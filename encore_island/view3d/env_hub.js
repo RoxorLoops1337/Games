@@ -3,7 +3,7 @@
 // Higher tiers sit on top of lower ones, in the 2D draw order (boulevards, zones, terrace, plaza). Stage, signs, lamps and plates belong to hub3d.js.
 import * as THREE from 'three';
 import * as kit from './kit.js';
-import { W, TAU, Acc, patchMat } from './env_util.js';
+import { W, TAU, Acc, runSync } from './env_util.js';
 
 const D2R = Math.PI / 180, INKC = new THREE.Color(0x2d170f);
 const TIER = { blvd: 0.022, zone: 0.034, terrace: 0.044, plaza: 0.054 };
@@ -21,12 +21,14 @@ const TEX = {
     for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) { const sh = (j % 2) * cs / 2, w = cs - 9 - r() * 6, h = cs - 9 - r() * 6, x = i * cs + sh + 4 + r() * 4, y = j * cs + 4 + r() * 4, base = jitterHex(pal[(r() * 4) | 0], r, 0.05);
       wrap9(S, (dx, dy) => { bevelRect(g, x + dx, y + dy, w, h, 22 + r() * 8, base, '#fffaf0', '#e8d0a6'); if ((i + j) % 3 === 0) { g.fillStyle = 'rgba(255,126,182,0.10)'; kit.rrPath(g, x + dx, y + dy, w, h, 24); g.fill(); } }); }
     speck(g, r, S, 140, '#b89868', 0.35); speck(g, r, S, 90, '#ffffff', 0.5, 1.1); },
-  marble(g, S) { const r = kit.rng(9), n = 4, cs = S / n; g.fillStyle = '#d5c6ee'; g.fillRect(0, 0, S, S);
-    for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) { const x = i * cs, y = j * cs; const gr = g.createLinearGradient(x, y, x + cs, y + cs); const odd = (i + j) % 2; gr.addColorStop(0, odd ? '#f9f4ff' : '#fffaf6'); gr.addColorStop(1, odd ? '#e9e0f8' : '#f0e8f6'); g.fillStyle = gr; g.fillRect(x + 2, y + 2, cs - 4, cs - 4);
+  marble(g, S) { const r = kit.rng(9), n = 6, cs = S / n; g.fillStyle = '#9a86c0'; g.fillRect(0, 0, S, S);
+    for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) { const x = i * cs, y = j * cs, odd = (i + j) % 2, gr = g.createLinearGradient(x, y, x + cs, y + cs);
+      gr.addColorStop(0, odd ? '#e8defa' : '#f6eefb'); gr.addColorStop(1, odd ? '#cfc0ec' : '#e2d6f2'); g.fillStyle = gr; g.fillRect(x + 2, y + 2, cs - 4, cs - 4);
       g.save(); g.beginPath(); g.rect(x + 2, y + 2, cs - 4, cs - 4); g.clip(); g.lineCap = 'round';
-      for (let v = 0; v < 3; v++) { const vx = x + r() * cs, vy = y + r() * cs, sg = r() < 0.5 ? 1 : -1; g.beginPath(); g.moveTo(vx - 60 * sg, vy - 50); g.bezierCurveTo(vx - 20, vy - 30 + r() * 40, vx + 10, vy + 20 - r() * 30, vx + 70 * sg, vy + 60); g.strokeStyle = 'rgba(150,120,200,0.26)'; g.lineWidth = 3 + r() * 3; g.stroke(); g.strokeStyle = 'rgba(255,255,255,0.7)'; g.lineWidth = 1.2; g.stroke(); }
-      g.restore(); g.fillStyle = 'rgba(255,255,255,0.75)'; g.fillRect(x + 3, y + 3, cs - 6, 3); g.fillRect(x + 3, y + 3, 3, cs - 6); g.fillStyle = 'rgba(120,90,170,0.35)'; g.fillRect(x + 3, y + cs - 6, cs - 6, 3); g.fillRect(x + cs - 6, y + 3, 3, cs - 6); }
-    speck(g, r, S, 22, '#f0b83c', 0.85, 1.7); },
+      for (let v = 0; v < 3; v++) { const vx = x + r() * cs, vy = y + r() * cs, sg = r() < 0.5 ? 1 : -1; g.beginPath(); g.moveTo(vx - 50 * sg, vy - 40); g.bezierCurveTo(vx - 16, vy - 24 + r() * 30, vx + 8, vy + 16 - r() * 24, vx + 56 * sg, vy + 48); g.strokeStyle = 'rgba(110,80,170,0.38)'; g.lineWidth = 3 + r() * 3; g.stroke(); g.strokeStyle = 'rgba(255,255,255,0.8)'; g.lineWidth = 1.2; g.stroke(); }
+      g.restore(); g.fillStyle = 'rgba(255,255,255,0.8)'; g.fillRect(x + 3, y + 3, cs - 6, 3); g.fillRect(x + 3, y + 3, 3, cs - 6); g.fillStyle = 'rgba(90,60,150,0.45)'; g.fillRect(x + 3, y + cs - 6, cs - 6, 3); g.fillRect(x + cs - 6, y + 3, 3, cs - 6);
+      if (odd) { g.strokeStyle = 'rgba(240,184,60,0.7)'; g.lineWidth = 2; g.strokeRect(x + 12, y + 12, cs - 24, cs - 24); } }
+    speck(g, r, S, 26, '#f0b83c', 0.9, 1.8); },
   basalt(g, S) { const r = kit.rng(13); g.fillStyle = '#1e1220'; g.fillRect(0, 0, S, S); const n = 4, cs = S / n;
     const tiles = []; for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) tiles.push([i * cs + (j % 2) * cs / 2 + 6, j * cs + 6, cs - 12, cs - 12]);
     g.save(); g.shadowColor = '#ff7a2a'; g.shadowBlur = 14; g.strokeStyle = 'rgba(255,140,50,0.75)'; g.lineWidth = 3; for (const [x, y, w, h] of tiles) wrap9(S, (dx, dy) => { kit.rrPath(g, x - 4 + dx, y - 4 + dy, w + 8, h + 8, 20); g.stroke(); }); g.restore();
@@ -45,7 +47,7 @@ const TEX = {
     for (let i = 0; i < 9; i++) { const x = r() * S, y = r() * S; wrap9(S, (dx, dy) => { g.fillStyle = 'rgba(150,115,70,0.45)'; g.beginPath(); g.ellipse(x + dx + 1.5, y + dy + 2, 7 + r() * 4, 4.5, 0.3, 0, TAU); g.fill(); g.fillStyle = '#e8d2a4'; g.beginPath(); g.ellipse(x + dx, y + dy, 7 + r() * 4, 4.5, 0.3, 0, TAU); g.fill(); }); } },
   slab(g, S) { const r = kit.rng(25), n = 3, cs = S / n; g.fillStyle = '#a995c6'; g.fillRect(0, 0, S, S);
     for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) { const x = i * cs + 5, y = j * cs + 5, w = cs - 10;
-      const base = (i + j) % 2 ? '#f4eefa' : '#ebe2f4'; wrap9(S, (dx, dy) => bevelRect(g, x + dx, y + dy, w, w, 10, base, '#ffffff', '#d9cbe8', 4));
+      const base = (i + j) % 2 ? '#e9e0f6' : '#ddd0ee'; wrap9(S, (dx, dy) => bevelRect(g, x + dx, y + dy, w, w, 10, base, '#faf6ff', '#c3b2de', 4));
       g.strokeStyle = 'rgba(130,100,170,0.22)'; g.lineWidth = 1.5; g.beginPath(); g.moveTo(x + w * (0.2 + r() * 0.2), y + 8); g.lineTo(x + w * (0.4 + r() * 0.3), y + w * 0.55); g.lineTo(x + w * (0.3 + r() * 0.5), y + w - 8); g.stroke(); }
     speck(g, r, S, 90, '#9a82c0', 0.28, 2); speck(g, r, S, 60, '#ffffff', 0.7, 1.2); },
   dock(g, S) { const r = kit.rng(29), n = 4, cs = S / n; g.fillStyle = '#9fd8e8'; g.fillRect(0, 0, S, S);
@@ -60,10 +62,10 @@ const TILEU = { cobble: 5.1, marble: 8, basalt: 5.1, plank: 4, sand: 6, slab: 6,
 const _tm = {};
 function texMat(kind) {
   if (_tm[kind]) return _tm[kind]; const map = kit.canvasTex(512, 512, (g, w) => TEX[kind](g, w), { repeat: true, aniso: 8 });
-  const m = new THREE.MeshStandardMaterial({ map, vertexColors: true, roughness: kind === 'marble' ? 0.38 : kind === 'dock' ? 0.45 : 0.88, metalness: 0, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
+  const m = new THREE.MeshStandardMaterial({ map, vertexColors: true, roughness: kind === 'marble' ? 0.38 : kind === 'dock' ? 0.45 : 0.88, metalness: 0, });
   m.userData.shared = true; return (_tm[kind] = m);
 }
-const TRIM = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.85, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
+const TRIM = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.85, });
 
 // ---------------------------------------------------------------- polygons (world units, XZ) and slab builder
 const circ = (cx, cz, r, n = 72) => { const p = []; for (let i = 0; i < n; i++) { const a = i / n * TAU; p.push([cx + Math.cos(a) * r, cz + Math.sin(a) * r]); } return p; };
@@ -114,17 +116,20 @@ class Floor {
 }
 
 /** build the whole hub floor + terrace balustrade. All hub constants are read from the 2D game's globals. */
-export function buildHubFloor() {
+export const buildHubFloor = () => runSync(buildHubFloorG());
+export function* buildHubFloorG() {
   const F = new Floor(), w = (v) => v * W;
   const plazaR = w(PLAZA_R), blvdW = w(BLVD_W);
   // boulevards (capsules from the plaza edge to each end); lengths follow blvdPathTo
   const ends = { 90: TERRACE.y + 280 - 90, '-90': 345, 180: 345, '-40': 390, 0: 500, 33: 440, 148: 470 };
   for (const d of ZONE_DEG) { const a = d * D2R, r1 = ends[d] !== undefined ? ends[d] : 470, a0 = PLAZA_R - 30;
     F.slab(capsule(w(Math.cos(a) * a0), w(Math.sin(a) * a0), w(Math.cos(a) * r1), w(Math.sin(a) * r1), blvdW), TIER.blvd, 'cobble', 0xfff1d6); }
+  yield;
   // zones (2D order)
-  const Z = (cx, cy, rx, ry, kind, rim, y = TIER.zone, tint) => F.slab(ell(w(cx), w(cy), w(rx), w(ry)), y, kind, rim, { tint });
+  let zi = 0; const Z = (cx, cy, rx, ry, kind, rim, y, tint) => F.slab(ell(w(cx), w(cy), w(rx), w(ry)), y === undefined ? TIER.zone + (zi++) * 0.0016 : y, kind, rim, { tint }); // each zone one hair above the last, so overlapping zones never z-fight
   Z(0, -345, 290, 130, 'marble', 0xfff8ee); Z(345, -180, 190, 150, 'basalt', 0x7a5a60); Z(-345, -140, 190, 200, 'plank', 0xe8c89a); Z(500, 60, 95, 70, 'sand', 0xfff1d6);
   Z(WAYPAD.x, WAYPAD.y, 86, 86, 'dock', 0xdff8ff); Z(HATCH.x, HATCH.y + 10, 92, 76, 'landing', 0x8a7aa8);
+  yield;
   // training terrace: slab ring sector
   const T = TERRACE, a0 = T.a0 * D2R, a1 = T.a1 * D2R;
   F.slab(sector(w(T.x), w(T.y), w(T.r - 60), w(T.r + 110), a0, a1, 48), TIER.terrace, 'slab', 0xfff8ee);
@@ -133,7 +138,8 @@ export function buildHubFloor() {
   // inlays: the plaza's pink dashed ring and the pink dashes along each boulevard
   const pr = w(PLAZA_R - 18), nd = 46; for (let i = 0; i < nd; i++) { const a = (i + 0.5) / nd * TAU; F.quad(Math.cos(a) * pr, Math.sin(a) * pr, 0.1, w(18), a + Math.PI / 2, TIER.plaza + 0.003, 0xf08ab8); }
   for (const d of ZONE_DEG) { const a = d * D2R, r1 = ends[d] !== undefined ? ends[d] : 470; for (let r = PLAZA_R + 14; r < r1 - 40; r += 30) F.quad(w(Math.cos(a) * r), w(Math.sin(a) * r), 0.06, w(12), a, TIER.blvd + 0.004, 0xf4a6c6); }
-  const grp = F.build();
+  yield; for (const k in F.tex) { texMat(k); yield; }
+  const grp = F.build(); yield;
   // ---- terrace balustrade: lathe-turned posts with ball finials, a handrail between them, ink-dark base rail
   const b = new kit.Builder({ ao: 0.12 }), R = w(T.r + 96), cxx = w(T.x), czz = w(T.y), lav = 0xd8c8f0, lavD = 0xb8a4dc, step = 5.5 * D2R, pts = [];
   for (let d = T.a0; d <= T.a1 + 0.01; d += 5.5) { const a = d * D2R; pts.push([cxx + Math.cos(a) * R, czz + Math.sin(a) * R, a]); }

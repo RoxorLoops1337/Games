@@ -59,9 +59,15 @@ lab({ ground: true, groundR: 40, el: cam.el, d: +(P.get('d') || cam.d), ty: cam.
     for (const f of S.fly) f.t += dt; S.fly = S.fly.filter((f) => f.t < f.delay + f.dur);
     if (S.chest) S.chest.t += dt;
   }
+  if (view === 'proj') { // static projectiles in a row, close up
+    const far = { x: 0, y: -1e4, r: 20, hp: 3 };
+    [[0, 'hero'], [1.4, 'crit'], [2.8, 'ally'], [4.2, 'tower']].forEach(([x, k]) => S.shots.push({ x: (x - 3) / W, y: 0, tgt: far, crit: k === 'crit', ally: k === 'ally', tower: k === 'tower' }));
+    [[0, 1, false], [1.2, 2, false], [2.4, 3, false], [3.6, 4, false], [5, 6, true], [6.6, 8, true]].forEach(([x, k, big]) => S.eshots.push({ x: (x - 3) / W, y: 2.4 / W - 14, k, big }));
+    S.shots.push({ boulder: true, sx: 0, sy: 4 / W, tx: 0, ty: 4 / W, x: 0, y: 0, t: 0.45, dur: 0.9 });
+  }
   let T = 0;
   return { update(dt, t) {
-    T += dt; age(dt); if (view !== 'models' && view !== 'fx') shotsAt(T); if (view === 'fx' || view === 'mix') fxAt(T);
+    T += dt; age(dt); if (view !== 'models' && view !== 'fx' && view !== 'proj') shotsAt(T); if (view === 'fx' || view === 'mix') fxAt(T);
     spin.forEach((m, i) => { m.rotation.y = Math.sin(T * 1.2 + i * 0.4) * 0.8; });
     V.blobs.begin(); fx.update(dt, t); loot.update(dt, t, { x: 0, z: 2 }); V.blobs.end();
   } };

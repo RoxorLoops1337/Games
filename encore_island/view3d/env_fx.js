@@ -7,14 +7,14 @@ import { makeCloudMat, tintCloud, cloudTex } from './env_sky.js';
 
 // kind table by biome: vel (x, y, z units/s), sway amplitude, size (world), box (half extents x, y, z), y centre, shape 0 soft round / 1 tumbling ellipse / 2 spark, additive, colours, density
 const KINDS = [
-  { vel: [-0.35, -0.55, 0.15], sway: 1.1, size: 0.17, shape: 1, add: 0, cols: ['#ffc2dc', '#ffffff', '#ff9cc6'], dens: 0.8 },       // Blossom Bay: petals
-  { vel: [0.25, 0.12, 0.1], sway: 0.9, size: 0.1, shape: 0, add: 0, cols: ['#ffffff', '#d4fff4', '#c6a8ff'], dens: 0.7 },             // Mint Meadow: pollen and seeds
-  { vel: [1.4, 0.05, -0.25], sway: 0.35, size: 0.075, shape: 2, add: 1, cols: ['#ffd08a', '#fff0c8', '#ffb070'], dens: 0.75 },         // Sunset Dunes: wind-blown glitter
-  { vel: [-0.3, -1.1, 0.12], sway: 0.8, size: 0.13, shape: 0, add: 0, cols: ['#ffffff', '#f2faff', '#d8eeff'], dens: 1.25 },            // Frost Fjord: flurries
-  { vel: [0.0, 0.3, 0.0], sway: 0.7, size: 0.15, shape: 2, add: 1, cols: ['#ff9ad2', '#ffe98a', '#c6a8ff'], dens: 0.7 },               // Candy Canyon: rising sparkles
-  { vel: [-0.3, -0.45, 0.2], sway: 1.2, size: 0.19, shape: 1, add: 0, cols: ['#8fdc4a', '#c8f07a', '#6cc26e'], dens: 0.55 },            // Lime Lagoon: whirling leaves
-  { vel: [0.0, 0.0, 0.0], sway: 1.0, size: 0.17, shape: 2, add: 1, cols: ['#a8fff4', '#fff4a0', '#ff9ad2'], dens: 0.75, fly: 1 },       // Neon Night: fireflies
-  { vel: [0.12, 0.28, 0.0], sway: 0.6, size: 0.13, shape: 2, add: 1, cols: ['#ffe48e', '#fff8d0', '#ffb640'], dens: 0.8 },             // Gold Gala: gold glitter
+  { vel: [-0.35, -0.55, 0.15], sway: 1.1, size: 0.3, shape: 1, add: 0, cols: ['#ffc2dc', '#ffffff', '#ff9cc6'], dens: 0.8 },       // Blossom Bay: petals
+  { vel: [0.25, 0.12, 0.1], sway: 0.9, size: 0.2, shape: 0, add: 0, cols: ['#ffffff', '#d4fff4', '#c6a8ff'], dens: 0.7 },             // Mint Meadow: pollen and seeds
+  { vel: [1.4, 0.05, -0.25], sway: 0.35, size: 0.17, shape: 2, add: 1, cols: ['#ffd08a', '#fff0c8', '#ffb070'], dens: 0.75 },         // Sunset Dunes: wind-blown glitter
+  { vel: [-0.3, -1.1, 0.12], sway: 0.8, size: 0.24, shape: 0, add: 0, cols: ['#ffffff', '#f2faff', '#d8eeff'], dens: 1.25 },            // Frost Fjord: flurries
+  { vel: [0.0, 0.3, 0.0], sway: 0.7, size: 0.3, shape: 2, add: 1, cols: ['#ff9ad2', '#ffe98a', '#c6a8ff'], dens: 0.7 },               // Candy Canyon: rising sparkles
+  { vel: [-0.3, -0.45, 0.2], sway: 1.2, size: 0.32, shape: 1, add: 0, cols: ['#8fdc4a', '#c8f07a', '#6cc26e'], dens: 0.55 },            // Lime Lagoon: whirling leaves
+  { vel: [0.0, 0.0, 0.0], sway: 1.0, size: 0.36, shape: 2, add: 1, cols: ['#a8fff4', '#fff4a0', '#ff9ad2'], dens: 0.75, fly: 1 },       // Neon Night: fireflies
+  { vel: [0.12, 0.28, 0.0], sway: 0.6, size: 0.26, shape: 2, add: 1, cols: ['#ffe48e', '#fff8d0', '#ffb640'], dens: 0.8 },             // Gold Gala: gold glitter
 ];
 const PV = `
 attribute vec4 aS; uniform float uT, uScale, uSize, uFade, uSway, uFly; uniform vec3 uFocus, uBox, uVel; uniform float uYc;
@@ -52,7 +52,7 @@ export function createAmbient(V) {
   const pts = new THREE.Points(geo, mat); pts.frustumCulled = false; pts.renderOrder = 10; pts.name = 'ambient'; pts.userData.noBake = true;
   let kind = -1, want = 0, fade = 0; const sz = new THREE.Vector2();
   function apply(k) { const K = KINDS[k]; kind = k; U.uVel.value.set(K.vel[0], K.vel[1], K.vel[2]); U.uSway.value = K.sway; U.uSize.value = K.size; U.uShape.value = K.shape; U.uFly.value = K.fly || 0; U.uC0.value.set(K.cols[0]); U.uC1.value.set(K.cols[1]); U.uC2.value.set(K.cols[2]);
-    mat.blending = K.add ? THREE.AdditiveBlending : THREE.NormalBlending; U.uBox.value.set(17, K.fly ? 3.2 : 5.2, 15); U.uYc.value = K.fly ? 1.6 : 3.2; geo.setDrawRange(0, Math.round(N * K.dens)); mat.needsUpdate = true; }
+    mat.blending = K.add ? THREE.AdditiveBlending : THREE.NormalBlending; U.uBox.value.set(17, K.fly ? 3.2 : 5.2, 15); U.uYc.value = K.fly ? 1.6 : 3.2; geo.setDrawRange(0, Math.round(N * K.dens * Math.min(1, Math.max(0.15, V.quality && V.quality.particles !== undefined ? V.quality.particles : 1)))); mat.needsUpdate = true; }
   return {
     points: pts,
     /** bi: biome index of the island nearest the focus */

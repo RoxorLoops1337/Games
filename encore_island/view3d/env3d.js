@@ -4,13 +4,13 @@
 //   init(V) -> { update(dt, t, focus), getMood(), setMoodOverride(mood|null, blend), heightAt(x, z), dispose() }
 import * as THREE from 'three';
 import * as kit from './kit.js';
-import { W, WY, biomeIdx, radiusSafe } from './env_util.js';
+import { W, WY, biomeIdx, radiusSafe, runSync } from './env_util.js';
 import { BIOME_MOODS, parseMood, newMood, copyMood, mixMood, toKit, seasonWash } from './env_mood.js';
 import { createWater } from './env_water.js';
-import { buildIsland } from './env_island.js';
-import { buildHubFloor, hubBlocked } from './env_hub.js';
-import { buildDecor } from './env_decor.js';
-import { buildWalk } from './env_walk.js';
+import { buildIslandG } from './env_island.js';
+import { buildHubFloorG, hubBlocked } from './env_hub.js';
+import { buildDecorG } from './env_decor.js';
+import { buildWalkG } from './env_walk.js';
 import { createSky } from './env_sky.js';
 import { createAmbient, createMist } from './env_fx.js';
 
@@ -31,34 +31,42 @@ export function init(V) {
   const guard = (fn) => { try { return fn(); } catch (e) { if (!warned) { warned = true; console.warn('[env3d]', e); } } };
 
   // ---------------------------------------------------------------- lands
-  function buildLand(k) {
+  /** generator: builds land k in small steps (yield between), adds it to the scene at the end; the driver decides how many steps fit in a frame */
+  function* buildLandG(k) {
     const g = geoOf(k), bi = biomeIdx(k), B = k === 0 ? BIOMES[0] : BIOMES[bi], rec = { k, g, bi, B, grp: new THREE.Group(), isl: null, born: null, ready: false };
-    rec.grp.name = 'land' + k; root.add(rec.grp); recs.set(k, rec);
-    const dec = (V.quality && V.quality.decor !== undefined) ? V.quality.decor : 1, isl = buildIsland(g, B, bi); rec.isl = isl; rec.grp.add(isl.grp);
-    if (k === 0) { rec.grp.add(buildHubFloor()); isl.grp.add(buildDecor(g, B, 0, HUBDECOR, { hub: true, density: dec, blocked: hubBlocked, keep: HUB_KEEP.map((o) => ({ x: o.x, y: o.y, r: o.r * 0.6 })) })); }
+    rec.grp.name = 'land' + k; const dec = (V.quality && V.quality.decor !== undefined) ? V.quality.decor : 1;
+    const isl = yield* buildIslandG(g, B, bi); rec.isl = isl; rec.grp.add(isl.grp); yield;
+    if (k === 0) { rec.grp.add(yield* buildHubFloorG()); isl.grp.add(yield* buildDecorG(g, B, 0, HUBDECOR, { hub: true, density: dec, blocked: hubBlocked, keep: HUB_KEEP.map((o) => ({ x: o.x, y: o.y, r: o.r * 0.6 })) })); }
     else {
       const keep = [landPadSpot(g), g.den, unlockSpot(k + 1)].concat(landPlateDefs(k, g)).map((o) => ({ x: o.x, y: o.y, r: 95 }));
       for (let i = 0; i < g.path.length; i += 1) keep.push({ x: g.path[i].x, y: g.path[i].y, r: 105 });
-      isl.grp.add(buildDecor(g, B, bi, decorOf(g), { keep, density: dec })); rec.walk = buildWalk(g); rec.grp.add(rec.walk);
+      isl.grp.add(yield* buildDecorG(g, B, bi, decorOf(g), { keep, density: dec })); yield; rec.walk = yield* buildWalkG(g); rec.grp.add(rec.walk);
     }
-    rec.ready = true; return rec;
+    if (recs.has(k)) return null; // a duplicate raced in: drop this one
+    root.add(rec.grp); recs.set(k, rec); rec.ready = true; return rec;
   }
+  guard(() => runSync(buildLandG(0)));
+
   function disposeLand(k) {
     const rec = recs.get(k); if (!rec) return; root.remove(rec.grp);
     rec.grp.traverse((n) => { if (n.geometry && !n.userData.sharedGeo) n.geometry.dispose(); }); recs.delete(k);
   }
-  guard(() => buildLand(0));
 
   function syncLands() {
     const n = (typeof S !== 'undefined' && S.lands) ? S.lands.length : 0;
     for (const k of [...recs.keys()]) if (k > n) disposeLand(k);
-    for (let k = 1; k <= n; k++) if (!recs.has(k) && !queue.some((q) => q.k === k)) queue.push({ k, run() { const rec = buildLand(k); const z = S.lands[k - 1]; if (z && typeof z.born === 'number' && S.t - z.born < 1.2) rec.born = z.born; } });
+    for (let i = queue.length - 1; i >= 0; i--) if (queue[i].k > n) queue.splice(i, 1);
+    for (let k = 1; k <= n; k++) if (!recs.has(k) && !queue.some((q) => q.k === k)) queue.push({ k, gen: buildLandG(k) });
     // shore map follows the lands: re-bake whenever the set changes
     mist.set(n + 1 <= 60 ? n + 1 : -1);
     const key = 'n' + n; if (water.key !== key) { const ex = worldExtent(n); sky.setWorld((ex.x0 + ex.x1) / 2 * W, (ex.y0 + ex.y1) / 2 * W, Math.hypot(ex.x1 - ex.x0, ex.y1 - ex.y0) / 2 * W); water.key = key; const geos = [HUB_GEO]; for (let k = 1; k <= n; k++) geos.push(geoOf(k)); water.request(geos, worldExtent(n), key); }
   }
   function runQueue(ms) {
-    const t0 = now(); while (queue.length && now() - t0 < ms) { const q = queue.shift(); guard(() => q.run()); }
+    const t0 = now();
+    while (queue.length && now() - t0 < ms) {
+      const q = queue[0]; let r = null; try { r = q.gen.next(); } catch (e) { r = { done: true, value: null }; if (!warned) { warned = true; console.warn('[env3d]', e); } }
+      if (r.done) { queue.shift(); const rec = r.value; if (rec && rec.k > 0) { const z = S.lands[rec.k - 1]; if (z && typeof z.born === 'number' && S.t - z.born < 1.2 && S.t > 2) rec.born = z.born; } }
+    }
   }
 
   // ---------------------------------------------------------------- mood
@@ -81,7 +89,7 @@ export function init(V) {
   }
   function update(dt, t, focus) {
     dt = Math.min(dt || 0.016, 0.1); frame++; const f = focus || _f;
-    guard(syncLands); runQueue(5);
+    guard(syncLands); runQueue(4);
     guard(() => water.work(2));
     guard(() => updateMood(dt, f));
     guard(() => water.update(dt, t, camera, cur));

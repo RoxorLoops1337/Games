@@ -2,13 +2,14 @@
 //   * particles live in preallocated ring buffers (start position, velocity, gravity, birth, life ...) and are animated entirely in the vertex shader,
 //     so a burst costs a few typed-array writes and no allocation. Blending is premultiplied: per particle `add` 0 = candy "over", 1 = additive glow.
 //   * the 2D game's own effect arrays (S.parts, S.fx, S.fly) are re-drawn every frame from a rewritten "bridge" tail of the same buffers.
-//   * API (also stored on V.fx):  burst  ring  puff  confetti  beam  zap  glowAt (immediate glow for other modules)  flyers (S.fly hand-off to loot3d)
+//   * API (also stored on V.fx):  burst  ring  puff  confetti  beam  zap  trail (one cheap dot)  glowAt (immediate glow for other modules)  rgb (cached css -> linear colour)
+//     and the S.fly hand-off: every update it calls V.mods.loot.setFlyers(list, n) so loot3d draws coins / gems / loot with its own instanced models.
 // Units: WORLD units (x*W, h, y*W). Never touches S except to read. update order requirement: none (immediates are cleared after render).
 import * as THREE from 'three';
 import * as kit from './kit.js';
 
 const W = kit.W, PI = Math.PI;
-const RING = 1400, BRIDGE = 720, N = RING + BRIDGE, ZMAX = 300, GMAX = 220, FLY_MAX = 160;
+const RING = 1400, BRIDGE = 720, N = RING + BRIDGE, ZMAX = 300, GMAX = 170, FLY_MAX = 160;
 const rnd = Math.random, easeInOut = (t) => (t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2), easeOut = (t) => 1 - Math.pow(1 - t, 3);
 const _col = new THREE.Color(), _cc = new Map();
 /** css/hex colour -> cached [r,g,b] in linear working space (the shaders output linear, the renderer converts) */
@@ -107,7 +108,7 @@ void main() {
   if (vK < 0.5) { a = pow(max(0.0, 1.0 - vUv.y), 1.25) * (0.62 + 0.38 * sin(vUv.x * 18.85 + uT * 1.7)) * smoothstep(0.0, 0.06, vUv.y) * 0.55; col = mix(col, vec3(1.0), 0.25 * (1.0 - vUv.y)); }          // light beam
   else if (vK < 1.5) { float d = abs(r - (1.0 - vTh * 0.5)); a = 1.0 - smoothstep(vTh * 0.22, vTh * 0.5, d); a *= r < 1.0 + vTh * 0.1 ? 1.0 : 0.0;
     a += 0.1 * (1.0 - smoothstep(0.0, 1.0, r)); a *= mix(1.0, 0.45 + 0.55 * cos(atan(vUv.y, vUv.x) * 3.0), vDash); nrm = 1.0; col = mix(col, vec3(1.0), 0.1 * a); gain = 0.68; }         // ground ring (mostly "over", so it reads on the pastel ground)
-  else if (vK < 2.5) { a = pow(max(0.0, 1.0 - r), 2.0); col = mix(col, vec3(1.0), 0.5 * pow(max(0.0, 1.0 - r), 3.0)); }                                                         // glow sprite
+  else if (vK < 2.5) { a = pow(max(0.0, 1.0 - r), 2.0); col = mix(col, vec3(1.0), 0.18 * pow(max(0.0, 1.0 - r), 3.0)); }                                                         // glow sprite
   else { vec2 p = abs(vUv); float h = exp(-p.y * 10.0) * (1.0 - p.x), v = exp(-p.x * 10.0) * (1.0 - p.y); a = max(h, v) + 0.7 * pow(max(0.0, 1.0 - r * 1.7), 2.0); col = mix(col, vec3(1.0), clamp(a, 0.0, 1.0)); } // sparkle flare
   a *= vCol.a;
   gl_FragColor = vec4(col * a * gain, a * nrm);
@@ -158,7 +159,6 @@ export function init(V) {
     put(i, x, y, z, vx, vy, vz, size, grav, clock + delay, life, drag, spin, col[0], col[1], col[2], kind, sEnd, add, fin, fout);
   }
   const PASTEL = [0xff7eb6, 0xffd84d, 0x9af0b4, 0x8fe3f0, 0xc6a8ff, 0xfff4e6, 0xff9a2e];
-  const tmpc = [0, 0, 0];
   const colorOf = (cs, i) => { if (!cs || !cs.length) return rgb(0xfff4e6); return rgb(cs[i % cs.length]); };
   /** radial burst of candy dots / stars. o: x y z n colors speed up size life grav star (bool or 0..1 chance) drag flash */
   function burst(o) {
@@ -195,7 +195,7 @@ export function init(V) {
     for (const k of [2, 3]) { const b = addV(-1, -1, 0, -1, -1, k); addV(1, -1, 0, 1, -1, k); addV(1, 1, 0, 1, 1, k); addV(-1, 1, 0, -1, 1, k); idx.push(b, b + 1, b + 2, b, b + 2, b + 3); }
   }
   const gg = new THREE.InstancedBufferGeometry(); gg.setIndex(idx); gg.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); gg.setAttribute('aUv', new THREE.Float32BufferAttribute(uv, 2)); gg.setAttribute('aK', new THREE.Float32BufferAttribute(kk, 1));
-  const GR = 96, GN = GR + GMAX, GA = { aPos: iattr(GN, 4), aScl: iattr(GN, 4), aCol: iattr(GN, 4), aTm: iattr(GN, 4), aSel: iattr(GN, 1) };
+  const GR = 64, GN = GR + GMAX, GA = { aPos: iattr(GN, 4), aScl: iattr(GN, 4), aCol: iattr(GN, 4), aTm: iattr(GN, 4), aSel: iattr(GN, 1) };
   const GAL = []; for (const k in GA) { gg.setAttribute(k, GA[k]); GAL.push(GA[k]); } gg.instanceCount = GN;
   for (let i = 0; i < GN; i++) { GA.aTm.array[i * 4] = 1e9; GA.aTm.array[i * 4 + 1] = 1; }
   const gmat = new THREE.ShaderMaterial({ vertexShader: G_VS, fragmentShader: G_FS, uniforms: { uT, uGain }, ...premult() });

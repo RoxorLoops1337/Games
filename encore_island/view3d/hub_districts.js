@@ -33,7 +33,7 @@ export function buildMarket(V, fx) {
     const sp = sg(tilt, 0, sy, sz, 0.056); fx.atlas.quad(qs, 'MARKET', 2.0, sp[0], sp[1], sp[2], 0, tilt, 0.66);
     // hot item plate on the counter
     b.cyl(0x4a2a1e, 0.85, 0.98, 0.62, 0.3, 0.04, 14); b.cyl(0xff7a2a, 0.85, 1.02, 0.62, 0.26, 0.03, 14);
-    grp.add(outline(b.build({ cast: true }), 0.028)); grp.add(fx.atlas.mesh(qs)); built = grp; g.add(grp); lvl = L;
+    grp.add(outline(b.build({ cast: true }))); grp.add(fx.atlas.mesh(qs)); built = grp; g.add(grp); lvl = L;
   }
   return {
     group: g,
@@ -55,11 +55,11 @@ export function buildArena(V, fx) {
   const b = new Builder({ ao: 0.2 }), qs = new QuadSet(), RO = 1.55;
   b.cyl({ m: floorMat(), c: 0xc89a62 }, 0, 0, 0, RO - 0.3, 0.07, seg(32)); b.cyl({ m: floorMat(), c: 0xe0b078 }, 0, 0.07, 0, 0.7, 0.02, seg(24)); b.tor(0xb07a48, 0, 0.09, 0, 0.55, 0.03, 6, seg(24), PI / 2);
   // curved wall: radial blocks with a gap in front for the gate; arched alcoves on the outer face, crenels on top
-  const N = 20;
+  const N = 18;
   for (let i = 0; i < N; i++) {
     const a = i / N * TAU, front = Math.abs(Math.atan2(Math.sin(a - PI / 2), Math.cos(a - PI / 2))); if (front < 0.3) continue;
     b.local(Math.cos(a) * RO, 0, Math.sin(a) * RO, -a + PI / 2, (q) => {
-      rbx(q, i % 2 ? 0xff9a8a : 0xffaa9a, 0, 0.58, 0, 0.62, 1.16, 0.4, 0.14); rbx(q, 0xd8384f, 0, 0.07, 0.03, 0.66, 0.16, 0.44, 0.3); rbx(q, C.cream, 0, 1.14, 0.0, 0.68, 0.1, 0.46, 0.4);
+      rbx(q, i % 2 ? 0xff9a8a : 0xffaa9a, 0, 0.58, 0, 0.62, 1.16, 0.4, 0.14); q.box(0xd8384f, 0, 0.07, 0.03, 0.66, 0.14, 0.44); q.box(C.cream, 0, 1.14, 0.0, 0.68, 0.09, 0.46);
       if (i % 2) rbx(q, 0xffd0c8, 0, 1.3, 0, 0.3, 0.22, 0.32, 0.3);
       if (a > 0.2 && a < PI - 0.2) { rbx(q, 0x7a1c3a, 0, 0.5, 0.2, 0.3, 0.5, 0.05, 0.45); q.cyl(0x7a1c3a, 0, 0.72, 0.2, 0.15, 0.05, 10, 1); }
     });
@@ -69,11 +69,11 @@ export function buildArena(V, fx) {
   const tilt = -0.55, sy = 1.98, sz = RO - 0.02; rbx(b, 0x5a1a2a, 0, sy, sz, 1.9, 0.68, 0.1, 0.4, 0, tilt); for (const sx of [-0.6, 0.6]) rbx(b, 0xb02a40, sx, 1.62, RO + 0.02, 0.08, 0.45, 0.08, 0.4);
   { const sp = sg(tilt, 0, sy, sz, 0.056); fx.atlas.quad(qs, 'ARENA', 1.8, sp[0], sp[1], sp[2], 0, tilt, 0.6); }
   for (const sx of [-1, 1]) { b.cyl(0xa8703c, sx * 2.2, 0, 0.7, 0.06, 2.4, 8); bll(b, GOLDM, sx * 2.2, 2.45, 0.7, 0.09, 0.9); }
-  g.add(outline(b.build({ cast: true }), 0.028)); g.add(fx.atlas.mesh(qs));
+  g.add(outline(b.build({ cast: true }))); g.add(fx.atlas.mesh(qs));
   // waving pennants (instanced, 2 draws total with the "!" marker)
   const flagG = new THREE.PlaneGeometry(1, 1, 6, 1); flagG.translate(0.5, 0, 0); const fm = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide, fog: true }); fm.userData.noLook = true;
   const flags = new Inst(flagG, fm, 2, { colors: true }); g.add(flags.mesh);
-  const bang = new THREE.Group(); { const bb = new Builder({ ao: 0 }); rbx(bb, GOLDM, 0, 0.3, 0, 0.2, 0.5, 0.2, 0.5); bll(bb, GOLDM, 0, -0.1, 0, 0.12, 1); bang.add(outline(bb.build({ cast: false }), 0.03)); } bang.position.y = 3.0; g.add(bang);
+  const bang = new THREE.Group(); { const bb = new Builder({ ao: 0 }); rbx(bb, GOLDM, 0, 0.3, 0, 0.2, 0.5, 0.2, 0.5); bll(bb, GOLDM, 0, -0.1, 0, 0.12, 1); bang.add(outline(bb.build({ cast: false }))); } bang.position.y = 3.0; g.add(bang);
   return {
     group: g,
     update(dt, t) {
@@ -100,7 +100,7 @@ export function buildStudio(V, fx) {
   rbx(b, 0x2a1a5a, 0.3, BHT + 0.3, 0.35, 0.82, 0.34, 0.1, 0.4, 0, -0.5);
   { const sp = sg(-0.5, 0.3, BHT + 0.3, 0.35, 0.06); fx.atlas.quad(qs, 'ON AIR', 0.74, sp[0], sp[1], sp[2], 0, -0.5, 0.25); }
   const tilt = -0.6; rbx(b, 0x4a2a90, -0.4, BHT + 0.75, -0.3, 1.5, 0.56, 0.1, 0.4, 0, tilt); { const sp = sg(tilt, -0.4, BHT + 0.75, -0.3, 0.056); fx.atlas.quad(qs, 'STUDIO', 1.4, sp[0], sp[1], sp[2], 0, tilt, 0.46); }
-  g.add(outline(b.build({ cast: true }), 0.028)); g.add(fx.atlas.mesh(qs));
+  g.add(outline(b.build({ cast: true }))); g.add(fx.atlas.mesh(qs));
   const beacon = new THREE.Mesh(new THREE.IcosahedronGeometry(0.1, 1), new THREE.MeshBasicMaterial({ color: 0xff3d6e })); beacon.position.set(0.78, BHT + 0.86, -0.1); g.add(beacon);
   return {
     group: g,

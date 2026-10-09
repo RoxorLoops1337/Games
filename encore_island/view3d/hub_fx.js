@@ -1,6 +1,7 @@
 // Encore Island 3D, hub helpers: instanced pools (glow billboards, bulbs, generic), a ground arc/dash ring shader, a text atlas and quad sets.
 // Everything here is small and allocation free per frame, so the hub can animate dozens of lights in a handful of draw calls.
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { canvasTex, softTex, stickerText, FONT, rrPath, PI, TAU, HAS_DOM, addOutline, INK, G, GB, roundedBoxGeo, Q, icoDetail } from './kit.js';
 
 const _z = new THREE.Vector3(0, 0, 1), _q2 = new THREE.Quaternion(), _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _e = new THREE.Euler(), _p = new THREE.Vector3(), _s = new THREE.Vector3(), _c = new THREE.Color();
@@ -119,7 +120,7 @@ export function signAtlas() {
     mesh(qs) { const m = new THREE.Mesh(qs.geometry(), mat); m.castShadow = false; m.receiveShadow = false; return m; }, dispose() { at.tex.dispose && at.tex.dispose(); mat.dispose(); } };
 }
 /** inked silhouette hulls on the big lit meshes of a built group (one extra draw call per mesh; emissive / transparent parts are skipped) */
-export function outline(group, width = 0.032, skipGold = true) {
+export function outline(group, width = 0.027, skipGold = true) {
   group.children.slice().forEach((m) => { if (!m.isMesh || m.isInstancedMesh || !m.material || !m.material.isMeshStandardMaterial || m.material.transparent || m.material.map) return; if (skipGold && m.material.emissiveIntensity > 0.1) return; addOutline(m, width, INK); });
   return group;
 }
@@ -134,6 +135,19 @@ export function bll(b, c, x, y, z, r, sy = 1, sz) { const d = r < 0.075 ? 0 : r 
 /** vertex-coloured lit material for flat things lying on the paving (stage floor, well, pads): a strong polygon offset so they always win over env3d's slabs */
 let _floor = null;
 export function floorMat() { return _floor || (_floor = Object.assign(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.85, polygonOffset: true, polygonOffsetFactor: -5, polygonOffsetUnits: -5 }), { userData: { noCast: true } })); }
+/** mark every mesh under `obj` as static so batchStatics() folds it into one mesh per material (fewer draw calls); returns obj */
+export function stat(obj) { obj.traverse((o) => { if (o.isMesh && !o.isInstancedMesh) o.userData.batch = true; }); return obj; }
+/** merge all flagged static meshes under root into one mesh per material (world space, root must sit at the origin), dispose the originals */
+const _bm = new THREE.Matrix4(), _inv = new THREE.Matrix4();
+export function batchStatics(root) {
+  root.updateMatrixWorld(true); _inv.copy(root.matrixWorld).invert();
+  const groups = new Map(), kill = [];
+  root.traverse((o) => { if (!(o.isMesh && !o.isInstancedMesh && o.userData.batch && o.geometry && o.material && !Array.isArray(o.material))) return; let e = groups.get(o.material); if (!e) groups.set(o.material, e = { list: [], cast: false, recv: false }); const g = o.geometry.clone(); g.applyMatrix4(_bm.multiplyMatrices(_inv, o.matrixWorld)); e.list.push(g); e.cast = e.cast || o.castShadow; e.recv = e.recv || o.receiveShadow; kill.push(o); });
+  const out = new THREE.Group(); out.name = 'hubStatic';
+  for (const [mat, e] of groups) { const geom = mergeGeometries(e.list, false); e.list.forEach((g) => g.dispose()); if (!geom) continue; const m = new THREE.Mesh(geom, mat); m.castShadow = e.cast; m.receiveShadow = e.recv; out.add(m); }
+  for (const o of kill) { if (o.parent) o.parent.remove(o); o.geometry.dispose(); }
+  root.add(out); return out;
+}
 export const hexRGB = (h, k = 1) => { _c.set(h); return [_c.r * k, _c.g * k, _c.b * k]; };
 /** a beat-ish value: 1 right on the beat decaying to 0 (LOOK.beat is the engine's own pulse; this is the fallback) */
 export const beatOf = (V) => (V.LOOK ? V.LOOK.beat.value : 0);

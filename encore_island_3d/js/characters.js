@@ -679,7 +679,7 @@ function makeNotes(parent, ox = 0.12, oy = 1.25, oz = 0.45, cols = [0xffd84d, 0x
       if (n.life >= 1) { n.on = false; n.n.visible = false; n.wait = 0.1 + i * 0.12; continue; }
       n.x += n.vx * dt; n.y += n.vy * dt; n.z += 0.35 * dt;
       const u = n.life, sc = Math.sin(u * Math.PI) * 1.1;
-      n.n.visible = sc > 0.02; n.n.position.set(n.x + Math.sin(u * 9 + i) * 0.05, n.y, n.z); n.n.scale.setScalar(sc * 0.9); n.n.rotation.z = Math.sin(u * 7 + i) * 0.4; n.n.rotation.y = u * 4;
+      n.n.visible = sc > 0.02; n.n.position.set(n.x + Math.sin(u * 9 + i) * 0.05, n.y, n.z); n.n.scale.setScalar(sc * 1.7); n.n.rotation.z = Math.sin(u * 7 + i) * 0.4; n.n.rotation.y = u * 4;
     }
   } };
 }

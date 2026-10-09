@@ -9,6 +9,8 @@ import { bakeActor, countCalls } from './bake.js';
 import { makeHero, init } from './heroes3d.js';
 const P = new URLSearchParams(location.search), num = (k, d) => (P.has(k) ? +P.get(k) : d);
 const ALL = ['jasmin', 'roxor', 'rawclaw', 'andy', 'jasmin_unicorn', 'roxor_monster', 'rawclaw_goat', 'jordan'];
+const hud = document.createElement('div'); hud.style.cssText = 'position:fixed;left:8px;top:8px;font:12px monospace;color:#2d170f;background:rgba(255,255,255,.7);padding:4px 8px;border-radius:6px;pointer-events:none;white-space:pre'; document.body.appendChild(hud);
+let hudN = 0; const showHud = (extra) => { if (hudN++ % 20 === 0 && window.__lab) { const i = window.__lab.info(); hud.textContent = 'draw calls ' + i.calls + '   triangles ' + i.tris + (extra ? '\n' + extra() : ''); } };
 const tris = (root) => { let n = 0; root.traverse((o) => { if (o.isMesh && o.visible && o.layers.test({ mask: 1 })) n += (o.geometry.index ? o.geometry.index.count : o.geometry.attributes.position.count) / 3; }); return Math.round(n); };
 if (P.get('game') === '1') {
   // same as gamelab.js loadGame, but EI.resize() is guarded (main.js leaves its canvas null in headless mode)
@@ -30,6 +32,7 @@ if (P.get('game') === '1') {
   for (let i = 0; i < num('helm', 6); i++) S.player.helmets.push(i % 7 === 3 ? { k: 4, bar: true } : i % 11 === 5 ? { k: 1, crown: true } : { k: 1 + (i * 3) % 9 });
   S.houses = 8;
   lab({ ground: true, groundR: 40, d: num('d', 12), el: num('el', 55), ty: 0, az: num('az', 0), w: num('w', 900), h: num('h', 600), async build(V) {
+    let lootm = null; if (P.get('loot') === '1') { const lm = await import('./loot3d.js'); lootm = await lm.init(V); V.mods.loot = lootm; }
     const mod = init(V); V.mods.heroes3d = mod; const p = S.player, pose = P.get('pose') || '';
     p.x = -330; p.y = -150; S.comp.x = p.x - 60; S.comp.y = p.y + 24;
     S.pop.forEach((f, i) => { f.x = p.x + 100 + (i % 6) * 55 - 100 + (i > 5 ? 20 : 0); f.y = p.y + 120 + Math.floor(i / 6) * 55; if (f.role === 'fight' && i % 2 === 0) f.atkT = 0.3; if (P.has('spec')) f.spec = ['roadie', 'manager', 'scout', 'bodyguard', 'drummer'][i % 5]; if (i % 3 === 0 && f.role === 'gather') for (let k = 0; k < 4 + (i % 5); k++) f.carry.push({ k: 1 + k }); });
@@ -45,6 +48,8 @@ if (P.get('game') === '1') {
       if (pose === 'atk') { p.atkT = 0.3; }
       if (P.has('shield')) FEATS.find((f) => f.id === 'gear').api.T.shield = 2;
       if (P.get('pose') === 'walk') V.camera.userData.follow = 1;
+      showHud(() => 'fans ' + mod.fanCount() + '  hero ' + (window.__stat.hero ? window.__stat.hero.calls + ' calls ' + window.__stat.hero.tris + ' tris' : '') + '  fan ' + (window.__stat.fan ? window.__stat.fan.calls + ' calls ' + window.__stat.fan.tris + ' tris' : ''));
+      if (lootm) lootm.update(dt, t, { x: p.x * 0.02, z: p.y * 0.02 });
       mod.update(dt, t, { x: p.x * 0.02, z: p.y * 0.02 });
       if (mod.hero && mod.companion && !window.__stat.hero) window.__stat.hero = { calls: countCalls(mod.hero.group), tris: tris(mod.hero.group) };
       window.__stat.comp = mod.companion && { calls: countCalls(mod.companion.group), tris: tris(mod.companion.group) }; const fa = mod.fanActors(); window.__stat.fanActors = fa.length; window.__stat.fan = fa[0] && { calls: countCalls(fa[0].group), tris: tris(fa[0].group), maxTris: Math.max(...fa.map((a) => tris(a.group))), maxCalls: Math.max(...fa.map((a) => countCalls(a.group))) };
@@ -53,11 +58,11 @@ if (P.get('game') === '1') {
 } else {
   lab({ d: num('d', 12), el: num('el', 14), ty: num('ty', 1), tx: num('tx', 0), az: num('az', 0), build(V) {
     const list = [], names = (P.get('show') || ALL.join(',')).split(','), sp = num('sp', 2.1), pose = P.get('pose') || 'idle', fan = P.get('fan') === '1';
-    names.forEach((n, i) => { const a = makeHero(n, { fan, seed: i + 1, acc: i }); a.group.position.set((i - (names.length - 1) / 2) * sp, 0, 0); V.scene.add(a.group); bakeActor(a); list.push(a); });
+    const ms = []; names.forEach((n, i) => { const t0 = performance.now(); const a = makeHero(n, { fan, seed: i + 1, acc: i }); a.group.position.set((i - (names.length - 1) / 2) * sp, 0, 0); V.scene.add(a.group); bakeActor(a); list.push(a); ms.push(Math.round(performance.now() - t0)); });
     const st = { speed: pose === 'walk' ? 0.8 : 0, singing: pose === 'sing', atk: pose === 'atk', cast: pose === 'cast', cheer: pose === 'cheer', dash: pose === 'dash', hurt: pose === 'hurt' ? 0.8 : 0, role: 'fight' };
-    window.__stat = { calls: list.map((a) => countCalls(a.group)), tris: list.map((a) => tris(a.group)) };
+    window.__stat = { calls: list.map((a) => countCalls(a.group)), tris: list.map((a) => tris(a.group)), buildMs: ms };
     if (P.has('tri')) { const m = {}; list[0].group.traverse((o) => { if (o.isMesh && !o.isSkinnedMesh) { const g = o.geometry, n = (g.index ? g.index.count : g.attributes.position.count) / 3, k = (o.material.type === 'ShaderMaterial' ? 'hull' : 'mesh') + ':' + n; m[k] = (m[k] || 0) + 1; } }); window.__stat.parts = Object.entries(m).map(([k, c]) => [k, c, c * +k.split(':')[1]]).sort((a, b) => b[2] - a[2]).slice(0, 14); }
-    return { update(dt, t) { for (const a of list) a.update(dt, t, st); } };
+    return { update(dt, t) { showHud(); for (const a of list) a.update(dt, t, st); } };
   } });
 }
 </script>

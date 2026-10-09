@@ -3,7 +3,7 @@
 // The outline is the same B-spline the 2D game strokes, so shore, foam and walkable area line up with the classic view.
 import * as THREE from 'three';
 import * as kit from './kit.js';
-import { W, WY, outline, Acc, tpl, facetGeo, vnoise, fbm, patchMat } from './env_util.js';
+import { W, WY, outline, Acc, tpl, facetGeo, vnoise, fbm, runSync } from './env_util.js';
 
 const TILE = 4.2, _c = new THREE.Color(), _d = new THREE.Color();
 const sstep = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
@@ -58,14 +58,15 @@ function tpls() {
  * Build the meshes of one island in a Group centred on the island (local coords). Returns { grp, top, rock, R }.
  * g: geoOf(k) (or HUB_GEO), B: its biome, bi: biome index.
  */
-export function buildIsland(g, B, bi) {
+export const buildIsland = (g, B, bi) => runSync(buildIslandG(g, B, bi));
+export function* buildIslandG(g, B, bi) {
   const O = outline(g, 4), n = O.length / 2, rnd = kit.rng(g.seed * 7 + 3), cx = g.x * W, cz = g.y * W;
   const rr = new Float32Array(n), ux = new Float32Array(n), uz = new Float32Array(n); let minR = 1e9, sumR = 0;
   for (let i = 0; i < n; i++) { rr[i] = Math.hypot(O[i * 2], O[i * 2 + 1]); ux[i] = O[i * 2] / rr[i]; uz[i] = O[i * 2 + 1] / rr[i]; minR = Math.min(minR, rr[i]); sumR += rr[i]; }
   const R = sumR / n, seedN = g.seed * 0.37;
   // ---------------- top
-  const night = bi === 6, hsl = { h: 0, s: 0, l: 0 };
-  const tone = (c) => { c.getHSL(hsl); return c.setHSL(hsl.h, Math.min(0.95, hsl.s * (night ? 0.9 : 1.28)), hsl.l * (night ? 0.55 : 0.92)); }; // lighting washes pastels out, so the ground starts a little richer than the 2D fill
+  const night = bi === 6, sandy = bi === 2 || bi === 7, hsl = { h: 0, s: 0, l: 0 };
+  const tone = (c) => { c.getHSL(hsl); return c.setHSL(hsl.h, Math.min(0.95, hsl.s * (night ? 0.9 : sandy ? 1.0 : 1.28)), hsl.l * (night ? 0.55 : sandy ? 0.97 : 0.92)); }; // lighting washes pastels out, so the ground starts a little richer than the 2D fill
   const g0 = tone(new THREE.Color(B.g[0])), g1 = tone(new THREE.Color(B.g[1])), tuft = tone(new THREE.Color(B.tuft)), deep = new THREE.Color(B.deep), shore = new THREE.Color(B.shore), sand = new THREE.Color(0xf3deb0).lerp(shore, 0.25);
   if (bi === 2 || bi === 7) sand.set(B.g[0]).multiplyScalar(0.96); // dune and gala ground already reads as sand: the rim only gets paler
   const insets = [0, 0.06, 0.14, 0.24, 0.36, 0.5, 0.7, 1.0, 1.5, 2.2, 3.1, 4.4, 6.2, 8.6].filter((v) => v < minR * 0.86);
@@ -85,11 +86,12 @@ export function buildIsland(g, B, bi) {
   for (let j = 0; j < rows; j++) {
     const ins = insets[j], y = -0.22 * Math.pow(1 - Math.min(1, ins / 0.34), 2);
     for (let i = 0; i < n; i++) { const s = Math.max(0, 1 - ins / rr[i]); setV(1 + j * n + i, O[i * 2] * s, y, O[i * 2 + 1] * s, ins); }
+    if (j % 2) yield;
   }
   const vi = (j, i) => 1 + j * n + ((i % n) + n) % n;
   for (let i = 0; i < n; i++) idx.push(0, vi(rows - 1, i + 1), vi(rows - 1, i));          // centre fan (innermost ring)
   for (let j = rows - 1; j > 0; j--) for (let i = 0; i < n; i++) { const a = vi(j, i), b = vi(j, i + 1), c = vi(j - 1, i), d = vi(j - 1, i + 1); idx.push(a, b, c, b, d, c); }
-  const tg = new THREE.BufferGeometry(); tg.setAttribute('position', new THREE.BufferAttribute(pos, 3)); tg.setAttribute('color', new THREE.BufferAttribute(col, 3)); tg.setAttribute('uv', new THREE.BufferAttribute(uv, 2)); tg.setIndex(idx); tg.computeVertexNormals();
+  const tg = new THREE.BufferGeometry(); tg.setAttribute('position', new THREE.BufferAttribute(pos, 3)); tg.setAttribute('color', new THREE.BufferAttribute(col, 3)); tg.setAttribute('uv', new THREE.BufferAttribute(uv, 2)); tg.setIndex(idx); yield; tg.computeVertexNormals(); yield;
   const top = new THREE.Mesh(tg, groundMat(bi)); top.receiveShadow = true; top.castShadow = false; top.name = 'islandTop';
   // ---------------- rock: skirt, underside, boulders, roots (one flat-shaded vertex coloured mesh)
   const acc = new Acc(), depthK = Math.sqrt(Math.max(0.8, Math.min(2.2, R / 6.3)));
@@ -102,17 +104,19 @@ export function buildIsland(g, B, bi) {
   const light = cliff.clone().lerp(warm, 0.28).multiplyScalar(1.12), deepC = cliff.clone().lerp(dark, 0.5);
   for (let b2 = 0; b2 < nbd; b2++) { const f = b2 / (nbd - 1), c1 = light.clone().lerp(deepC, f * 0.85), c2 = light.clone().lerp(deepC, Math.min(1, f * 0.85 + 0.12)), yb = -0.48 - (b2 + 1) * bh, off = -0.1 - b2 * 0.13, id = b2 + 1;
     wall.push([yb + bh * 0.04, off, 0.2 + 0.03 * b2, id, c1]); wall.push([yb, off - 0.01, 0.2 + 0.03 * b2, id, c2]); if (b2 < nbd - 1) wall.push([yb - 0.035, off - 0.16, 0.12, id + 20, c2]); }
-  const wrow = wall.map(([y, off, amp, nid, cc], r) => {
+  const wrow = [];
+  for (let r = 0; r < wall.length; r++) {
+    const [y, off, amp, nid, cc] = wall[r];
     const P = new Float32Array(n * 3), Cc = new Float32Array(n * 3), uw = kit.clamp((WY + 0.15 - y) / 1.0, 0, 1);
     for (let i = 0; i < n; i++) {
       const nzz = (vnoise(i * 0.27 + nid * 9.1 + seedN, nid * 3.3) - 0.5) * 2 + (vnoise(i * 0.8 + nid * 4.4, 7.7 + seedN) - 0.5) * 0.7, o = off + amp * nzz;
       P[i * 3] = O[i * 2] + ux[i] * o; P[i * 3 + 1] = y; P[i * 3 + 2] = O[i * 2 + 1] + uz[i] * o;
       _c.copy(cc); if (r === 2) _c.lerp(cols.turfB, sstep(0.46, 0.62, vnoise(i * 0.55 + seedN, 2.2))); if (r === 3) _c.lerp(cols.turfB, sstep(0.5, 0.68, vnoise(i * 0.55 + seedN, 2.2)) * 0.45);
-      if (uw > 0) _c.lerp(sea, uw * 0.6).multiplyScalar(1 - 0.45 * uw);
+      if (uw > 0) _c.lerp(sea, uw * 0.6).multiplyScalar(1 - 0.5 * uw);
       _c.multiplyScalar(0.94 + 0.12 * vnoise(i * 0.12 + r * 5.5, seedN + 1.7)); Cc[i * 3] = _c.r; Cc[i * 3 + 1] = _c.g; Cc[i * 3 + 2] = _c.b;
     }
-    return { P, Cc, n };
-  });
+    wrow.push({ P, Cc, n }); yield;
+  }
   const colv = (R_, i) => { _c.setRGB(R_.Cc[i * 3], R_.Cc[i * 3 + 1], R_.Cc[i * 3 + 2]); return _c; };
   const _ca = new THREE.Color(), _cb = new THREE.Color(), _cc = new THREE.Color(), _cd = new THREE.Color();
   const strip = (A, Bw, step = 1) => { // outward-facing quads between two rows (Bw below A)
@@ -122,7 +126,7 @@ export function buildIsland(g, B, bi) {
       acc.triv(A.P[a1], A.P[a1 + 1], A.P[a1 + 2], _cb, Bw.P[a1], Bw.P[a1 + 1], Bw.P[a1 + 2], _cd, Bw.P[a0], Bw.P[a0 + 1], Bw.P[a0 + 2], _cc);
     }
   };
-  for (let r = 0; r + 1 < wrow.length; r++) strip(wrow[r], wrow[r + 1]);
+  for (let r = 0; r + 1 < wrow.length; r++) { strip(wrow[r], wrow[r + 1]); if (r % 2) yield; }
   // underside: half the vertex count, tapering toward a tip with lumpy noise; each row is [y, scale, amp, colour]
   const half = n / 2, y0u = WY - 1.1, under = [[y0u - 1.1, 0.9, 0.3, 'u0'], [y0u - 2.7, 0.72, 0.45, 'u1'], [y0u - 4.4, 0.5, 0.55, 'u2'], [y0u - 6.0, 0.26, 0.5, 'u3']];
   const mk = (y, s, amp, ck, rid) => {
@@ -134,13 +138,13 @@ export function buildIsland(g, B, bi) {
   };
   const last = wrow[wrow.length - 1], u0 = { P: new Float32Array(half * 3), Cc: new Float32Array(half * 3), n: half };
   for (let h = 0; h < half; h++) for (let k = 0; k < 3; k++) { u0.P[h * 3 + k] = last.P[h * 2 * 3 + k]; u0.Cc[h * 3 + k] = last.Cc[h * 2 * 3 + k]; }
-  let prev = u0; under.forEach(([y, s, amp, ck], r) => { const row = mk(y, s, amp, ck, r + 1); strip(prev, row); prev = row; });
+  let prev = u0; for (let r = 0; r < under.length; r++) { const [y, s, amp, ck] = under[r], row = mk(y, s, amp, ck, r + 1); strip(prev, row); prev = row; yield; }
   { // tip fan
     const tipY = (y0u - 7.4) * depthK, ct = cols.u3; const tx = (rnd() - 0.5) * 0.6, tz = (rnd() - 0.5) * 0.6;
     for (let h = 0; h < half; h++) { const h1 = (h + 1) % half; _ca.setRGB(prev.Cc[h * 3], prev.Cc[h * 3 + 1], prev.Cc[h * 3 + 2]); _cb.setRGB(prev.Cc[h1 * 3], prev.Cc[h1 * 3 + 1], prev.Cc[h1 * 3 + 2]);
       acc.triv(prev.P[h * 3], prev.P[h * 3 + 1], prev.P[h * 3 + 2], _ca, prev.P[h1 * 3], prev.P[h1 * 3 + 1], prev.P[h1 * 3 + 2], _cb, tx, tipY, tz, ct); }
   }
-  const T = tpls(), tint = new THREE.Color();
+  yield; const T = tpls(), tint = new THREE.Color(); yield;
   // boulders at the waterline and hanging rocks below
   const nb = 4 + Math.round(R * 0.5);
   for (let q = 0; q < nb; q++) {
@@ -151,7 +155,7 @@ export function buildIsland(g, B, bi) {
   const nr = 5 + Math.round(R * 0.7);
   for (let q = 0; q < nr; q++) { const i = Math.floor(rnd() * n), y = (WY - 0.6 - rnd() * 2.2) * depthK ** 0.5, s = 0.8 + rnd() * 0.9, k = 0.96 - rnd() * 0.06; tint.copy(cols.u0).lerp(new THREE.Color(0x6a4a3a), 0.5);
     acc.add(T.roots[q % 3], O[i * 2] * k, y, O[i * 2 + 1] * k, rnd() * 6.3, s * 0.9, s, s * 0.9, null, 0, 0, 0.1); }
-  const rg = acc.build(false), rock = new THREE.Mesh(rg, ROCK_MAT); rock.castShadow = false; rock.receiveShadow = false; rock.name = 'islandRock';
+  yield; const rg = acc.build(false); yield; const rock = new THREE.Mesh(rg, ROCK_MAT); rock.castShadow = false; rock.receiveShadow = false; rock.name = 'islandRock';
   const grp = new THREE.Group(); grp.name = 'island'; grp.position.set(cx, 0, cz); grp.add(top, rock);
   return { grp, top, rock, R };
 }

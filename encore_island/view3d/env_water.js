@@ -9,7 +9,7 @@ import { WY, W, outline } from './env_util.js';
 const VERT = `varying vec3 vW; void main(){ vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }`;
 const FRAG = `
 varying vec3 vW;
-uniform sampler2D uShore; uniform vec4 uRect; uniform float uHas, uT, uBeat, uCloud, uSparkle, uFoam, uFogN, uFogF, uGrowR, uGrowS;
+uniform sampler2D uShore; uniform vec4 uRect; uniform float uHas, uT, uBeat, uCloud, uSparkle, uFoam, uClear, uFogN, uFogF, uGrowR, uGrowS;
 uniform vec3 uShallow, uDeep, uFoamCol, uSky, uFogCol, uSun, uCam; uniform vec2 uSunXZ; uniform vec2 uGrowC;
 float hs(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
 float vn(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f); return mix(mix(hs(i), hs(i + vec2(1.0, 0.0)), f.x), mix(hs(i + vec2(0.0, 1.0)), hs(i + vec2(1.0, 1.0)), f.x), f.y); }
@@ -55,7 +55,7 @@ void main(){
   col = mix(col, uSky, fr * 0.45);
   // cloud shadows drifting over the sea (same field as the lit materials)
   if (uCloud > 0.001) { vec2 q = p * 0.05 + vec2(t * 0.022, t * 0.012); float n = vn(q * 3.0) * 0.62 + vn(q * 6.93 + 7.1) * 0.38; col *= 1.0 - smoothstep(0.46, 0.66, n) * uCloud * 0.55; }
-  float a = mix(0.6, 1.0, smoothstep(0.1, 3.2, d)); a = max(a, foam);
+  float a = mix(uClear, 1.0, smoothstep(0.1, 3.2, d)); a = max(a, foam);
   float fg = clamp((length(vW - uCam) - uFogN) / max(1.0, uFogF - uFogN), 0.0, 1.0); fg = fg * fg * (3.0 - 2.0 * fg);
   col = mix(col, uFogCol, fg); a = mix(a, 1.0, fg);
   gl_FragColor = vec4(col, a);
@@ -93,7 +93,7 @@ function* bakeShore(geos, rect, R, res) {
 
 export function createWater(V) {
   const U = {
-    uShore: { value: null }, uRect: { value: new THREE.Vector4(0, 0, 1, 1) }, uHas: { value: 0 }, uT: kit.LOOK.t, uBeat: kit.LOOK.beat, uCloud: kit.LOOK.cloud, uSparkle: { value: 1 }, uFoam: { value: 1 },
+    uShore: { value: null }, uRect: { value: new THREE.Vector4(0, 0, 1, 1) }, uHas: { value: 0 }, uT: kit.LOOK.t, uBeat: kit.LOOK.beat, uCloud: kit.LOOK.cloud, uSparkle: { value: 1 }, uFoam: { value: 1 }, uClear: { value: 0.6 },
     uFogN: { value: 60 }, uFogF: { value: 200 }, uGrowR: { value: 1 }, uGrowS: { value: 0 }, uGrowC: { value: new THREE.Vector2() },
     uShallow: { value: new THREE.Color() }, uDeep: { value: new THREE.Color() }, uFoamCol: { value: new THREE.Color() }, uSky: { value: new THREE.Color() }, uFogCol: { value: new THREE.Color() }, uSun: { value: new THREE.Color() }, uCam: { value: new THREE.Vector3() }, uSunXZ: { value: new THREE.Vector2(0.7, -0.6) },
   };
@@ -127,7 +127,7 @@ export function createWater(V) {
     update(dt, t, cam, mood, fog) {
       U.uCam.value.copy(cam.position); const s = 6; mesh.position.set(Math.round(cam.position.x / s) * s, WY + Math.sin(t * 0.8) * 0.035, Math.round(cam.position.z / s) * s);
       U.uShallow.value.copy(mood.water); U.uDeep.value.copy(mood.waterDeep); U.uFoamCol.value.copy(mood.foamCol); U.uSky.value.copy(mood.skyLow); U.uFogCol.value.copy(mood.fog); U.uSun.value.copy(mood.sunDisc);
-      U.uSparkle.value = mood.sparkle; U.uFoam.value = mood.foam; U.uFogN.value = mood.fogNear; U.uFogF.value = mood.fogFar;
+      U.uSparkle.value = mood.sparkle; U.uFoam.value = mood.foam; U.uClear.value = mood.clear; U.uFogN.value = mood.fogNear; U.uFogF.value = mood.fogFar;
       const L = mood.sunDir, ly = Math.max(0.25, L[1]); U.uSunXZ.value.set(L[0] / ly, L[2] / ly);
     },
     dispose() { mesh.geometry.dispose(); mat.dispose(); if (tex) tex.dispose(); },

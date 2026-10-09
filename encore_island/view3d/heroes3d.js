@@ -9,13 +9,12 @@ import { CK, makeJasmin, makeRoxor, STYLE } from '../../encore_island_3d/js/char
 import { bakeActor } from './bake.js';
 import { W as WU, softTex, lit, clamp, lerp, damp, hash01, canvasTex as kitCanvasTex } from './kit.js';
 
-const { part, flat, ico, box, cyl, hang, cone, torus, cap, dome, basic, aim, blade, tubeGeo, flameGeo, lockGeo, pleatGeo, geo, makeCtx, makeLife, newState, kidTick, poseArm, setBlinkH, setMouthH, lifeXform,
-  buildHero, fitHero, makeHead, patchGeo, decal, cylDecal, decalMat, ctex, ell, star, addHeroFace, addFanFace, eyeJ, paintEyeShutJ, paintEyeR, paintEyeShutR, paintMouthJ, paintMouthR, paintMouthSmile, heroBase, finishHero, makeNotes, SKIN } = CK;
+const { part, flat, ico, box, cyl, hang, cone, torus, cap, basic, blade, tubeGeo, flameGeo, lockGeo, geo, makeCtx, kidTick, poseArm, setBlinkH, setMouthH, lifeXform,
+  buildHero, fitHero, cylDecal, decalMat, ctex, ell, star, addHeroFace, addFanFace, eyeJ, paintEyeShutJ, paintEyeR, paintEyeShutR, paintMouthJ, paintMouthR, paintMouthSmile, heroBase, finishHero } = CK;
 
 const PI = Math.PI;
 const capL = (fan, a, b, th) => (fan ? cap(10, 4, th) : cap(a, b, th)); // crowd LOD hair caps
 const mixHex = (a, b, t) => { const k = new THREE.Color(a).lerp(new THREE.Color(b), t); return k.getHex(); };
-const sphX = (rx, ry, rz) => (x, y) => rz * Math.sqrt(Math.max(0.04, 1 - (x / rx) ** 2 - (y / ry) ** 2)); // z on an ellipse centred at 0
 const DEF_ATK = [[-1.55, 0, -0.1, -0.2, 0, 0], [0.6, 0, -0.6, -0.4, 0, 0]];
 
 // generic hero update: kidTick locomotion, then the rig's idle / sing / attack arm poses, extras, notes, shared overlays (cast / cheer / dash / hurt)
@@ -122,11 +121,11 @@ function rigRawclaw(o = {}, goat = false) {
   const eye = eyeJ({ gr: ['#4a2a14', '#7a4a26', '#c89050'], star: null, lash: 7 });
   R.face = fan ? addFanFace(ctx, head, H, { ex: 0.17, iris: 0x6a3a22 }) : addHeroFace(ctx, head, H, {
     id: goat ? 'G' : 'C', eyeP: eye, shutP: paintEyeShutJ, ex: 0.18, ey: -0.04, ew: 0.19, eh: 0.19, blush: '#ff9a8a', bx: 0.23, by: -0.15, bw: 0.14,
-    brow: { col: '#24181a', thick: 9, arch: 0.22, x: 0.185, y: 0.17, w: 0.17, h: 0.07, rot: 0.1 }, noseCol: '#b8806a', ny: -0.12, mouthP: goat ? paintMouthJ : paintMouthSmile, my: -0.215, mw: goat ? 0.17 : 0.14, mh: goat ? 0.12 : 0.08 });
+    brow: { col: '#24181a', thick: 8, arch: 0.3, x: 0.185, y: 0.17, w: 0.17, h: 0.07, rot: -0.04 }, noseCol: '#b8806a', ny: -0.12, mouthP: paintMouthJ, my: -0.215, mw: goat ? 0.17 : 0.15, mh: goat ? 0.12 : 0.1 });
   fitHero(R, 1.7);
   const { self, S, L, NT } = heroBase(R, { seed: goat ? 7 : 5, height: 1.7, radius: 0.42, note: [0.0, 1.3, 0.4] });
   self.update = makeUpdate(self, R, S, L, NT, {
-    mouthBase: goat ? 1 : 0.9,
+    mouthBase: goat ? 0.9 : 0.5,
     idle: (c) => goat
       ? [[-1.75 - c.s * 0.05 * c.amp, 0.1, -0.35, -2.3, 0, 0], [-0.55 + c.s * 0.1 * c.amp, -0.3, -0.2, -1.25, 0, 0]] // right hand under the chin, left hand on the pad
       : [[-0.55 - c.s * 0.1 * c.amp, -0.3, -0.12, -1.3, 0, 0], [-0.55 + c.s * 0.1 * c.amp, 0.3, 0.12, -1.3, 0, 0]],
@@ -246,7 +245,7 @@ function rigUnicorn(o = {}) {
   part(ctx, hn, cone(0.075, 0.3, 8), 0xffe27a, 0, 0.14, 0, 1, 1, 1, { ol: 0.013 });
   if (!fan) for (let i = 0; i < 3; i++) part(ctx, hn, torus(0.062 - i * 0.015, 0.012, 3, 9), 0xffb52e, 0, 0.07 + i * 0.07, 0, 1, 1, 1, { rx: PI / 2, ol: false });
   // rainbow ponytail from the back left of the hood
-  const tail = new THREE.Group(); tail.position.set(-0.26, cy + ry * 0.55, -0.19); head.add(tail);
+  const tail = new THREE.Group(); tail.position.set(-0.34, cy + ry * 0.3, -0.12); head.add(tail);
   part(ctx, tail, ico(1), 0xff9ec8, 0, 0, 0, 0.11, 0.1, 0.1, { ol: 0.012 });
   const tj = makeTail(ctx, tail, fan ? [0xff9ec8, 0xc3a6ff, 0x9fdcff, 0xa6f0c0, 0xffe48a] : [0xff9ec8, 0xc3a6ff, 0x9fdcff, 0xa6f0c0, 0xffe48a], 1.0, 0.1, 0.16);
   const eye = eyeJ({ gr: ['#4a2815', '#7c4824', '#c08848'] });
@@ -261,7 +260,7 @@ function rigUnicorn(o = {}) {
     sing: (c) => [[-0.8 + c.beat * 0.05, -0.1, -0.25, -1.95], [-0.25 + c.beat * 0.15, -0.2, -0.95, -0.35, 0, -(0.5 + c.beat * 0.12)]],
     extra(c) {
       const idle = Math.sin(c.t * 1.7), side = Math.sin(c.ph - 0.6);
-      tail.rotation.set(0.1 * c.amp + c.sg * (0.1 + 0.15 * c.beat) + idle * 0.05 + c.A * 0.4, 0, -0.5 + side * 0.15 * c.amp + c.sg * Math.sin(c.t * PI * 2 - 0.4) * 0.12);
+      tail.rotation.set(0.1 * c.amp + c.sg * (0.1 + 0.15 * c.beat) + idle * 0.05 + c.A * 0.4, 0, -0.75 + side * 0.15 * c.amp + c.sg * Math.sin(c.t * PI * 2 - 0.4) * 0.12);
       whip(tj, c.ph, { x: 0.2, z: 0.1 }, c.amp + c.sg * 0.5 + c.A, 0);
       for (let i = 0; i < tj.length; i++) tj[i].rotation.z += Math.sin(c.t * 1.7 - i * 0.8) * 0.05 + 0.04;
       hn.rotation.z = Math.sin(c.t * 2) * 0.03 + c.sg * c.beat * 0.04;
@@ -346,7 +345,7 @@ function rigJordan(o = {}) {
   const hm = ctx.mk('joHair', { color: HAIR, flatShading: false, roughness: 0.6 }), hl = ctx.mk('joHair2', { color: HAIR2, flatShading: false });
   part(ctx, head, cap(18, 8, 1.3), 0, 0, cy + 0.03, -0.04, rx * 1.1, ry * 1.1, rz * 1.12, { mat: hm, hull: true, ol: 0.014, rx: -0.35 });
   part(ctx, head, ico(1), 0, 0, cy - 0.3, -0.19, rx * 0.88, ry * 1.4, rz * 0.5, { mat: hm, hull: true, ol: 0.014 });
-  for (const sd of [-1, 1]) { part(ctx, head, ico(1), 0, sd * (rx * 1.0), cy - 0.3, -0.03, 0.085, 0.36, 0.11, { mat: hm, hull: true, ol: 0.013, rz: sd * 0.06 }); part(ctx, head, ico(1), 0, sd * (rx * 0.99), cy - 0.2, 0.06, 0.04, 0.22, 0.06, { mat: hl, ol: false, rz: sd * 0.06 }); }
+  for (const sd of [-1, 1]) { part(ctx, head, ico(1), 0, sd * (rx * 1.0), cy - 0.3, -0.03, 0.075, 0.33, 0.1, { mat: hm, hull: true, ol: 0.013, rz: sd * 0.06 }); part(ctx, head, ico(1), 0, sd * (rx * 0.99), cy - 0.2, 0.06, 0.04, 0.22, 0.06, { mat: hl, ol: false, rz: sd * 0.06 }); }
   const lock = (path, wid, lift) => part(ctx, head, lockGeo(H, path, wid, lift), 0, 0, 0, 0, 1, 1, 1, { mat: hm, hull: true, ol: 0.011 });
   lock([[0.0, 0.95], [0.3, 0.88], [0.6, 0.72], [0.82, 0.45], [0.92, 0.25]], [0.05, 0.16, 0.17, 0.12, 0.05], [0.03, 0.04, 0.045, 0.04, 0.03]);
   lock([[0.0, 0.95], [-0.3, 0.88], [-0.6, 0.72], [-0.82, 0.45], [-0.92, 0.25]], [0.05, 0.16, 0.17, 0.12, 0.05], [0.03, 0.04, 0.045, 0.04, 0.03]);
@@ -356,15 +355,15 @@ function rigJordan(o = {}) {
     brow: { col: '#262a4c', thick: 6, arch: 0.25, x: 0.18, y: 0.14, w: 0.15, h: 0.06, rot: 0.1 }, noseCol: '#c08070', ny: -0.12, mouthP: paintMouthJ, my: -0.215, mw: 0.15, mh: 0.1 });
   // round glasses
   const gm = ctx.mk('joGlass', { color: 0x2d170f, flatShading: false }), gz = H.surf(0.178, cy - 0.035 - cy + cy) + 0.035;
-  for (const sd of [-1, 1]) { part(ctx, head, torus(0.1, 0.013, 4, 16), 0, sd * 0.178, cy - 0.035, H.surf(sd * 0.178, cy - 0.035) + 0.03, 1, 1, 1, { mat: gm, ol: false }); part(ctx, head, box(0.012, 0.012, 0.2), 0, sd * 0.28, cy - 0.025, 0.1, 1, 1, 1, { mat: gm, ol: false, ry: sd * 0.28 }); }
+  for (const sd of [-1, 1]) { part(ctx, head, torus(0.095, 0.009, 4, 18), 0, sd * 0.178, cy - 0.035, H.surf(sd * 0.178, cy - 0.035) + 0.03, 1, 1, 1, { mat: gm, ol: false }); part(ctx, head, box(0.012, 0.012, 0.2), 0, sd * 0.28, cy - 0.025, 0.1, 1, 1, 1, { mat: gm, ol: false, ry: sd * 0.28 }); }
   part(ctx, head, box(0.07, 0.014, 0.014), 0, 0, cy - 0.025, H.surf(0, cy - 0.025) + 0.03, 1, 1, 1, { mat: gm, ol: false });
   // phone with a glowing screen (right hand, +x) and a tiny second hand wave
-  const ph = new THREE.Group(); ph.position.set(0.0, -0.2, 0.04); ph.rotation.set(1.0, 0, 0); R.armR.el.add(ph);
+  const ph = new THREE.Group(); ph.position.set(0.0, -0.2, 0.04); ph.rotation.set(0.9, 0, 0); ph.scale.setScalar(1.45); R.armR.el.add(ph);
   part(ctx, ph, box(0.12, 0.2, 0.025), 0x1b6a68, 0, 0, 0, 1, 1, 1, { ol: 0.01 });
   flat(box(1, 1, 1), basic(mixHex(0x6ee9d8, 0xffffff, 0.2)), ph, 0, 0, 0.014, 0.1, 0.17, 0.004);
   flat(ico(0), basic(0xffffff), ph, -0.012, -0.02, 0.019, 0.02, 0.016, 0.004); flat(box(1, 1, 1), basic(0xffffff), ph, 0.004, 0.015, 0.019, 0.005, 0.06, 0.004); flat(box(1, 1, 1), basic(0xffffff), ph, 0.02, 0.04, 0.019, 0.03, 0.01, 0.004);
   fitHero(R, o.height || 1.25);
-  const { self, S, L, NT } = heroBase(R, { seed: 17, height: o.height || 1.25, radius: 0.35, note: [0.12, 1.15, 0.35], noteCols: [0x5ee0d2, 0xb8fff6, 0x8fe3f0, 0x9af0b4] });
+  const { self, S, L, NT } = heroBase(R, { seed: 17, height: o.height || 1.25, radius: 0.35, note: [0.3, 0.95, 0.4], noteCols: [0x5ee0d2, 0xb8fff6, 0x8fe3f0, 0x9af0b4] });
   self.update = makeUpdate(self, R, S, L, NT, {
     noNotes: true, mouthBase: 0.8,
     idle: (c) => { const up = Math.max(0, Math.sin(c.t * 0.5)) ** 3; return [[-0.85 - up * 0.2, -0.2, 0.12, -1.25 + up * 0.3, 0, 0], [-0.2 + Math.sin(c.t * 1.3) * 0.05, 0.1, -0.55 - Math.max(0, Math.sin(c.t * 0.5 + 1.5)) * 0.5, -0.3]]; },
@@ -465,7 +464,7 @@ function badgeTex(k) {
 }
 
 export function init(V) {
-  const T = V.THREE || THREE, dyn = V.dyn, blobs = V.blobs;
+  const dyn = V.dyn, blobs = V.blobs;
   const bake = (a, opts) => { try { (V.bake || bakeActor)(a, opts); } catch (e) { /* unbaked actors still render, just with more calls */ } };
   const tmpV = new THREE.Vector3(), tmpQ = new THREE.Quaternion(), tmpM = new THREE.Matrix4(), tmpM2 = new THREE.Matrix4(), tmpS = new THREE.Vector3(), UP = new THREE.Vector3(0, 1, 0), tmpC = new THREE.Color();
   const root = new THREE.Group(); root.name = 'heroes3d'; dyn.add(root);
@@ -485,7 +484,16 @@ export function init(V) {
   const metalCol = (k) => { const i = ((k || 1) - 1) % 8; return METAL_HEX[i]; };
   const METAL_HEX = [0xc87838, 0xb5804a, 0xc8ccd4, 0xe8b93a, 0xd6e2ea, 0x6ee0d8, 0x5a7fe0, 0xa6e04a];
   // stack the entries on a world anchor matrix: lean/sway grows toward the top like the 2D stack. size = item width in world units.
-  function stackAt(anchor, items, t, moving, size, maxH, seed) {
+  // real item models (loot3d.makeItemModel) for the top `real` entries when the loot module is present; proxies for the rest of the pile
+  const slots = [], lootMod = () => V.mods && (V.mods.loot || V.mods.loot3d), keyOf = (e) => (e.crown ? 'c' : e.bar ? 'b' + (((e.k || 1) - 1) % 8) : 'h' + (((e.k || 1) - 1) % 8)); let slotN = 0;
+  function realItem(e, m4) {
+    const lm = lootMod(); if (!lm || !lm.makeItemModel) return false;
+    const sl = slots[slotN] || (slots[slotN] = { cache: new Map(), cur: null }); slotN++;
+    const k = keyOf(e); let o = sl.cache.get(k); if (!o) { try { o = lm.makeItemModel(e); } catch (err) { return false; } sl.cache.set(k, o); o.matrixAutoUpdate = false; root.add(o); }
+    if (sl.cur !== o) { if (sl.cur) sl.cur.visible = false; sl.cur = o; }
+    o.visible = true; o.matrix.copy(m4); o.matrixWorldNeedsUpdate = true; return true;
+  }
+  function stackAt(anchor, items, t, moving, size, maxH, seed, real = 0) {
     const n = items.length; if (!n) return 0;
     anchor.updateWorldMatrix(true, false); tmpM.copy(anchor.matrixWorld);
     const dy = clamp(maxH / n, size * 0.18, size * 0.5), sw = moving ? 1.6 : 0.6;
@@ -495,6 +503,7 @@ export function init(V) {
       tmpV.set(sx + Math.sin(i * 2.3) * 0.02 * size * 6, size * 0.3 + i * dy, sz); tmpQ.setFromAxisAngle(UP, (i % 5 - 2) * 0.12 + Math.sin(t * 3 + i) * 0.04 * sw);
       const bar = !!e.bar, crown = !!e.crown, sc = size * (crown ? 1.05 : bar ? 0.9 : 1.0);
       tmpS.set(sc, sc, sc); tmpM2.compose(tmpV, tmpQ, tmpS).premultiply(tmpM);
+      if (real && i >= n - real && realItem(e, tmpM2)) continue;
       if (crown) { if (lootN.c < 120) crowns.setMatrixAt(lootN.c++, tmpM2); }
       else if (bar) { if (lootN.b < LOOT_MAX) { bars.setMatrixAt(lootN.b, tmpM2); bars.setColorAt(lootN.b, tmpC.set(metalCol(e.k))); lootN.b++; } }
       else if (lootN.h < LOOT_MAX) { helm.setMatrixAt(lootN.h, tmpM2); helm.setColorAt(lootN.h, tmpC.set(metalCol(e.k))); trim.setMatrixAt(lootN.h, tmpM2); lootN.h++; }
@@ -502,6 +511,7 @@ export function init(V) {
     return n * dy;
   }
   function lootFlush() {
+    for (let j = slotN; j < slots.length; j++) if (slots[j].cur) slots[j].cur.visible = false; slotN = 0;
     helm.count = trim.count = lootN.h; bars.count = lootN.b; crowns.count = lootN.c;
     for (const im of [helm, trim, bars, crowns]) im.instanceMatrix.needsUpdate = true;
     helm.instanceColor.needsUpdate = true; bars.instanceColor.needsUpdate = true; lootN.h = lootN.b = lootN.c = 0;
@@ -509,7 +519,7 @@ export function init(V) {
 
   // ---- generic entry: holder (position + yaw) around an actor; the actor's own group is never rotated
   function mkEntry(actor, o = {}) {
-    const holder = new THREE.Group(); holder.add(actor.group); root.add(holder);
+    const holder = actor.group; root.add(holder); // the engine contract: position / yaw / scale live on actor.group itself
     if (o.scale) holder.scale.setScalar(o.scale);
     return { holder, actor, yaw: 0, x: 0, z: 0, px: 0, pz: 0, vx: 0, vz: 0, init: false, st: { speed: 0, atk: false, cast: false, cheer: false, hurt: 0, singing: false, carry: null, glow: false, dash: false, die: 0, role: '' }, hold: 0, aim: 0, lastAtk: 0, scale: o.scale || 1 };
   }
@@ -557,9 +567,9 @@ export function init(V) {
     setAlpha(e, p.invuln > 0 && ((S.t * 14) | 0) % 2 && !(heroGrace() > 0) ? 0.5 : 1);
     // effects
     const enc = encoreOn(), pulse = 0.5 + 0.5 * Math.sin(S.t * 3);
-    aura.visible = enc || st.glow; if (aura.visible) { aura.material.color.set(enc ? 0xff7eb6 : 0xffd94a); aura.material.opacity = enc ? 0.5 + 0.1 * pulse : 0.35 + 0.1 * pulse; aura.scale.set(enc ? 4 : 2.4, enc ? 4 : 3.4, 1); aura.position.set(x, 0.95, z); }
+    aura.visible = enc || st.glow; if (aura.visible) { aura.material.color.set(enc ? 0xff7eb6 : 0xffd94a); aura.material.opacity = enc ? 0.34 + 0.08 * pulse : 0.3 + 0.08 * pulse; aura.scale.set(enc ? 4 : 2.4, enc ? 4 : 3.4, 1); aura.position.set(x, 0.95, z - 0.9); } // sprites sit behind the hero so they never wash out the face
     const cu = S.ultCasting > 0 ? S.ultCasting / 1.4 : 0, cg = cu > 0 ? Math.sin(clamp(1 - cu, 0, 1) * PI) : 0;
-    castGlow.visible = cg > 0.02; if (castGlow.visible) { castGlow.position.set(x, 1.0, z); const s = 2.6 + 3 * cg; castGlow.scale.set(s, s * 1.15, 1); castGlow.material.opacity = 0.18 + 0.32 * cg; castGlow.material.color.setHSL((S.t * 0.8) % 1, 0.85, 0.62); }
+    castGlow.visible = cg > 0.02; if (castGlow.visible) { castGlow.position.set(x, 1.0, z - 0.9); const s = 2.6 + 3 * cg; castGlow.scale.set(s, s * 1.15, 1); castGlow.material.opacity = 0.12 + 0.28 * cg; castGlow.material.color.setHSL((S.t * 0.8) % 1, 0.85, 0.62); }
     const gs = heroGrace(); shield.visible = gs > 0; if (shield.visible) { const al = Math.min(1, gs) * (0.35 + 0.1 * Math.sin(S.t * 10)); shield.material.opacity = al * 0.5; shield.position.set(x, 0.9, z); const r = 0.98 + 0.02 * Math.sin(S.t * 8); shield.scale.set(r, r * 1.08, r); }
     trailT -= dt; if (trailT <= 0) { trailT = 0.035; trail.copyWithin(3, 0, 45); trail[0] = x; trail[1] = 0.9; trail[2] = z; trailN = Math.min(15, trailN + 1); }
     for (let i = 0; i < 3; i++) { const g = ghosts[i], idx = (i + 1) * 2 * 3; g.visible = st.dash && trailN > (i + 1) * 2; if (g.visible) { g.position.set(trail[idx], trail[idx + 1], trail[idx + 2]); g.scale.set(0.8 - i * 0.12, 1.5, 1); g.material.opacity = 0.4 - i * 0.12; g.material.color.set(i % 2 ? 0xfff4e6 : 0xc6ffd8); } }
@@ -576,7 +586,7 @@ export function init(V) {
     if ((c.drop || 0) > 0.3 && !(e.drop > 0.3)) a.attack(); e.drop = c.drop || 0;
     st.speed = moving ? 0.8 : 0; st.atk = false; st.singing = false; st.hurt = 0; st.cast = st.cheer = st.dash = false;
     a.update(dt, t, st);
-    const items = S.player.helmets, n = items.length, hgt = stackAt(a.anchor, items, t, moving, 0.32, 1.4, 0);
+    const items = S.player.helmets, n = items.length, hgt = stackAt(a.anchor, items, t, moving, 0.32, 1.4, 0, 3);
     blobs.add(x, z, 0.5, 0.3);
     a.anchor.getWorldPosition(tmpV);
     if (n) V.labels.pill(n + '/' + cap(), tmpV.x, tmpV.y + hgt * 1.1 + 0.5, tmpV.z, { fill: n >= cap() ? '#ffe98a' : '#ffffff', stroke: n >= cap() ? '#f0b422' : '#dccaff', c1: n >= cap() ? '#ffe98a' : '#ffffff', c2: n >= cap() ? '#f0b422' : '#dccaff', size: 11, px: 11 });
@@ -589,7 +599,7 @@ export function init(V) {
   function fanFor(f) {
     let e = fans.get(f.id);
     if (e) return e;
-    if (built >= 2) return null; // build at most two crowd actors per frame, the rest appear next frame
+    if (built >= 1) return null; // build one crowd actor per frame (a rig + bake is 15 to 40 ms), the rest appear over the next frames
     const v = Math.floor(hash01(f.id * 7 + 3) * FAN_V), key = f.art + '|' + v, free = fanPool.get(key);
     if (free && free.length) { e = free.pop(); e.holder.visible = true; }
     else {

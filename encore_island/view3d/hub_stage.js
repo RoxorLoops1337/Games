@@ -2,7 +2,7 @@
 // and the ENCORE ISLAND marquee with chasing bulbs. Local frame: origin at STAGE (world X = x*W, Z = y*W), +z faces the camera.
 import * as THREE from 'three';
 import { Builder, C, INK, W, TAU, PI, seg, GB, GOLD, SHINY, glow, lit, canvasTex, stickerText, fitFont, starShape, damp, clamp } from './kit.js';
-import { Inst, ringQuad, rod, textAtlas, rbx, bll, floorMat } from './hub_fx.js';
+import { Inst, ringQuad, rod, textAtlas, rbx, bll, floorMat, stat } from './hub_fx.js';
 
 const PINK = 0xff9ac8, PINK_D = 0xd8559a, CZ = 0.36, R = 2.32; // platform centre z (local) and radius
 const SPOT_COL = [[1.0, 0.45, 0.72], [0.45, 1.0, 0.7], [0.62, 0.5, 1.0], [1.0, 0.85, 0.35]];
@@ -13,7 +13,7 @@ export function buildStage(V, fx) {
   const FM = (c) => ({ m: floorMat(), c }), f = new Builder({ ao: 0 });
   f.cyl(FM(INK), 0, 0, CZ, R + 0.2, 0.057, seg(64)); f.cyl(FM(C.cream), 0, 0, CZ, R + 0.13, 0.065, seg(64)); f.cyl(FM(PINK_D), 0, 0, CZ, R + 0.06, 0.073, seg(64)); f.cyl(FM(PINK), 0, 0, CZ, R, 0.081, seg(64));
   f.cyl(FM(0xffb4d6), 0, 0, CZ, R * 0.72, 0.085, seg(48)); f.cyl(FM(PINK), 0, 0, CZ, R * 0.44, 0.089, seg(40));
-  g.add(f.build({ cast: false }));
+  g.add(stat(f.build({ cast: false })));
   // ---- lit stars: one big in the middle, a ring of small ones chasing around it ----
   const starGeo = new THREE.ShapeGeometry(starShape(5, 1, 0.45), 1).rotateX(-PI / 2).toNonIndexed(); starGeo.deleteAttribute('uv');
   const smat = new THREE.MeshBasicMaterial({ color: 0xffffff, fog: false, polygonOffset: true, polygonOffsetFactor: -8, polygonOffsetUnits: -8 }); smat.userData.noCast = true; smat.userData.noLook = true;
@@ -42,7 +42,7 @@ export function buildStage(V, fx) {
   for (const sd of [-1, 1]) { rod(t, GBc, INK, sd * (TX - 0.05), TH - 0.1, TZ + 0.0, sd * 2.3, BY + BH / 2 + 0.1, TZ, 0.03, 5); rod(t, GBc, INK, sd * 1.2, TH - 0.1, TZ, sd * 1.2, BY + BH / 2 + 0.1, TZ, 0.03, 5); }
   // trim lines
   t.box({ m: GOLD, c: C.gold }, 0, BY + BH / 2 - 0.04, TZ + 0.16, BW - 0.05, 0.05, 0.05); t.box({ m: GOLD, c: C.gold }, 0, BY - BH / 2 + 0.07, TZ + 0.16, BW - 0.05, 0.05, 0.05);
-  const bd = t.build({ cast: true }); g.add(bd);
+  const bd = t.build({ cast: true }); g.add(stat(bd));
   // lettering
   const lt = canvasTex(1024, 256, (c, w, h) => { const sz = fitFont(c, 'ENCORE ISLAND', w - 90, 150); stickerText(c, 'ENCORE ISLAND', w / 2, h * 0.5, sz, '#ffc9de', '#ff5fa6', sz * 0.17); }, {});
   const lm = new THREE.MeshBasicMaterial({ map: lt, transparent: true, alphaTest: 0.04, depthWrite: false, fog: true }); lm.userData.noCast = true;
@@ -59,7 +59,7 @@ export function buildStage(V, fx) {
     });
     woofs.push([x, 0.55, z, yaw, 0.34], [x, 1.18, z, yaw, 0.24]);
   }
-  g.add(sp.build({ cast: true }));
+  g.add(stat(sp.build({ cast: true })));
   const wb = new Builder({ ao: 0 }); wb.tor(C.cream, 0, 0, 0, 1, 0.14, 8, seg(24)); wb.cylc(0x241a52, 0, 0, 0, 0.9, 0.05, seg(24), PI / 2); wb.part(GB.ico(2), 0x6a5cd8, 0, 0, 0.0, 0.62, 0.62, 0.28); wb.part(GB.ico(1), C.gold, 0, 0, 0.1, 0.2, 0.2, 0.12);
   const woof = new Inst(wb.geometry(), lit(0xffffff, { vc: true, rough: 0.5 }), 4, {}); g.add(woof.mesh);
   // ---- spotlights ----
@@ -82,11 +82,11 @@ export function buildStage(V, fx) {
       // stars
       stars.begin(); const hue = (i) => SPOT_COL[i % 4];
       { const c = hue(((tt * 1.5) | 0) % 4), s = 1.0 + 0.1 * pulse; stars.put(0, 0, CZ, 0, tt * 0.25, 0, s, 1, s, c[0] * 1.2, c[1] * 1.2, c[2] * 1.2); }
-      for (let i = 0; i < 10; i++) { const a = i / 10 * TAU + tt * 0.15, c = hue(i + ((tt * 2) | 0)), on = 0.55 + 0.45 * Math.max(0, Math.sin(tt * 3 - i * 0.9)), s = 0.2 + 0.05 * pulse; stars.put(Math.cos(a) * R * 0.8, 0, CZ + Math.sin(a) * R * 0.8, 0, -a + PI / 2, 0, s, 1, s, c[0] * on * 1.1, c[1] * on * 1.1, c[2] * on * 1.1); }
+      for (let i = 0; i < 10; i++) { const a = i / 10 * TAU + tt * 0.15, c = hue(i + ((tt * 2) | 0)), on = 0.55 + 0.45 * Math.max(0, Math.sin(tt * 3 - i * 0.9)), s = 0.27 + 0.06 * pulse; stars.put(Math.cos(a) * R * 0.8, 0, CZ + Math.sin(a) * R * 0.8, 0, -a + PI / 2, 0, s, 1, s, c[0] * on * 1.25, c[1] * on * 1.25, c[2] * on * 1.25); }
       stars.end();
       ringA.userData.u.uA.value = 0.3 + 0.55 * pulse; ringA.scale.setScalar(R * (0.93 + 0.02 * pulse)); ringB.userData.u.uT.value = tt; ringB.rotation.y = 0;
       // speakers
-      woof.begin(); for (const [x, y, z, yaw, r] of woofs) { const k = 1 + 0.14 * pulse; const off = r > 0.3 ? 0.485 : 0.435; woof.put(x + Math.sin(yaw) * off, y, z + Math.cos(yaw) * off, 0, yaw, 0, r, r, r * (0.7 + 0.5 * pulse)); void k; } woof.end();
+      woof.begin(); for (let wi = 0; wi < woofs.length; wi++) { const w = woofs[wi], x = w[0], y = w[1], z = w[2], yaw = w[3], r = w[4], off = r > 0.3 ? 0.485 : 0.435; woof.put(x + Math.sin(yaw) * off, y, z + Math.cos(yaw) * off, 0, yaw, 0, r, r, r * (0.7 + 0.5 * pulse)); } woof.end();
       // spots: aim at a point sweeping across the stage floor
       heads.begin(); cones.begin();
       for (let i = 0; i < 4; i++) {

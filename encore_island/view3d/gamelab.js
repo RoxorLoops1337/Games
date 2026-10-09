@@ -8,7 +8,7 @@ export async function loadGame(o = {}) {
   const srcs = [...html.matchAll(/<script src="(js\/[^"]+)"/g)].map((m) => m[1]);
   const cv = document.createElement('canvas'); cv.id = 'game'; cv.width = 800; cv.height = 600; cv.style.display = 'none'; document.body.appendChild(cv);
   for (const s of srcs) await new Promise((res, rej) => { const el = document.createElement('script'); el.src = '../' + s; el.onload = res; el.onerror = () => rej(new Error('load ' + s)); document.head.appendChild(el); });
-  const EI = window.EI; EI.setupCtx(cv.getContext('2d')); EI.resize && EI.resize();
+  const EI = window.EI; EI.setupCtx(cv.getContext('2d')); try { EI.resize && EI.resize(); } catch (e) { /* no main canvas in the lab (boot() is not run) */ }
   EI.initGame(true); const S = EI.S; S.started = true; S.t = 0;
   try { const T = EI.FEATS.find((f) => f.id === 'tutorial').api; S.feat.tutorial.off = true; T.finish(); } catch (e) { /* tutorial optional */ }
   for (let i = 0; i < (o.lands || 0); i++) EI.addLand();

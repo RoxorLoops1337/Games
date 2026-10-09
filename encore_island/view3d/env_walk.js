@@ -2,7 +2,7 @@
 // a pink inlay line and little lanterns. Over the islands themselves the deck lies flat (no rails or piles); over water it gains all of them.
 import * as THREE from 'three';
 import * as kit from './kit.js';
-import { W, WY, Acc, tpl, radiusSafe } from './env_util.js';
+import { W, WY, Acc, tpl, radiusSafe, runSync } from './env_util.js';
 
 let _T = null;
 function T() {
@@ -18,24 +18,28 @@ function T() {
 const sh = (hex, a, r) => new THREE.Color(hex).offsetHSL(0, 0, (r() - 0.5) * a);
 const woodCols = [0xf2d6a6, 0xe9c898, 0xf6e0b4, 0xe2bf8c];
 
-export function buildWalk(g) {
-  const t = T(), A = new Acc(), GL = new Acc(), r = kit.rng(g.seed * 3 + 11), P = g.path, par = geoOf(g.parent);
+export const buildWalk = (g) => runSync(buildWalkG(g));
+export function* buildWalkG(g) {
+  const t = T(),  A = new Acc(), GL = new Acc(), r = kit.rng(g.seed * 3 + 11), P = g.path, par = geoOf(g.parent);
   const half = PATH_HALF * W, curve = new THREE.CatmullRomCurve3(P.map((p) => new THREE.Vector3(p.x * W, 0, p.y * W)), false, 'centripetal'), len = curve.getLength();
   const over = (x, z) => radiusSafe(par, x / W - par.x, z / W - par.y) > 38 || radiusSafe(g, x / W - g.x, z / W - g.y) > 38; // standing on an island: no rails or piles there
   const pitch = 0.36, n = Math.max(2, Math.round(len / pitch)), dk = new THREE.Color(0x8a6444), cream = new THREE.Color(0xfff4e6), pink = new THREE.Color(0xff9ec8);
   const pts = [], v = new THREE.Vector3(), tg = new THREE.Vector3();
   for (let i = 0; i <= n; i++) { const u = i / n; curve.getPointAt(u, v); curve.getTangentAt(u, tg); pts.push({ x: v.x, z: v.z, tx: tg.x, tz: tg.z, nx: -tg.z, nz: tg.x, wet: !over(v.x, v.z), u }); }
   const yawOf = (dx, dz) => Math.atan2(-dz, dx), DECK = 0.05, TH = 0.075, wid = half * 2 + 0.06;
+  yield;
   // planks across the path
-  for (let i = 0; i < n; i++) { const a = pts[i], b = pts[i + 1], mx = (a.x + b.x) / 2, mz = (a.z + b.z) / 2, ang = yawOf(a.nx, a.nz) + (r() - 0.5) * 0.03, c = sh(woodCols[(r() * 4) | 0], 0.06, r), jitter = (r() - 0.5) * 0.03;
+  for (let i = 0; i < n; i++) {
+    if (i % 30 === 29) yield; const a = pts[i], b = pts[i + 1], mx = (a.x + b.x) / 2, mz = (a.z + b.z) / 2, ang = yawOf(a.nx, a.nz) + (r() - 0.5) * 0.03, c = sh(woodCols[(r() * 4) | 0], 0.06, r), jitter = (r() - 0.5) * 0.03;
     A.add(t.plank, mx + a.nx * jitter, DECK - TH / 2, mz + a.nz * jitter, ang, wid, TH, pitch * 0.86, c, 0, 0, 0.12); }
   // pink inlay dashes along the middle (the 2D boardwalk's dashed line)
   for (let i = 0; i < n; i += 2) { const a = pts[i]; A.add(t.box, a.x, DECK + 0.003, a.z, yawOf(a.tx, a.tz), 0.2, 0.012, 0.07, pink, 0, 0, 0); }
   // side stringers (two long beams under the deck edges) and cross beams, piles, rails
   for (let i = 0; i < n; i += 3) { const a = pts[i], b = pts[Math.min(n, i + 3)], mx = (a.x + b.x) / 2, mz = (a.z + b.z) / 2, l = Math.hypot(b.x - a.x, b.z - a.z) + 0.04, ang = yawOf(b.x - a.x, b.z - a.z);
     for (const sd of [-1, 1]) A.add(t.box, mx + a.nx * (half - 0.02) * sd, DECK - TH - 0.06, mz + a.nz * (half - 0.02) * sd, ang, l, 0.14, 0.12, dk, 0, 0, 0.2); }
-  let pileI = 0, postI = 0, lantI = 0;
+  yield; let pileI = 0, postI = 0, lantI = 0;
   for (let i = 0; i <= n; i++) {
+    if (i % 30 === 29) yield;
     const a = pts[i]; if (!a.wet) continue;
     if (i % 7 === 0) { // piles: pairs standing in the water, with a cross beam on top
       A.add(t.box, a.x, DECK - TH - 0.17, a.z, yawOf(a.nx, a.nz), wid + 0.1, 0.12, 0.2, dk, 0, 0, 0.2);

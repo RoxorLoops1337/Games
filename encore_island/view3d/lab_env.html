@@ -19,14 +19,15 @@ async function loadGame(o = {}) {
 }
 const P = new URLSearchParams(location.search), view = P.get('v') || 'hub';
 const VIEWS = { // camera presets: az el d tx ty tz fov lands focus(player land)
-  hub: { az: 0, el: 55, d: 23, tx: 0, tz: 2, lands: 2, fk: 0 },
+  hub: { az: 0, el: 52, d: 59, fov: 32, tx: 0, tz: 1, lands: 2, fk: 0 },
+  hubnear: { az: 0, el: 52, d: 24, fov: 32, tx: 0, tz: 2, lands: 2, fk: 0 },
   hubwide: { az: 20, el: 40, d: 60, tx: 0, tz: 0, lands: 3, fk: 0 },
-  land: { az: 0, el: 55, d: 23, tx: null, tz: null, lands: 3, fk: 2 },
+  land: { az: 0, el: 52, d: 45, fov: 32, tx: null, tz: null, lands: 3, fk: 2 },
   terrace: { az: 0, el: 45, d: 12, tx: 0, tz: 8, lands: 1, fk: 0 },
-  night: { az: 0, el: 55, d: 24, tx: null, tz: null, lands: 7, fk: 7 },
+  night: { az: 0, el: 52, d: 45, fov: 32, tx: null, tz: null, lands: 7, fk: 7 },
   wide: { az: 25, el: 33, d: 150, tx: 0, tz: 0, lands: 6, fk: 0 },
 };
-const V0 = Object.assign({}, VIEWS[view] || VIEWS.hub); for (const k of ['az', 'el', 'd', 'tx', 'tz', 'lands']) if (P.has(k)) V0[k] = +P.get(k); if (P.has('focus')) V0.fk = +P.get('focus');
+const V0 = Object.assign({}, VIEWS[view] || VIEWS.hub); for (const k of ['az', 'el', 'd', 'tx', 'tz', 'lands', 'fov']) if (P.has(k)) V0[k] = +P.get(k); if (P.has('focus')) V0.fk = +P.get('focus');
 const g = await loadGame({ lands: V0.lands, wallet: 5e5, gems: 9 });
 const S = g.S(); let fx = 0, fz = 0;
 if (V0.fk > 0) { const G = geoOf(V0.fk); fx = G.x * 0.02; fz = G.y * 0.02; }
@@ -34,7 +35,7 @@ if (V0.tx === null) V0.tx = fx; if (V0.tz === null) V0.tz = fz;
 S.player.x = fx / 0.02; S.player.y = fz / 0.02;
 const mods = (P.get('m') || './env3d.js').split(',').filter(Boolean);
 lab({ ground: false, az: V0.az, el: V0.el, d: V0.d, tx: V0.tx, tz: V0.tz, ty: 0, async build(V) {
-  V.scene.background = null;
+  V.scene.background = null; if (V0.fov) { V.camera.fov = V0.fov; V.camera.near = 1; V.camera.far = 700; V.camera.updateProjectionMatrix(); }
   const inst = [];
   for (const m of mods) { const mod = await import(m + (P.has('nc') ? '' : '?' + Date.now())); const r = await mod.init(V); if (r) { inst.push(r); V.mods[m.replace(/^.*\//, '').replace(/\.js$/, '')] = r; } }
   window.__inst = inst; window.__env = inst[0];

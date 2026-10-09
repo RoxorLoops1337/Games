@@ -11,7 +11,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 const { W, Builder } = kit, PI = Math.PI, TAU = PI * 2;
 const MET = ['#c87838', '#b5804a', '#c8ccd4', '#e8b93a', '#d6e2ea', '#6ee0d8', '#5a7fe0', '#a6e04a'], FOE = ['#ff6a5a', '#ffb640', '#a77bff', '#2ec4b6', '#8fdc4a', '#ff7eb6', '#5fb4ff', '#8a86a8'];
 const metHex = (i) => (typeof METALS !== 'undefined' && METALS[i] ? METALS[i].col : MET[i]);
-const foeHex = (k) => (typeof foeCol === 'function' ? foeCol(k) : FOE[((k || 1) - 1) % 8]);
+const foeHex = (k) => (typeof foeCol === "function" ? foeCol(k) : FOE[((((Math.floor(+k) || 1) - 1) % 8) + 8) % 8]);
 const getS = () => (typeof S !== 'undefined' ? S : null);
 const WH = new THREE.Color(1, 1, 1), VD = new THREE.Color(0x1a0a30), INKC = new THREE.Color(0x2d170f);
 const cl = (h) => new THREE.Color(h), lite = (h, t) => cl(h).lerp(WH, t), dk = (h, t) => cl(h).lerp(VD, t);
@@ -83,9 +83,9 @@ function hullOf(g, w, minA = 0.0013) {
 
 // ------------------------------------------------------------------------------------------------ model library
 const DKV = 0x33160d, CREAM = 0xfff4e6, GOLD = 0xffd84d, RED = 0xff5a6a;
-const sg = (n = 9) => Math.max(8, kit.seg(n)); // items are small: never coarser than an octagon, never finer than needed
+const sg = (n = 8) => Math.max(8, kit.seg(n)); // items are small: never coarser than an octagon, never finer than needed
 /** dome profile for a lathe: short vertical wall then a quarter ellipse to the crown */
-const domeProf = (R, H, wall, N = 4) => { const p = [[R * 0.97, 0], [R, wall]]; for (let i = 1; i <= N; i++) { const a = i / N * PI / 2; p.push([i === N ? 0 : R * Math.cos(a), wall + H * Math.sin(a)]); } return p; };
+const domeProf = (R, H, wall, N = 3) => { const p = [[R * 0.97, 0], [R, wall]]; for (let i = 1; i <= N; i++) { const a = i / N * PI / 2; p.push([i === N ? 0 : R * Math.cos(a), wall + H * Math.sin(a)]); } return p; };
 const surfZ = (R, H, y0, wall, y) => { const r = (y - y0 - wall) / H; return y < y0 + wall ? R : R * Math.sqrt(Math.max(0, 1 - r * r)); };
 const band = (b, c, R, y, h, n) => b.lathe(c, [[R - 0.03, 0], [R, h * 0.3], [R, h * 0.75], [R - 0.04, h]], 0, y, 0, n);
 function rivets(b, xs, R, y, z0 = 0) { for (const a of xs) b.ball(CREAM, Math.sin(a) * R, y, Math.cos(a) * R + z0, 0.027, 1, 1, 0); }
@@ -242,7 +242,7 @@ class Pool {
 }
 
 export function init(V) {
-  const root = V.dyn && V.dyn.add ? V.dyn : V.scene && V.scene.add ? V.scene : new THREE.Group(), matShared = mkMat(0xffffff), matIG = mkMat(0xffffff);
+  const root = V.dyn && V.dyn.add ? V.dyn : V.scene && V.scene.add ? V.scene : new THREE.Group(), matShared = mkMat(0xffffff);
   const L = { helm: HELM.map((fn, i) => { const b = new Builder(); fn(b, cl(metHex(i)), i); return bake(b, { ao: 0.18, hull: 0.022 }); }), bar: buildBar(), crown: buildCrown(), gem: buildGem(), coin: buildCoin(), star: buildStar(), note: buildNote(), orb: buildOrb(), boulder: buildBoulder() };
   const [chestBody, chestLid] = buildChest();
   const pools = [], mk = (geo, max, o, mat = matShared) => { const p = new Pool(geo.clone ? (o && o.ig ? geo.clone() : geo) : geo, mat, max, o); p.mesh.name = 'loot_pool'; root.add(p.mesh); pools.push(p); return p; };
@@ -260,14 +260,15 @@ export function init(V) {
   const hh = (a) => { const s = Math.sin(a * 12.9898) * 43758.5453; return s - Math.floor(s); };
 
   // ---- entry classification (same rules as drawItemWorld) ----
-  const rarOf = (it) => (it.gem || it.crown ? 3 : it.bar ? 2 : (it.k || 1) >= 7 ? 3 : (it.k || 1) >= 4 ? 2 : 1);
-  const colOf = (it) => (it.gem ? '#6ee0d8' : it.crown ? '#ffd84d' : metHex(((it.k || 1) - 1) % 8));
+  const kOf = (e) => { const k = Math.floor(+e.k); return k >= 1 ? k : 1; }; // tier index, tolerant of missing / odd values
+  const rarOf = (it) => (it.gem || it.crown ? 3 : it.bar ? 2 : kOf(it) >= 7 ? 3 : kOf(it) >= 4 ? 2 : 1);
+  const colOf = (it) => (it.gem ? '#6ee0d8' : it.crown ? '#ffd84d' : metHex((kOf(it) - 1) % 8));
   /** push one entry into the right pool at a pose; returns nothing. cyc star badges are chained onto helmets. */
   function put(e, x, y, z, yaw, pitch, roll, sc, sq) {
     const sy = sc * sq, sxz = sc / Math.sqrt(sq);
     if (e.gem) { gemP.add(x, y + 0.34 * sy, z, yaw, pitch, roll, 0.78 * sxz, 0.78 * sy, 0.78 * sxz); return; }
     if (e.crown) { crownP.add(x, y, z, yaw, pitch, roll, sxz, sy, sxz); return; }
-    const k = e.k || 1, i = (k - 1) % 8;
+    const k = kOf(e), i = (k - 1) % 8;
     if (e.bar) { barP.add(x, y, z, yaw, pitch, roll, 0.95 * sxz, 0.95 * sy, 0.95 * sxz, rgb(metHex(i)), i === 7 ? 0.55 : 0); return; }
     const m = helmP[i].add(x, y, z, yaw, pitch, roll, sxz, sy, sxz); if (!m) return;
     const cyc = Math.min(3, Math.floor((k - 1) / 8));
@@ -302,7 +303,7 @@ export function init(V) {
         FX.glowAt(0, gx, 0.02, gz, 0, 0.3, rar === 3 ? 2.6 : 2.1, 0.3, 0, c[0], c[1], c[2], 0.34 * pl);
         FX.glowAt(1, gx, 0.07, gz, T * 1.4 + it.x, 0.52 + Math.sin(T * 5) * 0.04, 1, 0.52 + Math.sin(T * 5) * 0.04, 0.9, c[0], c[1], c[2], 0.75 * pl, 0.16);
       }
-      if (it.gem || (!it.bar && !it.crown && ((it.k || 1) - 1) % 8 >= 5)) FX.glowAt(2, gx, y + 0.5, gz, 0, 0.7, 0.15, 1, 0, c[0], c[1], c[2], 0.3 + 0.08 * pl);
+      if (it.gem || (!it.bar && !it.crown && (kOf(it) - 1) % 8 >= 5)) FX.glowAt(2, gx, y + 0.5, gz, 0, 0.62, 0.15, 1, 0, c[0], c[1], c[2], 0.2 + 0.06 * pl);
       const ph = ((T * 2 + it.x) % 3) / 0.35; if (ph < 1) { const sz = 0.3 * Math.sin(ph * PI); FX.glowAt(3, gx + 0.2, y + 0.65, gz, 0, sz, 1, 1, 0, 1, 1, 1, 0.95); }
     }
   }
@@ -333,8 +334,8 @@ export function init(V) {
     if (sh.boulder) { // arc from the tower top to the target; the 2D arc height becomes real height
       const u = Math.min(1, (sh.t || 0) / (sh.dur || 1)), gx = (sh.sx + (sh.tx - sh.sx) * u) * W, gz = (sh.sy + 50 + (sh.ty - sh.sy - 50) * u) * W, y = (50 * (1 - u) + Math.sin(u * PI) * 150) * W + 0.45;
       if (!vis(gx, gz, f)) return; const c = BOULDER;
-      bouldP.add(gx, y, gz, 0.3 * Math.sin(T * 2 + i), -T * 5, 0, 0.38, 0.38, 0.38, c); if (V.blobs) V.blobs.add(gx, gz, 0.45, 0.22);
-      if (FX) { FX.glowAt(2, gx, y, gz, 0, 0.9, 0.15, 1, 0, c[0], c[1], c[2], 0.4); FX.glowAt(1, sh.tx * W, 0.07, sh.ty * W, T * 2, 0.9 + 0.7 * (1 - u), 1, 0.9 + 0.7 * (1 - u), 0.5, c[0], c[1], c[2], 0.35 + 0.35 * u, 0.12); if (Math.random() < dt * 30) FX.trail(gx, y, gz, c, 0.16, 0.45, 0, 1); }
+      bouldP.add(gx, y, gz, 0.3 * Math.sin(T * 2 + i), -T * 5, 0, 0.32, 0.32, 0.32, c); if (V.blobs) V.blobs.add(gx, gz, 0.45, 0.22);
+      if (FX) { FX.glowAt(2, gx, y, gz, 0, 0.8, 0.15, 1, 0, c[0], c[1], c[2], 0.2); FX.glowAt(1, sh.tx * W, 0.07, sh.ty * W, T * 2, 0.9 + 0.7 * (1 - u), 1, 0.9 + 0.7 * (1 - u), 0.5, c[0], c[1], c[2], 0.35 + 0.35 * u, 0.12); if (Math.random() < dt * 30) FX.trail(gx, y, gz, c, 0.16, 0.45, 0, 1); }
       return;
     }
     // notes: the 2D y includes the flight height; split it into ground z + height (high at the shooter, low at the target) so the note arcs down onto its foe
@@ -344,13 +345,13 @@ export function init(V) {
     const kind = sh.crit ? 'crit' : sh.ally ? 'ally' : sh.tower ? 'tower' : 'hero', sz = sh.crit ? 1.5 : 1, c = NCOL[kind];
     noteP.add(gx, y, gz, Math.sin(T * 9 + i) * 0.5, -0.5, Math.sin(T * 18 + sh.x * 0.1) * 0.28, 0.85 * sz, 0.85 * sz, 0.85 * sz, c);
     if (V.blobs) V.blobs.add(gx, gz, 0.16 * sz, 0.18);
-    if (FX) { FX.glowAt(2, gx, y, gz, 0, 0.5 * sz, 0.2, 1, 0, c[0], c[1], c[2], sh.crit ? 0.4 : 0.2); if (Math.random() < dt * (sh.crit ? 40 : 22)) FX.trail(gx, y, gz, c, 0.12 * sz, 0.4, Math.random() < 0.3 ? 2 : 0, 1); }
+    if (FX) { FX.glowAt(2, gx, y, gz, 0, 0.42 * sz, 0.2, 1, 0, c[0], c[1], c[2], sh.crit ? 0.26 : 0.14); if (Math.random() < dt * (sh.crit ? 40 : 22)) FX.trail(gx, y, gz, c, 0.12 * sz, 0.4, Math.random() < 0.3 ? 2 : 0, 1); }
   }
   function oneOrb(e, i, T, f, dt, FX) {
     const gx = e.x * W, gz = (e.y + 14) * W, y = 0.42; if (!vis(gx, gz, f)) return;
     const c = rgb(foeHex(e.k)), r = (e.big ? 0.36 : 0.21) * (1 + 0.06 * Math.sin(T * 22 + i));
     orbP.add(gx, y, gz, T * 3, 0, 0, r, r, r, c); if (V.blobs) V.blobs.add(gx, gz, r * 1.3, 0.22);
-    if (FX) { FX.glowAt(2, gx, y, gz, 0, r * 3.1, 0.15, 1, 0, c[0], c[1], c[2], 0.5); if (Math.random() < dt * 24) FX.trail(gx, y, gz, c, r * 0.8, 0.35, 0, 1); }
+    if (FX) { FX.glowAt(2, gx, y, gz, 0, r * 2.4, 0.15, 1, 0, c[0], c[1], c[2], 0.2); if (Math.random() < dt * 24) FX.trail(gx, y, gz, c, r * 0.8, 0.35, 0, 1); }
   }
   function updateShots(S, T, f, dt) {
     const FX = fx(), shots = S.shots, es = S.eshots;
@@ -376,7 +377,7 @@ export function init(V) {
   const tinted = (hex, ig) => { const k = hex + '|' + ig; let m = matCache.get(k); if (!m) matCache.set(k, (m = mkMat(hex, ig))); return m; };
   /** small Object3D for an entry ({k, bar, crown, gem}); ~1 unit wide, origin at the base (gem and coin are centred). Shares geometry; do not dispose it. */
   function makeItemModel(e) {
-    const g = new THREE.Group(); e = e || {}; const k = e.k || 1, i = (k - 1) % 8; let m;
+    const g = new THREE.Group(); e = e || {}; const k = kOf(e), i = (k - 1) % 8; let m;
     if (e.gem) { m = new THREE.Mesh(L.gem, matShared); m.position.y = 0.3; m.scale.setScalar(0.78); }
     else if (e.coin) { m = new THREE.Mesh(L.coin, matShared); m.position.y = 0.4; m.scale.setScalar(0.8); }
     else if (e.crown) m = new THREE.Mesh(L.crown, matShared);
@@ -391,7 +392,7 @@ export function init(V) {
     for (const p of pools) { if (p.mesh.parent) p.mesh.parent.remove(p.mesh); p.mesh.dispose && p.mesh.dispose(); }
     if (chest.parent) chest.parent.remove(chest);
     const geos = [...L.helm, L.bar, L.crown, L.gem, L.coin, L.star, L.note, L.orb, L.boulder, chestBody, chestLid]; for (const g of geos) g.dispose();
-    matShared.dispose(); matIG.dispose(); for (const m of matCache.values()) m.dispose();
+    matShared.dispose(); for (const m of matCache.values()) m.dispose();
   }
   return { update, makeItemModel, setFlyers, dispose, models: L };
 }

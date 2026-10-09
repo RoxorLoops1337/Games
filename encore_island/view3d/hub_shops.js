@@ -2,7 +2,7 @@
 // Each builder returns { group, update(dt, t, focus), dispose() }; local frame = the 2D position (X = x*W, Z = y*W), +z faces the camera.
 import * as THREE from 'three';
 import { Builder, C, INK, W, TAU, PI, seg, GB, GOLD, SHINY, lit, glow, damp, clamp, hash01 } from './kit.js';
-import { Inst, ringQuad, QuadSet, rod, outline, rbx, bll } from './hub_fx.js';
+import { Inst, ringQuad, QuadSet, rod, outline, rbx, bll, stat } from './hub_fx.js';
 
 const WOOD = 0xd9a468, WOOD_D = 0xa8703c, GOLDC = 0xffd84d;
 const GOLDM = { m: GOLD, c: GOLDC };
@@ -35,8 +35,8 @@ export function buildStall(V, fx) {
   // coin pile + till on the counter
   for (let i = 0; i < 5; i++) b.cyl({ m: GOLD, c: i % 2 ? 0xffe066 : 0xf0b422 }, 0.7, 0.98 + i * 0.045, 0.9, 0.14, 0.045, 12);
   b.cyl(INK, -0.7, 0.98, 0.92, 0.2, 0.05, 14); b.cyl(C.mint, -0.7, 0.99, 0.92, 0.17, 0.05, 14); b.cyl(INK, -0.7, 1.04, 0.92, 0.03, 0.2, 8); rbx(b, C.cream, -0.7, 1.26, 0.92, 0.38, 0.05, 0.08, 0.5);
-  g.add(outline(b.build({ cast: true })));
-  const sign = fx.atlas.mesh(qs); g.add(sign);
+  g.add(stat(outline(b.build({ cast: true }))));
+  const sign = fx.atlas.mesh(qs); g.add(stat(sign));
   // the keeper (jordan) is placed behind the counter by heroes3d itself (SELL.x, SELL.y + 6 px), so nothing to spawn here
   return {
     group: g,
@@ -57,7 +57,7 @@ export function buildVault(V, fx) {
   rbx(b, GOLDM, 0, BHT + 0.04, BD / 2 - 0.05, BW - 0.1, 0.1, 0.12, 0.4); rbx(b, GOLDM, 0, BHT + 0.04, -BD / 2 + 0.05, BW - 0.1, 0.1, 0.12, 0.4);
   rbx(b, GOLDM, -BW / 2 + 0.07, BHT + 0.04, 0, 0.12, 0.1, BD - 0.1, 0.4); rbx(b, GOLDM, BW / 2 - 0.07, BHT + 0.04, 0, 0.12, 0.1, BD - 0.1, 0.4);
   b.box(0x5a3a1e, 0, BHT - 0.02, 0, BW - 0.2, 0.04, BD - 0.2);
-  g.add(outline(b.build({ cast: true })));
+  g.add(stat(outline(b.build({ cast: true }))));
   // coins
   const coinG = new THREE.CylinderGeometry(1, 1, 1, 12).toNonIndexed(); coinG.deleteAttribute('uv');
   const coinM = lit(0xffffff, { rough: 0.3, metal: 0.25, emissive: 0x6a4000, ei: 0.2 }), coins = new Inst(coinG, coinM, 380, { colors: true, cast: true }); g.add(coins.mesh);
@@ -65,7 +65,7 @@ export function buildVault(V, fx) {
   const cols = 8, rowsN = 7, sh = { n: 0 }, hsh = [];
   for (let i = 0; i < 56; i++) hsh.push(2 + ((i * 7 + 3) % 5));
   const topY = BHT, CR = 0.115, CH = 0.05;
-  const stackPos = (i) => { const c = i % cols, r = Math.floor(i / cols), x = -1.05 + c * 0.3 + (r % 2) * 0.1, z = 0.52 - r * 0.17; return [x, z, r]; };
+  const SX = [], SZ = [], SR = []; for (let i = 0; i < 56; i++) { const c = i % cols, r = Math.floor(i / cols); SX.push(-1.05 + c * 0.3 + (r % 2) * 0.1); SZ.push(0.52 - r * 0.17); SR.push(r); }
   const sparks = []; for (let k = 0; k < 6; k++) sparks.push(k / 6);
   return {
     group: g,
@@ -74,8 +74,8 @@ export function buildVault(V, fx) {
       coins.begin();
       for (let i = 0; i < 56; i++) {
         const vis = clamp(sh.n - i, 0, 1); if (vis <= 0.001) continue;
-        const [x, z, r] = stackPos(i), h = hsh[i], base = topY + 0.0 + r * 0.02;
-        for (let j = 0; j < h; j++) { const top = j === h - 1, k = vis * (1 + (top ? 0.0 : 0)), tw = j % 2 ? 0.0 : 0.0; coins.put(x + tw, base + CH / 2 + j * CH * vis, z, 0, i * 1.7 + j, 0, CR * k, CH * k + 0.001, CR * k, top ? 1.0 : j % 2 ? 0.98 : 0.9, top ? 0.8 : j % 2 ? 0.68 : 0.5, top ? 0.25 : j % 2 ? 0.14 : 0.06); }
+        const x = SX[i], z = SZ[i], h = hsh[i], base = topY + SR[i] * 0.02;
+        for (let j = 0; j < h; j++) { const top = j === h - 1, k = vis * (1 + (top ? 0.0 : 0)), tw = j % 2 ? 0.0 : 0.0; coins.put(x + tw, base + CH / 2 + j * CH * vis, z, 0, i * 1.7 + j, 0, CR * k, CH * k + 0.001, CR * k, top ? 1.0 : j % 2 ? 0.96 : 0.85, top ? 0.72 : j % 2 ? 0.58 : 0.42, top ? 0.16 : j % 2 ? 0.08 : 0.03); }
       }
       coins.end();
       if (S.pallet > 0) for (let k = 0; k < 6; k++) { const ph = (t * 1.1 + sparks[k]) % 1, id = Math.floor(t * 1.1 + sparks[k]) * 7 + k, x = (hash01(id * 3 + 1) - 0.5) * 2.4, z = (hash01(id * 5 + 2) - 0.5) * 1.0, a = Math.sin(ph * PI), y = BHT + 0.25 + ph * 0.5; fx.glow(g.position.x + x, y, g.position.z + z, 0.28 * a + 0.05, 1.6, 1.4, 0.7, 0.9 * a); }
@@ -92,7 +92,7 @@ export function buildMonument(V, fx) {
   const b = new Builder({ ao: 0.14 });
   b.cyl(0xe6d3a3, 0, 0, 0, 1.2, 0.16, seg(32)); b.cyl(0xf3e4bd, 0, 0.16, 0, 0.92, 0.16, seg(28)); b.cyl(C.cream, 0, 0.32, 0, 0.74, 0.05, seg(24));
   for (let i = 0; i < 8; i++) { const a = i / 8 * TAU; bll(b, { m: GOLD, c: GOLDC }, Math.cos(a) * 1.1, 0.17, Math.sin(a) * 1.1, 0.045, 0.7); }
-  const bl = b.build({ cast: true }); g.add(outline(bl));
+  const bl = b.build({ cast: true }); g.add(stat(outline(bl)));
   // plinth: ink slab + two materials (gold / lavender) toggled by readiness
   const mk = (col, trim) => { const p = new Builder({ ao: 0.16 }); rbx(p, col, 0, 0.95, 0, 1.08, 1.2, 1.1, 0.2); rbx(p, trim, 0, 1.55, 0, 1.28, 0.16, 1.28, 0.4); rbx(p, trim, 0, 0.42, 0, 1.24, 0.14, 1.24, 0.4);
     rbx(p, trim, 0, 0.95, 0.56, 0.5, 0.5, 0.06, 0.4); rbx(p, INK, 0, 0.95, 0.58, 0.4, 0.4, 0.05, 0.4); return outline(p.build({ cast: true })); };

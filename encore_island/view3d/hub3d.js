@@ -4,7 +4,7 @@
 // (bulbs, glows, puffs: one draw call each) and runs them.
 import * as THREE from 'three';
 import { glow, damp } from './kit.js';
-import { Inst, Bill, signAtlas } from './hub_fx.js';
+import { Inst, Bill, signAtlas, batchStatics } from './hub_fx.js';
 import { buildStage } from './hub_stage.js';
 import { buildPlates } from './hub_plates.js';
 import { buildStall, buildVault, buildMonument } from './hub_shops.js';
@@ -36,6 +36,7 @@ export function init(V) {
   add(buildHatch); add(buildWarp);
   add(buildTown);
   add(buildPlates);
+  let statics = null; try { statics = batchStatics(root); } catch (e) { console.error('hub3d batch failed', e); }
   return {
     root, fx,
     update(dt, t, focus) {
@@ -43,6 +44,6 @@ export function init(V) {
       for (const m of mods) { try { m.update(dt, t, focus || { x: 0, z: 0 }); } catch (e) { if (!m._err) { m._err = 1; console.error('hub3d update failed', e); } } }
       bulbs.end(); glows.end(); puffs.end();
     },
-    dispose() { for (const m of mods) try { m.dispose && m.dispose(); } catch (e) { /* ignore */ } root.removeFromParent(); atlas.dispose(); bulbs.mesh.geometry.dispose(); glows.mesh.geometry.dispose(); puffs.mesh.geometry.dispose(); bulbMat.dispose(); glows.mesh.material.dispose(); puffs.mesh.material.dispose(); }
+    dispose() { for (const m of mods) try { m.dispose && m.dispose(); } catch (e) { /* ignore */ } if (statics) statics.children.forEach((m) => m.geometry.dispose()); root.removeFromParent(); atlas.dispose(); bulbs.mesh.geometry.dispose(); glows.mesh.geometry.dispose(); puffs.mesh.geometry.dispose(); bulbMat.dispose(); glows.mesh.material.dispose(); puffs.mesh.material.dispose(); }
   };
 }

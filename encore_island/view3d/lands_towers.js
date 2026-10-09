@@ -14,7 +14,7 @@ function rbx(b, c, x, y, z, w, h, d, r = 0.2, s = 1, ry = 0, rz = 0) { const k =
 const bbx = (b, c, x, y, z, w, h, d, r, s, ry) => rbx(b, c, x, y + h / 2, z, w, h, d, r, s, ry);
 const dot = (b, c, x, y, z, r, sy = 1, sz) => b.ball(c, x, y, z, r, sy, sz, r < 0.05 ? 0 : 1); // cheap ball: 20 or 80 tris
 /** ink hull from a simplified silhouette builder: the real body is not outlined (that would double its triangles) */
-function hullOf(hb, w = 0.022) { const geo = hb.geometry(); const m = new THREE.Mesh(geo, outlineMat(INK, w)); m.castShadow = false; m.receiveShadow = false; m.renderOrder = -1; return m; }
+function hullOf(hb, w = 0.022) { if (Q.detail === 0) { hb.buckets.clear(); return new THREE.Group(); } /* low tier: no ink hulls */ const geo = hb.geometry(); const m = new THREE.Mesh(geo, outlineMat(INK, w)); m.castShadow = false; m.receiveShadow = false; m.renderOrder = -1; return m; }
 const group = (b, o) => b.build(o).children.slice();
 
 // ---- a speaker (cone, surround, dust cap) facing +Z, built at (x, y) on the plane z = 0. Lives in its own mesh so it can pulse in depth.
@@ -45,7 +45,7 @@ function flashRing(c, size) {
   const mesh = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), m); mesh.userData.billboard = true; mesh.userData.size = size; mesh.visible = false; mesh.renderOrder = 7; return mesh;
 }
 function setFlash(fr, u, y) { // u: 0 at the shot .. 1 done
-  fr.visible = u < 1; if (!fr.visible) return; const s = fr.userData.size * (0.5 + u * 1.5); fr.scale.set(s, s, s); fr.material.opacity = (1 - u) * 0.9; if (y !== undefined) fr.position.y = y;
+  fr.visible = u < 1; if (!fr.visible) return; const s = fr.userData.size * (0.5 + u * 1.5); fr.scale.set(s, s, s); fr.material.opacity = (1 - u) * 0.65; if (y !== undefined) fr.position.y = y;
 }
 // ---- per-tower drum-boost ring on the ground (only while the land has War Drums)
 function drumRing() { const r = ringMesh({ c: 0xffa040, a: 0.6, r: 1.1, in: 0.78, out: 1, soft: 0.05, y: 0.09 }); r.visible = false; return r; }
@@ -74,7 +74,7 @@ export function speakerTower(tw) {
   const cones = cb.build({ cast: false }).children[0]; cones.position.z = D / 2 + 0.02; body.add(cones);
   const flag = clothMesh(clothGeo(0.5, 0.3, PINK, 0xff4d8d, tw.x * 0.01, 8, 0.85)); flag.position.set(-0.38, top + 0.72, -0.28); body.add(flag);
   const fig = figure(((tw.x * 0.37) | 0) % 4 & 3); fig.position.set(0, top, -0.02); body.add(fig);
-  const fr = flashRing(0xfff0b0, 2.2); fr.position.y = top + 0.4; body.add(fr); const dr = drumRing(); body.add(dr);
+  const fr = flashRing(0xfff0b0, 1.5); fr.position.y = top + 0.4; body.add(fr); const dr = drumRing(); body.add(dr);
   g.add(body);
   return { g, update(dt, t, z) {
     const f = clamp((tw.fire || 0) / 0.25, 0, 1), bt = LOOK.beat.value, rec = f * f;
@@ -93,11 +93,10 @@ export function discoTower(tw) {
   hb.cyl(0, 0, 0, 0, 0.62, 0.14, 12); hb.cyl(0, 0, 0.14, 0, 0.54, 0.12, 12); hb.cyl(0, 0, 0.26, 0, 0.52, 1.55, 14, 0.76); hb.cyl(0, 0, 1.78, 0, 0.32, 0.1, 12);
   const rr = rng(21), tiles = [0xffffff, 0xcdf4ff, 0xffd0f0, 0xe0d0ff, 0xfff4c0];
   for (let row = 0; row < 5; row++) { const yy = 0.52 + row * 0.3, R = 0.47 - ((yy - 0.26) / 1.55) * 0.12 + 0.025, n = 11; for (let i = 0; i < n; i++) { const a = (i + (row & 1) * 0.5) / n * TAU; tb.box({ m: SHINY, c: tiles[(i * 3 + row * 2 + (rr() * 2 | 0)) % 5] }, Math.sin(a) * R, yy, Math.cos(a) * R, 0.2, 0.19, 0.05, 0, a, 0); } }
-  body.add(...group(b, { cast: true })); body.add(hullOf(hb)); const tiles3 = tb.build({ cast: false }); body.add(tiles3);
   // the disco ball: faceted mirror tiles, spins; gimbal rings around it
-  const by = 2.52, gb = new Builder({ ao: 0 }); gb.tor(GOLDC, 0, by, 0, 0.52, 0.03, 5, seg(24)); gb.tor(GOLDC, 0, by, 0, 0.52, 0.03, 5, seg(24), 0, PI / 2, 0); gb.cyl(GOLDC, 0, 2.1, 0, 0.03, 0.3, 6);
-  const gimbal = gb.build({ cast: false }); body.add(gimbal);
-  const bg = new THREE.IcosahedronGeometry(0.4, 2).toNonIndexed(), pc = bg.attributes.position.count, cc = new Float32Array(pc * 3), kk = new THREE.Color(), pal = [0xffffff, 0xcdf4ff, 0xffc8ee, 0xdcd0ff, 0xfff0b8, 0xaee8ff];
+  const by = 2.52; b.tor(GOLDC, 0, by, 0, 0.52, 0.03, 5, seg(24)); b.tor(GOLDC, 0, by, 0, 0.52, 0.03, 5, seg(24), 0, PI / 2, 0); b.cyl(GOLDC, 0, 2.1, 0, 0.03, 0.3, 6); // gimbal rings: static, merged into the body (one call fewer)
+  body.add(...group(b, { cast: true })); body.add(hullOf(hb)); body.add(tb.build({ cast: false }));
+  const bg = new THREE.IcosahedronGeometry(0.4, 2), pc = bg.attributes.position.count, cc = new Float32Array(pc * 3), kk = new THREE.Color(), pal = [0xffffff, 0xcdf4ff, 0xffc8ee, 0xdcd0ff, 0xfff0b8, 0xaee8ff];
   for (let f = 0; f < pc / 3; f++) { kk.set(pal[(hash01(f * 7 + 3) * pal.length) | 0]).multiplyScalar(0.8 + hash01(f) * 0.6); for (let v = 0; v < 3; v++) { cc[(f * 3 + v) * 3] = kk.r; cc[(f * 3 + v) * 3 + 1] = kk.g; cc[(f * 3 + v) * 3 + 2] = kk.b; } }
   bg.setAttribute('color', new THREE.BufferAttribute(cc, 3));
   const ballMat = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.18, metalness: 0.5, emissive: 0x8a4aaa, emissiveIntensity: 0.7 }); ballMat.userData.noCast = true; ballMat.userData.own = true;
@@ -110,13 +109,13 @@ export function discoTower(tw) {
   const fan = new THREE.Mesh(bgeo, new THREE.ShaderMaterial({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, fog: false, uniforms: { uT: LOOK.t, uA: { value: 0.1 }, uFall: { value: 1.3 }, uStr: { value: 3 }, uSpd: { value: 1.5 }, uBase: { value: 0.03 }, uCol: { value: col(0xffd0f4) } },
     vertexShader: 'varying float vY; varying float vAng; void main(){ vY = uv.y; vAng = uv.x * 6.2831853; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
     fragmentShader: 'uniform float uT, uA, uFall, uStr, uSpd, uBase; uniform vec3 uCol; varying float vY; varying float vAng; void main(){ float a = uA * pow(clamp(1.0 - vY, 0.0, 1.0), uFall) * smoothstep(0.0, uBase, vY) * (0.7 + 0.3 * sin(vAng * uStr + vY * 9.0 - uT * uSpd)); gl_FragColor = vec4(uCol, a);\n#include <tonemapping_fragment>\n#include <colorspace_fragment>\n }' }));
-  fan.material.userData.noCast = fan.material.userData.noLook = fan.material.userData.own = true; fan.renderOrder = 5; body.add(fan);
-  const fr = flashRing(0xffc8f4, 2.6); fr.position.y = by; body.add(fr); const dr = drumRing(); body.add(dr);
+  fan.material.userData.noCast = fan.material.userData.noLook = fan.material.userData.own = true; fan.renderOrder = 5; fan.visible = Q.detail > 0; body.add(fan);
+  const fr = flashRing(0xffc8f4, 1.9); fr.position.y = by; body.add(fr); const dr = drumRing(); body.add(dr);
   g.add(body);
   return { g, update(dt, t, z) {
     const f = clamp((tw.fire || 0) / 0.3, 0, 1), bt = LOOK.beat.value, pul = 0.5 + Math.sin(t * 6) * 0.4;
     body.scale.set(1 + 0.05 * f, 1 - 0.08 * f + 0.01 * bt, 1 + 0.05 * f);
-    ball.rotation.y += dt * (0.9 + 5 * f); ball.scale.setScalar(1 + 0.35 * f + 0.04 * bt); gimbal.rotation.y = -t * 0.4;
+    ball.rotation.y += dt * (0.9 + 5 * f); ball.scale.setScalar(1 + 0.35 * f + 0.04 * bt);
     aura.scale.setScalar(2.6 + pul * 0.5 + f * 1.8); fan.rotation.y = t * 0.45; fan.material.uniforms.uA.value = 0.075 + 0.12 * f + 0.03 * bt;
     setFlash(fr, f > 0 ? 1 - f : 1); drumPulse(dr, z, t);
   }, dispose() { disposeDeep(g); } };
@@ -145,7 +144,7 @@ export function boomBox(tw) {
   ab.ball(CREAM, 0, 0.98, 0.02, 0.2, 0.5, 0.9, 1); ab.tor(GOLDC, 0, 1.02, 0.02, 0.19, 0.03, 4, seg(14), PI / 2, 0, 0);
   arm.add(...group(ab, { cast: false })); arm.add(hullOf(ah, 0.018)); body.add(arm);
   const sb = new Builder({ ao: 0 }); sb.ball(0xa77bff, 0, 0, 0, 0.17, 1, undefined, 2); dot(sb, CREAM, -0.05, 0.06, 0.1, 0.05); const shot = sb.build({ cast: false }); shot.position.set(0, 1.12, 0.02); arm.add(shot);
-  const fr = flashRing(0xc8a8ff, 2.4); fr.position.y = 1.0; body.add(fr); const dr = drumRing(); body.add(dr);
+  const fr = flashRing(0xc8a8ff, 1.7); fr.position.y = 1.0; body.add(fr); const dr = drumRing(); body.add(dr);
   g.add(body); g.scale.setScalar(1.12); const PHI_R = -0.95, PHI_C = 2.0;
   return { g, update(dt, t, z) {
     const rate = (typeof CAT_RATE !== 'undefined' ? CAT_RATE : CAT_RATE_FALLBACK) * (z.drums ? 0.75 : 1), cd = tw.cd || 0, ak = clamp(1 - cd / rate, 0, 1), f = clamp((tw.fire || 0) / 0.4, 0, 1), u = 1 - f, bt = LOOK.beat.value;
