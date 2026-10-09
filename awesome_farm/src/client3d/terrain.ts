@@ -24,6 +24,14 @@ export const PALS: Record<string, Pal | undefined> = {
     bog: { ground: [0x6e5d8d, 0x655483, 0x786896, 0x5d4a7c, 0x6e5d8d, 0x6a5a89], cliff: [0x5d4a7c, 0x48385f, 0x372b4a], bank: 0x8a7aa8, tuft: 0x8fb06a },
     rift: { ground: [0xa88ad8, 0x9d7fd0, 0xb398e0, 0x9070c6, 0xa88ad8, 0xa584d4], cliff: [0x7a5cb4, 0x62479a, 0x4c377c], bank: 0xc4a8ec, tuft: 0xe0c8ff }
 };
+/** A Blight nest isle (`Plot.blight` 1, while its nest lives), as the 2D `tileBlight` and `TILE_BLIGHT_CLIFF` paint it
+ * (client/art/storybook-ground.ts BLIGHT): bruised purple-grey soil, dark cliffs, a sickly bank and dead tufts. */
+export const BLIGHT_PAL: Pal = { ground: [0x4a3a54, 0x52405c, 0x44344c, 0x4a3a54, 0x3e3046, 0x4e3c58], cliff: [0x5a4068, 0x3a2a44, 0x1c1424], bank: 0x4a3a52, tuft: 0x5a4c50 };
+/** The Blight's cracks (the 2D speck and its hot pixel) and what lies on its ground: ooze, bone, dead wood. */
+export const BLIGHT_VEIN = [0x7a2040, 0xd85068];
+const OOZE = [0x120c18, 0x22182c, 0x6e3c6a], BONE = [0xe8e0d0, 0xd0c8b8], DEADWOOD = [0x3c3034, 0x54464a, 0x6a5a5a];
+/** Unlit, so the Blight's cracks smoulder in the dark as they do on the 2D tiles (one extra draw call for a chunk that has them). */
+export const veinMat = new MeshBasicMaterial({ vertexColors: true, side: DoubleSide });
 export const ORE_COL: Record<string, number | undefined> = { stone: 0xa3a8bd, coal: 0x45414f, iron: 0xd5d9e6, copper: 0xd98a52, goldore: 0xffd966, clay: 0xdf9a7c, sand: 0xf0d79a, peat: 0x4e3d33, crystal: 0xb48cf0 };
 export const FLOWERS = [0xf79fc6, 0xffd966, 0xfff6e0, 0x9d6fdb, 0xf8a24a];
 /**
@@ -85,6 +93,14 @@ export class Soup {
         return g;
     }
 }
+/** The Blight's cracks ride on their chunk's ground mesh (they rise out of the sea with it and go with it). */
+function withVeins(ground: Mesh, veins: Soup) {
+    const g = veins.geometry();
+    if (!g) return;
+    const m = new Mesh(g, veinMat);
+    m.name = 'veins';
+    ground.add(m);
+}
 /** A corner of the seabed: where it is and its colour. */
 export interface SeaCorner { p: V3; c: Color }
 /** A land plot rising out of the sea, ring by ring. */
@@ -133,6 +149,7 @@ export class Terrain {
         for (const m of [c.ground, c.foam]) if (m) {
             this.group.remove(m);
             m.geometry.dispose();
+            for (const v of m.children) (v as Mesh).geometry.dispose();
         }
         this.chunks.delete(k);
     }
@@ -169,14 +186,15 @@ export class Terrain {
         this.vcache.clear();
         const tiles: number[] = [];
         for (let y = cy * CH; y < cy * CH + CH; y++) for (let x = cx * CH; x < cx * CH + CH; x++) tiles.push(x, y);
-        const soup = new Soup();
-        this.tiles(soup, tiles);
+        const soup = new Soup(), veins = new Soup();
+        this.tiles(soup, tiles, veins);
         const entry: { ground?: Mesh; foam?: Mesh } = {};
         const g = soup.geometry();
         if (g) {
             const m = new Mesh(g, groundMat);
             m.castShadow = true;
             m.receiveShadow = true;
+            withVeins(m, veins);
             this.group.add(m);
             entry.ground = m;
         }
@@ -191,15 +209,16 @@ export class Terrain {
         this.chunks.set(key, entry);
     }
     /** The tile soup for a flat list [x0, y0, x1, y1, ...] of tiles. */
-    tiles(s: Soup, list: number[]) {
+    tiles(s: Soup, list: number[], glow: Soup = s) {
         for (let i = 0; i < list.length; i += 2) {
             const tx = list[i], ty = list[i + 1];
-            if (this.landAt(tx, ty)) this.landTile(s, tx, ty);
+            if (this.landAt(tx, ty)) this.landTile(s, tx, ty, glow);
             else this.waterTile(s, tx, ty);
         }
     }
-    landTile(s: Soup, tx: number, ty: number) {
-        const pal = PALS[this.biomeAt(tx, ty)] ?? PALS.meadow!, plot = this.world.plotAt(tx, ty);
+    landTile(s: Soup, tx: number, ty: number, glow: Soup = s) {
+        const plot = this.world.plotAt(tx, ty), blight = plot?.blight === 1 && this.world.isLand(tx, ty);
+        const pal = blight ? BLIGHT_PAL : PALS[this.biomeAt(tx, ty)] ?? PALS.meadow!;
         const h = hash2(tx * 1.7, ty * 2.3), r = h * 100, variant = r < 25 ? 0 : r < 50 ? 1 : r < 75 ? 2 : r < 83 ? 3 : r < 92 ? 4 : 5;
         let base = pal.ground[variant];
         const dread = plot?.dread ? 0.55 : 1;
@@ -228,7 +247,8 @@ export class Terrain {
         if (!this.landAt(tx - 1, ty)) s.quad([tx, hD, ty + 1], [tx, hA, ty], [tx - 0.32, SEABED_1, ty], [tx - 0.32, SEABED_1, ty + 1], bank, 0.9);
         if (!this.landAt(tx, ty - 1)) s.quad([tx, hA, ty], [tx + 1, hB, ty], [tx + 1, SEABED_1, ty - 0.32], [tx, SEABED_1, ty - 0.32], bank, 0.96);
         const ore = this.veins.get(this.idx(tx, ty));
-        if (ore) this.decal(s, tx, ty, ore, [hA, hB, hC, hD]);
+        if (blight) this.blightDecor(s, glow, tx, ty, [hA, hB, hC, hD]);
+        else if (ore) this.decal(s, tx, ty, ore, [hA, hB, hC, hD]);
         else if (variant >= 3 && !plot?.dread) this.decor(s, tx, ty, variant, pal, (hA + hB + hC + hD) / 4);
     }
     /**
@@ -259,6 +279,85 @@ export class Terrain {
             s.tri([x - q, y, z + q * 0.7], [x + q, y, z + q * 0.5], [x, y + q * 1.4, z], c, 1.12);
             s.tri([x + q, y, z + q * 0.5], [x, y, z - q], [x, y + q * 1.4, z], c, 0.92);
             s.tri([x, y, z - q], [x - q, y, z + q * 0.7], [x, y + q * 1.4, z], c, 1);
+        }
+    }
+    /**
+     * A nest isle's ground, as the 2D blight tiles paint it: smouldering cracks wandering over most tiles (into `glow`, unlit), and on
+     * some a pool of dark ooze, a dead tuft or a bone; now and then a dead stump or a rib cage (kept clear of the nest in the middle).
+     * Baked into the chunk's soup like the rest of the ground: no extra models, no extra draw calls but the cracks'.
+     */
+    blightDecor(s: Soup, glow: Soup, tx: number, ty: number, h: number[]) {
+        const rr = (k: number) => hash2(tx * 13.7 + k * 1.3, ty * 9.1 - k * 2.9);
+        const yAt = (x: number, z: number) => {
+            const u = Math.min(1, Math.max(0, x - tx)), v = Math.min(1, Math.max(0, z - ty));
+            return h[0] * (1 - u) * (1 - v) + h[1] * u * (1 - v) + h[2] * u * v + h[3] * (1 - u) * v;
+        };
+        // the cracks: a crooked line of short flat strips, dark red with a hot pink every third step
+        const cracks = rr(1) < 0.42 ? 1 + (rr(2) < 0.2 ? 1 : 0) : 0;
+        for (let c = 0; c < cracks; c++) {
+            let x = tx + 0.15 + rr(3 + c) * 0.7, z = ty + 0.15 + rr(5 + c) * 0.7, a = rr(7 + c) * Math.PI * 2;
+            for (let i = 0; i < 5; i++) {
+                a += (rr(11 + i + c * 5) - 0.5) * 1.6;
+                const len = 0.1 + rr(17 + i) * 0.08, nx = Math.min(tx + 0.97, Math.max(tx + 0.03, x + Math.cos(a) * len)), nz = Math.min(ty + 0.97, Math.max(ty + 0.03, z + Math.sin(a) * len));
+                const dx = nz - z, dz = -(nx - x), l = Math.hypot(dx, dz) || 1, w = (i === 0 || i === 4 ? 0.008 : 0.016) / l;
+                const y0 = yAt(x, z) + 0.014, y1 = yAt(nx, nz) + 0.014;
+                glow.quad([x - dx * w, y0, z - dz * w], [x + dx * w, y0, z + dz * w], [nx + dx * w, y1, nz + dz * w], [nx - dx * w, y1, nz - dz * w], BLIGHT_VEIN[i === 2 ? 1 : 0], i === 2 ? 1 : 0.8);
+                x = nx; z = nz;
+            }
+        }
+        const o = this.world.plotOrigin(this.world.plotAt(tx, ty)!), mid = Math.hypot(tx + 0.5 - (o.tx + PLOT / 2), ty + 0.5 - (o.ty + PLOT / 2));
+        const pick = rr(23), cx = tx + 0.3 + rr(29) * 0.4, cz = ty + 0.3 + rr(31) * 0.4, cy = yAt(cx, cz);
+        if (pick < 0.08) {
+            // a pool of dark ooze with a sheen
+            const n = 9, rx = 0.2 + rr(37) * 0.08, rz = rx * 0.6;
+            for (let i = 0; i < n; i++) {
+                const a0 = (i / n) * Math.PI * 2, a1 = ((i + 1) / n) * Math.PI * 2;
+                s.tri([cx, cy + 0.02, cz], [cx + Math.cos(a1) * rx, cy + 0.012, cz + Math.sin(a1) * rz], [cx + Math.cos(a0) * rx, cy + 0.012, cz + Math.sin(a0) * rz], i % 3 ? OOZE[0] : OOZE[1]);
+            }
+            s.tri([cx - 0.07, cy + 0.024, cz - 0.03], [cx - 0.02, cy + 0.024, cz - 0.05], [cx - 0.04, cy + 0.024, cz - 0.01], OOZE[2], 1.1);
+        } else if (pick < 0.22) {
+            // a dead tuft: grey blades bent over
+            for (let k = 0; k < 4; k++) {
+                const x = cx + (rr(41 + k) - 0.5) * 0.2, z = cz + (rr(47 + k) - 0.5) * 0.15, hgt = 0.14 + rr(53 + k) * 0.1, lean = (rr(59 + k) - 0.5) * 0.25;
+                s.tri([x - 0.03, cy, z], [x + 0.03, cy, z], [x + lean, cy + hgt, z + 0.03], DEADWOOD[1 + (k & 1)], 0.95 + k * 0.05);
+            }
+        } else if (pick < 0.32) {
+            // a bone: a shaft with a knob at each end
+            const a = rr(61) * Math.PI, ux = Math.cos(a) * 0.13, uz = Math.sin(a) * 0.13, px = -uz * 0.25, pz = ux * 0.25, y = cy + 0.025;
+            s.quad([cx - ux - px, y, cz - uz - pz], [cx - ux + px, y, cz - uz + pz], [cx + ux + px, y, cz + uz + pz], [cx + ux - px, y, cz + uz - pz], BONE[0]);
+            for (const e of [-1, 1]) for (const sd of [-1, 1]) {
+                const kx = cx + ux * e * 1.15 + px * sd * 1.6, kz = cz + uz * e * 1.15 + pz * sd * 1.6;
+                s.tri([kx - 0.03, y - 0.01, kz], [kx + 0.03, y - 0.01, kz + 0.01], [kx, y + 0.035, kz - 0.01], BONE[1], 1.05);
+            }
+        } else if (pick > 0.93 && mid > 2.6) {
+            if (rr(67) < 0.6) this.stump(s, cx, cy, cz, rr(71));
+            else this.ribs(s, cx, cy, cz, rr(73));
+        }
+    }
+    /** A dead stump: a six-sided snag with a jagged, broken top and a root or two. */
+    stump(s: Soup, x: number, y: number, z: number, r0: number) {
+        const n = 6, r = 0.11 + r0 * 0.04, hgt = 0.22 + r0 * 0.16;
+        for (let i = 0; i < n; i++) {
+            const a0 = (i / n) * Math.PI * 2, a1 = ((i + 1) / n) * Math.PI * 2, t0 = hgt * (0.7 + hash2(i, r0 * 9) * 0.5), t1 = hgt * (0.7 + hash2(i + 1 === n ? 0 : i + 1, r0 * 9) * 0.5);
+            const b0: V3 = [x + Math.cos(a0) * r * 1.25, y - 0.02, z + Math.sin(a0) * r * 1.25], b1: V3 = [x + Math.cos(a1) * r * 1.25, y - 0.02, z + Math.sin(a1) * r * 1.25];
+            const u0: V3 = [x + Math.cos(a0) * r * 0.85, y + t0, z + Math.sin(a0) * r * 0.85], u1: V3 = [x + Math.cos(a1) * r * 0.85, y + t1, z + Math.sin(a1) * r * 0.85];
+            s.quad(b0, b1, u1, u0, DEADWOOD[i % 2], 0.85 + (Math.sin(a0 + 0.5) * 0.5 + 0.5) * 0.3);
+            s.tri(u0, u1, [x, y + hgt * 0.62, z], DEADWOOD[2], 1);
+        }
+        for (const a of [r0 * 6, r0 * 6 + 2.4]) s.tri([x + Math.cos(a) * r * 0.8, y + 0.06, z + Math.sin(a) * r * 0.8], [x + Math.cos(a + 0.5) * r * 0.8, y, z + Math.sin(a + 0.5) * r * 0.8], [x + Math.cos(a + 0.2) * r * 2.6, y, z + Math.sin(a + 0.2) * r * 2.6], DEADWOOD[0], 0.9);
+    }
+    /** A rib cage half sunk in the ground: a spine and a few curved ribs. */
+    ribs(s: Soup, x: number, y: number, z: number, r0: number) {
+        const a = r0 * Math.PI, ux = Math.cos(a), uz = Math.sin(a), px = -uz, pz = ux;
+        s.quad([x - ux * 0.22 - px * 0.02, y + 0.03, z - uz * 0.22 - pz * 0.02], [x - ux * 0.22 + px * 0.02, y + 0.03, z - uz * 0.22 + pz * 0.02], [x + ux * 0.22 + px * 0.02, y + 0.03, z + uz * 0.22 + pz * 0.02], [x + ux * 0.22 - px * 0.02, y + 0.03, z + uz * 0.22 - pz * 0.02], BONE[1]);
+        for (let k = 0; k < 4; k++) {
+            const t = -0.15 + k * 0.1;
+            for (const sd of [-1, 1]) {
+                const bx = x + ux * t, bz = z + uz * t, hgt = 0.16 - Math.abs(k - 1.5) * 0.025;
+                const mx = bx + px * sd * 0.12, mz = bz + pz * sd * 0.12, tipx = bx + px * sd * 0.15 + ux * 0.02, tipz = bz + pz * sd * 0.15 + uz * 0.02;
+                s.tri([bx, y + 0.03, bz], [bx + ux * 0.025, y + 0.03, bz + uz * 0.025], [mx, y + hgt, mz], BONE[0], 1.05);
+                s.tri([mx, y + hgt, mz], [mx + ux * 0.025, y + hgt, mz + uz * 0.025], [tipx, y, tipz], BONE[k & 1], 0.92);
+            }
         }
     }
     decor(s: Soup, tx: number, ty: number, variant: number, pal: Pal, y: number) {
@@ -361,13 +460,14 @@ export class Terrain {
         this.skip.clear();
         const rings: Rising['rings'] = [];
         for (const [ring, list] of [...byRing.entries()].sort((a, b) => a[0] - b[0])) {
-            const soup = new Soup();
-            this.tiles(soup, list);
+            const soup = new Soup(), veins = new Soup();
+            this.tiles(soup, list, veins);
             const g = soup.geometry();
             if (!g) continue;
             const mesh = new Mesh(g, groundMat);
             mesh.castShadow = true;
             mesh.receiveShadow = true;
+            withVeins(mesh, veins);
             mesh.position.y = -3;
             this.group.add(mesh);
             rings.push({ mesh, delay: ring * 0.07 });
@@ -397,6 +497,7 @@ export class Terrain {
                 for (const g of r.rings) {
                     this.group.remove(g.mesh);
                     g.mesh.geometry.dispose();
+                    for (const v of g.mesh.children) (v as Mesh).geometry.dispose();
                 }
                 for (let y = 0; y < PLOT; y++) for (let x = 0; x < PLOT; x++) this.skip.delete(this.idx(o.tx + x, o.ty + y));
                 this.invalidateRect(o.tx - 1, o.ty - 1, o.tx + PLOT, o.ty + PLOT);

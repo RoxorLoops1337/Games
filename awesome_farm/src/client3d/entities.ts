@@ -75,7 +75,8 @@ export class Entities {
         switch (e.k) {
             case 'node': {
                 const biome = this.world.plotAt(e.tx, e.ty)?.biome ?? 'meadow';
-                model = nodeModel(e.kind, { biome, gold: !!e.gold, seed: e.id });
+                const plot = e.kind === 'nest' ? e.plot : -1, world = this.world;
+                model = nodeModel(e.kind, { biome, gold: !!e.gold, seed: e.id, level: plot >= 0 ? () => world.plots[plot]?.nl ?? 1 : undefined });
                 x = e.tx + 0.5;
                 z = e.ty + 0.5;
                 break;

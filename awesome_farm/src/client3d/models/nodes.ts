@@ -15,7 +15,7 @@ export const GOLD_LEAF = [0xa8741a, 0xd89a20, 0xffd966, 0xfff0a0, 0xfffbd0];
 /** A node's model: the object, the body that sways and squashes when hit, how much it sways, and its own per-frame extras. */
 export interface NodeRig { obj: THREE.Group; body: THREE.Group; swayAmp: number; extra?: (dt: number, t: number) => void; /** the node's health changed (0..1) */ onHp?: (f: number) => void }
 /** What a node model is made from: the island's biome, golden or not, and a seed for variety. */
-export interface NodeOpts { biome: string; gold: boolean; seed: number }
+export interface NodeOpts { biome: string; gold: boolean; seed: number; /** a Blight nest: its plot's level now (`Plot.nl`) */ level?: () => number }
 export type Rand = () => number;
 export function rig(swayAmp = 0): NodeRig {
     const obj = new THREE.Group(), body = new THREE.Group();
