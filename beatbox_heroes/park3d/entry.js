@@ -5,4 +5,5 @@
 //   const { createHost, WORLDS } = await import(url);   createHost(canvas, { embedded:true, quality, preserve, onLost }) -> host   (see host.js for the full API)
 export { createHost, createRenderer, DEFAULT_LOOK, BUDGETS } from './host.js';
 export { WORLDS, WORLD_IDS, MINI_IDS } from './worlds.js';
+export { playTape } from './tape.js';   // WATCH A BEATBOX TAPE: the couch / TV sequence in the flat (the game calls R3.lib.playTape(world, opts))
 export const PARK3D_ESM = 1;

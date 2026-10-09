@@ -314,7 +314,7 @@
       couch(S) {
         S.sheet('COUCH', [
           S.row('REST  30 min', 'Mood +8. Put your feet up.', '', () => { S.closeSheet(); const c0 = G.ch.mood; G.do({ t: 'wait', minutes: 30 }); const r = Core.clone(G.ch); r.mood = Math.min(100, r.mood + 8); G.setChar(r); E.toast('Mood +' + Math.round(r.mood - c0), 'good'); }),
-          S.row('WATCH A BEATBOX TAPE  60 min', G.ch.flags.tapeDay === G.ch.day ? 'Already watched one today.' : 'An old VHS battle tape. Mood +8, Originality up. Once a day.', G.ch.flags.tapeDay === G.ch.day ? 'dis' : 'cyan', () => { S.closeSheet(); G.do({ t: 'tape' }); }),
+          S.row('WATCH A BEATBOX TAPE  60 min', G.ch.flags.tapeDay === G.ch.day ? 'Already watched one today.' : 'An old VHS battle tape. Mood +8, Originality up. Once a day.', G.ch.flags.tapeDay === G.ch.day ? 'dis' : 'cyan', () => { S.closeSheet(); if (G.watchTape) G.watchTape(S); else G.do({ t: 'tape' }); }),
           S.row('TALK TO FOXY', 'Tips and advice.', '', () => { S.closeSheet(); E.dialog([{ who: 'foxy', text: tip('foxy') }]); })]);
       },
       kitchen(S) { S.eatMenu(true); },

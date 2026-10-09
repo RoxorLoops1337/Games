@@ -317,7 +317,7 @@
       v: CFG.version, name: L.name || 'Hero', look: L, day: 1, minutes: 60,         // wakes 07:00 on day 1
       energy: CFG.startEnergy, maxEnergy: CFG.startEnergy, hunger: 70, mood: 60, cash: CFG.startCash, fans: 0,
       xp: 0, level: 1, stats: { mus: 3, tech: 3, ori: 3, show: 3 },
-      owned: {}, ach: {}, beat: {}, flags: { story: 1 }, dev: {}, place: 'home', rentDebt: 0, lastBattleDay: -9, lastShowcaseDay: -9,
+      owned: {}, ach: {}, beat: {}, flags: { story: 1, tapeNext: 0 }, dev: {}, place: 'home', rentDebt: 0, lastBattleDay: -9, lastShowcaseDay: -9,
       affinity: {}, seen: {}, history: [], songs: [], crew: [], patterns: [0, 1, 2, 3].map((i) => emptyPattern(i)), patIdx: 0,
       n: { busks: 0, openMics: 0, showcases: 0, karaoke: 0, battlesWon: 0, battlesLost: 0, meals: 0, homeMeals: 0, perfects: 0, bestCombo: 0, perfectLane: [0, 0, 0, 0], sRanks: 0, collapses: 0, nights: 0, mingles: 0, dates: 0, rentPaid: 0, spent: 0, trains: 0, wardrobe: 0, bought: 0, runs: 0, tunes: 0, seqs: 0, songs: 0, streams: 0, coaches: 0, recorded: 0, jobs: 0, jams: 0 },
       created: 0, trainLv: defaultTrainLv(), sounds: START_SOUNDS.slice(),
@@ -987,9 +987,9 @@
         spend(ch, j.minutes, j.energy, fx, rng); fx.push({ t: 'sfx', name: 'coin' }); toast(j.text + ' +$' + j.cash, 'good');
         break;
       }
-      case 'tape': {                                               // watch a beatbox VHS tape on the couch
+      case 'tape': {                                               // watch a beatbox VHS tape on the couch (tape.js plays it; flags.tapeNext = the next history tape)
         if (ch.flags.tapeDay === ch.day) { toast('You already watched a tape today.', 'warn'); break; }
-        ch.flags.tapeDay = ch.day; ch.mood += 8; bumpStat(ch, 'ori', 0.35); gainXp(ch, 6, fx);
+        ch.flags.tapeDay = ch.day; ch.flags.tapeNext = (ch.flags.tapeNext | 0) + 1; ch.mood += 8; bumpStat(ch, 'ori', 0.35); gainXp(ch, 6, fx);
         spend(ch, 60, 2, fx, rng); fx.push({ t: 'sfx', name: 'sparkle' }); toast('You watch an old battle tape. Originality up.', 'good');
         break;
       }
@@ -1028,6 +1028,7 @@
     const tl = defaultTrainLv(), rl = raw.trainLv && typeof raw.trainLv === 'object' ? raw.trainLv : {};
     for (const g of TRAIN_GAMES) tl[g] = clamp(Math.floor(+rl[g] || 1), 1, TRAIN_CFG.levelMax);
     ch.trainLv = tl; ch.seen = raw.seen || {};
+    if (typeof ch.flags.tapeNext !== 'number' || !(ch.flags.tapeNext >= 0)) ch.flags.tapeNext = 0;   // the VHS history tapes watched (tape.js), default 0
     // saves from before the story (no flags.story): if they already met BeeAmGee on the old always-there bench, he stays met and on his bench
     if (!ch.flags.story) {
       const f = ch.flags, met = f.visited_park || f.tip_beeamgee || f.coachDay !== undefined || f.proCoachDay !== undefined || ch.seen.beeamgee || (ch.n.coaches || 0) > 0;
