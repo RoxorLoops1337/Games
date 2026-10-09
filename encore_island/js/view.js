@@ -10,7 +10,13 @@ const VIEW_SRC = (typeof document !== 'undefined' && document.currentScript && d
   try { const o = JSON.parse(localStorage.getItem(VIEW_KEY) || '{}'); if (o.mode === '3d' || o.mode === '2d') VIEW.mode = o.mode; if (['auto', 'low', 'medium', 'high'].includes(o.q)) VIEW.quality = o.q; } catch (e) { /* default view */ }
 })();
 function viewSavePref() { try { localStorage.setItem(VIEW_KEY, JSON.stringify({ mode: VIEW.mode, q: VIEW.quality })); } catch (e) { /* private mode */ } }
-function viewSupported() { try { const c = document.createElement('canvas'); return !!(c.getContext('webgl2') || c.getContext('webgl')); } catch (e) { return false; } }
+function viewSupported() { return typeof WebGL2RenderingContext !== 'undefined' || typeof WebGLRenderingContext !== 'undefined'; } // cheap check: the engine creates the one real context (a probe context costs a GPU round trip)
+async function viewPreload() {
+  try {
+    const base = new URL('.', VIEW_SRC).href, list = await (await fetch(new URL('modules.json', base).href)).json();
+    for (const f of list) { const l = document.createElement('link'); l.rel = 'modulepreload'; l.href = new URL(f, base).href; document.head.appendChild(l); }
+  } catch (e) { /* the preload is only a speed-up */ }
+}
 function viewLoad() { // load and start the 3D engine once; resolves true when it is ready to draw
   if (VIEW.status === 'ready') return Promise.resolve(true);
   if (VIEW._p) return VIEW._p;
@@ -20,6 +26,7 @@ function viewLoad() { // load and start the 3D engine once; resolves true when i
       if (typeof window.__EI_FORCE3D === 'undefined' && typeof window.__EI_HEADLESS__ !== 'undefined') throw new Error('headless');
       if (!viewSupported()) throw new Error('WebGL is not available');
       const cv3 = document.getElementById('game3d'); if (!cv3) throw new Error('no 3D canvas');
+      await viewPreload(); // fetch every 3D file in parallel first: the import graph is deep and would otherwise load one level at a time
       const mod = await import(VIEW_SRC);
       VIEW.api = await mod.createView({ canvas: cv3, quality: VIEW.quality, onProgress: (p) => { VIEW.progress = p; } });
       VIEW.api.resize(vw, vh, dpr); VIEW.status = 'ready'; return true;

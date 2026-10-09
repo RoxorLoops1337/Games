@@ -24,5 +24,5 @@ const info = await page.evaluate(async ({ state, after, frames, fps }) => {
   EI.draw(1 / 60);
   const V = EI.VIEW; return { view: V.mode + '/' + V.status + (V.err ? ' ' + V.err : ''), stats: V.api ? V.api.stats() : null, place: EI.S.place };
 }, { state: opt('state', ''), after: opt('after', ''), frames, fps: 1 });
-await page.screenshot({ path: out }); console.log('shot', out, JSON.stringify(info), errs ? errs + ' errors' : 'ok');
+await page.screenshot({ path: out, timeout: 240000 }); console.log('shot', out, JSON.stringify(info), errs ? errs + ' errors' : 'ok');
 await browser.close();

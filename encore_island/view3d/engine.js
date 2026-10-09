@@ -20,11 +20,10 @@ const nextFrame = () => new Promise((r) => (typeof requestAnimationFrame === 'fu
 export async function createView(opts = {}) {
   const canvas = opts.canvas, onProgress = opts.onProgress || (() => {});
   kit.installLook();
-  // pick a tier BEFORE creating the real context (it decides whether the default framebuffer needs MSAA)
-  let probe = null; try { const c = document.createElement('canvas'); probe = c.getContext('webgl2') || c.getContext('webgl'); } catch (e) { /* no gl */ }
-  if (!probe) throw new Error('WebGL unavailable');
-  const pref = opts.quality || 'auto', tierName = detectTier(probe, pref); try { const ex = probe.getExtension('WEBGL_lose_context'); if (ex) ex.loseContext(); } catch (e) { /* ignore */ }
-  const renderer = new THREE.WebGLRenderer({ canvas, antialias: tierName === 'low', stencil: false, alpha: false, powerPreference: 'high-performance' });
+  // ONE real context (creating probe contexts costs a GPU round trip each). The default framebuffer is antialiased so the low tier (no post chain) looks clean;
+  // the post tiers antialias their own render target and the extra backbuffer MSAA on a full-screen quad is cheap.
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, stencil: false, alpha: false, powerPreference: 'high-performance' });
+  const pref = opts.quality || 'auto', tierName = detectTier(renderer.getContext(), pref);
   renderer.outputColorSpace = THREE.SRGBColorSpace; renderer.shadowMap.type = THREE.PCFSoftShadowMap; renderer.autoClear = false; renderer.info.autoReset = false; let shaderErrs = 0; renderer.debug.onShaderError = (gl, prog, vs, fs) => { if (++shaderErrs <= 2) console.warn('[3d] a shader failed to compile on this GPU: ' + String(gl.getProgramInfoLog(prog) || '').slice(0, 300)); }; renderer.setClearColor(0xbfe8f4, 1);
   const post = new Post(renderer);
   const scene = new THREE.Scene(); scene.fog = new THREE.Fog(0xbfe8f4, 60, 200);
@@ -32,7 +31,7 @@ export async function createView(opts = {}) {
   const rig = kit.makeLightRig(scene, { shadows: true, size: 2048, extent: 30 });
   const world = new THREE.Group(), dyn = new THREE.Group(); world.name = 'world'; dyn.name = 'dyn'; scene.add(world, dyn);
   const blobs = new kit.BlobShadows(640); scene.add(blobs.mesh);
-  const focus = { x: 0, z: 0 }, mods = {}, order = [], fails = {}, ms = {};
+  const focus = { x: 0, z: 0 }, mods = {}, order = [], fails = {}, ms = {}, loadMs = {};
   const V = { THREE, kit, scene, camera, renderer, rig, LOOK: kit.LOOK, Q: kit.Q, W, world, dyn, blobs, labels, mods, focus, quality: { tier: tierName, detail: 2, shadows: true, dpr: 1, particles: 1, decor: 1 }, moodOverride: null,
     bake: (actor, o) => bakeActor(actor, Object.assign({ cast: V.quality.shadows }, o || {})), heightAt: (x, z) => (mods.env && mods.env.heightAt ? mods.env.heightAt(x, z) : 0), S: () => S, project: null };
   const st = { tier: TIERS[tierName], tierName, scale: 1, vw: 1, vh: 1, dpr: 1, lost: false, frames: 0, last: 0 };
@@ -80,8 +79,9 @@ export async function createView(opts = {}) {
   // ---- modules ----
   async function load(name) {
     try {
-      const m = await import('./' + name + '.js'); if (!m.init) return;
-      V._cur = name; const inst = await m.init(V); V._cur = null; if (!inst) return; inst.name = name; mods[name === 'env3d' ? 'env' : name.replace(/3d$/, '')] = inst; order.push(inst); fails[name] = 0; ms[name] = 0;
+      // loadMs[name] = [import ms, init ms]
+      const t0 = performance.now(); const m = await import('./' + name + '.js'); const t1 = performance.now(); if (!m.init) return;
+      V._cur = name; const inst = await m.init(V); V._cur = null; loadMs[name] = [Math.round(t1 - t0), Math.round(performance.now() - t1)]; if (!inst) return; inst.name = name; mods[name === 'env3d' ? 'env' : name.replace(/3d$/, '')] = inst; order.push(inst); fails[name] = 0; ms[name] = 0;
     } catch (e) { console.warn('[3d] module ' + name + ' failed to load: ' + e.message); }
   }
   applyTier(tierName); resize0();
@@ -89,6 +89,7 @@ export async function createView(opts = {}) {
   STYLE.flat = false; STYLE.boost = 0;
   for (let i = 0; i < MODULES.length; i++) { onProgress(i / MODULES.length, MODULES[i]); await load(MODULES[i]); await nextFrame(); }
   for (const make of (typeof VIEW3D !== 'undefined' ? VIEW3D : [])) { try { const inst = make(V); if (inst && inst.update) { inst.name = 'feature' + order.length; fails[inst.name] = 0; ms[inst.name] = 0; order.push(inst); } } catch (e) { console.warn('[3d] feature visual failed: ' + e.message); } }
+  if (!mods.env || !mods.heroes) throw new Error('core 3D modules did not load (' + Object.keys(mods).join(',') + ')'); // an empty world is worse than 2D: view.js falls back
   onProgress(1, 'ready');
   canvas.addEventListener('webglcontextlost', (e) => { e.preventDefault(); st.lost = true; api.lost = true; });
 
@@ -99,7 +100,7 @@ export async function createView(opts = {}) {
     const shk = JUICE.shake > 0 && S.settings.shake; shakeX = shk ? (Math.random() - 0.5) * JUICE.shake * W * 0.9 : 0; shakeY = shk ? (Math.random() - 0.5) * JUICE.shake * W * 0.6 : 0; JUICE.shake = Math.max(0, JUICE.shake - dt * 22);
   }
   const api = {
-    V, lost: false, mods,
+    V, lost: false, mods, loadMs,
     frame(dt) {
       if (st.lost) return; const t0 = performance.now(); st.frames++; renderer.info.reset();
       dt = Math.min(dt || 0.016, 0.05); updateJuice(dt); fitCamera(dt);

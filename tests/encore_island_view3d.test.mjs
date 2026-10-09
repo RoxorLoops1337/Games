@@ -27,6 +27,8 @@ for (const m of MODS) {
   const p = join(v3, m + '.js'); t.ok(existsSync(p), m + '.js exists'); if (!existsSync(p)) continue;
   try { execFileSync(process.execPath, ['--check', '--input-type=module', '-'], { input: readFileSync(p, 'utf8'), stdio: ['pipe', 'pipe', 'pipe'] }); t.ok(true, m + '.js parses'); } catch (e) { t.ok(false, m + '.js parses: ' + String(e.stderr).split('\n')[0]); }
 }
+{ const { computeManifest } = await import('../tools/3d_manifest.mjs'); const live = computeManifest(), saved = JSON.parse(readFileSync(join(v3, 'modules.json'), 'utf8'));
+  t.ok(JSON.stringify(live) === JSON.stringify(saved), 'modules.json (the preload list) matches the real import graph' + (JSON.stringify(live) === JSON.stringify(saved) ? ' (' + live.length + ' files)' : ': run node tools/3d_manifest.mjs --write')); }
 const allSrc = MODS.map((m) => (existsSync(join(v3, m + '.js')) ? readFileSync(join(v3, m + '.js'), 'utf8') : '')).join('\n');
 t.ok(!/https?:\/\/(?!www\.w3\.org)/.test(allSrc), 'no network dependencies in the 3D modules');
 t.ok(!allSrc.includes('—'), 'no em dashes in the 3D modules');

@@ -14,5 +14,5 @@ await page.evaluate(async () => { if (window.__labReady) await window.__labReady
 if (pre) await page.evaluate(pre);
 const info = await page.evaluate((s) => (window.__labShot ? window.__labShot(s) : null), secs);
 const stat = await page.evaluate(() => window.__stat || null); if (stat) console.log('STAT', JSON.stringify(stat));
-await page.screenshot({ path: out }); console.log('shot', out, JSON.stringify(info), errs ? errs + ' errors' : 'ok');
+await page.screenshot({ path: out, timeout: 240000 }); console.log('shot', out, JSON.stringify(info), errs ? errs + ' errors' : 'ok');
 await browser.close();
