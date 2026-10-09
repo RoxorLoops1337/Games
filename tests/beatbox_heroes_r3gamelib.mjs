@@ -21,6 +21,7 @@ export async function seed(page, patch) {
     for (const p of ['home', 'park', 'shop', 'studio', 'bar']) ch.flags['visited_' + p] = 1;
     const f = (patch && patch.flags) || {}; const rest = Object.assign({}, patch); delete rest.flags; Object.assign(ch, rest); Object.assign(ch.flags, f);
     BBH.G.slot = 1; BBH.G.setChar(ch);
+    BBH.E.settings.micAsked = true;           // the one-time "play with your voice?" card would sit in front of every set these suites start
   }, patch || {});
 }
 export const setClock = (page, day, hour) => page.evaluate(([d, h]) => { const ch = BBH.Core.clone(BBH.G.ch); ch.day = d; ch.minutes = h * 60 - 360; BBH.G.setChar(ch); }, [day, hour]);

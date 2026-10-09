@@ -145,4 +145,19 @@ const ev = (l, rng, voice = 0, strength = 0.8) => ({ vec: M.featureVec(hit(l, SR
   BBH.Mic = real;
 }
 
+/* ---------------------------------------------------------------- MicSetup.firstRun: asks once, never nags */
+{
+  Object.defineProperty(globalThis, 'navigator', { value: { mediaDevices: { getUserMedia() {} } }, configurable: true });
+  load('mic_setup');
+  const modals = [], saved = [];
+  const mk = (settings) => { BBH.E = { settings, saveSettings: () => saved.push(JSON.stringify(settings)), h: () => ({}), modal: (m) => modals.push(m) }; };
+  let nexts = 0; const next = () => nexts++;
+  mk({}); BBH.MicSetup.firstRun(next);
+  eq([modals.length, nexts], [1, 0], 'a new player is asked before the first set'); eq(BBH.E.settings.micAsked, true, 'and the ask is remembered');
+  modals[0].buttons[0].fn(); eq([BBH.E.settings.mic, nexts], [false, 1], 'TAPS ONLY stores the choice and starts the set');
+  mk({ micAsked: true }); BBH.MicSetup.firstRun(next); eq([modals.length, nexts], [1, 2], 'asked once only: next runs straight away');
+  mk({ mic: true }); BBH.MicSetup.firstRun(next); eq([modals.length, nexts], [1, 3], 'a player who already uses the mic is never asked');
+  mk({ mic: false }); BBH.MicSetup.firstRun(next); eq([modals.length, nexts], [1, 4], 'a player who turned the mic off is never asked');
+}
+
 done();
