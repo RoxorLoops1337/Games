@@ -6,4 +6,6 @@
 export { createHost, createRenderer, DEFAULT_LOOK, BUDGETS } from './host.js';
 export { WORLDS, WORLD_IDS, MINI_IDS } from './worlds.js';
 export { playTape } from './tape.js';   // WATCH A BEATBOX TAPE: the couch / TV sequence in the flat (the game calls R3.lib.playTape(world, opts))
+// the cutscene engine (cine.js + cine_screen.js + cine_reels.js): its own lazy chunk, fetched the first time a film plays
+export const loadCine = () => import('./cine_reels.js');
 export const PARK3D_ESM = 1;

@@ -1,7 +1,7 @@
 // Park3D HOST (owner PLAT). One renderer, one canvas, one loop; worlds come and go through load()/unload().
 //   const host = createHost(canvas, { embedded, quality, onLost, preserve, seed })
 //   host.load(worldId, args) -> Promise<world | null>   unload previous world, build, warm one frame; null when a newer load()/unload() superseded it; rejects when the id is unknown or the build throws
-//   host.unload()  host.tick(dt)  host.pause(b)  host.resize(w?, h?)  host.setQuality('low'|'med'|'high')  host.stats()  host.leakReport()  host.dispose()
+//   host.timeScale (0.05..2, slow motion for cutscenes, back to 1 on every unload)  host.unload()  host.tick(dt)  host.pause(b)  host.resize(w?, h?)  host.setQuality('low'|'med'|'high')  host.stats()  host.leakReport()  host.dispose()
 //   host.world (current world or null)  host.events (persistent emitter: 'worldReady' {id}, 'quality' {q}, 'contextlost' {n, second})  host.renderer  host.shared  host.quality  host.demoted
 //   embedded:true  -> NO own RAF and NO window resize listener: the game loop calls host.tick(dt) and host.resize(w, h).  embedded:false (Park3D.init shim, dev pages) -> own RAF + resize listener.
 //   onLost({phase:'lost'|'restored'|'demote', n, second, reason, id}): context-loss hook. After 'lost' the host waits 2 s for webglcontextrestored and rebuilds the same world;
@@ -10,7 +10,9 @@
 // WORLD OBJECT (what load() resolves to, also window.__park):
 //   { id, sceneName, ready, ctx, events, scene, camera, renderer, terrain, flora, lighting, spots, controls, player, npcs[], profile, args,
 //     setTime(n|'day'|'dusk'|'night', instant?), setWeather('clear'|'rain'), setClock({hour,day}), setLook(look), setBeat(b), focus(target, opts), release(), walkToSpot(id, {run}), done(spotId),
-//     setSpotState(id, {locked, reason, goal, badge}), activate(id), teleport(id), talk(npcId), setQuality(q), stats(), pause(b), dispose() }
+//     setSpotState(id, {locked, reason, goal, badge}), activate(id), teleport(id), talk(npcId), setQuality(q), stats(), pause(b), dispose(),
+//     onFrame(fn(dt, t), phase 'pre'|'post') -> off }   pre runs after every module update and before the render (a cutscene camera wins over the controls there), post right after the render
+//     (still inside the same task, so a drawImage of the canvas sees this frame: cine.js snapshots it for a crossfade). Hooks are dropped with the world; a throwing hook is logged once and removed.
 //   The thin pass-throughs call lighting / controls / spots / npcs / the world module when THEY implement the method and silently do nothing otherwise, so missing methods never throw.
 // WORLD MODULE CONTRACT: see worlds.js. ctx.shared = { post, shadowMap }: created ONCE per host. post stays null until fx_post.js exports createSharedPost(renderer) (LIGHT), then it is passed on.
 // PERF (stability + phones): resize() only touches the drawing buffer on a real size / DPR change and redraws at once (setSize clears the canvas); load() yields a frame between import,
@@ -139,10 +141,10 @@ export function createHost(target, opts) {
 
   function assemble(id, args, ctx, scene, camera, events, spec) {
     ctx.profile = spec.profile || 'out'; if (spec.camera) Object.assign(camera, spec.camera);
-    const w = { id, args, ctx, scene, camera, events, spec, t: 0, ready: true, mini: null, terrain: null, flora: null, lighting: null, spots: null, player: null, npcs: [], controls: null, step: NOP, world: null, rec: null, before: null };
+    const w = { id, args, ctx, scene, camera, events, spec, t: 0, ready: true, mini: null, hooks: { pre: [], post: [] }, terrain: null, flora: null, lighting: null, spots: null, player: null, npcs: [], controls: null, step: NOP, world: null, rec: null, before: null };
     if (spec.mini) { // mini game: owns its content, camera and optional render()
       const mg = spec.mini; w.mini = mg; scene.add(mg.group); if (args.onResult) events.on('minigame', args.onResult);
-      w.step = (dt, t) => { mg.update(dt, t); if (mg.render) mg.render(); else renderer.render(scene, camera); };
+      w.step = (dt, t) => { mg.update(dt, t); runHooks(w.hooks.pre, dt, t); if (mg.render) mg.render(); else renderer.render(scene, camera); runHooks(w.hooks.post, dt, t); };
       w.world = makeWorld(w); return w;
     }
     const terrain = spec.terrain; if (terrain.group.parent !== scene) scene.add(terrain.group); w.terrain = terrain; ctx.terrain = terrain;
@@ -166,10 +168,13 @@ export function createHost(target, opts) {
     w.step = (dt, t) => {
       renderer.shadowMap.autoUpdate = false; if (drawn < 3 || dt === 0 || (shadowN++ % shadowEvery()) === 0) renderer.shadowMap.needsUpdate = true;
       controls.update(dt, t); player.update(dt, t); for (let i = 0; i < npcs.length; i++) npcs[i].update(dt, t); flora.update(dt, t); if (terrain.update) terrain.update(dt, t); spots.update(dt, t, pos); lighting.update(dt, t);
-      if (sup) sup(dt, t); if (lighting.render) lighting.render(); else renderer.render(scene, camera);
+      if (sup) sup(dt, t); runHooks(w.hooks.pre, dt, t); if (lighting.render) lighting.render(); else renderer.render(scene, camera); runHooks(w.hooks.post, dt, t);
     };
     w.world = makeWorld(w); return w;
   }
+
+  // per-frame hooks of a world (world.onFrame): allocation free when empty, a throwing hook is removed so it cannot break every frame
+  function runHooks(list, dt, t) { for (let i = 0; i < list.length; i++) { try { list[i](dt, t); } catch (e) { console.error('[park3d] frame hook failed: ' + (e && e.stack || e)); list.splice(i--, 1); } } }
 
   // ------------------------------------------------------------------ the world object (public api)
   function makeWorld(w) {
@@ -197,6 +202,7 @@ export function createHost(target, opts) {
     world.stats = () => api.stats();
     world.pause = (v) => api.pause(v);
     world.dispose = () => { if (cur === w) api.unload(); };
+    world.onFrame = (fn, phase) => { const l = w.hooks[phase === 'post' ? 'post' : 'pre']; if (typeof fn === 'function') l.push(fn); return () => { const i = l.indexOf(fn); if (i >= 0) l.splice(i, 1); }; };
     return world;
   }
 
@@ -207,9 +213,9 @@ export function createHost(target, opts) {
     if (before) Array.from(dom.children).forEach((n) => { if (!before.has(n) && n !== canvas) { try { dom.removeChild(n); } catch (e) { /* ignore */ } } });
   }
   function unloadNow() {
-    const w = cur; if (!w) return; cur = null;
+    api._ts = 1; const w = cur; if (!w) return; cur = null;
     if (window.__park === w.world) window.__park = undefined;
-    safe('unload event', () => w.events.emit('unload', { id: w.id }), null);
+    safe('unload event', () => w.events.emit('unload', { id: w.id }), null); w.hooks.pre.length = 0; w.hooks.post.length = 0;
     safe('spec.dispose', () => { if (w.spec && w.spec.dispose) w.spec.dispose(); }, null);
     safe('mini.dispose', () => { if (w.mini && w.mini.dispose) w.mini.dispose(); }, null);
     safe('controls.dispose', () => { if (w.controls && w.controls.dispose) w.controls.dispose(); }, null);
@@ -241,7 +247,8 @@ export function createHost(target, opts) {
   // ------------------------------------------------------------------ loop
   function tick(dt) {
     const w = cur; if (!w || paused || lost || demoted || disposed) return;
-    dt = dt > 0.05 ? 0.05 : dt < 0 ? 0 : dt; w.t += dt;
+    // timeScale: a cutscene slow motion (cine.js), 1 otherwise
+    dt = (dt > 0.05 ? 0.05 : dt < 0 ? 0 : dt) * api.timeScale; w.t += dt;
     const t0 = nowMs();
     try { w.step(dt, w.t); drawn++; } catch (e) { if (errs++ < 5) console.error('[park3d] frame failed: ' + (e && e.stack || e)); }
     adapt(opts.frameMs !== undefined ? opts.frameMs : (api._frameMs || (nowMs() - t0)));   // the embedder passes the real frame interval (api._frameMs), else the CPU time of this frame
@@ -255,6 +262,8 @@ export function createHost(target, opts) {
   const api = {
     renderer, canvas, shared, events, embedded,
     get world() { return cur ? cur.world : null; }, get quality() { return quality; }, get drawn() { return cur ? drawn : 0; }, get dpr() { return appDpr; }, _frameMs: 0,
+    // world time scale for slow motion (cine.js time ramps), clamped 0.05..2, reset to 1 by every load and unload
+    _ts: 1, get timeScale() { return this._ts; }, set timeScale(v) { v = +v; this._ts = isFinite(v) ? Math.max(0.05, Math.min(2, v)) : 1; },
     // fetch (not build) the world modules a player is likely to open next, so the first visit does not wait for the network
     perf: PERF,
     prefetch(ids) { if (!PERF) return; (ids || []).forEach((id) => { if (prefetched[id] || !WORLDS[id]) return; prefetched[id] = 1; try { WORLDS[id]().catch(() => { prefetched[id] = 0; }); } catch (e) { prefetched[id] = 0; } }); }, get demoted() { return demoted; }, get lost() { return lost; }, get paused() { return paused; },

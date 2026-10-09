@@ -13,6 +13,9 @@
 //                   also called from a wrapper around G.setChar). title and creator worlds ignore Core time and look (R3.FIXED).
 //   R3.demote(reason, detail)  live fallback: re-enters the current scene's 2D sibling with the same args and persists bbh:r3.fail (except reason 'user').
 //   R3.setMode('auto'|'3d'|'2d'|'classic') -> {mode, reload}   persists, resets fail, '2d' demotes live. Settings GRAPHICS row: AUTO / 3D / CLASSIC (reload the page when .reload is true).
+//   R3.setWide(b)  cutscenes on a landscape screen: the 3D box fills the whole window instead of the 9:16 column (r3/cine.js, desktop films). Phones in portrait are unchanged.
+//   R3.setBeatSource(fn | null)  fn() -> 0..1 replaces the music beat that pulses the world's neon (a cutscene drives it with its own hits).  R3.holdSync(b)  the save's time, weather and look stop
+//                   reaching the world while b (the opening film lights its own sets); releasing re-applies them.
 //   R3.setQuality(q)  R3.listen(name, fn) -> unsubscribe  (events: ready, fail, demote, show, quality)   E.hooks = { dialogLine, dialogEnd, sheetOpen, sheetClose, uiBlock } are filled here.
 (function (root) {
   'use strict';
@@ -23,11 +26,11 @@
   const KEY = 'bbh:r3';
   R3.AUTO_3D = false;                                         // M4 flips this: AUTO then picks 3D on capable devices (until then 3D is opt-in: ?r=3d or Settings GRAPHICS)
   R3.auto3d = () => R3.AUTO_3D === true || root.BBH_R3_AUTO3D === true;   // window.BBH_R3_AUTO3D lets tests (and a future remote flag) preview the M4 flip
-  R3.FIXED = { title: 1, creator: 1 };                        // worlds that ignore Core time, weather and look
+  R3.FIXED = { title: 1, creator: 1, cine: 1 };                        // worlds that ignore Core time, weather and look
   const $ = (id) => document.getElementById(id);
 
   /* ------------------------------------------------------------------ state */
-  const S = { mode: 'auto', modeSrc: 'default', status: 'idle', reason: '', detail: '', host: null, active: false, demoted: null, quality: null, qForced: false, probe: null, held: null,
+  const S = { wide: false, beatFn: null, syncHeld: false, mode: 'auto', modeSrc: 'default', status: 'idle', reason: '', detail: '', host: null, active: false, demoted: null, quality: null, qForced: false, probe: null, held: null,
     bootMs: 0, box: { x: 0, w: 360, h: 640 }, acc: 0, ch: null, pend: false, lastSyncT: 0, lastPlace: null, last: { w: null, n: -1, hr: -1, day: -1, wx: '', look: '' }, ticks: [], subs: {}, resizeBound: false, bootP: null };
   const def = (k, get) => Object.defineProperty(R3, k, { get, enumerable: true, configurable: true });
   def('on', () => S.status === 'ready' && !!S.host && !S.demoted);
@@ -63,13 +66,16 @@
   /* ------------------------------------------------------------------- layout */
   // #glwrap and #fx share one box: a 9:16 column (full height on tall phones, a phone column on desktop), centred. They sit OUTSIDE the scaled #stage.
   R3.resize = function () {
-    const vw = root.innerWidth, vh = root.innerHeight, w = Math.max(2, Math.floor(Math.min(vw, vh * 9 / 16))), x = Math.floor((vw - w) / 2), dpr = Math.min(2, root.devicePixelRatio || 1);
+    const vw = root.innerWidth, vh = root.innerHeight, w = Math.max(2, Math.floor(S.wide ? vw : Math.min(vw, vh * 9 / 16))), x = Math.floor((vw - w) / 2), dpr = Math.min(2, root.devicePixelRatio || 1);
     S.box = { x, w, h: vh };
     for (const id of ['glwrap', 'fx']) { const el = $(id); if (el) { el.style.left = x + 'px'; el.style.top = '0'; el.style.width = w + 'px'; el.style.height = vh + 'px'; } }
     const fx = $('fx'); if (fx) { const fw = Math.round(w * dpr), fh = Math.round(vh * dpr); if (fx.width !== fw || fx.height !== fh) { fx.width = fw; fx.height = fh; } }
     if (S.host) { try { S.host.resize(w, vh); } catch (e) { console.error(e); } }
   };
   function shakeReset() { for (const id of ['glwrap', 'fx']) { const el = $(id); if (el) el.style.transform = ''; } }
+  R3.setWide = function (b) { b = !!b; if (b === S.wide) return; S.wide = b; R3.resize(); };
+  R3.setBeatSource = function (fn) { S.beatFn = typeof fn === 'function' ? fn : null; };
+  R3.holdSync = function (b) { const was = S.syncHeld; S.syncHeld = !!b; if (was && !S.syncHeld) { S.last.w = null; applySync(); } };
   R3.shakeBy = function (dx, dy) {
     const k = S.box.w / 360, t = dx || dy ? 'translate(' + (dx * k).toFixed(1) + 'px,' + (dy * k).toFixed(1) + 'px)' : '';
     for (const id of ['glwrap', 'fx']) { const el = $(id); if (el) el.style.transform = t; }
@@ -104,7 +110,7 @@
     if (S.reveals.length) setTimeout(() => checkReveal(), 1600);   // the loop may be paused (hidden tab): never leave the fade up
   };
   // world modules the player is likely to open next: fetched (not built) when the browser is idle, so the first visit only waits for the build
-  const NEXT = { title: ['creator', 'street'], creator: ['street'], street: ['flat', 'park', 'shop', 'lab', 'bar', 'hood'], flat: ['street', 'creator'], park: ['street', 'rhythm'], shop: ['street'], lab: ['street', 'rhythm'], bar: ['street', 'rhythm'], hood: ['street'], rhythm: ['park', 'bar'] };
+  const NEXT = { title: ['creator', 'street'], creator: ['cine', 'street'], street: ['flat', 'park', 'shop', 'lab', 'bar', 'hood'], flat: ['street', 'creator'], park: ['street', 'rhythm'], shop: ['street'], lab: ['street', 'rhythm'], bar: ['street', 'rhythm'], hood: ['street'], rhythm: ['park', 'bar'] };
   function prefetchNext(id) {
     const h = S.host, ids = NEXT[id]; if (!h || !h.prefetch || !ids) return;
     try { const c = navigator.connection; if (c && c.saveData) return; } catch (e) { /* ignore */ }
@@ -116,7 +122,7 @@
   R3.tick = function (dt) {
     const host = S.host; if (!host || !S.active || S.demoted) return;
     if (S.quality === 'low') { S.acc += dt; if (S.acc < 30) return; dt = S.acc; S.acc = 0; }   // low tier: 30 fps cap (the E loop keeps running at display rate)
-    const w = host.world; if (w) { try { w.setBeat(E.beat()); } catch (e) { /* ignore */ } }
+    const w = host.world; if (w) { try { w.setBeat(S.beatFn ? S.beatFn() : E.beat()); } catch (e) { /* ignore */ } }
     host._frameMs = dt; host.tick(dt / 1000);   // the real frame interval feeds the host's adaptive DPR
     if (S.reveals.length) checkReveal(); if (S.splashUp) splashCheck();
     if (S.probe) S.probe.push(dt);
@@ -126,7 +132,7 @@
 
   /* ------------------------------------------------- Core time, weather, look -> world */
   function applySync() {
-    const w = S.host && S.host.world, ch = S.ch || (BBH.G && BBH.G.ch), C = BBH.Core; if (!w || !ch || !C || R3.FIXED[w.id]) return;
+    const w = S.host && S.host.world, ch = S.ch || (BBH.G && BBH.G.ch), C = BBH.Core; if (!w || !ch || !C || R3.FIXED[w.id] || S.syncHeld) return;
     const L = S.last, fresh = L.w !== w; L.w = w;
     try {
       if (!w.mini && typeof ch.minutes === 'number') {

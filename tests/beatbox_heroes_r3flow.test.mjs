@@ -34,9 +34,9 @@ try {
   ok((await toasts(page)).some((t) => /name/i.test(t)) && await page.evaluate(() => BBH.Eng.sceneName) === 'creator', 'GO! without a name asks for one (the 2D rule, toast in the 3D kit)');
   await page.locator('#ui input[type=text]').fill('Nova'); await sleep(400);
   await click(page, '#ui .btn', 'GO!');
-  ok(await until(page, () => BBH.Eng.sceneName === 'intro', null, 90000), 'GO! with a name starts the game: Core.newChar, the intro (a 2D scene in mixed mode)');
-  ok(await page.evaluate(() => BBH.G.ch.name === 'Nova' && !BBH.R3.active && !document.body.classList.contains('r3')), 'the intro runs on the 2D canvas (the 3D layer is hidden)');
-  await sleep(1500); await click(page, '#ui .btn', 'SKIP');
+  ok(await until(page, () => BBH.Eng.sceneName === 'intro', null, 90000), 'GO! with a name starts the game: Core.newChar, the intro (the 3D opening film, r3/cine.js)');
+  ok(await until(page, () => BBH.G.ch.name === 'Nova' && BBH.R3.active && BBH.Eng.scene.is3d && BBH.R3Cine.playing === 'opening' && !!document.querySelector('.cin .cin-skip.on'), null, 90000), 'the intro plays as a 3D film with a SKIP button');
+  await sleep(500); await page.evaluate(() => document.querySelector('.cin .cin-skip').click());
   ok(await sceneReady(page, 'street', 'street', 240000), 'intro SKIP -> the 3D street scene on the street world');
   ok(await page.evaluate(() => BBH.Eng.sceneArgs.tutorial === true && BBH.G.ch.flags.intro === 1), 'the street was entered with the tutorial flag');
 
