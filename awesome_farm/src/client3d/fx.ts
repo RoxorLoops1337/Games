@@ -44,6 +44,13 @@ export const FX: Record<string, FxDef | undefined> = {
     slam: { colors: [C.dirt, C.stone], n: 24, speed: 4, up: 3, size: 1.2, sfx: 'fell', shake: 0.2 },
     roar: { colors: [C.berry, C.plum], n: 12, speed: 3, up: 2, size: 1, sfx: 'fell', shake: 0.12 },
     unlock: { colors: [C.gold, C.cream], n: 14, speed: 2.4, up: 3.4, size: 0.8, sfx: 'level', shake: 0.03 },
+    // the Blight (sim/blight.ts, sim/raid.ts): a nest struck and destroyed, a nest spreading to the next isle, a raid setting out
+    nestHit: { colors: [C.plum, C.berry, 0x2a1830], n: 7, speed: 2, up: 2.6, size: 0.8, sfx: 'hit', shake: 0.04 },
+    nestDie: { colors: [C.berry, C.plum, 0x2a1830, C.cream], n: 44, speed: 4.2, up: 5.5, size: 1.3, sfx: 'fell', shake: 0.2 },
+    nestSpread: { colors: [C.plum, 0x2a1830, C.berry], n: 20, speed: 2.4, up: 4, size: 1, sfx: 'pop', shake: 0.05 },
+    raid: { colors: [C.berry, C.plum], n: 18, speed: 2.4, up: 6, size: 1, sfx: 'fell', shake: 0.06 },
+    bedSet: { colors: [C.cream, C.blossom, C.gold], n: 10, speed: 1.6, up: 3, size: 0.7, sfx: 'level', shake: 0.02 },
+    unbind: { colors: [C.foam, C.cream, C.plum], n: 8, speed: 1.6, up: 3, size: 0.7, sfx: 'pop', shake: 0.02 },
     // the Blight's raids on the defenses (sim/defense.ts): a chip off a wall, and a wall breaking into a puff of rubble
     bldHit: { colors: [C.stone, C.wood, C.cream], n: 6, speed: 1.8, up: 2.2, size: 0.7, sfx: 'rock', shake: 0.03 },
     bldBreak: { colors: [C.stone, C.wood, C.pebble, C.dirt], n: 26, speed: 3, up: 4.2, size: 1.25, sfx: 'fell', shake: 0.12 }

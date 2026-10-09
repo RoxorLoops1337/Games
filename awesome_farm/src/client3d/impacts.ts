@@ -27,6 +27,8 @@ export const RINGS: Record<string, RingDef | undefined> = {
     roar: { color: C.berry, r0: 0.5, r1: 3.6, dur: 0.7 },
     bossDie: { color: C.gold, r0: 0.5, r1: 5, dur: 0.9, flash: 3 },
     nestHit: small(C.plum), nestDie: { color: C.plum, r0: 0.4, r1: 2.6, dur: 0.6, flash: 1.6 },
+    nestSpread: { color: C.plum, r0: 0.6, r1: 3.4, dur: 0.8, flash: 1.4 },
+    raid: { color: C.berry, r0: 0.6, r1: 4.5, dur: 1, flash: 2 },
     bldHit: small(C.berry), bldBreak: breakRing(C.berry),
     build: { color: C.cream, r0: 0.3, r1: 1.2, dur: 0.35 },
     buyLand: { color: C.foam, r0: 1, r1: 6, dur: 0.9 },

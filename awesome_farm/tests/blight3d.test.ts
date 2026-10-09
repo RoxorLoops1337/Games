@@ -176,3 +176,9 @@ test('a wall breaking is mapped in the 3D fx table: a puff of rubble and dust, a
     const a = im.alive;
     assert.ok(a.rings === 1 && a.flashes === 1 && a.dust >= 6, JSON.stringify(a));
 });
+
+test('every Blight action has its own 3D burst (not the default puff), and the big ones a ring', () => {
+    for (const k of ['nestHit', 'nestDie', 'nestSpread', 'raid', 'bldHit', 'bldBreak', 'bedSet', 'unbind']) assert.ok(FX[k], `${k} burst`);
+    for (const k of ['nestHit', 'nestDie', 'nestSpread', 'raid', 'bldHit', 'bldBreak']) assert.ok(RINGS[k], `${k} ring`);
+    assert.ok(FX.nestDie!.n > FX.nestHit!.n * 4, 'a nest dying is a big burst');
+});
