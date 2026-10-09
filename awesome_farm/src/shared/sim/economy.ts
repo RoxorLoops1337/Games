@@ -10,6 +10,7 @@ import { PAL } from '../palette';
 import { BLUEPRINT_MAX, BLUEPRINT_RANGE } from '../blueprint';
 import { chuteSells } from './chute';
 import { tunnelPartner } from './factory';
+import * as bed from './bed';
 import * as chronicle from './chronicle';
 import * as gather from './gather';
 import * as mail from './mail';
@@ -80,6 +81,7 @@ export function tryBuild (sim: Sim, p: PlayerS, kind: BuildingKind, tx: number, 
         ...(isBeltLike(kind) ? { belt: [null, null, null] } : {}),
         ...(kind === 'bed' ? { crop: -1 } : {}),
     });
+    if (kind === 'sleepbed') bed.setBed(sim, p, b);           // (a new bed is where you wake up now)
     p.stats.built++;
     quests.count(p, `build:${kind}`);
     sim.gainXp(p, 4 + Math.min(10, Object.keys(def.cost).length * 2));
@@ -207,6 +209,7 @@ export function cmdUse (sim: Sim, p: PlayerS, id: number, seed?: ItemId) {
         sim.float(c.x, c.y - 12, other ? `Linked: ${Math.abs(other.tx - b.tx) + Math.abs(other.ty - b.ty)} tiles` : b.kind === 'tunnel' ? 'No exit ahead' : 'No entrance behind', other ? PAL.lime : PAL.berry, p.id);
         return;
     }
+    if (b.kind === 'sleepbed') { bed.setBed(sim, p, b); return; }
     if (b.kind === 'weathervane') { sim.events.push({ e: 'open', to: p.id, ui: 'vane', id: b.id }); return; }       // (it only shows: nothing changes)
     if (def.dir || def.pole || def.gen || def.store || b.kind === 'drill' || b.kind === 'chute') { if (b.kind !== 'belt') sim.events.push({ e: 'open', to: p.id, ui: 'device', id: b.id }); return; }
     switch (b.kind) {

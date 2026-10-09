@@ -270,6 +270,7 @@ export interface PlayerS {
     fishing?: FishState;     // your line in the water
     line?: { x: number; y: number; ph: 0 | 1 | 2 | 3 };   // what other farmers see of it
     pk?: { x: number; y: number };   // where your last lost backpack lies (the HUD points the way to it)
+    bed?: number;            // the Bed you wake up in after a fall (a building id; gone or never set: at home; sim/bed.ts)
     fishlog?: Record<string, { n: number; best: number }>;   // every species you have caught: how many, and the biggest (cm)
     qs?: QuestState;
     fort?: FortuneState;

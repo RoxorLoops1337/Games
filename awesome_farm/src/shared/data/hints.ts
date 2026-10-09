@@ -136,6 +136,11 @@ export const HINTS: Hint[] = [
         text: () => 'Weather Vane: press E on it to read the next three days: rain, fog and the night to come. The little picture over it is tomorrow. More in the guide (H).',
     },
     {
+        id: 'bedset', icon: 'k_heart', color: PAL.blossom,
+        when: (c) => (c.me.cnt?.['build:sleepbed'] ?? 0) > 0,
+        text: () => 'Your Bed is where you wake up now after a fall, instead of at home. Press E on any bed to make it yours.',
+    },
+    {
         id: 'rain', icon: 'k_rain', color: PAL.sea,
         when: (c) => c.rain != null && (c.me.cnt?.['build:bed'] ?? 0) > 0 && (c.me.cnt?.['build:weathervane'] ?? 0) === 0,
         text: (c) => `Rain ${c.rain === 0 ? 'is coming later today' : 'is coming tomorrow'}: crops grow up to ${Math.round(TUNING.rainGrow * 100)}% faster while it falls. A Weather Vane (Build, Decor) shows the next three days.`,

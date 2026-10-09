@@ -19,6 +19,7 @@ export const ACTIONS = [
     'feast',
     // co-op boss statuses (sim/costatus.ts)
     'freeze', 'thaw', 'hex', 'hexTick', 'hexJump', 'chain', 'chainTug', 'unbind',
+    'bedSet',     // (a Bed becomes where you wake up: sim/bed.ts)
 ] as const;
 
 export type Action = typeof ACTIONS[number];

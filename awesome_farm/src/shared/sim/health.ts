@@ -3,6 +3,7 @@
 import { PLOT, TILE, TUNING } from '../config';
 import { dist } from '../geom';
 import { PAL } from '../palette';
+import * as bed from './bed';
 import * as costatus from './costatus';
 import * as death from './death';
 import * as quests from './quests';
@@ -19,7 +20,8 @@ export function die (sim: Sim, p: PlayerS) {
 export function respawnHome (sim: Sim, p: PlayerS, note = 'Nothing was lost') {
     const home = sim.homePlot(p.slot);
     const o = sim.world.plotOrigin(home);
-    const spot = sim.nearestFree(o.tx + PLOT / 2, o.ty + PLOT / 2) ?? { tx: o.tx + PLOT / 2, ty: o.ty + PLOT / 2 };
+    const inBed = bed.wakeSpot(sim, p);                  // (a farmer with a Bed wakes beside it)
+    const spot = inBed ?? sim.nearestFree(o.tx + PLOT / 2, o.ty + PLOT / 2) ?? { tx: o.tx + PLOT / 2, ty: o.ty + PLOT / 2 };
     p.x = (spot.tx + 0.5) * TILE;
     p.y = (spot.ty + 1) * TILE - 3;
     p.warp++;
@@ -30,7 +32,7 @@ export function respawnHome (sim: Sim, p: PlayerS, note = 'Nothing was lost') {
     p.energy = Math.max(p.energy, 30);
     p.invuln = 2;
     sim.fx('heal', p.x, p.y - 8, p.id);
-    sim.banner('You woke up at home', note, PAL.cream, p.id);
+    sim.banner(inBed ? 'You woke up in your bed' : 'You woke up at home', note, PAL.cream, p.id);
 }
 
 export function hurt (sim: Sim, p: PlayerS, from: { x: number; y: number }, amount = 1) {

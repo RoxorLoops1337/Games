@@ -1,7 +1,7 @@
 // The in-game guide and the first-time hints: the text has to fit its page and stay true to the rules it describes.
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { BUILDINGS } from '../src/shared/data/buildings';
+import { BUILD_CATS, BUILDINGS } from '../src/shared/data/buildings';
 import { CAST_RANGE, MAX_STRIKES } from '../src/shared/data/fish';
 import { GUIDE, GUIDE_BY_ID, guideText } from '../src/shared/data/guide';
 import { ITEMS, STARTER_GEAR } from '../src/shared/data/items';
@@ -86,8 +86,9 @@ test('the fishing page matches the fishing rules', () => {
 
 test('the house, farm and pack pages name things that exist', () => {
     const house = GUIDE_BY_ID.house.steps.map(desk).join(' ');
-    for (const k of ['wall_wood', 'doorway', 'roof_tile'] as const) assert.ok(BUILDINGS[k].cat === 'home', `${k} is in the Walls & roofs tab`);
-    assert.ok(house.includes('Walls & roofs'), 'the tab name');
+    for (const k of ['wall_wood', 'doorway', 'roof_tile', 'planks', 'brickfloor', 'carpet'] as const) assert.ok(BUILDINGS[k].cat === 'home', `${k} is in the Floors & walls tab`);
+    assert.equal(BUILD_CATS.find((c) => c.id === 'home')!.name, 'Floors & walls');
+    assert.ok(house.includes('Floors & walls'), 'the tab name');
     assert.ok(house.includes('60%'), 'the refund on dismantling is 60%');
     const pack = GUIDE_BY_ID.pack.steps.map(desk).join(' ');
     assert.ok(pack.includes('Satchel') && recipe('bag_satchel')!.station === 'workbench');

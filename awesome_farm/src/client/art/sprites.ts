@@ -17,6 +17,7 @@ import { registerStorybookDecor } from './storybook-decor';
 import { registerStorybookSites } from './storybook-sites';
 import { GROUND_VARIANTS, registerStorybookTiles, SHORE_FRAMES, VEIN_KINDS, VEIN_VARIANTS } from './storybook-ground';
 import { CAVE_FRAMES, registerStorybookMine } from './storybook-cave';
+import { registerStorybookBlight } from './storybook-blight';
 
 // ── Resource nodes ─────────────────────────────────────────────────────────
 // (trees, rocks, ores, bushes, flowers and mushrooms are painted in storybook.ts)
@@ -138,7 +139,7 @@ export const ART_GROUPS: [string, (scene: Phaser.Scene) => void][] = [
     ['farmers', (s) => { registerStorybookChars(s); registerStorybookWorn(s); }],
     ['houses', (s) => { registerStorybookHouse(s); registerStorybookLogo(s); }],
     ['nature', registerStorybookNature],
-    ['buildings', (s) => { registerStorybookBuildings(s); registerStorybookLuck(s); registerStorybookMine(s); }],
+    ['buildings', (s) => { registerStorybookBuildings(s); registerStorybookLuck(s); registerStorybookMine(s); registerStorybookBlight(s); }],
     ['icons', (s) => { makeSprite(s, 'i_coin', COIN); registerIcons(s, 0, 4); }],
     ['tools', (s) => registerIcons(s, 1, 4)],
     ['things', (s) => registerIcons(s, 2, 4)],
