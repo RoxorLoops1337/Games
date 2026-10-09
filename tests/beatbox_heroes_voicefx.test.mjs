@@ -118,7 +118,7 @@ function plot(name, raw, res, sr) {
   ok(V.response(V.profile('B').eq, 3000, sr) >= 2, 'B: kick click lifted at 3 kHz');
   for (const id of ['t', 'CR']) { const r = (f) => V.response(V.profile(id).eq, f, sr); ok(r(100) < -18 && r(50) < -40 && r(8000) > 0.5, id + ': hat low cut (' + r(100).toFixed(0) + ' dB at 100 Hz, ' + r(50).toFixed(0) + ' at 50) and air (+' + r(8000).toFixed(1) + ' at 8 kHz)'); }
   for (const id of ['K', 'IK', 'Pf', 'RIM']) { const r = (f) => V.response(V.profile(id).eq, f, sr); ok(r(40) < -8 && r(4000) >= 1.5, id + ': snare high pass (' + r(40).toFixed(0) + ' dB at 40 Hz) and snap (+' + r(4000).toFixed(1) + ' at 4 kHz)'); }
-  for (const id in V.SOUND) { const p = V.profile(id); ok(p.target <= -4 && p.target >= -24 && p.lim.max <= 6 && p.maxMs >= 300 && p.maxMs <= 2000, id + ': sane target / limiter / length'); }
+  for (const id in V.SOUND) { const p = V.profile(id); ok(p.target <= -4 && p.target >= -24 && p.lim.max <= 6 && p.maxMs >= 300 && p.maxMs <= 4000, id + ': sane target / limiter / length'); }
 }
 
 /* ---------------------------------------------------------------- targets still match the synth kit */
@@ -220,6 +220,23 @@ function plot(name, raw, res, sr) {
   ok(lo.info.segments >= 1 && lo.info.lengthMs >= 480, 'LR: the flutter does not chop the roll (' + lo.info.lengthMs + ' ms, ' + lo.info.segments + ' segment)');
 }
 
+/* ---------------------------------------------------------------- smart cut: the silence goes, the whole sound stays */
+{
+  const sr = 48000, n = Math.round(2.2 * sr), roll = new Float32Array(n), base = lipRoll(sr, 70);
+  /* a 2.2 s lip roll that falters for 150 ms in the middle (drops 40 dB), then carries on */
+  for (let i = 0; i < n; i++) { const t = i / sr, dip = t > 1.0 && t < 1.15 ? 0.01 : 1; roll[i] = base[i % base.length] * dip * Math.min(1, t / 0.01, (n - i) / sr / 0.03); }
+  const r = V.process(take(roll, sr, 400, -62, 3400, 91), sr, 'LR'), I = r.info;
+  ok(I.ok && !I.capped, 'long LR: processed, not capped (' + JSON.stringify(I) + ')');
+  near(I.onsetMs, 400, 2, 'long LR: the 400 ms of silence before it is cut, right at the onset');
+  ok(I.lengthMs >= 2200 && I.lengthMs <= 2200 + 300 + 120, 'long LR: the whole 2.2 s roll is kept across the dip, plus its release (' + I.lengthMs + ' ms, ' + I.kept + ' parts)');
+  ok(r.end <= Math.round((0.4 + 2.2 + 0.45) * sr), 'long LR: the silence after it is cut (' + ((3400 - r.end / sr * 1000) | 0) + ' ms of room removed)');
+  const sn = V.process(take(snare(sr), sr, 300, -62, 1500, 92), sr, 'K');
+  ok(sn.info.ok && sn.info.lengthMs >= 150 && sn.info.lengthMs <= 180 + 80 + 60, 'snare: stays short, only its own ring is kept (' + sn.info.lengthMs + ' ms of a 1.5 s take)');
+  /* a snare with a soft breath 900 ms later: the breath is not part of the sound */
+  const two = take(snare(sr), sr, 300, -62, 1800, 93); const br = rngf(94); for (let i = 0; i < Math.round(0.2 * sr); i++) two[Math.round(1.2 * sr) + i] += 0.004 * gauss(br);
+  const t2 = V.process(two, sr, 'K'); ok(t2.info.ok && t2.info.lengthMs < 400, 'snare + a breath 900 ms later: the breath is left out (' + t2.info.lengthMs + ' ms)');
+}
+
 /* ---------------------------------------------------------------- every sound runs; nothing to keep stays empty */
 {
   const sr = 44100, src = take(snare(sr), sr, 150, -60, 600, 61);
@@ -264,6 +281,10 @@ function plot(name, raw, res, sr) {
   ok(r2.ok && r2.fx && r2.fx.family === 'hat', 'a soft hat in a quiet room still triggers (adaptive trigger, ' + (r2.reason) + ')');
   const p3 = M.recordSample({ maxWaitMs: 4000, sound: 'HUM' }); pump(take(hum(sr, 1500), sr, 500, -62, 3500, 83, 0)); const r3 = await p3;
   ok(r3.ok && r3.fx.lengthMs >= 1400, 'a 1.5 s hum is recorded whole (the HUM profile allows ' + V.profile('HUM').maxMs + ' ms; got ' + (r3.fx && r3.fx.lengthMs) + ' ms)');
+  /* a 2 s lip roll that dips for 200 ms: the take does not end in the dip */
+  const lr = new Float32Array(Math.round(2 * sr)), lb = lipRoll(sr, 70); for (let i = 0; i < lr.length; i++) { const t = i / sr; lr[i] = lb[i % lb.length] * (t > 0.8 && t < 1.0 ? 0.01 : 1) * Math.min(1, t / 0.01, (lr.length - i) / sr / 0.03); }
+  const p5 = M.recordSample({ maxWaitMs: 3000, sound: 'LR' }); pump(take(lr, sr, 500, -62, 4500, 84, 0)); const r5 = await p5;
+  ok(r5.ok && r5.fx.lengthMs >= 1950, 'a 2 s lip roll with a 200 ms dip is recorded whole (' + (r5.fx && r5.fx.lengthMs) + ' ms)');
   const p4 = M.recordSample({ maxWaitMs: 2500 }); pump(x); const r4 = await p4;
   ok(r4.ok && !r4.raw && Math.abs(R.peak(r4.data) - 0.85) < 1e-4, 'without a sound id recordSample is the old trimSample path');
   M.close(); delete globalThis.navigator; delete globalThis.AudioContext; delete globalThis.isSecureContext;
