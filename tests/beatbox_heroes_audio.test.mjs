@@ -6,7 +6,7 @@ import * as R from '../tools/beatbox_heroes/audio_render.mjs';
 
 const BBH = load('audio');
 const AF = BBH.AudioFactory;
-const SFX = ['click', 'back', 'confirm', 'error', 'coin', 'buy', 'unlock', 'levelup', 'achievement', 'hit_perfect', 'hit_good', 'miss', 'combo', 'win', 'lose', 'equip', 'swoosh', 'sleep', 'eat', 'step', 'door', 'crowd_cheer', 'crowd_boo', 'applause', 'sparkle', 'whoosh', 'record', 'countdown', 'go'];
+const SFX = ['click', 'back', 'confirm', 'error', 'coin', 'buy', 'unlock', 'levelup', 'achievement', 'hit_perfect', 'hit_good', 'miss', 'combo', 'win', 'lose', 'equip', 'swoosh', 'sleep', 'eat', 'step', 'door', 'crowd_cheer', 'crowd_boo', 'applause', 'sparkle', 'whoosh', 'record', 'countdown', 'rain', 'thunder', 'heart', 'hum', 'go'];
 const MUSIC = ['title', 'creator', 'street', 'home', 'park', 'shop', 'bar', 'studio', 'battle', 'victory', 'defeat', 'intro'];
 const BPM = { title: 100, creator: 84, street: 92, home: 78, park: 96, shop: 104, bar: 98, studio: 88, battle: 140, intro: 66 };
 const LOOPING = MUSIC.filter((m) => m !== 'victory' && m !== 'defeat');

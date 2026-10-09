@@ -58,6 +58,7 @@
     try { if (BBH.R3UI && BBH.R3UI.install) BBH.R3UI.install(); } catch (e) { console.error('[r3] UI kit install failed', e); }
     let core; try { core = await timeout(loadCore(), IMPORT_MS, 'the 3D core download'); } catch (e) { X.fail(e.timeout ? 'timeout' : 'chunk', e && e.message); return R3; }
     if (S.status !== 'booting') return R3;
+    R3.core = core;
     let host; try { host = core.createHost($('gl'), { embedded: true, quality: q, preserve: qs.get('preserve') === '1', onLost: onLost }); } catch (e) { X.fail('renderer', e && e.message); return R3; }
     S.host = host; R3.resize(); X.splash('full', 'BUILDING');
     try { const w = await timeout(host.load('title', { time: 'night' }), WORLD_MS, 'the title world'); if (!w) throw new Error('title world was superseded'); } catch (e) { X.fail(e.timeout ? 'timeout' : 'chunk', e && e.message); return R3; }

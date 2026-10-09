@@ -65,6 +65,6 @@ async function init(target, opts) {
   api.dispose = () => host.dispose(); api.host = host;
   return api;
 }
-const Park3D = { init, createHost, WORLDS, THREE, kit, PAL };
+const Park3D = { init, createHost, WORLDS, THREE, kit, PAL, loadCine: () => import('./cine_reels.js') };
 window.Park3D = Park3D;
 export default Park3D;

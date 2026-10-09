@@ -25,6 +25,8 @@ export const WORLDS = {
   hood: () => import('./w_hood.js'),
   office: () => import('./world_stub.js'),
   arena: () => import('./world_arena.js'),
+  // CINE: the dedicated cutscene stage (w_cine.js, args.set 'office'); the cutscene engine itself is park3d/cine.js (entry.js loadCine)
+  cine: () => import('./w_cine.js'),
 };
 export const WORLD_IDS = Object.keys(WORLDS);
 export const MINI_IDS = ['rhythm', 'run', 'tuner', 'ear', 'pose'];

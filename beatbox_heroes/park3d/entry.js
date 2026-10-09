@@ -5,4 +5,6 @@
 //   const { createHost, WORLDS } = await import(url);   createHost(canvas, { embedded:true, quality, preserve, onLost }) -> host   (see host.js for the full API)
 export { createHost, createRenderer, DEFAULT_LOOK, BUDGETS } from './host.js';
 export { WORLDS, WORLD_IDS, MINI_IDS } from './worlds.js';
+// the cutscene engine (cine.js + cine_screen.js + cine_reels.js): its own lazy chunk, fetched the first time a film plays
+export const loadCine = () => import('./cine_reels.js');
 export const PARK3D_ESM = 1;
