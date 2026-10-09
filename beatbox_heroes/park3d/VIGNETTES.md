@@ -59,6 +59,17 @@ browsers), Settings SCENES FULL / SHORT / OFF (`E.settings.scenes`), reduce moti
 (section 2.15), INTRO vignettes before activities launched from a place, the bedtime and wake up hooks, and a story film always wins the camera.
 Core reports the picked morning event (`morning` fx: `ev`, `event` id) and the mingle outcome (new fx `{ t: 'mingle', i, id, who }`).
 
+The P2 milestones (done: `vig_milestones.js`, section 3) are not a world: the MILESTONES section at the end of `r3/vig.js` makes their table the prototype of every
+world's table (a world's own entry wins, `Object.keys` of a world's table stays its own), so the shared trigger table reaches the action milestones (`p2.crew.<id>`,
+`p2.first.stream`). Everything else is QUEUED there: the progress fx (`levelup`, `achievement`, `unlock`, `soundUnlocked`, their sfx and the "New sound" toast) are held out
+of `G.play`, the save is watched for the fan and money lines, the first $0 of a week and a new rung on the ladder, and a Sunday morning queues the rent. The queue plays when
+the place is quiet for 0.9 s (no vignette, no story film or story waiting, no dialog, card, open menu sheet or morning), a world scene first (rent, ladder, release in their world), then every
+beat waiting collapsed into ONE scene (`p2.beats` when there are several). MICRO lands the old banners on PAY; a staged form shows its own card instead. A beat that waits
+more than 2 minutes, or that a story film covered, gets its old banner and no scene. Ids: `p2.levelup`, `p2.sound.<RIM|LR|TB|CR|IK|WB|ZP|HUM|SI>`, `p2.ach`,
+`p2.unlock.cosmetic`, `p2.beats`, `p2.fans.<25|100|500|2000>`, `p2.money.<100|500>`, `p2.broke`, `p2.rent.paid`, `p2.rent.short`, `p2.first.stream`, `p2.release`,
+`p2.ladder`, `p2.crew.<jaxx|noor|duot|glaze|miro>`. Progress beats play wherever the hero stands: the lens sits on the line to the gameplay camera, turned up to 36 degrees
+when a raycast finds the set in the frame, and the cast being chibi and wide, a full figure on a phone wants about 1.9 m of frame width (5.6 m out at 40 degrees).
+
 The town (done: `vig_shop.js`, `vig_lab.js`, `vig_bar.js`, with `vig_town_kit.js`, `vig_town_props.js`, `vig_town_clips.js`). Actions there that never reach `G.do` have their own
 hooks in the town section at the end of `r3/vig.js`: the shop TRY ON (a tile tap changes the panel's look: `p1.shop.tryon`, MICRO, the look swaps on its beat, the try on camera
 is untouched), the bar stage walk up and the battle walk out (`E.go('rhythm')` from the bar: `p1.stage.in.<kind>`, `p1.battle.walkout`), the bow and the verdict back in the room

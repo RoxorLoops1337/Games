@@ -68,10 +68,10 @@ function eatBanana(ctx) {
   // 2 MCU the peel: three pulls on the beat, each a hi-hat
   R.at(t, place(H, EAT_AT, -150), face(H, KF, 450), clip(H, 'v_hold', { y: 0.9, z: 0.3, look: 1 }));
   if (f !== 'short') {
-    R.at(t, S('mcu', 25, Object.assign({ lookH: 1.05, to: { w: 0.95, lookH: 1.12 }, dur: 2.2 }, first ? xf(300) : {})));
+    R.at(t, S('ms', 25, Object.assign({ w: 1.45, lookH: 1.0, to: { w: 1.3, lookH: 1.08 }, dur: 2.2 }, first ? xf(300) : {})));
     [0, 1, 2].forEach((i) => R.at(t + 0.35 + i * BEAT * 0.5, drum('t'), withProp(b, (p) => p.userData.peel((i + 1) / 3)), word('t', [0.62 + i * 0.06, 0.4 - i * 0.04], { size: 3.2, color: '#2ee6ff', ms: 500 })));
     t += 0.35 + BEAT * 1.5 + 0.1;
-  } else R.at(t, withProp(b, (p) => p.userData.peel(1)), S('mcu', 25, { w: 0.95 }));
+  } else R.at(t, withProp(b, (p) => p.userData.peel(1)), S('ms', 25, { w: 1.3 }));
   // 3 the bite: PAY on the bite (a kick), the chew
   R.at(t, clip(H, 'v_eat', { bites: f === 'short' ? 1 : 2, every: 0.85, lead: 0.05, chew: 1 }));
   const bite1 = t + 0.05 + 0.85 * 0.42;
@@ -125,8 +125,8 @@ function eatTable(ctx, kind) {
   t += 0.05 + lead + every * bites + 0.2;
   if (f === 'short') { R.end(t + 0.2); return { events: R.list() }; }
   // 3 the beat: oats = the warm face (eyes close for one beat); burrito = food coma (lean back, a slow blink)
-  if (oats) R.at(t, S('cu', 12, Object.assign({ h: 1.55, lookH: 1.32, w: 0.92 }, xf(300))), mood(H, 'happy'), clip(H, 'sit', { seat, slump: 0.8, drowsy: 1 })).end(t + 1.3);
-  else R.at(t, S('mcu', 30, Object.assign({ h: 1.55, lookH: 1.28, to: { w: 0.9 }, dur: 1.6 }, xf(300))), clip(H, 'sit', { seat, slump: 1.6, drowsy: 1 }), gone(ctx, ut), mood(H, 'happy'), sfx('heart', { pitch: 0.7 })).end(t + 1.8);
+  if (oats) R.at(t, S('mcu', 12, Object.assign({ h: 1.55, lookH: 1.2, w: 1.2 }, xf(300))), mood(H, 'happy'), clip(H, 'sit', { seat, slump: 0.8, drowsy: 1 })).end(t + 1.3);
+  else R.at(t, S('ms', -38, Object.assign({ h: 1.6, lookH: 1.0, w: 1.5, to: { w: 1.32 }, dur: 1.6 }, xf(300))), clip(H, 'sit', { seat, slump: 1.6, drowsy: 1 }), gone(ctx, ut), mood(H, 'happy'), sfx('heart', { pitch: 0.7 })).end(t + 1.8);
   return { events: R.list() };
 }
 
@@ -138,7 +138,7 @@ function eatDates(ctx) {
   if (first) { R.at(0, S('ms', 150, { to: { yaw: 135 }, dur: 1.2 }), place(H, EAT_AT, 180), clip(H, 'v_reach', { to: [0.05, 0.98, 0.5], hold: 0.2 })); t = 0.9; }
   R.at(t, place(H, EAT_AT, -150), face(H, KF, 400), spawn(ctx, d, () => food('dates'), [EAT_AT[0], 1, EAT_AT[1]]), hold(ctx, d, H, grip('dates')));
   // LOW, looking up: the ball against the ceiling
-  R.at(t, S('mcu', 20, Object.assign({ h: 0.75, lookH: 1.35, fov: 40, w: 1.25, to: { w: 1.15 }, dur: 1.6 }, first ? xf(260) : {})));
+  R.at(t, S('ms', 20, Object.assign({ h: 0.75, lookH: 1.3, fov: 40, w: 1.6, to: { w: 1.45 }, dur: 1.6 }, first ? xf(260) : {})));
   R.at(t + 0.15, clip(H, 'v_toss', { catchAt: 0.75, miss }), sfx('swoosh', { pitch: 1.6, quiet: true }));
   // the flight: off the hand, up, into the mouth (a pure function of time, so the shot tool sees it)
   const tmp = [new THREE.Vector3(), new THREE.Vector3()];
@@ -165,7 +165,7 @@ function eatSmoothie(ctx) {
   let t = 0;
   if (f !== 'short') {
     // 1 INS the blender: the hand comes in and presses the button
-    R.at(0, place(H, spot, 193), clip(H, 'v_reach', { to: [-0.02, 1.0, 0.52], hold: 0.35 }), cam([2.95, 1.25, -4.78], [1.98, 1.08, -5.12], 36, { to: { pos: [2.9, 1.24, -4.8] }, dur: 1.2 }));
+    R.at(0, place(H, spot, 193), clip(H, 'v_reach', { to: [-0.02, 1.0, 0.52], hold: 0.35 }), cam([1.3, 1.32, -4.5], [2.0, 1.02, -5.12], 40, { to: { pos: [1.36, 1.3, -4.56] }, dur: 1.2 }));
     R.at(0.45, drum('K'), sfx('click', { pitch: 0.5 }));
     t = 0.6;
   } else R.at(0, place(H, spot, 193));
@@ -203,14 +203,14 @@ function eatTea(ctx) {
   } else R.at(0, face(H, 45, 0));
   // 3 the mug, a sip, the warm face; at night the lamp light and the long lens (the mug is held a beat longer)
   R.at(t, spawn(ctx, mg, () => food('tea'), [spot[0], 1, spot[1]]), hold(ctx, mg, H, grip('tea')), clip(H, 'v_drink', { at: 0.45, gulp: 0.3, warm: true }), mood(H, 'happy'),
-    S('cu', 22, Object.assign({ fov: night ? 26 : 30, w: 1.0, lookH: 1.15, to: { w: 0.88 }, dur: 2 }, f === 'short' ? {} : xf(260))));
+    S('mcu', 22, Object.assign({ fov: night ? 30 : 34, w: 1.25, lookH: 1.12, to: { w: 1.1 }, dur: 2 }, f === 'short' ? {} : xf(260))));
   R.at(t + 0.5, sfx('swoosh', { pitch: 0.4, quiet: true }), ctx.PAY).at(t + 0.9, withProp(mg, (p) => p.userData.bite(0.5)));
   R.end(t + (f === 'short' ? 1.5 : night ? 2.6 : 2.1));
   return { events: R.list() };
 }
 
 // ======================================================================= BED: nap, sleep, wake (2.2)
-const BED = { edge: [-6.25, 3.86], lie: [-6.2, 3.15], lieFace: 90, lamp: [-7.28, 0.98, 4.32], seat: 0.55 };
+const BED = { edge: [-6.25, 3.86], lie: [-6.2, 3.15], lieFace: 90, lamp: [-7.28, 0.98, 4.32], seat: 0.55, reach: [-6.8, 3.84], reachFace: -46 };
 // the blanket over the sleeper (world space)
 const blanketAt = (ctx, r) => spawn(ctx, r, () => blanket(1.45, 1.42), [-6.15, 1.0, 3.15]);
 // sleep letters rise from the sleeper: beatbox letters (the hero beatboxes in their sleep)
@@ -220,8 +220,9 @@ function sleepLetters(ctx, R, t0, n, step) {
 }
 // the clock text minutes before or after the current save time (VHS stamp)
 function clockAt(ctx, dm) { const m = ((((ctx.ch ? ctx.ch.minutes : 0) + (dm || 0) + 360) % 1440) + 1440) % 1440; return String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0'); }
-// a top shot of the bed from the foot end: steep, the frame runs along the bed
-const bedTop = (o) => cam([-4.75, 3.2, 3.15], [-6.35, 0.6, 3.15], 46, o);
+// the bed from the foot end corner, high: the lens runs diagonally along the body (a lying figure fits the portrait frame that way), the face on the pillow at the top,
+// the blanket below, the window behind (a straight top down along the blanket read as a field of patchwork)
+const bedTop = (o) => cam([-3.05, 3.45, 6.35], [-6.85, 0.62, 3.15], 40, o);
 function nap(ctx) {
   const f = ctx.form, R = reel(), bl = ref(), tired = ctx.pre && ctx.pre.energy < 10, dusk = ctx.hour >= 17;
   if (MICRO(f)) {
@@ -240,7 +241,7 @@ function nap(ctx) {
   }
   // 3 TOP, slow push down: under the blanket, the clock ramps +90 min, the light slides, the sleep letters rise
   R.at(t, place(H, BED.lie, BED.lieFace, { y: 0 }), clip(H, 'v_lie', { y: 0.2, snore: true }), blanketAt(ctx, bl), mood(H, 'neutral'),
-    bedTop(Object.assign({ to: { pos: [-5.0, 2.8, 3.15] }, dur: f === 'short' ? 1.2 : 2.2 }, f === 'short' ? {} : { cut: 'xfade', ms: 350 })));
+    bedTop(Object.assign({ to: { pos: [-3.35, 3.25, 6.05] }, dur: f === 'short' ? 1.2 : 2.2 }, f === 'short' ? {} : { cut: 'xfade', ms: 350 })));
   R.at(t, stamp(clockAt(ctx, -90) + '|+90 MIN', 1400));
   sleepLetters(ctx, R, t + 0.25, f === 'short' ? 2 : 4, 0.38);
   if (dusk && f !== 'short') R.at(t + 0.3, cue('light', { time: Math.min(1, ctx.night + 0.25) }));
@@ -263,20 +264,23 @@ function sleepScene(ctx) {
     // 1 MCU on the bed edge, the phone lights the face: today's numbers
     R.at(0, place(H, BED.edge, 0), clip(H, 'v_hold', { y: 0.95, z: 0.3, look: 1, sit: BED.seat }), spawn(ctx, ph, () => phone(), [BED.edge[0], 1, BED.edge[1]]), hold(ctx, ph, H, { aim: 'face' }),
       call(() => ph.obj && ph.obj.userData.draw((g, w, h) => { g.fillStyle = '#120d1f'; g.fillRect(0, 0, w, h); g.fillStyle = '#ffd35c'; g.font = '700 26px sans-serif'; g.textAlign = 'center'; g.fillText('DAY ' + day, w / 2, 70); g.fillStyle = '#2ee6ff'; g.font = '700 22px sans-serif'; g.fillText(fans + ' FANS', w / 2, 130); g.fillStyle = '#9dff4a'; g.fillText('$' + cash, w / 2, 170); g.fillStyle = '#fff6e8'; g.font = '500 15px sans-serif'; g.fillText('good night', w / 2, 250); })),
-      cam([-5.75, 1.45, 5.35], [-6.2, 1.1, 3.9], 60, { to: { pos: [-5.8, 1.43, 5.25] }, dur: 2 }));
+      cam([-2.75, 2.1, 7.45], [-6.25, 0.72, 3.86], 40, { to: { pos: [-2.95, 2.05, 7.1] }, dur: 2 }));
     // the day's numbers, read off the phone (lowercase after midnight, like the tired NPC lines)
     const txt = 'Day ' + day + '. ' + fans + ' fans. $' + cash + '.' + (first ? ' Still here.' : ''), late2 = ctx.hour < 6;
     R.at(0.35, say(null, late2 ? txt.toLowerCase() : txt, { dur: first ? 2.0 : 1.4 })).at(first ? 2.2 : 1.5, call((api) => api.screen.clearSub(300)));
     R.at(1.3, sfx('click', { pitch: 1.6, quiet: true }), drum('t', { vel: 0.4, pulse: false }), gone(ctx, ph));
     t = first ? 2.3 : 1.6;
   }
-  // 2 the nightstand lamp: the hand reaches in, clicks it off ON the beat; the room drops to moonlight
-  R.at(t, place(H, BED.lie, BED.lieFace), clip(H, 'v_lie', { y: 0.2, awake: moodV < 30 ? 0.8 : 0.25, turn: moodV < 30 ? 0.5 : 0, smile: moodV > 80 }), blanketAt(ctx, bl),
-    cam([-5.6, 1.35, 5.3], [-7.2, 0.85, 4.25], 34, { to: { pos: [-5.7, 1.32, 5.2] }, dur: 1.2 }));
-  R.at(t + 0.55, drum('K'), sfx('click', { pitch: 0.6 }), off(lamp), cue('light', { time: 1, instant: !!ctx.reduce }), cue('vignette', { v: 0.7, ms: 400 }));
-  t += 1.0;
+  // 2 the nightstand lamp, a full figure in profile from over the low south wall (the reaching hand on the near side): sitting at the head end, the hero turns to the lamp,
+  //   the hand goes out, the click ON the beat,
+  //   the room drops to moonlight and the hero is a silhouette against the window for a beat
+  R.at(t, place(H, BED.reach, BED.reachFace, { y: 0 }), clip(H, 'v_reach', { to: [0.05, 0.92, 0.55], hold: 0.45, sit: BED.seat }), mood(H, moodV < 30 ? 'sad' : 'neutral'),
+    cam([-3.35, 2.1, 7.45], [-7.0, 0.75, 4.05], 40, { to: { pos: [-3.55, 2.05, 7.15] }, dur: 1.5 }));
+  R.at(t + 0.6, drum('K'), sfx('click', { pitch: 0.6 }), off(lamp), cue('light', { time: 1, instant: !!ctx.reduce }), cue('vignette', { v: 0.7, ms: 400 }));
+  t += 1.3;
   // 3 WS from the doorway: the shape under the blanket, the city windows go out (4 beats), a single held pad
-  R.at(t, cam([-2.6, 2.4, 6.4], [-6.3, 0.6, 3.2], 40, Object.assign({ to: { pos: [-2.8, 2.3, 6.2] }, dur: 2.4 }, xf(400))));
+  R.at(t, place(H, BED.lie, BED.lieFace), clip(H, 'v_lie', { y: 0.2, awake: moodV < 30 ? 0.8 : 0.25, turn: moodV < 30 ? 0.5 : 0, smile: moodV > 80 }), blanketAt(ctx, bl),
+    cam([-2.2, 2.6, 7.0], [-6.3, 0.6, 3.2], 42, Object.assign({ to: { pos: [-2.45, 2.45, 6.65] }, dur: 2.4 }, xf(400))));
   if (f !== 'short') [0, 1, 2, 3].forEach((i) => R.at(t + 0.3 + i * BEAT, drum(i === 3 ? 'K' : 't', { vel: 0.3 }), cue('pulse', { v: 0.6 - i * 0.12 })));
   R.at(t + (f === 'short' ? 0.4 : 1.6), sfx('sleep', { pitch: 0.9 }), ctx.PAY);
   // 4 black, a held beat
@@ -346,7 +350,7 @@ function couchRest(ctx) {
   }
   // 2 CU eyes closed, head back: a speed ramp, the string lights twinkle on the beat, +30 min
   const t = f === 'short' ? 0.3 : 1.2;
-  R.at(t, S('cu', -55, Object.assign({ h: 1.6, lookH: 1.38, w: 0.95, fov: 32, to: { w: 0.85 }, dur: 1.4 }, f === 'short' ? {} : xf(300))), clip(H, 'sit', { seat: 0.46, slump: 1.5, drowsy: 1, armBack: !sad }), mood(H, sad ? 'sad' : 'happy'),
+  R.at(t, S('mcu', -55, Object.assign({ h: 1.7, lookH: 1.15, w: 1.3, fov: 40, to: { w: 1.18 }, dur: 1.4 }, f === 'short' ? {} : xf(300))), clip(H, 'sit', { seat: 0.46, slump: 1.5, drowsy: 1, armBack: !sad }), mood(H, sad ? 'sad' : 'happy'),
     stamp(clockAt(ctx, -30) + '|+30 MIN', 1100));
   [0, 1, 2, 3].forEach((i) => R.at(t + 0.2 + i * 0.3, cue('pulse', { v: 0.8 }), drum('t', { vel: 0.2, pulse: false })));
   if (ctx.foxy && f === 'first') R.at(t + 0.4, say('foxy', '...', { dur: 1.0 }));
@@ -390,15 +394,15 @@ function stream(ctx) {
     t = 1.1;
   } else R.at(0, onV(rl));
   // 2 INS the monitor over the shoulder: LIVE, the counter rolls from 0, chat bubbles float up
-  R.at(t, cam([-1.55, 1.5, -3.65], [-0.6, 1.22, -5.18], 42, Object.assign({ to: { pos: [-1.5, 1.48, -3.75] }, dur: 1.1 }, xf(250))));
+  R.at(t, cam([-1.95, 2.0, -3.15], [-0.6, 1.12, -5.18], 40, Object.assign({ to: { pos: [-1.85, 1.95, -3.3] }, dur: 1.1 }, xf(250))));
   for (let i = 0; i <= 6; i++) R.at(t + i * 0.15, call(() => ov.obj && ov.obj.userData.draw(draw(i / 6, Math.floor(i / 2), 0))));
   t += 1.05;
   // 3 MCU the hero at the mic: two bars, the counter climbs on every kick
-  R.at(t, S('mcu', 62, Object.assign({ h: 1.95, lookH: 1.3, w: 1.0 }, xf(220))), clip(H, 'v_type', { seat: DESK.seat, mic: true, bpm: 100 }), cue('beat', { who: H, pattern: 'B . t . K . t . B B t . K . t .', bpm: 100, step: 0.5, rings: true }));
+  R.at(t, S('ms', 62, Object.assign({ h: 1.85, lookH: 1.1, w: 1.35 }, xf(220))), clip(H, 'v_type', { seat: DESK.seat, mic: true, bpm: 100 }), cue('beat', { who: H, pattern: 'B . t . K . t . B B t . K . t .', bpm: 100, step: 0.5, rings: true }));
   for (let i = 0; i < 8; i++) R.at(t + i * 0.3, call(() => ov.obj && ov.obj.userData.draw(draw(1 + i * 0.02, 3 + Math.floor(i / 2), 0))));
   t += f === 'short' ? 1.2 : 2.4;
   // 4 INS tips pop as coins on the beat. PAY
-  R.at(t, cam([-1.55, 1.5, -3.65], [-0.6, 1.22, -5.18], 38, xf(200)), ctx.PAY);
+  R.at(t, cam([-2.35, 2.55, -2.65], [-0.6, 1.05, -5.18], 38, xf(200)), ctx.PAY);
   [0, 1, 2].forEach((i) => R.at(t + i * 0.3, sfx('coin', { pitch: 1 + i * 0.06 }), call(() => ov.obj && ov.obj.userData.draw(draw(1.15, lines.length, (i + 1) / 3)))));
   t += 1.0;
   // 5 MS the wave at the webcam, END; the ring light off
@@ -427,7 +431,7 @@ function boothIn(ctx, stat) {
   const f = ctx.form, R = reel(), nb = ref();
   if (MICRO(f)) { R.at(0, clip(H, stat === 'show' ? 'v_guns' : stat === 'ori' ? 'point' : 'beatbox', { bpm: 96 })).at(0.4, drum('K')).at(0.5, ctx.PAY).end(0.9); return { events: R.list() }; }
   // the OCCUPIED sign pulses on above the door
-  R.at(0, place(H, BOOTH.at, 0), S('ms', 28, { w: 1.35, to: { w: 1.2 }, dur: 2.4 }), cue('cone', { id: 'occ', at: [6.05, 2.6, -3.2], to: [6.05, 0, -2.9], color: '#ff4a3a', r: 0.7, v: 0.55, ms: 300 }));
+  R.at(0, place(H, BOOTH.at, 0), S('ms', 28, { w: 1.6, to: { w: 1.45 }, dur: 2.4 }), cue('cone', { id: 'occ', at: [6.05, 2.6, -3.2], to: [6.05, 0, -2.9], color: '#ff4a3a', r: 0.7, v: 0.55, ms: 300 }));
   if (stat === 'mus') R.at(0.1, clip(H, 'v_hold', { y: 1.28, x: 0.26, z: 0.05, look: 0 }), sfx('click', { pitch: 0.8 })).at(0.7, clip(H, 'talk'), mood(H, 'happy'), call(() => [60, 62, 64, 65, 67].forEach((m, i) => setTimeout(() => ctx.note(m, 0.25, { timbre: 'keys', vel: 0.25 }), i * 180))), word('do re mi', 'hero:top', { size: 3, color: '#2ee6ff', ms: 900 }));
   if (stat === 'tech') R.at(0.1, clip(H, 'v_stretch', { dur: 0.8 })).at(0.4, drum('t'), word('crack', [0.35, 0.4], { size: 3, color: '#fff6e8', ms: 500 })).at(0.7, drum('t'), word('crack', [0.6, 0.35], { size: 3, color: '#fff6e8', ms: 500 })).at(0.9, clip(H, 'battle', { bpm: 100 }), mood(H, 'angry'));
   if (stat === 'ori') R.at(0.1, spawn(ctx, nb, () => { const g = new THREE.Group(); const p = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.11, 0.012), mat('#fffdf4')); const c = new THREE.Mesh(new THREE.BoxGeometry(0.166, 0.115, 0.004), mat('#ff5cb0')); c.position.z = -0.008; g.add(p, c); g.scale.setScalar(HAND); return g; }, [BOOTH.at[0], 1, BOOTH.at[1]]), hold(ctx, nb, H, { aim: 'face' }), clip(H, 'v_hold', { y: 0.95, z: 0.3 }))
@@ -442,7 +446,7 @@ function playIn(ctx, game) {
   const f = ctx.form, R = reel();
   if (game === 'make') return padsIn(ctx);
   if (MICRO(f)) { R.at(0, clip(H, 'beatbox', { bpm: 100 })).at(0.3, drum('K'), ctx.PAY).end(0.6); return { events: R.list() }; }
-  R.at(0, place(H, BOOTH.at, 0), S('mcu', 28, { to: { w: 1.0 }, dur: 1.6 }));
+  R.at(0, place(H, BOOTH.at, 0), S('ms', 28, { w: 1.55, to: { w: 1.4 }, dur: 1.6 }));
   if (game === 'ear') R.at(0.1, clip(H, 'v_hold', { y: 1.28, x: 0.27, z: 0.08, look: 0 }), call(() => { ctx.note(64, 0.3, { timbre: 'keys', vel: 0.35 }); setTimeout(() => ctx.note(67, 0.3, { timbre: 'keys', vel: 0.35 }), 300); }), word('?', [0.6, 0.35], { size: 5, color: '#2ee6ff', ms: 800 }));
   if (game === 'tune') R.at(0.15, clip(H, 'beatbox', { bpm: 100, amp: 0.4 })).at(0.3, drum('B'), word('check', [0.4, 0.4], { size: 3, color: '#fff6e8', ms: 500 })).at(0.6, drum('B'), word('check', [0.6, 0.35], { size: 3, color: '#fff6e8', ms: 500 }));
   if (game === 'beat') ['1', '2', '3', '4'].forEach((n, i) => R.at(0.2 + i * 0.3, drum(i === 3 ? 'K' : 't'), word(n, [0.5, 0.42], { size: 6, color: '#ffd35c', ms: 300 }), i === 0 ? clip(H, 'v_nod', { n: 4 }) : null));
@@ -457,7 +461,7 @@ function padsIn(ctx) {
   if (MICRO(f)) { R.at(0, call(() => pd.obj && pd.obj.userData.light(5, 1)), drum('B')).at(0.4, ctx.PAY).end(0.7); return { events: R.list(), letterbox: false }; }
   R.at(0, place(H, [-1.15, -4.45], 195), clip(H, 'v_type', { seat: 0.5 }), spawn(ctx, chr, chair, [-1.15, 0, -4.43], 195 * Math.PI / 180), cam([-0.1, 1.6, -4.62], [-1.2, 0.82, -4.98], 34, { to: { pos: [-0.2, 1.56, -4.66] }, dur: 1.6 }));
   [0, 5, 10, 15, 1, 6, 11, 12].forEach((p, i) => R.at(0.15 + i * 0.15, drum(['B', 't', 'K', 't'][i % 4], { vel: 0.7 }), call(() => { if (!pd.obj) return; for (let k = 0; k < 16; k++) pd.obj.userData.light(k, k === p ? 1 : 0.15); })));
-  R.at(1.4, S('mcu', 72, Object.assign({ h: 1.6, lookH: 1.32, w: 1.05 }, xf(220))), mood(H, 'happy'), call(() => { if (pd.obj) for (let k = 0; k < 16; k++) pd.obj.userData.light(k, 0.9); }), drum('K'));
+  R.at(1.4, S('ms', 72, Object.assign({ h: 1.7, lookH: 1.1, w: 1.35 }, xf(220))), mood(H, 'happy'), call(() => { if (pd.obj) for (let k = 0; k < 16; k++) pd.obj.userData.light(k, 0.9); }), drum('K'));
   const T = f === 'first' ? 2.1 : 1.8; R.at(T - 0.3, ctx.PAY).end(T);
   return { events: R.list() };
 }
@@ -466,7 +470,7 @@ function recordIn(ctx) {
   const f = ctx.form, R = reel(), rec = ref();
   R.at(0, spawn(ctx, rec, () => glowBall('#ff2a3a', 0.1), [6.05, 1.98, -3.22]), off(rec));
   if (MICRO(f)) { R.at(0, clip(H, 'beatbox', { bpm: 96 })).at(0.3, onV(rec), drum('B'), ctx.PAY).end(0.7); return { events: R.list() }; }
-  R.at(0, place(H, BOOTH.at, 0), clip(H, 'beatbox', { bpm: 96, amp: 0.3 }), S('mcu', 24, { h: 1.55, lookH: 1.35, to: { w: 0.9 }, dur: 1.8 }));
+  R.at(0, place(H, BOOTH.at, 0), clip(H, 'beatbox', { bpm: 96, amp: 0.3 }), S('ms', 24, { h: 1.55, lookH: 1.15, w: 1.5, to: { w: 1.3 }, dur: 1.8 }));
   R.at(0.5, onV(rec), sfx('record'), stamp('REC|●', 900));
   R.at(0.9, drum('B'), word('B', 'hero:mouth', { size: 5, color: '#ffd35c', ms: 600 }), cue('fx', { kind: 'rings', at: 'hero:mouth', color: '#ff3ea5', n: 2 }));
   if (f === 'first') R.at(1.5, mood(H, 'happy'), clip(H, 'cheer')).at(2.2, mood(H, 'neutral'), clip(H, 'beatbox', { bpm: 96, amp: 0.6 }), drum('B'));
@@ -499,9 +503,9 @@ function wardrobeOut(ctx) {
   if (MICRO(f)) { R.at(0, clip(H, 'v_guns'), sfx('equip')).at(0.45, ctx.PAY).end(0.9); return { events: R.list() }; }
   ctx.own(() => { const gl = document.getElementById('gl'); if (gl) gl.style.transform = ''; const fr = document.getElementById('vig-mirror'); if (fr) fr.remove(); });
   // 1 MS from behind: the hero walks up to the mirror
-  R.at(0, place(H, WARD.mirror, WARD.mface), clip(H, 'idle'), cam([-3.4, 3.0, -0.2], [-5.9, 0.9, -1.0], 44, { to: { pos: [-3.6, 2.85, -0.3] }, dur: 1.3 }), sfx('equip'));
+  R.at(0, place(H, WARD.mirror, WARD.mface), clip(H, 'idle'), cam([-1.85, 2.45, 1.95], [-6.25, 0.9, -1.1], 42, { to: { pos: [-2.1, 2.35, 1.65] }, dur: 1.3 }), sfx('equip'));
   // 2 MCU through the mirror: left, right, the touch on what changed
-  R.at(0.9, mirrorFlip(true), cam([-7.0, 2.05, -1.45], [-4.9, 1.0, -0.55], 44, { to: { pos: [-6.95, 2.0, -1.4] }, dur: 2.2 }), clip(H, 'v_check', { slot }), mood(H, 'happy'));
+  R.at(0.9, mirrorFlip(true), cam([-7.08, 1.15, -1.45], [-4.9, 0.86, -0.55], 60, { to: { pos: [-6.95, 1.18, -1.4], look: [-4.9, 0.92, -0.55] }, dur: 2.2 }), clip(H, 'v_check', { slot }), mood(H, 'happy'));
   // 3 the pose: finger guns at the reflection
   const tp = f === 'short' ? 1.4 : 3.1;
   R.at(tp, clip(H, 'v_guns'), drum('B'), word('B', [0.5, 0.3], { size: 5, color: '#ffd35c', ms: 500 }), ctx.PAY);

@@ -43,6 +43,20 @@ function firstJam(ctx) {
     cue('sfx', { name: 'crowd_cheer' }), cue('fx', { kind: 'sparks', at: 'hero:top', n: 40 }), wait(0.8),
   ].filter(Boolean) } }] };
 }
+// nobody else in BeeAmGee's picture: a passer-by resting on the fountain rim beside him read as a second grey haired man. While the film plays, the park's walkers near his
+// spot (or near the line from the hero to him) step out of the frame; a frame hook puts them back the moment the reel is over, played out or skipped.
+function clearAround(at, from, r) {
+  return cue('call', { fn: (api) => {
+    const w = api.world, pb = w && w.ctx && w.ctx.passersby; if (!pb || !pb.walkers || !w.onFrame) return null;
+    const hid = new Set(), dx = at[0] - from[0], dz = at[1] - from[1], L2 = dx * dx + dz * dz || 1; let off = null;
+    const near = (x, z) => { const u = Math.max(0, Math.min(1, ((x - from[0]) * dx + (z - from[1]) * dz) / L2)); return Math.hypot(x - at[0], z - at[1]) < r || Math.hypot(x - from[0] - dx * u, z - from[1] - dz * u) < 2.2; };
+    const step = () => {
+      if (api.done) { hid.forEach((o) => { o.visible = true; }); hid.clear(); if (off) { off(); off = null; } return; }
+      for (const k of pb.walkers) { const o = k.c && k.c.object; if (!o) continue; const n = near(o.position.x, o.position.z); if (n && o.visible && !hid.has(o)) { o.visible = false; hid.add(o); } else if (!n && hid.has(o)) { o.visible = true; hid.delete(o); } }
+    };
+    off = w.onFrame(step, 'pre'); step(); return null;
+  } });
+}
 // BeeAmGee watching from the back (beyond the open side of the ring, so the lens inside the ring sees him over nobody's head). Over the hero's shoulder, out of focus;
 // a rack focus; a nod; back to the hero; back again: nobody there.
 function sighting(ctx, busk) {
@@ -51,18 +65,19 @@ function sighting(ctx, busk) {
   // the long lens on BeeAmGee: off to the side of the hero, above the heads of the ring, so nobody stands between
   const dx = at[0] - hero[0], dz = at[1] - hero[1], dl = Math.hypot(dx, dz), lens = [hero[0] - dz / dl * 1.1 - dx / dl * 0.5, 1.7, hero[1] + dx / dl * 1.1 - dz / dl * 0.5];
   return { reels: [{ reel: { id: busk ? 'sightBusk' : 'sightJam', cast: busk ? {} : CREW, events: [
+    clearAround(at, hero, busk ? 6.5 : 3.2),
     cue('spawn', { id: 'bmg', look: 'beeamgee', at, clip: 'idle' }), cue('place', { who: 'hero', at: hero, face: 'bmg' }), cue('face', { who: 'bmg', to: 'hero', ms: 0 }),
     cue('clip', { who: 'hero', clip: 'beatbox', opts: { bpm: 96, amp: 0.6 } }),
     shot({ on: 'hero', yaw: 180, w: 1.3, h: 1.5, lookH: 1.3, shift: -0.45, fov: 52 }), cue('blur', { px: 2.2, ms: 10 }),
     line(L, 0, { dur: 3.4 }),
     // rack focus: the shape at the back sharpens
-    shot({ pos: lens, look: 'bmg:head', fov: 20, to: { pos: [lens[0] + dx / dl * 0.5, lens[1], lens[2] + dz / dl * 0.5] }, dur: 6 }), cue('blur', { px: 0, ms: 1100 }), cue('look', { who: 'bmg', at: 'hero:head' }),
+    shot({ pos: lens, look: 'bmg:head', fov: 20, port: { fov: 26, look: [at[0], 1.15, at[1]] }, to: { pos: [lens[0] + dx / dl * 0.5, lens[1], lens[2] + dz / dl * 0.5] }, dur: 6 }), cue('blur', { px: 0, ms: 1100 }), cue('look', { who: 'bmg', at: 'hero:head' }),
     mid[0] || wait(1.2),
     cue('clip', { who: 'hero', clip: 'idle' }), cue('look', { who: 'bmg', at: [hero[0], 0.5, hero[1]] }), wait(0.45), cue('look', { who: 'bmg', at: 'hero:head' }),
     ...mid.slice(1),
     shot({ on: 'hero', yaw: 0, w: 1.1, h: 1.25, lookH: 1.2, fov: 30 }), cue('look', { who: 'hero', at: 'bmg:head' }), wait(1.1),
     cue('despawn', { id: 'bmg' }),
-    shot({ pos: [lens[0] + dx / dl * 0.5, lens[1], lens[2] + dz / dl * 0.5], look: [at[0], 1.3, at[1]], fov: 20 }), cue('sfx', { name: 'swoosh', o: { pitch: 0.5 } }), wait(1.3),
+    shot({ pos: [lens[0] + dx / dl * 0.5, lens[1], lens[2] + dz / dl * 0.5], look: [at[0], 1.3, at[1]], fov: 20, port: { fov: 26, look: [at[0], 1.15, at[1]] } }), cue('sfx', { name: 'swoosh', o: { pitch: 0.5 } }), wait(1.3),
     n > 1 ? line(L, n - 1) : null,
   ].filter(Boolean) } }] };
 }
