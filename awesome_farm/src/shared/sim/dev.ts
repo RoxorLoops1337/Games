@@ -22,6 +22,7 @@ import { NIGHT_EVENTS, type NightEvent } from '../weather';
 import * as clock from './clock';
 import * as costatus from './costatus';
 import * as creatures from './creatures';
+import * as defense from './defense';
 import * as dread from './dread';
 import * as economy from './economy';
 import * as fishing from './fishing';
@@ -51,7 +52,7 @@ export const DEV_OPS = [
     'affection',
     'feast',
     'co',
-    'labWave', 'labNight', 'labMend', 'labClear', 'labSpeed', 'labReset', 'labXp', 'labPerks',
+    'labWave', 'labNight', 'labMend', 'labClear', 'labSpeed', 'labReset', 'labXp', 'labPerks', 'labHurt',
 ] as const;
 export type DevOp = typeof DEV_OPS[number];
 export type DevCmd = Extract<Cmd, { t: 'devdo' }>;
@@ -397,7 +398,7 @@ function bestFor (slot: GearSlot): ItemId | null {
 // ── the ops ─────────────────────────────────────────────────────────────────
 const OPS: Record<DevOp, (sim: Sim, p: PlayerS, c: DevCmd) => void> = {
     labWave: (...a) => LAB_OPS.labWave(...a), labNight: (...a) => LAB_OPS.labNight(...a), labMend: (...a) => LAB_OPS.labMend(...a),
-    labClear: (...a) => LAB_OPS.labClear(...a), labSpeed: (...a) => LAB_OPS.labSpeed(...a), labReset: (...a) => LAB_OPS.labReset(...a), labXp: (...a) => LAB_OPS.labXp(...a), labPerks: (...a) => LAB_OPS.labPerks(...a),
+    labClear: (...a) => LAB_OPS.labClear(...a), labSpeed: (...a) => LAB_OPS.labSpeed(...a), labReset: (...a) => LAB_OPS.labReset(...a), labXp: (...a) => LAB_OPS.labXp(...a), labPerks: (...a) => LAB_OPS.labPerks(...a), labHurt: (...a) => LAB_OPS.labHurt(...a),
     level: (sim, p, c) => setLevel(sim, p, p.level + int(c.n, 1, MAX_LEVEL, 1)),
     levelTo: (sim, p, c) => setLevel(sim, p, int(c.n, 1, MAX_LEVEL, p.level)),
     xp: (sim, p, c) => {
@@ -613,6 +614,11 @@ const LAB_OPS = {
         const n = lab.resetPerks(sim);
         note(sim, p, 'unbind', n ? `${n} towers lost their upgrades` : 'No upgrades to reset', PAL.pebble);
     }),
+    /** Every wall, doorway and tower hurt to 40% of its health, so regeneration and repair can be tried at once. */
+    labHurt: labOp((sim, p) => {
+        const n = defense.hurtAll(sim, TUNING.towers.hurtTo);
+        note(sim, p, 'bldHit', `${n} defenses hurt to ${Math.round(TUNING.towers.hurtTo * 100)}%`, PAL.berry);
+    }),
     labReset: labOp((sim, p) => {
         lab.reset(sim, p);
         note(sim, p, 'build', 'Arena reset', PAL.lime);
@@ -633,7 +639,7 @@ function clearMobs (sim: Sim, p: PlayerS, range: number) {
 }
 
 /** Ops that change the world around the farmer: not while they are on an expedition (it would wreck the run). */
-const WORLD_OPS = new Set<DevOp>(['time', 'day', 'event', 'clock', 'mob', 'boss', 'creature', 'node', 'killNear', 'killAll', 'clearDrops', 'land', 'tp', 'feast', 'labWave', 'labNight', 'labMend', 'labClear', 'labSpeed', 'labReset', 'labXp', 'labPerks']);
+const WORLD_OPS = new Set<DevOp>(['time', 'day', 'event', 'clock', 'mob', 'boss', 'creature', 'node', 'killNear', 'killAll', 'clearDrops', 'land', 'tp', 'feast', 'labWave', 'labNight', 'labMend', 'labClear', 'labSpeed', 'labReset', 'labXp', 'labPerks', 'labHurt']);
 
 /** Run one op for a farmer (a no-op unless they are allowed). Reached from Sim.command, after the command has passed the hostile-name check. */
 export function run (sim: Sim, p: PlayerS, c: DevCmd) {

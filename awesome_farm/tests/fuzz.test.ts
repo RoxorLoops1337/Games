@@ -16,7 +16,7 @@ import type { BuildE, Cmd, CritE, MobE, NodeE } from '../src/shared/sim/types';
 const STEP = 1 / 20;
 
 const CMD_TYPES = ['move', 'swing', 'use', 'buy', 'build', 'bp', 'demolish', 'eat', 'sell', 'craft', 'equip', 'unequip', 'skill', 'xfer', 'load', 'config', 'collect', 'revive', 'dash',
-    'summon', 'tame', 'quest', 'chat', 'emote', 'ping', 'travel', 'shop', 'pet', 'pause', 'rift', 'fish', 'breed', 'crate', 'fortune', 'towerpick'] as const;
+    'summon', 'tame', 'quest', 'chat', 'emote', 'ping', 'travel', 'shop', 'pet', 'pause', 'rift', 'fish', 'breed', 'crate', 'fortune', 'towerpick', 'towerrepair'] as const;
 const OPS = ['claim', 'goal', 'bounty', 'reroll', 'companion', 'rest', 'assign', 'unassign', 'feed', 'release', 'rename', 'awaken', 'launch', 'pick', 'leave', 'cast', 'reel', 'cancel', 'start', 'hatch', 'put', 'take', 'spin', 'double'];
 
 function world (seed: string) {

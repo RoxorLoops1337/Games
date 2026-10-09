@@ -13,6 +13,7 @@ import { SKILL_LIST } from '../src/shared/data/skills';
 import { SimHost, type Peer } from '../src/shared/net/host';
 import { PROTOCOL } from '../src/shared/net/protocol';
 import * as blight from '../src/shared/sim/blight';
+import * as defense from '../src/shared/sim/defense';
 import * as lab from '../src/shared/sim/lab';
 import * as raid from '../src/shared/sim/raid';
 import { Sim } from '../src/shared/sim/sim';
@@ -246,13 +247,22 @@ test('the tower tools: XP for every tower, a level at a time, perks reset; the r
     assert.ok(towers().every((x) => x.xp === undefined && x.pk === undefined));
 });
 
+test('the Hurt button damages every wall and tower to 40% and says so', () => {
+    const { sim, op } = world();
+    const ev = op({ op: 'labHurt' });
+    const defs = blds(sim).filter((b) => BUILDINGS[b.kind].hp);
+    assert.ok(defs.length > 30);
+    assert.ok(defs.every((b) => b.hp !== undefined && b.hp <= 0.41 * defense.maxHp(b) + 1));
+    assert.ok(fxNames(ev).length && said(ev).some((t) => /hurt to 40%/.test(t)));
+});
+
 test('the lab ops work only in a lab world, and stay locked on a real server like every developer op', () => {
     // an ordinary world with the menu open: refused
     const plain = Sim.create('LAB-PLAIN', 'w');
     plain.join('a', 'Ann');
     plain.devs.add('a');
     const had = mobsOf(plain).length;
-    for (const o of ['labWave', 'labNight', 'labMend', 'labClear', 'labSpeed', 'labReset', 'labXp', 'labPerks']) {
+    for (const o of ['labWave', 'labNight', 'labMend', 'labClear', 'labSpeed', 'labReset', 'labXp', 'labPerks', 'labHurt']) {
         plain.events = [];
         plain.command('a', { t: 'devdo', op: o, id: 'slime', n: 4, lv: 1, who: 'n', on: true } as Cmd);
         assert.ok(fxNames(plain.events).includes('deny'), `${o} is refused outside the lab`);
@@ -267,7 +277,7 @@ test('the lab ops work only in a lab world, and stay locked on a real server lik
     host.attach(peer);
     host.receive(peer, JSON.stringify({ t: 'hello', v: PROTOCOL, id: 'a', name: 'Ann' }));
     const before = JSON.stringify([Object.keys(sim.s.ents).length, sim.s.night, sim.s.clock]);
-    for (const c of [{ op: 'labWave', id: 'mixed', n: 40, lv: 9, who: 'sea' }, { op: 'labNight', on: true }, { op: 'labSpeed', n: 4 }, { op: 'labReset' }, { op: 'labClear' }, { op: 'labMend' }, { op: 'labXp', n: 500 }, { op: 'labPerks' }]) {
+    for (const c of [{ op: 'labWave', id: 'mixed', n: 40, lv: 9, who: 'sea' }, { op: 'labNight', on: true }, { op: 'labSpeed', n: 4 }, { op: 'labReset' }, { op: 'labClear' }, { op: 'labMend' }, { op: 'labXp', n: 500 }, { op: 'labPerks' }, { op: 'labHurt' }]) {
         host.receive(peer, JSON.stringify({ t: 'cmd', c: { t: 'devdo', ...c } }));
     }
     assert.equal(JSON.stringify([Object.keys(sim.s.ents).length, sim.s.night, sim.s.clock]), before, 'locked');

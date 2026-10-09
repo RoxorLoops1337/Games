@@ -8,7 +8,9 @@ import { BUILDINGS } from '../../../shared/data/buildings';
 import { levelFrac, levelOf, offer, pending, PERK_BY_ID, perksOf, RARITY_NAME, statsOf, towerType, xpAt, xpStep, type PerkDef, type Rarity, type TowerType } from '../../../shared/data/towerperks';
 import { PAL } from '../../../shared/palette';
 import type { BuildE } from '../../../shared/sim/types';
-import { maxHp } from '../../../shared/sim/defense';
+import { ITEMS, type ItemId } from '../../../shared/data/items';
+import { maxHp, regenPerSecond, repairCostOf } from '../../../shared/sim/defense';
+import { canAfford } from '../../../shared/sim/stats';
 import { isTouchUi } from '../../input/layout';
 import { button, GAP, icon, onTap, rowBox, STYLES, ts, Win } from '../kit';
 import { inset, rect } from '../px';
@@ -42,7 +44,7 @@ export class TowerScreen implements Screen {
         if (!e || e.k !== 'bld' || !towerType(e.kind)) { this.ctx.close(); return; }
         const type = towerType(e.kind)!;
         const owner = e.by ? f.players[e.by] : undefined;
-        const k = JSON.stringify([e.xp, e.pk, e.hp, owner?.level, e.pw]);
+        const k = JSON.stringify([e.xp, e.pk, e.hp, owner?.level, e.pw, this.ctx.me().inv]);
         if (k !== this.key) { this.key = k; this.build(e, type, owner?.level ?? 1, owner?.name ?? 'Nobody'); }
         // the legendary cards glow
         this.t += dt;
@@ -92,6 +94,19 @@ export class TowerScreen implements Screen {
             this.dyn.push(win.text(a, ix + 4, y, ts('body'), PAL.pebble, { bold: false }));
             this.dyn.push(win.text(b, ix + sec.inner.w - 4, y, ts('body'), PAL.cream, { origin: [1, 0], bold: false }));
             y += lh;
+        }
+        // regeneration and the repair button (a trap on the floor has no health to mend)
+        if (maxHp(e) > 0) {
+            const hurt = e.hp !== undefined, per = regenPerSecond(e);
+            this.dyn.push(win.text(hurt ? `Regenerating ${Math.round(per * 10) / 10}/s` : `Heals ${Math.round(per * 10) / 10}/s when hurt`, ix + 4, y, ts('cap'), hurt ? PAL.lime : PAL.pebble, { bold: false }));
+            y += Math.round(ts('cap') * 1.5);
+            const cost = repairCostOf(e) as Record<ItemId, number>;
+            const words = Object.entries(cost).map(([r, n]) => `${n} ${ITEMS[r as ItemId]?.name ?? r}`).join(', ');
+            const can = hurt && canAfford(this.ctx.me(), cost);
+            const btn = button(s, 0, 0, sec.inner.w - 8, isTouchUi() ? 38 : 30, hurt ? `Repair: ${words}` : 'Nothing to repair', () => this.ctx.send({ t: 'towerrepair', id: e.id }), { style: STYLES.gold, size: isTouchUi() ? 14 : 13 });
+            btn.setEnabled(can);
+            win.put(btn.root, ix + sec.inner.w / 2, sec.y + sec.h - (isTouchUi() ? 30 : 26));
+            this.dyn.push(btn.root);
         }
         // the perks it has
         y += 6;

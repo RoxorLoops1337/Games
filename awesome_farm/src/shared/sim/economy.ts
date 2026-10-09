@@ -12,6 +12,7 @@ import { chuteSells } from './chute';
 import { tunnelPartner } from './factory';
 import * as bed from './bed';
 import * as chronicle from './chronicle';
+import * as defense from './defense';
 import * as gather from './gather';
 import * as mail from './mail';
 import * as potluck from './potluck';
@@ -212,6 +213,7 @@ export function cmdUse (sim: Sim, p: PlayerS, id: number, seed?: ItemId) {
         return;
     }
     if (b.kind === 'sleepbed') { bed.setBed(sim, p, b); return; }
+    if (def.hp && !def.tower && !def.spike) { if (b.hp !== undefined) defense.repair(sim, p, b); return; }       // (using a hurt wall or doorway mends it for materials)
     if (def.tower || def.spike) { sim.events.push({ e: 'open', to: p.id, ui: 'tower', id: b.id }); return; }
     if (b.kind === 'weathervane') { sim.events.push({ e: 'open', to: p.id, ui: 'vane', id: b.id }); return; }       // (it only shows: nothing changes)
     if (def.dir || def.pole || def.gen || def.store || b.kind === 'drill' || b.kind === 'chute') { if (b.kind !== 'belt') sim.events.push({ e: 'open', to: p.id, ui: 'device', id: b.id }); return; }

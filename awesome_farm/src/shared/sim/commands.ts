@@ -99,6 +99,7 @@ export function command (sim: Sim, pid: string, c: Cmd) {
         case 'fish': return fishing.cmd(sim, p, c);
         case 'pat': return bond.cmdPat(sim, p);
         case 'towerpick': return defense.cmdPick(sim, p, c);
+        case 'towerrepair': return defense.cmdRepair(sim, p, c);
     }
 }
 

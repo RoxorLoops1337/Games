@@ -9,7 +9,7 @@ import { NODES } from '../../shared/data/nodes';
 import { NEST_KINDS } from '../../shared/data/mobs';
 import { petsFirstAt } from '../../shared/data/bond';
 import { pending } from '../../shared/data/towerperks';
-import { maxHp } from '../../shared/sim/defense';
+import { maxHp, repairCostOf } from '../../shared/sim/defense';
 import { hasRod } from '../../shared/sim/fishing';
 import * as potluck from '../../shared/sim/potluck';
 import { hasUnlock } from '../../shared/sim/stats';
@@ -114,6 +114,7 @@ function promptText (h: PromptHost): string {
         if (def.grave) return `E: Take your things back${hold}`;
         if (def.storage) return `E: Open ${def.name}${hold}`;
         if (b.kind === 'table') return `E: ${potluck.promptOf(me, b, h.clock.time, (id) => potluck.cookName(h.players, id))}${h.distToBuilding(b) < d.reach + 6 ? hold : ''}`;
+        if (def.hp && !def.tower && !def.spike && b.hp !== undefined) return `E: Repair ${def.name} (${Object.entries(repairCostOf(b)).map(([r, n]) => `${n} ${ITEMS[r as keyof typeof ITEMS]?.name ?? r}`).join(', ')})${hold}`;
         if (def.tower || def.spike) return `E: ${pending(b) > 0 ? 'Choose an upgrade' : def.name}${b.hp !== undefined ? ` (${Math.ceil(b.hp)} / ${maxHp(b)})` : ''}${hold}`;
         if (b.kind === 'sleepbed') return b.id === me.bed ? `Your bed: you wake up here after a fall${hold}` : `E: Sleep here (wake up here after a fall)${hold}`;
         const say = PROMPTS[b.kind];

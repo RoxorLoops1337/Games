@@ -108,7 +108,7 @@ export const HOWTO: Partial<Record<BuildingKind, HowTo>> = {
     },
     // ── base defense (sim/defense.ts): raids come from the Blight nests at night ──
     tower_archer: {
-        role: 'Shoots the nearest monster in range', how: `Build it behind a wall: an arrow every ${TUNING.blight.archer.every} s at a monster within ${Math.round(TUNING.blight.archer.range / 16)} tiles. Its kills are yours, and it levels up from them: use it to choose an upgrade.`,
+        role: 'Shoots the nearest monster in range', how: `Build it behind a wall: an arrow every ${TUNING.blight.archer.every} s at a monster within ${Math.round(TUNING.blight.archer.range / 16)} tiles. Its kills are yours, and it levels up from them: use it to choose an upgrade. Hurt towers and walls mend slowly by themselves; use one to repair it faster for materials.`,
         example: { items: [P('wall_stone', 0, 0), P('wall_stone', 0, 1), P('wall_stone', 0, 2), P('tower_archer', 1, 1), P('spike', -1, 1)], marks: [{ i: 3, t: 'shoots' }, { i: 4, t: 'bites' }] },
     },
     ballista: { role: 'A heavy bolt at long range', how: `A slow, hard-hitting bolt every ${TUNING.blight.ballista.every} s at a monster up to ${Math.round(TUNING.blight.ballista.range / 16)} tiles away. Put it behind a wall. It levels up as it kills: use it to choose an upgrade.` },

@@ -207,7 +207,7 @@ export const TUNING = {
         legendaryFrom: 5,        // a legendary perk is offered only from this level on
         range: 0.15, haste: 0.15, power: 0.2, sturdy: 0.3, rapid: 0.3,
         pierceDmg: 0.7, multiDmg: 0.6, crit: 0.1, critMul: 2,
-        slow: 0.25, slowSecs: 2, veteran: 0.3, mend: 0.03,
+        slow: 0.25, slowSecs: 2, veteran: 0.3,
         bleedSecs: 3, bleedDps: 0.5,         // a bleed does this share of the bite every second
         execute: 0.6, executeBelow: 0.3, splashDmg: 0.6, splashRadius: 30,
         overEvery: 5, overMul: 3, auraTiles: 4, auraMend: 0.15, barbs: 2,
@@ -215,6 +215,14 @@ export const TUNING = {
         pierceReach: 44,         // px past the target a piercing shot still finds a monster in line, and how close to the line it must be
         pierceWidth: 12,
         reach: 5,                // tiles a farmer may stand from a tower to pick its perk
+        regen: 1 / 240,          // every defense with hit points mends this share of its health a second (a full heal from nothing in 4 minutes)…
+        regenDelay: 6,           // … once it has not been hit for this many seconds (the full mend at dawn stays)
+        mendMul: 3,              // each rank of Self-Mending adds this many times the base regeneration (rank 1: x4, rank 3: x10)
+        repairCut: 0.3,          // each rank of Field Repairs takes this much off the cost of a repair by hand
+        wallRepair: 0.5,         // a wall or doorway repair costs this share of its build cost, for all the missing health
+        /** What a full repair by hand of a tower or trap costs (less, for less missing). */
+        repair: { tower_archer: { plank: 4, stone: 5 }, ballista: { ironbar: 3, gear: 2 }, tesla: { wire: 3, ironbar: 2 }, spike: { ironbar: 1 } } as Record<string, Record<string, number>>,
+        hurtTo: 0.4,             // the Lab's Hurt button leaves every defense this share of its health
         spikeWide: 18,           // px round a Wide Spikes trap's centre where it bites
     },
     /** Co-op boss statuses (sim/costatus.ts): patterns that need teammates. Laid only while two or more farmers are up in the arena. */

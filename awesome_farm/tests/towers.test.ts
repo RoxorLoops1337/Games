@@ -5,12 +5,13 @@ import { test } from 'node:test';
 import { TILE, TUNING } from '../src/shared/config';
 import { BUILDINGS } from '../src/shared/data/buildings';
 import { MOBS } from '../src/shared/data/mobs';
-import { canTake, count, killXp, levelFrac, levelOf, offer, PERK_BY_ID, PERKS, pending, RARITIES, statsOf, towerType, xpAt, xpStep, type Rarity, type TowerType } from '../src/shared/data/towerperks';
+import { canTake, count, repairCost, killXp, levelFrac, levelOf, offer, PERK_BY_ID, PERKS, pending, RARITIES, statsOf, towerType, xpAt, xpStep, type Rarity, type TowerType } from '../src/shared/data/towerperks';
 import * as defense from '../src/shared/sim/defense';
 import * as mobs from '../src/shared/sim/mobs';
 import { Sim } from '../src/shared/sim/sim';
 import type { BuildE, Cmd, MobE } from '../src/shared/sim/types';
 import { Rng } from '../src/shared/rng';
+import { countOf } from '../src/shared/sim/stats';
 
 const T = TUNING.towers;
 const STEP = 1 / 20;
@@ -240,14 +241,7 @@ test('uncommon perks: piercing, multishot, crits, slowing, veteran XP, self-mend
     // veteran: more XP
     const xpFor = (perks: string[]) => { const q = rig('archer', perks); q.at(40, 0, 'skeleton', 1); run(q.sim, 3); return q.t.xp!; };
     assert.ok(Math.abs(xpFor(['veteran']) / xpFor([]) - 1.3) < 0.1);
-    // mending: a hurt tower heals itself
-    r = rig('archer', ['mending']);
-    defense.hitBuilding(r.sim, r.t, 40);
-    const h0 = r.t.hp!;
-    run(r.sim, 3);
-    assert.ok(r.t.hp === undefined || r.t.hp > h0, 'it healed');
-    const q2 = rig('archer'); defense.hitBuilding(q2.sim, q2.t, 40); run(q2.sim, 3);
-    assert.equal(q2.t.hp, TUNING.blight.hp.archer - 40, 'one without the perk does not');
+    // (self-mending is in its own test below)
 });
 
 test('rare perks: executioner, splash, long chain, overcharge, vampiric aura', () => {
@@ -281,7 +275,7 @@ test('rare perks: executioner, splash, long chain, overcharge, vampiric aura', (
     r.at(40, 0, 'slime', 1);
     run(r.sim, 3);
     assert.ok((wall.hp ?? 100) > 10 + 10, 'the near wall mended');
-    assert.equal(farWall.hp, 10);
+    assert.ok(farWall.hp! < 20, "the far wall got no aura (only the slow regeneration)");
 });
 
 test('legendary perks: fire arrows burn, frost bolts freeze, the storm strikes the whole group', () => {
@@ -370,4 +364,93 @@ test('a Spike Trap wears no level badge or pick star in the world (its window an
     const src = readFileSync(new URL('../src/client/world/blight.ts', import.meta.url), 'utf8');
     assert.ok(/type !== 'spike'\) this\.badge/.test(src));
     assert.ok(/this\.stars\.push/.test(src));
+});
+
+test('regeneration: nothing while it was hit a moment ago, then a small share a second; Self-Mending ranks multiply it', () => {
+    const heal = (perks: string[], secs: number) => { const r = rig('archer', perks); defense.hitBuilding(r.sim, r.t, 40); const h0 = r.t.hp!; run(r.sim, secs); return { r, got: (r.t.hp ?? defense.maxHp(r.t)) - h0 }; };
+    assert.equal(heal([], T.regenDelay - 1).got, 0, 'no regeneration while it was hit a few seconds ago');
+    const base = heal([], T.regenDelay + 11);
+    assert.ok(base.got > 0 && base.got < 5, `then it mends a little (${base.got})`);
+    // a fresh hit starts the wait again
+    const r = rig('archer'); defense.hitBuilding(r.sim, r.t, 20); run(r.sim, T.regenDelay - 1); defense.hitBuilding(r.sim, r.t, 5); const h = r.t.hp!; run(r.sim, T.regenDelay - 1);
+    assert.equal(r.t.hp, h, 'hit again: the timer starts over');
+    // the rate: a full heal from nearly nothing in about four minutes
+    const z = rig('archer'); z.t.hp = 1; run(z.sim, 235);
+    assert.ok(z.t.hp !== undefined && z.t.hp < defense.maxHp(z.t), 'not quite yet at 235 s');
+    run(z.sim, 25);
+    assert.equal(z.t.hp, undefined, 'whole again within four and a bit minutes');
+    // ranks of Self-Mending
+    const rate = (n: number) => { const q = rig('archer', Array(n).fill('mending')); q.t.hp = 10; run(q.sim, T.regenDelay + 1); const h0 = q.t.hp; run(q.sim, 10); return (q.t.hp! - h0) / 10; };
+    const r0 = rate(0), r1 = rate(1), r3 = rate(3);
+    assert.ok(Math.abs(r1 / r0 - (1 + T.mendMul)) < 0.05, `rank 1 is x${r1 / r0}`);
+    assert.ok(Math.abs(r3 / r0 - (1 + 3 * T.mendMul)) < 0.1, `rank 3 is x${r3 / r0}`);
+    assert.equal(canTake('archer', ['mending', 'mending'], 'mending', 5), true);
+    assert.equal(canTake('archer', ['mending', 'mending', 'mending'], 'mending', 5), false, 'three ranks at most');
+    // walls mend too
+    const w = rig('archer'); const wall = w.sim.add<BuildE>({ k: 'bld', kind: 'wall_stone', tx: w.t.tx + 5, ty: w.t.ty + 2, rot: 0, by: 'a' });
+    defense.hitBuilding(w.sim, wall, 50); run(w.sim, T.regenDelay + 5);
+    assert.ok(wall.hp! > 50, 'a wall regenerates');
+    // the readout the window shows
+    assert.ok(Math.abs(defense.regenPerSecond(r.t) - defense.maxHp(r.t) * T.regen) < 1e-9);
+});
+
+test('repair by hand: the cost scales with the missing health, Field Repairs cut it, and only a farmer who can pay and reach it may', () => {
+    assert.deepEqual(repairCost('ballista', 0), {});
+    assert.deepEqual(repairCost('ballista', 1), { ironbar: 3, gear: 2 });
+    assert.deepEqual(repairCost('ballista', 0.5), { ironbar: 2, gear: 1 });
+    assert.deepEqual(repairCost('tesla', 0.01), { wire: 1, ironbar: 1 }, 'always at least one of each');
+    assert.deepEqual(repairCost('tower_archer', 1, ['repairs']), { plank: 3, stone: 4 }, 'Field Repairs: 30% less');
+    assert.ok(repairCost('tower_archer', 1, ['repairs', 'repairs']).stone <= 2, 'two ranks');
+    assert.ok(repairCost('wall_stone', 1).stone >= 1, 'a wall costs its own material');
+    assert.equal(canTake('archer', ['repairs', 'repairs'], 'repairs', 3), false);
+    assert.equal(canTake('spike', [], 'repairs', 3), true);
+    // in the sim
+    const r = rig('ballista');
+    const send = (who: string, c: unknown) => r.sim.command(who, c as Cmd);
+    defense.hitBuilding(r.sim, r.t, 60);                              // (of 120)
+    const cost = defense.repairCostOf(r.t);
+    assert.deepEqual(cost, { ironbar: 2, gear: 1 });
+    r.p.inv = {};
+    send('a', { t: 'towerrepair', id: r.t.id });
+    assert.equal(r.t.hp, 60, 'no materials, no repair');
+    r.sim.give(r.p, 'ironbar', 5); r.sim.give(r.p, 'gear', 5);
+    send('a', { t: 'towerrepair', id: r.t.id });
+    assert.equal(r.t.hp, undefined, 'whole again');
+    assert.equal(countOf(r.p, 'ironbar'), 3); assert.equal(countOf(r.p, 'gear'), 4);
+    send('a', { t: 'towerrepair', id: r.t.id });
+    assert.equal(countOf(r.p, 'ironbar'), 3, 'a whole tower costs nothing');
+    // a stranger far away cannot, one beside it can (and pays)
+    const q = r.sim.join('b', 'B')!; q.x = r.p.x; q.y = r.p.y; r.sim.give(q, 'ironbar', 9); r.sim.give(q, 'gear', 9);
+    defense.hitBuilding(r.sim, r.t, 60);
+    send('b', { t: 'towerrepair', id: r.t.id });
+    assert.equal(r.t.hp, 60, 'too far');
+    const c = r.sim.center(r.t); q.x = c.x + 8; q.y = c.y;
+    send('b', { t: 'towerrepair', id: r.t.id });
+    assert.equal(r.t.hp, undefined);
+    assert.equal(countOf(q, 'ironbar'), 7, 'the one who repairs pays');
+    // using a hurt wall repairs it
+    const wall = r.sim.add<BuildE>({ k: 'bld', kind: 'wall_wood', tx: r.t.tx + 2, ty: r.t.ty + 2, rot: 0, by: 'a' });
+    defense.hitBuilding(r.sim, wall, 30);
+    const planks = countOf(q, 'plank'); r.sim.give(q, 'plank', 5);
+    q.x = (wall.tx + 0.5) * TILE + 6; q.y = (wall.ty + 1) * TILE;
+    r.sim.command('b', { t: 'use', id: wall.id });
+    assert.equal(wall.hp, undefined, 'a hurt wall mends when used');
+    assert.ok(countOf(q, 'plank') < planks + 5);
+    // hostile requests
+    const before = JSON.stringify([r.t, wall]);
+    for (const bad of [{}, { id: 'x' }, { id: NaN }, { id: -1 }, { id: 1e300 }, { id: null }, { id: [r.t.id] }, { id: '__proto__' }, { id: 0.5 }, { id: r.p.id }]) send('a', { t: 'towerrepair', ...bad });
+    assert.equal(JSON.stringify([r.t, wall]), before);
+});
+
+test('the Lab\'s hurt button leaves every wall and tower at 40%, and regeneration then brings them back', () => {
+    const r = rig('archer');
+    const wall = r.sim.add<BuildE>({ k: 'bld', kind: 'wall_brick', tx: r.t.tx + 5, ty: r.t.ty + 2, rot: 0, by: 'a' });
+    const n = defense.hurtAll(r.sim, T.hurtTo);
+    assert.ok(n >= 2);
+    assert.equal(r.t.hp, Math.floor(defense.maxHp(r.t) * 0.4));
+    assert.equal(wall.hp, Math.floor(defense.maxHp(wall) * 0.4));
+    run(r.sim, T.regenDelay - 1);
+    assert.equal(wall.hp, Math.floor(defense.maxHp(wall) * 0.4), 'they wait a moment');
+    run(r.sim, 30);
+    assert.ok(wall.hp! > Math.floor(defense.maxHp(wall) * 0.4));
 });
