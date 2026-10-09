@@ -45,7 +45,7 @@ try {
     const c = M.createCine(w, reel, { audio, onCue: (e) => fired.push(e.do) }), res = await c.play();
     const after = [p.x, p.z], layer = !!document.querySelector('.cin'), spawned = w.scene.children.filter((o) => o.isObject3D && o.userData && o.userData.cineSpawn).length;
     // skip: a long reel ends at once
-    const c2 = M.createCine(w, { id: 'long', events: [{ do: 'shot', on: 'hero', w: 2 }, { do: 'wait', s: 99 }] }, { audio }); const t0 = performance.now(); setTimeout(() => c2.skip(), 300); const r2 = await c2.play();
+    const c2 = M.createCine(w, { id: 'long', events: [{ do: 'shot', on: 'hero', w: 2 }, { do: 'wait', s: 99 }] }, { audio }); const t0 = performance.now(); const sk = () => (c2.state().fired >= 2 ? c2.skip() : setTimeout(sk, 50)); setTimeout(sk, 300); const r2 = await c2.play();   // skip once the reel is running (its first frame can take seconds on a loaded machine)
     // watchdog: a reel blocked on a tap that never comes
     const c3 = M.createCine(w, { id: 'stuck', max: 0.6, events: [{ do: 'wait', tap: true }] }, { audio }); const r3 = await c3.play();
     return { fired, want: reel.events.map((e) => e.do), log, res, moved: Math.hypot(after[0] - p0[0], after[1] - p0[1]), layer, spawned, skip: r2, skipMs: performance.now() - t0, stuck: r3 };

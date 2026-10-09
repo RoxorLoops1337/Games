@@ -115,7 +115,7 @@ try {
   if (SHOTS) {
     const d = await boot3d({ width: 1280, height: 720 }); await seedHome(d.page, { flags: { tapeNext: 1 } });
     await goScene(d.page, 'place', { id: 'home' }, 'flat'); await openCouch(d.page); await d.page.evaluate(() => { BBH.Tape.speed = 1; }); await rowClick(d.page, '^WATCH A BEATBOX TAPE');
-    await sleep(2600); await shot(d.page, 'tape_1280_1_push.png');
+    await sleep(2600); await shot(d.page, 'tape_1280_1_push.png'); await sleep(1500); await shot(d.page, 'tape_1280_1b_push.png');
     await until(d.page, () => BBH.Tape.ctrl && BBH.Tape.ctrl.phase === 'card', null, 90000); await sleep(3200); await shot(d.page, 'tape_1280_2_card.png');
     await d.page.context().close();
   }

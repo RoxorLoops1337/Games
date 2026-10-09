@@ -3,7 +3,7 @@
 //   round deck r 9.5 with theme rings | two podiums (YOU left x -2.7, OPPONENT right x +2.7, z 1.4, top y 0.9) with theme rims | judge tier at z -3.9 (top y 0.9) with five desks and the five judges
 //   (Tek, Mel, Origi, Showtime, Wildcard from char_cast) each with a glowing score display | huge LED wall (12 x 4.8) for the VS splash | LED towers, truss arch, par cans, crowd barrier, crowd ring (instanced)
 // Theme by opponent style: style % 4 -> pink | cyan | lime | gold (also lighting.setStageTheme). Everything that changes with the theme is white geometry tinted by two materials (V.TA / V.TB).
-// API (on top of venue_base): setOpponent(opp | look), setPlayerName(s), setScores([5] | null, animate), reveal(i, score), vs({you, opp, round, sub}), setRound(n), splash(text, sub), cheer(sec), mood(name),
+// API (on top of venue_base): setOpponent(opp | look), setPlayerName(s), setScores([5] | null, animate), reveal(i, score), vs({you, opp, round, sub}), setRound(n), splash(text, sub) (text may be the lines array of led.text), cheer(sec), mood(name),
 //   characters: api.judges[], api.opponent, attachPlayer(character) (puts it on the left podium and keeps it facing the opponent), cams (VS whip, wide, over shoulder, judges, crowd; world coordinates), whip(...)
 import { THREE, rng, disposeTree } from './kit.js';
 import { createCrowd } from './char_crowd.js';
@@ -89,7 +89,7 @@ export function buildVenueArena(V) {
   if (nC > 0) { const pos = [], a0 = -2.35, a1 = 2.35; let guard = 0; while (pos.length < nC && guard++ < 4000) { const a = a0 + (a1 - a0) * R(), r = 7.6 + R() * 5.9, x = Math.sin(a) * r, z = Math.cos(a) * r; if (Math.abs(x) < 1.5 && z > 5) continue; pos.push([x, z, Math.atan2(-x, -z) + (R() - 0.5) * 0.3]); }
     crowd = createCrowd(V.ctx, pos.length, { positions: pos, seed: o.seed + 5, energy: 0.5, bpm: 110 }); S.group.add(crowd.object); }
   // ---------------------------------------------------------------- led content, per-frame work
-  const splash = (text, sub) => led.text([{ t: String(text), c: '#ffd23f', k: 1.0 }, { t: String(sub || ''), c: '#7af0ff', k: 0.45 }], { bg: ['#2a1058', '#090420'], rays: ['rgba(255,255,255,0.07)', 'rgba(255,255,255,0)'] });
+  const splash = (text, sub) => led.text(Array.isArray(text) ? text : [{ t: String(text), c: '#ffd23f', k: 1.0 }, { t: String(sub || ''), c: '#7af0ff', k: 0.45 }], { bg: ['#2a1058', '#090420'], rays: ['rgba(255,255,255,0.07)', 'rgba(255,255,255,0)'] });
   const vsDraw = () => { led.draw((g, w, h) => { drawVs(g, w, h, { theme: V.theme, you: state.you, opp: state.oppName, round: state.round ? 'ROUND ' + state.round : '', sub: state.sub }); led.grid(0.2); }); };
   vsDraw();
   V.ups.push((dt, t, e, pulse) => {

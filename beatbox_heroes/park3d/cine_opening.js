@@ -33,10 +33,11 @@ const office = () => ({ id: 'opening.office', events: [
   cue('despawn', { id: 'boss' }), cue('clip', { who: 'hero', clip: 'idle' }), cue('place', { who: 'hero', at: [-0.05, -1.55], face: 0 }),
   wait(0.5), cue('prop', { who: 'hero', kind: 'box', plant: true }), cue('sfx', { name: 'swoosh', o: { pitch: 0.6 } }),
   narr('You leave with a box, a plant and $40.'),
-  // the exit: from the door, looking back, the lens follows him. He walks towards us through the empty office
-  shot({ pos: [6.0, 1.5, 2.75], look: 'hero:head', fov: 30, cut: 'xfade', ms: 700 }),
-  cue('walk', { who: 'hero', to: [[-1.2, -1.65], [-1.35, 0.35], [3.6, 1.4], [5.2, 1.9]], speed: 1.15, prop: 'box' }),
-  wait(7.8), cue('sfx', { name: 'door', o: { pitch: 0.8 } }),
+  // the exit: from the door end of the aisle, looking back down it, the lens follows him. He walks towards us between the empty desks, then turns off to the door
+  // (the aisle runs between the two rows of pods at z 0.4, so nothing stands between him and the lens)
+  shot({ pos: [6.6, 1.95, -0.55], look: 'hero:head', fov: 30, cut: 'xfade', ms: 700 }),
+  cue('walk', { who: 'hero', to: [[-1.25, -1.6], [-1.25, 0.4], [4.4, 0.42], [5.9, 1.6]], speed: 1.15, prop: 'box' }),
+  wait(7.4), cue('sfx', { name: 'door', o: { pitch: 0.8 } }),
 ] });
 
 // ---- II. The walk home. Rain. Away from us down Neon Row, a tracking profile, the lamp. Then silence, and the first sound. The city answers.
@@ -48,7 +49,8 @@ const street = () => ({ id: 'opening.street', events: [
   shot({ pos: [16, 7.2, 4.2], look: [0, 0.6, 1.2], fov: 38, to: { pos: [13.5, 3.0, 3.0], look: [1, 1.0, 1.4] }, dur: 7, ease: 'io' }),
   cue('stamp', { text: 'TUE 18:03|REC' }), wait(1.4),
   narr('You walk home in the rain.'),
-  shot({ on: 'hero', yaw: 6, rel: false, w: 1.9, h: 1.15, lookH: 1.05, fov: 40, hand: 0.008, cut: 'xfade', ms: 800 }),
+  // (a fixed 3.2 m off his shoulder, in the near lane over the roofs of the parked cars: the far pavement is never between him and the lens)
+  shot({ on: 'hero', yaw: 6, rel: false, dist: 3.2, h: 1.55, lookH: 1.0, fov: 44, hand: 0.008, cut: 'xfade', ms: 800 }),
   wait(3.0), cue('sfx', { name: 'thunder' }), cue('flash', { color: '#cfd8ff', ms: 500 }), wait(1.4),
   // under the lamp: low wide angle, the cone of light and the rain in it
   shot({ on: 'hero', yaw: 22, rel: false, w: 2.6, h: 0.4, lookH: 1.7, fov: 46, to: { yaw: 14, w: 2.3 }, dur: 6, cut: 'xfade', ms: 600 }),
@@ -79,7 +81,8 @@ const street = () => ({ id: 'opening.street', events: [
 ] });
 
 // ---- III. Home. Foxy, the rent, the idea. A night of practice in sharp cuts. The bed. A heartbeat.
-const HERO_AT = [-1.9, -2.6], PRACTICE = [0.6, 1.0];
+// HERO_AT: clear of the floor lamp (-2.3, -2.55) and the beanbag (-1.55, -1.85)
+const HERO_AT = [-1.0, -3.0], PRACTICE = [0.6, 1.0];
 const flat = () => ({ id: 'opening.flat', cast: { foxy: { rest: { clip: 'sit', opts: FOXY_SIT } } }, events: [
   cue('light', { time: 'night', instant: true }),
   cue('place', { who: 'hero', at: [3.4, 2.7], face: -120 }), cue('prop', { who: 'hero', kind: 'box', plant: true }), cue('mood', { who: 'hero', mood: 'neutral' }),
@@ -92,7 +95,7 @@ const flat = () => ({ id: 'opening.flat', cast: { foxy: { rest: { clip: 'sit', o
   say('foxy', 'You are home early. Why is there a plant in a box?', { clip: 'sit', opts: Object.assign({ talk: true }, FOXY_SIT) }),
   shot({ on: 'hero', yaw: 45, w: 1.25, h: 1.2, lookH: 1.2, fov: 48 }), cue('mood', { who: 'hero', mood: 'sad' }),
   say('hero', 'They fired me. I have forty dollars.'),
-  shot({ on: 'foxy', yaw: -70, w: 1.2, h: 1.1, lookH: 1.0, fov: 48 }), cue('mood', { who: 'foxy', mood: 'sad' }),
+  shot({ on: 'foxy', yaw: -35, w: 1.2, h: 1.1, lookH: 1.0, fov: 48 }), cue('mood', { who: 'foxy', mood: 'sad' }),
   say('foxy', 'Rent is sixty. Every Sunday. You know that, right?'),
   cue('mood', { who: 'foxy', mood: 'happy' }),
   say('foxy', 'OK. Idea. Go busk in the park. Play beats for the people walking by. Tips pay rent, and every listener can become a fan.'),
@@ -121,14 +124,17 @@ const flat = () => ({ id: 'opening.flat', cast: { foxy: { rest: { clip: 'sit', o
 
 // ---- IV. The dream. The world stage in slow motion, the plan, the title landing on his drums.
 const dream = (q) => ({ id: 'opening.dream', events: [
-  cue('call', { fn: (api) => { const w = api.world, ar = w.arena; if (ar && ar.opponent) ar.opponent.object.visible = false; if (ar && ar.splash) ar.splash('WORLD CUP', api.names.hero || ''); if (w.lighting && w.lighting.setStageTheme) w.lighting.setStageTheme('gold', true); } }),
+  // on a phone held upright the 12 m LED wall is wider than any frame, so it stacks the words (WORLD / CUP / name) in the middle where the lens can read them
+  cue('call', { fn: (api) => { const w = api.world, ar = w.arena, nm = api.names.hero || '', port = api.camera && api.camera.aspect > 0 && api.camera.aspect < 0.9; if (ar && ar.opponent) ar.opponent.object.visible = false;
+    if (ar && ar.splash) ar.splash(port ? [{ t: 'WORLD', c: '#ffd23f', k: 0.78 }, { t: 'CUP', c: '#ffd23f', k: 0.78 }, { t: nm, c: '#7af0ff', k: 0.5 }] : 'WORLD CUP', nm); if (w.lighting && w.lighting.setStageTheme) w.lighting.setStageTheme('gold', true); } }),
   cue('place', { who: 'hero', at: [0, 3.0], face: 0, y: 0.4 }), cue('clip', { who: 'hero', clip: 'idle' }), cue('mood', { who: 'hero', mood: 'neutral' }),
   cue('blur', { px: 0, ms: 1600 }), cue('vignette', { v: 0.55, ms: 1500 }), cue('speed', { v: 0.35, ms: 10 }),
-  shot({ pos: [-0.4, 1.55, 10.5], look: [0, 2.7, 1.0], fov: 40, to: { pos: [-0.2, 1.8, 8.4], look: [0, 2.6, 1.0] }, dur: 8, ease: 'soft' }),
+  shot({ pos: [-0.4, 1.55, 10.5], look: [0, 2.7, 1.0], fov: 40, to: { pos: [-0.2, 1.8, 8.4], look: [0, 2.6, 1.0] }, dur: 8, ease: 'soft',
+    port: { pos: [-0.3, 1.5, 13.0], look: [0, 3.3, 1.0], fov: 50, to: { pos: [-0.15, 1.7, 11.6], look: [0, 3.2, 1.0] } } }),
   cue('sfx', { name: 'crowd_cheer', o: { pitch: 0.5 } }), wait(0.8), cue('sfx', { name: 'heart' }),
   narr('Your plan: busk in the park, play open mics at the bar, win beatbox battles.', { dur: 3.8 }),
   // the world stage from the rig: a small figure on the big VS deck, the crowd all around
-  shot({ pos: [0.6, 11.5, 9.5], look: [0, 0.4, 2.2], fov: 46, to: { pos: [0.3, 9.0, 7.6] }, dur: 6, cut: 'xfade', ms: 900 }),
+  shot({ pos: [0.6, 11.5, 9.5], look: [0, 0.4, 2.2], fov: 46, to: { pos: [0.3, 9.0, 7.6] }, dur: 6, cut: 'xfade', ms: 900, port: { pos: [0.6, 9.5, 15.5], look: [0, 2.6, 1.0], fov: 50, to: { pos: [0.3, 8.0, 13.8] } } }),
   cue('speed', { v: 1, ms: 1600 }), cue('call', { fn: (api) => { const ar = api.world.arena; if (ar && ar.cheer) ar.cheer(4); } }), cue('sfx', { name: 'crowd_cheer' }),
   narr('And one day, the Beatbox Heroes World Cup.', { dur: 3.2 }),
   shot({ on: 'hero', yaw: -15, w: 1.9, h: 0.9, lookH: 1.35, fov: 34 }), cue('clip', { who: 'hero', clip: 'finisher', opts: { bpm: 110 } }), cue('mood', { who: 'hero', mood: 'happy' }),
