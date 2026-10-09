@@ -182,6 +182,7 @@ export class Entities {
             v.model.dispose?.();
             const [bw, bh] = BUILDINGS[v.e.kind].size;
             const m = buildingModel(v.e.kind, { rot: v.e.rot ?? 0, seed: v.e.id, mask });
+            m.apply?.(v.e);                                     // (its state carries over: a hurt wall keeps its cracks)
             m.obj.position.set(v.e.tx + bw / 2, 0, v.e.ty + bh / 2);
             this.group.add(m.obj);
             v.model = m;
