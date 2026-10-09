@@ -96,8 +96,8 @@ export const GUIDE: GuideTopic[] = [
         id: 'house', name: 'Building a house', icon: 'k_hammer',
         blurb: 'Lay a floor, raise walls, add a doorway and a roof. Nothing spawns inside, and monsters cannot get in.',
         steps: [
-            'Open the Build menu ({build}) and lay a floor in the Decor tab: Plank, Brick, Slate or Carpet. Drag to lay a whole row at once.',
-            'Open the Walls & roofs tab and pick a wall: wood, stone, brick, or a wall with a window. Drag along the edge of the floor; walls join up with their neighbours by themselves.',
+            'Open the Build menu ({build}): floors are the first things in the Floors & walls tab (Plank, Stone Path, Brick, Slate, Carpet). Drag to lay a whole row at once.',
+            'In the same Floors & walls tab pick a wall: wood, stone, brick, or a wall with a window. Drag along the edge of the floor; walls join up with their neighbours by themselves.',
             'Add a Doorway: leave a gap, or place it straight onto a piece of wall and it takes that piece’s place, turned to fit. You walk through it; monsters cannot.',
             ['Put in a Garden Bed, a Chest, a Campfire or a Table, whatever you want inside. You keep placing the same thing until you right-click or press Esc, so a whole row of beds is quick.',
                 'Put in a Garden Bed, a Chest, a Campfire or a Table, whatever you want inside. Tap a tile to aim, tap again to place; you keep placing the same thing until you tap CANCEL.'],

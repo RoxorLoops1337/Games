@@ -361,8 +361,8 @@ export const QUESTS: Quest[] = [
         offer: 'Out in the open the night finds you. Put walls round yourself, leave one way in, and a roof on top. Doors keep the monsters out.',
         thanks: 'Warm, dry and monster-proof. Take this satchel: a builder with full pockets is no builder at all. Wear it from your Backpack.',
         steps: [
-            o('Lay 6 plank floors', 'build:planks', 6, 'Press B, open the Decor tab and pick the Plank Floor (1 plank). Drag across the ground to lay a row.'),
-            o('Raise 8 wooden walls', 'build:wall_wood', 8, 'Open the Walls & roofs tab. The Wooden Wall is 2 planks; drag along the edge of the floor and the pieces join up.'),
+            o('Lay 6 plank floors', 'build:planks', 6, 'Press B, open the Floors & walls tab and pick the Plank Floor (1 plank). Drag across the ground to lay a row.'),
+            o('Raise 8 wooden walls', 'build:wall_wood', 8, 'In the same Floors & walls tab, the Wooden Wall is 2 planks; drag along the edge of the floor and the pieces join up.'),
             o('Build a Doorway', 'build:doorway', 1, 'Leave a gap in the wall and put a Doorway in it. You can walk through; monsters cannot. R turns it.'),
             o('Put on 6 thatch roofs', 'build:roof_thatch', 6, 'The Thatch Roof is 3 fiber and 1 plank. Drag it across the floor. It fades when you stand under it.'),
         ],
