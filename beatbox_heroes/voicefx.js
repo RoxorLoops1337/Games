@@ -66,49 +66,49 @@
       eq: [['hp', 22, 0.707], ['lowshelf', 100, 0.8, 4], ['peak', 400, 1.4, -3], ['peak', 3000, 1.0, 2.5], ['lp', 14000, 0.707]],
       exciter: { f: 120, drive: 3, mix: 0.18 }, trans: 3, transHp: 1000,
       comp: { thr: -22, ratio: 3, atk: 10, rel: 90, knee: 6, rms: 5, sc: 150 }, par: null, deess: null,
-      lim: { max: 4, rel: 40 }, maxMs: 500, fadeMs: 20, target: -5,
+      lim: { max: 4, rel: 40 }, maxMs: 900, fadeMs: 20, target: -5,
     },
     bass: {
       gate: { sc: 40, open: 10, close: 6, atk: 3, hold: 80, rel: 220, det: 1, detClose: 15, gap: 120 },
       eq: [['hp', 25, 0.707], ['lowshelf', 100, 0.8, 3.5], ['peak', 420, 1.2, -2], ['peak', 1500, 1.0, 1]],
       exciter: { f: 120, drive: 2.5, mix: 0.2 }, trans: 0,
       comp: { thr: -24, ratio: 2.5, atk: 15, rel: 200, knee: 8, rms: 10 }, par: { thr: -36, ratio: 8, atk: 2, rel: 120, knee: 6, rms: 5, mix: 0.25 }, deess: null,
-      lim: { max: 4, rel: 80 }, maxMs: 1200, fadeMs: 50, target: -8,
+      lim: { max: 4, rel: 80 }, maxMs: 3500, fadeMs: 50, target: -8,
     },
     hat: {
       gate: { sc: 1500, open: 12, close: 6, atk: 1, hold: 8, rel: 35, det: 0.3, detClose: 3, gap: 40 },
       eq: [['hp', 200, 0.707, 0, 4], ['peak', 4500, 0.9, 2], ['highshelf', 10000, 0.8, 3]],
       exciter: null, trans: 0,
       comp: { thr: -20, ratio: 2.5, atk: 3, rel: 40, knee: 4, rms: 2 }, par: null, deess: { f: 7500, q: 1.4, rel: -3, ratio: 2, max: 3 },
-      lim: { max: 3, rel: 30 }, clip: 6, maxMs: 300, fadeMs: 8, target: -12.5,
+      lim: { max: 3, rel: 30 }, clip: 6, maxMs: 600, fadeMs: 8, target: -12.5,
     },
     snare: {
       gate: { sc: 300, open: 12, close: 6, atk: 1.5, hold: 20, rel: 80, det: 0.4, detClose: 5, gap: 50 },
       eq: [['hp', 90, 0.707], ['peak', 200, 1.2, 1.5], ['peak', 4000, 1.0, 3], ['highshelf', 12000, 0.8, -1.5]],
       exciter: null, trans: 2,
       comp: { thr: -22, ratio: 4, atk: 5, rel: 70, knee: 6, rms: 3 }, par: { thr: -34, ratio: 10, atk: 0.5, rel: 50, knee: 6, rms: 2, mix: 0.3 }, deess: { f: 7500, q: 1.4, rel: -6, ratio: 2.5, max: 5 },
-      lim: { max: 4, rel: 40 }, clip: 6, maxMs: 450, fadeMs: 15, target: -9,
+      lim: { max: 4, rel: 40 }, clip: 6, maxMs: 800, fadeMs: 15, target: -9,
     },
     tonal: {
       gate: { sc: 150, open: 12, close: 6, atk: 2, hold: 60, rel: 150, det: 0.5, detClose: 10, gap: 100 },
       eq: [['hp', 120, 0.707], ['peak', 3000, 1.0, 1], ['highshelf', 9000, 0.8, -2]],
       exciter: null, trans: 0,
       comp: { thr: -24, ratio: 2, atk: 20, rel: 250, knee: 8, rms: 10 }, par: null, deess: { f: 7000, q: 1.4, rel: -6, ratio: 2, max: 3 },
-      lim: { max: 4, rel: 80 }, maxMs: 1500, fadeMs: 40, target: -9,
+      lim: { max: 4, rel: 80 }, maxMs: 3500, fadeMs: 40, target: -9,
     },
     fx: {
       gate: { sc: 500, open: 12, close: 6, atk: 1.5, hold: 30, rel: 70, det: 0.4, detClose: 5, gap: 80 },
       eq: [['hp', 150, 0.707], ['peak', 3000, 1.0, 2], ['highshelf', 11000, 0.8, 1]],
       exciter: null, trans: 0,
       comp: { thr: -22, ratio: 3, atk: 4, rel: 60, knee: 6, rms: 3 }, par: null, deess: { f: 7500, q: 1.4, rel: -4, ratio: 2, max: 4 },
-      lim: { max: 3, rel: 40 }, clip: 4, maxMs: 700, fadeMs: 20, target: -10.5,
+      lim: { max: 3, rel: 40 }, clip: 4, maxMs: 1500, fadeMs: 20, target: -10.5,
     },
     generic: {
       gate: { sc: 100, open: 12, close: 6, atk: 2, hold: 40, rel: 100, det: 0.5, detClose: 8, gap: 80 },
       eq: [['hp', 30, 0.707]],
       exciter: null, trans: 0,
       comp: { thr: -22, ratio: 2.5, atk: 8, rel: 100, knee: 6, rms: 5 }, par: null, deess: null,
-      lim: { max: 5, rel: 50 }, maxMs: 800, fadeMs: 20, target: -10,
+      lim: { max: 5, rel: 50 }, maxMs: 1500, fadeMs: 20, target: -10,
     },
   };
   /* Per sound. target = the synth voice's loudest-30-ms RMS at the game output minus the gain of the sample path (Audio.drum plays a
@@ -116,17 +116,17 @@
    * at the level of the built-in kit. The voicefx test re-measures the synth and fails when a target drifts more than 2.5 dB. */
   const SOUND = {
     B: { fam: 'kick', target: -5 },
-    TB: { fam: 'bass', target: -6.5, maxMs: 1400 },
-    HUM: { fam: 'bass', target: -8.5, maxMs: 1800, gate: { rel: 250 }, fadeMs: 70 },
-    LR: { fam: 'bass', target: -10, maxMs: 1400, auto: { minLow: 0.3, mid: { eq: [['hp', 45, 0.707], ['peak', 300, 1.0, -1.5], ['peak', 2000, 1.0, 2]], exciter: null } } },
+    TB: { fam: 'bass', target: -6.5, maxMs: 3500 },
+    HUM: { fam: 'bass', target: -8.5, maxMs: 4000, gate: { rel: 250 }, fadeMs: 70 },
+    LR: { fam: 'bass', target: -10, maxMs: 3500, auto: { minLow: 0.3, mid: { eq: [['hp', 45, 0.707], ['peak', 300, 1.0, -1.5], ['peak', 2000, 1.0, 2]], exciter: null } } },
     t: { fam: 'hat', target: -12.5 },
-    CR: { fam: 'hat', target: -21.5, gate: { hold: 30, rel: 60, gap: 160 }, eq: [['hp', 180, 0.707, 0, 4], ['peak', 3500, 1.0, 2], ['highshelf', 10000, 0.8, 2]], maxMs: 1200, fadeMs: 25 },
+    CR: { fam: 'hat', target: -21.5, gate: { hold: 30, rel: 60, gap: 160 }, eq: [['hp', 180, 0.707, 0, 4], ['peak', 3500, 1.0, 2], ['highshelf', 10000, 0.8, 2]], maxMs: 2500, fadeMs: 25 },
     K: { fam: 'snare', target: -8 },
-    IK: { fam: 'snare', target: -6.5, gate: { rel: 110 }, maxMs: 600 },
+    IK: { fam: 'snare', target: -6.5, gate: { rel: 110 }, maxMs: 900 },
     Pf: { fam: 'snare', target: -11, eq: [['hp', 120, 0.707], ['peak', 250, 1.2, 1], ['peak', 3500, 1.0, 2], ['highshelf', 12000, 0.8, -1]], deess: { max: 6 } },
-    RIM: { fam: 'snare', target: -16.5, eq: [['hp', 150, 0.707], ['peak', 500, 1.4, 2], ['peak', 4500, 1.2, 3]], trans: 3, maxMs: 350 },
-    WB: { fam: 'tonal', target: -9, maxMs: 600, gate: { atk: 1, hold: 20, rel: 90 }, fadeMs: 20 },
-    SI: { fam: 'tonal', target: -8, maxMs: 1800, gate: { hold: 80, rel: 220 }, fadeMs: 60 },
+    RIM: { fam: 'snare', target: -16.5, eq: [['hp', 150, 0.707], ['peak', 500, 1.4, 2], ['peak', 4500, 1.2, 3]], trans: 3, maxMs: 600 },
+    WB: { fam: 'tonal', target: -9, maxMs: 1200, gate: { atk: 1, hold: 20, rel: 90 }, fadeMs: 20 },
+    SI: { fam: 'tonal', target: -8, maxMs: 4000, gate: { hold: 80, rel: 220 }, fadeMs: 60 },
     ZP: { fam: 'fx', target: -10.5 },
   };
   const OBJ = { gate: 1, comp: 1, par: 1, deess: 1, lim: 1, exciter: 1 };
@@ -391,8 +391,17 @@
     if (!segs.length) return fail('quiet', info0);
     const merged = [segs[0].slice()];
     for (let k = 1; k < segs.length; k++) { const p = merged[merged.length - 1]; if (segs[k][0] - p[1] < gapS) p[1] = segs[k][1]; else merged.push(segs[k].slice()); }
-    let main = merged[0], best = -1;
-    for (const sg of merged) { let e = 0; for (let i = sg[0]; i <= sg[1]; i++) e += xa[i] * xa[i]; if (e > best) { best = e; main = sg; } }
+    let mi = 0, best = -1;
+    merged.forEach((sg, k) => { let e = 0; for (let i = sg[0]; i <= sg[1]; i++) e += xa[i] * xa[i]; if (e > best) { best = e; mi = k; } });
+    /* the sound is the loudest segment PLUS the parts of it a dip split off: neighbours within `chain` ms whose peak is within 30 dB
+     * of the loudest (a lip roll that falters, a hum that wavers, a sound with a soft start or a long soft end). Stray noise further
+     * away or much quieter (a breath, a chair, a far tap) stays outside, so only the silence around the sound is cut, never the sound. */
+    const segPk = merged.map((sg) => { let m = 0; for (let i = sg[0]; i <= sg[1]; i++) if (envC[i] > m) m = envC[i]; return m; });
+    const chainS = ms(Math.max(G.gap * 3, 250)), keepPk = segPk[mi] * lin(-30);
+    let sLo = mi, sHi = mi;
+    while (sLo > 0 && merged[sLo][0] - merged[sLo - 1][1] <= chainS && segPk[sLo - 1] >= keepPk) sLo--;
+    while (sHi < merged.length - 1 && merged[sHi + 1][0] - merged[sHi][1] <= chainS && segPk[sHi + 1] >= keepPk) sHi++;
+    const main = [merged[sLo][0], merged[sHi][1]];
     /* sample-accurate onset: walk back from the detector crossing while the 0.25 ms sidechain RMS is still 6 dB over the floor */
     const ps = new Float64Array(n + 1); for (let i = 0; i < n; i++) ps[i + 1] = ps[i] + sc[i] * sc[i];
     const w = Math.max(4, ms(0.25)), thr2 = nfS * nfS * lin(6) * lin(6), lo = Math.max(0, main[0] - ms(G.det * 4 + 3));
@@ -490,7 +499,7 @@
       data: out, dry, start, end,
       info: {
         ok: true, id: P.id, family: P.fam, noiseDb: r1(dB(nfA)), onsetMs: r1(onset / sr * 1000), startMs: r1(start / sr * 1000), lengthMs: r1(len / sr * 1000), capped,
-        openDb: r1(dB(openThr)), closeDb: r1(dB(closeThr)), segments: merged.length, stageDb: r1(stage), lowShare: lowShare == null ? null : Math.round(lowShare * 100) / 100,
+        openDb: r1(dB(openThr)), closeDb: r1(dB(closeThr)), segments: merged.length, kept: sHi - sLo + 1, stageDb: r1(stage), lowShare: lowShare == null ? null : Math.round(lowShare * 100) / 100,
         bass: !!P.exciter, compDb: r1(compDb), deessDb: r1(deessDb), clipDb: z ? r1(Math.max(0, clipIn)) : 0, limDb: r1(limDb), gainDb: r1(stage + gDb), punchDb: r1(lo2), targetDb: P.target, peakDb: r1(tpo),
       },
     };

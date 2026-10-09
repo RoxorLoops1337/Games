@@ -244,10 +244,10 @@
     c.style.width = pix.w * (scale || 1) + 'px'; c.style.height = pix.h * (scale || 1) + 'px'; if (extra) Object.assign(c.style, extra); return c;
   };
   E.iconEl = (name, scale, extra) => E.pixEl(E.icon(name), scale || 1, extra);
-  // gold/pink/... button; fn gets the click. Plays a click sfx. opts: {cls, style, sfx}
+  // gold/pink/... button; fn gets the click. Plays a click sfx, except with the 'quiet' class (buttons that record or play a sound, so no click lands in the take or over it)
   E.btn = function (label, cls, fn, style) {
     const b = h('div.btn' + (cls ? '.' + cls.split(' ').join('.') : ''), { style }, label);
-    b.addEventListener('click', (ev) => { ev.stopPropagation(); if (b.classList.contains('dis')) { E.sfx('error'); return; } E.sfx('click'); if (fn) fn(ev); });
+    b.addEventListener('click', (ev) => { ev.stopPropagation(); if (b.classList.contains('dis')) { E.sfx('error'); return; } if (!b.classList.contains('quiet')) E.sfx('click'); if (fn) fn(ev); });
     return b;
   };
   E.bar = function (color, frac) { const i = h('i', { style: { width: Math.max(0, Math.min(1, frac)) * 100 + '%', background: color, boxShadow: 'inset 0 1px 0 rgba(255,255,255,.35)' } }); return h('div.bar', null, i); };

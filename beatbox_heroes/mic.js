@@ -549,10 +549,12 @@
       if (r.onset < 0) {
         /* adaptive trigger: 16 dB over the quietest recent block, between 0.02 (quiet room, soft sounds still trigger) and 0.04 */
         r.nf = Math.min(r.nf * 1.02 + 1e-5, lv);
-        if (lv > clamp(r.nf * 6, 0.02, 0.04)) { r.onset = p; r.quiet = 0; }
+        if (lv > clamp(r.nf * 6, 0.02, 0.04)) { r.onset = p; r.quiet = 0; r.endLv = clamp(r.nf * 4, 0.006, 0.015); }
       } else {
-        if (lv < 0.015) r.quiet += 256; else r.quiet = 0;
-        if (r.quiet >= 0.12 * sr || p + 256 - r.onset >= r.maxRec * sr) {
+        /* the take ends after real silence: under the room's own level (4x the noise floor, between 0.006 and 0.015) for quietS,
+         * which is longer for sounds that can falter or fade (lip roll, hum, throat bass, siren), so a dip never ends the take early */
+        if (lv < r.endLv) r.quiet += 256; else r.quiet = 0;
+        if (r.quiet >= r.quietS * sr || p + 256 - r.onset >= r.maxRec * sr) {
           const from = Math.max(0, r.onset - (r.sound != null ? Math.round(0.25 * sr) : 4096)), to = p + 256;
           finishRec(finishTake(r, from, to, sr));
           return;
@@ -564,7 +566,8 @@
     if (r.onset < 0 && r.pos / sr * 1000 > r.maxWait) finishRec({ ok: false, data: new Float32Array(0), sampleRate: sr, reason: 'timeout' });
   }
   /**
-   * Auto-detect recording: waits for a sound (RMS over an adaptive 0.02..0.04 trigger), records until 120 ms of quiet (or 750 ms),
+   * Auto-detect recording: waits for a sound (RMS over an adaptive 0.02..0.04 trigger), records until it goes quiet (120 ms without a
+   * sound id; with one, 200 ms, or 350 ms for long sounds, under the room's own level) or the sound's length cap,
    * returns the trimmed and normalised sample. Resolves { ok, data, sampleRate, reason } with reason 'ok' | 'timeout' | 'quiet' | 'closed' | 'cancelled'.
    * opts.sound (a Core.SOUNDS id or lane) with BBH.VoiceFX loaded: the take runs through that sound's studio chain (voicefx.js) and may
    * be as long as the sound's profile allows; the result adds raw (the untouched take with 250 ms of room before it), dry (the A/B
@@ -576,10 +579,15 @@
       if (!R.open || !R.sr) { resolve({ ok: false, data: new Float32Array(0), sampleRate: R.sr || 0, reason: 'closed' }); return; }
       if (rec) finishRec({ ok: false, data: new Float32Array(0), sampleRate: R.sr, reason: 'cancelled' });
       const maxWait = opts.maxWaitMs > 0 ? opts.maxWaitMs : 4000, sound = opts.sound != null ? opts.sound : null;
-      let maxRec = 0.75;
-      try { if (sound != null && BBH.VoiceFX) maxRec = Math.max(0.75, BBH.VoiceFX.profile(sound).maxMs * 0.001 + 0.25); } catch (e) { /* ignore */ }
-      const cap = Math.ceil((maxWait + maxRec * 1000 + 700) * 0.001 * R.sr / 1024 + 2) * 1024;
-      rec = { resolve, buf: new Float32Array(cap), pos: 0, onset: -1, quiet: 0, nf: 1, maxWait, maxRec, sound, onLevel: opts.onLevel };
+      let maxRec = 0.75, quietS = 0.12;
+      try {
+        if (sound != null && BBH.VoiceFX) {
+          const P = BBH.VoiceFX.profile(sound); maxRec = Math.max(0.75, P.maxMs * 0.001 + 0.25);
+          quietS = P.fam === 'bass' || P.fam === 'tonal' || P.maxMs >= 1200 ? 0.35 : 0.2;
+        }
+      } catch (e) { /* ignore */ }
+      const cap = Math.ceil((maxWait + maxRec * 1000 + quietS * 1000 + 700) * 0.001 * R.sr / 1024 + 2) * 1024;
+      rec = { resolve, buf: new Float32Array(cap), pos: 0, onset: -1, quiet: 0, nf: 1, endLv: 0.015, quietS, maxWait, maxRec, sound, onLevel: opts.onLevel };
     });
   }
   function cancelRecording() { if (rec) finishRec({ ok: false, data: new Float32Array(0), sampleRate: R.sr, reason: 'cancelled' }); }

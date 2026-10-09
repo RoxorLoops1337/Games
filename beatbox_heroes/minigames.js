@@ -335,7 +335,7 @@
       // a take made through the studio chain keeps its raw take: CLEAN / RAW flips between the two (same cut, same level) and a strip shows both
       const take = mine ? this.take(id) : null;
       const body = open
-        ? h('div.row', { style: { flex: 1, gap: '2px', minWidth: 0 } }, E.btn('REC', 'red', () => this.record(id), sb), E.btn('SYNTH', '', () => SND.play(id, { vel: 1, synth: true }), sb), E.btn('MINE', mine ? 'cyan' : 'dis', () => SND.play(id, { vel: 1, mine: true }), sb), E.btn('RESET', mine ? '' : 'dis', () => this.reset(id), sb))
+        ? h('div.row', { style: { flex: 1, gap: '2px', minWidth: 0 } }, E.btn('REC', 'red quiet', () => this.record(id), sb), E.btn('SYNTH', 'quiet', () => SND.play(id, { vel: 1, synth: true }), sb), E.btn('MINE', mine ? 'cyan quiet' : 'dis', () => SND.play(id, { vel: 1, mine: true }), sb), E.btn('RESET', mine ? '' : 'dis', () => this.reset(id), sb))
         : h('div.ts', { style: { flex: 1, color: PAL.fog, fontSize: compact ? '6px' : '', whiteSpace: 'normal', lineHeight: 1.25 } }, SND.hint(s));
       const el = h('div.panel.flat.snd' + (open ? '' : '.locked'), { 'data-id': id, style: { position: 'relative', padding: compact ? '3px 4px 4px 6px' : '5px', borderLeft: '4px solid ' + (open ? col : '#4a3f66'), display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '4px', flex: 'none', opacity: open ? 1 : 0.5, filter: open ? '' : 'grayscale(1)', boxShadow: this.focus === id ? '0 0 0 2px #ffd35c' : '' } }, name, body, take ? this.strip(id, take, col, compact) : null);
       return el;
@@ -346,7 +346,7 @@
     fxOf(v) { const c = fxCache.get(v.raw); if (c && c.rate === v.rate) return c; let r = null; try { r = BBH.VoiceFX.process(v.raw, v.rate, v.id); } catch (e) { r = null; } const o = r && r.data.length ? { rate: v.rate, clean: r.data, dry: r.dry, info: r.info } : null; if (o) fxCache.set(v.raw, o); return o; },
     // waveform strip: the raw take (grey) under the clean one (the sound's colour), on one time axis, what the chain did, and the CLEAN / RAW switch
     strip(id, v, col, compact) {
-      const clean = v.fx !== 'raw', sw = E.btn(clean ? 'CLEAN' : 'RAW', clean ? 'gold' : '', () => this.toggleFx(id), { flex: 'none', minWidth: compact ? '50px' : '56px', padding: '4px 0 5px', textAlign: 'center' });
+      const clean = v.fx !== 'raw', sw = E.btn(clean ? 'CLEAN' : 'RAW', clean ? 'gold quiet' : 'quiet', () => this.toggleFx(id), { flex: 'none', minWidth: compact ? '50px' : '56px', padding: '4px 0 5px', textAlign: 'center' });
       const W = 240, H = compact ? 16 : 20, cv = h('canvas', { width: W, height: H, style: { width: '100%', height: H + 'px', imageRendering: 'pixelated', background: 'rgba(10,6,24,.55)', borderRadius: '2px' } });
       const fx = this.fxOf(Object.assign({ id }, v)), line = fx ? BBH.VoiceFX.summary(fx.info) : '';
       try {
@@ -382,7 +382,7 @@
       if (!r || !r.ok || !r.data || !r.data.length) { E.toast('I did not hear anything. Try again, a bit louder.', 'warn'); E.sfx('error'); this.build(); return; }
       // the CLEAN take is what plays; the raw take is kept so RAW / CLEAN can be compared (and re-cleaned) later
       try { BBH.Samples.put(G.slot || 1, lane >= 0 ? lane : id, r.data, r.sampleRate, r.raw ? { raw: r.raw, fx: 'clean' } : undefined); BBH.Audio.setSample(lane >= 0 ? lane : id, r.data, r.sampleRate); } catch (e) { /* ignore */ }
-      G.do({ t: 'recorded', n: 1 }); E.sfx('record'); E.toast(nm.toUpperCase() + (r.fx ? ' recorded and cleaned! Playing it back.' : ' recorded! Playing it back.'), 'good'); setTimeout(() => SND.play(id, { vel: 1 }), 250); this.build();
+      G.do({ t: 'recorded', n: 1 }); E.toast(nm.toUpperCase() + (r.fx ? ' recorded and cleaned! Playing it back.' : ' recorded! Playing it back.'), 'good'); setTimeout(() => SND.play(id, { vel: 1 }), 250); this.build();
     },
     async reset(id) {
       if (typeof id === 'number') id = LANE_ID[id]; const lane = SND.lane(id), k = lane >= 0 ? lane : id;
