@@ -438,4 +438,146 @@
     const vid = first('p1.door.in.' + ar.to), form = vid && (ar.form || doorForm(vid));
     if (vid && form) V.play(vid, { form, action: { t: 'travel', to: ar.to } });
   });
+
+  /* ------------------------------------------------------------------ MILESTONES (park3d/vig_milestones.js; VIGNETTES.md section 3: level ups, new sounds, trophies, unlocks, fans, money, rent, crew, ladder) */
+  // The milestone table is the shared BASE of every world's table (its prototype): a world's own entry always wins, Object.keys of a world's table stays the world's own ids.
+  // That is how the shared trigger table reaches the action milestones (recruit -> p2.crew.<id>, the first stream, the first release). The rest has no action of its own, so it is
+  // QUEUED here: the progress fx (levelup, achievement, unlock, soundUnlocked, with their sfx and the "New sound" toast) are held out of G.play, the save is watched for the fan and
+  // money lines, the first $0, a new rung on the ladder, and the Sunday morning for the rent. The queue plays once the place is QUIET (the place scene up, no vignette, no story film,
+  // no story waiting, no dialog, card or menu sheet, no morning, no stage outro pending) for 0.9 s: a world scene (rent, ladder, release) first, then every progress beat waiting COLLAPSED into
+  // one scene (one beat: its own scene; one beat with only unlocks or its level trophy riding along: that beat's scene; several: p2.beats with all of them on one card). At most
+  // two scenes chain. PAY lands the held fx: MICRO (and SCENES: OFF, automated browsers) shows the old banners; a staged form shows its own card instead of the banners it covers.
+  // A beat that waits more than 2 minutes (a long set, the street) or that a story film covered (the first win's film, the champion) gets its old banner and no scene.
+  const MS = V.ms = { q: [], log: [], mod: null, idleAt: 0, busy: false, lastApply: null, max: 120000 };
+  const C3 = () => BBH.R3Cine;
+  MS.on = () => param !== '0' && !!(R3.on && R3.active && R3.host);
+  const link = () => { const ms = MS.mod; if (!ms) return; for (const k in V.mods) { if (k === 'milestones' || k === 'doors') continue; const e = V.mods[k], t = e && e.m && e.m.VIGNETTES; if (t && t !== ms.VIGNETTES && Object.getPrototypeOf(t) !== ms.VIGNETTES) safe(() => Object.setPrototypeOf(t, ms.VIGNETTES)); } };
+  MS.load = (wid) => Promise.all([V.load('milestones'), wid ? V.load(wid) : null]).then(([m]) => { if (m) { MS.mod = m; link(); } return m; }, () => null);
+  let msW = null;
+  if (R3.onTick) R3.onTick(() => { const w = R3.world; if (!w || w === msW || param === '0') return; msW = w; MS.load(w.id); });
+  // the fx a scene owns: achievements a story film or a P1 scene already stages keep their banner
+  const ACH_SCENE = { fans100: 'p2.fans.100', fans500: 'p2.fans.500', fans2000: 'p2.fans.2000', rich: 'p2.money.500', firstsong: 'p2.release' };
+  const ACH_OWNED = { streamer: 1, firstbattle: 1, worldcup: 1, showcase: 1 };
+  const SFX_OF = { levelup: 'levelup', ach: 'achievement', unlock: 'unlock', sound: 'unlock' };
+  function itemOf(f) {
+    if (f.t === 'levelup') return { k: 'levelup', level: f.level, f };
+    if (f.t === 'soundUnlocked') return { k: 'sound', id: f.id, name: f.name, f };
+    if (f.t === 'unlock') return { k: 'unlock', name: f.name, group: f.group, id: f.id, f };
+    if (f.t === 'achievement' && !ACH_OWNED[f.id]) return { k: 'ach', id: f.id, name: f.name, desc: f.desc, scene: ACH_SCENE[f.id] || null, home: f.id === 'firstsong' ? 'flat' : null, f };
+    return null;
+  }
+  const playMs = (fx) => { if (fx && fx.length) safe(() => play0.call(G, fx, {})); };
+  MS.add = function (e) { e.at = Date.now(); e.films = (C3() && C3().log.length) || 0; MS.q.push(e); MS.idleAt = 0; return e; };
+  // G.play: the progress beats wait for the queue, everything else plays now
+  const play0 = G.play;
+  G.play = function (fx, hand) {
+    if (!Array.isArray(fx) || !MS.on()) return play0.apply(G, arguments);
+    const h = hand || {}, items = [], held = [], rest = [];
+    for (const f of fx) { const it = f && !h[f.t] ? itemOf(f) : null; if (it) { items.push(it); held.push(f); } else rest.push(f); }
+    if (!items.length) return play0.apply(G, arguments);
+    const names = {}; items.forEach((i) => { names[SFX_OF[i.k]] = 1; }); const snd = items.some((i) => i.k === 'sound'), keep = [];
+    for (const f of rest) { if ((f.t === 'sfx' && names[f.name]) || (snd && f.t === 'toast' && /^New sound: /.test(f.text || ''))) held.push(f); else keep.push(f); }
+    play0.call(G, keep, hand);
+    MS.add({ kind: 'beats', items, held });
+    return undefined;
+  };
+  // the save: fans and money lines, the first $0 of the week, a new rung on the ladder (only saves that come out of Core.apply count, never a load or a test seed)
+  const apply0 = Core.apply;
+  Core.apply = function (ch0, a) { const r = apply0.apply(Core, arguments); if (r && r.char && ch0 && a && a.t !== 'flag') MS.lastApply = { pre: ch0, post: r.char, a }; return r; };
+  const set0 = G.setChar;
+  G.setChar = function (ch) {
+    const L0 = MS.lastApply, r = set0.apply(G, arguments);
+    if (L0 && ch && ch === L0.post) { MS.lastApply = null; if (MS.on()) safe(() => watch(L0.pre, ch, L0.a)); }
+    return r;
+  };
+  const solo = (id, o) => MS.add(Object.assign({ kind: 'solo', id, held: [], items: [] }, o));
+  function watch(pre, post, a) {
+    if ((pre.fans || 0) < 25 && post.fans >= 25 && !V.count('p2.fans.25').n) solo('p2.fans.25');
+    if ((pre.cash || 0) < 100 && post.cash >= 100 && !V.count('p2.money.100').n && !(post.ach && post.ach.rich && !(pre.ach && pre.ach.rich))) solo('p2.money.100');
+    if ((pre.cash || 0) > 0 && post.cash === 0 && a.t !== 'sleep') {
+      const cs = V.counts(), e = cs['p2.broke'];
+      if (!e || !(e.day > 0) || post.day - e.day >= 7) { cs['p2.broke'] = Object.assign(e || { n: 0, last: 0 }, { day: post.day }); solo('p2.broke'); }
+    }
+    if (a.t === 'battle' && !a.final) {
+      const opp = Object.keys(post.beat || {}).find((k) => !(pre.beat || {})[k]);
+      if (opp) solo('p2.ladder', { home: 'bar', extra: { opp }, cover: ['firstWin', 'champion'] });
+    }
+  }
+  // Sunday morning: the rent, paid or covered by Foxy (after the wake up and the morning card)
+  const morn0 = G.showMorning;
+  G.showMorning = function () {
+    const f = G.pendingMorning;
+    if (f && MS.on() && Array.isArray(f.lines)) safe(() => {
+      const paid = f.lines.find((l) => /^Rent paid: \$(\d+)/.test(l)), short = f.lines.find((l) => /could not cover rent/i.test(l));
+      if (paid) solo('p2.rent.paid', { home: 'flat', extra: { amount: +paid.match(/\$(\d+)/)[1] } });
+      else if (short) { const m = short.match(/owe \$(\d+)/); solo('p2.rent.short', { home: 'flat', extra: { debt: m ? +m[1] : 75 } }); }
+    });
+    return morn0.apply(G, arguments);
+  };
+  // quiet: nothing else owns the screen (an open menu sheet too: the player is choosing, the milestone waits until it is closed)
+  MS.quiet = () => {
+    if (!MS.on() || !sceneUp() || V.playing || V.cur || MS.busy || V.outPending || G.pendingMorning || E.pendingSwitch) return false;
+    const C = C3(); if ((C && C.playing) || (G.storyQ && G.storyQ.length) || (BBH.Tape && BBH.Tape.playing)) return false;
+    return !document.querySelector('#r3kit .k3-dlg, #r3kit .k3-modal, #ui .dialog, #ui .full, #ui .sheet');
+  };
+  // what one pending batch of beats becomes: { id, extra, shown (the fx its card covers) }
+  function scenePlan(items) {
+    const lvl = items.some((i) => i.k === 'levelup');
+    const minor = (i) => i.k === 'unlock' || (lvl && i.k === 'ach' && /^level\d+$/.test(i.id || ''));
+    const major = items.filter((i) => !minor(i)), level = Math.max(0, ...items.filter((i) => i.k === 'levelup').map((i) => i.level || 0));
+    const extra = { items: items.map((i) => ({ k: i.k, id: i.id, name: i.name, desc: i.desc, level: i.level, group: i.group })), level: level || undefined };
+    if (!major.length) return items.length === 1 ? { id: 'p2.unlock.cosmetic', extra, shown: items } : { id: 'p2.beats', extra, shown: items };
+    if (major.length === 1) {
+      const m = major[0], shown = [m].concat(items.filter((i) => lvl && m.k === 'levelup' && i.k === 'ach'));
+      const id = m.k === 'levelup' ? 'p2.levelup' : m.k === 'sound' ? 'p2.sound.' + m.id : m.scene || 'p2.ach';
+      return { id, extra: Object.assign(extra, { name: m.name, desc: m.desc }), shown, home: m.home || null };
+    }
+    return { id: 'p2.beats', extra, shown: items };
+  }
+  // PAY: the held fx land; a staged form drops the banners (and their sounds, the new sound toast) of the beats its own card shows
+  function payFor(held, shown, form) {
+    if (form === 'micro' || !shown.length) return held;
+    const fs = new Set(shown.map((i) => i.f)), names = {}; shown.forEach((i) => { names[SFX_OF[i.k]] = 1; }); const snd = shown.some((i) => i.k === 'sound');
+    return held.filter((f) => !fs.has(f) && !(f.t === 'sfx' && names[f.name]) && !(snd && f.t === 'toast' && /^New sound: /.test(f.text || '')));
+  }
+  function run1(id, extra, held, shown, then) {
+    const wid = R3.world && R3.world.id; MS.busy = true;
+    MS.load(wid).then(() => {
+      const vid = first(id) ? id : null, form = vid ? V.form(vid) : 'micro';
+      if (!vid || !MS.quiet0()) { MS.busy = false; playMs(held); then(); return; }
+      MS.log.push(vid + ':' + form); MS.vid = vid;
+      const p = MS.cur = V.play(vid, { form, extra, pay: () => playMs(payFor(held, shown || [], form)) }).then(() => { MS.busy = false; MS.idleAt = 0; MS.cur = null; MS.vid = null; then(); });
+      return p;
+    }).catch((e) => { console.error('[r3 vig] milestone', e); MS.busy = false; playMs(held); then(); });
+  }
+  // the player's next move wins: an activity, the booth, the door while a milestone plays: the milestone is cut (its reward lands) and the move goes on a moment later with its own scene
+  const yieldTo = (fn) => function () {
+    if (!(MS.cur && V.cur && V.cur.id === MS.vid)) return fn.apply(this, arguments);
+    const self = this, args = arguments, p = MS.cur; V.cut(); p.then(() => fn.apply(self, args), () => fn.apply(self, args)); return undefined;
+  };
+  E.go = yieldTo(E.go);
+  if (BBH.Train && typeof BBH.Train.idle === 'function') BBH.Train.idle = yieldTo(BBH.Train.idle);
+  if (P3park && typeof P3park.leave2 === 'function') P3park.leave2 = yieldTo(P3park.leave2);
+  MS.quiet0 = () => { MS.busy = false; const q = MS.quiet(); MS.busy = true; return q; };
+  if (R3.onTick) R3.onTick(() => {
+    if (!MS.q.length || MS.busy) return;
+    const now = Date.now(), C = C3(), wid = R3.world && R3.world.id;
+    // too late, or a story film staged the moment: the old banner, no scene
+    for (let i = MS.q.length - 1; i >= 0; i--) {
+      const e = MS.q[i], filmed = !!(e.cover && C && C.log.slice(e.films).some((x) => e.cover.indexOf(x) >= 0));
+      if (now - e.at > MS.max || filmed || !MS.on()) { MS.q.splice(i, 1); playMs(e.held); }
+    }
+    if (!MS.q.length) return;
+    if (!MS.quiet()) { MS.idleAt = 0; return; }
+    if (!MS.idleAt) { MS.idleAt = now; return; }
+    if (now - MS.idleAt < 900) return;
+    // a world scene first (in its world), then the beats collapsed
+    const si = MS.q.findIndex((e) => e.kind === 'solo' && (!e.home || e.home === wid));
+    if (si >= 0) { const e = MS.q.splice(si, 1)[0]; run1(e.id, e.extra || {}, e.held, [], () => {}); return; }
+    const beats = MS.q.filter((e) => e.kind === 'beats'); if (!beats.length) return;
+    const items = [].concat(...beats.map((e) => e.items)), held = [].concat(...beats.map((e) => e.held)), plan = scenePlan(items);
+    if (plan.home && plan.home !== wid) { if (beats.some((e) => now - e.at > 30000)) { plan.id = 'p2.ach'; plan.home = null; } else return; }   // the first release waits for the flat a little
+    MS.q = MS.q.filter((e) => e.kind !== 'beats');
+    run1(plan.id, plan.extra, held, plan.shown, () => {});
+  });
 })(typeof globalThis !== 'undefined' ? globalThis : this);
