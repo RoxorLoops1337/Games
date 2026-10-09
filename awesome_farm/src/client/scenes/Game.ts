@@ -904,6 +904,7 @@ export class GameScene extends Phaser.Scene {
             }
         }
         this.titanFx.draw(this.time.now);
+        this.blightFx.track(this.visViews, this.time.now);
         this.blightFx.draw();
     }
 

@@ -16,3 +16,6 @@ export const sinceShot = (tx: number, ty: number, now: number) => { const s = se
 export const dir8 = (a: number) => ((Math.round(a / (Math.PI / 4)) % 8) + 8) % 8;
 /** The shortest signed turn from `from` to `to` (radians). */
 export const turnTo = (from: number, to: number) => { let d = (to - from) % (2 * Math.PI); if (d > Math.PI) d -= 2 * Math.PI; if (d < -Math.PI) d += 2 * Math.PI; return d; };
+
+/** A tower turns to look at `a` without having fired (the Ballista follows the nearest raider in range, and glances about when none is). Does not touch the time of its last shot. */
+export function lookAt (tx: number, ty: number, a: number) { const k = key(tx, ty), s = seen.get(k); seen.set(k, { a, at: s?.at ?? -1e9 }); }

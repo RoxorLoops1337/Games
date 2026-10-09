@@ -359,6 +359,17 @@ test('the Ballista and Tesla Coil remember where they last shot (data/aim.ts): e
     assert.ok(Math.abs(turnTo(0, 1) - 1) < 1e-9);
 });
 
+test('the Ballista follows the nearest raider before it fires, and glances about when none is near', async () => {
+    const { aimOf, lookAt, sinceShot } = await import('../src/shared/data/aim');
+    lookAt(30, 30, 1.2);
+    assert.equal(aimOf(30, 30), 1.2, 'it turns without having fired');
+    assert.ok(sinceShot(30, 30, 5000) > 1e6, 'looking is not a shot');
+    const { readFileSync } = await import('node:fs');
+    const src = readFileSync(new URL('../src/client/world/blight.ts', import.meta.url), 'utf8');
+    assert.ok(/track \(views/.test(src) && /lookAt\(g\.tx, g\.ty, Math\.atan2/.test(src) && /this\.idle/.test(src));
+    assert.ok(/blightFx\.track\(this\.visViews/.test(readFileSync(new URL('../src/client/scenes/Game.ts', import.meta.url), 'utf8')), 'the game scene calls it every frame');
+});
+
 test('a Spike Trap wears no level badge or pick star in the world (its window and prompt carry them); towers do', async () => {
     const { readFileSync } = await import('node:fs');
     const src = readFileSync(new URL('../src/client/world/blight.ts', import.meta.url), 'utf8');
