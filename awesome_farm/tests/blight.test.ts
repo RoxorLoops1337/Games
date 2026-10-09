@@ -241,6 +241,76 @@ test('a raider breaks the wall in its way; a broken wall is gone and the damaged
     assert.ok(BUILDINGS.wall_wood.hp! < BUILDINGS.wall_stone.hp! && BUILDINGS.wall_stone.hp! < BUILDINGS.wall_brick.hp!, 'wood < stone < brick');
 });
 
+/** A farmer at home with the Defense skills and plenty of materials. */
+function defender (seed: string) {
+    const sim = Sim.create(seed, 'b');
+    const p = sim.join('a', 'A')!;
+    clear(sim);
+    p.skills.c_towers = 1; p.skills.c_siege = 1; p.invuln = 1e9;
+    for (const it of ['plank', 'rope', 'stone', 'ironbar', 'gear', 'wire', 'circuit', 'blightcore', 'cloth', 'glass'] as const) sim.give(p, it, 200);
+    const c = home(sim, p);
+    p.x = c.x; p.y = c.y + 40;
+    return { sim, p, c };
+}
+
+test('an Archer Tower kills a monster in range and its builder gets the kill', () => {
+    const { sim, p, c } = defender('BL-TOWER');
+    const t = free(sim, c.x, c.y);
+    sim.command('a', { t: 'build', kind: 'tower_archer', tx: t.tx, ty: t.ty });
+    const tower = sim.buildings('tower_archer')[0];
+    assert.ok(tower, 'built');
+    const kills = p.stats.kills, xp = p.xp + p.level * 1e4;
+    p.x = c.x - 260;                                              // (out of the slime's sight: only the tower fights)
+    const m = mobs.spawnMob(sim, 'slime', undefined, undefined, { x: (t.tx + 0.5) * TILE + 60, y: (t.ty + 1) * TILE, lv: 1 })!;
+    run(sim, 6);
+    assert.ok(!sim.s.ents[m.id], 'the tower shot it down');
+    assert.equal(p.stats.kills, kills + 1, 'credited to its builder');
+    assert.ok(p.xp + p.level * 1e4 > xp, 'with its XP');
+    assert.ok(sim.events.length >= 0);
+    // out of range: left alone
+    const far = mobs.spawnMob(sim, 'slime', undefined, undefined, { x: (t.tx + 0.5) * TILE + B.archer.range + 60, y: (t.ty + 1) * TILE, lv: 1 })!;
+    far.vx = 0; far.vy = 0;
+    sim.s.time += 0;
+    sim.step(STEP);
+    assert.ok(sim.s.ents[far.id], 'beyond its range nothing is shot');
+});
+
+test('a Tesla Coil fires only with power', () => {
+    const { sim, p, c } = defender('BL-TESLA');
+    const t = free(sim, c.x, c.y);
+    sim.command('a', { t: 'build', kind: 'tesla', tx: t.tx, ty: t.ty });
+    const coil = sim.buildings('tesla')[0];
+    assert.ok(coil, 'built');
+    p.x = c.x - 260;
+    const spawn = () => { const m = mobs.spawnMob(sim, 'slime', undefined, undefined, { x: (t.tx + 0.5) * TILE + 40, y: (t.ty + 1) * TILE, lv: 1 })!; m.hp = m.mhp = 1000; return m; };
+    const m = spawn();
+    run(sim, 4);
+    assert.equal(m.hp, 1000, 'no power, no zap');
+    // a wind turbine and a pole beside it
+    p.x = c.x; p.y = c.y + 40;
+    let g: { tx: number; ty: number } | null = null;
+    for (let r = 2; r < 9 && !g; r++) for (let dy = -r; dy <= r && !g; dy++) for (let dx = -r; dx <= r && !g; dx++) if (sim.world.rectFree(t.tx + dx, t.ty + dy, 2, 2)) g = { tx: t.tx + dx, ty: t.ty + dy };
+    sim.add<BuildE>({ k: 'bld', kind: 'windturbine', tx: g!.tx, ty: g!.ty, rot: 0, by: 'a' });
+    const pole = sim.nearestFree(t.tx, t.ty - 1, 3)!;
+    sim.add<BuildE>({ k: 'bld', kind: 'pole', tx: pole.tx, ty: pole.ty, rot: 0, by: 'a' });
+    assert.ok(sim.buildings('windturbine').length && sim.buildings('pole').length, 'power is built');
+    p.x = c.x - 260;
+    run(sim, 4);
+    assert.ok(m.hp < 1000 || !sim.s.ents[m.id], 'with power it zaps');
+});
+
+test('a Spike Trap bites the monsters that walk over it', () => {
+    const { sim, c } = defender('BL-SPIKE');
+    const t = free(sim, c.x + 40, c.y);
+    sim.command('a', { t: 'build', kind: 'spike', tx: t.tx, ty: t.ty });
+    assert.ok(sim.buildings('spike').length, 'built');
+    sim.s.players.a.x = c.x - 260;
+    const m = mobs.spawnMob(sim, 'skeleton', undefined, undefined, { x: (t.tx + 0.5) * TILE, y: (t.ty + 1) * TILE - 3, lv: 1 })!;
+    m.hp = m.mhp = 100;
+    for (let i = 0; i < 40; i++) { m.x = (t.tx + 0.5) * TILE; m.y = (t.ty + 1) * TILE - 3; sim.step(STEP); }
+    assert.ok(m.hp < 100, 'bitten');
+});
+
 test('nights without a nest in range spawn exactly as a world without the Blight', () => {
     const plain = Sim.create('BL-SAME', 'b'), blighted = Sim.create('BL-SAME', 'b');
     const a = plain.join('a', 'A')!, b = blighted.join('a', 'A')!;

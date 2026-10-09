@@ -154,7 +154,7 @@ export class GameScene extends Phaser.Scene {
     private crit!: CritFx;
     /** The "2+" badge, ring and health bar on Titan nodes (world/titan.ts). */
     private titanFx!: TitanFx;
-    /** The Blight: nests and wading raiders (world/blight.ts). */
+    /** The Blight: nests, damaged defenses, wading raiders and tower shots (world/blight.ts). */
     private blightFx!: BlightFx;
     /** Ice blocks, curses and chains (co-op boss statuses). */
     private coFx!: CoFx;
@@ -699,6 +699,7 @@ export class GameScene extends Phaser.Scene {
                 return;
             }
             case 'tele': if (this.inView(e.x, e.y, 160)) this.combat.tele(e); return;
+            case 'shot': if (this.inView(e.x, e.y, 120)) this.blightFx.shot(e); return;
             case 'chat': case 'emote': case 'ping': this.emitEvent('hud:social', e); return;
             case 'wish': this.wishS = e.wish; return;
             case 'chron': this.chron.push(e.entry); if (this.chron.length > 300) this.chron.shift(); if (!/^(lvl|join):/.test(e.entry.k ?? '')) this.emitEvent('hud:toast', { text: e.entry.t, icon: 'k_book', color: PAL.cream }); return;
