@@ -68,7 +68,8 @@ export class LabPanel {
         mk(1, 3, 1, 'Mend', () => this.send({ t: 'devdo', op: 'labMend' }));
         mk(2, 3, 1, 'Clear', () => this.send({ t: 'devdo', op: 'labClear' }));
         this.speedB = mk(0, 4, 1, 'x1', () => { const s = this.read()?.speed ?? 1; const i = (LAB_SPEEDS as readonly number[]).indexOf(s); this.send({ t: 'devdo', op: 'labSpeed', n: LAB_SPEEDS[(i + 1) % LAB_SPEEDS.length] }); });
-        mk(1, 4, 2, 'Reset arena', () => this.send({ t: 'devdo', op: 'labReset' }), STYLES.berry);
+        mk(1, 4, 1, 'Hurt', () => this.send({ t: 'devdo', op: 'labHurt' }));
+        mk(2, 4, 1, 'Reset', () => this.send({ t: 'devdo', op: 'labReset' }), STYLES.berry);
         mk(0, 5, 1, 'XP +', () => this.send({ t: 'devdo', op: 'labXp', n: 40 }));
         mk(1, 5, 1, 'Level +', () => this.send({ t: 'devdo', op: 'labXp', id: 'level' }), STYLES.gold);
         mk(2, 5, 1, 'No perks', () => this.send({ t: 'devdo', op: 'labPerks' }));

@@ -316,6 +316,7 @@ const GLYPHS: Record<string, string[]> = {
     tp_barbs:    g('..T...T..', '.TT..TTT.', '.TT.TTTT.', 'TTTTTTTTT', 'SSSSSSSSS'),
     tp_fire:     g('....o....', '...oo....', '..ooyo...', '.ooyyoo..', '.oyyyyoo.', 'ooyywyyoo', 'ooyyyyyoo', '.ooyyyoo.', '..ooooo..'),
     tp_frost:    g('...F...', '.F.F.F.', '..FwF..', 'FFwwwFF', '..FwF..', '.F.F.F.', '...F...'),
+    tp_repairs:  g('..TTT...', '.TT.T...', '.TT.T...', '..TTT...', '..bb....', '.bb.....', 'bb..y.y.', '.....yy.'),
     tp_storm:    g('..TTTT...', '.TSSSST.T', 'TSSSSSSTS', 'TTTTTTTT.', '...yy....', '..yy.....', '.yyyy....', '...yy....', '..y......'),
     k_fairy:   g('....p....', '....p..w.', '...ppp...', 'ppppwpppp', '...ppp...', '.w..p....', '....p....'),
 };

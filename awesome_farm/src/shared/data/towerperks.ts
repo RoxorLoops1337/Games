@@ -4,6 +4,7 @@
 // Every number is a dial in TUNING.towers (config.ts).
 
 import { TUNING } from '../config';
+import { BUILDINGS, type BuildingKind } from './buildings';
 import { Rng } from '../rng';
 
 /** The four kinds of defense that level up. */
@@ -40,7 +41,8 @@ export const PERKS: readonly PerkDef[] = [
     { id: 'crit', name: 'Keen Eye', icon: 'tp_crit', rarity: 'uncommon', max: 3, on: ALL, desc: `+${pct(T.crit)} chance to hit twice as hard.` },
     { id: 'slow', name: 'Slowing Shots', icon: 'tp_slow', rarity: 'uncommon', max: 1, on: ['archer', 'ballista', 'tesla', 'spike'], desc: `Hit monsters move ${pct(T.slow)} slower for ${T.slowSecs} s.` },
     { id: 'veteran', name: 'Veteran', icon: 'tp_veteran', rarity: 'uncommon', max: 1, on: ALL, desc: `+${pct(T.veteran)} XP from kills.` },
-    { id: 'mending', name: 'Self-Mending', icon: 'tp_mending', rarity: 'uncommon', max: 1, on: SHOOTERS, desc: `The tower slowly heals itself (${pct(T.mend)} of its health a second).` },
+    { id: 'mending', name: 'Self-Mending', icon: 'tp_mending', rarity: 'uncommon', max: 3, on: SHOOTERS, desc: `Heals itself ${T.mendMul + 1} times as fast (and ${T.mendMul} more times the base per extra rank).` },
+    { id: 'repairs', name: 'Field Repairs', icon: 'tp_repairs', rarity: 'common', max: 2, on: ALL, desc: `Repairs by hand cost ${pct(T.repairCut)} less.` },
     { id: 'bleed', name: 'Barbed Spikes', icon: 'tp_bleed', rarity: 'uncommon', max: 1, on: ['spike'], desc: `Bitten monsters bleed for ${T.bleedSecs} s.` },
     { id: 'lasting', name: 'Lingering', icon: 'tp_lasting', rarity: 'uncommon', max: 1, on: ['spike'], desc: 'Bleeding and slowing last twice as long.' },
     // rare
@@ -135,6 +137,23 @@ export interface TowerStats {
     crit: number; multi: number; pierce: boolean; slow: boolean; freeze: boolean; burn: boolean; bleed: boolean; lasting: boolean; wider: boolean;
     execute: boolean; splash: boolean; chain: number; overcharge: boolean; aura: boolean; mend: boolean; storm: boolean;
     xpMul: number;
+}
+
+/** The share of its health a defense mends each second once it has been left alone: the base, times more for Self-Mending ranks. */
+export const regenShare = (pk: unknown) => T.regen * (1 + T.mendMul * count(perksOf(pk), 'mending'));
+
+/**
+ * What a repair by hand costs: the missing share of the health (0..1) of the base amount for this kind, less for Field Repairs; always
+ * at least one of each thing while anything is missing. A wall's base is a share of its build cost.
+ */
+export function repairCost (kind: string, missing: number, pk?: unknown): Record<string, number> {
+    const base: Record<string, number> = T.repair[kind] ?? Object.fromEntries(Object.entries(BUILDINGS[kind as BuildingKind]?.cost ?? {}).filter(([r]) => r !== 'coin').map(([r, n]) => [r, (n as number) * T.wallRepair]));
+    const cut = Math.max(0.1, 1 - T.repairCut * count(perksOf(pk), 'repairs'));
+    const f = Math.max(0, Math.min(1, Number.isFinite(missing) ? missing : 0));
+    const out: Record<string, number> = {};
+    if (f <= 0) return out;
+    for (const [r, n] of Object.entries(base)) out[r] = Math.max(1, Math.ceil(n * f * cut - 1e-9));
+    return out;
 }
 
 /** A tower's numbers from its type, its perks and its builder's level (the one function the sim, the window and the tests all use). */

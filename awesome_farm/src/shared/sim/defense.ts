@@ -8,11 +8,13 @@ import { TILE, TUNING } from '../config';
 import { BUILDINGS } from '../data/buildings';
 import { MOBS } from '../data/mobs';
 import { flightTime } from '../data/shotfx';
-import { killXp, PERK_BY_ID, perksOf, levelOf, offer, pending, statsOf, towerType, type TowerStats, type TowerType } from '../data/towerperks';
+import { killXp, PERK_BY_ID, perksOf, regenShare, repairCost, levelOf, offer, pending, statsOf, towerType, type TowerStats, type TowerType } from '../data/towerperks';
 import { hash } from '../weather';
 import { PAL } from '../palette';
 import * as combat from './combat';
 import type { Sim } from './sim';
+import { ITEMS, type ItemId } from '../data/items';
+import { canAfford, pay } from './stats';
 import type { BuildE, Cmd, MobE, PlayerS, ProjE } from './types';
 
 const B = TUNING.blight;
@@ -26,13 +28,15 @@ interface Mem {
     dot: Map<number, { until: number; dps: number; by: number; next: number }>;
     /** Shots each tower has fired (every Nth is overcharged). */
     shots: Map<number, number>;
+    /** When each defense was last hit (world seconds): it starts to mend a few seconds after. */
+    hit: Map<number, number>;
 }
 /** Since the world loaded: monsters towers and traps killed, damage the defenses took, pieces broken. */
 export interface Tally { kills: number; dmg: number; broke: number }
 const memory = new WeakMap<Sim, Mem>();
 const mem = (sim: Sim): Mem => {
     let m = memory.get(sim);
-    if (!m) { m = { cd: new Map(), bite: new Map(), t: { kills: 0, dmg: 0, broke: 0 }, slow: new Map(), dot: new Map(), shots: new Map() }; memory.set(sim, m); }
+    if (!m) { m = { cd: new Map(), bite: new Map(), t: { kills: 0, dmg: 0, broke: 0 }, slow: new Map(), dot: new Map(), shots: new Map(), hit: new Map() }; memory.set(sim, m); }
     return m;
 };
 export const tally = (sim: Sim): Readonly<Tally> => mem(sim).t;
@@ -99,6 +103,7 @@ export function hitBuilding (sim: Sim, b: BuildE, dmg: number) {
     const was = b.hp ?? max;
     b.hp = Math.max(0, was - dmg);
     mem(sim).t.dmg += was - b.hp;
+    mem(sim).hit.set(b.id, sim.s.time);
     sim.touch(b);
     const c = sim.center(b);
     if (b.hp > 0) { sim.fx('bldHit', c.x, c.y); return; }
@@ -107,6 +112,69 @@ export function hitBuilding (sim: Sim, b: BuildE, dmg: number) {
     const owner = b.by ? sim.s.players[b.by] : undefined;
     if (owner?.online) sim.toast(owner.id, `Raiders broke your ${BUILDINGS[b.kind].name}`, 'k_skull', PAL.berry);
     sim.remove(b.id);
+}
+
+/** Once a second: a defense nobody has hit for a few seconds mends a little (Self-Mending towers faster). */
+function regenerate (sim: Sim) {
+    const m = mem(sim), now = sim.s.time;
+    for (const b of sim.buildings()) {
+        if (b.hp === undefined) continue;
+        if (now - (m.hit.get(b.id) ?? -1e9) < TW.regenDelay) continue;
+        const max = maxHp(b);
+        if (!max) continue;
+        b.hp += max * regenShare(b.pk);
+        if (b.hp >= max) { delete b.hp; m.hit.delete(b.id); } 
+        sim.touch(b);
+    }
+}
+
+/** Hit points a defense mends each second once it is left alone (what the Tower window says). */
+export const regenPerSecond = (b: BuildE) => maxHp(b) * regenShare(b.pk);
+
+/** What it would cost to repair this defense by hand now (nothing when it is whole). */
+export function repairCostOf (b: BuildE): Record<string, number> {
+    const max = maxHp(b);
+    if (!max || b.hp === undefined) return {};
+    return repairCost(b.kind, 1 - b.hp / max, b.pk);
+}
+
+/** `towerrepair`: mend one hurt defense in full for materials from the pack, scaled by the missing health. Same reach rule as `towerpick`. */
+export function cmdRepair (sim: Sim, p: PlayerS, c: Extract<Cmd, { t: 'towerrepair' }>) {
+    if (typeof c.id !== 'number' || !Number.isInteger(c.id)) return;
+    const b = Object.prototype.hasOwnProperty.call(sim.s.ents, c.id) ? sim.s.ents[c.id] : undefined;
+    if (b?.k !== 'bld') return;
+    repair(sim, p, b);
+}
+
+/** Repair a piece for `p` (shared by the command and by using a hurt wall). Returns whether it was done. */
+export function repair (sim: Sim, p: PlayerS, b: BuildE): boolean {
+    if (!maxHp(b) || b.hp === undefined) return false;
+    const owner = b.by === p.id;
+    const cc = sim.center(b);
+    if (!owner && Math.hypot(cc.x - p.x, cc.y - p.y) > TW.reach * TILE) { sim.deny(p, 'Stand next to it'); return false; }
+    const cost = repairCostOf(b) as Record<ItemId, number>;
+    if (!canAfford(p, cost)) { sim.deny(p, `Needs ${Object.entries(cost).map(([r, n]) => `${n} ${ITEMS[r as ItemId]?.name ?? r}`).join(', ')}`); return false; }
+    pay(p, cost);
+    delete b.hp;
+    mem(sim).hit.delete(b.id);
+    sim.touch(b);
+    sim.fx('build', cc.x, cc.y - 4, p.id);
+    sim.float(cc.x, cc.y - 18, 'Repaired', PAL.lime, p.id);
+    return true;
+}
+
+/** The Lab's Hurt button: every defense left at a share of its health. */
+export function hurtAll (sim: Sim, share: number): number {
+    let n = 0;
+    for (const b of sim.buildings()) {
+        const max = maxHp(b);
+        if (!max) continue;
+        b.hp = Math.max(1, Math.floor(max * share));
+        mem(sim).hit.set(b.id, sim.s.time);
+        sim.touch(b);
+        n++;
+    }
+    return n;
 }
 
 /** Dawn: every damaged defense is whole again. */
@@ -264,6 +332,7 @@ export function update (sim: Sim) {
     const towers = TOWER_KINDS.flatMap((k) => sim.buildings(k));
     const spikes = sim.buildings('spike');
     const mm = memory.get(sim);
+    if (sim.s.tick % 20 === 0) regenerate(sim);
     if (mm && (mm.slow.size || mm.dot.size)) statuses(sim);              // (a slow or a burn runs out even when its tower is gone)
     if (!towers.length && !spikes.length) return;
     const list = sim.ents('mob');
@@ -272,15 +341,6 @@ export function update (sim: Sim) {
         if ((m.cd.get(t.id) ?? 0) > now) continue;
         const st = statsFor(sim, t)!;
         m.cd.set(t.id, now + (list.length && fire(sim, t, list) ? st.every : 0.25));
-    }
-    if (sim.s.tick % 20 === 0) {
-        for (const t of towers) {
-            if (t.hp === undefined || !perksOf(t.pk).includes('mending')) continue;
-            const max = maxHp(t);
-            t.hp = Math.min(max, t.hp + max * TW.mend);
-            if (t.hp >= max) delete t.hp;
-            sim.touch(t);
-        }
     }
     if (!spikes.length || sim.s.tick % 4 !== 0) return;
     for (const e of list) {
