@@ -36,8 +36,8 @@ function T() {
   // rocks: faceted on purpose, mossy tops
   for (let i = 0; i < 3; i++) t.rock[i] = tpl((b) => { const g = facetGeo(1, 0.34, 31 + i * 5, 0.75 + i * 0.1), c = g.attributes.color; b.shape(g, 0xffffff, 0, 0.3 * (0.75 + i * 0.1), 0, 0.5 + i * 0.07); if (i !== 1) b.shape(facetGeo(1, 0.3, 40 + i, 0.8), 0xf4f4f4, 0.5, 0.18, 0.15, 0.26); });
   // flowers: stem + petals (tinted) + centre
-  t.flower[0] = tpl((b) => { b.part(kit.GB.cyl(5, 0.8), 0x5fb85a, 0, 0.22, 0, 0.022, 0.44, 0.022); for (let i = 0; i < 6; i++) { const a = i / 6 * 6.28; b.ball(0xffffff, Math.cos(a) * 0.11, 0.47, Math.sin(a) * 0.11, 0.085, 0.45, 1, 0); } b.ball(0xffd84d, 0, 0.485, 0, 0.065, 0.7, 1, 1); b.part(kit.GB.cone(5), 0x5fb85a, 0.06, 0.12, 0, 0.07, 0.16, 0.025, 0, 0, -0.8); });
-  t.flower[1] = tpl((b) => { b.part(kit.GB.cyl(5, 0.8), 0x5fb85a, 0, 0.25, 0, 0.022, 0.5, 0.022); b.part(kit.GB.cone(6), 0xffffff, 0, 0.55, 0, 0.13, 0.22, 0.13, Math.PI, 0, 0); b.ball(0xffffff, 0, 0.5, 0, 0.1, 0.6, 1, 1); b.part(kit.GB.cone(5), 0x5fb85a, -0.06, 0.12, 0, 0.07, 0.16, 0.025, 0, 0, 0.8); });
+  t.flower[0] = tpl((b) => { b.part(kit.GB.cyl(4, 0.8), 0x5fb85a, 0, 0.22, 0, 0.022, 0.44, 0.022); for (let i = 0; i < 5; i++) { const a = i / 5 * 6.28; b.ball(0xffffff, Math.cos(a) * 0.11, 0.47, Math.sin(a) * 0.11, 0.09, 0.45, 1, 0); } b.ball(0xffd84d, 0, 0.485, 0, 0.065, 0.7, 1, 0); b.part(kit.GB.cone(4), 0x5fb85a, 0.06, 0.12, 0, 0.07, 0.16, 0.025, 0, 0, -0.8); });
+  t.flower[1] = tpl((b) => { b.part(kit.GB.cyl(4, 0.8), 0x5fb85a, 0, 0.25, 0, 0.022, 0.5, 0.022); b.part(kit.GB.cone(6), 0xffffff, 0, 0.55, 0, 0.13, 0.22, 0.13, Math.PI, 0, 0); b.ball(0xffffff, 0, 0.5, 0, 0.1, 0.6, 1, 0); b.part(kit.GB.cone(5), 0x5fb85a, -0.06, 0.12, 0, 0.07, 0.16, 0.025, 0, 0, 0.8); });
   // grass tuft: five slanted blades
   t.tuft = tpl((b) => { const r = kit.rng(5); for (let i = 0; i < 5; i++) { const a = i / 5 * 6.28 + r(), l = 0.22 + r() * 0.16; b.part(kit.GB.cone(4), 0xffffff, Math.cos(a) * 0.05, l / 2, Math.sin(a) * 0.05, 0.035, l, 0.012, 0, a, 0.3 * Math.cos(a * 1.7)); } });
   t.dot = tpl((b) => b.ball(0xffffff, 0, 0, 0, 1, 1, 1, 1));
@@ -98,6 +98,16 @@ export function buildDecor(g, B, bi, items, o = {}) {
     const s = 0.7 + rnd() * 0.7; A.add(t.tuft, (px - cx) * W, 0, (py - cy) * W, rnd() * 6.28, s, s, s, tuftC.clone().offsetHSL(0, 0, (rnd() - 0.5) * 0.1), 1.5, rnd() * 6.28, 0.15);
     if (rnd() < 0.12) addFlowerHead((px - cx) * W + 0.05, 0.3 * s, (py - cy) * W, 0.55, flowerCols[(rnd() * flowerCols.length) | 0], 0);
   }
+  // meadow patches (flower clusters in two biome colours with taller grass around them) and pebbles: the "life" between the plates
+  const dens = (o.density === undefined ? 1 : o.density), nP = Math.round(R * (o.hub ? 1.0 : 2.0) * dens), okSpot = (px, py) => { if (radiusSafe(g, px - g.x, py - g.y) < 110) return false; if (o.blocked && o.blocked(px, py)) return false; for (const q of keep) if ((px - q.x) * (px - q.x) + (py - q.y) * (py - q.y) < q.r * q.r) return false; return true; };
+  for (let i = 0, tries = 0; i < nP && tries < nP * 6; tries++) {
+    const a = rnd() * 6.28, rr = Math.sqrt(rnd()) * 0.86, px = g.x + Math.cos(a) * g.r * rr, py = g.y + Math.sin(a) * g.r * rr; if (!okSpot(px, py)) continue; i++;
+    const c1 = flowerCols[(rnd() * flowerCols.length) | 0], c2 = flowerCols[(rnd() * flowerCols.length) | 0], n = 4 + ((rnd() * 5) | 0), lx = (px - cx) * W, lz = (py - cy) * W;
+    for (let q = 0; q < n; q++) { const aa = rnd() * 6.28, d = 0.12 + rnd() * 0.55, fx = lx + Math.cos(aa) * d, fz = lz + Math.sin(aa) * d, sc = 0.75 + rnd() * 0.6, ph = rnd() * 6.28, c = q % 3 ? c1 : c2;
+      if (night) { A.add(t.tuft, fx, 0, fz, rnd() * 6, 1.3, 1.5 * sc, 1.3, tuftC, 1.2, ph, 0); addFlowerHead(fx, 0.5 * sc, fz, 1.7 * sc, c, ph); } else A.add(t.flower[q % 2], fx, 0, fz, rnd() * 6, sc, sc, sc, c, 1.6, ph, 0.1);
+      A.add(t.tuft, fx + 0.1, 0, fz - 0.08, rnd() * 6, 1.1, 1.3, 1.1, tuftC, 1.5, ph, 0.1); }
+  }
+  for (let i = 0, tries = 0; i < Math.round(R * 1.2 * dens) && tries < 200; tries++) { const a = rnd() * 6.28, rr = Math.sqrt(rnd()) * 0.9, px = g.x + Math.cos(a) * g.r * rr, py = g.y + Math.sin(a) * g.r * rr; if (!okSpot(px, py)) continue; i++; const sc = 0.18 + rnd() * 0.22; A.add(t.rock[(rnd() * 3) | 0], (px - cx) * W, 0, (py - cy) * W, rnd() * 6.28, sc, sc * 0.8, sc, stone.clone().multiplyScalar(0.95 + rnd() * 0.2), 0, 0, 0.3); }
   const grp = new THREE.Group(); grp.name = 'decor';
   const gm = A.build(true); if (gm) { const m = new THREE.Mesh(gm, decorMat()); m.castShadow = true; m.receiveShadow = true; m.name = 'decorMesh'; grp.add(m); }
   const gg = GL.build(true); if (gg) { const m = new THREE.Mesh(gg, glowMat()); m.name = 'decorGlow'; grp.add(m); }

@@ -321,7 +321,7 @@ export function init(V) {
     if (rendered) { rendered = false; stale = 0; } else if (++stale > 3) { imm = 0; stale = 0; } // headless / not rendered: do not let immediates pile up
     const s = getS(); bUsed = 0; zn = 0;
     if (s) {
-      try { if (s.parts) bridgeParts(s); if (s.fx) bridgeFx(s); if (s.fly) bridgeFly(s, V.mods && (V.mods.loot || V.mods.loot3d)); } catch (e) { /* never throw into the frame loop */ }
+      try { if (s.parts) bridgeParts(s); if (s.fx) bridgeFx(s); if (s.fly) bridgeFly(s, V.mods && (V.mods.loot || V.mods.loot3d)); } catch (e) { if (globalThis.__LOOT_DEBUG) throw e; /* never throw into the frame loop */ }
     }
     // internal zaps (V.fx.zap)
     for (let i = 0; i < ZS.length; i++) { const z = ZS[i]; if (z.life <= 0) continue; z.t += dt; if (z.t >= z.life) { z.life = 0; continue; } bolt(z.pts, z.n, z.c, 1 - z.t / z.life, Math.floor(clock * 30)); }

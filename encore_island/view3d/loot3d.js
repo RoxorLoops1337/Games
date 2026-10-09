@@ -278,7 +278,7 @@ export function init(V) {
   function updateItems(S, T, f, dt) {
     const FX = fx(), items = S.items;
     for (let i = 0; i < items.length; i++) {
-      const it = items[i]; if (it.dead) continue; try { oneItem(it, S, T, f, dt, FX); } catch (e) { /* skip a malformed entry */ }
+      const it = items[i]; if (it.dead) continue; try { oneItem(it, S, T, f, dt, FX); } catch (e) { if (globalThis.__LOOT_DEBUG) throw e; /* skip a malformed entry */ }
     }
   }
   function oneItem(it, S, T, f, dt, FX) {
@@ -328,43 +328,44 @@ export function init(V) {
     sparkAcc += 0.016 * 12; while (sparkAcc >= 1) { sparkAcc -= 1; const a = Math.random() * TAU, r = 0.2 + Math.random() * 0.5; FX.trail(gx + Math.cos(a) * r, 0.7 + Math.random() * 0.4, gz + Math.sin(a) * r * 0.6, 0xfff0a0, 0.16 + Math.random() * 0.1, 0.7, 2, 0.8); }
   }
   const NCOL = { hero: rgb('#ff7eb6'), crit: rgb('#ff9a2e'), ally: rgb('#3fcf6a'), tower: rgb('#a77bff') }; // note tints (linear)
+  const BOULDER = rgb('#a77bff');
+  function oneShot(sh, i, T, f, dt, FX) {
+    if (sh.boulder) { // arc from the tower top to the target; the 2D arc height becomes real height
+      const u = Math.min(1, (sh.t || 0) / (sh.dur || 1)), gx = (sh.sx + (sh.tx - sh.sx) * u) * W, gz = (sh.sy + 50 + (sh.ty - sh.sy - 50) * u) * W, y = (50 * (1 - u) + Math.sin(u * PI) * 150) * W + 0.45;
+      if (!vis(gx, gz, f)) return; const c = BOULDER;
+      bouldP.add(gx, y, gz, 0.3 * Math.sin(T * 2 + i), -T * 5, 0, 0.38, 0.38, 0.38, c); if (V.blobs) V.blobs.add(gx, gz, 0.45, 0.22);
+      if (FX) { FX.glowAt(2, gx, y, gz, 0, 0.9, 0.15, 1, 0, c[0], c[1], c[2], 0.4); FX.glowAt(1, sh.tx * W, 0.07, sh.ty * W, T * 2, 0.9 + 0.7 * (1 - u), 1, 0.9 + 0.7 * (1 - u), 0.5, c[0], c[1], c[2], 0.35 + 0.35 * u, 0.12); if (Math.random() < dt * 30) FX.trail(gx, y, gz, c, 0.16, 0.45, 0, 1); }
+      return;
+    }
+    // notes: the 2D y includes the flight height; split it into ground z + height (high at the shooter, low at the target) so the note arcs down onto its foe
+    const tg = sh.tgt, hs = sh.tower ? 70 : sh.ally ? 24 : 42, r2 = tg && tg.r ? tg.r * 0.5 : 10; let h2 = hs * 0.6;
+    if (tg) { const d = Math.hypot(tg.x - sh.x, tg.y - r2 - sh.y), w = Math.min(1, d / 260); h2 = r2 + (hs - r2) * w; }
+    const gx = sh.x * W, gz = (sh.y + h2) * W, y = h2 * W + 0.1; if (!vis(gx, gz, f)) return;
+    const kind = sh.crit ? 'crit' : sh.ally ? 'ally' : sh.tower ? 'tower' : 'hero', sz = sh.crit ? 1.5 : 1, c = NCOL[kind];
+    noteP.add(gx, y, gz, Math.sin(T * 9 + i) * 0.5, -0.5, Math.sin(T * 18 + sh.x * 0.1) * 0.28, 0.85 * sz, 0.85 * sz, 0.85 * sz, c);
+    if (V.blobs) V.blobs.add(gx, gz, 0.16 * sz, 0.18);
+    if (FX) { FX.glowAt(2, gx, y, gz, 0, 0.5 * sz, 0.2, 1, 0, c[0], c[1], c[2], sh.crit ? 0.4 : 0.2); if (Math.random() < dt * (sh.crit ? 40 : 22)) FX.trail(gx, y, gz, c, 0.12 * sz, 0.4, Math.random() < 0.3 ? 2 : 0, 1); }
+  }
+  function oneOrb(e, i, T, f, dt, FX) {
+    const gx = e.x * W, gz = (e.y + 14) * W, y = 0.42; if (!vis(gx, gz, f)) return;
+    const c = rgb(foeHex(e.k)), r = (e.big ? 0.36 : 0.21) * (1 + 0.06 * Math.sin(T * 22 + i));
+    orbP.add(gx, y, gz, T * 3, 0, 0, r, r, r, c); if (V.blobs) V.blobs.add(gx, gz, r * 1.3, 0.22);
+    if (FX) { FX.glowAt(2, gx, y, gz, 0, r * 3.1, 0.15, 1, 0, c[0], c[1], c[2], 0.5); if (Math.random() < dt * 24) FX.trail(gx, y, gz, c, r * 0.8, 0.35, 0, 1); }
+  }
   function updateShots(S, T, f, dt) {
-    const FX = fx(), shots = S.shots;
-    for (let i = 0; i < shots.length; i++) {
-      const sh = shots[i]; try {
-      if (sh.boulder) { // arc from the tower top to the target; the 2D arc height becomes real height
-        const u = Math.min(1, (sh.t || 0) / (sh.dur || 1)), gx = (sh.sx + (sh.tx - sh.sx) * u) * W, gz = (sh.sy + 50 + (sh.ty - sh.sy - 50) * u) * W, y = (50 * (1 - u) + Math.sin(u * PI) * 150) * W + 0.45;
-        if (!vis(gx, gz, f)) continue; const c = rgb('#a77bff');
-        bouldP.add(gx, y, gz, 0.3 * Math.sin(T * 2 + i), -T * 5, 0, 0.38, 0.38, 0.38, c); if (V.blobs) V.blobs.add(gx, (sh.ty + 0) * W + (gz - sh.ty * W) * 0.0, 0.5, 0.2);
-        if (FX) { FX.glowAt(2, gx, y, gz, 0, 0.9, 0.15, 1, 0, c[0], c[1], c[2], 0.4); FX.glowAt(1, sh.tx * W, 0.07, sh.ty * W, T * 2, 0.9 + 0.7 * (1 - u), 1, 0.9 + 0.7 * (1 - u), 0.5, 1, 0.45, 0.65, 0.35 + 0.35 * u, 0.12); if (Math.random() < dt * 30) FX.trail(gx, y, gz, c, 0.16, 0.45, 0, 1); }
-        continue;
-      }
-      const tg = sh.tgt, hs = sh.tower ? 70 : sh.ally ? 24 : 42, r2 = tg && tg.r ? tg.r * 0.5 : 10; let h2 = hs * 0.6;
-      if (tg) { const d = Math.hypot(tg.x - sh.x, tg.y - r2 - sh.y), w = Math.min(1, d / 260); h2 = r2 + (hs - r2) * w; }
-      const gx = sh.x * W, gz = (sh.y + h2) * W, y = h2 * W + 0.1; if (!vis(gx, gz, f)) continue;
-      const kind = sh.crit ? 'crit' : sh.ally ? 'ally' : sh.tower ? 'tower' : 'hero', sz = sh.crit ? 1.5 : 1, c = NCOL[kind];
-      const wob = Math.sin(T * 18 + sh.x * 0.1) * 0.28;
-      noteP.add(gx, y, gz, Math.sin(T * 9 + i) * 0.5, -0.5, wob, 0.85 * sz, 0.85 * sz, 0.85 * sz, c);
-      if (V.blobs) V.blobs.add(gx, sh.y * W + (gz - sh.y * W) - (h2 - r2) * W * 0 , 0.16 * sz, 0.18);
-      if (FX) { FX.glowAt(2, gx, y, gz, 0, 0.5 * sz, 0.2, 1, 0, c[0], c[1], c[2], sh.crit ? 0.4 : 0.2); if (Math.random() < dt * (sh.crit ? 40 : 22)) FX.trail(gx, y, gz, c, 0.12 * sz, 0.4, Math.random() < 0.3 ? 2 : 0, 1); }
-    }
-    const es = S.eshots;
-    for (let i = 0; i < es.length; i++) {
-      const e = es[i], gx = e.x * W, gz = (e.y + 14) * W, y = 0.42; if (!vis(gx, gz, f)) continue;
-      const c = rgb(foeHex(e.k)), r = (e.big ? 0.36 : 0.21) * (1 + 0.06 * Math.sin(T * 22 + i));
-      orbP.add(gx, y, gz, T * 3, 0, 0, r, r, r, c); if (V.blobs) V.blobs.add(gx, gz, r * 1.3, 0.22);
-      if (FX) { FX.glowAt(2, gx, y, gz, 0, r * 3.1, 0.15, 1, 0, c[0], c[1], c[2], 0.5); if (Math.random() < dt * 24) FX.trail(gx, y, gz, c, r * 0.8, 0.35, 0, 1); }
-    }
+    const FX = fx(), shots = S.shots, es = S.eshots;
+    if (shots) for (let i = 0; i < shots.length; i++) { try { oneShot(shots[i], i, T, f, dt, FX); } catch (e) { if (globalThis.__LOOT_DEBUG) throw e; /* skip a malformed entry */ } }
+    if (es) for (let i = 0; i < es.length; i++) { try { oneOrb(es[i], i, T, f, dt, FX); } catch (e) { if (globalThis.__LOOT_DEBUG) throw e; /* ditto */ } }
   }
   function update(dt, t, focus) {
-    clock += dt; const S = getS(), T = clock, f = focus || null; for (const p of pools) p.begin();
+    clock += dt; const S = getS(), T = clock, f = focus || null; for (let i = 0; i < pools.length; i++) pools[i].begin();
     if (S) {
-      try { if (S.items) updateItems(S, T, f, dt); } catch (e) { /* a bad entry must never stop the frame */ }
-      try { updateShots(S, T, f, dt); } catch (e) { /* ditto */ }
-      try { updateChest(S, T, f); } catch (e) { chest.visible = false; }
+      try { if (S.items) updateItems(S, T, f, dt); } catch (e) { if (globalThis.__LOOT_DEBUG) throw e; /* a bad entry must never stop the frame */ }
+      try { updateShots(S, T, f, dt); } catch (e) { if (globalThis.__LOOT_DEBUG) throw e; /* ditto */ }
+      try { updateChest(S, T, f); } catch (e) { if (globalThis.__LOOT_DEBUG) throw e; chest.visible = false; }
     } else chest.visible = false;
-    try { if (flyList) updateFlyers(T); } catch (e) { /* ditto */ }
-    for (const p of pools) p.end();
+    try { if (flyList) updateFlyers(T); } catch (e) { if (globalThis.__LOOT_DEBUG) throw e; /* ditto */ }
+    for (let i = 0; i < pools.length; i++) pools[i].end();
     starP.mesh.count = starP.n; starP.mesh.visible = starP.n > 0; if (starP.n) starP.mesh.instanceMatrix.needsUpdate = true;
   }
   /** fx3d hands over the S.fly list (positions already converted to world units); drawn with the same instanced models */

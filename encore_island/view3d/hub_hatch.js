@@ -31,7 +31,7 @@ export function buildHatch(V, fx) {
   lk.add(gb.build({ cast: false }));
   const pb = new Builder({ ao: 0.1 }); rbx(pb, GOLDM, 0, 0, 0, 0.5, 0.42, 0.2, 0.3); pb.tor(GOLDM, 0, 0.26, 0, 0.15, 0.045, 6, seg(16)); rbx(pb, INK, 0, -0.02, 0.1, 0.08, 0.14, 0.03, 0.5); const pad = outline(pb.build({ cast: true }), 0.025); pad.position.set(0, 1.0, -0.2); lk.add(pad); g.add(lk);
   // open-state effects
-  const ring = ringQuad({ r: 1.5, rin: 0.9, rout: 1.0, col: 0xff9ac8, prog: 0, a: 1 }); ring.position.set(0, 0.07, 0.1); g.add(ring);
+  const ring = ringQuad({ r: 1.5, rin: 0.9, rout: 1.0, col: 0xff9ac8, prog: 0, a: 1, off: 8 }); ring.position.set(0, 0.07, 0.1); g.add(ring);
   const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 1.0, 3.4, 24, 1, true), new THREE.MeshBasicMaterial({ color: new THREE.Color(1, 0.45, 0.75), transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, fog: false })); beam.position.set(0, 1.7, 0.1); beam.scale.set(1.2, 1, 0.8); beam.renderOrder = 5; g.add(beam);
   const pole = new THREE.Group(); // velvet rope hung to one side when open
   { const rb = new Builder({ ao: 0 }); const A = [-1.35, 0.98, -0.75], B = [-1.35, 0.35, 0.95], n = 12; for (let k = 0; k < n; k++) { const u0 = k / n, u1 = (k + 1) / n; const P = (u) => [A[0] - 0.1 * Math.sin(u * PI), A[1] + (B[1] - A[1]) * u - 0.12 * Math.sin(u * PI), A[2] + (B[2] - A[2]) * u]; const p0 = P(u0), p1 = P(u1); rod(rb, GB.cyl, 0xff5fa6, p0[0], p0[1], p0[2], p1[0], p1[1], p1[2], 0.04, 6); } pole.add(rb.build({ cast: false, ao: 0 })); }
@@ -65,8 +65,8 @@ export function buildWarp(V, fx) {
   b.cyl(FM(INK), 0, 0, 0, R + 0.16, 0.05, seg(40)); b.cyl(FM(0xdff8ff), 0, 0, 0, R + 0.08, 0.09, seg(40)); b.cyl(FM(0x2a5a9a), 0, 0, 0, R, 0.11, seg(40)); b.cyl(FM(0x4aa0cc), 0, 0, 0, R * 0.82, 0.118, seg(40)); b.cyl(FM(0x6ec9e0), 0, 0, 0, R * 0.52, 0.124, seg(32)); b.cyl(FM(0xb8f4ff), 0, 0, 0, R * 0.2, 0.13, seg(20));
   for (let i = 0; i < 8; i++) { const a = i / 8 * TAU; bll(b, GOLDM, Math.cos(a) * (R + 0.04), 0.1, Math.sin(a) * (R + 0.04), 0.045, 0.7); }
   g.add(b.build({ cast: false, ao: 0 }));
-  const rune = ringQuad({ r: R * 0.9, rin: 0.62, rout: 0.72, col: 0xb8f4ff, dash: 12, spin: 0.25, a: 1 }); rune.position.y = 0.14; g.add(rune);
-  const rune2 = ringQuad({ r: R * 0.9, rin: 0.9, rout: 0.97, col: 0x6ec9e0, a: 0.6 }); rune2.position.y = 0.14; g.add(rune2);
+  const rune = ringQuad({ r: R * 0.9, rin: 0.62, rout: 0.72, col: 0xb8f4ff, dash: 12, spin: 0.25, a: 1, off: 8 }); rune.position.y = 0.14; g.add(rune);
+  const rune2 = ringQuad({ r: R * 0.9, rin: 0.9, rout: 0.97, col: 0x6ec9e0, a: 0.6, off: 8 }); rune2.position.y = 0.14; g.add(rune2);
   const im = new THREE.MeshBasicMaterial({ map: iconTex('way'), transparent: true, alphaTest: 0.04, depthWrite: false, fog: false }); im.userData.noCast = true; im.userData.noLook = true;
   const sigil = new THREE.Mesh(new THREE.PlaneGeometry(1.15, 1.15), im); sigil.renderOrder = 6; g.add(sigil);
   return {

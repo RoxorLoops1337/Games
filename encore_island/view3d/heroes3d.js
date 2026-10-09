@@ -559,10 +559,10 @@ export function init(V) {
     const enc = encoreOn(), pulse = 0.5 + 0.5 * Math.sin(S.t * 3);
     aura.visible = enc || st.glow; if (aura.visible) { aura.material.color.set(enc ? 0xff7eb6 : 0xffd94a); aura.material.opacity = enc ? 0.5 + 0.1 * pulse : 0.35 + 0.1 * pulse; aura.scale.set(enc ? 4 : 2.4, enc ? 4 : 3.4, 1); aura.position.set(x, 0.95, z); }
     const cu = S.ultCasting > 0 ? S.ultCasting / 1.4 : 0, cg = cu > 0 ? Math.sin(clamp(1 - cu, 0, 1) * PI) : 0;
-    castGlow.visible = cg > 0.02; if (castGlow.visible) { castGlow.position.set(x, 1.0, z); const s = 3.5 + 6 * cg; castGlow.scale.set(s, s, 1); castGlow.material.opacity = 0.35 + 0.5 * cg; castGlow.material.color.setHSL((S.t * 0.8) % 1, 0.9, 0.8); }
+    castGlow.visible = cg > 0.02; if (castGlow.visible) { castGlow.position.set(x, 1.0, z); const s = 2.6 + 3 * cg; castGlow.scale.set(s, s * 1.15, 1); castGlow.material.opacity = 0.18 + 0.32 * cg; castGlow.material.color.setHSL((S.t * 0.8) % 1, 0.85, 0.62); }
     const gs = heroGrace(); shield.visible = gs > 0; if (shield.visible) { const al = Math.min(1, gs) * (0.35 + 0.1 * Math.sin(S.t * 10)); shield.material.opacity = al * 0.5; shield.position.set(x, 0.9, z); const r = 0.98 + 0.02 * Math.sin(S.t * 8); shield.scale.set(r, r * 1.08, r); }
     trailT -= dt; if (trailT <= 0) { trailT = 0.035; trail.copyWithin(3, 0, 45); trail[0] = x; trail[1] = 0.9; trail[2] = z; trailN = Math.min(15, trailN + 1); }
-    for (let i = 0; i < 3; i++) { const g = ghosts[i], idx = (i + 1) * 2 * 3; g.visible = st.dash && trailN > (i + 1) * 2; if (g.visible) { g.position.set(trail[idx], trail[idx + 1], trail[idx + 2]); g.scale.set(1.1 - i * 0.15, 2.0, 1); g.material.opacity = 0.55 - i * 0.16; g.material.color.set(i % 2 ? 0xfff4e6 : 0xc6ffd8); } }
+    for (let i = 0; i < 3; i++) { const g = ghosts[i], idx = (i + 1) * 2 * 3; g.visible = st.dash && trailN > (i + 1) * 2; if (g.visible) { g.position.set(trail[idx], trail[idx + 1], trail[idx + 2]); g.scale.set(0.8 - i * 0.12, 1.5, 1); g.material.opacity = 0.4 - i * 0.12; g.material.color.set(i % 2 ? 0xfff4e6 : 0xc6ffd8); } }
     if (cu > 0) { const r = 1 + (1 - cu) * 5; rings.add(x, z, r, 0.8 * cu, 0xff9ac8, 0.06); rings.add(x, z, r * 0.6, 0.6 * cu, 0xfff0c8, 0.065); }
     return { x, z };
   }

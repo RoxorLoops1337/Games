@@ -2,7 +2,8 @@
 // biome, positions computed in the vertex shader from a seed and time, so the CPU does nothing per particle) and the cloud mist over the next locked land.
 import * as THREE from 'three';
 import * as kit from './kit.js';
-import { W, Acc, tpl, smoothBlob, outline, biomeIdx } from './env_util.js';
+import { W, outline } from './env_util.js';
+import { makeCloudMat, tintCloud, cloudTex } from './env_sky.js';
 
 // kind table by biome: vel (x, y, z units/s), sway amplitude, size (world), box (half extents x, y, z), y centre, shape 0 soft round / 1 tumbling ellipse / 2 spark, additive, colours, density
 const KINDS = [
@@ -67,11 +68,10 @@ export function createAmbient(V) {
 // ---- mist over the next, still locked land: a tinted ghost of its footprint under a bank of soft white puffs (the lock and the name are the HUD's job)
 export function createMist(V) {
   const grp = new THREE.Group(); grp.name = 'mist'; grp.visible = false; let cur = -1, pu = null, ghost = null, puffs = null;
-  const pg = (() => { const b = new kit.Builder({ ao: 0 }); for (let i = 0; i < 5; i++) { const a = i / 5 * 6.28; b.shape(smoothBlob(kit.icoDetail(0), 0.14, 40 + i, 0.8), 0xffffff, Math.cos(a) * 0.55 * (i ? 1 : 0), (i % 2) * 0.05, Math.sin(a) * 0.45 * (i ? 1 : 0), i ? 0.55 : 0.8); } return b.geometry(); })();
-  const mm = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 1, vertexColors: true, transparent: true, opacity: 0.92, depthWrite: false }); mm.userData.noCast = true;
+  const ct = cloudTex(), { mat: mm, U: mu } = makeCloudMat(ct, 0, 1); mu.uO.value = 0.93; const pg = new THREE.PlaneGeometry(1, 1).translate(0, 0.5, 0);
   const gm = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.3, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 }); gm.userData.noCast = true; gm.userData.noLook = true;
   const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), pv = new THREE.Vector3(), sv = new THREE.Vector3(), UP = new THREE.Vector3(0, 1, 0), seeds = [];
-  const NP = 20, rr = kit.rng(31); for (let i = 0; i < NP; i++) seeds.push({ a: rr() * 6.28, d: Math.sqrt(rr()) * 0.8, s: 2.2 + rr() * 2.2, ph: rr() * 6.28, y: rr() });
+  const NP = 34, rr = kit.rng(31); for (let i = 0; i < NP; i++) seeds.push({ a: rr() * 6.28, d: Math.sqrt(rr()) * 0.8, s: 1.8 + rr() * 2.0, ph: rr() * 6.28, y: rr() });
   function set(k) {
     if (k === cur) return; cur = k; if (puffs) { grp.remove(puffs); puffs.dispose(); puffs = null; } if (ghost) { grp.remove(ghost); ghost.geometry.dispose(); ghost = null; }
     if (k < 1) { grp.visible = false; return; }
@@ -79,15 +79,15 @@ export function createMist(V) {
     pos.push(0, 0, 0); for (let i = 0; i < n; i++) pos.push(o[i * 2] * 0.96, 0, o[i * 2 + 1] * 0.96); for (let i = 0; i < n; i++) idx.push(0, 1 + (i + 1) % n, 1 + i);
     const gg = new THREE.BufferGeometry(); gg.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); gg.setIndex(idx); gm.color.set(B.deep).lerp(new THREE.Color(0xffffff), 0.35);
     ghost = new THREE.Mesh(gg, gm); ghost.position.set(g.x * W, 0.02, g.y * W); ghost.renderOrder = -2; grp.add(ghost);
-    puffs = new THREE.InstancedMesh(pg, mm, NP); puffs.frustumCulled = false; puffs.userData.k = k; puffs.userData.g = g; puffs.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(NP * 3).fill(1), 3); grp.add(puffs); grp.visible = true;
+    puffs = new THREE.InstancedMesh(pg, mm, NP); puffs.frustumCulled = false; puffs.userData.k = k; puffs.userData.g = g; puffs.renderOrder = 2; grp.add(puffs); grp.visible = true;
   }
   return {
     group: grp, set,
-    update(dt, t, mood) {
-      if (!puffs) return; const g = puffs.userData.g, R = g.r * W; mm.color.copy(mood.cloudCol).lerp(mood.hemiSky, 0.1);
-      for (let i = 0; i < NP; i++) { const s = seeds[i], a = s.a + t * 0.05 * (i % 2 ? 1 : -1); pv.set(g.x * W + Math.cos(a) * R * s.d, 0.7 + s.y * 1.1 + Math.sin(t * 0.6 + s.ph) * 0.18, g.y * W + Math.sin(a) * R * s.d * 0.9); q.setFromAxisAngle(UP, s.ph); sv.set(s.s, s.s * 0.7, s.s); m4.compose(pv, q, sv); puffs.setMatrixAt(i, m4); }
+    update(dt, t, mood, cam) {
+      if (!puffs) return; const g = puffs.userData.g, R = g.r * W; tintCloud(mu, mood, cam);
+      for (let i = 0; i < NP; i++) { const s = seeds[i], a = s.a + t * 0.05 * (i % 2 ? 1 : -1); pv.set(g.x * W + Math.cos(a) * R * s.d, 0.7 + s.y * 1.1 + Math.sin(t * 0.6 + s.ph) * 0.18, g.y * W + Math.sin(a) * R * s.d * 0.9); q.setFromAxisAngle(UP, s.ph); sv.set(s.s * 1.5, s.s * 1.5, 1); m4.compose(pv, q, sv); puffs.setMatrixAt(i, m4); }
       puffs.instanceMatrix.needsUpdate = true;
     },
-    dispose() { set(-5); pg.dispose(); mm.dispose(); gm.dispose(); },
+    dispose() { set(-5); pg.dispose(); mm.dispose(); gm.dispose(); ct.dispose(); },
   };
 }

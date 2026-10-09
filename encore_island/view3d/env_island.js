@@ -64,9 +64,11 @@ export function buildIsland(g, B, bi) {
   for (let i = 0; i < n; i++) { rr[i] = Math.hypot(O[i * 2], O[i * 2 + 1]); ux[i] = O[i * 2] / rr[i]; uz[i] = O[i * 2 + 1] / rr[i]; minR = Math.min(minR, rr[i]); sumR += rr[i]; }
   const R = sumR / n, seedN = g.seed * 0.37;
   // ---------------- top
-  const g0 = new THREE.Color(B.g[0]), g1 = new THREE.Color(B.g[1]), tuft = new THREE.Color(B.tuft), deep = new THREE.Color(B.deep), shore = new THREE.Color(B.shore), sand = new THREE.Color(0xf3deb0).lerp(shore, 0.25);
+  const night = bi === 6, hsl = { h: 0, s: 0, l: 0 };
+  const tone = (c) => { c.getHSL(hsl); return c.setHSL(hsl.h, Math.min(0.95, hsl.s * (night ? 0.9 : 1.28)), hsl.l * (night ? 0.55 : 0.92)); }; // lighting washes pastels out, so the ground starts a little richer than the 2D fill
+  const g0 = tone(new THREE.Color(B.g[0])), g1 = tone(new THREE.Color(B.g[1])), tuft = tone(new THREE.Color(B.tuft)), deep = new THREE.Color(B.deep), shore = new THREE.Color(B.shore), sand = new THREE.Color(0xf3deb0).lerp(shore, 0.25);
   if (bi === 2 || bi === 7) sand.set(B.g[0]).multiplyScalar(0.96); // dune and gala ground already reads as sand: the rim only gets paler
-  const insets = [0, 0.06, 0.14, 0.24, 0.36, 0.55, 0.85, 1.3, 2.0, 3.0, 4.4, 6.2, 8.6].filter((v) => v < minR * 0.86);
+  const insets = [0, 0.06, 0.14, 0.24, 0.36, 0.5, 0.7, 1.0, 1.5, 2.2, 3.1, 4.4, 6.2, 8.6].filter((v) => v < minR * 0.86);
   const rows = insets.length, pos = new Float32Array((1 + rows * n) * 3), col = new Float32Array((1 + rows * n) * 3), uv = new Float32Array((1 + rows * n) * 2), idx = [];
   const texBoost = 1.2; // the grey tile multiplies vertex colours, so lift them a little
   const colAt = (x, z, inset, out) => {
@@ -74,7 +76,7 @@ export function buildIsland(g, B, bi) {
     out.copy(g0).lerp(g1, kit.clamp(nz * 1.3 - 0.1, 0, 1)); out.lerp(tuft, sstep(0.55, 0.85, nz2) * 0.25);
     const rad = Math.hypot(x, z) / R; out.multiplyScalar(1.06 - 0.12 * rad * rad);                                   // centre a touch lighter, like the 2D radial fill
     out.lerp(deep, 0.30 * (1 - sstep(0.4, 2.6, inset)));                                                            // the 2D game's soft inner edge shade
-    out.lerp(sand, 1 - sstep(0.5, 1.05, inset) * 1);                                                                 // pale sandy rim
+    out.lerp(night ? shore : sand, 1 - sstep(0.4, 0.85, inset));                                                                 // pale sandy rim
     if (inset < 0.3) out.multiplyScalar(0.9 + 0.1 * (inset / 0.3));
     out.multiplyScalar(texBoost);
   };

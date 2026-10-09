@@ -62,7 +62,7 @@ void main(){
 }`;
 const _rg = new THREE.PlaneGeometry(2, 2).rotateX(-PI / 2);
 export function ringQuad(o = {}) {
-  const m = new THREE.ShaderMaterial({ transparent: true, depthWrite: false, blending: o.add === false ? THREE.NormalBlending : THREE.AdditiveBlending, fog: false, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3,
+  const m = new THREE.ShaderMaterial({ transparent: true, depthWrite: false, blending: o.add === false ? THREE.NormalBlending : THREE.AdditiveBlending, fog: false, polygonOffset: true, polygonOffsetFactor: -(o.off ?? 3), polygonOffsetUnits: -(o.off ?? 3),
     uniforms: { uT: { value: 0 }, uProg: { value: o.prog ?? 1 }, uA: { value: o.a ?? 1 }, uIn: { value: o.rin ?? 0.8 }, uOut: { value: o.rout ?? 0.95 }, uDash: { value: o.dash ?? 0 }, uSpin: { value: o.spin ?? 0.3 }, uSoft: { value: o.soft ?? 0 }, uCol: { value: new THREE.Color(o.col ?? 0xffd84d) } }, vertexShader: RV, fragmentShader: RF });
   m.userData.noCast = true; m.userData.noLook = true;
   const mesh = new THREE.Mesh(_rg, m); mesh.scale.set(o.r ?? 1, 1, o.r ?? 1); mesh.renderOrder = 4; mesh.userData.u = m.uniforms; return mesh;

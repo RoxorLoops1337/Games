@@ -34,12 +34,12 @@ export function init(V) {
   function buildLand(k) {
     const g = geoOf(k), bi = biomeIdx(k), B = k === 0 ? BIOMES[0] : BIOMES[bi], rec = { k, g, bi, B, grp: new THREE.Group(), isl: null, born: null, ready: false };
     rec.grp.name = 'land' + k; root.add(rec.grp); recs.set(k, rec);
-    const isl = buildIsland(g, B, bi); rec.isl = isl; rec.grp.add(isl.grp);
-    if (k === 0) { rec.grp.add(buildHubFloor()); isl.grp.add(buildDecor(g, B, 0, HUBDECOR, { hub: true, blocked: hubBlocked, keep: HUB_KEEP.map((o) => ({ x: o.x, y: o.y, r: o.r * 0.6 })) })); }
+    const dec = (V.quality && V.quality.decor !== undefined) ? V.quality.decor : 1, isl = buildIsland(g, B, bi); rec.isl = isl; rec.grp.add(isl.grp);
+    if (k === 0) { rec.grp.add(buildHubFloor()); isl.grp.add(buildDecor(g, B, 0, HUBDECOR, { hub: true, density: dec, blocked: hubBlocked, keep: HUB_KEEP.map((o) => ({ x: o.x, y: o.y, r: o.r * 0.6 })) })); }
     else {
       const keep = [landPadSpot(g), g.den, unlockSpot(k + 1)].concat(landPlateDefs(k, g)).map((o) => ({ x: o.x, y: o.y, r: 95 }));
       for (let i = 0; i < g.path.length; i += 1) keep.push({ x: g.path[i].x, y: g.path[i].y, r: 105 });
-      isl.grp.add(buildDecor(g, B, bi, decorOf(g), { keep })); rec.walk = buildWalk(g); rec.grp.add(rec.walk);
+      isl.grp.add(buildDecor(g, B, bi, decorOf(g), { keep, density: dec })); rec.walk = buildWalk(g); rec.grp.add(rec.walk);
     }
     rec.ready = true; return rec;
   }
@@ -87,7 +87,7 @@ export function init(V) {
     guard(() => water.update(dt, t, camera, cur));
     guard(() => sky.update(dt, t, camera, cur));
     guard(() => amb.update(dt, t, f, camera, biomeIdx(nearestK(f.x, f.z)), V.renderer));
-    guard(() => mist.update(dt, t, cur));
+    guard(() => mist.update(dt, t, cur, camera));
     guard(() => cull());
     // island grow-in for the newest land
     for (const rec of recs.values()) if (rec.born !== null && rec.isl) {

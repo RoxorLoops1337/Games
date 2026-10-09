@@ -16,10 +16,10 @@ export function buildStage(V, fx) {
   g.add(f.build({ cast: false }));
   // ---- lit stars: one big in the middle, a ring of small ones chasing around it ----
   const starGeo = new THREE.ShapeGeometry(starShape(5, 1, 0.45), 1).rotateX(-PI / 2).toNonIndexed(); starGeo.deleteAttribute('uv');
-  const smat = new THREE.MeshBasicMaterial({ color: 0xffffff, fog: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }); smat.userData.noCast = true; smat.userData.noLook = true;
+  const smat = new THREE.MeshBasicMaterial({ color: 0xffffff, fog: false, polygonOffset: true, polygonOffsetFactor: -8, polygonOffsetUnits: -8 }); smat.userData.noCast = true; smat.userData.noLook = true;
   const stars = new Inst(starGeo, smat, 16, { colors: true }); stars.mesh.position.y = 0.093; g.add(stars.mesh);
-  const ringA = ringQuad({ r: R * 0.93, rin: 0.9, rout: 0.97, col: 0xff7eb6, a: 0.5 }); ringA.position.set(0, 0.096, CZ); g.add(ringA);
-  const ringB = ringQuad({ r: R * 0.62, rin: 0.9, rout: 0.97, col: 0xfff4e6, dash: 28, spin: 0.15, a: 0.8 }); ringB.position.set(0, 0.098, CZ); g.add(ringB);
+  const ringA = ringQuad({ r: R * 0.93, rin: 0.9, rout: 0.97, col: 0xff7eb6, a: 0.5, off: 8 }); ringA.position.set(0, 0.096, CZ); g.add(ringA);
+  const ringB = ringQuad({ r: R * 0.62, rin: 0.9, rout: 0.97, col: 0xfff4e6, dash: 28, spin: 0.15, a: 0.8, off: 8 }); ringB.position.set(0, 0.098, CZ); g.add(ringB);
   // ---- backdrop: truss towers + top beam + hanging marquee board ----
   const t = new Builder({ ao: 0.12 }), TZ = -2.0, TH = 3.25, TX = 2.95, CH = 0xc9cfe6;
   const GBc = GB.cyl;

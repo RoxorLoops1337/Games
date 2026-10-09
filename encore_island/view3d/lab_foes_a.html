@@ -12,7 +12,8 @@ import { FOES_A } from './foes_a.js';
 const P = new URLSearchParams(location.search), NAMES = Object.keys(FOES_A), mode = P.get('m') || 'row';
 const still = P.get('still') === '1', only = P.get('only') ? P.get('only').split(',') : NAMES, VARS = (P.get('v') || 'idle,walk,atk,hurt,die,elite,gold').split(','), dieAt = +(P.get('dieAt') || 0.45);
 const GAP = +(P.get('gap') || 2.6);
-lab({ az: 0, el: mode === 'row' ? 55 : 18, d: mode === 'row' ? 21 : 12, ty: mode === 'row' ? 0.5 : 1.1, build(V) {
+const rows = only.length; // grid: rows run toward -z, so aim the camera at the middle row
+lab({ az: 0, el: mode === 'row' ? 55 : rows > 1 ? 40 : 18, d: mode === 'row' ? 21 : rows > 1 ? 8 + 5 * rows : 9, ty: mode === 'row' ? 0.5 : rows > 1 ? 0.5 : 1.1, tz: mode === 'row' ? 0 : -(rows - 1) * 1.6, build(V) {
   CH.STYLE.flat = false; const slots = [], hud = document.getElementById('hud');
   const mk = (name, variant) => { const a = FOES_A[name]({ elite: variant === 'elite', gold: variant === 'gold' }); V.scene.add(a.group);
     if (P.get('dbg') && !window.__dbg) { const m = new Map(); a.group.traverse((o) => { if (!o.isMesh) return; const g = o.geometry, n = (g.index ? g.index.count : g.attributes.position.count) / 3, k = (o.material.side === 1 ? 'hull' : 'part') + ' ' + g.type + ' ' + n; m.set(k, (m.get(k) || 0) + 1); }); window.__dbg = [...m].map(([k, v]) => k + ' x' + v).sort(); }
@@ -20,7 +21,7 @@ lab({ az: 0, el: mode === 'row' ? 55 : 18, d: mode === 'row' ? 21 : 12, ty: mode
   const place = (s, x, z) => { s.x = x; s.z = z; s.a.group.position.set(x, 0, z); };
   const lines = [];
   if (mode === 'row') NAMES.forEach((n, i) => { const rv = P.get('rv') || 'walk', s = { name: n, variant: rv, ...mk(n, rv) }; const x = -11 + i * GAP + (i === 8 ? 1.6 : 0); place(s, x, 0); s.x0 = x; s.ph = i * 0.7; slots.push(s); });
-  else only.forEach((n, r) => VARS.forEach((v, c) => { const s = { name: n, variant: v, ...mk(n, v) }; place(s, (c - (VARS.length - 1) / 2) * GAP, -r * (n.startsWith('boss') ? 4.5 : 3.2)); s.x0 = s.x; slots.push(s); }));
+  else only.forEach((n, r) => VARS.forEach((v, c) => { const s = { name: n, variant: v, ...mk(n, v) }; place(s, (c - (VARS.length - 1) / 2) * GAP * (n.startsWith('boss') ? 1.9 : 1), -r * (n.startsWith('boss') ? 4.5 : 3.2)); s.x0 = s.x; slots.push(s); }));
   for (const s of slots) { const tris = s.info.meshes.reduce((n, m) => n + m.geometry.attributes.position.count / 3, 0); s.tris = tris; const bb = new V.THREE.Box3().setFromObject(s.a.group); s.a.group.updateMatrixWorld(true); const hz = Math.max(bb.max.z, -bb.min.z);
     lines.push(`${s.name}/${s.variant}: ${s.info.calls} calls ${Math.round(tris)} tris h=${s.a.height.toFixed(2)} (top ${bb.max.y.toFixed(2)}, half-depth ${hz.toFixed(2)}, r ${s.a.radius})`); }
   window.__stat = { foes: lines, dbg: window.__dbg }; window.__slots = slots;

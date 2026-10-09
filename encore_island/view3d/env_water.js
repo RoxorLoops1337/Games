@@ -29,9 +29,9 @@ void main(){
   col = mix(col, uShallow * 1.2 + 0.03, (1.0 - smoothstep(0.0, 1.2, d)) * 0.35);
   float sw = vn(p * 0.09 + vec2(t * 0.02, -t * 0.015)); col *= 0.92 + 0.14 * sw;                     // broad swells of lightness
   // wave strokes: stretched drifting noise thresholded into short dashes, like the 2D game's wave arcs
-  float ds = vn(p * vec2(0.45, 2.6) + vec2(t * 0.3, 0.0)) * 0.6 + vn(p * vec2(0.9, 5.0) - vec2(t * 0.42, 3.0)) * 0.4;
-  float cd = length(vW - uCam); float dash = smoothstep(0.7, 0.75, ds) * (0.5 + 0.5 * dep) * (1.0 - smoothstep(40.0, 120.0, cd) * 0.85);
-  col = mix(col, vec3(1.0), dash * 0.24);
+  float ds = vn(p * vec2(0.32, 4.4) + vec2(t * 0.3, 0.0)) * 0.6 + vn(p * vec2(0.7, 8.0) - vec2(t * 0.42, 3.0)) * 0.4;
+  float cd = length(vW - uCam); float dash = smoothstep(0.68, 0.76, ds) * (0.5 + 0.5 * dep) * (1.0 - smoothstep(40.0, 120.0, cd) * 0.85);
+  col = mix(col, vec3(1.0), dash * 0.2);
   #ifndef LOWQ
   // caustics: two warped cell layers crossing, only in the shallows
   float cs = (1.0 - smoothstep(0.4, 3.8, d));
