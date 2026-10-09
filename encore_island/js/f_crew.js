@@ -242,7 +242,7 @@
     if (!S.started || S.sheet || S.modal || S.cards) return;
     try {
       for (const d of DISTRICTS) {
-        if (!d.on()) continue; const sx = vw / 2 + (d.pos.x - CAM.x) * scl, sy = vh * 0.46 + (d.pos.y - CAM.y) * scl;
+        if (!d.on()) continue; const q = w2s(d.pos.x, d.pos.y), sx = q.x, sy = q.y;
         if (sx < -80 || sx > vw + 80 || sy < -80 || sy > vh + 80) continue;
         hitRect(sx - 56 * scl, sy - 100 * scl, 112 * scl, 140 * scl, () => { openSheet('town', 'districts'); sfx('ui_open'); });
       }

@@ -70,7 +70,7 @@ function coachLines(txt, maxW) {
   for (const w of words) { const t = line ? line + ' ' + w : w; if (ctx.measureText(t).width > maxW && line) { out.push(line); line = w; } else line = t; }
   if (line) out.push(line); return out;
 }
-function coachW2S(p) { return p.screen ? { x: p.x, y: p.y } : { x: vw / 2 + (p.x - CAM.x) * scl, y: vh * 0.46 + (p.y - CAM.y) * scl }; }
+function coachW2S(p) { if (p.screen) return { x: p.x, y: p.y }; const q = w2s(p.x, p.y, 30); return { x: q.x, y: q.y }; }
 function coachPortrait(cx, cy, who, c) {
   disc(cx, cy, 27, '#fff4c0', '#ffd0e6');
   ctx.save(); ctx.beginPath(); ctx.arc(cx, cy, 25, 0, TAU); ctx.clip();

@@ -287,6 +287,19 @@ function ldEventWorld(ev) {
 }
 
 // ---------------------------------------------------------------- feature: lands
+function ldScreenFx() { // darkness vignette around the hero and the golden tint: screen space, shared by the 2D and 3D views
+  if (LD.dk > 0.01 || LD.tint > 0.01) {
+    ctx.save(); ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    if (LD.dk > 0.01) {
+      const p = S.player, q = w2s(p.x, p.y), sx = q.x, sy = q.y, R = 175 * scl * (1 + 0.03 * Math.sin(S.t * 5));
+      const gr = ctx.createRadialGradient(sx, sy - 20, R * 0.35, sx, sy - 20, R * 1.8); gr.addColorStop(0, 'rgba(10,5,40,0)'); gr.addColorStop(0.45, 'rgba(10,5,40,' + 0.45 * LD.dk + ')'); gr.addColorStop(1, 'rgba(8,4,32,' + 0.9 * LD.dk + ')');
+      ctx.fillStyle = gr; ctx.fillRect(0, 0, vw, vh);
+      ctx.globalCompositeOperation = 'lighter'; const wg = ctx.createRadialGradient(sx, sy - 20, 4, sx, sy - 20, R); wg.addColorStop(0, 'rgba(255,220,140,' + 0.22 * LD.dk + ')'); wg.addColorStop(1, 'rgba(255,220,140,0)'); ctx.fillStyle = wg; ctx.fillRect(0, 0, vw, vh);
+    }
+    if (LD.tint > 0.01) { const tg = ctx.createLinearGradient(0, 0, 0, vh); tg.addColorStop(0, 'rgba(255,214,90,' + 0.34 * LD.tint + ')'); tg.addColorStop(1, 'rgba(255,190,70,' + 0.08 * LD.tint + ')'); ctx.fillStyle = tg; ctx.fillRect(0, 0, vw, vh); }
+    ctx.restore();
+  }
+}
 regFeature({
   id: 'lands', keep: false,
   init(st) {
@@ -324,19 +337,10 @@ regFeature({
       for (let k = 1; k <= S.lands.length; k++) { ldFlag(k); ldSecretDraw(k); }
       if (ev) ldEventWorld(ev);
       for (const e of S.enemies) if (e.variant && e.hp > 0) ldBossDraw(e);
-      if (LD.dk > 0.01 || LD.tint > 0.01) {
-        ctx.save(); ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-        if (LD.dk > 0.01) {
-          const p = S.player, sx = vw / 2 + (p.x - CAM.x) * scl, sy = vh * 0.46 + (p.y - CAM.y) * scl, R = 175 * scl * (1 + 0.03 * Math.sin(S.t * 5));
-          const gr = ctx.createRadialGradient(sx, sy - 20, R * 0.35, sx, sy - 20, R * 1.8); gr.addColorStop(0, 'rgba(10,5,40,0)'); gr.addColorStop(0.45, 'rgba(10,5,40,' + 0.45 * LD.dk + ')'); gr.addColorStop(1, 'rgba(8,4,32,' + 0.9 * LD.dk + ')');
-          ctx.fillStyle = gr; ctx.fillRect(0, 0, vw, vh);
-          ctx.globalCompositeOperation = 'lighter'; const wg = ctx.createRadialGradient(sx, sy - 20, 4, sx, sy - 20, R); wg.addColorStop(0, 'rgba(255,220,140,' + 0.22 * LD.dk + ')'); wg.addColorStop(1, 'rgba(255,220,140,0)'); ctx.fillStyle = wg; ctx.fillRect(0, 0, vw, vh);
-        }
-        if (LD.tint > 0.01) { const tg = ctx.createLinearGradient(0, 0, 0, vh); tg.addColorStop(0, 'rgba(255,214,90,' + 0.34 * LD.tint + ')'); tg.addColorStop(1, 'rgba(255,190,70,' + 0.08 * LD.tint + ')'); ctx.fillStyle = tg; ctx.fillRect(0, 0, vw, vh); }
-        ctx.restore();
-      }
+      ldScreenFx();
     } catch (err) { if (LD.strict) throw err; }
   },
+  drawScreen() { try { ldScreenFx(); } catch (err) { if (LD.strict) throw err; } },
   drawHud() {
     const st = fs('lands'), ev = st.ev; if (!ev || S.sheet || S.modal || S.cards) { LD.chip = null; return; }
     const D = LD_EV[ev.type], x = 8, y = 198, w = 168, h = 44, left = Math.max(0, ev.dur - ev.t), f = left / ev.dur, g = geoOf(ev.k), pu = 0.5 + 0.5 * Math.sin(S.t * 5);

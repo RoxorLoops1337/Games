@@ -183,10 +183,27 @@ const SHEET_DRAW = {
     y = section(y + 6, 'Settings');
     const sets = [['music', 'Music'], ['sfx', 'Sound effects'], ['shake', 'Screen shake'], ['particles', 'Sparkles'], ['dmgNums', 'Damage numbers'], ['haptics', 'Vibration']];
     for (const [k, label] of sets) { rowCard(y, 40, cw); ctx.fillStyle = '#fff'; ctx.font = font(13); ctx.textAlign = 'left'; ctx.fillText(label, 14, y + 25); const on = S.settings[k] !== false; pill(cw - 66, y + 8, 52, 24, on ? '#7cf09a' : '#6a5aa0', on ? '#25a84f' : '#3e3076'); ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(cw - (on ? 28 : 52), y + 20, 9, 0, TAU); ctx.fill(); chit(2, y, cw - 4, 40, () => toggleSetting(k)); y += 46; }
+    y = viewRows(y, cw);
     y += 6; cbtn(2, y, cw - 4, 40, true, 'red'); ctx.fillStyle = '#fff'; ctx.font = font(13); ctx.textAlign = 'center'; ctx.fillText('Reset all progress', cw / 2, y + 25); chit(2, y, cw - 4, 40, () => { S.modal = { id: 'reset' }; S.sheet = null; }); y += 52;
     return note(y, cw, 'Encore Island · the long-awaited sequel · characters by RoxorLoops & Jasmin', '#9d93c4') + 10;
   },
 };
+// segmented choice (2D / 3D, quality): `opts` = [[label, value, act], ...], the current value is lit
+function segRow(y, cw, label, opts, cur, h) {
+  h = h || 48; rowCard(y, h, cw); ctx.fillStyle = '#fff'; ctx.font = font(13); ctx.textAlign = 'left'; ctx.fillText(label, 14, y + h / 2 + 5);
+  const bw = Math.min(60, (cw - 130) / opts.length), gap = 4; let x = cw - 12 - opts.length * (bw + gap) + gap;
+  for (const [lb, val, act] of opts) { const on = val === cur; pill(x, y + h / 2 - 14, bw, 28, on ? '#7cf09a' : '#6a5aa0', on ? '#25a84f' : '#3e3076'); ctx.fillStyle = '#fff'; ctx.font = font(12); ctx.textAlign = 'center'; ctx.fillText(lb, x + bw / 2, y + h / 2 + 5); chit(x, y + h / 2 - 14, bw, 28, () => { sfx('ui_tap'); act(); }); x += bw + gap; }
+  return y + h + 6;
+}
+function viewRows(y, cw) {
+  y = section(y + 6, 'Graphics');
+  y = segRow(y, cw, 'Game view', [['2D', '2d', () => viewSet('2d')], ['3D', '3d', () => viewSet('3d')]], VIEW.mode);
+  if (VIEW.mode === '3d') y = segRow(y, cw, '3D quality', [['Auto', 'auto', () => viewSetQuality('auto')], ['Low', 'low', () => viewSetQuality('low')], ['Med', 'medium', () => viewSetQuality('medium')], ['High', 'high', () => viewSetQuality('high')]], VIEW.quality);
+  if (VIEW.status === 'loading') y = note(y, cw, 'Building the 3D island... ' + Math.round(VIEW.progress * 100) + '%');
+  else if (VIEW.status === 'failed') y = note(y, cw, '3D is not available on this device (' + VIEW.err + '). Staying in 2D.', '#ffb0b0');
+  else if (VIEW.mode === '3d') y = note(y, cw, 'Auto picks the best quality for your device and keeps the game smooth.');
+  return y;
+}
 function toggleSetting(k) { S.settings[k] = S.settings[k] === false; sfx('ui_tap'); applyAudioSettings(); save(); }
 function applyAudioSettings() { if (typeof AUDIO === 'undefined') return; AUDIO.setVolume && AUDIO.setVolume(S.settings.music === false ? 0 : 1, S.settings.sfx === false ? 0 : 1); }
 // ---- modals ----
@@ -238,7 +255,7 @@ function hitAt(x, y) { for (let i = hits.length - 1; i >= 0; i--) { const h = hi
 function onDown(ev) {
   ev.preventDefault(); if (typeof AUDIO !== 'undefined') { AUDIO.init(); if (S.settings.music !== false) AUDIO.musicStart(); applyAudioSettings(); }
   const p = pointerXY(ev);
-  if (!S.started) { S.started = true; sfx('unlock', true); return; } // the tutorial (js/tutorial.js) greets the player
+  if (!S.started) { const th = hitAt(p.x, p.y); if (th && th.title) { th.act(); return; } S.started = true; sfx('unlock', true); return; } // the tutorial (js/tutorial.js) greets the player
   PT.down = true; PT.id = ev.pointerId; PT.x = PT.sx = p.x; PT.y = PT.sy = p.y; PT.moved = 0; PT.lastY = p.y; PT.vel = 0;
   if (S.sheet || S.modal) { PT.inSheet = true; if (S.sheet) { S.sheet.drag = false; S.sheet.vel = 0; } return; }
   PT.inSheet = false;

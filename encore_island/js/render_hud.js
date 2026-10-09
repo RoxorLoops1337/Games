@@ -211,7 +211,8 @@ function drawCardsDraft() {
 function wrapText(txt, cx, y, maxW, lh) { const words = txt.split(' '); let line = '', yy = y; for (const w of words) { const test = line ? line + ' ' + w : w; if (ctx.measureText(test).width > maxW && line) { ctx.fillText(line, cx, yy); line = w; yy += lh; } else line = test; } if (line) ctx.fillText(line, cx, yy); return yy; }
 function drawTitle() {
   const cx = vw / 2, t = S.t, u = Math.min(1.15, vh / 800);
-  const bg = ctx.createLinearGradient(0, 0, 0, vh); bg.addColorStop(0, 'rgba(70,40,150,0.88)'); bg.addColorStop(0.55, 'rgba(120,70,190,0.7)'); bg.addColorStop(1, 'rgba(30,16,70,0.9)'); ctx.fillStyle = bg; ctx.fillRect(0, 0, vw, vh);
+  const k3 = VIEW.on3d ? 0.34 : 1; // in 3D the island orbits behind the title, so the veil is light and the 3D cast stands on the stage
+  const bg = ctx.createLinearGradient(0, 0, 0, vh); bg.addColorStop(0, 'rgba(70,40,150,' + 0.88 * k3 + ')'); bg.addColorStop(0.55, 'rgba(120,70,190,' + 0.7 * k3 * 0.6 + ')'); bg.addColorStop(1, 'rgba(30,16,70,' + 0.9 * k3 + ')'); ctx.fillStyle = bg; ctx.fillRect(0, 0, vw, vh);
   const sp = ctx.createRadialGradient(cx, vh * 0.58, 10, cx, vh * 0.58, Math.min(vw, vh) * 0.65); sp.addColorStop(0, 'rgba(255,233,168,0.55)'); sp.addColorStop(1, 'rgba(255,233,168,0)'); ctx.fillStyle = sp; ctx.fillRect(0, 0, vw, vh);
   ctx.save(); ctx.globalAlpha = 0.10; ctx.fillStyle = '#fff4c0'; for (const [bx, w] of [[0.22, 70], [0.5, 90], [0.78, 70]]) { ctx.beginPath(); ctx.moveTo(vw * bx - 8, -10); ctx.lineTo(vw * bx + 8, -10); ctx.lineTo(vw * bx + w + Math.sin(t * 0.6 + bx * 9) * 14, vh * 0.8); ctx.lineTo(vw * bx - w + Math.sin(t * 0.6 + bx * 9) * 14, vh * 0.8); ctx.fill(); } ctx.restore();
   for (let i = 0; i <= 14; i++) { const x = (i / 14) * vw, y = 12 + Math.sin((i / 14) * Math.PI) * 26; ctx.fillStyle = [HV.pink, HV.green, HV.gold, HV.violet][i % 4]; ctx.strokeStyle = HV.line; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(x - 9, y); ctx.lineTo(x + 9, y); ctx.lineTo(x, y + 18 + Math.sin(t * 2 + i) * 1.5); ctx.closePath(); ctx.fill(); ctx.stroke(); }
@@ -220,10 +221,15 @@ function drawTitle() {
   stickerText('ENCORE', cx, ty + bounce, fs, '#ffc9de', '#ff5fa6', -0.04); stickerText('ISLAND', cx, ty + fs * 0.98 - bounce, fs, '#d9fff0', '#35c46a', 0.03);
   labelPill('the loop continues', cx, ty + fs * 1.62, '#ffe98a', '#f0b422', 13);
   const bf = (i) => ((t * 5 + i) | 0);
-  artDraw('kappa', 'idle', bf(1), cx - 132 * u, vh * 0.69, 0.78 * u, false); artDraw('oni_cub', 'idle', bf(2), cx + 136 * u, vh * 0.69, 0.78 * u, true);
-  artDraw('roxor', 'idle', bf(0), cx + 54 * u, vh * 0.7, 1.25 * u, true); artDraw('jasmin', 'idle', bf(2), cx - 54 * u, vh * 0.72, 1.3 * u, false);
+  if (!VIEW.on3d) { artDraw('kappa', 'idle', bf(1), cx - 132 * u, vh * 0.69, 0.78 * u, false); artDraw('oni_cub', 'idle', bf(2), cx + 136 * u, vh * 0.69, 0.78 * u, true);
+  artDraw('roxor', 'idle', bf(0), cx + 54 * u, vh * 0.7, 1.25 * u, true); artDraw('jasmin', 'idle', bf(2), cx - 54 * u, vh * 0.72, 1.3 * u, false); }
   const lines = ['Defeat the Soundlands critters, sell their helmets,', 'stack the coins, grow a glittering island —', 'and keep the beat for the loudest ENCORE.'];
   const ly = vh * 0.765, lw = Math.min(vw - 32, 360); plaque(cx - lw / 2, ly, lw, 74, 16); ctx.fillStyle = HV.cream; ctx.font = font(13, false); ctx.textAlign = 'center'; lines.forEach((l, i) => ctx.fillText(l, cx, ly + 22 + i * 18));
+  // view chooser: 2D classic or the new 3D (a tap here must not start the game, hence title:true)
+  { const bw = 118, bh = 34, gap = 8, y = 54, x0 = cx - bw - gap / 2;
+    for (let i = 0; i < 2; i++) { const m = i ? '3d' : '2d', on = VIEW.mode === m, x = x0 + i * (bw + gap); pill(x, y, bw, bh, on ? '#7cf09a' : '#6a5aa0', on ? '#25a84f' : '#3e3076'); ctx.fillStyle = '#fff'; ctx.font = font(13); ctx.textAlign = 'center';
+      ctx.fillText(i ? (VIEW.status === 'loading' ? '3D ' + Math.round(VIEW.progress * 100) + '%' : '3D  new!') : '2D  classic', x + bw / 2, y + 22); hits.push({ x, y, w: bw, h: bh, title: true, act: () => { sfx('ui_tap'); viewSet(m); } }); }
+    if (VIEW.status === 'failed') labelPill('3D unavailable here', cx, y + bh + 20, '#ffd0d0', '#ff8a8a', 11); }
   const pulse = 1 + Math.sin(t * 4) * 0.05; ctx.save(); ctx.translate(cx, vh * 0.92); ctx.scale(pulse, pulse); pill(-120, -28, 240, 56, '#ff9ac8', '#f0599a'); ctx.fillStyle = '#fff'; ctx.font = font(24); ctx.textAlign = 'center'; ctx.fillText('TAP TO PLAY', 0, 9); ctx.restore();
 }
 function drawHudTop() {

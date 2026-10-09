@@ -4,11 +4,14 @@
 //   regTab(sheetId, tabId, label, draw(cw, sh) -> content height)      add a tab to an existing menu sheet
 //   regMod(key, fn) / mod(key) / modAdd(key)                            stat modifiers read by the core formulas
 // Persistent state lives in S.feat[id] (saved automatically; kept across Encore Tours when `keep` is true).
-const FEATS = [], TABS = {}, MODS = {}, DOORS = [];
+const FEATS = [], TABS = {}, MODS = {}, DOORS = [], VIEW3D = [];
 function regFeature(f) { FEATS.push(f); return f; }
 // a doorway in the Backstage greenroom: { id, name, icon, hint, unlocked(): bool, enter() } . The room draws every registered door
 // (built-in placeholders fill the empty frames); a door whose unlocked() is true opens when the hero stands in it for a moment.
 function regDoor(d) { const i = DOORS.findIndex(o => o.id === d.id); if (i >= 0) DOORS[i] = d; else DOORS.push(d); return d; }
+// a feature's look in the 3D view: reg3d(V => ({ update(dt, t, focus) {}, dispose() {} })). V gives THREE, kit, scene/world/dyn groups, bake, labels, fx ... (view3d/README.md).
+// Classic scripts cannot import three.js, so use V.THREE and V.kit. Called once when the 3D engine starts; a feature without one simply has no 3D visuals.
+function reg3d(make) { VIEW3D.push(make); return make; }
 function regTab(sheet, id, label, draw, opts) { (TABS[sheet] || (TABS[sheet] = [])).push(Object.assign({ id, label, draw }, opts || {})); }
 function regMod(key, fn) { (MODS[key] || (MODS[key] = [])).push(fn); }
 function mod(key) { const a = MODS[key]; if (!a) return 1; let m = 1; for (let i = 0; i < a.length; i++) m *= a[i](); return m; }
@@ -18,6 +21,7 @@ function fEmit(name, a, b) { for (let i = 0; i < FEATS.length; i++) { const h = 
 function toast(txt, ic, life) { S.toasts.push({ txt, t: 0, ic: ic || 'star', life }); }
 function tickFeatures(dt) { for (let i = 0; i < FEATS.length; i++) if (FEATS[i].tick) FEATS[i].tick(dt); }
 function drawFeaturesWorld() { for (let i = 0; i < FEATS.length; i++) if (FEATS[i].drawWorld) FEATS[i].drawWorld(); }
+function drawFeaturesScreen() { for (let i = 0; i < FEATS.length; i++) if (FEATS[i].drawScreen) FEATS[i].drawScreen(); } // screen-space overlays that must show in the 3D view too (the 2D view draws them inside drawWorld)
 function drawFeaturesHud() { for (let i = 0; i < FEATS.length; i++) if (FEATS[i].drawHud) FEATS[i].drawHud(); }
 function featPips() { const o = {}; for (let i = 0; i < FEATS.length; i++) if (FEATS[i].pips) { const p = FEATS[i].pips(); if (p) for (const k in p) if (p[k]) o[k] = true; } return o; }
 function featsInit() { S.feat = S.feat || {}; for (const f of FEATS) { if (!S.feat[f.id]) S.feat[f.id] = {}; if (f.init) f.init(S.feat[f.id]); } }

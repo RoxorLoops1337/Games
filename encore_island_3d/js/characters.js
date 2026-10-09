@@ -373,8 +373,9 @@ const heart = (g, x, y, s, fill, stroke, lw) => { g.beginPath(); g.moveTo(x, y +
 function makeHead(rx, ry, rz, cy, jaw) {
   const tp = (yn) => (yn < 0.1 ? 1 - jaw * Math.pow(clamp((0.1 - yn) / 1.1, 0, 1), 1.2) : 1);
   const surf = (x, y) => { const yn = (y - cy) / ry, t = tp(yn); return rz * t * Math.sqrt(Math.max(1e-4, 1 - (x / (rx * t)) ** 2 - yn * yn)); };
-  const g = geo(`hd${jaw}`, () => {
-    const s = new THREE.SphereGeometry(1, 15, 10), p = s.attributes.position;
+  const sw = STYLE.boost ? 22 : 15, sh = STYLE.boost ? 14 : 10;
+  const g = geo(`hd${jaw}_${sw}`, () => {
+    const s = new THREE.SphereGeometry(1, sw, sh), p = s.attributes.position;
     for (let i = 0; i < p.count; i++) { const t = tp(p.getY(i)); p.setX(i, p.getX(i) * t); p.setZ(i, p.getZ(i) * t); }
     s.computeVertexNormals();
     // toon-ish shading: pull front normals toward the camera so the painted face reads evenly lit
@@ -397,7 +398,9 @@ function patchGeo(H, cx, cy, w, h, o = {}) {
   for (let j = 0; j <= ny; j++) for (let i = 0; i <= nx; i++) {
     const u = i / nx, v = j / ny, lx = (u - 0.5) * w, ly = (0.5 - v) * h;
     const x = cx + lx * cr - ly * sr, y = cy + lx * sr + ly * cr;
-    pos.push(x - cx, y - cy, H.surf(x, y) + eps - z0); uv.push(o.flip ? 1 - u : u, 1 - v);
+    pos.push(x - cx, y - cy, H.surf(x, y) + eps - z0);
+    const uu = o.flip ? 1 - u : u, rc = o.rect; // rc = [x, y, w, h] px in the 512x256 face atlas (one material per face instead of six)
+    if (rc) uv.push((rc[0] + uu * rc[2]) / 512, 1 - (rc[1] + v * rc[3]) / 256); else uv.push(uu, 1 - v);
   }
   for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) { const a = j * (nx + 1) + i, b = a + 1, c = a + nx + 1, d = c + 1; idx.push(a, c, b, b, c, d); }
   const g = new THREE.BufferGeometry();
@@ -524,9 +527,45 @@ function paintMouthR(g, W, H) {
 function paintBlush(g, W, H, col) { const gr = g.createRadialGradient(W / 2, H / 2, 0, W / 2, H / 2, W / 2); gr.addColorStop(0, col + 'cc'); gr.addColorStop(0.6, col + '66'); gr.addColorStop(1, col + '00'); g.fillStyle = gr; g.fillRect(0, 0, W, H); }
 function paintNose(g, W, H, col) { g.strokeStyle = col; g.lineWidth = 6; g.lineCap = 'round'; g.beginPath(); g.moveTo(W * 0.3, H * 0.4); g.quadraticCurveTo(W * 0.5, H * 0.75, W * 0.74, H * 0.42); g.stroke(); }
 
+// parametrised version of paintEyeJ: the big glossy anime eye with custom iris colours and an optional star glint
+const eyeJ = (o = {}) => (g, W, H) => {
+  const cx = W * 0.5, cy = H * 0.56, c = o.gr || ['#4a2815', '#7c4824', '#c08848'];
+  ell(g, cx, cy, W * 0.47, H * 0.46, '#fff6f0');
+  const gr = g.createLinearGradient(0, cy - H * 0.4, 0, cy + H * 0.44); gr.addColorStop(0, c[0]); gr.addColorStop(0.5, c[1]); gr.addColorStop(1, c[2]);
+  ell(g, cx, cy + 2, W * 0.4, H * 0.44, gr); g.lineWidth = 4; g.strokeStyle = '#2a140c'; g.stroke();
+  ell(g, cx, cy - 3, W * 0.2, H * 0.24, '#24100a');
+  if (o.star !== null) { star(g, cx - W * 0.015, cy + H * 0.13, W * 0.1, W * 0.045, o.star || '#ff86b6'); ell(g, cx - W * 0.015, cy + H * 0.13, W * 0.022, W * 0.022, '#ffe6f0'); }
+  ell(g, cx + W * 0.17, cy - H * 0.2, W * 0.095, W * 0.1, '#ffffff'); ell(g, cx - W * 0.2, cy + H * 0.28, W * 0.045, W * 0.045, '#ffffff'); ell(g, cx + W * 0.2, cy + H * 0.2, W * 0.025, W * 0.025, '#fff0f6');
+  g.lineCap = 'round'; g.strokeStyle = '#2a140c'; g.lineWidth = o.lash ?? 9;
+  g.beginPath(); g.moveTo(W * 0.04, cy + H * 0.0); g.quadraticCurveTo(W * 0.42, cy - H * 0.62, W * 0.97, cy - H * 0.1); g.stroke();
+  if (o.lash !== 6) { g.lineWidth = 6; g.beginPath(); g.moveTo(W * 0.94, cy - H * 0.1); g.lineTo(W * 1.0, cy - H * 0.28); g.stroke(); }
+};
+function paintMouthSmile(g, W, H) { // closed cheeky smile with a small dimple tick
+  g.lineCap = 'round'; g.lineJoin = 'round'; g.strokeStyle = '#3d1420'; g.lineWidth = 7; g.beginPath(); g.moveTo(W * 0.12, H * 0.3); g.quadraticCurveTo(W * 0.5, H * 0.82, W * 0.88, H * 0.26); g.stroke();
+  g.lineWidth = 4; g.beginPath(); g.moveTo(W * 0.88, H * 0.26); g.lineTo(W * 0.95, H * 0.16); g.stroke();
+}
+// Fan / far-LOD face: flat basic-material ellipsoids (no textures, merges into the shared glow bucket). Same interface as addHeroFace.
+function addFanFace(ctx, head, H, f = {}) {
+  const cy = H.cy, eyes = [], eyeOpen = [], eyeShut = [], ex = f.ex ?? 0.16, ey = cy + (f.ey ?? -0.03), ew = f.ew ?? 0.085, eh = f.eh ?? 0.11;
+  for (const sd of [-1, 1]) {
+    const piv = new THREE.Group(); piv.position.set(sd * ex, ey, H.surf(sd * ex, ey) - 0.014); piv.rotation.y = sd * 0.3; head.add(piv);
+    const op = new THREE.Group(); piv.add(op);
+    flat(ico(1), eyeMat, op, 0, 0, 0, ew, eh, 0.04);
+    flat(ico(0), basic(f.iris ?? 0x6a3a22), op, 0, -eh * 0.2, 0.022, ew * 0.78, eh * 0.7, 0.03);
+    flat(ico(0), whiteMat, op, ew * 0.3, eh * 0.38, 0.045, ew * 0.3, ew * 0.3, 0.012);
+    const sh = flat(ico(0), eyeMat, piv, 0, -eh * 0.15, 0.01, ew * 1.1, 0.014, 0.03); sh.visible = false;
+    eyes.push(piv); eyeOpen.push(op); eyeShut.push(sh);
+  }
+  const bm = basic(f.blush ?? 0xff8fb0);
+  for (const sd of [-1, 1]) { const bx = sd * ex * 1.45, by = ey - eh * 1.3, b = flat(ico(0), bm, head, bx, by, H.surf(bx, by) - 0.012, 0.06, 0.036, 0.012); b.rotation.y = sd * 0.8; }
+  const mouth = new THREE.Group(), my = cy + (f.my ?? -0.2); mouth.position.set(0, my, H.surf(0, my) - 0.01); head.add(mouth);
+  flat(ico(0), mouthMat, mouth, 0, 0, 0, 0.05, 0.026, 0.02); flat(ico(0), tongueMat, mouth, 0, -0.01, 0.01, 0.028, 0.012, 0.012);
+  return { eyes, eyeOpen, eyeShut, mouth, d: R_d(H) };
+}
+
 // ---- the rig. o: hip, legX, legR, legColor, head dims, shoulder pos, arm colours/radii, skin; details are added by the caller.
 function buildHero(ctx, o) {
-  const skin = o.skin ?? SKIN;
+  const skin = o.skin ?? SKIN, LS = 6 + STYLE.boost * 2;
   const fitG = new THREE.Group(), root = new THREE.Group();
   fitG.add(root);
   const HIP = o.hip;
@@ -535,7 +574,7 @@ function buildHero(ctx, o) {
     const piv = new THREE.Group();
     piv.position.set(sd * (o.legX ?? 0.085), HIP, 0);
     root.add(piv);
-    part(ctx, piv, hang(o.legR, o.legR * 0.92, HIP - 0.06, 6), o.legColor ?? skin, 0, 0, 0, 1, 1, 1, { ol: OUTLINE * 0.85 });
+    part(ctx, piv, hang(o.legR, o.legR * 0.92, HIP - 0.06, LS), o.legColor ?? skin, 0, 0, 0, 1, 1, 1, { ol: OUTLINE * 0.85 });
     R.legs.push(piv);
     if (o.leg) o.leg(piv, sd);
   }
@@ -556,10 +595,10 @@ function buildHero(ctx, o) {
   for (const sd of [-1, 1]) {
     const sh = new THREE.Group();
     sh.position.set(sd * o.shX, o.shY, 0); sh.rotation.order = 'YXZ'; body.add(sh);
-    part(ctx, sh, hang(o.armR, o.armR * 0.9, o.upLen, 6), o.upperColor ?? skin, 0, 0, 0, 1, 1, 1, { ol: 0.013 });
-    if (o.sleeve) part(ctx, sh, hang(o.armR * 1.28, o.armR * 1.2, o.sleeve.len, 6), o.sleeve.col, 0, 0.012, 0, 1, 1, 1, { ol: 0.013 });
+    part(ctx, sh, hang(o.armR, o.armR * 0.9, o.upLen, LS), o.upperColor ?? skin, 0, 0, 0, 1, 1, 1, { ol: 0.013 });
+    if (o.sleeve) part(ctx, sh, hang(o.armR * 1.28, o.armR * 1.2, o.sleeve.len, LS), o.sleeve.col, 0, 0.012, 0, 1, 1, 1, { ol: 0.013 });
     const el = new THREE.Group(); el.position.y = -o.upLen; el.rotation.order = 'YXZ'; sh.add(el);
-    part(ctx, el, hang(o.armR * 0.92, o.armR * 0.78, o.foreLen, 6), skin, 0, 0, 0, 1, 1, 1, { ol: 0.012 });
+    part(ctx, el, hang(o.armR * 0.92, o.armR * 0.78, o.foreLen, LS), o.foreColor ?? skin, 0, 0, 0, 1, 1, 1, { ol: 0.012 });
     const hand = part(ctx, el, ico(1), skin, 0, -o.foreLen - 0.015, 0, o.handR, o.handR * 1.05, o.handR * 0.9, { ol: 0.013 });
     arms.push({ sh, el, hand, sd });
   }
@@ -587,32 +626,97 @@ function setBlinkH(face, bl, extra = 0) {
   for (let i = 0; i < 2; i++) { face.eyeOpen[i].visible = !shut; face.eyeShut[i].visible = shut; face.eyes[i].scale.y = shut ? 1 : Math.max(0.3, 1 - 1.2 * v); }
 }
 function setMouthH(face, open, wide = 0, base = 0.62) { face.mouth.scale.set(0.9 + wide * 0.3, base + open * 0.9, 1); }
-// face: eyes/brows/blush/nose/mouth as painted decals. f: {ex,ey,ew,eh,eyeP,shutP,brow:{col,thick,arch,y,w,h,rot},nose,mouthP,my,mw,mh,blush}
+// face: eyes/brows/blush/nose/mouth as painted decals, all packed in ONE 512x256 atlas texture (one baked draw call per face).
+// f: {id,ex,ey,ew,eh,eyeP,shutP,brow:{col,thick,arch,y,w,h,rot},nose,mouthP,my,mw,mh,blush}
+const FR = { eo: [0, 0, 128, 128], es: [144, 0, 128, 128], mo: [288, 0, 128, 96], br: [0, 144, 128, 48], bl: [144, 144, 64, 64], no: [224, 144, 64, 64] };
+function faceAtlas(f) {
+  return ctex('atlas' + f.id, 512, 256, (g) => {
+    const put = (r, fn) => { g.save(); g.translate(r[0], r[1]); g.beginPath(); g.rect(0, 0, r[2], r[3]); g.clip(); fn(g, r[2], r[3]); g.restore(); };
+    put(FR.eo, f.eyeP); put(FR.es, f.shutP || f.eyeP); put(FR.mo, f.mouthP);
+    if (f.brow) put(FR.br, (g2, W, Hh) => paintBrow(g2, W, Hh, f.brow.col, f.brow.thick, f.brow.arch));
+    if (f.blush) put(FR.bl, (g2, W, Hh) => paintBlush(g2, W, Hh, f.blush));
+    put(FR.no, (g2, W, Hh) => paintNose(g2, W, Hh, f.noseCol || '#d9877a'));
+  });
+}
 function addHeroFace(ctx, head, H, f) {
   const cy = H.cy, eyes = [], eyeOpen = [], eyeShut = [];
-  const mEO = decalMat('eo' + f.id, ctex('eo' + f.id, 128, 128, f.eyeP)), mES = decalMat('es' + f.id, ctex('es' + f.id, 128, 128, f.shutP));
+  const mat = decalMat('face' + f.id, faceAtlas(f));
   for (const sd of [-1, 1]) {
     const piv = new THREE.Group(), ex = sd * f.ex, ey = cy + f.ey;
     const z0 = H.surf(ex, ey) + 0.011;
     piv.position.set(ex, ey, z0); head.add(piv);
-    const mk = (mat) => { const { g } = patchGeo(H, ex, ey, f.ew, f.eh, { nx: 4, ny: 4, flip: sd < 0, rot: sd * (f.eyeRot || 0) }); const m = new THREE.Mesh(g, mat); m.renderOrder = 4; piv.add(m); return m; };
-    eyeOpen.push(mk(mEO)); const sh = mk(mES); sh.visible = false; eyeShut.push(sh); eyes.push(piv);
+    const mk = (rect) => { const { g } = patchGeo(H, ex, ey, f.ew, f.eh, { nx: 4, ny: 4, flip: sd < 0, rot: sd * (f.eyeRot || 0), rect }); const m = new THREE.Mesh(g, mat); m.renderOrder = 4; piv.add(m); return m; };
+    eyeOpen.push(mk(FR.eo)); const sh = mk(FR.es); sh.visible = false; eyeShut.push(sh); eyes.push(piv);
   }
-  if (f.blush) {
-    const mB = decalMat('bl' + f.id, ctex('bl' + f.id, 64, 64, (g, W, Hh) => paintBlush(g, W, Hh, f.blush)));
-    for (const sd of [-1, 1]) decal(head, H, mB, sd * f.bx, cy + f.by, f.bw, f.bw * 0.7, { ro: 2, rot: sd * 0.15 });
-  }
+  if (f.blush) for (const sd of [-1, 1]) decal(head, H, mat, sd * f.bx, cy + f.by, f.bw, f.bw * 0.7, { ro: 2, rot: sd * 0.15, rect: FR.bl });
   const b = f.brow;
-  const mBr = decalMat('br' + f.id, ctex('br' + f.id, 128, 48, (g, W, Hh) => paintBrow(g, W, Hh, b.col, b.thick, b.arch)));
-  for (const sd of [-1, 1]) decal(head, H, mBr, sd * b.x, cy + b.y, b.w, b.h, { ro: 5, nx: 6, ny: 2, flip: sd < 0, rot: sd * b.rot, eps: 0.013 });
-  const mN = decalMat('no' + f.id, ctex('no' + f.id, 64, 64, (g, W, Hh) => paintNose(g, W, Hh, f.noseCol)));
-  decal(head, H, mN, f.nx || 0, cy + f.ny, 0.06, 0.06, { ro: 2 });
-  const mM = decalMat('mo' + f.id, ctex('mo' + f.id, 128, 96, f.mouthP));
+  if (b) for (const sd of [-1, 1]) decal(head, H, mat, sd * b.x, cy + b.y, b.w, b.h, { ro: 5, nx: 6, ny: 2, flip: sd < 0, rot: sd * b.rot, eps: 0.013, rect: FR.br });
+  if (f.ny !== undefined) decal(head, H, mat, f.nx || 0, cy + f.ny, 0.06, 0.06, { ro: 2, rect: FR.no });
   const mouth = new THREE.Group(); const my = cy + f.my; mouth.position.set(f.mx || 0, my, H.surf(f.mx || 0, my) + 0.011); head.add(mouth);
-  { const { g } = patchGeo(H, f.mx || 0, my, f.mw, f.mh, { nx: 6, ny: 4 }); const m = new THREE.Mesh(g, mM); m.renderOrder = 4; mouth.add(m); }
+  { const { g } = patchGeo(H, f.mx || 0, my, f.mw, f.mh, { nx: 6, ny: 4, rect: FR.mo }); const m = new THREE.Mesh(g, mat); m.renderOrder = 4; mouth.add(m); }
   return { eyes, eyeOpen, eyeShut, mouth, d: R_d(H) };
 }
 const R_d = (H) => ({ cy: H.cy, rx: H.rx, ry: H.ry, rz: H.rz, hs: 1 });
+
+/* ------------------------------------------------------------------ shared hero animation layer */
+// Floating music notes near the mic. Plain basic-material parts, so they bake into the shared glow bucket.
+function makeNotes(parent, ox = 0.12, oy = 1.25, oz = 0.45, cols = [0xffd84d, 0xff7eb6, 0x9af0b4, 0x8fe3f0]) {
+  const notes = [], noteG = new THREE.Group(); parent.add(noteG);
+  for (let i = 0; i < 4; i++) {
+    const n = new THREE.Group(), m = basic(cols[i]);
+    flat(ico(0), m, n, 0, 0, 0, 0.05, 0.04, 0.03); flat(box(1, 1, 1), m, n, 0.04, 0.09, 0, 0.012, 0.16, 0.012);
+    const fl = flat(box(1, 1, 1), m, n, 0.075, 0.15, 0, 0.05, 0.02, 0.012); fl.rotation.z = -0.5;
+    n.visible = false; noteG.add(n); notes.push({ n, on: false, wait: i * 0.2, life: 0, vx: 0, vy: 0, x: 0, y: 0, z: 0 });
+  }
+  return { group: noteG, tick(dt, on, seedR = Math.random) {
+    for (let i = 0; i < 4; i++) {
+      const n = notes[i];
+      if (!n.on) { if (on) { n.wait -= dt; if (n.wait <= 0) { n.on = true; n.life = 0; n.vx = (seedR() - 0.5) * 0.7; n.vy = 0.5 + seedR() * 0.3; n.x = ox; n.y = oy; n.z = oz; } } continue; }
+      n.life += dt * 0.9;
+      if (n.life >= 1) { n.on = false; n.n.visible = false; n.wait = 0.1 + i * 0.12; continue; }
+      n.x += n.vx * dt; n.y += n.vy * dt; n.z += 0.35 * dt;
+      const u = n.life, sc = Math.sin(u * Math.PI) * 1.1;
+      n.n.visible = sc > 0.02; n.n.position.set(n.x + Math.sin(u * 9 + i) * 0.05, n.y, n.z); n.n.scale.setScalar(sc * 0.9); n.n.rotation.z = Math.sin(u * 7 + i) * 0.4; n.n.rotation.y = u * 4;
+    }
+  } };
+}
+// Overlays shared by every hero rig, applied after the rig's own idle / sing / attack pose: cast (arms up), cheer (jump), dash lean, hurt recoil.
+// Returns the mouth / eye extras so the caller can fold them into the face.
+function heroOverlay(R, S, st, t, dt, o = {}) {
+  const cw = (S.cast = damp(S.cast || 0, st.cast ? 1 : 0, 12, dt)), ch = (S.cheer = damp(S.cheer || 0, st.cheer ? 1 : 0, 14, dt)), dw = (S.dash = damp(S.dash || 0, st.dash ? 1 : 0, 20, dt)), hu = clamp(st.hurt || 0, 0, 1);
+  const pump = Math.sin(t * 13), ar = R.armR, al = R.armL;
+  if (dw > 0.01) { poseArm(ar, dw, 1.0, 0, 0.2, -0.7); poseArm(al, dw, 1.1, 0, -0.2, -0.7); R.body.rotation.x += dw * 0.3; R.head.rotation.x -= dw * 0.2; R.legs[0].rotation.x += dw * 0.5; R.legs[1].rotation.x -= dw * 0.4; }
+  if (ch > 0.01) {
+    poseArm(ar, ch, -2.7 + pump * 0.3, 0, 0.5, -0.1); poseArm(al, ch, -2.7 - pump * 0.3, 0, -0.5, -0.1);
+    R.root.position.y += ch * Math.abs(Math.sin(t * 9)) * (o.jump ?? 0.22); R.legs[0].rotation.x += ch * 0.35; R.legs[1].rotation.x -= ch * 0.35; R.head.rotation.x -= ch * 0.15; R.body.rotation.z += ch * Math.sin(t * 9) * 0.06;
+  }
+  if (cw > 0.01) {
+    const sw = Math.sin(t * 7) * 0.12;
+    poseArm(ar, cw, -2.95 + sw, 0, 0.32, -0.12); poseArm(al, cw, -2.95 - sw, 0, -0.32, -0.12);
+    R.root.position.y += cw * (0.12 + 0.03 * Math.sin(t * 5)); R.body.rotation.x -= cw * 0.18; R.head.rotation.x -= cw * 0.3; R.legs[0].rotation.x += cw * 0.18; R.legs[1].rotation.x -= cw * 0.12;
+  }
+  if (hu > 0.01) { R.body.rotation.x -= hu * 0.35; R.head.rotation.x -= hu * 0.25; R.head.rotation.z += hu * 0.12 * Math.sin(t * 40); R.root.position.z -= hu * 0.08; poseArm(ar, hu * 0.6, -0.5, 0, 0.5, -0.5); poseArm(al, hu * 0.6, -0.5, 0, -0.5, -0.5); }
+  R.root.rotation.x = dw * 0.28 - cw * 0.04;
+  return { open: Math.max(ch * 0.85, cw * 0.8, hu * 0.9), wide: ch * 0.7 + cw * 0.5, shut: Math.max(ch * 0.9, hu > 0.35 ? 1 : 0) };
+}
+// the common tail of every hero update: overlays, face, squash and life
+function finishHero(R, S, L, st, t, dt, open = 0, wide = 0, shut = 0, mouthBase = 1.0, jump) {
+  const ov = heroOverlay(R, S, st, t, dt, { jump });
+  setMouthH(R.face, Math.max(open, ov.open) * 0.78, Math.max(wide, ov.wide), mouthBase);
+  setBlinkH(R.face, S.blink, Math.max(shut, ov.shut));
+  const A = L.atkEnv, sg = S.sing || 0, hit = Math.abs(Math.sin(t * Math.PI * 2));
+  lifeXform(L, R.root, 1, 1, 1, 1 + A * 0.06 + sg * hit * 0.012 + S.cheer * 0.04, 1 + A * 0.12 + S.cast * 0.04);
+}
+function heroBase(R, o) { // standard hero bookkeeping: state, life, notes and the actor shell (rig-specific update is plugged in by the caller)
+  const S = newState(o.seed || 1), L = makeLife(R.ctx, o.atkDur || 0.55, 0.9), NT = makeNotes(R.fitG, ...(o.note || [0.12, 1.25, 0.45]), o.noteCols);
+  const self = {
+    group: new THREE.Group(), rig: R, S, L, height: o.height || 1.7, radius: o.radius || 0.45,
+    attack() { L.attack(); }, die() { L.die(); }, isDead() { return L.dead; }, get dead() { return L.dead; }, setCarry() {},
+    dispose() { if (self.baked && self.baked.dispose) self.baked.dispose(); },
+  };
+  self.group.add(R.fitG);
+  return { self, S, L, NT };
+}
 
 /* ------------------------------------------------------------------ JASMIN */
 const JC = { hair: 0x68381e, hair2: 0x8c5430, hairDk: 0x3a1d0f, top: 0xfda3bd, topDk: 0xf27fa3, skirt: 0xfdadc6, pink: 0xff8fb9, white: 0xfffaf4, sole: 0xffb4cf, gold: 0xf4c64e, mic: 0x1b1b24 };
@@ -708,26 +812,15 @@ export function makeJasmin() {
   part(ctx, mic, torus(0.027, 0.012, 3, 7), 0xff5fa5, 0, -0.1, 0, 1, 1, 1, { rx: Math.PI / 2, ol: 0.007 });
   fitHero(R, 1.7);
 
-  const noteG = new THREE.Group(); R.fitG.add(noteG);
-  const noteCols = [0xffd84d, 0xff7eb6, 0x9af0b4, 0x8fe3f0];
-  const notes = [];
-  for (let i = 0; i < 4; i++) {
-    const n = new THREE.Group(); const m = basic(noteCols[i]);
-    flat(ico(0), m, n, 0, 0, 0, 0.05, 0.04, 0.03);
-    flat(box(1, 1, 1), m, n, 0.04, 0.09, 0, 0.012, 0.16, 0.012);
-    const fl = flat(box(1, 1, 1), m, n, 0.075, 0.15, 0, 0.05, 0.02, 0.012); fl.rotation.z = -0.5;
-    n.visible = false; noteG.add(n); notes.push({ n, on: false, wait: i * 0.2, life: 0, vx: 0, vy: 0, x: 0, y: 0, z: 0 });
-  }
-  const S = newState(1), L = makeLife(ctx, 0.55, 0.9);
-  const self = {
-    group: new THREE.Group(),
+  const { self, S, L, NT } = heroBase(R, { seed: 1, height: 1.7, radius: 0.4, note: [0.12, 1.25, 0.45] });
+  Object.assign(self, {
     update(dt, t, st) {
       if (L.dead) return;
       dt = Math.min(dt, 0.05); st = st || {};
       L.tick(dt, st);
       kidTick(R, S, dt, t, st);
       const amp = S.amp, ph = S.ph;
-      const sg = (S.sing = damp(S.sing, st.singing ? 1 : 0, 9, dt));
+      const sg = (S.sing = damp(S.sing, st.singing || st.atk ? 1 : 0, 9, dt));
       const beat = Math.sin(t * Math.PI * 4), hit = Math.abs(Math.sin(t * Math.PI * 2));
       const A = L.atkEnv, idleW = Math.sin(t * 3.2);
       // base pose (as drawn): mic hand up by the chin, free hand waving out to the side
@@ -749,8 +842,6 @@ export function makeJasmin() {
       } else R.root.position.z = 0;
       const vowel = 0.72 + 0.28 * Math.sin(t * 3.1);
       const open = Math.max(sg * (0.5 + 0.5 * beat) * vowel, A * 0.9);
-      setMouthH(R.face, open * 0.75, A * 0.5, 1.0);
-      setBlinkH(R.face, S.blink, sg * 0.55 * (0.5 + 0.5 * Math.sin(t * 0.8)) * (sg > 0.7 ? 1 : 0));
       skirt.scale.set(1 + 0.06 * amp * Math.abs(S.s) + sg * hit * 0.03, 1, 1 + 0.06 * amp * Math.abs(S.s) + sg * hit * 0.03);
       skirt.rotation.set(-0.05 * amp + Math.sin(ph * 2 - 0.5) * 0.04 * amp, 0, S.s * 0.09 * amp + Math.sin(t * 1.4) * 0.01);
       const idle = Math.sin(t * 1.7), side = Math.sin(ph - 0.6);
@@ -758,29 +849,10 @@ export function makeJasmin() {
       t1.rotation.set(-0.06 + Math.sin(ph * 2 - 0.9) * 0.2 * amp + Math.sin(t * 1.7 - 0.8) * 0.05 + sg * beat * 0.1, 0, 0.48 + Math.sin(ph - 1.2) * 0.22 * amp);
       t2.rotation.set(-0.1 + Math.sin(ph * 2 - 1.8) * 0.26 * amp + Math.sin(t * 1.7 - 1.6) * 0.07 + sg * beat * 0.14, 0, 0.36 + Math.sin(ph - 1.8) * 0.28 * amp);
       t3.rotation.set(-0.1 + Math.sin(ph * 2 - 2.4) * 0.3 * amp + sg * beat * 0.16, 0, -0.3 + Math.sin(ph - 2.4) * 0.3 * amp);
-      for (let i = 0; i < 4; i++) {
-        const n = notes[i];
-        if (!n.on) {
-          if (sg > 0.3) { n.wait -= dt; if (n.wait <= 0) { n.on = true; n.life = 0; n.vx = (Math.random() - 0.5) * 0.7; n.vy = 0.5 + Math.random() * 0.3; n.x = 0.12; n.y = 1.25; n.z = 0.45; } }
-          continue;
-        }
-        n.life += dt * 0.9;
-        if (n.life >= 1) { n.on = false; n.n.visible = false; n.wait = 0.1 + i * 0.12; continue; }
-        n.x += n.vx * dt; n.y += n.vy * dt; n.z += 0.35 * dt;
-        const u = n.life, sc = Math.sin(u * Math.PI) * 1.1;
-        n.n.visible = sc > 0.02;
-        n.n.position.set(n.x + Math.sin(u * 9 + i) * 0.05, n.y, n.z);
-        n.n.scale.setScalar(sc * 0.9); n.n.rotation.z = Math.sin(u * 7 + i) * 0.4; n.n.rotation.y = u * 4;
-      }
-      lifeXform(L, R.root, 1, 1, 1, 1 + A * 0.06 + sg * hit * 0.012, 1 + A * 0.12);
+      NT.tick(dt, sg > 0.3);
+      finishHero(R, S, L, st, t, dt, open * 0.96, A * 0.5, sg * 0.55 * (0.5 + 0.5 * Math.sin(t * 0.8)) * (sg > 0.7 ? 1 : 0));
     },
-    attack() { L.attack(); },
-    die() { L.die(); },
-    isDead() { return L.dead; },
-    get dead() { return L.dead; },
-    setCarry() {},
-  };
-  self.group.add(R.fitG);
+  });
   self.group.name = 'Jasmin';
   return self;
 }
@@ -811,13 +883,14 @@ function roxorChestTex() {
     g.lineWidth = 6; g.lineCap = 'round'; g.strokeStyle = '#a85a10'; g.beginPath(); g.arc(W / 2, H * 0.47, 28, 0.25, Math.PI - 0.25); g.stroke();
   });
 }
-export function makeRoxor() {
+export function makeRoxor(opt = {}) {
+  const tc = opt.tc || ((c) => c), fan = !!opt.fan, rackOn = opt.rack !== false && !fan;
   const ctx = makeCtx();
   const WOOD = 0xc99060, YEL = 0xffd84d, CREAM = 0xfff4e6;
-  const headMat = ctx.mk('rhead', { color: 0xffffff, map: roxorHeadTex(), flatShading: false });
+  const headMat = fan ? undefined : ctx.mk('rhead', { color: 0xffffff, map: roxorHeadTex(), flatShading: false });
   const R = buildHero(ctx, {
-    hip: 0.42, legX: 0.115, legR: 0.1, legColor: RC.pants, head: { rx: 0.35, ry: 0.32, rz: 0.335, jaw: 0.3 }, headY: 0.35, shX: 0.235, shY: 0.28, armR: 0.044, upLen: 0.15, foreLen: 0.14, handR: 0.057, headMat, earH: 0.085,
-    sleeve: { col: RC.tee, len: 0.1 },
+    hip: 0.42, legX: 0.115, legR: 0.1, legColor: tc(RC.pants), head: { rx: 0.35, ry: 0.32, rz: 0.335, jaw: 0.3 }, headY: 0.35, shX: 0.235, shY: 0.28, armR: 0.044, upLen: 0.15, foreLen: 0.14, handR: 0.057, headMat, earH: 0.085,
+    sleeve: { col: tc(RC.tee), len: 0.1 },
     leg(piv) {
       part(ctx, piv, hang(0.08, 0.09, 0.07, 6), RC.pantsDk, 0, -0.29, 0, 1, 1, 1, { ol: 0.012 });
       part(ctx, piv, box(0.02, 0.22, 0.07), RC.pantsDk, 0.055, -0.15, 0.05, 1, 1, 1, { ol: false, rz: 0.08 });
@@ -832,10 +905,10 @@ export function makeRoxor() {
   const { head, body, H } = R;
   const { cy, rx, ry, rz } = H;
   part(ctx, body, cyl(0.19, 0.165, 0.1, 12), RC.pants, 0, -0.03, 0, 1, 1, 0.9, { ol: 0.012 });
-  part(ctx, body, cyl(0.175, 0.195, 0.35, 12), RC.tee, 0, 0.16, 0, 1, 1, 0.86);
+  part(ctx, body, cyl(0.175, 0.195, 0.35, 12), tc(RC.tee), 0, 0.16, 0, 1, 1, 0.86);
   part(ctx, body, cyl(0.062, 0.07, 0.1, 8), SKIN, 0, 0.35, 0, 1, 1, 1, { ol: 0.012 });
   part(ctx, body, cyl(0.105, 0.14, 0.04, 12), RC.teeDk, 0, 0.325, 0, 1, 1, 0.9, { ol: 0.012 });
-  cylDecal(body, decalMat('rchest', roxorChestTex()), 0.185, 0.86, 0.18, 0.22, 0.22);
+  if (fan) part(ctx, body, ico(1), 0xffb52e, 0, 0.18, 0.155, 0.08, 0.08, 0.03, { ol: false }); else cylDecal(body, decalMat('rchest', roxorChestTex()), 0.185, 0.86, 0.18, 0.22, 0.22);
   // ---- mohawk crest: dark base mass + a fan of tall curled flame locks
   const hm2 = ctx.mk('rhairM', { color: RC.hair, flatShading: false });
   part(ctx, head, ico(1), 0, 0, cy + ry * 0.86, -0.04, rx * 0.72, ry * 0.34, rz * 0.98, { mat: hm2, hull: true, ol: 0.014, rx: -0.12 });
@@ -845,15 +918,15 @@ export function makeRoxor() {
     [-0.4, 0.2, -0.7, 0.15, 0.46, 0.2, 0], [-0.17, 0.14, -0.3, 0.05, 0.58, 0.22, 1], [0.05, 0.1, 0.0, -0.05, 0.64, 0.23, 0], [0.26, 0.06, 0.4, -0.12, 0.56, 0.22, 1], [0.46, 0.0, 0.85, -0.15, 0.42, 0.19, 0],
     [-0.1, -0.3, -0.15, -0.6, 0.5, 0.21, 1], [0.2, -0.32, 0.35, -0.6, 0.44, 0.2, 0],
   ];
-  for (const f of fl) {
+  for (const f of (fan ? fl.slice(0, 5) : fl)) {
     const bx = f[0] * rx, bz = f[1] * rz, by = cy + ry * Math.sqrt(Math.max(0.05, 1 - f[0] * f[0] - f[1] * f[1])) - 0.03;
     part(ctx, head, flameGeo(f[4] * 0.72, f[5] * 1.05, 0.14, -0.45), f[6] ? RC.hair2 : RC.hair, bx, by, bz, 1, 1, 1, { rz: -f[2], rx: f[3], ol: 0.012 });
   }
   // nape tail of wavy hair (viewer's left)
-  for (let i = 0; i < 3; i++) blade(ctx, head, i % 2 ? RC.hair2 : RC.hair, -0.12 - i * 0.07, cy - 0.12, -rz * 0.8, -0.22 - i * 0.1, cy - 0.34 - (i % 2) * 0.05, -rz * 0.86, 0.06, 0.04);
+  for (let i = 0; i < (fan ? 0 : 3); i++) blade(ctx, head, i % 2 ? RC.hair2 : RC.hair, -0.12 - i * 0.07, cy - 0.12, -rz * 0.8, -0.22 - i * 0.1, cy - 0.34 - (i % 2) * 0.05, -rz * 0.86, 0.06, 0.04);
   // stud earring
-  part(ctx, head, ico(0), 0xe8e8f0, -(rx * 0.985 + 0.014), cy - 0.12, 0.02, 0.018, 0.018, 0.018, { ol: 0.006 });
-  R.face = addHeroFace(ctx, head, H, {
+  if (!fan) part(ctx, head, ico(0), 0xe8e8f0, -(rx * 0.985 + 0.014), cy - 0.12, 0.02, 0.018, 0.018, 0.018, { ol: 0.006 });
+  R.face = fan ? addFanFace(ctx, head, H, { ex: 0.15, iris: 0x4a6aa8 }) : addHeroFace(ctx, head, H, {
     id: 'R', eyeP: paintEyeR, shutP: paintEyeShutR, ex: 0.16, ey: -0.035, ew: 0.17, eh: 0.15, blush: '#ff9fb0', bx: 0.2, by: -0.13, bw: 0.1,
     brow: { col: '#5a3220', thick: 11, arch: 0.28, x: 0.158, y: 0.15, w: 0.17, h: 0.1, rot: -0.04 }, noseCol: '#cf8a74', ny: -0.1,
     mouthP: paintMouthR, my: -0.175, mx: 0.02, mw: 0.15, mh: 0.092,
@@ -864,10 +937,11 @@ export function makeRoxor() {
   part(ctx, mic, ico(1), 0x1b1b24, 0, -0.31, 0, 0.052, 0.056, 0.052, { ol: 0.011 });
   part(ctx, mic, torus(0.025, 0.011, 3, 7), 0x76d04a, 0, -0.1, 0, 1, 1, 1, { rx: Math.PI / 2, ol: 0.007 });
   // pointing finger on the -x hand
-  part(ctx, R.armL.el, hang(0.017, 0.011, 0.1, 5), SKIN, -0.004, -0.2, 0.02, 1, 1, 1, { ol: 0.009 });
-  part(ctx, R.armL.el, ico(0), SKIN, 0.045, -0.19, 0.02, 0.022, 0.03, 0.02, { ol: 0.008 });
+  if (!fan) { part(ctx, R.armL.el, hang(0.017, 0.011, 0.1, 5), SKIN, -0.004, -0.2, 0.02, 1, 1, 1, { ol: 0.009 }); part(ctx, R.armL.el, ico(0), SKIN, 0.045, -0.19, 0.02, 0.022, 0.03, 0.02, { ol: 0.008 }); }
   // ---- carry rack (unchanged)
-  const rack = new THREE.Group(); body.add(rack);
+  let rack = null, stackA = null, stackB = null, stackC = null; const items = [];
+  if (rackOn) {
+  rack = new THREE.Group(); body.add(rack);
   part(ctx, rack, box(0.4, 0.5, 0.05), WOOD, 0, 0.14, -0.17, 1, 1, 1, { ol: false });
   part(ctx, rack, box(0.5, 0.05, 0.6), WOOD, 0, -0.1, -0.47, 1, 1, 1, { ol: 0.012 });
   for (const sd of [-1, 1]) {
@@ -879,11 +953,10 @@ export function makeRoxor() {
     part(ctx, rack, box(0.05, 0.4, 0.02), CREAM, sd * 0.085, 0.16, 0.128, 1, 1, 1, { rz: sd * -0.06, ol: false });
     part(ctx, rack, box(0.05, 0.03, 0.34), CREAM, sd * 0.1, 0.34, -0.02, 1, 1, 1, { ol: false });
   }
-  const stackA = new THREE.Group(); stackA.position.set(0, -0.07, -0.5); rack.add(stackA);
-  const stackB = new THREE.Group(); stackB.position.y = 0.4; stackA.add(stackB);
-  const stackC = new THREE.Group(); stackC.position.y = 0.4; stackB.add(stackC);
+  stackA = new THREE.Group(); stackA.position.set(0, -0.07, -0.5); rack.add(stackA);
+  stackB = new THREE.Group(); stackB.position.y = 0.4; stackA.add(stackB);
+  stackC = new THREE.Group(); stackC.position.y = 0.4; stackB.add(stackC);
   const lootCols = [C.pink, C.mint, C.gold, C.sky, C.violet, C.orange, C.blossom, C.teal, C.hotPink, C.green, 0xffe98a, 0xb59cff];
-  const items = [];
   for (let i = 0; i < 12; i++) {
     const r = Math.floor(i / 2), col = i % 2, parent = r < 2 ? stackA : r < 4 ? stackB : stackC;
     const piv = new THREE.Group();
@@ -902,11 +975,11 @@ export function makeRoxor() {
     piv.scale.setScalar(0.0001);
     items.push({ piv, s: 0, v: 0 });
   }
+  }
   fitHero(R, 1.8);
-  const S = newState(2), L = makeLife(ctx, 0.5, 0.9);
+  const { self, S, L, NT } = heroBase(R, { seed: 2, atkDur: 0.5, height: 1.8, radius: 0.45, note: [0.12, 1.3, 0.45] });
   let carryT = 0;
-  const self = {
-    group: new THREE.Group(),
+  Object.assign(self, {
     setCarry(n) { carryT = clamp(Math.round(n || 0), 0, 12); self._carryManual = true; },
     update(dt, t, st) {
       if (L.dead) return;
@@ -916,7 +989,7 @@ export function makeRoxor() {
       kidTick(R, S, dt, t, st);
       const amp = S.amp, ph = S.ph, A = L.atkEnv;
       const cw = (S.carryW = damp(S.carryW, carryT > 0 ? 1 : 0, 8, dt));
-      const sg = (S.sing = damp(S.sing, st.singing ? 1 : 0, 9, dt));
+      const sg = (S.sing = damp(S.sing, st.singing || st.atk ? 1 : 0, 9, dt));
       const beat = Math.sin(t * Math.PI * 4), hit = Math.abs(Math.sin(t * Math.PI * 2));
       // base pose (as drawn): mic hand at the chest (+x), free arm pointing out (-x)
       poseArm(R.armR, 1, -0.4 - S.s * 0.08 * amp, -0.1, -0.25, -1.95, 0, 0);
@@ -937,29 +1010,25 @@ export function makeRoxor() {
         R.body.rotation.x += A * 0.25;
         R.root.position.z = A * 0.28;
       } else R.root.position.z = 0;
-      setMouthH(R.face, Math.max(A * 0.9, sg * (0.4 + 0.4 * beat)) * 0.8, 0.1 + A * 0.4, 0.8);
-      setBlinkH(R.face, S.blink);
-      rack.visible = cw > 0.03 || carryT > 0;
-      for (let i = 0; i < 12; i++) {
-        const it = items[i], tg = i < carryT ? 1 : 0;
-        const sub = Math.max(1, Math.ceil(dt / 0.016)), h = dt / sub;
-        for (let k = 0; k < sub; k++) { it.v += (tg - it.s) * 170 * h; it.v *= Math.exp(-11 * h); it.s += it.v * h; }
-        const sc = Math.max(0.0001, it.s);
-        it.piv.scale.setScalar(sc);
-        it.piv.visible = sc > 0.004;
+      NT.tick(dt, sg > 0.3);
+      if (rackOn) {
+        rack.visible = cw > 0.03 || carryT > 0;
+        for (let i = 0; i < 12; i++) {
+          const it = items[i], tg = i < carryT ? 1 : 0;
+          const sub = Math.max(1, Math.ceil(dt / 0.016)), h = dt / sub;
+          for (let k = 0; k < sub; k++) { it.v += (tg - it.s) * 170 * h; it.v *= Math.exp(-11 * h); it.s += it.v * h; }
+          const sc = Math.max(0.0001, it.s);
+          it.piv.scale.setScalar(sc);
+          it.piv.visible = sc > 0.004;
+        }
+        const lean = 0.05 + 0.1 * amp;
+        stackA.rotation.set(lean + Math.sin(ph * 2) * 0.03 * amp + Math.sin(t * 1.6) * 0.008, 0, Math.sin(ph) * 0.05 * amp);
+        stackB.rotation.set(Math.sin(ph * 2 - 0.9) * 0.06 * amp + 0.02, 0, Math.sin(ph - 0.9) * 0.1 * amp + Math.sin(t * 1.5) * 0.015);
+        stackC.rotation.set(Math.sin(ph * 2 - 1.8) * 0.09 * amp + 0.02, 0, Math.sin(ph - 1.8) * 0.15 * amp + Math.sin(t * 1.5 - 0.8) * 0.025);
       }
-      const lean = 0.05 + 0.1 * amp;
-      stackA.rotation.set(lean + Math.sin(ph * 2) * 0.03 * amp + Math.sin(t * 1.6) * 0.008, 0, Math.sin(ph) * 0.05 * amp);
-      stackB.rotation.set(Math.sin(ph * 2 - 0.9) * 0.06 * amp + 0.02, 0, Math.sin(ph - 0.9) * 0.1 * amp + Math.sin(t * 1.5) * 0.015);
-      stackC.rotation.set(Math.sin(ph * 2 - 1.8) * 0.09 * amp + 0.02, 0, Math.sin(ph - 1.8) * 0.15 * amp + Math.sin(t * 1.5 - 0.8) * 0.025);
-      lifeXform(L, R.root, 1, 1, 1, 1 + A * 0.05, 1 + A * 0.1);
+      finishHero(R, S, L, st, t, dt, Math.max(A * 0.9, sg * (0.4 + 0.4 * beat)), 0.1 + A * 0.4, 0, 0.8);
     },
-    attack() { L.attack(); },
-    die() { L.die(); },
-    isDead() { return L.dead; },
-    get dead() { return L.dead; },
-  };
-  self.group.add(R.fitG);
+  });
   self.group.name = 'Roxor';
   return self;
 }
@@ -1281,4 +1350,7 @@ export function makeFan(seed = 1) {
 
 // ---- shared building blocks for other modules (foes, heroes in the game view). Same pattern as makeKappa / makeOni below. ----
 export const CK = { clamp, lerp, damp, ease, rng, makeCtx, part, flat, aim, addFace, makeLife, lifeXform, creatureBase, creatureStub, newState, fit, setBlink, setMouth,
-  ico, box, cyl, hang, cone, torus, cap, dome, geo, inkMat, eyeMat, whiteMat, mouthMat, tongueMat, basic, outlineGeo };
+  ico, box, cyl, hang, cone, torus, cap, dome, geo, inkMat, eyeMat, whiteMat, mouthMat, tongueMat, basic, outlineGeo,
+  // hero kit (heroes3d.js builds the rest of the cast from these)
+  THREE, STYLE, SKIN, ctex, decalMat, ell, star, heart, makeHead, patchGeo, decal, cylDecal, lockGeo, tubeGeo, flameGeo, pleatGeo, blade, buildHero, fitHero, poseArm, setBlinkH, setMouthH, addHeroFace, addFanFace,
+  eyeJ, paintEyeJ, paintEyeShutJ, paintEyeR, paintEyeShutR, paintMouthJ, paintMouthR, paintMouthSmile, paintBlush, kidTick, heroBase, heroOverlay, finishHero, makeNotes };

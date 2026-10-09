@@ -1,0 +1,21 @@
+<!doctype html><meta charset="utf-8"><title>lands parts lab</title>
+<!-- the tower / upgrade pieces on a bare disc, no game state: ?az= &el= &d= &tx= as in lab.js, set=towers|extras -->
+<script type="importmap">{ "imports": { "three": "../../encore_island_3d/vendor/three.module.min.js", "three/addons/": "../../encore_island_3d/vendor/jsm/" } }</script>
+<script type="module">
+import { lab } from './lab.js';
+import * as T from './lands_towers.js';
+import { makePlate } from './plate3d.js';
+import { fixPlate } from './lands_fx.js';
+import { loadGame } from './lands_lab.js';
+const P = new URLSearchParams(location.search), set = P.get('set') || 'towers';
+if (new URLSearchParams(location.search).get('game') === '1') await loadGame({ lands: 1 });
+lab({ d: 9, el: 55, az: 0, ty: 1, groundR: 20, extent: 14, async build(V) {
+  const parts = [], mk = (p, x, z, s = 1) => { p.g.position.set(x, 0, z); p.g.scale.setScalar(s); V.scene.add(p.g); parts.push(p); return p; };
+  const z = { drums: P.get('drums') === '1' };
+  const tws = [{ type: 'archer', x: -150, y: 0, fire: +(P.get('fire') || 0), cd: 1 }, { type: 'wizard', x: 0, y: 0, fire: +(P.get('fire') || 0), cd: 1 }, { type: 'catapult', x: 150, y: 0, fire: +(P.get('fire') || 0), cd: +(P.get('cd') || 1) }];
+  if (set === 'plate') { const pl = fixPlate(makePlate(V, { r: 0.84, icon: P.get('icon') || 'tower' })); pl.group.position.set(0, 0, 0); V.scene.add(pl.group); parts.push({ update(dt, t) { pl.setState({ afford: true, cost: 100, paid: 30, rem: 70, near: true, label: 'Speaker Tower', lvl: 2 }); pl.update(dt, t); }, g: pl.group }); }
+  else if (set === 'towers') { mk(T.speakerTower(tws[0]), -3, 0); mk(T.discoTower(tws[1]), 0, 0); mk(T.boomBox(tws[2]), 3, 0); window.__tws = tws; }
+  else { mk(T.drumKit(), -4.5, 0); mk(T.ampWall(+(P.get('amps') || 4)), 0, 0); mk(T.crowdGate(+(P.get('gate') || 2)), 4.5, 0); }
+  return { update(dt, t) { for (const p of parts) p.update && p.update(dt, t, z); } };
+} });
+</script>
