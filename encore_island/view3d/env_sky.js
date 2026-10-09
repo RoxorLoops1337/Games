@@ -39,15 +39,27 @@ export function createSky(V) {
   const dome = new THREE.Mesh(new THREE.SphereGeometry(1, 28, 16), dm); dome.frustumCulled = false; dome.renderOrder = -1000; dome.name = 'skyDome'; dome.userData.noBake = true;
   const root = new THREE.Group(); root.name = 'sky'; root.add(dome);
 
-  // ---- cloud banks: lumpy white puffs (several lobes each) arranged in a ring, fading out near the camera so they never block the view
-  const PUFFS = kit.Q.detail === 0 ? 44 : 84, banks = new THREE.Group(); banks.name = 'cloudBanks';
-  const cg = (() => { const b = new kit.Builder({ ao: 0 }), r = kit.rng(4); for (let i = 0; i < 6; i++) { const a = i / 6 * 6.28; b.shape(blobSmooth(1, 0.12, 20 + i, 0.78), 0xffffff, Math.cos(a) * 0.6 * (i ? 1 : 0), 0.0 + (i % 2) * 0.08, Math.sin(a) * 0.5 * (i ? 1 : 0), i ? 0.5 + r() * 0.2 : 0.85); } return b.geometry(); })();
-  const cm = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 1, metalness: 0, transparent: true, depthWrite: false, vertexColors: true, flatShading: false }); const cu = { uFadeA: { value: 38 }, uFadeB: { value: 70 } };
-  patchMat(cm, 'cloudfade', (sh) => { sh.uniforms.uFadeA = cu.uFadeA; sh.uniforms.uFadeB = cu.uFadeB; sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying float vCd;').replace('#include <project_vertex>', '#include <project_vertex>\nvCd = length(mvPosition.xyz);'); sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying float vCd; uniform float uFadeA, uFadeB;').replace('#include <opaque_fragment>', '#include <opaque_fragment>\ngl_FragColor.a *= smoothstep(uFadeA, uFadeB, vCd) * 0.96;'); });
-  cm.userData.noCast = true;
-  const puffs = new THREE.InstancedMesh(cg, cm, PUFFS); puffs.frustumCulled = false; puffs.castShadow = false; puffs.receiveShadow = false; puffs.renderOrder = -900; puffs.name = 'puffs';
-  const pr = kit.rng(77), seedP = []; for (let i = 0; i < PUFFS; i++) seedP.push({ a: pr() * 6.283, d: pr(), y: pr(), s: 0.6 + pr() * 0.9, ph: pr() * 6.28, hi: pr() < 0.25 });
-  puffs.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(PUFFS * 3), 3); for (let i = 0; i < PUFFS; i++) { const b = 0.9 + pr() * 0.1; puffs.setColorAt(i, new THREE.Color(b, b, b)); }
+  // ---- cloud banks: soft painted cloud billboards (upright, turning to face the camera) in a ring around the world, hazed by distance and faded out
+  // near the camera so they never block the view. One instanced draw call.
+  const PUFFS = kit.Q.detail === 0 ? 40 : 84, banks = new THREE.Group(); banks.name = 'cloudBanks';
+  const ctex = kit.canvasTex(256, 128, (g, w, h) => { // lumpy cloud: overlapping soft discs, lit from above (R = brightness, A = coverage)
+    const r = kit.rng(3), lobes = [[0.5, 0.52, 0.3], [0.3, 0.62, 0.2], [0.7, 0.6, 0.22], [0.15, 0.72, 0.13], [0.86, 0.72, 0.13], [0.42, 0.34, 0.18], [0.62, 0.36, 0.16]];
+    for (const [cx, cy, rr] of lobes) { const x = cx * w, y = cy * h, R = rr * h * 1.5, gr = g.createRadialGradient(x, y, R * 0.15, x, y, R); gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(0.62, 'rgba(255,255,255,0.95)'); gr.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = gr; g.fillRect(x - R, y - R, R * 2, R * 2); }
+    g.globalCompositeOperation = 'source-atop'; const sh = g.createLinearGradient(0, h * 0.12, 0, h * 0.86); sh.addColorStop(0, 'rgba(255,255,255,1)'); sh.addColorStop(0.55, 'rgba(226,226,236,1)'); sh.addColorStop(1, 'rgba(176,176,204,1)'); g.fillStyle = sh; g.fillRect(0, 0, w, h);
+  }, { mip: false });
+  const cu = { uMap: { value: ctex }, uCol: { value: new THREE.Color() }, uUnder: { value: new THREE.Color() }, uFog: { value: new THREE.Color() }, uFogN: { value: 60 }, uFogF: { value: 200 }, uFadeA: { value: 38 }, uFadeB: { value: 70 }, uCam: { value: new THREE.Vector3() }, uO: { value: 0.9 } };
+  const cm = new THREE.ShaderMaterial({ uniforms: cu, transparent: true, depthWrite: false, fog: false, side: THREE.DoubleSide,
+    vertexShader: `varying vec2 vUv; varying float vD; varying vec3 vW; void main(){ vec3 c = instanceMatrix[3].xyz; float s = instanceMatrix[0][0]; vec3 rt = vec3(viewMatrix[0][0], viewMatrix[1][0], viewMatrix[2][0]); rt = normalize(vec3(rt.x, 0.0, rt.z));
+      vec3 wp = c + rt * position.x * s * 2.0 + vec3(0.0, 1.0, 0.0) * position.y * s; vUv = uv; vW = wp; gl_Position = projectionMatrix * viewMatrix * vec4(wp, 1.0); }`,
+    fragmentShader: `varying vec2 vUv; varying vec3 vW; uniform sampler2D uMap; uniform vec3 uCol, uUnder, uFog, uCam; uniform float uFogN, uFogF, uFadeA, uFadeB, uO;
+      void main(){ vec4 t = texture2D(uMap, vUv); float d = length(vW - uCam); vec3 col = mix(uUnder, uCol, t.r * t.r * 1.15); float a = t.a * uO * smoothstep(uFadeA, uFadeB, d);
+        float fg = clamp((d - uFogN) / max(1.0, uFogF - uFogN), 0.0, 1.0); fg = fg * fg * (3.0 - 2.0 * fg); col = mix(col, uFog, fg * 0.8); gl_FragColor = vec4(col, a);
+        #include <tonemapping_fragment>
+        #include <colorspace_fragment>
+      }` });
+  cm.userData.noCast = true; cm.userData.noLook = true;
+  const puffs = new THREE.InstancedMesh(new THREE.PlaneGeometry(1, 1).translate(0, 0.5, 0), cm, PUFFS); puffs.frustumCulled = false; puffs.castShadow = false; puffs.receiveShadow = false; puffs.renderOrder = -900; puffs.name = 'puffs';
+  const pr = kit.rng(77), seedP = []; for (let i = 0; i < PUFFS; i++) seedP.push({ a: pr() * 6.283, d: pr(), y: pr(), s: 0.6 + pr() * 0.9, ph: pr() * 6.28, hi: pr() < 0.3 });
   banks.add(puffs); root.add(banks);
 
   // ---- far floating islets: grass cap, tiered rock body, one tiny tree. One instanced mesh.
@@ -70,17 +82,17 @@ export function createSky(V) {
       dome.position.copy(cam.position);
       U.uTop.value.copy(mood.skyTop); U.uMid.value.copy(mood.skyMid); U.uLow.value.copy(mood.skyLow); U.uFog.value.copy(mood.fog); U.uSunCol.value.copy(mood.sun); U.uSunDisc.value.copy(mood.sunDisc); U.uCloudCol.value.copy(mood.cloudCol);
       U.uSunDir.value.set(mood.sunDir[0], mood.sunDir[1], mood.sunDir[2]); U.uStars.value = mood.stars; U.uSunSize.value = mood.sunSize;
-      cm.color.copy(mood.cloudCol).lerp(mood.fog, 0.18); im.color.copy(mood.hemiSky).lerp(new THREE.Color(1, 1, 1), 0.6);
-      cu.uFadeA.value = Math.max(30, mood.fogNear * 0.55); cu.uFadeB.value = mood.fogNear + 20;
+      cu.uCol.value.copy(mood.cloudCol); cu.uUnder.value.copy(mood.skyMid).lerp(mood.cloudCol, 0.35).multiplyScalar(0.8); cu.uFog.value.copy(mood.fog); cu.uFogN.value = mood.fogNear; cu.uFogF.value = mood.fogFar; cu.uCam.value.copy(cam.position);
+      im.color.copy(mood.hemiSky).lerp(new THREE.Color(1, 1, 1), 0.6); cu.uFadeA.value = 26; cu.uFadeB.value = 62;
       rad += (radT - rad) * (1 - Math.exp(-dt * 0.8));
       const drift = t * 0.0035;
-      for (let i = 0; i < PUFFS; i++) { const s = seedP[i], a = s.a + drift * (s.hi ? 1.6 : 1), R = rad + 24 + s.d * 120, y = s.hi ? 6 + s.y * 10 : WY + 0.5 + s.y * 6 + Math.sin(t * 0.3 + s.ph) * 0.3, sc = s.s * (s.hi ? 7 : 11);
-        pv.set(cx + Math.cos(a) * R, y, cz + Math.sin(a) * R); q.setFromAxisAngle(UP, s.ph); sv.set(sc, sc * (s.hi ? 0.55 : 0.8), sc * 0.8); m4.compose(pv, q, sv); puffs.setMatrixAt(i, m4); }
+      for (let i = 0; i < PUFFS; i++) { const s = seedP[i], a = s.a + drift * (s.hi ? 1.6 : 1), R = rad + 30 + s.d * 150, y = s.hi ? 7 + s.y * 14 : WY + 0.3 + s.y * 7 + Math.sin(t * 0.3 + s.ph) * 0.3, sc = s.s * (s.hi ? 14 : 20);
+        pv.set(cx + Math.cos(a) * R, y, cz + Math.sin(a) * R); q.identity(); sv.set(sc, sc * 0.5, 1); m4.compose(pv, q, sv); puffs.setMatrixAt(i, m4); }
       puffs.instanceMatrix.needsUpdate = true;
       for (let i = 0; i < ISL; i++) { const s = iseed[i], a = s.a + t * 0.0012, R = rad + 34 + s.d * 90; pv.set(cx + Math.cos(a) * R, 1.5 + s.y * 9 + Math.sin(t * 0.5 + s.ph) * 0.35, cz + Math.sin(a) * R); q.setFromAxisAngle(UP, s.yaw + t * 0.02); sv.setScalar(s.s); m4.compose(pv, q, sv); islets.setMatrixAt(i, m4); }
       islets.instanceMatrix.needsUpdate = true;
     },
-    dispose() { dome.geometry.dispose(); dm.dispose(); cg.dispose(); cm.dispose(); ig.dispose(); im.dispose(); puffs.dispose(); islets.dispose(); },
+    dispose() { dome.geometry.dispose(); dm.dispose(); puffs.geometry.dispose(); cm.dispose(); ctex.dispose(); ig.dispose(); im.dispose(); puffs.dispose(); islets.dispose(); },
   };
   return api;
 }

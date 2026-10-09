@@ -34,7 +34,7 @@ function mkB(ctx, gold) { // lit part with an inked hull; gold swaps every colou
 const HID = 1e-4, vis = (n, on, s = 1) => { n.visible = on; n.scale.setScalar(on ? s : HID); };
 const note = (par, col, s = 1) => { const g = grp(par); F(g, ic(0), col, 0, 0, 0, 0.1 * s, 0.075 * s, 0.05 * s); F(g, bx, col, 0.085 * s, 0.17 * s, 0, 0.026 * s, 0.34 * s, 0.03 * s); F(g, bx, col, 0.14 * s, 0.31 * s, 0, 0.1 * s, 0.05 * s, 0.03 * s, { rz: -0.5 }); g.visible = false; return g; };
 function flyNote(n, u, x, y, z, dx, dy, s = 1) { // u 0..1 along a rising wobbly path, hidden outside
-  const on = u > 0 && u < 1; n.visible = on; if (!on) { n.scale.setScalar(HID); return; } n.position.set(x + dx * u + sin(u * 9) * 0.05, y + dy * u, z); n.scale.setScalar(s * Math.sqrt(sin(u * PI)) * 1.1); n.rotation.z = sin(u * 7) * 0.3;
+  const on = u > 0 && u < 1; n.visible = on; if (!on) { n.scale.setScalar(HID); return; } n.position.set(x + dx * u + sin(u * 9) * 0.05, y + dy * u, z); n.scale.setScalar(s * Math.sqrt(sin(u * PI)) * 1.6); n.rotation.z = sin(u * 7) * 0.3;
 }
 
 // ---------------------------------------------------------------- face kit: eyes with sclera + iris + pupil + glint, lids, brows, mouths
@@ -99,8 +99,8 @@ function foe(o, cfg, setup) {
   let crown = null, glint = null, sparks = null;
   if (elite) {
     const [cx, cy, cz, cs] = cfg.crown || [0, cfg.H, 0, 1]; crown = grp(pre, cx, cy, cz); crown.scale.setScalar(cs);
-    CK.part(ctx, crown, tor(0.14, 5, 12), 0xffd84d, 0, 0.1, 0, 0.3, 0.3, 0.16, { rx: PI / 2, ol: 0.016, mo: GLOSS });
-    for (let i = 0; i < 5; i++) { const a = i / 5 * TAU; CK.part(ctx, crown, cone(0.075, 0.22, 5), 0xffd84d, sin(a) * 0.3, 0.26, cos(a) * 0.3 * 0.55, 1, 1, 1, { ol: 0.014, mo: GLOSS }); F(crown, ic(0), i % 2 ? 0xff7eb6 : 0x8fe3f0, sin(a) * 0.3, 0.4, cos(a) * 0.3 * 0.55, 0.045); }
+    CK.part(ctx, crown, tor(0.14, 4, 10), 0xffd84d, 0, 0.1, 0, 0.3, 0.3, 0.16, { rx: PI / 2, ol: 0.016, mo: GLOSS });
+    for (let i = 0; i < 5; i++) { const a = i / 5 * TAU; CK.part(ctx, crown, cone(0.075, 0.22, 5), 0xffd84d, sin(a) * 0.3, 0.26, cos(a) * 0.3 * 0.55, 1, 1, 1, { ol: 0.014, mo: GLOSS }); if (i % 2 === 0) F(crown, ic(0), i === 2 ? 0xff7eb6 : 0x8fe3f0, sin(a) * 0.3, 0.4, cos(a) * 0.3 * 0.55, 0.05); }
     glint = F(crown, CK.geo('fa_oct', () => new THREE.OctahedronGeometry(1, 0)), hdr(2.2, 1.9, 0.9), 0.32, 0.46, 0.08, 0.09, 0.2, 0.02);
   }
   if (gold) { sparks = grp(pre); for (let i = 0; i < 3; i++) { const m = F(sparks, CK.geo('fa_oct', () => new THREE.OctahedronGeometry(1, 0)), hdr(2.2, 1.7, 0.6), 0, 0, 0, 0.06, 0.15, 0.02); m.userData.k = i; } }
@@ -121,7 +121,7 @@ function foe(o, cfg, setup) {
       S.blinkIn -= dt; if (S.blinkIn <= 0 && S.blinkT < 0) { S.blinkT = 0; S.blinkIn = 2 + S.rnd() * 3; }
       c.bl = 0; if (S.blinkT >= 0) { S.blinkT += dt; const u = S.blinkT / 0.15; if (u >= 1) S.blinkT = -1; else c.bl = 1 - Math.abs(u * 2 - 1); }
       tick(c);
-      if (st.die > 0) { if (L.dieT < 0) L.dieT = 0; L.dieU = Math.max(L.dieU, sat(st.die)); if (L.dieU >= 1) L.dead = true; }
+      if (st.die > 0) { L.dieT = sat(st.die) * (cfg.die || 0.8); L.dieU = sat(st.die); if (L.dieU >= 1) L.dead = true; } // the engine's death progress wins over the internal timer
       c.die = L.dieT >= 0 ? L.dieU : 0;
       CK.lifeXform(L, root, 1, 1, 1, c.sy, c.sxz);
       const ev = elite || st.elite; eS = damp(eS, ev ? 1.14 : 1, 8, dt); pre.scale.setScalar(eS);
@@ -149,16 +149,16 @@ function kappa(X) {
   const E = mkEyes(X, head, d, { ex: 0.25, ey: 0.05, r: 0.15, h: 1.1, iris: 0x4fa8e8, lid: OR, droop: 0.42, tilt: 0.12 });
   const M = mkMouth(X, head, d, 0, -0.3, 'o', 0.15);
   B(head, ic(2), NAVY, 0, 0.33, -0.02, 0.5, 0.3, 0.46, { ol: 0.026 }); B(head, tor(0.16, 4, 12), NAVY, 0, 0.3, 0, 0.5, 0.46, 0.2, { rx: PI / 2, ol: 0.02 });
-  B(head, ic(1), 0xff7eb6, 0, 0.64, -0.02, 0.1, 0.1, 0.1, { ol: false }); B(head, ic(0), 0xfff4e6, 0.2, 0.43, 0.3, 0.05, 0.03, 0.03, { ol: false });
+  B(head, ic(0), 0xff7eb6, 0, 0.64, -0.02, 0.11, 0.11, 0.11, { ol: false }); B(head, ic(0), 0xfff4e6, 0.2, 0.43, 0.3, 0.05, 0.03, 0.03, { ol: false });
   // worm arm (left): three soft segments that dangle
   const arm = grp(body, -0.4, 0.42, 0.02); arm.rotation.order = 'YXZ'; const seg = [arm];
-  for (let i = 0; i < 3; i++) { const g = i ? grp(seg[i - 1], 0, -0.22, 0) : arm; if (i) seg.push(g); B(g, hang(0.075 - i * 0.008, 0.07 - i * 0.008, 0.22, 8), CRM, 0, 0, 0, 1, 1, 1, { ol: 0.016 }); B(g, ic(0), CRM, 0, -0.22, 0, 0.08 - i * 0.01, 0.08 - i * 0.01, 0.08 - i * 0.01, { ol: false }); }
+  for (let i = 0; i < 3; i++) { const g = i ? grp(seg[i - 1], 0, -0.22, 0) : arm; if (i) seg.push(g); B(g, hang(0.075 - i * 0.008, 0.07 - i * 0.008, 0.22, 6), CRM, 0, 0, 0, 1, 1, 1, { ol: 0.016 }); B(g, ic(0), CRM, 0, -0.22, 0, 0.08 - i * 0.01, 0.08 - i * 0.01, 0.08 - i * 0.01, { ol: false }); }
   F(seg[2], ic(0), 0xffc9a8, 0, -0.3, 0, 0.001);
   // brass horn on the right side: coiled loop, flared bell and a mouthpiece pipe to the face
   const horn = grp(body, 0.55, 0.6, 0.0);
   B(horn, tor(0.2, 5, 12), BRASS, 0, 0, 0, 0.3, 0.3, 0.3, { sh: true, ol: 0.022 });
   const bell = grp(horn, 0.22, 0.28, 0); bell.rotation.z = -0.55;
-  B(bell, CK.cyl(0.3, 0.08, 0.42, 10), BRASS, 0, 0.21, 0, 1, 1, 1, { sh: true, ol: 0.022 }); F(bell, ic(1), 0x7a4a14, 0, 0.41, 0, 0.27, 0.04, 0.27);
+  B(bell, CK.cyl(0.3, 0.08, 0.42, 8), BRASS, 0, 0.21, 0, 1, 1, 1, { sh: true, ol: 0.022 }); F(bell, ic(1), 0x7a4a14, 0, 0.41, 0, 0.27, 0.04, 0.27);
   const pipe = B(horn, cylg(1, 7), BRASS, -0.2, 0.2, 0.2, 0.07, 0.6, 0.07, { sh: true, ol: 0.016, rz: 1.1, rx: -0.5 });
   const nts = [note(root, 0x4f8cf0, 1.2), note(root, 0xff5fa0, 1.2)];
   return (c) => {
@@ -195,7 +195,7 @@ function oni_cub(X) {
   const arms = [-1, 1].map((sd) => { const a = limb(X, body, sd * 0.36, 0.5, 0.04, 0.3, 0.05, PUR, LIL, 0.07); return a; });
   const drop = grp(head, 0.5, 0.1, 0.2); F(drop, ic(1), 0x9de0ff, 0, 0, 0, 0.07, 0.09, 0.07); F(drop, cone(0.06, 0.14, 6), 0x9de0ff, 0, 0.1, 0, 1);
   return (c) => {
-    const { t, amp, s, cs, A, sp } = c, jit = sin(t * 47) * (0.012 + 0.02 * amp + 0.012 * A), jit2 = sin(t * 53 + 1) * (0.012 + 0.02 * amp);
+    const { t, amp, s, cs, A } = c, jit = sin(t * 47) * (0.012 + 0.02 * amp + 0.012 * A), jit2 = sin(t * 53 + 1) * (0.012 + 0.02 * amp);
     const hop = Math.abs(sin(c.ph * 0.5)) * 0.2 * amp;
     root.position.set(jit * 0.5, hop + sin(t * 3.1) * 0.01, A * 0.5);
     legs[0].rotation.set(s * 0.9 * amp, 0, 0.12 - sin(t * 8) * 0.04 * (1 - amp)); legs[1].rotation.set(-s * 0.9 * amp, 0, -0.12 + sin(t * 8 + 2) * 0.04 * (1 - amp));
@@ -242,7 +242,7 @@ function bamboo_boar(X) {
 // ---------------------------------------------------------------- 4. crow_tengu = Pitch-Perfect Gull (spitter): headphone gull that flaps, sings and spits a teal glob
 function crow_tengu(X) {
   const { root, B } = X, WH = 0xfbfbff, WING = 0x7a88b8, WING2 = 0x56648f, ORG = 0xff9a2e, LEG = 0xff9a52, NAVY = 0x3a4a8a;
-  const legs = [-1, 1].map((sd) => { const g = grp(root, sd * 0.14, 0.72, 0); B(g, hang(0.045, 0.04, 0.7, 6), LEG, 0, 0, 0, 1, 1, 1, { ol: 0.016 }); B(g, ic(1), LEG, 0, -0.72, 0.1, 0.13, 0.035, 0.2, { ol: 0.016 }); return g; });
+  const legs = [-1, 1].map((sd) => { const g = grp(root, sd * 0.14, 0.72, 0); B(g, hang(0.045, 0.04, 0.7, 6), LEG, 0, 0, 0, 1, 1, 1, { ol: 0.016 }); B(g, ic(0), LEG, 0, -0.72, 0.1, 0.13, 0.04, 0.2, { ol: 0.016 }); return g; });
   const body = grp(root, 0, 0.8, 0); B(body, ic(2), WH, 0, 0.42, 0, 0.42, 0.55, 0.38); B(body, ic(1), 0xdfe6ff, 0, 0.4, -0.2, 0.3, 0.42, 0.2, { ol: false });
   const tail = grp(body, 0, 0.0, -0.3); for (let i = -1; i <= 1; i++) { const f = grp(tail); f.rotation.set(0.5, 0, i * 0.35); B(f, ic(0), WING, 0, -0.12, -0.05, 0.1, 0.3, 0.035, { ol: 0.014 }); F(f, ic(0), 0xffffff, 0, -0.36, -0.03, 0.035); }
   const wings = [-1, 1].map((sd) => { const w = grp(body, sd * 0.4, 0.66, -0.04); w.rotation.order = 'ZXY'; B(w, ic(2), WING, sd * 0.38, -0.04, 0, 0.5, 0.075, 0.26, { ol: 0.022 }); for (let k = 0; k < 3; k++) { B(w, ic(0), WING2, sd * (0.78 + k * 0.1), -0.08 - k * 0.025, -0.06 + k * 0.1, 0.17, 0.04, 0.07, { ol: 0.014, rz: -sd * 0.1 }); F(w, ic(0), 0xffffff, sd * (0.9 + k * 0.1), -0.05 - k * 0.025, -0.06 + k * 0.1, 0.03, 0.02, 0.03); } return w; });
@@ -286,7 +286,7 @@ function mushroom_folk(X) {
   const btn = [0xff4d4d, 0x6fd36a, 0xff4d4d, 0xffd84d, 0x6fd36a]; const bl = btn.map((c, i) => F(body, ic(0), c, 0.34, 0.8 - i * 0.12, 0.31, 0.045));
   const spk = B(body, CK.cyl(0.12, 0.12, 0.04, 12), BLU, 0.34, 0.2, 0.3, 1, 1, 1, { rx: PI / 2, ol: 0.014 }); for (let i = 0; i < 3; i++) F(body, ic(0), 0x3a7ac0, 0.34 + (i - 1) * 0.06, 0.2 + (i % 2) * 0.04, 0.33, 0.02);
   const head = grp(body, 0, 1.28, 0), d = { cy: 0, rx: 0.5, ry: 0.4, rz: 0.4 };
-  B(head, rb(1.0, 0.6, 0.56, 0.35, 2), BLU2, 0, 0, 0, 1, 1, 1, { ol: 0.03 }); B(head, rb(0.8, 0.44, 0.06, 0.45, 1), 0x9fdcff, 0, -0.02, 0.27, 1, 1, 1, { ol: false });
+  B(head, rb(1.0, 0.6, 0.56, 0.35, 2), BLU2, 0, 0, 0, 1, 1, 1, { ol: 0.03 }); B(head, rb(0.8, 0.44, 0.06, 0.45, 1), 0xb4e6ff, 0, -0.02, 0.27, 1, 1, 1, { ol: false });
   const E = mkEyes(X, head, d, { ex: 0.2, ey: 0.05, r: 0.115, h: 1.1, iris: 0xf0a020, lift: 0.0 }), M = mkMouth(X, head, d, 0, -0.17, 'smile', 0.14);
   const bulbs = []; const bc = [0xff7eb6, 0xffd84d, 0x8fe3f0, 0xff9a2e, 0x9af0b4, 0xff7eb6, 0xffd84d]; for (let i = 0; i < 7; i++) bulbs.push(B(head, ic(0), bc[i], -0.36 + i * 0.12, 0.33, 0.05, 0.05, 0.05, 0.05, { ol: false }));
   const arms = [-1, 1].map((sd) => limb(X, body, sd * 0.56, 0.85, 0.02, 0.45, 0.07, BLU, BLU, 0.115));
@@ -312,14 +312,14 @@ function hitodama(X) {
   const pg = CK.geo('fa_chilli', () => { // teardrop lathe that curls to one side at the tip
     const pts = [[0.001, 0], [0.07, 0.1], [0.19, 0.34], [0.31, 0.62], [0.39, 0.92], [0.4, 1.15], [0.32, 1.36], [0.16, 1.46], [0.001, 1.49]].map(([r, y]) => new THREE.Vector2(r, y));
     const g = new THREE.LatheGeometry(pts, 14), p = g.attributes.position; for (let i = 0; i < p.count; i++) { const y = p.getY(i), k = Math.pow(1 - y / 1.5, 2.2); p.setX(i, p.getX(i) * 1.0 + k * 0.3); p.setZ(i, p.getZ(i) * 0.86); } g.computeVertexNormals(); return g; });
-  const legs = [-1, 1].map((sd) => { const g = grp(root, 0.05 + sd * 0.14, 0.5, 0.04); B(g, hang(0.065, 0.058, 0.4, 7), DK, 0, 0, 0, 1, 1, 1, { ol: 0.018 }); foot(X, g, 0, -0.42, 0.06, 0x7a1a14, 0.12, 0.07, 0.19); return g; });
-  const body = grp(root, 0, 0.3, 0); B(body, pg, RED, 0, 0, 0, 1, 1, 1, { ol: 0.028, sh: true });
+  const legs = [-1, 1].map((sd) => { const g = grp(root, 0.06 + sd * 0.1, 0.6, 0.02); B(g, hang(0.07, 0.06, 0.5, 7), DK, 0, 0, 0, 1, 1, 1, { ol: 0.018 }); foot(X, g, 0, -0.52, 0.06, 0x7a1a14, 0.12, 0.07, 0.19); return g; });
+  const body = grp(root, -0.12, 0.3, 0); B(body, pg, RED, 0, 0, 0, 1, 1, 1, { ol: 0.028, sh: true });
   const d = { cy: 0.98, rx: 0.4, ry: 0.5, rz: 0.34 };
   const E = mkEyes(X, body, d, { ex: 0.15, ey: 0.08, r: 0.14, h: 1.15, iris: 0xb8a8f8, lift: 0.08 }), M = mkMouth(X, body, d, 0, -0.24, 'smile', 0.07, 0x5a1426);
   F(body, ic(1), 0xfff0e0, 0.24, 0.6, 0.15, 0.12, 0.22, 0.03, { ry: 0.9, rz: -0.25 }); F(body, ic(0), 0xffffff, -0.22, 1.1, 0.14, 0.04, 0.07, 0.02, { ry: -0.9 });
   B(body, ic(1), GRN, 0, 1.46, -0.02, 0.2, 0.09, 0.18, { ol: 0.016 });
   const stem = [grp(body, 0, 1.5, 0)]; for (let i = 0; i < 3; i++) { if (i) stem.push(grp(stem[i - 1], 0, 0.15, 0)); B(stem[i], CK.cyl(0.04 - i * 0.006, 0.055 - i * 0.008, 0.16, 6), GRN, 0, 0.08, 0, 1, 1, 1, { ol: 0.012 }); }
-  const wisp = [-1, 1].map((sd) => { const g = grp(body, sd * 0.16, 2.0, 0), ch = []; ch.push(F(g, tor(0.3, 4, 8, PI), ST, 0.05, 0.08, 0, 0.09, 0.09, 0.09, { rz: -PI / 2 })); ch.push(F(g, tor(0.3, 4, 8, PI), ST, -0.05, 0.26, 0, 0.09, 0.09, 0.09, { rz: PI / 2 })); g.userData.ch = ch; return g; });
+  const wisp = [-1, 1].map((sd) => { const g = grp(body, sd * 0.16, 1.9, 0), ch = []; ch.push(F(g, tor(0.3, 4, 8, PI), ST, 0.05, 0.08, 0, 0.09, 0.09, 0.09, { rz: -PI / 2 })); ch.push(F(g, tor(0.3, 4, 8, PI), ST, -0.05, 0.26, 0, 0.09, 0.09, 0.09, { rz: PI / 2 })); g.userData.ch = ch; return g; });
   return (c) => {
     const { t, amp, s, cs, A } = c, hop = Math.abs(sin(c.ph * 0.5)) * 0.14 * amp;
     root.position.set(0, hop + sin(t * 5) * 0.01, A * 0.65);
@@ -327,7 +327,7 @@ function hitodama(X) {
     body.rotation.set(0.14 * amp + A * 0.5, sin(t * 11) * 0.04 * amp, sin(t * 3.4) * 0.05 + s * 0.12 * amp); body.scale.set(1 + hop * 0.2, 1 - hop * 0.2 + A * 0.04, 1 + hop * 0.2);
     stem.forEach((g, i) => g.rotation.set(-0.1 - 0.3 * amp - A * 0.3, 0, -0.3 + sin(t * 3 - i * 0.7) * 0.15 - 0.2 * i * 0.1));
     const flare = 1 + A * 1.0 + 0.2 * sin(t * 6);
-    wisp.forEach((g, i) => { g.scale.set(1, flare, 1); g.rotation.z = (i ? -1 : 1) * 0.1; g.userData.ch.forEach((m, k) => { m.rotation.z = (k ? 1 : -1) * PI / 2 + sin(t * 4 - k * 1.3 + i * 2) * 0.3; m.scale.setScalar(0.09 * (0.7 + 0.5 * tri(t * 1.1 + k * 0.2 + i * 0.4))); }); });
+    wisp.forEach((g, i) => { g.scale.set(1, flare, 1); g.rotation.z = (i ? -1 : 1) * 0.1; g.userData.ch.forEach((m, k) => { m.rotation.z = (k ? 1 : -1) * PI / 2 + sin(t * 4 - k * 1.3 + i * 2) * 0.3; m.scale.setScalar(0.075 * (0.7 + 0.5 * tri(t * 1.1 + k * 0.2 + i * 0.4))); }); });
     eyesSet(E, c.bl, sin(t * 6) * 0.4 * (0.3 + amp), 0.1); mouthSet(M, A * 0.9);
     c.sy = 1; c.sxz = 1;
   };
@@ -343,7 +343,7 @@ function oni_brute(X) {
   const lights = [0xff4d4d, 0xffd84d, 0x6fd36a, 0xff7eb6, 0x8fe3f0, 0xff4d4d].map((c, i) => F(body, ic(0), c, -0.3 + i * 0.12, 0.56, 0.33, 0.04));
   const dome = grp(body, 0, 0.95, 0);
   B(dome, CK.cyl(0.5, 0.5, 0.64, 14), BR, 0, 0, 0, 1, 1, 1, { rx: PI / 2, ol: 0.028 }); B(dome, tor(0.07, 4, 14, PI), 0xe8887a, 0, 0, 0.33, 0.5, 0.5, 0.5, { ol: false });
-  B(dome, ic(2), 0xd6eefa, 0, 0, 0.3, 0.4, 0.4, 0.07, { sh: true, ol: false }); B(dome, CK.cyl(0.26, 0.26, 0.03, 14), 0x3a2a3a, 0, 0.04, 0.37, 1, 1, 1, { rx: PI / 2, ol: false }); F(dome, ic(0), 0xff7eb6, 0, 0.04, 0.395, 0.07, 0.07, 0.02);
+  B(dome, disc(18), 0xd6eefa, 0, 0, 0.34, 0.4, 0.4, 1, { sh: true, ol: false }); B(dome, CK.cyl(0.26, 0.26, 0.03, 14), 0x3a2a3a, 0, 0.04, 0.37, 1, 1, 1, { rx: PI / 2, ol: false }); F(dome, ic(0), 0xff7eb6, 0, 0.04, 0.395, 0.07, 0.07, 0.02);
   const bear = grp(dome, 0, -0.04, 0.4), bd = { cy: 0, rx: 0.2, ry: 0.19, rz: 0.16 };
   B(bear, ic(1), 0x8a4a28, 0, 0, 0, bd.rx, bd.ry, bd.rz, { ol: 0.014 }); for (const sd of [-1, 1]) B(bear, ic(0), 0x8a4a28, sd * 0.15, 0.15, -0.02, 0.07, 0.07, 0.05, { ol: false });
   B(bear, ic(1), 0xe6b98a, 0, -0.06, 0.12, 0.1, 0.075, 0.07, { ol: false }); F(bear, ic(0), 0x2b1426, 0, -0.03, 0.18, 0.03, 0.022, 0.02);
@@ -373,7 +373,7 @@ function karakasa(X) {
   const leg = grp(root, 0, 0.7, 0); B(leg, hang(0.12, 0.1, 0.5, 8), CRM, 0, 0, 0, 1, 1, 1, { ol: 0.02 }); B(leg, ic(1), 0x5aa0f0, 0, -0.56, 0.12, 0.19, 0.1, 0.32, { ol: 0.022 });
   const body = grp(root, 0, 0.7, 0); B(body, rb(0.66, 0.2, 0.48, 0.35, 1), ORG, 0, 0.05, 0, 1, 1, 1, { ol: 0.024 });
   const core = B(body, rb(0.72, 0.9, 0.5, 0.2, 1), RED2, 0, 0.62, 0, 1, 1, 1, { ol: 0.026 }), slabs = []; for (let i = 0; i < 8; i++) slabs.push(B(body, rb(0.8, 0.12, 0.56, 0.45, 1), i % 2 ? RED2 : RED, 0, 0.25 + i * 0.12, 0, 1, 1, 1, { ol: false }));
-  const head = grp(body, 0, 1.43, 0), d = { cy: 0, rx: 0.4, ry: 0.28, rz: 0.3 };
+  const head = grp(body, 0, 1.43, 0), d = { cy: 0, rx: 0.4, ry: 0.28, rz: 0.46 };
   B(head, rb(0.8, 0.54, 0.6, 0.28, 2), ORG, 0, 0, 0, 1, 1, 1, { ol: 0.028 }); B(head, rb(0.14, 0.5, 0.54, 0.4, 1), CRM, 0.46, 0, 0, 1, 1, 1, { ol: 0.018 }); for (let i = 0; i < 4; i++) F(head, bx, 0x3a2a4a, 0.535, 0.17 - i * 0.11, 0, 0.02, 0.05, 0.4);
   B(head, rb(0.5, 0.1, 0.4, 0.4, 1), CRM, -0.04, 0.32, 0, 1, 1, 1, { ol: 0.016 });
   const E = mkEyes(X, head, d, { ex: 0.2, ey: 0.07, r: 0.135, h: 1.0, iris: 0xe89a2a, ring: YEL, lift: 0.0 }), M = mkMouth(X, head, d, 0, -0.17, 'grin', 0.2);

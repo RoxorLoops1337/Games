@@ -353,7 +353,7 @@ function bBoss(K) {
   P(hd, ico(1), 0x4a3ab0, 0, 0.7, -0.1, 0.24, 0.22, 0.24, { ol: 0.022 }); P(hd, cone(0.19, 0.75, 6), 0x5a3ac0, 0.32, 0.74, -0.08, 1, 1, 1, { q: CK.aim(1, 0.7, 0), ol: 0.022 });
   const fh = grp(hd, 0, -0.04, 0.1), face = K.face(fh, { cy: 0, rx: 0.5, ry: 0.5, rz: 0.44, hs: 1.55 }, { iris: 0x5a4ae0, ex: 0.125, ey: 0.0, ew: 0.075, eh: 0.105, my: -0.14, mw: 0.03 });
   const ring = grp(hd, -0.04, 0.06, -0.5); F(ring, tor(0.88, 0.07, 5, 26), G(1.5, 1.45, 2.0), 0, 0, 0);
-  const sh = grp(tor_, 0.4, 0.6, 0), sl = limb(K, sh, 0, 0, 0, 0.6, 0.14, 0.1, IND, 0.13, SKIN), phone = grp(sl, 0, -0.78, 0.04); P(phone, rb(0.3, 0.52, 0.06, 0.06, 1), YEL, 0, 0.04, 0, 1, 1, 1, { ol: 0.02 }); const scr = F(phone, box, GH(0xcfe4ff, 1.3), 0, 0.05, 0.034, 0.25, 0.42, 0.01), lens = F(phone, ico(0), CK.basic(0x2b1426), 0.07, 0.24, -0.04, 0.03, 0.03, 0.02);
+  const sh = grp(tor_, 0.4, 0.6, 0), sl = limb(K, sh, 0, 0, 0, 0.6, 0.14, 0.1, IND, 0.13, SKIN), phone = grp(sl, 0, -0.78, 0.04); P(phone, rb(0.3, 0.52, 0.06, 0.06, 1), YEL, 0, 0.04, 0, 1, 1, 1, { ol: 0.02 }); const scr = F(phone, box, GH(0xcfe4ff, 1.3), 0, 0.05, 0.034, 0.25, 0.42, 0.01), lens = F(phone, ico(0), CK.basic(0x2b1426), 0.07, 0.24, -0.04, 0.03, 0.03, 0.02), pop = F(phone, ico(1), G(3, 3, 3.4), 0, 0.1, 0.08, 0.3); // camera flash
   const lh = grp(tor_, -0.4, 0.6, 0), la = limb(K, lh, 0, 0, 0, 0.62, 0.14, 0.1, IND, 0.13, SKIN);
   const cables = [], cg = grp(root, 0, 2.3, -0.3), curveG = (dir, k) => CK.geo(`fb_cab${dir},${k}`, () => { const c = new THREE.CatmullRomCurve3([new THREE.Vector3(0, 0, 0), new THREE.Vector3(dir * 0.9, 0.05 - k * 0.2, 0.1), new THREE.Vector3(dir * 1.7, 0.35 + k * 0.3, 0.0), new THREE.Vector3(dir * 2.4, 0.7 + k * 0.5, -0.1)]); const g = new THREE.TubeGeometry(c, 8, 0.04, 4); g.deleteAttribute('uv'); return g; });
   for (const sd of [-1, 1]) for (const [k, y] of [[-0.5, 0.2], [0.1, -0.45], [0.7, -1.05]]) { const g = grp(cg, 0, y, 0); P(g, curveG(sd, k), 0x3ad0d8, 0, 0, 0, 1, 1, 1, { ol: false }); cables.push([g, sd, k]); }
@@ -364,7 +364,7 @@ function bBoss(K) {
     const { amp, s, c, t, A, du, u } = m, sk = strike(u), lean = Math.max(0, sk);
     root.position.set(0, abs(sin(m.ph)) * 0.05 * amp, lean * 0.6); m.sy = 1 + A * 0.03; skirt.rotation.set(0, 0, s * 0.04 * amp + sin(t * 1.2) * 0.012); skirt.rotation.y = sk < 0 ? 0 : sk * 0.0 + (A > 0.1 ? t * 8 * A : 0); skirt.scale.set(1 + m.br * 0.008 + A * 0.04, 1, 1 + m.br * 0.008 + A * 0.04);
     tor_.position.y = 2.1 + sin(t * 2.4) * 0.03; tor_.rotation.set(sk * 0.2, 0, sin(t * 1.6) * 0.03 + s * 0.03 * amp); hd.rotation.set(-sk * 0.15, sin(t * 1.1) * 0.1, sin(t * 1.9) * 0.06 + 0.05);
-    sh.rotation.set(0.35 + lean * 0.3, 0, 2.55 + sin(t * 2) * 0.07 - lean * 0.2); phone.rotation.set(0, 0, -2.4 + sin(t * 3) * 0.06); scr.scale.set(0.25 * (1 + A * 0.2), 0.42 * (1 + A * 0.2), 0.01);
+    sh.rotation.set(0.35 + lean * 0.3, 0, 2.55 + sin(t * 2) * 0.07 - lean * 0.2); phone.rotation.set(0, 0, -2.4 + sin(t * 3) * 0.06); scr.scale.set(0.25 * (1 + A * 0.2), 0.42 * (1 + A * 0.2), 0.01); pop.scale.setScalar(A > 0.35 && lean > 0.2 ? 0.5 * A : 1e-4);
     lh.rotation.set(sin(t * 1.5) * 0.1, 0, -0.45 - Math.max(0, sin(t * 2.4)) * 0.35 - lean * 0.8);
     ring.rotation.z = t * 0.4; ring.scale.setScalar(1 + m.beat * 0.05 + A * 0.1);
     for (const L of legs) { const ph = m.ph * 1.0 + L.i * PI * 0.5 + (L.i % 2 ? PI : 0), lift = Math.max(0, sin(ph)) * 0.45 * amp, st2 = Math.max(0, sk) * 0.35;

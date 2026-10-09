@@ -7,7 +7,8 @@ import { lab } from './lab.js';
 import { loadGame, buildPlate } from './lands_lab.js';
 const P = new URLSearchParams(location.search), sc = P.get('s') || 'plates', num = (k, d) => (P.has(k) ? +P.get(k) : d);
 const g = await loadGame({ lands: num('lands', 4), wallet: 0 }), S = g.S(), EI = g.EI;
-S.t = 20; S.player.x = S.lands[0].g.x; S.player.y = S.lands[0].g.y + 400; // hero off to the side so plates are not 'near' unless asked
+S.t = 20; { const n = S.lands.length + 1, us = EI.unlockSpot(n); S.unlockPlate = { x: us.x, y: us.y, cost: EI.unlockCost(n), paid: 0, built: false }; } // the sim fills this every tick; the lab does not tick
+ S.player.x = S.lands[0].g.x; S.player.y = S.lands[0].g.y + 400; // hero off to the side so plates are not 'near' unless asked
 // scenario setups: each mutates S the way playing would
 const SCEN = {
   plates() { S.wallet = 0; },
@@ -16,14 +17,14 @@ const SCEN = {
   towers() { const z = S.lands[1]; for (const id of ['tower1', 'tower2', 'catapult']) buildPlate(2, id); z.towers.forEach((tw, i) => { tw.fire = +(P.get('fire') || 0); tw.cd = +(P.get('cd') || 1); }); buildPlate(2, 'towersUp', num('amp', 3)); buildPlate(2, 'gate2', num('gate', 2)); },
   altar() { const z = S.lands[1]; buildPlate(2, 'altar'); z.altar.cd = P.has('cd') ? +P.get('cd') : 0; },
   drums() { const z = S.lands[2]; buildPlate(3, 'tower1'); buildPlate(3, 'wizard'); buildPlate(3, 'drums'); buildPlate(3, 'towersUp', 4); buildPlate(3, 'gate2', 3); z.towers.forEach((tw) => { tw.fire = +(P.get('fire') || 0); }); S.waygate = true; },
-  unlock() { S.wallet = 1e9; S.beaconUntil = P.get('beacon') ? S.t + 99 : 0; },
+  unlock() { S.wallet = P.get('poor') ? 0 : 1e9; S.unlockPlate.paid = +(P.get('paid') || 0); S.beaconUntil = P.get('beacon') ? S.t + 99 : 0; },
   teaser() { S.wallet = 0; },
   pad() { S.waygate = true; },
   all() { for (const k of [1, 2, 3]) { const z = S.lands[k - 1]; for (const pl of z.plates) if (!pl.repeat && pl.id !== 'altar' && Math.random() < 0.0 + (pl.id === 'tower1' || pl.id === 'tower2' ? 1 : 0.5)) buildPlate(k, pl.id); } S.waygate = true; S.wallet = 1e9; },
 };
 (SCEN[sc] || SCEN.plates)();
 const idx = num('land', 1), gg = S.lands[Math.min(idx, S.lands.length) - 1].g, W = 0.02;
-const tgt = sc === 'unlock' ? S.unlockPlate || window.EI.unlockSpot(S.lands.length + 1) : sc === 'teaser' ? window.EI.geoOf(S.lands.length + 1) : gg;
+const tgt = sc === 'unlock' ? S.unlockPlate : sc === 'teaser' ? window.EI.geoOf(S.lands.length + 1) : gg;
 window.__S = S; window.__EI = EI;
 lab({ ground: false, d: num('d', 22), el: num('el', 55), az: num('az', 0), tx: num('tx', tgt.x * W), tz: num('tz', tgt.y * W), ty: num('ty', 0), fov: num('fov', 38), async build(V) {
   // bare island discs standing in for env3d's ground

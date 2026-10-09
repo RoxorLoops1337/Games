@@ -218,7 +218,7 @@ function rigAndy(o = {}) {
 /* ------------------------------------------------------------------ onesie hoods (unicorn + monster) */
 // an open hood: a sphere cap turned to the back (pole = -z) so its rim frames the face, plus a ring at the rim
 function addHood(ctx, head, H, col, rimCol, fan) {
-  const { cy, rx, ry, rz } = H, hm = ctx.mk('hood' + col, { color: col, flatShading: false, roughness: 0.95 });
+  const { cy, rx, ry, rz } = H, hm = ctx.mk('hood' + col, { color: col, flatShading: false, roughness: fan ? 0.75 : 0.95 });
   part(ctx, head, capL(fan, 20, 10, 2.05), 0, 0, cy - 0.0, -0.03, rx * 1.14, rz * 1.12, ry * 1.1, { mat: hm, hull: true, ol: 0.015, rx: -PI / 2 });
   const rim = part(ctx, head, torus(1, 0.13, 6, fan ? 14 : 24), rimCol, 0, cy, 0.165, rx * 1.06 * 0.887, ry * 1.1 * 0.887, 0.4 * 0.887, { ol: 0.013 });
   return rim;
@@ -299,7 +299,7 @@ function rigMonster(o = {}) {
     part(ctx, head, cone(0.065, 0.22, 6), CRM, sd * 0.25, cy + ry * 0.82, -0.02, 1, 1, 1, { ol: 0.013, rz: -sd * 0.55 });
     const ey = new THREE.Group(); ey.position.set(sd * 0.12, cy + ry * 1.06, 0.06); head.add(ey);
     part(ctx, ey, ico(1), 0xffffff, 0, 0.03, 0, 0.075, 0.075, 0.075, { ol: 0.012 });
-    flat(ico(1), CK.eyeMat, ey, 0, 0.035, 0.065, 0.034, 0.034, 0.02); flat(ico(0), CK.whiteMat, ey, 0.012, 0.05, 0.078, 0.012, 0.012, 0.01);
+    part(ctx, ey, ico(1), 0x2b1426, 0, 0.035, 0.065, 0.034, 0.034, 0.02, { ol: false, keep: true }); if (!fan) flat(ico(0), CK.whiteMat, ey, 0.012, 0.05, 0.078, 0.012, 0.012, 0.01);
   }
   const eye = paintEyeR;
   R.face = fan ? addFanFace(ctx, head, H, { ex: 0.15, iris: 0x4a6aa8 }) : addHeroFace(ctx, head, H, {
@@ -385,7 +385,7 @@ const FAN_TINTS = [0xffb0d0, 0x9af0b4, 0x8fe3f0, 0xffd84d, 0xc9b3ff, 0xff9a2e], 
 // crowd accessories: 0 none, 1 glow stick, 2 foam finger, 3 star clip, 4 bow (colour from FAN_ACC)
 function addFanAcc(a, acc, col) {
   const R = a.rig, ctx = R.ctx, { H, head } = R, cy = H.cy;
-  if (acc === 1) { flat(CK.hang(0.026, 0.026, 0.34, 5), basic(col), R.armR.el, 0, -0.12, 0, 1, 1, 1); flat(ico(0), basic(0xffffff), R.armR.el, 0, -0.47, 0, 0.034, 0.034, 0.034); }
+  if (acc === 1) { part(ctx, R.armR.el, CK.hang(0.026, 0.026, 0.34, 5), col, 0, -0.12, 0, 1, 1, 1, { ol: false, keep: true }); part(ctx, R.armR.el, ico(0), 0xffffff, 0, -0.47, 0, 0.034, 0.034, 0.034, { ol: false, keep: true }); }
   else if (acc === 2) { part(ctx, R.armR.el, ico(0), col, 0, -0.2, 0, 0.12, 0.1, 0.07, { ol: 0.012 }); part(ctx, R.armR.el, hang(0.04, 0.045, 0.24, 5), col, 0, -0.2, 0, 1, 1, 1, { ol: 0.012 }); part(ctx, R.armR.el, ico(0), col, 0, -0.45, 0, 0.05, 0.05, 0.05, { ol: 0.012 }); }
   else if (acc === 3) part(ctx, head, starGeo(0.07, 0.03, 0.03), col, 0.26, cy + 0.2, H.surf(0.26, cy + 0.2) * 0.55 + 0.1, 1, 1, 1, { ol: 0.01, rz: 0.3 });
   else if (acc === 4) { for (const sd of [-1, 1]) part(ctx, head, cone(0.075, 0.17, 5), col, sd * 0.1 + 0.2, cy + H.ry * 0.95, 0.12, 1, 1, 0.7, { ol: 0.01, rz: sd * 1.5 }); part(ctx, head, ico(0), col, 0.2, cy + H.ry * 0.95, 0.12, 0.05, 0.05, 0.05, { ol: 0.01 }); }

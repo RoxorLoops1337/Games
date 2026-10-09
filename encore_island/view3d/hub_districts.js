@@ -2,7 +2,7 @@
 // (DISTRICTS[].on()) and reflects its own state: market level, arena ready, studio recording. Local frame = the district position, +z faces the camera.
 import * as THREE from 'three';
 import { Builder, C, INK, W, TAU, PI, seg, GB, GOLD, lit, latheGeo, damp, clamp, hash01 } from './kit.js';
-import { Inst, QuadSet, outline, rbx, bll } from './hub_fx.js';
+import { Inst, QuadSet, outline, rbx, bll, floorMat } from './hub_fx.js';
 
 const GOLDM = { m: GOLD, c: 0xffd84d };
 const crew = () => { try { const f = FEATS.find((x) => x.id === 'crew'); return f && f.api ? f.api : null; } catch (e) { return null; } };
@@ -53,7 +53,7 @@ export function buildMarket(V, fx) {
 export function buildArena(V, fx) {
   const P = posOf('arena', { x: 500, y: 60 }), g = new THREE.Group(); g.name = 'arena'; g.position.set(P.x * W, 0, P.y * W);
   const b = new Builder({ ao: 0.2 }), qs = new QuadSet(), RO = 1.55;
-  b.cyl(0xe8c49a, 0, 0, 0, RO + 0.55, 0.06, seg(40)); b.cyl(0xc89a62, 0, 0.06, 0, RO - 0.3, 0.02, seg(32)); b.cyl(0xe0b078, 0, 0.07, 0, 0.7, 0.02, seg(24)); b.tor(0xb07a48, 0, 0.09, 0, 0.55, 0.03, 6, seg(24), PI / 2);
+  b.cyl({ m: floorMat(), c: 0xc89a62 }, 0, 0, 0, RO - 0.3, 0.07, seg(32)); b.cyl({ m: floorMat(), c: 0xe0b078 }, 0, 0.07, 0, 0.7, 0.02, seg(24)); b.tor(0xb07a48, 0, 0.09, 0, 0.55, 0.03, 6, seg(24), PI / 2);
   // curved wall: radial blocks with a gap in front for the gate; arched alcoves on the outer face, crenels on top
   const N = 20;
   for (let i = 0; i < N; i++) {

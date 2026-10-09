@@ -8,7 +8,7 @@ import * as THREE from 'three';
 import * as kit from './kit.js';
 
 const W = kit.W, PI = Math.PI;
-const RING = 2200, BRIDGE = 1000, N = RING + BRIDGE, ZMAX = 360, GMAX = 420, FLY_MAX = 160;
+const RING = 1400, BRIDGE = 720, N = RING + BRIDGE, ZMAX = 300, GMAX = 220, FLY_MAX = 160;
 const rnd = Math.random, easeInOut = (t) => (t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2), easeOut = (t) => 1 - Math.pow(1 - t, 3);
 const _col = new THREE.Color(), _cc = new Map();
 /** css/hex colour -> cached [r,g,b] in linear working space (the shaders output linear, the renderer converts) */
@@ -39,7 +39,7 @@ void main() {
   float sz = aP0.w * mix(1.0, aE.x, u);
   float env = smoothstep(0.0, max(aE.z, 0.001), u) * (1.0 - smoothstep(aE.w, 1.0, u));
   vec2 c = position.xy; vec3 wp;
-  if (kind > 3.5) {
+  if (kind > 3.5 && kind < 4.5) {
     vec3 vel = vec3(aV.x * exp(-d * age), aV.y - grav * age, aV.z * exp(-d * age));
     float sp = length(vel) + 0.001; vec3 ax = vel / sp, tc = normalize(cameraPosition - pos), sd = normalize(cross(ax, tc) + vec3(1e-5));
     wp = pos + ax * c.y * sz * (0.6 + sp * 0.18) + sd * c.x * sz * 0.32;
@@ -57,14 +57,15 @@ const P_FS = `
 uniform float uGain;
 varying vec2 vC; varying vec4 vCol; varying float vK, vSh, vAdd;
 void main() {
-  float r = length(vC), a = 0.0; vec3 col = vCol.rgb;
+  float r = length(vC), a = 0.0, gain = uGain; vec3 col = vCol.rgb;
   if (vK < 0.5) { a = pow(max(0.0, 1.0 - r), 2.0); col *= 1.0 + a * 0.5; }
   else if (vK < 1.5) { a = smoothstep(1.0, 0.82, r); col = mix(col, vec3(1.0), 0.45 * smoothstep(0.1, 0.9, dot(vC, vec2(-0.55, 0.7)) * 0.9 + 0.4)); col *= 1.0 - 0.22 * smoothstep(0.5, 1.0, r); }
   else if (vK < 2.5) { vec2 p = abs(vC); float f = sqrt(p.x) + sqrt(p.y); a = max(1.0 - smoothstep(0.7, 1.0, f), 0.45 * pow(max(0.0, 1.0 - r), 2.0)); col = mix(col, vec3(1.0), smoothstep(0.55, 0.0, r)) * 1.25; }
   else if (vK < 3.5) { vec2 p = abs(vC); a = 1.0 - smoothstep(0.82, 1.0, max(p.x, p.y * 1.5)); col *= 0.72 + 0.4 * abs(vSh); }
-  else { a = pow(max(0.0, 1.0 - abs(vC.x)), 1.6) * pow(max(0.0, 1.0 - abs(vC.y)), 0.55); col = mix(col, vec3(1.0), 0.5 * a) * 1.2; }
+  else if (vK < 4.5) { a = pow(max(0.0, 1.0 - abs(vC.x)), 1.6) * pow(max(0.0, 1.0 - abs(vC.y)), 0.55); col = mix(col, vec3(1.0), 0.5 * a) * 1.2; }
+  else { a = smoothstep(1.0, 0.25, r); col = mix(col * 0.9, vec3(1.0), 0.5 * smoothstep(0.2, 0.9, dot(vC, vec2(-0.5, 0.7)) + 0.5)); gain = 1.0; }
   a *= vCol.a;
-  gl_FragColor = vec4(col * a * uGain, a * (1.0 - vAdd));
+  gl_FragColor = vec4(col * a * gain, a * (1.0 - vAdd));
   #include <tonemapping_fragment>
   #include <colorspace_fragment>
 }`;
@@ -93,7 +94,7 @@ void main() {
   } else {
     vec3 right = vec3(viewMatrix[0][0], viewMatrix[1][0], viewMatrix[2][0]), up = vec3(viewMatrix[0][1], viewMatrix[1][1], viewMatrix[2][1]);
     float cr = cos(aPos.w), sr = sin(aPos.w); vec2 q = vec2(position.x * cr - position.y * sr, position.x * sr + position.y * cr);
-    wp = aPos.xyz + (right * q.x + up * q.y) * aScl.x + normalize(cameraPosition - aPos.xyz) * aScl.x * 0.8;
+    wp = aPos.xyz + (right * q.x + up * q.y) * aScl.x + normalize(cameraPosition - aPos.xyz) * aScl.x * 0.8 * aScl.y;
   }
   vUv = aUv; vK = K; vTh = th; vCol = vec4(aCol.rgb, aCol.a * env);
   gl_Position = projectionMatrix * viewMatrix * vec4(wp, 1.0);
@@ -102,14 +103,14 @@ const G_FS = `
 uniform float uT, uGain;
 varying vec2 vUv; varying vec4 vCol; varying float vK, vTh, vDash;
 void main() {
-  float r = length(vUv), a = 0.0, nrm = 0.0; vec3 col = vCol.rgb;
+  float r = length(vUv), a = 0.0, nrm = 0.0, gain = uGain; vec3 col = vCol.rgb;
   if (vK < 0.5) { a = pow(max(0.0, 1.0 - vUv.y), 1.25) * (0.62 + 0.38 * sin(vUv.x * 18.85 + uT * 1.7)) * smoothstep(0.0, 0.06, vUv.y) * 0.55; col = mix(col, vec3(1.0), 0.25 * (1.0 - vUv.y)); }          // light beam
   else if (vK < 1.5) { float d = abs(r - (1.0 - vTh * 0.5)); a = 1.0 - smoothstep(vTh * 0.22, vTh * 0.5, d); a *= r < 1.0 + vTh * 0.1 ? 1.0 : 0.0;
-    a += 0.1 * (1.0 - smoothstep(0.0, 1.0, r)); a *= mix(1.0, 0.45 + 0.55 * cos(atan(vUv.y, vUv.x) * 3.0), vDash); nrm = 0.7; col = mix(col, vec3(1.0), 0.25 * a); }         // ground ring (mostly "over", so it reads on the pastel ground)
+    a += 0.1 * (1.0 - smoothstep(0.0, 1.0, r)); a *= mix(1.0, 0.45 + 0.55 * cos(atan(vUv.y, vUv.x) * 3.0), vDash); nrm = 1.0; col = mix(col, vec3(1.0), 0.1 * a); gain = 0.68; }         // ground ring (mostly "over", so it reads on the pastel ground)
   else if (vK < 2.5) { a = pow(max(0.0, 1.0 - r), 2.0); col = mix(col, vec3(1.0), 0.5 * pow(max(0.0, 1.0 - r), 3.0)); }                                                         // glow sprite
   else { vec2 p = abs(vUv); float h = exp(-p.y * 10.0) * (1.0 - p.x), v = exp(-p.x * 10.0) * (1.0 - p.y); a = max(h, v) + 0.7 * pow(max(0.0, 1.0 - r * 1.7), 2.0); col = mix(col, vec3(1.0), clamp(a, 0.0, 1.0)); } // sparkle flare
   a *= vCol.a;
-  gl_FragColor = vec4(col * a * uGain, a * nrm);
+  gl_FragColor = vec4(col * a * gain, a * nrm);
   #include <tonemapping_fragment>
   #include <colorspace_fragment>
 }`;
@@ -118,7 +119,7 @@ const Z_VS = `
 attribute vec4 aA, aB, aCol; varying vec2 vUv; varying vec4 vCol;
 void main() {
   vec3 A = aA.xyz, B = aB.xyz, dir = B - A; vec3 mid = mix(A, B, 0.5), tc = normalize(cameraPosition - mid), sd = normalize(cross(dir, tc) + vec3(1e-5)), dn = normalize(dir + vec3(1e-5));
-  vec3 p = mix(A, B, position.x) + sd * position.y * aA.w + dn * (position.x * 2.0 - 1.0) * aA.w * 0.6;
+  vec3 p = mix(A, B, position.x) + sd * position.y * aA.w + dn * (position.x * 2.0 - 1.0) * aA.w * 0.15;
   vUv = position.xy; vCol = aCol; gl_Position = projectionMatrix * viewMatrix * vec4(p, 1.0);
 }`;
 const Z_FS = `
@@ -132,14 +133,14 @@ const premult = (extra = {}) => Object.assign({ transparent: true, depthWrite: f
 const iattr = (n, k) => { const a = new THREE.InstancedBufferAttribute(new Float32Array(n * k), k); a.setUsage(THREE.DynamicDrawUsage); return a; };
 
 export function init(V) {
-  const dynRoot = V.dyn || V.scene, uT = { value: 0 }, uGain = { value: 0.62 }; // gain: ACES (lab) / the post composite brighten x1.75 and burn pastel colours to white, so effects are authored dimmer
+  const dynRoot = V.dyn && V.dyn.add ? V.dyn : V.scene && V.scene.add ? V.scene : new THREE.Group(), uT = { value: 0 }, uGain = { value: 0.62 }; // gain: ACES (lab) / the post composite brighten x1.75 and burn pastel colours to white, so effects are authored dimmer
   let clock = 0;
   const lod = () => { const q = V.quality && V.quality.particles; return q === undefined ? 1 : Math.max(0.25, q); };
 
   // ---------------------------------------------------------------- particles
   const quad = new THREE.BufferGeometry(); quad.setAttribute('position', new THREE.BufferAttribute(new Float32Array([-1, -1, 0, 1, -1, 0, 1, 1, 0, -1, 1, 0]), 3)); quad.setIndex([0, 1, 2, 0, 2, 3]);
   const pg = new THREE.InstancedBufferGeometry(); pg.index = quad.index; pg.setAttribute('position', quad.attributes.position); pg.instanceCount = N;
-  const PA = {}; for (const k of ['aP0', 'aV', 'aT', 'aC', 'aE']) { PA[k] = iattr(N, 4); pg.setAttribute(k, PA[k]); }
+  const PA = {}, PAL = []; for (const k of ['aP0', 'aV', 'aT', 'aC', 'aE']) { PA[k] = iattr(N, 4); pg.setAttribute(k, PA[k]); PAL.push(PA[k]); }
   for (let i = 0; i < N; i++) PA.aT.array[i * 4] = 1e9; // never born
   const pmat = new THREE.ShaderMaterial({ vertexShader: P_VS, fragmentShader: P_FS, uniforms: { uT, uGain }, ...premult() });
   const pmesh = new THREE.Mesh(pg, pmat); pmesh.frustumCulled = false; pmesh.renderOrder = 20; pmesh.name = 'fx_particles'; dynRoot.add(pmesh);
@@ -171,7 +172,7 @@ export function init(V) {
   }
   function puff(x, y, z, n = 6, color = 0xfff4e6, up = 0.6) {
     n = Math.max(1, Math.round(n * lod())); const c = rgb(color);
-    for (let i = 0; i < n; i++) { const a = rnd() * PI * 2, k = 0.5 + rnd() * 1.1; spawn(x, y, z, Math.cos(a) * k, up * (0.4 + rnd()), Math.sin(a) * k, 0.2 + rnd() * 0.16, 0, 0.55 + rnd() * 0.3, 2.6, (rnd() - 0.5) * 2, c, 1, 1.9, 0.12, 0.1, 0.4); }
+    for (let i = 0; i < n; i++) { const a = rnd() * PI * 2, k = 0.5 + rnd() * 1.1; spawn(x, y, z, Math.cos(a) * k, up * (0.4 + rnd()), Math.sin(a) * k, 0.2 + rnd() * 0.16, 0, 0.55 + rnd() * 0.3, 2.6, (rnd() - 0.5) * 2, c, 5, 1.9, 0.0, 0.1, 0.4); }
   }
   /** one cheap drifting dot (trails and ambient sparkle for other modules). col is an [r,g,b] array from rgb() or a hex */
   function trail(x, y, z, col, size = 0.12, life = 0.4, kind = 0, add = 1) {
@@ -188,14 +189,14 @@ export function init(V) {
   const pos = [], uv = [], kk = [], idx = [];
   const addV = (x, y, z, u, v, k) => { pos.push(x, y, z); uv.push(u, v); kk.push(k); return pos.length / 3 - 1; };
   { // beam: tapered open tube, y 0..1
-    const S = 10; for (let i = 0; i <= S; i++) { const a = i / S * PI * 2; for (let j = 0; j < 2; j++) { const r = j ? 0.38 : 1; addV(Math.cos(a) * r, j, Math.sin(a) * r, i / S, j, 0); } }
+    const S = 6; for (let i = 0; i <= S; i++) { const a = i / S * PI * 2; for (let j = 0; j < 2; j++) { const r = j ? 0.38 : 1; addV(Math.cos(a) * r, j, Math.sin(a) * r, i / S, j, 0); } }
     for (let i = 0; i < S; i++) { const a = i * 2; idx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2); }
     const ring = addV(-1, 0, -1, -1, -1, 1); addV(1, 0, -1, 1, -1, 1); addV(1, 0, 1, 1, 1, 1); addV(-1, 0, 1, -1, 1, 1); idx.push(ring, ring + 2, ring + 1, ring, ring + 3, ring + 2);
     for (const k of [2, 3]) { const b = addV(-1, -1, 0, -1, -1, k); addV(1, -1, 0, 1, -1, k); addV(1, 1, 0, 1, 1, k); addV(-1, 1, 0, -1, 1, k); idx.push(b, b + 1, b + 2, b, b + 2, b + 3); }
   }
   const gg = new THREE.InstancedBufferGeometry(); gg.setIndex(idx); gg.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); gg.setAttribute('aUv', new THREE.Float32BufferAttribute(uv, 2)); gg.setAttribute('aK', new THREE.Float32BufferAttribute(kk, 1));
-  const GR = 160, GN = GR + GMAX, GA = { aPos: iattr(GN, 4), aScl: iattr(GN, 4), aCol: iattr(GN, 4), aTm: iattr(GN, 4), aSel: iattr(GN, 1) };
-  for (const k in GA) gg.setAttribute(k, GA[k]); gg.instanceCount = GN;
+  const GR = 96, GN = GR + GMAX, GA = { aPos: iattr(GN, 4), aScl: iattr(GN, 4), aCol: iattr(GN, 4), aTm: iattr(GN, 4), aSel: iattr(GN, 1) };
+  const GAL = []; for (const k in GA) { gg.setAttribute(k, GA[k]); GAL.push(GA[k]); } gg.instanceCount = GN;
   for (let i = 0; i < GN; i++) { GA.aTm.array[i * 4] = 1e9; GA.aTm.array[i * 4 + 1] = 1; }
   const gmat = new THREE.ShaderMaterial({ vertexShader: G_VS, fragmentShader: G_FS, uniforms: { uT, uGain }, ...premult() });
   const gmesh = new THREE.Mesh(gg, gmat); gmesh.frustumCulled = false; gmesh.renderOrder = 18; gmesh.name = 'fx_glow'; dynRoot.add(gmesh);
@@ -209,7 +210,7 @@ export function init(V) {
     gput(i, sel, x, y, z, yaw, sx, sy, sz, w, c[0], c[1], c[2], a, clock + delay, life, 0, th);
   }
   /** immediate glow element for this frame only. sel 0 beam (sx radius, sy height, sz radius, w tilt) 1 ring (sx=sz radius, w dash 0..1, th ring width) 2 glow sprite (sx radius) 3 sparkle flare (sx radius) */
-  function glowAt(sel, x, y, z, yaw, sx, sy, sz, w, r, g, b, a, th = 0.16) {
+  function glowAt(sel, x, y, z, yaw, sx, sy, sz, w, r, g, b, a, th = 0.16) { // sprites: sy = depth nudge toward the camera in units of sx*0.8 (1 = clear of the ground, ~0.2 = stay behind a model)
     if (imm >= GMAX) return; gput(GR + imm, sel, x, y, z, yaw, sx, sy, sz, w, r, g, b, a, 0, 0, 0, th); imm++; if (imm > immHi) immHi = imm;
   }
   // immediates (glowAt) are cleared AFTER the render that drew them, so module update order does not matter. Geometry attributes are uploaded when the
@@ -217,9 +218,9 @@ export function init(V) {
   gmesh.onAfterRender = () => { const sel = GA.aSel.array; for (let i = 0; i < immHi; i++) sel[GR + i] = -1; imm = 0; immHi = 0; rendered = true; gLo = GN; gHi = -1; };
 
   function ring(x, z, r, color = 0xfff4c0, dur = 0.45) {
-    const c = rgb(color); gspawn(1, x, 0.07, z, 0, r, 1, r, 0, c, 1, dur, 0.2);
-    gspawn(1, x, 0.07, z, 0, r * 0.72, 1, r * 0.72, 0, c, 0.6, dur * 0.8, 0.12, 0.05);
-    gspawn(2, x, 0.12, z, 0, r * 0.9, 1, 1, 0, c, 0.5, dur * 0.5, 0);
+    const c = rgb(color), th = Math.min(0.3, Math.max(0.05, 0.2 / r)); gspawn(1, x, 0.07, z, 0, r, 1, r, 0, c, 1, dur, th);
+    gspawn(1, x, 0.07, z, 0, r * 0.72, 1, r * 0.72, 0, c, 0.6, dur * 0.8, th * 0.7, 0.05);
+    gspawn(2, x, 0.12, z, 0, r * 0.8, 1, 1, 0, c, 0.2, dur * 0.5, 0);
   }
   function beam(x, z, color = 0xffe98a, h = 4, dur = 1.2) {
     const c = rgb(color), r = Math.max(0.3, h * 0.12);
@@ -230,7 +231,7 @@ export function init(V) {
   // ---------------------------------------------------------------- lightning
   const zg = new THREE.InstancedBufferGeometry(); const zq = new THREE.BufferGeometry();
   zg.setIndex([0, 1, 2, 0, 2, 3]); zg.setAttribute('position', new THREE.BufferAttribute(new Float32Array([0, -1, 0, 1, -1, 0, 1, 1, 0, 0, 1, 0]), 3));
-  const ZA = { aA: iattr(ZMAX, 4), aB: iattr(ZMAX, 4), aCol: iattr(ZMAX, 4) }; for (const k in ZA) zg.setAttribute(k, ZA[k]); zg.instanceCount = 0;
+  const ZA = { aA: iattr(ZMAX, 4), aB: iattr(ZMAX, 4), aCol: iattr(ZMAX, 4) }; zg.setAttribute('aA', ZA.aA); zg.setAttribute('aB', ZA.aB); zg.setAttribute('aCol', ZA.aCol); zg.instanceCount = 0;
   const zmat = new THREE.ShaderMaterial({ vertexShader: Z_VS, fragmentShader: Z_FS, uniforms: { uGain }, ...premult() });
   const zmesh = new THREE.Mesh(zg, zmat); zmesh.frustumCulled = false; zmesh.renderOrder = 22; zmesh.name = 'fx_zap'; dynRoot.add(zmesh);
   let zn = 0; const zcol = rgb(0xa77bff);
@@ -253,7 +254,7 @@ export function init(V) {
       for (let k = 1; k <= K; k++) {
         const f = k / K, last = k === K, s = tq * 13 + i * 7 + k;
         const qx = last ? bx : ax + (bx - ax) * f + (hash(s, 1) - 0.5) * 2 * amp, qy = last ? by : ay + (by - ay) * f + (hash(s, 2) - 0.5) * amp, qz = last ? bz : az + (bz - az) * f + (hash(s, 3) - 0.5) * 2 * amp;
-        seg(px, py, pz, qx, qy, qz, 0.11, c[0], c[1], c[2], 0.8 * a); seg(px, py, pz, qx, qy, qz, 0.03, 1, 1, 1, a);
+        seg(px, py, pz, qx, qy, qz, 0.2, c[0], c[1], c[2], 0.55 * a); seg(px, py, pz, qx, qy, qz, 0.035, 1, 1, 1, a);
         px = qx; py = qy; pz = qz;
       }
     }
@@ -279,10 +280,10 @@ export function init(V) {
     const fxs = s.fx;
     for (let i = 0; i < fxs.length; i++) {
       const q = fxs[i], u = q.t / q.dur; if (!(q.dur > 0) || u >= 1) continue;
-      if (q.kind === 'ring') { const c = rgb(q.col || '#fff4c0'), r = q.r * W * (0.25 + 0.75 * easeOut(u)); glowAt(1, q.x * W, 0.07, q.y * W, 0, r, 1, r, 0, c[0], c[1], c[2], 1 - u, 0.2 * (1 - u * 0.7) + 0.05); glowAt(2, q.x * W, 0.14, q.y * W, 0, r * 0.8, 1, 1, 0, c[0], c[1], c[2], 0.35 * (1 - u)); }
+      if (q.kind === 'ring') { const c = rgb(q.col || '#fff4c0'), r = q.r * W * (0.25 + 0.75 * easeOut(u)); glowAt(1, q.x * W, 0.07, q.y * W, 0, r, 1, r, 0, c[0], c[1], c[2], 1 - u * u, Math.min(0.3, 0.24 * (1 - u * 0.5) / Math.max(r, 0.5)) + 0.02); glowAt(2, q.x * W, 0.14, q.y * W, 0, r * 0.7, 1, 1, 0, c[0], c[1], c[2], 0.14 * (1 - u)); }
       else if (q.kind === 'boom') {
-        if (!seen.has(q)) { seen.add(q); burst({ x: q.x * W, y: 0.4, z: q.y * W, n: 28, colors: [0xff7eb6, 0xfff4e6, 0xffd84d, 0xc6a8ff], speed: 5.5, up: 3.2, size: 0.2, life: 0.8, star: 0.45 }); spawn(q.x * W, 0.35, q.y * W, 0, 0, 0, q.r * W * 1.5, 0, 0.3, 0, 0, rgb(0xffe0f0), 0, 0.5, 1, 0.02, 0.25); }
-        const r = q.r * W * (0.4 + 0.75 * easeOut(u)); glowAt(1, q.x * W, 0.08, q.y * W, 0, r, 1, r, 0, BOOM[0], BOOM[1], BOOM[2], 1 - u, 0.2 * (1 - u * 0.6) + 0.04); glowAt(2, q.x * W, 0.2, q.y * W, 0, r * 0.8, 1, 1, 0, BOOM[0], BOOM[1], BOOM[2], 0.3 * (1 - u));
+        if (!seen.has(q)) { seen.add(q); burst({ x: q.x * W, y: 0.4, z: q.y * W, n: 28, colors: [0xff7eb6, 0xfff4e6, 0xffd84d, 0xc6a8ff], speed: 5.5, up: 3.2, size: 0.2, life: 0.8, star: 0.45 }); spawn(q.x * W, 0.35, q.y * W, 0, 0, 0, q.r * W * 0.6, 0, 0.25, 0, 0, rgb(0xff8cba), 0, 0.5, 1, 0.02, 0.25); }
+        const r = q.r * W * (0.4 + 0.75 * easeOut(u)); glowAt(1, q.x * W, 0.08, q.y * W, 0, r, 1, r, 0, BOOM[0], BOOM[1], BOOM[2], 1 - u * u, Math.min(0.3, 0.26 * (1 - u * 0.5) / Math.max(r, 0.5)) + 0.02); glowAt(2, q.x * W, 0.2, q.y * W, 0, r * 0.8, 1, 1, 0, BOOM[0], BOOM[1], BOOM[2], 0.12 * (1 - u));
       } else if (q.kind === 'zap' && q.pts) {
         const n = Math.min(q.pts.length, 10), a = 1 - u, c = zcol; let m = 0;
         for (let k = 0; k < n; k++) { const p = q.pts[k]; const tower = k === 0; zbuf[m++] = p.x * W; zbuf[m++] = tower ? 1.55 : 0.4; zbuf[m++] = (p.y + (tower ? 80 : 14)) * W; }
@@ -324,14 +325,14 @@ export function init(V) {
     }
     // internal zaps (V.fx.zap)
     for (let i = 0; i < ZS.length; i++) { const z = ZS[i]; if (z.life <= 0) continue; z.t += dt; if (z.t >= z.life) { z.life = 0; continue; } bolt(z.pts, z.n, z.c, 1 - z.t / z.life, Math.floor(clock * 30)); }
-    for (const k in GA) { const a = GA[k], c = k === 'aSel' ? 1 : 4; if (a.clearUpdateRanges) a.clearUpdateRanges(); if (gHi >= 0) a.addUpdateRange(gLo * c, (gHi - gLo + 1) * c); a.addUpdateRange(GR * c, GMAX * c); a.needsUpdate = true; }
+    for (let i = 0; i < GAL.length; i++) { const a = GAL[i], c = a.itemSize; a.clearUpdateRanges(); if (gHi >= 0) a.addUpdateRange(gLo * c, (gHi - gLo + 1) * c); a.addUpdateRange(GR * c, GMAX * c); a.needsUpdate = true; }
     zg.instanceCount = zn; if (zn) { ZA.aA.needsUpdate = ZA.aB.needsUpdate = ZA.aCol.needsUpdate = true; } zmesh.visible = zn > 0;
     // clear the bridge tail that the previous frame used but this one did not
     for (let i = bUsed; i < bPrev; i++) PA.aT.array[(RING + i) * 4] = 1e9;
     const top = Math.max(bUsed, bPrev); bPrev = bUsed;
     // upload only what changed since the last RENDER (ranges accumulate across updates, so skipped frames and screenshots stay correct)
     bTopAcc = Math.max(bTopAcc, top);
-    for (const k in PA) { const a = PA[k]; if (a.clearUpdateRanges) a.clearUpdateRanges(); if (dHi >= 0) a.addUpdateRange(dLo * 4, (dHi - dLo + 1) * 4); if (bTopAcc) a.addUpdateRange(RING * 4, bTopAcc * 4); a.needsUpdate = dHi >= 0 || bTopAcc > 0; }
+    for (let i = 0; i < PAL.length; i++) { const a = PAL[i]; a.clearUpdateRanges(); if (dHi >= 0) a.addUpdateRange(dLo * 4, (dHi - dLo + 1) * 4); if (bTopAcc) a.addUpdateRange(RING * 4, bTopAcc * 4); a.needsUpdate = dHi >= 0 || bTopAcc > 0; }
   }
   function dispose() { for (const m of [pmesh, gmesh, zmesh]) { if (m.parent) m.parent.remove(m); m.geometry.dispose(); m.material.dispose(); } }
 

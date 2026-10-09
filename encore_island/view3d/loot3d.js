@@ -83,7 +83,7 @@ function hullOf(g, w, minA = 0.0013) {
 
 // ------------------------------------------------------------------------------------------------ model library
 const DKV = 0x33160d, CREAM = 0xfff4e6, GOLD = 0xffd84d, RED = 0xff5a6a;
-const sg = (n = 9) => kit.seg(n);
+const sg = (n = 9) => Math.max(8, kit.seg(n)); // items are small: never coarser than an octagon, never finer than needed
 /** dome profile for a lathe: short vertical wall then a quarter ellipse to the crown */
 const domeProf = (R, H, wall, N = 4) => { const p = [[R * 0.97, 0], [R, wall]]; for (let i = 1; i <= N; i++) { const a = i / N * PI / 2; p.push([i === N ? 0 : R * Math.cos(a), wall + H * Math.sin(a)]); } return p; };
 const surfZ = (R, H, y0, wall, y) => { const r = (y - y0 - wall) / H; return y < y0 + wall ? R : R * Math.sqrt(Math.max(0, 1 - r * r)); };
@@ -242,7 +242,7 @@ class Pool {
 }
 
 export function init(V) {
-  const root = V.dyn || V.scene, matShared = mkMat(0xffffff), matIG = mkMat(0xffffff);
+  const root = V.dyn && V.dyn.add ? V.dyn : V.scene && V.scene.add ? V.scene : new THREE.Group(), matShared = mkMat(0xffffff), matIG = mkMat(0xffffff);
   const L = { helm: HELM.map((fn, i) => { const b = new Builder(); fn(b, cl(metHex(i)), i); return bake(b, { ao: 0.18, hull: 0.022 }); }), bar: buildBar(), crown: buildCrown(), gem: buildGem(), coin: buildCoin(), star: buildStar(), note: buildNote(), orb: buildOrb(), boulder: buildBoulder() };
   const [chestBody, chestLid] = buildChest();
   const pools = [], mk = (geo, max, o, mat = matShared) => { const p = new Pool(geo.clone ? (o && o.ig ? geo.clone() : geo) : geo, mat, max, o); p.mesh.name = 'loot_pool'; root.add(p.mesh); pools.push(p); return p; };
@@ -278,27 +278,31 @@ export function init(V) {
   function updateItems(S, T, f, dt) {
     const FX = fx(), items = S.items;
     for (let i = 0; i < items.length; i++) {
-      const it = items[i]; if (it.dead) continue;
-      const rar = rarOf(it), air = it.t < 0.45;
+      const it = items[i]; if (it.dead) continue; try { oneItem(it, S, T, f, dt, FX); } catch (e) { /* skip a malformed entry */ }
+    }
+  }
+  function oneItem(it, S, T, f, dt, FX) {
+    {
+      const tt = it.t > 0 ? it.t : 0, rar = rarOf(it), air = tt < 0.45;
       let gx, gz, y, yaw, pitch = -0.22, roll = 0, sq = 1, sc = 1;
       if (air) { // reconstruct the toss: start point -> landing point on the ground, with an arc for height
-        const t = it.t, vy0 = it.vy - 380 * t, x0 = it.x - it.vx * t, y0 = it.y - vy0 * t - 190 * t * t, u = t / 0.45;
+        const t = tt, vy0 = it.vy - 380 * t, x0 = it.x - it.vx * t, y0 = it.y - vy0 * t - 190 * t * t, u = t / 0.45;
         gx = (x0 + it.vx * 0.45 * u) * W; gz = (y0 + (vy0 * 0.45 + 190 * 0.2025) * u) * W; y = 0.15 + Math.sin(u * PI) * 0.95; yaw = T * 7 + it.x; pitch = -0.2 + Math.sin(T * 9 + it.y) * 0.3; roll = Math.sin(T * 8 + it.x) * 0.4; sc = 0.8 + 0.2 * u;
       } else {
-        gx = it.x * W; gz = it.y * W; const lt = it.t - 0.45, pl = Math.sin(T * 2.6 + it.x), hover = (rar > 1 ? 0.2 : 0.1) + (rar > 1 ? 0.07 : 0.025) * Math.abs(pl);
+        gx = it.x * W; gz = it.y * W; const lt = tt - 0.45, pl = Math.sin(T * 2.6 + it.x), hover = (rar > 1 ? 0.2 : 0.1) + (rar > 1 ? 0.07 : 0.025) * Math.abs(pl);
         y = hover; if (lt < 0.22) { const k2 = Math.sin(lt / 0.22 * PI); sq = 1 - 0.28 * k2; y = 0.02 * (1 - k2) + hover * (1 - k2); }
         yaw = (it.gem || it.crown || it.bar) ? T * 1.1 + it.x : Math.sin(T * 1.3 + it.x * 0.7) * 0.85;
       }
-      if (!vis(gx, gz, f)) continue;
+      if (!vis(gx, gz, f)) return;
       put(it, gx, y, gz, yaw, it.gem ? 0 : pitch, roll, sc, sq);
       if (V.blobs) V.blobs.add(gx, gz, air ? 0.24 : 0.4, air ? 0.2 : 0.3);
-      if (!FX || air) continue;
+      if (!FX || air) return;
       const c = rgb(colOf(it)), pl = 0.7 + 0.3 * Math.sin(T * 4 + it.x);
       if (rar >= 2) {
         FX.glowAt(0, gx, 0.02, gz, 0, 0.3, rar === 3 ? 2.6 : 2.1, 0.3, 0, c[0], c[1], c[2], 0.34 * pl);
         FX.glowAt(1, gx, 0.07, gz, T * 1.4 + it.x, 0.52 + Math.sin(T * 5) * 0.04, 1, 0.52 + Math.sin(T * 5) * 0.04, 0.9, c[0], c[1], c[2], 0.75 * pl, 0.16);
       }
-      if (it.gem || (!it.bar && !it.crown && ((it.k || 1) - 1) % 8 >= 5)) FX.glowAt(2, gx, y + 0.4, gz, 0, 0.8, 1, 1, 0, c[0], c[1], c[2], 0.28 + 0.08 * pl);
+      if (it.gem || (!it.bar && !it.crown && ((it.k || 1) - 1) % 8 >= 5)) FX.glowAt(2, gx, y + 0.5, gz, 0, 0.7, 0.15, 1, 0, c[0], c[1], c[2], 0.3 + 0.08 * pl);
       const ph = ((T * 2 + it.x) % 3) / 0.35; if (ph < 1) { const sz = 0.3 * Math.sin(ph * PI); FX.glowAt(3, gx + 0.2, y + 0.65, gz, 0, sz, 1, 1, 0, 1, 1, 1, 0.95); }
     }
   }
@@ -320,19 +324,19 @@ export function init(V) {
     const FX = fx(); if (!FX) return;
     FX.glowAt(0, gx, 0.5, gz, 0, 0.5, 3.0, 0.5, 0, 1, 0.88, 0.35, 0.22 + 0.08 * pl);
     for (let r = 0; r < 7; r++) { const a = T * 0.6 + r * (TAU / 7); FX.glowAt(0, gx, 0.55 + bob, gz, a, 0.12, 2.0 + 0.4 * Math.sin(T * 2 + r), 0.12, 1.25, 1, 0.9, 0.45, 0.13 + 0.06 * pl); }
-    FX.glowAt(1, gx, 0.07, gz, T, 1.0 + 0.06 * pl, 1, 1.0 + 0.06 * pl, 0.8, 1, 0.82, 0.3, 0.7, 0.14); FX.glowAt(2, gx, 0.75 + bob, gz, 0, 1.2, 1, 1, 0, 1, 0.85, 0.4, 0.25 + 0.1 * pl);
+    FX.glowAt(1, gx, 0.07, gz, T, 1.0 + 0.06 * pl, 1, 1.0 + 0.06 * pl, 0.8, 1, 0.82, 0.3, 0.7, 0.14); FX.glowAt(2, gx, 0.75 + bob, gz, 0, 1.2, 0.2, 1, 0, 1, 0.8, 0.3, 0.25 + 0.1 * pl);
     sparkAcc += 0.016 * 12; while (sparkAcc >= 1) { sparkAcc -= 1; const a = Math.random() * TAU, r = 0.2 + Math.random() * 0.5; FX.trail(gx + Math.cos(a) * r, 0.7 + Math.random() * 0.4, gz + Math.sin(a) * r * 0.6, 0xfff0a0, 0.16 + Math.random() * 0.1, 0.7, 2, 0.8); }
   }
   const NCOL = { hero: rgb('#ff7eb6'), crit: rgb('#ff9a2e'), ally: rgb('#3fcf6a'), tower: rgb('#a77bff') }; // note tints (linear)
   function updateShots(S, T, f, dt) {
     const FX = fx(), shots = S.shots;
     for (let i = 0; i < shots.length; i++) {
-      const sh = shots[i];
+      const sh = shots[i]; try {
       if (sh.boulder) { // arc from the tower top to the target; the 2D arc height becomes real height
         const u = Math.min(1, (sh.t || 0) / (sh.dur || 1)), gx = (sh.sx + (sh.tx - sh.sx) * u) * W, gz = (sh.sy + 50 + (sh.ty - sh.sy - 50) * u) * W, y = (50 * (1 - u) + Math.sin(u * PI) * 150) * W + 0.45;
         if (!vis(gx, gz, f)) continue; const c = rgb('#a77bff');
         bouldP.add(gx, y, gz, 0.3 * Math.sin(T * 2 + i), -T * 5, 0, 0.38, 0.38, 0.38, c); if (V.blobs) V.blobs.add(gx, (sh.ty + 0) * W + (gz - sh.ty * W) * 0.0, 0.5, 0.2);
-        if (FX) { FX.glowAt(2, gx, y, gz, 0, 0.9, 1, 1, 0, 0.65, 0.48, 1, 0.45); FX.glowAt(1, sh.tx * W, 0.07, sh.ty * W, T * 2, 0.9 + 0.7 * (1 - u), 1, 0.9 + 0.7 * (1 - u), 0.5, 1, 0.45, 0.65, 0.35 + 0.35 * u, 0.12); if (Math.random() < dt * 30) FX.trail(gx, y, gz, c, 0.16, 0.45, 0, 1); }
+        if (FX) { FX.glowAt(2, gx, y, gz, 0, 0.9, 0.15, 1, 0, c[0], c[1], c[2], 0.4); FX.glowAt(1, sh.tx * W, 0.07, sh.ty * W, T * 2, 0.9 + 0.7 * (1 - u), 1, 0.9 + 0.7 * (1 - u), 0.5, 1, 0.45, 0.65, 0.35 + 0.35 * u, 0.12); if (Math.random() < dt * 30) FX.trail(gx, y, gz, c, 0.16, 0.45, 0, 1); }
         continue;
       }
       const tg = sh.tgt, hs = sh.tower ? 70 : sh.ally ? 24 : 42, r2 = tg && tg.r ? tg.r * 0.5 : 10; let h2 = hs * 0.6;
@@ -342,14 +346,14 @@ export function init(V) {
       const wob = Math.sin(T * 18 + sh.x * 0.1) * 0.28;
       noteP.add(gx, y, gz, Math.sin(T * 9 + i) * 0.5, -0.5, wob, 0.85 * sz, 0.85 * sz, 0.85 * sz, c);
       if (V.blobs) V.blobs.add(gx, sh.y * W + (gz - sh.y * W) - (h2 - r2) * W * 0 , 0.16 * sz, 0.18);
-      if (FX) { FX.glowAt(2, gx, y, gz, 0, 0.5 * sz, 1, 1, 0, c[0], c[1], c[2], sh.crit ? 0.4 : 0.2); if (Math.random() < dt * (sh.crit ? 40 : 22)) FX.trail(gx, y, gz, c, 0.12 * sz, 0.4, Math.random() < 0.3 ? 2 : 0, 1); }
+      if (FX) { FX.glowAt(2, gx, y, gz, 0, 0.5 * sz, 0.2, 1, 0, c[0], c[1], c[2], sh.crit ? 0.4 : 0.2); if (Math.random() < dt * (sh.crit ? 40 : 22)) FX.trail(gx, y, gz, c, 0.12 * sz, 0.4, Math.random() < 0.3 ? 2 : 0, 1); }
     }
     const es = S.eshots;
     for (let i = 0; i < es.length; i++) {
       const e = es[i], gx = e.x * W, gz = (e.y + 14) * W, y = 0.42; if (!vis(gx, gz, f)) continue;
       const c = rgb(foeHex(e.k)), r = (e.big ? 0.36 : 0.21) * (1 + 0.06 * Math.sin(T * 22 + i));
       orbP.add(gx, y, gz, T * 3, 0, 0, r, r, r, c); if (V.blobs) V.blobs.add(gx, gz, r * 1.3, 0.22);
-      if (FX) { FX.glowAt(2, gx, y, gz, 0, r * 3.1, 1, 1, 0, c[0], c[1], c[2], 0.5); if (Math.random() < dt * 24) FX.trail(gx, y, gz, c, r * 0.8, 0.35, 0, 1); }
+      if (FX) { FX.glowAt(2, gx, y, gz, 0, r * 3.1, 0.15, 1, 0, c[0], c[1], c[2], 0.5); if (Math.random() < dt * 24) FX.trail(gx, y, gz, c, r * 0.8, 0.35, 0, 1); }
     }
   }
   function update(dt, t, focus) {
@@ -373,6 +377,7 @@ export function init(V) {
   function makeItemModel(e) {
     const g = new THREE.Group(); e = e || {}; const k = e.k || 1, i = (k - 1) % 8; let m;
     if (e.gem) { m = new THREE.Mesh(L.gem, matShared); m.position.y = 0.3; m.scale.setScalar(0.78); }
+    else if (e.coin) { m = new THREE.Mesh(L.coin, matShared); m.position.y = 0.4; m.scale.setScalar(0.8); }
     else if (e.crown) m = new THREE.Mesh(L.crown, matShared);
     else if (e.bar) { m = new THREE.Mesh(L.bar, tinted(metHex(i), i === 7 ? 0.55 : 0)); m.scale.setScalar(0.95); }
     else {

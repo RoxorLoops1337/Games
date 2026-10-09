@@ -7,7 +7,7 @@
 // Things pop in with a spring when they appear DURING play (a tower built, a new island); on load / prestige they just appear.
 //   const lands = init(V);  lands.update(dt, t, { x, z });  lands.dispose();
 import * as THREE from 'three';
-import { W } from './kit.js';
+import { W, PI } from './kit.js';
 import { makePlate } from './plate3d.js';
 import { speakerTower, discoTower, boomBox, drumKit, ampWall, crowdGate } from './lands_towers.js';
 import { makeDen, makePad } from './lands_den.js';
@@ -20,6 +20,21 @@ const TOWER_MAKE = { archer: speakerTower, wizard: discoTower, catapult: boomBox
 const near2 = (ax, ay, bx, by, r) => { const dx = ax - bx, dy = ay - by; return dx * dx + dy * dy < r * r; };
 const collect = (g) => { const out = []; g.traverse((o) => { if (o.userData && o.userData.billboard) out.push(o); }); return out; };
 const plateOf = (z, id) => z.plates.find((p) => p.id === id);
+/** where to stand an add-on (Amp Up wall) near its plate: the clearest of 8 directions, north preferred (behind the plate sign). Obstacles: plates, den, pad, towers, drum kit. */
+function clearSpot(L, pl, D, half) {
+  const z = L.z, obs = [];
+  for (const q of z.plates) if (q !== pl) obs.push([q.x * W, q.y * W, 1.4]);
+  obs.push([z.g.den.x * W, z.g.den.y * W, 1.9], [z.pad.x * W, z.pad.y * W, 1.3]); for (const t of z.towers) obs.push([t.x * W, t.y * W, 1.1]);
+  const gp = plateOf(z, 'gate2'); if (gp && z.hordeLvl > 0) obs.push([gp.x * W, gp.y * W - 1.15, 1.5]);
+  let best = null, bs = -1e9; const cx = pl.x * W, cz = pl.y * W, R = z.g.r * W;
+  for (let i = 0; i < 8; i++) {
+    const a = -PI / 2 + (i % 2 ? 1 : -1) * Math.ceil(i / 2) * PI / 4, x = cx + Math.cos(a) * D, zz = cz + Math.sin(a) * D; let c = 1e9;
+    for (const dx of [-half, 0, half]) for (const o of obs) c = Math.min(c, Math.hypot(x + dx - o[0], zz - o[1]) - o[2]);
+    const rim = Math.hypot(x - z.g.x * W, zz - z.g.y * W) - R * 0.82; // keep off the shore
+    const sc = Math.min(c, 0.3) * 3 - Math.abs(Math.ceil(i / 2)) * 0.5 - Math.max(0, rim) * 3; if (sc > bs) { bs = sc; best = { x, z: zz }; }
+  }
+  return best;
+}
 /** spring a group in: age counts seconds since it appeared (>= 90 means "already there") */
 const pop = (grp, age, delay = 0) => { const s = age >= 90 ? 1 : easeBack((age - delay) / POP); grp.scale.setScalar(Math.max(0.001, s)); grp.visible = s > 0.002; };
 
@@ -80,7 +95,7 @@ export function init(V) {
     if (L.drums) { L.drums.update(dt, t); L.drums.age += dt; pop(L.drums.g, L.drums.age); }
     // Amp Up (a wall of amps behind its plate, one per level) and Crowd Gate (an arch behind its plate, bigger per level): rebuilt on a level change
     const lvlA = Math.min(6, z.towerLvl | 0), lvlG = Math.min(4, z.hordeLvl | 0);
-    if (lvlA > 0 && L.ampN !== lvlA) { const pl = plateOf(z, 'towersUp'); if (pl) { if (L.amps) { L.amps.dispose(); g.remove(L.amps.g); } L.amps = born(L, ampWall(lvlA)); L.ampN = lvlA; L.amps.g.position.set(pl.x * W, 0, pl.y * W - 2.1); g.add(L.amps.g); } }
+    if (lvlA > 0 && L.ampN !== lvlA) { const pl = plateOf(z, 'towersUp'); if (pl) { if (L.amps) { L.amps.dispose(); g.remove(L.amps.g); } L.amps = born(L, ampWall(lvlA)); L.ampN = lvlA; const sp = clearSpot(L, pl, 2.1, 1.3); L.amps.g.position.set(sp.x, 0, sp.z); g.add(L.amps.g); } }
     if (L.amps) { L.amps.age += dt; pop(L.amps.g, L.amps.age); }
     if (lvlG > 0 && L.gateN !== lvlG) { const pl = plateOf(z, 'gate2'); if (pl) { if (L.gate) { L.gate.dispose(); g.remove(L.gate.g); } L.gate = born(L, crowdGate(lvlG)); L.gateN = lvlG; L.gate.g.position.set(pl.x * W, 0, pl.y * W - 1.15); g.add(L.gate.g); } }
     if (L.gate) { L.gate.age += dt; pop(L.gate.g, L.gate.age); }

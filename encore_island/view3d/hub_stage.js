@@ -2,7 +2,7 @@
 // and the ENCORE ISLAND marquee with chasing bulbs. Local frame: origin at STAGE (world X = x*W, Z = y*W), +z faces the camera.
 import * as THREE from 'three';
 import { Builder, C, INK, W, TAU, PI, seg, GB, GOLD, SHINY, glow, lit, canvasTex, stickerText, fitFont, starShape, damp, clamp } from './kit.js';
-import { Inst, ringQuad, rod, textAtlas, rbx, bll } from './hub_fx.js';
+import { Inst, ringQuad, rod, textAtlas, rbx, bll, floorMat } from './hub_fx.js';
 
 const PINK = 0xff9ac8, PINK_D = 0xd8559a, CZ = 0.36, R = 2.32; // platform centre z (local) and radius
 const SPOT_COL = [[1.0, 0.45, 0.72], [0.45, 1.0, 0.7], [0.62, 0.5, 1.0], [1.0, 0.85, 0.35]];
@@ -10,16 +10,16 @@ const SPOT_COL = [[1.0, 0.45, 0.72], [0.45, 1.0, 0.7], [0.62, 0.5, 1.0], [1.0, 0
 export function buildStage(V, fx) {
   const g = new THREE.Group(); g.name = 'stage'; g.position.set(STAGE.x * W, 0, STAGE.y * W);
   // ---- floor: stepped rings, all within 0.06 so heroes can walk across it ----
-  const f = new Builder({ ao: 0 });
-  f.cyl(INK, 0, 0, CZ, R + 0.2, 0.02, seg(64)); f.cyl(C.cream, 0, 0, CZ, R + 0.13, 0.03, seg(64)); f.cyl(PINK_D, 0, 0, CZ, R + 0.06, 0.04, seg(64)); f.cyl(PINK, 0, 0, CZ, R, 0.05, seg(64));
-  f.cyl(0xffb4d6, 0, 0, CZ, R * 0.72, 0.052, seg(48)); f.cyl(PINK, 0, 0, CZ, R * 0.44, 0.054, seg(40));
+  const FM = (c) => ({ m: floorMat(), c }), f = new Builder({ ao: 0 });
+  f.cyl(FM(INK), 0, 0, CZ, R + 0.2, 0.057, seg(64)); f.cyl(FM(C.cream), 0, 0, CZ, R + 0.13, 0.065, seg(64)); f.cyl(FM(PINK_D), 0, 0, CZ, R + 0.06, 0.073, seg(64)); f.cyl(FM(PINK), 0, 0, CZ, R, 0.081, seg(64));
+  f.cyl(FM(0xffb4d6), 0, 0, CZ, R * 0.72, 0.085, seg(48)); f.cyl(FM(PINK), 0, 0, CZ, R * 0.44, 0.089, seg(40));
   g.add(f.build({ cast: false }));
   // ---- lit stars: one big in the middle, a ring of small ones chasing around it ----
   const starGeo = new THREE.ShapeGeometry(starShape(5, 1, 0.45), 1).rotateX(-PI / 2).toNonIndexed(); starGeo.deleteAttribute('uv');
   const smat = new THREE.MeshBasicMaterial({ color: 0xffffff, fog: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }); smat.userData.noCast = true; smat.userData.noLook = true;
-  const stars = new Inst(starGeo, smat, 16, { colors: true }); stars.mesh.position.y = 0.058; g.add(stars.mesh);
-  const ringA = ringQuad({ r: R * 0.93, rin: 0.9, rout: 0.97, col: 0xff7eb6, a: 0.5 }); ringA.position.set(0, 0.062, CZ); g.add(ringA);
-  const ringB = ringQuad({ r: R * 0.62, rin: 0.9, rout: 0.97, col: 0xfff4e6, dash: 28, spin: 0.15, a: 0.8 }); ringB.position.set(0, 0.062, CZ); g.add(ringB);
+  const stars = new Inst(starGeo, smat, 16, { colors: true }); stars.mesh.position.y = 0.093; g.add(stars.mesh);
+  const ringA = ringQuad({ r: R * 0.93, rin: 0.9, rout: 0.97, col: 0xff7eb6, a: 0.5 }); ringA.position.set(0, 0.096, CZ); g.add(ringA);
+  const ringB = ringQuad({ r: R * 0.62, rin: 0.9, rout: 0.97, col: 0xfff4e6, dash: 28, spin: 0.15, a: 0.8 }); ringB.position.set(0, 0.098, CZ); g.add(ringB);
   // ---- backdrop: truss towers + top beam + hanging marquee board ----
   const t = new Builder({ ao: 0.12 }), TZ = -2.0, TH = 3.25, TX = 2.95, CH = 0xc9cfe6;
   const GBc = GB.cyl;
@@ -72,7 +72,7 @@ export function buildStage(V, fx) {
   const cones = new Inst(coneGeo, coneMat, 4, { colors: true }); cones.mesh.renderOrder = 5; g.add(cones.mesh);
   // marquee bulbs positions (world), chased in update
   const bulbs = []; for (let i = 0; i < 21; i++) { const x = -2.5 + 5 * i / 20; bulbs.push([x, BY + BH / 2 + 0.01, TZ + 0.2], [x, BY - BH / 2 + 0.0, TZ + 0.2]); }
-  const foot = []; for (let i = 0; i < 17; i++) { const a = PI * (0.12 + 0.76 * i / 16); foot.push([Math.cos(a) * (R + 0.1), 0.1, CZ + Math.sin(a) * (R + 0.1)]); }
+  const foot = []; for (let i = 0; i < 17; i++) { const a = PI * (0.12 + 0.76 * i / 16); foot.push([Math.cos(a) * (R + 0.1), 0.13, CZ + Math.sin(a) * (R + 0.1)]); }
   const wx = STAGE.x * W, wz = STAGE.y * W, _q = new THREE.Quaternion(), _qa = new THREE.Quaternion(), _v = new THREE.Vector3(), _d = new THREE.Vector3(), _Y = new THREE.Vector3(0, 1, 0), HX = [-1.8, -0.6, 0.6, 1.8], HY = 2.95, HZ = -1.55;
   let pulse = 0;
   return {
@@ -91,7 +91,7 @@ export function buildStage(V, fx) {
       heads.begin(); cones.begin();
       for (let i = 0; i < 4; i++) {
         const sw = Math.sin(tt * 0.9 + i * 2.1) * 1.5, sz = Math.cos(tt * 0.7 + i * 1.3) * 0.7, hx = HX[i], c = SPOT_COL[i];
-        _v.set(sw + (i - 1.5) * 0.45 - hx, 0.06 - HY, 1.4 + CZ + sz - HZ); const len = _v.length(); _v.multiplyScalar(1 / len);
+        _v.set(sw + (i - 1.5) * 0.45 - hx, 0.09 - HY, 1.4 + CZ + sz - HZ); const len = _v.length(); _v.multiplyScalar(1 / len);
         _q.setFromUnitVectors(_Y, _v); heads.putQ(hx, HY, HZ, _q, 1, 1, 1);
         _qa.setFromUnitVectors(_Y, _d.copy(_v).negate()); const rad = 0.5 + 0.12 * Math.sin(tt * 2 + i), a = 0.6 + 0.5 * pulse;
         cones.putQ(hx + _v.x * len / 2, HY + _v.y * len / 2, HZ + _v.z * len / 2, _qa, rad, len, rad, c[0] * a, c[1] * a, c[2] * a);

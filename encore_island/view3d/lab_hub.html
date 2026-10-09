@@ -26,12 +26,14 @@ let pl = (P.get('pl') || '').split(',').map(Number); if (pl.length < 2 || pl.som
 S.player.x = pl[0] * 50; S.player.y = pl[1] * 50;
 lab({ ground: false, d: num('d', sc[3]), el: num('el', sc[4]), az: num('az', sc[5]), tx: num('tx', sc[0]), ty: num('ty', sc[1]), tz: num('tz', sc[2]), extent: 26, mood: P.get('night') ? { sun: '#9a8cff', sunI: 1.1, hemiSky: '#6a5cc8', hemiGround: '#3a2a66', hemiI: 0.7, skyMid: '#2a1d5a', fog: '#2a1d5a', exposure: 0.9 } : undefined, async build(V) {
   V.rig.follow(num('tx', sc[0]), num('tz', sc[2]));
+  if (P.get('env') === '1') { const em = await import('./env3d.js'); const ei = await em.init(V); V.mods.env = ei; window.__env = ei; V.__envUpd = ei.update ? ei.update.bind(ei) : null; }
+  else {
   // lab ground: grass, cream plaza, boulevards
   const grass = new THREE.Mesh(new THREE.CircleGeometry(13.5, 64).rotateX(-Math.PI / 2), new THREE.MeshStandardMaterial({ color: 0xa4e59c, roughness: 1 })); grass.receiveShadow = true; V.scene.add(grass);
   const b = new kit.Builder({ ao: 0 }); b.cyl(0xfff1d6, 0, 0, 0, 4.9, 0.012, 64); for (const d of [-90, -40, 0, 33, 90, 148, 180, -125]) { const a = d * Math.PI / 180; b.part(kit.GB.box(), 0xfff1d6, Math.cos(a) * 7.5, 0.012, Math.sin(a) * 7.5, 1.5, 0.02, 7.0, 0, -a + Math.PI / 2, 0); }
-  const gm = b.build({ cast: false }); gm.children.forEach((m) => { m.receiveShadow = true; }); V.scene.add(gm);
+  const gm = b.build({ cast: false }); gm.children.forEach((m) => { m.receiveShadow = true; }); V.scene.add(gm); }
   const hero = new kit.Builder({ ao: 0.2 }); hero.cyl(0xff7eb6, 0, 0, 0, 0.3, 0.8, 12); hero.ball(0xffe0c8, 0, 1.0, 0, 0.3); const hg = hero.build(); hg.position.set(pl[0], 0, pl[1]); V.scene.add(hg);
   const mod = await import('./hub3d.js'); const inst = mod.init(V); window.__hub = inst; V.mods.hub3d = inst;
-  return { update(dt, t) { inst.update(dt, t, { x: S.player.x * W, z: S.player.y * W }); } };
+  return { update(dt, t) { const f = { x: S.player.x * W, z: S.player.y * W }; if (V.__envUpd) V.__envUpd(dt, t, f); inst.update(dt, t, f); } };
 } });
 </script>

@@ -112,7 +112,7 @@ const SIGNS = [
 export function signAtlas() {
   const cells = SIGNS.map(([, txt, bg, c1, c2]) => ({ txt, bg, c1, c2, size: 66, rad: 30, sw: 11 })), at = textAtlas(cells, { cw: 384, ch: 128, cols: 3 }), ix = {};
   SIGNS.forEach((s, i) => { ix[s[0]] = i; });
-  const mat = new THREE.MeshStandardMaterial({ map: at.tex, roughness: 0.6, alphaTest: 0.35, transparent: false }); mat.userData.noBake = true;
+  const mat = new THREE.MeshStandardMaterial({ map: at.tex, roughness: 0.6, alphaTest: 0.35, transparent: false, emissive: 0xffffff, emissiveMap: at.tex, emissiveIntensity: 0.28 }); mat.userData.noBake = true;
   return { tex: at.tex, mat, has: (n) => n in ix,
     /** add a sign quad (w wide, 3:1 unless h given) to a QuadSet */
     quad(qs, name, w, x, y, z, yaw = 0, rx = 0, h) { const i = ix[name]; if (i === undefined) return qs; return qs.add(w, h || w / 3, x, y, z, yaw, at.uv(i), rx); },
@@ -131,6 +131,9 @@ export function rbx(b, c, x, y, z, w, h, d, r = 0.15, ry = 0, rx = 0, rz = 0) {
 }
 /** ball whose icosphere detail follows its size (tiny studs 0, medium 1, big 2); same argument order as Builder.ball without the detail */
 export function bll(b, c, x, y, z, r, sy = 1, sz) { const d = r < 0.075 ? 0 : r < 0.22 ? 1 : Math.min(2, icoDetail(1)); return b.part(GB.ico(d), c, x, y, z, r, r * sy, sz ? r * sz : r, 0, 0, 0); }
+/** vertex-coloured lit material for flat things lying on the paving (stage floor, well, pads): a strong polygon offset so they always win over env3d's slabs */
+let _floor = null;
+export function floorMat() { return _floor || (_floor = Object.assign(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.85, polygonOffset: true, polygonOffsetFactor: -5, polygonOffsetUnits: -5 }), { userData: { noCast: true } })); }
 export const hexRGB = (h, k = 1) => { _c.set(h); return [_c.r * k, _c.g * k, _c.b * k]; };
 /** a beat-ish value: 1 right on the beat decaying to 0 (LOOK.beat is the engine's own pulse; this is the fallback) */
 export const beatOf = (V) => (V.LOOK ? V.LOOK.beat.value : 0);

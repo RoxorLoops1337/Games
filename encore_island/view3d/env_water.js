@@ -30,7 +30,7 @@ void main(){
   float sw = vn(p * 0.09 + vec2(t * 0.02, -t * 0.015)); col *= 0.92 + 0.14 * sw;                     // broad swells of lightness
   // wave strokes: stretched drifting noise thresholded into short dashes, like the 2D game's wave arcs
   float ds = vn(p * vec2(0.45, 2.6) + vec2(t * 0.3, 0.0)) * 0.6 + vn(p * vec2(0.9, 5.0) - vec2(t * 0.42, 3.0)) * 0.4;
-  float dash = smoothstep(0.7, 0.75, ds) * (0.5 + 0.5 * dep);
+  float cd = length(vW - uCam); float dash = smoothstep(0.7, 0.75, ds) * (0.5 + 0.5 * dep) * (1.0 - smoothstep(40.0, 120.0, cd) * 0.85);
   col = mix(col, vec3(1.0), dash * 0.24);
   #ifndef LOWQ
   // caustics: two warped cell layers crossing, only in the shallows
@@ -49,7 +49,7 @@ void main(){
   // glitter on the swell tops, stronger where the sun-facing shimmer is
   vec2 gq = p * 2.2; vec2 gc = floor(gq), gf = fract(gq) - 0.5; float gh = hs(gc), gph = fract(t * (0.25 + 0.3 * hs(gc + 3.7)) + gh);
   float gl = step(0.78, gh) * smoothstep(0.0, 0.08, gph) * smoothstep(0.35, 0.08, gph) * max(0.0, 1.0 - (abs(gf.x) + abs(gf.y)) * 3.4) * 2.2;
-  col += uSun * gl * uSparkle * 0.55 * (0.4 + 0.6 * dep);
+  col += uSun * gl * uSparkle * 0.55 * (0.4 + 0.6 * dep) * (1.0 - smoothstep(30.0, 90.0, cd));
   // sky reflection at grazing angles
   vec3 vd = normalize(uCam - vW); float fr = pow(1.0 - clamp(vd.y, 0.0, 1.0), 3.0);
   col = mix(col, uSky, fr * 0.45);

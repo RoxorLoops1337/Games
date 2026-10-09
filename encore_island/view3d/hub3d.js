@@ -14,8 +14,8 @@ import { buildHatch, buildWarp } from './hub_hatch.js';
 import { buildMarket, buildArena, buildStudio } from './hub_districts.js';
 
 export function init(V) {
-  const root = new THREE.Group(); root.name = 'hub3d'; (V.hubGroup || V.world || V.scene).add(root); V.hubRoot = root;
-  const cam = V.camera;
+  const root = new THREE.Group(); root.name = 'hub3d'; const host = V.hubGroup || V.world || V.scene; if (host && host.add) host.add(root); V.hubRoot = root;
+  const cam = V.camera || { quaternion: new THREE.Quaternion() };
   // shared pools: every module drops its lights into these each frame
   const bulbMat = new THREE.MeshBasicMaterial({ color: 0xffffff, fog: true }); bulbMat.userData.noCast = true; bulbMat.userData.noLook = true;
   const bulbs = new Inst(new THREE.IcosahedronGeometry(1, 1), bulbMat, 240, { colors: true }); bulbs.mesh.renderOrder = 2;

@@ -10,11 +10,12 @@ const SWIRL_V = 'varying vec2 vP; void main(){ vP = position.xz; gl_Position = p
 const SWIRL_F = `varying vec2 vP; uniform float uT, uK, uPulse; uniform vec3 uCol;
 void main(){
   float r = length(vP), ang = atan(vP.y, vP.x);
-  vec3 dark = vec3(0.07, 0.02, 0.15);
-  float arms = pow(sin(ang * 2.0 + r * 8.0 - uT * 2.4 + uK) * 0.5 + 0.5, 1.5), arms2 = pow(sin(ang * 3.0 - r * 11.0 + uT * 1.7 + uK) * 0.5 + 0.5, 3.0);
-  float ring = smoothstep(0.80, 0.9, r) * (1.0 - smoothstep(0.93, 1.0, r));
-  vec3 c = mix(dark, uCol * 1.15, arms * smoothstep(0.05, 0.7, r) * (0.55 + 0.45 * uPulse));
-  c += uCol * arms2 * 0.35 * smoothstep(0.2, 0.9, r) + uCol * ring * 0.9 + vec3(1.0) * ring * 0.18 + uCol * 0.6 * exp(-r * 7.0) * (0.5 + 0.5 * uPulse);
+  vec3 dark = vec3(0.05, 0.015, 0.11);
+  float a1 = pow(sin(ang * 2.0 + r * 9.0 - uT * 2.5 + uK) * 0.5 + 0.5, 3.0), a2 = pow(sin(ang * 3.0 - r * 13.0 + uT * 1.8 + uK) * 0.5 + 0.5, 4.0);
+  float ring = smoothstep(0.84, 0.92, r) * (1.0 - smoothstep(0.95, 1.0, r));
+  vec3 c = dark + uCol * (a1 * 0.85 + a2 * 0.4) * smoothstep(0.08, 0.75, r) * (0.55 + 0.45 * uPulse);
+  c *= 0.7 + 0.3 * smoothstep(0.0, 0.55, r);
+  c += uCol * ring * 0.55 + uCol * 0.35 * exp(-r * 14.0) * (0.4 + 0.6 * uPulse);
   gl_FragColor = vec4(c, 1.0 - smoothstep(0.97, 1.0, r));${OUT}
 }`;
 const _plane = new THREE.PlaneGeometry(2, 2).rotateX(-PI / 2); _plane.userData.sharedGeo = true;
@@ -23,8 +24,8 @@ const _plane = new THREE.PlaneGeometry(2, 2).rotateX(-PI / 2); _plane.userData.s
 export function makeDen(z) {
   const k = z.k, fc = typeof foeCol === 'function' ? foeCol(k) : '#ff6a5a', fcol = new THREE.Color(fc), light = fcol.clone().lerp(new THREE.Color(0xffffff), 0.55);
   const g = new THREE.Group(), b = new Builder({ ao: 0.2 }), r = rng(k * 13 + 5);
-  b.cyl(INK, 0, 0, 0, 1.08, 0.06, seg(28)); b.cyl(0x4a2f7a, 0, 0, 0, 1.0, 0.1, seg(28)); b.cyl(0x2a1850, 0, 0, 0, 0.84, 0.115, seg(28));
-  const n = 11; for (let i = 0; i < n; i++) { const a = i / n * TAU + r() * 0.2, rd = 1.02 + r() * 0.06, s = 0.2 + r() * 0.1; b.ball(i & 1 ? 0x6a4aa8 : 0x5a3f98, Math.cos(a) * rd, 0.1 + s * 0.2, Math.sin(a) * rd, s, 0.72, 0.9, 1); b.ball(0x8f6be8, Math.cos(a) * rd, 0.1 + s * 0.55, Math.sin(a) * rd, s * 0.45, 0.6, 0.8, 1); }
+  b.cyl(INK, 0, 0, 0, 1.08, 0.06, seg(28)); b.cyl(0x4a2f7a, 0, 0, 0, 1.0, 0.1, seg(28)); b.cyl(0x1a0a30, 0, 0, 0, 0.86, 0.118, seg(28));
+  const n = 9; for (let i = 0; i < n; i++) { const a = i / n * TAU + r() * 0.25, rd = 1.06 + r() * 0.1, s = 0.17 + r() * 0.15; b.ball(i & 1 ? 0x6a4aa8 : 0x5a3f98, Math.cos(a) * rd, 0.1 + s * 0.2, Math.sin(a) * rd, s, 0.72, 0.9, 1); b.ball(0x8f6be8, Math.cos(a) * rd, 0.1 + s * 0.55, Math.sin(a) * rd, s * 0.45, 0.6, 0.8, 1); }
   const rim = b.build({ cast: true }); rim.children.forEach((m) => addOutline(m, 0.02)); g.add(rim);
   // crystals in the foe colour poke out of the rim
   const cb = new Builder({ ao: 0.1 }), cc = fcol.clone().lerp(new THREE.Color(0xffffff), 0.25).getHex();
@@ -32,11 +33,11 @@ export function makeDen(z) {
   const cr = cb.build({ cast: false }); g.add(cr);
   const m = new THREE.ShaderMaterial({ transparent: true, depthWrite: false, fog: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2, uniforms: { uT: LOOK.t, uK: { value: k * 1.7 }, uPulse: { value: 0 }, uCol: { value: fcol } }, vertexShader: SWIRL_V, fragmentShader: SWIRL_F });
   m.userData.noCast = m.userData.noLook = m.userData.own = true;
-  const sw = new THREE.Mesh(_plane, m); sw.userData.sharedGeo = true; sw.scale.set(0.84, 1, 0.84); sw.position.y = 0.125; sw.renderOrder = 3; g.add(sw);
+  const sw = new THREE.Mesh(_plane, m); sw.userData.sharedGeo = true; sw.scale.set(0.8, 1, 0.8); sw.position.y = 0.125; sw.renderOrder = 3; g.add(sw);
   const motes = moteField({ n: 22, h: 2.4, r: 0.62, cone: 0.75, size: 0.17, speed: 0.32, sway: 0.2, c: light.getHex(), c2: 0xffffff, seed: k * 7 + 1 }); motes.position.y = 0.1; g.add(motes);
-  const beam = beamMesh(0.8, 0.3, 2.6, { c: fcol.getHex(), a: 0.16, fall: 1.2, stripes: 4, spd: 1.5 }); beam.position.y = 0.1; g.add(beam);
-  const glow = glowSprite(fc, 3.4, { flat: true, a: 0.45 }); glow.position.y = 0.08; g.add(glow);
-  return { g, update(dt, t) { m.uniforms.uPulse.value = 0.5 + 0.5 * Math.sin(t * 2 + k); beam.userData.u.uA.value = 0.11 + 0.07 * m.uniforms.uPulse.value + 0.04 * LOOK.beat.value; glow.scale.setScalar(3.2 + 0.4 * m.uniforms.uPulse.value); }, dispose() { disposeDeep(g); } };
+  const beam = beamMesh(0.8, 0.3, 2.6, { c: fcol.getHex(), a: 0.1, fall: 1.2, stripes: 4, spd: 1.5 }); beam.position.y = 0.1; g.add(beam);
+  const glow = glowSprite(fc, 3.4, { flat: true, a: 0.3 }); glow.position.y = 0.08; g.add(glow);
+  return { g, update(dt, t) { m.uniforms.uPulse.value = 0.5 + 0.5 * Math.sin(t * 2 + k); beam.userData.u.uA.value = 0.07 + 0.05 * m.uniforms.uPulse.value + 0.03 * LOOK.beat.value; glow.scale.setScalar(3.2 + 0.4 * m.uniforms.uPulse.value); }, dispose() { disposeDeep(g); } };
 }
 
 // ================================================================= HOME warp pad (only once S.waygate): z.pad px

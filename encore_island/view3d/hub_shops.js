@@ -1,9 +1,8 @@
-// Encore Island 3D, the three money fixtures: the SELL stall (with its keeper), the Vault (coin stacks grow with S.pallet) and the Encore Tour monument.
+// Encore Island 3D, the three money fixtures: the SELL stall (heroes3d places the keeper), the Vault (coin stacks grow with S.pallet) and the Encore Tour monument.
 // Each builder returns { group, update(dt, t, focus), dispose() }; local frame = the 2D position (X = x*W, Z = y*W), +z faces the camera.
 import * as THREE from 'three';
 import { Builder, C, INK, W, TAU, PI, seg, GB, GOLD, SHINY, lit, glow, damp, clamp, hash01 } from './kit.js';
 import { Inst, ringQuad, QuadSet, rod, outline, rbx, bll } from './hub_fx.js';
-import { bakeActor } from './bake.js';
 
 const WOOD = 0xd9a468, WOOD_D = 0xa8703c, GOLDC = 0xffd84d;
 const GOLDM = { m: GOLD, c: GOLDC };
@@ -38,15 +37,10 @@ export function buildStall(V, fx) {
   b.cyl(INK, -0.7, 0.98, 0.92, 0.2, 0.05, 14); b.cyl(C.mint, -0.7, 0.99, 0.92, 0.17, 0.05, 14); b.cyl(INK, -0.7, 1.04, 0.92, 0.03, 0.2, 8); rbx(b, C.cream, -0.7, 1.26, 0.92, 0.38, 0.05, 0.08, 0.5);
   g.add(outline(b.build({ cast: true })));
   const sign = fx.atlas.mesh(qs); g.add(sign);
-  // keeper: heroes3d builds jordan; ask lazily, then park him behind the counter
-  let keeper = null, tried = 0, kt = 0; const stK = { speed: 0, atk: false, cast: false, cheer: false, hurt: 0, singing: false, die: 0, elite: false, gold: false, slow: false, glow: false, dash: false, carry: [] };
+  // the keeper (jordan) is placed behind the counter by heroes3d itself (SELL.x, SELL.y + 6 px), so nothing to spawn here
   return {
     group: g,
-    update(dt, t) {
-      if (!keeper && (tried += dt) > 0.5 && tried < 1e5) { tried = -1; const H = V.mods && (V.mods.heroes || V.mods.heroes3d); if (H && H.makeHero) { try { keeper = H.makeHero('jordan'); keeper.group.position.set(0, 0, -0.05); keeper.group.userData.hubKeeper = true; g.add(keeper.group); try { bakeActor(keeper); } catch (e) { /* unbaked keeper still renders */ } } catch (e) { keeper = null; tried = 1e6; } } else tried = 0; }
-      if (keeper) { stK.cheer = (t * 0.7 | 0) % 6 === 0; try { keeper.update(dt, t, stK); } catch (e) { /* keeper is optional */ } }
-      void kt;
-    },
+    update() {},
     dispose() { g.removeFromParent(); g.traverse((o) => { if (o.geometry && !o.userData.sharedGeo) o.geometry.dispose(); }); }
   };
 }

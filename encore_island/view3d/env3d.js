@@ -11,6 +11,8 @@ import { buildIsland } from './env_island.js';
 import { buildHubFloor, hubBlocked } from './env_hub.js';
 import { buildDecor } from './env_decor.js';
 import { buildWalk } from './env_walk.js';
+import { createSky } from './env_sky.js';
+import { createAmbient, createMist } from './env_fx.js';
 
 const easeBack = (u) => { const c1 = 1.70158, c3 = c1 + 1, x = Math.min(1, Math.max(0, u)) - 1; return 1 + c3 * x * x * x + c1 * x * x; };
 
@@ -20,6 +22,9 @@ export function init(V) {
   const cur = newMood(), tgt = newMood(), tmp = newMood(); copyMood(cur, biomeMoods[0]);
   let over = null, overBlend = 0, kitMood = null, kitStamp = -1, frame = 0, warned = false;
   const water = createWater(V); root.add(water.mesh);
+  const sky = createSky(V); root.add(sky.root);
+  const amb = createAmbient(V); root.add(amb.points);
+  const mist = createMist(V); root.add(mist.group);
   const recs = new Map(); // land index (0 = hub) -> { k, g, grp, parts: [], ready }
   const queue = []; // build tasks, run within a per-frame time budget
   const now = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());
@@ -49,7 +54,8 @@ export function init(V) {
     for (const k of [...recs.keys()]) if (k > n) disposeLand(k);
     for (let k = 1; k <= n; k++) if (!recs.has(k) && !queue.some((q) => q.k === k)) queue.push({ k, run() { const rec = buildLand(k); const z = S.lands[k - 1]; if (z && typeof z.born === 'number' && S.t - z.born < 1.2) rec.born = z.born; } });
     // shore map follows the lands: re-bake whenever the set changes
-    const key = 'n' + n; if (water.key !== key) { water.key = key; const geos = [HUB_GEO]; for (let k = 1; k <= n; k++) geos.push(geoOf(k)); water.request(geos, worldExtent(n), key); }
+    mist.set(n + 1 <= 60 ? n + 1 : -1);
+    const key = 'n' + n; if (water.key !== key) { const ex = worldExtent(n); sky.setWorld((ex.x0 + ex.x1) / 2 * W, (ex.y0 + ex.y1) / 2 * W, Math.hypot(ex.x1 - ex.x0, ex.y1 - ex.y0) / 2 * W); water.key = key; const geos = [HUB_GEO]; for (let k = 1; k <= n; k++) geos.push(geoOf(k)); water.request(geos, worldExtent(n), key); }
   }
   function runQueue(ms) {
     const t0 = now(); while (queue.length && now() - t0 < ms) { const q = queue.shift(); guard(() => q.run()); }
@@ -68,12 +74,21 @@ export function init(V) {
 
   // ---------------------------------------------------------------- frame
   const _f = { x: 0, z: 0 };
+  // distance culling: an island (and its boardwalk) beyond the fog is not drawn at all
+  function cull() {
+    const cp = camera.position, far = cur.fogFar * 1.04;
+    for (const rec of recs.values()) { const dx = rec.g.x * W - cp.x, dz = rec.g.y * W - cp.z, d = Math.hypot(dx, dz) - rec.g.r * W * 1.3 - (rec.k ? 30 : 0); rec.grp.visible = d < far; }
+  }
   function update(dt, t, focus) {
     dt = Math.min(dt || 0.016, 0.1); frame++; const f = focus || _f;
     guard(syncLands); runQueue(5);
     guard(() => water.work(2));
     guard(() => updateMood(dt, f));
     guard(() => water.update(dt, t, camera, cur));
+    guard(() => sky.update(dt, t, camera, cur));
+    guard(() => amb.update(dt, t, f, camera, biomeIdx(nearestK(f.x, f.z)), V.renderer));
+    guard(() => mist.update(dt, t, cur));
+    guard(() => cull());
     // island grow-in for the newest land
     for (const rec of recs.values()) if (rec.born !== null && rec.isl) {
       const u = (S.t - rec.born) / 1.1, s = u >= 1 ? 1 : Math.max(0.04, easeBack(u)); rec.isl.grp.scale.setScalar(s);
@@ -90,8 +105,9 @@ export function init(V) {
 
   return {
     update, heightAt, water,
-    getMood() { if (kitStamp !== frame) { kitMood = toKit(cur); kitStamp = frame; } return kitMood; },
+    /** the live blended mood (colours are THREE.Color, which rig.apply / setClearColor / Color.set all accept); getMood('css') returns the kit's string form */
+    getMood(form) { if (form === 'css') { if (kitStamp !== frame) { kitMood = toKit(cur); kitStamp = frame; } return kitMood; } return cur; },
     setMoodOverride(m, blend = 1) { if (!m) { over = null; overBlend = 0; return; } over = parseMood(m, toKit(biomeMoods[0])); overBlend = Math.min(1, Math.max(0, blend)); },
-    dispose() { for (const k of [...recs.keys()]) disposeLand(k); water.dispose(); root.parent && root.parent.remove(root); },
+    dispose() { for (const k of [...recs.keys()]) disposeLand(k); water.dispose(); sky.dispose(); amb.dispose(); mist.dispose(); root.parent && root.parent.remove(root); },
   };
 }

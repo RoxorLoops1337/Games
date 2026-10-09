@@ -2,7 +2,7 @@
 // and the warp pad at the Travel Dock (WAYPAD, once S.waygate). Local frames = the 2D positions, +z faces the camera.
 import * as THREE from 'three';
 import { Builder, C, INK, W, TAU, PI, seg, GB, GOLD, lit, damp, clamp, hash01 } from './kit.js';
-import { Inst, QuadSet, ringQuad, rod, outline, rbx, bll } from './hub_fx.js';
+import { Inst, QuadSet, ringQuad, rod, outline, rbx, bll, floorMat } from './hub_fx.js';
 import { iconTex } from './plate3d.js';
 
 const GOLDM = { m: GOLD, c: 0xffd84d };
@@ -12,9 +12,9 @@ export function buildHatch(V, fx) {
   const g = new THREE.Group(); g.name = 'hatch'; g.position.set(HATCH.x * W, 0, HATCH.y * W);
   const wx = g.position.x, wz = g.position.z;
   // landing + well (everything within 0.06 so the hero can stand on the steps)
-  const f = new Builder({ ao: 0 }); f.cyl(INK, 0, 0, 0.1, 2.0, 0.02, seg(40)); f.cyl(0x8a7aa8, 0, 0, 0.1, 1.94, 0.03, seg(40)); f.cyl(0x5a4a7a, 0, 0, 0.1, 1.82, 0.035, seg(40));
-  f.box(INK, 0, 0.04, 0.1, 2.38, 0.02, 1.7); f.box(0x8a7aa8, 0, 0.043, 0.1, 2.3, 0.02, 1.62);
-  for (let i = 0; i < 5; i++) { const k = i / 4; f.box(new THREE.Color().setHSL(0.7, 0.35, 0.34 - k * 0.2).getHex(), 0, 0.055, 0.62 - i * 0.28, 2.1 - i * 0.12, 0.014, 0.26); f.box(0x9a8ad0, 0, 0.0625, 0.745 - i * 0.28, 2.1 - i * 0.12, 0.004, 0.03); }
+  const FM = (c) => ({ m: floorMat(), c }), f = new Builder({ ao: 0 }); // the landing paving itself comes from env3d; this is only the well
+  f.box(FM(INK), 0, 0.04, 0.1, 2.38, 0.02, 1.7); f.box(FM(0x8a7aa8), 0, 0.043, 0.1, 2.3, 0.02, 1.62);
+  for (let i = 0; i < 5; i++) { const k = i / 4; f.box(FM(new THREE.Color().setHSL(0.7, 0.35, 0.34 - k * 0.2).getHex()), 0, 0.055, 0.62 - i * 0.28, 2.1 - i * 0.12, 0.014, 0.26); f.box(FM(0x9a8ad0), 0, 0.0625, 0.745 - i * 0.28, 2.1 - i * 0.12, 0.004, 0.03); }
   const fl = f.build({ cast: false, ao: 0 }); fl.children.forEach((m) => { m.receiveShadow = true; }); g.add(fl);
   // posts, arch and chain (static)
   const b = new Builder({ ao: 0.18 }), qs = new QuadSet();
@@ -61,8 +61,8 @@ export function buildHatch(V, fx) {
 export function buildWarp(V, fx) {
   const g = new THREE.Group(); g.name = 'warpPad'; g.position.set(WAYPAD.x * W, 0, WAYPAD.y * W);
   const wx = g.position.x, wz = g.position.z, R = 0.92;
-  const b = new Builder({ ao: 0 });
-  b.cyl(INK, 0, 0, 0, R + 0.16, 0.05, seg(40)); b.cyl(0xdff8ff, 0, 0, 0, R + 0.08, 0.09, seg(40)); b.cyl(0x2a5a9a, 0, 0, 0, R, 0.11, seg(40)); b.cyl(0x4aa0cc, 0, 0, 0, R * 0.82, 0.118, seg(40)); b.cyl(0x6ec9e0, 0, 0, 0, R * 0.52, 0.124, seg(32)); b.cyl(0xb8f4ff, 0, 0, 0, R * 0.2, 0.13, seg(20));
+  const FM = (c) => ({ m: floorMat(), c }), b = new Builder({ ao: 0 });
+  b.cyl(FM(INK), 0, 0, 0, R + 0.16, 0.05, seg(40)); b.cyl(FM(0xdff8ff), 0, 0, 0, R + 0.08, 0.09, seg(40)); b.cyl(FM(0x2a5a9a), 0, 0, 0, R, 0.11, seg(40)); b.cyl(FM(0x4aa0cc), 0, 0, 0, R * 0.82, 0.118, seg(40)); b.cyl(FM(0x6ec9e0), 0, 0, 0, R * 0.52, 0.124, seg(32)); b.cyl(FM(0xb8f4ff), 0, 0, 0, R * 0.2, 0.13, seg(20));
   for (let i = 0; i < 8; i++) { const a = i / 8 * TAU; bll(b, GOLDM, Math.cos(a) * (R + 0.04), 0.1, Math.sin(a) * (R + 0.04), 0.045, 0.7); }
   g.add(b.build({ cast: false, ao: 0 }));
   const rune = ringQuad({ r: R * 0.9, rin: 0.62, rout: 0.72, col: 0xb8f4ff, dash: 12, spin: 0.25, a: 1 }); rune.position.y = 0.14; g.add(rune);

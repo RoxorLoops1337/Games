@@ -1,4 +1,4 @@
-// Encore Island 3D — characters. Procedural chibi low-poly rigs (no textures, no per-frame allocation).
+// Encore Island 3D - characters. Procedural chibi low-poly rigs (no textures, no per-frame allocation).
 // API: makeJasmin(), makeRoxor(), makeCreature('kappa'|'oni'|'slime'), makeFan(seed)
 //   -> { group, update(dt,t,st), attack(), die(), isDead(), get dead, setCarry(n) }
 import * as THREE from 'three';
@@ -134,7 +134,7 @@ function part(ctx, parent, g, color, x = 0, y = 0, z = 0, sx = 1, sy = sx, sz = 
     const e = typeof o.ol === 'number' ? o.ol : OUTLINE;
     mesh.add(new THREE.Mesh(outlineGeo(g, sx, sy, sz, e), inkMat));
   }
-  if (!(STYLE.boost < 0 && o.ol === false && !o.mat && g.attributes.position.count <= 60 && Math.max(sx, sy, sz) < 0.09)) parent.add(mesh); // crowd LOD drops unoutlined specks (toe caps, inner ears) entirely
+  if (!(STYLE.boost < 0 && !o.keep && o.ol === false && !o.mat && g.attributes.position.count <= 60 && Math.max(sx, sy, sz) < 0.09)) parent.add(mesh); // crowd LOD drops unoutlined specks (toe caps, inner ears) entirely
   return mesh;
 }
 const flat = (g, mat, parent, x, y, z, sx, sy, sz, o = {}) => { // unlit/face bits: no outline, no shadow
@@ -354,9 +354,11 @@ function ctex(key, w, h, draw) {
   if (t !== undefined) return t;
   t = null;
   if (typeof document !== 'undefined') {
-    const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
-    draw(cv.getContext('2d'), w, h);
-    t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4;
+    try { // never throw: a failed paint (no 2D context, stubbed canvas) just leaves the decal off
+      const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+      draw(cv.getContext('2d'), w, h);
+      t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4;
+    } catch (e) { t = null; }
   }
   HTX.set(key, t);
   return t;
@@ -441,7 +443,7 @@ function lockGeo(H, path, wid, lift) {
   I.push(0, 2, 1, (n - 1) * 3, (n - 1) * 3 + 1, (n - 1) * 3 + 2);
   const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(V, 3)); g.setIndex(I); g.computeVertexNormals(); return g;
 }
-// blade between two points (flattened pointy ellipsoid) — spikes, strands, tail flicks
+// blade between two points (flattened pointy ellipsoid) - spikes, strands, tail flicks
 const _bv = new THREE.Vector3();
 function blade(ctx, parent, col, ax, ay, az, bx, by, bz, w, th, o = {}) {
   _bv.set(bx - ax, by - ay, bz - az);
@@ -549,20 +551,18 @@ function paintMouthSmile(g, W, H) { // closed cheeky smile with a small dimple t
 }
 // Fan / far-LOD face: flat basic-material ellipsoids (no textures, merges into the shared glow bucket). Same interface as addHeroFace.
 function addFanFace(ctx, head, H, f = {}) {
-  const cy = H.cy, eyes = [], eyeOpen = [], eyeShut = [], ex = f.ex ?? 0.16, ey = cy + (f.ey ?? -0.03), ew = f.ew ?? 0.085, eh = f.eh ?? 0.11;
+  const cy = H.cy, eyes = [], eyeOpen = [], eyeShut = [], ex = f.ex ?? 0.16, ey = cy + (f.ey ?? -0.03), ew = f.ew ?? 0.085, eh = f.eh ?? 0.11, K = { ol: false, keep: true };
+  const pp = (par, g, c, x, y, z, a, b, d) => part(ctx, par, g, c, x, y, z, a, b, d, K); // lit parts (same bucket as the body): a crowd actor is just ink + one solid draw call
   for (const sd of [-1, 1]) {
     const piv = new THREE.Group(); piv.position.set(sd * ex, ey, H.surf(sd * ex, ey) - 0.014); piv.rotation.y = sd * 0.3; head.add(piv);
     const op = new THREE.Group(); piv.add(op);
-    flat(ico(1), eyeMat, op, 0, 0, 0, ew, eh, 0.04);
-    flat(ico(0), basic(f.iris ?? 0x6a3a22), op, 0, -eh * 0.2, 0.022, ew * 0.78, eh * 0.7, 0.03);
-    flat(ico(0), whiteMat, op, ew * 0.3, eh * 0.38, 0.045, ew * 0.3, ew * 0.3, 0.012);
-    const sh = flat(ico(0), eyeMat, piv, 0, -eh * 0.15, 0.01, ew * 1.1, 0.014, 0.03); sh.visible = false;
+    pp(op, ico(1), 0x2b1426, 0, 0, 0, ew, eh, 0.04); pp(op, ico(0), f.iris ?? 0x6a3a22, 0, -eh * 0.2, 0.022, ew * 0.78, eh * 0.7, 0.03); pp(op, ico(0), 0xffffff, ew * 0.3, eh * 0.38, 0.045, ew * 0.3, ew * 0.3, 0.012);
+    const sh = pp(piv, ico(0), 0x2b1426, 0, -eh * 0.15, 0.01, ew * 1.1, 0.014, 0.03); sh.visible = false;
     eyes.push(piv); eyeOpen.push(op); eyeShut.push(sh);
   }
-  const bm = basic(f.blush ?? 0xff8fb0);
-  for (const sd of [-1, 1]) { const bx = sd * ex * 1.45, by = ey - eh * 1.3, b = flat(ico(0), bm, head, bx, by, H.surf(bx, by) - 0.012, 0.06, 0.036, 0.012); b.rotation.y = sd * 0.8; }
+  for (const sd of [-1, 1]) { const bx = sd * ex * 1.45, by = ey - eh * 1.3, b = pp(head, ico(0), f.blush ?? 0xff8fb0, bx, by, H.surf(bx, by) - 0.012, 0.06, 0.036, 0.012); b.rotation.y = sd * 0.8; }
   const mouth = new THREE.Group(), my = cy + (f.my ?? -0.2); mouth.position.set(0, my, H.surf(0, my) - 0.01); head.add(mouth);
-  flat(ico(0), mouthMat, mouth, 0, 0, 0, 0.05, 0.026, 0.02); flat(ico(0), tongueMat, mouth, 0, -0.01, 0.01, 0.028, 0.012, 0.012);
+  pp(mouth, ico(0), 0x5a1426, 0, 0, 0, 0.05, 0.026, 0.02); pp(mouth, ico(0), 0xff7f95, 0, -0.01, 0.01, 0.028, 0.012, 0.012);
   return { eyes, eyeOpen, eyeShut, mouth, d: R_d(H) };
 }
 
@@ -711,7 +711,7 @@ function finishHero(R, S, L, st, t, dt, open = 0, wide = 0, shut = 0, mouthBase 
   lifeXform(L, R.root, 1, 1, 1, 1 + A * 0.06 + sg * hit * 0.012 + S.cheer * 0.04, 1 + A * 0.12 + S.cast * 0.04);
 }
 function heroBase(R, o) { // standard hero bookkeeping: state, life, notes and the actor shell (rig-specific update is plugged in by the caller)
-  const S = newState(o.seed || 1), L = makeLife(R.ctx, o.atkDur || 0.55, 0.9), NT = makeNotes(R.fitG, ...(o.note || [0.12, 1.25, 0.45]), o.noteCols);
+  const S = newState(o.seed || 1), L = makeLife(R.ctx, o.atkDur || 0.55, 0.9), NT = STYLE.boost < 0 ? { tick() {} } : makeNotes(R.fitG, ...(o.note || [0.12, 1.25, 0.45]), o.noteCols); // crowd actors sing without notes (keeps them at ink + solid)
   const self = {
     group: new THREE.Group(), rig: R, S, L, height: o.height || 1.7, radius: o.radius || 0.45,
     attack() { L.attack(); }, die() { L.die(); }, isDead() { return L.dead; }, get dead() { return L.dead; }, setCarry() {},
