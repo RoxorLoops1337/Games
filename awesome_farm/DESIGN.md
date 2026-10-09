@@ -218,7 +218,7 @@ A **Mine Shaft** (skill *Mine Shafts* in the Gathering branch, Special tab of th
 ### The Dread Reaches (`sim/dread.ts`)
 Four **3×3 blocks of haunted bog** sit out in the wilds on the four diagonals (`markDread`; they slide aside where somebody owns the ground in older worlds). They are land from the start and nobody's: nobody can buy them, but the land beside them is bought as usual, and you can build there. They are stocked once with rich ore, a chest node in every outer plot and a vault by the middle. **The dead haunt a block day and night** while a farmer is within (`TUNING.dreadBase` + `dreadPerFarmer` each, up to `dreadMax`; undead one tier tougher than your level calls for, a fifth of them elite; they thin out 30 s after the last farmer leaves). **A warden** (an altar boss: Frost Giant, Dune Pharaoh, Stone Colossus or Bog Witch by block) stands in the middle with `wardenHp` × the health and `wardenDmg` × the damage; he never retreats, mends when alone, and wakes again `wardenRespawnDays` after he falls. His defeat gives the ordinary boss spoils plus two gold crates, rift shards and a chance at a mythic one. The client dims the world to violet inside a block (`Game.dreadAmount`), and the map shows each block with a skull.
 
-### The Blight (`sim/blight.ts`)
+### The Blight (`sim/blight.ts`, `sim/raid.ts`)
 Out at sea, beyond reach at first, dark **nest isles** carry **Blight nests** (Factorio's spreading biter nests, Kingdom Two Crowns' portals).
 A nest isle is a plot marked `blight` (1 while its nest lives: land, nobody's, **not for sale**; 2 once cleansed: land anybody may buy,
 and buying it makes it ordinary land). The nest is a `nest` node in its middle, fought with your **weapon** (it is not cleared at dawn).
@@ -230,7 +230,13 @@ grows a level, two nests of the same kind on neighbouring plots may **merge** (8
 added; the other isle is cleansed), and every nest may **spread** a level-1 nest of its kind onto a neighbouring wild plot (50% plus 1%
 per level, up to 90%; never onto anybody's land, the Dread Reaches, the Old Heart or within two plots of a home; at most `nestMax`
 nests). A farmer near a nest wakes its **brood**. Destroying a nest pays everyone who fought there XP, coins and **Blight Cores** by its
-level, and the isle can be bought. The map marks every nest in red. Every number is a dial in `TUNING.blight`. Test: `tests/blight.test.ts`.
+level, and the isle can be bought. The map marks every nest in red.
+**Raids** (They Are Billions, Valheim, Minecraft raids): at nightfall, a farmer whose **base** (the campfire on their own land nearest
+to them, or their home island) has a living nest within six plots gets half the night's monsters (plus one per other nest in range and
+per four nest levels, at most ten) as a raiding party from the nearest nest, of its kind and a level higher for every three nest
+levels. The dusk warning says where it gathers. Raiders **wade** across the sea (slower, with a red glow so you see them coming),
+march on the base and stop at walls, doorways and buildings; a farmer close by is fought as usual. They melt away at dawn. Without a
+nest in range a night is exactly what it always was (nothing rolls the world's dice unless a raid is coming). Every number is a dial in `TUNING.blight`. Test: `tests/blight.test.ts`.
 
 ### Co-op
 When down you can wait for a friend to revive you (hold E, which costs nothing) or press **R** (or run out the clock) to wake up at home, which costs **half the XP you have towards the next level and your whole backpack**: it stays where you fell as a **Lost Backpack** (`sim/death.ts`: a hidden building, take-only, anybody can fetch from it, gone when empty or after `TUNING.packLife`). Coins and what you wear are safe, and an expedition costs nothing.

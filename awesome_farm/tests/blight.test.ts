@@ -1,15 +1,19 @@
-// The Blight: nest isles out at sea, their levels, merging and spread, destroying them, and the Bed.
+// The Blight: nest isles out at sea, their levels, merging and spread, destroying them, the night raids they send, and the Bed.
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { GRID, TILE, TUNING } from '../src/shared/config';
-import { NEST_KINDS } from '../src/shared/data/mobs';
+import { NEST_KINDS, nightCount } from '../src/shared/data/mobs';
 import * as blight from '../src/shared/sim/blight';
 import * as clock from '../src/shared/sim/clock';
+import * as raid from '../src/shared/sim/raid';
 import { Sim } from '../src/shared/sim/sim';
-import type { NodeE, PlayerS, Plot, WorldState } from '../src/shared/sim/types';
+import type { MobE, NodeE, PlayerS, Plot, WorldState } from '../src/shared/sim/types';
 import { slotPlot } from '../src/shared/sim/worldgen';
 
 const B = TUNING.blight;
+const STEP = 1 / 20;
+const run = (sim: Sim, secs: number) => { for (let t = 0; t < secs; t += STEP) sim.step(STEP); };
+const mobsOf = (sim: Sim) => Object.values(sim.s.ents).filter((e): e is MobE => e.k === 'mob');
 const nests = (sim: Sim) => sim.s.plots.filter((p) => p.blight === 1);
 const nestOf = (sim: Sim, plot: Plot) => Object.values(sim.s.ents).find((e): e is NodeE => e.k === 'node' && e.kind === 'nest' && e.plot === plot.i);
 /** Take every nest out of a world (their isles cleansed), so a test can place its own. */
@@ -164,6 +168,62 @@ test('a nest isle cannot be bought while its nest lives; destroying it pays ever
     assert.ok(sim.s.chron?.some((e) => e.k === 'nest:first'), 'a chronicle line');
     sim.command('a', { t: 'buy', plot: plot.i });
     assert.ok(plot.owned && plot.blight === undefined, 'now it can be bought, and it is ordinary land');
+});
+
+test('a raid spawns at the nest only when one is in range, and marches on the base across the sea', () => {
+    const sim = Sim.create('BL-RAID', 'b');
+    const p = sim.join('a', 'A')!;
+    p.level = 6; p.invuln = 1e9;
+    clear(sim);
+    // no nest in range: the night is as it always was
+    sim.s.clock = TUNING.dayLength;
+    clock.startNight(sim);
+    assert.ok(sim.nightSpawns.every((s) => s.raid === undefined));
+    assert.equal(sim.nightSpawns.length, nightCount(6));
+    sim.s.night = false; sim.nightSpawns = [];
+    // a nest four plots east
+    const plot = near(sim, p, 4, 0);
+    assert.ok(blight.raise(sim, plot, 'swarm'));
+    const plan = raid.raidFor(sim, p, nightCount(6))!;
+    assert.ok(plan && plan.plot === plot.i, 'the nest is in range');
+    assert.equal(plan.dir, 'east');
+    clock.startNight(sim);
+    const party = sim.nightSpawns.filter((s) => s.raid === plot.i);
+    assert.equal(party.length, plan.n);
+    assert.equal(sim.nightSpawns.length - party.length, nightCount(6) - plan.taken, 'the rest comes as before');
+    assert.ok(party.every((s) => s.at <= 1 + B.raidWindow), 'they set out early');
+    let t = 0;
+    while (!mobsOf(sim).some((m) => m.rd) && t < 2 + B.raidWindow) { sim.step(STEP); t += STEP; }
+    const first = mobsOf(sim).find((m) => m.rd)!;
+    assert.ok(first, 'a raider came out');
+    assert.equal(sim.world.plotAtPx(first.x, first.y), plot, 'out of the nest isle');
+    run(sim, 2 + B.raidWindow - t);
+    const raiders = mobsOf(sim).filter((m) => m.rd);
+    assert.ok(raiders.length >= 1, `${raiders.length} raiders out`);
+    assert.ok(raiders.every((m) => NEST_KINDS.swarm.mobs.includes(m.kind)), 'a swarm nest hatches its own family');
+    const base = blight.baseOf(sim, p);
+    const d0 = raiders.map((m) => Math.hypot(m.x - base.x, m.y - base.y));
+    let wet = false;
+    for (let t = 0; t < 30; t += STEP) {
+        sim.step(STEP);
+        for (const m of raiders) if (sim.s.ents[m.id] && !sim.world.isLand(Math.floor(m.x / TILE), Math.floor(m.y / TILE))) wet = true;
+    }
+    const alive = raiders.filter((m) => sim.s.ents[m.id]);
+    assert.ok(alive.length, 'some still marching');
+    for (const m of alive) assert.ok(Math.hypot(m.x - base.x, m.y - base.y) < d0[raiders.indexOf(m)] - 60, 'closer to the base');
+    assert.ok(wet, 'they waded across the sea between the isles');
+});
+
+test('nights without a nest in range spawn exactly as a world without the Blight', () => {
+    const plain = Sim.create('BL-SAME', 'b'), blighted = Sim.create('BL-SAME', 'b');
+    const a = plain.join('a', 'A')!, b = blighted.join('a', 'A')!;
+    clear(plain);
+    a.level = b.level = 9;
+    for (const sim of [plain, blighted]) { sim.s.clock = TUNING.dayLength - 0.01; sim.step(STEP); }
+    assert.deepEqual(blighted.nightSpawns, plain.nightSpawns, 'the same monsters at the same moments');
+    run(plain, 20); run(blighted, 20);
+    const at = (sim: Sim) => mobsOf(sim).filter((m) => !m.zone && !m.nb).map((m) => `${m.kind}@${Math.round(m.x)},${Math.round(m.y)}`).sort();
+    assert.deepEqual(at(blighted), at(plain));
 });
 
 test('a bed moves where you wake up after a fall', () => {

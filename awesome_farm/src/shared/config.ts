@@ -174,7 +174,15 @@ export const TUNING = {
         broodEvery: 9,           // s between two while a farmer is near
         broodNear: 170,          // px: a farmer this close stirs it
         broodLinger: 30,         // s after the last farmer leaves before its brood melts away
-        raidRange: 6,            // plots (straight line) from a farmer's land or base within which a nest counts as near
+        raidRange: 6,            // plots (straight line) from a farmer's land or base within which a nest counts as near, and sends a raid at night (sim/raid.ts)
+        raidShare: 0.5,          // of the night's monsters, this share comes from the nest instead…
+        raidPerNest: 1,          // … plus this many for every other nest in range…
+        raidPerLv: 4,            // … and one more for every this many levels of the nest…
+        raidMax: 10,             // … up to this many raiders
+        raidWindow: 6,           // s after nightfall within which the raiders set out
+        raidWade: 0.6,           // a raider wades across the sea at this share of its speed
+        raidMarch: 1.5,          // … and marches this much faster than it walks while no farmer is near
+        raidArrive: 28,          // px from the base where a raider stops marching
     },
     /** Co-op boss statuses (sim/costatus.ts): patterns that need teammates. Laid only while two or more farmers are up in the arena. */
     coop: {

@@ -17,6 +17,7 @@ import * as mines from './mines';
 import * as mobs from './mobs';
 import { tellLessons } from './petlib';
 import * as quests from './quests';
+import * as raid from './raid';
 import * as scholar from './scholar';
 import * as shop from './shop';
 import type { Sim } from './sim';
@@ -45,7 +46,8 @@ export function updateClock (sim: Sim, dt: number) {
         const nt = s.clock - TUNING.dayLength;
         while (sim.nightSpawns.length && sim.nightSpawns[0].at <= nt) {
             const sp = sim.nightSpawns.shift()!;
-            sim.spawnMob(sp.kind, sp.near, sp.plot);
+            if (sp.raid !== undefined) raid.spawnRaider(sim, sp);
+            else sim.spawnMob(sp.kind, sp.near, sp.plot);
         }
     }
     if (s.clock >= TUNING.dayLength + s.nightLen) dawn(sim);
@@ -76,15 +78,19 @@ export function startNight (sim: Sim) {
     const n = s.day;
     sim.nightEv = nightEvent(s.seed, n);
     const spawns: typeof sim.nightSpawns = [];
+    const raids: [typeof sim.online[number], raid.RaidPlan][] = [];
     for (const p of sim.online) {
         const count = Math.min(14, Math.round(nightCount(mobs.groupLevel(sim, p)) * (sim.nightEv === 'bloodmoon' ? 1.8 : 1)));
-        for (let i = 0; i < count; i++) spawns.push({ near: p.id, at: 0 });
+        // a Blight nest near this farmer's base sends part of the night as a raiding party (none near: the night is as it always was)
+        const plan = raid.raidFor(sim, p, count);
+        for (let i = 0; i < count - (plan?.taken ?? 0); i++) spawns.push({ near: p.id, at: 0 });
+        if (plan) { raids.push([p, plan]); for (let i = 0; i < plan.n; i++) spawns.push({ near: p.id, at: -1, raid: plan.plot, rx: plan.x, ry: plan.y }); }
         sim.fx('dusk', p.x, p.y - 12, p.id);
     }
     for (const h of sim.world.ownedPlots().filter((p) => p.mod === 'haunted')) {
         spawns.push({ kind: 'slime', plot: h.i, at: 0 }, { kind: 'slime', plot: h.i, at: 0 });
     }
-    for (const sp of spawns) sp.at = 2 + sim.rng.next() * TUNING.nightSpawnWindow;
+    for (const sp of spawns) sp.at = sp.raid !== undefined ? 1 + sim.rng.next() * TUNING.blight.raidWindow : 2 + sim.rng.next() * TUNING.nightSpawnWindow;
     sim.nightSpawns = spawns.sort((a, b) => a.at - b.at);
     if (sim.nightEv) {
         const info = NIGHT_EVENTS[sim.nightEv];
@@ -92,6 +98,7 @@ export function startNight (sim: Sim) {
         startEvent(sim, sim.nightEv);
     } else sim.banner(`Night ${n}`, 'Monsters wander the farm — stay near a campfire', PAL.plum);
     hearth.onNight(sim);                          // (a circle sitting at a fire as night falls kindles it)
+    for (const [p, plan] of raids) raid.announce(sim, p, plan);
 }
 
 export function startEvent (sim: Sim, ev: Exclude<NightEvent, null>) {
@@ -125,6 +132,7 @@ function warnDusk (sim: Sim, alarm: boolean) {
             sim.fx('dusk', p.x, p.y - 12, p.id);
         }
     }
+    if (!alarm) raid.warn(sim);                   // (a raid is gathering: whoever it comes for hears from where)
 }
 
 export function dawn (sim: Sim) {

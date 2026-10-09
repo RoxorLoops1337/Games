@@ -129,7 +129,10 @@ export interface MobE {
     idle?: number;           // s without any player in the arena
     zone?: number;           // a Dread block's monster (1..4): the warden itself, or one of the things haunting it
     und?: 1;                 // a creature of the caves (they come and go with whoever is digging)
+    rd?: [number, number];   // a raider from a Blight nest: the base it marches on (px); it wades across the sea (sim/raid.ts)
     nb?: number;             // the brood of a Blight nest: the nest isle's plot index (it melts away when nobody is near)
+    dt?: number;             // a raider stepping round something in its way: seconds left of the sidestep…
+    dd?: number;             // … and which way (1 left, -1 right)
 }
 /** A bolt, arrow or boulder in flight (fired by monsters; players' shots resolve instantly). */
 export interface ProjE { id: number; k: 'proj'; kind: ProjKind; x: number; y: number; vx: number; vy: number; dmg: number; life: number }
