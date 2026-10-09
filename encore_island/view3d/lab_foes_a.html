@@ -1,0 +1,52 @@
+<!doctype html><meta charset="utf-8"><title>foes A lab</title>
+<script type="importmap">{ "imports": { "three": "../../encore_island_3d/vendor/three.module.min.js", "three/addons/": "../../encore_island_3d/vendor/jsm/" } }</script>
+<style>#hud{position:fixed;left:6px;top:4px;font:11px/1.3 monospace;color:#2d170f;background:#fff8;padding:3px 6px;border-radius:4px;white-space:pre;pointer-events:none}</style>
+<div id="hud"></div>
+<script type="module">
+// Foes A lab. ?m=row (default): all 9 in a row, walking along x (live game scale camera: el 55).  ?m=grid: close-up grid, rows = creatures, cols = variants.
+// Params: only=kappa,oni_cub  v=idle,walk,atk,hurt,die,elite,gold  dieAt=0.45  az el d tx ty tz w h  (see lab.js)
+import { lab } from './lab.js';
+import { bakeActor } from './bake.js';
+import * as CH from '../../encore_island_3d/js/characters.js';
+import { FOES_A } from './foes_a.js';
+const P = new URLSearchParams(location.search), NAMES = Object.keys(FOES_A), mode = P.get('m') || 'row';
+const still = P.get('still') === '1', only = P.get('only') ? P.get('only').split(',') : NAMES, VARS = (P.get('v') || 'idle,walk,atk,hurt,die,elite,gold').split(','), dieAt = +(P.get('dieAt') || 0.45);
+const GAP = +(P.get('gap') || 2.6);
+const rows = only.length; // grid: rows run toward -z, so aim the camera at the middle row
+lab({ az: 0, el: mode === 'row' ? 55 : rows > 1 ? 40 : 18, d: mode === 'row' ? 21 : rows > 1 ? 8 + 5 * rows : 9, ty: mode === 'row' ? 0.5 : rows > 1 ? 0.5 : 1.1, tz: mode === 'row' ? 0 : -(rows - 1) * 1.6, build(V) {
+  CH.STYLE.flat = false; const slots = [], hud = document.getElementById('hud');
+  const mk = (name, variant) => { const a = FOES_A[name]({ elite: variant === 'elite', gold: variant === 'gold' }); V.scene.add(a.group);
+    if (P.get('dbg') && !window.__dbg) { const m = new Map(); a.group.traverse((o) => { if (!o.isMesh) return; const g = o.geometry, n = (g.index ? g.index.count : g.attributes.position.count) / 3, k = (o.material.side === 1 ? 'hull' : 'part') + ' ' + g.type + ' ' + n; m.set(k, (m.get(k) || 0) + 1); }); window.__dbg = [...m].map(([k, v]) => k + ' x' + v).sort(); }
+    const info = bakeActor(a); return { a, info }; };
+  const place = (s, x, z) => { s.x = x; s.z = z; s.a.group.position.set(x, 0, z); };
+  const lines = [];
+  if (mode === 'row') NAMES.forEach((n, i) => { const rv = P.get('rv') || 'walk', s = { name: n, variant: rv, ...mk(n, rv) }; const x = -11 + i * GAP + (i === 8 ? 1.6 : 0); place(s, x, 0); s.x0 = x; s.ph = i * 0.7; slots.push(s); });
+  else only.forEach((n, r) => VARS.forEach((v, c) => { const s = { name: n, variant: v, ...mk(n, v) }; place(s, (c - (VARS.length - 1) / 2) * GAP * (n.startsWith('boss') ? 1.9 : 1), -r * (n.startsWith('boss') ? 4.5 : 3.2)); s.x0 = s.x; slots.push(s); }));
+  for (const s of slots) { const tris = s.info.meshes.reduce((n, m) => n + m.geometry.attributes.position.count / 3, 0); s.tris = tris; const bb = new V.THREE.Box3().setFromObject(s.a.group); s.a.group.updateMatrixWorld(true); const hz = Math.max(bb.max.z, -bb.min.z);
+    lines.push(`${s.name}/${s.variant}: ${s.info.calls} calls ${Math.round(tris)} tris h=${s.a.height.toFixed(2)} (top ${bb.max.y.toFixed(2)}, half-depth ${hz.toFixed(2)}, r ${s.a.radius})`); }
+  window.__stat = { foes: lines, dbg: window.__dbg }; window.__slots = slots;
+  if (P.get('hud') !== '0') hud.textContent = lines.filter((_, i) => mode === 'row' || i % VARS.length === 0).join('\n');
+  else hud.style.display = 'none';
+  const respawn = (s) => { s.a.group.removeFromParent(); s.a.dispose(); const m = mk(s.name, s.variant); s.a = m.a; s.info = m.info; s.a.group.position.set(s.x, 0, s.z); };
+  const labs = slots.map((s) => { const d = document.createElement('div'); d.textContent = s.name + (mode === 'grid' ? ' ' + s.variant : ''); d.style.cssText = 'position:fixed;font:10px monospace;color:#2d170f;background:#fffa;padding:0 3px;border-radius:3px;transform:translate(-50%,0);pointer-events:none'; document.body.appendChild(d); return d; });
+  const _v = new V.THREE.Vector3();
+  const st = { speed: 0, atk: false, hurt: 0, die: 0, elite: false, gold: false, slow: false, glow: false, singing: false };
+  return { update(dt, t) {
+    V.blobs.begin();
+    for (const s of slots) {
+      const v = s.variant; st.speed = 0; st.atk = false; st.hurt = 0; st.die = 0; st.elite = v === 'elite'; st.gold = v === 'gold'; st.singing = false;
+      if (mode === 'row' && P.get('walk') === '0') { st.speed = +(P.get('sp') || 0); st.atk = P.get('atk') === '1' && (t % 2) >= 0.7; st.hurt = +(P.get('hurt') || 0); st.die = +(P.get('die') || 0); s.a.group.position.x = s.x0; s.a.group.rotation.y = 0; }
+      else if (mode === 'row') { // walk along x, face the heading
+        const k = Math.sin(t * 0.5 + s.ph), vx = Math.cos(t * 0.5 + s.ph); st.speed = 1; s.a.group.position.x = s.x0 + k * 0.9; s.a.group.rotation.y = Math.atan2(vx, 0.35);
+        if (Math.floor(t / 2 + s.ph) % 3 === 0 && (t / 2 + s.ph) % 1 < 0.5) st.atk = true;
+      }
+      else if (v === 'walk') st.speed = 1; else if (v === 'atk') st.atk = (t % 2) >= 0.7; else if (v === 'hurt') st.hurt = still ? 1 : (t % 1.4) < 0.3 ? 1 : 0;
+      else if (v === 'die') { if (still) st.die = dieAt; else { const k = t % 3.2; st.die = Math.max(0, Math.min(1, (k - 0.6) / 1.2)); if (k < 0.1 && s.a.isDead()) respawn(s); } }
+      s.a.update(dt, t, st); V.blobs.add(s.a.group.position.x, s.a.group.position.z, s.a.radius * 1.1, 0.35);
+    }
+    V.blobs.end();
+    if (P.get('labels') !== '0') slots.forEach((s, i) => { _v.set(s.a.group.position.x, 0, s.a.group.position.z).project(V.camera); labs[i].style.left = (_v.x * 0.5 + 0.5) * innerWidth + 'px'; labs[i].style.top = (-_v.y * 0.5 + 0.5) * innerHeight + 6 + 'px'; });
+    else labs.forEach((d) => (d.style.display = 'none'));
+  } };
+} });
+</script>

@@ -1,0 +1,15 @@
+<!doctype html><meta charset="utf-8"><title>characters lab</title>
+<script type="importmap">{ "imports": { "three": "../../encore_island_3d/vendor/three.module.min.js", "three/addons/": "../../encore_island_3d/vendor/jsm/" } }</script>
+<script type="module">
+import { lab } from './lab.js';
+import { bakeActor, countCalls } from './bake.js';
+import * as CH from '../../encore_island_3d/js/characters.js';
+const P = new URLSearchParams(location.search);
+lab({ d: 8, el: 12, ty: 1, build(V) {
+  CH.STYLE.flat = P.get('flat') === '1'; const list = [];
+  const specs = [['jasmin', 1, () => CH.makeJasmin()], ['roxor', 1, () => CH.makeRoxor()], ['fan', 0, () => CH.makeFan(3)], ['kappa', 0, () => CH.makeCreature('kappa')], ['oni', 0, () => CH.makeCreature('oni')]];
+  specs.forEach(([n, boost, f], i) => { CH.STYLE.boost = boost; const a = f(); a.group.position.set(-4.4 + i * 2.2, 0, 0); V.scene.add(a.group); bakeActor(a); list.push(a); });
+  window.__stat = { calls: list.map(a => countCalls(a.group)) };
+  return { update(dt, t) { for (const a of list) a.update(dt, t, { speed: 0, singing: true, carry: 4 }); } };
+} });
+</script>

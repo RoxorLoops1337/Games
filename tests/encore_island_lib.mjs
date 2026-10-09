@@ -1,9 +1,11 @@
 // Shared headless loader for Encore Island suites: evaluates every js/*.js from index.html against a stubbed DOM and returns window.EI.
 import { readFileSync } from 'node:fs';
+import vm from 'node:vm';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
-export function loadEI() {
+// loadEI({ bridge: true }) runs the classic scripts as real global scripts (S, HUB, geoOf ... become globals, as in a browser), so ES modules under test can use them
+export function loadEI(opts = {}) {
   const here = dirname(fileURLToPath(import.meta.url));
   const dir = join(here, '..', 'encore_island');
   const html = readFileSync(join(dir, 'index.html'), 'utf8');
@@ -37,6 +39,8 @@ export function loadEI() {
   global.window.addEventListener = noop; global.window.innerWidth = 400; global.window.innerHeight = 800; global.window.__EI_HEADLESS__ = true;
   global.setTimeout = () => 0; global.setInterval = () => 0; global.clearTimeout = noop; global.clearInterval = noop;
   code = code.replace(/\bconst\b/g, 'var').replace(/\blet\b/g, 'var');
-  eval('(function(){' + code + '\nglobalThis.__EI=window.EI;})()');
+  if (opts.bridge) { // run as true global scripts (what a browser does for classic scripts), so ES modules under test see S, HUB, geoOf ... as globals
+    vm.runInThisContext(code + '\n;globalThis.__EI = window.EI;', { filename: 'encore_island/js (concatenated)' });
+  } else eval('(function(){' + code + '\nglobalThis.__EI=window.EI;})()');
   const EI = globalThis.__EI; EI.boot(); return EI;
 }

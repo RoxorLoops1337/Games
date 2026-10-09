@@ -1,0 +1,75 @@
+<!doctype html><meta charset="utf-8"><title>loot + fx lab</title>
+<!-- ?v=models (every item model large) | ground (60 items, shots, eshots, chest in the game camera) | fx (every effect + the S.parts / S.fx / S.fly bridges) | mix (ground + fx). fov=32 el=52 d=24 is the game camera. -->
+<script type="importmap">{ "imports": { "three": "../../encore_island_3d/vendor/three.module.min.js", "three/addons/": "../../encore_island_3d/vendor/jsm/" } }</script>
+<script type="module">
+import { lab } from './lab.js';
+import * as GL from './gamelab.js';
+// gamelab.loadGame calls EI.resize(), which throws in headless mode while main.js has no canvas bound; tolerate that here.
+const _rs = Object.getOwnPropertyDescriptor(window, 'EI');
+async function loadGame(o) { try { return await GL.loadGame(o); } catch (e) { if (!/width/.test(String(e.message))) throw e; const EI = window.EI; EI.initGame(true); const S = EI.S; S.started = true; S.t = 0; for (let i = 0; i < (o.lands || 0); i++) EI.addLand(); window.__game = { EI, S: () => EI.S }; return window.__game; } }
+const P = new URLSearchParams(location.search), view = P.get('v') || 'mix', W = 0.02;
+const g = await loadGame({ lands: 1, wallet: 5e5 });
+const cam = view === 'models' ? { el: 22, d: 13, fov: 34, ty: 0.8 } : { el: 52, d: 24, fov: 32, ty: 0 };
+lab({ ground: true, groundR: 40, el: cam.el, d: +(P.get('d') || cam.d), ty: cam.ty, fov: cam.fov, async build(V) {
+  const fxm = await import('./fx3d.js'), lm = await import('./loot3d.js');
+  const fx = fxm.init(V); V.mods.fx = fx; const loot = lm.init(V); V.mods.loot = loot; V.mods.loot3d = loot;
+  window.__fx = fx; const S = g.S(); let rs = 12345; const R = () => { rs = (rs * 1664525 + 1013904223) >>> 0; return rs / 4294967296; };
+  const models = new V.THREE.Group(); V.scene.add(models); const spin = [];
+  if (view === 'models') {
+    const row = (list, z, x0, dx) => list.forEach((e, i) => { const m = loot.makeItemModel(e); m.position.set(x0 + i * dx, 0, z); m.scale.setScalar(1.35); V.scene.add(m); spin.push(m); });
+    row([1, 2, 3, 4, 5, 6, 7, 8].map((k) => ({ k })), -3.4, -6.3, 1.8);
+    row([1, 2, 3, 4, 5, 6, 7, 8].map((k) => ({ k, bar: true })), -1.1, -6.3, 1.8);
+    row([{ k: 9 }, { k: 17 }, { k: 25 }, { k: 12 }, { crown: true }, { gem: true }, { coin: true }, { k: 8, bar: true }], 1.3, -6.3, 1.8);
+    const ci = S.items; // the ground pools too, in a straight line at the front
+    for (let i = 0; i < 8; i++) ci.push({ x: (-6.3 + i * 1.8) / W, y: 3.8 / W, t: 2, vx: 0, vy: 0, k: i + 1 });
+  }
+  if (view === 'ground' || view === 'mix') {
+    for (let i = 0; i < 60; i++) {
+      const a = R() * 6.283, r = Math.sqrt(R()) * 9, k = 1 + Math.floor(R() * R() * 26), it = { x: Math.cos(a) * r / W, y: Math.sin(a) * r * 0.75 / W + 2 / W, t: 1 + R() * 3, vx: 0, vy: 0, k };
+      const q = R(); if (q < 0.08) it.gem = true; else if (q < 0.14) it.crown = true; else if (q < 0.3) it.bar = true; S.items.push(it);
+    }
+    S.items.push({ x: -2 / W, y: 7 / W, t: 0.1, vx: 60, vy: -90, k: 5 }, { x: 0, y: 7 / W, t: 0.3, vx: -50, vy: -80, gem: true }, { x: 2 / W, y: 7 / W, t: 0.5, vx: 0, vy: 0, k: 12 });
+    S.chest = { x: 7 / W, y: -3 / W, val: 10, t: 2 };
+    S.player.x = 0; S.player.y = 0;
+  }
+  const foes = [{ x: -4 / W, y: -1 / W, r: 24, hp: 5 }, { x: 4 / W, y: -3 / W, r: 24, hp: 5 }, { x: 0, y: -4 / W, r: 30, hp: 5 }];
+  const trig = { n: -1 };
+  function shotsAt(T) {
+    S.shots.length = 0; S.eshots.length = 0;
+    for (let i = 0; i < 9; i++) { const u = (T * 0.8 + i / 9) % 1, tg = foes[i % 3], kind = i % 4; S.shots.push({ x: (-2 + (tg.x * W + 2) * u) / W + 0, y: (3 + (tg.y * W - 3) * u) / W - 42 * (1 - u), tgt: tg, crit: kind === 1 && i === 1, ally: kind === 2, tower: kind === 3, a: 0 }); }
+    S.shots.push({ boulder: true, sx: -5 / W, sy: -2 / W - 50, tx: 4 / W, ty: 1 / W, x: 0, y: 0, t: (T * 0.5) % 0.9, dur: 0.9 });
+    for (let i = 0; i < 6; i++) { const u = (T * 0.6 + i / 6) % 1; S.eshots.push({ x: (5 - 9 * u) / W, y: (-3 + 7 * u + i * 0.4) / W - 14, k: 1 + i, big: i === 0 }); }
+  }
+  function fxAt(T) {
+    const n = Math.floor(T / 1.4); if (n === trig.n) return; trig.n = n;
+    fx.burst({ x: -7, y: 0.5, z: -2, n: 24, colors: [0xff7eb6, 0xffd84d, 0x9af0b4], star: 0.3 }); fx.burst({ x: -4.5, y: 0.5, z: -2, n: 30, colors: [0xfff4e6, 0xffd84d], star: 1, speed: 4.4 });
+    fx.ring(-1.5, -2, 2.2, 0xff7eb6, 0.6); fx.puff(1, 0.3, -2, 8); fx.confetti(3.5, 0.5, -2, 60); fx.beam(6, -2, 0xffe98a, 4, 1.2); fx.ring(6, -2, 1.6, 0xffd84d, 0.7);
+    fx.zap([{ x: -7, y: 2.2, z: 3 }, { x: -5, y: 0.5, z: 3.5 }, { x: -3.5, y: 0.5, z: 4.5 }, { x: -2, y: 0.5, z: 3 }], 0xb89cff, 0.5);
+    for (let i = 0; i < 24; i++) S.parts.push({ x: (-7 + R()) / W, y: 6 / W, vx: (R() - 0.5) * 200, vy: (R() - 0.85) * 220, t: 0, dur: 0.8 + R() * 0.2, r: 2 + R() * 3, color: ['#ff7eb6', '#ffd84d', '#9af0b4'][i % 3], g: 1 });
+    for (let i = 0; i < 14; i++) { const a = R() * 6.28, v = (0.4 + R() * 0.6) * 220; S.parts.push({ x: -4.5 / W, y: 6 / W, vx: Math.cos(a) * v, vy: Math.sin(a) * v - 60, t: 0, dur: 0.7 + R() * 0.3, r: 4 + R() * 4, color: ['#b8fff6', '#6ee0d8'][i % 2], g: 1, star: true }); }
+    S.fx.push({ kind: 'ring', x: -1.5 / W, y: 6 / W, r: 100, t: 0, dur: 0.7, col: '#ffd84d' }, { kind: 'boom', x: 1 / W, y: 6 / W, r: 115, t: 0, dur: 0.6 }, { kind: 'zap', pts: [{ x: 3 / W, y: 4 / W - 80 }, { x: 4.5 / W, y: 6 / W - 14 }, { x: 5.5 / W, y: 7 / W - 14 }], t: 0, dur: 0.5 });
+    for (let i = 0; i < 6; i++) S.fly.push({ kind: 'coin', x0: -7 / W, y0: 9 / W, x1: -4 / W, y1: 8 / W, t: 0, delay: i * 0.06, dur: 0.7, arc: 50, spin: 3 + i });
+    for (let i = 0; i < 3; i++) S.fly.push({ kind: 'gem', x0: -3 / W, y0: 9 / W, x1: 0, y1: 8 / W, t: 0, delay: i * 0.08, dur: 0.7, arc: 60, spin: 2 });
+    for (const [k, bar, crown] of [[3], [8, true], [5], [14], [0, false, true]]) S.fly.push({ kind: 'item', entry: { k: k || 1, bar, crown }, x0: 1 / W, y0: 9 / W, x1: 5 / W, y1: 8 / W, t: 0, delay: 0, dur: 0.8, arc: 45, spin: 2 });
+  }
+  function age(dt) {
+    for (const it of S.items) { it.t += dt; if (it.t < 0.45) { it.x += it.vx * dt; it.y += it.vy * dt; it.vy += 380 * dt; } }
+    for (const q of S.fx) q.t += dt; S.fx = S.fx.filter((q) => q.t < q.dur);
+    for (const q of S.parts) { q.t += dt; q.x += q.vx * dt; q.y += q.vy * dt; if (q.g) q.vy += 420 * dt; } S.parts = S.parts.filter((q) => q.t < q.dur);
+    for (const f of S.fly) f.t += dt; S.fly = S.fly.filter((f) => f.t < f.delay + f.dur);
+    if (S.chest) S.chest.t += dt;
+  }
+  if (view === 'proj') { // static projectiles in a row, close up
+    const far = { x: 0, y: -1e4, r: 20, hp: 3 };
+    [[0, 'hero'], [1.4, 'crit'], [2.8, 'ally'], [4.2, 'tower']].forEach(([x, k]) => S.shots.push({ x: (x - 3) / W, y: 0, tgt: far, crit: k === 'crit', ally: k === 'ally', tower: k === 'tower' }));
+    [[0, 1, false], [1.2, 2, false], [2.4, 3, false], [3.6, 4, false], [5, 6, true], [6.6, 8, true]].forEach(([x, k, big]) => S.eshots.push({ x: (x - 3) / W, y: 2.4 / W - 14, k, big }));
+    S.shots.push({ boulder: true, sx: 0, sy: 4 / W, tx: 0, ty: 4 / W, x: 0, y: 0, t: 0.45, dur: 0.9 });
+  }
+  let T = 0;
+  return { update(dt, t) {
+    T += dt; age(dt); if (view !== 'models' && view !== 'fx' && view !== 'proj') shotsAt(T); if (view === 'fx' || view === 'mix') fxAt(T);
+    spin.forEach((m, i) => { m.rotation.y = Math.sin(T * 1.2 + i * 0.4) * 0.8; });
+    V.blobs.begin(); fx.update(dt, t); loot.update(dt, t, { x: 0, z: 2 }); V.blobs.end();
+  } };
+} });
+</script>

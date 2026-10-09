@@ -1,0 +1,54 @@
+<!doctype html><meta charset="utf-8"><title>lands lab</title>
+<!-- The real game state + lands3d.js. ?s=<scenario> picks a setup, camera params as in lab.js (az el d tx ty tz fov w h detail), land=<k> frames land k
+     (lands=<n> adds n lands to the starting one; the land numbering is 1-based), focus=player uses the hero as the update focus. Use live=0 for shots.
+       plates  unaffordable build plates          afford  wallet full (gold rune rings)        near    hero stands on the first plate
+       towers  land 2: both Speaker Towers + Boom Box + Amp Up x3 + Crowd Gate x2 (fire= cd= amp= gate=)
+       altar   land 2 Headliner altar (cd=<s> shows the resting plate)        drums   land 3: drum kit, Disco Tower, amps, gate, HOME pads
+       unlock  the next-island portal (poor=1 broke, paid=<n>, beacon=1 boosted)       teaser  the locked next island        pad  HOME pads
+       feat    mastery flags, revealed secrets, a land event (ev=blossom|sound|dark|golden|none, evk=<land>), rival takeovers (rival=0 off)
+       all     a bit of everything
+     Examples: lab_lands.html?live=0&s=towers&land=2&d=18   |   --secs 0.3 with --eval "window.__EI.addLand()" shows a new island springing in.
+     A bare island disc is drawn under every land (the real ground comes from env3d.js). -->
+<script type="importmap">{ "imports": { "three": "../../encore_island_3d/vendor/three.module.min.js", "three/addons/": "../../encore_island_3d/vendor/jsm/" } }</script>
+<script type="module">
+import { lab } from './lab.js';
+import { loadGame, buildPlate } from './lands_lab.js';
+const P = new URLSearchParams(location.search), sc = P.get('s') || 'plates', num = (k, d) => (P.has(k) ? +P.get(k) : d);
+const g = await loadGame({ lands: num('lands', 4), wallet: 0 }), S = g.S(), EI = g.EI;
+S.t = 20; { const n = S.lands.length + 1, us = EI.unlockSpot(n); S.unlockPlate = { x: us.x, y: us.y, cost: EI.unlockCost(n), paid: 0, built: false }; } // the sim fills this every tick; the lab does not tick
+ S.player.x = S.lands[0].g.x; S.player.y = S.lands[0].g.y + 400; // hero off to the side so plates are not 'near' unless asked
+// scenario setups: each mutates S the way playing would
+const SCEN = {
+  plates() { S.wallet = 0; },
+  afford() { S.wallet = 1e9; },
+  near() { const pl = S.lands[0].plates[0]; S.player.x = pl.x; S.player.y = pl.y + 30; S.wallet = 1e9; },
+  towers() { const z = S.lands[1]; for (const id of ['tower1', 'tower2', 'catapult']) buildPlate(2, id); z.towers.forEach((tw, i) => { tw.fire = +(P.get('fire') || 0); tw.cd = +(P.get('cd') || 1); }); buildPlate(2, 'towersUp', num('amp', 3)); buildPlate(2, 'gate2', num('gate', 2)); },
+  altar() { const z = S.lands[1]; buildPlate(2, 'altar'); z.altar.cd = P.has('cd') ? +P.get('cd') : 0; },
+  drums() { const z = S.lands[2]; buildPlate(3, 'tower1'); buildPlate(3, 'wizard'); buildPlate(3, 'drums'); buildPlate(3, 'towersUp', 4); buildPlate(3, 'gate2', 3); z.towers.forEach((tw) => { tw.fire = +(P.get('fire') || 0); }); S.waygate = true; },
+  unlock() { S.wallet = P.get('poor') ? 0 : 1e9; S.unlockPlate.paid = +(P.get('paid') || 0); S.beaconUntil = P.get('beacon') ? S.t + 99 : 0; },
+  teaser() { S.wallet = 0; },
+  pad() { S.waygate = true; },
+  feat() { // mastery flags, secrets (revealed), a land event, a rival takeover with its battle pad
+    const st = S.feat.lands; st.mast[1] = { kills: 99, lv: +(P.get('lv') || 4), ms: [1, 1, 1] }; st.mast[2] = { kills: 20, lv: 2, ms: [1, 0, 0] };
+    LD.reveal[1] = S.t + 1e5; st.found[1] = [false, true, false];
+    const type = P.get('ev') || 'blossom'; if (type !== 'none') { const ev = window.LANDS_API.ldStartEvent(type, +(P.get('evk') || 1)); ev.t = 30; ev.killed = 4; }
+    if (P.get('rival') !== '0') { window.rvInvade(2, 0); window.rvInvade(3, 1); }
+    S.wallet = 0;
+  },
+  all() { for (const k of [1, 2, 3]) { const z = S.lands[k - 1]; for (const pl of z.plates) if (!pl.repeat && pl.id !== 'altar' && Math.random() < 0.0 + (pl.id === 'tower1' || pl.id === 'tower2' ? 1 : 0.5)) buildPlate(k, pl.id); } S.waygate = true; S.wallet = 1e9; },
+};
+(SCEN[sc] || SCEN.plates)();
+const idx = num('land', 1), TX0 = 0, gg = S.lands[Math.min(idx, S.lands.length) - 1].g, W = 0.02;
+const tgt = sc === 'unlock' ? S.unlockPlate : sc === 'teaser' ? window.EI.geoOf(S.lands.length + 1) : gg;
+const TX = num('tx', tgt.x * W), TZ = num('tz', tgt.y * W); window.__S = S; window.__EI = EI;
+const L0 = await lab({ ground: false, d: num('d', 22), el: num('el', 55), az: num('az', 0), tx: TX, tz: TZ, ty: num('ty', 0), fov: num('fov', 38), async build(V) {
+  // bare island discs standing in for env3d's ground
+  const discs = new V.THREE.Group(); V.scene.add(discs); const mk = (geo, color) => { const m = new V.THREE.Mesh(new V.THREE.CylinderGeometry(1, 0.7, 0.6, 56).translate(0, -0.3, 0), new V.THREE.MeshStandardMaterial({ color, roughness: 1 })); m.scale.set(geo.r * W, 1, geo.r * W); m.position.set(geo.x * W, 0, geo.y * W); m.receiveShadow = true; discs.add(m); };
+  mk({ x: 0, y: 0, r: 640 }, 0xbfe9a0); S.lands.forEach((z) => mk(z.g, new V.THREE.Color(window.EI.BIOMES[(z.k - 1) % 8].g[0])));
+  V.camera.far = 400; V.rig.ext = 30;
+  const lands = (await import('./lands3d.js')).init(V); window.__lands = lands; V.mods.lands3d = lands;
+  const p = S.player;
+  return { update(dt, t) { V.rig.follow(TX, TZ); lands.update(dt, t, P.get('focus') === 'player' ? { x: p.x * W, z: p.y * W } : { x: TX, z: TZ }); } };
+} });
+L0.step(1 / 60); // one tick so the module has seen the starting lands (later lands then spring in, as in play)
+</script>

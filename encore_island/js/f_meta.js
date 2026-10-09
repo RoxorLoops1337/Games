@@ -130,6 +130,7 @@ regFeature({
   init(st) { if (st.force === undefined) st.force = null; if (!st.rec) st.rec = {}; if (st.off === undefined) st.off = false; if (st.lastEarned === undefined) st.lastEarned = S.stats ? S.stats.earned : 0; if (!st.fakeNow) st.fakeNow = 0; if (S.stats && st.lastEarned > S.stats.earned) st.lastEarned = S.stats.earned; seasRec(); },
   tick() { const st = S.feat.seasons, e = S.stats.earned; if (e > st.lastEarned) { seasAdd('earn', e - st.lastEarned); } st.lastEarned = e; },
   drawWorld() { seasDrawFx(); },
+  drawScreen() { seasDrawFx(); },
   on: { kill() { seasAdd('kill', 1); }, sell() { seasAdd('sell', 1); }, land() { seasAdd('land', 1); }, boss() { seasAdd('boss', 1); } },
   pips() { return { goals: seasReady() }; },
 });

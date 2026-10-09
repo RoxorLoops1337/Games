@@ -1,0 +1,46 @@
+<!doctype html><meta charset="utf-8"><title>environment lab</title>
+<!-- Environment lab: loads the real game scripts, then ONLY env3d (or m=./a.js,./b.js). Views: v=hub (phone game camera, fov 32, pitch 52) | hubnear | hubwide | land (focus=<k>) | terrace | night | wide.
+     Overrides: az el d tx tz fov lands focus=<land idx> walk=<land idx> (look at that boardwalk) detail=0|1|2 w h. Use live=0 with tools/3d_shot.mjs --wait 5000 (the game scripts take a few seconds to load). -->
+<script type="importmap">{ "imports": { "three": "../../encore_island_3d/vendor/three.module.min.js", "three/addons/": "../../encore_island_3d/vendor/jsm/" } }</script>
+<script type="module">
+import { lab } from './lab.js';
+// local copy of gamelab.loadGame: main.js resize() needs its module-level `cvs` (normally set by boot()), so assign it before EI.resize
+async function loadGame(o = {}) {
+  window.__EI_HEADLESS__ = true;
+  const html = await (await fetch('../index.html')).text(), srcs = [...html.matchAll(/<script src="(js\/[^"]+)"/g)].map((m) => m[1]);
+  const cv = document.createElement('canvas'); cv.id = 'game'; cv.width = 800; cv.height = 600; cv.style.display = 'none'; document.body.appendChild(cv);
+  for (const s of srcs) await new Promise((res, rej) => { const el = document.createElement('script'); el.src = '../' + s; el.onload = res; el.onerror = () => rej(new Error('load ' + s)); document.head.appendChild(el); });
+  const EI = window.EI; try { (0, eval)("cvs = document.getElementById('game')"); } catch (e) {} EI.setupCtx(cv.getContext('2d')); try { EI.resize && EI.resize(); } catch (e) {}
+  EI.initGame(true); const S = EI.S; S.started = true; S.t = 0;
+  try { const T = EI.FEATS.find((f) => f.id === 'tutorial').api; S.feat.tutorial.off = true; T.finish(); } catch (e) {}
+  for (let i = 0; i < (o.lands || 0); i++) EI.addLand();
+  if (o.wallet) S.wallet = o.wallet; if (o.gems) S.gems = o.gems;
+  await new Promise((r) => { const t0 = Date.now(); (function w() { if (typeof ART !== 'undefined' && ART.ready || Date.now() - t0 > 3000) r(); else setTimeout(w, 50); })(); });
+  window.__game = { EI, S: () => EI.S }; return window.__game;
+}
+const P = new URLSearchParams(location.search), view = P.get('v') || 'hub';
+const VIEWS = { // camera presets: az el d tx ty tz fov lands focus(player land)
+  hub: { az: 0, el: 52, d: 59, fov: 32, tx: 0, tz: 1, lands: 2, fk: 0 },
+  hubnear: { az: 0, el: 52, d: 24, fov: 32, tx: 0, tz: 2, lands: 2, fk: 0 },
+  hubwide: { az: 20, el: 40, d: 60, tx: 0, tz: 0, lands: 3, fk: 0 },
+  land: { az: 0, el: 52, d: 45, fov: 32, tx: null, tz: null, lands: 3, fk: 2 },
+  terrace: { az: 0, el: 45, d: 12, tx: 0, tz: 8, lands: 1, fk: 0 },
+  night: { az: 0, el: 52, d: 45, fov: 32, tx: null, tz: null, lands: 7, fk: 7 },
+  wide: { az: 25, el: 33, d: 150, tx: 0, tz: 0, lands: 6, fk: 0 },
+};
+const V0 = Object.assign({}, VIEWS[view] || VIEWS.hub); for (const k of ['az', 'el', 'd', 'tx', 'tz', 'lands', 'fov']) if (P.has(k)) V0[k] = +P.get(k); if (P.has('focus')) V0.fk = +P.get('focus');
+const g = await loadGame({ lands: V0.lands, wallet: 5e5, gems: 9 });
+const S = g.S(); let fx = 0, fz = 0;
+if (V0.fk > 0) { const G = geoOf(V0.fk); fx = G.x * 0.02; fz = G.y * 0.02; }
+if (P.has('walk')) { const m = geoOf(+P.get('walk')).path[8]; V0.tx = m.x * 0.02; V0.tz = m.y * 0.02; }
+if (V0.tx === null) V0.tx = fx; if (V0.tz === null) V0.tz = fz;
+S.player.x = fx / 0.02; S.player.y = fz / 0.02;
+const mods = (P.get('m') || './env3d.js').split(',').filter(Boolean);
+lab({ ground: false, az: V0.az, el: V0.el, d: V0.d, tx: V0.tx, tz: V0.tz, ty: 0, async build(V) {
+  V.scene.background = null; if (V0.fov) { V.camera.fov = V0.fov; V.camera.near = 1; V.camera.far = 700; V.camera.updateProjectionMatrix(); }
+  const inst = [];
+  for (const m of mods) { const mod = await import(m + (P.has('nc') ? '' : '?' + Date.now())); const r = await mod.init(V); if (r) { inst.push(r); V.mods[m.replace(/^.*\//, '').replace(/\.js$/, '')] = r; } }
+  window.__inst = inst; window.__env = inst[0];
+  return { update(dt, t) { S.t += dt; for (const r of inst) if (r.update) r.update(dt, t, { x: fx, z: fz }); } };
+} });
+</script>

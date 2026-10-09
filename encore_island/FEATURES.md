@@ -1,7 +1,7 @@
 # Encore Island — late-game feature contract (read before writing a js/f_*.js module)
 
 Game = 2D canvas, vanilla JS, files loaded in order by index.html (util, data, world, art, items, icons, fx, sim, sim2, meta, town,
-**features, tutorial, f_lands, f_gear, f_crew, f_meta, f_rivals**, render_world, render_actors, backstage, render_hud, ui, audio, main). Everything is a
+**features, tutorial, f_lands, f_gear, f_crew, f_meta, f_rivals**, render_world, render_actors, backstage, render_hud, view, ui, audio, main). Everything is a
 global (no modules). Your file may use any global defined in files loaded BEFORE it at load time, and any global at run time.
 **Only edit the files you own.** If you truly need a core change, do NOT edit core files — describe it in your final report (the lead applies it).
 
@@ -30,3 +30,10 @@ Persistent progress that must survive reloads goes in your `st` (JSON). Do not u
 
 ## Quality bar
 Cute, juicy, readable on a phone; no overlapping UI; no toast spam; costs are significant (this is a late-game feature: think thousands to millions of coins, scaled with `helmVal(S.lands.length)` or lands count where sensible); nothing may break saving, offline earnings or Encore Tours; 60fps (no per-frame allocation in tick/draw loops beyond tiny objects). Pure additions: do not change existing balance except through regMod.
+
+## 3D view (read view3d/README.md for the full contract)
+The game has two renderers over ONE simulation: the classic 2D canvas (`render_world.js`, `render_actors.js`) and a medium-poly three.js view (`view3d/`, loaded on demand when the player picks 3D on the title screen or in More > Graphics). The 3D view only draws; it reads `S` every frame. A feature that has a visible footprint in the world should give both views a look:
+- 2D: `drawWorld()` in `regFeature` as before (world-space canvas drawing; it is NOT called in 3D).
+- 3D: `reg3d(V => ({ update(dt, t, focus) {}, dispose() {} }))` (features.js). `V.THREE`, `V.kit` (Builder, materials, plates), `V.world` / `V.dyn` groups, `V.bake(actor)`, `V.labels.pill/price/bar/icon` (HUD text at world points, units = px * 0.02), `V.fx.burst/ring/...`. Classic scripts cannot import, so use `V.THREE` and `V.kit`. Skipping it is safe: the feature simply has no 3D visuals.
+- Screen-space overlays (full-screen tints, vignettes) belong in `drawScreen()` on the feature: it runs in both views (2D calls it through `drawWorld`, 3D through `drawFeaturesScreen`). Convert world points to screen with `w2s(x, y, heightPx)`, never with `CAM`/`scl` directly: it is correct in both views.
+- HUD code is shared and unchanged: it draws on the transparent 2D canvas over the WebGL one.

@@ -1,0 +1,68 @@
+<!doctype html><meta charset="utf-8"><title>heroes lab</title>
+<!-- Static rigs:   ?show=rawclaw,andy,... (default all 8) &pose=idle|walk|sing|atk|cast|hurt|cheer|dash &d= &el= &az= &tx= &sp=spacing &fan=1 &w= &h=
+     Game sync:     ?game=1 &skin=jasmin|roxor|rawclaw|andy|unicorn|monster|goat|legend &fans=30 &helm=6 &pose=cast|dash|hurt|cheer|atk|walk &spec=1 (careers) &shield=1 &encore=1
+                    loads the REAL game scripts, runs heroes3d.init(V) against live state S (hero, companion, fans, stall keeper). -->
+<script type="importmap">{ "imports": { "three": "../../encore_island_3d/vendor/three.module.min.js", "three/addons/": "../../encore_island_3d/vendor/jsm/" } }</script>
+<script type="module">
+import { lab } from './lab.js';
+import { bakeActor, countCalls } from './bake.js';
+import { makeHero, init } from './heroes3d.js';
+const P = new URLSearchParams(location.search), num = (k, d) => (P.has(k) ? +P.get(k) : d);
+const ALL = ['jasmin', 'roxor', 'rawclaw', 'andy', 'jasmin_unicorn', 'roxor_monster', 'rawclaw_goat', 'jordan'];
+const hud = document.createElement('div'); hud.style.cssText = 'position:fixed;left:8px;top:8px;font:12px monospace;color:#2d170f;background:rgba(255,255,255,.7);padding:4px 8px;border-radius:6px;pointer-events:none;white-space:pre'; document.body.appendChild(hud);
+let hudN = 0; const showHud = (extra) => { if (hudN++ % 20 === 0 && window.__lab) { const i = window.__lab.info(); hud.textContent = 'draw calls ' + i.calls + '   triangles ' + i.tris + (extra ? '\n' + extra() : ''); } };
+const tris = (root) => { let n = 0; root.traverse((o) => { if (o.isMesh && o.visible && o.layers.test({ mask: 1 })) n += (o.geometry.index ? o.geometry.index.count : o.geometry.attributes.position.count) / 3; }); return Math.round(n); };
+if (P.get('game') === '1') {
+  // same as gamelab.js loadGame, but EI.resize() is guarded (main.js leaves its canvas null in headless mode)
+  const loadGame = async (o) => {
+    window.__EI_HEADLESS__ = true; const html = await (await fetch('../index.html')).text(), srcs = [...html.matchAll(/<script src="(js\/[^"]+)"/g)].map((m) => m[1]);
+    const cv = document.createElement('canvas'); cv.id = 'game'; cv.width = 800; cv.height = 600; cv.style.display = 'none'; document.body.appendChild(cv);
+    for (const s of srcs) await new Promise((res, rej) => { const el = document.createElement('script'); el.src = '../' + s; el.onload = res; el.onerror = () => rej(new Error('load ' + s)); document.head.appendChild(el); });
+    const EI = window.EI; EI.setupCtx(cv.getContext('2d')); try { EI.resize(); } catch (e) { /* headless */ }
+    EI.initGame(true); const S = EI.S; S.started = true; S.t = 0;
+    try { const T = EI.FEATS.find((f) => f.id === 'tutorial').api; S.feat.tutorial.off = true; T.finish(); } catch (e) { /* optional */ }
+    for (let i = 0; i < (o.lands || 0); i++) EI.addLand();
+    if (o.wallet) S.wallet = o.wallet; if (o.gems) S.gems = o.gems; if (o.fans) { S.houses = 40; S.wallet = 1e15; for (let i = 0; i < o.fans; i++) EI.recruit(); }
+    await new Promise((r) => { const t0 = Date.now(); (function w() { if (typeof ART !== 'undefined' && ART.ready || Date.now() - t0 > 4000) r(); else setTimeout(w, 50); })(); });
+    window.__game = { EI, S: () => EI.S }; return window.__game;
+  };
+  const g = await loadGame({ lands: 2, wallet: 5e5, gems: 9, fans: num('fans', 12) });
+  const S = g.S();
+  if (P.has('skin')) S.skins.active = P.get('skin');
+  for (let i = 0; i < num('helm', 6); i++) S.player.helmets.push(i % 7 === 3 ? { k: 4, bar: true } : i % 11 === 5 ? { k: 1, crown: true } : { k: 1 + (i * 3) % 9 });
+  S.houses = 8;
+  lab({ ground: true, groundR: 40, d: num('d', 12), el: num('el', 55), ty: 0, az: num('az', 0), w: num('w', 900), h: num('h', 600), async build(V) {
+    let lootm = null; if (P.get('loot') === '1') { const lm = await import('./loot3d.js'); lootm = await lm.init(V); V.mods.loot = lootm; }
+    const mod = init(V); V.mods.heroes3d = mod; const p = S.player, pose = P.get('pose') || '';
+    p.x = -330; p.y = -150; S.comp.x = p.x - 60; S.comp.y = p.y + 24;
+    S.pop.forEach((f, i) => { f.x = p.x + 100 + (i % 6) * 55 - 100 + (i > 5 ? 20 : 0); f.y = p.y + 120 + Math.floor(i / 6) * 55; if (f.role === 'fight' && i % 2 === 0) f.atkT = 0.3; if (P.has('spec')) f.spec = ['roadie', 'manager', 'scout', 'bodyguard', 'drummer'][i % 5]; if (i % 3 === 0 && f.role === 'gather') for (let k = 0; k < 4 + (i % 5); k++) f.carry.push({ k: 1 + k }); });
+    if (P.has('encore')) S.encoreT = 99;
+    window.__stat = { fans: S.pop.length };
+    return { update(dt, t) {
+      S.t += dt;
+      if (pose === 'walk') { p.vx = 150; p.moving = true; p.x += 150 * dt; S.comp.x += 150 * dt; S.comp.mv = 0.15; S.pop.forEach((f) => { f.mv = 0.1; f.x += 40 * dt; }); }
+      if (pose === 'cast') S.ultCasting = Math.max(0.3, S.ultCasting - 0) || 1.4, S.ultCasting = 0.7;
+      if (pose === 'dash') { p.dashT = 0.2; p.vx = 780; p.x += 780 * dt * 0.1; p.moving = true; }
+      if (pose === 'hurt') p.hurtT = 0.12;
+      if (pose === 'cheer') p.cheerT = 1;
+      if (pose === 'atk') { p.atkT = 0.3; }
+      if (P.has('shield')) FEATS.find((f) => f.id === 'gear').api.T.shield = 2;
+      if (P.get('pose') === 'walk') V.camera.userData.follow = 1;
+      showHud(() => 'fans ' + mod.fanCount() + '  hero ' + (window.__stat.hero ? window.__stat.hero.calls + ' calls ' + window.__stat.hero.tris + ' tris' : '') + '  fan ' + (window.__stat.fan ? window.__stat.fan.calls + ' calls ' + window.__stat.fan.tris + ' tris' : ''));
+      if (lootm) lootm.update(dt, t, { x: p.x * 0.02, z: p.y * 0.02 });
+      mod.update(dt, t, { x: p.x * 0.02, z: p.y * 0.02 });
+      if (mod.hero && mod.companion && !window.__stat.hero) window.__stat.hero = { calls: countCalls(mod.hero.group), tris: tris(mod.hero.group) };
+      window.__stat.comp = mod.companion && { calls: countCalls(mod.companion.group), tris: tris(mod.companion.group) }; const fa = mod.fanActors(); window.__stat.fanActors = fa.length; window.__stat.fan = fa[0] && { calls: countCalls(fa[0].group), tris: tris(fa[0].group), maxTris: Math.max(...fa.map((a) => tris(a.group))), maxCalls: Math.max(...fa.map((a) => countCalls(a.group))) };
+    } };
+  } });
+} else {
+  lab({ d: num('d', 12), el: num('el', 14), ty: num('ty', 1), tx: num('tx', 0), az: num('az', 0), build(V) {
+    const list = [], names = (P.get('show') || ALL.join(',')).split(','), sp = num('sp', 2.1), pose = P.get('pose') || 'idle', fan = P.get('fan') === '1';
+    const ms = []; names.forEach((n, i) => { const t0 = performance.now(); const a = makeHero(n, { fan, seed: i + 1, acc: i }); a.group.position.set((i - (names.length - 1) / 2) * sp, 0, 0); V.scene.add(a.group); bakeActor(a); list.push(a); ms.push(Math.round(performance.now() - t0)); });
+    const st = { speed: pose === 'walk' ? 0.8 : 0, singing: pose === 'sing', atk: pose === 'atk', cast: pose === 'cast', cheer: pose === 'cheer', dash: pose === 'dash', hurt: pose === 'hurt' ? 0.8 : 0, role: 'fight' };
+    window.__stat = { calls: list.map((a) => countCalls(a.group)), tris: list.map((a) => tris(a.group)), buildMs: ms };
+    if (P.has('tri')) { const m = {}; list[0].group.traverse((o) => { if (o.isMesh && !o.isSkinnedMesh) { const g = o.geometry, n = (g.index ? g.index.count : g.attributes.position.count) / 3, k = (o.material.type === 'ShaderMaterial' ? 'hull' : 'mesh') + ':' + n; m[k] = (m[k] || 0) + 1; } }); window.__stat.parts = Object.entries(m).map(([k, c]) => [k, c, c * +k.split(':')[1]]).sort((a, b) => b[2] - a[2]).slice(0, 14); }
+    return { update(dt, t) { showHud(); for (const a of list) a.update(dt, t, st); } };
+  } });
+}
+</script>

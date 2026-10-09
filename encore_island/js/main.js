@@ -6,6 +6,7 @@ function resize() {
   dpr = Math.min(2, window.devicePixelRatio || 1); vw = window.innerWidth; vh = window.innerHeight;
   cvs.width = Math.round(vw * dpr); cvs.height = Math.round(vh * dpr); cvs.style.width = vw + 'px'; cvs.style.height = vh + 'px';
   sclBase = clamp(Math.min(vw / 620, vh / 880), 0.5, 1.45); scl = sclBase * ZOOM.k;
+  if (VIEW.api) VIEW.api.resize(vw, vh, dpr);
 }
 function updateCamera(dt) {
   // the home island is big, so the camera pulls back there; the Backstage room and the lands are seen close up
@@ -15,8 +16,9 @@ function updateCamera(dt) {
   const k = Math.min(1, dt * 5.5); CAM.x += (tx - CAM.x) * k; CAM.y += (ty - CAM.y) * k;
 }
 const VIGNETTE = { key: '', edge: null, top: null }; // both gradients depend only on the screen size
+function drawFlash() { if (JUICE.flash > 0) { ctx.fillStyle = 'rgba(255,240,170,' + (JUICE.flash * 0.45) + ')'; ctx.fillRect(0, 0, vw, vh); JUICE.flash = Math.max(0, JUICE.flash - 0.03); } }
 function drawVignette() {
-  if (JUICE.flash > 0) { ctx.fillStyle = 'rgba(255,240,170,' + (JUICE.flash * 0.45) + ')'; ctx.fillRect(0, 0, vw, vh); JUICE.flash = Math.max(0, JUICE.flash - 0.03); }
+  drawFlash();
   const key = vw + 'x' + vh;
   if (VIGNETTE.key !== key) {
     const r = Math.hypot(vw, vh) * 0.62, g = ctx.createRadialGradient(vw / 2, vh * 0.46, r * 0.45, vw / 2, vh * 0.46, r); g.addColorStop(0, 'rgba(60,30,120,0)'); g.addColorStop(1, 'rgba(60,30,120,0.24)');
@@ -30,6 +32,11 @@ function draw(dt) {
   hits = [];
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   updateCamera(dt || 0.016);
+  if (VIEW.on3d && VIEW.api && VIEW.api.lost) { VIEW.on3d = false; VIEW.mode = '2d'; const c3 = document.getElementById('game3d'); if (c3) c3.style.display = 'none'; if (S.toasts) toast('3D stopped (graphics reset). Back to 2D.', 'star', 4); }
+  if (VIEW.on3d && VIEW.api) {
+    ctx.clearRect(0, 0, vw, vh); // transparent: the WebGL canvas underneath shows through
+    VIEW.api.frame(dt || 0.016); drawFeaturesScreen(); VIEW.api.overlay(ctx); drawFlash();
+  } else {
   const bs = S.place === 'backstage';
   if (bs) drawBackstageBg(); else drawWater();
   ctx.save();
@@ -39,6 +46,7 @@ function draw(dt) {
   if (bs) drawBackstage(); else drawWorld(); ctx.restore();
   if (S.settings.particles && !bs) drawPetals();
   drawVignette();
+  }
   if (!S.started) { drawTitle(); return; }
   if (S.cards) S.sheet = null;
   drawHudTop(); drawFeaturesHud(); drawSheet(); drawHudBottom(); drawModal(); if (typeof drawCoach === 'function') drawCoach();
@@ -52,7 +60,7 @@ let saveCd = 10;
 function autosave(dt) { saveCd -= dt; if (S.started && saveCd <= 0) { saveCd = 10; save(); } }
 function boot() {
   cvs = document.getElementById('game'); setupCtx(cvs.getContext('2d')); resize(); window.addEventListener('resize', resize);
-  initGame(true); S.t = 0; loadArt();
+  initGame(true); S.t = 0; loadArt(); viewBoot();
   cvs.addEventListener('pointerdown', onDown); cvs.addEventListener('pointermove', onMove); window.addEventListener('pointerup', onUp); window.addEventListener('pointercancel', onUp);
   window.addEventListener('keydown', (e) => onKey(e, true)); window.addEventListener('keyup', (e) => onKey(e, false));
   document.addEventListener('visibilitychange', () => { if (document.hidden && S.started) save(); });
@@ -64,4 +72,4 @@ if (typeof window.__EI_HEADLESS__ === 'undefined') boot();
 window.EI = { get S() { return S; }, set S(v) { S = v; }, initGame, newState, tick, draw, save, loadSave, serialize, applySave, resetAll, setupCtx, resize, tickFx, boot,
   fmt, rnd, seedMain, hash01, walkable, landAt, genLand, geoOf, radiusAt, unlockSpot, worldExtent, routeBetween, openNextLand, addLand, spawnEnemy, killEnemy, hurtEnemy, dropItem, pay, prestige, recruit, setFans, hatchEgg, spinWheel, claimLogin, castUlt, dashAbility, petAbility, buySkin, buyCperk, pickCard, drawCards, grantXp, startEncore, questEvent, openSheet, closeSheet, guideTarget,
   helmVal, foeHp, unlockCost, bcost, foeName, foeArtName, metal, entryVal, coinMul, pDmg, pRate, cap, popCap, flowMul, crownsToGain, BIOMES, SKINS, PETS, CARDS, ACH, QDEFS, UPG, GEMU, UPG_POS, GEM_POS, WHEEL, pickWeighted,
-  vgrad, hgrad, pgrad, ggrad, biomePal, MINI, SELL, VAULT, FORGE, TRAY, STAGE, MONU, HUB_GEO, LAND_GEO, HUB, HUB_KEEP, TERRACE, HUBSIGNS, HUBLAMPS, HATCH, BACKSTAGE, BS_STAIRS, BACKSTAGE_SHOW, BACKSTAGE_OPEN, inBackstage, enterBackstage, exitBackstage, bsDoorPos, bsDoors, bsPlateCost, DOORS, regDoor, TOWN, TOWN_BY, townCost, townLvl, buyTown, trainFan, fanTrainCost, fanCarryCap, fanDmgOf, fanMaxLvl, townTierIdx, recruitCost, beatTap, onBeatNow, FEATS, TABS, MODS, mod, modAdd, fEmit, fs, featPips, sheetTabs, regFeature, regTab, regMod, hits: () => hits };
+  vgrad, hgrad, pgrad, ggrad, biomePal, MINI, SELL, VAULT, FORGE, TRAY, STAGE, MONU, HUB_GEO, LAND_GEO, HUB, HUB_KEEP, TERRACE, HUBSIGNS, HUBLAMPS, HATCH, BACKSTAGE, BS_STAIRS, BACKSTAGE_SHOW, BACKSTAGE_OPEN, inBackstage, enterBackstage, exitBackstage, bsDoorPos, bsDoors, bsPlateCost, DOORS, regDoor, TOWN, TOWN_BY, townCost, townLvl, buyTown, trainFan, fanTrainCost, fanCarryCap, fanDmgOf, fanMaxLvl, townTierIdx, recruitCost, beatTap, onBeatNow, FEATS, TABS, MODS, mod, modAdd, fEmit, fs, featPips, sheetTabs, regFeature, regTab, regMod, hits: () => hits, VIEW, viewSet, viewSetQuality, viewLoad, w2s };
