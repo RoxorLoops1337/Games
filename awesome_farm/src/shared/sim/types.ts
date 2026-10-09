@@ -92,6 +92,8 @@ export interface BuildE {
     lnk?: number;            // a mine ladder: the shaft it leads up to
     hg?: number;             // a campfire, table or light at dusk: how far the evening hearth is kindled, 0..1 (1: it is, until night falls; sim/hearth.ts)
     ch?: ChuteS;             // an export chute: its books (see sim/chute.ts)
+    xp?: number;             // a tower or spike trap: the XP it has earned (its level comes from it: data/towerperks.ts)
+    pk?: string[];           // … and the perks it has taken, in order
     hp?: number;             // a wall, doorway or tower a raider has hurt: the hit points it has left (none: whole; it mends at dawn, sim/defense.ts)
 }
 
@@ -393,6 +395,8 @@ export type Cmd =
     | { t: 'shop'; i: number; n: number }
     /** Pet your companion: it must be yours and beside you (sim/bond.ts). */
     | { t: 'pat' }
+    /** Take the i-th upgrade a tower offers (sim/defense.ts `cmdPick`). */
+    | { t: 'towerpick'; id: number; i: number }
     | { t: 'pet'; op: 'companion' | 'rest' | 'assign' | 'unassign' | 'feed' | 'release' | 'rename' | 'awaken' | 'task' | 'post' | 'order'; pet: string; den?: number; item?: ItemId; name?: string; task?: WorkKind | null; at?: { plot?: number; job?: WorkKind; bld?: number }; rcp?: string; n?: number }
     | { t: 'rift'; op: 'launch'; id: number; tier: number; omens?: string[]; daily?: boolean }
     | { t: 'rift'; op: 'pick'; i: number }
@@ -407,7 +411,7 @@ export type Cmd =
     | { t: 'dev'; key: string }
     | { t: 'devdo'; op: DevOp; id?: string; who?: string; n?: number; lv?: number; x?: number; y?: number; at?: 'feet' | 'front'; elite?: boolean; on?: boolean };
 
-export type UiKind = 'fortune' | 'market' | 'station' | 'proc' | 'chest' | 'bed' | 'device' | 'altar' | 'den' | 'waystone' | 'dock' | 'hatchery' | 'wish' | 'mail' | 'vane' | 'table';
+export type UiKind = 'fortune' | 'market' | 'station' | 'proc' | 'chest' | 'bed' | 'device' | 'altar' | 'den' | 'waystone' | 'dock' | 'hatchery' | 'wish' | 'mail' | 'vane' | 'table' | 'tower';
 
 /** Things that happened — clients turn them into FX, floating text and banners. */
 /** One farmer's luck: the daily free spin, the spin price, the jackpot and crate pity, and the coin prize they may still gamble. */
@@ -429,7 +433,7 @@ export type SimEvent =
     | { e: 'pickup'; id: number; by: string; res: Res }
     | { e: 'swing'; by: string; x: number; y: number; w?: WeaponType; px?: number; py?: number }
     /** A tower fired (sim/defense.ts): an arrow, a ballista bolt or a Tesla's zap from `x,y` through the points in `to` (the hit lands at once). */
-    | { e: 'shot'; k: 'arrow' | 'bolt' | 'zap'; x: number; y: number; to: [number, number][] }
+    | { e: 'shot'; k: 'arrow' | 'bolt' | 'zap'; x: number; y: number; to: [number, number][]; fx?: 'fire' | 'frost'; big?: 1 }
     | { e: 'ways'; to: string; from: number; list: { id: number; x: number; y: number; plot: number; by?: string }[] }
     | { e: 'chat'; by: string; name: string; text: string; color: number }
     /** The season wish vote changed (opened, a vote came in, it was decided). */

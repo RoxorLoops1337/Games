@@ -1,4 +1,5 @@
 // Art integrity: every icon and world sprite grid uses only palette characters and has even rows.
+import { PERKS } from '../src/shared/data/towerperks';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { iconGrids } from '../src/client/art/icons';
@@ -55,6 +56,11 @@ test('every hat, armor and charm has a painted outfit layer for the farmer sprit
     }
     for (const [slot, list] of Object.entries(worn)) for (const id of list) assert.equal(ITEMS[id as keyof typeof ITEMS]?.gear?.slot, slot, `${id} is not a ${slot} item`);
     for (const id of WORN_BACK) assert.ok(WORN_BODY.includes(id), 'a cloak layer goes with a body item');
+});
+
+test('every tower perk has an icon', () => {
+    const grids = iconGrids();
+    for (const p of PERKS) assert.ok(grids[p.icon], `${p.id}: icon ${p.icon}`);
 });
 
 test('every season wish has an icon', () => {

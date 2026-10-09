@@ -728,6 +728,8 @@ export class GameScene extends Phaser.Scene {
     // ── entity views ────────────────────────────────────────────────────────
     landmarks () { return this.marks.values(); }
     lightSources () { return this.lit.values(); }
+    /** The tower shots in the air, as lights for the night layer. */
+    shotLights () { return this.blightFx.lights; }
     buildings (): BuildE[] { return [...this.blds.values()]; }
     wallMask (tx: number, ty: number) { return this.bviews.wallMask(tx, ty); }
 
@@ -876,7 +878,7 @@ export class GameScene extends Phaser.Scene {
                 this.blightFx.nest(v, e, this.world.plots[e.plot], this.time.now);
             } else if (e.k === 'bld') {
                 const def = BUILDINGS[e.kind];
-                if (e.hp !== undefined) this.blightFx.defense(v, e);
+                if (e.hp !== undefined || def.tower || def.spike) this.blightFx.defense(v, e);
                 this.fv.animate(v, e, dt, sun);
                 const working = def.proc && (e.prog ?? 0) > 0 && !!e.rcp;
                 if (working && Math.random() < dt * 5) this.ambient.explode(1, v.x + (Math.random() - 0.5) * 4, v.y - 10);

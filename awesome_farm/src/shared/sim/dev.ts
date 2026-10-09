@@ -51,7 +51,7 @@ export const DEV_OPS = [
     'affection',
     'feast',
     'co',
-    'labWave', 'labNight', 'labMend', 'labClear', 'labSpeed', 'labReset',
+    'labWave', 'labNight', 'labMend', 'labClear', 'labSpeed', 'labReset', 'labXp', 'labPerks',
 ] as const;
 export type DevOp = typeof DEV_OPS[number];
 export type DevCmd = Extract<Cmd, { t: 'devdo' }>;
@@ -397,7 +397,7 @@ function bestFor (slot: GearSlot): ItemId | null {
 // ── the ops ─────────────────────────────────────────────────────────────────
 const OPS: Record<DevOp, (sim: Sim, p: PlayerS, c: DevCmd) => void> = {
     labWave: (...a) => LAB_OPS.labWave(...a), labNight: (...a) => LAB_OPS.labNight(...a), labMend: (...a) => LAB_OPS.labMend(...a),
-    labClear: (...a) => LAB_OPS.labClear(...a), labSpeed: (...a) => LAB_OPS.labSpeed(...a), labReset: (...a) => LAB_OPS.labReset(...a),
+    labClear: (...a) => LAB_OPS.labClear(...a), labSpeed: (...a) => LAB_OPS.labSpeed(...a), labReset: (...a) => LAB_OPS.labReset(...a), labXp: (...a) => LAB_OPS.labXp(...a), labPerks: (...a) => LAB_OPS.labPerks(...a),
     level: (sim, p, c) => setLevel(sim, p, p.level + int(c.n, 1, MAX_LEVEL, 1)),
     levelTo: (sim, p, c) => setLevel(sim, p, int(c.n, 1, MAX_LEVEL, p.level)),
     xp: (sim, p, c) => {
@@ -603,6 +603,16 @@ const LAB_OPS = {
         lab.setSpeed(sim, int(c.n, 1, 4, 1));
         note(sim, p, 'dash', `Game speed x${sim.timeScale}`, PAL.foam);
     }),
+    /** XP for every tower and trap: `n` of it (default 40), or `id: 'level'` for one whole level. */
+    labXp: labOp((sim, p, c) => {
+        const up = word(c.id) === 'level';
+        const n = lab.giveXp(sim, int(c.n, 1, 100000, 40), up);
+        note(sim, p, 'perk', up ? `${n} defenses up a level` : `XP for ${n} defenses`, PAL.gold);
+    }),
+    labPerks: labOp((sim, p) => {
+        const n = lab.resetPerks(sim);
+        note(sim, p, 'unbind', n ? `${n} towers lost their upgrades` : 'No upgrades to reset', PAL.pebble);
+    }),
     labReset: labOp((sim, p) => {
         lab.reset(sim, p);
         note(sim, p, 'build', 'Arena reset', PAL.lime);
@@ -623,7 +633,7 @@ function clearMobs (sim: Sim, p: PlayerS, range: number) {
 }
 
 /** Ops that change the world around the farmer: not while they are on an expedition (it would wreck the run). */
-const WORLD_OPS = new Set<DevOp>(['time', 'day', 'event', 'clock', 'mob', 'boss', 'creature', 'node', 'killNear', 'killAll', 'clearDrops', 'land', 'tp', 'feast', 'labWave', 'labNight', 'labMend', 'labClear', 'labSpeed', 'labReset']);
+const WORLD_OPS = new Set<DevOp>(['time', 'day', 'event', 'clock', 'mob', 'boss', 'creature', 'node', 'killNear', 'killAll', 'clearDrops', 'land', 'tp', 'feast', 'labWave', 'labNight', 'labMend', 'labClear', 'labSpeed', 'labReset', 'labXp', 'labPerks']);
 
 /** Run one op for a farmer (a no-op unless they are allowed). Reached from Sim.command, after the command has passed the hostile-name check. */
 export function run (sim: Sim, p: PlayerS, c: DevCmd) {

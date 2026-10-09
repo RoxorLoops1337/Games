@@ -86,6 +86,7 @@ const PAYLOADS: Omit<DevCmd, 't'>[] = [
     { op: 'feast' },
     { op: 'co', id: 'hexed' },
     { op: 'labWave', id: 'mixed', n: 10, lv: 3, who: 'sea' }, { op: 'labNight', on: true }, { op: 'labMend' }, { op: 'labClear' }, { op: 'labSpeed', n: 4 }, { op: 'labReset' },
+    { op: 'labXp', n: 80 }, { op: 'labXp', id: 'level' }, { op: 'labPerks' },
 ];
 
 /** Everything an op could touch, as text: a farmer, the clock, the entities, the land. */

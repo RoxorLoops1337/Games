@@ -13,6 +13,7 @@ import { LEFT, type Rect } from './slots';
 
 const MOB_NAMES: Record<string, string> = { slime: 'Slime', skeleton: 'Skeleton', bat: 'Night Bat', boar: 'Tusker', archer: 'Archer', mixed: 'Mixed' };
 const DIR_NAMES: Record<string, string> = { n: 'North', e: 'East', s: 'South', w: 'West', sea: 'Sea' };
+const LV_NAMES: Record<string, string> = { tower_archer: 'A', ballista: 'B', tesla: 'T' };
 const MOB_CHOICES = [...LAB_MOBS, 'mixed'] as const;
 
 export class LabPanel {
@@ -68,10 +69,13 @@ export class LabPanel {
         mk(2, 3, 1, 'Clear', () => this.send({ t: 'devdo', op: 'labClear' }));
         this.speedB = mk(0, 4, 1, 'x1', () => { const s = this.read()?.speed ?? 1; const i = (LAB_SPEEDS as readonly number[]).indexOf(s); this.send({ t: 'devdo', op: 'labSpeed', n: LAB_SPEEDS[(i + 1) % LAB_SPEEDS.length] }); });
         mk(1, 4, 2, 'Reset arena', () => this.send({ t: 'devdo', op: 'labReset' }), STYLES.berry);
-        const readY = ry(4) + rh / 2 + gap + 2;
+        mk(0, 5, 1, 'XP +', () => this.send({ t: 'devdo', op: 'labXp', n: 40 }));
+        mk(1, 5, 1, 'Level +', () => this.send({ t: 'devdo', op: 'labXp', id: 'level' }), STYLES.gold);
+        mk(2, 5, 1, 'No perks', () => this.send({ t: 'devdo', op: 'labPerks' }));
+        const readY = ry(5) + rh / 2 + gap + 2;
         this.readT = label(scene, pad + 2, readY, '', touch ? 13 : 12, PAL.cream, { origin: [0, 0], bold: false });
         this.body.add(this.readT);
-        this.h = Math.round(readY + (touch ? 36 : 32) + pad);
+        this.h = Math.round(readY + (touch ? 52 : 46) + pad);
         this.root.add([this.g, this.body]);
         panel(this.g, 0, 0, w, this.h, { ...STYLES.dark, rim: PAL.pumpkin, hi: PAL.gold, shadow: true });
         // fold it down to one button (and back)
@@ -109,10 +113,10 @@ export class LabPanel {
         this.readIn = 0.25;
         const r = this.read();
         if (!r) return;
-        const key = `${r.alive}|${r.towers}|${r.you}|${r.dmg}|${r.broken}|${r.night}|${r.god}|${r.speed}`;
+        const key = `${r.levels.map((l) => `${l.kind}${l.lv}${l.pending}`).join()}|${r.alive}|${r.towers}|${r.you}|${r.dmg}|${r.broken}|${r.night}|${r.god}|${r.speed}`;
         if (key === this.shown) return;
         this.shown = key;
-        this.readT.setText(`Alive ${r.alive}   Towers ${r.towers}   You ${r.you}\nWall damage ${r.dmg}   Broken ${r.broken}`);
+        this.readT.setText(`Alive ${r.alive}   Towers ${r.towers}   You ${r.you}\nWall damage ${r.dmg}   Broken ${r.broken}\nLevels ${r.levels.map((l) => `${LV_NAMES[l.kind] ?? '?'}${l.lv}${l.pending ? '*' : ''}`).join('  ')}`);
         this.nightB.setLabel(r.night ? 'Night' : 'Day');
         this.nightB.setStyle(r.night ? STYLES.plum : STYLES.dark);
         this.godB.setLabel(r.god ? 'God on' : 'God off');

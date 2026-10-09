@@ -11,6 +11,7 @@ import * as boss from './boss';
 import * as combat from './combat';
 import * as costatus from './costatus';
 import * as creatures from './creatures';
+import * as defense from './defense';
 import * as dev from './dev';
 import * as economy from './economy';
 import * as factory from './factory';
@@ -97,6 +98,7 @@ export function command (sim: Sim, pid: string, c: Cmd) {
         case 'breed': return creatures.cmdBreed(sim, p, c);
         case 'fish': return fishing.cmd(sim, p, c);
         case 'pat': return bond.cmdPat(sim, p);
+        case 'towerpick': return defense.cmdPick(sim, p, c);
     }
 }
 

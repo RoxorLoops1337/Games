@@ -17,6 +17,7 @@ import * as lab from '../src/shared/sim/lab';
 import * as raid from '../src/shared/sim/raid';
 import { Sim } from '../src/shared/sim/sim';
 import { countOf } from '../src/shared/sim/stats';
+import { levelOf, pending, towerType } from '../src/shared/data/towerperks';
 import type { BuildE, Cmd, MobE, SimEvent } from '../src/shared/sim/types';
 import { weatherAt } from '../src/shared/weather';
 
@@ -196,13 +197,41 @@ test('the ops: night, speed, mend, clear and reset', () => {
     assert.equal(mobsOf(sim).length, 0);
 });
 
+test('the tower tools: XP for every tower, a level at a time, perks reset; the readout lists their levels', () => {
+    const { sim, op } = world();
+    const towers = () => Object.values(sim.s.ents).filter((e): e is BuildE => e.k === 'bld' && towerType(e.kind) !== null && e.kind !== 'spike');
+    assert.ok(towers().length >= 4);
+    assert.ok(towers().every((t) => levelOf(t.xp) === 1));
+    let ev = op({ op: 'labXp', n: 40 });
+    assert.ok(towers().every((t) => t.xp === 40 && levelOf(t.xp) === 2 && pending(t) === 1), 'a chunk of XP for each');
+    assert.ok(fxNames(ev).length && said(ev).length);
+    op({ op: 'labXp', id: 'level' });
+    assert.ok(towers().every((t) => levelOf(t.xp) === 3), 'one level up for each, from wherever it stood');
+    const spike = blds(sim, 'spike')[0];
+    assert.equal(levelOf(spike.xp), 3, 'the traps too');
+    for (let i = 0; i < 12; i++) op({ op: 'labXp', id: 'level' });
+    assert.ok(towers().every((t) => levelOf(t.xp) === 10), 'never past the top');
+    // take a perk, then reset them: the picks wait again
+    const t = towers()[0];
+    sim.command('me', { t: 'towerpick', id: t.id, i: 0 } as Cmd);
+    assert.equal(t.pk!.length, 1);
+    ev = op({ op: 'labPerks' });
+    assert.ok(towers().every((x) => x.pk === undefined && pending(x) === 9), 'every perk back to be chosen again');
+    assert.ok(said(ev).length);
+    const r = lab.readout(sim)!;
+    assert.ok(r.levels.length === 4 && r.levels.every((l) => l.lv === 10 && l.pending === 9), JSON.stringify(r.levels));
+    // a reset arena starts them over
+    op({ op: 'labReset' });
+    assert.ok(towers().every((x) => x.xp === undefined && x.pk === undefined));
+});
+
 test('the lab ops work only in a lab world, and stay locked on a real server like every developer op', () => {
     // an ordinary world with the menu open: refused
     const plain = Sim.create('LAB-PLAIN', 'w');
     plain.join('a', 'Ann');
     plain.devs.add('a');
     const had = mobsOf(plain).length;
-    for (const o of ['labWave', 'labNight', 'labMend', 'labClear', 'labSpeed', 'labReset']) {
+    for (const o of ['labWave', 'labNight', 'labMend', 'labClear', 'labSpeed', 'labReset', 'labXp', 'labPerks']) {
         plain.events = [];
         plain.command('a', { t: 'devdo', op: o, id: 'slime', n: 4, lv: 1, who: 'n', on: true } as Cmd);
         assert.ok(fxNames(plain.events).includes('deny'), `${o} is refused outside the lab`);
@@ -217,7 +246,7 @@ test('the lab ops work only in a lab world, and stay locked on a real server lik
     host.attach(peer);
     host.receive(peer, JSON.stringify({ t: 'hello', v: PROTOCOL, id: 'a', name: 'Ann' }));
     const before = JSON.stringify([Object.keys(sim.s.ents).length, sim.s.night, sim.s.clock]);
-    for (const c of [{ op: 'labWave', id: 'mixed', n: 40, lv: 9, who: 'sea' }, { op: 'labNight', on: true }, { op: 'labSpeed', n: 4 }, { op: 'labReset' }, { op: 'labClear' }, { op: 'labMend' }]) {
+    for (const c of [{ op: 'labWave', id: 'mixed', n: 40, lv: 9, who: 'sea' }, { op: 'labNight', on: true }, { op: 'labSpeed', n: 4 }, { op: 'labReset' }, { op: 'labClear' }, { op: 'labMend' }, { op: 'labXp', n: 500 }, { op: 'labPerks' }]) {
         host.receive(peer, JSON.stringify({ t: 'cmd', c: { t: 'devdo', ...c } }));
     }
     assert.equal(JSON.stringify([Object.keys(sim.s.ents).length, sim.s.night, sim.s.clock]), before, 'locked');
@@ -243,7 +272,7 @@ test('the lab never touches the real solo world or profile: its own keys, never 
         assert.equal(conn.label, 'Defense Lab');
         for (let i = 0; i < 60; i++) conn.poll(0.05);
         conn.send({ t: 'devdo', op: 'labWave', id: 'slime', n: 5, lv: 1, who: 'w' } as Cmd);
-        for (let i = 0; i < 30; i++) conn.poll(0.05);
+        for (let i = 0; i < 3; i++) conn.poll(0.05);
         assert.equal(lab.readout(conn.debugSim)!.alive, 5, 'cheats on: the panel ops work');
         conn.saveNow();
         conn.close();
@@ -254,6 +283,23 @@ test('the lab never touches the real solo world or profile: its own keys, never 
     } finally {
         Object.assign(g, had);
     }
+});
+
+test('tower shots stay on screen long enough to be seen: flight times, the arc, the zap glow', async () => {
+    const { flightTime, FLIGHT, ZAP_LINGER, MAX_ARC, ARC } = await import('../src/shared/data/shotfx');
+    for (const k of ['arrow', 'bolt'] as const) {
+        for (const d of [0, 20, 60, 112, 168, 400]) {
+            const t = flightTime(k, d);
+            assert.ok(t >= 0.35 && t <= 0.6, `${k} over ${d}px: ${t}s`);
+        }
+        assert.ok(flightTime(k, 400) >= flightTime(k, 10), 'further takes longer');
+        assert.ok(ARC[k] > 0 && ARC[k] * 400 > 0 && MAX_ARC > 0);
+    }
+    assert.ok(FLIGHT.bolt[0] > FLIGHT.arrow[0] && flightTime('bolt', 100) > flightTime('arrow', 100), 'the heavy bolt is slower');
+    assert.ok(ZAP_LINGER >= 0.3);
+    const src = readFileSync(join(ROOT, 'src/client/world/blight.ts'), 'utf8');
+    assert.ok(/flightTime\(e\.k, d\)/.test(src) && /ZAP_LINGER/.test(src), 'blight.ts uses them');
+    assert.ok(/overlay3d\(scene\.add\.particles/.test(src), 'trail and sparks are overlays');
 });
 
 test('the tower shots are world overlays the 3D view shows too; the panel only sends developer ops', () => {

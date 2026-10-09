@@ -12,6 +12,7 @@ import { TILE, TUNING } from '../config';
 import { BUILDINGS, type BuildingKind } from '../data/buildings';
 import type { ItemId } from '../data/items';
 import { MOBS, type MobKind } from '../data/mobs';
+import { levelOf, pending, towerType, xpAt } from '../data/towerperks';
 import { CHAPTERS, MEDALS } from '../data/quests';
 import { SKILL_LIST } from '../data/skills';
 import { PAL } from '../palette';
@@ -60,7 +61,7 @@ export function layout (): Piece[] {
             out.push(d === 0 ? { kind: 'doorway', dx: R, dy: 0, rot: 1 } : { kind: 'wall_fort', dx: R, dy: d });
         }
     }
-    out.push({ kind: 'tower_archer', dx: -3, dy: -3 }, { kind: 'ballista', dx: 3, dy: -3 }, { kind: 'tesla', dx: 3, dy: 3 }, { kind: 'tower_archer', dx: -3, dy: 3 });
+    out.push({ kind: 'tower_archer', dx: 3, dy: -3 }, { kind: 'ballista', dx: 0, dy: -3 }, { kind: 'tesla', dx: 3, dy: 3 }, { kind: 'tower_archer', dx: 3, dy: 0 });
     out.push({ kind: 'windturbine', dx: -1, dy: 3 }, { kind: 'pole', dx: 2, dy: 3 });
     for (const [dx, dy] of [[6, -1], [6, 0], [6, 1], [7, 0], [8, -1], [8, 1]]) out.push({ kind: 'spike', dx, dy });
     return out;
@@ -184,14 +185,16 @@ export function step (sim: Sim) {
 }
 
 // ── what the panel shows ────────────────────────────────────────────────────
-export interface LabReadout { alive: number; towers: number; you: number; dmg: number; broken: number; night: boolean; speed: number; god: boolean }
+export interface LabReadout { levels: { kind: string; lv: number; pending: number }[]; alive: number; towers: number; you: number; dmg: number; broken: number; night: boolean; speed: number; god: boolean }
 export function readout (sim: Sim): LabReadout | null {
     const st = labs.get(sim);
     if (!st) return null;
     const p = sim.s.players[st.who];
     const t = defense.tally(sim);
     const towers = t.kills - st.base.tk;
+    const levels = Object.values(sim.s.ents).filter((e): e is BuildE => e.k === 'bld' && towerType(e.kind) !== null && e.kind !== 'spike').map((b) => ({ kind: b.kind, lv: levelOf(b.xp), pending: pending(b) }));
     return {
+        levels,
         alive: sim.ents('mob').length,
         towers,
         you: Math.max(0, (p?.stats.kills ?? 0) - st.base.kills - towers),
@@ -271,6 +274,27 @@ export function mendAll (sim: Sim): number {
     return back;
 }
 const mobsOn = (sim: Sim, tx: number, ty: number, w: number, h: number) => sim.ents('mob').some((m) => m.x >= tx * TILE - 4 && m.x < (tx + w) * TILE + 4 && m.y >= ty * TILE - 2 && m.y < (ty + h) * TILE + 2);
+
+/** Every tower and spike trap in the arena (what the tower tools reach). */
+const defenses = (sim: Sim) => Object.values(sim.s.ents).filter((e): e is BuildE => e.k === 'bld' && towerType(e.kind) !== null);
+
+/** XP for every tower: `n` of it, or (`levelUp`) enough for exactly the next level. Returns how many it reached. */
+export function giveXp (sim: Sim, n: number, levelUp: boolean): number {
+    const list = defenses(sim);
+    for (const b of list) {
+        const lv = levelOf(b.xp);
+        const add = levelUp ? (lv >= TUNING.towers.maxLevel ? 0 : xpAt(lv + 1) - (b.xp ?? 0)) : n;
+        defense.addXp(sim, b, add);
+    }
+    return list.length;
+}
+
+/** Every perk taken back (the XP stays), so every pick waits to be made again. */
+export function resetPerks (sim: Sim): number {
+    let n = 0;
+    for (const b of defenses(sim)) if (b.pk?.length) { delete b.pk; sim.touch(b); n++; }
+    return n;
+}
 
 /** Every monster, shot and dropped thing gone, quietly (nobody is credited). Returns how many monsters went. */
 export function clearAll (sim: Sim): number {

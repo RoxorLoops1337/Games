@@ -5,6 +5,7 @@
 //   npm run wiki          writes wiki/index.html
 //   tests/wiki.test.ts    fails when the committed page is not what buildWiki() makes now (run `npm run wiki` and commit)
 
+import { PERKS, RARITIES, RARITY_NAME, xpAt, xpStep, type Rarity } from '../src/shared/data/towerperks';
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { CENTER, DREAD_ZONES, GRID, MAX_PLAYERS, PLOT, RIFT_ISLANDS, TUNING } from '../src/shared/config';
@@ -609,6 +610,19 @@ function phasesTable (phases: BossPhase[]) {
     ]));
 }
 
+/** The tower levels and perks (data/towerperks.ts). */
+function towerPerks () {
+    const T = TUNING.towers;
+    const names: Record<string, string> = { archer: 'Archer Tower', ballista: 'Ballista', tesla: 'Tesla Coil', spike: 'Spike Trap' };
+    const hex: Record<Rarity, string> = { common: 'd5d9e6', uncommon: '5cb04f', rare: '4ab2cf', legendary: 'ffd966' };
+    const xp = Array.from({ length: T.maxLevel - 1 }, (_, i) => [`${i + 2}`, `${xpStep(i + 2)}`, `${xpAt(i + 2)}`]);
+    const rows = PERKS.map((d) => [`<b>${esc(d.name)}</b>`, `<span class="tag" style="--t:#${hex[d.rarity]}">${RARITY_NAME[d.rarity]}</span>`, esc(d.on.map((t) => names[t]).join(', ')), d.max > 1 ? `up to ${d.max}` : 'once', esc(d.desc)]);
+    const odds = RARITIES.map((r) => `${RARITY_NAME[r]} ${T.weights[r]}`).join(', ');
+    return p(esc(`Towers and spike traps earn XP from what they kill (the monster's own XP, ${T.eliteXp} times that for an elite). Each level from 2 to ${T.maxLevel} lets you choose one of three upgrades drawn from that tower's own pool: use the tower to see them. The same three are offered every time, so reloading changes nothing. How likely each rarity is: ${odds} (out of ${Object.values(T.weights).reduce((a, b) => a + b, 0)}); a Legendary upgrade can only be offered from level ${T.legendaryFrom} on.`))
+        + table(['Level', 'XP for this level', 'XP in total'], xp)
+        + table(['Upgrade', 'Rarity', 'Fits', 'Taken', 'What it does'], rows);
+}
+
 function combatSection () {
     const firstLevel = (tier: number) => { for (let l = 1; l <= MAX_LEVEL; l++) if (tierCap(l) >= tier) return l; return null; };
     const mobCards = WILD_KINDS.map((k) => {
@@ -657,6 +671,7 @@ function combatSection () {
         + sub('s-weapons', 'Weapons', p(Object.entries(WEAPON_WORDS).map(([k, v]) => `<b>${esc(k)}</b>: ${esc(v)}`).join(' ')) + table(['Weapon', 'Type', 'Damage', 'Swing time', 'Reach', 'Bonuses'], weapons))
         + sub('s-bosses', `Bosses (${BOSS_ORDER.length})`, p(esc(PROSE.altar)) + p(esc(PROSE.coop)) + cards(bossCards) + `<h4>Patterns</h4>${table(['Pattern', 'What it does'], pats)}`)
         + sub('s-coop', 'Co-op statuses', table(['Status', 'What happens'], co))
+        + sub('s-towerperks', `Tower upgrades (${PERKS.length})`, towerPerks())
         + sub('s-death', 'Going down, and the lost backpack', p(esc(PROSE.death)) + kv([
             ['Waiting for a friend', `${TUNING.downedSeconds} s (${TUNING.downedSoloSeconds} s when nobody can come)`],
             ['Reviving', `hold E beside them for ${TUNING.reviveSeconds} s`],

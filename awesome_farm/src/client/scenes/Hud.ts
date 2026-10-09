@@ -40,6 +40,7 @@ import { ACTIVITY, spOf } from '../../shared/data/creatures';
 import { CreatureScreen } from '../ui/screens/creatures';
 import { DenScreen } from '../ui/screens/den';
 import { DevToolsScreen } from '../ui/screens/devtools';
+import { TowerScreen } from '../ui/screens/tower';
 import { VaneScreen } from '../ui/screens/vane';
 import { forecast } from '../../shared/weather';
 import { DevUnlock } from '../ui/devunlock';
@@ -80,7 +81,7 @@ interface Float { key?: string; wx: number; wy: number; t: Phaser.GameObjects.Te
 const DOWN = { x: TOP_SLOT.x, y: TOP_SLOT.y, w: TOP_SLOT.w, h: 96, hFriends: 118 };
 
 /** The window each `open` event's building kind gets, opened with `{ id }`. */
-const UI_SCREEN: Partial<Record<UiKind, string>> = { proc: 'machine', device: 'device', altar: 'altar', den: 'den', waystone: 'waystone', dock: 'dock', hatchery: 'hatchery', vane: 'vane', chest: 'chest', bed: 'bed', fortune: 'wheel', mail: 'mail', table: 'table' };
+const UI_SCREEN: Partial<Record<UiKind, string>> = { proc: 'machine', device: 'device', altar: 'altar', den: 'den', waystone: 'waystone', dock: 'dock', hatchery: 'hatchery', vane: 'vane', chest: 'chest', bed: 'bed', fortune: 'wheel', mail: 'mail', table: 'table', tower: 'tower' };
 /** Windows a hotkey does not swap away from (they belong to the thing in front of you, or hold a moment that should not be skipped). */
 const STICKY = new Set(['machine', 'device', 'altar', 'den', 'chest', 'chestcfg', 'bed', 'dock', 'hatchery', 'boons', 'riftend', 'loot', 'wheel', 'story']);
 
@@ -88,7 +89,7 @@ const SCREENS: Record<string, new (ctx: ScreenCtx, arg?: unknown) => Screen> = {
     inventory: InventoryScreen, craft: CraftScreen, skills: SkillScreen, build: BuildScreen,
     machine: MachineScreen, device: DeviceScreen, altar: AltarScreen, creatures: CreatureScreen, den: DenScreen, journal: JournalScreen, guide: GuideScreen, launcher: LauncherScreen, jobpost: JobPostScreen, crewpick: CrewPickScreen, waystone: WaystoneScreen, welcome: WelcomeScreen, chest: ChestScreen, chestcfg: ChestSetupScreen, market: MarketScreen, bed: BedScreen, menu: MenuScreen, map: MenuScreen,
     dock: DockScreen, boons: BoonScreen, riftend: RiftEndScreen, hatchery: HatcheryScreen, blueprints: BlueprintScreen,
-    loot: LootScreen, wheel: WheelScreen, story: StoryScreen, look: LookScreen, dev: DevToolsScreen, wish: WishScreen, mail: MailScreen, vane: VaneScreen, table: TableScreen,
+    loot: LootScreen, wheel: WheelScreen, story: StoryScreen, look: LookScreen, dev: DevToolsScreen, wish: WishScreen, mail: MailScreen, vane: VaneScreen, table: TableScreen, tower: TowerScreen,
 };
 
 export class HudScene extends Phaser.Scene {
