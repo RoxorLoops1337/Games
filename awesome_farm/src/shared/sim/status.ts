@@ -325,6 +325,7 @@ export function statusOf (b: BuildE, env: StatusEnv): Status {
     if (def.gen || def.pole || def.store) return powerStatus(b, env);
     if (def.storage && !def.grave && !def.pets) return chestStatus(b);
     if (b.kind === 'chute') return chuteStatus(b, env);
+    if (def.tower === 'tesla') return noPower(b, env) ?? S('working', 'work', (b.act ?? 0) > 0 ? 'Zapping monsters' : 'Ready: waiting for monsters in range', '');
     return S('ok', null, def.name, '');
 }
 
@@ -336,5 +337,5 @@ export function badgeOf (b: BuildE, env: StatusEnv): Badge | null {
 /** Is this one of the buildings the factory overlays care about? */
 export const isFactoryPiece = (kind: BuildE['kind']) => {
     const d = BUILDINGS[kind];
-    return !!d.proc || !!d.gen || !!d.pole || !!d.store || kind === 'drill' || kind === 'inserter' || kind === 'chute' || isBeltLike(kind) || (!!d.storage && !d.pets && !d.grave);
+    return !!d.proc || !!d.gen || !!d.pole || !!d.store || d.tower === 'tesla' || kind === 'drill' || kind === 'inserter' || kind === 'chute' || isBeltLike(kind) || (!!d.storage && !d.pets && !d.grave);
 };

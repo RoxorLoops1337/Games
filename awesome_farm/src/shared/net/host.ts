@@ -494,7 +494,7 @@ export class SimHost {
                 ev: sim.events.filter((e) => {
                     if ('to' in e && e.to) return e.to === id;
                     // effects far from this player are never seen, so they are never sent
-                    if (e.e === 'fx' || e.e === 'swing' || e.e === 'float' || e.e === 'tele' || e.e === 'pod' || e.e === 'work' || e.e === 'emote' || e.e === 'hop') return Math.max(Math.abs(e.x - me.x), Math.abs(e.y - me.y)) <= R2;
+                    if (e.e === 'fx' || e.e === 'swing' || e.e === 'shot' || e.e === 'float' || e.e === 'tele' || e.e === 'pod' || e.e === 'work' || e.e === 'emote' || e.e === 'hop') return Math.max(Math.abs(e.x - me.x), Math.abs(e.y - me.y)) <= R2;
                     return true;
                 }),
             };

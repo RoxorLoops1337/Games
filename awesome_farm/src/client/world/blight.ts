@@ -1,13 +1,14 @@
-// The Blight in the world view: a nest throbs (bigger and darker the higher its level), wears a name plate with its kind and level, and
-// a health bar once it is hurt, over a dark ring of blight on the ground; a raider in the sea wades (sunk to the waist, with ripples and
-// the odd splash); a wall or doorway a raider has hurt shows a small health bar. Game.ts calls `nest`, `defense` and `wade` for the views on screen every frame and `draw` once after them.
+// The Blight in the world view: a nest throbs (bigger and darker the higher its level), wears a name plate with its level and a health
+// bar once it is hurt; a wall, doorway or tower a raider has hurt shows a small health bar; a raider in the sea wades (sunk to the waist,
+// with ripples and splashes); and the towers' shots fly (an arrow, a ballista bolt, a Tesla's jagged zap). Game.ts calls `nest`,
+// `defense` and `wade` for the views on screen every frame, `draw` once after them, and `shot` for each tower event.
 
 import * as Phaser from 'phaser';
-import { NEST_KINDS } from '../../shared/data/mobs';
-import { PAL } from '../../shared/palette';
 import { TILE } from '../../shared/config';
 import { BUILDINGS } from '../../shared/data/buildings';
-import type { BuildE, MobE, NodeE, Plot } from '../../shared/sim/types';
+import { NEST_KINDS } from '../../shared/data/mobs';
+import { PAL } from '../../shared/palette';
+import type { BuildE, MobE, NodeE, Plot, SimEvent } from '../../shared/sim/types';
 import type { World } from '../../shared/world';
 
 type Img = Phaser.GameObjects.Image;
@@ -19,9 +20,9 @@ export const nestScale = (lv: number) => Math.min(1.9, 0.85 + 0.09 * (Math.max(1
 
 export class BlightFx {
     private g: Phaser.GameObjects.Graphics;
-    private splash: Phaser.GameObjects.Particles.ParticleEmitter;
     private plates = new Map<number, Txt>();
     private seen = new Set<number>();
+    private splash: Phaser.GameObjects.Particles.ParticleEmitter;
     private bars: { x: number; y: number; w: number; f: number }[] = [];
     private rings: { x: number; y: number; r: number }[] = [];
 
@@ -83,6 +84,33 @@ export class BlightFx {
         v.shadow?.setVisible(false);
         this.rings.push({ x: v.x, y: v.y - 1, r: -(6 + Math.sin(performance.now() / 160 + e.id) * 1.5) });
         if (Math.hypot(e.vx, e.vy) > 3 && Math.random() < dt * 6) this.splash.explode(2, v.x + (Math.random() - 0.5) * 6, v.y - 1);
+    }
+
+    /** A tower fired. */
+    shot (e: Extract<SimEvent, { e: 'shot' }>) {
+        const s = this.scene;
+        if (e.k === 'zap') {
+            const g = s.add.graphics().setDepth(8e4);
+            let fx = e.x, fy = e.y;
+            for (const [tx, ty] of e.to) {
+                for (const [col, wdt] of [[PAL.plum, 3], [PAL.foam, 1.5]] as const) {
+                    g.lineStyle(wdt, col, 0.95);
+                    g.beginPath(); g.moveTo(fx, fy);
+                    const n = 5;
+                    for (let i = 1; i < n; i++) g.lineTo(fx + ((tx - fx) * i) / n + (Math.random() - 0.5) * 7, fy + ((ty - fy) * i) / n + (Math.random() - 0.5) * 7);
+                    g.lineTo(tx, ty); g.strokePath();
+                }
+                this.splash.explode(3, tx, ty);
+                fx = tx; fy = ty;
+            }
+            s.tweens.add({ targets: g, alpha: 0, duration: 220, onComplete: () => g.destroy() });
+            return;
+        }
+        const [tx, ty] = e.to[0] ?? [e.x, e.y];
+        const ang = Math.atan2(ty - e.y, tx - e.x), d = Math.hypot(tx - e.x, ty - e.y);
+        const img = s.add.image(e.x, e.y, e.k === 'bolt' ? 'proj_bolt' : 'proj_arrow', 0).setDepth(8e4).setRotation(ang).setScale(e.k === 'bolt' ? 1.6 : 1);
+        if (e.k === 'bolt') img.setTint(PAL.pebble);
+        s.tweens.add({ targets: img, x: tx, y: ty, duration: Math.max(60, d * (e.k === 'bolt' ? 1.6 : 1.1)), ease: 'Linear', onComplete: () => img.destroy() });
     }
 
     draw () {

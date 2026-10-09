@@ -186,7 +186,14 @@ export const TUNING = {
         raidBldDmg: 4,           // damage to a wall, doorway or tower in a raider's way for every heart of its bite…
         raidBldEvery: 1,         // … once a second (sim/defense.ts)
         /** Hit points of the defense pieces (a broken one is gone; damaged ones mend at dawn). */
-        hp: { wood: 40, stone: 100, brick: 130, doorway: 60, fortified: 260 },
+        hp: { wood: 40, stone: 100, brick: 130, doorway: 60, fortified: 260, archer: 80, ballista: 120, tesla: 100 },
+        towerLevel: 0.02,        // a tower hits 2% harder for every level its builder has
+        spikeDmg: 1.5,           // a Spike Trap's bite…
+        spikeEvery: 0.7,         // … at most this often for one monster
+        /** The towers: range (px), seconds between shots, damage (and the Tesla's chain and the hop between two it chains). */
+        archer: { range: 112, every: 1.2, dmg: 1.6 },
+        ballista: { range: 168, every: 3, dmg: 7 },
+        tesla: { range: 96, every: 1.5, dmg: 1.4, chain: 3, hop: 56 },
     },
     /** Co-op boss statuses (sim/costatus.ts): patterns that need teammates. Laid only while two or more farmers are up in the arena. */
     coop: {

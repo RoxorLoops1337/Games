@@ -23,7 +23,7 @@ export const BUILD_CATS: { id: BuildCat; name: string; icon: string }[] = [
     { id: 'storage', name: 'Storage', icon: 'chest_b' },
     { id: 'light', name: 'Light', icon: 'lantern' },
     { id: 'home', name: 'Floors & walls', icon: 'floor_plank' },
-    { id: 'defense', name: 'Defense', icon: 'wall_fort_icon' },
+    { id: 'defense', name: 'Defense', icon: 'tower_archer' },
     { id: 'decor', name: 'Decor', icon: 'fence' },
     { id: 'special', name: 'Special', icon: 'market' },
 ];
@@ -57,7 +57,9 @@ export interface BuildingDef {
     floor?: boolean;              // drawn under everything, walkable, one per tile
     hidden?: boolean;             // never offered in the build menu and never built by a player (the world makes it)
     grave?: boolean;              // a dropped backpack: anyone can take things out of it, nothing goes in, and it is gone when it is empty
-    hp?: number;                  // a defense piece (walls, doorways): what a raider must break (sim/defense.ts); it mends at dawn
+    hp?: number;                  // a defense piece (walls, doorways, towers): what a raider must break (sim/defense.ts); it mends at dawn
+    tower?: 'archer' | 'ballista' | 'tesla';   // shoots monsters in range (TUNING.blight has the numbers)
+    spike?: boolean;              // a Spike Trap: a floor piece that bites the monsters walking over it
 }
 
 /** Belts and the things that behave like belts: they hold three items and pass them on. */
@@ -73,7 +75,7 @@ export type BuildingKind =
     | 'lostpack' | 'mineshaft' | 'mineladder'
     | 'chute' | 'weathervane'
     | 'sleepbed'
-    | 'wall_fort';
+    | 'wall_fort' | 'tower_archer' | 'ballista' | 'tesla' | 'spike';
 
 export const BUILDINGS: Record<BuildingKind, BuildingDef> = {
     workbench: { name: 'Workbench',   tex: 'workbench', size: [1, 1], cost: { wood: 6 }, cat: 'craft', station: 'workbench', work: 'make', desc: 'Saw planks, craft bows and simple tools.' },
@@ -145,6 +147,10 @@ export const BUILDINGS: Record<BuildingKind, BuildingDef> = {
 
     // ── base defense (the Defense tab): raids come from the Blight nests at night (sim/raid.ts, sim/defense.ts) ──
     wall_fort:   { name: 'Fortified Wall', tex: 'wall_fort', size: [1, 1], cost: { ironbar: 2, stone: 4 }, cat: 'defense', req: 'towers', wall: true, hp: TUNING.blight.hp.fortified, desc: 'Stone bound in iron: the toughest wall there is. Joins up with other walls and doorways. Raiders take a long time to break it.' },
+    tower_archer: { name: 'Archer Tower', tex: 'tower_archer', size: [1, 1], cost: { plank: 8, rope: 4, stone: 10 }, cat: 'defense', req: 'towers', tower: 'archer', hp: TUNING.blight.hp.archer, light: 20, desc: `Shoots an arrow at the nearest monster within ${Math.round(TUNING.blight.archer.range / 16)} tiles every ${TUNING.blight.archer.every} seconds. Its kills are yours. Never shoots creatures or farmers.` },
+    spike:       { name: 'Spike Trap',    tex: 'spike',      size: [1, 1], cost: { ironbar: 1, plank: 1 }, cat: 'defense', req: 'towers', floor: true, solid: false, spike: true, desc: 'A floor of iron spikes: it hurts every monster that walks over it. You walk over it safely. Drag to lay a line in front of your walls.' },
+    ballista:    { name: 'Ballista',      tex: 'ballista',   size: [1, 1], cost: { ironbar: 6, gear: 4, plank: 6, blightcore: 1 }, cat: 'defense', req: 'towers2', tower: 'ballista', hp: TUNING.blight.hp.ballista, desc: `A heavy bolt every ${TUNING.blight.ballista.every} seconds at a monster up to ${Math.round(TUNING.blight.ballista.range / 16)} tiles away. Slow, but it hits very hard.` },
+    tesla:       { name: 'Tesla Coil',    tex: 'tesla',      size: [1, 1], cost: { wire: 6, circuit: 2, ironbar: 4, blightcore: 1 }, cat: 'defense', req: 'towers2', tower: 'tesla', hp: TUNING.blight.hp.tesla, use: 15, desc: `Needs power (a pole within 3 tiles). Zaps a monster within ${Math.round(TUNING.blight.tesla.range / 16)} tiles and the lightning leaps on to ${TUNING.blight.tesla.chain - 1} more near it.` },
 
     market:    { name: 'Market Stall', tex: 'market',   size: [2, 1], cost: { wood: 6, stone: 4 }, cat: 'special', desc: 'Sell your goods for coins.' },
     altar:     { name: 'Boss Altar', tex: 'altar', size: [2, 2], cost: { stone: 30, brick: 10, ironbar: 4 }, cat: 'special', req: 'altar', station: 'altar', light: 60, desc: 'Craft sigils and call the island\u2019s bosses. Bring friends.' },

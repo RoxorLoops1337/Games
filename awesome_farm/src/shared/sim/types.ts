@@ -428,6 +428,8 @@ export type SimEvent =
     | { e: 'banner'; text: string; sub?: string; color?: number; to?: string }
     | { e: 'pickup'; id: number; by: string; res: Res }
     | { e: 'swing'; by: string; x: number; y: number; w?: WeaponType; px?: number; py?: number }
+    /** A tower fired (sim/defense.ts): an arrow, a ballista bolt or a Tesla's zap from `x,y` through the points in `to` (the hit lands at once). */
+    | { e: 'shot'; k: 'arrow' | 'bolt' | 'zap'; x: number; y: number; to: [number, number][] }
     | { e: 'ways'; to: string; from: number; list: { id: number; x: number; y: number; plot: number; by?: string }[] }
     | { e: 'chat'; by: string; name: string; text: string; color: number }
     /** The season wish vote changed (opened, a vote came in, it was decided). */

@@ -25,6 +25,7 @@ import * as costatus from './costatus';
 import * as creatures from './creatures';
 import * as death from './death';
 import * as dev from './dev';
+import * as defense from './defense';
 import * as dread from './dread';
 import * as factory from './factory';
 import * as gather from './gather';
@@ -521,6 +522,7 @@ export class Sim {
         mobs.updateMobs(this, dt);
         mobs.updateProjs(this, dt);
         blight.update(this);
+        defense.update(this);                         // (towers shoot, spike traps bite)
         rift.update(this, dt);
         costatus.update(this, dt);
         death.update(this);

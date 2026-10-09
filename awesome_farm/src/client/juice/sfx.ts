@@ -114,6 +114,10 @@ const SFX = {
     nestdie: [{ w: 'noise', d: 0.5, v: 0.22, lp: 800 }, { w: 'sawtooth', f: 220, to: 50, d: 0.45, v: 0.07, lp: 900 }, ...arp('triangle', [392, 523, 659, 784], 0.08, 0.2, 0.08)],
     nestgrow: [{ w: 'sine', f: 90, to: 140, d: 0.45, v: 0.12 }, { w: 'noise', d: 0.3, v: 0.05, lp: 500 }],
     raid:    [{ w: 'sawtooth', f: 110, to: 140, d: 0.5, v: 0.06, lp: 600 }, { w: 'sawtooth', f: 165, to: 210, at: 0.2, d: 0.5, v: 0.05, lp: 700 }],
+    bowtwang: [{ w: 'triangle', f: 420, to: 260, d: 0.08, v: 0.06 }, { w: 'noise', d: 0.05, v: 0.04, hp: 2500 }],
+    ballista: [{ w: 'square', f: 140, to: 70, d: 0.14, v: 0.08, lp: 900 }, { w: 'noise', d: 0.1, v: 0.08, lp: 1400 }],
+    zap:     [{ w: 'sawtooth', f: 900, to: 300, d: 0.12, v: 0.05, hp: 600 }, { w: 'noise', d: 0.1, v: 0.05, hp: 3000 }],
+    spike:   [{ w: 'triangle', f: 700, to: 500, d: 0.05, v: 0.06 }, { w: 'noise', d: 0.04, v: 0.05, hp: 2500 }],
     unbind:  [{ w: 'sine', f: 880, to: 520, d: 0.18, v: 0.06 }, { w: 'noise', d: 0.1, v: 0.025, lp: 1500 }],
 } satisfies Record<string, Tone[]>;
 
