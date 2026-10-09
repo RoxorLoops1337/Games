@@ -99,7 +99,7 @@ export class Sim {
     readonly devs = new Set<string>();
 
     /** The night's monsters still to come: near a farmer, on a plot, or (`raid`: a nest isle's plot) a raider marching on the base at rx, ry. */
-    nightSpawns: { at: number; kind?: MobKind; near?: string; plot?: number; raid?: number; rx?: number; ry?: number }[] = [];
+    nightSpawns: { at: number; kind?: MobKind; near?: string; plot?: number; raid?: number; rx?: number; ry?: number; side?: number; first?: boolean }[] = [];
     /** Damage dealt to each monster by each player (boss rewards). Not saved. */
     private credits: Record<number, Record<string, number>> = {};
     dashT: Record<string, number> = {};

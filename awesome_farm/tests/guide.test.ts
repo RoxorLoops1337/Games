@@ -86,7 +86,7 @@ test('the fishing page matches the fishing rules', () => {
 
 test('the house, farm and pack pages name things that exist', () => {
     const house = GUIDE_BY_ID.house.steps.map(desk).join(' ');
-    for (const k of ['wall_wood', 'doorway', 'roof_tile', 'planks', 'brickfloor', 'carpet', 'sleepbed'] as const) assert.ok(BUILDINGS[k].cat === 'home', `${k} is in the Floors & walls tab`);
+    for (const k of ['wall_wood', 'doorway', 'roof_tile', 'planks', 'brickfloor', 'carpet'] as const) assert.ok(BUILDINGS[k].cat === 'home', `${k} is in the Floors & walls tab`);
     assert.equal(BUILD_CATS.find((c) => c.id === 'home')!.name, 'Floors & walls');
     assert.ok(house.includes('Floors & walls'), 'the tab name');
     const blight = GUIDE_BY_ID.blight.steps.map(desk).join(' ');

@@ -85,13 +85,17 @@ export function startNight (sim: Sim) {
         // a Blight nest near this farmer's base sends part of the night as a raiding party (none near: the night is as it always was)
         const plan = raid.raidFor(sim, p, count);
         for (let i = 0; i < count - (plan?.taken ?? 0); i++) spawns.push({ near: p.id, at: 0 });
-        if (plan) { raids.push([p, plan]); for (let i = 0; i < plan.n; i++) spawns.push({ near: p.id, at: -1, raid: plan.plot, rx: plan.x, ry: plan.y }); }
+        if (plan) {
+            raids.push([p, plan]);
+            // each wave steps out of its own side of its nest, a raider every half second or so
+            for (const w of plan.waves) for (let i = 0; i < w.n; i++) spawns.push({ near: p.id, at: w.at + i * 0.6, raid: w.plot, rx: plan.x, ry: plan.y, side: w.side, first: i === 0 });
+        }
         sim.fx('dusk', p.x, p.y - 12, p.id);
     }
     for (const h of sim.world.ownedPlots().filter((p) => p.mod === 'haunted')) {
         spawns.push({ kind: 'slime', plot: h.i, at: 0 }, { kind: 'slime', plot: h.i, at: 0 });
     }
-    for (const sp of spawns) sp.at = sp.raid !== undefined ? 1 + sim.rng.next() * TUNING.blight.raidWindow : 2 + sim.rng.next() * TUNING.nightSpawnWindow;
+    for (const sp of spawns) if (sp.raid === undefined) sp.at = 2 + sim.rng.next() * TUNING.nightSpawnWindow;       // (a raid's waves keep the moments they were given)
     sim.nightSpawns = spawns.sort((a, b) => a.at - b.at);
     if (sim.nightEv) {
         const info = NIGHT_EVENTS[sim.nightEv];

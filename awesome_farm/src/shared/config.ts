@@ -180,6 +180,9 @@ export const TUNING = {
         raidPerLv: 4,            // … and one more for every this many levels of the nest…
         raidMax: 10,             // … up to this many raiders
         raidWindow: 6,           // s after nightfall within which the raiders set out
+        waveMax: 4,              // a nest sends at most this many waves in a night (1 + one more for every 3 levels)
+        waveGap: 7,              // s between one wave of a nest and its next (a night is only 50 s long)
+        waveTotal: 24,           // raiders in all, across every wave of every nest, that come for one farmer in a night
         raidWade: 0.6,           // a raider wades across the sea at this share of its speed
         raidMarch: 1.5,          // … and marches this much faster than it walks while no farmer is near
         raidArrive: 28,          // px from the base where a raider stops marching

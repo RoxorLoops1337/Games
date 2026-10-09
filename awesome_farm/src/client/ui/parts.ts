@@ -327,6 +327,8 @@ export class SearchBox {
         this.dom = win.scene.add.dom(win.x + x, win.y + y, el).setOrigin(0, 0.5).setDepth(20);
     }
 
+    /** Keep a window's extra camera from drawing this field (a DOM element is placed by the LAST camera that draws it). */
+    hideFrom (cam: Phaser.Cameras.Scene2D.Camera) { cam.ignore(this.dom); }
     private set (v: string) { this.value = v.trim().toLowerCase(); this.onChange(this.value); }
     /** Does any of these names contain what was typed? (Everything matches an empty search.) */
     matches (...names: (string | undefined)[]) { return !this.value || names.some((n) => !!n && n.toLowerCase().includes(this.value)); }

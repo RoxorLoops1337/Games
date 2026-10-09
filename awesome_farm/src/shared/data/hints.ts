@@ -143,6 +143,11 @@ export const HINTS: Hint[] = [
             : 'A raid from a Blight nest! Wall your base in (stone holds longer than wood), then learn Watchtowers (K, Combat) for Archer Towers. Or go and break the nest.',
     },
     {
+        id: 'bedfirst', icon: 'k_heart', color: PAL.blossom,
+        when: (c) => (c.me.cnt?.['build:workbench'] ?? 0) > 0 && !(c.me.cnt?.['build:sleepbed'] ?? 0),
+        text: () => 'Build a Bed (Build, Crafting: 4 planks and 2 wood). Press E on it and it is your home: after a fall you wake up there.',
+    },
+    {
         id: 'bedset', icon: 'k_heart', color: PAL.blossom,
         when: (c) => (c.me.cnt?.['build:sleepbed'] ?? 0) > 0,
         text: () => 'Your Bed is where you wake up now after a fall, instead of at home. Press E on any bed to make it yours.',
