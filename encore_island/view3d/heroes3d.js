@@ -615,12 +615,12 @@ export function init(V) {
   for (const k in BADGES) { const m = new THREE.MeshBasicMaterial({ map: badgeTex(k), transparent: true, depthWrite: false, fog: false }); const im = new THREE.InstancedMesh(new THREE.PlaneGeometry(0.34, 0.34), m, 48); im.frustumCulled = false; im.count = 0; im.renderOrder = 7; root.add(im); badgeMeshes[k] = im; badgeN[k] = 0; }
   function updateFans(dt, t, focus) {
     seen.clear(); for (const k in badgeN) badgeN[k] = 0;
-    const cam = V.camera;
+    const cam = V.camera; let shown = 0; const cap = V.quality.fans || 999;
     for (let i = 0; i < S.pop.length; i++) {
       const f = S.pop[i], fx0 = f.x * WU, fz0 = f.y * WU; seen.add(f.id);
-      const far = focus && Math.hypot(fx0 - focus.x, fz0 - focus.z) > 45;
+      const far = (focus && Math.hypot(fx0 - focus.x, fz0 - focus.z) > 45) || shown >= cap; // beyond the tier's crowd cap fans are skipped (still simulated)
       let e = fans.get(f.id); if (far) { if (e) e.holder.visible = false; continue; }
-      e = e || fanFor(f); if (!e) continue; e.holder.visible = true;
+      e = e || fanFor(f); if (!e) continue; e.holder.visible = true; shown++;
       const st = e.st, a = e.actor, moving = (f.mv || 0) > 0, fight = f.role === 'fight';
       let yawT;
       if ((f.atkT || 0) > 0) { if (!(e.lastAtk > 0)) { const fo = nearestFoe(f.x, f.y, 520 * 520); e.aim = fo ? Math.atan2(fo.x - f.x, fo.y - f.y) : e.yaw; a.attack(); } yawT = e.aim; } else yawT = moving && Math.hypot(e.vx, e.vz) > 0.4 ? Math.atan2(e.vx, e.vz) : (fight ? e.yaw * 0.9 : clamp(f.face || 1, -1, 1) * 0.4);

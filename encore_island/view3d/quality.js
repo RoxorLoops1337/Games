@@ -2,9 +2,9 @@
 // A tier is a bundle of costs (post chain, MSAA, shadows, pixel ratio cap, model detail). Auto picks one from the device, then Adaptive
 // watches real frame times and trades resolution first, tier second, so a phone holds its frame rate and a desktop gets the full show.
 export const TIERS = {
-  low: { name: 'low', post: false, msaa: false, bloom: 0, tilt: 0, levels: 0, half: false, shadows: false, shadowSize: 0, dprMax: 1, detail: 0, particles: 0.4, decor: 0.5 },
-  medium: { name: 'medium', post: true, msaa: true, bloom: 0.5, tilt: 0, levels: 4, half: true, shadows: true, shadowSize: 1024, dprMax: 1.25, detail: 1, particles: 0.7, decor: 0.8 },
-  high: { name: 'high', post: true, msaa: true, bloom: 0.58, tilt: 0.6, levels: 5, half: false, shadows: true, shadowSize: 2048, dprMax: 1.75, detail: 2, particles: 1, decor: 1 },
+  low: { name: 'low', post: false, msaa: false, bloom: 0, tilt: 0, levels: 0, half: false, shadows: false, shadowSize: 0, dprMax: 1, detail: 0, particles: 0.4, decor: 0.5, fans: 8, foes: 10 },
+  medium: { name: 'medium', post: true, msaa: true, bloom: 0.5, tilt: 0, levels: 4, half: true, shadows: true, shadowSize: 1024, dprMax: 1.25, detail: 1, particles: 0.7, decor: 0.8, fans: 16, foes: 20 },
+  high: { name: 'high', post: true, msaa: true, bloom: 0.58, tilt: 0.6, levels: 5, half: false, shadows: true, shadowSize: 2048, dprMax: 1.75, detail: 2, particles: 1, decor: 1, fans: 40, foes: 48 },
 };
 export const ORDER = ['low', 'medium', 'high'];
 

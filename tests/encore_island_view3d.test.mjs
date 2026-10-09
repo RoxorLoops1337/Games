@@ -58,10 +58,11 @@ EI.seedMain(7); for (const z of S.lands) for (let i = 0; i < 6; i++) EI.spawnEne
 for (let i = 0; i < 40; i++) EI.dropItem(S.lands[0].g.x + (i % 8) * 30, S.lands[0].g.y + (i / 8 | 0) * 30, i % 7 === 0 ? { gem: true } : { k: 1 + (i % 12), bar: i % 5 === 0 });
 S.forge = { queue: [{ k: 3 }], tray: [1, 2, 3, 4], smeltT: 0.5 }; S.forgeLvl = 2; S.bsPlate.built = true;
 const labelsSeen = []; const labels = { pill() { labelsSeen.push('pill'); }, price() { labelsSeen.push('price'); }, bar() { labelsSeen.push('bar'); }, icon() { labelsSeen.push('icon'); }, clear() { labelsSeen.length = 0; } };
+// the V below uses the medium (phone) tier caps: the budget that matters
 function mkV() {
   const scene = new THREE.Scene(); scene.fog = new THREE.Fog(0xbfe8f4, 60, 200); const camera = new THREE.PerspectiveCamera(32, 0.5, 1, 800), rig = kit.makeLightRig(scene, { shadows: false });
   const world = new THREE.Group(), dyn = new THREE.Group(); scene.add(world, dyn); const blobs = new kit.BlobShadows(256); scene.add(blobs.mesh);
-  const V = { THREE, kit, scene, camera, renderer: null, rig, LOOK: kit.LOOK, Q: kit.Q, W: kit.W, world, dyn, blobs, labels, mods: {}, focus: { x: 0, z: 0 }, quality: { tier: 'high', detail: 2, shadows: true, dpr: 1, particles: 1, decor: 1 }, moodOverride: null, heightAt: () => 0, S: () => EI.S };
+  const V = { THREE, kit, scene, camera, renderer: null, rig, LOOK: kit.LOOK, Q: kit.Q, W: kit.W, world, dyn, blobs, labels, mods: {}, focus: { x: 0, z: 0 }, quality: { tier: 'medium', detail: 2, shadows: true, dpr: 1, particles: 0.7, decor: 0.8, fans: 16, foes: 20 }, moodOverride: null, heightAt: () => 0, S: () => EI.S };
   V.bake = (a, o) => bake.bakeActor(a, o); return V;
 }
 // what a frame would draw: visible meshes whose bounding sphere is within the fog distance of the hero (the engine's frustum and fog cull the rest)

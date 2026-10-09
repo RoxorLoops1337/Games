@@ -58,26 +58,29 @@ export async function init(V) {
       if (e.elite) L.icon('star', x, top + 0.45, z, 24);
     }
   }
+  const cur = { frame: 0, dt: 0, t: 0 }, gone = []; // reused: the per-frame sweep below allocates nothing
+  function sweep(rec, e) {
+    if (rec.seen === cur.frame && !rec.dead) return;
+    if (!rec.dead) { // gone from S.enemies: killed (a fresh S.dead entry sits where it stood) or simply removed
+      let d = null; for (let i = 0; i < S.dead.length; i++) { const q = S.dead[i]; if (Math.abs(q.x - e.x) < 2 && Math.abs(q.y - e.y) < 2 && q.k === e.k) { d = q; break; } }
+      if (d) rec.dead = d; else { release(rec); gone.push(e); return; }
+    }
+    if (S.dead.indexOf(rec.dead) < 0 || rec.dead.t >= 0.7) { rec.noReuse = rec.actor.isDead ? !!rec.actor.isDead() : false; release(rec); gone.push(e); return; }
+    drive(rec, e, cur.dt, cur.t, true, rec.dead);
+  }
   return {
     REG, stats: () => ({ live: recs.size, built, registered: Object.keys(REG).length }),
     update(dt, t, focus) {
       frame++; let made = 0;
-      const fx = focus.x, fz = focus.z, FAR = 70 * 70;
+      const fx = focus.x, fz = focus.z, FAR = 70 * 70, cap = V.quality.foes || 999; let shown = 0;
       for (const e of S.enemies) {
         let rec = recs.get(e);
-        const dx = e.x * W - fx, dz = e.y * W - fz; if (dx * dx + dz * dz > FAR) { if (rec) rec.seen = frame, rec.actor.group.visible = false; continue; }
+        const dx = e.x * W - fx, dz = e.y * W - fz; if (dx * dx + dz * dz > FAR || (shown >= cap && !e.boss)) { if (rec) rec.seen = frame, rec.actor.group.visible = false; continue; }
         if (!rec) { if (made >= 2) continue; made++; const m = make(e); rec = { actor: m.actor, art: m.art, key: m.key, e, seen: 0, yaw: 0, first: true, st: st0(), dead: null, noReuse: false }; recs.set(e, rec); V.dyn.add(rec.actor.group); }
-        rec.seen = frame; drive(rec, e, dt, t, false, null);
+        rec.seen = frame; shown++; drive(rec, e, dt, t, false, null);
       }
-      for (const [e, rec] of recs) {
-        if (rec.seen === frame && !rec.dead) continue;
-        if (!rec.dead) { // gone from S.enemies: killed (a fresh S.dead entry sits where it stood) or simply removed
-          let d = null; for (const q of S.dead) if (Math.abs(q.x - e.x) < 2 && Math.abs(q.y - e.y) < 2 && q.k === e.k) { d = q; break; }
-          if (d) rec.dead = d; else { release(rec); recs.delete(e); continue; }
-        }
-        if (S.dead.indexOf(rec.dead) < 0 || rec.dead.t >= 0.7) { rec.noReuse = rec.actor.isDead ? !!rec.actor.isDead() : false; release(rec); recs.delete(e); continue; }
-        drive(rec, e, dt, t, true, rec.dead);
-      }
+      cur.frame = frame; cur.dt = dt; cur.t = t; gone.length = 0; recs.forEach(sweep);
+      for (let i = 0; i < gone.length; i++) recs.delete(gone[i]);
     },
     dispose() { for (const [, rec] of recs) release(rec); recs.clear(); },
   };

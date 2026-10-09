@@ -39,8 +39,9 @@ export async function createView(opts = {}) {
   const adaptive = new Adaptive(tierName, (c) => { if (c.tier !== st.tierName) applyTier(c.tier); st.scale = c.scale; applySize(); }, { locked: pref !== 'auto', floor: 'low' });
 
   function applyTier(name) {
-    const t = TIERS[name]; st.tier = t; st.tierName = name; V.quality.tier = name; V.quality.detail = t.detail; V.quality.shadows = t.shadows; V.quality.particles = t.particles; V.quality.decor = t.decor; kit.Q.detail = t.detail; kit.Q.tier = name; kit.Q.shadows = t.shadows;
+    const t = TIERS[name]; st.tier = t; st.tierName = name; V.quality.tier = name; V.quality.detail = t.detail; V.quality.shadows = t.shadows; V.quality.particles = t.particles; V.quality.decor = t.decor; V.quality.fans = t.fans; V.quality.foes = t.foes; // crowd caps: draw calls are CPU-bound, so phones draw fewer fans and foes kit.Q.detail = t.detail; kit.Q.tier = name; kit.Q.shadows = t.shadows;
     renderer.shadowMap.enabled = t.shadows; rig.setShadows(t.shadows, t.shadowSize || 1024);
+    scene.traverse((o) => { if (o.name === 'decorMesh') o.castShadow = name === 'high'; }); // island decor: real shadows only on high
     if (t.post) { renderer.toneMapping = THREE.NoToneMapping; post.configure({ bloom: t.bloom, levels: t.levels, msaa: t.msaa, tilt: t.tilt, half: t.half }); }
     else { renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.1; }
     applySize();
@@ -74,11 +75,13 @@ export async function createView(opts = {}) {
   function projectW(x, y, z) { _v.set(x, y, z).project(camera); PR.ok = _v.z < 1 && _v.z > -1; PR.x = (_v.x * 0.5 + 0.5) * st.vw; PR.y = (-_v.y * 0.5 + 0.5) * st.vh; PR.k = scl; return PR; }
   V.projectW = projectW; V.project = (x2d, y2d, h) => { const p = projectW(x2d * W, (h || 0) * W, y2d * W); return { x: p.x, y: p.y, k: p.k, ok: p.ok }; };
 
+  // tag everything a module adds with its name (for the budget breakdown: api.breakdown())
+  for (const g of [world, dyn, scene]) { const add = g.add; g.add = function (...c) { for (const o of c) if (o && o.userData && o.userData.mod === undefined) o.userData.mod = V._cur || '?'; return add.apply(this, c); }; }
   // ---- modules ----
   async function load(name) {
     try {
       const m = await import('./' + name + '.js'); if (!m.init) return;
-      const inst = await m.init(V); if (!inst) return; inst.name = name; mods[name === 'env3d' ? 'env' : name.replace(/3d$/, '')] = inst; order.push(inst); fails[name] = 0; ms[name] = 0;
+      V._cur = name; const inst = await m.init(V); V._cur = null; if (!inst) return; inst.name = name; mods[name === 'env3d' ? 'env' : name.replace(/3d$/, '')] = inst; order.push(inst); fails[name] = 0; ms[name] = 0;
     } catch (e) { console.warn('[3d] module ' + name + ' failed to load: ' + e.message); }
   }
   applyTier(tierName); resize0();
@@ -103,11 +106,12 @@ export async function createView(opts = {}) {
       kit.LOOK.t.value = S.t; const bt = beatNow() % 1; kit.LOOK.beat.value = Math.max(0, 1 - bt * 3.2) * (encoreOn() ? 1 : 0.6);
       labels.clear(); blobs.begin(); focus.x = S.player.x * W; focus.z = S.player.y * W;
       for (let i = 0; i < order.length; i++) {
-        const m = order[i]; if (m.disabled) continue; const a = performance.now();
+        const m = order[i]; if (m.disabled) continue; const a = performance.now(); V._cur = m.name;
         try { m.update(dt, S.t, focus); fails[m.name] = 0; } catch (e) { if (++fails[m.name] === 1) console.warn('[3d] ' + m.name + ': ' + (e && e.stack || e)); if (fails[m.name] > 30) { m.disabled = true; console.warn('[3d] ' + m.name + ' switched off'); } }
         ms[m.name] = ms[m.name] * 0.9 + (performance.now() - a) * 0.1;
       }
-      blobs.end();
+      V._cur = null; blobs.end();
+      if (api.noRender) { st.cost = performance.now() - t0; return; } // tools: step the modules without paying for GL (software renderers are slow)
       const mood = V.moodOverride || (mods.env && mods.env.getMood ? mods.env.getMood() : kit.DEFAULT_MOOD); rig.follow(focus.x, focus.z); rig.apply(mood);
       if (!scene.background) scene.background = new THREE.Color(mood.skyMid); else if (scene.background.isColor) scene.background.set(mood.skyMid);
       renderer.setClearColor(mood.skyMid, 1);
@@ -125,6 +129,29 @@ export async function createView(opts = {}) {
     resize(vw, vh, dpr) { st.vw = vw; st.vh = vh; st.dpr = Math.min(2, dpr || 1); applySize(); },
     project: V.project, projectW,
     setQuality(q) { const t = detectTier(renderer.getContext(), q); adaptive.locked = q !== 'auto'; adaptive.tier = t; adaptive.ceil = t; adaptive.scale = 1; st.scale = 1; applyTier(t); },
+    /** what the camera actually sees, by module: { mod: { calls, tris } } (frustum culled, same rules as the renderer) */
+    breakdown() {
+      const fr = new THREE.Frustum().setFromProjectionMatrix(new THREE.Matrix4().multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse)), out = {};
+      scene.traverse((o) => {
+        if (!(o.isMesh || o.isPoints || o.isLine) || !o.layers.test(camera.layers)) return; for (let p = o; p; p = p.parent) if (p.visible === false) return;
+        if (o.frustumCulled && !fr.intersectsObject(o)) return;
+        let mod = '?'; for (let p = o; p; p = p.parent) if (p.userData && p.userData.mod) { mod = p.userData.mod; break; }
+        const g = o.geometry, n = g && g.attributes.position ? (g.index ? g.index.count : g.attributes.position.count) : 0, r = out[mod] || (out[mod] = { calls: 0, tris: 0 });
+        r.calls++; r.tris += Math.round((o.isInstancedMesh ? o.count : 1) * (o.isPoints ? 0 : n / 3));
+      });
+      return out;
+    },
+    /** the heaviest visible meshes right now (debug): [{ mod, tris, inst, name, mat }] */
+    topMeshes(k = 15) {
+      const fr = new THREE.Frustum().setFromProjectionMatrix(new THREE.Matrix4().multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse)), rows = [];
+      scene.traverse((o) => {
+        if (!(o.isMesh || o.isPoints) || !o.layers.test(camera.layers)) return; for (let p = o; p; p = p.parent) if (p.visible === false) return; if (o.frustumCulled && !fr.intersectsObject(o)) return;
+        let mod = '?'; for (let p = o; p; p = p.parent) if (p.userData && p.userData.mod) { mod = p.userData.mod; break; }
+        const g = o.geometry, n = g.index ? g.index.count : g.attributes.position.count, inst = o.isInstancedMesh ? o.count : 1;
+        rows.push({ mod, tris: Math.round(inst * n / 3), inst, name: o.name || (o.parent && o.parent.name) || g.type, mat: (o.material.name || o.material.type) + (o.isSkinnedMesh ? ' skinned' : ''), attrs: Object.keys(g.attributes).length });
+      });
+      return rows.sort((a, b) => b.tris - a.tris).slice(0, k);
+    },
     stats() { const r = renderer.info; return { tier: st.tierName, scale: st.scale, dpr: V.quality.dpr, calls: r.render.calls, tris: r.render.triangles, geos: r.memory.geometries, tex: r.memory.textures, cpuMs: +(st.cost || 0).toFixed(2), mods: Object.fromEntries(Object.entries(ms).map(([k, v]) => [k, +v.toFixed(2)])) }; },
     dispose() { for (const m of order) { try { m.dispose && m.dispose(); } catch (e) { /* ignore */ } } post.dispose(); renderer.dispose(); },
   };

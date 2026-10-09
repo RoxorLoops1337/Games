@@ -120,7 +120,8 @@ export function* buildDecorG(g, B, bi, items, o = {}) {
   }
   for (let i = 0, tries = 0; i < Math.round(R * 1.2 * dens) && tries < 200; tries++) { const a = rnd() * 6.28, rr = Math.sqrt(rnd()) * 0.9, px = g.x + Math.cos(a) * g.r * rr, py = g.y + Math.sin(a) * g.r * rr; if (!okSpot(px, py)) continue; i++; const sc = 0.18 + rnd() * 0.22; A.add(t.rock[(rnd() * 3) | 0], (px - cx) * W, 0, (py - cy) * W, rnd() * 6.28, sc, sc * 0.8, sc, stone.clone().multiplyScalar(0.95 + rnd() * 0.2), 0, 0, 0.3); }
   yield; const grp = new THREE.Group(); grp.name = 'decor';
-  const gm = yield* A.buildG(true); if (gm) { const m = new THREE.Mesh(gm, decorMat()); m.castShadow = true; m.receiveShadow = true; m.name = 'decorMesh'; grp.add(m); }
+  // island decor casts real shadows only on the high tier (the soft ground decals cover the rest)
+  const gm = yield* A.buildG(true); if (gm) { const m = new THREE.Mesh(gm, decorMat()); m.castShadow = kit.Q.tier === 'high'; m.receiveShadow = true; m.name = 'decorMesh'; grp.add(m); }
   const gg = yield* GL.buildG(true); if (gg) { const m = new THREE.Mesh(gg, glowMat()); m.name = 'decorGlow'; grp.add(m); }
   if (shadows.length || o.ribbon) { // merged soft quads (rgba vertex colours) plus the boardwalk shadow ribbon
     const pos = [], uv = [], col = [], idx = []; shadows.forEach(([x, z, r], i) => { const y = 0.014, b = i * 4; pos.push(x - r, y, z - r, x + r, y, z - r, x + r, y, z + r, x - r, y, z + r); uv.push(0, 0, 1, 0, 1, 1, 0, 1); for (let q = 0; q < 4; q++) col.push(0.02, 0.008, 0.06, 0.34); idx.push(b, b + 2, b + 1, b, b + 3, b + 2); });
