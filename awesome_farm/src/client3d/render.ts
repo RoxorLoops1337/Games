@@ -30,7 +30,8 @@ export function makeRenderer (alpha = false) {
 export function makePost (renderer: WebGLRenderer, scene: Scene, cam: OrthographicCamera) {
     const rt = new WebGLRenderTarget(4, 4, { type: HalfFloatType, samples: 4 });
     const composer = new EffectComposer(renderer, rt);
-    composer.addPass(new RenderPass(scene, cam));
+    const scenePass = new RenderPass(scene, cam);
+    composer.addPass(scenePass);
     const bloom = new UnrealBloomPass(new Vector2(512, 512), 0.28, 0.6, 1.35);
     composer.addPass(bloom);
     const grade = new ShaderPass({
@@ -41,7 +42,8 @@ export function makePost (renderer: WebGLRenderer, scene: Scene, cam: Orthograph
           float v = smoothstep(.95, .28, length((vUv - .5) * vec2(1.25, 1.0))); col *= mix(1.0 - uVig, 1.0, v); gl_FragColor = vec4(col, c.a); }`
     });
     composer.addPass(grade);
-    composer.addPass(new OutputPass());
+    const output = new OutputPass();
+    composer.addPass(output);
     /** Size the chain to the canvas (CSS pixels) at a pixel ratio. */
     const resize = (w: number, h: number, dpr: number) => {
         renderer.setPixelRatio(dpr);
@@ -50,7 +52,17 @@ export function makePost (renderer: WebGLRenderer, scene: Scene, cam: Orthograph
         composer.setSize(w, h);
         bloom.resolution.set(w / 2, h / 2);
     };
-    return { composer, bloom, grade, rt, resize };
+    /** Multisampled edges on the scene's targets (0: none); the targets are made again at their next use. */
+    const setSamples = (n: number) => {
+        for (const t of [composer.renderTarget1, composer.renderTarget2]) if (t.samples !== n) { t.samples = n; t.dispose(); }
+    };
+    /** Free the chain's targets, the glow's mip chain and the passes' materials. */
+    const dispose = () => {
+        for (const p of [scenePass, bloom, grade, output]) p.dispose();
+        composer.dispose();
+        rt.dispose();
+    };
+    return { composer, bloom, grade, rt, resize, setSamples, dispose };
 }
 
 /** The hour of the sky (0..24) for the world clock: the day runs 6:00 to 20:00, the night 20:00 to 6:00. */

@@ -1,6 +1,7 @@
 // The monster rig wrapper (facing, stun, hurt flash, elite crown and aura) and shared monster parts (eyes, sheets, shading).
 import * as THREE from 'three';
 import type { Ent } from '../../shared/sim/types';
+import { type AtkPose, PATTERN_POSES, restPose } from './mobs-attack';
 import { bake, Bld, clamp, type Col, type ColorFn, flashMeshes, hash3, meshesOf, mix, pick, TAU, type Xf } from './kit';
 
 /** What the rig hands a monster's `anim` every frame: clocks, walk blend and phase, wind-up, act, stun, boss phase, rage, health. */
@@ -84,8 +85,13 @@ export function haloFor(rad: number) {
 export function wrapRig(rig: MobRig, o: { elite: boolean; seed: number }) {
     const obj = new THREE.Group();
     const body = new THREE.Group();
+    // a boss's attack moves the whole body (mobs-attack.ts): lifted, leant, turned and squashed by `atk`, over its own rig's poses
+    const atk = new THREE.Group();
     body.add(rig.root);
-    obj.add(body);
+    atk.add(body);
+    obj.add(atk);
+    let pat: string | undefined, patT = 0, atkW = 0;
+    const ap: AtkPose = restPose({ y: 0, rx: 0, ry: 0, rz: 0, sy: 1 });
     const parts = meshesOf(rig.root).filter((m) => !m.userData.noFlash);
     const size = o.elite ? 1.15 : 1;
     body.scale.setScalar(size);
@@ -133,6 +139,9 @@ export function wrapRig(rig: MobRig, o: { elite: boolean; seed: number }) {
             phase = e.ph ?? 0;
             stunned = st === 3 || (e.stun ?? 0) > 0;
             hpf = e.mhp > 0 ? clamp(e.hp / e.mhp) : 1;
+            // the pattern's own clock runs here between ticks, and snaps to the sim's when they drift apart
+            if (e.pat !== pat) { pat = e.pat; patT = e.pat ? e.pt ?? 0 : 0; }
+            else if (pat && typeof e.pt === 'number' && Math.abs(e.pt - patT) > 0.25) patT = e.pt;
         },
         pose(face: number, moving: boolean, hurt: number, dt: number) {
             if (!(dt > 0)) dt = 0.016;
@@ -159,6 +168,15 @@ export function wrapRig(rig: MobRig, o: { elite: boolean; seed: number }) {
             cur += d * (1 - Math.exp(-dt * 14));
             obj.rotation.y = cur;
             rig.anim(c);
+            if (pat) patT += dt;
+            atkW = ease(atkW, pat ? 1 : 0, pat ? 30 : 8, dt);
+            const pose = pat ? (PATTERN_POSES as Record<string, ((u: number, o: AtkPose) => void) | undefined>)[pat] : undefined;
+            if (pose) { restPose(ap); pose(patT, ap); }
+            const k = atkW;
+            atk.position.y = ap.y * k;
+            atk.rotation.set(ap.rx * k, ap.ry * k, ap.rz * k);
+            const sy = 1 + (ap.sy - 1) * k, sxz = 1 + (1 - sy) * 0.5;
+            atk.scale.set(sxz, sy, sxz);
             const r = rig.root;
             r.rotation.z = c.stun > 0.01 ? Math.sin(c.t * 4.6) * 0.2 * c.stun : 0;
             r.rotation.x = c.stun > 0.01 ? Math.sin(c.t * 3.3 + 1) * 0.1 * c.stun : 0;

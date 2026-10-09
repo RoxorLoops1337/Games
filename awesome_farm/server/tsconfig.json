@@ -18,6 +18,11 @@
         "../tests/keyboard.test.ts",
         "../tests/client3d.test.ts",
         "../tests/view3d.test.ts",
+        "../tests/camera3d.test.ts",
+        "../tests/perf3d.test.ts",
+        "../tests/overlays3d.test.ts",
+        "../tests/world3d.test.ts",
+        "../tests/art3d.test.ts",
         "./cf/worker.ts"
     ]
 }

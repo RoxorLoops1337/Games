@@ -1,5 +1,5 @@
 // The entity layer: one model per node, building, monster, creature, drop and shot, kept in step with the simulation; farmers; joining walls and belts; hp bars; fading roofs.
-import { Group, IcosahedronGeometry, type Material, Mesh, MeshBasicMaterial, MeshStandardMaterial, PlaneGeometry, Scene } from 'three';
+import { Group, type Material, Mesh, MeshBasicMaterial, type Object3D, PlaneGeometry, Scene } from 'three';
 import { TILE } from '../shared/config';
 import { type BuildingDef, type BuildingKind, BUILDINGS } from '../shared/data/buildings';
 import type { PlayerView } from '../shared/net/protocol';
@@ -14,6 +14,8 @@ import { dropModel } from './models/drops';
 import { farmerModel } from './models/farmer';
 import { mobModel } from './models/mobs';
 import { nodeModel } from './models/nodes';
+import { shotModel } from './models/shots';
+import { layChain, STATUS_MODELS } from './models/costatus';
 
 /** Pieces of one family join their neighbours (walls, fences, belts ...): which family a building kind belongs to, if any. */
 export function familyOf(kind: string) {
@@ -33,7 +35,7 @@ export interface View {
     bar?: Group; roofA?: number; fade?: Material[];
 }
 /** A farmer on screen: the model, where it is, facing and walking, and the look it was dressed in. */
-export interface FarmerView { m: Farmer; x: number; z: number; face: number; moving: boolean; sx: number; sz: number; key: string }
+export interface FarmerView { m: Farmer; x: number; z: number; face: number; moving: boolean; sx: number; sz: number; key: string; /** tethered to this farmer (a co-op chain) */ co?: string }
 export class Entities {
     world: World;
     group = new Group();
@@ -43,8 +45,10 @@ export class Entities {
     fam = new Map<number, string>();
     hpMat = new MeshBasicMaterial({ color: 0xe85d62, depthTest: false, transparent: true });
     hpBack = new MeshBasicMaterial({ color: 0x2a1d2c, depthTest: false, transparent: true, opacity: 0.85 });
-    shotGeo = new IcosahedronGeometry(0.16, 0);
-    shotMat = new MeshStandardMaterial({ color: 0xffd966, emissive: 0xffa040, emissiveIntensity: 2, flatShading: true });
+    /** Things on their way out: a beaten monster shrinks away, a picked-up drop flies to the farmer who took it. */
+    /** Called with a leaving model once it is finally out of the scene (the view hands its one-off geometry back to the GPU then). */
+    gone?: (obj: Object3D) => void;
+    leaving: { obj: Object3D; model: Model; t: number; k: 'mob' | 'drop'; x: number; z: number; tx: number; tz: number; face: number }[] = [];
     constructor(scene: Scene, world: World) {
         this.world = world;
         scene.add(this.group);
@@ -99,17 +103,12 @@ export class Entities {
                 x = px(e.x);
                 z = px(e.y);
                 break;
-            default: {
-                const m = new Mesh(this.shotGeo, this.shotMat);
-                m.castShadow = false;
-                const g = new Group();
-                g.add(m);
-                m.position.y = 0.6;
-                model = { obj: g };
+            default:
+                model = shotModel(e.kind);
                 x = px(e.x);
                 z = px(e.y);
-            }
         }
+        model.apply?.(e);
         model.obj.position.set(x, groundY(x, z), z);
         this.group.add(model.obj);
         return { e, model, x, z, face: 0, px: x, pz: z, moving: false, hurt: 0, hp: e.k === 'mob' ? e.hp : 0, mask };
@@ -142,10 +141,17 @@ export class Entities {
                 for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) this.fam.delete(this.tileKey(v.e.tx + i, v.e.ty + j));
             }
         }
-        this.group.remove(v.model.obj);
-        v.model.dispose?.();
         if (v.bar) this.group.remove(v.bar);
         this.views.delete(id);
+        if ((v.e.k === 'mob' || v.e.k === 'drop') && v.model.obj.visible) {
+            // a drop flies to the nearest farmer within reach (who picked it up); a monster gives a last flash and shrinks away
+            let tx = v.x, tz = v.z, best = 2.5 * 2.5;
+            if (v.e.k === 'drop') for (const f of this.farmers.values()) { const d = (f.x - v.x) ** 2 + (f.z - v.z) ** 2; if (d < best) { best = d; tx = f.x; tz = f.z; } }
+            this.leaving.push({ obj: v.model.obj, model: v.model, t: 0, k: v.e.k, x: v.x, z: v.z, tx, tz, face: v.face });
+        } else {
+            this.group.remove(v.model.obj);
+            v.model.dispose?.();
+        }
         if (v.e.k === 'bld' && familyOf(v.e.kind)) this.refreshAround(v.e);
     }
     /** A joining piece appeared or went: its neighbours of the same family redraw with their new connections. */
@@ -184,8 +190,8 @@ export class Entities {
         }
         return null;
     }
-    /** The farmers (including you). */
-    setFarmer(id: string, p: PlayerView, x: number, z: number, fx: number, fy: number, moving: boolean, swing: number, hold?: string | null) {
+    /** The farmers (including you). `dt`: seconds since the last frame. */
+    setFarmer(id: string, p: PlayerView, x: number, z: number, fx: number, fy: number, moving: boolean, swing: number, hold?: string | null, dt = 1 / 60) {
         let f = this.farmers.get(id);
         const key = JSON.stringify([p.look ?? null, p.color, p.equip ?? null]);
         if (!f) {
@@ -202,7 +208,10 @@ export class Entities {
         f.moving = moving;
         f.m.obj.position.set(x, groundY(x, z), z);
         f.m.hold?.(hold);
-        f.m.pose(fx, fy, moving, swing, p.downed > 0, 1 / 60);
+        f.m.pose(fx, fy, moving, swing, p.downed > 0, dt);
+        f.m.react(p.hearts, p.invuln ?? 0, p.downed > 0, dt);
+        f.m.status(p.co);
+        f.co = p.co?.k === 'tether' ? p.co.w : undefined;
         f.m.obj.visible = true;
     }
     dropFarmer(id: string) {
@@ -216,15 +225,39 @@ export class Entities {
     farmerIds() {
         return [...this.farmers.keys()];
     }
-    update(dt: number, t: number, cx: number, cz: number) {
+    /** The chains between tethered farmers (one per pair, its links reused), laid between them every frame. */
+    chains = new Map<string, Object3D[]>();
+    drawChains(t: number) {
+        const seen = new Set<string>();
+        for (const [id, f] of this.farmers) {
+            const o = f.co ? this.farmers.get(f.co) : undefined;
+            if (!o || !f.co) continue;
+            const key = id < f.co ? `${id}|${f.co}` : `${f.co}|${id}`;
+            if (seen.has(key)) continue;
+            seen.add(key);
+            let links = this.chains.get(key);
+            if (!links) {
+                links = Array.from({ length: 14 }, () => STATUS_MODELS.tether());
+                for (const l of links) this.group.add(l);
+                this.chains.set(key, links);
+            }
+            layChain(links, f.x, f.z, o.x, o.z, t);
+        }
+        for (const [key, links] of this.chains) if (!seen.has(key)) { for (const l of links) this.group.remove(l); this.chains.delete(key); }
+    }
+    /** Animate what is near (cx, cz). `near`: how far (tiles) things are shown and animated; the game's view passes what its camera
+     * sees plus a margin (budget.ts `reach`), the prototype keeps the wide default. */
+    update(dt: number, t: number, cx: number, cz: number, near?: { rx: number; rz: number }) {
         const k = Math.min(1, dt * 14);
+        const mx = near?.rx ?? 60, mz = near?.rz ?? 50, sx = near?.rx ?? 70, sz = near?.rz ?? 60;
         for (const v of this.views.values()) {
             const e = v.e;
             if (e.k === 'mob' || e.k === 'crit' || e.k === 'drop' || e.k === 'proj') {
                 const ex = px(e.x), ez = px(e.y);
-                const near = Math.abs(ex - cx) < 60 && Math.abs(ez - cz) < 50;
-                v.model.obj.visible = near;
-                if (!near) {
+                const seen = Math.abs(ex - cx) < mx && Math.abs(ez - cz) < mz;
+                v.model.obj.visible = seen;
+                if (v.bar && !seen) v.bar.visible = false;
+                if (!seen) {
                     v.x = ex;
                     v.z = ez;
                     continue;
@@ -239,18 +272,44 @@ export class Entities {
                 v.model.obj.position.set(v.x, groundY(v.x, v.z), v.z);
                 v.hurt = Math.max(0, v.hurt - dt * 4);
                 if (e.k === 'mob') v.model.pose?.(v.face, v.moving, v.hurt, dt);
-                else if (e.k === 'crit') v.model.pose?.(v.face, v.moving, e.st === 1 ? false : false, dt);
+                // a den worker with nothing to do curls up and sleeps (the rig's z's) until its next job
+                else if (e.k === 'crit') v.model.pose?.(v.face, v.moving, e.mode === 2 && e.ac === 'idle' && !v.moving, dt);
                 if (e.k === 'mob' && e.hp < e.mhp) this.hpBar(v, e.hp / e.mhp, 1.9); // a monster's entity carries no radius: every bar sits at the same height
                 else if (v.bar) v.bar.visible = false;
             } else {
                 const dxn = Math.abs(v.x - cx), dzn = Math.abs(v.z - cz);
-                if (dxn > 70 || dzn > 60) {
+                if (dxn > sx || dzn > sz) {
                     v.model.obj.visible = false;
                     continue;
                 }
                 v.model.obj.visible = true;
             }
             v.model.update?.(dt, t);
+        }
+        this.updateLeaving(dt, t);
+        this.drawChains(t);
+    }
+    private updateLeaving(dt: number, t: number) {
+        for (let i = this.leaving.length - 1; i >= 0; i--) {
+            const l = this.leaving[i];
+            l.t += dt;
+            const dur = l.k === 'drop' ? 0.28 : 0.32, u = Math.min(1, l.t / dur);
+            if (l.k === 'drop') {
+                const e = u * u;
+                const x = l.x + (l.tx - l.x) * e, z = l.z + (l.tz - l.z) * e;
+                l.obj.position.set(x, groundY(x, z) + Math.sin(u * Math.PI) * 0.5, z);
+                l.obj.scale.setScalar(Math.max(0.001, 1 - u * 0.7));
+                l.model.update?.(dt, t);
+            } else {
+                l.obj.scale.set(Math.max(0.001, 1 + u * 0.25 - u * u * 1.25), Math.max(0.001, 1 - u), Math.max(0.001, 1 + u * 0.25 - u * u * 1.25));
+                l.model.pose?.(l.face, false, 1 - u, dt);
+            }
+            if (u >= 1) {
+                this.group.remove(l.obj);
+                l.model.dispose?.();
+                this.gone?.(l.obj);
+                this.leaving.splice(i, 1);
+            }
         }
     }
     /** Roofs fade away while the farmer is under one (like the game's), so the rooms show. */

@@ -60,7 +60,11 @@ export function seedRand(seed: number): () => number {
         return ((t ^ t >>> 14) >>> 0) / 4294967296;
     };
 }
-export const env = { wind: 0.5, sun: 1, night: 0 };
+/** What the world is like right now, set by the view each frame: wind 0..1, sun and night 0..1, and the world's seed and day
+ * (the weather vane reads tomorrow's forecast and the day's wind from them). */
+export const env = { wind: 0.5, sun: 1, night: 0, seed: '', day: 0 };
+/** The camera's elevation (render.ts `EL`, 62 degrees): a flat badge tilted back by this faces the camera. */
+export const CAM_EL = 62 * Math.PI / 180;
 export const _c1 = new Color();
 export const _c2 = new Color();
 export function mix(a: number, b: number, t: number): number {
@@ -319,6 +323,7 @@ export function bake(key: string, fn: (mb: MB) => void, seed = 0): Group {
         const mb = new MB(seed);
         fn(mb);
         list = mb.finish();
+        for (const b of list) b.geo.userData.cached = true;           // (kept for the session: the view never frees these when a model goes)
         bakeCache.set(key, list);
         stats.bakes++;
         for (const b of list) stats.tris += b.geo.attributes.position.count / 3;

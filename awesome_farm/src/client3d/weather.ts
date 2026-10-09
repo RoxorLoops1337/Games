@@ -1,41 +1,54 @@
 // Rain, the pool of night lights and the red warning circles of monster attacks.
-import { BufferAttribute, BufferGeometry, CircleGeometry, DynamicDrawUsage, LineBasicMaterial, LineSegments, Mesh, MeshBasicMaterial, PointLight, RingGeometry, Scene } from 'three';
+import { AdditiveBlending, BufferAttribute, BufferGeometry, CircleGeometry, DynamicDrawUsage, LineBasicMaterial, LineSegments, Mesh, MeshBasicMaterial, PointLight, RingGeometry, Scene } from 'three';
 
-/** Rain streaks around the camera: line segments falling and wrapping. */
+/**
+ * Rain streaks around the camera: line segments falling and wrapping. Each streak is long, leans with the wind and fades from a
+ * faint tail to a bright head (vertex colours, added onto the picture), so under the steep camera it still reads as falling rain
+ * and not as dots. `density` (0..1) is the quality level's share of the streaks.
+ */
 export class Rain {
-    seed: { ox: number; oz: number; oy: number; v: number }[] = [];
-    mat = new LineBasicMaterial({ color: 0xcfe0ff, transparent: true, opacity: 0, depthWrite: false, fog: false });
+    seed: { ox: number; oz: number; oy: number; v: number; l: number }[] = [];
+    mat = new LineBasicMaterial({ color: 0xffffff, vertexColors: true, transparent: true, opacity: 0, depthWrite: false, fog: false, blending: AdditiveBlending });
     n = 1100;
+    density = 1;
     pos: Float32Array;
     mesh: LineSegments<BufferGeometry, LineBasicMaterial>;
     constructor(scene: Scene) {
         this.pos = new Float32Array(this.n * 6);
-        for (let i = 0; i < this.n; i++) this.seed.push({ ox: Math.random() * 48, oz: Math.random() * 40, oy: Math.random() * 30, v: 22 + Math.random() * 10 });
+        const col = new Float32Array(this.n * 6);
+        for (let i = 0; i < this.n; i++) {
+            this.seed.push({ ox: Math.random() * 48, oz: Math.random() * 40, oy: Math.random() * 30, v: 24 + Math.random() * 10, l: 1.1 + Math.random() * 0.8 });
+            const head = 0.7 + Math.random() * 0.3;
+            col.set([0.1, 0.12, 0.16, 0.62 * head, 0.7 * head, 0.85 * head], i * 6);
+        }
         const g = new BufferGeometry();
         g.setAttribute('position', new BufferAttribute(this.pos, 3).setUsage(DynamicDrawUsage));
+        g.setAttribute('color', new BufferAttribute(col, 3));
         this.mesh = new LineSegments(g, this.mat);
         this.mesh.frustumCulled = false;
         this.mesh.renderOrder = 30;
         scene.add(this.mesh);
     }
-    /** `amount` 0..1; (cx, cz) is the middle of what the camera sees. */
-    update(dt: number, cx: number, cz: number, amount: number, wind = 0.12) {
-        this.mat.opacity = Math.min(0.34, amount * 0.42);
+    /** `amount` 0..1; (cx, cz) is the middle of what the camera sees; `wind` 0..1 leans the streaks. */
+    update(dt: number, cx: number, cz: number, amount: number, wind = 0.25) {
+        this.mat.opacity = Math.min(0.9, amount * 1.1);
         this.mesh.visible = amount > 0.02;
         if (!this.mesh.visible) return;
-        const live = Math.floor(this.n * Math.min(1, 0.25 + amount));
+        const live = Math.floor(this.n * this.density * Math.min(1, 0.25 + amount));
+        const lean = 0.12 + wind * 0.5;
         for (let i = 0; i < this.n; i++) {
             const s = this.seed[i];
             s.oy -= s.v * dt;
             if (s.oy < 0) s.oy += 30;
-            const x = cx - 24 + s.ox, z = cz - 22 + s.oz + (30 - s.oy) * 0, y = s.oy;
+            const y = s.oy, x = cx - 24 + s.ox + (15 - y) * lean, z = cz - 22 + s.oz;
             const j = i * 6, on = i < live;
-            this.pos[j] = x;
-            this.pos[j + 1] = on ? y : -9;
-            this.pos[j + 2] = z;
-            this.pos[j + 3] = x + wind;
-            this.pos[j + 4] = on ? y + 0.65 : -9;
-            this.pos[j + 5] = z + 0;
+            // the tail (up and upwind), then the head
+            this.pos[j] = x - lean * s.l;
+            this.pos[j + 1] = on ? y + s.l : -9;
+            this.pos[j + 2] = z - 0.08 * s.l;
+            this.pos[j + 3] = x;
+            this.pos[j + 4] = on ? y : -9;
+            this.pos[j + 5] = z;
         }
         this.mesh.geometry.attributes.position.needsUpdate = true;
     }

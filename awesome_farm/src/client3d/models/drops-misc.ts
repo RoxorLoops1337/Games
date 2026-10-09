@@ -50,8 +50,37 @@ export const POTIONS = {
         glint(mb, -0.12, 0.3, 0.38, 0.05, 0xe8f0ff, 2.6);
         glint(mb, 0.14, 0.4, 0.36, 0.035, 0xe8f0ff, 2.6);
         glint(mb, 0.02, 0.18, 0.42, 0.03, 0xffe680, 2.6);
+    } },
+    // the XP brews (their 2D icons: plum with blossom, plum with gold, dusk with plum, blossom with lime)
+    potion_study: { o: { liquid: 0x9d6fdb, body: BODY.squat, neckY: 0.42, neckR: 0.14, e: 0.7, cork: 0x6a402f }, extra: (mb: MB) => {
+        // a tea leaf tied to the neck
+        mb.main.leaf(0.22, 0.09, 0.012, 0x5cb04f, { x: 0.16, y: 0.5, z: 0.12, ry: 0.6, rx: -0.5, j: 0.003, ao: false });
+        glint(mb, -0.14, 0.24, 0.42, 0.04, 0xf79fc6, 2.2);
+    } },
+    potion_insight: { o: { liquid: 0x8a5ce0, body: BODY.tall, neckY: 0.64, e: 0.85 }, extra: (mb: MB) => {
+        // a gold eye-star on its front, the double XP
+        mb.glow(0xffd966, 2).oct(0.08, 0xffe680, { y: 0.32, z: 0.33, sz: 0.4, ao: false, v: 0 });
+        glint(mb, 0.12, 0.5, 0.3, 0.035, 0xfff3b0, 2.4);
+        glint(mb, -0.14, 0.18, 0.3, 0.03, 0xfff3b0, 2.4);
+    } },
+    potion_memory: { o: { liquid: 0x5d4a7c, body: BODY.round, neckY: 0.58, e: 1, hi: 0xc9a6f0 }, extra: (mb: MB) => {
+        // a swirl of remembered light inside
+        for (let i = 0; i < 5; i++) {
+            const a = i / 5 * TAU;
+            mb.glow(0xc9a6f0, 2.4).oct(0.035, 0xeedcff, { x: Math.cos(a) * 0.22, y: 0.18 + i * 0.05, z: Math.sin(a) * 0.22 + 0.1, ao: false, v: 0 });
+        }
+    } },
+    potion_kin: { o: { liquid: 0xf79fc6, body: BODY.hex, neckY: 0.62, seg: 6, e: 0.75 }, extra: (mb: MB) => {
+        // a lime heart for the creatures it helps
+        heart(mb.glow(0xd4f08a, 1.6), 0.36, 0xd4f08a, { y: 0.26, z: 0.38, ao: false, v: 0 });
     } }
 };
+/** The Blight Core: the dark heart of a nest, a violet-black shell with crimson veins glowing through its cracks (its 2D pearl icon). */
+export function blightCore(mb: MB) {
+    mb.shiny().ico(0.34, 1, (_x: number, y: number) => y > 0.62 ? 0x5d4a7c : y > 0.4 ? 0x46284e : 0x2a1830, { y: 0.4, j: 0.025, v: 0.06 });
+    for (const [x, y, z, s] of [[0.12, 0.55, 0.26, 0.05], [0.22, 0.42, 0.2, 0.04], [0.18, 0.3, 0.26, 0.045], [-0.2, 0.48, 0.24, 0.035]]) mb.glow(0xe0405a, 2.4).oct(s, 0xff7a88, { x, y, z, sy: 1.6, ao: false, v: 0 });
+    glint(mb, -0.14, 0.62, 0.2, 0.035, 0xbe7ab8, 1.8);
+}
 export function mendJar(mb: MB) {
     mb.glow(0x7ad04a, 0.65).lathe([[0, 0], [0.42, 0], [0.47, 0.08], [0.47, 0.3], [0.4, 0.36]], 7, hg([0x4a9a2a, 0x7ad04a, 0xa8e870], 0, 0.35, 0.3), { j: 0.008, v: 0.06, ao: false });
     mb.main.cyl(0.43, 0.43, 0.13, 7, 0xfff0d2, { y: 0.4, j: 0.008, v: 0.04 });
@@ -254,6 +283,7 @@ export function msgBottle(mb: MB) {
 export const MISC: Record<string, DropSpec> = {
     ...Object.fromEntries(Object.entries(POTIONS).map(([id, p]) => [id, S((mb: MB) => potion(mb, p.o, p.extra), { turn: 'sway', lean: 0.85 })])),
     potion_mend: S(mendJar, { lean: 0.7, turn: 'sway' }),
+    blightcore: S(blightCore),
     sigil_slime: sigilSpec([0x4a3a7a, 0x6a52a6, 0x8f72cc, 0xbba0ee], 0x9d6fdb, 'drop'),
     sigil_stone: sigilSpec([0x585c7c, 0x7a7f9e, 0x9ea4bf, 0xc4c9dc], 0xaab4d8, 'diamond'),
     sigil_bog: sigilSpec([0x264f46, 0x2f6b4b, 0x3f8a4c, 0x5cb04f], 0x92d364, 'eye'),

@@ -7,6 +7,7 @@ import { PAL } from '../../shared/palette';
 import { TILE } from '../../shared/config';
 import { CAST_RANGE } from '../../shared/data/fish';
 import type { World } from '../../shared/world';
+import { overlay3d } from './view3d-bridge';
 
 export interface LineView {
     id: string;
@@ -22,7 +23,7 @@ export class FishLines {
     private t = 0;
 
     constructor (private scene: Phaser.Scene) {
-        this.g = scene.add.graphics().setDepth(5000);
+        this.g = overlay3d(scene.add.graphics().setDepth(5000));        // (the line, the bobber and the "!" are world overlays: the 3D view shows them too)
     }
 
     draw (dt: number, lines: LineView[]) {
@@ -64,7 +65,7 @@ export class FishLines {
             // "!" on a bite or a tug
             let m = this.marks.get(l.id);
             if (bite) {
-                if (!m) { m = this.scene.add.image(0, 0, 'mark_alert', 0).setDepth(5001); this.marks.set(l.id, m); }
+                if (!m) { m = overlay3d(this.scene.add.image(0, 0, 'mark_alert', 0).setDepth(5001)); this.marks.set(l.id, m); }
                 m.setVisible(true).setPosition(Math.round(bx), Math.round(by - 12 - Math.abs(Math.sin(t * 14)) * 2)).setTint(l.ph === 3 ? PAL.foam : 0xffffff);
             } else m?.setVisible(false);
         }

@@ -50,7 +50,9 @@ import type { Blueprint } from '../../shared/blueprint';
 import { mixc } from '../art/paint';
 import { saveSettings, settings, type ViewMode } from '../settings';
 import { stashResume } from '../net/connection';
-import { canSwitchLive, loadView3D, Pointer2D, Pointer3D, type View3D, type View3DFarmer, type View3DFrame, type WorldPointer, type XY } from '../world/view3d-bridge';
+import { canSwitchLive, loadView3D, Pointer2D, Pointer3D, shakeNow, type View3D, type View3DFarmer, type View3DFrame, type WorldPointer, type XY } from '../world/view3d-bridge';
+import { PhotoCam } from '../world/photocam';
+import { Overlay3D } from '../world/overlay3d';
 import { animateCrit, createCrit, CritFx } from '../world/critters';
 import { VeinLayer } from '../world/veins';
 import { TitanFx } from '../world/titan';
@@ -179,6 +181,14 @@ export class GameScene extends Phaser.Scene {
     private ptr!: WorldPointer;
     private viewToken = 0;
     private farmers3d: View3DFarmer[] = [];
+    /** Photo mode (F2, the HUD hidden; Hud.setPhoto tells us) and, in 3D, its free camera (world/photocam.ts). */
+    photo = false;
+    readonly photoCam = new PhotoCam();
+    /** Real seconds and the world's pace this frame (the 3D camera keeps real time through the Perfect beat). */
+    private realDt = 0;
+    private slowK = 1;
+    /** In 3D: the world overlays (badges, the Factory view, belt items, fishing lines…) laid onto the 3D ground (world/overlay3d.ts). */
+    private ov3d!: Overlay3D;
 
     constructor () {
         super('Game');
@@ -199,6 +209,7 @@ export class GameScene extends Phaser.Scene {
         this.seaT = 0; this.tweens.timeScale = 1;
         this.promptIn = 0; this.gates = []; this.gateFrame = -1;
         this.viewMode = '2d'; this.view3d = null; this.farmers3d = [];
+        this.photo = false; this.photoCam.reset(); this.realDt = 0; this.slowK = 1;
     }
 
     create () {
@@ -252,6 +263,7 @@ export class GameScene extends Phaser.Scene {
             busy: () => this.menuOpen || this.overUi || !!this.placer.cur || this.bp.active,
             pop: (x, y, n) => this.pop(x, y, n),
             toWorld: (p, out, aim) => this.toWorld(p, out, aim),
+            view: () => this.viewRect(),
         });
         this.promptHost = {
             get meS () { return self.meS!; },
@@ -287,6 +299,7 @@ export class GameScene extends Phaser.Scene {
         this.setupInput();
         this.ptr2d = new Pointer2D(() => this.cameras.main);
         this.ptr = this.ptr2d;
+        this.ov3d = new Overlay3D(this, PAL.deepSea);
         this.events.once('shutdown', () => { this.viewToken++; this.dropView3d(); });
         if (settings.view === '3d' && canSwitchLive(this.game)) void this.setView('3d');       // (booted in 2D, the title screen already reloaded into 3D)
         this.scene.launch('Hud');
@@ -342,7 +355,7 @@ export class GameScene extends Phaser.Scene {
             this.ptr = new Pointer3D(v, this.ptr2d);
             this.viewMode = '3d';
             if (this.ready) v.welcome(this.world, Object.values(this.ents));
-            this.scene.setVisible(false);              // (the scene still runs: only its drawing stops)
+            this.ov3d.start();                         // (the scene still runs: only its marked overlays reach the screen, laid on the 3D ground)
         } catch (err) {
             console.warn('The 3D view could not start:', err);
             settings.view = '2d'; saveSettings();
@@ -356,6 +369,7 @@ export class GameScene extends Phaser.Scene {
         this.view3d = null;
         this.ptr = this.ptr2d;
         this.viewMode = '2d';
+        this.ov3d?.stop();
         if (this.sys.isActive()) this.scene.setVisible(true);
     }
 
@@ -374,6 +388,7 @@ export class GameScene extends Phaser.Scene {
         this.input.mouse?.disableContextMenu();
         this.input.on('pointerdown', (p: Phaser.Input.Pointer) => {
             if (!this.ready || this.menuOpen) return;
+            if (this.photo3d) { this.photoCam.down(p.id, p.x / SS, p.y / SS); return; }      // (photo mode in 3D: a drag turns the camera, nothing is swung)
             if (this.bp.active) {
                 this.toWorld(p, this.pointerWorld); this.mouseAimT = 2;
                 if (p.wasTouch && this.bp.mode === 'paste') { this.placer.touchAimDown(p); return; }
@@ -394,12 +409,16 @@ export class GameScene extends Phaser.Scene {
             this.mouseHeld = true;
         });
         this.input.on('pointerup', (p: Phaser.Input.Pointer) => {
+            this.photoCam.up(p.id);
             // (another finger, say the one on the stick, lifting does not end a line or a box that this one is drawing)
             const aiming = !!this.aimPointer && this.aimPointer.id === p.id;
             if (aiming) this.placer.touchAimUp(p);
             if (aiming || !this.aimPointer) { this.mouseHeld = false; this.placer.pointerUp(); this.bp.pointerUp(); }
         });
-        this.input.on('pointermove', (p: Phaser.Input.Pointer) => { if (!p.wasTouch) this.mouseAimT = 2; });
+        this.input.on('pointermove', (p: Phaser.Input.Pointer) => {
+            if (this.photo3d) { if (p.isDown) this.photoCam.move(p.id, p.x / SS, p.y / SS); return; }
+            if (!p.wasTouch) this.mouseAimT = 2;
+        });
         const release = () => this.releaseInput();
         this.game.events.on(Phaser.Core.Events.BLUR, release);
         this.events.once('shutdown', () => this.game.events.off(Phaser.Core.Events.BLUR, release));
@@ -433,7 +452,9 @@ export class GameScene extends Phaser.Scene {
     // ── main loop ───────────────────────────────────────────────────────────
     update (_time: number, deltaMs: number) {
         const dt = Math.min(deltaMs / 1000, 0.1);
-        const wdt = dt * this.slow.step(dt);             // (the world's own time: slower for a beat after a Perfect dash, otherwise the same as dt)
+        this.slowK = this.slow.step(dt);
+        const wdt = dt * this.slowK;                      // (the world's own time: slower for a beat after a Perfect dash, otherwise the same as dt)
+        this.realDt = dt;
         this.seaT += wdt;
         this.sea?.update(this.seaT);
         for (const msg of this.conn.poll(dt)) this.handle(msg);
@@ -452,7 +473,7 @@ export class GameScene extends Phaser.Scene {
         this.coFx.update(wdt, this.farmers.values(), this.players, this.clock.time);
         this.drawFishing(wdt);
         this.updateViews(wdt);
-        this.combat.draw(wdt, this.visViews, this.cameras.main.worldView);
+        this.combat.draw(wdt, this.visViews, this.viewRect());
         this.fv.drawWorld();
         this.fv.update(dt);
         this.amb.updateWaves(wdt);
@@ -463,7 +484,15 @@ export class GameScene extends Phaser.Scene {
         this.bp.update();
         this.amb.drawBrackets(this.act.target, (id) => this.views.get(id));
         if ((this.promptIn -= dt) <= 0) { this.promptIn = 0.1; this.prompt = computePrompt(this.promptHost); }       // (ten times a second is as fast as anyone reads)
-        this.view3d?.frame(wdt, this.frame3d());
+        if (this.view3d) {
+            this.view3d.frame(wdt, this.frame3d());
+            this.ov3d.sync(this.view3d.groundView());
+        }
+    }
+
+    /** The part of the world on screen (sim pixels): the camera's view in 2D, the ground the 3D view shows in 3D (it reaches a little further north and south). */
+    viewRect (): Phaser.Geom.Rectangle {
+        return this.ov3d?.active && this.ov3d.rect.width > 0 ? this.ov3d.rect : this.cameras.main.worldView;
     }
 
     /** What the 3D view draws this frame, read from the scene (world/view3d-bridge.ts View3DFrame). */
@@ -480,9 +509,15 @@ export class GameScene extends Phaser.Scene {
         }
         return {
             me: this.me, camX: l.x, camY: l.y, zoom: this.zoomLevel, clock: this.clock, seed: this.seed, farmers: list,
-            placing: this.placer.cur ? { kind: this.placer.cur.kind, tx: this.placer.cur.tx, ty: this.placer.cur.ty, rot: this.placer.cur.rot, valid: this.placer.cur.valid } : null,
-            target: this.targetSpot(),
+            placing: this.placer.cur && !this.photo ? { kind: this.placer.cur.kind, tx: this.placer.cur.tx, ty: this.placer.cur.ty, rot: this.placer.cur.rot, valid: this.placer.cur.valid } : null,
+            target: this.photo ? null : this.targetSpot(),          // (a photo shows the world, not the aiming ring or the ghost)
             shake: settings.shake,
+            cam: {
+                realDt: this.realDt, shake: shakeNow(this.cameras.main), punch: this.slow.punch(), slow: this.slowK,
+                photo: this.photo ? { yaw: this.photoCam.yaw, tilt: this.photoCam.tilt, zoom: this.photoCam.zoom } : null,
+            },
+            quality: settings.quality3d,
+            paste: this.bp.mode === 'paste' ? this.bp.ghostSpots : undefined,
         };
     }
 
@@ -615,7 +650,7 @@ export class GameScene extends Phaser.Scene {
     }
 
     inView (x: number, y: number, margin = 40) {
-        const v = this.cameras.main.worldView;
+        const v = this.viewRect();
         return x > v.x - margin && x < v.right + margin && y > v.y - margin && y < v.bottom + margin;
     }
 
@@ -807,7 +842,7 @@ export class GameScene extends Phaser.Scene {
         const night = this.nightAmount();
         const hearth = this.amb.beginHearths();
         const sun = sunlight(this.clock.clock, this.clock.nightLen);
-        const wv = this.cameras.main.worldView, m = 48;
+        const wv = this.viewRect(), m = 48;
         const vis = this.visViews;
         vis.length = 0;
         for (const v of this.views.values()) {
@@ -1008,12 +1043,27 @@ export class GameScene extends Phaser.Scene {
     // ── the camera and the HUD's questions ──────────────────────────────────
     /** Zoom in (+1) or out (-1) one step: the + and - keys, Ctrl + wheel, pinching, the buttons under the minimap. */
     zoomBy (dir: number) {
+        if (this.photo3d) { this.photoCam.zoomStep(dir); return; }          // (photo mode in 3D zooms its own camera, further, and forgets it after)
         const i = Math.max(0, Math.min(ZOOM_STEPS.length - 1, ZOOM_STEPS.indexOf(this.zoomTarget) + (dir > 0 ? 1 : -1)));
         if (ZOOM_STEPS[i] === this.zoomTarget) return;
         this.zoomTarget = ZOOM_STEPS[i];
         settings.zoom = this.zoomTarget;
         saveSettings();
     }
+
+    /** Photo mode began or ended (the HUD hid or came back). In 3D the camera comes loose: drag to turn it, wheel or pinch to zoom. */
+    setPhoto (on: boolean) {
+        if (on === this.photo) return;
+        this.photo = on;
+        this.photoCam.reset();
+        if (on && this.view3d) this.releaseInput();         // (a swing held when the HUD went away stops)
+    }
+
+    /** Is the 3D photo camera in charge of the pointer? */
+    get photo3d () { return this.photo && !!this.view3d; }
+
+    /** How far the 3D photo camera is turned: keys and the stick move in screen directions (world/farmers.ts). 0 in 2D. */
+    get moveYaw () { return this.photo3d ? this.photoCam.yaw : 0; }
 
     /** How close the camera is going to be (1 is the classic view). */
     get zoomLevel () { return this.zoomTarget / ZOOM; }

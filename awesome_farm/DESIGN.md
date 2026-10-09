@@ -313,23 +313,117 @@ CLAUDE.md, "The 3D view", has the rules.
 placement rules, fighting (models, hp bars, telegraph circles, a target ring), day and night with lamps and rain, land rising
 out of the sea, other farmers in multiplayer, live or one-reload switching, every model or a written-down placeholder.
 
+**Stage 2, the world (built):** the caves under the world (rock and floor streamed round you, rebuilt as it is dug, ore that glints,
+the dark tinted by depth as in 2D with the light you carry), the Dread Reaches' dim violet day and veil, the four seasons on the ground
+and the plants (blossom, autumn colours and straw grass, snow on what faces the sky) with leaves, petals and snow in the air, fog
+mornings, rain rings, a storm's lightning (with the 2D thunder), the special nights (Blood Moon, Fairy Night, Meteor Shower), every
+2D light source lighting the night with pools on the ground, the dusk hearth circles, the rift gates, and terrain fixes (the cliffs'
+fronts and the ore veins were never drawn; veins now join into patches like the 2D vein tiles; the ground under you is built first,
+so a slow device no longer starts on open sea).
+
+**Stage 2, entities (built):** no placeholders left: the export chute (gulps and flips a coin on each sale, wears its one item),
+the mailbox (the flag swings up with a letter while post waits), the weather vane (turns to the day's wind under a little 3D
+picture of tomorrow's forecast), the Great Oak (a titan pine on snowy islands) and the Titan Boulder with their gold ground ring,
+"2+" badge and health bar; one model per projectile kind (arrow, orb, rock, spore, frost, fire, bolt) flying nose first; a boss's
+whole body moves through each attack pattern on the scripts' timings (leap, slam, sweep, charge, radial, aimed, rain, spiral,
+summon, freeze, hex, chain); creatures hold a tool or carry a load for what they are doing (an axe to chop, a can to water, a crate
+to haul ...) and den workers with nothing to do sleep; the farmer flinches and flashes when hit, blinks while invulnerable and has a
+pulsing ring calling for help when down; the co-op statuses (ice block, hex wisps, the chain between two farmers); a beaten monster
+flashes and shrinks away and a picked-up drop flies to the farmer. The coverage test now spans buildings, nodes, monsters,
+creatures, items, projectiles, crop stages, boss patterns, creature activities, every character creator choice (each must look
+different), gear and co-op statuses, all read from the data, so new content without a model fails.
+
 **Still to do for parity** (each a self-contained job; the tag is the area):
-- WORLD: caves and mines (the underground layer, descending, `TickMsg.dug`); seasons (palettes, snow, falling leaves and petals);
-  fog days and storms with lightning from `weatherAt`; night events (blood moon, meteors, fairies); the Dread Reaches' atmosphere;
-  rift islands' gates and the expedition arena; hearth circles at dusk; height (terrain is flat: `groundY` is 0).
-- ENTITIES: models for the export chute, mailbox and weather vane and the Titan nodes (their ring, "2+" badge and shared health
-  bar); a projectile per kind (arrow, orb, rock) instead of one glowing gem; the co-op statuses (ice block, curse wisps, chain);
-  creature workers' activity icons and post bubbles, pod throws and catches, the companion's pat; fishing (line, bobber, splash);
-  machines as they run (inserter arms, belt items moving, drill and windmill motion), the pickup fly-to-farmer, the pop-in of new things.
-- OVERLAYS: the Factory view (grid colours, flows, rates) and status badges over machines; power wires; the dismantle outline and
-  hold ring in the world; telegraph lines and cones (now drawn as circles) and the co-op telegraph colours; the Perfect dash ring and
-  slow motion; land price plates and name tags placed at a head's height rather than on the ground; the blueprint copy box and paste ghost;
-  58 of the game's 96 juice actions still use a generic puff in 3D (the 2D `FX` table has them all; sounds are shared already).
-- CONTROLS: the pinch zoom and touch aim are routed but untested on a real phone; picking ignores farmers (reviving a friend works by
-  standing near, as in 2D); the camera has no rotation or tilt (keys and the stick move in screen directions, which matches the fixed camera).
-- PERF: in 3D the hidden Game scene still builds and updates its 2D sprites (cheap, but not free on a phone); entity models are not
-  instanced or merged; shadows and bloom have no quality setting; the 3D chunk is large (three.js plus the model library) and could be
-  split further (models on first use).
+- WORLD: the expedition arena's own look (it is a rift island with monsters, drawn as such); height (terrain is flat: `groundY` is 0);
+  roofs, buildings and crops do not take snow in winter (only the ground and the nodes change with the seasons).
+- ENTITIES: creature workers' activity icons and post bubbles (the props in hand are built; the floating icon is not), pod throws and
+  catches, the companion's pat (the `hop` event); fishing (line, bobber, splash); a check that every machine runs as in 2D (inserter
+  arms, belt items, drills, windmills); the pop-in of new things (it must not change a model's pick box while it grows).
+- OVERLAYS (built 2026-10-09): the 2D overlays are laid onto the 3D ground by an overlay camera (badges, the Factory view, inserter
+  marks, the placement and blueprint overlays, dismantle outline, fishing, swing arcs, monster marks, the Perfect ring);
+  warnings in their real shapes and colours, boss arenas, power wires and pasted-blueprint ghosts are painted in 3D. Still open: the
+  overlays are drawn over the models (a badge never hides behind a tree); the 2D target brackets are left to the 3D target ring; land
+  price plates and name tags use the ground point plus the 2D offset (about head height, not measured per model); 58 of the game's 96
+  juice actions still use a generic puff in 3D (the 2D `FX` table has them all; sounds are shared already).
+- CONTROLS (built: `src/client3d/camera.ts`, `client/world/photocam.ts`): the follow camera at the prototype's angle, frame-rate
+  independent; the 2D zoom steps from the wheel, + and -, the buttons and the pinch; the shake read from the 2D camera (so the juice table
+  and its "only your own actions" rule hold); the Perfect beat (real-time camera, push in, drained colour); a dip to black down a shaft,
+  up again and through a waystone; photo mode (F2) turns, tilts and zooms the camera, with the keys still moving up the screen. Pinch,
+  touch aim and the long press are checked with emulated touch in Chromium, not yet on a real phone. Still to do: picking ignores farmers
+  (reviving a friend works by standing near, as in 2D); the game camera itself never turns (only photo mode's does).
+- PERF: in 3D the hidden Game scene still builds and updates its 2D sprites (cheap, but not free on a phone); the 3D chunk is large
+  (three.js plus the model library) and could be split further (models on first use); one-off model geometries (not from `bake`) are
+  drawn one by one; Auto steps down on slow frames but never back up; frame rates on real GPUs and phones are still not measured.
+
+**Stage 2, the budget (built):** a **3D quality** setting (Pause menu, Settings, World view: Auto, Low, Medium, High; Auto is High on a
+computer, Medium on a phone, Low on a phone with 4 cores or 3 GB or less, and steps down once if frames stay under ~24 a second): pixel
+ratio caps (2 / 1.5 / 1, phones 1.5 / 1.25 / 1), the sun's shadow map (2048 soft / 1024 / none), the glow, multisampling (4 / 2 / 0),
+night lamps (8 / 4 / 2) and ambient life. **Instancing** (`src/client3d/batch.ts`): every frame the visible meshes that share a baked
+geometry and material are drawn as one InstancedMesh. **Culling by the view:** the ground is built, and models animated and matrix-updated,
+only as far as the camera sees plus a margin; the sun's shadow box fits the view and slides in whole texels. **Lights:** by day the lamps
+and the moon leave the scene (a light at no intensity still costs every lit pixel), and at night the sun casts no shadow. **No leaks:** a ledger of everything the renderer
+uploaded is handed back when the view goes (3D to 2D, or leaving the world); before, every switch left a dead renderer behind, held by the
+model caches' dispose listeners.
+Measured in Chromium (software GL, so the times are only relative) on a busy world (25 plots, 2,750 buildings, 760 nodes; the farmer in
+the middle), High, day:
+
+| | draw calls | triangles | view's JS per frame | whole frame (software GL) |
+|---|---|---|---|---|
+| before, classic zoom | 2,505 | 255k | 21 ms | 1,670 ms |
+| after, classic zoom | 208 | 107k | 8.4 ms | 837 ms |
+| before, zoomed out | 3,280 | 306k | 26 ms | 2,220 ms |
+| after, zoomed out | 328 | 249k | 12.9 ms | 964 ms |
+| after, classic zoom, Medium / Low | 264 / 114 | 114k / 60k | 13 / 10 ms | 840 / 237 ms |
+
+At night the sun's shadow pass is skipped (142 draw calls at High). Instancing alone (switched off in the same session, zoomed out): 2,323 draw calls, 377 with it. Five 3D -> 2D -> 3D switches: the JS heap
+stays flat (454 to 455 MB) and one renderer is alive (it was one more per switch).
+
+**Stage 2, the art pass (2026-10-09):** scored with the 10-category visual scorecard (0 placeholder, 1 basic, 2 premium stylized,
+3 showcase) on active-play shots of a busy solo world (desktop 1280x720 on High; phone 390x844 and 844x390 on Auto, which is Low there)
+by day, at dusk with lamps, at night, in heavy rain, at a factory, in a fight, at a boss and in the caves. Before, the three weakest:
+the night painted stone and metal royal blue, rain looked like a sunny day with thin ticks, the caves were darkness standing in for
+form (rock and floor nearly one colour), nothing was grounded on Low or at night (no shadows at all), and a blow landing was only a
+handful of tetrahedra. The pass, all in the prototype's flat low-poly style and costing at most five draw calls:
+- Lighting and grade (`sky.ts`, `mood.ts`): a moonlit slate night with a silver moon, a little darker so lamps are the warm colour;
+  a golden hour with lavender shade; rain as an overcast (sun nearly gone, an even grey sky light, cooler, dimmer, less colour);
+  soft contact shadows under everything that stands at every quality level (`contact.ts`); the cave floor sinks into shadow by height.
+- Materials (`wet.ts`, `caves.ts`): rain darkens the ground and makes it glossier, it dries slowly, and puddles that mirror the sky gather
+  on open land; cave rock has a lighter worn lip where it meets the floor.
+- VFX (`impacts.ts`, `weather.ts`): a ring spreading over the ground for 36 actions (hits, breaks, kills, a boss's slam and roar, level
+  ups, building, buying land ...) with a flash for the big ones, dust at running feet, and rain streaks that lean with the wind and fade
+  from tail to head. Low keeps the grade and contact shadows, and drops puddles, dust and half the rain.
+
+| Category | before | after | evidence |
+|---|---|---|---|
+| Art direction | 2 | 2 | one pastel low-poly language from HUD to world; the moods now differ by light, not by tint alone |
+| Hero (the farmer) | 2 | 2 | unchanged model; now grounded by a contact shadow and kicking dust |
+| Obstacles / enemies | 2 | 2 | unchanged models; hits and slams now ring on the ground |
+| Rewards / interactables | 2 | 2 | unchanged; build, harvest and level-up rings |
+| World | 2 | 2 | caves now read as blocks and floor across the screen; terrain still flat |
+| Materials | 1.5 | 2 | wet ground and puddles, cave lips and height grade; still one roughness for most models, no decal kit |
+| Lighting / render | 1.5 | 2 | night, dusk and rain each have their own light; contact shadows on Low |
+| VFX / motion | 1.5 | 2 | event rings and flashes, dust, wind-driven rain; the bursts themselves are still the generic tetrahedra |
+| UI / HUD | 2.5 | 2.5 | not touched |
+| Performance evidence | 2 | 2 | counts per scene below; software GL only |
+| **Average** | **1.9** | **2.05** | below the premium bar (every category 2, average 2.3) |
+
+Draw calls / triangles at High, 1280x720, after the pass (the worlds are new each run, so before and after differ by layout too):
+day 232 / 101k, dusk 258 / 132k, night 120 / 56k, rain 241 / 106k, factory 250 / 123k, fight 143 / 57k, boss 303 / 158k (over the
+300 desktop start budget, as before at 298), caves 48 / 12k. Phone (Low): 120 to 137 draw calls, 56k to 59k triangles, no shadow map.
+Next passes for premium: material roles on the models (metal, glass, cloth read differently), bursts per action family instead of
+tetrahedra, terrain height, and the HUD's overlays drawn behind tall models.
+
+**Stage 2, QA before release (2026-10-09):** played in Chromium (software GL) on the dev build and on `play/`. Checked: the title
+toggle (2D lit on a fresh browser, the choice saved); solo 2D, then 3D (one reload straight back into the same world: inventory, coins,
+level, buildings and position the same), four live 3D/2D/3D switches (one 3D view alive, heap flat, no extra canvas), back to 2D and a
+full reload; Save & quit from 3D, then 2D from the title; a triple switch in one frame (ends in the last choice, no stray view); photo
+mode with drag and wheel; a window resize; two players on `npm run server` (2D in one tab, 3D in `?profile=2`: each sees the other
+move and chat, the 2D tab switches to 3D and rejoins as the same farmer); a phone (touch UI, 844x390: the stick walks, a tap aims
+through the 3D pointer; 390x844 shows the "turn your phone sideways" card as in 2D); AZERTY by position in 3D (Z Q S D walk north,
+west, south, east; & and é pick slots 1 and 2). No page errors. 2D against origin/main from the same saved world and dice, stepped
+frame by frame: the HUD pixel for pixel the same, the world the same apart from the fog blobs and pulses placed by wall-clock dice.
+`play/` sizes (raw / gzip): 2D main chunk 1,238,750 / 428,253 bytes (origin/main 1,233,964 / 426,545, +0.4%), Phaser unchanged,
+the 3D chunk 984,926 / 287,623 (stage 1 was 893,000 / 255,907) and only requested once 3D is chosen.
 
 ### Co-op life (2026-10-07)
 Eleven of the ideas in [IDEAS.md](IDEAS.md) are built, each documented under "Adding content" in CLAUDE.md: the **farm chronicle** (a storybook line per milestone in the Journal), the **season wish** (a world-wide vote on each season's first morning), the **mailbox** (parcels and notes between farmers, a postcard every dawn), the **evening hearth** (sit at a fire together at dusk for Hearthside), **pet and gifts** (pet your companion, it digs up presents), the **Perfect dash** (a slow-motion beat, energy back and a crit for dashing through a telegraph at the last instant), **Titan nodes** (a Great Oak or Titan Boulder only two farmers can fell), the **export chute** (a belt-fed sink that sells at 85%), the **weather vane** (a three-day forecast), the **potluck table** (every cook's dish in one feast) and **co-op boss statuses** (Frozen, Hexed and Tethered: patterns a boss only lays when two or more farmers are up). A **photo mode** (F2) hides the HUD, and the **character creator** picks the farmer's look and scarf.

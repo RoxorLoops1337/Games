@@ -10,7 +10,7 @@ import { BIOMES, BIOME_DEFS, MODS } from '../../../shared/data/biomes';
 import { keyControls, TOUCH_CONTROLS, type ControlGroup } from '../../../shared/data/controls';
 import { PAL } from '../../../shared/palette';
 import { PLAYER_COLORS, derived } from '../../../shared/sim/stats';
-import { saveSettings, settings } from '../../settings';
+import { QUALITY_CHOICES, saveSettings, settings } from '../../settings';
 import { detectedName, KEYBOARD_CHOICES, keyLabel, moveKeys } from '../../input/layout';
 import { setFullscreenSetting } from '../../input/screenMode';
 import { isTouchUi } from '../../input/layout';
@@ -207,7 +207,15 @@ export class MenuScreen implements Screen {
         toggle(L, IN_Y + 244, 'Show FPS', undefined, () => settings.fps, (v) => { settings.fps = v; });
         // the view: 2D (the classic) or 3D (beta); the same world, menus and keys (world/view3d-bridge.ts). Live, or one reload back into this world.
         const farm = this.ctx.farm;
-        label(L, IN_Y + 284, 'World view', '3D is new (beta): the same world, menus and keys.');
+        pane.text('World view', L, IN_Y + 284, 14, PAL.cream);
+        pane.text('3D (beta) and its detail level.', L, IN_Y + 305, fit(11), PAL.pebble, { bold: false, wrap: colW - 196 });
+        // the 3D view's quality (src/client3d/quality.ts): Auto fits the device (and steps down if frames stay slow); live in 3D
+        const qName = () => ({ auto: 'Auto', low: 'Low', medium: 'Medium', high: 'High' })[settings.quality3d];
+        const qb = pane.button(L + colW - 140, IN_Y + 294, 88, ROW_H, qName(), () => {
+            settings.quality3d = QUALITY_CHOICES[(QUALITY_CHOICES.indexOf(settings.quality3d) + 1) % QUALITY_CHOICES.length];
+            qb.setLabel(qName()); qb.setStyle(settings.quality3d === 'auto' ? STYLES.dark : STYLES.lime);
+            saveSettings();
+        }, { style: settings.quality3d === 'auto' ? STYLES.dark : STYLES.lime, size: 14, ink: settings.quality3d !== 'auto' });
         const vb = pane.button(L + colW - 44, IN_Y + 294, 88, ROW_H, settings.view === '3d' ? '3D' : '2D', () => {
             const mode = settings.view === '3d' ? '2d' : '3d';
             vb.setLabel(mode === '3d' ? '3D' : '2D'); vb.setStyle(mode === '3d' ? STYLES.lime : STYLES.dark);

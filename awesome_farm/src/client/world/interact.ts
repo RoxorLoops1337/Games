@@ -18,6 +18,7 @@ import type { World } from '../../shared/world';
 import { isTouchUi } from '../input/layout';
 import type { BlueprintTool } from './blueprints';
 import type { Farmers, Local } from './farmers';
+import { overlay3d } from './view3d-bridge';
 import type { Placer } from './placing';
 
 export type Target = { kind: 'ent'; ent: Ent } | { kind: 'rock'; tx: number; ty: number };
@@ -93,7 +94,7 @@ export class Interact {
             if (this.demolishT >= 0.8) { this.demolishT = 0; h.send({ t: 'demolish', id: b!.id }); }
         } else this.demolishT = 0;
         // show what it would take down, and how far along the hold is
-        const g = (this.demoG ??= this.scene.add.graphics().setDepth(9e4));
+        const g = (this.demoG ??= overlay3d(this.scene.add.graphics().setDepth(9e4)));        // (a world overlay: the 3D view shows it too)
         const show = !!b && !h.menuOpen && (holding || this.near.aimed === b);
         if (show || this.demoDrawn) g.clear();
         this.demoDrawn = show;

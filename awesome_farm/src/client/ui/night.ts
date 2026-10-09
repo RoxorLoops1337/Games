@@ -235,6 +235,9 @@ export class NightLayer {
             const w = weatherAt(f.serverSeed(), f.clock.day, f.clock.clock);
             this.rainLevel = f.undergroundAmount() > 0.5 ? 0 : w.rain; this.stormy = w.storm;
             if (this.shown) this.show(false);
+            // a storm's lightning: the same timer and thunder as in 2D, the flash drawn by the 3D view
+            this.lightning(dt, w.storm && f.undergroundAmount() <= 0.5);
+            f.view3d?.lightning?.(this.bolt > 0 ? this.bolt / 0.22 : 0);
             return;
         }
         if (!this.shown) this.show(true);
@@ -378,11 +381,17 @@ export class NightLayer {
             }
         } else this.splashes.length = 0;
         // ── lightning ──
-        if (w.storm) {
+        this.lightning(dt, w.storm);
+        if (this.bolt > 0) this.flash.setAlpha(Math.max(0, this.bolt / 0.22) * (Math.random() < 0.4 ? 0.5 : 0.28)); else this.flash.setAlpha(0);
+    }
+
+    /** A storm's bolts (every 5 to 16 seconds) and the thunder that follows each one. */
+    private lightning (dt: number, storm: boolean) {
+        if (storm) {
             this.nextBolt -= dt;
             if (this.nextBolt <= 0) { this.nextBolt = 5 + Math.random() * 11; this.bolt = 0.22; this.thunderIn = 0.4 + Math.random() * 1.2; }
         }
-        if (this.bolt > 0) { this.bolt -= dt; this.flash.setAlpha(Math.max(0, this.bolt / 0.22) * (Math.random() < 0.4 ? 0.5 : 0.28)); } else this.flash.setAlpha(0);
+        if (this.bolt > 0) this.bolt -= dt;
         if (this.thunderIn > 0) { this.thunderIn -= dt; if (this.thunderIn <= 0) playSfx('thunder'); }
     }
 }

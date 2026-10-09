@@ -1,16 +1,18 @@
 // The farmer: rig, dressing (look, scarf colour, gear) and the per-frame pose (walk, swing, downed, blink, springs).
 import * as THREE from 'three';
-import { DEFAULT_LOOK, Look, SCARF_COLORS } from '../../shared/data/look';
+import { BODY_TONES, DEFAULT_LOOK, EYES, Look, MOUTHS, SCARF_COLORS, SPROUTS } from '../../shared/data/look';
 import { approach, BR, BY, CMAT, easeInOut, FMAT, SMAT, Spring, TOP, wrapAngle } from './farmer-base';
 import { bodyGroup, EYE_LINE, eyesGroup, footGroup, handGroup, KNOT, koEyesGroup, mouthGroup, scarfGroup, sproutGroup, tailGroup } from './farmer-body';
 import { bagPart, bodyPart, type BodyPart, charmPart, type GearPart, headPart } from './farmer-gear';
 import { newCh, swingAt } from './farmer-swing';
 import { arrowPart, stowPart, toolPart, type ToolPart } from './farmer-tools';
 import type { PlayerS } from '../../shared/sim/types';
+import type { CoStatus } from '../../shared/data/costatus';
+import { animateStatus, STATUS_MODELS } from './costatus';
 
 /** What a farmer wears and holds, by slot. */
 export type Equip = PlayerS['equip'];
-import { clamp, env, lerp, smooth } from './kit';
+import { clamp, env, flashMeshes, lerp, meshesOf, smooth } from './kit';
 
 export const PI = Math.PI;
 export const TAU = PI * 2;
@@ -100,6 +102,14 @@ export class Farmer {
     ch = newCh();
     swingW = 0;
     toolShown = 1;
+    // what happened to the farmer: a hit (flash and recoil), the blink of invulnerability, the call for help while downed
+    hurtT = 0;
+    lastHearts = Number.NaN;
+    flashing: THREE.Mesh[] | null = null;
+    helpRing: THREE.Mesh | null = null;
+    /** the co-op status shown on the farmer (ice block, hex wisps), and which kind it is */
+    coObj: THREE.Object3D | null = null;
+    coK = '';
     // ── dressing ─────────────────────────────────────────────────────────────
     safeLook = { b: 0, l: 0, e: 0, m: 0 };
     constructor(look: Look | undefined, color: number, equip: Equip | undefined) {
@@ -141,14 +151,14 @@ export class Farmer {
     /** A look with every number inside its range (the sim guarantees it, the model does not trust it). */
     safe(look: Look | undefined) {
         const l = look ?? DEFAULT_LOOK, s = this.safeLook, k = (v: number, n: number) => v >= 0 && v < n ? v | 0 : 0;
-        s.b = k(l.b, 8);
-        s.l = k(l.l, 5);
-        s.e = k(l.e, 4);
-        s.m = k(l.m, 4);
+        s.b = k(l.b, BODY_TONES.length);
+        s.l = k(l.l, SPROUTS.length);
+        s.e = k(l.e, EYES.length);
+        s.m = k(l.m, MOUTHS.length);
         return s;
     }
     dress(look: Look | undefined, color: number, equip: Equip | undefined) {
-        const l = this.safe(look), col = ((color | 0) % 8 + 8) % 8;
+        const l = this.safe(look), n = SCARF_COLORS.length, col = ((color | 0) % n + n) % n;
         if (!this.built || l.b !== this.lb || l.l !== this.ll || l.e !== this.le || l.m !== this.lm || col !== this.lc) {
             const sub = (s: THREE.Group, g: THREE.Group) => {
                 s.clear();
@@ -285,7 +295,8 @@ export class Farmer {
         const idle = Math.sin(T * 2.3);
         const bob = this.bob.step(mv * 0.062 * (0.5 + 0.5 * s2) + c.by * w, dt);
         const sq = this.sq.step(mv * -0.04 * s2 + idle * -0.014 * (1 - mv) + c.sq * w, dt);
-        const lean = mv * 0.12 + c.lean * w;
+        const hk = this.hurtT > 0 ? Math.sin(Math.min(1, this.hurtT / 0.35) * Math.PI) : 0;
+        const lean = mv * 0.12 + c.lean * w - hk * 0.42;
         const roll = Math.sin(ph) * 0.08 * mv + clamp(-this.yawRate * 0.012, -0.12, 0.12);
         const bg = this.bodyG;
         bg.position.set(0, bob * up, c.bz * w * up);
@@ -380,7 +391,60 @@ export class Farmer {
         if (b?.tick) b.tick(T, mv, d);
         if (ch?.tick) ch.tick(T, mv, d);
     }
+    /**
+     * What the farmer's record says happened, once a frame after `pose`: fewer hearts than last time is a hit (a white flash and a
+     * recoil, like a monster's), `invuln` makes the farmer blink as the 2D sprite does, and a downed farmer gets a berry ring that
+     * pulses on the ground, calling for a friend.
+     */
+    react(hearts: number, invuln: number, downed: boolean, dt: number) {
+        if (!(dt > 0)) dt = 0.016;
+        if (hearts < this.lastHearts && !downed) {
+            this.hurtT = 0.35;
+            this.sq.kick(2.2);
+        }
+        this.lastHearts = hearts;
+        this.hurtT = Math.max(0, this.hurtT - dt);
+        const flash = this.hurtT > 0.22;
+        if (flash && !this.flashing) {
+            this.flashing = meshesOf(this.bodyG);
+            flashMeshes(this.flashing, true);
+        } else if (!flash && this.flashing) {
+            flashMeshes(this.flashing, false);
+            this.flashing = null;
+        }
+        this.yawG.visible = !(invuln > 0 && !downed && Math.floor(invuln * 12) % 2 === 0);
+        if (downed && !this.helpRing) {
+            this.helpRing = new THREE.Mesh(new THREE.RingGeometry(0.5, 0.58, 32).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0xe85d62, transparent: true, opacity: 0.6, depthWrite: false }));
+            this.helpRing.position.y = 0.04;
+            this.helpRing.renderOrder = 2;
+            this.helpRing.raycast = () => {};
+            this.obj.add(this.helpRing);
+        }
+        if (this.helpRing) {
+            this.helpRing.visible = downed;
+            if (downed) {
+                const u = (this.T * 0.9) % 1;
+                this.helpRing.scale.setScalar(0.8 + u * 0.7);
+                (this.helpRing.material as THREE.MeshBasicMaterial).opacity = 0.65 * (1 - u);
+            }
+        }
+    }
+    /** A co-op boss status (`PlayerS.co`): the ice block or the hex wisps (the chain between two farmers is the entity layer's). */
+    status(co: CoStatus | undefined) {
+        const k = co && co.k !== 'tether' ? co.k : '';
+        if (k !== this.coK) {
+            if (this.coObj) this.obj.remove(this.coObj);
+            this.coObj = k ? STATUS_MODELS[k as 'frozen' | 'hexed']() : null;
+            if (this.coObj) this.obj.add(this.coObj);
+            this.coK = k;
+        }
+        if (this.coObj && co) animateStatus(co.k, this.coObj, this.T, co.th ? co.th / 1.5 : 0);
+    }
     dispose() {
+        if (this.helpRing) {
+            this.helpRing.geometry.dispose();
+            (this.helpRing.material as THREE.Material).dispose();
+        }
     }
 }
 export function farmerModel(look: Look | undefined, color: number, equip: Equip | undefined) {

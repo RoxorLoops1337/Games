@@ -1,6 +1,6 @@
 // The islands as flat-shaded tiles with cliffs, banks, ore decals and grass, the shallows and shore foam, land rising out of the sea, and the animated sea.
-import { BufferGeometry, CircleGeometry, Color, Float32BufferAttribute, Group, Mesh, MeshBasicMaterial, MeshStandardMaterial, PlaneGeometry, Vector2, Scene } from 'three';
-import { PLOT, RIFT_ISLANDS } from '../shared/config';
+import { BufferGeometry, CircleGeometry, Color, DoubleSide, Float32BufferAttribute, Group, Mesh, MeshBasicMaterial, MeshStandardMaterial, PlaneGeometry, Vector2, Scene } from 'three';
+import { PLOT, RIFT_ISLANDS, UNDER_Y } from '../shared/config';
 import type { Plot } from '../shared/sim/types';
 import type { World } from '../shared/world';
 
@@ -24,10 +24,14 @@ export const PALS: Record<string, Pal | undefined> = {
     bog: { ground: [0x6e5d8d, 0x655483, 0x786896, 0x5d4a7c, 0x6e5d8d, 0x6a5a89], cliff: [0x5d4a7c, 0x48385f, 0x372b4a], bank: 0x8a7aa8, tuft: 0x8fb06a },
     rift: { ground: [0xa88ad8, 0x9d7fd0, 0xb398e0, 0x9070c6, 0xa88ad8, 0xa584d4], cliff: [0x7a5cb4, 0x62479a, 0x4c377c], bank: 0xc4a8ec, tuft: 0xe0c8ff }
 };
-export const ORE_COL: Record<string, number | undefined> = { stone: 0xa3a8bd, coal: 0x2c2a36, iron: 0xd5d9e6, copper: 0xd98a52, goldore: 0xffd966, clay: 0xdf9a7c, sand: 0xf0d79a, peat: 0x4e3d33, crystal: 0xb48cf0 };
+export const ORE_COL: Record<string, number | undefined> = { stone: 0xa3a8bd, coal: 0x45414f, iron: 0xd5d9e6, copper: 0xd98a52, goldore: 0xffd966, clay: 0xdf9a7c, sand: 0xf0d79a, peat: 0x4e3d33, crystal: 0xb48cf0 };
 export const FLOWERS = [0xf79fc6, 0xffd966, 0xfff6e0, 0x9d6fdb, 0xf8a24a];
-export const groundMat = new MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.95 });
-export const foamMat = new MeshBasicMaterial({ vertexColors: true, transparent: true, depthWrite: false, fog: false, opacity: 0.9 });
+/**
+ * Both sides: the soup's triangles are wound every which way (the cliffs' fronts and the vein decals face away from a one-sided
+ * material, so they never showed). Flat shading takes its normal from the screen, so either side lights the same.
+ */
+export const groundMat = new MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.95, side: DoubleSide });
+export const foamMat = new MeshBasicMaterial({ vertexColors: true, transparent: true, depthWrite: false, fog: false, opacity: 0.9, side: DoubleSide });
 /** A soup of flat-shaded triangles (and see-through foam) for one chunk of land and shore. */
 export class Soup {
     pos: number[] = [];
@@ -105,8 +109,9 @@ export class Terrain {
     idx(tx: number, ty: number) {
         return ty * 100000 + tx;
     }
+    /** Land on the surface (the caves below are drawn by caves.ts, so their rows are never land here). */
     landAt(tx: number, ty: number) {
-        return this.world.isLand(tx, ty) && !this.skip.has(this.idx(tx, ty));
+        return ty < UNDER_Y && this.world.isLand(tx, ty) && !this.skip.has(this.idx(tx, ty));
     }
     biomeAt(tx: number, ty: number) {
         const p = this.world.plotAt(tx, ty);
@@ -136,16 +141,24 @@ export class Terrain {
         for (const p of this.world.plots) if (p.owned || p.dread) for (const v of p.veins ?? []) this.veins.set(this.idx(v[0], v[1]), v[2]);
         this.veinsDirty = false;
     }
-    /** Keep the chunks round (x, z) (tile units) built, and the far ones freed. */
+    /**
+     * Keep the chunks round (x, z) (tile units) built, and the far ones freed. Nearest first: the chunks under the camera (the one it is
+     * over and the eight round it) are built at once, the rest three a frame, so the ground under you is there from the first frame even
+     * on a slow device (it used to fill in row by row from the far corner, leaving you on open sea for a while).
+     */
     update(x: number, z: number, radius = 56) {
         if (this.veinsDirty) this.rebuildVeins();
         const cx0 = Math.floor((x - radius) / CH), cx1 = Math.floor((x + radius) / CH), cy0 = Math.floor((z - radius) / CH), cy1 = Math.floor((z + radius) / CH);
+        const fx = Math.floor(x / CH), fz = Math.floor(z / CH), want: [number, number, number][] = [];
+        for (let cy = Math.max(0, cy0); cy <= cy1; cy++) for (let cx = Math.max(0, cx0); cx <= cx1; cx++) {
+            if (!this.chunks.has(cy * 1000 + cx)) want.push([cx, cy, Math.max(Math.abs(cx - fx), Math.abs(cy - fz))]);
+        }
+        want.sort((a, b) => a[2] - b[2]);
         let built = 0;
-        for (let cy = cy0; cy <= cy1; cy++) for (let cx = cx0; cx <= cx1; cx++) {
-            const k = cy * 1000 + cx;
-            if (this.chunks.has(k) || cx < 0 || cy < 0) continue;
-            if (built++ >= 3) return;
-            this.buildChunk(cx, cy, k);
+        for (const [cx, cy, d] of want) {
+            if (d > 1 && built >= 3) break;
+            this.buildChunk(cx, cy, cy * 1000 + cx);
+            built++;
         }
         for (const k of [...this.chunks.keys()]) {
             const cy = Math.floor(k / 1000), cx = k % 1000;
@@ -215,20 +228,37 @@ export class Terrain {
         if (!this.landAt(tx - 1, ty)) s.quad([tx, hD, ty + 1], [tx, hA, ty], [tx - 0.32, SEABED_1, ty], [tx - 0.32, SEABED_1, ty + 1], bank, 0.9);
         if (!this.landAt(tx, ty - 1)) s.quad([tx, hA, ty], [tx + 1, hB, ty], [tx + 1, SEABED_1, ty - 0.32], [tx, SEABED_1, ty - 0.32], bank, 0.96);
         const ore = this.veins.get(this.idx(tx, ty));
-        if (ore) this.decal(s, tx, ty, ORE_COL[ore] ?? 0xa3a8bd, (hA + hB + hC + hD) / 4 + 0.016);
+        if (ore) this.decal(s, tx, ty, ore, [hA, hB, hC, hD]);
         else if (variant >= 3 && !plot?.dread) this.decor(s, tx, ty, variant, pal, (hA + hB + hC + hD) / 4);
     }
-    decal(s: Soup, tx: number, ty: number, hex: number, y: number) {
-        const cx = tx + 0.5, cz = ty + 0.5, n = 7, pts: V3[] = [];
+    /**
+     * An ore vein on the ground, as the 2D vein tiles paint it: a blob of the ore's colour that reaches out to the neighbours with the
+     * same ore, so a vein of several tiles reads as one patch, and a few nuggets standing on it. It follows the ground's own bumps.
+     */
+    decal(s: Soup, tx: number, ty: number, ore: string, h: number[]) {
+        const hex = ORE_COL[ore] ?? 0xa3a8bd, same = (dx: number, dy: number) => this.veins.get(this.idx(tx + dx, ty + dy)) === ore;
+        const yAt = (x: number, z: number) => {
+            const u = Math.min(1, Math.max(0, x - tx)), v = Math.min(1, Math.max(0, z - ty));
+            return h[0] * (1 - u) * (1 - v) + h[1] * u * (1 - v) + h[2] * u * v + h[3] * (1 - u) * v + 0.022;
+        };
+        const cx = tx + 0.5, cz = ty + 0.5, n = 12, pts: V3[] = [], spin = hash2(tx, ty) * 0.4;
         for (let i = 0; i < n; i++) {
-            const a = i / n * Math.PI * 2 + hash2(tx, ty) * 0.6, rr = 0.36 + hash2(tx * 5 + i, ty * 7) * 0.1;
-            pts.push([cx + Math.cos(a) * rr, y, cz + Math.sin(a) * rr]);
+            const a = (i / n) * Math.PI * 2 + spin, dx = Math.cos(a), dz = Math.sin(a);
+            // reach to (and a little past) the edge toward a neighbour of the same vein; stay inside the tile elsewhere
+            const ex = Math.abs(dx) > 0.38 ? Math.sign(dx) : 0, ez = Math.abs(dz) > 0.38 ? Math.sign(dz) : 0;
+            const joins = (ex || ez) && same(ex, ez) && (!ex || !ez || (same(ex, 0) && same(0, ez)));
+            const rr = joins ? 0.62 / Math.max(Math.abs(dx), Math.abs(dz)) : 0.34 + hash2(tx * 5 + i, ty * 7) * 0.1;
+            const x = cx + dx * rr, z = cz + dz * rr;
+            pts.push([x, yAt(x, z), z]);
         }
-        for (let i = 0; i < n; i++) s.tri([cx, y + 0.012, cz], pts[i], pts[(i + 1) % n], hex, 0.9 + i % 3 * 0.07);
-        for (let k = 0; k < 2; k++) {
-            const a = hash2(tx + k * 3, ty - k) * 6.28, r = 0.15 + k * 0.08, x = cx + Math.cos(a) * r, z = cz + Math.sin(a) * r;
-            s.tri([x - 0.1, y + 0.01, z + 0.07], [x + 0.1, y + 0.01, z + 0.05], [x, y + 0.11, z], hex, 1.12);
-            s.tri([x + 0.1, y + 0.01, z + 0.05], [x, y + 0.01, z - 0.09], [x, y + 0.11, z], hex, 0.95);
+        const mid: V3 = [cx, yAt(cx, cz) + 0.004, cz];
+        for (let i = 0; i < n; i++) s.tri(mid, pts[(i + 1) % n], pts[i], hex, 0.94 + (i % 3) * 0.035);
+        for (let k = 0; k < 3; k++) {
+            const a = hash2(tx + k * 3, ty - k) * 6.28, r = 0.08 + k * 0.1, x = cx + Math.cos(a) * r, z = cz + Math.sin(a) * r, y = yAt(x, z), q = 0.07 + hash2(tx - k, ty + k) * 0.05;
+            const c = ore === 'coal' ? 0x4a4658 : new Color(hex).lerp(new Color(0xffffff), 0.25).getHex();
+            s.tri([x - q, y, z + q * 0.7], [x + q, y, z + q * 0.5], [x, y + q * 1.4, z], c, 1.12);
+            s.tri([x + q, y, z + q * 0.5], [x, y, z - q], [x, y + q * 1.4, z], c, 0.92);
+            s.tri([x, y, z - q], [x - q, y, z + q * 0.7], [x, y + q * 1.4, z], c, 1);
         }
     }
     decor(s: Soup, tx: number, ty: number, variant: number, pal: Pal, y: number) {

@@ -13,6 +13,7 @@ import type { BuildE, Ent } from '../../shared/sim/types';
 import type { World } from '../../shared/world';
 import { squash } from './farmers';
 import type { EntView } from './views';
+import { overlay3d } from './view3d-bridge';
 
 type Img = Phaser.GameObjects.Image;
 type Spr = Phaser.GameObjects.Sprite;
@@ -127,9 +128,10 @@ export class BuildViews {
         if (shown === tex) return;
         if (!v.tag) {
             const y = v.y - 15;
-            const edge = s.add.image(v.x, y, 'px').setDisplaySize(14, 14).setTint(PAL.ink).setDepth(v.y + 0.4);
-            const plate = s.add.image(v.x, y, 'px').setDisplaySize(12, 12).setTint(PAL.cream).setDepth(v.y + 0.41);
-            const icon = s.add.image(v.x, y, tex, 0).setDisplaySize(10, 10).setDepth(v.y + 0.42);
+            // (a world overlay: the 3D view shows the plate too, over the chest model)
+            const edge = overlay3d(s.add.image(v.x, y, 'px').setDisplaySize(14, 14).setTint(PAL.ink).setDepth(v.y + 0.4));
+            const plate = overlay3d(s.add.image(v.x, y, 'px').setDisplaySize(12, 12).setTint(PAL.cream).setDepth(v.y + 0.41));
+            const icon = overlay3d(s.add.image(v.x, y, tex, 0).setDisplaySize(10, 10).setDepth(v.y + 0.42));
             v.tag = [edge, plate, icon];
         } else v.tag[2].setTexture(tex, 0).setDisplaySize(10, 10);
         squash(s, v.tag[2], 1.5, 0.6, 110);
