@@ -16,6 +16,7 @@ import { isTouchUi, moveKeys } from '../input/layout';
 import { Fx } from '../juice/fx';
 import { hintStore } from './hints';
 import { playSfx } from '../juice/sfx';
+import { LAB } from '../lab';
 import { TUTORIAL_KEY } from '../profile';
 import type { GameScene } from '../scenes/Game';
 import { MENU_BUTTONS, menuCell } from './hudlayer';
@@ -42,6 +43,7 @@ interface TutState {
 const fresh = (): TutState => ({ v: 1, i: 0, done: false, base: {}, skip: [], tips: true });
 
 function loadTutorial (): TutState | null {
+    if (LAB) return { ...fresh(), i: TOTAL, done: true, tips: false };       // (the Defense Lab: no tutorial, no tips)
     try {
         const s = JSON.parse(localStorage.getItem(TUTORIAL_KEY) ?? 'null') as Partial<TutState> | null;
         if (!s || typeof s.i !== 'number') return null;
@@ -49,6 +51,7 @@ function loadTutorial (): TutState | null {
     } catch { return null; }
 }
 function saveTutorial (s: TutState) {
+    if (LAB) return;
     try { localStorage.setItem(TUTORIAL_KEY, JSON.stringify(s)); } catch { /* private mode: it comes back next visit */ }
 }
 

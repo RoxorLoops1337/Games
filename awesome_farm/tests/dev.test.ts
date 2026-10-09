@@ -20,6 +20,7 @@ import { Sim } from '../src/shared/sim/sim';
 import { countOf, derived, MAX_LEVEL, xpToNext } from '../src/shared/sim/stats';
 import type { BuildE, CritE, Cmd, MobE, NodeE, SimEvent } from '../src/shared/sim/types';
 import * as dread from '../src/shared/sim/dread';
+import * as labMod from '../src/shared/sim/lab';
 import { onPortrait, TapCounter, TAPS, WITHIN_MS } from '../src/client/ui/devgesture';
 import { freePort } from './netlib';
 import { Rng } from '../src/shared/rng';
@@ -58,6 +59,14 @@ function lab (seed = 'DEV-2') {
     const op = (c: Omit<DevCmd, 't'>) => { sim.command('a', { t: 'devdo', ...c } as Cmd); return events(sim); };
     return { sim, p, op };
 }
+/** The Defense Lab's world (sim/lab.ts), the menu open through its cheats. */
+function labWorld () {
+    const sim = labMod.create('a', 'Ann');
+    const p = sim.s.players.a;
+    events(sim);
+    const op = (c: Omit<DevCmd, 't'>) => { sim.command('a', { t: 'devdo', ...c } as Cmd); return events(sim); };
+    return { sim, p, op };
+}
 const ticks = (peer: Inbox) => peer.msgs.filter((m): m is TickMsg => m.t === 'tick');
 /** What a peer was last told about a player. */
 function toldAbout (peer: Inbox, id: string): PlayerDelta[] {
@@ -76,6 +85,8 @@ const PAYLOADS: Omit<DevCmd, 't'>[] = [
     { op: 'affection', n: 40 },
     { op: 'feast' },
     { op: 'co', id: 'hexed' },
+    { op: 'labWave', id: 'mixed', n: 10, lv: 3, who: 'sea' }, { op: 'labNight', on: true }, { op: 'labMend' }, { op: 'labClear' }, { op: 'labSpeed', n: 4 }, { op: 'labReset' },
+    { op: 'labXp', n: 80 }, { op: 'labXp', id: 'level' }, { op: 'labPerks' },
 ];
 
 /** Everything an op could touch, as text: a farmer, the clock, the entities, the land. */
@@ -102,6 +113,27 @@ test('without the key, every op is ignored (a plain farmer, a hostile payload, a
     assert.equal(fingerprint(sim), before, 'nothing in the world or on the farmer changed');
     assert.equal(pa.coins, 0);
     assert.ok(!sim.cheats);
+});
+
+test('the Defense Lab ops are locked like the rest: a lab world on a host with cheats off opens nothing without the key', () => {
+    const sim = labMod.create('a', 'Ann');
+    sim.cheats = false;                                                        // (as a real server would run it)
+    const host = new SimHost(sim, 'Test', '', { devKey: KEY });
+    const a = join(host, 'a', 'Ann');
+    const before = fingerprint(sim);
+    for (const payload of PAYLOADS.filter((x) => x.op.startsWith('lab'))) cmd(host, a, { t: 'devdo', ...payload });
+    assert.equal(fingerprint(sim), before, 'nothing changed');
+    assert.equal(sim.timeScale, 1);
+    unlockWith(host, a, KEY);
+    cmd(host, a, { t: 'devdo', op: 'labSpeed', n: 2 });
+    assert.equal(sim.timeScale, 2, 'with the key it opens, as every op does');
+    // and an ordinary world never runs them, unlocked or not
+    const { sim: plain, host: h2, a: a2 } = party();
+    unlockWith(h2, a2, KEY);
+    const was = fingerprint(plain);
+    for (const payload of PAYLOADS.filter((x) => x.op.startsWith('lab'))) cmd(h2, a2, { t: 'devdo', ...payload });
+    assert.equal(fingerprint(plain), was, 'only a lab world has them');
+    assert.equal(plain.timeScale, 1);
 });
 
 test('a server with no key set can never be unlocked, even by guessing nothing at all', () => {
@@ -267,7 +299,7 @@ test('cheats on means ops work without an unlock (the old test servers), and off
 test('every op tells the player what it did: an effect, and words', () => {
     for (const payload of PAYLOADS) {
         if (['revive'].includes(payload.op)) continue;               // (only for somebody who is down: its own test)
-        const { sim, p, op } = lab(`DEV-FX-${payload.op}`);
+        const { sim, p, op } = payload.op.startsWith('lab') ? labWorld() : lab(`DEV-FX-${payload.op}`);       // (the Defense Lab's ops work only in a lab world)
         p.hearts = 1;
         const ev = op(payload);
         const said = [...floats(ev), ...toasts(ev), ...ev.filter((e) => e.e === 'banner').map((e) => (e as { text: string }).text)];

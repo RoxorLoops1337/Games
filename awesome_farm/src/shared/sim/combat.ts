@@ -59,7 +59,7 @@ function targetsFor (sim: Sim, p: PlayerS, primary: MobE): MobE[] {
 }
 
 /** Damage a monster. Handles crits, boss bonuses, knockback, floating numbers and death. */
-export function damageMob (sim: Sim, e: MobE, dmg: number, by: PlayerS | null, opts: { kx?: number; ky?: number; kb?: number; crit?: boolean; quiet?: boolean } = {}) {
+export function damageMob (sim: Sim, e: MobE, dmg: number, by: PlayerS | null, opts: { kx?: number; ky?: number; kb?: number; crit?: boolean; quiet?: boolean; nofloat?: boolean } = {}) {
     if (!sim.s.ents[e.id]) return;
     const def = MOBS[e.kind];
     e.hp -= dmg;
@@ -72,7 +72,7 @@ export function damageMob (sim: Sim, e: MobE, dmg: number, by: PlayerS | null, o
     }
     sim.touch(e);
     const text = dmg >= 10 ? `${Math.round(dmg)}` : `${Math.round(dmg * 10) / 10}`;
-    sim.float(e.x + (sim.rng.next() - 0.5) * 8, e.y - 14, opts.crit ? `${text}!` : text, opts.crit ? PAL.gold : PAL.cream, by?.id);
+    if (!opts.nofloat) sim.float(e.x + (sim.rng.next() - 0.5) * 8, e.y - 14, opts.crit ? `${text}!` : text, opts.crit ? PAL.gold : PAL.cream, by?.id);
     if (e.hp > 0) { if (!opts.quiet) sim.fx('enemyHit', e.x, e.y - 5, by?.id); return; }
     mobs.killMob(sim, e, by ?? undefined);
 }

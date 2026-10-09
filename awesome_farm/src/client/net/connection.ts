@@ -5,6 +5,7 @@
 import { SimHost, type Peer } from '../../shared/net/host';
 import { PROTOCOL, type ClientMsg, type ServerMsg } from '../../shared/net/protocol';
 import { makeSeed } from '../../shared/rng';
+import * as labWorld from '../../shared/sim/lab';
 import { Sim } from '../../shared/sim/sim';
 import type { Cmd, WorldState } from '../../shared/sim/types';
 import { profile, saveProfile, SOLO_KEY } from '../profile';
@@ -47,10 +48,10 @@ export function takeResume (): Resume | null {
     return null;
 }
 
-/** Solo world saved in localStorage. */
+/** Solo world saved in localStorage; or, with `lab`, the Defense Lab (shared/sim/lab.ts): a world of its own, never saved, cheats on. */
 export class LocalConnection implements Connection {
     readonly mode = 'solo';
-    readonly label = 'Solo';
+    readonly label: string;
     status: Connection['status'] = 'open';
     resumeInfo (): Resume { return { mode: 'solo' }; }
     error = '';
@@ -70,7 +71,21 @@ export class LocalConnection implements Connection {
 
     static wipe () { try { localStorage.removeItem(SOLO_KEY); } catch { /* ignore */ } }
 
-    constructor () {
+    constructor (readonly lab: '' | 'defense' = '') {
+        this.label = lab ? 'Defense Lab' : 'Solo';
+        if (lab) {
+            // the lab: built fresh every time, never read from or written to the browser's storage
+            this.host = new SimHost(labWorld.create(profile.id, profile.name), 'Defense Lab', '', { devOpen: true });
+            this.peer = { send: (text) => { this.inbox.push(JSON.parse(text)); } };
+            this.host.attach(this.peer);
+            this.host.receive(this.peer, JSON.stringify({ t: 'hello', v: PROTOCOL, id: profile.id, name: profile.name } satisfies ClientMsg));
+            this.send({ t: 'devdo', op: 'god', on: true });          // (god mode to begin with: a new connection strips the menu's buffs)
+            const sim = this.host.sim;
+            sim.events = [];                          // (no "welcome back" and no float for that: a lab banner instead)
+            for (const m of this.inbox) if (m.t === 'tick') m.ev = [];
+            sim.banner('Defense Lab', 'Send a wave from the Lab panel and watch the towers work', 0xffd966, profile.id);
+            return;
+        }
         let sim: Sim | null = null;
         try {
             const raw = localStorage.getItem(SOLO_KEY);

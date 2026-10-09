@@ -3,6 +3,7 @@
 // child baked once per stage, look and shape (so every wall at a stage shares one instanced mesh) and swapped when the stage changes;
 // it all goes at dawn, when the wall mends and its `hp` is gone. The 2D view shows a small health bar over the piece (an overlay, so
 // the 3D view shows it too); this is what the wall itself shows.
+import { maxHp } from '../../shared/sim/defense';
 import type * as THREE from 'three';
 import { BUILDINGS, type BuildingKind } from '../../shared/data/buildings';
 import type { BuildE } from '../../shared/sim/types';
@@ -82,7 +83,7 @@ export function withDamage (kind: string, mask: number, rot: number, seed: numbe
         ...inner,
         apply (e: BuildE) {
             inner.apply?.(e);
-            const s = damageStage(e.hp, max);
+            const s = damageStage(e.hp, max && maxHp(e));       // (a tower's perks can raise its health)
             if (s === stage) return;
             stage = s;
             if (child) { inner.obj.remove(child); child = null; }

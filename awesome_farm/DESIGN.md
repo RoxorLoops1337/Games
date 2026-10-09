@@ -238,7 +238,12 @@ levels. The dusk warning says where it gathers. Raiders **wade** across the sea 
 march on the base and attack the **walls and doorways** in their way (`BuildE.hp`: wood 40, stone 100, brick 130, doorway 60, and the
 **Fortified Wall**, iron-bound stone, 260, in the Build menu's **Defense** tab after the Combat skill *Watchtowers*); a piece at 0 breaks
 (nothing is given back) and everything hurt **mends at dawn** (`sim/defense.ts`). A farmer close by is fought as usual. Raiders melt
-away at dawn. Without a
+away at dawn.
+**Towers** (the Defense tab; *Watchtowers*, then *Siegeworks* in the Combat branch): the **Archer Tower** (an arrow every 1.2 s within
+seven tiles), the **Spike Trap** (a floor that bites what walks over it), the **Ballista** (a heavy bolt every 3 s, ten tiles) and the
+**Tesla Coil** (needs power; its bolt leaps to two more monsters), the last two built around a Blight Core. Towers hit a little harder
+for every level their builder has, their kills are the builder's (XP and drops, online or not), and they never shoot creatures,
+farmers or bosses. Towers have hit points too. Without a
 nest in range a night is exactly what it always was (nothing rolls the world's dice unless a raid is coming). Every number is a dial in `TUNING.blight`. Test: `tests/blight.test.ts`.
 
 ### Co-op
