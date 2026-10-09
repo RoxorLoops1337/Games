@@ -1,6 +1,7 @@
 // Buildings that came with the Blight and after it: the four towers of the Defense tab, the Bed (wake here after a fall, as client/art/storybook-blight.ts paints it),
 // the Fortified Wall (stone bound in iron, joined like the other walls) and the Uber Chest (the farm's one shared store, violet and
 // gold like its 2D chest). The Blight nest is a node: models/nodes-nest.ts.
+import { aimOf, sinceShot, turnTo } from '../../shared/data/aim';
 import * as THREE from 'three';
 import type { BuildE } from '../../shared/sim/types';
 import { wallModel } from './b-home-walls';
@@ -81,12 +82,16 @@ function spike (_o: BOpts): Model<BuildE> {
     }) };
 }
 
-/** The Ballista: a timber cradle on a swivel, a great bow with iron tips and a bolt laid ready. */
+/** The Ballista: a timber cradle on a swivel and a great bow with iron tips and a bolt laid ready, which turns toward its last target (data/aim.ts). */
 function ballista (_o: BOpts): Model<BuildE> {
-    return { obj: bake('blight.ballista', (mb) => {
+    const obj = new THREE.Group();
+    obj.add(bake('blight.ballista.base', (mb) => {
         const b = mb.main, W = RAMP.wood, I = RAMP.iron;
         b.box(0.8, 0.16, 0.8, W[1], { y: 0.08, j: 0.006, v: 0.05 });
         b.cyl(0.14, 0.18, 0.3, 8, I[1], { y: 0.31, v: 0.04 });
+    }));
+    const bow = bake('blight.ballista.bow', (mb) => {
+        const b = mb.main, W = RAMP.wood, I = RAMP.iron;
         b.box(0.16, 0.12, 0.9, W[2], { y: 0.52, rx: -0.12, v: 0.04 });
         for (const s of [-1, 1]) {
             b.box(0.5, 0.07, 0.07, W[2], { x: s * 0.27, y: 0.6, z: -0.3, ry: s * 0.35, v: 0.04 });
@@ -95,7 +100,21 @@ function ballista (_o: BOpts): Model<BuildE> {
         b.box(0.015, 0.015, 0.7, RAMP.cream[2], { y: 0.62, z: -0.02, v: 0 });
         b.cyl(0.025, 0.025, 0.85, 5, W[3], { y: 0.6, z: 0.02, rx: Math.PI / 2, v: 0.02 });
         mb.shiny().cone(0.05, 0.12, 4, I[3], { y: 0.6, z: -0.46, rx: -Math.PI / 2, v: 0.02 });
-    }) };
+    });
+    obj.add(bow);
+    let tile: [number, number] = [0, 0], ang = aimOf(0, 0), seen = false;
+    // (the bow points along -z at rest: a screen angle `a` is a turn of -(a + a quarter) about the vertical)
+    const face = (a: number) => -(a + Math.PI / 2);
+    return {
+        obj,
+        apply: (e: BuildE) => { tile = [e.tx, e.ty]; if (!seen) { seen = true; ang = aimOf(e.tx, e.ty); bow.rotation.y = face(ang); } },
+        update: (dt: number) => {
+            const want = aimOf(tile[0], tile[1]);
+            const d = turnTo(ang, want);
+            ang += Math.abs(d) < 0.02 ? d : d * Math.min(1, dt * 12);
+            bow.rotation.y = face(ang);
+        },
+    };
 }
 
 /** The Tesla Coil: an iron plinth, a copper coil wound up a mast and a glowing sphere that hums while the grid feeds it. */
@@ -111,9 +130,17 @@ function tesla (_o: BOpts): Model<BuildE> {
     const orb = bake('blight.tesla.orb', (mb) => { mb.glow(0x8fe7ff, 2.4).ico(0.13, 1, 0xdff8ff, { ao: false, v: 0 }); });
     orb.position.y = 1.5;
     obj.add(orb);
+    let tile: [number, number] = [0, 0];
     return {
         obj,
-        update: (_dt: number, t: number) => { const k = 1 + Math.sin(t * 9) * 0.08; orb.scale.set(k, k, k); orb.rotation.y = t * 1.5; },
+        apply: (e: BuildE) => { tile = [e.tx, e.ty]; },
+        // the orb hums, and swells and flares for a moment as the coil fires (data/aim.ts)
+        update: (_dt: number, t: number) => {
+            const since = sinceShot(tile[0], tile[1], performance.now());
+            const surge = since < 260 ? Math.sin((since / 260) * Math.PI) : 0;
+            const k = 1 + Math.sin(t * 9) * 0.08 + surge * 0.9;
+            orb.scale.set(k, k, k); orb.rotation.y = t * 1.5;
+        },
     };
 }
 
