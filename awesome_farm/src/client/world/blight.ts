@@ -20,6 +20,8 @@ export const nestScale = (lv: number) => Math.min(1.9, 0.85 + 0.09 * (Math.max(1
 
 export class BlightFx {
     private g: Phaser.GameObjects.Graphics;
+    /** The wading ripples: 2D only (unmarked, so the 3D view, which draws its own foam on the water in client3d/wade.ts, leaves them out). */
+    private wg: Phaser.GameObjects.Graphics;
     private splash: Phaser.GameObjects.Particles.ParticleEmitter;
     private plates = new Map<number, Txt>();
     private seen = new Set<number>();
@@ -27,14 +29,15 @@ export class BlightFx {
     private rings: { x: number; y: number; r: number }[] = [];
 
     constructor (private scene: Phaser.Scene, private world: () => World) {
-        this.g = overlay3d(scene.add.graphics().setDepth(9e4));          // (the bars and the rings are world overlays: the 3D view shows them too)
+        this.g = overlay3d(scene.add.graphics().setDepth(9e4));          // (the bars and the nest rings are world overlays: the 3D view shows them too)
+        this.wg = scene.add.graphics().setDepth(9e4);
         this.splash = scene.add.particles(0, 0, 'px', {
             emitting: false, speed: { min: 8, max: 26 }, angle: { min: 200, max: 340 }, lifespan: { min: 240, max: 420 },
             scale: { start: 1, end: 0 }, alpha: { start: 0.9, end: 0 }, gravityY: 90, tint: [PAL.foam, PAL.sea, PAL.snow],
         }).setDepth(9e4);
     }
 
-    destroy () { this.g.destroy(); this.splash.destroy(); for (const t of this.plates.values()) t.destroy(); this.plates.clear(); }
+    destroy () { this.g.destroy(); this.wg.destroy(); this.splash.destroy(); for (const t of this.plates.values()) t.destroy(); this.plates.clear(); }
 
     forget (id: number) { this.plates.get(id)?.destroy(); this.plates.delete(id); }
 
@@ -87,11 +90,12 @@ export class BlightFx {
     }
 
     draw () {
-        const g = this.g;
+        const g = this.g, wg = this.wg;
         g.clear();
+        wg.clear();
         for (const r of this.rings) {
             if (r.r > 0) { g.fillStyle(PAL.night, 0.22).fillEllipse(r.x, r.y, r.r * 2.2, r.r * 0.9); g.lineStyle(1, PAL.berry, 0.35).strokeEllipse(r.x, r.y, r.r * 2.2, r.r * 0.9); }
-            else { const k = -r.r; g.lineStyle(1, PAL.foam, 0.75).strokeEllipse(r.x, r.y, k * 2.2, k * 0.8); g.lineStyle(1, PAL.snow, 0.4).strokeEllipse(r.x, r.y, k * 1.4, k * 0.5); }
+            else { const k = -r.r; wg.lineStyle(1, PAL.foam, 0.75).strokeEllipse(r.x, r.y, k * 2.2, k * 0.8); wg.lineStyle(1, PAL.snow, 0.4).strokeEllipse(r.x, r.y, k * 1.4, k * 0.5); }
         }
         for (const b of this.bars) {
             const x = Math.round(b.x - b.w / 2), y = Math.round(b.y), f = Math.max(0, Math.min(1, b.f));

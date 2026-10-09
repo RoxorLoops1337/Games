@@ -33,6 +33,7 @@ import { Sky } from './sky';
 import { groundMat, Sea, Terrain } from './terrain';
 import { groundViewOf } from './groundview';
 import { Impacts } from './impacts';
+import { Wading } from './wade';
 import { Arenas, Warnings } from './marks';
 import { LightPool, Rain } from './weather';
 import { Wires } from './wires';
@@ -73,6 +74,8 @@ class GameView3D implements View3D {
      * feet, and the ground wet with rain (contact.ts, impacts.ts, wet.ts). */
     private readonly contact = new ContactShadows(this.scene);
     private readonly impacts = new Impacts(this.scene);
+    /** The foam Blight raiders leave as they wade across the sea (wade.ts). */
+    private readonly wading = new Wading(this.scene);
     private readonly wet = new Wetness(this.scene, groundMat);
     /** Where a puddle may lie: open land on the surface (no building, no rock, not the sea). */
     private readonly openLand = (tx: number, ty: number) => !!this.terrain?.landAt(tx, ty) && !!this.world?.isFree(tx, ty);
@@ -161,12 +164,14 @@ class GameView3D implements View3D {
         this.terrain = new Terrain(world, this.scene);
         this.ents = new Entities(this.scene, world);
         this.ents.gone = (obj) => this.ledger.dropModel(obj);
+        this.ents.wading = this.wading;
         for (const e of ents) this.upsert(e);
         this.mood.welcome(world);
         this.swingT.clear();
         this.rig.reset();
         this.warnings.clear(); this.arenas.clear(); this.wires.clear();
         this.impacts.clear();
+        this.wading.clear();
     }
 
     upsert (e: Ent) {
@@ -246,6 +251,7 @@ class GameView3D implements View3D {
         const ext = viewExtent(this.cam);
         // the sky, the light, the weather, the seasons, the caves (mood.ts); the farmers first, so the light you carry is on you
         this.impacts.feet = this.spec.ambient && this.wet.wet < 0.3;
+        this.wading.splash = this.spec.ambient;
         this.drawFarmers(dt, f);
         const meF = f.farmers.find((p) => p.id === f.me);
         this.mood.frame(dt, this.t, { clock: f.clock, seed: f.seed, me: meF ? { x: tiles(meF.x), z: tiles(meF.y) } : null, ambient: this.spec.ambient }, camT, ents.views);
@@ -278,6 +284,7 @@ class GameView3D implements View3D {
         this.wet.update(dt, this.mood.wetRain, camT.x, camT.z, this.scene.background as Color, this.spec.ambient && this.mood.under < 0.5, this.openLand);
         this.particles.update(dt);
         this.impacts.update(dt);
+        this.wading.update(dt);
         this.warnings.update(dt);
         this.arenas.update(ents.views.values(), this.t);
         this.wires.update(dt, ents.views.values(), camT.x, camT.z);
@@ -532,7 +539,7 @@ class GameView3D implements View3D {
         for (const g of this.ghosts) this.dropGhost(g);
         this.ghosts.length = 0;
         this.warnings.clear(); this.arenas.clear(); this.wires.dispose();
-        this.contact.dispose(); this.impacts.dispose(); this.wet.dispose();
+        this.contact.dispose(); this.impacts.dispose(); this.wading.dispose(); this.wet.dispose();
         this.terrain?.invalidateAll();
         this.batch.dispose();
         this.scene.traverse((o) => { if ((o as InstancedMesh).isInstancedMesh) (o as InstancedMesh).dispose(); });
