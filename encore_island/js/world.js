@@ -2,8 +2,11 @@
 // Encore Island — organic world generation. The hub ("Stage Plaza") sits at the origin; every new land is a noise-warped blob dropped
 // along a golden-angle spiral and joined to its nearest neighbour by a curving boardwalk. All geometry is a pure function of the land
 // index, so it never needs saving.
-const HUB = { x: 0, y: 0, r: 640 };
-const PATH_HALF = 58, RAD_N = 56, GAP = 150;
+// Room to breathe: the home island is HS times its first size and every land LS times, the boardwalks are wider and longer, and every
+// fixture sits proportionally further apart. Buildings and plates keep their size, so the same things now stand in more open ground.
+const HS = 1.35, LS = 1.3;
+const HUB = { x: 0, y: 0, r: Math.round(640 * HS) };
+const PATH_HALF = 66, RAD_N = 56, GAP = 210;
 const HUB_GEO = { k: 0, x: 0, y: 0, r: HUB.r, rad: null, ia: 0, parent: -1, path: null, seed: 7 };
 const LAND_GEO = [];
 function mkRadii(seed, r, amp = 1) {
@@ -22,7 +25,7 @@ function radiusAt(g, ang) { // smooth radius lookup around a blob
 function geoOf(k) { return k === 0 ? HUB_GEO : genLand(k); }
 function genLand(k) {
   if (LAND_GEO[k]) return LAND_GEO[k];
-  const r = 300 + 12 * Math.min(k, 12);
+  const r = Math.round((300 + 12 * Math.min(k, 12)) * LS);
   const others = [HUB_GEO]; for (let j = 1; j < k; j++) others.push(genLand(j));
   let a = k * 2.39996323 + (hash01(k * 13) - 0.5) * 0.5, R = HUB.r + r + GAP, x = 0, y = 0;
   for (let it = 0; it < 240; it++) {
@@ -55,11 +58,11 @@ function mkDecor(g) {
     for (const o of clear) if (dist2(x, y, o.x, o.y) < plateR * plateR) return true;
     return false;
   };
-  for (let i = 0; i < 52; i++) { // rim trees hug the shore (kept clear of every plate by a generous margin: trees are tall)
+  for (let i = 0; i < 64; i++) { // rim trees hug the shore (kept clear of every plate by a generous margin: trees are tall)
     const a = rng() * TAU, rr = radiusAt(g, a) * (0.84 + rng() * 0.11), x = g.x + Math.cos(a) * rr, y = g.y + Math.sin(a) * rr, s = 0.75 + rng() * 0.4, v = (rng() * 3) | 0;
     if (!bad(x, y, 135)) out.push({ t: 'tree', x, y, s, v });
   }
-  for (let i = 0; i < 40; i++) { // low clutter nearer the middle, clear of the plate ring
+  for (let i = 0; i < 46; i++) { // low clutter nearer the middle, clear of the plate ring
     const a = rng() * TAU, rr = radiusAt(g, a) * (0.55 + rng() * 0.3), x = g.x + Math.cos(a) * rr, y = g.y + Math.sin(a) * rr, q = rng(), s = 0.8 + rng() * 0.5, v = (rng() * 3) | 0;
     if (!bad(x, y, 90)) out.push({ t: q < 0.35 ? 'rock' : q < 0.62 ? 'bush' : 'flower', x, y, s, v });
   }
@@ -103,17 +106,27 @@ const D2R = Math.PI / 180;
 //   NE  Smelter Yard: smelter, bar tray, smelter upgrade          E   Arena district        SE  Travel Dock: warp pad
 //   S   Training Terrace: the five hero plates on a stone arc     SW  Backstage stairway   W   Market Quarter: SELL stall, Vault, Midas plate, Market district
 const polarXY = (c, deg, r) => ({ x: Math.round(c.x + Math.cos(deg * Math.PI / 180) * r), y: Math.round(c.y + Math.sin(deg * Math.PI / 180) * r) });
+const hs = (x, y) => ({ x: Math.round(x * HS), y: Math.round(y * HS) }); // a spot of the original layout, moved out to the roomier island
 const STAGE = { x: 0, y: 30 };
-const SELL = { x: -330, y: -230, r: 62 }, VAULT = { x: -370, y: -60, r: 68 };
-const FORGE = { x: 330, y: -250, r: 55 }, TRAY = { x: 430, y: -120, r: 55 }, FUP = { x: 250, y: -120, r: 44 };
-const MONU = { x: 0, y: -340, r: 48 }, WAYPAD = { x: 370, y: 240, r: 44 }, WAYPLATE = { x: 370, y: 240, r: 46 };
-const TERRACE = { x: 0, y: 90, r: 330, a0: 35, a1: 145 }; // the training arc: plates sit on it, the slab floor and balustrade follow it
+const SELL = { ...hs(-330, -230), r: 62 }, VAULT = { ...hs(-370, -60), r: 68 };
+const FORGE = { ...hs(330, -250), r: 55 }, TRAY = { ...hs(430, -120), r: 55 }, FUP = { ...hs(250, -120), r: 44 };
+const MONU = { ...hs(0, -340), r: 48 }, WAYPAD = { ...hs(370, 240), r: 44 }, WAYPLATE = { ...hs(370, 240), r: 46 };
+const TERRACE = { x: 0, y: Math.round(90 * HS), r: Math.round(330 * HS), a0: 35, a1: 145, inner: 70, outer: 130, rail: 112 }; // the training arc: plates sit on it, the slab floor (r - inner .. r + outer) and balustrade (r + rail) follow it
 const UPG_POS = { speed: polarXY(TERRACE, 140, TERRACE.r), cap: polarXY(TERRACE, 115, TERRACE.r), dmg: polarXY(TERRACE, 90, TERRACE.r), rate: polarXY(TERRACE, 65, TERRACE.r), hp: polarXY(TERRACE, 40, TERRACE.r) };
-const GEM_POS = { magnet: { x: -135, y: -380 }, crit: { x: 135, y: -380 }, coin: { x: -220, y: -120 } };
+const GEM_POS = { magnet: hs(-135, -380), crit: hs(135, -380), coin: hs(-220, -120) };
+// the hub floor plan, shared by the 2D and 3D renderers: plaza, boulevard width / ends (by screen angle) and the paved zones (ellipses)
+const ZONE_DEG = [-90, -40, 0, 33, 90, 148, 180, -125]; // boulevard directions (screen angles): Hall, Smelter, Arena, Dock, Terrace, Backstage, Market, Studio
+const PLAZA_R = 310, BLVD_W = 84;
+const BLVD_END = { '-90': Math.round(345 * HS), '-40': Math.round(390 * HS), 0: Math.round(500 * HS), 33: Math.round(440 * HS), 90: TERRACE.y + Math.round(190 * HS), 148: Math.round(470 * HS), 180: Math.round(345 * HS), '-125': Math.round(470 * HS) };
+const HUBZ = { // x, y, rx, ry
+  hall: { ...hs(0, -345), rx: Math.round(290 * HS), ry: Math.round(130 * HS) }, yard: { ...hs(345, -180), rx: Math.round(190 * HS), ry: Math.round(150 * HS) },
+  market: { ...hs(-345, -140), rx: Math.round(190 * HS), ry: Math.round(200 * HS) }, arena: { ...hs(500, 60), rx: Math.round(95 * HS), ry: Math.round(70 * HS) },
+};
 // the Backstage: a stairway on the home island (SW) down to an underground greenroom. The room lives far away in world space so nothing
 // else can reach it; walkable() knows its floor. Appears at BACKSTAGE_SHOW lands, opens with a plate from BACKSTAGE_OPEN lands.
-const HATCH = { x: -400, y: 250, r: 48 }, BACKSTAGE_SHOW = 3, BACKSTAGE_OPEN = 6;
-const BACKSTAGE = { x: -20000, y: 0, w: 760, h: 440, pad: 26 }; // room rect (top-left + size); the stairs up are at the bottom middle
+const HATCH = { ...hs(-400, 250), r: 48 }, BACKSTAGE_SHOW = 3, BACKSTAGE_OPEN = 6;
+HUBZ.dock = { x: WAYPAD.x, y: WAYPAD.y, rx: 104, ry: 104 }; HUBZ.landing = { x: HATCH.x, y: HATCH.y + 12, rx: 112, ry: 92 }; // the Travel Dock and the Backstage landing
+const BACKSTAGE = { x: -20000, y: 0, w: 950, h: 560, pad: 30 }; // room rect (top-left + size); the stairs up are at the bottom middle
 const BS_STAIRS = { x: BACKSTAGE.x + BACKSTAGE.w / 2, y: BACKSTAGE.y + BACKSTAGE.h - 46, r: 44 };
 const inBackstage = (x, y) => x > BACKSTAGE.x + BACKSTAGE.pad && x < BACKSTAGE.x + BACKSTAGE.w - BACKSTAGE.pad && y > BACKSTAGE.y + 70 && y < BACKSTAGE.y + BACKSTAGE.h - BACKSTAGE.pad;
 // every fixed hub fixture (centre + keep-clear radius) so the next-land plate, lamps and trees never land on top of one

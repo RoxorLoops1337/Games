@@ -97,8 +97,6 @@ function drawMist(kn) {
   labelPill(B.name, g.x, g.y + 60, '#ffffff', '#d8c8ff', 15);
 }
 // ---- the home island. Zones around the Stage Plaza, each with its own paving, joined by cobbled boulevards (world.js has the layout) ----
-const ZONE_DEG = [-90, -40, 0, 33, 90, 148, 180, -125]; // boulevard directions (screen angles): Hall, Smelter, Arena, Dock, Terrace, Backstage, Market, Studio
-const PLAZA_R = 240, BLVD_W = 76;
 const HUBSIGNS = (function () { // signposts at the boulevard mouths, each on whichever side of its boulevard is clearer of the fixtures
   const defs = [[-90, 'HALL OF FAME'], [-40, 'SMELTER'], [0, 'ARENA'], [33, 'DOCK'], [90, 'TRAINING'], [180, 'MARKET'], [148, 'BACKSTAGE'], [-125, 'STUDIO']], out = [];
   for (const [deg, txt] of defs) {
@@ -111,8 +109,8 @@ const HUBSIGNS = (function () { // signposts at the boulevard mouths, each on wh
 })();
 const HUBDECOR = (function () { // rim trees and bushes, kept off every fixture and the boulevard ends
   const r = mkRng(77), out = [];
-  for (let i = 0; i < 64; i++) {
-    const a = i / 64 * TAU + r() * 0.08, rr0 = radiusAt(HUB_GEO, a) * (0.925 + r() * 0.05), x = Math.cos(a) * rr0, y = Math.sin(a) * rr0, bush = i % 4 === 0;
+  for (let i = 0; i < 84; i++) {
+    const a = i / 84 * TAU + r() * 0.08, rr0 = radiusAt(HUB_GEO, a) * (0.925 + r() * 0.05), x = Math.cos(a) * rr0, y = Math.sin(a) * rr0, bush = i % 4 === 0;
     let ok = true; for (const o of HUB_KEEP) if (o !== HUB_KEEP[0] && Math.hypot(x - o.x, y - o.y) < 125) ok = false;
     if (ok) out.push({ t: bush ? 'bush' : 'tree', x, y, s: bush ? 1.1 : 0.78 + r() * 0.3, v: (r() * 3) | 0 }); else r();
   }
@@ -125,7 +123,7 @@ const HUBLAMPS = (function () {
   const tryAdd = (x, y, ph, keepR) => { for (const o of HUB_KEEP) if (o !== HUB_KEEP[0] && Math.hypot(x - o.x, y - o.y) < keepR) return; for (const gt of gates) if (Math.hypot(x - gt.x, y - gt.y) < 105) return; for (const s of HUBSIGNS) if (Math.hypot(x - s.x, y - s.y) < 60) return; for (const l of out) if (Math.hypot(x - l.x, y - l.y) < 90) return; out.push({ x, y, ph }); };
   for (let i = 0; i < degs.length; i++) { const d0 = degs[i], d1 = i + 1 < degs.length ? degs[i + 1] : degs[0] + 360, a = (d0 + d1) / 2 * D2R; tryAdd(Math.cos(a) * (PLAZA_R - 36), Math.sin(a) * (PLAZA_R - 36), i * 0.7, 70); } // on the plaza, between the boulevard mouths
   for (const d of ZONE_DEG) for (const sd of [1, -1]) { const a = d * D2R, R = PLAZA_R + 120; tryAdd(Math.cos(a) * R - Math.sin(a) * sd * (BLVD_W / 2 + 22), Math.sin(a) * R + Math.cos(a) * sd * (BLVD_W / 2 + 22), d * 0.05, 92); } // flanking each boulevard
-  for (let i = 0; i < 14; i++) { const a = i / 14 * TAU + 0.12, R = radiusAt(HUB_GEO, a) * 0.8; tryAdd(Math.cos(a) * R, Math.sin(a) * R, i * 0.9 + 2, 108); } // along the shore
+  for (let i = 0; i < 18; i++) { const a = i / 18 * TAU + 0.12, R = radiusAt(HUB_GEO, a) * 0.8; tryAdd(Math.cos(a) * R, Math.sin(a) * R, i * 0.9 + 2, 108); } // along the shore
   return out;
 })();
 function paintLamp() {
@@ -155,8 +153,8 @@ function drawSignpost(s) { // a wooden post with an arrow board pointing down it
 }
 // cached floor shapes (Path2D when available): the plaza, the eight boulevards and the terrace ring
 const HUBPATH = { blvd: null, terrace: null };
-function blvdPathTo(t) { for (const d of ZONE_DEG) { const a = d * D2R, r1 = d === 90 ? TERRACE.y + 280 - 90 : d === -90 ? 345 : d === 180 ? 345 : d === -40 ? 390 : d === 0 ? 500 : d === 33 ? 440 : d === 148 ? 470 : 470; t.moveTo(Math.cos(a) * (PLAZA_R - 30), Math.sin(a) * (PLAZA_R - 30)); t.lineTo(Math.cos(a) * r1, Math.sin(a) * r1); } }
-function terracePathTo(t) { const c = TERRACE, a0 = c.a0 * D2R, a1 = c.a1 * D2R, r0 = c.r - 60, r1 = c.r + 110; t.moveTo(c.x + Math.cos(a0) * r0, c.y + Math.sin(a0) * r0); t.arc(c.x, c.y, r1, a0, a1); t.arc(c.x, c.y, r0, a1, a0, true); t.closePath(); }
+function blvdPathTo(t) { for (const d of ZONE_DEG) { const a = d * D2R, r1 = BLVD_END[d]; t.moveTo(Math.cos(a) * (PLAZA_R - 30), Math.sin(a) * (PLAZA_R - 30)); t.lineTo(Math.cos(a) * r1, Math.sin(a) * r1); } }
+function terracePathTo(t) { const c = TERRACE, a0 = c.a0 * D2R, a1 = c.a1 * D2R, r0 = c.r - c.inner, r1 = c.r + c.outer; t.moveTo(c.x + Math.cos(a0) * r0, c.y + Math.sin(a0) * r0); t.arc(c.x, c.y, r1, a0, a1); t.arc(c.x, c.y, r0, a1, a0, true); t.closePath(); }
 function hubPath(key, build) { if (!HAS_PATH2D) { ctx.beginPath(); build(ctx); return null; } let p = HUBPATH[key]; if (!p) { p = new Path2D(); build(p); HUBPATH[key] = p; } return p; }
 function pStroke(p) { if (p) ctx.stroke(p); else ctx.stroke(); }
 function pFill(p) { if (p) ctx.fill(p); else ctx.fill(); }
@@ -174,18 +172,18 @@ function drawHubFloor() {
   ctx.strokeStyle = HV.line; ctx.lineWidth = BLVD_W + 10; pStroke(bp); ctx.strokeStyle = '#fff1d6'; ctx.lineWidth = BLVD_W; pStroke(bp); if (cob) { ctx.strokeStyle = cob; ctx.lineWidth = BLVD_W - 4; pStroke(bp); }
   ctx.strokeStyle = 'rgba(255,126,182,0.35)'; ctx.lineWidth = 3; ctx.setLineDash([12, 16]); pStroke(bp); ctx.setLineDash(DASH_NONE);
   // the zones
-  zoneEllipse(0, -345, 290, 130, '#fff8ee', '#f6f0ff', groundPat('hall', ['#f6f0ff', '#f6f0ff'], 'rgba(150,120,200,0.35)', null, 'marble')); // Hall of Fame (marble)
-  zoneEllipse(345, -180, 190, 150, '#7a5a60', '#4a3a48', groundPat('yard', ['#4a3a48', '#4a3a48'], '#3a2a38', null, 'basalt')); // Smelter Yard (basalt)
-  zoneEllipse(-345, -140, 190, 200, '#e8c89a', '#c9a878', groundPat('market', ['#c9a878', '#c9a878'], 'rgba(90,50,20,0.45)', null, 'plank')); // Market Quarter (planks)
-  zoneEllipse(500, 60, 95, 70, '#fff1d6', '#f3d9a8', groundPat('arena', ['#f3d9a8', '#f3d9a8'], '#e0c08a', null, 'sand')); // Arena (sand)
-  zoneEllipse(WAYPAD.x, WAYPAD.y, 86, 86, '#dff8ff', '#bfe9f4', null); // Travel Dock
-  zoneEllipse(HATCH.x, HATCH.y + 10, 92, 76, '#8a7aa8', '#5a4a7a', null); // Backstage landing
+  zoneEllipse(HUBZ.hall.x, HUBZ.hall.y, HUBZ.hall.rx, HUBZ.hall.ry, '#fff8ee', '#f6f0ff', groundPat('hall', ['#f6f0ff', '#f6f0ff'], 'rgba(150,120,200,0.35)', null, 'marble')); // Hall of Fame (marble)
+  zoneEllipse(HUBZ.yard.x, HUBZ.yard.y, HUBZ.yard.rx, HUBZ.yard.ry, '#7a5a60', '#4a3a48', groundPat('yard', ['#4a3a48', '#4a3a48'], '#3a2a38', null, 'basalt')); // Smelter Yard (basalt)
+  zoneEllipse(HUBZ.market.x, HUBZ.market.y, HUBZ.market.rx, HUBZ.market.ry, '#e8c89a', '#c9a878', groundPat('market', ['#c9a878', '#c9a878'], 'rgba(90,50,20,0.45)', null, 'plank')); // Market Quarter (planks)
+  zoneEllipse(HUBZ.arena.x, HUBZ.arena.y, HUBZ.arena.rx, HUBZ.arena.ry, '#fff1d6', '#f3d9a8', groundPat('arena', ['#f3d9a8', '#f3d9a8'], '#e0c08a', null, 'sand')); // Arena (sand)
+  zoneEllipse(HUBZ.dock.x, HUBZ.dock.y, HUBZ.dock.rx, HUBZ.dock.ry, '#dff8ff', '#bfe9f4', null); // Travel Dock
+  zoneEllipse(HUBZ.landing.x, HUBZ.landing.y, HUBZ.landing.rx, HUBZ.landing.ry, '#8a7aa8', '#5a4a7a', null); // Backstage landing
   // Training Terrace: a slab-floored ring with a balustrade along its outer edge
   const tp = hubPath('terrace', terracePathTo);
   ctx.fillStyle = HV.line; ctx.translate(0, 4); pFill(tp); ctx.translate(0, -4); ctx.fillStyle = '#fff8ee'; pFill(tp);
-  const slab = groundPat('terrace', ['#efe6f6', '#efe6f6'], 'rgba(120,90,160,0.35)', null, 'slab'); if (slab) { ctx.save(); if (tp) ctx.clip(tp); else ctx.clip(); ctx.fillStyle = slab; ctx.fillRect(TERRACE.x - 460, TERRACE.y, 920, 460); ctx.restore(); }
-  for (let d = TERRACE.a0; d <= TERRACE.a1; d += 5.5) { const a = d * D2R, R = TERRACE.r + 96, x = TERRACE.x + Math.cos(a) * R, y = TERRACE.y + Math.sin(a) * R; ctx.fillStyle = HV.line; ctx.beginPath(); ctx.arc(x, y, 7, 0, TAU); ctx.fill(); ctx.fillStyle = '#d8c8f0'; ctx.beginPath(); ctx.arc(x, y - 2, 5, 0, TAU); ctx.fill(); }
-  ctx.strokeStyle = HV.line; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(TERRACE.x, TERRACE.y, TERRACE.r + 96, TERRACE.a0 * D2R, TERRACE.a1 * D2R); ctx.stroke(); ctx.strokeStyle = '#d8c8f0'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(TERRACE.x, TERRACE.y - 4, TERRACE.r + 96, TERRACE.a0 * D2R, TERRACE.a1 * D2R); ctx.stroke();
+  const slab = groundPat('terrace', ['#efe6f6', '#efe6f6'], 'rgba(120,90,160,0.35)', null, 'slab'); if (slab) { ctx.save(); if (tp) ctx.clip(tp); else ctx.clip(); ctx.fillStyle = slab; ctx.fillRect(TERRACE.x - TERRACE.r * 1.4, TERRACE.y, TERRACE.r * 2.8, TERRACE.r * 1.4); ctx.restore(); }
+  for (let d = TERRACE.a0; d <= TERRACE.a1; d += 5.5) { const a = d * D2R, R = TERRACE.r + TERRACE.rail, x = TERRACE.x + Math.cos(a) * R, y = TERRACE.y + Math.sin(a) * R; ctx.fillStyle = HV.line; ctx.beginPath(); ctx.arc(x, y, 7, 0, TAU); ctx.fill(); ctx.fillStyle = '#d8c8f0'; ctx.beginPath(); ctx.arc(x, y - 2, 5, 0, TAU); ctx.fill(); }
+  ctx.strokeStyle = HV.line; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(TERRACE.x, TERRACE.y, TERRACE.r + TERRACE.rail, TERRACE.a0 * D2R, TERRACE.a1 * D2R); ctx.stroke(); ctx.strokeStyle = '#d8c8f0'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(TERRACE.x, TERRACE.y - 4, TERRACE.r + TERRACE.rail, TERRACE.a0 * D2R, TERRACE.a1 * D2R); ctx.stroke();
   // the Stage Plaza: cobbled disc with a pink dashed ring
   ctx.fillStyle = HV.line; ctx.beginPath(); ctx.arc(0, 0, PLAZA_R + 8, 0, TAU); ctx.fill();
   ctx.fillStyle = '#fff1d6'; ctx.beginPath(); ctx.arc(0, 0, PLAZA_R, 0, TAU); ctx.fill();
