@@ -299,4 +299,64 @@
     b.addEventListener('click', () => { const s = next[V.setting()]; E.settings.scenes = s; b.textContent = 'SCENES: ' + lab[s]; b.className = 'btn ' + (s === 'full' ? 'green' : ''); safe(() => E.saveSettings()); E.sfx('click'); });
     if (!row) return b; const wrap = E.h('div.col', { style: { gap: '7px' } }); wrap.append(row, b); return wrap;
   };
+
+  /* ------------------------------------------------------------------ THE TOWN (thrift shop, Sound Lab, bar: park3d/vig_shop.js, vig_lab.js, vig_bar.js). Actions with no Core call get a hook here */
+  // the shop TRY ON (a tile tap changes the panel's look, no Core): the MICRO swap plays and swaps the look at its half turn; the try on camera and the drag to spin stay as they are
+  const P3 = E.scenes3d.place;
+  if (P3 && typeof P3.tryOn === 'function') {
+    const try0 = P3.tryOn;
+    P3.tryOn = function () {
+      const sh = this.shop, tt = this._try, w = this.w, sc = this;
+      if (tt && tt.k && sh && sh.el && sh.el.isConnected && w && sh.tab === tt.tab && !(V.cur && V.cur.form !== 'micro')) {
+        const k = JSON.stringify(sh.look);
+        if (k !== tt.k && V.enabled() && first('p1.shop.tryon')) {
+          const from = safe(() => JSON.parse(tt.k), null); tt.k = k;   // the scene's own setLook is skipped: the vignette swaps the look on its beat
+          const restore = () => safe(() => { if (sc.w === w) { const s = sc.shop; w.setLook(s && s.el && s.el.isConnected ? s.look : G.ch.look); } });
+          V.play('p1.shop.tryon', { form: 'micro', extra: { from, to: JSON.parse(k), tab: sh.tab, restore } }).then((i) => { if (!i.ok) restore(); });
+        }
+      }
+      return try0.apply(this, arguments);
+    };
+  }
+  // the bar stage: the walk up before a set and the walk out before a battle (INTRO, then the venue). The World Cup finals belong to their own films
+  const STAGE_IN = (a) => (a && a.mode === 'perform' && /^(openmic|showcase|karaoke)$/.test(a.kind) ? 'p1.stage.in.' + a.kind : a && a.mode === 'battle' && !a.final ? 'p1.battle.walkout' : null);
+  const goT = E.go;
+  E.go = function (name, args, o) {
+    const S = E.scene;
+    if (name !== 'rhythm' || V.playing || !V.enabled() || (o && o.noVig) || !S || S.id !== 'bar') return goT.apply(E, arguments);
+    const vid = first(STAGE_IN(args || {}));
+    if (!vid || V.form(vid) === 'micro') return goT.apply(E, arguments);
+    const spot = S.activeSpot, all = arguments;
+    V.play(vid, { action: { t: 'go', scene: name, args } }).then(() => { if (E.scene === S && S && !S.activeSpot && spot) S.activeSpot = spot; goT.apply(E, all); });
+    return undefined;
+  };
+  // after the set: the bow (p1.stage.out) or the verdict in the room (p1.battle.verdict) once the bar is up again. Core decided in the venue (G.doHold); the scene waits for the
+  // place and steps aside for a story film (firstWin, firstLoss, firstShowcase, champion), a story dialog or the morning
+  const hold0 = G.doHold;
+  if (hold0) G.doHold = function (action) { const r = hold0.apply(G, arguments); if (action && (action.t === 'perform' || action.t === 'battle')) V.lastSet = { action, fx: r.fx, at: Date.now() }; return r; };
+  const ret0 = G.takeReturn;
+  if (ret0) G.takeReturn = function (id) {
+    const t = ret0.apply(G, arguments), L = V.lastSet; V.lastSet = null; V.outPending = null;
+    if (t && id === 'bar' && t.scene === 'rhythm' && L && Date.now() - L.at < 10 * 60000) V.outPending = { L, at: 0, films: (BBH.R3Cine && BBH.R3Cine.log.length) || 0 };
+    return t;
+  };
+  const OUT_OF = (a) => (a.t === 'battle' ? (a.final ? null : 'p1.battle.verdict') : /^(openmic|showcase|karaoke)$/.test(a.kind) ? 'p1.stage.out' : null);
+  if (R3.onTick) R3.onTick(() => {
+    const p = V.outPending; if (!p) return;
+    if (E.sceneName !== 'place' || !E.scene || E.scene.id !== 'bar' || G.pendingMorning) { V.outPending = null; return; }
+    if (!sceneUp()) return;
+    if (!p.at) { p.at = Date.now(); return; }
+    if (Date.now() - p.at < 450) return;
+    V.outPending = null;
+    const C = BBH.R3Cine; if ((C && (C.playing || C.log.length > p.films)) || V.playing || document.querySelector('.k3-dlg, #ui .dialog')) return;
+    const id = OUT_OF(p.L.action), vid = id && first(id);
+    if (vid) V.play(vid, { action: p.L.action, fx: p.L.fx });
+  });
+  // the Sound Lab JUKEBOX (a track from the mixer's jukebox sheet): a bar of the new track (MICRO)
+  const mus0 = E.music;
+  if (mus0) E.music = function (id) {
+    const r = mus0.apply(E, arguments), S = E.scene, ttl = S && S.sheetEl && S.sheetEl.querySelector && S.sheetEl.querySelector('.h2');
+    if (S && S.id === 'studio' && ttl && /^\s*JUKEBOX/.test(ttl.textContent || '') && !V.playing && V.enabled() && first('p3.jukebox.lab')) V.play('p3.jukebox.lab', { form: 'micro', extra: { track: id } });
+    return r;
+  };
 })(typeof globalThis !== 'undefined' ? globalThis : this);

@@ -32,7 +32,7 @@ Contents
 The runtime is built (`r3/vig.js`, the game glue; `park3d/vignette_kit.js`, `vignette_clips.js`, `vignette_props.js`, the shared kit). A crew adds its
 world's scenes WITHOUT editing any of those files:
 
-1. Create `park3d/vig_<worldId>.js`, where worldId is the Park3D world id: `flat` (home, done), `park`, `shop`, `lab` (the Sound Lab), `bar`, `street`.
+1. Create `park3d/vig_<worldId>.js`, where worldId is the Park3D world id: `flat` (home, done), `park`, `shop` (done), `lab` (the Sound Lab, done), `bar` (done), `street`.
    The build picks it up by its name (`entry.js loadVig` is a pattern import of `./vig_${world}.js`); it becomes its own lazy chunk, fetched when that
    world comes up. No module, or no entry for an id: the action simply plays without a vignette, exactly as before.
 2. Export the table: `export const VIGNETTES = { 'p1.busk.out': (ctx) => ({ events: [...] }), ... }` with the ids of this document. A reel is a cine.js
@@ -53,6 +53,13 @@ choice (FIRST, FULL x4, then SHORT; MICRO for a repeat inside 20 s, Settings SCE
 browsers), Settings SCENES FULL / SHORT / OFF (`E.settings.scenes`), reduce motion, held toasts and HUD numbers until PAY, refusals by toast text
 (section 2.15), INTRO vignettes before activities launched from a place, the bedtime and wake up hooks, and a story film always wins the camera.
 Core reports the picked morning event (`morning` fx: `ev`, `event` id) and the mingle outcome (new fx `{ t: 'mingle', i, id, who }`).
+
+The town (done: `vig_shop.js`, `vig_lab.js`, `vig_bar.js`, with `vig_town_kit.js`, `vig_town_props.js`, `vig_town_clips.js`). Actions there that never reach `G.do` have their own
+hooks in the town section at the end of `r3/vig.js`: the shop TRY ON (a tile tap changes the panel's look: `p1.shop.tryon`, MICRO, the look swaps on its beat, the try on camera
+is untouched), the bar stage walk up and the battle walk out (`E.go('rhythm')` from the bar: `p1.stage.in.<kind>`, `p1.battle.walkout`), the bow and the verdict back in the room
+after a set (`p1.stage.out`, `p1.battle.verdict`: Core's result is captured at `G.doHold`, the scene waits for the place to be up and steps aside for a story film or a dialog),
+and the Sound Lab jukebox (`p3.jukebox.lab`). The cast is chibi (a 0.9 m head on 1.72 m): portrait two shots only work along the axis (over the shoulder), and every town camera
+stays inside the room, since the low south and east walls are brick to the shoulder.
 
 ### 0.1 What a vignette is
 

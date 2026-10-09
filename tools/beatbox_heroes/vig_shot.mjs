@@ -1,6 +1,7 @@
 // Frame grabber for the action vignettes (r3/vig.js, park3d/vig_<world>.js): plays vignettes in the REAL game (index.html?r=3d) and saves PNGs at chosen moments.
 //   node tools/beatbox_heroes/vig_shot.mjs <outDir> --vig p1.eat.banana,p1.nap [--form first] [--at 0.5,1.5,3] [--sizes 390x844,1280x720] [--q high] [--hour 13] [--place home]
 //   --morning oats      the morning event for p1.wake (oats five drums rain streamed mum dream pipes)      --slot hat   the changed slot for p1.wardrobe
+//   --action '{"t":"buy","group":"hat","id":"cowboy"}'   the Core action the reel sees (ctx.action)      --extra '{...}'   ctx.extra      --fx '[...]'   ctx.fx
 //   --sheet             also writes <outDir>/contact_<size>.png: every frame of the run on one page (needs nothing but the browser)
 // Each vignette is frozen (cine.pause) and moved with cine.seek(T) (simulation only), then real frames render for a moment with the world almost stopped (host.timeScale 0.05).
 // Prints each vignette's info and the console errors.
@@ -9,6 +10,7 @@ const [outDir, ...rest] = process.argv.slice(2); const opt = (k, d) => { const i
 if (!outDir) { console.log('usage: vig_shot.mjs <outDir> --vig id[,id] [--form first] [--at 0.5,1.5]'); process.exit(1); }
 fs.mkdirSync(outDir, { recursive: true }); process.env.BBH_BROWSER = '1';
 const ids = opt('vig', 'p1.eat.banana').split(','), form = opt('form', 'first'), q = opt('q', 'high'), sizes = opt('sizes', '390x844').split(','), hour = +opt('hour', 13), place = opt('place', 'home');
+const XO = { action: opt('action', '') ? JSON.parse(opt('action')) : null, extra: opt('extra', '') ? JSON.parse(opt('extra')) : null, fx: opt('fx', '') ? JSON.parse(opt('fx')) : null };
 const at = opt('at', '') ? opt('at').split(',').map(Number) : null, sheet = rest.includes('--sheet');
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const env = await r3env('vig_shot');
@@ -26,11 +28,12 @@ for (const s of sizes) {
   const shots = [];
   for (const id of ids) {
     await page.evaluate(([form]) => { BBH.R3Vig.force = form; BBH.R3Vig.onReel = (c) => { c.pause(true); window.__vc = c; }; window.__vc = null; }, [form]);
-    await page.evaluate(([id, mo, slot]) => {
+    await page.evaluate(([id, mo, slot, xo]) => {
       const o = {}; if (id === 'p1.wake') { o.morning = { t: 'morning', day: 4, name: 'Thursday', lines: ['You slept well.'], cause: 'sleep', event: mo || null }; o.anyScene = true; }
       if (id === 'p1.wardrobe') o.extra = { slot: slot || 'hat' }; if (id === 'p1.train.quick') o.action = { t: 'train', stat: 'tech', q: 0.4 };
+      if (xo.action) o.action = xo.action; if (xo.extra) o.extra = xo.extra; if (xo.fx) o.fx = xo.fx;
       window.__vp = BBH.R3Vig.play(id, o).then((i) => { window.__vi = i; });
-    }, [id, opt('morning', ''), opt('slot', '')]);
+    }, [id, opt('morning', ''), opt('slot', ''), XO]);
     await page.waitForFunction(() => window.__vc || (window.__vi && !window.__vi.ok), null, { timeout: 30000 }).catch(() => {});
     const has = await page.evaluate(() => !!window.__vc);
     if (!has) { console.log(id, 'did not play', JSON.stringify(await page.evaluate(() => window.__vi))); continue; }
