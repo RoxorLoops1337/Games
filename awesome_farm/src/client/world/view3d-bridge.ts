@@ -5,8 +5,9 @@
 // becomes a spot in the world:
 //
 //   2D (the default)  the Game scene's own Phaser sprites, and `Pointer2D` (the Phaser camera).
-//   3D (beta)         the Game scene is hidden (it still runs) and a three.js canvas under the transparent Phaser canvas draws the
-//                     same state (`View3D`, made by `src/client3d/view3d.ts`, loaded on demand); `Pointer3D` raycasts into it.
+//   3D (beta)         the Game scene's main camera draws nothing (the scene still runs) and a three.js canvas under the transparent
+//                     Phaser canvas draws the same state (`View3D`, made by `src/client3d/view3d.ts`, loaded on demand); `Pointer3D`
+//                     raycasts into it. The 2D overlays marked with `overlay3d` are laid onto its ground (world/overlay3d.ts).
 //
 // Everything in here is types plus two tiny classes, so the 2D bundle carries no three.js: the only way into src/client3d is the
 // dynamic import in `loadView3D` (tests/view3d.test.ts checks that no static import reaches it).
@@ -19,6 +20,7 @@ import { VIEW_H, VIEW_W } from '../../shared/config';
 import type { BuildingKind } from '../../shared/data/buildings';
 import type { ItemId } from '../../shared/data/items';
 import type { PlayerView } from '../../shared/net/protocol';
+import type { Quality3D } from '../settings';
 import type { Ent, Plot, SimEvent } from '../../shared/sim/types';
 import type { World } from '../../shared/world';
 import { SS } from '../res';
@@ -69,6 +71,46 @@ export class Pointer3D implements WorldPointer {
     toScreen (x: number, y: number): XY { return this.view.worldToScreen(x, y); }
 }
 
+// ── world overlays: the 2D drawing the 3D view shows too ──────────────────────
+
+/**
+ * The Game scene's world-space overlays (status badges, the Factory view, belt items, inserter arms and marks, the placement and
+ * blueprint overlays, fishing lines, Titan rings, the dismantle outline, swing arcs, monster marks…) are drawn by the 2D code in
+ * both views. In 3D only these objects are drawn, by an overlay camera that lies the 2D world on the 3D ground (world/overlay3d.ts):
+ * an orthographic camera with no yaw maps the ground to the screen by an exact affine map, so a Phaser camera with a different
+ * zoom down than across puts every overlay on its spot of the 3D ground. `lift` (tiles) raises one above the ground on screen, as
+ * high as a thing of that height stands in 3D (badges float over the machine models). Everything not marked stays 2D only.
+ */
+const OVERLAYS = new WeakMap<object, number>();
+/** Every lift some overlay was marked with (the overlay layer keeps one camera per lift). */
+export const OVERLAY_LIFTS = new Set<number>([0]);
+
+/** Mark a Game-scene object as a world overlay the 3D view shows too (returns it, for chaining). */
+export function overlay3d<T extends object> (obj: T, lift = 0): T {
+    OVERLAYS.set(obj, lift);
+    OVERLAY_LIFTS.add(lift);
+    return obj;
+}
+
+/** How high (tiles) a marked overlay is drawn in 3D; undefined: not an overlay (2D only). */
+export function overlayLift (obj: object): number | undefined { return OVERLAYS.get(obj); }
+
+/**
+ * How the 3D ground (y = 0) lies on the screen this frame: the ground point at the centre of the screen (sim pixels, shake
+ * included), HUD units per sim pixel across (`sx`) and down (`sy`, the elevation's squash), and HUD units a tile of height rises on
+ * screen (`up`). Ground point (x, y) is at HUD ((x - cx) * sx + VIEW_W / 2, (y - cy) * sy + VIEW_H / 2).
+ */
+export interface GroundView { cx: number; cy: number; sx: number; sy: number; up: number }
+
+/**
+ * The 2D camera that draws the overlays of one lift onto the 3D ground: its zoom across and down (canvas pixels per sim pixel)
+ * and the world point at the middle of the screen. A Phaser camera puts world (x, y) at ((x - x0) * zx, (y - y0) * zy) from the
+ * screen's middle, so a thing `lift` tiles up is drawn `lift * up` HUD units higher by looking that much further south.
+ */
+export function overlayCamera (gv: GroundView, lift: number) {
+    return { zx: gv.sx * SS, zy: gv.sy * SS, x: gv.cx, y: gv.cy + (lift * gv.up) / gv.sy };
+}
+
 // ── the 3D view's interface ─────────────────────────────────────────────────
 
 /** One farmer to draw this frame: where the Game scene has them (your own walked here, the others glided), facing and walking. */
@@ -103,6 +145,29 @@ export interface View3DFrame {
     target: { x: number; y: number; r: number } | null;
     /** The player's Screen shake setting. */
     shake: boolean;
+    /** The player's 3D quality setting (Auto when left out): src/client3d/quality.ts. */
+    quality?: Quality3D;
+    /** A blueprint being pasted: a ghost per piece, green where it fits and red where not (the blueprint tool decides). */
+    paste?: readonly View3DPlacing[];
+    /** The camera's extras (CONTROLS: real time, shake, the Perfect beat, photo mode). Missing: the plain follow camera. */
+    cam?: View3DCamera;
+}
+
+/**
+ * What the 3D camera takes from the Game scene besides the follow target and zoom (src/client3d/camera.ts draws it, nothing here
+ * is decided by the view): the 2D camera's own shake, so the juice table's numbers and its rule (only YOUR actions shake YOUR
+ * camera) hold in 3D unchanged; the Perfect dash's beat; and photo mode's free camera.
+ */
+export interface View3DCamera {
+    /** Real seconds this frame (`frame`'s dt is the world's time, slower in the Perfect beat; the camera keeps real time). */
+    realDt: number;
+    /** The 2D camera's shake running now, in sim pixels (what `Fx` asked for: 0 when none, or when Screen shake is off). */
+    shake: number;
+    /** The Perfect dash's push in (juice/slowmo.ts `punch`) and how fast the world runs (1 normal, 0.2 at the bottom of the beat). */
+    punch: number;
+    slow: number;
+    /** Photo mode's free camera (turn, tilt in degrees above the ground, zoom over the game's), or null for the game camera. */
+    photo: { yaw: number; tilt: number; zoom: number } | null;
 }
 
 /**
@@ -122,12 +187,16 @@ export interface View3D {
     event (e: SimEvent, me: string): void;
     /** A farmer swung (your own swing starts here, before the server answers). */
     swing (id: string): void;
+    /** A storm's lightning flash (0..1): the 2D night layer keeps the timer and the thunder, the view lights the world up. */
+    lightning? (k: number): void;
     /** Draw a frame. `dt` is the world's own time (slower in the Perfect beat). */
     frame (dt: number, f: View3DFrame): void;
     /** A pointer at (u, v), 0..1 across the canvas, onto the world (see WorldPointer.toWorld). False: nothing under it. */
     pointerToWorld (u: number, v: number, out: XY, aim: boolean): boolean;
     /** A ground point (sim pixels) to HUD units. */
     worldToScreen (x: number, y: number): XY;
+    /** How the ground lies on the screen after the last frame (null before the first): the overlay camera follows it. */
+    groundView (): GroundView | null;
     /** Take the canvas away and free the GPU. */
     dispose (): void;
 }
@@ -141,6 +210,13 @@ export interface View3DHost {
 }
 
 export type View3DFactory = (host: View3DHost) => View3D;
+
+/** The shake the 2D camera is running now, in sim pixels (Phaser moves the world by intensity x width x zoom), tapering to 0 as it ends. */
+export function shakeNow (cam: Phaser.Cameras.Scene2D.Camera) {
+    const s = cam.shakeEffect;
+    if (!s.isRunning) return 0;
+    return s.intensity.x * cam.width * cam.zoom * (1 - s.progress);
+}
 
 /** Load the 3D view (its own chunk, with three.js: a 2D player never downloads it). */
 export function loadView3D (): Promise<View3DFactory> {

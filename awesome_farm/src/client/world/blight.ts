@@ -9,6 +9,7 @@ import { TILE } from '../../shared/config';
 import { BUILDINGS } from '../../shared/data/buildings';
 import type { BuildE, MobE, NodeE, Plot } from '../../shared/sim/types';
 import type { World } from '../../shared/world';
+import { overlay3d } from './view3d-bridge';
 
 type Img = Phaser.GameObjects.Image;
 type Txt = Phaser.GameObjects.Text;
@@ -26,7 +27,7 @@ export class BlightFx {
     private rings: { x: number; y: number; r: number }[] = [];
 
     constructor (private scene: Phaser.Scene, private world: () => World) {
-        this.g = scene.add.graphics().setDepth(9e4);
+        this.g = overlay3d(scene.add.graphics().setDepth(9e4));          // (the bars and the rings are world overlays: the 3D view shows them too)
         this.splash = scene.add.particles(0, 0, 'px', {
             emitting: false, speed: { min: 8, max: 26 }, angle: { min: 200, max: 340 }, lifespan: { min: 240, max: 420 },
             scale: { start: 1, end: 0 }, alpha: { start: 0.9, end: 0 }, gravityY: 90, tint: [PAL.foam, PAL.sea, PAL.snow],
@@ -53,8 +54,8 @@ export class BlightFx {
         let plate = this.plates.get(e.id);
         const words = `${plot?.nk ? NEST_KINDS[plot.nk].name : 'Blight Nest'}  Lv ${lv}`;
         if (!plate) {
-            plate = this.scene.add.text(0, 0, words, { fontFamily: 'Pixelify Sans', fontSize: '20px', color: '#ffc0c8', stroke: '#2a1d2c', strokeThickness: 4 })
-                .setResolution(2).setScale(0.25).setOrigin(0.5, 1).setDepth(9e4);
+            plate = overlay3d(this.scene.add.text(0, 0, words, { fontFamily: 'Pixelify Sans', fontSize: '20px', color: '#ffc0c8', stroke: '#2a1d2c', strokeThickness: 4 })
+                .setResolution(2).setScale(0.25).setOrigin(0.5, 1).setDepth(9e4));
             this.plates.set(e.id, plate);
         } else if (plate.text !== words) plate.setText(words);
         const mhp = e.mhp ?? e.hp, hurt = e.hp < mhp;

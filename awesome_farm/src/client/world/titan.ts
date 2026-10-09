@@ -23,6 +23,7 @@ export class TitanFx {
 
     constructor (private scene: Phaser.Scene) {
         ensureTitanBadge(scene);
+        // (2D only: the 3D Titan models carry their own ring, badge and bar, client3d/models/nodes-titan.ts, so these stay unmarked)
         this.ground = scene.add.graphics().setDepth(-4.5);
         this.air = scene.add.graphics().setDepth(9e4);
     }

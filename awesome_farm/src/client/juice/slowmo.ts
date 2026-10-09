@@ -5,6 +5,7 @@ import * as Phaser from 'phaser';
 import { TUNING } from '../../shared/config';
 import { PAL } from '../../shared/palette';
 import { settings } from '../settings';
+import { overlay3d } from '../world/view3d-bridge';
 
 export class SlowMo {
     /** Real seconds of slow motion left. */
@@ -53,7 +54,7 @@ export class SlowMo {
     ringFlash (x: number, y: number) {
         const s = this.scene;
         for (const [delay, from, to] of [[0, 0.5, 3.6], [90, 0.4, 2.6]] as const) {
-            const ring = s.add.circle(x, y, 5).setStrokeStyle(2, PAL.snow, 1).setDepth(9.5e4).setScale(from).setAlpha(0);
+            const ring = overlay3d(s.add.circle(x, y, 5).setStrokeStyle(2, PAL.snow, 1).setDepth(9.5e4).setScale(from).setAlpha(0));
             s.tweens.add({
                 targets: ring, scale: to, duration: 460, delay, ease: 'Quad.easeOut',
                 onStart: () => ring.setAlpha(1),
@@ -62,7 +63,7 @@ export class SlowMo {
             });
         }
         // and a bright glow that blooms and fades under it
-        const glow = s.add.image(x, y, 'light', 0).setTint(PAL.snow).setAlpha(0.85).setScale(0.3).setDepth(9.49e4).setBlendMode(Phaser.BlendModes.ADD);
+        const glow = overlay3d(s.add.image(x, y, 'light', 0).setTint(PAL.snow).setAlpha(0.85).setScale(0.3).setDepth(9.49e4).setBlendMode(Phaser.BlendModes.ADD));
         s.tweens.add({ targets: glow, scale: 0.9, alpha: 0, duration: 380, ease: 'Quad.easeOut', onComplete: () => glow.destroy() });
     }
 }

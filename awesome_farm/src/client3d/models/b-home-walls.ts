@@ -182,7 +182,7 @@ export function windowParts(frame: Bld, glass: Bld) {
 }
 export function buildWall(mb: MB, style: string, mask: number, seed: number) {
     const b = mb.main, cfg = style === 'block' ? BLOCK_CFG : WALL_CFG;
-    const stone = style === 'stone' || style === 'block';
+    const stone = style === 'stone' || style === 'block' || style === 'fort';
     let cols;
     if (stone) cols = { plinth: { top: ST[2], s: ST[1], o: ST[1] }, body: { top: ST[2], s: ST[0], o: ST[2] }, cap: { top: ST[0], s: ST[3], o: ST[3] } };
     else if (style === 'brick') cols = { plinth: { top: BR3[3], s: BR3[1], o: BR3[1] }, body: { top: BR3[2], s: mix(BR3[0], 0xe8d8c0, 0.5), o: BR3[2] }, cap: { top: BR3[1], s: BR3[3], o: BR3[3] } };
@@ -196,6 +196,7 @@ export function buildWall(mb: MB, style: string, mask: number, seed: number) {
         stoneFront(b, cfg, segs, seed);
         stoneTop(b, cfg, tops, seed);
         if (style === 'block') mossTufts(b, cfg, tops, seed);
+        if (style === 'fort') fortBands(mb, cfg, mask);
     } else if (style === 'brick') {
         brickFront(b, cfg, segs, seed);
         brickTop(b, cfg, tops, seed);
@@ -213,6 +214,13 @@ export function buildWall(mb: MB, style: string, mask: number, seed: number) {
             stamp(gl, g, t);
         }
     }
+}
+/** The Fortified Wall: stone bound by two iron bands (they follow the joins like the courses do) with rivet heads along them. */
+export function fortBands(mb: MB, cfg: WallCfg, mask: number) {
+    const I = RAMP.steel, band = { top: I[2], s: I[1], o: I[2] };
+    for (const y of [0.56, 1.18]) layer(mb.main, cfg, mask, 0.022, y, y + 0.09, band, true);
+    const h = cfg.hh + 0.026, x0 = mask & 8 ? -0.5 : -h, x1 = mask & 2 ? 0.5 : h, sh = mb.shiny();
+    for (const y of [0.605, 1.225]) for (let x = x0 + 0.12; x < x1 - 0.06; x += 0.26) for (const z of [-h, h]) sh.box(0.045, 0.045, 0.02, I[3], { x, y, z, ao: false, v: 0 });
 }
 export function mossTufts(b: Bld, cfg: WallCfg, rects: Rect[], seed: number) {
     const R = seedRand(seed * 17 + 9), y = cfg.top + 0.006, r0 = rects[0];

@@ -10,6 +10,7 @@ import type { Cmd, PlayerS } from '../../shared/sim/types';
 import type { World } from '../../shared/world';
 import { ensureFarmer } from '../art/storybook-chars';
 import { physDown } from '../input/layout';
+import { screenToWorldMove } from './photocam';
 
 type Img = Phaser.GameObjects.Image;
 type Spr = Phaser.GameObjects.Sprite;
@@ -51,6 +52,8 @@ interface FarmersHost {
     send (c: Cmd): void;
     /** A farmer swung (the 3D view poses its model). */
     swung? (id: string): void;
+    /** How far the 3D photo camera is turned (radians; 0 in 2D and in the game camera): keys and stick keep moving in screen directions. */
+    readonly moveYaw?: number;
 }
 
 /** A quick squash (or stretch) that springs back: a hit, a pop, a swap. */
@@ -200,6 +203,7 @@ export class Farmers {
             mx = (physDown('KeyD') || k.RIGHT.isDown ? 1 : 0) - (physDown('KeyA') || k.LEFT.isDown ? 1 : 0) + h.touch.mx;
             my = (physDown('KeyS') || k.DOWN.isDown ? 1 : 0) - (physDown('KeyW') || k.UP.isDown ? 1 : 0) + h.touch.my;
         }
+        if (h.moveYaw) ({ x: mx, y: my } = screenToWorldMove(mx, my, h.moveYaw));
         const len = Math.hypot(mx, my);
         if (len > 1) { mx /= len; my /= len; }
         const moving = len > 0.15;

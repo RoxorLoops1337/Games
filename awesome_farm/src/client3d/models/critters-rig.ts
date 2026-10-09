@@ -1,6 +1,7 @@
 // The creature rig: bones, procedural walk, breathing, blinking, sleep and work, colour helpers and shared parts (limbs, eyes, flames).
 import * as THREE from 'three';
 import type { Ent } from '../../shared/sim/types';
+import { WorkSlot } from './critters-work';
 import { bake, Bld, clamp, type Col, type ColorFn, hash3, M, MB, mix, TAU, type Xf } from './kit';
 
 export const _hc = new THREE.Color();
@@ -158,6 +159,8 @@ export class Rig {
     bo: number;
     to: number;
     zg = new THREE.Group();
+    /** the tool or load it carries for what it is doing (critters-work.ts) */
+    work = new WorkSlot();
     constructor(public sp: string, public v: number, public cfg: RigCfg, public seed: number) {
 
         const g3 = new THREE.Group();
@@ -180,6 +183,7 @@ export class Rig {
             this.zs.push(z);
         }
         this.obj.add(this.zg);
+        this.obj.add(this.work.group);
     }
     /** A bare pivot (no geometry). */
     pivot(parent: Bone | null, x: number, y: number, z: number, sleep?: Partial<Pose>) {
@@ -221,12 +225,27 @@ export class Rig {
         this.nStars = n;
         for (let i = 0; i < this.stars.length; i++) this.stars[i].visible = i < n;
     }
+    measured = false;
+    /** The body's half width and depth (for where a held tool and a load sit), once, from its bounds at rest. */
+    measure() {
+        this.measured = true;
+        const ry = this.obj.rotation.y;
+        this.obj.rotation.y = 0;
+        this.obj.updateMatrixWorld(true);
+        const box = new THREE.Box3().setFromObject(this.scaler), p = this.obj.getWorldPosition(new THREE.Vector3());
+        this.obj.rotation.y = ry;
+        if (box.isEmpty()) return;
+        this.work.side = Math.max(p.x - box.min.x, box.max.x - p.x) * 0.92;
+        this.work.rear = Math.max(0.1, p.z - box.min.z);
+    }
     apply(e: Ent) {
         if (e.k !== 'crit') return;
         this.flee = e.st === 1;
         this.stWork = e.st === 3;
         this.wLeft = Math.max(0, e.w ?? 0);
         this.shake = !!e.cat;
+        if (e.ac && !this.measured) this.measure();
+        this.work.set(e.ac, !!e.ld?.length);
         if (e.star !== undefined) this.setStars(e.star);
     }
     pose(face: number, moving: boolean, sleeping: boolean, dt: number) {
@@ -316,6 +335,8 @@ export class Rig {
                 z.scale.setScalar(Math.max(0.0001, zl * Math.sin(u * Math.PI) * (0.045 + u * 0.05)));
             }
         }
+        this.work.group.visible = s.sl < 0.5;
+        this.work.pose(this.topY * this.k * (1 - 0.35 * s.sl), s.busy, t);
         if (this.starG && this.nStars) {
             const n = this.nStars, y = (this.topY * (1 - 0.3 * s.sl) + b.g.position.y * 0.6) * this.k + 0.17;
             this.starG.position.y = y;

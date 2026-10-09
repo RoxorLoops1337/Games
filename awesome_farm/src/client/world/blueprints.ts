@@ -13,6 +13,7 @@ import { canAfford, scaledCost } from '../../shared/sim/stats';
 import type { BuildE, Cmd, Ent, PlayerS } from '../../shared/sim/types';
 import { isTouchUi } from '../input/layout';
 import { BLUEPRINT_KEY } from '../profile';
+import { overlay3d, type View3DPlacing } from './view3d-bridge';
 
 // ── the book ────────────────────────────────────────────────────────────────
 export const MAX_SAVED = 14;
@@ -55,9 +56,11 @@ export class BlueprintTool {
     private fit = 0;
     private missing = '';
     private inRange = true;
+    /** Where each piece of the layout being pasted would go, and whether it fits (the 3D view's ghosts; updated with the 2D ones). */
+    readonly ghostSpots: View3DPlacing[] = [];
 
     constructor (private scene: Phaser.Scene, private h: BpHost) {
-        this.g = scene.add.graphics().setDepth(1e5 + 5);
+        this.g = overlay3d(scene.add.graphics().setDepth(1e5 + 5));          // (the box and outline are world overlays; the 3D view builds its own ghosts from `ghostSpots`)
     }
 
     get active () { return this.mode !== 'off'; }
@@ -88,6 +91,7 @@ export class BlueprintTool {
         this.mode = 'off';
         this.from = this.to = null;
         this.bp = null;
+        this.ghostSpots.length = 0;
         this.g.clear();
     }
 
@@ -187,12 +191,16 @@ export class BlueprintTool {
         let fit = 0;
         const me = this.h.me();
         const need: Record<string, number> = {};
+        const spots = this.ghostSpots;
+        spots.length = this.items.length;
         this.items.forEach((it, i) => {
             const tx = ax + it.dx, ty = ay + it.dy;
             const def = BUILDINGS[it.kind];
             const [w, h] = def.size;
             const ok = this.inRange && this.h.valid(it.kind, tx, ty);
             if (ok) { fit++; for (const [res, n] of Object.entries(scaledCost(me, def.cost))) need[res] = (need[res] ?? 0) + n; }
+            const spot = (spots[i] ??= { kind: it.kind, tx, ty, rot: 0, valid: ok });
+            spot.kind = it.kind; spot.tx = tx; spot.ty = ty; spot.rot = it.rot ?? 0; spot.valid = ok;
             const ghost = this.ghosts[i];
             if (!ghost) return;
             const centred = isBeltLike(it.kind) || it.kind === 'drill';

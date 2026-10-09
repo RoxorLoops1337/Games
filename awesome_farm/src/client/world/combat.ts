@@ -8,6 +8,7 @@ import type { WeaponType } from '../../shared/data/items';
 import { MobKind, MOBS, PROJ } from '../../shared/data/mobs';
 import { PAL } from '../../shared/palette';
 import type { Ent, MobE, ProjE, SimEvent } from '../../shared/sim/types';
+import { overlay3d } from './view3d-bridge';
 
 type Img = Phaser.GameObjects.Image;
 type Spr = Phaser.GameObjects.Sprite;
@@ -116,7 +117,7 @@ export function animateMob (scene: Phaser.Scene, v: MobViewLike, e: MobE, dt: nu
     // the little icon above its head: danger, stun, or the elite crown
     const wantMark = st === 1 ? 'mark_alert' : st === 3 || (e.stun ?? 0) > 0 ? 'mark_stun' : e.el ? 'mark_elite' : null;
     if (wantMark) {
-        if (!v.mark) v.mark = scene.add.image(0, 0, wantMark, 0).setDepth(9e4);
+        if (!v.mark) v.mark = overlay3d(scene.add.image(0, 0, wantMark, 0).setDepth(9e4));
         else if (v.mark.texture.key !== wantMark) v.mark.setTexture(wantMark, 0);
         v.mark.setVisible(true).setPosition(Math.round(v.x), Math.round(v.y + oy - spr.displayHeight - 3 - (wantMark === 'mark_alert' ? Math.abs(Math.sin(now / 90)) * 2 : 0)));
     } else v.mark?.setVisible(false);
@@ -151,7 +152,7 @@ export class CombatFx {
         const dist = Math.hypot(e.x - px, e.y - py);
         const scene = this.scene;
         const draw = (fn: (g: Phaser.GameObjects.Graphics) => void, ms: number, alphaFrom = 1) => {
-            const g = scene.add.graphics().setDepth(8e4);
+            const g = overlay3d(scene.add.graphics().setDepth(8e4));
             fn(g);
             g.setAlpha(alphaFrom);
             scene.tweens.add({ targets: g, alpha: 0, duration: ms, onComplete: () => g.destroy() });
@@ -180,21 +181,21 @@ export class CombatFx {
                 break;
             }
             case 'hammer': {
-                const g = scene.add.graphics().setDepth(8e4).setPosition(px, py + 4);
+                const g = overlay3d(scene.add.graphics().setDepth(8e4).setPosition(px, py + 4));
                 g.lineStyle(3, PAL.cream, 0.9).strokeCircle(0, 0, 12).lineStyle(1, PAL.dirt, 0.8).strokeCircle(0, 0, 8);
                 scene.tweens.add({ targets: g, scaleX: 3, scaleY: 2.2, alpha: 0, duration: 260, ease: 'Quad.easeOut', onComplete: () => g.destroy() });
                 break;
             }
             case 'bow': case 'staff': {
                 const key = w === 'bow' ? 'proj_arrow' : 'proj_bolt';
-                const s = scene.add.image(px, py, key, 0).setDepth(8e4).setRotation(ang);
-                const glow = w === 'staff' ? scene.add.image(px, py, 'dot', 0).setTint(PAL.foam).setAlpha(0.5).setScale(1.4).setDepth(7.9e4).setBlendMode(Phaser.BlendModes.ADD) : null;
+                const s = overlay3d(scene.add.image(px, py, key, 0).setDepth(8e4).setRotation(ang));
+                const glow = w === 'staff' ? overlay3d(scene.add.image(px, py, 'dot', 0).setTint(PAL.foam).setAlpha(0.5).setScale(1.4).setDepth(7.9e4).setBlendMode(Phaser.BlendModes.ADD)) : null;
                 scene.tweens.add({
                     targets: glow ? [s, glow] : s, x: e.x, y: e.y, duration: Math.max(60, dist * 1.1), ease: 'Linear',
                     onComplete: () => {
                         s.destroy(); glow?.destroy();
                         if (w === 'staff') {
-                            const ring = scene.add.graphics().setDepth(8e4).setPosition(e.x, e.y);
+                            const ring = overlay3d(scene.add.graphics().setDepth(8e4).setPosition(e.x, e.y));
                             ring.lineStyle(2, PAL.foam, 0.9).strokeCircle(0, 0, 10);
                             scene.tweens.add({ targets: ring, scaleX: 2.4, scaleY: 2.4, alpha: 0, duration: 240, onComplete: () => ring.destroy() });
                         }

@@ -30,6 +30,7 @@ import { SS } from '../res';
 import type { TipData } from '../ui/kit';
 import { squash } from './farmers';
 import type { Placing } from './placing';
+import { overlay3d } from './view3d-bridge';
 
 type Img = Phaser.GameObjects.Image;
 type Spr = Phaser.GameObjects.Sprite;
@@ -72,6 +73,8 @@ interface FactoryHost {
     pop (x: number, y: number, n: number): void;
     /** A pointer onto the world through the view in use (world/view3d-bridge.ts); `aim` picks the thing under it. */
     toWorld (p: Phaser.Input.Pointer, out: { x: number; y: number }, aim?: boolean): unknown;
+    /** The part of the world on screen (sim pixels), in the view in use (the 3D ground reaches a little further north and south). */
+    view (): Phaser.Geom.Rectangle;
 }
 
 /** Buildings whose frame follows the clock (`t`, seconds) and their own state: `working` is act and power, `sun` the daylight. */
@@ -124,6 +127,8 @@ const MARGIN = 3 * TILE;
 const MAX_LABELS = 56;
 const NET_COLORS = [PAL.gold, PAL.sea, PAL.blossom, PAL.lime, PAL.pumpkin, PAL.plum, PAL.foam];
 const LONG_PRESS = 450;
+/** In 3D: status badges float this high (tiles) over the ground, clear of the machine models. */
+const BADGE_LIFT = 0.9;
 
 /** The pole of a net closest to a member (where its feed wire is drawn from). */
 export const STATE_WORDS: Record<StatusState, [string, number]> = {
@@ -171,17 +176,22 @@ export class FactoryView {
     private wiresG: Phaser.GameObjects.Graphics;
     private wiresAt = { v: -1, x: -1e9, y: -1e9, w: 0 };
     private fxg: Phaser.GameObjects.Graphics;
+    /** The inserter arms (their own Graphics, under the placement overlay as before, so the 3D view can leave them to its models). */
+    private arms: Phaser.GameObjects.Graphics;
     private fxDrawn = false;
 
     constructor (private scene: Phaser.Scene, private h: FactoryHost) {
         const s = scene;
         ensureBadgeArt(s);
         for (let i = 0; i < MAX_LABELS; i++) this.labels.push({ x: 0, y: 0, text: '', color: PAL.cream, size: 12 });
-        this.dim = s.add.rectangle(0, 0, 10, 10, PAL.ink, 0.5).setOrigin(0).setDepth(-9.6).setVisible(false);
-        this.g = s.add.graphics().setDepth(9.5e3);
-        this.mk = s.add.graphics().setDepth(4.9e4);
+        // (the dim, the Factory view, the inserter marks and the placement overlay are world overlays the 3D view shows too; its
+        // models have their own wires, inserter arms and belt items, so those stay 2D only)
+        this.dim = overlay3d(s.add.rectangle(0, 0, 10, 10, PAL.ink, 0.5).setOrigin(0).setDepth(-9.6).setVisible(false));
+        this.g = overlay3d(s.add.graphics().setDepth(9.5e3));
+        this.mk = overlay3d(s.add.graphics().setDepth(4.9e4));
         this.wiresG = s.add.graphics().setDepth(5e4 - 1);
-        this.fxg = s.add.graphics().setDepth(5e4);
+        this.arms = s.add.graphics().setDepth(5e4);
+        this.fxg = overlay3d(s.add.graphics().setDepth(5e4));
         const at = (tx: number, ty: number): BuildE | null => {
             const id = h.world.occAt(tx, ty) || h.world.floorAt(tx, ty);
             const e = id ? h.ents[id] : null;
@@ -263,14 +273,14 @@ export class FactoryView {
         this.animateBadges();
         this.hover(dt);
         if (this.on) {
-            const wv = this.scene.cameras.main.worldView;
-            this.dim.setPosition(wv.x, wv.y).setSize(wv.width + 1, wv.height + 1);
+            const wv = this.h.view();
+            this.dim.setPosition(wv.x - TILE, wv.y - TILE).setSize(wv.width + TILE * 2, wv.height + TILE * 2);         // (a tile spare: the 3D camera may glide a little before the next frame)
         }
     }
 
     // ── the refresh: a few times a second, over what is on screen ───────────
     private refresh () {
-        const h = this.h, wv = this.scene.cameras.main.worldView;
+        const h = this.h, wv = h.view();
         const c = h.clock;
         this.env.wind = wind(c.time);
         this.env.sun = sunlight(c.clock, c.nightLen);
@@ -307,7 +317,7 @@ export class FactoryView {
             this.badged.push(en);
             const tex = badgeTex(en.badge);
             if (!en.img) {
-                en.img = this.pool.pop() ?? this.scene.add.image(0, 0, tex, 0).setDepth(1e4);
+                en.img = this.pool.pop() ?? overlay3d(this.scene.add.image(0, 0, tex, 0).setDepth(1e4), BADGE_LIFT);
                 en.img.setVisible(true).setTexture(tex, 0).setAlpha(1);
                 this.place(en);
                 const im = en.img;
@@ -391,7 +401,7 @@ export class FactoryView {
         const g = this.g, graph = this.graph!;
         g.clear();
         this.nLabels = 0;
-        const wv = this.scene.cameras.main.worldView;
+        const wv = this.h.view();
         const near = (x: number, y: number, m = 120) => x > wv.x - m && x < wv.right + m && y > wv.y - m && y < wv.bottom + m;
         // power grids: each its own colour
         for (const net of graph.nets) {
@@ -535,7 +545,7 @@ export class FactoryView {
             if (e.kind === 'tunnel') this.drawTunnelLink(v, e);
             if (e.kind === 'sorter') {
                 // the filter item sits on the hub, so you can read the whole line at a glance
-                if (e.flt) { if (!v.hand) v.hand = s.add.image(v.x, v.y, iconOf(e.flt), 0).setScale(0.5).setDepth(-6.9); icon(v.hand, iconOf(e.flt)).setVisible(true).setPosition(v.x, v.y); }
+                if (e.flt) { if (!v.hand) v.hand = overlay3d(s.add.image(v.x, v.y, iconOf(e.flt), 0).setScale(0.5).setDepth(-6.9)); icon(v.hand, iconOf(e.flt)).setVisible(true).setPosition(v.x, v.y); }
                 else v.hand?.setVisible(false);
             }
             const [dx, dy] = DIRS[e.rot & 3];
@@ -555,7 +565,7 @@ export class FactoryView {
         else if (e.kind === 'weathervane') this.animateVane(v, e, dt, t);
         else if (e.kind === 'chute') {
             // the one item it sells wears its icon on the coin plate (nothing there: it sells anything)
-            if (e.flt) { if (!v.hand) v.hand = s.add.image(v.x, v.y - 6, iconOf(e.flt), 0).setScale(0.5).setDepth(v.y + 0.2); icon(v.hand, iconOf(e.flt)).setVisible(true); }
+            if (e.flt) { if (!v.hand) v.hand = overlay3d(s.add.image(v.x, v.y - 6, iconOf(e.flt), 0).setScale(0.5).setDepth(v.y + 0.2)); icon(v.hand, iconOf(e.flt)).setVisible(true); }
             else v.hand?.setVisible(false);
         }
         else if (e.kind === 'inserter') {
@@ -609,7 +619,7 @@ export class FactoryView {
         if (!other) return;
         const x0 = (e.tx + 0.5) * TILE, y0 = (e.ty + 0.5) * TILE, x1 = (other.tx + 0.5) * TILE, y1 = (other.ty + 0.5) * TILE;
         const len = Math.hypot(x1 - x0, y1 - y0);
-        const g = this.scene.add.graphics().setDepth(-8.2);
+        const g = overlay3d(this.scene.add.graphics().setDepth(-8.2));
         g.fillStyle(PAL.ink, 0.38);
         for (let d = 11; d < len - 7; d += 5) g.fillRect(Math.round(x0 + ((x1 - x0) * d) / len) - 1, Math.round(y0 + ((y1 - y0) * d) / len) - 1, 2, 2);
         v.link = g;
@@ -621,7 +631,7 @@ export class FactoryView {
      * came or went or the camera moved on. The inserter arms and the placement overlay move, so they are drawn each frame.
      */
     private drawWires () {
-        const wv = this.scene.cameras.main.worldView, at = this.wiresAt;
+        const wv = this.h.view(), at = this.wiresAt;
         const moved = Math.abs(wv.centerX - at.x) + Math.abs(wv.centerY - at.y) > 56 || Math.abs(wv.width - at.w) > 1;
         if (at.v === this.h.bldVersion && !moved) return;
         at.v = this.h.bldVersion; at.x = wv.centerX; at.y = wv.centerY; at.w = wv.width;
@@ -654,9 +664,9 @@ export class FactoryView {
             this.wires = { v: h.bldVersion, g };
         }
         this.drawWires();
-        const g = this.fxg;
+        const g = this.fxg, arms = this.arms;
         const drawing = h.visViews.length > 0 || !!h.placing;
-        if (drawing || this.fxDrawn) g.clear();
+        if (drawing || this.fxDrawn) { g.clear(); arms.clear(); }
         this.fxDrawn = drawing;
         if (!drawing) return;
         // inserter arms
@@ -666,10 +676,10 @@ export class FactoryView {
             const base = ((e.rot & 3) + 2) * (Math.PI / 2);
             const ang = base + Math.PI * (v.swing ?? 0);
             const len = 7, tx = v.x + Math.cos(ang) * len, ty = v.y + Math.sin(ang) * len;
-            g.lineStyle(3, PAL.ink, 1).lineBetween(v.x, v.y, tx, ty);
-            g.lineStyle(1, (e.pw ?? 0) > 0.05 ? PAL.pumpkin : PAL.stone, 1).lineBetween(v.x, v.y, tx, ty);
-            g.fillStyle(PAL.ink, 1).fillRect(Math.round(tx) - 2, Math.round(ty) - 2, 4, 4);
-            g.fillStyle(PAL.pebble, 1).fillRect(Math.round(tx) - 1, Math.round(ty) - 1, 2, 2);
+            arms.lineStyle(3, PAL.ink, 1).lineBetween(v.x, v.y, tx, ty);
+            arms.lineStyle(1, (e.pw ?? 0) > 0.05 ? PAL.pumpkin : PAL.stone, 1).lineBetween(v.x, v.y, tx, ty);
+            arms.fillStyle(PAL.ink, 1).fillRect(Math.round(tx) - 2, Math.round(ty) - 2, 4, 4);
+            arms.fillStyle(PAL.pebble, 1).fillRect(Math.round(tx) - 1, Math.round(ty) - 1, 2, 2);
             v.hand?.setPosition(Math.round(tx), Math.round(ty) - 1);
         }
         // placement overlay: supply squares, wire reach, facing arrow
@@ -703,6 +713,6 @@ export class FactoryView {
         this.clear();
         for (const im of this.pool) im.destroy();
         this.pool.length = 0;
-        this.dim.destroy(); this.g.destroy(); this.mk.destroy(); this.wiresG.destroy(); this.fxg.destroy();
+        this.dim.destroy(); this.g.destroy(); this.mk.destroy(); this.wiresG.destroy(); this.arms.destroy(); this.fxg.destroy();
     }
 }

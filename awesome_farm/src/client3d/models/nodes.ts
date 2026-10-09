@@ -5,13 +5,15 @@ import type { NodeE } from '../../shared/sim/types';
 import { PAL } from '../../shared/palette';
 import { RAMP } from './data';
 import { bake, Bld, byHeight, type Model, type Xf, clamp, env, grad, hash, lighten, MB, mix, seedRand, smooth, TAU } from './kit';
+import { nestNode } from './nodes-nest';
+import { titan } from './nodes-titan';
 
 export const L = RAMP.leaf;
 export const ST = RAMP.stone;
 export const W = RAMP.wood;
 export const GOLD_LEAF = [0xa8741a, 0xd89a20, 0xffd966, 0xfff0a0, 0xfffbd0];
 /** A node's model: the object, the body that sways and squashes when hit, how much it sways, and its own per-frame extras. */
-export interface NodeRig { obj: THREE.Group; body: THREE.Group; swayAmp: number; extra?: (dt: number, t: number) => void }
+export interface NodeRig { obj: THREE.Group; body: THREE.Group; swayAmp: number; extra?: (dt: number, t: number) => void; /** the node's health changed (0..1) */ onHp?: (f: number) => void }
 /** What a node model is made from: the island's biome, golden or not, and a seed for variety. */
 export interface NodeOpts { biome: string; gold: boolean; seed: number }
 export type Rand = () => number;
@@ -499,7 +501,10 @@ export const BUILD: Record<string, ((o: NodeOpts) => NodeRig) | undefined> = {
     cotton: cottonPlant,
     chest: (o: NodeOpts) => chestNode(o, false),
     vault: (o: NodeOpts) => chestNode(o, true),
-    mound: treasureMound
+    mound: treasureMound,
+    titan_oak: (o: NodeOpts) => titan('titan_oak', o),
+    titan_rock: (o: NodeOpts) => titan('titan_rock', o),
+    nest: nestNode
 };
 export const NODE_MODEL_KINDS = Object.keys(BUILD);
 export function nodeModel(kind: string, o: NodeOpts): Model<NodeE> {
@@ -507,7 +512,7 @@ export function nodeModel(kind: string, o: NodeOpts): Model<NodeE> {
     const rg = mk(o);
     const def = NODES[kind as NodeKind] as { hp: number; group: string } | undefined;
     const max = def?.hp ?? 1;
-    let hp = max, hit = 0, phase = hash(o.seed, kind.length) * TAU, shown = 1;
+    let hp = max, hit = 0, phase = hash(o.seed, kind.length) * TAU, shown = 1, seen = false;
     const soft = def?.group === 'plant';
     return {
         obj: rg.obj,
@@ -532,9 +537,11 @@ export function nodeModel(kind: string, o: NodeOpts): Model<NodeE> {
         apply(e: NodeE) {
             const n = e;
             if (typeof n.hp !== 'number') return;
-            if (n.hp < hp) hit = 1;
+            if (n.hp < hp && seen) hit = 1;
+            seen = true;
             hp = n.hp;
             const f = clamp(hp / max);
+            rg.onHp?.(f);
             shown = soft ? 1 : 0.8 + 0.2 * smooth(0, 1, f);
             if (hit === 0) rg.body.scale.setScalar(shown);
         }

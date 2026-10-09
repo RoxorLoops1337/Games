@@ -233,6 +233,7 @@ export class HudScene extends Phaser.Scene {
         this.input.on('wheel', (p: Phaser.Input.Pointer, _o: unknown, _dx: number, dy: number) => {
             if (this.screen) { this.screen.wheel?.(dy, logical(p).x, logical(p).y); return; }
             const ev = p.event as WheelEvent | undefined;
+            if (this.photo && this.farm.photo3d && dy !== 0) { ev?.preventDefault(); this.wheelZoom += dy; if (Math.abs(this.wheelZoom) >= 40) { this.farm.zoomBy(this.wheelZoom < 0 ? 1 : -1); this.wheelZoom = 0; } return; }      // photo mode in 3D: the wheel zooms the photo camera
             if (this.farm.ready && !this.farm.menuOpen && !this.photo && dy !== 0 && (ev?.ctrlKey || ev?.altKey)) { ev.preventDefault(); this.wheelZoom += dy; if (Math.abs(this.wheelZoom) >= 40) { this.farm.zoomBy(this.wheelZoom < 0 ? 1 : -1); this.wheelZoom = 0; } return; }       // Ctrl + wheel (or a trackpad pinch) zooms
             if (this.farm.ready && !this.farm.menuOpen && !this.photo && dy !== 0) this.farm.hotCycle(dy);      // scroll through the hotbar
         });
@@ -340,6 +341,7 @@ export class HudScene extends Phaser.Scene {
     private setPhoto (on: boolean) {
         if (on && this.screen) this.closeScreen();
         this.photo = on;
+        this.farm.setPhoto(on);                    // (in 3D the camera comes loose: world/photocam.ts)
         this.scene.setVisible(!on, this.scene.key);
     }
 
