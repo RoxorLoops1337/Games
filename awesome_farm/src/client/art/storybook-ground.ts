@@ -12,7 +12,7 @@ const T = 32;
 /** Ground variants per biome: the first three are plain, the rest carry a tuft, flowers, pebbles… */
 export const GROUND_VARIANTS = 6;
 
-interface Ground { base: number; light: number; dark: number; deep: number; high: number; speck: number; kind: 'grass' | 'stone' | 'sand' | 'snow' | 'bog' }
+interface Ground { base: number; light: number; dark: number; deep: number; high: number; speck: number; kind: 'grass' | 'stone' | 'sand' | 'snow' | 'bog' | 'blight' }
 
 const GROUND: Record<Biome, Ground> = {
     meadow:   { base: 0x92d364, light: 0xa4de78, dark: 0x84c85a, deep: 0x70bc58, high: 0xb6e880, speck: 0xf79fc6, kind: 'grass' },
@@ -21,6 +21,9 @@ const GROUND: Record<Biome, Ground> = {
     snowcap:  { base: 0xfdfbf4, light: 0xffffff, dark: 0xe6eef4, deep: 0xcadbe8, high: 0xcdf4ee, speck: 0xa8dcee, kind: 'snow' },
     bog:      { base: 0x66527f, light: 0x78629a, dark: 0x5a4772, deep: 0x463a64, high: 0x8f78b6, speck: 0x7ec06a, kind: 'bog' },
 };
+
+/** The blighted ground of a nest isle: bruised violet-black earth with crimson cracks. */
+const BLIGHT: Ground = { base: 0x3a2c44, light: 0x48364f, dark: 0x30243a, deep: 0x22182c, high: 0x5e4466, speck: 0x8e2446, kind: 'blight' };
 
 const CLIFF: Record<Biome, { face: number; dark: number; light: number }> = {
     meadow:   { face: 0xd49a62, dark: 0xa8703f, light: 0xe8b47c },
@@ -83,6 +86,13 @@ function ground (g: Ground, v: number, seed: number) {
             for (let k = 0; k < 1 + s3; k++) { const x = inside(rnd, 6, 26), y = inside(rnd, 6, 26); p.ellipse(x, y, 3.4, 1.9, [g.deep, g.dark]); p.set(x - 1, y - 1, g.high); }
             if (s3 === 1) { const x = inside(rnd, 8, 22), y = inside(rnd, 10, 22); p.rect(x, y, 2, 3, 0xd5d9e6); p.ellipse(x + 1, y - 1, 2.6, 1.8, [0x9d6fdb, 0xc4a4f0]); }
             if (s3 === 2) tuft(p, inside(rnd, 8, 24), inside(rnd, 12, 26), { ...g, deep: 0x4a8a44, dark: 0x66a850, high: 0x8ac870 });
+            break;
+        case 'blight':
+            // cracks that glow, pools of dark ooze, a dead tuft, a bone
+            for (let k = 0; k < 1 + s3; k++) { let x = inside(rnd, 6, 26), y = inside(rnd, 6, 26); for (let i = 0; i < 7; i++) { p.set(x, y, i % 3 ? g.speck : 0xff6a7a); x += rnd() < 0.5 ? 1 : 0; y += rnd() < 0.6 ? 1 : -1; } }
+            if (s3 === 0) { const x = inside(rnd, 8, 24), y = inside(rnd, 8, 24); p.ellipse(x, y, 4, 2.2, [0x120c18, g.deep]); p.set(x - 1, y - 1, 0x6e3c6a); }
+            if (s3 === 1) tuft(p, inside(rnd, 8, 24), inside(rnd, 14, 26), { ...g, deep: 0x2a2230, dark: 0x4a3c44, high: 0x6a5a5a });
+            if (s3 === 2) { const x = inside(rnd, 8, 22), y = inside(rnd, 10, 24); p.rect(x, y, 6, 2, 0xe8e0d0); p.rect(x - 1, y - 1, 2, 4, 0xe8e0d0); p.rect(x + 5, y - 1, 2, 4, 0xd0c8b8); }
             break;
     }
     return p;
@@ -192,8 +202,11 @@ export function registerStorybookTiles (scene: Phaser.Scene) {
     for (let m = 0; m < SHORE_FRAMES; m++) frames.push(shore(m));
     frames.push(...caveTileFrames());
     frames.push(...veinFrames());
+    // a Blight nest isle: its own cliff and ground (sprites.ts TILE_BLIGHT_CLIFF)
+    frames.push(cliff(0x3a2a44, 0x1c1424, 0x5a4068, BLIGHT, RNG(300)));
+    for (let v = 0; v < GROUND_VARIANTS; v++) frames.push(ground(BLIGHT, v, 3000 + v));
     seaLayers(scene);
-    return paintTexture(scene, 'tiles', frames);
+    return paintTexture(scene, 'tiles', frames, 64);
 }
 
 // ── ore veins: patches of ground with the ore showing through (three variants per resource) ──

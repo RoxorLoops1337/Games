@@ -222,6 +222,18 @@ export const GUIDE: GuideTopic[] = [
         tips: ['It is dim and violet in there even at noon. A lantern or campfire shows you what is coming.', 'If you fall in the Reaches you drop your backpack there: go back for it with friends.'],
     },
     {
+        id: 'blight', name: 'The Blight', icon: 'k_tower',
+        blurb: 'Dark nest isles out at sea grow, spread and merge. Go out and break the nests.',
+        steps: [
+            'The red marks out at sea on the map are Blight nests, each on a dark isle. Nobody owns a nest isle, and it cannot be bought while its nest lives.',
+            'To reach one, buy land toward it. Then hit the nest with your weapon. A nest that is struck wakes its brood, so bring friends, food and potions.',
+            'A nest grows a level every night: more health, nastier brood, better spoils. Do not wait too long. Breaking it pays coins, XP and Blight Cores to everyone who fought.',
+            'Nests spread to the sea beside them, and two of a kind side by side may merge into one nest with both levels added. Its isle, once broken, is land you can buy.',
+            'Build a Bed (Floors & walls) in an outpost near the nests and press {use} on it: after a fall you wake up there instead of at home.',
+        ],
+        tips: ['The kind of a nest (Bone, Swarm, Beast or Spirit) says which monsters it hatches.'],
+    },
+    {
         id: 'friends', name: 'Friends & online', icon: 'k_heart',
         blurb: 'Up to sixteen farmers share one world and one farm.',
         steps: [

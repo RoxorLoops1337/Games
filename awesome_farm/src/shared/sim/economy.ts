@@ -157,6 +157,7 @@ export function cmdDemolish (sim: Sim, p: PlayerS, id: number) {
 // ── land ───────────────────────────────────────────────────────────────────
 export function cmdBuy (sim: Sim, p: PlayerS, plotIndex: number) {
     const plot = Number.isInteger(plotIndex) ? sim.s.plots[plotIndex] : undefined;      // (an array answers `plots['length']` with a number)
+    if (plot?.blight === 1) { sim.deny(p, 'Destroy the Blight nest first'); return; }
     if (!plot || !sim.world.isPurchasable(plot)) return;
     const price = Math.max(1, Math.round(sim.world.price(plot, p.plotsBought) * derived(p).landMul));
     if (p.coins < price) { sim.deny(p, `Needs ${price} coins`); return; }
@@ -166,6 +167,7 @@ export function cmdBuy (sim: Sim, p: PlayerS, plotIndex: number) {
     chronicle.land(sim, p);
     plot.owned = true;
     plot.buyer = p.id;
+    delete plot.blight;                                   // (a cleansed nest isle is ordinary land from now on)
     ensureVeins(sim.s.seed, plot);
     sim.world.recompute();
     sim.dirtyPlots.add(plot.i);

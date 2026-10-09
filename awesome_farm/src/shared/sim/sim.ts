@@ -16,6 +16,7 @@ import { BODY_Y, dist, distToBuilding, hitPoint } from '../geom';
 import { PAL } from '../palette';
 import { Rng } from '../rng';
 import { World } from '../world';
+import * as blight from './blight';
 import * as boss from './boss';
 import * as chronicle from './chronicle';
 import * as clock from './clock';
@@ -154,6 +155,7 @@ export class Sim {
         this.homeGroups = this.countHomeGroups();
         shop.refresh(this);
         dread.ensure(this);
+        blight.ensure(this);                           // (the Blight's first nests: placed once, from the seed)
         if (state.mine) mines.ensure(this);            // the caves have been visited: make them, with the dug-out rock opened again
         uber.link(this);                               // (every Uber Chest opens the one shared store)
     }
@@ -517,6 +519,7 @@ export class Sim {
         factory.stepFactory(this, dt);
         mobs.updateMobs(this, dt);
         mobs.updateProjs(this, dt);
+        blight.update(this);
         rift.update(this, dt);
         costatus.update(this, dt);
         death.update(this);

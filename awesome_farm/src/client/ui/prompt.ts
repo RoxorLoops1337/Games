@@ -6,6 +6,7 @@ import { BUILDINGS, BuildingKind, CROPS, STATION_NAMES } from '../../shared/data
 import { spOf } from '../../shared/data/creatures';
 import { ITEMS } from '../../shared/data/items';
 import { NODES } from '../../shared/data/nodes';
+import { NEST_KINDS } from '../../shared/data/mobs';
 import { petsFirstAt } from '../../shared/data/bond';
 import { hasRod } from '../../shared/sim/fishing';
 import * as potluck from '../../shared/sim/potluck';
@@ -93,6 +94,7 @@ function promptText (h: PromptHost): string {
     if (t?.kind === 'ent' && t.ent.k === 'node') {
         const def = NODES[t.ent.kind];
         if (def.minTier !== undefined && d.toolTier < def.minTier) return `${def.name} — needs a better pick`;
+        if (t.ent.kind === 'nest') { const pl = h.world.plots[t.ent.plot]; return `${pl?.nk ? NEST_KINDS[pl.nk].name : def.name} Lv ${pl?.nl ?? 1}: swing your weapon to destroy it`; }
     }
     if (t?.kind === 'rock') {
         const ore = h.world.oreAt(t.tx, t.ty);

@@ -161,7 +161,7 @@ test('the new border of an owned patch gets fresh resources, and nothing lands o
         assert.equal(Math.floor(tx / PLOT) - SEA, p.gx); assert.equal(Math.floor(ty / PLOT) - SEA, p.gy);
     }
     assert.ok(s.nextId > Math.max(...Object.keys(s.ents).map(Number)), 'ids are not reused');
-    assert.equal(s.plots.filter((p) => !p.owned && !p.dread && p.nodes > 0).length, 0, 'land nobody owns has no nodes yet (bar the Dread Reaches)');
+    assert.equal(s.plots.filter((p) => !p.owned && !p.dread && !p.blight && p.nodes > 0).length, 0, 'land nobody owns has no nodes yet (bar the Dread Reaches and the nests)');
 });
 
 test('every patch is eighteen tiles across and a new home is stocked in proportion', () => {

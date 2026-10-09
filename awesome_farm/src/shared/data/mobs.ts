@@ -275,6 +275,33 @@ export function pickCave (level: number, depth: number, roll: () => number): Mob
     return pool[0];
 }
 
+/**
+ * The kinds of Blight nest (sim/blight.ts) and the family of monsters each one hatches. A nest's kind comes from its isle's biome when
+ * it first rises and is passed on to the nests it spreads; two nests merge only with their own kind.
+ */
+export const NEST_KINDS = {
+    bone:   { name: 'Bone Nest',   mobs: ['skeleton', 'archer', 'knight'] as MobKind[] },
+    swarm:  { name: 'Swarm Nest',  mobs: ['slime', 'scarab', 'bat'] as MobKind[] },
+    beast:  { name: 'Beast Nest',  mobs: ['slime', 'boar', 'rockling', 'bogtoad'] as MobKind[] },
+    spirit: { name: 'Spirit Nest', mobs: ['bat', 'wisp', 'frostling', 'wraith'] as MobKind[] },
+} as const;
+export type NestKindId = keyof typeof NEST_KINDS;
+export const NEST_KIND_IDS = Object.keys(NEST_KINDS) as NestKindId[];
+/** The kind a nest takes from its isle's biome. */
+export const nestKindFor = (b: Biome): NestKindId => (b === 'goldsand' ? 'swarm' : b === 'quarry' || b === 'meadow' ? 'beast' : b === 'bog' ? 'spirit' : 'bone');
+
+/** What a nest of this kind hatches for a threat level: its own family, the tiers the level allows (its weakest member when none is allowed yet). */
+export function pickRaider (kind: NestKindId, level: number, roll: () => number): MobKind {
+    const fam = NEST_KINDS[kind].mobs;
+    const cap = tierCap(level);
+    const pool = fam.filter((k) => mobDef(k).tier <= cap);
+    const list = pool.length ? pool : [fam.reduce((a, b) => (mobDef(b).tier < mobDef(a).tier ? b : a))];
+    const weights = list.map((k) => 1 + Math.max(0, 3 - (cap - mobDef(k).tier)) * 0.7);
+    let r = roll() * weights.reduce((a, b) => a + b, 0);
+    for (let i = 0; i < list.length; i++) { r -= weights[i]; if (r <= 0) return list[i]; }
+    return list[0];
+}
+
 /** Elites only show up once you have found your feet, then get more common. */
 export const eliteChance = (level: number) => level < 6 ? 0 : Math.min(0.22, 0.012 * (level - 4));
 

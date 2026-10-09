@@ -72,6 +72,7 @@ export const ITEMS = {
     circuit:  it('Circuit',     'material', 30, 'A tiny brain for machines.', { rarity: 2 }),
     flour:    it('Flour',       'material', 4, 'Ground wheat.'),
     motor:    it('Motor',       'material', 40, 'Spins forever if you let it. Drills and generators need them.', { rarity: 2 }),
+    blightcore: it('Blight Core', 'material', 30, 'The dark heart of a Blight nest, still warm. Ballistas and Tesla Coils are built around one.', { rarity: 2 }),
     core:     it('Power Core',  'material', 180, 'A heart of crystal and copper. The most advanced thing you can build.', { rarity: 3 }),
     // ── food & crops ──
     berry:    it('Berry',       'food', 1, 'Sweet and juicy.', { food: 6 }),

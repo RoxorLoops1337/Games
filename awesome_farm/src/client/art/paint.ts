@@ -186,14 +186,16 @@ export class Pix {
  * Register paintings as one dense texture, frames side by side (named 0..n-1). Each frame occupies
  * w/SS by h/SS logical units, the same room an old grid sprite took.
  */
-export function paintTexture (scene: Phaser.Scene, key: string, frames: Pix[]) {
+export function paintTexture (scene: Phaser.Scene, key: string, frames: Pix[], cols = frames.length) {
     const fw = frames[0].w, fh = frames[0].h;
     for (const f of frames) if (f.w !== fw || f.h !== fh) throw new Error(`painting "${key}": frames differ in size`);
+    // frames run left to right, `cols` to a row (a long sheet wraps, so no texture is wider than a phone's GPU allows)
+    const per = Math.max(1, Math.min(cols, frames.length)), rows = Math.ceil(frames.length / per);
     const canvas = document.createElement('canvas');
-    canvas.width = fw * frames.length; canvas.height = fh;
+    canvas.width = fw * per; canvas.height = fh * rows;
     const ctx = canvas.getContext('2d')!;
-    frames.forEach((f, i) => ctx.putImageData(f.toImage(), i * fw, 0));
-    return addDense(scene, key, canvas, frames.map((_, i) => ({ name: i, x: i * fw, y: 0, w: fw, h: fh })));
+    frames.forEach((f, i) => ctx.putImageData(f.toImage(), (i % per) * fw, Math.floor(i / per) * fh));
+    return addDense(scene, key, canvas, frames.map((_, i) => ({ name: i, x: (i % per) * fw, y: Math.floor(i / per) * fh, w: fw, h: fh })));
 }
 
 /** Paint one sprite of logical size w×h (before the game's own outline padding), at SS density. */

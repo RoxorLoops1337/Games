@@ -20,6 +20,8 @@ export const ACTIONS = [
     // co-op boss statuses (sim/costatus.ts)
     'freeze', 'thaw', 'hex', 'hexTick', 'hexJump', 'chain', 'chainTug', 'unbind',
     'bedSet',     // (a Bed becomes where you wake up: sim/bed.ts)
+    // the Blight (sim/blight.ts): hitting and breaking a nest, a nest spreading or merging
+    'nestHit', 'nestDie', 'nestSpread',
 ] as const;
 
 export type Action = typeof ACTIONS[number];

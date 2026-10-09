@@ -280,6 +280,9 @@ export class NightLayer {
             } else if (e.k === 'mob') {
                 const s = f.worldToScreen(e.x, e.y - 8);
                 this.light(s.x, s.y, e.kind === 'oldheart' ? 70 : 26, 0.9, e.kind === 'oldheart' ? 0xff7080 : 0xb8f0c0);
+            } else if (e.k === 'node') {
+                const s = f.worldToScreen((e.tx + 0.5) * TILE, (e.ty + 0.5) * TILE - 6);
+                this.light(s.x, s.y, 40 + Math.sin(this.t * 2.4 + e.id) * 5, 0.9, 0xff7080);      // a Blight nest smoulders
             } else if (e.k === 'crit') {
                 const s = f.worldToScreen(e.x, e.y - 8);
                 this.light(s.x, s.y, e.sp === 'aurorin' ? 44 : 24, 0.85, e.sp === 'cinderkit' || e.sp === 'pyrelion' ? 0xffa060 : 0xe8f0ff);

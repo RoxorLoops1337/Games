@@ -21,7 +21,8 @@ export interface PlaceEnv {
 export function landWhy (world: World, tx: number, ty: number): string {
     const plot = world.inBounds(tx, ty) ? world.plotAt(tx, ty) : null;
     if (!plot) return 'Open sea: nothing to build on';
-    if (!plot.owned && !plot.dread) return world.isPurchasable(plot) ? 'Not your land yet: buy this plot first' : 'Not your land yet';
+    if (plot.blight === 1) return 'A Blight nest isle: destroy the nest first';
+    if (!plot.owned && !plot.dread && !plot.blight) return world.isPurchasable(plot) ? 'Not your land yet: buy this plot first' : 'Not your land yet';
     return 'Water: build on the land';
 }
 

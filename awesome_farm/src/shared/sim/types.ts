@@ -8,7 +8,7 @@ import type { GearSlot, ItemId, Res, WeaponType } from '../data/items';
 import type { NodeKind } from '../data/nodes';
 import type { Pet, PostStatus, SpeciesId, TraitId, WorkKind } from '../data/creatures';
 import type { Reward } from '../data/quests';
-import type { MobKind, PatternId, ProjKind } from '../data/mobs';
+import type { MobKind, NestKindId, PatternId, ProjKind } from '../data/mobs';
 import type { BuffId } from '../data/stats';
 import type { CoStatus } from '../data/costatus';
 import type { Look } from '../data/look';
@@ -32,7 +32,13 @@ export interface Plot {
     veins?: Vein[];         // ore veins in the ground (drills mine them)
     dread?: 1 | 2;          // part of a Dread block (2: its middle plot): always land, never for sale
     zone?: number;          // … which block (0..3)
+    blight?: 1 | 2;         // a nest isle (sim/blight.ts): 1 while its Blight nest lives (land, nobody's, not for sale), 2 cleansed (land anybody may buy)
+    nl?: number;            // … its nest's level (1 when it rises, +1 every night, summed when two merge)
+    nk?: NestKind;          // … and its kind (the family of monsters it hatches)
 }
+
+/** The kinds of Blight nest (data/mobs.ts NEST_KINDS): each hatches its own family of raiders. */
+export type NestKind = NestKindId;
 
 /** [tile x, tile y, resource] */
 export type Vein = [number, number, ItemId];
@@ -43,7 +49,11 @@ export type Vein = [number, number, ItemId];
  * one), so anything that reads a node's plot checks the node really stands on it (`world.plotAt(tx, ty) === plot`). `gold`: a golden
  * node, worth a lot more.
  */
-export interface NodeE { id: number; k: 'node'; kind: NodeKind; tx: number; ty: number; hp: number; plot: number; gold?: 1 }
+export interface NodeE {
+    id: number; k: 'node'; kind: NodeKind; tx: number; ty: number; hp: number; plot: number; gold?: 1;
+    /** A Blight nest (sim/blight.ts): its full health (its level and kind are on its plot: `Plot.nl`, `Plot.nk`). */
+    mhp?: number;
+}
 export interface BuildE {
     id: number; k: 'bld'; kind: BuildingKind;
     tx: number; ty: number;  // top-left tile of the footprint
@@ -119,6 +129,7 @@ export interface MobE {
     idle?: number;           // s without any player in the arena
     zone?: number;           // a Dread block's monster (1..4): the warden itself, or one of the things haunting it
     und?: 1;                 // a creature of the caves (they come and go with whoever is digging)
+    nb?: number;             // the brood of a Blight nest: the nest isle's plot index (it melts away when nobody is near)
 }
 /** A bolt, arrow or boulder in flight (fired by monsters; players' shots resolve instantly). */
 export interface ProjE { id: number; k: 'proj'; kind: ProjKind; x: number; y: number; vx: number; vy: number; dmg: number; life: number }
@@ -309,6 +320,7 @@ export interface WorldState {
     mine?: MineState;                     // the caves under the world, once somebody has gone down
     chron?: ChronEntry[];                 // the farm chronicle, oldest first (sim/chronicle.ts)
     wish?: WishState;                     // the season wish on offer or chosen (sim/wish.ts)
+    blight?: { v: 1 };                    // the Blight's starting nests have been placed (sim/blight.ts); the nests themselves are plots marked `blight` and their nodes
 }
 
 /** One dish on a potluck table: the item (one with a buff), the portions left and the id of the farmer who cooked it (only they can take it back). */
