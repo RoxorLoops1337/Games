@@ -32,7 +32,7 @@ Contents
 The runtime is built (`r3/vig.js`, the game glue; `park3d/vignette_kit.js`, `vignette_clips.js`, `vignette_props.js`, the shared kit). A crew adds its
 world's scenes WITHOUT editing any of those files:
 
-1. Create `park3d/vig_<worldId>.js`, where worldId is the Park3D world id: `flat` (home, done), `park`, `shop`, `lab` (the Sound Lab), `bar`, `street`.
+1. Create `park3d/vig_<worldId>.js`, where worldId is the Park3D world id: `flat` (home, done), `park` (done: vig_park.js, its props and clips in vig_park_props.js / vig_park_clips.js), `hood` (done: vig_hood.js, the map hop), `shop`, `lab` (the Sound Lab), `bar`, `street`.
    The build picks it up by its name (`entry.js loadVig` is a pattern import of `./vig_${world}.js`); it becomes its own lazy chunk, fetched when that
    world comes up. No module, or no entry for an id: the action simply plays without a vignette, exactly as before.
 2. Export the table: `export const VIGNETTES = { 'p1.busk.out': (ctx) => ({ events: [...] }), ... }` with the ids of this document. A reel is a cine.js
@@ -47,6 +47,11 @@ world's scenes WITHOUT editing any of those files:
    reel never reached it. Never leave the world changed: spawned props go through `spawn` (removed at the end), actors are put back by the engine.
 5. Check frames: `node tools/beatbox_heroes/vig_shot.mjs /tmp/out --place park --vig p1.busk.out --form first --sizes 390x844,1280x720 --sheet`,
    and add the ids to `tests/beatbox_heroes_r3vig.test.mjs` (every id plays and ends, MICRO under 1.5 s).
+
+Doors and the park activities (r3/vig.js, the park section): the busk, the jam and the run get an INTRO in the park and an OUTRO when their result card hands back to the
+park (the held effects land on PAY; a story beat or a morning in the held effects means a film owns the moment, so no outro). `p1.door.out` plays before a place is left,
+`p1.door.in.<place>` when a travel lands (not on a first visit), `p1.travel.map` on the hood map before GO THERE. Doors never play MICRO. A world module without its own
+door ids gets the generic ones of `park3d/vig_doors.js` filled into the gaps of its table (the world's own entries always win).
 
 What the runtime already does (section 0.2 to 0.5): the repeat counter in a NEW localStorage key `bbh:vig<slot>` (`{ id: { n, last } }`), the form
 choice (FIRST, FULL x4, then SHORT; MICRO for a repeat inside 20 s, Settings SCENES: OFF, a second action during a vignette, and automated

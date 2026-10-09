@@ -299,4 +299,84 @@
     b.addEventListener('click', () => { const s = next[V.setting()]; E.settings.scenes = s; b.textContent = 'SCENES: ' + lab[s]; b.className = 'btn ' + (s === 'full' ? 'green' : ''); safe(() => E.saveSettings()); E.sfx('click'); });
     if (!row) return b; const wrap = E.h('div.col', { style: { gap: '7px' } }); wrap.append(row, b); return wrap;
   };
+
+  /* ------------------------------------------------------------------ THE PARK, DOORS, TRAVEL (park3d/vig_park.js, vig_doors.js, vig_hood.js; VIGNETTES.md 2.8, 2.9, 2.13) */
+  // The park's activities leave the place scene, so they get an INTRO here (busk, jam, run) and an OUTRO when the result card hands back to the park: the held effects (toasts, banners,
+  // the coach line) land on PAY. A story beat or a morning in the held effects means a film (or the morning card) owns the moment: no outro then, the old path runs untouched.
+  // Doors: p1.door.out before a place is left (the LEAVE button, the door ring), p1.door.in.<place> when a travel lands (not on a first visit: the arrival lines and films own that),
+  // p1.travel.map on the hood map before GO THERE travels (the door then plays SHORT). Like the intros, doors have no MICRO: a repeat or SCENES: OFF goes straight through.
+  // A world without its own door scene gets the generic one of vig_doors.js (filled into the gaps of that world's table; the world module always wins).
+  if (!$('vig-css-park')) { const st = document.createElement('style'); st.id = 'vig-css-park'; st.textContent = 'body.vig-on .p3-go { visibility: hidden !important; }'; document.head.appendChild(st); }
+  INTRO.run = () => 'p1.run.in';
+  const rhythmIn = INTRO.rhythm;
+  INTRO.rhythm = (a) => rhythmIn(a) || (a && a.mode === 'perform' && (a.kind === 'busk' || a.kind === 'jam') && E.scene && E.scene.id === 'park' ? 'p1.' + a.kind + '.in' : null);
+  const hold0 = G.doHold;
+  if (hold0) G.doHold = function (action) { const pre = G.ch, h = hold0.apply(G, arguments); if (h && typeof h === 'object') { h.action = action; h.pre = pre; } return h; };
+  const OUTRO = { busk: 'p1.busk.out', jam: 'p1.jam.out' };
+  const fin0 = G.finishActivity;
+  if (fin0) G.finishActivity = function (held, back) {
+    const a = held && held.action, fx = (held && held.fx) || [], to = back && typeof back === 'object' ? back.args && back.args.id : back;
+    const id = a ? (a.t === 'perform' ? OUTRO[a.kind] : a.t === 'run' ? 'p1.run.out' : null) : null;
+    const owned = fx.some((f) => f.t === 'story' || f.t === 'morning') || safe(() => !!(Core.storyArrive && Core.storyArrive(G.ch, 'park')), true) || (G.storyQ && G.storyQ.length);
+    const again = !!(G.activityReturn && G.activityReturn.mode === 'again');   // PLAY AGAIN goes straight back into the activity: the old path
+    if (!id || to !== 'park' || owned || again || param === '0' || !(R3.on && R3.active) || typeof held.play !== 'function' || !first(id, 'park')) return fin0.apply(G, arguments);
+    const play = held.play, t0 = Date.now(); let hand = null, done = false;
+    const flush = () => { if (done) return; done = true; held.play = play; safe(() => play.call(held, hand || {})); };
+    held.play = (h) => { hand = h; };   // the old path asks for the effects now: they wait for the park
+    safe(() => fin0.call(G, held, back), null);
+    if (G.pendingMorning) { flush(); return undefined; }
+    const poll = () => {
+      if (done) return;
+      const up = sceneUp() && E.scene.id === 'park' && R3.world.id === 'park';
+      if (!up) { if ((E.sceneName === 'place' && !E.pendingSwitch && E.scene && E.scene.id !== 'park') || Date.now() - t0 > 45000) flush(); else setTimeout(poll, 120); return; }   // somewhere else, or the park never came
+      if (V.playing || (BBH.R3Cine && BBH.R3Cine.playing)) { flush(); return; }
+      holdOn(); V.play(id, { action: a, fx, pre: held.pre, pay: () => { holdOff(); flush(); } }).then(() => { holdOff(); flush(); });
+    };
+    setTimeout(poll, 60);
+    return undefined;
+  };
+  // the door scenes a world module lacks come from vig_doors.js
+  const DOOR_IDS = /^p1\.door\.(out|in\.)/;
+  function doorsFor(wid) {
+    return Promise.all([V.load(wid), V.load('doors')]).then(([, d]) => {
+      const e = V.mods[wid]; if (!d || !e) return; if (!e.m) e.m = { VIGNETTES: {} };
+      for (const k in d.VIGNETTES) if (DOOR_IDS.test(k) && typeof e.m.VIGNETTES[k] !== 'function') safe(() => { e.m.VIGNETTES[k] = d.VIGNETTES[k]; });
+    }, nop);
+  }
+  let doorW = null;
+  if (R3.onTick) R3.onTick(() => { const w = R3.world; if (!w || w === doorW || param === '0') return; doorW = w; if (w.id !== 'hood' && w.id !== 'street') doorsFor(w.id); });
+  const doorForm = (vid, o) => { const f = V.form(vid, o); return f === 'micro' && FORMS.indexOf(V.force) < 0 && FORMS.indexOf(param) < 0 ? null : f; };
+  // leaving a place: the door scene first, then the old path
+  const P3 = E.scenes3d.place;
+  if (P3 && typeof P3.leave2 === 'function') {
+    const leave0 = P3.leave2;
+    P3.leave2 = function () {
+      const S = this, all = arguments, vid = first('p1.door.out');
+      if (!vid || V.playing || S.__vigLeave || !V.enabled() || E.scene !== S || !doorForm(vid)) return leave0.apply(S, all);
+      S.__vigLeave = true; safe(() => S.closeSheet && S.closeSheet());
+      const go = () => { S.__vigLeave = false; if (E.scene === S && E.sceneName === 'place') leave0.apply(S, all); };
+      V.play(vid, { action: { t: 'leave', from: S.id } }).then(go, go);
+      return undefined;
+    };
+  }
+  // travelling: the hood map hop first (GO THERE), then the travel; the arrival door when the place comes up
+  let arrive = null;
+  const enter0 = G.enterPlace;
+  if (enter0) G.enterPlace = function (to) {
+    const all = arguments, ch = G.ch, ok = safe(() => Core.canEnter(ch, to).ok, false), mapUp = E.sceneName === 'map' && R3.world && R3.world.id === 'hood' && E.scene && E.scene.w === R3.world;
+    const mark = () => { arrive = { to, at: Date.now(), first: !(ch && ch.flags && ch.flags['visited_' + to]), story: safe(() => !!(Core.storyArrive && Core.storyArrive(ch, to)), true), form: mapUp ? 'short' : null }; };
+    if (ok && mapUp && !V.playing && param !== '0' && first('p1.travel.map', 'hood') && doorForm('p1.travel.map')) {
+      const S = E.scene; V.play('p1.travel.map', { anyScene: true, extra: { to }, action: { t: 'travel', to } }).then(() => { if (E.scene === S) { mark(); enter0.apply(G, all); } });
+      return true;
+    }
+    const r = enter0.apply(G, all); if (r) mark(); return r;
+  };
+  if (R3.onTick) R3.onTick(() => {
+    const ar = arrive; if (!ar) return;
+    if (Date.now() - ar.at > 90000) { arrive = null; return; }
+    if (!sceneUp() || E.scene.id !== ar.to) return;
+    arrive = null; if (ar.first || ar.story || V.playing || (BBH.R3Cine && BBH.R3Cine.playing) || (G.storyQ && G.storyQ.length)) return;
+    const vid = first('p1.door.in.' + ar.to), form = vid && (ar.form || doorForm(vid));
+    if (vid && form) V.play(vid, { form, action: { t: 'travel', to: ar.to } });
+  });
 })(typeof globalThis !== 'undefined' ? globalThis : this);
