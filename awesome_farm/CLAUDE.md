@@ -237,7 +237,7 @@ awesome_farm/
   The welcome carries other farmers as their public view only (`publicView`, plus `mh`), the own record whole. Tests: `tests/accounts.test.ts`, `tests/host.hardening.test.ts`, plus the restart case in `tests/server.e2e.test.ts`.
 
 ## Play online: several worlds (`data/servers.ts`)
-One Worker hosts every world in `WORLDS`, one Durable Object each (`/w/<id>/...`; plain `/status|/ws|/admin` = first world, so old links and farmer identities keep working). The title screen reads `<server>/worlds` and shows one button per world; `PUBLIC_SERVER` (empty until the owner supplies the address) lets first-time players skip typing. Add a world = add a `WORLDS` line + `npm run cf:deploy`. Never rename a world id (it names the save). Details: `server/cf/README.md`.
+One Worker hosts every world in `WORLDS`, one Durable Object each (`/w/<id>/...`; plain `/status|/ws|/admin` = first world, so old links and farmer identities keep working). The title screen has a "Play online" button that opens one card per world from `WORLDS` (built into the client, no server box; counts come from each world's `/status`, asked once when the cards open); `PUBLIC_SERVER` is the worker the cards use, and a PC's own address is one tap away ("own server"). Add a world = add a `WORLDS` line + `npm run cf:deploy`. Never rename a world id (it names the save). Details: `server/cf/README.md`.
 
 ## The 3D view (beta): `settings.view`, `world/view3d-bridge.ts`, `src/client3d/view3d.ts`
 
