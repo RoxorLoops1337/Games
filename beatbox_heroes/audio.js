@@ -1625,5 +1625,7 @@
     },
     groove: { start: (o) => inst().groove.start(o), stop: (f) => inst().groove.stop(f), setIntensity: (v) => inst().groove.setIntensity(v) },
     get log() { return inst().log; },
+    // the shared AudioContext and its state, for small self-contained beds that route their own nodes (tape.js: the muffled TV)
+    get ctx() { try { return inst().ctx; } catch (e) { return null; } }, get muted() { try { return inst().muted; } catch (e) { return true; } }, get volume() { try { return inst().volume; } catch (e) { return { music: 0, sfx: 0 }; } },
   };
 })(typeof globalThis !== 'undefined' ? globalThis : typeof window !== 'undefined' ? window : this);
