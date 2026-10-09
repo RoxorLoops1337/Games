@@ -16,6 +16,9 @@ import { mobModel } from './models/mobs';
 import { nodeModel } from './models/nodes';
 import { shotModel } from './models/shots';
 import { layChain, STATUS_MODELS } from './models/costatus';
+import { MOBS } from '../shared/data/mobs';
+import { WATER_Y } from './terrain';
+import { wadeDepth, type Wading } from './wade';
 
 /** Pieces of one family join their neighbours (walls, fences, belts ...): which family a building kind belongs to, if any. */
 export function familyOf(kind: string) {
@@ -33,6 +36,8 @@ export const px = (v: number) => v / TILE;
 export interface View {
     e: Ent; model: Model; x: number; z: number; face: number; px: number; pz: number; moving: boolean; hurt: number; hp: number; mask: number;
     bar?: Group; roofA?: number; fade?: Material[];
+    /** a Blight raider: how far it stands in the sea (0 on land, 1 wading to the waist) */
+    wade?: number;
 }
 /** A farmer on screen: the model, where it is, facing and walking, and the look it was dressed in. */
 export interface FarmerView { m: Farmer; x: number; z: number; face: number; moving: boolean; sx: number; sz: number; key: string; /** tethered to this farmer (a co-op chain) */ co?: string }
@@ -48,6 +53,8 @@ export class Entities {
     /** Things on their way out: a beaten monster shrinks away, a picked-up drop flies to the farmer who took it. */
     /** Called with a leaving model once it is finally out of the scene (the view hands its one-off geometry back to the GPU then). */
     gone?: (obj: Object3D) => void;
+    /** The foam a wading raider leaves (wade.ts), when the view has it. */
+    wading?: Wading;
     leaving: { obj: Object3D; model: Model; t: number; k: 'mob' | 'drop'; x: number; z: number; tx: number; tz: number; face: number }[] = [];
     constructor(scene: Scene, world: World) {
         this.world = world;
@@ -144,6 +151,7 @@ export class Entities {
         }
         if (v.bar) this.group.remove(v.bar);
         this.views.delete(id);
+        this.wading?.forget(id);
         if ((v.e.k === 'mob' || v.e.k === 'drop') && v.model.obj.visible) {
             // a drop flies to the nearest farmer within reach (who picked it up); a monster gives a last flash and shrinks away
             let tx = v.x, tz = v.z, best = 2.5 * 2.5;
@@ -271,11 +279,12 @@ export class Entities {
                 v.px = v.x;
                 v.pz = v.z;
                 v.model.obj.position.set(v.x, groundY(v.x, v.z), v.z);
+                if (e.k === 'mob' && (e.rd || v.wade)) this.wadeStep(v, e.kind, !!e.rd, dt);
                 v.hurt = Math.max(0, v.hurt - dt * 4);
                 if (e.k === 'mob') v.model.pose?.(v.face, v.moving, v.hurt, dt);
                 // a den worker with nothing to do curls up and sleeps (the rig's z's) until its next job
                 else if (e.k === 'crit') v.model.pose?.(v.face, v.moving, e.mode === 2 && e.ac === 'idle' && !v.moving, dt);
-                if (e.k === 'mob' && e.hp < e.mhp) this.hpBar(v, e.hp / e.mhp, 1.9); // a monster's entity carries no radius: every bar sits at the same height
+                if (e.k === 'mob' && e.hp < e.mhp) this.hpBar(v, e.hp / e.mhp, 1.9, v.model.obj.position.y); // a monster's entity carries no radius: every bar sits at the same height
                 else if (v.bar) v.bar.visible = false;
             } else {
                 const dxn = Math.abs(v.x - cx), dzn = Math.abs(v.z - cz);
@@ -289,6 +298,20 @@ export class Entities {
         }
         this.updateLeaving(dt, t);
         this.drawChains(t);
+    }
+    /**
+     * A Blight raider in the sea wades (the 2D BlightFx.wade): it sinks to the waist (gliding down off the shore and back up onto
+     * land), leaves foam on the water, and its hp bar rides lower with it. A flier never wades.
+     */
+    private wadeStep(v: View, kind: string, raider: boolean, dt: number) {
+        const def = MOBS[kind as keyof typeof MOBS] as { r?: number; flies?: boolean } | undefined;
+        const wet = raider && !def?.flies && !this.world.isLand(Math.floor(v.x), Math.floor(v.z));
+        const w = (v.wade ?? 0) + ((wet ? 1 : 0) - (v.wade ?? 0)) * Math.min(1, dt * 5);
+        v.wade = w < 0.01 && !wet ? 0 : w;
+        if (!v.wade) return;
+        const r = def?.r ?? 6;
+        v.model.obj.position.y += (WATER_Y - wadeDepth(r)) * v.wade;
+        if (v.wade > 0.6) this.wading?.step(v.e.id, v.x, v.z, Math.max(0.3, (r / TILE) * 1.3), v.moving, dt);
     }
     private updateLeaving(dt: number, t: number) {
         for (let i = this.leaving.length - 1; i >= 0; i--) {
@@ -346,7 +369,7 @@ export class Entities {
             v.model.obj.visible = a > 0.03;
         }
     }
-    hpBar(v: View, frac: number, h: number) {
+    hpBar(v: View, frac: number, h: number, base = 0) {
         if (!v.bar) {
             const g = new Group();
             const back = new Mesh(new PlaneGeometry(0.9, 0.12), this.hpBack), fill = new Mesh(new PlaneGeometry(0.9, 0.12), this.hpMat);
@@ -360,7 +383,7 @@ export class Entities {
             v.bar = g;
         }
         v.bar.visible = true;
-        v.bar.position.set(v.x, 1 + h * 0.7, v.z + 0.2);
+        v.bar.position.set(v.x, base + 1 + h * 0.7, v.z + 0.2);
         const fill = v.bar.userData.fill as Mesh;
         fill.scale.x = Math.max(0.02, frac);
         fill.position.x = -0.45 * (1 - frac);

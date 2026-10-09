@@ -308,6 +308,9 @@ stored there reads as 2D.
   cracks as one unlit child mesh per chunk, `veinMat`); the nest (`models/nodes-nest.ts`) reads its plot's level through
   `NodeOpts.level` and grows (`nestScale`, the 2D formula), darkens and sprouts eggs and spines by tier (`nestTier`, one baked mesh
   per tier and seed) and throbs (`nestBeat`); it smoulders in the dark (`glowOf`, a slow `pulse`).
+  A raider (`MobE.rd`, not a flier) in the sea sinks to the waist (`Entities.wadeStep`, `View.wade`, `wadeDepth` from its radius; no
+  contact shadow there) and leaves foam on the water (`wade.ts` `Wading`: wake rings, a collar, splashes off on Low); it carries the
+  2D red raider light (`glowOf`, followed every frame and sunk with it). The 2D wading ripples are unmarked (2D only), since 3D draws its own.
 - **Coordinates:** the bridge speaks sim pixels (TILE = 16 per tile) and HUD units (960 x 540); the 3D view works in tiles
   (x east, z south, y up) with an orthographic camera at 62 degrees (`render.ts` `EL`, `BASE_VIEW` = 11.25 tiles tall at zoom 1 =
   the 2D view's classic distance). Zoom follows the 2D zoom steps (`GameScene.zoomLevel`).

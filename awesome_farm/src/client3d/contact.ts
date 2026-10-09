@@ -70,9 +70,9 @@ export class ContactShadows {
     }
 
     /** Everything shown in `views` that stands (see `contactSize`). */
-    addViews (views: Iterable<{ e: Ent; x: number; z: number; model: { obj: { visible: boolean } } }>) {
+    addViews (views: Iterable<{ e: Ent; x: number; z: number; model: { obj: { visible: boolean } }; wade?: number }>) {
         for (const v of views) {
-            if (!v.model.obj.visible) continue;
+            if (!v.model.obj.visible || (v.wade ?? 0) > 0.3) continue;          // (a raider wading in the sea casts none: the water has it)
             const sz = contactSize(v.e);
             if (sz) this.add(v.x, v.z, sz[0], sz[1]);
         }

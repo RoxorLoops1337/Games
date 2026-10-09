@@ -1,18 +1,27 @@
 // The Blight in the 3D view (src/client3d) draws what the 2D view draws for it (client/world/blight.ts, the blight tiles): a nest
 // isle's ground is the bruised blight soil with smouldering cracks, the nest grows, darkens and throbs with its level and smoulders
-// in the dark.
+// in the dark; a raider wades through the sea sunk to the waist, leaving foam, with the Blight's red glow.
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { Color, type Mesh, Scene } from 'three';
 import { PLOT } from '../src/shared/config';
 import { Rng } from '../src/shared/rng';
-import type { Ent, NodeE, Plot } from '../src/shared/sim/types';
+import type { Ent, MobE, NodeE, Plot } from '../src/shared/sim/types';
+import { MOBS } from '../src/shared/data/mobs';
+import { Entities } from '../src/client3d/entities';
+import { wadeDepth, Wading } from '../src/client3d/wade';
 import { generatePlots } from '../src/shared/sim/worldgen';
 import { World } from '../src/shared/world';
 import { glowOf } from '../src/client3d/glow';
 import { nestBeat, nestScale, nestTier } from '../src/client3d/models/nodes-nest';
 import { nodeModel } from '../src/client3d/models/nodes';
-import { BLIGHT_PAL, PALS, Soup, Terrain } from '../src/client3d/terrain';
+import { BLIGHT_PAL, PALS, Soup, Terrain, WATER_Y } from '../src/client3d/terrain';
+
+// the soft discs are drawn on a 2D canvas when first asked for: give node a stand-in that draws nothing
+if (typeof (globalThis as { document?: unknown }).document === 'undefined') {
+    const ctx = new Proxy({}, { get: (_t, k) => (k === 'createRadialGradient' ? () => ({ addColorStop () {} }) : () => {}), set: () => true });
+    (globalThis as { document?: unknown }).document = { createElement: () => ({ width: 0, height: 0, getContext: () => ctx }) };
+}
 
 /** A world with one nest isle (`blight` 1) next to the home plot, and the plain plot beside it for comparison. */
 function world (blight: 0 | 1 = 1) {
@@ -84,4 +93,44 @@ test('a nest smoulders in the dark, as the 2D light map lights it; other nodes d
     const g = glowOf(nest as Ent, 3, 4);
     assert.ok(g && g.pulse && g.color === 0xff7080);
     assert.equal(glowOf({ ...nest, kind: 'tree' } as unknown as Ent, 0, 0), null);
+});
+
+/** A sea tile a few tiles off the home island's shore, and a land tile on it. */
+function shore (w: World) {
+    const o = w.plotOrigin(w.plots[0]);
+    for (let x = o.tx + PLOT; x < o.tx + PLOT + 12; x++) if (!w.isLand(x, o.ty + 8) && !w.isLand(x + 1, o.ty + 8)) return { sea: { x: x + 3.5, z: o.ty + 8.5 }, land: { x: o.tx + 8.5, z: o.ty + 8.5 } };
+    throw new Error('no sea');
+}
+const mob = (id: number, kind: string, x: number, z: number, rd?: [number, number]) => ({ id, k: 'mob', kind, x: x * 16, y: z * 16, vx: 0, vy: 0, hp: 10, mhp: 10, rd }) as unknown as MobE;
+
+test('a raider in the sea wades sunk to the waist and leaves foam; on land, or not a raider, or flying, it stands on the ground', () => {
+    const { w } = world(1), scene = new Scene(), ents = new Entities(scene, w), wading = new Wading(scene);
+    ents.wading = wading;
+    const at = shore(w);
+    const walker = Object.keys(MOBS).find((k) => !(MOBS as Record<string, { flies?: boolean; boss?: unknown }>)[k].flies && !(MOBS as Record<string, { boss?: unknown }>)[k].boss)!;
+    const flier = Object.keys(MOBS).find((k) => (MOBS as Record<string, { flies?: boolean }>)[k].flies);
+    ents.upsert(mob(1, walker, at.sea.x, at.sea.z, [0, 0]));
+    ents.upsert(mob(2, walker, at.sea.x, at.sea.z));
+    ents.upsert(mob(3, walker, at.land.x, at.land.z, [0, 0]));
+    if (flier) ents.upsert(mob(4, flier, at.sea.x, at.sea.z, [0, 0]));
+    for (let i = 0; i < 40; i++) { ents.update(1 / 30, i / 30, at.sea.x, at.sea.z); wading.update(1 / 30); }
+    const y = (id: number) => ents.views.get(id)!.model.obj.position.y;
+    const r = (MOBS as Record<string, { r?: number }>)[walker].r ?? 6;
+    assert.ok(Math.abs(y(1) - (WATER_Y - wadeDepth(r))) < 0.02, `the raider is in the water to its waist (${y(1)})`);
+    assert.equal(y(2), 0, 'a monster that is no raider is drawn as before');
+    assert.equal(y(3), 0, 'a raider on land stands on the ground');
+    if (flier) assert.equal(y(4), 0, 'a flier never wades');
+    assert.ok(wading.alive.rings > 0 && wading.alive.collars === 1, `foam round the one wading raider (${JSON.stringify(wading.alive)})`);
+    // it comes back up out of the sea onto the land
+    ents.upsert(mob(1, walker, at.land.x, at.land.z, [0, 0]));
+    for (let i = 0; i < 60; i++) ents.update(1 / 30, 2 + i / 30, at.land.x, at.land.z);
+    assert.equal(y(1), 0);
+    ents.remove(1);
+});
+
+test('a raider carries the Blight\'s red glow (the 2D light map\'s), which goes with it into the sea', () => {
+    const r = glowOf(mob(1, 'slime', 3, 4, [0, 0]) as Ent, 3, 4);
+    assert.ok(r && r.color === 0xff8a96 && r.day, 'red, and faintly by day');
+    assert.equal(glowOf(mob(2, 'slime', 3, 4) as Ent, 3, 4), null, 'an ordinary slime is dark');
+    assert.equal(glowOf(mob(3, 'wisp', 3, 4, [0, 0]) as Ent, 3, 4)?.color, 0xb8f0c0, 'a wisp keeps its own light');
 });

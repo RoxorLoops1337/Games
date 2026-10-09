@@ -1,5 +1,5 @@
 // Light in the dark, as the 2D NightLayer's light map has it: the same sources (lamps, lanterns, fires, working furnaces and coal
-// generators, waystones and altars, glowing monsters, shots and creatures, Blight nests, the rift gates, and a little light every farmer carries),
+// generators, waystones and altars, glowing monsters, shots and creatures, Blight nests and raiders, the rift gates, and a little light every farmer carries),
 // the same colours. The nearest ones get a real point light (LightPool); every one of them also lays a soft pool of light on the
 // ground (one instanced mesh, as cheap for forty lamps as for four), and lamps keep a faint warm halo by day.
 // Plus the evening hearth: in the dusk countdown, a dotted circle round each campfire, table and lamp shows where to sit, and a ring
@@ -12,6 +12,7 @@ import { isHearthSpot } from '../shared/data/hearth';
 import type { BuildE, Ent } from '../shared/sim/types';
 import type { World } from '../shared/world';
 import { EL } from './render';
+import { WATER_Y } from './terrain';
 import type { LightPool, LightSpot } from './weather';
 
 /** The monsters and creatures that shine (the Game scene's LIGHT_MOBS and LIGHT_SPECIES). */
@@ -19,7 +20,7 @@ const LIGHT_MOBS = new Set(['wisp', 'wraith', 'oldheart', 'witch']);
 const LIGHT_SPECIES = new Set(['glimmoth', 'aurorin', 'cinderkit', 'pyrelion']);
 
 /** A light, in tiles: where (y is its height), its colour, how strong (0..1.4) and how far it reaches; `day`: it keeps a halo by day. */
-export interface Glow extends LightSpot { day?: boolean; flicker?: number; /** a slow swell (radians a second): a Blight nest smouldering */ pulse?: number }
+export interface Glow extends LightSpot { day?: boolean; flicker?: number; /** a slow swell (radians a second): a Blight nest smouldering */ pulse?: number; /** what it moves with (a raider: followed every frame, and sunk with it into the sea) */ of?: { x: number; z: number; wade?: number }; y0?: number; /** the height of the ground its pool lies on */ gy?: number }
 
 /** The colour a building's light has in 2D (ui/night.ts). */
 export function lightColor (kind: string) {
@@ -44,6 +45,7 @@ export function glowOf (e: Ent, x: number, z: number): Glow | null {
     }
     if (e.k === 'node') return e.kind === 'nest' ? { x, y: 0.8, z, color: 0xff7080, power: 0.9, range: 4.5, pulse: 2.4 } : null;      // (a Blight nest smoulders)
     if (e.k === 'proj') return { x, y: 0.6, z, color: 0xc8e6ff, power: 0.7, range: 3 };
+    if (e.k === 'mob' && e.rd && !LIGHT_MOBS.has(e.kind)) return { x, y: 0.8, z, color: 0xff8a96, power: 0.85, range: 2.6, day: true };      // (a raider carries the Blight's red glow: you see a raid coming in the dark)
     if (e.k === 'mob' && LIGHT_MOBS.has(e.kind)) return e.kind === 'oldheart' ? { x, y: 1.5, z, color: 0xff7080, power: 1.4, range: 9 } : { x, y: 1, z, color: 0xb8f0c0, power: 0.8, range: 4 };
     if (e.k === 'crit' && LIGHT_SPECIES.has(e.sp)) return { x, y: 0.8, z, color: e.sp === 'cinderkit' || e.sp === 'pyrelion' ? 0xffa060 : 0xe8f0ff, power: e.sp === 'aurorin' ? 1 : 0.7, range: e.sp === 'aurorin' ? 6 : 3.5 };
     return null;
@@ -117,6 +119,7 @@ export class Glows {
                 if (e.k !== 'bld' && e.k !== 'proj' && e.k !== 'mob' && e.k !== 'crit' && !(e.k === 'node' && e.kind === 'nest')) continue;
                 const g = glowOf(e, v.x, v.z);
                 if (!g || Math.abs(g.x - cam.x) > 30 || Math.abs(g.z - cam.z) > 24) continue;
+                if (e.k === 'mob' && e.rd) { g.of = v; g.y0 = g.y; }
                 spots.push(g);
             }
             // the rift gates glow all night
@@ -126,6 +129,8 @@ export class Glows {
             }
             spots.sort((a, b) => Math.hypot(a.x - cam.x, a.z - cam.z) - Math.hypot(b.x - cam.x, b.z - cam.z));
         }
+        // a raider's glow goes with it, down into the sea as it wades
+        for (const g of this.spots) if (g.of) { const w = g.of.wade ?? 0; g.x = g.of.x; g.z = g.of.z; g.gy = 0.06 + WATER_Y * w; g.y = (g.y0 ?? 0.8) + WATER_Y * w; }
         this.pool.update(this.spots, cam.x, cam.z, dark, t);
         // the light you carry
         const carry = this.carry;
@@ -142,7 +147,7 @@ export class Glows {
             const k = Math.max(dark, g.day ? day : 0) * (1 - under * 0.45) * (g.flicker ? 0.92 + Math.sin(t * 9 + g.x * 3.1) * 0.08 : g.pulse ? 0.85 + Math.sin(t * g.pulse + g.x) * 0.15 : 1);
             if (k < 0.01) continue;
             const r = g.range * 0.75;
-            this.p.set(g.x, 0.06, g.z);
+            this.p.set(g.x, g.gy ?? 0.06, g.z);
             this.s.set(r, 1, r);
             this.m.compose(this.p, this.q, this.s);
             this.pools.setMatrixAt(n, this.m);
