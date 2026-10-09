@@ -7,12 +7,13 @@
 import { TILE, TUNING } from '../config';
 import { BUILDINGS } from '../data/buildings';
 import { MOBS } from '../data/mobs';
+import { flightTime } from '../data/shotfx';
 import { killXp, PERK_BY_ID, perksOf, levelOf, offer, pending, statsOf, towerType, type TowerStats, type TowerType } from '../data/towerperks';
 import { hash } from '../weather';
 import { PAL } from '../palette';
 import * as combat from './combat';
 import type { Sim } from './sim';
-import type { BuildE, Cmd, MobE, PlayerS } from './types';
+import type { BuildE, Cmd, MobE, PlayerS, ProjE } from './types';
 
 const B = TUNING.blight;
 
@@ -183,7 +184,15 @@ function fire (sim: Sim, t: BuildE, list: readonly MobE[]): boolean {
     };
     const hits: [MobE, number][] = [];
     const fxk = st.burn ? 'fire' : st.freeze ? 'frost' : undefined;
-    const push = (k: 'arrow' | 'bolt' | 'zap', to: MobE[], kind?: 'fire' | 'frost') => sim.events.push({ e: 'shot', k, x: Math.round(x), y: Math.round(y), to: to.map((m) => [Math.round(m.x), Math.round(m.y - 5)] as [number, number]), ...(kind ? { fx: kind } : {}), ...(over > 1 ? { big: 1 as const } : {}) });
+    // an arrow or a bolt is a real projectile (the skeletons' own arrow, flying at a speed the eye can follow); the hit itself is dealt below, at once
+    const fly = (k: 'arrow' | 'bolt', m: MobE, kind?: 'fire' | 'frost') => {
+        const dx = m.x - x, dy = m.y - y, d = Math.max(1, Math.hypot(dx, dy)), t = flightTime(k, d);
+        sim.add<ProjE>({ k: 'proj', kind: kind === 'fire' ? 'fire' : kind === 'frost' ? 'frost' : k, x, y, vx: (dx / d) * (d / t), vy: (dy / d) * (d / t), dmg: 0, life: t, tw: 1 });
+    };
+    const push = (k: 'arrow' | 'bolt' | 'zap', to: MobE[], kind?: 'fire' | 'frost') => {
+        if (k !== 'zap' && to[0]) fly(k, to[0], kind);
+        sim.events.push({ e: 'shot', k, x: Math.round(x), y: Math.round(y), to: to.map((m) => [Math.round(m.x), Math.round(m.y - 5)] as [number, number]), ...(kind ? { fx: kind } : {}), ...(over > 1 ? { big: 1 as const } : {}) });
+    };
     if (type === 'tesla') {
         const chain: MobE[] = [first];
         if (st.storm) for (const m of inr.slice(1, TW.stormMax)) chain.push(m);

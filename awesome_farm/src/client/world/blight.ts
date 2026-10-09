@@ -10,7 +10,7 @@ import { NEST_KINDS } from '../../shared/data/mobs';
 import { PAL } from '../../shared/palette';
 import type { BuildE, MobE, NodeE, Plot, SimEvent } from '../../shared/sim/types';
 import type { World } from '../../shared/world';
-import { ARC, MAX_ARC, ZAP_LINGER, flightTime } from '../../shared/data/shotfx';
+import { ZAP_LINGER, flightTime } from '../../shared/data/shotfx';
 import { levelOf, pending, towerType } from '../../shared/data/towerperks';
 import { maxHp } from '../../shared/sim/defense';
 import { overlay3d } from './view3d-bridge';
@@ -181,26 +181,18 @@ export class BlightFx {
         const [tx, ty] = e.to[0] ?? [e.x, e.y];
         const d = Math.hypot(tx - e.x, ty - e.y);
         const bolt = e.k === 'bolt';
-        const arc = Math.min(MAX_ARC, d * ARC[e.k]);
-        const img = overlay3d(s.add.image(e.x, e.y, bolt ? 'proj_bolt' : 'proj_arrow', 0).setDepth(8e4).setScale(bolt ? 3.6 : 3), SHOT_LIFT);
-        if (e.fx === 'fire') img.setTint(PAL.pumpkin);
-        else if (e.fx === 'frost') img.setTint(PAL.sea);
-        else if (bolt) img.setTint(PAL.pebble);
-        if (e.big) img.setScale(img.scaleX * 1.5);
         const trail = e.fx === 'fire' ? this.fireTrail : e.fx === 'frost' ? this.frostTrail : this.trail;
         flash(e.x, e.y, bolt ? 6 : 4, e.fx === 'fire' ? PAL.berry : e.fx === 'frost' ? PAL.foam : bolt ? PAL.pumpkin : PAL.gold);
-        const pos = (t: number) => ({ x: e.x + (tx - e.x) * t, y: e.y + (ty - e.y) * t - Math.sin(Math.PI * t) * arc });
+        const pos = (t: number) => ({ x: e.x + (tx - e.x) * t, y: e.y + (ty - e.y) * t });       // (the arrow itself is a real projectile: sim/defense.ts `fly`)
         const t0 = this.scene.time.now, dur = flightTime(e.k, d) * 1000;
         const lamp = { x: e.x, y: e.y, r: bolt ? 30 : 24, c: e.fx === 'fire' ? 0xff8a40 : e.fx === 'frost' ? 0xa8d8ff : 0xffe9c8 };
         this.lights.add(lamp);
         const step = () => {
-            const t = Math.min(1, (this.scene.time.now - t0) / dur), p = pos(t), q = pos(Math.min(1, t + 0.02));
-            img.setPosition(p.x, p.y).setRotation(Math.atan2(q.y - p.y, q.x - p.x));
+            const t = Math.min(1, (this.scene.time.now - t0) / dur), p = pos(t);
             lamp.x = p.x; lamp.y = p.y;
             trail.explode(e.fx ? 2 : 1, p.x, p.y);
             if (t >= 1) {
                 this.scene.events.off('update', step);
-                img.destroy();
                 this.lights.delete(lamp);
                 this.sparks.explode(bolt ? 8 : 4, tx, ty);
                 flash(tx, ty, bolt ? 6 : 4, PAL.cream);

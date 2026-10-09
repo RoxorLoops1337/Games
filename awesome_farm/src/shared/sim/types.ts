@@ -139,7 +139,11 @@ export interface MobE {
     hb?: number;             // a raider at a wall: seconds until its next blow
 }
 /** A bolt, arrow or boulder in flight (fired by monsters; players' shots resolve instantly). */
-export interface ProjE { id: number; k: 'proj'; kind: ProjKind; x: number; y: number; vx: number; vy: number; dmg: number; life: number }
+export interface ProjE {
+    id: number; k: 'proj'; kind: ProjKind; x: number; y: number; vx: number; vy: number; dmg: number; life: number;
+    /** A tower's shot: harmless (the hit was dealt when it was fired), it only flies to show where the shot goes, over walls, and ends with its flight. */
+    tw?: 1;
+}
 /** A wild creature, a companion at its owner's heels, or a worker living in a den. */
 export interface CritE {
     id: number; k: 'crit'; sp: SpeciesId;

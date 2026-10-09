@@ -135,6 +135,27 @@ test('a wave marches on the yard from where it was sent, the towers wear it down
     assert.equal(Object.values(sim.s.ents).filter((e) => e.k === 'node' && lab.arenaPlots(sim).includes(sim.world.plotAt(e.tx, e.ty)!)).length, 0, 'no tree or rock grew back on the arena');
 });
 
+test('a tower shot is a real, harmless projectile (the skeletons\' own arrow) that flies at a speed the eye can follow, then ends', () => {
+    const { sim, p, op } = world();
+    op({ op: 'labClear' });
+    op({ op: 'labWave', id: 'skeleton', n: 4, lv: 1, who: 'e' });
+    const seen = new Map<number, { x0: number; y0: number; t: number; kind: string }>();
+    let towerArrows = 0;
+    for (let i = 0; i < 20 * 40; i++) {
+        sim.step(1 / 20);
+        for (const e of Object.values(sim.s.ents)) {
+            if (e.k !== 'proj' || !e.tw) continue;
+            if (!seen.has(e.id)) { seen.set(e.id, { x0: e.x, y0: e.y, t: 0, kind: e.kind }); towerArrows++; assert.equal(e.dmg, 0, 'it hurts nobody'); }
+            seen.get(e.id)!.t += 1 / 20;
+        }
+        assert.ok(p.downed <= 0, 'the shot never hurt the farmer');
+    }
+    assert.ok(towerArrows >= 3, `${towerArrows} shots flew`);
+    for (const v of seen.values()) assert.ok(v.t >= 0.3 && v.t <= 1.2, `in the air ${v.t.toFixed(2)} s: long enough to see`);
+    assert.ok([...seen.values()].every((v) => ['arrow', 'bolt', 'fire', 'frost'].includes(v.kind)));
+    assert.ok(!Object.values(sim.s.ents).some((e) => e.k === 'proj' && e.tw && e.life > 1), 'none lingers');
+});
+
 test('the ops: night, speed, mend, clear and reset', () => {
     const { sim, p, op, yard, ytx, yty } = world();
     // night on and off, held there
@@ -285,17 +306,19 @@ test('the lab never touches the real solo world or profile: its own keys, never 
     }
 });
 
-test('tower shots stay on screen long enough to be seen: flight times, the arc, the zap glow', async () => {
-    const { flightTime, FLIGHT, ZAP_LINGER, MAX_ARC, ARC } = await import('../src/shared/data/shotfx');
+test('tower shots stay on screen long enough to be seen: the speed of a skeleton\'s arrow, the zap glow', async () => {
+    const { flightTime, SPEED, FLIGHT_MIN, FLIGHT_MAX, ZAP_LINGER } = await import('../src/shared/data/shotfx');
     for (const k of ['arrow', 'bolt'] as const) {
         for (const d of [0, 20, 60, 112, 168, 400]) {
             const t = flightTime(k, d);
-            assert.ok(t >= 0.35 && t <= 0.6, `${k} over ${d}px: ${t}s`);
+            assert.ok(t >= FLIGHT_MIN && t <= FLIGHT_MAX, `${k} over ${d}px: ${t}s`);
         }
+        assert.ok(flightTime(k, 112) >= 0.6, `${k} over an Archer's reach is in the air for at least 0.6 s`);
+        assert.ok(SPEED[k] <= 160, `${k} flies no faster than the eye can follow`);
         assert.ok(flightTime(k, 400) >= flightTime(k, 10), 'further takes longer');
-        assert.ok(ARC[k] > 0 && ARC[k] * 400 > 0 && MAX_ARC > 0);
     }
-    assert.ok(FLIGHT.bolt[0] > FLIGHT.arrow[0] && flightTime('bolt', 100) > flightTime('arrow', 100), 'the heavy bolt is slower');
+    assert.ok(SPEED.arrow >= 120, 'at least a skeleton\'s arrow (120)');
+    assert.ok(SPEED.bolt < SPEED.arrow && flightTime('bolt', 100) > flightTime('arrow', 100), 'the heavy bolt is slower');
     assert.ok(ZAP_LINGER >= 0.3);
     const src = readFileSync(join(ROOT, 'src/client/world/blight.ts'), 'utf8');
     assert.ok(/flightTime\(e\.k, d\)/.test(src) && /ZAP_LINGER/.test(src), 'blight.ts uses them');
@@ -306,7 +329,8 @@ test('the tower shots are world overlays the 3D view shows too; the panel only s
     const src = readFileSync(join(ROOT, 'src/client/world/blight.ts'), 'utf8');
     const shot = src.slice(src.indexOf('    shot ('), src.indexOf('    draw ()'));
     assert.ok(/overlay3d\(s\.add\.graphics\(\)/.test(shot), 'the zap is marked');
-    assert.ok(/overlay3d\(s\.add\.image\(/.test(shot), 'the arrow and the bolt are marked');
+    assert.ok(!/s\.add\.image\(/.test(shot), 'an arrow or a bolt is not drawn here: it is a real projectile (sim/defense.ts), drawn like every other');
+    assert.ok(/e\.k === 'proj'/.test(readFileSync(join(ROOT, 'src/client3d/entities.ts'), 'utf8')), 'the 3D view draws projectiles');
     const panel = readFileSync(join(ROOT, 'src/client/ui/labpanel.ts'), 'utf8');
     const sent = [...panel.matchAll(/t: '(\w+)', op: '(\w+)'/g)].map((m) => `${m[1]}:${m[2]}`);
     assert.ok(sent.length >= 7 && sent.every((s) => s.startsWith('devdo:')), sent.join(' '));
