@@ -66,6 +66,6 @@ async function init(target, opts) {
   api.dispose = () => host.dispose(); api.host = host;
   return api;
 }
-const Park3D = { init, createHost, WORLDS, THREE, kit, PAL, playTape, loadCine: () => import('./cine_reels.js') };
+const Park3D = { init, createHost, WORLDS, THREE, kit, PAL, playTape, loadCine: () => import('./cine_reels.js'), loadVig: (w) => (/^[a-z0-9]+$/.test(String(w)) ? import(`./vig_${w}.js`) : Promise.reject(new Error('bad world id'))) };
 window.Park3D = Park3D;
 export default Park3D;

@@ -296,8 +296,11 @@
           S.row('NAP  90 min', 'Energy +22. Not available too late.', '', () => { S.closeSheet(); G.do({ t: 'nap' }); }),
           S.row('SLEEP', late ? 'End the day. Wake up fresh at 07:00.' : 'Only after 20:00.', late ? 'gold' : 'dis', () => {
             if (!late) { E.toast('Too early to sleep. Nap, or wait until 20:00.', 'warn'); return; }
-            S.closeSheet(); E.fadeTo(1, 600); G.pendingMorning = null; const r = G.doHold({ t: 'sleep' }); r.play({ morning: (f) => { G.pendingMorning = f; } });
-            setTimeout(() => { E.go('place', { id: 'home' }, { nofade: true }); }, 700);
+            S.closeSheet();
+            const sleep = () => { E.fadeTo(1, 600); G.pendingMorning = null; const r = G.doHold({ t: 'sleep' }); r.play({ morning: (f) => { G.pendingMorning = f; } });
+              setTimeout(() => { E.go('place', { id: 'home' }, { nofade: true }); }, 700); };
+            if (G.vigBefore && G.vigBefore('sleep', S, sleep)) return;   // 3D: the bedtime vignette plays first, then calls sleep() (r3/vig.js)
+            sleep();
           }),
         ]);
       },
