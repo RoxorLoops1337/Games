@@ -1193,7 +1193,7 @@
       countdown(o, t, p) { tone(o, t, { f: 660 * p, d: 0.12, v: 0.24, type: 'square', lp: 3000 }); tone(o, t, { f: 1320 * p, d: 0.07, v: 0.05, type: 'sine' }); },
       // cutscene ambience (park3d/cine.js): rain on the street for n seconds, a far thunder roll, a heartbeat, the hum of a dying office tube
       rain(o, t, p, n) { const d = clamp(num(n, 2.4), 0.5, 30); noiz(o, t, { ft: 'bandpass', f: 2400 * p, q: 0.5, d, v: 0.13, swell: Math.min(1.2, d / 3), pink: true }); noiz(o, t, { ft: 'lowpass', f: 700, q: 0.6, d, v: 0.09, swell: Math.min(1.5, d / 3), pink: true }); },
-      thunder(o, t, p) { noiz(o, t, { ft: 'lowpass', f: 260 * p, f2: 90 * p, q: 0.8, d: 2.6, v: 0.34, swell: 0.25, pink: true, rev: 0.4 }); tone(o, t, { f: 46 * p, f2: 34 * p, d: 1.6, v: 0.16, type: 'sine', a: 0.2 }); },
+      thunder(o, t, p) { noiz(o, t, { ft: 'bandpass', f: 260 * p, f2: 90 * p, q: 0.6, d: 2.6, v: 0.4, swell: 0.25, pink: true, rev: 0.4 }); tone(o, t, { f: 46 * p, f2: 34 * p, d: 1.6, v: 0.16, type: 'sine', a: 0.2 }); },
       heart(o, t, p) { [0, 0.24].forEach((d, i) => tone(o, t + d, { f: (i ? 52 : 60) * p, f2: 38 * p, d: 0.16, v: i ? 0.26 : 0.34, type: 'sine', fd: 0.12 })); },
       hum(o, t, p, n) { const d = clamp(num(n, 2.2), 0.3, 20); tone(o, t, { f: 120 * p, d, v: 0.12, type: 'sawtooth', lp: 900, a: 0.3 }); tone(o, t, { f: 240 * p, d, v: 0.05, type: 'square', lp: 1400, a: 0.3 }); },
       go(o, t, p) { tone(o, t, { f: 1320 * p, d: 0.3, v: 0.24, type: 'square', lp: 4000, rev: 0.1 }); tone(o, t, { f: 1980 * p, d: 0.25, v: 0.1, type: 'triangle' }); tone(o, t, { f: 2640 * p, d: 0.2, v: 0.04 }); },
