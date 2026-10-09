@@ -236,6 +236,9 @@ awesome_farm/
   no longer exists are dropped on load; a device makes at most two new accounts per server run and a connection at most five hellos. The hasher is injectable (`HostOptions.hash`: the server uses `node:crypto`, the same stretched SHA-256, 5× faster).
   The welcome carries other farmers as their public view only (`publicView`, plus `mh`), the own record whole. Tests: `tests/accounts.test.ts`, `tests/host.hardening.test.ts`, plus the restart case in `tests/server.e2e.test.ts`.
 
+## Play online: several worlds (`data/servers.ts`)
+One Worker hosts every world in `WORLDS`, one Durable Object each (`/w/<id>/...`; plain `/status|/ws|/admin` = first world, so old links and farmer identities keep working). The title screen reads `<server>/worlds` and shows one button per world; `PUBLIC_SERVER` (empty until the owner supplies the address) lets first-time players skip typing. Add a world = add a `WORLDS` line + `npm run cf:deploy`. Never rename a world id (it names the save). Details: `server/cf/README.md`.
+
 ## The 3D view (beta): `settings.view`, `world/view3d-bridge.ts`, `src/client3d/view3d.ts`
 
 Players choose how the world is drawn: **2D** (the default, unchanged) or **3D (beta)**, on the title screen (the View toggle beside

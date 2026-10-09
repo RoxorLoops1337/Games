@@ -66,6 +66,7 @@
 <body>
 <header>
   <h1>Awesome Farm admin</h1>
+  <select id="world" class="quiet" title="Which world this page manages" hidden></select>
   <span id="pill" class="pill wait">…</span>
   <span class="spacer"></span>
   <button id="share" class="quiet" title="Copy the link friends use to join">Copy join link</button>
@@ -150,6 +151,8 @@
 <script>
 (() => {
   const $ = (id) => document.getElementById(id);
+  // this page manages ONE world: /admin is the first, /w/<world>/admin another (every request goes under the same prefix)
+  const BASE = location.pathname.replace(/\/admin\/?$/, '');
   const KEY = 'awesome_farm_admin_key';
   let key = sessionStorage.getItem(KEY) || localStorage.getItem(KEY) || '';
   let state = null, timer = null, busy = false;
@@ -162,7 +165,7 @@
   async function api (path, opts = {}) {
     const headers = { authorization: 'Bearer ' + key };
     if (typeof opts.body === 'string') headers['content-type'] = 'application/json';
-    const r = await fetch('/admin/' + path, { ...opts, headers });
+    const r = await fetch(BASE + '/admin/' + path, { ...opts, headers });
     if (r.status === 403) { const j = await r.json().catch(() => ({})); lock(j.error || 'That key did not work.'); throw new Error('locked'); }
     const isJson = (r.headers.get('content-type') || '').includes('json');
     const out = isJson ? await r.json() : await r.text();
@@ -241,8 +244,18 @@
     try { state = await api('state'); render(); unlocked(); } catch (err) { if (err.message !== 'locked') $('lockmsg').textContent = 'The server did not answer: ' + err.message; }
   });
   $('logout').onclick = () => lock('Locked.');
+  // the worlds this server hosts (a public list: no key needed), to switch between them
+  fetch('/worlds').then((r) => r.json()).then((j) => {
+    if (!j || !Array.isArray(j.worlds) || j.worlds.length < 2) return;
+    const here = (/^\/w\/([a-z0-9_-]+)/.exec(BASE) || [])[1] || j.default;
+    const sel = $('world');
+    for (const w of j.worlds) { const o = document.createElement('option'); o.value = w.id; o.textContent = w.name + (w.id === j.default ? ' (first)' : ''); sel.appendChild(o); }
+    sel.value = here;
+    sel.hidden = false;
+    sel.onchange = () => { location.href = location.origin + '/w/' + sel.value + '/admin'; };
+  }).catch(() => {});
   $('share').onclick = async () => {
-    const link = location.origin;
+    const link = location.origin + BASE;
     try { await navigator.clipboard.writeText(link); toast('Copied: ' + link); } catch { prompt('The link friends use:', link); }
   };
   $('sayform').addEventListener('submit', (e) => {
@@ -253,7 +266,7 @@
   });
   $('savenow').onclick = () => act('save', async () => { await post('save'); return 'Saved'; });
   $('download').onclick = () => act('download', async () => {
-    const r = await fetch('/admin/backup', { headers: { authorization: 'Bearer ' + key } });
+    const r = await fetch(BASE + '/admin/backup', { headers: { authorization: 'Bearer ' + key } });
     if (!r.ok) throw new Error(String(r.status));
     const blob = await r.blob(), a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
