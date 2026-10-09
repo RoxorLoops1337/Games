@@ -235,7 +235,10 @@ level, and the isle can be bought. The map marks every nest in red.
 to them, or their home island) has a living nest within six plots gets half the night's monsters (plus one per other nest in range and
 per four nest levels, at most ten) as a raiding party from the nearest nest, of its kind and a level higher for every three nest
 levels. The dusk warning says where it gathers. Raiders **wade** across the sea (slower, with a red glow so you see them coming),
-march on the base and stop at walls, doorways and buildings; a farmer close by is fought as usual. They melt away at dawn. Without a
+march on the base and attack the **walls and doorways** in their way (`BuildE.hp`: wood 40, stone 100, brick 130, doorway 60, and the
+**Fortified Wall**, iron-bound stone, 260, in the Build menu's **Defense** tab after the Combat skill *Watchtowers*); a piece at 0 breaks
+(nothing is given back) and everything hurt **mends at dawn** (`sim/defense.ts`). A farmer close by is fought as usual. Raiders melt
+away at dawn. Without a
 nest in range a night is exactly what it always was (nothing rolls the world's dice unless a raid is coming). Every number is a dial in `TUNING.blight`. Test: `tests/blight.test.ts`.
 
 ### Co-op

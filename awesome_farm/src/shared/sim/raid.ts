@@ -1,12 +1,15 @@
 // The raids a Blight nest sends at night. At nightfall, a farmer whose base (the campfire on their own land nearest to them, or their
 // home island) has a living nest within `raidRange` plots gets part of the night's monsters as a raiding party from the nearest nest:
-// they wade across the sea (slower), march on the base, and stop at walls, doorways and buildings; a farmer close by is fought as usual.
+// they wade across the sea (slower), march on the base, and break the walls and doorways in their way (sim/defense.ts); a farmer close by
+// is fought as usual.
 // Without a nest in range a night is exactly what it always was: nothing here rolls the world's dice unless a raid is coming.
 
 import { TILE, TUNING } from '../config';
+import { BUILDINGS } from '../data/buildings';
 import { pickRaider, type MobDef } from '../data/mobs';
 import { PAL } from '../palette';
 import * as blight from './blight';
+import * as defense from './defense';
 import * as mobs from './mobs';
 import * as quests from './quests';
 import type { Sim } from './sim';
@@ -109,7 +112,13 @@ export function raidMove (sim: Sim, e: MobE, def: MobDef, dt: number) {
     if (hit) atWall(sim, e, def, hit, dt);
 }
 
-/** Something stops a raider: it steps round it for a moment. */
-function atWall (_sim: Sim, e: MobE, _def: MobDef, _id: number, _dt: number) {
+/** Something stops a raider: a defense piece takes a blow now and then; anything else it steps round. */
+function atWall (sim: Sim, e: MobE, def: MobDef, id: number, dt: number) {
+    const b = id > 0 ? sim.s.ents[id] : undefined;
+    if (b?.k === 'bld' && BUILDINGS[b.kind].hp) {
+        e.hb = (e.hb ?? 0.3) - dt;
+        if (e.hb <= 0) { e.hb = B.raidBldEvery; defense.hitBuilding(sim, b, B.raidBldDmg * def.dmg * (e.el ? 1.25 : 1)); }
+        return;
+    }
     if ((e.dt ?? 0) <= 0 && e.rd) { e.dt = 0.8; e.dd = -(e.dd ?? ((e.id & 1) ? -1 : 1)); }
 }

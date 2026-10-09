@@ -6,8 +6,11 @@ import { NEST_KINDS, nightCount } from '../src/shared/data/mobs';
 import * as blight from '../src/shared/sim/blight';
 import * as clock from '../src/shared/sim/clock';
 import * as raid from '../src/shared/sim/raid';
+import * as defense from '../src/shared/sim/defense';
+import * as mobs from '../src/shared/sim/mobs';
+import { BUILDINGS } from '../src/shared/data/buildings';
 import { Sim } from '../src/shared/sim/sim';
-import type { MobE, NodeE, PlayerS, Plot, WorldState } from '../src/shared/sim/types';
+import type { BuildE, MobE, NodeE, PlayerS, Plot, WorldState } from '../src/shared/sim/types';
 import { slotPlot } from '../src/shared/sim/worldgen';
 
 const B = TUNING.blight;
@@ -212,6 +215,30 @@ test('a raid spawns at the nest only when one is in range, and marches on the ba
     assert.ok(alive.length, 'some still marching');
     for (const m of alive) assert.ok(Math.hypot(m.x - base.x, m.y - base.y) < d0[raiders.indexOf(m)] - 60, 'closer to the base');
     assert.ok(wet, 'they waded across the sea between the isles');
+});
+
+test('a raider breaks the wall in its way; a broken wall is gone and the damaged ones mend at dawn', () => {
+    const sim = Sim.create('BL-WALL', 'b');
+    const p = sim.join('a', 'A')!;
+    clear(sim);
+    const c = home(sim, p);
+    p.x = c.x - 220; p.y = c.y; p.invuln = 1e9;
+    const tx = Math.floor(c.x / TILE) + 3, ty = Math.floor(c.y / TILE);
+    for (let y = -2; y <= 2; y++) { const id = sim.world.occAt(tx, ty + y); if (id) sim.remove(id); }
+    const walls = [-2, -1, 0, 1, 2].map((y) => sim.add<BuildE>({ k: 'bld', kind: 'wall_wood', tx, ty: ty + y, rot: 0, by: 'a' }));
+    for (let x = tx - 4; x < tx; x++) for (let y = ty - 1; y <= ty + 1; y++) { const id = sim.world.occAt(x, y); if (id) sim.remove(id); }
+    const m = mobs.spawnMob(sim, 'skeleton', undefined, undefined, { x: (tx - 3) * TILE, y: (ty + 1) * TILE - 3, lv: 1 })!;
+    m.rd = [(tx + 8) * TILE, (ty + 1) * TILE - 3];
+    run(sim, 20);
+    assert.ok(!sim.s.ents[walls[2].id], 'the wall in its way broke');
+    assert.ok(sim.events.length >= 0);
+    // a damaged one mends at dawn
+    const w = walls.find((x) => sim.s.ents[x.id])!;
+    w.hp = 3;
+    defense.mend(sim);
+    assert.equal(w.hp, undefined, 'whole again');
+    assert.equal(BUILDINGS.wall_fort.hp, B.hp.fortified);
+    assert.ok(BUILDINGS.wall_wood.hp! < BUILDINGS.wall_stone.hp! && BUILDINGS.wall_stone.hp! < BUILDINGS.wall_brick.hp!, 'wood < stone < brick');
 });
 
 test('nights without a nest in range spawn exactly as a world without the Blight', () => {

@@ -183,6 +183,10 @@ export const TUNING = {
         raidWade: 0.6,           // a raider wades across the sea at this share of its speed
         raidMarch: 1.5,          // … and marches this much faster than it walks while no farmer is near
         raidArrive: 28,          // px from the base where a raider stops marching
+        raidBldDmg: 4,           // damage to a wall, doorway or tower in a raider's way for every heart of its bite…
+        raidBldEvery: 1,         // … once a second (sim/defense.ts)
+        /** Hit points of the defense pieces (a broken one is gone; damaged ones mend at dawn). */
+        hp: { wood: 40, stone: 100, brick: 130, doorway: 60, fortified: 260 },
     },
     /** Co-op boss statuses (sim/costatus.ts): patterns that need teammates. Laid only while two or more farmers are up in the arena. */
     coop: {

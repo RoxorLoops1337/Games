@@ -6,7 +6,7 @@ import { mixc, outlineOf, paint, paintFrames, Pix, RAMP } from './paint';
 
 const BRICK = [0x5e2a28, 0x8a4036, 0xb35e48, 0xd4805c, 0xefa27e];
 
-interface WallStyle { ramp: readonly number[]; pattern: 'wood' | 'stone' | 'brick'; window?: boolean }
+interface WallStyle { ramp: readonly number[]; pattern: 'wood' | 'stone' | 'brick'; window?: boolean; bands?: boolean }
 
 /** One frame of a wall: the centre post, plus an arm towards every side that has a neighbour. */
 function wallFrame (p: Pix, mask: number, st: WallStyle) {
@@ -39,6 +39,8 @@ function wallFrame (p: Pix, mask: number, st: WallStyle) {
             if (x % 6 === 0) c = mixc(c, R[0], 0.45);                 // plank seams
             if (x % 6 === 3 && (y % 9 === 4)) c = R[0];               // a nail
         }
+        if (st.bands && (y % 8 === 1 || y % 8 === 2) && at(x, y - 1)) c = y % 8 === 1 ? 0x9496ae : 0x4a475c;       // iron bands (the Fortified Wall)
+        if (st.bands && y % 8 === 1 && x % 6 === 2) c = 0xd6d9ec;                                                   // … with rivets
         p.set(x, y, c);
     }
     // a window in a straight run
@@ -103,6 +105,7 @@ const WALL_STYLES: Record<string, WallStyle> = {
     wall_stone: { ramp: RAMP.stone, pattern: 'stone' },
     wall_brick: { ramp: BRICK, pattern: 'brick' },
     wall_window: { ramp: RAMP.wood, pattern: 'wood', window: true },
+    wall_fort: { ramp: [0x3a3c52, 0x555878, 0x747aa0, 0x9ea4c8, 0xc4c9dc], pattern: 'stone', bands: true },
 };
 
 export function registerStorybookHouse (scene: Phaser.Scene) {

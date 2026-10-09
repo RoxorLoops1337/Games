@@ -106,4 +106,6 @@ export const HOWTO: Partial<Record<BuildingKind, HowTo>> = {
     uberchest: {
         role: 'One store, everywhere', how: `Every Uber Chest opens the same store, shared by the farm; each one adds ${BUILDINGS.uberchest.storage} room. Inserters and creatures use it like any chest.`,
     },
+    // ── base defense (sim/defense.ts): raids come from the Blight nests at night ──
+    wall_fort: { role: 'The toughest wall raiders face', how: `Iron-bound stone with ${TUNING.blight.hp.fortified} hit points (wood has ${TUNING.blight.hp.wood}). Joins up with other walls; mends at dawn.` },
 };

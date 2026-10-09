@@ -17,7 +17,7 @@ export type Family = 'building' | 'node' | 'monster' | 'creature' | 'item';
 
 /** The things drawn as a placeholder on purpose, until someone models them (each is a work item: see CLAUDE.md, "3D view"). */
 export const PLACEHOLDERS: Record<Family, readonly string[]> = {
-    building: ['chute', 'mailbox', 'uberchest', 'weathervane', 'sleepbed'],      // a block of the right footprint
+    building: ['chute', 'mailbox', 'uberchest', 'weathervane', 'sleepbed', 'wall_fort'],      // a block of the right footprint
     node: ['titan_oak', 'titan_rock', 'nest'],                 // drawn as the plain rock
     monster: [],
     creature: [],

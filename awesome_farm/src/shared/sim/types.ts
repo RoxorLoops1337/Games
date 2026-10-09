@@ -92,6 +92,7 @@ export interface BuildE {
     lnk?: number;            // a mine ladder: the shaft it leads up to
     hg?: number;             // a campfire, table or light at dusk: how far the evening hearth is kindled, 0..1 (1: it is, until night falls; sim/hearth.ts)
     ch?: ChuteS;             // an export chute: its books (see sim/chute.ts)
+    hp?: number;             // a wall, doorway or tower a raider has hurt: the hit points it has left (none: whole; it mends at dawn, sim/defense.ts)
 }
 
 /**
@@ -133,6 +134,7 @@ export interface MobE {
     nb?: number;             // the brood of a Blight nest: the nest isle's plot index (it melts away when nobody is near)
     dt?: number;             // a raider stepping round something in its way: seconds left of the sidestep…
     dd?: number;             // … and which way (1 left, -1 right)
+    hb?: number;             // a raider at a wall: seconds until its next blow
 }
 /** A bolt, arrow or boulder in flight (fired by monsters; players' shots resolve instantly). */
 export interface ProjE { id: number; k: 'proj'; kind: ProjKind; x: number; y: number; vx: number; vy: number; dmg: number; life: number }

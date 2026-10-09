@@ -4,7 +4,7 @@ import type { Cost, ItemId } from './items';
 
 export type StationId = 'hand' | 'workbench' | 'anvil' | 'kitchen' | 'loom' | 'alchemy' | 'altar' | 'riftforge';
 export type ProcId = 'furnace' | 'sawmill' | 'millstone' | 'assembler';
-export type BuildCat = 'craft' | 'industry' | 'power' | 'logistics' | 'farm' | 'storage' | 'light' | 'home' | 'decor' | 'special';
+export type BuildCat = 'craft' | 'industry' | 'power' | 'logistics' | 'farm' | 'storage' | 'light' | 'home' | 'defense' | 'decor' | 'special';
 
 export const STATION_NAMES: Record<StationId | ProcId, string> = {
     hand: 'By hand', workbench: 'Workbench', anvil: 'Anvil', kitchen: 'Kitchen', loom: 'Loom', alchemy: 'Alchemy Table', altar: 'Boss Altar', riftforge: 'Rift Forge',
@@ -23,6 +23,7 @@ export const BUILD_CATS: { id: BuildCat; name: string; icon: string }[] = [
     { id: 'storage', name: 'Storage', icon: 'chest_b' },
     { id: 'light', name: 'Light', icon: 'lantern' },
     { id: 'home', name: 'Floors & walls', icon: 'floor_plank' },
+    { id: 'defense', name: 'Defense', icon: 'wall_fort_icon' },
     { id: 'decor', name: 'Decor', icon: 'fence' },
     { id: 'special', name: 'Special', icon: 'market' },
 ];
@@ -56,6 +57,7 @@ export interface BuildingDef {
     floor?: boolean;              // drawn under everything, walkable, one per tile
     hidden?: boolean;             // never offered in the build menu and never built by a player (the world makes it)
     grave?: boolean;              // a dropped backpack: anyone can take things out of it, nothing goes in, and it is gone when it is empty
+    hp?: number;                  // a defense piece (walls, doorways): what a raider must break (sim/defense.ts); it mends at dawn
 }
 
 /** Belts and the things that behave like belts: they hold three items and pass them on. */
@@ -70,7 +72,8 @@ export type BuildingKind =
     | 'wall_wood' | 'wall_stone' | 'wall_brick' | 'wall_window' | 'doorway' | 'roof_thatch' | 'roof_tile' | 'roof_slate'
     | 'lostpack' | 'mineshaft' | 'mineladder'
     | 'chute' | 'weathervane'
-    | 'sleepbed';
+    | 'sleepbed'
+    | 'wall_fort';
 
 export const BUILDINGS: Record<BuildingKind, BuildingDef> = {
     workbench: { name: 'Workbench',   tex: 'workbench', size: [1, 1], cost: { wood: 6 }, cat: 'craft', station: 'workbench', work: 'make', desc: 'Saw planks, craft bows and simple tools.' },
@@ -130,15 +133,18 @@ export const BUILDINGS: Record<BuildingKind, BuildingDef> = {
     brickfloor: { name: 'Brick Floor', tex: 'floor_brick', size: [1, 1], cost: { brick: 1 }, cat: 'home', floor: true, solid: false, desc: 'Warm red brick underfoot. Nothing spawns on a floor.' },
     slatefloor: { name: 'Slate Floor', tex: 'floor_slate', size: [1, 1], cost: { stone: 1 }, cat: 'home', floor: true, solid: false, desc: 'Tidy grey tiles. Nothing spawns on a floor.' },
     carpet:    { name: 'Carpet',       tex: 'floor_carpet', size: [1, 1], cost: { cloth: 1 }, cat: 'home', floor: true, solid: false, desc: 'Plush and a little bit fancy. Nothing spawns on a floor.' },
-    wall_wood:   { name: 'Wooden Wall',  tex: 'wall_wood',  size: [1, 1], cost: { plank: 2 }, cat: 'home', wall: true, desc: 'Joins up with the walls next to it. Drag to lay a line. Monsters cannot get through.' },
-    wall_stone:  { name: 'Stone Wall',   tex: 'wall_stone', size: [1, 1], cost: { stone: 3 }, cat: 'home', wall: true, desc: 'Grey stone blocks. Joins up with its neighbours.' },
-    wall_brick:  { name: 'Brick Wall',   tex: 'wall_brick', size: [1, 1], cost: { brick: 2 }, cat: 'home', wall: true, desc: 'Warm red brick. Joins up with its neighbours.' },
-    wall_window: { name: 'Window Wall',  tex: 'wall_window', size: [1, 1], cost: { plank: 2, glass: 1 }, cat: 'home', wall: true, desc: 'A wall with a window to look out of. Place it in a straight run.' },
-    doorway:     { name: 'Doorway',      tex: 'doorway',    size: [1, 1], cost: { plank: 3 }, cat: 'home', walk: true, gate: true, dir: true, desc: 'You walk straight through; monsters cannot. R turns it to fit a wall running up and down.' },
+    wall_wood:   { name: 'Wooden Wall',  tex: 'wall_wood',  size: [1, 1], cost: { plank: 2 }, cat: 'home', wall: true, hp: TUNING.blight.hp.wood, desc: 'Joins up with the walls next to it. Drag to lay a line. Monsters cannot get through.' },
+    wall_stone:  { name: 'Stone Wall',   tex: 'wall_stone', size: [1, 1], cost: { stone: 3 }, cat: 'home', wall: true, hp: TUNING.blight.hp.stone, desc: 'Grey stone blocks. Joins up with its neighbours. Tougher than wood when raiders come.' },
+    wall_brick:  { name: 'Brick Wall',   tex: 'wall_brick', size: [1, 1], cost: { brick: 2 }, cat: 'home', wall: true, hp: TUNING.blight.hp.brick, desc: 'Warm red brick. Joins up with its neighbours. Stands up to raiders better than stone.' },
+    wall_window: { name: 'Window Wall',  tex: 'wall_window', size: [1, 1], cost: { plank: 2, glass: 1 }, cat: 'home', wall: true, hp: TUNING.blight.hp.wood, desc: 'A wall with a window to look out of. Place it in a straight run.' },
+    doorway:     { name: 'Doorway',      tex: 'doorway',    size: [1, 1], cost: { plank: 3 }, cat: 'home', walk: true, gate: true, dir: true, hp: TUNING.blight.hp.doorway, desc: 'You walk straight through; monsters cannot. R turns it to fit a wall running up and down.' },
     roof_thatch: { name: 'Thatch Roof',  tex: 'roof_thatch', size: [1, 1], cost: { fiber: 3, plank: 1 }, cat: 'home', roof: true, desc: 'Goes over a floor and furniture. Fades away when you stand underneath. Drag to cover a room.' },
     roof_tile:   { name: 'Tile Roof',    tex: 'roof_tile',  size: [1, 1], cost: { brick: 1, plank: 1 }, cat: 'home', roof: true, desc: 'Terracotta tiles. Goes over a floor; fades when you are underneath.' },
     roof_slate:  { name: 'Slate Roof',   tex: 'roof_slate', size: [1, 1], cost: { stone: 2, plank: 1 }, cat: 'home', roof: true, desc: 'Grey slate. Goes over a floor; fades when you are underneath.' },
     sleepbed:    { name: 'Bed',          tex: 'sleepbed',   size: [1, 2], cost: { plank: 6, cloth: 2 }, cat: 'home', desc: 'Press E on it and this is where you wake up after a fall, instead of at home. One wake-up spot each: a new bed moves it. Good for an outpost far from home.' },
+
+    // ── base defense (the Defense tab): raids come from the Blight nests at night (sim/raid.ts, sim/defense.ts) ──
+    wall_fort:   { name: 'Fortified Wall', tex: 'wall_fort', size: [1, 1], cost: { ironbar: 2, stone: 4 }, cat: 'defense', req: 'towers', wall: true, hp: TUNING.blight.hp.fortified, desc: 'Stone bound in iron: the toughest wall there is. Joins up with other walls and doorways. Raiders take a long time to break it.' },
 
     market:    { name: 'Market Stall', tex: 'market',   size: [2, 1], cost: { wood: 6, stone: 4 }, cat: 'special', desc: 'Sell your goods for coins.' },
     altar:     { name: 'Boss Altar', tex: 'altar', size: [2, 2], cost: { stone: 30, brick: 10, ironbar: 4 }, cat: 'special', req: 'altar', station: 'altar', light: 60, desc: 'Craft sigils and call the island\u2019s bosses. Bring friends.' },
