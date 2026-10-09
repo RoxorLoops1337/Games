@@ -8,6 +8,7 @@ import { seasonDay, seasonDef, seasonOf, SEASONS, yearOf } from '../season';
 import { nightEvent, NIGHT_EVENTS, type NightEvent } from '../weather';
 import * as blight from './blight';
 import * as chronicle from './chronicle';
+import * as defense from './defense';
 import * as dread from './dread';
 import * as fortune from './fortune';
 import * as gather from './gather';
@@ -167,6 +168,7 @@ export function dawn (sim: Sim) {
     scholar.onDawn(sim);
     for (const p of sim.online) tellLessons(sim, p, false);
     dread.ensure(sim);
+    defense.mend(sim);                            // (walls and doorways the raiders hurt are whole again)
     blight.onDawn(sim);                           // (nests grow a level, merge and spread)
     sim.banner(`Day ${s.day}`, `You made it through the night. +1 heart`, PAL.gold);
 }

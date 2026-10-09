@@ -32,9 +32,9 @@ test('Build lists a category only when something in it can be built', () => {
     const p = sim.join('a', 'A')!;
     const first = listedBuildCats(p);
     for (const need of ['craft', 'industry', 'farm', 'storage', 'light', 'home', 'decor', 'special'] as const) assert.ok(first.includes(need), `${need} is there from the start`);
-    for (const hidden of ['logistics', 'power'] as const) {
+    for (const [hidden, token] of [['logistics', 'logistics'], ['power', 'power'], ['defense', 'towers']] as const) {
         assert.ok(!first.includes(hidden), `${hidden} is hidden at first`);
-        learn(p, hidden);
+        learn(p, token);
         assert.ok(listedBuildCats(p).includes(hidden), `${hidden} appears once learned`);
     }
     assert.deepEqual(listedBuildCats(p), BUILD_CATS.map((c) => c.id), 'order is kept');

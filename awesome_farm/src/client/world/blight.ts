@@ -1,12 +1,13 @@
 // The Blight in the world view: a nest throbs (bigger and darker the higher its level), wears a name plate with its kind and level, and
 // a health bar once it is hurt, over a dark ring of blight on the ground; a raider in the sea wades (sunk to the waist, with ripples and
-// the odd splash). Game.ts calls `nest` and `wade` for the views on screen every frame and `draw` once after them.
+// the odd splash); a wall or doorway a raider has hurt shows a small health bar. Game.ts calls `nest`, `defense` and `wade` for the views on screen every frame and `draw` once after them.
 
 import * as Phaser from 'phaser';
 import { NEST_KINDS } from '../../shared/data/mobs';
 import { PAL } from '../../shared/palette';
 import { TILE } from '../../shared/config';
-import type { MobE, NodeE, Plot } from '../../shared/sim/types';
+import { BUILDINGS } from '../../shared/data/buildings';
+import type { BuildE, MobE, NodeE, Plot } from '../../shared/sim/types';
 import type { World } from '../../shared/world';
 
 type Img = Phaser.GameObjects.Image;
@@ -61,6 +62,14 @@ export class BlightFx {
         if (hurt) this.bars.push({ x: v.x, y: top - 4, w: 30, f: e.hp / mhp });
         // the blight seeps: a dark ring that breathes on the ground round it
         this.rings.push({ x: v.x, y: v.y - 2, r: 14 * s + beat * 2 });
+    }
+
+    /** A defense piece a raider has hurt: a small health bar over it until it mends at dawn. */
+    defense (v: ViewLike, b: BuildE) {
+        const max = BUILDINGS[b.kind].hp;
+        if (!max || b.hp === undefined || b.hp >= max) return;
+        const [w, h] = BUILDINGS[b.kind].size;
+        this.bars.push({ x: (b.tx + w / 2) * TILE, y: v.y - Math.max(h * TILE, v.sprite.displayHeight) - 3, w: 14, f: b.hp / max });
     }
 
     /** A raider (or anything) standing in the sea wades: sunk to the waist, with ripples and the odd splash. */

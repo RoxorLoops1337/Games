@@ -23,6 +23,7 @@ export const ACTIONS = [
     // the Blight (sim/blight.ts): hitting and breaking a nest, a nest spreading or merging
     'nestHit', 'nestDie', 'nestSpread',
     'raid',       // (a raid sets out from a nest at nightfall: sim/raid.ts)
+    'bldHit', 'bldBreak',     // (a raider strikes a wall, and breaks it: sim/defense.ts)
 ] as const;
 
 export type Action = typeof ACTIONS[number];

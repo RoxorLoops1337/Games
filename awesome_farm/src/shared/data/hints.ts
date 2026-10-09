@@ -138,7 +138,7 @@ export const HINTS: Hint[] = [
     {
         id: 'raid', icon: 'k_tower', color: PAL.berry, now: true,
         when: (c) => (c.me.cnt?.raid ?? 0) > 0,
-        text: () => 'A raid from a Blight nest! Raiders wade across the sea and march on your base. Wall it in, with a doorway, and fight them at the walls. Or go and break the nest.',
+        text: () => 'A raid from a Blight nest! Raiders break the walls in their way (stone holds longer than wood, and what they hurt mends at dawn). Wall your base in and fight them at the walls, or go and break the nest.',
     },
     {
         id: 'bedset', icon: 'k_heart', color: PAL.blossom,
