@@ -313,7 +313,9 @@ stored there reads as 2D.
   2D red raider light (`glowOf`, followed every frame and sunk with it). The 2D wading ripples are unmarked (2D only), since 3D draws its own.
   A hurt defense (any kind with `BuildingDef.hp`) shows its `BuildE.hp` (`models/b-damage.ts`: `buildingModel` wraps it in
   `withDamage`; cracks, then chips out of the cap, then crumbling, with rubble at its foot; one baked child per stage and shape, gone
-  when it mends), and a break (`bldBreak`) is in the `FX` table with a ring, a flash and a cloud of dust (`Impacts`).
+  when it mends), and a break (`bldBreak`) is in the `FX` table with a ring, a flash and a cloud of dust (`Impacts`). Every Blight
+  action (`nestHit`, `nestDie`, `nestSpread`, `raid`, `bedSet`, `unbind`) has its own burst, the big ones a ring. The rest (plates, nest
+  rings, health bars) are the 2D overlays; the dusk warning and the minimap marks are HUD.
 - **Coordinates:** the bridge speaks sim pixels (TILE = 16 per tile) and HUD units (960 x 540); the 3D view works in tiles
   (x east, z south, y up) with an orthographic camera at 62 degrees (`render.ts` `EL`, `BASE_VIEW` = 11.25 tiles tall at zoom 1 =
   the 2D view's classic distance). Zoom follows the 2D zoom steps (`GameScene.zoomLevel`).
