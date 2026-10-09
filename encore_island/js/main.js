@@ -8,7 +8,8 @@ function resize() {
   sclBase = clamp(Math.min(vw / 620, vh / 880), 0.5, 1.45); scl = sclBase * ZOOM.k;
 }
 function updateCamera(dt) {
-  const inHub = landAt(S.player.x, S.player.y, S.lands.length) <= 0; ZOOM.k += ((inHub ? 0.8 : 1) - ZOOM.k) * Math.min(1, dt * 3); scl = sclBase * ZOOM.k;
+  // the home island is big, so the camera pulls back there; the Backstage room and the lands are seen close up
+  const zt = S.place === 'backstage' ? 0.92 : landAt(S.player.x, S.player.y, S.lands.length) <= 0 ? 0.74 : 1; ZOOM.k += (zt - ZOOM.k) * Math.min(1, dt * 3); scl = sclBase * ZOOM.k;
   const p = S.player, tx = p.x + p.vx * 0.28, ty = p.y + p.vy * 0.2 - 30;
   if (!CAM.init) { CAM.x = tx; CAM.y = ty; CAM.init = true; }
   const k = Math.min(1, dt * 5.5); CAM.x += (tx - CAM.x) * k; CAM.y += (ty - CAM.y) * k;
@@ -29,13 +30,14 @@ function draw(dt) {
   hits = [];
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   updateCamera(dt || 0.016);
-  drawWater();
+  const bs = S.place === 'backstage';
+  if (bs) drawBackstageBg(); else drawWater();
   ctx.save();
   const shk = JUICE.shake > 0 && S.settings.shake, sx = shk ? (vrnd() - 0.5) * JUICE.shake : 0, sy = shk ? (vrnd() - 0.5) * JUICE.shake : 0; JUICE.shake = Math.max(0, JUICE.shake - (dt || 0.016) * 22);
   const oy = vh * 0.46; ctx.translate(vw / 2 + sx, oy + sy); ctx.scale(scl, scl); ctx.translate(-CAM.x, -CAM.y);
   vL = CAM.x - vw / 2 / scl - 120; vR = CAM.x + vw / 2 / scl + 120; vT = CAM.y - oy / scl - 120; vB = CAM.y + (vh - oy) / scl + 120;
-  drawWorld(); ctx.restore();
-  if (S.settings.particles) drawPetals();
+  if (bs) drawBackstage(); else drawWorld(); ctx.restore();
+  if (S.settings.particles && !bs) drawPetals();
   drawVignette();
   if (!S.started) { drawTitle(); return; }
   if (S.cards) S.sheet = null;
@@ -62,4 +64,4 @@ if (typeof window.__EI_HEADLESS__ === 'undefined') boot();
 window.EI = { get S() { return S; }, set S(v) { S = v; }, initGame, newState, tick, draw, save, loadSave, serialize, applySave, resetAll, setupCtx, resize, tickFx, boot,
   fmt, rnd, seedMain, hash01, walkable, landAt, genLand, geoOf, radiusAt, unlockSpot, worldExtent, routeBetween, openNextLand, addLand, spawnEnemy, killEnemy, hurtEnemy, dropItem, pay, prestige, recruit, setFans, hatchEgg, spinWheel, claimLogin, castUlt, dashAbility, petAbility, buySkin, buyCperk, pickCard, drawCards, grantXp, startEncore, questEvent, openSheet, closeSheet, guideTarget,
   helmVal, foeHp, unlockCost, bcost, foeName, foeArtName, metal, entryVal, coinMul, pDmg, pRate, cap, popCap, flowMul, crownsToGain, BIOMES, SKINS, PETS, CARDS, ACH, QDEFS, UPG, GEMU, UPG_POS, GEM_POS, WHEEL, pickWeighted,
-  vgrad, hgrad, pgrad, ggrad, biomePal, MINI, SELL, VAULT, FORGE, TRAY, STAGE, MONU, HUB_GEO, LAND_GEO, TOWN, TOWN_BY, townCost, townLvl, buyTown, trainFan, fanTrainCost, fanCarryCap, fanDmgOf, fanMaxLvl, townTierIdx, recruitCost, beatTap, onBeatNow, FEATS, TABS, MODS, mod, modAdd, fEmit, fs, featPips, sheetTabs, regFeature, regTab, regMod, hits: () => hits };
+  vgrad, hgrad, pgrad, ggrad, biomePal, MINI, SELL, VAULT, FORGE, TRAY, STAGE, MONU, HUB_GEO, LAND_GEO, HUB, HUB_KEEP, TERRACE, HUBSIGNS, HUBLAMPS, HATCH, BACKSTAGE, BS_STAIRS, BACKSTAGE_SHOW, BACKSTAGE_OPEN, inBackstage, enterBackstage, exitBackstage, bsDoorPos, bsDoors, bsPlateCost, DOORS, regDoor, TOWN, TOWN_BY, townCost, townLvl, buyTown, trainFan, fanTrainCost, fanCarryCap, fanDmgOf, fanMaxLvl, townTierIdx, recruitCost, beatTap, onBeatNow, FEATS, TABS, MODS, mod, modAdd, fEmit, fs, featPips, sheetTabs, regFeature, regTab, regMod, hits: () => hits };

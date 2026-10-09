@@ -15,6 +15,7 @@ import { grantPetXp, STASH_RADIUS, stashAt } from './petlib';
 import * as quests from './quests';
 import type { Sim } from './sim';
 import type { BuildE, CritE } from './types';
+import { storageOf } from './uber';
 
 // ── carrying ────────────────────────────────────────────────────────────────
 // A creature on an island does not teleport what it gets: it carries it (a handful at a time) to a chest, and for farming
@@ -57,7 +58,7 @@ export function carrySite (c: CritE, site: Site): Site {
 export function startErrand (sim: Sim, c: CritE, site: Site, kind: 0 | 1): boolean {
     let best: BuildE | undefined, bd = Infinity;
     for (const s of site.stores!()) {
-        const ok = kind === 0 ? (BUILDINGS[s.kind].storage ?? 0) - invSum(s.inv) > 0 && (c.ld ?? []).some(([item]) => takes(s.fl, item as ItemId)) : SEED_IDS.some((id) => invHas(s.inv, id) > 0);
+        const ok = kind === 0 ? storageOf(s) - invSum(s.inv) > 0 && (c.ld ?? []).some(([item]) => takes(s.fl, item as ItemId)) : SEED_IDS.some((id) => invHas(s.inv, id) > 0);
         if (!ok) continue;
         const cc = sim.center(s), d = dist(cc.x, cc.y, c.x, c.y);
         if (d < bd) { bd = d; best = s; }
@@ -81,7 +82,7 @@ function errandPick (sim: Sim, c: CritE, chest: BuildE, at: { x: number; y: numb
 /** At the chest, sorting (kind 3): put the stack in its chest (whatever does not fit goes to the nearest chest with room). */
 function errandPlace (sim: Sim, c: CritE, site: Site, pet: Pet, chest: BuildE, at: { x: number; y: number }) {
     let moved = 0;
-    const room = (BUILDINGS[chest.kind].storage ?? 0) - invSum(chest.inv);
+    const room = storageOf(chest) - invSum(chest.inv);
     let left = room;
     for (const [item, n] of [...(c.ld ?? [])]) {
         const put = takes(chest.fl, item as ItemId) ? Math.min(n, left) : 0;
@@ -93,7 +94,7 @@ function errandPlace (sim: Sim, c: CritE, site: Site, pet: Pet, chest: BuildE, a
         sim.fx('petWork', at.x, at.y);
         pet.pn = (pet.pn ?? 0) + moved;
         quests.count(site.owner, 'petwork'); quests.count(site.owner, 'petwork:sort');
-        grantPetXp(sim, site.owner, pet, 2, c);
+        grantPetXp(sim, site.owner, pet, 2, c, true);
     }
     c.et = undefined;
     c.js = Math.max(0.3, workCycle(pet, 'sort', sim.derivedOf(site.owner).mods.work ?? 0) / (TUNING.postSpeed * 2));

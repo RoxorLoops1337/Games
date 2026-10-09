@@ -14,7 +14,9 @@ import * as hearth from './hearth';
 import * as mail from './mail';
 import * as mines from './mines';
 import * as mobs from './mobs';
+import { tellLessons } from './petlib';
 import * as quests from './quests';
+import * as scholar from './scholar';
 import * as shop from './shop';
 import type { Sim } from './sim';
 import { derived } from './stats';
@@ -153,6 +155,8 @@ export function dawn (sim: Sim) {
         if (p.downed <= 0 && p.hearts < max) p.hearts = Math.min(max, p.hearts + 1);
     }
     morning(sim);
+    scholar.onDawn(sim);
+    for (const p of sim.online) tellLessons(sim, p, false);
     dread.ensure(sim);
     sim.banner(`Day ${s.day}`, `You made it through the night. +1 heart`, PAL.gold);
 }

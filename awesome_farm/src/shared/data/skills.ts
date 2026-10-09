@@ -101,6 +101,7 @@ const INDUSTRY = branch('industry', [
     ['i_yield',  'Drill Bits',        'k_drill',  5, 0,  ['i_drills'], 4, 1, { drillYield: 0.12 }],
     ['i_grid',   'Efficient Grid',    'k_bolt',   5, 1,  ['i_power'], 4, 1, { powerSave: 0.1 }],
     ['i_asm',    'Assembly',          'k_robot',  5, 2,  ['i_power'], 1, 3, null, ['assembly']],
+    ['i_vault',  'Uber Chests',       'k_chest',  6, -1.6, ['i_belt2', 'i_speed'], 1, 3, null, ['uberchest'], 'Build Uber Chests: every one opens the same shared store, and each one adds room.'],
     ['i_auto',   'Full Automation',   'k_crown',  7, 0,  ['i_speed', 'i_yield', 'i_grid', 'i_belt2'], 1, 4, { machineSpeed: 0.25, beltSpeed: 0.25, drillYield: 0.25 }, null, 'The factory runs itself.', true],
 ]);
 
@@ -141,6 +142,8 @@ const TAMING = branch('taming', [
     ['t_nursery', 'Nursery',          'k_den',    5, 0,  ['t_breed'], 3, 2, { breed: 0.2, creatureXp: 0.05 }],
     ['t_prime',  'Prime Training',    'k_star',   5, -1.5, ['t_rare', 't_pack'], 3, 2, { creatureXp: 0.2, companionDmg: 0.1 }],
     ['t_hive',   'Hive Mind',         'k_gear',   5, 1.5, ['t_over'], 3, 2, { work: 0.15, machineSpeed: 0.05 }],
+    ['t_mentor', 'Shared Lessons',    'k_book',   4, 2.8, ['t_stable', 't_over'], 3, 1, { crewXp: 0.1 }, null, 'You learn from your creatures\' work: more of the XP they earn on jobs comes to you.'],
+    ['t_lore',   'Pack Lore',         'k_star',   6, 2.2, ['t_hive', 't_mentor'], 1, 3, { crewXp: 0.25, creatureXp: 0.1 }, null, 'Every job your creatures do teaches you something.'],
     ['t_master', 'Beastmaster',       'k_crown',  6, 0,  ['t_prime', 't_hive', 't_pack'], 1, 4, { creatureSlots: 2, work: 0.2, companionDmg: 0.2 }, null, 'The wild answers when you call.', true],
     ['t_spirit', 'Spirit Bond',       'k_crown',  7, 0,  ['t_master'], 1, 4, { catch: 0.2, creatureXp: 0.3, healPower: 0.2 }, null, 'A bond beyond words.', true],
 ]);
@@ -163,6 +166,7 @@ const EXPLORE = branch('explore', [
     ['x_fortune', 'Fortune',          'k_clover', 5, -3, ['x_trade'], 3, 1, { luck: 0.04, chestLoot: 0.15, sell: 0.04 }],
     ['x_exped',  'Expedition Pass',   'k_map',    5, 0,  ['x_way'], 1, 3, null, ['expedition'], 'Launch expeditions to far-off islands.'],
     ['x_endure', 'Endurance',         'k_lung',   5, -2, ['x_wise', 'x_trade'], 3, 2, { maxEnergy: 20, energyRegen: 0.2, armor: 0.1 }],
+    ['x_sage',   'Sage',              'k_book',   6, -2.6, ['x_endure', 'x_fortune'], 3, 2, { xp: 0.1, buffTime: 0.05 }, null, 'A lifetime of lessons: more XP from everything.'],
     ['x_wander', 'Wanderer',          'k_crown',  6, -1, ['x_endure', 'x_exped'], 1, 4, { moveSpeed: 0.15, maxEnergy: 30, carry: 50, xp: 0.1 }, null, 'The road never tires you.', true],
     ['x_world',  'World Walker',      'k_crown',  7, 0,  ['x_wander'], 1, 4, { landCost: -0.2, buildCost: -0.15, sell: 0.1 }, null, 'The world is yours to shape.', true],
 ]);
@@ -182,6 +186,7 @@ export const UNLOCK_INFO: Record<string, string> = {
     alchemy2: 'Unlocks swift brews and charms.',
     engineering: 'Unlocks circuits and engineering.',
     logistics: 'Unlocks belts, inserters, sorters and the export chute.',
+    uberchest: 'Unlocks the Uber Chest: every one opens the same store, shared by the whole farm, and each adds room.',
     drills: 'Unlocks mining drills.',
     power: 'Unlocks power poles, generators and wind turbines.',
     assembly: 'Unlocks assemblers.',

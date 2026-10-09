@@ -19,9 +19,10 @@ import * as mines from './mines';
 import * as quests from './quests';
 import * as shop from './shop';
 import type { Sim } from './sim';
+import { isUber } from './uber';
 import { ensureVeins } from './worldgen';
 import {
-    addItem, addRes, canAfford, canLearn, countOf, derived, hasUnlock, itemCap, learnSkill, pay, scaledCost, sellValue, takeItem,
+    addItem, addRes, canAfford, canLearn, countOf, derived, hasUnlock, itemCap, learnSkill, MAX_LEVEL, pay, scaledCost, sellValue, takeItem, xpToNext,
 } from './stats';
 import type { BuildE, Cmd, PlayerS } from './types';
 
@@ -139,7 +140,8 @@ export function cmdDemolish (sim: Sim, p: PlayerS, id: number) {
     const c = sim.center(b);
     if (b.kind === 'table') potluck.dismantle(sim, p, b);        // (the dishes go back to their cooks)
     // contents and a share of the materials come back
-    for (const part of [b.inv, b.out, b.fin]) {
+    if (isUber(b)) sim.toast(p.id, 'The Uber Chest\'s store stays safe: every other Uber Chest still opens it', 'chest_b', PAL.gold);
+    for (const part of [isUber(b) ? undefined : b.inv, b.out, b.fin]) {
         for (const [item, n] of Object.entries(part ?? {}) as [ItemId, number][]) sim.give(p, item, n, c.x, c.y);
     }
     for (const it of [...(b.belt ?? []), b.hand]) if (it) sim.give(p, it, 1, c.x, c.y);
@@ -307,8 +309,9 @@ export function cmdEat (sim: Sim, p: PlayerS, item?: ItemId) {
         id = fits[0] ?? foods.sort((a, b) => ITEMS[a].food! - ITEMS[b].food!)[0];
     }
     const def = ITEMS[id];
-    if (!def || countOf(p, id) < 1 || !(def.food || def.heal || def.buff)) return;
-    if (!def.heal && !def.buff && missing < 1) { sim.deny(p, 'Not hungry'); return; }
+    if (!def || countOf(p, id) < 1 || !(def.food || def.heal || def.buff || def.xpPct)) return;
+    if (def.xpPct && p.level >= MAX_LEVEL) { sim.deny(p, 'You already know all there is to know'); return; }
+    if (!def.heal && !def.buff && !def.xpPct && missing < 1) { sim.deny(p, 'Not hungry'); return; }
     if (def.heal && p.rift?.omens?.includes('cursed')) { sim.deny(p, 'The curse turns it to dust'); return; }
     if (def.heal && !def.food && !def.buff && p.hearts >= d.maxHearts) { sim.deny(p, 'Already healthy'); return; }
     takeItem(p, id, 1);
@@ -318,6 +321,11 @@ export function cmdEat (sim: Sim, p: PlayerS, item?: ItemId) {
         if (gain > 0) sim.float(p.x, p.y - 22, `+${Math.round(gain)} energy`, PAL.gold, p.id);
     }
     if (def.heal) sim.heal(p, def.heal);
+    if (def.xpPct) {
+        const n = xpToNext(p.level) * def.xpPct;
+        sim.float(p.x, p.y - 30, `+${Math.round(n * d.xpMul)} XP`, PAL.plum, p.id);
+        sim.gainXp(p, n);
+    }
     if (def.buff) {
         const secs = def.buff.secs * d.buffMul;
         const have = p.buffs.find((b) => b.id === def.buff!.id);

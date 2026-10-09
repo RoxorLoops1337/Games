@@ -11,6 +11,10 @@ export const shade = (a, k) => { const c = C(a); c.multiplyScalar(k); return c.l
 export const lite = (a, k) => { const c = C(a); c.lerp(WARM, k); return c; };                                                      // lighter toward warm cream
 export const skinShade = (a, k) => { const c = C(a); c.multiplyScalar(k); return c.lerp(new THREE.Color('#8a2f45'), Math.max(0, 1 - k) * 0.16); }; // warm blood-red shadows for skin
 export const INK = '#2b2438', CREAM = '#fff2dc';
+// mix in sRGB, like the 2D sprites mix their colours (chars_*.js mix()): a 2D zone colour such as mix(col, '#ffffff', 0.3) comes out the same in 3D
+export const mixS = (a, b, t) => C(a).convertLinearToSRGB().lerp(C(b).convertLinearToSRGB(), t).convertSRGBToLinear();
+// lighten toward cream by k scaled with the colour's own lightness, so a near-black item keeps reading black (lite() lifts a black hat to grey)
+export const liteL = (a, k) => { const c = C(a), l = c.r * 0.2126 + c.g * 0.7152 + c.b * 0.0722; return lite(c, k * Math.min(1, 0.3 + l * 3)); };
 
 // ------------------------------------------------------------------ body dimensions per body type
 export function dims(body) {
@@ -83,6 +87,7 @@ export function mat(pos, rot, scl) { const q = new THREE.Quaternion().setFromEul
 const sgnpow = (s, e) => Math.sign(s) * Math.pow(Math.abs(s), e);
 // Ring loft: the workhorse. rings = [{ y, rx, rz, cx, cz, c, sk, sq, rot }], axis = y (apply o.m to reorient).
 // o: n (sides, default 8), a0 (start angle), caps ('b','t','bt'), capTip ([x,y,z] apex for top cap), m (Matrix4), nh, fc(i,j)=>Color for per-facet colour, sq default squareness exponent
+//    fcv: with fc, a facet whose fc returns null keeps the per-vertex ring colours (without fcv it takes the flat colour of its lower ring)
 export function loft(mb, rings, o) {
   o = o || {};
   if (o.hullHalf && !mb.hm && rings.length >= 4) { const sub = rings.filter((r, i) => i === 0 || i === rings.length - 1 || i % 2 === 0); mb.hm = true; loft(mb, sub, Object.assign({}, o, { hullHalf: false, caps: o.hullCaps === undefined ? '' : o.hullCaps, nh: false })); mb.hm = false; o = Object.assign({}, o, { nh: true }); } const n = o.n || 8, a0 = o.a0 === undefined ? Math.PI / n : o.a0, M = o.m || null, ds = rings[rings.length - 1].y < rings[0].y ? -1 : 1, flip = (!!M && M.determinant() < 0) !== (ds < 0), nh = !!o.nh;
@@ -96,7 +101,8 @@ export function loft(mb, rings, o) {
     const r0 = R[j], r1 = R[j + 1];
     for (let i = 0; i < n; i++) {
       const i2 = (i + 1) % n, A = r0.pts[i], B = r0.pts[i2], Cc = r1.pts[i2], D = r1.pts[i];
-      if (o.fc) { const fc = o.fc(i, j) || r0.col; T(A, B, Cc, fc, fc, fc, r0.sk, r0.sk, r1.sk); T(A, Cc, D, fc, fc, fc, r0.sk, r1.sk, r1.sk); }
+      const fc = o.fc ? o.fc(i, j) || (o.fcv ? null : r0.col) : null;
+      if (fc) { T(A, B, Cc, fc, fc, fc, r0.sk, r0.sk, r1.sk); T(A, Cc, D, fc, fc, fc, r0.sk, r1.sk, r1.sk); }
       else { T(A, B, Cc, r0.col, r0.col, r1.col, r0.sk, r0.sk, r1.sk); T(A, Cc, D, r0.col, r1.col, r1.col, r0.sk, r1.sk, r1.sk); }
     }
   }

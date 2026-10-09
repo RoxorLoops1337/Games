@@ -48,6 +48,7 @@ npm run check          # typecheck (client + server/shared without DOM) + tests 
 npm run build:single    # → dist-single/awesome-farm.html: the whole game in ONE file (solo play; open on a phone, share anywhere)
 npm run server:build   # → server-dist/: awesome-farm-server.mjs + public/ + start.bat/.sh + README.txt  (SERVER_DIST=dir to package elsewhere)
 npm run palette        # regenerate palette.gpl after editing src/shared/palette.ts
+npm run wiki           # regenerate wiki/index.html, the player wiki (served at /awesome_farm/wiki/), after ANY data change: tests/wiki.test.ts fails while it is stale
 npm run balance        # win rates for a simple (non-dodging) fighter: every expedition tier, every altar boss; nights needed to farm each sigil
 ```
 
@@ -149,6 +150,8 @@ awesome_farm/
 ```
 
 ### Adding content (everything is data-driven)
+
+- **The player wiki** (`wiki/index.html`, linked from the guide's footer) is generated from `src/shared` by `scripts/wiki.ts`; its explanations live in `scripts/wiki-text.ts` (no numbers there: every figure, name and list comes from the data). Change any table, run `npm run wiki` and commit the page with the change (`tests/wiki.test.ts` compares them, checks every item, building, skill, creature and monster has an entry, every link lands and the page has no em dash). The root `build.js` copies it into `dist/`.
 
 - **Item:** add to `ITEMS` (`data/items.ts`) and give it an icon spec in `client/art/icons.ts` (a seed sack takes a crop mark from `SEED_MARKS` there)
   (a test fails until it has one, and until the item is obtainable from a node, drop or recipe).

@@ -125,6 +125,9 @@ export function createCharacter(ctx, look, extra) {
     const hullOf = (i) => { let n = lits[i].hull.P.length / 9; for (let t = ranges[i][0]; t < ranges[i][1]; t++) if (!nhA[t]) n++; return n; };
     const keep = lits.slice(); let total = g.attributes.position.count / 3 + gg.attributes.position.count / 3; for (let i = 0; i < lits.length; i++) total += hullOf(i);
     const dropped = []; for (const nm of ['acc', 'glasses', 'hat', 'hair', 'facial', 'bottom', 'top', 'arms', 'shoes', 'legs']) { if (total <= TRI_BUDGET) break; const i = names.indexOf(nm); if (i < 0) continue; const n = hullOf(i); if (!n) continue; for (let t = ranges[i][0]; t < ranges[i][1]; t++) nhA[t] = 1; keep[i] = new MB(1); total -= n; dropped.push(nm); }
+    // last resort for the heaviest mixes: the remaining slots in build order, then the head outline itself
+    const rest = names.filter((nm) => nm !== 'head').concat(['head']);
+    for (let j = 0; j < rest.length && total > TRI_BUDGET; j++) { const nm = rest[j], i = names.indexOf(nm); if (i < 0 || dropped.includes(nm)) continue; const n = hullOf(i); if (!n) continue; for (let t = ranges[i][0]; t < ranges[i][1]; t++) nhA[t] = 1; keep[i] = new MB(1); total -= n; dropped.push(nm); }
     const hg = makeHull(g, keep); api.hullDropped = dropped;
     [['lit', g], ['glow', gg], ['hull', hg]].forEach(([k, geo]) => { const m = meshes[k]; if (m.geometry) m.geometry.dispose(); m.geometry = geo; m.visible = geo.attributes.position.count > 0 && !(k === 'hull' && ctx && ctx.quality === 'low'); });
     api.tris = (g.attributes.position.count + gg.attributes.position.count + hg.attributes.position.count) / 3; api.triParts = { lit: g.attributes.position.count / 3, glow: gg.attributes.position.count / 3, hull: hg.attributes.position.count / 3 };

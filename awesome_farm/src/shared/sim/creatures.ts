@@ -426,7 +426,7 @@ function workerStep (sim: Sim, c: CritE, dt: number) {
             const cyc = workCycle(pet, did, ownerWork);
             c.a = did === 'guard' ? cyc / 4 : cyc;
             c.st = 3; c.w = 0.9; c.wk = did;
-            grantPetXp(sim, owner, pet, did === 'guard' ? 1 : 3, c);
+            grantPetXp(sim, owner, pet, did === 'guard' ? 1 : 3, c, true);
         } else c.a = kinds.includes('guard') ? 1 : 5;
     }
     sim.touch(c);

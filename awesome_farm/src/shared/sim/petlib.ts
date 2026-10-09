@@ -1,7 +1,7 @@
 // What every creature job shares: the roster and its caps, moving about, experience, and the chests that goods go into
 // and supplies come out of. (creatures.ts, jobs.ts and the den code all stand on this; it depends on none of them.)
 
-import { TILE } from '../config';
+import { TILE, TUNING } from '../config';
 import { BUILDINGS } from '../data/buildings';
 import { names, takes } from '../data/filters';
 import { PET_MAX_LEVEL, petXpMul, petXpNeed, type Pet } from '../data/creatures';
@@ -10,8 +10,9 @@ import { dist } from '../geom';
 import { PAL } from '../palette';
 import { invDrop, invHas, invPut, invSum } from './machines';
 import type { Sim } from './sim';
-import { derived } from './stats';
+import { derived, type Derived, MAX_LEVEL } from './stats';
 import type { BuildE, CritE, PlayerS } from './types';
+import { oneUber, storageOf } from './uber';
 
 export const petsOf = (p: PlayerS): Pet[] => (p.pets ??= []);
 export const rosterCap = (p: PlayerS) => 12 + 3 * Math.floor(derived(p).mods.creatureSlots ?? 0);      // (commands and menus: the plain `derived`)
@@ -28,8 +29,12 @@ export function move (sim: Sim, c: CritE, dt: number, flies?: boolean) {
     if (!sim.world.boxBlocked(c.x, ny, 3, 2)) c.y = ny; else c.vy = -c.vy * 0.4;
 }
 
-/** Experience for a pet: traits, the owner's Creature XP skill, level-ups with a toast. */
-export function grantPetXp (sim: Sim, owner: PlayerS | undefined, pet: Pet, amount: number, at?: { x: number; y: number }) {
+/**
+ * Experience for a pet: traits, the owner's Creature XP skill, level-ups with a toast. `work`: the XP came from a job (a den,
+ * an island post, a machine or a workshop, never fights or treats), so its keeper learns a share of it too (`crewLesson`).
+ */
+export function grantPetXp (sim: Sim, owner: PlayerS | undefined, pet: Pet, amount: number, at?: { x: number; y: number }, work = false) {
+    if (work && owner) crewLesson(sim, owner, amount);
     if (pet.lv >= PET_MAX_LEVEL) return;
     pet.xp += amount * petXpMul(pet) * (1 + (owner ? derived(owner).mods.creatureXp ?? 0 : 0));
     let up = 0;
@@ -40,6 +45,25 @@ export function grantPetXp (sim: Sim, owner: PlayerS | undefined, pet: Pet, amou
         if (at) sim.fx('petLevel', at.x, at.y - 10, owner.online ? owner.id : undefined);
         if (owner.online) sim.toast(owner.id, `${pet.name} reached level ${pet.lv}!`, 'k_paw', PAL.blossom);
     }
+}
+
+/** What a keeper learns from their creatures' work, as a share of the creatures' XP: `TUNING.crewXpShare`, more with the crewXp stat. */
+export const crewShare = (d: Pick<Derived, 'mods'>) => TUNING.crewXpShare + (d.mods.crewXp ?? 0);
+
+export function crewLesson (sim: Sim, owner: PlayerS, petXp: number) {
+    if (owner.level >= MAX_LEVEL) return;
+    const d = sim.derivedOf(owner), n = petXp * crewShare(d);
+    if (!(n > 0)) return;
+    owner.lessons = (owner.lessons ?? 0) + n * d.xpMul;
+    sim.gainXp(owner, n);
+}
+
+/** "Your creatures taught you 340 XP": told at dawn to everybody here, and on arrival to whoever was away. */
+export function tellLessons (sim: Sim, p: PlayerS, away: boolean) {
+    const n = Math.floor(p.lessons ?? 0);
+    p.lessons = undefined;
+    if (n < 1) return;
+    sim.toast(p.id, `${away ? 'While you were away, y' : 'Y'}our creatures taught you ${n} XP`, 'k_paw', PAL.plum);
 }
 
 // ── chests ──────────────────────────────────────────────────────────────────
@@ -56,7 +80,7 @@ export function storesNear (sim: Sim, x: number, y: number, radius: number, last
         const c = centreOf(b), d = dist(c.x, c.y, x, y);
         if (d <= radius) out.push({ b, d: d + (b.id === last ? 1e6 : 0) });
     }
-    return out.sort((a, c) => a.d - c.d).map((e) => e.b);
+    return oneUber(out.sort((a, c) => a.d - c.d).map((e) => e.b));      // (Uber Chests are one store: the nearest stands for them all)
 }
 
 /**
@@ -68,7 +92,7 @@ type Stores = readonly BuildE[] | undefined;
 /** Free space across the storage near a point (for `item`, only the chests that would take it). */
 export function roomAt (sim: Sim, x: number, y: number, radius: number, last?: number, item?: ItemId, stores?: Stores): number {
     let room = 0;
-    for (const s of stores ?? storesNear(sim, x, y, radius, last)) if (!item || takes(s.fl, item)) room += Math.max(0, (BUILDINGS[s.kind].storage ?? 0) - invSum(s.inv));
+    for (const s of stores ?? storesNear(sim, x, y, radius, last)) if (!item || takes(s.fl, item)) room += Math.max(0, storageOf(s) - invSum(s.inv));
     return room;
 }
 
@@ -88,7 +112,7 @@ export function stashAt (sim: Sim, x: number, y: number, radius: number, item: I
     const near = (o.stores ?? storesNear(sim, x, y, radius, o.last)).filter((s) => takes(s.fl, item));
     for (const s of [...near.filter((s) => names(s.fl, item)), ...near.filter((s) => !names(s.fl, item))]) {
         s.inv ??= {};
-        const room = (BUILDINGS[s.kind].storage ?? 0) - invSum(s.inv);
+        const room = storageOf(s) - invSum(s.inv);
         const put = Math.min(left, room);
         if (put > 0) { invPut(s.inv, item, put); left -= put; sim.touch(s); }
         if (!left) break;

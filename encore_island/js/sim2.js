@@ -24,7 +24,7 @@ function tick(dt) {
   p.maxHp = pMaxHp(); p.hp = Math.min(p.hp, p.maxHp);
   tickHero(dt); tickFire(dt); tickShots(dt); tickItems(dt); tickSell(dt); tickForge(dt); tickVault(dt);
   tickHubPlates(dt); tickLandPlates(dt); tickSpawns(dt); tickEnemies(dt); tickTowers(dt); tickFans(dt); tickComp(dt);
-  tickBeat(dt); tickTimers(dt); tickMeta(dt); tickFeatures(dt); tickFx(dt);
+  tickBackstage(dt); tickBeat(dt); tickTimers(dt); tickMeta(dt); tickFeatures(dt); tickFx(dt);
   if (!S.flowTouched) { S.flowKey = null; S.flowT = 0; }
 }
 function tickBeat(dt) { // the PERFECT-tap damage buff, the tap lock and the button flash; a perfect chain breaks after 3 s without a buff
@@ -363,13 +363,13 @@ function walkRoute(f, tx, ty, spd, dt) { // follow boardwalk waypoints toward (t
   return Math.hypot(tx - f.x, ty - f.y);
 }
 function tickFans(dt) {
-  const p = S.player;
+  const p = S.player, fa = S.place === 'backstage' ? STAGE : p; // fighters wait on the stage while the hero is down in the Backstage
   for (const f of S.pop) {
     f.mv = Math.max(0, f.mv - dt);
     if (f.role === 'fight') {
-      const ang = f.ph + S.t * 0.4, ox = p.x + Math.cos(ang) * 90, oy = p.y + Math.sin(ang) * 60;
+      const ang = f.ph + S.t * 0.4, ox = fa.x + Math.cos(ang) * 90, oy = fa.y + Math.sin(ang) * 60;
       const dl = Math.hypot(ox - f.x, oy - f.y); if (dl > 40) stepToward(f, ox, oy, fanSpeed() * (dl > 300 ? 3 : 1), dt);
-      if (dl > 900) { f.x = p.x; f.y = p.y; }
+      if (dl > 900) { f.x = fa.x; f.y = fa.y; }
       f.cd -= dt;
       if (f.cd <= 0) {
         let best = null, bd = fanRangeOf() * fanRangeOf();

@@ -88,6 +88,7 @@ export const TUNING = {
     wildNear: 1,                 // wild creatures allowed near a farmer at once (the pods are for a find, not a crowd)
     wildNearFairy: 4,            // … on a fairy night
     wildChance: 0.55,            // chance each roll actually spawns one
+    crewXpShare: 0.25,           // of the XP a creature earns at work (a den, an island post, a machine or a workshop), this share teaches its keeper too (+ the crewXp stat)
     postSpeed: 6.5,              // how much quicker a creature on an island post works than one in a den
     serviceEvery: 3,             // s between a machine keeper's rounds (empty the tray, fetch fuel and ingredients)
     partyRange: 800,             // px — farmers this close count as one party: monsters are tuned to their average level

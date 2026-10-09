@@ -136,7 +136,7 @@ export const GUIDE: GuideTopic[] = [
             'To leave a creature working while you do other things, press Give a job… on its card (see Creatures at work). A Creature Den works too: the creatures you leave there work the land around it. Treats keep them happy.',
             'Stand next to your companion and {press} {use} to pet it. Hearts float up and it grows fonder (five pets a day count). A Fond creature digs up a small gift for you once a day, and a Devoted one finds better things.',
         ],
-        tips: ['Two creatures and treats in a Hatchery make an egg, and the child inherits the best traits.', 'Creatures that work for you gain levels, which makes them better at their job.'],
+        tips: ['Two creatures and treats in a Hatchery make an egg, and the child inherits the best traits.', 'Creatures that work for you level up, and teach you too: a share of the XP they earn on a job comes to you, even while you are away.'],
     },
     {
         id: 'work', name: 'Creatures at work', icon: 'k_hammer',

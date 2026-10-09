@@ -2,7 +2,7 @@
 // Encore Island — organic world generation. The hub ("Stage Plaza") sits at the origin; every new land is a noise-warped blob dropped
 // along a golden-angle spiral and joined to its nearest neighbour by a curving boardwalk. All geometry is a pure function of the land
 // index, so it never needs saving.
-const HUB = { x: 0, y: 0, r: 470 };
+const HUB = { x: 0, y: 0, r: 640 };
 const PATH_HALF = 58, RAD_N = 56, GAP = 150;
 const HUB_GEO = { k: 0, x: 0, y: 0, r: HUB.r, rad: null, ia: 0, parent: -1, path: null, seed: 7 };
 const LAND_GEO = [];
@@ -68,6 +68,7 @@ function mkDecor(g) {
 }
 // walkable test over hub + unlocked lands + their boardwalks
 function walkable(x, y, n) {
+  if (x < -10000) return inBackstage(x, y); // the greenroom floor
   if (dist2(x, y, 0, 0) < Math.pow(radiusAt(HUB_GEO, Math.atan2(y, x)) - 10, 2)) return true;
   for (let k = 1; k <= n; k++) {
     const g = LAND_GEO[k] || genLand(k), dx = x - g.x, dy = y - g.y;
@@ -97,15 +98,26 @@ function worldExtent(n) {
 const polar = (g, off, f) => ({ x: g.x + Math.cos(g.ia + off) * g.r * f, y: g.y + Math.sin(g.ia + off) * g.r * f });
 const D2R = Math.PI / 180;
 
-// ---- hub furniture (all offsets from the Stage Plaza centre) ----
-const STAGE = { x: 0, y: 40 };
-const SELL = { x: -255, y: -115, r: 62 }, VAULT = { x: -255, y: 45, r: 68 };
-const FORGE = { x: 245, y: -165, r: 55 }, TRAY = { x: 270, y: 70, r: 55 }, FUP = { x: 290, y: -55, r: 44 };
-const MONU = { x: 0, y: -245, r: 48 }, WAYPAD = { x: 140, y: 205, r: 44 }, WAYPLATE = { x: 140, y: 205, r: 46 };
-const UPG_POS = { speed: { x: -226, y: 300 }, cap: { x: -113, y: 350 }, dmg: { x: 0, y: 372 }, rate: { x: 113, y: 350 }, hp: { x: 226, y: 300 } };
-const GEM_POS = { magnet: { x: -125, y: -290 }, crit: { x: 125, y: -290 }, coin: { x: -250, y: 168 } };
-// every fixed hub fixture (centre + keep-clear radius) so the next-land plate never lands on top of one
-const HUB_KEEP = [STAGE, SELL, VAULT, FORGE, TRAY, FUP, MONU, WAYPLATE, ...Object.values(UPG_POS), ...Object.values(GEM_POS)].map((o, i) => ({ x: o.x, y: o.y, r: i === 0 ? 190 : 80 }));
+// ---- hub furniture. The home island is laid out in zones around the Stage, each at the end of a cobbled boulevard (screen angles, y down):
+//   N   Hall of Fame: Encore Tour monument, Magnet + Crit gem plates (the Studio district sits NW of it)
+//   NE  Smelter Yard: smelter, bar tray, smelter upgrade          E   Arena district        SE  Travel Dock: warp pad
+//   S   Training Terrace: the five hero plates on a stone arc     SW  Backstage stairway   W   Market Quarter: SELL stall, Vault, Midas plate, Market district
+const polarXY = (c, deg, r) => ({ x: Math.round(c.x + Math.cos(deg * Math.PI / 180) * r), y: Math.round(c.y + Math.sin(deg * Math.PI / 180) * r) });
+const STAGE = { x: 0, y: 30 };
+const SELL = { x: -330, y: -230, r: 62 }, VAULT = { x: -370, y: -60, r: 68 };
+const FORGE = { x: 330, y: -250, r: 55 }, TRAY = { x: 430, y: -120, r: 55 }, FUP = { x: 250, y: -120, r: 44 };
+const MONU = { x: 0, y: -340, r: 48 }, WAYPAD = { x: 370, y: 240, r: 44 }, WAYPLATE = { x: 370, y: 240, r: 46 };
+const TERRACE = { x: 0, y: 90, r: 330, a0: 35, a1: 145 }; // the training arc: plates sit on it, the slab floor and balustrade follow it
+const UPG_POS = { speed: polarXY(TERRACE, 140, TERRACE.r), cap: polarXY(TERRACE, 115, TERRACE.r), dmg: polarXY(TERRACE, 90, TERRACE.r), rate: polarXY(TERRACE, 65, TERRACE.r), hp: polarXY(TERRACE, 40, TERRACE.r) };
+const GEM_POS = { magnet: { x: -135, y: -380 }, crit: { x: 135, y: -380 }, coin: { x: -220, y: -120 } };
+// the Backstage: a stairway on the home island (SW) down to an underground greenroom. The room lives far away in world space so nothing
+// else can reach it; walkable() knows its floor. Appears at BACKSTAGE_SHOW lands, opens with a plate from BACKSTAGE_OPEN lands.
+const HATCH = { x: -400, y: 250, r: 48 }, BACKSTAGE_SHOW = 3, BACKSTAGE_OPEN = 6;
+const BACKSTAGE = { x: -20000, y: 0, w: 760, h: 440, pad: 26 }; // room rect (top-left + size); the stairs up are at the bottom middle
+const BS_STAIRS = { x: BACKSTAGE.x + BACKSTAGE.w / 2, y: BACKSTAGE.y + BACKSTAGE.h - 46, r: 44 };
+const inBackstage = (x, y) => x > BACKSTAGE.x + BACKSTAGE.pad && x < BACKSTAGE.x + BACKSTAGE.w - BACKSTAGE.pad && y > BACKSTAGE.y + 70 && y < BACKSTAGE.y + BACKSTAGE.h - BACKSTAGE.pad;
+// every fixed hub fixture (centre + keep-clear radius) so the next-land plate, lamps and trees never land on top of one
+const HUB_KEEP = [STAGE, SELL, VAULT, FORGE, TRAY, FUP, MONU, WAYPLATE, HATCH, ...Object.values(UPG_POS), ...Object.values(GEM_POS)].map((o, i) => ({ x: o.x, y: o.y, r: i === 0 ? 190 : 80 }));
 // plates inside a land (positions are polar around the land centre, relative to the direction of the entrance)
 function landPlateDefs(k, g) {
   const bc = bcost(k), P = (id, name, icon, off, f, cost, rep) => { const p = polar(g, off * D2R, f); return { id, name, icon, x: p.x, y: p.y, base: Math.ceil(cost), cost: Math.ceil(cost), mul: rep ? rep.mul : 0, maxLvl: rep ? rep.max : 0, paid: 0, lvl: 0, built: false, repeat: !!rep }; };

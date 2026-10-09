@@ -322,6 +322,8 @@ export function registerStorybookBuildings (scene: Phaser.Scene) {
     paint(scene, 'furnace', 16, 14, furnace, 3);
     paint(scene, 'campfire', 14, 9, (p) => campfire(p), 1);
     paint(scene, 'chest_b', 16, 9, (p) => chestBox(p, W, B), 1);
+    // the Uber Chest: plum and gold, the colours of magic and of riches (one store, everywhere)
+    paint(scene, 'uberchest', 16, 9, (p) => chestBox(p, [0x35305c, 0x5d4a7c, 0x9d6fdb, 0xc9a6f0, 0xeedcff], [0xb8862e, 0xf0b93a, 0xffd966, 0xfff2b0]), 1);
     paint(scene, 'steelchest', 16, 9, (p) => chestBox(p, [0x3a3647, 0x56526a, 0x7a7f9e, 0xb0b5cc, 0xd9dcea], [0x666b86, 0x9ea4bf, 0xc4c9dc, 0xe8ebf6]), 1);
     paint(scene, 'bed', 16, 9, bed, 4);
     paint(scene, 'kitchen', 16, 13, (p) => kitchen(p), 1);
