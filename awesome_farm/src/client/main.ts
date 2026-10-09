@@ -2,6 +2,7 @@ import { AUTO, Game, Scale, Types } from 'phaser';
 import { VIEW_H, VIEW_W } from '../shared/config';
 import { PAL } from '../shared/palette';
 import { SS } from './res';
+import { settings } from './settings';
 import { BootScene } from './scenes/Boot';
 import { GameScene } from './scenes/Game';
 import { HudScene } from './scenes/Hud';
@@ -14,6 +15,9 @@ const config: Types.Core.GameConfig = {
     height: VIEW_H * SS,
     parent: 'game-container',
     backgroundColor: PAL.deepSea,
+    // the 3D view (world/view3d-bridge.ts) draws on its own canvas UNDER this one, so in 3D this canvas is made see-through (every
+    // scene but the hidden Game scene paints its own background); in 2D it stays opaque, exactly as it always was
+    transparent: settings.view === '3d',
     pixelArt: true,
     roundPixels: true,
     input: { activePointers: 3 },

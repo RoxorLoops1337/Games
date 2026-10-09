@@ -1,12 +1,14 @@
 // Title: an animated island scene, your name, solo play, or join a server (the dedicated
-// server serves this page too, in which case its address is filled in for you).
+// server serves this page too, in which case its address is filled in for you), and the view: 2D or 3D (beta).
+// A page reload that switches the view (world/view3d-bridge.ts) comes back here and goes straight into the same world.
 
 import * as Phaser from 'phaser';
 import { PROTOCOL } from '../../shared/net/protocol';
 import { css, PAL } from '../../shared/palette';
 import { TILE_SHALLOW, tileCliff, tileGround, tileShore } from '../art/sprites';
 import { Fx } from '../juice/fx';
-import { LocalConnection, statusUrl, WsConnection, type Connection } from '../net/connection';
+import { LocalConnection, stashResume, statusUrl, takeResume, WsConnection, type Connection, type Resume } from '../net/connection';
+import { canSwitchLive } from '../world/view3d-bridge';
 import { profile, saveProfile } from '../profile';
 import { saveSettings, settings } from '../settings';
 import { button, FONT_TEXT, H, label, panel, W } from '../ui/kit';
@@ -67,6 +69,9 @@ export class TitleScene extends Phaser.Scene {
 
         this.drawPlay();
         this.detectHostServer();
+        // back from a reload that switched the view: straight into the world we were in
+        const back = takeResume();
+        if (back) this.time.delayedCall(60, () => this.start(() => (back.mode === 'solo' ? new LocalConnection() : new WsConnection(back.addr, back.password, back.key)), back));
     }
 
     update (_t: number, dtMs: number) {
@@ -176,6 +181,7 @@ export class TitleScene extends Phaser.Scene {
 
         // solo
         label(this, x + 20, y + 72, 'Solo', 22, PAL.lime, { origin: [0, 0.5] });
+        this.drawViewToggle(x + w - 20, y + 72);
         const day = LocalConnection.savedDay();
         label(this, x + 20, y + 98, day ? `Your world is on day ${day}. It saves in this browser.` : 'A private world that saves in this browser.', 12, PAL.pebble, { origin: [0, 0.5], bold: false });
         button(this, x + w / 2, y + 138, 330, 46, day ? `Continue solo  ·  day ${day}  ▶` : 'Start a solo world  ▶', () => this.start(() => new LocalConnection()), { style: STYLES.lime, size: 18 });
@@ -215,6 +221,20 @@ export class TitleScene extends Phaser.Scene {
         this.keyInput.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') this.join(); });
         this.scheduleCheck();
         if (/password/i.test(this.notice)) this.time.delayedCall(400, () => this.passInput.focus());   // wrong password: ready to type it again
+    }
+
+    /** The view, for solo and online alike: 2D (the classic, the default) or 3D (beta). Two segments, the chosen one lit. */
+    private drawViewToggle (right: number, y: number) {
+        const w3 = 84, w2 = 56, gap = 6, h = 26;
+        const pick = (mode: '2d' | '3d') => { settings.view = mode; saveSettings(); paint(); };
+        const b2 = button(this, right - w3 - gap - w2 / 2, y, w2, h, '2D', () => pick('2d'), { style: STYLES.dark, size: 13 });
+        const b3 = button(this, right - w3 / 2, y, w3, h, '3D beta', () => pick('3d'), { style: STYLES.dark, size: 13 });
+        label(this, right - w3 - gap - w2 - 10, y, 'View', 15, PAL.pebble, { origin: [1, 0.5] });
+        const paint = () => {
+            b2.setStyle(settings.view === '2d' ? STYLES.lime : STYLES.dark);
+            b3.setStyle(settings.view === '3d' ? STYLES.lime : STYLES.dark);
+        };
+        paint();
     }
 
     /** If this page was served by a game server, point the Join box at it. */
@@ -280,14 +300,23 @@ export class TitleScene extends Phaser.Scene {
             this.scheduleCheck(); this.fx.play('deny', 735, 306); return;
         }
         profile.key = key || undefined;
-        this.start(() => new WsConnection(addr, password, key));
+        this.start(() => new WsConnection(addr, password, key), { mode: 'online', addr, password, key });
     }
 
-    /** Name first: the connection says hello with it. */
-    private start (connect: () => Connection) {
+    /**
+     * Name first: the connection says hello with it. The 3D view needs a see-through canvas, made when the page boots: a page that
+     * booted in 2D reloads first (the connection written down for the reload, which comes straight back here and in).
+     */
+    private start (connect: () => Connection, resume: Resume = { mode: 'solo' }) {
         if (this.starting) return;
         this.starting = true;
         this.saveName();
+        if (settings.view === '3d' && !canSwitchLive(this.game)) {
+            stashResume(resume);
+            this.cameras.main.fadeOut(250, 27, 26, 38);
+            this.cameras.main.once('camerafadeoutcomplete', () => location.reload());
+            return;
+        }
         const conn = connect();
         this.fx.play('dawn', W / 2, H / 2);
         this.cameras.main.fadeOut(300, 27, 26, 38);

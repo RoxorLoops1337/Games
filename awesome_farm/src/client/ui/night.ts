@@ -102,6 +102,8 @@ export class NightLayer {
     event: ReturnType<typeof nightEvent> = null;
     private meteors: { x: number; y: number; t: number }[] = [];
     stormy = false;
+    /** Drawn at all: the 3D view has its own sky, light and weather, so there only the numbers above are kept up. */
+    private shown = true;
 
     constructor (scene: Phaser.Scene, private farm: GameScene) {
         this.rt = scene.add.renderTexture(0, 0, W * LIGHT_RES, H * LIGHT_RES).setOrigin(0).setScale(1 / LIGHT_RES).setDepth(0).setVisible(false).setBlendMode(Phaser.BlendModes.MULTIPLY);
@@ -134,6 +136,16 @@ export class NightLayer {
         this.fogRect = scene.add.rectangle(0, 0, W, H, 0xdfe8f0).setOrigin(0).setAlpha(0).setDepth(0.12);
         for (let i = 0; i < 7; i++) this.fogBlobs.push(scene.add.image(Math.random() * W, 80 + Math.random() * (H - 160), 'light', 0).setTint(0xeef4fa).setAlpha(0).setScale(5 + Math.random() * 4).setDepth(0.13));
         for (let i = 0; i < 160; i++) this.drops.push({ x: Math.random() * W, y: Math.random() * H, v: 520 + Math.random() * 260, len: 6 + Math.random() * 7 });
+    }
+
+    /** Hide everything this layer draws (the 3D view is on), or bring back what is always up (the rest shows itself as it is drawn). */
+    private show (on: boolean) {
+        this.shown = on;
+        for (const o of [this.seasonRect, this.tint, this.vignette, this.flash, this.fogRect, this.rain, this.sky, ...this.fogBlobs]) o.setVisible(on);
+        if (on) return;
+        this.rt.setVisible(false);
+        for (const h of this.halos) h.setVisible(false);
+        this.seasonI.done(); this.seasonHalo.done(); this.moteI.done(); this.moteHalo.done();
     }
 
     /** Add a pool of light to the light map (it is multiplied over the world). */
@@ -212,9 +224,18 @@ export class NightLayer {
         g.done(); halo.done();
     }
 
-    update (dt: number) {
+    /** `world`: draw the night, the weather and the season over the world (2D). False (3D): only work out the weather and the night's event for the music. */
+    update (dt: number, world = true) {
         this.t += dt;
         const f = this.farm;
+        if (!world) {
+            this.event = f.clock.night ? nightEvent(f.serverSeed(), f.clock.day) : null;
+            const w = weatherAt(f.serverSeed(), f.clock.day, f.clock.clock);
+            this.rainLevel = f.undergroundAmount() > 0.5 ? 0 : w.rain; this.stormy = w.storm;
+            if (this.shown) this.show(false);
+            return;
+        }
+        if (!this.shown) this.show(true);
         // the Dread Reaches are dim and violet even at noon
         const dreadA = f.dreadAmount();
         const underA = f.undergroundAmount();

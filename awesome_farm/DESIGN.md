@@ -269,6 +269,37 @@ mobs, combat, boss, creatures and the jobs-* files, quests, shop, rift, fishing,
 social for the day, the farmer's life and the chat; CLAUDE.md's folder layout lists them all. Content lives in `data/` tables
 read by both sides.
 
+### Two views of one world: 2D and 3D (beta) (2026-10-08)
+Players choose how the world is drawn: the classic **2D** view (the default) or a low-poly **3D** view (beta), on the title
+screen and in Settings. It is a second *picture* of the same game, not a second game: the Game scene keeps the connection, the
+state mirror, movement, keys, targeting and placing in both, and in 3D it hides its sprites and feeds `src/client3d/view3d.ts`
+the same state and events through one documented seam (`client/world/view3d-bridge.ts`: `View3D` for drawing, `WorldPointer`
+for the pointer). The real Phaser HUD, with every menu and window, draws on top of the 3D canvas, so nothing about the UI is
+built twice. The 3D code and three.js are a chunk of their own, loaded only when 3D is chosen: 2D players download nothing more.
+CLAUDE.md, "The 3D view", has the rules.
+
+**Stage 1 (built):** walking, gathering, planting and harvesting, building with a 3D ghost that goes green or red by the real
+placement rules, fighting (models, hp bars, telegraph circles, a target ring), day and night with lamps and rain, land rising
+out of the sea, other farmers in multiplayer, live or one-reload switching, every model or a written-down placeholder.
+
+**Still to do for parity** (each a self-contained job; the tag is the area):
+- WORLD: caves and mines (the underground layer, descending, `TickMsg.dug`); seasons (palettes, snow, falling leaves and petals);
+  fog days and storms with lightning from `weatherAt`; night events (blood moon, meteors, fairies); the Dread Reaches' atmosphere;
+  rift islands' gates and the expedition arena; hearth circles at dusk; height (terrain is flat: `groundY` is 0).
+- ENTITIES: models for the export chute, mailbox and weather vane and the Titan nodes (their ring, "2+" badge and shared health
+  bar); a projectile per kind (arrow, orb, rock) instead of one glowing gem; the co-op statuses (ice block, curse wisps, chain);
+  creature workers' activity icons and post bubbles, pod throws and catches, the companion's pat; fishing (line, bobber, splash);
+  machines as they run (inserter arms, belt items moving, drill and windmill motion), the pickup fly-to-farmer, the pop-in of new things.
+- OVERLAYS: the Factory view (grid colours, flows, rates) and status badges over machines; power wires; the dismantle outline and
+  hold ring in the world; telegraph lines and cones (now drawn as circles) and the co-op telegraph colours; the Perfect dash ring and
+  slow motion; land price plates and name tags placed at a head's height rather than on the ground; the blueprint copy box and paste ghost;
+  58 of the game's 96 juice actions still use a generic puff in 3D (the 2D `FX` table has them all; sounds are shared already).
+- CONTROLS: the pinch zoom and touch aim are routed but untested on a real phone; picking ignores farmers (reviving a friend works by
+  standing near, as in 2D); the camera has no rotation or tilt (keys and the stick move in screen directions, which matches the fixed camera).
+- PERF: in 3D the hidden Game scene still builds and updates its 2D sprites (cheap, but not free on a phone); entity models are not
+  instanced or merged; shadows and bloom have no quality setting; the 3D chunk is large (three.js plus the model library) and could be
+  split further (models on first use).
+
 ### Co-op life (2026-10-07)
 Eleven of the ideas in [IDEAS.md](IDEAS.md) are built, each documented under "Adding content" in CLAUDE.md: the **farm chronicle** (a storybook line per milestone in the Journal), the **season wish** (a world-wide vote on each season's first morning), the **mailbox** (parcels and notes between farmers, a postcard every dawn), the **evening hearth** (sit at a fire together at dusk for Hearthside), **pet and gifts** (pet your companion, it digs up presents), the **Perfect dash** (a slow-motion beat, energy back and a crit for dashing through a telegraph at the last instant), **Titan nodes** (a Great Oak or Titan Boulder only two farmers can fell), the **export chute** (a belt-fed sink that sells at 85%), the **weather vane** (a three-day forecast), the **potluck table** (every cook's dish in one feast) and **co-op boss statuses** (Frozen, Hexed and Tethered: patterns a boss only lays when two or more farmers are up). A **photo mode** (F2) hides the HUD, and the **character creator** picks the farmer's look and scarf.
 

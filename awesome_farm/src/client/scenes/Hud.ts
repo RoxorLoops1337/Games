@@ -396,7 +396,7 @@ export class HudScene extends Phaser.Scene {
         }
         const me = f.meS!;
         if (!this.screen && this.queued.length && me.downed <= 0) { const [n, a] = this.queued.shift()!; this.openScreen(n, a); }
-        this.night.update(dt);
+        this.night.update(dt, f.viewMode === '2d');
         updateMusic({ night: f.nightAmount(), rain: this.night.rainLevel, boss: this.bossBar.cur ? 1 : me.rift?.ph === 1 ? 0.35 : this.night.event === 'bloodmoon' ? 0.3 : 0, phase: this.bossBar.cur?.phase ?? 0, under: f.undergroundAmount(), dread: f.dreadAmount() });
         this.arrange(dt, me);
         this.layer.update(dt);

@@ -58,6 +58,8 @@ interface InteractHost {
     buyPlot (plot: Plot): void;
     /** A few sparks at a spot (the revive hold). */
     pop (x: number, y: number, n: number): void;
+    /** A pointer onto the world through the view in use (world/view3d-bridge.ts); `aim` picks a thing rather than the ground. */
+    toWorld (p: Phaser.Input.Pointer, out: { x: number; y: number }, aim?: boolean): unknown;
 }
 
 export class Interact {
@@ -117,7 +119,7 @@ export class Interact {
     updateTargetAndSwing (dt: number) {
         const h = this.h;
         h.mouseAimT = Math.max(0, h.mouseAimT - dt);
-        (h.aimPointer?.isDown ? h.aimPointer : this.scene.input.activePointer).positionToCamera(this.scene.cameras.main, h.pointerWorld);
+        h.toWorld(h.aimPointer?.isDown ? h.aimPointer : this.scene.input.activePointer, h.pointerWorld, !h.placer.cur && !h.bp.active);       // (placing and blueprints aim at the ground)
         const me = h.meS!;
         this.target = h.placer.cur || h.bp.active || me.downed > 0 ? null : this.findTarget();
         this.swingCd -= dt;

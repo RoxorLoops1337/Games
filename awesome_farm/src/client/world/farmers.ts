@@ -49,6 +49,8 @@ interface FarmersHost {
     readonly camTarget: Phaser.Math.Vector2;
     derivedMe (): { speed: number };
     send (c: Cmd): void;
+    /** A farmer swung (the 3D view poses its model). */
+    swung? (id: string): void;
 }
 
 /** A quick squash (or stretch) that springs back: a hit, a pop, a swap. */
@@ -201,6 +203,7 @@ export class Farmers {
         const len = Math.hypot(mx, my);
         if (len > 1) { mx /= len; my /= len; }
         const moving = len > 0.15;
+        l.moving = moving;
         this.stillT = moving ? 0 : this.stillT + dt;
         if (moving) { l.face.x = mx / Math.max(len, 1e-6); l.face.y = my / Math.max(len, 1e-6); }
         const speed = h.derivedMe().speed;
@@ -227,6 +230,7 @@ export class Farmers {
     swingAnim (pv: PlayerSprite | undefined, targetX: number, weapon?: ItemId) {
         if (!pv) return;
         const s = this.scene;
+        this.h.swung?.(pv.id);
         if (Math.abs(targetX - pv.x) > 2) pv.flip = targetX < pv.x;
         const side = pv.flip ? -1 : 1;
         pv.swinging = true;

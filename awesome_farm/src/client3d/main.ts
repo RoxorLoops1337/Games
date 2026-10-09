@@ -1,10 +1,5 @@
 // The low-poly 3D view: renderer, post-processing, camera, input, the solo connection and the frame loop.
-import { ACESFilmicToneMapping, Color, HalfFloatType, type Material, type Mesh, type MeshStandardMaterial, type Object3D, OrthographicCamera, PCFSoftShadowMap, Plane, Raycaster, Scene, SRGBColorSpace, Vector2, Vector3, WebGLRenderer, WebGLRenderTarget } from 'three';
-import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
-import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
-import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
-import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
-import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
+import { type Material, type Mesh, type MeshStandardMaterial, type Object3D, OrthographicCamera, Plane, Raycaster, Scene, Vector2, Vector3 } from 'three';
 import { NET, TILE, TUNING } from '../shared/config';
 import { type BuildingKind, BUILDINGS } from '../shared/data/buildings';
 import { SPECIES } from '../shared/data/creatures';
@@ -28,6 +23,7 @@ import { buildingModel } from './models/buildings';
 import { env } from './models/kit';
 import { Local } from './net';
 import { type Staged, stageShowcase } from './showcase';
+import { BASE_VIEW, dprCap, EL, hourOf, makePost, makeRenderer } from './render';
 import { Sky } from './sky';
 import { Sea, Terrain } from './terrain';
 import { LightPool, type LightSpot, Rain, Telegraphs } from './weather';
@@ -37,21 +33,13 @@ interface Placing { kind: BuildingKind; rot: number; tx: number; ty: number; ok:
 
 export const q = new URLSearchParams(location.search);
 export const DEBUG = q.has('debug');
-export const EL = 62 * Math.PI / 180;
-export const BASE_VIEW = 11.25;
 export const px = (v: number) => v / TILE;
 /** Start the 3D view in the page's #stage: a solo world on the real simulation, the showcase farmstead, the camera, the HUD and the loop. */
 export function boot() {
     const stage = document.getElementById('stage')!;
-    const renderer = new WebGLRenderer({ antialias: false, powerPreference: 'high-performance' });
-    const cap = matchMedia('(pointer:coarse)').matches ? 1.5 : 2;
+    const renderer = makeRenderer();
+    const cap = dprCap();
     let dpr = Math.min(window.devicePixelRatio || 1, cap);
-    renderer.setPixelRatio(dpr);
-    renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = PCFSoftShadowMap;
-    renderer.toneMapping = ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1;
-    renderer.outputColorSpace = SRGBColorSpace;
     stage.appendChild(renderer.domElement);
     renderer.domElement.style.cssText = 'display:block;width:100vw;height:100vh;touch-action:none';
     const scene = new Scene();
@@ -117,26 +105,9 @@ export function boot() {
         lab: (a: string) => lab(a)
     });
     const floats = new Floats(hud.floats);
-    const rt = new WebGLRenderTarget(4, 4, { type: HalfFloatType, samples: 4 });
-    const composer = new EffectComposer(renderer, rt);
-    composer.addPass(new RenderPass(scene, cam));
-    const bloom = new UnrealBloomPass(new Vector2(512, 512), 0.28, 0.6, 1.35);
-    composer.addPass(bloom);
-    const grade = new ShaderPass({
-        uniforms: { tDiffuse: { value: null }, uTint: { value: new Color(1, 1, 1) }, uSat: { value: 1.15 }, uExp: { value: 1 }, uVig: { value: 0.32 } },
-        vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
-        fragmentShader: `varying vec2 vUv; uniform sampler2D tDiffuse; uniform vec3 uTint; uniform float uSat, uExp, uVig;
-          void main(){ vec4 c = texture2D(tDiffuse, vUv); vec3 col = c.rgb * uTint * uExp; float l = dot(col, vec3(.299,.587,.114)); col = mix(vec3(l), col, uSat);
-          float v = smoothstep(.95, .28, length((vUv - .5) * vec2(1.25, 1.0))); col *= mix(1.0 - uVig, 1.0, v); gl_FragColor = vec4(col, c.a); }`
-    });
-    composer.addPass(grade);
-    composer.addPass(new OutputPass());
+    const { composer, bloom, grade, resize: sizePost } = makePost(renderer, scene, cam);
     function resize() {
-        const w = innerWidth, h = innerHeight;
-        renderer.setSize(w, h, false);
-        composer.setSize(w, h);
-        composer.setPixelRatio(dpr);
-        bloom.resolution.set(w / 2, h / 2);
+        sizePost(innerWidth, innerHeight, dpr);
     }
     addEventListener('resize', resize);
     resize();
@@ -753,8 +724,7 @@ export function boot() {
         cam.updateProjectionMatrix();
         cam.position.set(camT.x + shake.x, Math.sin(EL) * 120, camT.z + Math.cos(EL) * 120 + shake.z);
         cam.lookAt(camT.x + shake.x, 0, camT.z + shake.z);
-        const dayLen = TUNING.dayLength, night = clock.clock >= dayLen;
-        const hour = hourOv ?? (night ? (20 + (clock.clock - dayLen) / Math.max(1, clock.nightLen) * 10) % 24 : 6 + clock.clock / dayLen * 14);
+        const hour = hourOv ?? hourOf(clock.clock, clock.nightLen);
         const w = weatherAt(seed, clock.day, clock.clock), rainAmt = Math.max(w.rain, forceRain);
         sky.apply(hour, rainAmt, camT);
         env.night = sky.night;
