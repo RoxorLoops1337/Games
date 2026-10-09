@@ -75,6 +75,7 @@ export const INTRO: Record<string, string[]> = {
     multiplayer: [
         'Up to sixteen farmers share one world. Everybody starts on their own island, far apart, and buys land towards the others until the islands connect. Chests, machines and the Market Stall are shared.',
         'Join a server from the title screen: paste its address in the Join box (a link with ?server= fills it in for you), pick a name and a secret word. Use the same name and word on any phone or computer and you are the same farmer. Solo worlds live in your browser.',
+        'Play online shows the servers as buttons (Meadow, Quarry, Snowcap). Each is a separate world with its own farmers and save, and only the one you pick wakes up. Your name and secret word make a separate farmer on each.',
         'The always-on world runs on a server around the clock, so the farm keeps going (machines, creatures at work, the seasons) while everybody is away. Anyone can also host a world on a PC with the server package.',
     ],
     buffs: [

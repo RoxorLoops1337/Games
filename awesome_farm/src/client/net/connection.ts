@@ -141,6 +141,9 @@ function toWsUrl (address: string) {
 /** "…/ws" WebSocket URL → the server's http(s) status endpoint. */
 export const statusUrl = (address: string) => toWsUrl(address).replace(/^ws/, 'http').replace(/\/ws$/, '/status');
 
+/** The server's list of worlds to pick from (a Cloudflare host with several; any other server has none). */
+export const worldsUrl = (address: string) => statusUrl(address).replace(/\/status$/, '/worlds');
+
 /** How long to wait before each new try at a dropped connection, in seconds; after the last the connection is closed for good. */
 export const RECONNECT_WAITS = [1, 2, 4, 8, 8];
 /** A small ping while connected, even standing still: a Cloudflare-hosted world counts its CPU budget from the last message it got, and any server learns sooner that a line went quiet. */

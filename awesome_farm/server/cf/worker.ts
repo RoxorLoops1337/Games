@@ -22,15 +22,28 @@ import { Sim } from '../../src/shared/sim/sim';
 import type { WorldState } from '../../src/shared/sim/types';
 import { WorldStore } from './store';
 import ADMIN_PAGE from './admin.html';
+import { DEFAULT_WORLD, routeOf, WORLDS, worldInfo } from '../../src/shared/data/servers';
 
 export interface Env {
     WORLD: DurableObjectNamespace<World>;
-    WORLD_NAME?: string;            // which world this deployment serves (default "farm")
+    WORLD_NAME?: string;            // the world the old, world-less addresses (/status, /ws, /admin) mean (default "farm"); the worlds themselves are in src/shared/data/servers.ts
     SERVER_NAME?: string;           // shown to players
     GAME_URL?: string;              // the game page ("/" sends people there with ?server=<this host>)
     VERSION?: string;               // the game's version, stamped by the deploy script
     PASSWORD?: string;              // secret: players must type it (optional)
     DEV_KEY?: string;               // secret: unlocks the developer menu and the /admin routes
+}
+
+const adminPage = () => new Response(ADMIN_PAGE, { headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store', 'x-frame-options': 'DENY', 'referrer-policy': 'no-referrer' } });
+/** The world the old, world-less addresses mean. */
+const defaultWorld = (env: Env) => { const w = (env.WORLD_NAME || DEFAULT_WORLD).replace(/[^a-zA-Z0-9_-]/g, ''); return w || DEFAULT_WORLD; };
+/** Hand a request to one world's Durable Object, with the path it knows (/status, /ws, /admin/…). */
+function toWorld (env: Env, world: string, req: Request, path: string): Promise<Response> {
+    const to = new URL(req.url);
+    to.pathname = path;
+    const fwd = new Request(to.toString(), req);
+    fwd.headers.set('x-world', world);
+    return env.WORLD.get(env.WORLD.idFromName(world)).fetch(fwd);
 }
 
 /** Seconds a farmer whose line dropped (a phone asleep) is kept in the world. */
@@ -51,18 +64,26 @@ export default {
     async fetch (req: Request, env: Env): Promise<Response> {
         const url = new URL(req.url);
         if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
-        if (url.pathname === '/' && env.GAME_URL) {
-            const to = new URL(env.GAME_URL);
-            to.searchParams.set('server', url.origin);
+        const toGame = (address: string) => {
+            const to = new URL(env.GAME_URL!);
+            to.searchParams.set('server', address);
             return Response.redirect(to.toString(), 302);
+        };
+        // the list of worlds to pick from: a plain answer, no world is woken for it
+        if (url.pathname === '/worlds') return json({ game: 'awesome-farm', protocol: PROTOCOL, default: defaultWorld(env), worlds: WORLDS });
+        if (url.pathname === '/' && env.GAME_URL) return toGame(url.origin);
+        // one address per world: /w/<world>/status, /ws and /admin (the world's own page and routes)
+        const bare = url.pathname.replace(/\/+$/, '');
+        const routed = routeOf(bare);
+        if (routed) {
+            if (routed.rest === '/' && env.GAME_URL) return toGame(`${url.origin}/w/${routed.world}`);
+            if (routed.rest === '/admin') return adminPage();
+            if (routed.rest === '/status' || routed.rest === '/ws' || routed.rest.startsWith('/admin/')) return toWorld(env, routed.world, req, routed.rest);
+            return new Response('Not found', { status: 404, headers: CORS });
         }
-        if (url.pathname === '/admin' || url.pathname === '/admin/') {
-            return new Response(ADMIN_PAGE, { headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store', 'x-frame-options': 'DENY', 'referrer-policy': 'no-referrer' } });
-        }
-        if (url.pathname === '/status' || url.pathname === '/ws' || url.pathname.startsWith('/admin/')) {
-            const world = (env.WORLD_NAME || 'farm').replace(/[^a-zA-Z0-9_-]/g, '') || 'farm';
-            return env.WORLD.get(env.WORLD.idFromName(world)).fetch(req);
-        }
+        if (url.pathname === '/admin' || url.pathname === '/admin/') return adminPage();
+        // the old addresses: the first world, as before there were three
+        if (url.pathname === '/status' || url.pathname === '/ws' || url.pathname.startsWith('/admin/')) return toWorld(env, defaultWorld(env), req, url.pathname);
         return new Response('Awesome Farm server. Open the game and join this address.', { status: 404, headers: CORS });
     },
 } satisfies ExportedHandler<Env>;
@@ -82,9 +103,12 @@ export class World extends DurableObject<Env> {
     private usage = { day: '', http: 0, msgs: 0 };
     private readonly awake = Date.now();
     private adminFails: number[] = [];
+    /** Which world this object is (its Durable Object name): the first, `farm`, is the one from before there were three. */
+    private worldId = DEFAULT_WORLD;
 
     constructor (ctx: DurableObjectState, env: Env) {
         super(ctx, env);
+        this.worldId = ctx.id.name || (env.WORLD_NAME || DEFAULT_WORLD).replace(/[^a-zA-Z0-9_-]/g, '') || DEFAULT_WORLD;
         this.store = new WorldStore(ctx.storage as unknown as ConstructorParameters<typeof WorldStore>[0]);
         void ctx.blockConcurrencyWhile(async () => {
             let state: WorldState | null = null;
@@ -96,16 +120,22 @@ export class World extends DurableObject<Env> {
 
     // ── the world ──────────────────────────────────────────────────────────
     private boot (state: WorldState | null) {
-        const name = this.env.WORLD_NAME || 'farm';
+        const name = this.worldId;
         try { this.sim = state ? new Sim(state) : Sim.create(`${name}-${makeSeed()}`, name); } catch (err) {
             this.log(`!! the save could not be loaded: ${(err as Error).message}; starting a new world`);
             this.sim = Sim.create(`${name}-${makeSeed()}`, name);
         }
-        this.host = new SimHost(this.sim, this.env.SERVER_NAME || 'Awesome Farm', secret(this.env.PASSWORD), { devKey: secret(this.env.DEV_KEY) || undefined, grace: GRACE_S });
+        this.host = new SimHost(this.sim, this.serverName(), secret(this.env.PASSWORD), { devKey: secret(this.env.DEV_KEY) || undefined, grace: GRACE_S });
         this.host.onLog = (line) => this.log(line);
         this.host.onSave = (text) => { if (!this.tainted) this.save(text); };
         this.tainted = false;
         this.log(`World "${name}" ready: day ${this.sim.s.day}, ${Object.keys(this.sim.s.players).length} farmers`);
+    }
+
+    /** What players see as the server's name: the deployment's name and the world's own ("Awesome Farm · Quarry"). */
+    private serverName () {
+        const base = this.env.SERVER_NAME || 'Awesome Farm', w = worldInfo(this.worldId);
+        return w ? `${base} · ${w.name}` : base;
     }
 
     private log (line: string) {
@@ -161,6 +191,8 @@ export class World extends DurableObject<Env> {
 
     async fetch (req: Request): Promise<Response> {
         const url = new URL(req.url);
+        const said = req.headers.get('x-world');
+        if (said && !this.ctx.id.name && worldInfo(said)) this.worldId = said;        // (a runtime that does not tell an object its own name: the worker does)
         this.count('http');
         if (url.pathname === '/status') return json(this.status());
         if (url.pathname === '/ws') return this.openSocket(req);
@@ -170,7 +202,7 @@ export class World extends DurableObject<Env> {
 
     private status () {
         const s = this.sim.s;
-        return { game: 'awesome-farm', version: this.env.VERSION || '?', protocol: PROTOCOL, name: this.env.SERVER_NAME || 'Awesome Farm', world: this.env.WORLD_NAME || 'farm',
+        return { game: 'awesome-farm', version: this.env.VERSION || '?', protocol: PROTOCOL, name: this.serverName(), world: this.worldId,
             online: this.host.playerCount, max: MAX_PLAYERS, farmers: Object.keys(s.players).length, day: s.day, password: !!secret(this.env.PASSWORD), host: 'cloudflare', tainted: this.tainted };
     }
 

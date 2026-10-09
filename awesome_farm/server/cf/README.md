@@ -54,3 +54,14 @@ Local run: `npm run cf:dev` (put `DEV_KEY=…` in `server/cf/.dev.vars`, which g
   world loads from the last save (at most 20 s of play is lost, as with a crash of the Node server).
 - A tick that throws keeps the world as it was in a named backup and stops autosaves until a clean tick.
 - There is no outbound back-pressure signal on Cloudflare WebSockets, so `Peer.ready` is not set (every tick goes out).
+
+## Several worlds, one deploy
+
+One Worker hosts every world listed in `src/shared/data/servers.ts` (`WORLDS`: Meadow, Quarry, Snowcap), each in its own
+Durable Object named after the world id, so each has its own save, backups and farmers. Idle worlds cost nothing.
+
+- `GET /worlds` lists them (wakes no world). The title screen reads it to show its server buttons.
+- `/w/<id>/status`, `/w/<id>/ws`, `/w/<id>/admin` reach one world. `/w/<id>` redirects to the game with that server chosen.
+- The old plain addresses (`/status`, `/ws`, `/admin`) still reach the first world (Meadow), so existing saves and links keep working.
+- Add a world: add a line to `WORLDS` and run `npm run cf:deploy`. No new migration is needed.
+- Set `PUBLIC_SERVER` in `servers.ts` to the worker address so players get the buttons without typing anything.
