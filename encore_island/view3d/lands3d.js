@@ -43,9 +43,9 @@ function mergePlates(L) {
   if (L.merged) { L.merged.forEach((m) => { L.g.remove(m); m.geometry.dispose(); }); L.merged = null; }
   const buckets = new Map(); L.g.updateMatrixWorld(true); _inv.copy(L.g.matrixWorld).invert();
   for (const { pl, p } of L.plates) {
-    const base = p.group.children[0], pole = p.post && p.post.children[0] && p.post.children[0].children[0], srcs = [];
-    if (!base || !base.isGroup || !pole || !pole.isMesh) return;
-    base.children.forEach((m) => srcs.push([m, 'b'])); srcs.push([pole, 'p']);
+    const base = p.group.children[0], srcs = [];
+    if (!base || !base.isGroup) return;
+    base.children.forEach((m) => srcs.push([m, 'b']));
     p.group.updateMatrixWorld(true);
     for (const [m, kind] of srcs) {
       if (!m.isMesh) return; m.visible = false; if (pl.built) continue;

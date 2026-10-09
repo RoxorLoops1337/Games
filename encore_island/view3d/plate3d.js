@@ -1,9 +1,9 @@
 // Encore Island 3D, the "walk onto it" plate. One look for every upgrade circle in the game (hub, lands, gems, smelter, warp, backstage).
 // A beveled stone disc set into the paving (a merged Builder mesh, which hub3d / lands3d fold further into shared meshes), a shader ring on top
-// (gold rune dashes when you can afford it, the green progress arc, an additive glow), and a sign post at the back carrying the 2D game's own
-// icon sticker plus a level badge. Prices and names are drawn by the HUD overlay (V.labels) so text stays crisp.
+// (gold rune dashes when you can afford it, the green progress arc, an additive glow), and the 2D game's own icon painted flat on the stone
+// (a floor decal, no post or sign) plus a level badge lying beside it. Prices and names are drawn by the HUD overlay (V.labels) so text stays crisp.
 // PERFORMANCE: every plate in the game shares THREE instanced draw calls (rings, sign stickers, level badges) through PlateFx, whatever the plate
-// count. Sign stickers and badges are camera-facing quads cut from two texture atlases (icon sticker per icon+colours, digits 0..99).
+// count. Icon decals and badges are flat quads cut from two texture atlases (icon per icon+colours, digits 0..99).
 //   const p = makePlate(V, { r: 0.92, icon: 'dmg', c1: '#7a5cd8', c2: '#3a2a8a', ring: '#9af0b4', gem: false });
 //   p.group.position.set(x * W, 0, y * W); V.hubGroup.add(p.group);
 //   each frame: p.setState({ afford, paid, cost, lvl, label, near, rem, doneTxt, hidden }); p.update(dt, t);
@@ -34,13 +34,14 @@ void main(){
   float aff = vS.x, prog = vS.y, rr = length(vP) * uHalf, ang = atan(vP.y, vP.x), e = 0.015 * uHalf;
   float pulse = 0.5 + 0.5 * sin(uT * 5.0 + vS.z); vec3 col = vec3(0.0); float a = 0.0;
   float gl = aff * (0.30 + 0.22 * pulse + 0.15 * uBeat) * smoothstep(uHalf, 0.55, rr); col += vec3(1.0, 0.9, 0.5) * gl; a += gl;
-  float dash = step(0.5, fract(ang / 6.2831853 * 18.0 + uT * 0.35)); float rune = band(rr, 0.66, 0.72, e) * dash;
+  float dash = step(0.5, fract(ang / 6.2831853 * 18.0 + uT * 0.35)); float rune = band(rr, 0.80, 0.85, e) * dash;
   vec3 rc = mix(vec3(1.0), vec3(1.0, 0.86, 0.3), aff); float ra = rune * mix(0.38, 1.0, aff); col += rc * ra * 1.5; a += ra;
-  float r2 = band(rr, 0.50, 0.52, e) * mix(0.18, 0.5, aff); col += rc * r2; a += r2;
-  float pa = fract((ang + 1.5707963) / 6.2831853 + 1.0); float pr = band(rr, 0.88, 0.99, e) * step(pa, prog) * step(0.0005, prog); col += vC * pr * 1.4; a += pr;
-  float track = band(rr, 0.88, 0.99, e) * step(0.0005, prog) * 0.18; col += vec3(1.0) * track; a += track;
+  float r2 = band(rr, 0.745, 0.765, e) * mix(0.18, 0.5, aff); col += rc * r2; a += r2;
+  float pa = fract((ang + 1.5707963) / 6.2831853 + 1.0); float pr = band(rr, 0.90, 1.0, e) * step(pa, prog) * step(0.0005, prog); col += vC * pr * 1.4; a += pr;
+  float track = band(rr, 0.90, 1.0, e) * step(0.0005, prog) * 0.18; col += vec3(1.0) * track; a += track;
   gl_FragColor = vec4(col, clamp(a, 0.0, 1.0)); }`;
-const _qGeo = new THREE.PlaneGeometry(1, 1);
+const _qGeo = new THREE.PlaneGeometry(1, 1).rotateX(-PI / 2); // unit quad lying on the ground (icon decals, badges): its up is screen up
+const PS = 1.12; // visual plate size over the trigger radius the caller passes
 const _ringGeo = new THREE.PlaneGeometry(2, 2).rotateX(-PI / 2); // unit quad on the ground; scaled per instance
 const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _p = new THREE.Vector3(), _s = new THREE.Vector3(), _Y = new THREE.Vector3(0, 1, 0), _z = new THREE.Matrix4().makeScale(0, 0, 0);
 class Slots { constructor(mesh) { this.mesh = mesh; this.free = []; this.top = 0; } take() { const i = this.free.length ? this.free.pop() : this.top++; if (i >= CAP) { this.top = CAP; return -1; } if (i + 1 > this.mesh.count) this.mesh.count = i + 1; return i; } drop(i) { if (i < 0) return; this.mesh.setMatrixAt(i, _z); this.free.push(i); this.mesh.instanceMatrix.needsUpdate = true; } }
@@ -55,9 +56,9 @@ class PlateFx {
     this.rings = new THREE.InstancedMesh(rg, this.ringMat, CAP); this.rings.count = 0; this.rings.frustumCulled = false; this.rings.renderOrder = 3; this.rings.userData.noCast = true;
     // sign stickers (atlas of icon discs) and badges (atlas of digits)
     this.cells = new Map(); this.nCell = 0;
-    this.signTex = HAS_DOM ? this.makeAtlas(CELL * GRID) : new THREE.Texture(); this.signMat = new THREE.MeshBasicMaterial({ map: this.signTex, transparent: true, alphaTest: 0.04, depthWrite: false, fog: false }); this.signMat.userData.noLook = true; this.signMat.onBeforeCompile = ATLAS_VS; this.signMat.customProgramCacheKey = () => 'plateAtlas';
-    this.signs = new THREE.InstancedMesh(_qGeo.clone(), this.signMat, CAP); this.signs.count = 0; this.signs.frustumCulled = false; this.signs.renderOrder = 4; this.aSign = uvAtlas(this.signs, CAP);
-    this.badgeTex = HAS_DOM ? this.makeBadgeAtlas() : new THREE.Texture(); this.badgeMat = new THREE.MeshBasicMaterial({ map: this.badgeTex, transparent: true, alphaTest: 0.04, depthWrite: false, fog: false }); this.badgeMat.userData.noLook = true; this.badgeMat.onBeforeCompile = ATLAS_VS; this.badgeMat.customProgramCacheKey = () => 'plateAtlas';
+    this.signTex = HAS_DOM ? this.makeAtlas(CELL * GRID) : new THREE.Texture(); this.signMat = new THREE.MeshBasicMaterial({ map: this.signTex, transparent: true, alphaTest: 0.04, depthWrite: false, fog: false, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 }); this.signMat.userData.noLook = true; this.signMat.onBeforeCompile = ATLAS_VS; this.signMat.customProgramCacheKey = () => 'plateAtlas';
+    this.signs = new THREE.InstancedMesh(_qGeo.clone(), this.signMat, CAP); this.signs.count = 0; this.signs.frustumCulled = false; this.signs.renderOrder = 2; this.aSign = uvAtlas(this.signs, CAP);
+    this.badgeTex = HAS_DOM ? this.makeBadgeAtlas() : new THREE.Texture(); this.badgeMat = new THREE.MeshBasicMaterial({ map: this.badgeTex, transparent: true, alphaTest: 0.04, depthWrite: false, fog: false, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 }); this.badgeMat.userData.noLook = true; this.badgeMat.onBeforeCompile = ATLAS_VS; this.badgeMat.customProgramCacheKey = () => 'plateAtlas';
     this.badges = new THREE.InstancedMesh(_qGeo.clone(), this.badgeMat, CAP); this.badges.count = 0; this.badges.frustumCulled = false; this.badges.renderOrder = 5; this.aBadge = uvAtlas(this.badges, CAP);
     this.sr = new Slots(this.rings); this.ss = new Slots(this.signs); this.sb = new Slots(this.badges);
     for (const m of [this.rings, this.signs, this.badges]) { m.userData.noCast = true; this.root.add(m); }
@@ -71,10 +72,9 @@ class PlateFx {
   cell(icon, c1, c2) {
     const key = icon + '|' + c1 + '|' + c2; let i = this.cells.get(key); if (i !== undefined) return i; i = Math.min(this.nCell++, GRID * GRID - 1); this.cells.set(key, i);
     if (this.actx) { const g = this.actx, x = (i % GRID) * CELL + CELL / 2, y = ((i / GRID) | 0) * CELL + CELL / 2; g.clearRect(x - CELL / 2, y - CELL / 2, CELL, CELL);
-      g.fillStyle = '#2d170f'; g.beginPath(); g.arc(x, y, 62, 0, TAU); g.fill(); g.fillStyle = '#fff4e6'; g.beginPath(); g.arc(x, y, 57, 0, TAU); g.fill();
-      const gr = g.createLinearGradient(x, y - 52, x, y + 52); gr.addColorStop(0, '#' + mixc(c2, c1, 0.5).lerp(new THREE.Color(1, 1, 1), 0.18).getHexString()); gr.addColorStop(1, '#' + mixc(c2, c1, 0.5).getHexString()); g.fillStyle = gr; g.beginPath(); g.arc(x, y, 52, 0, TAU); g.fill();
-      g.fillStyle = 'rgba(255,255,255,0.28)'; g.beginPath(); g.ellipse(x - 8, y - 26, 30, 14, -0.35, 0, TAU); g.fill();
-      const ic = iconCanvas(icon); if (ic) g.drawImage(ic, x - 48, y - 46, 96, 96); else { g.fillStyle = '#fff'; g.font = `900 64px ${FONT}`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('?', x, y + 3); }
+      // a soft darker pad so the art reads on any stone colour, then the icon itself, big
+      const pad = '#' + mixc(c2, '#000000', 0.4).getHexString(); g.fillStyle = pad; g.globalAlpha = 0.66; g.beginPath(); g.arc(x, y, 60, 0, TAU); g.fill(); g.globalAlpha = 0.9; g.lineWidth = 3; g.strokeStyle = '#fff4e6'; g.beginPath(); g.arc(x, y, 58, 0, TAU); g.stroke(); g.globalAlpha = 1;
+      const ic = iconCanvas(icon); if (ic) g.drawImage(ic, x - 54, y - 52, 108, 108); else { g.fillStyle = '#fff'; g.font = `900 72px ${FONT}`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('?', x, y + 3); }
       this.signTex.needsUpdate = true; }
     return i;
   }
@@ -85,22 +85,18 @@ const plateFx = (V) => { let f = _fx.get(V); if (!f) _fx.set(V, f = new PlateFx(
 const HAS_DOM = typeof document !== 'undefined' && !!document.createElement;
 
 export function makePlate(V, o = {}) {
-  const r = o.r ?? 0.92, c1 = o.c1 || '#7a5cd8', c2 = o.c2 || '#3a2a8a', group = new THREE.Group(), fx = plateFx(V);
+  const r = (o.r ?? 0.92) * PS, c1 = o.c1 || '#7a5cd8', c2 = o.c2 || '#3a2a8a', group = new THREE.Group(), fx = plateFx(V);
   // stone: dark ink rim, cream bevel, tinted top, studs (child 0 of the group: hub3d and lands3d merge it with its neighbours)
   const b = new Builder({ ao: 0.12 });
   b.cyl(INK, 0, 0, 0, r + 0.16, 0.05, 48);
   b.cyl(C.cream, 0, 0.0, 0, r + 0.1, 0.1, 48);
   b.cyl(mixc(c2, '#000000', 0.15).getHex(), 0, 0.0, 0, r + 0.02, 0.125, 48);
-  b.cyl(mixc(c1, c2, 0.3).getHex(), 0, 0.0, 0, r * 0.84, 0.135, 48);
-  b.cyl(mixc(c1, '#ffffff', 0.12).getHex(), 0, 0.0, 0, r * 0.48, 0.14, 40);
+  b.cyl(mixc(c1, c2, 0.3).getHex(), 0, 0.0, 0, r * 0.93, 0.135, 48);
+  b.cyl(mixc(c1, '#ffffff', 0.12).getHex(), 0, 0.0, 0, r * 0.76, 0.14, 40);
   for (let i = 0; i < 8; i++) { const a = i / 8 * TAU; b.ball({ m: GOLD, c: 0xffe27a }, Math.cos(a) * (r + 0.06), 0.1, Math.sin(a) * (r + 0.06), 0.045, 0.7); }
   const base = b.build({ cast: false }); group.add(base);
-  // sign post at the back edge (child of `post`; the sign itself is an instanced sticker, `sign` is only the bobbing anchor)
-  const post = new THREE.Group(); post.position.set(0, 0, -r * 0.62); group.add(post);
-  const pb = new Builder({ ao: 0.1 }); const ph = r * 1.45;
-  pb.cyl(INK, 0, 0, 0, 0.075, ph, 10); pb.cyl(0x8a6cc8, 0, 0.0, 0, 0.05, ph, 10); pb.ball(INK, 0, 0.02, 0, 0.13, 0.5);
-  post.add(pb.build({ cast: true }));
-  const sr = r * 0.62, sign = new THREE.Group(); sign.position.y = ph + sr * 0.55; post.add(sign);
+  // no post any more: `post` and `sign` stay as empty groups so the modules that fold or sweep plates keep working
+  const post = new THREE.Group(), sign = new THREE.Group(); group.add(post, sign);
   const sRing = fx.sr.take(), sSign = fx.ss.take(), sBadge = o.lvl !== false ? fx.sb.take() : -1, cell = fx.cell(o.icon || 'star', c1, c2);
   const ringCol = new THREE.Color(o.ring || '#9af0b4'); fx.aC.setXYZ(sRing, ringCol.r, ringCol.g, ringCol.b); fx.uv(fx.aSign, sSign, cell, GRID);
   const st = { afford: false, paid: 0, cost: 0, lvl: undefined, label: null, near: false, rem: 0, doneTxt: null, hidden: false, pulse: 0 };
@@ -111,21 +107,19 @@ export function makePlate(V, o = {}) {
       group.visible = !st.hidden;
       if (st.hidden) { if (wasHidden !== true) { wasHidden = true; fx.rings.setMatrixAt(sRing, _z); fx.signs.setMatrixAt(sSign, _z); if (sBadge >= 0) fx.badges.setMatrixAt(sBadge, _z); fx.dirty = true; } return; }
       wasHidden = false; aff += ((st.afford ? 1 : 0) - aff) * Math.min(1, dt * 8);
-      const prog = st.cost > 0 && st.paid > 0 ? clamp(st.paid / st.cost, 0, 1) : 0, bob = st.afford && !o.noBob ? Math.sin(t * 4 + group.position.x) * 0.09 : 0;
-      sign.position.y += (ph + sr * 0.55 + bob - sign.position.y) * Math.min(1, dt * 10);
+      const prog = st.cost > 0 && st.paid > 0 ? clamp(st.paid / st.cost, 0, 1) : 0, pulse = st.afford && !o.noBob ? 1 + Math.sin(t * 4 + group.position.x) * 0.045 : 1;
       const gx = group.position.x, gz = group.position.z, gy = group.position.y;
       fx.rings.setMatrixAt(sRing, _m.compose(_p.set(gx, gy + 0.16, gz), _q.identity(), _s.set(r * 1.9, 1, r * 1.9))); fx.aS.setXYZW(sRing, aff, prog, seed, 0);
-      const yaw = Math.atan2(cam.position.x - gx, cam.position.z - gz), sx = gx + post.position.x, sz = gz + post.position.z, sy = gy + post.position.y + sign.position.y; _q.setFromAxisAngle(_Y, yaw);
-      fx.signs.setMatrixAt(sSign, _m.compose(_p.set(sx + Math.sin(yaw) * 0.14, sy + sr * 0.03, sz + Math.cos(yaw) * 0.14), _q, _s.set((sr + 0.1) * 2.1, (sr + 0.1) * 2.1, 1)));
+      const d = r * 1.58 * pulse; fx.signs.setMatrixAt(sSign, _m.compose(_p.set(gx, gy + 0.152, gz), _q.identity(), _s.set(d, 1, d)));
       if (sBadge >= 0) { if (st.lvl === undefined) fx.badges.setMatrixAt(sBadge, _z); else { if (st.lvl !== lastLvl) { lastLvl = st.lvl; fx.uv(fx.aBadge, sBadge, clamp(st.lvl | 0, 0, 99), BGRID); }
-        const bx = sr * 0.82, by = sr * 0.82; fx.badges.setMatrixAt(sBadge, _m.compose(_p.set(sx + Math.cos(yaw) * bx + Math.sin(yaw) * 0.2, sy + by, sz - Math.sin(yaw) * bx + Math.cos(yaw) * 0.2), _q, _s.set(0.44, 0.44, 1))); } }
+        fx.badges.setMatrixAt(sBadge, _m.compose(_p.set(gx + r * 0.86, gy + 0.153, gz - r * 0.86), _q.identity(), _s.set(0.52, 1, 0.52))); } }
       fx.dirty = true;
       // overlay text (cheap: only when the plate is near the screen focus, which the labels module decides)
       const L = V.labels; if (L) {
         const x = group.position.x, z = group.position.z;
-        if (st.near && st.label) L.pill(st.label, x, ph + sr * 1.7, z - r * 0.62, { c1: '#ffffff', c2: '#dccaff', px: 12 });
-        if (st.rem > 0) L.price(st.rem, x, 0.05, z + r * 0.7, { gem: !!o.gem, afford: st.afford });
-        else if (st.doneTxt) L.pill(st.doneTxt, x, 0.05, z + r * 0.7, { c1: '#9af0b4', c2: '#3fcf6a', px: 12 });
+        if (st.near && st.label) L.pill(st.label, x, 0.35, z - r * 1.32, { c1: '#ffffff', c2: '#dccaff', px: 12 });
+        if (st.rem > 0) L.price(st.rem, x, 0.05, z + r * 1.22, { gem: !!o.gem, afford: st.afford });
+        else if (st.doneTxt) L.pill(st.doneTxt, x, 0.05, z + r * 1.22, { c1: '#9af0b4', c2: '#3fcf6a', px: 12 });
       }
     },
     dispose() { fx.sr.drop(sRing); fx.ss.drop(sSign); fx.sb.drop(sBadge); } };
