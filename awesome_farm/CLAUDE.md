@@ -303,6 +303,11 @@ stored there reads as 2D.
   sky on open land); rain streaks lean with the wind and fade tail to head (`weather.ts`, `Rain.density` by level); the cave rock has
   a lighter lip where it meets the floor and the cave material darkens the floor by height. Low keeps contact shadows and the grade but
   drops puddles, dust and half the rain. `tests/art3d.test.ts`.
+- **The Blight in 3D** (`tests/blight3d.test.ts`): a nest isle (`Plot.blight` 1) is ground of its own in `terrain.ts` (`BLIGHT_PAL`,
+  `blightDecor`: bruised purple-grey soil, ooze, dead tufts, bones, stumps and rib cages baked into the chunk soup, and the smouldering
+  cracks as one unlit child mesh per chunk, `veinMat`); the nest (`models/nodes-nest.ts`) reads its plot's level through
+  `NodeOpts.level` and grows (`nestScale`, the 2D formula), darkens and sprouts eggs and spines by tier (`nestTier`, one baked mesh
+  per tier and seed) and throbs (`nestBeat`); it smoulders in the dark (`glowOf`, a slow `pulse`).
 - **Coordinates:** the bridge speaks sim pixels (TILE = 16 per tile) and HUD units (960 x 540); the 3D view works in tiles
   (x east, z south, y up) with an orthographic camera at 62 degrees (`render.ts` `EL`, `BASE_VIEW` = 11.25 tiles tall at zoom 1 =
   the 2D view's classic distance). Zoom follows the 2D zoom steps (`GameScene.zoomLevel`).

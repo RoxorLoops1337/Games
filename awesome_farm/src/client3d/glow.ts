@@ -1,5 +1,5 @@
 // Light in the dark, as the 2D NightLayer's light map has it: the same sources (lamps, lanterns, fires, working furnaces and coal
-// generators, waystones and altars, glowing monsters, shots and creatures, the rift gates, and a little light every farmer carries),
+// generators, waystones and altars, glowing monsters, shots and creatures, Blight nests, the rift gates, and a little light every farmer carries),
 // the same colours. The nearest ones get a real point light (LightPool); every one of them also lays a soft pool of light on the
 // ground (one instanced mesh, as cheap for forty lamps as for four), and lamps keep a faint warm halo by day.
 // Plus the evening hearth: in the dusk countdown, a dotted circle round each campfire, table and lamp shows where to sit, and a ring
@@ -19,7 +19,7 @@ const LIGHT_MOBS = new Set(['wisp', 'wraith', 'oldheart', 'witch']);
 const LIGHT_SPECIES = new Set(['glimmoth', 'aurorin', 'cinderkit', 'pyrelion']);
 
 /** A light, in tiles: where (y is its height), its colour, how strong (0..1.4) and how far it reaches; `day`: it keeps a halo by day. */
-export interface Glow extends LightSpot { day?: boolean; flicker?: number }
+export interface Glow extends LightSpot { day?: boolean; flicker?: number; /** a slow swell (radians a second): a Blight nest smouldering */ pulse?: number }
 
 /** The colour a building's light has in 2D (ui/night.ts). */
 export function lightColor (kind: string) {
@@ -42,6 +42,7 @@ export function glowOf (e: Ent, x: number, z: number): Glow | null {
             power: Math.min(1.4, glow / 50), range: Math.min(12, 2.5 + glow / 11), day: true, flicker: e.kind === 'campfire' ? 1 : 0,
         };
     }
+    if (e.k === 'node') return e.kind === 'nest' ? { x, y: 0.8, z, color: 0xff7080, power: 0.9, range: 4.5, pulse: 2.4 } : null;      // (a Blight nest smoulders)
     if (e.k === 'proj') return { x, y: 0.6, z, color: 0xc8e6ff, power: 0.7, range: 3 };
     if (e.k === 'mob' && LIGHT_MOBS.has(e.kind)) return e.kind === 'oldheart' ? { x, y: 1.5, z, color: 0xff7080, power: 1.4, range: 9 } : { x, y: 1, z, color: 0xb8f0c0, power: 0.8, range: 4 };
     if (e.k === 'crit' && LIGHT_SPECIES.has(e.sp)) return { x, y: 0.8, z, color: e.sp === 'cinderkit' || e.sp === 'pyrelion' ? 0xffa060 : 0xe8f0ff, power: e.sp === 'aurorin' ? 1 : 0.7, range: e.sp === 'aurorin' ? 6 : 3.5 };
@@ -113,7 +114,7 @@ export class Glows {
             spots.length = 0;
             for (const v of views) {
                 const e = v.e;
-                if (e.k !== 'bld' && e.k !== 'proj' && e.k !== 'mob' && e.k !== 'crit') continue;
+                if (e.k !== 'bld' && e.k !== 'proj' && e.k !== 'mob' && e.k !== 'crit' && !(e.k === 'node' && e.kind === 'nest')) continue;
                 const g = glowOf(e, v.x, v.z);
                 if (!g || Math.abs(g.x - cam.x) > 30 || Math.abs(g.z - cam.z) > 24) continue;
                 spots.push(g);
@@ -138,7 +139,7 @@ export class Glows {
         const day = (1 - dark) * 0.16;
         for (const g of this.spots) {
             if (n >= MAX_POOLS) break;
-            const k = Math.max(dark, g.day ? day : 0) * (1 - under * 0.45) * (g.flicker ? 0.92 + Math.sin(t * 9 + g.x * 3.1) * 0.08 : 1);
+            const k = Math.max(dark, g.day ? day : 0) * (1 - under * 0.45) * (g.flicker ? 0.92 + Math.sin(t * 9 + g.x * 3.1) * 0.08 : g.pulse ? 0.85 + Math.sin(t * g.pulse + g.x) * 0.15 : 1);
             if (k < 0.01) continue;
             const r = g.range * 0.75;
             this.p.set(g.x, 0.06, g.z);

@@ -23,6 +23,7 @@
         "../tests/overlays3d.test.ts",
         "../tests/world3d.test.ts",
         "../tests/art3d.test.ts",
+        "../tests/blight3d.test.ts",
         "./cf/worker.ts"
     ]
 }
