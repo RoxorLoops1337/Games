@@ -4,7 +4,7 @@
 // is fought as usual.
 // Without a nest in range a night is exactly what it always was: nothing here rolls the world's dice unless a raid is coming.
 
-import { TILE, TUNING } from '../config';
+import { PLOT, TILE, TUNING } from '../config';
 import { BUILDINGS } from '../data/buildings';
 import { pickRaider, type MobDef } from '../data/mobs';
 import { PAL } from '../palette';
@@ -17,7 +17,19 @@ import type { MobE, PlayerS } from './types';
 
 const B = TUNING.blight;
 
-export interface RaidPlan { plot: number; n: number; taken: number; x: number; y: number; dir: string; nests: number; lv: number }
+/** The four sides a wave comes from, in the order a nest uses them (north first, then east, south, west). */
+export const SIDES = ['north', 'east', 'south', 'west'] as const;
+
+/** One wave: `n` raiders stepping out of one side of a nest `at` seconds into the night. */
+export interface Wave { plot: number; side: number; n: number; at: number; lv: number }
+export interface RaidPlan { plot: number; n: number; taken: number; x: number; y: number; dir: string; nests: number; lv: number; waves: Wave[] }
+
+/** How many raiders one wave of a nest of this level holds: one small one at level 1, two at level 2, then a few more every other level. */
+export const waveSize = (lv: number) => lv <= 2 ? Math.max(1, lv) : 2 + Math.floor((lv - 2) / 2);
+/** How many waves a nest of this level sends in a night: one, and one more for every three levels. */
+export const waveCount = (lv: number) => Math.min(B.waveMax, 1 + Math.floor((Math.max(1, lv) - 1) / 3));
+/** The side a nest's `i`th wave of a night comes from: it starts on a different side every night and goes round (north, east, south, west). */
+export const sideOf = (day: number, plot: number, i: number) => (((day + plot + i) % 4) + 4) % 4;
 
 /** The raid a farmer gets tonight (null: none, and the night is exactly as it always was). `count` is how many monsters come for them. */
 export function raidFor (sim: Sim, p: PlayerS, count: number): RaidPlan | null {
@@ -26,9 +38,18 @@ export function raidFor (sim: Sim, p: PlayerS, count: number): RaidPlan | null {
     const near = blight.nestsNear(sim, base.x, base.y);
     if (!near.length) return null;
     const taken = Math.round(count * B.raidShare);
+    // every nest in range sends its own waves, each from the next side round, the first ones small
+    const waves: Wave[] = [];
+    near.slice(0, 4).forEach((plot, k) => {
+        const lv = blight.levelOf(plot), size = waveSize(lv);
+        for (let i = 0; i < waveCount(lv); i++) waves.push({ plot: plot.i, side: sideOf(sim.s.day, plot.i, i), n: size, at: 2 + k * 2 + i * B.waveGap, lv });
+    });
+    waves.sort((a, b) => a.at - b.at);
+    let left = B.waveTotal;
+    for (const w of waves) { w.n = Math.min(w.n, left); left -= w.n; }
+    const keep = waves.filter((w) => w.n > 0);
     const lv = blight.levelOf(near[0]);
-    const n = Math.min(B.raidMax, taken + B.raidPerNest * (near.length - 1) + Math.floor(lv / B.raidPerLv));
-    return { plot: near[0].i, n, taken, x: Math.round(base.x), y: Math.round(base.y), dir: blight.direction(sim, base, near[0]), nests: near.length, lv };
+    return { plot: near[0].i, n: keep.reduce((a, w) => a + w.n, 0), taken, x: Math.round(base.x), y: Math.round(base.y), dir: blight.direction(sim, base, near[0]), nests: near.length, lv, waves: keep };
 }
 
 /** The dusk warning: every farmer a raid is coming for hears where from. */
@@ -36,7 +57,7 @@ export function warn (sim: Sim) {
     for (const p of sim.online) {
         const plan = raidFor(sim, p, 1);
         if (!plan) continue;
-        sim.banner('A raid is gathering', `at the level ${plan.lv} nest to the ${plan.dir}. Walls, doorways and towers will hold them off.`, PAL.berry, p.id);
+        sim.banner('A raid is gathering', `at the level ${plan.lv} nest to the ${plan.dir}: ${plan.waves.length} wave${plan.waves.length > 1 ? 's' : ''}, the first from the ${SIDES[plan.waves[0].side]}. Walls, doorways and towers will hold them off.`, PAL.berry, p.id);
         sim.toast(p.id, `A raid is gathering at the nest to the ${plan.dir}`, 'k_skull', PAL.berry);
     }
 }
@@ -45,22 +66,38 @@ export function warn (sim: Sim) {
 export function announce (sim: Sim, p: PlayerS, plan: RaidPlan) {
     const c = sim.world.plotCenter(sim.s.plots[plan.plot]);
     sim.fx('raid', c.x, c.y);
-    sim.banner('The raid sets out!', `${plan.n} monster${plan.n > 1 ? 's' : ''} from the nest to the ${plan.dir}${plan.nests > 1 ? ` (${plan.nests} nests are near)` : ''}`, PAL.berry, p.id);
+    const first = plan.waves[0];
+    sim.banner('The raid sets out!', `${plan.waves.length} wave${plan.waves.length > 1 ? 's' : ''}, ${plan.n} monster${plan.n > 1 ? 's' : ''}, from the nest to the ${plan.dir}${plan.nests > 1 ? ` (${plan.nests} nests are near)` : ''}. The first comes from the ${SIDES[first.side]}.`, PAL.berry, p.id);
     quests.count(p, 'raid');
 }
 
 /** One raider steps out of its nest and sets off for the base. (Null: the nest is gone, or there was no room.) */
-export function spawnRaider (sim: Sim, sp: { near?: string; raid?: number; rx?: number; ry?: number }): MobE | null {
+export function spawnRaider (sim: Sim, sp: { near?: string; raid?: number; rx?: number; ry?: number; side?: number; first?: boolean }): MobE | null {
     const plot = sp.raid !== undefined ? sim.s.plots[sp.raid] : undefined;
     if (!plot || plot.blight !== 1 || sp.rx === undefined || sp.ry === undefined) return null;
     const who = sp.near ? sim.s.players[sp.near] : undefined;
     const lv = (who ? mobs.groupLevel(sim, who) : 1) + blight.raidBonus(blight.levelOf(plot));
     const kind = pickRaider(blight.kindOf(plot), lv, () => sim.rng.next());
-    const m = mobs.spawnMob(sim, kind, undefined, plot.i, { lv, pack: false });
+    // a wave steps out of one side of the nest island (when there is room there; else anywhere on it, as raiders always did)
+    const at = sp.side !== undefined ? edgeSpot(sim, plot, sp.side) : null;
+    const m = mobs.spawnMob(sim, kind, undefined, plot.i, { lv, pack: false, ...(at ?? {}) });
     if (!m) return null;
+    if (sp.first && who && sp.side !== undefined) sim.toast(who.id, `A wave comes from the ${SIDES[sp.side]}`, 'k_skull', PAL.berry);
     m.rd = [sp.rx, sp.ry];
     sim.touch(m);
     return m;
+}
+
+/** A spot a little inside one side of a nest island (0 north, 1 east, 2 south, 3 west), a little spread along it; null when it is blocked. */
+function edgeSpot (sim: Sim, plot: { gx: number; gy: number }, side: number): { x: number; y: number } | null {
+    const c = sim.world.plotCenter(plot as never), half = (PLOT * TILE) / 2 - 2.5 * TILE;
+    for (let tries = 0; tries < 6; tries++) {
+        const along = (sim.rng.next() - 0.5) * 6 * TILE;
+        const dx = side === 1 ? half : side === 3 ? -half : along, dy = side === 0 ? -half : side === 2 ? half : along;
+        const x = c.x + dx, y = c.y + dy;
+        if (!sim.world.boxBlocked(x, y, 3, 2)) return { x, y };
+    }
+    return null;
 }
 
 /** A raider with nobody to chase marches on the base (stepping round whatever is in its way for a moment when it has to). */

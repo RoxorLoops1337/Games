@@ -143,7 +143,7 @@ export const BUILDINGS: Record<BuildingKind, BuildingDef> = {
     roof_thatch: { name: 'Thatch Roof',  tex: 'roof_thatch', size: [1, 1], cost: { fiber: 3, plank: 1 }, cat: 'home', roof: true, desc: 'Goes over a floor and furniture. Fades away when you stand underneath. Drag to cover a room.' },
     roof_tile:   { name: 'Tile Roof',    tex: 'roof_tile',  size: [1, 1], cost: { brick: 1, plank: 1 }, cat: 'home', roof: true, desc: 'Terracotta tiles. Goes over a floor; fades when you are underneath.' },
     roof_slate:  { name: 'Slate Roof',   tex: 'roof_slate', size: [1, 1], cost: { stone: 2, plank: 1 }, cat: 'home', roof: true, desc: 'Grey slate. Goes over a floor; fades when you are underneath.' },
-    sleepbed:    { name: 'Bed',          tex: 'sleepbed',   size: [1, 2], cost: { plank: 6, cloth: 2 }, cat: 'home', desc: 'Press E on it and this is where you wake up after a fall, instead of at home. One wake-up spot each: a new bed moves it. Good for an outpost far from home.' },
+    sleepbed:    { name: 'Bed',          tex: 'sleepbed',   size: [1, 2], cost: { plank: 4, wood: 2 }, cat: 'craft', desc: 'Press E on it to make it your home: after a fall you wake up here instead. One spot each, a new bed moves it. Build one by every outpost.' },
 
     // ── base defense (the Defense tab): raids come from the Blight nests at night (sim/raid.ts, sim/defense.ts) ──
     wall_fort:   { name: 'Fortified Wall', tex: 'wall_fort', size: [1, 1], cost: { ironbar: 2, stone: 4 }, cat: 'defense', req: 'towers', wall: true, hp: TUNING.blight.hp.fortified, desc: 'Stone bound in iron: the toughest wall there is. Joins up with other walls and doorways. Raiders take a long time to break it.' },

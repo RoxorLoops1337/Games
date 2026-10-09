@@ -194,7 +194,7 @@ test('a raid spawns at the nest only when one is in range, and marches on the ba
     const party = sim.nightSpawns.filter((s) => s.raid === plot.i);
     assert.equal(party.length, plan.n);
     assert.equal(sim.nightSpawns.length - party.length, nightCount(6) - plan.taken, 'the rest comes as before');
-    assert.ok(party.every((s) => s.at <= 1 + B.raidWindow), 'they set out early');
+    assert.ok(party.every((s) => s.at <= 2 + B.waveMax * B.waveGap), 'they set out early, wave by wave');
     let t = 0;
     while (!mobsOf(sim).some((m) => m.rd) && t < 2 + B.raidWindow) { sim.step(STEP); t += STEP; }
     const first = mobsOf(sim).find((m) => m.rd)!;
@@ -326,7 +326,7 @@ test('nights without a nest in range spawn exactly as a world without the Blight
 test('a bed moves where you wake up after a fall', () => {
     const sim = Sim.create('BL-BED', 'b');
     const p = sim.join('a', 'A')!;
-    sim.give(p, 'plank', 50); sim.give(p, 'cloth', 10);
+    sim.give(p, 'plank', 50); sim.give(p, 'wood', 10);
     const c = home(sim, p);
     p.x = c.x; p.y = c.y + 40;
     const b = free(sim, c.x + 50, c.y - 30);
@@ -349,4 +349,43 @@ test('a bed moves where you wake up after a fall', () => {
     p.x = (second.tx + 0.5) * TILE; p.y = (second.ty + 3) * TILE;
     sim.command('a', { t: 'use', id: second.id });
     assert.equal(p.bed, second.id, 'E: this is where you wake up now');
+});
+
+test('waves: a level 1 nest sends one small raider, level 2 two, then bigger and more; every wave comes from the next side round', () => {
+    assert.deepEqual([1, 2, 3, 4, 6, 8].map(raid.waveSize), [1, 2, 2, 3, 4, 5]);
+    assert.deepEqual([1, 3, 4, 7, 10, 40].map(raid.waveCount), [1, 1, 2, 3, 4, 4]);
+    assert.deepEqual([0, 1, 2, 3, 4].map((i) => raid.SIDES[raid.sideOf(1, 0, i)]), ['east', 'south', 'west', 'north', 'east']);
+    assert.notEqual(raid.sideOf(1, 5, 0), raid.sideOf(2, 5, 0), 'tomorrow starts on another side');
+});
+
+test('waves: a night plan has a wave per nest and per three levels, spaced out, capped, each stepping out on its own side', () => {
+    const sim = Sim.create('BL-WAVE', 'b');
+    const p = sim.join('a', 'A')!;
+    p.level = 6; p.invuln = 1e9;
+    clear(sim);
+    const plot = near(sim, p, 4, 0);
+    assert.ok(blight.raise(sim, plot, 'swarm'));
+    plot.nl = 7;                                  // three waves of three
+    const plan = raid.raidFor(sim, p, nightCount(6))!;
+    assert.equal(plan.waves.length, raid.waveCount(7));
+    assert.ok(plan.waves.every((w, i) => w.n === raid.waveSize(7) && (i === 0 || w.at - plan.waves[i - 1].at === B.waveGap)));
+    assert.deepEqual(plan.waves.map((w) => w.side), [0, 1, 2].map((i) => raid.sideOf(sim.s.day, plot.i, i)), 'north, east, south, west, round');
+    assert.equal(plan.n, plan.waves.reduce((a, w) => a + w.n, 0));
+    // a cluster is capped
+    for (const [dx, dy] of [[4, 2], [4, -2], [5, 0]]) { const q = near(sim, p, dx, dy); if (q && !q.owned && !q.blight) { blight.raise(sim, q, 'swarm'); q.nl = 20; } }
+    plot.nl = 20;
+    const big = raid.raidFor(sim, p, nightCount(6))!;
+    assert.ok(big.n <= B.waveTotal, `capped at ${B.waveTotal} (${big.n})`);
+    // the night: a wave steps out of its side of the island, with a word about it
+    clock.startNight(sim);
+    const first = sim.nightSpawns.find((s) => s.raid !== undefined && s.first)!;
+    assert.ok(first && first.side !== undefined);
+    const c = sim.world.plotCenter(sim.s.plots[first.raid!]);
+    sim.nightSpawns = sim.nightSpawns.filter((s) => s === first || s.raid === undefined);
+    first.at = 0;
+    const m = raid.spawnRaider(sim, first)!;
+    assert.ok(m, 'it stepped out');
+    const side = first.side!;
+    if (side === 0) assert.ok(m.y < c.y - 20, 'north of the nest'); else if (side === 2) assert.ok(m.y > c.y + 20, 'south'); else if (side === 1) assert.ok(m.x > c.x + 20, 'east'); else assert.ok(m.x < c.x - 20, 'west');
+    assert.ok(sim.events.some((e) => e.e === 'toast' && /A wave comes from the/.test(e.text)), 'and says where from');
 });

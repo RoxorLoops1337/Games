@@ -7,7 +7,8 @@ import { BRANCHES, BRANCH_ORDER, SKILL_LIST, SKILLS, SkillNode, skillPos, SKILL_
 import { modLine, StatKey } from '../../../shared/data/stats';
 import { PAL } from '../../../shared/palette';
 import { canLearn, rankOf } from '../../../shared/sim/stats';
-import { button, fit, hex, icon, label, panel, rect, STYLES, tipOn, Win } from '../kit';
+import { button, fit, hex, icon, label, panel, rect, SearchBox, STYLES, tipOn, Win } from '../kit';
+import { searchSkills } from '../../../shared/data/skillsearch';
 import { PAD, ROW_H, TAB_Y } from '../menukit';
 import { inset, notch } from '../px';
 import { isTouchUi, physCode } from '../../input/layout';
@@ -55,6 +56,9 @@ export class SkillScreen implements Screen {
     private selected: string | null = null;
     private key = '';
     private t = 0;
+    /** The search box, and the skills it matches (null: nothing typed, everything shows). */
+    private search!: SearchBox;
+    private found: Set<string> | null = null;
     private spark: Phaser.GameObjects.Particles.ParticleEmitter;
     private handlers: { ev: string; fn: (...a: never[]) => void }[] = [];
 
@@ -69,15 +73,17 @@ export class SkillScreen implements Screen {
         w.put(fg, 0, 0);
         inset(fg, 20 - 4, 66 - 4, VW + 8, VH + 8, PAL.ink, PAL.slate);
         // the row of branches (jump to one), then your points at the right; a finger also gets the zoom buttons
-        const cw = touch ? 104 : 118, cg = touch ? 4 : 6;
+        const cw = 88, cg = 3;
         BRANCH_ORDER.forEach((b, i) => {
             const def = BRANCHES[b];
             const chip = button(s, 0, 0, cw, ROW_H, def.name.split(' ')[0], () => this.focusBranch(b), { style: { fill: def.dark, rim: def.color, hi: def.color, lo: PAL.ink }, size: 12, ink: false, icon: def.icon });
             w.put(chip.root, PAD + cw / 2 + i * (cw + cg), TAB_Y);
         });
+        this.search = new SearchBox(w, PAD + 6 * (cw + cg) + 6, TAB_Y, touch ? 124 : 170, (q) => this.onSearch(q), 'Find a skill…  ( / )');
         this.ptsT = w.text('', touch ? 778 : w.w - PAD, TAB_Y, 16, PAL.gold, { origin: [1, 0.5], font: 'head' });
         // tree camera + world
         this.cam = s.cameras.add(this.vx * SS, this.vy * SS, VW * SS, VH * SS).setBackgroundColor(0x161520).setAlpha(0);
+        this.search.hideFrom(this.cam);
         s.tweens.add({ targets: this.cam, alpha: 1, duration: 160 });
         this.bgG = add(s.add.graphics().setPosition(OX, OY).setDepth(0).setVisible(false));       // (baked into the tree texture)
         this.linkG = add(s.add.graphics().setPosition(OX, OY).setDepth(1).setVisible(false));
@@ -127,6 +133,24 @@ export class SkillScreen implements Screen {
         this.syncAll();
         const first = SKILL_LIST.find((n) => canLearn(ctx.me(), n.id).ok);
         if (first) { const p = skillPos(first); this.center = { x: p.x * 0.7, y: p.y * 0.7 }; }
+    }
+
+    /** Typing in the search box: matching skills stay lit, the rest dim, and the tree glides to the nearest match. */
+    private onSearch (q: string) {
+        this.found = q ? new Set(searchSkills(q).map((n) => n.id)) : null;
+        for (const v of this.views.values()) v.c.setAlpha(!this.found || this.found.has(v.n.id) ? 1 : 0.18);
+        this.infoKey = '';
+        if (!this.found?.size) return;
+        let best: NodeView | null = null, bd = Infinity;
+        for (const id of this.found) {
+            const v = this.views.get(id)!;
+            const d = Math.hypot(v.x - OX - this.center.x, v.y - OY - this.center.y);
+            if (d < bd) { bd = d; best = v; }
+        }
+        if (best) {
+            this.pan?.stop();
+            this.pan = this.ctx.scene.tweens.add({ targets: this.center, x: best.x - OX, y: best.y - OY, duration: 380, ease: 'Cubic.easeInOut' });
+        }
     }
 
     private inView (p: Phaser.Input.Pointer) { const q = logical(p); return q.x >= this.vx && q.x <= this.vx + VW && q.y >= this.vy && q.y <= this.vy + VH; }
@@ -323,6 +347,7 @@ export class SkillScreen implements Screen {
 
     onKey (k: string, ev?: KeyboardEvent) {
         const c = physCode(ev);                   // pan with the WASD key positions, whatever the layout
+        if (k === '/') { this.search.focus(); return true; }
         if (k === 'Home') { this.focusBranch('gather'); this.center = { x: 0, y: 0 }; return true; }
         if (k === '+' || k === '=') { this.wheel(-1, this.vx + VW / 2, this.vy + VH / 2); return true; }
         if (k === '-') { this.wheel(1, this.vx + VW / 2, this.vy + VH / 2); return true; }
@@ -350,6 +375,12 @@ export class SkillScreen implements Screen {
             const size = sel.n.key ? 52 : 40;
             g.lineStyle(3, 0xffffff, 0.95).strokeRect(sel.x - OX - size / 2 - 4, sel.y - OY - size / 2 - 4, size + 8, size + 8);
         }
+        if (this.found) {
+            for (const id of this.found) {
+                const v = this.views.get(id)!, size = v.n.key ? 52 : 40;
+                g.lineStyle(3, 0xffffff, 0.5 + pulse * 0.5).strokeRect(v.x - OX - size / 2 - 5, v.y - OY - size / 2 - 5, size + 10, size + 10);
+            }
+        }
         for (const v of this.views.values()) {
             if (v.state !== 'afford') continue;
             const size = v.n.key ? 52 : 40;
@@ -372,9 +403,9 @@ export class SkillScreen implements Screen {
         if (!id) {
             this.infoIcon.setVisible(false);
             const touch = isTouchUi();
-            this.infoT[0].setText(touch ? 'Tap a skill to read it, tap Learn to take it' : 'Hover a skill to read it — click to learn').setColor(hex(PAL.pebble));
+            this.infoT[0].setText(this.found ? 'Searching the tree' : touch ? 'Tap a skill to read it, tap Learn to take it' : 'Hover a skill to read it — click to learn').setColor(hex(PAL.pebble));
             w.at(this.infoT[0], sx + 24, sy + 14);
-            this.infoT[1].setText(touch ? 'Drag to pan · + and − zoom · pick a branch above to jump to it' : 'Drag to pan · scroll to zoom · pick a branch above to jump to it').setColor(hex(PAL.pebble));
+            this.infoT[1].setText(this.found ? (this.found.size ? `${this.found.size} skill${this.found.size === 1 ? '' : 's'} match: the tree moved to the nearest one` : 'Nothing matches that') : touch ? 'Drag to pan · + and − zoom · pick a branch above to jump to it' : 'Drag to pan · scroll to zoom · pick a branch above to jump to it').setColor(hex(PAL.pebble));
             w.at(this.infoT[1], sx + 24, sy + 40);
             this.infoT[2].setText(''); this.infoT[3].setText('');
             this.totalT.setText(this.invested).setColor(hex(PAL.pebble));
@@ -408,6 +439,7 @@ export class SkillScreen implements Screen {
         s.cameras.remove(this.cam);
         s.tweens.killTweensOf([...this.views.values()].map((v) => v.c));
         for (const o of this.objs) o.destroy();
+        this.search.destroy();
         this.win.destroy();
     }
 }
