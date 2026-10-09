@@ -2,7 +2,7 @@
 // (DISTRICTS[].on()) and reflects its own state: market level, arena ready, studio recording. Local frame = the district position, +z faces the camera.
 import * as THREE from 'three';
 import { Builder, C, INK, W, TAU, PI, seg, GB, GOLD, lit, latheGeo, damp, clamp, hash01 } from './kit.js';
-import { Inst, QuadSet, outline } from './hub_fx.js';
+import { Inst, QuadSet, outline, rbx, bll } from './hub_fx.js';
 
 const GOLDM = { m: GOLD, c: 0xffd84d };
 const crew = () => { try { const f = FEATS.find((x) => x.id === 'crew'); return f && f.api ? f.api : null; } catch (e) { return null; } };
@@ -12,24 +12,24 @@ const sg = (tilt, x, y, z, off) => [x, y - Math.sin(tilt) * off, z + Math.cos(ti
 
 // ------------------------------------------------------------------ Market
 export function buildMarket(V, fx) {
-  const P = posOf('market', { x: -500, y: -150 }), g = new THREE.Group(); g.name = 'market'; g.position.set(P.x * W, 0, P.y * W);
+  const P = posOf('market', { x: -500, y: -150 }), g = new THREE.Group(); g.name = 'market'; g.position.set(P.x * W - 0.55, 0, P.y * W - 0.2);
   let built = null, lvl = -1; const fruit = [C.pink, C.orange, C.gold, C.mint, C.violet, C.hotPink];
   function build(L) {
     if (built) { built.removeFromParent(); built.traverse((o) => { if (o.geometry && !o.userData.keep) o.geometry.dispose(); }); }
     const b = new Builder({ ao: 0.18 }), qs = new QuadSet(), grp = new THREE.Group();
-    b.rbox(0xe8dcc4, 0, 0.04, 0.2, 3.3, 0.08, 2.4, 0.4); // plank apron
-    b.rbox(0xd9a468, 0, 0.45, 0.62, 2.4, 0.9, 0.9, 0.2); b.rbox(C.cream, 0, 0.93, 0.62, 2.55, 0.09, 1.05, 0.45); for (const y of [0.24, 0.56]) b.rbox(0xa8703c, 0, y, 1.085, 2.3, 0.035, 0.03, 0.4);
-    b.rbox(0xc88a50, 0, 1.05, -0.62, 2.5, 2.1, 0.12, 0.1);
-    for (const sx of [-1, 1]) for (const z of [-0.65, 0.2]) { b.cyl(0xb07840, sx * 1.28, 0, z, 0.08, 2.2, 10); b.ball(GOLDM, sx * 1.28, 2.22, z, 0.1, 0.8); }
+    rbx(b, 0xe8dcc4, 0, 0.04, 0.2, 3.3, 0.08, 2.4, 0.4); // plank apron
+    rbx(b, 0xd9a468, 0, 0.45, 0.62, 2.4, 0.9, 0.9, 0.2); rbx(b, C.cream, 0, 0.93, 0.62, 2.55, 0.09, 1.05, 0.45); for (const y of [0.24, 0.56]) rbx(b, 0xa8703c, 0, y, 1.085, 2.3, 0.035, 0.03, 0.4);
+    rbx(b, 0xc88a50, 0, 1.05, -0.62, 2.5, 2.1, 0.12, 0.1);
+    for (const sx of [-1, 1]) for (const z of [-0.65, 0.2]) { b.cyl(0xb07840, sx * 1.28, 0, z, 0.08, 2.2, 10); bll(b, GOLDM, sx * 1.28, 2.22, z, 0.1, 0.8); }
     const n = 8, sw = 3.1 / n, slope = 0.26, rl = 1.15, zc = -0.2, y0 = 2.25;
     for (let i = 0; i < n; i++) { const x = -1.55 + sw * (i + 0.5), col = i % 2 ? C.cream : 0xffa63a, fy = y0 - rl * 0.5 * Math.sin(slope), fz = zc + rl * 0.5 * Math.cos(slope);
       b.part(GB.box(), col, x, y0, zc, sw * 0.98, 0.09, rl, slope, 0, 0); b.part(GB.box(), col, x, fy - 0.08, fz - 0.01, sw * 0.98, 0.16, 0.06, 0.05, 0, 0); b.part(GB.ico(1), col, x, fy - 0.17, fz + 0.01, sw * 0.49, sw * 0.34, 0.035, 0, 0, 0); }
     // crates of produce around the stall; every market level adds more
-    const crate = (x, z, c1, ry) => { b.local(x, 0, z, ry, (q) => { q.rbox(0xc88a50, 0, 0.2, 0, 0.62, 0.4, 0.5, 0.2); q.rbox(0xa8703c, 0, 0.3, 0.255, 0.58, 0.05, 0.02, 0.4); for (let k = 0; k < 6; k++) q.sph(fruit[(k + c1) % 6], -0.2 + (k % 3) * 0.2, 0.47, -0.1 + Math.floor(k / 3) * 0.2, 0.1, 0.95); }); };
+    const crate = (x, z, c1, ry) => { b.local(x, 0, z, ry, (q) => { rbx(q, 0xc88a50, 0, 0.2, 0, 0.62, 0.4, 0.5, 0.2); rbx(q, 0xa8703c, 0, 0.3, 0.255, 0.58, 0.05, 0.02, 0.4); for (let k = 0; k < 6; k++) bll(q, fruit[(k + c1) % 6], -0.2 + (k % 3) * 0.2, 0.47, -0.1 + Math.floor(k / 3) * 0.2, 0.1, 0.95); }); };
     crate(-1.0, 1.7, 0, 0.1); if (L >= 1) crate(0.9, 1.75, 2, -0.15); if (L >= 2) crate(-1.9, 0.4, 4, 0.5); if (L >= 3) crate(1.95, 0.3, 1, -0.4); if (L >= 4) { crate(-1.85, -0.9, 3, 0.8); crate(1.9, -0.8, 5, -0.7); }
-    if (L >= 5) for (const sx of [-1, 1]) b.rbox(GOLDM, sx * 1.55, 2.28, 0.08, 0.06, 0.06, 1.1, 0.5);
+    if (L >= 5) for (const sx of [-1, 1]) rbx(b, GOLDM, sx * 1.55, 2.28, 0.08, 0.06, 0.06, 1.1, 0.5);
     // sign
-    const tilt = -0.62, sy = 2.95, sz = -0.6; b.rbox(0x5a3a1e, 0, sy, sz, 2.1, 0.74, 0.1, 0.4, 0, tilt); for (const sx of [-0.7, 0.7]) b.rbox(0xa8703c, sx, 2.52, -0.52, 0.08, 0.5, 0.08, 0.4);
+    const tilt = -0.62, sy = 2.95, sz = -0.6; rbx(b, 0x5a3a1e, 0, sy, sz, 2.1, 0.74, 0.1, 0.4, 0, tilt); for (const sx of [-0.7, 0.7]) rbx(b, 0xa8703c, sx, 2.52, -0.52, 0.08, 0.5, 0.08, 0.4);
     const sp = sg(tilt, 0, sy, sz, 0.056); fx.atlas.quad(qs, 'MARKET', 2.0, sp[0], sp[1], sp[2], 0, tilt, 0.66);
     // hot item plate on the counter
     b.cyl(0x4a2a1e, 0.85, 0.98, 0.62, 0.3, 0.04, 14); b.cyl(0xff7a2a, 0.85, 1.02, 0.62, 0.26, 0.03, 14);
@@ -59,21 +59,21 @@ export function buildArena(V, fx) {
   for (let i = 0; i < N; i++) {
     const a = i / N * TAU, front = Math.abs(Math.atan2(Math.sin(a - PI / 2), Math.cos(a - PI / 2))); if (front < 0.3) continue;
     b.local(Math.cos(a) * RO, 0, Math.sin(a) * RO, -a + PI / 2, (q) => {
-      q.rbox(i % 2 ? 0xff9a8a : 0xffaa9a, 0, 0.58, 0, 0.62, 1.16, 0.4, 0.14); q.rbox(0xd8384f, 0, 0.07, 0.03, 0.66, 0.16, 0.44, 0.3); q.rbox(C.cream, 0, 1.14, 0.0, 0.68, 0.1, 0.46, 0.4);
-      if (i % 2) q.rbox(0xffd0c8, 0, 1.3, 0, 0.3, 0.22, 0.32, 0.3);
-      if (a > 0.2 && a < PI - 0.2) { q.rbox(0x7a1c3a, 0, 0.5, 0.2, 0.3, 0.5, 0.05, 0.45); q.cyl(0x7a1c3a, 0, 0.72, 0.2, 0.15, 0.05, 10, 1); }
+      rbx(q, i % 2 ? 0xff9a8a : 0xffaa9a, 0, 0.58, 0, 0.62, 1.16, 0.4, 0.14); rbx(q, 0xd8384f, 0, 0.07, 0.03, 0.66, 0.16, 0.44, 0.3); rbx(q, C.cream, 0, 1.14, 0.0, 0.68, 0.1, 0.46, 0.4);
+      if (i % 2) rbx(q, 0xffd0c8, 0, 1.3, 0, 0.3, 0.22, 0.32, 0.3);
+      if (a > 0.2 && a < PI - 0.2) { rbx(q, 0x7a1c3a, 0, 0.5, 0.2, 0.3, 0.5, 0.05, 0.45); q.cyl(0x7a1c3a, 0, 0.72, 0.2, 0.15, 0.05, 10, 1); }
     });
   }
   // gate: two pillars and the sign across the top
-  for (const sx of [-1, 1]) { b.rbox(0xff9a8a, sx * 0.56, 0.7, RO, 0.3, 1.4, 0.4, 0.2); b.rbox(C.cream, sx * 0.56, 1.42, RO, 0.38, 0.1, 0.48, 0.4); b.ball(GOLDM, sx * 0.56, 1.58, RO, 0.12, 0.9); }
-  const tilt = -0.55, sy = 1.98, sz = RO - 0.02; b.rbox(0x5a1a2a, 0, sy, sz, 1.9, 0.68, 0.1, 0.4, 0, tilt); for (const sx of [-0.6, 0.6]) b.rbox(0xb02a40, sx, 1.62, RO + 0.02, 0.08, 0.45, 0.08, 0.4);
+  for (const sx of [-1, 1]) { rbx(b, 0xff9a8a, sx * 0.56, 0.7, RO, 0.3, 1.4, 0.4, 0.2); rbx(b, C.cream, sx * 0.56, 1.42, RO, 0.38, 0.1, 0.48, 0.4); bll(b, GOLDM, sx * 0.56, 1.58, RO, 0.12, 0.9); }
+  const tilt = -0.55, sy = 1.98, sz = RO - 0.02; rbx(b, 0x5a1a2a, 0, sy, sz, 1.9, 0.68, 0.1, 0.4, 0, tilt); for (const sx of [-0.6, 0.6]) rbx(b, 0xb02a40, sx, 1.62, RO + 0.02, 0.08, 0.45, 0.08, 0.4);
   { const sp = sg(tilt, 0, sy, sz, 0.056); fx.atlas.quad(qs, 'ARENA', 1.8, sp[0], sp[1], sp[2], 0, tilt, 0.6); }
-  for (const sx of [-1, 1]) { b.cyl(0xa8703c, sx * 2.2, 0, 0.7, 0.06, 2.4, 8); b.ball(GOLDM, sx * 2.2, 2.45, 0.7, 0.09, 0.9); }
+  for (const sx of [-1, 1]) { b.cyl(0xa8703c, sx * 2.2, 0, 0.7, 0.06, 2.4, 8); bll(b, GOLDM, sx * 2.2, 2.45, 0.7, 0.09, 0.9); }
   g.add(outline(b.build({ cast: true }), 0.028)); g.add(fx.atlas.mesh(qs));
   // waving pennants (instanced, 2 draws total with the "!" marker)
   const flagG = new THREE.PlaneGeometry(1, 1, 6, 1); flagG.translate(0.5, 0, 0); const fm = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide, fog: true }); fm.userData.noLook = true;
   const flags = new Inst(flagG, fm, 2, { colors: true }); g.add(flags.mesh);
-  const bang = new THREE.Group(); { const bb = new Builder({ ao: 0 }); bb.rbox(GOLDM, 0, 0.3, 0, 0.2, 0.5, 0.2, 0.5); bb.ball(GOLDM, 0, -0.1, 0, 0.12, 1); bang.add(outline(bb.build({ cast: false }), 0.03)); } bang.position.y = 3.0; g.add(bang);
+  const bang = new THREE.Group(); { const bb = new Builder({ ao: 0 }); rbx(bb, GOLDM, 0, 0.3, 0, 0.2, 0.5, 0.2, 0.5); bll(bb, GOLDM, 0, -0.1, 0, 0.12, 1); bang.add(outline(bb.build({ cast: false }), 0.03)); } bang.position.y = 3.0; g.add(bang);
   return {
     group: g,
     update(dt, t) {
@@ -90,16 +90,16 @@ export function buildArena(V, fx) {
 export function buildStudio(V, fx) {
   const P = posOf('studio', { x: -250, y: -410 }), g = new THREE.Group(); g.name = 'studio'; g.position.set(P.x * W, 0, P.y * W);
   const b = new Builder({ ao: 0.2 }), qs = new QuadSet(), BW = 2.1, BHT = 1.5, BD = 1.4;
-  b.rbox(0xe8dcc4, 0, 0.04, 0.1, 2.8, 0.08, 2.2, 0.4);
-  b.rbox(0x9a7af0, 0, BHT / 2 + 0.05, 0, BW, BHT, BD, 0.1); b.rbox(0xc6a8ff, 0, BHT + 0.1, 0, BW + 0.14, 0.18, BD + 0.14, 0.4); b.rbox(0x7a5ad8, 0, 0.14, 0, BW + 0.1, 0.22, BD + 0.1, 0.3);
-  b.rbox(0x3a2a86, 0, 0.6, BD / 2 + 0.01, 0.6, 1.0, 0.06, 0.3); b.cyl(0x3a2a86, 0, 1.0, BD / 2 + 0.01, 0.3, 0.06, 14, 1); b.part(GB.cyl(14), 0x3a2a86, 0, 1.1, BD / 2 + 0.02, 0.3, 0.06, 0.3, PI / 2, 0, 0);
-  b.rbox(C.cream, -0.38, 0.6, BD / 2 + 0.04, 0.09, 1.0, 0.06, 0.4); b.rbox(C.cream, 0.38, 0.6, BD / 2 + 0.04, 0.09, 1.0, 0.06, 0.4); b.rbox(C.cream, 0, 1.12, BD / 2 + 0.04, 0.85, 0.09, 0.06, 0.4);
-  for (const sx of [-1, 1]) { b.rbox(C.cream, sx * 0.72, 0.95, BD / 2 + 0.03, 0.42, 0.34, 0.05, 0.3); b.rbox(0x9ad8ff, sx * 0.72, 0.95, BD / 2 + 0.06, 0.34, 0.26, 0.05, 0.3); b.rbox(0xdff4ff, sx * 0.72 - 0.06, 1.0, BD / 2 + 0.09, 0.12, 0.06, 0.03, 0.5); }
+  rbx(b, 0xe8dcc4, 0, 0.04, 0.1, 2.8, 0.08, 2.2, 0.4);
+  rbx(b, 0x9a7af0, 0, BHT / 2 + 0.05, 0, BW, BHT, BD, 0.1); rbx(b, 0xc6a8ff, 0, BHT + 0.1, 0, BW + 0.14, 0.18, BD + 0.14, 0.4); rbx(b, 0x7a5ad8, 0, 0.14, 0, BW + 0.1, 0.22, BD + 0.1, 0.3);
+  rbx(b, 0x3a2a86, 0, 0.6, BD / 2 + 0.01, 0.6, 1.0, 0.06, 0.3); b.cyl(0x3a2a86, 0, 1.0, BD / 2 + 0.01, 0.3, 0.06, 14, 1); b.part(GB.cyl(14), 0x3a2a86, 0, 1.1, BD / 2 + 0.02, 0.3, 0.06, 0.3, PI / 2, 0, 0);
+  rbx(b, C.cream, -0.38, 0.6, BD / 2 + 0.04, 0.09, 1.0, 0.06, 0.4); rbx(b, C.cream, 0.38, 0.6, BD / 2 + 0.04, 0.09, 1.0, 0.06, 0.4); rbx(b, C.cream, 0, 1.12, BD / 2 + 0.04, 0.85, 0.09, 0.06, 0.4);
+  for (const sx of [-1, 1]) { rbx(b, C.cream, sx * 0.72, 0.95, BD / 2 + 0.03, 0.42, 0.34, 0.05, 0.3); rbx(b, 0x9ad8ff, sx * 0.72, 0.95, BD / 2 + 0.06, 0.34, 0.26, 0.05, 0.3); rbx(b, 0xdff4ff, sx * 0.72 - 0.06, 1.0, BD / 2 + 0.09, 0.12, 0.06, 0.03, 0.5); }
   // antenna mast, dish, mic stand
   b.cyl(0xc9cfe6, 0.78, BHT + 0.2, -0.1, 0.035, 1.2, 8); b.part(GB.sph(12, 8), 0xe6dcff, -0.7, BHT + 0.42, -0.1, 0.34, 0.14, 0.34, -0.7, 0, 0); b.cyl(0xc9cfe6, -0.7, BHT + 0.2, -0.1, 0.03, 0.2, 6);
-  b.rbox(0x2a1a5a, 0.3, BHT + 0.3, 0.35, 0.82, 0.34, 0.1, 0.4, 0, -0.5);
+  rbx(b, 0x2a1a5a, 0.3, BHT + 0.3, 0.35, 0.82, 0.34, 0.1, 0.4, 0, -0.5);
   { const sp = sg(-0.5, 0.3, BHT + 0.3, 0.35, 0.06); fx.atlas.quad(qs, 'ON AIR', 0.74, sp[0], sp[1], sp[2], 0, -0.5, 0.25); }
-  const tilt = -0.6; b.rbox(0x4a2a90, -0.4, BHT + 0.75, -0.3, 1.5, 0.56, 0.1, 0.4, 0, tilt); { const sp = sg(tilt, -0.4, BHT + 0.75, -0.3, 0.056); fx.atlas.quad(qs, 'STUDIO', 1.4, sp[0], sp[1], sp[2], 0, tilt, 0.46); }
+  const tilt = -0.6; rbx(b, 0x4a2a90, -0.4, BHT + 0.75, -0.3, 1.5, 0.56, 0.1, 0.4, 0, tilt); { const sp = sg(tilt, -0.4, BHT + 0.75, -0.3, 0.056); fx.atlas.quad(qs, 'STUDIO', 1.4, sp[0], sp[1], sp[2], 0, tilt, 0.46); }
   g.add(outline(b.build({ cast: true }), 0.028)); g.add(fx.atlas.mesh(qs));
   const beacon = new THREE.Mesh(new THREE.IcosahedronGeometry(0.1, 1), new THREE.MeshBasicMaterial({ color: 0xff3d6e })); beacon.position.set(0.78, BHT + 0.86, -0.1); g.add(beacon);
   return {

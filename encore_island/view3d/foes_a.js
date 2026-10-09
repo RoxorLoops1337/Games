@@ -23,12 +23,12 @@ const rb = (w, h, d, r, s = 2) => CK.geo(`fa_rb${w},${h},${d},${r},${s}`, () => 
 const grp = (par, x = 0, y = 0, z = 0) => { const g = new THREE.Group(); g.position.set(x, y, z); if (par) par.add(g); return g; };
 const _hdr = new Map(), hdr = (r, g, b) => { const k = r + ',' + g + ',' + b; let c = _hdr.get(k); if (!c) _hdr.set(k, c = new THREE.Color(r, g, b)); return c; }; // cached HDR colours (glints)
 const F = (par, g, col, x = 0, y = 0, z = 0, sx = 1, sy = sx, sz = sx, o = {}) => CK.flat(g, CK.basic(col), par, x, y, z, sx, sy, sz, o); // unlit bits (faces, glows)
-const GLOSS = { metalness: 0.22, roughness: 0.32, flatShading: false }, MATT = { flatShading: false };
+const GLOSS = { metalness: 0.14, roughness: 0.34, flatShading: false }, MATT = { flatShading: false };
 const _gc = new THREE.Color();
-const goldify = (c) => { _gc.set(c); const l = _gc.r * 0.3 + _gc.g * 0.59 + _gc.b * 0.11, k = 0.42 + l * 0.95; return _gc.setRGB(Math.min(1, k), Math.min(1, k * 0.78), Math.min(1, k * 0.24)).getHex(); };
+const goldify = (c) => { _gc.set(c); const l = _gc.r * 0.3 + _gc.g * 0.59 + _gc.b * 0.11, k = 0.5 + l * 0.9; return _gc.setRGB(Math.min(1, k), Math.min(1, k * 0.6), Math.min(1, k * 0.07)).getHex(); };
 function mkB(ctx, gold) { // lit part with an inked hull; gold swaps every colour for a metallic gold ramp, o.sh = glossy
   return (par, g, c, x = 0, y = 0, z = 0, sx = 1, sy = sx, sz = sx, o = {}) =>
-    CK.part(ctx, par, g, gold ? goldify(c) : c, x, y, z, sx, sy, sz, Object.assign({ ol: 0.026 }, o, { mo: Object.assign({}, gold || o.sh ? GLOSS : MATT, o.mo) }));
+    CK.part(ctx, par, g, gold && !o.nk ? goldify(c) : c, x, y, z, sx, sy, sz, Object.assign({ ol: 0.026 }, o, { mo: Object.assign({}, gold || o.sh ? GLOSS : MATT, o.mo) }));
 }
 // hiding: node.visible plus a ~0 scale, because a baked rig only collapses `visible = false` bones while its bone array stays in sync
 const HID = 1e-4, vis = (n, on, s = 1) => { n.visible = on; n.scale.setScalar(on ? s : HID); };
@@ -200,7 +200,7 @@ function oni_cub(X) {
     root.position.set(jit * 0.5, hop + sin(t * 3.1) * 0.01, A * 0.5);
     legs[0].rotation.set(s * 0.9 * amp, 0, 0.12 - sin(t * 8) * 0.04 * (1 - amp)); legs[1].rotation.set(-s * 0.9 * amp, 0, -0.12 + sin(t * 8 + 2) * 0.04 * (1 - amp));
     body.rotation.set(0.12 * amp + A * 0.45, jit2 * 2, jit * 2); head.rotation.set(-0.05 * amp - A * 0.2 + jit, jit2, sin(t * 1.9) * 0.05 + jit2 * 2);
-    ants.forEach((a, i) => a.rotation.set(-0.15 - 0.35 * amp - A * 0.6 + sin(t * 31 + i) * 0.1 * (0.5 + amp), 0, (i ? -1 : 1) * (-0.35 - sin(t * 17 + i * 2) * 0.12 * (0.4 + amp))));
+    ants.forEach((a, i) => a.rotation.set(-0.15 - 0.35 * amp - A * 0.6 + sin(t * 31 + i) * 0.1 * (0.5 + amp), 0, (i ? -1 : 1) * (0.4 + sin(t * 17 + i * 2) * 0.12 * (0.4 + amp))));
     arms[0].rotation.set(-0.9 - A * 0.4 + jit * 3, 0, -0.35); arms[1].rotation.set(-0.9 - A * 0.4 - jit * 3, 0, 0.35);
     sheet.rotation.set(-0.15 + jit * 4, 0, jit * 3);
     eyesSet(E, c.bl, sin(t * 3.7) * 0.8, sin(t * 2.3) * 0.5); mouthSet(M, 0.1 + A * 0.7 + 0.12 * (0.5 + 0.5 * sin(t * 19)));
@@ -212,13 +212,13 @@ function oni_cub(X) {
 // ---------------------------------------------------------------- 3. bamboo_boar = Runaway Melon (tank): grumpy watermelon with a vine, a rosette ribbon and stubby legs
 function bamboo_boar(X) {
   const { root, B } = X, G1 = 0x84d64e, G2 = 0x2c8a38, LEG = 0x3a8f3a, CRM = 0xfff4e6;
-  const mg = CK.geo('fa_melon', () => { // vertex-coloured striped sphere (7 dark stripes), colours survive baking
-    const g = new THREE.SphereGeometry(1, 28, 12), p = g.attributes.position, col = new Float32Array(p.count * 3), a = new THREE.Color(0x92e05a), b = new THREE.Color(0x2f8f3a), m = new THREE.Color();
+  const mg = CK.geo(X.gold ? 'fa_melon_g' : 'fa_melon', () => { // vertex-coloured striped sphere (7 dark stripes), colours survive baking
+    const g = new THREE.SphereGeometry(1, 28, 12), p = g.attributes.position, col = new Float32Array(p.count * 3), a = new THREE.Color(X.gold ? 0xffe688 : 0x92e05a), b = new THREE.Color(X.gold ? 0xd9a41c : 0x2f8f3a), m = new THREE.Color();
     for (let i = 0; i < p.count; i++) { const lon = Math.atan2(p.getX(i), p.getZ(i)), w = 0.5 + 0.5 * Math.cos(lon * 7 + p.getY(i) * 0.5), k = sstep(0.55, 1, w); m.copy(a).lerp(b, k * 0.95); col[i * 3] = m.r; col[i * 3 + 1] = m.g; col[i * 3 + 2] = m.b; }
     g.setAttribute('color', new THREE.BufferAttribute(col, 3)); return g; });
   const legs = [-1, 1].map((sd) => { const g = grp(root, sd * 0.3, 0.3, 0.06); B(g, hang(0.1, 0.09, 0.26, 8), LEG, 0, 0, 0, 1, 1, 1, { ol: 0.02 }); foot(X, g, 0, -0.27, 0.07, CRM, 0.15, 0.08, 0.21); return g; });
   const body = grp(root, 0, 0.82, 0), d = { cy: 0, rx: 0.7, ry: 0.62, rz: 0.66 };
-  B(body, mg, X.gold ? 0xffffff : 0xffffff, 0, 0, 0, d.rx, d.ry, d.rz, { ol: 0.03, sh: true });
+  B(body, mg, 0xffffff, 0, 0, 0, d.rx, d.ry, d.rz, { ol: 0.03, sh: true, nk: true });
   const E = mkEyes(X, body, d, { ex: 0.25, ey: 0.2, r: 0.115, h: 1.0, iris: 0x7aa86a, sclera: 0xf4fff0, lid: G1, droop: 0.38, brow: 0x1f5a28, browTilt: 0.35, lift: 0.12 });
   const M = mkMouth(X, body, d, 0, -0.05, 'line', 0.09, 0x1f4a24);
   F(body, ic(1), 0xeaffd8, 0.36, 0.42, 0.5, 0.16, 0.1, 0.03, { rz: 0.7, ry: 0.5, rx: -0.3 }); // gloss patch
@@ -254,7 +254,7 @@ function crow_tengu(X) {
   B(head, tor(0.08, 4, 12, PI), NAVY, 0, 0, 0, 0.42, 0.42, 0.42, { ol: 0.014 }); // headphones: band, cups, boom mic
   for (const sd of [-1, 1]) { B(head, CK.cyl(0.13, 0.13, 0.1, 10), NAVY, sd * 0.4, 0.0, -0.02, 1, 1, 1, { rz: PI / 2, ol: 0.016 }); B(head, CK.cyl(0.09, 0.09, 0.03, 10), 0x4fc6f0, sd * 0.46, 0.0, -0.02, 1, 1, 1, { rz: PI / 2, ol: false }); }
   B(head, cylg(1, 5), NAVY, -0.36, -0.14, 0.12, 0.016, 0.34, 0.016, { rz: -0.9, rx: -0.5, ol: false }); B(head, ic(0), 0xffffff, -0.22, -0.3, 0.3, 0.04, 0.04, 0.04, { ol: false });
-  const glob = grp(root); F(glob, ic(1), 0x2ec4b6, 0, 0, 0, 0.19, 0.17, 0.26); F(glob, ic(0), 0xc8fff6, -0.06, 0.07, 0.1, 0.06); glob.visible = false;
+  const glob = grp(root); B(glob, ic(1), 0x2ec4b6, 0, 0, 0, 0.19, 0.17, 0.26, { ol: false, nk: true }); F(glob, ic(0), 0xc8fff6, -0.06, 0.08, 0.12, 0.05); glob.visible = false;
   const nt = note(root, 0x4f8cf0, 1.3);
   return (c) => {
     const { t, amp, s, cs, A, st } = c, strut = Math.abs(cs), fl = 0.5 + 0.5 * sin(t * 9), idleFlap = (t * 0.33) % 1 < 0.22 ? sin((t * 0.33 % 1) / 0.22 * PI) : 0;
@@ -379,7 +379,7 @@ function karakasa(X) {
   const E = mkEyes(X, head, d, { ex: 0.2, ey: 0.07, r: 0.135, h: 1.0, iris: 0xe89a2a, ring: YEL, lift: 0.0 }), M = mkMouth(X, head, d, 0, -0.17, 'grin', 0.2);
   for (let i = 0; i < 5; i++) F(M.g, bx, 0xffffff, (i - 2) * 0.075, 0.07, 0.02, 0.05, 0.065, 0.03);
   const arms = [-1, 1].map((sd) => limb(X, body, sd * 0.43, 1.12, 0.02, 0.42, 0.045, NAVY, CRM, 0.085));
-  const glob = grp(root); F(glob, ic(1), 0xb9a8ff, 0, 0, 0, 0.2); F(glob, ic(0), 0xffffff, -0.06, 0.07, 0.1, 0.06); glob.visible = false;
+  const glob = grp(root); B(glob, ic(1), 0xb9a8ff, 0, 0, 0, 0.2, 0.2, 0.2, { ol: false, nk: true }); F(glob, ic(0), 0xffffff, -0.06, 0.08, 0.12, 0.05); glob.visible = false;
   const nt = note(root, 0xb59cff, 1.2);
   return (c) => {
     const { t, amp, A, st } = c, hop = Math.abs(sin(c.ph * 0.5)), u = c.spit, wind = u >= 0 && u < 0.35 ? sstep(0, 0.35, u) : 0, snap = u >= 0.35 ? 1 - sstep(0.35, 0.65, u) : 0;
@@ -422,7 +422,7 @@ function boss_kuzunoha(X) {
   }
   const bub = [0, 1, 2, 3, 4].map((i) => { const g = grp(root); CK.flat(ic(1), bubMat(), g, 0, 0, 0, 1, 1, 1); g.userData.noBake = false; return g; });
   const sp = [0, 1, 2].map((i) => F(grp(root), CK.geo('fa_oct', () => new THREE.OctahedronGeometry(1, 0)), hdr(2.2, 1.8, 0.5), 0, 0, 0, 0.1, 0.1, 0.02));
-  const glob = grp(root); F(glob, ic(1), 0xffb0d8, 0, 0, 0, 0.3); F(glob, ic(0), 0xffffff, -0.1, 0.1, 0.15, 0.09); glob.visible = false;
+  const glob = grp(root); B(glob, ic(2), 0xffb0d8, 0, 0, 0, 0.3, 0.3, 0.3, { ol: 0.02, nk: true }); F(glob, ic(0), 0xffffff, -0.1, 0.12, 0.17, 0.08); glob.visible = false;
   const rest = legs.map((ch) => ch.map((g) => g.rotation.x));
   return (c) => {
     const { t, amp, s, A } = c, u = c.spit, wind = u >= 0 && u < 0.35 ? sstep(0, 0.35, u) : 0, snap = u >= 0.35 ? 1 - sstep(0.35, 0.6, u) : 0, br = sin(t * 1.9), hop = Math.abs(sin(c.ph * 0.5)) * 0.14 * amp;
@@ -443,11 +443,11 @@ function boss_kuzunoha(X) {
 export const FOES_A = {};
 const reg = (name, cfg, setup) => { FOES_A[name] = (o) => foe(o, Object.assign({ name }, cfg), setup); };
 reg('kappa', { H: 2.3, R: 0.58, seed: 3, stride: 11, crown: [0, 2.28, 0, 1.1], puff: 0xffc66a }, kappa);
-reg('oni_cub', { H: 1.95, R: 0.52, seed: 4, stride: 20, crown: [0, 2.12, 0, 0.95], puff: 0xc9b4ff, atk: 0.45 }, oni_cub);
-reg('bamboo_boar', { H: 1.75, R: 0.66, seed: 5, stride: 8, crown: [0, 1.75, -0.05, 1.1], puff: 0x84d64e, atk: 0.6 }, bamboo_boar);
-reg('crow_tengu', { H: 2.6, R: 0.6, seed: 6, stride: 12, crown: [0, 2.5, 0.04, 0.9], puff: 0xc8d4ff, atk: 0.6 }, crow_tengu);
-reg('mushroom_folk', { H: 2.0, R: 0.58, seed: 7, stride: 8, crown: [0, 2.0, 0, 1.2], puff: 0xfdc638, atk: 0.6 }, mushroom_folk);
-reg('hitodama', { H: 2.2, R: 0.5, seed: 8, stride: 22, crown: [0.0, 2.25, 0, 0.9], puff: 0xff7058, atk: 0.45 }, hitodama);
-reg('oni_brute', { H: 2.15, R: 0.68, seed: 9, stride: 7, crown: [0, 2.15, 0, 1.3], puff: 0xc08050, atk: 0.7 }, oni_brute);
-reg('karakasa', { H: 2.35, R: 0.55, seed: 10, stride: 14, crown: [0, 2.2, 0, 0.9], puff: 0xff8a2e, atk: 0.6 }, karakasa);
+reg('oni_cub', { H: 2.45, R: 0.52, seed: 4, stride: 20, crown: [0, 2.02, 0, 0.9], puff: 0xc9b4ff, atk: 0.45 }, oni_cub);
+reg('bamboo_boar', { H: 2.1, R: 0.66, seed: 5, stride: 8, crown: [0, 1.5, -0.04, 1.1], puff: 0x84d64e, atk: 0.6 }, bamboo_boar);
+reg('crow_tengu', { H: 2.6, R: 0.6, seed: 6, stride: 12, crown: [0, 2.55, 0.04, 0.9], puff: 0xc8d4ff, atk: 0.6 }, crow_tengu);
+reg('mushroom_folk', { H: 2.15, R: 0.58, seed: 7, stride: 8, crown: [0, 2.22, 0, 1.2], puff: 0xfdc638, atk: 0.6 }, mushroom_folk);
+reg('hitodama', { H: 2.5, R: 0.5, seed: 8, stride: 22, crown: [0.0, 1.9, 0, 0.9], puff: 0xff7058, atk: 0.45 }, hitodama);
+reg('oni_brute', { H: 2.05, R: 0.68, seed: 9, stride: 7, crown: [0, 1.98, 0, 1.3], puff: 0xc08050, atk: 0.7 }, oni_brute);
+reg('karakasa', { H: 2.5, R: 0.55, seed: 10, stride: 14, crown: [0, 2.48, 0, 0.9], puff: 0xff8a2e, atk: 0.6 }, karakasa);
 reg('boss_kuzunoha', { H: 4.0, R: 1.6, seed: 11, stride: 8, crown: [0, 3.15, 0, 1.8], puff: 0xff9cc6, atk: 0.8, die: 1.1 }, boss_kuzunoha);

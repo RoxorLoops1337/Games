@@ -182,7 +182,6 @@ function buildCoin() {
   return bake(b, { ao: 0, hull: 0.022 });
 }
 function buildStar() { const b = new Builder(); b.shape(ex(kit.starShape(5, 0.15, 0.07), 0.05, 0.014, 'bstar'), GOLD, 0, 0, 0, 1, 0, 0, 0); return bake(b, { ao: 0, hull: 0.016 }); }
-const noteHead = () => { const b = new Builder(); return b; };
 function buildNote() {
   const b = new Builder(), g = new THREE.Color(1, 1, 1);
   b.ball(g, -0.12, -0.2, 0, 0.17, 0.72, 0.5, 1, 0); // head (tilted by the hull-less rotation below)
@@ -274,10 +273,8 @@ export function init(V) {
     const cyc = Math.min(3, Math.floor((k - 1) / 8));
     for (let n = 0; n < cyc && starP.n < starP.max; n++) { _m2.makeTranslation(0.34 - n * 0.2, 0.86, 0.16); _m2.premultiply(m); starP.mesh.setMatrixAt(starP.n++, _m2); }
   }
-  const pend = new THREE.Matrix4();
 
   // ---- projectile pose helpers (2D screen y includes height; recover ground z + height as the 2D draw implies) ----
-  function glowCol(tag, a) { const f = fx(); return f; }
   function updateItems(S, T, f, dt) {
     const FX = fx(), items = S.items;
     for (let i = 0; i < items.length; i++) {
@@ -301,7 +298,7 @@ export function init(V) {
         FX.glowAt(0, gx, 0.02, gz, 0, 0.3, rar === 3 ? 2.6 : 2.1, 0.3, 0, c[0], c[1], c[2], 0.34 * pl);
         FX.glowAt(1, gx, 0.07, gz, T * 1.4 + it.x, 0.52 + Math.sin(T * 5) * 0.04, 1, 0.52 + Math.sin(T * 5) * 0.04, 0.9, c[0], c[1], c[2], 0.75 * pl, 0.16);
       }
-      if (it.gem || (!it.bar && !it.crown && ((it.k || 1) - 1) % 8 >= 5)) FX.glowAt(2, gx, y + 0.4, gz, 0, 0.85, 1, 1, 0, c[0], c[1], c[2], 0.45 + 0.1 * pl);
+      if (it.gem || (!it.bar && !it.crown && ((it.k || 1) - 1) % 8 >= 5)) FX.glowAt(2, gx, y + 0.4, gz, 0, 0.8, 1, 1, 0, c[0], c[1], c[2], 0.28 + 0.08 * pl);
       const ph = ((T * 2 + it.x) % 3) / 0.35; if (ph < 1) { const sz = 0.3 * Math.sin(ph * PI); FX.glowAt(3, gx + 0.2, y + 0.65, gz, 0, sz, 1, 1, 0, 1, 1, 1, 0.95); }
     }
   }
@@ -321,14 +318,12 @@ export function init(V) {
     lidPivot.rotation.x = -(0.5 + 0.18 * Math.sin(T * 3) + 0.1 * pl); // bobbing lid, never fully shut
     if (V.blobs) V.blobs.add(gx, gz, 0.78, 0.3);
     const FX = fx(); if (!FX) return;
-    FX.glowAt(0, gx, 0.5, gz, 0, 0.6, 3.4, 0.6, 0, 1, 0.88, 0.35, 0.3 + 0.12 * pl);
-    for (let r = 0; r < 7; r++) { const a = T * 0.6 + r * (TAU / 7); FX.glowAt(0, gx, 0.55 + bob, gz, a, 0.14, 2.3 + 0.4 * Math.sin(T * 2 + r), 0.14, 1.25, 1, 0.9, 0.45, 0.22 + 0.1 * pl); }
-    FX.glowAt(1, gx, 0.07, gz, T, 1.0 + 0.06 * pl, 1, 1.0 + 0.06 * pl, 0.8, 1, 0.82, 0.3, 0.7, 0.14); FX.glowAt(2, gx, 0.75 + bob, gz, 0, 1.3, 1, 1, 0, 1, 0.85, 0.4, 0.45 + 0.2 * pl);
+    FX.glowAt(0, gx, 0.5, gz, 0, 0.5, 3.0, 0.5, 0, 1, 0.88, 0.35, 0.22 + 0.08 * pl);
+    for (let r = 0; r < 7; r++) { const a = T * 0.6 + r * (TAU / 7); FX.glowAt(0, gx, 0.55 + bob, gz, a, 0.12, 2.0 + 0.4 * Math.sin(T * 2 + r), 0.12, 1.25, 1, 0.9, 0.45, 0.13 + 0.06 * pl); }
+    FX.glowAt(1, gx, 0.07, gz, T, 1.0 + 0.06 * pl, 1, 1.0 + 0.06 * pl, 0.8, 1, 0.82, 0.3, 0.7, 0.14); FX.glowAt(2, gx, 0.75 + bob, gz, 0, 1.2, 1, 1, 0, 1, 0.85, 0.4, 0.25 + 0.1 * pl);
     sparkAcc += 0.016 * 12; while (sparkAcc >= 1) { sparkAcc -= 1; const a = Math.random() * TAU, r = 0.2 + Math.random() * 0.5; FX.trail(gx + Math.cos(a) * r, 0.7 + Math.random() * 0.4, gz + Math.sin(a) * r * 0.6, 0xfff0a0, 0.16 + Math.random() * 0.1, 0.7, 2, 0.8); }
   }
-  const NCOL = { hero: [1, 0.494, 0.714], crit: [1, 0.604, 0.18], ally: [0.247, 0.812, 0.416], tower: [0.655, 0.482, 1] }; // css #ff7eb6 / #ff9a2e / #3fcf6a / #a77bff
-  const NLIN = { hero: rgb('#ff7eb6'), crit: rgb('#ff9a2e'), ally: rgb('#3fcf6a'), tower: rgb('#a77bff') };
-  const LV = [rgb('#ff7eb6'), 0, 0];
+  const NCOL = { hero: rgb('#ff7eb6'), crit: rgb('#ff9a2e'), ally: rgb('#3fcf6a'), tower: rgb('#a77bff') }; // note tints (linear)
   function updateShots(S, T, f, dt) {
     const FX = fx(), shots = S.shots;
     for (let i = 0; i < shots.length; i++) {
@@ -336,7 +331,7 @@ export function init(V) {
       if (sh.boulder) { // arc from the tower top to the target; the 2D arc height becomes real height
         const u = Math.min(1, (sh.t || 0) / (sh.dur || 1)), gx = (sh.sx + (sh.tx - sh.sx) * u) * W, gz = (sh.sy + 50 + (sh.ty - sh.sy - 50) * u) * W, y = (50 * (1 - u) + Math.sin(u * PI) * 150) * W + 0.45;
         if (!vis(gx, gz, f)) continue; const c = rgb('#a77bff');
-        bouldP.add(gx, y, gz, T * 2 + i, -T * 7, 0, 0.46, 0.46, 0.46, c); if (V.blobs) V.blobs.add(gx, (sh.ty + 0) * W + (gz - sh.ty * W) * 0.0, 0.5, 0.2);
+        bouldP.add(gx, y, gz, 0.3 * Math.sin(T * 2 + i), -T * 5, 0, 0.38, 0.38, 0.38, c); if (V.blobs) V.blobs.add(gx, (sh.ty + 0) * W + (gz - sh.ty * W) * 0.0, 0.5, 0.2);
         if (FX) { FX.glowAt(2, gx, y, gz, 0, 0.9, 1, 1, 0, 0.65, 0.48, 1, 0.45); FX.glowAt(1, sh.tx * W, 0.07, sh.ty * W, T * 2, 0.9 + 0.7 * (1 - u), 1, 0.9 + 0.7 * (1 - u), 0.5, 1, 0.45, 0.65, 0.35 + 0.35 * u, 0.12); if (Math.random() < dt * 30) FX.trail(gx, y, gz, c, 0.16, 0.45, 0, 1); }
         continue;
       }
@@ -345,9 +340,9 @@ export function init(V) {
       const gx = sh.x * W, gz = (sh.y + h2) * W, y = h2 * W + 0.1; if (!vis(gx, gz, f)) continue;
       const kind = sh.crit ? 'crit' : sh.ally ? 'ally' : sh.tower ? 'tower' : 'hero', sz = sh.crit ? 1.5 : 1, c = NCOL[kind];
       const wob = Math.sin(T * 18 + sh.x * 0.1) * 0.28;
-      noteP.add(gx, y, gz, Math.sin(T * 9 + i) * 0.5, -0.5, wob, 0.62 * sz, 0.62 * sz, 0.62 * sz, c);
+      noteP.add(gx, y, gz, Math.sin(T * 9 + i) * 0.5, -0.5, wob, 0.85 * sz, 0.85 * sz, 0.85 * sz, c);
       if (V.blobs) V.blobs.add(gx, sh.y * W + (gz - sh.y * W) - (h2 - r2) * W * 0 , 0.16 * sz, 0.18);
-      if (FX) { FX.glowAt(2, gx, y, gz, 0, 0.58 * sz, 1, 1, 0, c[0], c[1], c[2], sh.crit ? 0.6 : 0.4); if (Math.random() < dt * (sh.crit ? 40 : 22)) FX.trail(gx, y, gz, c, 0.12 * sz, 0.4, Math.random() < 0.3 ? 2 : 0, 1); }
+      if (FX) { FX.glowAt(2, gx, y, gz, 0, 0.5 * sz, 1, 1, 0, c[0], c[1], c[2], sh.crit ? 0.4 : 0.2); if (Math.random() < dt * (sh.crit ? 40 : 22)) FX.trail(gx, y, gz, c, 0.12 * sz, 0.4, Math.random() < 0.3 ? 2 : 0, 1); }
     }
     const es = S.eshots;
     for (let i = 0; i < es.length; i++) {

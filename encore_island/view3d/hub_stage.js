@@ -2,7 +2,7 @@
 // and the ENCORE ISLAND marquee with chasing bulbs. Local frame: origin at STAGE (world X = x*W, Z = y*W), +z faces the camera.
 import * as THREE from 'three';
 import { Builder, C, INK, W, TAU, PI, seg, GB, GOLD, SHINY, glow, lit, canvasTex, stickerText, fitFont, starShape, damp, clamp } from './kit.js';
-import { Inst, ringQuad, rod, textAtlas } from './hub_fx.js';
+import { Inst, ringQuad, rod, textAtlas, rbx, bll } from './hub_fx.js';
 
 const PINK = 0xff9ac8, PINK_D = 0xd8559a, CZ = 0.36, R = 2.32; // platform centre z (local) and radius
 const SPOT_COL = [[1.0, 0.45, 0.72], [0.45, 1.0, 0.7], [0.62, 0.5, 1.0], [1.0, 0.85, 0.35]];
@@ -29,7 +29,7 @@ export function buildStage(V, fx) {
     for (const [cx, cz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) rod(t, GBc, CH, x + cx * h, 0.1, TZ + cz * h, x + cx * h, TH, TZ + cz * h, 0.035, 6);
     const n = 9; for (let i = 0; i <= n; i++) { const y = 0.12 + (TH - 0.12) * i / n; for (const [a, bb] of [[-1, -1, 1, -1], [1, -1, 1, 1], [1, 1, -1, 1], [-1, 1, -1, -1]].map((q) => [[q[0], q[1]], [q[2], q[3]]])) rod(t, GBc, CH, x + a[0] * h, y, TZ + a[1] * h, x + bb[0] * h, y, TZ + bb[1] * h, 0.018, 5); }
     for (let i = 0; i < n; i++) { const y0 = 0.12 + (TH - 0.12) * i / n, y1 = 0.12 + (TH - 0.12) * (i + 1) / n, s = i % 2 ? 1 : -1; rod(t, GBc, CH, x - h, y0, TZ + s * h, x + h, y1, TZ + s * h, 0.016, 5); rod(t, GBc, CH, x + s * h, y0, TZ - h, x - s * h, y1, TZ - h, 0.016, 5); }
-    t.ball({ m: GOLD, c: C.gold }, x, TH + 0.14, TZ, 0.17, 0.9); t.cone({ m: GOLD, c: C.gold }, x, TH + 0.25, TZ, 0.09, 0.28, 8); // gold finial
+    bll(t, { m: GOLD, c: C.gold }, x, TH + 0.14, TZ, 0.17, 0.9); t.cone({ m: GOLD, c: C.gold }, x, TH + 0.25, TZ, 0.09, 0.28, 8); // gold finial
   }
   { // top beam: a triangular lattice running along x
     const bh = 0.17, y = TH - 0.05;
@@ -38,7 +38,7 @@ export function buildStage(V, fx) {
   }
   // board: ink slab, violet face, gold trim, sits between the towers hanging from the beam
   const BY = 1.95, BW = 5.2, BH = 1.3;
-  t.rbox(INK, 0, BY, TZ - 0.02, BW + 0.3, BH + 0.26, 0.22, 0.4); t.rbox(0x3a2a86, 0, BY, TZ, BW + 0.12, BH + 0.1, 0.24, 0.35); t.rbox(0x5a44c4, 0, BY + 0.05, TZ + 0.03, BW - 0.1, BH - 0.12, 0.22, 0.3); t.rbox(0x7a62dc, 0, BY + BH * 0.3, TZ + 0.06, BW - 0.3, BH * 0.28, 0.2, 0.5);
+  rbx(t, INK, 0, BY, TZ - 0.02, BW + 0.3, BH + 0.26, 0.22, 0.4); rbx(t, 0x3a2a86, 0, BY, TZ, BW + 0.12, BH + 0.1, 0.24, 0.35); rbx(t, 0x5a44c4, 0, BY + 0.05, TZ + 0.03, BW - 0.1, BH - 0.12, 0.22, 0.3); rbx(t, 0x7a62dc, 0, BY + BH * 0.3, TZ + 0.06, BW - 0.3, BH * 0.28, 0.2, 0.5);
   for (const sd of [-1, 1]) { rod(t, GBc, INK, sd * (TX - 0.05), TH - 0.1, TZ + 0.0, sd * 2.3, BY + BH / 2 + 0.1, TZ, 0.03, 5); rod(t, GBc, INK, sd * 1.2, TH - 0.1, TZ, sd * 1.2, BY + BH / 2 + 0.1, TZ, 0.03, 5); }
   // trim lines
   t.box({ m: GOLD, c: C.gold }, 0, BY + BH / 2 - 0.04, TZ + 0.16, BW - 0.05, 0.05, 0.05); t.box({ m: GOLD, c: C.gold }, 0, BY - BH / 2 + 0.07, TZ + 0.16, BW - 0.05, 0.05, 0.05);
@@ -52,10 +52,10 @@ export function buildStage(V, fx) {
   for (const sd of [-1, 1]) {
     const x = sd * 3.3, z = -0.9, yaw = -sd * 0.3;
     sp.local(x, 0, z, yaw, (b) => {
-      b.rbox(INK, 0, 0.52, 0, 1.14, 1.06, 0.88, 0.25); b.rbox(0x7a62dc, 0, 0.52, 0.08, 1.02, 0.96, 0.8, 0.25); b.rbox(C.pink, 0, 1.0, 0.09, 1.0, 0.07, 0.8, 0.5); b.rbox(C.pink, 0, 0.06, 0.09, 1.04, 0.07, 0.8, 0.5);
-      b.rbox(INK, 0, 1.4, 0, 1.0, 0.8, 0.76, 0.25); b.rbox(0x8a72e8, 0, 1.4, 0.08, 0.88, 0.7, 0.68, 0.25); b.rbox(C.pink, 0, 1.77, 0.08, 0.8, 0.05, 0.6, 0.5);
+      rbx(b, INK, 0, 0.52, 0, 1.14, 1.06, 0.88, 0.25); rbx(b, 0x7a62dc, 0, 0.52, 0.08, 1.02, 0.96, 0.8, 0.25); rbx(b, C.pink, 0, 1.0, 0.09, 1.0, 0.07, 0.8, 0.5); rbx(b, C.pink, 0, 0.06, 0.09, 1.04, 0.07, 0.8, 0.5);
+      rbx(b, INK, 0, 1.4, 0, 1.0, 0.8, 0.76, 0.25); rbx(b, 0x8a72e8, 0, 1.4, 0.08, 0.88, 0.7, 0.68, 0.25); rbx(b, C.pink, 0, 1.77, 0.08, 0.8, 0.05, 0.6, 0.5);
       b.cyl(INK, 0.28, 1.76, 0, 0.05, 0.28, 8); b.cone({ m: SHINY, c: C.gold }, 0.28, 2.0, 0, 0.17, 0.2, 14); // horn
-      b.ball(C.cream, -0.25, 1.56, 0.38, 0.09, 0.9); b.ball(C.cream, 0.25, 1.56, 0.38, 0.09, 0.9);
+      bll(b, C.cream, -0.25, 1.56, 0.38, 0.09, 0.9); bll(b, C.cream, 0.25, 1.56, 0.38, 0.09, 0.9);
     });
     woofs.push([x, 0.55, z, yaw, 0.34], [x, 1.18, z, yaw, 0.24]);
   }
@@ -63,7 +63,7 @@ export function buildStage(V, fx) {
   const wb = new Builder({ ao: 0 }); wb.tor(C.cream, 0, 0, 0, 1, 0.14, 8, seg(24)); wb.cylc(0x241a52, 0, 0, 0, 0.9, 0.05, seg(24), PI / 2); wb.part(GB.ico(2), 0x6a5cd8, 0, 0, 0.0, 0.62, 0.62, 0.28); wb.part(GB.ico(1), C.gold, 0, 0, 0.1, 0.2, 0.2, 0.12);
   const woof = new Inst(wb.geometry(), lit(0xffffff, { vc: true, rough: 0.5 }), 4, {}); g.add(woof.mesh);
   // ---- spotlights ----
-  const headG = new Builder({ ao: 0 }); headG.cyl(0x2a2050, 0, -0.16, 0, 0.13, 0.32, 10, 0.8); headG.cyl(C.cream, 0, 0.14, 0, 0.14, 0.04, 10); headG.cyl(0xfff4c0, 0, 0.16, 0, 0.1, 0.03, 10); headG.ball(0x3a2a86, 0, -0.18, 0, 0.12, 0.8);
+  const headG = new Builder({ ao: 0 }); headG.cyl(0x2a2050, 0, -0.16, 0, 0.13, 0.32, 10, 0.8); headG.cyl(C.cream, 0, 0.14, 0, 0.14, 0.04, 10); headG.cyl(0xfff4c0, 0, 0.16, 0, 0.1, 0.03, 10); bll(headG, 0x3a2a86, 0, -0.18, 0, 0.12, 0.8);
   const heads = new Inst(headG.geometry(), lit(0xffffff, { vc: true, rough: 0.5 }), 4, { cast: false }); g.add(heads.mesh);
   const coneGeo = new THREE.ConeGeometry(1, 1, seg(16), 1, true), cp = coneGeo.attributes.position, cc = new Float32Array(cp.count * 3);
   for (let i = 0; i < cp.count; i++) cc[i * 3] = cc[i * 3 + 1] = cc[i * 3 + 2] = 0.05 + 0.95 * (cp.getY(i) + 0.5);
@@ -93,9 +93,9 @@ export function buildStage(V, fx) {
         const sw = Math.sin(tt * 0.9 + i * 2.1) * 1.5, sz = Math.cos(tt * 0.7 + i * 1.3) * 0.7, hx = HX[i], c = SPOT_COL[i];
         _v.set(sw + (i - 1.5) * 0.45 - hx, 0.06 - HY, 1.4 + CZ + sz - HZ); const len = _v.length(); _v.multiplyScalar(1 / len);
         _q.setFromUnitVectors(_Y, _v); heads.putQ(hx, HY, HZ, _q, 1, 1, 1);
-        _qa.setFromUnitVectors(_Y, _d.copy(_v).negate()); const rad = 0.5 + 0.12 * Math.sin(tt * 2 + i), a = 0.9 + 0.7 * pulse;
+        _qa.setFromUnitVectors(_Y, _d.copy(_v).negate()); const rad = 0.5 + 0.12 * Math.sin(tt * 2 + i), a = 0.6 + 0.5 * pulse;
         cones.putQ(hx + _v.x * len / 2, HY + _v.y * len / 2, HZ + _v.z * len / 2, _qa, rad, len, rad, c[0] * a, c[1] * a, c[2] * a);
-        fx.glow(wx + hx + _v.x * len, 0.12, wz + HZ + _v.z * len, 1.4 + pulse * 0.4, c[0], c[1], c[2], 0.28 + 0.18 * pulse);
+        fx.glow(wx + hx + _v.x * len, 0.12, wz + HZ + _v.z * len, 1.1 + pulse * 0.3, c[0], c[1], c[2], 0.22 + 0.14 * pulse);
       }
       heads.end(); cones.end();
       // bulbs: marquee chase + footlights

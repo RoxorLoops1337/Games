@@ -1,7 +1,7 @@
 // Encore Island 3D, hub helpers: instanced pools (glow billboards, bulbs, generic), a ground arc/dash ring shader, a text atlas and quad sets.
 // Everything here is small and allocation free per frame, so the hub can animate dozens of lights in a handful of draw calls.
 import * as THREE from 'three';
-import { canvasTex, softTex, stickerText, FONT, rrPath, PI, TAU, HAS_DOM, addOutline, INK } from './kit.js';
+import { canvasTex, softTex, stickerText, FONT, rrPath, PI, TAU, HAS_DOM, addOutline, INK, G, GB, roundedBoxGeo, Q, icoDetail } from './kit.js';
 
 const _z = new THREE.Vector3(0, 0, 1), _q2 = new THREE.Quaternion(), _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _e = new THREE.Euler(), _p = new THREE.Vector3(), _s = new THREE.Vector3(), _c = new THREE.Color();
 
@@ -123,6 +123,14 @@ export function outline(group, width = 0.032, skipGold = true) {
   group.children.slice().forEach((m) => { if (!m.isMesh || m.isInstancedMesh || !m.material || !m.material.isMeshStandardMaterial || m.material.transparent || m.material.map) return; if (skipGold && m.material.emissiveIntensity > 0.1) return; addOutline(m, width, INK); });
   return group;
 }
+/** cheaper rounded box: thin pieces become plain boxes, the rest use a 2 (high) / 1 (lower tiers) segment bevel. Same argument order as Builder.rbox. */
+export function rbx(b, c, x, y, z, w, h, d, r = 0.15, ry = 0, rx = 0, rz = 0) {
+  const m = Math.min(w, h, d); if (m < 0.1) return b.box(c, x, y, z, w, h, d, rx, ry, rz);
+  const k = m * r, key = 'hrb' + w.toFixed(3) + '_' + h.toFixed(3) + '_' + d.toFixed(3) + '_' + k.toFixed(3) + '_' + (Q.detail >= 2 ? 2 : 1);
+  return b.part(G(key, () => roundedBoxGeo(w, h, d, k, Q.detail >= 2 ? 2 : 1)), c, x, y, z, 1, 1, 1, rx, ry, rz);
+}
+/** ball whose icosphere detail follows its size (tiny studs 0, medium 1, big 2); same argument order as Builder.ball without the detail */
+export function bll(b, c, x, y, z, r, sy = 1, sz) { const d = r < 0.075 ? 0 : r < 0.22 ? 1 : Math.min(2, icoDetail(1)); return b.part(GB.ico(d), c, x, y, z, r, r * sy, sz ? r * sz : r, 0, 0, 0); }
 export const hexRGB = (h, k = 1) => { _c.set(h); return [_c.r * k, _c.g * k, _c.b * k]; };
 /** a beat-ish value: 1 right on the beat decaying to 0 (LOOK.beat is the engine's own pulse; this is the fallback) */
 export const beatOf = (V) => (V.LOOK ? V.LOOK.beat.value : 0);

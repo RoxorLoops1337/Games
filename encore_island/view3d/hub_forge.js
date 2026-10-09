@@ -2,28 +2,28 @@
 // Appears once S.forge exists (the plate for it is made by hub_plates.js). Hot while S.forge.queue has shields in it. Local frame = FORGE / TRAY position.
 import * as THREE from 'three';
 import { Builder, C, INK, W, TAU, PI, seg, GB, GOLD, lit, damp, clamp } from './kit.js';
-import { Inst, QuadSet, outline } from './hub_fx.js';
+import { Inst, QuadSet, outline, rbx, bll } from './hub_fx.js';
 
 const GOLDM = { m: GOLD, c: 0xffd84d };
 
 export function buildForge(V, fx) {
   const g = new THREE.Group(); g.name = 'forge'; g.position.set(FORGE.x * W, 0, FORGE.y * W);
   const b = new Builder({ ao: 0.2 }), BX = -0.2, BW = 2.0, BHT = 1.7, BD = 1.5, MX = -0.2;
-  b.rbox(0xe8dcc4, 0, 0.05, 0.05, 2.7, 0.1, 2.15, 0.4); // stone apron
-  b.rbox(0x8a62e8, BX, BHT / 2 + 0.05, 0, BW, BHT, BD, 0.1); b.rbox(0xb494ff, BX, BHT + 0.1, 0, BW + 0.14, 0.2, BD + 0.14, 0.4); b.rbox(0x6a46c8, BX, 0.14, 0.0, BW + 0.1, 0.24, BD + 0.1, 0.3);
+  rbx(b, 0xe8dcc4, 0, 0.05, 0.05, 2.7, 0.1, 2.15, 0.4); // stone apron
+  rbx(b, 0x8a62e8, BX, BHT / 2 + 0.05, 0, BW, BHT, BD, 0.1); rbx(b, 0xb494ff, BX, BHT + 0.1, 0, BW + 0.14, 0.2, BD + 0.14, 0.4); rbx(b, 0x6a46c8, BX, 0.14, 0.0, BW + 0.1, 0.24, BD + 0.1, 0.3);
   const z0 = BD / 2 + 0.005; // brick joints on the front
   for (let r = 0; r < 4; r++) { const y = 0.5 + r * 0.33; b.box(0x5a3aa8, BX, y, z0, BW - 0.06, 0.028, 0.02); for (let c = 0; c < 5; c++) b.box(0x5a3aa8, BX - 0.8 + c * 0.4 + (r % 2) * 0.2, y + 0.165, z0, 0.026, 0.3, 0.02); }
   // furnace mouth frame: cream arch around the glowing opening
-  b.rbox(C.cream, MX - 0.52, 0.55, z0 + 0.03, 0.14, 1.0, 0.1, 0.4); b.rbox(C.cream, MX + 0.52, 0.55, z0 + 0.03, 0.14, 1.0, 0.1, 0.4); b.tor(C.cream, MX, 1.0, z0 + 0.03, 0.45, 0.075, 8, seg(20)); b.part(GB.box(), 0xfff0d8, MX, 0.1, z0 + 0.12, 1.3, 0.1, 0.4, 0, 0, 0); // step
-  b.rbox(0x3a2a70, MX, 1.4, z0 + 0.02, 1.34, 0.16, 0.04, 0.4); // pip plaque
-  for (const sx of [-1, 1]) for (const y of [0.24, 1.46]) b.ball(C.cream, BX + sx * 0.9, y, z0 + 0.03, 0.055, 1); // rivets
+  rbx(b, C.cream, MX - 0.52, 0.55, z0 + 0.03, 0.14, 1.0, 0.1, 0.4); rbx(b, C.cream, MX + 0.52, 0.55, z0 + 0.03, 0.14, 1.0, 0.1, 0.4); b.tor(C.cream, MX, 1.0, z0 + 0.03, 0.45, 0.075, 8, seg(20)); b.part(GB.box(), 0xfff0d8, MX, 0.1, z0 + 0.12, 1.3, 0.1, 0.4, 0, 0, 0); // step
+  rbx(b, 0x3a2a70, MX, 1.4, z0 + 0.02, 1.34, 0.16, 0.04, 0.4); // pip plaque
+  for (const sx of [-1, 1]) for (const y of [0.24, 1.46]) bll(b, C.cream, BX + sx * 0.9, y, z0 + 0.03, 0.055, 1); // rivets
   // chimney: pink with gold bands
-  b.rbox(0xff9ac8, 0.52, 2.3, -0.28, 0.56, 1.4, 0.56, 0.25); b.rbox(0xffc9de, 0.52, 3.04, -0.28, 0.72, 0.16, 0.72, 0.4); b.rbox(GOLDM, 0.52, 1.95, -0.28, 0.6, 0.07, 0.6, 0.5); b.rbox(GOLDM, 0.52, 2.55, -0.28, 0.6, 0.07, 0.6, 0.5); b.rbox(0xffffff, 0.4, 2.3, -0.0, 0.07, 1.1, 0.04, 0.5);
+  rbx(b, 0xff9ac8, 0.52, 2.3, -0.28, 0.56, 1.4, 0.56, 0.25); rbx(b, 0xffc9de, 0.52, 3.04, -0.28, 0.72, 0.16, 0.72, 0.4); rbx(b, GOLDM, 0.52, 1.95, -0.28, 0.6, 0.07, 0.6, 0.5); rbx(b, GOLDM, 0.52, 2.55, -0.28, 0.6, 0.07, 0.6, 0.5); rbx(b, 0xffffff, 0.4, 2.3, -0.0, 0.07, 1.1, 0.04, 0.5);
   // fuel: coal heap on the left, a log stack on the right, a cart wheel prop
-  for (const [x, z, r] of [[-1.45, 0.45, 0.2], [-1.25, 0.65, 0.16], [-1.55, 0.75, 0.15], [-1.38, 0.3, 0.14]]) b.ball(0x3a3050, x, r * 0.8, z, r, 0.8);
+  for (const [x, z, r] of [[-1.45, 0.45, 0.2], [-1.25, 0.65, 0.16], [-1.55, 0.75, 0.15], [-1.38, 0.3, 0.14]]) bll(b, 0x3a3050, x, r * 0.8, z, r, 0.8);
   for (let i = 0; i < 3; i++) b.cylc(0xb07840, 1.15 + (i === 2 ? 0.0 : (i - 0.5) * 0.3), 0.18 + (i === 2 ? 0.26 : 0), 0.7, 0.14, 0.7, 10, PI / 2);
   for (let i = 0; i < 3; i++) b.cylc(0xe8c49a, 1.15 + (i === 2 ? 0.0 : (i - 0.5) * 0.3), 0.18 + (i === 2 ? 0.26 : 0), 1.06, 0.1, 0.02, 10, PI / 2);
-  const qs = new QuadSet(); { const tilt = -0.6, sy = 2.28, sz = -0.15, sn = [-Math.sin(tilt), Math.cos(tilt)]; b.rbox(0x4a2a90, -0.62, sy, sz, 1.28, 0.5, 0.1, 0.4, 0, tilt); fx.atlas.quad(qs, 'SMELTER', 1.2, -0.62, sy + sn[0] * 0.056, sz + sn[1] * 0.056, 0, tilt, 0.4); }
+  const qs = new QuadSet(); { const tilt = -0.6, sy = 2.28, sz = -0.15, sn = [-Math.sin(tilt), Math.cos(tilt)]; rbx(b, 0x4a2a90, -0.62, sy, sz, 1.28, 0.5, 0.1, 0.4, 0, tilt); fx.atlas.quad(qs, 'SMELTER', 1.2, -0.62, sy + sn[0] * 0.056, sz + sn[1] * 0.056, 0, tilt, 0.4); }
   g.add(outline(b.build({ cast: true })));
   g.add(fx.atlas.mesh(qs));
   // glowing mouth (arch shape, vertex gradient, brightness driven by heat)
@@ -64,10 +64,10 @@ export function buildForge(V, fx) {
 export function buildTray(V, fx) {
   const g = new THREE.Group(); g.name = 'tray'; g.position.set(TRAY.x * W, 0, TRAY.y * W);
   const b = new Builder({ ao: 0.2 });
-  b.rbox(0xe8c49a, 0, 0.1, 0, 2.5, 0.18, 0.95, 0.35); b.rbox(0xb07840, 0, 0.22, 0.46, 2.5, 0.16, 0.08, 0.4); b.rbox(0xb07840, 0, 0.22, -0.46, 2.5, 0.16, 0.08, 0.4); b.rbox(0xb07840, -1.21, 0.22, 0, 0.08, 0.16, 0.95, 0.4); b.rbox(0xb07840, 1.21, 0.22, 0, 0.08, 0.16, 0.95, 0.4);
-  b.rbox(GOLDM, -1.0, 0.31, 0.46, 0.14, 0.05, 0.1, 0.5); b.rbox(GOLDM, 1.0, 0.31, 0.46, 0.14, 0.05, 0.1, 0.5);
-  g.add(outline(b.build({ cast: true })));
-  const barG = new Builder({ ao: 0 }); barG.rbox(0xffffff, 0, 0, 0, 1, 1, 1, 0.3); barG.rbox(0xeeeeee, 0, 0.45, 0, 0.78, 0.14, 0.78, 0.5);
+  rbx(b, 0xe8c49a, 0, 0.1, 0, 2.5, 0.18, 0.95, 0.35); rbx(b, 0xb07840, 0, 0.22, 0.46, 2.5, 0.16, 0.08, 0.4); rbx(b, 0xb07840, 0, 0.22, -0.46, 2.5, 0.16, 0.08, 0.4); rbx(b, 0xb07840, -1.21, 0.22, 0, 0.08, 0.16, 0.95, 0.4); rbx(b, 0xb07840, 1.21, 0.22, 0, 0.08, 0.16, 0.95, 0.4);
+  rbx(b, GOLDM, -1.0, 0.31, 0.46, 0.14, 0.05, 0.1, 0.5); rbx(b, GOLDM, 1.0, 0.31, 0.46, 0.14, 0.05, 0.1, 0.5);
+  g.add(b.build({ cast: true }));
+  const barG = new Builder({ ao: 0 }); rbx(barG, 0xffffff, 0, 0, 0, 1, 1, 1, 0.3); rbx(barG, 0xeeeeee, 0, 0.45, 0, 0.78, 0.14, 0.78, 0.5);
   const bars = new Inst(barG.geometry(), lit(0xffffff, { vc: true, rough: 0.28, metal: 0.3 }), 15, { colors: true, cast: true }); g.add(bars.mesh);
   const c = new THREE.Color(), tray = { key: '', cols: [] };
   const wx = g.position.x, wz = g.position.z;

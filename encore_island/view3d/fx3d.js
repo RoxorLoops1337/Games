@@ -48,22 +48,23 @@ void main() {
     float ang = seed * 6.2832 + aT.w * age, ca = cos(ang), sa = sin(ang);
     vec2 q = vec2(c.x * ca - c.y * sa, c.x * sa + c.y * ca);
     if (kind > 2.5 && kind < 3.5) q.x *= cos(age * 7.0 + seed * 6.2832);
-    wp = pos + (right * q.x + up * q.y) * sz;
+    wp = pos + (right * q.x + up * q.y) * sz + normalize(cameraPosition - pos) * sz * 0.75; // nudged toward the camera so big glows are not sliced by the ground
   }
   vC = c; vK = kind; vAdd = aE.y; vSh = cos(age * 7.0 + seed * 6.2832); vCol = vec4(aC.rgb, env);
   gl_Position = projectionMatrix * viewMatrix * vec4(wp, 1.0);
 }`;
 const P_FS = `
+uniform float uGain;
 varying vec2 vC; varying vec4 vCol; varying float vK, vSh, vAdd;
 void main() {
   float r = length(vC), a = 0.0; vec3 col = vCol.rgb;
-  if (vK < 0.5) { a = pow(max(0.0, 1.0 - r), 2.0); col *= 1.0 + a * 1.2; }
+  if (vK < 0.5) { a = pow(max(0.0, 1.0 - r), 2.0); col *= 1.0 + a * 0.5; }
   else if (vK < 1.5) { a = smoothstep(1.0, 0.82, r); col = mix(col, vec3(1.0), 0.45 * smoothstep(0.1, 0.9, dot(vC, vec2(-0.55, 0.7)) * 0.9 + 0.4)); col *= 1.0 - 0.22 * smoothstep(0.5, 1.0, r); }
   else if (vK < 2.5) { vec2 p = abs(vC); float f = sqrt(p.x) + sqrt(p.y); a = max(1.0 - smoothstep(0.7, 1.0, f), 0.45 * pow(max(0.0, 1.0 - r), 2.0)); col = mix(col, vec3(1.0), smoothstep(0.55, 0.0, r)) * 1.25; }
   else if (vK < 3.5) { vec2 p = abs(vC); a = 1.0 - smoothstep(0.82, 1.0, max(p.x, p.y * 1.5)); col *= 0.72 + 0.4 * abs(vSh); }
   else { a = pow(max(0.0, 1.0 - abs(vC.x)), 1.6) * pow(max(0.0, 1.0 - abs(vC.y)), 0.55); col = mix(col, vec3(1.0), 0.5 * a) * 1.2; }
   a *= vCol.a;
-  gl_FragColor = vec4(col * a, a * (1.0 - vAdd));
+  gl_FragColor = vec4(col * a * uGain, a * (1.0 - vAdd));
   #include <tonemapping_fragment>
   #include <colorspace_fragment>
 }`;
@@ -92,13 +93,13 @@ void main() {
   } else {
     vec3 right = vec3(viewMatrix[0][0], viewMatrix[1][0], viewMatrix[2][0]), up = vec3(viewMatrix[0][1], viewMatrix[1][1], viewMatrix[2][1]);
     float cr = cos(aPos.w), sr = sin(aPos.w); vec2 q = vec2(position.x * cr - position.y * sr, position.x * sr + position.y * cr);
-    wp = aPos.xyz + (right * q.x + up * q.y) * aScl.x;
+    wp = aPos.xyz + (right * q.x + up * q.y) * aScl.x + normalize(cameraPosition - aPos.xyz) * aScl.x * 0.8;
   }
   vUv = aUv; vK = K; vTh = th; vCol = vec4(aCol.rgb, aCol.a * env);
   gl_Position = projectionMatrix * viewMatrix * vec4(wp, 1.0);
 }`;
 const G_FS = `
-uniform float uT;
+uniform float uT, uGain;
 varying vec2 vUv; varying vec4 vCol; varying float vK, vTh, vDash;
 void main() {
   float r = length(vUv), a = 0.0, nrm = 0.0; vec3 col = vCol.rgb;
@@ -108,7 +109,7 @@ void main() {
   else if (vK < 2.5) { a = pow(max(0.0, 1.0 - r), 2.0); col = mix(col, vec3(1.0), 0.5 * pow(max(0.0, 1.0 - r), 3.0)); }                                                         // glow sprite
   else { vec2 p = abs(vUv); float h = exp(-p.y * 10.0) * (1.0 - p.x), v = exp(-p.x * 10.0) * (1.0 - p.y); a = max(h, v) + 0.7 * pow(max(0.0, 1.0 - r * 1.7), 2.0); col = mix(col, vec3(1.0), clamp(a, 0.0, 1.0)); } // sparkle flare
   a *= vCol.a;
-  gl_FragColor = vec4(col * a, a * nrm);
+  gl_FragColor = vec4(col * a * uGain, a * nrm);
   #include <tonemapping_fragment>
   #include <colorspace_fragment>
 }`;
@@ -121,8 +122,8 @@ void main() {
   vUv = position.xy; vCol = aCol; gl_Position = projectionMatrix * viewMatrix * vec4(p, 1.0);
 }`;
 const Z_FS = `
-varying vec2 vUv; varying vec4 vCol;
-void main() { float a = pow(max(0.0, 1.0 - abs(vUv.y)), 1.4) * vCol.a; gl_FragColor = vec4(vCol.rgb * a, 0.0);
+uniform float uGain; varying vec2 vUv; varying vec4 vCol;
+void main() { float a = pow(max(0.0, 1.0 - abs(vUv.y)), 1.4) * vCol.a; gl_FragColor = vec4(vCol.rgb * a * uGain, 0.0);
   #include <tonemapping_fragment>
   #include <colorspace_fragment>
 }`;
@@ -131,7 +132,7 @@ const premult = (extra = {}) => Object.assign({ transparent: true, depthWrite: f
 const iattr = (n, k) => { const a = new THREE.InstancedBufferAttribute(new Float32Array(n * k), k); a.setUsage(THREE.DynamicDrawUsage); return a; };
 
 export function init(V) {
-  const dynRoot = V.dyn || V.scene, uT = { value: 0 };
+  const dynRoot = V.dyn || V.scene, uT = { value: 0 }, uGain = { value: 0.62 }; // gain: ACES (lab) / the post composite brighten x1.75 and burn pastel colours to white, so effects are authored dimmer
   let clock = 0;
   const lod = () => { const q = V.quality && V.quality.particles; return q === undefined ? 1 : Math.max(0.25, q); };
 
@@ -140,9 +141,10 @@ export function init(V) {
   const pg = new THREE.InstancedBufferGeometry(); pg.index = quad.index; pg.setAttribute('position', quad.attributes.position); pg.instanceCount = N;
   const PA = {}; for (const k of ['aP0', 'aV', 'aT', 'aC', 'aE']) { PA[k] = iattr(N, 4); pg.setAttribute(k, PA[k]); }
   for (let i = 0; i < N; i++) PA.aT.array[i * 4] = 1e9; // never born
-  const pmat = new THREE.ShaderMaterial({ vertexShader: P_VS, fragmentShader: P_FS, uniforms: { uT }, ...premult() });
+  const pmat = new THREE.ShaderMaterial({ vertexShader: P_VS, fragmentShader: P_FS, uniforms: { uT, uGain }, ...premult() });
   const pmesh = new THREE.Mesh(pg, pmat); pmesh.frustumCulled = false; pmesh.renderOrder = 20; pmesh.name = 'fx_particles'; dynRoot.add(pmesh);
-  let head = 0, dLo = N, dHi = -1, bUsed = 0, bPrev = 0;
+  let head = 0, dLo = N, dHi = -1, bUsed = 0, bPrev = 0, bTopAcc = 0;
+  pmesh.onAfterRender = () => { dLo = N; dHi = -1; bTopAcc = 0; };
   /** write one particle into slot i. All times are in the module clock. */
   function put(i, x, y, z, vx, vy, vz, size, grav, birth, life, drag, spin, r, g, b, kind, sEnd, add, fin, fout) {
     const o = i * 4, p0 = PA.aP0.array, v = PA.aV.array, t = PA.aT.array, c = PA.aC.array, e = PA.aE.array;
@@ -165,7 +167,7 @@ export function init(V) {
       const l = life * (0.7 + 0.5 * rnd()), s = size * (0.7 + 0.7 * rnd());
       spawn(o.x, o.y ?? 0.3, o.z, Math.cos(a) * sr * k, cy * k * 0.7 + up * (0.5 + 0.5 * rnd()), Math.sin(a) * sr * k, isStar ? s * 1.6 : s, grav, l, drag, (rnd() - 0.5) * 8, c, isStar ? 2 : 1, isStar ? 0.3 : 0.55, isStar ? 0.8 : 0.12);
     }
-    if (o.flash !== false && n >= 5) spawn(o.x, o.y ?? 0.3, o.z, 0, 0, 0, size * 7, 0, 0.22, 0, 0, colorOf(cs, 0), 0, 0.3, 1, 0.02, 0.2);
+    if (o.flash !== false && n >= 5) spawn(o.x, o.y ?? 0.3, o.z, 0, 0, 0, size * 5, 0, 0.2, 0, 0, colorOf(cs, 0), 0, 0.3, 1, 0.02, 0.2);
   }
   function puff(x, y, z, n = 6, color = 0xfff4e6, up = 0.6) {
     n = Math.max(1, Math.round(n * lod())); const c = rgb(color);
@@ -195,7 +197,7 @@ export function init(V) {
   const GR = 160, GN = GR + GMAX, GA = { aPos: iattr(GN, 4), aScl: iattr(GN, 4), aCol: iattr(GN, 4), aTm: iattr(GN, 4), aSel: iattr(GN, 1) };
   for (const k in GA) gg.setAttribute(k, GA[k]); gg.instanceCount = GN;
   for (let i = 0; i < GN; i++) { GA.aTm.array[i * 4] = 1e9; GA.aTm.array[i * 4 + 1] = 1; }
-  const gmat = new THREE.ShaderMaterial({ vertexShader: G_VS, fragmentShader: G_FS, uniforms: { uT }, ...premult() });
+  const gmat = new THREE.ShaderMaterial({ vertexShader: G_VS, fragmentShader: G_FS, uniforms: { uT, uGain }, ...premult() });
   const gmesh = new THREE.Mesh(gg, gmat); gmesh.frustumCulled = false; gmesh.renderOrder = 18; gmesh.name = 'fx_glow'; dynRoot.add(gmesh);
   let gHead = 0, gLo = GN, gHi = -1, imm = 0, immHi = 0, rendered = false, stale = 0;
   function gput(i, sel, x, y, z, yaw, sx, sy, sz, w, r, g, b, a, birth, life, p, q) {
@@ -212,7 +214,7 @@ export function init(V) {
   }
   // immediates (glowAt) are cleared AFTER the render that drew them, so module update order does not matter. Geometry attributes are uploaded when the
   // renderer projects the scene (before onBeforeRender), so the dirty ranges are flagged in update(); slots unused this frame were parked (sel -1) after the last render.
-  gmesh.onAfterRender = () => { const sel = GA.aSel.array; for (let i = 0; i < immHi; i++) sel[GR + i] = -1; imm = 0; immHi = 0; rendered = true; };
+  gmesh.onAfterRender = () => { const sel = GA.aSel.array; for (let i = 0; i < immHi; i++) sel[GR + i] = -1; imm = 0; immHi = 0; rendered = true; gLo = GN; gHi = -1; };
 
   function ring(x, z, r, color = 0xfff4c0, dur = 0.45) {
     const c = rgb(color); gspawn(1, x, 0.07, z, 0, r, 1, r, 0, c, 1, dur, 0.2);
@@ -229,9 +231,9 @@ export function init(V) {
   const zg = new THREE.InstancedBufferGeometry(); const zq = new THREE.BufferGeometry();
   zg.setIndex([0, 1, 2, 0, 2, 3]); zg.setAttribute('position', new THREE.BufferAttribute(new Float32Array([0, -1, 0, 1, -1, 0, 1, 1, 0, 0, 1, 0]), 3));
   const ZA = { aA: iattr(ZMAX, 4), aB: iattr(ZMAX, 4), aCol: iattr(ZMAX, 4) }; for (const k in ZA) zg.setAttribute(k, ZA[k]); zg.instanceCount = 0;
-  const zmat = new THREE.ShaderMaterial({ vertexShader: Z_VS, fragmentShader: Z_FS, ...premult() });
+  const zmat = new THREE.ShaderMaterial({ vertexShader: Z_VS, fragmentShader: Z_FS, uniforms: { uGain }, ...premult() });
   const zmesh = new THREE.Mesh(zg, zmat); zmesh.frustumCulled = false; zmesh.renderOrder = 22; zmesh.name = 'fx_zap'; dynRoot.add(zmesh);
-  let zn = 0; const zcol = [0.7, 0.55, 1];
+  let zn = 0; const zcol = rgb(0xa77bff);
   const ZS = []; for (let i = 0; i < 10; i++) ZS.push({ pts: new Float32Array(3 * 10), n: 0, t: 0, life: 0, c: [0.7, 0.55, 1] });
   let zsHead = 0;
   function zap(points, color = 0xb89cff, life = 0.22) {
@@ -251,7 +253,7 @@ export function init(V) {
       for (let k = 1; k <= K; k++) {
         const f = k / K, last = k === K, s = tq * 13 + i * 7 + k;
         const qx = last ? bx : ax + (bx - ax) * f + (hash(s, 1) - 0.5) * 2 * amp, qy = last ? by : ay + (by - ay) * f + (hash(s, 2) - 0.5) * amp, qz = last ? bz : az + (bz - az) * f + (hash(s, 3) - 0.5) * 2 * amp;
-        seg(px, py, pz, qx, qy, qz, 0.16, c[0], c[1], c[2], 0.75 * a); seg(px, py, pz, qx, qy, qz, 0.05, 1, 1, 1, a);
+        seg(px, py, pz, qx, qy, qz, 0.11, c[0], c[1], c[2], 0.8 * a); seg(px, py, pz, qx, qy, qz, 0.03, 1, 1, 1, a);
         px = qx; py = qy; pz = qz;
       }
     }
@@ -280,16 +282,16 @@ export function init(V) {
       if (q.kind === 'ring') { const c = rgb(q.col || '#fff4c0'), r = q.r * W * (0.25 + 0.75 * easeOut(u)); glowAt(1, q.x * W, 0.07, q.y * W, 0, r, 1, r, 0, c[0], c[1], c[2], 1 - u, 0.2 * (1 - u * 0.7) + 0.05); glowAt(2, q.x * W, 0.14, q.y * W, 0, r * 0.8, 1, 1, 0, c[0], c[1], c[2], 0.35 * (1 - u)); }
       else if (q.kind === 'boom') {
         if (!seen.has(q)) { seen.add(q); burst({ x: q.x * W, y: 0.4, z: q.y * W, n: 28, colors: [0xff7eb6, 0xfff4e6, 0xffd84d, 0xc6a8ff], speed: 5.5, up: 3.2, size: 0.2, life: 0.8, star: 0.45 }); spawn(q.x * W, 0.35, q.y * W, 0, 0, 0, q.r * W * 1.5, 0, 0.3, 0, 0, rgb(0xffe0f0), 0, 0.5, 1, 0.02, 0.25); }
-        const r = q.r * W * (0.4 + 0.75 * easeOut(u)); glowAt(1, q.x * W, 0.08, q.y * W, 0, r, 1, r, 0, 1, 0.42, 0.7, 1 - u, 0.24 * (1 - u * 0.6) + 0.04); glowAt(2, q.x * W, 0.2, q.y * W, 0, r * 0.9, 1, 1, 0, 1, 0.5, 0.75, 0.55 * (1 - u));
+        const r = q.r * W * (0.4 + 0.75 * easeOut(u)); glowAt(1, q.x * W, 0.08, q.y * W, 0, r, 1, r, 0, BOOM[0], BOOM[1], BOOM[2], 1 - u, 0.2 * (1 - u * 0.6) + 0.04); glowAt(2, q.x * W, 0.2, q.y * W, 0, r * 0.8, 1, 1, 0, BOOM[0], BOOM[1], BOOM[2], 0.3 * (1 - u));
       } else if (q.kind === 'zap' && q.pts) {
         const n = Math.min(q.pts.length, 10), a = 1 - u, c = zcol; let m = 0;
         for (let k = 0; k < n; k++) { const p = q.pts[k]; const tower = k === 0; zbuf[m++] = p.x * W; zbuf[m++] = tower ? 1.55 : 0.4; zbuf[m++] = (p.y + (tower ? 80 : 14)) * W; }
         bolt(zbuf, n, c, a, Math.floor(clock * 30));
-        for (let k = 0; k < n; k++) glowAt(2, zbuf[k * 3], zbuf[k * 3 + 1], zbuf[k * 3 + 2], 0, k ? 0.5 : 0.7, 1, 1, 0, 0.65, 0.5, 1, 0.7 * a);
+        for (let k = 0; k < n; k++) glowAt(2, zbuf[k * 3], zbuf[k * 3 + 1], zbuf[k * 3 + 2], 0, k ? 0.3 : 0.4, 1, 1, 0, zcol[0], zcol[1], zcol[2], 0.6 * a);
       }
     }
   }
-  const fpos = [0, 0, 0];
+  const fpos = [0, 0, 0], BOOM = rgb(0xff7eb6);
   function flightAt(f, e, out) { // 2D flight -> world: the 2D arc becomes height, the 2D y offset of the endpoints becomes a small z shift
     const sy = f.y0 + (f.y1 - f.y0) * e;
     out[0] = (f.x0 + (f.x1 - f.x0) * e) * W; out[2] = sy * W + 0.28 * e; out[1] = 0.22 + 0.4 * e + Math.sin(e * PI) * (f.arc || 40) * W * 1.1;
@@ -323,18 +325,17 @@ export function init(V) {
     // internal zaps (V.fx.zap)
     for (let i = 0; i < ZS.length; i++) { const z = ZS[i]; if (z.life <= 0) continue; z.t += dt; if (z.t >= z.life) { z.life = 0; continue; } bolt(z.pts, z.n, z.c, 1 - z.t / z.life, Math.floor(clock * 30)); }
     for (const k in GA) { const a = GA[k], c = k === 'aSel' ? 1 : 4; if (a.clearUpdateRanges) a.clearUpdateRanges(); if (gHi >= 0) a.addUpdateRange(gLo * c, (gHi - gLo + 1) * c); a.addUpdateRange(GR * c, GMAX * c); a.needsUpdate = true; }
-    gLo = GN; gHi = -1;
     zg.instanceCount = zn; if (zn) { ZA.aA.needsUpdate = ZA.aB.needsUpdate = ZA.aCol.needsUpdate = true; } zmesh.visible = zn > 0;
     // clear the bridge tail that the previous frame used but this one did not
     for (let i = bUsed; i < bPrev; i++) PA.aT.array[(RING + i) * 4] = 1e9;
     const top = Math.max(bUsed, bPrev); bPrev = bUsed;
-    // upload only what changed (ring slots spawned this frame + the bridge tail)
-    for (const k in PA) { const a = PA[k]; if (a.clearUpdateRanges) a.clearUpdateRanges(); if (dHi >= 0) a.addUpdateRange(dLo * 4, (dHi - dLo + 1) * 4); if (top) a.addUpdateRange(RING * 4, top * 4); a.needsUpdate = dHi >= 0 || top > 0; }
-    dLo = N; dHi = -1;
+    // upload only what changed since the last RENDER (ranges accumulate across updates, so skipped frames and screenshots stay correct)
+    bTopAcc = Math.max(bTopAcc, top);
+    for (const k in PA) { const a = PA[k]; if (a.clearUpdateRanges) a.clearUpdateRanges(); if (dHi >= 0) a.addUpdateRange(dLo * 4, (dHi - dLo + 1) * 4); if (bTopAcc) a.addUpdateRange(RING * 4, bTopAcc * 4); a.needsUpdate = dHi >= 0 || bTopAcc > 0; }
   }
   function dispose() { for (const m of [pmesh, gmesh, zmesh]) { if (m.parent) m.parent.remove(m); m.geometry.dispose(); m.material.dispose(); } }
 
-  const api = { update, burst, ring, puff, confetti, beam, zap, glowAt, trail, rgb, dispose, get flyers() { return FL; }, get flyerCount() { return flN; }, get clock() { return clock; } };
+  const api = { update, burst, ring, puff, confetti, beam, zap, glowAt, trail, rgb, dispose, get flyers() { return FL; }, get flyerCount() { return flN; }, get clock() { return clock; }, _dbg: { PA, GA, pmesh, gmesh } };
   V.fx = api;
   return api;
 }

@@ -4,7 +4,7 @@
 <div id="hud"></div>
 <script type="module">
 // Foes B lab (act 2 + Scrollspinner). ?m=row (default): all 9 in a row, walking (live camera, el 55). ?m=grid: close-up grid, rows = creatures, cols = variants.
-// Params: only=chochin,nopperabo  v=idle,walk,atk,hurt,die,elite,gold  dieAt=0.45  gap=2.8  hud=0  + az el d tx ty tz w h (lab.js).  Variants: elite / gold are built with the opts AND driven by st.
+// Params: only=chochin,nopperabo  v=idle,walk,atk,hurt,die,elite,gold (hurt / atk / die loop over time; hurtx = held hurt, diex = held death at dieAt)  dieAt=0.45  gap=2.8  hud=0  + az el d tx ty tz w h (lab.js).  Variants: elite / gold are built with the opts AND driven by st.
 import { lab } from './lab.js';
 import { bakeActor } from './bake.js';
 import * as CH from '../../encore_island_3d/js/characters.js';
@@ -27,7 +27,8 @@ lab({ az: 0, el: mode === 'row' ? 55 : 22, d: mode === 'row' ? 21 : 13, ty: mode
     for (const s of slots) {
       const v = s.variant; st.speed = 0; st.atk = false; st.hurt = 0; st.die = 0; st.elite = v === 'elite'; st.gold = v === 'gold'; st.singing = false;
       if (mode === 'row') { const k = Math.sin(t * 0.5 + s.ph), vx = Math.cos(t * 0.5 + s.ph); st.speed = 1; s.a.group.position.x = s.x0 + k * 0.9; s.a.group.rotation.y = Math.atan2(vx, 0.35); if (Math.floor(t / 2 + s.ph) % 3 === 0 && (t / 2 + s.ph) % 1 < 0.5) st.atk = true; }
-      else if (v === 'walk') st.speed = 1; else if (v === 'atk') st.atk = (t % 1.2) < 0.45; else if (v === 'hurt') st.hurt = 1; else if (v === 'die') st.die = dieAt;
+      else if (v === 'walk') st.speed = 1; else if (v === 'atk') st.atk = (t % 1.2) < 0.45; else if (v === 'hurt') st.hurt = (t % 1.5) < 0.12 ? 1 : 0; else if (v === 'hurtx') st.hurt = 1; else if (v === 'diex') st.die = dieAt;
+      else if (v === 'die') { const c = t % 3.2; st.die = c < 1.2 ? 0 : Math.min(1, (c - 1.2) / 0.7); if (s.wasDie && c < 1.2) s.a.reset(); s.wasDie = c >= 1.2; }
       s.a.update(dt, t, st); V.blobs.add(s.a.group.position.x, s.a.group.position.z, s.a.radius * 1.1, 0.35);
     }
     V.blobs.end();

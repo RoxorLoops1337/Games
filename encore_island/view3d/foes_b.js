@@ -121,7 +121,7 @@ function bChochin(K) {
   const face = K.face(head, { cy: 0, rx: 0.43, ry: 0.41, rz: 0.41, hs: 1.55 }, { ex: 0.12, ey: -0.01, ew: 0.075, eh: 0.1, my: -0.13, mw: 0.045, blushColor: 0xff9ab0 });
   // flame: tongues + hot core, unlit HDR so bloom lights it
   const fl = grp(head, 0, 0.3, 0), tongues = [], hot = G(1.7, 0.2, 0.02), core = G(1.9, 0.85, 0.08);
-  for (const [x, rz, sc, c] of [[0, 0, 1, hot], [-0.14, 0.4, 0.62, hot], [0.14, -0.4, 0.7, hot], [0, 0, 0.62, core]]) { const g = grp(fl, x, 0, 0); g.rotation.z = rz; const w = 0.21 * (c === core ? 0.6 : 1); F(g, spike(6), c, 0, 0, 0, w, 0.8 * sc, w); tongues.push([g, rz, sc]); }
+  for (const [x, rz, sc, c] of [[0, 0, 1, hot], [-0.14, 0.4, 0.62, hot], [0.14, -0.4, 0.7, hot], [0, 0, 0.62, core]]) { const g = grp(fl, x, 0, 0); g.rotation.z = rz; const w = 0.19 * (c === core ? 0.62 : 1); F(g, spike(6), c, 0, 0, c === core ? 0.07 : 0, w, 0.62 * sc * (c === core ? 0.85 : 1), w); tongues.push([g, rz, sc]); }
   const crown = K.crown(head, 0, 0.36, 0, 0.9); K.sparkle(root, 1.2, 0.8);
   // arms: left holds the glowing phone up in front of its face, right is a stub
   const aL = limb(K, body, -0.17, 0.95, 0.05, 0.34, 0.05, 0.045, WOOD, 0.075, WOOD), aR = limb(K, body, 0.17, 0.95, 0, 0.3, 0.05, 0.045, WOOD, 0.07, WOOD);
@@ -151,7 +151,7 @@ function bPuppet(K) {
   const arms = [];
   for (const sd of [-1, 1]) arms.push(limb(K, body, sd * 0.37, 0.5, 0, 0.36, 0.065, 0.06, CREAM, 0.09, 0xffffff));
   const cg = grp(body, 0.27, 0.58, -0.22); P(cg, cog(), 0xd89a3a, 0, 0, 0, 1, 1, 1.2, { ol: false }); P(cg, ico(0), 0x7a4a1a, 0, 0, 0.06, 0.04, 0.04, 0.03, { ol: false });
-  const arrow = grp(body, 0.3, 0.6, -0.12); arrow.rotation.z = -0.6;
+  const arrow = grp(body, 0.34, 0.62, -0.1); arrow.rotation.z = -0.85;
   P(arrow, rb(0.11, 0.62, 0.11, 0.05, 1), RED, 0, 0.34, 0, 1, 1, 1, { ol: 0.02 }); P(arrow, cone(0.21, 0.34, 4), RED, 0, 0.76, 0, 1, 1, 0.6, { ol: 0.022 });
   const head = grp(body, 0, 0.96, 0); P(head, ico(2), GREEN, 0, 0, 0, 0.44, 0.4, 0.38, { ol: 0.028 });
   for (const sd of [-1, 1]) { const dir = new THREE.Vector3(sd, 0.34, -0.12).normalize(), L = sd < 0 ? 0.7 : 0.58; P(head, cone(0.15, L, 5), GREEN, sd * 0.4 + dir.x * L / 2, 0.07 + dir.y * L / 2, -0.02 + dir.z * L / 2, 1, 1, 0.55, { q: CK.aim(dir.x, dir.y, dir.z), ol: 0.02 }); }
@@ -168,7 +168,7 @@ function bPuppet(K) {
     // puppet-on-strings: the head and arms snap to a new pose a few times a second instead of flowing
     const tz = hash(js) * 0.2, tx = hash(js + 50) * 0.1; head.rotation.z = damp(head.rotation.z, tz, 26, m.dt); head.rotation.x = damp(head.rotation.x, tx - sk * 0.25, 26, m.dt); head.rotation.y = -s * 0.1 * amp;
     arms[0].rotation.set(s * 1.0 * amp - lean * 2.0 + hash(js + 21) * 0.2 * (1 - amp), 0, -0.4 - hash(js + 3) * 0.15); arms[1].rotation.set(-s * 1.0 * amp - lean * 2.0 + hash(js + 33) * 0.2 * (1 - amp), 0, 0.4 + hash(js + 7) * 0.15);
-    arrow.rotation.z = -0.6 + sin(t * 9) * 0.08 + lean * 0.5; arrow.scale.setScalar(1 + 0.08 * sin(t * 9) + lean * 0.3 + du); cg.rotation.z = m.ph * 0.5 + t * 2;
+    arrow.rotation.z = -0.85 + sin(t * 9) * 0.08 + lean * 0.5; arrow.scale.setScalar(1 + 0.08 * sin(t * 9) + lean * 0.3 + du); cg.rotation.z = m.ph * 0.5 + t * 2;
     faceTick(face, m, 0.2 + A * 0.9 + abs(hash(js + 4)) * 0.2, 0);
   };
 }
@@ -218,7 +218,7 @@ function bFairy(K) {
   const fh = grp(head, 0, -0.03, 0.15), face = K.face(fh, { cy: 0, rx: 0.3, ry: 0.35, rz: 0.24, hs: 1.1 }, { ex: 0.13, ey: 0.03, ew: 0.07, eh: 0.1, my: -0.15, mw: 0.05 });
   F(head, oct, G(2.6, 2.0, 0.6), 0.3, 0.34, 0.14, 0.07, 0.07, 0.03);
   const ring = grp(head, -0.06, 0.1, -0.22); F(ring, tor(0.62, 0.055, 5, 22), G(1.5, 1.4, 1.9), 0, 0, 0, 1, 1, 0.8);
-  const wings = []; for (const sd of [-1, 1]) for (const [y, sc, a] of [[1.0, 1, 0.5], [0.72, 0.7, 0.9]]) { const g = grp(bd, sd * 0.1, y, -0.12); P(g, ico(0), 0xaee8f8, sd * 0.24 * sc, 0.08 * sc, 0, 0.07, 0.46 * sc, 0.26 * sc, { sh: true, ol: false, rz: sd * 0.4 }); g.rotation.y = sd * a; wings.push([g, sd, a]); }
+  const wings = []; for (const sd of [-1, 1]) for (const [y, sc, a] of [[1.0, 1, 1.0], [0.72, 0.7, 1.35]]) { const g = grp(bd, sd * 0.1, y, -0.12); P(g, ico(0), 0xaee8f8, sd * 0.24 * sc, 0.08 * sc, 0, 0.07, 0.46 * sc, 0.26 * sc, { sh: true, ol: false, rz: sd * 0.4 }); g.rotation.y = sd * a; wings.push([g, sd, a]); }
   K.crown(head, 0, 0.42, -0.04, 1); K.sparkle(fl, 0.8, 0.75);
   const droplets = [0, 1, 2].map((i) => { const g = grp(fl, 0, 1.2, 1.9); F(g, ico(1), GH(0x2ee0c8, 1.3), 0, 0, 0, 0.17 * [1, 0.6, 0.45][i]); return g; });
   return (m) => {

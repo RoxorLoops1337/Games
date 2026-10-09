@@ -36,7 +36,8 @@ const GC = new Map();
 const geo = (k, f) => { let g = GC.get(k); if (!g) { g = f(); GC.set(k, g); } return g; };
 // STYLE: the 3D game sets flat = false (smooth "medium poly" shading under the inked hull) and boost = 1 for hero-class actors (one extra icosphere subdivision).
 export const STYLE = { flat: true, boost: 0 };
-const ico = (d = 1) => { const dd = Math.max(0, Math.min(4, d + STYLE.boost)); return geo('ico' + dd, () => new THREE.IcosahedronGeometry(1, dd)); };
+const icoRaw = (dd) => geo('ico' + dd, () => { const g = new THREE.IcosahedronGeometry(1, dd); g.userData.dd = dd; return g; });
+const ico = (d = 1) => icoRaw(Math.max(0, Math.min(4, d + STYLE.boost)));
 const box = (w, h, d) => geo(`box${w},${h},${d}`, () => new THREE.BoxGeometry(w, h, d));
 const cyl = (rt, rb, h, seg = 8) => geo(`cyl${rt},${rb},${h},${seg}`, () => new THREE.CylinderGeometry(rt, rb, h, seg, 1));
 const hang = (rt, rb, h, seg = 6) => geo(`hang${rt},${rb},${h},${seg}`, () => { const g = new THREE.CylinderGeometry(rt, rb, h, seg, 1); g.translate(0, -h / 2, 0); return g; });
@@ -120,6 +121,7 @@ function makeCtx() {
 
 // add a mesh (+ inked hull) to parent
 function part(ctx, parent, g, color, x = 0, y = 0, z = 0, sx = 1, sy = sx, sz = sx, o = {}) {
+  if (STYLE.boost > 0 && g.userData.dd !== undefined && Math.cbrt(sx * sy * sz) < 0.1) g = icoRaw(Math.max(0, g.userData.dd - STYLE.boost)); // the extra subdivision is invisible on small parts
   const mat = o.mat || ctx.m(color, o.mo);
   const mesh = new THREE.Mesh(g, mat);
   mesh.position.set(x, y, z);
@@ -127,11 +129,12 @@ function part(ctx, parent, g, color, x = 0, y = 0, z = 0, sx = 1, sy = sx, sz = 
   if (o.rx || o.ry || o.rz) mesh.rotation.set(o.rx || 0, o.ry || 0, o.rz || 0);
   if (o.q) mesh.quaternion.copy(o.q);
   mesh.castShadow = o.shadow !== false;
-  if ((o.ol !== false && !o.mat) || (o.hull && o.ol !== false)) {
+  const tiny = STYLE.boost < 0 && ((g.attributes.position.count <= 60 && Math.max(sx, sy, sz) < 0.1) || (typeof o.ol === 'number' && o.ol <= 0.011)); // crowd LOD: no ink hull on specks (it would be under a pixel)
+  if (!tiny && ((o.ol !== false && !o.mat) || (o.hull && o.ol !== false))) {
     const e = typeof o.ol === 'number' ? o.ol : OUTLINE;
     mesh.add(new THREE.Mesh(outlineGeo(g, sx, sy, sz, e), inkMat));
   }
-  parent.add(mesh);
+  if (!(STYLE.boost < 0 && o.ol === false && !o.mat && g.attributes.position.count <= 60 && Math.max(sx, sy, sz) < 0.09)) parent.add(mesh); // crowd LOD drops unoutlined specks (toe caps, inner ears) entirely
   return mesh;
 }
 const flat = (g, mat, parent, x, y, z, sx, sy, sz, o = {}) => { // unlit/face bits: no outline, no shadow

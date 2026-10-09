@@ -63,10 +63,10 @@ export function bakeActor(actor, opts = {}) {
   const boneInverses = bones.map((n) => new THREE.Matrix4().copy(n.matrixWorld).invert());
   const skeleton = new THREE.Skeleton(bones, boneInverses);
   // visibility emulation: a hidden node (or any hidden ancestor) collapses its bone. Hooked into the per-frame skeleton update.
-  const upd = skeleton.update.bind(skeleton), bm = skeleton.boneMatrices;
+  const upd = skeleton.update.bind(skeleton);
   const chain = bones.map((n) => { const c = []; for (let p = n; p && p !== root; p = p.parent) c.push(p); return c; });
   skeleton.update = function () {
-    upd();
+    upd(); const bm = skeleton.boneMatrices; // read it live: three reallocates this array when it builds the bone texture
     for (let i = 0; i < bones.length; i++) { const c = chain[i]; let hid = false; for (let k = 0; k < c.length; k++) if (c[k].visible === false) { hid = true; break; } if (hid) bm.fill(0, i * 16, i * 16 + 16); }
     if (skeleton.boneTexture) skeleton.boneTexture.needsUpdate = true;
   };

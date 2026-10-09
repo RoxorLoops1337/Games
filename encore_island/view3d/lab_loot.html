@@ -13,7 +13,7 @@ const cam = view === 'models' ? { el: 22, d: 13, fov: 34, ty: 0.8 } : { el: 52, 
 lab({ ground: true, groundR: 40, el: cam.el, d: +(P.get('d') || cam.d), ty: cam.ty, fov: cam.fov, async build(V) {
   const fxm = await import('./fx3d.js'), lm = await import('./loot3d.js');
   const fx = fxm.init(V); V.mods.fx = fx; const loot = lm.init(V); V.mods.loot = loot; V.mods.loot3d = loot;
-  const S = g.S(); let rs = 12345; const R = () => { rs = (rs * 1664525 + 1013904223) >>> 0; return rs / 4294967296; };
+  window.__fx = fx; const S = g.S(); let rs = 12345; const R = () => { rs = (rs * 1664525 + 1013904223) >>> 0; return rs / 4294967296; };
   const models = new V.THREE.Group(); V.scene.add(models); const spin = [];
   if (view === 'models') {
     const row = (list, z, x0, dx) => list.forEach((e, i) => { const m = loot.makeItemModel(e); m.position.set(x0 + i * dx, 0, z); m.scale.setScalar(1.35); V.scene.add(m); spin.push(m); });

@@ -13,6 +13,7 @@ const { part, flat, ico, box, cyl, hang, cone, torus, cap, dome, basic, aim, bla
   buildHero, fitHero, makeHead, patchGeo, decal, cylDecal, decalMat, ctex, ell, star, addHeroFace, addFanFace, eyeJ, paintEyeShutJ, paintEyeR, paintEyeShutR, paintMouthJ, paintMouthR, paintMouthSmile, heroBase, finishHero, makeNotes, SKIN } = CK;
 
 const PI = Math.PI;
+const capL = (fan, a, b, th) => (fan ? cap(10, 4, th) : cap(a, b, th)); // crowd LOD hair caps
 const mixHex = (a, b, t) => { const k = new THREE.Color(a).lerp(new THREE.Color(b), t); return k.getHex(); };
 const sphX = (rx, ry, rz) => (x, y) => rz * Math.sqrt(Math.max(0.04, 1 - (x / rx) ** 2 - (y / ry) ** 2)); // z on an ellipse centred at 0
 const DEF_ATK = [[-1.55, 0, -0.1, -0.2, 0, 0], [0.6, 0, -0.6, -0.4, 0, 0]];
@@ -91,13 +92,13 @@ function rigRawclaw(o = {}, goat = false) {
   const { head, body, H } = R, { cy, rx, ry, rz } = H;
   part(ctx, body, cyl(0.175, 0.19, 0.2, 12), tc(HOOD2), 0, 0.09, 0, 1, 1, 0.88);
   part(ctx, body, cyl(0.158, 0.175, 0.2, 12), tc(HOOD), 0, 0.26, 0, 1, 1, 0.88);
-  part(ctx, body, torus(0.13, 0.055, 5, 12), tc(HOOD), 0, 0.355, -0.01, 1, 1, 0.8, { rx: PI / 2, ol: 0.012 });
+  part(ctx, body, torus(0.13, 0.055, fan ? 4 : 5, fan ? 8 : 12), tc(HOOD), 0, 0.355, -0.01, 1, 1, 0.8, { rx: PI / 2, ol: 0.012 });
   part(ctx, body, ico(1), tc(HOOD), 0, 0.33, -0.14, 0.12, 0.1, 0.09, { ol: 0.012 });
   for (const sd of [-1, 1]) { part(ctx, body, hang(0.01, 0.01, 0.13, 5), 0xffffff, sd * 0.05, 0.33, 0.145, 1, 1, 1, { ol: false }); part(ctx, R.arms[sd < 0 ? 0 : 1].el, hang(0.058, 0.056, 0.03, 8), tc(HOOD2), 0, -0.1, 0, 1, 1, 1, { ol: 0.008 }); }
   addBeatPad(ctx, body, 0.2, 0.162, fan, goat ? 0xfff6e0 : 0xe9e7f7);
   // hair: dark cap, swept pompadour (blobs running front to back), flicks, nape tuft
   const hm = ctx.mk('rcHair', { color: HAIR, flatShading: false }), hl = ctx.mk('rcHair2', { color: HAIR2, flatShading: false });
-  part(ctx, head, cap(16, 7, 1.25), 0, 0, cy + 0.02, -0.035, rx * 1.1, ry * 1.1, rz * 1.12, { mat: hm, hull: true, ol: 0.014, rx: -0.55 });
+  part(ctx, head, capL(fan, 16, 7, 1.25), 0, 0, cy + 0.02, -0.035, rx * 1.1, ry * 1.1, rz * 1.12, { mat: hm, hull: true, ol: 0.014, rx: -0.55 });
   // pompadour: a big swept-back wave (two stretched blobs, front high, tail sloping back) with lighter strand streaks along it
   part(ctx, head, ico(1), 0, 0, cy + ry * 0.98, 0.07, rx * 0.56, ry * 0.3, rz * 0.7, { mat: hm, hull: true, ol: 0.014, rx: -0.3 });
   part(ctx, head, ico(1), 0, 0.03, cy + ry * 1.1, -0.13, rx * 0.46, ry * 0.3, rz * 0.56, { mat: hm, hull: true, ol: 0.014, rx: -0.65, rz: -0.12 });
@@ -114,9 +115,9 @@ function rigRawclaw(o = {}, goat = false) {
       part(ctx, head, ico(1), 0xf1d5b0, sd * (rx + 0.2), cy + 0.01, -0.03, 0.27, 0.075, 0.115, { ol: 0.013, rz: sd * -0.28 });
       part(ctx, head, ico(1), 0xf2a3ab, sd * (rx + 0.2), cy + 0.0, 0.03, 0.2, 0.05, 0.07, { ol: false, rz: sd * -0.28, ry: sd * 0.2 });
       part(ctx, head, cyl(0.105, 0.105, 0.075, 12), PURP, sd * (rx + 0.03), cy - 0.02, 0.03, 1, 1, 1, { rz: PI / 2, ol: 0.012 });
-      part(ctx, head, torus(0.075, 0.016, 5, 12), 0xc8b3ff, sd * (rx + 0.075), cy - 0.02, 0.03, 1, 1, 1, { ry: PI / 2, ol: false });
+      if (!fan) part(ctx, head, torus(0.075, 0.016, 5, 12), 0xc8b3ff, sd * (rx + 0.075), cy - 0.02, 0.03, 1, 1, 1, { ry: PI / 2, ol: false });
     }
-    part(ctx, head, geo('hpband', () => new THREE.TorusGeometry(1, 0.045, 6, 28, PI)), PURP, 0, cy - 0.02, 0.0, rx * 1.12, ry * 1.2, rx * 1.12, { ol: 0.012 });
+    part(ctx, head, geo('hpband' + fan, () => new THREE.TorusGeometry(1, fan ? 0.06 : 0.045, fan ? 4 : 5, fan ? 10 : 22, PI)), PURP, 0, cy - 0.02, 0.0, rx * 1.12, ry * 1.2, rx * 1.12, { ol: 0.012 });
   }
   const eye = eyeJ({ gr: ['#4a2a14', '#7a4a26', '#c89050'], star: null, lash: 7 });
   R.face = fan ? addFanFace(ctx, head, H, { ex: 0.17, iris: 0x6a3a22 }) : addHeroFace(ctx, head, H, {
@@ -157,15 +158,15 @@ function rigAndy(o = {}) {
   part(ctx, body, cyl(0.17, 0.182, 0.06, 12), mixHex(PANTS, 0x000000, 0.1), 0, -0.02, 0, 1, 1, 0.88, { ol: 0.01 });
   // hair: brown cap + spiky crown + bangs, orange headband with a knot and flying tails on the viewer's left
   const hm = ctx.mk('anHair', { color: HAIR, flatShading: false }), hl = ctx.mk('anHair2', { color: HAIR2, flatShading: false });
-  part(ctx, head, cap(16, 7, 1.3), 0, 0, cy + 0.03, -0.04, rx * 1.1, ry * 1.1, rz * 1.12, { mat: hm, hull: true, ol: 0.014, rx: -0.4 });
+  part(ctx, head, capL(fan, 16, 7, 1.3), 0, 0, cy + 0.03, -0.04, rx * 1.1, ry * 1.1, rz * 1.12, { mat: hm, hull: true, ol: 0.014, rx: -0.4 });
   const sp = [[-0.62, 0.05, 0.3, 0.26, 0], [-0.34, 0.3, 0.12, 0.32, 1], [-0.04, 0.4, 0.0, 0.36, 0], [0.26, 0.34, -0.12, 0.32, 1], [0.58, 0.18, -0.32, 0.27, 0], [-0.3, -0.35, 0.05, 0.3, 1], [0.12, -0.4, -0.1, 0.33, 0], [0.5, -0.25, -0.3, 0.28, 1], [-0.6, -0.25, 0.2, 0.26, 0]];
-  for (const q of (fan ? sp.slice(0, 6) : sp)) {
+  for (const q of (fan ? sp.slice(0, 5) : sp)) {
     const bx = q[0] * rx, bz = q[1] * rz, by = cy + ry * Math.sqrt(Math.max(0.05, 1 - q[0] ** 2 - q[1] ** 2)) - 0.02;
     part(ctx, head, cone(0.1, q[3] * 1.15, 6), 0, bx, by + q[3] * 0.35, bz, 1, 1, 1, { mat: q[4] ? hl : hm, hull: true, ol: 0.012, rz: -q[0] * 0.9, rx: q[1] * 0.9 });
   }
   if (!fan) { part(ctx, head, ico(1), 0, -0.34, cy - 0.12, -0.04, 0.07, 0.17, 0.12, { mat: hm, ol: 0.012 }); part(ctx, head, ico(1), 0, 0.34, cy - 0.1, -0.04, 0.06, 0.15, 0.1, { mat: hm, ol: 0.012 }); }
   const hb = new THREE.Group(); hb.position.set(0, cy + ry * 0.38, -0.012); hb.rotation.x = -0.14; head.add(hb);
-  part(ctx, hb, torus(1, 0.075, 5, 24), ORG, 0, 0, 0, rx * 1.03, rz * 1.04, 0.55, { ol: 0.012, rx: PI / 2 }); // ring turned flat, z scale = band height
+  part(ctx, hb, torus(1, 0.075, fan ? 4 : 5, fan ? 12 : 24), ORG, 0, 0, 0, rx * 1.03, rz * 1.04, 0.55, { ol: 0.012, rx: PI / 2 }); // ring turned flat, z scale = band height
   const knot = new THREE.Group(); knot.position.set(-rx * 0.95, -0.02, -0.12); hb.add(knot);
   part(ctx, knot, ico(1), mixHex(ORG, 0xffffff, 0.15), 0, 0, 0, 0.08, 0.07, 0.07, { ol: 0.012 });
   const tails = [0, 1].map((i) => { const g = new THREE.Group(); knot.add(g); blade(ctx, g, ORG, 0, 0, 0, -0.1 - i * 0.05, -0.09 - i * 0.07, -0.22 - i * 0.04, 0.075, 0.025); return g; });
@@ -177,7 +178,7 @@ function rigAndy(o = {}) {
   const gt = new THREE.Group(); gt.position.set(-0.02, 0.08, 0.2); gt.rotation.set(0, -0.12, 0.5); gt.scale.setScalar(1.2); body.add(gt);
   const GO = 0xff8a1e, GY = 0xffc64a, WD = 0x8a5a30;
   part(ctx, gt, ico(2), GO, -0.02, -0.05, 0, 0.17, 0.14, 0.045, { ol: 0.012 });
-  part(ctx, gt, ico(2), GO, 0.1, 0.05, 0, 0.12, 0.1, 0.045, { ol: 0.012 });
+  if (!fan) part(ctx, gt, ico(2), GO, 0.1, 0.05, 0, 0.12, 0.1, 0.045, { ol: 0.012 });
   part(ctx, gt, ico(1), GY, -0.01, -0.03, 0.035, 0.13, 0.1, 0.018, { ol: false });
   part(ctx, gt, box(0.5, 0.05, 0.035), WD, 0.42, 0.075, 0.0, 1, 1, 1, { ol: 0.01 });
   part(ctx, gt, box(0.5, 0.032, 0.012), 0x3a2414, 0.42, 0.075, 0.02, 1, 1, 1, { ol: false });
@@ -188,7 +189,7 @@ function rigAndy(o = {}) {
     part(ctx, body, box(0.035, 0.42, 0.014), 0x4a2a14, 0.0, 0.18, 0.168, 1, 1, 1, { ol: false, rz: -0.55 });
   }
   // effects pedal on the floor beside his feet
-  const ped = new THREE.Group(); ped.position.set(-0.4, 0, 0.12); ped.rotation.y = 0.35; R.root.add(ped);
+  const ped = new THREE.Group(); ped.position.set(-0.4, 0, 0.12); ped.rotation.y = 0.35; if (!fan) R.root.add(ped);
   part(ctx, ped, box(0.22, 0.07, 0.15), 0x4f4a68, 0, 0.035, 0, 1, 1, 1, { ol: 0.01 });
   part(ctx, ped, box(0.2, 0.012, 0.13), 0xd8d4ee, 0, 0.075, 0, 1, 1, 1, { ol: false });
   const btn = [0x6fd36a, ORG].map((c, i) => part(ctx, ped, cyl(0.032, 0.032, 0.03, 8), c, -0.05 + i * 0.1, 0.09, 0.02, 1, 1, 1, { ol: 0.008 }));
@@ -216,10 +217,10 @@ function rigAndy(o = {}) {
 
 /* ------------------------------------------------------------------ onesie hoods (unicorn + monster) */
 // an open hood: a sphere cap turned to the back (pole = -z) so its rim frames the face, plus a ring at the rim
-function addHood(ctx, head, H, col, rimCol, o = {}) {
+function addHood(ctx, head, H, col, rimCol, fan) {
   const { cy, rx, ry, rz } = H, hm = ctx.mk('hood' + col, { color: col, flatShading: false, roughness: 0.95 });
-  part(ctx, head, cap(20, 10, 2.05), 0, 0, cy - 0.0, -0.03, rx * 1.14, rz * 1.12, ry * 1.1, { mat: hm, hull: true, ol: 0.015, rx: -PI / 2 });
-  const rim = part(ctx, head, torus(1, 0.13, 6, 24), rimCol, 0, cy, 0.165, rx * 1.06 * 0.887, ry * 1.1 * 0.887, 0.4 * 0.887, { ol: 0.013 });
+  part(ctx, head, capL(fan, 20, 10, 2.05), 0, 0, cy - 0.0, -0.03, rx * 1.14, rz * 1.12, ry * 1.1, { mat: hm, hull: true, ol: 0.015, rx: -PI / 2 });
+  const rim = part(ctx, head, torus(1, 0.13, 6, fan ? 14 : 24), rimCol, 0, cy, 0.165, rx * 1.06 * 0.887, ry * 1.1 * 0.887, 0.4 * 0.887, { ol: 0.013 });
   return rim;
 }
 /* ------------------------------------------------------------------ UNICORN JASMIN */
@@ -238,7 +239,7 @@ function rigUnicorn(o = {}) {
   part(ctx, body, starGeo(0.045, 0.02, 0.02), 0xffd84d, 0, 0.13, 0.185, 1, 1, 1, { ol: false });
   part(ctx, body, box(0.014, 0.2, 0.012), WH, 0, 0.28, 0.168, 1, 1, 1, { ol: false });
   for (const sd of [-1, 1]) { part(ctx, R.arms[sd < 0 ? 0 : 1].el, hang(0.062, 0.062, 0.05, 8), WH, 0, -0.09, 0, 1, 1, 1, { ol: 0.01 }); }
-  addHood(ctx, head, H, PK2, WH);
+  addHood(ctx, head, H, PK2, WH, fan);
   // ears + horn on top of the hood
   for (const sd of [-1, 1]) { part(ctx, head, cone(0.085, 0.2, 6), PK2, sd * 0.2, cy + ry * 0.98, 0.0, 1, 1, 0.6, { ol: 0.012, rz: -sd * 0.3, rx: -0.15 }); part(ctx, head, cone(0.05, 0.14, 5), 0xff9ec0, sd * 0.2 + sd * 0.012, cy + ry * 0.95, 0.03, 1, 1, 0.5, { ol: false, rz: -sd * 0.3, rx: -0.15 }); }
   const hn = new THREE.Group(); hn.position.set(0, cy + ry * 1.0, 0.1); hn.rotation.x = 0.18; head.add(hn);
@@ -289,7 +290,7 @@ function rigMonster(o = {}) {
   const mat = decalMat('smiley', smileyTex()); if (!fan) cylDecal(body, mat, 0.2, 0.9, 0.17, 0.23, 0.23, { eps: 0.03 }); else part(ctx, body, ico(1), 0xffb52e, 0, 0.16, 0.16, 0.09, 0.09, 0.03, { ol: false });
   part(ctx, body, ico(1), tc(G2), 0, -0.02, 0, 0.19, 0.08, 0.17, { ol: false });
   for (let i = 0; i < (fan ? 3 : 4); i++) part(ctx, body, cone(0.05, 0.14, 4), G3, 0, 0.3 - i * 0.1, -0.17 - (i % 2) * 0.01, 1, 1, 1, { ol: 0.01, rx: -PI / 2 - 0.2 });
-  addHood(ctx, head, H, G1, G3);
+  addHood(ctx, head, H, G1, G3, fan);
   // leafy fringe round the face opening, spikes + horns + eyeballs on top of the hood
   const nf = fan ? 6 : 10;
   for (let i = 0; i < nf; i++) { const a = PI * 0.5 + (i / (nf - 1)) * PI * 1.55 - 0.1, rr = 0.355; part(ctx, head, cone(0.04, 0.12, 4), i % 2 ? G2 : G3, Math.cos(a) * rr * 1.13, cy + Math.sin(a) * rr * 1.0, 0.18, 1, 1, 0.7, { ol: false, rz: a - PI / 2 }); }
@@ -415,7 +416,7 @@ function fanUpdate(a, seed) {
 export function makeHero(art, o = {}) {
   const fan = !!o.fan, keep = { flat: STYLE.flat, boost: STYLE.boost };
   STYLE.flat = false; STYLE.boost = fan ? -1 : 1; // crowd actors drop one icosphere level (fans are ~47 px tall)
-  if (fan) { const tint = o.tint || FAN_TINTS[(o.seed || 0) % FAN_TINTS.length]; o = Object.assign({}, o, { tc: (c) => mixHex(c, tint, 0.4) }); }
+  if (fan) { const tint = o.tint || FAN_TINTS[(o.seed || 0) % FAN_TINTS.length]; o = Object.assign({}, o, { tc: (c) => mixHex(c, tint, 0.3) }); }
   try {
     let a;
     if (art === 'jasmin') a = makeJasmin({ tc: o.tc }); else if (art === 'roxor') a = makeRoxor({ rack: false, fan, tc: o.tc });

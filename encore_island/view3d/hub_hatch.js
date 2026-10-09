@@ -2,7 +2,7 @@
 // and the warp pad at the Travel Dock (WAYPAD, once S.waygate). Local frames = the 2D positions, +z faces the camera.
 import * as THREE from 'three';
 import { Builder, C, INK, W, TAU, PI, seg, GB, GOLD, lit, damp, clamp, hash01 } from './kit.js';
-import { Inst, QuadSet, ringQuad, rod, outline } from './hub_fx.js';
+import { Inst, QuadSet, ringQuad, rod, outline, rbx, bll } from './hub_fx.js';
 import { iconTex } from './plate3d.js';
 
 const GOLDM = { m: GOLD, c: 0xffd84d };
@@ -18,18 +18,18 @@ export function buildHatch(V, fx) {
   const fl = f.build({ cast: false, ao: 0 }); fl.children.forEach((m) => { m.receiveShadow = true; }); g.add(fl);
   // posts, arch and chain (static)
   const b = new Builder({ ao: 0.18 }), qs = new QuadSet();
-  for (const sx of [-1, 1]) { b.cyl(0x6a4a20, sx * 1.35, 0, -0.75, 0.15, 0.1, 12, 0.8); b.cyl(GOLDM, sx * 1.35, 0.05, -0.75, 0.065, 1.05, 10); b.ball(GOLDM, sx * 1.35, 1.12, -0.75, 0.14, 0.9); b.cyl(0xb02a60, sx * 1.35, 0, 0.95, 0.06, 0.05, 8); }
-  for (const sx of [-1, 1]) b.rbox(0x6a4cc4, sx * 1.15, 1.3, -1.0, 0.22, 2.6, 0.22, 0.3);
-  const tilt = -0.5, sy = 2.45, sz = -1.05; b.rbox(0x2d1a6a, 0, sy, sz, 2.7, 0.7, 0.14, 0.4, 0, tilt); b.rbox(GOLDM, 0, sy + 0.4, sz - 0.1, 2.76, 0.07, 0.12, 0.5, 0, tilt);
+  for (const sx of [-1, 1]) { b.cyl(0x6a4a20, sx * 1.35, 0, -0.75, 0.15, 0.1, 12, 0.8); b.cyl(GOLDM, sx * 1.35, 0.05, -0.75, 0.065, 1.05, 10); bll(b, GOLDM, sx * 1.35, 1.12, -0.75, 0.14, 0.9); b.cyl(0xb02a60, sx * 1.35, 0, 0.95, 0.06, 0.05, 8); }
+  for (const sx of [-1, 1]) rbx(b, 0x6a4cc4, sx * 1.15, 1.3, -1.0, 0.22, 2.6, 0.22, 0.3);
+  const tilt = -0.5, sy = 2.45, sz = -1.05; rbx(b, 0x2d1a6a, 0, sy, sz, 2.7, 0.7, 0.14, 0.4, 0, tilt); rbx(b, GOLDM, 0, sy + 0.4, sz - 0.1, 2.76, 0.07, 0.12, 0.5, 0, tilt);
   { const sp = sg(tilt, 0, sy, sz, 0.08); fx.atlas.quad(qs, 'BACKSTAGE', 2.5, sp[0], sp[1], sp[2], 0, tilt, 0.74); }
   g.add(outline(b.build({ cast: true }), 0.028)); g.add(fx.atlas.mesh(qs));
   // locked props: grate + chain + padlock (separate meshes so they can hide when the stairs open)
   const lk = new THREE.Group(); const gb = new Builder({ ao: 0.1 });
-  for (let i = 0; i < 11; i++) gb.rbox(0x8a8aa0, -1.0 + i * 0.2, 0.105, 0.1, 0.05, 0.05, 1.5, 0.5);
-  for (const z of [-0.55, 0.0, 0.55]) gb.rbox(0x6a6a88, 0, 0.12, 0.1 + z, 2.2, 0.05, 0.06, 0.5);
+  for (let i = 0; i < 11; i++) rbx(gb, 0x8a8aa0, -1.0 + i * 0.2, 0.105, 0.1, 0.05, 0.05, 1.5, 0.5);
+  for (const z of [-0.55, 0.0, 0.55]) rbx(gb, 0x6a6a88, 0, 0.12, 0.1 + z, 2.2, 0.05, 0.06, 0.5);
   { const A = [-1.35, 1.02, -0.75], B = [1.35, 1.02, -0.75], n = 16; for (let k = 0; k < n; k++) { const u0 = k / n, u1 = (k + 1) / n, s0 = 0.34 * Math.sin(u0 * PI), s1 = 0.34 * Math.sin(u1 * PI); rod(gb, GB.cyl, 0x9a9ab8, A[0] + (B[0] - A[0]) * u0, A[1] - s0, A[2] + 0.3 * Math.sin(u0 * PI), A[0] + (B[0] - A[0]) * u1, A[1] - s1, A[2] + 0.3 * Math.sin(u1 * PI), 0.03, 5); } }
-  lk.add(outline(gb.build({ cast: true }), 0.02));
-  const pb = new Builder({ ao: 0.1 }); pb.rbox(GOLDM, 0, 0, 0, 0.5, 0.42, 0.2, 0.3); pb.tor(GOLDM, 0, 0.26, 0, 0.15, 0.045, 6, seg(16)); pb.rbox(INK, 0, -0.02, 0.1, 0.08, 0.14, 0.03, 0.5); const pad = outline(pb.build({ cast: true }), 0.025); pad.position.set(0, 1.0, -0.2); lk.add(pad); g.add(lk);
+  lk.add(gb.build({ cast: false }));
+  const pb = new Builder({ ao: 0.1 }); rbx(pb, GOLDM, 0, 0, 0, 0.5, 0.42, 0.2, 0.3); pb.tor(GOLDM, 0, 0.26, 0, 0.15, 0.045, 6, seg(16)); rbx(pb, INK, 0, -0.02, 0.1, 0.08, 0.14, 0.03, 0.5); const pad = outline(pb.build({ cast: true }), 0.025); pad.position.set(0, 1.0, -0.2); lk.add(pad); g.add(lk);
   // open-state effects
   const ring = ringQuad({ r: 1.5, rin: 0.9, rout: 1.0, col: 0xff9ac8, prog: 0, a: 1 }); ring.position.set(0, 0.07, 0.1); g.add(ring);
   const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 1.0, 3.4, 24, 1, true), new THREE.MeshBasicMaterial({ color: new THREE.Color(1, 0.45, 0.75), transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, fog: false })); beam.position.set(0, 1.7, 0.1); beam.scale.set(1.2, 1, 0.8); beam.renderOrder = 5; g.add(beam);
@@ -63,7 +63,7 @@ export function buildWarp(V, fx) {
   const wx = g.position.x, wz = g.position.z, R = 0.92;
   const b = new Builder({ ao: 0 });
   b.cyl(INK, 0, 0, 0, R + 0.16, 0.05, seg(40)); b.cyl(0xdff8ff, 0, 0, 0, R + 0.08, 0.09, seg(40)); b.cyl(0x2a5a9a, 0, 0, 0, R, 0.11, seg(40)); b.cyl(0x4aa0cc, 0, 0, 0, R * 0.82, 0.118, seg(40)); b.cyl(0x6ec9e0, 0, 0, 0, R * 0.52, 0.124, seg(32)); b.cyl(0xb8f4ff, 0, 0, 0, R * 0.2, 0.13, seg(20));
-  for (let i = 0; i < 8; i++) { const a = i / 8 * TAU; b.ball(GOLDM, Math.cos(a) * (R + 0.04), 0.1, Math.sin(a) * (R + 0.04), 0.045, 0.7); }
+  for (let i = 0; i < 8; i++) { const a = i / 8 * TAU; bll(b, GOLDM, Math.cos(a) * (R + 0.04), 0.1, Math.sin(a) * (R + 0.04), 0.045, 0.7); }
   g.add(b.build({ cast: false, ao: 0 }));
   const rune = ringQuad({ r: R * 0.9, rin: 0.62, rout: 0.72, col: 0xb8f4ff, dash: 12, spin: 0.25, a: 1 }); rune.position.y = 0.14; g.add(rune);
   const rune2 = ringQuad({ r: R * 0.9, rin: 0.9, rout: 0.97, col: 0x6ec9e0, a: 0.6 }); rune2.position.y = 0.14; g.add(rune2);

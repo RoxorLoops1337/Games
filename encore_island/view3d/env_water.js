@@ -55,7 +55,7 @@ void main(){
   col = mix(col, uSky, fr * 0.45);
   // cloud shadows drifting over the sea (same field as the lit materials)
   if (uCloud > 0.001) { vec2 q = p * 0.05 + vec2(t * 0.022, t * 0.012); float n = vn(q * 3.0) * 0.62 + vn(q * 6.93 + 7.1) * 0.38; col *= 1.0 - smoothstep(0.46, 0.66, n) * uCloud * 0.55; }
-  float a = mix(0.36, 1.0, smoothstep(0.1, 3.2, d)); a = max(a, foam);
+  float a = mix(0.6, 1.0, smoothstep(0.1, 3.2, d)); a = max(a, foam);
   float fg = clamp((length(vW - uCam) - uFogN) / max(1.0, uFogF - uFogN), 0.0, 1.0); fg = fg * fg * (3.0 - 2.0 * fg);
   col = mix(col, uFogCol, fg); a = mix(a, 1.0, fg);
   gl_FragColor = vec4(col, a);
@@ -63,6 +63,8 @@ void main(){
   #include <colorspace_fragment>
 }`;
 
+// the cliff skirt steps inward as it descends, so at sea level the rock sits this far inside the top outline: the shore map follows the WATERLINE
+const WATERLINE_INSET = 0.72;
 // ---- the bake: rasterise outlines, exact Euclidean distance transform (Felzenszwalb), pack to half floats. Generator: yield between slices.
 function* edt(f, R, out, v, z) { // f: Float32Array R*R (0 or 1e20), out: squared distances
   const tmp = new Float64Array(R), d = new Float64Array(R);
@@ -79,7 +81,7 @@ function* edt(f, R, out, v, z) { // f: Float32Array R*R (0 or 1e20), out: square
 function* bakeShore(geos, rect, R, res) {
   const cv = document.createElement('canvas'); cv.width = cv.height = R; const c = cv.getContext('2d', { willReadFrequently: true }), k = R / rect.size;
   c.fillStyle = '#000'; c.fillRect(0, 0, R, R); c.fillStyle = '#fff';
-  for (const g of geos) { const o = outline(g, 3), cx = g.x * W, cz = g.y * W; c.beginPath(); for (let i = 0; i < o.length; i += 2) { const x = (cx + o[i] - rect.x0) * k, y = (cz + o[i + 1] - rect.z0) * k; i ? c.lineTo(x, y) : c.moveTo(x, y); } c.closePath(); c.fill(); }
+  for (const g of geos) { const o = outline(g, 3), cx = g.x * W, cz = g.y * W; c.beginPath(); for (let i = 0; i < o.length; i += 2) { const l = Math.hypot(o[i], o[i + 1]), sc = 1 - WATERLINE_INSET / l, x = (cx + o[i] * sc - rect.x0) * k, y = (cz + o[i + 1] * sc - rect.z0) * k; i ? c.lineTo(x, y) : c.moveTo(x, y); } c.closePath(); c.fill(); }
   const img = c.getImageData(0, 0, R, R).data; yield;
   const N = R * R, f = new Float32Array(N), dOut = new Float32Array(N), dIn = new Float32Array(N), v = new Int32Array(R), z = new Float64Array(R + 1);
   for (let i = 0; i < N; i++) f[i] = img[i * 4] > 127 ? 0 : 1e20; yield* edt(f, R, dOut, v, z);

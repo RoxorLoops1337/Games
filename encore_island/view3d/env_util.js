@@ -1,6 +1,7 @@
 // Encore Island 3D environment: shared helpers (noise, island outlines, geometry accumulator, material patch chaining).
 import * as THREE from 'three';
 import * as kit from './kit.js';
+import { mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
 
 export const W = kit.W, TAU = kit.TAU;
 /** water surface height. Islands are flat at y = 0; cliffs drop to here and the rock keeps tapering underwater. */
@@ -88,3 +89,6 @@ export function radiusSafe(g, dx, dy) {
   const d = Math.hypot(dx, dy); if (d < 1e-6) return 1; const n = g.rad.length; let t = ((Math.atan2(dy, dx) % TAU) + TAU) % TAU / TAU * n; const i = Math.floor(t) % n, j = (i + 1) % n; t -= Math.floor(t);
   return g.rad[i] * (1 - t) + g.rad[j] * t - d;
 }
+
+/** smooth (welded) noisy blob, non-indexed with smooth normals: tree crowns, bushes, clouds */
+export function smoothBlob(d, amp, seed, sy) { const g = kit.blobGeo(d, amp, seed, sy); g.deleteAttribute('normal'); g.deleteAttribute('uv'); const m = mergeVertices(g, 1e-4); m.computeVertexNormals(); const n = m.toNonIndexed(); n.deleteAttribute('uv'); return n; }

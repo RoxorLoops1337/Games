@@ -20,7 +20,7 @@ if (P.get('game') === '1') {
     EI.initGame(true); const S = EI.S; S.started = true; S.t = 0;
     try { const T = EI.FEATS.find((f) => f.id === 'tutorial').api; S.feat.tutorial.off = true; T.finish(); } catch (e) { /* optional */ }
     for (let i = 0; i < (o.lands || 0); i++) EI.addLand();
-    if (o.wallet) S.wallet = o.wallet; if (o.gems) S.gems = o.gems; if (o.fans) { S.houses = 3; for (let i = 0; i < o.fans; i++) EI.recruit(); }
+    if (o.wallet) S.wallet = o.wallet; if (o.gems) S.gems = o.gems; if (o.fans) { S.houses = 40; S.wallet = 1e15; for (let i = 0; i < o.fans; i++) EI.recruit(); }
     await new Promise((r) => { const t0 = Date.now(); (function w() { if (typeof ART !== 'undefined' && ART.ready || Date.now() - t0 > 4000) r(); else setTimeout(w, 50); })(); });
     window.__game = { EI, S: () => EI.S }; return window.__game;
   };

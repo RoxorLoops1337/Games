@@ -64,7 +64,7 @@ export function buildIsland(g, B, bi) {
   for (let i = 0; i < n; i++) { rr[i] = Math.hypot(O[i * 2], O[i * 2 + 1]); ux[i] = O[i * 2] / rr[i]; uz[i] = O[i * 2 + 1] / rr[i]; minR = Math.min(minR, rr[i]); sumR += rr[i]; }
   const R = sumR / n, seedN = g.seed * 0.37;
   // ---------------- top
-  const g0 = new THREE.Color(B.g[0]), g1 = new THREE.Color(B.g[1]), tuft = new THREE.Color(B.tuft), deep = new THREE.Color(B.deep), shore = new THREE.Color(B.shore), sand = new THREE.Color(0xf6e7c8).lerp(shore, 0.45);
+  const g0 = new THREE.Color(B.g[0]), g1 = new THREE.Color(B.g[1]), tuft = new THREE.Color(B.tuft), deep = new THREE.Color(B.deep), shore = new THREE.Color(B.shore), sand = new THREE.Color(0xf3deb0).lerp(shore, 0.25);
   if (bi === 2 || bi === 7) sand.set(B.g[0]).multiplyScalar(0.96); // dune and gala ground already reads as sand: the rim only gets paler
   const insets = [0, 0.06, 0.14, 0.24, 0.36, 0.55, 0.85, 1.3, 2.0, 3.0, 4.4, 6.2, 8.6].filter((v) => v < minR * 0.86);
   const rows = insets.length, pos = new Float32Array((1 + rows * n) * 3), col = new Float32Array((1 + rows * n) * 3), uv = new Float32Array((1 + rows * n) * 2), idx = [];
@@ -91,22 +91,22 @@ export function buildIsland(g, B, bi) {
   const top = new THREE.Mesh(tg, groundMat(bi)); top.receiveShadow = true; top.castShadow = false; top.name = 'islandTop';
   // ---------------- rock: skirt, underside, boulders, roots (one flat-shaded vertex coloured mesh)
   const acc = new Acc(), depthK = Math.sqrt(Math.max(0.8, Math.min(2.2, R / 6.3)));
-  const cliff = new THREE.Color(B.cliff), dark = new THREE.Color(0x1a0a30), warm = new THREE.Color(0xe8c8a0), turfA = new THREE.Color(B.g[1]).lerp(deep, 0.45), turfB = new THREE.Color(B.g[1]).lerp(deep, 0.7).multiplyScalar(0.95), sea = new THREE.Color(0x4aa8c8);
+  const cliff = new THREE.Color(B.cliff), dark = new THREE.Color(0x1a0a30), warm = new THREE.Color(0xe8c8a0), turfA = new THREE.Color(B.g[1]).lerp(deep, 0.45), turfB = new THREE.Color(B.g[1]).lerp(deep, 0.7).multiplyScalar(0.95), sea = new THREE.Color(0x2e86a8);
   const cols = { turfA, turfB, c0: cliff.clone().lerp(warm, 0.32).multiplyScalar(1.12), c0d: cliff.clone().lerp(warm, 0.1), c1: cliff.clone().multiplyScalar(0.98), c1d: cliff.clone().lerp(dark, 0.28), c2: cliff.clone().lerp(dark, 0.22), c2d: cliff.clone().lerp(dark, 0.45), c3: cliff.clone().lerp(sea, 0.5).lerp(dark, 0.12), c3d: cliff.clone().lerp(sea, 0.55).lerp(dark, 0.3),
     u0: cliff.clone().lerp(sea, 0.55).lerp(dark, 0.3), u1: cliff.clone().lerp(sea, 0.5).lerp(dark, 0.45), u2: cliff.clone().lerp(sea, 0.4).lerp(dark, 0.6), u3: cliff.clone().lerp(dark, 0.7) };
   // wall rows: stratified bands from the lip down past the waterline. Each band is a wall followed by a small inset ledge; bands darken with depth,
   // the top band wears a mossy drip fringe, and everything below the sea level tints toward water. [y, outward offset, noise amplitude, noise id, colour]
-  const nb = Math.max(4, Math.round((-WY - 0.48) / 0.62)), bh = (-WY - 0.5) / nb, wall = [[-0.22, 0, 0, 0, cols.turfA], [-0.32, 0.03, 0.04, 0, cols.turfB], [-0.48, 0.02, 0.06, 0, cols.c0]];
+  const nbd = Math.max(4, Math.round((-WY - 0.48) / 0.62)), bh = (-WY - 0.5) / nbd, wall = [[-0.22, 0, 0, 0, cols.turfA], [-0.32, 0.03, 0.04, 0, cols.turfB], [-0.48, 0.02, 0.06, 0, cols.c0]];
   const light = cliff.clone().lerp(warm, 0.28).multiplyScalar(1.12), deepC = cliff.clone().lerp(dark, 0.5);
-  for (let b2 = 0; b2 < nb; b2++) { const f = b2 / (nb - 1), c1 = light.clone().lerp(deepC, f * 0.85), c2 = light.clone().lerp(deepC, Math.min(1, f * 0.85 + 0.12)), yb = -0.48 - (b2 + 1) * bh, off = -0.1 - b2 * 0.13, id = b2 + 1;
-    wall.push([yb + bh * 0.04, off, 0.2 + 0.03 * b2, id, c1]); wall.push([yb, off - 0.01, 0.2 + 0.03 * b2, id, c2]); if (b2 < nb - 1) wall.push([yb - 0.035, off - 0.16, 0.12, id + 20, c2]); }
+  for (let b2 = 0; b2 < nbd; b2++) { const f = b2 / (nbd - 1), c1 = light.clone().lerp(deepC, f * 0.85), c2 = light.clone().lerp(deepC, Math.min(1, f * 0.85 + 0.12)), yb = -0.48 - (b2 + 1) * bh, off = -0.1 - b2 * 0.13, id = b2 + 1;
+    wall.push([yb + bh * 0.04, off, 0.2 + 0.03 * b2, id, c1]); wall.push([yb, off - 0.01, 0.2 + 0.03 * b2, id, c2]); if (b2 < nbd - 1) wall.push([yb - 0.035, off - 0.16, 0.12, id + 20, c2]); }
   const wrow = wall.map(([y, off, amp, nid, cc], r) => {
     const P = new Float32Array(n * 3), Cc = new Float32Array(n * 3), uw = kit.clamp((WY + 0.15 - y) / 1.0, 0, 1);
     for (let i = 0; i < n; i++) {
       const nzz = (vnoise(i * 0.27 + nid * 9.1 + seedN, nid * 3.3) - 0.5) * 2 + (vnoise(i * 0.8 + nid * 4.4, 7.7 + seedN) - 0.5) * 0.7, o = off + amp * nzz;
       P[i * 3] = O[i * 2] + ux[i] * o; P[i * 3 + 1] = y; P[i * 3 + 2] = O[i * 2 + 1] + uz[i] * o;
       _c.copy(cc); if (r === 2) _c.lerp(cols.turfB, sstep(0.46, 0.62, vnoise(i * 0.55 + seedN, 2.2))); if (r === 3) _c.lerp(cols.turfB, sstep(0.5, 0.68, vnoise(i * 0.55 + seedN, 2.2)) * 0.45);
-      if (uw > 0) _c.lerp(sea, uw * 0.5).multiplyScalar(1 - 0.25 * uw);
+      if (uw > 0) _c.lerp(sea, uw * 0.6).multiplyScalar(1 - 0.45 * uw);
       _c.multiplyScalar(0.94 + 0.12 * vnoise(i * 0.12 + r * 5.5, seedN + 1.7)); Cc[i * 3] = _c.r; Cc[i * 3 + 1] = _c.g; Cc[i * 3 + 2] = _c.b;
     }
     return { P, Cc, n };
@@ -126,7 +126,7 @@ export function buildIsland(g, B, bi) {
   const mk = (y, s, amp, ck, rid) => {
     const P = new Float32Array(half * 3), Cc = new Float32Array(half * 3);
     for (let h = 0; h < half; h++) { const i = h * 2, nzz = (vnoise(h * 0.33 + rid * 5.7 + seedN, rid * 2.1) - 0.5) * 2, k = s + amp * 0.18 * nzz, o = -0.2 * rid * nzz;
-      P[h * 3] = O[i * 2] * k + ux[i] * o; P[h * 3 + 1] = y * (rid === 0 ? 1 : depthK); P[h * 3 + 2] = O[i * 2 + 1] * k + uz[i] * o;
+      P[h * 3] = O[i * 2] * k + ux[i] * o; P[h * 3 + 1] = y * depthK; P[h * 3 + 2] = O[i * 2 + 1] * k + uz[i] * o;
       _c.copy(cols[ck]).multiplyScalar(0.9 + 0.2 * vnoise(h * 0.4 + rid * 3, seedN)); Cc[h * 3] = _c.r; Cc[h * 3 + 1] = _c.g; Cc[h * 3 + 2] = _c.b; }
     return { P, Cc, n: half };
   };

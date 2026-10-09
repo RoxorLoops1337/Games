@@ -80,9 +80,9 @@ export function init(V) {
     if (L.drums) { L.drums.update(dt, t); L.drums.age += dt; pop(L.drums.g, L.drums.age); }
     // Amp Up (a wall of amps behind its plate, one per level) and Crowd Gate (an arch behind its plate, bigger per level): rebuilt on a level change
     const lvlA = Math.min(6, z.towerLvl | 0), lvlG = Math.min(4, z.hordeLvl | 0);
-    if (lvlA > 0 && L.ampN !== lvlA) { const pl = plateOf(z, 'towersUp'); if (pl) { if (L.amps) { L.amps.dispose(); g.remove(L.amps.g); } L.amps = born(L, ampWall(lvlA)); L.ampN = lvlA; L.amps.g.position.set(pl.x * W, 0, pl.y * W - 2.0); g.add(L.amps.g); } }
+    if (lvlA > 0 && L.ampN !== lvlA) { const pl = plateOf(z, 'towersUp'); if (pl) { if (L.amps) { L.amps.dispose(); g.remove(L.amps.g); } L.amps = born(L, ampWall(lvlA)); L.ampN = lvlA; L.amps.g.position.set(pl.x * W, 0, pl.y * W - 2.1); g.add(L.amps.g); } }
     if (L.amps) { L.amps.age += dt; pop(L.amps.g, L.amps.age); }
-    if (lvlG > 0 && L.gateN !== lvlG) { const pl = plateOf(z, 'gate2'); if (pl) { if (L.gate) { L.gate.dispose(); g.remove(L.gate.g); } L.gate = born(L, crowdGate(lvlG)); L.gateN = lvlG; L.gate.g.position.set(pl.x * W, 0, pl.y * W - 2.4); g.add(L.gate.g); } }
+    if (lvlG > 0 && L.gateN !== lvlG) { const pl = plateOf(z, 'gate2'); if (pl) { if (L.gate) { L.gate.dispose(); g.remove(L.gate.g); } L.gate = born(L, crowdGate(lvlG)); L.gateN = lvlG; L.gate.g.position.set(pl.x * W, 0, pl.y * W - 1.15); g.add(L.gate.g); } }
     if (L.gate) { L.gate.age += dt; pop(L.gate.g, L.gate.age); }
     // den + the HOME warp pad (once the Warp Pads plate is paid)
     L.den.update(dt, t); pop(L.den.g, L.age, 0.1);

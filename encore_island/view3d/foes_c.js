@@ -37,9 +37,9 @@ function core(name, seed, o, atkDur = 0.55, dieDur = 0.8) {
   // elite: a glinting crown on a parent node
   c.crown = (par, x, y, z, s = 1) => {
     if (!elite) return null;
-    const g = new THREE.Group(); g.position.set(x, y, z); g.scale.setScalar(s); par.add(g);
-    part(ctx, g, cyl(0.15, 0.17, 0.07, 8), 0xffd84d, 0, 0, 0, 1, 1, 1, { mo: M, ol: 0.012 });
-    for (let i = 0; i < 5; i++) { const a = i / 5 * TAU; part(ctx, g, cone(0.045, 0.13, 4), 0xffd84d, cos(a) * 0.15, 0.09, sin(a) * 0.15, 1, 1, 1, { mo: M, ol: 0.01 }); c.gems.push(bit(g, ico(0), i % 2 ? gl(1.6, 0.5, 0.8) : gl(0.5, 1.5, 1.7), cos(a) * 0.15, 0.175, sin(a) * 0.15, 0.03)); }
+    const g = new THREE.Group(), mo = gold ? MG : undefined; g.position.set(x, y, z); g.scale.setScalar(s); par.add(g);
+    part(ctx, g, cyl(0.15, 0.17, 0.07, 8), 0xffd84d, 0, 0, 0, 1, 1, 1, { mo, ol: 0.012 });
+    for (let i = 0; i < 5; i++) { const a = i / 5 * TAU; part(ctx, g, cone(0.045, 0.13, 4), 0xffd84d, cos(a) * 0.15, 0.09, sin(a) * 0.15, 1, 1, 1, { mo, ol: false }); if (i % 2 === 0) c.gems.push(bit(g, ico(0), i ? gl(1.6, 0.5, 0.8) : gl(0.5, 1.5, 1.7), cos(a) * 0.15, 0.175, sin(a) * 0.15, 0.032)); }
     c.gems.push(bit(g, oct(), gl(2.2, 2, 1.3), 0, 0.2, 0, 0.05, 0.11, 0.05));
     return g;
   };
@@ -50,8 +50,8 @@ function core(name, seed, o, atkDur = 0.55, dieDur = 0.8) {
     for (let i = 0; i < c.gems.length; i++) c.gems[i].scale.setScalar(0.75 + 0.35 * sin(t * 6 + i * 1.7));
   };
   c.done = (self, h, rad = 0.55) => {
-    const k = elite ? 1.14 : 1; fitG.scale.setScalar(k);
-    Object.assign(self, { group, height: h * k + (elite ? 0.1 : 0), radius: rad, attack() { if (L.atkT < 0 && L.dieT < 0) { L.attack(); S.cd = atkDur + 0.5; } }, die: () => L.die(), isDead: () => L.dead, dispose() { for (const m of ctx.list) m.dispose(); } });
+    const k = elite ? 1.05 : 1; fitG.scale.setScalar(k); // the sim already grows an elite's radius, so only a hint of extra size
+    Object.assign(self, { group, height: h * k + (elite ? 0.12 : 0), radius: rad, attack() { if (L.atkT < 0 && L.dieT < 0) { L.attack(); S.cd = atkDur + 0.5; } }, die: () => L.die(), isDead: () => L.dead, reset() { Object.assign(L, { atkT: -1, dieT: -1, dead: false, hurt: 0, hurtApplied: 0, atkEnv: 0, dieU: 0 }); ctx.setHurt(0); S.cd = 0; S.sp = 0; }, dispose() { for (const m of ctx.list) m.dispose(); } });
     Object.defineProperty(self, 'dead', { get: () => L.dead }); return self;
   };
   return c;
@@ -72,7 +72,7 @@ function frame(c, dt, st) {
 // a fanned jazz / glove hand hanging along -y of its parent; returns the group
 function glove(c, par, col = 0xffffff, s = 1) {
   const h = new THREE.Group(); par.add(h);
-  c.P(h, ico(1), col, 0, -0.04 * s, 0, 0.065 * s, 0.06 * s, 0.04 * s, { ol: 0.01 });
+  c.P(h, ico(0), col, 0, -0.04 * s, 0, 0.068 * s, 0.062 * s, 0.04 * s, { ol: 0.01 });
   for (let i = 0; i < 5; i++) { const a = (i - 2) * 0.5, l = [0.065, 0.09, 0.1, 0.09, 0.065][i] * s; c.P(h, hang(0.019 * s, 0.013 * s, l, 4), col, sin(a) * 0.045 * s, -0.075 * s, 0, 1, 1, 1, { rz: a, ol: 0.008 }); }
   return h;
 }
@@ -144,7 +144,7 @@ function dancer(o) {
   P(head, ico(2), WH, 0, 0, 0, 0.29, 0.27, 0.26, { ol: 0.017 });
   const face = addFace(c.ctx, head, { cy: 0, rx: 0.29, ry: 0.27, rz: 0.26, hs: 1 }, { ex: 0.115, ey: -0.02, ew: 0.058, eh: 0.082, mw: 0.05, my: -0.125, iris: 0x9a8ad8, blushColor: 0xffa6c8 });
   P(head, cap(10, 5, 1.55), LAV, 0, 0.02, -0.03, 0.31, 0.29, 0.28, { rx: -0.4 });
-  for (const sd of [-1, 1]) P(head, ico(1), LAV, sd * 0.27, -0.04, -0.02, 0.09, 0.17, 0.1);
+  for (const sd of [-1, 1]) P(head, ico(0), LAV, sd * 0.27, -0.04, -0.02, 0.09, 0.17, 0.1);
   for (let i = 0; i < 3; i++) { const x = -0.1 + i * 0.1; P(head, cone(0.06, 0.12, 4), LAV, x, 0.2, 0.15 - Math.abs(x) * 0.2, 1, 1, 0.8, { rx: PI, ol: 0.01 }); }
   P(head, cone(0.07, 0.15, 5), LAV, 0, 0.3, -0.06, 1, 1, 1, { rx: -0.25, ol: 0.012 });
   const arms = [-1, 1].map((sd) => { const sh = new THREE.Group(); sh.position.set(sd * 0.2, 0.4, 0); body.add(sh);
@@ -189,9 +189,9 @@ function bouncer(o) {
   P(head, ico(2), GOLD, 0, 0, 0, 0.28, 0.27, 0.26, { ol: 0.019 });
   const face = addFace(c.ctx, head, { cy: 0, rx: 0.28, ry: 0.27, rz: 0.26, hs: 0.95 }, { mw: 0.055, my: -0.135, blushColor: 0xffa070 });
   for (const e of face.eyes) show(e, false);
-  for (const sd of [-1, 1]) { P(head, ico(1), 0x241c30, sd * 0.1, 0.045, 0.2, 0.108, 0.075, 0.07, { ol: 0.01, nt: true }); flat(ico(0), basic(0xffffff), head, sd * 0.13, 0.075, 0.262, 0.035, 0.012, 0.01).rotation.z = 0.6; }
+  for (const sd of [-1, 1]) { P(head, ico(1), 0x241c30, sd * 0.1, 0.045, 0.2, 0.108, 0.075, 0.07, { ol: false, nt: true }); flat(ico(0), basic(0xffffff), head, sd * 0.13, 0.075, 0.262, 0.035, 0.012, 0.01).rotation.z = 0.6; }
   flat(box(1, 1, 1), basic(0x241c30), head, 0, 0.055, 0.25, 0.07, 0.02, 0.02);
-  P(head, ico(1), GOLD2, 0.27, 0.0, 0.0, 0.05, 0.065, 0.045, { ol: 0.008 });
+  P(head, ico(0), GOLD2, 0.27, 0.0, 0.0, 0.05, 0.065, 0.045, { ol: 0.008 });
   for (let i = 0; i < 3; i++) P(head, torus(0.03, 0.01, 3, 6), 0x3a3a50, 0.285 + i * 0.012, -0.07 - i * 0.08, -0.01, 1, 1, 1, { ol: false, nt: true, ry: PI / 2 });
   c.crown(head, 0, 0.27, 0, 0.95); c.glints(root, 5, 0.7, 0.5, 0.055);
   const self = {
@@ -272,14 +272,14 @@ function knight(o) {
   const legs = [-1, 1].map((sd) => { const g = new THREE.Group(); g.position.set(sd * 0.14, 0.34, 0); root.add(g);
     P(g, hang(0.085, 0.078, 0.22, 7), WH, 0, 0, 0, 1, 1, 1, { ol: 0.015 }); P(g, ico(1), BOOT, 0, -0.27, 0.04, 0.125, 0.09, 0.18); return g; });
   const body = new THREE.Group(); body.position.y = 0.34; root.add(body);
-  P(body, ico(2), SIL, 0, 0.28, 0, 0.3, 0.27, 0.23, { mo: M, ol: 0.018 }); P(body, ico(1), SIL2, 0, 0.06, 0, 0.25, 0.1, 0.19, { mo: M });
+  P(body, ico(2), SIL, 0, 0.28, 0, 0.3, 0.27, 0.23, { mo: M, ol: 0.018 }); P(body, ico(0), SIL2, 0, 0.06, 0, 0.25, 0.1, 0.19, { mo: M });
   P(body, torus(0.22, 0.03, 4, 14), 0x4a4660, 0, 0.12, 0, 1, 1, 1, { rx: PI / 2, ol: 0.01, nt: true }); flat(ico(1), gl(1.5, 0.5, 0.9), body, 0, 0.12, 0.225, 0.045, 0.045, 0.025);
   P(body, ico(0), SIL, 0, 0.5, 0, 0.2, 0.08, 0.16, { mo: M });
   const head = new THREE.Group(); head.position.y = 0.76; body.add(head);
   P(head, ico(2), WH, 0, 0, 0, 0.3, 0.28, 0.27, { ol: 0.019 });
   const face = addFace(c.ctx, head, { cy: 0, rx: 0.3, ry: 0.28, rz: 0.27, hs: 1 }, { ex: 0.12, ey: 0.03, ew: 0.056, eh: 0.075, my: -0.2, mw: 0.02, iris: 0x7a8296, brow: 0x4a4660, browTilt: -0.15, blushColor: 0xffa6c8 });
   // slate beard (hides the mouth) and the clapper hat
-  const slate = c.P(head, box(1, 1, 1), 0xf4f1ff, 0, -0.17, 0.2, 0.44, 0.13, 0.1, { rx: 0.2, ol: 0.014 }); stripes(c, head, 3, -0.18, 0.18, -0.17, 0.205, 0.075, 0.136, 0.104, 0x2d2640, { rx: 0.2 });
+  c.P(head, box(1, 1, 1), 0xf4f1ff, 0, -0.17, 0.2, 0.44, 0.13, 0.1, { rx: 0.2, ol: 0.014 }); stripes(c, head, 3, -0.18, 0.18, -0.17, 0.205, 0.075, 0.136, 0.104, 0x2d2640, { rx: 0.2 });
   c.P(head, box(1, 1, 1), 0xf4f1ff, 0, 0.27, 0.03, 0.5, 0.07, 0.32, { rx: -0.12, ol: 0.014 }); stripes(c, head, 3, -0.2, 0.2, 0.27, 0.03, 0.1, 0.074, 0.322, 0x2d2640, { rx: -0.12 });
   const stick = clapper(c, head, 0.5, 0.32, 0.345, 0.03); stick.rotation.z = 0.55;
   flat(ico(0), gl(1.6, 0.4, 0.5), head, -0.25, 0.31, 0.2, 0.03, 0.03, 0.03);
@@ -289,7 +289,7 @@ function knight(o) {
   const eL = new THREE.Group(); eL.position.y = -0.2; aL.add(eL); P(eL, hang(0.07, 0.06, 0.2, 7), SIL, 0, 0, 0, 1, 1, 1, { mo: M }); P(eL, ico(1), WH, 0, -0.22, 0.01, 0.085, 0.08, 0.085);
   const mg = new THREE.Group(); mg.position.set(0, -0.24, 0.1); eL.add(mg);
   P(mg, cyl(0.2, 0.06, 0.32, 10), LAV, 0, 0, 0.12, 1, 1, 1, { rx: PI / 2, ol: 0.016 }); P(mg, torus(0.2, 0.025, 4, 12), WH, 0, 0, 0.28, 1, 1, 1, { ol: 0.01 }); P(mg, ico(0), 0x8a7ad0, 0, 0, -0.05, 0.05, 0.05, 0.05, { ol: 0.008 });
-  const rings = [0, 1, 2].map((i) => flat(torus(1, 0.05, 3, 14), gl(1.7, 1.2, 2), mg, 0, 0, 0.3, 0.001, 0.001, 0.001));
+  const rings = [0, 1].map((i) => flat(torus(1, 0.05, 3, 14), gl(1.7, 1.2, 2), mg, 0, 0, 0.3, 0.001, 0.001, 0.001));
   const aR = new THREE.Group(); aR.position.set(0.33, 0.4, 0); body.add(aR); P(aR, hang(0.08, 0.07, 0.2, 7), SIL, 0, 0, 0, 1, 1, 1, { mo: M }); P(aR, ico(0), SIL2, 0, 0, 0, 0.1, 0.1, 0.1, { mo: M });
   const eR = new THREE.Group(); eR.position.y = -0.2; aR.add(eR); P(eR, hang(0.07, 0.06, 0.2, 7), SIL, 0, 0, 0, 1, 1, 1, { mo: M }); P(eR, ico(1), WH, 0, -0.22, 0.01, 0.085, 0.08, 0.085);
   c.crown(head, 0, 0.4, 0, 0.95); c.glints(root, 5, 0.7, 0.6, 0.055);
@@ -304,16 +304,16 @@ function knight(o) {
       body.scale.set(1 + (1 - step) * 0.04 * amp, 1 - (1 - step) * 0.06 * amp + br * 0.01, 1 + (1 - step) * 0.04 * amp);
       head.rotation.set(-lunge * 0.2 + sin(t * 1.3) * 0.03, -sin(ph) * 0.06 * amp, sin(t) * 0.03);
       // idle clap: every ~1.7 s the stick snaps shut, a spark pops; the attack is one big clap
-      const cp = (t * 0.6 + S.off) % 1, ca = cp < 0.12 ? 1 - ease(cp / 0.12) : cp < 0.2 ? ease((cp - 0.12) / 0.08) * 0 : 0;
-      const open = u >= 0 ? kf(u, [[0, 0.55], [0.3, 1.05], [0.48, 0.0], [0.7, 0.0], [1, 0.55]]) : lerp(0.55, 0.0, cp < 0.12 ? ease(cp / 0.12) : cp < 0.3 ? 1 : 1 - ease((cp - 0.3) / 0.3)) ;
+      const cp = (t * 0.6 + S.off) % 1;
+      const open = u >= 0 ? kf(u, [[0, 0.55], [0.3, 1.05], [0.48, 0.0], [0.7, 0.0], [1, 0.55]]) : lerp(0.55, 0.0, cp < 0.12 ? ease(cp / 0.12) : cp < 0.3 ? 1 : 1 - ease((cp - 0.3) / 0.3));
       stick.rotation.z = open;
       const hit = u >= 0 ? clamp(1 - abs(u - 0.5) * 9, 0, 1) : (cp > 0.1 && cp < 0.22 ? 1 - abs(cp - 0.16) / 0.06 : 0); flash.scale.set(0.12 * hit, 0.2 * hit, 0.12 * hit); flash.rotation.z = hit;
       // megaphone arm: raises to shout on the attack
       const sh = kf(u, [[0, 0], [0.4, 0], [0.5, 1], [0.85, 1], [1, 0]]);
-      aL.rotation.set(-1.0 - sh * 0.5 + sin(ph) * 0.35 * amp, 0.2, -0.25 + sin(t * 1.5) * 0.04); eL.rotation.x = -0.3 - sh * 0.2;
-      for (let i = 0; i < 3; i++) { const k = clamp((u - 0.5 - i * 0.1) / 0.3, 0, 1); const on = u >= 0 && k > 0 && k < 1; show(rings[i], on); if (on) { const s = 0.18 + k * 0.35; rings[i].scale.set(s, s, 0.2); rings[i].position.z = 0.3 + k * 0.7; } }
+      aL.rotation.set(-1.0 - sh * 0.5 + sin(ph) * 0.35 * amp, 0.2, -0.25 + sin(t * 1.5) * 0.04); eL.rotation.x = -0.3 - sh * 0.2; mg.rotation.set(-(aL.rotation.x + eL.rotation.x) - 0.1, -0.3, 0); // the megaphone always points forward
+      for (let i = 0; i < 2; i++) { const k = clamp((u - 0.5 - i * 0.12) / 0.3, 0, 1); const on = u >= 0 && k > 0 && k < 1; show(rings[i], on); if (on) { const s = 0.18 + k * 0.35; rings[i].scale.set(s, s, 0.2); rings[i].position.z = 0.3 + k * 0.7; } }
       aR.rotation.set(-sin(ph) * 0.5 * amp - lunge * 0.9, 0, 0.3 + sin(t * 1.4) * 0.04 + A * 0.3); eR.rotation.x = -0.2 - A * 0.6;
-      setBlink(face, F.bl); head.rotation.z += 0;
+      setBlink(face, F.bl);
       lifeXform(L, root, 1, 1, 1, 1 + A * 0.05, 1 + A * 0.04); c.fx(t);
     },
   };
@@ -402,7 +402,7 @@ function wraith(o) {
   const shape = lathe('c3ghost', [[0, 0.02], [0.3, 0.02], [0.42, 0.08], [0.46, 0.2], [0.46, 0.4], [0.44, 0.56], [0.42, 0.68], [0.36, 0.82], [0.24, 0.93], [0, 0.98]], 16);
   P(fl, shape, WHT, 0, 0, 0, 1, 1, 1, { ol: 0.019 });
   const face = addFace(c.ctx, fl, { cy: 0.67, rx: 0.43, ry: 0.31, rz: 0.43, hs: 1.1 }, { ex: 0.125, ey: -0.01, ew: 0.075, eh: 0.1, mw: 0.045, my: -0.15, iris: 0x8a7ad8, blushColor: 0xffa6c8 });
-  flat(shape, gl(1, 0.92, 1, { add: true, op: 0.42 }), fl, 0, 0, 0, 0.985, 0.985, 0.985); // soft inner light: the ghost glows instead of greying in shade
+  flat(shape, gl(1, 0.92, 1, { add: true, op: 0.5 }), fl, 0, 0, 0, 0.985, 0.985, 0.985); // soft inner light: the ghost glows instead of greying in shade
   const teeth = [];
   for (let i = 0; i < 9; i++) { const a = i / 9 * TAU, g = new THREE.Group(); g.position.set(cos(a) * 0.37, 0.08, sin(a) * 0.37); fl.add(g); P(g, cone(0.14, 0.34, 4), WHT2, 0, -0.13, 0, 1, 1, 1, { rx: PI, ol: false, mo: { transparent: true, opacity: 0.6 } }); teeth.push(g); }
   for (let i = 0; i < 4; i++) { const a = i / 4 * TAU + 0.4; P(fl, ico(1), WHT2, cos(a) * 0.2, -0.05, sin(a) * 0.2, 0.13, 0.1, 0.13, { ol: false, mo: { transparent: true, opacity: 0.6 } }); }

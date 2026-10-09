@@ -24,7 +24,7 @@ export function makeDen(z) {
   const k = z.k, fc = typeof foeCol === 'function' ? foeCol(k) : '#ff6a5a', fcol = new THREE.Color(fc), light = fcol.clone().lerp(new THREE.Color(0xffffff), 0.55);
   const g = new THREE.Group(), b = new Builder({ ao: 0.2 }), r = rng(k * 13 + 5);
   b.cyl(INK, 0, 0, 0, 1.08, 0.06, seg(28)); b.cyl(0x4a2f7a, 0, 0, 0, 1.0, 0.1, seg(28)); b.cyl(0x2a1850, 0, 0, 0, 0.84, 0.115, seg(28));
-  const n = 11; for (let i = 0; i < n; i++) { const a = i / n * TAU + r() * 0.2, rd = 1.02 + r() * 0.06, s = 0.2 + r() * 0.1; b.ball(i & 1 ? 0x6a4aa8 : 0x5a3f98, Math.cos(a) * rd, 0.1 + s * 0.2, Math.sin(a) * rd, s, 0.72, 0.9); b.ball(0x8f6be8, Math.cos(a) * rd, 0.1 + s * 0.55, Math.sin(a) * rd, s * 0.45, 0.6, 0.8); }
+  const n = 11; for (let i = 0; i < n; i++) { const a = i / n * TAU + r() * 0.2, rd = 1.02 + r() * 0.06, s = 0.2 + r() * 0.1; b.ball(i & 1 ? 0x6a4aa8 : 0x5a3f98, Math.cos(a) * rd, 0.1 + s * 0.2, Math.sin(a) * rd, s, 0.72, 0.9, 1); b.ball(0x8f6be8, Math.cos(a) * rd, 0.1 + s * 0.55, Math.sin(a) * rd, s * 0.45, 0.6, 0.8, 1); }
   const rim = b.build({ cast: true }); rim.children.forEach((m) => addOutline(m, 0.02)); g.add(rim);
   // crystals in the foe colour poke out of the rim
   const cb = new Builder({ ao: 0.1 }), cc = fcol.clone().lerp(new THREE.Color(0xffffff), 0.25).getHex();
