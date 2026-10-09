@@ -131,16 +131,17 @@ export class MenuScreen implements Screen {
         });
         this.heading(cx, IN_Y + 96, cw, 'Reading the map');
         const key = (i: number, draw: (g: Phaser.GameObjects.Graphics, kx: number, ky: number) => void, text: string, color: number = PAL.cream) => {
-            const ky = IN_Y + 132 + i * 38;
+            const ky = IN_Y + 128 + i * 32;
             draw(pane.g, cx + 2, ky + 1);
             pane.text(forDevice(text), cx + 30, ky, fit(12), color, { bold: false, wrap: cw - 30 });
         };
         key(0, (g, kx, ky) => { rect(g, kx, ky, 16, 16, PAL.ink); rect(g, kx + 1, ky + 1, 14, 14, 0xe9f4f8); }, 'Light squares are for sale: walk to the edge of your land and press E.');
         key(1, (g, kx, ky) => { rect(g, kx, ky, 16, 16, PAL.berry); rect(g, kx + 2, ky + 2, 12, 12, PAL.sea); }, 'The red outline is the Old Heart, at the centre of the world.');
         key(2, (g, kx, ky) => { rect(g, kx, ky, 16, 16, PAL.ink); rect(g, kx + 1, ky + 1, 14, 14, 0x5d3f8c); rect(g, kx + 6, ky + 5, 4, 4, PAL.snow); }, 'Dark violet blocks with a skull are the Dread Reaches: the dead walk there, and a warden guards the middle.', PAL.plum);
+        key(3, (g, kx, ky) => { rect(g, kx, ky, 16, 16, PAL.ink); rect(g, kx + 1, ky + 1, 14, 14, PAL.night); rect(g, kx + 5, ky + 5, 6, 6, PAL.berry); }, 'Red marks out at sea are Blight nests: they grow every night. Break one and its isle is for sale.', PAL.berry);
         // who is here
         const online = Object.values(f.players).filter((p) => p.online);
-        this.heading(cx, IN_Y + 254, cw, 'Farmers here', `${online.length} online`);
+        this.heading(cx, IN_Y + 266, cw, 'Farmers here', `${online.length} online`);
         online.slice(0, 6).forEach((p, i) => {
             const col = i % 2, row = Math.floor(i / 2), fx = cx + col * Math.floor(cw / 2), fy = IN_Y + 288 + row * 22;
             rect(pane.g, fx, fy + 2, 14, 14, PAL.ink); rect(pane.g, fx + 2, fy + 4, 10, 10, PLAYER_COLORS[p.color]);

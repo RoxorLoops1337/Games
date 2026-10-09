@@ -21,7 +21,7 @@ const HOME_KINDS: NodeKind[] = [
 
 /** Which stat adds extra drops for a node group. */
 const GROUP_STAT: Record<NodeGroup, StatKey | null> = {
-    wood: 'wood', stone: 'stone', earth: 'stone', ore: 'ore', gem: 'ore', plant: 'plant', chest: null,
+    wood: 'wood', stone: 'stone', earth: 'stone', ore: 'ore', gem: 'ore', plant: 'plant', chest: null, nest: null,
 };
 
 export function addNode (sim: Sim, kind: NodeKind, tx: number, ty: number, plot: Plot) {

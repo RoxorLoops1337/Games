@@ -27,7 +27,8 @@ export function homeSpot (plots: readonly Plot[], k: number): { gx: number; gy: 
     const at = (gx: number, gy: number) => (gx >= 0 && gy >= 0 && gx < GRID && gy < GRID ? plots[gy * GRID + gx] : undefined);
     const wild = (gx: number, gy: number) => {
         if (gx < 2 || gy < 2 || gx > GRID - 3 || gy > GRID - 3) return false;
-        return [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1]].every(([dx, dy]) => { const p = at(gx + dx, gy + dy); return !!p && !p.owned && !p.heart && p.home === undefined && !p.dread; });
+        if (plots.some((p) => p.blight === 1 && Math.max(Math.abs(p.gx - gx), Math.abs(p.gy - gy)) <= 3)) return false;      // (never next door to a Blight nest)
+        return [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1]].every(([dx, dy]) => { const p = at(gx + dx, gy + dy); return !!p && !p.owned && !p.heart && p.home === undefined && !p.dread && !p.blight; });
     };
     const first = slotPlot(k);
     if (wild(first.gx, first.gy)) return first;
@@ -52,7 +53,7 @@ export function raiseHome (plots: Plot[], spot: { gx: number; gy: number }, k: n
     const ring = rng.shuffle<Biome>(['quarry', 'goldsand', 'meadow', 'meadow']);
     for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
         const n = plots[(spot.gy + dy) * GRID + (spot.gx + dx)];
-        if (!n || n.owned || n.heart || n.home !== undefined) continue;
+        if (!n || n.owned || n.heart || n.home !== undefined || n.blight) continue;
         n.biome = ring.pop()!; n.mod = null;
         n.veins = genVeins(rng, n, false);
         changed.push(n.i);

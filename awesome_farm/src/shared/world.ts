@@ -31,7 +31,7 @@ export class World {
     private cave: Cave | null = null;
     private seenGen = 0;
     private readonly queue = new Int32Array(2048);
-    /** How many plots are ground (owned, or the Dread Reaches): the respawn clock runs on it every step. Kept by `recompute`. */
+    /** How many plots are ground that grows things (owned, or the Dread Reaches; not the nest isles): the respawn clock runs on it every step. Kept by `recompute`. */
     landCount = 0;
 
     constructor (readonly plots: Plot[], readonly seed = '') {
@@ -135,17 +135,19 @@ export class World {
     /** The plots of the Dread Reaches. */
     dreadPlots () { return this.plots.filter((p) => !!p.dread); }
 
-    /** Unowned plots touching an owned plot on a side — the ones anyone can buy. */
+    /** Unowned plots touching an owned plot on a side (the ones anyone can buy), and the cleansed nest isles (land already, anybody may buy one). */
     purchasable () {
-        const owned = (gx: number, gy: number) => this.plot(gx, gy)?.owned ?? false;
-        return this.plots.filter((p) => !p.owned && !p.dread
-            && (owned(p.gx - 1, p.gy) || owned(p.gx + 1, p.gy) || owned(p.gx, p.gy - 1) || owned(p.gx, p.gy + 1)));
+        return this.plots.filter((p) => this.isPurchasable(p));
     }
 
     isPurchasable (p: Plot) {
-        if (p.owned || p.dread) return false;       // (the Dread Reaches are land already, and nobody's)
+        if (p.owned || p.dread || p.blight === 1) return false;       // (the Dread Reaches are land already, and nobody's; a nest isle is not for sale while its nest lives)
+        if (p.blight === 2) return true;                               // (a cleansed nest isle: whoever stands on it may buy it)
         return [[-1, 0], [1, 0], [0, -1], [0, 1]].some(([dx, dy]) => this.plot(p.gx + dx, p.gy + dy)?.owned);
     }
+
+    /** Is this plot ground (owned, the Dread Reaches, or a nest isle)? */
+    isGround (p: Plot) { return p.owned || !!p.dread || !!p.blight; }
 
     /** Price for a buyer who has already bought `plotsBought` plots. */
     price (p: Plot, plotsBought: number) {
@@ -246,11 +248,11 @@ export class World {
                 if (Math.hypot(x + 0.5 - PLOT / 2, y + 0.5 - PLOT / 2) <= RIFT_RADIUS) this.land[this.idx(o.tx + x, o.ty + y)] = 1;
             }
         }
-        const owned = (gx: number, gy: number) => { const q = this.plot(gx, gy); return !!q && (q.owned || !!q.dread); };
+        const owned = (gx: number, gy: number) => { const q = this.plot(gx, gy); return !!q && this.isGround(q); };
         this.landCount = 0;
         for (const p of this.plots) {
-            if (!p.owned && !p.dread) continue;
-            this.landCount++;
+            if (!this.isGround(p)) continue;
+            if (p.owned || p.dread) this.landCount++;          // (a nest isle grows nothing: it is not counted for the respawn clock)
             const o = this.plotOrigin(p);
             for (let y = 0; y < PLOT; y++) for (let x = 0; x < PLOT; x++) this.land[this.idx(o.tx + x, o.ty + y)] = 1;
             for (const [dx, dy] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {

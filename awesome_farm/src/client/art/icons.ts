@@ -205,6 +205,7 @@ const SPEC: Partial<Record<ItemId, IconSpec>> = {
     crate_wood: { shape: 'crate', mat: MAT.wood, accent: 'T' }, crate_silver: { shape: 'crate', mat: MAT.iron, accent: 'S' },
     crate_gold: { shape: 'crate', mat: MAT.gold, accent: 'o' }, crate_mythic: { shape: 'crate', mat: MAT.void, accent: 'F' },
     bottle: { shape: 'msgbottle', mat: ['F', 'w', 'W'] }, lantern_shard: { shape: 'gem', mat: ['y', 'w', 'o'] },
+    blightcore: { shape: 'pearl', mat: ['u', 'v', 'n'], dots: [[3, 2], [4, 3], [4, 4], [5, 3]], dotCol: ['r', 'p', 'r', 'r'] },
     charm_fortune: { shape: 'charm', mat: ['y', 'w', 'o'], accent: 'F' },
     fish_minnow: { shape: 'fish', mat: ['T', 'w', 'S'] }, fish_carp: { shape: 'fish', mat: ['o', 'y', 'b'], dots: [[5, 2], [7, 3], [6, 4]], dotCol: ['y', 'y', 'y'] },
     fish_perch: { shape: 'fish', mat: ['g', 'l', 'G'], dots: [[5, 2], [6, 3], [7, 2], [6, 4]], dotCol: ['G', 'G', 'G', 'G'] },
@@ -292,6 +293,7 @@ const GLYPHS: Record<string, string[]> = {
     k_fog:     g('..FFFF....', '.FwwwwF.F.', 'FFFFFFFFFF', '..........', '.TTTTTTTT.', '..........', 'TTTTTTTT..', '..........', '..TTTTTT..'),
     k_blood:   g('..rrrr..', '.rpprrr.', 'rprrrrrr', 'rprrrrrr', 'rrrrrrro', 'rrrrrroo', '.rrrroo.', '..rooo..'),
     k_meteor:  g('o........', '.oo......', '..ooo....', '...ooyy..', '....yyyy.', '....yyyw.', '.....yy..'),
+    k_tower:   g('...r....', '...rrr..', '...r....', '.TTTTTT.', '.TkTTkT.', '..bbbb..', '..bkkb..', '..bbbb..', '.TTTTTT.', '.TSTTST.', '.TTTTTT.'),
     k_fairy:   g('....p....', '....p..w.', '...ppp...', 'ppppwpppp', '...ppp...', '.w..p....', '....p....'),
 };
 

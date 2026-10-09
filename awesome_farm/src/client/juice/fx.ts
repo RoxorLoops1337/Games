@@ -124,6 +124,10 @@ const FX = {
     hexJump:     { sfx: 'hexjump', burst: { tex: 'spark', colors: [C.plum, C.blossom, C.cream], count: 12, speed: 70, life: 420, gravity: 20 }, shake: { px: 1.5, ms: 80 } },
     chain:       { sfx: 'chain',   burst: { tex: 'spark', colors: [C.gold, C.cream, C.stone], count: 14, speed: 60, life: 450, gravity: 80 }, shake: { px: 3, ms: 110 } },
     chainTug:    { sfx: 'tug',     burst: { tex: 'dot', colors: [C.gold, C.cream], count: 5, speed: 30, life: 280, gravity: 20 }, shake: { px: 1.2, ms: 70 } },
+    // the Blight (sim/blight.ts)
+    nestHit:     { sfx: 'nesthit', burst: { tex: 'dot', colors: [C.plum, C.berry, C.night], count: 6, speed: 50, life: 380, gravity: 120 }, shake: { px: 1.6, ms: 70 } },
+    nestDie:     { sfx: 'nestdie', burst: { tex: 'spark', colors: [C.berry, C.plum, C.night, C.cream], count: 40, speed: 120, life: 900, up: true, gravity: 90 }, shake: { px: 6, ms: 260 } },
+    nestSpread:  { sfx: 'nestgrow', burst: { tex: 'dot', colors: [C.plum, C.night, C.berry], count: 18, speed: 60, life: 800, up: true, gravity: 40 }, shake: { px: 2, ms: 120 } },
     bedSet:      { sfx: 'chime',   burst: { tex: 'star', colors: [C.cream, C.blossom, C.gold], count: 10, speed: 40, life: 650, up: true, gravity: 20 }, shake: { px: 0.8, ms: 60 } },
     unbind:      { sfx: 'unbind',  burst: { tex: 'star', colors: [C.foam, C.cream, C.plum], count: 8, speed: 40, life: 600, up: true, gravity: -10 }, shake: { px: 0.8, ms: 60 } },
 } satisfies Record<Action, FxSpec>;

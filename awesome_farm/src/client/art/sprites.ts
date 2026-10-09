@@ -100,6 +100,9 @@ export const tileRockFace = (variant: number, ore = 0) => (ore ? TILE_CAVE + 15 
 /** The ore vein decals (storybook-ground.ts), after the cave: three variants per resource, in VEIN_KINDS order. */
 const TILE_VEIN = TILE_CAVE + CAVE_FRAMES;
 export const tileVein = (res: string, variant: number) => TILE_VEIN + VEIN_KINDS.indexOf(res) * VEIN_VARIANTS + (variant % VEIN_VARIANTS);
+/** A Blight nest isle (storybook-ground.ts, after the veins): its cliff, then its ground variants. */
+export const TILE_BLIGHT_CLIFF = TILE_VEIN + VEIN_KINDS.length * VEIN_VARIANTS;
+export const tileBlight = (variant: number) => TILE_BLIGHT_CLIFF + 1 + (variant % GROUND_VARIANTS);
 
 // ── Registration ───────────────────────────────────────────────────────────
 function registerShapes (scene: Phaser.Scene) {

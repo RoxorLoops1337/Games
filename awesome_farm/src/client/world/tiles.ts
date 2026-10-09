@@ -4,7 +4,7 @@ import { PLOT, RIFT_ISLANDS, riftOrigin, TILE, UNDER_Y, WORLD_H, WORLD_TILES } f
 import { SS } from '../res';
 import type { Plot } from '../../shared/sim/types';
 import type { World } from '../../shared/world';
-import { TILE_RIFT_CLIFF, TILE_SHALLOW, tileCaveFloor, tileCliff, tileGround, tileRift, tileRockFace, tileRockTop, tileShore } from '../art/sprites';
+import { TILE_BLIGHT_CLIFF, TILE_RIFT_CLIFF, TILE_SHALLOW, tileBlight, tileCaveFloor, tileCliff, tileGround, tileRift, tileRockFace, tileRockTop, tileShore } from '../art/sprites';
 
 const W = WORLD_TILES;
 const H = WORLD_H;
@@ -48,9 +48,9 @@ export class TileLayer {
             // mostly plain ground, now and then a tuft, flowers or pebbles
             const r = h % 100, variant = r < 25 ? 0 : r < 50 ? 1 : r < 75 ? 2 : r < 83 ? 3 : r < 92 ? 4 : 5;
             const plot = w.plotAt(tx, ty);
-            return plot ? tileGround(plot.biome, variant) : tileRift(variant % 3);
+            return plot ? (plot.blight === 1 ? tileBlight(variant) : tileGround(plot.biome, variant)) : tileRift(variant % 3);
         }
-        if (w.isLand(tx, ty - 1)) { const above = w.plotAt(tx, ty - 1); return above ? tileCliff(above.biome) : TILE_RIFT_CLIFF; }
+        if (w.isLand(tx, ty - 1)) { const above = w.plotAt(tx, ty - 1); return above ? (above.blight === 1 ? TILE_BLIGHT_CLIFF : tileCliff(above.biome)) : TILE_RIFT_CLIFF; }
         for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
             if (!w.isLand(tx + dx, ty + dy)) continue;
             // shallow water by the shore: foam on the sides that touch land
@@ -164,7 +164,7 @@ export class TileLayer {
         const rects: [number, number, number, number][] = [];
         if (rising) { const o = w.plotOrigin(rising); rects.push([o.tx - 2, o.ty - 2, o.tx + PLOT + 2, o.ty + PLOT + 2]); }
         else {
-            for (const p of w.plots) if (p.owned || p.dread) { const o = w.plotOrigin(p); rects.push([o.tx - 2, o.ty - 2, o.tx + PLOT + 2, o.ty + PLOT + 2]); }
+            for (const p of w.plots) if (w.isGround(p)) { const o = w.plotOrigin(p); rects.push([o.tx - 2, o.ty - 2, o.tx + PLOT + 2, o.ty + PLOT + 2]); }
             for (let i = 0; i < RIFT_ISLANDS; i++) { const o = riftOrigin(i); rects.push([o.tx - 2, o.ty - 2, o.tx + PLOT + 2, o.ty + PLOT + 2]); }
         }
         const rings = new Map<number, number[]>();

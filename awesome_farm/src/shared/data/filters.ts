@@ -30,7 +30,7 @@ export const FILTER_CATS: FilterCat[] = [
     { id: 'fish', name: 'Fish', icon: 'fish_trout', desc: 'Everything fresh from the water.', has: isRawFish },
     { id: 'potions', name: 'Potions', icon: 'potion_heal', desc: 'Healing and boosting potions.', has: (i) => kindOf(i) === 'potion' },
     { id: 'gear', name: 'Gear', icon: 'sword_iron', desc: 'Tools, weapons, armour, charms and packs.', has: (i) => kindOf(i) === 'gear' },
-    { id: 'monster', name: 'Monster parts', icon: 'slimegel', desc: 'What the night leaves behind: gel, bone, hide, shells, shards and cores.', has: IS('slimegel', 'bone', 'batwing', 'hide', 'ectoplasm', 'scarabshell', 'rockheart', 'frostshard', 'toadskin', 'shroud', 'rift_shard', 'rift_core', 'pearl', 'lantern_shard') },
+    { id: 'monster', name: 'Monster parts', icon: 'slimegel', desc: 'What the night leaves behind: gel, bone, hide, shells, shards and cores.', has: IS('slimegel', 'bone', 'batwing', 'hide', 'ectoplasm', 'scarabshell', 'rockheart', 'frostshard', 'toadskin', 'shroud', 'rift_shard', 'rift_core', 'pearl', 'lantern_shard', 'blightcore') },
     { id: 'odds', name: 'Odds & ends', icon: 'crate_wood', desc: 'Crates, bottles, sigils, trophies, pods, bait and fishing rods.', has: (i) => kindOf(i) === 'misc' },
 ];
 
