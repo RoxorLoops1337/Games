@@ -1,5 +1,6 @@
 <!doctype html><meta charset="utf-8"><title>environment lab</title>
-<!-- ?v=hub|land|terrace|night|wide  (or az el d tx ty tz fov lands focus=<land idx> mood=<biome>) : loads the real game, env3d only, no other modules -->
+<!-- Environment lab: loads the real game scripts, then ONLY env3d (or m=./a.js,./b.js). Views: v=hub (phone game camera, fov 32, pitch 52) | hubnear | hubwide | land (focus=<k>) | terrace | night | wide.
+     Overrides: az el d tx tz fov lands focus=<land idx> walk=<land idx> (look at that boardwalk) detail=0|1|2 w h. Use live=0 with tools/3d_shot.mjs --wait 5000 (the game scripts take a few seconds to load). -->
 <script type="importmap">{ "imports": { "three": "../../encore_island_3d/vendor/three.module.min.js", "three/addons/": "../../encore_island_3d/vendor/jsm/" } }</script>
 <script type="module">
 import { lab } from './lab.js';
@@ -40,7 +41,6 @@ lab({ ground: false, az: V0.az, el: V0.el, d: V0.d, tx: V0.tx, tz: V0.tz, ty: 0,
   const inst = [];
   for (const m of mods) { const mod = await import(m + (P.has('nc') ? '' : '?' + Date.now())); const r = await mod.init(V); if (r) { inst.push(r); V.mods[m.replace(/^.*\//, '').replace(/\.js$/, '')] = r; } }
   window.__inst = inst; window.__env = inst[0];
-  if (P.has('mood')) inst[0].setMoodOverride && inst[0].setMoodOverride(null);
   return { update(dt, t) { S.t += dt; for (const r of inst) if (r.update) r.update(dt, t, { x: fx, z: fz }); } };
 } });
 </script>
