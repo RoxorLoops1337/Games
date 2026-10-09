@@ -76,7 +76,9 @@ try {
     ok(await goScene(page, 'place', { id: 'park' }, 'park'), 'story: the park reloads the next day');
     s = await park();
     ok(s.bee && s.bench === 'TALK' && s.jamPlaced && s.crowd, 'story: after the trigger BeeAmGee sits on his bench, and the 14:00 jam is lit (' + JSON.stringify(s) + ')');
-    ok(await until(page, () => !!document.querySelector('#r3kit .k3-dlg'), null, 30000) && await dlgName() === 'BeeAmGee', 'story: the visit opens with the meeting, BeeAmGee speaks');
+    // the meeting is a staged film in 3D (r3/cine.js): BeeAmGee on his bench says the core.js lines; SKIP it like a player would
+    ok(await until(page, () => BBH.R3Cine.playing === 'meet' && [...document.querySelectorAll('.cin .cin-who')].some((e) => /BEEAMGEE/i.test(e.textContent)), null, 60000), 'story: the visit opens with the meeting film, BeeAmGee speaks');
+    await page.evaluate(() => BBH.R3Cine.skip()); await until(page, () => !BBH.R3Cine.playing && !document.querySelector('.cin'), null, 60000);
     ok(await page.evaluate(() => BBH.G.ch.flags.bmgMet === 3 && BBH.G.ch.seen.beeamgee === 3), 'story: the first-meeting flag is saved');
     await skipDialogs(page, 20);
     ok(await until(page, () => !document.querySelector('#r3kit .k3-dlg') && BBH.G.ch.sounds.includes('LR') && BBH.G.storyFx.length === 0, null, 30000), 'story: after the meeting dialog the held effects play (the lip roll is unlocked)');
