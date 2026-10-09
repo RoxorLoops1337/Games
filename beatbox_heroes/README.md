@@ -48,6 +48,7 @@ Every action goes through `Core.dev` / `Core.apply`, the same reducer the game u
 | `core.js` | pure rules: save object, time, needs, XP, unlocks, achievements, scoring, battle judging, saves |
 | `engine.js` | scaling, input, scenes, particles, UI kit |
 | `screens.js`, `creator.js`, `places.js`, `rhythm.js`, `dev.js`, `game.js` | the screens |
+| `tape_facts.js`, `tape.js`, `park3d/tape.js` | WATCH A BEATBOX TAPE on the couch: 58 sourced beatbox history facts (12 tapes, save `flags.tapeNext`), the VHS video + kinetic fact cards overlay, and the 3D push into the TV (`playTape(world, opts)`) |
 
 Design notes and module contracts: `DESIGN.md`. Tests: `tests/beatbox_heroes_*.test.mjs` (`npm run test:heroes`).
 

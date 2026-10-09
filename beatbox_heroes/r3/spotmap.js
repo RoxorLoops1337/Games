@@ -138,7 +138,7 @@
   /* --------------------------------------------------------------- done(spotId) */
   M.busy = function (S) {
     if ((S.sheetEl && S.sheetEl.isConnected) || (S.shop && S.shop.el && S.shop.el.isConnected)) return true;
-    if (E.uiBlock > 0 || E.pendingSwitch || G.pendingMorning) return true;
+    if (E.uiBlock > 0 || E.pendingSwitch || G.pendingMorning || (BBH.Tape && BBH.Tape.playing)) return true;   // tape.js: the hero stays on the couch while the tape plays
     try { if (E.ui && E.ui.querySelector('.full, .sheet, .panel.pop')) return true; } catch (e) { /* ignore */ }
     return false;
   };

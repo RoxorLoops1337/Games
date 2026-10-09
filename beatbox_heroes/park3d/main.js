@@ -9,6 +9,7 @@ import { PAL } from './palette.js';
 import { MINIS } from './mg_index.js';
 import { createHost, createRenderer } from './host.js';
 import { WORLDS } from './worlds.js';
+import { playTape } from './tape.js';
 
 const NOP = () => {};
 
@@ -65,6 +66,6 @@ async function init(target, opts) {
   api.dispose = () => host.dispose(); api.host = host;
   return api;
 }
-const Park3D = { init, createHost, WORLDS, THREE, kit, PAL };
+const Park3D = { init, createHost, WORLDS, THREE, kit, PAL, playTape };
 window.Park3D = Park3D;
 export default Park3D;
