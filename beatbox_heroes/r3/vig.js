@@ -580,4 +580,92 @@
     MS.q = MS.q.filter((e) => e.kind !== 'beats');
     run1(plan.id, plan.extra, held, plan.shown, () => {});
   });
+
+  /* ------------------------------------------------------------------ DELIGHTS (park3d/vig_delights.js; VIGNETTES.md section 4: idle moments, the clock, rare surprises, callbacks) */
+  // Nobody asks for a delight. The table below is read every quarter second; a delight plays only when ALL of this holds: the place is QUIET exactly as the milestones mean it
+  // (no vignette, no story film or story waiting, no dialog, card, menu sheet or morning, no stage outro, no arrival door) and no milestone is waiting; the hero has not moved and
+  // nothing was touched or pressed for the rule's idle time; SCENES is not OFF (OFF: none at all) and ?vig=0 is not set; the last delight is DL.gap (150 s) behind. Rarity: a
+  // chance is rolled ONCE per idle stretch (moving or touching starts a new one), the clock moments and the callbacks play once a day or once a save (marks in the vignette
+  // counter key, bbh:vig<slot>), hunger and energy once per 30 / 45 game minutes, the fountain coin is one roll in ten per park entry. A delight never holds the input: its
+  // screen lets taps through, and the first touch or key cuts it (the touch goes on to the game, the controls are back in the same event). Automated browsers: DL.on is false
+  // (tests turn it on). The delights table is chained at the END of every world's table (world -> milestones -> delights), so V.has / V.play reach the ids anywhere.
+  const DL = V.dl = { mod: null, on: !V.test, gap: 150000, rng: Math.random, log: [], vid: null, busy: false, st: { input: Date.now(), move: Date.now(), quiet: 0, last: 0, rolled: {}, entry: null, w: null, t: 0 } };
+  // (loaded outside V.mods: the milestones' link walks V.mods and would chain the delights table onto its own, a loop)
+  DL.load = () => {
+    if (!DL.p) { const core = R3.core || root.Park3D; DL.p = (core && typeof core.loadVig === 'function' ? Promise.resolve().then(() => core.loadVig('delights')) : Promise.reject(new Error('no loader'))).then((m) => (m && m.VIGNETTES ? m : null), () => { DL.p = null; return null; }); }
+    return DL.p.then((m) => { if (m) { DL.mod = m; dlink(); } return m; });
+  };
+  function dlink() {
+    const D = DL.mod && DL.mod.VIGNETTES; if (!D) return;
+    const tabs = []; for (const k in V.mods) { const e = V.mods[k]; if (e && e.m && e.m.VIGNETTES) tabs.push(e.m.VIGNETTES); }
+    for (const t of tabs) safe(() => { let x = t; for (let i = 0; i < 8; i++) { if (x === D) return; const p = Object.getPrototypeOf(x); if (p === D) return; if (!p || p === Object.prototype) { Object.setPrototypeOf(x, D); return; } x = p; } });
+  }
+  const dmark = (id, k, v) => { const cs = V.counts(), e = cs[id] || (cs[id] = { n: 0, last: 0 }); e[k] = v; safe(() => E.store.setItem(KEY(), JSON.stringify(cs))); };
+  const dget = (id, k) => (V.counts()[id] || {})[k];
+  const today = (id, c) => dget(id, 'day') === c.ch.day;
+  const gmin = (ch) => (ch.day || 0) * 1440 + (ch.minutes || 0);
+  const nearFountain = () => safe(() => { const a = R3.world.terrain.anchors.fountain, p = R3.world.player.object.position; return Math.hypot(p.x - a.x, p.z - a.z) < 10; }, false);
+  // ch.minutes counts from 06:00: 01:30 = 1170, 01:45 = 1185, 02:00 = 1200, 19:45 = 825, 20:00 = 840, noon = 360, 17:30 = 690
+  // { id, w (world id or null = any place world), idle (s), chance (per idle stretch), when(c), once: 'day' | 'save' | 'gm' (with every: game minutes) }
+  DL.RULES = [
+    { id: 'p3.late.warning', idle: 1.5, once: 'day', when: (c) => c.m >= 1170 && c.m < 1200 },
+    { id: 'p3.closing.bar', w: 'bar', idle: 1.5, once: 'day', when: (c) => c.m >= 1185 && c.m < 1200 },
+    { id: 'p3.closing.park', w: 'park', idle: 1.5, once: 'day', when: (c) => c.m >= 825 && c.m < 840 },
+    { id: 'p3.week.one', w: 'flat', idle: 2.5, once: 'save', when: (c) => c.ch.day >= 8 && c.ch.day <= 10 },
+    { id: 'p3.weekend', w: 'flat', idle: 2.5, once: 'day', when: (c) => safe(() => Core.dow(c.ch.day), -1) === 5 && c.m < 360 },
+    { id: 'p3.growl', idle: 4, once: 'gm', every: 30, when: (c) => c.ch.hunger < 22 },
+    { id: 'p3.yawn', idle: 4, once: 'gm', every: 45, when: (c) => c.ch.energy < 22 },
+    { id: 'p3.fountain.coin', w: 'park', idle: 2.5, when: (c) => !!(DL.st.entry && DL.st.entry.coin) && c.ch.cash > 20 && nearFountain(), fire: () => { DL.st.entry.coin = false; } },
+    { id: 'p3.sunset', w: 'park', idle: 3, chance: 0.4, once: 'day', when: (c) => c.m >= 690 && c.m < 820 },
+    { id: 'p3.pigeon', w: 'park', idle: 7, chance: 0.25, once: 'day', when: () => true },
+    { id: 'p3.egg.both', w: 'bar', idle: 7, chance: 0.2, once: 'day', when: () => true },
+    { id: 'p3.idle.flat', w: 'flat', idle: 8, chance: 0.5, when: (c) => dget('p3.idle.flat', 'part') !== c.ch.day + ':' + (c.h >= 5 && c.h < 11 ? 0 : c.h >= 11 && c.h < 18 ? 1 : c.h >= 18 && c.h < 23 ? 2 : 3), fire: (c) => dmark('p3.idle.flat', 'part', c.ch.day + ':' + (c.h >= 5 && c.h < 11 ? 0 : c.h >= 11 && c.h < 18 ? 1 : c.h >= 18 && c.h < 23 ? 2 : 3)) },
+    { id: 'p3.idle.beat', idle: 12, chance: 0.35, when: () => true },
+  ];
+  const PLACE_W = { flat: 1, park: 1, bar: 1, shop: 1, lab: 1 };
+  // why nothing may play now (null: a delight may play)
+  DL.blocked = () => {
+    if (!DL.on) return 'off'; if (V.setting() === 'off' || param === '0') return 'scenes off'; if (!MS.quiet()) return 'not quiet'; if (MS.q.length) return 'milestone waiting';
+    if (arrive || V.wardrobeFrom || DL.busy) return 'busy'; const w = R3.world; if (!w || !PLACE_W[w.id] || !G.ch) return 'not a place';
+    return null;
+  };
+  // pick the delight for this moment (or null); o.force skips the gap since the last delight (tests)
+  DL.check = (now, o) => {
+    o = o || {}; now = now || Date.now(); if (DL.blocked()) return null;
+    const st = DL.st, ch = G.ch, w = R3.world, idle = (now - Math.max(st.input, st.move, st.quiet || now)) / 1000;
+    if (!o.force && now - st.last < DL.gap) return null;
+    const c = { ch, m: ch.minutes || 0, h: safe(() => Core.hourOf(ch.minutes), 12), wid: w.id };
+    for (const r of DL.RULES) {
+      if ((r.w && r.w !== c.wid) || idle < r.idle || !V.has(r.id)) continue;
+      if (r.once === 'day' && today(r.id, c)) continue;
+      if (r.once === 'save' && V.count(r.id).n) continue;
+      if (r.once === 'gm' && gmin(ch) - (dget(r.id, 'gm') || -1e9) < r.every) continue;
+      if (!safe(() => r.when(c), false)) continue;
+      if (r.chance !== undefined) { if (st.rolled[r.id] === undefined) st.rolled[r.id] = DL.rng() < r.chance; if (!st.rolled[r.id]) continue; }
+      return { r, c };
+    }
+    return null;
+  };
+  DL.fire = (hit) => {
+    const { r, c } = hit, now = Date.now(); DL.st.last = now; DL.st.rolled = {}; DL.busy = true; DL.vid = r.id;
+    if (r.once === 'day') dmark(r.id, 'day', c.ch.day); if (r.once === 'gm') dmark(r.id, 'gm', gmin(c.ch)); if (r.fire) safe(() => r.fire(c));
+    return V.play(r.id, { action: { t: 'delight' } }).then((i) => { DL.busy = false; DL.vid = null; DL.log.push(r.id + ':' + (i.ok ? i.form : 'no:' + i.error)); DL.st.quiet = 0; return i; });
+  };
+  // input: any touch, click, key or wheel starts a new idle stretch, and cuts a delight that is playing (its screen lets the touch through to the game)
+  const dInput = () => { DL.st.input = Date.now(); DL.st.rolled = {}; if (DL.vid && V.cur && V.cur.id === DL.vid) V.cut(); };
+  ['pointerdown', 'keydown', 'wheel', 'touchstart'].forEach((k) => safe(() => root.addEventListener(k, dInput, { capture: true, passive: true })));
+  let dT = 0;
+  if (R3.onTick) R3.onTick(() => {
+    if (param === '0') return;
+    const now = Date.now(), w = R3.world, st = DL.st;
+    if (V.cur && DL.vid && V.cur.id === DL.vid && !V.cur.dl) { V.cur.dl = 1; safe(() => { V.cur.scr.root.style.pointerEvents = 'none'; }); }
+    if (now - dT < 250) return; dT = now;
+    if (w !== st.w) { st.w = w; st.rolled = {}; st.quiet = 0; if (w) { DL.load(); st.entry = { wid: w.id, coin: w.id === 'park' && DL.rng() < 0.1 }; } }
+    dlink();
+    const ctl = w && w.controls && w.controls.state ? safe(() => w.controls.state(), null) : null;
+    if (ctl && ctl.moving) { st.move = now; st.rolled = {}; }
+    if (DL.blocked()) { st.quiet = 0; return; }
+    if (!st.quiet) st.quiet = now;
+    const hit = DL.check(now); if (hit) DL.fire(hit);
+  });
 })(typeof globalThis !== 'undefined' ? globalThis : this);
