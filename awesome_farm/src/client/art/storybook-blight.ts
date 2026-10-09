@@ -71,14 +71,26 @@ function ballista (p: Pix) {
     // a trestle
     lit(p, 6, 24, 4, 11, W); lit(p, S - 10, 24, 4, 11, W);
     planks(p, 4, 20, S - 8, 6, true, W, 4);
-    // the bow: two iron limbs swept back, the string, the stock and a bolt
-    p.blade(S / 2, 16, 7, 12, 1, 18, 1.6, IRON);
-    p.blade(S / 2, 16, S - 7, 12, S - 1, 18, 1.6, IRON);
-    p.line(1, 18, S / 2, 21, RAMP.cream[1]); p.line(S - 1, 18, S / 2, 21, RAMP.cream[1]);
-    lit(p, S / 2 - 2, 6, 4, 16, W);
-    p.rect(S / 2 - 1, 0, 2, 16, RAMP.wood[4]);
-    p.poly([[S / 2 - 3, 4], [S / 2 + 3, 4], [S / 2, -1]], IRON[3]);
-    p.rect(S / 2 - 2, 14, 4, 2, IRON[2]);
+    // (the bow itself is a separate turning part: `ballistaBow`)
+    lit(p, S / 2 - 3, 10, 6, 12, W);
+    p.ellipse(S / 2, 11, 5, 3, IRON);
+    p.outline();
+}
+
+/** The Ballista's bow, stock and bolt as one of eight frames (0 E, 1 SE, 2 S, 3 SW, 4 W, 5 NW, 6 N, 7 NE), drawn round the middle of the frame. */
+function ballistaBow (p: Pix, frame: number) {
+    const cx = p.w / 2, cy = p.h / 2, a = (frame * Math.PI) / 4;
+    const dx = Math.cos(a), dy = Math.sin(a), nx = -dy, ny = dx, k = p.w / 22;
+    const at = (f: number, s: number): [number, number] => [cx + (dx * f + nx * s) * k * 2, cy + (dy * f + ny * s) * k * 2];
+    // the stock, two planks thick, with the bolt laid on it
+    for (const s of [-0.5, 0.5]) { const [x0, y0] = at(-5, s), [x1, y1] = at(6, s); p.line(x0, y0, x1, y1, RAMP.wood[s < 0 ? 4 : 3]); }
+    // the limbs, swept back, and the string
+    const [lx, ly] = at(1, -6.5), [rx, ry] = at(1, 6.5), [mx, my] = at(0, 0), [sx, sy] = at(-3, 0);
+    p.line(mx, my, lx, ly, IRON[2]); p.line(mx, my, rx, ry, IRON[2]);
+    p.line(lx, ly, sx, sy, RAMP.cream[1]); p.line(rx, ry, sx, sy, RAMP.cream[1]);
+    const [ex, ey] = at(7.5, 0), [bx, by] = at(-1, 0);
+    p.line(bx, by, ex, ey, IRON[3]);
+    p.set(Math.round(ex), Math.round(ey), 0xe8ebf6);
     p.outline();
 }
 
@@ -125,9 +137,10 @@ export function registerStorybookBlight (scene: Phaser.Scene) {
     paintFrames(scene, 'nest', 22, 20, 2, (p, rnd, f) => nest(p, rnd, f), 13);
     paint(scene, 'tower_archer', 16, 34, archerTower, 3);
     paint(scene, 'ballista', 16, 18, (p) => ballista(p), 1);
+    paintFrames(scene, 'ballista_bow', 22, 22, 8, (p, _r, f) => ballistaBow(p, f), 1);
     paint(scene, 'tesla', 12, 30, tesla, 7);
     paint(scene, 'spike', 16, 16, spike, 5);
     paint(scene, 'sleepbed', 16, 32, (p) => bed(p), 1);
 }
 
-export const BLIGHT_TEXTURES = ['nest', 'tower_archer', 'ballista', 'tesla', 'spike', 'sleepbed'];
+export const BLIGHT_TEXTURES = ['nest', 'tower_archer', 'ballista', 'ballista_bow', 'tesla', 'spike', 'sleepbed'];

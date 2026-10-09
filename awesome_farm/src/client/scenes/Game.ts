@@ -284,6 +284,15 @@ export class GameScene extends Phaser.Scene {
         this.crit = new CritFx(this);
         this.titanFx = new TitanFx(this);
         this.blightFx = new BlightFx(this, () => this.world);
+        // lightning flashes the monster it strikes white for a moment
+        this.blightFx.onZapHit = (x, y) => {
+            for (const v of this.views.values()) {
+                if (v.ent.k !== 'mob' || Math.abs(v.ent.x - x) > 12 || Math.abs(v.ent.y - y - 5) > 16) continue;
+                const spr = v.sprite;
+                spr.setTint(0xffffff).setTintMode(Phaser.TintModes.FILL);
+                this.time.delayedCall(120, () => { if (spr.active) spr.clearTint().setTintMode(Phaser.TintModes.MULTIPLY); });
+            }
+        };
         this.coFx = new CoFx(this);
         this.ambient = this.add.particles(0, 0, 'px', {
             emitting: false, speed: { min: 4, max: 14 }, angle: { min: 240, max: 300 },

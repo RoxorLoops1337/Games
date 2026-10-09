@@ -351,3 +351,23 @@ test('what a tower says: a pick waiting is the first thing', () => {
     t.pk = ['power'];
     assert.ok(/^Guards/.test(defense.towerWords(t)));
 });
+
+test('the Ballista and Tesla Coil remember where they last shot (data/aim.ts): eight directions, the short way round', async () => {
+    const { aimOf, dir8, noteShot, sinceShot, turnTo } = await import('../src/shared/data/aim');
+    assert.equal(aimOf(5, 5), 0, 'east, the sea side, until it has shot');
+    assert.deepEqual([0, 0.3, Math.PI / 2, 2.4, Math.PI, -2.4, -Math.PI / 2, -0.7, -Math.PI].map(dir8), [0, 0, 2, 3, 4, 5, 6, 7, 4]);
+    noteShot(5, 5, Math.PI / 2, 1000);
+    assert.equal(aimOf(5, 5), Math.PI / 2);
+    assert.equal(aimOf(5, 6), 0, 'by tile');
+    assert.equal(sinceShot(5, 5, 1300), 300);
+    assert.ok(sinceShot(9, 9, 1300) > 1e6);
+    assert.ok(Math.abs(turnTo(3, -3) - (2 * Math.PI - 6)) < 1e-9, 'across the half turn the short way');
+    assert.ok(Math.abs(turnTo(0, 1) - 1) < 1e-9);
+});
+
+test('a Spike Trap wears no level badge or pick star in the world (its window and prompt carry them); towers do', async () => {
+    const { readFileSync } = await import('node:fs');
+    const src = readFileSync(new URL('../src/client/world/blight.ts', import.meta.url), 'utf8');
+    assert.ok(/type !== 'spike'\) this\.badge/.test(src));
+    assert.ok(/this\.stars\.push/.test(src));
+});
