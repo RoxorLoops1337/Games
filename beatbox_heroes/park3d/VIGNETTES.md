@@ -70,6 +70,12 @@ more than 2 minutes, or that a story film covered, gets its old banner and no sc
 `p2.ladder`, `p2.crew.<jaxx|noor|duot|glaze|miro>`. Progress beats play wherever the hero stands: the lens sits on the line to the gameplay camera, turned up to 36 degrees
 when a raycast finds the set in the frame, and the cast being chibi and wide, a full figure on a phone wants about 1.9 m of frame width (5.6 m out at 40 degrees).
 
+The P3 delights (done: `vig_delights.js`, section 4) are not a world either: the DELIGHTS section at the end of `r3/vig.js` chains their table at the END of every world's table
+(world -> milestones -> delights) and reads its rule table (`BBH.R3Vig.dl.RULES`) four times a second. A delight plays only when the place is quiet as the milestones mean it, no milestone
+waits, the hero has not moved or been touched for the rule's idle time, SCENES is not OFF and the last delight is 150 s behind; chances are rolled once per idle stretch, clock moments
+once a day, callbacks once a save (marks in `bbh:vig<slot>`). Its screen lets touches through and the first touch or key cuts it. Ids: `p3.growl`, `p3.yawn`, `p3.idle.beat`,
+`p3.late.warning`, `p3.idle.flat`, `p3.week.one`, `p3.weekend`, `p3.fountain.coin`, `p3.pigeon`, `p3.sunset`, `p3.closing.park`, `p3.closing.bar`, `p3.egg.both`.
+
 The town (done: `vig_shop.js`, `vig_lab.js`, `vig_bar.js`, with `vig_town_kit.js`, `vig_town_props.js`, `vig_town_clips.js`). Actions there that never reach `G.do` have their own
 hooks in the town section at the end of `r3/vig.js`: the shop TRY ON (a tile tap changes the panel's look: `p1.shop.tryon`, MICRO, the look swaps on its beat, the try on camera
 is untouched), the bar stage walk up and the battle walk out (`E.go('rhythm')` from the bar: `p1.stage.in.<kind>`, `p1.battle.walkout`), the bow and the verdict back in the room

@@ -536,4 +536,6 @@ for (const k of CREW_IDS) VIGNETTES['p2.crew.' + k] = (c) => crewScene(c, k);
 export const HOME = { 'p2.rent.paid': 'flat', 'p2.rent.short': 'flat', 'p2.first.stream': 'flat', 'p2.release': 'flat', 'p2.ladder': 'bar' };
 for (const k of CREW_IDS) HOME['p2.crew.' + k] = 'bar';
 export const WORLD = 'milestones';
+// the staging anywhere helpers, shared with the P3 delights (vig_delights.js)
+export { frameOf, L, turn, lensPt, freeSide, anywhere, micro, ptAt, blocked, hasFoxy };
 void stamp; void put; void show; void withProp; void HAND; void S; void glowBall;
