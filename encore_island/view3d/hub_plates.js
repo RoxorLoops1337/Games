@@ -5,8 +5,6 @@ import { W, SOLID, GOLD } from './kit.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { makePlate } from './plate3d.js';
 
-const px2 = (a, b) => a * a + b * b;
-
 export function buildPlates(V, fx) {
   const g = new THREE.Group(); g.name = 'hubPlates';
   const list = []; // { plate, rpx, x, y, tick(state), st (reused state object), hidden }

@@ -64,8 +64,12 @@ function mkV() {
   const V = { THREE, kit, scene, camera, renderer: null, rig, LOOK: kit.LOOK, Q: kit.Q, W: kit.W, world, dyn, blobs, labels, mods: {}, focus: { x: 0, z: 0 }, quality: { tier: 'high', detail: 2, shadows: true, dpr: 1, particles: 1, decor: 1 }, moodOverride: null, heightAt: () => 0, S: () => EI.S };
   V.bake = (a, o) => bake.bakeActor(a, o); return V;
 }
-function sceneCost(V) { let calls = 0, tris = 0; V.scene.traverse((o) => { if (!(o.isMesh || o.isPoints || o.isLine)) return; let vis = true; for (let p = o; p; p = p.parent) if (p.visible === false) { vis = false; break; } if (!vis || !o.layers.test({ mask: 1 })) return; calls++;
-  const g = o.geometry; if (!g || !g.attributes.position) return; const n = g.index ? g.index.count : g.attributes.position.count; tris += (o.isInstancedMesh ? o.count : 1) * (o.isPoints ? 0 : n / 3); }); return { calls, tris }; }
+// what a frame would draw: visible meshes whose bounding sphere is within the fog distance of the hero (the engine's frustum and fog cull the rest)
+const _sp = new THREE.Sphere(), _fv = new THREE.Vector3();
+function sceneCost(V, focus, range = 38) { V.scene.updateMatrixWorld(true); let calls = 0, tris = 0; V.scene.traverse((o) => { if (!(o.isMesh || o.isPoints || o.isLine)) return; let vis = true; for (let p = o; p; p = p.parent) if (p.visible === false) { vis = false; break; } if (!vis || !o.layers.test({ mask: 1 })) return;
+  const g = o.geometry; if (!g || !g.attributes.position) return;
+  if (!o.isInstancedMesh && !o.isPoints) { if (!g.boundingSphere) g.computeBoundingSphere(); _sp.copy(o.boundingSphere || g.boundingSphere).applyMatrix4(o.matrixWorld); if (Math.hypot(_sp.center.x - focus.x, _sp.center.z - focus.z) - _sp.radius > range) return; }
+  calls++; const n = g.index ? g.index.count : g.attributes.position.count; tris += (o.isInstancedMesh ? o.count : 1) * (o.isPoints ? 0 : n / 3); }); return { calls, tris }; }
 {
   const V = mkV(), order = ['fx3d', 'env3d', 'loot3d', 'heroes3d', 'foes3d', 'hub3d', 'lands3d', 'backstage3d'], inst = {};
   for (const m of order) {
@@ -79,7 +83,10 @@ function sceneCost(V) { let calls = 0, tris = 0; V.scene.traverse((o) => { if (!
   // visit land 1 and the hub with the rich state, then count what a frame would cost
   S.player.x = S.lands[0].g.x; S.player.y = S.lands[0].g.y; try { for (let f = 0; f < 20; f++) { EI.tick(1 / 30); focus.x = S.player.x * kit.W; focus.z = S.player.y * kit.W; for (const m of names) inst[m].update(1 / 30, S.t, focus); } } catch (e) { thrown = e; }
   t.ok(!thrown, 'modules keep updating while the hero stands on land 1' + (thrown ? ': ' + thrown : ''));
-  const cost = sceneCost(V); t.ok(cost.calls > 20 && cost.calls < 420, 'the rich scene stays near the draw-call budget before culling (' + cost.calls + ' objects)'); t.ok(cost.tris < 1.2e6, 'triangle count in range (' + Math.round(cost.tris / 1000) + 'k before culling)');
+  const cost = sceneCost(V, focus); t.ok(cost.calls > 20 && cost.calls < 330, 'a busy frame near land 1 stays inside the draw-call budget (' + cost.calls + ' objects in the view frustum range)'); t.ok(cost.tris < 800000, 'and the triangle budget (' + Math.round(cost.tris / 1000) + 'k)');
+  if (process.env.V3_DEBUG) { // which top-level groups carry the draw calls? (V3_DEBUG=1 node tests/encore_island_view3d.test.mjs)
+    const rows = []; for (const root of [V.world, V.dyn]) for (const ch of root.children) { const one = { scene: { traverse: (f) => ch.traverse(f), updateMatrixWorld() {} } }; const c = sceneCost({ scene: { traverse: (f) => ch.traverse(f), updateMatrixWorld: () => {} } }, focus); if (c.calls) rows.push([c.calls, Math.round(c.tris / 1000) + 'k', ch.name || ch.type + ':' + (ch.children[0] ? ch.children[0].type : '')]); }
+    rows.sort((a, b) => b[0] - a[0]); console.log('V3 breakdown (calls, tris, group):\n' + rows.slice(0, 40).map((r) => '  ' + r.join('  ')).join('\n')); }
   t.ok(labelsSeen.length > 0, 'modules queue HUD labels (' + labelsSeen.length + ' this frame)');
   // reset behaviour: an Encore Tour empties the lands, modules must follow without throwing
   EI.prestige(); thrown = null; try { for (let f = 0; f < 10; f++) { EI.tick(1 / 30); for (const m of names) inst[m].update(1 / 30, EI.S.t, focus); } } catch (e) { thrown = e; }

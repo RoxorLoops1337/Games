@@ -31,6 +31,7 @@ const V0 = Object.assign({}, VIEWS[view] || VIEWS.hub); for (const k of ['az', '
 const g = await loadGame({ lands: V0.lands, wallet: 5e5, gems: 9 });
 const S = g.S(); let fx = 0, fz = 0;
 if (V0.fk > 0) { const G = geoOf(V0.fk); fx = G.x * 0.02; fz = G.y * 0.02; }
+if (P.has('walk')) { const m = geoOf(+P.get('walk')).path[8]; V0.tx = m.x * 0.02; V0.tz = m.y * 0.02; }
 if (V0.tx === null) V0.tx = fx; if (V0.tz === null) V0.tz = fz;
 S.player.x = fx / 0.02; S.player.y = fz / 0.02;
 const mods = (P.get('m') || './env3d.js').split(',').filter(Boolean);

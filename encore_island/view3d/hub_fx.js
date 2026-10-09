@@ -141,12 +141,43 @@ export function stat(obj) { obj.traverse((o) => { if (o.isMesh && !o.isInstanced
 const _bm = new THREE.Matrix4(), _inv = new THREE.Matrix4();
 export function batchStatics(root) {
   root.updateMatrixWorld(true); _inv.copy(root.matrixWorld).invert();
-  const groups = new Map(), kill = [];
-  root.traverse((o) => { if (!(o.isMesh && !o.isInstancedMesh && o.userData.batch && o.geometry && o.material && !Array.isArray(o.material))) return; let e = groups.get(o.material); if (!e) groups.set(o.material, e = { list: [], cast: false, recv: false }); const g = o.geometry.clone(); g.applyMatrix4(_bm.multiplyMatrices(_inv, o.matrixWorld)); e.list.push(g); e.cast = e.cast || o.castShadow; e.recv = e.recv || o.receiveShadow; kill.push(o); });
+  const groups = new Map();
+  root.traverse((o) => { if (!(o.isMesh && !o.isInstancedMesh && o.userData.batch && o.geometry && o.material && !Array.isArray(o.material))) return; let e = groups.get(o.material); if (!e) groups.set(o.material, e = { list: [], src: [], cast: false, recv: false }); const g = o.geometry.clone(); g.applyMatrix4(_bm.multiplyMatrices(_inv, o.matrixWorld)); e.list.push(g); e.src.push(o); e.cast = e.cast || o.castShadow; e.recv = e.recv || o.receiveShadow; });
   const out = new THREE.Group(); out.name = 'hubStatic';
-  for (const [mat, e] of groups) { const geom = mergeGeometries(e.list, false); e.list.forEach((g) => g.dispose()); if (!geom) continue; const m = new THREE.Mesh(geom, mat); m.castShadow = e.cast; m.receiveShadow = e.recv; out.add(m); }
-  for (const o of kill) { if (o.parent) o.parent.remove(o); o.geometry.dispose(); }
+  for (const [mat, e] of groups) {
+    let geom = null; try { geom = mergeGeometries(e.list, false); } catch (err) { geom = null; } e.list.forEach((g) => g.dispose());
+    if (!geom) continue; // attribute mismatch: leave these meshes as they are (more draw calls, but nothing goes missing)
+    const m = new THREE.Mesh(geom, mat); m.castShadow = e.cast; m.receiveShadow = e.recv; out.add(m);
+    for (const o of e.src) { if (o.parent) o.parent.remove(o); o.geometry.dispose(); }
+  }
   root.add(out); return out;
+}
+/**
+ * Batch for fixtures that appear and disappear (smelter, districts, hatch ...). set(group) lifts every stat()-flagged mesh out of `group` and keeps its world
+ * space geometry; update() draws one merged mesh per material from the fixtures whose group chain is currently visible (rebuilt only when that set changes).
+ */
+export class DynBatch {
+  constructor(root) { this.root = root; this.entries = []; this.meshes = new Map(); this.sig = -1; this.dirty = true; }
+  set(obj, key = obj.name) {
+    this.root.updateMatrixWorld(true); _inv.copy(this.root.matrixWorld).invert();
+    let e = this.entries.find((x) => x.key === key); if (!e) this.entries.push(e = { key, obj, parts: new Map() }); else { for (const l of e.parts.values()) l.geoms.forEach((g) => g.dispose()); e.parts.clear(); e.obj = obj; }
+    const kill = []; obj.updateWorldMatrix(true, true);
+    obj.traverse((o) => { if (!(o.isMesh && !o.isInstancedMesh && o.userData.batch && o.geometry && o.material && !Array.isArray(o.material))) return; let l = e.parts.get(o.material); if (!l) e.parts.set(o.material, l = { geoms: [], cast: false, recv: false }); const g = o.geometry.clone(); g.applyMatrix4(_bm.multiplyMatrices(_inv, o.matrixWorld)); l.geoms.push(g); l.cast = l.cast || o.castShadow; l.recv = l.recv || o.receiveShadow; kill.push(o); });
+    for (const o of kill) { if (o.parent) o.parent.remove(o); o.geometry.dispose(); }
+    this.dirty = true; return obj;
+  }
+  update() {
+    let sig = 0, bit = 1; for (const e of this.entries) { let v = true; for (let p = e.obj; p; p = p.parent) if (p.visible === false) { v = false; break; } e.on = v; if (v) sig |= bit; bit <<= 1; }
+    if (sig === this.sig && !this.dirty) return; this.sig = sig; this.dirty = false;
+    const mats = new Set(); for (const e of this.entries) for (const m of e.parts.keys()) mats.add(m);
+    for (const mat of mats) {
+      const geoms = []; let cast = false, recv = false; for (const e of this.entries) { const l = e.on && e.parts.get(mat); if (l) { geoms.push(...l.geoms); cast = cast || l.cast; recv = recv || l.recv; } }
+      let m = this.meshes.get(mat); if (!m) { m = new THREE.Mesh(new THREE.BufferGeometry(), mat); this.meshes.set(mat, m); this.root.add(m); }
+      const old = m.geometry; let merged = null; try { merged = geoms.length ? mergeGeometries(geoms, false) : null; } catch (err) { merged = null; }
+      m.geometry = merged || new THREE.BufferGeometry(); old.dispose(); m.visible = !!merged; m.castShadow = cast; m.receiveShadow = recv;
+    }
+  }
+  dispose() { for (const e of this.entries) for (const l of e.parts.values()) l.geoms.forEach((g) => g.dispose()); for (const m of this.meshes.values()) { m.geometry.dispose(); m.removeFromParent(); } this.entries.length = 0; this.meshes.clear(); }
 }
 export const hexRGB = (h, k = 1) => { _c.set(h); return [_c.r * k, _c.g * k, _c.b * k]; };
 /** a beat-ish value: 1 right on the beat decaying to 0 (LOOK.beat is the engine's own pulse; this is the fallback) */

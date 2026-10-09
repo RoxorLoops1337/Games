@@ -1,8 +1,8 @@
 // Encore Island 3D, the Smelter yard: the furnace building (chimney, smoke, glowing mouth, level pips) and the bar TRAY with its ingot pyramid.
 // Appears once S.forge exists (the plate for it is made by hub_plates.js). Hot while S.forge.queue has shields in it. Local frame = FORGE / TRAY position.
 import * as THREE from 'three';
-import { Builder, C, INK, W, TAU, PI, seg, GB, GOLD, lit, damp, clamp } from './kit.js';
-import { Inst, QuadSet, outline, rbx, bll } from './hub_fx.js';
+import { Builder, C, W, PI, seg, GB, GOLD, lit, damp, clamp } from './kit.js';
+import { Inst, QuadSet, outline, rbx, bll, stat } from './hub_fx.js';
 
 const GOLDM = { m: GOLD, c: 0xffd84d };
 
@@ -24,8 +24,8 @@ export function buildForge(V, fx) {
   for (let i = 0; i < 3; i++) b.cylc(0xb07840, 1.15 + (i === 2 ? 0.0 : (i - 0.5) * 0.3), 0.18 + (i === 2 ? 0.26 : 0), 0.7, 0.14, 0.7, 10, PI / 2);
   for (let i = 0; i < 3; i++) b.cylc(0xe8c49a, 1.15 + (i === 2 ? 0.0 : (i - 0.5) * 0.3), 0.18 + (i === 2 ? 0.26 : 0), 1.06, 0.1, 0.02, 10, PI / 2);
   const qs = new QuadSet(); { const tilt = -0.6, sy = 2.28, sz = -0.15, sn = [-Math.sin(tilt), Math.cos(tilt)]; rbx(b, 0x4a2a90, -0.62, sy, sz, 1.28, 0.5, 0.1, 0.4, 0, tilt); fx.atlas.quad(qs, 'SMELTER', 1.2, -0.62, sy + sn[0] * 0.056, sz + sn[1] * 0.056, 0, tilt, 0.4); }
-  g.add(outline(b.build({ cast: true })));
-  g.add(fx.atlas.mesh(qs));
+  g.add(stat(outline(b.build({ cast: true }))));
+  g.add(stat(fx.atlas.mesh(qs)));
   // glowing mouth (arch shape, vertex gradient, brightness driven by heat)
   const sh = new THREE.Shape(); sh.moveTo(-0.38, 0); sh.lineTo(0.38, 0); sh.lineTo(0.38, 0.9); sh.absarc(0, 0.9, 0.38, 0, PI, false); sh.lineTo(-0.38, 0); const mg = new THREE.ShapeGeometry(sh, 10).toNonIndexed(), mp = mg.attributes.position, mc = new Float32Array(mp.count * 3);
   for (let i = 0; i < mp.count; i++) { const k = clamp(mp.getY(i) / 1.28, 0, 1); mc[i * 3] = 1.0; mc[i * 3 + 1] = 0.78 - k * 0.5; mc[i * 3 + 2] = 0.3 - k * 0.28; }
@@ -34,12 +34,12 @@ export function buildForge(V, fx) {
   const mouth = new THREE.Mesh(mg, mouthMat); mouth.position.set(MX, 0.12, z0 + 0.06); g.add(mouth);
   const fgeo = new THREE.ConeGeometry(1, 1, 7).toNonIndexed(); fgeo.deleteAttribute('uv'); const fmat = new THREE.MeshBasicMaterial({ fog: true }); fmat.userData.noLook = true;
   const flames = new Inst(fgeo, fmat, 6, { colors: true }); g.add(flames.mesh);
-  const wx = g.position.x, wz = g.position.z; let heat = 0, lvlSeen = -1;
+  const wx = g.position.x, wz = g.position.z; let heat = 0;
   return {
-    group: g,
+    group: g, dynGroups: [g],
     update(dt, t) {
       const f = S.forge; if (!f) { g.visible = false; return; } g.visible = true;
-      const hot = f.queue.length > 0; heat = damp(heat, hot ? 1 : 0.28, 4, dt); const lvl = S.forgeLvl || 0, beat = fx.beat();
+      const hot = f.queue.length > 0; heat = damp(heat, hot ? 1 : 0.28, 4, dt); const lvl = S.forgeLvl || 0;
       mouthMat.color.setRGB(0.55 + 0.9 * heat, 0.42 + 0.4 * heat, 0.4 + 0.1 * heat);
       flames.begin(); for (let i = 0; i < 5; i++) { const x = MX - 0.25 + i * 0.125, h = (0.22 + 0.25 * Math.sin(t * 9 + i * 1.7) * 0.5 + 0.12 * (i % 2) + 0.08) * (0.4 + 0.9 * heat), w = 0.075; flames.put(x, 0.13 + h / 2, z0 + 0.1, 0, 0, Math.sin(t * 7 + i) * 0.1, w, h, w, i % 2 ? 1.8 : 1.5, i % 2 ? 1.5 : 0.8, i % 2 ? 0.5 : 0.15); } flames.end();
       // ground + mouth glow
@@ -50,7 +50,6 @@ export function buildForge(V, fx) {
       if (hot) for (let i = 0; i < 4; i++) { const ph = (t * 0.9 + i / 4) % 1, id = i * 5 + Math.floor(t * 0.9 + i / 4); fx.glow(wx + MX + (Math.sin(id * 12.9) * 0.3), 0.5 + ph * 1.2, wz + z0 + 0.12, 0.12 * Math.sin(ph * PI) + 0.02, 1.8, 1.0, 0.3, 0.9 * Math.sin(ph * PI)); }
       // level pips: lit gold up to the smelter level
       for (let i = 0; i < 10; i++) { const on = i < lvl; fx.bulb(wx + MX - 0.54 + i * 0.12, 1.4, wz + z0 + 0.06, 0.04, on ? 1.8 : 0.35, on ? 1.4 : 0.3, on ? 0.45 : 0.3); }
-      void beat; void lvlSeen;
       const L = V.labels; if (L) {
         L.pill('SMELTER LV' + (lvl + 1) + '  x' + BAR_MUL, wx + MX, 3.55, wz, { c1: '#ffe98a', c2: '#f0b422', px: 12 });
         L.pill(f.queue.length + '/' + forgeQ() + ' shields', wx, 0.05, wz + 1.45, { c1: '#ffffff', c2: '#dccaff', px: 11 });
@@ -66,13 +65,13 @@ export function buildTray(V, fx) {
   const b = new Builder({ ao: 0.2 });
   rbx(b, 0xe8c49a, 0, 0.1, 0, 2.5, 0.18, 0.95, 0.35); rbx(b, 0xb07840, 0, 0.22, 0.46, 2.5, 0.16, 0.08, 0.4); rbx(b, 0xb07840, 0, 0.22, -0.46, 2.5, 0.16, 0.08, 0.4); rbx(b, 0xb07840, -1.21, 0.22, 0, 0.08, 0.16, 0.95, 0.4); rbx(b, 0xb07840, 1.21, 0.22, 0, 0.08, 0.16, 0.95, 0.4);
   rbx(b, GOLDM, -1.0, 0.31, 0.46, 0.14, 0.05, 0.1, 0.5); rbx(b, GOLDM, 1.0, 0.31, 0.46, 0.14, 0.05, 0.1, 0.5);
-  g.add(b.build({ cast: true }));
+  g.add(stat(b.build({ cast: true })));
   const barG = new Builder({ ao: 0 }); rbx(barG, 0xffffff, 0, 0, 0, 1, 1, 1, 0.3); rbx(barG, 0xeeeeee, 0, 0.45, 0, 0.78, 0.14, 0.78, 0.5);
   const bars = new Inst(barG.geometry(), lit(0xffffff, { vc: true, rough: 0.28, metal: 0.3 }), 15, { colors: true, cast: true }); g.add(bars.mesh);
   const c = new THREE.Color(), tray = { key: '', cols: [] }, kk = (v) => (typeof v === 'number' ? v : (v && v.k) || 1); // the sim stores plain numbers; tolerate {k} entries
   const wx = g.position.x, wz = g.position.z;
   return {
-    group: g,
+    group: g, dynGroups: [g],
     update(dt, t) {
       const f = S.forge; g.visible = !!f; if (!f) return;
       const tr = f.tray, show = Math.min(tr.length, 15), key = tr.slice(-15).map(kk).join(',');

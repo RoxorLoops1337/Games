@@ -62,8 +62,8 @@ function decorMat() {
 function glowMat() {
   if (_glow) return _glow; const m = new THREE.MeshBasicMaterial({ vertexColors: true }); m.onBeforeCompile = (sh) => { sh.uniforms.uWT = kit.LOOK.t; sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\n' + SWAY_V).replace('#include <begin_vertex>', SWAY_B); }; m.customProgramCacheKey = () => 'glowsway'; m.userData.noCast = true; m.userData.noLook = true; return (_glow = m);
 }
-function shadowMat() {
-  if (_sh) return _sh; const m = new THREE.MeshBasicMaterial({ map: kit.softTex('shadow'), color: 0x241044, transparent: true, opacity: 0.34, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 }); m.userData.noCast = true; m.userData.noLook = true; return (_sh = m);
+function shadowMat() { // soft ground decals: the shared round-shadow texture times a per-vertex rgba (tree shadows and the boardwalk's shadow on the water)
+  if (_sh) return _sh; const m = new THREE.MeshBasicMaterial({ map: kit.softTex('shadow'), vertexColors: true, transparent: true, depthWrite: false, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 }); m.userData.noCast = true; m.userData.noLook = true; return (_sh = m);
 }
 
 const SZ = { tree: [1.0, 0.9, 1.0], pine: [0.85, 0.85, 0.85], mush: [1.0, 1.0, 1.0] };
@@ -73,7 +73,7 @@ const SZ = { tree: [1.0, 0.9, 1.0], pine: [0.85, 0.85, 0.85], mush: [1.0, 1.0, 1
  */
 export const buildDecor = (g, B, bi, items, o) => runSync(buildDecorG(g, B, bi, items, o));
 export function* buildDecorG(g, B, bi, items, o = {}) {
-  const t = yield* T(), A = new Acc(), GL = new Acc(), rnd = kit.rng(g.seed * 13 + 1), cx = g.x, cy = g.y, night = bi === 6, style = B.prop || 'round';
+  const dens = (o.density === undefined ? 1 : o.density), t = yield* T(), A = new Acc(), GL = new Acc(), rnd = kit.rng(g.seed * 13 + 1), cx = g.x, cy = g.y, night = bi === 6, style = B.prop || 'round';
   const treeTint = (r) => C3(B.tree[0]).lerp(C3(B.tree[1]), r()).offsetHSL((r() - 0.5) * 0.02, 0, (r() - 0.5) * 0.08);
   const stone = C3(B.cliff).lerp(C3(0xe6e0f4), 0.5), tuftC = C3(B.tuft).lerp(C3(0xffffff), 0.1), bushC = C3(B.g[1]).lerp(C3(B.deep), 0.45), shadows = [];
   const L = (p) => [(p.x - cx) * W, (p.y - cy) * W];
@@ -82,7 +82,7 @@ export function* buildDecorG(g, B, bi, items, o = {}) {
   let step = 0;
   for (const it of items) {
     if (++step % 6 === 0) yield;
-    const [x, z] = L(it), s = it.s || 1, v = it.v % 3, ph = rnd() * 6.28, yaw = rnd() * 6.28;
+    const [x, z] = L(it), s = it.s || 1, v = it.v % 3, ph = rnd() * 6.28, yaw = rnd() * 6.28; if (it.t !== 'tree' && dens < 1 && rnd() > dens) continue;
     if (it.t === 'tree') {
       const tp = style === 'pine' ? t.pine[v] : style === 'mush' ? t.mush[v] : t.round[v], k = style === 'mush' ? 1.15 : 1;
       A.add(tp, x, 0, z, yaw, s * k, s * k * (0.95 + rnd() * 0.15), s * k, style === 'pine' ? C3(0x3a8a86).lerp(C3(B.tree[1]), 0.12 + rnd() * 0.2).offsetHSL(0, 0, (rnd() - 0.5) * 0.07) : treeTint(rnd), 1, ph);
@@ -100,7 +100,7 @@ export function* buildDecorG(g, B, bi, items, o = {}) {
     }
   }
   // grass tufts everywhere on open ground
-  const R = g.r * W, nT = Math.round(R * R * (o.hub ? 0.5 : 0.95) * (kit.Q.detail === 0 ? 0.6 : 1)), keep = o.keep || [];
+  const R = g.r * W, nT = Math.round(R * R * (o.hub ? 1.1 : 2.0) * Math.min(1, dens)), keep = o.keep || [];
   for (let i = 0; i < nT; i++) {
     if (i % 40 === 39) yield;
     const a = rnd() * 6.28, rr = Math.sqrt(rnd()) * 0.93, px = g.x + Math.cos(a) * g.r * rr, py = g.y + Math.sin(a) * g.r * rr; if (radiusSafe(g, px - g.x, py - g.y) < 70) continue;
@@ -109,7 +109,7 @@ export function* buildDecorG(g, B, bi, items, o = {}) {
     if (rnd() < 0.12) addFlowerHead((px - cx) * W + 0.05, 0.3 * s, (py - cy) * W, 0.55, flowerCols[(rnd() * flowerCols.length) | 0], 0);
   }
   // meadow patches (flower clusters in two biome colours with taller grass around them) and pebbles: the "life" between the plates
-  const dens = (o.density === undefined ? 1 : o.density), nP = Math.round(R * (o.hub ? 1.0 : 2.0) * dens), okSpot = (px, py) => { if (radiusSafe(g, px - g.x, py - g.y) < 110) return false; if (o.blocked && o.blocked(px, py)) return false; for (const q of keep) if ((px - q.x) * (px - q.x) + (py - q.y) * (py - q.y) < q.r * q.r) return false; return true; };
+  const nP = Math.round(R * (o.hub ? 1.0 : 2.0) * dens), okSpot = (px, py) => { if (radiusSafe(g, px - g.x, py - g.y) < 110) return false; if (o.blocked && o.blocked(px, py)) return false; for (const q of keep) if ((px - q.x) * (px - q.x) + (py - q.y) * (py - q.y) < q.r * q.r) return false; return true; };
   for (let i = 0, tries = 0; i < nP && tries < nP * 6; tries++) {
     if (tries % 3 === 2) yield;
     const a = rnd() * 6.28, rr = Math.sqrt(rnd()) * 0.86, px = g.x + Math.cos(a) * g.r * rr, py = g.y + Math.sin(a) * g.r * rr; if (!okSpot(px, py)) continue; i++;
@@ -120,10 +120,11 @@ export function* buildDecorG(g, B, bi, items, o = {}) {
   }
   for (let i = 0, tries = 0; i < Math.round(R * 1.2 * dens) && tries < 200; tries++) { const a = rnd() * 6.28, rr = Math.sqrt(rnd()) * 0.9, px = g.x + Math.cos(a) * g.r * rr, py = g.y + Math.sin(a) * g.r * rr; if (!okSpot(px, py)) continue; i++; const sc = 0.18 + rnd() * 0.22; A.add(t.rock[(rnd() * 3) | 0], (px - cx) * W, 0, (py - cy) * W, rnd() * 6.28, sc, sc * 0.8, sc, stone.clone().multiplyScalar(0.95 + rnd() * 0.2), 0, 0, 0.3); }
   yield; const grp = new THREE.Group(); grp.name = 'decor';
-  const gm = A.build(true); yield; if (gm) { const m = new THREE.Mesh(gm, decorMat()); m.castShadow = true; m.receiveShadow = true; m.name = 'decorMesh'; grp.add(m); }
-  const gg = GL.build(true); yield; if (gg) { const m = new THREE.Mesh(gg, glowMat()); m.name = 'decorGlow'; grp.add(m); }
-  if (shadows.length) { // merged soft quads
-    const pos = [], uv = [], idx = []; shadows.forEach(([x, z, r], i) => { const y = 0.014, b = i * 4; pos.push(x - r, y, z - r, x + r, y, z - r, x + r, y, z + r, x - r, y, z + r); uv.push(0, 0, 1, 0, 1, 1, 0, 1); idx.push(b, b + 2, b + 1, b, b + 3, b + 2); });
-    const sg = new THREE.BufferGeometry(); sg.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); sg.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); sg.setIndex(idx); const m = new THREE.Mesh(sg, shadowMat()); m.renderOrder = -3; m.name = 'decorShadow'; grp.add(m); }
+  const gm = yield* A.buildG(true); if (gm) { const m = new THREE.Mesh(gm, decorMat()); m.castShadow = true; m.receiveShadow = true; m.name = 'decorMesh'; grp.add(m); }
+  const gg = yield* GL.buildG(true); if (gg) { const m = new THREE.Mesh(gg, glowMat()); m.name = 'decorGlow'; grp.add(m); }
+  if (shadows.length || o.ribbon) { // merged soft quads (rgba vertex colours) plus the boardwalk shadow ribbon
+    const pos = [], uv = [], col = [], idx = []; shadows.forEach(([x, z, r], i) => { const y = 0.014, b = i * 4; pos.push(x - r, y, z - r, x + r, y, z - r, x + r, y, z + r, x - r, y, z + r); uv.push(0, 0, 1, 0, 1, 1, 0, 1); for (let q = 0; q < 4; q++) col.push(0.02, 0.008, 0.06, 0.34); idx.push(b, b + 2, b + 1, b, b + 3, b + 2); });
+    if (o.ribbon) { const rb = o.ribbon, base = pos.length / 3; for (let i = 0; i < rb.pos.length; i += 3) { pos.push(rb.pos[i] - cx * W, rb.pos[i + 1], rb.pos[i + 2] - cy * W); uv.push(0.5, 0.5); } for (const c of rb.col) col.push(c); for (const i of rb.idx) idx.push(base + i); }
+    const sg = new THREE.BufferGeometry(); sg.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); sg.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); sg.setAttribute('color', new THREE.Float32BufferAttribute(col, 4)); sg.setIndex(idx); const m = new THREE.Mesh(sg, shadowMat()); m.renderOrder = -3; m.name = 'decorShadow'; grp.add(m); }
   return grp;
 }

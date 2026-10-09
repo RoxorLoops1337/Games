@@ -82,7 +82,7 @@ export function makeFeat(V) {
   const petalGeo = new THREE.CircleGeometry(1, 8).scale(0.17, 0.1, 1); petalGeo.userData.sharedGeo = true;
   function makeEvent(e) {
     const D = LD_EV[e.type], gg = geoOf(e.k), g = new THREE.Group(), cx = gg.x * W, cz = gg.y * W; g.position.set(0, 0, 0);
-    const soft = ribbon(gg, 0.97, 0.6, { c: D.col, a: 0.5 }), dash = ribbon(gg, 0.97, 0.16, { c: 0xffffff, a: 0.85, dash: 56, speed: 0.75 }); g.add(soft, dash);
+    const soft = ribbon(gg, 0.97, 0.9, { c: D.col, a: 0.6 }), dash = ribbon(gg, 0.97, 0.22, { c: 0xffffff, a: 1, dash: 50, speed: 0.75 }); g.add(soft, dash);
     const rip = ringMesh({ c: D.col, a: 0.5, r: 1, in: 0.95, out: 1, soft: 0.02, y: 0.12, add: false }); rip.position.set(cx, 0.12, cz); g.add(rip);
     const v = { e, D, gg, g, soft, dash, rip, cx, cz, rings: null, motes: null, petals: null, pill: { c1: '#ffffff', c2: D.col, px: 13 } };
     if (e.type === 'blossom') {
@@ -90,7 +90,7 @@ export function makeFeat(V) {
       im.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(40 * 3), 3); const cc = new THREE.Color(); for (let i = 0; i < 40; i++) { cc.set(i % 3 === 0 ? '#fff4e6' : i % 3 === 1 ? '#ff9ac8' : '#ffc2dc'); im.setColorAt(i, cc); }
       im.frustumCulled = false; im.castShadow = false; g.add(im); v.petals = im;
     } else if (e.type === 'golden' || e.type === 'dark') {
-      const m = moteField({ n: e.type === 'golden' ? 36 : 18, h: 1.5, r: gg.r * W * 0.88, size: 0.26, speed: 0.25, sway: 0.1, star: true, c: e.type === 'golden' ? 0xffe98a : 0xc6b4ff, c2: 0xffffff, seed: e.k * 3 }); m.position.set(cx, 0.2, cz); g.add(m); v.motes = m;
+      const m = moteField({ n: e.type === 'golden' ? 44 : 22, h: 1.5, r: gg.r * W * 0.88, size: 0.4, speed: 0.25, sway: 0.1, star: true, c: e.type === 'golden' ? 0xffd040 : 0xb8a0ff, c2: 0xffffff, seed: e.k * 3 }); m.position.set(cx, 0.2, cz); g.add(m); v.motes = m;
     } else if (e.type === 'sound') {
       v.rings = [0, 1, 2].map(() => { const r = ringMesh({ c: D.col, a: 1, r: 1, in: 0.93, out: 1, soft: 0.02, y: 0.13, add: false }); r.position.set(gg.den.x * W, 0.13, gg.den.y * W); g.add(r); return r; });
     }
@@ -103,7 +103,7 @@ export function makeFeat(V) {
     if (!e || !S.lands[e.k - 1] || !LD_EV[e.type]) return;
     if (!ev) { ev = makeEvent(e); root.add(ev.g); }
     const { D, gg, cx, cz } = ev, u = (t * 0.7) % 1, pul = 0.3 + 0.25 * Math.sin(t * 4);
-    ev.soft.userData.u.uA.value = pul + 0.1; ev.rip.scale.setScalar(gg.r * W * (0.2 + u * 0.7)); ev.rip.userData.u.uA.value = (1 - u) * 0.55;
+    ev.soft.userData.u.uA.value = pul + 0.25; ev.rip.scale.setScalar(gg.r * W * (0.2 + u * 0.7)); ev.rip.userData.u.uA.value = (1 - u) * 0.55;
     if (ev.petals) for (let i = 0; i < 40; i++) {
       const hh = (j) => hash01(j * 31 + 7), uu = (t * (0.05 + hh(i) * 0.05) + hh(i + 40)) % 1, sn = Math.sin(uu * PI);
       _p.set((gg.x + (hh(i + 80) * 2 - 1) * gg.r * 1.05 + Math.sin(t * 1.3 + i) * 26 + uu * 90) * W, 0.25 + sn * 1.5, (gg.y + (uu * 2 - 1) * gg.r * 0.95 + gg.r * 0.1) * W);
@@ -124,7 +124,7 @@ export function makeFeat(V) {
     for (let i = 0; i < 9; i++) {
       const a = i / 9 * TAU + 0.3, rd = radiusAt(gg, a) * 0.86, x = (gg.x + Math.cos(a) * rd) * W, zz = (gg.y + Math.sin(a) * rd) * W, h = 54 * W;
       pb.cyl(INK, x, 0, zz, 0.04, h, 6); pb.ball(INK, x, h + 0.02, zz, 0.07); pb.ball(C.cream, x, h + 0.02, zz, 0.05);
-      items.push({ g: clothGeo(0.5, 0.36, i % 2 ? B.col : B.col2, i % 2 ? B.col2 : B.col, i * 0.9, 6, 0.85), x: x + 0.02, y: h - 0.2, z: zz, s: 1 });
+      items.push({ g: clothGeo(0.66, 0.46, i % 2 ? B.col : B.col2, i % 2 ? B.col2 : B.col, i * 0.9, 6, 0.85), x: x + 0.02, y: h - 0.2, z: zz, s: 1 });
     }
     g.add(pb.build({ cast: false })); const cg = clothMerge(items); items.forEach((it) => it.g.dispose()); g.add(clothMesh(cg));
     const ps = rvPadSpot(k), pg = new THREE.Group(); pg.position.set(ps.x * W, 0, ps.y * W);

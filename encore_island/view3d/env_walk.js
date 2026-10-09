@@ -59,12 +59,10 @@ export function* buildWalkG(g) {
   const grp = new THREE.Group(); grp.name = 'walk' + g.k;
   const geo = A.build(false); if (geo) { const m = new THREE.Mesh(geo, kit.SOLID); m.castShadow = true; m.receiveShadow = true; grp.add(m); }
   const gg = GL.build(false); if (gg) { const m = new THREE.Mesh(gg, kit.glow(1, 1, 1, { vc: true })); m.castShadow = false; grp.add(m); }
-  // soft shadow of the deck on the water: a ribbon at sea level with an alpha-faded edge, nudged away from the sun
-  { const pos = [], col = [], idx = []; let k = 0; const ox = 0.5, oz = -0.4, wd = half + 0.9;
-    for (let i = 0; i <= n; i++) { const a = pts[i], wet = a.wet ? 1 : 0; for (const [s, al] of [[-1, 0], [-0.45, 0.3], [0.45, 0.3], [1, 0]]) { pos.push(a.x + a.nx * wd * s + ox, WY + 0.045, a.z + a.nz * wd * s + oz); col.push(0.04, 0.1, 0.3, al * wet * 0.85); } if (i) { const b0 = (i - 1) * 4, b1 = i * 4; for (let q = 0; q < 3; q++) idx.push(b0 + q, b1 + q, b0 + q + 1, b0 + q + 1, b1 + q, b1 + q + 1); } }
-    const rg = new THREE.BufferGeometry(); rg.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); rg.setAttribute('color', new THREE.Float32BufferAttribute(col, 4)); rg.setIndex(idx);
-    const rm = new THREE.Mesh(rg, RIB); rm.renderOrder = -4; rm.frustumCulled = true; rm.name = 'walkShadow'; grp.add(rm); }
+  // soft shadow of the deck on the water: a ribbon at sea level with an alpha-faded edge, nudged away from the sun. It is handed to the island's decal mesh
+  // (env_decor) so the whole land shares one transparent draw call; positions are world units, colours rgba.
+  { const pos = [], col = [], idx = [], ox = 0.5, oz = -0.4, wd = half + 0.9;
+    for (let i = 0; i <= n; i++) { const a = pts[i], wet = a.wet ? 1 : 0; for (const [s, al] of [[-1, 0], [-0.45, 0.3], [0.45, 0.3], [1, 0]]) { pos.push(a.x + a.nx * wd * s + ox, WY + 0.045, a.z + a.nz * wd * s + oz); col.push(0.02, 0.05, 0.16, al * wet * 0.85); } if (i) { const b0 = (i - 1) * 4, b1 = i * 4; for (let q = 0; q < 3; q++) idx.push(b0 + q, b1 + q, b0 + q + 1, b0 + q + 1, b1 + q, b1 + q + 1); } }
+    grp.userData.ribbon = { pos, col, idx }; }
   return grp;
 }
-const RIB = new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, depthWrite: false, side: THREE.DoubleSide, fog: true });
-RIB.userData.noCast = true; RIB.userData.noLook = true;

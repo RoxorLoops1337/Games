@@ -1,8 +1,8 @@
 // Encore Island 3D, the three money fixtures: the SELL stall (heroes3d places the keeper), the Vault (coin stacks grow with S.pallet) and the Encore Tour monument.
 // Each builder returns { group, update(dt, t, focus), dispose() }; local frame = the 2D position (X = x*W, Z = y*W), +z faces the camera.
 import * as THREE from 'three';
-import { Builder, C, INK, W, TAU, PI, seg, GB, GOLD, SHINY, lit, glow, damp, clamp, hash01 } from './kit.js';
-import { Inst, ringQuad, QuadSet, rod, outline, rbx, bll, stat } from './hub_fx.js';
+import { Builder, C, INK, W, TAU, PI, seg, GB, GOLD, lit, glow, damp, clamp, hash01 } from './kit.js';
+import { Inst, ringQuad, QuadSet, outline, rbx, bll, stat } from './hub_fx.js';
 
 const WOOD = 0xd9a468, WOOD_D = 0xa8703c, GOLDC = 0xffd84d;
 const GOLDM = { m: GOLD, c: GOLDC };
@@ -13,8 +13,8 @@ export function buildStall(V, fx) {
   const b = new Builder({ ao: 0.18 });
   // counter in front, keeper behind it, open shelves at the back; the awning only roofs the back half so the keeper stays visible from the high camera
   rbx(b, WOOD, 0, 0.43, 0.9, 2.2, 0.84, 0.8, 0.2); rbx(b, C.cream, 0, 0.9, 0.9, 2.36, 0.09, 0.94, 0.45); rbx(b, 0xfff0d8, 0, 0.945, 0.9, 2.2, 0.03, 0.8, 0.5);
-  for (const y of [0.22, 0.5]) rbx(b, WOOD_D, 0, y, 1.305, 2.12, 0.035, 0.03, 0.4);
-  rbx(b, GOLDM, 0, 0.5, 1.325, 0.5, 0.36, 0.05, 0.4); bll(b, 0x3a2410, 0, 0.5, 1.365, 0.045, 1); // little gold plaque with a coin slot
+  for (let i = 0; i < 7; i++) b.box(i % 2 ? C.cream : C.hotPink, -0.93 + i * 0.31, 0.46, 1.305, 0.3, 0.72, 0.02); // striped counter skirt
+  rbx(b, GOLDM, 0, 0.5, 1.33, 0.46, 0.34, 0.05, 0.4); bll(b, 0x3a2410, 0, 0.5, 1.37, 0.045, 1); // little gold plaque with a coin slot
   rbx(b, 0xc88a50, 0, 1.0, -0.68, 2.28, 2.0, 0.12, 0.1);
   for (const y of [0.98, 1.44]) rbx(b, 0xe8c49a, 0, y, -0.5, 2.12, 0.07, 0.3, 0.4);
   const cols = [C.pink, C.mint, C.sky, C.gold, C.violet, C.orange];
@@ -60,7 +60,7 @@ export function buildVault(V, fx) {
   g.add(stat(outline(b.build({ cast: true }))));
   // coins
   const coinG = new THREE.CylinderGeometry(1, 1, 1, 12).toNonIndexed(); coinG.deleteAttribute('uv');
-  const coinM = lit(0xffffff, { rough: 0.3, metal: 0.25, emissive: 0x6a4000, ei: 0.2 }), coins = new Inst(coinG, coinM, 380, { colors: true, cast: true }); g.add(coins.mesh);
+  const coinM = lit(0xffffff, { rough: 0.3, metal: 0.25, emissive: 0x6a4000, ei: 0.2 }), coins = new Inst(coinG, coinM, 380, { colors: true }); g.add(coins.mesh);
   const ring = ringQuad({ r: VAULT.r * W, rin: 0.95, rout: 1.0, col: 0xffd84d, dash: 22, spin: 0.08, a: 0.5 }); ring.position.y = 0.045; g.add(ring);
   const cols = 8, rowsN = 7, sh = { n: 0 }, hsh = [];
   for (let i = 0; i < 56; i++) hsh.push(2 + ((i * 7 + 3) % 5));
@@ -75,7 +75,7 @@ export function buildVault(V, fx) {
       for (let i = 0; i < 56; i++) {
         const vis = clamp(sh.n - i, 0, 1); if (vis <= 0.001) continue;
         const x = SX[i], z = SZ[i], h = hsh[i], base = topY + SR[i] * 0.02;
-        for (let j = 0; j < h; j++) { const top = j === h - 1, k = vis * (1 + (top ? 0.0 : 0)), tw = j % 2 ? 0.0 : 0.0; coins.put(x + tw, base + CH / 2 + j * CH * vis, z, 0, i * 1.7 + j, 0, CR * k, CH * k + 0.001, CR * k, top ? 1.0 : j % 2 ? 0.96 : 0.85, top ? 0.72 : j % 2 ? 0.58 : 0.42, top ? 0.16 : j % 2 ? 0.08 : 0.03); }
+        for (let j = 0; j < h; j++) { const top = j === h - 1, k = vis; coins.put(x, base + CH / 2 + j * CH * vis, z, 0, i * 1.7 + j, 0, CR * k, CH * k + 0.001, CR * k, top ? 1.0 : j % 2 ? 0.96 : 0.85, top ? 0.72 : j % 2 ? 0.58 : 0.42, top ? 0.16 : j % 2 ? 0.08 : 0.03); }
       }
       coins.end();
       if (S.pallet > 0) for (let k = 0; k < 6; k++) { const ph = (t * 1.1 + sparks[k]) % 1, id = Math.floor(t * 1.1 + sparks[k]) * 7 + k, x = (hash01(id * 3 + 1) - 0.5) * 2.4, z = (hash01(id * 5 + 2) - 0.5) * 1.0, a = Math.sin(ph * PI), y = BHT + 0.25 + ph * 0.5; fx.glow(g.position.x + x, y, g.position.z + z, 0.28 * a + 0.05, 1.6, 1.4, 0.7, 0.9 * a); }
@@ -94,9 +94,9 @@ export function buildMonument(V, fx) {
   for (let i = 0; i < 8; i++) { const a = i / 8 * TAU; bll(b, { m: GOLD, c: GOLDC }, Math.cos(a) * 1.1, 0.17, Math.sin(a) * 1.1, 0.045, 0.7); }
   const bl = b.build({ cast: true }); g.add(stat(outline(bl)));
   // plinth: ink slab + two materials (gold / lavender) toggled by readiness
-  const mk = (col, trim) => { const p = new Builder({ ao: 0.16 }); rbx(p, col, 0, 0.95, 0, 1.08, 1.2, 1.1, 0.2); rbx(p, trim, 0, 1.55, 0, 1.28, 0.16, 1.28, 0.4); rbx(p, trim, 0, 0.42, 0, 1.24, 0.14, 1.24, 0.4);
-    rbx(p, trim, 0, 0.95, 0.56, 0.5, 0.5, 0.06, 0.4); rbx(p, INK, 0, 0.95, 0.58, 0.4, 0.4, 0.05, 0.4); return outline(p.build({ cast: true })); };
-  const plR = mk(0xffd84d, 0xfff4e6), plN = mk(0xb9b2d0, 0xe6dcff); g.add(plR, plN);
+  const mk = (col, trim) => { const p = new Builder({ ao: 0.16 }); rbx(p, col, 0, 0.95, 0, 1.08, 1.2, 1.1, 0.2); rbx(p, trim, 0, 1.55, 0, 1.2, 0.16, 1.2, 0.4); rbx(p, trim, 0, 0.42, 0, 1.24, 0.14, 1.24, 0.4);
+    rbx(p, trim, 0, 0.95, 0.56, 0.5, 0.5, 0.06, 0.4); rbx(p, INK, 0, 0.95, 0.58, 0.4, 0.4, 0.05, 0.4); return stat(outline(p.build({ cast: true }))); };
+  const plR = mk(0xffcf3a, 0xffe27a), plN = mk(0xb9b2d0, 0xe6dcff); g.add(plR, plN);
   const emb = new THREE.Mesh(new THREE.ShapeGeometry(starShapeGeo(), 1), new THREE.MeshBasicMaterial({ color: new THREE.Color(1.6, 1.3, 0.5), fog: true })); emb.position.set(0, 0.95, 0.64); emb.scale.setScalar(0.17); g.add(emb);
   // crown (two copies, gold when the tour is ready, lavender otherwise)
   const mkCrown = (body, spike, gem1, gem2) => { const cb = new Builder({ ao: 0.1 }); cb.cyl(body, 0, 0, 0, 0.5, 0.26, seg(20), 0.92); cb.cyl(spike, 0, 0.22, 0, 0.48, 0.07, seg(20), 1.0);
@@ -106,17 +106,16 @@ export function buildMonument(V, fx) {
   const crownPivot = new THREE.Group(); crownPivot.add(crR, crN); crownPivot.scale.setScalar(1.2); g.add(crownPivot);
   const ring = ringQuad({ r: 1.55, rin: 0.9, rout: 1.0, col: 0xffd84d, prog: 0, a: 1 }); ring.position.y = 0.2; g.add(ring);
   const track = ringQuad({ r: 1.55, rin: 0.9, rout: 1.0, col: 0xffffff, prog: 1, a: 0.0 }); track.position.y = 0.19; g.add(track);
-  const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.8, 5, 20, 1, true), new THREE.MeshBasicMaterial({ color: new THREE.Color(1.0, 0.85, 0.4), transparent: true, opacity: 0.0, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, fog: false })); beam.position.y = 2.7; beam.renderOrder = 5; g.add(beam);
   let readyK = 0;
   return {
-    group: g,
+    group: g, dynGroups: [plR, plN],
     update(dt, t) {
       const ready = S.lands.length >= PRESTIGE_MIN, chg = clamp((S.prestT || 0) / PREST_T, 0, 1); readyK = damp(readyK, ready ? 1 : 0, 6, dt);
       plR.visible = ready; plN.visible = !ready; crR.visible = ready; crN.visible = !ready;
       const bob = Math.sin(t * 2) * 0.08, beat = fx.beat();
       crownPivot.position.y = 2.35 + bob + chg * 0.25; crownPivot.rotation.y = t * (0.7 + chg * 5); crownPivot.scale.setScalar(1.2 + (ready ? 0.08 * beat : 0) + chg * 0.15);
       emb.visible = ready; ring.userData.u.uProg.value = chg; ring.userData.u.uA.value = ready ? 1 : 0; track.userData.u.uA.value = 0.2 * readyK; ring.userData.u.uT.value = t;
-      beam.visible = readyK > 0.02; track.visible = readyK > 0.02; beam.material.opacity = readyK * (0.03 + 0.02 * Math.sin(t * 3) + 0.08 * chg);
+      track.visible = readyK > 0.02;
       const px = g.position.x, pz = g.position.z;
       if (ready) { fx.glow(px, 2.35 + bob, pz, 2.2 + beat * 0.4 + chg * 1.2, 1.2, 0.9, 0.3, 0.4 + 0.3 * chg); for (let k = 0; k < 5; k++) { const ph = (t * 0.5 + k / 5) % 1, a = k * 2.4 + t * 0.4; fx.glow(px + Math.cos(a) * (0.5 + ph * 0.6), 1.5 + ph * 2.2, pz + Math.sin(a) * (0.5 + ph * 0.6), 0.22 * Math.sin(ph * PI) + 0.03, 1.6, 1.4, 0.7, 0.9 * Math.sin(ph * PI)); } }
       const L = V.labels; if (L) {
@@ -124,7 +123,7 @@ export function buildMonument(V, fx) {
         else L.pill('Encore Tour: ' + S.lands.length + '/' + PRESTIGE_MIN + ' lands', px, 3.6, pz, { c1: '#ffffff', c2: '#dccaff', px: 12 });
       }
     },
-    dispose() { g.removeFromParent(); g.traverse((o) => { if (o.geometry) o.geometry.dispose(); }); emb.material.dispose(); beam.material.dispose(); }
+    dispose() { g.removeFromParent(); g.traverse((o) => { if (o.geometry) o.geometry.dispose(); }); emb.material.dispose(); }
   };
 }
 function starShapeGeo() { const s = new THREE.Shape(); for (let i = 0; i < 10; i++) { const a = i / 10 * TAU + PI / 2, r = i % 2 ? 0.45 : 1, x = Math.cos(a) * r, y = Math.sin(a) * r; i ? s.lineTo(x, y) : s.moveTo(x, y); } s.closePath(); return s; }

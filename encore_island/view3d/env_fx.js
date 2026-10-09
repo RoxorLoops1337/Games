@@ -57,7 +57,7 @@ export function createAmbient(V) {
     points: pts,
     /** bi: biome index of the island nearest the focus */
     update(dt, t, focus, cam, bi, renderer) {
-      if (bi !== want) want = bi; if (kind !== want) { fade -= dt * 3; if (fade <= 0) { fade = 0; apply(want); } } else fade = Math.min(1, fade + dt * 1.5);
+      if (bi !== want) want = bi; if (want < 0) { fade = Math.max(0, fade - dt * 3); } else if (kind !== want) { fade -= dt * 3; if (fade <= 0) { fade = 0; apply(want); } } else fade = Math.min(1, fade + dt * 1.5);
       U.uFade.value = fade * (kit.Q.detail === 0 ? 0.8 : 1); U.uFocus.value.set(focus.x, 0, focus.z);
       const h = renderer && renderer.getDrawingBufferSize ? renderer.getDrawingBufferSize(sz).y : 700; U.uScale.value = h * 0.5 * cam.projectionMatrix.elements[5];
     },

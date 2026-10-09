@@ -76,11 +76,11 @@ export function moteField(o = {}) {
 const BEAM_V = 'varying float vY; varying float vAng; void main(){ vY = uv.y; vAng = uv.x * 6.2831853; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }';
 const BEAM_F = `uniform float uT, uA, uFall, uStr, uSpd, uBase; uniform vec3 uCol; varying float vY; varying float vAng;
 void main(){ float a = uA * pow(clamp(1.0 - vY, 0.0, 1.0), uFall) * smoothstep(0.0, uBase, vY) * (0.78 + 0.22 * sin(vAng * uStr + vY * 9.0 - uT * uSpd)); gl_FragColor = vec4(uCol, a);${OUT} }`;
-/** open cone / pillar from y = 0 (radius r0) up to y = h (radius r1). o: { c, a, fall, stripes, spd, base }. The gradient runs on uv.y, so geometry may be merged / tilted freely (see beamGeo). */
+/** open cone / pillar from y = 0 (radius r0) up to y = h (radius r1). o: { c, a, fall, stripes, spd, base, add (false = normal blending: reads on pale ground) }. The gradient runs on uv.y, so geometry may be merged / tilted freely (see beamGeo). */
 export const beamGeo = (r0, r1, h, seg = 20) => new THREE.CylinderGeometry(r1, r0, h, seg, 1, true).translate(0, h / 2, 0);
 export function beamMesh(r0, r1, h, o = {}) {
   const g = o.geo || beamGeo(r0, r1, h, o.seg);
-  const m = fin(new THREE.ShaderMaterial({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, fog: false,
+  const m = fin(new THREE.ShaderMaterial({ transparent: true, depthWrite: false, blending: o.add === false ? THREE.NormalBlending : THREE.AdditiveBlending, side: THREE.DoubleSide, fog: false,
     uniforms: { uT: LOOK.t, uA: { value: o.a ?? 0.4 }, uFall: { value: o.fall ?? 1.2 }, uStr: { value: o.stripes ?? 5 }, uSpd: { value: o.spd ?? 2 }, uBase: { value: o.base ?? 0.05 }, uCol: { value: col(o.c ?? 0xffe98a) } },
     vertexShader: BEAM_V, fragmentShader: BEAM_F }));
   const mesh = new THREE.Mesh(g, m); mesh.renderOrder = 5; mesh.userData.u = m.uniforms; return mesh;

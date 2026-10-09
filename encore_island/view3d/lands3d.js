@@ -62,7 +62,7 @@ const pop = (grp, age, delay = 0) => { const s = age >= 90 ? 1 : easeBack((age -
 
 export function init(V) {
   const root = new THREE.Group(); root.name = 'lands3d'; V.world.add(root);
-  const views = [], dying = []; let teaser = null, portal = null, first = true;
+  const slots = [], dying = []; let teaser = null, portal = null, first = true; // slots[k] = { z: land state, L: its 3D view (built only while the hero is near), grow: spring in when built }
   const feat = makeFeat(V);
   // the 2D sim already queues ring + star bursts for a new island (fx3d bridges them); this adds a 3D sparkle fountain and shock ring on top
   const burst = (x, y, z, c) => { const fx = V.fx; if (!fx) return; try { if (fx.burst) fx.burst({ x, y, z, n: 36, colors: [c.c1, c.c2, 0xfff4e6, 0x9af0b4], speed: 6.5, up: 4, size: 0.22, life: 1, star: 0.5 }); if (fx.ring) fx.ring(x, z, c.r, c.c1, 0.9); } catch (e) { /* cosmetic only */ } };
@@ -132,11 +132,11 @@ export function init(V) {
 
   // ------------------------------------------------------------ sync with S
   function sync() {
-    const lands = S.lands, n = lands.length;
-    for (let i = views.length - 1; i >= 0; i--) if (views[i].z !== lands[i]) { disposeLand(views[i]); views.splice(i, 1); } // prestige / load swap the objects
-    while (views.length > n) disposeLand(views.pop());
-    for (let k = views.length; k < n; k++) {
-      const z = lands[k], grow = !first && n === views.length + 1 && S.t - z.born < 2; views.push(buildLand(z, grow));
+    const lands = S.lands, n = lands.length; let i = 0;
+    while (i < slots.length && i < n && slots[i].z === lands[i]) i++; // prestige / load swap the land objects: drop everything from the first mismatch
+    while (slots.length > i) { const sl = slots.pop(); if (sl.L) disposeLand(sl.L); }
+    for (let k = slots.length; k < n; k++) {
+      const z = lands[k], grow = !first && n === slots.length + 1 && S.t - z.born < 2; slots.push({ z, L: null, grow });
       if (grow) { const gg = z.g; burst(gg.x * W, 0.6, gg.y * W, { c1: 0xffe98a, c2: 0xff9ac8, r: gg.r * W * 0.9 }); }
     }
     if (portal && portal.n !== n + 1) { portal.dispose(); root.remove(portal.g); portal = null; }
@@ -153,9 +153,10 @@ export function init(V) {
     update(dt, t, focus) {
       if (typeof S === 'undefined' || !S.lands) return; dt = Math.min(dt, 0.1); sync();
       const fx = focus ? focus.x : 0, fz = focus ? focus.z : 0, cam = V.camera;
-      for (const L of views) { // lands far from the hero cost nothing
-        const gg = L.z.g, near = Math.hypot(fx - gg.x * W, fz - gg.y * W) < gg.r * W + 28; L.g.visible = near;
-        if (near) { updateLand(L, dt, t); face(L.bb, cam); }
+      for (const sl of slots) { // lands are built when the hero comes near and dropped when far: a 40-land save does not keep 40 lands of meshes alive
+        const gg = sl.z.g, d = Math.hypot(fx - gg.x * W, fz - gg.y * W), near = d < gg.r * W + 15;
+        if (near && !sl.L) { sl.L = buildLand(sl.z, sl.grow); sl.grow = false; } else if (sl.L && d > gg.r * W + 40) { disposeLand(sl.L); sl.L = null; }
+        const L = sl.L; if (L) { L.g.visible = near; if (near) { updateLand(L, dt, t); face(L.bb, cam); } }
       }
       const u = S.unlockPlate;
       if (portal) { const ok = !!u && Math.hypot(fx - u.x * W, fz - u.y * W) < 40; portal.g.visible = ok; if (ok) { portal.update(dt, t, u, S.wallet >= Math.max(0, u.cost - u.paid), (S.beaconUntil || 0) > S.t, false, u.x * W, u.y * W); face(portal.bb, cam); } }
@@ -163,9 +164,9 @@ export function init(V) {
       for (let i = dying.length - 1; i >= 0; i--) { const d = dying[i]; d.update(dt, t); face(d.bb, cam); if (d.done) { d.dispose(); root.remove(d.g); dying.splice(i, 1); } }
       feat.update(dt, t, focus);
     },
-    views, feat,
+    slots, feat, get views() { return slots.map((sl) => sl.L); },
     dispose() {
-      for (const L of views) disposeLand(L); views.length = 0; if (portal) { portal.dispose(); root.remove(portal.g); portal = null; } if (teaser) { teaser.dispose(); root.remove(teaser.g); teaser = null; }
+      for (const sl of slots) if (sl.L) disposeLand(sl.L); slots.length = 0; if (portal) { portal.dispose(); root.remove(portal.g); portal = null; } if (teaser) { teaser.dispose(); root.remove(teaser.g); teaser = null; }
       dying.forEach((d) => d.dispose()); dying.length = 0; feat.dispose(); V.world.remove(root);
     },
   };

@@ -66,26 +66,24 @@ void main(){
 // the cliff skirt steps inward as it descends, so at sea level the rock sits this far inside the top outline: the shore map follows the WATERLINE
 const WATERLINE_INSET = 0.72;
 // ---- the bake: rasterise outlines, exact Euclidean distance transform (Felzenszwalb), pack to half floats. Generator: yield between slices.
-function* edt(f, R, out, v, z) { // f: Float32Array R*R (0 or 1e20), out: squared distances
+function* edt(f, R, out, v, z) { // f: Float32Array R*R (0 or 1e20), out: squared distances. Columns first, then rows, yielding every 128 lines
   const tmp = new Float64Array(R), d = new Float64Array(R);
-  const line = (get, set) => {
-    for (let i = 0; i < R; i++) tmp[i] = get(i);
+  const run = () => { // 1D lower envelope of parabolas over tmp -> d
     let k = 0; v[0] = 0; z[0] = -1e20; z[1] = 1e20;
     for (let q = 1; q < R; q++) { let s; for (;;) { const r = v[k]; s = ((tmp[q] + q * q) - (tmp[r] + r * r)) / (2 * q - 2 * r); if (s <= z[k]) k--; else break; } k++; v[k] = q; z[k] = s; z[k + 1] = 1e20; }
     k = 0; for (let q = 0; q < R; q++) { while (z[k + 1] < q) k++; const r = v[k]; d[q] = (q - r) * (q - r) + tmp[r]; }
-    for (let i = 0; i < R; i++) set(i, d[i]);
   };
-  for (let x = 0; x < R; x++) { line((y) => f[y * R + x], (y, val) => { out[y * R + x] = val; }); if ((x & 127) === 127) yield; }
-  for (let y = 0; y < R; y++) { line((x) => out[y * R + x], (x, val) => { out[y * R + x] = val; }); if ((y & 127) === 127) yield; }
+  for (let x = 0; x < R; x++) { for (let y = 0; y < R; y++) tmp[y] = f[y * R + x]; run(); for (let y = 0; y < R; y++) out[y * R + x] = d[y]; if ((x & 127) === 127) yield; }
+  for (let y = 0; y < R; y++) { const o = y * R; for (let x = 0; x < R; x++) tmp[x] = out[o + x]; run(); for (let x = 0; x < R; x++) out[o + x] = d[x]; if ((y & 127) === 127) yield; }
 }
 function* bakeShore(geos, rect, R, res) {
   const cv = document.createElement('canvas'); cv.width = cv.height = R; const c = cv.getContext('2d', { willReadFrequently: true }), k = R / rect.size;
   c.fillStyle = '#000'; c.fillRect(0, 0, R, R); c.fillStyle = '#fff';
   for (const g of geos) { const o = outline(g, 3), cx = g.x * W, cz = g.y * W; c.beginPath(); for (let i = 0; i < o.length; i += 2) { const l = Math.hypot(o[i], o[i + 1]), sc = 1 - WATERLINE_INSET / l, x = (cx + o[i] * sc - rect.x0) * k, y = (cz + o[i + 1] * sc - rect.z0) * k; i ? c.lineTo(x, y) : c.moveTo(x, y); } c.closePath(); c.fill(); }
-  const img = c.getImageData(0, 0, R, R).data; yield;
+  const img = c.getImageData(0, 0, R, R).data; if (img.length !== R * R * 4) return; yield; // a stubbed canvas (headless tests) has nothing to read: no shore map
   const N = R * R, f = new Float32Array(N), dOut = new Float32Array(N), dIn = new Float32Array(N), v = new Int32Array(R), z = new Float64Array(R + 1);
-  for (let i = 0; i < N; i++) f[i] = img[i * 4] > 127 ? 0 : 1e20; yield* edt(f, R, dOut, v, z);
-  for (let i = 0; i < N; i++) f[i] = img[i * 4] > 127 ? 1e20 : 0; yield* edt(f, R, dIn, v, z);
+  for (let i = 0; i < N; i++) { f[i] = img[i * 4] > 127 ? 0 : 1e20; if ((i & 0x7ffff) === 0x7ffff) yield; } yield* edt(f, R, dOut, v, z);
+  for (let i = 0; i < N; i++) { f[i] = img[i * 4] > 127 ? 1e20 : 0; if ((i & 0x7ffff) === 0x7ffff) yield; } yield* edt(f, R, dIn, v, z);
   const half = new Uint16Array(N), tex = rect.size / R, toH = THREE.DataUtils.toHalfFloat;
   for (let i = 0; i < N; i++) { const sd = (Math.sqrt(dOut[i]) - Math.sqrt(dIn[i])) * tex; half[i] = toH(Math.max(-12, Math.min(40, sd))); if ((i & 0x3ffff) === 0x3ffff) yield; }
   res.data = half; res.rect = rect; res.R = R;
@@ -117,7 +115,7 @@ export function createWater(V) {
       if (pending && !job) { res = {}; job = bakeShore(pending.geos, pending.rect, pending.R, res); pending = null; }
       while (job && performance.now() - t0 < ms) {
         const r = job.next();
-        if (r.done) { job = null; if (tex) tex.dispose(); tex = new THREE.DataTexture(res.data, res.R, res.R, THREE.RedFormat, THREE.HalfFloatType); tex.minFilter = tex.magFilter = THREE.LinearFilter; tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping; tex.generateMipmaps = false; tex.needsUpdate = true;
+        if (r.done) { job = null; if (!res.data) { res = null; continue; } if (tex) tex.dispose(); tex = new THREE.DataTexture(res.data, res.R, res.R, THREE.RedFormat, THREE.HalfFloatType); tex.minFilter = tex.magFilter = THREE.LinearFilter; tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping; tex.generateMipmaps = false; tex.needsUpdate = true;
           U.uShore.value = tex; U.uHas.value = 1; U.uRect.value.set(res.rect.x0, res.rect.z0, 1 / res.rect.size, 1 / res.rect.size); res = null; }
       }
       return !!(job || pending);

@@ -1,14 +1,14 @@
 // Encore Island 3D, the Stage: pink platform with a lit star floor, a lighting truss with sweeping coloured spots, speaker stacks that kick on the beat
 // and the ENCORE ISLAND marquee with chasing bulbs. Local frame: origin at STAGE (world X = x*W, Z = y*W), +z faces the camera.
 import * as THREE from 'three';
-import { Builder, C, INK, W, TAU, PI, seg, GB, GOLD, SHINY, glow, lit, canvasTex, stickerText, fitFont, starShape, damp, clamp } from './kit.js';
-import { Inst, ringQuad, rod, textAtlas, rbx, bll, floorMat, stat } from './hub_fx.js';
+import { Builder, C, INK, W, TAU, PI, seg, GB, GOLD, SHINY, glow, lit, canvasTex, stickerText, fitFont, starShape, extr, damp } from './kit.js';
+import { Inst, ringQuad, rod, rbx, bll, floorMat, stat, QuadSet } from './hub_fx.js';
 
 const PINK = 0xff9ac8, PINK_D = 0xd8559a, CZ = 0.36, R = 2.32; // platform centre z (local) and radius
 const SPOT_COL = [[1.0, 0.45, 0.72], [0.45, 1.0, 0.7], [0.62, 0.5, 1.0], [1.0, 0.85, 0.35]];
 
 export function buildStage(V, fx) {
-  const g = new THREE.Group(); g.name = 'stage'; g.position.set(STAGE.x * W, 0, STAGE.y * W);
+  const STAR = extr(starShape(5, 0.34, 0.16), 0.09, 0.02, 'hubTopStar'), g = new THREE.Group(); g.name = 'stage'; g.position.set(STAGE.x * W, 0, STAGE.y * W);
   // ---- floor: stepped rings, all within 0.06 so heroes can walk across it ----
   const FM = (c) => ({ m: floorMat(), c }), f = new Builder({ ao: 0 });
   f.cyl(FM(INK), 0, 0, CZ, R + 0.2, 0.057, seg(64)); f.cyl(FM(C.cream), 0, 0, CZ, R + 0.13, 0.065, seg(64)); f.cyl(FM(PINK_D), 0, 0, CZ, R + 0.06, 0.073, seg(64)); f.cyl(FM(PINK), 0, 0, CZ, R, 0.081, seg(64));
@@ -29,7 +29,7 @@ export function buildStage(V, fx) {
     for (const [cx, cz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) rod(t, GBc, CH, x + cx * h, 0.1, TZ + cz * h, x + cx * h, TH, TZ + cz * h, 0.035, 6);
     const n = 9; for (let i = 0; i <= n; i++) { const y = 0.12 + (TH - 0.12) * i / n; for (const [a, bb] of [[-1, -1, 1, -1], [1, -1, 1, 1], [1, 1, -1, 1], [-1, 1, -1, -1]].map((q) => [[q[0], q[1]], [q[2], q[3]]])) rod(t, GBc, CH, x + a[0] * h, y, TZ + a[1] * h, x + bb[0] * h, y, TZ + bb[1] * h, 0.018, 5); }
     for (let i = 0; i < n; i++) { const y0 = 0.12 + (TH - 0.12) * i / n, y1 = 0.12 + (TH - 0.12) * (i + 1) / n, s = i % 2 ? 1 : -1; rod(t, GBc, CH, x - h, y0, TZ + s * h, x + h, y1, TZ + s * h, 0.016, 5); rod(t, GBc, CH, x + s * h, y0, TZ - h, x - s * h, y1, TZ - h, 0.016, 5); }
-    bll(t, { m: GOLD, c: C.gold }, x, TH + 0.14, TZ, 0.17, 0.9); t.cone({ m: GOLD, c: C.gold }, x, TH + 0.25, TZ, 0.09, 0.28, 8); // gold finial
+    t.shape(STAR, { m: GOLD, c: C.gold }, x, TH + 0.5, TZ, 1, 0, 0, 0); // gold star topper
   }
   { // top beam: a triangular lattice running along x
     const bh = 0.17, y = TH - 0.05;
@@ -38,7 +38,7 @@ export function buildStage(V, fx) {
   }
   // board: ink slab, violet face, gold trim, sits between the towers hanging from the beam
   const BY = 1.95, BW = 5.2, BH = 1.3;
-  rbx(t, INK, 0, BY, TZ - 0.02, BW + 0.3, BH + 0.26, 0.22, 0.4); rbx(t, 0x3a2a86, 0, BY, TZ, BW + 0.12, BH + 0.1, 0.24, 0.35); rbx(t, 0x5a44c4, 0, BY + 0.05, TZ + 0.03, BW - 0.1, BH - 0.12, 0.22, 0.3); rbx(t, 0x7a62dc, 0, BY + BH * 0.3, TZ + 0.06, BW - 0.3, BH * 0.28, 0.2, 0.5);
+  rbx(t, INK, 0, BY, TZ, BW + 0.3, BH + 0.26, 0.2, 0.4); rbx(t, 0x3a2a86, 0, BY, TZ, BW + 0.12, BH + 0.1, 0.24, 0.35); rbx(t, 0x5a44c4, 0, BY + 0.05, TZ + 0.03, BW - 0.1, BH - 0.12, 0.22, 0.3); rbx(t, 0x7a62dc, 0, BY + BH * 0.3, TZ + 0.06, BW - 0.3, BH * 0.28, 0.2, 0.5);
   for (const sd of [-1, 1]) { rod(t, GBc, INK, sd * (TX - 0.05), TH - 0.1, TZ + 0.0, sd * 2.3, BY + BH / 2 + 0.1, TZ, 0.03, 5); rod(t, GBc, INK, sd * 1.2, TH - 0.1, TZ, sd * 1.2, BY + BH / 2 + 0.1, TZ, 0.03, 5); }
   // trim lines
   t.box({ m: GOLD, c: C.gold }, 0, BY + BH / 2 - 0.04, TZ + 0.16, BW - 0.05, 0.05, 0.05); t.box({ m: GOLD, c: C.gold }, 0, BY - BH / 2 + 0.07, TZ + 0.16, BW - 0.05, 0.05, 0.05);
@@ -46,7 +46,8 @@ export function buildStage(V, fx) {
   // lettering
   const lt = canvasTex(1024, 256, (c, w, h) => { const sz = fitFont(c, 'ENCORE ISLAND', w - 90, 150); stickerText(c, 'ENCORE ISLAND', w / 2, h * 0.5, sz, '#ffc9de', '#ff5fa6', sz * 0.17); }, {});
   const lm = new THREE.MeshBasicMaterial({ map: lt, transparent: true, alphaTest: 0.04, depthWrite: false, fog: true }); lm.userData.noCast = true;
-  const letters = new THREE.Mesh(new THREE.PlaneGeometry(4.5, 1.125), lm); letters.position.set(0, BY + 0.02, TZ + 0.19); letters.renderOrder = 3; g.add(letters);
+  const lq = new QuadSet().add(4.5, 1.125, 0, BY + 0.02, TZ + 0.19, 0, [0, 0, 1, 1]).add(4.5, 1.125, 0, BY + 0.02, TZ - 0.22, PI, [0, 0, 1, 1]); // the title cinematic orbits the stage, so the back reads too
+  const letters = new THREE.Mesh(lq.geometry(), lm); letters.renderOrder = 3; g.add(letters);
   // ---- speakers ----
   const sp = new Builder({ ao: 0.2 }), woofs = [];
   for (const sd of [-1, 1]) {

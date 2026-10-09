@@ -41,6 +41,22 @@ export function groundMat(bi) {
   const st = groundStyle(bi); if (_gm[st]) return _gm[st];
   const m = new THREE.MeshStandardMaterial({ vertexColors: true, map: groundTex(st), roughness: 0.96, metalness: 0 }); m.userData.shared = true; return (_gm[st] = m);
 }
+// ---- little waterfalls pouring over the cliff into the sea (one ribbon mesh per island, scrolling streaks in the shader)
+let _fall = null;
+function fallMat() {
+  if (_fall) return _fall;
+  _fall = new THREE.ShaderMaterial({ uniforms: { uT: kit.LOOK.t }, transparent: true, depthWrite: false, side: THREE.DoubleSide, fog: false,
+    vertexShader: 'varying vec2 vUv; varying float vH; void main(){ vUv = uv; vH = position.y; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+    fragmentShader: `varying vec2 vUv; varying float vH; uniform float uT;
+      float hs(float n){ return fract(sin(n * 91.7) * 43758.5); }
+      void main(){ float col = floor(vUv.x * 6.0), f = fract(vUv.y * 0.9 - uT * (0.9 + hs(col) * 0.5) + hs(col + 3.0)); float streak = smoothstep(0.0, 0.5, f) * (1.0 - smoothstep(0.5, 1.0, f));
+        float edge = smoothstep(0.0, 0.2, vUv.x) * smoothstep(1.0, 0.8, vUv.x), top = smoothstep(0.0, 0.08, vUv.y), a = (0.6 + 0.4 * streak) * edge * top;
+        vec3 c = mix(vec3(0.62, 0.9, 1.0), vec3(1.0), streak * 0.9); gl_FragColor = vec4(c, a);
+        #include <tonemapping_fragment>
+        #include <colorspace_fragment>
+      }` });
+  _fall.userData.noCast = true; _fall.userData.noLook = true; return _fall;
+}
 export const ROCK_MAT = kit.lit(0xffffff, { vc: true, flat: true, rough: 0.92 });
 
 // ---- hanging rock / root / boulder templates
@@ -155,7 +171,14 @@ export function* buildIslandG(g, B, bi) {
   const nr = 5 + Math.round(R * 0.7);
   for (let q = 0; q < nr; q++) { const i = Math.floor(rnd() * n), y = (WY - 0.6 - rnd() * 2.2) * depthK ** 0.5, s = 0.8 + rnd() * 0.9, k = 0.96 - rnd() * 0.06; tint.copy(cols.u0).lerp(new THREE.Color(0x6a4a3a), 0.5);
     acc.add(T.roots[q % 3], O[i * 2] * k, y, O[i * 2 + 1] * k, rnd() * 6.3, s * 0.9, s, s * 0.9, null, 0, 0, 0.1); }
-  yield; const rg = acc.build(false); yield; const rock = new THREE.Mesh(rg, ROCK_MAT); rock.castShadow = false; rock.receiveShadow = false; rock.name = 'islandRock';
+  yield; const rg = yield* acc.buildG(false); const rock = new THREE.Mesh(rg, ROCK_MAT); rock.castShadow = false; rock.receiveShadow = false; rock.name = 'islandRock';
   const grp = new THREE.Group(); grp.name = 'island'; grp.position.set(cx, 0, cz); grp.add(top, rock);
+  { // waterfalls: ribbons hugging the wall rows on the camera-facing (south) side, away from the boardwalk landing
+    const pos = [], uvs = [], idx = [], nf = g.k === 0 ? 3 : R > 7 ? 2 : 1, ia = g.ia || 0, taken = [];
+    for (let q = 0, tries = 0; q < nf && tries < 40; tries++) { const i = 4 + Math.floor(rnd() * (n - 8)); if (uz[i] < 0.45) continue; const da = Math.abs(Math.atan2(uz[i], ux[i]) - ia), dd = Math.min(da, 6.283 - da); if (g.k > 0 && dd < 0.6) continue; if (taken.some((t2) => Math.abs(t2 - i) < n * 0.12)) continue; taken.push(i); q++;
+      const w = 3, r0 = 2; for (let c = 0; c <= w; c++) for (let rr = r0; rr < wrow.length; rr++) { const R_ = wrow[rr], ii = i + c, o = 0.1; pos.push(R_.P[ii * 3] + ux[ii] * o, R_.P[ii * 3 + 1], R_.P[ii * 3 + 2] + uz[ii] * o); uvs.push(c / w, (rr - r0) / (wrow.length - 1 - r0)); }
+      const base = pos.length / 3 - (w + 1) * (wrow.length - r0), rowsN = wrow.length - r0; for (let c = 0; c < w; c++) for (let rr = 0; rr + 1 < rowsN; rr++) { const a = base + c * rowsN + rr, b = a + 1, c2 = a + rowsN, d = c2 + 1; idx.push(a, c2, b, b, c2, d); } }
+    if (idx.length) { const fg = new THREE.BufferGeometry(); fg.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); fg.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2)); fg.setIndex(idx); const fm = new THREE.Mesh(fg, fallMat()); fm.renderOrder = -3; fm.name = 'falls'; grp.add(fm); }
+  }
   return { grp, top, rock, R };
 }

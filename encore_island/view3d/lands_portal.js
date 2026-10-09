@@ -11,12 +11,12 @@ const hexStr = (c) => '#' + c.getHexString();
 
 // ================================================================= the unlock portal (S.unlockPlate)
 export function makePortal(V, n) {
-  const B = biomeOf(n), root = new THREE.Group(), g = new THREE.Group(), bg = new THREE.Color(B.g[0]), tint = new THREE.Color(1, 0.82, 0.32).lerp(bg, 0.2), deep = new THREE.Color(B.deep).lerp(new THREE.Color('#1a0a30'), 0.25);
+  const B = biomeOf(n), root = new THREE.Group(), g = new THREE.Group(), bg = new THREE.Color(B.g[0]), tint = new THREE.Color('#ffb52e').lerp(bg, 0.1), deep = new THREE.Color(B.deep).lerp(new THREE.Color('#1a0a30'), 0.25);
   const R = 1.16, plate = fixPlate(makePlate(V, { r: R, icon: 'way', c1: B.g[0], c2: hexStr(deep), ring: '#ffe98a', lvl: false })); root.add(plate.group, g); // plate.update reads its own group position as world x,z (labels), so it must sit directly under an identity parent
-  const pillar = beamMesh(0.85, 0.45, 11, { c: tint.getHex(), a: 0.3, fall: 0.9, stripes: 6, spd: 2.6, base: 0.04 }), core = beamMesh(0.3, 0.18, 11, { c: new THREE.Color(1, 0.9, 0.55).getHex(), a: 0.2, fall: 1.1, stripes: 3, spd: 3.2, base: 0.04 });
+  const pillar = beamMesh(0.95, 0.5, 11, { c: tint.getHex(), a: 0.3, fall: 0.5, stripes: 6, spd: 2.6, base: 0.04, add: false }), core = beamMesh(0.3, 0.18, 11, { c: new THREE.Color('#ffe08a').getHex(), a: 0.2, fall: 1.1, stripes: 3, spd: 3.2, base: 0.04 });
   pillar.position.y = core.position.y = 0.15; g.add(pillar, core);
   const rip = [ringMesh({ c: 0xffd678, a: 0.5, r: 1.2, in: 0.9, out: 1, soft: 0.04, y: 0.12 }), ringMesh({ c: 0xffd678, a: 0.5, r: 1.2, in: 0.9, out: 1, soft: 0.04, y: 0.12 })]; g.add(...rip);
-  const glow = glowSprite(tint.getHex(), 5, { flat: true, a: 0.32 }); glow.position.y = 0.1; g.add(glow);
+  const glow = glowSprite(tint.getHex(), 5, { flat: true, a: 0.4, k: 1.3 }); glow.position.y = 0.1; g.add(glow);
   const motes = moteField({ n: 26, h: 7, r: 0.9, cone: 0.5, size: 0.2, speed: 0.22, sway: 0.3, c: tint.getHex(), c2: 0xfff4c0, star: true, seed: n }); motes.position.y = 0.2; g.add(motes);
   // bouncing arrow (only when affordable): ink-hulled gold arrow pointing at the plate
   const ab = new Builder({ ao: 0.1 }); ab.rbox(C.gold, 0, 0.62, 0, 0.3, 0.55, 0.22, 0.4); ab.conec(C.gold, 0, 0.16, 0, 0.36, 0.5, seg(10), PI); const arrow = ab.build({ cast: false }); arrow.children.forEach((m) => addOutline(m, 0.03)); arrow.position.y = 4.9; g.add(arrow);
@@ -27,7 +27,7 @@ export function makePortal(V, n) {
     plate.setState({ afford, paid: u.paid, cost: u.cost, rem, near: false, label: null, hidden: false }); plate.update(dt, t);
     const hgt = lerp(0.36, 1, st.aff) * (1 + 0.5 * st.boost), wid = 1 + 0.2 * st.boost, pul = 0.5 + 0.5 * Math.sin(t * 5), bt = LOOK.beat.value;
     pillar.scale.set(wid, hgt, wid); core.scale.set(wid, hgt * 0.92, wid);
-    pillar.userData.u.uA.value = lerp(0.09, 0.17 + 0.05 * pul + 0.04 * bt, st.aff) + 0.04 * st.boost; core.userData.u.uA.value = lerp(0.06, 0.17 + 0.06 * pul, st.aff) + 0.05 * st.boost;
+    pillar.userData.u.uA.value = lerp(0.16, 0.55 + 0.08 * pul + 0.05 * bt, st.aff) + 0.08 * st.boost; core.userData.u.uA.value = lerp(0.06, 0.17 + 0.06 * pul, st.aff) + 0.05 * st.boost;
     const ph = (t * 0.9) % 1; for (let i = 0; i < 2; i++) { const q = (ph + i * 0.5) % 1; rip[i].scale.setScalar(1.2 + q * 1.6); rip[i].userData.u.uA.value = 0.6 * (1 - q) * lerp(0.5, 1, st.aff); }
     glow.scale.setScalar(4.4 + 0.5 * pul * st.aff + 0.6 * st.boost); motes.userData.u.uOpacity.value = lerp(0.35, 1, st.aff);
     arrow.visible = st.aff > 0.05; arrow.position.y = 4.9 + Math.sin(t * 6) * 0.2; arrow.rotation.y = t * 1.8; arrow.scale.setScalar(st.aff);

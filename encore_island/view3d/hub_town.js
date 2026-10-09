@@ -1,11 +1,11 @@
 // Encore Island 3D, the festival dressing of the plaza: lamp posts (HUBLAMPS) with beat-pulsing glow, bunting strung between them, balloon clusters,
 // flower rings, arrow signposts (HUBSIGNS) and falling confetti around the stage. Everything sits on the 2D lists, which already keep clear of plates and boulevards.
 import * as THREE from 'three';
-import { Builder, C, INK, W, TAU, PI, seg, GB, GOLD, glow, lit, extr, hash01, rng, clamp } from './kit.js';
-import { Inst, QuadSet, rod, outline, rbx, bll, stat } from './hub_fx.js';
+import { Builder, C, W, TAU, PI, GB, GOLD, glow, lit, extr, hash01, clamp } from './kit.js';
+import { Inst, QuadSet, rod, outline, bll, stat } from './hub_fx.js';
 
 const FLAG = [C.hotPink, C.cream, C.mint, C.gold, C.violet, C.sky];
-const BALLOON = [[1.0, 0.45, 0.7], [0.45, 0.95, 0.7], [1.0, 0.85, 0.3], [0.62, 0.5, 1.0], [0.5, 0.85, 1.0]];
+const STR = [[1, 0.8, 0.4], [1, 0.5, 0.75], [0.6, 1, 0.8]], BALLOON = [[1.0, 0.45, 0.7], [0.45, 0.95, 0.7], [1.0, 0.85, 0.3], [0.62, 0.5, 1.0], [0.5, 0.85, 1.0]];
 const tri = () => { const s = new THREE.Shape(); s.moveTo(-0.1, 0); s.lineTo(0.1, 0); s.lineTo(0, -0.24); s.closePath(); return s; };
 
 export function buildTown(V, fx) {
@@ -33,11 +33,12 @@ export function buildTown(V, fx) {
   const links = [], deg = new Array(lamps.length).fill(0), cand = [];
   for (let i = 0; i < lamps.length; i++) for (let j = i + 1; j < lamps.length; j++) { const d = Math.hypot(lamps[i].x - lamps[j].x, lamps[i].z - lamps[j].z); if (d > 1.6 && d < 5.6 && clearOf(lamps[i], lamps[j])) cand.push([d, i, j]); }
   cand.sort((p, q) => p[0] - q[0]); for (const [d, i, j] of cand) if (deg[i] < 2 && deg[j] < 2 && links.length < 22) { links.push([i, j, d]); deg[i]++; deg[j]++; }
-  const bb = new Builder({ ao: 0 }), triG = extr(tri(), 0.012, 0, 'hubPennant'), wire = [];
+  const strB = [], bb = new Builder({ ao: 0 }), triG = extr(tri(), 0.012, 0, 'hubPennant'), wire = [];
   links.forEach(([i, j, d], li) => {
     const A = lamps[i], B = lamps[j], ay = LH + 0.42, sag = 0.22 + d * 0.05, yaw = Math.atan2(-(B.z - A.z), B.x - A.x), pts = []; const n = 10;
     for (let k = 0; k <= n; k++) { const u = k / n; pts.push([A.x + (B.x - A.x) * u, ay - sag * Math.sin(u * PI), A.z + (B.z - A.z) * u]); }
     for (let k = 0; k < n; k++) rod(bb, GB.cyl, 0x4a3a70, pts[k][0], pts[k][1], pts[k][2], pts[k + 1][0], pts[k + 1][1], pts[k + 1][2], 0.012, 4);
+    if (li % 2) { const nb = Math.max(5, Math.round(d * 2.6)); for (let k = 0; k < nb; k++) { const u = (k + 0.5) / nb; strB.push([A.x + (B.x - A.x) * u, ay - sag * Math.sin(u * PI) - 0.05, A.z + (B.z - A.z) * u, k + li * 3]); } return; } // alternate links carry string lights instead of flags
     const nf = Math.max(4, Math.round(d * 1.7));
     for (let k = 0; k < nf; k++) { const u = (k + 0.5) / nf, x = A.x + (B.x - A.x) * u, z = A.z + (B.z - A.z) * u, y = ay - sag * Math.sin(u * PI); bb.part(triG, FLAG[(k + li) % FLAG.length], x, y, z, 1, 1, 1, 0, yaw, 0); }
   });
@@ -53,7 +54,7 @@ export function buildTown(V, fx) {
     const dir = s.dir >= 0 ? 1 : -1, bx = s.x + dir * 0.62, by = 1.66;
     sb.cyl(0x6a4020, s.x, 0, s.z, 0.12, 0.1, 10, 0.8); sb.cyl(0xb07840, s.x, 0.05, s.z, 0.07, 1.76, 8); bll(sb, GOLD_M, s.x, 1.86, s.z, 0.085, 0.9);
     sb.part(arrow(dir), 0xc08850, bx, by, s.z + 0.02, 1, 1, 1, tilt, 0, 0);
-    fx.atlas.quad(qs, 'p:' + s.txt, 1.38, bx - dir * 0.0, by + Math.sin(-tilt) * -0.0 + 0.0 + 0.0 + (-Math.sin(tilt)) * 0.05, s.z + 0.02 + Math.cos(tilt) * 0.05, 0, tilt, 0.46);
+    fx.atlas.quad(qs, 'p:' + s.txt, 1.24, bx - dir * 0.1, by - Math.sin(tilt) * 0.05, s.z + 0.02 + Math.cos(tilt) * 0.05, 0, tilt, 0.41);
   });
   g.add(stat(outline(sb.build({ cast: true })))); g.add(stat(fx.atlas.mesh(qs)));
   // confetti drifting around the stage
@@ -65,6 +66,7 @@ export function buildTown(V, fx) {
     update(dt, t) {
       const beat = fx.beat();
       cores.begin(); for (let i = 0; i < lamps.length; i++) { const l = lamps[i], pu = 0.7 + 0.3 * beat + Math.sin(t * 3 + l.ph) * 0.06; cores.put(l.x, LH + 0.3, l.z, 0, 0, 0, 0.21, 0.25, 0.21, 2.0 * pu, 1.5 * pu, 0.65 * pu); fx.glow(l.x, LH + 0.3, l.z, 2.5 + beat * 0.5, 1.0, 0.72, 0.32, 0.34 * pu); } cores.end();
+      for (let i = 0; i < strB.length; i++) { const p = strB[i], on = 0.45 + 0.55 * Math.max(0, Math.sin(t * 3.2 - p[3] * 0.8)), c = STR[p[3] % 3]; fx.bulb(p[0], p[1], p[2], 0.05, c[0] * on * 1.6 + 0.2, c[1] * on * 1.6 + 0.2, c[2] * on * 1.6 + 0.1); }
       balloons.begin(); for (let bi = 0; bi < bl.length; bi++) { const e = bl[bi], x = e[0], y = e[1], z = e[2], c = e[3], k = e[4], s = Math.sin(t * 1.3 + k * 1.9); balloons.put(x + s * 0.05, y + Math.sin(t * 1.7 + k) * 0.07, z + Math.cos(t * 1.1 + k) * 0.05, 0, 0, 0, 0.26, 0.31, 0.26, c[0], c[1], c[2]); } balloons.end();
       conf.begin(); for (let i = 0; i < 56; i++) { const ph = (t * (0.12 + hash01(i) * 0.08) + hash01(i + 90)) % 1, a = hash01(i + 7) * TAU, r = 1.6 + hash01(i + 33) * 3.2, c = CC[i % 5]; conf.put(cx + Math.cos(a + t * 0.05) * r + Math.sin(t * 0.8 + i) * 0.2, 4.6 * (1 - ph) + 0.05, cz + 1.0 + Math.sin(a + t * 0.05) * r * 0.8 + Math.cos(t * 0.7 + i) * 0.2, t * (2 + i % 3) + i, t * 1.6 + i * 2, 0.4 * i, 0.09, 0.15, 1, c[0], c[1], c[2]); } conf.end();
     },

@@ -59,6 +59,13 @@ export class Acc {
     for (let i = 0; i < 3; i++) { n[k3 + i * 3] = nx; n[k3 + i * 3 + 1] = ny; n[k3 + i * 3 + 2] = nz; } // sway and phase stay 0 (fresh arrays)
     c[k3] = ca.r; c[k3 + 1] = ca.g; c[k3 + 2] = ca.b; c[k3 + 3] = cb.r; c[k3 + 4] = cb.g; c[k3 + 5] = cb.b; c[k3 + 6] = cc.r; c[k3 + 7] = cc.g; c[k3 + 8] = cc.b; this.cnt += 3;
   }
+  /** build() split into small steps (yields between the big array copies) so a frame never stalls on it */
+  *buildG(withSway = true) {
+    if (!this.cnt) return null; const m = this.cnt, g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.BufferAttribute(this.p.slice(0, m * 3), 3)); yield; g.setAttribute('normal', new THREE.BufferAttribute(this.n.slice(0, m * 3), 3)); yield; g.setAttribute('color', new THREE.BufferAttribute(this.c.slice(0, m * 3), 3)); yield;
+    if (withSway) { g.setAttribute('aSw', new THREE.BufferAttribute(this.sw.slice(0, m), 1)); g.setAttribute('aPh', new THREE.BufferAttribute(this.ph.slice(0, m), 1)); yield; }
+    g.computeBoundingBox(); yield; g.computeBoundingSphere(); return g;
+  }
   build(withSway = true) {
     if (!this.cnt) return null; const m = this.cnt, g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.BufferAttribute(this.p.slice(0, m * 3), 3)); g.setAttribute('normal', new THREE.BufferAttribute(this.n.slice(0, m * 3), 3)); g.setAttribute('color', new THREE.BufferAttribute(this.c.slice(0, m * 3), 3));
@@ -80,12 +87,9 @@ export function tpl(fn) {
   const b = new kit.Builder({ ao: 0 }); fn(b); const g = b.geometry(); g.computeBoundingBox(); g.userData.y0 = g.boundingBox.min.y; g.userData.h = Math.max(0.01, g.boundingBox.max.y - g.boundingBox.min.y); return g;
 }
 /** faceted (flat normals) noisy rock geometry for Builder.shape */
-export function facetGeo(detail, amp, seed, sy = 1) { const g = kit.blobGeo(detail, amp, seed, sy).toNonIndexed(); g.computeVertexNormals(); return g; }
+export function facetGeo(detail, amp, seed, sy = 1) { const g = kit.blobGeo(detail, amp, seed, sy); g.computeVertexNormals(); return g; } // icosahedra are non-indexed, so their normals are per face
 
 export const biomeIdx = (k) => (k <= 0 ? 0 : (k - 1) % 8);
-/** safe global read (classic-script bindings are globals in the game, bridged in tests) */
-export function G_(name) { try { return (0, eval)(name); } catch (e) { return undefined; } }
-export function disposeGroup(grp) { grp.traverse((n) => { if (n.geometry && !n.userData.sharedGeo) n.geometry.dispose(); if (n.material && n.userData.ownMat) n.material.dispose(); }); }
 /** >0 when the point (px, py relative to the island centre, in 2D game pixels) is inside the blob outline: radius left to the shore */
 export function radiusSafe(g, dx, dy) {
   const d = Math.hypot(dx, dy); if (d < 1e-6) return 1; const n = g.rad.length; let t = ((Math.atan2(dy, dx) % TAU) + TAU) % TAU / TAU * n; const i = Math.floor(t) % n, j = (i + 1) % n; t -= Math.floor(t);

@@ -3,7 +3,7 @@
 // sea melts into the sky.
 import * as THREE from 'three';
 import * as kit from './kit.js';
-import { W, WY, Acc, tpl, facetGeo, patchMat, smoothBlob } from './env_util.js';
+import { WY, Acc, tpl, facetGeo, smoothBlob } from './env_util.js';
 
 const DOME_V = `varying vec3 vD; void main(){ vD = position; vec4 p = projectionMatrix * vec4(mat3(viewMatrix) * position, 1.0); gl_Position = p.xyww; }`;
 const DOME_F = `

@@ -1,8 +1,8 @@
 // Encore Island 3D, the town districts from f_crew.js: Market (west), Arena (east) and Studio (north-west). Each shows once the town tier opens it
 // (DISTRICTS[].on()) and reflects its own state: market level, arena ready, studio recording. Local frame = the district position, +z faces the camera.
 import * as THREE from 'three';
-import { Builder, C, INK, W, TAU, PI, seg, GB, GOLD, lit, latheGeo, damp, clamp, hash01 } from './kit.js';
-import { Inst, QuadSet, outline, rbx, bll, floorMat } from './hub_fx.js';
+import { Builder, C, W, TAU, PI, seg, GB, GOLD } from './kit.js';
+import { Inst, QuadSet, outline, rbx, bll, floorMat, stat } from './hub_fx.js';
 
 const GOLDM = { m: GOLD, c: 0xffd84d };
 const crew = () => { try { const f = FEATS.find((x) => x.id === 'crew'); return f && f.api ? f.api : null; } catch (e) { return null; } };
@@ -18,7 +18,7 @@ export function buildMarket(V, fx) {
     if (built) { built.removeFromParent(); built.traverse((o) => { if (o.geometry && !o.userData.keep) o.geometry.dispose(); }); }
     const b = new Builder({ ao: 0.18 }), qs = new QuadSet(), grp = new THREE.Group();
     rbx(b, 0xe8dcc4, 0, 0.04, 0.2, 3.3, 0.08, 2.4, 0.4); // plank apron
-    rbx(b, 0xd9a468, 0, 0.45, 0.62, 2.4, 0.9, 0.9, 0.2); rbx(b, C.cream, 0, 0.93, 0.62, 2.55, 0.09, 1.05, 0.45); for (const y of [0.24, 0.56]) rbx(b, 0xa8703c, 0, y, 1.085, 2.3, 0.035, 0.03, 0.4);
+    rbx(b, 0xd9a468, 0, 0.45, 0.62, 2.4, 0.9, 0.9, 0.2); rbx(b, C.cream, 0, 0.93, 0.62, 2.55, 0.09, 1.05, 0.45); for (let i = 0; i < 8; i++) b.box(i % 2 ? C.cream : 0xffa63a, -1.08 + i * 0.31, 0.46, 1.075, 0.3, 0.72, 0.02); // striped counter skirt
     rbx(b, 0xc88a50, 0, 1.05, -0.62, 2.5, 2.1, 0.12, 0.1);
     for (const sx of [-1, 1]) for (const z of [-0.65, 0.2]) { b.cyl(0xb07840, sx * 1.28, 0, z, 0.08, 2.2, 10); bll(b, GOLDM, sx * 1.28, 2.22, z, 0.1, 0.8); }
     const n = 8, sw = 3.1 / n, slope = 0.26, rl = 1.15, zc = -0.2, y0 = 2.25;
@@ -33,7 +33,7 @@ export function buildMarket(V, fx) {
     const sp = sg(tilt, 0, sy, sz, 0.056); fx.atlas.quad(qs, 'MARKET', 2.0, sp[0], sp[1], sp[2], 0, tilt, 0.66);
     // hot item plate on the counter
     b.cyl(0x4a2a1e, 0.85, 0.98, 0.62, 0.3, 0.04, 14); b.cyl(0xff7a2a, 0.85, 1.02, 0.62, 0.26, 0.03, 14);
-    grp.add(outline(b.build({ cast: true }))); grp.add(fx.atlas.mesh(qs)); built = grp; g.add(grp); lvl = L;
+    grp.add(stat(outline(b.build({ cast: true })))); grp.add(stat(fx.atlas.mesh(qs))); built = grp; g.add(grp); fx.dyn.set(grp, 'market'); lvl = L;
   }
   return {
     group: g,
@@ -69,18 +69,18 @@ export function buildArena(V, fx) {
   const tilt = -0.55, sy = 1.98, sz = RO - 0.02; rbx(b, 0x5a1a2a, 0, sy, sz, 1.9, 0.68, 0.1, 0.4, 0, tilt); for (const sx of [-0.6, 0.6]) rbx(b, 0xb02a40, sx, 1.62, RO + 0.02, 0.08, 0.45, 0.08, 0.4);
   { const sp = sg(tilt, 0, sy, sz, 0.056); fx.atlas.quad(qs, 'ARENA', 1.8, sp[0], sp[1], sp[2], 0, tilt, 0.6); }
   for (const sx of [-1, 1]) { b.cyl(0xa8703c, sx * 2.2, 0, 0.7, 0.06, 2.4, 8); bll(b, GOLDM, sx * 2.2, 2.45, 0.7, 0.09, 0.9); }
-  g.add(outline(b.build({ cast: true }))); g.add(fx.atlas.mesh(qs));
+  g.add(stat(outline(b.build({ cast: true })))); g.add(stat(fx.atlas.mesh(qs)));
   // waving pennants (instanced, 2 draws total with the "!" marker)
   const flagG = new THREE.PlaneGeometry(1, 1, 6, 1); flagG.translate(0.5, 0, 0); const fm = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide, fog: true }); fm.userData.noLook = true;
   const flags = new Inst(flagG, fm, 2, { colors: true }); g.add(flags.mesh);
-  const bang = new THREE.Group(); { const bb = new Builder({ ao: 0 }); rbx(bb, GOLDM, 0, 0.3, 0, 0.2, 0.5, 0.2, 0.5); bll(bb, GOLDM, 0, -0.1, 0, 0.12, 1); bang.add(outline(bb.build({ cast: false }))); } bang.position.y = 3.0; g.add(bang);
+  const bang = new THREE.Group(); { const bb = new Builder({ ao: 0 }); rbx(bb, GOLDM, 0, 0.3, 0, 0.2, 0.5, 0.2, 0.5); bll(bb, GOLDM, 0, -0.1, 0, 0.12, 1); bang.add(outline(bb.build({ cast: false }))); } bang.position.set(0, 3.0, 0.8); g.add(bang);
   return {
-    group: g,
+    group: g, dynGroups: [g],
     update(dt, t) {
       const on = isOn('arena', 2); g.visible = on; if (!on) return;
       const px = g.position.x, pz = g.position.z, a = crew(); let ready = false; try { ready = !!(a && a.arenaReady && a.arenaReady()); } catch (e) { ready = false; }
       flags.begin(); for (const sx of [-1, 1]) { const w = Math.sin(t * 5 + sx) * 0.18; flags.put(sx * 2.2, 2.2, 0.7, 0, sx > 0 ? PI : 0, w, 0.6, 0.3, 1, sx < 0 ? 1.0 : 1.0, sx < 0 ? 0.7 : 0.25, sx < 0 ? 0.1 : 0.55); } flags.end();
-      bang.visible = ready; if (ready) { bang.position.y = 3.0 + Math.sin(t * 4) * 0.1; bang.rotation.y = Math.sin(t * 2) * 0.4; fx.glow(px, 3.05 + Math.sin(t * 4) * 0.1, pz, 1.5 + fx.beat() * 0.4, 1.4, 1.0, 0.3, 0.5); }
+      bang.visible = ready; if (ready) { bang.position.y = 3.0 + Math.sin(t * 4) * 0.1; bang.position.z = 0.8; bang.rotation.y = Math.sin(t * 2) * 0.4; fx.glow(px, 3.05 + Math.sin(t * 4) * 0.1, pz + 0.8, 1.5 + fx.beat() * 0.4, 1.4, 1.0, 0.3, 0.5); }
     },
     dispose() { g.removeFromParent(); g.traverse((o) => { if (o.geometry) o.geometry.dispose(); }); fm.dispose(); }
   };
@@ -100,10 +100,10 @@ export function buildStudio(V, fx) {
   rbx(b, 0x2a1a5a, 0.3, BHT + 0.3, 0.35, 0.82, 0.34, 0.1, 0.4, 0, -0.5);
   { const sp = sg(-0.5, 0.3, BHT + 0.3, 0.35, 0.06); fx.atlas.quad(qs, 'ON AIR', 0.74, sp[0], sp[1], sp[2], 0, -0.5, 0.25); }
   const tilt = -0.6; rbx(b, 0x4a2a90, -0.4, BHT + 0.75, -0.3, 1.5, 0.56, 0.1, 0.4, 0, tilt); { const sp = sg(tilt, -0.4, BHT + 0.75, -0.3, 0.056); fx.atlas.quad(qs, 'STUDIO', 1.4, sp[0], sp[1], sp[2], 0, tilt, 0.46); }
-  g.add(outline(b.build({ cast: true }))); g.add(fx.atlas.mesh(qs));
+  g.add(stat(outline(b.build({ cast: true })))); g.add(stat(fx.atlas.mesh(qs)));
   const beacon = new THREE.Mesh(new THREE.IcosahedronGeometry(0.1, 1), new THREE.MeshBasicMaterial({ color: 0xff3d6e })); beacon.position.set(0.78, BHT + 0.86, -0.1); g.add(beacon);
   return {
-    group: g,
+    group: g, dynGroups: [g],
     update(dt, t) {
       const on = isOn('studio', 3); g.visible = on; if (!on) return;
       let rec = false; try { rec = ((S.feat.crew || {}).studio || { slots: [] }).slots.some((s) => !s.done); } catch (e) { rec = false; }

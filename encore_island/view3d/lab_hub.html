@@ -18,6 +18,8 @@ if (P.has('pallet')) S.pallet = num('pallet', 0);
 if (has('paid')) { for (const k in S.upPaid) S.upPaid[k] = Math.ceil(UPG[k].base * 0.4); S.forgeUpPlate.paid = 1500; S.wayPlate.paid = 150; }
 if (P.has('tier')) { S.houses = Math.round(num('tier', 0) * 6); S.town = { shed: 2, yard: 4, booth: 3, track: 3, merch: 2, club: 2, academy: 2 }; }
 if (has('tour')) { S.prestT = 1.6; }
+if (P.has('mlvl')) { S.feat.crew.market = S.feat.crew.market || { lvl: 0 }; S.feat.crew.market.lvl = num('mlvl', 0); }
+if (has('rec')) { S.feat.crew.studio = S.feat.crew.studio || { slots: [] }; S.feat.crew.studio.slots.push({ id: 'x', w0: Date.now(), t0: 0, dur: 99999, done: false }); }
 if (has('way')) { S.waygate = true; }
 const scenes = { all: [0, 0, -1, 40, 55, 0], game: [0, 1, 2, 17, 55, 0], stage: [0, 1.2, 0.2, 11, 52, 0], stall: [-6.6, 0.8, -4.2, 8, 50, 0], vault: [-7.4, 0.5, -1.2, 8, 50, 0], smelter: [7.4, 0.8, -3.6, 9, 50, 0], monu: [0, 1, -6.4, 8, 50, 0], hatch: [-8, 1, 5, 9, 50, 0], plates: [0, 0, 6, 14, 55, 0], dist: [0, 0, -2, 30, 55, 0], town: [0, 0, 0, 26, 55, 0], way: [7.4, 0.5, 4.8, 8, 50, 0], arena: [10, 1, 1.2, 8, 50, 0], market: [-10, 1, -3, 9, 50, 0], studio: [-5, 1.5, -8.2, 9, 50, 0] };
 const sc = scenes[P.get('scene') || 'game'] || scenes.game;
@@ -33,7 +35,8 @@ lab({ ground: false, d: num('d', sc[3]), el: num('el', sc[4]), az: num('az', sc[
   const b = new kit.Builder({ ao: 0 }); b.cyl(0xfff1d6, 0, 0, 0, 4.9, 0.012, 64); for (const d of [-90, -40, 0, 33, 90, 148, 180, -125]) { const a = d * Math.PI / 180; b.part(kit.GB.box(), 0xfff1d6, Math.cos(a) * 7.5, 0.012, Math.sin(a) * 7.5, 1.5, 0.02, 7.0, 0, -a + Math.PI / 2, 0); }
   const gm = b.build({ cast: false }); gm.children.forEach((m) => { m.receiveShadow = true; }); V.scene.add(gm); }
   const hero = new kit.Builder({ ao: 0.2 }); hero.cyl(0xff7eb6, 0, 0, 0, 0.3, 0.8, 12); hero.ball(0xffe0c8, 0, 1.0, 0, 0.3); const hg = hero.build(); hg.position.set(pl[0], 0, pl[1]); V.scene.add(hg);
+  let hz = null; if (P.get('heroes') === '1') { const hm = await import('./heroes3d.js'); V.bake = (a, o) => import('./bake.js').then((m) => m.bakeActor(a, o)); hz = await hm.init(V); V.mods.heroes = hz; }
   const mod = await import('./hub3d.js'); const inst = mod.init(V); window.__hub = inst; V.mods.hub3d = inst;
-  return { update(dt, t) { const f = { x: S.player.x * W, z: S.player.y * W }; if (V.__envUpd) V.__envUpd(dt, t, f); inst.update(dt, t, f); } };
+  return { update(dt, t) { const f = { x: S.player.x * W, z: S.player.y * W }; if (V.__envUpd) V.__envUpd(dt, t, f); if (hz) hz.update(dt, t, f); inst.update(dt, t, f); } };
 } });
 </script>
