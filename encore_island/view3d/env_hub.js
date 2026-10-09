@@ -121,27 +121,28 @@ export function* buildHubFloorG() {
   const F = new Floor(), w = (v) => v * W;
   const plazaR = w(PLAZA_R), blvdW = w(BLVD_W);
   // boulevards (capsules from the plaza edge to each end); lengths follow blvdPathTo
-  const ends = { 90: TERRACE.y + 280 - 90, '-90': 345, 180: 345, '-40': 390, 0: 500, 33: 440, 148: 470 };
-  for (const d of ZONE_DEG) { const a = d * D2R, r1 = ends[d] !== undefined ? ends[d] : 470, a0 = PLAZA_R - 30;
+  const ends = BLVD_END;
+  for (const d of ZONE_DEG) { const a = d * D2R, r1 = ends[d], a0 = PLAZA_R - 30;
     F.slab(capsule(w(Math.cos(a) * a0), w(Math.sin(a) * a0), w(Math.cos(a) * r1), w(Math.sin(a) * r1), blvdW), TIER.blvd, 'cobble', 0xfff1d6); }
   yield;
   // zones (2D order)
   let zi = 0; const Z = (cx, cy, rx, ry, kind, rim, y, tint) => F.slab(ell(w(cx), w(cy), w(rx), w(ry)), y === undefined ? TIER.zone + (zi++) * 0.0016 : y, kind, rim, { tint }); // each zone one hair above the last, so overlapping zones never z-fight
-  Z(0, -345, 290, 130, 'marble', 0xfff8ee); Z(345, -180, 190, 150, 'basalt', 0x7a5a60); Z(-345, -140, 190, 200, 'plank', 0xe8c89a); Z(500, 60, 95, 70, 'sand', 0xfff1d6);
-  Z(WAYPAD.x, WAYPAD.y, 86, 86, 'dock', 0xdff8ff); Z(HATCH.x, HATCH.y + 10, 92, 76, 'landing', 0x8a7aa8);
+  const zz = (k, kind, rim) => Z(HUBZ[k].x, HUBZ[k].y, HUBZ[k].rx, HUBZ[k].ry, kind, rim);
+  zz('hall', 'marble', 0xfff8ee); zz('yard', 'basalt', 0x7a5a60); zz('market', 'plank', 0xe8c89a); zz('arena', 'sand', 0xfff1d6);
+  zz('dock', 'dock', 0xdff8ff); zz('landing', 'landing', 0x8a7aa8);
   yield;
   // training terrace: slab ring sector
   const T = TERRACE, a0 = T.a0 * D2R, a1 = T.a1 * D2R;
-  F.slab(sector(w(T.x), w(T.y), w(T.r - 60), w(T.r + 110), a0, a1, 48), TIER.terrace, 'slab', 0xfff8ee);
+  F.slab(sector(w(T.x), w(T.y), w(T.r - T.inner), w(T.r + T.outer), a0, a1, 48), TIER.terrace, 'slab', 0xfff8ee);
   // stage plaza
   F.slab(circ(0, 0, plazaR, 96), TIER.plaza, 'cobble', 0xfff1d6);
   // inlays: the plaza's pink dashed ring and the pink dashes along each boulevard
   const pr = w(PLAZA_R - 18), nd = 46; for (let i = 0; i < nd; i++) { const a = (i + 0.5) / nd * TAU; F.quad(Math.cos(a) * pr, Math.sin(a) * pr, 0.1, w(18), a + Math.PI / 2, TIER.plaza + 0.003, 0xf08ab8); }
-  for (const d of ZONE_DEG) { const a = d * D2R, r1 = ends[d] !== undefined ? ends[d] : 470; for (let r = PLAZA_R + 14; r < r1 - 40; r += 30) F.quad(w(Math.cos(a) * r), w(Math.sin(a) * r), 0.06, w(12), a, TIER.blvd + 0.004, 0xf4a6c6); }
+  for (const d of ZONE_DEG) { const a = d * D2R, r1 = ends[d]; for (let r = PLAZA_R + 14; r < r1 - 40; r += 30) F.quad(w(Math.cos(a) * r), w(Math.sin(a) * r), 0.06, w(12), a, TIER.blvd + 0.004, 0xf4a6c6); }
   yield; for (const k in F.tex) { texMat(k); yield; }
   const grp = F.build(); yield;
   // ---- terrace balustrade: lathe-turned posts with ball finials, a handrail between them, ink-dark base rail
-  const b = new kit.Builder({ ao: 0.12 }), R = w(T.r + 96), cxx = w(T.x), czz = w(T.y), lav = 0xd8c8f0, lavD = 0xb8a4dc, step = 5.5 * D2R, pts = [];
+  const b = new kit.Builder({ ao: 0.12 }), R = w(T.r + T.rail), cxx = w(T.x), czz = w(T.y), lav = 0xd8c8f0, lavD = 0xb8a4dc, step = 5.5 * D2R, pts = [];
   for (let d = T.a0; d <= T.a1 + 0.01; d += 5.5) { const a = d * D2R; pts.push([cxx + Math.cos(a) * R, czz + Math.sin(a) * R, a]); }
   for (const [x, z, a] of pts) { b.cyl(lav, x, TIER.terrace, z, 0.075, 0.07, kit.seg(8), 1.25); b.part(kit.GB.cyl(kit.seg(10), 0.6), lav, x, TIER.terrace + 0.3, z, 0.075, 0.5, 0.075); b.ball(0xfff4ff, x, TIER.terrace + 0.62, z, 0.105, 1, 1, 1); b.ball(lavD, x, TIER.terrace + 0.1, z, 0.09, 0.6, 1, 1); }
   for (let i = 0; i + 1 < pts.length; i++) { const [x0, z0] = pts[i], [x1, z1] = pts[i + 1], mx = (x0 + x1) / 2, mz = (z0 + z1) / 2, l = Math.hypot(x1 - x0, z1 - z0), ang = -Math.atan2(z1 - z0, x1 - x0);
@@ -155,10 +156,10 @@ export function* buildHubFloorG() {
 export function hubBlocked(x, y, m = 24) {
   if (Math.hypot(x, y) < PLAZA_R + m) return true;
   const e = (cx, cy, rx, ry) => ((x - cx) / (rx + m)) ** 2 + ((y - cy) / (ry + m)) ** 2 < 1;
-  if (e(0, -345, 290, 130) || e(345, -180, 190, 150) || e(-345, -140, 190, 200) || e(500, 60, 95, 70) || e(WAYPAD.x, WAYPAD.y, 86, 86) || e(HATCH.x, HATCH.y + 10, 92, 76)) return true;
+  for (const k in HUBZ) if (e(HUBZ[k].x, HUBZ[k].y, HUBZ[k].rx, HUBZ[k].ry)) return true;
   const T = TERRACE, dx = x - T.x, dy = y - T.y, d = Math.hypot(dx, dy), ang = Math.atan2(dy, dx) / D2R;
-  if (d > T.r - 60 - m && d < T.r + 110 + m && ang > T.a0 - 5 && ang < T.a1 + 5) return true;
-  const ends = { 90: T.y + 190, '-90': 345, 180: 345, '-40': 390, 0: 500, 33: 440, 148: 470 };
-  for (const dg of ZONE_DEG) { const a = dg * D2R, r1 = ends[dg] || 470, ax = Math.cos(a), ay = Math.sin(a), t = Math.max(PLAZA_R - 30, Math.min(r1, x * ax + y * ay)); if (Math.hypot(x - ax * t, y - ay * t) < BLVD_W / 2 + m) return true; }
+  if (d > T.r - T.inner - m && d < T.r + T.outer + m && ang > T.a0 - 5 && ang < T.a1 + 5) return true;
+  const ends = BLVD_END;
+  for (const dg of ZONE_DEG) { const a = dg * D2R, r1 = ends[dg], ax = Math.cos(a), ay = Math.sin(a), t = Math.max(PLAZA_R - 30, Math.min(r1, x * ax + y * ay)); if (Math.hypot(x - ax * t, y - ay * t) < BLVD_W / 2 + m) return true; }
   return false;
 }

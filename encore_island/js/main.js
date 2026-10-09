@@ -10,7 +10,7 @@ function resize() {
 }
 function updateCamera(dt) {
   // the home island is big, so the camera pulls back there; the Backstage room and the lands are seen close up
-  const zt = S.place === 'backstage' ? 0.92 : landAt(S.player.x, S.player.y, S.lands.length) <= 0 ? 0.74 : 1; ZOOM.k += (zt - ZOOM.k) * Math.min(1, dt * 3); scl = sclBase * ZOOM.k;
+  const zt = S.place === 'backstage' ? 0.84 : landAt(S.player.x, S.player.y, S.lands.length) <= 0 ? 0.62 : 0.86; ZOOM.k += (zt - ZOOM.k) * Math.min(1, dt * 3); scl = sclBase * ZOOM.k;
   const p = S.player, tx = p.x + p.vx * 0.28, ty = p.y + p.vy * 0.2 - 30;
   if (!CAM.init) { CAM.x = tx; CAM.y = ty; CAM.init = true; }
   const k = Math.min(1, dt * 5.5); CAM.x += (tx - CAM.x) * k; CAM.y += (ty - CAM.y) * k;

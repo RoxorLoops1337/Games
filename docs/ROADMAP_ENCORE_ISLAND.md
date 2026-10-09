@@ -19,7 +19,7 @@ Each session: pick one door, build it properly (headless suite + `npm run check`
 
 ## Done
 
-- **The big home island** (r 470 to 640) laid out in zones around the Stage
+- **The big home island** (r 864, 1.35x the first size; lands 1.3x, wider and longer boardwalks, a roomier Backstage) laid out in zones around the Stage
   Plaza, each at the end of a signposted cobbled boulevard: Hall of Fame (N,
   marble: monument + Magnet/Crit gem plates), Smelter Yard (NE, basalt),
   Arena (E, sand), Travel Dock (SE, warp pad), Training Terrace (S, slab arc
