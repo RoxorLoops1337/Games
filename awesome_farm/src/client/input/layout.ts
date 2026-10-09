@@ -5,17 +5,18 @@
 // Detection, strongest first: your setting, what the browser says the keys are (Chromium's keyboard map),
 // letters seen in real key presses (remembered), then a guess from the browser language.
 
+import { KEY_LAYOUTS, type PhysKey } from '../../shared/data/controls';
 import { settings } from '../settings';
 
 export type KeyboardSetting = 'auto' | 'qwerty' | 'azerty';
 export const KEYBOARD_CHOICES: KeyboardSetting[] = ['auto', 'qwerty', 'azerty'];
 
 /** The physical keys the game cares about, by KeyboardEvent.code. */
-type Phys = 'KeyW' | 'KeyA' | 'KeyS' | 'KeyD' | 'KeyQ';
+type Phys = PhysKey;
 
 const PHYS: Phys[] = ['KeyW', 'KeyA', 'KeyS', 'KeyD', 'KeyQ'];
-const QWERTY: Record<Phys, string> = { KeyW: 'W', KeyA: 'A', KeyS: 'S', KeyD: 'D', KeyQ: 'Q' };
-const AZERTY: Record<Phys, string> = { KeyW: 'Z', KeyA: 'Q', KeyS: 'S', KeyD: 'D', KeyQ: 'A' };
+const QWERTY = KEY_LAYOUTS.qwerty;
+const AZERTY = KEY_LAYOUTS.azerty;
 const STORE = 'awesome_farm_keys_v1';
 // old browsers send no `code`: fall back on the old key codes (these only ever name the QWERTY positions)
 const BY_KEYCODE: Record<number, Phys> = { 87: 'KeyW', 65: 'KeyA', 83: 'KeyS', 68: 'KeyD', 81: 'KeyQ' };

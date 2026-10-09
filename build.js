@@ -135,6 +135,12 @@ const buildAwesomeFarm = () => {
     fs.cpSync(play, path.join(DIST, 'awesome_farm', 'play'), { recursive: true });
     fs.copyFileSync(path.join(FARM, 'index.html'), path.join(DIST, 'awesome_farm', 'index.html'));
     console.log('copied awesome_farm/play → dist/awesome_farm/play');
+    // the player wiki: one generated page (awesome_farm/scripts/wiki.ts, `npm run wiki` there), committed like play/
+    const wiki = path.join(FARM, 'wiki');
+    if (fs.existsSync(path.join(wiki, 'index.html'))) {
+      fs.cpSync(wiki, path.join(DIST, 'awesome_farm', 'wiki'), { recursive: true });
+      console.log('copied awesome_farm/wiki → dist/awesome_farm/wiki');
+    }
   } catch (err) {
     console.error(`!! awesome_farm did not build (${err.message}); the rest of the site is unaffected`);
   }

@@ -22,6 +22,16 @@ export interface Cave {
 
 /** How far a chamber's room reaches from its middle (it is a square of 2 × this + 1, with a pillar of rock in each corner). */
 export const CHAMBER_R = 4;
+
+/**
+ * What an ore cluster in the rock is, by how far from the middle of the map it grows (`upTo`: 0 in the middle, 1 at the
+ * edge): weights over 1 + the index into CAVE_ORES (1 coal, 2 iron, 3 copper, 4 gold ore, 5 crystal).
+ */
+export const CAVE_ORE_BANDS: { upTo: number; w: Record<string, number> }[] = [
+    { upTo: 0.35, w: { 1: 36, 2: 34, 3: 30 } },
+    { upTo: 0.7, w: { 1: 12, 2: 28, 3: 22, 4: 30, 5: 8 } },
+    { upTo: Infinity, w: { 1: 8, 2: 14, 3: 10, 4: 40, 5: 28 } },
+];
 export const CHAMBERS = 16;
 
 /** Roll the caves for a world. About a hundred milliseconds. */
@@ -57,9 +67,7 @@ export function genCave (seed: string): Cave {
     const ore = new Uint8Array(N * N);
     const plant = (cx: number, cy: number) => {
         const d = Math.hypot(cx - N / 2, cy - N / 2) / (N / 2);                // 0 in the middle, 1 at the edge
-        const kind = d < 0.35 ? rng.weighted({ 1: 36, 2: 34, 3: 30 })
-            : d < 0.7 ? rng.weighted({ 1: 12, 2: 28, 3: 22, 4: 30, 5: 8 })
-            : rng.weighted({ 1: 8, 2: 14, 3: 10, 4: 40, 5: 28 });
+        const kind = rng.weighted((CAVE_ORE_BANDS.find((b) => d < b.upTo) ?? CAVE_ORE_BANDS[CAVE_ORE_BANDS.length - 1]).w);
         const size = rng.int(4, 6 + Math.round(d * 6));
         let x = cx, y = cy;
         for (let n = 0, guard = 0; n < size && guard < 60; guard++) {
