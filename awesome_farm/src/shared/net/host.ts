@@ -400,7 +400,8 @@ export class SimHost {
 
     /** Advance real time: fixed-step simulation, periodic broadcasts and saves. */
     update (dt: number) {
-        this.stepAcc = Math.min(this.stepAcc + dt, 0.25);
+        const k = this.sim.timeScale;                 // (1, but for the Defense Lab's game speed)
+        this.stepAcc = Math.min(this.stepAcc + dt * k, 0.25 * k);
         const step = 1 / NET.simHz;
         while (this.stepAcc >= step) { this.sim.step(step); this.stepAcc -= step; }
         this.flushTokens = Math.min(FLUSH_BURST, this.flushTokens + dt * FLUSH_PER_S);

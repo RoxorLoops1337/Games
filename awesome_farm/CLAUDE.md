@@ -352,6 +352,23 @@ A tester's screen for levelling up, giving items, spawning monsters, bosses, cre
 - **The key:** `Cmd { t: 'dev'; key }` is answered by `SimHost` (`net/host.ts`), not the sim. The server takes `--dev-key <secret>` or `AWESOME_FARM_DEV_KEY`; with neither, the menu can never be unlocked there. The host keeps only a salted `hashKey` of it, compares in constant time, locks an address (or farmer) for 5 minutes after 4 wrong keys (a reconnect does not reset it) and everybody for 10 after 20 in 10 minutes, and never logs, sends or saves the key. The farmer's own record carries `dev: true` once unlocked (`flush()` adds it to the own view only). Solo is `new SimHost(…, { devOpen: true })`. The hosting scripts add `--dev-key` from `dev-key.txt` when that file exists.
 - On a `--cheats` server (and in vite dev solo) every op works without an unlock, and the gesture opens the menu without a key.
 
+## The Defense Lab (`?lab=defense`: towers, walls and waves, solo only)
+
+`play/?lab=defense` (or the dev server's `/?lab=defense`) skips the title screen into a test arena: `shared/sim/lab.ts` builds a world of its own
+(seed `DEFENSE-LAB`, cheats on: `sim.lab`, `sim.cheats`), a flat island of six plots (no ore, nothing grows back) open to the sea on the east,
+the farmer in an 11 x 11 yard (stone north, wood west, brick south, Fortified east with the doorway), an Archer Tower, a Ballista and a Tesla Coil
+(a wind turbine and a pole feed it) inside, spike traps outside the doorway, a nest isle four plots east, every skill, the story and medals done,
+`LAB_KIT` in the backpack and god mode on. The clock is held at noon or midnight (`lab.step`: no night spawns, no dawn, no weather).
+- **Never saved, never the real farm:** `client/lab.ts` reads the switch; with it the profile slot is `lab` (`profile.ts`: every per-farmer key
+  gets `:lab`), `LocalConnection('defense')` builds the lab instead of reading `awesome_farm_solo_v1` and has no `onSave`, and the hints, tips,
+  welcome card and tutorial neither show nor write.
+- **The panel** (`ui/labpanel.ts`, in the left column where the quest tracker would be; the corner button folds it): monster, count, direction
+  and level, Send wave, Night, God, Mend, Clear, Speed, Reset, and a readout (alive, killed by towers, by you, wall damage, broken pieces;
+  `lab.readout`, from `defense.tally`). Every button is a `devdo` op: `labWave` (`id` monster or `mixed`, `n`, `lv`, `who` = n / e / s / w / sea:
+  raiders with `rd` on the yard, 14 tiles out, the sea wave 18 out in the water), `labNight`, `labMend` (mends and puts back broken arena
+  pieces), `labClear`, `labSpeed` (`sim.timeScale`, read by `SimHost.update`), `labReset`, plus the menu's own `god`. They refuse outside a lab
+  world and are locked like every op. Test: `tests/lab.test.ts`.
+
 ## HUD layout: zones, banners, toasts, plates (`ui/slots.ts`)
 
 Every HUD element has ONE home, and a home is one of a few named zones. The zones, their rectangles and the rules between them are pure data in `ui/slots.ts` (no Phaser, tested in `tests/slots.test.ts`); `ui/hudlayer.ts`, `ui/plates.ts`, `ui/companion.ts`, `ui/bossbar.ts`, `ui/rift.ts`, `ui/fishing.ts`, `ui/chat.ts`, `ui/touchcontrols.ts` and the tutorial's pointer all read them, so move a thing there and the rest follows (`furniture()` is built from them too).
@@ -507,6 +524,6 @@ does it for you).
 - **Storage keys (never rename):** `awesome_farm_profile_v1` (device id, name, last server, secret word, and the farmer id each server gave you: how servers
   recognise you), `awesome_farm_solo_v1` (solo world), `awesome_farm_settings_v1`, `awesome_farm_hints_v1` (which first-time hints and progression tips were shown: one list, tips as `tip:<id>`, saved by adding only), `awesome_farm_welcome_v1`,
   `awesome_farm_tutorial_v1` (the starting tutorial: step reached, counters when a replay began, skipped steps, and the tips switch; also `:N`). A
-  `?profile=N` tab suffixes the first two with `:N`. Server saves are `worlds/<world>.json`
+  `?profile=N` tab suffixes the first two with `:N` (the Defense Lab, `?lab=defense`, with `:lab`). Server saves are `worlds/<world>.json`
   with a `.bak`. Change the save format only with a `version` bump and a migration in the
   `Sim` constructor.

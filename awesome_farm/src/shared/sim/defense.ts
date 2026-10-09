@@ -14,24 +14,36 @@ import type { BuildE, MobE, PlayerS } from './types';
 
 const B = TUNING.blight;
 
-/** Runtime only: when each tower may fire next, and when each monster was last bitten by a spike. */
-interface Mem { cd: Map<number, number>; bite: Map<number, number> }
+/** Runtime only: when each tower may fire next, when each monster was last bitten by a spike, and running totals (the Defense Lab reads them). */
+interface Mem { cd: Map<number, number>; bite: Map<number, number>; t: Tally }
+/** Since the world loaded: monsters towers and traps killed, damage the defenses took, pieces broken. */
+export interface Tally { kills: number; dmg: number; broke: number }
 const memory = new WeakMap<Sim, Mem>();
 const mem = (sim: Sim): Mem => {
     let m = memory.get(sim);
-    if (!m) { m = { cd: new Map(), bite: new Map() }; memory.set(sim, m); }
+    if (!m) { m = { cd: new Map(), bite: new Map(), t: { kills: 0, dmg: 0, broke: 0 } }; memory.set(sim, m); }
     return m;
 };
+export const tally = (sim: Sim): Readonly<Tally> => mem(sim).t;
+/** A tower or a trap strikes a monster (counted when that is the end of it). */
+function strike (sim: Sim, m: MobE, dmg: number, owner: PlayerS | undefined, o: Parameters<typeof combat.damageMob>[4]) {
+    if (!sim.s.ents[m.id]) return;
+    combat.damageMob(sim, m, dmg, owner ?? null, o);
+    if (!sim.s.ents[m.id]) mem(sim).t.kills++;
+}
 
 /** A blow against a wall, doorway or tower: it loses hit points, and at none it breaks (nothing is given back). */
 export function hitBuilding (sim: Sim, b: BuildE, dmg: number) {
     const max = BUILDINGS[b.kind].hp;
     if (!max || !sim.s.ents[b.id]) return;
-    b.hp = Math.max(0, (b.hp ?? max) - dmg);
+    const was = b.hp ?? max;
+    b.hp = Math.max(0, was - dmg);
+    mem(sim).t.dmg += was - b.hp;
     sim.touch(b);
     const c = sim.center(b);
     if (b.hp > 0) { sim.fx('bldHit', c.x, c.y); return; }
     sim.fx('bldBreak', c.x, c.y);
+    mem(sim).t.broke++;
     const owner = b.by ? sim.s.players[b.by] : undefined;
     if (owner?.online) sim.toast(owner.id, `Raiders broke your ${BUILDINGS[b.kind].name}`, 'k_skull', PAL.berry);
     sim.remove(b.id);
@@ -52,10 +64,10 @@ const fair = (m: MobE) => !MOBS[m.kind].boss && !m.rb && m.rift === undefined &&
 /** How hard a tower hits for its builder: a little more for every level they have. */
 const towerMul = (owner: PlayerS | undefined) => 1 + B.towerLevel * Math.max(0, (owner?.level ?? 1) - 1);
 
-function nearestMob (list: readonly MobE[], x: number, y: number, range: number, skip?: Set<number>): MobE | null {
+function nearestMob (sim: Sim, list: readonly MobE[], x: number, y: number, range: number, skip?: Set<number>): MobE | null {
     let best: MobE | null = null, bd = range;
     for (const m of list) {
-        if (skip?.has(m.id) || !fair(m)) continue;
+        if (skip?.has(m.id) || !fair(m) || !sim.s.ents[m.id]) continue;        // (the list is this step's: one another tower just killed is skipped)
         const d = Math.hypot(m.x - x, m.y - 4 - y);
         if (d <= bd) { bd = d; best = m; }
     }
@@ -67,7 +79,7 @@ function fire (sim: Sim, t: BuildE, list: readonly MobE[]): boolean {
     const spec = B[def.tower!];
     const owner = t.by ? sim.s.players[t.by] : undefined;
     const x = (t.tx + 0.5) * TILE, y = (t.ty + 0.5) * TILE - 10;
-    const first = nearestMob(list, x, y, spec.range);
+    const first = nearestMob(sim, list, x, y, spec.range);
     if (def.tower === 'tesla') {
         const want = first ? 1 : 0;
         if ((t.act ?? 0) !== want) { t.act = want; sim.touch(t); }       // (it draws power while something is in range)
@@ -80,14 +92,14 @@ function fire (sim: Sim, t: BuildE, list: readonly MobE[]): boolean {
         const seen = new Set([first.id]);
         while (hits.length < B.tesla.chain) {
             const last = hits[hits.length - 1];
-            const next = nearestMob(list, last.x, last.y - 4, B.tesla.hop, seen);
+            const next = nearestMob(sim, list, last.x, last.y - 4, B.tesla.hop, seen);
             if (!next) break;
             seen.add(next.id); hits.push(next);
         }
     }
     sim.events.push({ e: 'shot', k: def.tower === 'archer' ? 'arrow' : def.tower === 'ballista' ? 'bolt' : 'zap', x: Math.round(x), y: Math.round(y), to: hits.map((m) => [Math.round(m.x), Math.round(m.y - 5)] as [number, number]) });
     sim.fx(def.tower === 'archer' ? 'towerShot' : def.tower === 'ballista' ? 'ballista' : 'zap', x, y);
-    for (const m of hits) combat.damageMob(sim, m, dmg * (def.tower === 'tesla' && m !== first ? 0.8 : 1), owner ?? null, { kx: m.x - x, ky: m.y - y, kb: def.tower === 'ballista' ? 120 : 30, quiet: true, nofloat: true });
+    for (const m of hits) strike(sim, m, dmg * (def.tower === 'tesla' && m !== first ? 0.8 : 1), owner, { kx: m.x - x, ky: m.y - y, kb: def.tower === 'ballista' ? 120 : 30, quiet: true, nofloat: true });
     return true;
 }
 
@@ -112,7 +124,7 @@ export function update (sim: Sim) {
         m.bite.set(e.id, now + B.spikeEvery);
         const owner = trap.by ? sim.s.players[trap.by] : undefined;
         sim.fx('spike', e.x, e.y - 3);
-        combat.damageMob(sim, e, B.spikeDmg * towerMul(owner), owner ?? null, { quiet: true, nofloat: true });
+        strike(sim, e, B.spikeDmg * towerMul(owner), owner, { quiet: true, nofloat: true });
     }
 }
 

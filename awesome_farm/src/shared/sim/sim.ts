@@ -25,6 +25,7 @@ import * as costatus from './costatus';
 import * as creatures from './creatures';
 import * as death from './death';
 import * as dev from './dev';
+import * as lab from './lab';
 import * as defense from './defense';
 import * as dread from './dread';
 import * as factory from './factory';
@@ -90,6 +91,10 @@ export class Sim {
     private onlineCache: PlayerS[] | null = null;
     /** Developer ops (`devdo`) work for everybody: dev builds and `--cheats` servers only. */
     cheats = false;
+    /** A test arena (sim/lab.ts: the Defense Lab, `?lab=defense` in solo): its own ops, its clock held. Runtime only, never on a server. */
+    lab = '';
+    /** How fast the world runs (the lab's game speed: SimHost steps it this many times as often). Runtime only. */
+    timeScale = 1;
     /** The farmers who have unlocked the developer menu (sim/dev.ts). Runtime only: never saved, never sent, gone when they leave. */
     readonly devs = new Set<string>();
 
@@ -533,6 +538,7 @@ export class Sim {
         hearth.update(this, dt);
         quests.update(this, dt);
         wish.update(this);
+        if (this.lab) lab.step(this);                 // (the Defense Lab holds its clock)
     }
 
     private updatePlayer (p: PlayerS, dt: number) {

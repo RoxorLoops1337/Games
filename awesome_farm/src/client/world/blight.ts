@@ -16,6 +16,9 @@ type Img = Phaser.GameObjects.Image;
 type Txt = Phaser.GameObjects.Text;
 interface ViewLike { x: number; y: number; sprite: Phaser.GameObjects.Image | Phaser.GameObjects.Sprite; shadow?: Img }
 
+/** How high (tiles) a tower's shot flies in the 3D view: between the tower's top and the monster's middle. */
+export const SHOT_LIFT = 1;
+
 /** How big a nest is drawn at a level (it grows, then levels off). */
 export const nestScale = (lv: number) => Math.min(1.9, 0.85 + 0.09 * (Math.max(1, lv) - 1));
 
@@ -90,11 +93,11 @@ export class BlightFx {
         if (Math.hypot(e.vx, e.vy) > 3 && Math.random() < dt * 6) this.splash.explode(2, v.x + (Math.random() - 0.5) * 6, v.y - 1);
     }
 
-    /** A tower fired. */
+    /** A tower fired: the arrow, bolt or zap is a world overlay lifted to about a tower's shoulder, so the 3D view shows it too. */
     shot (e: Extract<SimEvent, { e: 'shot' }>) {
         const s = this.scene;
         if (e.k === 'zap') {
-            const g = s.add.graphics().setDepth(8e4);
+            const g = overlay3d(s.add.graphics().setDepth(8e4), SHOT_LIFT);
             let fx = e.x, fy = e.y;
             for (const [tx, ty] of e.to) {
                 for (const [col, wdt] of [[PAL.plum, 3], [PAL.foam, 1.5]] as const) {
@@ -112,7 +115,7 @@ export class BlightFx {
         }
         const [tx, ty] = e.to[0] ?? [e.x, e.y];
         const ang = Math.atan2(ty - e.y, tx - e.x), d = Math.hypot(tx - e.x, ty - e.y);
-        const img = s.add.image(e.x, e.y, e.k === 'bolt' ? 'proj_bolt' : 'proj_arrow', 0).setDepth(8e4).setRotation(ang).setScale(e.k === 'bolt' ? 1.6 : 1);
+        const img = overlay3d(s.add.image(e.x, e.y, e.k === 'bolt' ? 'proj_bolt' : 'proj_arrow', 0).setDepth(8e4).setRotation(ang).setScale(e.k === 'bolt' ? 1.6 : 1), SHOT_LIFT);
         if (e.k === 'bolt') img.setTint(PAL.pebble);
         s.tweens.add({ targets: img, x: tx, y: ty, duration: Math.max(60, d * (e.k === 'bolt' ? 1.6 : 1.1)), ease: 'Linear', onComplete: () => img.destroy() });
     }

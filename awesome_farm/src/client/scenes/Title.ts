@@ -7,6 +7,7 @@ import { PROTOCOL } from '../../shared/net/protocol';
 import { css, PAL } from '../../shared/palette';
 import { TILE_SHALLOW, tileCliff, tileGround, tileShore } from '../art/sprites';
 import { Fx } from '../juice/fx';
+import { LAB } from '../lab';
 import { LocalConnection, stashResume, statusUrl, takeResume, WsConnection, type Connection, type Resume } from '../net/connection';
 import { canSwitchLive } from '../world/view3d-bridge';
 import { profile, saveProfile } from '../profile';
@@ -15,6 +16,9 @@ import { button, FONT_TEXT, H, label, panel, W } from '../ui/kit';
 import { rect, STYLES } from '../ui/px';
 import { hudCamera } from '../res';
 import { PAPER, TEXT, WOOD } from '../ui/theme';
+
+/** The Defense Lab opens by itself once per page load. */
+let labOpened = false;
 
 export class TitleScene extends Phaser.Scene {
     private fx!: Fx;
@@ -71,7 +75,13 @@ export class TitleScene extends Phaser.Scene {
         this.detectHostServer();
         // back from a reload that switched the view: straight into the world we were in
         const back = takeResume();
-        if (back) this.time.delayedCall(60, () => this.start(() => (back.mode === 'solo' ? new LocalConnection() : new WsConnection(back.addr, back.password, back.key)), back));
+        if (LAB && !labOpened) {
+            // `?lab=defense`: straight into the Defense Lab (once per page: after leaving it the title screen offers it again)
+            labOpened = true;
+            this.time.delayedCall(60, () => this.start(() => new LocalConnection(LAB)));
+            return;
+        }
+        if (back && !LAB) this.time.delayedCall(60, () => this.start(() => (back.mode === 'solo' ? new LocalConnection() : new WsConnection(back.addr, back.password, back.key)), back));
     }
 
     update (_t: number, dtMs: number) {
@@ -182,9 +192,12 @@ export class TitleScene extends Phaser.Scene {
         // solo
         label(this, x + 20, y + 72, 'Solo', 22, PAL.lime, { origin: [0, 0.5] });
         this.drawViewToggle(x + w - 20, y + 72);
-        const day = LocalConnection.savedDay();
-        label(this, x + 20, y + 98, day ? `Your world is on day ${day}. It saves in this browser.` : 'A private world that saves in this browser.', 12, PAL.pebble, { origin: [0, 0.5], bold: false });
-        button(this, x + w / 2, y + 138, 330, 46, day ? `Continue solo  ·  day ${day}  ▶` : 'Start a solo world  ▶', () => this.start(() => new LocalConnection()), { style: STYLES.lime, size: 18 });
+        const day = LAB ? null : LocalConnection.savedDay();
+        if (LAB) {
+            label(this, x + 20, y + 98, 'A test arena for towers and walls. It is never saved.', 12, PAL.pebble, { origin: [0, 0.5], bold: false });
+            button(this, x + w / 2, y + 138, 330, 46, 'Enter the Defense Lab  ▶', () => this.start(() => new LocalConnection(LAB)), { style: STYLES.lime, size: 18 });
+        } else label(this, x + 20, y + 98, day ? `Your world is on day ${day}. It saves in this browser.` : 'A private world that saves in this browser.', 12, PAL.pebble, { origin: [0, 0.5], bold: false });
+        if (!LAB) button(this, x + w / 2, y + 138, 330, 46, day ? `Continue solo  ·  day ${day}  ▶` : 'Start a solo world  ▶', () => this.start(() => new LocalConnection()), { style: STYLES.lime, size: 18 });
         if (day) {
             const wipe = label(this, x + w / 2, y + 176, 'start a new solo world', 12, PAL.pebble, { origin: [0.5, 0.5], bold: false }).setInteractive({ useHandCursor: true });
             wipe.on('pointerup', () => {

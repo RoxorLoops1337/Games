@@ -2,6 +2,7 @@
 
 import { guideText } from '../../../shared/data/guide';
 import type { Say } from '../../../shared/data/tutorial';
+import { LAB } from '../../lab';
 import { PAL } from '../../../shared/palette';
 import { isTouchUi, keyLabel, moveKeys } from '../../input/layout';
 import { deviceText, fit, Win } from '../kit';
@@ -11,7 +12,7 @@ import type { Screen, ScreenCtx } from './types';
 
 const KEY = 'awesome_farm_welcome_v1';
 
-export const shouldWelcome = () => { try { return !localStorage.getItem(KEY); } catch { return false; } };
+export const shouldWelcome = () => { if (LAB) return false; try { return !localStorage.getItem(KEY); } catch { return false; } };
 export const markWelcomed = () => { try { localStorage.setItem(KEY, '1'); } catch { /* private mode */ } };
 
 /** [icon, title, text]: a text is a string, or [keyboard, phone] where a phone has buttons instead of keys ({move} is your keys). */
