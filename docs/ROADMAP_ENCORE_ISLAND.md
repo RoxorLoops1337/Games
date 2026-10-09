@@ -33,7 +33,27 @@ Each session: pick one door, build it properly (headless suite + `npm run check`
   wall, each a `regDoor` slot. Unclaimed doorways show chained placeholders.
   Saves remember `S.place` and the plate; a tour resets both.
 
+- **The 3D view** (medium-poly, three.js, chosen on the title screen or in More > Graphics, 2D stays the default and the classic renderer is untouched).
+  One simulation, two renderers: the 3D view only draws `S`. Environment (biome moods, sky, sea with shore foam, floating islands, zoned paving,
+  boardwalks, decor), the whole hub and every land plate and tower, all 8 heroes, the 24 creatures and 3 bosses, loot, projectiles and GPU
+  effects, the Backstage room, a cinematic title orbit, a post chain (bloom, tilt-shift, grade) and three quality tiers with an adaptive
+  resolution governor. Architecture, contracts and the performance playbook are in `encore_island/view3d/README.md`; tools: `tools/3d_shot.mjs`,
+  `tools/3d_game_shot.mjs`, `tools/3d_perf.mjs`, `tools/3d_manifest.mjs`.
+
 ## Next up
+
+### 3D follow-ups
+
+- **Real-device tuning.** Everything is measured with software GL (draw calls, triangles, module time, heap), so the next session with a phone
+  in hand should open the game with `?perf`, note the tier Auto picks and where the governor settles, and adjust `quality.js` (crowd caps,
+  DPR caps, shadow sizes) from real frame times.
+- **Backstage doors in 3D.** The Merch Workshop and Horde Defense designs below should each ship a `reg3d` visual (workshop interior, a defended
+  rim with walls and turrets) alongside their 2D look; the room already shows registered doors open.
+- **Weather and time of day.** Biome moods are static per island; a slow day/night cycle and rain on a few biomes would use the existing
+  mood blend (`env_mood.js`) and the particle layer.
+- **Skins in 3D.** New outfits need a rig in `encore_island_3d/js/characters.js` (and a fan variant); the 3D view falls back to the RawClaw
+  rig for an unknown skin.
+
 
 ### Door 1: Merch Workshop ("turn drops into merchandise")
 
