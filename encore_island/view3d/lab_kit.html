@@ -1,0 +1,15 @@
+<!doctype html><meta charset="utf-8"><title>3D kit lab</title>
+<script type="importmap">{ "imports": { "three": "../../encore_island_3d/vendor/three.module.min.js", "three/addons/": "../../encore_island_3d/vendor/jsm/" } }</script>
+<script type="module">
+import { lab } from './lab.js';
+import { Builder, C, SHINY, GOLD, addOutline, BlobShadows, W } from './kit.js';
+lab({ d: 9, el: 24, build(V) {
+  const { THREE, scene } = V, b = new Builder();
+  b.brbox(C.pink, 0, 0, 0, 2.4, 1.2, 1.6, 0.2); b.sph(C.cream, 0, 1.7, 0, 0.7); b.cone(C.gold, 0, 2.2, 0, 0.5, 0.9);
+  b.cyl({ m: GOLD, c: C.gold }, 2.4, 0, 0, 0.5, 0.3); b.tor(C.violet, -2.4, 0.8, 0, 0.6, 0.18, 10, 28, Math.PI / 2);
+  b.ball(C.mint, 0, 0.5, 2.2, 0.8); b.lathe(C.hotPink, [[0.001, 0], [0.7, 0], [0.55, 0.5], [0.3, 1.1], [0.001, 1.3]], -2.4, 0, 2.2);
+  const g = b.build(); scene.add(g);
+  const bs = new BlobShadows(8); scene.add(bs.mesh); bs.begin(); bs.add(2.4, 0, 0.9, 0.4); bs.end();
+  return { update(dt, t) { g.rotation.y = Math.sin(t * 0.5) * 0.1; } };
+} });
+</script>

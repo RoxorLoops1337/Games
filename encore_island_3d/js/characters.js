@@ -34,7 +34,9 @@ const basic = (c) => { let m = BASIC.get(c); if (!m) { m = new THREE.MeshBasicMa
 // shared geometry cache
 const GC = new Map();
 const geo = (k, f) => { let g = GC.get(k); if (!g) { g = f(); GC.set(k, g); } return g; };
-const ico = (d = 1) => geo('ico' + d, () => new THREE.IcosahedronGeometry(1, d));
+// STYLE: the 3D game sets flat = false (smooth "medium poly" shading under the inked hull) and boost = 1 for hero-class actors (one extra icosphere subdivision).
+export const STYLE = { flat: true, boost: 0 };
+const ico = (d = 1) => { const dd = Math.min(4, d + STYLE.boost); return geo('ico' + dd, () => new THREE.IcosahedronGeometry(1, dd)); };
 const box = (w, h, d) => geo(`box${w},${h},${d}`, () => new THREE.BoxGeometry(w, h, d));
 const cyl = (rt, rb, h, seg = 8) => geo(`cyl${rt},${rb},${h},${seg}`, () => new THREE.CylinderGeometry(rt, rb, h, seg, 1));
 const hang = (rt, rb, h, seg = 6) => geo(`hang${rt},${rb},${h},${seg}`, () => { const g = new THREE.CylinderGeometry(rt, rb, h, seg, 1); g.translate(0, -h / 2, 0); return g; });
@@ -102,14 +104,14 @@ function makeCtx() {
       const k = color + (extra ? JSON.stringify(extra) : '');
       let mat = map.get(k);
       if (!mat) {
-        mat = new THREE.MeshStandardMaterial({ color, flatShading: true, roughness: 0.75, metalness: 0, emissive: 0xff2a4a, emissiveIntensity: 0, ...extra });
+        mat = new THREE.MeshStandardMaterial({ color, flatShading: STYLE.flat, roughness: 0.75, metalness: 0, emissive: 0xff2a4a, emissiveIntensity: 0, ...extra });
         map.set(k, mat); list.push(mat);
       }
       return mat;
     },
     mk(key, params) {
       let mat = map.get(key);
-      if (!mat) { mat = new THREE.MeshStandardMaterial({ flatShading: true, roughness: 0.75, metalness: 0, emissive: 0xff2a4a, emissiveIntensity: 0, ...params }); map.set(key, mat); list.push(mat); }
+      if (!mat) { mat = new THREE.MeshStandardMaterial({ flatShading: STYLE.flat, roughness: 0.75, metalness: 0, emissive: 0xff2a4a, emissiveIntensity: 0, ...params }); map.set(key, mat); list.push(mat); }
       return mat;
     },
     setHurt(v) { for (const m of list) m.emissiveIntensity = v * 0.85; },
@@ -1276,3 +1278,7 @@ export function makeFan(seed = 1) {
   self.group.name = 'fan' + seed;
   return creatureStub(self, L);
 }
+
+// ---- shared building blocks for other modules (foes, heroes in the game view). Same pattern as makeKappa / makeOni below. ----
+export const CK = { clamp, lerp, damp, ease, rng, makeCtx, part, flat, aim, addFace, makeLife, lifeXform, creatureBase, creatureStub, newState, fit, setBlink, setMouth,
+  ico, box, cyl, hang, cone, torus, cap, dome, geo, inkMat, eyeMat, whiteMat, mouthMat, tongueMat, basic, outlineGeo };

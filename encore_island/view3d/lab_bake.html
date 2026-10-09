@@ -1,0 +1,18 @@
+<!doctype html><meta charset="utf-8"><title>bake lab</title>
+<script type="importmap">{ "imports": { "three": "../../encore_island_3d/vendor/three.module.min.js", "three/addons/": "../../encore_island_3d/vendor/jsm/" } }</script>
+<script type="module">
+import { lab } from './lab.js';
+import { bakeActor, countCalls } from './bake.js';
+import { makeJasmin, makeRoxor, makeCreature, makeFan } from '../../encore_island_3d/js/characters.js';
+lab({ d: 11, el: 18, tx: 0, ty: 1.1, build(V) {
+  const { scene } = V, list = [];
+  const mk = [() => makeJasmin(), () => makeRoxor(), () => makeFan(3), () => makeCreature('kappa'), () => makeCreature('oni')];
+  const stat = { before: 0, after: 0, bones: 0 };
+  mk.forEach((f, i) => {
+    const a = f(), b = f(); a.group.position.set(-5 + i * 2.2, 0, 1.2); b.group.position.set(-5 + i * 2.2, 0, -1.4); scene.add(a.group, b.group); stat.before += countCalls(a.group);
+    const info = bakeActor(b); stat.after += countCalls(b.group); stat.bones += info.bones; list.push(a, b);
+  });
+  window.__stat = stat;
+  return { update(dt, t) { for (const a of list) a.update(dt, t, { speed: 0.7 + 0.3 * Math.sin(t), singing: true, carry: 4, hurt: Math.max(0, Math.sin(t * 2)) * 0.6 }); } };
+} });
+</script>

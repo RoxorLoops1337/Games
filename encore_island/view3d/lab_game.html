@@ -1,0 +1,16 @@
+<!doctype html><meta charset="utf-8"><title>game lab</title>
+<!-- Generic: ?m=./env3d.js&lands=3 loads the real game scripts, then init(V) of the module and runs its update(dt,t) each frame. -->
+<script type="importmap">{ "imports": { "three": "../../encore_island_3d/vendor/three.module.min.js", "three/addons/": "../../encore_island_3d/vendor/jsm/" } }</script>
+<script type="module">
+import { lab } from './lab.js';
+import { loadGame } from './gamelab.js';
+const P = new URLSearchParams(location.search);
+const g = await loadGame({ lands: +(P.get('lands') || 2), wallet: +(P.get('wallet') || 5e5), gems: 9, fans: +(P.get('fans') || 0), enemies: +(P.get('enemies') || 0) });
+const mods = (P.get('m') || '').split(',').filter(Boolean);
+lab({ ground: false, d: +(P.get('d') || 30), el: +(P.get('el') || 55), ty: 0, async build(V) {
+  const inst = [];
+  for (const m of mods) { const mod = await import(m); const r = await mod.init(V); if (r) { inst.push(r); const key = m.replace(/^.*\//, '').replace(/\.js$/, ''); V.mods[key] = r; } }
+  window.__inst = inst;
+  return { update(dt, t) { for (const r of inst) if (r.update) r.update(dt, t, { x: g.S().player.x * 0.02, z: g.S().player.y * 0.02 }); } };
+} });
+</script>
