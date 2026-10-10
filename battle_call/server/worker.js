@@ -31,6 +31,7 @@ const ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
 const CODE_LEN = 5;
 const PBKDF2_ITER = 12000; // a party game, not a bank: keeps a rush of sign-ups cheap
 const MAX_PHOTO = 160 * 1024;
+const REACTIONS = ['fire', 'clap', 'hands', 'mind', 'bass'];
 const LIVE_MS = 700, BOARD_MS = 2500, HOST_MS = 2000;
 
 const CORS = {
@@ -126,6 +127,8 @@ export class Event {
     this.fails = new Map();    // ip -> [timestamps] of wrong passwords
     this.rate = new Map();     // key -> [timestamps] of actions
     this.timers = {};
+    this.rxLast = new Map();   // user -> last reaction time
+    this.rxBuf = {};           // reactions waiting for the next broadcast
     this.sent = { meta: 0 };
     try {
       state.setWebSocketAutoResponse(new WebSocketRequestResponsePair('ping', 'pong'));
@@ -257,10 +260,27 @@ export class Event {
       this.later('live', 300, () => this.pushLive());
       return;
     }
+    if (m.t === 'rx') { this.react(ws, m.e); return; }
     if (m.t !== 'a') return;
     const a = this.att(ws);
     const r = await this.act(a, m, (a.r === 'u' ? a.k : a.r) + ':ws');
     this.send(ws, { ...r, t: 'r', id: m.id });
+  }
+  /** Live reactions: not game state, never stored. Counted per kind and sent to everybody twice a second. */
+  react(ws, e) {
+    const a = this.att(ws), S = this.S;
+    if (a.r !== 'u' || !REACTIONS.includes(e)) return;
+    const u = S.users.get(a.k), now = Date.now();
+    if (!u || u.banned) return;
+    if ((this.rxLast.get(a.k) || 0) > now - 350) return;
+    this.rxLast.set(a.k, now);
+    if (this.rxLast.size > 3000) this.rxLast.clear();
+    this.rxBuf[e] = Math.min(60, (this.rxBuf[e] || 0) + 1);
+    this.later('rx', 500, () => {
+      const c = this.rxBuf; this.rxBuf = {};
+      const s = JSON.stringify({ t: 'rx', c });
+      for (const w of this.sockets()) this.send(w, s);
+    });
   }
   webSocketClose(ws) { try { ws.close(); } catch (_) { /* already */ } this.S && this.later('live', 500, () => this.pushLive()); }
   webSocketError(ws) { this.webSocketClose(ws); }

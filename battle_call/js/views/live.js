@@ -4,6 +4,7 @@ import { S, bbName, size, rounds, curMatch, nextMatch, seedOf, sides, leftKey, m
 import { ui, av, userAv, duel, bracket, resultCard, loops, pill, x, catArt, crown, ART_FILE, countdown } from '../ui.js';
 import { matchRound } from '../shared.js';
 import { callStats } from '../share.js';
+import { REACTIONS, levelOf, badgesOf, soundOn } from '../juice.js';
 
 /** The category's picture, standing in the corner of a hero card. */
 const heroArt = () => `<img class="heroart" src="img/${ART_FILE[S.meta.art] || 'male-solo'}.webp" alt="" decoding="async">`;
@@ -15,6 +16,7 @@ export function liveTab() {
   const parts = [];
   if (ev.banner) parts.push(`<div class="banner" data-k="banner-${ev.banner.id}">${ic('mega', 18)}<span>${esc(ev.banner.text)}</span></div>`);
   if (S.role === 'guest') parts.push(`<div class="guestbar"><span>You are watching. Join to predict, bet and vote.</span><button class="btn sm" data-a="authOpen">Join</button></div>`);
+  if (S.role === 'user' && S.me) parts.push(playerCard());
   switch (ev.phase) {
     case 'lobby': parts.push(lobby()); break;
     case 'picks': parts.push(picks()); break;
@@ -24,6 +26,19 @@ export function liveTab() {
   }
   return parts.join('');
 }
+
+function playerCard() {
+  const me = S.me, L = levelOf(me), sk = me.streak || 0;
+  return `<section class="pcard" data-k="pcard"><div class="lv"><span><small>LVL</small>${L.lvl}</span></div>
+    <div><b>${esc(L.title)}</b> <small>${L.xp} XP · ${L.toNext} to level ${L.lvl + 1}</small></div>
+    <div class="fire ${sk >= 2 ? '' : 'off'}">\u{1F525} ${sk}<small>streak</small></div>
+    <div class="xpbar"><i style="width:${Math.max(4, L.pct)}%"></i></div>
+  </section>
+  <div class="badges" data-k="badges">${badgesOf(me).map((b) => `<span class="badge ${b.got ? '' : 'off'}" title="${esc(b.name)}">${b.icon} ${esc(b.name)}</span>`).join('')}
+    <button class="badge" data-a="toggleSound">${soundOn() ? '\u{1F50A} Sound on' : '\u{1F507} Sound off'}</button></div>`;
+}
+
+const rxBar = () => (S.role === 'user' ? `<div class="rxbar" data-k="rxbar">${REACTIONS.map(([k, e]) => `<button data-a="react" data-e="${k}" aria-label="${k}">${e}</button>`).join('')}</div>` : '');
 
 function lineup(limit = 60) {
   const list = S.meta.bbs.slice(0, limit);
@@ -111,6 +126,7 @@ function matchHero(m) {
     ${m.status === 'voting' ? countdown(m, 'inline') : ''}
     ${duel(m)}
     ${body}
+    ${['live', 'voting', 'closed'].includes(m.status) ? rxBar() : ''}
   </section>`;
 }
 

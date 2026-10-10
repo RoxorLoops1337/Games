@@ -60,6 +60,20 @@ function botsVote(mid) {
   });
 }
 
+/** The fans cheer while a battle is on. */
+let cheerT = 0;
+function cheer() {
+  clearInterval(cheerT);
+  cheerT = setInterval(() => {
+    if (!DS || !att) return;
+    const c = E.currentMatch(DS);
+    if (!c) return;
+    const kinds = ['fire', 'clap', 'hands', 'mind', 'bass'], burst = {};
+    for (let i = 0; i < 1 + rnd(4); i++) { const k = pick(kinds); burst[k] = (burst[k] || 0) + 1; }
+    att.push({ t: 'rx', c: burst });
+  }, 900);
+}
+
 /** A vote with a countdown closes itself, just like on the server. */
 function armVotes() {
   clearTimeout(voteT); voteT = 0;
@@ -108,8 +122,8 @@ export function createDemo() {
   if (!DS) build();
   return {
     name: () => DS.event.name,
-    attach(push, role) { att = { push, role }; flush(); },
-    detach() { att = null; },
+    attach(push, role) { att = { push, role }; cheer(); flush(); },
+    detach() { att = null; clearInterval(cheerT); },
     reset() { build(); clearTimeout(voteT); flush(); },
     act(m) {
       DS.now = Date.now();

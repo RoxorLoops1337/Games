@@ -257,6 +257,21 @@ await t('a vote with a countdown closes by itself, and messages carry the server
   assert.equal(m().status, 'voting', 'secs 0 means manual');
 });
 
+await t('reactions: players only, known kinds only, batched into one broadcast', async () => {
+  const rt = await newEvent();
+  const tk = await join(rt, 'Ann'); const ann = await connect(rt, { tk }), guest = await connect(rt, {}), host = await connect(rt, { ht: rt.ht });
+  await rt.d.webSocketMessage(ann, JSON.stringify({ t: 'rx', e: 'fire' }));
+  await rt.d.webSocketMessage(ann, JSON.stringify({ t: 'rx', e: 'fire' })); // too soon
+  await rt.d.webSocketMessage(ann, JSON.stringify({ t: 'rx', e: 'nope' }));
+  await rt.d.webSocketMessage(guest, JSON.stringify({ t: 'rx', e: 'clap' }));
+  await rt.d.webSocketMessage(host, JSON.stringify({ t: 'rx', e: 'clap' }));
+  await sleep(700);
+  const got = host.msgs('rx');
+  assert.equal(got.length, 1);
+  assert.deepEqual(got[0].c, { fire: 1 });
+  assert.equal(guest.msgs('rx').length, 1, 'everybody gets it');
+});
+
 await t('an evicted and rebuilt object has the same players, tokens, bets, pools, bracket and results', async () => {
   const rt = await newEvent();
   const tk = await join(rt, 'Ann'); const ann = await connect(rt, { tk }), host = await connect(rt, { ht: rt.ht });

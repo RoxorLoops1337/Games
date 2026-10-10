@@ -503,3 +503,22 @@ body[data-mode=screen] { overflow: hidden; }
 .votelen { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
 @keyframes cdpulse { to { transform: scale(1.07); } }
 @media (prefers-reduced-motion: reduce) { .cd.hot { animation: none; } }
+
+/* ---- juice: reactions, player card, badges ---- */
+#rxlayer { position: fixed; inset: 0; z-index: 120; pointer-events: none; overflow: hidden; }
+#rxlayer i { position: absolute; bottom: -60px; font-style: normal; animation: rxup 3s ease-out both; will-change: transform, opacity; }
+@keyframes rxup { 0% { transform: translate(0, 0) scale(.5); opacity: 0; } 12% { opacity: 1; transform: translate(0, -60px) scale(1.15); } 100% { transform: translate(var(--dx), -105vh) scale(1); opacity: 0; } }
+.rxbar { display: flex; justify-content: center; gap: 8px; margin-top: 12px; }
+.rxbar button { width: 52px; height: 52px; border-radius: 16px; background: rgba(255,255,255,.09); font-size: 26px; transition: transform .1s; }
+.rxbar button:active { transform: scale(.85); background: rgba(255,255,255,.2); }
+.pcard { display: grid; grid-template-columns: auto 1fr auto; gap: 4px 12px; align-items: center; padding: 12px 14px; border-radius: var(--r); background: var(--glass); border: 1px solid var(--line); }
+.pcard .lv { grid-row: span 2; width: 54px; height: 54px; border-radius: 50%; display: grid; place-items: center; background: var(--grad); font-weight: 800; font-size: 22px; box-shadow: 0 6px 18px rgba(139,92,255,.4); }
+.pcard .lv small { display: block; color: #fff; opacity: .8; font-size: 9px; letter-spacing: .1em; margin-bottom: -2px; }
+.pcard b { font-size: 15px; } .pcard .xpbar { height: 8px; border-radius: 9px; background: rgba(255,255,255,.1); overflow: hidden; grid-column: 2; }
+.pcard .xpbar i { display: block; height: 100%; background: var(--grad); border-radius: 9px; transition: width .6s; }
+.pcard .fire { grid-row: span 2; font-weight: 800; font-size: 18px; text-align: center; line-height: 1.1; } .pcard .fire small { display: block; }
+.pcard .fire.off { opacity: .35; }
+.badges { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+.badge { display: flex; align-items: center; gap: 6px; padding: 5px 10px; border-radius: 99px; background: rgba(255,255,255,.08); font-size: 12.5px; font-weight: 700; }
+.badge.off { opacity: .3; filter: grayscale(1); }
+.soundbtn { position: fixed; right: 12px; bottom: 12px; z-index: 60; }
