@@ -998,6 +998,7 @@ export function liveOf(S, online, host) {
       (out.cons = out.cons || {})[c.id] = { N: c.settings.size, voters: c.consensusAll.voters, rows: c.consensusAll.rows, staked };
     }
     // between battles the big screen cycles through what the hall predicted for the bracket: picks per battle and for the title
+    if ((c.phase === 'bracket' || c.phase === 'finished') && !out.spot) out.spot = spotOf(S);
     if (c.phase === 'bracket' || c.phase === 'finished') {
       const ms = c.matches.filter((x) => !x.third && x.a && x.b), fin = c.matches.find((x) => !x.third && x.r === log2(c.settings.size) - 1);
       const pk = {}, champ = {};
@@ -1027,6 +1028,20 @@ export function meOf(S, u) {
     name: u.name, bal: u.bal, staked: staked(S, u), net: netWorth(S, u), rank: rank.rank, of: rank.of,
     streak: voteStreak(S, u), tops: u.tops || {}, picks: u.picks, bets: u.bets, votes: u.votes, st: u.st, log: u.log.slice(-25), banned: u.banned,
   };
+}
+
+/** Players worth a spotlight on the big screen: who is on a streak, who calls the battles best, who won big, who is riding the most. */
+export function spotOf(S) {
+  const list = [...S.users.values()].filter((u) => !u.banned);
+  const best = (score) => { let b = null, bs = 0; for (const u of list) { const s = score(u); if (s > bs) { bs = s; b = u; } } return b ? { n: b.name, v: bs } : null; };
+  const out = [];
+  const add = (k, r, min = 1) => { if (r && r.v >= min) out.push({ k, ...r }); };
+  add('streak', best((u) => voteStreak(S, u)), 2);
+  add('caller', best((u) => u.st.hits || 0));
+  add('win', best((u) => u.log.reduce((m, l) => (l.k === 'win' && l.d > m ? l.d : m), 0)), 50);
+  add('roller', best((u) => staked(S, u)), 50);
+  add('ear', best((u) => u.st.sync || 0));
+  return out;
 }
 
 /** Everybody's rank, computed once per change in money rather than once per player per push. */
