@@ -1,7 +1,7 @@
 // Battle Call: the Live tab. It follows the organiser: whatever phase the event is in, this is the page that explains it.
 import { esc, ic } from '../dom.js';
-import { S, bbName, size, rounds, curMatch, nextMatch, seedOf, sides, leftKey, myBet, mkView, mkTitle } from '../state.js';
-import { ui, av, userAv, perfStats, duel, bracket, resultCard, loops, pill, x, catArt, crown, ART_FILE, countdown } from '../ui.js';
+import { S, perfNow, bbName, size, rounds, curMatch, nextMatch, seedOf, sides, leftKey, myBet, mkView, mkTitle } from '../state.js';
+import { ui, av, userAv, perfStats, lockClock, duel, bracket, resultCard, loops, pill, x, catArt, crown, ART_FILE, countdown } from '../ui.js';
 import { matchRound } from '../shared.js';
 import { callStats } from '../share.js';
 import { REACTIONS, levelOf, badgesOf, soundOn } from '../juice.js';
@@ -77,9 +77,12 @@ function lobby() {
 
 function picks() {
   if (S.meta.bbs.length === 1) return soloHero('Picks are open elsewhere');
-  const me = S.me, N = size(), n = me ? me.top.length : 0;
+  const me = S.me, N = size(), n = me ? me.top.length : 0, pf = perfNow(), on = S.meta.elimOn;
+  const stage = on ? `${pf ? `<section class="hero perf"><p class="eyebrow">${eq} On stage now</p><div class="crownwrap"><div class="crown">${av(pf.id, 'xxl')}</div></div><h1>${esc(bbName(pf.id))}</h1>${perfStats(pf)}</section>` : `<section class="hero tight"><p class="eyebrow">${eq} Elimination is on</p><h1>The beatboxers are performing</h1></section>`}
+    <div class="center">${lockClock(S.meta) || '<span class="pill">Predictions are still open</span>'}</div>` : '';
   const tops = S.host ? S.host.tops : null;
   return `
+    ${stage}
     <section class="hero picks photo">
       ${heroArt()}
       <p class="eyebrow">${eq} Picks are open</p>
@@ -96,7 +99,7 @@ function picks() {
 
 function elimination() {
   if (S.meta.bbs.length === 1) return soloHero('Elimination is on');
-  const c = S.meta.consensus, N = size(), pf = S.meta.perf;
+  const c = S.meta.consensus, N = size(), pf = perfNow();
   return `
     ${pf ? `<section class="hero perf"><p class="eyebrow">${eq} On stage now</p><div class="crownwrap"><div class="crown">${av(pf.id, 'xxl')}</div></div><h1>${esc(bbName(pf.id))}</h1>${perfStats(pf)}</section>` : ''}
     <section class="hero elim photo">

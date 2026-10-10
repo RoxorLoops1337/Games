@@ -1,8 +1,8 @@
 // Battle Call: the organiser console. Everything the host does in one place, built for a phone held in one hand
 // next to a stage: one big obvious next step per phase, and confirmation before anything that cannot be undone.
 import { esc, ic } from '../dom.js';
-import { S, bbName, size, rounds, curMatch, nextMatch, sides, leftKey, seedOf, mkView, mkTitle, mkLabel, serverBase } from '../state.js';
-import { ui, av, userAv, perfStats, loops, pill, rankBuilder, bracket, empty, duel, x, catBar, catArt, countdown } from '../ui.js';
+import { S, perfNow, bbName, size, rounds, curMatch, nextMatch, sides, leftKey, seedOf, mkView, mkTitle, mkLabel, serverBase } from '../state.js';
+import { ui, av, userAv, perfStats, lockClock, loops, pill, rankBuilder, bracket, empty, duel, x, catBar, catArt, countdown } from '../ui.js';
 import { matchRound, SIZES } from '../shared.js';
 import { photoUrl } from '../net.js';
 
@@ -65,10 +65,14 @@ function run() {
       <button class="btn big" data-a="hPhase" data-to="picks" ${need > 0 ? 'disabled' : ''}>${ic('predict', 20)} Open predictions and bets</button>
       <button class="btn ghost" data-a="hPhase" data-to="elimination" ${need > 0 ? 'disabled' : ''}>Skip picks, go straight to the elimination</button>`;
   } else if (ev.phase === 'picks') {
-    main = `<div class="stats4">${stat(users, 'players')}${stat(tops == null ? '-' : tops, 'Top ' + N + ' in')}${stat(h ? h.volume.toLocaleString() : '-', 'Loops staked')}${stat(ev.mk.filter((m) => m.st === 'open').length, 'open bets')}</div>
-      <button class="btn big" data-a="hPhase" data-to="elimination">${ic('lock', 20)} Lock picks, start the elimination</button>
-      <p class="muted small center">Picks and "makes the cut" bets lock together. You can reopen them until the ranking is published.</p>
-      ${consensusCard()}`;
+    const stats = `<div class="stats4">${stat(users, 'players')}${stat(tops == null ? '-' : tops, 'Top ' + N + ' in')}${stat(h ? h.volume.toLocaleString() : '-', 'Loops staked')}${stat(ev.mk.filter((m) => m.st === 'open').length, 'open bets')}</div>`;
+    main = ev.elimOn
+      ? `${stats}<div class="card tip"><b>Elimination round is on</b><p>Predictions and bets are still open. Put each beatboxer on stage as they go. When the last one is done, lock the predictions, or give the hall a few minutes first.</p></div>
+        ${performerPanel()}${lockControls()}${consensusCard()}`
+      : `${stats}<button class="btn big hot" data-a="hElimStart">${ic('mic', 20)} Start the elimination round</button>
+        <p class="muted small center">Predictions stay open while the beatboxers perform. You lock them at the end.</p>
+        <button class="btn ghost" data-a="hPhase" data-to="elimination">${ic('lock', 18)} Lock predictions now, no performer list</button>
+        ${consensusCard()}`;
   } else if (ev.phase === 'elimination' && ev.bbs.length === 1) {
     main = `<div class="card tip"><b>Walkover</b><p>${esc(ev.bbs[0].name)} is the only entrant in ${esc(ev.catName)}, so there are no battles. Crown them when the elimination round is done.</p></div>
       <button class="btn big hot" data-a="hWalkover">${ic('trophy', 20)} Crown ${esc(ev.bbs[0].name)} the champion</button>
@@ -101,9 +105,20 @@ function consensusCard() {
   return `<section class="block"><h3>What the hall predicts <small>${c.voters} players</small></h3><ol class="cons">${c.rows.slice(0, 16).map((r, i) => `<li data-k="c${r.id}"><span class="n">${i + 1}</span>${av(r.id, 'sm')}<b>${esc(bbName(r.id))}</b><small>${Math.round((r.n / c.voters) * 100)}%</small></li>`).join('')}</ol></section>`;
 }
 
+/** Closing the predictions at the end of the elimination round: now, or on a clock ("five minutes to lock in"). */
+function lockControls() {
+  const ev = S.meta;
+  const clock = ev.picksEnd
+    ? `<div class="cdrow">${lockClock(ev)}<button class="btn sm ghost" data-a="hPicksTimer" data-m="0">Cancel the clock</button></div>`
+    : `<div class="votelen"><small>Give the hall time to lock in</small><span class="segs mini">${[2, 5, 10].map((n) => `<button class="seg" data-a="hPicksTimer" data-m="${n}">${n} min</button>`).join('')}</span></div>`;
+  return `<section class="block"><h3>Lock the predictions</h3>${clock}
+    <button class="btn big" data-a="hPhase" data-to="elimination">${ic('lock', 20)} Lock predictions now</button>
+    <p class="muted small center">Locking also closes the "makes the cut" bets. The judges' ranking comes next.</p></section>`;
+}
+
 /** Elimination round: who is on stage now, who has been, and what the hall predicted for the one on stage. */
 function performerPanel() {
-  const ev = S.meta, cur = ev.perf, done = new Set(ev.performed || []);
+  const ev = S.meta, cur = perfNow(), done = new Set(ev.performed || []);
   const left = ev.bbs.filter((b) => !done.has(b.id) && !(cur && cur.id === b.id));
   return `<section class="block perf"><h3>On stage <small>${done.size} done · ${left.length} to go</small></h3>
     ${cur ? `<div class="card perfcard">${av(cur.id, 'lg')}<div><small>On stage now</small><b>${esc(bbName(cur.id))}</b></div></div>${perfStats(cur)}` : '<p class="muted small">Tap a beatboxer when they step up. The screen and every phone show the hall\'s predictions for them.</p>'}

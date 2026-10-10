@@ -67,13 +67,9 @@ A category with exactly one beatboxer has no bracket: `setPhase` lets it through
 
 `#/s/CODE` shows Full screen and Sound buttons (F toggles full screen). Bottom right: Margins (cycles 0/2/4/6/8 %, remembered in `bc.safe`, applied as `--safe` on the stage padding so projector and TV overscan never crops content; default 4 %) and Guides (G key; shows action safe 3.5 %, title safe 5 % and the chosen margin; also flashes for 4 s when the margin changes). They fade after 3 s without mouse movement so the projection stays clean, and the screen is kept awake with the Wake Lock API where the browser allows it.
 
-## Elimination: who is on stage
+## Elimination round: who is on stage, predictions stay open
 
-During the elimination the organiser taps the beatboxer who is performing (`performer` action, `ev.performer`, `ev.performed` marks who has been; both reset when the picks reopen and the stage clears when the ranking is published). `metaOf` then carries `perf` = `performerStats`: share of players with them in their Top N, average predicted seat, how many have them #1, hall rank, and the "makes the cut" bet split. Host Run tab has the list and a Next button, the big screen shows them large with the stats tiles, phones show a card at the top of the Live tab.
-
-## Deploys during a live event
-
-Every merge redeploys the Worker; the Durable Object's storage (players, tokens, Top N, picks, bets, votes, ledger) is untouched and sockets reconnect by themselves. `migrateEvent` (called from `load()`) backfills settings and fields added after an event was created, and keeps rules that would change a night under way (third place) off for it; a test loads a stripped old save. Socket messages carry their transport id in `rid` (actions have their own `id`: a category, a beatboxer); the ack echoes `rid`, falling back to `id` for phones still running the old script.
+Phase `picks` can carry a running elimination round (`ev.elimOn`, host action `elim.start`): predictions (Top N) and "makes the cut" bets stay OPEN while the organiser taps who is on stage (`performer`, `ev.performer`, `ev.performed` = who has been). At the end the organiser locks everything (`phase` -> elimination) now, or sets a lock-in clock (`picks.timer` minutes, `ev.picksEnd`; `closeDueVotes`, the Durable Object timer and the demo lock it by themselves, countdown `lockClock` in `ui.js`, ticker in `main.js`). Reopening the picks from elimination keeps the round and the stage. Locking keeps the stage for the judging; publishing the ranking clears it; lobby resets everything. Meta carries ids (`performer`, `performed`, `elimOn`, `picksEnd`); the stats for who is on stage (`performerStats`: share with them in their Top N, average seat, #1 picks, hall rank, bet split) travel in the live push (`live.perf[catId]`, re-sent when someone edits their Top), read through `perfNow()` in `state.js`. Undo while the round runs stops it.
 
 ## Hard rules for this folder
 

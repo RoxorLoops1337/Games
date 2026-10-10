@@ -1,8 +1,8 @@
 // Battle Call: the big screen for the hall. Open /battle_call/#/s/CODE on the projector laptop: read-only, no login,
 // it follows the organiser by itself.
 import { esc, ic } from '../dom.js';
-import { S, bbName, size, rounds, curMatch, nextMatch, sides, leftKey, seedOf } from '../state.js';
-import { ui, av, perfStats, bracket, feedStrip, crown, wordmark, countdown } from '../ui.js';
+import { S, perfNow, bbName, size, rounds, curMatch, nextMatch, sides, leftKey, seedOf } from '../state.js';
+import { ui, av, perfStats, lockClock, bracket, feedStrip, crown, wordmark, countdown } from '../ui.js';
 import { matchRound } from '../shared.js';
 import { joinLink } from './host.js';
 
@@ -13,8 +13,10 @@ export function screenView() {
   const hold = ui.screenHold && Date.now() < ui.screenHold.until ? S.match[ui.screenHold.id] : null;
   const cur = curMatch() || (hold && hold.status === 'done' ? hold : null), nx = nextMatch();
   let body = '';
-  if (ev.phase === 'lobby' || ev.phase === 'picks') body = joinStage();
-  else if (ev.phase === 'elimination' && ev.perf) body = `<div class="st-perf"><p class="eyebrow">${eq} On stage now</p><div class="pp">${av(ev.perf.id, 'hero')}<h1 class="mega">${esc(bbName(ev.perf.id))}</h1></div>${perfStats(ev.perf)}</div>`;
+  const pf = perfNow(), running = ev.phase === 'elimination' || (ev.phase === 'picks' && ev.elimOn);
+  if (ev.phase === 'lobby' || (ev.phase === 'picks' && !ev.elimOn)) body = joinStage();
+  else if (running && pf) body = `<div class="st-perf"><p class="eyebrow">${eq} On stage now</p><div class="pp">${av(pf.id, 'hero')}<h1 class="mega">${esc(bbName(pf.id))}</h1></div>${perfStats(pf)}${ev.phase === 'picks' ? `<div class="st-lock">${lockClock(ev) || 'Predictions are still open'}</div>` : ''}</div>${ev.phase === 'picks' ? qrCorner('top') : ''}`;
+  else if (ev.phase === 'picks') body = `<div class="st-center">${eq}<p class="eyebrow">Elimination is on</p><h1 class="mega">Predictions<br>still open</h1><p class="lead">${lockClock(ev) || 'Lock in your Top ' + N + ' before the judges announce it'}</p></div>${consensus()}${qrCorner()}`;
   else if (ev.phase === 'elimination') body = `<div class="st-center">${eq}<p class="eyebrow">Picks are locked</p><h1 class="mega">Elimination</h1><p class="lead">The judges are choosing the Top ${N}</p></div>${consensus()}${qrCorner()}`;
   else if (ev.phase === 'finished' && !cur) body = champion();
   else if (cur) body = duelStage(cur);
@@ -26,7 +28,7 @@ export function screenView() {
     <div class="st-body">${body}</div>${feedStrip(3)}</div>`;
 }
 
-const qrCorner = () => `<div class="qrcorner"><div class="qrbox sm" data-static id="qr"></div><div><small>Join</small><b>${esc(S.code)}</b></div></div>`;
+const qrCorner = (cls = '') => `<div class="qrcorner ${cls}"><div class="qrbox sm" data-static id="qr"></div><div><small>Join</small><b>${esc(S.code)}</b></div></div>`;
 
 function joinStage() {
   const ev = S.meta, N = size();

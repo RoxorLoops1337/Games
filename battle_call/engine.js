@@ -41,6 +41,7 @@ export function migrateEvent(ev) {
     for (const [k, v] of Object.entries(DEFAULTS)) if (c.settings[k] === undefined) c.settings[k] = k === 'pts' ? { ...v } : k === 'thirdPlace' ? false : v;
     c.settings.pts = { ...DEFAULTS.pts, ...c.settings.pts };
     c.performed = c.performed || [];
+    c.elimOn = !!c.elimOn; c.picksEnd = c.picksEnd || 0;
     c.performer = c.performer || null;
     c.walkover = !!c.walkover;
     c.matches = c.matches || []; c.locked = c.locked || []; c.out = c.out || {}; c.bbs = c.bbs || [];
@@ -277,7 +278,7 @@ export function setPhase(S, to) {
   if (to === 'lobby') {
     // back to doors open: the "makes the cut" bets are refunded and removed (everyone's own picks stay)
     for (const m of marketsList(S)) if (m.kind === 'qualify') { voidMarket(S, m, null, 'Picks closed'); dropMarket(S, m); }
-    ev.phase = 'lobby'; ev.consensus = null; ev.performer = null; ev.performed = [];
+    ev.phase = 'lobby'; ev.consensus = null; ev.performer = null; ev.performed = []; ev.elimOn = false; ev.picksEnd = 0;
     touchMeta(S);
     return ok({});
   }
@@ -286,12 +287,12 @@ export function setPhase(S, to) {
     ev.phase = 'picks';
     if (from === 'elimination') {
       for (const m of marketsList(S)) if (m.kind === 'qualify' && m.st === 'locked') { m.st = 'open'; touchMk(S, m); }
-      ev.consensus = null; ev.performer = null; ev.performed = [];
+      ev.consensus = null; ev.elimOn = true; // reopened: the round is still going, the stage stays as it was
     } else if (ev.settings.qualifyBets && ev.bbs.length > ev.settings.size && ev.bbs.length <= QUALIFY_AUTO_MAX) {
       for (const b of ev.bbs) if (!qualifyOf(S, b.id)) openQualify(S, b.id);
     }
   } else {
-    ev.phase = 'elimination';
+    ev.phase = 'elimination'; ev.picksEnd = 0;
     for (const m of marketsList(S)) if (m.kind === 'qualify' && m.st === 'open') { m.st = 'locked'; touchMk(S, m); }
     ev.consensus = consensus(S);
   }
@@ -322,12 +323,32 @@ export function consensus(S, all) {
 /** The beatboxer on stage during the elimination, and what the hall predicted for them. */
 export function setPerformer(S, id) {
   const ev = S.ev;
-  if (ev.phase !== 'elimination') return fail('Pick who is on stage during the elimination');
+  if (!(ev.phase === 'elimination' || (ev.phase === 'picks' && ev.elimOn))) return fail('Start the elimination round first');
   if (id != null && !ev.bbs.some((b) => b.id === id)) return fail('No such beatboxer');
   ev.performed = ev.performed || [];
   if (ev.performer && ev.performer !== id && !ev.performed.includes(ev.performer)) ev.performed.push(ev.performer);
   if (id != null) ev.performed = ev.performed.filter((x) => x !== id);
   ev.performer = id == null ? null : id;
+  touchMeta(S); S.dirty.ev = true;
+  return ok({});
+}
+
+/** The elimination round starts while predictions stay open: the organiser can now put people on stage. */
+export function startElimination(S) {
+  const ev = S.ev;
+  if (ev.phase !== 'picks') return fail('Open the predictions first');
+  if (ev.elimOn) return fail('The elimination round is already on');
+  ev.elimOn = true; ev.performer = null; ev.performed = []; ev.picksEnd = 0;
+  touchMeta(S); S.dirty.ev = true;
+  return ok({});
+}
+
+/** "They have N minutes to lock in": predictions close by themselves when the clock runs out. 0 cancels. */
+export function setPicksTimer(S, mins) {
+  const ev = S.ev;
+  if (ev.phase !== 'picks') return fail('Only while predictions are open');
+  const m = Math.max(0, Math.min(60, +mins || 0));
+  ev.picksEnd = m ? S.now + Math.round(m * 60000) : 0;
   touchMeta(S); S.dirty.ev = true;
   return ok({});
 }
@@ -477,10 +498,17 @@ export function stepMatch(S, mid, to, secs) {
 /** Close every vote whose countdown has run out. Returns the battles it closed (the caller runs this from a timer). */
 export function closeDueVotes(S) {
   const done = [];
-  for (const c of cats(S)) for (const m of c.matches) {
-    if (m.status === 'voting' && m.vend && S.now >= m.vend) {
-      const r = inCat(S, c, () => stepMatch(S, m.id, 'closed'));
-      if (r.ok) done.push(m.id);
+  for (const c of cats(S)) {
+    for (const m of c.matches) {
+      if (m.status === 'voting' && m.vend && S.now >= m.vend) {
+        const r = inCat(S, c, () => stepMatch(S, m.id, 'closed'));
+        if (r.ok) done.push(m.id);
+      }
+    }
+    // "they have five minutes to lock in": predictions close when the clock runs out
+    if (c.phase === 'picks' && c.picksEnd && S.now >= c.picksEnd) {
+      const r = inCat(S, c, () => setPhase(S, 'elimination'));
+      if (r.ok) done.push('picks:' + c.id);
     }
   }
   return done;
@@ -591,6 +619,7 @@ export function undoPlan(S) {
     return { label: 'Take back the ranking and redraw the bracket', hard: true };
   }
   if (ev.phase === 'elimination') return { label: 'Reopen the picks', hard: false };
+  if (ev.phase === 'picks' && ev.elimOn) return { label: 'Stop the elimination round (predictions stay open)', hard: false };
   if (ev.phase === 'picks') return { label: 'Close the picks and go back to doors open', hard: true };
   return null;
 }
@@ -605,6 +634,7 @@ export function undoStep(S) {
   else if (ev.phase === 'finished' && ev.walkover) { ev.champion = null; ev.walkover = false; ev.seeds = null; ev.phase = 'elimination'; touchMeta(S); S.dirty.ev = true; r = ok({}); }
   else if (plan.mid) r = revertMatch(S, plan.mid);
   else if (ev.phase === 'bracket') r = revertSeeds(S);
+  else if (ev.phase === 'picks' && ev.elimOn) { ev.elimOn = false; ev.performer = null; ev.performed = []; ev.picksEnd = 0; touchMeta(S); S.dirty.ev = true; r = ok({}); }
   else if (ev.phase === 'elimination') r = setPhase(S, 'picks');
   else r = setPhase(S, 'lobby');
   return r.ok ? ok({ undid: plan.label }) : r;
@@ -659,7 +689,7 @@ export function setTop(S, u, order, catId) {
     if (!Array.isArray(order)) return fail('Bad ranking');
     const ids = order.slice(0, S.ev.settings.size);
     if (new Set(ids).size !== ids.length || ids.some((id) => !bbOf(S, id))) return fail('Bad ranking');
-    (u.tops = u.tops || {})[S.ev.id] = ids; touchUser(S, u); S.dirty.host = true;
+    (u.tops = u.tops || {})[S.ev.id] = ids; touchUser(S, u); S.dirty.host = true; if (S.ev.performer) S.dirty.live = true;
     return ok({});
   });
 }
@@ -872,6 +902,8 @@ function catAction(S, a) {
     case 'seeds': return publishSeeds(S, a.order);
     case 'seeds.revert': return revertSeeds(S);
     case 'walkover': return walkover(S);
+    case 'elim.start': return startElimination(S);
+    case 'picks.timer': return setPicksTimer(S, a.mins);
     case 'performer': return setPerformer(S, a.id == null ? null : String(a.id));
     case 'step': return stepMatch(S, a.mid, a.to, a.secs);
     case 'result': return setResult(S, a.mid, a.w, a.judges);
@@ -932,7 +964,7 @@ function catAction(S, a) {
 /** Everything the audience may see that changes rarely. Pools live in `liveOf` so a bet does not resend all of this. */
 function catMeta(S, c) {
   return {
-    id: c.id, name: c.name, art: c.art, pfx: c.pfx, phase: c.phase, performed: c.performed || [], perf: c.performer ? inCat(S, c, () => performerStats(S, c.performer)) : null, walkover: !!c.walkover, undo: inCat(S, c, () => undoPlan(S)),
+    id: c.id, name: c.name, art: c.art, pfx: c.pfx, phase: c.phase, performed: c.performed || [], performer: c.performer || null, elimOn: !!c.elimOn, picksEnd: c.picksEnd || 0, walkover: !!c.walkover, undo: inCat(S, c, () => undoPlan(S)),
     set: { size: c.settings.size, qualifyBets: c.settings.qualifyBets, autoChampion: c.settings.autoChampion, thirdPlace: c.settings.thirdPlace },
     bbs: c.bbs, seeds: c.seeds, locked: c.locked, out: c.out, champion: c.champion, consensus: c.consensus,
     matches: c.matches.map((m) => ({ ...m, c: m.status === 'closed' || m.status === 'done' ? m.c : null })),
@@ -954,6 +986,7 @@ export function liveOf(S, online, host) {
   const mk = {};
   for (const c of cats(S)) for (const m of Object.values(c.markets)) if (m.st !== 'void') mk[m.id] = [m.pool, m.cnt];
   const out = { n: S.users.size, on: online, mk };
+  for (const c of cats(S)) if (c.performer) (out.perf = out.perf || {})[c.id] = inCat(S, c, () => performerStats(S, c.performer));
   if (host) { const cur = activeMatch(S); if (cur) out.v = { id: cur.id, a: cur.c.a, b: cur.c.b }; }
   return out;
 }
