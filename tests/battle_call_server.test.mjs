@@ -178,7 +178,8 @@ await t('a phase change reaches every socket at once; money and picks go only to
 });
 await t('the live numbers are throttled to one push, and only the organiser gets the running vote count', async () => {
   const rt = await newEvent();
-  const host = await connect(rt, { ht: rt.ht }), fan = await connect(rt, { tk: await join(rt, 'Fan') });
+  const fanTk = await join(rt, 'Fan');
+  const host = await connect(rt, { ht: rt.ht }), fan = await connect(rt, { tk: fanTk }), screen = await connect(rt, { screen: true }), sneaky = await connect(rt, { tk: fanTk, screen: true });
   await act(rt, host, { a: 'bb.add', names: Array.from({ length: 8 }, (_, i) => 'BB' + i) });
   await act(rt, host, { a: 'phase', to: 'elimination' });
   await act(rt, host, { a: 'seeds', order: host.last('meta').cats[0].bbs.map((b) => b.id) });
@@ -186,6 +187,8 @@ await t('the live numbers are throttled to one push, and only the organiser gets
   await act(rt, fan, { a: 'vote', mid: 'r0m0', side: 'a' });
   await sleep(1000);
   assert.deepEqual(host.last('live').v, { id: 'r0m0', a: 1, b: 0 });
+  assert.deepEqual(screen.last('live').v, { id: 'r0m0', a: 1, b: 0 }, 'the big screen watches the vote come in');
+  assert.equal(sneaky.last('live').v, undefined, 'a phone cannot ask for the screen view');
   assert.equal(fan.last('live').v, undefined, 'the running tally stays hidden from the audience');
   assert.equal(fan.last('meta').cats[0].matches[0].c, null);
   const n = host.msgs('live').length;

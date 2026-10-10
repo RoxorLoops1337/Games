@@ -229,7 +229,7 @@ export class Event {
     const all = this.sockets(), on = all.length;
     const pub = JSON.stringify({ t: 'live', now: Date.now(), ...E.liveOf(this.S, on, false) });
     const hst = JSON.stringify({ t: 'live', now: Date.now(), ...E.liveOf(this.S, on, true) });
-    for (const ws of all) this.send(ws, this.att(ws).r === 'h' ? hst : pub);
+    for (const ws of all) { const at = this.att(ws); this.send(ws, at.r === 'h' || at.sc ? hst : pub); }
   }
   pushBoard() {
     if (!this.S) return;
@@ -247,7 +247,7 @@ export class Event {
   snapshot(ws, a) {
     const S = this.S;
     this.send(ws, { t: 'meta', now: Date.now(), ...E.metaOf(S) });
-    this.send(ws, { t: 'live', now: Date.now(), ...E.liveOf(S, this.sockets().length, a.r === 'h') });
+    this.send(ws, { t: 'live', now: Date.now(), ...E.liveOf(S, this.sockets().length, a.r === 'h' || !!a.sc) });
     this.send(ws, { t: 'board', rows: E.boardOf(S) });
     if (a.r === 'u' && S.users.has(a.k)) this.send(ws, { t: 'me', ...E.meOf(S, S.users.get(a.k)) });
     if (a.r === 'h') this.send(ws, { t: 'host', ...E.hostOf(S) });
@@ -259,6 +259,7 @@ export class Event {
     let m; try { m = JSON.parse(raw); } catch (_) { return; }
     if (m.t === 'hello') {
       const a = await this.authFor(m.tk, m.ht);
+      if (m.screen === true && a.r === 's' && !a.bad) a.sc = 1; // the hall's big screen may watch the vote come in
       ws.serializeAttachment(a);
       if (a.bad) this.send(ws, { t: 'authfail' });
       this.snapshot(ws, a);

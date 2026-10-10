@@ -71,6 +71,10 @@ A category with exactly one beatboxer has no bracket: `setPhase` lets it through
 
 Phase `picks` can carry a running elimination round (`ev.elimOn`, host action `elim.start`): predictions (Top N) and "makes the cut" bets stay OPEN while the organiser taps who is on stage (`performer`, `ev.performer`, `ev.performed` = who has been). At the end the organiser locks everything (`phase` -> elimination) now, or sets a lock-in clock (`picks.timer` minutes, `ev.picksEnd`; `closeDueVotes`, the Durable Object timer and the demo lock it by themselves, countdown `lockClock` in `ui.js`, ticker in `main.js`). Reopening the picks from elimination keeps the round and the stage. Locking keeps the stage for the judging; publishing the ranking clears it; lobby resets everything. Meta carries ids (`performer`, `performed`, `elimOn`, `picksEnd`); the stats for who is on stage (`performerStats`: share with them in their Top N, average seat, #1 picks, hall rank, bet split) travel in the live push (`live.perf[catId]`, re-sent when someone edits their Top), read through `perfNow()` in `state.js`. Undo while the round runs stops it. When nobody is on stage after people have gone, the big screen switches to `predictionsStage()`: the huge lock-in clock, how many players have locked in, Loops on the cut, and the hall's Top N so far (`live.cons[catId]`, only sent while the round is on).
 
+## The vote on the big screen
+
+While the audience votes, the big screen shows the running tally at the top (percentage and head count per side, total and share of the hall: `liveTally()` in `views/screen.js`). The tally stays hidden from phones: the hello of the big screen carries `screen: true` (guests only, a player token cannot ask for it), the Durable Object marks that socket `sc` and sends it the organiser variant of the live push (`v`). The polling fallback has no screen variant; the big screen needs its WebSocket.
+
 ## Hard rules for this folder
 
 1. All Loops moves go through `credit()` with a ledger ref, or `reopen` stops being exact. Tests check conservation.
