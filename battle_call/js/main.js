@@ -15,6 +15,7 @@ import { voteOverlay } from './views/vote.js';
 import { hostLogin as hostLoginView, hostShell, photoQueueSheet, joinLink } from './views/host.js';
 import { screenView } from './views/screen.js';
 import { shareCard } from './share.js';
+import { shrink } from './photo.js';
 import { sound, setSound, soundOn, levelOf } from './juice.js';
 
 const app = document.getElementById('app');
@@ -554,17 +555,6 @@ document.addEventListener('submit', (e) => {
 });
 
 /* photos: pick, shrink to a square, upload */
-async function shrink(file) {
-  const bmp = await createImageBitmap(file, { imageOrientation: 'from-image' });
-  const side = Math.min(bmp.width, bmp.height), c = document.createElement('canvas');
-  c.width = c.height = 480;
-  c.getContext('2d').drawImage(bmp, (bmp.width - side) / 2, (bmp.height - side) / 2, side, side, 0, 0, 480, 480);
-  for (const q of [0.84, 0.72, 0.6, 0.48]) {
-    const blob = await new Promise((res) => c.toBlob(res, 'image/jpeg', q));
-    if (blob && blob.size < 150 * 1024) return blob;
-  }
-  return new Promise((res) => c.toBlob(res, 'image/jpeg', 0.4));
-}
 document.addEventListener('change', async (e) => {
   const el = e.target.closest('[data-file="photo"]');
   if (!el || !el.files[0]) return;

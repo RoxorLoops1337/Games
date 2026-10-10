@@ -16,7 +16,7 @@ export function liveTab() {
   const parts = [];
   if (ev.banner) parts.push(`<div class="banner" data-k="banner-${ev.banner.id}">${ic('mega', 18)}<span>${esc(ev.banner.text)}</span></div>`);
   if (S.role === 'guest') parts.push(`<div class="guestbar"><span>You are watching. Join to predict, bet and vote.</span><button class="btn sm" data-a="authOpen">Join</button></div>`);
-  if (S.role === 'user' && S.me) parts.push(playerCard());
+  if (S.role === 'user' && S.me && ev.phase !== 'bracket') parts.push(playerCard()); // in the bracket the battle comes first
   switch (ev.phase) {
     case 'lobby': parts.push(lobby()); break;
     case 'picks': parts.push(picks()); break;
@@ -34,7 +34,7 @@ function playerCard() {
     <div class="fire ${sk >= 2 ? '' : 'off'}">\u{1F525} ${sk}<small>streak</small></div>
     <div class="xpbar"><i style="width:${Math.max(4, L.pct)}%"></i></div>
   </section>
-  <div class="badges" data-k="badges">${badgesOf(me).map((b) => `<span class="badge ${b.got ? '' : 'off'}" title="${esc(b.name)}">${b.icon} ${esc(b.name)}</span>`).join('')}
+  <div class="badges" data-k="badges">${badgesOf(me).filter((b) => b.got).map((b) => `<span class="badge" title="${esc(b.name)}">${b.icon} ${esc(b.name)}</span>`).join('')}
     <button class="badge" data-a="toggleSound">${soundOn() ? '\u{1F50A} Sound on' : '\u{1F507} Sound off'}</button></div>`;
 }
 
@@ -136,6 +136,7 @@ function bracketPhase() {
   return `
     ${cur ? matchHero(cur) : nx ? matchHero(nx) : '<section class="hero"><h1>Next round loading</h1></section>'}
     ${cur && nx ? `<p class="upnext">Up next: <b>${esc(bbName(nx.a))}</b> vs <b>${esc(bbName(nx.b))}</b></p>` : ''}
+    ${S.role === 'user' && S.me ? playerCard() : ''}
     <section class="block"><h3>The bracket</h3><div class="hscroll">${bracket({ mode: 'view' })}</div></section>
     ${done.length ? `<section class="block"><h3>Results</h3><div class="stack">${done.slice(0, 4).map(resultCard).join('')}</div>${done.length > 4 ? '<button class="btn ghost sm" data-a="tab" data-t="board" data-b="results">All results</button>' : ''}</section>` : ''}`;
 }

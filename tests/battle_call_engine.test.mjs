@@ -7,6 +7,7 @@
 // Run: node tests/battle_call_engine.test.mjs
 import assert from 'node:assert/strict';
 import * as E from '../battle_call/engine.js';
+import { cropBox } from '../battle_call/js/photo.js';
 import { seedOrder, buildMatches, roundsOf, multiplier, slotsFor, nameKey } from '../battle_call/js/shared.js';
 
 let pass = 0, failN = 0;
@@ -735,6 +736,15 @@ t('voting with the judges several times in a row pays a growing bonus, and takin
   assert.equal(a.st.streakBonus, 15, 'run of three pays +10 on top');
   host(S, { a: 'reopen', mid: 'r0m2' });
   assert.equal(a.st.streakBonus, 5, 'taking the result back takes the bonus back');
+});
+
+console.log('photo crop');
+t('a portrait photo is cropped from near the top, and a found face is centred', () => {
+  const portrait = cropBox(1200, 1600);
+  assert.equal(portrait.side, 1200); assert.ok(portrait.y > 0 && portrait.y < 200, 'near the top, not the centre (200)');
+  assert.deepEqual(cropBox(1600, 1200), { x: 200, y: 0, side: 1200 });
+  const f = cropBox(1200, 1600, { x: 500, y: 100, width: 200, height: 250 });
+  assert.ok(f.y < 100 && f.y + f.side > 350, 'the face is inside the square: ' + JSON.stringify(f));
 });
 
 console.log(`\n${pass} passed, ${failN} failed`);
