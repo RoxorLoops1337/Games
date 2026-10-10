@@ -4,7 +4,7 @@ import { roundInfo, roundsOf, multiplier as mult, poolTotal, sidePool, payoutFor
 
 export const S = {
   code: null, role: 'guest', name: '', tk: '', ht: '',
-  meta: null, live: null, board: [], me: null, host: null,
+  meta: null, live: null, board: [], me: null, host: null, feed: [],
   conn: 'idle', // idle | live | poll | down
   bb: {}, match: {}, mk: {}, gone: false, authFail: false, ready: false,
 };
@@ -26,7 +26,7 @@ export function setMeta(m) {
 }
 
 export function resetState() {
-  Object.assign(S, { code: null, role: 'guest', name: '', tk: '', ht: '', meta: null, live: null, board: [], me: null, host: null,
+  Object.assign(S, { code: null, role: 'guest', name: '', tk: '', ht: '', meta: null, live: null, board: [], me: null, host: null, feed: [],
     conn: 'idle', bb: {}, match: {}, mk: {}, gone: false, authFail: false, ready: false });
 }
 

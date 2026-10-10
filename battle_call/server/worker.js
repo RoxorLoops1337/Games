@@ -282,8 +282,28 @@ export class Event {
     } else {
       return { ok: false, err: 'Log in first' };
     }
-    if (r.ok) await this.commit();
+    if (r.ok) {
+      await this.commit();
+      this.feedFor(a, m);
+    }
     return r;
+  }
+
+  /** The hall's talking points: big bets as they land, big wins when a battle is settled. */
+  feedFor(a, m) {
+    const S = this.S, items = [];
+    if (a.r === 'u' && m.a === 'bet' && m.amt >= 100) {
+      const k = S.ev.markets[m.mk];
+      if (k) items.push({ k: 'bet', t: `${S.users.get(a.k).name} put ${Math.floor(m.amt)} on ${E.marketTitle(S, k)}: ${this.optLabel(k, m.o)}` });
+    }
+    if (a.r === 'h' && m.a === 'result') for (const w of E.bigWins(S, 'm:' + m.mid)) items.push({ k: 'win', t: `${w.n} collected ${w.d} Loops` });
+    if (!items.length) return;
+    const s = JSON.stringify({ t: 'feed', items });
+    for (const ws of this.sockets()) this.send(ws, s);
+  }
+  optLabel(k, o) {
+    const S = this.S, nm = (id) => (S.ev.bbs.find((b) => b.id === id) || { name: '?' }).name;
+    return k.kind === 'match' || k.kind === 'champion' ? nm(k.bbs[o]) : o === 0 ? 'yes' : 'no';
   }
 
   /* ---------- HTTP ---------- */

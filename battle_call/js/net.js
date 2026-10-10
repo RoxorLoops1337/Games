@@ -30,6 +30,7 @@ export function apply(m) {
     case 'board': S.board = m.rows; break;
     case 'me': { const prev = S.me; const { t, ...rest } = m; S.me = rest; onPush('me', prev, rest); break; }
     case 'host': S.host = m; break;
+    case 'feed': S.feed = [...(S.feed || []), ...m.items.map((i) => ({ ...i, at: Date.now() }))].slice(-8); break;
     case 'authfail': S.authFail = true; break;
     case 'gone': S.gone = true; break;
     case 'r': { const w = waiting.get(m.id); if (w) { waiting.delete(m.id); clearTimeout(w.to); const { t, id, ...rest } = m; w.res(rest); } return; }

@@ -2,7 +2,7 @@
 // it follows the organiser by itself.
 import { esc, ic } from '../dom.js';
 import { S, bbName, size, rounds, curMatch, nextMatch, sides, leftKey, seedOf } from '../state.js';
-import { ui, av, bracket } from '../ui.js';
+import { ui, av, bracket, feedStrip } from '../ui.js';
 import { roundInfo } from '../shared.js';
 import { joinLink } from './host.js';
 
@@ -17,12 +17,12 @@ export function screenView() {
   else if (ev.phase === 'elimination') body = `<div class="st-center">${eq}<p class="eyebrow">Picks are locked</p><h1 class="mega">Elimination</h1><p class="lead">The judges are choosing the Top ${N}</p></div>${consensus()}${qrCorner()}`;
   else if (ev.phase === 'finished' && !cur) body = champion();
   else if (cur) body = duelStage(cur);
-  else body = `<div class="st-top"><p class="eyebrow">${nx ? 'Up next' : 'The bracket'}</p></div>${nx ? upNext(nx) : ''}<div class="st-bracket">${bracket({ mode: 'view' })}</div>${qrCorner()}`;
+  else body = `<div class="st-top"><p class="eyebrow">${nx ? 'Up next' : 'The bracket'}</p></div>${nx ? upNext(nx) : ''}<div class="st-bracket">${bracket({ mode: 'view' })}</div>`;
   return `<div class="stage ${ev.phase}"><div class="glow g1"></div><div class="glow g2"></div>
     <header class="st-head"><div class="brand">${ic('mic', 28)}<div><b>${esc(ev.name)}</b><small>Battle Call</small></div></div>
     <div class="st-meta"><span>${S.live ? S.live.n : 0} ${S.live && S.live.n === 1 ? 'player' : 'players'}</span><span class="code">${esc(S.code)}</span></div></header>
     ${ev.banner ? `<div class="st-banner" data-k="b${ev.banner.id}">${ic('mega', 28)}<span>${esc(ev.banner.text)}</span></div>` : ''}
-    <div class="st-body">${body}</div></div>`;
+    <div class="st-body">${body}</div>${feedStrip(3)}</div>`;
 }
 
 const qrCorner = () => `<div class="qrcorner"><div class="qrbox sm" data-static id="qr"></div><div><small>Join</small><b>${esc(S.code)}</b></div></div>`;

@@ -109,6 +109,7 @@ function matchConsole() {
     ctl = `${stepper}
       ${next ? `<button class="btn big hot" data-a="hStep" data-m="${m.id}" data-to="${next[0]}">${ic(next[2], 22)} ${next[1]}</button>` : ''}
       ${m.status === 'closed' ? `<button class="btn ghost" data-a="hStep" data-m="${m.id}" data-to="voting">Reopen the vote</button>` : ''}
+      ${m.status === 'live' ? `<button class="btn ghost" data-a="hStep" data-m="${m.id}" data-to="upcoming">${ic('undo', 18)} Started by mistake? Put it back</button>` : ''}
       ${m.status === 'upcoming' ? `<button class="btn ghost" data-a="hSwap" data-m="${m.id}">${ic('swap', 18)} Swap sides (blue / red)</button>` : ''}
       ${['voting', 'closed'].includes(m.status) ? `<div class="votebar"><div class="vb-h"><b class="blue">${tl}</b><small>${tt} audience votes</small><b class="red">${tr}</b></div><div class="bar big"><i style="width:${pl}%"></i></div></div>` : ''}
       ${canResult ? `<div class="card judges"><b>Judges' decision</b>

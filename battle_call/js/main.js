@@ -44,7 +44,7 @@ async function onRoute() {
   if (kind === 'e' && sess.tk) { S.role = 'user'; S.tk = sess.tk; S.name = sess.name || ''; }
   else if (kind === 'h' && sess.ht) { S.role = 'host'; S.ht = sess.ht; }
   else S.role = 'guest';
-  try { ui.seenLog = +localStorage.getItem('bc.seen.' + r.code) || 0; } catch (_) { ui.seenLog = 0; }
+  try { const v = localStorage.getItem('bc.seen.' + r.code); ui.seenLog = v === null ? null : +v || 0; } catch (_) { ui.seenLog = null; }
   emit();
   const i = await info(r.code);
   if (entered !== key) return;
@@ -198,7 +198,11 @@ function onState() {
 
 function onPush(kind, prev, next) {
   if (kind !== 'me') return;
-  // money lines the viewer has not seen yet
+  // money lines the viewer has not seen yet (on a phone that has never seen this event, start from now: no replay of old news)
+  if (ui.seenLog === null) {
+    ui.seenLog = next.log.length ? next.log[next.log.length - 1].i : 0;
+    try { localStorage.setItem('bc.seen.' + S.code, String(ui.seenLog)); } catch (_) { /* */ }
+  }
   const fresh = next.log.filter((l) => l.i > ui.seenLog);
   if (fresh.length) {
     const top = next.log[next.log.length - 1].i;
@@ -430,7 +434,7 @@ const FORMS = {
     if (!r.ok) { ui.err = r.err || 'That did not work'; emit(); return; }
     S.role = 'user'; S.tk = r.token; S.name = r.name;
     saveSession(S.code, { tk: r.token, name: r.name, ev: S.meta ? S.meta.name : '' });
-    ui.err = ''; ui.watching = false; ui.seenLog = 0;
+    ui.err = ''; ui.watching = false; ui.seenLog = null;
     toast(ui.authMode === 'join' ? `Welcome, ${esc(r.name)}!` : `Welcome back, ${esc(r.name)}`, 'info');
     disconnect(); connect(S.code, onPush); emit();
   },

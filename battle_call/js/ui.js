@@ -138,3 +138,10 @@ export function resultCard(m) {
     ${total ? `<div class="crowd"><span class="blue">${lp}%</span><div class="bar"><i style="width:${lp}%"></i></div><span class="red">${100 - lp}%</span></div><small class="muted c">Crowd vote · ${total} voted${mine ? ` · you went ${((mine === lk) ? 'blue' : 'red')}` : ''}</small>` : ''}
   </article>`;
 }
+
+/** The latest big bets and wins, newest first. */
+export function feedStrip(n = 3) {
+  const items = (S.feed || []).slice(-n).reverse();
+  if (!items.length) return '';
+  return `<div class="feed">${items.map((f) => `<div class="fi ${f.k}" data-k="f${f.at}${f.t.length}">${ic(f.k === 'win' ? 'trophy' : 'fire', 15)}<span>${esc(f.t)}</span></div>`).join('')}</div>`;
+}

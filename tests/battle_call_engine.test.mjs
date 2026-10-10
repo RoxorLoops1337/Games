@@ -296,6 +296,18 @@ t('swapping sides is only allowed before the battle starts', () => {
 });
 
 console.log('taking a result back');
+t('a battle started by mistake can be put back: bets and picks reopen, the round unlocks', () => {
+  const { S, us, ids } = bracketWorld();
+  const mk = Object.values(S.ev.markets).find((m) => m.kind === 'match' && m.mid === 'r0m0');
+  host(S, { a: 'step', mid: 'r0m0', to: 'live' });
+  assert.equal(E.setBet(S, us[0], mk.id, 0, 100).ok, false);
+  assert.equal(E.setPick(S, us[0], 'r0m1', ids[1]).ok, false);
+  host(S, { a: 'step', mid: 'r0m0', to: 'upcoming' });
+  assert.ok(E.setBet(S, us[0], mk.id, 0, 100).ok, 'bets are open again');
+  assert.ok(E.setPick(S, us[0], 'r0m1', ids[1]).ok, 'so are the picks');
+  host(S, { a: 'step', mid: 'r0m0', to: 'live' }); host(S, { a: 'step', mid: 'r0m0', to: 'voting' });
+  assert.equal(E.hostAction(S, { a: 'step', mid: 'r0m0', to: 'upcoming' }).ok, false, 'not once voting has opened');
+});
 t('reopening a result restores every balance, stat, market and the bracket exactly', () => {
   const { S, us, ids } = bracketWorld();
   const [a, b, c] = us;

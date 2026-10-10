@@ -187,6 +187,23 @@ await t('the live numbers are throttled to one push, and only the organiser gets
   assert.ok(host.msgs('live').length - n <= 2, 'twenty votes, at most two pushes: ' + (host.msgs('live').length - n));
 });
 
+console.log('the live feed');
+await t('big bets and big wins are announced to everybody; small bets are not', async () => {
+  const rt = await newEvent({ size: 4 });
+  const host = await connect(rt, { ht: rt.ht }), ann = await connect(rt, { tk: await join(rt, 'Ann') }), bob = await connect(rt, { tk: await join(rt, 'Bob') });
+  await act(rt, host, { a: 'bb.add', names: ['One', 'Two', 'Three', 'Four'] });
+  await act(rt, host, { a: 'phase', to: 'elimination' });
+  await act(rt, host, { a: 'seeds', order: host.last('meta').bbs.map((b) => b.id) });
+  const mk = host.last('meta').mk.find((m) => m.kind === 'match' && m.mid === 'r0m0');
+  await act(rt, ann, { a: 'bet', mk: mk.id, o: 0, amt: 40 });
+  assert.equal(bob.msgs('feed').length, 0, 'a small bet is not news');
+  await act(rt, ann, { a: 'bet', mk: mk.id, o: 0, amt: 300 });
+  assert.match(bob.last('feed').items[0].t, /Ann put 300 on One vs Four: One/);
+  await act(rt, host, { a: 'step', mid: 'r0m0', to: 'live' });
+  await act(rt, host, { a: 'result', mid: 'r0m0', w: 'a' });
+  assert.match(bob.last('feed').items[0].t, /Ann collected \d+ Loops/);
+});
+
 console.log('a hall voting at once');
 await t('200 phones voting in the same instant are each counted exactly once', async () => {
   const rt = await newEvent();

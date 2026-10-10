@@ -2,7 +2,7 @@
 // so the multiplier you see moves as the hall bets. The sheet at the bottom is where a stake is set.
 import { esc, ic } from '../dom.js';
 import { S, bbName, size, mkView, mkTitle, mkLabel, myBet, payoutIf, seedOf, sides, leftKey, isOut } from '../state.js';
-import { ui, av, empty, loops, x, pill } from '../ui.js';
+import { ui, av, empty, loops, x, pill, feedStrip } from '../ui.js';
 import { roundInfo, MIN_BET } from '../shared.js';
 
 const FILTERS = [['open', 'Open'], ['play', 'In play'], ['mine', 'Mine'], ['done', 'Done']];
@@ -25,6 +25,7 @@ export function betsTab() {
   const qual = pick.filter((m) => m.kind === 'qualify').sort((a, b) => a.mult[0] - b.mult[0]);
   const many = qual.length + reach.length > 6;
   return `
+    ${feedStrip(3)}
     <div class="segs">${chips}</div>
     ${many ? `<label class="search">${ic('predict', 18)}<input data-in="search" value="${esc(ui.search)}" placeholder="Find a beatboxer" autocomplete="off"></label>` : ''}
     ${!pick.length ? empty('dice', f === 'mine' ? 'No bets yet' : 'Nothing here', f === 'mine' ? 'Tap a multiplier on any open market to back it.' : 'Check another tab.') : ''}

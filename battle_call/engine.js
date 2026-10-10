@@ -63,7 +63,7 @@ export function canRegister(S, { name, device, ipH }) {
 }
 
 export function addUser(S, u) {
-  S.users.set(u.key, u);
+  S.users.set(u.key, u); S.rankDirty = true;
   touchUser(S, u); S.dirty.host = true; S.dirty.live = true;
   return u;
 }
@@ -91,7 +91,7 @@ function ledgerOf(S, ref) {
 
 /** Move Loops (and stat counters) for a user, with a history line and a ledger entry so it can be taken back. */
 function credit(S, u, amt, kind, text, ref, stats) {
-  u.bal += amt;
+  u.bal += amt; S.rankDirty = true;
   if (stats) for (const k of Object.keys(stats)) u.st[k] = (u.st[k] || 0) + stats[k];
   if (amt || text) pushLog(S, u, kind, amt, text, ref);
   if (ref) {
@@ -360,6 +360,18 @@ export function stepMatch(S, mid, to) {
   if (ev.phase !== 'bracket') return fail('The bracket is not running');
   if (!m) return fail('No such battle');
   const ALLOWED = { live: ['upcoming'], voting: ['live', 'closed'], closed: ['voting'], upcoming: ['live'] };
+  if (to === 'upcoming') {
+    // "oops, wrong battle": only a battle that is live and has no votes yet can be put back, and its bets and picks reopen
+    if (m.status !== 'live') return fail('Only a battle that has just started can be put back');
+    m.status = 'upcoming';
+    for (const k of marketsList(S)) if (k.kind === 'match' && k.mid === mid && k.st === 'locked') { k.st = 'open'; touchMk(S, k); }
+    if (ev.matches.filter((x) => x.r === m.r).every((x) => x.status === 'upcoming' || x.status === 'wait')) {
+      ev.locked[m.r] = false;
+      for (const k of marketsList(S)) if (k.kind === 'reach' && k.to - 1 === m.r && k.st === 'locked') { k.st = 'open'; touchMk(S, k); }
+    }
+    touchMeta(S);
+    return ok({});
+  }
   if (!(ALLOWED[to] || []).includes(m.status)) return fail(`A ${m.status} battle cannot go to ${to}`);
   if (to === 'live') {
     const other = activeMatch(S);
@@ -645,7 +657,7 @@ export function hostAction(S, a) {
     case 'user.ban': {
       const u = S.users.get(nameKey(a.key));
       if (!u) return fail('No such player');
-      u.banned = !!a.on; touchUser(S, u); S.dirty.host = true;
+      u.banned = !!a.on; S.rankDirty = true; touchUser(S, u); S.dirty.host = true;
       return ok({});
     }
     default: return fail('Unknown action');
@@ -685,18 +697,35 @@ export function meOf(S, u) {
   };
 }
 
+/** Everybody's rank, computed once per change in money rather than once per player per push. */
+function ranking(S) {
+  if (!S.rank || S.rankDirty || S.rank.n !== S.users.size) {
+    const rows = [...S.users.values()].filter((u) => !u.banned)
+      .map((u) => ({ n: u.name, key: u.key, net: netWorth(S, u), pred: u.st.pred || 0, won: u.st.won || 0, lost: u.st.lost || 0 }))
+      .sort((a, b) => b.net - a.net || a.n.localeCompare(b.n));
+    const at = new Map(rows.map((r, i) => [r.key, i + 1]));
+    S.rank = { rows, at, of: rows.length, n: S.users.size };
+    S.rankDirty = false;
+  }
+  return S.rank;
+}
+
 export function boardOf(S) {
-  const rows = [...S.users.values()].filter((u) => !u.banned)
-    .map((u) => ({ n: u.name, net: netWorth(S, u), pred: u.st.pred || 0, won: u.st.won || 0, lost: u.st.lost || 0 }))
-    .sort((a, b) => b.net - a.net || a.n.localeCompare(b.n));
-  return rows.slice(0, 50).map((r, i) => ({ ...r, rank: i + 1 }));
+  S.rankDirty = true; // the board is the moment to be exact
+  return ranking(S).rows.slice(0, 50).map(({ key, ...r }, i) => ({ ...r, rank: i + 1 }));
 }
 
 export function rankOf(S, u) {
-  const net = netWorth(S, u);
-  let better = 0, of = 0;
-  for (const o of S.users.values()) { if (o.banned) continue; of++; if (netWorth(S, o) > net) better++; }
-  return { rank: better + 1, of };
+  const r = ranking(S);
+  return { rank: r.at.get(u.key) || r.of + 1, of: r.of };
+}
+
+/** The three biggest winners of a settlement, for the live feed. */
+export function bigWins(S, ref, min = 100) {
+  const lg = S.ledger.get(ref);
+  if (!lg) return [];
+  return Object.entries(lg.u).map(([k, e]) => ({ k, d: e.bal })).filter((x) => x.d >= min).sort((a, b) => b.d - a.d).slice(0, 3)
+    .map((x) => ({ n: (S.users.get(x.k) || { name: x.k }).name, d: x.d }));
 }
 
 /** Organiser dashboard numbers. */
