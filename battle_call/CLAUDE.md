@@ -104,3 +104,6 @@ then open http://localhost:8787/.
 - Finals and third place: `seal` (mid, w, judges) closes the vote (status `awaiting`) and stores `m.sealed = {w, judges}`. Nothing is paid, shown or advanced. `unseal` removes it; reopening the vote drops it too.
 - `reveal` (cat) runs `setResult` for every sealed battle of that category, third place first, then the final. Payouts, champion and the big-screen result scene happen then.
 - `sealed` is stripped in `catMeta` and only travels in `hostOf().wait[].sealed` (host sockets only, never the big screen). Host UI: lock buttons in the judges card, "Award ceremony: reveal <category>" in the "Waiting for the judges" panel.
+
+## Prediction winners (big screen)
+`predWinners()` in `screen.js`: podium of the best predictors by prediction points (`pred` in the board rows, all categories), top 3 big plus places 4 to 8. It cycles with the champion scene (finished category) and is one of the idle slides between battles. Hidden while nobody has prediction points.
