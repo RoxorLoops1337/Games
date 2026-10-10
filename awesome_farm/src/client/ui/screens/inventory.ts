@@ -40,7 +40,7 @@ export class InventoryScreen implements Screen {
         const s = ctx.scene;
         this.win = new Win(s, { size: 'large', title: 'Backpack', icon: 'k_bag', accent: PAL.gold, onClose: () => ctx.close() });
         const w = this.win;
-        this.foot = w.footer({ info: '', infoW: 110, secondary: [{ label: 'Rings  (G)', onClick: () => ctx.open('gear'), icon: 'i_ring_copper' }], hint: deviceText('Click an item to equip, eat or open it. Hover for what it does.', 'Tap an item to equip, eat or open it.') });
+        this.foot = w.footer({ info: '', infoW: 110, secondary: [{ label: 'Rings  (U)', onClick: () => ctx.open('gear'), icon: 'i_ring_copper' }], hint: deviceText('Click an item to equip, eat or open it. Hover for what it does.', 'Tap an item to equip, eat or open it.') });
         const body = w.body, lw = 300, gx = 8;
 
         // ── left: what you wear, and your stats ──

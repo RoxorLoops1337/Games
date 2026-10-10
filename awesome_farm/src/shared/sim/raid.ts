@@ -80,7 +80,11 @@ export function spawnRaider (sim: Sim, sp: { near?: string; raid?: number; rx?: 
     const kind = pickRaider(blight.kindOf(plot), lv, () => sim.rng.next());
     // a wave steps out of one side of the nest island (when there is room there; else anywhere on it, as raiders always did)
     const at = sp.side !== undefined ? edgeSpot(sim, plot, sp.side) : null;
-    const m = mobs.spawnMob(sim, kind, undefined, plot.i, { lv, pack: false, ...(at ?? {}) });
+    // the higher the nest, the tougher what comes out of it: more health, a harder bite, and from level 5 on some of them elite
+    const nl = blight.levelOf(plot);
+    const hm = Math.min(B.raidHpMax, 1 + B.raidHpPerLv * (nl - 1)), dm = Math.min(B.raidDmgMax, 1 + B.raidDmgPerLv * (nl - 1));
+    const elite = nl >= B.raidEliteFrom && sim.rng.chance(Math.min(B.raidEliteMax, B.raidElitePerLv * (nl - B.raidEliteFrom + 1)));
+    const m = mobs.spawnMob(sim, kind, undefined, plot.i, { lv, pack: false, hm, dm, elite, ...(at ?? {}) });
     if (!m) return null;
     if (sp.first && who && sp.side !== undefined) sim.toast(who.id, `A wave comes from the ${SIDES[sp.side]}`, 'k_skull', PAL.berry);
     m.rd = [sp.rx, sp.ry];

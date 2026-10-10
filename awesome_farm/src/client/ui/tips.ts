@@ -24,7 +24,7 @@ export function itemTip (id: ItemId, o: { count?: number; sellMul?: number; foot
         for (const [k, v] of Object.entries(g.mods ?? {}) as [StatKey, number][]) lines.push({ t: modLine(k, v), c: v < 0 && (k === 'moveSpeed') ? PAL.berry : PAL.lime });
     }
     const rl = (d as { relic?: RelicDef }).relic;
-    if (rl) lines.push({ t: `${TAG_INFO[rl.tag].name} relic  ·  ${SIZES[rl.size].join(' x ')} cells  ·  gives ${TAG_INFO[rl.tag].word}`, c: TAG_INFO[rl.tag].color }, { t: 'Lay it in the Relic Satchel (G). Relics of one kind that touch give more; touching kinds make combos.', c: PAL.pebble });
+    if (rl) lines.push({ t: `${TAG_INFO[rl.tag].name} relic  ·  ${SIZES[rl.size].join(' x ')} cells  ·  gives ${TAG_INFO[rl.tag].word}`, c: TAG_INFO[rl.tag].color }, { t: 'Lay it in the Relic Satchel (U). Relics of one kind that touch give more; touching kinds make combos.', c: PAL.pebble });
     if (d.food) lines.push({ t: `Restores ${d.food} energy`, c: PAL.gold });
     if (d.heal) lines.push({ t: `Restores ${d.heal} ♥`, c: PAL.blossom });
     if (d.buff) {
