@@ -61,6 +61,21 @@ async function onRoute() {
 }
 addEventListener('hashchange', onRoute);
 
+/* Big screen: full screen on a button (or the F key), the buttons fade away when the mouse rests, the screen stays awake. */
+const isFull = () => !!(document.fullscreenElement || document.webkitFullscreenElement);
+['fullscreenchange', 'webkitfullscreenchange'].forEach((n) => document.addEventListener(n, () => emit()));
+addEventListener('keydown', (e) => { if (route && route.a === 's' && (e.key === 'f' || e.key === 'F') && !e.metaKey && !e.ctrlKey && !/INPUT|TEXTAREA/.test(e.target.tagName)) A.toggleFullscreen(); });
+{
+  let idle = 0, lock = null;
+  const awake = () => { document.body.classList.remove('idle'); clearTimeout(idle); idle = setTimeout(() => document.body.classList.add('idle'), 3000); };
+  ['mousemove', 'mousedown', 'touchstart', 'keydown'].forEach((n) => addEventListener(n, awake, { passive: true }));
+  awake();
+  setInterval(async () => {
+    if (!(route && route.a === 's') || lock || !navigator.wakeLock) return;
+    try { lock = await navigator.wakeLock.request('screen'); lock.addEventListener('release', () => { lock = null; }); } catch (_) { /* not allowed here */ }
+  }, 5000);
+}
+
 /* A big bracket (16+) does not fit the projector at a readable size: the big screen drifts down it and back, slowly. */
 {
   let dir = 1, hold = 0, last = 0;
@@ -126,7 +141,7 @@ function viewMain() {
     return hostShell() + overlays();
   }
   if (!S.meta) return loadingView();
-  if (r.a === 's') return screenView() + `<button class="btn sm ghost soundbtn" data-a="toggleSound">${soundOn() ? 'Sound on' : 'Enable sound'}</button>`;
+  if (r.a === 's') return screenView() + `<div class="stagectl" data-k="stagectl"><button class="btn sm ghost" data-a="toggleFullscreen">${isFull() ? 'Exit full screen' : 'Full screen'}</button><button class="btn sm ghost" data-a="toggleSound">${soundOn() ? 'Sound on' : 'Enable sound'}</button></div>`;
   if (S.role === 'guest' && !ui.watching) return authView();
   return audienceShell() + overlays();
 }
@@ -462,6 +477,13 @@ const A = {
     const url = joinLink(), title = S.meta ? S.meta.name : 'BattleCall';
     try { if (navigator.share) { await navigator.share({ title, text: `Join the battle: ${title}`, url }); return; } } catch (_) { return; }
     try { await navigator.clipboard.writeText(url); toast('Link copied. Send it to your friends.', 'info'); } catch (_) { prompt('Copy this link', url); }
+  },
+  toggleFullscreen() {
+    const d = document, el = d.documentElement;
+    try {
+      if (isFull()) (d.exitFullscreen || d.webkitExitFullscreen).call(d);
+      else (el.requestFullscreen || el.webkitRequestFullscreen).call(el);
+    } catch (_) { toast('This browser will not go full screen. Try F11.', 'info'); }
   },
   liveRound(el) { ui.liveRound = +el.dataset.r; emit(); },
   react(el) { react(el.dataset.e); buzz(10); },

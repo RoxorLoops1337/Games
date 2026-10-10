@@ -63,6 +63,10 @@ Streak bonus: every judged battle where a player's vote matched the judges, `vot
 
 A category with exactly one beatboxer has no bracket: `setPhase` lets it through the size check, and after the elimination the host crowns them (`walkover` action, `ev.walkover`, `ev.phase = 'finished'`, no Loops move). Undo takes it back. `js/presets.js` holds ready-made events: open `#/new/<key>` (e.g. `dmi2026`) and the create page asks only for a password, then makes the event and fills every category and lineup over the HTTP `/act` route.
 
+## Big screen controls
+
+`#/s/CODE` shows Full screen and Sound buttons bottom right (F toggles full screen). They fade after 3 s without mouse movement so the projection stays clean, and the screen is kept awake with the Wake Lock API where the browser allows it.
+
 ## Hard rules for this folder
 
 1. All Loops moves go through `credit()` with a ledger ref, or `reopen` stops being exact. Tests check conservation.
