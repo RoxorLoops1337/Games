@@ -186,7 +186,7 @@ export function createDemo() {
         if (allDone()) { auto = false; schedule(); return; }
         this.next(true);
         const st = stageOf(), cur = st === 'bracket' ? E.currentMatch(DS) : null;
-        const wait = st === 'lobby' ? 4000 : st === 'picks' ? 6000 : st === 'elimination' ? 3500 : !cur ? 2500 : cur.status === 'voting' ? 11000 : cur.status === 'closed' ? 4500 : cur.status === 'live' ? 4500 : 7000;
+        const wait = st === 'lobby' ? 4000 : st === 'picks' ? 6000 : st === 'elimination' ? 3500 : !cur ? 2500 : cur.status === 'voting' ? 33000 : cur.status === 'closed' ? 4500 : cur.status === 'live' ? 4500 : 7000;
         autoTimer = setTimeout(tick, wait);
       };
       if (auto) tick();

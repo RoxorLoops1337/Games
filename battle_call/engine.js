@@ -38,6 +38,8 @@ export function newCategory(event, { id, name, size, art }) {
 export function migrateEvent(ev) {
   for (const c of Object.values(ev.cats || {})) {
     c.settings = c.settings || {};
+    // the audience vote now takes 30 s by default: an event still on the old default of 10 moves with it (a custom length is left alone)
+    if (c.settings.voteSecsV !== 2) { if (c.settings.voteSecs === 10) c.settings.voteSecs = 30; c.settings.voteSecsV = 2; }
     for (const [k, v] of Object.entries(DEFAULTS)) if (c.settings[k] === undefined) c.settings[k] = k === 'pts' ? { ...v } : k === 'thirdPlace' ? false : v;
     c.settings.pts = { ...DEFAULTS.pts, ...c.settings.pts };
     c.performed = c.performed || [];
