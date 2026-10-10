@@ -84,3 +84,12 @@ test('the showcase farmstead goes down on the current rules, through a real SimH
     local.send({ t: 'move', x: 0, y: 0, fx: 0, fy: 1, moving: false });
     for (let i = 0; i < 10; i++) local.poll(0.1);
 });
+
+test('every action has a 3D burst (rerun scripts/gen-fx3d.ts when an action is added)', async () => {
+    const { ACTIONS } = await import('../src/shared/actions');
+    const { FX } = await import('../src/client3d/fx');
+    const { RINGS } = await import('../src/client3d/impacts');
+    const missing = ACTIONS.filter((a) => !(FX as Record<string, unknown>)[a]);
+    assert.deepEqual(missing, []);
+    for (const a of ['artHook', 'artArrow', 'artScorch', 'artShroud', 'artFrost', 'artRam']) assert.ok(RINGS[a], `${a} has a ring`);
+});

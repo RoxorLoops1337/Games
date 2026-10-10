@@ -1,11 +1,12 @@
 // Juice: the burst table for the simulation's fx actions, the instanced particles, synthesised sounds and floating words.
 import { Color, Euler, InstancedMesh, Matrix4, MeshStandardMaterial, Quaternion, Scene, TetrahedronGeometry, Vector3 } from 'three';
 import { groundY } from './ground';
+import { FX_GENERATED } from './fx-table';
 
 export const C = { leaf: 0x5cb04f, lime: 0xd4f08a, wood: 0xa8703f, bark: 0x6a402f, stone: 0x9ea4b9, pebble: 0xd5d9e6, gold: 0xffd966, cream: 0xfff6e0, berry: 0xe85d62, blossom: 0xf79fc6, sea: 0x4ab2cf, foam: 0xcdf4ee, plum: 0x9d6fdb, pumpkin: 0xf8a24a, dirt: 0xd49a62, ink: 0x2a1d2c, sand: 0xf4deaa };
 /** A juice burst: particle colours, count, speed, lift and size, the sound and the camera shake. */
 export interface FxDef { colors: readonly number[]; y?: number; n: number; speed: number; up: number; size: number; sfx: string; shake: number }
-export const FX: Record<string, FxDef | undefined> = {
+const HAND: Record<string, FxDef | undefined> = {
     hitWood: { colors: [C.leaf, C.lime, C.wood], n: 9, speed: 2.2, up: 3, size: 0.9, sfx: 'chop', shake: 0.04 },
     breakTree: { colors: [C.leaf, C.lime, C.wood, C.bark], n: 22, speed: 3.2, up: 4, size: 1.1, sfx: 'fell', shake: 0.12 },
     hitStone: { colors: [C.stone, C.pebble], n: 8, speed: 2.4, up: 3, size: 0.8, sfx: 'rock', shake: 0.04 },
@@ -55,6 +56,8 @@ export const FX: Record<string, FxDef | undefined> = {
     bldHit: { colors: [C.stone, C.wood, C.cream], n: 6, speed: 1.8, up: 2.2, size: 0.7, sfx: 'rock', shake: 0.03 },
     bldBreak: { colors: [C.stone, C.wood, C.pebble, C.dirt], n: 26, speed: 3, up: 4.2, size: 1.25, sfx: 'fell', shake: 0.12 }
 };
+/** Every action's burst: the hand-written ones, and the rest made from the 2D table (fx-table.ts, scripts/gen-fx3d.ts). */
+export const FX: Record<string, FxDef | undefined> = { ...FX_GENERATED, ...HAND };
 export const N = 300;
 export class Particles {
     p = Array.from({ length: N }, () => ({ life: 0, x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, rx: 0, ry: 0, spin: 0, size: 1 }));
