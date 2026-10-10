@@ -6,4 +6,4 @@
 // When the app is opened from somewhere else (the Pages copy at /battle_call/), put the Worker's address here once
 // after `npx wrangler deploy`, e.g.  export const SERVER = 'https://battle-call.yourname.workers.dev';
 // A visitor can also open the app once with ?server=https://... and it is remembered on that phone.
-export const SERVER = '';
+export const SERVER = 'https://battle-call.danhieux-senjka.workers.dev';
