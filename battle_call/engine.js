@@ -36,7 +36,7 @@ export function newCategory(event, { id, name, size }) {
 export function newEvent({ code, name, size = DEFAULTS.size, catName = 'Main battle', now = 0 }) {
   const event = {
     v: 2, code, name: String(name || 'Beatbox Battle').trim().slice(0, 40) || 'Beatbox Battle', created: now,
-    banner: null, rev: 1, active: 'c1', order: [], cats: {}, nextBb: 1, nextMk: 1, nextCat: 2,
+    banner: null, rev: 1, active: 'c1', order: [], cats: {}, nextBb: 1, nextMk: 1, nextCat: 2, doneSeq: 0,
   };
   event.cats.c1 = newCategory(event, { id: 'c1', name: catName, size });
   event.order.push('c1');
@@ -254,11 +254,18 @@ export function marketTitle(S, m) {
 
 /* ---------------------------------------------------------------- phases */
 
-const NEXT_PHASE = { lobby: ['picks', 'elimination'], picks: ['elimination'], elimination: ['picks'] };
+const NEXT_PHASE = { lobby: ['picks', 'elimination'], picks: ['elimination', 'lobby'], elimination: ['picks'] };
 
 export function setPhase(S, to) {
   const ev = S.ev, from = ev.phase;
   if (!(NEXT_PHASE[from] || []).includes(to)) return fail(`Cannot go from ${from} to ${to}`);
+  if (to === 'lobby') {
+    // back to doors open: the "makes the cut" bets are refunded and removed (everyone's own picks stay)
+    for (const m of marketsList(S)) if (m.kind === 'qualify') { voidMarket(S, m, null, 'Picks closed'); dropMarket(S, m); }
+    ev.phase = 'lobby'; ev.consensus = null;
+    touchMeta(S);
+    return ok({});
+  }
   if (ev.bbs.length < ev.settings.size) return fail(`Add at least ${ev.settings.size} beatboxers first (or lower the bracket size)`);
   if (to === 'picks') {
     ev.phase = 'picks';
@@ -388,7 +395,7 @@ export function stepMatch(S, mid, to) {
   const ev = S.ev, m = matchOf(S, mid);
   if (ev.phase !== 'bracket') return fail('The bracket is not running');
   if (!m) return fail('No such battle');
-  const ALLOWED = { live: ['upcoming'], voting: ['live', 'closed'], closed: ['voting'], upcoming: ['live'] };
+  const ALLOWED = { live: ['upcoming', 'voting'], voting: ['live', 'closed'], closed: ['voting'], upcoming: ['live'] };
   if (to === 'upcoming') {
     // "oops, wrong battle": only a battle that is live and has no votes yet can be put back, and its bets and picks reopen
     if (m.status !== 'live') return fail('Only a battle that has just started can be put back');
@@ -433,7 +440,7 @@ export function setResult(S, mid, w, judges) {
   const ref = 'm:' + mid, lg = ledgerOf(S, ref);
   lg.extra = { was: m.status };
   lockRound(S, m.r);
-  m.w = w; m.status = 'done';
+  m.w = w; m.status = 'done'; m.ds = ++S.event.doneSeq; // the order results came in, so Undo can walk back through them
   if (judges && Number.isInteger(judges.a) && Number.isInteger(judges.b)) m.judges = { a: Math.max(0, judges.a | 0), b: Math.max(0, judges.b | 0) };
   const win = winnerOf(m), lose = loserOf(m);
   ev.out[lose] = m.r;
@@ -464,6 +471,38 @@ export function setResult(S, mid, w, judges) {
   if (ev.matches.filter((x) => x.r === m.r).every((x) => x.status === 'done')) roundTips(S, m.r);
   touchMeta(S); S.dirty.board = true; S.dirty.host = true;
   return ok({ winner: win });
+}
+
+/** What "Undo" would take back in this category right now (null: nothing to undo). `hard` = it reverses payouts. */
+export function undoPlan(S) {
+  const ev = S.ev, act = activeMatch(S), nm = (m) => `${bbName(S, m.a)} vs ${bbName(S, m.b)}`;
+  if (act && ev.matches.includes(act)) {
+    if (act.status === 'closed') return { label: 'Reopen the audience vote', hard: false };
+    if (act.status === 'voting') return { label: 'Close the vote and go back to the battle', hard: false };
+    return { label: `Put ${nm(act)} back: not started yet`, hard: false };
+  }
+  if (ev.phase === 'bracket' || ev.phase === 'finished') {
+    const last = ev.matches.filter((m) => m.status === 'done').sort((a, b) => b.ds - a.ds)[0];
+    if (last) return { label: `Take back the result of ${nm(last)}`, hard: true, mid: last.id };
+    return { label: 'Take back the ranking and redraw the bracket', hard: true };
+  }
+  if (ev.phase === 'elimination') return { label: 'Reopen the picks', hard: false };
+  if (ev.phase === 'picks') return { label: 'Close the picks and go back to doors open', hard: true };
+  return null;
+}
+
+/** One step back, whatever the last step was. Pressing it again goes back one more. */
+export function undoStep(S) {
+  const plan = undoPlan(S), ev = S.ev;
+  if (!plan) return fail('Nothing to undo');
+  const act = activeMatch(S);
+  let r;
+  if (act && ev.matches.includes(act)) r = stepMatch(S, act.id, act.status === 'closed' ? 'voting' : act.status === 'voting' ? 'live' : 'upcoming');
+  else if (plan.mid) r = revertMatch(S, plan.mid);
+  else if (ev.phase === 'bracket') r = revertSeeds(S);
+  else if (ev.phase === 'elimination') r = setPhase(S, 'picks');
+  else r = setPhase(S, 'lobby');
+  return r.ok ? ok({ undid: plan.label }) : r;
 }
 
 /** Reach-the-round bets resolve as soon as it is known: yes when the fighter is drawn into that round, no when they are out first. */
@@ -498,7 +537,7 @@ export function revertMatch(S, mid) {
   if (nx) { nx[m.i % 2 === 0 ? 'a' : 'b'] = null; nx.status = 'wait'; }
   if (ev.phase === 'finished') { ev.phase = 'bracket'; ev.champion = null; }
   delete ev.out[loserOf(m)];
-  m.w = null; m.judges = null; m.status = 'closed';
+  m.w = null; m.judges = null; m.ds = 0; m.status = 'closed';
   touchMeta(S); S.dirty.board = true;
   return ok({});
 }
@@ -710,6 +749,7 @@ function catAction(S, a) {
       return ok({});
     }
     case 'phase': return setPhase(S, a.to);
+    case 'undo': return undoStep(S);
     case 'seeds': return publishSeeds(S, a.order);
     case 'seeds.revert': return revertSeeds(S);
     case 'step': return stepMatch(S, a.mid, a.to);
@@ -771,7 +811,7 @@ function catAction(S, a) {
 /** Everything the audience may see that changes rarely. Pools live in `liveOf` so a bet does not resend all of this. */
 function catMeta(S, c) {
   return {
-    id: c.id, name: c.name, pfx: c.pfx, phase: c.phase,
+    id: c.id, name: c.name, pfx: c.pfx, phase: c.phase, undo: inCat(S, c, () => undoPlan(S)),
     set: { size: c.settings.size, qualifyBets: c.settings.qualifyBets, autoChampion: c.settings.autoChampion },
     bbs: c.bbs, seeds: c.seeds, locked: c.locked, out: c.out, champion: c.champion, consensus: c.consensus,
     matches: c.matches.map((m) => ({ ...m, c: m.status === 'closed' || m.status === 'done' ? m.c : null })),

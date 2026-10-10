@@ -35,6 +35,13 @@ export function hostShell() {
 }
 
 /* ------------------------------------------------------------ run */
+/** One step back, always. It says exactly what it will take back. */
+function undoBtn() {
+  const u = S.meta.undo;
+  if (!u) return '';
+  return `<button class="btn ghost undo" data-a="hUndo" data-hard="${u.hard ? 1 : 0}" data-label="${esc(u.label)}">${ic('undo', 20)}<span><small>Undo last step</small><b>${esc(u.label)}</b></span></button>`;
+}
+
 /** A battle is on in a category the organiser is not looking at: say so, with a way back to it. */
 function liveElsewhere() {
   const c = S.meta.cats.find((x) => x.live && x.id !== S.catId);
@@ -78,7 +85,7 @@ function run() {
   }
   const stage = ev.active !== S.catId && S.meta.cats.length > 1
     ? `<button class="btn ghost" data-a="hStage" data-id="${S.catId}">${ic('tv', 18)} Put ${esc(ev.catName)} on stage</button>` : '';
-  return `<section class="phasebar"><small>${esc(ev.catName)}</small><b>${phaseName}</b></section>${stage}${rail}${main}
+  return `<section class="phasebar"><small>${esc(ev.catName)}</small><b>${phaseName}</b></section>${stage}${rail}${undoBtn()}${main}
     <section class="block"><h3>Message to the hall</h3>
       <form class="inline" data-form="banner"><input name="text" maxlength="140" placeholder="e.g. Break time, voting opens in 5" value="${esc(ev.banner ? ev.banner.text : '')}" autocomplete="off"><button class="btn" type="submit">Send</button>${ev.banner ? '<button type="button" class="btn ghost" data-a="hBannerClear">Clear</button>' : ''}</form></section>`;
 }

@@ -410,3 +410,5 @@ body[data-mode=screen] { overflow: hidden; }
 .card.elsewhere { display: flex; align-items: center; gap: 10px; text-align: left; border-color: var(--pink); background: rgba(255,79,176,.12); } .card.elsewhere span { flex: 1; }
 .numf .row { display: flex; gap: 2px; }
 .stage .st-head .brand small { text-transform: none; letter-spacing: 0; }
+
+.btn.undo { justify-content: flex-start; gap: 12px; text-align: left; padding: 10px 16px; min-height: 52px; } .btn.undo span { display: flex; flex-direction: column; line-height: 1.2; } .btn.undo small { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; } .btn.undo b { font-size: 15px; }

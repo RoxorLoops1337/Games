@@ -44,7 +44,7 @@ round's picks lock) -> voting (audience votes, tally hidden) -> closed ("hands u
 judges' winner, optionally the judge split). Bracket picks pay 25 x 2^round. Bets are parimutuel (winners split the pot
 including a small house seed, never less than 1.1x); markets: qualify, battle winner, reach-a-round, champion.
 Voting pays 10 Loops (+15 if it matched the judges). One pot per player; the ranking is net worth (balance + open stakes).
-A wrong result can be taken back (`reopen`) because every settlement writes a per-user ledger.
+A wrong result can be taken back (`reopen`) because every settlement writes a per-user ledger. `undo` (host action, `undoPlan`/`undoStep` in the engine, button on the Run tab) steps the selected category back exactly one thing each press, all the way to doors open: put a battle back, close/reopen the vote, take back the latest result (`m.ds` is the order results came in), take back the ranking, reopen the picks, close the picks. Tests check every Loop returns to the start.
 
 ## Hard rules for this folder
 
