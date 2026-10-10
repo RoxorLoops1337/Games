@@ -69,7 +69,7 @@ async function connect(rt, hello) {
 let mid = 1;
 async function act(rt, ws, o) {
   const id = mid++;
-  await rt.d.webSocketMessage(ws, JSON.stringify({ t: 'a', id, ...o }));
+  await rt.d.webSocketMessage(ws, JSON.stringify({ ...o, t: 'a', rid: id }));
   return ws.msgs('r').find((m) => m.id === id);
 }
 
@@ -289,6 +289,31 @@ await t('the DMI preset sets itself up over HTTP: three categories, every beatbo
   for (const to of ['picks', 'elimination']) assert.equal((await send({ a: 'phase', cat: sf.id, to })).ok, true);
   assert.equal((await send({ a: 'walkover', cat: sf.id })).ok, true);
   assert.equal((await call(rt.d, '/state')).meta.cats[2].champion, sf.bbs[0].id);
+});
+
+await t('an event saved by an older version still loads after a deploy: every prediction, bet and balance is intact and the new features have defaults', async () => {
+  const rt = await newEvent();
+  const tk = await join(rt, 'Ann'); const ann = await connect(rt, { tk }), host = await connect(rt, { ht: rt.ht });
+  await act(rt, host, { a: 'bb.add', names: Array.from({ length: 10 }, (_, i) => 'BB' + i) });
+  await act(rt, host, { a: 'phase', to: 'picks' });
+  const ids = ann.last('meta').cats[0].bbs.map((b) => b.id);
+  await act(rt, ann, { a: 'top', order: ids.slice(0, 8) });
+  await act(rt, ann, { a: 'bet', mk: ann.last('meta').cats[0].mk[0].id, o: 0, amt: 250 });
+  await act(rt, host, { a: 'phase', to: 'elimination' });
+  const meBefore = ann.last('me');
+  // strip everything that came after the first version, as an old save would look
+  const ev = await rt.storage.get('ev');
+  for (const c of Object.values(ev.cats)) { delete c.settings.voteSecs; delete c.settings.thirdPlace; delete c.performed; delete c.performer; delete c.walkover; }
+  await rt.storage.put('ev', ev);
+  const rt2 = runtime(rt.storage); await rt2.ready();
+  const ann2 = await connect(rt2, { tk }), host2 = await connect(rt2, { ht: rt.ht });
+  const me = ann2.last('me');
+  assert.deepEqual(me.top, meBefore.top, 'the Top 8 is still there');
+  assert.deepEqual(me.bets, meBefore.bets, 'and the bet'); assert.equal(me.bal, meBefore.bal);
+  const m = host2.last('meta');
+  assert.equal(m.set.voteSecs, 10); assert.equal(m.cats[0].set.thirdPlace, false, 'a night under way does not suddenly grow a third-place battle');
+  assert.equal((await act(rt2, host2, { a: 'performer', cat: 'c1', id: ids[0] })).ok, true, 'new actions work on the old event');
+  assert.equal(host2.last('meta').cats[0].perf.n, 1);
 });
 
 await t('an evicted and rebuilt object has the same players, tokens, bets, pools, bracket and results', async () => {

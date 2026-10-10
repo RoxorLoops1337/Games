@@ -140,7 +140,7 @@ export function act(a) {
     return new Promise((res) => {
       const to = setTimeout(() => { waiting.delete(id); res({ ok: false, err: 'No answer from the server' }); }, 9000);
       waiting.set(id, { res, to });
-      ws.send(JSON.stringify({ t: 'a', id, ...a }));
+      ws.send(JSON.stringify({ ...a, t: 'a', rid: id })); // `rid`, not `id`: actions have an `id` of their own (a category, a beatboxer)
     });
   }
   return http(`/api/e/${S.code}/act`, a, { headers: authHeaders() }).then((r) => {

@@ -142,6 +142,7 @@ export class Event {
     const ev = await st.get('ev');
     if (!ev) return;
     for (const c of Object.values(ev.cats)) c.markets = {};
+    E.migrateEvent(ev);
     const S = E.newState(ev);
     for (const [, m] of await st.list({ prefix: 'mk:' })) if (ev.cats[m.cat]) ev.cats[m.cat].markets[m.id] = m;
     for (const [, u] of await st.list({ prefix: 'u:' })) S.users.set(u.key, u);
@@ -264,7 +265,7 @@ export class Event {
     if (m.t !== 'a') return;
     const a = this.att(ws);
     const r = await this.act(a, m, (a.r === 'u' ? a.k : a.r) + ':ws');
-    this.send(ws, { ...r, t: 'r', id: m.id });
+    this.send(ws, { ...r, t: 'r', id: m.rid !== undefined ? m.rid : m.id });
   }
   /** Live reactions: not game state, never stored. Counted per kind and sent to everybody twice a second. */
   react(ws, e) {

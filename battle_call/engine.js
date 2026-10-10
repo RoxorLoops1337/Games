@@ -33,6 +33,21 @@ export function newCategory(event, { id, name, size, art }) {
   };
 }
 
+/** Events saved by an older version keep working after a deploy: fill in whatever settings and fields are newer than the save.
+ *  A rule that would change a night already under way (third place) stays off for them. */
+export function migrateEvent(ev) {
+  for (const c of Object.values(ev.cats || {})) {
+    c.settings = c.settings || {};
+    for (const [k, v] of Object.entries(DEFAULTS)) if (c.settings[k] === undefined) c.settings[k] = k === 'pts' ? { ...v } : k === 'thirdPlace' ? false : v;
+    c.settings.pts = { ...DEFAULTS.pts, ...c.settings.pts };
+    c.performed = c.performed || [];
+    c.performer = c.performer || null;
+    c.walkover = !!c.walkover;
+    c.matches = c.matches || []; c.locked = c.locked || []; c.out = c.out || {}; c.bbs = c.bbs || [];
+  }
+  return ev;
+}
+
 export function newEvent({ code, name, size = DEFAULTS.size, catName = 'Main battle', art, now = 0 }) {
   const event = {
     v: 2, code, name: String(name || 'Beatbox Battle').trim().slice(0, 40) || 'Beatbox Battle', created: now,
