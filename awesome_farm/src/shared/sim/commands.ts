@@ -15,6 +15,7 @@ import * as defense from './defense';
 import * as dev from './dev';
 import * as economy from './economy';
 import * as satchel from './satchel';
+import * as gems from './gems';
 import * as factory from './factory';
 import * as fishing from './fishing';
 import * as fortune from './fortune';
@@ -76,6 +77,7 @@ export function command (sim: Sim, pid: string, c: Cmd) {
         case 'respawn': return cmdRespawn(sim, p);
         case 'look': return cmdLook(sim, p, c);
         case 'unequip': return economy.cmdUnequip(sim, p, c.slot);
+        case 'gem': return c.op === 'set' ? gems.set(sim, p, c.socket, c.item) : c.op === 'clear' ? gems.clear(sim, p, c.socket) : c.op === 'merge' ? gems.merge(sim, p, c.item) : undefined;
         case 'satchel': return c.op === 'put' ? satchel.put(sim, p, c.item, c.x, c.y, c.r) : c.op === 'take' ? satchel.take(sim, p, c.i) : undefined;
         case 'skill': return economy.cmdSkill(sim, p, c.id);
         case 'xfer': return machines.cmdXfer(sim, p, c);

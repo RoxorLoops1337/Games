@@ -7,6 +7,7 @@ import * as Phaser from 'phaser';
 import { ITEM_ORDER, ITEMS, ItemId, RING_SLOTS, RingSlot } from '../../../shared/data/items';
 import { cellsOf, fits, satchelDims, satchelResult, TAG_INFO, type RelicDef } from '../../../shared/data/relics';
 import { modLine, type Mods, type StatKey } from '../../../shared/data/stats';
+import { gemMods, GEM_SOCKETS, GEM_INFO, parseGem, CUT_NAMES, SOCKET_NAMES, mergeTarget, MERGE_COST, type GemSocket } from '../../../shared/data/gems';
 import { PAL } from '../../../shared/palette';
 import { countOf, ringTags } from '../../../shared/sim/stats';
 import { ItemGrid, GridItem } from '../grid';
@@ -16,6 +17,10 @@ import { itemTip } from '../tips';
 import type { Screen, ScreenCtx } from './types';
 
 const CELL = 46;
+const gemFoot = (id: string, n: number) => {
+    const g = parseGem(id)!, next = mergeTarget(id);
+    return deviceText(`Click to socket it (${GEM_INFO[g.kind].weapon} in a weapon, ${GEM_INFO[g.kind].armor} in armour)${next ? `  ·  right-click: merge ${MERGE_COST} into ${CUT_NAMES[(g.tier + 1) as 1 | 2 | 3]}${n >= MERGE_COST ? '' : ' (need ' + MERGE_COST + ')'}` : ''}`, `Tap to socket it (${GEM_INFO[g.kind].weapon} in a weapon, ${GEM_INFO[g.kind].armor} in armour)${next ? `  ·  hold: merge ${MERGE_COST} into ${CUT_NAMES[(g.tier + 1) as 1 | 2 | 3]}` : ''}`);
+};
 const relicOf = (it: string): RelicDef | undefined => (ITEMS as Record<string, { relic?: RelicDef }>)[it]?.relic;
 const lines = (m: Mods) => (Object.entries(m) as [StatKey, number][]).filter(([, v]) => v).map(([k, v]) => modLine(k, v));
 
@@ -29,6 +34,8 @@ export function ringBonuses (worn: (ItemId | undefined)[]): string[] {
 export class GearScreen implements Screen {
     private win: Win;
     private fingers = {} as Record<RingSlot, Slot>;
+    private sockets = {} as Record<GemSocket, Slot>;
+    private selSocket: GemSocket | null = null;
     private grid: ItemGrid;
     private bonus: ReturnType<Win['text']>;
     private foot: Footer;
@@ -45,7 +52,7 @@ export class GearScreen implements Screen {
 
     constructor (private ctx: ScreenCtx) {
         const s = ctx.scene;
-        this.win = new Win(s, { size: 'large', title: 'Equipment Bag', icon: 'k_bag', accent: PAL.gold, onClose: () => ctx.close(), sub: 'Rings on your fingers, relics puzzled into the satchel: how they touch decides what they give.' });
+        this.win = new Win(s, { size: 'large', title: 'Equipment Bag', icon: 'k_bag', accent: PAL.gold, onClose: () => ctx.close(), sub: 'Rings on your fingers, relics puzzled into the satchel, gems in their sockets.' });
         const w = this.win;
         this.foot = w.footer({
             info: '', infoW: 110,
@@ -67,8 +74,23 @@ export class GearScreen implements Screen {
                 return id ? itemTip(id, { foot: 'Click to take it off' }) : { title: `Finger ${i + 1}`, color: PAL.pebble, lines: [{ t: 'Free: wear a ring here.', c: PAL.pebble }] };
             });
         });
-        const sum = w.section(body.x, hand.y + hand.h + gx, lw, body.h - hand.h - gx, 'Together they give');
-        this.bonus = w.text('', sum.inner.x + 4, sum.inner.y + 2, 12, PAL.lime, { wrap: sum.inner.w - 8, bold: false });
+        const gem = w.section(body.x, hand.y + hand.h + gx, lw, 96, 'Gem sockets');
+        GEM_SOCKETS.forEach((sock, i) => {
+            const sl = new Slot(s, 0, 0, 48);
+            w.putAt(sl.root, gem.inner.x + 2 + i * 66, gem.inner.y + 2);
+            w.text(SOCKET_NAMES[sock], gem.inner.x + 2 + i * 66 + 24, gem.inner.y + 54, 10, PAL.pebble, { origin: [0.5, 0], bold: false });
+            this.sockets[sock] = sl;
+            onTap(sl.interactive, () => {
+                if (ctx.me().gems?.[sock]) ctx.send({ t: 'gem', op: 'clear', socket: sock });
+                else { this.selSocket = this.selSocket === sock ? null : sock; this.key = ''; }
+            });
+            tipOn(sl.interactive, () => {
+                const id = ctx.me().gems?.[sock];
+                return id ? itemTip(id, { foot: 'Click to take it out' }) : { title: `${SOCKET_NAMES[sock]} socket`, color: PAL.pebble, lines: [{ t: sock === 'w1' || sock === 'w2' ? 'A gem here works on every hit of your weapon.' : 'A gem here gives a steady bonus.', c: PAL.pebble }, { t: 'Click to choose it, then click a gem you carry.', c: PAL.pebble }] };
+            });
+        });
+        const sum = w.section(body.x, gem.y + gem.h + gx, lw, body.h - hand.h - gem.h - 2 * gx, 'Together they give');
+        this.bonus = w.text('', sum.inner.x + 4, sum.inner.y + 2, 11, PAL.lime, { wrap: sum.inner.w - 8, bold: false });
 
         // ── middle: the Relic Satchel ──
         const mw = 5 * CELL + 24;
@@ -143,27 +165,40 @@ export class GearScreen implements Screen {
 
     update () {
         const me = this.ctx.me();
-        const k = JSON.stringify([me.inv, me.equip, me.satchel, me.level, this.held, this.rot, this.hover]);
+        const k = JSON.stringify([me.inv, me.equip, me.satchel, me.gems, this.selSocket, me.level, this.held, this.rot, this.hover]);
         if (k === this.key) return;
         this.key = k;
         const worn = RING_SLOTS.map((r) => me.equip[r]);
         RING_SLOTS.forEach((r, i) => this.fingers[r].set(worn[i] ? { icon: `i_${worn[i]}`, rarity: ITEMS[worn[i]!].rarity } : { icon: 'i_ring_copper', dim: true }));
-        // what it all gives
+        // what it all gives, added up: rings, relics and gems together, then the combos
         const list = me.satchel ?? [], res = satchelResult(relicOf, list, ringTags(me));
-        const text: string[] = [];
-        const rb = ringBonuses(worn);
-        if (rb.length) text.push('Rings', ...rb.map((l) => '  ' + l));
-        const sb = lines(res.mods);
-        if (sb.length) text.push('Satchel', ...sb.map((l) => '  ' + l));
-        if (res.combos.length) text.push('Combos', ...[...new Set(res.combos.map((c) => `  ${c.name}: ${lines(c.mods).join(', ')}`))]);
-        this.bonus.setText(text.length ? text.join('\n') : 'Nothing yet. Wear a ring, lay a relic.');
+        const total: Mods = {};
+        const addAll = (m: Mods) => { for (const [kk, v] of Object.entries(m)) total[kk as StatKey] = (total[kk as StatKey] ?? 0) + (v as number); };
+        for (const id of worn) addAll(ITEMS[id!]?.gear?.mods ?? {});
+        addAll(res.mods); addAll(gemMods(me.gems));
+        const text = lines(total);
+        const combos = [...new Set(res.combos.map((c) => c.name))];
+        if (combos.length) text.push('', `Combos: ${combos.join(', ')}`);
+        this.bonus.setText(text.length ? text.join('\n') : 'Nothing yet. Wear a ring, lay a relic, socket a gem.');
+        const firstFree = GEM_SOCKETS.find((x) => !me.gems?.[x]);
+        GEM_SOCKETS.forEach((sock) => {
+            const id = me.gems?.[sock];
+            this.sockets[sock].set(id ? { icon: `i_${id}`, rarity: ITEMS[id].rarity } : { icon: 'i_gem_ruby_1', dim: true });
+            this.sockets[sock].setSelected(!id && (this.selSocket === sock || (!this.selSocket && sock === firstFree)));
+        });
         // the carried
-        const owned = ITEM_ORDER.filter((id) => (ITEMS[id].gear?.slot === 'ring' || ITEMS[id].relic) && countOf(me, id) > 0);
+        const owned = ITEM_ORDER.filter((id) => (ITEMS[id].gear?.slot === 'ring' || ITEMS[id].relic || parseGem(id)) && countOf(me, id) > 0);
         if (this.held && countOf(me, this.held) < 1) this.held = null;
         const items: GridItem[] = owned.map((id) => ({
             data: { icon: `i_${id}`, count: countOf(me, id), rarity: ITEMS[id].rarity, ...(this.held === id ? {} : {}) },
-            tip: () => itemTip(id, { count: countOf(me, id), foot: ITEMS[id].relic ? 'Click to pick it up, then click a cell' : 'Click to wear it' }),
-            click: () => { if (ITEMS[id].relic) this.held = this.held === id ? null : id; else this.ctx.send({ t: 'equip', item: id }); this.key = ''; },
+            tip: () => itemTip(id, { count: countOf(me, id), foot: ITEMS[id].relic ? 'Click to pick it up, then click a cell' : parseGem(id) ? gemFoot(id, countOf(me, id)) : 'Click to wear it' }),
+            click: () => {
+                if (ITEMS[id].relic) this.held = this.held === id ? null : id;
+                else if (parseGem(id)) { const sock = (this.selSocket && !me.gems?.[this.selSocket] ? this.selSocket : firstFree) ?? this.selSocket ?? 'w1'; this.ctx.send({ t: 'gem', op: 'set', socket: sock, item: id }); this.selSocket = null; }
+                else this.ctx.send({ t: 'equip', item: id });
+                this.key = '';
+            },
+            right: parseGem(id) ? () => this.ctx.send({ t: 'gem', op: 'merge', item: id }) : undefined,
         }));
         this.grid.setItems(items);
         this.drawSatchel(me, res);

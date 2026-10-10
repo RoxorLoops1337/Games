@@ -4,6 +4,7 @@
 
 import { TILE, TUNING, UNDER_Y } from '../config';
 import { CAVE_N, CHAMBER_R, caveDepth } from '../cave';
+import { GEM_KINDS, gemId } from '../data/gems';
 import type { ItemId } from '../data/items';
 import { pickCave } from '../data/mobs';
 import { NODES, type NodeKind } from '../data/nodes';
@@ -165,6 +166,12 @@ export function cmdDig (sim: Sim, p: PlayerS, c: Extract<Cmd, { t: 'dig' }>) {
         if (sim.rng.chance(0.08)) drops.push(['coal', 1]);
     }
     if (sim.rng.chance(d.luck)) for (const dr of drops) dr[1] *= 2;
+    // and now and then, a gem: more from ore, most from crystal, finer cuts the deeper you are
+    if (sim.rng.chance((ore === 'crystal' ? 0.25 : hard ? 0.06 : 0.012) * (1 + d.luck))) {
+        const depth = caveDepth(tx, ty), roll = sim.rng.next();
+        const tier = depth >= 0.8 && roll < 0.08 ? 3 : depth >= 0.5 && roll < 0.2 ? 2 : 1;
+        drops.push([gemId(sim.rng.pick(GEM_KINDS), tier) as ItemId, 1]);
+    }
     for (const [item, n] of drops) for (let k = 0; k < n; k++) sim.spawnDrop(item, cx, cy + 2);
     p.stats.harvested++;
     quests.count(p, ore && hard ? `harvest:${hard.node}` : 'harvest:rock');

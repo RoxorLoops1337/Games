@@ -407,6 +407,7 @@ function itemCard (id: ItemId) {
 
 function itemsSection () {
     const groups: [string, string, (id: ItemId) => boolean][] = [
+        ['s-items-gems', 'Gems (for the sockets)', (i) => /^gem_[a-z]+_[123]$/.test(i)],
         ['s-items-materials', 'Materials', (i) => ITEMS[i].kind === 'material'],
         ['s-items-food', 'Food and crops', (i) => ITEMS[i].kind === 'food'],
         ['s-items-seeds', 'Seeds', (i) => ITEMS[i].kind === 'seed'],
