@@ -599,3 +599,9 @@ body.idle .stagectl { opacity: 0; pointer-events: none; }
 .lockclk.big { flex-direction: column; align-items: flex-start; gap: .1em; border-radius: 3vmin; padding: 1.4vmin 4vmin; } .lockclk.big .lbl { font-size: .34em; opacity: .9; } .lockclk.big b { font-size: 1.7em; line-height: 1; } .lockclk.big .ic { display: none; }
 .st-predict { padding-bottom: 15vmin; }
 .st-predict { padding-bottom: 19vmin; } .st-predict .pl .mega { font-size: min(7em, 13vh); } .st-predict .pt b { font-size: 3.4em; }
+
+/* big screen: the information sits in the upper part of the picture, where the whole hall can see it */
+.st-perf, .st-center { justify-content: flex-start; padding-top: 1vmin; }
+.st-predict { align-items: start; padding-top: 1vmin; }
+.st-predict .pl { gap: 1.6vmin; }
+.st-perf { gap: 2vmin; }

@@ -2,6 +2,7 @@
 //   #/            home (enter a code)      #/new        create an event
 //   #/e/CODE      the audience app         #/h/CODE     the organiser console      #/s/CODE   the big screen
 import { morph, esc, ic, $, $$, toast, confetti, runTickers, buzz, setHaptics } from './dom.js';
+import { VERSION } from './config.js';
 import { S, serverNow, emit, subscribe, resetState, selectCat, sessions, saveSession, dropSession, deviceId, serverBase, setServer, mkView, curMatch, bbName, size, leftKey, sides, myBet, mkTitle, mkLabel, payoutIf } from './state.js';
 import { connect, disconnect, react, act, http, register, login, hostLogin, info, createEvent, uploadPhoto, isDemo, demoCtl } from './net.js';
 import { ui, loops, catBar, wordmark, catArt, ART_LABEL, ART_FILE, crown } from './ui.js';
@@ -60,6 +61,26 @@ async function onRoute() {
   connect(r.code, onPush);
 }
 addEventListener('hashchange', onRoute);
+
+/* The big screen keeps itself up to date: a newer deploy or a long lost connection reloads it (never in the middle of a battle).
+   Browser full screen is lost on a reload, so for the hall F11 (or a kiosk window) is the sturdier choice. */
+{
+  let downSince = 0;
+  // at most one reload every two minutes, whatever happens
+  const stamp = () => { try { const t = +sessionStorage.getItem('bc.reload') || 0; if (Date.now() - t < 120000) return false; sessionStorage.setItem('bc.reload', String(Date.now())); } catch (_) { /* */ } return true; };
+  const quiet = () => { const c = curMatch(); return !c || c.status === 'done'; };
+  setInterval(async () => {
+    if (!(route && route.a === 's') || !S.meta || route.code === 'DEMO') return;
+    if (S.conn === 'live') downSince = 0; else downSince = downSince || Date.now();
+    if (downSince && Date.now() - downSince > 90000 && quiet() && stamp()) { location.reload(); return; }
+    try {
+      const r = await fetch('js/config.js?v=' + Date.now(), { cache: 'no-store' });
+      const m = /VERSION\s*=\s*'([^']*)'/.exec(await r.text());
+      const live = m && m[1].replace(/\\u([0-9a-fA-F]{4})/g, (_, h) => String.fromCharCode(parseInt(h, 16)));
+      if (live && live !== VERSION && quiet() && stamp()) location.reload();
+    } catch (_) { /* offline: the connection check above handles it */ }
+  }, 45000);
+}
 
 /* Safe zones: TVs and projectors crop the edge of the picture, so the big screen keeps a margin (0 to 8 %) clear. */
 let guideT = 0;
