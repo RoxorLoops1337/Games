@@ -2,6 +2,7 @@
 // networks that eat WebSockets, automatic reconnect, and plain HTTP for sign-up and login.
 import { S, emit, setMeta, setMe, serverBase } from './state.js';
 import { createDemo } from './demo.js';
+import { floatReactions } from './juice.js';
 
 let demo = null;
 export const isDemo = () => S.code === 'DEMO';
@@ -33,6 +34,7 @@ export function apply(m) {
     case 'meta': { const { t, now, ...rest } = m; if (now) S.skew = now - Date.now(); setMeta(rest); S.ready = true; break; }
     case 'live': if (m.now) S.skew = m.now - Date.now(); S.live = m; break;
     case 'board': S.board = m.rows; break;
+    case 'rx': floatReactions(m.c, location.hash.startsWith('#/s/')); return;
     case 'me': { const prev = S.me; const { t, ...rest } = m; setMe(rest); onPush('me', prev, rest); break; }
     case 'host': S.host = m; break;
     case 'feed': S.feed = [...(S.feed || []), ...m.items.map((i) => ({ ...i, at: Date.now() }))].slice(-8); break;
@@ -42,6 +44,12 @@ export function apply(m) {
     default: return;
   }
   emit();
+}
+
+/** Send a reaction (not game state: it only floats up everybody's screen). */
+export function react(e) {
+  if (S.code === 'DEMO') { floatReactions({ [e]: 1 }); return; }
+  if (ws && ws.readyState === 1) ws.send(JSON.stringify({ t: 'rx', e }));
 }
 
 export function connect(code, push) {

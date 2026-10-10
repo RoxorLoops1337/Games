@@ -55,6 +55,10 @@ A wrong result can be taken back (`reopen`) because every settlement writes a pe
 
 Opening a vote sets `m.vend` (server time in ms; `voteSecs` default 10, the host picks 5/10/15/20/30/Off per battle, 0 = manual). The Durable Object arms one timer (`armVotes`) that calls `closeDueVotes`; the demo does the same. `meta`/`live`/`state` carry `now` so phones correct their clock (`S.skew`, `secsLeft`); the ring is `countdown()` in `ui.js`, kept current by the 200 ms ticker in `main.js`. Late votes (2.5 s grace) bounce. With `thirdPlace` on (default), finishing both semis splices a `third: true` match before the final (no bracket picks, own market); taking back a semi is refused until it is `upcoming` again. `js/share.js` draws the player's result card on a canvas (never uploaded).
 
+## Juice
+
+Streak bonus: every judged battle where a player's vote matched the judges, `voteStreak` counts the run (across categories, newest first); from 2 in a row `setResult` pays +5 per step (cap 25) as a separate ledger `credit` (stat `streakBonus`), so `reopen` reverses it. Levels and badges (`js/juice.js`) are derived on the client from the server counters, nothing is stored. Reactions are ephemeral: a socket message `{t:'rx', e}` (players only, 5 kinds, one per 350 ms each) is batched by the Durable Object and broadcast as `{t:'rx', c:{kind:n}}` twice a second; phones and the big screen float emojis. Sounds are synthesised with WebAudio (no files); `bc.sound` in localStorage remembers the toggle (off by default; the big screen has an Enable sound button because browsers need a tap).
+
 ## Hard rules for this folder
 
 1. All Loops moves go through `credit()` with a ledger ref, or `reopen` stops being exact. Tests check conservation.

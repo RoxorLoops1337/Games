@@ -704,5 +704,38 @@ t('the category summary carries its art (crew tabs used to show the male portrai
   assert.ok(m.cats.some((c) => c.art === 'crew'));
 });
 
+console.log('streaks');
+t('voting with the judges several times in a row pays a growing bonus, and taking a result back takes it back', () => {
+  const { S, us, ids } = setup({ size: 8, beatboxers: 8, users: 2 });
+  host(S, { a: 'phase', to: 'elimination' });
+  host(S, { a: 'seeds', order: ids });
+  const [a, b] = us;
+  const vote = (mid, ua, ub) => {
+    host(S, { a: 'step', mid, to: 'live' }); host(S, { a: 'step', mid, to: 'voting' });
+    E.castVote(S, a, mid, ua); E.castVote(S, b, mid, ub);
+    host(S, { a: 'step', mid, to: 'closed' });
+  };
+  const gain = (u, f) => { const before = u.bal; f(); return u.bal - before; };
+  const P = S.ev.settings.pts;
+  vote('r0m0', 'a', 'b'); const g1 = gain(a, () => host(S, { a: 'result', mid: 'r0m0', w: 'a' }));
+  assert.equal(g1, P.vote + P.sync, 'first one: no bonus yet');
+  vote('r0m1', 'a', 'b'); const g2 = gain(a, () => host(S, { a: 'result', mid: 'r0m1', w: 'a' }));
+  assert.equal(g2, P.vote + P.sync + 5, 'two in a row: +5');
+  assert.equal(E.voteStreak(S, a), 2); assert.equal(E.voteStreak(S, b), 0);
+  assert.equal(E.meOf(S, a).streak, 2);
+  vote('r0m2', 'b', 'b'); const g3 = gain(a, () => host(S, { a: 'result', mid: 'r0m2', w: 'a' }));
+  assert.equal(g3, P.vote, 'wrong side breaks the run');
+  assert.equal(E.voteStreak(S, a), 0);
+  host(S, { a: 'reopen', mid: 'r0m2' });
+  assert.equal(E.voteStreak(S, a), 2, 'back to the run');
+  assert.equal(a.st.streakBonus, 5, 'one bonus paid so far');
+  host(S, { a: 'step', mid: 'r0m2', to: 'voting' }); host(S, { a: 'step', mid: 'r0m2', to: 'closed' });
+  host(S, { a: 'result', mid: 'r0m2', w: 'b' });
+  assert.equal(E.voteStreak(S, a), 3, 'three in a row now');
+  assert.equal(a.st.streakBonus, 15, 'run of three pays +10 on top');
+  host(S, { a: 'reopen', mid: 'r0m2' });
+  assert.equal(a.st.streakBonus, 5, 'taking the result back takes the bonus back');
+});
+
 console.log(`\n${pass} passed, ${failN} failed`);
 process.exit(failN ? 1 : 0);

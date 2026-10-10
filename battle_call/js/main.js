@@ -3,7 +3,7 @@
 //   #/e/CODE      the audience app         #/h/CODE     the organiser console      #/s/CODE   the big screen
 import { morph, esc, ic, $, $$, toast, confetti, runTickers, buzz, setHaptics } from './dom.js';
 import { S, serverNow, emit, subscribe, resetState, selectCat, sessions, saveSession, dropSession, deviceId, serverBase, setServer, mkView, curMatch, bbName, size, leftKey, sides, myBet, mkTitle, mkLabel, payoutIf } from './state.js';
-import { connect, disconnect, act, http, register, login, hostLogin, info, createEvent, uploadPhoto, isDemo, demoCtl } from './net.js';
+import { connect, disconnect, react, act, http, register, login, hostLogin, info, createEvent, uploadPhoto, isDemo, demoCtl } from './net.js';
 import { ui, loops, catBar, wordmark, catArt, ART_LABEL, ART_FILE, crown } from './ui.js';
 import { MIN_BET } from './shared.js';
 import { homeView, createView, authView } from './views/auth.js';
@@ -15,6 +15,7 @@ import { voteOverlay } from './views/vote.js';
 import { hostLogin as hostLoginView, hostShell, photoQueueSheet, joinLink } from './views/host.js';
 import { screenView } from './views/screen.js';
 import { shareCard } from './share.js';
+import { sound, setSound, soundOn, levelOf } from './juice.js';
 
 const app = document.getElementById('app');
 let route = { a: '', code: '' }, entered = '';
@@ -39,7 +40,7 @@ async function onRoute() {
   if (entered === key) { emit(); return; }
   entered = key;
   disconnect(); resetState();
-  Object.assign(ui, { sheet: null, modal: null, voteOpen: null, notFound: false, offline: false, err: '', watching: false, tab: r.tab && ['live', 'predict', 'bets', 'board'].includes(r.tab) ? r.tab : 'live', rank: { top: null, seeds: [] }, topSaved: true });
+  Object.assign(ui, { lvl: 0, sheet: null, modal: null, voteOpen: null, notFound: false, offline: false, err: '', watching: false, tab: r.tab && ['live', 'predict', 'bets', 'board'].includes(r.tab) ? r.tab : 'live', rank: { top: null, seeds: [] }, topSaved: true });
   S.code = r.code;
   const sess = sessions()[r.code] || {};
   if (r.code === 'DEMO') { S.role = kind === 'e' ? 'user' : kind === 'h' ? 'host' : 'guest'; S.tk = 'demo'; S.ht = 'demo'; S.name = 'You'; }
@@ -68,7 +69,7 @@ setInterval(() => {
     if (b && b.textContent !== String(s)) b.textContent = s;
     el.style.setProperty('--f', Math.max(0, Math.min(1, left / +el.dataset.tot)).toFixed(3));
     el.classList.toggle('hot', s <= 3);
-    if (s !== lastTick && s <= 3 && s > 0 && el.closest('.vote, .stage')) { lastTick = s; buzz(15); }
+    if (s !== lastTick && s <= 3 && s > 0 && el.closest('.vote, .stage')) { lastTick = s; buzz(15); sound('tick'); }
   }
 }, 200);
 
@@ -104,7 +105,7 @@ function viewMain() {
     return hostShell() + overlays();
   }
   if (!S.meta) return loadingView();
-  if (r.a === 's') return screenView();
+  if (r.a === 's') return screenView() + `<button class="btn sm ghost soundbtn" data-a="toggleSound">${soundOn() ? 'Sound on' : 'Enable sound'}</button>`;
   if (S.role === 'guest' && !ui.watching) return authView();
   return audienceShell() + overlays();
 }
@@ -208,21 +209,22 @@ function onState() {
       if (route.a === 'e' && S.role === 'user') {
         if (m.status === 'voting') {
           ui.voteDismissed[m.id] = false;
+          sound('go');
           if (!S.me || !S.me.votes[m.id]) { selectCat(c.id); ui.voteOpen = m.id; buzz([40, 60, 40]); }
           else toast('Voting is open. Your screen is ready.', 'info');
         }
-        if (m.status === 'closed' && ui.voteOpen === m.id) buzz([60, 40, 60, 40, 120]);
+        if (m.status === 'closed' && ui.voteOpen === m.id) { buzz([60, 40, 60, 40, 120]); sound('hands'); }
         if (m.status === 'live') toast(`The battle is on${tag}!`, 'info');
       }
       if (m.status === 'done') {
         if (route.a === 's') {
-          confetti({ x: 0.5, y: 0.5, n: 160, power: 1.4 });
+          confetti({ x: 0.5, y: 0.5, n: 160, power: 1.4 }); sound('fanfare');
           ui.screenHold = { id: m.id, until: Date.now() + 18000 };
           setTimeout(emit, 18200); // the hall gets the result for a while before the bracket comes back
         }
         if (route.a === 'e' && ui.voteOpen === m.id) {
           const mine = S.me && S.me.votes[m.id];
-          if (mine && mine === m.w) confetti({ n: 120 });
+          if (mine && mine === m.w) { confetti({ n: 120 }); sound('win'); } else if (mine) sound('lose');
           clearTimeout(resultTimer);
           resultTimer = setTimeout(() => { if (ui.voteOpen === m.id) { ui.voteOpen = null; emit(); } }, 9000);
         }
@@ -255,6 +257,9 @@ function onPush(kind, prev, next) {
     ui.seenLog = top;
     try { localStorage.setItem('bc.seen.' + S.code, String(top)); } catch (_) { /* */ }
   }
+  const lv = levelOf(next).lvl;
+  if (ui.lvl && lv > ui.lvl) { toast(`<b>Level ${lv}!</b> You are climbing`, 'win'); confetti({ n: 90, gold: true, y: 0.3 }); sound('level'); buzz([30, 40, 30, 40, 80]); }
+  ui.lvl = lv;
   if (ui.topSaved && ui.rank.top && next.top.join() !== ui.rank.top.join()) ui.rank.top = [...next.top];
   if (ui.rank.top == null) ui.rank.top = [...next.top];
 }
@@ -436,6 +441,8 @@ const A = {
     try { if (navigator.share) { await navigator.share({ title, text: `Join the battle: ${title}`, url }); return; } } catch (_) { return; }
     try { await navigator.clipboard.writeText(url); toast('Link copied. Send it to your friends.', 'info'); } catch (_) { prompt('Copy this link', url); }
   },
+  react(el) { react(el.dataset.e); buzz(10); },
+  toggleSound() { setSound(!soundOn()); emit(); },
   async shareResults() { if (!S.me) return; const r = await shareCard(); if (r.saved) toast('Saved as a picture. Post it anywhere!', 'info'); },
   async copyLink() { try { await navigator.clipboard.writeText(joinLink()); toast('Link copied', 'info'); } catch (_) { prompt('Copy this link', joinLink()); } },
 };

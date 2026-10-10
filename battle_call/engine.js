@@ -446,6 +446,17 @@ export function swapSides(S, mid) {
   return ok({});
 }
 
+/** How many battles in a row (latest first, across categories) this player's vote went the judges' way. */
+export function voteStreak(S, u) {
+  const done = [];
+  for (const c of cats(S)) for (const m of c.matches) if (m.status === 'done' && m.w) done.push(m);
+  done.sort((a, b) => (b.ds || 0) - (a.ds || 0));
+  let n = 0;
+  for (const m of done) { if (u.votes[m.id] === m.w) n++; else break; }
+  return n;
+}
+const streakBonus = (n) => (n >= 2 ? Math.min(5 * (n - 1), 25) : 0);
+
 export function setResult(S, mid, w, judges) {
   const ev = S.ev, m = matchOf(S, mid), P = ev.settings.pts;
   if (ev.phase !== 'bracket') return fail('The bracket is not running');
@@ -473,6 +484,8 @@ export function setResult(S, mid, w, judges) {
       credit(S, u, P.vote + (synced ? P.sync : 0), 'vote',
         synced ? `Your vote matched the judges: +${P.vote + P.sync}` : `Thanks for voting: +${P.vote}`, ref,
         { votes: 1, sync: synced ? 1 : 0 });
+      const run = synced ? voteStreak(S, u) : 0, bonus = streakBonus(run);
+      if (bonus) credit(S, u, bonus, 'streak', `${run} in a row with the judges: +${bonus}`, ref, { streakBonus: bonus });
     }
   }
   // advance
@@ -886,7 +899,7 @@ export function meOf(S, u) {
   const rank = rankOf(S, u);
   return {
     name: u.name, bal: u.bal, staked: staked(S, u), net: netWorth(S, u), rank: rank.rank, of: rank.of,
-    tops: u.tops || {}, picks: u.picks, bets: u.bets, votes: u.votes, st: u.st, log: u.log.slice(-25), banned: u.banned,
+    streak: voteStreak(S, u), tops: u.tops || {}, picks: u.picks, bets: u.bets, votes: u.votes, st: u.st, log: u.log.slice(-25), banned: u.banned,
   };
 }
 

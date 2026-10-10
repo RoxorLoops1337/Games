@@ -1,6 +1,7 @@
 // Battle Call: the share card. A 1080 x 1350 picture of how the player did, drawn on a canvas on their own phone
 // (nothing is uploaded), shared with the native share sheet or downloaded.
 import { S } from './state.js';
+import { levelOf } from './juice.js';
 
 /** How many finished battles the player called right, across every category. */
 export function callStats() {
@@ -47,7 +48,7 @@ export async function drawCard() {
   cell(80, 860, tot ? `${hit} of ${tot}` : String(hit), 'battles called');
   cell(560, 860, me.net.toLocaleString(), 'Loops');
   cell(80, 1090, String((me.st && me.st.won) || 0), 'bets won');
-  cell(560, 1090, me.lvl ? 'Lv ' + me.lvl : String((me.st && me.st.votes) || 0), me.lvl ? 'level' : 'votes cast');
+  cell(560, 1090, 'Lv ' + levelOf(me).lvl, levelOf(me).title);
   g.fillStyle = '#a29dc9'; g.font = font(600, 32); g.fillText('Call the battle. Join the next one.', W / 2, 1325);
   return cv;
 }
