@@ -311,7 +311,7 @@ await t('an event saved by an older version still loads after a deploy: every pr
   assert.deepEqual(me.top, meBefore.top, 'the Top 8 is still there');
   assert.deepEqual(me.bets, meBefore.bets, 'and the bet'); assert.equal(me.bal, meBefore.bal);
   const m = host2.last('meta');
-  assert.equal(m.set.voteSecs, 10); assert.equal(m.cats[0].set.thirdPlace, false, 'a night under way does not suddenly grow a third-place battle');
+  assert.equal(m.set.voteSecs, 30); assert.equal(m.cats[0].set.thirdPlace, false, 'a night under way does not suddenly grow a third-place battle');
   assert.equal((await act(rt2, host2, { a: 'phase', to: 'picks' })).ok, true);
   assert.equal(host2.last('meta').cats[0].elimOn, true, 'reopened picks keep the round going');
   assert.equal((await act(rt2, host2, { a: 'performer', cat: 'c1', id: ids[0] })).ok, true, 'new actions work on the old event');

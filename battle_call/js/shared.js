@@ -25,7 +25,7 @@ export const DEFAULTS = {
   qualifyBets: true,   // "Will X make the cut?" bets while picks are open
   autoChampion: true,  // open the "Who wins the whole battle?" market when the bracket is drawn
   thirdPlace: true,    // the two semi-final losers battle for third place
-  voteSecs: 10,        // the audience vote closes by itself after this many seconds (0 = the organiser closes it)
+  voteSecs: 30,        // the audience vote closes by itself after this many seconds (0 = the organiser closes it)
   pts: { topIn: 20, topExact: 40, topNear: 15, pick: 25, vote: 10, sync: 15, tip: 50 },
 };
 

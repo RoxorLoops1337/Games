@@ -615,18 +615,28 @@ t('32 beatboxers, 120 random players: the world stays solvent and the numbers st
 });
 
 console.log('vote countdown and third place');
+t('the vote length is 30 s: events still on the old default of 10 follow, a custom length stays, and a later choice of 10 sticks', () => {
+  const mk = (v) => { const ev = E.newEvent({ code: 'M', name: 'M', size: 4, now: 1 }); const c = ev.cats[ev.order[0]]; c.settings.voteSecs = v; delete c.settings.voteSecsV; return ev; };
+  const on = (ev) => ev.cats[ev.order[0]].settings;
+  assert.equal(on(E.migrateEvent(mk(10))).voteSecs, 30);
+  assert.equal(on(E.migrateEvent(mk(15))).voteSecs, 15);
+  const ev = E.migrateEvent(mk(10)); on(ev).voteSecs = 10; E.migrateEvent(ev);
+  assert.equal(on(ev).voteSecs, 10, 'migrated once only');
+  assert.equal(on(E.newEvent({ code: 'N', name: 'N', size: 4, now: 1 })).voteSecs, 30, 'new events start at 30');
+});
+
 t('voting has a countdown: closes itself, late votes bounce, 0 means manual', () => {
   const { S, us } = bracketWorld();
   S.now = 1000;
   host(S, { a: 'step', mid: 'r0m0', to: 'live' });
   host(S, { a: 'step', mid: 'r0m0', to: 'voting' });
   const m = S.ev.matches.find((x) => x.id === 'r0m0');
-  assert.equal(m.vsecs, 10, 'default is 10 seconds');
-  assert.equal(m.vend, 11000);
+  assert.equal(m.vsecs, 30, 'default is 30 seconds');
+  assert.equal(m.vend, 31000);
   assert.deepEqual(E.closeDueVotes(S), [], 'not due yet');
-  S.now = 10999;
+  S.now = 30999;
   assert.ok(E.castVote(S, us[0], 'r0m0', 'a').ok);
-  S.now = 11000;
+  S.now = 31000;
   assert.deepEqual(E.closeDueVotes(S), ['r0m0']);
   assert.equal(m.status, 'closed');
   assert.equal(m.vend, 0);
