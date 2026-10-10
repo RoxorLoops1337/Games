@@ -4,7 +4,7 @@
 import { morph, esc, ic, $, $$, toast, confetti, runTickers, buzz, setHaptics } from './dom.js';
 import { S, emit, subscribe, resetState, selectCat, sessions, saveSession, dropSession, deviceId, serverBase, setServer, mkView, curMatch, bbName, size, leftKey, sides, myBet, mkTitle, mkLabel, payoutIf } from './state.js';
 import { connect, disconnect, act, http, register, login, hostLogin, info, createEvent, uploadPhoto, isDemo, demoCtl } from './net.js';
-import { ui, loops, catBar } from './ui.js';
+import { ui, loops, catBar, wordmark, catArt, ART_LABEL, ART_FILE, crown } from './ui.js';
 import { MIN_BET } from './shared.js';
 import { homeView, createView, authView } from './views/auth.js';
 import { liveTab } from './views/live.js';
@@ -69,7 +69,7 @@ function view() {
 function demoBar() {
   const here = route.a, auto = demoCtl().isAuto(), done = S.meta.phase === 'finished';
   const seg = (r, l) => `<button class="seg ${here === r ? 'on' : ''}" data-a="demoGo" data-r="${r}">${l}</button>`;
-  return `<div class="demobar ${here === 's' ? 'tiny' : ''}" data-k="demobar"><b>Demo</b><div class="segs mini">${seg('e', 'Phone')}${seg('h', 'Organiser')}${seg('s', 'Screen')}</div>
+  return `<div class="demobar ${here === 's' ? 'tiny' : ''}" data-k="demobar"><b>Demo</b><div class="segs mini">${seg('e', 'Phone')}${seg('h', 'Host')}${seg('s', 'Screen')}</div>
     <button class="btn sm" data-a="demoNext" ${done ? 'disabled' : ''}>Next step</button>
     <button class="btn sm ${auto ? 'hot' : 'ghost'}" data-a="demoPlay" ${done ? 'disabled' : ''}>${auto ? 'Pause' : 'Autoplay'}</button>
     <button class="ib dim" data-a="demoReset" aria-label="Start the demo again">${ic('undo', 16)}</button></div>`;
@@ -102,7 +102,7 @@ function audienceShell() {
   const pickDue = ev.phase === 'picks' && me && me.top.length < size();
   const tabs = [['live', 'Live', 'live', voteDue], ['predict', 'Predict', 'predict', pickDue], ['bets', 'Bets', 'dice', false], ['board', 'Board', 'board', false]];
   return `<div class="shell">
-    <header class="top"><a class="brand-mini" href="#/">${ic('mic', 18)}<b>Battle Call</b></a>
+    <header class="top"><a class="brand-mini" href="#/" aria-label="BattleCall home">${wordmark(22)}</a>
       <div class="evname">${esc(ev.name)}${conn ? `<small class="warnline">${conn}</small>` : ''}</div>
       ${me ? `<button class="wallet" data-a="openMe" aria-label="Your wallet">${ic('loops', 18)}<b data-count="${me.bal}">${me.bal}</b></button>` : `<button class="btn sm" data-a="authOpen">Join</button>`}</header>
     <main class="page" data-k="page-${ui.tab}">${catBar()}${content}</main>
@@ -120,7 +120,8 @@ function overlays() {
   if (ui.modal) {
     const m = ui.modal;
     h += `<div class="scrim" data-a="modalNo" data-k="mscrim"></div><div class="modal" role="alertdialog"><h2>${esc(m.title)}</h2><p>${m.text}</p>
- ${m.sizes ? `<p class="muted small">How many go through to the bracket?</p><div class="segs">${m.sizes.map((n) => `<button type="button" class="seg ${m.pick === n ? 'on' : ''}" data-a="modalPick" data-v="${n}">${n === 2 ? 'Final only' : 'Top ' + n}</button>`).join('')}</div>` : ''}
+ ${m.arts ? `<p class="muted small">Which picture? <span>Leave it empty and it is chosen from the name.</span></p><div class="arts">${m.arts.map((k) => `<button type="button" class="artpick ${m.art === k ? 'on' : ''}" data-a="modalArt" data-v="${k}">${catArt(k)}<small>${ART_LABEL[k]}</small></button>`).join('')}</div>` : ''}
+      ${m.sizes ? `<p class="muted small">How many go through to the bracket?</p><div class="segs">${m.sizes.map((n) => `<button type="button" class="seg ${m.pick === n ? 'on' : ''}" data-a="modalPick" data-v="${n}">${n === 2 ? 'Final only' : 'Top ' + n}</button>`).join('')}</div>` : ''}
       ${m.input ? `<input id="modalin" class="mi" value="${esc(m.input.value)}" maxlength="${m.input.max || 60}" autocomplete="off" type="${m.input.type || 'text'}" placeholder="${esc(m.input.ph || '')}">` : ''}
       <div class="cta-row"><button class="btn ghost" data-a="modalNo">Cancel</button><button class="btn ${m.danger ? 'danger' : ''}" data-a="modalYes">${esc(m.ok || 'OK')}</button></div></div>`;
   }
@@ -281,12 +282,13 @@ const A = {
     disconnect(); connect(S.code, onPush); emit();
   },
   modalNo() { ui.modal = null; emit(); },
+  modalArt(el) { if (ui.modal) { ui.modal.art = el.dataset.v; emit(); } },
   modalPick(el) { if (ui.modal) { ui.modal.pick = +el.dataset.v; emit(); } },
   async modalYes() {
     const m = ui.modal; if (!m) return;
     const v = m.input ? ($('#modalin') || {}).value : undefined;
     ui.modal = null; emit();
-    await m.run(v, m.pick);
+    await m.run(v, m.pick, m.art);
   },
   serverEdit() {
     ask('Server address', 'Where the Battle Call Worker runs. Leave empty for the default.', 'Save', (v) => { setServer((v || '').trim()); entered = ''; location.reload(); },
@@ -297,10 +299,14 @@ const A = {
   /* categories */
   catPick(el) { selectCat(el.dataset.id); window.scrollTo(0, 0); emit(); },
   hCatAdd() {
-    ask('Add a category', 'For example Solo Female, Tag Team, Crew or Loop Station. It gets its own lineup and bracket.', 'Add', async (v, size) => {
-      const r = await act({ a: 'cat.add', name: v, size });
+    ask('Add a category', 'For example Solo Female, Tag Team, Crew or Loop Station. It gets its own lineup and bracket.', 'Add', async (v, size, art) => {
+      const r = await act({ a: 'cat.add', name: v, size, art });
       if (fail(r)) { selectCat(r.cat); ui.hostTab = 'lineup'; toast('Category added: add its beatboxers', 'info'); emit(); }
-    }, { input: { value: '', ph: 'Category name', max: 24 }, sizes: [2, 4, 8, 16, 32, 64], pick: 16 });
+    }, { input: { value: '', ph: 'Category name', max: 24 }, sizes: [2, 4, 8, 16, 32, 64], pick: 16, arts: ['male', 'female', 'duo', 'crew', 'loop'], art: '' });
+  },
+  hCatArt(el) {
+    const id = el.dataset.id, c = S.event.cats.find((x) => x.id === id);
+    ask('Category picture', `The picture shown for ${esc(c.name)} on every phone and on the big screen.`, 'Save', async (v, size, art) => { if (art) fail(await act({ a: 'cat.art', id, art })); }, { arts: ['male', 'female', 'duo', 'crew', 'loop'], art: c.art });
   },
   hCatRename(el) { const id = el.dataset.id; ask('Rename the category', 'This shows on every phone and on the big screen.', 'Save', async (v) => { fail(await act({ a: 'cat.rename', id, name: v })); }, { input: { value: S.event.cats.find((c) => c.id === id).name, max: 24 } }); },
   hCatRm(el) { const id = el.dataset.id, c = S.event.cats.find((x) => x.id === id); ask(`Remove ${c.name}?`, 'Its lineup goes with it. You can only remove a category that has not started.', 'Remove', async () => { fail(await act({ a: 'cat.rm', id })); }, { danger: true }); },
@@ -341,7 +347,8 @@ const A = {
   voteOpen(el) { ui.voteOpen = el.dataset.m; ui.voteDismissed[el.dataset.m] = false; keepAwake(true); emit(); },
   async vote(el) {
     const mid = el.dataset.m, side = el.dataset.side;
-    ui.vote[mid] = side; buzz(35); keepAwake(true); goFull(); emit();
+    ui.vote[mid] = side; ui.voteFlash = mid; setTimeout(() => { if (ui.voteFlash === mid) { ui.voteFlash = null; emit(); } }, 1700);
+    buzz(35); keepAwake(true); goFull(); emit();
     const r = await act({ a: 'vote', mid, side });
     if (!r.ok) { delete ui.vote[mid]; toast(esc(r.err || 'Vote not counted'), 'loss'); emit(); }
   },
@@ -402,6 +409,11 @@ const A = {
   mkFilter(el) { ui.mkFilter = el.dataset.f; emit(); },
   async hBannerClear() { fail(await act({ a: 'banner', text: '' })); },
   hDestroy() { ask('Delete this event?', 'Everything goes: players, picks, bets and photos. Download the results first if you want to keep them.', 'Delete forever', async () => { const r = await http(`/api/e/${S.code}/destroy`, {}, { headers: { 'x-host': S.ht } }); if (r.ok) { dropSession(S.code); location.hash = '#/'; } else toast(esc(r.err || 'Failed'), 'loss'); }, { danger: true }); },
+  async shareEvent() {
+    const url = joinLink(), title = S.meta ? S.meta.name : 'BattleCall';
+    try { if (navigator.share) { await navigator.share({ title, text: `Join the battle: ${title}`, url }); return; } } catch (_) { return; }
+    try { await navigator.clipboard.writeText(url); toast('Link copied. Send it to your friends.', 'info'); } catch (_) { prompt('Copy this link', url); }
+  },
   async copyLink() { try { await navigator.clipboard.writeText(joinLink()); toast('Link copied', 'info'); } catch (_) { prompt('Copy this link', joinLink()); } },
 };
 

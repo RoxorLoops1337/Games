@@ -412,3 +412,73 @@ body[data-mode=screen] { overflow: hidden; }
 .stage .st-head .brand small { text-transform: none; letter-spacing: 0; }
 
 .btn.undo { justify-content: flex-start; gap: 12px; text-align: left; padding: 10px 16px; min-height: 52px; } .btn.undo span { display: flex; flex-direction: column; line-height: 1.2; } .btn.undo small { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; } .btn.undo b { font-size: 15px; }
+
+/* =====================================================================
+   Brand pass: BattleCall artwork (img/), condensed headline, photo heroes
+   ===================================================================== */
+.wm { display: block; width: auto; }
+.brand .wm { filter: drop-shadow(0 2px 14px rgba(237,39,188,.35)); }
+.top .brand-mini { color: inherit; }
+.hl { font-family: 'Barlow Condensed', 'Arial Narrow', var(--f); font-style: italic; font-weight: 800; text-transform: uppercase; font-size: clamp(58px, 18vw, 92px); line-height: .88; letter-spacing: .005em; color: #fff; text-shadow: 0 4px 36px rgba(0,0,0,.6); }
+.hl em { font-style: italic; background: linear-gradient(90deg, #ff3bd0, #ff7a4d); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.front.home { isolation: isolate; }
+.homehero { position: absolute; z-index: -1; top: 0; left: 50%; width: 100vw; max-width: 760px; transform: translateX(-50%); height: 78vh; min-height: 520px; background: linear-gradient(180deg, rgba(10,9,20,.45) 0%, rgba(10,9,20,.05) 30%, rgba(10,9,20,.55) 62%, var(--bg) 96%), url(../img/hero.webp) 18% 0 / cover no-repeat; }
+.front.home .brand { margin-bottom: 12vh; }
+
+.catart { object-fit: cover; object-position: 50% 10%; background: linear-gradient(145deg, #4a2f9a, #1c1640); flex: none; display: block; }
+.catart.tab { width: 36px; height: 36px; border-radius: 50%; }
+.cat { flex-direction: row; align-items: center; gap: 9px; padding: 6px 14px 6px 7px; }
+.cat > span { display: flex; flex-direction: column; align-items: flex-start; }
+.ib.art { width: 40px; height: 40px; }
+.arts { display: flex; gap: 8px; overflow-x: auto; padding: 2px; scrollbar-width: none; }
+.artpick { flex: none; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 8px 6px 6px; width: 76px; border-radius: 14px; border: 1.5px solid var(--line); background: rgba(255,255,255,.05); }
+.artpick .catart { width: 52px; height: 52px; border-radius: 50%; } .artpick small { font-size: 10.5px; text-align: center; line-height: 1.1; }
+.artpick.on { border-color: var(--pink); background: rgba(255,79,176,.16); }
+
+.hero.photo { background: linear-gradient(90deg, rgba(10,9,20,.94) 0%, rgba(10,9,20,.78) 50%, rgba(10,9,20,.3) 100%), linear-gradient(180deg, rgba(139,92,255,.3), rgba(255,79,176,.12)), url(../img/crowd.webp) center / cover no-repeat; min-height: 270px; }
+.hero.photo.elim { background: linear-gradient(90deg, rgba(10,9,20,.94), rgba(10,9,20,.75) 60%, rgba(10,9,20,.35)), linear-gradient(180deg, rgba(255,162,58,.3), rgba(255,51,81,.14)), url(../img/crowd.webp) center / cover no-repeat; }
+.hero.photo::after { display: none; }
+.hero.photo > *:not(.heroart) { position: relative; z-index: 1; }
+.hero.photo .lead { max-width: 80%; }
+.heroart { position: absolute; z-index: 0; right: -6%; bottom: 0; height: 88%; width: auto; max-width: 62%; object-fit: contain; object-position: bottom right; opacity: .9; -webkit-mask-image: linear-gradient(to left, #000 55%, transparent); mask-image: linear-gradient(to left, #000 55%, transparent); pointer-events: none; }
+.livepill { display: inline-flex; align-items: center; gap: 6px; padding: 4px 11px; border-radius: 99px; background: var(--red); font-size: 12px; font-weight: 800; letter-spacing: .1em; color: #fff; } .livepill i { width: 7px; height: 7px; border-radius: 50%; background: #fff; animation: pulse 1.2s infinite; }
+.onl { display: inline-flex; align-items: center; gap: 5px; color: #d6d2f5; font-size: 13px; font-weight: 600; }
+.sharebtn { align-self: flex-start; }
+
+.crown-i { display: inline-block; vertical-align: middle; }
+.crown-i.xs { width: 26px; height: 26px; } .crown-i.sm { width: 20px; height: 20px; margin-right: 5px; } .crown-i.big { width: 64px; height: 64px; }
+.crownwrap { position: relative; display: inline-block; padding-top: 30px; } .crownwrap .crown-i.big { position: absolute; top: -4px; left: 50%; transform: translateX(-50%); z-index: 3; filter: drop-shadow(0 4px 14px rgba(255,201,64,.7)); }
+.hero.champ .crownwrap { margin-top: 6px; }
+.wavatar { position: relative; padding-top: 34px; } .wavatar .crown-i.big { position: absolute; top: -6px; left: 50%; transform: translateX(-50%); z-index: 3; filter: drop-shadow(0 4px 14px rgba(255,201,64,.8)); }
+.pd.p1 .crown-i.sm { width: 30px; height: 30px; margin: 0 0 -4px; }
+.board li.r1 .rk { background: none; width: 30px; } .board .rk .crown-i { margin: 0; }
+.bcol h4 .crown-i.sm { width: 18px; height: 18px; margin-right: 2px; }
+.pane .crown .crown-i.big { width: 9vmin; height: 9vmin; filter: drop-shadow(0 .6vmin 2vmin rgba(255,201,64,.8)); }
+
+/* the battle: the two figures stand behind the two halves */
+.half { overflow: hidden; isolation: isolate; padding-bottom: 96px; }
+.half::before { content: ''; position: absolute; inset: 0; z-index: -1; background-repeat: no-repeat; background-size: auto 74%; opacity: .55; pointer-events: none; }
+.half.blue::before { background-image: url(../img/battle-blue.webp); background-position: 0% 100%; }
+.half.red::before { background-image: url(../img/battle-red.webp); background-position: 100% 100%; }
+.vtitle { display: flex; flex-direction: column; align-items: center; gap: 2px; } .vtitle b { font-size: 30px; font-weight: 800; letter-spacing: -.01em; } .vtitle small { color: #fff; opacity: .85; font-size: 14px; }
+.vwave { position: absolute; z-index: 3; left: 50%; bottom: calc(18px + var(--sb)); transform: translateX(-50%); width: 82%; max-width: 520px; opacity: .8; pointer-events: none; }
+.vflash { position: absolute; inset: 0; z-index: 6; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; text-align: center; color: #fff; background: inherit; animation: vflash 1.7s ease forwards; pointer-events: none; }
+.vflash img { width: 150px; height: 150px; animation: pop .55s cubic-bezier(.2,.9,.3,1.4) both; filter: drop-shadow(0 8px 30px rgba(0,0,0,.35)); } .vflash b { font-size: 34px; letter-spacing: -.01em; } .vflash small { color: #fff; opacity: .85; font-size: 16px; }
+@keyframes vflash { 0%, 72% { opacity: 1; } 100% { opacity: 0; visibility: hidden; } }
+
+/* the big screen */
+.pane::before { content: ''; position: absolute; inset: 0; background-repeat: no-repeat; background-size: auto 88%; opacity: .4; pointer-events: none; }
+.pane.blue::before { background-image: url(../img/battle-blue.webp); background-position: 0% 100%; } .pane.red::before { background-image: url(../img/battle-red.webp); background-position: 100% 100%; }
+.pane > * { position: relative; }
+.pane .crown { position: absolute; }
+.stage.lobby, .stage.picks { background: linear-gradient(180deg, rgba(10,9,20,.82), rgba(10,9,20,.93)), url(../img/crowd.webp) center / cover no-repeat; }
+.stage .st-head .brand .crown-i { width: 3.4em; height: 3.4em; margin: 0 .6em 0 0; }
+.stage .st-head .brand > div { display: flex; flex-direction: column; }
+
+.top .brand-mini .wm { height: 19px !important; }
+.hero.photo .lead { max-width: 64%; }
+.heroart { max-width: 50%; height: 92%; right: -4%; }
+.half::before { opacity: .62; }
+
+.demobar.tiny { top: 10px; left: 50%; right: auto; transform: translateX(-50%); }
+.pane.won { padding-top: 10vmin; } .pane .crown { top: 1.5vmin; }

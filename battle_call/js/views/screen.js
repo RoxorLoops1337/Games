@@ -2,7 +2,7 @@
 // it follows the organiser by itself.
 import { esc, ic } from '../dom.js';
 import { S, bbName, size, rounds, curMatch, nextMatch, sides, leftKey, seedOf } from '../state.js';
-import { ui, av, bracket, feedStrip } from '../ui.js';
+import { ui, av, bracket, feedStrip, crown, wordmark } from '../ui.js';
 import { roundInfo } from '../shared.js';
 import { joinLink } from './host.js';
 
@@ -19,7 +19,7 @@ export function screenView() {
   else if (cur) body = duelStage(cur);
   else body = `<div class="st-top"><p class="eyebrow">${nx ? 'Up next' : 'The bracket'}</p></div>${nx ? upNext(nx) : ''}<div class="st-bracket">${bracket({ mode: 'view' })}</div>`;
   return `<div class="stage ${ev.phase}"><div class="glow g1"></div><div class="glow g2"></div>
-    <header class="st-head"><div class="brand">${ic('mic', 28)}<div><b>${esc(ev.name)}</b><small>${ev.cats.length > 1 ? esc(ev.catName) + ' · ' : ''}Battle Call</small></div></div>
+    <header class="st-head"><div class="brand">${crown('sm', false)}<div><b>${esc(ev.name)}</b><small>${ev.cats.length > 1 ? esc(ev.catName) + ' · ' : ''}BattleCall</small></div></div>
     <div class="st-meta"><span>${S.live ? S.live.n : 0} ${S.live && S.live.n === 1 ? 'player' : 'players'}</span><span class="code">${esc(S.code)}</span></div></header>
     ${ev.banner ? `<div class="st-banner" data-k="b${ev.banner.id}">${ic('mega', 28)}<span>${esc(ev.banner.text)}</span></div>` : ''}
     <div class="st-body">${body}</div>${feedStrip(3)}</div>`;
@@ -59,7 +59,7 @@ function duelStage(m) {
   if (m.c) { tot = m.c.a + m.c.b; lp = tot ? Math.round(((lk === 'a' ? m.c.a : m.c.b) / tot) * 100) : 50; }
   const label = { live: 'Battle on', voting: 'Vote now! Pick your colour', closed: 'Hands up!', done: 'The judges decided' }[m.status];
   const jl = m.judges ? (lk === 'a' ? m.judges.a : m.judges.b) : null, jr = m.judges ? (lk === 'a' ? m.judges.b : m.judges.a) : null;
-  const side = (id, col, key) => `<div class="pane ${col} ${m.w === key ? 'won' : ''} ${m.w && m.w !== key ? 'lost' : ''}">${av(id, 'hero')}<h2>${esc(bbName(id))}</h2><small>${seedOf(id) ? 'Seed ' + seedOf(id) : ''}</small>${m.w === key ? `<span class="crown">${ic('trophy', 40)}</span>` : ''}</div>`;
+  const side = (id, col, key) => `<div class="pane ${col} ${m.w === key ? 'won' : ''} ${m.w && m.w !== key ? 'lost' : ''}">${av(id, 'hero')}<h2>${esc(bbName(id))}</h2><small>${seedOf(id) ? 'Seed ' + seedOf(id) : ''}</small>${m.w === key ? `<span class="crown">${crown('big')}</span>` : ''}</div>`;
   return `<div class="st-duel ${m.status}">
     <div class="st-top"><p class="eyebrow">${R.long} · Battle ${m.i + 1}</p><h2 class="status">${label}</h2></div>
     <div class="panes">${side(l, 'blue', lk)}<div class="vs"><span>VS</span></div>${side(r, 'red', lk === 'a' ? 'b' : 'a')}</div>
@@ -72,6 +72,6 @@ function duelStage(m) {
 function champion() {
   const ev = S.meta, champ = ev.champion;
   const top = S.board.slice(0, 5);
-  return `<div class="st-champ"><p class="eyebrow">${ic('trophy', 22)} Champion</p><div class="crown">${av(champ, 'hero')}</div><h1 class="mega">${esc(bbName(champ))}</h1></div>
+  return `<div class="st-champ"><p class="eyebrow">${ic('trophy', 22)} Champion</p><div class="crownwrap">${crown('big')}<div class="crown">${av(champ, 'hero')}</div></div><h1 class="mega">${esc(bbName(champ))}</h1></div>
     ${top.length ? `<section class="st-cons right"><h3>Best callers</h3><ol>${top.map((r, i) => `<li><span class="n">${i + 1}</span><b>${esc(r.n)}</b><small>${r.net.toLocaleString()}</small></li>`).join('')}</ol></section>` : ''}`;
 }

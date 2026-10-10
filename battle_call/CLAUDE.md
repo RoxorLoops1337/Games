@@ -22,6 +22,11 @@ The live server is a Cloudflare Worker (see `server/README.md`); the Pages copy 
   fans, wired in through `net.js` (`isDemo()`); a floating director bar switches views, advances the organiser's next step
   or autoplays the whole night. No server needed, so the Pages copy is useful before the Worker is deployed. Keep it
   using `engine.js` directly, never a mock of the rules.
+- `img/`: the BattleCall artwork pack (supplied by the owner; photos are synthetic fictional performers). Portraits, battle
+  figures, hero and crowd are optimised WebP (640 to 1280 px, under 150 KB each; the originals were 13 MB); the wordmark,
+  crowns, waveform, check and lightning are SVG (paths only, no scripts). `icon.svg` and `icon-*.png` are the app icon.
+  Each category has an `art` (male/female/duo/crew/loop) that picks its portrait (`ART_FILE` in `ui.js`), guessed from its
+  name by `guessArt` and changeable by the host. Beatboxers keep initials until the host uploads their photo.
 - `vendor/qrcode.js`: qrcode-generator (MIT), for the join QR.
 
 ## Categories

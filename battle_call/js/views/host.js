@@ -2,7 +2,7 @@
 // next to a stage: one big obvious next step per phase, and confirmation before anything that cannot be undone.
 import { esc, ic } from '../dom.js';
 import { S, bbName, size, rounds, curMatch, nextMatch, sides, leftKey, seedOf, mkView, mkTitle, mkLabel, serverBase } from '../state.js';
-import { ui, av, userAv, loops, pill, rankBuilder, bracket, empty, duel, x, catBar } from '../ui.js';
+import { ui, av, userAv, loops, pill, rankBuilder, bracket, empty, duel, x, catBar, catArt } from '../ui.js';
 import { roundInfo, SIZES } from '../shared.js';
 import { photoUrl } from '../net.js';
 
@@ -256,7 +256,7 @@ function setup() {
       ${num('maxPerIp', 'Accounts per network', s.maxPerIp, 'A hall shares one wifi, keep it high. 0 = off')}</section>
     <section class="block"><h3>Categories</h3>
       ${S.event.cats.map((c) => `<div class="numf" data-k="cs${c.id}"><span><b>${esc(c.name)}</b><small>Top ${c.set.size} · ${c.bbs.length} beatboxers · ${c.phase}</small></span>
-        <span class="row"><button class="ib dim" data-a="hCatRename" data-id="${c.id}" aria-label="Rename">${ic('cog', 18)}</button>${c.phase === 'lobby' && S.event.cats.length > 1 ? `<button class="ib dim" data-a="hCatRm" data-id="${c.id}" aria-label="Remove">${ic('x', 18)}</button>` : ''}</span></div>`).join('')}
+        <span class="row"><button class="ib dim art" data-a="hCatArt" data-id="${c.id}" aria-label="Change picture">${catArt(c.art, 'tab')}</button><button class="ib dim" data-a="hCatRename" data-id="${c.id}" aria-label="Rename">${ic('cog', 18)}</button>${c.phase === 'lobby' && S.event.cats.length > 1 ? `<button class="ib dim" data-a="hCatRm" data-id="${c.id}" aria-label="Remove">${ic('x', 18)}</button>` : ''}</span></div>`).join('')}
       <button class="btn ghost" data-a="hCatAdd">${ic('plus', 18)} Add a category</button></section>
     <section class="block"><h3>After the show</h3>
       <a class="btn ghost" href="${require_export()}" target="_blank" rel="noopener">${ic('download', 18)} Download results (JSON)</a>

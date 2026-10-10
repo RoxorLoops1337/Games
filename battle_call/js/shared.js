@@ -3,6 +3,16 @@
 
 export const SIZES = [2, 4, 8, 16, 32, 64];
 export const MAX_CATS = 8;
+/** The artwork a category shows when it has no photo of its own: male, female, duo (tag team), crew, loop (loop station). */
+export const ARTS = ['male', 'female', 'duo', 'crew', 'loop'];
+export function guessArt(name) {
+  const n = String(name || '').toLowerCase();
+  if (/female|women|woman|girl|ladies|lady/.test(n)) return 'female';
+  if (/tag|duo|team|pair|2v2|double/.test(n)) return 'duo';
+  if (/crew|group|squad|band|choir/.test(n)) return 'crew';
+  if (/loop|station|pedal/.test(n)) return 'loop';
+  return 'male';
+}
 export const PHASES = ['lobby', 'picks', 'elimination', 'bracket', 'finished'];
 
 export const DEFAULTS = {

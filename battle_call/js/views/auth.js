@@ -1,26 +1,26 @@
 // Battle Call: front door. Home (enter a code), create an event, and join/log in to one.
 import { esc, ic } from '../dom.js';
 import { S, sessions, serverBase } from '../state.js';
-import { ui, pill } from '../ui.js';
+import { ui, pill, wordmark, crown } from '../ui.js';
 
-const brand = `<div class="brand">${ic('mic', 30)}<div><b>Battle Call</b><small>Predict · Bet · Vote</small></div></div>`;
+const brand = `<div class="brand">${wordmark(34)}</div>`;
 
 export function homeView() {
   const sess = Object.entries(sessions()).sort((a, b) => (b[1].t || 0) - (a[1].t || 0)).slice(0, 4);
-  return `<main class="front">
-    <div class="glow g1"></div><div class="glow g2"></div>
+  return `<main class="front home">
+    <div class="homehero" aria-hidden="true"></div>
     ${brand}
-    <h1 class="mega">Call the<br>battle.</h1>
-    <p class="lead">Rank the Top 16, back your winners, and hold up your colour when it's time to vote. Live, in the hall, on your phone.</p>
+    <h1 class="hl">Feel it.<br>Predict it.<br><em>Call it.</em></h1>
+    <p class="lead">Live beatbox battles. Real fans. Rank the Top 16, back your winners, and hold up your colour when it is time to vote.</p>
     <form class="card codebox" data-form="joinCode">
       <label for="code">Event code</label>
       <input id="code" name="code" class="code" maxlength="8" placeholder="A1B2C" autocapitalize="characters" autocomplete="off" autocorrect="off" spellcheck="false" inputmode="text">
-      <button class="btn big" type="submit">Join the battle ${ic('right', 20)}</button>
+      <button class="btn big" type="submit">Join a battle ${ic('right', 20)}</button>
       ${ui.err ? `<p class="err">${esc(ui.err)}</p>` : ''}
     </form>
-    ${sess.length ? `<section class="block"><h3>Your events</h3><div class="stack">${sess.map(([c, s]) => `<a class="card link" href="#/${s.ht ? 'h' : 'e'}/${c}">${ic(s.ht ? 'cog' : 'user', 20)}<div><b>${esc(s.ev || c)}</b><small>${s.ht ? 'Organiser' : esc(s.name || 'Watching')} · ${c}</small></div>${ic('right', 18)}</a>`).join('')}</div></section>` : ''}
-    <a class="btn ghost wide" href="#/new">${ic('mic', 18)} I'm running a battle</a>
     <a class="card link demo" href="#/e/DEMO">${ic('bolt', 22)}<div><b>Try the demo</b><small>A full battle night with 28 simulated fans. No server, no sign-up.</small></div>${ic('right', 18)}</a>
+    ${sess.length ? `<section class="block"><h3>Your events</h3><div class="stack">${sess.map(([c, s]) => `<a class="card link" href="#/${s.ht ? 'h' : 'e'}/${c}">${ic(s.ht ? 'cog' : 'user', 20)}<div><b>${esc(s.ev || c)}</b><small>${s.ht ? 'Organiser' : esc(s.name || 'Watching')} · ${c}</small></div>${ic('right', 18)}</a>`).join('')}</div></section>` : ''}
+    <a class="btn ghost wide" href="#/new">${crown('sm', false)} I am running a battle</a>
     <p class="muted center small foot">Server: ${esc(serverBase().replace(/^https?:\/\//, ''))} · <button class="linkbtn" data-a="serverEdit">change</button></p>
   </main>`;
 }

@@ -547,6 +547,20 @@ t('settings: bracket size is per category, the house rules are shared by all of 
   assert.equal(E.metaOf(S).cats.length, 2);
 });
 
+t('categories get a picture: guessed from the name, chosen by the host, changeable later', () => {
+  const { S, main } = twoCats();
+  assert.equal(main.art, 'male');
+  const r = host(S, { a: 'cat.add', name: 'Solo Female', size: 8 });
+  assert.equal(S.event.cats[r.cat].art, 'female');
+  assert.equal(host(S, { a: 'cat.add', name: 'Tag Team', size: 4 }).cat && S.event.cats.c4.art, 'duo');
+  assert.equal(host(S, { a: 'cat.add', name: 'Loop Station', size: 4 }).cat && S.event.cats.c5.art, 'loop');
+  assert.equal(host(S, { a: 'cat.add', name: 'Anything', size: 4, art: 'crew' }).cat && S.event.cats.c6.art, 'crew', 'a chosen picture wins over the guess');
+  host(S, { a: 'cat.art', id: 'c1', art: 'duo' });
+  assert.equal(main.art, 'duo');
+  assert.equal(E.hostAction(S, { a: 'cat.art', id: 'c1', art: 'robot' }).ok, false);
+  assert.equal(E.metaOf(S).cats[0].art, 'duo');
+});
+
 console.log('big fields');
 t('with more entrants than the auto limit the organiser picks which "makes the cut" bets to open', () => {
   const { S, ids } = setup({ size: 8, beatboxers: 60, users: 2 });
