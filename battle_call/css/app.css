@@ -521,7 +521,8 @@ body[data-mode=screen] { overflow: hidden; }
 .badges { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
 .badge { display: flex; align-items: center; gap: 6px; padding: 5px 10px; border-radius: 99px; background: rgba(255,255,255,.08); font-size: 12.5px; font-weight: 700; }
 .badge.off { opacity: .3; filter: grayscale(1); }
-.soundbtn { position: fixed; right: 12px; bottom: 12px; z-index: 60; }
+.stagectl { position: fixed; right: 12px; bottom: 12px; z-index: 60; display: flex; gap: 8px; transition: opacity .5s; }
+body.idle .stagectl { opacity: 0; pointer-events: none; }
 
 /* big screen, big bracket: natural size, scrolled slowly by main.js */
 .st-bracket.scroll { align-items: flex-start; overflow: hidden; }
