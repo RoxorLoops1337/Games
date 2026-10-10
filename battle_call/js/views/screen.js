@@ -25,7 +25,18 @@ export function screenView() {
     <header class="st-head"><div class="brand">${crown('sm', false)}<div><b>${esc(ev.name)}</b><small>${ev.cats.length > 1 ? esc(ev.catName) + ' · ' : ''}BattleCall</small></div></div>
     <div class="st-meta"><span>${S.live ? S.live.n : 0} ${S.live && S.live.n === 1 ? 'player' : 'players'}</span><span class="code">${esc(S.code)}</span></div></header>
     ${ev.banner ? `<div class="st-banner" data-k="b${ev.banner.id}">${ic('mega', 28)}<span>${esc(ev.banner.text)}</span></div>` : ''}
-    <div class="st-body">${body}</div>${feedStrip(3)}</div>`;
+    <div class="st-body">${body}</div>${wall(cur, ev)}</div>`;
+}
+
+/** The strip along the bottom: the names of the players. Who is voting while a vote is open, who has joined while the doors are open, otherwise the bets coming in. */
+function wall(cur, ev) {
+  const chip = (n, cls) => `<span class="nm ${cls}" data-k="n${esc(n)}">${esc(n)}</span>`;
+  if (cur && cur.status === 'voting' && S.live && S.live.vn) {
+    const lk = leftKey(cur);
+    return `<div class="namewall" data-k="wall"><small>${S.live.vn.length ? 'Voting now' : 'Waiting for the first vote'}</small>${S.live.vn.map(([n, side]) => chip(n, side === lk ? 'blue' : 'red')).join('')}</div>`;
+  }
+  if ((ev.phase === 'lobby' || ev.phase === 'picks') && S.live && S.live.jn && S.live.jn.length) return `<div class="namewall" data-k="wall"><small>Welcome</small>${S.live.jn.map((n) => chip(n, '')).join('')}</div>`;
+  return feedStrip(3);
 }
 
 const qrCorner = (cls = '') => `<div class="qrcorner ${cls}"><div class="qrbox sm" data-static id="qr"></div><div><small>Join</small><b>${esc(S.code)}</b></div></div>`;

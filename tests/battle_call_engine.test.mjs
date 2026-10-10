@@ -258,6 +258,18 @@ t('the big screen gets players to spotlight: streaks, best caller, biggest win, 
   assert.ok(spot.some((x) => x.k === 'win' && x.n === a.name), 'biggest win');
   assert.ok(!spot.some((x) => x.k === 'streak'), 'one in a row is not a streak yet');
 });
+t('the big screen gets the names of the players: newest voters first with their side, and who just joined; phones get neither', () => {
+  const { S, us, ids } = bracketWorld();
+  host(S, { a: 'step', mid: 'r0m0', to: 'live' }); host(S, { a: 'step', mid: 'r0m0', to: 'voting' });
+  S.now = 5000; E.castVote(S, us[0], 'r0m0', 'a');
+  S.now = 6000; E.castVote(S, us[1], 'r0m0', 'b');
+  const vn = E.liveOf(S, 0, true).vn;
+  assert.deepEqual(vn, [[us[1].name, 'b'], [us[0].name, 'a']], 'newest first, with the side');
+  assert.equal(E.liveOf(S, 0, false).vn, undefined, 'never to the audience');
+  const w = setup({ size: 4, beatboxers: 4, users: 3 });
+  assert.deepEqual(E.liveOf(w.S, 0, true).jn.length, 3, 'who has joined while the doors are open');
+  assert.equal(E.liveOf(w.S, 0, false).jn, undefined);
+});
 t('bracket picks pay 25 x 2^round', () => {
   const { S, us, ids } = bracketWorld();
   const [a, b] = us;

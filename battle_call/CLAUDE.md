@@ -75,6 +75,10 @@ Phase `picks` can carry a running elimination round (`ev.elimOn`, host action `e
 
 While the audience votes, the big screen shows the running tally at the top (percentage and head count per side, total and share of the hall: `liveTally()` in `views/screen.js`). The tally stays hidden from phones: the hello of the big screen carries `screen: true` (guests only, a player token cannot ask for it), the Durable Object marks that socket `sc` and sends it the organiser variant of the live push (`v`). The polling fallback has no screen variant; the big screen needs its WebSocket.
 
+## Names of the players on the big screen
+
+The strip along the bottom of the big screen is a name wall: while a vote is open it shows who has voted, newest first, coloured by the side they picked (`live.vn`, ordered with `u.vt[mid]`, the time of the vote); while the doors are open it shows who has just joined (`live.jn`); otherwise the bets feed. Both come only in the organiser/screen variant of the live push, never to phones. The leaderboard and "Players to watch" slides show names too.
+
 ## Hard rules for this folder
 
 1. All Loops moves go through `credit()` with a ledger ref, or `reopen` stops being exact. Tests check conservation.
