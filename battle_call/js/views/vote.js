@@ -2,7 +2,7 @@
 // your colour so you can hold it up in the hall.
 import { esc, ic } from '../dom.js';
 import { S, bbName, sides, leftKey, size, seedOf } from '../state.js';
-import { ui, av } from '../ui.js';
+import { ui, av, crown } from '../ui.js';
 import { roundInfo } from '../shared.js';
 
 export function voteOverlay() {
@@ -18,7 +18,7 @@ export function voteOverlay() {
     const won = m.w === (mine || '');
     const winId = m.w === 'a' ? m.a : m.b, col = m.w === lk ? 'blue' : 'red';
     return `<div class="vote done ${col}" data-k="vote">${head}
-      <div class="vcenter"><p class="eyebrow">The judges say</p><div class="wavatar">${av(winId, 'xxl')}</div><h1>${esc(bbName(winId))}</h1>
+      <div class="vcenter"><p class="eyebrow">The judges say</p><div class="wavatar">${crown('big')}${av(winId, 'xxl')}</div><h1>${esc(bbName(winId))}</h1>
       ${m.judges ? `<p class="big">${m.judges.a}-${m.judges.b}</p>` : ''}
       <p class="lead">${mine ? (won ? 'You voted with the judges!' : 'You went the other way this time.') : ''}</p></div>
       <button class="btn big light" data-a="voteClose">Back to the battle</button></div>`;
@@ -28,6 +28,7 @@ export function voteOverlay() {
     const col = mine === lk ? 'blue' : 'red', id = mine === 'a' ? m.a : m.b;
     const closed = m.status !== 'voting';
     return `<div class="vote flag ${col} ${closed ? 'hands' : ''}" data-k="vote">
+      ${ui.voteFlash === m.id ? `<div class="vflash" data-k="flash-${m.id}"><img src="img/vote-check.svg" alt=""><b>Vote submitted!</b><small>You picked ${esc(bbName(id))}</small></div>` : ''}
       <div class="flag-inner"><span class="flagname">${esc(bbName(id))}</span><span class="flagsub">${closed ? 'HANDS UP!' : col.toUpperCase()}</span></div>
       <div class="flag-bar">
         ${closed ? '' : `<button class="chip lightc" data-a="voteChange">Change my vote</button>`}
@@ -39,6 +40,7 @@ export function voteOverlay() {
   const half = (id, col, key) => `<button class="half ${col}" data-a="vote" data-m="${m.id}" data-side="${key}" ${closed ? 'disabled' : ''}>
       ${av(id, 'xxl')}<b>${esc(bbName(id))}</b><small>${seedOf(id) ? 'Seed ' + seedOf(id) : ''}</small><span class="go">${closed ? 'Closed' : 'Vote ' + col.toUpperCase()}</span></button>`;
   return `<div class="vote pick" data-k="vote">${head}
-    <p class="vtitle">${closed ? 'Voting is closed' : 'Who took it?'}</p>
-    <div class="halves">${half(l, 'blue', lk)}${half(r, 'red', rk)}</div></div>`;
+    <div class="vtitle"><b>${closed ? 'Voting is closed' : 'Who took it?'}</b>${closed ? '' : '<small>Listen. Feel it. Pick your winner.</small>'}</div>
+    <div class="halves">${half(l, 'blue', lk)}${half(r, 'red', rk)}</div>
+    <img class="vwave" src="img/waveform.svg" alt="" aria-hidden="true"></div>`;
 }

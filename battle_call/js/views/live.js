@@ -1,9 +1,12 @@
 // Battle Call: the Live tab. It follows the organiser: whatever phase the event is in, this is the page that explains it.
 import { esc, ic } from '../dom.js';
 import { S, bbName, size, rounds, curMatch, nextMatch, seedOf, sides, leftKey, myBet, mkView, mkTitle } from '../state.js';
-import { ui, av, userAv, duel, bracket, resultCard, loops, pill, x } from '../ui.js';
+import { ui, av, userAv, duel, bracket, resultCard, loops, pill, x, catArt, crown, ART_FILE } from '../ui.js';
 import { roundInfo } from '../shared.js';
 
+/** The category's picture, standing in the corner of a hero card. */
+const heroArt = () => `<img class="heroart" src="img/${ART_FILE[S.meta.art] || 'male-solo'}.webp" alt="" decoding="async">`;
+const livePill = () => `<span class="livepill"><i></i>LIVE</span><span class="onl">${ic('users', 14)} ${S.live ? S.live.on : 0} online</span>`;
 const eq = '<span class="eq"><i></i><i></i><i></i><i></i><i></i></span>';
 
 export function liveTab() {
@@ -31,11 +34,13 @@ function lineup(limit = 60) {
 function lobby() {
   const ev = S.meta;
   return `
-    <section class="hero lobby">
+    <section class="hero lobby photo">
+      ${heroArt()}
       <p class="eyebrow">${eq} Doors are open</p>
       <h1>${esc(ev.name)}</h1>
       <p class="lead">Call the Top ${size()}, back your winners and vote in every battle. Everyone starts with <b>${ev.set.start.toLocaleString()} Loops</b>.</p>
-      <div class="pills">${pill(`${S.live ? S.live.n : 0} ${S.live && S.live.n === 1 ? 'player' : 'players'} in`)}${pill(`${ev.bbs.length} beatboxers`)}</div>
+      <div class="pills">${livePill()}${pill(`${S.live ? S.live.n : 0} ${S.live && S.live.n === 1 ? 'player' : 'players'} in`)}${pill(`${ev.bbs.length} beatboxers`)}</div>
+      <button class="btn ghost sm sharebtn" data-a="shareEvent">${ic('copy', 16)} Share this event</button>
     </section>
     <section class="how">
       <div class="card how-c"><i class="hi v">${ic('predict', 22)}</i><b>Predict</b><p>Build your Top ${size()} before the elimination. Then call every battle in the bracket.</p></div>
@@ -49,7 +54,8 @@ function picks() {
   const me = S.me, N = size(), n = me ? me.top.length : 0;
   const tops = S.host ? S.host.tops : null;
   return `
-    <section class="hero picks">
+    <section class="hero picks photo">
+      ${heroArt()}
       <p class="eyebrow">${eq} Picks are open</p>
       <h1>Who is making the Top ${N}?</h1>
       <p class="lead">Rank your Top ${N}. You earn Loops for every beatboxer who gets through, and more for the exact seat.</p>
@@ -65,7 +71,7 @@ function picks() {
 function elimination() {
   const c = S.meta.consensus, N = size();
   return `
-    <section class="hero elim">
+    <section class="hero elim photo">
       <p class="eyebrow">${eq} Elimination is on</p>
       <h1>The judges are choosing</h1>
       <p class="lead">Picks and bets are locked. Sit tight: the Top ${N} is about to be announced.</p>
@@ -126,14 +132,14 @@ function finished() {
   return `
     <section class="hero champ">
       <p class="eyebrow">${ic('trophy', 16)} Champion</p>
-      <div class="crown">${av(champ, 'xxl')}</div>
+      <div class="crownwrap">${crown('big')}<div class="crown">${av(champ, 'xxl')}</div></div>
       <h1>${esc(bbName(champ))}</h1>
       <p class="lead">${esc(ev.name)} is done. What a battle.</p>
     </section>
     <section class="block"><h3>Podium</h3>
       <div class="podium">
         <div class="pd p2">${runner ? av(runner, 'lg') : ''}<b>${esc(runner ? bbName(runner) : '')}</b><span>2</span></div>
-        <div class="pd p1">${av(champ, 'lg')}<b>${esc(bbName(champ))}</b><span>1</span></div>
+        <div class="pd p1">${crown('sm')}${av(champ, 'lg')}<b>${esc(bbName(champ))}</b><span>1</span></div>
         <div class="pd p3">${semis[0] ? av(semis[0], 'lg') : ''}<b>${esc(semis[0] ? bbName(semis[0]) : '')}</b>${semis[1] ? `<small>and ${esc(bbName(semis[1]))}</small>` : ''}<span>3</span></div>
       </div>
     </section>
@@ -145,5 +151,5 @@ function finished() {
 
 export function rowOf(r) {
   const mine = S.me && r.n === S.me.name;
-  return `<li class="${mine ? 'me' : ''} r${r.rank}" data-k="u${r.n}"><span class="rk">${r.rank}</span>${userAv(r.n, 'sm')}<b>${esc(r.n)}${mine ? ' <i>you</i>' : ''}</b><span class="net">${loops(r.net)}</span></li>`;
+  return `<li class="${mine ? 'me' : ''} r${r.rank}" data-k="u${r.n}"><span class="rk">${r.rank === 1 ? crown('xs') : r.rank}</span>${userAv(r.n, 'sm')}<b>${esc(r.n)}${mine ? ' <i>you</i>' : ''}</b><span class="net">${loops(r.net)}</span></li>`;
 }

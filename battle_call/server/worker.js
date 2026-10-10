@@ -89,7 +89,7 @@ export default {
       for (let tries = 0; tries < 5; tries++) {
         const code = makeCode();
         const stub = env.EVENT.get(env.EVENT.idFromName(code));
-        const r = await stub.fetch('https://do/init', { method: 'POST', body: JSON.stringify({ code, name: b.name, size: b.size, catName: b.catName, password: b.password }) });
+        const r = await stub.fetch('https://do/init', { method: 'POST', body: JSON.stringify({ code, name: b.name, size: b.size, catName: b.catName, art: b.art, password: b.password }) });
         if (r.status !== 409) return withCors(r);
       }
       return err('Could not make an event code, try again', 500);
@@ -394,7 +394,7 @@ export class Event {
     const pw = String(b.password || '');
     if (pw.length < 4) return err('Choose an organiser password of at least 4 characters');
     if (!cleanCode(b.code)) return err('Bad code');
-    const ev = E.newEvent({ code: b.code, name: b.name, size: +b.size || 16, catName: b.catName, now: Date.now() });
+    const ev = E.newEvent({ code: b.code, name: b.name, size: +b.size || 16, catName: b.catName, art: b.art, now: Date.now() });
     const salt = randomToken(12), ht = randomToken();
     const host = { s: salt, h: await hashPassword(pw, salt), tk: [await sha(ht)] };
     if (this.S) return err('exists', 409); // another init finished while we were hashing

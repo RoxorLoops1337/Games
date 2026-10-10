@@ -110,7 +110,7 @@ export function bracket({ mode = 'view', picks = {}, only = null } = {}) {
       };
       return `<article class="bm ${m.status}" data-k="${m.id}"><div class="bm-h"><span>Battle ${m.i + 1}</span>${stLabel[m.status] ? `<i class="st ${m.status}">${stLabel[m.status]}</i>` : ''}${mode === 'view' && m.judges ? `<small>${m.judges.a}-${m.judges.b}</small>` : ''}</div>${row(0)}${row(1)}</article>`;
     }).join('');
-    return `<div class="bcol" data-k="r${R.r}"><h4>${R.short}${locked ? ` ${ic('lock', 13)}` : ''}</h4><div class="bcards">${cards}</div></div>`;
+    return `<div class="bcol" data-k="r${R.r}"><h4>${R.last ? crown('sm') : ''}${R.short}${locked ? ` ${ic('lock', 13)}` : ''}</h4><div class="bcards">${cards}</div></div>`;
   }).join('');
   return `<div class="bracket ${mode} n${N}">${cols}</div>`;
 }
@@ -151,6 +151,15 @@ export function catBar(host = false) {
   const m = S.meta;
   if (!host && m.cats.length < 2) return '';
   const chips = m.cats.map((c) => `<button class="cat ${c.id === S.catId ? 'on' : ''} ${c.live ? 'live' : ''}" data-k="cat${c.id}" data-a="catPick" data-id="${c.id}">
-    <b>${esc(c.name)}</b><small>Top ${c.size}${c.id === m.active ? ' · on stage' : ''}</small>${c.voting ? '<i class="dot"></i>' : ''}</button>`).join('');
+    ${catArt(c.art, 'tab')}<span><b>${esc(c.name)}</b><small>${c.size === 2 ? 'Final' : 'Top ' + c.size}${c.id === m.active ? ' · on stage' : ''}</small></span>${c.voting ? '<i class="dot"></i>' : ''}</button>`).join('');
   return `<div class="cats" data-k="cats">${chips}${host ? `<button class="cat add" data-a="hCatAdd">${ic('plus', 16)}<b>Category</b></button>` : ''}</div>`;
 }
+
+/* ------------------------------------------------------------ brand artwork */
+export const ART_FILE = { male: 'male-solo', female: 'female-solo', duo: 'tag-team', crew: 'crew', loop: 'loop-station' };
+export const ART_LABEL = { male: 'Solo', female: 'Solo female', duo: 'Tag team', crew: 'Crew', loop: 'Loop station' };
+export const img = (name, ext = 'webp') => `img/${name}.${ext}`;
+export const wordmark = (h = 28) => `<img class="wm" src="img/wordmark.svg" alt="BattleCall" height="${h}" style="height:${h}px">`;
+export const crown = (cls = '', gold = true) => `<img class="crown-i ${cls}" src="img/crown-${gold ? 'gold' : 'pink'}.svg" alt="" aria-hidden="true">`;
+/** The picture a category shows (a cut-out portrait), small and round for the tabs. */
+export const catArt = (art, cls = '') => `<img class="catart ${cls}" src="img/${ART_FILE[art] || 'male-solo'}.webp" alt="" loading="lazy" decoding="async">`;

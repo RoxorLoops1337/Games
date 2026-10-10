@@ -14,7 +14,7 @@
 // balance + what is still riding on open bets (net worth).
 import {
   DEFAULTS, SIZES, MIN_BET, QUALIFY_AUTO_MAX, MAX_BB, MAX_CATS, nameKey, cleanName, cleanBb, buildMatches, roundsOf, roundInfo, winnerOf, loserOf,
-  slotsFor, cleanPicks, poolTotal, sidePool, multiplier, payoutFor, log2,
+  slotsFor, cleanPicks, poolTotal, sidePool, multiplier, payoutFor, log2, ARTS, guessArt,
 } from './js/shared.js';
 
 const RESERVED = new Set(Object.getOwnPropertyNames(Object.prototype).map((n) => n.toLowerCase()));
@@ -23,22 +23,22 @@ export const fail = (err) => ({ ok: false, err });
 
 /* ---------------------------------------------------------------- state */
 
-export function newCategory(event, { id, name, size }) {
+export function newCategory(event, { id, name, size, art }) {
   if (!SIZES.includes(size)) size = DEFAULTS.size;
   const first = event.order.length ? event.cats[event.order[0]].settings : null;
   const settings = first ? { ...first, pts: { ...first.pts }, size } : { ...DEFAULTS, pts: { ...DEFAULTS.pts }, size };
   return {
-    id, name: cleanBb(name).slice(0, 24) || 'Battle', pfx: event.order.length ? id + '.' : '', phase: 'lobby', settings,
+    id, name: cleanBb(name).slice(0, 24) || 'Battle', art: ARTS.includes(art) ? art : guessArt(name), pfx: event.order.length ? id + '.' : '', phase: 'lobby', settings,
     bbs: [], seeds: null, matches: [], locked: [], out: {}, champion: null, markets: {}, consensus: null,
   };
 }
 
-export function newEvent({ code, name, size = DEFAULTS.size, catName = 'Main battle', now = 0 }) {
+export function newEvent({ code, name, size = DEFAULTS.size, catName = 'Main battle', art, now = 0 }) {
   const event = {
     v: 2, code, name: String(name || 'Beatbox Battle').trim().slice(0, 40) || 'Beatbox Battle', created: now,
     banner: null, rev: 1, active: 'c1', order: [], cats: {}, nextBb: 1, nextMk: 1, nextCat: 2, doneSeq: 0,
   };
-  event.cats.c1 = newCategory(event, { id: 'c1', name: catName, size });
+  event.cats.c1 = newCategory(event, { id: 'c1', name: catName, size, art });
   event.order.push('c1');
   return event;
 }
@@ -628,7 +628,7 @@ function eventAction(S, a) {
       if (cats(S).some((c) => c.name.toLowerCase() === name.toLowerCase())) return fail('There is already a category with that name');
       if (!SIZES.includes(+a.size)) return fail('Pick a bracket of 2, 4, 8, 16, 32 or 64');
       const id = 'c' + E0.nextCat++;
-      E0.cats[id] = newCategory(E0, { id, name, size: +a.size });
+      E0.cats[id] = newCategory(E0, { id, name, size: +a.size, art: a.art });
       E0.order.push(id);
       touchMeta(S);
       return ok({ cat: id });
@@ -639,6 +639,13 @@ function eventAction(S, a) {
       if (!name) return fail('Give the category a name');
       if (cats(S).some((x) => x.id !== c.id && x.name.toLowerCase() === name.toLowerCase())) return fail('There is already a category with that name');
       c.name = name; touchMeta(S);
+      return ok({});
+    }
+    case 'cat.art': {
+      const c = E0.cats[a.id];
+      if (!c) return fail('No such category');
+      if (!ARTS.includes(a.art)) return fail('Pick one of the pictures');
+      c.art = a.art; touchMeta(S);
       return ok({});
     }
     case 'cat.rm': {
@@ -811,7 +818,7 @@ function catAction(S, a) {
 /** Everything the audience may see that changes rarely. Pools live in `liveOf` so a bet does not resend all of this. */
 function catMeta(S, c) {
   return {
-    id: c.id, name: c.name, pfx: c.pfx, phase: c.phase, undo: inCat(S, c, () => undoPlan(S)),
+    id: c.id, name: c.name, art: c.art, pfx: c.pfx, phase: c.phase, undo: inCat(S, c, () => undoPlan(S)),
     set: { size: c.settings.size, qualifyBets: c.settings.qualifyBets, autoChampion: c.settings.autoChampion },
     bbs: c.bbs, seeds: c.seeds, locked: c.locked, out: c.out, champion: c.champion, consensus: c.consensus,
     matches: c.matches.map((m) => ({ ...m, c: m.status === 'closed' || m.status === 'done' ? m.c : null })),
