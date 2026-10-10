@@ -1,6 +1,7 @@
 // Battle Call: front door. Home (enter a code), create an event, and join/log in to one.
 import { esc, ic } from '../dom.js';
 import { S, sessions, serverBase } from '../state.js';
+import { VERSION } from '../config.js';
 import { ui, pill, wordmark, crown } from '../ui.js';
 
 const brand = `<div class="brand">${wordmark(34)}</div>`;
@@ -22,6 +23,7 @@ export function homeView() {
     ${sess.length ? `<section class="block"><h3>Your events</h3><div class="stack">${sess.map(([c, s]) => `<a class="card link" href="#/${s.ht ? 'h' : 'e'}/${c}">${ic(s.ht ? 'cog' : 'user', 20)}<div><b>${esc(s.ev || c)}</b><small>${s.ht ? 'Organiser' : esc(s.name || 'Watching')} · ${c}</small></div>${ic('right', 18)}</a>`).join('')}</div></section>` : ''}
     <a class="btn ghost wide" href="#/new">${crown('sm', false)} I am running a battle</a>
     <p class="muted center small foot">Server: ${esc(serverBase().replace(/^https?:\/\//, ''))} · <button class="linkbtn" data-a="serverEdit">change</button></p>
+    <p class="muted center small ver">Version ${esc(VERSION)}</p>
   </main>`;
 }
 

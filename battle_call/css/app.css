@@ -482,3 +482,5 @@ body[data-mode=screen] { overflow: hidden; }
 
 .demobar.tiny { top: 10px; left: 50%; right: auto; transform: translateX(-50%); }
 .pane.won { padding-top: 10vmin; } .pane .crown { top: 1.5vmin; }
+
+.ver { opacity: .6; font-size: 11.5px; margin-top: -8px; }
