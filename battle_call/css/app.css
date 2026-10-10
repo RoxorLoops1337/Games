@@ -586,3 +586,16 @@ body.idle .stagectl { opacity: 0; pointer-events: none; }
 .lockclk { display: inline-flex; align-items: center; gap: 8px; padding: 8px 16px; border-radius: 99px; background: rgba(255,207,61,.14); border: 1px solid rgba(255,207,61,.5); font-weight: 700; } .lockclk b { font-size: 1.3em; font-variant-numeric: tabular-nums; }
 .st-lock { font-size: 2.6em; font-weight: 800; color: var(--gold); } .st-lock .lockclk { font-size: 1em; padding: 1vmin 3vmin; }
 .st-body > .qrcorner.top { top: 0; bottom: auto; }
+.lockclk.big { font-size: 5.5em; padding: 1vmin 3.5vmin; gap: 2vmin; } .lockclk.big b { font-size: 1.15em; letter-spacing: .02em; }
+.st-predict { flex: 1; min-height: 0; display: grid; grid-template-columns: 1.1fr 1fr; gap: 4vmin; align-items: center; }
+.st-predict .pl { display: flex; flex-direction: column; gap: 2.4vmin; align-items: flex-start; } .st-predict .pl .mega { font-size: min(8em, 15vh); }
+.st-predict .pstats3 { display: flex; gap: 2vmin; } .st-predict .pt { padding: 1.6vmin 2.4vmin; border-radius: 2vmin; } .st-predict .pt b { font-size: 4em; } .st-predict .pt small { font-size: 1.6em; color: #cfc9f3; }
+.st-predict .pr h3 { font-size: 2.4em; margin-bottom: 1.2vmin; }
+.st-pred { list-style: none; margin: 0; padding: 0; display: grid; gap: .9vmin; } .st-pred.two { grid-template-columns: 1fr 1fr; grid-auto-flow: column; grid-template-rows: repeat(8, auto); }
+.st-pred li { display: flex; align-items: center; gap: 1.2vmin; padding: .7vmin 1.4vmin; background: var(--glass); border: 1px solid var(--line); border-radius: 1.4vmin; font-size: 1.8em; min-width: 0; }
+.st-pred li b { flex: 0 1 auto; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } .st-pred .n { font-weight: 800; color: var(--pink); width: 1.4em; } .st-pred .av.md { --s: 4.4vmin; }
+.st-pred .pbar { flex: 1; height: .9vmin; min-width: 4vmin; border-radius: 9px; background: rgba(255,255,255,.1); overflow: hidden; } .st-pred .pbar u { display: block; height: 100%; background: var(--grad); } .st-pred small { font-size: .8em; width: 2.6em; text-align: right; }
+.lockclk .lbl { white-space: nowrap; }
+.lockclk.big { flex-direction: column; align-items: flex-start; gap: .1em; border-radius: 3vmin; padding: 1.4vmin 4vmin; } .lockclk.big .lbl { font-size: .34em; opacity: .9; } .lockclk.big b { font-size: 1.7em; line-height: 1; } .lockclk.big .ic { display: none; }
+.st-predict { padding-bottom: 15vmin; }
+.st-predict { padding-bottom: 19vmin; } .st-predict .pl .mega { font-size: min(7em, 13vh); } .st-predict .pt b { font-size: 3.4em; }

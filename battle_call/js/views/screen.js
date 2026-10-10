@@ -16,7 +16,7 @@ export function screenView() {
   const pf = perfNow(), running = ev.phase === 'elimination' || (ev.phase === 'picks' && ev.elimOn);
   if (ev.phase === 'lobby' || (ev.phase === 'picks' && !ev.elimOn)) body = joinStage();
   else if (running && pf) body = `<div class="st-perf"><p class="eyebrow">${eq} On stage now</p><div class="pp">${av(pf.id, 'hero')}<h1 class="mega">${esc(bbName(pf.id))}</h1></div>${perfStats(pf)}${ev.phase === 'picks' ? `<div class="st-lock">${lockClock(ev) || 'Predictions are still open'}</div>` : ''}</div>${ev.phase === 'picks' ? qrCorner('top') : ''}`;
-  else if (ev.phase === 'picks') body = `<div class="st-center">${eq}<p class="eyebrow">Elimination is on</p><h1 class="mega">Predictions<br>still open</h1><p class="lead">${lockClock(ev) || 'Lock in your Top ' + N + ' before the judges announce it'}</p></div>${consensus()}${qrCorner()}`;
+  else if (ev.phase === 'picks') body = predictionsStage();
   else if (ev.phase === 'elimination') body = `<div class="st-center">${eq}<p class="eyebrow">Picks are locked</p><h1 class="mega">Elimination</h1><p class="lead">The judges are choosing the Top ${N}</p></div>${consensus()}${qrCorner()}`;
   else if (ev.phase === 'finished' && !cur) body = champion();
   else if (cur) body = duelStage(cur);
@@ -41,6 +41,25 @@ function joinStage() {
     <div class="st-right"><div class="qrbox xl" data-static id="qr"></div><div class="bigcode">${esc(S.code)}</div><small>${esc(joinLink().replace(/^https?:\/\//, '').replace(/#.*/, ''))}</small></div>
   </div>
   <div class="mosaic">${ev.bbs.slice(0, 40).map((b) => `<div class="lu" data-k="mz${b.id}">${av(b.id, 'lg')}<b>${esc(b.name)}</b></div>`).join('')}</div>`;
+}
+
+/** Everybody has performed: the screen shows the lock-in clock and how the hall's Top N is shaping up. */
+function predictionsStage() {
+  const ev = S.meta, N = size(), cons = S.live && S.live.cons && S.live.cons[ev.id];
+  const rows = cons ? cons.rows.slice(0, N > 8 ? 16 : N) : [], v = cons ? cons.voters : 0;
+  const list = rows.length
+    ? `<ol class="st-pred ${rows.length > 8 ? 'two' : ''}">${rows.map((r, i) => `<li data-k="p${r.id}"><span class="n">${i + 1}</span>${av(r.id, 'md')}<b>${esc(bbName(r.id))}</b><i class="pbar"><u style="width:${v ? Math.round((r.n / v) * 100) : 0}%"></u></i><small>${v ? Math.round((r.n / v) * 100) : 0}%</small></li>`).join('')}</ol>`
+    : '<p class="lead">The hall\'s Top ' + N + ' appears here as players lock in.</p>';
+  return `<div class="st-predict">
+    <div class="pl">
+      <p class="eyebrow">${eq} ${(ev.performed || []).length ? 'Elimination is done' : 'Elimination is on'}</p>
+      <h1 class="mega">${ev.picksEnd ? 'Lock in<br>your Top ' + N : 'Predictions<br>still open'}</h1>
+      ${ev.picksEnd ? lockClock(ev, 'big') : '<p class="lead">Lock in your Top ' + N + ' before the judges announce it</p>'}
+      <div class="pstats3"><div class="pt"><b>${v}</b><small>of ${S.live ? S.live.n : 0} players locked in a Top ${N}</small></div>
+        ${cons && cons.staked ? `<div class="pt"><b>${cons.staked.toLocaleString()}</b><small>Loops on who makes the cut</small></div>` : ''}</div>
+    </div>
+    <section class="pr"><h3>The hall's Top ${N} so far</h3>${list}</section>
+  </div>${qrCorner()}`;
 }
 
 function consensus() {
