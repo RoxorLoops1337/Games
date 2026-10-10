@@ -58,7 +58,10 @@ import { VeinLayer } from '../world/veins';
 import { TitanFx } from '../world/titan';
 import { BlightFx } from '../world/blight';
 import { SS } from '../res';
-import { physPressed, physReset } from '../input/layout';
+import { isTouchUi, physPressed, physReset } from '../input/layout';
+import { artPressed, installArtKeys } from '../input/arts';
+import { ART_SLOTS, ARTS } from '../../shared/data/arts';
+import { ArtFx } from '../world/arts';
 import { Sea } from '../world/sea';
 
 type Img = Phaser.GameObjects.Image;
@@ -156,6 +159,9 @@ export class GameScene extends Phaser.Scene {
     private titanFx!: TitanFx;
     /** The Blight: nests, damaged defenses, wading raiders and tower shots (world/blight.ts). */
     private blightFx!: BlightFx;
+    private artFx!: ArtFx;
+    /** When each Combat Art we cast is ready again (the HUD's cooldown sweep), by art id, in this scene's clock. */
+    readonly artCd: Record<string, number> = {};
     /** Ice blocks, curses and chains (co-op boss statuses). */
     private coFx!: CoFx;
     private veins: VeinLayer | null = null;
@@ -284,6 +290,8 @@ export class GameScene extends Phaser.Scene {
         this.crit = new CritFx(this);
         this.titanFx = new TitanFx(this);
         this.blightFx = new BlightFx(this, () => this.world);
+        this.artFx = new ArtFx(this);
+        installArtKeys();
         // lightning flashes the monster it strikes white for a moment
         this.blightFx.onZapHit = (x, y) => {
             for (const v of this.views.values()) {
@@ -453,6 +461,7 @@ export class GameScene extends Phaser.Scene {
         if (this.pressed('T')) this.hands.throwPod();
         if (physPressed('KeyQ')) this.fishKey();
         if (this.pressed('SHIFT')) this.dash();
+        for (let i = 0; i < ART_SLOTS; i++) if (artPressed(i)) this.art(i);
         if (this.pressed('R')) this.placer.turn();
         if (this.placer.cur && this.pressed('SPACE')) this.placer.tryPlace();
         this.act.updateDismantle(dt);
@@ -709,6 +718,7 @@ export class GameScene extends Phaser.Scene {
             }
             case 'tele': if (this.inView(e.x, e.y, 160)) this.combat.tele(e); return;
             case 'shot': if (this.inView(e.x, e.y, 120)) this.blightFx.shot(e); return;
+            case 'art': if (e.by === this.me) this.artCd[e.k] = this.time.now + e.cd * 1000; if (this.inView(e.x, e.y, 260)) this.artFx.play(e); return;
             case 'chat': case 'emote': case 'ping': this.emitEvent('hud:social', e); return;
             case 'wish': this.wishS = e.wish; return;
             case 'chron': this.chron.push(e.entry); if (this.chron.length > 300) this.chron.shift(); if (!/^(lvl|join):/.test(e.entry.k ?? '')) this.emitEvent('hud:toast', { text: e.entry.t, icon: 'k_book', color: PAL.cream }); return;
@@ -906,6 +916,7 @@ export class GameScene extends Phaser.Scene {
         this.titanFx.draw(this.time.now);
         this.blightFx.track(this.visViews, this.time.now);
         this.blightFx.draw();
+        this.artFx.update(this.time.now);
     }
 
     // ── the farmer: stats, actions, what the HUD asks ───────────────────────
@@ -976,6 +987,24 @@ export class GameScene extends Phaser.Scene {
     /** The season wish vote (the Season wish window and the chip beside the buffs). */
     wishState () { return this.wishS; }
 
+    /** Which way an art is aimed: at the mouse on a computer (when it moved lately), else the way you face. */
+    artAim () {
+        const l = this.local;
+        if (this.mouseAimT > 0 && !isTouchUi()) {
+            const dx = this.pointerWorld.x - l.x, dy = this.pointerWorld.y - (l.y - 5);
+            if (Math.hypot(dx, dy) > 4) return { x: dx, y: dy };
+        }
+        return { x: l.face.x, y: l.face.y };
+    }
+
+    /** Cast the Combat Art on a key (Z, X, N, or its round button on a phone). */
+    art (slot: number) {
+        const me = this.meS;
+        if (!this.ready || this.menuOpen || !me || !me.arts?.[slot] || me.co?.k === 'frozen' || me.downed > 0) return;
+        const a = this.artAim();
+        this.send({ t: 'art', slot, fx: a.x, fy: a.y });
+    }
+
     /** Dash the way you are facing (Shift, or the phone's DASH button). */
     dash () {
         if (!this.ready || this.menuOpen || !hasUnlock(this.meS!, 'dash') || this.meS!.co?.k === 'frozen') return;
@@ -986,7 +1015,7 @@ export class GameScene extends Phaser.Scene {
     /** What the phone's context buttons should offer right now (fish, throw a pod, turn or cancel a placement, dismantle, dash). */
     touchContext () {
         const me = this.meS;
-        const none = { fish: '', pod: false, turn: false, cancel: false, take: false, dash: false };
+        const none = { fish: '', pod: false, turn: false, cancel: false, take: false, dash: false, arts: ['', '', ''] };
         if (!this.ready || !me || me.downed > 0 || this.menuOpen) return none;
         const placing = !!this.placer.cur || this.bp.active;
         const wild = placing ? null : this.act.near.wild;
@@ -997,6 +1026,7 @@ export class GameScene extends Phaser.Scene {
             cancel: placing,
             take: !placing && !!this.act.near.take,
             dash: !placing && hasUnlock(me, 'dash'),
+            arts: [0, 1, 2].map((i) => (!placing && me.arts?.[i] ? ARTS[me.arts[i]!].name.split(' ').pop()!.toUpperCase().slice(0, 7) : '')),
         };
     }
 

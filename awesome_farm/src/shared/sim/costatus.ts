@@ -27,7 +27,7 @@ export const GUARDIAN_ARENA = 140;
 const arenaOf = (e: MobE) => MOBS[e.kind].boss?.arena ?? GUARDIAN_ARENA;
 
 /** What a frozen farmer cannot ask for (the menus, eating and gear still work). */
-const BLOCKED = new Set<Cmd['t']>(['move', 'swing', 'dig', 'use', 'dash', 'revive', 'fish', 'tame', 'summon', 'travel']);
+const BLOCKED = new Set<Cmd['t']>(['move', 'swing', 'dig', 'use', 'dash', 'art', 'revive', 'fish', 'tame', 'summon', 'travel']);
 export const blocks = (p: PlayerS, c: Cmd) => p.co?.k === 'frozen' && BLOCKED.has(c.t);
 
 // ── who and where ───────────────────────────────────────────────────────────

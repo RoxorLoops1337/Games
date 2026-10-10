@@ -56,7 +56,7 @@ export class GearScreen implements Screen {
         const w = this.win;
         this.foot = w.footer({
             info: '', infoW: 110,
-            secondary: [{ label: 'Turn  (R)', onClick: () => this.turn() }],
+            secondary: [{ label: 'Turn  (R)', onClick: () => this.turn() }, { label: 'Arts', onClick: () => ctx.open('arts') }],
             hint: deviceText('Pick a ring or relic on the right. Click a cell to lay a relic; click a laid one to take it back.', 'Tap a ring or relic on the right. Tap a cell to lay a relic; tap a laid one to take it back.'),
         });
         const body = w.body, lw = 300, gx = 8;

@@ -127,7 +127,7 @@ interface RoundBtn { x: number; y: number; r: number }
  * Round buttons for the right thumb, round ACT. FISH and TURN share a place, and so do POD and CANCEL (they never show together).
  * REMOVE sits beside USE, over the end of the hotbar.
  */
-export const THUMB: Record<'act' | 'use' | 'eat' | 'dash' | 'fish' | 'turn' | 'pod' | 'cancel' | 'take', RoundBtn> = {
+export const THUMB: Record<'act' | 'use' | 'eat' | 'dash' | 'fish' | 'turn' | 'pod' | 'cancel' | 'take' | 'art0' | 'art1' | 'art2', RoundBtn> = {
     act: { x: 872, y: 432, r: 50 },
     use: { x: 764, y: 460, r: 32 },
     eat: { x: 832, y: 338, r: 28 },
@@ -137,6 +137,9 @@ export const THUMB: Record<'act' | 'use' | 'eat' | 'dash' | 'fish' | 'turn' | 'p
     pod: { x: 768, y: 326, r: 28 },
     cancel: { x: 768, y: 326, r: 28 },
     take: { x: 690, y: 430, r: 30 },
+    art0: { x: 702, y: 236, r: 26 },        // the three Combat Art buttons, in a column left of the context buttons (the toast lane keeps left of them) (they show only for the arts that are on a key)
+    art1: { x: 702, y: 292, r: 26 },
+    art2: { x: 702, y: 348, r: 26 },
 };
 
 /** BAG, BUILD and MENU on a phone: centres of three buttons in a row at the bottom right. */
@@ -282,7 +285,7 @@ export function toastLane (touch: boolean, cardBottom = 0): ToastLane {
         const b = worldBlock(false).frame;
         return { right: b.x + b.w - 6, top: b.y + b.h + 12, bottom: hotbarLayout(false).y - 2, maxW: 280 };
     }
-    return { right: 722, top: Math.max(204, cardBottom + 8), bottom: 396, maxW: 190 };
+    return { right: 650, top: Math.max(204, cardBottom + 8), bottom: 396, maxW: 190 };
 }
 
 export const TOAST_MAX = 3;

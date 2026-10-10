@@ -188,7 +188,7 @@ export class Farmers {
             pv.x += (p.x - pv.x) * k;
             pv.y += (p.y - pv.y) * k;
             this.draw(pv, p.moving, { x: p.fx, y: p.fy }, p.downed > 0, dt);
-            this.setAlpha(pv, p.downed > 0 ? 0.7 + Math.sin(this.scene.time.now / 150) * 0.2 : 1);
+            this.setAlpha(pv, p.downed > 0 ? 0.7 + Math.sin(this.scene.time.now / 150) * 0.2 : p.cl ? 0.4 : 1);
         }
     }
 
@@ -218,7 +218,7 @@ export class Farmers {
         if (pv) {
             pv.x = l.x; pv.y = l.y;
             this.draw(pv, moving, l.face, downed, dt);
-            this.setAlpha(pv, downed ? 0.7 : me.invuln > 0 && Math.floor(me.invuln * 12) % 2 === 0 ? 0.35 : 1);
+            this.setAlpha(pv, downed ? 0.7 : me.cl ? 0.4 : me.invuln > 0 && Math.floor(me.invuln * 12) % 2 === 0 ? 0.35 : 1);
         }
         h.camTarget.set(l.x, l.y - 8);
         l.sendT -= dt;

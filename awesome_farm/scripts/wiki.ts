@@ -423,7 +423,7 @@ function itemsSection () {
         return sub(id, `${title} (${ids.length})`, cards(ids.map(itemCard)), false);
     }).join('');
     const rest = ITEM_ORDER.filter((i) => !seen.has(i));
-    return section('s-items', `Items (${ITEM_ORDER.length})`, intro('items') + intro('rings')
+    return section('s-items', `Items (${ITEM_ORDER.length})`, intro('items') + intro('rings') + intro('arts')
         + p(`Swatches: the colour is the kind of item, the ring its rarity (${RARITY_NAMES.map((_, i) => rarityTag(i)).join(' ')}).`)
         + body + (rest.length ? sub('s-items-rest', 'More', cards(rest.map(itemCard))) : ''));
 }

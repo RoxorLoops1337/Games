@@ -125,6 +125,12 @@ const COMBAT = branch('combat', [
     ['c_war',    'Warcry',            'k_burst',  5, 2,  ['c_dash'], 3, 1, { dmgPct: 0.06, swingSpeed: 0.05 }],
     ['c_towers', 'Watchtowers',       'k_tower',  4, 2.8, ['c_wind', 'c_dodge'], 1, 2, null, ['towers'], 'Raids come from the Blight nests at night: build Archer Towers, Spike Traps and Fortified Walls (Build, Defense).'],
     ['c_siege',  'Siegeworks',        'k_bolt',   5, 3.2, ['c_towers'], 1, 3, null, ['towers2'], 'Build Ballistas and Tesla Coils around the Blight Cores that destroyed nests leave behind.'],
+    ['c_hook',   'Grapple Hook',      'k_hook',   6, 1.2, ['c_war'], 1, 2, null, ['art_hook'], 'Combat Art: pull the first monster in a line to your feet and stun it.  Press its key (Z, X or N) once it is on one.'],
+    ['c_ram',    'Headbutt',          'k_ram',    6, 2.4, ['c_war'], 1, 2, null, ['art_ram'], 'Combat Art: lunge forward and throw the first monster you meet, dazed.'],
+    ['c_scorch', 'Scorch',            'k_flame',  6, 3.6, ['c_siege'], 1, 2, null, ['art_scorch'], 'Combat Art: a burst of fire round you that knocks enemies back and sets them alight.'],
+    ['c_arrow',  'Crystal Arrow',     'k_arrow',  7, 1.8, ['c_hook', 'c_ram'], 1, 3, null, ['art_arrow'], 'Combat Art: a long arrow that stuns what it hits, longer the further it flew.'],
+    ['c_frost',  'Frost Zone',        'k_snow',   7, 3.0, ['c_ram', 'c_scorch'], 1, 3, null, ['art_frost'], 'Combat Art: a zone on the ground that freezes everything in it nearly solid.'],
+    ['c_shroud', 'Shroud',            'k_cloak',  6, -2.5, ['c_exec'], 1, 3, null, ['art_shroud'], 'Combat Art: slip out of sight; monsters lose you and your next blow hits much harder.'],
 ]);
 
 const TAMING = branch('taming', [
@@ -205,6 +211,8 @@ export const UNLOCK_INFO: Record<string, string> = {
     mineshaft: 'Unlocks the Mine Shaft: a way down to the caves under the world.',
     towers: 'Unlocks the Defense tab: Archer Towers, Spike Traps and Fortified Walls against the Blight\u2019s raids.',
     towers2: 'Unlocks the Ballista and the Tesla Coil (each needs a Blight Core).',
+    art_hook: 'Combat Art: the Grapple Hook.', art_arrow: 'Combat Art: the Crystal Arrow.', art_scorch: 'Combat Art: Scorch.',
+    art_shroud: 'Combat Art: Shroud.', art_frost: 'Combat Art: the Frost Zone.', art_ram: 'Combat Art: the Headbutt.',
 };
 
 /** The skill that grants an unlock token (null for a token no skill gives). */

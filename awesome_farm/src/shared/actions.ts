@@ -24,6 +24,7 @@ export const ACTIONS = [
     'nestHit', 'nestDie', 'nestSpread',
     'raid',       // (a raid sets out from a nest at nightfall: sim/raid.ts)
     'bldHit', 'bldBreak',     // (a raider strikes a wall, and breaks it: sim/defense.ts)
+    'artHook', 'artArrow', 'artScorch', 'artShroud', 'artFrost', 'artRam',      // (the Combat Arts land: sim/arts.ts)
     'towerShot', 'ballista', 'zap', 'spike',      // (the towers fire and the traps bite: they carry no farmer, so they never shake a camera)
 ] as const;
 
