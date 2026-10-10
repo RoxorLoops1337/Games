@@ -242,6 +242,22 @@ t('between battles the live push carries what the hall picked for every battle a
   assert.equal(pk.champ[ids[0]], 2); assert.equal(pk.champ[ids[3]], 1);
   assert.equal(pk.pk.r1m0, undefined, 'only battles whose fighters are known');
 });
+t('the big screen gets players to spotlight: streaks, best caller, biggest win, high roller', () => {
+  const { S, us, ids } = bracketWorld();
+  const [a, b] = us;
+  E.setPick(S, a, 'r0m0', ids[0]); E.setPick(S, b, 'r0m0', ids[3]);
+  const mk = Object.values(S.ev.markets).find((m) => m.kind === 'match' && m.mid === 'r0m0');
+  E.setBet(S, a, mk.id, 0, 200);
+  assert.ok(E.liveOf(S, 0, false).spot.some((x) => x.k === 'roller' && x.n === a.name && x.v === 200));
+  host(S, { a: 'step', mid: 'r0m0', to: 'live' }); host(S, { a: 'step', mid: 'r0m0', to: 'voting' });
+  E.castVote(S, a, 'r0m0', 'a'); E.castVote(S, b, 'r0m0', 'b');
+  host(S, { a: 'step', mid: 'r0m0', to: 'closed' }); host(S, { a: 'result', mid: 'r0m0', w: 'a' });
+  const spot = E.liveOf(S, 0, false).spot;
+  assert.ok(spot.some((x) => x.k === 'caller' && x.n === a.name), 'best caller');
+  assert.ok(spot.some((x) => x.k === 'ear' && x.n === a.name), 'votes with the judges');
+  assert.ok(spot.some((x) => x.k === 'win' && x.n === a.name), 'biggest win');
+  assert.ok(!spot.some((x) => x.k === 'streak'), 'one in a row is not a streak yet');
+});
 t('bracket picks pay 25 x 2^round', () => {
   const { S, us, ids } = bracketWorld();
   const [a, b] = us;

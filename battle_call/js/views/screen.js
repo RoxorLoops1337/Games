@@ -2,7 +2,7 @@
 // it follows the organiser by itself.
 import { esc, ic } from '../dom.js';
 import { S, perfNow, bbName, size, rounds, curMatch, nextMatch, sides, leftKey, seedOf } from '../state.js';
-import { ui, av, perfStats, lockClock, bracket, feedStrip, crown, wordmark, countdown } from '../ui.js';
+import { ui, av, userAv, loops, perfStats, lockClock, bracket, feedStrip, crown, wordmark, countdown } from '../ui.js';
 import { matchRound } from '../shared.js';
 import { joinLink } from './host.js';
 
@@ -63,8 +63,11 @@ function idleStage(nx) {
     const done = ev.matches.filter((m) => !m.third && m.status === 'done' && d.pk[m.id] && d.pk[m.id][0] + d.pk[m.id][1] > 0).sort((a, b) => b.ds - a.ds).slice(0, 5);
     if (done.length) slides.push({ t: 'How the hall called it', h: `<ol class="st-pred">${done.map((m) => { const win = m.w === 'a' ? m.a : m.b, k = d.pk[m.id], got = m.w === 'a' ? k[0] : k[1], p = Math.round((got / (k[0] + k[1])) * 100); return `<li data-k="d${m.id}">${av(win, 'md')}<b>${name(win)} won</b><i class="pbar"><u style="width:${p}%"></u></i><small class="seat">${p}% saw it coming</small></li>`; }).join('')}</ol>` });
   }
-  const top = (S.board || []).slice(0, 5);
-  if (top.length && top[0].net) slides.push({ t: 'Best callers right now', h: `<ol class="st-pred">${top.map((r, i) => `<li data-k="u${r.n}"><span class="n">${i + 1}</span><b>${esc(r.n)}</b><small class="seat">${r.net.toLocaleString()} Loops</small></li>`).join('')}</ol>` });
+  const top = (S.board || []).slice(0, 10);
+  if (top.length) slides.push({ t: 'The leaderboard', h: `<ol class="st-board ${top.length > 5 ? 'two' : ''}">${top.map((r) => `<li class="r${r.rank}" data-k="lb${r.n}"><span class="rk">${r.rank === 1 ? crown('xs') : r.rank}</span>${userAv(r.n, 'md')}<b>${esc(r.n)}</b><span class="net">${loops(r.net)}</span></li>`).join('')}</ol>` });
+  const SPOT = { streak: ['\u{1F525}', 'On fire', (v) => `${v} in a row with the judges`], caller: ['\u{1F3AF}', 'Best caller', (v) => `${v} ${v === 1 ? 'battle' : 'battles'} called right`], win: ['\u{1F4B0}', 'Biggest win', (v) => `+${v.toLocaleString()} Loops`], roller: ['\u{1F3B2}', 'High roller', (v) => `${v.toLocaleString()} Loops riding`], ear: ['\u{1F442}', 'Sharpest ear', (v) => `${v} ${v === 1 ? 'vote' : 'votes'} with the judges`] };
+  const spot = (S.live && S.live.spot) || [];
+  if (spot.length) slides.push({ t: 'Players to watch', h: `<div class="st-spot">${spot.map((x) => `<div class="sp" data-k="sp${x.k}">${userAv(x.n, 'xl')}<i>${SPOT[x.k][0]}</i><small>${SPOT[x.k][1]}</small><b>${esc(x.n)}</b><span>${SPOT[x.k][2](x.v)}</span></div>`).join('')}</div>` });
   const i = Math.floor(Date.now() / SLIDE_MS) % slides.length, sl = slides[i];
   const dots = slides.length > 1 ? `<div class="dots">${slides.map((_, k) => `<i class="${k === i ? 'on' : ''}"></i>`).join('')}</div>` : '';
   return `<div class="st-idle" data-cycle="${slides.length}" data-cur="${i}">${typeof sl === 'string' ? sl : `<p class="eyebrow">${eq} While we wait for the next battle</p><h1 class="mega" data-k="it${i}">${sl.t}</h1><div class="jbody" data-k="ib${i}">${sl.h}</div>`}${dots}</div>`;
