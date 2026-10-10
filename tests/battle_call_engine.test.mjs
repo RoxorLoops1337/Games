@@ -17,6 +17,7 @@ const t = (name, fn) => {
 function setup({ size = 8, beatboxers = 12, users = 4, start = 1000 } = {}) {
   const S = E.newState(E.newEvent({ code: 'TEST1', name: 'Test Battle', size, now: 1 }));
   S.ev.settings.start = start;
+  S.ev.settings.thirdPlace = false; // most tests end at the final; third place has its own tests
   S.now = 1;
   E.hostAction(S, { a: 'bb.add', names: Array.from({ length: beatboxers }, (_, i) => 'BB' + (i + 1)) });
   const us = [];
@@ -610,6 +611,97 @@ t('32 beatboxers, 120 random players: the world stays solvent and the numbers st
   const board = E.boardOf(S);
   assert.equal(board.length, 50); assert.ok(board[0].net >= board[49].net);
   assert.ok(JSON.stringify(E.metaOf(S)).length < 60000, 'meta stays small: ' + JSON.stringify(E.metaOf(S)).length);
+});
+
+console.log('vote countdown and third place');
+t('voting has a countdown: closes itself, late votes bounce, 0 means manual', () => {
+  const { S, us } = bracketWorld();
+  S.now = 1000;
+  host(S, { a: 'step', mid: 'r0m0', to: 'live' });
+  host(S, { a: 'step', mid: 'r0m0', to: 'voting' });
+  const m = S.ev.matches.find((x) => x.id === 'r0m0');
+  assert.equal(m.vsecs, 10, 'default is 10 seconds');
+  assert.equal(m.vend, 11000);
+  assert.deepEqual(E.closeDueVotes(S), [], 'not due yet');
+  S.now = 10999;
+  assert.ok(E.castVote(S, us[0], 'r0m0', 'a').ok);
+  S.now = 11000;
+  assert.deepEqual(E.closeDueVotes(S), ['r0m0']);
+  assert.equal(m.status, 'closed');
+  assert.equal(m.vend, 0);
+  host(S, { a: 'step', mid: 'r0m0', to: 'voting', secs: 0 });
+  assert.equal(m.vend, 0, 'no timer');
+  S.now = 999999;
+  assert.deepEqual(E.closeDueVotes(S), []);
+  assert.ok(E.castVote(S, us[1], 'r0m0', 'b').ok);
+  host(S, { a: 'step', mid: 'r0m0', to: 'closed' });
+  host(S, { a: 'step', mid: 'r0m0', to: 'voting', secs: 20 });
+  assert.equal(m.vend, S.now + 20000);
+  S.now += 20000 + 2501;
+  assert.equal(E.castVote(S, us[2], 'r0m0', 'a').ok, false, 'too late');
+});
+t('third place: made when both semis are done, played before the final, paid like a battle, undone in order', () => {
+  const w = setup({ size: 4, beatboxers: 4, users: 2 });
+  const { S, ids } = w;
+  S.ev.settings.thirdPlace = true;
+  host(S, { a: 'phase', to: 'elimination' });
+  host(S, { a: 'seeds', order: ids });
+  const start = total(S);
+  assert.ok(!S.ev.matches.some((x) => x.third));
+  playMatch(S, 'r0m0', 'a');
+  assert.ok(!S.ev.matches.some((x) => x.third), 'only after both semis');
+  playMatch(S, 'r0m1', 'b');
+  const th = S.ev.matches.find((x) => x.third);
+  assert.ok(th, 'third place exists');
+  assert.equal(th.status, 'upcoming');
+  assert.deepEqual([th.a, th.b].sort(), [ids[3], ids[1]].sort(), 'the two semi losers');
+  assert.ok(S.ev.matches.indexOf(th) < S.ev.matches.findIndex((x) => x.r === 1 && !x.third), 'before the final');
+  assert.equal(E.setPick(S, w.us[0], th.id, th.a).ok, false, 'no bracket picks on third place');
+  playMatch(S, th.id, 'a');
+  assert.equal(S.ev.phase, 'bracket', 'not finished until the final');
+  assert.ok(!S.ev.champion, 'a third-place result is not a champion');
+  playMatch(S, 'r1m0', 'a');
+  assert.equal(S.ev.phase, 'finished');
+  assert.ok(S.ev.champion);
+  assert.ok(Math.abs(total(S) - start) < 1e6);
+});
+t('third place can be switched off in settings', () => {
+  const w = setup({ size: 4, beatboxers: 4, users: 1 });
+  const { S, ids } = w;
+  assert.equal(S.ev.settings.thirdPlace, false);
+  host(S, { a: 'settings', set: { thirdPlace: true } });
+  assert.equal(S.ev.settings.thirdPlace, true);
+  host(S, { a: 'settings', set: { thirdPlace: false, voteSecs: 15 } });
+  assert.equal(S.ev.settings.thirdPlace, false);
+  assert.equal(S.ev.settings.voteSecs, 15);
+  host(S, { a: 'phase', to: 'elimination' });
+  host(S, { a: 'seeds', order: ids });
+  playMatch(S, 'r0m0', 'a'); playMatch(S, 'r0m1', 'a');
+  assert.ok(!S.ev.matches.some((x) => x.third));
+  playMatch(S, 'r1m0', 'a');
+  assert.equal(S.ev.phase, 'finished');
+});
+t('taking back a semi is refused while third place is in play, and removes the match once it is not', () => {
+  const w = setup({ size: 4, beatboxers: 4, users: 1 });
+  const { S, ids } = w;
+  S.ev.settings.thirdPlace = true;
+  host(S, { a: 'phase', to: 'elimination' });
+  host(S, { a: 'seeds', order: ids });
+  playMatch(S, 'r0m0', 'a'); playMatch(S, 'r0m1', 'a');
+  const th = S.ev.matches.find((x) => x.third);
+  host(S, { a: 'step', mid: th.id, to: 'live' });
+  assert.equal(E.hostAction(S, { a: 'reopen', mid: 'r0m1' }).ok, false);
+  host(S, { a: 'step', mid: th.id, to: 'upcoming' });
+  host(S, { a: 'reopen', mid: 'r0m1' });
+  assert.ok(!S.ev.matches.some((x) => x.third), 'third place withdrawn');
+  host(S, { a: 'result', mid: 'r0m1', w: 'b' });
+  assert.ok(S.ev.matches.some((x) => x.third), 'and made again');
+});
+t('the category summary carries its art (crew tabs used to show the male portrait)', () => {
+  const { S } = setup();
+  host(S, { a: 'cat.add', name: 'Crew', size: 4, art: 'crew' });
+  const m = E.metaOf(S);
+  assert.ok(m.cats.some((c) => c.art === 'crew'));
 });
 
 console.log(`\n${pass} passed, ${failN} failed`);

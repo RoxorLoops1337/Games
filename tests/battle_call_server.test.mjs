@@ -239,6 +239,24 @@ await t('twenty people picking the same nickname at the same moment: exactly one
 });
 
 console.log('surviving a restart');
+await t('a vote with a countdown closes by itself, and messages carry the server clock', async () => {
+  const rt = await newEvent();
+  const host = await connect(rt, { ht: rt.ht });
+  await act(rt, host, { a: 'bb.add', names: Array.from({ length: 8 }, (_, i) => 'BB' + i) });
+  await act(rt, host, { a: 'phase', to: 'elimination' });
+  await act(rt, host, { a: 'seeds', order: host.last('meta').cats[0].bbs.map((b) => b.id) });
+  assert.ok(host.last('meta').now > 1e12, 'meta carries now');
+  await act(rt, host, { a: 'step', mid: 'r0m0', to: 'live' });
+  await act(rt, host, { a: 'step', mid: 'r0m0', to: 'voting', secs: 1 });
+  const m = () => host.last('meta').cats[0].matches[0];
+  assert.equal(m().status, 'voting'); assert.ok(m().vend > Date.now());
+  await sleep(1300);
+  assert.equal(m().status, 'closed', 'the server closed it');
+  await act(rt, host, { a: 'step', mid: 'r0m0', to: 'voting', secs: 0 });
+  await sleep(300);
+  assert.equal(m().status, 'voting', 'secs 0 means manual');
+});
+
 await t('an evicted and rebuilt object has the same players, tokens, bets, pools, bracket and results', async () => {
   const rt = await newEvent();
   const tk = await join(rt, 'Ann'); const ann = await connect(rt, { tk }), host = await connect(rt, { ht: rt.ht });
@@ -257,7 +275,7 @@ await t('an evicted and rebuilt object has the same players, tokens, bets, pools
   // brand new object over the same storage: what the runtime does after an eviction
   const rt2 = runtime(rt.storage); await rt2.ready();
   const ann2 = await connect(rt2, { tk }), host2 = await connect(rt2, { ht: rt.ht });
-  const { rev: _r1, ...m1 } = metaBefore, { rev: _r2, ...m2 } = host2.last('meta');
+  const { rev: _r1, now: _n1, ...m1 } = metaBefore, { rev: _r2, now: _n2, ...m2 } = host2.last('meta');
   assert.deepEqual(m2, m1, 'public state is identical');
   assert.deepEqual(ann2.last('me'), meBefore, 'the player is exactly where they were');
   assert.equal(ann2.last('me').bal, meBefore.bal);

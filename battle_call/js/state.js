@@ -36,7 +36,7 @@ function rebuild() {
   const m = S.event, c = m.cats.find((x) => x.id === S.catId) || m.cats[0];
   S.catId = c.id;
   S.meta = { ...c, rev: m.rev, code: m.code, name: m.name, banner: m.banner, active: m.active, catName: c.name, catId: c.id,
-    cats: m.cats.map((x) => ({ id: x.id, name: x.name, phase: x.phase, size: x.set.size, live: x.matches.some((q) => q.status === 'live' || q.status === 'voting' || q.status === 'closed'), voting: x.matches.some((q) => q.status === 'voting') })),
+    cats: m.cats.map((x) => ({ id: x.id, name: x.name, art: x.art, phase: x.phase, size: x.set.size, live: x.matches.some((q) => q.status === 'live' || q.status === 'voting' || q.status === 'closed'), voting: x.matches.some((q) => q.status === 'voting') })),
     set: { ...m.set, ...c.set } };
   S.bb = {}; S.match = {}; S.mk = {};
   for (const x of m.cats) {
