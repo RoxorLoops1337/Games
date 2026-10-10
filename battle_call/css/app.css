@@ -646,3 +646,19 @@ body.idle .stagectl { opacity: 0; pointer-events: none; }
 .namewall .nm { padding: .6vmin 1.8vmin; border-radius: 99px; font-size: 2em; font-weight: 700; background: rgba(255,255,255,.1); border: 1px solid var(--line); animation: pop .35s both; }
 .namewall .nm.blue { background: rgba(43,107,255,.35); border-color: rgba(95,147,255,.7); } .namewall .nm.red { background: rgba(255,51,81,.33); border-color: rgba(255,112,136,.7); }
 .card.await { display: flex; align-items: center; justify-content: space-between; gap: 10px; } .card.await b { display: block; } .card.await small { display: block; }
+
+.st-cyc { position: relative; width: 100%; flex: 1; display: flex; flex-direction: column; justify-content: center; } .st-cyc > .st-champ { flex: 0 1 auto; } .st-cyc .dots { position: static; justify-content: center; margin-top: 2vmin; }
+.st-pw { display: flex; flex-direction: column; align-items: center; gap: 1.6vmin; width: 100%; text-align: center; }
+.st-pw .pods { display: flex; align-items: flex-end; justify-content: center; gap: 3vmin; width: 100%; }
+.st-pw .pod { position: relative; flex: 0 1 32vmin; display: flex; flex-direction: column; align-items: center; gap: .8vmin; padding: 2.4vmin 2vmin; border-radius: 3vmin; background: var(--glass); border: 1px solid var(--line); min-width: 0; }
+.st-pw .pod.p1 { border-color: var(--gold); background: linear-gradient(180deg, rgba(255,207,61,.25), rgba(255,255,255,.05)); padding-bottom: 5vmin;  }
+.st-pw .pod.p3 { padding-bottom: 1.4vmin; }
+.st-pw .pod .av.xl { --s: 15vmin; } .st-pw .pod.p1 .av.xl { --s: 20vmin; }
+.st-pw .pod b { font-size: 3.2em; overflow-wrap: anywhere; line-height: 1.05; } .st-pw .pod.p1 b { font-size: 4.2em; }
+.st-pw .pod span { font-size: 2.6em; font-weight: 800; color: var(--gold); } .st-pw .pod span small { font-size: .5em; color: #d6d2f5; font-weight: 600; }
+.st-pw .medal { font-style: normal; font-weight: 800; font-size: 3em; color: var(--pink); }
+.st-pw .rest { list-style: none; margin: 1vmin 0 0; padding: 0; display: flex; flex-wrap: wrap; justify-content: center; gap: 1.2vmin 2vmin; }
+.st-pw .rest li { display: flex; gap: 1.4vmin; align-items: center; padding: .8vmin 2vmin; border-radius: 2vmin; background: var(--glass); border: 1px solid var(--line); font-size: 2em; } .st-pw .rest .rk { color: var(--pink); font-weight: 800; } .st-pw .rest small { color: var(--gold); font-weight: 800; }
+.st-pw .pwh { font-size: 6.5em; }
+.st-pw .pod .av.xl { --s: 12vmin; } .st-pw .pod.p1 .av.xl { --s: 16vmin; }
+.st-pw .pod b { font-size: 2.6em; } .st-pw .pod.p1 b { font-size: 3.4em; } .st-pw .pod span { font-size: 2.2em; }

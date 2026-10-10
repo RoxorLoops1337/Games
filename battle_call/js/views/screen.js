@@ -76,6 +76,8 @@ function idleStage(nx) {
     const done = ev.matches.filter((m) => !m.third && m.status === 'done' && d.pk[m.id] && d.pk[m.id][0] + d.pk[m.id][1] > 0).sort((a, b) => b.ds - a.ds).slice(0, 5);
     if (done.length) slides.push({ t: 'How the hall called it', h: `<ol class="st-pred">${done.map((m) => { const win = m.w === 'a' ? m.a : m.b, k = d.pk[m.id], got = m.w === 'a' ? k[0] : k[1], p = Math.round((got / (k[0] + k[1])) * 100); return `<li data-k="d${m.id}">${av(win, 'md')}<b>${name(win)} won</b><i class="pbar"><u style="width:${p}%"></u></i><small class="seat">${p}% saw it coming</small></li>`; }).join('')}</ol>` });
   }
+  const pw = predWinners();
+  if (pw) slides.push(pw);
   const top = (S.board || []).slice(0, 10);
   if (top.length) slides.push({ t: 'The leaderboard', h: `<ol class="st-board ${top.length > 5 ? 'two' : ''}">${top.map((r) => `<li class="r${r.rank}" data-k="lb${r.n}"><span class="rk">${r.rank === 1 ? crown('xs') : r.rank}</span>${userAv(r.n, 'md')}<b>${esc(r.n)}</b><span class="net">${loops(r.net)}</span></li>`).join('')}</ol>` });
   const SPOT = { streak: ['\u{1F525}', 'On fire', (v) => `${v} in a row with the judges`], caller: ['\u{1F3AF}', 'Best caller', (v) => `${v} ${v === 1 ? 'battle' : 'battles'} called right`], win: ['\u{1F4B0}', 'Biggest win', (v) => `+${v.toLocaleString()} Loops`], roller: ['\u{1F3B2}', 'High roller', (v) => `${v.toLocaleString()} Loops riding`], ear: ['\u{1F442}', 'Sharpest ear', (v) => `${v} ${v === 1 ? 'vote' : 'votes'} with the judges`] };
@@ -174,9 +176,22 @@ function duelStage(m) {
   </div>`;
 }
 
+/** The best predictors of the night (prediction points: Top lists, bracket picks), big: a podium for the first three. */
+function predWinners() {
+  const rows = (S.board || []).filter((r) => (r.pred || 0) > 0).sort((a, b) => b.pred - a.pred || b.net - a.net).slice(0, 8);
+  if (!rows.length) return '';
+  const [a, b, c] = rows, rest = rows.slice(3);
+  const pod = (r, k) => (r ? `<div class="pod p${k}" data-k="pw${esc(r.n)}">${k === 1 ? crown('sm', false) : `<i class="medal">${k}</i>`}${userAv(r.n, 'xl')}<b>${esc(r.n)}</b><span>${r.pred.toLocaleString()} <small>prediction points</small></span></div>` : '');
+  return `<div class="st-pw"><p class="eyebrow">${ic('trophy', 22)} The best predictors</p><h1 class="mega pwh">Prediction winners</h1>
+    <div class="pods">${pod(b, 2)}${pod(a, 1)}${pod(c, 3)}</div>
+    ${rest.length ? `<ol class="rest">${rest.map((r, i) => `<li data-k="pwr${esc(r.n)}"><span class="rk">${i + 4}</span><b>${esc(r.n)}</b><small>${r.pred.toLocaleString()}</small></li>`).join('')}</ol>` : ''}</div>`;
+}
+
 function champion() {
   const ev = S.meta, champ = ev.champion;
-  const top = S.board.slice(0, 5);
-  return `<div class="st-champ"><p class="eyebrow">${ic('trophy', 22)} Champion</p><div class="crownwrap">${crown('big')}<div class="crown">${av(champ, 'hero')}</div></div><h1 class="mega">${esc(bbName(champ))}</h1></div>
-    ${top.length ? `<section class="st-cons right"><h3>Best callers</h3><ol>${top.map((r, i) => `<li><span class="n">${i + 1}</span><b>${esc(r.n)}</b><small>${r.net.toLocaleString()}</small></li>`).join('')}</ol></section>` : ''}`;
+  const slide = `<div class="st-champ"><p class="eyebrow">${ic('trophy', 22)} Champion</p><div class="crownwrap">${crown('big')}<div class="crown">${av(champ, 'hero')}</div></div><h1 class="mega">${esc(bbName(champ))}</h1></div>`;
+  const pw = predWinners();
+  if (!pw) return slide;
+  const i = Math.floor(Date.now() / SLIDE_MS) % 2;
+  return `<div class="st-cyc" data-cycle="2" data-cur="${i}">${i === 0 ? slide : pw}<div class="dots"><i class="${i === 0 ? 'on' : ''}"></i><i class="${i === 1 ? 'on' : ''}"></i></div></div>`;
 }
