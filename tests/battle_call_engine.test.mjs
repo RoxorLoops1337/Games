@@ -267,10 +267,10 @@ t('voting: one vote each, changeable while open, tallied, rewarded, and judges d
   assert.ok(E.castVote(S, c, 'r0m0', 'b').ok, 'changed their mind');
   const m = S.ev.matches[0];
   assert.deepEqual(m.c, { a: 1, b: 2 });
-  assert.equal(E.metaOf(S).matches[0].c, null, 'crowd result hidden until voting closes');
+  assert.equal(E.metaOf(S).cats[0].matches[0].c, null, 'crowd result hidden until voting closes');
   host(S, { a: 'step', mid: 'r0m0', to: 'closed' });
   assert.equal(E.castVote(S, a, 'r0m0', 'b').ok, false, 'closed');
-  assert.deepEqual(E.metaOf(S).matches[0].c, { a: 1, b: 2 });
+  assert.deepEqual(E.metaOf(S).cats[0].matches[0].c, { a: 1, b: 2 });
   host(S, { a: 'result', mid: 'r0m0', w: 'b', judges: { a: 1, b: 2 } });
   const P = S.ev.settings.pts;
   assert.equal(a.bal, 1000 + P.vote);
@@ -398,6 +398,106 @@ t('reach bets are not offered on fighters already drawn into that round; reopeni
   assert.equal(E.hostAction(S, { a: 'mk.preset', preset: 'reach', to: 1 }).ok, false, 'round 0 is over, nothing to bet on');
   host(S, { a: 'step', mid: 'r1m0', to: 'live' });
   assert.equal(E.hostAction(S, { a: 'reopen', mid: 'r0m3' }).ok, false, 'a battle is in progress');
+});
+
+console.log('categories');
+function twoCats() {
+  const w = setup({ size: 4, beatboxers: 5, users: 3 });
+  const { S } = w;
+  const r = host(S, { a: 'cat.add', name: 'Crew', size: 2 });
+  host(S, { a: 'bb.add', cat: r.cat, names: ['Crew A', 'Crew B', 'Crew C'] });
+  return { ...w, crew: S.event.cats[r.cat], main: S.event.cats.c1 };
+}
+t('an event holds several categories with their own lineup, size and phase, and ids never collide', () => {
+  const { S, crew, main } = twoCats();
+  assert.deepEqual(S.event.order, ['c1', crew.id]);
+  assert.equal(crew.settings.size, 2); assert.equal(main.settings.size, 4);
+  assert.equal(crew.bbs.length, 3); assert.equal(main.bbs.length, 5);
+  assert.equal(new Set([...main.bbs, ...crew.bbs].map((b) => b.id)).size, 8, 'beatboxer ids are event-wide');
+  host(S, { a: 'phase', cat: crew.id, to: 'elimination' });
+  assert.equal(crew.phase, 'elimination'); assert.equal(main.phase, 'lobby');
+  host(S, { a: 'seeds', cat: crew.id, order: crew.bbs.slice(0, 2).map((b) => b.id) });
+  host(S, { a: 'phase', cat: 'c1', to: 'elimination' }); host(S, { a: 'seeds', cat: 'c1', order: main.bbs.slice(0, 4).map((b) => b.id) });
+  const ids = [...main.matches, ...crew.matches].map((m) => m.id);
+  assert.equal(new Set(ids).size, ids.length, 'match ids are event-wide');
+  assert.equal(crew.matches.length, 1, 'a 2-bracket is just the final');
+  const mks = [...Object.keys(main.markets), ...Object.keys(crew.markets)];
+  assert.equal(new Set(mks).size, mks.length, 'market ids are event-wide');
+});
+t('one wallet: bets, picks, votes and results in two categories add up in the same balance, tops stay per category', () => {
+  const { S, us, crew, main } = twoCats();
+  const [a, b] = us;
+  host(S, { a: 'phase', cat: 'c1', to: 'picks' });
+  assert.ok(E.setTop(S, a, main.bbs.slice(0, 4).map((x) => x.id), 'c1').ok);
+  assert.equal(E.setTop(S, a, crew.bbs.slice(0, 2).map((x) => x.id), crew.id).ok, false, 'the crew category is not open for picks');
+  host(S, { a: 'phase', cat: crew.id, to: 'picks' });
+  assert.ok(E.setTop(S, a, crew.bbs.slice(0, 2).map((x) => x.id), crew.id).ok);
+  assert.equal(a.tops.c1.length, 4); assert.equal(a.tops[crew.id].length, 2);
+  host(S, { a: 'phase', cat: 'c1', to: 'elimination' }); host(S, { a: 'phase', cat: crew.id, to: 'elimination' });
+  host(S, { a: 'seeds', cat: 'c1', order: main.bbs.slice(0, 4).map((x) => x.id) });
+  host(S, { a: 'seeds', cat: crew.id, order: crew.bbs.slice(0, 2).map((x) => x.id) });
+  const P = S.ev.settings.pts;
+  assert.equal(a.bal, 1000 + 4 * (P.topIn + P.topExact) + 2 * (P.topIn + P.topExact), 'both rankings paid into one wallet');
+  const mm = Object.values(main.markets).find((m) => m.kind === 'match' && m.mid === 'r0m0');
+  const cm = Object.values(crew.markets).find((m) => m.kind === 'match');
+  E.setBet(S, b, mm.id, 0, 100); E.setBet(S, b, cm.id, 1, 200);
+  assert.equal(b.bal, 700); assert.equal(E.staked(S, b), 300, 'stakes in both categories count');
+  assert.equal(E.setPick(S, b, crew.matches[0].id, crew.matches[0].a).ok, true);
+  assert.equal(E.setPick(S, b, 'r0m0', crew.matches[0].a).ok, false, 'a crew member is not in a main-category battle');
+  playMatch(S, crew.matches[0].id, 'a');
+  assert.equal(S.event.active, crew.id, 'the category with a battle on stage is the active one');
+  assert.equal(crew.phase, 'finished'); assert.equal(main.phase, 'bracket');
+  assert.ok(b.bal !== 700); assert.equal(E.staked(S, b), 100, 'the crew bet is settled, the main one is still riding');
+});
+t('only one battle on stage across the whole event, and the stage cannot move mid-battle', () => {
+  const { S, crew } = twoCats();
+  for (const [c, n] of [['c1', 4], [crew.id, 2]]) { host(S, { a: 'phase', cat: c, to: 'elimination' }); host(S, { a: 'seeds', cat: c, order: S.event.cats[c].bbs.slice(0, n).map((b) => b.id) }); }
+  host(S, { a: 'step', mid: 'r0m0', to: 'live' });
+  assert.equal(E.hostAction(S, { a: 'step', mid: crew.matches[0].id, to: 'live' }).ok, false, 'finish the main battle first');
+  assert.equal(E.hostAction(S, { a: 'cat.stage', id: crew.id }).ok, false);
+  host(S, { a: 'result', mid: 'r0m0', w: 'a' });
+  host(S, { a: 'cat.stage', id: crew.id });
+  assert.equal(S.event.active, crew.id);
+});
+t('taking back a ranking or a result in one category leaves the other untouched', () => {
+  const { S, us, crew, main } = twoCats();
+  for (const [c, n] of [['c1', 4], [crew.id, 2]]) { host(S, { a: 'phase', cat: c, to: 'picks' }); }
+  E.setTop(S, us[0], main.bbs.slice(0, 4).map((x) => x.id), 'c1'); E.setTop(S, us[0], crew.bbs.slice(0, 2).map((x) => x.id), crew.id);
+  for (const [c, n] of [['c1', 4], [crew.id, 2]]) { host(S, { a: 'phase', cat: c, to: 'elimination' }); host(S, { a: 'seeds', cat: c, order: S.event.cats[c].bbs.slice(0, n).map((b) => b.id) }); }
+  const P = S.ev.settings.pts, perfect = (n) => n * (P.topIn + P.topExact);
+  assert.equal(us[0].bal, 1000 + perfect(4) + perfect(2));
+  host(S, { a: 'seeds.revert', cat: crew.id });
+  assert.equal(us[0].bal, 1000 + perfect(4), 'only the crew prediction points were taken back');
+  assert.equal(main.phase, 'bracket'); assert.equal(crew.phase, 'elimination');
+  assert.equal(main.matches.length, 3);
+});
+t('categories can be renamed and removed only before they start, and the last one stays', () => {
+  const { S, crew } = twoCats();
+  assert.equal(E.hostAction(S, { a: 'cat.add', name: 'crew', size: 8 }).ok, false, 'names are unique');
+  assert.equal(E.hostAction(S, { a: 'cat.add', name: 'Bad', size: 12 }).ok, false, 'only the real bracket sizes');
+  host(S, { a: 'cat.rename', id: crew.id, name: 'Tag Team' });
+  assert.equal(crew.name, 'Tag Team');
+  host(S, { a: 'cat.rm', id: crew.id });
+  assert.deepEqual(S.event.order, ['c1']);
+  assert.equal(E.hostAction(S, { a: 'cat.rm', id: 'c1' }).ok, false, 'an event keeps at least one category');
+  host(S, { a: 'phase', cat: 'c1', to: 'picks' });
+  const r = host(S, { a: 'cat.add', name: 'Loop Station', size: 64 });
+  r.id = r.cat;
+  assert.equal(S.event.cats[r.id].settings.size, 64);
+  host(S, { a: 'bb.add', cat: r.id, names: Array.from({ length: 64 }, (_, i) => 'LS' + i) });
+  host(S, { a: 'phase', cat: r.id, to: 'elimination' });
+  host(S, { a: 'seeds', cat: r.id, order: S.event.cats[r.id].bbs.map((b) => b.id) });
+  assert.equal(S.event.cats[r.id].matches.length, 63);
+  assert.equal(E.hostAction(S, { a: 'cat.rm', id: r.id }).ok, false, 'started categories stay');
+});
+t('settings: bracket size is per category, the house rules are shared by all of them', () => {
+  const { S, crew, main } = twoCats();
+  host(S, { a: 'settings', cat: crew.id, set: { size: 4 } });
+  assert.equal(crew.settings.size, 4); assert.equal(main.settings.size, 4);
+  host(S, { a: 'settings', set: { minPayout: 1.5, maxPerDevice: 3 } });
+  assert.equal(crew.settings.minPayout, 1.5); assert.equal(main.settings.maxPerDevice, 3);
+  assert.equal(E.metaOf(S).set.minPayout, 1.5);
+  assert.equal(E.metaOf(S).cats.length, 2);
 });
 
 console.log('big fields');

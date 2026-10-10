@@ -2,7 +2,7 @@
 // next to a stage: one big obvious next step per phase, and confirmation before anything that cannot be undone.
 import { esc, ic } from '../dom.js';
 import { S, bbName, size, rounds, curMatch, nextMatch, sides, leftKey, seedOf, mkView, mkTitle, mkLabel, serverBase } from '../state.js';
-import { ui, av, userAv, loops, pill, rankBuilder, bracket, empty, duel, x } from '../ui.js';
+import { ui, av, userAv, loops, pill, rankBuilder, bracket, empty, duel, x, catBar } from '../ui.js';
 import { roundInfo, SIZES } from '../shared.js';
 import { photoUrl } from '../net.js';
 
@@ -29,16 +29,23 @@ export function hostShell() {
     <header class="top"><a class="brand-mini" href="#/">${ic('cog', 18)}<b>Organiser</b></a>
       <div class="evname">${esc(ev.name)}<small>${esc(S.code)} · <i class="conn ${conn[1]}">${conn[0]}</i> · ${S.live ? S.live.on : 0} online</small></div>
       <a class="wallet" href="#/s/${S.code}" target="_blank" rel="noopener" title="Big screen">${ic('tv', 18)}<b>Screen</b></a></header>
-    <main class="page">${body}</main>
+    <main class="page">${catBar(true)}${liveElsewhere()}${body}</main>
     <nav class="tabs host">${TABS.map(([k, l, i]) => `<button class="${ui.hostTab === k ? 'on' : ''}" data-a="hostTab" data-t="${k}">${ic(i, 22)}<span>${l}</span></button>`).join('')}</nav>
   </div>`;
 }
 
 /* ------------------------------------------------------------ run */
+/** A battle is on in a category the organiser is not looking at: say so, with a way back to it. */
+function liveElsewhere() {
+  const c = S.meta.cats.find((x) => x.live && x.id !== S.catId);
+  return c ? `<button class="card elsewhere" data-a="catPick" data-id="${c.id}">${ic('live', 18)}<span>A battle is live in <b>${esc(c.name)}</b></span>${ic('right', 16)}</button>` : '';
+}
+
 function stat(n, l) { return `<div><b>${n}</b><small>${l}</small></div>`; }
 
 function run() {
   const ev = S.meta, N = size(), h = S.host, users = h ? h.total : S.live ? S.live.n : 0;
+  const tops = h && h.tops ? h.tops[S.catId] : null;
   const phaseName = { lobby: 'Doors open', picks: 'Picks and bets open', elimination: 'Elimination', bracket: 'Bracket', finished: 'Finished' }[ev.phase];
   const steps = ['lobby', 'picks', 'elimination', 'bracket', 'finished'];
   const ix = steps.indexOf(ev.phase);
@@ -51,7 +58,7 @@ function run() {
       <button class="btn big" data-a="hPhase" data-to="picks" ${need > 0 ? 'disabled' : ''}>${ic('predict', 20)} Open predictions and bets</button>
       <button class="btn ghost" data-a="hPhase" data-to="elimination" ${need > 0 ? 'disabled' : ''}>Skip picks, go straight to the elimination</button>`;
   } else if (ev.phase === 'picks') {
-    main = `<div class="stats4">${stat(users, 'players')}${stat(h ? h.tops : '-', 'Top ' + N + ' in')}${stat(h ? h.volume.toLocaleString() : '-', 'Loops staked')}${stat(ev.mk.filter((m) => m.st === 'open').length, 'open bets')}</div>
+    main = `<div class="stats4">${stat(users, 'players')}${stat(tops == null ? '-' : tops, 'Top ' + N + ' in')}${stat(h ? h.volume.toLocaleString() : '-', 'Loops staked')}${stat(ev.mk.filter((m) => m.st === 'open').length, 'open bets')}</div>
       <button class="btn big" data-a="hPhase" data-to="elimination">${ic('lock', 20)} Lock picks, start the elimination</button>
       <p class="muted small center">Picks and "makes the cut" bets lock together. You can reopen them until the ranking is published.</p>
       ${consensusCard()}`;
@@ -69,14 +76,16 @@ function run() {
       <p class="muted small center">The audience screens show the podium. Re-open a result below if the last one was wrong.</p>
       ${matchList()}`;
   }
-  return `<section class="phasebar"><small>Phase</small><b>${phaseName}</b></section>${rail}${main}
+  const stage = ev.active !== S.catId && S.meta.cats.length > 1
+    ? `<button class="btn ghost" data-a="hStage" data-id="${S.catId}">${ic('tv', 18)} Put ${esc(ev.catName)} on stage</button>` : '';
+  return `<section class="phasebar"><small>${esc(ev.catName)}</small><b>${phaseName}</b></section>${stage}${rail}${main}
     <section class="block"><h3>Message to the hall</h3>
       <form class="inline" data-form="banner"><input name="text" maxlength="140" placeholder="e.g. Break time, voting opens in 5" value="${esc(ev.banner ? ev.banner.text : '')}" autocomplete="off"><button class="btn" type="submit">Send</button>${ev.banner ? '<button type="button" class="btn ghost" data-a="hBannerClear">Clear</button>' : ''}</form></section>`;
 }
 const require_export = () => `${serverBase()}/api/e/${S.code}/export?ht=${encodeURIComponent(S.ht)}`;
 
 function consensusCard() {
-  const c = S.host ? S.host.consensus : null;
+  const c = S.host && S.host.consensus ? S.host.consensus[S.catId] : null;
   if (!c || !c.rows.length) return '';
   return `<section class="block"><h3>What the hall predicts <small>${c.voters} players</small></h3><ol class="cons">${c.rows.slice(0, 16).map((r, i) => `<li data-k="c${r.id}"><span class="n">${i + 1}</span>${av(r.id, 'sm')}<b>${esc(bbName(r.id))}</b><small>${Math.round((r.n / c.voters) * 100)}%</small></li>`).join('')}</ol></section>`;
 }
@@ -202,10 +211,10 @@ function players() {
   if (!h) return empty('users', 'Loading...', 'One moment.');
   const q = ui.playerSearch.trim().toLowerCase();
   const list = h.users.filter((u) => !q || u.n.toLowerCase().includes(q)).sort((a, b) => b.net - a.net);
-  return `<div class="stats4">${stat(h.total, 'players')}${stat(h.tops, 'ranked a Top ' + size())}${stat(S.live ? S.live.on : 0, 'online now')}${stat(h.volume.toLocaleString(), 'Loops staked')}</div>
+  return `<div class="stats4">${stat(h.total, 'players')}${stat(h.tops ? h.tops[S.catId] || 0 : 0, 'ranked a Top ' + size())}${stat(S.live ? S.live.on : 0, 'online now')}${stat(h.volume.toLocaleString(), 'Loops staked')}</div>
     <div class="cta-row"><button class="btn" data-a="hRain">${ic('gift', 18)} Loop rain for everyone</button></div>
     <label class="search">${ic('predict', 18)}<input data-in="playerSearch" value="${esc(ui.playerSearch)}" placeholder="Search players" autocomplete="off"></label>
-    <ul class="plist">${list.slice(0, 200).map((u) => `<li class="${u.banned ? 'banned' : ''}" data-k="pl${u.n}">${userAv(u.n, 'sm')}<div><b>${esc(u.n)}</b><small>${u.top ? 'Top ' + size() + ' in · ' : ''}${u.picks} picks · ${u.votes} votes</small></div>${loops(u.net)}
+    <ul class="plist">${list.slice(0, 200).map((u) => `<li class="${u.banned ? 'banned' : ''}" data-k="pl${u.n}">${userAv(u.n, 'sm')}<div><b>${esc(u.n)}</b><small>${u.tops ? 'ranked in ' + u.tops + ' · ' : ''}${u.picks} picks · ${u.votes} votes</small></div>${loops(u.net)}
       <button class="ib dim" data-a="hGrantOne" data-n="${esc(u.n)}" aria-label="Give Loops">${ic('gift', 18)}</button><button class="ib dim" data-a="hBan" data-n="${esc(u.n)}" data-on="${u.banned ? 0 : 1}" aria-label="${u.banned ? 'Unblock' : 'Block'}">${ic(u.banned ? 'check' : 'lock', 18)}</button></li>`).join('')}</ul>
     ${h.total > 200 ? `<p class="muted center small">Showing the top 200 of ${h.total}. Search to find the rest.</p>` : ''}`;
 }
@@ -230,14 +239,18 @@ function setup() {
       <div class="cta-row"><button class="btn sm" data-a="copyLink">${ic('copy', 16)} Copy link</button><a class="btn sm ghost" href="#/s/${S.code}" target="_blank" rel="noopener">${ic('tv', 16)} Big screen</a></div></div></section>
     <section class="block"><h3>Event</h3>
       <label class="numf wide"><span><b>Name</b><small>Shown to everyone</small></span><input data-in="hSetName" value="${esc(ev.name)}" maxlength="40"></label>
-      <div class="numf"><span><b>Bracket size</b><small>${lobby ? 'How many go through' : 'Locked after the picks open'}</small></span>
-        <span class="segs mini">${SIZES.filter((n) => n >= 8).map((n) => `<button class="seg ${s.size === n ? 'on' : ''}" data-a="hSize" data-n="${n}" ${lobby ? '' : 'disabled'}>${n}</button>`).join('')}</span></div>
+      <div class="numf"><span><b>Bracket size</b><small>${esc(ev.catName)}: ${lobby ? 'how many go through' : 'locked after the picks open'}</small></span>
+        <span class="segs mini">${SIZES.map((n) => `<button class="seg ${s.size === n ? 'on' : ''}" data-a="hSize" data-n="${n}" ${lobby ? '' : 'disabled'}>${n === 2 ? 'Final' : n}</button>`).join('')}</span></div>
       ${sw('regOpen', 'Sign-ups open', s.regOpen, 'Turn off once everyone is in')}
       ${sw('qualifyBets', 'Bets on who makes the cut', s.qualifyBets, 'Yes/no market per beatboxer while picks are open')}
       ${sw('autoChampion', 'Champion market', s.autoChampion, 'Opens when the bracket is drawn')}
       ${num('start', 'Starting Loops', s.start, 'Fixed once people join', !lobby || (S.host && S.host.total > 0))}
       ${num('maxPerDevice', 'Accounts per phone', s.maxPerDevice, '0 = no limit')}
       ${num('maxPerIp', 'Accounts per network', s.maxPerIp, 'A hall shares one wifi, keep it high. 0 = off')}</section>
+    <section class="block"><h3>Categories</h3>
+      ${S.event.cats.map((c) => `<div class="numf" data-k="cs${c.id}"><span><b>${esc(c.name)}</b><small>Top ${c.set.size} · ${c.bbs.length} beatboxers · ${c.phase}</small></span>
+        <span class="row"><button class="ib dim" data-a="hCatRename" data-id="${c.id}" aria-label="Rename">${ic('cog', 18)}</button>${c.phase === 'lobby' && S.event.cats.length > 1 ? `<button class="ib dim" data-a="hCatRm" data-id="${c.id}" aria-label="Remove">${ic('x', 18)}</button>` : ''}</span></div>`).join('')}
+      <button class="btn ghost" data-a="hCatAdd">${ic('plus', 18)} Add a category</button></section>
     <section class="block"><h3>After the show</h3>
       <a class="btn ghost" href="${require_export()}" target="_blank" rel="noopener">${ic('download', 18)} Download results (JSON)</a>
       <button class="btn ghost danger" data-a="hDestroy">Delete this event</button></section>`;

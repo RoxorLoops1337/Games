@@ -24,6 +24,17 @@ The live server is a Cloudflare Worker (see `server/README.md`); the Pages copy 
   using `engine.js` directly, never a mock of the rules.
 - `vendor/qrcode.js`: qrcode-generator (MIT), for the join QR.
 
+## Categories
+
+An event holds several categories (Solo Mix, Solo Female, Tag Team, Crew, Loop Station...). Each is a complete battle of its
+own (`S.event.cats[id]`: lineup, bracket size 2/4/8/16/32/64 chosen by the host, phase, markets). Players sign up once and
+keep one wallet. In the engine `S.ev` is "the category being worked on": public entry points point it at the right
+category (`inCat`) and restore it. Match, market and beatboxer ids are unique across the event (the first category has no
+id prefix, later ones start `c2.`), so picks/bets/votes are plain maps; only the Top-N ranking is per category
+(`u.tops[catId]`). Ledger refs are prefixed per category. One battle on stage at a time; `S.event.active` is the stage and
+phones follow it. The client builds `S.meta` as the category being looked at (`state.js` `rebuild`), so most screens are
+unchanged. Never merge two categories' ids or markets.
+
 ## Rules in one paragraph
 
 Phases: lobby -> picks -> elimination -> bracket -> finished, all driven by the organiser. The Top-N ranking is scored

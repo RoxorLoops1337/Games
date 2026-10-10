@@ -89,7 +89,7 @@ export default {
       for (let tries = 0; tries < 5; tries++) {
         const code = makeCode();
         const stub = env.EVENT.get(env.EVENT.idFromName(code));
-        const r = await stub.fetch('https://do/init', { method: 'POST', body: JSON.stringify({ code, name: b.name, size: b.size, password: b.password }) });
+        const r = await stub.fetch('https://do/init', { method: 'POST', body: JSON.stringify({ code, name: b.name, size: b.size, catName: b.catName, password: b.password }) });
         if (r.status !== 409) return withCors(r);
       }
       return err('Could not make an event code, try again', 500);
@@ -138,9 +138,9 @@ export class Event {
     const st = this.ctx.storage;
     const ev = await st.get('ev');
     if (!ev) return;
-    ev.markets = {};
+    for (const c of Object.values(ev.cats)) c.markets = {};
     const S = E.newState(ev);
-    for (const [, m] of await st.list({ prefix: 'mk:' })) ev.markets[m.id] = m;
+    for (const [, m] of await st.list({ prefix: 'mk:' })) if (ev.cats[m.cat]) ev.cats[m.cat].markets[m.id] = m;
     for (const [, u] of await st.list({ prefix: 'u:' })) S.users.set(u.key, u);
     for (const [, l] of await st.list({ prefix: 'lg:' })) S.ledger.set(l.ref, l);
     this.host = await st.get('host');
@@ -153,10 +153,10 @@ export class Event {
   async commit() {
     const S = this.S, d = S.dirty, st = this.ctx.storage;
     S.dirty = E.blankDirty();
-    if (d.meta) S.ev.rev++;
+    if (d.meta) S.event.rev++;
     const puts = {}, dels = [];
-    if (d.ev) { const { markets, ...core } = S.ev; puts.ev = core; }
-    for (const id of d.mk) if (S.ev.markets[id]) puts['mk:' + id] = S.ev.markets[id];
+    if (d.ev) puts.ev = { ...S.event, cats: Object.fromEntries(Object.entries(S.event.cats).map(([id, c]) => { const { markets, ...core } = c; return [id, core]; })) };
+    for (const id of d.mk) { const m = E.findMarket(S, id); if (m) puts['mk:' + id] = m; }
     for (const id of d.delMk) dels.push('mk:' + id);
     for (const k of d.users) if (S.users.has(k)) puts['u:' + k] = S.users.get(k);
     for (const k of d.delUsers) dels.push('u:' + k);
@@ -276,7 +276,7 @@ export class Event {
       const u = S.users.get(a.k);
       if (!u) return { ok: false, err: 'Log in again' };
       if (u.banned) return { ok: false, err: 'Your account is blocked' };
-      if (m.a === 'top') r = E.setTop(S, u, m.order);
+      if (m.a === 'top') r = E.setTop(S, u, m.order, m.cat);
       else if (m.a === 'pick') r = E.setPick(S, u, m.mid, m.bb || null);
       else if (m.a === 'bet') r = E.setBet(S, u, m.mk, m.o, m.amt);
       else if (m.a === 'vote') r = E.castVote(S, u, m.mid, m.side);
@@ -295,7 +295,7 @@ export class Event {
   feedFor(a, m) {
     const S = this.S, items = [];
     if (a.r === 'u' && m.a === 'bet' && m.amt >= 100) {
-      const k = S.ev.markets[m.mk];
+      const k = E.findMarket(S, m.mk);
       if (k) items.push({ k: 'bet', t: `${S.users.get(a.k).name} put ${Math.floor(m.amt)} on ${E.marketTitle(S, k)}: ${this.optLabel(k, m.o)}` });
     }
     if (a.r === 'h' && m.a === 'result') for (const w of E.bigWins(S, 'm:' + m.mid)) items.push({ k: 'win', t: `${w.n} collected ${w.d} Loops` });
@@ -304,7 +304,7 @@ export class Event {
     for (const ws of this.sockets()) this.send(ws, s);
   }
   optLabel(k, o) {
-    const S = this.S, nm = (id) => (S.ev.bbs.find((b) => b.id === id) || { name: '?' }).name;
+    const S = this.S, nm = (id) => (E.findBb(S, id) || { name: '?' }).name;
     return k.kind === 'match' || k.kind === 'champion' ? nm(k.bbs[o]) : o === 0 ? 'yes' : 'no';
   }
 
@@ -322,8 +322,8 @@ export class Event {
       return new Response(null, { status: 101, webSocket: client });
     }
     if (path === '/info') {
-      const ev = this.S.ev;
-      return json({ ok: true, code: ev.code, name: ev.name, phase: ev.phase, players: this.S.users.size, regOpen: ev.settings.regOpen });
+      const e = this.S.event, c = e.cats[e.active];
+      return json({ ok: true, code: e.code, name: e.name, phase: c.phase, cats: e.order.map((id) => e.cats[id].name), players: this.S.users.size, regOpen: c.settings.regOpen });
     }
     if (path === '/register' && method === 'POST') return this.register(request);
     if (path === '/login' && method === 'POST') return this.login(request);
@@ -339,12 +339,12 @@ export class Event {
       if (method === 'PUT') {
         const a = await this.authFor(null, request.headers.get('x-host'));
         if (a.r !== 'h') return err('Organiser only', 403);
-        if (!this.S.ev.bbs.some((b) => b.id === id)) return err('No such beatboxer', 404);
+        const bb = E.findBb(this.S, id);
+        if (!bb) return err('No such beatboxer', 404);
         if (+request.headers.get('content-length') > MAX_PHOTO * 1.5) return err('Picture too big (max 160 KB)', 413);
         const buf = await request.arrayBuffer();
         if (!buf.byteLength || buf.byteLength > MAX_PHOTO) return err('Picture too big (max 160 KB)', 413);
         await this.ctx.storage.put('ph:' + id, new Uint8Array(buf));
-        const bb = this.S.ev.bbs.find((b) => b.id === id);
         bb.ph = (bb.ph || 0) + 1;
         this.S.dirty.meta = true; this.S.dirty.ev = true;
         await this.commit();
@@ -374,7 +374,7 @@ export class Event {
       const S = this.S;
       return json({ ok: true, event: { ...E.metaOf(S) }, board: E.boardOf(S), markets: E.marketsList(S),
         players: [...S.users.values()].map((u) => ({ name: u.name, bal: u.bal, st: u.st, top: u.top, picks: u.picks, bets: u.bets, votes: u.votes })) },
-      200, { 'content-disposition': `attachment; filename="battle-call-${S.ev.code}.json"` });
+      200, { 'content-disposition': `attachment; filename="battle-call-${S.event.code}.json"` });
     }
 
     if (path === '/destroy' && method === 'POST') {
@@ -394,7 +394,7 @@ export class Event {
     const pw = String(b.password || '');
     if (pw.length < 4) return err('Choose an organiser password of at least 4 characters');
     if (!cleanCode(b.code)) return err('Bad code');
-    const ev = E.newEvent({ code: b.code, name: b.name, size: +b.size || 16, now: Date.now() });
+    const ev = E.newEvent({ code: b.code, name: b.name, size: +b.size || 16, catName: b.catName, now: Date.now() });
     const salt = randomToken(12), ht = randomToken();
     const host = { s: salt, h: await hashPassword(pw, salt), tk: [await sha(ht)] };
     if (this.S) return err('exists', 409); // another init finished while we were hashing
@@ -420,7 +420,7 @@ export class Event {
     const pw = String(b.password || '');
     if (pw.length < 4) return err('Password needs at least 4 characters');
     if (pw.length > 80) return err('Password too long');
-    const ipH = (await sha(this.S.ev.code + ip)).slice(0, 10);
+    const ipH = (await sha(this.S.event.code + ip)).slice(0, 10);
     const dev = String(b.device || '').slice(0, 40);
     S.now = Date.now();
     const chk = E.canRegister(S, { name: b.name, device: dev, ipH });

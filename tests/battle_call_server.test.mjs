@@ -168,12 +168,12 @@ await t('a phase change reaches every socket at once; money and picks go only to
   await act(rt, host, { a: 'bb.add', names: Array.from({ length: 10 }, (_, i) => 'BB' + i) });
   const before = [a, b].map((w) => w.msgs('meta').length);
   await act(rt, host, { a: 'phase', to: 'picks' });
-  assert.equal(a.last('meta').phase, 'picks'); assert.equal(b.last('meta').phase, 'picks');
+  assert.equal(a.last('meta').cats[0].phase, 'picks'); assert.equal(b.last('meta').cats[0].phase, 'picks');
   assert.ok(a.msgs('meta').length > before[0]);
-  const bbs = a.last('meta').bbs;
+  const bbs = a.last('meta').cats[0].bbs;
   const bm = b.msgs('me').length;
   await act(rt, a, { a: 'top', order: bbs.slice(0, 8).map((x) => x.id) });
-  assert.equal(a.last('me').top.length, 8); assert.equal(b.msgs('me').length, bm, 'Bob is not sent Ann\'s picks');
+  assert.equal(a.last('me').tops.c1.length, 8); assert.equal(b.msgs('me').length, bm, 'Bob is not sent Ann\'s picks');
   assert.ok(!JSON.stringify(b.sent).includes('"Ann"') || true);
 });
 await t('the live numbers are throttled to one push, and only the organiser gets the running vote count', async () => {
@@ -181,13 +181,13 @@ await t('the live numbers are throttled to one push, and only the organiser gets
   const host = await connect(rt, { ht: rt.ht }), fan = await connect(rt, { tk: await join(rt, 'Fan') });
   await act(rt, host, { a: 'bb.add', names: Array.from({ length: 8 }, (_, i) => 'BB' + i) });
   await act(rt, host, { a: 'phase', to: 'elimination' });
-  await act(rt, host, { a: 'seeds', order: host.last('meta').bbs.map((b) => b.id) });
+  await act(rt, host, { a: 'seeds', order: host.last('meta').cats[0].bbs.map((b) => b.id) });
   await act(rt, host, { a: 'step', mid: 'r0m0', to: 'live' }); await act(rt, host, { a: 'step', mid: 'r0m0', to: 'voting' });
   await act(rt, fan, { a: 'vote', mid: 'r0m0', side: 'a' });
   await sleep(1000);
   assert.deepEqual(host.last('live').v, { id: 'r0m0', a: 1, b: 0 });
   assert.equal(fan.last('live').v, undefined, 'the running tally stays hidden from the audience');
-  assert.equal(fan.last('meta').matches[0].c, null);
+  assert.equal(fan.last('meta').cats[0].matches[0].c, null);
   const n = host.msgs('live').length;
   for (let i = 0; i < 20; i++) await act(rt, fan, { a: 'vote', mid: 'r0m0', side: i % 2 ? 'a' : 'b' });
   await sleep(1000);
@@ -200,8 +200,8 @@ await t('big bets and big wins are announced to everybody; small bets are not', 
   const host = await connect(rt, { ht: rt.ht }), ann = await connect(rt, { tk: await join(rt, 'Ann') }), bob = await connect(rt, { tk: await join(rt, 'Bob') });
   await act(rt, host, { a: 'bb.add', names: ['One', 'Two', 'Three', 'Four'] });
   await act(rt, host, { a: 'phase', to: 'elimination' });
-  await act(rt, host, { a: 'seeds', order: host.last('meta').bbs.map((b) => b.id) });
-  const mk = host.last('meta').mk.find((m) => m.kind === 'match' && m.mid === 'r0m0');
+  await act(rt, host, { a: 'seeds', order: host.last('meta').cats[0].bbs.map((b) => b.id) });
+  const mk = host.last('meta').cats[0].mk.find((m) => m.kind === 'match' && m.mid === 'r0m0');
   await act(rt, ann, { a: 'bet', mk: mk.id, o: 0, amt: 40 });
   assert.equal(bob.msgs('feed').length, 0, 'a small bet is not news');
   await act(rt, ann, { a: 'bet', mk: mk.id, o: 0, amt: 300 });
@@ -217,16 +217,16 @@ await t('200 phones voting in the same instant are each counted exactly once', a
   const host = await connect(rt, { ht: rt.ht });
   await act(rt, host, { a: 'bb.add', names: Array.from({ length: 8 }, (_, i) => 'BB' + i) });
   await act(rt, host, { a: 'phase', to: 'elimination' });
-  await act(rt, host, { a: 'seeds', order: host.last('meta').bbs.map((b) => b.id) });
+  await act(rt, host, { a: 'seeds', order: host.last('meta').cats[0].bbs.map((b) => b.id) });
   await act(rt, host, { a: 'step', mid: 'r0m0', to: 'live' }); await act(rt, host, { a: 'step', mid: 'r0m0', to: 'voting' });
   const fans = [];
   const tokens = await Promise.all(Array.from({ length: 200 }, (_, i) => join(rt, 'fan' + i, 'dev' + i)));
   for (const tk of tokens) fans.push(await connect(rt, { tk }));
   await Promise.all(fans.map((ws, i) => act(rt, ws, { a: 'vote', mid: 'r0m0', side: i < 130 ? 'a' : 'b' })));
   await act(rt, host, { a: 'step', mid: 'r0m0', to: 'closed' });
-  assert.deepEqual(host.last('meta').matches[0].c, { a: 130, b: 70 });
+  assert.deepEqual(host.last('meta').cats[0].matches[0].c, { a: 130, b: 70 });
   // and an immediate burst of bets from everybody onto one market does not lose a single Loop
-  const mk = host.last('meta').mk.find((m) => m.kind === 'match' && m.mid === 'r0m1');
+  const mk = host.last('meta').cats[0].mk.find((m) => m.kind === 'match' && m.mid === 'r0m1');
   await Promise.all(fans.map((ws) => act(rt, ws, { a: 'bet', mk: mk.id, o: 0, amt: 100 })));
   await sleep(900);
   assert.deepEqual(host.last('live').mk[mk.id][0], [20000, 0]);
@@ -244,9 +244,9 @@ await t('an evicted and rebuilt object has the same players, tokens, bets, pools
   const tk = await join(rt, 'Ann'); const ann = await connect(rt, { tk }), host = await connect(rt, { ht: rt.ht });
   await act(rt, host, { a: 'bb.add', names: Array.from({ length: 10 }, (_, i) => 'BB' + i) });
   await act(rt, host, { a: 'phase', to: 'picks' });
-  const ids = ann.last('meta').bbs.map((b) => b.id);
+  const ids = ann.last('meta').cats[0].bbs.map((b) => b.id);
   await act(rt, ann, { a: 'top', order: ids.slice(0, 8) });
-  const q = ann.last('meta').mk[0];
+  const q = ann.last('meta').cats[0].mk[0];
   await act(rt, ann, { a: 'bet', mk: q.id, o: 0, amt: 250 });
   await act(rt, host, { a: 'phase', to: 'elimination' });
   await act(rt, host, { a: 'seeds', order: ids.slice(0, 8) });
@@ -268,19 +268,48 @@ await t('an evicted and rebuilt object has the same players, tokens, bets, pools
   assert.ok(ann2.last('me').bal < meBefore.bal);
 });
 
+console.log('categories');
+await t('an organiser adds categories over the socket; players rank per category; it all survives an eviction', async () => {
+  const rt = await newEvent({ size: 4 });
+  const host = await connect(rt, { ht: rt.ht }), ann = await connect(rt, { tk: await join(rt, 'Ann') });
+  const r = await act(rt, host, { a: 'cat.add', name: 'Loop Station', size: 2 });
+  assert.equal(r.ok, true); assert.ok(r.cat, 'the ack carries the new category id'); r.id = r.cat;
+  assert.equal(host.last('meta').cats.length, 2); assert.equal(ann.last('meta').cats[1].name, 'Loop Station');
+  assert.equal((await act(rt, ann, { a: 'cat.add', name: 'Nope', size: 2 })).ok, false, 'players cannot add categories');
+  await act(rt, host, { a: 'bb.add', cat: 'c1', names: ['A', 'B', 'C', 'D'] });
+  await act(rt, host, { a: 'bb.add', cat: r.id, names: ['X', 'Y'] });
+  await act(rt, host, { a: 'phase', cat: r.id, to: 'picks' });
+  const ls = ann.last('meta').cats[1];
+  assert.equal((await act(rt, ann, { a: 'top', cat: r.id, order: ls.bbs.map((b) => b.id) })).ok, true);
+  assert.equal((await act(rt, ann, { a: 'top', cat: 'c1', order: [] })).ok, false, 'the main category is not open');
+  assert.equal(ann.last('me').tops[r.id].length, 2);
+  await act(rt, host, { a: 'phase', cat: r.id, to: 'elimination' });
+  await act(rt, host, { a: 'seeds', cat: r.id, order: ls.bbs.map((b) => b.id) });
+  const mid = host.last('meta').cats[1].matches[0].id;
+  assert.match(mid, /^c2\./);
+  await act(rt, host, { a: 'step', mid, to: 'live' });
+  assert.equal(host.last('meta').active, r.id, 'the stage moved to the category that went live');
+  const rt2 = runtime(rt.storage); await rt2.ready();
+  const host2 = await connect(rt2, { ht: rt.ht }), ann2 = await connect(rt2, { tk: await rt.d.tokIdx && (await call(rt2.d, '/login', { method: 'POST', body: { name: 'Ann', password: 'pw1234' } })).token });
+  const m2 = host2.last('meta');
+  assert.equal(m2.cats.length, 2); assert.equal(m2.active, r.id); assert.equal(m2.cats[1].matches[0].status, 'live');
+  assert.equal(ann2.last('me').tops[r.id].length, 2);
+  assert.equal((await call(rt2.d, '/info')).cats.join(), 'Main battle,Loop Station');
+});
+
 console.log('photos, export, delete');
 await t('only the organiser can upload a photo; it is capped, served with a long cache, and bumps the version', async () => {
   const rt = await newEvent();
   const host = await connect(rt, { ht: rt.ht });
   await act(rt, host, { a: 'bb.add', names: ['Pic'] });
-  const id = host.last('meta').bbs[0].id;
+  const id = host.last('meta').cats[0].bbs[0].id;
   const jpeg = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3, 4]);
   assert.equal((await call(rt.d, '/photo/' + id, { method: 'PUT', body: jpeg })).status, 403);
   assert.equal((await call(rt.d, '/photo/' + id, { method: 'PUT', body: jpeg, headers: { 'x-host': 'forged' } })).status, 403);
   assert.equal((await call(rt.d, '/photo/' + id, { method: 'PUT', body: new Uint8Array(200 * 1024), headers: { 'x-host': rt.ht } })).status, 413);
   const up = await call(rt.d, '/photo/' + id, { method: 'PUT', body: jpeg, headers: { 'x-host': rt.ht } });
   assert.equal(up.ok, true); assert.equal(up.ph, 1);
-  assert.equal(host.last('meta').bbs[0].ph, 1, 'everyone is told the photo changed');
+  assert.equal(host.last('meta').cats[0].bbs[0].ph, 1, 'everyone is told the photo changed');
   const got = await call(rt.d, '/photo/' + id);
   assert.equal(got.status, 200); assert.match(got.headers.get('cache-control'), /immutable/); assert.equal(got.raw.byteLength, 8);
   assert.equal((await call(rt.d, '/photo/nope')).status, 404);

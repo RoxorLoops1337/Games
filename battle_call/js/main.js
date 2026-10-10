@@ -2,9 +2,9 @@
 //   #/            home (enter a code)      #/new        create an event
 //   #/e/CODE      the audience app         #/h/CODE     the organiser console      #/s/CODE   the big screen
 import { morph, esc, ic, $, $$, toast, confetti, runTickers, buzz, setHaptics } from './dom.js';
-import { S, emit, subscribe, resetState, sessions, saveSession, dropSession, deviceId, serverBase, setServer, mkView, curMatch, bbName, size, leftKey, sides, myBet, mkTitle, mkLabel, payoutIf } from './state.js';
+import { S, emit, subscribe, resetState, selectCat, sessions, saveSession, dropSession, deviceId, serverBase, setServer, mkView, curMatch, bbName, size, leftKey, sides, myBet, mkTitle, mkLabel, payoutIf } from './state.js';
 import { connect, disconnect, act, http, register, login, hostLogin, info, createEvent, uploadPhoto, isDemo, demoCtl } from './net.js';
-import { ui, loops } from './ui.js';
+import { ui, loops, catBar } from './ui.js';
 import { MIN_BET } from './shared.js';
 import { homeView, createView, authView } from './views/auth.js';
 import { liveTab } from './views/live.js';
@@ -105,7 +105,7 @@ function audienceShell() {
     <header class="top"><a class="brand-mini" href="#/">${ic('mic', 18)}<b>Battle Call</b></a>
       <div class="evname">${esc(ev.name)}${conn ? `<small class="warnline">${conn}</small>` : ''}</div>
       ${me ? `<button class="wallet" data-a="openMe" aria-label="Your wallet">${ic('loops', 18)}<b data-count="${me.bal}">${me.bal}</b></button>` : `<button class="btn sm" data-a="authOpen">Join</button>`}</header>
-    <main class="page" data-k="page-${ui.tab}">${content}</main>
+    <main class="page" data-k="page-${ui.tab}">${catBar()}${content}</main>
     <nav class="tabs">${tabs.map(([k, l, i, dot]) => `<button class="${ui.tab === k ? 'on' : ''}" data-a="tab" data-t="${k}">${ic(i, 22)}<span>${l}</span>${dot ? '<i class="dot"></i>' : ''}</button>`).join('')}</nav>
   </div>`;
 }
@@ -120,6 +120,7 @@ function overlays() {
   if (ui.modal) {
     const m = ui.modal;
     h += `<div class="scrim" data-a="modalNo" data-k="mscrim"></div><div class="modal" role="alertdialog"><h2>${esc(m.title)}</h2><p>${m.text}</p>
+ ${m.sizes ? `<p class="muted small">How many go through to the bracket?</p><div class="segs">${m.sizes.map((n) => `<button type="button" class="seg ${m.pick === n ? 'on' : ''}" data-a="modalPick" data-v="${n}">${n === 2 ? 'Final only' : 'Top ' + n}</button>`).join('')}</div>` : ''}
       ${m.input ? `<input id="modalin" class="mi" value="${esc(m.input.value)}" maxlength="${m.input.max || 60}" autocomplete="off" type="${m.input.type || 'text'}" placeholder="${esc(m.input.ph || '')}">` : ''}
       <div class="cta-row"><button class="btn ghost" data-a="modalNo">Cancel</button><button class="btn ${m.danger ? 'danger' : ''}" data-a="modalYes">${esc(m.ok || 'OK')}</button></div></div>`;
   }
@@ -153,59 +154,69 @@ function drawQr() {
 }
 
 /* ------------------------------------------------------------ reacting to the server */
-const prevStatus = {};
-let prevPhase = null, celebratedChamp = false, resultTimer = 0;
+const prevStatus = {}, prevPhase = {}, celebrated = {};
+let resultTimer = 0;
 
 function onState() {
-  const ev = S.meta;
+  const ev = S.event;
   if (!ev) return;
   if (S.authFail) {
     S.authFail = false;
     if (S.role === 'user') { dropSession(S.code, ['tk']); S.role = 'guest'; S.tk = ''; ui.authMode = 'login'; ui.err = 'Your session ended. Log in again.'; disconnect(); connect(S.code, onPush); }
     else if (S.role === 'host') { dropSession(S.code, ['ht']); S.role = 'guest'; S.ht = ''; ui.err = 'Please log in again.'; disconnect(); }
   }
-  if (S.role === 'user' && S.me && S.me.banned) { /* shown as errors on actions */ }
-  const first = prevPhase === null;
-  if (prevPhase && prevPhase !== ev.phase) {
-    if (route.a !== 's') {
-      if (ev.phase === 'picks') toast('Picks are open! Build your Top ' + size(), 'info');
-      if (ev.phase === 'elimination') toast('Picks and bets are locked', 'info');
-      if (ev.phase === 'bracket') toast('The bracket is drawn!', 'info');
-    }
-    if (ui.sheet && ui.sheet.t === 'stake') ui.sheet = null;
-    buzz(30);
+  // looking at a different category than a moment ago: nothing typed for the old one applies
+  if (ui.catSeen !== S.catId) {
+    if (ui.catSeen) { ui.rank = { top: null, seeds: [] }; ui.predRound = 0; ui.search = ''; ui.hostMatch = null; ui.judges = { a: 0, b: 0 }; ui.sheet = null; }
+    if (ui.catSeen && S.role === 'user' && route.a === 'e' && S.catId === ev.active && ev.cats.length > 1) toast(`On stage now: ${S.meta.catName}`, 'info');
+    ui.catSeen = S.catId;
   }
-  prevPhase = ev.phase;
-  for (const m of ev.matches) {
-    const was = prevStatus[m.id];
-    prevStatus[m.id] = m.status;
-    if (was === undefined || was === m.status) continue;
-    if (route.a === 'e' && S.role === 'user') {
-      if (m.status === 'voting') {
-        ui.voteDismissed[m.id] = false;
-        if (!S.me || !S.me.votes[m.id]) { ui.voteOpen = m.id; buzz([40, 60, 40]); }
-        else toast('Voting is open. Your screen is ready.', 'info');
+  const multi = ev.cats.length > 1;
+  for (const c of ev.cats) {
+    const first = prevPhase[c.id] === undefined, was = prevPhase[c.id], tag = multi ? ` (${c.name})` : '';
+    prevPhase[c.id] = c.phase;
+    if (!first && was !== c.phase) {
+      if (route.a === 'e') {
+        if (c.phase === 'picks') toast(`Picks are open${tag}! Build your Top ${c.set.size}`, 'info');
+        if (c.phase === 'elimination') toast(`Picks and bets are locked${tag}`, 'info');
+        if (c.phase === 'bracket') toast(`The bracket is drawn${tag}!`, 'info');
       }
-      if (m.status === 'closed' && ui.voteOpen === m.id) buzz([60, 40, 60, 40, 120]);
-      if (m.status === 'live') toast('The battle is on!', 'info');
+      if (ui.sheet && ui.sheet.t === 'stake') ui.sheet = null;
+      buzz(30);
     }
-    if (m.status === 'done') {
-      if (route.a === 's') {
-        confetti({ x: 0.5, y: 0.5, n: 160, power: 1.4 });
-        ui.screenHold = { id: m.id, until: Date.now() + 18000 };
-        setTimeout(emit, 18200); // the hall gets the result for a while before the bracket comes back
+    for (const m of c.matches) {
+      const wasM = prevStatus[m.id];
+      prevStatus[m.id] = m.status;
+      if (wasM === undefined || wasM === m.status) continue;
+      if (route.a === 'e' && S.role === 'user') {
+        if (m.status === 'voting') {
+          ui.voteDismissed[m.id] = false;
+          if (!S.me || !S.me.votes[m.id]) { selectCat(c.id); ui.voteOpen = m.id; buzz([40, 60, 40]); }
+          else toast('Voting is open. Your screen is ready.', 'info');
+        }
+        if (m.status === 'closed' && ui.voteOpen === m.id) buzz([60, 40, 60, 40, 120]);
+        if (m.status === 'live') toast(`The battle is on${tag}!`, 'info');
       }
-      if (route.a === 'e' && ui.voteOpen === m.id) {
-        const mine = S.me && S.me.votes[m.id];
-        if (mine && mine === m.w) confetti({ n: 120 });
-        clearTimeout(resultTimer);
-        resultTimer = setTimeout(() => { if (ui.voteOpen === m.id) { ui.voteOpen = null; emit(); } }, 9000);
+      if (m.status === 'done') {
+        if (route.a === 's') {
+          confetti({ x: 0.5, y: 0.5, n: 160, power: 1.4 });
+          ui.screenHold = { id: m.id, until: Date.now() + 18000 };
+          setTimeout(emit, 18200); // the hall gets the result for a while before the bracket comes back
+        }
+        if (route.a === 'e' && ui.voteOpen === m.id) {
+          const mine = S.me && S.me.votes[m.id];
+          if (mine && mine === m.w) confetti({ n: 120 });
+          clearTimeout(resultTimer);
+          resultTimer = setTimeout(() => { if (ui.voteOpen === m.id) { ui.voteOpen = null; emit(); } }, 9000);
+        }
       }
+      if (m.status === 'upcoming' && wasM === 'wait' && route.a === 'e') toast(`Up next${tag}: ${bbName(m.a)} vs ${bbName(m.b)}`, 'info');
     }
-    if (m.status === 'upcoming' && was === 'wait' && route.a === 'e') toast(`Up next: ${bbName(m.a)} vs ${bbName(m.b)}`, 'info');
+    if (c.phase === 'finished' && !celebrated[c.id]) {
+      celebrated[c.id] = true;
+      if (!first) { confetti({ n: 220, power: 1.6, gold: true }); setTimeout(() => confetti({ x: 0.2, n: 100 }), 400); setTimeout(() => confetti({ x: 0.8, n: 100 }), 700); }
+    }
   }
-  if (ev.phase === 'finished' && !celebratedChamp && !first) { celebratedChamp = true; confetti({ n: 220, power: 1.6, gold: true }); setTimeout(() => confetti({ x: 0.2, n: 100 }), 400); setTimeout(() => confetti({ x: 0.8, n: 100 }), 700); }
-  if (ev.phase === 'finished' && first) celebratedChamp = true;
   // close the vote screen if the match it belongs to is gone (the organiser re-drew the ranking)
   if (ui.voteOpen && !S.match[ui.voteOpen]) ui.voteOpen = null;
 }
@@ -240,8 +251,9 @@ let topTimer = 0;
 function saveTop() {
   ui.topSaved = false; emit();
   clearTimeout(topTimer);
+  const cat = S.catId, order = [...ui.rank.top];
   topTimer = setTimeout(async () => {
-    const r = await act({ a: 'top', order: ui.rank.top });
+    const r = await act({ a: 'top', cat, order });
     if (r.ok) { ui.topSaved = true; } else { ui.topSaved = true; if (r.err) toast(esc(r.err), 'loss'); if (S.me) ui.rank.top = [...S.me.top]; }
     emit();
   }, 450);
@@ -255,7 +267,7 @@ const A = {
   demoGo(el) { location.hash = `#/${el.dataset.r}/DEMO`; },
   demoNext() { if (!demoCtl().next()) toast('Nothing to do next', 'info'); },
   demoPlay() { demoCtl().toggleAuto(); emit(); },
-  demoReset() { demoCtl().reset(); ui.rank = { top: null, seeds: [] }; ui.voteOpen = null; ui.hostMatch = null; ui.seenLog = null; for (const k of Object.keys(prevStatus)) delete prevStatus[k]; celebratedChamp = false; toast('Demo restarted', 'info'); emit(); },
+  demoReset() { demoCtl().reset(); ui.rank = { top: null, seeds: [] }; ui.voteOpen = null; ui.hostMatch = null; ui.seenLog = null; for (const k of Object.keys(prevStatus)) delete prevStatus[k]; for (const k of Object.keys(prevPhase)) delete prevPhase[k]; for (const k of Object.keys(celebrated)) delete celebrated[k]; S.catId = null; S.lastActive = null; toast('Demo restarted', 'info'); emit(); },
   tab(el) { ui.tab = el.dataset.t; if (el.dataset.b) ui.boardTab = el.dataset.b; ui.search = ''; emit(); },
   authOpen() { ui.watching = false; ui.err = ''; emit(); },
   watch() { ui.watching = true; emit(); },
@@ -269,17 +281,30 @@ const A = {
     disconnect(); connect(S.code, onPush); emit();
   },
   modalNo() { ui.modal = null; emit(); },
+  modalPick(el) { if (ui.modal) { ui.modal.pick = +el.dataset.v; emit(); } },
   async modalYes() {
     const m = ui.modal; if (!m) return;
     const v = m.input ? ($('#modalin') || {}).value : undefined;
     ui.modal = null; emit();
-    await m.run(v);
+    await m.run(v, m.pick);
   },
   serverEdit() {
     ask('Server address', 'Where the Battle Call Worker runs. Leave empty for the default.', 'Save', (v) => { setServer((v || '').trim()); entered = ''; location.reload(); },
       { input: { value: serverBase(), ph: 'https://battle-call.you.workers.dev', max: 200 } });
   },
   createSize(el) { ui.createSize = +el.dataset.n; emit(); },
+
+  /* categories */
+  catPick(el) { selectCat(el.dataset.id); window.scrollTo(0, 0); emit(); },
+  hCatAdd() {
+    ask('Add a category', 'For example Solo Female, Tag Team, Crew or Loop Station. It gets its own lineup and bracket.', 'Add', async (v, size) => {
+      const r = await act({ a: 'cat.add', name: v, size });
+      if (fail(r)) { selectCat(r.cat); ui.hostTab = 'lineup'; toast('Category added: add its beatboxers', 'info'); emit(); }
+    }, { input: { value: '', ph: 'Category name', max: 24 }, sizes: [2, 4, 8, 16, 32, 64], pick: 16 });
+  },
+  hCatRename(el) { const id = el.dataset.id; ask('Rename the category', 'This shows on every phone and on the big screen.', 'Save', async (v) => { fail(await act({ a: 'cat.rename', id, name: v })); }, { input: { value: S.event.cats.find((c) => c.id === id).name, max: 24 } }); },
+  hCatRm(el) { const id = el.dataset.id, c = S.event.cats.find((x) => x.id === id); ask(`Remove ${c.name}?`, 'Its lineup goes with it. You can only remove a category that has not started.', 'Remove', async () => { fail(await act({ a: 'cat.rm', id })); }, { danger: true }); },
+  async hStage(el) { const r = await act({ a: 'cat.stage', id: el.dataset.id }); if (fail(r)) toast('On stage now', 'info'); },
 
   /* ranking builder */
   rankAdd(el) { const l = ranks(el.dataset.w), N = size(); if (l.length >= N) return; if (!l.includes(el.dataset.id)) l.push(el.dataset.id); ui.search = ''; buzz(10); afterRank(el.dataset.w); },
@@ -430,11 +455,11 @@ const FORMS = {
   },
   async create(f) {
     if (ui.busy) return;
-    const name = f.name.value.trim(), password = f.password.value;
-    ui.createName = name;
+    const name = f.name.value.trim(), password = f.password.value, catName = f.catName.value.trim();
+    ui.createName = name; ui.createCat = catName;
     if (password.length < 4) { ui.err = 'Pick an organiser password of at least 4 characters'; emit(); return; }
     ui.busy = true; ui.err = ''; emit();
-    const r = await createEvent({ name, size: ui.createSize || 16, password, key: f.key ? f.key.value : undefined });
+    const r = await createEvent({ name, catName, size: ui.createSize || 16, password, key: f.key ? f.key.value : undefined });
     ui.busy = false;
     if (!r.ok) { ui.err = r.err || 'Could not create the event'; if (r.status === 403) S.createKeyNeeded = true; emit(); return; }
     saveSession(r.code, { ht: r.hostToken, ev: name || 'Beatbox Battle' });

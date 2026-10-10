@@ -34,8 +34,9 @@ export function createView() {
     <p class="lead">Make an event, share the code, and drive the whole thing from your phone. You can add the beatboxers after.</p>
     <form class="card form" data-form="create">
       <label>Event name<input name="name" maxlength="40" placeholder="Beatbox Battle Utrecht" autocomplete="off" value="${esc(ui.createName || '')}"></label>
-      <label>How many go through to the bracket?</label>
-      <div class="segs" role="radiogroup">${[8, 16, 32].map((n) => `<button type="button" class="seg ${(ui.createSize || 16) === n ? 'on' : ''}" data-a="createSize" data-n="${n}">Top ${n}</button>`).join('')}</div>
+      <label>First category <small class="muted">you can add more later: Solo Female, Crew, Tag Team...</small><input name="catName" maxlength="24" placeholder="Solo Mix" autocomplete="off" value="${esc(ui.createCat || '')}"></label>
+      <label>How many go through to its bracket?</label>
+      <div class="segs" role="radiogroup">${[2, 4, 8, 16, 32, 64].map((n) => `<button type="button" class="seg ${(ui.createSize || 16) === n ? 'on' : ''}" data-a="createSize" data-n="${n}">${n === 2 ? 'Final' : n}</button>`).join('')}</div>
       <label>Organiser password<input name="password" type="password" minlength="4" placeholder="Only you know this" autocomplete="new-password"></label>
       ${S.createKeyNeeded ? '<label>Organiser key<input name="key" placeholder="Needed on this server" autocomplete="off"></label>' : ''}
       <button class="btn big" type="submit" ${ui.busy ? 'disabled' : ''}>${ui.busy ? 'Creating...' : 'Create event'}</button>
