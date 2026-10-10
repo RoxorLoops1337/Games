@@ -792,8 +792,11 @@ t('the elimination round runs while predictions stay open, with a stage and the 
   assert.deepEqual(E.metaOf(S).cats[0].performed, [ids[0]], 'the one who went before is marked');
   host(S, { a: 'performer', id: null });
   assert.equal(perfOf(S), null); assert.deepEqual(E.metaOf(S).cats[0].performed, [ids[0], ids[4]]);
+  const cons = E.liveOf(S, 0, false).cons.c1;
+  assert.equal(cons.voters, 3); assert.equal(cons.rows[0].id, ids[0]); assert.ok(cons.staked >= 150, 'bets on the cut are counted');
   host(S, { a: 'performer', id: ids[2] });
   host(S, { a: 'phase', to: 'elimination' }); // the lock-in at the end
+  assert.equal((E.liveOf(S, 0, false).cons || {}).c1, undefined, 'no live Top N once locked');
   assert.equal(E.setTop(S, us[0], [ids[0]]).ok, false, 'now they are locked');
   assert.equal(E.metaOf(S).cats[0].performer, ids[2], 'the stage stays for the judging');
   host(S, { a: 'seeds', order: ids.slice(0, 4) });

@@ -689,7 +689,7 @@ export function setTop(S, u, order, catId) {
     if (!Array.isArray(order)) return fail('Bad ranking');
     const ids = order.slice(0, S.ev.settings.size);
     if (new Set(ids).size !== ids.length || ids.some((id) => !bbOf(S, id))) return fail('Bad ranking');
-    (u.tops = u.tops || {})[S.ev.id] = ids; touchUser(S, u); S.dirty.host = true; if (S.ev.performer) S.dirty.live = true;
+    (u.tops = u.tops || {})[S.ev.id] = ids; touchUser(S, u); S.dirty.host = true; if (S.ev.performer || S.ev.elimOn) S.dirty.live = true;
     return ok({});
   });
 }
@@ -986,7 +986,16 @@ export function liveOf(S, online, host) {
   const mk = {};
   for (const c of cats(S)) for (const m of Object.values(c.markets)) if (m.st !== 'void') mk[m.id] = [m.pool, m.cnt];
   const out = { n: S.users.size, on: online, mk };
-  for (const c of cats(S)) if (c.performer) (out.perf = out.perf || {})[c.id] = inCat(S, c, () => performerStats(S, c.performer));
+  for (const c of cats(S)) {
+    if (c.performer) (out.perf = out.perf || {})[c.id] = inCat(S, c, () => performerStats(S, c.performer));
+    // the elimination round is on and predictions are open: the big screen shows how the hall's Top N is shaping up
+    if (c.phase === 'picks' && c.elimOn) (out.cons = out.cons || {})[c.id] = inCat(S, c, () => {
+      const cs = consensus(S), N = S.ev.settings.size;
+      let staked = 0;
+      for (const m of Object.values(c.markets)) if (m.kind === 'qualify' && m.st !== 'void') staked += m.pool[0] + m.pool[1];
+      return { N, voters: cs.voters, rows: cs.rows.slice(0, 16), staked };
+    });
+  }
   if (host) { const cur = activeMatch(S); if (cur) out.v = { id: cur.id, a: cur.c.a, b: cur.c.b }; }
   return out;
 }
