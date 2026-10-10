@@ -278,7 +278,7 @@ export function setPhase(S, to) {
   if (to === 'lobby') {
     // back to doors open: the "makes the cut" bets are refunded and removed (everyone's own picks stay)
     for (const m of marketsList(S)) if (m.kind === 'qualify') { voidMarket(S, m, null, 'Picks closed'); dropMarket(S, m); }
-    ev.phase = 'lobby'; ev.consensus = null; ev.performer = null; ev.performed = []; ev.elimOn = false; ev.picksEnd = 0;
+    ev.phase = 'lobby'; ev.consensus = null; ev.consensusAll = null; ev.performer = null; ev.performed = []; ev.elimOn = false; ev.picksEnd = 0;
     touchMeta(S);
     return ok({});
   }
@@ -287,14 +287,14 @@ export function setPhase(S, to) {
     ev.phase = 'picks';
     if (from === 'elimination') {
       for (const m of marketsList(S)) if (m.kind === 'qualify' && m.st === 'locked') { m.st = 'open'; touchMk(S, m); }
-      ev.consensus = null; ev.elimOn = true; // reopened: the round is still going, the stage stays as it was
+      ev.consensus = null; ev.consensusAll = null; ev.elimOn = true; // reopened: the round is still going, the stage stays as it was
     } else if (ev.settings.qualifyBets && ev.bbs.length > ev.settings.size && ev.bbs.length <= QUALIFY_AUTO_MAX) {
       for (const b of ev.bbs) if (!qualifyOf(S, b.id)) openQualify(S, b.id);
     }
   } else {
     ev.phase = 'elimination'; ev.picksEnd = 0;
     for (const m of marketsList(S)) if (m.kind === 'qualify' && m.st === 'open') { m.st = 'locked'; touchMk(S, m); }
-    ev.consensus = consensus(S);
+    ev.consensus = consensus(S); ev.consensusAll = consensus(S, true);
   }
   touchMeta(S);
   return ok({});
@@ -310,13 +310,13 @@ export function consensus(S, all) {
     if (!topOf(S, u).length) continue;
     voters++;
     topOf(S, u).forEach((id, i) => {
-      const a = acc.get(id) || { id, n: 0, pts: 0, sum: 0 };
-      a.n++; a.pts += N - i; a.sum += i + 1;
+      const a = acc.get(id) || { id, n: 0, pts: 0, sum: 0, f: 0 };
+      a.n++; a.pts += N - i; a.sum += i + 1; if (i === 0) a.f++;
       acc.set(id, a);
     });
   }
   const rows = [...acc.values()].sort((a, b) => b.pts - a.pts || a.sum / a.n - b.sum / b.n)
-    .slice(0, all ? undefined : N).map((a) => ({ id: a.id, n: a.n, avg: Math.round((a.sum / a.n) * 10) / 10 }));
+    .slice(0, all ? undefined : N).map((a) => ({ id: a.id, n: a.n, avg: Math.round((a.sum / a.n) * 10) / 10, f: a.f }));
   return { voters, rows };
 }
 
@@ -988,6 +988,13 @@ export function liveOf(S, online, host) {
   const out = { n: S.users.size, on: online, mk };
   for (const c of cats(S)) {
     if (c.performer) (out.perf = out.perf || {})[c.id] = inCat(S, c, () => performerStats(S, c.performer));
+    // the judges are scoring: the big screen cycles through facts about what the hall predicted (worked out once, at the lock-in)
+    if (c.phase === 'elimination') {
+      if (!c.consensusAll) c.consensusAll = inCat(S, c, () => consensus(S, true)); // an event locked before this existed
+      let staked = 0;
+      for (const m of Object.values(c.markets)) if (m.kind === 'qualify' && m.st !== 'void') staked += m.pool[0] + m.pool[1];
+      (out.cons = out.cons || {})[c.id] = { N: c.settings.size, voters: c.consensusAll.voters, rows: c.consensusAll.rows, staked };
+    }
     // the elimination round is on and predictions are open: the big screen shows how the hall's Top N is shaping up
     if (c.phase === 'picks' && c.elimOn) (out.cons = out.cons || {})[c.id] = inCat(S, c, () => {
       const cs = consensus(S), N = S.ev.settings.size;

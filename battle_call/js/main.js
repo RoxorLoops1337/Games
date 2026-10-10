@@ -126,6 +126,12 @@ addEventListener('keydown', (e) => { if (route && route.a === 's' && (e.key === 
   requestAnimationFrame(loop);
 }
 
+/* The judging scene cycles through slides: render again when it is time for the next one. */
+setInterval(() => {
+  const el = document.querySelector('[data-cycle]');
+  if (el && String(Math.floor(Date.now() / 9000) % +el.dataset.cycle) !== el.dataset.cur) emit();
+}, 1000);
+
 /* The vote countdown: every [data-cd] ring is kept current here, 5 times a second, without re-rendering the page. */
 let lastTick = -1;
 setInterval(() => {

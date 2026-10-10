@@ -17,7 +17,7 @@ export function screenView() {
   if (ev.phase === 'lobby' || (ev.phase === 'picks' && !ev.elimOn)) body = joinStage();
   else if (running && pf) body = `<div class="st-perf"><p class="eyebrow">${eq} On stage now</p><div class="pp">${av(pf.id, 'hero')}<h1 class="mega">${esc(bbName(pf.id))}</h1></div>${perfStats(pf)}${ev.phase === 'picks' ? `<div class="st-lock">${lockClock(ev) || 'Predictions are still open'}</div>` : ''}</div>${ev.phase === 'picks' ? qrCorner('top') : ''}`;
   else if (ev.phase === 'picks') body = predictionsStage();
-  else if (ev.phase === 'elimination') body = `<div class="st-center">${eq}<p class="eyebrow">Picks are locked</p><h1 class="mega">Elimination</h1><p class="lead">The judges are choosing the Top ${N}</p></div>${consensus()}${qrCorner()}`;
+  else if (ev.phase === 'elimination') body = judgingStage();
   else if (ev.phase === 'finished' && !cur) body = champion();
   else if (cur) body = duelStage(cur);
   else body = `<div class="st-top"><p class="eyebrow">${nx ? 'Up next' : 'The bracket'}</p></div>${nx ? upNext(nx) : ''}<div class="st-bracket ${N >= 16 ? 'scroll' : ''}">${bracket({ mode: 'view' })}</div>`;
@@ -41,6 +41,34 @@ function joinStage() {
     <div class="st-right"><div class="qrbox xl" data-static id="qr"></div><div class="bigcode">${esc(S.code)}</div><small>${esc(joinLink().replace(/^https?:\/\//, '').replace(/#.*/, ''))}</small></div>
   </div>
   <div class="mosaic">${ev.bbs.slice(0, 40).map((b) => `<div class="lu" data-k="mz${b.id}">${av(b.id, 'lg')}<b>${esc(b.name)}</b></div>`).join('')}</div>`;
+}
+
+/** The judges are scoring: the screen cycles through facts about what the hall predicted, one every few seconds. */
+const SLIDE_MS = 9000;
+function judgingStage() {
+  const ev = S.meta, N = size(), cons = S.live && S.live.cons && S.live.cons[ev.id];
+  const rows = cons ? cons.rows : [], v = cons ? cons.voters : 0;
+  const pct = (n) => (v ? Math.round((n / v) * 100) : 0);
+  const name = (id) => esc(bbName(id));
+  const tile = (big, small) => `<div class="pt"><b>${big}</b><small>${small}</small></div>`;
+  const slides = [];
+  if (rows.length) {
+    slides.push({ t: `The hall's Top ${N}`, h: `<ol class="st-pred ${Math.min(N, 16) > 8 ? 'two' : ''}">${rows.slice(0, Math.min(N, 16)).map((r, i) => `<li><span class="n">${i + 1}</span>${av(r.id, 'md')}<b>${name(r.id)}</b><i class="pbar"><u style="width:${pct(r.n)}%"></u></i><small>${pct(r.n)}%</small></li>`).join('')}</ol>` });
+    const firsts = [...rows].filter((r) => r.f).sort((a, b) => b.f - a.f).slice(0, 3);
+    if (firsts.length) slides.push({ t: 'Picked as number one', h: `<div class="st-podium">${firsts.map((r, i) => `<div class="pp${i}" data-k="f${r.id}">${av(r.id, 'xl')}<b>${name(r.id)}</b><span>${r.f} ${r.f === 1 ? 'player' : 'players'} put them first</span></div>`).join('')}</div>` });
+    const few = rows.filter((r) => r.n > 0).sort((a, b) => a.n - b.n || b.avg - a.avg).slice(0, 5);
+    const unpicked = ev.bbs.filter((b) => !rows.some((r) => r.id === b.id)).length;
+    if (rows.length >= 4) slides.push({ t: 'Long shots', h: `<p class="lead">Hardly anyone has these in their Top ${N}</p><ol class="st-pred">${few.map((r) => `<li data-k="l${r.id}">${av(r.id, 'md')}<b>${name(r.id)}</b><i class="pbar"><u style="width:${Math.max(3, pct(r.n))}%"></u></i><small>${pct(r.n)}%</small></li>`).join('')}</ol>${unpicked ? `<p class="lead">${unpicked} ${unpicked === 1 ? 'beatboxer' : 'beatboxers'} in nobody's Top ${N}</p>` : ''}` });
+    const tight = [...rows].filter((r) => r.n >= 3).sort((a, b) => a.avg - b.avg).slice(0, 4);
+    if (tight.length) slides.push({ t: 'Where the hall seats them', h: `<ol class="st-pred">${tight.map((r) => `<li data-k="s${r.id}">${av(r.id, 'md')}<b>${name(r.id)}</b><small class="seat">average seat #${r.avg}</small></li>`).join('')}</ol>` });
+  }
+  const cut = ev.mk.filter((m) => m.kind === 'qualify').map((m) => { const lv = S.live && S.live.mk && S.live.mk[m.id]; return { bb: m.bb, yes: lv ? lv[0][0] : 0, no: lv ? lv[0][1] : 0, ppl: lv ? lv[1][0] + lv[1][1] : 0 }; }).filter((x) => x.yes + x.no > 0).sort((a, b) => b.yes - a.yes).slice(0, 6);
+  if (cut.length) slides.push({ t: 'Most backed to make the cut', h: `<ol class="st-pred">${cut.map((x) => `<li data-k="c${x.bb}">${av(x.bb, 'md')}<b>${name(x.bb)}</b><i class="pbar"><u style="width:${Math.round((x.yes / (x.yes + x.no)) * 100)}%"></u></i><small>${Math.round((x.yes / (x.yes + x.no)) * 100)}% yes</small></li>`).join('')}</ol><p class="lead">${cons ? cons.staked.toLocaleString() : 0} Loops on the cut</p>` });
+  slides.push({ t: 'The hall in numbers', h: `<div class="pstats3">${tile(S.live ? S.live.n : 0, 'players')}${tile(v, 'locked in a Top ' + N)}${cons && cons.staked ? tile(cons.staked.toLocaleString(), 'Loops on who makes the cut') : ''}${tile(ev.bbs.length, 'beatboxers on stage tonight')}</div>` });
+  const i = Math.floor(Date.now() / SLIDE_MS) % slides.length, sl = slides[i];
+  return `<div class="st-judging" data-cycle="${slides.length}" data-cur="${i}"><p class="eyebrow">${eq} The judges are scoring</p>
+    <h1 class="mega" data-k="jt${i}">${sl.t}</h1><div class="jbody" data-k="jb${i}">${sl.h}</div>
+    <div class="dots">${slides.map((_, k) => `<i class="${k === i ? 'on' : ''}"></i>`).join('')}</div></div>`;
 }
 
 /** Everybody has performed: the screen shows the lock-in clock and how the hall's Top N is shaping up. */
