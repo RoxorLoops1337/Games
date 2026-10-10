@@ -2,8 +2,8 @@
 // next to a stage: one big obvious next step per phase, and confirmation before anything that cannot be undone.
 import { esc, ic } from '../dom.js';
 import { S, bbName, size, rounds, curMatch, nextMatch, sides, leftKey, seedOf, mkView, mkTitle, mkLabel, serverBase } from '../state.js';
-import { ui, av, userAv, loops, pill, rankBuilder, bracket, empty, duel, x, catBar, catArt } from '../ui.js';
-import { roundInfo, SIZES } from '../shared.js';
+import { ui, av, userAv, loops, pill, rankBuilder, bracket, empty, duel, x, catBar, catArt, countdown } from '../ui.js';
+import { matchRound, SIZES } from '../shared.js';
 import { photoUrl } from '../net.js';
 
 const TABS = [['run', 'Run', 'bolt'], ['lineup', 'Lineup', 'mic'], ['markets', 'Bets', 'dice'], ['players', 'Players', 'users'], ['setup', 'Setup', 'cog']];
@@ -104,7 +104,7 @@ function matchConsole() {
   const ev = S.meta;
   const sel = ui.hostMatch ? S.match[ui.hostMatch] : null;
   const m = sel || curMatch() || nextMatch() || ev.matches.find((x2) => x2.status !== 'wait' && x2.status !== 'done') || ev.matches[0];
-  const R = roundInfo(size(), m.r);
+  const R = matchRound(size(), m);
   const [l, r] = sides(m), lk = leftKey(m), rk = lk === 'a' ? 'b' : 'a';
   const live = S.live && S.live.v && S.live.v.id === m.id ? S.live.v : null;
   const cnt = live ? live : { a: m.c ? m.c.a : 0, b: m.c ? m.c.b : 0 };
@@ -123,6 +123,8 @@ function matchConsole() {
       <button class="btn ghost" data-a="hReopen" data-m="${m.id}">${ic('undo', 18)} Wrong winner? Take the result back</button>`;
   } else {
     ctl = `${stepper}
+      ${m.status === 'live' ? voteLen() : ''}
+      ${m.status === 'voting' && m.vend ? `<div class="cdrow">${countdown(m, 'lg')}<small>The vote closes by itself</small></div>` : ''}
       ${next ? `<button class="btn big hot" data-a="hStep" data-m="${m.id}" data-to="${next[0]}">${ic(next[2], 22)} ${next[1]}</button>` : ''}
       ${m.status === 'closed' ? `<button class="btn ghost" data-a="hStep" data-m="${m.id}" data-to="voting">Reopen the vote</button>` : ''}
       ${m.status === 'live' ? `<button class="btn ghost" data-a="hStep" data-m="${m.id}" data-to="upcoming">${ic('undo', 18)} Started by mistake? Put it back</button>` : ''}
@@ -135,18 +137,25 @@ function matchConsole() {
         <div class="cta-row">${win(lk, 'blue')}${win(rk, 'red')}</div></div>` : ''}`;
   }
   return `<section class="duel host ${m.status}">
-    <div class="duel-top"><span>${R.long} · Battle ${m.i + 1}</span><i class="st ${m.status}">${STEP_L[m.status] || 'Waiting'}</i></div>
+    <div class="duel-top"><span>${R.long}${m.third ? '' : ' · Battle ' + (m.i + 1)}</span><i class="st ${m.status}">${STEP_L[m.status] || 'Waiting'}</i></div>
     ${m.a && m.b ? duel(m, { size: 'sm' }) : ''}
     ${ctl}</section>
     ${matchList(m.id)}
     ${ev.matches.every((q) => q.status === 'upcoming' || q.status === 'wait') ? `<button class="btn ghost" data-a="hRevertSeeds">${ic('undo', 18)} Wrong ranking? Take it back and redo it</button>` : ''}`;
 }
 
+const VSECS = [5, 10, 15, 20, 30, 0];
+/** How long the next vote runs: chips, defaulting to the event's setting. 0 means the organiser closes it by hand. */
+function voteLen() {
+  const cur = ui.vsecs == null ? S.meta.set.voteSecs : ui.vsecs;
+  return `<div class="votelen"><small>Vote length</small><span class="segs mini">${VSECS.map((n) => `<button class="seg ${cur === n ? 'on' : ''}" data-a="hVSecs" data-n="${n}">${n ? n + 's' : 'Off'}</button>`).join('')}</span></div>`;
+}
+
 function matchList(selId) {
   const ev = S.meta;
   return `<section class="block"><h3>All battles</h3>${rounds().map((R) => `<h4 class="sh">${R.long}</h4><div class="mlist">${ev.matches.filter((m) => m.r === R.r).map((m) => {
     const [l, r] = sides(m);
-    return `<button class="mrow ${m.id === selId ? 'sel' : ''} ${m.status}" data-a="hSelect" data-m="${m.id}"><span class="mn">${m.i + 1}</span>
+    return `<button class="mrow ${m.id === selId ? 'sel' : ''} ${m.status}" data-a="hSelect" data-m="${m.id}"><span class="mn">${m.third ? '3rd' : m.i + 1}</span>
       <span class="mf blue ${m.w && m.w === leftKey(m) ? 'won' : ''}">${l ? esc(bbName(l)) : 'TBD'}</span><i>vs</i><span class="mf red ${m.w && m.w !== leftKey(m) ? 'won' : ''}">${r ? esc(bbName(r)) : 'TBD'}</span>
       <em class="st ${m.status}">${STEP_L[m.status] || 'Waiting'}</em></button>`;
   }).join('')}</div>`).join('')}</section>`;
@@ -252,6 +261,8 @@ function setup() {
       ${sw('qualifyBets', 'Bets on who makes the cut', s.qualifyBets, 'Yes/no market per beatboxer while picks are open')}
       ${sw('autoChampion', 'Champion market', s.autoChampion, 'Opens when the bracket is drawn')}
       ${num('start', 'Starting Loops', s.start, 'Fixed once people join', !lobby || (S.host && S.host.total > 0))}
+      ${sw('thirdPlace', 'Third-place battle', s.thirdPlace, 'The two semi-final losers fight it out before the final')}
+      ${num('voteSecs', 'Vote countdown (seconds)', ev.set.voteSecs, 'The vote closes by itself. 0 = organiser closes it')}
       ${num('maxPerDevice', 'Accounts per phone', s.maxPerDevice, '0 = no limit')}
       ${num('maxPerIp', 'Accounts per network', s.maxPerIp, 'A hall shares one wifi, keep it high. 0 = off')}</section>
     <section class="block"><h3>Categories</h3>

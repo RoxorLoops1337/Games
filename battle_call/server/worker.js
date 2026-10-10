@@ -145,6 +145,7 @@ export class Event {
     for (const [, l] of await st.list({ prefix: 'lg:' })) S.ledger.set(l.ref, l);
     this.host = await st.get('host');
     this.S = S;
+    this.armVotes();
     this.hostTk = new Set((this.host && this.host.tk) || []);
     for (const u of S.users.values()) for (const h of u.tk || []) this.tokIdx.set(h, u.key);
   }
@@ -170,6 +171,24 @@ export class Event {
     }
     for (let i = 0; i < dels.length; i += 120) await st.delete(dels.slice(i, i + 120));
     this.fan(d);
+    this.armVotes();
+  }
+
+  /** A battle in voting with a countdown closes itself: one timer for the soonest deadline. */
+  armVotes() {
+    const S = this.S;
+    if (!S) return;
+    let next = 0;
+    for (const c of Object.values(S.event.cats)) for (const m of c.matches) if (m.status === 'voting' && m.vend && (!next || m.vend < next)) next = m.vend;
+    if (this.voteT) { clearTimeout(this.voteT); this.voteT = null; }
+    if (!next) return;
+    this.voteT = setTimeout(async () => {
+      this.voteT = null;
+      try {
+        S.now = Date.now();
+        if (E.closeDueVotes(S).length) await this.commit(); else this.armVotes();
+      } catch (e) { console.log('votes', e && e.stack); }
+    }, Math.max(50, next - Date.now()));
   }
 
   /* ---------- sockets ---------- */
@@ -179,7 +198,7 @@ export class Event {
 
   fan(d) {
     const S = this.S, all = this.sockets();
-    if (d.meta) { const s = JSON.stringify({ t: 'meta', ...E.metaOf(S) }); for (const ws of all) this.send(ws, s); }
+    if (d.meta) { const s = JSON.stringify({ t: 'meta', now: Date.now(), ...E.metaOf(S) }); for (const ws of all) this.send(ws, s); }
     if (d.users.size) {
       const keys = d.users;
       for (const ws of all) {
@@ -200,8 +219,8 @@ export class Event {
   pushLive() {
     if (!this.S) return;
     const all = this.sockets(), on = all.length;
-    const pub = JSON.stringify({ t: 'live', ...E.liveOf(this.S, on, false) });
-    const hst = JSON.stringify({ t: 'live', ...E.liveOf(this.S, on, true) });
+    const pub = JSON.stringify({ t: 'live', now: Date.now(), ...E.liveOf(this.S, on, false) });
+    const hst = JSON.stringify({ t: 'live', now: Date.now(), ...E.liveOf(this.S, on, true) });
     for (const ws of all) this.send(ws, this.att(ws).r === 'h' ? hst : pub);
   }
   pushBoard() {
@@ -219,8 +238,8 @@ export class Event {
 
   snapshot(ws, a) {
     const S = this.S;
-    this.send(ws, { t: 'meta', ...E.metaOf(S) });
-    this.send(ws, { t: 'live', ...E.liveOf(S, this.sockets().length, a.r === 'h') });
+    this.send(ws, { t: 'meta', now: Date.now(), ...E.metaOf(S) });
+    this.send(ws, { t: 'live', now: Date.now(), ...E.liveOf(S, this.sockets().length, a.r === 'h') });
     this.send(ws, { t: 'board', rows: E.boardOf(S) });
     if (a.r === 'u' && S.users.has(a.k)) this.send(ws, { t: 'me', ...E.meOf(S, S.users.get(a.k)) });
     if (a.r === 'h') this.send(ws, { t: 'host', ...E.hostOf(S) });
@@ -354,7 +373,7 @@ export class Event {
 
     if (path === '/state' && method === 'GET') {
       const a = await this.authFor(bearer(request), request.headers.get('x-host'));
-      const S = this.S, out = { ok: true, meta: E.metaOf(S), live: E.liveOf(S, this.sockets().length, a.r === 'h'), board: E.boardOf(S), auth: a.bad ? 0 : 1 };
+      const S = this.S, out = { ok: true, now: Date.now(), meta: E.metaOf(S), live: E.liveOf(S, this.sockets().length, a.r === 'h'), board: E.boardOf(S), auth: a.bad ? 0 : 1 };
       if (a.r === 'u' && S.users.has(a.k)) out.me = E.meOf(S, S.users.get(a.k));
       if (a.r === 'h') out.host = E.hostOf(S);
       return json(out);

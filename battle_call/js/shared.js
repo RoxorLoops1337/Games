@@ -24,6 +24,8 @@ export const DEFAULTS = {
   regOpen: true,
   qualifyBets: true,   // "Will X make the cut?" bets while picks are open
   autoChampion: true,  // open the "Who wins the whole battle?" market when the bracket is drawn
+  thirdPlace: true,    // the two semi-final losers battle for third place
+  voteSecs: 10,        // the audience vote closes by itself after this many seconds (0 = the organiser closes it)
   pts: { topIn: 20, topExact: 40, topNear: 15, pick: 25, vote: 10, sync: 15, tip: 50 },
 };
 
@@ -71,6 +73,11 @@ export function buildMatches(size, pfx = '') {
     }
   }
   return out;
+}
+
+/** Round names for a battle. The third-place battle is not a round of the tree, so it has its own label. */
+export function matchRound(size, m) {
+  return m.third ? { r: m.r, p: 2, short: 'Third place', long: 'Third place', count: 1, last: false } : roundInfo(size, m.r);
 }
 
 export const winnerOf = (m) => (m.w === 'a' ? m.a : m.w === 'b' ? m.b : null);

@@ -30,8 +30,8 @@ const authHeaders = () => (S.role === 'host' ? { 'x-host': S.ht } : S.tk ? { aut
 /** Apply one pushed message to the state. Used by the socket and by the polling fallback. */
 export function apply(m) {
   switch (m.t) {
-    case 'meta': { const { t, ...rest } = m; setMeta(rest); S.ready = true; break; }
-    case 'live': S.live = m; break;
+    case 'meta': { const { t, now, ...rest } = m; if (now) S.skew = now - Date.now(); setMeta(rest); S.ready = true; break; }
+    case 'live': if (m.now) S.skew = m.now - Date.now(); S.live = m; break;
     case 'board': S.board = m.rows; break;
     case 'me': { const prev = S.me; const { t, ...rest } = m; setMe(rest); onPush('me', prev, rest); break; }
     case 'host': S.host = m; break;
@@ -112,7 +112,7 @@ function fallback() {
     const r = await http(`/api/e/${wantCode}/state`, undefined, { headers: authHeaders() });
     if (!r.ok) { S.conn = 'down'; emit(); return; }
     S.conn = 'poll';
-    apply({ t: 'meta', ...r.meta }); apply({ t: 'live', ...r.live }); apply({ t: 'board', rows: r.board });
+    apply({ t: 'meta', now: r.now, ...r.meta }); apply({ t: 'live', ...r.live }); apply({ t: 'board', rows: r.board });
     if (r.me) apply({ t: 'me', ...r.me });
     if (r.host) apply({ t: 'host', ...r.host });
     if ((S.role === 'user' || S.role === 'host') && r.auth === 0) apply({ t: 'authfail' });
@@ -143,7 +143,7 @@ export function act(a) {
 async function fallbackNow() {
   const r = await http(`/api/e/${S.code}/state`, undefined, { headers: authHeaders() });
   if (!r.ok) return;
-  apply({ t: 'meta', ...r.meta }); apply({ t: 'live', ...r.live }); apply({ t: 'board', rows: r.board });
+  apply({ t: 'meta', now: r.now, ...r.meta }); apply({ t: 'live', ...r.live }); apply({ t: 'board', rows: r.board });
   if (r.me) apply({ t: 'me', ...r.me });
 }
 

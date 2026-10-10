@@ -1,8 +1,9 @@
 // Battle Call: the Live tab. It follows the organiser: whatever phase the event is in, this is the page that explains it.
 import { esc, ic } from '../dom.js';
 import { S, bbName, size, rounds, curMatch, nextMatch, seedOf, sides, leftKey, myBet, mkView, mkTitle } from '../state.js';
-import { ui, av, userAv, duel, bracket, resultCard, loops, pill, x, catArt, crown, ART_FILE } from '../ui.js';
-import { roundInfo } from '../shared.js';
+import { ui, av, userAv, duel, bracket, resultCard, loops, pill, x, catArt, crown, ART_FILE, countdown } from '../ui.js';
+import { matchRound } from '../shared.js';
+import { callStats } from '../share.js';
 
 /** The category's picture, standing in the corner of a hero card. */
 const heroArt = () => `<img class="heroart" src="img/${ART_FILE[S.meta.art] || 'male-solo'}.webp" alt="" decoding="async">`;
@@ -83,7 +84,7 @@ function elimination() {
 
 function matchHero(m) {
   const lk = leftKey(m);
-  const R = roundInfo(size(), m.r);
+  const R = matchRound(size(), m);
   const voted = S.me && S.me.votes ? S.me.votes[m.id] : null;
   const label = { upcoming: 'Up next', live: 'Battle live', voting: 'Vote now', closed: 'Voting closed' }[m.status];
   const pick = S.me && S.me.picks ? S.me.picks[m.id] : null;
@@ -106,7 +107,8 @@ function matchHero(m) {
       : '<p class="note">Voting is closed. The judges are deciding.</p>';
   }
   return `<section class="duel ${m.status}" data-k="duel">
-    <div class="duel-top"><span>${R.long} · Battle ${m.i + 1}</span><i class="st ${m.status}">${label}</i></div>
+    <div class="duel-top"><span>${R.long}${m.third ? '' : ' · Battle ' + (m.i + 1)}</span><i class="st ${m.status}">${label}</i></div>
+    ${m.status === 'voting' ? countdown(m, 'inline') : ''}
     ${duel(m)}
     ${body}
   </section>`;
@@ -124,9 +126,10 @@ function bracketPhase() {
 
 function finished() {
   const ev = S.meta, champ = ev.champion;
-  const fin = ev.matches.find((m) => m.r === rounds().length - 1);
+  const fin = ev.matches.find((m) => m.r === rounds().length - 1 && !m.third);
   const runner = fin ? (fin.w === 'a' ? fin.b : fin.a) : null;
-  const semis = ev.matches.filter((m) => m.r === rounds().length - 2 && m.status === 'done').map((m) => (m.w === 'a' ? m.b : m.a));
+  const th = ev.matches.find((m) => m.third && m.status === 'done');
+  const semis = th ? [th.w === 'a' ? th.a : th.b] : ev.matches.filter((m) => m.r === rounds().length - 2 && m.status === 'done').map((m) => (m.w === 'a' ? m.b : m.a));
   const me = S.me;
   const top3 = S.board.slice(0, 3);
   return `
@@ -145,7 +148,8 @@ function finished() {
     </section>
     ${me ? `<section class="block you"><h3>Your battle</h3><div class="stats4">
       <div><b>#${me.rank}</b><small>of ${me.of}</small></div><div><b>${me.net.toLocaleString()}</b><small>Loops</small></div>
-      <div><b>${me.st.hits || 0}</b><small>right calls</small></div><div><b>${me.st.won || 0}</b><small>bets won</small></div></div></section>` : ''}
+      <div><b>${callStats().hit}/${callStats().tot}</b><small>battles called</small></div><div><b>${me.st.won || 0}</b><small>bets won</small></div></div>
+      <button class="btn big" data-a="shareResults">${ic('copy', 20)} Share my result</button></section>` : ''}
     ${top3.length ? `<section class="block"><h3>Best callers</h3><ol class="board">${top3.map((r) => rowOf(r)).join('')}</ol></section>` : ''}`;
 }
 

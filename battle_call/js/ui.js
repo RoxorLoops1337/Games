@@ -1,15 +1,15 @@
 // Battle Call: UI state and the small components every screen shares.
 import { esc, ic, hue } from './dom.js';
-import { S, bbName, seedOf, sides, rounds, isOut, size } from './state.js';
+import { S, bbName, seedOf, sides, rounds, isOut, size, secsLeft, serverNow } from './state.js';
 import { photoUrl } from './net.js';
-import { roundInfo, slotsFor } from './shared.js';
+import { matchRound, slotsFor } from './shared.js';
 
 /** Local, per-phone UI state (not the server's). */
 export const ui = {
   tab: 'live', hostTab: 'run', sheet: null, modal: null, search: '', rank: { top: null, seeds: [] }, topSaved: true,
   betFilter: 'open', stake: 100, predRound: 0, boardTab: 'rank', voteOpen: null, voteDismissed: {}, vote: {}, resultSeen: {},
   authMode: 'join', busy: false, err: '', showPw: false, lineupSearch: '', mkFilter: 'all', playerSearch: '', judges: { a: 0, b: 0 },
-  hostMatch: null, drag: null, qr: null, seenLog: 0, winCelebrated: false, hapt: true,
+  hostMatch: null, vsecs: null, drag: null, qr: null, seenLog: 0, winCelebrated: false, hapt: true,
 };
 
 export const initials = (n) => String(n || '?').trim().split(/\s+/).slice(0, 2).map((w) => w[0]).join('').toUpperCase().slice(0, 2) || '?';
@@ -79,6 +79,15 @@ export function rankBuilder({ which, list, N, intro, ctaLabel }) {
     </div>`;
 }
 
+/* ------------------------------------------------------------ vote countdown */
+/** The ring that counts a vote down. The ticker in main.js keeps `data-cd` elements current without re-rendering. */
+export function countdown(m, cls = '') {
+  const s = secsLeft(m);
+  if (s === null) return '';
+  const f = Math.max(0, Math.min(1, (m.vend - serverNow()) / ((m.vsecs || 10) * 1000)));
+  return `<div class="cd ${cls} ${s <= 3 ? 'hot' : ''}" data-cd="${m.vend}" data-tot="${(m.vsecs || 10) * 1000}" style="--f:${f.toFixed(3)}"><b>${s}</b><small>sec</small></div>`;
+}
+
 /* ------------------------------------------------------------ bracket */
 const stLabel = { wait: '', upcoming: 'Up next', live: 'LIVE', voting: 'VOTE', closed: 'Judging', done: '' };
 
@@ -86,7 +95,7 @@ const stLabel = { wait: '', upcoming: 'Up next', live: 'LIVE', voting: 'VOTE', c
 export function bracket({ mode = 'view', picks = {}, only = null } = {}) {
   const ev = S.meta, N = size();
   const cols = rounds().filter((r) => only == null || r.r === only).map((R) => {
-    const ms = ev.matches.filter((m) => m.r === R.r);
+    const ms = ev.matches.filter((m) => m.r === R.r && (mode !== 'pick' || !m.third));
     const locked = ev.locked[R.r];
     const cards = ms.map((m) => {
       const slots = mode === 'pick' ? slotsFor(ev.matches, picks, m) : [m.a, m.b];
@@ -108,7 +117,7 @@ export function bracket({ mode = 'view', picks = {}, only = null } = {}) {
           <span class="dot"></span>${av(id, 'xs')}<b>${esc(bbName(id))}</b><small>${seedOf(id) ? '#' + seedOf(id) : ''}</small>${right}
         </${can ? 'button' : 'div'}>`;
       };
-      return `<article class="bm ${m.status}" data-k="${m.id}"><div class="bm-h"><span>Battle ${m.i + 1}</span>${stLabel[m.status] ? `<i class="st ${m.status}">${stLabel[m.status]}</i>` : ''}${mode === 'view' && m.judges ? `<small>${m.judges.a}-${m.judges.b}</small>` : ''}</div>${row(0)}${row(1)}</article>`;
+      return `<article class="bm ${m.status}" data-k="${m.id}"><div class="bm-h"><span>${m.third ? 'Third place' : 'Battle ' + (m.i + 1)}</span>${stLabel[m.status] ? `<i class="st ${m.status}">${stLabel[m.status]}</i>` : ''}${mode === 'view' && m.judges ? `<small>${m.judges.a}-${m.judges.b}</small>` : ''}</div>${row(0)}${row(1)}</article>`;
     }).join('');
     return `<div class="bcol" data-k="r${R.r}"><h4>${R.last ? crown('sm') : ''}${R.short}${locked ? ` ${ic('lock', 13)}` : ''}</h4><div class="bcards">${cards}</div></div>`;
   }).join('');
@@ -129,7 +138,7 @@ export function resultCard(m) {
   const lp = lk === 'a' ? crowdA : 100 - crowdA;
   const mine = S.me && S.me.votes ? S.me.votes[m.id] : null;
   return `<article class="res" data-k="res-${m.id}">
-    <header><span>${roundInfo(size(), m.r).short} · Battle ${m.i + 1}</span>${crowdWin && crowdWin !== 'tie' && crowdWin !== m.w ? '<span class="pill upset">Crowd upset</span>' : ''}</header>
+    <header><span>${matchRound(size(), m).short}${m.third ? '' : ' · Battle ' + (m.i + 1)}</span>${crowdWin && crowdWin !== 'tie' && crowdWin !== m.w ? '<span class="pill upset">Crowd upset</span>' : ''}</header>
     <div class="res-row">
       <div class="rs ${lk === m.w ? 'won' : ''}">${av(l, 'sm')}<b>${esc(bbName(l))}</b></div>
       <div class="rsmid">${m.judges ? `<b>${lk === 'a' ? m.judges.a : m.judges.b}</b><i>judges</i><b>${lk === 'a' ? m.judges.b : m.judges.a}</b>` : '<i>vs</i>'}</div>

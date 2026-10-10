@@ -391,7 +391,7 @@ function lockRound(S, r) {
 const activeMatch = (S) => { for (const c of cats(S)) { const m = c.matches.find((x) => x.status === 'live' || x.status === 'voting' || x.status === 'closed'); if (m) return m; } return undefined; };
 export const currentMatch = activeMatch;
 
-export function stepMatch(S, mid, to) {
+export function stepMatch(S, mid, to, secs) {
   const ev = S.ev, m = matchOf(S, mid);
   if (ev.phase !== 'bracket') return fail('The bracket is not running');
   if (!m) return fail('No such battle');
@@ -416,9 +416,26 @@ export function stepMatch(S, mid, to) {
     S.event.active = ev.id; // whoever is on stage is the category everybody's phone follows
     for (const k of marketsList(S)) if (k.kind === 'match' && k.mid === mid && k.st === 'open') { k.st = 'locked'; touchMk(S, k); }
   }
+  if (to === 'voting') {
+    // the vote can close by itself: `vend` is the moment (server clock) it does
+    const s = secs == null ? ev.settings.voteSecs : Math.max(0, Math.min(300, Math.floor(+secs) || 0));
+    m.vsecs = s; m.vend = s > 0 ? S.now + s * 1000 : 0;
+  } else m.vend = 0;
   m.status = to;
   touchMeta(S);
   return ok({});
+}
+
+/** Close every vote whose countdown has run out. Returns the battles it closed (the caller runs this from a timer). */
+export function closeDueVotes(S) {
+  const done = [];
+  for (const c of cats(S)) for (const m of c.matches) {
+    if (m.status === 'voting' && m.vend && S.now >= m.vend) {
+      const r = inCat(S, c, () => stepMatch(S, m.id, 'closed'));
+      if (r.ok) done.push(m.id);
+    }
+  }
+  return done;
 }
 
 export function swapSides(S, mid) {
@@ -443,7 +460,7 @@ export function setResult(S, mid, w, judges) {
   m.w = w; m.status = 'done'; m.ds = ++S.event.doneSeq; // the order results came in, so Undo can walk back through them
   if (judges && Number.isInteger(judges.a) && Number.isInteger(judges.b)) m.judges = { a: Math.max(0, judges.a | 0), b: Math.max(0, judges.b | 0) };
   const win = winnerOf(m), lose = loserOf(m);
-  ev.out[lose] = m.r;
+  if (!m.third) ev.out[lose] = m.r;
   // the battle's own market
   for (const k of marketsList(S)) if (k.kind === 'match' && k.mid === mid && (k.st === 'open' || k.st === 'locked')) settleMarket(S, k, w === 'a' ? 0 : 1, ref);
   // bracket picks, round by round worth more
@@ -459,14 +476,28 @@ export function setResult(S, mid, w, judges) {
     }
   }
   // advance
-  if (m.r + 1 < log2(ev.settings.size)) {
-    const nx = ev.matches.find((x) => x.r === m.r + 1 && x.i === m.i >> 1);
+  if (m.third) { /* the battle for third place goes nowhere */ }
+  else if (m.r + 1 < log2(ev.settings.size)) {
+    const nx = ev.matches.find((x) => x.r === m.r + 1 && x.i === m.i >> 1 && !x.third);
     nx[m.i % 2 === 0 ? 'a' : 'b'] = win;
     if (nx.a && nx.b) { nx.status = 'upcoming'; lg.made.push(openMatchMarket(S, nx).id); }
   } else {
-    ev.champion = win; ev.phase = 'finished';
+    ev.champion = win;
     for (const k of marketsList(S)) if (k.kind === 'champion' && k.st !== 'settled' && k.st !== 'void') settleMarket(S, k, k.bbs.indexOf(win), ref);
   }
+  // both semi-finals are in: the losers play for third
+  if (ev.settings.thirdPlace && !m.third && log2(ev.settings.size) >= 2 && m.r === log2(ev.settings.size) - 2 && !ev.matches.some((x) => x.third)) {
+    const semis = ev.matches.filter((x) => x.r === m.r);
+    if (semis.every((x) => x.status === 'done')) {
+      const R = log2(ev.settings.size), fin = ev.matches.findIndex((x) => x.r === R - 1);
+      const th = { id: ev.pfx + 'third', r: R, i: 0, third: true, seeds: null, feed: null, a: loserOf(semis[0]), b: loserOf(semis[1]),
+        status: 'upcoming', w: null, swap: false, judges: null, c: { a: 0, b: 0 } };
+      ev.matches.splice(fin, 0, th); // listed before the final: it is the next battle
+      ev.locked[R] = false;
+      lg.made.push(openMatchMarket(S, th).id);
+    }
+  }
+  if (ev.champion && ev.matches.every((x) => x.status === 'done')) ev.phase = 'finished';
   settleReaches(S, ref);
   if (ev.matches.filter((x) => x.r === m.r).every((x) => x.status === 'done')) roundTips(S, m.r);
   touchMeta(S); S.dirty.board = true; S.dirty.host = true;
@@ -528,15 +559,19 @@ export function revertMatch(S, mid) {
   const ev = S.ev, m = matchOf(S, mid);
   if (!m || m.status !== 'done') return fail('That battle has no result to take back');
   if (activeMatch(S)) return fail('Finish the current battle first');
-  const nx = m.r + 1 < log2(ev.settings.size) ? ev.matches.find((x) => x.r === m.r + 1 && x.i === m.i >> 1) : null;
+  const nx = !m.third && m.r + 1 < log2(ev.settings.size) ? ev.matches.find((x) => x.r === m.r + 1 && x.i === m.i >> 1 && !x.third) : null;
   if (nx && nx.status !== 'upcoming' && nx.status !== 'wait') return fail('The next battle has already started');
+  const th = ev.matches.find((x) => x.third);
+  if (th && !m.third && m.r === log2(ev.settings.size) - 2 && th.status !== 'upcoming') return fail('Take back the third-place battle first');
   const lg = S.ledger.get('m:' + mid);
   for (const id of lg ? lg.made : []) { const k = mkOf(S, id); if (k) { voidMarket(S, k, null, 'Result changed'); dropMarket(S, k); } }
   applyLedgerBack(S, 'm:' + mid);
   if (S.ledger.has(ev.pfx + 'tip:' + m.r)) applyLedgerBack(S, ev.pfx + 'tip:' + m.r); // the round is open again, so are its tips
   if (nx) { nx[m.i % 2 === 0 ? 'a' : 'b'] = null; nx.status = 'wait'; }
-  if (ev.phase === 'finished') { ev.phase = 'bracket'; ev.champion = null; }
-  delete ev.out[loserOf(m)];
+  if (th && !m.third && m.r === log2(ev.settings.size) - 2) { ev.matches = ev.matches.filter((x) => !x.third); ev.locked.length = Math.min(ev.locked.length, log2(ev.settings.size)); }
+  if (!m.third && m.r === log2(ev.settings.size) - 1) ev.champion = null;
+  if (ev.phase === 'finished') ev.phase = 'bracket';
+  if (!m.third) delete ev.out[loserOf(m)];
   m.w = null; m.judges = null; m.ds = 0; m.status = 'closed';
   touchMeta(S); S.dirty.board = true;
   return ok({});
@@ -559,6 +594,7 @@ export const setPick = (S, u, mid, bb) => inCat(S, catOfMatch(S, mid), () => set
 function setPickIn(S, u, mid, bb) {
   const ev = S.ev, m = matchOf(S, mid);
   if (ev.phase !== 'bracket' || !m) return fail('Picks are not open');
+  if (m.third) return fail('The third-place battle has no picks');
   if (ev.locked[m.r] || m.status === 'done') return fail('This round is locked');
   if (bb) {
     if (!slotsFor(ev.matches, u.picks, m).includes(bb)) return fail('They are not in that battle (yet)');
@@ -595,6 +631,7 @@ export const castVote = (S, u, mid, side) => inCat(S, catOfMatch(S, mid), () => 
 function castVoteIn(S, u, mid, side) {
   const m = matchOf(S, mid);
   if (!m || m.status !== 'voting') return fail('Voting is not open');
+  if (m.vend && S.now > m.vend + 2500) return fail('Voting is closed'); // a little grace for a slow connection
   if (side !== 'a' && side !== 'b') return fail('Pick a side');
   const prev = u.votes[mid];
   if (prev === side) return ok({});
@@ -676,11 +713,12 @@ function eventAction(S, a) {
         if (!SIZES.includes(+v.size)) return fail('Pick 2, 4, 8, 16, 32 or 64');
         c.settings.size = +v.size;
       }
-      for (const k of ['qualifyBets', 'autoChampion']) if (v[k] != null) c.settings[k] = !!v[k];
+      for (const k of ['qualifyBets', 'autoChampion', 'thirdPlace']) if (v[k] != null) c.settings[k] = !!v[k];
       // the rest is shared by every category (one wallet, one set of house rules)
       const shared = {};
       if (v.start != null) { if (all.some((x) => x.phase !== 'lobby') || S.users.size) return fail('The starting Loops are fixed once people join'); shared.start = Math.max(100, Math.min(100000, Math.floor(+v.start) || 1000)); }
       if (v.regOpen != null) shared.regOpen = !!v.regOpen;
+      if (v.voteSecs != null) shared.voteSecs = Math.max(0, Math.min(120, Math.floor(+v.voteSecs) || 0));
       for (const k of ['maxPerDevice', 'maxPerIp']) if (v[k] != null) shared[k] = Math.max(0, Math.min(1000, Math.floor(+v[k]) || 0));
       if (v.minPayout != null) shared.minPayout = Math.max(1, Math.min(3, +v.minPayout || 1.1));
       for (const x of all) Object.assign(x.settings, shared);
@@ -759,7 +797,7 @@ function catAction(S, a) {
     case 'undo': return undoStep(S);
     case 'seeds': return publishSeeds(S, a.order);
     case 'seeds.revert': return revertSeeds(S);
-    case 'step': return stepMatch(S, a.mid, a.to);
+    case 'step': return stepMatch(S, a.mid, a.to, a.secs);
     case 'result': return setResult(S, a.mid, a.w, a.judges);
     case 'reopen': return revertMatch(S, a.mid);
     case 'swap': return swapSides(S, a.mid);
@@ -819,7 +857,7 @@ function catAction(S, a) {
 function catMeta(S, c) {
   return {
     id: c.id, name: c.name, art: c.art, pfx: c.pfx, phase: c.phase, undo: inCat(S, c, () => undoPlan(S)),
-    set: { size: c.settings.size, qualifyBets: c.settings.qualifyBets, autoChampion: c.settings.autoChampion },
+    set: { size: c.settings.size, qualifyBets: c.settings.qualifyBets, autoChampion: c.settings.autoChampion, thirdPlace: c.settings.thirdPlace },
     bbs: c.bbs, seeds: c.seeds, locked: c.locked, out: c.out, champion: c.champion, consensus: c.consensus,
     matches: c.matches.map((m) => ({ ...m, c: m.status === 'closed' || m.status === 'done' ? m.c : null })),
     mk: Object.values(c.markets).sort((a, b) => a.ord - b.ord).map((m) => ({ id: m.id, kind: m.kind, bb: m.bb, mid: m.mid, to: m.to, bbs: m.bbs, seed: m.seed, st: m.st, win: m.win })),
@@ -830,7 +868,7 @@ export function metaOf(S) {
   const e = S.event, s = e.cats[e.order[0]].settings;
   return {
     rev: e.rev, code: e.code, name: e.name, banner: e.banner, active: e.active,
-    set: { start: s.start, minPayout: s.minPayout, pts: s.pts, regOpen: s.regOpen, maxPerDevice: s.maxPerDevice, maxPerIp: s.maxPerIp },
+    set: { start: s.start, minPayout: s.minPayout, pts: s.pts, regOpen: s.regOpen, maxPerDevice: s.maxPerDevice, maxPerIp: s.maxPerIp, voteSecs: s.voteSecs },
     cats: cats(S).map((c) => catMeta(S, c)),
   };
 }
