@@ -32,6 +32,7 @@ import * as factory from './factory';
 import * as gather from './gather';
 import * as health from './health';
 import * as satchel from './satchel';
+import * as arts from './arts';
 import * as hearth from './hearth';
 import * as machines from './machines';
 import * as mail from './mail';
@@ -104,6 +105,9 @@ export class Sim {
     /** Damage dealt to each monster by each player (boss rewards). Not saved. */
     private credits: Record<number, Record<string, number>> = {};
     dashT: Record<string, number> = {};
+    /** When each Combat Art is next ready, by `farmer:art` (runtime), and the Frost Zones lying on the ground (sim/arts.ts). */
+    artT: Record<string, number> = {};
+    artZones: { x: number; y: number; r: number; until: number; by: string; next: number }[] = [];
     /** Titan nodes (sim/titan.ts): who swung at each one and when (world time), and when each farmer was last told "Needs a friend!". Runtime only: the window is three seconds, shorter than a save. */
     readonly titanLog = new Map<number, { hits: Map<string, number>; coop: number }>();
     readonly titanSay = new Map<string, number>();
@@ -156,7 +160,7 @@ export class Sim {
         this.rng = new Rng(`${state.seed}:${state.tick}`);
         for (const p of state.plots) if (!p.owned && !p.dread) delete p.veins;         // (nobody's land has no ore until somebody takes it: ensureVeins)
         state.paused = false;                         // (a menu open when the page was saved paused the world: nobody is in that menu now)
-        for (const p of Object.values(state.players)) { p.online = false; p.moving = false; dev.strip(p); costatus.strip(p); satchel.tidy(p); }
+        for (const p of Object.values(state.players)) { p.online = false; p.moving = false; dev.strip(p); costatus.strip(p); satchel.tidy(p); arts.sync(p); delete p.cl; }
         rift.recover(this);
         hearth.tidy(this);                             // (a fill or a buff that belongs to no dusk goes)
         creatures.tidy(this);                          // (a creature "in" a hatchery that is gone is free)
@@ -529,6 +533,7 @@ export class Sim {
         mobs.updateProjs(this, dt);
         blight.update(this);
         defense.update(this);                         // (towers shoot, spike traps bite)
+        arts.update(this);                            // (Frost Zones chill, the Shroud ends)
         rift.update(this, dt);
         costatus.update(this, dt);
         death.update(this);

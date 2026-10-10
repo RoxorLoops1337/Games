@@ -34,7 +34,7 @@ export interface Peer {
 }
 
 const PUBLIC_KEYS = ['id', 'name', 'color', 'slot', 'online', 'x', 'y', 'fx', 'fy', 'moving', 'warp',
-    'hearts', 'downed', 'revive', 'level', 'equip', 'line', 'look', 'co'] as const;
+    'hearts', 'downed', 'revive', 'level', 'equip', 'line', 'look', 'co', 'cl'] as const;
 
 /** What everyone else may see of a player; `mh` is their max hearts (their skills stay private). */
 function publicView (p: PlayerS, mh: number): PlayerView {

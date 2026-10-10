@@ -15,7 +15,7 @@ interface TouchHost {
     readonly ready: boolean;
     readonly touch: { mx: number; my: number; act: boolean; use: boolean; dem: boolean };
     /** Which context buttons apply right now. */
-    touchContext (): { fish: string; pod: boolean; turn: boolean; cancel: boolean; take: boolean; dash: boolean };
+    touchContext (): { fish: string; pod: boolean; turn: boolean; cancel: boolean; take: boolean; dash: boolean; arts: string[] };
     zoomBy (dir: number): void;
     interact (): void;
     eat (): void;
@@ -24,12 +24,13 @@ interface TouchHost {
     turnPlacing (): void;
     cancelTools (): void;
     dash (): void;
+    art (slot: number): void;
 }
 
 type RoundBtn = { c: Phaser.GameObjects.Arc; t: Phaser.GameObjects.Text };
 
 export class TouchControls {
-    private btns: Record<'fish' | 'pod' | 'turn' | 'cancel' | 'take' | 'dash', RoundBtn>;
+    private btns: Record<'fish' | 'pod' | 'turn' | 'cancel' | 'take' | 'dash' | 'art0' | 'art1' | 'art2', RoundBtn>;
     /** The touch area that grabs a finger for the stick: the lower left, until a building is in hand (then only round the stick, so the ground there can be tapped). */
     private stickZone: Phaser.GameObjects.Zone;
     private stickWide = true;
@@ -95,6 +96,9 @@ export class TouchControls {
             cancel: round(T.cancel.x, T.cancel.y, T.cancel.r, 'CANCEL', PAL.berry, () => farm.cancelTools(), undefined, 12),
             take: round(T.take.x, T.take.y, T.take.r, 'REMOVE', PAL.pumpkin, () => { farm.touch.dem = true; }, () => { farm.touch.dem = false; }, 12),
             dash: round(T.dash.x, T.dash.y, T.dash.r, 'DASH', PAL.sea, () => farm.dash(), undefined, 13),
+            art0: round(T.art0.x, T.art0.y, T.art0.r, '', PAL.plum, () => farm.art(0), undefined, 11),
+            art1: round(T.art1.x, T.art1.y, T.art1.r, '', PAL.plum, () => farm.art(1), undefined, 11),
+            art2: round(T.art2.x, T.art2.y, T.art2.r, '', PAL.plum, () => farm.art(2), undefined, 11),
         };
         this.update();
     }
@@ -102,7 +106,7 @@ export class TouchControls {
     /** Show only the context buttons that do something right now. */
     update () {
         const b = this.btns, farm = this.farm;
-        const k = farm.ready ? farm.touchContext() : { fish: '', pod: false, turn: false, cancel: false, take: false, dash: false };
+        const k = farm.ready ? farm.touchContext() : { fish: '', pod: false, turn: false, cancel: false, take: false, dash: false, arts: ['', '', ''] };
         const set = (btn: RoundBtn, on: boolean, text?: string) => {
             btn.c.setVisible(on); btn.t.setVisible(on);
             if (btn.c.input) btn.c.input.enabled = on;
@@ -117,6 +121,7 @@ export class TouchControls {
             slots.set('stick', z);
         }
         set(b.fish, !!k.fish, k.fish);
+        set(b.art0, !!k.arts[0], k.arts[0]); set(b.art1, !!k.arts[1], k.arts[1]); set(b.art2, !!k.arts[2], k.arts[2]);
         set(b.pod, k.pod); set(b.turn, k.turn); set(b.cancel, k.cancel); set(b.take, k.take); set(b.dash, k.dash);
         if (!k.take) farm.touch.dem = false;
     }

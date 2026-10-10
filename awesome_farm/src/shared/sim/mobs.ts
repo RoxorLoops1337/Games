@@ -134,10 +134,11 @@ function leash (sim: Sim, e: MobE) {
 }
 
 // ── behaviour ───────────────────────────────────────────────────────────────
-function nearestPlayer (players: PlayerS[], x: number, y: number, range: number) {
+function nearestPlayer (players: PlayerS[], x: number, y: number, range: number, now: number) {
     let best: PlayerS | null = null, bd = range;
     for (const p of players) {
         const d = Math.hypot(p.x - x, p.y - y);
+        if (p.cl && p.cl > now && d > 24) continue;          // (a farmer in the Shroud is lost to anything that is not right beside them)
         if (d < bd) { bd = d; best = p; }
     }
     return { p: best, d: bd };
@@ -149,7 +150,7 @@ export function updateMobs (sim: Sim, dt: number) {
     for (const e of sim.ents('mob')) {
         const def = MOBS[e.kind];
         if (def.boss || e.rb) { boss.updateBoss(sim, e, dt, players); continue; }
-        const { p: target, d: td } = nearestPlayer(players, e.x, e.y, def.aggro);
+        const { p: target, d: td } = nearestPlayer(players, e.x, e.y, def.aggro, sim.s.time);
         const dx = target ? target.x - e.x : 0, dy = target ? target.y - e.y : 0, dist = Math.max(1, Math.hypot(dx, dy));
         const ux = dx / dist, uy = dy / dist;
         e.t += dt;

@@ -24,6 +24,7 @@ import { NightLayer } from '../ui/night';
 import { CompanionCard, QuestTracker } from '../ui/companion';
 import { HudLayer } from '../ui/hudlayer';
 import { DuskPill, PartyList } from '../ui/party';
+import { ArtsBar } from '../ui/artsbar';
 import { button, forDevice, H, hideTip, icon, label, setHudScaleSource, setTooltip, tipOn, Toasts, Tooltip, W } from '../ui/kit';
 import { LandPlates } from '../ui/plates';
 import { TouchControls } from '../ui/touchcontrols';
@@ -49,6 +50,7 @@ import { HatcheryScreen } from '../ui/screens/hatchery';
 import { RiftEndScreen } from '../ui/screens/riftend';
 import { InventoryScreen } from '../ui/screens/inventory';
 import { GearScreen } from '../ui/screens/gear';
+import { ArtsScreen } from '../ui/screens/arts';
 import { CrewPickScreen } from '../ui/screens/crewpick';
 import { GuideScreen } from '../ui/screens/guide';
 import { JobPostScreen } from '../ui/screens/jobpost';
@@ -87,7 +89,7 @@ const UI_SCREEN: Partial<Record<UiKind, string>> = { proc: 'machine', device: 'd
 const STICKY = new Set(['machine', 'device', 'altar', 'den', 'chest', 'chestcfg', 'bed', 'dock', 'hatchery', 'boons', 'riftend', 'loot', 'wheel', 'story']);
 
 const SCREENS: Record<string, new (ctx: ScreenCtx, arg?: unknown) => Screen> = {
-    inventory: InventoryScreen, gear: GearScreen, craft: CraftScreen, skills: SkillScreen, build: BuildScreen,
+    inventory: InventoryScreen, gear: GearScreen, arts: ArtsScreen, craft: CraftScreen, skills: SkillScreen, build: BuildScreen,
     machine: MachineScreen, device: DeviceScreen, altar: AltarScreen, creatures: CreatureScreen, den: DenScreen, journal: JournalScreen, guide: GuideScreen, launcher: LauncherScreen, jobpost: JobPostScreen, crewpick: CrewPickScreen, waystone: WaystoneScreen, welcome: WelcomeScreen, chest: ChestScreen, chestcfg: ChestSetupScreen, market: MarketScreen, bed: BedScreen, menu: MenuScreen, map: MenuScreen,
     dock: DockScreen, boons: BoonScreen, riftend: RiftEndScreen, hatchery: HatcheryScreen, blueprints: BlueprintScreen,
     loot: LootScreen, wheel: WheelScreen, story: StoryScreen, look: LookScreen, dev: DevToolsScreen, wish: WishScreen, mail: MailScreen, vane: VaneScreen, table: TableScreen, tower: TowerScreen,
@@ -104,6 +106,7 @@ export class HudScene extends Phaser.Scene {
     private compCard!: CompanionCard;
     private party!: PartyList;
     private dusk!: DuskPill;
+    private artsBar!: ArtsBar;
     /** Where the stacks at the top and above the hotbar are right now (they glide to where they should be). */
     private topNow: TopStack = topStack({});
     private botNow!: BottomStack;
@@ -180,6 +183,7 @@ export class HudScene extends Phaser.Scene {
         this.compCard = new CompanionCard(this, this.farm);
         this.party = new PartyList(this, this.farm);
         this.dusk = new DuskPill(this, this.farm);
+        this.artsBar = new ArtsBar(this, this.farm, () => this.openScreen('arts'));
         this.tracker = new QuestTracker(this, this.farm, () => this.toggle('journal'));
         this.topNow = topStack({});
         this.botNow = bottomStack(this.touchMode, {});
@@ -419,6 +423,7 @@ export class HudScene extends Phaser.Scene {
         this.coHud.update(dt, me, !!this.screen || this.photo);
         const top = this.topNow;
         this.dusk.update(top.dusk, !me.rift);
+        this.artsBar.update(me, !this.touchMode && !this.screen && !this.photo);
         this.bossBar.update(dt, top.boss);
         this.riftHud.update(dt, me, top.plaque);
         this.fishHud.update(dt, me, this.botNow.fishing);
@@ -646,6 +651,7 @@ export class HudScene extends Phaser.Scene {
         slots.set('tracker', this.tracker.rect);
         slots.set('lab', this.labPanel?.rect ?? null);
         slots.set('dusk', this.dusk.rect);
+        slots.set('arts', this.artsBar.rect);
         slots.set('boss', this.bossBar.visible ? { x: Math.round(W / 2 - BOSS.w / 2), y: Math.round(top.boss), w: BOSS.w, h: BOSS.h } : null);
         slots.set('rift', me.rift ? { x: Math.round(W / 2 - PLAQUE.w / 2), y: Math.round(top.plaque), w: PLAQUE.w, h: PLAQUE.h + (this.chipsOn ? CHIPS_H + 6 : 0) } : null);
         slots.set('top', top.bottom ? { x: Math.round(W / 2 - BOSS.w / 2), y: EDGE, w: BOSS.w, h: Math.round(top.bottom) - EDGE } : null);

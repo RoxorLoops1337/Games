@@ -88,6 +88,10 @@ export const INTRO: Record<string, string[]> = {
         'Each relic gives its kind\'s stat, more for a bigger one. Relics of one kind that touch give more, and every worn ring of that kind adds to them too. Two touching relics of different kinds make a combo with a bonus of its own (Steam, Wildfire, Forge, Phoenix, Winter Garden, Rime Plate, Whisper, Thornmail, Bloom, Aegis). Relics are made at the Alchemy table and found in crates.',
         'Gems sit in four sockets in the Equipment Bag: two for the weapon and one each for the headgear and the body armour. A gem in the weapon works on every hit (Ruby sets enemies on fire, Sapphire slows them, Emerald poisons them, Topaz sends lightning to a nearby enemy, Amethyst sometimes heals you, Diamond adds critical chance). A gem in armour gives a steady bonus. Gems come in three cuts, Rough, Cut and Flawless; right-click three of a cut in the Equipment Bag to merge them into the next. They are found digging in the caves (ore and crystal most of all, finer cuts the deeper you go) and in crates.',
     ],
+    arts: [
+        'Combat Arts are six moves learned in the skill tree (Combat branch): the Grapple Hook (pulls the first monster in a line to you and stuns it), the Crystal Arrow (a long arrow that stuns for longer the further it flew), Scorch (a ring of fire that knocks back and burns), Shroud (monsters lose you; your next blow hits much harder), the Frost Zone (a patch of ground that freezes what is in it) and the Headbutt (a lunge that throws the first monster, dazed). Bosses take the damage but cannot be pulled or stunned.',
+        'Put up to three on the Z, X and N keys in the Arts window (the Arts button in the Equipment Bag). Aim with the mouse; on a phone each art has a round button and goes the way you face. Each has a cooldown and costs energy.',
+    ],
     stats: [
         'Every bonus in the game goes into one ledger: skills (per rank), equipped gear, active buffs, expedition boons and the season wish all add to the same stats.',
     ],

@@ -4,6 +4,7 @@
 import type { Action } from '../actions';
 import type { Biome, ModKind } from '../data/biomes';
 import type { BuildingKind } from '../data/buildings';
+import type { ArtId } from '../data/arts';
 import type { ItemId, Res, WeaponType, WornSlot } from '../data/items';
 import type { NodeKind } from '../data/nodes';
 import type { Pet, PostStatus, SpeciesId, TraitId, WorkKind } from '../data/creatures';
@@ -270,6 +271,9 @@ export interface PlayerS {
     satchel?: { it: ItemId; x: number; y: number; r?: 1 }[];
     /** Gems socketed in the weapon (w1, w2), the headgear and the body armour (data/gems.ts). */
     gems?: Partial<Record<'w1' | 'w2' | 'head' | 'body', ItemId>>;
+    /** The Combat Arts on the three keys (data/arts.ts), and, while it lasts, the time the Shroud ends (others see you faded). */
+    arts?: (ArtId | null)[];
+    cl?: number;
     hot?: (ItemId | null)[];   // your hotbar, once you have pinned something (see sim/hotbar.ts)
     skills: Record<string, number>;
     buffs: { id: BuffId; t: number; by?: string }[];       // `by`: the cook, when the buff came from a potluck feast
@@ -390,6 +394,8 @@ export type Cmd =
     | { t: 'collect'; id: number }
     | { t: 'revive'; who: string }
     | { t: 'dash'; fx: number; fy: number }
+    | { t: 'art'; slot: number; fx: number; fy: number }          // cast the art on a key, aimed along (fx, fy)
+    | { t: 'artbind'; slot: number; id: string | null }          // put a learned art on a key (null: clear it)
     | { t: 'summon'; id: number; boss: string }
     | { t: 'tame'; id: number; pod: ItemId }
     | { t: 'quest'; op: 'claim' | 'goal' | 'bounty' | 'reroll' | 'accept' | 'abandon' | 'track'; id?: string }
@@ -448,6 +454,7 @@ export type SimEvent =
     | { e: 'pickup'; id: number; by: string; res: Res }
     | { e: 'swing'; by: string; x: number; y: number; w?: WeaponType; px?: number; py?: number }
     /** A tower fired (sim/defense.ts): an arrow, a ballista bolt or a Tesla's zap from `x,y` through the points in `to` (the hit lands at once). */
+    | { e: 'art'; k: string; by: string; x: number; y: number; tx: number; ty: number; cd: number; r?: number; secs?: number; hit?: 0 | 1 }       // a Combat Art was cast (the picture of it)
     | { e: 'shot'; k: 'arrow' | 'bolt' | 'zap'; x: number; y: number; to: [number, number][]; fx?: 'fire' | 'frost'; big?: 1 }
     | { e: 'ways'; to: string; from: number; list: { id: number; x: number; y: number; plot: number; by?: string }[] }
     | { e: 'chat'; by: string; name: string; text: string; color: number }

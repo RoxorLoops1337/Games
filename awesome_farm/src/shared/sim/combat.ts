@@ -3,6 +3,7 @@
 // dagger — fast and crit-happy · bow — an arrow from range · staff — a bolt that bursts.
 
 import * as gems from './gems';
+import { ART_TUNING } from '../data/arts';
 import type { WeaponType } from '../data/items';
 import { MOBS } from '../data/mobs';
 import { PAL } from '../palette';
@@ -86,10 +87,12 @@ export function attack (sim: Sim, p: PlayerS, primary: MobE) {
     const list = targetsFor(sim, p, primary);
     const perfect = p.buffs.some((b) => b.id === 'perfect');           // (a Perfect dash: this swing is a critical hit, then the buff is spent)
     if (perfect) p.buffs = p.buffs.filter((b) => b.id !== 'perfect');
+    const hidden = (p.cl ?? 0) > sim.s.time;           // (the Shroud: the first blow from the dark hits much harder, and ends it)
+    if (hidden) { delete p.cl; sim.float(p.x, p.y - 26, 'Ambush!', PAL.plum, p.id); }
     let first = true;
     for (const m of list) {
         const def = MOBS[m.kind];
-        let dmg = w.dmg * night * (def.boss || m.rb ? 1 + (d.mods.bossDmg ?? 0) : 1);
+        let dmg = w.dmg * (hidden ? ART_TUNING.shroud.bonus : 1) * night * (def.boss || m.rb ? 1 + (d.mods.bossDmg ?? 0) : 1);
         if (w.wtype === 'staff' && m !== primary) dmg *= 0.6;
         if (w.wtype === 'hammer' && m !== primary) dmg *= 0.8;
         const crit = perfect || (d.crit > 0 && sim.rng.chance(d.crit));

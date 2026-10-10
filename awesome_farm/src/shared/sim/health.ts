@@ -37,7 +37,8 @@ export function respawnHome (sim: Sim, p: PlayerS, note = 'Nothing was lost') {
 
 export function hurt (sim: Sim, p: PlayerS, from: { x: number; y: number }, amount = 1) {
     if (p.buffs.some((b) => b.id === 'devgod')) return;           // (developer menu: god mode)
-    if (p.co?.k === 'frozen') return;                              // (frozen solid: nothing can hurt you, and a friend is on the way: sim/costatus.ts)
+    if (p.co?.k === 'frozen') return;
+    if (p.cl) delete p.cl;                                          // (a blow breaks the Shroud)                              // (frozen solid: nothing can hurt you, and a friend is on the way: sim/costatus.ts)
     const d = derived(p);
     if (d.dodge > 0 && sim.rng.chance(d.dodge)) {
         p.invuln = 0.5;
