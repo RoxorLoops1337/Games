@@ -31,6 +31,7 @@ import * as dread from './dread';
 import * as factory from './factory';
 import * as gather from './gather';
 import * as health from './health';
+import * as satchel from './satchel';
 import * as hearth from './hearth';
 import * as machines from './machines';
 import * as mail from './mail';
@@ -155,7 +156,7 @@ export class Sim {
         this.rng = new Rng(`${state.seed}:${state.tick}`);
         for (const p of state.plots) if (!p.owned && !p.dread) delete p.veins;         // (nobody's land has no ore until somebody takes it: ensureVeins)
         state.paused = false;                         // (a menu open when the page was saved paused the world: nobody is in that menu now)
-        for (const p of Object.values(state.players)) { p.online = false; p.moving = false; dev.strip(p); costatus.strip(p); }
+        for (const p of Object.values(state.players)) { p.online = false; p.moving = false; dev.strip(p); costatus.strip(p); satchel.tidy(p); }
         rift.recover(this);
         hearth.tidy(this);                             // (a fill or a buff that belongs to no dusk goes)
         creatures.tidy(this);                          // (a creature "in" a hatchery that is gone is free)

@@ -84,6 +84,8 @@ export const INTRO: Record<string, string[]> = {
     rings: [
         'You can wear five rings at once, in the Equipment Bag (G, or the Rings button in the Backpack). Click a ring to put it on the first free finger; click a worn ring to take it off. A sixth ring takes the first finger\'s place.',
         'Rings come from the Anvil (copper, iron, gold, steel, crystal and Blightcore) and as rare drops from the six bosses. Every ring adds its bonus to the same ledger as skills and gear.',
+        'The Relic Satchel is the other bag in the Equipment Bag: a grid that grows with your level (4 x 3 to begin with, up to 5 x 5). Relics come in five kinds (Ember, Frost, Vine, Iron, Spirit) and three sizes: a chip takes one cell, a shard two, a core a 2 x 2 block. Pick one up on the right, click a cell to lay it, R to turn it, click a laid relic to take it back.',
+        'Each relic gives its kind\'s stat, more for a bigger one. Relics of one kind that touch give more, and every worn ring of that kind adds to them too. Two touching relics of different kinds make a combo with a bonus of its own (Steam, Wildfire, Forge, Phoenix, Winter Garden, Rime Plate, Whisper, Thornmail, Bloom, Aegis). Relics are made at the Alchemy table and found in crates.',
     ],
     stats: [
         'Every bonus in the game goes into one ledger: skills (per rank), equipped gear, active buffs, expedition boons and the season wish all add to the same stats.',

@@ -1,5 +1,6 @@
 // The item catalogue. Texture key for any item is `i_<id>` (art/icons.ts generates them).
 
+import type { RelicDef } from './relics';
 import type { BuffId, Mods } from './stats';
 
 export type Rarity = 0 | 1 | 2 | 3 | 4;
@@ -40,6 +41,8 @@ interface ItemDef {
     heal?: number;            // hearts restored
     buff?: { id: BuffId; secs: number };
     gear?: GearDef;
+    /** A relic: puzzled into the Relic Satchel instead of being worn (data/relics.ts). */
+    relic?: RelicDef;
     /** Click it in the backpack to open it: a loot crate (the tier) or a message in a bottle. */
     open?: 'wood' | 'silver' | 'gold' | 'mythic' | 'bottle';
     /** Drink it for XP at once: this share of what the farmer's current level needs (XP boosts count too). */
@@ -186,6 +189,23 @@ export const ITEMS = {
     charm_rift:   it('Riftheart Charm', 'gear', 900, 'Hums when something dangerous is near.', { rarity: 4, gear: { slot: 'charm', tier: 4, mods: { dmgPct: 0.2, vamp: 0.08, luck: 0.08, maxHearts: 1 } } }),
     charm_heart:  it('Heartstone',    'gear', 1500, 'It beats in time with yours.', { rarity: 4, gear: { slot: 'charm', tier: 4, mods: { maxHearts: 2, dmgPct: 0.15, armor: 0.5, healPower: 0.3 } } }),
     // ── packs: carry more of every item ──
+
+    // ── relics (puzzled into the Relic Satchel, in the Equipment Bag) ──
+    relic_ember_chip: it('Cinder Chip', 'misc', 30, 'A coal that never goes out. A chip relic for the Relic Satchel (G).', { rarity: 1, relic: { tag: 'ember', size: 'chip' } }),
+    relic_ember_shard: it('Ember Brand', 'misc', 90, 'A coal that never goes out. A shard relic for the Relic Satchel (G).', { rarity: 2, relic: { tag: 'ember', size: 'shard' } }),
+    relic_ember_core: it('Magma Core', 'misc', 260, 'A coal that never goes out. A core relic for the Relic Satchel (G).', { rarity: 3, relic: { tag: 'ember', size: 'core' } }),
+    relic_frost_chip: it('Frost Chip', 'misc', 30, 'Cold enough to hurt. A chip relic for the Relic Satchel (G).', { rarity: 1, relic: { tag: 'frost', size: 'chip' } }),
+    relic_frost_shard: it('Rime Shard', 'misc', 90, 'Cold enough to hurt. A shard relic for the Relic Satchel (G).', { rarity: 2, relic: { tag: 'frost', size: 'shard' } }),
+    relic_frost_core: it('Glacier Core', 'misc', 260, 'Cold enough to hurt. A core relic for the Relic Satchel (G).', { rarity: 3, relic: { tag: 'frost', size: 'core' } }),
+    relic_vine_chip: it('Seed Pod', 'misc', 30, 'Still growing, somehow. A chip relic for the Relic Satchel (G).', { rarity: 1, relic: { tag: 'vine', size: 'chip' } }),
+    relic_vine_shard: it('Thorn Vine', 'misc', 90, 'Still growing, somehow. A shard relic for the Relic Satchel (G).', { rarity: 2, relic: { tag: 'vine', size: 'shard' } }),
+    relic_vine_core: it('Heartwood Core', 'misc', 260, 'Still growing, somehow. A core relic for the Relic Satchel (G).', { rarity: 3, relic: { tag: 'vine', size: 'core' } }),
+    relic_iron_chip: it('Iron Rivet', 'misc', 30, 'Dense and dependable. A chip relic for the Relic Satchel (G).', { rarity: 1, relic: { tag: 'iron', size: 'chip' } }),
+    relic_iron_shard: it('Plate Shard', 'misc', 90, 'Dense and dependable. A shard relic for the Relic Satchel (G).', { rarity: 2, relic: { tag: 'iron', size: 'shard' } }),
+    relic_iron_core: it('Anvil Core', 'misc', 260, 'Dense and dependable. A core relic for the Relic Satchel (G).', { rarity: 3, relic: { tag: 'iron', size: 'core' } }),
+    relic_spirit_chip: it('Wisp Chip', 'misc', 30, 'It whispers when nobody is near. A chip relic for the Relic Satchel (G).', { rarity: 1, relic: { tag: 'spirit', size: 'chip' } }),
+    relic_spirit_shard: it('Spirit Charm', 'misc', 90, 'It whispers when nobody is near. A shard relic for the Relic Satchel (G).', { rarity: 2, relic: { tag: 'spirit', size: 'shard' } }),
+    relic_spirit_core: it('Soul Core', 'misc', 260, 'It whispers when nobody is near. A core relic for the Relic Satchel (G).', { rarity: 3, relic: { tag: 'spirit', size: 'core' } }),
     // ── rings (five can be worn at once: the Equipment Bag) ──
     ring_copper: it('Copper Ring', 'gear', 14, 'A plain band that hums faintly.', { rarity: 0, gear: { slot: 'ring', tier: 1, mods: { maxEnergy: 6 } } }),
     ring_iron: it('Iron Ring', 'gear', 18, 'Heavy on the finger, light on worries.', { rarity: 0, gear: { slot: 'ring', tier: 1, mods: { armor: 0.15 } } }),

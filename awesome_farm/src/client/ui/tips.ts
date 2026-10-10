@@ -1,6 +1,7 @@
 // Tooltip content for items, skills, buildings and recipes.
 
 import { BUILDINGS, BuildingDef, STATION_NAMES } from '../../shared/data/buildings';
+import { SIZES, TAG_INFO, type RelicDef } from '../../shared/data/relics';
 import { Cost, ITEMS, ItemId, RARITY_NAMES, Res, resName, SLOT_NAMES } from '../../shared/data/items';
 import type { Recipe } from '../../shared/data/recipes';
 import { UNLOCK_INFO } from '../../shared/data/skills';
@@ -22,6 +23,8 @@ export function itemTip (id: ItemId, o: { count?: number; sellMul?: number; foot
         if (g.dmg) lines.push({ t: `Damage ${g.dmg}  ·  ${g.wtype}  ·  reach ${g.reach}`, c: PAL.lime });
         for (const [k, v] of Object.entries(g.mods ?? {}) as [StatKey, number][]) lines.push({ t: modLine(k, v), c: v < 0 && (k === 'moveSpeed') ? PAL.berry : PAL.lime });
     }
+    const rl = (d as { relic?: RelicDef }).relic;
+    if (rl) lines.push({ t: `${TAG_INFO[rl.tag].name} relic  ·  ${SIZES[rl.size].join(' x ')} cells  ·  gives ${TAG_INFO[rl.tag].word}`, c: TAG_INFO[rl.tag].color }, { t: 'Lay it in the Relic Satchel (G). Relics of one kind that touch give more; touching kinds make combos.', c: PAL.pebble });
     if (d.food) lines.push({ t: `Restores ${d.food} energy`, c: PAL.gold });
     if (d.heal) lines.push({ t: `Restores ${d.heal} ♥`, c: PAL.blossom });
     if (d.buff) {
