@@ -67,7 +67,9 @@ t('needs enough beatboxers, moves lobby -> picks -> elimination, and only publis
   assert.equal(E.hostAction(S, { a: 'phase', to: 'picks' }).ok, false);
   host(S, { a: 'bb.add', names: ['X1', 'X2', 'Another'] });
   host(S, { a: 'phase', to: 'picks' });
-  assert.equal(E.hostAction(S, { a: 'phase', to: 'lobby' }).ok, false);
+  assert.equal(E.hostAction(S, { a: 'phase', to: 'lobby' }).ok, true, 'picks can be closed again');
+  host(S, { a: 'phase', to: 'picks' });
+  assert.equal(E.hostAction(S, { a: 'phase', to: 'bracket' }).ok, false, 'but the phases cannot be skipped');
   host(S, { a: 'phase', to: 'elimination' });
   assert.equal(E.hostAction(S, { a: 'seeds', order: S.ev.bbs.slice(0, 7).map((b) => b.id) }).ok, false);
   assert.equal(E.hostAction(S, { a: 'seeds', order: Array(8).fill(S.ev.bbs[0].id) }).ok, false);
@@ -398,6 +400,51 @@ t('reach bets are not offered on fighters already drawn into that round; reopeni
   assert.equal(E.hostAction(S, { a: 'mk.preset', preset: 'reach', to: 1 }).ok, false, 'round 0 is over, nothing to bet on');
   host(S, { a: 'step', mid: 'r1m0', to: 'live' });
   assert.equal(E.hostAction(S, { a: 'reopen', mid: 'r0m3' }).ok, false, 'a battle is in progress');
+});
+
+console.log('undo');
+t('Undo walks the whole night back, one step at a time, and every Loop ends up where it started', () => {
+  const { S, us, ids } = setup({ size: 4, beatboxers: 6, users: 4 });
+  host(S, { a: 'phase', to: 'picks' });
+  const q = Object.values(S.ev.markets).filter((m) => m.kind === 'qualify');
+  us.forEach((u, i) => { E.setTop(S, u, ids.slice(0, 4)); E.setBet(S, u, q[i].id, i % 2, 100 + i * 50); });
+  host(S, { a: 'phase', to: 'elimination' });
+  host(S, { a: 'seeds', order: ids.slice(0, 4) });
+  us.forEach((u, i) => { E.setPick(S, u, 'r0m0', S.ev.matches[0].a); E.setPick(S, u, 'r0m1', S.ev.matches[1].b); E.setPick(S, u, 'r1m0', S.ev.matches[0].a); const mk = Object.values(S.ev.markets).find((m) => m.kind === 'match' && m.mid === 'r0m0'); E.setBet(S, u, mk.id, i % 2, 80); });
+  for (const [mid, w] of [['r0m0', 'a'], ['r0m1', 'b'], ['r1m0', 'a']]) {
+    host(S, { a: 'step', mid, to: 'live' }); host(S, { a: 'step', mid, to: 'voting' });
+    us.forEach((u, i) => E.castVote(S, u, mid, i % 2 ? 'a' : 'b'));
+    host(S, { a: 'step', mid, to: 'closed' }); host(S, { a: 'result', mid, w, judges: { a: 2, b: 1 } });
+  }
+  assert.equal(S.ev.phase, 'finished');
+  assert.ok(us.some((u) => u.bal !== 1000));
+  const seen = [];
+  for (let i = 0; i < 40; i++) {
+    const plan = E.undoPlan(S);
+    if (!plan) break;
+    const r = host(S, { a: 'undo' });
+    assert.equal(r.undid, plan.label);
+    seen.push(r.undid);
+  }
+  assert.equal(S.ev.phase, 'lobby');
+  assert.equal(E.undoPlan(S), null, 'nothing left to undo at the door');
+  for (const u of us) { assert.equal(u.bal, 1000, u.name + ' is back to the starting Loops'); assert.equal(E.staked(S, u), 0); }
+  assert.ok(seen.some((x) => /^Take back the result of/.test(x)) && seen.some((x) => /ranking/.test(x)) && seen.some((x) => /picks/.test(x)), seen.join(' | '));
+  assert.equal(Object.values(S.ev.markets).length, 0, 'every market is gone with its refunds');
+  // and the night can be played again from there
+  host(S, { a: 'phase', to: 'elimination' }); host(S, { a: 'seeds', order: ids.slice(0, 4) });
+  assert.equal(S.ev.phase, 'bracket');
+});
+t('Undo says what it will do, and stops at a battle somewhere else being on stage', () => {
+  const { S } = bracketWorld();
+  assert.match(E.undoPlan(S).label, /ranking/);
+  host(S, { a: 'step', mid: 'r0m0', to: 'live' });
+  assert.match(E.undoPlan(S).label, /Put .* back/);
+  host(S, { a: 'undo' });
+  assert.equal(S.ev.matches[0].status, 'upcoming');
+  host(S, { a: 'step', mid: 'r0m0', to: 'live' }); host(S, { a: 'step', mid: 'r0m0', to: 'voting' });
+  host(S, { a: 'undo' });
+  assert.equal(S.ev.matches[0].status, 'live', 'closing the vote goes back to the battle');
 });
 
 console.log('categories');

@@ -364,6 +364,12 @@ const A = {
     });
   },
   hRevertSeeds() { ask('Take the ranking back?', 'Prediction points are taken back and bets refunded, then you can enter the ranking again.', 'Take it back', async () => { if (fail(await act({ a: 'seeds.revert' }))) { ui.rank.seeds = []; } }, { danger: true }); },
+  hUndo(el) {
+    const label = el.dataset.label;
+    const run = async () => { const r = await act({ a: 'undo' }); if (fail(r)) { ui.hostMatch = null; ui.judges = { a: 0, b: 0 }; ui.rank.seeds = []; toast(`Undone: ${esc(r.undid)}`, 'info'); emit(); } };
+    if (el.dataset.hard === '1') ask('Undo this?', `${esc(label)}. Any Loops paid out for it are taken back, and you can press Undo again to go back further.`, 'Yes, undo it', run, { danger: true });
+    else run();
+  },
   async hStep(el) { ui.hostMatch = null; fail(await act({ a: 'step', mid: el.dataset.m, to: el.dataset.to })); },
   async hSwap(el) { fail(await act({ a: 'swap', mid: el.dataset.m })); },
   hSelect(el) { ui.hostMatch = el.dataset.m; ui.judges = { a: 0, b: 0 }; window.scrollTo(0, 0); emit(); },
