@@ -99,3 +99,8 @@ A final and the third-place battle can close their vote WITHOUT a judges' result
 `tests/battle_call_server.test.mjs` (accounts, auth, persistence across eviction, 200 simultaneous votes, photos, polling
 fallback) against a fake Durable Object runtime. The real runtime: `npx wrangler dev --config battle_call/server/wrangler.toml`
 then open http://localhost:8787/.
+
+## Locked results (reveal at the award ceremony)
+- Finals and third place: `seal` (mid, w, judges) closes the vote (status `awaiting`) and stores `m.sealed = {w, judges}`. Nothing is paid, shown or advanced. `unseal` removes it; reopening the vote drops it too.
+- `reveal` (cat) runs `setResult` for every sealed battle of that category, third place first, then the final. Payouts, champion and the big-screen result scene happen then.
+- `sealed` is stripped in `catMeta` and only travels in `hostOf().wait[].sealed` (host sockets only, never the big screen). Host UI: lock buttons in the judges card, "Award ceremony: reveal <category>" in the "Waiting for the judges" panel.

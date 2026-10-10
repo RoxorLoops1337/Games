@@ -816,7 +816,7 @@ t('a final can close its vote and wait for the judges while the night goes on, a
   host(S, { a: 'step', mid: 'r1m0', to: 'awaiting' });
   assert.equal(fm.status, 'awaiting');
   assert.equal(E.metaOf(S).cats[0].matches.find((x) => x.id === 'r1m0').c, null, 'the audience tally stays hidden until the result');
-  assert.deepEqual(E.hostOf(S).wait, [{ cat: 'c1', mid: 'r1m0', a: 0, b: 1 }], 'the organiser still sees it');
+  assert.deepEqual(E.hostOf(S).wait, [{ cat: 'c1', mid: 'r1m0', a: 0, b: 1, sealed: null }], 'the organiser still sees it');
   assert.equal(S.ev.phase, 'bracket');
   // the stage is free: another category plays its final, and so does the small final here
   host(S, { a: 'step', mid: th.id, to: 'live' }); host(S, { a: 'step', mid: th.id, to: 'voting', later: true });
@@ -845,6 +845,41 @@ t('"judges decide later" is undoable and refused for earlier rounds', () => {
   assert.match(E.undoPlan(S).label, /judges decide later/);
   host(S, { a: 'undo' });
   assert.equal(S.ev.matches.find((x) => x.id === 'r1m0').status, 'closed');
+});
+
+console.log('locked results');
+t('a final can be locked in privately and only pays out and shows when the category is revealed', () => {
+  const { S, us, ids } = setup({ size: 4, beatboxers: 4, users: 3 });
+  S.ev.settings.thirdPlace = true;
+  host(S, { a: 'phase', to: 'elimination' }); host(S, { a: 'seeds', order: ids });
+  playMatch(S, 'r0m0', 'a'); playMatch(S, 'r0m1', 'a');
+  const th = S.ev.matches.find((x) => x.third), fm = S.ev.matches.find((x) => x.id === 'r1m0');
+  assert.equal(E.hostAction(S, { a: 'seal', mid: 'r0m0', w: 'a' }).ok, false, 'only finals');
+  host(S, { a: 'step', mid: 'r1m0', to: 'live' }); host(S, { a: 'step', mid: 'r1m0', to: 'voting' });
+  E.castVote(S, us[0], 'r1m0', 'a');
+  const before = total(S);
+  host(S, { a: 'seal', mid: 'r1m0', w: 'b', judges: { a: 1, b: 2 } });
+  assert.equal(fm.status, 'awaiting');
+  host(S, { a: 'step', mid: th.id, to: 'live' }); host(S, { a: 'step', mid: th.id, to: 'voting' });
+  host(S, { a: 'seal', mid: th.id, w: 'a' });
+  assert.equal(total(S), before, 'nothing paid yet');
+  assert.ok(!JSON.stringify(E.metaOf(S)).includes('sealed'), 'the audience data does not carry the locked result');
+  assert.ok(!JSON.stringify(E.liveOf(S, 0, true)).includes('sealed'));
+  assert.equal(E.hostOf(S).wait.find((x) => x.mid === 'r1m0').sealed.w, 'b', 'the organiser sees it');
+  assert.equal(S.ev.phase, 'bracket'); assert.equal(S.ev.champion, null);
+  host(S, { a: 'unseal', mid: 'r1m0' }); host(S, { a: 'seal', mid: 'r1m0', w: 'b', judges: { a: 1, b: 2 } });
+  host(S, { a: 'reveal', cat: 'c1' });
+  assert.equal(fm.status, 'done'); assert.equal(th.status, 'done'); assert.equal(fm.w, 'b'); assert.deepEqual(fm.judges, { a: 1, b: 2 });
+  assert.equal(S.ev.phase, 'finished'); assert.ok(S.ev.champion);
+  assert.equal(E.hostAction(S, { a: 'reveal', cat: 'c1' }).ok, false, 'nothing left to reveal');
+});
+t('reopening the vote throws a locked result away', () => {
+  const { S, ids } = setup({ size: 4, beatboxers: 4, users: 1 });
+  host(S, { a: 'phase', to: 'elimination' }); host(S, { a: 'seeds', order: ids });
+  playMatch(S, 'r0m0', 'a'); playMatch(S, 'r0m1', 'a');
+  host(S, { a: 'step', mid: 'r1m0', to: 'live' }); host(S, { a: 'step', mid: 'r1m0', to: 'voting' });
+  host(S, { a: 'seal', mid: 'r1m0', w: 'a' }); host(S, { a: 'step', mid: 'r1m0', to: 'voting' });
+  assert.equal(S.ev.matches.find((x) => x.id === 'r1m0').sealed, undefined);
 });
 
 console.log('walkover');

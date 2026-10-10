@@ -92,9 +92,9 @@ function run() {
       ${matchList()}`;
   }
   const wait = awaitingAll(), hostWait = (S.host && S.host.wait) || [];
-  const awaitPanel = wait.length ? `<section class="block"><h3>Waiting for the judges <small>${wait.length}</small></h3>${wait.map(({ cat, m }) => { const w = hostWait.find((x) => x.mid === m.id); return `<div class="card await" data-k="aw${m.id}"><div><small>${esc(cat.name)}${m.third ? ' · third place' : ' · final'}</small><b>${esc(bbName(m.a))} vs ${esc(bbName(m.b))}</b>${w ? `<small>Audience: ${esc(bbName(m.a))} ${w.a} · ${esc(bbName(m.b))} ${w.b}</small>` : ''}</div><button class="btn sm" data-a="hAwait" data-cat="${cat.id}" data-m="${m.id}">Enter the result</button></div>`; }).join('')}</section>` : '';
-  const stage = ev.active !== S.catId && S.meta.cats.length > 1
-    ? `<button class="btn ghost" data-a="hStage" data-id="${S.catId}">${ic('tv', 18)} Put ${esc(ev.catName)} on stage</button>` : '';
+  const lockedOf = (id) => { const w = hostWait.find((x) => x.mid === id); return w && w.sealed ? w.sealed : null; };
+  const revealCats = [...new Set(wait.filter(({ m }) => lockedOf(m.id)).map(({ cat }) => cat.id))];
+  const awaitPanel = wait.length ? `<section class="block"><h3>Waiting for the judges <small>${wait.length}</small></h3>${wait.map(({ cat, m }) => { const w = hostWait.find((x) => x.mid === m.id), lk = lockedOf(m.id); return `<div class="card await" data-k="aw${m.id}"><div><small>${esc(cat.name)}${m.third ? ' · third place' : ' · final'}</small><b>${esc(bbName(m.a))} vs ${esc(bbName(m.b))}</b>${lk ? `<small>${ic('lock', 14)} Locked (hidden): ${esc(bbName(lk.w === 'a' ? m.a : m.b))} wins</small>` : ''}${w ? `<small>Audience: ${esc(bbName(m.a))} ${w.a} · ${esc(bbName(m.b))} ${w.b}</small>` : ''}</div><button class="btn sm" data-a="hAwait" data-cat="${cat.id}" data-m="${m.id}">${lk ? 'Open' : 'Enter the result'}</button></div>`; }).join('')}${revealCats.map((cid) => { const cat = wait.find((x) => x.cat.id === cid).cat; return `<button class="btn big hot" data-a="hReveal" data-cat="${cid}">${ic('star', 20)} Award ceremony: reveal ${esc(cat.name)}</button>`; }).join('')}</section>` : '';
   return `<section class="phasebar"><small>${esc(ev.catName)}</small><b>${phaseName}</b></section>${stage}${awaitPanel}${rail}${undoBtn()}${main}
     <section class="block"><h3>Message to the hall</h3>
       <form class="inline" data-form="banner"><input name="text" maxlength="140" placeholder="e.g. Break time, voting opens in 5" value="${esc(ev.banner ? ev.banner.text : '')}" autocomplete="off"><button class="btn" type="submit">Send</button>${ev.banner ? '<button type="button" class="btn ghost" data-a="hBannerClear">Clear</button>' : ''}</form></section>`;
@@ -130,6 +130,14 @@ function performerPanel() {
 
 const STEPS = ['upcoming', 'live', 'voting', 'closed', 'done'];
 const STEP_L = { upcoming: 'Up next', live: 'Battle on', voting: 'Audience vote', closed: 'Judging', awaiting: 'Judges later', done: 'Result' };
+
+/** Finals: lock the judges' decision without showing it (revealed later at the award ceremony of the category). */
+function sealUi(m, lk, rk, win) {
+  const w = (S.host && S.host.wait || []).find((x) => x.mid === m.id), lock = w && w.sealed;
+  const sb = (key, col) => `<button class="btn big ${col}" data-a="hSeal" data-m="${m.id}" data-w="${key}">${ic('lock', 18)} ${esc(bbName(key === 'a' ? m.a : m.b))} wins</button>`;
+  return `${lock ? `<div class="card done-card">${ic('lock', 20)}<div><b>Locked: ${esc(bbName(lock.w === 'a' ? m.a : m.b))} wins</b><small>${lock.judges ? `Judges ${lock.judges.a}-${lock.judges.b} · ` : ''}hidden until the award ceremony</small></div></div><button class="btn ghost" data-a="hUnseal" data-m="${m.id}">${ic('undo', 18)} Change the locked winner</button>` : `<small class="muted">Lock it in now, nobody sees it until you reveal the category at the award ceremony.</small><div class="cta-row">${sb(lk, 'blue')}${sb(rk, 'red')}</div>`}
+    <details><summary class="muted">Announce right away instead</summary><div class="cta-row">${win(lk, 'blue')}${win(rk, 'red')}</div></details>`;
+}
 
 function matchConsole() {
   const ev = S.meta;
@@ -169,7 +177,7 @@ function matchConsole() {
         <div class="jrow"><div class="jc blue"><button class="ib" data-a="hJudge" data-s="${lk}" data-d="-1">${ic('minus', 18)}</button><b>${j[lk]}</b><button class="ib" data-a="hJudge" data-s="${lk}" data-d="1">${ic('plus', 18)}</button></div>
         <span>judges</span>
         <div class="jc red"><button class="ib" data-a="hJudge" data-s="${rk}" data-d="-1">${ic('minus', 18)}</button><b>${j[rk]}</b><button class="ib" data-a="hJudge" data-s="${rk}" data-d="1">${ic('plus', 18)}</button></div></div>
-        <div class="cta-row">${win(lk, 'blue')}${win(rk, 'red')}</div></div>` : ''}`;
+        ${term && m.status !== 'upcoming' && m.status !== 'live' ? sealUi(m, lk, rk, win) : `<div class="cta-row">${win(lk, 'blue')}${win(rk, 'red')}</div>`}</div>` : ''}`;
   }
   return `<section class="duel host ${m.status}">
     <div class="duel-top"><span>${R.long}${m.third ? '' : ' · Battle ' + (m.i + 1)}</span><i class="st ${m.status}">${STEP_L[m.status] || 'Waiting'}</i></div>
