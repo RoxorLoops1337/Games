@@ -471,7 +471,7 @@ body[data-mode=screen] { overflow: hidden; }
 .pane.blue::before { background-image: url(../img/battle-blue.webp); background-position: 0% 100%; } .pane.red::before { background-image: url(../img/battle-red.webp); background-position: 100% 100%; }
 .pane > * { position: relative; }
 .pane .crown { position: absolute; }
-.stage.lobby, .stage.picks { background: linear-gradient(180deg, rgba(10,9,20,.82), rgba(10,9,20,.93)), url(../img/crowd.webp) center / cover no-repeat; }
+.stage.ph-lobby, .stage.ph-picks { background: linear-gradient(180deg, rgba(10,9,20,.82), rgba(10,9,20,.93)), url(../img/crowd.webp) center / cover no-repeat; }
 .stage .st-head .brand .crown-i { width: 3.4em; height: 3.4em; margin: 0 .6em 0 0; }
 .stage .st-head .brand > div { display: flex; flex-direction: column; }
 
@@ -532,3 +532,40 @@ body.idle .stagectl { opacity: 0; pointer-events: none; }
 .st-bracket.scroll .bcards { justify-content: space-around; }
 .st-bracket.scroll .bracket.n64 .bm-row, .st-bracket.scroll .bracket.n32 .bm-row, .st-bracket.scroll .bracket.n16 .bm-row { font-size: 1.3em; }
 .rsel { margin-bottom: 10px; }
+
+/* ---- big screen: safe zones and layout ---- */
+:root { --safe: 4; }
+.stage { padding: max(2vmin, calc(var(--safe) * 1vh)) max(2vmin, calc(var(--safe) * 1vw)); }
+.stagectl { right: max(12px, calc(var(--safe) * 1vw)); bottom: max(10px, calc(var(--safe) * 1vh)); }
+.stagectl .btn.on { background: var(--grad); color: #fff; }
+.safeguides { position: fixed; inset: 0; z-index: 90; pointer-events: none; }
+.safeguides i { position: absolute; border: 2px dashed; font-style: normal; }
+.safeguides b { position: absolute; left: 8px; top: 6px; font-size: 13px; background: rgba(0,0,0,.6); padding: 2px 8px; border-radius: 6px; }
+.safeguides .act { inset: 3.5vh 3.5vw; border-color: var(--gold); color: var(--gold); }
+.safeguides .ttl { inset: 5vh 5vw; border-color: var(--pink); color: var(--pink); } .safeguides .ttl b { top: auto; bottom: 6px; }
+.safeguides .own { border-color: var(--mint); color: var(--mint); border-style: solid; } .safeguides .own b { left: auto; right: 8px; }
+/* the duel: everything inside the panes scales with the pane, nothing spills over */
+.st-duel .pane { container-type: size; gap: 1cqh; padding: 0 2vmin; }
+.st-duel .pane .av.hero { --s: min(30vmin, 44cqh); }
+.st-duel .pane h2 { font-size: min(5.4em, 11cqh); }
+.st-duel .pane small { font-size: min(2em, 4.5cqh); }
+.st-duel .pane .crown { top: 1.5cqh; } .st-duel .pane .crown .ic { width: min(7vmin, 10cqh); height: min(7vmin, 10cqh); }
+.st-duel .st-top .status { font-size: 4.2em; }
+.st-duel > .cd.huge { position: absolute; right: 0; top: 0; --d: 15vmin; margin: 0; z-index: 3; }
+.st-duel > .qrcorner { top: 0; bottom: auto; left: 0; padding: .8vmin 1.2vmin; } .st-duel > .qrcorner .qrbox.sm { width: 9vmin; height: 9vmin; } .st-duel > .qrcorner b { font-size: 2.6em; } .st-duel > .qrcorner small { font-size: 1.2em; }
+/* the activity strip never grows: one line per bubble */
+.stage > .feed .fi { font-size: 1.35em; white-space: nowrap; min-width: 0; flex: 1 1 0; max-width: 33%; overflow: hidden; }
+.stage > .feed .fi span { overflow: hidden; text-overflow: ellipsis; }
+.stage > .feed .fi .ic { flex: none; }
+/* the idle bracket */
+.st-next { font-size: 2.3em; } .st-next .av.lg { --s: 6.5vmin; }
+.st-bracket .bracket.n8 .bm-row { font-size: 1.25em; }
+.st-bracket .bracket.n8 .bm-h { font-size: .9em; }
+.st-crowd small { position: static; grid-column: 1 / -1; text-align: center; font-size: .28em; margin-top: -1.2em; }
+.st-next { font-size: 2em; }
+.st-bracket .bracket.n8 .bm-row { font-size: 1.1em; padding: .2vmin 1vmin; } .st-bracket .bracket.n8 .bm { padding: .5vmin .8vmin; } .st-bracket .bracket.n8 .av.xs { --s: 3vmin; }
+.st-join { min-height: 0; } .st-left .mega, .st-join .mega { font-size: min(11em, 17vh); }
+.mosaic { max-height: 16vh; flex: none; } .mosaic .av.lg { --s: 7vmin; } .mosaic .lu { width: 8vmin; } .mosaic .lu b { font-size: 1.1em; }
+.st-right .qrbox.xl { width: min(34vmin, 36vh); height: min(34vmin, 36vh); } .st-right .bigcode { font-size: min(8em, 11vh); }
+@media (max-aspect-ratio: 3/2) { .mosaic { display: none; } .st-join .mega { font-size: min(9em, 14vh); } }
+.st-body { overflow: hidden; }
