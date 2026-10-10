@@ -304,7 +304,16 @@ function relic (mb: MB, size: 'chip' | 'shard' | 'core', col: number, light: num
 }
 const RELIC_COL: Record<string, [number, number]> = { ember: [0xf8a24a, 0xffd966], frost: [0x8fdcf2, 0xcdf4ee], vine: [0x92d364, 0x5cb04f], iron: [0xb8bed2, 0x8a90a8], spirit: [0xb07aff, 0xe8dcff] };
 const relics = Object.fromEntries(Object.entries(RELIC_COL).flatMap(([tag, [col, light]]) => (['chip', 'shard', 'core'] as const).map((sz) => [`relic_${tag}_${sz}`, S((mb: MB) => relic(mb, sz, col, light), { lean: 0.5, spark: col })] as const)));
+/** A cut gem: a faceted stone on a point, bigger and brighter the finer the cut. */
+function gemStone (mb: MB, tier: number, col: number, light: number) {
+    const r = 0.2 + tier * 0.05;
+    mb.glow(col, 0.8 + tier * 0.5).oct(r, col, { y: 0.36, sy: 1.3, ao: false, v: 0.05 });
+    mb.shiny().oct(r * 0.45, light, { y: 0.42 + r * 0.3, x: -r * 0.2, ao: false, v: 0.02 });
+}
+const GEM_COL: Record<string, [number, number]> = { ruby: [0xe85d62, 0xffb0a8], sapphire: [0x4a8fe0, 0xa8d8ff], emerald: [0x5cb04f, 0xb8f090], topaz: [0xffd966, 0xfff0a0], amethyst: [0x9d6fdb, 0xe0c8ff], diamond: [0xcdf4ee, 0xffffff] };
+const gemModels = Object.fromEntries(Object.entries(GEM_COL).flatMap(([kind, [col, light]]) => [1, 2, 3].map((t) => [`gem_${kind}_${t}`, S((mb: MB) => gemStone(mb, t, col, light), { lean: 0.5, spark: t === 3 ? light : undefined })] as const)));
 export const ARMOR: Record<string, DropSpec> = {
+    ...gemModels,
     ...relics,
     ring_copper: S((mb: MB) => ring(mb, R.copper, 0xffc078), { lean: 0.9 }),
     ring_iron: S((mb: MB) => ring(mb, R.iron, 0xe4e8f4), { lean: 0.9 }),

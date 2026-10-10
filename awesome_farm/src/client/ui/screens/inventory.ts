@@ -4,6 +4,7 @@ import { ensureFarmer } from '../../art/storybook-chars';
 import * as Phaser from 'phaser';
 import { TILE, TUNING } from '../../../shared/config';
 import { GEAR_SLOTS, GearSlot, ITEM_ORDER, ITEMS, ItemId, SLOT_NAMES } from '../../../shared/data/items';
+import { parseGem } from '../../../shared/data/gems';
 import { PAL } from '../../../shared/palette';
 import { countOf, derived, itemCap, xpToNextOf } from '../../../shared/sim/stats';
 import { HOT_SLOTS, hotbarOf, hotKind } from '../../../shared/sim/hotbar';
@@ -149,7 +150,7 @@ export class InventoryScreen implements Screen {
                 if (def.gear) send({ t: 'equip', item: id });
                 else if (def.food || def.heal || def.buff) send({ t: 'eat', item: id });
                 else if (def.open) send({ t: 'crate', item: id });
-                else if (def.relic) this.ctx.open('gear');
+                else if (def.relic || parseGem(id)) this.ctx.open('gear');
             },
             right: () => this.pin(id),
         }));

@@ -20,6 +20,7 @@ const IS = (...ids: ItemId[]) => { const s = new Set<ItemId>(ids); return (i: It
 
 export const FILTER_CATS: FilterCat[] = [
     { id: 'ore', name: 'Ores', icon: 'iron', desc: 'Coal, iron, copper, gold ore and crystals.', has: IS('coal', 'iron', 'copper', 'goldore', 'crystal') },
+    { id: 'gems', name: 'Gems', icon: 'gem_ruby_1', desc: 'Rough, cut and flawless gems for the sockets.', has: (i) => i.startsWith('gem_') },
     { id: 'stone', name: 'Stone & earth', icon: 'stone', desc: 'Stone, sand, clay, peat, bricks and glass.', has: IS('stone', 'sand', 'clay', 'peat', 'brick', 'glass') },
     { id: 'bars', name: 'Bars', icon: 'ironbar', desc: 'Iron, copper and gold bars, and steel.', has: IS('ironbar', 'copperbar', 'goldbar', 'steel') },
     { id: 'wood', name: 'Wood & fibre', icon: 'wood', desc: 'Logs, planks, plant fibre, rope, cotton and cloth.', has: IS('wood', 'plank', 'fiber', 'rope', 'cotton', 'cloth', 'flax') },

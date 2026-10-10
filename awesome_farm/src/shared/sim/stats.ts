@@ -5,6 +5,7 @@ import { TUNING } from '../config';
 import { Cost, ITEMS, ItemId, Res, STARTER_GEAR } from '../data/items';
 import type { GearDef, WeaponType, WornSlot } from '../data/items';
 import { RING_SLOTS } from '../data/items';
+import { gemMods } from '../data/gems';
 import { RING_TAG, satchelResult, type RelicDef, type RelicTag } from '../data/relics';
 import { BOON_BY_ID } from '../data/rift';
 import { WISH_BY_ID } from '../data/wishes';
@@ -127,6 +128,7 @@ export function modsOf (p: PlayerS): Mods {
     };
     for (const [id, rank] of Object.entries(p.skills)) add(SKILLS[id]?.mods, rank);
     for (const id of Object.values(p.equip)) add(ITEMS[id!]?.gear?.mods);
+    if (p.gems) add(gemMods(p.gems));
     if (p.satchel?.length) add(satchelResult(relicOf, p.satchel, ringTags(p)).mods);
     for (const b of p.buffs) add(BUFFS[b.id]?.mods);
     for (const id of p.boons ?? []) add(BOON_BY_ID[id]?.mods);

@@ -25,7 +25,7 @@ interface Mem {
     /** Monsters that are slowed or frozen: until when, the factor, and the speed multiplier they had. */
     slow: Map<number, { until: number; f: number; base: number | undefined }>;
     /** Monsters that burn or bleed: until when, damage a second, who set it, and when the next tick is due. */
-    dot: Map<number, { until: number; dps: number; by: number; next: number }>;
+    dot: Map<number, { until: number; dps: number; by: number; next: number; p?: string }>;
     /** Shots each tower has fired (every Nth is overcharged). */
     shots: Map<number, number>;
     /** When each defense was last hit (world seconds): it starts to mend a few seconds after. */
@@ -206,7 +206,7 @@ const nearestMob = (sim: Sim, list: readonly MobE[], x: number, y: number, range
 const roll = (sim: Sim, id: number, k: number) => hash(sim.s.seed, sim.s.tick * 131 + id, k);
 
 /** Slow or freeze a monster for a while (the strongest wins; it recovers by itself). */
-function slowMob (sim: Sim, m: MobE, f: number, secs: number) {
+export function slowMob (sim: Sim, m: MobE, f: number, secs: number) {
     const mm = mem(sim), cur = mm.slow.get(m.id), until = sim.s.time + secs;
     if (cur) { if (f <= cur.f) { cur.until = Math.max(cur.until, until); } else { cur.f = f; cur.until = Math.max(cur.until, until); } m.sm = (cur.base ?? 1) * cur.f; sim.touch(m); return; }
     mm.slow.set(m.id, { until, f, base: m.sm });
@@ -218,6 +218,13 @@ function dotMob (sim: Sim, m: MobE, dps: number, secs: number, by: number) {
     const d = mem(sim).dot, now = sim.s.time, cur = d.get(m.id);
     if (cur && cur.dps >= dps) { cur.until = Math.max(cur.until, now + secs); return; }
     d.set(m.id, { until: now + secs, dps, by, next: now + 0.5 });
+}
+
+/** A burn or poison a farmer's gem sets: damage a second for a while, counted for them (a stronger one replaces a weaker, a repeat refreshes). */
+export function burnMob (sim: Sim, m: MobE, dps: number, secs: number, p: PlayerS) {
+    const d = mem(sim).dot, now = sim.s.time, cur = d.get(m.id);
+    if (cur && cur.dps >= dps) { cur.until = Math.max(cur.until, now + secs); return; }
+    d.set(m.id, { until: now + secs, dps, by: -1, next: now + 0.5, p: p.id });
 }
 
 /** What a hit from this tower does besides damage: slows, freezes, burns. */
@@ -321,8 +328,9 @@ function statuses (sim: Sim) {
         if (m?.k !== 'mob') { mm.dot.delete(id); continue; }
         if (now < d.next) continue;
         d.next = now + 0.5;
-        const by = sim.s.ents[d.by];
-        strike(sim, by?.k === 'bld' ? by : null, m, d.dps * 0.5, { quiet: true, nofloat: true });
+        const by = sim.s.ents[d.by], who = d.p ? sim.s.players[d.p] : undefined;
+        if (who) combat.damageMob(sim, m, d.dps * 0.5, who, { quiet: true, nofloat: true });
+        else strike(sim, by?.k === 'bld' ? by : null, m, d.dps * 0.5, { quiet: true, nofloat: true });
         if (now >= d.until || !sim.s.ents[id]) mm.dot.delete(id);
     }
 }

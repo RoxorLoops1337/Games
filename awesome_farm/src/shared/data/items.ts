@@ -190,6 +190,26 @@ export const ITEMS = {
     charm_heart:  it('Heartstone',    'gear', 1500, 'It beats in time with yours.', { rarity: 4, gear: { slot: 'charm', tier: 4, mods: { maxHearts: 2, dmgPct: 0.15, armor: 0.5, healPower: 0.3 } } }),
     // ── packs: carry more of every item ──
 
+
+    // ── gems (socketed in the Equipment Bag; three of a cut merge into the next) ──
+    gem_ruby_1: it('Rough Ruby', 'material', 40, 'Warm to the touch. Socket it in the Equipment Bag (G), or merge three into a finer cut.', { rarity: 1 }),
+    gem_ruby_2: it('Cut Ruby', 'material', 140, 'Warm to the touch. Socket it in the Equipment Bag (G), or merge three into a finer cut.', { rarity: 2 }),
+    gem_ruby_3: it('Flawless Ruby', 'material', 480, 'Warm to the touch. Socket it in the Equipment Bag (G), or merge three into a finer cut.', { rarity: 3 }),
+    gem_sapphire_1: it('Rough Sapphire', 'material', 40, 'Cold and deep. Socket it in the Equipment Bag (G), or merge three into a finer cut.', { rarity: 1 }),
+    gem_sapphire_2: it('Cut Sapphire', 'material', 140, 'Cold and deep. Socket it in the Equipment Bag (G), or merge three into a finer cut.', { rarity: 2 }),
+    gem_sapphire_3: it('Flawless Sapphire', 'material', 480, 'Cold and deep. Socket it in the Equipment Bag (G), or merge three into a finer cut.', { rarity: 3 }),
+    gem_emerald_1: it('Rough Emerald', 'material', 40, 'Green as a summer pond. Socket it in the Equipment Bag (G), or merge three into a finer cut.', { rarity: 1 }),
+    gem_emerald_2: it('Cut Emerald', 'material', 140, 'Green as a summer pond. Socket it in the Equipment Bag (G), or merge three into a finer cut.', { rarity: 2 }),
+    gem_emerald_3: it('Flawless Emerald', 'material', 480, 'Green as a summer pond. Socket it in the Equipment Bag (G), or merge three into a finer cut.', { rarity: 3 }),
+    gem_topaz_1: it('Rough Topaz', 'material', 40, 'It crackles faintly. Socket it in the Equipment Bag (G), or merge three into a finer cut.', { rarity: 1 }),
+    gem_topaz_2: it('Cut Topaz', 'material', 140, 'It crackles faintly. Socket it in the Equipment Bag (G), or merge three into a finer cut.', { rarity: 2 }),
+    gem_topaz_3: it('Flawless Topaz', 'material', 480, 'It crackles faintly. Socket it in the Equipment Bag (G), or merge three into a finer cut.', { rarity: 3 }),
+    gem_amethyst_1: it('Rough Amethyst', 'material', 40, 'It drinks the light. Socket it in the Equipment Bag (G), or merge three into a finer cut.', { rarity: 1 }),
+    gem_amethyst_2: it('Cut Amethyst', 'material', 140, 'It drinks the light. Socket it in the Equipment Bag (G), or merge three into a finer cut.', { rarity: 2 }),
+    gem_amethyst_3: it('Flawless Amethyst', 'material', 480, 'It drinks the light. Socket it in the Equipment Bag (G), or merge three into a finer cut.', { rarity: 3 }),
+    gem_diamond_1: it('Rough Diamond', 'material', 40, 'Hard, clear and cruelly bright. Socket it in the Equipment Bag (G), or merge three into a finer cut.', { rarity: 1 }),
+    gem_diamond_2: it('Cut Diamond', 'material', 140, 'Hard, clear and cruelly bright. Socket it in the Equipment Bag (G), or merge three into a finer cut.', { rarity: 2 }),
+    gem_diamond_3: it('Flawless Diamond', 'material', 480, 'Hard, clear and cruelly bright. Socket it in the Equipment Bag (G), or merge three into a finer cut.', { rarity: 3 }),
     // ── relics (puzzled into the Relic Satchel, in the Equipment Bag) ──
     relic_ember_chip: it('Cinder Chip', 'misc', 30, 'A coal that never goes out. A chip relic for the Relic Satchel (G).', { rarity: 1, relic: { tag: 'ember', size: 'chip' } }),
     relic_ember_shard: it('Ember Brand', 'misc', 90, 'A coal that never goes out. A shard relic for the Relic Satchel (G).', { rarity: 2, relic: { tag: 'ember', size: 'shard' } }),

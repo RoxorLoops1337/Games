@@ -2,6 +2,7 @@
 // sword — a cleaving arc · spear — a piercing line · hammer — a ground-pounding ring ·
 // dagger — fast and crit-happy · bow — an arrow from range · staff — a bolt that bursts.
 
+import * as gems from './gems';
 import type { WeaponType } from '../data/items';
 import { MOBS } from '../data/mobs';
 import { PAL } from '../palette';
@@ -96,6 +97,7 @@ export function attack (sim: Sim, p: PlayerS, primary: MobE) {
         const kx = m.x - p.x, ky = m.y - p.y;
         const stunHammer = w.wtype === 'hammer' && !def.boss && sim.rng.chance(0.25);
         damageMob(sim, m, dmg, p, { kx, ky, kb: KNOCK[w.wtype], crit, quiet: !first });
+        gems.onHit(sim, p, m, dmg);
         if (stunHammer && sim.s.ents[m.id]) { m.stun = 0.7; m.st = 3; sim.touch(m); }
         first = false;
     }
