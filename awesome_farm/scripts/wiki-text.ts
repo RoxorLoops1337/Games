@@ -81,6 +81,10 @@ export const INTRO: Record<string, string[]> = {
     buffs: [
         'Buffs are short boosts from food, potions and events. Eating the same buff again refreshes it rather than stacking. Buff duration skills make them last longer.',
     ],
+    rings: [
+        'You can wear five rings at once, in the Equipment Bag (G, or the Rings button in the Backpack). Click a ring to put it on the first free finger; click a worn ring to take it off. A sixth ring takes the first finger\'s place.',
+        'Rings come from the Anvil (copper, iron, gold, steel, crystal and Blightcore) and as rare drops from the six bosses. Every ring adds its bonus to the same ledger as skills and gear.',
+    ],
     stats: [
         'Every bonus in the game goes into one ledger: skills (per rank), equipped gear, active buffs, expedition boons and the season wish all add to the same stats.',
     ],

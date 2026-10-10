@@ -134,7 +134,7 @@ const MOBS_RAW = {
     // ── bosses ──
     slimeking: {
         name: 'Slime King', tex: 'slimeking', ai: 'boss', hp: 300, dmg: 3.4, speed: 26, aggro: 260, r: 14, xp: 120, coins: [30, 50], tier: 1, scale: 1,
-        drops: [['slimegel', 1, 8, 12]], desc: 'A crowned mountain of goo.',
+        drops: [['slimegel', 1, 8, 12], ['ring_slime', 0.35]], desc: 'A crowned mountain of goo.',
         boss: {
             id: 'slime', title: 'The Slime King', blurb: 'Leaps, belches and calls its subjects.', sigil: 'sigil_slime', trophy: 'trophy_slime', summon: 'slime', color: PAL.plum,
             points: 2, arena: 190, gear: ['crown_slime', 'staff_slime'],
@@ -147,7 +147,7 @@ const MOBS_RAW = {
     },
     colossus: {
         name: 'Stone Colossus', tex: 'colossus', ai: 'boss', hp: 660, dmg: 3.9, speed: 22, aggro: 260, r: 16, xp: 260, coins: [60, 90], tier: 2, scale: 1,
-        drops: [['stone', 1, 12, 20], ['iron', 1, 6, 10], ['rockheart', 1, 2, 3]], desc: 'The quarry itself, standing up.',
+        drops: [['stone', 1, 12, 20], ['iron', 1, 6, 10], ['rockheart', 1, 2, 3], ['ring_stone', 0.35]], desc: 'The quarry itself, standing up.',
         boss: {
             id: 'stone', title: 'The Stone Colossus', blurb: 'Slams the ground, rains boulders and chains two farmers together.', sigil: 'sigil_stone', trophy: 'trophy_stone', summon: 'rockling', color: PAL.stone,
             points: 3, arena: 200, gear: ['hammer_colossus', 'plate_colossus'],
@@ -160,7 +160,7 @@ const MOBS_RAW = {
     },
     witch: {
         name: 'Bog Witch', tex: 'witch', ai: 'boss', hp: 780, dmg: 3.8, speed: 30, aggro: 280, r: 10, xp: 260, coins: [60, 90], tier: 2, scale: 1, flies: true,
-        drops: [['ectoplasm', 1, 6, 10], ['herb', 1, 6, 10]], desc: 'Cackles in the fog and bottles the moon.',
+        drops: [['ectoplasm', 1, 6, 10], ['herb', 1, 6, 10], ['ring_hex', 0.35]], desc: 'Cackles in the fog and bottles the moon.',
         boss: {
             id: 'bog', title: 'The Bog Witch', blurb: 'Hexes a farmer (touch a friend to pass the curse on), poison clouds and swarms of wisps.', sigil: 'sigil_bog', trophy: 'trophy_bog', summon: 'wisp', color: PAL.leaf,
             points: 3, arena: 210, gear: ['staff_witch', 'charm_hex'],
@@ -173,7 +173,7 @@ const MOBS_RAW = {
     },
     pharaoh: {
         name: 'Dune Pharaoh', tex: 'pharaoh', ai: 'boss', hp: 1250, dmg: 4.9, speed: 28, aggro: 280, r: 11, xp: 420, coins: [90, 130], tier: 3, scale: 1,
-        drops: [['goldbar', 1, 2, 4], ['scarabshell', 1, 6, 10]], desc: 'An ancient king with a sand-wrapped crown.',
+        drops: [['goldbar', 1, 2, 4], ['scarabshell', 1, 6, 10], ['ring_sun', 0.35]], desc: 'An ancient king with a sand-wrapped crown.',
         boss: {
             id: 'dune', title: 'The Dune Pharaoh', blurb: 'Dashes through you, calls scarab swarms and lays a mummy’s curse on a farmer.', sigil: 'sigil_dune', trophy: 'trophy_dune', summon: 'scarab', color: PAL.gold,
             points: 4, arena: 210, gear: ['sword_pharaoh', 'charm_scarab'],
@@ -186,7 +186,7 @@ const MOBS_RAW = {
     },
     frostgiant: {
         name: 'Frost Giant', tex: 'frostgiant', ai: 'boss', hp: 1700, dmg: 6, speed: 22, aggro: 280, r: 16, xp: 420, coins: [90, 130], tier: 3, scale: 1,
-        drops: [['frostshard', 1, 6, 10], ['crystal', 1, 2, 4]], desc: 'A glacier with a bad temper.',
+        drops: [['frostshard', 1, 6, 10], ['crystal', 1, 2, 4], ['ring_frost', 0.35]], desc: 'A glacier with a bad temper.',
         boss: {
             id: 'frost', title: 'The Frost Giant', blurb: 'Hurls ice, stomps and freezes a farmer solid until a friend thaws them.', sigil: 'sigil_frost', trophy: 'trophy_frost', summon: 'frostling', color: PAL.foam,
             points: 4, arena: 220, gear: ['bow_frost', 'helm_frost'],

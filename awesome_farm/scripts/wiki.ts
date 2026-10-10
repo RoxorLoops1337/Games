@@ -411,7 +411,7 @@ function itemsSection () {
         ['s-items-food', 'Food and crops', (i) => ITEMS[i].kind === 'food'],
         ['s-items-seeds', 'Seeds', (i) => ITEMS[i].kind === 'seed'],
         ['s-items-potions', 'Potions', (i) => ITEMS[i].kind === 'potion'],
-        ...(['tool', 'weapon', 'head', 'body', 'charm', 'bag'] as GearSlot[]).map((s) => [`s-items-${s}`, `Gear: ${SLOT_NAMES[s]}`, (i: ItemId) => ITEMS[i].gear?.slot === s] as [string, string, (id: ItemId) => boolean]),
+        ...(['tool', 'weapon', 'head', 'body', 'charm', 'ring', 'bag'] as GearSlot[]).map((s) => [`s-items-${s}`, `Gear: ${SLOT_NAMES[s]}`, (i: ItemId) => ITEMS[i].gear?.slot === s] as [string, string, (id: ItemId) => boolean]),
         ['s-items-misc', 'Other things (pods, rods, sigils, trophies, crates...)', (i) => ITEMS[i].kind === 'misc'],
     ];
     const seen = new Set<ItemId>();
@@ -421,7 +421,7 @@ function itemsSection () {
         return sub(id, `${title} (${ids.length})`, cards(ids.map(itemCard)), false);
     }).join('');
     const rest = ITEM_ORDER.filter((i) => !seen.has(i));
-    return section('s-items', `Items (${ITEM_ORDER.length})`, intro('items')
+    return section('s-items', `Items (${ITEM_ORDER.length})`, intro('items') + intro('rings')
         + p(`Swatches: the colour is the kind of item, the ring its rarity (${RARITY_NAMES.map((_, i) => rarityTag(i)).join(' ')}).`)
         + body + (rest.length ? sub('s-items-rest', 'More', cards(rest.map(itemCard))) : ''));
 }
