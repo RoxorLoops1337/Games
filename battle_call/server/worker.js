@@ -239,7 +239,7 @@ export class Event {
     if (m.t !== 'a') return;
     const a = this.att(ws);
     const r = await this.act(a, m, (a.r === 'u' ? a.k : a.r) + ':ws');
-    this.send(ws, { t: 'r', id: m.id, ok: r.ok, err: r.err });
+    this.send(ws, { ...r, t: 'r', id: m.id });
   }
   webSocketClose(ws) { try { ws.close(); } catch (_) { /* already */ } this.S && this.later('live', 500, () => this.pushLive()); }
   webSocketError(ws) { this.webSocketClose(ws); }

@@ -175,8 +175,16 @@ function markets() {
   const R = rounds();
   const presets = ev.phase === 'bracket' ? R.filter((r) => r.r >= 1 && !ev.locked[r.r - 1]).map((r) => `<button class="btn sm ghost" data-a="hPreset" data-to="${r.r}">Reach the ${r.short}</button>`).join('') : '';
   const hasChamp = ev.mk.some((m) => m.kind === 'champion' && m.st !== 'void');
+  const hasQ = (id) => ev.mk.some((m) => m.kind === 'qualify' && m.bb === id && m.st !== 'void');
+  const missingQ = ev.phase === 'picks' && ev.set.qualifyBets && ev.bbs.length > ev.set.size ? ev.bbs.filter((b) => !hasQ(b.id)) : [];
+  const qq = ui.search.trim().toLowerCase();
+  const qpanel = missingQ.length ? `<section class="card"><b>Open "makes the cut" bets</b><p class="muted small">${missingQ.length} beatboxer${missingQ.length === 1 ? '' : 's'} without one. With a big field, pick the ones the hall will care about.</p>
+    <button class="btn sm" data-a="hQualAll">Open all ${missingQ.length}</button>
+    ${missingQ.length > 8 ? `<label class="search">${ic('predict', 18)}<input data-in="search" value="${esc(ui.search)}" placeholder="Search beatboxers" autocomplete="off"></label>` : ''}
+    <div class="chips">${missingQ.filter((b) => !qq || b.name.toLowerCase().includes(qq)).slice(0, 60).map((b) => `<button class="chip bb" data-k="q${b.id}" data-a="hQual" data-id="${b.id}">${av(b.id, 'xs')}<span>${esc(b.name)}</span>${ic('plus', 14)}</button>`).join('')}</div></section>` : '';
   const tabs = [['all', 'All'], ['open', 'Open'], ['locked', 'In play'], ['done', 'Done']].map(([k, l]) => `<button class="seg ${f === k ? 'on' : ''}" data-a="mkFilter" data-f="${k}">${l}</button>`).join('');
   return `<div class="card tip"><b>Bets</b><p>Match, qualify and champion markets open by themselves. Add extra ones here, or lock and refund any of them.</p></div>
+    ${qpanel}
     ${ev.phase === 'bracket' ? `<div class="chips">${presets}${hasChamp ? '' : '<button class="btn sm ghost" data-a="hPreset" data-champ="1">Who wins it all</button>'}</div>` : ''}
     <div class="segs">${tabs}</div>
     ${list.length ? `<div class="stack">${list.map((m) => {

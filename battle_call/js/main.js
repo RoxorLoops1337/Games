@@ -1,7 +1,7 @@
 // Battle Call: the app. Routing, rendering, and every button.
 //   #/            home (enter a code)      #/new        create an event
 //   #/e/CODE      the audience app         #/h/CODE     the organiser console      #/s/CODE   the big screen
-import { morph, esc, ic, $, $$, toast, confetti, runTickers, buzz } from './dom.js';
+import { morph, esc, ic, $, $$, toast, confetti, runTickers, buzz, setHaptics } from './dom.js';
 import { S, emit, subscribe, resetState, sessions, saveSession, dropSession, deviceId, serverBase, setServer, mkView, curMatch, bbName, size, leftKey, sides, myBet, mkTitle, mkLabel, payoutIf } from './state.js';
 import { connect, disconnect, act, http, register, login, hostLogin, info, createEvent, uploadPhoto } from './net.js';
 import { ui, loops } from './ui.js';
@@ -116,6 +116,7 @@ function overlays() {
 let lastKey = '';
 function render() {
   onState();
+  if (ui.drag) return; // a row is being dragged: leave the DOM alone until it lands
   const key = route.a + route.code + ui.tab + ui.hostTab;
   morph(app, view());
   runTickers(app);
@@ -240,7 +241,7 @@ const A = {
   togglePw() { ui.showPw = !ui.showPw; emit(); },
   openMe() { ui.sheet = { t: 'me' }; emit(); },
   sheetClose() { ui.sheet = null; emit(); },
-  haptics() { ui.hapt = !ui.hapt; emit(); },
+  haptics() { ui.hapt = !ui.hapt; setHaptics(ui.hapt); try { localStorage.setItem('bc.hapt', ui.hapt ? '1' : '0'); } catch (_) { /* */ } emit(); },
   logout() {
     dropSession(S.code, ['tk', 'name']); ui.sheet = null; S.role = 'guest'; S.tk = ''; S.me = null; ui.watching = false; ui.authMode = 'login';
     disconnect(); connect(S.code, onPush); emit();
@@ -342,6 +343,8 @@ const A = {
   hRain() { ask('Loop rain', 'How many Loops should every player get?', 'Make it rain', async (v) => { const n = Math.floor(+v); if (n) fail(await act({ a: 'grant', key: 'all', amount: n, text: 'Loop rain from the organiser' })); }, { input: { value: '100', type: 'number', max: 6 } }); },
   hGrantOne(el) { const n = el.dataset.n; ask(`Give ${n} Loops`, 'Use a negative number to take some away.', 'Give', async (v) => { const a = Math.floor(+v); if (a) fail(await act({ a: 'grant', key: n, amount: a })); }, { input: { value: '100', type: 'number', max: 7 } }); },
   async hBan(el) { fail(await act({ a: 'user.ban', key: el.dataset.n, on: el.dataset.on === '1' })); },
+  async hQual(el) { fail(await act({ a: 'mk.qualify', ids: [el.dataset.id] })); },
+  async hQualAll() { const r = await act({ a: 'mk.qualify', all: true }); if (fail(r)) toast(`${r.added} bets opened`, 'info'); },
   async hSize(el) { fail(await act({ a: 'settings', set: { size: +el.dataset.n } })); },
   mkFilter(el) { ui.mkFilter = el.dataset.f; emit(); },
   async hBannerClear() { fail(await act({ a: 'banner', text: '' })); },
@@ -479,6 +482,44 @@ document.addEventListener('change', async (e) => {
   ui.busy = false; el.value = ''; emit();
 });
 
+/* drag a ranking row by its grip */
+document.addEventListener('pointerdown', (e) => {
+  const grip = e.target.closest('[data-grip]');
+  if (!grip || e.button > 0) return;
+  const row = grip.closest('.slot'), rows = [...row.parentElement.querySelectorAll('.slot:not(.empty)')];
+  const from = rows.indexOf(row);
+  if (from < 0) return;
+  e.preventDefault();
+  const rects = rows.map((r) => r.getBoundingClientRect()), h = rects[from].height + 8, y0 = e.clientY;
+  ui.drag = { w: grip.dataset.w, from, to: from };
+  row.classList.add('dragging');
+  try { grip.setPointerCapture(e.pointerId); } catch (_) { /* */ }
+  buzz(8);
+  const move = (ev) => {
+    const dy = ev.clientY - y0;
+    row.style.transform = `translateY(${dy}px)`;
+    const mid = rects[from].top + rects[from].height / 2 + dy;
+    let to = 0;
+    rects.forEach((r, i) => { if (i !== from && r.top + r.height / 2 < mid) to = i + (i < from ? 1 : 0); });
+    if (mid < rects[0].top + rects[0].height / 2) to = 0;
+    ui.drag.to = Math.max(0, Math.min(rows.length - 1, to));
+    rows.forEach((r, i) => {
+      if (i === from) return;
+      const shift = from < ui.drag.to && i > from && i <= ui.drag.to ? -h : from > ui.drag.to && i < from && i >= ui.drag.to ? h : 0;
+      r.style.transform = shift ? `translateY(${shift}px)` : '';
+      r.style.transition = 'transform .15s';
+    });
+  };
+  const end = () => {
+    grip.removeEventListener('pointermove', move); grip.removeEventListener('pointerup', end); grip.removeEventListener('pointercancel', end);
+    const { w, from: f, to: t2 } = ui.drag;
+    ui.drag = null;
+    rows.forEach((r) => { r.style.transform = ''; r.style.transition = ''; r.classList.remove('dragging'); });
+    if (t2 !== f) { const l = ranks(w); const [it] = l.splice(f, 1); l.splice(t2, 0, it); buzz(14); afterRank(w); } else emit();
+  };
+  grip.addEventListener('pointermove', move); grip.addEventListener('pointerup', end); grip.addEventListener('pointercancel', end);
+});
+
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') { if (ui.modal) A.modalNo(); else if (ui.sheet) A.sheetClose(); else if (ui.voteOpen) A.voteClose(); }
   if (e.key === 'Enter' && ui.modal && e.target.id === 'modalin') A.modalYes();
@@ -487,5 +528,6 @@ document.addEventListener('keydown', (e) => {
 // A shared link can carry the server address: ?server=https://battle-call.you.workers.dev
 try { const s = new URLSearchParams(location.search).get('server'); if (s && /^https?:\/\//.test(s)) setServer(s); } catch (_) { /* */ }
 
+try { ui.hapt = localStorage.getItem('bc.hapt') !== '0'; setHaptics(ui.hapt); } catch (_) { /* */ }
 onRoute();
 render();

@@ -9,7 +9,7 @@
 // Money is "Loops". One pot per player: predictions pay into it, bets move it, the leaderboard ranks
 // balance + what is still riding on open bets (net worth).
 import {
-  DEFAULTS, SIZES, MIN_BET, nameKey, cleanName, cleanBb, buildMatches, roundsOf, roundInfo, winnerOf, loserOf,
+  DEFAULTS, SIZES, MIN_BET, QUALIFY_AUTO_MAX, MAX_BB, nameKey, cleanName, cleanBb, buildMatches, roundsOf, roundInfo, winnerOf, loserOf,
   slotsFor, cleanPicks, poolTotal, sidePool, multiplier, payoutFor, log2,
 } from './js/shared.js';
 
@@ -234,7 +234,7 @@ export function setPhase(S, to) {
     if (from === 'elimination') {
       for (const m of marketsList(S)) if (m.kind === 'qualify' && m.st === 'locked') { m.st = 'open'; touchMk(S, m); }
       ev.consensus = null;
-    } else if (ev.settings.qualifyBets && ev.bbs.length > ev.settings.size) {
+    } else if (ev.settings.qualifyBets && ev.bbs.length > ev.settings.size && ev.bbs.length <= QUALIFY_AUTO_MAX) {
       for (const b of ev.bbs) if (!qualifyOf(S, b.id)) openQualify(S, b.id);
     }
   } else {
@@ -523,13 +523,14 @@ export function hostAction(S, a) {
   switch (a.a) {
     case 'bb.add': {
       if (ev.phase === 'bracket' || ev.phase === 'finished') return fail('The bracket is drawn, the lineup is locked');
-      const names = (Array.isArray(a.names) ? a.names : [a.name]).map(cleanBb).filter(Boolean);
+      const names = (Array.isArray(a.names) ? a.names : [a.name]).map(cleanBb).filter(Boolean).slice(0, 500);
       let n = 0;
       for (const nm of names) {
+        if (ev.bbs.length >= MAX_BB) return fail(`That is the limit: ${MAX_BB} beatboxers`);
         const bb = addBb(S, nm, a);
         if (!bb) continue;
         n++;
-        if (ev.phase === 'picks' && ev.settings.qualifyBets && ev.bbs.length > ev.settings.size) openQualify(S, bb.id);
+        if (ev.phase === 'picks' && ev.settings.qualifyBets && ev.bbs.length > ev.settings.size && ev.bbs.length <= QUALIFY_AUTO_MAX) openQualify(S, bb.id);
       }
       touchMeta(S);
       return ok({ added: n });
@@ -587,6 +588,14 @@ export function hostAction(S, a) {
         n++;
       }
       return n ? ok({ added: n }) : fail('Nothing to add');
+    }
+    case 'mk.qualify': {
+      if (ev.phase !== 'picks') return fail('"Makes the cut" bets open while the picks are open');
+      const ids = (a.all ? ev.bbs.map((b) => b.id) : Array.isArray(a.ids) ? a.ids : []).filter((id) => bbOf(S, id) && !qualifyOf(S, id));
+      if (!ids.length) return fail('Nothing to add');
+      if (ev.bbs.length <= ev.settings.size) return fail('Everybody goes through, there is nothing to bet on');
+      for (const id of ids) openQualify(S, id);
+      return ok({ added: ids.length });
     }
     case 'mk.lock': case 'mk.open': {
       const m = mkOf(S, a.id);

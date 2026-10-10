@@ -35,7 +35,7 @@ function lobby() {
       <p class="eyebrow">${eq} Doors are open</p>
       <h1>${esc(ev.name)}</h1>
       <p class="lead">Call the Top ${size()}, back your winners and vote in every battle. Everyone starts with <b>${ev.set.start.toLocaleString()} Loops</b>.</p>
-      <div class="pills">${pill(`${S.live ? S.live.n : 0} players in`)}${pill(`${ev.bbs.length} beatboxers`)}</div>
+      <div class="pills">${pill(`${S.live ? S.live.n : 0} ${S.live && S.live.n === 1 ? 'player' : 'players'} in`)}${pill(`${ev.bbs.length} beatboxers`)}</div>
     </section>
     <section class="how">
       <div class="card how-c"><i class="hi v">${ic('predict', 22)}</i><b>Predict</b><p>Build your Top ${size()} before the elimination. Then call every battle in the bracket.</p></div>

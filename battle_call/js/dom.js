@@ -163,7 +163,11 @@ export function runTickers(root = document) {
 }
 export const fmtN = (n) => Math.round(n).toLocaleString('en-US');
 
-export const buzz = (ms = 18) => { try { navigator.vibrate && navigator.vibrate(ms); } catch (_) { /* */ } };
+let haptics = true;
+export const setHaptics = (on) => { haptics = on; };
+export const buzz = (ms = 18) => {
+  try { if (haptics && navigator.vibrate && (!navigator.userActivation || navigator.userActivation.hasBeenActive)) navigator.vibrate(ms); } catch (_) { /* */ }
+};
 
 /** Hash a string to a hue so every beatboxer / player gets a stable colour. */
 export const hue = (s) => { let h = 7; for (const c of String(s)) h = (h * 31 + c.charCodeAt(0)) % 360; return h; };

@@ -17,6 +17,9 @@ export const DEFAULTS = {
 };
 
 export const MIN_BET = 10;
+/** More entrants than this and the organiser picks which "makes the cut" bets to open (200 markets would flood every phone). */
+export const QUALIFY_AUTO_MAX = 48;
+export const MAX_BB = 1000;
 export const nameKey = (n) => String(n || '').trim().toLowerCase().replace(/\s+/g, ' ');
 export const cleanName = (n) =>
   String(n || '').replace(/[^\p{L}\p{N} _.'-]/gu, '').replace(/\s+/g, ' ').trim().slice(0, 18);

@@ -348,6 +348,27 @@ t('re-drawing the ranking before any battle refunds, un-pays and rebuilds', () =
   assert.equal(us[0].bal, 1000 + 4 * 20 + 2 * 15, 'all four in the top four, two of them one seat off');
 });
 
+console.log('big fields');
+t('with more entrants than the auto limit the organiser picks which "makes the cut" bets to open', () => {
+  const { S, ids } = setup({ size: 8, beatboxers: 60, users: 2 });
+  host(S, { a: 'phase', to: 'picks' });
+  assert.equal(Object.values(S.ev.markets).length, 0, 'no flood of 60 markets');
+  assert.equal(host(S, { a: 'mk.qualify', ids: [ids[0], ids[1], 'nope'] }).added, 2);
+  assert.equal(E.hostAction(S, { a: 'mk.qualify', ids: [ids[0]] }).ok, false, 'already open');
+  assert.equal(Object.values(S.ev.markets).length, 2);
+  assert.equal(host(S, { a: 'mk.qualify', all: true }).added, 58);
+  host(S, { a: 'bb.add', names: ['Late entry'] });
+  assert.equal(Object.values(S.ev.markets).length, 60, 'a late entry past the limit does not auto-open');
+});
+t('a huge lineup is accepted in one paste, de-duplicated, and capped', () => {
+  const { S } = setup({ size: 16, beatboxers: 0, users: 0 });
+  const names = Array.from({ length: 700 }, (_, i) => 'Entrant ' + (i % 650));
+  assert.equal(host(S, { a: 'bb.add', names }).added, 500, 'at most 500 names per paste');
+  host(S, { a: 'bb.add', names: names.slice(0, 700) });
+  assert.ok(S.ev.bbs.length <= 650);
+  assert.equal(new Set(S.ev.bbs.map((b) => b.name.toLowerCase())).size, S.ev.bbs.length);
+});
+
 console.log('a whole battle, many players');
 t('32 beatboxers, 120 random players: the world stays solvent and the numbers stay sane', () => {
   const { S, us, ids } = setup({ size: 16, beatboxers: 32, users: 120 });

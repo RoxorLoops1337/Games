@@ -244,6 +244,9 @@ button.bm-row:active { transform: scale(.98); } button.bm-row:hover { background
 .slot.empty { background: none; border: 1.5px dashed rgba(255,255,255,.16); min-height: 52px; animation: none; } .slot .hint { color: var(--mut); font-size: 13px; }
 .slot .mv { display: flex; gap: 2px; } .slot .mv .ib { width: 34px; height: 34px; background: rgba(255,255,255,.05); }
 .slots.ro .slot { padding: 7px 12px; }
+.slot .grip { display: grid; place-items: center; width: 24px; height: 36px; margin-left: -4px; color: var(--mut); cursor: grab; touch-action: none; flex: none; border-radius: 8px; }
+.slot .grip:active { color: #fff; }
+.slot.dragging { position: relative; z-index: 5; box-shadow: 0 14px 34px rgba(0,0,0,.55), 0 0 0 1.5px var(--pink); background: var(--bg3); transition: none; }
 .pool { display: flex; flex-direction: column; gap: 12px; }
 .savebar { position: fixed; z-index: 25; left: 50%; transform: translateX(-50%); bottom: calc(82px + var(--sb)); padding: 6px 14px; border-radius: 99px; background: rgba(20,18,43,.92); border: 1px solid var(--line); font-size: 13px; font-weight: 700; display: flex; gap: 6px; align-items: center; color: var(--mut); backdrop-filter: blur(8px); }
 .savebar.ok { color: var(--mint); }
@@ -379,3 +382,5 @@ body[data-mode=screen] { overflow: hidden; }
 
 @media (min-width: 700px) { .top .brand-mini b { display: inline; } .vote .half .av { --s: min(22vw, 220px); } }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; } }
+
+.st-duel.done .panes .vs { display: none; }

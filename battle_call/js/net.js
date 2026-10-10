@@ -32,7 +32,7 @@ export function apply(m) {
     case 'host': S.host = m; break;
     case 'authfail': S.authFail = true; break;
     case 'gone': S.gone = true; break;
-    case 'r': { const w = waiting.get(m.id); if (w) { waiting.delete(m.id); clearTimeout(w.to); w.res({ ok: m.ok, err: m.err }); } return; }
+    case 'r': { const w = waiting.get(m.id); if (w) { waiting.delete(m.id); clearTimeout(w.to); const { t, id, ...rest } = m; w.res(rest); } return; }
     default: return;
   }
   emit();

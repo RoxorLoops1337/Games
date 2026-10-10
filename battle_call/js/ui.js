@@ -57,7 +57,7 @@ export function rankBuilder({ which, list, N, intro, ctaLabel }) {
   const slots = Array.from({ length: N }, (_, i) => {
     const id = list[i];
     if (!id) return `<li class="slot empty" data-k="s${i}"><span class="n">${i + 1}</span><span class="hint">${i === list.length ? 'Tap a beatboxer below' : ''}</span></li>`;
-    return `<li class="slot" data-k="s${i}-${id}"><span class="n">${i + 1}</span>${av(id, 'sm')}<b>${esc(bbName(id))}</b>
+    return `<li class="slot" data-k="s${i}-${id}"><span class="grip" data-grip data-w="${which}" data-i="${i}" aria-label="Drag to reorder">${ic('drag', 18)}</span><span class="n">${i + 1}</span>${av(id, 'sm')}<b>${esc(bbName(id))}</b>
       <span class="mv">
         <button class="ib" data-a="rankMove" data-w="${which}" data-i="${i}" data-d="-1" ${i === 0 ? 'disabled' : ''} aria-label="Move up">${ic('up', 18)}</button>
         <button class="ib" data-a="rankMove" data-w="${which}" data-i="${i}" data-d="1" ${i === list.length - 1 ? 'disabled' : ''} aria-label="Move down">${ic('down', 18)}</button>
