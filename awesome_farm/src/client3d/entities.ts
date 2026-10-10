@@ -219,7 +219,7 @@ export class Entities {
         f.m.obj.position.set(x, groundY(x, z), z);
         f.m.hold?.(hold);
         f.m.pose(fx, fy, moving, swing, p.downed > 0, dt);
-        f.m.react(p.hearts, p.invuln ?? 0, p.downed > 0, dt);
+        f.m.react(p.hearts, p.invuln ?? 0, p.downed > 0, dt, !!p.cl);
         f.m.status(p.co);
         f.co = p.co?.k === 'tether' ? p.co.w : undefined;
         f.m.obj.visible = true;
