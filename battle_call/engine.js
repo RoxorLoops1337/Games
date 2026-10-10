@@ -743,6 +743,7 @@ function castVoteIn(S, u, mid, side) {
   if (prev === side) return ok({});
   if (prev) m.c[prev]--;
   m.c[side]++; u.votes[mid] = side;
+  (u.vt = u.vt || {})[mid] = S.now; // when they voted, so the big screen can show the newest names first
   S.dirty.ev = true; S.dirty.live = true; touchUser(S, u);
   return ok({});
 }
@@ -1018,7 +1019,15 @@ export function liveOf(S, online, host) {
       return { N, voters: cs.voters, rows: cs.rows.slice(0, 16), staked };
     });
   }
-  if (host) { const cur = activeMatch(S); if (cur) out.v = { id: cur.id, a: cur.c.a, b: cur.c.b }; }
+  if (host) {
+    // the organiser and the big screen: the running vote, who has voted (newest first), and who has just joined
+    const cur = activeMatch(S);
+    if (cur) {
+      out.v = { id: cur.id, a: cur.c.a, b: cur.c.b };
+      if (cur.status === 'voting') out.vn = [...S.users.values()].filter((u) => u.votes[cur.id]).sort((a, b) => ((b.vt && b.vt[cur.id]) || 0) - ((a.vt && a.vt[cur.id]) || 0)).slice(0, 60).map((u) => [u.name, u.votes[cur.id]]);
+    }
+    if (cats(S).some((c) => c.phase === 'lobby' || c.phase === 'picks')) out.jn = [...S.users.values()].filter((u) => !u.banned).sort((a, b) => b.joined - a.joined).slice(0, 40).map((u) => u.name);
+  }
   return out;
 }
 
