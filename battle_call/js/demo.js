@@ -165,7 +165,7 @@ export function createDemo() {
         const cur = E.currentMatch(DS);
         if (cur) {
           if (cur.status === 'live') todo.push({ a: 'step', mid: cur.id, to: 'voting' });
-          else if (cur.status === 'voting') { if (!(fromAuto && cur.vend)) todo.push({ a: 'step', mid: cur.id, to: 'closed' }); }
+          else if (cur.status === 'voting') todo.push({ a: 'step', mid: cur.id, to: 'closed' });
           else todo.push({ a: 'result', mid: cur.id, w: cur.c.a >= cur.c.b ? (Math.random() < 0.7 ? 'a' : 'b') : (Math.random() < 0.7 ? 'b' : 'a'), judges: pick([{ a: 3, b: 0 }, { a: 2, b: 1 }, { a: 1, b: 2 }, { a: 0, b: 3 }]) });
         } else {
           // the next battle: the category on stage first, then the others
@@ -186,7 +186,7 @@ export function createDemo() {
         if (allDone()) { auto = false; schedule(); return; }
         this.next(true);
         const st = stageOf(), cur = st === 'bracket' ? E.currentMatch(DS) : null;
-        const wait = st === 'lobby' ? 4000 : st === 'picks' ? 6000 : st === 'elimination' ? 3500 : !cur ? 2500 : cur.status === 'voting' ? 33000 : cur.status === 'closed' ? 4500 : cur.status === 'live' ? 4500 : 7000;
+        const wait = st === 'lobby' ? 4000 : st === 'picks' ? 6000 : st === 'elimination' ? 3500 : !cur ? 2500 : cur.status === 'voting' ? 7500 : cur.status === 'closed' ? 4500 : cur.status === 'live' ? 4500 : 7000;
         autoTimer = setTimeout(tick, wait);
       };
       if (auto) tick();

@@ -103,11 +103,13 @@ export const lockClock = (ev, cls = '') => {
 
 /* ------------------------------------------------------------ vote countdown */
 /** The ring that counts a vote down. The ticker in main.js keeps `data-cd` elements current without re-rendering. */
+/** Seconds left as the ring shows them: 45 under a minute, 3:59 above. */
+export const fmtLeft = (s) => (s >= 60 ? Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0') : String(s));
 export function countdown(m, cls = '') {
   const s = secsLeft(m);
   if (s === null) return '';
   const f = Math.max(0, Math.min(1, (m.vend - serverNow()) / ((m.vsecs || 10) * 1000)));
-  return `<div class="cd ${cls} ${s <= 3 ? 'hot' : ''}" data-cd="${m.vend}" data-tot="${(m.vsecs || 10) * 1000}" style="--f:${f.toFixed(3)}"><b>${s}</b><small>sec</small></div>`;
+  return `<div class="cd ${cls} ${s <= 3 ? 'hot' : ''} ${s >= 60 ? 'long' : ''}" data-cd="${m.vend}" data-tot="${(m.vsecs || 10) * 1000}" style="--f:${f.toFixed(3)}"><b>${fmtLeft(s)}</b><small>${s >= 60 ? 'min' : 'sec'}</small></div>`;
 }
 
 /* ------------------------------------------------------------ bracket */

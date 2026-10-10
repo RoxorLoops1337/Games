@@ -5,7 +5,7 @@ import { morph, esc, ic, $, $$, toast, confetti, runTickers, buzz, setHaptics } 
 import { VERSION } from './config.js';
 import { S, serverNow, emit, subscribe, resetState, selectCat, sessions, saveSession, dropSession, deviceId, serverBase, setServer, mkView, curMatch, bbName, size, leftKey, sides, myBet, mkTitle, mkLabel, payoutIf } from './state.js';
 import { connect, disconnect, react, act, http, register, login, hostLogin, info, createEvent, uploadPhoto, isDemo, demoCtl } from './net.js';
-import { ui, loops, catBar, wordmark, catArt, ART_LABEL, ART_FILE, crown } from './ui.js';
+import { ui, fmtLeft, loops, catBar, wordmark, catArt, ART_LABEL, ART_FILE, crown } from './ui.js';
 import { MIN_BET } from './shared.js';
 import { homeView, createView, authView } from './views/auth.js';
 import { liveTab } from './views/live.js';
@@ -144,7 +144,9 @@ setInterval(() => {
   for (const el of els) {
     const left = +el.dataset.cd - serverNow(), s = Math.max(0, Math.ceil(left / 1000));
     const b = el.firstElementChild;
-    if (b && b.textContent !== String(s)) b.textContent = s;
+    if (b && b.textContent !== fmtLeft(s)) b.textContent = fmtLeft(s);
+    el.classList.toggle('long', s >= 60);
+    const u = el.querySelector('small'); if (u) u.textContent = s >= 60 ? 'min' : 'sec';
     el.style.setProperty('--f', Math.max(0, Math.min(1, left / +el.dataset.tot)).toFixed(3));
     el.classList.toggle('hot', s <= 3);
     if (s !== lastTick && s <= 3 && s > 0 && el.closest('.vote, .stage')) { lastTick = s; buzz(15); sound('tick'); }

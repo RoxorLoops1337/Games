@@ -615,14 +615,15 @@ t('32 beatboxers, 120 random players: the world stays solvent and the numbers st
 });
 
 console.log('vote countdown and third place');
-t('the vote length is 30 s: events still on the old default of 10 follow, a custom length stays, and a later choice of 10 sticks', () => {
+t('the vote length is 4 minutes: events still on an earlier default (10 or 30 s) follow, a custom length stays, and a later choice sticks', () => {
   const mk = (v) => { const ev = E.newEvent({ code: 'M', name: 'M', size: 4, now: 1 }); const c = ev.cats[ev.order[0]]; c.settings.voteSecs = v; delete c.settings.voteSecsV; return ev; };
   const on = (ev) => ev.cats[ev.order[0]].settings;
-  assert.equal(on(E.migrateEvent(mk(10))).voteSecs, 30);
+  assert.equal(on(E.migrateEvent(mk(10))).voteSecs, 240);
+  assert.equal(on(E.migrateEvent(mk(30))).voteSecs, 240);
   assert.equal(on(E.migrateEvent(mk(15))).voteSecs, 15);
-  const ev = E.migrateEvent(mk(10)); on(ev).voteSecs = 10; E.migrateEvent(ev);
-  assert.equal(on(ev).voteSecs, 10, 'migrated once only');
-  assert.equal(on(E.newEvent({ code: 'N', name: 'N', size: 4, now: 1 })).voteSecs, 30, 'new events start at 30');
+  const ev = E.migrateEvent(mk(30)); on(ev).voteSecs = 30; E.migrateEvent(ev);
+  assert.equal(on(ev).voteSecs, 30, 'migrated once only');
+  assert.equal(on(E.newEvent({ code: 'N', name: 'N', size: 4, now: 1 })).voteSecs, 240, 'new events start at 4 minutes');
 });
 
 t('voting has a countdown: closes itself, late votes bounce, 0 means manual', () => {
@@ -631,12 +632,12 @@ t('voting has a countdown: closes itself, late votes bounce, 0 means manual', ()
   host(S, { a: 'step', mid: 'r0m0', to: 'live' });
   host(S, { a: 'step', mid: 'r0m0', to: 'voting' });
   const m = S.ev.matches.find((x) => x.id === 'r0m0');
-  assert.equal(m.vsecs, 30, 'default is 30 seconds');
-  assert.equal(m.vend, 31000);
+  assert.equal(m.vsecs, 240, 'default is 4 minutes');
+  assert.equal(m.vend, 241000);
   assert.deepEqual(E.closeDueVotes(S), [], 'not due yet');
-  S.now = 30999;
+  S.now = 240999;
   assert.ok(E.castVote(S, us[0], 'r0m0', 'a').ok);
-  S.now = 31000;
+  S.now = 241000;
   assert.deepEqual(E.closeDueVotes(S), ['r0m0']);
   assert.equal(m.status, 'closed');
   assert.equal(m.vend, 0);

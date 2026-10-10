@@ -173,11 +173,11 @@ function matchConsole() {
     ${ev.matches.every((q) => q.status === 'upcoming' || q.status === 'wait') ? `<button class="btn ghost" data-a="hRevertSeeds">${ic('undo', 18)} Wrong ranking? Take it back and redo it</button>` : ''}`;
 }
 
-const VSECS = [5, 10, 15, 20, 30, 0];
+const VSECS = [30, 60, 120, 240, 0];
 /** How long the next vote runs: chips, defaulting to the event's setting. 0 means the organiser closes it by hand. */
 function voteLen() {
   const cur = ui.vsecs == null ? S.meta.set.voteSecs : ui.vsecs;
-  return `<div class="votelen"><small>Vote length</small><span class="segs mini">${VSECS.map((n) => `<button class="seg ${cur === n ? 'on' : ''}" data-a="hVSecs" data-n="${n}">${n ? n + 's' : 'Off'}</button>`).join('')}</span></div>`;
+  return `<div class="votelen"><small>Vote length</small><span class="segs mini">${VSECS.map((n) => `<button class="seg ${cur === n ? 'on' : ''}" data-a="hVSecs" data-n="${n}">${n ? (n >= 60 ? n / 60 + ' min' : n + 's') : 'Off'}</button>`).join('')}</span></div>`;
 }
 
 function matchList(selId) {
