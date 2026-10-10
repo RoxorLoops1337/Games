@@ -133,7 +133,11 @@ A.groove.start({bpm, style:0..3, bars}) -> { t0, spb }   // backing loop for the
                                                          // (the game places notes at t0 + k*spb/2). A.groove.stop(), A.groove.setIntensity(0..1)
 A.log -> array of what was scheduled (only when created with {log:true}, for tests)
 ```
-Music styles: title = dark synthwave arpeggio with a heartbeat kick; creator = relaxed lo-fi; street = moody night-walk groove;
-home = warm lo-fi; park = airy acoustic-ish pluck; shop = quirky jazzy; bar = smoky funk; studio = clean pads; battle = driving breakbeat;
-victory/defeat = short stings; intro = slow melancholic piano-ish. Music must LOOP seamlessly (schedule ahead with a 25 ms timer + 180 ms lookahead).
+Music styles (genre first, every track is synthesised): title = dark techno (126, four on the floor, offbeat open hats, rolling bass, acid arp);
+creator = lo-fi trip hop (84); street = boom bap hip hop (90, 808 sub bass); home = slow trip hop (76, half-time snare, vinyl crackle); park = bouncy hip hop (96);
+shop = jazz hop (100, walking upright bass under a boom bap kit); bar = dubby trip hop (90, funk bass); studio = minimal techno (122); battle = drum and bass (172, two-step,
+reese bass); intro = slow melancholic piano; victory/defeat = short stings. The rhythm game's backing groove keeps its four styles (boom bap, house, trap, two-step).
+THE PLAYER'S OWN SOUNDS ARE IN THE SONGS: when recorded (Sound Lab), the drum hits of every song are the player's B, t, K and Pf (a quiet synth sub stays under the kick),
+a recorded throat bass (else hum) is pitched to every bass note (sine sub underneath), and recipes with `vox` add pitched lip roll / hum / throat bass stabs (the synth
+voice of the same sound when nothing is recorded). The backing groove never uses recordings, so the player's own hits stay distinct. See `MUSIC_PLAN.md`.
 Master bus: compressor/limiter so stacked sounds never clip. Respect mute. Never throw if the context is suspended or missing.

@@ -8,7 +8,7 @@ const BBH = load('audio');
 const AF = BBH.AudioFactory;
 const SFX = ['click', 'back', 'confirm', 'error', 'coin', 'buy', 'unlock', 'levelup', 'achievement', 'hit_perfect', 'hit_good', 'miss', 'combo', 'win', 'lose', 'equip', 'swoosh', 'sleep', 'eat', 'step', 'door', 'crowd_cheer', 'crowd_boo', 'applause', 'sparkle', 'whoosh', 'record', 'countdown', 'rain', 'thunder', 'heart', 'hum', 'go'];
 const MUSIC = ['title', 'creator', 'street', 'home', 'park', 'shop', 'bar', 'studio', 'battle', 'victory', 'defeat', 'intro'];
-const BPM = { title: 100, creator: 84, street: 92, home: 78, park: 96, shop: 104, bar: 98, studio: 88, battle: 140, intro: 66 };
+const BPM = { title: 126, creator: 84, street: 90, home: 76, park: 96, shop: 100, bar: 90, studio: 122, battle: 172, intro: 66 };
 const LOOPING = MUSIC.filter((m) => m !== 'victory' && m !== 'defeat');
 
 function fakeRig(opts) {
@@ -99,7 +99,7 @@ for (const id of MUSIC) {
   ok(seam, 'second loop repeats the first exactly one loop length later (seamless)');
   const lastIn = l1[l1.length - 1];
   ok(l2[0].t - t0 >= loopSec - 1e-6 && lastIn.t < l2[0].t, 'loop 2 starts at t0 + loop length');
-  near(A.music.bpm(), 140, 0, 'bpm()');
+  near(A.music.bpm(), 172, 0, 'bpm()');
   A.music.stop(0.1);
   step(1);
   const n0 = A.log.filter((e) => e.k === 'note').length; step(2);

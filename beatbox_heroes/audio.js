@@ -207,6 +207,16 @@
             push({ b: B + stepB(s), k: 'pluck', n: ladder[+c % ladder.length], d: R.arpDur || 0.22, v: (s % 4 === 0 ? 0.95 : 0.7) * (0.9 + rng() * 0.15) }, SL.arp);
           }
         }
+        /* vox: pitched beatbox stabs (lip roll, hum, throat bass) on the chord tones */
+        if (sec.vox && R.vox) {
+          const vp = R.voxes[sec.vox];
+          for (let s = 0; s < 16; s++) {
+            const c = vp[s];
+            if (c === '.' || c === ' ') continue;
+            const vn = voicing(chordAt(s), R.vox.lo || 48, R.vox.hi || 67);
+            push({ b: B + stepB(s), k: 'vox', n: vn[+c % vn.length], d: R.vox.d || 0.4, w: R.vox.w, v: (s % 4 === 0 ? 1 : 0.8) * (0.92 + rng() * 0.12) }, SL.vox);
+          }
+        }
         /* lead motif */
         if (sec.lead && R.lead) {
           const id = sec.lead;
@@ -239,21 +249,22 @@
   const RECIPES = {};
   const D = (o) => o; // readability marker
   RECIPES.title = D({
-    id: 'title', bpm: 100, key: 'A', mode: 'minor', kit: 'synth', pump: 0.5, rev: 0.32, dly: 0.28, swing: 0, bassLo: 29, arpLo: 57, arpHi: 81, arpDur: 0.2,
-    v: { bass: 'sub', pad: 'synth', pluck: 'saw', lead: 'synth' }, lead: { lo: 64, hi: 88, cells: [[0, 3, 6, 8, 11, 14], [0, 4, 6, 8, 12], [0, 2, 6, 8, 10, 14]] },
+    id: 'title', bpm: 126, key: 'A', mode: 'minor', kit: 'techno', pump: 0.55, rev: 0.3, dly: 0.3, swing: 0, bassLo: 29, arpLo: 57, arpHi: 81, arpDur: 0.18,
+    v: { bass: 'tech', pad: 'synth', pluck: 'saw', lead: 'synth' }, lead: { lo: 64, hi: 88, cells: [[0, 3, 6, 8, 11, 14], [0, 4, 6, 8, 12], [0, 2, 6, 8, 10, 14]] },
+    vox: { w: 'LR', lo: 45, hi: 62, d: 0.3 }, voxes: { A: '..0...........2...', B: '0.....2.....0...' },
     drums: {
-      H: { k: 'x..o....x..o....', h: '..o...o...o...o.' },
-      A: { k: 'x..o....x..o....', s: '....x.......x...', h: 'o.x.o.x.o.x.o.x.', o: '......x.......x.' },
-      B: { k: 'x..o....x..o..x.', s: '....x.......x...', h: 'xoxoxoxoxoxoxoxo', o: '......x.......x.' },
+      H: { k: 'x...x...x...x...', h: '..o...o...o...o.' },
+      A: { k: 'x...x...x...x...', c: '........x.......', o: '..x...x...x...x.', h: 'o.o.o.o.o.o.o.o.' },
+      B: { k: 'x...x...x...x...', c: '....x.......x...', o: '..x...x...x...x.', h: 'xoxoxoxoxoxoxoxo' },
     },
-    bass: { A: 'R.r.r.r.R.r.r.8.', B: 'R.rr.r.rR.rr.r.a' },
+    bass: { A: '.r.rg.r..r.rg.r.', B: '.r.r.rr..r.r.rrg' },
     arps: { A: '0121324301214352', B: '0.1.2.3.4.3.2.1.', C: '0120120120120125' },
     sections: [
-      { bars: 4, prog: ['Am', 'F', 'C', 'G'], drums: 'H', pad: 'hold', arp: 'B', L: { arp: 0 } },
-      { bars: 8, prog: ['Am', 'F', 'C', 'G'], drums: 'A', fill: 'snare', bass: 'A', pad: 'hold', arp: 'A', crash: true },
-      { bars: 8, prog: ['F', 'G', 'Am', 'Am'], drums: 'B', fill: 'snare', bass: 'B', pad: 'hold', arp: 'A', lead: 'A' },
+      { bars: 4, prog: ['Am', 'Am', 'F', 'G'], drums: 'H', pad: 'hold', arp: 'B', L: { arp: 0 } },
+      { bars: 8, prog: ['Am', 'Am', 'F', 'G'], drums: 'A', fill: 'snare', bass: 'A', pad: 'hold', arp: 'A', crash: true },
+      { bars: 8, prog: ['Am', 'F', 'C', 'G'], drums: 'B', fill: 'snare', bass: 'B', pad: 'hold', arp: 'A', vox: 'A', lead: 'A' },
       { bars: 4, prog: ['Dm', 'Dm', 'E', 'E'], pad: 'hold', arp: 'C', lead: 'B', riser: true },
-      { bars: 8, prog: ['Am', 'F', 'Dm', 'E'], drums: 'B', fill: 'snare', bass: 'B', pad: 'hold', arp: 'A', lead: 'B', crash: true },
+      { bars: 8, prog: ['Am', 'F', 'Dm', 'E'], drums: 'B', fill: 'snare', bass: 'B', pad: 'hold', arp: 'A', vox: 'B', lead: 'B', crash: true },
     ],
   });
   RECIPES.creator = D({
@@ -274,8 +285,8 @@
     ],
   });
   RECIPES.street = D({
-    id: 'street', bpm: 92, key: 'E', mode: 'dorian', kit: 'night', pump: 0.25, rev: 0.4, dly: 0.35, swing: 0.12, bassLo: 28, lofi: { lp: 7000, crackle: 0.006 },
-    v: { bass: 'moog', pad: 'dark', keys: 'rhodes', pluck: 'pizz', lead: 'muted' }, lead: { lo: 64, hi: 86, cells: [[0, 6, 10, 14], [2, 8, 11], [0, 3, 6, 12], [0, 8, 10]], relLo: -2, relHi: 7 },
+    id: 'street', bpm: 90, key: 'E', mode: 'dorian', kit: 'hiphop', pump: 0.25, rev: 0.4, dly: 0.35, swing: 0.12, bassLo: 28, lofi: { lp: 7000, crackle: 0.006 },
+    v: { bass: 'b808', pad: 'dark', keys: 'rhodes', pluck: 'pizz', lead: 'muted' }, vox: { w: 'LR', lo: 40, hi: 58, d: 0.3 }, voxes: { A: '..............0.', B: '0.....2.....0...' }, lead: { lo: 64, hi: 86, cells: [[0, 6, 10, 14], [2, 8, 11], [0, 3, 6, 12], [0, 8, 10]], relLo: -2, relHi: 7 },
     pads: { stab: 'x.....x.....x...', sus: 'x...............' },
     arps: { A: '..0...1...2...1.', B: '0.2.1.2.0.2.1.3.' },
     drums: {
@@ -286,45 +297,47 @@
     sections: [
       { bars: 4, prog: ['Em9', 'Em9', 'Cmaj7', 'D6'], pad: 'hold', arp: 'A', bass: 'A', L: {} },
       { bars: 8, prog: ['Em9', 'Em9', 'Cmaj7', 'D6'], drums: 'A', fill: 'hats', bass: 'A', pad: 'hold', arp: 'A', keys: 'stab' },
-      { bars: 8, prog: ['Am9', 'Bm7', 'Cmaj7', 'B7sus4'], drums: 'B', fill: 'snare', bass: 'B', pad: 'hold', arp: 'B', keys: 'stab', lead: 'A', leadRest: true },
-      { bars: 8, prog: ['Em9', 'Em9', 'Cmaj7', 'D6'], drums: 'A', fill: 'hats', bass: 'B', pad: 'hold', arp: 'B', keys: 'stab', lead: 'B', leadRest: true },
+      { bars: 8, prog: ['Am9', 'Bm7', 'Cmaj7', 'B7sus4'], drums: 'B', fill: 'snare', bass: 'B', pad: 'hold', arp: 'B', keys: 'stab', vox: 'A', lead: 'A', leadRest: true },
+      { bars: 8, prog: ['Em9', 'Em9', 'Cmaj7', 'D6'], drums: 'A', fill: 'hats', bass: 'B', pad: 'hold', arp: 'B', keys: 'stab', vox: 'B', lead: 'B', leadRest: true },
       { bars: 4, prog: ['Am9', 'Bm7', 'Cmaj7', 'B7sus4'], pad: 'hold', arp: 'A', riser: true },
     ],
   });
   RECIPES.home = D({
-    id: 'home', bpm: 78, key: 'F', mode: 'major', kit: 'soft', pump: 0.1, rev: 0.4, dly: 0.2, swing: 0.2, bassLo: 29, lofi: { lp: 5000, crackle: 0.015, wobble: 1 }, arpLo: 55, arpHi: 79, arpDur: 0.5,
+    id: 'home', bpm: 76, key: 'F', mode: 'major', kit: 'trip', pump: 0.1, rev: 0.4, dly: 0.2, swing: 0.2, bassLo: 29, lofi: { lp: 5000, crackle: 0.015, wobble: 1 }, arpLo: 55, arpHi: 79, arpDur: 0.5,
     v: { bass: 'lofi', pad: 'warm', keys: 'rhodesSoft', pluck: 'kal', lead: 'flute' }, lead: { lo: 65, hi: 84, cells: [[0, 8], [0, 6, 10], [2, 8, 12], [0, 4, 8, 12]], relLo: -1, relHi: 7, hold: 0.98 },
     arps: { A: '0.1.2.3.2.1.0.1.', B: '0.12.3.1.2.4.3.2' },
     pads: { sus: 'x...............', comp: 'x.......x.......' },
-    drums: { A: { k: 'x.......x.x.....', r: '....x.......x...', p: 'o.o.o.o.o.o.o.o.' }, B: { k: 'x.....o.x.x.....', r: '....x.......x..o', p: 'o.x.o.x.o.x.o.x.' } },
+    drums: { A: { k: 'x.....o...x.....', s: '........x.......', h: 'o.o.o.o.o.o.o.o.' }, B: { k: 'x.....o..ox.....', s: '.......ox......o', h: 'o.x.o.x.o.x.o.x.', p: '..o...o...o...o.' } },
+    vox: { w: 'HUM', lo: 48, hi: 62, d: 0.6 }, voxes: { A: '0.......2.......' },
     bass: { A: 'r.......5.....r.', B: 'r.....r.....5.a.' },
     sections: [
       { bars: 4, prog: ['Fmaj9', 'Dm9', 'Bbmaj7', 'C13'], pad: 'hold', arp: 'A' },
       { bars: 8, prog: ['Fmaj9', 'Dm9', 'Bbmaj7', 'C13'], drums: 'A', fill: 'hats', bass: 'A', pad: 'hold', arp: 'A', keys: 'comp' },
-      { bars: 8, prog: ['Gm9', 'C13', 'Fmaj9', 'Dm9'], drums: 'B', bass: 'B', pad: 'hold', arp: 'B', keys: 'comp', lead: 'A', leadRest: true },
+      { bars: 8, prog: ['Gm9', 'C13', 'Fmaj9', 'Dm9'], drums: 'B', bass: 'B', pad: 'hold', arp: 'B', keys: 'comp', vox: 'A', lead: 'A', leadRest: true },
       { bars: 8, prog: ['Fmaj9', 'Dm9', 'Bbmaj7', 'C13'], drums: 'A', fill: 'hats', bass: 'B', pad: 'hold', arp: 'B', keys: 'comp', lead: 'B', leadRest: true },
       { bars: 4, prog: ['Gm9', 'C13', 'Fmaj9', 'Fmaj9'], pad: 'hold', arp: 'A' },
     ],
   });
   RECIPES.park = D({
-    id: 'park', bpm: 96, key: 'G', mode: 'major', kit: 'soft', pump: 0.1, rev: 0.45, dly: 0.3, swing: 0.06, bassLo: 31, arpLo: 55, arpHi: 83, arpDur: 0.45,
-    v: { bass: 'soft', pad: 'air', keys: 'rhodesSoft', pluck: 'harp', lead: 'flute' }, lead: { lo: 67, hi: 88, cells: [[0, 4, 8, 10, 12], [0, 3, 6, 8, 12], [2, 4, 8, 14], [0, 6, 8, 11, 14]], relLo: -1, relHi: 8, hold: 0.9 },
+    id: 'park', bpm: 96, key: 'G', mode: 'major', kit: 'hiphop', pump: 0.1, rev: 0.45, dly: 0.3, swing: 0.06, bassLo: 31, arpLo: 55, arpHi: 83, arpDur: 0.45,
+    v: { bass: 'b808', pad: 'air', keys: 'rhodesSoft', pluck: 'harp', lead: 'flute' }, lead: { lo: 67, hi: 88, cells: [[0, 4, 8, 10, 12], [0, 3, 6, 8, 12], [2, 4, 8, 14], [0, 6, 8, 11, 14]], relLo: -1, relHi: 8, hold: 0.9 },
     arps: { A: '0.1.2.3.2.1.2.4.', B: '012.234.432.210.', C: '0.2.1.3.2.4.3.5.' },
-    drums: { A: { k: 'x.......x.......', r: '....x.......x...', p: 'o.o.o.o.o.o.o.o.' }, B: { k: 'x.....x.x.......', r: '....x.......x..x', p: 'xoxoxoxoxoxoxoxo', c: '................' } },
-    bass: { A: 'r.....5.r.....5.', B: 'r..5..r.r..5..a.' },
+    drums: { A: { k: 'x.....x..x......', s: '....x.......x...', h: 'x.x.x.x.x.x.x.x.' }, B: { k: 'x..x..x..x..x...', s: '....x..o....x..o', h: 'xoxxxoxxxoxxxoxx', o: '..............x.' } },
+    vox: { w: 'HUM', lo: 48, hi: 64, d: 0.5 }, voxes: { A: '0.......2.......', B: '0.....2.....4...' },
+    bass: { A: 'R.....r..r.....5', B: 'R..r..r..r..R...' },
     sections: [
       { bars: 4, prog: ['G', 'D', 'Em7', 'C'], pad: 'hold', arp: 'A' },
       { bars: 8, prog: ['G', 'D', 'Em7', 'C'], drums: 'A', bass: 'A', pad: 'hold', arp: 'B', fill: 'hats' },
-      { bars: 8, prog: ['C', 'G', 'Am7', 'D'], drums: 'B', bass: 'B', pad: 'hold', arp: 'C', lead: 'A', fill: 'hats' },
-      { bars: 8, prog: ['G', 'D', 'Em7', 'C'], drums: 'B', bass: 'B', pad: 'hold', arp: 'B', lead: 'B', leadRest: true, fill: 'hats' },
+      { bars: 8, prog: ['C', 'G', 'Am7', 'D'], drums: 'B', bass: 'B', pad: 'hold', arp: 'C', vox: 'A', lead: 'A', fill: 'hats' },
+      { bars: 8, prog: ['G', 'D', 'Em7', 'C'], drums: 'B', bass: 'B', pad: 'hold', arp: 'B', vox: 'B', lead: 'B', leadRest: true, fill: 'hats' },
       { bars: 4, prog: ['C', 'D', 'G', 'G'], pad: 'hold', arp: 'A' },
     ],
   });
   RECIPES.shop = D({
-    id: 'shop', bpm: 104, key: 'C', mode: 'major', kit: 'jazz', pump: 0, rev: 0.3, dly: 0.15, swing: 0.33, bassLo: 29, padLen: 0.6,
+    id: 'shop', bpm: 100, key: 'C', mode: 'major', kit: 'hiphop', pump: 0, rev: 0.3, dly: 0.15, swing: 0.33, bassLo: 29, padLen: 0.6,
     v: { bass: 'upright', pad: 'warm', keys: 'rhodes', pluck: 'pizz', lead: 'brass' }, lead: { lo: 67, hi: 88, stacc: true, cells: [[2, 6, 7, 10, 14], [0, 3, 6, 9, 12], [1, 4, 7, 8, 11, 14], [0, 4, 6, 10, 12]], relLo: -2, relHi: 8 },
     pads: { charl: 'x.....x.........', comp: 'x..x....x..x....' },
-    drums: { A: { h: 'x..xx..xx..xx..x', k: 'o...o...o...o...', r: '....o.......o...' }, B: { h: 'x..xx..xx..xx..x', k: 'o...o...o...o..o', s: '....o.......o...', r: '..o...........o.' } },
+    drums: { A: { k: 'x.....o...x.....', s: '....x.......x...', h: 'x..xx..xx..xx..x', r: '..o...........o.' }, B: { k: 'x..x..o...x..o..', s: '....x..o....x.o.', h: 'x..xx..xx..xx..x', r: '..o...........o.' } },
     bass: { W: 'walk' },
     sections: [
       { bars: 4, prog: ['Dm7', 'G7', 'Cmaj7', 'A7'], bass: 'W', keys: 'charl' },
@@ -335,8 +348,8 @@
     ],
   });
   RECIPES.bar = D({
-    id: 'bar', bpm: 98, key: 'E', mode: 'dorian', kit: 'funk', pump: 0, rev: 0.28, dly: 0.2, swing: 0.14, bassLo: 28, padLen: 0.5,
-    v: { bass: 'funk', pad: 'dark', keys: 'organ', lead: 'sax' }, lead: { lo: 64, hi: 86, cells: [[0, 3, 6, 8, 11, 14], [2, 4, 7, 10, 12], [0, 3, 6, 10, 13], [0, 6, 8, 11]], relLo: -2, relHi: 7, glide: 0.2 },
+    id: 'bar', bpm: 90, key: 'E', mode: 'dorian', kit: 'trip', pump: 0, rev: 0.28, dly: 0.2, swing: 0.14, bassLo: 28, padLen: 0.5,
+    v: { bass: 'funk', pad: 'dark', keys: 'organ', lead: 'sax' }, vox: { w: 'TB', lo: 38, hi: 52, d: 0.5 }, voxes: { A: '0.......2.......' }, lead: { lo: 64, hi: 86, cells: [[0, 3, 6, 8, 11, 14], [2, 4, 7, 10, 12], [0, 3, 6, 10, 13], [0, 6, 8, 11]], relLo: -2, relHi: 7, glide: 0.2 },
     pads: { stab: 'x..x..x...x..x..', long: 'x...............', off: '..x...x...x...x.' },
     drums: {
       A: { k: 'x..x..x...x.....', s: '....x..o..o.x..o', h: 'xoxoxoxoxoxoxoxo', o: '..............x.' },
@@ -346,42 +359,44 @@
     sections: [
       { bars: 4, prog: ['Em9', 'A13', 'Em9', 'Bm7 A7'], bass: 'A', keys: 'long', drums: 'A', L: {} },
       { bars: 8, prog: ['Em9', 'A13', 'Em9', 'Bm7 A7'], drums: 'A', bass: 'A', keys: 'stab', pad: 'long', fill: 'snare', fillFrom: 13 },
-      { bars: 8, prog: ['Gmaj7', 'A9', 'Em9', 'Em9'], drums: 'B', bass: 'B', keys: 'off', pad: 'long', lead: 'A', leadRest: true, fill: 'snare', fillFrom: 13 },
+      { bars: 8, prog: ['Gmaj7', 'A9', 'Em9', 'Em9'], drums: 'B', bass: 'B', keys: 'off', pad: 'long', vox: 'A', lead: 'A', leadRest: true, fill: 'snare', fillFrom: 13 },
       { bars: 8, prog: ['Em9', 'A13', 'Em9', 'Bm7 A7'], drums: 'B', bass: 'B', keys: 'stab', pad: 'long', lead: 'B', leadRest: true, fill: 'snare', fillFrom: 13 },
       { bars: 4, prog: ['Am9', 'A13', 'Em9', 'Em9'], drums: 'A', bass: 'A', keys: 'stab' },
     ],
   });
   RECIPES.studio = D({
-    id: 'studio', bpm: 88, key: 'C', mode: 'major', kit: 'clean', pump: 0.5, rev: 0.45, dly: 0.35, swing: 0, bassLo: 31, arpLo: 60, arpHi: 88, arpDur: 0.3, padLo: 52, padHi: 76,
-    v: { bass: 'warm', pad: 'glass', keys: 'rhodesSoft', pluck: 'glock', lead: 'bell' }, lead: { lo: 72, hi: 93, cells: [[0, 6, 12], [0, 4, 8, 12], [2, 8, 14], [0, 6, 8]], relLo: -1, relHi: 7, hold: 0.95 },
+    id: 'studio', bpm: 122, key: 'D', mode: 'dorian', kit: 'clean', pump: 0.5, rev: 0.4, dly: 0.35, swing: 0, bassLo: 31, arpLo: 62, arpHi: 90, arpDur: 0.22, padLo: 52, padHi: 76,
+    v: { bass: 'tech', pad: 'glass', keys: 'rhodesSoft', pluck: 'glock', lead: 'bell' }, lead: { lo: 72, hi: 93, cells: [[0, 6, 12], [0, 4, 8, 12], [2, 8, 14], [0, 6, 8]], relLo: -1, relHi: 7, hold: 0.95 },
+    vox: { w: 'TB', lo: 38, hi: 55, d: 0.5 }, voxes: { A: '0.......0.....2.' },
     arps: { A: '0.1.2.3.4.3.2.1.', B: '0..1..2..3..4..2', C: '0.2.4.2.0.2.4.5.' },
-    drums: { A: { k: 'x.......x.......', c: '........x.......', h: '..o...o...o...o.' }, B: { k: 'x...x...x...x...', c: '....x.......x...', h: '..o...o...o...o.', p: 'o.o.o.o.o.o.o.o.' } },
-    bass: { A: 'r.......5.......', B: 'r.....r.r.....5.' },
+    drums: { A: { k: 'x...x...x...x...', o: '..x...x...x...x.', h: '..o...o...o...o.' }, B: { k: 'x...x...x...x...', c: '....x.......x...', o: '..x...x...x...x.', h: 'xoxoxoxoxoxoxoxo', p: 'o.o.o.o.o.o.o.o.' } },
+    bass: { A: '..r...r...r...r.', B: '.r.r.rr..r.r.r.5' },
     sections: [
-      { bars: 4, prog: ['Cmaj7', 'Em7', 'Fmaj7', 'G6'], pad: 'hold', arp: 'A' },
-      { bars: 8, prog: ['Cmaj7', 'Em7', 'Fmaj7', 'G6'], drums: 'A', bass: 'A', pad: 'hold', arp: 'B', fill: 'hats' },
-      { bars: 8, prog: ['Am7', 'Fmaj7', 'Cmaj7', 'G6'], drums: 'B', bass: 'B', pad: 'hold', arp: 'C', lead: 'A', fill: 'hats', leadRest: true },
-      { bars: 8, prog: ['Cmaj7', 'Em7', 'Fmaj7', 'G6'], drums: 'B', bass: 'B', pad: 'hold', arp: 'B', lead: 'B', fill: 'hats', leadRest: true },
-      { bars: 4, prog: ['Am7', 'Fmaj7', 'Cmaj7', 'Cmaj7'], pad: 'hold', arp: 'A' },
+      { bars: 4, prog: ['Dm9', 'Dm9', 'Gm9', 'Am7'], pad: 'hold', arp: 'A' },
+      { bars: 8, prog: ['Dm9', 'Dm9', 'Gm9', 'Am7'], drums: 'A', bass: 'A', pad: 'hold', arp: 'B', fill: 'hats' },
+      { bars: 8, prog: ['Gm9', 'Dm9', 'Am7', 'Am7'], drums: 'B', bass: 'B', pad: 'hold', arp: 'C', vox: 'A', lead: 'A', fill: 'hats', leadRest: true },
+      { bars: 8, prog: ['Dm9', 'Dm9', 'Gm9', 'Am7'], drums: 'B', bass: 'B', pad: 'hold', arp: 'B', vox: 'A', lead: 'B', fill: 'hats', leadRest: true },
+      { bars: 4, prog: ['Gm9', 'Dm9', 'Am7', 'Am7'], pad: 'hold', arp: 'A' },
     ],
   });
   RECIPES.battle = D({
-    id: 'battle', bpm: 140, key: 'E', mode: 'minor', kit: 'bb', pump: 0.3, rev: 0.2, dly: 0.2, swing: 0, bassLo: 28, arpLo: 52, arpHi: 80, arpDur: 0.2, padLen: 0.35, padLo: 52, padHi: 72,
+    id: 'battle', bpm: 172, key: 'E', mode: 'minor', kit: 'dnb', pump: 0.3, rev: 0.18, dly: 0.2, swing: 0, bassLo: 28, arpLo: 52, arpHi: 80, arpDur: 0.12, padLen: 0.35, padLo: 52, padHi: 72,
     v: { bass: 'reese', pad: 'synth', pluck: 'saw', lead: 'synth' }, lead: { lo: 64, hi: 88, cells: [[0, 2, 6, 8, 10, 14], [0, 3, 6, 8, 12, 14], [0, 2, 4, 8, 11, 14], [0, 6, 8, 10, 12]], relLo: -2, relHi: 8 },
+    vox: { w: 'LR', lo: 40, hi: 58, d: 0.35 }, voxes: { A: '0.........2.....', B: '0.....2.....0.2.' },
     pads: { stab: 'x..x..x.x..x....', hit: 'x.......x.......' },
     arps: { A: '0.1.2.0.1.2.0.1.', B: '0120120120120120', C: '0.2.0.2.0.2.0.2.' },
     drums: {
-      A: { k: 'x.....x...x.....', s: '....x..o.o..x..o', h: 'xoxoxoxoxoxoxoxo', o: '..............x.' },
-      B: { k: 'x.....x..xx...x.', s: '....x..o.o..x.o.', h: 'xxxoxxxoxxxoxxxo', o: '......x.......x.' },
+      A: { k: 'x.........x.....', s: '....x.......x...', h: 'x.x.x.x.x.x.x.x.', o: '..............x.' },
+      B: { k: 'x.........x...x.', s: '....x.o.....x..o', h: 'xxxoxxxoxxxoxxxo', o: '......x.......x.' },
       H: { k: 'x.......x.......', s: '........x.......', h: 'x.x.x.x.x.x.x.x.' },
     },
-    bass: { A: 'R.rr.r.rR.r.rr.r', B: 'R.rrRr.rR.rrr.a.' },
+    bass: { A: 'R.......5.....r.', B: 'R...r.......a...' },
     sections: [
       { bars: 4, prog: ['Em', 'Em', 'C', 'D'], drums: 'A', fill: 'beatbox', keys: 'hit', arp: 'A' },
       { bars: 8, prog: ['Em', 'Em', 'C', 'D'], drums: 'A', fill: 'beatbox', bass: 'A', pad: 'stab', arp: 'B', crash: true },
-      { bars: 8, prog: ['Em', 'C', 'G', 'D'], drums: 'B', fill: 'snare', bass: 'B', pad: 'stab', arp: 'B', lead: 'A' },
+      { bars: 8, prog: ['Em', 'C', 'G', 'D'], drums: 'B', fill: 'snare', bass: 'B', pad: 'stab', arp: 'B', vox: 'A', lead: 'A' },
       { bars: 4, prog: ['C', 'C', 'D', 'D'], drums: 'H', fill: 'tom', arp: 'C', pad: 'hold', riser: true },
-      { bars: 8, prog: ['Em', 'C', 'G', 'D'], drums: 'B', fill: 'beatbox', bass: 'B', pad: 'stab', arp: 'B', lead: 'B', crash: true },
+      { bars: 8, prog: ['Em', 'C', 'G', 'D'], drums: 'B', fill: 'beatbox', bass: 'B', pad: 'stab', arp: 'B', vox: 'B', lead: 'B', crash: true },
     ],
   });
   RECIPES.intro = D({
@@ -467,6 +482,10 @@
     jazz: { kick: { f0: 100, f1: 55, len: 0.22, click: 0.05, lip: 0.1, sat: 1, lv: 0.8 }, snare: { f: 200, nlen: 0.2, bp: 4200, hp: 1800, body: 0.2, click: 0.05, lv: 0.6 }, hat: { hp: 5500, bp: 8000, len: 0.1, lv: 0.9, open: 0.3 }, rim: { f: 1900, lv: 0.9 }, lp: 9000, gain: 0.9 },
     funk: { kick: { f0: 160, f1: 54, len: 0.22, click: 0.5, lip: 0.2, sat: 2.4 }, snare: { f: 215, nlen: 0.14, click: 0.85, body: 0.6 }, hat: { len: 0.04, lv: 1.3 }, gain: 0.95 },
     clean: { kick: { f0: 135, f1: 48, len: 0.3, click: 0.25, lip: 0.1, sat: 1.2 }, clap: { len: 0.14, lv: 1.0 }, hat: { len: 0.04, lv: 1.0 }, gain: 0.9 },
+    techno: { kick: { f0: 155, f1: 44, len: 0.4, click: 0.35, lip: 0.1, sat: 2.2 }, snare: { f: 200, len: 0.12, nlen: 0.14, body: 0.3, click: 0.5 }, hat: { hp: 7000, bp: 10000, len: 0.03, lv: 1.5, open: 0.18 }, clap: { len: 0.12, lv: 1.2 }, gain: 0.95 },
+    hiphop: { kick: { f0: 130, f1: 46, len: 0.38, click: 0.3, lip: 0.25, sat: 2.4 }, snare: { f: 185, len: 0.16, nlen: 0.2, bp: 1900, hp: 600, body: 0.8, click: 0.5 }, hat: { hp: 5600, len: 0.035, lv: 1.1 }, clap: { lv: 1.0 }, gain: 0.95 },
+    trip: { kick: { f0: 105, f1: 42, len: 0.45, click: 0.1, lip: 0.2, sat: 1.6 }, snare: { f: 165, len: 0.2, nlen: 0.28, bp: 1500, hp: 500, body: 0.9, click: 0.15 }, hat: { hp: 4500, len: 0.05, lv: 0.85 }, lp: 7500, gain: 0.9 },
+    dnb: { kick: { f0: 160, f1: 48, len: 0.2, click: 0.55, lip: 0.1, sat: 2.6 }, snare: { f: 225, len: 0.12, nlen: 0.14, bp: 2600, hp: 900, body: 0.5, click: 0.9 }, hat: { hp: 7500, bp: 11000, len: 0.025, lv: 1.4 }, gain: 1 },
     groove: { kick: { f0: 120, f1: 48, len: 0.26, click: 0.2, lip: 0.2, lv: 0.7 }, snare: { f: 170, nlen: 0.1, lv: 0.5 }, hat: { len: 0.03, lv: 0.9 }, clap: { lv: 0.7 }, lp: 5500, gain: 0.8 },
   };
   function kitOf(name) {
@@ -483,6 +502,8 @@
     upright: { w: 'triangle', w2: 'sine', det: 0, sub: 0.0, c1: 1100, c0: 450, fd: 0.12, q: 0.7, a: 0.006, d: 0.34, s: 0.2, r: 0.1, lv: 0.75, click: 0.35, drive: 0 },
     soft: { w: 'triangle', w2: 'sine', det: 0, sub: 0, c1: 900, c0: 420, fd: 0.2, q: 0.7, a: 0.012, d: 0.3, s: 0.55, r: 0.14, lv: 0.62, drive: 0 },
     warm: { w: 'sine', w2: 'triangle', det: 0, sub: 0, c1: 600, c0: 400, fd: 0.2, q: 0.7, a: 0.015, d: 0.3, s: 0.75, r: 0.18, lv: 0.6, drive: 0 },
+    b808: { w: 'sine', w2: null, det: 0, sub: 0, c1: 900, c0: 300, fd: 0.3, q: 0.7, a: 0.003, d: 0.6, s: 0.55, r: 0.18, lv: 0.85, drive: 1.8 },
+    tech: { w: 'sawtooth', w2: 'square', det: 3, sub: 0.6, c1: 1400, c0: 200, fd: 0.12, q: 6, a: 0.002, d: 0.1, s: 0.35, r: 0.04, lv: 0.5, drive: 2 },
   };
   const PAD = {
     warm: { w: 'triangle', w2: 'sawtooth', a2: 0.28, det: 9, c0: 700, c1: 1500, a: 0.3, r: 0.7, lv: 0.2, lfo: [0.55, 7] },
@@ -520,7 +541,7 @@
     kalimbaLead: { eng: 'pluck', pluck: 'kal', vscale: 0.5 },
   };
 
-  const MIXK = { bass: 1, pad: 0.75, keys: 1.4, pluck: 2.4, lead: 3.4 };
+  const MIXK = { bass: 1, pad: 0.75, keys: 1.4, pluck: 2.4, lead: 3.4, vox: 1 };
 
   /* ================================================================== ENGINE */
   function create(ctxFactory, copts) {
@@ -983,6 +1004,82 @@
       } catch (e) { return false; }
     }
 
+    /* ================= recorded sounds inside the songs =================
+     * Songs (not the rhythm game's backing groove, so the player's own hits stay distinct) play the player's recordings when they exist:
+     *   drums   k -> B, h and o -> t, s -> K, c -> Pf, t (tom) -> B pitched. A kick keeps a quiet synth sub under it so a thin recording
+     *           still carries on a phone speaker.
+     *   bass    a recorded throat bass (TB) or hum (HUM) is pitched to every bass note with a clean sine sub underneath for weight.
+     *   vox     pitched lip roll / hum / throat bass stabs (recipe `vox`); without a recording the synth voice of the same sound plays.
+     * A sample is pitched by playbackRate = target Hz / its own pitch (found once with Mic.yin, else the synth voice's pitch). */
+    const MUS_SAMPLE = { k: 'B', h: 't', o: 't', s: 'K', c: 'Pf', t: 'B' };
+    const SYNTH_F0 = { TB: 55, HUM: HUM_F, LR: 88 };
+    function f0Of(S, id) {
+      if (S.f0) return S.f0;
+      let f = 0;
+      const M = root.BBH && root.BBH.Mic;
+      if (M && M.yin && S.f32.length >= 4096) {
+        try {
+          const n = S.f32.length, win = 2048, fs = [];
+          for (const fr of [0.3, 0.45, 0.6]) {
+            const s0 = Math.max(0, Math.min(n - win, Math.floor(n * fr - win / 2))), r = M.yin(S.f32.subarray(s0, s0 + win), S.rate);
+            if (r && r.freq > 30 && r.freq < 600 && r.clarity > 0.5) fs.push(r.freq);
+          }
+          if (fs.length) { fs.sort((a, b) => a - b); f = fs[fs.length >> 1]; }
+        } catch (e) { /* use the synth pitch */ }
+      }
+      S.f0 = f || SYNTH_F0[id] || 110;
+      return S.f0;
+    }
+    function sampleBuf(S) {
+      if (S.bufCtx !== ctx || !S.buf) { const b = ctx.createBuffer(1, S.f32.length, S.rate); b.getChannelData(0).set(S.f32); S.buf = b; S.bufCtx = ctx; }
+      return S.buf;
+    }
+    /** one recorded sound into a music bus. o: { bus, rev, dly }. opts: pm (playback rate), dur (hold seconds, 0 = one shot), rel (release s) */
+    function sampleVoice(S, id, t, vel, o, rev, opts) {
+      opts = opts || {};
+      const src = ctx.createBufferSource(); src.buffer = sampleBuf(S);
+      const pm = clamp(opts.pm || 1, 0.25, 4), len = S.f32.length / S.rate / pm, g = mkGain(0);
+      try { src.playbackRate.value = pm; } catch (e) { /* ignore */ }
+      const dur = opts.dur > 0 ? opts.dur : len, rel = opts.rel != null ? opts.rel : 0.03;
+      if (opts.dur > 0 && len < opts.dur && len > 0.25) { src.loop = true; src.loopStart = S.f32.length / S.rate * 0.35; src.loopEnd = S.f32.length / S.rate * 0.8; }
+      const hold = Math.min(dur, opts.dur > 0 && src.loop ? opts.dur : len);
+      g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(vel, t + 0.004);
+      g.gain.setValueAtTime(vel, t + Math.max(0.005, hold - rel)); g.gain.linearRampToValueAtTime(0, t + hold + rel);
+      src.connect(g); route(g, o, rev, 0);
+      voices++;
+      src.onended = () => { voices = Math.max(0, voices - 1); try { g.disconnect(); } catch (e) { /* ignore */ } };
+      src.start(t); try { src.stop(t + hold + rel + 0.02); } catch (e) { /* ignore */ }
+      if (LOG) LOG.push({ k: 'drum', id, t, vel, sample: true, music: true, pm });
+      return true;
+    }
+    /** pitch ratio that brings a sample's own pitch to midi note n, folded into one octave either side so the timbre stays natural */
+    function pitchRatio(S, id, n) {
+      let r = mtof(n) / f0Of(S, id);
+      while (r > 1.45) r /= 2;
+      while (r < 0.7) r *= 2;
+      return r;
+    }
+    function subV(t, midi, dur, vel, o) { // a clean sine under a recorded bass note
+      const v = vc(mkGain(0)), g = mkGain(0), end = t + dur + 0.2, so = O(v, 'sine', mtof(midi), t, end);
+      so.connect(g); envADSR(g.gain, t, vel, 0.01, 0.1, 0.8, dur, 0.1); route(g, o, 0, 0);
+    }
+    function recordedBass(t, n, dur, vel, o) {
+      const id = SAMPLES.has('TB') ? 'TB' : SAMPLES.has('HUM') ? 'HUM' : null;
+      if (!id) return false;
+      const S = SAMPLES.get(id);
+      sampleVoice(S, id, t, vel * 0.8, o, 0, { pm: pitchRatio(S, id, n), dur, rel: 0.07 });
+      subV(t, n, dur, vel * 0.5, o);
+      return true;
+    }
+    function voxHit(t, w, n, dur, vel, o, rev) {
+      const S = SAMPLES.get(w);
+      if (S) return sampleVoice(S, w, t, vel * 0.9, o, rev, { pm: pitchRatio(S, w, n), dur: Math.min(dur, 1.2), rel: 0.05 });
+      const fn = XVOICE[w], f0 = SYNTH_F0[w];
+      if (!fn || !f0) return false;
+      fn(t, clamp(vel, 0, 1), clamp(mtof(n) / f0, 0.3, 3), o);
+      return true;
+    }
+
     /* ================= metronome shaker + ear training tones ================= */
     function shakerTick(t, accent, vol) { // soft "chk": two bead grains, a brighter and slightly louder accent
       const g = mkGain(0), v = vc(g);
@@ -1371,10 +1468,17 @@
         case 'd': {
           const key = e.d;
           if (key === 'k' && R.pump > 0 && T.kind !== 'sting') duck(T, t, R.pump * clamp(e.v, 0.3, 1.1));
-          kitHit(T.kit, key, t, clamp(e.v * mixg, 0, 1.2), bus.d, e.p || 1, 0.6, key === 's' || key === 'c' ? (R.rev || 0.2) * 0.8 : (key === 'x' ? 0.3 : 0.05));
+          const sid = T.kind === 'music' ? MUS_SAMPLE[key] : null, S = sid ? SAMPLES.get(sid) : null, rv = key === 's' || key === 'c' ? (R.rev || 0.2) * 0.8 : (key === 'x' ? 0.3 : 0.05);
+          if (S) {
+            sampleVoice(S, sid, t, clamp(e.v, 0, 1.2) * 0.9 * T.kit.gain * (key === 'o' ? 0.9 : 1), bus.d, rv, { pm: (e.p || 1) * (key === 'o' ? 0.82 : 1) });
+            if (key === 'k') kitHit(T.kit, 'k', t, clamp(e.v * mixg, 0, 1.2) * 0.3, bus.d, 1, 0.6, 0.02);
+            break;
+          }
+          kitHit(T.kit, key, t, clamp(e.v * mixg, 0, 1.2), bus.d, e.p || 1, 0.6, rv);
           break;
         }
-        case 'bass': bassV(t, e.n, e.d * spb, e.v * mk('bass'), BASS[v.bass || 'sub'], bus.b, 0, 0); break;
+        case 'bass': if (!(T.kind === 'music' && recordedBass(t, e.n, e.d * spb, e.v * mk('bass'), bus.b))) bassV(t, e.n, e.d * spb, e.v * mk('bass'), BASS[v.bass || 'sub'], bus.b, 0, 0); break;
+        case 'vox': voxHit(t, e.w, e.n, e.d * spb, e.v * mk('vox'), bus.l, R.rev * 0.6); break;
         case 'pad': padV(t, e.n, e.d * spb, e.v * mk('pad'), PAD[v.pad || 'warm'], bus.p, R.rev * 0.9, R.dly * 0.15); break;
         case 'keys': keysV(t, e.n, e.d * spb, e.v * mk('keys'), KEYS[v.keys || 'rhodes'], bus.p, R.rev * 0.8, R.dly * 0.35); break;
         case 'pluck': pluckV(t, e.n, e.d * spb, e.v * mk('pluck'), PLUCK[v.pluck || 'saw'], bus.l, R.rev * 0.8, R.dly); break;
