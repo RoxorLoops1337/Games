@@ -61,9 +61,20 @@ async function onRoute() {
 }
 addEventListener('hashchange', onRoute);
 
+/* Safe zones: TVs and projectors crop the edge of the picture, so the big screen keeps a margin (0 to 8 %) clear. */
+let guideT = 0;
+ui.safe = 4;
+try { const v = +localStorage.getItem('bc.safe'); if ([0, 2, 4, 6, 8].includes(v) && localStorage.getItem('bc.safe') !== null) ui.safe = v; } catch (_) { /* */ }
+function applySafe() {
+  document.documentElement.style.setProperty('--safe', String(ui.safe));
+  try { localStorage.setItem('bc.safe', String(ui.safe)); } catch (_) { /* */ }
+}
+applySafe();
+
 /* Big screen: full screen on a button (or the F key), the buttons fade away when the mouse rests, the screen stays awake. */
 const isFull = () => !!(document.fullscreenElement || document.webkitFullscreenElement);
 ['fullscreenchange', 'webkitfullscreenchange'].forEach((n) => document.addEventListener(n, () => emit()));
+addEventListener('keydown', (e) => { if (route && route.a === 's' && (e.key === 'g' || e.key === 'G') && !e.metaKey && !e.ctrlKey && !/INPUT|TEXTAREA/.test(e.target.tagName)) A.toggleGuides(); });
 addEventListener('keydown', (e) => { if (route && route.a === 's' && (e.key === 'f' || e.key === 'F') && !e.metaKey && !e.ctrlKey && !/INPUT|TEXTAREA/.test(e.target.tagName)) A.toggleFullscreen(); });
 {
   let idle = 0, lock = null;
@@ -141,7 +152,7 @@ function viewMain() {
     return hostShell() + overlays();
   }
   if (!S.meta) return loadingView();
-  if (r.a === 's') return screenView() + `<div class="stagectl" data-k="stagectl"><button class="btn sm ghost" data-a="toggleFullscreen">${isFull() ? 'Exit full screen' : 'Full screen'}</button><button class="btn sm ghost" data-a="toggleSound">${soundOn() ? 'Sound on' : 'Enable sound'}</button></div>`;
+  if (r.a === 's') return screenView() + `${ui.guides || ui.guidesPin ? `<div class="safeguides" data-k="guides" aria-hidden="true"><i class="act"><b>action safe 3.5%</b></i><i class="ttl"><b>title safe 5%</b></i><i class="own" style="inset:calc(var(--safe) * 1vh) calc(var(--safe) * 1vw)"><b>your margin ${ui.safe}%</b></i></div>` : ''}<div class="stagectl" data-k="stagectl"><button class="btn sm ghost" data-a="cycleSafe">Margins ${ui.safe}%</button><button class="btn sm ghost ${ui.guidesPin ? 'on' : ''}" data-a="toggleGuides">Guides</button><button class="btn sm ghost" data-a="toggleFullscreen">${isFull() ? 'Exit full screen' : 'Full screen'}</button><button class="btn sm ghost" data-a="toggleSound">${soundOn() ? 'Sound on' : 'Enable sound'}</button></div>`;
   if (S.role === 'guest' && !ui.watching) return authView();
   return audienceShell() + overlays();
 }
@@ -478,6 +489,14 @@ const A = {
     try { if (navigator.share) { await navigator.share({ title, text: `Join the battle: ${title}`, url }); return; } } catch (_) { return; }
     try { await navigator.clipboard.writeText(url); toast('Link copied. Send it to your friends.', 'info'); } catch (_) { prompt('Copy this link', url); }
   },
+  cycleSafe() {
+    const P = [0, 2, 4, 6, 8];
+    ui.safe = P[(P.indexOf(ui.safe) + 1) % P.length];
+    applySafe(); ui.guides = true; clearTimeout(guideT);
+    guideT = setTimeout(() => { ui.guides = false; emit(); }, 4000);
+    emit();
+  },
+  toggleGuides() { ui.guidesPin = !ui.guidesPin; emit(); },
   toggleFullscreen() {
     const d = document, el = d.documentElement;
     try {

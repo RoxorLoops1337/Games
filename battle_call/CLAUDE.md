@@ -65,7 +65,7 @@ A category with exactly one beatboxer has no bracket: `setPhase` lets it through
 
 ## Big screen controls
 
-`#/s/CODE` shows Full screen and Sound buttons bottom right (F toggles full screen). They fade after 3 s without mouse movement so the projection stays clean, and the screen is kept awake with the Wake Lock API where the browser allows it.
+`#/s/CODE` shows Full screen and Sound buttons (F toggles full screen). Bottom right: Margins (cycles 0/2/4/6/8 %, remembered in `bc.safe`, applied as `--safe` on the stage padding so projector and TV overscan never crops content; default 4 %) and Guides (G key; shows action safe 3.5 %, title safe 5 % and the chosen margin; also flashes for 4 s when the margin changes). They fade after 3 s without mouse movement so the projection stays clean, and the screen is kept awake with the Wake Lock API where the browser allows it.
 
 ## Hard rules for this folder
 

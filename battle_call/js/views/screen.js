@@ -18,7 +18,7 @@ export function screenView() {
   else if (ev.phase === 'finished' && !cur) body = champion();
   else if (cur) body = duelStage(cur);
   else body = `<div class="st-top"><p class="eyebrow">${nx ? 'Up next' : 'The bracket'}</p></div>${nx ? upNext(nx) : ''}<div class="st-bracket ${N >= 16 ? 'scroll' : ''}">${bracket({ mode: 'view' })}</div>`;
-  return `<div class="stage ${ev.phase}"><div class="glow g1"></div><div class="glow g2"></div>
+  return `<div class="stage ph-${ev.phase}"><div class="glow g1"></div><div class="glow g2"></div>
     <header class="st-head"><div class="brand">${crown('sm', false)}<div><b>${esc(ev.name)}</b><small>${ev.cats.length > 1 ? esc(ev.catName) + ' · ' : ''}BattleCall</small></div></div>
     <div class="st-meta"><span>${S.live ? S.live.n : 0} ${S.live && S.live.n === 1 ? 'player' : 'players'}</span><span class="code">${esc(S.code)}</span></div></header>
     ${ev.banner ? `<div class="st-banner" data-k="b${ev.banner.id}">${ic('mega', 28)}<span>${esc(ev.banner.text)}</span></div>` : ''}
