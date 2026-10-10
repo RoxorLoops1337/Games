@@ -114,6 +114,8 @@ export const size = () => (S.meta ? S.meta.set.size : 16);
 export const rounds = () => roundsOf(size());
 export const seedOf = (id) => (S.meta && S.meta.seeds ? S.meta.seeds.indexOf(id) + 1 : 0);
 export const curMatch = () => (S.meta ? S.meta.matches.find((m) => ['live', 'voting', 'closed'].includes(m.status)) : null);
+/** Battles (any category) whose vote is over and that wait for the judges' decision at the ceremony. */
+export const awaitingAll = () => (S.event ? S.event.cats.flatMap((c) => c.matches.filter((m) => m.status === 'awaiting').map((m) => ({ cat: c, m }))) : []);
 export const nextMatch = () => (S.meta ? S.meta.matches.find((m) => m.status === 'upcoming') : null);
 export const isOut = (id) => !!S.meta && S.meta.out[id] !== undefined;
 /** [left, right] ids as the hall sees them: left = blue. */

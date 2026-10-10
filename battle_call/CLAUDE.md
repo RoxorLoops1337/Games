@@ -79,6 +79,10 @@ While the audience votes, the big screen shows the running tally at the top (per
 
 The strip along the bottom of the big screen is a name wall: while a vote is open it shows who has voted, newest first, coloured by the side they picked (`live.vn`, ordered with `u.vt[mid]`, the time of the vote); while the doors are open it shows who has just joined (`live.jn`); otherwise the bets feed. Both come only in the organiser/screen variant of the live push, never to phones. The leaderboard and "Players to watch" slides show names too.
 
+## Judges decide later (finals at the award ceremony)
+
+A final and the third-place battle can close their vote WITHOUT a judges' result: status `awaiting` (`stepMatch` to `awaiting`; refused for earlier rounds because the bracket needs them). The stage is free at once (`activeMatch` ignores it), so the next category's final can start; bets stay locked and nothing is paid until `result` is entered, in any order, whenever (the audience tally is hidden from everyone but the organiser, `hostOf().wait`, until then). Opening a vote of a final with `later: true` (the organiser's default for finals, chips "At the ceremony / Right away") makes the clock send it to `awaiting` by itself instead of hands up. The Run tab lists everything waiting across categories with "Enter the result"; the big screen cycles a "The judges decide later" slide, phones show "Voting is closed, the judges announce it at the ceremony". Undo steps `awaiting` back to hands up. Setting a result reveals it on the big screen like any other (hold scene, confetti).
+
 ## Hard rules for this folder
 
 1. All Loops moves go through `credit()` with a ledger ref, or `reopen` stops being exact. Tests check conservation.

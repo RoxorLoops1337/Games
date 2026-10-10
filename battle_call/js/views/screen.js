@@ -1,7 +1,7 @@
 // Battle Call: the big screen for the hall. Open /battle_call/#/s/CODE on the projector laptop: read-only, no login,
 // it follows the organiser by itself.
 import { esc, ic } from '../dom.js';
-import { S, perfNow, bbName, size, rounds, curMatch, nextMatch, sides, leftKey, seedOf } from '../state.js';
+import { S, perfNow, awaitingAll, bbName, size, rounds, curMatch, nextMatch, sides, leftKey, seedOf } from '../state.js';
 import { ui, av, userAv, loops, perfStats, lockClock, bracket, feedStrip, crown, wordmark, countdown } from '../ui.js';
 import { matchRound } from '../shared.js';
 import { joinLink } from './host.js';
@@ -60,6 +60,8 @@ function idleStage(nx) {
   const name = (id) => esc(bbName(id));
   const slides = [`<div class="st-top"><p class="eyebrow">${nx ? 'Up next' : 'The bracket'}</p></div>${nx ? upNext(nx) : ''}<div class="st-bracket ${N >= 16 ? 'scroll' : ''}">${bracket({ mode: 'view' })}</div>`];
   const share = (a, b) => (a + b ? Math.round((a / (a + b)) * 100) : null);
+  const waiting = awaitingAll();
+  if (waiting.length) slides.push({ t: 'The judges decide later', h: `<p class="lead">Voting is closed. The results are announced at the award ceremony.</p><ol class="st-pred">${waiting.map(({ cat, m }) => `<li data-k="aw${m.id}">${av(m.a, 'md')}<b>${name(m.a)} vs ${name(m.b)}</b><small class="seat">${esc(cat.name)}${m.third ? ' · third place' : ' · final'}</small>${av(m.b, 'md')}</li>`).join('')}</ol>` });
   if (nx && d && d.pk[nx.id]) {
     const [pa, pb] = d.pk[nx.id], mk = ev.mk.find((m) => m.kind === 'match' && m.mid === nx.id), lv = mk && S.live && S.live.mk && S.live.mk[mk.id];
     const ba = lv ? lv[0][mk.bbs.indexOf(nx.a)] || 0 : 0, bb = lv ? lv[0][mk.bbs.indexOf(nx.b)] || 0 : 0;

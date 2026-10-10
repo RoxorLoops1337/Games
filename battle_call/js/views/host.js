@@ -1,7 +1,7 @@
 // Battle Call: the organiser console. Everything the host does in one place, built for a phone held in one hand
 // next to a stage: one big obvious next step per phase, and confirmation before anything that cannot be undone.
 import { esc, ic } from '../dom.js';
-import { S, perfNow, bbName, size, rounds, curMatch, nextMatch, sides, leftKey, seedOf, mkView, mkTitle, mkLabel, serverBase } from '../state.js';
+import { S, perfNow, awaitingAll, bbName, size, rounds, curMatch, nextMatch, sides, leftKey, seedOf, mkView, mkTitle, mkLabel, serverBase } from '../state.js';
 import { ui, av, userAv, perfStats, lockClock, loops, pill, rankBuilder, bracket, empty, duel, x, catBar, catArt, countdown } from '../ui.js';
 import { matchRound, SIZES } from '../shared.js';
 import { photoUrl } from '../net.js';
@@ -91,9 +91,11 @@ function run() {
       <p class="muted small center">The audience screens show the podium. Re-open a result below if the last one was wrong.</p>
       ${matchList()}`;
   }
+  const wait = awaitingAll(), hostWait = (S.host && S.host.wait) || [];
+  const awaitPanel = wait.length ? `<section class="block"><h3>Waiting for the judges <small>${wait.length}</small></h3>${wait.map(({ cat, m }) => { const w = hostWait.find((x) => x.mid === m.id); return `<div class="card await" data-k="aw${m.id}"><div><small>${esc(cat.name)}${m.third ? ' · third place' : ' · final'}</small><b>${esc(bbName(m.a))} vs ${esc(bbName(m.b))}</b>${w ? `<small>Audience: ${esc(bbName(m.a))} ${w.a} · ${esc(bbName(m.b))} ${w.b}</small>` : ''}</div><button class="btn sm" data-a="hAwait" data-cat="${cat.id}" data-m="${m.id}">Enter the result</button></div>`; }).join('')}</section>` : '';
   const stage = ev.active !== S.catId && S.meta.cats.length > 1
     ? `<button class="btn ghost" data-a="hStage" data-id="${S.catId}">${ic('tv', 18)} Put ${esc(ev.catName)} on stage</button>` : '';
-  return `<section class="phasebar"><small>${esc(ev.catName)}</small><b>${phaseName}</b></section>${stage}${rail}${undoBtn()}${main}
+  return `<section class="phasebar"><small>${esc(ev.catName)}</small><b>${phaseName}</b></section>${stage}${awaitPanel}${rail}${undoBtn()}${main}
     <section class="block"><h3>Message to the hall</h3>
       <form class="inline" data-form="banner"><input name="text" maxlength="140" placeholder="e.g. Break time, voting opens in 5" value="${esc(ev.banner ? ev.banner.text : '')}" autocomplete="off"><button class="btn" type="submit">Send</button>${ev.banner ? '<button type="button" class="btn ghost" data-a="hBannerClear">Clear</button>' : ''}</form></section>`;
 }
@@ -127,7 +129,7 @@ function performerPanel() {
 }
 
 const STEPS = ['upcoming', 'live', 'voting', 'closed', 'done'];
-const STEP_L = { upcoming: 'Up next', live: 'Battle on', voting: 'Audience vote', closed: 'Judging', done: 'Result' };
+const STEP_L = { upcoming: 'Up next', live: 'Battle on', voting: 'Audience vote', closed: 'Judging', awaiting: 'Judges later', done: 'Result' };
 
 function matchConsole() {
   const ev = S.meta;
@@ -139,10 +141,11 @@ function matchConsole() {
   const cnt = live ? live : { a: m.c ? m.c.a : 0, b: m.c ? m.c.b : 0 };
   const tl = lk === 'a' ? cnt.a : cnt.b, tr = lk === 'a' ? cnt.b : cnt.a, tt = tl + tr;
   const pl = tt ? Math.round((tl / tt) * 100) : 50;
-  const ix = STEPS.indexOf(m.status);
+  const ix = STEPS.indexOf(m.status === 'awaiting' ? 'closed' : m.status);
+  const term = !!m.third || m.r === rounds().length - 1, later = ui.later == null ? true : ui.later;
   const stepper = `<ol class="stepper">${STEPS.map((s, i) => `<li class="${i < ix ? 'done' : i === ix ? 'now' : ''}"><i></i><span>${STEP_L[s]}</span></li>`).join('')}</ol>`;
   const next = { upcoming: ['live', 'Start the battle', 'bolt'], live: ['voting', 'Open the audience vote', 'hand'], voting: ['closed', 'Close the vote: hands up!', 'lock'] }[m.status];
-  const canResult = ['upcoming', 'live', 'voting', 'closed'].includes(m.status);
+  const canResult = ['upcoming', 'live', 'voting', 'closed', 'awaiting'].includes(m.status);
   const j = ui.judges;
   const win = (key, col) => `<button class="btn big ${col}" data-a="hResult" data-m="${m.id}" data-w="${key}">${esc(bbName(key === 'a' ? m.a : m.b))} wins</button>`;
   let ctl = '';
@@ -153,8 +156,11 @@ function matchConsole() {
   } else {
     ctl = `${stepper}
       ${m.status === 'live' ? voteLen() : ''}
+      ${m.status === 'live' && term ? `<div class="votelen"><small>Judges' result</small><span class="segs mini"><button class="seg ${later ? 'on' : ''}" data-a="hLater" data-v="1">At the ceremony</button><button class="seg ${later ? '' : 'on'}" data-a="hLater" data-v="0">Right away</button></span></div>` : ''}
+      ${m.status === 'awaiting' ? `<div class="card tip"><b>Waiting for the judges</b><p>The vote is closed and the audience tally is hidden. Enter the judges' decision here when it is time to announce it, or reopen the vote.</p></div><button class="btn ghost" data-a="hStep" data-m="${m.id}" data-to="voting">${ic('undo', 18)} Reopen the vote</button>` : ''}
       ${m.status === 'voting' && m.vend ? `<div class="cdrow">${countdown(m, 'lg')}<small>The vote closes by itself</small></div>` : ''}
       ${next ? `<button class="btn big hot" data-a="hStep" data-m="${m.id}" data-to="${next[0]}">${ic(next[2], 22)} ${next[1]}</button>` : ''}
+      ${term && (m.status === 'voting' || m.status === 'closed') ? `<button class="btn big" data-a="hStep" data-m="${m.id}" data-to="awaiting">${ic('lock', 20)} Close the vote, judges decide later</button>` : ''}
       ${m.status === 'closed' ? `<button class="btn ghost" data-a="hStep" data-m="${m.id}" data-to="voting">Reopen the vote</button>` : ''}
       ${m.status === 'live' ? `<button class="btn ghost" data-a="hStep" data-m="${m.id}" data-to="upcoming">${ic('undo', 18)} Started by mistake? Put it back</button>` : ''}
       ${m.status === 'upcoming' ? `<button class="btn ghost" data-a="hSwap" data-m="${m.id}">${ic('swap', 18)} Swap sides (blue / red)</button>` : ''}

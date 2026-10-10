@@ -3,7 +3,7 @@
 //   #/e/CODE      the audience app         #/h/CODE     the organiser console      #/s/CODE   the big screen
 import { morph, esc, ic, $, $$, toast, confetti, runTickers, buzz, setHaptics } from './dom.js';
 import { VERSION } from './config.js';
-import { S, serverNow, emit, subscribe, resetState, selectCat, sessions, saveSession, dropSession, deviceId, serverBase, setServer, mkView, curMatch, bbName, size, leftKey, sides, myBet, mkTitle, mkLabel, payoutIf } from './state.js';
+import { S, serverNow, emit, subscribe, resetState, selectCat, sessions, saveSession, dropSession, deviceId, serverBase, setServer, mkView, curMatch, bbName, size, leftKey, sides, myBet, mkTitle, mkLabel, payoutIf, rounds } from './state.js';
 import { connect, disconnect, react, act, http, register, login, hostLogin, info, createEvent, uploadPhoto, isDemo, demoCtl } from './net.js';
 import { ui, fmtLeft, loops, catBar, wordmark, catArt, ART_LABEL, ART_FILE, crown } from './ui.js';
 import { MIN_BET } from './shared.js';
@@ -481,7 +481,11 @@ const A = {
   async hStep(el) {
     ui.hostMatch = null;
     const o = { a: 'step', mid: el.dataset.m, to: el.dataset.to };
-    if (o.to === 'voting' && ui.vsecs != null) o.secs = ui.vsecs;
+    if (o.to === 'voting') {
+      if (ui.vsecs != null) o.secs = ui.vsecs;
+      const mm = S.match[o.mid];
+      if (mm && (mm.third || mm.r === rounds().length - 1)) o.later = ui.later == null ? true : ui.later; // finals wait for the judges unless told otherwise
+    }
     fail(await act(o));
   },
   async hPerf(el) { fail(await act({ a: 'performer', cat: S.catId, id: el.dataset.id || null })); },
@@ -492,6 +496,8 @@ const A = {
   async hElimStart() { fail(await act({ a: 'elim.start', cat: S.catId })); },
   async hPicksTimer(el) { fail(await act({ a: 'picks.timer', cat: S.catId, mins: +el.dataset.m })); },
   async hWalkover() { fail(await act({ a: 'walkover', cat: S.catId })); },
+  hLater(el) { ui.later = el.dataset.v === '1'; emit(); },
+  hAwait(el) { selectCat(el.dataset.cat); ui.hostMatch = el.dataset.m; ui.hostTab = 'run'; emit(); },
   hVSecs(el) { ui.vsecs = +el.dataset.n; emit(); },
   async hSwap(el) { fail(await act({ a: 'swap', mid: el.dataset.m })); },
   hSelect(el) { ui.hostMatch = el.dataset.m; ui.judges = { a: 0, b: 0 }; window.scrollTo(0, 0); emit(); },

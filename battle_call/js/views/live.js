@@ -123,7 +123,7 @@ function matchHero(m) {
   let body = '';
   if (m.status === 'upcoming') {
     body = `<div class="cta-row">
-      <button class="btn big" data-a="tab" data-t="predict">${ic('predict', 20)} ${pick ? 'Pick: ' + esc(bbName(pick)) : 'Make your pick'}</button>
+      ${m.third ? '' : `<button class="btn big" data-a="tab" data-t="predict">${ic('predict', 20)} ${pick ? 'Pick: ' + esc(bbName(pick)) : 'Make your pick'}</button>`}
       ${mk ? `<button class="btn big ghost" data-a="tab" data-t="bets">${ic('dice', 20)} ${bet ? 'Bet placed' : 'Place a bet'}</button>` : ''}</div>`;
   } else if (m.status === 'live') {
     body = `<p class="note">${ic('lock', 16)} Bets are locked. Enjoy the battle, your vote opens when it ends.</p>`;
@@ -145,10 +145,18 @@ function matchHero(m) {
   </section>`;
 }
 
+/** A final whose vote is closed: the audience can relax, the judges announce it at the ceremony. */
+function awaitingHero() {
+  const aw = S.meta.matches.filter((m) => m.status === 'awaiting');
+  return `<section class="hero tight await" data-k="awaiting"><p class="eyebrow">${ic('lock', 14)} Voting is closed</p><h1>The judges announce it at the ceremony</h1>
+    <p class="lead">${aw.map((m) => `${esc(bbName(m.a))} vs ${esc(bbName(m.b))}${m.third ? ' (third place)' : ''}`).join('<br>')}</p></section>`;
+}
+
 function bracketPhase() {
   const cur = curMatch(), nx = nextMatch();
   const done = S.meta.matches.filter((m) => m.status === 'done').sort((a, b) => b.r - a.r || b.i - a.i);
   return `
+    ${!cur && S.meta.matches.some((m) => m.status === 'awaiting') ? awaitingHero() : ''}
     ${cur ? matchHero(cur) : nx ? matchHero(nx) : '<section class="hero"><h1>Next round loading</h1></section>'}
     ${cur && nx ? `<p class="upnext">Up next: <b>${esc(bbName(nx.a))}</b> vs <b>${esc(bbName(nx.b))}</b></p>` : ''}
     ${S.role === 'user' && S.me ? playerCard() : ''}

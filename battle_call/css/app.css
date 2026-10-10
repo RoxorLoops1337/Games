@@ -645,3 +645,4 @@ body.idle .stagectl { opacity: 0; pointer-events: none; }
 .namewall small { font-size: 1.5em; letter-spacing: .14em; text-transform: uppercase; color: var(--mut); font-weight: 700; margin-right: 1vmin; }
 .namewall .nm { padding: .6vmin 1.8vmin; border-radius: 99px; font-size: 2em; font-weight: 700; background: rgba(255,255,255,.1); border: 1px solid var(--line); animation: pop .35s both; }
 .namewall .nm.blue { background: rgba(43,107,255,.35); border-color: rgba(95,147,255,.7); } .namewall .nm.red { background: rgba(255,51,81,.33); border-color: rgba(255,112,136,.7); }
+.card.await { display: flex; align-items: center; justify-content: space-between; gap: 10px; } .card.await b { display: block; } .card.await small { display: block; }
