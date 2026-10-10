@@ -367,7 +367,7 @@
       if (this.ui) this.ui.remove();
       const list = h('div.scroll.col', { style: { gap: '4px', flex: 1, minHeight: 0, paddingBottom: '10px', WebkitMaskImage: 'linear-gradient(#000 88%, transparent)', maskImage: 'linear-gradient(#000 88%, transparent)' } }, this.sounds().map((s) => this.row(s, false)));
       this.ui = h('div', { style: { position: 'absolute', left: '6px', right: '6px', top: '90px', bottom: '8px', zIndex: 15, display: 'flex', flexDirection: 'column', gap: '4px' } },
-        h('div.ts.ctr', null, MicOK() ? 'Press REC, then make the sound into your mic. It stops by itself when you go quiet. New sounds unlock as you meet beatboxers and level up.' : 'Microphone recording is not supported in this browser.'), list,
+        h('div.ts.ctr', null, MicOK() ? 'Press REC, then make the sound into your mic. It stops by itself when you go quiet. Your recordings also play inside the songs of the game. New sounds unlock as you meet beatboxers and level up.' : 'Microphone recording is not supported in this browser.'), list,
         h('div.row', null, E.btn(this.test ? 'STOP TEST' : 'TEST MIC MODE', this.test ? 'red' : 'cyan', () => this.toggleTest(), { flex: 2 }), E.btn('BACK', '', () => back(this.a.back), { flex: 1 })));
       E.add(this.ui); this.list = list; this.scrollFocus();
     },

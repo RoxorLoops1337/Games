@@ -44,7 +44,7 @@ Every action goes through `Core.dev` / `Core.apply`, the same reducer the game u
 | `catalog.js` | every cosmetic and its unlock rule (data only) |
 | `chars*.js` | the paper-doll character renderer (poses, hair, clothes, accessories, portraits, thumbs) |
 | `world_a.js`, `world_b.js` | painted scenes: title, logo, street (parallax, day/dusk/night), park, intro plates, interiors, stage, icons, fx |
-| `audio.js` | Web Audio synth: beatbox drums, sfx, 12 music tracks, a groove engine that drives the rhythm game |
+| `audio.js` | Web Audio synth: beatbox drums, sfx, 12 music tracks (techno, hip hop, trip hop, drum and bass; your recorded sounds play inside them), a groove engine that drives the rhythm game |
 | `core.js` | pure rules: save object, time, needs, XP, unlocks, achievements, scoring, battle judging, saves |
 | `engine.js` | scaling, input, scenes, particles, UI kit |
 | `screens.js`, `creator.js`, `places.js`, `rhythm.js`, `dev.js`, `game.js` | the screens |
