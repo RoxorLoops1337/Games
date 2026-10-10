@@ -747,5 +747,22 @@ t('a portrait photo is cropped from near the top, and a found face is centred', 
   assert.ok(f.y < 100 && f.y + f.side > 350, 'the face is inside the square: ' + JSON.stringify(f));
 });
 
+console.log('walkover');
+t('a category with one entrant is crowned at the elimination, with no money moving, and can be taken back', () => {
+  const { S, us } = setup({ size: 8, beatboxers: 8, users: 1 });
+  const r = E.hostAction(S, { a: 'cat.add', name: 'Solo Female', size: 2 }); assert.ok(r.ok);
+  host(S, { a: 'bb.add', cat: r.cat, names: ['Sena Mascs'] });
+  const start = total(S), cat = S.event.cats[r.cat];
+  assert.equal(E.hostAction(S, { a: 'walkover', cat: r.cat }).ok, false, 'not before the elimination');
+  host(S, { a: 'phase', cat: r.cat, to: 'picks' });
+  host(S, { a: 'phase', cat: r.cat, to: 'elimination' });
+  host(S, { a: 'walkover', cat: r.cat });
+  assert.equal(cat.phase, 'finished'); assert.equal(cat.champion, cat.bbs[0].id); assert.ok(E.metaOf(S).cats.find((c) => c.id === r.cat).walkover);
+  assert.equal(total(S), start);
+  host(S, { a: 'undo', cat: r.cat });
+  assert.equal(cat.phase, 'elimination'); assert.equal(cat.champion, null);
+  assert.equal(E.hostAction(S, { a: 'walkover', cat: S.event.order[0] }).ok, false, 'a real category cannot walk over');
+});
+
 console.log(`\n${pass} passed, ${failN} failed`);
 process.exit(failN ? 1 : 0);

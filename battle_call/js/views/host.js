@@ -59,8 +59,8 @@ function run() {
   const rail = `<ol class="rail">${['Doors', 'Picks', 'Elimination', 'Bracket', 'Done'].map((l, i) => `<li class="${i < ix ? 'done' : i === ix ? 'now' : ''}"><i></i><span>${l}</span></li>`).join('')}</ol>`;
   let main = '';
   if (ev.phase === 'lobby') {
-    const need = N - ev.bbs.length;
-    main = `<div class="card todo ${need <= 0 ? 'ok' : ''}"><i>${ic(need <= 0 ? 'check' : 'mic', 20)}</i><div><b>${ev.bbs.length} beatboxers in</b><small>${need > 0 ? `Add at least ${need} more (or lower the bracket size in Setup)` : 'Enough for a Top ' + N}</small></div><button class="btn sm ghost" data-a="hostTab" data-t="lineup">Lineup</button></div>
+    const solo = ev.bbs.length === 1, need = solo ? 0 : N - ev.bbs.length;
+    main = `<div class="card todo ${need <= 0 ? 'ok' : ''}"><i>${ic(need <= 0 ? 'check' : 'mic', 20)}</i><div><b>${ev.bbs.length} beatboxers in</b><small>${solo ? 'One entrant: a walkover. They are crowned after the elimination.' : need > 0 ? `Add at least ${need} more (or lower the bracket size in Setup)` : 'Enough for a Top ' + N}</small></div><button class="btn sm ghost" data-a="hostTab" data-t="lineup">Lineup</button></div>
       <div class="card todo ${users ? 'ok' : ''}"><i>${ic('qr', 20)}</i><div><b>${users} players joined</b><small>Show the QR code so the audience can join</small></div><button class="btn sm ghost" data-a="hostTab" data-t="setup">QR</button></div>
       <button class="btn big" data-a="hPhase" data-to="picks" ${need > 0 ? 'disabled' : ''}>${ic('predict', 20)} Open predictions and bets</button>
       <button class="btn ghost" data-a="hPhase" data-to="elimination" ${need > 0 ? 'disabled' : ''}>Skip picks, go straight to the elimination</button>`;
@@ -69,6 +69,10 @@ function run() {
       <button class="btn big" data-a="hPhase" data-to="elimination">${ic('lock', 20)} Lock picks, start the elimination</button>
       <p class="muted small center">Picks and "makes the cut" bets lock together. You can reopen them until the ranking is published.</p>
       ${consensusCard()}`;
+  } else if (ev.phase === 'elimination' && ev.bbs.length === 1) {
+    main = `<div class="card tip"><b>Walkover</b><p>${esc(ev.bbs[0].name)} is the only entrant in ${esc(ev.catName)}, so there are no battles. Crown them when the elimination round is done.</p></div>
+      <button class="btn big hot" data-a="hWalkover">${ic('trophy', 20)} Crown ${esc(ev.bbs[0].name)} the champion</button>
+      <button class="btn ghost" data-a="hPhase" data-to="picks">Reopen the picks</button>`;
   } else if (ev.phase === 'elimination') {
     main = `<div class="card tip"><b>Enter the ranking</b><p>Tap the beatboxers in the order the judges ranked them: first tap is seed 1, the best. Reorder with the arrows. The bracket is drawn the moment you publish.</p></div>
       ${rankBuilder({ which: 'seeds', list: ui.rank.seeds, N })}

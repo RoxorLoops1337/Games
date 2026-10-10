@@ -272,6 +272,25 @@ await t('reactions: players only, known kinds only, batched into one broadcast',
   assert.equal(guest.msgs('rx').length, 1, 'everybody gets it');
 });
 
+await t('the DMI preset sets itself up over HTTP: three categories, every beatboxer, and the walkover works', async () => {
+  const { PRESETS } = await import('../battle_call/js/presets.js');
+  const pre = PRESETS.dmi2026;
+  const rt = await newEvent({ name: pre.name, catName: pre.cats[0].name, size: pre.cats[0].size });
+  const send = (a) => call(rt.d, '/act', { method: 'POST', body: a, headers: { 'x-host': rt.ht } });
+  for (let i = 0; i < pre.cats.length; i++) {
+    const c = pre.cats[i]; let cat = 'c1';
+    if (i === 0) assert.equal((await send({ a: 'cat.art', id: 'c1', art: c.art })).ok, true);
+    else { const r = await send({ a: 'cat.add', name: c.name, size: c.size, art: c.art }); assert.equal(r.ok, true, JSON.stringify(r)); cat = r.cat; }
+    const b = await send({ a: 'bb.add', cat, names: c.bbs }); assert.equal(b.ok, true, JSON.stringify(b)); assert.equal(b.added, c.bbs.length);
+  }
+  const g = await call(rt.d, '/state');
+  assert.deepEqual(g.meta.cats.map((c) => [c.name, c.bbs.length, c.set.size]), [['Mixed Solo', 17, 16], ['Tag Team', 3, 2], ['Solo Female', 1, 2]]);
+  const sf = g.meta.cats[2];
+  for (const to of ['picks', 'elimination']) assert.equal((await send({ a: 'phase', cat: sf.id, to })).ok, true);
+  assert.equal((await send({ a: 'walkover', cat: sf.id })).ok, true);
+  assert.equal((await call(rt.d, '/state')).meta.cats[2].champion, sf.bbs[0].id);
+});
+
 await t('an evicted and rebuilt object has the same players, tokens, bets, pools, bracket and results', async () => {
   const rt = await newEvent();
   const tk = await join(rt, 'Ann'); const ann = await connect(rt, { tk }), host = await connect(rt, { ht: rt.ht });

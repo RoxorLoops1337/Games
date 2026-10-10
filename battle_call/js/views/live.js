@@ -47,8 +47,17 @@ function lineup(limit = 60) {
     <div class="lineup">${list.map((b) => `<div class="lu" data-k="lu${b.id}">${av(b.id, 'md')}<b>${esc(b.name)}</b></div>`).join('')}</div></section>`;
 }
 
+/** One entrant: nothing to predict, they walk straight to the title once the elimination is done. */
+function soloHero(eyebrow) {
+  const b = S.meta.bbs[0];
+  return `<section class="hero lobby photo">${heroArt()}<p class="eyebrow">${eq} ${eyebrow}</p><h1>${esc(b.name)}</h1>
+    <p class="lead">${esc(b.name)} is the only entrant in ${esc(S.meta.catName)}. No bracket here: a walkover to the title after the elimination round.</p>
+    <div class="pills">${pill('Walkover')}</div></section>`;
+}
+
 function lobby() {
   const ev = S.meta;
+  if (ev.bbs.length === 1) return soloHero('Doors are open');
   return `
     <section class="hero lobby photo">
       ${heroArt()}
@@ -67,6 +76,7 @@ function lobby() {
 }
 
 function picks() {
+  if (S.meta.bbs.length === 1) return soloHero('Picks are open elsewhere');
   const me = S.me, N = size(), n = me ? me.top.length : 0;
   const tops = S.host ? S.host.tops : null;
   return `
@@ -85,6 +95,7 @@ function picks() {
 }
 
 function elimination() {
+  if (S.meta.bbs.length === 1) return soloHero('Elimination is on');
   const c = S.meta.consensus, N = size();
   return `
     <section class="hero elim photo">
@@ -164,13 +175,13 @@ function finished() {
       <h1>${esc(bbName(champ))}</h1>
       <p class="lead">${esc(ev.name)} is done. What a battle.</p>
     </section>
-    <section class="block"><h3>Podium</h3>
+    ${ev.walkover ? `<section class="block"><p class="note">Walkover: ${esc(bbName(champ))} was the only entrant in ${esc(ev.catName)}.</p></section>` : `<section class="block"><h3>Podium</h3>
       <div class="podium">
         <div class="pd p2">${runner ? av(runner, 'lg') : ''}<b>${esc(runner ? bbName(runner) : '')}</b><span>2</span></div>
         <div class="pd p1">${crown('sm')}${av(champ, 'lg')}<b>${esc(bbName(champ))}</b><span>1</span></div>
         <div class="pd p3">${semis[0] ? av(semis[0], 'lg') : ''}<b>${esc(semis[0] ? bbName(semis[0]) : '')}</b>${semis[1] ? `<small>and ${esc(bbName(semis[1]))}</small>` : ''}<span>3</span></div>
       </div>
-    </section>
+    </section>`}
     ${me ? `<section class="block you"><h3>Your battle</h3><div class="stats4">
       <div><b>#${me.rank}</b><small>of ${me.of}</small></div><div><b>${me.net.toLocaleString()}</b><small>Loops</small></div>
       <div><b>${callStats().hit}/${callStats().tot}</b><small>battles called</small></div><div><b>${me.st.won || 0}</b><small>bets won</small></div></div>

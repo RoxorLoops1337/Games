@@ -6,6 +6,7 @@ import { slotsFor } from '../shared.js';
 
 export function predictTab() {
   const ev = S.meta, N = size();
+  if (ev.bbs.length === 1) return empty('predict', 'Nothing to predict here', ev.bbs[0].name + ' is the only entrant in ' + ev.catName + ', so there is no bracket to call. Head to the other categories.');
   if (S.role === 'guest') return empty('lock', 'Join to predict', 'Make an account (just a nickname and a password) to rank your Top ' + N + ' and call every battle.') + '<div class="center"><button class="btn big" data-a="authOpen">Join the battle</button></div>';
   if (ev.phase === 'lobby') {
     return `<section class="hero tight"><p class="eyebrow">Soon</p><h1>Picks open soon</h1><p class="lead">When the organiser opens the picks you will rank your Top ${N} here. You earn <b>${ev.set.pts.topIn}</b> Loops for each beatboxer who makes it and <b>${ev.set.pts.topExact}</b> more for the exact seat.</p></section>`;
