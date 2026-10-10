@@ -583,3 +583,6 @@ body.idle .stagectl { opacity: 0; pointer-events: none; }
 .st-perf .pp { display: flex; align-items: center; gap: 4vmin; } .st-perf .pp .mega { font-size: min(8em, 14vh); text-align: left; } .st-perf .av.hero { --s: min(26vmin, 34vh); }
 .st-perf .pstats { grid-template-columns: repeat(5, 1fr); gap: 1.6vmin; width: 100%; margin: 0; }
 .st-perf .pt { padding: 2vmin 1.4vmin; border-radius: 2vmin; } .st-perf .pt b { font-size: 5em; } .st-perf .pt small { font-size: 1.7em; color: #cfc9f3; }
+.lockclk { display: inline-flex; align-items: center; gap: 8px; padding: 8px 16px; border-radius: 99px; background: rgba(255,207,61,.14); border: 1px solid rgba(255,207,61,.5); font-weight: 700; } .lockclk b { font-size: 1.3em; font-variant-numeric: tabular-nums; }
+.st-lock { font-size: 2.6em; font-weight: 800; color: var(--gold); } .st-lock .lockclk { font-size: 1em; padding: 1vmin 3vmin; }
+.st-body > .qrcorner.top { top: 0; bottom: auto; }

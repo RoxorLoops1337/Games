@@ -178,12 +178,16 @@ export class Event {
     this.armVotes();
   }
 
-  /** A battle in voting with a countdown closes itself: one timer for the soonest deadline. */
+  /** A battle in voting with a countdown closes itself, and so do predictions with a lock-in clock: one timer for the soonest deadline. */
   armVotes() {
     const S = this.S;
     if (!S) return;
     let next = 0;
-    for (const c of Object.values(S.event.cats)) for (const m of c.matches) if (m.status === 'voting' && m.vend && (!next || m.vend < next)) next = m.vend;
+    const soon = (t) => { if (t && (!next || t < next)) next = t; };
+    for (const c of Object.values(S.event.cats)) {
+      for (const m of c.matches) if (m.status === 'voting') soon(m.vend);
+      if (c.phase === 'picks') soon(c.picksEnd); // "they have five minutes to lock in" ends by itself
+    }
     if (this.voteT) { clearTimeout(this.voteT); this.voteT = null; }
     if (!next) return;
     this.voteT = setTimeout(async () => {

@@ -109,7 +109,11 @@ addEventListener('keydown', (e) => { if (route && route.a === 's' && (e.key === 
 let lastTick = -1;
 setInterval(() => {
   const els = document.querySelectorAll('[data-cd]');
-  if (!els.length) { lastTick = -1; return; }
+  if (!els.length) lastTick = -1;
+  for (const el of document.querySelectorAll('[data-lock]')) {
+    const s = Math.max(0, Math.ceil((+el.dataset.lock - serverNow()) / 1000)), b = el.querySelector('b'), t = Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+    if (b && b.textContent !== t) b.textContent = t;
+  }
   for (const el of els) {
     const left = +el.dataset.cd - serverNow(), s = Math.max(0, Math.ceil(left / 1000));
     const b = el.firstElementChild;
@@ -453,9 +457,11 @@ const A = {
   },
   async hPerf(el) { fail(await act({ a: 'performer', cat: S.catId, id: el.dataset.id || null })); },
   async hPerfNext() {
-    const m = S.meta, done = new Set(m.performed || []), nx = m.bbs.find((b) => !done.has(b.id) && !(m.perf && m.perf.id === b.id));
+    const m = S.meta, done = new Set(m.performed || []), nx = m.bbs.find((b) => !done.has(b.id) && b.id !== m.performer);
     if (nx) fail(await act({ a: 'performer', cat: S.catId, id: nx.id }));
   },
+  async hElimStart() { fail(await act({ a: 'elim.start', cat: S.catId })); },
+  async hPicksTimer(el) { fail(await act({ a: 'picks.timer', cat: S.catId, mins: +el.dataset.m })); },
   async hWalkover() { fail(await act({ a: 'walkover', cat: S.catId })); },
   hVSecs(el) { ui.vsecs = +el.dataset.n; emit(); },
   async hSwap(el) { fail(await act({ a: 'swap', mid: el.dataset.m })); },

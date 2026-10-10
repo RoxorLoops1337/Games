@@ -765,30 +765,54 @@ t('a category with one entrant is crowned at the elimination, with no money movi
 });
 
 console.log('performer');
-t('the organiser puts a beatboxer on stage during the elimination and everyone sees what the hall predicted for them', () => {
+const perfOf = (S, cat = 'c1') => (E.liveOf(S, 0, false).perf || {})[cat] || null;
+t('the elimination round runs while predictions stay open, with a stage and the hall\'s predictions for who is on it', () => {
   const { S, us, ids } = setup({ size: 4, beatboxers: 6, users: 3 });
   host(S, { a: 'phase', to: 'picks' });
   E.setTop(S, us[0], [ids[0], ids[1], ids[2], ids[3]]);
   E.setTop(S, us[1], [ids[1], ids[0], ids[4], ids[5]]);
-  E.setTop(S, us[2], [ids[0], ids[2], ids[1], ids[5]]);
   const q = Object.values(S.ev.markets).find((m) => m.kind === 'qualify' && m.bb === ids[0]);
   if (q) E.setBet(S, us[0], q.id, 0, 100);
-  assert.equal(E.hostAction(S, { a: 'performer', id: ids[0] }).ok, false, 'only in the elimination');
-  host(S, { a: 'phase', to: 'elimination' });
+  assert.equal(E.hostAction(S, { a: 'performer', id: ids[0] }).ok, false, 'not before the round starts');
+  host(S, { a: 'elim.start' });
+  assert.equal(E.hostAction(S, { a: 'elim.start' }).ok, false, 'only once');
+  assert.equal(S.ev.phase, 'picks', 'predictions are still open');
   assert.equal(E.hostAction(S, { a: 'performer', id: 'nope' }).ok, false);
   host(S, { a: 'performer', id: ids[0] });
-  let c = E.metaOf(S).cats[0];
-  assert.equal(c.perf.id, ids[0]); assert.equal(c.perf.voters, 3); assert.equal(c.perf.n, 3); assert.equal(c.perf.pct, 100);
-  assert.equal(c.perf.firsts, 2); assert.equal(c.perf.avg, 1.3); assert.equal(c.perf.rank, 1);
+  assert.equal(E.metaOf(S).cats[0].performer, ids[0]); assert.equal(E.metaOf(S).cats[0].elimOn, true);
+  let p = perfOf(S);
+  assert.equal(p.id, ids[0]); assert.equal(p.voters, 2); assert.equal(p.n, 2); assert.equal(p.firsts, 1); assert.equal(p.rank, 1);
+  S.dirty.live = false;
+  assert.ok(E.setTop(S, us[2], [ids[0], ids[2], ids[1], ids[5]]).ok, 'people can still lock in');
+  assert.ok(S.dirty.live, 'the stats are pushed again');
+  p = perfOf(S);
+  assert.equal(p.voters, 3); assert.equal(p.firsts, 2); assert.equal(p.avg, 1.3);
+  assert.ok(E.setBet(S, us[1], q.id, 1, 50).ok, 'bets are open too');
   host(S, { a: 'performer', id: ids[4] });
-  c = E.metaOf(S).cats[0];
-  assert.equal(c.perf.n, 1); assert.deepEqual(c.performed, [ids[0]], 'the one who went before is marked');
+  assert.deepEqual(E.metaOf(S).cats[0].performed, [ids[0]], 'the one who went before is marked');
   host(S, { a: 'performer', id: null });
-  c = E.metaOf(S).cats[0];
-  assert.equal(c.perf, null); assert.deepEqual(c.performed, [ids[0], ids[4]]);
+  assert.equal(perfOf(S), null); assert.deepEqual(E.metaOf(S).cats[0].performed, [ids[0], ids[4]]);
   host(S, { a: 'performer', id: ids[2] });
+  host(S, { a: 'phase', to: 'elimination' }); // the lock-in at the end
+  assert.equal(E.setTop(S, us[0], [ids[0]]).ok, false, 'now they are locked');
+  assert.equal(E.metaOf(S).cats[0].performer, ids[2], 'the stage stays for the judging');
   host(S, { a: 'seeds', order: ids.slice(0, 4) });
-  assert.equal(E.metaOf(S).cats[0].perf, null, 'publishing the ranking clears the stage');
+  assert.equal(E.metaOf(S).cats[0].performer, null, 'publishing the ranking clears the stage');
+});
+t('"five minutes to lock in": the predictions close by themselves, and the clock can be cancelled; undo stops the round', () => {
+  const { S, ids } = setup({ size: 4, beatboxers: 6, users: 1 });
+  assert.equal(E.hostAction(S, { a: 'picks.timer', mins: 5 }).ok, false, 'only while predictions are open');
+  host(S, { a: 'phase', to: 'picks' });
+  S.now = 1000;
+  host(S, { a: 'picks.timer', mins: 5 });
+  assert.equal(E.metaOf(S).cats[0].picksEnd, 1000 + 300000);
+  S.now = 1000 + 299999; assert.deepEqual(E.closeDueVotes(S), []); assert.equal(S.ev.phase, 'picks');
+  host(S, { a: 'picks.timer', mins: 0 }); S.now += 10 * 60000; assert.deepEqual(E.closeDueVotes(S), [], 'cancelled');
+  host(S, { a: 'picks.timer', mins: 2 }); S.now += 2 * 60000;
+  assert.deepEqual(E.closeDueVotes(S), ['picks:c1']); assert.equal(S.ev.phase, 'elimination'); assert.equal(E.metaOf(S).cats[0].picksEnd, 0);
+  host(S, { a: 'phase', to: 'picks' }); assert.equal(S.ev.elimOn, true, 'reopening keeps the round going');
+  host(S, { a: 'undo' });
+  assert.ok(ids.length);
 });
 
 console.log(`\n${pass} passed, ${failN} failed`);

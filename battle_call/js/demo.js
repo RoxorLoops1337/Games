@@ -79,7 +79,8 @@ function armVotes() {
   clearTimeout(voteT); voteT = 0;
   if (!DS) return;
   let next = 0;
-  for (const c of allCats()) for (const m of c.matches) if (m.status === 'voting' && m.vend && (!next || m.vend < next)) next = m.vend;
+  const soon = (t) => { if (t && (!next || t < next)) next = t; };
+  for (const c of allCats()) { for (const m of c.matches) if (m.status === 'voting') soon(m.vend); if (c.phase === 'picks') soon(c.picksEnd); }
   if (!next) return;
   voteT = setTimeout(() => { DS.now = Date.now(); E.closeDueVotes(DS); schedule(); armVotes(); }, Math.max(50, next - Date.now()));
 }
@@ -108,6 +109,7 @@ function react(a) {
   if (a.a === 'phase' && a.to === 'picks') botsPick(c);
   if (a.a === 'seeds') botsRound(c);
   if (a.a === 'step' && a.to === 'voting') { botsVote(a.mid); armVotes(); }
+  if (a.a === 'picks.timer') armVotes();
   if (a.a === 'result') {
     for (const w of E.bigWins(DS, 'm:' + a.mid)) feed.push({ k: 'win', t: `${w.n} collected ${w.d} Loops` });
     botsRound(c);

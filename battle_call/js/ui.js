@@ -94,6 +94,13 @@ export function perfStats(p) {
   </div>`;
 }
 
+/** "Predictions close in 4:32": kept current by the ticker in main.js. */
+export const lockClock = (ev) => {
+  if (!ev.picksEnd || ev.phase !== 'picks') return '';
+  const left = Math.max(0, ev.picksEnd - serverNow()), s = Math.ceil(left / 1000);
+  return `<span class="lockclk" data-lock="${ev.picksEnd}">${ic('lock', 16)} Predictions close in <b>${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}</b></span>`;
+};
+
 /* ------------------------------------------------------------ vote countdown */
 /** The ring that counts a vote down. The ticker in main.js keeps `data-cd` elements current without re-rendering. */
 export function countdown(m, cls = '') {

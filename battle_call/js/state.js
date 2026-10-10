@@ -102,6 +102,13 @@ export function deviceId() {
 /** The server's idea of now, and whole seconds left on a battle's vote countdown (null when it has none). */
 export const serverNow = () => Date.now() + S.skew;
 export const secsLeft = (m) => (m && m.status === 'voting' && m.vend ? Math.max(0, Math.ceil((m.vend - serverNow()) / 1000)) : null);
+/** The beatboxer on stage (elimination round) with what the hall predicted; stats arrive in the live push so late edits show. */
+export const perfNow = () => {
+  const m = S.meta;
+  if (!m || !m.performer) return null;
+  const p = S.live && S.live.perf && S.live.perf[m.id];
+  return p && p.id === m.performer ? p : { id: m.performer, N: size(), voters: 0, n: 0, pct: 0, avg: 0, firsts: 0, rank: 0, bets: null };
+};
 export const bbName = (id) => (S.bb[id] ? S.bb[id].name : '?');
 export const size = () => (S.meta ? S.meta.set.size : 16);
 export const rounds = () => roundsOf(size());

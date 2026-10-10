@@ -312,8 +312,22 @@ await t('an event saved by an older version still loads after a deploy: every pr
   assert.deepEqual(me.bets, meBefore.bets, 'and the bet'); assert.equal(me.bal, meBefore.bal);
   const m = host2.last('meta');
   assert.equal(m.set.voteSecs, 10); assert.equal(m.cats[0].set.thirdPlace, false, 'a night under way does not suddenly grow a third-place battle');
+  assert.equal((await act(rt2, host2, { a: 'phase', to: 'picks' })).ok, true);
+  assert.equal(host2.last('meta').cats[0].elimOn, true, 'reopened picks keep the round going');
   assert.equal((await act(rt2, host2, { a: 'performer', cat: 'c1', id: ids[0] })).ok, true, 'new actions work on the old event');
-  assert.equal(host2.last('meta').cats[0].perf.n, 1);
+  assert.equal(host2.last('meta').cats[0].performer, ids[0]);
+});
+
+await t('the lock-in clock closes the predictions by itself on the server', async () => {
+  const rt = await newEvent();
+  const host = await connect(rt, { ht: rt.ht });
+  await act(rt, host, { a: 'bb.add', names: Array.from({ length: 9 }, (_, i) => 'BB' + i) });
+  await act(rt, host, { a: 'phase', to: 'picks' });
+  assert.equal((await act(rt, host, { a: 'elim.start' })).ok, true);
+  assert.equal((await act(rt, host, { a: 'picks.timer', mins: 0.02 })).ok, true);
+  assert.ok(host.last('meta').cats[0].picksEnd > Date.now());
+  await sleep(1700);
+  assert.equal(host.last('meta').cats[0].phase, 'elimination', 'locked by the clock');
 });
 
 await t('an evicted and rebuilt object has the same players, tokens, bets, pools, bracket and results', async () => {
