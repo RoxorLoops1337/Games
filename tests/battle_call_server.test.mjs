@@ -95,6 +95,13 @@ await t('an organiser password under four characters is refused, and an event ca
   assert.equal((await call(rt.d, '/init', { method: 'POST', body: { code: 'AAAAA', name: 'y', size: 8, password: 'abcd' } })).status, 409);
 });
 
+await t('the init route cannot be reached from outside: no creating events around the organiser key', async () => {
+  const dos = new Map();
+  const env = { EVENT: { idFromName: (n) => n, get: (n) => ({ fetch: async (u, init) => { if (!dos.has(n)) { const rt = runtime(); await rt.ready(); dos.set(n, rt); } return dos.get(n).d.fetch(new Request(u, init)); } }) }, CREATE_KEY: 'k' };
+  const r = await worker.fetch(new Request('https://x/api/e/ABCDE/init', { method: 'POST', body: JSON.stringify({ code: 'ABCDE', name: 'x', size: 8, password: 'abcd' }) }), env);
+  assert.equal(r.status, 404);
+});
+
 console.log('accounts');
 await t('register, log in, wrong password, duplicate nickname, short password, per-device cap', async () => {
   const rt = await newEvent();

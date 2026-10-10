@@ -4,6 +4,8 @@ One Worker. One Durable Object per event code (`Event`, SQLite-backed so it runs
 account, bet, vote and payout, counts them one at a time (so a hall voting in the same second never loses a vote) and pushes
 every change to every phone over WebSockets. The same Worker also serves the app files, so the Worker address is a complete app.
 
+Want to see it first? Open the app and tap **Try the demo**: the whole night plays in your browser with simulated fans, no server needed.
+
 ## Deploy (once, about two minutes)
 
 From the repo root:

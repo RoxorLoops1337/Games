@@ -100,6 +100,7 @@ export default {
     const code = cleanCode(m[1]);
     if (!code) return err('No event with that code', 404);
     const stub = env.EVENT.get(env.EVENT.idFromName(code));
+    if (m[2] === '/init') return err('Not found', 404); // creating goes through /api/create only
     const inner = new Request('https://do' + (m[2] || '/') + url.search, request);
     const res = await stub.fetch(inner);
     return res.status === 101 ? res : withCors(res);
@@ -227,6 +228,7 @@ export class Event {
 
   async webSocketMessage(ws, raw) {
     if (!this.S) { this.send(ws, { t: 'gone' }); return; }
+    if (typeof raw !== 'string' || raw.length > 65536) return;
     let m; try { m = JSON.parse(raw); } catch (_) { return; }
     if (m.t === 'hello') {
       const a = await this.authFor(m.tk, m.ht);
@@ -338,6 +340,7 @@ export class Event {
         const a = await this.authFor(null, request.headers.get('x-host'));
         if (a.r !== 'h') return err('Organiser only', 403);
         if (!this.S.ev.bbs.some((b) => b.id === id)) return err('No such beatboxer', 404);
+        if (+request.headers.get('content-length') > MAX_PHOTO * 1.5) return err('Picture too big (max 160 KB)', 413);
         const buf = await request.arrayBuffer();
         if (!buf.byteLength || buf.byteLength > MAX_PHOTO) return err('Picture too big (max 160 KB)', 413);
         await this.ctx.storage.put('ph:' + id, new Uint8Array(buf));
@@ -390,9 +393,12 @@ export class Event {
     let b; try { b = await request.json(); } catch (_) { return err('Bad request'); }
     const pw = String(b.password || '');
     if (pw.length < 4) return err('Choose an organiser password of at least 4 characters');
+    if (!cleanCode(b.code)) return err('Bad code');
     const ev = E.newEvent({ code: b.code, name: b.name, size: +b.size || 16, now: Date.now() });
     const salt = randomToken(12), ht = randomToken();
-    this.host = { s: salt, h: await hashPassword(pw, salt), tk: [await sha(ht)] };
+    const host = { s: salt, h: await hashPassword(pw, salt), tk: [await sha(ht)] };
+    if (this.S) return err('exists', 409); // another init finished while we were hashing
+    this.host = host;
     this.S = E.newState(ev);
     this.hostTk = new Set(this.host.tk);
     this.S.dirty.ev = true;
@@ -458,9 +464,9 @@ export class Event {
   async hostLogin(request) {
     let b; try { b = await request.json(); } catch (_) { return err('Bad request'); }
     const ip = request.headers.get('cf-connecting-ip') || '?';
-    if (this.tooManyFails(ip)) return err('Too many wrong passwords, wait a few minutes', 429);
+    if (this.tooManyFails('h' + ip)) return err('Too many wrong passwords, wait a few minutes', 429);
     const h = await hashPassword(String(b.password || ''), this.host.s);
-    if (!safeEq(h, this.host.h)) { this.noteFail(ip); return err('Wrong organiser password', 401); }
+    if (!safeEq(h, this.host.h)) { this.noteFail('h' + ip); return err('Wrong organiser password', 401); }
     const ht = randomToken(), hh = await sha(ht);
     this.host.tk = [...this.host.tk, hh].slice(-6);
     this.hostTk = new Set(this.host.tk);

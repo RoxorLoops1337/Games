@@ -18,6 +18,10 @@ The live server is a Cloudflare Worker (see `server/README.md`); the Pages copy 
 - `js/`: the browser app, vanilla ES modules, no bundler. `main.js` routing + every button, `state.js` mirror of the
   server state + odds maths, `net.js` socket/polling/HTTP, `ui.js` shared components, `dom.js` morphing renderer,
   `views/*` one file per screen. `css/app.css` is the whole design system (dark stage UI; BLUE = left, RED = right).
+- `js/demo.js`: demo mode (`#/e/DEMO`, `#/h/DEMO`, `#/s/DEMO`). The real engine runs inside the page with 28 simulated
+  fans, wired in through `net.js` (`isDemo()`); a floating director bar switches views, advances the organiser's next step
+  or autoplays the whole night. No server needed, so the Pages copy is useful before the Worker is deployed. Keep it
+  using `engine.js` directly, never a mock of the rules.
 - `vendor/qrcode.js`: qrcode-generator (MIT), for the join QR.
 
 ## Rules in one paragraph

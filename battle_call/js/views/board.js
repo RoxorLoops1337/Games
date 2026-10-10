@@ -51,6 +51,13 @@ export function meSheet() {
     <div class="stats4"><div><b>${st.votes || 0}</b><small>votes cast</small></div><div><b>${st.sync || 0}</b><small>matched judges</small></div><div><b>${st.hits || 0}</b><small>right calls</small></div><div><b>${me.net.toLocaleString()}</b><small>net worth</small></div></div>
     <h3 class="sh">Wallet</h3>
     <ul class="wallet-log">${log.length ? log.map((l) => `<li class="${l.d > 0 ? 'up' : l.d < 0 ? 'down' : ''}">${ic(KIND[l.k] || 'loops', 16)}<span>${esc(l.x)}</span><b>${l.d > 0 ? '+' : ''}${l.d || ''}</b></li>`).join('') : '<li class="muted">Nothing yet.</li>'}</ul>
-    <div class="cta-row"><button class="btn ghost" data-a="haptics">${ic('speaker', 18)} Vibration ${ui.hapt ? 'on' : 'off'}</button><button class="btn ghost" data-a="logout">${ic('logout', 18)} Log out</button></div>
+    <div class="cta-row"><button class="btn ghost" data-a="haptics">${ic('speaker', 18)} Vibration ${ui.hapt ? 'on' : 'off'}</button>${S.code === 'DEMO' ? '' : `<button class="btn ghost" data-a="logout">${ic('logout', 18)} Log out</button>`}</div>
+    <h3 class="sh">How scoring works</h3>
+    <ul class="rules">
+      <li><b>Your Top ${size()}</b> ${S.meta.set.pts.topIn} Loops per pick who makes it, +${S.meta.set.pts.topExact} for the exact seat, +${S.meta.set.pts.topNear} when you are one seat off.</li>
+      <li><b>Battle calls</b> ${S.meta.set.pts.pick} Loops for a right pick in the first round, doubling every round up to the final.</li>
+      <li><b>Bets</b> Winners share the pot, so the multiplier moves as the hall bets. Never less than ${S.meta.set.minPayout.toFixed(1)}x.</li>
+      <li><b>Votes</b> ${S.meta.set.pts.vote} Loops for voting, +${S.meta.set.pts.sync} more when you agree with the judges.</li>
+      <li><b>Run dry?</b> A busking tip tops you up when a round ends.</li></ul>
   </div>`;
 }

@@ -11,7 +11,7 @@ import { seedOrder, buildMatches, roundsOf, multiplier, slotsFor, nameKey } from
 
 let pass = 0, failN = 0;
 const t = (name, fn) => {
-  try { fn(); pass++; console.log('  ok  ' + name); } catch (e) { failN++; console.log('FAIL  ' + name + '\n      ' + (e.stack || e).splt('\n').slice(0, 4).join('\n      ')); }
+  try { fn(); pass++; console.log('  ok  ' + name); } catch (e) { failN++; console.log('FAIL  ' + name + '\n      ' + (e.stack || e).split('\n').slice(0, 4).join('\n      ')); }
 };
 
 function setup({ size = 8, beatboxers = 12, users = 4, start = 1000 } = {}) {
@@ -358,6 +358,46 @@ t('re-drawing the ranking before any battle refunds, un-pays and rebuilds', () =
   assert.equal(S.ev.matches.length, 0);
   host(S, { a: 'seeds', order: [ids[3], ids[2], ids[1], ids[0]] });
   assert.equal(us[0].bal, 1000 + 4 * 20 + 2 * 15, 'all four in the top four, two of them one seat off');
+});
+
+console.log('regressions from review');
+t('nicknames that are object property names are refused (they used to break settlement)', () => {
+  const { S } = setup({ users: 0 });
+  for (const n of ['constructor', '__proto__', 'toString', 'hasOwnProperty']) assert.equal(E.canRegister(S, { name: n }).ok, false, n);
+});
+t('a market the organiser voided is never refunded twice', () => {
+  const { S, us, ids } = bracketWorld();
+  playMatch(S, 'r0m0', 'a'); playMatch(S, 'r0m1', 'a');
+  const fin = Object.values(S.ev.markets).find((m) => m.kind === 'match' && m.mid === 'r1m0');
+  E.setBet(S, us[0], fin.id, 0, 500);
+  host(S, { a: 'mk.void', id: fin.id });
+  assert.equal(us[0].bal, 1000 + 25 * 0, 'refunded once');
+  const before = us[0].bal;
+  host(S, { a: 'reopen', mid: 'r0m1' });
+  assert.equal(us[0].bal, before, 'no second refund');
+});
+t('re-drawing the ranking drops a hand-opened champion market built on the old bracket', () => {
+  const { S, us, ids } = setup({ size: 4, beatboxers: 5, users: 1 });
+  S.ev.settings.autoChampion = false;
+  host(S, { a: 'phase', to: 'elimination' });
+  host(S, { a: 'seeds', order: ids.slice(0, 4) });
+  host(S, { a: 'mk.preset', preset: 'champion' });
+  const c = Object.values(S.ev.markets).find((m) => m.kind === 'champion');
+  E.setBet(S, us[0], c.id, 0, 100);
+  host(S, { a: 'seeds.revert' });
+  assert.equal(us[0].bal, 1000, 'stake refunded');
+  assert.equal(Object.values(S.ev.markets).filter((m) => m.kind === 'champion').length, 0);
+  S.ev.settings.autoChampion = true;
+  host(S, { a: 'seeds', order: [ids[4], ...ids.slice(0, 3)] });
+  assert.ok(Object.values(S.ev.markets).find((m) => m.kind === 'champion').bbs.includes(ids[4]));
+});
+t('reach bets are not offered on fighters already drawn into that round; reopening needs no battle in progress and undoes tips', () => {
+  const { S, ids } = setup({ size: 8, beatboxers: 8, users: 1 });
+  host(S, { a: 'phase', to: 'elimination' }); host(S, { a: 'seeds', order: ids });
+  for (const id of ['r0m0', 'r0m1', 'r0m2', 'r0m3']) playMatch(S, id, 'a');
+  assert.equal(E.hostAction(S, { a: 'mk.preset', preset: 'reach', to: 1 }).ok, false, 'round 0 is over, nothing to bet on');
+  host(S, { a: 'step', mid: 'r1m0', to: 'live' });
+  assert.equal(E.hostAction(S, { a: 'reopen', mid: 'r0m3' }).ok, false, 'a battle is in progress');
 });
 
 console.log('big fields');

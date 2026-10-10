@@ -13,6 +13,7 @@ import {
   slotsFor, cleanPicks, poolTotal, sidePool, multiplier, payoutFor, log2,
 } from './js/shared.js';
 
+const RESERVED = new Set(Object.getOwnPropertyNames(Object.prototype).map((n) => n.toLowerCase()));
 export const ok = (x) => ({ ok: true, ...x });
 export const fail = (err) => ({ ok: false, err });
 
@@ -54,7 +55,7 @@ export function canRegister(S, { name, device, ipH }) {
   if (!set.regOpen) return fail('Sign-ups are closed for this event');
   const nm = cleanName(name);
   if (nm.length < 2) return fail('Pick a nickname with at least 2 characters');
-  if (S.users.has(nameKey(nm))) return fail('That nickname is taken');
+  if (RESERVED.has(nameKey(nm)) || S.users.has(nameKey(nm))) return fail('That nickname is taken');
   if (device && set.maxPerDevice && [...S.users.values()].filter((u) => u.device === device).length >= set.maxPerDevice)
     return fail('This phone already has an account. Log in instead');
   if (ipH && set.maxPerIp && [...S.users.values()].filter((u) => u.ipH === ipH).length >= set.maxPerIp)
@@ -199,6 +200,7 @@ function settleMarket(S, m, win, ref) {
 }
 
 function voidMarket(S, m, ref, why = 'Bet cancelled') {
+  if (m.st === 'void') return; // already refunded
   m.st = 'void'; touchMk(S, m);
   for (const u of S.users.values()) {
     const b = u.bets[m.id];
@@ -311,9 +313,7 @@ export function revertSeeds(S) {
   const ev = S.ev;
   if (ev.phase !== 'bracket') return fail('There is no ranking to take back');
   if (ev.matches.some((m) => m.status !== 'upcoming' && m.status !== 'wait')) return fail('A battle has already started');
-  const lg = S.ledger.get('seeds');
-  for (const id of lg ? lg.made : []) { const m = mkOf(S, id); if (m) { voidMarket(S, m, null); dropMarket(S, m); } }
-  for (const m of marketsList(S)) if (m.kind === 'reach') { voidMarket(S, m, null); dropMarket(S, m); }
+  for (const m of marketsList(S)) if (m.kind !== 'qualify') { voidMarket(S, m, null); dropMarket(S, m); } // match, champion, reach: all built on the old bracket
   applyLedgerBack(S, 'seeds');
   for (const u of S.users.values()) if (Object.keys(u.picks).length) { u.picks = {}; touchUser(S, u); }
   ev.seeds = null; ev.matches = []; ev.locked = []; ev.out = {}; ev.champion = null; ev.phase = 'elimination';
@@ -458,11 +458,13 @@ function roundTips(S, r) {
 export function revertMatch(S, mid) {
   const ev = S.ev, m = matchOf(S, mid);
   if (!m || m.status !== 'done') return fail('That battle has no result to take back');
+  if (activeMatch(S)) return fail('Finish the current battle first');
   const nx = m.r + 1 < log2(ev.settings.size) ? ev.matches.find((x) => x.r === m.r + 1 && x.i === m.i >> 1) : null;
   if (nx && nx.status !== 'upcoming' && nx.status !== 'wait') return fail('The next battle has already started');
   const lg = S.ledger.get('m:' + mid);
   for (const id of lg ? lg.made : []) { const k = mkOf(S, id); if (k) { voidMarket(S, k, null, 'Result changed'); dropMarket(S, k); } }
   applyLedgerBack(S, 'm:' + mid);
+  if (S.ledger.has('tip:' + m.r)) applyLedgerBack(S, 'tip:' + m.r); // the round is open again, so are its tips
   if (nx) { nx[m.i % 2 === 0 ? 'a' : 'b'] = null; nx.status = 'wait'; }
   if (ev.phase === 'finished') { ev.phase = 'bracket'; ev.champion = null; }
   delete ev.out[loserOf(m)];
@@ -591,7 +593,7 @@ export function hostAction(S, a) {
       if (ev.locked[to - 1]) return fail('That round has already started');
       let n = 0;
       for (const id of ev.seeds) {
-        if (ev.out[id] !== undefined) continue;
+        if (ev.out[id] !== undefined || ev.matches.some((x) => x.r === to && (x.a === id || x.b === id))) continue;
         if (Object.values(ev.markets).some((k) => k.kind === 'reach' && k.bb === id && k.to === to && k.st !== 'void')) continue;
         const m = newMarket(S, { kind: 'reach', bb: id, to });
         const w = weight(S, id);

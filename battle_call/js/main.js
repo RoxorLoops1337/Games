@@ -3,7 +3,7 @@
 //   #/e/CODE      the audience app         #/h/CODE     the organiser console      #/s/CODE   the big screen
 import { morph, esc, ic, $, $$, toast, confetti, runTickers, buzz, setHaptics } from './dom.js';
 import { S, emit, subscribe, resetState, sessions, saveSession, dropSession, deviceId, serverBase, setServer, mkView, curMatch, bbName, size, leftKey, sides, myBet, mkTitle, mkLabel, payoutIf } from './state.js';
-import { connect, disconnect, act, http, register, login, hostLogin, info, createEvent, uploadPhoto } from './net.js';
+import { connect, disconnect, act, http, register, login, hostLogin, info, createEvent, uploadPhoto, isDemo, demoCtl } from './net.js';
 import { ui, loops } from './ui.js';
 import { MIN_BET } from './shared.js';
 import { homeView, createView, authView } from './views/auth.js';
@@ -41,7 +41,8 @@ async function onRoute() {
   Object.assign(ui, { sheet: null, modal: null, voteOpen: null, notFound: false, offline: false, err: '', watching: false, tab: r.tab && ['live', 'predict', 'bets', 'board'].includes(r.tab) ? r.tab : 'live', rank: { top: null, seeds: [] }, topSaved: true });
   S.code = r.code;
   const sess = sessions()[r.code] || {};
-  if (kind === 'e' && sess.tk) { S.role = 'user'; S.tk = sess.tk; S.name = sess.name || ''; }
+  if (r.code === 'DEMO') { S.role = kind === 'e' ? 'user' : kind === 'h' ? 'host' : 'guest'; S.tk = 'demo'; S.ht = 'demo'; S.name = 'You'; }
+  else if (kind === 'e' && sess.tk) { S.role = 'user'; S.tk = sess.tk; S.name = sess.name || ''; }
   else if (kind === 'h' && sess.ht) { S.role = 'host'; S.ht = sess.ht; }
   else S.role = 'guest';
   try { const v = localStorage.getItem('bc.seen.' + r.code); ui.seenLog = v === null ? null : +v || 0; } catch (_) { ui.seenLog = null; }
@@ -49,7 +50,7 @@ async function onRoute() {
   const i = await info(r.code);
   if (entered !== key) return;
   if (!i.ok) { if (i.offline) ui.offline = true; else ui.notFound = true; emit(); return; }
-  saveSession(r.code, { ev: i.name });
+  if (r.code !== 'DEMO') saveSession(r.code, { ev: i.name });
   if (kind === 'h' && S.role === 'guest') { emit(); return; } // needs the organiser password first
   connect(r.code, onPush);
 }
@@ -62,11 +63,24 @@ function problem(title, text, extra = '') {
 }
 
 function view() {
+  return viewMain() + (S.code === 'DEMO' && S.meta && ['e', 'h', 's'].includes(route.a) ? demoBar() : '');
+}
+
+function demoBar() {
+  const here = route.a, auto = demoCtl().isAuto(), done = S.meta.phase === 'finished';
+  const seg = (r, l) => `<button class="seg ${here === r ? 'on' : ''}" data-a="demoGo" data-r="${r}">${l}</button>`;
+  return `<div class="demobar ${here === 's' ? 'tiny' : ''}" data-k="demobar"><b>Demo</b><div class="segs mini">${seg('e', 'Phone')}${seg('h', 'Organiser')}${seg('s', 'Screen')}</div>
+    <button class="btn sm" data-a="demoNext" ${done ? 'disabled' : ''}>Next step</button>
+    <button class="btn sm ${auto ? 'hot' : 'ghost'}" data-a="demoPlay" ${done ? 'disabled' : ''}>${auto ? 'Pause' : 'Autoplay'}</button>
+    <button class="ib dim" data-a="demoReset" aria-label="Start the demo again">${ic('undo', 16)}</button></div>`;
+}
+
+function viewMain() {
   const r = route;
   if (r.a === 'new') return createView();
   if (!['e', 'h', 's'].includes(r.a) || !r.code) return homeView();
   if (ui.notFound) return problem('No event with that code', `We could not find <b>${esc(r.code)}</b>. Check the code on the screen and try again.`);
-  if (ui.offline) return problem('Cannot reach the server', `The app could not talk to <b>${esc(serverBase())}</b>. Check your connection${location.hostname.endsWith('pages.dev') ? ', or set the server address of the Battle Call Worker' : ''}.`, `<button class="btn big" data-a="serverEdit">Set server address</button>`);
+  if (ui.offline) return problem('Cannot reach the server', `The app could not talk to <b>${esc(serverBase())}</b>. Check your connection${location.hostname.endsWith('pages.dev') ? ', or set the server address of the Battle Call Worker' : ''}.`, `<button class="btn big" data-a="serverEdit">Set server address</button><a class="btn ghost big" href="#/e/DEMO">Try the demo instead</a>`);
   if (S.gone) return problem('This event was deleted', 'The organiser closed it.');
   if (r.a === 'h') {
     if (S.role !== 'host') return hostLoginView();
@@ -238,6 +252,10 @@ const afterRank = (w) => { if (w === 'top') saveTop(); else emit(); };
 
 const A = {
   home() { location.hash = '#/'; },
+  demoGo(el) { location.hash = `#/${el.dataset.r}/DEMO`; },
+  demoNext() { if (!demoCtl().next()) toast('Nothing to do next', 'info'); },
+  demoPlay() { demoCtl().toggleAuto(); emit(); },
+  demoReset() { demoCtl().reset(); ui.rank = { top: null, seeds: [] }; ui.voteOpen = null; ui.hostMatch = null; ui.seenLog = null; for (const k of Object.keys(prevStatus)) delete prevStatus[k]; celebratedChamp = false; toast('Demo restarted', 'info'); emit(); },
   tab(el) { ui.tab = el.dataset.t; if (el.dataset.b) ui.boardTab = el.dataset.b; ui.search = ''; emit(); },
   authOpen() { ui.watching = false; ui.err = ''; emit(); },
   watch() { ui.watching = true; emit(); },

@@ -20,6 +20,7 @@ export function homeView() {
     </form>
     ${sess.length ? `<section class="block"><h3>Your events</h3><div class="stack">${sess.map(([c, s]) => `<a class="card link" href="#/${s.ht ? 'h' : 'e'}/${c}">${ic(s.ht ? 'cog' : 'user', 20)}<div><b>${esc(s.ev || c)}</b><small>${s.ht ? 'Organiser' : esc(s.name || 'Watching')} · ${c}</small></div>${ic('right', 18)}</a>`).join('')}</div></section>` : ''}
     <a class="btn ghost wide" href="#/new">${ic('mic', 18)} I'm running a battle</a>
+    <a class="card link demo" href="#/e/DEMO">${ic('bolt', 22)}<div><b>Try the demo</b><small>A full battle night with 28 simulated fans. No server, no sign-up.</small></div>${ic('right', 18)}</a>
     <p class="muted center small foot">Server: ${esc(serverBase().replace(/^https?:\/\//, ''))} · <button class="linkbtn" data-a="serverEdit">change</button></p>
   </main>`;
 }

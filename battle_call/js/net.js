@@ -1,6 +1,11 @@
 // Battle Call: talking to the server. One WebSocket per event (instant push), with a polling fallback for
 // networks that eat WebSockets, automatic reconnect, and plain HTTP for sign-up and login.
 import { S, emit, setMeta, serverBase } from './state.js';
+import { createDemo } from './demo.js';
+
+let demo = null;
+export const isDemo = () => S.code === 'DEMO';
+export const demoCtl = () => (demo = demo || createDemo());
 
 let ws = null, wsTries = 0, hb = 0, poll = 0, retry = 0, lastMsg = 0, wantCode = null, seq = 1, onPush = () => {};
 const waiting = new Map();
@@ -41,6 +46,7 @@ export function apply(m) {
 
 export function connect(code, push) {
   disconnect();
+  if (code === 'DEMO') { onPush = push || (() => {}); S.conn = 'live'; demoCtl().attach(apply, S.role); emit(); return; }
   wantCode = code; onPush = push || (() => {}); wsTries = 0;
   open();
   document.addEventListener('visibilitychange', wake);
@@ -49,6 +55,7 @@ export function connect(code, push) {
 
 export function disconnect() {
   wantCode = null;
+  if (demo) demo.detach();
   clearInterval(hb); clearTimeout(retry); clearInterval(poll); hb = retry = poll = 0;
   document.removeEventListener('visibilitychange', wake);
   removeEventListener('online', wake);
@@ -117,6 +124,7 @@ function fallback() {
 
 /** Do something. Over the socket when it is up, over HTTP when not. Always resolves { ok, err }. */
 export function act(a) {
+  if (isDemo()) return Promise.resolve(demoCtl().act(a));
   if (S.role === 'guest') return Promise.resolve({ ok: false, err: 'Join the battle first', guest: true });
   if (ws && ws.readyState === 1) {
     const id = seq++;
@@ -142,10 +150,11 @@ async function fallbackNow() {
 export const register = (code, name, password, device) => http(`/api/e/${code}/register`, { name, password, device });
 export const login = (code, name, password) => http(`/api/e/${code}/login`, { name, password });
 export const hostLogin = (code, password) => http(`/api/e/${code}/hostlogin`, { password });
-export const info = (code) => http(`/api/e/${code}/info`);
+export const info = (code) => (code === 'DEMO' ? Promise.resolve({ ok: true, name: demoCtl().name() }) : http(`/api/e/${code}/info`));
 export const createEvent = (body) => http('/api/create', body);
 
 export async function uploadPhoto(bbId, blob) {
+  if (isDemo()) return { ok: false, err: 'Photos are switched off in the demo' };
   try {
     const r = await fetch(url('/photo/' + bbId), { method: 'PUT', headers: { 'x-host': S.ht }, body: blob });
     return await r.json();
