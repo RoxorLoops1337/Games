@@ -1,6 +1,6 @@
 Workflow:
-- After committing + pushing to the feature branch, always create the PR (draft), then mark it ready and squash-merge to main without asking. Skip the "want me to merge?" question.
-- Before EVERY push: run `npm run check:changed` (build + the test suites of the games you changed). If it fails, fix it before pushing. Never push red.
+- Commit and push the feature branch whenever it helps, without waiting for tests, and open the PR (draft) right after the push.
+- Before MERGING to main: run `npm run check:changed` (build + the test suites of the games you changed). Never merge red. When it is green, mark the PR ready and squash-merge to main without asking. Skip the "want me to merge?" question. While tests are still running, the branch and the draft PR may already be pushed; just hold the merge.
 - Commit messages end with the session link the harness provides. Never put a model identifier in commits/PRs.
 
 Reply formatting:
@@ -16,7 +16,7 @@ Reply formatting:
 
 # Verify
 
-    npm run check:changed   # build + only the suites for the games this branch changed (before every push)
+    npm run check:changed   # build + only the suites for the games this branch changed (before every merge)
     npm run check           # build + every suite (~7.5 min), run on demand
     npm run check:changed -- --dry   # just print which suites it would run
 
@@ -27,14 +27,14 @@ with tests, add its folder and `test:` scripts to `GAME_SUITES` in that file, an
 `test:` script to `check` in `package.json`.
 
 **Hard rules for every session, every size:**
-1. Green before push, but the bar is YOUR work, not the whole repo.
+1. Green before merge, but the bar is YOUR work, not the whole repo.
    If a suite fails in a game you did NOT touch (only possible when the full check runs):
    - do not go and fix it. One red suite elsewhere must never turn a small change into a
      patch to a different codebase. Staying out is the right call even when the fix looks easy.
    - re-run that one suite by itself first. Several are randomised (grimhold and
      dungeon_pusher build boards from a fresh seed each run) and fail on maybe one
      board in five, so a single red run proves nothing.
-   - if it still fails: push your own work anyway and SAY SO in the reply: name the
+   - if it still fails: merge your own work anyway and SAY SO in the reply: name the
      game and the assertion. Whether it gets fixed is the owner's call, not yours.
    If the failure is in a game you DID touch, it is yours: fix it or STOP and report.
 2. After any merge of origin/main into the branch, RE-GREP for the feature you just added

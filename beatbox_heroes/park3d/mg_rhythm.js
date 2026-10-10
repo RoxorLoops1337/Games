@@ -364,18 +364,21 @@ export function createRhythm(ctx, opts) {
   // MIC MODE: like the 2D game. Each detected beatbox hit presses the lane it was classified as.
   function toggleMic() { if (mic.on) { stopMic(); if (opts.onMic) opts.onMic(false); } else startMic(true); }
   async function startMic(user) {
-    const M = BBH().Mic, fail = (msg) => { ui.toast(msg, 2400); if (opts.onMic) opts.onMic(false); };
-    if (!M || !M.open) { ui.toast('No microphone available', 1800); return; }
+    const MP = BBH().MicPlay, fail = (msg) => { ui.toast(msg, 2400); if (opts.onMic) opts.onMic(false); };
+    if (!MP || !BBH().Mic || !BBH().Mic.open) { ui.toast('No microphone available', 1800); return; }
     try {
-      const o = await M.open(); if (!o.ok) { fail('Mic: ' + (o.error || 'unavailable') + '. Using taps.'); return; } if (disposed) { try { M.close && M.close(); } catch (e) { /* ignore */ } return; }
-      let prof = null; try { const by = {}, Sm = BBH().Samples; if (Sm) for (let l = 0; l < 4; l++) { const sm = await Sm.get(opts.slot || (BBH().G && BBH().G.slot) || 1, l); if (sm) by[l] = sm.f32 || sm.data; } if (Object.keys(by).length) prof = M.makeClassifier(M.trainFromSamples(by, M.sampleRate() || 44100)); } catch (e) { prof = null; }
-      mic.stop = M.listen((ev) => micHit(ev), prof ? { classifier: prof } : undefined); mic.on = true; ui.setMic(true); ui.toast('Mic mode: beatbox into your mic!', 2200); if (user && opts.onMic) opts.onMic(true);
+      const r = await MP.start({ slot: opts.slot || (BBH().G && BBH().G.slot) || 1, settings: opts.settings || (BBH().E && BBH().E.settings), onHit: (ev) => micHit(ev) });
+      if (!r.ok) { fail('Mic: ' + (r.error || 'unavailable') + '. Using taps.'); return; } if (disposed) { r.stop(); return; }
+      mic.stop = r.stop; mic.cls = r.cls; mic.dog = MP.Watchdog(); mic.dog.arm(performance.now()); mic.on = true; ui.setMic(true);
+      ui.toast(r.source === 'default' ? 'Mic mode: beatbox into your mic! (MIC SETUP tunes it to your voice)' : 'Mic mode: beatbox into your mic!', 2600); if (user && opts.onMic) opts.onMic(true);
     } catch (e) { fail('Mic mode failed. Using taps.'); }
   }
-  function stopMic() { try { if (mic.stop) mic.stop(); mic.stop = null; const M = BBH().Mic; if (M && M.close) M.close(); } catch (e) { /* ignore */ } mic.on = false; ui.setMic(false); }
+  function stopMic() { try { if (mic.stop) mic.stop(); } catch (e) { /* ignore */ } mic.stop = null; mic.cls = null; mic.dog = null; mic.on = false; ui.setMic(false); }
   function micHit(ev) {
-    if (S.phase !== 'play' && S.phase !== 'count') return; let lane = ev.lane;
-    if (S.phase === 'play' && (ev.confidence === undefined || ev.confidence < 0.5)) { let best = null, bd = 1e9; for (const n of S.notes) { if (n.state) continue; const d = Math.abs(S.T - n.time); if (d < bd) { bd = d; best = n; } } if (best && bd < 0.2) lane = best.lane; }
+    if (S.phase !== 'play' && S.phase !== 'count') return;
+    const MP = BBH().MicPlay, tOf = (n) => n.time; if (mic.dog) mic.dog.hit(performance.now());
+    let lane = ev.lane;
+    if (S.phase === 'play') { lane = MP.resolveLane(ev, S.notes, S.T, tOf).lane; if (mic.cls) MP.adapt(mic.cls, ev, lane, S.notes, S.T, tOf); }
     press(lane, { silent: true, shift: 0.04 });
   }
   function doQuit() { stopMic(); click.stop(); try { events.emit('minigameQuit'); } catch (e) { /* ignore */ } }
@@ -397,6 +400,7 @@ export function createRhythm(ctx, opts) {
     if (S.phase === 'verdict') { S.stateT += dt; return; }
     if (!S.manual && S.audioClock) { const a = A(); const an = a ? a.now() : 0; if (an > S.lastA + 1e-4 && S.lastA > 0) S.audioRun = true; S.lastA = an || S.lastA; if (S.audioRun) S.T = an - S.t0; else S.T += dt; } else S.T += dt;
     S.tPlay += dt;
+    if (mic.dog && S.phase === 'play' && S.notes.some((n) => !n.state && Math.abs(S.T - n.time) < 0.3) && mic.dog.tick(performance.now(), true)) ui.toast("Can't hear you. Move closer, or run MIC SETUP in SETTINGS.", 3200);
     if (S.phase === 'count' || S.phase === 'play') {
       const T = S.T, beatNow = Math.floor(T / S.spb);
       const cb = beatNow - (S.cIn || 0);
