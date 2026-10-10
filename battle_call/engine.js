@@ -266,7 +266,7 @@ export function setPhase(S, to) {
     touchMeta(S);
     return ok({});
   }
-  if (ev.bbs.length < ev.settings.size) return fail(`Add at least ${ev.settings.size} beatboxers first (or lower the bracket size)`);
+  if (ev.bbs.length < ev.settings.size && ev.bbs.length !== 1) return fail(`Add at least ${ev.settings.size} beatboxers first (or lower the bracket size)`);
   if (to === 'picks') {
     ev.phase = 'picks';
     if (from === 'elimination') {
@@ -517,6 +517,17 @@ export function setResult(S, mid, w, judges) {
   return ok({ winner: win });
 }
 
+/** A category with a single entrant has no battles: after the elimination the organiser crowns them (a walkover). */
+export function walkover(S) {
+  const ev = S.ev;
+  if (ev.phase !== 'elimination') return fail('A walkover is crowned at the elimination');
+  if (ev.bbs.length !== 1) return fail('A walkover needs exactly one beatboxer');
+  ev.seeds = [ev.bbs[0].id]; ev.matches = []; ev.locked = []; ev.out = {};
+  ev.champion = ev.bbs[0].id; ev.walkover = true; ev.phase = 'finished';
+  touchMeta(S); S.dirty.board = true; S.dirty.ev = true;
+  return ok({});
+}
+
 /** What "Undo" would take back in this category right now (null: nothing to undo). `hard` = it reverses payouts. */
 export function undoPlan(S) {
   const ev = S.ev, act = activeMatch(S), nm = (m) => `${bbName(S, m.a)} vs ${bbName(S, m.b)}`;
@@ -525,6 +536,7 @@ export function undoPlan(S) {
     if (act.status === 'voting') return { label: 'Close the vote and go back to the battle', hard: false };
     return { label: `Put ${nm(act)} back: not started yet`, hard: false };
   }
+  if (ev.phase === 'finished' && ev.walkover) return { label: 'Take back the walkover', hard: false };
   if (ev.phase === 'bracket' || ev.phase === 'finished') {
     const last = ev.matches.filter((m) => m.status === 'done').sort((a, b) => b.ds - a.ds)[0];
     if (last) return { label: `Take back the result of ${nm(last)}`, hard: true, mid: last.id };
@@ -542,6 +554,7 @@ export function undoStep(S) {
   const act = activeMatch(S);
   let r;
   if (act && ev.matches.includes(act)) r = stepMatch(S, act.id, act.status === 'closed' ? 'voting' : act.status === 'voting' ? 'live' : 'upcoming');
+  else if (ev.phase === 'finished' && ev.walkover) { ev.champion = null; ev.walkover = false; ev.seeds = null; ev.phase = 'elimination'; touchMeta(S); S.dirty.ev = true; r = ok({}); }
   else if (plan.mid) r = revertMatch(S, plan.mid);
   else if (ev.phase === 'bracket') r = revertSeeds(S);
   else if (ev.phase === 'elimination') r = setPhase(S, 'picks');
@@ -810,6 +823,7 @@ function catAction(S, a) {
     case 'undo': return undoStep(S);
     case 'seeds': return publishSeeds(S, a.order);
     case 'seeds.revert': return revertSeeds(S);
+    case 'walkover': return walkover(S);
     case 'step': return stepMatch(S, a.mid, a.to, a.secs);
     case 'result': return setResult(S, a.mid, a.w, a.judges);
     case 'reopen': return revertMatch(S, a.mid);
@@ -869,7 +883,7 @@ function catAction(S, a) {
 /** Everything the audience may see that changes rarely. Pools live in `liveOf` so a bet does not resend all of this. */
 function catMeta(S, c) {
   return {
-    id: c.id, name: c.name, art: c.art, pfx: c.pfx, phase: c.phase, undo: inCat(S, c, () => undoPlan(S)),
+    id: c.id, name: c.name, art: c.art, pfx: c.pfx, phase: c.phase, walkover: !!c.walkover, undo: inCat(S, c, () => undoPlan(S)),
     set: { size: c.settings.size, qualifyBets: c.settings.qualifyBets, autoChampion: c.settings.autoChampion, thirdPlace: c.settings.thirdPlace },
     bbs: c.bbs, seeds: c.seeds, locked: c.locked, out: c.out, champion: c.champion, consensus: c.consensus,
     matches: c.matches.map((m) => ({ ...m, c: m.status === 'closed' || m.status === 'done' ? m.c : null })),

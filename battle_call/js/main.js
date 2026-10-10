@@ -16,6 +16,7 @@ import { hostLogin as hostLoginView, hostShell, photoQueueSheet, joinLink } from
 import { screenView } from './views/screen.js';
 import { shareCard } from './share.js';
 import { shrink } from './photo.js';
+import { presetOf } from './presets.js';
 import { sound, setSound, soundOn, levelOf } from './juice.js';
 
 const app = document.getElementById('app');
@@ -30,6 +31,7 @@ function parse() {
 async function onRoute() {
   const r = parse();
   route = r;
+  if (r.a === 'new') ui.preset = presetOf(r.code);
   const kind = r.a === 'e' || r.a === 'h' || r.a === 's' ? r.a : '';
   if (!kind || !r.code) {
     if (entered) { disconnect(); resetState(); entered = ''; }
@@ -423,6 +425,7 @@ const A = {
     if (o.to === 'voting' && ui.vsecs != null) o.secs = ui.vsecs;
     fail(await act(o));
   },
+  async hWalkover() { fail(await act({ a: 'walkover', cat: S.catId })); },
   hVSecs(el) { ui.vsecs = +el.dataset.n; emit(); },
   async hSwap(el) { fail(await act({ a: 'swap', mid: el.dataset.m })); },
   hSelect(el) { ui.hostMatch = el.dataset.m; ui.judges = { a: 0, b: 0 }; window.scrollTo(0, 0); emit(); },
@@ -523,14 +526,28 @@ const FORMS = {
   },
   async create(f) {
     if (ui.busy) return;
-    const name = f.name.value.trim(), password = f.password.value, catName = f.catName.value.trim();
+    const pre = ui.preset;
+    const name = f.name.value.trim(), password = f.password.value, catName = pre ? pre.cats[0].name : f.catName.value.trim();
     ui.createName = name; ui.createCat = catName;
     if (password.length < 4) { ui.err = 'Pick an organiser password of at least 4 characters'; emit(); return; }
     ui.busy = true; ui.err = ''; emit();
-    const r = await createEvent({ name, catName, size: ui.createSize || 16, password, key: f.key ? f.key.value : undefined });
-    ui.busy = false;
-    if (!r.ok) { ui.err = r.err || 'Could not create the event'; if (r.status === 403) S.createKeyNeeded = true; emit(); return; }
+    const r = await createEvent({ name, catName, size: pre ? pre.cats[0].size : ui.createSize || 16, password, key: f.key ? f.key.value : undefined });
+    if (!r.ok) { ui.busy = false; ui.err = r.err || 'Could not create the event'; if (r.status === 403) S.createKeyNeeded = true; emit(); return; }
     saveSession(r.code, { ht: r.hostToken, ev: name || 'Beatbox Battle' });
+    if (pre) {
+      // the event exists: fill it from the preset (categories, pictures, every beatboxer)
+      const send = (a) => http(`/api/e/${r.code}/act`, a, { headers: { 'x-host': r.hostToken } });
+      let bad = '';
+      for (let i = 0; i < pre.cats.length && !bad; i++) {
+        const c = pre.cats[i];
+        let cat = 'c1';
+        if (i === 0) { const a1 = await send({ a: 'cat.art', id: 'c1', art: c.art }); if (!a1.ok) bad = a1.err; }
+        else { const a2 = await send({ a: 'cat.add', name: c.name, size: c.size, art: c.art }); if (!a2.ok) bad = a2.err; else cat = a2.cat; }
+        if (!bad) { const a3 = await send({ a: 'bb.add', cat, names: c.bbs }); if (!a3.ok) bad = a3.err; }
+      }
+      if (bad) toast(`Event ${r.code} was made, but the setup stopped: ${esc(bad)}`, 'loss');
+    }
+    ui.busy = false;
     entered = ''; location.hash = '#/h/' + r.code; onRoute();
   },
   async auth(f) {

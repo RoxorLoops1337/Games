@@ -59,6 +59,10 @@ Opening a vote sets `m.vend` (server time in ms; `voteSecs` default 10, the host
 
 Streak bonus: every judged battle where a player's vote matched the judges, `voteStreak` counts the run (across categories, newest first); from 2 in a row `setResult` pays +5 per step (cap 25) as a separate ledger `credit` (stat `streakBonus`), so `reopen` reverses it. Levels and badges (`js/juice.js`) are derived on the client from the server counters, nothing is stored. Reactions are ephemeral: a socket message `{t:'rx', e}` (players only, 5 kinds, one per 350 ms each) is batched by the Durable Object and broadcast as `{t:'rx', c:{kind:n}}` twice a second; phones and the big screen float emojis. Sounds are synthesised with WebAudio (no files); `bc.sound` in localStorage remembers the toggle (off by default; the big screen has an Enable sound button because browsers need a tap).
 
+## Walkover and presets
+
+A category with exactly one beatboxer has no bracket: `setPhase` lets it through the size check, and after the elimination the host crowns them (`walkover` action, `ev.walkover`, `ev.phase = 'finished'`, no Loops move). Undo takes it back. `js/presets.js` holds ready-made events: open `#/new/<key>` (e.g. `dmi2026`) and the create page asks only for a password, then makes the event and fills every category and lineup over the HTTP `/act` route.
+
 ## Hard rules for this folder
 
 1. All Loops moves go through `credit()` with a ledger ref, or `reopen` stops being exact. Tests check conservation.

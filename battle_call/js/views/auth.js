@@ -28,17 +28,19 @@ export function homeView() {
 }
 
 export function createView() {
+  const pre = ui.preset;
   return `<main class="front">
     <div class="glow g1"></div>
     <a class="back" href="#/">${ic('left', 18)} Back</a>
     ${brand}
-    <h1>Run a battle</h1>
-    <p class="lead">Make an event, share the code, and drive the whole thing from your phone. You can add the beatboxers after.</p>
+    <h1>${pre ? esc(pre.name) : 'Run a battle'}</h1>
+    <p class="lead">${pre ? 'Everything is ready: pick an organiser password and the event is made with its categories and the full lineup.' : 'Make an event, share the code, and drive the whole thing from your phone. You can add the beatboxers after.'}</p>
+    ${pre ? `<div class="card">${pre.cats.map((c) => `<p><b>${esc(c.name)}</b> <small class="muted">${c.bbs.length} ${c.bbs.length === 1 ? 'entrant (walkover)' : 'beatboxers'}</small></p>`).join('')}</div>` : ''}
     <form class="card form" data-form="create">
-      <label>Event name<input name="name" maxlength="40" placeholder="Beatbox Battle Utrecht" autocomplete="off" value="${esc(ui.createName || '')}"></label>
-      <label>First category <small class="muted">you can add more later: Solo Female, Crew, Tag Team...</small><input name="catName" maxlength="24" placeholder="Solo Mix" autocomplete="off" value="${esc(ui.createCat || '')}"></label>
+      <label>Event name<input name="name" maxlength="40" placeholder="Beatbox Battle Utrecht" autocomplete="off" value="${esc(ui.createName || (pre ? pre.name : ''))}"></label>
+      ${pre ? '' : `<label>First category <small class="muted">you can add more later: Solo Female, Crew, Tag Team...</small><input name="catName" maxlength="24" placeholder="Solo Mix" autocomplete="off" value="${esc(ui.createCat || '')}"></label>
       <label>How many go through to its bracket?</label>
-      <div class="segs" role="radiogroup">${[2, 4, 8, 16, 32, 64].map((n) => `<button type="button" class="seg ${(ui.createSize || 16) === n ? 'on' : ''}" data-a="createSize" data-n="${n}">${n === 2 ? 'Final' : n}</button>`).join('')}</div>
+      <div class="segs" role="radiogroup">${[2, 4, 8, 16, 32, 64].map((n) => `<button type="button" class="seg ${(ui.createSize || 16) === n ? 'on' : ''}" data-a="createSize" data-n="${n}">${n === 2 ? 'Final' : n}</button>`).join('')}</div>`}
       <label>Organiser password<input name="password" type="password" minlength="4" placeholder="Only you know this" autocomplete="new-password"></label>
       ${S.createKeyNeeded ? '<label>Organiser key<input name="key" placeholder="Needed on this server" autocomplete="off"></label>' : ''}
       <button class="btn big" type="submit" ${ui.busy ? 'disabled' : ''}>${ui.busy ? 'Creating...' : 'Create event'}</button>
