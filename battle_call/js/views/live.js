@@ -137,8 +137,16 @@ function bracketPhase() {
     ${cur ? matchHero(cur) : nx ? matchHero(nx) : '<section class="hero"><h1>Next round loading</h1></section>'}
     ${cur && nx ? `<p class="upnext">Up next: <b>${esc(bbName(nx.a))}</b> vs <b>${esc(bbName(nx.b))}</b></p>` : ''}
     ${S.role === 'user' && S.me ? playerCard() : ''}
-    <section class="block"><h3>The bracket</h3><div class="hscroll">${bracket({ mode: 'view' })}</div></section>
+    <section class="block"><h3>The bracket</h3>${bigBracket(cur || nx)}</section>
     ${done.length ? `<section class="block"><h3>Results</h3><div class="stack">${done.slice(0, 4).map(resultCard).join('')}</div>${done.length > 4 ? '<button class="btn ghost sm" data-a="tab" data-t="board" data-b="results">All results</button>' : ''}</section>` : ''}`;
+}
+
+/** 16+ beatboxers make a bracket far too tall for a phone: one round at a time, following the battle on stage. */
+function bigBracket(focus) {
+  if (size() < 16) return `<div class="hscroll">${bracket({ mode: 'view' })}</div>`;
+  const r = ui.liveRound != null ? ui.liveRound : focus ? focus.r : 0;
+  return `<div class="segs mini rsel">${rounds().map((R) => `<button class="seg ${R.r === r ? 'on' : ''}" data-a="liveRound" data-r="${R.r}">${R.short}</button>`).join('')}</div>
+    <div class="hscroll">${bracket({ mode: 'view', only: r })}</div>`;
 }
 
 function finished() {

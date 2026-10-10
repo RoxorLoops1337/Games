@@ -41,7 +41,7 @@ async function onRoute() {
   if (entered === key) { emit(); return; }
   entered = key;
   disconnect(); resetState();
-  Object.assign(ui, { lvl: 0, sheet: null, modal: null, voteOpen: null, notFound: false, offline: false, err: '', watching: false, tab: r.tab && ['live', 'predict', 'bets', 'board'].includes(r.tab) ? r.tab : 'live', rank: { top: null, seeds: [] }, topSaved: true });
+  Object.assign(ui, { lvl: 0, liveRound: null, sheet: null, modal: null, voteOpen: null, notFound: false, offline: false, err: '', watching: false, tab: r.tab && ['live', 'predict', 'bets', 'board'].includes(r.tab) ? r.tab : 'live', rank: { top: null, seeds: [] }, topSaved: true });
   S.code = r.code;
   const sess = sessions()[r.code] || {};
   if (r.code === 'DEMO') { S.role = kind === 'e' ? 'user' : kind === 'h' ? 'host' : 'guest'; S.tk = 'demo'; S.ht = 'demo'; S.name = 'You'; }
@@ -58,6 +58,24 @@ async function onRoute() {
   connect(r.code, onPush);
 }
 addEventListener('hashchange', onRoute);
+
+/* A big bracket (16+) does not fit the projector at a readable size: the big screen drifts down it and back, slowly. */
+{
+  let dir = 1, hold = 0, last = 0;
+  const loop = (t) => {
+    const el = document.querySelector('.st-bracket.scroll'), dt = Math.min(64, t - last); last = t;
+    if (el && el.scrollHeight > el.clientHeight + 4) {
+      if (hold > 0) hold -= dt;
+      else {
+        el.scrollTop += dir * dt * 0.035;
+        const max = el.scrollHeight - el.clientHeight;
+        if (el.scrollTop >= max - 1 || el.scrollTop <= 0) { dir = -dir; hold = 3500; el.scrollTop = Math.max(0, Math.min(max, el.scrollTop)); }
+      }
+    }
+    requestAnimationFrame(loop);
+  };
+  requestAnimationFrame(loop);
+}
 
 /* The vote countdown: every [data-cd] ring is kept current here, 5 times a second, without re-rendering the page. */
 let lastTick = -1;
@@ -442,6 +460,7 @@ const A = {
     try { if (navigator.share) { await navigator.share({ title, text: `Join the battle: ${title}`, url }); return; } } catch (_) { return; }
     try { await navigator.clipboard.writeText(url); toast('Link copied. Send it to your friends.', 'info'); } catch (_) { prompt('Copy this link', url); }
   },
+  liveRound(el) { ui.liveRound = +el.dataset.r; emit(); },
   react(el) { react(el.dataset.e); buzz(10); },
   toggleSound() { setSound(!soundOn()); emit(); },
   async shareResults() { if (!S.me) return; const r = await shareCard(); if (r.saved) toast('Saved as a picture. Post it anywhere!', 'info'); },

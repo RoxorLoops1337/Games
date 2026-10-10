@@ -17,7 +17,7 @@ export function screenView() {
   else if (ev.phase === 'elimination') body = `<div class="st-center">${eq}<p class="eyebrow">Picks are locked</p><h1 class="mega">Elimination</h1><p class="lead">The judges are choosing the Top ${N}</p></div>${consensus()}${qrCorner()}`;
   else if (ev.phase === 'finished' && !cur) body = champion();
   else if (cur) body = duelStage(cur);
-  else body = `<div class="st-top"><p class="eyebrow">${nx ? 'Up next' : 'The bracket'}</p></div>${nx ? upNext(nx) : ''}<div class="st-bracket">${bracket({ mode: 'view' })}</div>`;
+  else body = `<div class="st-top"><p class="eyebrow">${nx ? 'Up next' : 'The bracket'}</p></div>${nx ? upNext(nx) : ''}<div class="st-bracket ${N >= 16 ? 'scroll' : ''}">${bracket({ mode: 'view' })}</div>`;
   return `<div class="stage ${ev.phase}"><div class="glow g1"></div><div class="glow g2"></div>
     <header class="st-head"><div class="brand">${crown('sm', false)}<div><b>${esc(ev.name)}</b><small>${ev.cats.length > 1 ? esc(ev.catName) + ' · ' : ''}BattleCall</small></div></div>
     <div class="st-meta"><span>${S.live ? S.live.n : 0} ${S.live && S.live.n === 1 ? 'player' : 'players'}</span><span class="code">${esc(S.code)}</span></div></header>

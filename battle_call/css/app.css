@@ -522,3 +522,12 @@ body[data-mode=screen] { overflow: hidden; }
 .badge { display: flex; align-items: center; gap: 6px; padding: 5px 10px; border-radius: 99px; background: rgba(255,255,255,.08); font-size: 12.5px; font-weight: 700; }
 .badge.off { opacity: .3; filter: grayscale(1); }
 .soundbtn { position: fixed; right: 12px; bottom: 12px; z-index: 60; }
+
+/* big screen, big bracket: natural size, scrolled slowly by main.js */
+.st-bracket.scroll { align-items: flex-start; overflow: hidden; }
+.st-bracket.scroll .bracket { min-height: 100%; align-items: stretch; }
+.st-bracket.scroll .bm { flex: none; padding: .8vmin; }
+.st-bracket.scroll .bm-row { flex: none; min-height: 3.6vmin; }
+.st-bracket.scroll .bcards { justify-content: space-around; }
+.st-bracket.scroll .bracket.n64 .bm-row, .st-bracket.scroll .bracket.n32 .bm-row, .st-bracket.scroll .bracket.n16 .bm-row { font-size: 1.3em; }
+.rsel { margin-bottom: 10px; }
