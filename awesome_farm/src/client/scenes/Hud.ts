@@ -373,7 +373,7 @@ export class HudScene extends Phaser.Scene {
         if (k === 'F2') { ev.preventDefault(); this.setPhoto(!this.photo); return; }
         if (this.photo && (k === 'Escape' || k === 'Enter')) { ev.preventDefault(); this.setPhoto(false); return; }
         if (!this.screen && lower === FACTORY_VIEW_KEY.toLowerCase() && !ev.ctrlKey && !ev.metaKey && !ev.altKey) { ev.preventDefault(); this.farm.fv.toggle(); return; }
-        const hot: Record<string, string> = { i: 'inventory', Tab: 'inventory', c: 'craft', k: 'skills', g: 'gear', p: 'creatures', j: 'journal', b: 'build', v: 'blueprints', m: 'map', h: 'guide' };
+        const hot: Record<string, string> = { i: 'inventory', Tab: 'inventory', c: 'craft', k: 'skills', u: 'gear', p: 'creatures', j: 'journal', b: 'build', v: 'blueprints', m: 'map', h: 'guide' };
         if (this.screen) {
             if (k === '/' && this.screen.focusSearch) { ev.preventDefault(); this.screen.focusSearch(); return; }
             if (this.screen.onKey?.(k, ev)) return;

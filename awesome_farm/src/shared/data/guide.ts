@@ -126,9 +126,9 @@ export const GUIDE: GuideTopic[] = [
     },
     {
         id: 'gear', name: 'Rings, gems & arts', icon: 'i_ring_gold',
-        blurb: 'The Equipment Bag (G): five rings, a puzzle bag of relics, gem sockets, and the moves you learn.',
+        blurb: 'The Equipment Bag (U): five rings, a puzzle bag of relics, gem sockets, and the moves you learn.',
         steps: [
-            'Press G for the Equipment Bag. Rings go on five fingers, and all five count. Make them at the Anvil (copper, iron, gold, steel, crystal, Blightcore) or win them from bosses.',
+            'Press U for the Equipment Bag. Rings go on five fingers, and all five count. Make them at the Anvil (copper, iron, gold, steel, crystal, Blightcore) or win them from bosses.',
             'The Relic Satchel is a grid: lay relics in it (pick one, then click a cell; R turns it). Relics of one kind that touch give more, and touching kinds make combos like Steam or Aegis. Rings of a relic\u2019s kind boost it too.',
             'Gems are dug up in the caves and found in crates. Two sockets are in your weapon (fire, frost, venom, lightning, life, precision on every hit), one in your helm and one in your armour. Right-click three of a cut to merge them into a finer one.',
             'Combat Arts are learned in the skill tree (Combat): a hook that pulls a monster to you, a stunning arrow, a burst of fire, a Shroud to hide in, a Frost Zone and a Headbutt. Put up to three on the Z, X and N keys in the Arts window.',

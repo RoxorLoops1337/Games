@@ -236,7 +236,8 @@ export class GearScreen implements Screen {
             const cs = cellsOf(d.size, r.x, r.y, r.r);
             const cx = ox + (cs.reduce((a, c) => a + c[0], 0) / cs.length + 0.5) * CELL, cy = oy + (cs.reduce((a, c) => a + c[1], 0) / cs.length + 0.5) * CELL;
             let im = this.icons[n]; if (!im) { im = this.win.put(this.ctx.scene.add.image(0, 0, '__DEFAULT', 0).setScale(2), 0, 0) as Phaser.GameObjects.Image; this.icons.push(im); }
-            im.setTexture(`i_${r.it}`, 0).setPosition(cx, cy).setVisible(true);
+            im.setTexture(`i_${r.it}`, 0).setScale(d.size === 'core' ? 4 : 3).setVisible(true);
+            this.win.at(im, cx, cy);          // (panel-local, like everything else on the page)
             n++;
         });
         for (; n < this.icons.length; n++) this.icons[n].setVisible(false);
