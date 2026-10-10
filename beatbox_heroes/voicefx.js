@@ -54,6 +54,9 @@
    * gate: sc sidechain high pass Hz, open / close dB over the noise floor, atk (lookahead, ends at the onset) / hold / rel ms,
    *       det (opening, one-pole) / detClose (closing, centered window half width) detector ms, gap ms (gate gaps shorter than
    *       this belong to the same sound: rolls, rattles)
+   * crop: percussive sounds are cut down to the HIT itself: it starts where the loudest peak's envelope is still within `open` dB of that peak
+   *       (walking back, so a rustle, a breath or the tap on the REC button before it is dropped) and ends when the envelope is `close` dB
+   *       under the peak (the room ring-out is not part of a drum), `tail` ms of release after that. Tonal sounds are not cropped.
    * chain: how far (ms) and how quiet (dB under the loudest) a neighbouring burst may be and still count as part of the sound. Percussive
    *       sounds keep it tight so a breath or a room bump next to the hit is cut; tonal sounds (rolls, hums) keep a wide one
    * eq: see step 4. exciter: f Hz, drive, mix. trans: max dB, transHp Hz (lift only the band above it)
@@ -67,6 +70,7 @@
     kick: {
       gate: { sc: 60, open: 12, close: 6, atk: 2, hold: 40, rel: 140, det: 0.5, detClose: 8, gap: 60 },
       chain: { ms: 80, db: 10 },
+      crop: { open: 30, close: 40, tail: 10 },
       eq: [['hp', 22, 0.707], ['lowshelf', 100, 0.8, 4], ['peak', 400, 1.4, -3], ['peak', 3000, 1.0, 2.5], ['lp', 14000, 0.707]],
       exciter: { f: 120, drive: 3, mix: 0.18 }, trans: 3, transHp: 1000,
       comp: { thr: -22, ratio: 3, atk: 10, rel: 90, knee: 6, rms: 5, sc: 150 }, par: null, deess: null,
@@ -82,6 +86,7 @@
     hat: {
       gate: { sc: 1500, open: 12, close: 6, atk: 1, hold: 8, rel: 35, det: 0.3, detClose: 3, gap: 40 },
       chain: { ms: 80, db: 10 },
+      crop: { open: 30, close: 34, tail: 6 },
       eq: [['hp', 200, 0.707, 0, 4], ['peak', 4500, 0.9, 2], ['highshelf', 10000, 0.8, 3]],
       exciter: null, trans: 0,
       comp: { thr: -20, ratio: 2.5, atk: 3, rel: 40, knee: 4, rms: 2 }, par: null, deess: { f: 7500, q: 1.4, rel: -3, ratio: 2, max: 3 },
@@ -90,6 +95,7 @@
     snare: {
       gate: { sc: 300, open: 12, close: 6, atk: 1.5, hold: 20, rel: 80, det: 0.4, detClose: 5, gap: 50 },
       chain: { ms: 80, db: 10 },
+      crop: { open: 30, close: 38, tail: 8 },
       eq: [['hp', 90, 0.707], ['peak', 200, 1.2, 1.5], ['peak', 4000, 1.0, 3], ['highshelf', 12000, 0.8, -1.5]],
       exciter: null, trans: 2,
       comp: { thr: -22, ratio: 4, atk: 5, rel: 70, knee: 6, rms: 3 }, par: { thr: -34, ratio: 10, atk: 0.5, rel: 50, knee: 6, rms: 2, mix: 0.3 }, deess: { f: 7500, q: 1.4, rel: -6, ratio: 2.5, max: 5 },
@@ -472,13 +478,23 @@
     while (sLo > 0 && merged[sLo][0] - merged[sLo - 1][1] <= chainS && segPk[sLo - 1] >= keepPk) sLo--;
     while (sHi < merged.length - 1 && merged[sHi + 1][0] - merged[sHi][1] <= chainS && segPk[sHi + 1] >= keepPk) sHi++;
     const main = [merged[sLo][0], merged[sHi][1]];
+    /* 2b. hit isolation (percussive profiles): the main region shrinks to the hit around the loudest peak of the closing envelope */
+    const C = P.crop;
+    const cropped = !!C;
+    if (C) {
+      let pk = main[0]; for (let i = main[0]; i <= main[1]; i++) if (envC[i] > envC[pk]) pk = i;
+      const lvO = envC[pk] * lin(-C.open), lvC = envC[pk] * lin(-C.close), dip = ms(Math.max(2, G.gap * 0.25));
+      let a = pk, miss = 0; while (a > main[0] && miss <= dip) { if (envC[a - 1] > lvO) miss = 0; else miss++; a--; } a = Math.min(pk, a + miss);
+      let b = pk; miss = 0; while (b < main[1] && miss <= dip) { if (envC[b + 1] > lvC) miss = 0; else miss++; b++; } b = Math.max(pk, b - miss);
+      main[0] = a; main[1] = b;
+    }
     /* sample-accurate onset: walk back from the detector crossing while the 0.25 ms sidechain RMS is still 6 dB over the floor */
     const ps = new Float64Array(n + 1); for (let i = 0; i < n; i++) ps[i + 1] = ps[i] + sc[i] * sc[i];
     const w = Math.max(4, ms(0.25)), thr2 = nfS * nfS * lin(6) * lin(6), lo = Math.max(0, main[0] - ms(G.det * 4 + 3));
     let j = main[0];
     while (j > lo && (ps[j] - ps[Math.max(0, j - w)]) / Math.max(1, j - Math.max(0, j - w)) > thr2) j--;
     const onset = Math.max(0, Math.min(main[0], j - (w >> 1)));
-    const atkS = ms(G.atk), relS = ms(G.rel), maxS = ms(P.maxMs);
+    const atkS = ms(G.atk), relS = C ? ms(C.tail) : ms(G.rel), maxS = ms(P.maxMs);
     const start = Math.max(0, onset - atkS);
     let end = Math.min(n, main[1] + relS);
     const capped = end - start > maxS;
@@ -568,7 +584,7 @@
     return {
       data: out, dry, start, end,
       info: {
-        ok: true, id: P.id, family: P.fam, denoised: !!dn.applied, roomDb: r1(dn.noiseDb), noiseDb: r1(dB(nfA)), onsetMs: r1(onset / sr * 1000), startMs: r1(start / sr * 1000), lengthMs: r1(len / sr * 1000), capped,
+        ok: true, id: P.id, family: P.fam, cropped, denoised: !!dn.applied, roomDb: r1(dn.noiseDb), noiseDb: r1(dB(nfA)), onsetMs: r1(onset / sr * 1000), startMs: r1(start / sr * 1000), lengthMs: r1(len / sr * 1000), capped,
         openDb: r1(dB(openThr)), closeDb: r1(dB(closeThr)), segments: merged.length, kept: sHi - sLo + 1, stageDb: r1(stage), lowShare: lowShare == null ? null : Math.round(lowShare * 100) / 100,
         bass: !!P.exciter, compDb: r1(compDb), deessDb: r1(deessDb), clipDb: z ? r1(Math.max(0, clipIn)) : 0, limDb: r1(limDb), gainDb: r1(stage + gDb), punchDb: r1(lo2), targetDb: P.target, peakDb: r1(tpo),
       },
