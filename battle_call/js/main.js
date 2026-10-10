@@ -451,6 +451,11 @@ const A = {
     if (o.to === 'voting' && ui.vsecs != null) o.secs = ui.vsecs;
     fail(await act(o));
   },
+  async hPerf(el) { fail(await act({ a: 'performer', cat: S.catId, id: el.dataset.id || null })); },
+  async hPerfNext() {
+    const m = S.meta, done = new Set(m.performed || []), nx = m.bbs.find((b) => !done.has(b.id) && !(m.perf && m.perf.id === b.id));
+    if (nx) fail(await act({ a: 'performer', cat: S.catId, id: nx.id }));
+  },
   async hWalkover() { fail(await act({ a: 'walkover', cat: S.catId })); },
   hVSecs(el) { ui.vsecs = +el.dataset.n; emit(); },
   async hSwap(el) { fail(await act({ a: 'swap', mid: el.dataset.m })); },

@@ -2,7 +2,7 @@
 // it follows the organiser by itself.
 import { esc, ic } from '../dom.js';
 import { S, bbName, size, rounds, curMatch, nextMatch, sides, leftKey, seedOf } from '../state.js';
-import { ui, av, bracket, feedStrip, crown, wordmark, countdown } from '../ui.js';
+import { ui, av, perfStats, bracket, feedStrip, crown, wordmark, countdown } from '../ui.js';
 import { matchRound } from '../shared.js';
 import { joinLink } from './host.js';
 
@@ -14,6 +14,7 @@ export function screenView() {
   const cur = curMatch() || (hold && hold.status === 'done' ? hold : null), nx = nextMatch();
   let body = '';
   if (ev.phase === 'lobby' || ev.phase === 'picks') body = joinStage();
+  else if (ev.phase === 'elimination' && ev.perf) body = `<div class="st-perf"><p class="eyebrow">${eq} On stage now</p><div class="pp">${av(ev.perf.id, 'hero')}<h1 class="mega">${esc(bbName(ev.perf.id))}</h1></div>${perfStats(ev.perf)}</div>`;
   else if (ev.phase === 'elimination') body = `<div class="st-center">${eq}<p class="eyebrow">Picks are locked</p><h1 class="mega">Elimination</h1><p class="lead">The judges are choosing the Top ${N}</p></div>${consensus()}${qrCorner()}`;
   else if (ev.phase === 'finished' && !cur) body = champion();
   else if (cur) body = duelStage(cur);

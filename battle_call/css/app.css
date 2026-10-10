@@ -569,3 +569,17 @@ body.idle .stagectl { opacity: 0; pointer-events: none; }
 .st-right .qrbox.xl { width: min(34vmin, 36vh); height: min(34vmin, 36vh); } .st-right .bigcode { font-size: min(8em, 11vh); }
 @media (max-aspect-ratio: 3/2) { .mosaic { display: none; } .st-join .mega { font-size: min(9em, 14vh); } }
 .st-body { overflow: hidden; }
+
+/* ---- elimination: the beatboxer on stage ---- */
+.pstats { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; margin: 10px 0; }
+.pt { padding: 10px 12px; border-radius: 16px; background: rgba(255,255,255,.08); border: 1px solid var(--line); text-align: center; }
+.pt b { display: block; font-size: 26px; font-weight: 800; line-height: 1.1; } .pt small { display: block; margin-top: 2px; line-height: 1.25; }
+.perfcard { display: flex; align-items: center; gap: 12px; } .perfcard b { font-size: 20px; display: block; }
+.plist { display: grid; gap: 6px; margin-top: 12px; }
+.prow { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-radius: 14px; background: rgba(255,255,255,.06); text-align: left; }
+.prow b { flex: 1; } .prow.now { background: var(--grad); } .prow.now small { color: #fff; } .prow.done { opacity: .45; }
+.hero.perf { text-align: center; } .hero.perf .crown { display: inline-block; }
+.st-perf { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2.4vmin; text-align: center; min-height: 0; }
+.st-perf .pp { display: flex; align-items: center; gap: 4vmin; } .st-perf .pp .mega { font-size: min(8em, 14vh); text-align: left; } .st-perf .av.hero { --s: min(26vmin, 34vh); }
+.st-perf .pstats { grid-template-columns: repeat(5, 1fr); gap: 1.6vmin; width: 100%; margin: 0; }
+.st-perf .pt { padding: 2vmin 1.4vmin; border-radius: 2vmin; } .st-perf .pt b { font-size: 5em; } .st-perf .pt small { font-size: 1.7em; color: #cfc9f3; }

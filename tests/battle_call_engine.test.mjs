@@ -764,5 +764,32 @@ t('a category with one entrant is crowned at the elimination, with no money movi
   assert.equal(E.hostAction(S, { a: 'walkover', cat: S.event.order[0] }).ok, false, 'a real category cannot walk over');
 });
 
+console.log('performer');
+t('the organiser puts a beatboxer on stage during the elimination and everyone sees what the hall predicted for them', () => {
+  const { S, us, ids } = setup({ size: 4, beatboxers: 6, users: 3 });
+  host(S, { a: 'phase', to: 'picks' });
+  E.setTop(S, us[0], [ids[0], ids[1], ids[2], ids[3]]);
+  E.setTop(S, us[1], [ids[1], ids[0], ids[4], ids[5]]);
+  E.setTop(S, us[2], [ids[0], ids[2], ids[1], ids[5]]);
+  const q = Object.values(S.ev.markets).find((m) => m.kind === 'qualify' && m.bb === ids[0]);
+  if (q) E.setBet(S, us[0], q.id, 0, 100);
+  assert.equal(E.hostAction(S, { a: 'performer', id: ids[0] }).ok, false, 'only in the elimination');
+  host(S, { a: 'phase', to: 'elimination' });
+  assert.equal(E.hostAction(S, { a: 'performer', id: 'nope' }).ok, false);
+  host(S, { a: 'performer', id: ids[0] });
+  let c = E.metaOf(S).cats[0];
+  assert.equal(c.perf.id, ids[0]); assert.equal(c.perf.voters, 3); assert.equal(c.perf.n, 3); assert.equal(c.perf.pct, 100);
+  assert.equal(c.perf.firsts, 2); assert.equal(c.perf.avg, 1.3); assert.equal(c.perf.rank, 1);
+  host(S, { a: 'performer', id: ids[4] });
+  c = E.metaOf(S).cats[0];
+  assert.equal(c.perf.n, 1); assert.deepEqual(c.performed, [ids[0]], 'the one who went before is marked');
+  host(S, { a: 'performer', id: null });
+  c = E.metaOf(S).cats[0];
+  assert.equal(c.perf, null); assert.deepEqual(c.performed, [ids[0], ids[4]]);
+  host(S, { a: 'performer', id: ids[2] });
+  host(S, { a: 'seeds', order: ids.slice(0, 4) });
+  assert.equal(E.metaOf(S).cats[0].perf, null, 'publishing the ranking clears the stage');
+});
+
 console.log(`\n${pass} passed, ${failN} failed`);
 process.exit(failN ? 1 : 0);

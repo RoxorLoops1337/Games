@@ -1,7 +1,7 @@
 // Battle Call: the Live tab. It follows the organiser: whatever phase the event is in, this is the page that explains it.
 import { esc, ic } from '../dom.js';
 import { S, bbName, size, rounds, curMatch, nextMatch, seedOf, sides, leftKey, myBet, mkView, mkTitle } from '../state.js';
-import { ui, av, userAv, duel, bracket, resultCard, loops, pill, x, catArt, crown, ART_FILE, countdown } from '../ui.js';
+import { ui, av, userAv, perfStats, duel, bracket, resultCard, loops, pill, x, catArt, crown, ART_FILE, countdown } from '../ui.js';
 import { matchRound } from '../shared.js';
 import { callStats } from '../share.js';
 import { REACTIONS, levelOf, badgesOf, soundOn } from '../juice.js';
@@ -96,8 +96,9 @@ function picks() {
 
 function elimination() {
   if (S.meta.bbs.length === 1) return soloHero('Elimination is on');
-  const c = S.meta.consensus, N = size();
+  const c = S.meta.consensus, N = size(), pf = S.meta.perf;
   return `
+    ${pf ? `<section class="hero perf"><p class="eyebrow">${eq} On stage now</p><div class="crownwrap"><div class="crown">${av(pf.id, 'xxl')}</div></div><h1>${esc(bbName(pf.id))}</h1>${perfStats(pf)}</section>` : ''}
     <section class="hero elim photo">
       <p class="eyebrow">${eq} Elimination is on</p>
       <h1>The judges are choosing</h1>

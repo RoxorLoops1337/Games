@@ -2,7 +2,7 @@
 // next to a stage: one big obvious next step per phase, and confirmation before anything that cannot be undone.
 import { esc, ic } from '../dom.js';
 import { S, bbName, size, rounds, curMatch, nextMatch, sides, leftKey, seedOf, mkView, mkTitle, mkLabel, serverBase } from '../state.js';
-import { ui, av, userAv, loops, pill, rankBuilder, bracket, empty, duel, x, catBar, catArt, countdown } from '../ui.js';
+import { ui, av, userAv, perfStats, loops, pill, rankBuilder, bracket, empty, duel, x, catBar, catArt, countdown } from '../ui.js';
 import { matchRound, SIZES } from '../shared.js';
 import { photoUrl } from '../net.js';
 
@@ -74,7 +74,7 @@ function run() {
       <button class="btn big hot" data-a="hWalkover">${ic('trophy', 20)} Crown ${esc(ev.bbs[0].name)} the champion</button>
       <button class="btn ghost" data-a="hPhase" data-to="picks">Reopen the picks</button>`;
   } else if (ev.phase === 'elimination') {
-    main = `<div class="card tip"><b>Enter the ranking</b><p>Tap the beatboxers in the order the judges ranked them: first tap is seed 1, the best. Reorder with the arrows. The bracket is drawn the moment you publish.</p></div>
+    main = `${performerPanel()}<div class="card tip"><b>Enter the ranking</b><p>Tap the beatboxers in the order the judges ranked them: first tap is seed 1, the best. Reorder with the arrows. The bracket is drawn the moment you publish.</p></div>
       ${rankBuilder({ which: 'seeds', list: ui.rank.seeds, N })}
       <button class="btn big" data-a="hPublish" ${ui.rank.seeds.length === N ? '' : 'disabled'}>${ic('trophy', 20)} Publish the Top ${N} and draw the bracket</button>
       <button class="btn ghost" data-a="hPhase" data-to="picks">Reopen the picks</button>
@@ -99,6 +99,16 @@ function consensusCard() {
   const c = S.host && S.host.consensus ? S.host.consensus[S.catId] : null;
   if (!c || !c.rows.length) return '';
   return `<section class="block"><h3>What the hall predicts <small>${c.voters} players</small></h3><ol class="cons">${c.rows.slice(0, 16).map((r, i) => `<li data-k="c${r.id}"><span class="n">${i + 1}</span>${av(r.id, 'sm')}<b>${esc(bbName(r.id))}</b><small>${Math.round((r.n / c.voters) * 100)}%</small></li>`).join('')}</ol></section>`;
+}
+
+/** Elimination round: who is on stage now, who has been, and what the hall predicted for the one on stage. */
+function performerPanel() {
+  const ev = S.meta, cur = ev.perf, done = new Set(ev.performed || []);
+  const left = ev.bbs.filter((b) => !done.has(b.id) && !(cur && cur.id === b.id));
+  return `<section class="block perf"><h3>On stage <small>${done.size} done · ${left.length} to go</small></h3>
+    ${cur ? `<div class="card perfcard">${av(cur.id, 'lg')}<div><small>On stage now</small><b>${esc(bbName(cur.id))}</b></div></div>${perfStats(cur)}` : '<p class="muted small">Tap a beatboxer when they step up. The screen and every phone show the hall\'s predictions for them.</p>'}
+    <div class="cta-row">${left.length ? `<button class="btn big hot" data-a="hPerfNext">${ic('mic', 20)} Next: ${esc(left[0].name)}</button>` : ''}${cur ? '<button class="btn ghost" data-a="hPerf" data-id="">Done, nobody on stage</button>' : ''}</div>
+    <div class="plist">${ev.bbs.map((b) => { const now = cur && cur.id === b.id, dn = done.has(b.id); return `<button class="prow ${now ? 'now' : dn ? 'done' : ''}" data-k="pr${b.id}" data-a="hPerf" data-id="${b.id}">${av(b.id, 'sm')}<b>${esc(b.name)}</b><small>${now ? 'On stage' : dn ? 'Done' : ''}</small></button>`; }).join('')}</div></section>`;
 }
 
 const STEPS = ['upcoming', 'live', 'voting', 'closed', 'done'];

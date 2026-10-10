@@ -79,6 +79,21 @@ export function rankBuilder({ which, list, N, intro, ctaLabel }) {
     </div>`;
 }
 
+/* ------------------------------------------------------------ elimination: who is on stage */
+/** What the hall predicted for the beatboxer on stage: tiles (`p` is meta.perf). */
+export function perfStats(p) {
+  if (!p) return '';
+  const tile = (big, small) => `<div class="pt"><b>${big}</b><small>${small}</small></div>`;
+  const none = !p.voters;
+  return `<div class="pstats">
+    ${tile(none ? '-' : p.pct + '%', none ? 'no Top ' + p.N + ' yet' : `have them in their Top ${p.N}`)}
+    ${tile(p.n ? '#' + p.avg : '-', 'average seat')}
+    ${tile(p.firsts, p.firsts === 1 ? 'player has them #1' : 'players have them #1')}
+    ${tile(p.rank ? '#' + p.rank : '-', `in the hall's ranking`)}
+    ${p.bets && p.bets.staked ? tile(p.bets.yes + '%', `bet they make the cut · ${p.bets.staked.toLocaleString()} Loops`) : ''}
+  </div>`;
+}
+
 /* ------------------------------------------------------------ vote countdown */
 /** The ring that counts a vote down. The ticker in main.js keeps `data-cd` elements current without re-rendering. */
 export function countdown(m, cls = '') {
