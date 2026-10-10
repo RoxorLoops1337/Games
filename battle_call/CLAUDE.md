@@ -67,6 +67,10 @@ A category with exactly one beatboxer has no bracket: `setPhase` lets it through
 
 `#/s/CODE` shows Full screen and Sound buttons (F toggles full screen). Bottom right: Margins (cycles 0/2/4/6/8 %, remembered in `bc.safe`, applied as `--safe` on the stage padding so projector and TV overscan never crops content; default 4 %) and Guides (G key; shows action safe 3.5 %, title safe 5 % and the chosen margin; also flashes for 4 s when the margin changes). They fade after 3 s without mouse movement so the projection stays clean, and the screen is kept awake with the Wake Lock API where the browser allows it.
 
+## Elimination: who is on stage
+
+During the elimination the organiser taps the beatboxer who is performing (`performer` action, `ev.performer`, `ev.performed` marks who has been; both reset when the picks reopen and the stage clears when the ranking is published). `metaOf` then carries `perf` = `performerStats`: share of players with them in their Top N, average predicted seat, how many have them #1, hall rank, and the "makes the cut" bet split. Host Run tab has the list and a Next button, the big screen shows them large with the stats tiles, phones show a card at the top of the Live tab.
+
 ## Hard rules for this folder
 
 1. All Loops moves go through `credit()` with a ledger ref, or `reopen` stops being exact. Tests check conservation.

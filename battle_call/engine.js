@@ -262,7 +262,7 @@ export function setPhase(S, to) {
   if (to === 'lobby') {
     // back to doors open: the "makes the cut" bets are refunded and removed (everyone's own picks stay)
     for (const m of marketsList(S)) if (m.kind === 'qualify') { voidMarket(S, m, null, 'Picks closed'); dropMarket(S, m); }
-    ev.phase = 'lobby'; ev.consensus = null;
+    ev.phase = 'lobby'; ev.consensus = null; ev.performer = null; ev.performed = [];
     touchMeta(S);
     return ok({});
   }
@@ -271,7 +271,7 @@ export function setPhase(S, to) {
     ev.phase = 'picks';
     if (from === 'elimination') {
       for (const m of marketsList(S)) if (m.kind === 'qualify' && m.st === 'locked') { m.st = 'open'; touchMk(S, m); }
-      ev.consensus = null;
+      ev.consensus = null; ev.performer = null; ev.performed = [];
     } else if (ev.settings.qualifyBets && ev.bbs.length > ev.settings.size && ev.bbs.length <= QUALIFY_AUTO_MAX) {
       for (const b of ev.bbs) if (!qualifyOf(S, b.id)) openQualify(S, b.id);
     }
@@ -287,7 +287,7 @@ export function setPhase(S, to) {
 const qualifyOf = (S, bb) => Object.values(S.ev.markets).find((m) => m.kind === 'qualify' && m.bb === bb && m.st !== 'void');
 
 /** What the crowd thinks: Borda count over everybody's top-N pick. */
-export function consensus(S) {
+export function consensus(S, all) {
   const N = S.ev.settings.size, acc = new Map();
   let voters = 0;
   for (const u of S.users.values()) {
@@ -300,8 +300,40 @@ export function consensus(S) {
     });
   }
   const rows = [...acc.values()].sort((a, b) => b.pts - a.pts || a.sum / a.n - b.sum / b.n)
-    .slice(0, N).map((a) => ({ id: a.id, n: a.n, avg: Math.round((a.sum / a.n) * 10) / 10 }));
+    .slice(0, all ? undefined : N).map((a) => ({ id: a.id, n: a.n, avg: Math.round((a.sum / a.n) * 10) / 10 }));
   return { voters, rows };
+}
+
+/** The beatboxer on stage during the elimination, and what the hall predicted for them. */
+export function setPerformer(S, id) {
+  const ev = S.ev;
+  if (ev.phase !== 'elimination') return fail('Pick who is on stage during the elimination');
+  if (id != null && !ev.bbs.some((b) => b.id === id)) return fail('No such beatboxer');
+  ev.performed = ev.performed || [];
+  if (ev.performer && ev.performer !== id && !ev.performed.includes(ev.performer)) ev.performed.push(ev.performer);
+  if (id != null) ev.performed = ev.performed.filter((x) => x !== id);
+  ev.performer = id == null ? null : id;
+  touchMeta(S); S.dirty.ev = true;
+  return ok({});
+}
+
+export function performerStats(S, id) {
+  const N = S.ev.settings.size;
+  let voters = 0, n = 0, sum = 0, firsts = 0;
+  for (const u of S.users.values()) {
+    const t = topOf(S, u);
+    if (!t.length) continue;
+    voters++;
+    const i = t.indexOf(id);
+    if (i >= 0) { n++; sum += i + 1; if (i === 0) firsts++; }
+  }
+  const rank = consensus(S, true).rows.findIndex((r) => r.id === id) + 1;
+  const k = qualifyOf(S, id);
+  const yes = k ? k.pool[0] : 0, no = k ? k.pool[1] : 0;
+  return {
+    id, N, voters, n, pct: voters ? Math.round((n / voters) * 100) : 0, avg: n ? Math.round((sum / n) * 10) / 10 : 0, firsts, rank,
+    bets: k ? { yes: yes + no ? Math.round((yes / (yes + no)) * 100) : 0, staked: yes + no, people: k.cnt[0] + k.cnt[1] } : null,
+  };
 }
 
 /* ---------------------------------------------------------------- seeds -> bracket */
@@ -313,6 +345,7 @@ export function publishSeeds(S, order) {
   if (new Set(order).size !== N || order.some((id) => !bbOf(S, id))) return fail('Every beatboxer can only appear once');
   const ref = ev.pfx + 'seeds', lg = ledgerOf(S, ref);
   lg.extra = { phaseBefore: 'elimination' };
+  ev.performer = null;
   ev.seeds = [...order];
   ev.matches = buildMatches(N, ev.pfx);
   ev.locked = Array(log2(N)).fill(false);
@@ -824,6 +857,7 @@ function catAction(S, a) {
     case 'seeds': return publishSeeds(S, a.order);
     case 'seeds.revert': return revertSeeds(S);
     case 'walkover': return walkover(S);
+    case 'performer': return setPerformer(S, a.id == null ? null : String(a.id));
     case 'step': return stepMatch(S, a.mid, a.to, a.secs);
     case 'result': return setResult(S, a.mid, a.w, a.judges);
     case 'reopen': return revertMatch(S, a.mid);
@@ -883,7 +917,7 @@ function catAction(S, a) {
 /** Everything the audience may see that changes rarely. Pools live in `liveOf` so a bet does not resend all of this. */
 function catMeta(S, c) {
   return {
-    id: c.id, name: c.name, art: c.art, pfx: c.pfx, phase: c.phase, walkover: !!c.walkover, undo: inCat(S, c, () => undoPlan(S)),
+    id: c.id, name: c.name, art: c.art, pfx: c.pfx, phase: c.phase, performed: c.performed || [], perf: c.performer ? inCat(S, c, () => performerStats(S, c.performer)) : null, walkover: !!c.walkover, undo: inCat(S, c, () => undoPlan(S)),
     set: { size: c.settings.size, qualifyBets: c.settings.qualifyBets, autoChampion: c.settings.autoChampion, thirdPlace: c.settings.thirdPlace },
     bbs: c.bbs, seeds: c.seeds, locked: c.locked, out: c.out, champion: c.champion, consensus: c.consensus,
     matches: c.matches.map((m) => ({ ...m, c: m.status === 'closed' || m.status === 'done' ? m.c : null })),
