@@ -71,6 +71,10 @@ A category with exactly one beatboxer has no bracket: `setPhase` lets it through
 
 During the elimination the organiser taps the beatboxer who is performing (`performer` action, `ev.performer`, `ev.performed` marks who has been; both reset when the picks reopen and the stage clears when the ranking is published). `metaOf` then carries `perf` = `performerStats`: share of players with them in their Top N, average predicted seat, how many have them #1, hall rank, and the "makes the cut" bet split. Host Run tab has the list and a Next button, the big screen shows them large with the stats tiles, phones show a card at the top of the Live tab.
 
+## Deploys during a live event
+
+Every merge redeploys the Worker; the Durable Object's storage (players, tokens, Top N, picks, bets, votes, ledger) is untouched and sockets reconnect by themselves. `migrateEvent` (called from `load()`) backfills settings and fields added after an event was created, and keeps rules that would change a night under way (third place) off for it; a test loads a stripped old save. Socket messages carry their transport id in `rid` (actions have their own `id`: a category, a beatboxer); the ack echoes `rid`, falling back to `id` for phones still running the old script.
+
 ## Hard rules for this folder
 
 1. All Loops moves go through `credit()` with a ledger ref, or `reopen` stops being exact. Tests check conservation.
