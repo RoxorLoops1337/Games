@@ -233,6 +233,15 @@ t('picking: only real fighters, downstream picks follow, rounds lock when a batt
   host(S, { a: 'step', mid: 'r0m0', to: 'live' });
   assert.equal(E.setPick(S, u, 'r0m1', ids[1]).ok, false, 'whole round is locked');
 });
+t('between battles the live push carries what the hall picked for every battle and for the title', () => {
+  const { S, us, ids } = bracketWorld();
+  E.setPick(S, us[0], 'r0m0', ids[0]); E.setPick(S, us[1], 'r0m0', ids[0]); E.setPick(S, us[2], 'r0m0', ids[3]);
+  E.setPick(S, us[0], 'r1m0', ids[0]); E.setPick(S, us[1], 'r1m0', ids[0]); E.setPick(S, us[2], 'r1m0', ids[3]);
+  const pk = E.liveOf(S, 0, false).pk.c1;
+  assert.deepEqual(pk.pk.r0m0, [2, 1], 'two for the first seed, one for the other side');
+  assert.equal(pk.champ[ids[0]], 2); assert.equal(pk.champ[ids[3]], 1);
+  assert.equal(pk.pk.r1m0, undefined, 'only battles whose fighters are known');
+});
 t('bracket picks pay 25 x 2^round', () => {
   const { S, us, ids } = bracketWorld();
   const [a, b] = us;

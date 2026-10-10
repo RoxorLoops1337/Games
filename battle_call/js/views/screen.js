@@ -20,7 +20,7 @@ export function screenView() {
   else if (ev.phase === 'elimination') body = judgingStage();
   else if (ev.phase === 'finished' && !cur) body = champion();
   else if (cur) body = duelStage(cur);
-  else body = `<div class="st-top"><p class="eyebrow">${nx ? 'Up next' : 'The bracket'}</p></div>${nx ? upNext(nx) : ''}<div class="st-bracket ${N >= 16 ? 'scroll' : ''}">${bracket({ mode: 'view' })}</div>`;
+  else body = idleStage(nx);
   return `<div class="stage ph-${ev.phase}"><div class="glow g1"></div><div class="glow g2"></div>
     <header class="st-head"><div class="brand">${crown('sm', false)}<div><b>${esc(ev.name)}</b><small>${ev.cats.length > 1 ? esc(ev.catName) + ' · ' : ''}BattleCall</small></div></div>
     <div class="st-meta"><span>${S.live ? S.live.n : 0} ${S.live && S.live.n === 1 ? 'player' : 'players'}</span><span class="code">${esc(S.code)}</span></div></header>
@@ -41,6 +41,33 @@ function joinStage() {
     <div class="st-right"><div class="qrbox xl" data-static id="qr"></div><div class="bigcode">${esc(S.code)}</div><small>${esc(joinLink().replace(/^https?:\/\//, '').replace(/#.*/, ''))}</small></div>
   </div>
   <div class="mosaic">${ev.bbs.slice(0, 40).map((b) => `<div class="lu" data-k="mz${b.id}">${av(b.id, 'lg')}<b>${esc(b.name)}</b></div>`).join('')}</div>`;
+}
+
+/** Between battles: the bracket, then facts about what the hall predicted, one slide every few seconds. */
+function idleStage(nx) {
+  const ev = S.meta, N = size(), d = S.live && S.live.pk && S.live.pk[ev.id];
+  const name = (id) => esc(bbName(id));
+  const slides = [`<div class="st-top"><p class="eyebrow">${nx ? 'Up next' : 'The bracket'}</p></div>${nx ? upNext(nx) : ''}<div class="st-bracket ${N >= 16 ? 'scroll' : ''}">${bracket({ mode: 'view' })}</div>`];
+  const share = (a, b) => (a + b ? Math.round((a / (a + b)) * 100) : null);
+  if (nx && d && d.pk[nx.id]) {
+    const [pa, pb] = d.pk[nx.id], mk = ev.mk.find((m) => m.kind === 'match' && m.mid === nx.id), lv = mk && S.live && S.live.mk && S.live.mk[mk.id];
+    const ba = lv ? lv[0][mk.bbs.indexOf(nx.a)] || 0 : 0, bb = lv ? lv[0][mk.bbs.indexOf(nx.b)] || 0 : 0;
+    const [l, r] = sides(nx), lk = leftKey(nx);
+    const side = (id, col, picks, otherPicks, bets, otherBets) => `<div class="side ${col}">${av(id, 'xl')}<h2>${name(id)}</h2><b class="big">${share(picks, otherPicks) === null ? '-' : share(picks, otherPicks) + '%'}</b><small>of the hall picked them</small>${bets + otherBets > 0 ? `<span class="bets">${share(bets, otherBets)}% of the Loops</span>` : ''}</div>`;
+    const pl = lk === 'a' ? pa : pb, pr = lk === 'a' ? pb : pa, bl = lk === 'a' ? ba : bb, br = lk === 'a' ? bb : ba;
+    slides.push({ t: 'Who the hall picked for this battle', h: `<div class="st-pick2">${side(l, 'blue', pl, pr, bl, br)}<i>VS</i>${side(r, 'red', pr, pl, br, bl)}</div>` });
+  }
+  if (d) {
+    const alive = Object.entries(d.champ).filter(([id]) => ev.out[id] === undefined).sort((a, b) => b[1] - a[1]).slice(0, 5), tot = Object.values(d.champ).reduce((x, y) => x + y, 0);
+    if (alive.length) slides.push({ t: 'Who wins it all?', h: `<p class="lead">The hall's picks for the title, among those still in</p><ol class="st-pred">${alive.map(([id, n]) => `<li data-k="w${id}">${av(id, 'md')}<b>${name(id)}</b><i class="pbar"><u style="width:${Math.round((n / tot) * 100)}%"></u></i><small>${Math.round((n / tot) * 100)}%</small></li>`).join('')}</ol>` });
+    const done = ev.matches.filter((m) => !m.third && m.status === 'done' && d.pk[m.id] && d.pk[m.id][0] + d.pk[m.id][1] > 0).sort((a, b) => b.ds - a.ds).slice(0, 5);
+    if (done.length) slides.push({ t: 'How the hall called it', h: `<ol class="st-pred">${done.map((m) => { const win = m.w === 'a' ? m.a : m.b, k = d.pk[m.id], got = m.w === 'a' ? k[0] : k[1], p = Math.round((got / (k[0] + k[1])) * 100); return `<li data-k="d${m.id}">${av(win, 'md')}<b>${name(win)} won</b><i class="pbar"><u style="width:${p}%"></u></i><small class="seat">${p}% saw it coming</small></li>`; }).join('')}</ol>` });
+  }
+  const top = (S.board || []).slice(0, 5);
+  if (top.length && top[0].net) slides.push({ t: 'Best callers right now', h: `<ol class="st-pred">${top.map((r, i) => `<li data-k="u${r.n}"><span class="n">${i + 1}</span><b>${esc(r.n)}</b><small class="seat">${r.net.toLocaleString()} Loops</small></li>`).join('')}</ol>` });
+  const i = Math.floor(Date.now() / SLIDE_MS) % slides.length, sl = slides[i];
+  const dots = slides.length > 1 ? `<div class="dots">${slides.map((_, k) => `<i class="${k === i ? 'on' : ''}"></i>`).join('')}</div>` : '';
+  return `<div class="st-idle" data-cycle="${slides.length}" data-cur="${i}">${typeof sl === 'string' ? sl : `<p class="eyebrow">${eq} While we wait for the next battle</p><h1 class="mega" data-k="it${i}">${sl.t}</h1><div class="jbody" data-k="ib${i}">${sl.h}</div>`}${dots}</div>`;
 }
 
 /** The judges are scoring: the screen cycles through facts about what the hall predicted, one every few seconds. */
