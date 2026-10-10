@@ -146,6 +146,7 @@ export function cast (sim: Sim, p: PlayerS, slot: unknown, fx: unknown, fy: unkn
 
 /** Every step: the Frost Zones slow what stands in them (and hurt it a little), then melt. */
 export function update (sim: Sim) {
+    if (sim.s.tick % 20 === 0) for (const p of sim.online) sync(p);              // (a skill learned any way at all, the developer menu too, puts its art on a key)
     if (!sim.artZones.length) {
         for (const p of sim.online) if (p.cl && sim.s.time >= p.cl) { delete p.cl; }
         return;

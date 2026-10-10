@@ -42,6 +42,9 @@ export const RINGS: Record<string, RingDef | undefined> = {
     summon: { color: C.plum, r0: 0.4, r1: 2.4, dur: 0.6, flash: 1.2 },
     titan: { color: C.gold, r0: 0.6, r1: 3, dur: 0.6, flash: 1.6 },
     harvestCrop: small(C.gold),
+    artHook: small(C.cream), artArrow: small(C.foam), artRam: { color: C.berry, r0: 0.3, r1: 1.8, dur: 0.5, flash: 1.2 },
+    artScorch: { color: C.pumpkin, r0: 0.3, r1: 3.4, dur: 0.5, flash: 1.6 },
+    artShroud: { color: C.plum, r0: 0.3, r1: 1.4, dur: 0.5 }, artFrost: { color: C.foam, r0: 0.5, r1: 3, dur: 0.6 },
 };
 
 const RN = 40;

@@ -396,7 +396,7 @@ export class Farmer {
      * recoil, like a monster's), `invuln` makes the farmer blink as the 2D sprite does, and a downed farmer gets a berry ring that
      * pulses on the ground, calling for a friend.
      */
-    react(hearts: number, invuln: number, downed: boolean, dt: number) {
+    react(hearts: number, invuln: number, downed: boolean, dt: number, cloaked = false) {
         if (!(dt > 0)) dt = 0.016;
         if (hearts < this.lastHearts && !downed) {
             this.hurtT = 0.35;
@@ -412,7 +412,7 @@ export class Farmer {
             flashMeshes(this.flashing, false);
             this.flashing = null;
         }
-        this.yawG.visible = !(invuln > 0 && !downed && Math.floor(invuln * 12) % 2 === 0);
+        this.yawG.visible = !(invuln > 0 && !downed && Math.floor(invuln * 12) % 2 === 0) && !(cloaked && !downed && Math.floor(performance.now() / 110) % 3 === 0);
         if (downed && !this.helpRing) {
             this.helpRing = new THREE.Mesh(new THREE.RingGeometry(0.5, 0.58, 32).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0xe85d62, transparent: true, opacity: 0.6, depthWrite: false }));
             this.helpRing.position.y = 0.04;
