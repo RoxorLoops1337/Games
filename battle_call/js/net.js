@@ -87,7 +87,7 @@ function open() {
   ws = sock;
   sock.onopen = () => {
     wsTries = 0; lastMsg = Date.now();
-    sock.send(JSON.stringify({ t: 'hello', tk: S.role === 'user' ? S.tk : undefined, ht: S.role === 'host' ? S.ht : undefined }));
+    sock.send(JSON.stringify({ t: 'hello', tk: S.role === 'user' ? S.tk : undefined, ht: S.role === 'host' ? S.ht : undefined, screen: S.role === 'guest' && location.hash.startsWith('#/s/') ? true : undefined }));
     clearInterval(hb);
     hb = setInterval(() => {
       if (sock.readyState !== 1) return;

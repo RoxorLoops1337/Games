@@ -131,6 +131,16 @@ function upNext(m) {
   return `<div class="st-next"><div class="blue">${av(l, 'lg')}<b>${esc(bbName(l))}</b></div><i>VS</i><div class="red">${av(r, 'lg')}<b>${esc(bbName(r))}</b></div></div>`;
 }
 
+/** The vote coming in, at the top of the picture while the audience votes: percentages and head counts, both sides. */
+function liveTally(m) {
+  const v = S.live && S.live.v && S.live.v.id === m.id ? S.live.v : null, lk = leftKey(m);
+  const l = v ? (lk === 'a' ? v.a : v.b) : 0, r = v ? (lk === 'a' ? v.b : v.a) : 0, t = l + r, pl = t ? Math.round((l / t) * 100) : 50;
+  const n = S.live ? S.live.n : 0;
+  return `<div class="st-tally" data-k="tally"><div class="tl blue"><b>${t ? pl : 0}%</b><small>${l} ${l === 1 ? 'vote' : 'votes'}</small></div>
+    <div class="mid"><div class="bar huge"><i style="width:${t ? pl : 50}%"></i></div><small>${t} ${t === 1 ? 'vote' : 'votes'} in${n ? ' · ' + Math.round((t / n) * 100) + '% of the hall' : ''}</small></div>
+    <div class="tl red"><b>${t ? 100 - pl : 0}%</b><small>${r} ${r === 1 ? 'vote' : 'votes'}</small></div></div>`;
+}
+
 function duelStage(m) {
   const [l, r] = sides(m), lk = leftKey(m);
   const R = matchRound(size(), m);
@@ -143,6 +153,7 @@ function duelStage(m) {
   return `<div class="st-duel ${m.status}">
     <div class="st-top"><p class="eyebrow">${R.long}${m.third ? '' : ' · Battle ' + (m.i + 1)}</p><h2 class="status">${label}</h2></div>
     ${m.status === 'voting' ? countdown(m, 'huge') : ''}
+    ${m.status === 'voting' ? liveTally(m) : ''}
     <div class="panes">${side(l, 'blue', lk)}<div class="vs"><span>VS</span></div>${side(r, 'red', lk === 'a' ? 'b' : 'a')}</div>
     ${closed && tot ? `<div class="st-crowd"><b class="blue">${lp}%</b><div class="bar huge"><i style="width:${lp}%"></i></div><b class="red">${100 - lp}%</b><small>${tot} audience votes${m.judges ? '' : ''}</small></div>` : ''}
     ${m.judges ? `<div class="st-judges"><span class="blue">${jl}</span><small>JUDGES</small><span class="red">${jr}</span></div>` : ''}

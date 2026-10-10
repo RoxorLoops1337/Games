@@ -95,7 +95,7 @@ function flush() {
   if (d.meta) S.event.rev++;
   const send = att.push;
   send({ t: 'meta', ...E.metaOf(S) });
-  send({ t: 'live', ...E.liveOf(S, S.users.size, role === 'host') });
+  send({ t: 'live', ...E.liveOf(S, S.users.size, role === 'host' || location.hash.startsWith('#/s/')) });
   send({ t: 'board', rows: E.boardOf(S) });
   if (role === 'user') send({ t: 'me', ...E.meOf(S, S.users.get(nameKey(ME))) });
   if (role === 'host') send({ t: 'host', ...E.hostOf(S) });
