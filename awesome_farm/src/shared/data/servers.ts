@@ -41,3 +41,16 @@ export function splitAddress (address: string): { base: string; world: string | 
 
 /** The address that names one world on a base. */
 export const worldAddress = (base: string, id: string) => `${base.replace(/\/+$/, '')}/w/${id}`;
+
+/**
+ * The key a device remembers its farmer under for a server: every spelling of the same world (case, trailing slash, `/ws`, a scheme or none,
+ * and the bare public address, which is the first world) gives one key, so the same device is the same farmer.
+ * Plain servers on a PC (no worlds) keep their own address. Never throws.
+ */
+export function identityKey (address: string): string {
+    const { base, world } = splitAddress(address);
+    const host = base.replace(/^(wss?|https?):\/\//i, '').replace(/\/+$/, '').toLowerCase();
+    const pub = PUBLIC_SERVER.replace(/^https?:\/\//, '');
+    if (!world && host === pub) return `${host}/w/${DEFAULT_WORLD}`;      // the bare public address is the first world
+    return world ? `${host}/w/${world}` : host;
+}

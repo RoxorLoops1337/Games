@@ -72,3 +72,13 @@ test('the title screen: a Play online button opens the three worlds as cards, th
     assert.ok(/openCustom/.test(src) && /own server/.test(src), 'a PC\'s own address is still one tap away');
     assert.ok(!/Join a farm server/.test(src), 'no server box on the first look');
 });
+
+test('every spelling of a world address is one identity key (the same device is the same farmer)', async () => {
+    const { identityKey, PUBLIC_SERVER } = await import('../src/shared/data/servers');
+    const a = identityKey(`${PUBLIC_SERVER}/w/quarry`);
+    for (const v of [`${PUBLIC_SERVER}/w/quarry/`, `${PUBLIC_SERVER.toUpperCase()}/w/quarry/ws`, PUBLIC_SERVER.replace('https://', '') + '/w/quarry/status']) assert.equal(identityKey(v), a);
+    assert.notEqual(identityKey(`${PUBLIC_SERVER}/w/snowcap`), a);
+    assert.equal(identityKey(PUBLIC_SERVER), identityKey(`${PUBLIC_SERVER}/w/farm`));
+    assert.equal(identityKey('http://192.168.1.5:8787/'), '192.168.1.5:8787');
+    assert.equal(identityKey(undefined as unknown as string), '');
+});
