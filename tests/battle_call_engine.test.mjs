@@ -795,6 +795,58 @@ t('a portrait photo is cropped from near the top, and a found face is centred', 
   assert.ok(f.y < 100 && f.y + f.side > 350, 'the face is inside the square: ' + JSON.stringify(f));
 });
 
+console.log('judges decide later');
+t('a final can close its vote and wait for the judges while the night goes on, and the result is entered later', () => {
+  const w = setup({ size: 4, beatboxers: 4, users: 3 });
+  const { S, us, ids } = w;
+  S.ev.settings.thirdPlace = true;
+  const r = E.hostAction(S, { a: 'cat.add', name: 'Crew', size: 2 }); const c2 = r.cat;
+  host(S, { a: 'bb.add', cat: c2, names: ['X', 'Y'] });
+  for (const cat of ['c1', c2]) { host(S, { a: 'phase', cat, to: 'elimination' }); }
+  host(S, { a: 'seeds', cat: 'c1', order: ids });
+  host(S, { a: 'seeds', cat: c2, order: S.event.cats[c2].bbs.map((b) => b.id) });
+  playMatch(S, 'r0m0', 'a'); playMatch(S, 'r0m1', 'a');
+  const th = S.ev.matches.find((x) => x.third);
+  // semi-finals cannot wait: the bracket needs them
+  host(S, { a: 'step', mid: 'r1m0', to: 'live' }); host(S, { a: 'step', mid: 'r1m0', to: 'voting', later: true });
+  host(S, { a: 'step', mid: 'r1m0', to: 'closed' });
+  const fm = S.ev.matches.find((x) => x.id === 'r1m0');
+  host(S, { a: 'step', mid: 'r1m0', to: 'voting' });
+  E.castVote(S, us[1], 'r1m0', 'b');
+  host(S, { a: 'step', mid: 'r1m0', to: 'awaiting' });
+  assert.equal(fm.status, 'awaiting');
+  assert.equal(E.metaOf(S).cats[0].matches.find((x) => x.id === 'r1m0').c, null, 'the audience tally stays hidden until the result');
+  assert.deepEqual(E.hostOf(S).wait, [{ cat: 'c1', mid: 'r1m0', a: 0, b: 1 }], 'the organiser still sees it');
+  assert.equal(S.ev.phase, 'bracket');
+  // the stage is free: another category plays its final, and so does the small final here
+  host(S, { a: 'step', mid: th.id, to: 'live' }); host(S, { a: 'step', mid: th.id, to: 'voting', later: true });
+  S.now += 1000 * 1000; assert.deepEqual(E.closeDueVotes(S), [th.id], 'the clock ends it');
+  assert.equal(th.status, 'awaiting', 'a vote opened in "judges later" mode goes straight to waiting');
+  host(S, { a: 'step', mid: S.event.cats[c2].matches[0].id, to: 'live' });
+  assert.equal(S.event.cats[c2].matches[0].status, 'live');
+  assert.equal(E.hostAction(S, { a: 'result', mid: 'r1m0', w: 'a' }).ok, false, 'not while another battle is on');
+  host(S, { a: 'step', mid: S.event.cats[c2].matches[0].id, to: 'voting' }); host(S, { a: 'step', mid: S.event.cats[c2].matches[0].id, to: 'awaiting' });
+  // the award ceremony: results in any order
+  host(S, { a: 'result', mid: th.id, w: 'a', judges: { a: 2, b: 1 } });
+  assert.equal(S.ev.phase, 'bracket', 'the category finishes with the final');
+  host(S, { a: 'result', mid: 'r1m0', w: 'b', judges: { a: 1, b: 2 } });
+  assert.equal(S.ev.phase, 'finished'); assert.ok(S.ev.champion);
+  host(S, { a: 'result', cat: c2, mid: S.event.cats[c2].matches[0].id, w: 'a' });
+  assert.equal(S.event.cats[c2].phase, 'finished');
+});
+t('"judges decide later" is undoable and refused for earlier rounds', () => {
+  const { S, ids } = setup({ size: 4, beatboxers: 4, users: 1 });
+  host(S, { a: 'phase', to: 'elimination' }); host(S, { a: 'seeds', order: ids });
+  host(S, { a: 'step', mid: 'r0m0', to: 'live' }); host(S, { a: 'step', mid: 'r0m0', to: 'voting' });
+  assert.equal(E.hostAction(S, { a: 'step', mid: 'r0m0', to: 'awaiting' }).ok, false);
+  host(S, { a: 'step', mid: 'r0m0', to: 'closed' }); host(S, { a: 'result', mid: 'r0m0', w: 'a' });
+  playMatch(S, 'r0m1', 'a');
+  host(S, { a: 'step', mid: 'r1m0', to: 'live' }); host(S, { a: 'step', mid: 'r1m0', to: 'voting' }); host(S, { a: 'step', mid: 'r1m0', to: 'awaiting' });
+  assert.match(E.undoPlan(S).label, /judges decide later/);
+  host(S, { a: 'undo' });
+  assert.equal(S.ev.matches.find((x) => x.id === 'r1m0').status, 'closed');
+});
+
 console.log('walkover');
 t('a category with one entrant is crowned at the elimination, with no money moving, and can be taken back', () => {
   const { S, us } = setup({ size: 8, beatboxers: 8, users: 1 });

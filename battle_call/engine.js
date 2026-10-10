@@ -462,11 +462,14 @@ function lockRound(S, r) {
 const activeMatch = (S) => { for (const c of cats(S)) { const m = c.matches.find((x) => x.status === 'live' || x.status === 'voting' || x.status === 'closed'); if (m) return m; } return undefined; };
 export const currentMatch = activeMatch;
 
-export function stepMatch(S, mid, to, secs) {
+/** The final and the third-place battle can wait for the judges (announced later, at the award ceremony). */
+const isTerminal = (ev, m) => !!m.third || m.r === log2(ev.settings.size) - 1;
+
+export function stepMatch(S, mid, to, secs, later) {
   const ev = S.ev, m = matchOf(S, mid);
   if (ev.phase !== 'bracket') return fail('The bracket is not running');
   if (!m) return fail('No such battle');
-  const ALLOWED = { live: ['upcoming', 'voting'], voting: ['live', 'closed'], closed: ['voting'], upcoming: ['live'] };
+  const ALLOWED = { live: ['upcoming', 'voting'], voting: ['live', 'closed', 'awaiting'], closed: ['voting', 'awaiting'], awaiting: ['voting', 'closed'], upcoming: ['live'] };
   if (to === 'upcoming') {
     // "oops, wrong battle": only a battle that is live and has no votes yet can be put back, and its bets and picks reopen
     if (m.status !== 'live') return fail('Only a battle that has just started can be put back');
@@ -487,7 +490,18 @@ export function stepMatch(S, mid, to, secs) {
     S.event.active = ev.id; // whoever is on stage is the category everybody's phone follows
     for (const k of marketsList(S)) if (k.kind === 'match' && k.mid === mid && k.st === 'open') { k.st = 'locked'; touchMk(S, k); }
   }
+  if (to === 'awaiting') {
+    // the vote is over but the judges have not decided: the stage is free for the next battle, the result comes at the ceremony
+    if (!isTerminal(ev, m)) return fail('Only the final and the third-place battle can wait for the judges');
+    m.later = false; m.aws = ++S.event.doneSeq;
+  }
+  if ((to === 'voting' || to === 'closed') && m.status === 'awaiting') {
+    const other = activeMatch(S);
+    if (other && other.id !== mid) return fail('Finish the current battle first');
+    S.event.active = ev.id;
+  }
   if (to === 'voting') {
+    m.later = !!later && isTerminal(ev, m); // "judges decide later": when the clock runs out the battle goes to awaiting, not to hands up
     // the vote can close by itself: `vend` is the moment (server clock) it does
     const s = secs == null ? ev.settings.voteSecs : Math.max(0, Math.min(1800, Math.floor(+secs) || 0));
     m.vsecs = s; m.vend = s > 0 ? S.now + s * 1000 : 0;
@@ -503,7 +517,7 @@ export function closeDueVotes(S) {
   for (const c of cats(S)) {
     for (const m of c.matches) {
       if (m.status === 'voting' && m.vend && S.now >= m.vend) {
-        const r = inCat(S, c, () => stepMatch(S, m.id, 'closed'));
+        const r = inCat(S, c, () => stepMatch(S, m.id, m.later ? 'awaiting' : 'closed'));
         if (r.ok) done.push(m.id);
       }
     }
@@ -617,6 +631,8 @@ export function undoPlan(S) {
   if (ev.phase === 'finished' && ev.walkover) return { label: 'Take back the walkover', hard: false };
   if (ev.phase === 'bracket' || ev.phase === 'finished') {
     const last = ev.matches.filter((m) => m.status === 'done').sort((a, b) => b.ds - a.ds)[0];
+    const aw = ev.matches.filter((m) => m.status === 'awaiting').sort((a, b) => b.aws - a.aws)[0];
+    if (aw && aw.aws > (last ? last.ds : 0)) return { label: `Take back "judges decide later" for ${nm(aw)}`, hard: false, aw: aw.id };
     if (last) return { label: `Take back the result of ${nm(last)}`, hard: true, mid: last.id };
     return { label: 'Take back the ranking and redraw the bracket', hard: true };
   }
@@ -634,6 +650,7 @@ export function undoStep(S) {
   let r;
   if (act && ev.matches.includes(act)) r = stepMatch(S, act.id, act.status === 'closed' ? 'voting' : act.status === 'voting' ? 'live' : 'upcoming');
   else if (ev.phase === 'finished' && ev.walkover) { ev.champion = null; ev.walkover = false; ev.seeds = null; ev.phase = 'elimination'; touchMeta(S); S.dirty.ev = true; r = ok({}); }
+  else if (plan.aw) r = stepMatch(S, plan.aw, 'closed');
   else if (plan.mid) r = revertMatch(S, plan.mid);
   else if (ev.phase === 'bracket') r = revertSeeds(S);
   else if (ev.phase === 'picks' && ev.elimOn) { ev.elimOn = false; ev.performer = null; ev.performed = []; ev.picksEnd = 0; touchMeta(S); S.dirty.ev = true; r = ok({}); }
@@ -908,7 +925,7 @@ function catAction(S, a) {
     case 'elim.start': return startElimination(S);
     case 'picks.timer': return setPicksTimer(S, a.mins);
     case 'performer': return setPerformer(S, a.id == null ? null : String(a.id));
-    case 'step': return stepMatch(S, a.mid, a.to, a.secs);
+    case 'step': return stepMatch(S, a.mid, a.to, a.secs, a.later);
     case 'result': return setResult(S, a.mid, a.w, a.judges);
     case 'reopen': return revertMatch(S, a.mid);
     case 'swap': return swapSides(S, a.mid);
@@ -1094,7 +1111,11 @@ export function hostOf(S) {
     consensusBy[c.id] = inCat(S, c, () => consensus(S));
     volume += Object.values(c.markets).reduce((a, m) => a + m.pool.reduce((x, y) => x + y, 0), 0);
   }
+  // battles that have been voted on and wait for the judges: the organiser sees the audience's numbers, nobody else does
+  const wait = [];
+  for (const c of cats(S)) for (const m of c.matches) if (m.status === 'awaiting') wait.push({ cat: c.id, mid: m.id, a: m.c.a, b: m.c.b });
   return {
+    wait,
     users: users.slice(0, 600).map((u) => ({ n: u.name, bal: u.bal, net: netWorth(S, u), banned: u.banned,
       tops: Object.values(u.tops || {}).filter((t) => t.length).length,
       picks: Object.keys(u.picks).length, votes: Object.keys(u.votes).length, joined: u.joined })),
