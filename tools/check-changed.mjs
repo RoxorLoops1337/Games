@@ -29,6 +29,7 @@ import { readFileSync, statSync } from 'node:fs';
 
 const GAME_SUITES = {
   no_room_for_heroes: ['test:boss'],
+  battle_call: ['test:battlecall'],
   kingshot_endless: ['test:kingshot'],
   encore_island: ['test:encore'],
   encore_island_3d: ['test:encore'],

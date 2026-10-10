@@ -1,0 +1,25 @@
+# Battle Call: one Worker, one Durable Object per event, and it serves the app itself too.
+# Deployed by hand (never by the Pages build):   npx wrangler@4 deploy --config battle_call/server/wrangler.toml
+# Details and the two optional secrets: README.md beside this file.
+name = "battle-call"
+main = "worker.js"
+compatibility_date = "2025-09-01"
+
+# The same app files that Pages serves at /battle_call/ are served from the Worker root, so one deploy is a complete,
+# same-origin app (no CORS, nothing to configure). `server/` itself is not published (see ../.assetsignore).
+[assets]
+directory = "../"
+binding = "ASSETS"
+run_worker_first = ["/api/*"]
+
+[[durable_objects.bindings]]
+name = "EVENT"
+class_name = "Event"
+
+# SQLite-backed Durable Objects are the ones the Workers Free plan allows.
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Event"]
+
+[observability]
+enabled = true

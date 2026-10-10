@@ -23,3 +23,6 @@ tools/beatborne/shots/
 # Clawspire 2.0 trailer renders into trailer_out/clawspire too -- regenerate with tools/clawspire_trailer/render.mjs
 trailer_out/
 __pycache__/
+
+# wrangler scratch (Battle Call dev/dry-run)
+.wrangler/

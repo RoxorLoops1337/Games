@@ -1,0 +1,12 @@
+{
+  "name": "Battle Call",
+  "short_name": "Battle Call",
+  "description": "Predict, bet and vote in a live beatbox battle.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0a0914",
+  "theme_color": "#0a0914",
+  "icons": [{ "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }]
+}

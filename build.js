@@ -82,6 +82,7 @@ const STATIC_PATHS = [
   'rogue_book',
   'hocus_vocus',
   'LoopDoku',
+  'battle_call',
   'beatbox_heroes',
   'pixel_colony',
   'tools',
@@ -181,6 +182,8 @@ const SKIP_IN_DIST = {
   clawspire: new Set(['intro.mp4', 'intro.webm', 'intro_poster.jpg', 'DESIGN.md', 'ART_PROMPTS.md']),
   // Hocus Vocus: the re-theme plan (hundreds of KB of design notes) is never deployed
   hocus_vocus: new Set(['plan']),
+  // Battle Call: the Worker and its config deploy by hand (wrangler), never with the Pages site
+  battle_call: new Set(['server', 'package.json', '.assetsignore']),
 };
 
 const copyStatic = () => {
