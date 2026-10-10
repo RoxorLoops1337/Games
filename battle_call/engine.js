@@ -997,6 +997,18 @@ export function liveOf(S, online, host) {
       for (const m of Object.values(c.markets)) if (m.kind === 'qualify' && m.st !== 'void') staked += m.pool[0] + m.pool[1];
       (out.cons = out.cons || {})[c.id] = { N: c.settings.size, voters: c.consensusAll.voters, rows: c.consensusAll.rows, staked };
     }
+    // between battles the big screen cycles through what the hall predicted for the bracket: picks per battle and for the title
+    if (c.phase === 'bracket' || c.phase === 'finished') {
+      const ms = c.matches.filter((x) => !x.third && x.a && x.b), fin = c.matches.find((x) => !x.third && x.r === log2(c.settings.size) - 1);
+      const pk = {}, champ = {};
+      for (const m of ms) pk[m.id] = [0, 0];
+      for (const u of S.users.values()) {
+        for (const m of ms) { const p = u.picks[m.id]; if (p === m.a) pk[m.id][0]++; else if (p === m.b) pk[m.id][1]++; }
+        const w = fin && u.picks[fin.id];
+        if (w) champ[w] = (champ[w] || 0) + 1;
+      }
+      (out.pk = out.pk || {})[c.id] = { pk, champ };
+    }
     // the elimination round is on and predictions are open: the big screen shows how the hall's Top N is shaping up
     if (c.phase === 'picks' && c.elimOn) (out.cons = out.cons || {})[c.id] = inCat(S, c, () => {
       const cs = consensus(S), N = S.ev.settings.size;

@@ -615,3 +615,14 @@ body.idle .stagectl { opacity: 0; pointer-events: none; }
 .st-judging .pstats3 { display: flex; gap: 2.4vmin; flex-wrap: wrap; } .st-judging .pt { padding: 2vmin 3vmin; border-radius: 2vmin; min-width: 20vmin; } .st-judging .pt b { font-size: 6em; } .st-judging .pt small { font-size: 1.8em; color: #cfc9f3; }
 .st-podium { display: flex; gap: 4vmin; align-items: flex-end; } .st-podium > div { display: flex; flex-direction: column; align-items: center; gap: 1vmin; padding: 2vmin 3vmin; border-radius: 3vmin; background: var(--glass); border: 1px solid var(--line); text-align: center; } .st-podium b { font-size: 3em; } .st-podium span { font-size: 1.8em; color: #cfc9f3; } .st-podium .pp0 { border-color: var(--gold); transform: translateY(-2vmin); } .st-podium .av.xl { --s: 14vmin; }
 .cd.long b { font-size: calc(var(--d) * .3); }
+
+/* ---- big screen: between battles ---- */
+.st-idle { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 2vmin; }
+.st-idle > .st-bracket { flex: 1; min-height: 0; }
+.st-idle .mega { font-size: min(6.4em, 11vh); } .st-idle .jbody { animation: pop .5s both; display: flex; flex-direction: column; gap: 1.6vmin; } .st-idle .lead { font-size: 2.2em; }
+.st-idle .dots { margin-top: auto; display: flex; gap: 1vmin; justify-content: center; } .st-idle .dots i { width: 1.2vmin; height: 1.2vmin; border-radius: 50%; background: rgba(255,255,255,.2); } .st-idle .dots i.on { background: var(--pink); transform: scale(1.4); }
+.st-idle .st-pred { max-width: 72vw; }
+.st-pick2 { display: flex; align-items: stretch; justify-content: center; gap: 3vmin; } .st-pick2 > i { align-self: center; font-style: italic; font-weight: 800; font-size: 3.4em; color: var(--gold); }
+.st-pick2 .side { flex: 1; max-width: 42vw; display: flex; flex-direction: column; align-items: center; gap: 1vmin; padding: 3vmin; border-radius: 3vmin; text-align: center; } .st-pick2 .side.blue { background: linear-gradient(180deg, #2b6bff, #0f3cc9); } .st-pick2 .side.red { background: linear-gradient(180deg, #ff4a65, #b30f2c); }
+.st-pick2 h2 { font-size: 3em; } .st-pick2 .big { font-size: 7em; line-height: 1; } .st-pick2 small { font-size: 1.8em; color: rgba(255,255,255,.85); } .st-pick2 .bets { font-size: 1.8em; font-weight: 700; background: rgba(0,0,0,.25); padding: .3vmin 2vmin; border-radius: 99px; } .st-pick2 .av.xl { --s: 13vmin; }
+.st-pred small.seat { white-space: nowrap; width: auto; margin-left: auto; font-size: 1em; }
