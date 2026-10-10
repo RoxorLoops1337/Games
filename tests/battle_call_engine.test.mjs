@@ -796,7 +796,10 @@ t('the elimination round runs while predictions stay open, with a stage and the 
   assert.equal(cons.voters, 3); assert.equal(cons.rows[0].id, ids[0]); assert.ok(cons.staked >= 150, 'bets on the cut are counted');
   host(S, { a: 'performer', id: ids[2] });
   host(S, { a: 'phase', to: 'elimination' }); // the lock-in at the end
-  assert.equal((E.liveOf(S, 0, false).cons || {}).c1, undefined, 'no live Top N once locked');
+  const judging = E.liveOf(S, 0, false).cons.c1;
+  assert.equal(judging.voters, 3, 'while the judges score, the whole picture of the hall is there for the big screen');
+  assert.equal(judging.rows.length, 6, 'every beatboxer somebody picked, not only the Top N');
+  assert.equal(judging.rows.find((r) => r.id === ids[0]).f, 2, 'and how many put them first');
   assert.equal(E.setTop(S, us[0], [ids[0]]).ok, false, 'now they are locked');
   assert.equal(E.metaOf(S).cats[0].performer, ids[2], 'the stage stays for the judging');
   host(S, { a: 'seeds', order: ids.slice(0, 4) });
