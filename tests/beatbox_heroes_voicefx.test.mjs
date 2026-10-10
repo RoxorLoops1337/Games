@@ -147,7 +147,7 @@ function plot(name, raw, res, sr) {
   between((first - atk) / sr * 1000, -2, 2, 'kick: the hit sits right after the ' + P.gate.atk + ' ms lookahead attack in the sample, onset preserved (ms)');
   ok(res.start >= Math.round(0.297 * sr), 'kick: the 300 ms of room before the hit is gone (' + (res.start / sr * 1000).toFixed(1) + ' ms cut)');
   ok(dB(rms(y, 0, atk)) < -55, 'kick: residual before the hit (inside the attack ramp) ' + dB(rms(y, 0, atk)).toFixed(1) + ' dBFS');
-  ok(dB(rms(y, y.length - Math.round(0.02 * sr))) < -60, 'kick: residual after the gate closes (last 20 ms) ' + dB(rms(y, y.length - Math.round(0.02 * sr))).toFixed(1) + ' dBFS');
+  ok(dB(rms(y, y.length - Math.round(0.02 * sr))) < -40, 'kick: the hit is cropped where it has died away and fades out (last 20 ms) ' + dB(rms(y, y.length - Math.round(0.02 * sr))).toFixed(1) + ' dBFS');
   ok(y[0] === 0 && y[y.length - 1] === 0, 'kick: first and last samples are exactly 0');
   ok(R.maxStep(y, 1, Math.round(0.0005 * sr)) < 0.05 && R.maxStep(y, y.length - Math.round(0.005 * sr)) < 0.01, 'kick: no discontinuity at either edge (start ' + R.maxStep(y, 1, Math.round(0.0005 * sr)).toFixed(4) + ', end ' + R.maxStep(y, y.length - Math.round(0.005 * sr)).toFixed(4) + ')');
   ok(I.lengthMs >= 250, 'kick: the gate keys on the transient but lets the 60 Hz tail ring (' + I.lengthMs + ' ms)');
@@ -169,7 +169,7 @@ function plot(name, raw, res, sr) {
   ok(d.length === y.length && d[0] === 0 && d[d.length - 1] === 0, 'dry: same cut and clean edges as CLEAN');
   ok(Math.abs(V.punch(d, sr) - V.punch(y, sr)) <= 0.6 || V.truePeak(d) >= -1.1, 'dry: level-matched to CLEAN (' + V.punch(d, sr).toFixed(1) + ' vs ' + V.punch(y, sr).toFixed(1) + ') or at the ceiling');
   ok(V.truePeak(d) <= -0.95, 'dry: under the same ceiling');
-  ok(dB(rms(d, d.length - Math.round(0.02 * sr))) > dB(rms(y, y.length - Math.round(0.02 * sr))) + 10, 'dry: the RAW tail still has the room the gate took out');
+  ok(Math.abs(dB(rms(d, d.length - Math.round(0.02 * sr))) - dB(rms(y, y.length - Math.round(0.02 * sr)))) < 6, 'dry: cut at the same point as CLEAN, so the room is outside both and the tails sit at the same level');
   /* 44.1 kHz works the same */
   const r44 = V.process(take(kick(44100), 44100, 200, -60, 800, 12), 44100, 'B');
   ok(r44.info.ok && Math.abs(r44.info.onsetMs - 200) < 1 && V.truePeak(r44.data) <= -0.95, 'kick at 44.1 kHz: same result');
@@ -184,7 +184,7 @@ function plot(name, raw, res, sr) {
   const lowIn = ratioDb(s, sr, [20, 100], [20, 20000]), lowOut = ratioDb(y, sr, [20, 100], [20, 20000]);
   ok(lowOut - lowIn < -20, 'hat: the breath thump under 100 Hz is gone (' + (lowOut - lowIn).toFixed(1) + ' dB relative)');
   ok(I.lengthMs < 200, 'hat: stays short (' + I.lengthMs + ' ms)');
-  ok(dB(rms(y, y.length - Math.round(0.01 * sr))) < -60 && y[0] === 0 && y[y.length - 1] === 0, 'hat: clean tail and edges');
+  ok(dB(rms(y, y.length - Math.round(0.01 * sr))) < -40 && y[0] === 0 && y[y.length - 1] === 0, 'hat: clean tail and edges');
   ok(V.truePeak(y) <= -0.95 && V.punch(y, sr) >= V.profile('t').target - 3, 'hat: peak <= -1 dBTP, level ' + V.punch(y, sr).toFixed(1) + ' (target ' + V.profile('t').target + ')');
 }
 
@@ -247,6 +247,49 @@ function plot(name, raw, res, sr) {
   const long = V.process(take(hum(sr, 3000), sr, 100, -60, 3500, 63), sr, 'B');
   ok(long.info.capped && long.data.length === Math.round(V.profile('B').maxMs * 0.001 * sr) && long.data[long.data.length - 1] === 0, 'a 3 s tone recorded as a kick is capped at ' + V.profile('B').maxMs + ' ms with a fade');
   ok(/^ROOM -\d+DB  GATE  LOW BOOST/.test(V.summary(V.process(take(kick(sr), sr, 300, -60, 1000, 64), sr, 'B').info)), 'summary line for the recorder UI');
+}
+
+/* ---------------------------------------------------------------- hit isolation: a drum is cut down to the hit */
+{
+  const sr = 44100, first = (a, f) => { let m = 0; for (const v of a) m = Math.max(m, Math.abs(v)); let i = 0; while (i < a.length && Math.abs(a[i]) < m * f) i++; return i; }, last = (a, f) => { let m = 0; for (const v of a) m = Math.max(m, Math.abs(v)); let i = a.length - 1; while (i > 0 && Math.abs(a[i]) < m * f) i--; return i; };
+  for (const [name, sig, id] of [['kick', kick(sr), 'B'], ['hat', hat(sr), 't'], ['snare', snare(sr), 'K']]) {
+    for (const room of [-62, -45]) {
+      const t = take(sig, sr, 300, room, 1000, 90 + room), r = V.process(t, sr, id), y = r.data;
+      ok(r.info.ok && r.info.cropped, name + ' ' + room + ' dB: the hit was isolated');
+      const lead = first(y, 0.01) / sr * 1000, tail = (y.length - 1 - last(y, 0.01)) / sr * 1000;   // time under 1% (-40 dB) of the peak at each end
+      ok(lead <= 8, name + ' ' + room + ' dB: nothing but the hit before it (' + lead.toFixed(1) + ' ms under -40 dB at the start)');
+      ok(tail <= 30, name + ' ' + room + ' dB: nothing but the hit after it (' + tail.toFixed(1) + ' ms under -40 dB at the end)');
+    }
+  }
+  /* something rustling right before the hit (a tap on the REC button, clothes) is not part of the sample */
+  const bump = new Float32Array(Math.round(0.03 * sr)), t2 = take(kick(sr), sr, 300, -55, 1000, 95), r0 = rngf(5);
+  for (let i = 0; i < bump.length; i++) bump[i] = gauss(r0) * 0.05 * Math.sin(Math.PI * i / bump.length); for (let i = 0; i < bump.length; i++) t2[Math.round(0.2 * sr) + i] += bump[i];
+  const r2 = V.process(t2, sr, 'B');
+  ok(r2.info.ok && r2.start >= Math.round(0.285 * sr), 'a rustle 70 ms before the kick is cut away (sample starts at ' + (r2.start / sr * 1000).toFixed(0) + ' ms, the kick is at 300)');
+  /* a tonal sound is not cropped: a hum keeps its whole length */
+  const hm = V.process(take(hum(sr, 900), sr, 100, -60, 1500, 96), sr, 'HUM');
+  ok(hm.info.ok && !hm.info.cropped && hm.info.lengthMs > 800, 'a hum is not cropped (' + hm.info.lengthMs + ' ms)');
+}
+
+/* ---------------------------------------------------------------- phone-quality rooms: breath before the hit is cut, hiss is reduced */
+{
+  const sr = 44100, rms = (a, lo, hi) => { let e = 0; for (let i = lo; i < hi; i++) e += a[i] * a[i]; return Math.sqrt(e / Math.max(1, hi - lo)); }, dbv = (v) => 20 * Math.log10(Math.max(v, 1e-9));
+  for (const [name, sig, id] of [['kick', kick(sr), 'B'], ['hat', hat(sr), 't'], ['snare', snare(sr), 'K']]) {
+    const bs = hat(sr, 9), breath = new Float32Array(Math.round(0.07 * sr)); for (let i = 0; i < breath.length; i++) breath[i] = bs[i % bs.length] * 0.18 * Math.sin(Math.PI * i / breath.length);
+    for (const room of [-48, -40]) {
+      const t = take(sig, sr, 300, room, 900, 71 + room); for (let i = 0; i < breath.length; i++) t[Math.round(0.04 * sr) + i] += breath[i];   // a breath 190 ms before the hit
+      const r = V.process(t, sr, id);
+      ok(r.info.ok && r.data.length > 100, name + ' in a ' + room + ' dB room still records');
+      ok(r.start >= Math.round(0.26 * sr), name + ' ' + room + ' dB: the breath before the hit is not part of the sample (starts at ' + (r.start / sr * 1000).toFixed(0) + ' ms, hit at 300)');
+      if (room === -40) ok(r.info.denoised, name + ' ' + room + ' dB: noise reduction ran');
+    }
+    /* hiss: with the reduction the kept room sits lower than without it */
+    const t = take(sig, sr, 300, -42, 900, 77), on = V.process(t, sr, id), off = V.process(t, sr, id, { profile: Object.assign({}, V.profile(id), { denoise: false }) });
+    const tailOf = (r) => { const a = r.data, k = Math.floor(a.length * 0.8); return dbv(rms(a, k, a.length)) - dbv(Math.max(...a.map(Math.abs))); };
+    ok(on.data.length && off.data.length && tailOf(on) <= tailOf(off) + 0.01, name + ': the end of the sample is not noisier with the reduction (' + tailOf(on).toFixed(1) + ' vs ' + tailOf(off).toFixed(1) + ' dB)');
+  }
+  const clean = V.process(take(kick(sr), sr, 300, -75, 900, 80), sr, 'B');
+  ok(clean.info.ok && !clean.info.denoised, 'a clean take (75 dB room) skips the reduction');
 }
 
 /* ---------------------------------------------------------------- Samples: raw take, CLEAN / RAW, old entries */
