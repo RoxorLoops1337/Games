@@ -38,8 +38,8 @@ export function newCategory(event, { id, name, size, art }) {
 export function migrateEvent(ev) {
   for (const c of Object.values(ev.cats || {})) {
     c.settings = c.settings || {};
-    // the audience vote now takes 30 s by default: an event still on the old default of 10 moves with it (a custom length is left alone)
-    if (c.settings.voteSecsV !== 2) { if (c.settings.voteSecs === 10) c.settings.voteSecs = 30; c.settings.voteSecsV = 2; }
+    // the audience vote now takes 4 minutes by default: an event still on an earlier default (10 or 30 s) moves with it (a custom length is left alone)
+    if (!(c.settings.voteSecsV >= 3)) { if (c.settings.voteSecs === 10 || c.settings.voteSecs === 30) c.settings.voteSecs = 240; c.settings.voteSecsV = 3; }
     for (const [k, v] of Object.entries(DEFAULTS)) if (c.settings[k] === undefined) c.settings[k] = k === 'pts' ? { ...v } : k === 'thirdPlace' ? false : v;
     c.settings.pts = { ...DEFAULTS.pts, ...c.settings.pts };
     c.performed = c.performed || [];
@@ -489,7 +489,7 @@ export function stepMatch(S, mid, to, secs) {
   }
   if (to === 'voting') {
     // the vote can close by itself: `vend` is the moment (server clock) it does
-    const s = secs == null ? ev.settings.voteSecs : Math.max(0, Math.min(300, Math.floor(+secs) || 0));
+    const s = secs == null ? ev.settings.voteSecs : Math.max(0, Math.min(1800, Math.floor(+secs) || 0));
     m.vsecs = s; m.vend = s > 0 ? S.now + s * 1000 : 0;
   } else m.vend = 0;
   m.status = to;
@@ -824,7 +824,7 @@ function eventAction(S, a) {
       const shared = {};
       if (v.start != null) { if (all.some((x) => x.phase !== 'lobby') || S.users.size) return fail('The starting Loops are fixed once people join'); shared.start = Math.max(100, Math.min(100000, Math.floor(+v.start) || 1000)); }
       if (v.regOpen != null) shared.regOpen = !!v.regOpen;
-      if (v.voteSecs != null) shared.voteSecs = Math.max(0, Math.min(120, Math.floor(+v.voteSecs) || 0));
+      if (v.voteSecs != null) shared.voteSecs = Math.max(0, Math.min(1800, Math.floor(+v.voteSecs) || 0));
       for (const k of ['maxPerDevice', 'maxPerIp']) if (v[k] != null) shared[k] = Math.max(0, Math.min(1000, Math.floor(+v[k]) || 0));
       if (v.minPayout != null) shared.minPayout = Math.max(1, Math.min(3, +v.minPayout || 1.1));
       for (const x of all) Object.assign(x.settings, shared);
