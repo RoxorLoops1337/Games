@@ -1,0 +1,382 @@
+// Battle Call: the rules engine (battle_call/engine.js + js/shared.js).
+//
+// What matters here is money and fairness: that a bracket is drawn the way the organiser expects
+// (8th v 1st, 7th v 2nd), that every kind of prediction and bet pays exactly what it should, that a
+// wrong result can be taken back without leaving a single Loop behind, and that nobody can vote twice.
+//
+// Run: node tests/battle_call_engine.test.mjs
+import assert from 'node:assert/strict';
+import * as E from '../battle_call/engine.js';
+import { seedOrder, buildMatches, roundsOf, multiplier, slotsFor, nameKey } from '../battle_call/js/shared.js';
+
+let pass = 0, failN = 0;
+const t = (name, fn) => {
+  try { fn(); pass++; console.log('  ok  ' + name); } catch (e) { failN++; console.log('FAIL  ' + name + '\n      ' + (e.stack || e).splt('\n').slice(0, 4).join('\n      ')); }
+};
+
+function setup({ size = 8, beatboxers = 12, users = 4, start = 1000 } = {}) {
+  const S = E.newState(E.newEvent({ code: 'TEST1', name: 'Test Battle', size, now: 1 }));
+  S.ev.settings.start = start;
+  S.now = 1;
+  E.hostAction(S, { a: 'bb.add', names: Array.from({ length: beatboxers }, (_, i) => 'BB' + (i + 1)) });
+  const us = [];
+  for (let i = 0; i < users; i++) {
+    const r = E.canRegister(S, { name: 'user' + (i + 1), device: 'dev' + (i + 1), ipH: 'ip' });
+    assert.ok(r.ok, r.err);
+    us.push(E.addUser(S, E.newUser(S, { name: r.name, device: 'dev' + (i + 1), ipH: 'ip' })));
+  }
+  return { S, us, ids: S.ev.bbs.map((b) => b.id) };
+}
+const total = (S) => [...S.users.values()].reduce((a, u) => a + E.netWorth(S, u), 0);
+const host = (S, a) => { const r = E.hostAction(S, a); assert.ok(r.ok, JSON.stringify(a) + ' -> ' + r.err); return r; };
+const playMatch = (S, mid, w, judges) => {
+  host(S, { a: 'step', mid, to: 'live' });
+  host(S, { a: 'step', mid, to: 'voting' });
+  host(S, { a: 'step', mid, to: 'closed' });
+  host(S, { a: 'result', mid, w, judges });
+};
+
+console.log('bracket shape');
+t('seed order puts 1 v 8 and 2 v 7 on opposite halves', () => {
+  assert.deepEqual(seedOrder(8), [1, 8, 4, 5, 2, 7, 3, 6]);
+  assert.deepEqual(seedOrder(4), [1, 4, 2, 3]);
+  assert.deepEqual(seedOrder(16), [1, 16, 8, 9, 4, 13, 5, 12, 2, 15, 7, 10, 3, 14, 6, 11]);
+  for (const n of [4, 8, 16, 32]) assert.equal(new Set(seedOrder(n)).size, n);
+});
+t('round names go Top 16 -> Top 8 -> Top 4 -> Final', () => {
+  assert.deepEqual(roundsOf(16).map((r) => r.short), ['Top 16', 'Top 8', 'Top 4', 'Final']);
+  assert.deepEqual(roundsOf(8).map((r) => r.long), ['Quarter-finals', 'Semi-finals', 'Final']);
+  assert.equal(buildMatches(16).length, 15);
+});
+t('the drawn bracket pairs seed 1 with seed N, and winners meet in the standard tree', () => {
+  const { S, ids } = setup({ size: 8, beatboxers: 8, users: 0 });
+  host(S, { a: 'phase', to: 'elimination' });
+  const order = [...ids].reverse(); // seed 1 = BB8
+  host(S, { a: 'seeds', order });
+  const m = (id) => S.ev.matches.find((x) => x.id === id);
+  assert.deepEqual([m('r0m0').a, m('r0m0').b], [order[0], order[7]]);
+  assert.deepEqual([m('r0m1').a, m('r0m1').b], [order[3], order[4]]);
+  assert.deepEqual([m('r0m2').a, m('r0m2').b], [order[1], order[6]]);
+  assert.deepEqual([m('r0m3').a, m('r0m3').b], [order[2], order[5]]);
+  assert.equal(m('r1m0').status, 'wait');
+});
+
+console.log('phases');
+t('needs enough beatboxers, moves lobby -> picks -> elimination, and only publishes with a full ranking', () => {
+  const { S, ids } = setup({ size: 8, beatboxers: 6, users: 0 });
+  assert.equal(E.hostAction(S, { a: 'phase', to: 'picks' }).ok, false);
+  host(S, { a: 'bb.add', names: ['X1', 'X2', 'Another'] });
+  host(S, { a: 'phase', to: 'picks' });
+  assert.equal(E.hostAction(S, { a: 'phase', to: 'lobby' }).ok, false);
+  host(S, { a: 'phase', to: 'elimination' });
+  assert.equal(E.hostAction(S, { a: 'seeds', order: S.ev.bbs.slice(0, 7).map((b) => b.id) }).ok, false);
+  assert.equal(E.hostAction(S, { a: 'seeds', order: Array(8).fill(S.ev.bbs[0].id) }).ok, false);
+});
+t('duplicate names are refused and the lineup locks once the bracket is drawn', () => {
+  const { S } = setup({ size: 4, beatboxers: 4, users: 0 });
+  assert.equal(host(S, { a: 'bb.add', names: ['bb1', 'New one'] }).added, 1);
+  host(S, { a: 'phase', to: 'elimination' });
+  host(S, { a: 'seeds', order: S.ev.bbs.slice(0, 4).map((b) => b.id) });
+  assert.equal(E.hostAction(S, { a: 'bb.add', names: ['Late'] }).ok, false);
+  assert.equal(E.hostAction(S, { a: 'bb.rm', id: S.ev.bbs[0].id }).ok, false);
+});
+
+console.log('accounts');
+t('nicknames are unique ignoring case and the per-device cap holds', () => {
+  const { S } = setup({ users: 1 });
+  assert.equal(E.canRegister(S, { name: 'USER1', device: 'x' }).ok, false);
+  assert.equal(E.canRegister(S, { name: 'a' }).ok, false);
+  S.ev.settings.maxPerDevice = 1;
+  assert.equal(E.canRegister(S, { name: 'fresh', device: 'dev1' }).ok, false);
+  assert.equal(E.canRegister(S, { name: 'fresh', device: 'other' }).ok, true);
+  S.ev.settings.regOpen = false;
+  assert.equal(E.canRegister(S, { name: 'fresh', device: 'other' }).ok, false);
+});
+
+console.log('top-N predictions');
+t('a top-N call pays for who got through and for exact and near seats', () => {
+  const { S, us, ids } = setup({ size: 8, beatboxers: 12, users: 2 });
+  host(S, { a: 'phase', to: 'picks' });
+  const [u1, u2] = us;
+  // u1: perfect 1..8, u2: all eight right but shifted by one, plus one wrong
+  assert.ok(E.setTop(S, u1, ids.slice(0, 8)).ok);
+  assert.ok(E.setTop(S, u2, [ids[1], ids[0], ids[2], ids[3], ids[4], ids[5], ids[6], ids[10]]).ok);
+  assert.equal(E.setTop(S, u1, [ids[0], ids[0]]).ok, false, 'duplicates are refused');
+  host(S, { a: 'phase', to: 'elimination' });
+  assert.equal(E.setTop(S, u1, ids.slice(0, 8)).ok, false, 'picks are locked once elimination starts');
+  host(S, { a: 'seeds', order: ids.slice(0, 8) });
+  const P = S.ev.settings.pts;
+  assert.equal(u1.bal - 1000, 8 * (P.topIn + P.topExact));
+  // u2: seats 1,2 swapped (near), 3..7 exact, one outsider
+  assert.equal(u2.bal - 1000, 2 * (P.topIn + P.topNear) + 5 * (P.topIn + P.topExact));
+});
+t('the crowd consensus ranks by Borda count', () => {
+  const { S, us, ids } = setup({ size: 4, beatboxers: 6, users: 3 });
+  host(S, { a: 'phase', to: 'picks' });
+  E.setTop(S, us[0], [ids[0], ids[1], ids[2], ids[3]]);
+  E.setTop(S, us[1], [ids[0], ids[2], ids[1], ids[3]]);
+  E.setTop(S, us[2], [ids[1], ids[0], ids[4], ids[5]]);
+  host(S, { a: 'phase', to: 'elimination' });
+  const c = S.ev.consensus;
+  assert.equal(c.voters, 3);
+  assert.equal(c.rows[0].id, ids[0]);
+  assert.equal(c.rows.length, 4);
+});
+
+console.log('bets (parimutuel)');
+t('winners split the pot pro rata, losers pay in, and the house money is only the seed', () => {
+  const { S, us, ids } = setup({ size: 4, beatboxers: 4, users: 3 });
+  host(S, { a: 'phase', to: 'elimination' });
+  host(S, { a: 'seeds', order: ids });
+  const mk = Object.values(S.ev.markets).find((m) => m.kind === 'match' && m.mid === 'r0m0');
+  const [x, y, z] = us;
+  assert.ok(E.setBet(S, x, mk.id, 0, 100).ok);
+  assert.ok(E.setBet(S, y, mk.id, 1, 300).ok);
+  assert.ok(E.setBet(S, z, mk.id, 1, 100).ok);
+  assert.equal(x.bal, 900);
+  const T = mk.seed[0] + mk.seed[1] + 500;
+  host(S, { a: 'step', mid: 'r0m0', to: 'live' });
+  assert.equal(E.setBet(S, x, mk.id, 0, 200).ok, false, 'bets lock when the battle starts');
+  host(S, { a: 'result', mid: 'r0m0', w: 'b' });
+  const side = mk.seed[1] + 400;
+  assert.equal(y.bal, 700 + Math.floor((300 * T) / side));
+  assert.equal(z.bal, 900 + Math.floor((100 * T) / side));
+  assert.equal(x.bal, 900, 'lost stake is gone');
+  assert.equal(x.bets[mk.id][2], 0);
+});
+t('a winning bet never pays less than stake x minPayout', () => {
+  const { S, us, ids } = setup({ size: 4, beatboxers: 4, users: 1 });
+  host(S, { a: 'phase', to: 'elimination' });
+  host(S, { a: 'seeds', order: ids });
+  const mk = Object.values(S.ev.markets).find((m) => m.kind === 'match' && m.mid === 'r0m0');
+  E.setBet(S, us[0], mk.id, 0, 1000);
+  playMatch(S, 'r0m0', 'a');
+  assert.ok(us[0].bal >= 1100, 'got ' + us[0].bal);
+});
+t('bets can be moved, topped up and taken back while the market is open, and guard the balance', () => {
+  const { S, us, ids } = setup({ size: 4, beatboxers: 4, users: 1 });
+  host(S, { a: 'phase', to: 'elimination' });
+  host(S, { a: 'seeds', order: ids });
+  const mk = Object.values(S.ev.markets).find((m) => m.kind === 'match' && m.mid === 'r0m0');
+  const u = us[0];
+  assert.equal(E.setBet(S, u, mk.id, 0, 5).ok, false, 'min bet');
+  assert.equal(E.setBet(S, u, mk.id, 0, 5000).ok, false, 'more than you have');
+  E.setBet(S, u, mk.id, 0, 400);
+  E.setBet(S, u, mk.id, 0, 700);
+  assert.equal(u.bal, 300);
+  assert.deepEqual(mk.pool, [700, 0]);
+  E.setBet(S, u, mk.id, 1, 700);
+  assert.deepEqual(mk.pool, [0, 700]); assert.deepEqual(mk.cnt, [0, 1]);
+  E.setBet(S, u, mk.id, 1, 0);
+  assert.equal(u.bal, 1000); assert.deepEqual(mk.cnt, [0, 0]);
+  assert.equal(Object.keys(u.bets).length, 0);
+});
+t('qualify bets: yes/no on making the cut, paid when the ranking is published', () => {
+  const { S, us, ids } = setup({ size: 4, beatboxers: 8, users: 2 });
+  host(S, { a: 'phase', to: 'picks' });
+  const q = (id) => Object.values(S.ev.markets).find((m) => m.kind === 'qualify' && m.bb === id);
+  assert.equal(Object.values(S.ev.markets).filter((m) => m.kind === 'qualify').length, 8);
+  E.setBet(S, us[0], q(ids[0]).id, 0, 200); // yes, and they make it
+  E.setBet(S, us[1], q(ids[7]).id, 0, 200); // yes, and they do not
+  host(S, { a: 'phase', to: 'elimination' });
+  assert.equal(E.setBet(S, us[0], q(ids[1]).id, 0, 50).ok, false, 'locked with the elimination');
+  host(S, { a: 'seeds', order: ids.slice(0, 4) });
+  assert.ok(us[0].bal > 1000);
+  assert.equal(us[1].bal, 800);
+  assert.equal(q(ids[7]).win, 1);
+});
+t('champion and reach markets settle from the bracket', () => {
+  const { S, us, ids } = setup({ size: 4, beatboxers: 4, users: 2 });
+  host(S, { a: 'phase', to: 'elimination' });
+  host(S, { a: 'seeds', order: ids });
+  const champ = Object.values(S.ev.markets).find((m) => m.kind === 'champion');
+  assert.equal(champ.bbs.length, 4);
+  host(S, { a: 'mk.preset', preset: 'reach', to: 1 });
+  const reach = (id) => Object.values(S.ev.markets).find((m) => m.kind === 'reach' && m.bb === id);
+  assert.equal(Object.values(S.ev.markets).filter((m) => m.kind === 'reach').length, 4);
+  E.setBet(S, us[0], champ.id, 0, 100);         // seed 1 to win it all
+  E.setBet(S, us[1], reach(ids[3]).id, 0, 100); // seed 4 to reach the final: they will lose the first battle
+  E.setBet(S, us[1], reach(ids[0]).id, 0, 100);
+  playMatch(S, 'r0m0', 'a'); // seed 1 beats seed 4
+  assert.equal(reach(ids[3]).st, 'settled'); assert.equal(reach(ids[3]).win, 1, 'knocked out before the round = no');
+  assert.equal(reach(ids[0]).win, 0, 'drawn into the final = yes');
+  assert.equal(E.setBet(S, us[0], champ.id, 3, 50).ok, false, 'cannot back someone who is out');
+  playMatch(S, 'r0m1', 'a');
+  playMatch(S, 'r1m0', 'a');
+  assert.equal(S.ev.phase, 'finished');
+  assert.equal(S.ev.champion, ids[0]);
+  assert.equal(champ.win, 0);
+  assert.ok(us[0].bal > 1000);
+});
+
+console.log('battles, votes and bracket picks');
+function bracketWorld() {
+  const w = setup({ size: 4, beatboxers: 4, users: 3 });
+  host(w.S, { a: 'phase', to: 'elimination' });
+  host(w.S, { a: 'seeds', order: w.ids });
+  return w;
+}
+t('picking: only real fighters, downstream picks follow, rounds lock when a battle starts', () => {
+  const { S, us, ids } = bracketWorld();
+  const u = us[0];
+  assert.equal(E.setPick(S, u, 'r0m0', ids[1]).ok, false, 'not in that battle');
+  assert.ok(E.setPick(S, u, 'r0m0', ids[0]).ok);
+  assert.ok(E.setPick(S, u, 'r0m1', ids[2]).ok);
+  assert.ok(E.setPick(S, u, 'r1m0', ids[0]).ok, 'the final is open to your own picks');
+  E.setPick(S, u, 'r0m0', ids[3]); // change your mind about battle 1
+  assert.equal(u.picks['r1m0'], undefined, 'final pick for the old winner is dropped');
+  assert.ok(E.setPick(S, u, 'r1m0', ids[3]).ok);
+  host(S, { a: 'step', mid: 'r0m0', to: 'live' });
+  assert.equal(E.setPick(S, u, 'r0m1', ids[1]).ok, false, 'whole round is locked');
+});
+t('bracket picks pay 25 x 2^round', () => {
+  const { S, us, ids } = bracketWorld();
+  const [a, b] = us;
+  for (const [u, c] of [[a, [ids[0], ids[1], ids[0]]], [b, [ids[3], ids[1], ids[1]]]]) {
+    E.setPick(S, u, 'r0m0', c[0]); E.setPick(S, u, 'r0m1', c[1]); E.setPick(S, u, 'r1m0', c[2]);
+  }
+  const base = a.bal;
+  playMatch(S, 'r0m0', 'a');
+  assert.equal(a.bal - base, 25); assert.equal(b.bal - base, 0);
+  playMatch(S, 'r0m1', 'a'); // ids[1] vs ids[2]: seed2 (ids[1]) wins
+  assert.equal(a.bal - base, 50); assert.equal(b.bal - base, 25);
+  playMatch(S, 'r1m0', 'a'); // ids[0] beats ids[1]
+  assert.equal(a.bal - base, 25 + 25 + 50, 'the final pick pays 25 x 2');
+  assert.equal(b.bal - base, 25, 'b picked the wrong finalist');
+});
+t('a live pick can sit on a fighter who is already out and simply scores nothing', () => {
+  const { S, us, ids } = bracketWorld();
+  const u = us[0];
+  E.setPick(S, u, 'r0m0', ids[3]); E.setPick(S, u, 'r1m0', ids[3]);
+  playMatch(S, 'r0m0', 'a'); // ids[0] wins, the pick is busted
+  const m = S.ev.matches.find((x) => x.id === 'r1m0');
+  assert.equal(m.a, ids[0]);
+  assert.deepEqual(slotsFor(S.ev.matches, u.picks, m)[0], ids[0]);
+});
+t('voting: one vote each, changeable while open, tallied, rewarded, and judges decide', () => {
+  const { S, us, ids } = bracketWorld();
+  const [a, b, c] = us;
+  assert.equal(E.castVote(S, a, 'r0m0', 'a').ok, false, 'not open yet');
+  host(S, { a: 'step', mid: 'r0m0', to: 'live' });
+  assert.equal(E.castVote(S, a, 'r0m0', 'a').ok, false, 'still not open: the battle is on');
+  host(S, { a: 'step', mid: 'r0m0', to: 'voting' });
+  assert.ok(E.castVote(S, a, 'r0m0', 'a').ok);
+  assert.ok(E.castVote(S, a, 'r0m0', 'a').ok);
+  assert.ok(E.castVote(S, b, 'r0m0', 'b').ok);
+  assert.ok(E.castVote(S, c, 'r0m0', 'a').ok);
+  assert.ok(E.castVote(S, c, 'r0m0', 'b').ok, 'changed their mind');
+  const m = S.ev.matches[0];
+  assert.deepEqual(m.c, { a: 1, b: 2 });
+  assert.equal(E.metaOf(S).matches[0].c, null, 'crowd result hidden until voting closes');
+  host(S, { a: 'step', mid: 'r0m0', to: 'closed' });
+  assert.equal(E.castVote(S, a, 'r0m0', 'b').ok, false, 'closed');
+  assert.deepEqual(E.metaOf(S).matches[0].c, { a: 1, b: 2 });
+  host(S, { a: 'result', mid: 'r0m0', w: 'b', judges: { a: 1, b: 2 } });
+  const P = S.ev.settings.pts;
+  assert.equal(a.bal, 1000 + P.vote);
+  assert.equal(b.bal, 1000 + P.vote + P.sync);
+  assert.equal(c.bal, 1000 + P.vote + P.sync);
+  assert.deepEqual(S.ev.matches[0].judges, { a: 1, b: 2 });
+});
+t('only one battle at a time; a walk-over can skip the voting', () => {
+  const { S, ids } = bracketWorld();
+  host(S, { a: 'step', mid: 'r0m0', to: 'live' });
+  assert.equal(E.hostAction(S, { a: 'step', mid: 'r0m1', to: 'live' }).ok, false);
+  assert.equal(E.hostAction(S, { a: 'result', mid: 'r0m1', w: 'a' }).ok, false);
+  host(S, { a: 'result', mid: 'r0m0', w: 'a' });
+  host(S, { a: 'result', mid: 'r0m1', w: 'b' }); // straight from upcoming
+  assert.equal(S.ev.matches.find((x) => x.id === 'r1m0').status, 'upcoming');
+});
+t('swapping sides is only allowed before the battle starts', () => {
+  const { S } = bracketWorld();
+  host(S, { a: 'swap', mid: 'r0m0' });
+  assert.equal(S.ev.matches[0].swap, true);
+  host(S, { a: 'step', mid: 'r0m0', to: 'live' });
+  assert.equal(E.hostAction(S, { a: 'swap', mid: 'r0m0' }).ok, false);
+});
+
+console.log('taking a result back');
+t('reopening a result restores every balance, stat, market and the bracket exactly', () => {
+  const { S, us, ids } = bracketWorld();
+  const [a, b, c] = us;
+  const mk = Object.values(S.ev.markets).find((m) => m.kind === 'match' && m.mid === 'r0m0');
+  E.setPick(S, a, 'r0m0', ids[0]); E.setBet(S, a, mk.id, 0, 200); E.setBet(S, b, mk.id, 1, 300);
+  host(S, { a: 'step', mid: 'r0m0', to: 'live' }); host(S, { a: 'step', mid: 'r0m0', to: 'voting' });
+  E.castVote(S, c, 'r0m0', 'a');
+  host(S, { a: 'step', mid: 'r0m0', to: 'closed' });
+  const snap = () => JSON.stringify([...S.users.values()].map((u) => [u.key, u.bal, u.st, u.bets]));
+  const before = snap(), worldBefore = total(S);
+  host(S, { a: 'result', mid: 'r0m0', w: 'a' });
+  assert.notEqual(snap(), before);
+  const nextMk = Object.values(S.ev.markets).filter((m) => m.kind === 'match' && m.mid === 'r1m0');
+  assert.equal(nextMk.length, 0, 'final not ready: only one side is known');
+  host(S, { a: 'reopen', mid: 'r0m0' });
+  assert.equal(JSON.stringify([...S.users.values()].map((u) => [u.key, u.bal, u.st, u.bets])), before.replace(/"won":\d+,/, (x) => x));
+  assert.equal(S.ev.matches[0].status, 'closed');
+  assert.equal(S.ev.matches[0].w, null);
+  assert.equal(mk.st, 'locked');
+  assert.equal(S.ev.out[ids[3]], undefined);
+  assert.equal(total(S), worldBefore);
+  // and the corrected result pays the other way
+  host(S, { a: 'result', mid: 'r0m0', w: 'b' });
+  assert.ok(b.bal > 700);
+  assert.equal(a.bal, 800 + 0);
+});
+t('a result cannot be reopened once the next battle has started; the ranking cannot be re-drawn once a battle ran', () => {
+  const { S } = bracketWorld();
+  playMatch(S, 'r0m0', 'a');
+  playMatch(S, 'r0m1', 'a');
+  host(S, { a: 'step', mid: 'r1m0', to: 'live' });
+  assert.equal(E.hostAction(S, { a: 'reopen', mid: 'r0m0' }).ok, false);
+  assert.equal(E.hostAction(S, { a: 'seeds.revert' }).ok, false);
+});
+t('re-drawing the ranking before any battle refunds, un-pays and rebuilds', () => {
+  const { S, us, ids } = setup({ size: 4, beatboxers: 6, users: 2 });
+  host(S, { a: 'phase', to: 'picks' });
+  E.setTop(S, us[0], ids.slice(0, 4));
+  host(S, { a: 'phase', to: 'elimination' });
+  host(S, { a: 'seeds', order: ids.slice(0, 4) });
+  const mk = Object.values(S.ev.markets).find((m) => m.kind === 'match' && m.mid === 'r0m0');
+  E.setBet(S, us[1], mk.id, 0, 250);
+  assert.ok(us[0].bal > 1000);
+  host(S, { a: 'seeds.revert' });
+  assert.equal(us[0].bal, 1000, 'prediction points taken back');
+  assert.equal(us[1].bal, 1000, 'stake refunded');
+  assert.equal(S.ev.phase, 'elimination');
+  assert.equal(S.ev.matches.length, 0);
+  host(S, { a: 'seeds', order: [ids[3], ids[2], ids[1], ids[0]] });
+  assert.equal(us[0].bal, 1000 + 4 * 20 + 2 * 15, 'all four in the top four, two of them one seat off');
+});
+
+console.log('a whole battle, many players');
+t('32 beatboxers, 120 random players: the world stays solvent and the numbers stay sane', () => {
+  const { S, us, ids } = setup({ size: 16, beatboxers: 32, users: 120 });
+  let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  const pickN = (arr, n) => [...arr].sort(() => rnd() - 0.5).slice(0, n);
+  host(S, { a: 'phase', to: 'picks' });
+  for (const u of us) { E.setTop(S, u, pickN(ids, 16)); const q = Object.values(S.ev.markets).filter((m) => m.kind === 'qualify'); for (const m of pickN(q, 3)) E.setBet(S, u, m.id, rnd() < 0.5 ? 0 : 1, 10 + Math.floor(rnd() * 200)); }
+  host(S, { a: 'phase', to: 'elimination' });
+  host(S, { a: 'seeds', order: pickN(ids, 16) });
+  for (let r = 0; r < 4; r++) {
+    for (const u of us) {
+      for (const m of S.ev.matches.filter((x) => x.r === r)) { const s = slotsFor(S.ev.matches, u.picks, m); const p = s.filter(Boolean); if (p.length) E.setPick(S, u, m.id, p[Math.floor(rnd() * p.length)]); }
+      for (const k of Object.values(S.ev.markets).filter((x) => x.st === 'open')) if (rnd() < 0.15) E.setBet(S, u, k.id, Math.floor(rnd() * k.pool.length), 10 + Math.floor(rnd() * 100));
+    }
+    for (const m of S.ev.matches.filter((x) => x.r === r)) {
+      host(S, { a: 'step', mid: m.id, to: 'live' }); host(S, { a: 'step', mid: m.id, to: 'voting' });
+      for (const u of us) if (rnd() < 0.8) E.castVote(S, u, m.id, rnd() < 0.5 ? 'a' : 'b');
+      host(S, { a: 'step', mid: m.id, to: 'closed' });
+      host(S, { a: 'result', mid: m.id, w: rnd() < 0.5 ? 'a' : 'b', judges: { a: 2, b: 1 } });
+      for (const k of Object.values(S.ev.markets)) assert.ok(k.pool.every((x) => x >= 0) && k.cnt.every((x) => x >= 0), 'pool went negative');
+    }
+  }
+  assert.equal(S.ev.phase, 'finished'); assert.ok(S.ev.champion);
+  for (const u of S.users.values()) { assert.ok(Number.isFinite(u.bal) && u.bal >= 0, u.key + ' bal ' + u.bal); assert.equal(E.staked(S, u), 0, 'nothing still riding'); }
+  for (const k of Object.values(S.ev.markets)) assert.ok(k.st === 'settled' || k.st === 'void', k.kind + ' ' + k.st);
+  const board = E.boardOf(S);
+  assert.equal(board.length, 50); assert.ok(board[0].net >= board[49].net);
+  assert.ok(JSON.stringify(E.metaOf(S)).length < 60000, 'meta stays small: ' + JSON.stringify(E.metaOf(S)).length);
+});
+
+console.log(`\n${pass} passed, ${failN} failed`);
+process.exit(failN ? 1 : 0);
