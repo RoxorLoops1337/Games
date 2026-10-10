@@ -1,15 +1,19 @@
 // Battle Call: the rules engine. Pure and synchronous (no IO, no clock: `S.now` is set by the caller),
 // so the Durable Object, the tests and a future local server all run the exact same rules.
 //
-// S = { ev, users: Map<key,user>, ledger: Map<ref,ledger>, dirty, now }
-//   ev      the event: settings, lineup, bracket, markets (everything the audience can see + the pools)
+// S = { event, ev, users: Map<key,user>, ledger: Map<ref,ledger>, dirty, now }
+//   event   the event: its categories (Solo Mix, Crew, Loop Station ...), the banner, the stage
+//   ev      ONE category: settings, lineup, bracket, markets. The code below always works on S.ev; the public entry points
+//           point it at the right category first (see `inCat`), and put it back afterwards
+//   Match, market and beatboxer ids are unique across the whole event, so a player's picks, bets and votes live in
+//   plain maps keyed by id and one wallet serves every category. Only the Top-N ranking is per category (u.tops).
 //   users   every account (audience), keyed by lower-cased nickname
 //   ledger  per settlement, what it paid each user, so a wrong result can be taken back
 //
 // Money is "Loops". One pot per player: predictions pay into it, bets move it, the leaderboard ranks
 // balance + what is still riding on open bets (net worth).
 import {
-  DEFAULTS, SIZES, MIN_BET, QUALIFY_AUTO_MAX, MAX_BB, nameKey, cleanName, cleanBb, buildMatches, roundsOf, roundInfo, winnerOf, loserOf,
+  DEFAULTS, SIZES, MIN_BET, QUALIFY_AUTO_MAX, MAX_BB, MAX_CATS, nameKey, cleanName, cleanBb, buildMatches, roundsOf, roundInfo, winnerOf, loserOf,
   slotsFor, cleanPicks, poolTotal, sidePool, multiplier, payoutFor, log2,
 } from './js/shared.js';
 
@@ -19,18 +23,28 @@ export const fail = (err) => ({ ok: false, err });
 
 /* ---------------------------------------------------------------- state */
 
-export function newEvent({ code, name, size = DEFAULTS.size, now = 0 }) {
+export function newCategory(event, { id, name, size }) {
   if (!SIZES.includes(size)) size = DEFAULTS.size;
+  const first = event.order.length ? event.cats[event.order[0]].settings : null;
+  const settings = first ? { ...first, pts: { ...first.pts }, size } : { ...DEFAULTS, pts: { ...DEFAULTS.pts }, size };
   return {
-    v: 1, code, name: String(name || 'Beatbox Battle').trim().slice(0, 40) || 'Beatbox Battle', created: now,
-    phase: 'lobby', settings: { ...DEFAULTS, pts: { ...DEFAULTS.pts }, size },
-    bbs: [], nextBb: 1, seeds: null, matches: [], locked: [], out: {}, champion: null,
-    markets: {}, nextMk: 1, banner: null, consensus: null, rev: 1,
+    id, name: cleanBb(name).slice(0, 24) || 'Battle', pfx: event.order.length ? id + '.' : '', phase: 'lobby', settings,
+    bbs: [], seeds: null, matches: [], locked: [], out: {}, champion: null, markets: {}, consensus: null,
   };
 }
 
-export function newState(ev) {
-  return { ev, users: new Map(), ledger: new Map(), now: 0, dirty: blankDirty() };
+export function newEvent({ code, name, size = DEFAULTS.size, catName = 'Main battle', now = 0 }) {
+  const event = {
+    v: 2, code, name: String(name || 'Beatbox Battle').trim().slice(0, 40) || 'Beatbox Battle', created: now,
+    banner: null, rev: 1, active: 'c1', order: [], cats: {}, nextBb: 1, nextMk: 1, nextCat: 2,
+  };
+  event.cats.c1 = newCategory(event, { id: 'c1', name: catName, size });
+  event.order.push('c1');
+  return event;
+}
+
+export function newState(event) {
+  return { event, ev: event.cats[event.active], users: new Map(), ledger: new Map(), now: 0, dirty: blankDirty() };
 }
 export function blankDirty() {
   return { ev: false, meta: false, live: false, board: false, host: false, users: new Set(), mk: new Set(), delMk: new Set(),
@@ -43,7 +57,7 @@ const touchMk = (S, m) => { S.dirty.mk.add(m.id); S.dirty.live = true; };
 export function newUser(S, { name, device = '', ipH = '' }) {
   const set = S.ev.settings;
   return {
-    key: nameKey(name), name, bal: set.start, joined: S.now, device, ipH, top: [], picks: {}, bets: {}, votes: {},
+    key: nameKey(name), name, bal: set.start, joined: S.now, device, ipH, tops: {}, picks: {}, bets: {}, votes: {},
     st: { pred: 0, won: 0, lost: 0, votes: 0, sync: 0, hits: 0, bets: 0 }, log: [], seq: 0, banned: false,
     pw: null, tk: [],
   };
@@ -71,10 +85,24 @@ export function addUser(S, u) {
 
 /* ---------------------------------------------------------------- small helpers */
 
+const cats = (S) => S.event.order.map((id) => S.event.cats[id]);
 const bbOf = (S, id) => S.ev.bbs.find((b) => b.id === id);
 const bbName = (S, id) => (bbOf(S, id) ? bbOf(S, id).name : '?');
 const matchOf = (S, id) => S.ev.matches.find((m) => m.id === id);
-const mkOf = (S, id) => S.ev.markets[id];
+/** Markets live in their category, but their ids are unique across the event. */
+export function findMarket(S, id) { for (const c of cats(S)) if (c.markets[id]) return c.markets[id]; return undefined; }
+const mkOf = findMarket;
+export const findBb = (S, id) => { for (const c of cats(S)) { const b = c.bbs.find((x) => x.id === id); if (b) return b; } return undefined; };
+const catOfMatch = (S, mid) => cats(S).find((c) => c.matches.some((m) => m.id === mid));
+const catOfMarket = (S, id) => cats(S).find((c) => c.markets[id]);
+/** Run `fn` with S.ev pointing at category `c`, then restore it. */
+function inCat(S, c, fn) {
+  if (!c) return fail('No such category');
+  const prev = S.ev;
+  S.ev = c;
+  try { return fn(); } finally { S.ev = prev; }
+}
+const topOf = (S, u) => ((u.tops = u.tops || {})[S.ev.id] = u.tops[S.ev.id] || []);
 const seedNo = (S, id) => (S.ev.seeds ? S.ev.seeds.indexOf(id) + 1 : 0);
 export const marketsList = (S) => Object.values(S.ev.markets).sort((a, b) => a.ord - b.ord);
 
@@ -119,7 +147,7 @@ function addBb(S, name, extra = {}) {
   const nm = cleanBb(name);
   if (!nm) return null;
   if (S.ev.bbs.some((b) => b.name.toLowerCase() === nm.toLowerCase())) return null;
-  const bb = { id: 'b' + S.ev.nextBb++, name: nm, tag: cleanBb(extra.tag || '').slice(0, 24), ph: 0 };
+  const bb = { id: 'b' + S.event.nextBb++, name: nm, tag: cleanBb(extra.tag || '').slice(0, 24), ph: 0 };
   S.ev.bbs.push(bb);
   return bb;
 }
@@ -128,7 +156,7 @@ function addBb(S, name, extra = {}) {
 
 function newMarket(S, fields) {
   const n = fields.bbs ? fields.bbs.length : 2;
-  const m = { id: 'k' + S.ev.nextMk++, ord: S.ev.nextMk, st: 'open', win: null, pool: Array(n).fill(0), cnt: Array(n).fill(0),
+  const m = { id: 'k' + S.event.nextMk++, ord: S.event.nextMk, cat: S.ev.id, st: 'open', win: null, pool: Array(n).fill(0), cnt: Array(n).fill(0),
     seed: Array(n).fill(0), ...fields };
   S.ev.markets[m.id] = m;
   touchMk(S, m); S.dirty.meta = true; S.dirty.ev = true;
@@ -217,9 +245,10 @@ function dropMarket(S, m) {
 }
 
 export function marketTitle(S, m) {
-  if (m.kind === 'qualify') return `${bbName(S, m.bb)} makes the Top ${S.ev.settings.size}`;
-  if (m.kind === 'reach') return `${bbName(S, m.bb)} reaches the ${roundInfo(S.ev.settings.size, m.to).short}`;
-  if (m.kind === 'match') return `${bbName(S, m.bbs[0])} vs ${bbName(S, m.bbs[1])}`;
+  const c = S.event.cats[m.cat] || S.ev, nm = (id) => { const b = c.bbs.find((x) => x.id === id); return b ? b.name : '?'; };
+  if (m.kind === 'qualify') return `${nm(m.bb)} makes the Top ${c.settings.size}`;
+  if (m.kind === 'reach') return `${nm(m.bb)} reaches the ${roundInfo(c.settings.size, m.to).short}`;
+  if (m.kind === 'match') return `${nm(m.bbs[0])} vs ${nm(m.bbs[1])}`;
   return 'Battle champion';
 }
 
@@ -255,9 +284,9 @@ export function consensus(S) {
   const N = S.ev.settings.size, acc = new Map();
   let voters = 0;
   for (const u of S.users.values()) {
-    if (!u.top.length) continue;
+    if (!topOf(S, u).length) continue;
     voters++;
-    u.top.forEach((id, i) => {
+    topOf(S, u).forEach((id, i) => {
       const a = acc.get(id) || { id, n: 0, pts: 0, sum: 0 };
       a.n++; a.pts += N - i; a.sum += i + 1;
       acc.set(id, a);
@@ -275,10 +304,10 @@ export function publishSeeds(S, order) {
   if (ev.phase !== 'elimination') return fail('Publish the ranking while the elimination is on');
   if (!Array.isArray(order) || order.length !== N) return fail(`Pick exactly ${N} beatboxers`);
   if (new Set(order).size !== N || order.some((id) => !bbOf(S, id))) return fail('Every beatboxer can only appear once');
-  const ref = 'seeds', lg = ledgerOf(S, ref);
+  const ref = ev.pfx + 'seeds', lg = ledgerOf(S, ref);
   lg.extra = { phaseBefore: 'elimination' };
   ev.seeds = [...order];
-  ev.matches = buildMatches(N);
+  ev.matches = buildMatches(N, ev.pfx);
   ev.locked = Array(log2(N)).fill(false);
   ev.out = {}; ev.champion = null;
   for (const m of ev.matches.filter((x) => x.r === 0)) {
@@ -287,15 +316,15 @@ export function publishSeeds(S, order) {
   // 1. top-N predictions
   const P = ev.settings.pts;
   for (const u of S.users.values()) {
-    if (!u.top.length) continue;
+    if (!topOf(S, u).length) continue;
     let tot = 0, hits = 0;
-    u.top.forEach((id, i) => {
+    topOf(S, u).forEach((id, i) => {
       const at = order.indexOf(id);
       if (at < 0) return;
       hits++;
       tot += P.topIn + (at === i ? P.topExact : Math.abs(at - i) === 1 ? P.topNear : 0);
     });
-    if (tot) credit(S, u, tot, 'pred', `Top ${N} call: ${hits} of ${u.top.length} made it, +${tot}`, ref, { pred: tot, hits });
+    if (tot) credit(S, u, tot, 'pred', `Top ${N} call: ${hits} of ${topOf(S, u).length} made it, +${tot}`, ref, { pred: tot, hits });
   }
   // 2. "makes the cut" bets
   for (const m of marketsList(S)) {
@@ -314,7 +343,7 @@ export function revertSeeds(S) {
   if (ev.phase !== 'bracket') return fail('There is no ranking to take back');
   if (ev.matches.some((m) => m.status !== 'upcoming' && m.status !== 'wait')) return fail('A battle has already started');
   for (const m of marketsList(S)) if (m.kind !== 'qualify') { voidMarket(S, m, null); dropMarket(S, m); } // match, champion, reach: all built on the old bracket
-  applyLedgerBack(S, 'seeds');
+  applyLedgerBack(S, ev.pfx + 'seeds');
   for (const u of S.users.values()) if (Object.keys(u.picks).length) { u.picks = {}; touchUser(S, u); }
   ev.seeds = null; ev.matches = []; ev.locked = []; ev.out = {}; ev.champion = null; ev.phase = 'elimination';
   touchMeta(S);
@@ -352,7 +381,7 @@ function lockRound(S, r) {
   for (const m of marketsList(S)) if (m.kind === 'reach' && m.to - 1 === r && m.st === 'open') { m.st = 'locked'; touchMk(S, m); }
 }
 
-const activeMatch = (S) => S.ev.matches.find((m) => m.status === 'live' || m.status === 'voting' || m.status === 'closed');
+const activeMatch = (S) => { for (const c of cats(S)) { const m = c.matches.find((x) => x.status === 'live' || x.status === 'voting' || x.status === 'closed'); if (m) return m; } return undefined; };
 export const currentMatch = activeMatch;
 
 export function stepMatch(S, mid, to) {
@@ -377,6 +406,7 @@ export function stepMatch(S, mid, to) {
     const other = activeMatch(S);
     if (other && other.id !== mid) return fail('Finish the current battle first');
     lockRound(S, m.r);
+    S.event.active = ev.id; // whoever is on stage is the category everybody's phone follows
     for (const k of marketsList(S)) if (k.kind === 'match' && k.mid === mid && k.st === 'open') { k.st = 'locked'; touchMk(S, k); }
   }
   m.status = to;
@@ -451,7 +481,7 @@ function roundTips(S, r) {
   const tip = S.ev.settings.pts.tip;
   if (!tip) return;
   for (const u of S.users.values()) {
-    if (netWorth(S, u) < tip) credit(S, u, tip - Math.max(0, netWorth(S, u)), 'tip', 'Busking tip from the crowd', 'tip:' + r);
+    if (netWorth(S, u) < tip) credit(S, u, tip - Math.max(0, netWorth(S, u)), 'tip', 'Busking tip from the crowd', S.ev.pfx + 'tip:' + r);
   }
 }
 
@@ -464,7 +494,7 @@ export function revertMatch(S, mid) {
   const lg = S.ledger.get('m:' + mid);
   for (const id of lg ? lg.made : []) { const k = mkOf(S, id); if (k) { voidMarket(S, k, null, 'Result changed'); dropMarket(S, k); } }
   applyLedgerBack(S, 'm:' + mid);
-  if (S.ledger.has('tip:' + m.r)) applyLedgerBack(S, 'tip:' + m.r); // the round is open again, so are its tips
+  if (S.ledger.has(ev.pfx + 'tip:' + m.r)) applyLedgerBack(S, ev.pfx + 'tip:' + m.r); // the round is open again, so are its tips
   if (nx) { nx[m.i % 2 === 0 ? 'a' : 'b'] = null; nx.status = 'wait'; }
   if (ev.phase === 'finished') { ev.phase = 'bracket'; ev.champion = null; }
   delete ev.out[loserOf(m)];
@@ -475,16 +505,19 @@ export function revertMatch(S, mid) {
 
 /* ---------------------------------------------------------------- audience actions */
 
-export function setTop(S, u, order) {
-  if (S.ev.phase !== 'picks') return fail('Top picks are closed');
-  if (!Array.isArray(order)) return fail('Bad ranking');
-  const ids = order.slice(0, S.ev.settings.size);
-  if (new Set(ids).size !== ids.length || ids.some((id) => !bbOf(S, id))) return fail('Bad ranking');
-  u.top = ids; touchUser(S, u); S.dirty.host = true;
-  return ok({});
+export function setTop(S, u, order, catId) {
+  return inCat(S, S.event.cats[catId || S.event.active], () => {
+    if (S.ev.phase !== 'picks') return fail('Top picks are closed');
+    if (!Array.isArray(order)) return fail('Bad ranking');
+    const ids = order.slice(0, S.ev.settings.size);
+    if (new Set(ids).size !== ids.length || ids.some((id) => !bbOf(S, id))) return fail('Bad ranking');
+    (u.tops = u.tops || {})[S.ev.id] = ids; touchUser(S, u); S.dirty.host = true;
+    return ok({});
+  });
 }
 
-export function setPick(S, u, mid, bb) {
+export const setPick = (S, u, mid, bb) => inCat(S, catOfMatch(S, mid), () => setPickIn(S, u, mid, bb));
+function setPickIn(S, u, mid, bb) {
   const ev = S.ev, m = matchOf(S, mid);
   if (ev.phase !== 'bracket' || !m) return fail('Picks are not open');
   if (ev.locked[m.r] || m.status === 'done') return fail('This round is locked');
@@ -498,7 +531,8 @@ export function setPick(S, u, mid, bb) {
 }
 
 /** Set the stake on one side of a market. Same side again replaces the amount, the other side moves it, 0 takes it back. */
-export function setBet(S, u, mid, opt, amt) {
+export const setBet = (S, u, mid, opt, amt) => inCat(S, catOfMarket(S, mid), () => setBetIn(S, u, mid, opt, amt));
+function setBetIn(S, u, mid, opt, amt) {
   const m = mkOf(S, mid);
   if (!m || m.st !== 'open') return fail('Betting is closed on that one');
   amt = Math.floor(+amt);
@@ -518,7 +552,8 @@ export function setBet(S, u, mid, opt, amt) {
   return ok({});
 }
 
-export function castVote(S, u, mid, side) {
+export const castVote = (S, u, mid, side) => inCat(S, catOfMatch(S, mid), () => castVoteIn(S, u, mid, side));
+function castVoteIn(S, u, mid, side) {
   const m = matchOf(S, mid);
   if (!m || m.status !== 'voting') return fail('Voting is not open');
   if (side !== 'a' && side !== 'b') return fail('Pick a side');
@@ -533,6 +568,106 @@ export function castVote(S, u, mid, side) {
 /* ---------------------------------------------------------------- organiser actions */
 
 export function hostAction(S, a) {
+  const r = eventAction(S, a);
+  if (r) return r;
+  // which category? the one named, else the one the battle / market / beatboxer belongs to, else the one on stage
+  let c = a.cat && S.event.cats[a.cat];
+  if (!c && a.mid) c = catOfMatch(S, a.mid);
+  if (!c && a.id && String(a.a).startsWith('mk.')) c = catOfMarket(S, a.id);
+  if (!c && a.id && String(a.a).startsWith('bb.')) c = cats(S).find((x) => x.bbs.some((b) => b.id === a.id));
+  return inCat(S, c || S.event.cats[S.event.active], () => catAction(S, a));
+}
+
+/** Things that belong to the whole event (the stage, the categories, money, the banner). Returns null for anything else. */
+function eventAction(S, a) {
+  const E0 = S.event;
+  switch (a.a) {
+    case 'cat.add': {
+      if (E0.order.length >= MAX_CATS) return fail(`That is the limit: ${MAX_CATS} categories`);
+      const name = cleanBb(a.name).slice(0, 24);
+      if (!name) return fail('Give the category a name');
+      if (cats(S).some((c) => c.name.toLowerCase() === name.toLowerCase())) return fail('There is already a category with that name');
+      if (!SIZES.includes(+a.size)) return fail('Pick a bracket of 2, 4, 8, 16, 32 or 64');
+      const id = 'c' + E0.nextCat++;
+      E0.cats[id] = newCategory(E0, { id, name, size: +a.size });
+      E0.order.push(id);
+      touchMeta(S);
+      return ok({ cat: id });
+    }
+    case 'cat.rename': {
+      const c = E0.cats[a.id], name = cleanBb(a.name).slice(0, 24);
+      if (!c) return fail('No such category');
+      if (!name) return fail('Give the category a name');
+      if (cats(S).some((x) => x.id !== c.id && x.name.toLowerCase() === name.toLowerCase())) return fail('There is already a category with that name');
+      c.name = name; touchMeta(S);
+      return ok({});
+    }
+    case 'cat.rm': {
+      const c = E0.cats[a.id];
+      if (!c) return fail('No such category');
+      if (E0.order.length < 2) return fail('An event needs at least one category');
+      if (c.phase !== 'lobby') return fail('A category that has started cannot be removed');
+      for (const b of c.bbs) S.dirty.delPhotos.add(b.id);
+      delete E0.cats[c.id];
+      E0.order = E0.order.filter((x) => x !== c.id);
+      if (E0.active === c.id) E0.active = E0.order[0];
+      for (const u of S.users.values()) if (u.tops && u.tops[c.id]) { delete u.tops[c.id]; touchUser(S, u); }
+      S.ev = E0.cats[E0.active];
+      touchMeta(S);
+      return ok({});
+    }
+    case 'cat.stage': {
+      if (!E0.cats[a.id]) return fail('No such category');
+      if (activeMatch(S) && E0.active !== a.id) return fail('Finish the current battle first');
+      E0.active = a.id; touchMeta(S);
+      return ok({});
+    }
+    case 'settings': {
+      const v = a.set || {}, c = E0.cats[a.cat || E0.active];
+      const all = cats(S);
+      if (v.size != null) {
+        if (c.phase !== 'lobby') return fail('The bracket size can only change before picks open');
+        if (!SIZES.includes(+v.size)) return fail('Pick 2, 4, 8, 16, 32 or 64');
+        c.settings.size = +v.size;
+      }
+      for (const k of ['qualifyBets', 'autoChampion']) if (v[k] != null) c.settings[k] = !!v[k];
+      // the rest is shared by every category (one wallet, one set of house rules)
+      const shared = {};
+      if (v.start != null) { if (all.some((x) => x.phase !== 'lobby') || S.users.size) return fail('The starting Loops are fixed once people join'); shared.start = Math.max(100, Math.min(100000, Math.floor(+v.start) || 1000)); }
+      if (v.regOpen != null) shared.regOpen = !!v.regOpen;
+      for (const k of ['maxPerDevice', 'maxPerIp']) if (v[k] != null) shared[k] = Math.max(0, Math.min(1000, Math.floor(+v[k]) || 0));
+      if (v.minPayout != null) shared.minPayout = Math.max(1, Math.min(3, +v.minPayout || 1.1));
+      for (const x of all) Object.assign(x.settings, shared);
+      if (v.name != null) E0.name = String(v.name).trim().slice(0, 40) || E0.name;
+      touchMeta(S);
+      return ok({});
+    }
+    case 'banner': {
+      const t = String(a.text || '').trim().slice(0, 140);
+      E0.banner = t ? { id: (E0.banner ? E0.banner.id : 0) + 1, text: t, t: S.now } : null;
+      touchMeta(S);
+      return ok({});
+    }
+    case 'grant': {
+      const amt = Math.floor(+a.amount);
+      if (!Number.isFinite(amt) || amt === 0 || Math.abs(amt) > 100000) return fail('Bad amount');
+      const targets = a.key === 'all' ? [...S.users.values()] : [S.users.get(nameKey(a.key))].filter(Boolean);
+      if (!targets.length) return fail('Nobody to give it to');
+      for (const u of targets) credit(S, u, amt, 'grant', a.text ? String(a.text).slice(0, 60) : amt > 0 ? 'A gift from the organiser' : 'Adjustment by the organiser', '');
+      return ok({ n: targets.length });
+    }
+    case 'user.ban': {
+      const u = S.users.get(nameKey(a.key));
+      if (!u) return fail('No such player');
+      u.banned = !!a.on; S.rankDirty = true; touchUser(S, u); S.dirty.host = true;
+      return ok({});
+    }
+    default: return null;
+  }
+}
+
+/** Everything that happens inside one category (S.ev points at it). */
+function catAction(S, a) {
   const ev = S.ev;
   switch (a.a) {
     case 'bb.add': {
@@ -570,7 +705,7 @@ export function hostAction(S, a) {
       for (const m of marketsList(S)) if (m.kind === 'qualify' && m.bb === b.id) { voidMarket(S, m, null, 'Beatboxer withdrew'); dropMarket(S, m); }
       ev.bbs = ev.bbs.filter((x) => x.id !== b.id);
       S.dirty.delPhotos.add(b.id);
-      for (const u of S.users.values()) if (u.top.includes(b.id)) { u.top = u.top.filter((x) => x !== b.id); touchUser(S, u); }
+      for (const u of S.users.values()) if (topOf(S, u).includes(b.id)) { u.tops[ev.id] = u.tops[ev.id].filter((x) => x !== b.id); touchUser(S, u); }
       touchMeta(S);
       return ok({});
     }
@@ -627,41 +762,6 @@ export function hostAction(S, a) {
       S.dirty.meta = true; S.dirty.ev = true;
       return ok({});
     }
-    case 'settings': {
-      const s = ev.settings, v = a.set || {};
-      if (v.size != null) {
-        if (ev.phase !== 'lobby') return fail('The bracket size can only change before picks open');
-        if (!SIZES.includes(+v.size)) return fail('Pick 4, 8, 16 or 32');
-        s.size = +v.size;
-      }
-      if (v.start != null) { if (ev.phase !== 'lobby' || S.users.size) return fail('The starting Loops are fixed once people join'); s.start = Math.max(100, Math.min(100000, Math.floor(+v.start) || 1000)); }
-      for (const k of ['regOpen', 'qualifyBets', 'autoChampion']) if (v[k] != null) s[k] = !!v[k];
-      for (const k of ['maxPerDevice', 'maxPerIp']) if (v[k] != null) s[k] = Math.max(0, Math.min(1000, Math.floor(+v[k]) || 0));
-      if (v.minPayout != null) s.minPayout = Math.max(1, Math.min(3, +v.minPayout || 1.1));
-      if (v.name != null) ev.name = String(v.name).trim().slice(0, 40) || ev.name;
-      touchMeta(S);
-      return ok({});
-    }
-    case 'banner': {
-      const t = String(a.text || '').trim().slice(0, 140);
-      ev.banner = t ? { id: (ev.banner ? ev.banner.id : 0) + 1, text: t, t: S.now } : null;
-      touchMeta(S);
-      return ok({});
-    }
-    case 'grant': {
-      const amt = Math.floor(+a.amount);
-      if (!Number.isFinite(amt) || amt === 0 || Math.abs(amt) > 100000) return fail('Bad amount');
-      const targets = a.key === 'all' ? [...S.users.values()] : [S.users.get(nameKey(a.key))].filter(Boolean);
-      if (!targets.length) return fail('Nobody to give it to');
-      for (const u of targets) credit(S, u, amt, 'grant', a.text ? String(a.text).slice(0, 60) : amt > 0 ? 'A gift from the organiser' : 'Adjustment by the organiser', '');
-      return ok({ n: targets.length });
-    }
-    case 'user.ban': {
-      const u = S.users.get(nameKey(a.key));
-      if (!u) return fail('No such player');
-      u.banned = !!a.on; S.rankDirty = true; touchUser(S, u); S.dirty.host = true;
-      return ok({});
-    }
     default: return fail('Unknown action');
   }
 }
@@ -669,23 +769,29 @@ export function hostAction(S, a) {
 /* ---------------------------------------------------------------- views for the wire */
 
 /** Everything the audience may see that changes rarely. Pools live in `liveOf` so a bet does not resend all of this. */
-export function metaOf(S) {
-  const ev = S.ev;
+function catMeta(S, c) {
   return {
-    rev: ev.rev, code: ev.code, name: ev.name, phase: ev.phase,
-    set: { size: ev.settings.size, start: ev.settings.start, minPayout: ev.settings.minPayout, pts: ev.settings.pts,
-      regOpen: ev.settings.regOpen, qualifyBets: ev.settings.qualifyBets, autoChampion: ev.settings.autoChampion,
-      maxPerDevice: ev.settings.maxPerDevice, maxPerIp: ev.settings.maxPerIp },
-    bbs: ev.bbs, seeds: ev.seeds, locked: ev.locked, out: ev.out, champion: ev.champion, banner: ev.banner, consensus: ev.consensus,
-    matches: ev.matches.map((m) => ({ ...m, c: m.status === 'closed' || m.status === 'done' ? m.c : null })),
-    mk: marketsList(S).map((m) => ({ id: m.id, kind: m.kind, bb: m.bb, mid: m.mid, to: m.to, bbs: m.bbs, seed: m.seed, st: m.st, win: m.win })),
+    id: c.id, name: c.name, pfx: c.pfx, phase: c.phase,
+    set: { size: c.settings.size, qualifyBets: c.settings.qualifyBets, autoChampion: c.settings.autoChampion },
+    bbs: c.bbs, seeds: c.seeds, locked: c.locked, out: c.out, champion: c.champion, consensus: c.consensus,
+    matches: c.matches.map((m) => ({ ...m, c: m.status === 'closed' || m.status === 'done' ? m.c : null })),
+    mk: Object.values(c.markets).sort((a, b) => a.ord - b.ord).map((m) => ({ id: m.id, kind: m.kind, bb: m.bb, mid: m.mid, to: m.to, bbs: m.bbs, seed: m.seed, st: m.st, win: m.win })),
+  };
+}
+
+export function metaOf(S) {
+  const e = S.event, s = e.cats[e.order[0]].settings;
+  return {
+    rev: e.rev, code: e.code, name: e.name, banner: e.banner, active: e.active,
+    set: { start: s.start, minPayout: s.minPayout, pts: s.pts, regOpen: s.regOpen, maxPerDevice: s.maxPerDevice, maxPerIp: s.maxPerIp },
+    cats: cats(S).map((c) => catMeta(S, c)),
   };
 }
 
 /** The fast-moving numbers: stakes per side and head counts, plus (for the organiser) the live vote. */
 export function liveOf(S, online, host) {
   const mk = {};
-  for (const m of marketsList(S)) if (m.st !== 'void') mk[m.id] = [m.pool, m.cnt];
+  for (const c of cats(S)) for (const m of Object.values(c.markets)) if (m.st !== 'void') mk[m.id] = [m.pool, m.cnt];
   const out = { n: S.users.size, on: online, mk };
   if (host) { const cur = activeMatch(S); if (cur) out.v = { id: cur.id, a: cur.c.a, b: cur.c.b }; }
   return out;
@@ -695,7 +801,7 @@ export function meOf(S, u) {
   const rank = rankOf(S, u);
   return {
     name: u.name, bal: u.bal, staked: staked(S, u), net: netWorth(S, u), rank: rank.rank, of: rank.of,
-    top: u.top, picks: u.picks, bets: u.bets, votes: u.votes, st: u.st, log: u.log.slice(-25), banned: u.banned,
+    tops: u.tops || {}, picks: u.picks, bets: u.bets, votes: u.votes, st: u.st, log: u.log.slice(-25), banned: u.banned,
   };
 }
 
@@ -733,12 +839,17 @@ export function bigWins(S, ref, min = 100) {
 /** Organiser dashboard numbers. */
 export function hostOf(S) {
   const users = [...S.users.values()];
+  const tops = {}, consensusBy = {};
+  let volume = 0;
+  for (const c of cats(S)) {
+    tops[c.id] = users.filter((u) => u.tops && u.tops[c.id] && u.tops[c.id].length).length;
+    consensusBy[c.id] = inCat(S, c, () => consensus(S));
+    volume += Object.values(c.markets).reduce((a, m) => a + m.pool.reduce((x, y) => x + y, 0), 0);
+  }
   return {
-    users: users.slice(0, 600).map((u) => ({ n: u.name, bal: u.bal, net: netWorth(S, u), banned: u.banned, top: u.top.length,
+    users: users.slice(0, 600).map((u) => ({ n: u.name, bal: u.bal, net: netWorth(S, u), banned: u.banned,
+      tops: Object.values(u.tops || {}).filter((t) => t.length).length,
       picks: Object.keys(u.picks).length, votes: Object.keys(u.votes).length, joined: u.joined })),
-    total: users.length,
-    tops: users.filter((u) => u.top.length).length,
-    consensus: consensus(S),
-    volume: marketsList(S).reduce((a, m) => a + m.pool.reduce((x, y) => x + y, 0), 0),
+    total: users.length, tops, consensus: consensusBy, volume,
   };
 }

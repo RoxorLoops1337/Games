@@ -1,6 +1,6 @@
 // Battle Call: talking to the server. One WebSocket per event (instant push), with a polling fallback for
 // networks that eat WebSockets, automatic reconnect, and plain HTTP for sign-up and login.
-import { S, emit, setMeta, serverBase } from './state.js';
+import { S, emit, setMeta, setMe, serverBase } from './state.js';
 import { createDemo } from './demo.js';
 
 let demo = null;
@@ -33,7 +33,7 @@ export function apply(m) {
     case 'meta': { const { t, ...rest } = m; setMeta(rest); S.ready = true; break; }
     case 'live': S.live = m; break;
     case 'board': S.board = m.rows; break;
-    case 'me': { const prev = S.me; const { t, ...rest } = m; S.me = rest; onPush('me', prev, rest); break; }
+    case 'me': { const prev = S.me; const { t, ...rest } = m; setMe(rest); onPush('me', prev, rest); break; }
     case 'host': S.host = m; break;
     case 'feed': S.feed = [...(S.feed || []), ...m.items.map((i) => ({ ...i, at: Date.now() }))].slice(-8); break;
     case 'authfail': S.authFail = true; break;
@@ -124,6 +124,7 @@ function fallback() {
 
 /** Do something. Over the socket when it is up, over HTTP when not. Always resolves { ok, err }. */
 export function act(a) {
+  if (a.cat === undefined && S.catId) a = { ...a, cat: S.catId }; // every action says which category it is about
   if (isDemo()) return Promise.resolve(demoCtl().act(a));
   if (S.role === 'guest') return Promise.resolve({ ok: false, err: 'Join the battle first', guest: true });
   if (ws && ws.readyState === 1) {

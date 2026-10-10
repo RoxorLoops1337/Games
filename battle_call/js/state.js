@@ -4,6 +4,7 @@ import { roundInfo, roundsOf, multiplier as mult, poolTotal, sidePool, payoutFor
 
 export const S = {
   code: null, role: 'guest', name: '', tk: '', ht: '',
+  event: null, catId: null, lastActive: null,
   meta: null, live: null, board: [], me: null, host: null, feed: [],
   conn: 'idle', // idle | live | poll | down
   bb: {}, match: {}, mk: {}, gone: false, authFail: false, ready: false,
@@ -18,15 +19,47 @@ export function emit() {
   requestAnimationFrame(() => { queued = false; subs.forEach((f) => { try { f(); } catch (e) { console.error(e); } }); });
 }
 
+/** The server sends the whole event: every category. `S.meta` is the category being looked at, shaped like the old
+ *  single-battle meta, so each screen just reads S.meta. Beatboxer, battle and market ids are unique across the event,
+ *  so the lookup tables cover every category (a vote or a bet in another category still resolves). */
 export function setMeta(m) {
-  S.meta = m;
-  S.bb = Object.fromEntries(m.bbs.map((b) => [b.id, b]));
-  S.match = Object.fromEntries(m.matches.map((x) => [x.id, x]));
-  S.mk = Object.fromEntries(m.mk.map((x) => [x.id, x]));
+  S.event = m;
+  const ids = m.cats.map((c) => c.id);
+  // when the organiser moves the stage, audiences and the big screen follow; the organiser keeps their own place
+  if (S.lastActive && S.lastActive !== m.active && S.role !== 'host') S.catId = m.active;
+  S.lastActive = m.active;
+  if (!S.catId || !ids.includes(S.catId)) S.catId = m.active;
+  rebuild();
+}
+
+function rebuild() {
+  const m = S.event, c = m.cats.find((x) => x.id === S.catId) || m.cats[0];
+  S.catId = c.id;
+  S.meta = { ...c, rev: m.rev, code: m.code, name: m.name, banner: m.banner, active: m.active, catName: c.name, catId: c.id,
+    cats: m.cats.map((x) => ({ id: x.id, name: x.name, phase: x.phase, size: x.set.size, live: x.matches.some((q) => q.status === 'live' || q.status === 'voting' || q.status === 'closed'), voting: x.matches.some((q) => q.status === 'voting') })),
+    set: { ...m.set, ...c.set } };
+  S.bb = {}; S.match = {}; S.mk = {};
+  for (const x of m.cats) {
+    for (const b of x.bbs) S.bb[b.id] = b;
+    for (const q of x.matches) S.match[q.id] = q;
+    for (const k of x.mk) S.mk[k.id] = k;
+  }
+  if (S.me) S.me.top = (S.me.tops || {})[S.catId] || [];
+}
+
+export function selectCat(id) {
+  if (!S.event || S.catId === id || !S.event.cats.some((c) => c.id === id)) return;
+  S.catId = id;
+  rebuild();
+}
+
+export function setMe(m) {
+  S.me = m;
+  m.top = (m.tops || {})[S.catId] || [];
 }
 
 export function resetState() {
-  Object.assign(S, { code: null, role: 'guest', name: '', tk: '', ht: '', meta: null, live: null, board: [], me: null, host: null, feed: [],
+  Object.assign(S, { code: null, role: 'guest', name: '', tk: '', ht: '', meta: null, live: null, board: [], me: null, host: null, feed: [], event: null, catId: null, lastActive: null,
     conn: 'idle', bb: {}, match: {}, mk: {}, gone: false, authFail: false, ready: false });
 }
 

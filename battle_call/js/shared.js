@@ -1,7 +1,8 @@
 // Battle Call: pure helpers shared by the server (Durable Object), the browser app and the tests.
 // No DOM, no IO, no Date.now(): everything here is a function of its arguments.
 
-export const SIZES = [4, 8, 16, 32];
+export const SIZES = [2, 4, 8, 16, 32, 64];
+export const MAX_CATS = 8;
 export const PHASES = ['lobby', 'picks', 'elimination', 'bracket', 'finished'];
 
 export const DEFAULTS = {
@@ -43,17 +44,18 @@ export function roundInfo(size, r) {
 }
 export const roundsOf = (size) => Array.from({ length: log2(size) }, (_, r) => roundInfo(size, r));
 
-export const matchId = (r, i) => `r${r}m${i}`;
+export const matchId = (r, i, pfx = '') => `${pfx}r${r}m${i}`;
 
-/** Empty bracket for a size. Round 0 knows its seeds; later rounds know which matches feed them. */
-export function buildMatches(size) {
+/** Empty bracket for a size. Round 0 knows its seeds; later rounds know which matches feed them.
+ *  `pfx` keeps match ids unique across the categories of one event (the first category has none). */
+export function buildMatches(size, pfx = '') {
   const order = seedOrder(size), out = [];
   for (let r = 0; r < log2(size); r++) {
     for (let i = 0; i < size >> (r + 1); i++) {
       out.push({
-        id: matchId(r, i), r, i,
+        id: matchId(r, i, pfx), r, i,
         seeds: r === 0 ? [order[2 * i], order[2 * i + 1]] : null,
-        feed: r === 0 ? null : [matchId(r - 1, 2 * i), matchId(r - 1, 2 * i + 1)],
+        feed: r === 0 ? null : [matchId(r - 1, 2 * i, pfx), matchId(r - 1, 2 * i + 1, pfx)],
         a: null, b: null, status: 'wait', w: null, swap: false, judges: null, c: { a: 0, b: 0 },
       });
     }

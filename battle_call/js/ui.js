@@ -145,3 +145,12 @@ export function feedStrip(n = 3) {
   if (!items.length) return '';
   return `<div class="feed">${items.map((f) => `<div class="fi ${f.k}" data-k="f${f.at}${f.t.length}">${ic(f.k === 'win' ? 'trophy' : 'fire', 15)}<span>${esc(f.t)}</span></div>`).join('')}</div>`;
 }
+
+/** The category tabs: one row, the one on stage marked. Shown to the audience only when there is more than one. */
+export function catBar(host = false) {
+  const m = S.meta;
+  if (!host && m.cats.length < 2) return '';
+  const chips = m.cats.map((c) => `<button class="cat ${c.id === S.catId ? 'on' : ''} ${c.live ? 'live' : ''}" data-k="cat${c.id}" data-a="catPick" data-id="${c.id}">
+    <b>${esc(c.name)}</b><small>Top ${c.size}${c.id === m.active ? ' · on stage' : ''}</small>${c.voting ? '<i class="dot"></i>' : ''}</button>`).join('');
+  return `<div class="cats" data-k="cats">${chips}${host ? `<button class="cat add" data-a="hCatAdd">${ic('plus', 16)}<b>Category</b></button>` : ''}</div>`;
+}
