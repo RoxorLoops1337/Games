@@ -96,7 +96,7 @@
       gate: { sc: 300, open: 12, close: 6, atk: 1.5, hold: 20, rel: 80, det: 0.4, detClose: 5, gap: 50 },
       chain: { ms: 80, db: 10 },
       crop: { open: 30, close: 38, tail: 8 },
-      eq: [['hp', 90, 0.707], ['peak', 200, 1.2, 1.5], ['peak', 4000, 1.0, 3], ['highshelf', 12000, 0.8, -1.5]],
+      eq: [['peak', 200, 1.2, 1.5], ['peak', 4000, 1.0, 3], ['highshelf', 12000, 0.8, -1.5]],
       exciter: null, trans: 2,
       comp: { thr: -22, ratio: 4, atk: 5, rel: 70, knee: 6, rms: 3 }, par: { thr: -34, ratio: 10, atk: 0.5, rel: 50, knee: 6, rms: 2, mix: 0.3 }, deess: { f: 7500, q: 1.4, rel: -6, ratio: 2.5, max: 5 },
       lim: { max: 4, rel: 40 }, clip: 6, maxMs: 800, fadeMs: 15, target: -9,
@@ -135,7 +135,7 @@
     CR: { fam: 'hat', target: -21.5, gate: { hold: 30, rel: 60, gap: 160 }, eq: [['hp', 180, 0.707, 0, 4], ['peak', 3500, 1.0, 2], ['highshelf', 10000, 0.8, 2]], maxMs: 2500, fadeMs: 25 },
     K: { fam: 'snare', target: -8 },
     IK: { fam: 'snare', target: -6.5, gate: { rel: 110 }, maxMs: 900 },
-    Pf: { fam: 'snare', target: -11, eq: [['hp', 120, 0.707], ['peak', 250, 1.2, 1], ['peak', 3500, 1.0, 2], ['highshelf', 12000, 0.8, -1]], deess: { max: 6 } },
+    Pf: { fam: 'snare', target: -11, eq: [['peak', 250, 1.2, 1], ['peak', 3500, 1.0, 2], ['highshelf', 12000, 0.8, -1]], deess: { max: 6 } },
     RIM: { fam: 'snare', target: -16.5, eq: [['hp', 150, 0.707], ['peak', 500, 1.4, 2], ['peak', 4500, 1.2, 3]], trans: 3, maxMs: 600 },
     WB: { fam: 'tonal', target: -9, maxMs: 1200, gate: { atk: 1, hold: 20, rel: 90 }, fadeMs: 20 },
     SI: { fam: 'tonal', target: -8, maxMs: 4000, gate: { hold: 80, rel: 220 }, fadeMs: 60 },
@@ -422,6 +422,9 @@
   function fail(reason, info) { return { data: new Float32Array(0), dry: new Float32Array(0), start: 0, end: 0, info: Object.assign({ ok: false, reason }, info || {}) }; }
 
   /* ================================================================== the chain */
+  /* the high pass the ANALYSIS (noise floor, gate) measures through: the profile's own, else a gentle 40 Hz one so a rumble cannot move the gate.
+   * It is never applied to the sound: a profile without a high pass in its EQ (the snares) keeps its low end. */
+  const anaHp = (P) => { const b = (P.eq || []).filter((e) => e[0] === 'hp'); return b.length ? b : [['hp', 40, 0.707]]; };
   function process(input, sr, id, opts) {
     opts = opts || {};
     let P = opts.profile || profile(id);
@@ -436,13 +439,13 @@
     /* 1b. noise reduction on the whole take, before anything measures the floor (so the gate thresholds follow the cleaner signal) */
     let dn = { y: x, applied: false, noiseDb: -120 };
     if (P.denoise !== false) {                           // only a take that really has a sound in it (a room alone must still come out empty)
-      const ra0 = blockRms(runEq(Float64Array.from(x), (P.eq || []).filter((b) => b[0] === 'hp'), sr), Math.max(16, ms(5)));
+      const ra0 = blockRms(runEq(Float64Array.from(x), anaHp(P), sr), Math.max(16, ms(5)));
       let m0 = 0; for (const v of ra0) if (v > m0) m0 = v;
       if (dB(m0) - dB(Math.max(1e-6, quantile(ra0, 0.1))) >= 12) dn = denoise(x, sr, DENOISE);
     }
     if (dn.applied) x.set(dn.y);
     /* analysis signals: the full band after the profile's high pass (what we keep), and the gate sidechain */
-    const hpBands = (P.eq || []).filter((b) => b[0] === 'hp'), xa = runEq(Float64Array.from(x), hpBands, sr);
+    const xa = runEq(Float64Array.from(x), anaHp(P), sr);
     const sc = runBq(runBq(Float64Array.from(x), coefs('hp', G.sc, sr, Math.SQRT1_2)), coefs('hp', G.sc, sr, Math.SQRT1_2));
     const B = Math.max(16, ms(5)), ra = blockRms(xa, B), rs = blockRms(sc, B);
     let rsMax = 0; for (const v of rs) if (v > rsMax) rsMax = v;

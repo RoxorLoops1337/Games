@@ -1,6 +1,6 @@
 // BBH.VoiceFX (voicefx.js): the per-sound studio chain for recorded takes, on synthetic takes with a room noise floor.
 //   profiles   every Core.SOUNDS id has a profile (lane fallback, generic), EQ curves: bass sounds boosted and never high passed
-//              above ~30 Hz, hats / snares low-cut; the targets still match the synth kit (re-measured with audio_render)
+//              above ~30 Hz, hats low-cut, snares not (they keep their low end); the targets still match the synth kit (re-measured with audio_render)
 //   kick       gate removes the room before and after, onset within 2 ms, clean edges, low end up by the shelf, true peak and
 //              level, DC gone, deterministic, fast
 //   hat        low end (a breath thump) removed, short; snare; hum (long release, no pumping, low end kept); lip roll bass detection
@@ -117,7 +117,8 @@ function plot(name, raw, res, sr) {
   }
   ok(V.response(V.profile('B').eq, 3000, sr) >= 2, 'B: kick click lifted at 3 kHz');
   for (const id of ['t', 'CR']) { const r = (f) => V.response(V.profile(id).eq, f, sr); ok(r(100) < -18 && r(50) < -40 && r(8000) > 0.5, id + ': hat low cut (' + r(100).toFixed(0) + ' dB at 100 Hz, ' + r(50).toFixed(0) + ' at 50) and air (+' + r(8000).toFixed(1) + ' at 8 kHz)'); }
-  for (const id of ['K', 'IK', 'Pf', 'RIM']) { const r = (f) => V.response(V.profile(id).eq, f, sr); ok(r(40) < -8 && r(4000) >= 1.5, id + ': snare high pass (' + r(40).toFixed(0) + ' dB at 40 Hz) and snap (+' + r(4000).toFixed(1) + ' at 4 kHz)'); }
+  for (const id of ['K', 'IK', 'Pf']) { const r = (f) => V.response(V.profile(id).eq, f, sr); ok(Math.abs(r(40)) < 3 && Math.abs(r(100)) < 3 && r(4000) >= 1.5, id + ': snare keeps its low end (' + r(40).toFixed(1) + ' dB at 40 Hz, ' + r(100).toFixed(1) + ' at 100) and has snap (+' + r(4000).toFixed(1) + ' at 4 kHz)'); }
+  { const r = (f) => V.response(V.profile('RIM').eq, f, sr); ok(r(40) < -8 && r(4000) >= 1.5, 'RIM: the rim shot keeps its high pass (' + r(40).toFixed(0) + ' dB at 40 Hz) and snap (+' + r(4000).toFixed(1) + ' at 4 kHz)'); }
   for (const id in V.SOUND) { const p = V.profile(id); ok(p.target <= -4 && p.target >= -24 && p.lim.max <= 6 && p.maxMs >= 300 && p.maxMs <= 4000, id + ': sane target / limiter / length'); }
 }
 
@@ -193,7 +194,9 @@ function plot(name, raw, res, sr) {
   const sr = 44100, s = snare(sr), raw = take(s, sr, 200, -58, 700, 31), res = V.process(raw, sr, 'K'), y = res.data, I = res.info;
   plot('snare', raw, res, sr);
   ok(I.ok && I.family === 'snare' && Math.abs(I.onsetMs - 200) < 1, 'snare: processed, onset (' + JSON.stringify(I) + ')');
-  ok(ratioDb(y, sr, [20, 60], [60, 20000]) - ratioDb(s, sr, [20, 60], [60, 20000]) < -6, 'snare: rumble under 60 Hz cut');
+  ok(ratioDb(y, sr, [20, 150], [150, 20000]) - ratioDb(s, sr, [20, 150], [150, 20000]) > -4, 'snare: no low cut, the body under 150 Hz is kept (' + (ratioDb(y, sr, [20, 150], [150, 20000]) - ratioDb(s, sr, [20, 150], [150, 20000])).toFixed(1) + ' dB against the dry snare)');
+  for (const id of ['K', 'Pf', 'IK']) ok(!V.profile(id).eq.some((b) => b[0] === 'hp'), id + ': no high pass in the EQ');
+  ok(V.profile('RIM').eq.some((b) => b[0] === 'hp'), 'the rim shot keeps its own low cut (a stick knock has no low end)');
   ok(ratioDb(y, sr, [3000, 6000], [100, 1000]) > ratioDb(s, sr, [3000, 6000], [100, 1000]), 'snare: more snap (3..6 kHz) against the body');
   ok(V.truePeak(y) <= -0.95 && V.punch(y, sr) >= V.profile('K').target - 4, 'snare: peak <= -1 dBTP, level ' + V.punch(y, sr).toFixed(1));
 }
