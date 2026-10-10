@@ -496,6 +496,7 @@ export function stepMatch(S, mid, to, secs, later) {
     m.later = false; m.aws = ++S.event.doneSeq;
   }
   if ((to === 'voting' || to === 'closed') && m.status === 'awaiting') {
+    delete m.sealed; // reopening the vote throws away a locked result
     const other = activeMatch(S);
     if (other && other.id !== mid) return fail('Finish the current battle first');
     S.event.active = ev.id;
@@ -607,6 +608,41 @@ export function setResult(S, mid, w, judges) {
   if (ev.matches.filter((x) => x.r === m.r).every((x) => x.status === 'done')) roundTips(S, m.r);
   touchMeta(S); S.dirty.board = true; S.dirty.host = true;
   return ok({ winner: win });
+}
+
+/** Lock in the judges' decision for the final or the third-place battle WITHOUT showing it: nothing is paid or announced until `revealResults`. */
+export function sealResult(S, mid, w, judges) {
+  const ev = S.ev, m = matchOf(S, mid);
+  if (ev.phase !== 'bracket') return fail('The bracket is not running');
+  if (!m) return fail('No such battle');
+  if (!isTerminal(ev, m)) return fail('Only the final and the third-place battle can be locked for the ceremony');
+  if (w !== 'a' && w !== 'b') return fail('Pick a winner');
+  if (m.status === 'voting' || m.status === 'closed') { const r = stepMatch(S, mid, 'awaiting'); if (!r.ok) return r; }
+  else if (m.status !== 'awaiting') return fail('Close the audience vote first');
+  m.sealed = { w };
+  if (judges && Number.isInteger(judges.a) && Number.isInteger(judges.b)) m.sealed.judges = { a: Math.max(0, judges.a | 0), b: Math.max(0, judges.b | 0) };
+  touchMeta(S); S.dirty.host = true;
+  return ok({});
+}
+
+export function unsealResult(S, mid) {
+  const m = matchOf(S, mid);
+  if (!m || !m.sealed) return fail('No locked result there');
+  delete m.sealed; touchMeta(S); S.dirty.host = true;
+  return ok({});
+}
+
+/** The award ceremony: every locked result of this category goes public, third place first, then the final. */
+export function revealResults(S) {
+  const sealed = S.ev.matches.filter((m) => m.sealed && m.status === 'awaiting').sort((a, b) => (b.third ? 1 : 0) - (a.third ? 1 : 0));
+  if (!sealed.length) return fail('No locked results to reveal');
+  for (const m of sealed) {
+    const { w, judges } = m.sealed;
+    delete m.sealed;
+    const r = setResult(S, m.id, w, judges);
+    if (!r.ok) return r;
+  }
+  return ok({ revealed: sealed.length });
 }
 
 /** A category with a single entrant has no battles: after the elimination the organiser crowns them (a walkover). */
@@ -926,6 +962,9 @@ function catAction(S, a) {
     case 'picks.timer': return setPicksTimer(S, a.mins);
     case 'performer': return setPerformer(S, a.id == null ? null : String(a.id));
     case 'step': return stepMatch(S, a.mid, a.to, a.secs, a.later);
+    case 'seal': return sealResult(S, a.mid, a.w, a.judges);
+    case 'unseal': return unsealResult(S, a.mid);
+    case 'reveal': return revealResults(S);
     case 'result': return setResult(S, a.mid, a.w, a.judges);
     case 'reopen': return revertMatch(S, a.mid);
     case 'swap': return swapSides(S, a.mid);
@@ -987,7 +1026,7 @@ function catMeta(S, c) {
     id: c.id, name: c.name, art: c.art, pfx: c.pfx, phase: c.phase, performed: c.performed || [], performer: c.performer || null, elimOn: !!c.elimOn, picksEnd: c.picksEnd || 0, walkover: !!c.walkover, undo: inCat(S, c, () => undoPlan(S)),
     set: { size: c.settings.size, qualifyBets: c.settings.qualifyBets, autoChampion: c.settings.autoChampion, thirdPlace: c.settings.thirdPlace },
     bbs: c.bbs, seeds: c.seeds, locked: c.locked, out: c.out, champion: c.champion, consensus: c.consensus,
-    matches: c.matches.map((m) => ({ ...m, c: m.status === 'closed' || m.status === 'done' ? m.c : null })),
+    matches: c.matches.map(({ sealed, ...m }) => ({ ...m, c: m.status === 'closed' || m.status === 'done' ? m.c : null })),
     mk: Object.values(c.markets).sort((a, b) => a.ord - b.ord).map((m) => ({ id: m.id, kind: m.kind, bb: m.bb, mid: m.mid, to: m.to, bbs: m.bbs, seed: m.seed, st: m.st, win: m.win })),
   };
 }
@@ -1113,7 +1152,7 @@ export function hostOf(S) {
   }
   // battles that have been voted on and wait for the judges: the organiser sees the audience's numbers, nobody else does
   const wait = [];
-  for (const c of cats(S)) for (const m of c.matches) if (m.status === 'awaiting') wait.push({ cat: c.id, mid: m.id, a: m.c.a, b: m.c.b });
+  for (const c of cats(S)) for (const m of c.matches) if (m.status === 'awaiting') wait.push({ cat: c.id, mid: m.id, a: m.c.a, b: m.c.b, sealed: m.sealed || null });
   return {
     wait,
     users: users.slice(0, 600).map((u) => ({ n: u.name, bal: u.bal, net: netWorth(S, u), banned: u.banned,

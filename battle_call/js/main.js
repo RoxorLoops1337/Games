@@ -511,6 +511,13 @@ const A = {
       if (fail(r)) { ui.judges = { a: 0, b: 0 }; ui.hostMatch = null; emit(); }
     });
   },
+  async hSeal(el) {
+    const mid = el.dataset.m, j = { ...ui.judges };
+    const r = await act({ a: 'seal', mid, w: el.dataset.w, judges: j.a || j.b ? j : undefined });
+    if (fail(r)) { ui.judges = { a: 0, b: 0 }; toast('Locked in, hidden from the screen', 'info'); }
+  },
+  async hUnseal(el) { fail(await act({ a: 'unseal', mid: el.dataset.m })); },
+  hReveal(el) { ask('Reveal the results?', 'The big screen and every phone show who won, and the bets and predictions pay out.', 'Reveal now', async () => { fail(await act({ a: 'reveal', cat: el.dataset.cat })); }); },
   hReopen(el) { ask('Take the result back?', 'Every payout for this battle is reversed and the winner leaves the next round.', 'Take it back', async () => { if (fail(await act({ a: 'reopen', mid: el.dataset.m }))) ui.hostMatch = el.dataset.m; }, { danger: true }); },
   hBbEdit(el) {
     const id = el.dataset.id, b = S.bb[id];
