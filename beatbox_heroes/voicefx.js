@@ -46,6 +46,7 @@
   const BBH = root.BBH || (root.BBH = {});
   const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
   const dB = (v) => 20 * Math.log10(v > 1e-12 ? v : 1e-12), lin = (d) => Math.pow(10, d / 20);
+  const DENOISE = { pct: 0.2, alpha: 1.6, floor: 14, atk: 0.8, rel: 0.25, skipSnr: 48 };
   const CEIL_DB = -1, STAGE_DB = -18, RANGE_DB = -90, PUNCH_MS = 30, FADE_IN_MS = 0.25;
   const LANE_ID = ['B', 't', 'K', 'Pf'];
 
@@ -53,6 +54,8 @@
    * gate: sc sidechain high pass Hz, open / close dB over the noise floor, atk (lookahead, ends at the onset) / hold / rel ms,
    *       det (opening, one-pole) / detClose (closing, centered window half width) detector ms, gap ms (gate gaps shorter than
    *       this belong to the same sound: rolls, rattles)
+   * chain: how far (ms) and how quiet (dB under the loudest) a neighbouring burst may be and still count as part of the sound. Percussive
+   *       sounds keep it tight so a breath or a room bump next to the hit is cut; tonal sounds (rolls, hums) keep a wide one
    * eq: see step 4. exciter: f Hz, drive, mix. trans: max dB, transHp Hz (lift only the band above it)
    * comp: thr dBFS (after staging to -18), ratio, atk / rel ms, knee dB, rms detector ms, sc detector high pass Hz.
    *       par: the squashed parallel copy + its mix
@@ -63,6 +66,7 @@
   const FAMILIES = {
     kick: {
       gate: { sc: 60, open: 12, close: 6, atk: 2, hold: 40, rel: 140, det: 0.5, detClose: 8, gap: 60 },
+      chain: { ms: 80, db: 10 },
       eq: [['hp', 22, 0.707], ['lowshelf', 100, 0.8, 4], ['peak', 400, 1.4, -3], ['peak', 3000, 1.0, 2.5], ['lp', 14000, 0.707]],
       exciter: { f: 120, drive: 3, mix: 0.18 }, trans: 3, transHp: 1000,
       comp: { thr: -22, ratio: 3, atk: 10, rel: 90, knee: 6, rms: 5, sc: 150 }, par: null, deess: null,
@@ -77,6 +81,7 @@
     },
     hat: {
       gate: { sc: 1500, open: 12, close: 6, atk: 1, hold: 8, rel: 35, det: 0.3, detClose: 3, gap: 40 },
+      chain: { ms: 80, db: 10 },
       eq: [['hp', 200, 0.707, 0, 4], ['peak', 4500, 0.9, 2], ['highshelf', 10000, 0.8, 3]],
       exciter: null, trans: 0,
       comp: { thr: -20, ratio: 2.5, atk: 3, rel: 40, knee: 4, rms: 2 }, par: null, deess: { f: 7500, q: 1.4, rel: -3, ratio: 2, max: 3 },
@@ -84,6 +89,7 @@
     },
     snare: {
       gate: { sc: 300, open: 12, close: 6, atk: 1.5, hold: 20, rel: 80, det: 0.4, detClose: 5, gap: 50 },
+      chain: { ms: 80, db: 10 },
       eq: [['hp', 90, 0.707], ['peak', 200, 1.2, 1.5], ['peak', 4000, 1.0, 3], ['highshelf', 12000, 0.8, -1.5]],
       exciter: null, trans: 2,
       comp: { thr: -22, ratio: 4, atk: 5, rel: 70, knee: 6, rms: 3 }, par: { thr: -34, ratio: 10, atk: 0.5, rel: 50, knee: 6, rms: 2, mix: 0.3 }, deess: { f: 7500, q: 1.4, rel: -6, ratio: 2.5, max: 5 },
@@ -351,6 +357,62 @@
   }
   function quantile(arr, q) { if (!arr.length) return 0; const s = Float64Array.from(arr).sort(); return s[Math.min(s.length - 1, Math.floor(q * (s.length - 1)))]; }
 
+  /* ---- noise reduction (phones and laptop mics hiss; the gate alone cannot take hiss out from UNDER a sound or end a tail that sits in it) ----
+   * STFT spectral subtraction, offline and deterministic: Hann analysis / synthesis (75% overlap), the room's noise spectrum is the
+   * 20th percentile of every bin over the whole take (the sound covers only part of it; breath and handling are short), over-subtracted
+   * (alpha), gain floored (-DN dB) so nothing turns watery, smoothed over frequency and in time (fast attack, slow release) so the
+   * sound's onset is never dulled. Skipped when the take is already clean (peak more than 48 dB over the noise). */
+  const DN_N = 1024, DN_H = 256;
+  function fftInPlace(re, im) {
+    const n = re.length;
+    for (let i = 1, j = 0; i < n; i++) { let bit = n >> 1; for (; j & bit; bit >>= 1) j ^= bit; j ^= bit; if (i < j) { let t = re[i]; re[i] = re[j]; re[j] = t; t = im[i]; im[i] = im[j]; im[j] = t; } }
+    for (let len = 2; len <= n; len <<= 1) {
+      const ang = -2 * Math.PI / len, wr = Math.cos(ang), wi = Math.sin(ang);
+      for (let i = 0; i < n; i += len) {
+        let cr = 1, ci = 0;
+        for (let k = 0; k < len / 2; k++) {
+          const a = i + k, b = a + len / 2, tr = re[b] * cr - im[b] * ci, ti = re[b] * ci + im[b] * cr;
+          re[b] = re[a] - tr; im[b] = im[a] - ti; re[a] += tr; im[a] += ti;
+          const nr = cr * wr - ci * wi; ci = cr * wi + ci * wr; cr = nr;
+        }
+      }
+    }
+  }
+  function denoise(x, sr, D) {
+    const n = x.length, N = DN_N, H = DN_H, B = N / 2 + 1;
+    if (!D || n < N * 2) return { y: x, db: 0, noiseDb: -120, applied: false };
+    const win = new Float64Array(N); for (let i = 0; i < N; i++) win[i] = Math.sin(Math.PI * (i + 0.5) / N);       // sine window: analysis x synthesis = Hann, sums to 2 at hop N/4
+    const frames = Math.max(1, Math.floor((n - N) / H) + 1), mag = new Float32Array(frames * B), re = new Float64Array(N), im = new Float64Array(N);
+    let peak = 0; for (let i = 0; i < n; i++) { const a = Math.abs(x[i]); if (a > peak) peak = a; }
+    for (let f = 0; f < frames; f++) {
+      for (let i = 0; i < N; i++) { re[i] = x[f * H + i] * win[i]; im[i] = 0; }
+      fftInPlace(re, im);
+      for (let b = 0; b < B; b++) mag[f * B + b] = Math.sqrt(re[b] * re[b] + im[b] * im[b]);
+    }
+    const noise = new Float64Array(B), col = new Float64Array(frames);
+    for (let b = 0; b < B; b++) { for (let f = 0; f < frames; f++) col[f] = mag[f * B + b]; noise[b] = quantile(col, D.pct); }
+    for (let b = 1; b < B - 1; b++) noise[b] = (noise[b - 1] + 2 * noise[b] + noise[b + 1]) / 4;                      // a smooth noise spectrum, not a jagged one
+    let nrg = 0; for (let b = 0; b < B; b++) nrg += noise[b] * noise[b];
+    const noiseRms = Math.sqrt(nrg * 2) / (N * 0.6124);                                                                 // Hann-window energy: sum(w^2) = 3N/8
+    const noiseDb = dB(noiseRms);
+    if (dB(peak) - noiseDb > D.skipSnr) return { y: x, db: 0, noiseDb, applied: false };
+    const gMin = lin(-D.floor), y = new Float64Array(n), wsum = new Float64Array(n), prev = new Float64Array(B).fill(1), g = new Float64Array(B);
+    for (let f = 0; f < frames; f++) {
+      for (let i = 0; i < N; i++) { re[i] = x[f * H + i] * win[i]; im[i] = 0; }
+      fftInPlace(re, im);
+      for (let b = 0; b < B; b++) { const m = mag[f * B + b]; g[b] = m > 1e-12 ? clamp(1 - D.alpha * noise[b] / m, gMin, 1) : gMin; }
+      for (let b = 1; b < B - 1; b++) g[b] = Math.min(g[b], (g[b - 1] + 2 * g[b] + g[b + 1]) / 4 + 0.15);              // smooth over frequency, but a hole stays a hole
+      for (let b = 0; b < B; b++) { const a = g[b] > prev[b] ? D.atk : D.rel; g[b] = prev[b] + (g[b] - prev[b]) * a; prev[b] = g[b]; }
+      for (let b = 0; b < B; b++) { re[b] *= g[b]; im[b] *= g[b]; if (b > 0 && b < N / 2) { re[N - b] = re[b]; im[N - b] = -im[b]; } }
+      for (let b = 0; b < N; b++) im[b] = -im[b];
+      fftInPlace(re, im);
+      for (let i = 0; i < N; i++) { const o = f * H + i; y[o] += re[i] / N * win[i]; wsum[o] += win[i] * win[i]; }
+    }
+    for (let i = 0; i < n; i++) y[i] = wsum[i] > 1e-6 ? y[i] / wsum[i] : x[i];
+    for (let i = 0; i < n; i++) if (!(wsum[i] > 1e-6)) y[i] = 0;
+    return { y, db: D.alpha, noiseDb, applied: true };
+  }
+
   function fail(reason, info) { return { data: new Float32Array(0), dry: new Float32Array(0), start: 0, end: 0, info: Object.assign({ ok: false, reason }, info || {}) }; }
 
   /* ================================================================== the chain */
@@ -365,6 +427,14 @@
     const x = new Float64Array(n), R = Math.exp(-2 * Math.PI * 10 / sr);
     let px = 0, py = 0;
     for (let i = 0; i < n; i++) { const v = input[i] - mean, o = v - px + R * py; px = v; py = o; x[i] = o; }
+    /* 1b. noise reduction on the whole take, before anything measures the floor (so the gate thresholds follow the cleaner signal) */
+    let dn = { y: x, applied: false, noiseDb: -120 };
+    if (P.denoise !== false) {                           // only a take that really has a sound in it (a room alone must still come out empty)
+      const ra0 = blockRms(runEq(Float64Array.from(x), (P.eq || []).filter((b) => b[0] === 'hp'), sr), Math.max(16, ms(5)));
+      let m0 = 0; for (const v of ra0) if (v > m0) m0 = v;
+      if (dB(m0) - dB(Math.max(1e-6, quantile(ra0, 0.1))) >= 12) dn = denoise(x, sr, DENOISE);
+    }
+    if (dn.applied) x.set(dn.y);
     /* analysis signals: the full band after the profile's high pass (what we keep), and the gate sidechain */
     const hpBands = (P.eq || []).filter((b) => b[0] === 'hp'), xa = runEq(Float64Array.from(x), hpBands, sr);
     const sc = runBq(runBq(Float64Array.from(x), coefs('hp', G.sc, sr, Math.SQRT1_2)), coefs('hp', G.sc, sr, Math.SQRT1_2));
@@ -397,7 +467,7 @@
      * of the loudest (a lip roll that falters, a hum that wavers, a sound with a soft start or a long soft end). Stray noise further
      * away or much quieter (a breath, a chair, a far tap) stays outside, so only the silence around the sound is cut, never the sound. */
     const segPk = merged.map((sg) => { let m = 0; for (let i = sg[0]; i <= sg[1]; i++) if (envC[i] > m) m = envC[i]; return m; });
-    const chainS = ms(Math.max(G.gap * 3, 250)), keepPk = segPk[mi] * lin(-30);
+    const CH = P.chain || { ms: Math.max(G.gap * 3, 250), db: 30 }, chainS = ms(CH.ms), keepPk = Math.max(segPk[mi] * lin(-CH.db), nfA * lin(G.open));
     let sLo = mi, sHi = mi;
     while (sLo > 0 && merged[sLo][0] - merged[sLo - 1][1] <= chainS && segPk[sLo - 1] >= keepPk) sLo--;
     while (sHi < merged.length - 1 && merged[sHi + 1][0] - merged[sHi][1] <= chainS && segPk[sHi + 1] >= keepPk) sHi++;
@@ -498,7 +568,7 @@
     return {
       data: out, dry, start, end,
       info: {
-        ok: true, id: P.id, family: P.fam, noiseDb: r1(dB(nfA)), onsetMs: r1(onset / sr * 1000), startMs: r1(start / sr * 1000), lengthMs: r1(len / sr * 1000), capped,
+        ok: true, id: P.id, family: P.fam, denoised: !!dn.applied, roomDb: r1(dn.noiseDb), noiseDb: r1(dB(nfA)), onsetMs: r1(onset / sr * 1000), startMs: r1(start / sr * 1000), lengthMs: r1(len / sr * 1000), capped,
         openDb: r1(dB(openThr)), closeDb: r1(dB(closeThr)), segments: merged.length, kept: sHi - sLo + 1, stageDb: r1(stage), lowShare: lowShare == null ? null : Math.round(lowShare * 100) / 100,
         bass: !!P.exciter, compDb: r1(compDb), deessDb: r1(deessDb), clipDb: z ? r1(Math.max(0, clipIn)) : 0, limDb: r1(limDb), gainDb: r1(stage + gDb), punchDb: r1(lo2), targetDb: P.target, peakDb: r1(tpo),
       },
@@ -514,11 +584,11 @@
   /** one line for the recorder UI: what the chain did */
   function summary(info) {
     if (!info || !info.ok) return '';
-    const p = ['ROOM ' + Math.round(info.noiseDb) + 'DB', 'GATE', info.bass ? 'LOW BOOST' : 'LOW CUT'];
+    const p = ['ROOM ' + Math.round(info.denoised ? info.roomDb : info.noiseDb) + 'DB', info.denoised ? 'NOISE CUT' : null, 'GATE', info.bass ? 'LOW BOOST' : 'LOW CUT'];
     if (info.compDb >= 0.5) p.push('COMP ' + Math.round(info.compDb) + 'DB');
     if (info.deessDb >= 1) p.push('DE-ESS');
     p.push('LEVEL ' + Math.round(info.punchDb) + 'DB');
-    return p.map((s) => s.replace(/ /g, ' ')).join('  ');
+    return p.filter(Boolean).map((s) => s.replace(/ /g, '\u00a0')).join('  ');
   }
 
   BBH.VoiceFX = { version: 1, process, profile, resolveId, response, punch, truePeak, summary, coefs, FAMILIES, SOUND, CEIL_DB, STAGE_DB };

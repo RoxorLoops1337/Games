@@ -249,6 +249,27 @@ function plot(name, raw, res, sr) {
   ok(/^ROOM -\d+DB  GATE  LOW BOOST/.test(V.summary(V.process(take(kick(sr), sr, 300, -60, 1000, 64), sr, 'B').info)), 'summary line for the recorder UI');
 }
 
+/* ---------------------------------------------------------------- phone-quality rooms: breath before the hit is cut, hiss is reduced */
+{
+  const sr = 44100, rms = (a, lo, hi) => { let e = 0; for (let i = lo; i < hi; i++) e += a[i] * a[i]; return Math.sqrt(e / Math.max(1, hi - lo)); }, dbv = (v) => 20 * Math.log10(Math.max(v, 1e-9));
+  for (const [name, sig, id] of [['kick', kick(sr), 'B'], ['hat', hat(sr), 't'], ['snare', snare(sr), 'K']]) {
+    const bs = hat(sr, 9), breath = new Float32Array(Math.round(0.07 * sr)); for (let i = 0; i < breath.length; i++) breath[i] = bs[i % bs.length] * 0.18 * Math.sin(Math.PI * i / breath.length);
+    for (const room of [-48, -40]) {
+      const t = take(sig, sr, 300, room, 900, 71 + room); for (let i = 0; i < breath.length; i++) t[Math.round(0.04 * sr) + i] += breath[i];   // a breath 190 ms before the hit
+      const r = V.process(t, sr, id);
+      ok(r.info.ok && r.data.length > 100, name + ' in a ' + room + ' dB room still records');
+      ok(r.start >= Math.round(0.26 * sr), name + ' ' + room + ' dB: the breath before the hit is not part of the sample (starts at ' + (r.start / sr * 1000).toFixed(0) + ' ms, hit at 300)');
+      if (room === -40) ok(r.info.denoised, name + ' ' + room + ' dB: noise reduction ran');
+    }
+    /* hiss: with the reduction the kept room sits lower than without it */
+    const t = take(sig, sr, 300, -42, 900, 77), on = V.process(t, sr, id), off = V.process(t, sr, id, { profile: Object.assign({}, V.profile(id), { denoise: false }) });
+    const tailOf = (r) => { const a = r.data, k = Math.floor(a.length * 0.8); return dbv(rms(a, k, a.length)) - dbv(Math.max(...a.map(Math.abs))); };
+    ok(on.data.length && off.data.length && tailOf(on) <= tailOf(off) + 0.01, name + ': the end of the sample is not noisier with the reduction (' + tailOf(on).toFixed(1) + ' vs ' + tailOf(off).toFixed(1) + ' dB)');
+  }
+  const clean = V.process(take(kick(sr), sr, 300, -75, 900, 80), sr, 'B');
+  ok(clean.info.ok && !clean.info.denoised, 'a clean take (75 dB room) skips the reduction');
+}
+
 /* ---------------------------------------------------------------- Samples: raw take, CLEAN / RAW, old entries */
 {
   const sr = 44100, raw = take(kick(sr), sr, 250, -60, 900, 71), res = V.process(raw, sr, 'B');
