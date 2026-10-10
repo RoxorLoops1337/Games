@@ -2,6 +2,7 @@
 // inside this browser; online talks to a server over a WebSocket. The Game scene only
 // sees this interface, so solo and online play behave the same.
 
+import { identityKey } from '../../shared/data/servers';
 import { SimHost, type Peer } from '../../shared/net/host';
 import { PROTOCOL, type ClientMsg, type ServerMsg } from '../../shared/net/protocol';
 import { makeSeed } from '../../shared/rng';
@@ -169,6 +170,9 @@ export class WsConnection implements Connection {
         document.addEventListener('visibilitychange', this.onVisible);       // a phone waking up tries at once instead of waiting out the backoff
     }
 
+    /** The farmer id this device uses on this server: under the normalised address, or (older saves) under the address as typed. */
+    private knownId () { return profile.srv?.[identityKey(this.label)] ?? profile.srv?.[this.label]; }
+
     private open () {
         const ws = this.ws = new WebSocket(toWsUrl(this.label));
         ws.onopen = () => {
@@ -176,7 +180,7 @@ export class WsConnection implements Connection {
             this.status = 'open';
             this.error = '';
             this.tries = 0;
-            const id = profile.srv?.[this.label] ?? profile.id;
+            const id = this.knownId() ?? profile.id;
             ws.send(JSON.stringify({ t: 'hello', v: PROTOCOL, id, name: profile.name, password: this.password, ...(this.key ? { acct: { name: profile.name, key: this.key } } : {}) } satisfies ClientMsg));
             if (!this.beat) this.beat = setInterval(() => { if (this.ws.readyState === WebSocket.OPEN) this.ws.send(JSON.stringify({ t: 'ping' } satisfies ClientMsg)); }, HEARTBEAT_MS);
         };
@@ -186,7 +190,7 @@ export class WsConnection implements Connection {
                 if (msg.t === 'refused') { this.error = msg.reason; this.refused = true; }
                 if (msg.t === 'welcome') {
                     this.welcomed = true;
-                    if ((profile.srv?.[this.label] ?? profile.id) !== msg.you) { (profile.srv ??= {})[this.label] = msg.you; saveProfile(); }       // the server knows you as this farmer
+                    if ((this.knownId() ?? profile.id) !== msg.you) { (profile.srv ??= {})[identityKey(this.label)] = msg.you; saveProfile(); }       // the server knows you as this farmer
                 }
                 this.inbox.push(msg);
             } catch { /* ignore junk */ }
