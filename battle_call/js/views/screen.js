@@ -2,8 +2,8 @@
 // it follows the organiser by itself.
 import { esc, ic } from '../dom.js';
 import { S, bbName, size, rounds, curMatch, nextMatch, sides, leftKey, seedOf } from '../state.js';
-import { ui, av, bracket, feedStrip, crown, wordmark } from '../ui.js';
-import { roundInfo } from '../shared.js';
+import { ui, av, bracket, feedStrip, crown, wordmark, countdown } from '../ui.js';
+import { matchRound } from '../shared.js';
 import { joinLink } from './host.js';
 
 const eq = '<span class="eq lg"><i></i><i></i><i></i><i></i><i></i></span>';
@@ -53,7 +53,7 @@ function upNext(m) {
 
 function duelStage(m) {
   const [l, r] = sides(m), lk = leftKey(m);
-  const R = roundInfo(size(), m.r);
+  const R = matchRound(size(), m);
   const closed = m.status === 'closed' || m.status === 'done';
   let lp = 50, tot = 0;
   if (m.c) { tot = m.c.a + m.c.b; lp = tot ? Math.round(((lk === 'a' ? m.c.a : m.c.b) / tot) * 100) : 50; }
@@ -61,7 +61,8 @@ function duelStage(m) {
   const jl = m.judges ? (lk === 'a' ? m.judges.a : m.judges.b) : null, jr = m.judges ? (lk === 'a' ? m.judges.b : m.judges.a) : null;
   const side = (id, col, key) => `<div class="pane ${col} ${m.w === key ? 'won' : ''} ${m.w && m.w !== key ? 'lost' : ''}">${av(id, 'hero')}<h2>${esc(bbName(id))}</h2><small>${seedOf(id) ? 'Seed ' + seedOf(id) : ''}</small>${m.w === key ? `<span class="crown">${crown('big')}</span>` : ''}</div>`;
   return `<div class="st-duel ${m.status}">
-    <div class="st-top"><p class="eyebrow">${R.long} · Battle ${m.i + 1}</p><h2 class="status">${label}</h2></div>
+    <div class="st-top"><p class="eyebrow">${R.long}${m.third ? '' : ' · Battle ' + (m.i + 1)}</p><h2 class="status">${label}</h2></div>
+    ${m.status === 'voting' ? countdown(m, 'huge') : ''}
     <div class="panes">${side(l, 'blue', lk)}<div class="vs"><span>VS</span></div>${side(r, 'red', lk === 'a' ? 'b' : 'a')}</div>
     ${closed && tot ? `<div class="st-crowd"><b class="blue">${lp}%</b><div class="bar huge"><i style="width:${lp}%"></i></div><b class="red">${100 - lp}%</b><small>${tot} audience votes${m.judges ? '' : ''}</small></div>` : ''}
     ${m.judges ? `<div class="st-judges"><span class="blue">${jl}</span><small>JUDGES</small><span class="red">${jr}</span></div>` : ''}

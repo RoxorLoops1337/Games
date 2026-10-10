@@ -2,8 +2,8 @@
 // your colour so you can hold it up in the hall.
 import { esc, ic } from '../dom.js';
 import { S, bbName, sides, leftKey, size, seedOf } from '../state.js';
-import { ui, av, crown } from '../ui.js';
-import { roundInfo } from '../shared.js';
+import { ui, av, crown, countdown } from '../ui.js';
+import { matchRound } from '../shared.js';
 
 export function voteOverlay() {
   const m = S.match[ui.voteOpen];
@@ -11,8 +11,8 @@ export function voteOverlay() {
   const lk = leftKey(m), rk = lk === 'a' ? 'b' : 'a';
   const [l, r] = sides(m);
   const mine = S.me.votes[m.id] || ui.vote[m.id] || null;
-  const R = roundInfo(size(), m.r);
-  const head = `<div class="vhead"><span>${R.long} · Battle ${m.i + 1}</span><button class="ib" data-a="voteClose" aria-label="Close">${ic('x', 22)}</button></div>`;
+  const R = matchRound(size(), m);
+  const head = `<div class="vhead"><span>${R.long}${m.third ? '' : ' · Battle ' + (m.i + 1)}</span><button class="ib" data-a="voteClose" aria-label="Close">${ic('x', 22)}</button></div>`;
 
   if (m.status === 'done') {
     const won = m.w === (mine || '');
@@ -29,6 +29,7 @@ export function voteOverlay() {
     const closed = m.status !== 'voting';
     return `<div class="vote flag ${col} ${closed ? 'hands' : ''}" data-k="vote">
       ${ui.voteFlash === m.id ? `<div class="vflash" data-k="flash-${m.id}"><img src="img/vote-check.svg" alt=""><b>Vote submitted!</b><small>You picked ${esc(bbName(id))}</small></div>` : ''}
+      ${closed ? '' : countdown(m, 'corner')}
       <div class="flag-inner"><span class="flagname">${esc(bbName(id))}</span><span class="flagsub">${closed ? 'HANDS UP!' : col.toUpperCase()}</span></div>
       <div class="flag-bar">
         ${closed ? '' : `<button class="chip lightc" data-a="voteChange">Change my vote</button>`}
@@ -40,6 +41,7 @@ export function voteOverlay() {
   const half = (id, col, key) => `<button class="half ${col}" data-a="vote" data-m="${m.id}" data-side="${key}" ${closed ? 'disabled' : ''}>
       ${av(id, 'xxl')}<b>${esc(bbName(id))}</b><small>${seedOf(id) ? 'Seed ' + seedOf(id) : ''}</small><span class="go">${closed ? 'Closed' : 'Vote ' + col.toUpperCase()}</span></button>`;
   return `<div class="vote pick" data-k="vote">${head}
+    ${closed ? '' : countdown(m, 'bar')}
     <div class="vtitle"><b>${closed ? 'Voting is closed' : 'Who took it?'}</b>${closed ? '' : '<small>Listen. Feel it. Pick your winner.</small>'}</div>
     <div class="halves">${half(l, 'blue', lk)}${half(r, 'red', rk)}</div>
     <img class="vwave" src="img/waveform.svg" alt="" aria-hidden="true"></div>`;

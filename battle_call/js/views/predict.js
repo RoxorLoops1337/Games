@@ -24,12 +24,12 @@ export function predictTab() {
   const picks = S.me ? S.me.picks : {};
   const R = rounds();
   if (ui.predRound >= R.length) ui.predRound = 0;
-  const finalM = ev.matches.find((m) => m.r === R.length - 1);
+  const finalM = ev.matches.find((m) => m.r === R.length - 1 && !m.third);
   const champ = picks[finalM.id];
   const hits = S.me ? S.me.st.hits || 0 : 0;
-  const open = ev.matches.filter((m) => m.r === ui.predRound && !ev.locked[m.r] && m.status !== 'done').length;
+  const open = ev.matches.filter((m) => m.r === ui.predRound && !m.third && !ev.locked[m.r] && m.status !== 'done').length;
   const tabs = R.map((r) => {
-    const mine = ev.matches.filter((m) => m.r === r.r && picks[m.id]).length, tot = ev.matches.filter((m) => m.r === r.r).length;
+    const mine = ev.matches.filter((m) => m.r === r.r && !m.third && picks[m.id]).length, tot = ev.matches.filter((m) => m.r === r.r && !m.third).length;
     return `<button class="seg ${ui.predRound === r.r ? 'on' : ''}" data-a="predRound" data-r="${r.r}">${r.short}${ev.locked[r.r] ? ' ' + ic('lock', 12) : ` <small>${mine}/${tot}</small>`}</button>`;
   }).join('');
   const pts = ev.set.pts.pick * 2 ** ui.predRound;

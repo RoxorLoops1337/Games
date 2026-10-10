@@ -13,7 +13,7 @@ const rnd = (n) => Math.floor(Math.random() * n);
 const pick = (a) => a[rnd(a.length)];
 const shuffle = (a) => [...a].sort(() => Math.random() - 0.5);
 
-let DS = null, att = null, autoTimer = 0, auto = false, flushT = 0, feed = [];
+let DS = null, att = null, autoTimer = 0, auto = false, flushT = 0, voteT = 0, feed = [];
 
 function build() {
   const ev = E.newEvent({ code: 'DEMO', name: 'Demo Battle Night', size: 8, catName: 'Solo Mix', now: Date.now() });
@@ -60,6 +60,16 @@ function botsVote(mid) {
   });
 }
 
+/** A vote with a countdown closes itself, just like on the server. */
+function armVotes() {
+  clearTimeout(voteT); voteT = 0;
+  if (!DS) return;
+  let next = 0;
+  for (const c of allCats()) for (const m of c.matches) if (m.status === 'voting' && m.vend && (!next || m.vend < next)) next = m.vend;
+  if (!next) return;
+  voteT = setTimeout(() => { DS.now = Date.now(); E.closeDueVotes(DS); schedule(); armVotes(); }, Math.max(50, next - Date.now()));
+}
+
 /* ------------------------------------------------------------ talking to the app */
 function schedule() { if (!flushT) flushT = setTimeout(() => { flushT = 0; flush(); }, 120); }
 
@@ -83,7 +93,7 @@ function react(a) {
   const c = (a.mid && catOfMid(a.mid)) || DS.event.cats[a.cat || DS.event.active];
   if (a.a === 'phase' && a.to === 'picks') botsPick(c);
   if (a.a === 'seeds') botsRound(c);
-  if (a.a === 'step' && a.to === 'voting') botsVote(a.mid);
+  if (a.a === 'step' && a.to === 'voting') { botsVote(a.mid); armVotes(); }
   if (a.a === 'result') {
     for (const w of E.bigWins(DS, 'm:' + a.mid)) feed.push({ k: 'win', t: `${w.n} collected ${w.d} Loops` });
     botsRound(c);
@@ -100,7 +110,7 @@ export function createDemo() {
     name: () => DS.event.name,
     attach(push, role) { att = { push, role }; flush(); },
     detach() { att = null; },
-    reset() { build(); flush(); },
+    reset() { build(); clearTimeout(voteT); flush(); },
     act(m) {
       DS.now = Date.now();
       const role = att ? att.role : 'guest';
@@ -123,7 +133,7 @@ export function createDemo() {
       return r;
     },
     /** The director: do whatever the organiser would do next (used by the Next button and by autoplay). */
-    next() {
+    next(fromAuto) {
       DS.now = Date.now();
       const todo = [];
       const st = stageOf();
@@ -139,7 +149,7 @@ export function createDemo() {
         const cur = E.currentMatch(DS);
         if (cur) {
           if (cur.status === 'live') todo.push({ a: 'step', mid: cur.id, to: 'voting' });
-          else if (cur.status === 'voting') todo.push({ a: 'step', mid: cur.id, to: 'closed' });
+          else if (cur.status === 'voting') { if (!(fromAuto && cur.vend)) todo.push({ a: 'step', mid: cur.id, to: 'closed' }); }
           else todo.push({ a: 'result', mid: cur.id, w: cur.c.a >= cur.c.b ? (Math.random() < 0.7 ? 'a' : 'b') : (Math.random() < 0.7 ? 'b' : 'a'), judges: pick([{ a: 3, b: 0 }, { a: 2, b: 1 }, { a: 1, b: 2 }, { a: 0, b: 3 }]) });
         } else {
           // the next battle: the category on stage first, then the others
@@ -158,9 +168,9 @@ export function createDemo() {
       const tick = () => {
         if (!auto || !DS) return;
         if (allDone()) { auto = false; schedule(); return; }
-        this.next();
+        this.next(true);
         const st = stageOf(), cur = st === 'bracket' ? E.currentMatch(DS) : null;
-        const wait = st === 'lobby' ? 4000 : st === 'picks' ? 6000 : st === 'elimination' ? 3500 : !cur ? 2500 : cur.status === 'voting' ? 7500 : cur.status === 'closed' ? 4500 : cur.status === 'live' ? 4500 : 7000;
+        const wait = st === 'lobby' ? 4000 : st === 'picks' ? 6000 : st === 'elimination' ? 3500 : !cur ? 2500 : cur.status === 'voting' ? 11000 : cur.status === 'closed' ? 4500 : cur.status === 'live' ? 4500 : 7000;
         autoTimer = setTimeout(tick, wait);
       };
       if (auto) tick();

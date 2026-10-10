@@ -1,6 +1,6 @@
 // Battle Call: client state (the mirror of what the server pushes) and the market maths the screens share.
 import { SERVER } from './config.js';
-import { roundInfo, roundsOf, multiplier as mult, poolTotal, sidePool, payoutFor } from './shared.js';
+import { roundInfo, matchRound, roundsOf, multiplier as mult, poolTotal, sidePool, payoutFor } from './shared.js';
 
 export const S = {
   code: null, role: 'guest', name: '', tk: '', ht: '',
@@ -8,6 +8,7 @@ export const S = {
   meta: null, live: null, board: [], me: null, host: null, feed: [],
   conn: 'idle', // idle | live | poll | down
   bb: {}, match: {}, mk: {}, gone: false, authFail: false, ready: false,
+  skew: 0, // server clock minus ours, so every phone counts down to the same instant
 };
 
 const subs = new Set();
@@ -60,7 +61,7 @@ export function setMe(m) {
 
 export function resetState() {
   Object.assign(S, { code: null, role: 'guest', name: '', tk: '', ht: '', meta: null, live: null, board: [], me: null, host: null, feed: [], event: null, catId: null, lastActive: null,
-    conn: 'idle', bb: {}, match: {}, mk: {}, gone: false, authFail: false, ready: false });
+    conn: 'idle', bb: {}, match: {}, mk: {}, gone: false, authFail: false, ready: false, skew: 0 });
 }
 
 /* ------------------------------------------------------------ server address */
@@ -98,6 +99,9 @@ export function deviceId() {
 }
 
 /* ------------------------------------------------------------ derived */
+/** The server's idea of now, and whole seconds left on a battle's vote countdown (null when it has none). */
+export const serverNow = () => Date.now() + S.skew;
+export const secsLeft = (m) => (m && m.status === 'voting' && m.vend ? Math.max(0, Math.ceil((m.vend - serverNow()) / 1000)) : null);
 export const bbName = (id) => (S.bb[id] ? S.bb[id].name : '?');
 export const size = () => (S.meta ? S.meta.set.size : 16);
 export const rounds = () => roundsOf(size());
@@ -142,7 +146,7 @@ export function mkTitle(m) {
   if (m.kind === 'reach') return { title: bbName(m.bb), sub: `Reaches the ${roundInfo(n, m.to).short}?` };
   if (m.kind === 'match') {
     const mt = S.match[m.mid];
-    return { title: `${bbName(m.bbs[0])} vs ${bbName(m.bbs[1])}`, sub: mt ? roundInfo(n, mt.r).short : 'Battle' };
+    return { title: `${bbName(m.bbs[0])} vs ${bbName(m.bbs[1])}`, sub: mt ? matchRound(n, mt).short : 'Battle' };
   }
   return { title: 'Who wins it all?', sub: 'Battle champion' };
 }

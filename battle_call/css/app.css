@@ -484,3 +484,22 @@ body[data-mode=screen] { overflow: hidden; }
 .pane.won { padding-top: 10vmin; } .pane .crown { top: 1.5vmin; }
 
 .ver { opacity: .6; font-size: 11.5px; margin-top: -8px; }
+
+/* ---- vote countdown ring (kept current by the ticker in main.js) ---- */
+.cd { --d: 64px; position: relative; width: var(--d); height: var(--d); border-radius: 50%; display: grid; place-items: center; flex: none;
+  background: conic-gradient(var(--pink) calc(var(--f) * 360deg), rgba(255,255,255,.14) 0); box-shadow: 0 6px 22px rgba(0,0,0,.35); }
+.cd::before { content: ''; position: absolute; inset: 6px; border-radius: 50%; background: var(--bg2); }
+.cd b, .cd small { position: relative; line-height: 1; text-align: center; } .cd b { font-size: calc(var(--d) * .42); font-weight: 800; }
+.cd small { position: absolute; bottom: 14%; font-size: calc(var(--d) * .15); color: var(--mut); }
+.cd b { transform: translateY(-6%); }
+.cd.hot { background: conic-gradient(var(--red) calc(var(--f) * 360deg), rgba(255,255,255,.14) 0); animation: cdpulse .5s ease-in-out infinite alternate; }
+.cd.hot b { color: #fff; }
+.cd.inline { --d: 52px; margin: 2px auto 0; } .cd.lg { --d: 72px; }
+.cd.corner { position: absolute; top: calc(14px + var(--st)); right: 14px; z-index: 4; --d: 56px; }
+.cd.corner::before, .cd.bar::before { background: rgba(10,9,20,.78); }
+.cd.bar { position: absolute; z-index: 4; left: 50%; bottom: calc(24px + var(--sb)); margin-left: -34px; --d: 68px; }
+.cd.huge { --d: min(22vmin, 220px); margin: 1vmin auto 0; }
+.cdrow { display: flex; align-items: center; gap: 12px; justify-content: center; }
+.votelen { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+@keyframes cdpulse { to { transform: scale(1.07); } }
+@media (prefers-reduced-motion: reduce) { .cd.hot { animation: none; } }

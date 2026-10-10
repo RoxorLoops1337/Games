@@ -2,7 +2,7 @@
 //   #/            home (enter a code)      #/new        create an event
 //   #/e/CODE      the audience app         #/h/CODE     the organiser console      #/s/CODE   the big screen
 import { morph, esc, ic, $, $$, toast, confetti, runTickers, buzz, setHaptics } from './dom.js';
-import { S, emit, subscribe, resetState, selectCat, sessions, saveSession, dropSession, deviceId, serverBase, setServer, mkView, curMatch, bbName, size, leftKey, sides, myBet, mkTitle, mkLabel, payoutIf } from './state.js';
+import { S, serverNow, emit, subscribe, resetState, selectCat, sessions, saveSession, dropSession, deviceId, serverBase, setServer, mkView, curMatch, bbName, size, leftKey, sides, myBet, mkTitle, mkLabel, payoutIf } from './state.js';
 import { connect, disconnect, act, http, register, login, hostLogin, info, createEvent, uploadPhoto, isDemo, demoCtl } from './net.js';
 import { ui, loops, catBar, wordmark, catArt, ART_LABEL, ART_FILE, crown } from './ui.js';
 import { MIN_BET } from './shared.js';
@@ -14,6 +14,7 @@ import { boardTab, meSheet } from './views/board.js';
 import { voteOverlay } from './views/vote.js';
 import { hostLogin as hostLoginView, hostShell, photoQueueSheet, joinLink } from './views/host.js';
 import { screenView } from './views/screen.js';
+import { shareCard } from './share.js';
 
 const app = document.getElementById('app');
 let route = { a: '', code: '' }, entered = '';
@@ -55,6 +56,21 @@ async function onRoute() {
   connect(r.code, onPush);
 }
 addEventListener('hashchange', onRoute);
+
+/* The vote countdown: every [data-cd] ring is kept current here, 5 times a second, without re-rendering the page. */
+let lastTick = -1;
+setInterval(() => {
+  const els = document.querySelectorAll('[data-cd]');
+  if (!els.length) { lastTick = -1; return; }
+  for (const el of els) {
+    const left = +el.dataset.cd - serverNow(), s = Math.max(0, Math.ceil(left / 1000));
+    const b = el.firstElementChild;
+    if (b && b.textContent !== String(s)) b.textContent = s;
+    el.style.setProperty('--f', Math.max(0, Math.min(1, left / +el.dataset.tot)).toFixed(3));
+    el.classList.toggle('hot', s <= 3);
+    if (s !== lastTick && s <= 3 && s > 0 && el.closest('.vote, .stage')) { lastTick = s; buzz(15); }
+  }
+}, 200);
 
 /* ------------------------------------------------------------ views */
 function loadingView(msg = 'Tuning up...') { return `<main class="front center"><div class="spinner"></div><p class="muted">${msg}</p></main>`; }
@@ -377,7 +393,13 @@ const A = {
     if (el.dataset.hard === '1') ask('Undo this?', `${esc(label)}. Any Loops paid out for it are taken back, and you can press Undo again to go back further.`, 'Yes, undo it', run, { danger: true });
     else run();
   },
-  async hStep(el) { ui.hostMatch = null; fail(await act({ a: 'step', mid: el.dataset.m, to: el.dataset.to })); },
+  async hStep(el) {
+    ui.hostMatch = null;
+    const o = { a: 'step', mid: el.dataset.m, to: el.dataset.to };
+    if (o.to === 'voting' && ui.vsecs != null) o.secs = ui.vsecs;
+    fail(await act(o));
+  },
+  hVSecs(el) { ui.vsecs = +el.dataset.n; emit(); },
   async hSwap(el) { fail(await act({ a: 'swap', mid: el.dataset.m })); },
   hSelect(el) { ui.hostMatch = el.dataset.m; ui.judges = { a: 0, b: 0 }; window.scrollTo(0, 0); emit(); },
   hJudge(el) { const s = el.dataset.s; ui.judges[s] = Math.max(0, Math.min(20, ui.judges[s] + +el.dataset.d)); emit(); },
@@ -414,6 +436,7 @@ const A = {
     try { if (navigator.share) { await navigator.share({ title, text: `Join the battle: ${title}`, url }); return; } } catch (_) { return; }
     try { await navigator.clipboard.writeText(url); toast('Link copied. Send it to your friends.', 'info'); } catch (_) { prompt('Copy this link', url); }
   },
+  async shareResults() { if (!S.me) return; const r = await shareCard(); if (r.saved) toast('Saved as a picture. Post it anywhere!', 'info'); },
   async copyLink() { try { await navigator.clipboard.writeText(joinLink()); toast('Link copied', 'info'); } catch (_) { prompt('Copy this link', joinLink()); } },
 };
 
