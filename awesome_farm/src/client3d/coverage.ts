@@ -85,6 +85,7 @@ export function hasModel (family: Family, kind: string): boolean {
                 case 'body': return !!ARMOURS[kind];
                 case 'bag': return !!PACKS[kind];
                 case 'charm': return !!CHARMS[kind];
+                case 'ring': return !!DROP_MODELS[kind];         // (a ring is not drawn on the farmer: it has its drop model only)
                 default: return (g.wtype !== 'bow' || !!BOWS[kind]) && !!toolPart(kind);
             }
         }

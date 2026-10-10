@@ -14,6 +14,7 @@ import type { Screen, ScreenCtx } from './types';
 
 const TILES: { id: string; label: string; note: string; icon: string; arg?: unknown }[] = [
     { id: 'inventory', label: 'Backpack', note: 'Items and gear', icon: 'k_bag' },
+    { id: 'gear', label: 'Equipment', note: 'Rings and more', icon: 'k_shield' },
     { id: 'craft', label: 'Crafting', note: 'Make things', icon: 'k_anvil' },
     { id: 'build', label: 'Build', note: 'Place buildings', icon: 'k_hammer' },
     { id: 'blueprints', label: 'Blueprints', note: 'Factory layouts', icon: 'k_target' },

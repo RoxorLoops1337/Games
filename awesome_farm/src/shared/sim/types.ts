@@ -4,7 +4,7 @@
 import type { Action } from '../actions';
 import type { Biome, ModKind } from '../data/biomes';
 import type { BuildingKind } from '../data/buildings';
-import type { GearSlot, ItemId, Res, WeaponType } from '../data/items';
+import type { ItemId, Res, WeaponType, WornSlot } from '../data/items';
 import type { NodeKind } from '../data/nodes';
 import type { Pet, PostStatus, SpeciesId, TraitId, WorkKind } from '../data/creatures';
 import type { Reward } from '../data/quests';
@@ -265,7 +265,7 @@ export interface PlayerS {
     points: number;         // unspent skill points
     coins: number;
     inv: Inv;
-    equip: Partial<Record<GearSlot, ItemId>>;
+    equip: Partial<Record<WornSlot, ItemId>>;
     hot?: (ItemId | null)[];   // your hotbar, once you have pinned something (see sim/hotbar.ts)
     skills: Record<string, number>;
     buffs: { id: BuffId; t: number; by?: string }[];       // `by`: the cook, when the buff came from a potluck feast
@@ -369,11 +369,11 @@ export type Cmd =
     | { t: 'eat'; item?: ItemId }
     | { t: 'sell'; item: ItemId; n: number }
     | { t: 'craft'; recipe: string; n: number }
-    | { t: 'equip'; item: ItemId }
+    | { t: 'equip'; item: ItemId; slot?: WornSlot }     // (`slot`: which ring finger, when it matters)
     | { t: 'hot'; slot: number; item: ItemId | null }
     | { t: 'look'; look: Look; color: number }     // the character creator: how the farmer looks
     | { t: 'respawn' }                 // you are down: give up waiting for a friend and wake up at home
-    | { t: 'unequip'; slot: GearSlot }
+    | { t: 'unequip'; slot: WornSlot }
     | { t: 'skill'; id: string }
     | { t: 'xfer'; id: number; item: ItemId; n: number; dir: 'put' | 'take'; part?: 'inv' | 'out' | 'fuel' }
     | { t: 'load'; id: number }

@@ -286,7 +286,25 @@ export function packRift(mb: MB) {
     b.box(0.2, 0.28, 0.12, R.dusk[1], { x: 0.26, y: 0.2, z: 0.4, j: 0.01 });
     glint(mb, 0.52, 0.86, 0.1, 0.045, 0xb07aff, 1.6);
 }
+/** A ring lying on its edge: a band in one metal and a stone (or a core) set on top. */
+function ring (mb: MB, band: number[], stone: number, glow = false) {
+    const b = mb.shiny();
+    b.torus(0.3, 0.075, 6, 14, band[2], { y: 0.34, v: 0.05 });
+    b.box(0.2, 0.12, 0.2, band[1], { y: 0.66, j: 0.01, v: 0.04 });
+    (glow ? mb.glow(stone, 1.6) : mb.shiny()).oct(0.11, stone, { y: 0.74, sy: 1.15, ao: false, v: 0.05 });
+}
 export const ARMOR: Record<string, DropSpec> = {
+    ring_copper: S((mb: MB) => ring(mb, R.copper, 0xffc078), { lean: 0.9 }),
+    ring_iron: S((mb: MB) => ring(mb, R.iron, 0xe4e8f4), { lean: 0.9 }),
+    ring_gold: S((mb: MB) => ring(mb, R.gold, 0xe85d62), { lean: 0.9 }),
+    ring_steel: S((mb: MB) => ring(mb, R.steel, 0x8aeaf8), { lean: 0.9 }),
+    ring_crystal: S((mb: MB) => ring(mb, R.gold, 0xcdf4ee, true), { lean: 0.9, spark: 0x8aeaf8 }),
+    ring_blight: S((mb: MB) => ring(mb, R.iron, 0x9d6fdb, true), { lean: 0.9, pulse: true }),
+    ring_slime: S((mb: MB) => ring(mb, [0x2d6a50, 0x5cb04f, 0x92d364, 0xd4f08a], 0xd4f08a, true), { lean: 0.9 }),
+    ring_stone: S((mb: MB) => ring(mb, R.stone, 0xf8a24a), { lean: 0.9 }),
+    ring_hex: S((mb: MB) => ring(mb, [0x2d6a50, 0x5cb04f, 0x92d364, 0xd4f08a], 0x9d6fdb, true), { lean: 0.9, spark: 0xb07aff }),
+    ring_sun: S((mb: MB) => ring(mb, R.gold, 0xf8a24a, true), { lean: 0.9, spark: 0xffe680 }),
+    ring_frost: S((mb: MB) => ring(mb, R.ice, 0xffffff, true), { lean: 0.9, spark: 0xcdf4ee }),
     cap_cloth: S(capCloth, { lean: 0.2 }),
     cap_hide: S(capHide, { lean: 0.2 }),
     helm_iron: S((mb: MB) => helmet(mb, { ramp: R.iron, band: R.iron[0], nose: true, rivets: 8 }), { lean: 0.2 }),

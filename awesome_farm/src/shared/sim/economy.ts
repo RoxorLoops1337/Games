@@ -3,7 +3,7 @@
 import { TILE, TUNING } from '../config';
 import { BIOME_DEFS, MODS } from '../data/biomes';
 import { BUILDINGS, BuildingKind, isBeltLike, SEED_IDS } from '../data/buildings';
-import { GearSlot, ITEM_ORDER, ITEMS, ItemId, Res } from '../data/items';
+import { GEAR_SLOTS, isRingSlot, ITEM_ORDER, ITEMS, ItemId, Res, RING_SLOTS, WornSlot } from '../data/items';
 import { RECIPES } from '../data/recipes';
 import { SKILLS, UNLOCK_INFO } from '../data/skills';
 import { PAL } from '../palette';
@@ -276,26 +276,33 @@ export function cmdCraft (sim: Sim, p: PlayerS, recipeId: string, n: number) {
     if (fromChests) sim.float(p.x, p.y - 38, 'from the chests nearby', PAL.lime, p.id, `craft-chest`);
 }
 
-/** A freshly crafted piece of gear goes on straight away if it beats what you wear. */
+/** The free ring finger, or null when all five are taken. */
+const freeRing = (p: PlayerS) => RING_SLOTS.find((r) => !p.equip[r]) ?? null;
+
+/** A freshly crafted piece of gear goes on straight away if it beats what you wear (a ring, if a finger is free). */
 function autoEquip (sim: Sim, p: PlayerS, item: ItemId) {
     const g = ITEMS[item].gear;
     if (!g) return;
+    if (g.slot === 'ring') { if (freeRing(p)) cmdEquip(sim, p, item, true); return; }
     const cur = p.equip[g.slot] ? ITEMS[p.equip[g.slot]!].gear : undefined;
     if (!cur || g.tier > cur.tier) cmdEquip(sim, p, item, true);
 }
 
-export function cmdEquip (sim: Sim, p: PlayerS, item: ItemId, quiet = false) {
+/** Put a piece on. A ring goes on the finger asked for, else the first free one, else it replaces the first finger's ring. */
+export function cmdEquip (sim: Sim, p: PlayerS, item: ItemId, quiet = false, finger?: WornSlot) {
     const g = ITEMS[item]?.gear;
     if (!g || countOf(p, item) < 1) return;
-    const old = p.equip[g.slot];
+    const slot: WornSlot = g.slot === 'ring' ? (finger && isRingSlot(finger) ? finger : freeRing(p) ?? RING_SLOTS[0]) : g.slot;
+    const old = p.equip[slot];
     takeItem(p, item, 1);
-    p.equip[g.slot] = item;
+    p.equip[slot] = item;
     if (old) sim.give(p, old, 1);
     if (!quiet) sim.fx('equip', p.x, p.y - 8, p.id);
     else sim.toast(p.id, `Equipped ${ITEMS[item].name}`, `i_${item}`, PAL.lime);
 }
 
-export function cmdUnequip (sim: Sim, p: PlayerS, slot: GearSlot) {
+export function cmdUnequip (sim: Sim, p: PlayerS, slot: WornSlot) {
+    if (!(GEAR_SLOTS as string[]).includes(slot) && !isRingSlot(slot)) return;      // (only the slots there are)
     const old = p.equip[slot];
     if (!old) return;
     if (countOf(p, old) >= itemCap(p, old)) { sim.deny(p, 'Your pockets are full'); return; }

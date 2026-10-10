@@ -3,7 +3,7 @@
 
 import { TUNING } from '../config';
 import { Cost, ITEMS, ItemId, Res, STARTER_GEAR } from '../data/items';
-import type { GearDef, GearSlot, WeaponType } from '../data/items';
+import type { GearDef, WeaponType, WornSlot } from '../data/items';
 import { BOON_BY_ID } from '../data/rift';
 import { WISH_BY_ID } from '../data/wishes';
 import { SKILLS } from '../data/skills';
@@ -107,7 +107,7 @@ export function learnSkill (p: PlayerS, id: string): boolean {
 }
 
 // ── the stat ledger ────────────────────────────────────────────────────────
-function gearOf (p: PlayerS, slot: GearSlot): GearDef | null {
+function gearOf (p: PlayerS, slot: WornSlot): GearDef | null {
     const id = p.equip[slot];
     return id ? ITEMS[id].gear ?? null : null;
 }

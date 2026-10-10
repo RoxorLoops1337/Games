@@ -5,9 +5,16 @@ import type { BuffId, Mods } from './stats';
 export type Rarity = 0 | 1 | 2 | 3 | 4;
 export const RARITY_NAMES = ['Common', 'Uncommon', 'Rare', 'Epic', 'Legendary'] as const;
 
-export type GearSlot = 'tool' | 'weapon' | 'head' | 'body' | 'charm' | 'bag';
-export const GEAR_SLOTS: GearSlot[] = ['tool', 'weapon', 'head', 'body', 'charm', 'bag'];
-export const SLOT_NAMES: Record<GearSlot, string> = { tool: 'Pick', weapon: 'Weapon', head: 'Head', body: 'Body', charm: 'Charm', bag: 'Pack' };
+/** What a piece of gear is for. A ring is worn in any free one of the five ring slots (`RING_SLOTS`); the rest have one slot each. */
+export type GearSlot = 'tool' | 'weapon' | 'head' | 'body' | 'charm' | 'bag' | 'ring';
+/** The slots the Backpack shows beside the farmer (rings have their own screen, the Equipment Bag). */
+export const GEAR_SLOTS: Exclude<GearSlot, 'ring'>[] = ['tool', 'weapon', 'head', 'body', 'charm', 'bag'];
+export const RING_SLOTS = ['ring1', 'ring2', 'ring3', 'ring4', 'ring5'] as const;
+export type RingSlot = typeof RING_SLOTS[number];
+/** A place on the farmer a piece is worn: one slot each, and five for rings. */
+export type WornSlot = Exclude<GearSlot, 'ring'> | RingSlot;
+export const isRingSlot = (s: string): s is RingSlot => (RING_SLOTS as readonly string[]).includes(s);
+export const SLOT_NAMES: Record<GearSlot, string> = { tool: 'Pick', weapon: 'Weapon', head: 'Head', body: 'Body', charm: 'Charm', bag: 'Pack', ring: 'Ring' };
 export type WeaponType = 'fist' | 'club' | 'dagger' | 'sword' | 'spear' | 'hammer' | 'bow' | 'staff';
 
 export interface GearDef {
@@ -179,6 +186,18 @@ export const ITEMS = {
     charm_rift:   it('Riftheart Charm', 'gear', 900, 'Hums when something dangerous is near.', { rarity: 4, gear: { slot: 'charm', tier: 4, mods: { dmgPct: 0.2, vamp: 0.08, luck: 0.08, maxHearts: 1 } } }),
     charm_heart:  it('Heartstone',    'gear', 1500, 'It beats in time with yours.', { rarity: 4, gear: { slot: 'charm', tier: 4, mods: { maxHearts: 2, dmgPct: 0.15, armor: 0.5, healPower: 0.3 } } }),
     // ── packs: carry more of every item ──
+    // ── rings (five can be worn at once: the Equipment Bag) ──
+    ring_copper: it('Copper Ring', 'gear', 14, 'A plain band that hums faintly.', { rarity: 0, gear: { slot: 'ring', tier: 1, mods: { maxEnergy: 6 } } }),
+    ring_iron: it('Iron Ring', 'gear', 18, 'Heavy on the finger, light on worries.', { rarity: 0, gear: { slot: 'ring', tier: 1, mods: { armor: 0.15 } } }),
+    ring_gold: it('Gold Ring', 'gear', 60, 'Shines, and so does your purse.', { rarity: 1, gear: { slot: 'ring', tier: 2, mods: { sell: 0.05, luck: 0.02 } } }),
+    ring_steel: it('Steel Ring', 'gear', 70, 'Cold, sharp and quick.', { rarity: 1, gear: { slot: 'ring', tier: 2, mods: { dmgPct: 0.03, swingSpeed: 0.03 } } }),
+    ring_crystal: it('Crystal Ring', 'gear', 200, 'A sliver of crystal set in gold. Things drift towards it.', { rarity: 2, gear: { slot: 'ring', tier: 3, mods: { crit: 0.04, magnet: 0.12 } } }),
+    ring_blight: it('Blightcore Ring', 'gear', 150, 'A dark core in an iron band. It likes the night.', { rarity: 2, gear: { slot: 'ring', tier: 2, mods: { nightDmg: 0.08, bossDmg: 0.04 } } }),
+    ring_slime: it('Slimy Ring', 'gear', 120, 'Squishy, and oddly comforting.', { rarity: 2, gear: { slot: 'ring', tier: 2, mods: { healPower: 0.1, energyRegen: 0.1 } } }),
+    ring_stone: it('Boulder Ring', 'gear', 160, 'A ring cut from the Colossus\u2019s own heart.', { rarity: 2, gear: { slot: 'ring', tier: 3, mods: { armor: 0.25, stone: 1 } } }),
+    ring_hex: it('Hex Ring', 'gear', 280, 'Bad luck for others, good luck for you.', { rarity: 3, gear: { slot: 'ring', tier: 3, mods: { dodge: 0.03, luck: 0.03 } } }),
+    ring_sun: it('Sunstone Ring', 'gear', 300, 'Warm as a desert noon.', { rarity: 3, gear: { slot: 'ring', tier: 3, mods: { xp: 0.05, buffTime: 0.1 } } }),
+    ring_frost: it('Frostbite Ring', 'gear', 300, 'It never thaws, and neither will you.', { rarity: 3, gear: { slot: 'ring', tier: 3, mods: { armor: 0.2, moveSpeed: 0.04 } } }),
     bag_satchel:  it('Satchel',         'gear', 40,  'A leather satchel with a good strap. Carry 40 more of every item.', { gear: { slot: 'bag', tier: 0, mods: { carry: 40 } } }),
     bag_rucksack: it('Rucksack',        'gear', 110, 'Roomy, with pockets for everything. Carry 100 more of every item.', { rarity: 1, gear: { slot: 'bag', tier: 1, mods: { carry: 100 } } }),
     bag_pack:     it('Explorer\u2019s Pack', 'gear', 260, 'Canvas, iron buckles, a bedroll. Carry 220 more of every item.', { rarity: 2, gear: { slot: 'bag', tier: 2, mods: { carry: 220 } } }),

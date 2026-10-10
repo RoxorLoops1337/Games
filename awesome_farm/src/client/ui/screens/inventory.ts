@@ -14,16 +14,17 @@ import { inset, rect } from '../px';
 import { itemTip } from '../tips';
 import type { Screen, ScreenCtx } from './types';
 
-const PLACEHOLDER: Record<GearSlot, string> = { head: 'i_cap_cloth', body: 'i_tunic_cloth', charm: 'i_charm_lucky', tool: 'i_pick_flint', weapon: 'i_club', bag: 'i_bag_satchel' };
+type Slot6 = Exclude<GearSlot, 'ring'>;
+const PLACEHOLDER: Record<Slot6, string> = { head: 'i_cap_cloth', body: 'i_tunic_cloth', charm: 'i_charm_lucky', tool: 'i_pick_flint', weapon: 'i_club', bag: 'i_bag_satchel' };
 /** Where each piece goes: three across, two rows (what goes on the head, body and charm; then the tool, weapon and bag). */
-const SLOT_AT: Record<GearSlot, [number, number]> = { head: [0, 0], body: [1, 0], charm: [2, 0], tool: [0, 1], weapon: [1, 1], bag: [2, 1] };
+const SLOT_AT: Record<Slot6, [number, number]> = { head: [0, 0], body: [1, 0], charm: [2, 0], tool: [0, 1], weapon: [1, 1], bag: [2, 1] };
 const STAT_LABELS = ['Hearts', 'Energy', 'Level', 'Mining power', 'Weapon damage', 'Armor', 'Move speed', 'Reach', 'Luck', 'Critical', 'XP gain', 'Skill points'];
 
 export class InventoryScreen implements Screen {
     private win: Win;
     private grid: ItemGrid;
     private tools!: ListTools;
-    private equipSlots = {} as Record<GearSlot, Slot>;
+    private equipSlots = {} as Record<Slot6, Slot>;
     private stats: StatList;
     private key = '';
     private strip: Slot[] = [];
@@ -38,7 +39,7 @@ export class InventoryScreen implements Screen {
         const s = ctx.scene;
         this.win = new Win(s, { size: 'large', title: 'Backpack', icon: 'k_bag', accent: PAL.gold, onClose: () => ctx.close() });
         const w = this.win;
-        this.foot = w.footer({ info: '', infoW: 110, hint: deviceText('Click an item to equip, eat or open it. Hover for what it does.', 'Tap an item to equip, eat or open it.') });
+        this.foot = w.footer({ info: '', infoW: 110, secondary: [{ label: 'Rings  (G)', onClick: () => ctx.open('gear'), icon: 'i_ring_copper' }], hint: deviceText('Click an item to equip, eat or open it. Hover for what it does.', 'Tap an item to equip, eat or open it.') });
         const body = w.body, lw = 300, gx = 8;
 
         // ── left: what you wear, and your stats ──
