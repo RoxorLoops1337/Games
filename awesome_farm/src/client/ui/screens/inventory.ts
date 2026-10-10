@@ -149,6 +149,7 @@ export class InventoryScreen implements Screen {
                 if (def.gear) send({ t: 'equip', item: id });
                 else if (def.food || def.heal || def.buff) send({ t: 'eat', item: id });
                 else if (def.open) send({ t: 'crate', item: id });
+                else if (def.relic) this.ctx.open('gear');
             },
             right: () => this.pin(id),
         }));

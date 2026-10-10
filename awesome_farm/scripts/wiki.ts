@@ -412,6 +412,7 @@ function itemsSection () {
         ['s-items-seeds', 'Seeds', (i) => ITEMS[i].kind === 'seed'],
         ['s-items-potions', 'Potions', (i) => ITEMS[i].kind === 'potion'],
         ...(['tool', 'weapon', 'head', 'body', 'charm', 'ring', 'bag'] as GearSlot[]).map((s) => [`s-items-${s}`, `Gear: ${SLOT_NAMES[s]}`, (i: ItemId) => ITEMS[i].gear?.slot === s] as [string, string, (id: ItemId) => boolean]),
+        ['s-items-relics', 'Relics (for the Relic Satchel)', (i) => !!ITEMS[i].relic],
         ['s-items-misc', 'Other things (pods, rods, sigils, trophies, crates...)', (i) => ITEMS[i].kind === 'misc'],
     ];
     const seen = new Set<ItemId>();

@@ -3,7 +3,7 @@
 
 import type { Cmd, Ent, PlayerS, Plot, Shop, SimEvent, WorldState } from '../sim/types';
 
-export const PROTOCOL = 27;
+export const PROTOCOL = 28;
 
 export type ClientMsg =
     /** `acct`: sign in as a named farmer with a secret word, from any device (the server remembers it, as a hash). */

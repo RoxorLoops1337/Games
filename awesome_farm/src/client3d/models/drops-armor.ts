@@ -293,7 +293,19 @@ function ring (mb: MB, band: number[], stone: number, glow = false) {
     b.box(0.2, 0.12, 0.2, band[1], { y: 0.66, j: 0.01, v: 0.04 });
     (glow ? mb.glow(stone, 1.6) : mb.shiny()).oct(0.11, stone, { y: 0.74, sy: 1.15, ao: false, v: 0.05 });
 }
+/** A relic: a faceted stone in its tag's colour, small (a chip), long (a shard) or in a cage (a core). */
+function relic (mb: MB, size: 'chip' | 'shard' | 'core', col: number, light: number) {
+    const b = mb.shiny();
+    if (size === 'chip') { mb.glow(col, 1.2).oct(0.2, col, { y: 0.34, ao: false, v: 0.05 }); return; }
+    if (size === 'shard') { mb.glow(col, 1.2).oct(0.17, col, { y: 0.5, sy: 2.2, ao: false, v: 0.05 }); b.cyl(0.2, 0.26, 0.08, 6, light, { y: 0.06, v: 0.04 }); return; }
+    mb.glow(col, 1.6).oct(0.28, col, { y: 0.45, ao: false, v: 0.05 });
+    for (let i = 0; i < 4; i++) { const a = (i / 4) * TAU + Math.PI / 4; b.rod([Math.cos(a) * 0.38, 0.08, Math.sin(a) * 0.38], [0, 0.88, 0], 0.03, 3, light, 0.03); }
+    b.cyl(0.4, 0.46, 0.08, 6, light, { y: 0.04, v: 0.04 });
+}
+const RELIC_COL: Record<string, [number, number]> = { ember: [0xf8a24a, 0xffd966], frost: [0x8fdcf2, 0xcdf4ee], vine: [0x92d364, 0x5cb04f], iron: [0xb8bed2, 0x8a90a8], spirit: [0xb07aff, 0xe8dcff] };
+const relics = Object.fromEntries(Object.entries(RELIC_COL).flatMap(([tag, [col, light]]) => (['chip', 'shard', 'core'] as const).map((sz) => [`relic_${tag}_${sz}`, S((mb: MB) => relic(mb, sz, col, light), { lean: 0.5, spark: col })] as const)));
 export const ARMOR: Record<string, DropSpec> = {
+    ...relics,
     ring_copper: S((mb: MB) => ring(mb, R.copper, 0xffc078), { lean: 0.9 }),
     ring_iron: S((mb: MB) => ring(mb, R.iron, 0xe4e8f4), { lean: 0.9 }),
     ring_gold: S((mb: MB) => ring(mb, R.gold, 0xe85d62), { lean: 0.9 }),

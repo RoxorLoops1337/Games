@@ -266,6 +266,8 @@ export interface PlayerS {
     coins: number;
     inv: Inv;
     equip: Partial<Record<WornSlot, ItemId>>;
+    /** The Relic Satchel: the relics puzzled into it (data/relics.ts). */
+    satchel?: { it: ItemId; x: number; y: number; r?: 1 }[];
     hot?: (ItemId | null)[];   // your hotbar, once you have pinned something (see sim/hotbar.ts)
     skills: Record<string, number>;
     buffs: { id: BuffId; t: number; by?: string }[];       // `by`: the cook, when the buff came from a potluck feast
@@ -374,6 +376,8 @@ export type Cmd =
     | { t: 'look'; look: Look; color: number }     // the character creator: how the farmer looks
     | { t: 'respawn' }                 // you are down: give up waiting for a friend and wake up at home
     | { t: 'unequip'; slot: WornSlot }
+    | { t: 'satchel'; op: 'put'; item: ItemId; x: number; y: number; r?: 1 }     // lay a relic from your pockets in the Relic Satchel, its top-left cell at (x, y)
+    | { t: 'satchel'; op: 'take'; i: number }                                    // pick the i-th relic back up into your pockets
     | { t: 'skill'; id: string }
     | { t: 'xfer'; id: number; item: ItemId; n: number; dir: 'put' | 'take'; part?: 'inv' | 'out' | 'fuel' }
     | { t: 'load'; id: number }
