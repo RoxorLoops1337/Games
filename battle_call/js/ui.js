@@ -9,7 +9,7 @@ export const ui = {
   tab: 'live', hostTab: 'run', sheet: null, modal: null, search: '', rank: { top: null, seeds: [] }, topSaved: true,
   betFilter: 'open', stake: 100, predRound: 0, boardTab: 'rank', voteOpen: null, voteDismissed: {}, vote: {}, resultSeen: {},
   authMode: 'join', busy: false, err: '', showPw: false, lineupSearch: '', mkFilter: 'all', playerSearch: '', judges: { a: 0, b: 0 },
-  hostMatch: null, vsecs: null, drag: null, qr: null, seenLog: 0, winCelebrated: false, hapt: true,
+  hostMatch: null, vsecs: null, liveRound: null, drag: null, qr: null, seenLog: 0, winCelebrated: false, hapt: true,
 };
 
 export const initials = (n) => String(n || '?').trim().split(/\s+/).slice(0, 2).map((w) => w[0]).join('').toUpperCase().slice(0, 2) || '?';
