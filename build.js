@@ -85,6 +85,7 @@ const STATIC_PATHS = [
   'battle_call',
   'beatbox_heroes',
   'pixel_colony',
+  'ludus_maximus',
   'tools',
 ];
 
