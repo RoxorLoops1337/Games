@@ -6,6 +6,8 @@ Workflow:
 Reply formatting:
 - Each game's link is `https://games-71g.pages.dev/<folder>/`. Some games have their own `CLAUDE.md` with extra links (No Room For Heroes does).
 
+- For Awesome Farm, END every reply that is about the game with the two links as its last lines: Solo: `https://games-71g.pages.dev/awesome_farm/play/` and Server: `https://awesome-farm.danhieux-senjka.workers.dev/` (the worlds: `/w/farm`, `/w/quarry`, `/w/snowcap`).
+
 # Repo map (read this before touching anything)
 
 - One folder per game, served as-is at `/<folder>/`. Game-specific notes live in that game's own `CLAUDE.md` (`no_room_for_heroes/CLAUDE.md`, `awesome_farm/CLAUDE.md`), which load only when you work in that folder.
