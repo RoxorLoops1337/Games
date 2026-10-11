@@ -30,31 +30,31 @@
     murmillo: {
       id: 'murmillo', n: 'Murmillo', role: 'Bulwark', c: '#2f78c4', sig: 'shieldbash',
       d: 'Tower shield, steady sword. Walls off Raiders and Duelists.',
-      mul: { hp: 1.25, atk: 0.95, def: 1.35, spd: 0.85, crit: 0.9, eva: 0.7 },
+      mul: { hp: 1.12, atk: 0.95, def: 1.12, spd: 0.88, crit: 0.9, eva: 0.7 },
       base: { str: 11, agi: 7, end: 14, skl: 9, wil: 11 }, beats: ['thraex', 'dimachaerus'],
     },
     retiarius: {
       id: 'retiarius', n: 'Retiarius', role: 'Trapper', c: '#22a58f', sig: 'netthrow',
       d: 'Net and trident. Tangles slow Bulwarks and out-reaches Lancers.',
-      mul: { hp: 0.95, atk: 0.9, def: 0.8, spd: 1.1, crit: 1, eva: 1.15 },
+      mul: { hp: 1.0, atk: 1.05, def: 0.92, spd: 1.1, crit: 1, eva: 1.15 },
       base: { str: 8, agi: 12, end: 9, skl: 13, wil: 10 }, beats: ['murmillo', 'hoplomachus'],
     },
     thraex: {
       id: 'thraex', n: 'Thraex', role: 'Raider', c: '#e0742a', sig: 'flurry',
       d: 'Quick curved blade. Dodges nets and slips inside spears.',
-      mul: { hp: 0.95, atk: 1, def: 0.85, spd: 1.2, crit: 1.2, eva: 1.1 },
+      mul: { hp: 1.0, atk: 1.06, def: 0.9, spd: 1.12, crit: 1.22, eva: 1.1 },
       base: { str: 10, agi: 14, end: 8, skl: 12, wil: 9 }, beats: ['retiarius', 'hoplomachus'],
     },
     hoplomachus: {
       id: 'hoplomachus', n: 'Hoplomachus', role: 'Lancer', c: '#b8892a', sig: 'lunge',
       d: 'Long spear, round shield. Keeps Duelists at bay and cracks Bulwarks.',
-      mul: { hp: 1.05, atk: 1.1, def: 1, spd: 0.95, crit: 1, eva: 0.9 },
+      mul: { hp: 1.02, atk: 1.08, def: 1, spd: 0.95, crit: 1, eva: 0.9 },
       base: { str: 13, agi: 9, end: 11, skl: 11, wil: 9 }, beats: ['dimachaerus', 'murmillo'],
     },
     dimachaerus: {
       id: 'dimachaerus', n: 'Dimachaerus', role: 'Duelist', c: '#c2395f', sig: 'crossslash',
       d: 'Two blades, no shield. Shreds nets and Raiders, bounces off armor.',
-      mul: { hp: 0.9, atk: 1.2, def: 0.7, spd: 1.1, crit: 1.15, eva: 1 },
+      mul: { hp: 0.97, atk: 1.15, def: 0.85, spd: 1.08, crit: 1.15, eva: 1 },
       base: { str: 13, agi: 12, end: 7, skl: 11, wil: 9 }, beats: ['retiarius', 'thraex'],
     },
   };
@@ -106,8 +106,19 @@
     fleet: { n: 'Fleet', slots: ['helm', 'charm', 'armor'], d: v => `+${v * 4}% speed` },
     lucky: { n: 'Keen', slots: ['helm', 'charm', 'weapon'], d: v => `+${v * 3}% crit chance` },
     showy: { n: 'Showy', slots: ['helm', 'charm', 'armor'], d: v => `+${v * 10}% fame` },
+    frenzy: { n: "Berserker's", slots: ['weapon', 'charm', 'helm'], d: v => `Each hit gives +${v * 3}% attack speed (stacks 8x)` },
+    sear: { n: 'Sunfire', slots: ['armor', 'shield', 'charm'], d: v => `Burn enemies within reach for ${v * 10}% damage/s` },
+    shield: { n: 'Aegis', slots: ['shield', 'armor', 'helm'], d: v => `Start fights with a ${v * 8}% HP shield` },
+    regen: { n: "Troll's", slots: ['armor', 'charm', 'helm'], d: v => `Regenerate ${(v * 0.6).toFixed(1)}% HP per second` },
+    haste: { n: 'Chrono', slots: ['helm', 'charm', 'weapon'], d: v => `Skills and ultimates ${v * 6}% faster` },
+    pen: { n: 'Piercing', slots: ['weapon', 'helm'], d: v => `Ignore ${v * 8}% of enemy armor` },
+    sprint: { n: 'Phantom', slots: ['armor', 'charm', 'helm'], d: v => `Hits give +${v * 12}% move speed briefly` },
+    thunder: { n: 'Stormcaller', slots: ['weapon', 'charm'], d: v => `Every 3rd hit calls lightning (${v * 35}% damage)` },
+    grow: { n: 'Hungering', slots: ['weapon', 'armor'], d: v => `Each hit permanently adds +${(v * 0.6).toFixed(1)}% damage this fight` },
   };
   D.AFFIX_IDS = Object.keys(D.AFFIX);
+  D.RANGE = { murmillo: 1.5, retiarius: 2.7, thraex: 1.4, hoplomachus: 2.9, dimachaerus: 1.3 };
+  D.STYLE_ULT = { murmillo: 'pulverize', retiarius: 'hookshot', thraex: 'bladedance', hoplomachus: 'skewer', dimachaerus: 'tornado' };
 
   // Set bonuses use the same keys as affixes plus hp/atk/def/spd/crit/eva fractions.
   D.SETS = {
@@ -221,22 +232,111 @@
     { id: 'rally', n: 'Pep rally', d: 'You: +6% damage and armor. Safe.', cost: (l) => 20 + l * 2, risk: 0, me: { atk: 0.06, def: 0.06 } },
   ];
 
-  // Pit of Trials boons: syn = percent fractions, xfx = affix-style effects, heal = instant heal fraction
-  D.BOONS = [
-    { id: 'iron', n: 'Iron Skin', d: '+12% armor', syn: { def: 0.12 } },
-    { id: 'edge', n: 'Sharpened Edge', d: '+12% damage', syn: { atk: 0.12 } },
-    { id: 'bull', n: "Bull's Heart", d: '+15% max HP', syn: { hp: 0.15 } },
-    { id: 'sandals', n: 'Swift Sandals', d: '+10% speed', syn: { spd: 0.1 } },
-    { id: 'hawk', n: 'Hawk Eye', d: '+8% crit chance', syn: { crit: 0.08 } },
-    { id: 'shadow', n: 'Shadow Step', d: '+8% evasion', syn: { eva: 0.08 } },
-    { id: 'wind', n: 'Second Wind', d: 'Heal 40% HP now', heal: 0.4 },
-    { id: 'feast', n: "Gladiator's Feast", d: 'Heal 25% and +5% damage', heal: 0.25, syn: { atk: 0.05 } },
-    { id: 'thirst', n: 'Bloodthirst', d: 'Heal 8% of damage dealt', xfx: { vamp: 2 } },
-    { id: 'spikes', n: 'Spiked Armor', d: 'Reflect 12% of damage taken', xfx: { thorns: 2 } },
-    { id: 'rip', n: 'Riposte Training', d: '16% chance to counter-strike', xfx: { riposte: 2 } },
-    { id: 'serr', n: 'Serrated Edge', d: '30% chance to cause bleeding', xfx: { bleed: 2 } },
-    { id: 'grit', n: 'Stalwart Oath', d: 'Survive one killing blow per fight', xfx: { stalwart: 1 } },
-    { id: 'greed', n: 'Greed', d: '+50% gold from this run, -8% HP', syn: { hp: -0.08 }, gold: 0.5 },
+
+  // Ultimates: fired by the player (tap the big buttons). rng = max cast range in meters.
+  D.ULTS = {
+    pulverize: { n: 'Pulverize', cd: 16, d: 'Slam the sand: every enemy nearby is knocked up for 1.1s and takes 100% damage.', c: '#2f78c4' },
+    hookshot: { n: 'Hookshot', cd: 14, rng: 10, d: 'Hurl the chain: yank the target to you and stun them for 1s.', c: '#22a58f' },
+    bladedance: { n: 'Blade Dance', cd: 14, rng: 8, d: 'Dash through the target, untouchable, slashing everything near the landing.', c: '#e0742a' },
+    skewer: { n: 'Skewer', cd: 14, rng: 11, d: 'Hurl your spear through a line of enemies: 180% damage and slows them.', c: '#b8892a' },
+    tornado: { n: 'Blade Tornado', cd: 20, d: 'Spin for 3s, shredding everything around you. Immune to crowd control.', c: '#c2395f' },
+    unbreakable: { n: 'Unbreakable Will', cd: 24, d: 'For 6s take 70% less damage and shake off all crowd control. Castable while stunned.', c: '#7b4fb8' },
+    bloodrage: { n: 'Bloodrage', cd: 20, d: 'For 6s: +60% attack speed, +15% lifesteal, immune to crowd control.', c: '#d2412b' },
+    meteor: { n: 'Meteor Strike', cd: 20, rng: 12, d: 'Call a meteor on the target spot: 300% damage and a 1s stun after a short delay.', c: '#e8742a' },
+    duststorm: { n: 'Dust Storm', cd: 22, d: 'Blind and slow every enemy for 4s.', c: '#c98a52' },
+  };
+  D.ULT2 = ['unbreakable', 'bloodrage', 'meteor', 'duststorm'];
+
+  // Runes: one keystone + two minors per gladiator. Dynamic effects live in arena.js; fx = static bonuses.
+  D.KEYSTONES = {
+    lethal: { n: 'Lethal Tempo', d: 'Each hit grants +6% attack speed (6 stacks). At full stacks you also run 12% faster.', c: '#e0742a' },
+    conq: { n: 'Conqueror', d: 'Each hit grants +2.5% damage (8 stacks). At full stacks heal 6% of damage dealt.', c: '#d2412b' },
+    electro: { n: 'Electrocute', d: '3 hits within 3s trigger a lightning burst worth 120% damage (every 7s).', c: '#4aa3f0' },
+    grasp: { n: 'Grasp of the Undying', d: 'Every 4s your next hit deals 3.5% of their max HP, heals you 2% and grows your max HP.', c: '#2a9d6f' },
+    phase: { n: 'Phase Rush', d: '3 hits within 3s give +35% move speed and +15% attack speed for 3s (every 8s).', c: '#22b5a0' },
+    first: { n: 'First Strike', d: 'Your first hit on each enemy deals +35% damage. Win bonus: +10% gold.', c: '#f6b82d' },
+  };
+  D.MINORS = {
+    coup: { n: 'Coup de Grace', d: '+8% damage to enemies under 40% HP.' },
+    laststand: { n: 'Last Stand', d: 'Up to +12% damage as your own HP drops.' },
+    celerity: { n: 'Celerity', d: '+4% attack speed and move speed.' },
+    overgrowth: { n: 'Overgrowth', d: '+3% max HP.', fx: { hp: 0.03 } },
+    gather: { n: 'Gathering Storm', d: '+1% damage every 5s of the fight (max 6%).' },
+    cosmic: { n: 'Cosmic Insight', d: 'Ultimates and skills cool down 8% faster.' },
+    nimbus: { n: 'Nimbus Cloak', d: 'Casting an ultimate gives +25% move speed for 3s.' },
+    bone: { n: 'Bone Plating', d: 'After 3s without taking damage, the next hit is reduced by 25%.' },
+  };
+  D.RUNE_START = { k: ['lethal', 'conq'], m: ['coup', 'laststand', 'celerity', 'overgrowth'] };
+
+  // Masteries: permanent passives picked at levels 5, 10, 15 and 20.
+  D.MASTS = {
+    brute: { n: 'Brute Force', d: '+6% damage', fx: { atk: 0.06 } },
+    tough: { n: 'Tough Hide', d: '+8% max HP', fx: { hp: 0.08 } },
+    swift: { n: 'Swift Hands', d: '+5% speed', fx: { spd: 0.05 } },
+    keen: { n: 'Keen Eye', d: '+4% crit chance', fx: { crit: 0.04 } },
+    plate: { n: 'Plated Training', d: '+6% armor', fx: { def: 0.06 } },
+    leech: { n: 'Leech', d: 'Heal 4% of damage dealt', fx: { vamp: 1 } },
+    tactician: { n: 'Tactician', d: 'Skills and ultimates 6% faster', fx: { haste: 1 } },
+    thorny: { n: 'Thorn Mail', d: 'Reflect 6% of damage taken', fx: { thorns: 1 } },
+    fencer: { n: 'Fencer', d: '8% chance to counter-strike', fx: { riposte: 1 } },
+    oath: { n: 'Iron Oath', d: 'Survive one killing blow per fight', fx: { stalwart: 1 } },
+    sprinter: { n: 'Sprinter', d: 'Hits give +12% move speed briefly', fx: { sprint: 1 } },
+    reaper: { n: 'Reaper', d: '+8% damage to targets under 35% HP', fx: { exec: 1 } },
+  };
+
+  // Augments (ARAM Mayhem style): pick 1 of 3 before fights. tier 0 silver, 1 gold, 2 prismatic.
+  D.TIERS = [{ n: 'Silver', c: '#b9c4cf' }, { n: 'Gold', c: '#f6b82d' }, { n: 'Prismatic', c: '#d070ff' }];
+  D.AUGMENTS = [
+    { id: 'iron', t: 0, n: 'Iron Skin', d: '+12% armor', syn: { def: 0.12 } },
+    { id: 'edge', t: 0, n: 'Sharpened Edge', d: '+12% damage', syn: { atk: 0.12 } },
+    { id: 'bull', t: 0, n: "Bull's Heart", d: '+15% max HP', syn: { hp: 0.15 } },
+    { id: 'sandals', t: 0, n: 'Swift Sandals', d: '+10% speed', syn: { spd: 0.1 } },
+    { id: 'hawk', t: 0, n: 'Hawk Eye', d: '+8% crit chance', syn: { crit: 0.08 } },
+    { id: 'shadow', t: 0, n: 'Shadow Step', d: '+8% evasion', syn: { eva: 0.08 } },
+    { id: 'regen', t: 0, n: 'Regeneration', d: 'Heal 1.2% HP per second', xfx: { regen: 2 } },
+    { id: 'thirst', t: 0, n: 'Bloodthirst', d: 'Heal 8% of damage dealt', xfx: { vamp: 2 } },
+    { id: 'spikes', t: 0, n: 'Spiked Armor', d: 'Reflect 12% of damage taken', xfx: { thorns: 2 } },
+    { id: 'rip', t: 0, n: 'Riposte Training', d: '16% chance to counter-strike', xfx: { riposte: 2 } },
+    { id: 'serr', t: 0, n: 'Serrated Edge', d: '30% chance to cause bleeding', xfx: { bleed: 2 } },
+    { id: 'oath', t: 0, n: 'Stalwart Oath', d: 'Survive one killing blow', xfx: { stalwart: 1 } },
+    { id: 'study', t: 0, n: 'Quick Study', d: 'Skills and ultimates 12% faster', xfx: { haste: 2 } },
+    { id: 'aegis', t: 0, n: 'Aegis', d: 'Start with a 16% HP shield', xfx: { shield: 2 } },
+    { id: 'warm', t: 0, n: 'Warm-up', d: 'Hits give +3% attack speed (stacks)', xfx: { frenzy: 1 } },
+    { id: 'berserk', t: 1, n: 'Berserker Training', d: 'Hits give +9% attack speed (stacks 8x)', xfx: { frenzy: 3 } },
+    { id: 'exec', t: 1, n: 'Executioner', d: '+24% damage to targets under 35% HP', xfx: { exec: 3 } },
+    { id: 'glass', t: 1, n: 'Glass Cannon', d: '+30% damage, -20% max HP', syn: { atk: 0.3, hp: -0.2 } },
+    { id: 'jugg', t: 1, n: 'Juggernaut', d: '+30% max HP, +15% armor, -10% speed', syn: { hp: 0.3, def: 0.15, spd: -0.1 } },
+    { id: 'fire', t: 1, n: 'Firebrand', d: 'Burn nearby enemies for 20% damage/s', xfx: { sear: 2 } },
+    { id: 'giant', t: 1, n: 'Giant Slayer', d: '+20% damage to enemies with more max HP', xfx: { giant: 2 } },
+    { id: 'thunder', t: 1, n: 'Thunderlord', d: 'Every 3rd hit calls lightning (70%)', xfx: { thunder: 2 } },
+    { id: 'pen', t: 1, n: 'Armor Piercer', d: 'Ignore 24% of enemy armor', xfx: { pen: 3 } },
+    { id: 'phantom', t: 1, n: 'Phantom Dance', d: 'Hits give +24% move speed, +5% speed', syn: { spd: 0.05 }, xfx: { sprint: 2 } },
+    { id: 'breath', t: 1, n: 'Last Breath', d: 'Under 30% HP: +40% attack speed, heal 10%', xfx: { lastbreath: 1 } },
+    { id: 'hunger', t: 1, n: 'Hungering', d: 'Each hit permanently adds +1.2% damage (this fight)', xfx: { grow: 2 } },
+    { id: 'aim', t: 1, n: 'Deadly Aim', d: '+5% crit chance, crits hit 30% harder', syn: { crit: 0.05 }, xfx: { critdmg: 2 } },
+    { id: 'urf', t: 2, n: 'Urf Mode', d: 'Skills and ultimates cool down 70% faster', xfx: { haste: 6, ultcd: 3 } },
+    { id: 'phoenix', t: 2, n: 'Phoenix', d: 'Rise once from death with 35% HP. +10% HP', syn: { hp: 0.1 }, xfx: { revive: 1 } },
+    { id: 'ascend', t: 2, n: 'Ascension', d: '+25% damage, +25% HP, +15% speed', syn: { atk: 0.25, hp: 0.25, spd: 0.15 } },
+    { id: 'invinc', t: 2, n: 'Invincible', d: 'Shield, regeneration and a second life', xfx: { stalwart: 1, shield: 4, regen: 3 } },
+    { id: 'titan', t: 2, n: 'Titanic Hunger', d: '+20% HP and heal 16% of damage dealt', syn: { hp: 0.2 }, xfx: { vamp: 4 } },
+    { id: 'storm', t: 2, n: 'Storm Lord', d: 'Frenzy stacks and thunder on every 3rd hit', xfx: { thunder: 4, frenzy: 3 } },
+    { id: 'final', t: 2, n: 'Final Form', d: 'Deal +9% more damage every 5s of the fight', xfx: { ramp: 3 } },
+  ];
+
+  // Relics: ludus-wide artifacts, equipped on every fighter. Slots come from the Shrine.
+  D.RELICS = [
+    { id: 'laurel', n: 'Laurel of Sol', d: '+6% damage for everyone', syn: { atk: 0.06 }, c: '#f6b82d' },
+    { id: 'aegis', n: 'Aegis of Minerva', d: '+8% armor and a 8% HP shield', syn: { def: 0.08 }, xfx: { shield: 1 }, c: '#4aa3f0' },
+    { id: 'chrono', n: 'Hourglass of Chronos', d: 'Skills and ultimates 12% faster', xfx: { haste: 2 }, c: '#b06cf0' },
+    { id: 'mercury', n: 'Sandals of Mercury', d: '+8% speed', syn: { spd: 0.08 }, c: '#22b5a0' },
+    { id: 'fortune', n: 'Coin of Fortuna', d: '+12% gold from fights', gold: 0.12, c: '#c98a1a' },
+    { id: 'hydra', n: "Vulcan's Brand", d: 'Burn nearby enemies', xfx: { sear: 1 }, c: '#e8742a' },
+    { id: 'fang', n: 'Fang of Lupa', d: 'Heal 4% of damage dealt', xfx: { vamp: 1 }, c: '#c2395f' },
+    { id: 'feather', n: 'Phoenix Feather', d: 'Rise once per fight with 35% HP', xfx: { revive: 1 }, c: '#ff8a3d' },
+    { id: 'crown', n: 'Crown of Thorns', d: 'Reflect 12% of damage taken', xfx: { thorns: 2 }, c: '#2a9d6f' },
+    { id: 'ember', n: 'Ember of Mars', d: 'Hits give +3% attack speed (stacks)', xfx: { frenzy: 1 }, c: '#d2412b' },
+    { id: 'storm', n: "Jupiter's Bolt", d: 'Every 3rd hit calls lightning', xfx: { thunder: 1 }, c: '#7fc4ff' },
+    { id: 'titan', n: 'Heart of the Titan', d: '+12% max HP, regenerate HP', syn: { hp: 0.12 }, xfx: { regen: 1 }, c: '#8c5cc8' },
   ];
 
   G.LM_D = D;

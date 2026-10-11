@@ -4,6 +4,8 @@
   const LM = { D };
   let rnd = Math.random;
   LM.setRandom = (f) => { rnd = f || Math.random; };
+  LM.rand = () => rnd();
+  LM.withRandom = (f, fn) => { const keep = rnd; rnd = f; try { return fn(); } finally { rnd = keep; } };
 
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   const pick = (arr, r) => arr[Math.floor((r || rnd)() * arr.length)];
@@ -63,12 +65,19 @@
     const own = new Set(g.techs); const pool = D.TECH_POOL.filter((t) => !own.has(t));
     const a = pick(pool, r); const b = pick(pool.filter((t) => t !== a), r); return [a, b];
   }
+  function mastPicks(g, r) {
+    const pool = Object.keys(D.MASTS).filter((m) => !(g.mast || []).includes(m)); const out = [];
+    while (out.length < 3 && pool.length) out.push(pool.splice(Math.floor((r || rnd)() * pool.length), 1)[0]);
+    return out;
+  }
+  const ult2Picks = (r) => { const a = pick(D.ULT2, r); return [a, pick(D.ULT2.filter((x) => x !== a), r)]; };
   function makeGlad(o) {
     const r = o.r || rnd; const style = o.style || pick(D.STYLE_IDS, r); const S = D.STYLES[style]; const lvl = o.lvl || 1; const q = o.q == null ? r() : o.q;
     const g = {
       id: o.id || 0, name: o.name || pick(D.FIRST, r), nick: o.nick != null ? o.nick : (r() < 0.55 ? pick(D.NICK, r) : ''), style,
       skin: o.skin || pick(D.SKIN, r), hair: o.hair || pick(D.HAIR, r), plume: o.plume || pick(D.PLUME, r), face: o.face != null ? o.face : Math.floor(r() * 3),
-      lvl, xp: 0, st: {}, tal: {}, trait: o.trait || pick(D.TRAIT_IDS, r), techs: [S.sig], pick: null, gear: {},
+      lvl, xp: 0, st: {}, tal: {}, trait: o.trait || pick(D.TRAIT_IDS, r), techs: [S.sig], pend: [], gear: {}, mast: [], ult2: null,
+      rune: { k: 'lethal', m: ['celerity', 'coup'] },
       en: 100, mo: 70, inj: 0, act: 'rest', rec: { w: 0, l: 0 }, fame: 0, color: o.color || null,
     };
     D.STATS.forEach((s) => {
@@ -78,21 +87,32 @@
     for (let l = 2; l <= lvl; l++) D.STATS.forEach((s) => { g.st[s] += LM.levelGain(null, g, s); });
     if (lvl >= 3) g.techs.push(techPicks(g, r)[0]);
     if (lvl >= 6) g.techs.push(techPicks(g, r)[0]);
+    for (let l = 5; l <= Math.min(lvl, 20); l += 5) g.mast.push(mastPicks(g, r)[0]);
+    if (lvl >= 8) g.ult2 = ult2Picks(r)[0];
+    if (o.randRune) { const ms = Object.keys(D.MINORS); g.rune = { k: pick(Object.keys(D.KEYSTONES), r), m: [pick(ms, r)] }; g.rune.m.push(pick(ms.filter((x) => x !== g.rune.m[0]), r)); }
     return g;
   }
   LM.makeGlad = makeGlad;
   LM.stars = (g) => clamp(Math.round(((D.STATS.reduce((a, s) => a + g.tal[s], 0) - 5) / 10) * 4 + 1), 1, 5);
   LM.fullName = (g) => g.name + (g.nick ? ' ' + g.nick : '');
   LM.addXp = (g, xp) => {
-    const up = []; g.xp += xp;
+    const up = []; g.xp += xp; g.pend = g.pend || [];
     while (g.xp >= LM.need(g.lvl)) {
       g.xp -= LM.need(g.lvl); g.lvl++; up.push(g.lvl);
       D.STATS.forEach((s) => { g.st[s] += LM.levelGain(null, g, s); });
-      if ((g.lvl === 3 || g.lvl === 6) && !g.pick) g.pick = techPicks(g);
+      if (g.lvl === 3 || g.lvl === 6) g.pend.push({ t: 'tech', o: techPicks(g) });
+      if (g.lvl === 8 && !g.ult2) g.pend.push({ t: 'ult', o: ult2Picks() });
+      if (g.lvl % 5 === 0 && g.lvl <= 20) g.pend.push({ t: 'mast', o: mastPicks(g) });
     }
     return up;
   };
-  LM.choosePick = (g, id) => { if (g.pick && g.pick.includes(id)) { g.techs.push(id); g.pick = null; return true; } return false; };
+  LM.choosePick = (g, id) => {
+    const p = g.pend && g.pend[0]; if (!p || !p.o.includes(id)) return false;
+    if (p.t === 'tech') g.techs.push(id); else if (p.t === 'mast') g.mast.push(id); else g.ult2 = id;
+    g.pend.shift(); return true;
+  };
+  LM.pickName = (t, id) => (t === 'tech' ? D.TECHS[id] : t === 'mast' ? D.MASTS[id] : D.ULTS[id]);
+  LM.ultsOf = (g) => [D.STYLE_ULT[g.style]].concat(g.ult2 ? [g.ult2] : []);
   LM.statTotal = (g) => D.STATS.reduce((a, s) => a + g.st[s], 0);
   LM.grade = (v, lvl) => { const x = v / (8 + lvl * 4); return x < 0.75 ? 'D' : x < 0.95 ? 'C' : x < 1.15 ? 'B' : x < 1.4 ? 'A' : 'S'; };
 
@@ -178,8 +198,7 @@
   // ---------- derived combat stats ----------
   const STANCE = { agg: { atk: 0.15, def: -0.1 }, bal: {}, grd: { def: 0.2, atk: -0.08, spd: -0.05 }, cun: { crit: 0.08, eva: 0.08, hp: -0.05 } };
   LM.STANCES = { bal: 'Balanced', agg: 'Aggressive', grd: 'Guarded', cun: 'Cunning' };
-  const BEATS = { agg: 'cun', cun: 'grd', grd: 'agg' };
-  LM.stanceBeat = (a, b) => (BEATS[a] === b ? 1 : BEATS[b] === a ? -1 : 0);
+  LM.STANCE_D = { bal: 'No changes.', agg: '+15% damage, -10% armor.', grd: '+20% armor, -8% damage, -5% speed.', cun: '+8% crit, +8% dodge, -5% HP.' };
   LM.STANCE = STANCE;
   LM.perf = (g) => { const fe = g.en >= 60 ? 1 : 0.85 + (0.15 * g.en) / 60; const fm = 0.95 + (0.1 * g.mo) / 100; return fe * fm; };
   function derive(g, ctx) {
@@ -191,6 +210,8 @@
       if (it.set) sc[it.set] = (sc[it.set] || 0) + 1;
     });
     if (ctx.xfx) add(fx, ctx.xfx);
+    (g.mast || []).forEach((id) => { const m = D.MASTS[id]; if (m) add(fx, m.fx); });
+    if (g.rune) (g.rune.m || []).forEach((id) => { const m = D.MINORS[id]; if (m && m.fx) add(fx, m.fx); });
     const sets = [];
     for (const id in sc) { const n = sc[id]; if (n >= 2) { add(fx, D.SETS[id].two); sets.push({ id, n: 2 }); } if (n >= 4) { add(fx, D.SETS[id].four); sets.push({ id, n: 4 }); } }
     const T = D.TRAITS[g.trait] || {}; const sy = ctx.syn || {}; const st = STANCE[ctx.stance || 'bal'];
@@ -223,175 +244,12 @@
   const bkey = (a, b) => (a < b ? a + '-' + b : b + '-' + a);
   LM.bond = (S, a, b) => (S.bonds && S.bonds[bkey(a, b)]) || 0;
   LM.addBond = (S, a, b, n) => { S.bonds = S.bonds || {}; const k = bkey(a, b); S.bonds[k] = clamp((S.bonds[k] || 0) + n, 0, 100); };
-  LM.teamCtx = (S, glads, stance, vs) => {
+  LM.teamCtx = (S, glads, stance) => {
     const sy = LM.synergy(glads.map((g) => g.style)); const fx = Object.assign({}, sy.fx);
     if (S && glads.length > 1) { let tot = 0, n = 0; for (let i = 0; i < glads.length; i++) for (let j = i + 1; j < glads.length; j++) { tot += LM.bond(S, glads[i].id, glads[j].id); n++; } const b = (tot / n / 100) * 0.06; fx.atk = (fx.atk || 0) + b; fx.def = (fx.def || 0) + b; }
-    const sb = vs ? LM.stanceBeat(stance || 'bal', vs) : 0;
-    if (sb > 0) { fx.atk = (fx.atk || 0) + 0.12; fx.crit = (fx.crit || 0) + 0.05; } else if (sb < 0) fx.def = (fx.def || 0) - 0.05;
-    return { syn: fx, stance: stance || 'bal', list: sy.list, beat: sb };
-  };
-
-  // ---------- combat engine ----------
-  const alive = (F, side) => F.units.filter((u) => u.side === side && !u.down);
-  function mkUnit(g, side, i, ctx, hpFrac, grudge) {
-    const d = derive(g, ctx);
-    return {
-      id: side + i, side, i, g, name: g.name, style: g.style, tr: D.TRAITS[g.trait] || {},
-      maxhp: Math.round(d.hp), hp: Math.max(1, Math.round(d.hp * (hpFrac == null ? 1 : hpFrac))), atk: d.atk, def: d.def, spd: d.spd, crit: d.crit, eva: d.eva, fx: d.fx,
-      wil: g.st.wil, gauge: rnd() * 30, techs: (g.techs || []).map((id) => ({ id, cd: 2 + rnd() * 4 })), s: {}, down: false, gritUsed: false, stal: false,
-      dmg: 0, taken: 0, crits: 0, grudge: !!grudge, bacc: 0,
-    };
-  }
-  LM.mkUnits = (glads, side, ctx, hpFracs, grudge) => glads.map((g, i) => mkUnit(g, side, i, ctx, hpFracs && hpFracs[i], grudge));
-  function createFight(A, B, o) {
-    o = o || {};
-    return { t: 0, A, B, units: A.concat(B), ev: [], hype: 0, peak: 0, done: false, winner: null, auto: { A: !!o.autoA, B: true }, foc: { A: null, B: null }, quiet: !!o.quiet };
-  }
-  LM.createFight = createFight;
-  const emit = (F, e) => { if (!F.quiet) F.ev.push(e); };
-  const other = (s) => (s === 'A' ? 'B' : 'A');
-  function setStatus(F, t, key, val, dur) {
-    if (t.down) return;
-    if (key === 'stun' && rnd() < t.wil * 0.003) { emit(F, { k: 'resist', dst: t.id }); return; }
-    t.s[key] = val; emit(F, { k: 'status', dst: t.id, st: key, t: dur });
-  }
-  function damage(F, t, amt, srcUnit) {
-    t.hp -= amt; t.taken += amt;
-    if (t.hp <= 0 && !t.down) {
-      t.hp = 0; t.down = true; emit(F, { k: 'down', dst: t.id, src: srcUnit && srcUnit.id }); F.hype += 10;
-      if (!alive(F, t.side).length) finish(F, other(t.side));
-    }
-  }
-  function finish(F, winner) { if (F.done) return; F.done = true; F.winner = winner; emit(F, { k: 'end', winner }); }
-  function heal(F, u, amt) { amt = Math.min(u.maxhp - u.hp, Math.round(amt)); if (amt <= 0) return; u.hp += amt; emit(F, { k: 'heal', dst: u.id, amt }); }
-  function pickTarget(F, u, foes) {
-    const tn = foes.find((f) => f.s.taunt); if (tn) return tn;
-    const fid = F.foc[u.side]; if (fid) { const f = foes.find((x) => x.id === fid); if (f) return f; }
-    if (rnd() < 0.55) return foes.reduce((a, b) => (a.hp / a.maxhp <= b.hp / b.maxhp ? a : b));
-    return foes[Math.floor(rnd() * foes.length)];
-  }
-  function strike(F, u, t, o) {
-    o = o || {}; if (t.down || u.down) return 0;
-    const av = adv(u.style, t.style);
-    let hc = 0.93 - t.eva - (u.s.blind ? 0.4 : 0) + (t.s.netted ? 0.12 : 0); hc = clamp(hc, 0.3, 0.97);
-    if (rnd() > hc) { emit(F, { k: 'miss', src: u.id, dst: t.id }); return 0; }
-    let a = u.atk * (1 + (u.s.frenzy ? u.s.frenzy.atk : 0));
-    if (u.fx.fury) a *= 1 + u.fx.fury * 0.1 * (1 - u.hp / u.maxhp);
-    const df = t.def * (1 + (t.s.frenzy ? t.s.frenzy.def : 0)) * (1 - (o.ignore || 0));
-    let dmg = a * (o.mult || 1) * (0.85 + rnd() * 0.3) * (60 / (60 + Math.max(0, df)));
-    dmg *= av > 0 ? 1.25 : av < 0 ? 0.85 : 1;
-    if (av < 0 && u.tr.underdog) dmg *= 1 + u.tr.underdog;
-    if (u.grudge && u.tr.grudge) dmg *= 1 + u.tr.grudge;
-    if (u.fx.exec && t.hp / t.maxhp < 0.35) dmg *= 1 + u.fx.exec * 0.08;
-    if (o.exec && t.hp / t.maxhp < o.exec.th) dmg *= o.exec.m / (o.mult || 1);
-    const crit = rnd() < clamp(u.crit + (o.critB || 0), 0, 0.8); if (crit) dmg *= 1.6;
-    if (t.s.guard) dmg *= 1 - t.s.guard.f;
-    dmg = Math.max(1, Math.round(dmg));
-    let save = '';
-    if (dmg >= t.hp) {
-      if (t.fx.stalwart && !t.stal) { t.stal = true; dmg = t.hp - 1; save = 'STALWART'; }
-      else if (!t.gritUsed && rnd() < t.wil * 0.004) { t.gritUsed = true; dmg = t.hp - 1; save = 'GRIT'; F.hype += 14; }
-    }
-    u.dmg += dmg; if (crit) u.crits++;
-    emit(F, { k: 'hit', src: u.id, dst: t.id, dmg, crit, adv: av, tech: o.tag, save });
-    F.hype += 2 + (dmg / t.maxhp) * 50 + (crit ? 5 : 0);
-    damage(F, t, dmg, u);
-    if (u.fx.vamp) heal(F, u, dmg * u.fx.vamp * 0.04);
-    if (!t.down && ((u.fx.bleed && rnd() < u.fx.bleed * 0.15) || (crit && u.tr.bleedcrit))) { t.s.bleed = { dps: u.atk * 0.1, t: 4 }; emit(F, { k: 'status', dst: t.id, st: 'bleed' }); }
-    if (t.fx.thorns && !u.down) { const r = Math.round(dmg * t.fx.thorns * 0.06); if (r > 0) { emit(F, { k: 'thorn', src: t.id, dst: u.id, dmg: r }); damage(F, u, r, t); } }
-    if (!o.noRip && !t.down && !u.down && t.fx.riposte && rnd() < t.fx.riposte * 0.08) strike(F, t, u, { mult: 0.7, noRip: true, tag: 'riposte' });
-    return dmg;
-  }
-  function useTech(F, u, k, target) {
-    const t = u.techs[k]; const T = D.TECHS[t.id]; if (!T || t.cd > 0 || u.down || F.done) return false;
-    t.cd = T.cd; F.hype += 6; emit(F, { k: 'tech', src: u.id, tech: t.id });
-    const foes = alive(F, other(u.side)); const allies = alive(F, u.side);
-    if (T.tg === 'enemy' && foes.length) {
-      const tg = target && !target.down ? target : pickTarget(F, u, foes);
-      for (let h = 0; h < (T.hits || 1); h++) strike(F, u, tg, { mult: T.mult, ignore: T.ignore, critB: T.crit, exec: T.exec, tag: t.id });
-      if (!tg.down) {
-        if (T.stun) setStatus(F, tg, 'stun', T.stun, T.stun);
-        if (T.slow) setStatus(F, tg, 'slow', { f: T.slow.f, t: T.slow.t }, T.slow.t);
-        if (T.netted) tg.s.netted = T.netted;
-        if (T.blind) setStatus(F, tg, 'blind', T.blind, T.blind);
-      }
-    } else if (T.tg === 'enemies') {
-      foes.forEach((f) => strike(F, u, f, { mult: T.mult, tag: t.id }));
-    } else if (T.tg === 'self') {
-      if (T.heal) heal(F, u, u.maxhp * T.heal);
-      if (T.guard) { u.s.guard = { f: T.guard.f, t: T.guard.t }; emit(F, { k: 'status', dst: u.id, st: 'guard' }); }
-      if (T.taunt) { u.s.taunt = T.taunt; emit(F, { k: 'status', dst: u.id, st: 'taunt' }); }
-      if (T.frenzy) { u.s.frenzy = { atk: T.frenzy.atk, def: T.frenzy.def, t: T.frenzy.t }; emit(F, { k: 'status', dst: u.id, st: 'frenzy' }); }
-    } else if (T.tg === 'team') {
-      allies.forEach((a) => { a.s.rally = { spd: T.rally.spd, t: T.rally.t }; emit(F, { k: 'status', dst: a.id, st: 'rally' }); });
-    }
-    return true;
-  }
-  function aiTech(F, u, foes) {
-    const allies = alive(F, u.side); const hpf = u.hp / u.maxhp;
-    const order = u.techs.map((_, i) => i).sort(() => rnd() - 0.5);
-    for (const k of order) {
-      const t = u.techs[k]; const T = D.TECHS[t.id]; if (t.cd > 0) continue;
-      if (T.heal && hpf > 0.55) continue;
-      if (T.guard && !T.taunt && hpf > 0.7 && rnd() < 0.7) continue;
-      if (T.taunt && allies.length < 2) continue;
-      if (T.rally && allies.length < 2 && rnd() < 0.7) continue;
-      if (T.frenzy && hpf < 0.35) continue;
-      if (T.exec && !foes.some((f) => f.hp / f.maxhp < T.exec.th) && rnd() < 0.7) continue;
-      if (T.tg === 'enemies' && foes.length < 2 && rnd() < 0.6) continue;
-      if (rnd() < 0.8) return k;
-    }
-    return -1;
-  }
-  function act(F, u) {
-    const foes = alive(F, other(u.side)); if (!foes.length || u.down) return;
-    if (F.auto[u.side]) { const k = aiTech(F, u, foes); if (k >= 0) { useTech(F, u, k); return; } }
-    strike(F, u, pickTarget(F, u, foes), { mult: 1 });
-  }
-  function roar(F) {
-    F.peak = Math.max(F.peak, F.hype); F.hype = 0;
-    const hpf = (s) => { const us = F.units.filter((u) => u.side === s); return us.reduce((a, u) => a + u.hp, 0) / us.reduce((a, u) => a + u.maxhp, 0); };
-    const side = hpf('A') <= hpf('B') ? 'A' : 'B';
-    alive(F, side).forEach((u) => { u.gauge += 45; u.techs.forEach((t) => { t.cd = Math.max(0, t.cd - 3); }); });
-    emit(F, { k: 'roar', side });
-  }
-  function step(F, dt) {
-    if (F.done) return; F.t += dt;
-    for (const u of F.units) {
-      if (u.down) continue; const s = u.s;
-      for (const key in s) { const v = s[key]; if (typeof v === 'number') { s[key] = v - dt; if (s[key] <= 0) delete s[key]; } else { v.t -= dt; if (v.t <= 0) delete s[key]; } }
-      if (s.bleed) { u.bacc += s.bleed.dps * dt; if (u.bacc >= 1) { const d = Math.floor(u.bacc); u.bacc -= d; emit(F, { k: 'bleed', dst: u.id, dmg: d }); damage(F, u, d, null); } }
-      u.techs.forEach((t) => { t.cd = Math.max(0, t.cd - dt); });
-      if (!s.stun) u.gauge += u.spd * (s.slow ? s.slow.f : 1) * (s.rally ? 1 + s.rally.spd : 1) * dt;
-    }
-    if (F.done) return;
-    const ready = F.units.filter((u) => !u.down && u.gauge >= 100).sort((a, b) => b.gauge - a.gauge);
-    for (const u of ready) { if (F.done) break; if (u.down) continue; u.gauge -= 100; act(F, u); }
-    if (F.hype >= 100 && !F.done) roar(F);
-    F.peak = Math.max(F.peak, F.hype);
-    if (!F.done && F.t > 140) {
-      const hpf = (s) => F.units.filter((u) => u.side === s).reduce((a, u) => a + u.hp / u.maxhp, 0);
-      finish(F, hpf('A') >= hpf('B') ? 'A' : 'B');
-    }
-  }
-  LM.step = step;
-  LM.useTech = (F, uid_, k, targetId) => {
-    const u = F.units.find((x) => x.id === uid_); if (!u || u.down || u.s.stun) return false;
-    const tg = targetId ? F.units.find((x) => x.id === targetId) : null;
-    const ok = useTech(F, u, k, tg); if (ok) u.gauge = Math.max(0, u.gauge - 25); return ok;
-  };
-  LM.focus = (F, side, id) => { F.foc[side] = F.foc[side] === id ? null : id; };
-  LM.quick = (A, B, o) => {
-    const F = createFight(A, B, Object.assign({ autoA: true, quiet: true }, o)); let n = 0; while (!F.done && n++ < 1500) step(F, 0.25); return F;
-  };
-  // win chance of team A glads vs team B glads, stable seed so the number does not jitter between renders
-  LM.odds = (S, gA, gB, stanceA, n, stanceB) => {
-    n = n || 36; const keep = rnd; let w = 0; rnd = mulberry(hash(gA.map((g) => g.id + ':' + g.lvl).join() + '|' + gB.map((g) => g.name + g.lvl).join() + (stanceA || '') + (stanceB || '')));
-    try {
-      const ca = LM.teamCtx(S, gA, stanceA || 'bal', stanceB); const cb = LM.teamCtx(null, gB, stanceB || 'bal', stanceA || 'bal');
-      for (let i = 0; i < n; i++) { const F = LM.quick(LM.mkUnits(gA, 'A', ca), LM.mkUnits(gB, 'B', cb)); if (F.winner === 'A') w++; }
-    } finally { rnd = keep; }
-    return w / n;
+    const xfx = {};
+    if (S) (S.relicOn || []).forEach((id) => { const r = D.RELICS.find((x) => x.id === id); if (r) { if (r.syn) add(fx, r.syn); if (r.xfx) add(xfx, r.xfx); } });
+    return { syn: fx, xfx, stance: stance || 'bal', list: sy.list };
   };
 
   // ---------- rivals, opponents, fixtures ----------
@@ -407,7 +265,7 @@
   };
   LM.rivalById = (S, id) => LM.rivals(S, parseInt(id, 10))[parseInt(id.split('-')[1], 10)];
   function mkOpp(S, rv, lvl, power, r, league, rarShift) {
-    const g = makeGlad({ r, style: rv.style, name: rv.name, nick: rv.nick, trait: rv.trait, lvl, q: 0.5, skin: rv.skin, hair: rv.hair, plume: rv.plume, face: rv.face, color: rv.color });
+    const g = makeGlad({ r, randRune: true, style: rv.style, name: rv.name, nick: rv.nick, trait: rv.trait, lvl, q: 0.5, skin: rv.skin, hair: rv.hair, plume: rv.plume, face: rv.face, color: rv.color });
     const S0 = D.STYLES[rv.style]; const sb = D.STATS.reduce((a, s) => a + S0.base[s], 0); const pts = lvl * 4.5 * power;
     D.STATS.forEach((s) => { g.st[s] += (pts * S0.base[s]) / sb; });
     D.SLOTS.forEach((slot) => {
@@ -452,17 +310,7 @@
   LM.isRevenge = (S, ev) => ev.kind === 'duel' && S.rivals && S.rivals[ev.opps[0].rv] && S.rivals[ev.opps[0].rv].last === 'l';
 
 
-  // ---------- rival habits (stance tells) ----------
-  LM.habit = (opp) => {
-    const r = mulberry(hash('habit' + (opp.rv || opp.name))); const fav = ['agg', 'grd', 'cun', 'bal'][Math.floor(r() * 4)];
-    return { fav, p: 0.5 + r() * 0.25 };
-  };
-  LM.oppStance = (S, opp, r) => {
-    r = r || rnd; if (!opp.rv) return pick(['agg', 'grd', 'cun', 'bal'], r);
-    const h = LM.habit(opp); if (r() < h.p) return h.fav; return pick(['agg', 'grd', 'cun', 'bal'].filter((x) => x !== h.fav), r);
-  };
-  LM.noteStance = (S, opp, st) => { if (!opp.rv) return; S.rivals = S.rivals || {}; const r0 = S.rivals[opp.rv] || (S.rivals[opp.rv] = { w: 0, l: 0, last: '' }); r0.seen = r0.seen || {}; r0.seen[st] = (r0.seen[st] || 0) + 1; r0.lastSt = st; };
-  LM.expectedStance = (S, opp) => (opp.rv ? LM.habit(opp).fav : 'bal');
+  LM.oppStance = (S, o) => ({ hothead: 'agg', ironjaw: 'grd', coolhead: 'cun' }[o.trait] || 'bal');
 
   // ---------- the bookmaker: public odds know level and style only ----------
   LM.publicOdds = (gl, opps) => {
@@ -473,6 +321,42 @@
   LM.wagerMult = (gl, opps) => Math.round(clamp(0.93 / LM.publicOdds(gl, opps), 1.1, 8) * 10) / 10;
   LM.wagerOptions = (S) => [0.1, 0.25, 0.5].map((f) => Math.min(Math.round(S.gold * f), 2000)).filter((v) => v >= 5);
 
+
+  // ---------- augments (pick 1 of 3 before a fight, ARAM Mayhem style) ----------
+  const TIERW = [[70, 30, 0], [40, 55, 5], [15, 65, 20], [0, 50, 50]];
+  LM.augOffer = (S, level, have, forceTop) => {
+    const w = TIERW[clamp(level, 0, 3)]; const out = []; const taken = new Set((have || []).map((a) => a.id));
+    for (let i = 0; i < 3; i++) {
+      let t; if (forceTop && i === 0) t = 2; else { let x = rnd() * 100; t = 0; while (t < 2 && (x -= w[t]) >= 0) t++; }
+      let pool = D.AUGMENTS.filter((a) => a.t === t && !taken.has(a.id)); if (!pool.length) pool = D.AUGMENTS.filter((a) => !taken.has(a.id));
+      const a = pick(pool); taken.add(a.id); out.push(a);
+    }
+    return out;
+  };
+  LM.augCtx = (augs) => { const syn = {}, xfx = {}; augs.forEach((b) => { if (b.syn) add(syn, b.syn); if (b.xfx) add(xfx, b.xfx); }); return { syn, xfx }; };
+
+  // ---------- runes & relics ----------
+  LM.runeOwned = (S, kind, id) => (S.runes || D.RUNE_START)[kind].includes(id);
+  LM.unlockRune = (S) => {
+    const lock = []; Object.keys(D.KEYSTONES).forEach((id) => { if (!S.runes.k.includes(id)) lock.push({ kind: 'k', id }); }); Object.keys(D.MINORS).forEach((id) => { if (!S.runes.m.includes(id)) lock.push({ kind: 'm', id }); });
+    if (!lock.length) return null; const r = pick(lock); S.runes[r.kind].push(r.id); return r;
+  };
+  LM.setKeystone = (S, g, id) => { if (LM.runeOwned(S, 'k', id)) g.rune.k = id; };
+  LM.toggleMinor = (S, g, id) => {
+    if (!LM.runeOwned(S, 'm', id)) return; const m = g.rune.m; const i = m.indexOf(id);
+    if (i >= 0) m.splice(i, 1); else { if (m.length >= 2) m.shift(); m.push(id); }
+  };
+  LM.relicSlots = (S) => 2 + LM.bfx(S, 'shrine').l;
+  LM.dropRelic = (S) => {
+    const pool = D.RELICS.filter((r) => !(S.relics || []).includes(r.id)); if (!pool.length) return null;
+    const r = pick(pool); S.relics.push(r.id); if (S.relicOn.length < LM.relicSlots(S)) S.relicOn.push(r.id); return r;
+  };
+  LM.toggleRelic = (S, id) => {
+    const i = S.relicOn.indexOf(id); if (i >= 0) { S.relicOn.splice(i, 1); return ''; }
+    if (S.relicOn.length >= LM.relicSlots(S)) return 'All relic slots are full (the Shrine adds more)'; S.relicOn.push(id); return '';
+  };
+  LM.relicGold = (S) => (S.relicOn || []).reduce((a, id) => a + ((D.RELICS.find((r) => r.id === id) || {}).gold || 0), 0);
+
   // ---------- Pit of Trials ----------
   LM.pitOpp = (S, floor, g) => {
     const boss = floor % 5 === 0; const lvl = Math.max(1, Math.round(g.lvl * 0.75 + floor * 1.1 + (boss ? 3 : 0)));
@@ -481,25 +365,15 @@
     const o = mkOpp(S, rv, lvl, 0.78 + floor * 0.045 + (boss ? 0.15 : 0), rnd, Math.min(3, ml), boss);
     o.rv = null; o.id = 'pit' + floor; return o;
   };
-  LM.pitPick = (S, have) => {
-    const pool = D.BOONS.slice(); const out = [];
-    while (out.length < 3 && pool.length) out.push(pool.splice(Math.floor(rnd() * pool.length), 1)[0]);
-    return out;
-  };
-  LM.boonCtx = (boons) => {
-    const syn = {}, xfx = {};
-    boons.forEach((b) => { if (b.syn) add(syn, b.syn); if (b.xfx) add(xfx, b.xfx); });
-    return { syn, xfx };
-  };
   LM.pitReward = (S, floor, boons, lost) => {
     const ml = LM.maxLeague(S); const L0 = D.LEAGUES[ml];
     let gold = 0, fame = 0; for (let f = 1; f <= floor; f++) { gold += L0.purse * 0.3 * (1 + f * 0.18); fame += Math.round(L0.fameWin * 0.25 * (1 + f * 0.1)); }
-    gold *= 1 + boons.reduce((a, b) => a + (b.gold || 0), 0); gold *= 1 + 0.1 * ((S.perks || {}).gold || 0);
+    gold *= 1 + 0; gold *= 1 + 0.1 * ((S.perks || {}).gold || 0);
     if (lost) { gold *= 0.5; fame = Math.round(fame * 0.5); }
     const items = []; const n = Math.floor(floor / 3);
     for (let i = 0; i < n; i++) items.push(genItem(rnd, { league: ml, ilvl: 2 + ml * 5 + floor, luck: 0.04 * floor + LM.bfx(S, 'shrine').v }));
     if (floor >= 5 && !lost) items.push(genItem(rnd, { league: Math.min(3, ml + 1), ilvl: 3 + ml * 5 + floor, rar: Math.min(4, 2 + (floor >= 10 ? 1 : 0)) }));
-    return { gold: Math.round(gold), fame: Math.round(fame), items };
+    return { gold: Math.round(gold), fame: Math.round(fame), items, boss: floor >= 5 && !lost };
   };
 
   // ---------- legacy ghosts (your old champions come back as rivals) ----------
@@ -511,8 +385,8 @@
   };
 
   // ---------- scouting (fog of war) ----------
-  // 0: style + level only. 1: stat grades + trait. 2: exact numbers, techs, gear, win odds. 3: affixes/sets, derived stats, AI habits.
-  LM.fogNote = ['Style and level only', 'Stat grades and trait', 'Exact stats, gear, techs, win odds', 'Everything, incl. gear effects and habits'];
+  // 0: style + level only. 1: stat grades + trait. 2: exact numbers, techs, gear, win odds. 3: affixes/sets, derived stats, runes and masteries.
+  LM.fogNote = ['Style and level only', 'Stat grades and trait', 'Exact stats, gear, techs, win odds', 'Everything, incl. gear effects, runes and masteries'];
 
   // ---------- entering events ----------
   LM.healthy = (g) => g.inj <= 0;
@@ -559,7 +433,7 @@
     fame *= 0.85 + Math.min(res.hype || 0, 100) / 300;
     let ft = 0; glads.forEach((g) => { ft += (D.TRAITS[g.trait].fame || 0); ['weapon', 'shield', 'armor', 'helm', 'charm'].forEach((s) => { const it = g.gear[s]; if (it) it.af.forEach((a) => { if (a.id === 'showy') ft += 0.1 * a.v; }); }); });
     fame *= 1 + ft / glads.length;
-    const perks = S.perks || {}; gold *= 1 + 0.1 * (perks.gold || 0) + (res.win || res.place ? LM.bfx(S, 'stands').v : 0); fame *= 1 + (res.win ? LM.bfx(S, 'stands').v * 0.5 : 0);
+    const perks = S.perks || {}; gold *= 1 + 0.1 * (perks.gold || 0) + LM.relicGold(S) + (glads.some((g) => g.rune && g.rune.k === 'first') ? 0.1 : 0) + (res.win || res.place ? LM.bfx(S, 'stands').v : 0); fame *= 1 + (res.win ? LM.bfx(S, 'stands').v * 0.5 : 0);
     gold = Math.round(gold); fame = Math.round(fame); S.gold += gold; S.fame += fame; rep.gold = gold; rep.fame = fame;
     const oppLvl = Math.max(...ev.opps.map((o) => o.lvl));
     const big = ev.kind === 'tourney' || ev.kind === 'grand' ? 1.6 : 1;
@@ -576,7 +450,7 @@
     const luck = LM.bfx(S, 'shrine').v + (perks.luck || 0) * 0.05 + glads.reduce((a, g) => a + (D.TRAITS[g.trait].luck || 0), 0) / glads.length;
     const lootLvl = Math.max(1, oppLvl);
     const rolloot = () => genItem(rnd, { league: ev.league, ilvl: lootLvl, luck });
-    if (ev.loot && res.place === 1) rep.choice = [rolloot(), rolloot(), rolloot()];
+    if (ev.loot && res.place === 1) { rep.choice = [rolloot(), rolloot(), rolloot()]; rep.relic = (ev.kind === 'grand' || rnd() < 0.4) ? LM.dropRelic(S) : null; rep.rune = rnd() < 0.6 ? LM.unlockRune(S) : null; }
     else if (res.win && rnd() < 0.3 + 0.1 * (ev.diff || 0)) rep.loot.push(rolloot());
     rep.loot.forEach((it) => { const sold = LM.addItem(S, it); if (sold) rep.notes.push(`Armory full: sold ${sold.name}`); });
     // rivals head-to-head
@@ -784,7 +658,7 @@
     const S = {
       v: 1, name: o.name || 'Ludus Maximus', color: o.color || 0, seed: Math.floor(rnd() * 1e9).toString(36), week: 1, season: 1,
       gold: 250 + 150 * (perks.start || 0), fame: 0, laurels: o.laurels || 0, perks, rows: 2, plots: new Array(16).fill(null), glads: [], nextId: 1, items: [],
-      entries: {}, menu: 'barley', rivals: {}, contracts: [], legends: o.legends || [], bonds: {}, market: null, recruits: null, pendingEv: null,
+      runes: { k: D.RUNE_START.k.slice(), m: D.RUNE_START.m.slice() }, relics: [], relicOn: [], entries: {}, menu: 'barley', rivals: {}, contracts: [], legends: o.legends || [], bonds: {}, market: null, recruits: null, pendingEv: null,
       stats: { fights: 0, wins: 0, losses: 0, tourneys: 0, spares: 0, weeks: 0, contracts: 0 }, flags: o.flags || {}, ascensions: o.ascensions || 0, sound: o.sound !== false,
     };
     S.plots[6] = { b: 'kitchen', l: 1 }; S.plots[5] = { b: 'barracks', l: 1 + Math.min(1, perks.start || 0) }; S.plots[2] = { b: 'palaestra', l: 1 };
@@ -792,10 +666,18 @@
   };
   const KEY = 'ludus_maximus_v1';
   LM.save = (S) => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { /* storage may be blocked */ } };
-  LM.load = () => { try { const t = localStorage.getItem(KEY); if (!t) return null; const S = JSON.parse(t); return S && S.v === 1 ? S : null; } catch (e) { return null; } };
+  LM.load = () => { try { const t = localStorage.getItem(KEY); if (!t) return null; const S = JSON.parse(t); return S && S.v === 1 ? LM.migrate(S) : null; } catch (e) { return null; } };
+  LM.migrate = (S) => {
+    S.runes = S.runes || { k: D.RUNE_START.k.slice(), m: D.RUNE_START.m.slice() }; S.relics = S.relics || []; S.relicOn = S.relicOn || [];
+    (S.glads || []).concat(S.ghosts || []).forEach((g) => {
+      g.pend = g.pend || (g.pick ? [{ t: 'tech', o: g.pick }] : []); delete g.pick; g.mast = g.mast || []; g.rune = g.rune || { k: 'lethal', m: ['celerity', 'coup'] };
+      if (g.ult2 === undefined) g.ult2 = null; if (g.lvl >= 8 && !g.ult2 && !g.pend.some((p) => p.t === 'ult')) g.pend.push({ t: 'ult', o: ult2Picks() });
+    });
+    return S;
+  };
   LM.wipe = () => { try { localStorage.removeItem(KEY); } catch (e) { /* ignore */ } };
   LM.exportCode = (S) => btoa(unescape(encodeURIComponent(JSON.stringify(S))));
-  LM.importCode = (t) => { try { const S = JSON.parse(decodeURIComponent(escape(atob(t.trim())))); return S && S.v === 1 && S.plots ? S : null; } catch (e) { return null; } };
+  LM.importCode = (t) => { try { const S = JSON.parse(decodeURIComponent(escape(atob(t.trim())))); return S && S.v === 1 && S.plots ? LM.migrate(S) : null; } catch (e) { return null; } };
 
   G.LM = LM;
   if (typeof module !== 'undefined') module.exports = LM;

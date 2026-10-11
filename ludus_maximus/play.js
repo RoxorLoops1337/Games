@@ -5,7 +5,6 @@
   const esc = U.esc, fmt = U.fmt;
   const btn = (label, val, cls) => `<button class="btn full ${cls || ''}" style="margin-top:8px" data-a="res" data-v="${val}">${label}</button>`;
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-  const STANCES = [['agg', 'Aggressive', '+15% damage, -10% armor', 'red'], ['bal', 'Balanced', 'No changes', ''], ['grd', 'Guarded', '+20% armor, -8% damage', 'blue']];
 
   ACT.next = async () => {
     const S = U.S(); if (!S || U.busy) return;
@@ -18,7 +17,7 @@
     const wk = S.week;
     const rep = L.weekTrain(S); U.save(); U.render();
     await U.dialog(trainHtml(S, rep, wk));
-    await pickTechs(S);
+    await pickPends(S);
     for (const key of L.dueKeys(S)) {
       const ev = L.eventByKey(S, key); const en = S.entries[key];
       const gl = en.ids.map((id) => U.gOf(id)).filter(Boolean);
@@ -37,11 +36,24 @@
     const i = await U.dialog(`<h2>Event</h2><div style="font-size:15px;margin:8px 0">${E.t}</div>` + E.c.map((c, k) => btn(c.l, k, k ? 'ghost' : '')).join(''));
     const msg = L.runEvent(S, +i); U.save(); U.render(); await U.dialog(`<h2>Result</h2><div style="font-size:15px;margin:8px 0">${esc(msg)}</div>` + btn('Okay', 'ok'));
   }
-  async function pickTechs(S) {
+  const PICKT = { tech: ['New technique', 'Learn', (t) => `<span class="tag">${D.TECHS[t].cd}s</span> ${D.TECHS[t].d}`, (t) => D.TECHS[t].n], mast: ['New mastery', 'Take', (t) => D.MASTS[t].d, (t) => D.MASTS[t].n], ult: ['Second ultimate!', 'Learn', (t) => `<span class="tag">${D.ULTS[t].cd}s</span> ${D.ULTS[t].d}`, (t) => D.ULTS[t].n] };
+  async function pickPends(S) {
     for (const g of S.glads) {
-      if (!g.pick) continue;
-      const t = await U.dialog(`<h2>${esc(g.name)} reached level ${g.lvl}!</h2><div class="muted" style="margin-bottom:8px">Choose a new technique.</div>` + g.pick.map((t) => { const T = D.TECHS[t]; return `<div class="tech"><b>${T.n}</b> <span class="tag">${T.cd}s</span><div>${T.d}</div>${btn('Learn ' + T.n, t)}</div>`; }).join(''));
-      L.choosePick(g, t);
+      let guard = 0;
+      while (g.pend && g.pend.length && guard++ < 8) {
+        const p0 = g.pend[0]; const M = PICKT[p0.t];
+        const t = await U.dialog(`<h2>${esc(g.name)}: ${M[0]}</h2><div class="muted" style="margin-bottom:8px">Level ${g.lvl}. Choose one for good.</div>` + p0.o.map((t) => `<div class="tech"><b>${M[3](t)}</b><div>${M[2](t)}</div>${btn(M[1] + ' ' + M[3](t), t)}</div>`).join(''));
+        L.choosePick(g, t);
+      }
+    }
+  }
+  const pickTechs = pickPends;
+  async function pickAug(S, level, have, force, title) {
+    let offer = L.augOffer(S, level, have, force); let rerolled = false;
+    for (;;) {
+      const v = await U.dialog(`<h2>${title || 'Choose an augment'}</h2><div class="muted" style="margin-bottom:8px">Lasts for this fight${have && have.length ? ' (on top of ' + have.length + ' from earlier rounds)' : ''}. Silver, Gold or Prismatic: pick one.</div>` + offer.map((a) => `<div class="itm" data-a="res" data-v="${a.id}" style="border-color:${D.TIERS[a.t].c};box-shadow:0 0 0 3px ${D.TIERS[a.t].c}66"><div class="sp"><span class="tag" style="background:${D.TIERS[a.t].c}">${D.TIERS[a.t].n}</span><div class="gname" style="font-size:14px">${a.n}</div><div class="muted" style="opacity:1">${a.d}</div></div></div>`).join('') + (rerolled ? '' : btn('Reroll (free, once)', 'reroll', 'ghost')));
+      if (v === 'reroll') { rerolled = true; offer = L.augOffer(S, level, have, force); continue; }
+      return D.AUGMENTS.find((a) => a.id === v);
     }
   }
 
@@ -63,19 +75,20 @@
   async function runEvent(S, ev, gl, en) {
     if (ev.kind === 'tourney' || ev.kind === 'grand') return runTourney(S, ev, gl[0]);
     const stance = await prep(S, ev, gl, ev.opps, {}); const bet = commit(S);
-    const res = await fightScreen(S, gl, ev.opps, stance, { ev, tricks: bet.tricks });
-    ev.opps.forEach((o) => L.noteStance(S, o, res.stB));
+    const aug = await pickAug(S, ev.league, [], ev.kind === 'grand');
+    const res = await fightScreen(S, gl, ev.opps, stance, { ev, tricks: bet.tricks, augs: [aug] });
     const rep = L.settle(S, ev, gl, res); settleBets(S, bet, res, rep.notes);
     await results(S, ev, gl, res, rep);
   }
   async function runTourney(S, ev, g) {
-    const T = L.tourneyInit(S, ev, g); let champion = false; let hype = 0; let hpf = 1; let odds = null; const notes = [];
+    const T = L.tourneyInit(S, ev, g); let champion = false; let hype = 0; let hpf = 1; let odds = null; const notes = []; const augs = [];
     const names = ev.size === 8 ? ['Quarterfinal', 'Semifinal', 'Final'] : ['Semifinal', 'Final'];
     for (;;) {
       const opp = L.tourneyOpp(T); const name = names[T.round];
       const stance = await prep(S, ev, [g], [opp], { T, name, hpf: T.hpf }); const bet = commit(S);
-      const res = await fightScreen(S, [g], [opp], stance, { ev, hpf: { [g.id]: T.hpf }, tricks: bet.tricks });
-      L.noteStance(S, opp, res.stB); settleBets(S, bet, res, notes);
+      augs.push(await pickAug(S, Math.min(3, ev.league + (T.round >= 1 ? 1 : 0)), augs, ev.kind === 'grand' && T.round === names.length - 1, `${name}: new augment`));
+      const res = await fightScreen(S, [g], [opp], stance, { ev, hpf: { [g.id]: T.hpf }, tricks: bet.tricks, augs: augs.slice() });
+      settleBets(S, bet, res, notes);
       hype = Math.max(hype, res.hype); hpf = res.hpf[g.id]; if (odds == null) odds = res.odds;
       const r = L.tourneyAdvance(S, T, res.win);
       if (res.win) {
@@ -92,7 +105,7 @@
 
   // ---------- prep ----------
   const PREP = { wager: 0, mult: 1, tricks: {}, gold: 0, lvl: 1 };
-  const STN = [['bal', 'Balanced', 'Safe pick, no swings', ''], ['agg', 'Aggressive', '+15% damage, -10% armor. Beats Cunning', 'red'], ['grd', 'Guarded', '+20% armor, -8% damage. Beats Aggressive', 'blue'], ['cun', 'Cunning', '+8% crit, +8% dodge, -5% HP. Beats Guarded', 'green']];
+  const STN = [['bal', '', ''], ['agg', 'red'], ['grd', 'blue'], ['cun', 'green']];
   const trickCost = (t) => t.cost(PREP.lvl);
   function prepCost() { return Object.keys(PREP.tricks).filter((k) => PREP.tricks[k]).reduce((a, k) => a + trickCost(D.TRICKS.find((t) => t.id === k)), 0) + PREP.wager; }
   function prepPaint() {
@@ -105,22 +118,21 @@
   function prep(S, ev, gl, opps, o) {
     const lv = L.scoutLevel(S); const a = L.adv(gl[0].style, opps[0].style); const ctx = L.teamCtx(S, gl, 'bal');
     PREP.wager = 0; PREP.tricks = {}; PREP.gold = S.gold; PREP.lvl = Math.round(opps.reduce((x, y) => x + y.lvl, 0) / opps.length); PREP.mult = L.wagerMult(gl, opps);
-    const fav = L.expectedStance(S, opps[0]); const rec = opps[0].rv && S.rivals[opps[0].rv];
     let h = `<h2>${o.name ? o.name + ': ' : ''}${ev.title}</h2>`;
     h += `<div class="row" style="justify-content:space-around;align-items:flex-end"><div style="text-align:center">${gl.map((g) => U.spr(g, { size: 70 })).join('')}<div class="gname" style="font-size:12px">${gl.map((g) => esc(g.name)).join(' & ')}</div></div><div class="h" style="font-size:22px">VS</div><div style="text-align:center">${opps.map((x) => A.gladOf(x, { size: 70, tunic: x.color, flip: true, mood: 'fight' })).join('')}<div class="gname" style="font-size:12px">${opps.map((x) => esc(x.name)).join(' & ')}</div></div></div>`;
     h += `<div class="row wrap" style="justify-content:center;margin:8px 0">${gl.length === 1 && opps.length === 1 ? U.advTag(a) : ''}${opps.map((x) => A.styleIcon(x.style, 22)).join('')}${opps[0].gh ? '<span class="tag" style="background:#7d7d8c;color:#fff">Your old champion</span>' : ''}</div>`;
     if (o.hpf != null && o.hpf < 1) h += `<div class="card" style="background:#f7c9c0"><b>Wounded:</b> starting at ${Math.round(o.hpf * 100)}% HP</div>`;
     if (gl.length > 1) h += `<div class="small">Synergy: ${ctx.list.length ? ctx.list.map((s) => `<b>${s.n}</b> (${s.d})`).join(', ') : 'none'}</div>`;
     const low = gl.filter((g) => g.en < 60); if (low.length) h += `<div class="small" style="color:var(--terra)">${low.map((g) => esc(g.name)).join(', ')} ${low.length > 1 ? 'are' : 'is'} tired (energy under 60). Stats reduced.</div>`;
-    if (opps[0].rv) h += `<div class="small" style="margin-top:4px">${lv >= 2 ? `Tell: favors <b>${L.STANCES[fav]}</b>.` : rec && rec.lastSt ? `Last time they opened <b>${L.STANCES[rec.lastSt]}</b>.` : 'You know nothing of their habits yet.'}</div>`;
+    if (gl.length === 1) { const g = gl[0]; h += `<div class="small" style="margin-top:4px"><b>${esc(D.KEYSTONES[g.rune.k].n)}</b> rune · Ultimates: ${L.ultsOf(g).map((x) => '<b>' + D.ULTS[x].n + '</b>').join(', ')}${(S.relicOn || []).length ? ' · ' + S.relicOn.length + ' relic(s)' : ''}</div>`; }
     if (!o.pit) {
       h += `<div class="sec" style="color:var(--terra);text-shadow:none">The bookmaker</div><div class="small">The crowd only knows level and style, not stats. Spot a mispriced fight and back yourself. Pays <b>x${PREP.mult.toFixed(1)}</b> on a win.</div><div class="row wrap" style="margin-top:6px"><button class="btn sm on" data-a="pwager" data-v="0">No bet</button>${L.wagerOptions(S).map((v) => `<button class="btn sm ghost" data-a="pwager" data-v="${v}">${A.icon('coin', 12)}${fmt(v)}</button>`).join('')}</div>`;
       h += `<div class="sec" style="color:var(--terra);text-shadow:none">Dirty tricks</div>` + D.TRICKS.map((t) => `<div class="menu-opt" data-a="ptrick" data-v="${t.id}" style="margin-bottom:4px"><div class="sp"><div class="gname" style="font-size:12px">${t.n}</div><div class="tiny" style="font-weight:600">${t.d}${t.risk ? ` <b style="color:var(--terra)">${Math.round(t.risk * 100)}% risk of being caught (-15 fame)</b>` : ''}</div></div><div class="h" style="font-size:12px">${A.icon('coin', 12)}${trickCost(t)}</div></div>`).join('');
     }
-    h += `<div id="pcost" class="small" style="margin-top:6px;font-weight:900"></div><div class="sec" style="color:var(--terra);text-shadow:none">Choose a stance and fight</div><div class="muted" style="opacity:1;font-size:11px">Both sides choose in secret. Aggressive beats Cunning, Cunning beats Guarded, Guarded beats Aggressive.</div>`;
-    h += STN.map(([id, n, d, c]) => {
-      let odds = ''; if (lv >= 2 && gl.length * opps.length <= 6) odds = `<span class="pill" title="win chance if they use their favorite stance">${Math.round(L.odds(S, gl, opps, id, 24, fav) * 100)}%</span>`;
-      return `<button class="btn full ${c}" style="margin-top:8px;justify-content:space-between;text-align:left" data-a="res" data-v="${id}"><span>${n}<br><span class="tiny" style="text-transform:none;opacity:.9;font-weight:700">${d}</span></span>${odds}</button>`;
+    h += `<div id="pcost" class="small" style="margin-top:6px;font-weight:900"></div><div class="sec" style="color:var(--terra);text-shadow:none">Choose a battle plan</div><div class="muted" style="opacity:1;font-size:11px">A plan reshapes your stats for this fight. It is a build choice, not a counter.</div>`;
+    h += STN.map(([id, c]) => {
+      let odds = ''; if (lv >= 2 && gl.length * opps.length <= 6) odds = `<span class="pill">${Math.round(L.odds(S, gl, opps, id, 24) * 100)}%</span>`;
+      return `<button class="btn full ${c}" style="margin-top:8px;justify-content:space-between;text-align:left" data-a="res" data-v="${id}"><span>${L.STANCES[id]}<br><span class="tiny" style="text-transform:none;opacity:.9;font-weight:700">${L.STANCE_D[id]}</span></span>${odds}</button>`;
     }).join('');
     const pr = U.dialog(h); setTimeout(prepPaint, 0); return pr;
   }
@@ -135,91 +147,7 @@
     bet.tricks.forEach((id) => { const T = D.TRICKS.find((t) => t.id === id); if (T.risk && Math.random() < T.risk) { S.fame = Math.max(0, S.fame - 15); notes.push(`Caught ${T.n.toLowerCase()}! -15 fame`); } });
   }
 
-  // ---------- fight screen ----------
-  const POS = { 1: [[10, 22]], 2: [[3, 30], [18, 8]], 3: [[0, 38], [16, 20], [2, 2]] };
-  function fightScreen(S, gl, opps, stance, o) {
-    return new Promise((resolve) => {
-      const ev = o.ev || {};
-      const stB = L.oppStance(S, opps[0]); const odds = L.odds(S, gl, opps, stance, 30, stB);
-      const ctxA = L.teamCtx(S, gl, stance, stB); const ctxB = L.teamCtx(null, opps, stB, stance);
-      (o.tricks || []).forEach((id) => { const T = D.TRICKS.find((t) => t.id === id); const addTo = (c, fx) => { for (const k in fx) c.syn[k] = (c.syn[k] || 0) + fx[k]; }; if (T.foe) addTo(ctxB, T.foe); if (T.me) addTo(ctxA, T.me); });
-      if (o.boon) { for (const k in o.boon.syn) ctxA.syn[k] = (ctxA.syn[k] || 0) + o.boon.syn[k]; ctxA.xfx = o.boon.xfx; }
-      const unitsA = L.mkUnits(gl, 'A', ctxA, gl.map((g) => (o.hpf && o.hpf[g.id] != null ? o.hpf[g.id] : 1)));
-      const unitsB = L.mkUnits(opps, 'B', ctxB);
-      if (L.isRevenge(S, ev)) unitsA.forEach((u) => { u.grudge = true; });
-      const F = L.createFight(unitsA, unitsB, { autoA: !!S.flags.auto });
-      const root = $('#fightRoot');
-      const posA = POS[unitsA.length], posB = POS[unitsB.length];
-      const spritesHtml = F.units.map((u) => { const p = (u.side === 'A' ? posA : posB)[u.i]; return `<div class="fs" id="fs-${u.id}" data-a="${u.side === 'B' ? 'ffocus' : ''}" data-id="${u.id}" style="${u.side === 'A' ? 'left' : 'right'}:${p[0]}%;bottom:${p[1]}%;z-index:${10 - Math.floor(p[1] / 10)}"><span class="tgt">TARGET</span>${A.gladOf(u.g, { size: 130, tunic: u.side === 'A' ? U.myColor() : u.g.color || '#3d3b46', flip: u.side === 'B', mood: 'fight' })}</div>`; }).join('');
-      const bars = (side) => F.units.filter((u) => u.side === side).map((u) => `<div class="fu" id="fu-${u.id}"><div class="nm">${A.styleIcon(u.style, 16)}<span>${esc(u.name)}</span></div><div class="bar hp"><i id="hp-${u.id}" style="width:100%"></i></div></div>`).join('');
-      const ctrl = unitsA.map((u) => `<div class="tr"><div class="who">${esc(u.name)}</div>${u.techs.map((t, k) => `<button class="tb" id="tb-${u.id}-${k}" data-a="ftech" data-u="${u.id}" data-k="${k}"><i></i><span>${D.TECHS[t.id].n}</span></button>`).join('')}</div>`).join('');
-      root.innerHTML = `<div id="fight"><div class="inner"><div class="f-top"><div class="side">${bars('A')}</div><div class="h" style="color:#fff;align-self:center;font-size:14px;text-shadow:2px 2px 0 var(--ink)">VS</div><div class="side r">${bars('B')}</div></div><div class="f-stage" id="stage">${A.arenaBG()}${spritesHtml}<div class="f-banner" id="fban"></div></div><div class="f-hype"><i id="hype"></i><span>Crowd hype</span></div><div class="f-log" id="flog">${esc(gl[0].name)} (${L.STANCES[stance]}) vs ${esc(opps[0].name)} (${L.STANCES[stB]}).${ctxA.beat > 0 ? ' You read them!' : ctxA.beat < 0 ? ' They read you!' : ''}</div><div class="f-ctrl">${ctrl}</div><div class="f-speed"><button class="btn sm on" data-a="fspeed" data-v="1">1x</button><button class="btn sm" data-a="fspeed" data-v="2">2x</button><button class="btn sm" data-a="fspeed" data-v="4">4x</button><button class="btn sm ${F.auto.A ? 'on' : ''}" id="fauto" data-a="fauto">Auto</button><button class="btn sm ghost" data-a="fskip">Skip</button></div></div></div>`;
-      U.fight = { F, speed: 1, skip: false };
-      const fx = U.fight;
-      const el = (id) => $('#' + id);
-      const stage = $('#stage');
-      const ban = (t) => { const b = $('#fban'); b.textContent = t; b.classList.remove('on'); void b.offsetWidth; b.classList.add('on'); };
-      const logt = (t) => { $('#flog').textContent = t; };
-      const nameOf = (id) => (F.units.find((u) => u.id === id) || {}).name;
-      function floatAt(id, text, cls) {
-        const e = el('fs-' + id); if (!e) return; const f = document.createElement('div'); f.className = 'float ' + (cls || ''); f.textContent = text;
-        f.style.left = e.offsetLeft + e.offsetWidth / 2 + (Math.random() * 20 - 10) + 'px'; f.style.top = e.offsetTop + e.offsetHeight * 0.15 + 'px'; stage.appendChild(f); setTimeout(() => f.remove(), 1000);
-      }
-      const STL = { stun: 'STUNNED', slow: 'SLOWED', blind: 'BLINDED', bleed: 'BLEEDING', guard: 'GUARD', taunt: 'TAUNT', frenzy: 'FRENZY', rally: 'RALLY' };
-      function handle(e) {
-        const sp = fx.skip;
-        if (e.k === 'hit') {
-          if (!sp) {
-            const a = el('fs-' + e.src); const t = el('fs-' + e.dst); const dir = e.src[0] === 'A' ? 1 : -1;
-            if (a && !a.classList.contains('dead')) a.animate([{ transform: 'translateX(0)' }, { transform: `translateX(${dir * 30}px) scale(1.06)` }, { transform: 'translateX(0)' }], { duration: 280 / fx.speed });
-            if (t) { t.classList.add('hurt'); setTimeout(() => t.classList.remove('hurt'), 120); }
-            floatAt(e.dst, (e.crit ? 'CRIT ' : '') + e.dmg, e.crit ? 'crit' : '');
-            if (e.save) floatAt(e.dst, e.save + '!', 'tech');
-            U.snd(e.crit ? 'crit' : 'hit');
-          }
-          logt(`${nameOf(e.src)} hits ${nameOf(e.dst)} for ${e.dmg}${e.crit ? ' (CRIT)' : ''}${e.adv > 0 ? ' (style advantage)' : e.adv < 0 ? ' (style disadvantage)' : ''}.`);
-        } else if (e.k === 'miss') { if (!sp) floatAt(e.dst, 'MISS', 'miss'); logt(`${nameOf(e.src)} misses ${nameOf(e.dst)}.`); }
-        else if (e.k === 'tech') { if (!sp) { floatAt(e.src, D.TECHS[e.tech].n + '!', 'tech'); U.snd('tech'); } logt(`${nameOf(e.src)} uses ${D.TECHS[e.tech].n}!`); }
-        else if (e.k === 'heal') { if (!sp) floatAt(e.dst, '+' + e.amt, 'heal'); }
-        else if (e.k === 'down') { const t = el('fs-' + e.dst); if (t) t.classList.add('dead'); const f = el('fu-' + e.dst); if (f) f.classList.add('dead'); logt(`${nameOf(e.dst)} is down!`); }
-        else if (e.k === 'status') { if (!sp && STL[e.st]) floatAt(e.dst, STL[e.st], 'st'); }
-        else if (e.k === 'resist') { if (!sp) floatAt(e.dst, 'RESIST', 'st'); }
-        else if (e.k === 'bleed') { if (!sp) floatAt(e.dst, '-' + e.dmg, 'miss'); }
-        else if (e.k === 'thorn') { if (!sp) floatAt(e.dst, e.dmg + ' thorns', 'miss'); }
-        else if (e.k === 'roar') { if (!sp) { ban('Crowd roars!'); U.snd('roar'); stage.animate([{ transform: 'translateX(0)' }, { transform: 'translateX(-5px)' }, { transform: 'translateX(5px)' }, { transform: 'translateX(0)' }], { duration: 300 }); } logt(e.side === 'A' ? 'The crowd backs YOU!' : 'The crowd backs the underdog!'); }
-      }
-      function paint() {
-        F.units.forEach((u) => {
-          const h = el('hp-' + u.id); if (h) h.style.width = (u.hp / u.maxhp) * 100 + '%';
-          if (u.side === 'A') u.techs.forEach((t, k) => { const b = el(`tb-${u.id}-${k}`); if (!b) return; const T = D.TECHS[t.id]; b.firstChild.style.height = (t.cd > 0 ? (t.cd / T.cd) * 100 : 0) + '%'; b.classList.toggle('cd', t.cd > 0 || u.down || !!u.s.stun); });
-        });
-        $('#hype').style.width = Math.min(100, F.hype) + '%';
-        F.units.filter((u) => u.side === 'B').forEach((u) => { const e = el('fs-' + u.id); if (e) e.classList.toggle('focus', F.foc.A === u.id); });
-      }
-      if (ctxA.beat) setTimeout(() => ban(ctxA.beat > 0 ? 'You read them!' : 'They read you!'), 250);
-      let last = performance.now(); let acc = 0; let finished = false;
-      function end() {
-        if (finished) return; finished = true;
-        const win = F.winner === 'A'; ban(win ? 'Victory!' : 'Defeat'); U.snd(win ? 'win' : 'lose'); paint();
-        const hpf = {}; unitsA.forEach((u) => { hpf[u.g.id] = u.hp / u.maxhp; });
-        setTimeout(() => { root.innerHTML = ''; U.fight = null; resolve({ win, hype: Math.max(F.peak, F.hype), hpf, odds, F, stB, beat: ctxA.beat }); }, 1500);
-      }
-      function frame(now) {
-        if (finished) return;
-        const dt = Math.min(0.1, (now - last) / 1000); last = now; acc += dt * fx.speed;
-        if (fx.skip) { let n = 0; while (!F.done && n++ < 4000) L.step(F, 0.1); } else { while (acc >= 0.05 && !F.done) { L.step(F, 0.05); acc -= 0.05; } }
-        F.ev.splice(0).forEach(handle); paint();
-        if (F.done) { end(); return; }
-        requestAnimationFrame(frame);
-      }
-      requestAnimationFrame((t) => { last = t; frame(t); });
-    });
-  }
-  ACT.ftech = (el) => { const fx = U.fight; if (!fx) return; const ok = L.useTech(fx.F, el.dataset.u, +el.dataset.k); if (!ok) U.snd('miss'); };
-  ACT.ffocus = (el) => { const fx = U.fight; if (!fx) return; L.focus(fx.F, 'A', el.dataset.id); U.snd('click'); };
-  ACT.fspeed = (el) => { const fx = U.fight; if (!fx) return; fx.speed = +el.dataset.v; document.querySelectorAll('.f-speed [data-a=fspeed]').forEach((b) => b.classList.toggle('on', b === el)); };
-  ACT.fauto = (el) => { const fx = U.fight; if (!fx) return; fx.F.auto.A = !fx.F.auto.A; U.S().flags.auto = fx.F.auto.A; el.classList.toggle('on', fx.F.auto.A); };
-  ACT.fskip = () => { const fx = U.fight; if (fx) fx.skip = true; };
+  const fightScreen = (S, gl, opps, stance, o) => G.LMFIGHT.run(S, gl, opps, stance, o);
 
   // ---------- results ----------
   async function results(S, ev, gl, res, rep) {
@@ -246,9 +174,14 @@
       const id = await U.dialog(`<h2>Champion's loot</h2><div class="muted" style="margin-bottom:8px">Choose one prize from the Emperor's gift table.</div>` + rep.choice.map((it) => `<div class="itm" data-a="res" data-v="${it.id}">${A.itemIcon(it.slot, it.rar, 40)}<div class="sp"><div class="gname" style="font-size:12px">${esc(it.name)}</div>${U.rarTag(it.rar)}<div class="muted" style="opacity:1">${U.fmtSt(it)}</div>${U.affTxt(it)}</div></div>`).join(''));
       const it = rep.choice.find((x) => x.id === id) || rep.choice[0]; L.addItem(S, it);
     }
-    await pickTechs(S);
+    if (rep.relic) await dropDialog('relic', rep.relic);
+    if (rep.rune) await dropDialog('rune', rep.rune);
+    await pickPends(S);
   }
-
+  async function dropDialog(kind, d) {
+    if (kind === 'relic') await U.dialog(`<h2>Relic found!</h2><div class="itm" style="cursor:default;border-color:${d.c}"><div class="sp"><div class="gname">${esc(d.n)}</div><div class="muted" style="opacity:1">${d.d}</div></div></div><div class="small">Relics boost every fighter. Equip them in the Armory, Relics tab.</div>` + btn('Nice', 'ok', 'green'));
+    else { const r = d.kind === 'k' ? D.KEYSTONES[d.id] : D.MINORS[d.id]; await U.dialog(`<h2>Rune unlocked!</h2><div class="itm" style="cursor:default"><div class="sp"><div class="gname">${esc(r.n)} <span class="tag">${d.kind === 'k' ? 'Keystone' : 'Minor'}</span></div><div class="muted" style="opacity:1">${r.d}</div></div></div><div class="small">Set it on a fighter in their profile.</div>` + btn('Nice', 'ok', 'green')); }
+  }
 
   // ---------- Pit of Trials ----------
   ACT.pit = () => {
@@ -261,29 +194,28 @@
     try { await runPit(S, g); } catch (e) { console.error(e); U.toast('Oops: ' + e.message); } finally { U.busy = false; U.save(); U.render(); }
   };
   async function runPit(S, g) {
-    S.pitWeek = S.week; g.en = Math.max(0, g.en - 30); const boons = []; let floor = 0; let hpf = 1; let lost = false;
+    S.pitWeek = S.week; g.en = Math.max(0, g.en - 30); const augs = []; let floor = 0; let hpf = 1; let lost = false;
     for (;;) {
       const opp = L.pitOpp(S, floor + 1, g); floor++;
       const ev = { kind: 'pit', title: (floor % 5 === 0 ? 'BOSS: ' : '') + 'Pit floor ' + floor, opps: [opp], league: 0 };
       const stance = await prep(S, ev, [g], [opp], { pit: true, hpf });
-      const res = await fightScreen(S, [g], [opp], stance, { ev, hpf: { [g.id]: hpf }, boon: L.boonCtx(boons) });
+      augs.push(await pickAug(S, floor < 3 ? 0 : floor < 6 ? 1 : floor < 10 ? 2 : 3, augs, floor % 5 === 0, `Floor ${floor}: new augment`));
+      const res = await fightScreen(S, [g], [opp], stance, { ev, hpf: { [g.id]: hpf }, augs: augs.slice() });
       if (!res.win) { floor--; lost = true; break; }
-      hpf = Math.min(1, res.hpf[g.id] + 0.2);
-      const cur = L.pitReward(S, floor, boons, false); const opts = L.pitPick(S, boons);
-      const v = await U.dialog(`<h2>Floor ${floor} cleared</h2><div class="small">${esc(g.name)} is at <b>${Math.round(hpf * 100)}% HP</b>. Banked so far: ${A.icon('coin', 12)} ${fmt(cur.gold)} · ${A.icon('fame', 12)} ${cur.fame}${cur.items.length ? ' · ' + cur.items.length + ' item(s)' : ''}</div><div class="sec" style="color:var(--terra);text-shadow:none">Choose a boon (lasts this run)</div>` + opts.map((b) => `<div class="itm" data-a="res" data-v="${b.id}"><div class="sp"><div class="gname" style="font-size:13px">${b.n}</div><div class="muted" style="opacity:1">${b.d}</div></div><span class="tag green">Take</span></div>`).join('') + (boons.length ? `<div class="tiny muted">Active: ${boons.map((b) => b.n).join(', ')}</div>` : '') + btn('Cash out now', 'cash', 'ghost'));
-      if (v === 'cash') break;
-      const b = D.BOONS.find((x) => x.id === v); boons.push(b); if (b.heal) hpf = Math.min(1, hpf + b.heal);
-      const nx = floor + 1;
-      const go = await U.dialog(`<h2>${b.n}</h2><div class="small">${b.d}</div><div class="small" style="margin-top:6px">Floor ${nx}${nx % 5 === 0 ? ' is a BOSS floor' : ''} awaits. Go deeper?</div>` + btn('Descend!', 'go', 'red') + btn('Cash out', 'cash', 'ghost'));
+      hpf = Math.min(1, res.hpf[g.id] + 0.25);
+      const cur = L.pitReward(S, floor, [], false); const nx = floor + 1;
+      const go = await U.dialog(`<h2>Floor ${floor} cleared</h2><div class="small">${esc(g.name)} recovers to <b>${Math.round(hpf * 100)}% HP</b>. Banked: ${A.icon('coin', 12)} ${fmt(cur.gold)} · ${A.icon('fame', 12)} ${cur.fame}${cur.items.length ? ' · ' + cur.items.length + ' item(s)' : ''}${floor >= 5 ? ' · a relic for the boss' : ''}</div><div class="tiny muted" style="margin-top:6px">Augments: ${augs.map((b) => b.n).join(', ')}</div><div class="small" style="margin-top:6px">Floor ${nx}${nx % 5 === 0 ? ' is a BOSS floor' : ''} awaits. Each floor adds an augment.</div>` + btn('Descend!', 'go', 'red') + btn('Cash out', 'cash', 'ghost'));
       if (go === 'cash') break;
     }
-    const rw = L.pitReward(S, floor, boons, lost); S.gold += rw.gold; S.fame += rw.fame; S.pitBest = Math.max(S.pitBest || 0, floor);
+    const rw = L.pitReward(S, floor, [], lost); S.gold += rw.gold; S.fame += rw.fame; S.pitBest = Math.max(S.pitBest || 0, floor);
     const xp = floor * 12 + 8; const up = L.addXp(g, xp); g.en = Math.max(0, g.en - 5); let inj = '';
     if (lost && Math.random() < 0.35) { g.inj = 1 + Math.floor(Math.random() * 2); inj = `${g.name} is injured for ${g.inj} week(s).`; }
     rw.items.forEach((it) => L.addItem(S, it));
+    const relic = rw.boss ? L.dropRelic(S) : null; const rune = floor >= 3 && Math.random() < 0.5 ? L.unlockRune(S) : null;
     U.snd(lost ? 'lose' : 'win');
     await U.dialog(`<div class="big ${lost ? 'lose' : 'win'}">${lost ? 'Fallen' : 'Cashed out'}</div><div style="text-align:center;margin:6px 0">${U.spr(g, { size: 80 })}</div><div class="row wrap" style="justify-content:center"><span class="pill">Floors ${floor}</span><span class="pill">${A.icon('coin', 14)} +${fmt(rw.gold)}</span><span class="pill">${A.icon('fame', 14)} +${rw.fame}</span><span class="pill">+${xp} XP${up.length ? ' · LEVEL ' + up[up.length - 1] : ''}</span></div>${inj ? `<div class="small" style="color:var(--terra);text-align:center">${esc(inj)}</div>` : ''}` + rw.items.map((it) => `<div class="itm" style="cursor:default;margin-top:6px">${A.itemIcon(it.slot, it.rar, 38)}<div class="sp"><div class="gname" style="font-size:12px">${esc(it.name)}</div>${U.rarTag(it.rar)}</div><span class="tag green">Loot</span></div>`).join('') + btn('Continue', 'ok'));
-    await pickTechs(S);
+    if (relic) await dropDialog('relic', relic); if (rune) await dropDialog('rune', rune);
+    await pickPends(S);
   }
 
   U.afterBoot = () => { U.checkPending(); };

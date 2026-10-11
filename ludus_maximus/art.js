@@ -164,6 +164,32 @@ ${head(style, oo)}
     return `<svg class="arena-bg" viewBox="0 0 400 300" preserveAspectRatio="xMidYMid slice"><rect width="400" height="300" fill="#3a1d14"/><circle cx="330" cy="26" r="20" fill="#f6b82d" stroke="#14100f" stroke-width="3"/><g stroke="#14100f" stroke-width="1.5" opacity=".95">${crowd}</g><rect y="130" width="400" height="14" fill="#a8321f" stroke="#14100f" stroke-width="3"/><path d="M0 130h400" stroke="#f6b82d" stroke-width="3"/><rect y="144" width="400" height="160" fill="#e6c27d"/><ellipse cx="200" cy="232" rx="190" ry="60" fill="#d9b46a" stroke="#14100f" stroke-width="3" stroke-dasharray="8 6"/></svg>`;
   };
 
+
+  // ---------- ultimate icons ----------
+  const UG = {
+    pulverize: '<path d="M12 3l2 6 6-2-4 5 5 4-6 0-1 6-2-5-5 3 2-6-5-3 6-1z"/>',
+    hookshot: '<path d="M12 3v10a4 4 0 11-4-4M12 3l-2 2M12 3l2 2"/>',
+    bladedance: '<path d="M4 20L20 4M14 4h6v6M4 12l4 4M8 20l-4-4"/>',
+    skewer: '<path d="M3 21L19 5M19 5l-1 6M19 5l-6 1"/>',
+    tornado: '<path d="M5 6h14M7 10h10M9 14h6M11 18h2"/>',
+    unbreakable: '<path d="M12 3l8 3v6c0 5-4 8-8 9-4-1-8-4-8-9V6zM9 12l2 2 4-4"/>',
+    bloodrage: '<path d="M12 2c1 4 6 6 6 12a6 6 0 01-12 0c0-3 2-4 3-6 1 2 2 2 2 1 0-3-1-5 1-7z"/>',
+    meteor: '<path d="M17 4a5 5 0 11-7 7zM3 21l8-8"/>',
+    duststorm: '<path d="M7 17a4 4 0 010-8 5 5 0 019-1 4 4 0 01-1 9zM8 20h8"/>',
+  };
+  A.ultIcon = (id, size) => `<svg viewBox="0 0 24 24" width="${size || 30}" height="${size || 30}" fill="none" stroke="#fff" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round">${UG[id] || ''}</svg>`;
+
+  // ---------- arena backdrop sized to the stage (top of the stage is the crowd, below is the sand) ----------
+  A.arenaBG2 = (w, h) => {
+    const cols = ['#d2412b', '#f6b82d', '#2f78c4', '#2a9d6f', '#7b4fb8', '#f5ead2', '#e8742a'];
+    let s = 11; const r = () => { s = (s * 16807) % 2147483647; return s / 2147483647; };
+    const wallY = h * 0.27; let crowd = '';
+    for (let row = 0; row < 4; row++) { const y = wallY - 12 - row * (wallY / 5.2); const n = Math.ceil(w / 17); for (let i = 0; i <= n; i++) { const x = i * 17 + (row % 2) * 8 + r() * 3; const c1 = cols[Math.floor(r() * cols.length)], c2 = cols[Math.floor(r() * cols.length)]; crowd += `<g class="cw" style="animation-delay:${(r() * 1.2).toFixed(2)}s"><rect x="${(x - 5).toFixed(1)}" y="${(y + 4).toFixed(1)}" width="10" height="9" fill="${c2}"/><circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${(5 + r()).toFixed(1)}" fill="${c1}"/></g>`; } }
+    const cx = w / 2, cy = (h * 0.27 + h * 0.97) / 2, rx = w * 0.46, ry = (h * 0.97 - h * 0.27) * 0.46;
+    let dots = ''; for (let i = 0; i < 90; i++) dots += `<circle cx="${(r() * w).toFixed(0)}" cy="${(wallY + 14 + r() * (h - wallY)).toFixed(0)}" r="${(1 + r() * 1.6).toFixed(1)}" fill="#c9a360" opacity=".55"/>`;
+    return `<svg class="arena-bg" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}"><rect width="${w}" height="${h}" fill="#3a1d14"/><circle cx="${w * 0.86}" cy="${h * 0.06}" r="${w * 0.05}" fill="#f6b82d" stroke="#14100f" stroke-width="3"/><g stroke="#14100f" stroke-width="1.5">${crowd}</g><rect y="${wallY}" width="${w}" height="16" fill="#a8321f" stroke="#14100f" stroke-width="3"/><path d="M0 ${wallY + 3}h${w}" stroke="#f6b82d" stroke-width="3"/><rect y="${wallY + 16}" width="${w}" height="${h - wallY}" fill="#e6c27d"/>${dots}<ellipse cx="${cx}" cy="${cy}" rx="${rx}" ry="${ry}" fill="#dcb872" stroke="#14100f" stroke-width="3" stroke-dasharray="10 7"/><ellipse cx="${cx}" cy="${cy}" rx="${rx * 0.55}" ry="${ry * 0.55}" fill="none" stroke="#b8893a" stroke-width="3" stroke-dasharray="4 8"/><ellipse cx="${cx}" cy="${cy}" rx="${rx * 0.12}" ry="${ry * 0.12}" fill="#c98a52" stroke="#14100f" stroke-width="2"/></svg>`;
+  };
+
   G.LM_ART = A;
   if (typeof module !== 'undefined') module.exports = A;
 })(typeof globalThis !== 'undefined' ? globalThis : this);
