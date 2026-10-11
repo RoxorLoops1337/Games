@@ -8,6 +8,7 @@ import { playSfx } from '../juice/sfx';
 import { logical, SS } from '../res';
 import { HOLD_SECS, HOLD_SLOP, touchWords } from './gestures';
 import { panel, STYLES } from './px';
+import { stillThere } from './screens/live';
 import { fit, H, icon, label, smallScreen, W, type Obj } from './kit';
 
 type Text = Phaser.GameObjects.Text;
@@ -99,14 +100,6 @@ export class Tooltip {
         this.lastKey = '';
         this.box.setVisible(false);
     }
-}
-
-/** Is this object still alive and drawn (itself and every container above it)? */
-export function stillThere (o: Obj): boolean {
-    for (let n: Phaser.GameObjects.GameObject | Phaser.GameObjects.Container | null = o; n; n = (n as Phaser.GameObjects.GameObject & { parentContainer?: Phaser.GameObjects.Container | null }).parentContainer ?? null) {
-        if (!n.active || (n as unknown as { visible?: boolean }).visible === false) return false;
-    }
-    return true;
 }
 
 let tooltip: Tooltip | null = null;

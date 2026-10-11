@@ -194,27 +194,25 @@ test('a raid spawns at the nest only when one is in range, and marches on the ba
     const party = sim.nightSpawns.filter((s) => s.raid === plot.i);
     assert.equal(party.length, plan.n);
     assert.equal(sim.nightSpawns.length - party.length, nightCount(6) - plan.taken, 'the rest comes as before');
-    assert.ok(party.every((s) => s.at <= 2 + B.waveMax * B.waveGap), 'they set out early, wave by wave');
+    assert.ok(party.every((s) => s.at <= 2 + 8 * B.waveGap), 'they set out early, wave by wave');
     let t = 0;
     while (!mobsOf(sim).some((m) => m.rd) && t < 2 + B.raidWindow) { sim.step(STEP); t += STEP; }
     const first = mobsOf(sim).find((m) => m.rd)!;
     assert.ok(first, 'a raider came out');
-    assert.equal(sim.world.plotAtPx(first.x, first.y), plot, 'out of the nest isle');
+    const b0 = blight.baseOf(sim, p);
+    assert.ok(Math.hypot(first.x - b0.x, first.y - b0.y) <= B.raidSpawnTiles * TILE + 6 * TILE, 'it stepped out on the way from the nest, within a night\'s march');
     run(sim, 2 + B.raidWindow - t);
     const raiders = mobsOf(sim).filter((m) => m.rd);
     assert.ok(raiders.length >= 1, `${raiders.length} raiders out`);
     assert.ok(raiders.every((m) => NEST_KINDS.swarm.mobs.includes(m.kind)), 'a swarm nest hatches its own family');
     const base = blight.baseOf(sim, p);
     const d0 = raiders.map((m) => Math.hypot(m.x - base.x, m.y - base.y));
-    let wet = false;
     for (let t = 0; t < 30; t += STEP) {
         sim.step(STEP);
-        for (const m of raiders) if (sim.s.ents[m.id] && !sim.world.isLand(Math.floor(m.x / TILE), Math.floor(m.y / TILE))) wet = true;
     }
     const alive = raiders.filter((m) => sim.s.ents[m.id]);
-    assert.ok(alive.length, 'some still marching');
-    for (const m of alive) assert.ok(Math.hypot(m.x - base.x, m.y - base.y) < d0[raiders.indexOf(m)] - 60, 'closer to the base');
-    assert.ok(wet, 'they waded across the sea between the isles');
+    assert.ok(alive.length, 'some still there');
+    for (const m of alive.filter((q) => d0[raiders.indexOf(q)] > 100)) assert.ok(Math.hypot(m.x - base.x, m.y - base.y) < d0[raiders.indexOf(m)] - 60, `closer to the base (${Math.round(d0[raiders.indexOf(m)])} -> ${Math.round(Math.hypot(m.x - base.x, m.y - base.y))}, ${m.kind})`);
 });
 
 test('a raider breaks the wall in its way; a broken wall is gone and the damaged ones mend at dawn', () => {
@@ -311,10 +309,10 @@ test('a Spike Trap bites the monsters that walk over it', () => {
     assert.ok(m.hp < 100, 'bitten');
 });
 
-test('nights without a nest in range spawn exactly as a world without the Blight', () => {
+test('nights without any nest spawn exactly as a world without the Blight', () => {
     const plain = Sim.create('BL-SAME', 'b'), blighted = Sim.create('BL-SAME', 'b');
     const a = plain.join('a', 'A')!, b = blighted.join('a', 'A')!;
-    clear(plain);
+    clear(plain); clear(blighted);
     a.level = b.level = 9;
     for (const sim of [plain, blighted]) { sim.s.clock = TUNING.dayLength - 0.01; sim.step(STEP); }
     assert.deepEqual(blighted.nightSpawns, plain.nightSpawns, 'the same monsters at the same moments');
@@ -351,41 +349,62 @@ test('a bed moves where you wake up after a fall', () => {
     assert.equal(p.bed, second.id, 'E: this is where you wake up now');
 });
 
-test('waves: a level 1 nest sends one small raider, level 2 two, then bigger and more; every wave comes from the next side round', () => {
+test('waves: a level 1 nest adds one small raider, level 2 two, then bigger; the map is cut into eight sectors and a night starts a sector further round', () => {
     assert.deepEqual([1, 2, 3, 4, 6, 8].map(raid.waveSize), [1, 2, 2, 3, 4, 5]);
-    assert.deepEqual([1, 3, 4, 7, 10, 40].map(raid.waveCount), [1, 1, 2, 3, 4, 4]);
-    assert.deepEqual([0, 1, 2, 3, 4].map((i) => raid.SIDES[raid.sideOf(1, 0, i)]), ['east', 'south', 'west', 'north', 'east']);
-    assert.notEqual(raid.sideOf(1, 5, 0), raid.sideOf(2, 5, 0), 'tomorrow starts on another side');
+    const o = { x: 0, y: 0 };
+    assert.deepEqual([[10, 0], [10, 10], [0, 10], [-10, 10], [-10, 0], [-10, -10], [0, -10], [10, -10]].map(([x, y]) => raid.SECTORS[raid.sectorOf(o, { x, y })]),
+        ['east', 'south-east', 'south', 'south-west', 'west', 'north-west', 'north', 'north-east']);
+    assert.equal(raid.SECTORS[raid.sectorOrder(1)[0]], 'north', 'the first night starts in the north');
+    assert.equal(raid.SECTORS[raid.sectorOrder(2)[0]], 'north-east', 'and the next one a sector further round');
+    assert.deepEqual([...raid.sectorOrder(5)].sort(), [0, 1, 2, 3, 4, 5, 6, 7]);
+    assert.deepEqual([1, 2, 3, 5, 7, 20].map(raid.waveCap), [2, 3, 4, 6, 8, 8], 'two waves on the first night, one more each night, never more than eight');
 });
 
-test('waves: a night plan has a wave per nest and per three levels, spaced out, capped, each stepping out on its own side', () => {
+test('waves: nests in the same sector send ONE wave between them; at most eight waves; each steps out of its own direction', () => {
     const sim = Sim.create('BL-WAVE', 'b');
     const p = sim.join('a', 'A')!;
     p.level = 6; p.invuln = 1e9;
     clear(sim);
     const plot = near(sim, p, 4, 0);
     assert.ok(blight.raise(sim, plot, 'swarm'));
-    plot.nl = 7;                                  // three waves of three
-    const plan = raid.raidFor(sim, p, nightCount(6))!;
-    assert.equal(plan.waves.length, raid.waveCount(7));
-    assert.ok(plan.waves.every((w, i) => w.n === raid.waveSize(7) && (i === 0 || w.at - plan.waves[i - 1].at === B.waveGap)));
-    assert.deepEqual(plan.waves.map((w) => w.side), [0, 1, 2].map((i) => raid.sideOf(sim.s.day, plot.i, i)), 'north, east, south, west, round');
-    assert.equal(plan.n, plan.waves.reduce((a, w) => a + w.n, 0));
-    // a cluster is capped
-    for (const [dx, dy] of [[4, 2], [4, -2], [5, 0]]) { const q = near(sim, p, dx, dy); if (q && !q.owned && !q.blight) { blight.raise(sim, q, 'swarm'); q.nl = 20; } }
-    plot.nl = 20;
-    const big = raid.raidFor(sim, p, nightCount(6))!;
-    assert.ok(big.n <= B.waveTotal, `capped at ${B.waveTotal} (${big.n})`);
-    // the night: a wave steps out of its side of the island, with a word about it
+    plot.nl = 7;                                  // one nest to the east
+    let plan = raid.raidFor(sim, p, nightCount(6))!;
+    assert.equal(plan.waves.length, 1);
+    assert.equal(plan.waves[0].n, raid.waveSize(7));
+    assert.equal(raid.SECTORS[plan.waves[0].sector], 'east');
+    // a second nest in the same sector joins that wave; one on the other side makes a second wave
+    const q = near(sim, p, 5, 1);
+    assert.ok(q && blight.raise(sim, q, 'swarm')); q.nl = 3;
+    const w = near(sim, p, -4, 0);
+    assert.ok(w && blight.raise(sim, w, 'swarm')); w.nl = 1;
+    plan = raid.raidFor(sim, p, nightCount(6))!;
+    assert.equal(plan.waves.length, 2, 'east and west');
+    const east = plan.waves.find((x) => raid.SECTORS[x.sector] === 'east')!;
+    assert.equal(east.n, raid.waveSize(7) + raid.waveSize(3), 'the two eastern nests send one wave');
+    assert.equal(east.plot, plot.i, 'from the stronger one');
+    assert.ok(plan.waves.every((x, i) => i === 0 || x.at - plan.waves[i - 1].at === B.waveGap), 'spaced out');
+    assert.equal(plan.n, plan.waves.reduce((a, x) => a + x.n, 0));
+    // the night: a wave steps out where its direction meets the march, with a word about it
     clock.startNight(sim);
     const first = sim.nightSpawns.find((s) => s.raid !== undefined && s.first)!;
-    assert.ok(first && first.side !== undefined);
-    const c = sim.world.plotCenter(sim.s.plots[first.raid!]);
+    assert.ok(first && first.sec !== undefined && first.sx !== undefined);
     sim.nightSpawns = sim.nightSpawns.filter((s) => s === first || s.raid === undefined);
     first.at = 0;
     const m = raid.spawnRaider(sim, first)!;
     assert.ok(m, 'it stepped out');
-    const side = first.side!;
-    if (side === 0) assert.ok(m.y < c.y - 20, 'north of the nest'); else if (side === 2) assert.ok(m.y > c.y + 20, 'south'); else if (side === 1) assert.ok(m.x > c.x + 20, 'east'); else assert.ok(m.x < c.x - 20, 'west');
+    const base = blight.baseOf(sim, p);
+    const off = Math.abs(raid.sectorOf(base, m) - first.sec!); assert.ok(off === 0 || off === 1 || off === 7, 'in its own sector, or against the line next to it');
     assert.ok(sim.events.some((e) => e.e === 'toast' && /A wave comes from the/.test(e.text)), 'and says where from');
+});
+
+test('waves: the very first night already has raiders (every nest on the map counts, the far ones start 26 tiles out), at most waveTotal', () => {
+    for (const seed of ['BL-D1A', 'BL-D1B', 'BL-D1C']) {
+        const sim = Sim.create(seed, 'b');
+        const p = sim.join('a', 'A')!;
+        const plan = raid.raidFor(sim, p, nightCount(1));
+        assert.ok(plan && plan.waves.length >= 1, `${seed}: a raid on night 1`);
+        assert.ok(plan!.n <= B.waveTotal);
+        const base = blight.baseOf(sim, p);
+        for (const w of plan!.waves) assert.ok(Math.hypot(w.sx - base.x, w.sy - base.y) <= B.raidSpawnTiles * TILE + 1, 'close enough to arrive in a night');
+    }
 });

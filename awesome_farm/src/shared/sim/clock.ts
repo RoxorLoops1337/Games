@@ -87,8 +87,8 @@ export function startNight (sim: Sim) {
         for (let i = 0; i < count - (plan?.taken ?? 0); i++) spawns.push({ near: p.id, at: 0 });
         if (plan) {
             raids.push([p, plan]);
-            // each wave steps out of its own side of its nest, a raider every half second or so
-            for (const w of plan.waves) for (let i = 0; i < w.n; i++) spawns.push({ near: p.id, at: w.at + i * 0.6, raid: w.plot, rx: plan.x, ry: plan.y, side: w.side, first: i === 0 });
+            // each sector's wave steps out of its own direction, a raider every half second or so
+            for (const w of plan.waves) for (let i = 0; i < w.n; i++) spawns.push({ near: p.id, at: w.at + i * 0.6, raid: w.plot, rx: plan.x, ry: plan.y, sec: w.sector, sx: w.sx, sy: w.sy, first: i === 0 });
         }
         sim.fx('dusk', p.x, p.y - 12, p.id);
     }

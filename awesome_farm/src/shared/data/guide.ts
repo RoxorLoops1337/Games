@@ -236,8 +236,8 @@ export const GUIDE: GuideTopic[] = [
         id: 'blight', name: 'The Blight & raids', icon: 'k_tower',
         blurb: 'Dark nest isles out at sea send raids at night. Defend your base, then go and break the nests.',
         steps: [
-            `The red marks out at sea on the map are Blight nests, each on a dark isle nobody may buy while its nest lives. A nest within ${TUNING.blight.raidRange} plots of your base (your home, or a campfire on your land) sends part of the night as a raid.`,
-            'At dusk a banner says where the raid gathers. Each nest sends waves from its north, then east, south and west side: one small raider at level 1, two at level 2, then more and tougher. They wade over and break what is in their way.',
+            `The red marks out at sea on the map are Blight nests, each on a dark isle nobody may buy while its nest lives. Every nest on the map sends raiders to your base at night, from the very first night.`,
+            'At dusk a banner names the directions. The map is cut into eight sectors round your base (an X over a +); the nests of a sector send one wave, tougher as they grow. Two waves come the first night, one more each night. They wade over and break walls.',
             'Wall your base in: stone and brick hold longer than wood. Learn Watchtowers (K, Combat) for the Defense tab: Archer Towers, Spike Traps and Fortified Walls. A tower\u2019s kills are yours.',
             'To reach one, buy land toward it. Then hit the nest with your weapon. A nest that is struck wakes its brood, so bring friends, food and potions.',
             'A nest grows a level every night: more health, bigger raids, better spoils. Breaking it pays coins, XP and Blight Cores: Siegeworks (K) turns them into a Ballista and a Tesla Coil (which needs power).',
