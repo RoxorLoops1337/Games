@@ -181,14 +181,15 @@ export const TUNING = {
         broodEvery: 9,           // s between two while a farmer is near
         broodNear: 170,          // px: a farmer this close stirs it
         broodLinger: 30,         // s after the last farmer leaves before its brood melts away
-        raidRange: 6,            // plots (straight line) from a farmer's land or base within which a nest counts as near, and sends a raid at night (sim/raid.ts)
+        raidRange: 60,           // plots (straight line) from a farmer's base within which a nest counts as near and sends a wave at night (sim/raid.ts): the whole map, so the first night already has raiders
         raidShare: 0.3,          // of the night's monsters, this share comes from the nest instead…
         raidPerNest: 1,          // … plus this many for every other nest in range…
         raidPerLv: 4,            // … and one more for every this many levels of the nest…
         raidMax: 10,             // … up to this many raiders
         raidWindow: 6,           // s after nightfall within which the raiders set out
-        waveMax: 4,              // a nest sends at most this many waves in a night (1 + one more for every 3 levels)
-        waveGap: 7,              // s between one wave of a nest and its next (a night is only 50 s long)
+        waveSectorMax: 10,       // raiders in one sector's wave at most (the nests of a sector send one wave between them)
+        raidSpawnTiles: 26,      // tiles from the base at which a far nest's wave steps out (a nearer nest sends its own from where it stands): the march fits in a night
+        waveGap: 4,              // s between one sector's wave and the next (a night is only 50 s long, and there are at most eight)
         waveTotal: 24,           // raiders in all, across every wave of every nest, that come for one farmer in a night
         raidWade: 0.6,           // a raider wades across the sea at this share of its speed
         raidMarch: 1.5,          // … and marches this much faster than it walks while no farmer is near

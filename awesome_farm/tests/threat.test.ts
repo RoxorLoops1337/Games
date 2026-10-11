@@ -19,7 +19,7 @@ test('a level 1 farmer in an old world meets a new farmer\'s night: a few slimes
     sim.s.clock = TUNING.dayLength - 0.5;
     run(sim, 1 + TUNING.nightSpawnWindow + 3);
     a.invuln = 999;
-    const ms = mobsOf(sim);
+    const ms = mobsOf(sim).filter((m) => !m.rd);               // (the nests' raiders are their own story: tests/blight.test.ts)
     assert.ok(sim.s.night && ms.length >= 1, `${ms.length} mobs at night`);
     assert.ok(ms.length <= nightCount(1) * 2, `${ms.length} mobs for a level 1 farmer`);
     for (const m of ms) {
