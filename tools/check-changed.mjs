@@ -39,6 +39,7 @@ const GAME_SUITES = {
   nineties_cars: ['test:cars'],
   frietkot_tycoon: ['test:frietkot'],
   horse_ranch: ['test:horse'],
+  ludus_maximus: ['test:ludus'],
   wildwalk: ['test:wildwalk', 'test:wwboard'],
   the_collection: ['test:collection'],
   ballistic: ['test:ballistic'],
