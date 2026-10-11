@@ -214,6 +214,31 @@
     { id: 'start', n: 'Head Start', d: '+150 starting gold, +1 free level on Barracks', max: 5 },
   ];
 
+
+  D.TRICKS = [
+    { id: 'bribe', n: 'Bribe their physician', d: 'Rival has 12% less max HP.', cost: (l) => 40 + l * 4, risk: 0.25, foe: { hp: -0.12 } },
+    { id: 'straps', n: 'Loosen their straps', d: 'Rival armor -10%.', cost: (l) => 30 + l * 3, risk: 0.15, foe: { def: -0.1 } },
+    { id: 'rally', n: 'Pep rally', d: 'You: +6% damage and armor. Safe.', cost: (l) => 20 + l * 2, risk: 0, me: { atk: 0.06, def: 0.06 } },
+  ];
+
+  // Pit of Trials boons: syn = percent fractions, xfx = affix-style effects, heal = instant heal fraction
+  D.BOONS = [
+    { id: 'iron', n: 'Iron Skin', d: '+12% armor', syn: { def: 0.12 } },
+    { id: 'edge', n: 'Sharpened Edge', d: '+12% damage', syn: { atk: 0.12 } },
+    { id: 'bull', n: "Bull's Heart", d: '+15% max HP', syn: { hp: 0.15 } },
+    { id: 'sandals', n: 'Swift Sandals', d: '+10% speed', syn: { spd: 0.1 } },
+    { id: 'hawk', n: 'Hawk Eye', d: '+8% crit chance', syn: { crit: 0.08 } },
+    { id: 'shadow', n: 'Shadow Step', d: '+8% evasion', syn: { eva: 0.08 } },
+    { id: 'wind', n: 'Second Wind', d: 'Heal 40% HP now', heal: 0.4 },
+    { id: 'feast', n: "Gladiator's Feast", d: 'Heal 25% and +5% damage', heal: 0.25, syn: { atk: 0.05 } },
+    { id: 'thirst', n: 'Bloodthirst', d: 'Heal 8% of damage dealt', xfx: { vamp: 2 } },
+    { id: 'spikes', n: 'Spiked Armor', d: 'Reflect 12% of damage taken', xfx: { thorns: 2 } },
+    { id: 'rip', n: 'Riposte Training', d: '16% chance to counter-strike', xfx: { riposte: 2 } },
+    { id: 'serr', n: 'Serrated Edge', d: '30% chance to cause bleeding', xfx: { bleed: 2 } },
+    { id: 'grit', n: 'Stalwart Oath', d: 'Survive one killing blow per fight', xfx: { stalwart: 1 } },
+    { id: 'greed', n: 'Greed', d: '+50% gold from this run, -8% HP', syn: { hp: -0.08 }, gold: 0.5 },
+  ];
+
   G.LM_D = D;
   if (typeof module !== 'undefined') module.exports = D;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

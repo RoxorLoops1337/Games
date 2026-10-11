@@ -115,5 +115,30 @@ ok(strongWins >= 17, `level 10 beats level 1 (${strongWins}/20)`);
   const N = LM.ascend(S); ok(N.week === 1 && N.laurels >= 0 && N.ascensions === 1 && N.glads.length === 0, 'ascend resets the ludus');
 }
 
+
+// stance triangle, tells, bookmaker, pit, ghosts
+{
+  ok(LM.stanceBeat('agg', 'cun') === 1 && LM.stanceBeat('cun', 'grd') === 1 && LM.stanceBeat('grd', 'agg') === 1, 'stance triangle: agg>cun>grd>agg');
+  ok(LM.stanceBeat('agg', 'grd') === -1 && LM.stanceBeat('bal', 'agg') === 0, 'balanced is neutral');
+  ok(LM.teamCtx(null, [LM.makeGlad({})], 'agg', 'cun').beat === 1, 'teamCtx reports stance advantage');
+  const o = LM.events(S, 3, 0)[0].opps[0];
+  ok(LM.habit(o).fav === LM.habit(o).fav && LM.habit(o).p >= 0.5 && LM.habit(o).p <= 0.75, 'rival habits deterministic');
+  let fav = 0; for (let i = 0; i < 200; i++) if (LM.oppStance(S, o) === LM.habit(o).fav) fav++;
+  ok(fav > 90, `rivals usually pick their favorite stance (${fav}/200)`);
+  const a = LM.makeGlad({ style: 'murmillo', lvl: 5 }), b = LM.makeGlad({ style: 'thraex', lvl: 5 });
+  ok(LM.wagerMult([b], [a]) > LM.wagerMult([a], [b]), 'bookmaker pays more on the style underdog');
+  ok(LM.wagerMult([LM.makeGlad({ lvl: 30 })], [LM.makeGlad({ lvl: 1 })]) === 1.1, 'heavy favorite pays the minimum');
+  const op = LM.pitOpp(S, 5, a); ok(op.lvl > LM.pitOpp(S, 1, a).lvl && op.nick === 'the Pit Lord', 'pit gets harder and floor 5 is a boss');
+  const bc = LM.boonCtx([D.BOONS.find((x) => x.id === 'edge'), D.BOONS.find((x) => x.id === 'thirst')]);
+  ok(bc.syn.atk === 0.12 && bc.xfx.vamp === 2, 'boons aggregate');
+  ok(LM.derive(a, { xfx: { thorns: 3 } }).fx.thorns === 3, 'extra effects reach combat stats');
+  const r0 = LM.pitReward(S, 6, [], false), r1 = LM.pitReward(S, 6, [], true);
+  ok(r0.gold > 0 && r1.gold <= r0.gold / 2 + 1 && r0.items.length >= 2, 'pit rewards scale; defeat halves them');
+  const old = LM.newGame({ name: 'Old' }); const champ = LM.makeGlad({ id: 5, lvl: 12 }); old.glads.push(champ); old.fame = 2000;
+  const nxt = LM.ascend(old); ok(nxt.ghosts.length === 1 && nxt.ghosts[0].lud === 'Ghost of Old', 'ascend keeps old champions as ghosts');
+  let seen = false; for (let w = 1; w < 40 && !seen; w++) for (const e of LM.events(nxt, w, 1)) if (e.opps[0].gh) seen = true;
+  ok(seen, 'ghosts show up as hard-duel opponents');
+}
+
 console.log(`ludus_maximus: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

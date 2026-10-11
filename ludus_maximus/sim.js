@@ -176,7 +176,10 @@
   LM.setCounts = (g) => { const c = {}; D.SLOTS.forEach((s) => { const it = g.gear && g.gear[s]; if (it && it.set) c[it.set] = (c[it.set] || 0) + 1; }); return c; };
 
   // ---------- derived combat stats ----------
-  const STANCE = { agg: { atk: 0.15, def: -0.1 }, bal: {}, grd: { def: 0.2, atk: -0.08, spd: -0.05 } };
+  const STANCE = { agg: { atk: 0.15, def: -0.1 }, bal: {}, grd: { def: 0.2, atk: -0.08, spd: -0.05 }, cun: { crit: 0.08, eva: 0.08, hp: -0.05 } };
+  LM.STANCES = { bal: 'Balanced', agg: 'Aggressive', grd: 'Guarded', cun: 'Cunning' };
+  const BEATS = { agg: 'cun', cun: 'grd', grd: 'agg' };
+  LM.stanceBeat = (a, b) => (BEATS[a] === b ? 1 : BEATS[b] === a ? -1 : 0);
   LM.STANCE = STANCE;
   LM.perf = (g) => { const fe = g.en >= 60 ? 1 : 0.85 + (0.15 * g.en) / 60; const fm = 0.95 + (0.1 * g.mo) / 100; return fe * fm; };
   function derive(g, ctx) {
@@ -187,6 +190,7 @@
       it.af.forEach((a) => { fx[a.id] = (fx[a.id] || 0) + a.v; });
       if (it.set) sc[it.set] = (sc[it.set] || 0) + 1;
     });
+    if (ctx.xfx) add(fx, ctx.xfx);
     const sets = [];
     for (const id in sc) { const n = sc[id]; if (n >= 2) { add(fx, D.SETS[id].two); sets.push({ id, n: 2 }); } if (n >= 4) { add(fx, D.SETS[id].four); sets.push({ id, n: 4 }); } }
     const T = D.TRAITS[g.trait] || {}; const sy = ctx.syn || {}; const st = STANCE[ctx.stance || 'bal'];
@@ -196,8 +200,8 @@
     const atk = ((6 + s.str * 0.85 + s.skl * 0.3) * m.atk + G0.atk) * pc('atk') * pf;
     const def = ((s.end * 0.32 + s.skl * 0.08) * m.def + G0.def) * (pc('def') + (fx.plated || 0) * 0.04) * pf;
     const spd = ((30 + s.agi * 0.55) * m.spd + G0.spd) * (pc('spd') + (fx.fleet || 0) * 0.04) * pf;
-    const crit = clamp(((4 + s.skl * 0.35) * m.crit + G0.crit) / 100 + (fx.crit || 0) + (sy.crit || 0) + (T.crit || 0) + (fx.lucky || 0) * 0.03, 0, 0.6);
-    const eva = clamp(((s.agi * 0.3) * m.eva + G0.eva) / 100 + (fx.eva || 0) + (sy.eva || 0), 0, 0.4);
+    const crit = clamp(((4 + s.skl * 0.35) * m.crit + G0.crit) / 100 + (fx.crit || 0) + (sy.crit || 0) + (st.crit || 0) + (T.crit || 0) + (fx.lucky || 0) * 0.03, 0, 0.6);
+    const eva = clamp(((s.agi * 0.3) * m.eva + G0.eva) / 100 + (fx.eva || 0) + (sy.eva || 0) + (st.eva || 0), 0, 0.4);
     return { hp, atk, def, spd, crit, eva, fx, sets, pf };
   }
   LM.derive = derive;
@@ -219,10 +223,12 @@
   const bkey = (a, b) => (a < b ? a + '-' + b : b + '-' + a);
   LM.bond = (S, a, b) => (S.bonds && S.bonds[bkey(a, b)]) || 0;
   LM.addBond = (S, a, b, n) => { S.bonds = S.bonds || {}; const k = bkey(a, b); S.bonds[k] = clamp((S.bonds[k] || 0) + n, 0, 100); };
-  LM.teamCtx = (S, glads, stance) => {
+  LM.teamCtx = (S, glads, stance, vs) => {
     const sy = LM.synergy(glads.map((g) => g.style)); const fx = Object.assign({}, sy.fx);
     if (S && glads.length > 1) { let tot = 0, n = 0; for (let i = 0; i < glads.length; i++) for (let j = i + 1; j < glads.length; j++) { tot += LM.bond(S, glads[i].id, glads[j].id); n++; } const b = (tot / n / 100) * 0.06; fx.atk = (fx.atk || 0) + b; fx.def = (fx.def || 0) + b; }
-    return { syn: fx, stance: stance || 'bal', list: sy.list };
+    const sb = vs ? LM.stanceBeat(stance || 'bal', vs) : 0;
+    if (sb > 0) { fx.atk = (fx.atk || 0) + 0.12; fx.crit = (fx.crit || 0) + 0.05; } else if (sb < 0) fx.def = (fx.def || 0) - 0.05;
+    return { syn: fx, stance: stance || 'bal', list: sy.list, beat: sb };
   };
 
   // ---------- combat engine ----------
@@ -379,10 +385,10 @@
     const F = createFight(A, B, Object.assign({ autoA: true, quiet: true }, o)); let n = 0; while (!F.done && n++ < 1500) step(F, 0.25); return F;
   };
   // win chance of team A glads vs team B glads, stable seed so the number does not jitter between renders
-  LM.odds = (S, gA, gB, stanceA, n) => {
-    n = n || 36; const keep = rnd; let w = 0; rnd = mulberry(hash(gA.map((g) => g.id + ':' + g.lvl).join() + '|' + gB.map((g) => g.name + g.lvl).join() + (stanceA || '')));
+  LM.odds = (S, gA, gB, stanceA, n, stanceB) => {
+    n = n || 36; const keep = rnd; let w = 0; rnd = mulberry(hash(gA.map((g) => g.id + ':' + g.lvl).join() + '|' + gB.map((g) => g.name + g.lvl).join() + (stanceA || '') + (stanceB || '')));
     try {
-      const ca = LM.teamCtx(S, gA, stanceA || 'bal'); const cb = LM.teamCtx(null, gB, 'bal');
+      const ca = LM.teamCtx(S, gA, stanceA || 'bal', stanceB); const cb = LM.teamCtx(null, gB, stanceB || 'bal', stanceA || 'bal');
       for (let i = 0; i < n; i++) { const F = LM.quick(LM.mkUnits(gA, 'A', ca), LM.mkUnits(gB, 'B', cb)); if (F.winner === 'A') w++; }
     } finally { rnd = keep; }
     return w / n;
@@ -421,8 +427,10 @@
     const baseLvl = (d) => L.lvl + d + (season - 1) * 2 + Math.floor(((week - 1) % 12) / 4);
     const sm = 1 + 0.2 * (season - 1); const out = [];
     for (let d = 0; d < 3; d++) {
-      const DF = D.DIFF[d]; const rv = take(); const opp = mkOpp(S, rv, baseLvl(DF.l), DF.p, r, league, d === 2);
-      const purse = Math.round(L.purse * DF.m * sm);
+      const DF = D.DIFF[d]; const rv = take(); let opp = mkOpp(S, rv, baseLvl(DF.l), DF.p, r, league, d === 2);
+      const gh = (S.ghosts || []);
+      const ghosted = d === 2 && league >= 1 && gh.length && r() < 0.5; if (ghosted) opp = LM.ghostOpp(S, gh[Math.floor(r() * gh.length)], baseLvl(DF.l));
+      const purse = Math.round(L.purse * DF.m * sm * (ghosted ? 1.5 : 1));
       out.push({ key: `${week}:${league}:d${d}`, kind: 'duel', week, league, diff: d, title: `${DF.n} Duel`, size: 1, opps: [opp], purse, fame: Math.round(L.fameWin * DF.m), fee: Math.round(purse * 0.12) });
     }
     const field = (n, bonus) => { const a = []; for (let i = 0; i < n; i++) { const rv = take(); a.push(mkOpp(S, rv, baseLvl(1) + bonus, 1.05, r, league, true)); } return a; };
@@ -442,6 +450,65 @@
   LM.eventByKey = (S, key) => { const [w, l] = key.split(':'); return LM.events(S, parseInt(w, 10), parseInt(l, 10)).find((e) => e.key === key); };
   LM.teamSize = (ev) => (ev.kind === 'team' ? ev.size : 1);
   LM.isRevenge = (S, ev) => ev.kind === 'duel' && S.rivals && S.rivals[ev.opps[0].rv] && S.rivals[ev.opps[0].rv].last === 'l';
+
+
+  // ---------- rival habits (stance tells) ----------
+  LM.habit = (opp) => {
+    const r = mulberry(hash('habit' + (opp.rv || opp.name))); const fav = ['agg', 'grd', 'cun', 'bal'][Math.floor(r() * 4)];
+    return { fav, p: 0.5 + r() * 0.25 };
+  };
+  LM.oppStance = (S, opp, r) => {
+    r = r || rnd; if (!opp.rv) return pick(['agg', 'grd', 'cun', 'bal'], r);
+    const h = LM.habit(opp); if (r() < h.p) return h.fav; return pick(['agg', 'grd', 'cun', 'bal'].filter((x) => x !== h.fav), r);
+  };
+  LM.noteStance = (S, opp, st) => { if (!opp.rv) return; S.rivals = S.rivals || {}; const r0 = S.rivals[opp.rv] || (S.rivals[opp.rv] = { w: 0, l: 0, last: '' }); r0.seen = r0.seen || {}; r0.seen[st] = (r0.seen[st] || 0) + 1; r0.lastSt = st; };
+  LM.expectedStance = (S, opp) => (opp.rv ? LM.habit(opp).fav : 'bal');
+
+  // ---------- the bookmaker: public odds know level and style only ----------
+  LM.publicOdds = (gl, opps) => {
+    const avg = (a) => a.reduce((x, g) => x + g.lvl, 0) / a.length;
+    const ad = gl.length === 1 && opps.length === 1 ? LM.adv(gl[0].style, opps[0].style) : 0;
+    return clamp(0.5 + 0.04 * (avg(gl) - avg(opps)) + 0.12 * ad, 0.08, 0.92);
+  };
+  LM.wagerMult = (gl, opps) => Math.round(clamp(0.93 / LM.publicOdds(gl, opps), 1.1, 8) * 10) / 10;
+  LM.wagerOptions = (S) => [0.1, 0.25, 0.5].map((f) => Math.min(Math.round(S.gold * f), 2000)).filter((v) => v >= 5);
+
+  // ---------- Pit of Trials ----------
+  LM.pitOpp = (S, floor, g) => {
+    const boss = floor % 5 === 0; const lvl = Math.max(1, Math.round(g.lvl * 0.75 + floor * 1.1 + (boss ? 3 : 0)));
+    const style = pick(D.STYLE_IDS); const ml = LM.maxLeague(S);
+    const rv = { id: null, name: pick(D.FIRST), nick: boss ? 'the Pit Lord' : pick(D.NICK), ludus: 'The Pit', style, skin: pick(D.SKIN), hair: pick(D.HAIR), plume: pick(D.PLUME), face: Math.floor(rnd() * 3), trait: pick(D.TRAIT_IDS), color: pick(D.COLORS).c };
+    const o = mkOpp(S, rv, lvl, 0.78 + floor * 0.045 + (boss ? 0.15 : 0), rnd, Math.min(3, ml), boss);
+    o.rv = null; o.id = 'pit' + floor; return o;
+  };
+  LM.pitPick = (S, have) => {
+    const pool = D.BOONS.slice(); const out = [];
+    while (out.length < 3 && pool.length) out.push(pool.splice(Math.floor(rnd() * pool.length), 1)[0]);
+    return out;
+  };
+  LM.boonCtx = (boons) => {
+    const syn = {}, xfx = {};
+    boons.forEach((b) => { if (b.syn) add(syn, b.syn); if (b.xfx) add(xfx, b.xfx); });
+    return { syn, xfx };
+  };
+  LM.pitReward = (S, floor, boons, lost) => {
+    const ml = LM.maxLeague(S); const L0 = D.LEAGUES[ml];
+    let gold = 0, fame = 0; for (let f = 1; f <= floor; f++) { gold += L0.purse * 0.3 * (1 + f * 0.18); fame += Math.round(L0.fameWin * 0.25 * (1 + f * 0.1)); }
+    gold *= 1 + boons.reduce((a, b) => a + (b.gold || 0), 0); gold *= 1 + 0.1 * ((S.perks || {}).gold || 0);
+    if (lost) { gold *= 0.5; fame = Math.round(fame * 0.5); }
+    const items = []; const n = Math.floor(floor / 3);
+    for (let i = 0; i < n; i++) items.push(genItem(rnd, { league: ml, ilvl: 2 + ml * 5 + floor, luck: 0.04 * floor + LM.bfx(S, 'shrine').v }));
+    if (floor >= 5 && !lost) items.push(genItem(rnd, { league: Math.min(3, ml + 1), ilvl: 3 + ml * 5 + floor, rar: Math.min(4, 2 + (floor >= 10 ? 1 : 0)) }));
+    return { gold: Math.round(gold), fame: Math.round(fame), items };
+  };
+
+  // ---------- legacy ghosts (your old champions come back as rivals) ----------
+  LM.ghostOpp = (S, ghost, lvl) => {
+    const g = JSON.parse(JSON.stringify(ghost)); const f = Math.min(1, lvl / Math.max(1, g.lvl));
+    D.STATS.forEach((s) => { g.st[s] *= f; }); g.lvl = Math.min(g.lvl, lvl); g.rv = null; g.gh = true; g.color = '#7d7d8c'; g.id = 'gh' + ghost.name + g.lvl;
+    D.SLOTS.forEach((sl) => { if (g.gear[sl] && g.gear[sl].rar > 2) delete g.gear[sl]; });
+    g.inj = 0; g.en = 100; g.mo = 80; return g;
+  };
 
   // ---------- scouting (fog of war) ----------
   // 0: style + level only. 1: stat grades + trait. 2: exact numbers, techs, gear, win odds. 3: affixes/sets, derived stats, AI habits.
@@ -706,7 +773,9 @@
   LM.ascend = (S) => {
     const gain = LM.laurelsFor(S); const keep = { perks: S.perks, laurels: S.laurels + gain, legends: S.legends, name: S.name, color: S.color, ascensions: (S.ascensions || 0) + 1, sound: S.sound, flags: { tutor: true }, stats: Object.assign({}, S.stats) };
     const N = LM.newGame({ name: keep.name, color: keep.color, perks: keep.perks, laurels: keep.laurels, legends: keep.legends, ascensions: keep.ascensions, sound: keep.sound });
-    N.stats = keep.stats; return N;
+    N.stats = keep.stats;
+    const snap = S.glads.concat(S.ghosts || []).filter((g) => g.st).sort((a, b) => b.lvl - a.lvl).slice(0, 6).map((g) => { const c = JSON.parse(JSON.stringify(g)); c.lud = 'Ghost of ' + S.name; c.act = 'rest'; return c; });
+    N.ghosts = snap; return N;
   };
 
   // ---------- state ----------
