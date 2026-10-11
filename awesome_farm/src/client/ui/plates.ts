@@ -8,7 +8,7 @@ import { css, PAL } from '../../shared/palette';
 import type { PlayerS, Plot } from '../../shared/sim/types';
 import type { World } from '../../shared/world';
 import { SS } from '../res';
-import { label, onTap, tipOn } from './kit';
+import { hideTip, label, onTap, tipOn } from './kit';
 import { panel, rect, STYLES } from './px';
 import { firstClear, slideCandidates, slots, type Rect } from './slots';
 
@@ -38,6 +38,7 @@ export class LandPlates {
     /** The plots for sale changed: new plates for the new list. */
     rebuild () {
         const s = this.scene;
+        hideTip();                                   // (the plate under the pointer is about to go: its card must not stay)
         for (const t of this.tags) t.root.destroy();
         if (!this.farm.ready) { this.tags = []; return; }
         this.tags = this.farm.world.purchasable().map((plot) => {
@@ -119,6 +120,7 @@ export class LandPlates {
             if (!spot) { spot = spotFor(MINI_W, MINI_H); compact = true; }
             if (!spot) { tag.at = null; continue; }
             blockers.push(spot);
+            if (tag.compact !== compact) hideTip();          // (the card was for the other size of plate)
             tag.compact = compact;
             tag.full.setVisible(!compact); tag.mini.setVisible(compact);
             const w = compact ? MINI_W : tag.fw, h = compact ? MINI_H : tag.fh;

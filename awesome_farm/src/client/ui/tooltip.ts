@@ -31,6 +31,8 @@ export class Tooltip {
     /** The card's size (the box is a container: it has none of its own). */
     private tw = 0;
     private th = 0;
+    /** The object the card is for: when it is destroyed or hidden under the pointer (land that was just bought, a plate that moved away) no pointerout comes, so the card goes by itself. */
+    owner: Obj | null = null;
 
     /** Is a card up right now? */
     get visible () { return this.shown; }
@@ -80,6 +82,7 @@ export class Tooltip {
 
     follow (p: Phaser.Input.Pointer) {
         if (!this.shown) return;
+        if (this.owner && !stillThere(this.owner)) { this.hide(); return; }
         const { tw, th } = this;
         const q = logical(p);
         let x = q.x + 16, y = q.y + 16;
@@ -92,9 +95,18 @@ export class Tooltip {
     hide () {
         if (!this.shown) return;
         this.shown = false;
+        this.owner = null;
         this.lastKey = '';
         this.box.setVisible(false);
     }
+}
+
+/** Is this object still alive and drawn (itself and every container above it)? */
+export function stillThere (o: Obj): boolean {
+    for (let n: Phaser.GameObjects.GameObject | Phaser.GameObjects.Container | null = o; n; n = (n as Phaser.GameObjects.GameObject & { parentContainer?: Phaser.GameObjects.Container | null }).parentContainer ?? null) {
+        if (!n.active || (n as unknown as { visible?: boolean }).visible === false) return false;
+    }
+    return true;
 }
 
 let tooltip: Tooltip | null = null;
@@ -108,7 +120,7 @@ export const hideTip = () => tooltip?.hide();
  * when that changes.
  */
 export function tipOn (o: Obj, get: () => TipData | null, sub?: () => unknown) {
-    const show = () => { const d = get(); if (d) tooltip?.show(d); else tooltip?.hide(); };
+    const show = () => { const d = get(); if (d && tooltip) { tooltip.show(d); tooltip.owner = o; } else tooltip?.hide(); };
     let at: unknown;
     o.on('pointerover', () => { at = sub?.(); show(); });
     if (sub) o.on('pointermove', () => { const k = sub(); if (k !== at) { at = k; show(); } });

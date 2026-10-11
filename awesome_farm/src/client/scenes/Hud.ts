@@ -25,6 +25,7 @@ import { CompanionCard, QuestTracker } from '../ui/companion';
 import { HudLayer } from '../ui/hudlayer';
 import { DuskPill, PartyList } from '../ui/party';
 import { ArtsBar } from '../ui/artsbar';
+import { pausesWorld } from '../ui/screens/live';
 import { button, forDevice, H, hideTip, icon, label, setHudScaleSource, setTooltip, tipOn, Toasts, Tooltip, W } from '../ui/kit';
 import { LandPlates } from '../ui/plates';
 import { TouchControls } from '../ui/touchcontrols';
@@ -302,7 +303,7 @@ export class HudScene extends Phaser.Scene {
         if (!Cls) return;
         this.farm.cancelTools();
         this.farm.menuOpen = true;
-        this.farm.setPaused(true);
+        this.farm.setPaused(pausesWorld(name));
         this.screenName = name;
         this.screen = new Cls(this.ctx(), name === 'map' ? { tab: 'map' } : arg);
         hideTip();
