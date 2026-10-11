@@ -211,7 +211,7 @@
   function fogLevel() { return L.scoutLevel(S); }
   function oppRow(o, lv, i, key) {
     const fog = lv < 1 ? 'fog' : '';
-    return `<div class="opp" data-a="insp" data-key="${key}" data-i="${i}"><div class="spr ${lv < 0 ? 'fog' : ''}">${A.gladOf(o, { size: 52, tunic: o.color, mood: 'fight' })}</div><div class="sp"><div class="gname" style="font-size:13px">${esc(o.name)}</div><div class="row"><span class="pill">Lv ${o.lvl}</span>${A.styleIcon(o.style, 20)}</div></div></div>`;
+    return `<div class="opp" data-a="insp" data-key="${key}" data-i="${i}"><div class="spr ${lv < 0 ? 'fog' : ''}">${A.gladOf(o, { size: 52, tunic: o.color, mood: 'fight' })}</div><div class="sp"><div class="gname" style="font-size:13px">${esc(o.name)}</div><div class="row"><span class="pill">Lv ${o.lvl}</span>${A.styleIcon(o.style, 20)}${o.gh ? '<span class="tag" style="background:#7d7d8c;color:#fff">Ghost</span>' : ''}</div></div></div>`;
   }
   function vArena() {
     const ml = L.maxLeague(S); const lv = fogLevel(); const look = L.lookahead(S);
@@ -219,6 +219,8 @@
     let h = '<div class="ltabs">' + D.LEAGUES.map((Lg) => `<div class="ltab ${ui.league === Lg.id ? 'on' : ''} ${Lg.id > ml ? 'lock' : ''}" data-a="league" data-v="${Lg.id}">${Lg.id > ml ? A.icon('lock', 12) : ''} ${Lg.n}</div>`).join('') + '</div>';
     h += '<div class="wtabs">' + Array.from({ length: look }, (_, i) => `<div class="wtab ${ui.wk === i ? 'on' : ''}" data-a="wk" data-v="${i}">${i === 0 ? 'This week' : 'Week ' + (S.week + i)}</div>`).join('') + `</div>`;
     h += `<div class="card dark row" style="gap:10px">${A.icon('eye', 24)}<div class="small sp"><b class="h" style="font-size:12px;color:var(--gold)">Scouting level ${lv}</b><br>${L.fogNote[lv]}. Upgrade the Scout Tower to see more and look further ahead.</div></div>`;
+    const used = S.pitWeek === S.week;
+    h += `<div class="card" style="background:var(--ink);color:var(--cream);border-color:var(--gold)"><div class="row"><div class="sp"><b class="h" style="color:var(--gold)">Pit of Trials</b><div class="small" style="font-weight:600">One fighter descends. Wounds carry over. Pick a boon after every floor, then cash out or push deeper. Best floor: <b>${S.pitBest || 0}</b></div></div><button class="btn sm ${used ? 'off' : 'red'}" data-a="pit">${used ? 'Done this week' : 'Descend'}</button></div></div>`;
     const Lg = D.LEAGUES[ui.league];
     if (ui.league > ml) return h + `<div class="card"><h3>${A.icon('lock', 18)} ${Lg.n}</h3>Reach ${Lg.fame} fame to enter (you have ${fmt(S.fame)}). ${Lg.d}</div>`;
     const week = S.week + ui.wk; const evs = L.events(S, week, ui.league);
@@ -246,6 +248,9 @@
   U.dossier = (o, ev, opts) => {
     const lv = fogLevel(); const S0 = D.STYLES[o.style]; const counters = L.counters(o.style);
     let h = `<h2>${esc(o.name)} ${esc(o.nick)}</h2><div class="row" style="align-items:flex-start"><div style="width:120px;flex:none;background:var(--cream2);border:3px solid var(--ink);border-radius:14px;display:flex;justify-content:center;align-items:flex-end;height:164px;overflow:hidden">${A.gladOf(o, { size: 112, tunic: o.color, mood: 'fight' })}</div><div class="sp"><div class="row">${A.styleIcon(o.style, 26)}<b class="h" style="font-size:13px">${S0.n}</b></div><div class="muted" style="opacity:1;margin:3px 0">${esc(o.lud || '')} · ${S0.role}</div><span class="pill">Lv ${o.lvl}</span>${o.rv && S.rivals[o.rv] ? `<div class="small" style="margin-top:6px">Your record vs them: <b>${S.rivals[o.rv].w}W ${S.rivals[o.rv].l}L</b></div>` : ''}<div class="small" style="margin-top:6px"><b>Beats:</b> ${S0.beats.map((b) => A.styleIcon(b, 20)).join(' ')}<br><b>Loses to:</b> ${counters.map((b) => A.styleIcon(b, 20)).join(' ')}</div></div></div>`;
+    if (o.gh) h += `<div class="card" style="background:#d9d9e3;margin-top:8px"><b>${esc(o.lud || 'A ghost')}</b><div class="small">One of your own former champions, back as a rival. They keep their old techniques and tricks.</div></div>`;
+    const rec = o.rv && S.rivals[o.rv]; const hab = L.habit(o); const seen = rec && rec.seen ? Object.keys(rec.seen).map((k) => `${L.STANCES[k]} x${rec.seen[k]}`).join(', ') : '';
+    h += `<div class="sec" style="color:var(--terra);text-shadow:none">Tells (stance)</div><div class="small">${o.rv ? (lv >= 2 ? `Favors <b>${L.STANCES[hab.fav]}</b> (about ${Math.round(hab.p * 100)}% of the time). ` : lv === 1 ? 'Scouting level 2 reveals their favorite stance. ' : 'Scout them to learn their habits. ') : 'No fixed habits.'}${seen ? `<br>Seen in your fights: ${seen}.` : ''}</div><div class="tiny muted">Aggressive beats Cunning, Cunning beats Guarded, Guarded beats Aggressive.</div>`;
     h += `<div class="sec" style="color:var(--terra);text-shadow:none">Intel (scouting ${lv})</div>`;
     if (lv < 1) h += `<div class="row wrap">${D.STATS.map((s) => `<div class="st"><span style="background:${D.SC[s]}">${D.SA[s]}</span><b>?</b></div>`).join('')}</div><div class="muted" style="margin-top:6px">Build a Scout Tower to learn their stats, traits and gear.</div>`;
     else if (lv === 1) h += `<div class="row wrap">${D.STATS.map((s) => `<div class="st"><span style="background:${D.SC[s]}">${D.SA[s]}</span><b>${L.grade(o.st[s], o.lvl)}</b></div>`).join('')}</div><div class="small" style="margin-top:6px"><b>${D.TRAITS[o.trait].n}:</b> ${D.TRAITS[o.trait].d}</div><div class="muted">Scouting 2 reveals exact numbers, gear and win odds.</div>`;
