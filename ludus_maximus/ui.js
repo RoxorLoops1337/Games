@@ -57,7 +57,7 @@
   const statChip = (g, s) => `<div class="st"><span style="background:${D.SC[s]}">${D.SA[s]}</span><b>${Math.floor(g.st[s])}</b></div>`;
   const stars = (n) => '★'.repeat(n) + '☆'.repeat(5 - n);
   const rarTag = (r) => `<span class="tag" style="background:${D.RAR[r].c}">${D.RAR[r].n}</span>`;
-  const advTag = (a) => (a > 0 ? '<span class="adv up">You counter</span>' : a < 0 ? '<span class="adv dn">They counter</span>' : '<span class="adv eq">Neutral</span>');
+  const advTag = (a) => (a > 0 ? '<span class="adv up">Style edge +10%</span>' : a < 0 ? '<span class="adv dn">Style risk -8%</span>' : '<span class="adv eq">Even styles</span>');
   U.advTag = advTag; U.stars = stars; U.rarTag = rarTag;
   function fmtSt(it, f) {
     f = f || 1 + 0.08 * it.up; const lab = { atk: 'ATK', def: 'DEF', hp: 'HP', spd: 'SPD', crit: 'CRT%', eva: 'EVA%' };
@@ -74,8 +74,9 @@
   function renderHud() {
     if (!S) { $('#hud').innerHTML = ''; $('#tabs').innerHTML = ''; return; }
     const due = need();
-    $('#hud').innerHTML = `<span class="chip">${A.icon('coin', 20)}<b>${fmt(S.gold)}</b></span><span class="chip">${A.icon('fame', 20)}<b>${fmt(S.fame)}</b></span><span class="chip">${A.icon('week', 18)}<b>W${S.week}</b></span><span class="grow"></span><button class="btn sm ${due ? 'red pulse' : ''}" id="nextBtn" data-a="next">${due ? 'Games day' : 'Next week'} ${A.icon('play', 14)}</button>`;
-    const picks = S.glads.filter((g) => g.pick).length; const claim = S.contracts.filter((c) => L.contractProgress(S, c) >= c.n).length;
+    const gb = ui.pg !== undefined && ui.pg !== S.gold ? ' bump' : '', fb = ui.pf !== undefined && ui.pf !== S.fame ? ' bump' : ''; ui.pg = S.gold; ui.pf = S.fame;
+    $('#hud').innerHTML = `<span class="chip${gb}">${A.icon('coin', 20)}<b>${fmt(S.gold)}</b></span><span class="chip${fb}">${A.icon('fame', 20)}<b>${fmt(S.fame)}</b></span><span class="chip">${A.icon('week', 18)}<b>W${S.week}</b></span><span class="grow"></span><button class="btn sm ${due ? 'red pulse' : ''}" id="nextBtn" data-a="next">${due ? 'Games day' : 'Next week'} ${A.icon('play', 14)}</button>`;
+    const picks = S.glads.filter((g) => g.pend && g.pend.length).length; const claim = S.contracts.filter((c) => L.contractProgress(S, c) >= c.n).length;
     const T = [['ludus', 'home', 'Ludus', 0], ['glads', 'user', 'Fighters', picks], ['arena', 'swords', 'Arena', 0], ['armory', 'bag', 'Armory', 0], ['more', 'scroll', 'More', claim]];
     $('#tabs').innerHTML = T.map(([id, ic, n, d]) => `<div class="tab ${ui.tab === id ? 'on' : ''}" data-a="tab" data-v="${id}">${d ? `<span class="dot">${d}</span>` : ''}${A.icon(ic, 22, ui.tab === id ? '' : 'style="filter:brightness(1.3)"')}${n}</div>`).join('');
   }
@@ -139,7 +140,7 @@
   function gcard(g) {
     const T = D.TRAITS[g.trait]; const entered = L.busy(S, g, S.week) ? 'this week' : L.busy(S, g, S.week + 1) ? 'next week' : '';
     const acts = D.ACTS.map((a) => `<div class="act ${g.act === a.id ? 'on' : ''} ${g.inj > 0 ? 'off' : ''}" data-a="setact" data-id="${g.id}" data-v="${a.id}" ${a.t === 'train' ? `style="border-bottom-color:${D.SC[a.s]}"` : ''}>${actLabel[a.id]}</div>`).join('');
-    return `<div class="card gcard"><div class="row" style="align-items:flex-start"><div class="spr" data-a="gdetail" data-id="${g.id}">${spr(g)}</div><div class="sp"><div class="row"><div class="gname sp">${esc(g.name)} <span class="muted" style="text-transform:none">${esc(g.nick)}</span></div>${A.styleIcon(g.style, 24)}</div><div class="row wrap" style="margin:3px 0"><span class="pill">Lv ${g.lvl}</span><span class="pill">${esc(T.n)}</span><span class="pips">${stars(L.stars(g))}</span>${g.inj > 0 ? `<span class="tag red">Injured ${g.inj}w</span>` : ''}${entered ? `<span class="tag blue">Fights ${entered}</span>` : ''}${g.pick ? '<span class="tag green pulse" data-a="gpick" data-id="' + g.id + '">New technique!</span>' : ''}</div><div class="row" style="gap:4px"><div class="sp"><div class="bar en" title="Energy"><i style="width:${g.en}%"></i></div></div><div class="sp"><div class="bar mo" title="Morale"><i style="width:${g.mo}%"></i></div></div><div class="sp"><div class="bar xp" title="XP"><i style="width:${(g.xp / L.need(g.lvl)) * 100}%"></i></div></div></div><div class="row tiny muted" style="gap:4px;margin-top:1px"><span class="sp">ENERGY ${Math.round(g.en)}</span><span class="sp">MORALE ${Math.round(g.mo)}</span><span class="sp">XP</span></div></div></div><div class="stats">${D.STATS.map((s) => statChip(g, s)).join('')}</div><div class="acts">${acts}</div></div>`;
+    return `<div class="card gcard"><div class="row" style="align-items:flex-start"><div class="spr" data-a="gdetail" data-id="${g.id}">${spr(g)}</div><div class="sp"><div class="row"><div class="gname sp">${esc(g.name)} <span class="muted" style="text-transform:none">${esc(g.nick)}</span></div>${A.styleIcon(g.style, 24)}</div><div class="row wrap" style="margin:3px 0"><span class="pill">Lv ${g.lvl}</span><span class="pill">${esc(T.n)}</span><span class="pips">${stars(L.stars(g))}</span>${g.inj > 0 ? `<span class="tag red">Injured ${g.inj}w</span>` : ''}${entered ? `<span class="tag blue">Fights ${entered}</span>` : ''}${g.pend && g.pend.length ? '<span class="tag green pulse" data-a="gpick" data-id="' + g.id + '">Level-up pick!</span>' : ''}</div><div class="row" style="gap:4px"><div class="sp"><div class="bar en" title="Energy"><i style="width:${g.en}%"></i></div></div><div class="sp"><div class="bar mo" title="Morale"><i style="width:${g.mo}%"></i></div></div><div class="sp"><div class="bar xp" title="XP"><i style="width:${(g.xp / L.need(g.lvl)) * 100}%"></i></div></div></div><div class="row tiny muted" style="gap:4px;margin-top:1px"><span class="sp">ENERGY ${Math.round(g.en)}</span><span class="sp">MORALE ${Math.round(g.mo)}</span><span class="sp">XP</span></div></div></div><div class="stats">${D.STATS.map((s) => statChip(g, s)).join('')}</div><div class="acts">${acts}</div></div>`;
   }
   function vGlads() {
     let h = `<div class="row" style="margin-bottom:10px"><div class="sec sp" style="margin:0">Fighters ${S.glads.length}/${L.rosterCap(S)}</div><button class="btn sm ghost" data-a="autoplan">Auto-plan</button><button class="btn sm" data-a="recruit">${A.icon('plus', 14)} Recruit</button></div>`;
@@ -159,11 +160,12 @@
     });
     toast('Weekly plan set'); save(); render();
   };
+  const PKL = { tech: ['New technique', (t) => `<span class="tag">${D.TECHS[t].cd}s</span> ${D.TECHS[t].d}`, (t) => D.TECHS[t].n], mast: ['New mastery', (t) => D.MASTS[t].d, (t) => D.MASTS[t].n], ult: ['Second ultimate', (t) => `<span class="tag">${D.ULTS[t].cd}s</span> ${D.ULTS[t].d}`, (t) => D.ULTS[t].n] };
   ACT.gpick = (el) => {
-    const g = gOf(+el.dataset.id); if (!g || !g.pick) return;
-    modal(`<h2>New technique</h2><div class="muted" style="margin-bottom:8px">${esc(g.name)} reached level ${g.lvl}. Choose one to learn for good.</div>` + g.pick.map((t) => { const T = D.TECHS[t]; return `<div class="tech"><b>${T.n}</b> <span class="tag">${T.cd}s cooldown</span><div>${T.d}</div><button class="btn sm full" style="margin-top:6px" data-a="dopick" data-id="${g.id}" data-v="${t}">Learn ${T.n}</button></div>`; }).join(''), { dismiss: true });
+    const g = gOf(+el.dataset.id); if (!g || !g.pend || !g.pend.length) return; const p0 = g.pend[0]; const M = PKL[p0.t];
+    modal(`<h2>${M[0]}</h2><div class="muted" style="margin-bottom:8px">${esc(g.name)}, level ${g.lvl}. Choose one for good.</div>` + p0.o.map((t) => `<div class="tech"><b>${M[2](t)}</b><div>${M[1](t)}</div><button class="btn sm full" style="margin-top:6px" data-a="dopick" data-id="${g.id}" data-v="${t}">Take ${M[2](t)}</button></div>`).join(''), { dismiss: true });
   };
-  ACT.dopick = (el) => { const g = gOf(+el.dataset.id); L.choosePick(g, el.dataset.v); U.snd('win'); save(); closeModal(); render(); };
+  ACT.dopick = (el) => { const g = gOf(+el.dataset.id); L.choosePick(g, el.dataset.v); U.snd('win'); save(); closeModal(); render(); if (g.pend.length) ACT.gpick(el); };
   ACT.recruit = () => {
     L.ensureShops(S);
     const cap = L.rosterCap(S);
@@ -181,10 +183,20 @@
     h += '<div class="sec" style="color:var(--terra);text-shadow:none">Gear</div><div class="row wrap">' + D.SLOTS.map((s) => { const it = g.gear[s]; return `<div style="text-align:center"><div class="slotbox ${it ? 'has' : ''}" data-a="slot" data-id="${g.id}" data-v="${s}" style="${it ? 'background:' + D.RAR[it.rar].c + '33' : ''}">${it ? A.itemIcon(s, it.rar, 38) : '<span class="tiny muted">' + D.SLOT_NAME[s] + '</span>'}</div>${it && it.up ? `<div class="tiny">+${it.up}</div>` : ''}</div>`; }).join('') + '</div>';
     const sc = L.setCounts(g); const sl = Object.keys(sc).filter((k) => sc[k] >= 2);
     if (sl.length) h += '<div class="small" style="margin-top:6px">' + sl.map((k) => `<span class="tag" style="background:${D.SETS[k].c};color:#fff">${D.SETS[k].n} ${sc[k]}pc</span> ${D.SETS[k].d2}${sc[k] >= 4 ? ', ' + D.SETS[k].d4 : ''}`).join('<br>') + '</div>';
-    h += '<div class="sec" style="color:var(--terra);text-shadow:none">Techniques</div>' + g.techs.map((t) => `<div class="tech"><b>${D.TECHS[t].n}</b> <span class="tag">${D.TECHS[t].cd}s</span><div>${D.TECHS[t].d}</div></div>`).join('');
+    const kr = D.KEYSTONES[g.rune.k];
+    h += `<div class="sec" style="color:var(--terra);text-shadow:none">Ultimates (you trigger these)</div>` + L.ultsOf(g).map((id) => `<div class="tech" style="border-color:${D.ULTS[id].c}"><div class="row"><span class="sbadge" style="background:${D.ULTS[id].c};width:30px;height:30px">${A.ultIcon(id, 22)}</span><b>${D.ULTS[id].n}</b><span class="tag">${D.ULTS[id].cd}s</span></div><div>${D.ULTS[id].d}</div></div>`).join('') + (g.ult2 ? '' : '<div class="muted">A second ultimate unlocks at level 8.</div>');
+    h += `<div class="sec" style="color:var(--terra);text-shadow:none">Runes</div><div class="tech" style="border-color:${kr.c};cursor:pointer" data-a="runes" data-id="${g.id}"><b>${kr.n}</b> <span class="tag">Keystone</span><div>${kr.d}</div></div>` + g.rune.m.map((m) => `<div class="tech" data-a="runes" data-id="${g.id}" style="cursor:pointer"><b>${D.MINORS[m].n}</b> <span class="tag grey">Minor</span><div>${D.MINORS[m].d}</div></div>`).join('') + `<button class="btn sm ghost" data-a="runes" data-id="${g.id}">Change runes</button>`;
+    if (g.mast.length) h += '<div class="sec" style="color:var(--terra);text-shadow:none">Masteries</div>' + g.mast.map((m) => `<div class="tech"><b>${D.MASTS[m].n}</b> ${D.MASTS[m].d}</div>`).join('');
+    h += '<div class="sec" style="color:var(--terra);text-shadow:none">Techniques (cast automatically)</div>' + g.techs.map((t) => `<div class="tech"><b>${D.TECHS[t].n}</b> <span class="tag">${D.TECHS[t].cd}s</span><div>${D.TECHS[t].d}</div></div>`).join('');
     h += `<div class="row wrap" style="margin-top:10px"><button class="btn sm" data-a="autoeq" data-id="${g.id}">Auto-equip</button><button class="btn sm ghost" data-a="rename" data-id="${g.id}">Rename</button><button class="btn sm ghost" data-a="retrainm" data-id="${g.id}">Retrain style</button><button class="btn sm ghost ${g.lvl < 8 ? 'off' : ''}" data-a="retire" data-id="${g.id}">Retire (Lv8+)</button><button class="btn sm red" data-a="release" data-id="${g.id}">Release</button></div>`;
     modal(h);
   };
+  ACT.runes = (el) => {
+    const g = gOf(+el.dataset.id); U.rg = g.id; const ks = Object.keys(D.KEYSTONES), ms = Object.keys(D.MINORS);
+    modal(`<h2>Runes: ${esc(g.name)}</h2><div class="muted" style="margin-bottom:6px">Pick one keystone and two minors. Unlock more by winning tournaments, bosses and Pit floors.</div><div class="sec" style="color:var(--terra);text-shadow:none">Keystone</div>` + ks.map((k) => { const own = L.runeOwned(S, 'k', k); return `<div class="tech ${own ? '' : 'lockd'}" style="border-color:${D.KEYSTONES[k].c};${g.rune.k === k ? 'background:var(--gold)' : ''};${own ? 'cursor:pointer' : 'opacity:.45'}" data-a="${own ? 'setk' : ''}" data-id="${g.id}" data-v="${k}"><b>${D.KEYSTONES[k].n}</b> ${own ? '' : A.icon('lock', 12)}<div>${D.KEYSTONES[k].d}</div></div>`; }).join('') + '<div class="sec" style="color:var(--terra);text-shadow:none">Minors (2)</div>' + ms.map((m) => { const own = L.runeOwned(S, 'm', m); return `<div class="tech" style="${g.rune.m.includes(m) ? 'background:var(--gold)' : ''};${own ? 'cursor:pointer' : 'opacity:.45'}" data-a="${own ? 'setm' : ''}" data-id="${g.id}" data-v="${m}"><b>${D.MINORS[m].n}</b> ${own ? '' : A.icon('lock', 12)}<div>${D.MINORS[m].d}</div></div>`; }).join('') + `<button class="btn full" style="margin-top:8px" data-a="gdetail" data-id="${g.id}">Done</button>`);
+  };
+  ACT.setk = (el) => { const g = gOf(+el.dataset.id); L.setKeystone(S, g, el.dataset.v); save(); U.snd('click'); ACT.runes(el); };
+  ACT.setm = (el) => { const g = gOf(+el.dataset.id); L.toggleMinor(S, g, el.dataset.v); save(); U.snd('click'); const sc = $('#sheet').scrollTop; ACT.runes(el); $('#sheet').scrollTop = sc; };
   ACT.autoeq = (el) => { const g = gOf(+el.dataset.id); L.autoEquip(S, g); save(); ACT.gdetail(g.id); render(); };
   ACT.rename = (el) => { const g = gOf(+el.dataset.id); const n = prompt('New name', g.name); if (n && n.trim()) { g.name = n.trim().slice(0, 16); save(); ACT.gdetail(g.id); render(); } };
   ACT.retrainm = (el) => {
@@ -220,7 +232,7 @@
     h += '<div class="wtabs">' + Array.from({ length: look }, (_, i) => `<div class="wtab ${ui.wk === i ? 'on' : ''}" data-a="wk" data-v="${i}">${i === 0 ? 'This week' : 'Week ' + (S.week + i)}</div>`).join('') + `</div>`;
     h += `<div class="card dark row" style="gap:10px">${A.icon('eye', 24)}<div class="small sp"><b class="h" style="font-size:12px;color:var(--gold)">Scouting level ${lv}</b><br>${L.fogNote[lv]}. Upgrade the Scout Tower to see more and look further ahead.</div></div>`;
     const used = S.pitWeek === S.week;
-    h += `<div class="card" style="background:var(--ink);color:var(--cream);border-color:var(--gold)"><div class="row"><div class="sp"><b class="h" style="color:var(--gold)">Pit of Trials</b><div class="small" style="font-weight:600">One fighter descends. Wounds carry over. Pick a boon after every floor, then cash out or push deeper. Best floor: <b>${S.pitBest || 0}</b></div></div><button class="btn sm ${used ? 'off' : 'red'}" data-a="pit">${used ? 'Done this week' : 'Descend'}</button></div></div>`;
+    h += `<div class="card" style="background:var(--ink);color:var(--cream);border-color:var(--gold)"><div class="row"><div class="sp"><b class="h" style="color:var(--gold)">Pit of Trials</b><div class="small" style="font-weight:600">One fighter descends. Wounds carry over. Pick an augment before every floor, then cash out or push deeper. Best floor: <b>${S.pitBest || 0}</b></div></div><button class="btn sm ${used ? 'off' : 'red'}" data-a="pit">${used ? 'Done this week' : 'Descend'}</button></div></div>`;
     const Lg = D.LEAGUES[ui.league];
     if (ui.league > ml) return h + `<div class="card"><h3>${A.icon('lock', 18)} ${Lg.n}</h3>Reach ${Lg.fame} fame to enter (you have ${fmt(S.fame)}). ${Lg.d}</div>`;
     const week = S.week + ui.wk; const evs = L.events(S, week, ui.league);
@@ -247,21 +259,20 @@
   // Opponent dossier with fog of war
   U.dossier = (o, ev, opts) => {
     const lv = fogLevel(); const S0 = D.STYLES[o.style]; const counters = L.counters(o.style);
-    let h = `<h2>${esc(o.name)} ${esc(o.nick)}</h2><div class="row" style="align-items:flex-start"><div style="width:120px;flex:none;background:var(--cream2);border:3px solid var(--ink);border-radius:14px;display:flex;justify-content:center;align-items:flex-end;height:164px;overflow:hidden">${A.gladOf(o, { size: 112, tunic: o.color, mood: 'fight' })}</div><div class="sp"><div class="row">${A.styleIcon(o.style, 26)}<b class="h" style="font-size:13px">${S0.n}</b></div><div class="muted" style="opacity:1;margin:3px 0">${esc(o.lud || '')} · ${S0.role}</div><span class="pill">Lv ${o.lvl}</span>${o.rv && S.rivals[o.rv] ? `<div class="small" style="margin-top:6px">Your record vs them: <b>${S.rivals[o.rv].w}W ${S.rivals[o.rv].l}L</b></div>` : ''}<div class="small" style="margin-top:6px"><b>Beats:</b> ${S0.beats.map((b) => A.styleIcon(b, 20)).join(' ')}<br><b>Loses to:</b> ${counters.map((b) => A.styleIcon(b, 20)).join(' ')}</div></div></div>`;
+    let h = `<h2>${esc(o.name)} ${esc(o.nick)}</h2><div class="row" style="align-items:flex-start"><div style="width:120px;flex:none;background:var(--cream2);border:3px solid var(--ink);border-radius:14px;display:flex;justify-content:center;align-items:flex-end;height:164px;overflow:hidden">${A.gladOf(o, { size: 112, tunic: o.color, mood: 'fight' })}</div><div class="sp"><div class="row">${A.styleIcon(o.style, 26)}<b class="h" style="font-size:13px">${S0.n}</b></div><div class="muted" style="opacity:1;margin:3px 0">${esc(o.lud || '')} · ${S0.role}</div><span class="pill">Lv ${o.lvl}</span>${o.rv && S.rivals[o.rv] ? `<div class="small" style="margin-top:6px">Your record vs them: <b>${S.rivals[o.rv].w}W ${S.rivals[o.rv].l}L</b></div>` : ''}<div class="small" style="margin-top:6px"><b>Slight edge on:</b> ${S0.beats.map((b) => A.styleIcon(b, 20)).join(' ')}<br><b>Slight risk vs:</b> ${counters.map((b) => A.styleIcon(b, 20)).join(' ')}</div></div></div>`;
     if (o.gh) h += `<div class="card" style="background:#d9d9e3;margin-top:8px"><b>${esc(o.lud || 'A ghost')}</b><div class="small">One of your own former champions, back as a rival. They keep their old techniques and tricks.</div></div>`;
-    const rec = o.rv && S.rivals[o.rv]; const hab = L.habit(o); const seen = rec && rec.seen ? Object.keys(rec.seen).map((k) => `${L.STANCES[k]} x${rec.seen[k]}`).join(', ') : '';
-    h += `<div class="sec" style="color:var(--terra);text-shadow:none">Tells (stance)</div><div class="small">${o.rv ? (lv >= 2 ? `Favors <b>${L.STANCES[hab.fav]}</b> (about ${Math.round(hab.p * 100)}% of the time). ` : lv === 1 ? 'Scouting level 2 reveals their favorite stance. ' : 'Scout them to learn their habits. ') : 'No fixed habits.'}${seen ? `<br>Seen in your fights: ${seen}.` : ''}</div><div class="tiny muted">Aggressive beats Cunning, Cunning beats Guarded, Guarded beats Aggressive.</div>`;
     h += `<div class="sec" style="color:var(--terra);text-shadow:none">Intel (scouting ${lv})</div>`;
     if (lv < 1) h += `<div class="row wrap">${D.STATS.map((s) => `<div class="st"><span style="background:${D.SC[s]}">${D.SA[s]}</span><b>?</b></div>`).join('')}</div><div class="muted" style="margin-top:6px">Build a Scout Tower to learn their stats, traits and gear.</div>`;
     else if (lv === 1) h += `<div class="row wrap">${D.STATS.map((s) => `<div class="st"><span style="background:${D.SC[s]}">${D.SA[s]}</span><b>${L.grade(o.st[s], o.lvl)}</b></div>`).join('')}</div><div class="small" style="margin-top:6px"><b>${D.TRAITS[o.trait].n}:</b> ${D.TRAITS[o.trait].d}</div><div class="muted">Scouting 2 reveals exact numbers, gear and win odds.</div>`;
     else {
       h += `<div class="row wrap">${D.STATS.map((s) => `<div class="st"><span style="background:${D.SC[s]}">${D.SA[s]}</span><b>${Math.floor(o.st[s])}</b></div>`).join('')}</div><div class="small" style="margin-top:6px"><b>${D.TRAITS[o.trait].n}:</b> ${D.TRAITS[o.trait].d}</div>`;
       h += '<div style="margin-top:8px">' + o.techs.map((t) => `<span class="pill" title="${D.TECHS[t].d}">${D.TECHS[t].n}</span>`).join(' ') + '</div>';
+      h += `<div style="margin-top:6px" class="small"><b>Ultimates:</b> ${L.ultsOf(o).map((x) => D.ULTS[x].n).join(', ')} · <b>Rune:</b> ${D.KEYSTONES[o.rune.k].n}${lv >= 3 && o.mast.length ? ' · <b>Masteries:</b> ' + o.mast.map((m) => D.MASTS[m].n).join(', ') : ''}</div>`;
       h += '<div style="margin-top:8px">' + D.SLOTS.map((s) => { const it = o.gear[s]; return it ? `<div class="small"><span class="tag" style="background:${D.RAR[it.rar].c}">${D.SLOT_NAME[s]}</span> ${esc(it.name)}${lv >= 3 ? ' ' + it.af.map((a) => `<span class="tiny" style="color:#6a3bb0">${D.AFFIX[a.id].n}</span>`).join(' ') : ''}</div>` : ''; }).join('') + '</div>';
       if (lv >= 3) { const d = L.derive(o, { noperf: true }); h += `<div class="kv" style="margin-top:6px"><span>HP / ATK / DEF</span><b>${Math.round(d.hp)} / ${Math.round(d.atk)} / ${Math.round(d.def)}</b></div><div class="kv"><span>SPD / CRIT / EVA</span><b>${Math.round(d.spd)} / ${Math.round(d.crit * 100)}% / ${Math.round(d.eva * 100)}%</b></div>${d.sets.length ? '<div class="small">Sets: ' + d.sets.map((x) => D.SETS[x.id].n + ' ' + x.n + 'pc').join(', ') + '</div>' : ''}`; }
     }
     if (ev && ev.kind !== 'duel' && ev.opps.length > 1) h += '<div class="sec" style="color:var(--terra);text-shadow:none">Others in this event</div><div class="row wrap">' + ev.opps.map((x, i) => `<div class="opp" data-a="insp" data-key="${ev.key}" data-i="${i}">${A.gladOf(x, { size: 40, tunic: x.color })}${A.styleIcon(x.style, 18)}</div>`).join('') + '</div>';
-    if (!opts || !opts.noback) h += '<div class="muted" style="margin-top:10px">Counter-pick: put a fighter whose style beats theirs on the sand. Each style beats two and loses to two.</div>';
+    if (!opts || !opts.noback) h += '<div class="muted" style="margin-top:10px">Matchups give a small style edge (+10%), but fights are decided by stats, gear, runes, augments and how well you time your ultimates.</div>';
     modal(h);
   };
   ACT.insp = (el) => { const ev = L.eventByKey(S, el.dataset.key); U.dossier(ev.opps[+el.dataset.i], ev); };
@@ -303,11 +314,15 @@
   const icell = (it, extra) => `<div class="icell ${extra || ''}" data-a="${extra === 'fsel' ? 'fpick' : 'item'}" data-id="${it.id}" style="border-color:var(--ink);background:${D.RAR[it.rar].c}33">${it.up ? `<span class="up">+${it.up}</span>` : ''}${A.itemIcon(it.slot, it.rar, 36)}<div class="nm">${esc(it.name)}</div>${it.set ? `<span class="tag" style="background:${D.SETS[it.set].c};color:#fff;font-size:8px">${D.SETS[it.set].n}</span>` : ''}<div class="tiny">${fmtSt(it).split(' · ')[0]}</div></div>`;
   function vArmory() {
     const sub = ui.arm;
-    let h = `<div class="ltabs">${[['inv', 'Inventory'], ['shop', 'Market'], ['forge', 'Forge']].map(([id, n]) => `<div class="ltab ${sub === id ? 'on' : ''}" data-a="armsub" data-v="${id}">${n}</div>`).join('')}</div>`;
+    let h = `<div class="ltabs">${[['inv', 'Items'], ['relics', 'Relics'], ['shop', 'Market'], ['forge', 'Forge']].map(([id, n]) => `<div class="ltab ${sub === id ? 'on' : ''}" data-a="armsub" data-v="${id}">${n}</div>`).join('')}</div>`;
     if (sub === 'inv') {
       const items = S.items.slice().sort((a, b) => b.rar - a.rar || L.itemScore(b) - L.itemScore(a));
       h += `<div class="muted" style="margin-bottom:8px;color:var(--cream2)">${items.length}/${L.armoryCap(S)} items. Tap one to equip, upgrade or sell.</div>`;
       h += items.length ? '<div class="igrid">' + items.map((it) => icell(it)).join('') + '</div>' : '<div class="empty">No spare items. Win fights, enter tournaments, or visit the Market.</div>';
+    } else if (sub === 'relics') {
+      const slots = L.relicSlots(S);
+      h += `<div class="card dark"><b class="h" style="color:var(--gold)">Relics ${S.relicOn.length}/${slots}</b><div class="small" style="font-weight:600">Ancient artifacts that boost every fighter. Win tournaments, grand games and Pit bosses to find them. The Shrine adds slots.</div></div>`;
+      h += S.relics.length ? S.relics.map((id) => { const r = D.RELICS.find((x) => x.id === id); const on = S.relicOn.includes(id); return `<div class="itm" data-a="relic" data-v="${id}" style="border-color:${r.c};${on ? 'background:var(--gold)' : ''}"><div class="sbadge" style="background:${r.c};width:34px;height:34px">${A.icon('laurel', 20)}</div><div class="sp"><div class="gname" style="font-size:13px">${r.n}</div><div class="muted" style="opacity:1">${r.d}</div></div><span class="tag ${on ? 'green' : 'grey'}">${on ? 'Equipped' : 'Stored'}</span></div>`; }).join('') : '<div class="empty">No relics yet.</div>';
     } else if (sub === 'shop') {
       L.ensureShops(S); const mk = L.bfx(S, 'market');
       h += `<div class="muted" style="margin-bottom:8px;color:var(--cream2)">${mk.l ? 'Market L' + mk.l + ': ' + 3 * mk.l + '% discount.' : 'Build a Market for discounts and weekly income.'} Stock changes every week.</div>`;
@@ -323,6 +338,7 @@
     }
     return h;
   }
+  ACT.relic = (el) => { const e = L.toggleRelic(S, el.dataset.v); if (e) return toast(e); U.snd('click'); save(); render(); };
   ACT.armsub = (el) => { ui.arm = el.dataset.v; render(); };
   ACT.fpick = (el) => { const id = el.dataset.id; const i = ui.fsel.indexOf(id); if (i >= 0) ui.fsel.splice(i, 1); else { if (ui.fsel.length >= 3) ui.fsel.shift(); ui.fsel.push(id); } render(); };
   ACT.domerge = () => {
@@ -378,10 +394,10 @@
   ACT.how = () => {
     modal(`<h2>How to play</h2><div class="col small" style="font-weight:600;line-height:1.35">
 <div><b>1. Plan the week.</b> In Fighters, give every gladiator an activity: train a stat, rest, spar or take odd jobs. It repeats each week.</div>
-<div><b>2. Scout the Arena.</b> Matches are announced weeks ahead. Look at your opponents. Every style beats two others and loses to two, so counter-pick! A Scout Tower reveals more (grades, exact stats, gear, win odds) and shows more weeks ahead.</div>
-<div><b>3. Enter and fight.</b> Entering costs a fee. On games day pick a stance, then tap techniques and tap an enemy to focus them. Crowd hype rescues the underdog.</div>
-<div><b>4. Grow.</b> Win gold, fame and loot. Level up for new techniques. Spend gold on buildings (neighbours add synergy), gear (merge three into one better, collect set pieces) and the plant-powered kitchen menu.</div>
-<div><b>5. Go bigger.</b> Tournaments with carry-over wounds, team clashes with style combos, then the Imperial Games. Retire stars into the Hall of Legends and found a new ludus for laurels.</div></div>`);
+<div><b>2. Build your fighter.</b> Gear with on-hit effects and sets, a Keystone rune plus two minors, masteries at levels 5/10/15/20, techniques that fire on their own, and ultimates that you trigger.</div>
+<div><b>3. Scout the Arena.</b> Matches are announced weeks ahead. A Scout Tower reveals more about rivals and shows more weeks ahead. Style matchups give a small edge only.</div>
+<div><b>4. Fight live.</b> Gladiators move, strike and cast on their own in the arena. You tap your <b>ultimates</b> (knock-ups, hookshots, tornadoes...) at the right moment and tap an enemy to focus it. Before each fight pick an <b>augment</b> (Silver, Gold or Prismatic).</div>
+<div><b>5. Grow.</b> Win gold, fame, loot, runes and <b>relics</b>. Upgrade buildings (neighbours add synergy), merge gear, bet on mispriced fights, try the Pit of Trials, then found a new ludus for laurels.</div></div>`);
   };
 
   // ---------- INTRO ----------
@@ -403,7 +419,7 @@
   };
 
   // ---------- routing ----------
-  ACT.tab = (el) => { ui.tab = el.dataset.v; U.snd('click'); render(); main().scrollTop = 0; };
+  ACT.tab = (el) => { ui.tab = el.dataset.v; U.snd('click'); render(); main().scrollTop = 0; const m = main(); m.classList.remove('tabin'); void m.offsetWidth; m.classList.add('tabin'); };
   ACT.close = () => closeModal();
   ACT.res = (el) => { const r = U.res; U.res = null; closeModal(); if (r) r(el.dataset.v); };
   function render() {

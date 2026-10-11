@@ -3,6 +3,7 @@ import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 const D = require('../ludus_maximus/data.js');
 const LM = require('../ludus_maximus/sim.js');
+require('../ludus_maximus/arena.js');
 
 let pass = 0, fail = 0;
 const ok = (c, m) => { if (c) pass++; else { fail++; console.error('  FAIL:', m); } };
@@ -41,15 +42,52 @@ ok(strongWins >= 17, `level 10 beats level 1 (${strongWins}/20)`);
   const F = LM.quick(LM.mkUnits(A, 'A', LM.teamCtx(null, A)), LM.mkUnits(B, 'B', LM.teamCtx(null, B)));
   ok(F.done, 'team fight finishes');
 }
-// manual technique + focus work in a live fight
+// live fight: units move, ultimates fire on demand, focus works
 {
   const a = LM.makeGlad({ style: 'murmillo', lvl: 4 }), b = LM.makeGlad({ style: 'thraex', lvl: 4 });
   const F = LM.createFight(LM.mkUnits([a], 'A', {}), LM.mkUnits([b], 'B', {}));
-  for (let i = 0; i < 40; i++) LM.step(F, 0.25);
-  ok(LM.useTech(F, 'A0', 0) === true || F.done, 'signature technique can be fired once ready');
+  const x0 = F.units[0].x; for (let i = 0; i < 60; i++) LM.step(F, 0.05);
+  ok(Math.abs(F.units[0].x - x0) > 1, 'gladiators walk toward each other');
+  const slot = F.units[0].ults[0]; slot.cd = 0;
+  ok(LM.useUlt(F, 'A0', 0) === true && slot.cd > 0, 'ultimate fires when ready and goes on cooldown');
+  ok(LM.useUlt(F, 'A0', 0) === false, 'ultimate cannot be spammed');
   LM.focus(F, 'A', 'B0'); ok(F.foc.A === 'B0', 'focus target set');
+  const r = LM.makeGlad({ style: 'retiarius', lvl: 4 }), f2 = LM.createFight(LM.mkUnits([r], 'A', {}), LM.mkUnits([b], 'B', {}));
+  f2.units[0].x = -9; f2.units[1].x = 8; f2.units[0].ults[0].cd = 0; ok(LM.useUlt(f2, 'A0', 0) === 'range', 'hookshot refuses an out-of-range target');
 }
-
+// every ultimate and skill resolves without errors and has an effect
+{
+  const ids = Object.keys(D.ULTS); let moved = 0;
+  ids.forEach((id) => {
+    const a = LM.makeGlad({ style: 'murmillo', lvl: 12 }), b = LM.makeGlad({ style: 'thraex', lvl: 12 });
+    const F = LM.createFight(LM.mkUnits([a], 'A', {}), LM.mkUnits([b], 'B', {}), { quiet: true });
+    F.units[0].ults = [{ id, cd: 0, max: 10 }]; F.units[0].x = -2; F.units[1].x = 1;
+    const hp0 = F.units[1].hp; ok(LM.useUlt(F, 'A0', 0) === true, `ult ${id} casts`); for (let i = 0; i < 40; i++) LM.step(F, 0.05);
+    if (F.units[1].hp < hp0 || F.units[1].s.slow || F.units[1].s.blind || F.units[0].s.guard || F.units[0].s.rage) moved++;
+  });
+  ok(moved === ids.length, `every ultimate changes the fight (${moved}/${ids.length})`);
+  const a = LM.makeGlad({ style: 'dimachaerus', lvl: 14 }); a.techs = Object.keys(D.TECHS);
+  const F = LM.quick(LM.mkUnits([a], 'A', {}), LM.mkUnits([LM.makeGlad({ lvl: 14 })], 'B', {}));
+  ok(F.done, 'a fighter with every skill still finishes the fight');
+}
+// runes, augments, relics and affixes feed the engine
+{
+  const mk = (rk, fx) => { const g = LM.makeGlad({ style: 'thraex', lvl: 8 }); g.rune = { k: rk, m: [] }; return LM.mkUnits([g], 'A', { xfx: fx || {} })[0]; };
+  let F = LM.createFight([mk('lethal')], LM.mkUnits([LM.makeGlad({ lvl: 8 })], 'B', {}), { autoA: true, quiet: true });
+  for (let i = 0; i < 120; i++) LM.step(F, 0.05);
+  ok(F.units[0].stk.lt > 0 || F.done, 'Lethal Tempo stacks on hit');
+  const base = LM.apsOf(mk('electro')), fren = (() => { const u = mk('electro', { frenzy: 3 }); u.stk.fr = 8; return LM.apsOf(u); })();
+  ok(fren > base * 1.15, 'frenzy stacks raise attack speed');
+  ok(LM.apsOf(mk('first')) > 0 && D.KEYSTONES.first && Object.keys(D.KEYSTONES).length >= 6, 'six keystones exist');
+  const S2 = LM.newGame({ name: 'R' }); ok(S2.runes.k.length === 2 && LM.unlockRune(S2) !== null, 'new runes unlock');
+  const rel = LM.dropRelic(S2); ok(rel && S2.relics.includes(rel.id) && S2.relicOn.includes(rel.id), 'relic drops and auto-equips');
+  const ctx = LM.teamCtx(S2, [LM.makeGlad({})], 'bal'); ok(ctx.xfx && ctx.syn, 'relics flow into team ctx');
+  const off = LM.augOffer(S2, 3, [], true); ok(off.length === 3 && off[0].t === 2 && new Set(off.map((x) => x.id)).size === 3, 'augment offer: 3 distinct, top tier forced');
+  const bc = LM.augCtx([D.AUGMENTS.find((x) => x.id === 'edge'), D.AUGMENTS.find((x) => x.id === 'thirst')]); ok(bc.syn.atk === 0.12 && bc.xfx.vamp === 2, 'augments aggregate');
+  const g = LM.makeGlad({ lvl: 1 }); LM.addXp(g, 5000); ok(g.pend.some((p) => p.t === 'ult') && g.pend.some((p) => p.t === 'mast') && g.pend.some((p) => p.t === 'tech'), 'levelling queues tech, ultimate and mastery picks');
+  let n = 0; while (g.pend.length && n++ < 20) LM.choosePick(g, g.pend[0].o[0]); ok(g.ult2 && g.mast.length >= 3 && g.techs.length >= 3, 'picks apply');
+  const old = JSON.parse(JSON.stringify(g)); delete old.pend; delete old.rune; delete old.mast; old.pick = ['whirl', 'rally']; const M = LM.migrate({ glads: [old], ghosts: [] }); ok(M.glads[0].pend.length >= 1 && M.glads[0].rune.k && M.runes.k.length, 'old saves migrate');
+}
 // odds are stable (seeded) and bounded; style advantage matters
 {
   const a = LM.makeGlad({ style: 'murmillo', lvl: 5 }), b = LM.makeGlad({ style: 'thraex', lvl: 5 });
@@ -116,21 +154,14 @@ ok(strongWins >= 17, `level 10 beats level 1 (${strongWins}/20)`);
 }
 
 
-// stance triangle, tells, bookmaker, pit, ghosts
+// stances are build presets, bookmaker, pit, ghosts
 {
-  ok(LM.stanceBeat('agg', 'cun') === 1 && LM.stanceBeat('cun', 'grd') === 1 && LM.stanceBeat('grd', 'agg') === 1, 'stance triangle: agg>cun>grd>agg');
-  ok(LM.stanceBeat('agg', 'grd') === -1 && LM.stanceBeat('bal', 'agg') === 0, 'balanced is neutral');
-  ok(LM.teamCtx(null, [LM.makeGlad({})], 'agg', 'cun').beat === 1, 'teamCtx reports stance advantage');
-  const o = LM.events(S, 3, 0)[0].opps[0];
-  ok(LM.habit(o).fav === LM.habit(o).fav && LM.habit(o).p >= 0.5 && LM.habit(o).p <= 0.75, 'rival habits deterministic');
-  let fav = 0; for (let i = 0; i < 200; i++) if (LM.oppStance(S, o) === LM.habit(o).fav) fav++;
-  ok(fav > 90, `rivals usually pick their favorite stance (${fav}/200)`);
+  ok(LM.stanceBeat === undefined && LM.habit === undefined, 'the stance counter mechanic is gone');
   const a = LM.makeGlad({ style: 'murmillo', lvl: 5 }), b = LM.makeGlad({ style: 'thraex', lvl: 5 });
+  ok(LM.derive(a, { stance: 'agg' }).atk > LM.derive(a, { stance: 'bal' }).atk && LM.derive(a, { stance: 'grd' }).def > LM.derive(a, { stance: 'bal' }).def, 'stances reshape stats');
   ok(LM.wagerMult([b], [a]) > LM.wagerMult([a], [b]), 'bookmaker pays more on the style underdog');
   ok(LM.wagerMult([LM.makeGlad({ lvl: 30 })], [LM.makeGlad({ lvl: 1 })]) === 1.1, 'heavy favorite pays the minimum');
   const op = LM.pitOpp(S, 5, a); ok(op.lvl > LM.pitOpp(S, 1, a).lvl && op.nick === 'the Pit Lord', 'pit gets harder and floor 5 is a boss');
-  const bc = LM.boonCtx([D.BOONS.find((x) => x.id === 'edge'), D.BOONS.find((x) => x.id === 'thirst')]);
-  ok(bc.syn.atk === 0.12 && bc.xfx.vamp === 2, 'boons aggregate');
   ok(LM.derive(a, { xfx: { thorns: 3 } }).fx.thorns === 3, 'extra effects reach combat stats');
   const r0 = LM.pitReward(S, 6, [], false), r1 = LM.pitReward(S, 6, [], true);
   ok(r0.gold > 0 && r1.gold <= r0.gold / 2 + 1 && r0.items.length >= 2, 'pit rewards scale; defeat halves them');
