@@ -113,5 +113,14 @@ Weekly special market item (rare gear at a premium), random mood events (good om
 
 ## Next ideas
 - [ ] 52. Deterministic fight seeds so a real replay is possible
-- [ ] 53. Visible gym equipment upgrades on the ludus map
-- [ ] 54. Fighter portraits with mood faces
+- [x] 53. Visible gym equipment upgrades on the ludus map
+- [x] 54. Fighter portraits with mood faces
+
+## Round 12 shipped
+Building upgrades now show on the map (flag, torch, weights, gold star as levels rise) and roster portraits show happy or sad faces from morale. A true replay (52) needs fixed-step fights with recorded taps and is still open.
+
+## Next ideas
+- [ ] 55. Record ultimate taps and use a fixed step so fights can be replayed
+- [ ] 56. Ludus map weather and night lighting
+- [ ] 57. Fighter retirement ceremony animation
+- [ ] 58. Achievements screen polish with rewards
