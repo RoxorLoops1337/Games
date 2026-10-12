@@ -18,7 +18,7 @@ const rig = createLightRig(scene, { shadowSize: lab.T.shadow, shadowRadius: 50, 
 const arena = createArena({ density: lab.T.crowd, decalRes: lab.tier === 'low' ? 1024 : 2048 });
 scene.add(arena.group);
 const tod = q.get('tod') || 'golden';
-const preset = TOD[tod] || TOD.golden;
+const preset = Object.assign({}, TOD[tod] || TOD.golden, tod === 'golden' ? { sunElev: +(q.get('el') ?? 33), sunAz: +(q.get('az') ?? 215) } : {});
 const shared = { rig, scene, sky, renderer, nightUniforms: [{ set value(v) { arena.setNight(v); } }] };
 applyTOD(preset, shared);
 const sd = rig.sunDir;
@@ -39,16 +39,12 @@ arena.setHype(hype); arena.setWave(wave); arena.setGate(gate, 0);
 post.uniforms.uCA.value = 0;
 
 const SHOTS = [
-  // establishing: low-ish orbit inside the bowl looking across the sand toward the far seats
-  (t) => [[-17 + t * 0.2, 4.2, 12], [8, 7.5, -6]],
-  // high sweeping view
-  (t) => [[-6, 20, 30], [4, 3, -4]],
-  // gladiator eye view toward the gate with portcullis
-  (t) => [[8, 1.7, 1.5], [-22, 2.3, 0]],
-  // over the sand toward the sun-side seats and velarium
-  (t) => [[16, 2.4, -2], [-10, 9, -9]],
-  // outside facade
-  (t) => [[-62, 10, 52], [0, 8, 0]],
+  (t) => [[-15 + t * 0.15, 3.6, 8.5], [9, 7.5, -7]],        // inside the sand looking across to the far tiers
+  (t) => [[-12, 28, 44], [3, 4, -2]],                         // high flyover, outside the velarium
+  (t) => [[9, 1.8, 2], [-22, 2.4, 0]],                        // gladiator eye height toward the gate
+  (t) => [[16, 2.4, -2], [-10, 9, -9]],                       // toward sun-side seats and velarium
+  (t) => [[-62, 10, 52], [0, 8, 0]],                          // outside facade
+  (t) => [[0, 1.7, 9], [0, 6.5, -14]],                        // low hero angle on the crowd
 ];
 lab.run((t, dt) => {
   const [p, l] = SHOTS[cam](t);

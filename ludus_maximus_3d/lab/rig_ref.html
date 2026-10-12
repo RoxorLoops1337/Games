@@ -63,7 +63,7 @@ if (sheet) {
   const gap = +(Q.get('gap') || 1.45), view = Q.get('view') || '34';
   for (let i = 0; i < n; i++) {
     const rig = spawn(style, (i - (n - 1) / 2) * gap); const t = n > 1 ? t0 + (dur - t0) * (i / (n - 1)) : t0;
-    poseAt(rig, clip, t); rig.animator.update = () => {}; rig.animator.postIK = () => {}; rig.update = () => {};
+    poseAt(rig, clip, t); rig.resetSecondary(); for (const sc of rig.secondary) sc.write(); rig.animator.update = () => {}; rig.animator.postIK = () => {}; rig.update = () => {};
     rig.root.rotation.y = view === 'side' ? Math.PI / 2 : (view === '34' ? 0.5 : 0);
     const lab = document.createElement('div'); lab.style.cssText = 'position:fixed;bottom:6px;left:' + (50 + (i - (n - 1) / 2) * (100 / n * 0.9)) + '%;transform:translateX(-50%);text-shadow:0 1px 2px #000'; lab.textContent = t.toFixed(2) + 's'; document.body.appendChild(lab);
   }
