@@ -369,6 +369,7 @@ export class HudScene extends Phaser.Scene {
         const k = keyOf(ev);
         const lower = k.length === 1 ? k.toLowerCase() : k;
         if (this.farm.meS!.downed > 0 && lower === 'r' && !this.screen) { ev.preventDefault(); this.farm.send({ t: 'respawn' }); return; }       // don't want to wait for a friend: wake up at home
+        if (!this.screen && lower === 'r' && !ev.ctrlKey && !ev.metaKey && !ev.altKey) { ev.preventDefault(); this.farm.send({ t: 'ride' }); return; }       // climb on / off your companion
         if (!this.screen && (ev.key === '+' || ev.key === '=' || ev.key === 'Add' || ev.code === 'NumpadAdd')) { ev.preventDefault(); this.farm.zoomBy(1); return; }
         if (!this.screen && (ev.key === '-' || ev.key === '_' || ev.key === 'Subtract' || ev.code === 'NumpadSubtract')) { ev.preventDefault(); this.farm.zoomBy(-1); return; }
         if (k === 'F2') { ev.preventDefault(); this.setPhoto(!this.photo); return; }

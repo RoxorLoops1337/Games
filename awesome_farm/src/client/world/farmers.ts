@@ -168,7 +168,7 @@ export class Farmers {
         if (moving && Math.abs(face.x) > 0.2) pv.flip = face.x < 0;
         pv.walkT = moving ? pv.walkT + dt : 0;
         const frame = moving ? 1 + (Math.floor(pv.walkT / 0.12) % 2) : 0;
-        const bob = moving ? -Math.abs(Math.sin(pv.walkT * 14)) * 1.5 : 0;
+        const bob = (moving ? -Math.abs(Math.sin(pv.walkT * 14)) * 1.5 : 0) - (this.h.players[pv.id]?.ride ? 9 : 0);       // (riding: lifted onto the mount's back)
         pv.sprite.setFrame(frame).setPosition(pv.x, pv.y + bob).setFlipX(pv.flip).setDepth(pv.y);
         pv.sprite.setAngle(downed ? (pv.flip ? -90 : 90) : 0);
         this.placeWorn(pv, bob, downed);

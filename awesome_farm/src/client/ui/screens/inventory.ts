@@ -40,7 +40,7 @@ export class InventoryScreen implements Screen {
         const s = ctx.scene;
         this.win = new Win(s, { size: 'large', title: 'Backpack', icon: 'k_bag', accent: PAL.gold, onClose: () => ctx.close() });
         const w = this.win;
-        this.foot = w.footer({ info: '', infoW: 110, secondary: [{ label: 'Rings  (U)', onClick: () => ctx.open('gear'), icon: 'i_ring_copper' }], hint: deviceText('Click an item to equip, eat or open it. Hover for what it does.', 'Tap an item to equip, eat or open it.') });
+        this.foot = w.footer({ info: '', infoW: 110, secondary: [{ label: 'Rings  (U)', onClick: () => ctx.open('gear'), icon: 'i_ring_copper' }, { label: deviceText('Quick stack  (Q)', 'Quick stack'), onClick: () => ctx.send({ t: 'inv', op: 'stash' }) }], hint: deviceText('Click an item to equip, eat or open it.  F stars it so Quick stack leaves it alone.', 'Tap an item to equip, eat or open it.') });
         const body = w.body, lw = 300, gx = 8;
 
         // ── left: what you wear, and your stats ──
@@ -133,7 +133,7 @@ export class InventoryScreen implements Screen {
 
     update () {
         const me = this.ctx.me();
-        const k = JSON.stringify([me.inv, me.equip, me.hot, me.coins, me.level, me.xp | 0, me.skills, me.buffs.length, this.tools.prefs, me.points, this.armed, this.search.value]);
+        const k = JSON.stringify([me.inv, me.equip, me.hot, me.coins, me.level, me.xp | 0, me.skills, me.buffs.length, this.tools.prefs, me.points, this.armed, this.search.value, me.fav]);
         if (k === this.key) return;
         this.key = k;
         const send = this.ctx.send;
@@ -142,7 +142,8 @@ export class InventoryScreen implements Screen {
         const shown = this.tools.apply(owned, (id) => countOf(me, id));
         this.grid.setEmptyText(this.tools.filtering || this.search.value ? 'Nothing of this kind.\nPick All to see everything.' : 'Nothing here yet.\nGo harvest something!');
         const items: GridItem[] = shown.map((id) => ({
-            data: { icon: `i_${id}`, count: countOf(me, id), rarity: ITEMS[id].rarity },
+            data: { icon: `i_${id}`, count: countOf(me, id), rarity: ITEMS[id].rarity, ...(me.fav?.includes(id) ? { badge: '★' } : {}) },
+            star: () => send({ t: 'inv', op: 'fav', item: id }),
             tip: () => itemTip(id, { count: countOf(me, id), sellMul: derived(me).sellMul, foot: this.armed >= 0 ? `Click to put it in hotbar slot ${this.armed + 1}` : ITEMS[id].open ? 'Click to open it' : hotbarOf(this.ctx.me()).includes(id) ? 'Right-click to unpin from the hotbar' : 'Right-click to pin to the hotbar' }),
             click: (shift) => {
                 if (this.armed >= 0 || shift) { this.pin(id); return; }
@@ -190,6 +191,13 @@ export class InventoryScreen implements Screen {
             [`${me.points} unspent`, PAL.gold],
         ];
         rows.forEach(([v, c], i) => this.stats.set(i, v, c));
+    }
+
+    onKey (k: string): boolean {
+        const l = k.toLowerCase();
+        if (l === 'f') { const it = this.grid.hoverItem(); if (it?.star) { it.star(); return true; } return false; }
+        if (l === 'q') { this.ctx.send({ t: 'inv', op: 'stash' }); return true; }
+        return false;
     }
 
     focusSearch () { this.search.focus(); }

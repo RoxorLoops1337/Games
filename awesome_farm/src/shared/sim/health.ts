@@ -50,6 +50,7 @@ export function hurt (sim: Sim, p: PlayerS, from: { x: number; y: number }, amou
     const dmg = Math.max(0.5, Math.round((amount - d.armor) * 2) / 2);
     p.hearts = Math.max(0, p.hearts - dmg);
     p.invuln = TUNING.hurtInvuln;
+    if (p.ride) p.ride = undefined;                                 // (a blow knocks you off your mount)
     const dx = p.x - from.x, dy = p.y - from.y, dist = Math.max(1, Math.hypot(dx, dy));
     sim.events.push({ e: 'knock', to: p.id, vx: (dx / dist) * 160, vy: (dy / dist) * 160 });
     sim.fx('hurt', p.x, p.y - 8, p.id);

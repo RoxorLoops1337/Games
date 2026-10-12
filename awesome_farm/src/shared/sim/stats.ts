@@ -189,7 +189,7 @@ export function derived (p: PlayerS): Derived {
             reach: wgear?.reach ?? 18,
         },
         reach: TUNING.reach * (1 + g('reach')),
-        speed: TUNING.moveSpeed * Math.max(0.4, 1 + g('moveSpeed')) * (starving ? TUNING.lowEnergySlow : 1),
+        speed: TUNING.moveSpeed * Math.max(0.4, 1 + g('moveSpeed')) * (starving ? TUNING.lowEnergySlow : 1) * (p.ride ?? 1),
         magnet: TUNING.magnetRadius * (1 + g('magnet')),
         swingCd: TUNING.swingCooldown / Math.max(0.3, 1 + g('swingSpeed')) * (starving ? 2 : 1),
         swingEnergy: Math.max(0.1, TUNING.swingEnergy * (1 + g('swingCost'))),

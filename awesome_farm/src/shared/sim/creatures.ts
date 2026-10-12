@@ -292,6 +292,7 @@ function syncCompanions (sim: Sim, crits: CritE[]) {
         const ent = have.get(p.id);
         if (pet && isWorking(pet)) { p.comp = undefined; }
         const want = pet && !isWorking(pet) && p.downed <= 0 ? pet : undefined;
+        if (p.ride && (!want || !ent || ent.pid !== want.id)) { p.ride = undefined; }                // (the mount is gone, sent to work, or you went down: you are on your own feet)
         if (ent && (!want || ent.pid !== want.id)) { sim.remove(ent.id); crits.splice(crits.indexOf(ent), 1); }
         else if (!ent && want) {
             const e = sim.add<CritE>({ k: 'crit', sp: want.sp, x: p.x - 14, y: p.y, vx: 0, vy: 0, t: 0, lv: want.lv, ...(starsOf(want) ? { star: starsOf(want) } : {}), mode: 1, st: 0, owner: p.id, pid: want.id, a: 0.8 });
@@ -309,6 +310,11 @@ function companionStep (sim: Sim, c: CritE, dt: number) {
     if (!owner || !pet) { sim.remove(c.id); return; }
     const sp = spOf(c.sp);
     const task = pet.task && taskOk(pet, pet.task) ? pet.task : undefined;
+    if (owner.ride) {                                                  // carrying its rider: it is under them, facing the way they run
+        c.x = owner.x; c.y = owner.y - 1; c.vx = owner.moving ? owner.fx * 20 : 0; c.vy = 0; c.st = 0; c.tx = undefined; c.ty = undefined;
+        sim.touch(c);
+        return;
+    }
     const busy = task ? fieldStep(sim, c, ownerSite(sim, owner), pet, task, dt, 4) : false;      // working beside you, or trotting at heel
     if (!busy) {
         const speed = (62 + 8) * petSpeedMul(pet);

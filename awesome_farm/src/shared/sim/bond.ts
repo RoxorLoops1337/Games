@@ -7,8 +7,8 @@
 // The tables, the daily cap and the names of the levels are data/bond.ts.
 
 import { TUNING } from '../config';
-import { petLuck, type Pet } from '../data/creatures';
-import { AFFECTION_MAX, AFFECTION_PER_PAT, affectionOf, GIFT_AT, GIFTS, giftOdds, levelOf, PATS_PER_DAY } from '../data/bond';
+import { petLuck, petSpeedMul, type Pet } from '../data/creatures';
+import { AFFECTION_MAX, AFFECTION_PER_PAT, affectionOf, GIFT_AT, GIFTS, giftOdds, levelOf, PATS_PER_DAY, RIDE_AT, RIDE_LV, rideSpeed } from '../data/bond';
 import { PAL } from '../palette';
 import { luckRng } from './fortune';
 import { findPet } from './petlib';
@@ -31,6 +31,29 @@ export function patInfo (p: PlayerS, day: number) {
     const left = pet.pt?.d === day ? Math.max(0, PATS_PER_DAY - pet.pt.n) : PATS_PER_DAY;
     const aff = affectionOf(pet);
     return { pet, aff, earns: aff < AFFECTION_MAX && left > 0, gift: aff >= GIFT_AT && pet.pt?.g !== day };
+}
+
+/** Can this farmer ride their companion (the client reads it for its prompt)? Returns why not, or '' when yes. */
+export function rideWhy (pet: Pet | undefined): string {
+    if (!pet) return 'Take a creature along first';
+    if (pet.lv < RIDE_LV) return `${pet.name} must be level ${RIDE_LV} to carry you`;
+    if (affectionOf(pet) < RIDE_AT) return `${pet.name} does not trust you enough yet`;
+    return '';
+}
+
+/** R: climb on the companion beside you (you run faster, it carries you, and it stays out of the way of your tools), or climb off. */
+export function cmdRide (sim: Sim, p: PlayerS) {
+    if (sim.s.paused || p.downed > 0) return;
+    if (p.ride) { p.ride = undefined; sim.fx('pat', p.x, p.y - 6, p.id); return; }
+    const pet = p.comp ? findPet(p, p.comp) : undefined;
+    const why = rideWhy(pet);
+    if (why) { sim.deny(p, why); return; }
+    const c = companionOf(sim, p);
+    if (!c) return;
+    if (Math.hypot(c.x - p.x, c.y - p.y) > TUNING.patReach) { sim.deny(p, 'Too far away'); return; }
+    p.ride = rideSpeed(pet!, petSpeedMul(pet!) - 1);
+    sim.fx('summon', p.x, p.y - 6, p.id);
+    sim.float(p.x, p.y - 30, `Riding ${pet!.name}`, PAL.blossom, p.id, 'aff');
 }
 
 export function cmdPat (sim: Sim, p: PlayerS) {
