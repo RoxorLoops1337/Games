@@ -193,6 +193,7 @@
   function statsHtml(res) {
     if (!res || !res.F || !res.F.units) return '';
     const us = res.F.units; const mx = Math.max(1, ...us.map((u) => u.dmg || 0));
+    us.filter((u) => u.side === 'A' && u.g && u.g.id != null && U.gOf(u.g.id)).forEach((u) => L.recordLife(U.gOf(u.g.id), u));
     return `<div class="sec" style="color:var(--terra);text-shadow:none">Fight stats</div><div class="card" style="padding:6px">` + us.map((u) => `<div class="small" style="font-weight:700;margin-bottom:3px"><span style="color:${u.side === 'A' ? 'var(--green)' : 'var(--terra)'}">${esc(u.name)}</span> ${Math.round(u.dmg || 0)} dmg · ${Math.round(u.taken || 0)} taken · ${u.crits || 0} crit${u.crits === 1 ? '' : 's'}<div style="height:6px;border:2px solid var(--ink);border-radius:4px;background:#fff;margin-top:2px"><i style="display:block;height:100%;width:${Math.round(100 * (u.dmg || 0) / mx)}%;background:${u.side === 'A' ? 'var(--green)' : 'var(--terra)'}"></i></div></div>`).join('') + '</div>';
   }
   async function results(S, ev, gl, res, rep) {
