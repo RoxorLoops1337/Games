@@ -1,0 +1,57 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Arena reference lab</title>
+<style>html,body{margin:0;height:100%;background:#1b1626;overflow:hidden}canvas{display:block;width:100%;height:100%}</style>
+<script type="importmap">{"imports":{"three":"../vendor/three.module.min.js","three/addons/":"../vendor/jsm/"}}</script>
+</head><body>
+<script type="module">
+import * as THREE from 'three';
+import { bootLab } from './ref/env_lab_boot.js';
+import { createSky, createLightRig, applyTOD, TOD, lerpTOD } from './ref/sky_ref.js';
+import { createArena } from './ref/env_arena_ref.js';
+import { createDustMotes, createGodRays } from './ref/envfx_ref.js';
+
+const lab = bootLab();
+const { scene, camera, renderer, post, q } = lab;
+const sky = createSky(); scene.add(sky.mesh);
+const rig = createLightRig(scene, { shadowSize: lab.T.shadow, shadowRadius: 50, shadowCenter: new THREE.Vector3(0, 4, 0), far: 300 });
+const arena = createArena({ density: lab.T.crowd, decalRes: lab.tier === 'low' ? 1024 : 2048 });
+scene.add(arena.group);
+const tod = q.get('tod') || 'golden';
+const preset = Object.assign({}, TOD[tod] || TOD.golden, tod === 'golden' ? { sunElev: +(q.get('el') ?? 33), sunAz: +(q.get('az') ?? 215) } : {});
+const shared = { rig, scene, sky, renderer, nightUniforms: [{ set value(v) { arena.setNight(v); } }] };
+applyTOD(preset, shared);
+const sd = rig.sunDir;
+const rays = []; for (let i = 0; i < 16; i++) { const th = (i / 16) * Math.PI * 2 + 0.2; const p = arena.ring(9 + (i % 3) * 2, th); rays.push({ x: p[0], y: 19.5, z: p[1], w: 4 + (i % 4) * 0.9, len: 26 }); }
+const godrays = createGodRays(rays, sd, { color: new THREE.Color(preset.sunColor).getHex(), intensity: 0.085 * (1 - preset.night) });
+scene.add(godrays.mesh);
+const dust = createDustMotes({ count: Math.round(420 * lab.T.dust), min: new THREE.Vector3(-30, 0.4, -22), max: new THREE.Vector3(30, 18, 22), size: 3, intensity: 1.2 });
+scene.add(dust.points);
+
+// footprints + scuffs
+arena.footTrail(-19.5, 1.2, -4, 0.2, 0.62, 1.0);
+arena.footTrail(19.5, -1, 3.5, -0.4, 0.62, 1.0);
+for (let i = 0; i < 40; i++) { const a = i * 0.7; arena.stampFootprint(Math.cos(a) * (1.5 + (i % 5) * 0.5), Math.sin(a * 1.3) * 1.5, a + 1.5, 1, i % 2 ? 1 : -1); }
+arena.scuff(-3, -1.5, 2, 2.2, 0.55); arena.scuff(1, -3, 5, 1, 0.35);
+
+window.__post = post; window.__arena = arena; window.__scene = scene;
+const hype = +(q.get('hype') ?? 0.7), wave = +(q.get('wave') ?? 0), gate = +(q.get('gate') ?? 0.6), cam = +(q.get('cam') ?? 0);
+arena.setHype(hype); arena.setWave(wave); arena.setGate(gate, 0);
+post.uniforms.uCA.value = 0;
+
+const SHOTS = [
+  (t) => [[-15 + t * 0.15, 3.6, 8.5], [9, 7.5, -7]],        // inside the sand looking across to the far tiers
+  (t) => [[-12, 28, 44], [3, 4, -2]],                         // high flyover, outside the velarium
+  (t) => [[9, 1.8, 2], [-22, 2.4, 0]],                        // gladiator eye height toward the gate
+  (t) => [[16, 2.4, -2], [-10, 9, -9]],                       // toward sun-side seats and velarium
+  (t) => [[-62, 10, 52], [0, 8, 0]],                          // outside facade
+  (t) => [[0, 1.7, 9], [0, 6.5, -14]],                        // low hero angle on the crowd
+  (t) => [[-48, 7, 6], [-39.5, 8, 0]],                         // facade close-up
+];
+lab.run((t, dt) => {
+  const [p, l] = SHOTS[cam](t);
+  camera.position.set(...p); camera.lookAt(...l);
+  sky.update(camera, t); arena.update(t, dt); godrays.update(t); dust.update(t, renderer.getPixelRatio());
+  const sc = rig.shadowCenter; rig.sun.target.position.copy(sc);
+});
+</script></body></html>

@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Ludus FX Lab</title>
+<style>html,body{margin:0;height:100%;background:#2a2540;overflow:hidden;font:12px system-ui,sans-serif;color:#e8dcc0}
+#hud{position:fixed;left:8px;top:6px;white-space:pre;text-shadow:0 1px 2px #000;pointer-events:none}
+#bar{position:fixed;right:8px;top:6px;display:flex;gap:4px;flex-wrap:wrap;max-width:60vw;justify-content:flex-end}
+button{background:#5a1f5e;color:#f2c14e;border:1px solid #b8803a;border-radius:4px;padding:3px 7px;font-size:11px;cursor:pointer}</style>
+<script type="importmap">{"imports":{"three":"../vendor/three.module.min.js","three/addons/":"../vendor/jsm/"}}</script>
+</head><body><div id="hud"></div><div id="bar"></div>
+<script type="module">
+// Lab for fx_ref.js + feel_ref.js.
+//   ?fx=<name>          loop one effect at center     ?sheet=hits|beams|status|ults|all   contact sheet of a group
+//   ?t=<seconds>        freeze at that moment (also __labShot(secs))     ?post=1 enable shockwave distortion pass
+//   ?stress=1           spawn everything repeatedly (budget test)
+import * as THREE from 'three';
+import { createFx } from './ref/fx_ref.js';
+import { createFeel, GRADE_FX_GLSL } from './ref/feel_ref.js';
+
+const Q = new URLSearchParams(location.search);
+const W = innerWidth, H = innerHeight;
+const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5)); renderer.setSize(W, H);
+renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.0; renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+document.body.appendChild(renderer.domElement);
+const scene = new THREE.Scene(); scene.background = new THREE.Color('#3a3050'); scene.fog = new THREE.Fog('#3a3050', 30, 70);
+const camera = new THREE.PerspectiveCamera(40, W / H, 0.1, 200);
+
+// --- placeholder arena: dark-ish sand floor + pillars ---
+function sandTex() { const c = document.createElement('canvas'); c.width = c.height = 512; const g = c.getContext('2d'); g.fillStyle = '#d9b27c'; g.fillRect(0, 0, 512, 512);
+  let s = 7; const r = () => ((s = (s * 16807) % 2147483647) / 2147483647);
+  for (let i = 0; i < 9000; i++) { const v = r(); g.fillStyle = v < 0.5 ? `rgba(90,60,30,${0.05 + r() * 0.1})` : `rgba(240,210,150,${0.05 + r() * 0.1})`; g.fillRect(r() * 512, r() * 512, 1 + r() * 3, 1 + r() * 2); }
+  const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(10, 10); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; return t; }
+const floor = new THREE.Mesh(new THREE.CircleGeometry(60, 64).rotateX(-Math.PI / 2), new THREE.MeshLambertMaterial({ map: sandTex() })); floor.receiveShadow = true; scene.add(floor);
+scene.add(new THREE.HemisphereLight('#b8c4e8', '#b08850', 1.3));
+const sun = new THREE.DirectionalLight('#ffe2b0', 1.9); sun.position.set(-10, 14, 8); sun.castShadow = true; sun.shadow.mapSize.set(1024, 1024); const sc = sun.shadow.camera; sc.left = -30; sc.right = 30; sc.top = 30; sc.bottom = -30; scene.add(sun);
+const pillarM = new THREE.MeshLambertMaterial({ color: '#e8dcc0' });
+function pillar(x, z) { const m = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 0.7, 4.5, 14), pillarM); m.position.set(x, 2.25, z); m.castShadow = m.receiveShadow = true; scene.add(m); return m; }
+const sheetName = Q.get('sheet');
+const fx = createFx(scene, { arenaRadius: 40, seed: 99, decalSize: 1024 });
+const feel = createFeel({ overlay: false, fov: camera.fov, seed: 3 });
+
+// dummy gladiators (capsule + head)
+function dummy(x, z, col = '#b5532f') { const g = new THREE.Group(); const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.4, 1.0, 4, 10), new THREE.MeshLambertMaterial({ color: col })); body.position.y = 0.95; body.castShadow = true; const head = new THREE.Mesh(new THREE.SphereGeometry(0.22, 12, 8), new THREE.MeshLambertMaterial({ color: '#d9b27c' })); head.position.y = 1.85; head.castShadow = true; g.add(body, head); g.position.set(x, 0, z); scene.add(g); return g; }
+const sh = { dummies: [] };
+
+// ---------- effect catalogue: name -> fn(o: Vector3 origin) ----------
+const V = (x, y, z) => new THREE.Vector3(x, y, z);
+const at = (o, x, y, z) => V(o.x + x, y, o.z + z);
+const FX = {
+  spark: (o) => fx.spark(at(o, 0, 1, 0), V(1, 0.2, 0), 14, '#ffd27a'),
+  dust: (o) => fx.dust(at(o, 0, 0, 0), 12),
+  flash: (o) => fx.impactFlash(at(o, 0, 1.2, 0), '#ffe9b0', 1.4),
+  slash: (o) => { fx.slash(at(o, -0.4, 1.2, 0), V(1, 0, 0), '#ffffff', 1.9, { tilt: 0.3 }); fx.slash(at(o, -0.4, 1.0, 0), V(1, 0, 0), '#ffd27a', 2.2, { tilt: -0.5, flip: true }); },
+  ring: (o) => { fx.ring(at(o, 0, 0, 0), '#f5ead2', 2.2); },
+  shockwave: (o) => fx.shockwave(at(o, 0, 0, 0), 3.2, '#ffd9a0'),
+  hitLight: (o) => { fx.hit(at(o, 0.5, 1.2, 0), V(1, 0.2, 0), { dmgFrac: 0.05 }); fx.number(at(o, 0.5, 0, 0), 23, 'dmg'); },
+  hitHeavy: (o) => { fx.hit(at(o, 0.5, 1.2, 0), V(1, 0.2, 0), { dmgFrac: 0.2 }); fx.number(at(o, 0.5, 0, 0), 87, 'dmg', { scale: 1.2 }); },
+  hitCrit: (o) => { fx.hit(at(o, 0.5, 1.2, 0), V(1, 0.2, 0), { crit: true }); fx.number(at(o, 0.5, 0, 0), 'CRIT 156', 'crit'); },
+  debris: (o) => { fx.debris(at(o, 0, 0, 0), 14, { kind: 'stone' }); fx.debris(at(o, 0, 0, 0), 8, { kind: 'sand' }); },
+  decals: (o) => { ['scuff', 'skid', 'crater', 'scorch', 'crack', 'footprint', 'scratch'].forEach((t, i) => fx.decal(at(o, (i % 4 - 1.5) * 1.5, 0, (i < 4 ? -0.8 : 0.9)), t, { angle: 0.3 })); },
+  zap: (o) => fx.zap(at(o, -2, 1.3, 0), at(o, 2, 1.1, 0.3), '#a8d8ff'),
+  chain: (o) => fx.chain(at(o, -2, 1.3, 0), at(o, 2, 1.1, 0.3), '#d9e4ee'),
+  trail: (o) => { const obj = new THREE.Object3D(); sh.anim.push((t) => { obj.position.set(o.x + Math.cos(t * 6) * 1.6, 1.2 + Math.sin(t * 12) * 0.3, o.z + Math.sin(t * 6) * 1.6); }); sh.anim[sh.anim.length - 1](0); obj.updateMatrixWorld(); scene.add(obj); fx.trail(obj, '#ffd27a', { life: 0.5, width: 0.3 }); },
+  swordTrail: (o) => { const tip = new THREE.Object3D(), base = new THREE.Object3D(); scene.add(tip, base); sh.anim.push((t) => { const a = -1.6 + t * 6; tip.position.set(o.x + Math.cos(a) * 1.7, 1.3 + Math.sin(a * 2) * 0.1, o.z + Math.sin(a) * 1.7); base.position.set(o.x + Math.cos(a) * 0.8, 1.2, o.z + Math.sin(a) * 0.8); tip.updateMatrixWorld(); base.updateMatrixWorld(); }); sh.anim[sh.anim.length - 1](0); fx.swordTrail(tip, base, '#ffffff'); sh.stopAt.push([0.5, () => {}]); },
+  projectile: (o) => { fx.shoot(at(o, -2.5, 1.3, 0), at(o, 2.5, 1.2, 0), '#ffb347', { speed: 7, onHit: () => { fx.number(at(o, 2.5, 0, 0), 44, 'tech'); } }); },
+  stun: (o) => { const d = dummy(o.x, o.z); sh.tmp.push(d); fx.status(d, 'stun', 10); },
+  slow: (o) => { const d = dummy(o.x, o.z); sh.tmp.push(d); fx.status(d, 'slow', 10); },
+  bleed: (o) => { const d = dummy(o.x, o.z); sh.tmp.push(d); fx.status(d, 'bleed', 10); },
+  blind: (o) => { const d = dummy(o.x, o.z); sh.tmp.push(d); fx.status(d, 'blind', 10); },
+  taunt: (o) => { const d = dummy(o.x, o.z); sh.tmp.push(d); fx.status(d, 'taunt', 10); },
+  burn: (o) => { const d = dummy(o.x, o.z); sh.tmp.push(d); fx.status(d, 'burn', 10); },
+  heal: (o) => { const d = dummy(o.x, o.z); sh.tmp.push(d); fx.heal(d, 14); fx.number(d, '+120', 'heal'); },
+  auraBuff: (o) => { const d = dummy(o.x, o.z); sh.tmp.push(d); fx.aura(d, '#f2c14e', 10, { kind: 'buff' }); },
+  auraGuard: (o) => { const d = dummy(o.x, o.z); sh.tmp.push(d); fx.aura(d, '#9a6ad8', 10, { kind: 'guard' }); },
+  auraRage: (o) => { const d = dummy(o.x, o.z); sh.tmp.push(d); fx.aura(d, '#e0402a', 10, { kind: 'rage' }); },
+  auraRally: (o) => { const d = dummy(o.x, o.z); sh.tmp.push(d); fx.aura(d, '#22b5a0', 10, { kind: 'rally' }); },
+  numbers: (o) => { ['dmg', 'crit', 'heal', 'miss', 'tech', 'status', 'block'].forEach((k, i) => fx.number(at(o, (i - 3) * 0.9, 0, 0), { dmg: '42', crit: 'CRIT 99', heal: '+30', miss: 'DODGE', tech: 'FLURRY!', status: 'STUNNED', block: 'BLOCK' }[k], k, { drift: 0, dy: 1.6 + (i % 2) * 0.5 })); },
+  tele: (o) => { fx.tele(at(o, 0, 0, 0), 3.2, 1.6, '#e8742a'); },
+  ultFire: (o) => { fx.ult.cast('fire', at(o, -3.5, 0, 0)); fx.tele(at(o, 0, 0, 0), 3.2, 0.9, '#e8742a'); fx.later(0.9, () => fx.ult.impact('fire', at(o, 0, 0, 0), 3.2)); },
+  ultLightning: (o) => { fx.ult.cast('lightning', at(o, -3.5, 0, 0)); fx.later(0.3, () => fx.ult.impact('lightning', at(o, 0, 0, 0), 3)); },
+  ultEarth: (o) => { fx.ult.cast('earth', at(o, -3.5, 0, 0)); fx.later(0.3, () => fx.ult.impact('earth', at(o, 0, 0, 0), 3.4)); },
+  ultWind: (o) => { fx.ult.cast('wind', at(o, -3.5, 0, 0)); fx.later(0.3, () => fx.ult.impact('wind', at(o, 0, 0, 0), 3.4)); },
+  ultHoly: (o) => { fx.ult.cast('holy', at(o, -3.5, 0, 0)); fx.later(0.3, () => fx.ult.impact('holy', at(o, 0, 0, 0), 3)); },
+  tornado: (o) => { const d = dummy(o.x, o.z); sh.tmp.push(d); fx.ult.sustain('wind', d, 6); },
+  rageFire: (o) => { const d = dummy(o.x, o.z); sh.tmp.push(d); fx.ult.sustain('fire', d, 6); },
+  crackle: (o) => { const d = dummy(o.x, o.z); sh.tmp.push(d); fx.ult.sustain('lightning', d, 6); },
+};
+const GROUPS = {
+  h1: ['spark', 'dust', 'flash', 'slash', 'ring', 'shockwave'], h2: ['hitLight', 'hitHeavy', 'hitCrit', 'debris', 'decals', 'numbers'],
+  b1: ['zap', 'chain', 'trail', 'swordTrail', 'projectile', 'tele'], s1: ['stun', 'slow', 'bleed', 'blind', 'taunt', 'burn'], s2: ['heal', 'auraBuff', 'auraGuard', 'auraRage', 'auraRally', 'tornado'],
+  u1: ['ultFire', 'ultLightning', 'ultEarth'], u2: ['ultWind', 'ultHoly', 'rageFire'], u3: ['crackle'],
+};
+GROUPS.all = [].concat(...Object.values(GROUPS));
+const PERIOD = { tele: 2.2, ultFire: 3, tornado: 6 };
+
+// ---------- scenario control ----------
+let list = [], cells = [], simT = 0, started = false;
+const pillars = [];
+function layout() {
+  const name = Q.get('fx'); list = sheetName ? GROUPS[sheetName] || GROUPS.all : [name || 'hitCrit'];
+  const cols = sheetName ? Math.min(3, list.length) : 1, rows = Math.ceil(list.length / cols), SX = 6.4, SZ = 6.2;
+  cells = list.map((n, i) => ({ n, o: V((i % cols - (cols - 1) / 2) * SX, 0, (Math.floor(i / cols) - (rows - 1) / 2) * SZ) }));
+  if (sheetName) { const d = Math.max(cols * SX * 0.85, rows * SZ * 1.2) + 3; camera.position.set(0, d * 0.58, d * 0.78 + 1); camera.lookAt(0, 0.5, 0.4); camera.fov = 42; }
+  else { camera.position.set(0, 5.5, 9.5); camera.lookAt(0, 0.9, 0); camera.fov = 40; }
+  camera.updateProjectionMatrix(); feel.setBaseFov(camera.fov);
+  pillars.splice(0).forEach((m) => scene.remove(m));
+  const zb = -(rows * SZ) / 2 - 2.5, xb = (cols * SX) / 2 + (sheetName ? 1.5 : 8);
+  [[-xb, zb], [0, zb - 1], [xb, zb], [-xb, zb + rows * SZ * 0.5], [xb, zb + rows * SZ * 0.5]].forEach(([x, z]) => pillars.push(pillar(x, z)));
+}
+function clearTmp() { sh.tmp.forEach((d) => scene.remove(d)); sh.tmp = []; sh.anim = []; sh.stopAt = []; }
+function trigger() { clearTmp(); cells.forEach((c) => FX[c.n](c.o)); }
+sh.tmp = []; sh.anim = []; sh.stopAt = [];
+layout();
+const ppost = Q.get('post') === '1'; let rt, quad, qscene, qcam, shockV = [0, 1, 2, 3].map(() => new THREE.Vector4());
+if (ppost) { rt = new THREE.WebGLRenderTarget(W * renderer.getPixelRatio(), H * renderer.getPixelRatio(), { type: THREE.UnsignedByteType });
+  qscene = new THREE.Scene(); qcam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+  quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), new THREE.ShaderMaterial({ uniforms: { tDiffuse: { value: rt.texture }, uShock: { value: shockV }, uRadial: { value: 0 }, uChroma: { value: 0 }, uFlash: { value: new THREE.Vector4(0, 0, 0, 0) }, uAspect: { value: W / H } },
+    vertexShader: 'varying vec2 vUv; void main(){vUv=uv; gl_Position=vec4(position.xy,0.,1.);}', fragmentShader: `varying vec2 vUv; uniform sampler2D tDiffuse; uniform float uAspect; ${GRADE_FX_GLSL}
+void main(){ vec3 c = sceneFx(tDiffuse, vUv, uAspect); gl_FragColor = vec4(c,1.0);
+ #include <tonemapping_fragment>
+ #include <colorspace_fragment>
+}` })); quad.frustumCulled = false; qscene.add(quad); window.__quad = quad; window.__renderer = renderer; }
+
+function step(dt) {
+  const t = feel.update(dt); simT += t.dt;
+  sh.anim.forEach((f) => f(simT));
+  fx.update(t.dt, camera);
+  return t;
+}
+function render() {
+  // director would place camera here, then feel.apply
+  const keepP = camera.position.clone(), keepQ = camera.quaternion.clone();
+  feel.apply(camera);
+  if (ppost) { fx.getShockwaves(camera, shockV, W / H); quad.material.uniforms.uRadial.value = feel.post.radial; quad.material.uniforms.uChroma.value = feel.post.chroma; quad.material.uniforms.uFlash.value.set(...feel.post.flashColor, feel.post.flash); renderer.setRenderTarget(rt); renderer.render(scene, camera); renderer.setRenderTarget(null); renderer.render(qscene, qcam); }
+  else renderer.render(scene, camera);
+  camera.position.copy(keepP); camera.quaternion.copy(keepQ); camera.fov = feel.state.fov0; camera.updateProjectionMatrix();
+}
+function stats() { const i = renderer.info.render; return { calls: i.calls, tris: i.triangles, ...fx.stats() }; }
+
+// deterministic still
+window.__labShot = (secs) => {
+  fx.reset(); fx.clearDecals(); feel.reset(); simT = 0; trigger();
+  const dt = 1 / 60, n = Math.round(secs / dt); let maxMs = 0, sumMs = 0;
+  for (let i = 0; i < n; i++) { const a = performance.now(); step(dt); const b = performance.now() - a; maxMs = Math.max(maxMs, b); sumMs += b; }
+  if (Q.get('shake')) { feel.addTrauma(+Q.get('shake')); feel.update(0.016); }
+  fx.flushDecals(); renderer.info.reset(); render(); const st = stats(); window.__stat = { ...st, updateMsAvg: +(sumMs / Math.max(1, n)).toFixed(3), updateMsMax: +maxMs.toFixed(2) };
+  return window.__stat;
+};
+window.__labReady = Promise.resolve();
+// stress: every effect every 0.35s
+window.__stress = (secs = 4) => {
+  fx.reset(); const all = Object.keys(FX); let tms = 0, mx = 0, n = 0, maxCalls = 0; const dt = 1 / 60; const cellsAll = all.map((k, i) => ({ n: k, o: V((i % 7 - 3) * 4, 0, (Math.floor(i / 7) - 2) * 4) }));
+  for (let f = 0; f < secs * 60; f++) { if (f % 20 === 0) { clearTmp(); cellsAll.forEach((c) => { if (!['stun', 'slow', 'bleed', 'blind', 'taunt', 'burn', 'auraBuff', 'auraGuard', 'auraRage', 'auraRally', 'tornado', 'rageFire', 'crackle'].includes(c.n) || f % 120 === 0) FX[c.n](c.o); }); }
+    const a = performance.now(); step(dt); const b = performance.now() - a; tms += b; mx = Math.max(mx, b); n++; }
+  renderer.info.reset(); render(); const st = stats(); return { ...st, updateMsAvg: +(tms / n).toFixed(3), updateMsMax: +mx.toFixed(2), maxLive: fx.stats() };
+};
+// feel unit checks
+window.__feelTest = () => {
+  const f = createFeel({ overlay: false, fov: 40, seed: 5 }); const cam = { position: { x: 0, y: 5, z: 10 }, quaternion: { x: 0, y: 0, z: 0, w: 1, set(x, y, z, w) { this.x = x; this.y = y; this.z = z; this.w = w; } }, fov: 40, updateProjectionMatrix() {} };
+  const out = {}; f.hitStop(100); let frozen = 0; for (let i = 0; i < 20; i++) { const t = f.update(1 / 60); if (t.dt < 1e-3) frozen++; } out.hitstopFramesFrozen = frozen; // ~6 of 20
+  f.hitStop(50); f.hitStop(50); f.hitStop(200); out.cap = f.state.freeze <= 0.16 + 1e-9;
+  f.reset(); f.slowmo(0.25, 0.5, 0.05, 0.3); const sc = []; for (let i = 0; i < 70; i++) sc.push(f.update(1 / 60).scale); out.slowMin = Math.min(...sc); out.slowEndsAt1 = Math.abs(sc[69] - 1) < 1e-6;
+  f.reset(); f.addTrauma(1); f.update(0.016); let mx = 0; for (let i = 0; i < 60; i++) { f.update(1 / 60); mx = Math.max(mx, Math.abs(f.state.shakeOff.x)); } out.shakeMaxAfter1s = +mx.toFixed(4); out.traumaAfter1s = +f.state.trauma.toFixed(3);
+  f.reset(); f.addTrauma(0.3); f.update(0.016); mx = 0; for (let i = 0; i < 20; i++) { f.update(1 / 60); mx = Math.max(mx, Math.abs(f.state.shakeOff.x)); } out.shake03 = +mx.toFixed(4);
+  f.reset(); f.fovPunch(5); const fo = []; for (let i = 0; i < 40; i++) { f.update(1 / 60); fo.push(f.state.fovO); } out.fovMin = +Math.min(...fo).toFixed(2); out.fovEnd = +fo[39].toFixed(3);
+  f.reset(); f.impact('hit', { crit: true }); f.update(0.016); cam.position.y = 5; f.apply(cam); out.applyOk = Number.isFinite(cam.position.x) && Number.isFinite(cam.quaternion.w); out.flashA = +f.state.flashA.toFixed(3);
+  f.reset(); for (let i = 0; i < 12; i++) { f.hitStop(60); f.update(0.016); } out.stutterGuardRecent = f.state.recent.length;
+  return out;
+};
+if (Q.get('t')) { window.__labShot(+Q.get('t')); } else if (!navigator.webdriver) {
+  // live loop
+  let last = performance.now(), acc = 0, since = 0;
+  trigger(); const per = (PERIOD[list[0]] || 2.4);
+  const bar = document.getElementById('bar'); Object.keys(FX).forEach((k) => { const b = document.createElement('button'); b.textContent = k; b.onclick = () => { const u = new URL(location.href); u.search = '?fx=' + k; location.href = u; }; bar.appendChild(b); });
+  const loop = (now) => { const dt = Math.min(0.05, (now - last) / 1000); last = now; since += dt; step(dt); if (since > per) { since = 0; trigger(); } render(); document.getElementById('hud').textContent = JSON.stringify(stats()); requestAnimationFrame(loop); };
+  requestAnimationFrame(loop);
+}
+if (Q.get('t')) document.getElementById('hud').textContent = JSON.stringify(window.__stat);
+</script></body></html>

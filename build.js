@@ -86,6 +86,7 @@ const STATIC_PATHS = [
   'beatbox_heroes',
   'pixel_colony',
   'ludus_maximus',
+  'ludus_maximus_3d',
   'tools',
 ];
 
@@ -178,7 +179,7 @@ const wipeDist = () => {
 // folder). Clawspire: the old pre-rendered intro (js/intro.js draws it live, no
 // code requests these) and the design docs.
 // Encore Island 3D keeps its preview/lab pages and notes next to the code; none of it is part of the site
-const DEV_ONLY = /^(encore_island\/view3d\/(lab[\w]*\.html|[\w]*lab[\w]*\.js|README\.md)|encore_island_3d\/(preview_\w+\.html|DESIGN\.md))$/;
+const DEV_ONLY = /^(encore_island\/view3d\/(lab[\w]*\.html|[\w]*lab[\w]*\.js|README\.md)|encore_island_3d\/(preview_\w+\.html|DESIGN\.md)|ludus_maximus_3d\/(lab\/.*|ART_BIBLE\.md|ROADMAP\.md))$/;
 const SKIP_IN_DIST = {
   clawspire: new Set(['intro.mp4', 'intro.webm', 'intro_poster.jpg', 'DESIGN.md', 'ART_PROMPTS.md']),
   // Hocus Vocus: the re-theme plan (hundreds of KB of design notes) is never deployed

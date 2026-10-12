@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Ludus UI Reference</title>
+<link rel="stylesheet" href="ref/ui_ref.css">
+<style>
+html,body{margin:0;height:100%;overflow:hidden;background:#2a2540}
+body{font-family:var(--lx-sans)}
+.stage{position:fixed;inset:0;background:radial-gradient(120% 70% at 50% 85%,#d9b27c 0,#a8774a 22%,transparent 55%),linear-gradient(180deg,#e8b98a 0%,#9a6a7a 35%,#2a2540 100%)}
+.fighter{position:absolute;width:34px;height:96px;border-radius:17px 17px 6px 6px;background:linear-gradient(#b8803a,#5a3b1c);box-shadow:0 20px 20px -6px rgba(0,0,0,.4)}
+.gallery{position:absolute;inset:0;overflow:auto;padding:calc(var(--lx-sat) + 12px) var(--lx-gut) 24px;display:grid;gap:14px;align-content:start;grid-template-columns:repeat(auto-fit,minmax(min(100%,340px),1fr))}
+.gallery h4{margin:0 0 6px;font:700 11px var(--lx-sans);letter-spacing:.14em;text-transform:uppercase;opacity:.7}
+.ults{display:flex;flex-wrap:wrap;gap:12px}
+.col{display:flex;flex-direction:column;gap:10px}
+.app{position:fixed;inset:0;display:flex;flex-direction:column}
+.view{position:relative;flex:1;min-height:0}
+</style></head>
+<body class="lx-root">
+<div class="stage"></div>
+<div class="app"><div class="view" id="view"></div><div id="navhost"></div></div>
+<script type="module">
+import * as U from './ref/ui_ref.js';
+const q = new URLSearchParams(location.search), scene = q.get('scene') || 'hud';
+const view = document.getElementById('view');
+const ULTS = [['pulverize','#2f78c4'],['hookshot','#22a58f'],['bladedance','#e0742a'],['skewer','#b8892a'],['tornado','#c2395f'],['unbreakable','#7b4fb8'],['bloodrage','#d2412b'],['meteor','#e8742a'],['duststorm','#c98a52']];
+const phone = innerWidth < 700;
+
+// fake fighters on the "canvas"
+const f1 = document.createElement('div'), f2 = document.createElement('div'); f1.className = f2.className = 'fighter';
+f1.style.cssText += `left:${phone?'28%':'40%'};top:58%`; f2.style.cssText += `left:${phone?'62%':'56%'};top:52%`; view.append(f1, f2);
+
+const plates = document.createElement('div'); plates.className = 'lx-plates'; view.append(plates);
+const p1 = U.nameplate({ name: 'Spartacus', level: 7, hp: 142, maxHp: 180, team: 'ally', rank: 3 });
+const p2 = U.nameplate({ name: 'Crixus the Gaul', level: 8, hp: 160, maxHp: 200, team: 'foe', rank: 4 });
+plates.append(p1, p2);
+const place = () => { const r = view.getBoundingClientRect(), a = f1.getBoundingClientRect(), b = f2.getBoundingClientRect();
+  p1.place(a.left + a.width / 2, a.top - 6); p2.place(b.left + b.width / 2, b.top - 6); };
+addEventListener('resize', place);
+
+if (scene === 'hud' || scene === 'fight') {
+  const hud = document.createElement('div'); hud.className = 'lx-hud';
+  const top = document.createElement('div'); top.className = 'lx-hud-top';
+  const left = U.counter({ ico: 'coin', value: 12840, kind: 'gold' }), fame = U.counter({ ico: 'fame', value: 3120, kind: 'fame' });
+  const row = document.createElement('div'); row.className = 'lx-row'; row.append(left, fame);
+  const pause = U.iconButton('gear', 'Settings'); top.append(row, pause);
+  const ults = document.createElement('div'); ults.className = 'lx-hud-ults';
+  const rings = [['meteor','#e8742a',0],['bloodrage','#d2412b',0.55],['hookshot','#22a58f',0.9]].map(([u,c,f],i)=>{ const r = U.cooldownRing({ ult: u, color: c, size: phone?72:84, hotkey: ['Q','W','E'][i] }); r.set(f, f*16); return r; });
+  ults.append(...rings);
+  const mid = document.createElement('div'); mid.style.flex = '1'; mid.style.pointerEvents = 'none';
+  hud.append(top, mid, ults); view.append(hud);
+  const bn = document.createElement('div'); bn.className = 'lx-banners'; view.append(bn);
+  U.banner('Crixus is stunned', 'info', bn, 99999); U.banner('Meteor Strike!', 'ult', bn, 99999); U.banner('Critical hit 214', 'crit', bn, 99999);
+  place();
+  p1.hp.set(142, 180); p2.hp.set(160, 200);
+  setTimeout(() => { p2.hp.set(70, 200); }, 150);  // damage ghost demo
+  const nav = U.nav([{icon:'ludus',label:'Ludus'},{icon:'roster',label:'Roster',badge:2},{icon:'arena',label:'Arena'},{icon:'market',label:'Market'},{icon:'scroll',label:'Orders'}], null, 2);
+  if (scene === 'hud') {} // nav only in management view
+  if (scene === 'hud') {}
+}
+if (scene === 'manage') {
+  place();
+  const hud = document.createElement('div'); hud.className = 'lx-hud'; const top = document.createElement('div'); top.className = 'lx-hud-top';
+  const row = document.createElement('div'); row.className = 'lx-row'; const g = U.counter({ ico: 'coin', value: 0 }), fm = U.counter({ ico: 'fame', value: 0, kind: 'fame' }); row.append(g, fm); top.append(row, U.iconButton('gear','Settings'));
+  hud.append(top); view.append(hud); g.set(12840, { dur: 10 }); fm.set(3120, { dur: 10 });
+  document.getElementById('navhost').append(U.nav([{icon:'ludus',label:'Ludus'},{icon:'roster',label:'Roster',badge:2},{icon:'arena',label:'Arena'},{icon:'market',label:'Market'},{icon:'scroll',label:'Orders'}], null, 1));
+  const m = U.modal({ title: 'Marcus Aurelius', body: (() => { const d = document.createElement('div');
+    d.append(U.stars(4), U.rarityFrame('epic', U.icon('sword', 28), 52));
+    ['Strength:72','Agility:58','Endurance:81','Technique:44'].forEach(s => { const [n,v]=s.split(':'); d.append(U.statRow({ name: n, value: +v, max: 100, bonus: n==='Agility'?6:0, kind: n==='Strength'?'hp':'xp' })); });
+    const p = document.createElement('p'); p.textContent = 'A former legionary who fights with discipline. Trains hard, eats little, and never forgets a debt.'; d.append(p); return d; })(),
+    actions: [U.button({ label: 'Train', variant: 'gold', icon: 'sword', sub: '40 gold' }), U.button({ label: 'Release', variant: 'danger' })] });
+  U.toast('Marcus gained 12 strength', { kind: 'good', ico: 'check' });
+}
+if (scene === 'kit') {
+  const g = document.createElement('div'); g.className = 'gallery';
+  const sec = (t, ...k) => { const p = U.panel({ title: t, variant: 'bronze' }); p.body.append(...k); return p; };
+  const ul = document.createElement('div'); ul.className = 'ults'; ULTS.forEach(([u,c],i)=>{ const r = U.cooldownRing({ ult: u, color: c, size: 64 }); r.set(i % 2 === 0 ? 0 : 0.2 * (i % 5 + 1), 9); ul.append(r); U.tooltip(r, 'Slam the sand: every enemy nearby is knocked up.', { title: u }); });
+  g.append(sec('Ultimates', ul));
+  const btns = document.createElement('div'); btns.className = 'col';
+  btns.append(U.button({ label: 'Enter the arena', variant: 'gold', icon: 'arena', block: true }), U.button({ label: 'Train', variant: 'bronze', icon: 'sword', block: true, sub: '40 gold' }), U.button({ label: 'Retreat', variant: 'ghost', block: true }), U.button({ label: 'Release', variant: 'danger', block: true }), U.button({ label: 'Locked', variant: 'bronze', block: true, disabled: true, icon: 'lock' }));
+  g.append(sec('Buttons', btns));
+  const bars = document.createElement('div'); bars.className = 'col';
+  const hb = U.bar({ value: 140, max: 180, kind: 'hp', segments: 20, label: 'num', height: 18 }); const sb = U.bar({ value: 60, max: 100, kind: 'stam', height: 10 }); const xb = U.bar({ value: 320, max: 500, kind: 'xp', segments: 100, height: 12 });
+  bars.append(hb, sb, xb, U.statRow({ name: 'Strength', value: 72 }), U.statRow({ name: 'Agility', value: 58, bonus: 6, kind: 'stam' })); setTimeout(() => hb.set(60, 180), 100);
+  g.append(sec('Bars and stats', bars));
+  const rar = document.createElement('div'); rar.className = 'ults'; U.RARITY.forEach((r,i)=>rar.append(U.rarityFrame(r, U.icon(['shield','sword','skull','fame','star'][i], 26), 56)));
+  const st = document.createElement('div'); st.append(U.stars(3), document.createElement('br'), U.stars(5)); rar.append(st);
+  g.append(sec('Rarity and stars', rar));
+  const ct = document.createElement('div'); ct.className = 'lx-row'; ct.append(U.counter({ ico: 'coin', value: 1234567 }), U.counter({ ico: 'fame', value: 88, kind: 'fame' }));
+  const cu = U.button({ label: '+500', variant: 'bronze', onClick: () => ct.firstChild.set(ct.firstChild.value() + 500) }); const lv = U.button({ label: 'Level up', variant: 'gold', onClick: () => U.levelUp({ name: 'Marcus', level: 8 }) }); const ts = U.button({ label: 'Toast', onClick: () => U.toast('Contract signed', { kind: 'good', ico: 'check' }) });
+  const r2 = document.createElement('div'); r2.className = 'lx-row'; r2.append(cu, lv, ts); r2.style.marginTop = '8px'; ct.parentNode; const wrap = document.createElement('div'); wrap.append(ct, r2);
+  g.append(sec('Counters, celebration', wrap));
+  g.append(U.panel({ title: 'Marble', variant: 'marble', kids: 'Used for sheets, scrolls and the roster. Dark ink on travertine.' }), U.panel({ title: 'Parchment', variant: 'parchment', kids: 'Contracts, fight orders and lore.' }));
+  view.append(g);
+  document.getElementById('navhost').append(U.nav([{icon:'ludus',label:'Ludus'},{icon:'roster',label:'Roster',badge:2},{icon:'arena',label:'Arena'},{icon:'market',label:'Market'},{icon:'scroll',label:'Orders'}], null, 0));
+  f1.remove(); f2.remove(); plates.remove();
+  if (q.get('toasts')) { U.toast('Gold +500', { kind: 'good', ico: 'coin', ms: 99999 }); U.toast('Not enough gold', { kind: 'bad', ico: 'lock', ms: 99999 }); }
+}
+if (scene === 'vs') { f1.remove(); f2.remove(); plates.remove(); U.vsSplash({ a: { name: 'Spartacus', sub: 'Thraex, level 7', stars: 3 }, b: { name: 'Crixus the Gaul', sub: 'Murmillo, level 8', stars: 4 }, league: 'Colosseum, Bronze league', ms: 99999 }); }
+if (scene === 'levelup') { f1.remove(); f2.remove(); plates.remove(); U.levelUp({ name: 'Marcus Aurelius', level: 8, ms: 99999 }); }
+window.__labShot = async (s) => { await new Promise(r => setTimeout(r, s * 1000)); return { scene }; };
+</script></body></html>

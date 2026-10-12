@@ -1,0 +1,40 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Ludus reference lab</title>
+<style>html,body{margin:0;height:100%;background:#1b1626;overflow:hidden}canvas{display:block;width:100%;height:100%}</style>
+<script type="importmap">{"imports":{"three":"../vendor/three.module.min.js","three/addons/":"../vendor/jsm/"}}</script>
+</head><body>
+<script type="module">
+import * as THREE from 'three';
+import { bootLab } from './ref/env_lab_boot.js';
+import { createSky, createLightRig, applyTOD, TOD, todFromHour } from './ref/sky_ref.js';
+import { createLudus } from './ref/env_ludus_ref.js';
+
+const lab = bootLab();
+const { scene, camera, renderer, post, q } = lab;
+const sky = createSky(); scene.add(sky.mesh);
+const rig = createLightRig(scene, { shadowSize: lab.T.shadow, shadowRadius: 48, shadowCenter: new THREE.Vector3(0, 2, 0), far: 300 });
+const ludus = createLudus({ density: Math.max(0.5, lab.T.crowd) });
+scene.add(ludus.group);
+const tod = q.get('tod') || 'golden';
+const base = q.get('hour') ? todFromHour(+q.get('hour')) : TOD[tod];
+const preset = Object.assign({}, base, tod === 'golden' || q.get('az') ? { sunAz: +(q.get('az') ?? 332) } : {}, q.get('el') ? { sunElev: +q.get('el') } : {});
+const ctx = { rig, scene, sky, renderer, nightUniforms: [{ set value(v) { ludus.setNight(v); } }] };
+applyTOD(preset, ctx);
+ludus.setSun(rig.sunDir, preset.sunColor);
+window.__scene = scene; window.__ludus = ludus; window.__post = post;
+const cam = +(q.get('cam') ?? 0);
+const SHOTS = [
+  (t) => [[-42 + t * 0.1, 19, -26], [12, -5, 48]],
+  (t) => [[18, 26, 44], [-2, 0, -8]],
+  (t) => [[8, 2.4, 14], [-6, 3.2, -14]],
+  (t) => [[1, 7, 36], [6, -13, 260]],
+  (t) => [[-19, 3.2, 9], [14, 3.5, -9]],
+  (t) => [[-70, 30, 40], [30, -20, 250]],
+];
+lab.run((t, dt) => {
+  const [p, l] = SHOTS[cam](t);
+  camera.position.set(...p); camera.lookAt(...l);
+  sky.update(camera, t); ludus.update(t, dt); rig.sun.target.position.copy(rig.shadowCenter);
+});
+</script></body></html>

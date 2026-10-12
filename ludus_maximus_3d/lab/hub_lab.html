@@ -1,0 +1,132 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Hub lab</title>
+<style>html,body{margin:0;height:100%;background:#1b1626;overflow:hidden}canvas{display:block;width:100%;height:100%;touch-action:none}
+#hud{position:fixed;left:8px;top:6px;color:#f2c14e;font:12px/1.3 system-ui,sans-serif;pointer-events:none;text-shadow:0 1px 2px #000;white-space:pre}</style>
+<script type="importmap">{"imports":{"three":"../vendor/three.module.min.js","three/addons/":"../vendor/jsm/"}}</script>
+<script src="../core/data.js"></script><script src="../core/sim.js"></script><script src="../core/arena.js"></script>
+</head><body><div id="hud"></div>
+<script type="module">
+// Hub lab. Params: ?cam=N (hub presets) ?tier=high|medium|low ?hour=H ?weather=clear|rain|dust|heat|night ?rows=2..4 ?full=1 (fully upgraded sample)
+// Gallery: ?build=all&level=5 (all buildings at one level) or ?build=barracks&level=all (one building, levels 1..5) or ?build=all&level=all.
+// ?sel=plot:6 / glad:2  ?focus=6  ?glow=0..1
+import * as THREE from 'three';
+import { createPost, createDynamicRes, TIERS, detectTier } from '../js/post.js';
+import { createSky, createLightRig, applyTOD, TOD, todFromHour } from '../js/sky.js';
+
+const q = new URLSearchParams(location.search);
+const tier = q.get('tier') || 'high';
+const canvas = document.createElement('canvas'); document.body.appendChild(canvas);
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance' });
+renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 0.9;
+renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap; renderer.localClippingEnabled = true; renderer.info.autoReset = false;
+const camera = new THREE.PerspectiveCamera(q.get('fov') ? +q.get('fov') : 42, innerWidth / innerHeight, 0.3, 1500);
+const scratch = new THREE.Scene();
+const post = createPost(renderer, scratch, camera, { tier });
+const dyn = createDynamicRes(post);
+const T = TIERS[tier];
+const lab = { t: 0 };
+window.__post = post; window.__renderer = renderer; window.__camera = camera;
+const stats = () => { const i = renderer.info; return { calls: i.render.calls, triangles: i.render.triangles, geometries: i.memory.geometries, textures: i.memory.textures, programs: i.programs ? i.programs.length : 0 }; };
+const hud = document.getElementById('hud');
+
+let frameFn = () => {}, resizeFn = () => {};
+const setFrame = (f) => { frameFn = f; }, setResize = (f) => { resizeFn = f; };
+function resize() { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); post.setSize(innerWidth, innerHeight); resizeFn(innerWidth, innerHeight); }
+addEventListener('resize', resize);
+
+async function main() {
+  let scene;
+  if (q.get('build')) scene = await gallery(); else scene = await hubMode();
+  post.composer.passes[0].scene = scene; window.__scene = scene;
+  resize();
+  const step = (t, dt) => { frameFn(t, dt); renderer.info.reset(); post.render(dt, t); };
+  window.__labShot = async (secs) => {
+    const base = secs || 1.5; lab.t = base;
+    for (let i = 0; i < 3; i++) step(base + i * 0.033, 0.033);
+    renderer.info.reset(); renderer.render(scene, camera); const sceneOnly = stats();
+    renderer.info.reset(); post.render(0.016, base + 0.1); const total = stats();
+    window.__stat = { scene: sceneOnly, withPost: total, tier, hub: window.__hub && window.__hub.stats ? window.__hub.stats() : undefined };
+    return window.__stat;
+  };
+  window.__step = (secs, dt = 1 / 30) => { const n = Math.round(secs / dt); for (let i = 0; i < n; i++) { lab.t += dt; frameFn(lab.t, dt); } renderer.info.reset(); post.render(dt, lab.t); return stats(); };
+  window.__labReady = Promise.resolve();
+  if (!navigator.webdriver) {
+    let last = performance.now();
+    const tick = (now) => { const dt = Math.min(0.05, (now - last) / 1000); last = now; lab.t += dt; step(lab.t, dt); dyn.tick(dt * 1000); requestAnimationFrame(tick); };
+    requestAnimationFrame(tick);
+  }
+}
+
+// ------------------------------------------------------------------------------------------ gallery
+async function gallery() {
+  const B = await import('../js/buildings.js');
+  const { presetFor } = await import('../js/hub.js');
+  const scene = new THREE.Scene();
+  const sky = createSky(); scene.add(sky.mesh);
+  const rig = createLightRig(scene, { shadowSize: T.shadow, shadowRadius: 46, shadowCenter: new THREE.Vector3(0, 2, 0), far: 300 });
+  const preset = Object.assign({}, presetFor(+(q.get('hour') ?? 14), q.get('weather') || 'clear'), q.get('az') ? { sunAz: +q.get('az') } : { sunAz: 235 }, q.get('el') ? { sunElev: +q.get('el') } : {});
+  applyTOD(preset, { rig, scene, sky, renderer });
+  const b = q.get('build');
+  const ids = b === 'all' ? B.BUILDING_IDS : b.split(',');
+  const lv = q.get('level') || '5';
+  const levels = lv === 'all' ? [1, 2, 3, 4, 5] : lv.split(',').map(Number);
+  const glow = +(q.get('glow') ?? 0.0);
+  const px = 10.4, pz = 8.2;
+  const ground = new THREE.Mesh(new THREE.PlaneGeometry(400, 400).rotateX(-Math.PI / 2), new THREE.MeshStandardMaterial({ color: 0xd8c8a6, roughness: 1 }));
+  ground.receiveShadow = true; scene.add(ground);
+  const blds = [];
+  const grid = levels.length === 1 && ids.length > 1;       // many buildings, one level -> 4 columns
+  const cols = grid ? Math.min(4, ids.length) : levels.length, rowsN = grid ? Math.ceil(ids.length / cols) : ids.length;
+  ids.forEach((id, i) => levels.forEach((l, j) => {
+    const bd = B.createBuilding(id, l, { accent: +(q.get('accent') || 0xb5352a) });
+    const c = grid ? i % cols : j, r = grid ? Math.floor(i / cols) : i;
+    // buildings in the hub face -z (rotated PI); the gallery faces the camera at +z so the fronts read like the hub from behind
+    bd.group.position.set((c - (cols - 1) / 2) * px, 0, (r - (rowsN - 1) / 2) * pz);
+    bd.setGlow(glow); scene.add(bd.group); blds.push(bd);
+  }));
+  hud.textContent = q.get('nohud') ? '' : blds.map((x) => `${x.id} L${x.level}: ${x.tris} tris, ${x.calls} calls`).join('\n');
+  window.__blds = blds;
+  const span = Math.max(cols * px, rowsN * pz);
+  const az = +(q.get('caz') ?? 0.5), el = +(q.get('cel') ?? 0.55), dist = +(q.get('dist') ?? (span * 0.8 + 10));
+  const ctr = new THREE.Vector3(+(q.get('cx') ?? 0), 1.8, +(q.get('cz') ?? 0));
+  frameFn = (t, dt) => {
+    camera.position.set(ctr.x + Math.sin(az) * Math.cos(el) * dist, ctr.y + Math.sin(el) * dist, ctr.z + Math.cos(az) * Math.cos(el) * dist); camera.lookAt(ctr);
+    sky.update(camera, t); for (const x of blds) x.update(t, dt); rig.sun.target.position.copy(rig.shadowCenter);
+  };
+  return scene;
+}
+
+// ------------------------------------------------------------------------------------------ hub
+async function hubMode() {
+  const { createHub } = await import('../js/hub.js');
+  const LM = globalThis.LM, D = globalThis.LM_D;
+  const S = LM.newGame({ name: 'Lab Ludus', color: +(q.get('color') ?? 0) });
+  S.seed = 'lab' + (q.get('seed') || '1'); S.week = +(q.get('week') || 1); S.rows = +(q.get('rows') || 3);
+  const order = ['barracks', 'kitchen', 'market', 'forge', 'bath', 'infirmary', 'palaestra', 'stands', 'shrine', 'hall', 'sparring', 'scout'];
+  const full = q.get('full'), lvl = +(q.get('level') || (full ? 5 : 3));
+  if (full) { S.plots = new Array(16).fill(null); order.forEach((b, i) => { S.plots[i] = { b, l: lvl }; }); if (full === '2') S.plots[10] = null; }
+  else { S.plots[5] = { b: 'barracks', l: 4 }; S.plots[6] = { b: 'kitchen', l: 3 }; S.plots[2] = { b: 'palaestra', l: 3 }; S.plots[1] = { b: 'forge', l: 2 }; S.plots[0] = { b: 'market', l: 3 }; S.plots[4] = { b: 'bath', l: 2 }; S.plots[3] = { b: 'scout', l: 2 }; S.plots[7] = { b: 'sparring', l: 4 }; S.plots[9] = { b: 'infirmary', l: 3 }; }
+  const styles = D.STYLE_IDS || Object.keys(D.STYLES), acts = ['str', 'spar', 'spar', 'rest', 'agi', 'skl', 'work', 'spy', 'rest', 'end', 'wil', 'spar'];
+  const ng = +(q.get('glads') ?? 9);
+  for (let i = 0; i < ng; i++) { const g = LM.makeGlad({ style: styles[i % styles.length], lvl: 4 + (i % 4), id: i + 1, name: 'Gladiator ' + (i + 1), r: LM.mulberry(i * 977 + 5) }); g.act = acts[i % acts.length]; S.glads.push(g); S.nextId = i + 2; }
+  const hub = createHub({ renderer, camera, tier, post });
+  if (q.get('hour')) hub.setHour(+q.get('hour')); if (q.get('weather')) hub.setWeather(q.get('weather'));
+  hub.enter(S); hub.resize(innerWidth, innerHeight);
+  window.__hub = hub; window.__S = S;
+  const o = hub.orbit, cam = q.get('cam');
+  const PI = Math.PI, PRE = { 1: { az: PI + 0.55, pitch: 0.3, dist: 34, tx: 0, ty: 1.5, tz: 2 }, 2: { az: PI + 0.2, pitch: 1.15, dist: 62, tx: 0, ty: 0, tz: 0 }, 3: { az: PI - 0.6, pitch: 0.5, dist: 24, tx: -5, ty: 2.5, tz: -8 }, 4: { az: PI + 0.9, pitch: 0.42, dist: 28, tx: 6, ty: 2, tz: -4 }, 5: { az: PI - 1.2, pitch: 0.6, dist: 40, tx: 0, ty: 1, tz: 0 }, 6: { az: PI - 0.15, pitch: 0.27, dist: 46, tx: 0, ty: 3, tz: 6 }, 7: { az: 0.45, pitch: 0.5, dist: 50, tx: 0, ty: 1, tz: 1 } };
+  const P = PRE[cam]; if (P) { o.touched = true; o.az = P.az; o.pitch = P.pitch; o.dist = P.dist; o.target.set(P.tx, P.ty, P.tz); }
+  for (const [k, f] of [['az', (v) => { o.az = v; }], ['pitch', (v) => { o.pitch = v; }], ['dist', (v) => { o.dist = v; }], ['tx', (v) => { o.target.x = v; }], ['ty', (v) => { o.target.y = v; }], ['tz', (v) => { o.target.z = v; }]]) if (q.get(k) !== null) { o.touched = true; f(+q.get(k)); }
+  if (q.get('focus') !== null) { o.touched = true; hub.focusPlot(+q.get('focus'), { dur: 0.01 }); }
+  if (q.get('gfocus') !== null) hub.focusGlad(+q.get('gfocus'));
+  if (q.get('sel')) { const [t, v] = q.get('sel').split(':'); hub.setSelection(t === 'plot' ? { type: 'plot', i: +v } : { type: 'glad', id: +v }); }
+  if (q.get('hover')) hub.setHover({ type: 'plot', i: +q.get('hover') });
+  if (q.get('nodrift')) o.drift = false;
+  hud.textContent = '';
+  setFrame((t, dt) => { hub.update(dt, t); });
+  setResize((w, h) => hub.resize(w, h));
+  return hub.scene;
+}
+main();
+</script></body></html>

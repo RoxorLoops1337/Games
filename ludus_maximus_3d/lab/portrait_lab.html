@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Portrait lab</title>
+<style>html,body{margin:0;background:#2a2540;color:#f2e6c8;font:12px system-ui,sans-serif}
+#g{display:flex;flex-wrap:wrap;gap:8px;padding:8px}.c{display:flex;flex-direction:column;align-items:center;gap:2px}
+.c canvas{border:2px solid #f2c14e;display:block}.r{border-radius:50%}#hud{padding:6px 8px;white-space:pre}</style>
+<script type="importmap">{"imports":{"three":"../vendor/three.module.min.js","three/addons/":"../vendor/jsm/"}}</script>
+<script src="../core/data.js"></script><script src="../core/sim.js"></script>
+</head><body><div id="hud"></div><div id="g"></div>
+<script type="module">
+// Params: shared=1 (render through a main-style renderer's render target instead of the offscreen one)  size=<px> (default 160)
+//         frame=bust|three|full  pose=idle|victory|taunt|block  rar=0..4  lvl=<n>  tier=low|medium|high  rows=styles (default all 5, plus a 2nd row of other palettes)
+import * as THREE from 'three';
+import { createPortraitRenderer } from '../js/portrait.js';
+const Q = new URLSearchParams(location.search), LM = window.LM, D = window.LM_D, size = +(Q.get('size') || 160);
+let main = null;
+if (Q.get('shared')) { main = new THREE.WebGLRenderer({ antialias: false }); main.setSize(64, 64); main.toneMapping = THREE.ACESFilmicToneMapping; main.info.autoReset = false; document.body.append(main.domElement); main.domElement.style.display = 'none'; }
+const P = createPortraitRenderer({ tier: Q.get('tier') || 'medium', renderer: main });
+const styles = Object.keys(D.STYLES), cells = [];
+const rar = +(Q.get('rar') || 0);
+function glad(style, k) {
+  const g = LM.makeGlad({ style, lvl: +(Q.get('lvl') || 8), id: 21 + k, name: 'Lab' + style + k, r: LM.mulberry(1000 + k * 17), q: 0.8 });
+  g.skin = D.SKIN[(k * 2 + 1) % D.SKIN.length]; g.hair = D.HAIR[(k * 3) % D.HAIR.length]; g.color = D.COLORS[k % D.COLORS.length].c; g.plume = D.PLUME[k % D.PLUME.length];
+  for (const s of ['weapon', 'shield', 'armor', 'helm', 'charm']) g.gear[s] = { slot: s, rar, name: s, id: s + rar };
+  return g;
+}
+const t0 = performance.now(); let n = 0;
+for (let row = 0; row < 2; row++) styles.forEach((s, i) => {
+  const g = glad(s, i + row * 5), cv = P.portrait(g, { w: size, h: size, pose: Q.get('pose') || 'idle', style: Q.get('frame') || 'bust' });
+  if (row) cv.classList.add('r');
+  const c = document.createElement('div'); c.className = 'c'; c.append(cv, Object.assign(document.createElement('span'), { textContent: s })); document.getElementById('g').append(c); cells.push(cv); n++;
+});
+// a small-size strip of the same gladiators (cache must make these free of extra identical work only for same size)
+const strip = document.createElement('div'); strip.id = 'g'; strip.style.paddingTop = 0; document.body.append(strip);
+[40, 56, 76].forEach((sz) => styles.forEach((s, i) => { const cv = P.portrait(glad(s, i), { w: 128, h: 128 }); cv.style.cssText = `width:${sz}px;height:${sz}px;border-radius:50%`; strip.append(cv); }));
+const wait = () => { if (P.pending) return requestAnimationFrame(wait); window.__portraitDone = true; hud.textContent = JSON.stringify(P.stats) + ' total ' + (performance.now() - t0 | 0) + ' ms'; };
+requestAnimationFrame(wait);
+window.__P = P;
+</script></body></html>
