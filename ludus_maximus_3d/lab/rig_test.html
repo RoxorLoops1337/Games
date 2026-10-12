@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Rig test (js/)</title>
+<style>html,body{margin:0;height:100%;background:#2a2540;color:#f2e6c8;font:12px system-ui,sans-serif}pre{padding:8px;white-space:pre-wrap}</style>
+<script type="importmap">{"imports":{"three":"../vendor/three.module.min.js","three/addons/":"../vendor/jsm/"}}</script>
+<script src="../core/data.js"></script><script src="../core/sim.js"></script>
+</head><body><pre id="out">running...</pre>
+<script type="module">
+// Headless checks for the game rig (js/rig.js, js/gear.js, js/gladiator.js). Same checks as the old rig_ref test (finite transforms, feet above
+// ground, attack events, hand IK) plus the character budget (tris, draw calls), skinning sanity, shield / weapon attachment and shader compile.
+// Open with ?test=1 (default) ; result in window.__testResult and the page text.
+import * as THREE from 'three';
+import { buildGladiator, poseAt, triCount, attackInfo, DIM } from '../js/rig.js';
+import { equipStyle, STYLES } from '../js/gear.js';
+import { createGladiator } from '../js/gladiator.js';
+
+const PALETTES = {
+  murmillo: { skin: '#c98d62', hair: '#2b1b12', cloth: '#a8452a', plume: '#b5271f', metal: '#c08a3e' },
+  retiarius: { skin: '#a8714a', hair: '#1c1410', cloth: '#6f8a9a', plume: '#3c5a7a', metal: '#9aa0a8' },
+  thraex: { skin: '#e0ac84', hair: '#6a4423', cloth: '#5a1f5e', plume: '#7a2a7a', metal: '#b8803a' },
+  hoplomachus: { skin: '#d49a70', hair: '#3a2a1a', cloth: '#e8dcc0', plume: '#a3221b', metal: '#d6b35a' },
+  dimachaerus: { skin: '#7a4f34', hair: '#120c08', cloth: '#5b7a3a', plume: '#b8803a', metal: '#aab0b8' },
+};
+const BUILDS = { murmillo: { bulk: 1.14 }, retiarius: { bulk: 0.92, height: 1.04 }, thraex: { bulk: 1.0 }, hoplomachus: { bulk: 1.05, height: 1.02 }, dimachaerus: { bulk: 1.0, shoulder: 1.05 } };
+const TRI_MAX = 2500, CALL_MAX = 14;
+
+function runTests() {
+  const fails = [], R = { checks: 0, tris: {}, calls: {}, trisMax: 0, callsMax: 0 }; const ok = (c, m) => { R.checks++; if (!c) fails.push(m); };
+  const finite = (r) => { let bad = false; r.root.traverse((o) => { const e = o.matrixWorld.elements; for (let i = 0; i < 16; i++) if (!isFinite(e[i])) bad = true; }); return !bad; };
+  const names = ['idle', 'walk', 'run', 'strafe', 'attack1', 'attack2', 'attack3', 'block', 'hurt', 'knockdown', 'getup', 'death', 'stun', 'victory', 'taunt', 'cheer'];
+  const scene = new THREE.Scene(), W = new THREE.Vector3(), W2 = new THREE.Vector3();
+  const renderer = new THREE.WebGLRenderer({ antialias: false }); renderer.setSize(64, 64);
+  scene.add(new THREE.HemisphereLight('#a4a2cc', '#c98650', 1.2), new THREE.DirectionalLight('#ffb25e', 3));
+  for (const style of STYLES) {
+    const rig = buildGladiator({ palette: PALETTES[style], build: BUILDS[style], look: { face: 1, hair: 'tied', beard: 1 } }); equipStyle(rig, style, { stars: 3, lvl: 9, rar: { weapon: 4, shield: 4, armor: 4, helm: 4, charm: 4 }, rarCol: ['#b9b2a3', '#58c765', '#4aa3f0', '#b06cf0', '#f6b82d'], hasCharm: true });
+    const A = rig.animator; scene.add(rig.root); rig.root.visible = false;
+    const t = triCount(rig.root), c = rig.drawCalls(); R.tris[style] = t; R.calls[style] = c; R.trisMax = Math.max(R.trisMax, t); R.callsMax = Math.max(R.callsMax, c);
+    ok(t <= TRI_MAX, style + ' tris ' + t); ok(c <= CALL_MAX, style + ' draw calls ' + c);
+    // every geometry carries vertex colours; skinned parts share one skeleton and weights are valid
+    rig.root.traverse((o) => { if (o.isMesh) { ok(!!o.geometry.attributes.color, style + ' mesh ' + o.name + ' has no colour attribute'); if (o.isSkinnedMesh) { ok(o.skeleton === rig.skeleton, style + ' skeleton shared'); const sw = o.geometry.attributes.skinWeight; ok(sw && sw.count > 0, 'skin weights'); } } });
+    for (const n of ['hips', 'spine', 'chest', 'neck', 'head', 'wristL', 'wristR', 'handR', 'handL']) ok(!!rig.joints[n], style + ' joint ' + n);
+    for (const n of ['helm', 'back', 'cloakTop', 'beltFront', 'beltL', 'beltR', 'forearmL', 'chestFront', 'beltBack']) ok(!!rig.sockets[n], style + ' socket ' + n);
+    for (const n of names) {
+      A.setState('move', 0); A.dead = false; A.action = null; A.add = null; let ev = []; rig.onEvent = (e) => ev.push(e);
+      if (n === 'idle') A.setMove(0, 0); else if (n === 'walk') A.setMove(1.5, 0); else if (n === 'run') A.setMove(4.5, 0); else if (n === 'strafe') A.setMove(0, 2); else { A.setMove(0, 0); A.play(n); }
+      let minSole = 1e9;
+      for (let i = 0; i < 150; i++) {
+        rig.update(1 / 60);
+        if (i > 20 && (n === 'walk' || n === 'run' || n === 'idle' || n === 'strafe')) for (const s of ['L', 'R']) { const p = rig.joints['ankle' + s].getWorldPosition(W); minSole = Math.min(minSole, p.y - DIM.footH); }
+        if (n.startsWith('attack') && i === 12) { // weapon stays in the hand: weapon group origin sits at the hand socket
+          const wp = (A.weaponName === 'dual' ? rig.gear.weapon : rig.gear.weapon); wp.getWorldPosition(W); rig.joints.wristR.getWorldPosition(W2); ok(W.distanceTo(W2) < 0.12, style + '/' + n + ' weapon off the hand ' + W.distanceTo(W2).toFixed(3));
+        }
+        if (rig.gear.shieldHolder && (n === 'block' || n === 'hurt' || n === 'knockdown' || n === 'death' || n === 'attack1') && i % 25 === 5) { rig.gear.shieldHolder.getWorldPosition(W); rig.joints.wristL.getWorldPosition(W2); ok(W.distanceTo(W2) < 0.12, style + '/' + n + ' shield off the arm ' + W.distanceTo(W2).toFixed(3)); }
+      }
+      ok(finite(rig), style + '/' + n + ' non-finite transform');
+      if (n === 'walk' || n === 'run' || n === 'idle' || n === 'strafe') ok(minSole > -0.02, style + '/' + n + ' foot below ground by ' + minSole.toFixed(3));
+      if (n.startsWith('attack')) ok(ev.includes('swing') && ev.includes('hit') && ev.includes('end'), style + '/' + n + ' events ' + ev.join(','));
+    }
+    A.dead = false; A.action = null; A.setMove(0, 0);
+    if (A.ik.hand) { for (let i = 0; i < 30; i++) rig.update(1 / 60); const w = new THREE.Vector3(), tg = new THREE.Vector3(); tg.copy(A.ik.hand.lastTarget); rig.joints.wristL.getWorldPosition(w); ok(w.distanceTo(tg) < 0.1, style + ' hand IK error ' + w.distanceTo(tg).toFixed(3)); }
+    rig.root.visible = true; rig.root.position.set(0, 0, 0);
+    const cam = new THREE.PerspectiveCamera(40, 1, 0.1, 50); cam.position.set(0, 1.5, 5); cam.lookAt(0, 1, 0);
+    renderer.render(scene, cam); ok(renderer.info.render.calls >= 1, style + ' rendered');
+    scene.remove(rig.root);
+  }
+  // sim records through the real factory: budgets across rarity and recruit variance
+  if (window.LM) {
+    const LM = window.LM; let worst = 0, worstC = 0, n = 0;
+    for (const style of STYLES) for (const rar of [0, 2, 4]) for (let id = 1; id <= 3; id++) {
+      const g = LM.makeGlad({ style, lvl: 3 + id * 4, id, name: 'Test' + id, r: LM.mulberry(id * 977 + rar) });
+      for (const s of ['weapon', 'shield', 'armor', 'helm', 'charm']) g.gear[s] = { slot: s, rar, name: s };
+      const rig = createGladiator(g); const t = triCount(rig.root), c = rig.drawCalls(); worst = Math.max(worst, t); worstC = Math.max(worstC, c); n++;
+      ok(t <= TRI_MAX, 'factory ' + style + ' rar' + rar + ' tris ' + t); ok(c <= CALL_MAX, 'factory ' + style + ' rar' + rar + ' calls ' + c); rig.dispose();
+    }
+    R.factoryRigs = n; R.factoryTrisMax = worst; R.factoryCallsMax = worstC;
+  } else ok(false, 'core/sim.js missing');
+  const r2 = buildGladiator(); r2.animator.setWeapon('sword'); const info = r2.animator.clipInfo('attack1'); ok(Math.abs(info.dur - attackInfo('sword', 'attack1').dur) < 1e-6, 'attack1 dur');
+  R.bareTris = triCount(buildGladiator().root);
+  R.pass = fails.length === 0; R.fails = fails.slice(0, 16); return R;
+}
+const out = document.getElementById('out');
+try { const R = runTests(); window.__testResult = R; out.textContent = (R.pass ? 'PASS' : 'FAIL') + ' ' + JSON.stringify(R, null, 1); } catch (e) { window.__testResult = { pass: false, error: String(e && e.stack || e) }; out.textContent = 'ERROR ' + (e && e.stack || e); }
+window.__labShot = () => window.__testResult; window.__labReady = Promise.resolve();
+</script></body></html>

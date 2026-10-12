@@ -50,7 +50,7 @@ export function open(ctx, arg) {
     sync(); const top = it.up >= lm.maxUp(S); ctx.sfx(top ? 'levelUp' : 'uiConfirm'); celebrate('+' + it.up); render();
   }
   function goForge(it, mode) { st.tab = 'forge'; st.view = null; st.mode = mode || 'upgrade'; st.fid = it ? it.id : st.fid; if (mode === 'merge' && it) st.merge = [it.id]; render(); content.scrollTop = 0; }
-  const backBtn = (label, fn) => { const b = U.button({ label: '‹ ' + label, variant: 'ghost', onClick: fn }); b.classList.add('am-back'); return b; };
+  const backBtn = (label, fn) => { const b = U.button({ label: '‹ ' + label, variant: 'bronze', onClick: fn }); b.classList.add('am-back'); return b; };
   const secH = (t, extra) => h('div', 'am-h', [h('span', '', t), h('span', 'am-sp'), extra || null]);
   const card = (cls, kids) => { const c = h('div', 'am-card ' + (cls || ''), kids); c.style.position = 'relative'; return c; };
 
@@ -113,7 +113,7 @@ export function open(ctx, arg) {
     const out = h('div'), fl = forgeL();
     if (!fl) {
       out.append(card('warn', [h('div', 'am-name', 'No Forge yet'), h('div', 'am-p', 'Build a Forge in your ludus to upgrade, evolve, reforge and merge gear. ' + d.BUILD.forge.f(d.BUILD.forge.v[1]) + ' at level 1. It needs ' + d.BUILD.forge.fame + ' fame.')]));
-      out.append(h('div', 'am-btns', [U.button({ label: 'Back to items', variant: 'ghost', onClick: () => { st.tab = 'items'; render(); } })]));
+      out.append(h('div', 'am-btns', [U.button({ label: 'Back to items', variant: 'bronze', onClick: () => { st.tab = 'items'; render(); } })]));
       return out;
     }
     const info = card('dark', [h('div', '', [tip('Forge', 'Each Forge level raises the item upgrade limit and adds 4 armory slots. Upgrade the building from your ludus.', 'Forge level'), document.createTextNode(` level ${fl}`)]), h('div', 'am-small', `Items upgrade up to +${lm.maxUp(S)}. Armory holds ${lm.armoryCap(S)}.`)]);
@@ -164,7 +164,7 @@ export function open(ctx, arg) {
     out.append(secH('Requirements', tip('Evolve', 'Evolving raises an item one rarity step. It must first be fully upgraded to the Forge limit.', 'Evolve')), req(can, `Fully upgraded: +${it.up} of +${need}`), req(S.gold >= c, `Gold: ${ctx.fmt(c)} (you have ${ctx.fmt(S.gold)})`));
     const off = !can ? `Upgrade it to +${need} first` : S.gold < c ? 'Not enough gold' : '';
     out.append(h('div', 'am-btns', [btn(ctx, { label: 'Evolve to ' + nr.n, sub: ctx.fmt(c) + ' gold', icon: 'coin', variant: 'gold', off, block: true, onClick: () => doEvolve(it) })]));
-    if (!can && it.up < need) out.append(h('div', 'am-btns', [U.button({ label: 'Upgrade first', variant: 'ghost', onClick: () => { st.mode = 'upgrade'; render(); } })]));
+    if (!can && it.up < need) out.append(h('div', 'am-btns', [U.button({ label: 'Upgrade first', variant: 'bronze', onClick: () => { st.mode = 'upgrade'; render(); } })]));
     return out;
   }
   function doEvolve(it) {
@@ -207,7 +207,7 @@ export function open(ctx, arg) {
     if (ok) out.append(card('', [h('b', '', `Result: one ${d.RAR[r0 + 1].n} item`), h('div', 'am-p', `Slot of one of the three, ilvl ${Math.max(...sel.map((i) => i.ilvl)) + 1}, ${d.RAR[r0 + 1].af} affix${d.RAR[r0 + 1].af === 1 ? '' : 'es'}, a chance at a set piece.`)]));
     else out.append(h('div', 'am-small', `Pick ${3 - sel.length} more${r0 != null ? ' ' + d.RAR[r0].n : ''} item${3 - sel.length === 1 ? '' : 's'} below.`));
     const off = forgeL() < 1 ? 'Build a Forge first' : !ok ? 'Pick three items of the same rarity' : S.gold < mc ? 'Not enough gold' : '';
-    const auto = U.button({ label: 'Auto-fill', variant: 'ghost', onClick: autoMerge }), clr = U.button({ label: 'Clear', variant: 'ghost', onClick: () => { st.merge = []; render(); } });
+    const auto = U.button({ label: 'Auto-fill', variant: 'bronze', onClick: autoMerge }), clr = U.button({ label: 'Clear', variant: 'bronze', onClick: () => { st.merge = []; render(); } });
     out.append(h('div', 'am-btns', [btn(ctx, { label: ok ? 'Merge to ' + d.RAR[r0 + 1].n : 'Merge', sub: ok ? ctx.fmt(mc) + ' gold' : '', icon: 'coin', variant: 'gold', off, onClick: () => doMerge(sel) }), auto, clr]));
     const pool = items().filter((i) => i.rar < 4).sort((a, b) => a.rar - b.rar || lm.itemScore(a) - lm.itemScore(b));
     out.append(secH('Choose from your items'));

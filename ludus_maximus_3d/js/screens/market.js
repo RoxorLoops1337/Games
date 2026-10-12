@@ -29,7 +29,7 @@ export function open(ctx, arg) {
   const sync = () => { ctx.save(); ctx.refresh(); };
   const card = (cls, kids) => { const c = h('div', 'am-card ' + (cls || ''), kids); c.style.position = 'relative'; return c; };
   const secH = (t, extra) => h('div', 'am-h', [h('span', '', t), h('span', 'am-sp'), extra || null]);
-  const backBtn = (label, fn) => { const b = U.button({ label: '‹ ' + label, variant: 'ghost', onClick: fn }); b.classList.add('am-back'); return b; };
+  const backBtn = (label, fn) => { const b = U.button({ label: '‹ ' + label, variant: 'bronze', onClick: fn }); b.classList.add('am-back'); return b; };
   const price = (it) => lm.buyVal(S, it);
   const weakest = () => items().slice().sort((a, b) => lm.itemScore(a) - lm.itemScore(b))[0];
   const full = () => items().length >= lm.armoryCap(S);
@@ -52,7 +52,7 @@ export function open(ctx, arg) {
     out.append(secH('Special offer', tip('Special', 'A rare piece of gear sold at a 50% premium. A rival may buy it before you.', 'Special offer')));
     if (sp) {
       const hero = card('gold', [h('div', 'am-hero', [itemHead(ctx, sp, 60)])]); hero.style.marginTop = '10px'; hero.append(h('span', 'am-ribbon', 'Special'));
-      hero.firstChild.firstChild.style.flex = '1'; hero.append(statLine(sp), h('div', 'am-btns', [U.button({ label: 'Inspect', variant: 'ghost', onClick: () => openItem(sp) }), btn(ctx, { label: 'Buy', sub: ctx.fmt(price(sp)) + ' gold', icon: 'coin', variant: 'gold', off: S.gold < price(sp) ? 'Not enough gold' : '', onClick: () => buy(sp) })]));
+      hero.firstChild.firstChild.style.flex = '1'; hero.append(statLine(sp), h('div', 'am-btns', [U.button({ label: 'Inspect', variant: 'bronze', onClick: () => openItem(sp) }), btn(ctx, { label: 'Buy', sub: ctx.fmt(price(sp)) + ' gold', icon: 'coin', variant: 'gold', off: S.gold < price(sp) ? 'Not enough gold' : '', onClick: () => buy(sp) })]));
       out.append(hero);
     } else out.append(card('', [h('div', 'am-p', 'The special item is gone this week.')]));
     out.append(secH('On the stalls', h('span', 'am-small', rest.length + ' items')));
@@ -99,7 +99,7 @@ export function open(ctx, arg) {
     const fr = U.rarityFrame(P.RAR_KEY[it.rar], U.icon(P.SLOT_ICON[it.slot], 40), 84); fr.classList.add('am-pop');
     box.append(h('i', 'am-flare'), h('div', 'am-kicker', 'Purchased'), fr, h('div', 'am-big', it.name), h('div', 'am-small', 'Added to your armory' + (v.sold ? `. ${v.sold.name} was sold to make room.` : '.')));
     out.append(box, secH('Equip now?'), compareList(ctx, it, { onEquip: (g) => { lm.equip(S, g, it); sync(); ctx.sfx('uiConfirm'); ctx.toast(`${g.name} equipped ${it.name}`, { kind: 'good', ico: 'check' }); st.view = null; render(); } }));
-    out.append(h('div', 'am-btns', [U.button({ label: 'Keep shopping', variant: 'gold', onClick: () => { st.view = null; render(); } }), U.button({ label: 'Open armory', variant: 'ghost', onClick: () => ctx.open('armory') })]));
+    out.append(h('div', 'am-btns', [U.button({ label: 'Keep shopping', variant: 'gold', onClick: () => { st.view = null; render(); } }), U.button({ label: 'Open armory', variant: 'bronze', onClick: () => ctx.open('armory') })]));
     return out;
   }
 
