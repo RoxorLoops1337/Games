@@ -12,7 +12,7 @@ const CSS = `
 .am-top{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .am-top .am-sp{flex:1}
 .am-gold{display:inline-flex;align-items:center;gap:6px;padding:4px 12px;border-radius:999px;background:linear-gradient(180deg,#3b2a55,#1d1830);color:#f2c14e;font:800 15px/20px var(--lx-sans);box-shadow:inset 0 0 0 1px rgba(242,193,78,.5);min-height:36px;font-variant-numeric:tabular-nums}
-.am-cap{flex:1 1 120px;display:flex;flex-direction:column;gap:3px;font:700 11px/14px var(--lx-sans);color:#6a5238;letter-spacing:.04em;text-transform:uppercase}
+.am-cap{flex:none;display:flex;flex-direction:column;gap:3px;font:700 11px/14px var(--lx-sans);color:#6a5238;letter-spacing:.04em;text-transform:uppercase}
 .am-cap.full{color:#a8372b}
 .am-tabs{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;gap:6px}
 .am-tab{min-height:48px;border-radius:6px;border:2px solid #b79a64;background:rgba(255,250,235,.65);font:700 11px/13px var(--lx-serif);text-transform:uppercase;letter-spacing:.05em;color:#5a4222;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;cursor:pointer;padding:4px 2px;touch-action:manipulation}
@@ -175,7 +175,7 @@ export function tile(ctx, it, o = {}) {
   b.setAttribute('aria-label', `${it.name}, ${R.n} ${D().SLOT_NAME[it.slot]}${it.up ? ', plus ' + it.up : ''}, power ${power(it)}${o.price != null ? ', price ' + o.price : ''}`);
   b.append(U.rarityFrame(rk, U.icon(SLOT_ICON[it.slot] || 'star', 26), 46));
   if (it.up) b.append(h('span', 'am-up', '+' + it.up));
-  if (o.arrow !== false) { const g = ctx.S.glads.length ? gainFor(ctx, it) : null; if (g && g.d > 0) { const a = h('span', 'am-arrow', '▲'); a.title = `Upgrade for ${g.g.name}`; a.setAttribute('aria-hidden', 'true'); b.append(a); } }
+  if (o.arrow !== false) { const g = ctx.S.glads.length ? gainFor(ctx, it) : null; if (g && g.c && g.d > 0) { const a = h('span', 'am-arrow', '▲'); a.title = `Upgrade for ${g.g.name}`; a.setAttribute('aria-hidden', 'true'); b.append(a); } }
   b.append(h('span', 'am-nm', it.name));
   const main = Object.keys(it.st)[0]; const sc = scaled(it);
   b.append(h('span', 'am-ms', `${STAT_LAB[main]} ${sc[main]}`));

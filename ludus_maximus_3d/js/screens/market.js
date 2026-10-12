@@ -16,7 +16,7 @@ export function open(ctx, arg) {
   const root = h('div', 'am-root'), content = h('div', 'am-content'), tabsEl = h('div', 'am-tabs');
   tabsEl.setAttribute('role', 'tablist');
   const gold = P.goldChip(ctx);
-  const arm = U.button({ label: 'Armory', icon: 'shield', variant: 'ghost', onClick: () => ctx.open('armory') });
+  const arm = U.button({ label: 'Armory', icon: 'shield', variant: 'bronze', onClick: () => ctx.open('armory') });
   const capLab = h('div', 'am-cap'); const capBar = U.bar({ value: 0, max: 1, kind: 'xp', height: 8 });
   capLab.append(h('div', '', [tip('Armory space', 'Spare items you own. When it is full, buying loot sells your weakest item automatically.', 'Capacity'), document.createTextNode(' '), h('span', 'am-capn')]), capBar);
   root.append(h('div', 'am-top', [gold, h('span', 'am-sp'), arm]), capLab, tabsEl, content);

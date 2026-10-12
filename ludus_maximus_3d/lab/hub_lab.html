@@ -67,7 +67,7 @@ async function gallery() {
   applyTOD(preset, { rig, scene, sky, renderer });
   const ids = q.get('build') === 'all' ? B.BUILDING_IDS : [q.get('build')];
   const lv = q.get('level') || '5';
-  const levels = lv === 'all' ? [1, 2, 3, 4, 5] : [+lv];
+  const levels = lv === 'all' ? [1, 2, 3, 4, 5] : lv.split(',').map(Number);
   const glow = +(q.get('glow') ?? 0.0);
   const px = 10.4, pz = 8.2;
   const ground = new THREE.Mesh(new THREE.PlaneGeometry(400, 400).rotateX(-Math.PI / 2), new THREE.MeshStandardMaterial({ color: 0xc9a56c, roughness: 1 }));

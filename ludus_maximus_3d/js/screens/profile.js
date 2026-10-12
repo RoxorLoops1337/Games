@@ -83,12 +83,12 @@ export function open(ctx, arg) {
     }
     if (g.inj > 0) {
       const c = h('div', 'lm-card lm-warn');
-      c.append(h('div', 'lm-name', `Injured: ${g.inj} week${g.inj > 1 ? 's' : ''} to heal`), h('div', 'lm-sub', 'An injured fighter rests and cannot enter games. Treatment speeds recovery.'));
+      c.append(h('div', 'lm-name', `Injured: ${g.inj} week${g.inj > 1 ? 's' : ''} to heal`), h('div', 'lm-sub', 'An injured fighter rests and cannot enter games. Poultice: 60% chance to save 1 week. Physician: always saves 2 weeks.'));
       if (owned) {
         const row = h('div', 'lm-btnrow'); row.style.marginTop = '8px';
         row.append(
-          U.button({ label: `Poultice ${lm.treatCost(S, 'pou')}g`, variant: 'bronze', sub: '60% chance: -1 week', onClick: () => treat('pou') }),
-          U.button({ label: `Physician ${lm.treatCost(S, 'doc')}g`, variant: 'gold', sub: 'Sure: -2 weeks', onClick: () => treat('doc') }));
+          U.button({ label: `Poultice ${lm.treatCost(S, 'pou')}g`, variant: 'bronze', onClick: () => treat('pou') }),
+          U.button({ label: `Physician ${lm.treatCost(S, 'doc')}g`, variant: 'gold', onClick: () => treat('doc') }));
         c.append(row);
       }
       out.push(c);

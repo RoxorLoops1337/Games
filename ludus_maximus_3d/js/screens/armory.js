@@ -23,7 +23,7 @@ export function open(ctx, arg) {
   const capTip = tip('Armory', 'Spare items you own. The Forge adds 4 slots per level. When the armory is full, new loot automatically sells your weakest item.', 'Capacity');
   capLab.append(capTip, document.createTextNode(' '), h('span', 'am-capn', ''));
   const cap = h('div', 'am-cap', [capLab, capBar]);
-  const mk = U.button({ label: 'Market', icon: 'market', variant: 'ghost', onClick: () => ctx.open('market') });
+  const mk = U.button({ label: 'Market', icon: 'market', variant: 'bronze', onClick: () => ctx.open('market') });
   root.append(h('div', 'am-top', [gold, h('span', 'am-sp'), mk]), cap, tabsEl, content);
   const tabBtns = TABS.map(([id, label, ic]) => {
     const b = h('button', 'am-tab', [U.icon(ic, 20), h('span', '', label)]); b.type = 'button'; b.setAttribute('role', 'tab');

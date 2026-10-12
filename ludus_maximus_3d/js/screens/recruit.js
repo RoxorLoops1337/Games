@@ -28,7 +28,7 @@ export function open(ctx, arg) {
   lm.ensureShops(S);
   const body = h('div', 'lm-sheetbody');
   let dead = false;
-  const reroll = U.button({ label: 'New faces', icon: 'coin', variant: 'ghost', block: true, sub: '30 gold for three new volunteers', onClick: () => doReroll() });
+  const reroll = U.button({ label: 'New faces for 30 gold', icon: 'coin', variant: 'ghost', block: true, onClick: () => doReroll() });
   const m = wide(ctx.sheet({ title: first ? 'Your first fighter' : 'Volunteers', body, actions: [reroll], onClose: () => { dead = true; } }), 980);
   const commit = () => { ctx.save(); ctx.refresh(); };
 
@@ -62,9 +62,9 @@ export function open(ctx, arg) {
     c.append(h('div', 'rc-trait', [h('b', '', 'Ultimate: '), lm.ultsOf(g).map((u) => d.ULTS[u].n).join(', '), '. ', h('b', '', 'Techniques: '), g.techs.map((t) => d.TECHS[t].n).join(', ')]));
     const buy = h('div', 'rc-buy');
     const price = h('div', 'rc-price lm-num' + (short ? ' poor' : ''), [U.icon('coin', 22), fmt(g.cost)]);
-    const btn = U.button({ label: 'Hire', icon: 'check', variant: 'gold', block: true, disabled: bad, sub: full ? 'Barracks full' : short ? `Need ${fmt(g.cost - S.gold)} more gold` : undefined, onClick: () => hire(g, c) });
+    const btn = U.button({ label: 'Hire', icon: 'check', variant: 'gold', block: true, disabled: bad, onClick: () => hire(g, c) });
     btn.setAttribute('aria-label', `Hire ${g.name} for ${g.cost} gold`);
-    buy.append(h('div', 'lm-row', [price, h('span', 'lm-grow')]), btn); c.append(buy);
+    buy.append(h('div', 'lm-row', [price, h('span', 'lm-grow'), full ? chip('Barracks full', 'red') : short ? chip(`Need ${fmt(g.cost - S.gold)} more gold`, 'red') : null]), btn); c.append(buy);
     return c;
   }
 
