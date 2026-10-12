@@ -40,6 +40,7 @@ const GAME_SUITES = {
   frietkot_tycoon: ['test:frietkot'],
   horse_ranch: ['test:horse'],
   ludus_maximus: ['test:ludus'],
+  ludus_maximus_3d: ['test:ludus3d'],
   wildwalk: ['test:wildwalk', 'test:wwboard'],
   the_collection: ['test:collection'],
   ballistic: ['test:ballistic'],
