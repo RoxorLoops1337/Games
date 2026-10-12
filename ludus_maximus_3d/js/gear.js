@@ -3,7 +3,7 @@
 // skinned body (rig.add), so a fully dressed gladiator costs 9 to 13 draw calls. Only cloth (flaps, plume, cloak, net) is separate.
 // Weapon convention: authored along +Y with the grip at the origin; the hand sockets map +Y onto the forearm axis.
 import * as THREE from 'three';
-import { lathe, capsule, boxG, sphereG, cylG, coneG, torusG, xf, paint, ribbon, tabRing, extrude, sm01, addCloak, addPlume, ClothGrid, shadePatch, clamp, lerp } from './rig.js';
+import { lathe, capsule, boxG, sphereG, cylG, coneG, torusG, quadG, xf, paint, ribbon, tabRing, extrude, sm01, addCloak, addPlume, ClothGrid, shadePatch, clamp, lerp } from './rig.js';
 
 const V3 = THREE.Vector3;
 const sq = (v) => v * v;
@@ -75,22 +75,23 @@ function netTexture() {
 }
 
 // ---------------------------------------------------------------- weapons
-function blade(len, w, thick, curve = 0, tip = 0.58) {
+function blade(len, w, thick, curve = 0) {
   // leaf blade, diamond section (4-sided lathe): ridge faces darker, edges bright, so the fuller reads without extra triangles
-  const f = len / 0.58, prof = [[0, 0], [0.82 * w, 0.006 * f], [1.0 * w, 0.1 * f], [1.04 * w, 0.23 * f], [0.9 * w, 0.37 * f], [0.5 * w, 0.5 * f], [0, len]];
+  const f = len / 0.58, prof = [[0, 0], [1.0 * w, 0.1 * f], [1.04 * w, 0.26 * f], [0.62 * w, 0.46 * f], [0, len]];
   const g = lathe(prof, 4, 1, thick, 0, 1);
   const P = g.attributes.position; if (curve) for (let i = 0; i < P.count; i++) { const y = P.getY(i); P.setZ(i, P.getZ(i) + curve * y * y); }
   return paint(g, (x, y, z) => 0.72 + 0.5 * sm01(0, w * 0.5, Math.abs(x)) - 0.12 * sm01(0.8 * len, len, y));
 }
+const band = (r, y0, y1, seg = 6) => cylG(r, r, y1 - y0, seg, true).translate(0, (y0 + y1) / 2, 0); // open ring (12 tris at 6 seg), double-sided materials
 function swordParts(rig, grp, o, rr, sica) {
   const A = (m, g) => rig.add(m, g, grp);
   const len = sica ? 0.5 : 0.6, w = sica ? 0.042 : 0.036;
   A('metal', xf(blade(len, w, sica ? 0.2 : 0.13, sica ? 0.55 : 0), [0, 0.075, 0]));
   if (rr.r >= 3) A('gem', paint(xf(boxG(0.006, len * 0.5, 0.006), [0, 0.3, sica ? 0.012 : 0.0062]), tint(rr.col, 1.3)));
   else if (rr.r === 2) A('trim', paint(xf(boxG(0.005, len * 0.4, 0.005), [0, 0.27, 0.0062]), tint(rr.col, 1)));
-  A('trim', xf(sphereG(0.03, 6, 4), [0, 0.068, 0], [0, 0, 0], [sica ? 1.5 : 2.1, 0.4, 0.8])); // guard
-  A('leather', lathe([[0.014, -0.068], [0.019, -0.052], [0.014, -0.042], [0.019, -0.027], [0.014, -0.014], [0.019, 0.0], [0.014, 0.012], [0.018, 0.03], [0.014, 0.062]], 6, 1, 1, 0, 1));
-  A('trim', xf(sphereG(0.026, 6, 4), [0, -0.08, 0]));
+  A('trim', xf(boxG(sica ? 0.07 : 0.1, 0.016, 0.03), [0, 0.068, 0])); // guard
+  A('leather', lathe([[0.016, -0.068], [0.019, -0.02], [0.019, 0.025], [0.015, 0.062]], 5, 1, 1, 0, 1));
+  A('trim', xf(sphereG(0.026, 5, 3), [0, -0.08, 0]));
   gem(rig, grp, [0, -0.1, 0.018], 0.012, rr);
 }
 function makeSword(rig, o, rr, sica = false, side = 'R') {
@@ -99,23 +100,23 @@ function makeSword(rig, o, rr, sica = false, side = 'R') {
 }
 function spearParts(rig, grp, trident, rr, o) {
   const A = (m, g) => rig.add(m, g, grp), L = trident ? 1.85 : 2.0, y0 = L - 0.45;
-  A('leather', paint(xf(cylG(0.016, 0.019, L, 6), [0, L / 2 - 0.45, 0]), (x, y) => 0.9 + 0.2 * Math.sin(y * 9)));
-  A('trim', xf(torusG(0.021, 0.005, 3, 8), [0, 0.42 - 0.06, 0], [PI / 2, 0, 0])); A('trim', xf(torusG(0.021, 0.005, 3, 8), [0, 0.0, 0], [PI / 2, 0, 0]));
-  A('metal', xf(coneG(0.022, 0.1, 5), [0, -0.5, 0], [PI, 0, 0])); A('trim', xf(torusG(0.022, 0.005, 3, 8), [0, -0.45, 0], [PI / 2, 0, 0]));
-  A('metal', xf(lathe([[0.03, 0], [0.024, 0.05], [0.02, 0.09]], 6, 1, 1, 0, 1), [0, y0 - 0.06, 0]));
-  A('trim', xf(torusG(0.027, 0.006, 3, 8), [0, y0 - 0.02, 0], [PI / 2, 0, 0]));
+  A('leather', paint(xf(cylG(0.016, 0.019, L, 5), [0, L / 2 - 0.45, 0]), (x, y) => 0.9 + 0.2 * Math.sin(y * 9)));
+  A('trim', xf(band(0.021, -0.006, 0.006))); A('trim', xf(band(0.021, 0.354, 0.366)));
+  A('metal', xf(coneG(0.022, 0.1, 5), [0, -0.5, 0], [PI, 0, 0])); A('trim', xf(band(0.022, -0.456, -0.444), [0, 0, 0]));
+  A('metal', xf(lathe([[0.03, 0], [0.02, 0.09]], 5, 1, 1, 0, 1), [0, y0 - 0.06, 0]));
+  A('trim', xf(band(0.027, y0 - 0.026, y0 - 0.014)));
   if (trident) {
     A('metal', xf(boxG(0.15, 0.022, 0.026), [0, y0 + 0.012, 0]));
     A('metal', xf(blade(0.26, 0.017, 0.7), [0, y0 + 0.02, 0])); // centre prong
     for (const sg of [-1, 1]) {
       A('metal', xf(blade(0.22, 0.014, 0.7), [sg * 0.068, y0 + 0.02, 0], [0, 0, sg * -0.05]));
-      A('metal', xf(blade(0.07, 0.014, 0.7), [sg * 0.071, y0 + 0.1, 0], [0, 0, sg * 2.2])); // barb
+      A('metal', xf(coneG(0.012, 0.07, 4), [sg * 0.075, y0 + 0.12, 0], [0, 0, sg * -2.4])); // barb
     }
     if (rr.r >= 3) A('gem', paint(xf(boxG(0.008, 0.1, 0.008), [0, y0 + 0.12, 0.002]), tint(rr.col, 1.3)));
   } else {
-    A('metal', xf(blade(0.33, 0.05, 0.22, 0, 0.33), [0, y0 - 0.03, 0]));
-    A('plume', xf(torusG(0.023, 0.01, 3, 7), [0, y0 - 0.1, 0], [PI / 2, 0, 0]));
-    for (const dx of [-0.012, 0.012]) A('plume', xf(boxG(0.012, 0.11, 0.004), [dx, y0 - 0.17, 0.01], [0, 0, dx * 5]));
+    A('metal', xf(blade(0.33, 0.05, 0.22), [0, y0 - 0.03, 0]));
+    A('plume', xf(band(0.023, y0 - 0.1, y0 - 0.085)));
+    A('plume', xf(quadG(0.03, 0.12), [0, y0 - 0.16, 0.018], [0, 0, 0.05]));
     if (rr.r >= 3) A('gem', paint(xf(boxG(0.006, 0.17, 0.006), [0, y0 + 0.1, 0.0068]), tint(rr.col, 1.3)));
   }
   gem(rig, grp, [0, 0.0, 0.026], 0.012, rr);

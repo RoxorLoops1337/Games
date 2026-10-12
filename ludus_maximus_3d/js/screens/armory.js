@@ -34,7 +34,7 @@ export function open(ctx, arg) {
   P.shapeSheet(m, root);
 
   // ---------- helpers ----------
-  const sync = () => { ctx.save(); ctx.refresh(); };
+  const sync = () => { ctx.save(); try { ctx.refresh(); } catch (e) { console.error('refresh failed', e); } };
   function celebrate(text) { st.fx = { text }; }
   function sellIt(it) {
     const needs = it.rar >= 2 || it.up > 0;

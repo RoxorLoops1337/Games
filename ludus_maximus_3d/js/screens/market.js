@@ -26,7 +26,7 @@ export function open(ctx, arg) {
   const m = ctx.sheet({ title: 'Market', body: root, actions: [] });
   P.shapeSheet(m, root);
 
-  const sync = () => { ctx.save(); ctx.refresh(); };
+  const sync = () => { ctx.save(); try { ctx.refresh(); } catch (e) { console.error('refresh failed', e); } };
   const card = (cls, kids) => { const c = h('div', 'am-card ' + (cls || ''), kids); c.style.position = 'relative'; return c; };
   const secH = (t, extra) => h('div', 'am-h', [h('span', '', t), h('span', 'am-sp'), extra || null]);
   const backBtn = (label, fn) => { const b = U.button({ label: '‹ ' + label, variant: 'bronze', onClick: fn }); b.classList.add('am-back'); return b; };
