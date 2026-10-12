@@ -19,7 +19,9 @@
       const unitsA = L.mkUnits(gl, 'A', ctxA, gl.map((g) => (o.hpf && o.hpf[g.id] != null ? o.hpf[g.id] : 1)));
       const unitsB = L.mkUnits(opps, 'B', ctxB);
       if (L.isRevenge(S, ev)) unitsA.forEach((u) => { u.grudge = true; });
-      const F = L.createFight(unitsA, unitsB, { autoA: !!S.flags.auto });
+      const F = L.createFight(unitsA, unitsB, { autoA: !!S.flags.auto }); const fp = L.facPerks(S); F.hypeK = fp.hype;
+      if (fp.roarDmg) unitsA.forEach((u) => { u.fx.roarDmg = fp.roarDmg; });
+      if (fp.ultStart) unitsA.forEach((u) => u.ults.forEach((c) => { c.cd = Math.max(0, c.cd - fp.ultStart); }));
       const root = $('#fightRoot');
 
       const bars = (side) => F.units.filter((u) => u.side === side).map((u) => `<div class="fu" id="fu-${u.id}"><div class="nm">${A.styleIcon(u.style, 16)}<span>${esc(u.name)}</span><b class="lv">${u.g.lvl}</b></div><div class="bar hp"><i id="hp-${u.id}" style="width:100%"></i><em id="sh-${u.id}"></em><span id="ht-${u.id}" class="hnum"></span></div></div>`).join('');

@@ -339,6 +339,14 @@
     { id: 'titan', n: 'Heart of the Titan', d: '+12% max HP, regenerate HP', syn: { hp: 0.12 }, xfx: { regen: 1 }, c: '#8c5cc8' },
   ];
 
+
+  // Factions: reputation 0..100 each, perks at 25/50/75/100. Gains come from how you win.
+  D.FACTIONS = {
+    sen: { n: 'The Senate', c: '#7b4fb8', want: 'Show mercy, win tournaments, play fair (no caught tricks).', perks: ['+5% fame', 'One more relic slot', '+10% fame', '+40 gold per week'] },
+    mer: { n: 'The Merchants', c: '#c98a1a', want: 'Showboat, win your bets, keep the coin flowing.', perks: ['Shop prices -5%', '+10% fight gold', 'Better bookmaker payouts', '+60 gold per week'] },
+    ple: { n: 'The Plebs', c: '#d2412b', want: 'Upsets, big crits and spectacular fights.', perks: ['Crowd hype builds 15% faster', 'Ultimates start 3s charged', 'Two free augment rerolls', '+8% damage while the crowd roars'] },
+  };
+
   G.LM_D = D;
   if (typeof module !== 'undefined') module.exports = D;
 })(typeof globalThis !== 'undefined' ? globalThis : this);
