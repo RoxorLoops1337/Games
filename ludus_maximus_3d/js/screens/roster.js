@@ -1,5 +1,5 @@
 // Roster screen: every fighter at a glance, quick weekly activity assignment, planner presets, kitchen menu, recruit entry.
-import { h, U, D, L, fmt, portrait, injectCss, addCss, chip, sec, wide, actDesc, activityGrid, empty, note } from './ui_common.js';
+import { h, U, D, L, fmt, portrait, injectCss, addCss, clearTips, chip, sec, wide, actDesc, activityGrid, empty, note } from './ui_common.js';
 
 const CSS = `
 .lm-r-top{display:grid;gap:10px;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));align-items:stretch}
@@ -126,7 +126,7 @@ export function open(ctx) {
     if (chips.childNodes.length) c.append(chips);
 
     const desc = h('div', 'lm-actd', g.inj > 0 ? 'Recovering: injured fighters rest automatically.' : actDesc(lm.activity(g)));
-    const swap = () => { const n = card(g); c.replaceWith(n); };
+    const swap = () => { clearTips(); const n = card(g); c.replaceWith(n); };
     const pick = (a) => { g.act = a.id; sw('uiTap'); ctx.save(); swap(); };
     c.append(activityGrid(g, pick), desc);
 
@@ -140,7 +140,7 @@ export function open(ctx) {
 
   function render() {
     if (dead) return;
-    body.replaceChildren();
+    clearTips(); body.replaceChildren();
     body.append(topBar());
     body.append(sec('Weekly plan'), planner(), note('Each fighter repeats their activity every week until you change it. Fighters entered in games should rest.'));
     body.append(sec(`Fighters ${S.glads.length}`));

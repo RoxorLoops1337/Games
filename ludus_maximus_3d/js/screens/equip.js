@@ -1,5 +1,5 @@
 // Equip picker for one gear slot: current item, spare items with stat deltas, equip / unequip through LM.equip / LM.unequip.
-import { h, U, D, L, injectCss, addCss, chip, sec, wide, empty, note } from './ui_common.js';
+import { h, U, D, L, injectCss, addCss, clearTips, chip, sec, wide, empty, note } from './ui_common.js';
 import { itemCard } from '../uihelpers.js';
 
 const CSS = `
@@ -35,7 +35,7 @@ export function open(ctx, g, slot, onChange) {
   const m = wide(ctx.sheet({ title: d.SLOT_NAME[slot], body }), 560);
   const done = () => { ctx.save(); ctx.refresh(); onChange && onChange(); };
   function render() {
-    body.replaceChildren(note(`${g.name}: choose a ${d.SLOT_NAME[slot].toLowerCase()}. Green numbers are gains, red are losses compared with what is worn now.`));
+    clearTips(); body.replaceChildren(note(`${g.name}: choose a ${d.SLOT_NAME[slot].toLowerCase()}. Green numbers are gains, red are losses compared with what is worn now.`));
     const cur = g.gear[slot];
     if (cur) {
       body.append(sec('Equipped'));

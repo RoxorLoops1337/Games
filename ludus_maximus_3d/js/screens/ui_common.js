@@ -63,6 +63,9 @@ export async function promptText(ctx, { title, value = '', label = 'Save', max =
   return v === 'ok' ? inp.value.trim() : null;
 }
 
+/** remove tooltips orphaned by an in-place re-render (their target vanished while hovered) */
+export function clearTips() { document.querySelectorAll('.lx-tip').forEach((e) => e.remove()); }
+
 /** replace the title text of a sheet created by ctx.sheet */
 export function setTitle(m, text) { const t = m.el.querySelector('.lx-title'); if (t) t.textContent = text; }
 /** give a sheet a wider desktop layout */

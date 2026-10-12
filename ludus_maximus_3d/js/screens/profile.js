@@ -1,5 +1,5 @@
 // Gladiator profile: hero, stats, gear, skills, life (story, bonds, diary) and management (rename, retrain, retire, release).
-import { h, U, D, L, fmt, portrait, injectCss, addCss, chip, sec, pips, wide, setTitle, empty, note, confirm, promptText, activityGrid, actDesc } from './ui_common.js';
+import { h, U, D, L, fmt, portrait, injectCss, addCss, clearTips, chip, sec, pips, wide, setTitle, empty, note, confirm, promptText, activityGrid, actDesc } from './ui_common.js';
 import { itemCard, SLOT_ICON, fmtSt } from '../uihelpers.js';
 
 const CSS = `
@@ -292,6 +292,7 @@ export function open(ctx, arg) {
 
   function render() {
     if (dead) return;
+    clearTips();
     const sc = body.parentElement ? body.parentElement.scrollTop : 0;
     body.replaceChildren(hero(), ...alerts().map((a) => { a.style.marginTop = '10px'; return a; }), tabs(), h('div', 'pf-pane', [({ stats: statsTab, gear: gearTab, skills: skillsTab, life: lifeTab })[tab]()]));
     if (body.parentElement) body.parentElement.scrollTop = sc;

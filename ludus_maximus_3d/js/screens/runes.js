@@ -1,5 +1,5 @@
 // Rune picker: one keystone and up to two minors, through LM.setKeystone / LM.toggleMinor.
-import { h, U, D, L, injectCss, addCss, chip, sec, wide, note } from './ui_common.js';
+import { h, U, D, L, injectCss, addCss, clearTips, chip, sec, wide, note } from './ui_common.js';
 
 const CSS = `
 .rn-opt{display:flex;gap:10px;align-items:flex-start;width:100%;text-align:left;margin:0 0 8px;min-height:56px;cursor:pointer;font-family:inherit;color:inherit;border-left:6px solid var(--rc,#b8803a)}
@@ -24,7 +24,7 @@ export function open(ctx, g, onChange) {
   }
   function render() {
     const sc = body.parentElement ? body.parentElement.scrollTop : 0;
-    body.replaceChildren(note('Pick one keystone and two minors. Unlock more by winning tournaments, bosses and Pit floors.'));
+    clearTips(); body.replaceChildren(note('Pick one keystone and two minors. Unlock more by winning tournaments, bosses and Pit floors.'));
     body.append(sec('Keystone'));
     Object.keys(d.KEYSTONES).forEach((k) => body.append(opt('k', k, d.KEYSTONES[k], g.rune.k === k, () => lm.setKeystone(S, g, k))));
     body.append(sec(`Minors ${g.rune.m.length}/2`));

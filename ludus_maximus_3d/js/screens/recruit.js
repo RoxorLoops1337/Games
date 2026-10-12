@@ -1,5 +1,5 @@
 // Recruit screen: volunteers at the gate (S.recruits), hire through LM.hire, reroll for 30 gold. arg {first:true} = first-fighter framing.
-import { h, U, D, L, fmt, portrait, injectCss, addCss, chip, sec, statTag, wide, empty, note } from './ui_common.js';
+import { h, U, D, L, fmt, portrait, injectCss, addCss, clearTips, chip, sec, statTag, wide, empty, note } from './ui_common.js';
 
 const CSS = `
 .rc-hero{text-align:center;display:grid;gap:6px;justify-items:center;padding:6px 4px 4px}
@@ -71,7 +71,7 @@ export function open(ctx, arg) {
   function render() {
     if (dead) return;
     const cap = lm.rosterCap(S);
-    body.replaceChildren();
+    clearTips(); body.replaceChildren();
     if (first) {
       body.append(h('div', 'rc-hero', [U.laurel(), h('p', '', 'Three citizens wait at the gate hoping for bread, glory and a bed. Check their stats, talent pips and trait, then pick the one who will carry your ludus. You can hire more later.')]));
     } else {
