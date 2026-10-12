@@ -253,7 +253,7 @@
       const opp = daily ? L.withRandom(L.dailySeed(floor + 1, 'o'), () => L.pitOpp(S, floor + 1, g)) : L.pitOpp(S, floor + 1, g); floor++;
       const ev = { kind: 'pit', title: (floor % 5 === 0 ? 'BOSS: ' : '') + 'Pit floor ' + floor, opps: [opp], league: 0, key: (daily ? 'pitd' + L.dayKey() : 'pitw' + S.week) + ':' + floor, mut };
       const stance = await prep(S, ev, [g], [opp], { pit: true, hpf });
-      augs.push(await pickAug(S, floor < 3 ? 0 : floor < 6 ? 1 : floor < 10 ? 2 : 3, augs, floor % 5 === 0, `Floor ${floor}: new augment`, daily ? L.dailySeed(floor, 'a') : null));
+      augs.push(await pickAug(S, floor < 3 ? 0 : floor < 6 ? 1 : floor < 10 ? 2 : 3, augs, floor % 5 === 0, `Floor ${floor}: new augment`, daily ? L.dailySeed(floor, 'a') : null, g.style));
       const res = await fightScreen(S, [g], [opp], stance, { ev, hpf: { [g.id]: hpf }, augs: augs.slice(), mutator: mut });
       if (!res.win) { floor--; lost = true; break; }
       hpf = Math.min(1, res.hpf[g.id] + 0.25);
@@ -287,7 +287,7 @@
     for (;;) {
       wave++; const opps = L.hordeWave(S, wave, g); const ev = { kind: 'horde', title: 'Horde wave ' + wave, opps, league: 0, key: 'horde' + S.week + ':' + wave };
       await U.dialog(`<h2>Wave ${wave}</h2><div class="row" style="justify-content:center;gap:2px">${opps.map((o) => A.gladOf(o, { size: 50, tunic: o.color, flip: true, mood: 'fight' })).join('')}</div><div class="small" style="text-align:center">${opps.length} fighter${opps.length > 1 ? 's' : ''}, level ${opps[0].lvl}. ${esc(g.name)} starts at ${Math.round(hpf * 100)}% HP.</div>` + btn('Fight!', 'ok', 'red'));
-      if (wave % 2 === 0) augs.push(await pickAug(S, wave < 4 ? 0 : wave < 8 ? 1 : 2, augs, false, `Wave ${wave}: new augment`));
+      if (wave % 2 === 0) augs.push(await pickAug(S, wave < 4 ? 0 : wave < 8 ? 1 : 2, augs, false, `Wave ${wave}: new augment`, null, g.style));
       const res = await fightScreen(S, [g], opps, 'bal', { ev, hpf: { [g.id]: hpf }, augs: augs.slice() });
       if (!res.win) { wave--; lost = true; break; }
       hpf = Math.min(1, res.hpf[g.id] + 0.2); const cur = L.hordeReward(S, wave, false);
