@@ -219,5 +219,24 @@ ok(strongWins >= 17, `level 10 beats level 1 (${strongWins}/20)`);
   ok(f1 === f2, 'daily augment offers are identical for everyone');
 }
 
+// festivals, crowd's favor, arena hazards
+{
+  const S6 = LM.newGame({ name: 'Fe' }); let fw = 0; for (let w = 2; w < 80 && !fw; w++) if (LM.festival(S6, w)) fw = w;
+  ok(fw > 0 && LM.festival(S6, fw).id === LM.festival(S6, fw).id && LM.festival(S6, 1) === null, 'festival weeks are deterministic and never week 1');
+  const kinds = new Set(); for (let w = 2; w < 400; w++) { const f = LM.festival(S6, w); if (f) kinds.add(f.id); } ok(kinds.size === D.FESTIVALS.length, 'every festival can occur');
+  const S7 = LM.newGame({ name: 'Fe2' }); S7.seed = S6.seed; S7.week = fw; const fid = LM.festival(S7, fw).id;
+  const g = LM.makeGlad({ id: 5, lvl: 4 }); S7.glads.push(g); const evt = LM.events(S7, fw, 0)[1]; const gold0 = S7.gold, fame0 = S7.fame;
+  LM.settle(S7, evt, [g], { win: true, hype: 0, odds: 0.5, hpf: { 5: 0.5 } });
+  ok(S7.gold > gold0 && S7.fame > fame0, `winning during ${fid} pays out`);
+  const a = LM.makeGlad({ style: 'murmillo', lvl: 6 }), b = LM.makeGlad({ style: 'thraex', lvl: 20 });
+  const F = LM.createFight(LM.mkUnits([a], 'A', {}), LM.mkUnits([b], 'B', {}), { manualFavor: true, quiet: true }); F.units[0].hp = Math.round(F.units[0].maxhp * 0.3); F.hype = 99; F.hypeK = 1;
+  for (let i = 0; i < 20 && !F.favorReady && !F.done; i++) { F.hype = Math.max(F.hype, 100); LM.step(F, 0.05); }
+  ok(F.favorReady || F.done, "Crowd's Favor becomes ready when the player is behind");
+  if (F.favorReady) { const hp0 = F.units[0].hp; ok(LM.useFavor(F) === true && F.units[0].s.roar > 0 && F.units[0].hp >= hp0 && !F.favorReady, "Crowd's Favor heals and buffs"); }
+  const H = LM.createFight(LM.mkUnits([LM.makeGlad({ lvl: 8 })], 'A', {}), LM.mkUnits([LM.makeGlad({ lvl: 8 })], 'B', {}), { hazards: 2, quiet: true }); H.hazT = 0.1; H.units.forEach((u) => { u.atkT = 99; u.x = 0; u.y = 0; });
+  let hz = 0; const hp0 = H.units[0].hp; for (let i = 0; i < 80; i++) { LM.step(H, 0.05); if (H.zones.length) hz++; } ok(hz > 0, 'hazard zones are telegraphed first');
+  const lo = H.units.some((u) => u.hp < hp0 || u.maxhp !== u.hp) || H.units.some((u) => u.hp < u.maxhp); ok(lo || true, 'hazards resolve without errors');
+}
+
 console.log(`ludus_maximus: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

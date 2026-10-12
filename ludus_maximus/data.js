@@ -348,6 +348,17 @@
     ple: { n: 'The Plebs', c: '#d2412b', want: 'Upsets, big crits and spectacular fights.', perks: ['Crowd hype builds 15% faster', 'Ultimates start 3s charged', 'Two free augment rerolls', '+8% damage while the crowd roars'] },
   };
 
+  D.FESTIVALS = [
+    { id: 'mars', n: 'Festival of Mars', d: '+25% fame from fights this week.', c: '#d2412b' },
+    { id: 'saturn', n: 'Saturnalia', d: 'Shop prices -20% and no upkeep this week.', c: '#2a9d6f' },
+    { id: 'ceres', n: 'Harvest Feast', d: 'Free menu this week and everyone recovers +10 energy.', c: '#c98a1a' },
+    { id: 'jupiter', n: 'Imperial Visit', d: '+30% prize gold from fights this week.', c: '#f6b82d' },
+    { id: 'bacchus', n: 'Games of Bacchus', d: 'The crowd roars 30% sooner this week.', c: '#7b4fb8' },
+  ];
+  D.BARKS = {
+    murmillo: ['FOR ROME!', 'HOLD THE LINE!', 'SHIELDS UP!'], retiarius: ['CAUGHT YOU!', 'INTO THE NET!', 'NOWHERE TO RUN!'],
+    thraex: ['TOO SLOW!', 'CATCH ME!', 'BLINK AND DIE!'], hoplomachus: ['KEEP BACK!', 'THE SPEAR FINDS YOU!', 'HAH!'], dimachaerus: ['NO MERCY!', 'CUT THEM DOWN!', 'TWO BLADES!'],
+  };
   G.LM_D = D;
   if (typeof module !== 'undefined') module.exports = D;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

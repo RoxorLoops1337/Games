@@ -19,7 +19,7 @@
       const unitsA = L.mkUnits(gl, 'A', ctxA, gl.map((g) => (o.hpf && o.hpf[g.id] != null ? o.hpf[g.id] : 1)));
       const unitsB = L.mkUnits(opps, 'B', ctxB);
       if (L.isRevenge(S, ev)) unitsA.forEach((u) => { u.grudge = true; });
-      const F = L.createFight(unitsA, unitsB, { autoA: !!S.flags.auto }); const fp = L.facPerks(S); F.hypeK = fp.hype;
+      const F = L.createFight(unitsA, unitsB, { autoA: !!S.flags.auto, manualFavor: true, hazards: ev.league >= 2 ? 2 : ev.league >= 1 ? 1 : 0 }); const fp = L.facPerks(S); F.hypeK = fp.hype * (L.fest(S, S.week) === 'bacchus' ? 1.3 : 1);
       if (fp.roarDmg) unitsA.forEach((u) => { u.fx.roarDmg = fp.roarDmg; });
       if (fp.ultStart) unitsA.forEach((u) => u.ults.forEach((c) => { c.cd = Math.max(0, c.cd - fp.ultStart); }));
       const root = $('#fightRoot');
@@ -27,7 +27,7 @@
       const bars = (side) => F.units.filter((u) => u.side === side).map((u) => `<div class="fu" id="fu-${u.id}"><div class="nm">${A.styleIcon(u.style, 16)}<span>${esc(u.name)}</span><b class="lv">${u.g.lvl}</b></div><div class="bar hp"><i id="hp-${u.id}" style="width:100%"></i><em id="sh-${u.id}"></em><span id="ht-${u.id}" class="hnum"></span></div></div>`).join('');
       const ubtn = unitsA.map((u) => `<div class="ur"><div class="who">${esc(u.name)}</div>${u.ults.map((c, k) => `<div class="ub" id="ub-${u.id}-${k}" data-a="fult" data-u="${u.id}" data-k="${k}" style="--c:${D.ULTS[c.id].c}"><div class="ubi">${A.ultIcon(c.id, 26)}</div><div class="ubn">${D.ULTS[c.id].n}</div><span class="ubu">${esc(u.name)}</span><i class="ubcd"></i><b class="ubt"></b></div>`).join('')}</div>`).join('');
       const augChips = (o.augs || []).map((a) => `<span class="achip" style="border-color:${D.TIERS[a.t].c}" title="${a.d}">${esc(a.n)}</span>`).join('');
-      root.innerHTML = `<div id="fight"><div class="inner"><div class="f-top"><div class="side">${bars('A')}</div><div class="h" style="color:#fff;align-self:center;font-size:14px;text-shadow:2px 2px 0 var(--ink)">VS</div><div class="side r">${bars('B')}</div></div><div class="f-stage" id="stage"><div id="cam"></div><canvas id="fxc"></canvas><div class="f-banner" id="fban"></div><div class="f-flash" id="fflash"></div><div class="f-vs" id="fvs"></div></div><div class="f-hype"><i id="hype"></i><span>Crowd hype</span></div><div class="f-log" id="flog">${esc(gl[0].name)} (${L.STANCES[stance]}) vs ${esc(opps[0].name)}.${augChips ? '' : ''}</div>${augChips ? `<div class="f-aug">${augChips}</div>` : ''}<div class="f-ults ${unitsA.length > 1 ? 'many' : ''}">${ubtn}</div><div class="f-speed"><button class="btn sm on" data-a="fspeed" data-v="1">1x</button><button class="btn sm" data-a="fspeed" data-v="2">2x</button><button class="btn sm" data-a="fspeed" data-v="3">3x</button><button class="btn sm ${F.auto.A ? 'on' : ''}" id="fauto" data-a="fauto">Auto ult</button><button class="btn sm ghost" data-a="fskip">Skip</button></div></div></div>`;
+      root.innerHTML = `<div id="fight"><div class="inner"><div class="f-top"><div class="side">${bars('A')}</div><div class="h" style="color:#fff;align-self:center;font-size:14px;text-shadow:2px 2px 0 var(--ink)">VS</div><div class="side r">${bars('B')}</div></div><div class="f-stage" id="stage"><div id="cam"></div><canvas id="fxc"></canvas><div class="f-banner" id="fban"></div><div class="f-flash" id="fflash"></div><div class="f-vs" id="fvs"></div></div><div class="f-hype"><i id="hype"></i><span>Crowd hype</span></div><div class="f-log" id="flog">${esc(gl[0].name)} (${L.STANCES[stance]}) vs ${esc(opps[0].name)}.${augChips ? '' : ''}</div>${augChips ? `<div class="f-aug">${augChips}</div>` : ''}<div class="f-ults ${unitsA.length > 1 ? 'many' : ''}"><div class="favor" id="favor" data-a="ffavor">THE CROWD IS WITH YOU: tap for Crowd's Favor!</div>${ubtn}</div><div class="f-speed"><button class="btn sm on" data-a="fspeed" data-v="1">1x</button><button class="btn sm" data-a="fspeed" data-v="2">2x</button><button class="btn sm" data-a="fspeed" data-v="3">3x</button><button class="btn sm ${F.auto.A ? 'on' : ''}" id="fauto" data-a="fauto">Auto ult</button><button class="btn sm ghost" data-a="fskip">Skip</button></div></div></div>`;
       const stage = $('#stage'), cam = $('#cam'), cv = $('#fxc'); const W = stage.clientWidth, H = stage.clientHeight; const dpr = Math.min(2, G.devicePixelRatio || 1);
       cv.width = W * dpr; cv.height = H * dpr; cv.style.width = W + 'px'; cv.style.height = H + 'px'; const cx = cv.getContext('2d'); cx.scale(dpr, dpr);
       const fy0 = H * 0.27, fy1 = H * 0.97; const SX = (x) => W / 2 + x * ((W * 0.46) / R), SY = (y) => (fy0 + fy1) / 2 + y * (((fy1 - fy0) * 0.44) / R);
@@ -61,24 +61,28 @@
       const lightning = (a, b) => { const pts = [[a.x, a.y]]; const n = 6; for (let i = 1; i < n; i++) pts.push([a.x + ((b.x - a.x) * i) / n + (Math.random() - 0.5) * 22, a.y + ((b.y - a.y) * i) / n + (Math.random() - 0.5) * 22]); pts.push([b.x, b.y]); fx.lines.push({ pts, life: 0.2, max: 0.2, c: '#9fd8ff', w: 4 }); };
       const mpx = (m) => m * ((W * 0.46) / R);
 
+      const bark = (u, text) => { if (!u || u.down || fx.skip) return; const p = P(u); const b = document.createElement('div'); b.className = 'bark'; b.textContent = text; b.style.left = p.x + 'px'; b.style.top = p.y - sh * 0.55 + 'px'; cam.appendChild(b); setTimeout(() => b.remove(), 1300); };
+      const barkOf = (u) => { const a = D.BARKS[u.style]; return a[Math.floor(Math.random() * a.length)]; };
       function handle(e) {
         const sp = fx.skip; const src = e.src ? byId(e.src) : null, dst = e.dst ? byId(e.dst) : null;
         if (sp && e.k !== 'down') { if (e.k === 'hit') logt(`${src.name} hits ${dst.name} for ${e.dmg}.`); return; }
         if (e.k === 'atk') { const dir = src.face; src.elb.animate([{ transform: 'translateX(0) rotate(0)' }, { transform: `translateX(${dir * 16}px) rotate(${dir * 8}deg)`, offset: 0.55 }, { transform: 'translateX(0) rotate(0)' }], { duration: Math.max(160, 330 / fx.speed) }); }
+        else if (e.k === 'hit' && e.hz) { const p = P(dst); floatAt(dst, e.dmg + ' FIRE', 'tech'); spark(p.x, p.y, 10, '#ffb347', 200); dst.el.classList.add('hurt'); setTimeout(() => dst.el.classList.remove('hurt'), 110); }
         else if (e.k === 'hit') {
           const p = P(dst); dst.el.classList.add('hurt'); setTimeout(() => dst.el.classList.remove('hurt'), 110);
           dst.elb.animate([{ transform: 'translateX(0)' }, { transform: `translateX(${-dst.face * 9}px) scaleY(.94)` }, { transform: 'translateX(0)' }], { duration: 160 });
           spark(p.x, p.y, e.crit ? 14 : 6, e.crit ? '#ffd34d' : '#fff', e.crit ? 240 : 150);
           floatAt(dst, (e.crit ? 'CRIT ' : '') + e.dmg, e.crit ? 'crit' : e.tech && e.tech !== 'riposte' ? 'tech' : '');
           if (e.save) floatAt(dst, e.save + '!', 'tech');
+          if (e.crit && Math.random() < 0.18) bark(src, barkOf(src));
           if (e.crit) { fx.freeze = Math.max(fx.freeze, 0.06); shake(5); fx.zoom = Math.max(fx.zoom, 0.025); } else if (e.dmg > dst.maxhp * 0.12) shake(2.5);
           U.snd(e.crit ? 'crit' : 'hit');
           logt(`${src.name} hits ${dst.name} for ${e.dmg}${e.crit ? ' (CRIT)' : ''}.`);
         } else if (e.k === 'miss') { floatAt(dst, e.inv ? 'IMMUNE' : 'DODGE', 'miss'); dst.elb.animate([{ transform: 'translateX(0)' }, { transform: `translateX(${dst.face * 14}px)` }, { transform: 'translateX(0)' }], { duration: 220 }); U.snd('miss'); }
         else if (e.k === 'tech') { floatAt(src, D.TECHS[e.tech].n + '!', 'tech'); ring(P(src).x, P(src).y + sh * 0.3, 40, '#f5ead2'); U.snd('tech'); logt(`${src.name} uses ${D.TECHS[e.tech].n}!`); }
-        else if (e.k === 'ult') { const U0 = D.ULTS[e.id]; ban(U0.n + '!', U0.c); fx.flash = 0.35; fx.zoom = Math.max(fx.zoom, 0.06); shake(6); U.snd('u_' + e.id); logt(`${src.name} unleashes ${U0.n}!`); ring(P(src).x, P(src).y + sh * 0.3, 90, U0.c, true); }
+        else if (e.k === 'ult') { const U0 = D.ULTS[e.id]; ban(U0.n + '!', U0.c); fx.flash = 0.35; fx.zoom = Math.max(fx.zoom, 0.06); shake(6); U.snd('u_' + e.id); bark(src, barkOf(src)); logt(`${src.name} unleashes ${U0.n}!`); ring(P(src).x, P(src).y + sh * 0.3, 90, U0.c, true); }
         else if (e.k === 'aoe') { const x = SX(e.x), y = SY(e.y); ring(x, y, mpx(e.r), e.c, e.big); dust(x, y, e.big ? 18 : 8); if (e.big) shake(e.meteor ? 12 : 7); if (e.meteor) { fx.flash = 0.5; spark(x, y, 30, '#ffb347', 320); U.snd('crit'); } }
-        else if (e.k === 'tele') fx.teles.push({ x: SX(e.x), y: SY(e.y), r: mpx(e.r), life: e.t, max: e.t, c: e.c });
+        else if (e.k === 'tele') { if (e.haz) { logt('Fire jets! Get out of the red circle.'); U.snd('tech'); } fx.teles.push({ x: SX(e.x), y: SY(e.y), r: mpx(e.r), life: e.t, max: e.t, c: e.c }); }
         else if (e.k === 'hook') { const a = P(src), b = P(dst); fx.lines.push({ pts: [[a.x, a.y], [b.x, b.y]], life: 0.5, max: 0.5, c: '#d9e4ee', w: 5, chain: 1, a: src, b: dst }); spark(b.x, b.y, 10, '#fff', 200); U.snd('hit'); }
         else if (e.k === 'proj') { const a = P(src), b = P(dst); const dx = b.x - a.x, dy = b.y - a.y, l = Math.hypot(dx, dy) || 1; const far = e.long ? { x: a.x + (dx / l) * W, y: a.y + (dy / l) * W } : b; fx.lines.push({ pts: [[a.x, a.y], [far.x, far.y]], life: 0.25, max: 0.25, c: e.c || '#fff', w: e.long ? 7 : 4, proj: 1 }); }
         else if (e.k === 'zap') { lightning(P(src), P(dst)); U.snd('crit'); }
@@ -91,7 +95,8 @@
         else if (e.k === 'bleed') { if (e.dmg >= 3) floatAt(dst, '-' + e.dmg, e.fire ? 'tech' : 'miss'); }
         else if (e.k === 'thorn') floatAt(dst, e.dmg + ' thorns', 'miss');
         else if (e.k === 'down') { fx.lastDown = dst; dst.el.classList.add('dead'); const f = el('fu-' + e.dst); if (f) f.classList.add('dead'); logt(`${dst.name} is down!`); if (!sp) { fx.slow = 0.9; fx.flash = 0.25; shake(9); const p = P(dst); spark(p.x, p.y, 24, '#fff', 260); U.snd('crit'); } }
-        else if (e.k === 'roar') { ban('Crowd roars!'); U.snd('roar'); shake(4); const bg = cam.querySelector('.arena-bg'); if (bg) { bg.classList.add('roar'); setTimeout(() => bg.classList.remove('roar'), 1500); } logt(e.side === 'A' ? 'The crowd backs YOU!' : 'The crowd backs the underdog!'); }
+        else if (e.k === 'favorready') { ban("Crowd's Favor!", '#f6b82d'); U.snd('roar'); logt('The crowd is with you! Tap Crowd\'s Favor to turn the fight around.'); }
+        else if (e.k === 'roar') { ban(e.fav ? "Crowd's Favor!" : 'Crowd roars!', e.fav ? '#f6b82d' : ''); U.snd('roar'); shake(4); const bg = cam.querySelector('.arena-bg'); if (bg) { bg.classList.add('roar'); setTimeout(() => bg.classList.remove('roar'), 1500); } logt(e.side === 'A' ? 'The crowd backs YOU!' : 'The crowd backs the underdog!'); }
       }
 
       function layout() {
@@ -111,7 +116,7 @@
           if (u.side === 'B') u.el.classList.toggle('focus', F.foc.A === u.id);
         });
         unitsA.forEach((u) => u.ults.forEach((c, k) => { const b = el(`ub-${u.id}-${k}`); if (!b) return; const ready = c.cd <= 0 && !u.down; b.classList.toggle('ready', ready); b.classList.toggle('dead', u.down); b.querySelector('.ubcd').style.background = ready ? 'transparent' : `conic-gradient(rgba(20,16,15,.72) ${(c.cd / c.max) * 360}deg, transparent 0)`; b.querySelector('.ubt').textContent = ready || u.down ? '' : Math.ceil(c.cd); }));
-        $('#hype').style.width = Math.min(100, F.hype) + '%'; if (introDone) U.crowdLevel(F.hype / 100);
+        $('#hype').style.width = Math.min(100, F.hype) + '%'; el('favor').classList.toggle('on', F.favorReady); if (introDone) U.crowdLevel(F.hype / 100);
       }
       function drawFx(dt) {
         cx.clearRect(0, 0, W, H);
@@ -157,6 +162,7 @@
     const fx = U.fight; if (!fx || fx.intro > 0) return; const r = L.useUlt(fx.F, el.dataset.u, +el.dataset.k);
     if (r === 'range') U.toast('Too far! Get closer or tap a nearer enemy.'); else if (!r) U.snd('miss');
   };
+  ACT.ffavor = () => { const fx = U.fight; if (!fx || fx.intro > 0) return; if (L.useFavor(fx.F)) U.snd('roar'); };
   ACT.ffocus = (el) => { const fx = U.fight; if (!fx) return; L.focus(fx.F, 'A', el.dataset.id); U.snd('click'); };
   ACT.fspeed = (el) => { const fx = U.fight; if (!fx) return; fx.speed = +el.dataset.v; document.querySelectorAll('.f-speed [data-a=fspeed]').forEach((b) => b.classList.toggle('on', b === el)); };
   ACT.fauto = (el) => { const fx = U.fight; if (!fx) return; fx.F.auto.A = !fx.F.auto.A; U.S().flags.auto = fx.F.auto.A; el.classList.toggle('on', fx.F.auto.A); };
