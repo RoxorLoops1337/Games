@@ -228,7 +228,16 @@ Reflex drill (wait for green, tap fast) on even weeks once the Sparring Ring is 
 Reflex drill verified in headless Chromium (it works), reflex best time stored per fighter, and a combo memory drill (watch three arrows, repeat them) every third week at Sparring Ring level 5. Also verified in the browser.
 
 ## Next ideas
-- [ ] 103. Entrance animations per style (99)
+- [x] 103. Entrance animations per style (99)
 - [ ] 104. Fight replay and crowd audio (100)
-- [ ] 105. Drill leaderboard across your fighters
-- [ ] 106. Rival owner taunts shown in the fight intro
+- [x] 105. Drill leaderboard across your fighters
+- [x] 106. Rival owner taunts shown in the fight intro
+
+## Round 25 shipped
+Per-style entrance animations on the VS splash (stomp, spin, leap, slide, skew), the rival owner's taunt in the fight intro, and a Drill board listing best reflex times. Entrance and taunt checked in headless Chromium.
+
+## Next ideas
+- [ ] 107. Fight replay and crowd audio (55, 63, 104)
+- [ ] 108. Rival owner champion taunts per style
+- [ ] 109. More drill types for other buildings
+- [ ] 110. Second balance pass on items and runes
