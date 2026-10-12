@@ -24,7 +24,7 @@ document.body.appendChild(renderer.domElement);
 const scene = new THREE.Scene();
 const sky = createSky(); scene.add(sky.mesh);
 const light = createLightRig(scene, { shadowSize: 2048, shadowRadius: 9, shadowCenter: new THREE.Vector3(0, 0, 0), far: 300 });
-const preset = Object.assign({}, TOD.golden, { sunElev: +(Q.get('sun') || 46), sunAz: +(Q.get('az') || 205) });
+const preset = Object.assign({}, TOD.golden, { sunElev: +(Q.get('sun') || 46), sunAz: +(Q.get('az') || 150) });
 applyTOD(preset, { rig: light, scene, sky, renderer });
 const ground = new THREE.Mesh(new THREE.CircleGeometry(40, 48), new THREE.MeshStandardMaterial({ color: '#d9b27c', roughness: 1 })); ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; scene.add(ground);
 
