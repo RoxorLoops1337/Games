@@ -52,7 +52,7 @@ export class FightView {
     const top = document.createElement('div'); top.className = 'lx-hud-top';
     this.speedBtn = U.button({ label: 'x1', variant: 'bronze', onClick: () => { this.userSpeed = this.userSpeed === 1 ? 2 : this.userSpeed === 2 ? 4 : 1; this.speedBtn.querySelector('span') ? 0 : 0; this.speedBtn.textContent = 'x' + this.userSpeed; this.feel.setUserScale && this.feel.setUserScale(1); } });
     this.skipBtn = U.button({ label: 'Skip', variant: 'ghost', onClick: () => { this.skip = true; } });
-    const row = document.createElement('div'); row.className = 'lx-row'; row.append(this.speedBtn, this.skipBtn);
+    const row = this.topRow = document.createElement('div'); row.className = 'lx-row'; row.append(this.speedBtn, this.skipBtn);
     this.topInfo = document.createElement('div'); this.topInfo.className = 'lx-row';
     top.append(this.topInfo, row);
     this.ultBar = document.createElement('div'); this.ultBar.className = 'lx-hud-ults';
@@ -76,6 +76,7 @@ export class FightView {
       rig.root.position.set(gx, 0, u.y); this.scene.add(rig.root); rig.resetSecondary && rig.resetSecondary();
       const plate = U.nameplate({ name: u.name, level: u.g.lvl, hp: u.hp, maxHp: u.maxhp, team: u.side === 'A' ? 'ally' : 'foe', rank: 0 });
       this.plates.append(plate); f.plate = plate; this.fm.set(u.id, f);
+      if (u.side === 'B') { plate.style.pointerEvents = 'auto'; plate.style.cursor = 'pointer'; plate.addEventListener('pointerdown', () => this.focusUnit(u.id)); }
     });
     // ultimates (player side)
     const mine = F.units.filter((u) => u.side === 'A'); let hk = 0;
@@ -83,6 +84,9 @@ export class FightView {
       const col = D().ULTS[slot.id].c; const ring = U.cooldownRing({ ult: slot.id, color: col, size: innerWidth < 700 ? 72 : 84, hotkey: ['Q', 'W', 'E', 'R', 'T', 'Y'][hk++], onCast: () => this.cast(u, k) });
       this.ultBar.append(ring); this.fm.get(u.id).ring.push({ ring, slot });
     }));
+    this.applyWeather(F.meta ? F.meta.weather : 'clear');
+    this.buildExtras(F);
+    if (!opts.noSplash) { const a = F.units.filter((u) => u.side === 'A'), b = F.units.filter((u) => u.side === 'B'); const side = (us) => ({ name: us.map((u) => u.name).join(' & '), sub: us.map((u) => D().STYLES[u.style].n).join(' / ') + ' \u00b7 Lv ' + Math.round(us.reduce((x, u) => x + u.g.lvl, 0) / us.length), stars: Math.min(5, Math.round(us.reduce((x, u) => x + (L().stars ? L().stars(u.g) : 0), 0) / us.length)) }); setTimeout(() => U.vsSplash({ a: side(a), b: side(b), league: opts.league != null && D().LEAGUES[opts.league] ? D().LEAGUES[opts.league].n : '', host: this.host, ms: 2300 }), 350); }
     this.dir.setAspect(this.camera.aspect);
     this.dir.setShot('establishing', { dur: 3.2 }, 0); this.gateOpen = false;
     this.audio.music.setMode('arena', { fade: 1.2 }); this.audio.music.setIntensity(0.15); this.audio.crowd(0.3);
@@ -90,6 +94,36 @@ export class FightView {
     this.promise = new Promise((res) => { this.resolve = res; });
     return this.promise;
   }
+
+  // weather: time-of-day preset + rain streaks, so the fight screen matches D.WEATHER (clear, rain, dust, heat, night)
+  applyWeather(wx) {
+    const base = wx === 'night' ? TOD.night : TOD.golden;
+    const p = Object.assign({}, base, wx === 'night' ? {} : { sunElev: 46, sunAz: 205 });
+    if (wx === 'rain') Object.assign(p, { sunInt: base.sunInt * 0.35, hemiInt: base.hemiInt * 1.15, fog: 0x8a93a8, fogDensity: 0.012, exposure: 0.95, cloudAmt: 0.95, glow: 0x9aa6bd, skyTop: 0x4a5670, skyMid: 0x7a869d, skyHor: 0xa7afc0 });
+    if (wx === 'dust') Object.assign(p, { fog: 0xd9a066, fogDensity: 0.014, sunInt: base.sunInt * 0.7, skyHor: 0xe0b078, skyMid: 0xc89a6a });
+    if (wx === 'heat') Object.assign(p, { fog: 0xffc47a, sunInt: base.sunInt * 1.15, exposure: 1.0 });
+    applyTOD(p, { rig: this.light, scene: this.scene, sky: this.sky, renderer: this.renderer, nightUniforms: [{ set value(v) { } }] });
+    this.arena.setNight(p.night || 0); this.godrays.mesh.visible = wx !== 'rain'; this.wx = wx;
+    if (!this.rain) { const n = 520, pos = new Float32Array(n * 6); this.rainPos = pos; const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); this.rain = new THREE.LineSegments(g, new THREE.LineBasicMaterial({ color: 0xcfe0ff, transparent: true, opacity: 0.35, depthWrite: false, fog: false })); this.rain.frustumCulled = false; this.scene.add(this.rain); this.rainSeed = Array.from({ length: n }, () => [Math.random(), Math.random(), Math.random()]); }
+    this.rain.visible = wx === 'rain';
+  }
+  updateRain(dt, t) {
+    if (!this.rain || !this.rain.visible) return; const n = this.rainSeed.length, p = this.rainPos, c = this.camera.position;
+    for (let i = 0; i < n; i++) { const s = this.rainSeed[i]; const y = ((1 - ((t * (14 + s[2] * 6) * 0.1 + s[1]) % 1)) * 22); const x = c.x + (s[0] - 0.5) * 46, z = c.z + (((s[1] * 7.3) % 1) - 0.5) * 46; p[i * 6] = x; p[i * 6 + 1] = y; p[i * 6 + 2] = z; p[i * 6 + 3] = x - 0.05; p[i * 6 + 4] = y + 0.7; p[i * 6 + 5] = z; }
+    this.rain.geometry.attributes.position.needsUpdate = true;
+  }
+
+  // Crowd's Favor, Duo ultimate, auto-ult toggle and target focus
+  buildExtras(F) {
+    if (this.extras) this.extras.remove();
+    const box = this.extras = document.createElement('div'); box.style.cssText = 'display:flex;gap:8px;justify-content:center;flex-wrap:wrap;pointer-events:auto;margin-bottom:6px';
+    this.favorBtn = U.button({ label: "Crowd's Favor!", variant: 'gold', icon: 'fame', onClick: () => { if (L().useFavor(F)) this.audio.sfx('crowdCheer'); } }); this.favorBtn.style.display = 'none'; this.favorBtn.classList.add('lx-pulse');
+    box.append(this.favorBtn);
+    if (F.duo) { this.duoBtn = U.button({ label: 'Duo: ' + D().DUOS[F.duo.kind].n, variant: 'bronze', icon: 'sword', onClick: () => { const r = L().useDuo(F); if (!r) this.audio.sfx('uiError'); } }); box.append(this.duoBtn); } else this.duoBtn = null;
+    this.autoBtn = U.button({ label: F.auto.A ? 'Auto ult: on' : 'Auto ult: off', variant: 'ghost', onClick: () => { F.auto.A = !F.auto.A; this.autoBtn.textContent = F.auto.A ? 'Auto ult: on' : 'Auto ult: off'; } });
+    if (this.autoBtnOld) this.autoBtnOld.remove(); this.autoBtnOld = this.autoBtn; this.topRow.prepend(this.autoBtn); this.ultBar.before(box);
+  }
+  focusUnit(id) { const u = this.unitById(id); if (!u || u.side !== 'B' || u.down) return; L().focus(this.F, 'A', id); this.audio.sfx('uiTap'); for (const f of this.fm.values()) if (f.u.side === 'B') f.plate.classList.toggle('fv-focus', this.F.foc.A === f.u.id); }
 
   cast(u, k) {
     const r = L().useUlt(this.F, u.id, k);
@@ -134,6 +168,7 @@ export class FightView {
     this.applyCamera(pose);
     this.updateHud(realDt, F);
     this.updateAudio(realDt, F);
+    this.updateRain(realDt, t);
   }
 
   introStep(realDt, dt) {
@@ -291,7 +326,7 @@ export class FightView {
         const last = !F.units.some((u) => u.side === dst.side && !u.down && u !== dst);
         fx.hit(this.chest(dst), src ? this.dirOf(src, dst) : new THREE.Vector3(1, 0, 0), { dmgFrac: 0.4, crit: true }); fx.dust(this.feet(dst), 14); fx.debris && fx.debris(this.feet(dst), 4); fx.groundDecal(this.feet(dst), 'scuff', { size: 1.6 });
         fx.number(this.chest(dst, 1.9), 'DOWN', 'miss'); feel.impact(last ? 'finalKill' : 'kill', {}); if (last && this.post.zoomPunch) this.post.zoomPunch(0.06);
-        if (fd) { fd.rig.animator.play('death'); this.dropHandles(dst.id); fd.rig.flash(0.15); }
+        if (fd) { fd.rig.animator.play('death'); this.dropHandles(dst.id); fd.rig.flash(0.15, '#8a5530'); }
         A.sfx('deathCry', { voice: VOICE[dst.style] ?? 0, pan: pan(dst) }); setTimeout(() => A.sfx('deathThud', { pan: pan(dst) }), 350); A.sfx('crowdGasp'); this.bump = 0.4;
         if (!last) this.dir.cue('kill', { victim: dst.id, killer: src && src.id });
       } break;
@@ -303,7 +338,7 @@ export class FightView {
   }
 
   nearestFoe(u) { let best = null, bd = 1e9; for (const o of this.F.units) { if (o.side === u.side || o.down) continue; const d = Math.hypot(o.x - u.x, o.y - u.y); if (d < bd) { bd = d; best = o; } } return best; }
-  flashHurt(fd, frac) { if (!fd) return; fd.rig.flash(0.1 + Math.min(0.1, frac), '#ffd7a8'); fd.rig.squashKick && fd.rig.squashKick(-0.05 - Math.min(0.1, frac)); }
+  flashHurt(fd, frac) { if (!fd) return; fd.rig.flash(0.09 + Math.min(0.08, frac), '#8a5530'); fd.rig.squashKick && fd.rig.squashKick(-0.05 - Math.min(0.1, frac)); }
   dropHandles(id) { const f = this.fm.get(id); if (!f) return; for (const k in f.handles) { try { f.handles[k].stop(); } catch (e) { /* ignore */ } } f.handles = {}; }
   ultSustain(u, el, dur) { const f = u && this.fm.get(u.id); if (!f) return; const h = this.fx.ult.sustain(el, f.rig.root, dur); f.handles['ult' + el] = h; }
 
@@ -320,6 +355,8 @@ export class FightView {
 
   // ---------------------------------------------------------------- HUD + audio
   updateHud(dt, F) {
+    if (this.favorBtn) this.favorBtn.style.display = F.favorReady && !F.done ? '' : 'none';
+    if (this.duoBtn && F.duo) { const cd = Math.max(0, F.duo.cd); this.duoBtn.disabled = cd > 0; this.duoBtn.style.opacity = cd > 0 ? 0.55 : 1; }
     for (const f of this.fm.values()) for (const { ring, slot } of f.ring) { const frac = slot.max ? clamp(slot.cd / slot.max, 0, 1) : 0; ring.set(f.u.down ? 1 : frac, Math.max(0, slot.cd)); }
   }
 
