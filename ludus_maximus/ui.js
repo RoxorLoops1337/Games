@@ -186,6 +186,11 @@
   ACT.drill = (el) => {
     const g = gOf(+el.dataset.id); if (!g || !L.canDrill(S, g)) return toast('Set a training activity first. One drill per fighter each week.');
     U.drillRun = { g: g.id, t0: performance.now(), done: false };
+    if (L.drillKind(S) === 'combo') {
+      const seq = [0, 1, 2].map(() => Math.floor(Math.random() * 3)); const ar = ['&#8592;', '&#8593;', '&#8594;']; U.drillRun.mode = 'combo'; U.drillRun.seq = seq; U.drillRun.tap = [];
+      modal(`<h2>Combo drill</h2><div class="muted" style="margin-bottom:6px">${esc(g.name)} drills ${D.SN[L.activity(g).s]}. Memorise the three moves, then repeat them in order.</div><div id="cseq" class="big" style="font-size:40px;text-align:center;letter-spacing:10px">${seq.map((x) => ar[x]).join(' ')}</div><div class="row" style="justify-content:center;gap:8px;margin-top:10px">${ar.map((a, i) => `<button class="btn" data-a="combo" data-v="${i}" style="font-size:26px;min-width:64px">${a}</button>`).join('')}</div><div id="dres" class="big" style="font-size:22px;margin-top:10px"></div>`);
+      setTimeout(() => { const c = document.getElementById('cseq'); if (c) c.textContent = '? ? ?'; }, 1600); return;
+    }
     if (L.drillKind(S) === 'react') {
       U.drillRun.mode = 'react'; U.drillRun.readyAt = performance.now() + 1000 + Math.random() * 2000;
       modal(`<h2>Reflex drill</h2><div class="muted" style="margin-bottom:6px">${esc(g.name)} drills ${D.SN[L.activity(g).s]}. Wait for the button to turn green, then tap as fast as you can. Too early counts as a miss.</div><button class="btn full" id="rb" data-a="drillstop" style="background:#8a8a8a;min-height:90px;font-size:22px">WAIT...</button><div id="dres" class="big" style="font-size:22px;margin-top:10px"></div>`);
@@ -195,9 +200,12 @@
     const loop = () => { const r = U.drillRun; const m = document.getElementById('dm'); if (!r || r.done || !m) return; const t = (performance.now() - r.t0) / 1000 * L.drillSpeed(S); const ph = t % 2; const p = ph < 1 ? ph : 2 - ph; m.style.left = `calc(${p * 100}% - 4px)`; r.p = p; requestAnimationFrame(loop); };
     requestAnimationFrame(loop);
   };
+  ACT.combo = (el) => { const r = U.drillRun; if (!r || r.done || r.mode !== 'combo') return; r.tap.push(+el.dataset.v); const c = document.getElementById('cseq'); if (c && c.textContent.includes('?')) c.textContent = r.tap.map((x) => ['\u2190', '\u2191', '\u2192'][x]).join(' '); if (r.tap.length >= 3) { r.acc = L.comboAcc(r.seq, r.tap); ACT.drillstop(); } };
   ACT.drillstop = () => {
-    const r = U.drillRun; if (!r || r.done) return; r.done = true; const g = gOf(r.g); const acc = r.mode === 'react' ? L.reactAcc(r.on ? performance.now() - r.readyAt : -1) : 1 - Math.abs(r.p - 0.5) * 2; const m = L.setDrill(S, g, acc);
-    const txt = m >= 0.4 ? 'PERFECT! +40%' : m >= 0.25 ? 'Great! +25%' : m >= 0.1 ? 'Good. +10%' : 'Missed.'; $('#dres').textContent = txt; $('#dres').style.color = m >= 0.25 ? 'var(--green)' : 'var(--terra)'; U.snd(m >= 0.25 ? 'win' : 'miss'); save(); setTimeout(() => { closeModal(); render(); }, 900);
+    const r = U.drillRun; if (!r || r.done) return; r.done = true; const g = gOf(r.g); const acc = r.mode === 'combo' ? r.acc : r.mode === 'react' ? L.reactAcc(r.on ? performance.now() - r.readyAt : -1) : 1 - Math.abs(r.p - 0.5) * 2; const m = L.setDrill(S, g, acc);
+    if (r.mode === 'react' && r.on) { const ms = Math.round(performance.now() - r.readyAt); g.rtBest = Math.min(g.rtBest || 9999, ms); r.ms = ms; }
+    const txt0 = r.ms ? ` (${r.ms} ms, best ${g.rtBest})` : '';
+    const txt = (m >= 0.4 ? 'PERFECT! +40%' : m >= 0.25 ? 'Great! +25%' : m >= 0.1 ? 'Good. +10%' : 'Missed.') + txt0; $('#dres').textContent = txt; $('#dres').style.color = m >= 0.25 ? 'var(--green)' : 'var(--terra)'; U.snd(m >= 0.25 ? 'win' : 'miss'); save(); setTimeout(() => { closeModal(); render(); }, 900);
   };
   ACT.setact = (el) => { const g = gOf(+el.dataset.id); g.act = el.dataset.v; U.snd('click'); save(); render(); };
   ACT.preset = (el) => { const n = L.preset(S, el.dataset.v); U.snd('click'); save(); render(); toast(n ? `Plans set for ${n} fighter${n > 1 ? 's' : ''}.` : 'Nothing to change.'); };
@@ -240,6 +248,7 @@
     if (g.mast.length) h += '<div class="sec" style="color:var(--terra);text-shadow:none">Masteries</div>' + g.mast.map((m) => `<div class="tech"><b>${D.MASTS[m].n}</b> ${D.MASTS[m].d}</div>`).join('');
     h += `<div class="sec">Crowd favorite</div><div class="bar en" title="Crowd favorite"><i style="width:${g.fav || 0}%;background:var(--gold)"></i></div><div class="muted" style="opacity:1">${Math.round(g.fav || 0)}/100. Fan love raises purses by up to 20%. It fades 2 per week.</div>`;
     if (g.inj > 0) h += `<div class="sec">Infirmary</div><div class="row"><button class="btn sm ghost" data-a="treat" data-id="${g.id}" data-v="pou">Poultice ${L.treatCost(S, 'pou')}g (60%: -1w)</button><button class="btn sm" data-a="treat" data-id="${g.id}" data-v="doc">Physician ${L.treatCost(S, 'doc')}g (-2w)</button></div>`;
+    if (g.rtBest) h += `<div class="muted" style="opacity:1;margin-top:6px">Best reflex: ${g.rtBest} ms</div>`;
     if ((g.dy || []).length) h += `<div class="sec">Diary</div><div class="card" style="padding:6px">${g.dy.slice(-6).reverse().map((x) => `<div class="small"><b>Wk ${x.w}</b> ${esc(x.t)}</div>`).join('')}</div>`;
     if (g.mentor) h += `<div class="sec">Apprenticeship</div><div class="muted" style="opacity:1">Trained by the legend ${esc(g.mentor)}. +1 to their best stat.</div>`;
     const sd = L.storyDef(g); if (sd) { const pr = Math.min(sd.goal.n, L.storyProg(g)); h += `<div class="sec" style="color:var(--terra);text-shadow:none">Backstory: ${esc(sd.n)}</div><div class="small">${esc(sd.text)}</div>${g.story.done ? `<div class="tag green" style="margin-top:4px">Complete: ${esc(sd.rew.title)}</div>` : `<div class="bar" style="margin:6px 0"><i style="width:${(pr / sd.goal.n) * 100}%"></i></div><div class="tiny muted" style="opacity:1">Goal: ${sd.goal.k === 'wins' ? 'win ' + sd.goal.n + ' fights' : sd.goal.k === 'lvl' ? 'reach level ' + sd.goal.n : 'earn ' + sd.goal.n + ' personal fame'} (${Math.floor(pr)}/${sd.goal.n}). Reward: +${sd.rew.v} ${D.SA[sd.rew.stat]}, fame and a title.</div>`}`; }
