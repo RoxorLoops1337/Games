@@ -294,6 +294,7 @@ export interface PlayerS {
     boss?: Record<string, number>;   // bosses this player has helped defeat, by boss id
     pets?: Pet[];            // tamed creatures
     comp?: string;           // id of the pet walking beside you
+    ride?: number;           // while riding your companion: the speed multiplier (public; sim/bond.ts cmdRide)
     petSeq?: number;
     dex?: string[];          // species you have befriended at least once
     cnt?: Record<string, number>;   // counters behind quests and medals
@@ -420,6 +421,7 @@ export type Cmd =
     | { t: 'shop'; i: number; n: number }
     /** Pet your companion: it must be yours and beside you (sim/bond.ts). */
     | { t: 'pat' }
+    | { t: 'ride' }
     /** Take the i-th upgrade a tower offers (sim/defense.ts `cmdPick`). */
     | { t: 'towerpick'; id: number; i: number }
     /** Mend a hurt wall, doorway or tower for materials (sim/defense.ts `cmdRepair`). */

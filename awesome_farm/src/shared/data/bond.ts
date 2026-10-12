@@ -14,6 +14,12 @@ export const AFFECTION_PER_PAT = 1;
 /** From this much affection the creature digs up a gift the first time you pet it each day. */
 export const GIFT_AT = 40;
 
+/** Riding: a creature this fond (Friendly) and at least this grown carries you; you then run `rideSpeed` times as fast. */
+export const RIDE_AT = 10;
+export const RIDE_LV = 3;
+/** How much faster a mounted farmer moves: 1.35 for any mount, +0.05 per star, and the creature's own speed trait on top (capped). */
+export const rideSpeed = (pet: Pick<Pet, 'star'>, trait: number) => Math.min(2, (1.35 + 0.05 * (pet.star ?? 0)) * (1 + trait));
+
 interface AffectionLevel { id: string; name: string; at: number; color: number; line: string }
 /** Shy, Friendly, Fond, Devoted: from where the numbers start. (Gifts begin at Fond: `GIFT_AT` is its threshold.) */
 export const AFFECTION_LEVELS: AffectionLevel[] = [

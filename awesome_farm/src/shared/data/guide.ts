@@ -145,7 +145,7 @@ export const GUIDE: GuideTopic[] = [
             'Give your companion a job. Click one of its task buttons in the P window, or on its card at the top left: Gather (trees), Mine (rocks), Farm (crops) or Guard (monsters). What it collects goes into your pockets.',
             'Only creatures that are good at a job can do it: the card tells you which. Working makes them level up faster.',
             'To leave a creature working while you do other things, press Give a job… on its card (see Creatures at work). A Creature Den works too: the creatures you leave there work the land around it. Treats keep them happy.',
-            'Stand next to your companion and {press} {use} to pet it. Hearts float up and it grows fonder (five pets a day count). A Fond creature digs up a small gift for you once a day, and a Devoted one finds better things.',
+            '{press} {use} beside your companion to pet it: it grows fonder (five pets a day count) and a Fond one digs up a gift daily. Level 3 and Friendly? {press} R to ride it for a faster run (a blow knocks you off).',
         ],
         tips: ['Two creatures and treats in a Hatchery make an egg, and the child inherits the best traits.', 'Creatures that work for you level up, and teach you too: a share of the XP they earn on a job comes to you, even while you are away.'],
     },
