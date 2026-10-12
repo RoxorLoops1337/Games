@@ -103,6 +103,7 @@ export function sculpt(g, blobs) {
   }
   return g;
 }
+const sq = (v) => v * v;
 export const sm01 = (a, b, v) => smooth(a, b, v);
 // ribbon along a polyline (double sided material): w = width or fn(t), nrm = fn(point, i) -> outward normal
 export function ribbon(pts, w = 0.03, nrm = null) {
