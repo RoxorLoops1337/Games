@@ -888,7 +888,8 @@
 
   // ---------- training drill (tap-timing minigame) ----------
   LM.drillMult = (acc) => (acc >= 0.9 ? 0.4 : acc >= 0.7 ? 0.25 : acc >= 0.45 ? 0.1 : 0);
-  LM.drillKind = (S) => { const l = LM.bfx(S, 'sparring').l; return l >= 5 && S.week % 3 === 0 ? 'combo' : l >= 3 && S.week % 2 === 0 ? 'react' : 'timing'; };
+  LM.drillKind = (S) => { const l = LM.bfx(S, 'sparring').l; return l >= 5 && S.week % 3 === 0 ? 'combo' : l >= 3 && S.week % 2 === 0 ? 'react' : l >= 2 && S.week % 4 === 1 ? 'sprint' : 'timing'; };
+  LM.sprintAcc = (taps) => (taps >= 22 ? 1 : taps >= 17 ? 0.8 : taps >= 11 ? 0.55 : taps >= 5 ? 0.2 : 0);
   LM.comboAcc = (seq, tap) => { let n = 0; seq.forEach((x, i) => { if (tap[i] === x) n++; }); return [0, 0.5, 0.8, 1][Math.min(3, n)]; };
   LM.reactAcc = (ms) => (ms < 0 ? 0 : ms < 250 ? 1 : ms < 400 ? 0.8 : ms < 650 ? 0.55 : 0.2);
   LM.drillSpeed = (S) => Math.max(0.75, 1.3 - 0.1 * LM.bfx(S, 'palaestra').l);
