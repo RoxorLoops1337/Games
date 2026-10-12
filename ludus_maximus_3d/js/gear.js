@@ -172,7 +172,7 @@ export function mountShield(rig, kind, o = {}, rr = { r: 0, col: '#fff' }) {
   const [lip, wall] = rimOf(sh, sc ? 0.05 : 0.036, sc ? 0.04 : 0.032);
   rig.add('metal', paint(place(lip), 1.1), holder); rig.add('metal', paint(place(wall), 0.7), holder);
   const bz = zc + 0.012;
-  rig.add('metal', xf(sphereG(sc ? 0.082 : 0.062, 6, 3, 1, 1, 0.55), [0, dy, bz]), holder);
+  { const br = sc ? 0.088 : 0.066; rig.add('metal', xf(lathe([[br, 0], [br * 0.92, br * 0.22], [br * 0.5, br * 0.46], [0, br * 0.52]], 8, 1, 1, 0, 1).rotateX(PI / 2), [0, dy, bz - 0.01]), holder); }
   if (rr.r >= 1) gem(rig, holder, [0, dy, bz + (sc ? 0.05 : 0.04)], sc ? 0.026 : 0.02, { r: Math.max(2, rr.r), col: rr.col });
   if (rr.r >= 3) for (const sy of [-1, 1]) gem(rig, holder, [0, dy + sy * hh * 0.42, zc - sh.sag * 0.15 + 0.012], 0.014, rr);
   rig.add('leather', xf(boxG(0.16, 0.026, 0.02), [0, 0, 0.04]), holder); // grip bar (the back faces show bare leather via the shader)
@@ -194,7 +194,7 @@ function faceBars(rig, head, R, y0, y1, xs) {
   for (const x of xs) { const a = Math.asin(clamp(x / (R * 0.95), -0.95, 0.95)), z = R * 1.06 * Math.cos(a); rig.add('metal', xf(cylG(0.0045, 0.0045, y1 - y0, 3), [x, (y0 + y1) / 2, z]), head); }
 }
 function domeG(R, yb, top, sx = 0.95, sz = 1.06, seg = 10) {
-  return lathe([[R, yb], [R * 1.03, yb + 0.13], [R * 0.93, yb + 0.2], [R * 0.52, top - 0.015], [0, top]], seg, sx, sz, 0.1, 0.85);
+  const h = top - yb; return lathe([[R, yb], [R * 1.03, yb + h * 0.4], [R * 0.9, yb + h * 0.72], [R * 0.6, yb + h * 0.92], [R * 0.25, top - 0.005], [0, top]], seg, sx, sz, 0.1, 0.85);
 }
 const mask = (y0, y1, sw, r0, r1, seg = 8) => lathe([[r0, y0], [r1, y1]], seg, 0.96, 1.06, 0, 1, -sw / 2, sw);
 function helmMurmillo(rig, o, rr) {

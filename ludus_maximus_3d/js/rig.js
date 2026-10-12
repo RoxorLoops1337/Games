@@ -147,8 +147,8 @@ const SHADE = {
   cloth: { fill: 0.24, fs: '#c0c0f0', fg: '#d09870', rim: 0.40, rc: '#a8c0ff', rp: 4.5, sss: 0.10, sc: '#ff9060', env: 0 },
   plume: { fill: 0.24, fs: '#c0c0f0', fg: '#d09870', rim: 0.32, rc: '#b0c8ff', rp: 3.0, sss: 0.15, sc: '#ff9060', env: 0 },
   leather: { fill: 0.22, lift: 0.01, fs: '#b8b8e8', fg: '#c08860', rim: 0.35, rc: '#a8c0ff', rp: 4.5, sss: 0, sc: '#fff', env: 0.22, ew: 0.5 },
-  metal: { fill: 0.05, fs: '#b8c0e8', fg: '#c89868', rim: 0.40, rc: '#c0d4ff', rp: 2.4, sss: 0, sc: '#fff', env: 0.55 },
-  trim: { fill: 0.06, fs: '#c8c8f0', fg: '#d8a060', rim: 0.35, rc: '#ffe0b0', rp: 2.4, sss: 0, sc: '#fff', env: 0.75 },
+  metal: { fill: 0.04, fs: '#b8c0e8', fg: '#c89868', rim: 0.30, rc: '#c0d4ff', rp: 3.0, sss: 0, sc: '#fff', env: 1.0 },
+  trim: { fill: 0.04, fs: '#c8c8f0', fg: '#d8a060', rim: 0.3, rc: '#ffe0b0', rp: 3.0, sss: 0, sc: '#fff', env: 1.1 },
   eye: { fill: 0.25, fs: '#ffffff', fg: '#ffeedd', rim: 0, rc: '#fff', rp: 3, sss: 0, sc: '#fff', env: 0 },
   gem: { fill: 0, fs: '#fff', fg: '#fff', rim: 0.2, rc: '#fff', rp: 2, sss: 0, sc: '#fff', env: 0.4 },
 };
@@ -186,7 +186,7 @@ export function makeMaterials(p = DEFAULT_PALETTE) {
   const mk = (color, roughness, metalness, flat = false, ds = false) => new THREE.MeshStandardMaterial({ color, roughness, metalness, flatShading: flat, vertexColors: true, side: ds ? THREE.DoubleSide : THREE.FrontSide });
   const m = {
     skin: mk(p.skin, 0.5, 0), hair: mk(p.hair, 0.55, 0.05), cloth: mk(p.cloth, 0.9, 0, false, true), plume: mk(p.plume, 0.82, 0, false, true),
-    leather: mk('#7a4e2c', 0.66, 0.05, true, true), metal: mk(p.metal, 0.34, 0.55, true, true), trim: mk('#f0be52', 0.28, 0.7, true, true),
+    leather: mk('#7a4e2c', 0.66, 0.05, true, true), metal: mk(p.metal, 0.4, 0.8, true, true), trim: mk('#f0be52', 0.3, 0.85, true, true),
     eye: new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.45, metalness: 0, vertexColors: true, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }), gem: mk('#ffffff', 0.2, 0.2, true, true),
   };
   m.hair.roughness = 0.5;
