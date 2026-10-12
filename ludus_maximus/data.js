@@ -384,6 +384,7 @@
     { id: 'relics6', n: 'Relic Hoarder', d: 'Own 6 relics.', r: { gold: 300, laurels: 1 } },
     { id: 'faction', n: 'Beloved', d: 'Max out any faction.', r: { gold: 400, laurels: 1 } },
     { id: 'festwin', n: 'Festive Fighter', d: 'Win during a festival week.', r: { gold: 100 } },
+    { id: 'bouts', n: 'Settled It In The Sand', d: 'Settle a rivalry with a friendly bout.', r: { gold: 80, fame: 10 } },
     { id: 'ascended', n: 'New Dynasty', d: 'Found a new ludus.', r: { laurels: 2 } },
   ];
 

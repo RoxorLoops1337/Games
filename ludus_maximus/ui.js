@@ -22,14 +22,14 @@
       ac = ac || new (window.AudioContext || window.webkitAudioContext)();
       const t0 = ac.currentTime + (delay || 0); const o = ac.createOscillator(); const g = ac.createGain();
       o.type = type || 'square'; o.frequency.setValueAtTime(f, t0); if (to) o.frequency.exponentialRampToValueAtTime(to, t0 + d);
-      g.gain.setValueAtTime(vol || 0.06, t0); g.gain.exponentialRampToValueAtTime(0.0001, t0 + d); o.connect(g); g.connect(ac.destination); o.start(t0); o.stop(t0 + d + 0.02);
+      g.gain.setValueAtTime(Math.max(0.0002, (vol || 0.06) * U.vol()), t0); g.gain.exponentialRampToValueAtTime(0.0001, t0 + d); o.connect(g); g.connect(ac.destination); o.start(t0); o.stop(t0 + d + 0.02);
     } catch (e) { /* audio unavailable */ }
   }
   function noise(d, vol, f0, f1, delay) {
     try {
       ac = ac || new (window.AudioContext || window.webkitAudioContext)(); const t0 = ac.currentTime + (delay || 0); const n = Math.floor(ac.sampleRate * d); const buf = ac.createBuffer(1, n, ac.sampleRate); const dd = buf.getChannelData(0);
       for (let i = 0; i < n; i++) dd[i] = (Math.random() * 2 - 1) * (1 - i / n);
-      const s = ac.createBufferSource(); s.buffer = buf; const fl = ac.createBiquadFilter(); fl.type = 'bandpass'; fl.frequency.setValueAtTime(f0, t0); if (f1) fl.frequency.exponentialRampToValueAtTime(f1, t0 + d); const g = ac.createGain(); g.gain.value = vol; s.connect(fl); fl.connect(g); g.connect(ac.destination); s.start(t0);
+      const s = ac.createBufferSource(); s.buffer = buf; const fl = ac.createBiquadFilter(); fl.type = 'bandpass'; fl.frequency.setValueAtTime(f0, t0); if (f1) fl.frequency.exponentialRampToValueAtTime(f1, t0 + d); const g = ac.createGain(); g.gain.value = vol * U.vol(); s.connect(fl); fl.connect(g); g.connect(ac.destination); s.start(t0);
     } catch (e) { /* audio unavailable */ }
   }
   let crowd = null;
@@ -41,7 +41,7 @@
       const s = ac.createBufferSource(); s.buffer = buf; s.loop = true; const f = ac.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = 520; f.Q.value = 0.6; const g = ac.createGain(); g.gain.value = 0.0001; s.connect(f); f.connect(g); g.connect(ac.destination); s.start(); g.gain.setTargetAtTime(0.025, ac.currentTime, 0.4); crowd = { s, g, f };
     } catch (e) { /* audio unavailable */ }
   };
-  U.crowdLevel = (x) => { if (crowd) { crowd.g.gain.setTargetAtTime(0.02 + 0.05 * Math.min(1, x), ac.currentTime, 0.15); crowd.f.frequency.setTargetAtTime(480 + 400 * Math.min(1, x), ac.currentTime, 0.2); } };
+  U.crowdLevel = (x) => { if (crowd) { crowd.g.gain.setTargetAtTime((0.02 + 0.05 * Math.min(1, x)) * U.vol(), ac.currentTime, 0.15); crowd.f.frequency.setTargetAtTime(480 + 400 * Math.min(1, x), ac.currentTime, 0.2); } };
   U.snd = (n) => {
     if (S && S.sound === false) return;
     if (n === 'click') tone(520, 0.05, 'square', 0.04);
@@ -68,6 +68,10 @@
 
   // ---------- modal / toast ----------
   const modalEl = () => $('#modal');
+  U.vol = () => (S && S.opts && S.opts.vol != null ? S.opts.vol : 1);
+  U.calm = () => !!(S && S.opts && S.opts.rm);
+  function applyOpts() { const o = (S && S.opts) || {}; document.body.classList.toggle('rm', !!o.rm); document.body.classList.toggle('big', !!o.big); }
+  U.applyOpts = applyOpts;
   function modal(html, o) {
     o = o || {}; ui.dismiss = o.dismiss !== false; $('#sheet').innerHTML = `<div class="sheetwrap">${ui.dismiss ? '<button class="btn sm ghost x" data-a="close">' + A.icon('close', 16) + '</button>' : ''}${html}</div>`;
     modalEl().className = 'on' + (o.mid ? ' mid' : ''); $('#sheet').scrollTop = 0;
@@ -127,7 +131,7 @@
       const p = S.plots[i];
       if (!p) { h += `<div class="tile empty" data-a="plot" data-i="${i}">${A.icon('plus', 26)}</div>`; continue; }
       const syn = L.synAt(S, i); const people = (pplAt[p.b] || []).slice(0, 3).map((g) => spr(g, { size: 26 })).join('');
-      h += `<div class="tile" data-a="plot" data-i="${i}">${A.building(p.b, 100)}${people ? `<div class="people">${people}</div>` : ''}<span class="lv">L${p.l}</span>${syn ? `<span class="sy">+${syn}</span>` : ''}<span class="lbl">${D.BUILD[p.b].n}</span></div>`;
+      h += `<div class="tile b-${p.b}" data-a="plot" data-i="${i}">${A.building(p.b, 100)}${people ? `<div class="people">${people}</div>` : ''}<span class="lv">L${p.l}</span>${syn ? `<span class="sy">+${syn}</span>` : ''}<span class="lbl">${D.BUILD[p.b].n}</span></div>`;
     }
     h += '</div>';
     const menu = D.MENUS.find((m) => m.id === S.menu) || D.MENUS[0];
@@ -228,6 +232,8 @@
     h += `<div class="sec" style="color:var(--terra);text-shadow:none">Ultimates (you trigger these)</div>` + L.ultsOf(g).map((id) => `<div class="tech" style="border-color:${D.ULTS[id].c}"><div class="row"><span class="sbadge" style="background:${D.ULTS[id].c};width:30px;height:30px">${A.ultIcon(id, 22)}</span><b>${D.ULTS[id].n}</b><span class="tag">${D.ULTS[id].cd}s</span></div><div>${D.ULTS[id].d}</div></div>`).join('') + (g.ult2 ? '' : '<div class="muted">A second ultimate unlocks at level 8.</div>');
     h += `<div class="sec" style="color:var(--terra);text-shadow:none">Runes</div><div class="tech" style="border-color:${kr.c};cursor:pointer" data-a="runes" data-id="${g.id}"><b>${kr.n}</b> <span class="tag">Keystone</span><div>${kr.d}</div></div>` + g.rune.m.map((m) => `<div class="tech" data-a="runes" data-id="${g.id}" style="cursor:pointer"><b>${D.MINORS[m].n}</b> <span class="tag grey">Minor</span><div>${D.MINORS[m].d}</div></div>`).join('') + `<button class="btn sm ghost" data-a="runes" data-id="${g.id}">Change runes</button>`;
     if (g.mast.length) h += '<div class="sec" style="color:var(--terra);text-shadow:none">Masteries</div>' + g.mast.map((m) => `<div class="tech"><b>${D.MASTS[m].n}</b> ${D.MASTS[m].d}</div>`).join('');
+    const rels = S.glads.filter((o) => o.id !== g.id).map((o) => ({ o, b: L.bond(S, g.id, o.id), r: L.rivalryOf(S, g.id, o.id) })).filter((x) => x.b >= 10 || x.r >= 15);
+    if (rels.length) h += '<div class="sec" style="color:var(--terra);text-shadow:none">Relationships</div>' + rels.map((x) => `<div class="kv"><span>${esc(x.o.name)}</span><b>${x.b >= 10 ? '<span class="tag green">Bond ' + Math.round(x.b) + '</span> ' : ''}${x.r >= 15 ? '<span class="tag red">Rivalry ' + Math.round(x.r) + '</span>' : ''}</b></div>`).join('') + '<div class="tiny muted">Same-style fighters who train the same thing become rivals. At 45 rivalry the ludus asks you to settle it.</div>';
     h += '<div class="sec" style="color:var(--terra);text-shadow:none">Techniques (cast automatically)</div>' + g.techs.map((t) => `<div class="tech"><b>${D.TECHS[t].n}</b> <span class="tag">${D.TECHS[t].cd}s</span><div>${D.TECHS[t].d}</div></div>`).join('');
     h += `<div class="row wrap" style="margin-top:10px"><button class="btn sm" data-a="autoeq" data-id="${g.id}">Auto-equip</button><button class="btn sm ghost" data-a="rename" data-id="${g.id}">Rename</button><button class="btn sm ghost" data-a="retrainm" data-id="${g.id}">Retrain style</button><button class="btn sm ghost ${g.lvl < 8 ? 'off' : ''}" data-a="retire" data-id="${g.id}">Retire (Lv8+)</button><button class="btn sm red" data-a="release" data-id="${g.id}">Release</button></div>`;
     modal(h);
@@ -417,7 +423,7 @@
     h += `<div class="sec">Hall of Legends</div><div class="card"><div class="muted" style="opacity:1">${(S.legends || []).length} legends. ${slots} statue slot${slots === 1 ? '' : 's'} (build the Hall). Each active legend: +1.5% training for all and +3% for their best stat.</div><button class="btn sm ghost" style="margin-top:6px" data-a="legends">Open hall</button></div>`;
     h += `<div class="sec">New ludus</div><div class="card"><div class="muted" style="opacity:1">Laurels: <b>${S.laurels}</b>. Reach the Imperial Games (1800 fame) or win them, then found a new ludus: you keep laurels, perks and legends, and start over faster.</div><div class="row wrap" style="margin-top:6px"><button class="btn sm" data-a="perks">Laurel perks</button><button class="btn sm red ${L.canAscend(S) ? '' : 'off'}" data-a="ascend">Found new ludus (+${L.laurelsFor(S)})</button></div></div>`;
     h += `<div class="sec">Records</div><div class="card"><div class="kv"><span>Fights</span><b>${S.stats.fights}</b></div><div class="kv"><span>Wins / Losses</span><b>${S.stats.wins} / ${S.stats.losses}</b></div><div class="kv"><span>Tournaments won</span><b>${S.stats.tourneys}</b></div><div class="kv"><span>Mercies shown</span><b>${S.stats.spares}</b></div><div class="kv"><span>Weeks run</span><b>${S.stats.weeks}</b></div></div>`;
-    h += `<div class="sec">Settings</div><div class="card"><div class="row wrap"><button class="btn sm ghost" data-a="sound">Sound: ${S.sound === false ? 'OFF' : 'ON'}</button><button class="btn sm ghost" data-a="how">How to play</button><button class="btn sm ghost" data-a="export">Export save</button><button class="btn sm ghost" data-a="import">Import save</button><button class="btn sm red" data-a="reset">Reset</button></div></div>`;
+    h += `<div class="sec">Settings</div><div class="card"><div class="row wrap"><button class="btn sm ghost" data-a="sound">Sound: ${S.sound === false ? 'OFF' : 'ON'}</button><button class="btn sm ghost" data-a="volume">Volume: ${Math.round(U.vol() * 100)}%</button><button class="btn sm ghost" data-a="calm">Reduced motion: ${U.calm() ? 'ON' : 'off'}</button><button class="btn sm ghost" data-a="big">Large text: ${S.opts && S.opts.big ? 'ON' : 'off'}</button><button class="btn sm ghost" data-a="how">How to play</button><button class="btn sm ghost" data-a="export">Export save</button><button class="btn sm ghost" data-a="import">Import save</button><button class="btn sm red" data-a="reset">Reset</button></div></div>`;
     return h;
   }
   ACT.claim = (el) => { const c = L.claimContract(S, +el.dataset.i); if (!c) return; U.snd('coin'); save(); render(); toast(`Sponsor paid ${c.rew.gold} gold, ${c.rew.fame} fame!`); };
@@ -433,6 +439,10 @@
     if (!confirm(`Found a new ludus? You get ${L.laurelsFor(S)} laurels and keep perks and legends. Everything else resets.`)) return;
     S = L.ascend(S); U.setS(S); S.glads.push(U.starter()); save(); ui.tab = 'ludus'; render(); toast('A new ludus rises!');
   };
+  const optSet = (k, v) => { S.opts = S.opts || {}; S.opts[k] = v; save(); applyOpts(); render(); };
+  ACT.volume = () => { const v = U.vol(); optSet('vol', v > 0.9 ? 0.6 : v > 0.5 ? 0.3 : 1); U.snd('click'); };
+  ACT.calm = () => optSet('rm', !U.calm());
+  ACT.big = () => optSet('big', !(S.opts && S.opts.big));
   ACT.sound = () => { S.sound = S.sound === false; save(); render(); };
   ACT.export = () => { const c = L.exportCode(S); modal(`<h2>Save code</h2><div class="muted">Copy this to back up or move your ludus.</div><textarea readonly style="width:100%;height:140px;margin-top:8px;font-size:11px;border:3px solid var(--ink);border-radius:10px;user-select:text;-webkit-user-select:text">${c}</textarea>`); };
   ACT.import = () => { const t = prompt('Paste a save code'); if (!t) return; const N = L.importCode(t); if (!N) return toast('That code did not work'); S = N; U.setS(S); save(); render(); toast('Save loaded'); };
@@ -485,7 +495,7 @@
   ACT.res = (el) => { const r = U.res; U.res = null; closeModal(); if (r) r(el.dataset.v); };
   function render() {
     if (!S) return;
-    const sc = main().scrollTop; renderHud();
+    applyOpts(); const sc = main().scrollTop; renderHud();
     const V = { ludus: vLudus, glads: vGlads, arena: vArena, armory: vArmory, more: vMore };
     main().innerHTML = V[ui.tab](); main().scrollTop = sc;
   }
