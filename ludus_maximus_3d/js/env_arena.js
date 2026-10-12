@@ -228,7 +228,7 @@ export function createArena({ crowd = 3700, density = 1, decalRes = 2048, seed =
     const a = rnd() * TAU, d = Math.pow(rnd(), 1.6) * 0.62, rx = (0.7 + rnd() * 1.9) * ppm, ry = rx * (0.45 + rnd() * 0.4);
     const cx0 = DW / 2 + Math.cos(a) * d * SA * ppm, cy0 = DH / 2 + Math.sin(a) * d * SB * ppm * 1.1;
     dx.save(); dx.translate(cx0, cy0); dx.rotate(rnd() * Math.PI); dx.scale(1, ry / rx);
-    const g = dx.createRadialGradient(0, 0, 0, 0, 0, rx); const al = 0.10 + (1 - d) * 0.14;
+    const g = dx.createRadialGradient(0, 0, 0, 0, 0, rx); const al = 0.07 + (1 - d) * 0.10;
     g.addColorStop(0, `rgba(122,92,58,${al})`); g.addColorStop(1, 'rgba(122,92,58,0)'); dx.fillStyle = g; dx.fillRect(-rx, -rx, rx * 2, rx * 2); dx.restore();
   }
   const cg = dx.createRadialGradient(DW / 2, DH / 2, 0, DW / 2, DH / 2, 7 * ppm);

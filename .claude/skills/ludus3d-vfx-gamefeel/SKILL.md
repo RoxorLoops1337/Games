@@ -84,3 +84,8 @@ Colors: element hex in `fx.ult.colorOf(el)`; tint hits with the skill color `c` 
 - Anchored emitters (status/aura/sustain) must be stopped when the unit dies, or they follow a corpse until `dur` ends.
 - Keep shake off UI: apply to the 3D camera only; flash overlay sits above canvas but below HUD (z-index 50).
 - Blood-free: bleed is small crimson drips (`status` option `{color}` to change), no splatter decals; scorch/scuff/crack only.
+
+## Crisp hit pass (measured on screenshots)
+- impactFlash is now: 0.07 s glow core (size*0.34), 0.05 s white disc, 0.11 s burst rays (size*0.45 to *1.05), thin ring; star4 only for size > 2.2 (ults). The old 3 big overlapping additive sprites (size*1.5..3.2) covered whole fighters.
+- fx.hit scales by dmgFrac (f = dmgFrac/0.3): light 5 sparks + 1 debris, heavy 9..14 sparks + ring 1.4 + 3 debris, crit 16 gold + 5 white fast sparks + shockwave 1.9 (distort 0.35) + 5 debris + scuff decal.
+- The big yellow stars on fighters were the STUN status icons (0.8 world units, orbit radius 0.5), not the flash. Now 0.38 / 0.42.

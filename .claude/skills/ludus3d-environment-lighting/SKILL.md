@@ -113,3 +113,8 @@ Calls are far under 150, so triangles are the real mobile limit: the 300k mobile
 10. `InstancedMesh.frustumCulled` must be false for instanced FX that move in the shader (flames, birds, trees with sway, crowd); bounding sphere is the base geometry only.
 11. Changing MSAA samples on the composer needs `renderTarget.dispose()` (done in `setTier`).
 12. Sun elevation below about 25 degrees puts the whole arena floor in shadow (see Lighting). Keep arena golden at 33 degrees.
+
+## Fight polish pass (sand, grade)
+- Sand reads orange when the albedo (#d9b27c) is multiplied by an orange sun (#ffb25e) and orange hemi ground, then ACES. Fix both ends: sand texture palette E6CFA2/CDAE7E/F6E6C4 (ripple highlight weight 0.16, bump ripple 0.07, material bumpScale 2.0), TOD.golden sunColor 0xffc489 and hemiGround 0xb99872. Grade uSat 0.98, uContrast 1.12 (was 1.08/1.04).
+- Trampled wear is painted in the arena decal canvas: ~90 soft elliptical blotches (alpha 0.07..0.17, dense near centre via pow(rnd,1.6)), not a single radial gradient, which reads as a dirty stain.
+- Concentric raked rings in the decal must stay at alpha <= 0.10 or the floor looks like a vinyl record.
