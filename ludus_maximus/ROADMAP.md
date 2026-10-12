@@ -85,7 +85,16 @@ Rival of the Year award in the season recap, sponsor pledges (win 3 fights for a
 Town Crier headlines in the week summary, nicknames earned from deeds, a bobbing training montage, and a recurring rival ludus owner who taunts you and can be humbled.
 
 ## Next ideas
-- [ ] 41. Rival owner sends a champion to a special duel
-- [ ] 42. Nickname perks (small passive per deed)
-- [ ] 43. Forum board showing past crier headlines
-- [ ] 44. Seasonal arena decorations
+- [x] 41. Rival owner sends a champion to a special duel
+- [x] 42. Nickname perks (small passive per deed)
+- [x] 43. Forum board showing past crier headlines
+- [x] 44. Seasonal arena decorations
+
+## Round 9 shipped
+Champion duel against the rival owner's best fighter, small stat perks for deed nicknames, a Forum log of past headlines, and seasonal arena decorations (blossoms, sun glow, leaves, snow).
+
+## Next ideas
+- [ ] 45. Gladiator injuries with a recovery minigame at the infirmary
+- [ ] 46. Weekly bounty board with named targets
+- [ ] 47. Crowd favorite meter per fighter that affects purses
+- [ ] 48. Replay the last fight from the results screen

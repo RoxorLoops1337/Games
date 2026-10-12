@@ -422,8 +422,8 @@
   };
   D.CHANTS = ['MAX-I-MUS!', 'BLOOD! BLOOD!', 'AVE! AVE!', 'FIGHT! FIGHT!', 'HAIL THE VICTOR!', 'ROAR! ROAR!'];
   D.DEEDS = [
-    { id: 'w10', n: 'Crowd Pleaser', ok: (g) => g.rec.w >= 10 }, { id: 'w25', n: 'the Unbroken', ok: (g) => g.rec.w >= 25 && g.rec.l <= 3 },
-    { id: 'f300', n: 'Arena Darling', ok: (g) => g.fame >= 300 }, { id: 'l15', n: 'Old Iron', ok: (g) => g.lvl >= 15 }, { id: 'w50', n: 'the Legend', ok: (g) => g.rec.w >= 50 },
+    { id: 'w10', n: 'Crowd Pleaser', st: 'wil', ok: (g) => g.rec.w >= 10 }, { id: 'w25', n: 'the Unbroken', st: 'end', ok: (g) => g.rec.w >= 25 && g.rec.l <= 3 },
+    { id: 'f300', n: 'Arena Darling', st: 'agi', ok: (g) => g.fame >= 300 }, { id: 'l15', n: 'Old Iron', st: 'str', ok: (g) => g.lvl >= 15 }, { id: 'w50', n: 'the Legend', st: 'str', ok: (g) => g.rec.w >= 50 },
   ];
   D.DIFF_N = ['Relaxed', 'Standard', 'Brutal'];
   G.LM_D = D;

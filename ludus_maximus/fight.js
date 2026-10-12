@@ -37,7 +37,7 @@
       cv.width = W * dpr; cv.height = H * dpr; cv.style.width = W + 'px'; cv.style.height = H + 'px'; const cx = cv.getContext('2d'); cx.scale(dpr, dpr);
       const fy0 = H * 0.27, fy1 = H * 0.97; const SX = (x) => W / 2 + x * ((W * 0.46) / R), SY = (y) => (fy0 + fy1) / 2 + y * (((fy1 - fy0) * 0.44) / R);
       const many = Math.max(unitsA.length, unitsB.length); const sw = Math.max(58, Math.min(150, W * (many > 2 ? 0.24 : many > 1 ? 0.28 : 0.31))); const sh = sw * 1.34;
-      cam.innerHTML = A.arenaBG2(W, H, ev.league || 0) + '<div id="world"></div>';
+      cam.innerHTML = A.arenaBG2(W, H, ev.league || 0, (S.season || 1) - 1) + '<div id="world"></div>';
       const world = $('#world');
       F.units.forEach((u) => {
         const e = document.createElement('div'); e.className = 'fs ' + (u.side === 'B' ? 'foe' : 'mine'); e.id = 'fs-' + u.id; e.dataset.a = u.side === 'B' ? 'ffocus' : ''; e.dataset.id = u.id; e.style.width = sw + 'px'; e.style.height = sh + 'px';
