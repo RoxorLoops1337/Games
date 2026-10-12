@@ -21,7 +21,7 @@ const rngOf = (seed) => { let s = (seed | 0) || 1; return () => (s = (s * 16807)
 
 // palette (sRGB hex, converted to linear by three)
 const C = {
-  plaster: 0xe3c490, plaster2: 0xf0e2c2, trav: 0xe8dcc0, marble: 0xf4efe4, clay: 0xc97a48, wood: 0xb08050, wood2: 0x86603c, woodLt: 0xc99a62, dark: 0x2a2118,
+  plaster: 0xe3c490, plaster2: 0xf0e2c2, trav: 0xe8dcc0, marble: [1.1, 1.08, 1.0], clay: 0xc97a48, wood: 0xb08050, wood2: 0x86603c, woodLt: 0xc99a62, dark: 0x2a2118,
   iron: 0x565a63, bronze: 0xc08a3e, gold: 0xf5c545, purple: 0x6a2470, red: 0xb5352a, green: 0x5b7a3a, leaf: 0x56782f, leaf2: 0x7a9040, sand: 0xdcb47e,
   cream: 0xf0e4c6, soil: 0x6b4a2e, water: 0x4aa3a6, coal: 0x2a1a14, stone: 0xb9ab92, rope: 0xc9b07a, teal: 0x2f8f86,
 };
@@ -83,7 +83,7 @@ export function getLib() {
     masonry: litPatch(new THREE.MeshStandardMaterial({ map: stone.map, bumpMap: stone.bump, bumpScale: 1.6, vertexColors: true, roughness: 0.93 }), 'bld_masonry'),
     roof: litPatch(new THREE.MeshStandardMaterial({ map: roofT.map, bumpMap: roofT.bump, bumpScale: 2.2, vertexColors: true, roughness: 0.82 }), 'bld_roof'),
     wood: litPatch(new THREE.MeshStandardMaterial({ map: wood, vertexColors: true, roughness: 0.88 }), 'bld_wood'),
-    metal: litPatch(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.42, metalness: 0.5, emissive: 0x1c1208, emissiveIntensity: 0.6 }), 'bld_metal'),
+    metal: litPatch(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.5, metalness: 0.22, emissive: 0x2a1c0a, emissiveIntensity: 0.8 }), 'bld_metal'),
     cloth: litPatch(new THREE.MeshStandardMaterial({ map: cloth.map, vertexColors: true, roughness: 0.95, side: THREE.DoubleSide }), 'bld_cloth', {
       vBody: 'float swF = uv.x; transformed += normal * (sin(uTime * 2.3 + transformed.x * 0.9 + transformed.y * 0.7 + swF * 4.0) * 0.5 + 0.5) * 0.12 * swF * uWind;',
     }),
@@ -719,11 +719,11 @@ DESIGN.shrine = (k, lv) => {
   const y0 = 0.51;
   const cw = lv >= 4 ? 3.8 : 2.8, cd = lv >= 2 ? 3.2 : 2.0, cz = -0.9, ch = 2.5;
   if (lv >= 2) {
-    k.box('masonry', cw, ch, cd, 0, y0, cz, m); k.box('masonry', cw + 0.18, 0.2, cd + 0.18, 0, y0 + ch - 0.1, cz, C.trav);
+    k.box('masonry', cw, ch, cd, 0, y0, cz, 0xd8c29a); k.box('masonry', cw + 0.18, 0.2, cd + 0.18, 0, y0 + ch - 0.1, cz, C.trav);
     k.box('masonry', 1.0, 1.8, 0.1, 0, y0, cz + cd / 2 + 0.0, 0x1f1612); k.statue(0, cz + cd / 2 - 0.5, y0, 0.55, C.gold, { helm: false });
     for (const s of [-1, 1]) k.at(s * cw / 2, 0, cz, s * Math.PI / 2, () => k.win(0, y0 + 1.2, 0.0, 0.4, 0.8, { shut: false, frame: m }));
   }
-  const cn = lv >= 4 ? 6 : lv >= 3 ? 4 : 2, span = lv >= 4 ? 4.6 : lv >= 3 ? 3.2 : 2.0, fz = lv >= 2 ? cz + cd / 2 + 0.9 : 0.0, colH = 2.3;
+  const cn = lv >= 4 ? 6 : lv >= 3 ? 4 : 2, span = lv >= 4 ? 4.6 : lv >= 3 ? 3.2 : 2.0, fz = lv >= 2 ? cz + cd / 2 + 1.1 : 0.0, colH = 2.3;
   for (let i = 0; i < cn; i++) k.col(-span / 2 + i * span / Math.max(1, cn - 1), fz, colH, 0.21, y0, lv >= 5 ? 0xfaf2e0 : m);
   k.box('masonry', span + 0.8, 0.32, 0.5, 0, y0 + colH, fz, C.trav);
   if (lv >= 5) k.box('metal', span + 0.84, 0.06, 0.06, 0, y0 + colH + 0.32, fz + 0.26, C.gold);
@@ -744,11 +744,11 @@ DESIGN.shrine = (k, lv) => {
 DESIGN.hall = (k, lv) => {
   k.H = 5.6;
   const slots = [0, 1, 2, 3, 4, 6][lv], m = C.marble, W = lv >= 3 ? 7.4 : 6.0;
-  for (let i = 0; i < 2; i++) k.box('masonry', W + 0.7 - i * 0.4, 0.2, 4.5 - i * 0.4, 0, i * 0.2, -0.3, m);
+  for (let i = 0; i < 2; i++) k.box('masonry', W + 0.7 - i * 0.4, 0.2, 5.2 - i * 0.4, 0, i * 0.2, 0.0, m);
   const y0 = 0.4, hd = 3.0, hz = -1.0, hh = 3.2, hw = W - 0.8;
-  k.box('masonry', hw, hh, hd, 0, y0, hz, 0xe9dfc8); k.box('masonry', hw + 0.2, 0.28, hd + 0.2, 0, y0 + hh - 0.14, hz, m);
+  k.box('masonry', hw, hh, hd, 0, y0, hz, 0xd2b890); k.box('masonry', hw + 0.2, 0.28, hd + 0.2, 0, y0 + hh - 0.14, hz, m);
   k.box('masonry', hw + 0.14, 0.4, hd + 0.14, 0, y0, hz, C.trav);
-  const fz = hz + hd / 2 + 0.55, cn = lv >= 3 ? 6 : 4, span = lv >= 3 ? 5.0 : 3.4, colH = 2.8;
+  const fz = hz + hd / 2 + 1.0, cn = lv >= 3 ? 6 : 4, span = lv >= 3 ? 5.0 : 3.4, colH = 2.8;
   for (let i = 0; i < cn; i++) k.col(-span / 2 + i * span / (cn - 1), fz, colH, 0.23, y0, m);
   k.box('masonry', span + 0.9, 0.38, 0.6, 0, y0 + colH, fz, m);
   if (lv >= 2) k.box('metal', span + 0.7, 0.14, 0.04, 0, y0 + colH + 0.1, fz + 0.32, lv >= 5 ? C.gold : C.bronze);
@@ -760,7 +760,7 @@ DESIGN.hall = (k, lv) => {
   // statue plinths: one per legend slot
   const xs = slots <= 1 ? [0] : Array.from({ length: slots }, (_, i) => -3.4 + i * (6.8 / (slots - 1)));
   const gc = [0xd8a65a, C.bronze, 0xc9d0dc, C.gold, 0xd8a65a, C.bronze];
-  xs.forEach((x, i) => { const onFront = Math.abs(x) < span / 2 + 0.4 && slots > 2 ? 2.3 : 2.1; void onFront; k.statue(x, slots === 1 ? 2.35 : 2.3, 0, 1.0, lv >= 5 ? C.gold : gc[i % gc.length], { plume: acc(k) }); });
+  xs.forEach((x, i) => { const onFront = Math.abs(x) < span / 2 + 0.4 && slots > 2 ? 2.3 : 2.1; void onFront; k.statue(x, 2.45, 0, 1.0, lv >= 5 ? C.gold : gc[i % gc.length], { plume: acc(k) }); });
   if (lv >= 3) { k.torch(-span / 2 - 0.6, 2.1, fz + 0.5); k.torch(span / 2 + 0.6, 2.1, fz + 0.5); }
   if (lv >= 4) for (const s of [-1, 1]) k.banner(s * (W / 2 + 0.2), -0.3, 0, 4.4, acc(k), { gold: lv >= 5, w: 0.8, h: 1.8 });
   if (lv >= 5) { k.box('metal', hw + 0.3, 0.07, 0.07, 0, y0 + hh + 0.12, hz + hd / 2 + 0.12, C.gold); }
