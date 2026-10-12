@@ -559,7 +559,7 @@ export function buildGladiator(opts = {}) {
 
   const rig = {
     root, body, joints: J, sockets: sk, mats, palette: pal, secondary: [], squash, flashState, build: bd, opts,
-    mounts: [], // extra Object3D to dispose
+    postUpdate: [], // fn(rig) run after IK each frame (e.g. shield stabilisers)
     setPalette(p) { Object.assign(pal, p); mats.skin.color.set(pal.skin); mats.hair.color.set(pal.hair); mats.cloth.color.set(pal.cloth); mats.plume.color.set(pal.plume); mats.metal.color.set(pal.metal); },
     flash(dur = 0.12, color) { flashState.t = dur; flashState.dur = dur; if (color) flashState.color.set(color); },
     squashKick(a) { squash.kick(a); },
@@ -572,6 +572,7 @@ export function buildGladiator(opts = {}) {
       root.updateMatrixWorld(true);
       rig.animator.postIK();
       root.updateMatrixWorld(true);
+      for (const f of rig.postUpdate) f(rig);
       for (const s of rig.secondary) s.update(dt);
       const sq = squash.update(dt); body.scale.set(bd.height / Math.sqrt(1 + sq), bd.height * (1 + sq), bd.height / Math.sqrt(1 + sq));
       if (flashState.t > 0) { flashState.t = Math.max(0, flashState.t - dt); }
@@ -795,5 +796,5 @@ export function poseAt(rig, clipName, t) {
   const a = rig.animator; const clip = a.clips[clipName]; const P = new Pose(); clip.sample(t, P);
   const q = toQ(P, new QPose()); for (let i = 0; i < JOINTS.length; i++) rig.joints[JOINTS[i]].quaternion.copy(q.q[i]);
   rig.joints.hips.position.set(0, DIM.hipY + P.hip[1], P.hip[2]); rig.body.position.fromArray(P.body); rig.body.quaternion.setFromEuler(new E(P.brot[0], P.brot[1], P.brot[2]));
-  a.finalGround = P.ground; a.finalLock = P.lock; a.groundFix = 0; rig.root.updateMatrixWorld(true); a._dt = 1; a.postIK(); rig.root.updateMatrixWorld(true);
+  a.finalGround = P.ground; a.finalLock = P.lock; a.groundFix = 0; rig.root.updateMatrixWorld(true); a._dt = 1; a.postIK(); rig.root.updateMatrixWorld(true); for (const f of rig.postUpdate) f(rig);
 }

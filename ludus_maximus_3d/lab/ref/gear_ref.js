@@ -49,8 +49,20 @@ export function makeShield(rig, kind = 'scutum') {
   const rim = part(col(new THREE.TorusGeometry(kind === 'round' ? 0.35 : 0.3, 0.012, 4, 14)), m.trim, 'rim'); rim.position.z = -0.0; rim.visible = kind === 'round'; g.add(rim);
   return g;
 }
+// Shield held on the forearm but stabilised: its face normal follows the forearm direction projected on the ground plane and its
+// height axis stays along body-up, so it never flops flat when the arm hangs. Position stays on the wrist.
 export function mountOnForearm(rig, shield, side = 'L', off = 0.14) {
-  const j = rig.joints['wrist' + side]; shield.rotation.x = Math.PI / 2; shield.position.set(0, -off, 0); j.add(shield);
+  const wrist = rig.joints['wrist' + side], holder = new THREE.Object3D(); holder.position.set(0, -off, 0); wrist.add(holder); holder.add(shield);
+  const f = new V3(), n = new V3(), up = new V3(), x = new V3(), M = new THREE.Matrix4(), qb = new THREE.Quaternion(), qw = new THREE.Quaternion(), bf = new V3(0, 0, 1);
+  rig.postUpdate.push(() => {
+    wrist.getWorldQuaternion(qw); rig.body.getWorldQuaternion(qb);
+    f.set(0, -1, 0).applyQuaternion(qw).applyQuaternion(qb.clone().invert()); // forearm axis in body space
+    const hl = Math.hypot(f.x, f.z); n.set(f.x, 0, f.z).multiplyScalar(1).add(bf.clone().multiplyScalar(Math.max(0, 0.6 - hl))).normalize();
+    up.set(0, 1, 0); x.crossVectors(up, n).normalize(); up.crossVectors(n, x);
+    M.makeBasis(x, up, n); qb.multiply(new THREE.Quaternion().setFromRotationMatrix(M)); // body-space basis -> world
+    holder.quaternion.copy(qw.invert()).multiply(qb);
+  });
+  return holder;
 }
 export function makeHelm(rig, kind = 'murmillo') {
   const g = new THREE.Group(); g.name = 'helm-' + kind; const m = rig.mats;

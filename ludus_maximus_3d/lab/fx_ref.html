@@ -112,7 +112,7 @@ function trigger() { clearTmp(); cells.forEach((c) => FX[c.n](c.o)); }
 sh.tmp = []; sh.anim = []; sh.stopAt = [];
 layout();
 const ppost = Q.get('post') === '1'; let rt, quad, qscene, qcam, shockV = [0, 1, 2, 3].map(() => new THREE.Vector4());
-if (ppost) { rt = new THREE.WebGLRenderTarget(W * renderer.getPixelRatio(), H * renderer.getPixelRatio(), { type: THREE.HalfFloatType, samples: 4 });
+if (ppost) { rt = new THREE.WebGLRenderTarget(W * renderer.getPixelRatio(), H * renderer.getPixelRatio(), { type: THREE.UnsignedByteType });
   qscene = new THREE.Scene(); qcam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
   quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), new THREE.ShaderMaterial({ uniforms: { tDiffuse: { value: rt.texture }, uShock: { value: shockV }, uRadial: { value: 0 }, uChroma: { value: 0 }, uFlash: { value: new THREE.Vector4() }, uAspect: { value: W / H } },
     vertexShader: 'varying vec2 vUv; void main(){vUv=uv; gl_Position=vec4(position.xy,0.,1.);}', fragmentShader: `varying vec2 vUv; uniform sampler2D tDiffuse; uniform float uAspect; ${GRADE_FX_GLSL}
