@@ -21,7 +21,7 @@ const rngOf = (seed) => { let s = (seed | 0) || 1; return () => (s = (s * 16807)
 
 // palette (sRGB hex, converted to linear by three)
 const C = {
-  plaster: 0xe3c490, plaster2: 0xf0e2c2, trav: 0xe8dcc0, marble: 0xf4efe4, clay: 0xc97a48, wood: 0x9a6a3c, wood2: 0x6a4426, woodLt: 0xb98650, dark: 0x2a2118,
+  plaster: 0xe3c490, plaster2: 0xf0e2c2, trav: 0xe8dcc0, marble: 0xf4efe4, clay: 0xc97a48, wood: 0xb08050, wood2: 0x86603c, woodLt: 0xc99a62, dark: 0x2a2118,
   iron: 0x565a63, bronze: 0xc08a3e, gold: 0xf5c545, purple: 0x6a2470, red: 0xb5352a, green: 0x5b7a3a, leaf: 0x56782f, leaf2: 0x7a9040, sand: 0xdcb47e,
   cream: 0xf0e4c6, soil: 0x6b4a2e, water: 0x4aa3a6, coal: 0x2a1a14, stone: 0xb9ab92, rope: 0xc9b07a, teal: 0x2f8f86,
 };
@@ -89,7 +89,8 @@ export function getLib() {
     }),
     glow: makeGlowMaterial(),
   };
-  LIB.roof.color.setRGB(0.74, 0.66, 0.63); LIB.masonry.color.setRGB(1.12, 1.08, 1.02); LIB.wood.color.setRGB(1.08, 1.05, 1.0);
+  LIB.roof.color.setRGB(0.74, 0.66, 0.63);
+  LIB.roof.emissive.setRGB(0.07, 0.035, 0.05); LIB.masonry.emissive.setRGB(0.05, 0.04, 0.06); LIB.wood.emissive.setRGB(0.05, 0.035, 0.04); LIB.cloth.emissive.setRGB(0.03, 0.02, 0.04); LIB.masonry.color.setRGB(1.12, 1.08, 1.02); LIB.wood.color.setRGB(1.08, 1.05, 1.0);
   return LIB;
 }
 const MATS = ['masonry', 'roof', 'wood', 'metal', 'cloth', 'glow'];
@@ -207,7 +208,7 @@ export class Kit {
       for (let i = 0; i < nT; i++) this.box('wood', 0.1, 0.1, 0.34, cx - (w + 2 * ro) / 2 + 0.31 + i * 0.62, ye - 0.16, cz + s * (half - 0.2), C.wood2, { c: true, rx: -s * a * 0.9 });
     }
     this.cyl('roof', 0.15, 0.15, w + 2 * ro + 0.1, cx, yr + 0.02, cz, o.ridge || tint, { rz: Math.PI / 2, c: true, seg: 6 });
-    if (o.gold) { for (const s of [-1, 1]) this.cone('metal', 0.11, 0.42, cx + s * (w / 2 + ro + 0.02), yr - 0.1, cz, C.gold, { seg: 5 }); }
+    if (o.gold) { this.cyl('metal', 0.1, 0.1, w + 2 * ro + 0.14, cx, yr + 0.13, cz, C.gold, { rz: Math.PI / 2, c: true, seg: 6 }); for (const s of [-1, 1]) this.cone('metal', 0.11, 0.42, cx + s * (w / 2 + ro + 0.02), yr - 0.1, cz, C.gold, { seg: 5 }); }
     if (!o.noGable) for (const s of [1, -1]) this.poly('masonry', [[cx + s * w / 2, y, cz - d / 2], [cx + s * w / 2, y, cz + d / 2], [cx + s * w / 2, yr - 0.1, cz]], o.gableHex || C.plaster, { out: [s, 0, 0] });
     return yr;
   }
@@ -436,10 +437,10 @@ DESIGN.kitchen = (k, lv) => {
   k.gable(bx, bz, bw, bd, bh, 1.3, { gold: lv >= 5, tint: lv >= 5 ? 0xfff0d8 : 0xffffff });
   // oven (right back) with dome, mouth glow
   const ox = 2.55, oz = -1.45;
-  k.box('masonry', 2.3, 1.0, 1.9, ox, 0, oz, C.stone); k.sphere('roof', 1.05, ox, 1.0, oz, 0xf0d8c0, { half: true, sy: 0.85, seg: 12 });
+  k.box('masonry', 2.3, 1.0, 1.9, ox, 0, oz, C.stone); k.sphere('masonry', 1.05, ox, 1.0, oz, 0xd9b890, { half: true, sy: 0.85, seg: 12 });
   k.box('glow', 0.75, 0.5, 0.06, ox, 0.28, oz + 0.96, [3.0, 1.1, 0.3], { em: [1, 1.0], ao: 0 }); k.box('masonry', 0.95, 0.12, 0.2, ox, 0.8, oz + 0.9, C.trav); k.box('masonry', 0.16, 0.56, 0.2, ox - 0.5, 0.24, oz + 0.9, C.trav); k.box('masonry', 0.16, 0.56, 0.2, ox + 0.5, 0.24, oz + 0.9, C.trav);
   const chH = lv >= 3 ? 5.4 : 4.5; k.box('masonry', 0.62, chH - 0.9, 0.62, ox + 0.5, 0.9, oz - 0.5, C.stone); k.box('masonry', 0.85, 0.2, 0.85, ox + 0.5, chH - 0.1, oz - 0.5, C.trav); k.smoke(ox + 0.5, chH + 0.15, oz - 0.5, { r: 0.28, rate: 1.4 });
-  if (lv >= 3) { k.box('masonry', 1.6, 0.8, 1.4, 0.55, 0, -2.2, C.stone); k.sphere('roof', 0.75, 0.55, 0.8, -2.2, 0xf0d8c0, { half: true, sy: 0.85, seg: 10 }); k.box('glow', 0.5, 0.35, 0.05, 0.55, 0.2, -1.48, [3.0, 1.1, 0.3], { em: [1, 1.0], ao: 0 }); k.box('masonry', 0.5, 2.8, 0.5, 0.2, 0.8, -2.7, C.stone); k.smoke(0.2, 3.7, -2.7, { r: 0.2, rate: 0.9 }); }
+  if (lv >= 3) { k.box('masonry', 1.6, 0.8, 1.4, 0.55, 0, -2.2, C.stone); k.sphere('masonry', 0.75, 0.55, 0.8, -2.2, 0xd9b890, { half: true, sy: 0.85, seg: 10 }); k.box('glow', 0.5, 0.35, 0.05, 0.55, 0.2, -1.48, [3.0, 1.1, 0.3], { em: [1, 1.0], ao: 0 }); k.box('masonry', 0.5, 2.8, 0.5, 0.2, 0.8, -2.7, C.stone); k.smoke(0.2, 3.7, -2.7, { r: 0.2, rate: 0.9 }); }
   // serving counter + awning
   const aw = lv >= 2 ? 3.4 : 2.5, ax = 2.5;
   k.box('wood', aw, 0.9, 0.6, ax, 0, 1.6, C.wood); k.box('masonry', aw + 0.12, 0.08, 0.7, ax, 0.9, 1.6, C.marble);
@@ -468,7 +469,7 @@ DESIGN.bath = (k, lv) => {
   k.cyl('masonry', R, R, wh - 0.4, 0, 0.4, cz, marble, { seg: 12 });
   k.cyl('masonry', R + 0.14, R + 0.14, 0.2, 0, wh - 0.2, cz, C.trav, { seg: 12 });
   const n = 6; for (let i = 0; i < n; i++) { const a = i / n * TAU + 0.5; k.at(Math.sin(a) * R * 0.96, 0, cz + Math.cos(a) * R * 0.96, a, () => k.win(0, 1.15, 0.0, 0.5, 0.95, { shut: false })); }
-  const domeR = R + 0.12; k.sphere('roof', domeR, 0, wh, cz, lv >= 5 ? 0xffe6b8 : 0xf4d2a8, { half: true, sy: 0.82, seg: 14, hseg: 6 });
+  const domeR = R + 0.12; k.sphere('masonry', domeR, 0, wh, cz, lv >= 5 ? 0xfff0d0 : 0xf2e4c8, { half: true, sy: 0.82, seg: 14, hseg: 6 }); k.cyl('metal', domeR + 0.04, domeR + 0.04, 0.1, 0, wh + 0.02, cz, lv >= 4 ? C.gold : C.bronze, { seg: 14 });
   k.cyl('metal', 0.34, 0.4, 0.18, 0, wh + domeR * 0.82 - 0.08, cz, lv >= 5 ? C.gold : C.bronze, { seg: 10 }); k.sphere('metal', 0.16, 0, wh + domeR * 0.82 + 0.14, cz, lv >= 5 ? C.gold : C.bronze, { seg: 7, hseg: 5 });
   k.smoke(0, wh + domeR * 0.82 + 0.3, cz, { r: 0.35, rate: 1.0, tint: 1 });
   // portico
@@ -482,14 +483,14 @@ DESIGN.bath = (k, lv) => {
     const wx = s * 3.0, wz = -1.55, wd = 2.3;
     k.box('masonry', 2.0, 0.4, wd + 0.2, wx, 0, wz, C.trav); k.box('masonry', 1.8, 2.3, wd, wx, 0.4, wz, marble);
     k.at(wx, 0, wz, 0, () => { k.win(0, 1.3, wd / 2, 0.5, 0.8, { shut: false }); });
-    if (lv >= 4) { k.sphere('roof', 1.0, wx, 2.7, wz, 0xf4d2a8, { half: true, sy: 0.8, seg: 10 }); k.sphere('metal', 0.1, wx, 3.5, wz, lv >= 5 ? C.gold : C.bronze, { seg: 6, hseg: 4 }); }
+    if (lv >= 4) { k.sphere('masonry', 1.0, wx, 2.7, wz, 0xf2e4c8, { half: true, sy: 0.8, seg: 10 }); k.sphere('metal', 0.1, wx, 3.5, wz, lv >= 5 ? C.gold : C.bronze, { seg: 6, hseg: 4 }); }
     else k.hip(wx, wz, 1.8, wd, 2.7, 1.0, { finial: false });
     k.box('masonry', 0.5, 1.3, 0.5, wx + s * 0.55, 2.7, wz - 0.6, C.stone); k.smoke(wx + s * 0.55, 4.1, wz - 0.6, { r: 0.22, rate: 0.9, tint: 1 });
   }
   if (lv >= 3) for (const s of [-1, 1]) {
     const px = s * 3.0, pzz = 1.2;
     k.box('masonry', 2.0, 0.34, 2.0, px, 0, pzz, marble, { ao: 0.5 });
-    k.box('glow', 1.6, 0.04, 1.6, px, 0.3, pzz, [0.22, 0.62, 0.64], { em: [0, 0], ao: 0 });
+    k.box('glow', 1.6, 0.04, 1.6, px, 0.3, pzz, [0.10, 0.34, 0.38], { em: [0, 0], ao: 0 });
     k.at(px, 0, pzz, 0, () => { for (const [x, z, w, d] of [[0, -0.9, 2.0, 0.2], [0, 0.9, 2.0, 0.2], [-0.9, 0, 0.2, 1.6], [0.9, 0, 0.2, 1.6]]) k.box('masonry', w, 0.14, d, x, 0.34, z, marble); });
   }
   if (lv >= 4) { k.statue(-3.7, 2.4, 0, 0.8, 0xe8e0d0, { helm: false }); k.statue(3.7, 2.4, 0, 0.8, 0xe8e0d0, { helm: false }); }
@@ -647,7 +648,7 @@ DESIGN.scout = (k, lv) => {
 DESIGN.sparring = (k, lv) => {
   k.H = 3.5;
   const R = 2.35, cz = -0.1;
-  k.cyl('masonry', R + 0.1, R + 0.1, 0.07, 0, 0, cz, C.sand, { seg: 24, ao: 0.3 });
+  k.cyl('masonry', R + 0.1, R + 0.1, 0.07, 0, 0, cz, 0xf3e0b4, { seg: 24, ao: 0.3 });
   for (let i = 0; i < 16; i++) { const a = i / 16 * TAU; k.box('masonry', 0.7, lv >= 3 ? 0.34 : 0.2, 0.34, Math.sin(a) * (R + 0.2), 0, cz + Math.cos(a) * (R + 0.2), C.trav, { ry: a }); }
   const np = lv >= 2 ? 20 : 8;
   for (let i = 0; i < np; i++) {
