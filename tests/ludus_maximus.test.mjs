@@ -308,5 +308,14 @@ ok(strongWins >= 17, `level 10 beats level 1 (${strongWins}/20)`);
   ok(D.CHANTS.length >= 5, 'crowd has chants');
 }
 
+// round 8: earned nicknames, rival owner, town crier
+{
+  const S8 = LM.newGame({ name: 'R8' }); const g = LM.makeGlad({ id: S8.nextId++, style: 'thraex', lvl: 4 }); S8.glads.push(g); g.rec.w = 12;
+  const n1 = LM.earnNick(S8); ok(n1.length === 1 && g.nick === 'Crowd Pleaser', 'a deed earns a nickname'); ok(LM.earnNick(S8).length === 0, 'a deed is only honored once');
+  for (let i = 0; i < 3; i++) LM.ownerTick(S8, false); ok(S8.rowner.w === 3 && S8.news.length === 1, 'the rival owner taunts after three losses');
+  for (let i = 0; i < 4; i++) LM.ownerTick(S8, true); const f0 = S8.fame; ok(S8.rowner === null && S8.news.some((x) => /humbled/.test(x)), 'beating the rival owner four times humbles them');
+  const cr = LM.crier(S8, { nicks: n1 }); ok(cr.length >= 1 && cr.length <= 3 && S8.news.length === 0, 'the crier drains the news');
+}
+
 console.log(`ludus_maximus: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

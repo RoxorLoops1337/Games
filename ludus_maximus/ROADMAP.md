@@ -76,7 +76,16 @@ Duo ultimates (pincer, wall, storm), season recap with confetti, fighter backsto
 Rival of the Year award in the season recap, sponsor pledges (win 3 fights for a bonus), retirement pension and ceremony stamp in the Hall of Legends, crowd chants on roars.
 
 ## Next ideas
-- [ ] 37. Weekly town crier headlines about your fighters
-- [ ] 38. Fighter nicknames earned from deeds
-- [ ] 39. Training montage animation after the weekly plan
-- [ ] 40. Rival ludus owners with a recurring storyline
+- [x] 37. Weekly town crier headlines about your fighters
+- [x] 38. Fighter nicknames earned from deeds
+- [x] 39. Training montage animation after the weekly plan
+- [x] 40. Rival ludus owners with a recurring storyline
+
+## Round 8 shipped
+Town Crier headlines in the week summary, nicknames earned from deeds, a bobbing training montage, and a recurring rival ludus owner who taunts you and can be humbled.
+
+## Next ideas
+- [ ] 41. Rival owner sends a champion to a special duel
+- [ ] 42. Nickname perks (small passive per deed)
+- [ ] 43. Forum board showing past crier headlines
+- [ ] 44. Seasonal arena decorations

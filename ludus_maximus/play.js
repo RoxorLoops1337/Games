@@ -69,13 +69,14 @@
 
   function trainHtml(S, rep, wk) {
     let h = `<h2>Week ${wk} training</h2>`;
-    h += rep.lines.map((l) => { const g = U.gOf(l.id); return `<div class="itm" style="cursor:default"><div style="width:40px;height:46px;overflow:hidden;display:flex;align-items:flex-end;justify-content:center">${U.spr(g, { size: 42 })}</div><div class="sp"><div class="gname" style="font-size:12px">${esc(l.name)}</div><div class="small">${esc(l.txt)}</div></div></div>`; }).join('');
+    h += rep.lines.map((l) => { const g = U.gOf(l.id); return `<div class="itm" style="cursor:default"><div class="mont" style="width:40px;height:46px;overflow:hidden;display:flex;align-items:flex-end;justify-content:center;animation-delay:${(l.id % 5) * 0.12}s">${U.spr(g, { size: 42 })}</div><div class="sp"><div class="gname" style="font-size:12px">${esc(l.name)}</div><div class="small">${esc(l.txt)}</div></div></div>`; }).join('');
     if (rep.menuCost) h += `<div class="small">Kitchen: -${fmt(rep.menuCost)} gold</div>`;
     const due = L.dueKeys(S).length;
     return h + btn(due ? 'To the arena!' : 'Continue', 'ok', 'red');
   }
   function summaryHtml(S, fin, wk) {
     let h = `<h2>Week ${wk} done</h2><div class="kv"><span>Upkeep paid</span><b>-${fmt(fin.upkeep)}</b></div><div class="kv"><span>Market income</span><b>+${fmt(fin.income)}</b></div><div class="kv"><span>Gold now</span><b>${fmt(S.gold)}</b></div>`;
+    if (fin.news && fin.news.length) h += `<div class="crier"><b>TOWN CRIER</b>${fin.news.map((n) => '<div>' + esc(n) + '</div>').join('')}</div>`;
     fin.notes.forEach((n) => { h += `<div class="small" style="margin-top:6px">${esc(n)}</div>`; });
     if (fin.season) h += `<div class="card" style="margin-top:10px;background:var(--gold);overflow:hidden">${confetti(24)}<b class="h">Season ${fin.season} begins!</b><div class="small">Rivals have grown stronger. New prizes, new faces.</div></div>`;
     if (fin.recap) h += `<div class="recap"><b>SEASON ${fin.season - 1} RECAP</b><div class="small" style="font-weight:700;margin-top:4px">Record: <b>${fin.recap.wins}W ${fin.recap.losses}L</b> · Fame gained: <b>${fin.recap.fame}</b> · Tournaments won: <b>${fin.recap.tour}</b>${fin.recap.mvp ? `<br>MVP: <b>${esc(fin.recap.mvp.name)}</b> with ${fin.recap.mvp.w} win${fin.recap.mvp.w > 1 ? 's' : ''}` : ''}${fin.recap.rival ? `<br>Rivals of the Year: <b>${esc(fin.recap.rival.a)}</b> and <b>${esc(fin.recap.rival.b)}</b> (+${fin.recap.rival.fame} fame)` : ''}</div></div>`;

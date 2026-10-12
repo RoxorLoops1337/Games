@@ -485,7 +485,7 @@
       if (ev.kind === 'tourney' || ev.kind === 'grand') rep.fac.push(LM.facGain(S, 'sen', ev.kind === 'grand' ? 14 : 9));
       else rep.fac.push(LM.facGain(S, 'sen', 1));
     }
-    S.stats.fights++; if (wonAny) { S.stats.wins++; if (S.sponsor && S.sponsor.pledge) S.sponsor.pledge.got++; } else S.stats.losses++;
+    LM.ownerTick(S, wonAny); S.stats.fights++; if (wonAny) { S.stats.wins++; if (S.sponsor && S.sponsor.pledge) S.sponsor.pledge.got++; } else S.stats.losses++;
     if (wonAny) { LM.note(S, 'win', { styles: glads.map((g) => g.style), kind: ev.kind }); if (ev.kind === 'tourney' || ev.kind === 'grand') { S.stats.tourneys++; LM.note(S, 'tourney'); if (ev.kind === 'grand' && ev.league === 3) S.flags.imperial = true; } if (ev.kind === 'team') LM.note(S, 'team'); if (res.odds != null && res.odds < 0.4) LM.note(S, 'upset'); }
     return rep;
   };
@@ -558,6 +558,7 @@
     }
     S.market = null; S.recruits = null; LM.relTick(S); rep.story = LM.storyCheck(S);
     LM.fillContracts(S);
+    rep.nicks = LM.earnNick(S); rep.news = LM.crier(S, rep);
     rep.ev = LM.rollEvent(S);
     return rep;
   };
@@ -624,6 +625,26 @@
     const out = [];
     S.glads.forEach((g) => { const st = LM.storyDef(g); if (!st || g.story.done || LM.storyProg(g) < st.goal.n) return; g.story.done = true; g.st[st.rew.stat] += st.rew.v; g.title = st.rew.title; S.fame += st.rew.fame; out.push({ g, st }); });
     return out;
+  };
+
+  // ---------- town crier, earned nicknames, rival owner ----------
+  LM.earnNick = (S) => {
+    const out = [];
+    S.glads.forEach((g) => { g.dd = g.dd || []; D.DEEDS.forEach((d) => { if (!g.dd.includes(d.id) && d.ok(g)) { g.dd.push(d.id); g.nick = d.n; out.push({ g, nick: d.n }); } }); });
+    return out;
+  };
+  LM.ownerTick = (S, won) => {
+    if (!S.rowner) S.rowner = { name: pick(D.FIRST) + ' of ' + pick(D.LUDI), w: 0, l: 0 };
+    const o = S.rowner; S.news = S.news || [];
+    if (won) { o.l++; if (o.l >= 4) { const f = 50 + 15 * LM.maxLeague(S); S.fame += f; S.news.push(`${o.name} is humbled! Their ludus kneels to you (+${f} fame).`); S.rowner = null; } }
+    else { o.w++; if (o.w % 3 === 0) S.news.push(`${o.name} boasts in the forum: "Your gladiators are soft!"`); }
+  };
+  LM.crier = (S, rep) => {
+    const out = (S.news || []).splice(0); const top = S.glads.slice().sort((a, b) => b.fame - a.fame)[0];
+    (rep.nicks || []).forEach((x) => out.push(`The crowd now calls ${x.g.name} "${x.nick}".`));
+    if (top && top.fame > 0 && out.length < 3) out.push(pick(['The streets whisper about %n.', '%n draws crowds to the gates.', 'Poets are writing verses for %n.']).replace('%n', top.name));
+    if (S.sponsor && S.sponsor.pledge && out.length < 3) out.push(`Your sponsor waits to see ${S.sponsor.pledge.n - S.sponsor.pledge.got > 0 ? S.sponsor.pledge.n - S.sponsor.pledge.got + ' more win(s)' : 'the pledge paid'}.`);
+    return out.slice(0, 3);
   };
 
   // ---------- rival of the year: the pair that clashed most this season ----------
