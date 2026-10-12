@@ -7,8 +7,8 @@
 //   arena.setDensity(0..1) crowd LOD        arena.DIM  dimensions        arena.shadowHint {center, radius}
 // Draw calls: ~28 (+ shadow pass). Crowd = 1 InstancedMesh animated in the vertex shader (zero CPU per frame).
 import * as THREE from 'three';
-import { mergeGeos, prepGeo, patchMaterial, createFlames, createBlobShadows } from './fx_ref.js';
-import { makeSandTexture, makeStoneTexture, makeRadialTexture } from './tex_ref.js';
+import { mergeGeos, prepGeo, patchMaterial, createFlames, createBlobShadows } from './envfx_ref.js';
+import { makeSandTexture, makeStoneTexture, makeRadialTexture } from './envtex_ref.js';
 
 const TAU = Math.PI * 2;
 export const DIM = {

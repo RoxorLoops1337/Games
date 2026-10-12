@@ -66,7 +66,7 @@ export function lathe(profile, seg = 8, sx = 1, sz = 1, ao = 0.2, lo = 0.72) {
 export function capsule(len, rTop, rBot, seg = 7, bulge = 0.1) {
   // hangs down from y=0 to y=-len, rounded caps, muscle bulge
   const cb = rBot * 0.55, ct = rTop * 0.55, mid = lerp(rBot, rTop, 0.5) * (1 + bulge);
-  return lathe([[0, -len - cb], [rBot * 0.75, -len - cb * 0.55], [rBot, -len], [mid, -len * 0.5], [rTop, 0], [rTop * 0.75, ct * 0.55], [0, ct]], seg, 1, 1, 0.18, 0.74);
+  return lathe([[0, -len - cb], [rBot * 0.8, -len - cb * 0.5], [mid, -len * 0.5], [rTop, 0], [rTop * 0.72, ct * 0.7], [0, ct]], seg, 1, 1, 0.14, 0.8);
 }
 export function boxG(w, h, d, ao = 0) { const g = new THREE.BoxGeometry(w, h, d); return addAO(g, ao, 0.8); }
 export function sphereG(r, w = 8, h = 5, sx = 1, sy = 1, sz = 1) { const g = new THREE.SphereGeometry(r, w, h); g.scale(sx, sy, sz); return addAO(g, 0.25, 0.8); }
@@ -479,7 +479,7 @@ export class ChainMesh extends VerletGrid {
   constructor(o) {
     super(Object.assign({}, o, { cols: 1 })); this.segs = []; this.group = new THREE.Group(); this.group.name = o.name || 'chain';
     const n = this.rows - 1; this.radius = o.radius || [0.03, 0.012]; this.flat = o.flat || [0.5, 1.5];
-    const base = capsule(1, 1, 1, 6, 0.0); // unit capsule hanging down y 0..-1
+    const base = o.box ? (() => { const g = new THREE.BoxGeometry(1, 1, 1); g.translate(0, -0.5, 0); const c = new Float32Array(g.attributes.position.count * 3).fill(1); g.setAttribute('color', new THREE.BufferAttribute(c, 3)); return g; })() : capsule(1, 1, 1, 5, 0.0); // unit shape hanging down y 0..-1
     for (let i = 0; i < n; i++) { const m = new THREE.Mesh(base, o.material); m.castShadow = true; m.matrixAutoUpdate = false; m.frustumCulled = false; this.group.add(m); this.segs.push(m); }
     this._up = new V3(0, -1, 0);
   }
@@ -499,7 +499,7 @@ export class ChainMesh extends VerletGrid {
 // opts: {palette, build:{bulk,height,shoulder}, torso:'skin'|'cloth'|'leather'|'metal', armsBare, legsBare, hair:'short'|'none', boots, belt, loincloth, name}
 export function buildGladiator(opts = {}) {
   const pal = Object.assign({}, DEFAULT_PALETTE, opts.palette || {}), mats = makeMaterials(pal);
-  const bd = Object.assign({ bulk: 1, height: 1, shoulder: 1, seg: 7 }, opts.build || {}), B = bd.bulk, S = bd.seg;
+  const bd = Object.assign({ bulk: 1, height: 1, shoulder: 1, seg: 6 }, opts.build || {}), B = bd.bulk, S = bd.seg;
   const root = new THREE.Group(); root.name = opts.name || 'gladiator'; const body = new THREE.Group(); body.name = 'body'; root.add(body); body.scale.setScalar(bd.height);
   const J = {}; const mk = (n, parent, x, y, z) => { const o = new THREE.Object3D(); o.name = n; o.position.set(x, y, z); parent.add(o); J[n] = o; return o; };
   mk('hips', body, 0, DIM.hipY, 0); mk('spine', J.hips, 0, DIM.spineY, 0); mk('chest', J.spine, 0, DIM.chestY, 0); mk('neck', J.chest, 0, DIM.neckY, 0); mk('head', J.neck, 0, DIM.headY, 0);
@@ -513,9 +513,9 @@ export function buildGladiator(opts = {}) {
   const add = (parent, geo, mat, name, x = 0, y = 0, z = 0) => { const m = mesh(geo, mat, name); m.position.set(x, y, z); parent.add(m); return m; };
 
   // torso: pelvis, abdomen, chest (elliptical lathes), neck, head
-  add(J.hips, lathe([[0, -0.14], [0.14, -0.12], [0.185 * B, -0.02], [0.19 * B, 0.06], [0.15 * B, 0.12], [0, 0.13]], 9, 1, 0.7, 0.2, 0.7), mats.cloth, 'pelvis');
-  add(J.spine, lathe([[0, -0.1], [0.15 * B, -0.08], [0.16 * B, 0.05], [0.17 * B, 0.2], [0, 0.22]], 9, 1, 0.72, 0.15, 0.75), torsoMat, 'abdomen');
-  add(J.chest, lathe([[0, -0.03], [0.17 * B, -0.02], [0.215 * B, 0.1], [0.245 * B, 0.2], [0.23 * B, 0.29], [0.13, 0.36], [0, 0.37]], 10, 1, 0.66, 0.2, 0.8), torsoMat, 'chest');
+  add(J.hips, lathe([[0, -0.14], [0.14, -0.12], [0.185 * B, -0.02], [0.19 * B, 0.06], [0.15 * B, 0.12], [0, 0.13]], 9, 1, 0.7, 0.08, 0.9), mats.cloth, 'pelvis');
+  add(J.spine, lathe([[0, -0.1], [0.15 * B, -0.08], [0.16 * B, 0.05], [0.17 * B, 0.2], [0, 0.22]], 9, 1, 0.7, 0.06, 0.9), torsoMat, 'abdomen');
+  add(J.chest, lathe([[0, -0.03], [0.17 * B, -0.02], [0.215 * B, 0.1], [0.245 * B, 0.2], [0.23 * B, 0.29], [0.13, 0.36], [0, 0.37]], 9, 1, 0.7, 0.08, 0.9), torsoMat, 'chest');
   add(J.neck, lathe([[0, -0.04], [0.065, -0.04], [0.058, 0.04], [0.055, 0.09], [0, 0.1]], 6, 1, 1, 0.2, 0.8), mats.skin, 'neck');
   const head = J.head;
   add(head, lathe([[0, -0.015], [0.055, -0.005], [0.08, 0.04], [0.098, 0.1], [0.105, 0.15], [0.09, 0.21], [0.05, 0.245], [0, 0.255]], 9, 0.93, 1.06, 0.15, 0.85), mats.skin, 'skull', 0, 0, 0.0);
@@ -528,17 +528,16 @@ export function buildGladiator(opts = {}) {
   }
   // arms
   for (const [s, sg] of [['L', 1], ['R', -1]]) {
-    add(J['shoulder' + s], sphereG(0.07 * B, 8, 5), torsoMat === mats.skin ? mats.skin : torsoMat, 'deltoid' + s);
+    add(J['shoulder' + s], sphereG(0.07 * B, 6, 4), torsoMat === mats.skin ? mats.skin : torsoMat, 'deltoid' + s);
     add(J['shoulder' + s], capsule(DIM.upperArm, 0.062 * B, 0.05 * B, S, 0.12), armMat, 'upperArm' + s);
     add(J['elbow' + s], capsule(DIM.foreArm, 0.05 * B, 0.036 * B, S, 0.14), armMat, 'foreArm' + s);
-    const hand = add(J['wrist' + s], lathe([[0, -0.115], [0.03, -0.1], [0.042, -0.05], [0.04, 0.0], [0.03, 0.015], [0, 0.02]], 6, 1.0, 0.8, 0.15, 0.8), mats.skin, 'hand' + s);
+    const hand = add(J['wrist' + s], lathe([[0, -0.115], [0.036, -0.07], [0.042, -0.01], [0, 0.02]], 5, 1.0, 0.8, 0.15, 0.85), mats.skin, 'hand' + s);
     // socket: weapon authored along +Y with grip at origin; Rx(pi) maps weapon +Y to wrist -Y (blade continues the forearm).
     const sock = new THREE.Object3D(); sock.name = 'hand' + s + 'Socket'; sock.position.set(0, -0.075, 0); sock.rotation.x = Math.PI; J['wrist' + s].add(sock); J['hand' + s] = sock;
     // legs
     add(J['hip' + s], capsule(DIM.thigh, 0.1 * B, 0.066 * B, S, 0.1), legMat, 'thigh' + s);
     add(J['knee' + s], capsule(DIM.shin, 0.066 * B, 0.045 * B, S, 0.14), legMat, 'shin' + s);
-    add(J['knee' + s], sphereG(0.055 * B, 6, 4), legMat, 'kneecap' + s, 0, 0, 0.03);
-    const foot = lathe([[0, -0.11], [0.04, -0.1], [0.052, -0.04], [0.05, 0.06], [0.04, 0.13], [0.0, 0.16]], 6, 1, 1.0, 0.1, 0.8); foot.rotateX(Math.PI / 2); foot.scale(1, 1, 0.55);
+    const foot = lathe([[0, -0.11], [0.05, -0.06], [0.05, 0.06], [0.036, 0.13], [0.0, 0.16]], 5, 1, 1.0, 0.1, 0.85); foot.rotateX(Math.PI / 2); foot.scale(1, 1, 0.55);
     foot.translate(0, -DIM.footH + 0.03, 0.04);
     add(J['ankle' + s], foot, opts.boots === false ? mats.skin : mats.leather, 'foot' + s);
   }

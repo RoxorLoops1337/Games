@@ -6,10 +6,10 @@
 </head><body>
 <script type="module">
 import * as THREE from 'three';
-import { bootLab } from './ref/lab_boot.js';
+import { bootLab } from './ref/env_lab_boot.js';
 import { createSky, createLightRig, applyTOD, TOD, lerpTOD } from './ref/sky_ref.js';
 import { createArena } from './ref/env_arena_ref.js';
-import { createDustMotes, createGodRays } from './ref/fx_ref.js';
+import { createDustMotes, createGodRays } from './ref/envfx_ref.js';
 
 const lab = bootLab();
 const { scene, camera, renderer, post, q } = lab;

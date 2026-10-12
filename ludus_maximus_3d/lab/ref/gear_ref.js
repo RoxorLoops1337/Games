@@ -84,7 +84,7 @@ export function addSkirt(rig, n = 8, len = 0.26) {
     const a = (i / n) * Math.PI * 2, r = 0.185; const x = Math.sin(a) * r, z = Math.cos(a) * r * 0.72;
     const sock = new THREE.Object3D(); sock.position.set(x, -0.02, z); rig.joints.hips.add(sock); rig.sockets['sk' + i] = sock;
     const front = Math.abs(Math.cos(a)) > 0.7;
-    addTassel(rig, 'sk' + i, { rows: 3, length: len, radius: [0.05, 0.04], flat: front ? [1.5, 0.4] : [0.4, 1.5], material: i % 2 ? rig.mats.leather : rig.mats.cloth });
+    addTassel(rig, 'sk' + i, { rows: 3, length: len, radius: [0.05, 0.04], flat: front ? [1.5, 0.4] : [0.4, 1.5], material: i % 2 ? rig.mats.leather : rig.mats.cloth, box: true });
   }
 }
 
@@ -100,7 +100,7 @@ export function equipStyle(rig, style) {
     out.helm = makeHelm(rig, 'murmillo'); J.head.add(out.helm);
     J.elbowR.add(makeManica(rig)).position.y = -0.0; rig.joints.elbowR.children[rig.joints.elbowR.children.length - 1].position.y = -0.01;
     J.kneeL.add(makeGreave(rig)); addSkirt(rig, 8);
-    addTassel(rig, 'beltFront', { length: 0.3, rows: 4, material: m.cloth, radius: [0.04, 0.03], flat: [1.4, 0.4] });
+    addTassel(rig, 'beltFront', { length: 0.3, rows: 4, material: m.cloth, radius: [0.04, 0.03], flat: [1.4, 0.4], box: true });
   } else if (style === 'retiarius') {
     rig.animator.setWeapon('spear');
     out.weapon = makeTrident(rig); J.handR.add(out.weapon); rig.animator.ik.hand = { target: out.weapon.userData.gripB, w: 1, side: 'L' };

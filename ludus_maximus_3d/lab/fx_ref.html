@@ -104,7 +104,7 @@ function layout() {
   else { camera.position.set(0, 5.5, 9.5); camera.lookAt(0, 0.9, 0); camera.fov = 40; }
   camera.updateProjectionMatrix(); feel.setBaseFov(camera.fov);
   pillars.splice(0).forEach((m) => scene.remove(m));
-  const zb = -(rows * SZ) / 2 - 2.5, xb = (cols * SX) / 2 + 1.5;
+  const zb = -(rows * SZ) / 2 - 2.5, xb = (cols * SX) / 2 + (sheetName ? 1.5 : 8);
   [[-xb, zb], [0, zb - 1], [xb, zb], [-xb, zb + rows * SZ * 0.5], [xb, zb + rows * SZ * 0.5]].forEach(([x, z]) => pillars.push(pillar(x, z)));
 }
 function clearTmp() { sh.tmp.forEach((d) => scene.remove(d)); sh.tmp = []; sh.anim = []; sh.stopAt = []; }
