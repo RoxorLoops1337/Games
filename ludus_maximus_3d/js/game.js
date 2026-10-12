@@ -135,7 +135,7 @@ export class Game {
     const S = this.S; if (!S) return;
     this.goldC.set(S.gold); this.fameC.set(S.fame);
     const f = L().festival ? L().festival(S, S.week) : null;
-    this.weekChip.textContent = `SEASON ${S.season} · WEEK ${((S.week - 1) % 12) + 1}${f ? ' · ' + (D().FESTIVALS ? (D().FESTIVALS[f] || { n: f }).n : f).toUpperCase() : ''}`;
+    this.weekChip.textContent = `SEASON ${S.season} · WEEK ${((S.week - 1) % 12) + 1}${f && f.n ? ' · ' + String(f.n).toUpperCase() : ''}`;
     const due = L().dueKeys(S).length;
     this.advBtn.querySelector('span') ? 0 : 0;
     const lab = this.advBtn.querySelector('.lx-btn-label') || this.advBtn;
