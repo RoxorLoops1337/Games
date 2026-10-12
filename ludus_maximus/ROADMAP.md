@@ -192,7 +192,16 @@ Diary lines on the Share card, nickname or title under each fighter in the fight
 Armory affix filter, and a backup reminder in the week summary when your save code is more than 12 weeks old.
 
 ## Next ideas
-- [ ] 87. Weekly quests board (85 carried over)
+- [x] 87. Weekly quests board (85 carried over)
 - [ ] 88. Entrance animations per style (84 carried over)
 - [ ] 89. Fight replay and crowd audio (55, 63 carried over)
-- [ ] 90. Balance pass across all styles after the new systems
+- [x] 90. Balance pass across all styles after the new systems
+
+## Round 21 shipped
+Weekly goals board (win 2 fights, claim the bounty, face the horde; each pays gold at week end). Balance matrix re-checked at levels 8 and 15: every style averages 46 to 53%, no changes needed.
+
+## Next ideas
+- [ ] 91. Entrance animations per style (84, 88)
+- [ ] 92. Fight replay and crowd audio (55, 63)
+- [ ] 93. Training dummy upgrades (71)
+- [ ] 94. Goal streak bonus for finishing all three goals several weeks in a row

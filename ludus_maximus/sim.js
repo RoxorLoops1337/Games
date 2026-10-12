@@ -486,7 +486,7 @@
       if (ev.kind === 'tourney' || ev.kind === 'grand') rep.fac.push(LM.facGain(S, 'sen', ev.kind === 'grand' ? 14 : 9));
       else rep.fac.push(LM.facGain(S, 'sen', 1));
     }
-    LM.ownerTick(S, wonAny); S.forum = (S.forum || []).concat([{ w: S.week, t: `${wonAny ? 'Won' : 'Lost'}: ${ev.title || ev.kind} (hype ${Math.round(res.hype || 0)})` }]).slice(-30); S.stats.fights++; if (wonAny) { S.stats.wins++; if (S.sponsor && S.sponsor.pledge) S.sponsor.pledge.got++; } else S.stats.losses++;
+    LM.ownerTick(S, wonAny); S.forum = (S.forum || []).concat([{ w: S.week, t: `${wonAny ? 'Won' : 'Lost'}: ${ev.title || ev.kind} (hype ${Math.round(res.hype || 0)})` }]).slice(-30); S.stats.fights++; if (wonAny) { S.wkWins = (S.wkWins || 0) + 1; S.stats.wins++; if (S.sponsor && S.sponsor.pledge) S.sponsor.pledge.got++; } else S.stats.losses++;
     if (wonAny) { LM.note(S, 'win', { styles: glads.map((g) => g.style), kind: ev.kind }); if (ev.kind === 'tourney' || ev.kind === 'grand') { S.stats.tourneys++; LM.note(S, 'tourney'); if (ev.kind === 'grand' && ev.league === 3) S.flags.imperial = true; } if (ev.kind === 'team') LM.note(S, 'team'); if (res.odds != null && res.odds < 0.4) LM.note(S, 'upset'); }
     return rep;
   };
@@ -550,6 +550,7 @@
     if (S.sponsor && S.sponsor.weeks > 0) { S.sponsor.weeks--; if (S.sponsor.weeks <= 0) { const pl = S.sponsor.pledge; if (pl && pl.got >= pl.n) { S.gold += pl.bonus; rep.income += pl.bonus; rep.notes.push(`Pledge kept! The merchant adds a ${pl.bonus} gold bonus.`); } else rep.notes.push(pl ? `Your sponsor deal has ended. Pledge missed (${pl.got}/${pl.n} wins).` : 'Your sponsor deal has ended.'); S.sponsor = null; } }
     const sh = LM.bfx(S, 'shrine'); if (sh.l) { const f = Math.round(sh.v * 60); S.fame += f; if (f) rep.notes.push(`The shrine drew ${f} fame.`); }
     Object.keys(S.entries).forEach((k) => { if (parseInt(k.split(':')[0], 10) <= S.week) delete S.entries[k]; });
+    { const gl = LM.weeklyGoals(S).filter((x) => x.done); if (gl.length) { const pay = gl.length * LM.goalPay(S); S.gold += pay; rep.income += pay; rep.notes.push(`Weekly goals: ${gl.length}/3 done, +${pay} gold.`); } S.wkWins = 0; }
     S.week++; S.stats.weeks++; S.glads.forEach((g) => { g.fav = Math.max(0, (g.fav || 0) - 2); });
     if ((S.week - 1) % 12 === 0) {
       S.season = Math.ceil(S.week / 12); rep.season = S.season; const sl = S.sl || { fame: 0, wins: 0, losses: 0, tour: 0 }; const mvp = S.glads.slice().sort((a, b) => (b.sw || 0) - (a.sw || 0))[0];
@@ -618,6 +619,13 @@
     return out;
   };
   LM.takePrize = (S, it) => { LM.addItem(S, it); return it; };
+  // weekly goals: three small targets, each paid at week end
+  LM.weeklyGoals = (S) => [
+    { id: 'win2', t: 'Win 2 fights this week', done: (S.wkWins || 0) >= 2, p: Math.min(2, S.wkWins || 0) + '/2' },
+    { id: 'bounty', t: 'Claim the bounty', done: S.bountyWeek === S.week, p: S.bountyWeek === S.week ? '1/1' : '0/1' },
+    { id: 'horde', t: 'Face the horde', done: S.hordeWeek === S.week, p: S.hordeWeek === S.week ? '1/1' : '0/1' },
+  ];
+  LM.goalPay = (S) => 20 + 10 * LM.maxLeague(S);
   LM.diary = (S, g, t) => { g.dy = (g.dy || []).concat([{ w: S.week, t }]).slice(-12); };
   LM.forumAdd = (S, t) => { S.forum = (S.forum || []).concat([{ w: S.week, t }]).slice(-30); };
   LM.rivalryResolve = (S, a, b, choice, winnerId) => {
