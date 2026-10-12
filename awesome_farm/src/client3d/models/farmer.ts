@@ -430,6 +430,8 @@ export class Farmer {
             }
         }
     }
+    /** A white flash of the whole body (a Perfect dash). */
+    flash() { this.hurtT = Math.max(this.hurtT, 0.35); }
     /** A co-op boss status (`PlayerS.co`): the ice block or the hex wisps (the chain between two farmers is the entity layer's). */
     status(co: CoStatus | undefined) {
         const k = co && co.k !== 'tether' ? co.k : '';

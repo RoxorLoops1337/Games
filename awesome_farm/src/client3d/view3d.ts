@@ -26,7 +26,7 @@ import { buildingModel } from './models/buildings';
 import { ROCK_H } from './caves';
 import { env } from './models/kit';
 import { Mood, type MoodParts } from './mood';
-import { AutoStep, deviceInfo, pixelRatio, QUALITY, type QualityLevel, type QualitySpec, resolveQuality, stepDown } from './quality';
+import { AutoRecover, AutoStep, deviceInfo, pixelRatio, QUALITY, type QualityLevel, type QualitySpec, resolveQuality, stepDown } from './quality';
 import { makePost, makeRenderer } from './render';
 import { dressForSeasons, seasonGround } from './seasons';
 import { Sky } from './sky';
@@ -118,6 +118,11 @@ class GameView3D implements View3D {
     private spec: QualitySpec = QUALITY.high;
     private qSetting: Quality3D | null = null;
     private readonly auto = new AutoStep();
+    /** Auto's way back up (quality.ts AutoRecover): the level that was too heavy, the one tried again, and whether Auto has given up on it. */
+    private readonly recover = new AutoRecover();
+    private heavy: QualityLevel | null = null;
+    private triedUp: QualityLevel | null = null;
+    private frozen = false;
     private lastNow = 0;
     private dpr = 1;
     private lampsOn = false;
@@ -165,6 +170,8 @@ class GameView3D implements View3D {
         this.ents = new Entities(this.scene, world);
         this.ents.gone = (obj) => this.ledger.dropModel(obj);
         this.ents.wading = this.wading;
+        // a new node, building, creature or monster raises a small puff of dust where it appears (as 2D's ambient burst does)
+        this.ents.arrived = (e, x, z) => { if (this.spec.ambient) this.particles.burst(x, 0.3, z, e.k === 'node' || e.k === 'bld' ? [C.sand, C.cream] : [C.cream, C.foam], e.k === 'bld' ? 5 : 4, 0.9, 1.1, 0.5); };
         for (const e of ents) this.upsert(e);
         this.mood.welcome(world);
         this.swingT.clear();
@@ -174,8 +181,8 @@ class GameView3D implements View3D {
         this.wading.clear();
     }
 
-    upsert (e: Ent) {
-        this.ents?.upsert(e);
+    upsert (e: Ent, pop = false) {
+        this.ents?.upsert(e, pop);
         if (e.k === 'node') {
             const obj = this.ents?.views.get(e.id)?.model.obj;
             if (obj && !this.dressed.has(obj)) { this.dressed.add(obj); dressForSeasons(obj); }
@@ -222,6 +229,7 @@ class GameView3D implements View3D {
                 if (Math.abs(x - this.camT.x) > 26 || Math.abs(z - this.camT.z) > 20) return;
                 this.particles.burst(x, spec.y ?? 0.7, z, spec.colors, spec.n, spec.speed, spec.up, spec.size);
                 this.impacts.fx(e.fx, x, z - 0.3);
+                if (e.fx === 'perfect' && e.by) this.ents?.farmers.get(e.by)?.m.flash();      // (the Perfect dash: the farmer flashes white, as the 2D sprite does)
                 return;             // (the shake is the 2D camera's, read every frame: only your own actions shake your camera)
             }
             case 'tele':
@@ -235,6 +243,9 @@ class GameView3D implements View3D {
                 return;
             case 'hop':
                 this.ents?.hop(e.id);
+                return;
+            case 'work':
+                this.ents?.lunge(e.id, tiles(e.x), tiles(e.y), e.kind);
                 return;
             default:
                 return;
@@ -314,11 +325,23 @@ class GameView3D implements View3D {
         if (q !== this.qSetting) this.setQuality(q);
         const now = performance.now(), ms = this.lastNow ? now - this.lastNow : 0;
         this.lastNow = now;
-        if (q === 'auto' && this.spec.level !== 'low' && this.auto.frame(ms)) this.applyLevel(stepDown(this.spec.level));
+        if (q !== 'auto') return;
+        if (this.spec.level !== 'low' && this.auto.frame(ms)) {
+            if (this.triedUp === this.spec.level) this.frozen = true;          // it was slow again after the second try: give that level up
+            this.heavy = this.spec.level;
+            this.triedUp = null;
+            this.recover.reset();
+            this.applyLevel(stepDown(this.spec.level));
+        } else if (this.heavy && !this.frozen && this.recover.frame(ms)) {
+            this.triedUp = this.heavy;
+            this.heavy = null;
+            this.applyLevel(this.triedUp);
+        }
     }
 
     private setQuality (q: Quality3D) {
         this.qSetting = q;
+        this.heavy = null; this.triedUp = null; this.frozen = false; this.recover.reset();
         this.applyLevel(resolveQuality(q, deviceInfo()));
     }
 

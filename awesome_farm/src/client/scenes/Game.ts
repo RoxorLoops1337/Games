@@ -762,7 +762,7 @@ export class GameScene extends Phaser.Scene {
 
     private upsert (e: Ent) {
         this.ents[e.id] = e;
-        this.view3d?.upsert(e);
+        this.view3d?.upsert(e, !this.views.has(e.id));
         const v = this.views.get(e.id);
         if (!v) { occupy(this.world, e); this.createView(e, true); return; }
         v.ent = e;

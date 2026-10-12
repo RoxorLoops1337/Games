@@ -178,7 +178,8 @@ export interface View3D {
     /** A world arrived (join, reconnect): forget everything and build it from this state. */
     welcome (world: World, ents: Iterable<Ent>): void;
     /** An entity is new or changed (the latest state, as the tick carried it). */
-    upsert (e: Ent): void;
+    /** `pop`: it is new in a world that was already running (it grows in, pops in or arcs out; a world just loaded is simply there). */
+    upsert (e: Ent, pop?: boolean): void;
     /** An entity is gone. */
     remove (id: number): void;
     /** Land changed: `risen` plots were just bought (they rise out of the sea), the rest only need redrawing. */

@@ -1,6 +1,7 @@
 // The Iridium Drill: a squat violet-banded housing under a small derrick; its bit turns and bobs while it drills (the sim touches it
 // every second it works), with a glowing violet crystal on top and a plume of violet dust.
 import * as THREE from 'three';
+import { TUNING } from '../../shared/config';
 import type { BuildE } from '../../shared/sim/types';
 import { housing, PIT } from './b-work-power';
 import { puffs, sc } from './b-work-util';
@@ -40,12 +41,16 @@ export function iridiumDrill(_o: BOpts): Model<BuildE> {
     }));
     const dust = puffs({ x: 0, y: 0.5, z: 0, rise: 0.7, dx: 0.1, dz: 0.1, size: 0.9, period: 1.4, n: 4, color: IRI, spread: 0.28 });
     inner.add(dust.group);
-    let busy = 0, lastIp = -1;
+    // a few seconds before the next wave of hunters steps out the drill shows it: red dust and a throbbing bit
+    const alarm = puffs({ x: 0, y: 1.7, z: 0, rise: 0.5, dx: 0.05, dz: 0.05, size: 0.7, period: 0.7, n: 3, color: 0xe85d62, spread: 0.2 });
+    inner.add(alarm.group);
+    let busy = 0, lastIp = -1, soon = false;
     return {
         obj: inner,
         apply(e) {
             if ((e.ip ?? 0) !== lastIp) busy = 2.2;                 // it moved since the last time: it is drilling
             lastIp = e.ip ?? 0;
+            soon = (e.iw ?? 0) > TUNING.iridium.waveEvery - 6;
         },
         update(dt: number, t: number) {
             busy = Math.max(0, busy - dt);
@@ -55,6 +60,8 @@ export function iridiumDrill(_o: BOpts): Model<BuildE> {
                 rod.position.y = 0.36 + Math.sin(t * 18) * 0.025;
             } else rod.position.y = 0.36;
             dust.update(t, on);
+            alarm.update(t, on && soon);
+            if (on && soon) rod.scale.setScalar(1 + Math.sin(t * 14) * 0.06); else rod.scale.setScalar(1);
         }
     };
 }

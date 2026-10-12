@@ -40,7 +40,11 @@ const FRAG = /* glsl */`
     float facing = dot(normal, up);
     float face = seasonHash(floor(vSeasonObj * 5.0) + vSeasonSeed * 7.0);
     vec3 col = c;
-#ifdef FOLIAGE
+#ifdef SNOWONLY
+    // buildings: nothing recoloured, only snow on whatever faces the sky, in winter
+    float roofSnow = smoothstep(0.38, 0.72, facing) * (0.75 + 0.25 * face);
+    col = mix(c, mix(c, vec3(0.88, 0.94, 1.0), roofSnow), uSeason.w);
+#elif defined(FOLIAGE)
     // spring: fresher, brighter green, and blossom on the faces of a crown that look up
     vec3 spring = mix(c, c * vec3(1.15, 1.18, 0.9) + vec3(0.02, 0.03, 0.0), green);
     float bloom = green * step(face, 0.2) * smoothstep(0.1, 0.5, facing) * step(0.3, vSeasonSeed);
@@ -62,26 +66,29 @@ const FRAG = /* glsl */`
     float patchy = step(0.07, cell);
     vec3 winter = mix(c, mix(vec3(lum) * vec3(0.6, 0.8, 0.74), vec3(0.8, 0.9, 1.0) - face * 0.03, patchy), green);
 #endif
+#ifndef SNOWONLY
     col = c * uSeason.y + spring * uSeason.x + autumn * uSeason.z + winter * uSeason.w;
+#endif
     diffuseColor.rgb = col;
 }
 #include <emissivemap_fragment>
 `;
 
-function patch (m: Material, foliage: boolean) {
+type Dress = 'ground' | 'foliage' | 'snow';
+function patch (m: Material, dress: Dress) {
     m.onBeforeCompile = (sh) => {
         sh.uniforms.uSeason = seasonU.uSeason;
         sh.vertexShader = sh.vertexShader.replace('#include <common>', `#include <common>\n${GLSL_COMMON}`).replace('#include <begin_vertex>', VERT);
-        sh.fragmentShader = sh.fragmentShader.replace('#include <common>', `#include <common>\n${GLSL_COMMON}`).replace('#include <emissivemap_fragment>', (foliage ? '#define FOLIAGE\n' : '') + FRAG);
+        sh.fragmentShader = sh.fragmentShader.replace('#include <common>', `#include <common>\n${GLSL_COMMON}`).replace('#include <emissivemap_fragment>', (dress === 'foliage' ? '#define FOLIAGE\n' : dress === 'snow' ? '#define SNOWONLY\n' : '') + FRAG);
     };
-    m.customProgramCacheKey = () => (foliage ? 'season-foliage' : 'season-ground');
+    m.customProgramCacheKey = () => `season-${dress}`;
 }
 
 /** Make the island's ground material follow the seasons (it is shared by every chunk, so once is enough). */
 export function seasonGround (m: Material) {
     if (m.userData.season) return;
     m.userData.season = true;
-    patch(m, false);
+    patch(m, 'ground');
 }
 
 /** One seasonal copy per material the nodes use (they share theirs, so the copies are shared too). */
@@ -90,7 +97,7 @@ function copyOf (m: Material) {
     let c = copies.get(m);
     if (!c) {
         c = m.clone();
-        patch(c, true);
+        patch(c, 'foliage');
         copies.set(m, c);
     }
     return c;
@@ -104,6 +111,23 @@ export function dressForSeasons (obj: Object3D) {
         const mat = mesh.material;
         if (Array.isArray(mat)) mesh.material = mat.map((x) => (x.transparent ? x : copyOf(x)));
         else if (!mat.transparent && !(mat as MeshBasicMaterial).isMeshBasicMaterial) mesh.material = copyOf(mat);
+    });
+}
+
+/** One snow-only copy per material for the buildings (roofs, walls, fences, benches...): nothing changes colour, snow settles on top in winter. */
+const snowCopies = new Map<Material, Material>();
+export function dressSnow (obj: Object3D) {
+    const copy = (m: Material) => {
+        if (m.transparent || (m as MeshBasicMaterial).isMeshBasicMaterial) return m;
+        let c = snowCopies.get(m);
+        if (!c) { c = m.clone(); patch(c, 'snow'); snowCopies.set(m, c); }
+        return c;
+    };
+    obj.traverse((o) => {
+        const mesh = o as Mesh;
+        if (!mesh.isMesh || mesh.userData.snowDressed) return;
+        mesh.userData.snowDressed = true;
+        mesh.material = Array.isArray(mesh.material) ? mesh.material.map(copy) : copy(mesh.material);
     });
 }
 
