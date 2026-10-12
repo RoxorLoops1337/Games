@@ -32,7 +32,7 @@ function buildAtlas(rnd) {
     g.fillStyle = rg(30, [[0, W(0.8)], [1, W(0)]]); g.save(); g.translate(46, 0); g.fillRect(-30, -30, 60, 60); g.restore();
   });
   const puff = (i, n, seedOff) => cell(i, () => { // smoke / dust ball, top lit
-    for (let k = 0; k < n; k++) { const a = rnd() * TAU, d = rnd() * 26, x = Math.cos(a) * d, y = Math.sin(a) * d * 0.85, r = 22 + rnd() * 20;
+    for (let k = 0; k < n; k++) { const a = rnd() * TAU, d = rnd() * 14, x = Math.cos(a) * d, y = Math.sin(a) * d * 0.85, r = 16 + rnd() * 14;
       const sh = clamp(0.78 + (-y / 60) * 0.5, 0.6, 1); const v = Math.round(255 * sh);
       g.fillStyle = (() => { const gr = g.createRadialGradient(x, y, 0, x, y, r); gr.addColorStop(0, `rgba(${v},${v},${v},0.55)`); gr.addColorStop(0.6, `rgba(${v},${v},${v},0.3)`); gr.addColorStop(1, `rgba(${v},${v},${v},0)`); return gr; })();
       g.fillRect(x - r, y - r, r * 2, r * 2); }
@@ -124,9 +124,9 @@ void main(){
   if (t < 0.5) { float e = 1.0 - pow(1.0 - age, 3.0); float w = mix(0.16, 0.025, age);
     float band = smoothstep(e - w, e, r) * (1.0 - smoothstep(e, e + 0.025, r)); a = band * pow(1.0 - age, 1.3); hot = smoothstep(e - w * 0.3, e, r); }
   else if (t < 1.5) { float e = 1.0 - pow(1.0 - age, 4.0); float w = mix(0.45, 0.06, age);
-    float tr = smoothstep(e - w * 2.0, e, r) * (1.0 - smoothstep(e, e + 0.02, r)) * 0.42;
+    float tr = smoothstep(e - w * 2.0, e, r) * (1.0 - smoothstep(e, e + 0.02, r)) * 0.2;
     float ed = smoothstep(e - 0.05, e, r) * (1.0 - smoothstep(e, e + 0.025, r));
-    a = (tr + ed * 1.5) * pow(1.0 - age, 1.1); hot = ed; }
+    a = (tr + ed * 1.2) * pow(1.0 - age, 1.1); hot = ed; }
   else if (t < 2.5) { a = pow(1.0 - r, 2.0) * pow(1.0 - age, 2.0); hot = 0.6 * (1.0 - age); }
   else if (t < 3.5) { float e = age; float w = 0.12; float wave = smoothstep(e - w, e, r) * (1.0 - smoothstep(e, e + 0.03, r)) * (1.0 - e);
     float base = smoothstep(0.78, 0.9, r) * (1.0 - smoothstep(0.9, 0.97, r)) * 0.5; float fillg = pow(1.0 - r, 1.5) * 0.10;
@@ -396,7 +396,7 @@ export function createFx(scene, opts = {}) {
     for (let i = 0; i < n; i++) {
       const cone = o.cone ?? 0.9, s = spd * (0.45 + rnd() * 0.9);
       addL.add({ x: pos.x, y: pos.y, z: pos.z, vx: (d.x + (rnd() - 0.5) * cone * 2) * s, vy: (d.y * 0.6 + rnd() * 0.9 + 0.2) * s * 0.7, vz: (d.z + (rnd() - 0.5) * cone * 2) * s,
-        life: R_(0.22, 0.5) * (o.life ?? 1), s0: o.size ?? 0.07, s1: 0.03, st: 0.045, cell: CELL.streak, c0: hot, c1: scaleC(c, 0.6), g: 2.4, drag: 1.4, grav: 16, bounce: 0.35, floor: groundY + 0.03, fp: 0.9, att: 0.02 });
+        life: R_(0.25, 0.55) * (o.life ?? 1), s0: o.size ?? 0.13, s1: 0.05, st: 0.07, cell: CELL.streak, c0: hot, c1: scaleC(c, 0.6), g: 2.4, drag: 1.4, grav: 16, bounce: 0.35, floor: groundY + 0.03, fp: 0.9, att: 0.02 });
     }
     // a few lingering embers
     for (let i = 0; i < Math.ceil(n / 5); i++) addL.add({ x: pos.x, y: pos.y, z: pos.z, vx: (rnd() - 0.5) * 2, vy: R_(0.5, 2), vz: (rnd() - 0.5) * 2, life: R_(0.4, 0.8), s0: 0.09, s1: 0.02, cell: CELL.ember, c0: hot, c1: c, g: 2, drag: 1.5, grav: 2, fp: 1 });
@@ -421,7 +421,7 @@ export function createFx(scene, opts = {}) {
     addL.add({ x: pos.x, y: pos.y, z: pos.z, life: 0.1, s0: size * 1.5, s1: size * 2.2, cell: CELL.glow, c0: hot, c1: c, g: 2.2, fp: 1.6, att: 0.01 });
     addL.add({ x: pos.x, y: pos.y, z: pos.z, life: 0.16, s0: size * 1.6, s1: size * 2.8, cell: CELL.star4, c0: hot, c1: c, g: 3, rot: rnd() * TAU, rv: R_(-2, 2), fp: 1.3, att: 0.01 });
     addL.add({ x: pos.x, y: pos.y, z: pos.z, life: 0.14, s0: size * 1.2, s1: size * 3.2, cell: CELL.burst, c0: hot, c1: c, g: 2.4, rot: rnd() * TAU, fp: 1.2, att: 0.01 });
-    addL.add({ x: pos.x, y: pos.y, z: pos.z, life: 0.2, s0: size * 0.4, s1: size * 2.4, cell: CELL.ring, c0: c, c1: c, g: 1.8, fp: 1.1, att: 0.01 });
+    addL.add({ x: pos.x, y: pos.y, z: pos.z, life: 0.2, s0: size * 0.4, s1: size * 2.4, cell: CELL.ring, c0: c, c1: c, g: 1.0, a: 0.8, fp: 1.1, att: 0.01 });
   };
 
   fx.ring = (pos, color = '#f5ead2', size = 1.5, o = {}) => {
@@ -466,7 +466,7 @@ export function createFx(scene, opts = {}) {
     const pal = DCOL[o.kind || 'sand']; n = N(n);
     for (let i = 0; i < n; i++) {
       const d = debris[dCur]; dCur = (dCur + 1) % MAXD; const a = rnd() * TAU, s = R_(1.5, 4.5) * (o.speed ?? 1);
-      d.on = true; d.age = 0; d.life = R_(1.1, 1.8); d.x = pos.x; d.y = Math.max(pos.y, groundY + 0.1); d.z = pos.z; d.vx = Math.cos(a) * s; d.vz = Math.sin(a) * s; d.vy = R_(3, 7) * (o.up ?? 1); d.s = R_(0.07, 0.16) * (o.size ?? 1); d.rest = false;
+      d.on = true; d.age = 0; d.life = R_(1.1, 1.8); d.x = pos.x; d.y = Math.max(pos.y, groundY + 0.1); d.z = pos.z; d.vx = Math.cos(a) * s; d.vz = Math.sin(a) * s; d.vy = R_(3, 7) * (o.up ?? 1); d.s = R_(0.12, 0.26) * (o.size ?? 1); d.rest = false;
       _ax.set(rnd() - 0.5, rnd() - 0.5, rnd() - 0.5).normalize(); d.ax = _ax.x; d.ay = _ax.y; d.az = _ax.z; d.w = R_(6, 16); d.q.setFromAxisAngle(_ax, rnd() * TAU);
       _c.set(pal[(rnd() * pal.length) | 0]); debMesh.setColorAt(dIndex(d), _c);
     }
@@ -550,9 +550,9 @@ export function createFx(scene, opts = {}) {
     g.save(); g.translate(cx, cy); g.rotate(ang);
     const blob = (rx, ry, col, a) => { g.save(); g.scale(1, ry / rx); const gr = g.createRadialGradient(0, 0, 0, 0, 0, rx); gr.addColorStop(0, col.replace('A', a)); gr.addColorStop(1, col.replace('A', 0)); g.fillStyle = gr; g.beginPath(); g.arc(0, 0, rx, 0, TAU); g.fill(); g.restore(); };
     const DK = 'rgba(96,66,38,A)', LT = 'rgba(246,226,178,A)', BK = 'rgba(34,24,18,A)';
-    if (type === 'scuff') { blob(0.9 * s, 0.45 * s, DK, 0.34); for (let i = 0; i < 5; i++) { g.strokeStyle = LT.replace('A', 0.3); g.lineWidth = Math.max(1, 0.03 * s); g.beginPath(); const y = (rnd() - 0.5) * 0.5 * s; g.moveTo(-0.2 * s, y); g.lineTo(R_(0.4, 1.0) * s, y + (rnd() - 0.5) * 0.15 * s); g.stroke(); } }
+    if (type === 'scuff') { blob(1.0 * s, 0.5 * s, DK, 0.5); for (let i = 0; i < 5; i++) { g.strokeStyle = LT.replace('A', 0.5); g.lineWidth = Math.max(1.5, 0.045 * s); g.beginPath(); const y = (rnd() - 0.5) * 0.5 * s; g.moveTo(-0.2 * s, y); g.lineTo(R_(0.4, 1.0) * s, y + (rnd() - 0.5) * 0.15 * s); g.stroke(); } }
     else if (type === 'skid') { const L = (o.len ?? 2.5) * k; g.lineCap = 'round'; g.strokeStyle = LT.replace('A', 0.35); g.lineWidth = 0.34 * s; g.beginPath(); g.moveTo(0, 0); g.lineTo(L, 0); g.stroke(); g.strokeStyle = DK.replace('A', 0.42); g.lineWidth = 0.16 * s; g.beginPath(); g.moveTo(0, 0); g.lineTo(L, 0); g.stroke(); blob(0.4 * s, 0.4 * s, DK, 0.3); }
-    else if (type === 'crater') { blob(1.2 * s, 1.2 * s, DK, 0.5); g.strokeStyle = LT.replace('A', 0.5); g.lineWidth = 0.14 * s; g.beginPath(); g.arc(0, 0, 0.95 * s, 0, TAU); g.stroke(); blob(0.55 * s, 0.55 * s, BK, 0.18); }
+    else if (type === 'crater') { blob(1.3 * s, 1.3 * s, DK, 0.62); g.strokeStyle = LT.replace('A', 0.65); g.lineWidth = 0.14 * s; g.beginPath(); g.arc(0, 0, 0.95 * s, 0, TAU); g.stroke(); blob(0.55 * s, 0.55 * s, BK, 0.18); }
     else if (type === 'scorch') { blob(1.3 * s, 1.1 * s, BK, 0.62); for (let i = 0; i < 6; i++) { g.save(); g.translate((rnd() - 0.5) * s * 1.2, (rnd() - 0.5) * s * 1.2); blob(0.5 * s, 0.4 * s, BK, 0.3); g.restore(); } blob(0.5 * s, 0.5 * s, 'rgba(120,70,30,A)', 0.3); }
     else if (type === 'crack') { const arms = o.arms ?? 7; g.lineCap = 'round'; for (let i = 0; i < arms; i++) { let a = i / arms * TAU + (rnd() - 0.5) * 0.4, x = 0, y = 0; g.strokeStyle = BK.replace('A', 0.55); g.lineWidth = Math.max(1.5, 0.045 * s); g.beginPath(); g.moveTo(0, 0); const L = R_(0.9, 1.5) * s; for (let d = 0; d < L; d += 0.12 * s) { a += (rnd() - 0.5) * 0.7; x += Math.cos(a) * 0.12 * s; y += Math.sin(a) * 0.12 * s; g.lineTo(x, y); } g.stroke(); g.strokeStyle = LT.replace('A', 0.3); g.lineWidth = Math.max(1, 0.02 * s); g.stroke(); } blob(0.6 * s, 0.6 * s, DK, 0.25); }
     else if (type === 'footprint') { for (let f = 0; f < 2; f++) { g.save(); g.translate(f * 0.45 * s, (f ? 0.18 : -0.18) * s); g.scale(1, 0.55); g.fillStyle = DK.replace('A', 0.3); g.beginPath(); g.arc(0, 0, 0.17 * s, 0, TAU); g.fill(); g.restore(); } }
