@@ -41,7 +41,9 @@ export const ease = {
   outBounce: (t) => { const n = 7.5625, d = 2.75; if (t < 1 / d) return n * t * t; if (t < 2 / d) return n * (t -= 1.5 / d) * t + .75; if (t < 2.5 / d) return n * (t -= 2.25 / d) * t + .9375; return n * (t -= 2.625 / d) * t + .984375; },
 };
 
-// ---------------------------------------------------------------- geometry
+// ---------------------------------------------------------------- geometry kit
+// Every geometry carries a 'color' attribute (vertex colour = AO / paint). Parts are authored in the local frame of the
+// joint / socket they belong to, then merged per material into ONE skinned mesh (rigid weights) by rig.rebuild().
 function addAO(g, ends = 0.2, lo = 0.72) {
   // vertex colour gradient: darker at both ends of the Y extent (fake joint AO). Required: every geo has 'color'.
   g.computeBoundingBox(); const bb = g.boundingBox, h = Math.max(1e-4, bb.max.y - bb.min.y);
@@ -53,9 +55,9 @@ function addAO(g, ends = 0.2, lo = 0.72) {
   }
   g.setAttribute('color', new THREE.BufferAttribute(col, 3)); return g;
 }
-export function lathe(profile, seg = 8, sx = 1, sz = 1, ao = 0.2, lo = 0.72) {
-  // profile: [[radius, y], ...] ordered with increasing y.
-  const g = new THREE.LatheGeometry(profile.map((p) => new THREE.Vector2(p[0], p[1])), seg);
+export function lathe(profile, seg = 8, sx = 1, sz = 1, ao = 0.2, lo = 0.72, p0 = 0, pl = Math.PI * 2) {
+  // profile: [[radius, y], ...] ordered with increasing y. p0/pl: start angle / sweep (phi 0 = +Z, so a front mask is p0=-pl/2).
+  const g = new THREE.LatheGeometry(profile.map((p) => new THREE.Vector2(p[0], p[1])), seg, p0, pl);
   const pos = g.attributes.position, nor = g.attributes.normal, n = new V3();
   for (let i = 0; i < pos.count; i++) {
     pos.setX(i, pos.getX(i) * sx); pos.setZ(i, pos.getZ(i) * sz);
@@ -68,21 +70,124 @@ export function capsule(len, rTop, rBot, seg = 7, bulge = 0.1) {
   const cb = rBot * 0.55, ct = rTop * 0.55, mid = lerp(rBot, rTop, 0.5) * (1 + bulge);
   return lathe([[0, -len - cb], [rBot * 0.8, -len - cb * 0.5], [mid, -len * 0.5], [rTop, 0], [rTop * 0.72, ct * 0.7], [0, ct]], seg, 1, 1, 0.14, 0.8);
 }
+export function col1(g) { if (!g.attributes.color) { const n = g.attributes.position.count; g.setAttribute('color', new THREE.BufferAttribute(new Float32Array(n * 3).fill(1), 3)); } return g; }
 export function boxG(w, h, d, ao = 0) { const g = new THREE.BoxGeometry(w, h, d); return addAO(g, ao, 0.8); }
 export function sphereG(r, w = 8, h = 5, sx = 1, sy = 1, sz = 1) { const g = new THREE.SphereGeometry(r, w, h); g.scale(sx, sy, sz); return addAO(g, 0.25, 0.8); }
-function mesh(geo, mat, name) { const m = new THREE.Mesh(geo, mat); m.name = name || ''; m.castShadow = true; m.receiveShadow = true; return m; }
+export function cylG(rt, rb, h, seg = 6, open = false) { return col1(new THREE.CylinderGeometry(rt, rb, h, seg, 1, open)); }
+export function coneG(r, h, seg = 5) { return col1(new THREE.ConeGeometry(r, h, seg, 1)); }
+export function torusG(R, r, tseg = 4, seg = 12) { return col1(new THREE.TorusGeometry(R, r, tseg, seg)); }
+export function quadG(w, h) { return col1(new THREE.PlaneGeometry(w, h)); }
+const _xm = new THREE.Matrix4(), _xq = new Q(), _xe = new E(), _xp = new V3(), _xs = new V3();
+// place a geometry: p [x,y,z], r euler [x,y,z] (XYZ), s number or [x,y,z]. Mutates and returns it.
+export function xf(g, p, r, s) {
+  const sc = typeof s === 'number' ? [s, s, s] : (s || [1, 1, 1]);
+  _xp.set(...(p || [0, 0, 0])); _xq.setFromEuler(_xe.set(...(r || [0, 0, 0]), 'XYZ')); _xs.set(sc[0], sc[1], sc[2]);
+  g.applyMatrix4(_xm.compose(_xp, _xq, _xs)); return g;
+}
+// multiply vertex colour by [r,g,b] / number / fn(x,y,z,nx,ny,nz) -> [r,g,b] | number
+export function paint(g, c) {
+  col1(g); const a = g.attributes.color, P = g.attributes.position, N = g.attributes.normal;
+  for (let i = 0; i < P.count; i++) {
+    let k = c; if (typeof c === 'function') k = c(P.getX(i), P.getY(i), P.getZ(i), N ? N.getX(i) : 0, N ? N.getY(i) : 0, N ? N.getZ(i) : 0);
+    if (typeof k === 'number') a.setXYZ(i, a.getX(i) * k, a.getY(i) * k, a.getZ(i) * k); else a.setXYZ(i, a.getX(i) * k[0], a.getY(i) * k[1], a.getZ(i) * k[2]);
+  }
+  return g;
+}
+// gaussian bumps along the vertex normal: blobs [{p:[x,y,z], r, a}] (a>0 out, a<0 in). Geometry needs normals.
+export function sculpt(g, blobs) {
+  const P = g.attributes.position, N = g.attributes.normal;
+  for (let i = 0; i < P.count; i++) {
+    const x = P.getX(i), y = P.getY(i), z = P.getZ(i); let d = 0;
+    for (const b of blobs) { const dx = x - b.p[0], dy = y - b.p[1], dz = z - b.p[2]; d += b.a * Math.exp(-(dx * dx * (b.kx || 1) + dy * dy + dz * dz) / (b.r * b.r)); }
+    if (d) P.setXYZ(i, x + N.getX(i) * d, y + N.getY(i) * d, z + N.getZ(i) * d);
+  }
+  return g;
+}
+export const sm01 = (a, b, v) => smooth(a, b, v);
+// ribbon along a polyline (double sided material): w = width or fn(t), nrm = fn(point, i) -> outward normal
+export function ribbon(pts, w = 0.03, nrm = null) {
+  const n = pts.length, pos = [], nor = [], idx = [], t = new V3(), s = new V3(), nn = new V3();
+  for (let i = 0; i < n; i++) {
+    const a = pts[Math.max(0, i - 1)], b = pts[Math.min(n - 1, i + 1)]; t.subVectors(b, a).normalize();
+    nn.copy(nrm ? nrm(pts[i], i) : _xs.set(0, 0, 1)).normalize(); s.crossVectors(t, nn).normalize();
+    const ww = (typeof w === 'function' ? w(i / Math.max(1, n - 1)) : w) / 2, p = pts[i];
+    pos.push(p.x - s.x * ww, p.y - s.y * ww, p.z - s.z * ww, p.x + s.x * ww, p.y + s.y * ww, p.z + s.z * ww); nor.push(nn.x, nn.y, nn.z, nn.x, nn.y, nn.z);
+  }
+  for (let i = 0; i < n - 1; i++) idx.push(2 * i, 2 * i + 1, 2 * i + 2, 2 * i + 1, 2 * i + 3, 2 * i + 2);
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3)); g.setIndex(idx); return col1(g);
+}
+// strip of leather/cloth tabs (pteruges) hanging from a ring: n tabs around, each a trapezoid quad
+export function tabRing(n, r, y, len, w, o = {}) {
+  const pos = [], nor = [], col = [], idx = [], sx = o.sx || 1, sz = o.sz || 1, flare = o.flare ?? 0.05, tip = o.tip ?? 0.5, a0 = o.a0 || 0, arc = o.arc ?? Math.PI * 2, shade = o.shade ?? 0.72;
+  for (let i = 0; i < n; i++) {
+    const a = a0 + (arc >= Math.PI * 2 - 1e-3 ? i / n : i / Math.max(1, n - 1)) * arc, sa = Math.sin(a), ca = Math.cos(a), r2 = r + flare;
+    const dx = ca, dz = -sa; // tangent
+    const base = pos.length / 3, hw = w / 2;
+    pos.push(sa * r * sx - dx * hw, y, ca * r * sz - dz * hw * sz, sa * r * sx + dx * hw, y, ca * r * sz + dz * hw * sz, sa * r2 * sx + dx * hw * tip, y - len, ca * r2 * sz + dz * hw * tip * sz, sa * r2 * sx - dx * hw * tip, y - len, ca * r2 * sz - dz * hw * tip * sz);
+    for (let k = 0; k < 4; k++) { nor.push(sa, 0.1, ca); const c = k < 2 ? 1 : shade; col.push(c, c, c); }
+    idx.push(base, base + 2, base + 1, base, base + 3, base + 2);
+  }
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3)); g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3)); g.setIndex(idx); return g;
+}
+// extrude a closed 2D outline (array of [x,y]) along z (thickness d, centred), flat caps
+export function extrude(outline, d = 0.02, bevel = 0) {
+  const sh = new THREE.Shape(outline.map((p) => new THREE.Vector2(p[0], p[1])));
+  const g = new THREE.ExtrudeGeometry(sh, { depth: d, bevelEnabled: bevel > 0, bevelThickness: bevel, bevelSize: bevel, bevelSegments: 1, curveSegments: 3 }); g.translate(0, 0, -d / 2); return col1(g);
+}
 
 // ---------------------------------------------------------------- materials (zones)
 export const DEFAULT_PALETTE = { skin: '#c98d62', hair: '#2b1b12', cloth: '#a8452a', plume: '#b5271f', metal: '#b8803a' };
-export function makeMaterials(p = DEFAULT_PALETTE) {
-  const mk = (color, roughness, metalness, flat = false) => new THREE.MeshStandardMaterial({ color, roughness, metalness, flatShading: flat, vertexColors: true });
-  const m = {
-    skin: mk(p.skin, 0.62, 0), hair: mk(p.hair, 0.8, 0), cloth: mk(p.cloth, 0.92, 0), plume: mk(p.plume, 0.85, 0),
-    leather: mk('#6b4428', 0.72, 0, true), metal: mk(p.metal, 0.38, 0.75, true), trim: mk('#e0b04a', 0.3, 0.9, true),
-    eye: new THREE.MeshBasicMaterial({ color: '#1b1210' }),
+// Character-only shading baked into the material shader (no extra scene lights): a sky/ground fill so shadowed sides never
+// go flat brown, a cool fresnel rim for separation from sand, a warm subsurface-ish bleed at grazing angles on skin, and a faux
+// sky/ground reflection so metals read without an environment map (the arena has none).
+const SHADE = {
+  skin: { fill: 0.30, fs: '#c4c2ff', fg: '#e8a070', rim: 0.50, rc: '#a8c4ff', rp: 2.6, sss: 0.34, sc: '#ff6a3a', env: 0 },
+  hair: { fill: 0.22, fs: '#b8b8f0', fg: '#8a6a50', rim: 0.45, rc: '#b0c8ff', rp: 2.6, sss: 0, sc: '#fff', env: 0.10 },
+  cloth: { fill: 0.24, fs: '#c0c0f0', fg: '#d09870', rim: 0.30, rc: '#a8c0ff', rp: 3.0, sss: 0.10, sc: '#ff9060', env: 0 },
+  plume: { fill: 0.24, fs: '#c0c0f0', fg: '#d09870', rim: 0.32, rc: '#b0c8ff', rp: 3.0, sss: 0.15, sc: '#ff9060', env: 0 },
+  leather: { fill: 0.22, fs: '#b8b8e8', fg: '#c08860', rim: 0.28, rc: '#a8c0ff', rp: 3.0, sss: 0, sc: '#fff', env: 0.20 },
+  metal: { fill: 0.10, fs: '#b8c0e8', fg: '#c89868', rim: 0.50, rc: '#c0d4ff', rp: 2.4, sss: 0, sc: '#fff', env: 1.05 },
+  trim: { fill: 0.10, fs: '#c8c8f0', fg: '#d8a060', rim: 0.45, rc: '#ffe0b0', rp: 2.4, sss: 0, sc: '#fff', env: 1.2 },
+  eye: { fill: 0.25, fs: '#ffffff', fg: '#ffeedd', rim: 0, rc: '#fff', rp: 3, sss: 0, sc: '#fff', env: 0 },
+  gem: { fill: 0, fs: '#fff', fg: '#fff', rim: 0.2, rc: '#fff', rp: 2, sss: 0, sc: '#fff', env: 0.4 },
+};
+const _col = new THREE.Color();
+const v3s = (hex) => { _col.set(hex); return `vec3(${_col.r.toFixed(4)},${_col.g.toFixed(4)},${_col.b.toFixed(4)})`; };
+export function shadePatch(mat, key, xo = {}) {
+  const k = SHADE[key]; if (!k) return;
+  const f = (n) => (+n).toFixed(3);
+  const code = `{
+  vec3 vdC = normalize(vViewPosition);
+  float ndvC = clamp(dot(normal, vdC), 0.0, 1.0);
+  vec3 nWC = inverseTransformDirection(normal, viewMatrix);
+  float upC = nWC.y * 0.5 + 0.5;
+  vec3 albC = diffuseColor.rgb;
+  vec3 addC = albC * mix(${v3s(k.fg)}, ${v3s(k.fs)}, upC) * ${f(k.fill)};
+  float rimC = pow(1.0 - ndvC, ${f(k.rp)});
+  addC += ${v3s(k.rc)} * rimC * ${f(k.rim)} * (0.35 + 0.65 * upC) * (0.55 + 0.45 * length(albC));
+  addC += albC * ${v3s(k.sc)} * pow(1.0 - ndvC, 2.0) * ${f(k.sss)};
+  ${k.env > 0 ? `{ vec3 rWC = inverseTransformDirection(reflect(-vdC, normal), viewMatrix); float hC = rWC.y;
+    vec3 eC = mix(vec3(0.46,0.34,0.26), vec3(0.62,0.74,1.0), smoothstep(-0.35, 0.8, hC)); eC += vec3(1.0,0.78,0.5) * exp(-pow((hC - 0.14) * 3.6, 2.0)) * 0.9;
+    float frC = 0.4 + 0.6 * pow(1.0 - ndvC, 2.0); addC += albC * eC * ${f(k.env)} * frC; } ` : ''}
+  outgoingLight += addC;
+}
+`;
+  mat.onBeforeCompile = (sh) => {
+    sh.fragmentShader = sh.fragmentShader.replace('#include <opaque_fragment>', code + '#include <opaque_fragment>');
+    if (xo.back) sh.fragmentShader = sh.fragmentShader.replace('#include <color_fragment>', '#include <color_fragment>\n if (!gl_FrontFacing) diffuseColor.rgb = vec3(0.10, 0.062, 0.04);'); // back of a shield: bare leather
   };
-  m.cloth.side = THREE.DoubleSide; m.plume.side = THREE.DoubleSide;
-  for (const k of ['skin', 'hair', 'cloth', 'plume', 'leather', 'metal', 'trim']) m[k].userData.base = m[k].emissive.clone();
+  mat.customProgramCacheKey = () => 'lmc-' + key + (mat.flatShading ? 'f' : 's') + (xo.back ? 'b' : '');
+  if (!mat.userData.base) mat.userData.base = mat.emissive.clone();
+}
+export function makeMaterials(p = DEFAULT_PALETTE) {
+  const mk = (color, roughness, metalness, flat = false, ds = false) => new THREE.MeshStandardMaterial({ color, roughness, metalness, flatShading: flat, vertexColors: true, side: ds ? THREE.DoubleSide : THREE.FrontSide });
+  const m = {
+    skin: mk(p.skin, 0.58, 0), hair: mk(p.hair, 0.55, 0.05), cloth: mk(p.cloth, 0.9, 0, false, true), plume: mk(p.plume, 0.82, 0, false, true),
+    leather: mk('#7a4e2c', 0.66, 0.05, true, true), metal: mk(p.metal, 0.34, 0.55, true, true), trim: mk('#f0be52', 0.28, 0.7, true, true),
+    eye: mk('#ffffff', 0.25, 0), gem: mk('#ffffff', 0.2, 0.2, true, true),
+  };
+  m.hair.roughness = 0.5;
+  for (const k in m) shadePatch(m[k], k);
   return m;
 }
 
@@ -475,6 +580,7 @@ export class ClothGrid extends VerletGrid {
     this.geo = new THREE.BufferGeometry(); this.geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(R * C * 3), 3));
     const col = new Float32Array(R * C * 3); for (let r = 0; r < R; r++) for (let c = 0; c < C; c++) { const k = lerp(1, o.tipShade ?? 0.7, r / (R - 1)) * (o.fold ? (0.88 + 0.12 * Math.cos(c * 2.2)) : 1); col.set([k, k, k], (r * C + c) * 3); }
     this.geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+    const uv = new Float32Array(R * C * 2); for (let r = 0; r < R; r++) for (let c = 0; c < C; c++) { uv[(r * C + c) * 2] = C > 1 ? c / (C - 1) : 0.5; uv[(r * C + c) * 2 + 1] = 1 - r / (R - 1); } this.geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
     const idx = []; for (let r = 0; r < R - 1; r++) for (let c = 0; c < C - 1; c++) { const a = r * C + c, b = a + 1, d = a + C, e = d + 1; idx.push(a, d, b, b, d, e); }
     this.geo.setIndex(idx);
     this.mesh = new THREE.Mesh(this.geo, o.material); this.mesh.frustumCulled = false; this.mesh.castShadow = true; this.mesh.name = o.name || 'cloth';
@@ -506,13 +612,108 @@ export class ChainMesh extends VerletGrid {
   }
 }
 
+// ---------------------------------------------------------------- body: head, face, hair
+export const HEAD_SX = 0.93, HEAD_SZ = 1.06;
+const SKULL = (j) => [[0, -0.022], [0.040 * j, -0.014], [0.068 * j, 0.012], [0.086 * j, 0.048], [0.097, 0.088], [0.105, 0.13], [0.104, 0.17], [0.092, 0.215], [0.058, 0.248], [0, 0.262]];
+export function skullR(prof, y) { for (let i = 0; i < prof.length - 1; i++) if (y <= prof[i + 1][1]) { const t = clamp((y - prof[i][1]) / (prof[i + 1][1] - prof[i][1]), 0, 1); return lerp(prof[i][0], prof[i + 1][0], t); } return 0; }
+// face variants: 0 heroic square jaw, 1 lean high cheekbones, 2 rugged broken nose + scar
+export const FACES = [
+  { j: 1.0, brow: 0.016, cheek: 0.006, chin: 0.013, nose: [1.0, 1.0], eye: '#4a2c14', lid: 0.55, tilt: 0.10, mouth: 0.10, nx: 0.0 },
+  { j: 0.86, brow: 0.010, cheek: 0.012, chin: 0.008, nose: [0.82, 1.18], eye: '#5a7a9a', lid: 0.35, tilt: -0.18, mouth: -0.02, nx: 0.0 },
+  { j: 1.10, brow: 0.021, cheek: 0.008, chin: 0.017, nose: [1.25, 0.95], eye: '#4a5a2a', lid: 0.65, tilt: 0.22, mouth: -0.16, nx: 0.012, scar: true },
+];
+function buildHead(rig, look, bd) {
+  const A = (m, g, o) => rig.add(m, g, o || rig.joints.head);
+  const F = FACES[(look.face | 0) % 3], prof = SKULL(F.j), hs = bd.head || 1;
+  const surf = (x, y, off = 0) => { const R = skullR(prof, y), u = clamp(x / (R * HEAD_SX + 1e-5), -0.98, 0.98); return new V3(x, y, HEAD_SZ * R * Math.sqrt(1 - u * u) + off); };
+  const skull = lathe(prof, 14, HEAD_SX, HEAD_SZ, 0.1, 0.86);
+  const bl = [];
+  for (const sg of [-1, 1]) {
+    bl.push({ p: [sg * 0.04, 0.142, surf(sg * 0.04, 0.142).z], r: 0.034, a: F.brow }, { p: [sg * 0.037, 0.122, surf(sg * 0.037, 0.122).z], r: 0.021, a: -0.007 },
+      { p: [sg * 0.068, 0.088, surf(sg * 0.068, 0.088).z], r: 0.034, a: F.cheek }, { p: [sg * 0.05, 0.008, surf(sg * 0.05, 0.008).z], r: 0.026, a: F.j > 1.05 ? 0.008 : 0.002 });
+  }
+  bl.push({ p: [0, 0.002, surf(0, 0.002).z], r: 0.028, a: F.chin }, { p: [0, 0.19, surf(0, 0.19).z], r: 0.05, a: 0.004 });
+  sculpt(skull, bl);
+  paint(skull, (x, y, z) => {
+    const front = sm01(0.0, 0.07, z); let r = 1, g = 1, b = 1;
+    const ch = Math.exp(-((Math.abs(x) - 0.068) ** 2 + (y - 0.083) ** 2) / 0.0012) * front; r *= 1 + 0.05 * ch; g *= 1 - 0.15 * ch; b *= 1 - 0.14 * ch;
+    const es = Math.exp(-((Math.abs(x) - 0.037) ** 2 + (y - 0.124) ** 2) / 0.0007) * front; const e = 1 - 0.2 * es; r *= e; g *= e * 0.97; b *= e * 0.99;
+    const uj = 1 - 0.22 * sm01(0.02, -0.02, y); const fh = 1 + 0.06 * sm01(0.16, 0.225, y) * front; const k = uj * fh;
+    const nose = Math.exp(-(x * x + (y - 0.075) ** 2) / 0.0006) * front * 0.1; // nose tip a bit ruddy
+    return [r * k * (1 + nose), g * k * (1 - nose), b * k * (1 - nose)];
+  });
+  A('skin', skull);
+  // nose: bridge wedge + nostril wings
+  const nz = surf(0, 0.1).z;
+  A('skin', paint(xf(coneG(0.02 * F.nose[0], 0.042 * F.nose[1], 4), [0, 0.098, nz + 0.008], [Math.PI / 2 + 0.55, 0.785, 0], [1, 1, 0.8]), (x, y, z) => 1)); // pyramid pointing forward and down
+  for (const sg of [-1, 1]) A('skin', xf(sphereG(0.0105 * F.nose[0], 5, 3), [sg * 0.013 * F.nose[0], 0.083, nz - 0.003], [0, 0, 0], [1.1, 0.8, 0.9]));
+  if (F.nx) A('skin', xf(boxG(0.012, 0.03, 0.012), [F.nx, 0.112, nz + 0.002], [0.1, 0, 0.35])); // broken bridge
+  // eyes: sclera + iris + pupil in the eye material (white base, colour in vertex colour)
+  const iris = new THREE.Color(F.eye);
+  for (const sg of [-1, 1]) {
+    const ex = sg * 0.037, ey = 0.121, ez = surf(ex, ey).z - 0.007;
+    A('eye', paint(xf(sphereG(0.0145, 6, 4), [ex, ey, ez], [0, 0, 0], [1.25, 0.8, 0.75]), [0.96, 0.93, 0.88]));
+    A('eye', paint(xf(cylG(0.0075, 0.0075, 0.004, 6), [ex, ey, ez + 0.0085], [Math.PI / 2, 0, 0]), [iris.r * 2.2, iris.g * 2.2, iris.b * 2.2]));
+    A('eye', paint(xf(cylG(0.0035, 0.0035, 0.004, 5), [ex, ey, ez + 0.0102], [Math.PI / 2, 0, 0]), [0.03, 0.02, 0.02]));
+    A('skin', paint(xf(boxG(0.036, 0.0075, 0.018), [ex, ey + 0.011 - 0.004 * F.lid, ez + 0.0035], [0.25, 0, 0]), [0.82, 0.74, 0.72])); // upper lid
+    A('skin', paint(xf(boxG(0.03, 0.005, 0.012), [ex, ey - 0.0118, ez + 0.001], [-0.1, 0, 0]), [0.9, 0.82, 0.8])); // lower lid
+    // brow: two segments, tilt gives the expression (angry / calm / raised)
+    const by = 0.146 + (F.tilt < 0 ? 0.004 : 0), bz = surf(sg * 0.04, by).z + 0.003, th = sg * F.tilt;
+    A('hair', xf(boxG(0.028, 0.0095, 0.01), [sg * 0.026, by - 0.0035 * Math.sign(F.tilt || 1) * 0.5, bz], [0.15, 0, th]));
+    A('hair', xf(boxG(0.026, 0.0085, 0.01), [sg * 0.052, by + 0.0035 * Math.sign(F.tilt || 1) * 0.5, bz - 0.005], [0.15, sg * -0.35, th]));
+    // ears
+    A('skin', paint(xf(sphereG(0.024, 6, 4), [sg * 0.099, 0.099, -0.004], [0, 0, sg * -0.08], [0.32, 1.0, 0.72]), (x, y, z, nx) => 1 - 0.18 * Math.max(0, -nx * sg)));
+  }
+  // mouth: dark line (slight smile / grim by variant), upper + lower lip
+  const my = 0.052, mz = surf(0, my).z;
+  A('eye', paint(xf(boxG(0.022, 0.0042, 0.006), [0, my, mz - 0.001]), [0.3, 0.1, 0.09]));
+  for (const sg of [-1, 1]) A('eye', paint(xf(boxG(0.016, 0.0042, 0.006), [sg * 0.0185, my + F.mouth * 0.07 * 0.5, surf(sg * 0.0185, my).z - 0.001], [0, sg * -0.5, sg * F.mouth]), [0.3, 0.1, 0.09]));
+  A('skin', paint(xf(boxG(0.046, 0.0065, 0.009), [0, my + 0.0058, mz + 0.0006], [0.2, 0, 0]), [0.9, 0.52, 0.5]));
+  A('skin', paint(xf(boxG(0.036, 0.0075, 0.009), [0, my - 0.0072, mz + 0.0006], [-0.15, 0, 0]), [0.92, 0.56, 0.54]));
+  if (F.scar) { const pts = [surf(0.076, 0.13), surf(0.066, 0.108), surf(0.058, 0.09), surf(0.048, 0.07)].map((p) => p.add(new V3(0, 0, 0.0012))); A('skin', paint(ribbon(pts, 0.006, (p) => new V3(p.x / (HEAD_SX * HEAD_SX), 0, p.z / (HEAD_SZ * HEAD_SZ))), [1.2, 0.86, 0.84])); }
+  // hair
+  const hairy = look.hair || 'short', off = hairy === 'crop' ? 0.004 : 0.008, yb = hairy === 'tied' ? 0.175 : hairy === 'crop' ? 0.185 : 0.165;
+  if (hairy !== 'bald' && hairy !== 'none') {
+    const ys = [yb, 0.2, 0.228, 0.25, 0.262];
+    const pts = ys.map((y) => [skullR(prof, y) + off + (y < 0.2 ? 0.004 : 0), y]); pts.push([0, 0.272]);
+    const cap = lathe(pts, 12, HEAD_SX, HEAD_SZ, 0, 1);
+    const P = cap.attributes.position;
+    for (let i = 0; i < P.count; i++) { // hairline: high on the forehead, low at the nape and over the ears
+      const y = P.getY(i); if (Math.abs(y - yb) < 1e-5) { const z = P.getZ(i), x = P.getX(i), back = Math.max(0, -z / 0.1), side = Math.abs(x) / 0.1; P.setY(i, y - 0.075 * back - 0.03 * side * (1 - back) + 0.015 * Math.max(0, z / 0.1) * (1 - side)); }
+    }
+    paint(cap, (x, y, z) => 1 - 0.18 * sm01(0.2, 0.165, y) + 0.1 * sm01(0.22, 0.26, y)); A('hair', cap);
+    if (hairy === 'short') for (let i = -2; i <= 2; i++) A('hair', xf(boxG(0.034, 0.05 - Math.abs(i) * 0.006, 0.014), [i * 0.036, yb + 0.012, surf(i * 0.036, yb).z + 0.006 - Math.abs(i) * 0.004], [0.5 - Math.abs(i) * 0.1, -i * 0.14, i * 0.08]));
+    if (hairy === 'long') {
+      A('hair', paint(lathe([[0.07, -0.31], [0.098, -0.22], [0.112, -0.1], [0.116, 0.04], [0.11, 0.15]], 8, 0.96, 0.9, 0, 1, Math.PI * 0.52, Math.PI * 0.96), (x, y) => 1 - 0.3 * sm01(-0.05, -0.31, y) * 0.5), rig.joints.head);
+      for (const sg of [-1, 1]) A('hair', xf(boxG(0.022, 0.18, 0.05), [sg * 0.103, 0.06, 0.012], [0, 0, sg * 0.05]));
+    }
+    if (hairy === 'tied') {
+      A('hair', xf(capsule(0.2, 0.03, 0.012, 6, 0.1), [0, 0.2, -0.108], [2.3, 0, 0]));
+      A('cloth', xf(lathe([[0.034, -0.01], [0.036, -0.01], [0.036, 0.012], [0.034, 0.012]], 7, 1, 1, 0, 1), [0, 0.2, -0.112], [2.3, 0, 0]));
+    }
+  }
+  const bd2 = look.beard | 0; // 0 none, 1 short/stubble, 2 full
+  if (bd2) {
+    const lo = bd2 === 2 ? -0.07 : -0.045, o = bd2 === 2 ? 0.011 : 0.006, L = Math.PI * 1.2;
+    const bp = [[0.02, lo], [skullR(prof, -0.01) + o, -0.02], [skullR(prof, 0.02) + o, 0.02], [skullR(prof, 0.044) + o * 0.8, 0.044]];
+    const beard = lathe(bp, 11, HEAD_SX, HEAD_SZ, 0, 1, -L / 2, L);
+    const BP = beard.attributes.position; for (let i = 0; i < BP.count; i++) if (BP.getY(i) <= lo + 1e-4 && bd2 === 2) BP.setZ(i, BP.getZ(i) + 0.03 * Math.max(0, Math.cos(Math.atan2(BP.getX(i), BP.getZ(i)))));
+    paint(beard, (x, y) => 0.8 + 0.2 * sm01(lo, 0.04, y)); A('hair', beard);
+    for (const sg of [-1, 1]) A('hair', xf(boxG(0.014, 0.075, 0.034), [sg * 0.096, 0.088, -0.002], [0, 0, sg * 0.04]));
+    A('hair', xf(boxG(0.058, 0.011, 0.014), [0, my + 0.0125, mz + 0.003], [0.15, 0, 0]));
+    if (bd2 === 2) A('hair', xf(boxG(0.03, 0.03, 0.022), [0, lo + 0.012, surf(0, -0.03).z + 0.026], [-0.4, 0, 0]));
+  }
+}
+
 // ---------------------------------------------------------------- builder
-// opts: {palette, build:{bulk,height,shoulder}, torso:'skin'|'cloth'|'leather'|'metal', armsBare, legsBare, hair:'short'|'none', boots, belt, loincloth, name}
+// opts: {palette, build:{bulk,height,shoulder,arm,waist,leg,head,seg}, look:{face,hair:'short|crop|long|tied|bald',beard:0|1|2}, torso, legsBare, boots, belt, name, weapon}
 export function buildGladiator(opts = {}) {
   const pal = Object.assign({}, DEFAULT_PALETTE, opts.palette || {}), mats = makeMaterials(pal);
-  const bd = Object.assign({ bulk: 1, height: 1, shoulder: 1, seg: 6 }, opts.build || {}), B = bd.bulk, S = bd.seg;
+  const bd = Object.assign({ bulk: 1, height: 1, shoulder: 1, arm: 1, waist: 1, leg: 1, head: 1, seg: 6 }, opts.build || {}), B = bd.bulk, S = bd.seg + 1, WS = (1 + (B - 1) * 0.6) * bd.waist;
+  const look = Object.assign({ face: 0, hair: 'short', beard: 0 }, opts.look || {}); if (opts.hair === 'none') look.hair = 'bald';
   const root = new THREE.Group(); root.name = opts.name || 'gladiator'; const body = new THREE.Group(); body.name = 'body'; root.add(body); body.scale.setScalar(bd.height);
-  const J = {}; const mk = (n, parent, x, y, z) => { const o = new THREE.Object3D(); o.name = n; o.position.set(x, y, z); parent.add(o); J[n] = o; return o; };
+  const J = {}, rest = new Map(); rest.set(root, new THREE.Matrix4()); rest.set(body, new THREE.Matrix4().makeScale(bd.height, bd.height, bd.height));
+  const mk = (n, parent, x, y, z) => { const o = new THREE.Object3D(); o.name = n; o.position.set(x, y, z); parent.add(o); J[n] = o; rest.set(o, new THREE.Matrix4().makeTranslation(x, y, z)); return o; };
   mk('hips', body, 0, DIM.hipY, 0); mk('spine', J.hips, 0, DIM.spineY, 0); mk('chest', J.spine, 0, DIM.chestY, 0); mk('neck', J.chest, 0, DIM.neckY, 0); mk('head', J.neck, 0, DIM.headY, 0);
   const shx = DIM.shoulderX * bd.shoulder;
   for (const [s, sg] of [['L', 1], ['R', -1]]) {
@@ -520,58 +721,66 @@ export function buildGladiator(opts = {}) {
     mk('hip' + s, J.hips, sg * DIM.hipX, -DIM.hipSocketY, 0); mk('knee' + s, J['hip' + s], 0, -DIM.thigh, 0); mk('ankle' + s, J['knee' + s], 0, -DIM.shin, 0);
   }
   for (const n of JOINTS) J[n].rotation.order = ORDER[n] || 'XYZ';
-  const torsoMat = mats[opts.torso || 'skin'] || mats.skin, legMat = opts.legsBare === false ? mats.cloth : mats.skin, armMat = opts.armsBare === false ? mats.cloth : mats.skin;
-  const add = (parent, geo, mat, name, x = 0, y = 0, z = 0) => { const m = mesh(geo, mat, name); m.position.set(x, y, z); parent.add(m); return m; };
-
-  // torso: pelvis, abdomen, chest (elliptical lathes), neck, head
-  add(J.hips, lathe([[0, -0.14], [0.14, -0.12], [0.185 * B, -0.02], [0.19 * B, 0.06], [0.15 * B, 0.12], [0, 0.13]], 9, 1, 0.7, 0.08, 0.9), mats.cloth, 'pelvis');
-  add(J.spine, lathe([[0, -0.1], [0.15 * B, -0.08], [0.16 * B, 0.05], [0.17 * B, 0.2], [0, 0.22]], 9, 1, 0.7, 0.06, 0.9), torsoMat, 'abdomen');
-  add(J.chest, lathe([[0, -0.03], [0.17 * B, -0.02], [0.215 * B, 0.1], [0.245 * B, 0.2], [0.23 * B, 0.29], [0.13, 0.36], [0, 0.37]], 9, 1, 0.7, 0.08, 0.9), torsoMat, 'chest');
-  add(J.neck, lathe([[0, -0.04], [0.065, -0.04], [0.058, 0.04], [0.055, 0.09], [0, 0.1]], 6, 1, 1, 0.2, 0.8), mats.skin, 'neck');
-  const head = J.head;
-  add(head, lathe([[0, -0.015], [0.055, -0.005], [0.08, 0.04], [0.098, 0.1], [0.105, 0.15], [0.09, 0.21], [0.05, 0.245], [0, 0.255]], 9, 0.93, 1.06, 0.15, 0.85), mats.skin, 'skull', 0, 0, 0.0);
-  add(head, new THREE.ConeGeometry(0.018, 0.045, 4), mats.skin, 'nose', 0, 0.105, 0.108).rotation.x = Math.PI / 2 + 0.25;
-  addAO(head.children[head.children.length - 1].geometry, 0, 1);
-  add(head, boxG(0.15, 0.014, 0.03), mats.hair, 'brow', 0, 0.14, 0.088);
-  for (const sg of [-1, 1]) add(head, boxG(0.022, 0.012, 0.01), mats.eye, 'eye', sg * 0.036, 0.122, 0.1);
-  if ((opts.hair || 'short') !== 'none') {
-    const h = add(head, lathe([[0.098, 0.15], [0.108, 0.17], [0.095, 0.225], [0.055, 0.255], [0, 0.266]], 8, 0.96, 1.06, 0.1, 0.8), mats.hair, 'hair', 0, 0.0, -0.02); J.hair = h;
-  }
-  // arms
-  for (const [s, sg] of [['L', 1], ['R', -1]]) {
-    add(J['shoulder' + s], sphereG(0.07 * B, 6, 4), torsoMat === mats.skin ? mats.skin : torsoMat, 'deltoid' + s);
-    add(J['shoulder' + s], capsule(DIM.upperArm, 0.068 * B, 0.054 * B, S, 0.12), armMat, 'upperArm' + s);
-    add(J['elbow' + s], capsule(DIM.foreArm, 0.054 * B, 0.04 * B, S, 0.14), armMat, 'foreArm' + s);
-    const hand = add(J['wrist' + s], lathe([[0, -0.115], [0.036, -0.07], [0.042, -0.01], [0, 0.02]], 5, 1.0, 0.8, 0.15, 0.85), mats.skin, 'hand' + s);
-    // socket: weapon authored along +Y with grip at origin; Rx(pi) maps weapon +Y to wrist -Y (blade continues the forearm).
-    const sock = new THREE.Object3D(); sock.name = 'hand' + s + 'Socket'; sock.position.set(0, -0.075, 0); sock.rotation.x = Math.PI; J['wrist' + s].add(sock); J['hand' + s] = sock;
-    // legs
-    add(J['hip' + s], capsule(DIM.thigh, 0.1 * B, 0.066 * B, S, 0.1), legMat, 'thigh' + s);
-    add(J['knee' + s], capsule(DIM.shin, 0.066 * B, 0.045 * B, S, 0.14), legMat, 'shin' + s);
-    const foot = lathe([[0, -0.11], [0.05, -0.06], [0.05, 0.06], [0.036, 0.13], [0.0, 0.16]], 5, 1, 1.0, 0.1, 0.85); foot.rotateX(Math.PI / 2); foot.scale(1, 1, 0.55);
-    foot.translate(0, -DIM.footH + 0.03, 0.04);
-    add(J['ankle' + s], foot, opts.boots === false ? mats.skin : mats.leather, 'foot' + s);
-  }
-  if (opts.belt !== false) add(J.spine, lathe([[0.152 * B, -0.06], [0.162 * B, -0.06], [0.162 * B, 0.0], [0.152 * B, 0.0]], 9, 1, 0.72, 0, 1), mats.leather, 'belt').position.y = 0.01;
-
-  // sockets
+  // sockets (static children; weapon authored along +Y, Rx(pi) maps it onto the forearm axis)
+  for (const s of ['L', 'R']) { const sock = new THREE.Object3D(); sock.name = 'hand' + s + 'Socket'; sock.position.set(0, -0.075, 0); sock.rotation.x = Math.PI; J['wrist' + s].add(sock); J['hand' + s] = sock; }
   const sk = {}; const sockets = (n, parent, x, y, z) => { const o = new THREE.Object3D(); o.name = n; o.position.set(x, y, z); parent.add(o); sk[n] = o; return o; };
   sockets('helm', J.head, 0, 0.13, 0); sockets('back', J.chest, 0, 0.2, -0.13); sockets('cloakTop', J.chest, 0, 0.3, -0.13); sockets('beltFront', J.hips, 0, 0.06, 0.12); sockets('beltL', J.hips, 0.17, 0.0, 0); sockets('beltR', J.hips, -0.17, 0.0, 0); sockets('forearmL', J.elbowL, 0, -0.13, 0.0); sockets('chestFront', J.chest, 0, 0.16, 0.17);
   sockets('beltBack', J.hips, 0, 0.02, -0.12);
 
   // squash/stretch, flash
   const squash = new Spring1(300, 17); const flashState = { t: 0, dur: 0.12, color: new THREE.Color(0.7, 0.5, 0.3) };
+  const bones = JOINTS.map((n) => J[n]), boneSet = new Set(bones), items = [];
+  const restOf = (obj) => { // rest-pose matrix relative to root (joints rest at identity rotation)
+    const chain = []; for (let o = obj; o && o !== root; o = o.parent) chain.push(o);
+    const M = new THREE.Matrix4(), T = new THREE.Matrix4(); for (let i = chain.length - 1; i >= 0; i--) { const o = chain[i], r = rest.get(o); M.multiply(r || T.compose(o.position, o.quaternion, o.scale)); } return M;
+  };
+  const glow = { color: new THREE.Color('#ffffff'), on: false, base: 0.6, amp: 0.4, speed: 3, t: 0 };
 
   const rig = {
-    root, body, joints: J, sockets: sk, mats, palette: pal, secondary: [], squash, flashState, build: bd, opts,
+    root, body, joints: J, sockets: sk, mats, palette: pal, secondary: [], squash, flashState, build: bd, opts, look, glow, items, bones, rest,
+    parts: {}, gear: {}, skeleton: null,
     postUpdate: [], // fn(rig) run after IK each frame (e.g. shield stabilisers)
     setPalette(p) { Object.assign(pal, p); mats.skin.color.set(pal.skin); mats.hair.color.set(pal.hair); mats.cloth.color.set(pal.cloth); mats.plume.color.set(pal.plume); mats.metal.color.set(pal.metal); },
     flash(dur = 0.12, color) { flashState.t = dur; flashState.dur = dur; if (color) flashState.color.set(color); },
     squashKick(a) { squash.kick(a); },
     // attach a cloth/chain secondary effect; returns it
     addSecondary(sec) { rig.secondary.push(sec); const m = sec.mesh || sec.group; root.add(m); return sec; },
-    triangles() { let n = 0; root.traverse((o) => { if (o.isMesh && o.geometry) n += (o.geometry.index ? o.geometry.index.count : o.geometry.attributes.position.count) / 3; }); return n | 0; },
+    // queue geometry (authored in `obj` local space; obj is a joint, socket or bone-like holder) into the merged skinned body
+    add(mat, geo, obj) {
+      let b = obj; while (b && !boneSet.has(b)) b = b.parent; if (!b) throw new Error('rig.add: object is not under a bone');
+      const g = geo.clone(); col1(g); if (!g.attributes.normal) g.computeVertexNormals(); g.applyMatrix4(restOf(obj)); items.push({ mat, geo: g, bone: bones.indexOf(b) }); return g;
+    },
+    addMaterial(key, mat, shade, xo) { mats[key] = mat; shadePatch(mat, shade || 'cloth', xo); if (!mat.userData.base) mat.userData.base = mat.emissive.clone(); return mat; },
+    addBone(obj) { bones.push(obj); boneSet.add(obj); return bones.length - 1; },
+    restOf,
+    // (re)build one SkinnedMesh per material from the queued parts. Call after adding gear. Rigid weights, shared skeleton.
+    rebuild() {
+      for (const k in rig.parts) { root.remove(rig.parts[k]); rig.parts[k].geometry.dispose(); } rig.parts = {};
+      rig.skeleton = new THREE.Skeleton(bones, bones.map((b) => restOf(b).invert()));
+      const by = {}; for (const it of items) (by[it.mat] = by[it.mat] || []).push(it);
+      for (const k in by) {
+        const list = by[k]; let nv = 0, ni = 0; for (const it of list) { nv += it.geo.attributes.position.count; ni += it.geo.index ? it.geo.index.count : it.geo.attributes.position.count; }
+        const pos = new Float32Array(nv * 3), nor = new Float32Array(nv * 3), clr = new Float32Array(nv * 3), si = new Uint16Array(nv * 4), sw = new Float32Array(nv * 4), idx = new Uint32Array(ni);
+        let vo = 0, io = 0;
+        for (const it of list) {
+          const g = it.geo, n = g.attributes.position.count; pos.set(g.attributes.position.array, vo * 3); nor.set(g.attributes.normal.array, vo * 3); clr.set(g.attributes.color.array, vo * 3);
+          for (let i = 0; i < n; i++) { si[(vo + i) * 4] = it.bone; sw[(vo + i) * 4] = 1; }
+          if (g.index) for (let i = 0; i < g.index.count; i++) idx[io++] = g.index.getX(i) + vo; else for (let i = 0; i < n; i++) idx[io++] = vo + i;
+          vo += n;
+        }
+        const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(pos, 3)); geo.setAttribute('normal', new THREE.BufferAttribute(nor, 3)); geo.setAttribute('color', new THREE.BufferAttribute(clr, 3));
+        geo.setAttribute('skinIndex', new THREE.BufferAttribute(si, 4)); geo.setAttribute('skinWeight', new THREE.BufferAttribute(sw, 4)); geo.setIndex(new THREE.BufferAttribute(idx, 1));
+        geo.boundingSphere = new THREE.Sphere(new V3(0, 1, 0), 3); geo.boundingBox = new THREE.Box3(new V3(-3, -1, -3), new V3(3, 3, 3));
+        const m = new THREE.SkinnedMesh(geo, mats[k]); m.name = k; m.castShadow = true; m.receiveShadow = false; m.frustumCulled = false;
+        root.add(m); m.bind(rig.skeleton, new THREE.Matrix4()); rig.parts[k] = m;
+      }
+      return rig;
+    },
+    triangles() { let n = 0; root.traverse((o) => { if (o.isMesh && o.geometry && o.visible) n += (o.geometry.index ? o.geometry.index.count : o.geometry.attributes.position.count) / 3; }); return n | 0; },
+    drawCalls() { let n = 0; root.traverse((o) => { if (o.isMesh && o.visible) n++; }); return n; },
     resetSecondary() { for (const s of rig.secondary) s.reset(); },
+    // emissive pulse on gem material (rarity glow). hex colour, intensity base/amp, pulse speed (rad/s)
+    setGlow(hex, base = 0.6, amp = 0.35, speed = 3) { glow.color.set(hex); glow.on = true; glow.base = base; glow.amp = amp; glow.speed = speed; },
     update(dt) {
       rig.animator.update(dt);
       root.updateMatrixWorld(true);
@@ -582,11 +791,59 @@ export function buildGladiator(opts = {}) {
       const sq = squash.update(dt); body.scale.set(bd.height / Math.sqrt(1 + sq), bd.height * (1 + sq), bd.height / Math.sqrt(1 + sq));
       if (flashState.t > 0) { flashState.t = Math.max(0, flashState.t - dt); }
       const f = flashState.t > 0 ? flashState.t / flashState.dur : 0;
-      for (const k of ['skin', 'hair', 'cloth', 'plume', 'leather', 'metal', 'trim']) { const m = mats[k]; m.emissive.copy(m.userData.base); if (f > 0) m.emissive.lerp(flashState.color, f); m.emissiveIntensity = 1; }
+      glow.t += dt; const gi = glow.on ? glow.base + glow.amp * Math.sin(glow.t * glow.speed) : 0; mats.gem.userData.base.copy(glow.color).multiplyScalar(gi);
+      for (const k in mats) { const m = mats[k]; if (!m.userData.base) continue; m.emissive.copy(m.userData.base); if (f > 0) m.emissive.lerp(flashState.color, f); m.emissiveIntensity = 1; }
     },
-    dispose() { root.traverse((o) => { if (o.geometry) o.geometry.dispose(); }); for (const k in mats) mats[k].dispose(); },
+    dispose() { root.traverse((o) => { if (o.geometry) o.geometry.dispose(); }); for (const k in mats) mats[k].dispose(); rig.skeleton && rig.skeleton.dispose(); },
   };
+  const A = (m, g, o) => rig.add(m, g, o);
+  const tm = opts.torso && opts.torso !== 'skin' && mats[opts.torso] ? opts.torso : 'skin', legMat = opts.legsBare === false ? 'cloth' : 'skin', AR = bd.arm, LG = bd.leg;
+  const jt = (len) => (x, y) => { const t = -y / len; return 1 - 0.1 * sm01(0.8, 1, t) - 0.06 * sm01(0.2, 0, t); }; // slightly ruddier / darker at the joint ends
+
+  // torso: pelvis (cloth), abdomen, chest with pecs / clavicles / lats sculpted and painted, neck
+  A('cloth', paint(lathe([[0, -0.14], [0.14, -0.12], [0.186 * B, -0.02], [0.195 * B, 0.06], [0.158 * B * bd.waist, 0.12], [0, 0.13]], 10, 1, 0.72, 0.08, 0.9), (x, y) => 1 - 0.25 * sm01(-0.07, -0.13, y)), J.hips);
+  const ab = lathe([[0, -0.115], [0.152 * WS, -0.1], [0.148 * WS, -0.03], [0.154 * WS, 0.04], [0.164 * WS, 0.11], [0.178 * WS, 0.17], [0.185 * B, 0.225]], 12, 1, 0.74, 0.05, 0.92);
+  const abl = []; for (let r = 0; r < 3; r++) for (const sg of [-1, 1]) abl.push({ p: [sg * 0.042 * WS, -0.02 + r * 0.068, 0.12], r: 0.036, a: 0.0085 });
+  sculpt(ab, abl); paint(ab, (x, y, z) => { const fr = sm01(0, 0.08, z); const g1 = Math.exp(-(x / 0.012) ** 2) * fr * 0.13; const rows = (Math.exp(-((y + 0.0) / 0.012) ** 2) + Math.exp(-((y - 0.068) / 0.012) ** 2) + Math.exp(-((y - 0.136) / 0.012) ** 2)) * fr * 0.07; return 1 - g1 - rows; });
+  A(tm, ab, J.spine);
+  const sh = bd.shoulder;
+  const chest = lathe([[0, -0.045], [0.166 * B, -0.035], [0.206 * B, 0.035], [0.236 * B, 0.11], [0.256 * B * (0.94 + 0.06 * sh), 0.19], [0.244 * B * (0.94 + 0.06 * sh), 0.265], [0.17 * B, 0.325], [0.095, 0.358], [0, 0.372]], 14, 1, 0.72, 0.06, 0.92);
+  const cb = [];
+  for (const sg of [-1, 1]) cb.push({ p: [sg * 0.092 * B, 0.17, 0.125], r: 0.078, a: 0.024 }, { p: [sg * 0.075, 0.305, 0.1], r: 0.035, a: 0.007 }, { p: [sg * 0.1, 0.33, -0.03], r: 0.065, a: 0.014 }, { p: [sg * 0.13 * B, 0.1, -0.125], r: 0.09, a: 0.016 }, { p: [sg * 0.2 * B, 0.22, 0.04], r: 0.06, a: 0.008 });
+  sculpt(chest, cb);
+  paint(chest, (x, y, z) => {
+    const fr = sm01(0, 0.1, z), gr = Math.exp(-(x / 0.02) ** 2) * fr * sm01(0.05, 0.14, y) * sm01(0.27, 0.2, y) * 0.16;
+    const under = Math.exp(-((y - 0.098) / 0.014) ** 2) * fr * 0.13 * (1 - Math.exp(-(x / 0.02) ** 2));
+    const clav = Math.exp(-((y - 0.292 + Math.abs(x) * 0.25) / 0.009) ** 2) * fr * 0.1 * sm01(0.02, 0.07, Math.abs(x));
+    return 1 - gr - under - clav + 0.05 * sm01(0.17, 0.3, y) * fr;
+  });
+  A(tm, chest, J.chest);
+  A('skin', paint(lathe([[0, -0.05], [0.068 * B, -0.05], [0.06, 0.04], [0.056, 0.09], [0, 0.1]], 8, 1, 1, 0.2, 0.8), (x, y, z) => 1 - 0.15 * sm01(0.02, -0.05, y)), J.neck);
+  buildHead(rig, look, bd);
+  // arms: deltoid, upper arm, forearm, fist with thumb and knuckle shading
+  for (const [s, sg] of [['L', 1], ['R', -1]]) {
+    A('skin', paint(sphereG(0.07 * B * AR, 7, 5, 1.05, 1, 1.0), (x, y, z, nx, ny) => 1 - 0.08 * Math.max(0, -ny)), J['shoulder' + s]);
+    A('skin', paint(capsule(DIM.upperArm, 0.068 * B * AR, 0.054 * B * AR, S, 0.12), jt(DIM.upperArm)), J['shoulder' + s]);
+    A('skin', paint(capsule(DIM.foreArm, 0.054 * B * AR, 0.04 * B * AR, S, 0.14), jt(DIM.foreArm)), J['elbow' + s]);
+    A('skin', paint(lathe([[0, -0.118], [0.034, -0.095], [0.04, -0.06], [0.044, -0.015], [0.03, 0.01], [0, 0.02]], 6, 1.0, 0.82, 0.12, 0.88), (x, y, z) => 1 - 0.1 * Math.exp(-((y + 0.1) / 0.02) ** 2) + 0.04 * sm01(-0.04, 0, y)), J['wrist' + s]);
+    A('skin', xf(capsule(0.045, 0.013, 0.01, 5, 0), [sg * 0.03, -0.034, 0.025], [-0.9, 0, sg * 0.15]), J['wrist' + s]); // thumb
+    // legs
+    A(legMat, paint(capsule(DIM.thigh, 0.1 * B * LG, 0.066 * B * LG, S, 0.1), jt(DIM.thigh)), J['hip' + s]);
+    A(legMat, paint(capsule(DIM.shin, 0.066 * B * LG, 0.045 * B * LG, S, 0.14), jt(DIM.shin)), J['knee' + s]);
+    const prof = [[0, -0.11], [0.05, -0.06], [0.05, 0.06], [0.036, 0.13], [0.0, 0.16]];
+    const foot = lathe(prof, 6, 1, 1.0, 0.1, 0.85); foot.rotateX(Math.PI / 2); foot.scale(1, 1, 0.55); foot.translate(0, -DIM.footH + 0.03, 0.04);
+    if (opts.boots === false) A('skin', foot, J['ankle' + s]);
+    else {
+      A('skin', foot, J['ankle' + s]);
+      const sole = lathe(prof.map((p) => [p[0] + (p[0] ? 0.006 : 0), p[1]]), 6, 1, 1, 0, 1); sole.rotateX(Math.PI / 2); sole.scale(1.04, 1, 0.2); sole.translate(0, -DIM.footH + 0.0075, 0.04); A('leather', paint(sole, 0.7), J['ankle' + s]);
+      A('leather', lathe([[0.052, -0.046], [0.058, -0.046], [0.058, -0.012], [0.052, -0.012]], 7, 1, 1, 0, 1), J['ankle' + s]);
+      A('leather', xf(boxG(0.1, 0.01, 0.014), [0, -0.05, 0.075], [0.45, 0, 0]), J['ankle' + s]);
+      A('leather', xf(boxG(0.1, 0.01, 0.014), [0, -0.054, 0.045], [0.2, 0, 0]), J['ankle' + s]);
+    }
+  }
+  if (opts.belt !== false) A('leather', paint(lathe([[0.152 * WS, -0.065], [0.166 * WS, -0.065], [0.166 * WS, 0.012], [0.152 * WS, 0.012]], 12, 1, 0.76, 0, 1), (x, y, z) => 1 - 0.18 * Math.exp(-((y + 0.02) / 0.01) ** 2)), J.spine);
   rig.animator = new Animator(rig, opts.weapon || 'unarmed');
+  rig.rebuild();
   return rig;
 }
 
@@ -606,12 +863,13 @@ export function addCloak(rig, o = {}) {
   });
   return rig.addSecondary(g);
 }
-// Plume helper (horsehair crest) on the helm socket.
+// Plume helper (horsehair crest tail) on the helm socket: ONE verlet ribbon mesh (1 draw call) that arches back from the crest.
 export function addPlume(rig, o = {}) {
-  const rows = o.rows || 6, tall = o.tall || 1;
-  const g = new ChainMesh({
-    anchor: rig.sockets.helm, rows, rowLen: 0.058 * tall, stiff: 0.22, stiffFall: 0.8, damping: 0.93, gravity: -4,
-    shape: (r) => new V3(0, 0.05 * r * tall - 0.002 * r * r, -0.012 * r * r * 0.9 + 0.02), material: o.material || rig.mats.plume, radius: [0.036, 0.012], flat: [0.45, 1.6], name: 'plume',
+  const rows = o.rows || 7, tall = o.tall || 1, cols = o.cols || 3, rl = 0.052 * tall;
+  const g = new ClothGrid({
+    anchor: o.anchor || rig.sockets.helm, rows, cols, rowLen: rl, stiff: 0.2, stiffFall: 0.75, damping: 0.93, gravity: -4.5, side: new V3(1, 0, 0),
+    shape: (r) => new V3(0, 0.05 + 0.04 * Math.sin(Math.min(r, 3) * 0.55) * tall - 0.0016 * r * r * tall + (o.y || 0), (o.z ?? -0.01) - 0.034 * r * Math.min(1, tall) - 0.004 * r * r),
+    widthFn: (r) => (o.w || 0.075) * (1 - 0.45 * (r / (rows - 1))), material: o.material || rig.mats.plume, name: 'plume', tipShade: 0.62, fold: true,
   });
   return rig.addSecondary(g);
 }

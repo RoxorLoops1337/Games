@@ -6,8 +6,11 @@ const CSS = `
 .lm-cap{display:grid;gap:8px}
 .lm-cap-n{font:800 22px/26px var(--lx-serif);color:#2a1a30}
 .lm-cap-n small{font:700 12px var(--lx-sans);letter-spacing:.12em;text-transform:uppercase;color:#7a5222;margin-left:6px}
-.lm-presets{display:flex;flex-wrap:wrap;gap:8px}
-.lm-presets .lx-btn{flex:1 1 120px;min-height:44px;padding:6px 10px;font-size:12px}
+.lm-presets{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.lm-presets .lx-btn{min-height:44px;padding:6px 6px;font-size:11.5px;letter-spacing:.04em}
+@media(min-width:700px){.lm-presets{grid-template-columns:repeat(6,minmax(0,1fr))}}
+.lm-rec{flex:none;min-width:112px}
+.lm-kt{margin-bottom:2px;font:800 12px/16px var(--lx-serif);letter-spacing:.16em;text-transform:uppercase;color:#7a2f30}
 .lm-rc{display:grid;gap:9px}
 .lm-rc-head{display:flex;gap:12px;align-items:center;padding:2px;margin:-2px;border-radius:10px;cursor:pointer;min-width:0;-webkit-tap-highlight-color:transparent}
 .lm-rc-head:hover{background:rgba(242,193,78,.18)}
@@ -48,18 +51,14 @@ export function open(ctx) {
   function topBar() {
     const cap = lm.rosterCap(S), n = S.glads.length, full = n >= cap;
     const capCard = h('div', 'lm-card lm-cap');
-    capCard.append(h('div', 'lm-cap-n lm-num', [`${n}/${cap}`, h('small', '', 'fighters')]));
-    capCard.append(U.bar({ value: n, max: Math.max(1, cap), kind: full ? 'hp' : 'stam', height: 10, segments: 1 }));
-    capCard.append(h('div', 'lm-sub', full ? 'Barracks full. Upgrade the Barracks to house more.' : `${cap - n} free bed${cap - n === 1 ? '' : 's'} in the barracks.`));
-    const rec = U.button({ label: 'Recruit fighters', icon: 'roster', variant: 'gold', block: true, sub: full ? 'Barracks full, you can still look' : `${S.recruits ? S.recruits.length : 0} volunteers at the gate`, onClick: () => ctx.open('recruit') });
-    capCard.append(rec);
+    const left = h('div', 'lm-grow', [h('div', 'lm-cap-n lm-num', [`${n}/${cap}`, h('small', '', 'fighters')]), U.bar({ value: n, max: Math.max(1, cap), kind: full ? 'hp' : 'stam', height: 8, segments: 1 }), h('div', 'lm-sub', full ? 'Barracks full. Upgrade it for more beds.' : `${cap - n} free bed${cap - n === 1 ? '' : 's'}`)]);
+    left.children[1].style.margin = '5px 0 4px';
+    const rec = U.button({ label: 'Recruit', icon: 'roster', variant: 'gold', onClick: () => ctx.open('recruit') });
+    rec.classList.add('lm-rec'); rec.setAttribute('aria-label', 'Recruit fighters');
+    capCard.append(h('div', 'lm-row', [left, rec]));
 
     const menu = menuOf();
-    const kit = h('div', 'lm-card');
-    kit.append(h('div', 'lm-sec-t', 'Kitchen'));
-    kit.firstChild.style.cssText = 'font:800 12px/16px var(--lx-serif);letter-spacing:.16em;text-transform:uppercase;color:#7a2f30;margin-bottom:6px';
-    const row = h('div', 'lm-kitchen', [h('div', 'lm-grow', [h('div', 'lm-name', menu.n), h('div', 'lm-sub', menu.d), h('div', 'lm-sub', menu.c ? `${menu.c} gold per fighter each week (${fmt(menu.c * n)} now)` : 'Free'), ]), U.button({ label: 'Change', variant: 'bronze', onClick: menuPicker })]);
-    kit.append(row);
+    const kit = h('div', 'lm-card lm-kitchen', [h('div', 'lm-grow', [h('div', 'lm-sec-t lm-kt', 'Kitchen'), h('div', 'lm-name', menu.n), h('div', 'lm-sub', menu.d + (menu.c ? ` ${menu.c}g per fighter each week.` : ''))]), U.button({ label: 'Menu', variant: 'bronze', onClick: menuPicker })]);
     return h('div', 'lm-r-top', [capCard, kit]);
   }
 
@@ -86,7 +85,7 @@ export function open(ctx) {
     const P = [['Boot camp', 'boot', 'Everyone with energy trains their weakest stat; tired fighters rest.'], ['Rest week', 'rest', 'Everyone rests.'], ['Odd jobs', 'work', 'Fighters with energy take odd jobs for gold.'], ['Sparring', 'spar', 'Fighters with energy spar for XP.']];
     P.forEach(([label, kind, tip]) => { const b = U.button({ label, variant: 'bronze', onClick: () => { const n = lm.preset(S, kind); sw('uiTap'); commit(); render(); ctx.toast(n ? `Plans set for ${n} fighter${n > 1 ? 's' : ''}.` : 'Nothing to change.', { kind: n ? 'good' : 'info', ico: 'check' }); } }); U.tooltip(b, tip, { title: label }); wrap.append(b); });
     const auto = U.button({ label: 'Auto-plan', variant: 'gold', onClick: autoplan }); U.tooltip(auto, 'Picks each fighter\'s weakest trainable stat; rests the tired and injured; works when gold is low.', { title: 'Auto-plan' });
-    wrap.append(auto);
+    wrap.append(auto, U.button({ label: 'Drill board', variant: 'bronze', onClick: drillBoard }));
     return wrap;
   }
 
@@ -125,9 +124,8 @@ export function open(ctx) {
     const st = d.STYLES[g.style], T = d.TRAITS[g.trait];
     const stylechip = chip(st.n, 'bronze'); stylechip.classList.add('lm-stylechip'); stylechip.style.background = st.c;
     const nm = h('div', 'lm-name', [g.name, g.nick ? h('small', '', ' ' + g.nick) : null]);
-    const head = h('div', 'lm-rc-head', [portrait(ctx, g, 60), h('div', 'lm-grow', [nm, h('div', 'lm-chips', [stylechip, chip('Lv ' + g.lvl, 'gold'), chip(T.n, 'purple', T.d)]), h('div', '', U.stars(lm.stars(g), 5))]), U.icon('arena', 22, 'lm-rc-go')]);
-    head.querySelector('.lm-rc-go').remove(); head.append(U.icon('scroll', 22, 'lm-rc-go'));
-    head.setAttribute('role', 'button'); head.tabIndex = 0; head.setAttribute('aria-label', `Open profile of ${g.name}`);
+    const head = h('div', 'lm-rc-head', [portrait(ctx, g, 60), h('div', 'lm-grow', [nm, h('div', 'lm-chips', [stylechip, chip('Lv ' + g.lvl, 'gold'), chip(T.n, 'purple', T.d)]), h('div', '', U.stars(lm.stars(g), 5))]), U.icon('scroll', 22, 'lm-rc-go')]);
+        head.setAttribute('role', 'button'); head.tabIndex = 0; head.setAttribute('aria-label', `Open profile of ${g.name}`);
     const go = () => { sw('uiTap'); ctx.open('profile', g.id); };
     head.addEventListener('click', go); head.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); } });
     c.append(head);
@@ -155,7 +153,7 @@ export function open(ctx) {
     c.append(g1, g2, desc);
 
     if (lm.canDrill(S, g)) {
-      c.append(U.button({ label: 'Training drill', icon: 'bladedance', variant: 'gold', block: true, sub: 'Optional minigame: bonus on this week\'s gain', onClick: async () => { const mod = await import('./drill.js'); mod.open(ctx, g, () => { commit(); if (!dead) swap(); }); } }));
+      c.append(U.button({ label: 'Training drill', icon: 'bladedance', variant: 'gold', block: true, onClick: async () => { const mod = await import('./drill.js'); mod.open(ctx, g, () => { commit(); if (!dead) swap(); }); } }));
     } else if (g.drill && g.drill.week === S.week) {
       c.append(chip(g.drill.m > 0 ? `Drilled +${Math.round(g.drill.m * 100)}% this week` : 'Drilled, no bonus', g.drill.m > 0 ? 'green' : 'grey'));
     }
@@ -166,9 +164,7 @@ export function open(ctx) {
     if (dead) return;
     body.replaceChildren();
     body.append(topBar());
-    body.append(sec('Weekly plan'), note('Pick an activity per fighter. It repeats every week until you change it. Fighters entered in games should rest to arrive fresh.'), planner());
-    const dbBtn = U.button({ label: 'Drill board', variant: 'ghost', onClick: drillBoard }); dbBtn.style.marginTop = '8px'; dbBtn.classList.add('lm-btn-sm');
-    body.append(dbBtn);
+    body.append(sec('Weekly plan'), planner(), note('Each fighter repeats their activity every week until you change it. Fighters entered in games should rest.'));
     body.append(sec(`Fighters ${S.glads.length}`));
     if (!S.glads.length) { body.append(empty('Your barracks are empty. Recruit your first fighter!')); }
     else { const grid = h('div', 'lm-grid', S.glads.map(card)); body.append(grid); }

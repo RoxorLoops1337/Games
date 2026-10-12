@@ -1,0 +1,104 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Hub lab</title>
+<style>html,body{margin:0;height:100%;background:#1b1626;overflow:hidden}canvas{display:block;width:100%;height:100%;touch-action:none}
+#hud{position:fixed;left:8px;top:6px;color:#f2c14e;font:12px/1.3 system-ui,sans-serif;pointer-events:none;text-shadow:0 1px 2px #000;white-space:pre}</style>
+<script type="importmap">{"imports":{"three":"../vendor/three.module.min.js","three/addons/":"../vendor/jsm/"}}</script>
+<script src="../core/data.js"></script><script src="../core/sim.js"></script><script src="../core/arena.js"></script>
+</head><body><div id="hud"></div>
+<script type="module">
+// Hub lab. Params: ?cam=N (hub presets) ?tier=high|medium|low ?hour=H ?weather=clear|rain|dust|heat|night ?rows=2..4 ?full=1 (fully upgraded sample)
+// Gallery: ?build=all&level=5 (all buildings at one level) or ?build=barracks&level=all (one building, levels 1..5) or ?build=all&level=all.
+// ?sel=plot:6 / glad:2  ?focus=6  ?glow=0..1
+import * as THREE from 'three';
+import { createPost, createDynamicRes, TIERS, detectTier } from '../js/post.js';
+import { createSky, createLightRig, applyTOD, TOD, todFromHour } from '../js/sky.js';
+
+const q = new URLSearchParams(location.search);
+const tier = q.get('tier') || 'high';
+const canvas = document.createElement('canvas'); document.body.appendChild(canvas);
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance' });
+renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 0.9;
+renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap; renderer.localClippingEnabled = true; renderer.info.autoReset = false;
+const camera = new THREE.PerspectiveCamera(q.get('fov') ? +q.get('fov') : 42, innerWidth / innerHeight, 0.3, 1500);
+const scratch = new THREE.Scene();
+const post = createPost(renderer, scratch, camera, { tier });
+const dyn = createDynamicRes(post);
+const T = TIERS[tier];
+const lab = { t: 0 };
+window.__post = post; window.__renderer = renderer; window.__camera = camera;
+const stats = () => { const i = renderer.info; return { calls: i.render.calls, triangles: i.render.triangles, geometries: i.memory.geometries, textures: i.memory.textures, programs: i.programs ? i.programs.length : 0 }; };
+const hud = document.getElementById('hud');
+
+let frameFn = () => {}, resizeFn = () => {};
+function resize() { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); post.setSize(innerWidth, innerHeight); resizeFn(innerWidth, innerHeight); }
+addEventListener('resize', resize);
+
+async function main() {
+  let scene;
+  if (q.get('build')) scene = await gallery(); else scene = await hubMode();
+  post.composer.passes[0].scene = scene; window.__scene = scene;
+  resize();
+  const step = (t, dt) => { frameFn(t, dt); renderer.info.reset(); post.render(dt, t); };
+  window.__labShot = async (secs) => {
+    const base = secs || 1.5; lab.t = base;
+    for (let i = 0; i < 3; i++) step(base + i * 0.033, 0.033);
+    renderer.info.reset(); renderer.render(scene, camera); const sceneOnly = stats();
+    renderer.info.reset(); post.render(0.016, base + 0.1); const total = stats();
+    window.__stat = { scene: sceneOnly, withPost: total, tier, hub: window.__hub && window.__hub.stats ? window.__hub.stats() : undefined };
+    return window.__stat;
+  };
+  window.__step = (secs, dt = 1 / 30) => { const n = Math.round(secs / dt); for (let i = 0; i < n; i++) { lab.t += dt; frameFn(lab.t, dt); } renderer.info.reset(); post.render(dt, lab.t); return stats(); };
+  window.__labReady = Promise.resolve();
+  if (!navigator.webdriver) {
+    let last = performance.now();
+    const tick = (now) => { const dt = Math.min(0.05, (now - last) / 1000); last = now; lab.t += dt; step(lab.t, dt); dyn.tick(dt * 1000); requestAnimationFrame(tick); };
+    requestAnimationFrame(tick);
+  }
+}
+
+// ------------------------------------------------------------------------------------------ gallery
+async function gallery() {
+  const B = await import('../js/buildings.js');
+  const scene = new THREE.Scene();
+  const sky = createSky(); scene.add(sky.mesh);
+  const rig = createLightRig(scene, { shadowSize: T.shadow, shadowRadius: 40, shadowCenter: new THREE.Vector3(0, 2, 0), far: 300 });
+  const preset = Object.assign({}, TOD.golden, { sunAz: +(q.get('az') ?? 300), sunElev: +(q.get('el') ?? 26) });
+  applyTOD(preset, { rig, scene, sky, renderer });
+  const ids = q.get('build') === 'all' ? B.BUILDING_IDS : [q.get('build')];
+  const lv = q.get('level') || '5';
+  const levels = lv === 'all' ? [1, 2, 3, 4, 5] : [+lv];
+  const glow = +(q.get('glow') ?? 0.0);
+  const px = 10.4, pz = 8.2;
+  const ground = new THREE.Mesh(new THREE.PlaneGeometry(400, 400).rotateX(-Math.PI / 2), new THREE.MeshStandardMaterial({ color: 0xc9a56c, roughness: 1 }));
+  ground.receiveShadow = true; scene.add(ground);
+  const blds = []; const flamePts = [];
+  const cols = ids.length > 1 && levels.length === 1 ? 4 : levels.length === 1 ? 1 : 5;
+  ids.forEach((id, i) => levels.forEach((l, j) => {
+    const b = B.createBuilding(id, l, { accent: +(q.get('accent') || 0x6a2470) });
+    const idx = levels.length === 1 ? i : (ids.length === 1 ? j : i * 5 + j);
+    const c = levels.length === 1 ? idx % cols : (ids.length === 1 ? j : j), r = levels.length === 1 ? Math.floor(idx / cols) : (ids.length === 1 ? 0 : i);
+    const nc = levels.length === 1 ? cols : 5, nr = Math.ceil((levels.length === 1 ? ids.length : ids.length) / (levels.length === 1 ? cols : 1));
+    b.group.position.set((c - (nc - 1) / 2) * px, 0, (r - (nr - 1) / 2) * pz);
+    b.setGlow(glow); scene.add(b.group); blds.push(b);
+  }));
+  const info = blds.map((b) => `${b.id} L${b.level}: ${b.tris} tris, ${b.calls} calls`).join('\n');
+  hud.textContent = q.get('nohud') ? '' : info;
+  window.__blds = blds;
+  const nr = Math.ceil(blds.length / cols), span = Math.max((cols) * px, nr * pz);
+  const az = +(q.get('caz') ?? 0.5), el = +(q.get('cel') ?? 0.62), dist = +(q.get('dist') ?? (span * 0.95 + 8));
+  const ctr = new THREE.Vector3(+(q.get('cx') ?? 0), 2, +(q.get('cz') ?? 0));
+  frameFn = (t, dt) => {
+    camera.position.set(ctr.x + Math.sin(az) * Math.cos(el) * dist, ctr.y + Math.sin(el) * dist, ctr.z + Math.cos(az) * Math.cos(el) * dist); camera.lookAt(ctr);
+    sky.update(camera, t); for (const b of blds) b.update(t, dt); rig.sun.target.position.copy(rig.shadowCenter);
+  };
+  return scene;
+}
+
+// ------------------------------------------------------------------------------------------ hub
+async function hubMode() {
+  const { setupHubLab } = await import('./hub_lab_main.js');
+  return setupHubLab({ THREE, renderer, camera, post, tier, q, hud, lab, setFrame: (f) => { frameFn = f; }, setResize: (f) => { resizeFn = f; } });
+}
+main();
+</script></body></html>
