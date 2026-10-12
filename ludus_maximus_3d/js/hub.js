@@ -227,7 +227,7 @@ export function createHub({ renderer, camera, audio, tier = 'high', post = null 
     const cap = (w, d, x, z, ry) => k.box('roof', w, 0.4, d, x, WH, z, 0xffffff, { ry });
     // perimeter wall with a darker plinth and tile cap
     const BH = 1.7;   // the back wall (nearest the default camera) is low so row 0 is never hidden
-    wall(2 * CW + WT, 0.6, WT + 0.2, 0, 0, -CD, 0xcdb78f); wall(2 * CW + WT, BH - 0.6, WT, 0, 0.6, -CD); k.box('roof', 2 * CW + WT + 0.3, 0.3, WT + 0.6, 0, BH, -CD, 0xffffff);
+    wall(2 * CW + WT, 0.6, WT + 0.2, 0, 0, -CD, 0xcdb78f); wall(2 * CW + WT, BH - 0.6, WT, 0, 0.6, -CD); k.box('masonry', 2 * CW + WT + 0.3, 0.3, WT + 0.5, 0, BH, -CD, C.marble);
     for (const [w, d, x, z] of [[WT, 2 * CD, -CW, 0], [WT, 2 * CD, CW, 0]]) { wall(w + 0.0, 0.7, d + 0.2, x, 0, z, 0xcdb78f); wall(w, WH - 0.7, d, x, 0.7, z); cap(w + 0.3, d + 0.6, x, z); }
     const sw = CW - GATE - 2.6; for (const s of [-1, 1]) { wall(sw, 0.7, WT + 0.2, s * (GATE + 2.6 + sw / 2), 0, CD, 0xcdb78f); wall(sw, WH - 0.7, WT, s * (GATE + 2.6 + sw / 2), 0.7, CD); cap(sw + 0.3, WT + 0.6, s * (GATE + 2.6 + sw / 2), CD); }
     // pilasters on the inner faces + buttresses outside
@@ -297,7 +297,7 @@ export function createHub({ renderer, camera, audio, tier = 'high', post = null 
       const p = g.attributes.position, uv = g.attributes.uv, col = new Float32Array(p.count * 3), locked = rr >= rows;
       for (let i = 0; i < p.count; i++) {
         const x = p.getX(i), z = p.getZ(i), n = tfbm(x * 0.09 + 4, z * 0.09, 64, 3, 7), n2 = tfbm(x * 0.4, z * 0.4 + 9, 64, 2, 3);
-        let cr = 0.9 + n * 0.16, cg = 0.88 + n * 0.14, cb = 0.84 + n * 0.1;
+        let cr = 0.93 + n * 0.14, cg = 0.94 + n * 0.13, cb = 1.06 + n * 0.12;
         if (locked) { const gm = clamp(0.35 + n2 * 1.1); cr = lerp(0.74, 0.40, gm) * (0.9 + n * 0.2); cg = lerp(0.62, 0.50, gm) * (0.9 + n * 0.2); cb = lerp(0.38, 0.22, gm); }
         // darker where the pad meets the terrace (soft contact) is baked by the pad itself
         col[i * 3] = cr; col[i * 3 + 1] = cg; col[i * 3 + 2] = cb;
