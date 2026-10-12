@@ -395,7 +395,7 @@ export class HudScene extends Phaser.Scene {
         const k = keyOf(ev);
         const lower = k.length === 1 ? k.toLowerCase() : k;
         if (this.farm.meS!.downed > 0 && lower === 'r' && !this.screen) { ev.preventDefault(); this.farm.send({ t: 'respawn' }); return; }       // don't want to wait for a friend: wake up at home
-        if (!this.screen && lower === 'g' && !ev.ctrlKey && !ev.metaKey && !ev.altKey) { ev.preventDefault(); this.farm.send({ t: 'inv', op: 'stash' }); return; }       // quick stack into the chests round you
+        if (!this.screen && lower === 'o' && !ev.ctrlKey && !ev.metaKey && !ev.altKey) { ev.preventDefault(); this.farm.send({ t: 'inv', op: 'stash' }); return; }       // quick stack (O: offload; G is the emote bar) into the chests round you
         if (!this.screen && lower === 'y' && !ev.ctrlKey && !ev.metaKey && !ev.altKey) { ev.preventDefault(); this.startTrade(); return; }       // trade with the nearest friend
         if (!this.screen && lower === 'r' && !ev.ctrlKey && !ev.metaKey && !ev.altKey) { ev.preventDefault(); this.farm.send({ t: 'ride' }); return; }       // climb on / off your companion
         if (!this.screen && (ev.key === '+' || ev.key === '=' || ev.key === 'Add' || ev.code === 'NumpadAdd')) { ev.preventDefault(); this.farm.zoomBy(1); return; }

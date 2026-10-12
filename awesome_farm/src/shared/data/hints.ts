@@ -130,7 +130,7 @@ export const HINTS: Hint[] = [
     {
         id: 'stash', icon: 'k_bag', color: PAL.sand,
         when: (c) => c.me.stats.built > 0 && Object.values(c.me.inv).reduce((a, n) => a + (n ?? 0), 0) >= 80,
-        text: () => 'Pockets filling up? Press G near your chests to quick stack: it puts things where they already live. Hover an item and press F to star it so it always stays with you.',
+        text: () => 'Pockets filling up? Press O near your chests to quick stack: it puts things where they already live. Hover an item and press F to star it so it always stays with you.',
     },
     {
         id: 'ride', icon: 'k_paw', color: PAL.blossom,
