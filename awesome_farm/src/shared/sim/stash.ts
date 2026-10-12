@@ -29,6 +29,19 @@ export function guarded (p: PlayerS): Set<ItemId> {
 
 const isChest = (b: BuildE) => { const d = BUILDINGS[b.kind]; return !!d.storage && !d.pets && !d.grave; };
 
+/** A little stream of the kinds that moved, flying between the farmer and the chest (at most a handful per command, one after another). */
+function fly (sim: Sim, p: PlayerS, b: BuildE, items: ItemId[], dir: 'put' | 'take', k: { n: number }) {
+    const c = sim.center(b);
+    for (const item of items) {
+        if (k.n >= 10) return;
+        const d = k.n * 0.07;
+        k.n++;
+        sim.events.push(dir === 'put'
+            ? { e: 'fly', to: p.id, item, x0: p.x, y0: p.y - 10, x1: c.x, y1: c.y - 8, d }
+            : { e: 'fly', to: p.id, item, x0: c.x, y0: c.y - 8, x1: p.x, y1: p.y - 10, d });
+    }
+}
+
 export function cmdInv (sim: Sim, p: PlayerS, c: Extract<Cmd, { t: 'inv' }>) {
     if (sim.s.paused || p.downed > 0) return;
     if (c.op === 'fav') return fav(sim, p, c.item);
@@ -51,7 +64,7 @@ function stash (sim: Sim, p: PlayerS) {
         .sort((a, b) => dist(sim.center(a).x, sim.center(a).y, p.x, p.y) - dist(sim.center(b).x, sim.center(b).y, p.x, p.y));
     if (!near.length) { sim.deny(p, 'No chest within reach'); return; }
     let kinds = 0, total = 0, full = false;
-    const used = new Set<number>();
+    const used = new Set<number>(), flown = { n: 0 };
     for (const id of ITEM_ORDER) {
         if (keep.has(id) || ITEMS[id].gear) continue;
         let left = countOf(p, id), moved = 0;
@@ -67,6 +80,7 @@ function stash (sim: Sim, p: PlayerS) {
             b.by = p.id;
             sim.touch(b);
             used.add(b.id);
+            fly(sim, p, b, [id], 'put', flown);
             left -= n; moved += n;
         }
         if (moved) { kinds++; total += moved; }
@@ -82,6 +96,7 @@ function chestAll (sim: Sim, p: PlayerS, id: number, dir: 'put' | 'take') {
     const def = BUILDINGS[b.kind];
     if (!def.storage && !def.grave) return;
     let kinds = 0, total = 0, blocked = '';
+    const flown = { n: 0 };
     if (dir === 'put') {
         if (def.grave || !isChest(b)) { sim.deny(p, 'Nothing goes in here'); return; }
         const keep = guarded(p);
@@ -92,6 +107,7 @@ function chestAll (sim: Sim, p: PlayerS, id: number, dir: 'put' | 'take') {
             if (n <= 0) { blocked = 'The chest is full'; break; }
             takeItem(p, item, n);
             invPut((b.inv ??= {}), item, n);
+            fly(sim, p, b, [item], 'put', flown);
             kinds++; total += n;
         }
         if (total) { b.by = p.id; sim.touch(b); sim.fx('load', sim.center(b).x, sim.center(b).y, p.id); }
@@ -102,6 +118,7 @@ function chestAll (sim: Sim, p: PlayerS, id: number, dir: 'put' | 'take') {
             const n = addItem(p, item, have);
             if (n <= 0) { blocked = 'Your pockets are full'; continue; }
             invDrop(b.inv!, item, n);
+            fly(sim, p, b, [item], 'take', flown);
             kinds++; total += n;
         }
         if (total) { sim.touch(b); sim.fx('collect', sim.center(b).x, sim.center(b).y, p.id); }
