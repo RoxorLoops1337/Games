@@ -232,7 +232,8 @@ export class FightDirector {
     this._endIf(dur, p.next ?? null); return r;
   }
   _victory({ L, t, p, tall }) {
-    const pts = unitPts(L.length ? L : [{ x: 0, y: 0 }], 0, 2.4), yaw = (p.yaw0 ?? this.s.yaw) + t * 0.38, pitch = lerp(9, 17, ease(t / 6)) * D2R + tall * 8 * D2R;
+    if (p.yaw0 === undefined) p.yaw0 = this.s.yaw; // latched once: a target of (current yaw + k*t) runs away from the camera and spins faster the longer the shot lasts
+    const pts = unitPts(L.length ? L : [{ x: 0, y: 0 }], 0, 2.4), yaw = p.yaw0 + Math.min(t, 40) * 0.38, pitch = lerp(9, 17, ease(t / 6)) * D2R + tall * 8 * D2R;
     return this._frame({ pts, yaw, pitch, fov: this._fov(44), margin: lerp(0.8, 0.74, tall), minD: 4.8, padX: 0.9, st: { yaw: 0.05, pitch: 0.4, c: 0.35, d: 0.6, dUp: 0.2, fov: 0.5 } });
   }
 }

@@ -213,7 +213,9 @@ export function createArena({ crowd = 3700, density = 1, decalRes = 2048, seed =
 
   const DW = decalRes, DH = Math.round(decalRes * SB / SA);
   const dc = document.createElement('canvas'); dc.width = DW; dc.height = DH; const dx = dc.getContext('2d');
-  const decalTex = new THREE.CanvasTexture(dc); decalTex.colorSpace = THREE.SRGBColorSpace; decalTex.anisotropy = 8;
+  const decalTex = new THREE.CanvasTexture(dc); decalTex.colorSpace = THREE.SRGBColorSpace; decalTex.anisotropy = 1;
+  // no mipmaps: regenerating a 2048 mip chain on every upload makes some (mobile) GPUs show black blocks for a frame
+  decalTex.generateMipmaps = false; decalTex.minFilter = THREE.LinearFilter; decalTex.magFilter = THREE.LinearFilter;
   const ppm = DW / (2 * SA);
   const toPx = (x, z) => [(x + SA) * ppm, (z + SB) * ppm];
   // raked concentric rings (painted once)
@@ -505,8 +507,9 @@ export function createArena({ crowd = 3700, density = 1, decalRes = 2048, seed =
   function update(t, dt) {
     U.uTime.value = t;
     flames.update(t, nightV);
-    if (decalDirty) { decalTex.needsUpdate = true; decalDirty = false; }
+    if (decalDirty && t - lastDecalUp > 0.12) { decalTex.needsUpdate = true; decalDirty = false; lastDecalUp = t; } // throttled upload
   }
+  let lastDecalUp = -1;
   let nightV = 0;
   const api = {
     group, DIM, uniforms: U, stoneMat, crowdMesh, velarium, flames, decalCanvas: dc,

@@ -327,7 +327,7 @@ export function createFx(scene, opts = {}) {
   const glyphTex = new THREE.CanvasTexture(buildGlyphAtlas()); glyphTex.generateMipmaps = false; glyphTex.minFilter = THREE.LinearFilter;
 
   // 1) ground decals
-  const DS = opts.decalSize ?? 1024, dcv = mkCanvas(DS, DS), dctx = dcv.getContext('2d'); const decalTex = new THREE.CanvasTexture(dcv); decalTex.colorSpace = THREE.SRGBColorSpace; decalTex.anisotropy = 4;
+  const DS = opts.decalSize ?? 1024, dcv = mkCanvas(DS, DS), dctx = dcv.getContext('2d'); const decalTex = new THREE.CanvasTexture(dcv); decalTex.colorSpace = THREE.SRGBColorSpace; decalTex.anisotropy = 1; decalTex.generateMipmaps = false; decalTex.minFilter = THREE.LinearFilter; decalTex.magFilter = THREE.LinearFilter; // no mipmaps (black-block flicker on re-upload)
   const decalExt = R + 2;
   const decalMesh = new THREE.Mesh(new THREE.PlaneGeometry(decalExt * 2, decalExt * 2).rotateX(-Math.PI / 2), new THREE.MeshLambertMaterial({ map: decalTex, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }));
   decalMesh.position.y = groundY + 0.012; decalMesh.renderOrder = 1; decalMesh.name = 'decals'; decalMesh.receiveShadow = false; root.add(decalMesh);
