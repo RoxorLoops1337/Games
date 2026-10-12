@@ -147,8 +147,8 @@ const SHADE = {
   cloth: { fill: 0.24, fs: '#c0c0f0', fg: '#d09870', rim: 0.30, rc: '#a8c0ff', rp: 3.0, sss: 0.10, sc: '#ff9060', env: 0 },
   plume: { fill: 0.24, fs: '#c0c0f0', fg: '#d09870', rim: 0.32, rc: '#b0c8ff', rp: 3.0, sss: 0.15, sc: '#ff9060', env: 0 },
   leather: { fill: 0.22, fs: '#b8b8e8', fg: '#c08860', rim: 0.28, rc: '#a8c0ff', rp: 3.0, sss: 0, sc: '#fff', env: 0.20 },
-  metal: { fill: 0.10, fs: '#b8c0e8', fg: '#c89868', rim: 0.50, rc: '#c0d4ff', rp: 2.4, sss: 0, sc: '#fff', env: 1.05 },
-  trim: { fill: 0.10, fs: '#c8c8f0', fg: '#d8a060', rim: 0.45, rc: '#ffe0b0', rp: 2.4, sss: 0, sc: '#fff', env: 1.2 },
+  metal: { fill: 0.05, fs: '#b8c0e8', fg: '#c89868', rim: 0.40, rc: '#c0d4ff', rp: 2.4, sss: 0, sc: '#fff', env: 0.55 },
+  trim: { fill: 0.06, fs: '#c8c8f0', fg: '#d8a060', rim: 0.35, rc: '#ffe0b0', rp: 2.4, sss: 0, sc: '#fff', env: 0.75 },
   eye: { fill: 0.25, fs: '#ffffff', fg: '#ffeedd', rim: 0, rc: '#fff', rp: 3, sss: 0, sc: '#fff', env: 0 },
   gem: { fill: 0, fs: '#fff', fg: '#fff', rim: 0.2, rc: '#fff', rp: 2, sss: 0, sc: '#fff', env: 0.4 },
 };
@@ -652,7 +652,7 @@ export function faceTexture(fi, eyeHex, hairHex) {
     if (fi === 2) { x.strokeStyle = 'rgba(70,30,20,0.35)'; x.lineWidth = 1.2; for (let k = 0; k < 3; k++) { x.beginPath(); x.moveTo(px(sg * 0.064), py(0.121 + (k - 1) * 0.008)); x.lineTo(px(sg * 0.074), py(0.121 + (k - 1) * 0.016)); x.stroke(); } }
   }
   // mouth: shadow, lips, parting line with corners following the variant's expression
-  const mx = FACE_W / 2, my = py(0.052), mw = 15;
+  const mx = FACE_W / 2, my = py(0.052), mw = 19;
   soft(mx, my - 8, 12, 'rgba(70,25,15,0.2)', 1.6); soft(mx, my + 12, 12, 'rgba(70,25,15,0.22)', 1.6);
   const cr = -F.mouth * 38; x.fillStyle = 'rgba(150,55,50,0.72)'; x.beginPath(); x.moveTo(mx - mw, my + cr * 0.3); x.quadraticCurveTo(mx - 6, my - 7, mx, my - 3.5); x.quadraticCurveTo(mx + 6, my - 7, mx + mw, my + cr * 0.3); x.quadraticCurveTo(mx, my + 1, mx - mw, my + cr * 0.3); x.fill();
   x.fillStyle = 'rgba(190,95,88,0.7)'; x.beginPath(); x.moveTo(mx - mw + 1, my + cr * 0.3 + 0.5); x.quadraticCurveTo(mx, my + 1.5, mx + mw - 1, my + cr * 0.3 + 0.5); x.quadraticCurveTo(mx, my + 10, mx - mw + 1, my + cr * 0.3 + 0.5); x.fill();
@@ -718,7 +718,7 @@ function buildHead(rig, look, bd) {
       A('cloth', xf(lathe([[0.034, -0.01], [0.036, 0.012]], 6, 1, 1, 0, 1), [0, 0.2, -0.112], [2.3, 0, 0]));
     }
   }
-  const bd2 = look.beard | 0; // 0 none, 1 short, 2 full
+  const my = 0.052, mz = surf(0, my).z, bd2 = look.beard | 0; // 0 none, 1 short, 2 full
   if (bd2) {
     const lo = bd2 === 2 ? -0.07 : -0.045, o = bd2 === 2 ? 0.011 : 0.006, L = Math.PI * 1.2;
     const bp = [[0.02, lo], [skullR(prof, -0.01) + o, -0.02], [skullR(prof, 0.03) + o, 0.025], [skullR(prof, 0.044) + o * 0.8, 0.044]];

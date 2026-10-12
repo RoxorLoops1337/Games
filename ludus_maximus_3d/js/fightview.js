@@ -47,7 +47,7 @@ export class FightView {
   buildHud() {
     const root = this.hud = document.createElement('div'); root.className = 'fv-hud'; root.style.cssText = 'position:absolute;inset:0;pointer-events:none;display:none';
     this.plates = document.createElement('div'); this.plates.className = 'lx-plates';
-    this.banners = document.createElement('div'); this.banners.className = 'lx-banners';
+    this.banners = document.createElement('div'); this.banners.className = 'lx-banners'; this.banners.style.top = 'calc(var(--lx-sat) + 78px)';
     this.hudBox = document.createElement('div'); this.hudBox.className = 'lx-hud';
     const top = document.createElement('div'); top.className = 'lx-hud-top';
     this.speedBtn = U.button({ label: 'x1', variant: 'bronze', onClick: () => { this.userSpeed = this.userSpeed === 1 ? 2 : this.userSpeed === 2 ? 4 : 1; this.speedBtn.querySelector('span') ? 0 : 0; this.speedBtn.textContent = 'x' + this.userSpeed; this.feel.setUserScale && this.feel.setUserScale(1); } });
