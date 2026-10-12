@@ -329,7 +329,7 @@ export class Entities {
         f.x = x;
         f.z = z;
         f.moving = moving;
-        f.m.obj.position.set(x, groundY(x, z), z);
+        f.m.obj.position.set(x, groundY(x, z) + (p.ride ? 0.5 : 0), z);        // (riding: up on the mount's back)
         f.m.hold?.(hold);
         f.m.pose(fx, fy, moving, swing, p.downed > 0, dt);
         f.m.react(p.hearts, p.invuln ?? 0, p.downed > 0, dt, !!p.cl);

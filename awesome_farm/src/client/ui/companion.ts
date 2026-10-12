@@ -39,6 +39,7 @@ export class CompanionCard {
     private lvT: Phaser.GameObjects.Text;
     private taskI: Phaser.GameObjects.Image;
     private taskZone: Phaser.GameObjects.Zone;
+    private rideZone: Phaser.GameObjects.Zone;
     private shown = '';
     /** y where the next widget in the column may start. */
     bottom = 0;
@@ -57,6 +58,10 @@ export class CompanionCard {
         this.taskI = icon(scene, 'k_paw', 0, 0, 2).setDepth(7).setVisible(false);
         this.taskZone = scene.add.zone(0, 0, 30, 30).setOrigin(0).setInteractive({ useHandCursor: true }).setDepth(8).setVisible(false);
         onTap(this.taskZone, () => this.cycle());
+        // tapping its face climbs on or off (R on a keyboard)
+        this.rideZone = scene.add.zone(0, 0, 38, 38).setOrigin(0).setInteractive({ useHandCursor: true }).setDepth(8).setVisible(false);
+        onTap(this.rideZone, () => this.farm.send({ t: 'ride' }));
+        tipOn(this.rideZone, () => ({ title: this.farm.meS?.ride ? 'Climb off' : 'Ride', color: PAL.blossom, lines: [{ t: `${isTouchUi() ? 'Tap here' : 'Press R'} beside your companion to ride it: you run faster. A blow knocks you off.`, c: PAL.cream }, { t: 'It must be level 3 and Friendly.', c: PAL.pebble }] }));
         tipOn(this.taskZone, () => this.tip());
     }
 
@@ -90,7 +95,7 @@ export class CompanionCard {
     update (top: number) {
         const me = this.farm.meS;
         const pet = me?.comp ? petsOf(me).find((p) => p.id === me.comp) : undefined;
-        if (!pet) { this.baked.setVisible(false); this.face.setVisible(false); this.nameT.setVisible(false); this.lvT.setVisible(false); this.taskI.setVisible(false); this.taskZone.setVisible(false); this.shown = ''; this.bottom = top; this.rect = null; return; }
+        if (!pet) { this.baked.setVisible(false); this.face.setVisible(false); this.nameT.setVisible(false); this.lvT.setVisible(false); this.taskI.setVisible(false); this.taskZone.setVisible(false); this.rideZone.setVisible(false); this.shown = ''; this.bottom = top; this.rect = null; return; }
         this.bottom = top + COMP_H + LEFT.gap;
         this.rect = { x: LEFT.x, y: top, w: LEFT.w, h: COMP_H };
         const sp = spOf(pet.sp);
@@ -106,6 +111,7 @@ export class CompanionCard {
         inset(g, tx, top + 10, 30, 30, PAL.night, pet.task ? WORK_INFO[pet.task].color : PAL.slate);
         this.taskI.setVisible(true).setTexture(pet.task ? WORK_INFO[pet.task].icon : 'k_paw', 0).setPosition(tx + 15, top + 25);
         this.taskZone.setVisible(true).setPosition(tx, top + 10);
+        this.rideZone.setVisible(true).setPosition(x + 6, top + 7);
         this.face.setVisible(true).setTexture(critTex(this.scene, pet.sp), 0).setScale(fitScale(this.scene, critTex(this.scene, pet.sp), 32, 2)).setPosition(x + 25, top + 26);
         this.nameT.setVisible(true).setText(pet.name).setColor(hex(deepen(accent, 0.5))).setPosition(bx, top + 5);
         const bond = levelInfo(pet);
