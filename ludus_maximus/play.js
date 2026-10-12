@@ -26,7 +26,7 @@
       U.save(); U.render();
     }
     const fin = L.weekFinish(S); U.save(); U.render();
-    await U.dialog(summaryHtml(S, fin, wk)); if (fin.story && fin.story.length) await stories(S, fin.story); await trophies(S);
+    await U.dialog(summaryHtml(S, fin, wk)); if (fin.story && fin.story.length) await stories(S, fin.story); if (fin.recap && fin.recap.prizes) await prizePick(S, fin.recap.prizes); await trophies(S);
     await rivalryEvent(S);
     await pendingEvent(S);
   }
@@ -52,6 +52,11 @@
   const confetti = (n) => '<div class="cfw">' + Array.from({ length: n }, (_, i) => `<i class="cf" style="left:${(i * 37) % 100}%;background:${['#f6b82d', '#d2412b', '#2f78c4', '#2a9d6f', '#f5ead2'][i % 5]};animation-delay:${((i * 53) % 25) / 10}s;animation-duration:${2 + (i % 5) * 0.3}s"></i>`).join('') + '</div>';
   async function stories(S, list) {
     for (const x of list) { U.snd('levelup'); await U.dialog(`<h2>${esc(x.g.name)}'s story</h2><div class="row" style="justify-content:center">${U.spr(x.g, { size: 90 })}</div><div style="text-align:center;margin:6px 0"><b>${esc(x.st.n)}</b>: ${esc(x.st.text)}</div><div class="card" style="background:#fff3c4"><b>Goal reached!</b> ${esc(x.g.name)} is now ${esc(x.st.rew.title)}.<div class="row wrap" style="margin-top:4px"><span class="pill">+${x.st.rew.v} ${D.SA[x.st.rew.stat]}</span><span class="pill">${A.icon('fame', 12)} +${x.st.rew.fame}</span></div></div>` + btn('Wonderful', 'ok', 'green')); }
+  }
+  async function prizePick(S, prizes) {
+    U.snd('levelup');
+    const v = await U.dialog(`${confetti(20)}<h2>Season prize</h2><div class="small" style="margin-bottom:6px">The crowd honors your season. Choose one reward:</div>` + prizes.map((it, i) => `<div class="itm" data-a="res" data-v="${i}">${A.itemIcon(it.slot, it.rar, 38)}<div class="sp"><div class="gname" style="font-size:13px">${esc(it.name)}</div><div class="muted" style="opacity:1">${U.rarTag(it.rar)} ${U.fmtSt(it)}</div>${U.affTxt(it)}</div></div>`).join(''));
+    const it = prizes[+v] || prizes[0]; L.takePrize(S, it); U.save(); U.toast('Added: ' + it.name);
   }
   async function trophies(S) {
     const t = L.checkTrophies(S); if (!t.length) return; U.snd('levelup'); U.save();
@@ -79,7 +84,7 @@
     if (fin.news && fin.news.length) h += `<div class="crier"><b>TOWN CRIER</b>${fin.news.map((n) => '<div>' + esc(n) + '</div>').join('')}</div>`;
     fin.notes.forEach((n) => { h += `<div class="small" style="margin-top:6px">${esc(n)}</div>`; });
     if (fin.season) h += `<div class="card" style="margin-top:10px;background:var(--gold);overflow:hidden">${confetti(24)}<b class="h">Season ${fin.season} begins!</b><div class="small">Rivals have grown stronger. New prizes, new faces.</div></div>`;
-    if (fin.recap) h += `<div class="recap"><b>SEASON ${fin.season - 1} RECAP</b><div class="small" style="font-weight:700;margin-top:4px">Record: <b>${fin.recap.wins}W ${fin.recap.losses}L</b> · Fame gained: <b>${fin.recap.fame}</b> · Tournaments won: <b>${fin.recap.tour}</b>${fin.recap.mvp ? `<br>MVP: <b>${esc(fin.recap.mvp.name)}</b> with ${fin.recap.mvp.w} win${fin.recap.mvp.w > 1 ? 's' : ''}` : ''}${fin.recap.relic ? `<br>Season prize: <b>${esc(fin.recap.relic)}</b>` : ''}${fin.recap.rival ? `<br>Rivals of the Year: <b>${esc(fin.recap.rival.a)}</b> and <b>${esc(fin.recap.rival.b)}</b> (+${fin.recap.rival.fame} fame)` : ''}</div></div>`;
+    if (fin.recap) h += `<div class="recap"><b>SEASON ${fin.season - 1} RECAP</b><div class="small" style="font-weight:700;margin-top:4px">Record: <b>${fin.recap.wins}W ${fin.recap.losses}L</b> · Fame gained: <b>${fin.recap.fame}</b> · Tournaments won: <b>${fin.recap.tour}</b>${fin.recap.mvp ? `<br>MVP: <b>${esc(fin.recap.mvp.name)}</b> with ${fin.recap.mvp.w} win${fin.recap.mvp.w > 1 ? 's' : ''}` : ''}${fin.recap.rival ? `<br>Rivals of the Year: <b>${esc(fin.recap.rival.a)}</b> and <b>${esc(fin.recap.rival.b)}</b> (+${fin.recap.rival.fame} fame)` : ''}</div></div>`;
     return h + btn('Continue', 'ok');
   }
 

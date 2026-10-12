@@ -556,7 +556,7 @@
       rep.recap = { wins: S.stats.wins - sl.wins, losses: S.stats.losses - sl.losses, fame: S.fame - sl.fame, tour: S.stats.tourneys - sl.tour, mvp: mvp && (mvp.sw || 0) > 0 ? { name: mvp.name, w: mvp.sw, id: mvp.id } : null };
       S.sl = { fame: S.fame, wins: S.stats.wins, losses: S.stats.losses, tour: S.stats.tourneys }; S.glads.forEach((g) => { g.sw = 0; });
       rep.recap.rival = LM.rivalOfYear(S);
-      { const ml = LM.maxLeague(S); const relic = genItem(rnd, { league: Math.min(3, ml + 1), ilvl: 4 + ml * 5 + S.season * 2, rar: Math.min(4, 3 + (ml >= 2 ? 1 : 0)) }); relic.name = `Season ${S.season - 1} ${relic.name}`; LM.addItem(S, relic); rep.recap.relic = relic.name; }
+      rep.recap.prizes = LM.seasonPrizes(S);
       S.awards = (S.awards || []).concat([{ season: S.season - 1, mvp: rep.recap.mvp ? rep.recap.mvp.name : null, wins: rep.recap.wins, rival: rep.recap.rival ? rep.recap.rival.a + ' and ' + rep.recap.rival.b : null }]).slice(-12);
     }
     S.market = null; S.recruits = null; LM.relTick(S); rep.story = LM.storyCheck(S);
@@ -611,6 +611,12 @@
     }
   };
   LM.rivalryOf = (S, a, b) => (S.rivalry || {})[bkey(a, b)] || 0;
+  LM.seasonPrizes = (S) => {
+    const ml = LM.maxLeague(S); const out = [];
+    for (let i = 0; i < 3; i++) { const it = genItem(rnd, { slot: D.SLOTS[i * 2 % D.SLOTS.length], league: Math.min(3, ml + 1), ilvl: 4 + ml * 5 + S.season * 2, rar: Math.min(4, 3 + (ml >= 2 ? 1 : 0)) }); it.name = `Season ${S.season - 1} ${it.name}`; out.push(it); }
+    return out;
+  };
+  LM.takePrize = (S, it) => { LM.addItem(S, it); return it; };
   LM.diary = (S, g, t) => { g.dy = (g.dy || []).concat([{ w: S.week, t }]).slice(-12); };
   LM.forumAdd = (S, t) => { S.forum = (S.forum || []).concat([{ w: S.week, t }]).slice(-30); };
   LM.rivalryResolve = (S, a, b, choice, winnerId) => {
