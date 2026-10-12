@@ -17,6 +17,7 @@ import * as gather from './gather';
 import * as mail from './mail';
 import * as potluck from './potluck';
 import * as iridium from './iridium';
+import * as unstick from './unstick';
 import * as machines from './machines';
 import * as mines from './mines';
 import * as quests from './quests';
@@ -83,6 +84,7 @@ export function tryBuild (sim: Sim, p: PlayerS, kind: BuildingKind, tx: number, 
         ...(isBeltLike(kind) ? { belt: [null, null, null] } : {}),
         ...(kind === 'bed' ? { crop: -1 } : {}),
     });
+    if (def.solid !== false && !def.walk) unstick.watch(sim, tx, ty, w, h, p.id);       // (nobody is left standing inside it: see sim/unstick.ts)
     if (kind === 'sleepbed') bed.setBed(sim, p, b);           // (a new bed is where you wake up now)
     p.stats.built++;
     quests.count(p, `build:${kind}`);
