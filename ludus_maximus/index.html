@@ -257,6 +257,12 @@ h1,h2,h3,.h,.btn,.chip,.tab,.pill,.tag,.st,.act,.ltab,.wtab,.tb,.sec,.adv,.float
 @keyframes vsl{from{transform:translateX(-140%)}to{transform:none}}@keyframes vsr{from{transform:translateX(140%)}to{transform:none}}
 @keyframes vsout{to{opacity:0}}
 .vsp{filter:drop-shadow(0 6px 0 rgba(0,0,0,.5))}
+.vsp.ent-murmillo{animation:entM .7s cubic-bezier(.2,1.4,.4,1) both}@keyframes entM{from{transform:translateY(-50px) scale(1.3);opacity:0}to{transform:none;opacity:1}}
+.vsp.ent-retiarius{animation:entR .8s ease-out both}@keyframes entR{from{transform:rotate(-200deg) scale(.3);opacity:0}to{transform:none;opacity:1}}
+.vsp.ent-thraex{animation:entT .7s ease-out both}@keyframes entT{0%{transform:translateY(40px);opacity:0}60%{transform:translateY(-22px);opacity:1}100%{transform:none}}
+.vsp.ent-hoplomachus{animation:entH .6s ease-out both}@keyframes entH{from{transform:translateX(-70px);opacity:0}to{transform:none;opacity:1}}
+.vsp.ent-dimachaerus{animation:entD .6s ease-out both}@keyframes entD{0%{transform:skewX(30deg) scale(.6);opacity:0}70%{transform:skewX(-8deg)}100%{transform:none;opacity:1}}
+
 .vsn{font-family:var(--font);font-weight:900;color:var(--cream);text-transform:uppercase;font-size:15px;text-shadow:2px 2px 0 var(--ink)}
 .vsm{display:flex;gap:4px;align-items:center;font-family:var(--font);font-size:11px;color:var(--gold)}
 .vsv small{display:block;font-size:10px;color:var(--cream);text-shadow:1px 1px 0 var(--ink);text-align:center;margin-top:4px;letter-spacing:.5px}
