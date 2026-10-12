@@ -11,7 +11,7 @@ export const SFX_NAMES = ['swordHit', 'swordHitCrit', 'shieldBlock', 'metalClang
   'ultFire', 'ultLightning', 'ultEarth', 'ultWind', 'ultHoly', 'crowdGasp', 'crowdCheer', 'crowdRoar', 'crowdBoo', 'crowdChant', 'drum'];
 export const MUSIC_MODES = ['ludus', 'prep', 'arena', 'victory', 'defeat'];
 
-const MUSIC_TRIM = 0.5;      // music sits about 6 dB under the sfx at equal slider positions
+const MUSIC_TRIM = 0.38;      // music sits about 6 dB under the sfx at equal slider positions
 const NOTE = (midi) => 440 * Math.pow(2, (midi - 69) / 12);
 const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
 const sstep = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
@@ -249,7 +249,7 @@ export function createAudio(opts = {}) {
     burst(t + 0.05, 0.12, d, { type: 'highpass', f0: 4000, g: 0.15, a: 0.03 });
   });
   def('grunt', 1.5, 0.5, 2, 0.1, 0, 4, (t, d, o) => { voice(t, 0.22, d, { voice: o.voice, pitch: o.pitch, g: 0.9, p0: 1.15, p1: 0.82, breath: 0.45 }); });
-  def('hurt', 1.3, 0.7, 3, 0.14, 0, 3, (t, d, o) => {
+  def('hurt', 1.0, 0.7, 3, 0.14, 0, 3, (t, d, o) => {
     voice(t, 0.38, d, { voice: o.voice, pitch: (o.pitch || 1) * 1.35, g: 0.95, p0: 1.0, p1: 1.35, vowel: 'a', breath: 0.35, a: 0.01, vib: 31 });
     voice(t + 0.05, 0.3, d, { voice: o.voice, pitch: (o.pitch || 1) * 1.1, g: 0.5, p0: 1.1, p1: 0.7, vowel: 'o', breath: 0.2 });
   });
@@ -300,7 +300,7 @@ export function createAudio(opts = {}) {
     seq.forEach(([dt, du, s], i) => { brass(d, t + dt, f * Math.pow(2, s / 12), du, 0.5 * k, { a: 0.02 }); if (i > 2) brass(d, t + dt, f * Math.pow(2, (s + 7) / 12) * 0.5, du, 0.3 * k, { a: 0.03, bright: 0.8 }); });
     drumHit(d, t, 80, 0.7, { tymp: 1, dec: 0.6 }); drumHit(d, t + 1.32, 80, 0.8, { tymp: 1, dec: 0.9 }); crash(d, t + 1.32, 0.25, 1.4);
   };
-  def('levelUp', 0.5, 2.6, 3, 0.3, 0.5, 1, (t, d, o) => fanfare(t, d, o, 1));
+  def('levelUp', 0.38, 2.6, 3, 0.3, 0.5, 1, (t, d, o) => fanfare(t, d, o, 1));
   def('coin', 0.5, 0.5, 0, 0.12, 0, 4, (t, d, o) => {
     [[0, 1318.5], [0.07, 1975.5]].forEach(([dt, f]) => { const g = G(0); env(g.gain, t + dt, 0.002, 0.4, dt ? 0.35 : 0.1); g.connect(d); osc('square', hz(o, f), t + dt, 0.4, g); osc('sine', hz(o, f) * 2.01, t + dt, 0.3, (() => { const x = G(0.3); x.connect(g); return x; })()); });
   });
@@ -355,7 +355,7 @@ export function createAudio(opts = {}) {
       burst(t + 0.4, 1.0, d, { type: 'highpass', f0: 8000, g: 0.05, a: 0.4 });
     },
   };
-  for (const k of Object.keys(ult)) def(k, { ultFire: 0.65, ultLightning: 0.7, ultEarth: 0.7, ultWind: 1.0, ultHoly: 0.75 }[k], 2.2, 4, 0.35, 0.55, 2, ult[k]);
+  for (const k of Object.keys(ult)) def(k, { ultFire: 0.5, ultLightning: 0.55, ultEarth: 0.7, ultWind: 1.0, ultHoly: 0.75 }[k], 2.2, 4, 0.35, 0.55, 2, ult[k]);
   // crowd one-shots: formant-filtered noise + a handful of pitched voices
   function crowdVoices(t, dur, d, n, o) {
     for (let i = 0; i < n; i++) voice(t + rng() * dur * 0.25, dur * (0.55 + rng() * 0.4), d, { voice: i & 1 ? 1 : 0, pitch: (o.pitch || 1) * (0.85 + rng() * 0.8), vowel: o.vowel || 'o', g: (o.vg || 0.12), p0: o.p0 || 1, p1: o.p1 || 1, a: dur * 0.3, breath: 0.2, vib: 5 + rng() * 3, rasp: 3, fEnd: o.fEnd });

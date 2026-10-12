@@ -456,8 +456,7 @@ export function createFx(scene, opts = {}) {
   fx.slash = (pos, dir, color = '#ffffff', size = 1.5, o = {}) => {
     const yaw = Math.atan2(dir.x, dir.z), tilt = o.tilt ?? (rnd() - 0.5) * 1.0, arc = (o.arc ?? 2.3) * (o.flip ? -1 : 1);
     _q.setFromEuler(new THREE.Euler(tilt * 0.6, yaw, tilt, 'YXZ')); _v.set(pos.x, pos.y, pos.z); _m.compose(_v, _q, _s.set(size, size, size));
-    setTimed(slashMesh, allocTimed(slashMesh), _m, rgb(color), o.alpha ?? 1, uTime.value, o.dur ?? 0.28, 0, 0);
-    slashMesh.userData.par.setZ(slashMesh.userData.cur === 0 ? MAXS - 1 : slashMesh.userData.cur - 1, arc); slashMesh.userData.par.setW(slashMesh.userData.cur === 0 ? MAXS - 1 : slashMesh.userData.cur - 1, rnd());
+    setTimed(slashMesh, allocTimed(slashMesh), _m, rgb(color), o.alpha ?? 1, uTime.value, o.dur ?? 0.28, arc, rnd());
   };
 
   // Debris chunks (sand clods / stone shards / bronze bits). o.kind: 'sand' | 'stone' | 'metal' | 'fire'
@@ -479,7 +478,7 @@ export function createFx(scene, opts = {}) {
   function ribbonSlot() { const s = rib.alloc(); if (!s) return null; s.on = true; s.dirty = true; return s; }
   const setCol = (s, c, g = 1) => { s.c = rgb(c); s.g = g; };
   fx.beam = (a, b, color = '#ffffff', o = {}) => {
-    const s = ribbonSlot(); if (!s) return null; s.kind = 'beam'; setCol(s, color, o.glow ?? 2); s.a = a; s.b = b; s.life = o.life ?? 0.25; s.age = 0; s.width = o.width ?? 0.12; s.n = o.pts ?? 14; s.jag = o.jag ?? 0; s.flick = o.flicker ?? 0; s.sag = o.sag ?? 0; s.rej = 0; s.fade = o.fade ?? 1; return s;
+    const s = ribbonSlot(); if (!s) return null; s.kind = 'beam'; s.P0 = null; setCol(s, color, o.glow ?? 2); s.a = a; s.b = b; s.life = o.life ?? 0.25; s.age = 0; s.width = o.width ?? 0.12; s.n = o.pts ?? 14; s.jag = o.jag ?? 0; s.flick = o.flicker ?? 0; s.sag = o.sag ?? 0; s.rej = 0; s.fade = o.fade ?? 1; return s;
   };
   fx.zap = (a, b, color = '#a8d8ff', o = {}) => {
     const s = fx.beam(a, b, color, { life: 0.22, width: 0.14, jag: 0.22, flicker: 0.04, pts: 16, glow: 2.6, ...o });
