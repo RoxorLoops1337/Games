@@ -56,6 +56,10 @@ const sim = readFileSync(join(root, 'core', 'sim.js'), 'utf8');
 ok(/KEY = 'ludus_maximus_3d_v1'/.test(sim), 'own save key');
 ok(!/KEY = 'ludus_maximus_v1'/.test(sim), 'does not share the 2D save');
 
+// 5b. portraits: renderer module exists, game exposes ctx.portrait
+const gm = readFileSync(join(root, 'js', 'game.js'), 'utf8');
+ok(/export function createPortraitRenderer/.test(readFileSync(join(root, 'js', 'portrait.js'), 'utf8')) && /portrait: \(/.test(gm), 'portrait renderer + ctx.portrait');
+
 // 6. no em dashes anywhere in authored text (owner rule)
 for (const f of files.filter((x) => /\.(js|html|css|md)$/.test(x))) ok(!readFileSync(f, 'utf8').includes('—'), f.replace(root, '') + ' has no em dash');
 
