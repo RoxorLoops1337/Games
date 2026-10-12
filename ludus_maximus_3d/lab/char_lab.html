@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Character lab</title>
+<style>html,body{margin:0;height:100%;background:#2a2540;overflow:hidden;font:12px system-ui,sans-serif;color:#f2e6c8}
+canvas{display:block}#hud{position:fixed;left:8px;top:6px;text-shadow:0 1px 2px #000;white-space:pre;pointer-events:none}</style>
+<script type="importmap">{"imports":{"three":"../vendor/three.module.min.js","three/addons/":"../vendor/jsm/"}}</script>
+<script src="../core/data.js"></script><script src="../core/sim.js"></script>
+</head><body><div id="hud"></div>
+<script type="module">
+// Character showcase: 5 styles x 3 palettes under the arena light rig (js/sky.js golden preset as fightview uses it).
+// Params: view=grid|close|one|three  pal=0..2 (one palette row / the palette of a single view)  style=<id> (one)  rot=<deg yaw offset>  spin=1 (live turntable)
+//         rar=0..4 (rarity of every equipped item)  lvl=<n>  stars via lvl  pose=<clip>  t=<seconds into the pose>  face=0..2  hair=short|crop|long|tied|bald  beard=0..2  cam=<x,y,z,tx,ty,tz>  fov=<deg>
+import * as THREE from 'three';
+import { poseAt, triCount } from '../js/rig.js';
+import { STYLES } from '../js/gear.js';
+import { createGladiator } from '../js/gladiator.js';
+import { createSky, createLightRig, applyTOD, TOD } from '../js/sky.js';
+
+const Q = new URLSearchParams(location.search), W = innerWidth, H = innerHeight, LM = window.LM, D = window.LM_D;
+const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+renderer.setPixelRatio(1); renderer.setSize(W, H); renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.outputColorSpace = THREE.SRGBColorSpace;
+document.body.appendChild(renderer.domElement);
+const scene = new THREE.Scene();
+const sky = createSky(); scene.add(sky.mesh);
+const light = createLightRig(scene, { shadowSize: 2048, shadowRadius: 9, shadowCenter: new THREE.Vector3(0, 0, 0), far: 300 });
+const preset = Object.assign({}, TOD.golden, { sunElev: +(Q.get('sun') || 46), sunAz: +(Q.get('az') || 205) });
+applyTOD(preset, { rig: light, scene, sky, renderer });
+const ground = new THREE.Mesh(new THREE.CircleGeometry(40, 48), new THREE.MeshStandardMaterial({ color: '#d9b27c', roughness: 1 })); ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; scene.add(ground);
+
+// 3 palettes: skin / hair / tunic / plume. Tunic colours are D.COLORS (the sim picks from them), skin and hair from D.SKIN / D.HAIR.
+const PALS = [
+  { skin: D.SKIN[5], hair: D.HAIR[0], color: D.COLORS[0].c, plume: D.PLUME[1] },
+  { skin: D.SKIN[2], hair: D.HAIR[2], color: D.COLORS[1].c, plume: D.PLUME[5] },
+  { skin: D.SKIN[4], hair: D.HAIR[5], color: D.COLORS[3].c, plume: D.PLUME[0] },
+];
+const rarQ = Q.get('rar') != null ? +Q.get('rar') : 0, lvlQ = +(Q.get('lvl') || 8);
+const rigs = [];
+function spawn(style, pal, x, z, yaw, k) {
+  const g = LM.makeGlad({ style, lvl: lvlQ, id: 11 + k, name: 'Lab' + style + pal, r: LM.mulberry(1000 + k * 17), q: 0.8 });
+  Object.assign(g, PALS[pal], { face: Q.get('face') != null ? +Q.get('face') : (k % 3) });
+  for (const s of ['weapon', 'shield', 'armor', 'helm', 'charm']) g.gear[s] = { slot: s, rar: rarQ, name: s };
+  const over = {}; if (Q.get('hair')) over.hair = Q.get('hair'); if (Q.get('beard') != null) over.beard = +Q.get('beard');
+  const rig = createGladiator(g, { look: over });
+  rig.root.position.set(x, 0, z); rig.root.rotation.y = yaw; scene.add(rig.root); rig.animator.armed = 1;
+  rig.update(0.016); rig.resetSecondary(); rigs.push(rig); return rig;
+}
+const view = Q.get('view') || 'grid', palQ = Q.get('pal'), rot = (+(Q.get('rot') || 0)) * Math.PI / 180, yaw34 = 0.62 + rot;
+const cam = new THREE.PerspectiveCamera(+(Q.get('fov') || 30), W / H, 0.1, 400); const target = new THREE.Vector3(0, 1, 0);
+let k = 0;
+if (view === 'grid') {
+  const rows = palQ != null ? [+palQ] : [0, 1, 2];
+  rows.forEach((p, ri) => STYLES.forEach((s, ci) => spawn(s, p, (ci - 2) * 1.9, (ri - (rows.length - 1) / 2) * -2.3, yaw34, k++)));
+  const n = rows.length; cam.position.set(0, 2.2 + n * 0.5, 9.2 + n * 2.2); target.set(0, 0.95, 0); cam.fov = rows.length === 1 ? 25 : 30;
+} else if (view === 'close') {
+  const p = +(palQ || 0); STYLES.forEach((s, ci) => spawn(s, p, (ci - 2) * 0.62, 0, 0.5 + rot, k++));
+  cam.position.set(0.0, 1.58, 3.1); target.set(0, 1.53, 0); cam.fov = 17;
+} else if (view === 'three') { // three palettes of one style at 3/4, full body
+  const st = Q.get('style') || 'murmillo'; [0, 1, 2].forEach((p, i) => spawn(st, p, (i - 1) * 1.7, 0, yaw34, k++)); cam.position.set(0, 1.5, 6.4); target.set(0, 0.95, 0); cam.fov = 28;
+} else { // one
+  const st = Q.get('style') || 'murmillo'; spawn(st, +(palQ || 0), 0, 0, yaw34, +(Q.get('k') || 0)); cam.position.set(0, 1.35, 4.6); target.set(0, 0.95, 0); cam.fov = 28;
+  if (view === 'one' && Q.get('part') === 'head') { cam.position.set(0.5, 1.7, 1.5); target.set(0, 1.68, 0); cam.fov = 22; }
+}
+if (Q.get('cam')) { const c = Q.get('cam').split(',').map(Number); cam.position.set(c[0], c[1], c[2]); target.set(c[3], c[4], c[5]); }
+const pose = Q.get('pose'), pt = +(Q.get('t') || 0);
+let simT = 0;
+function applyPose() { if (pose) for (const r of rigs) { poseAt(r, pose, pt); r.resetSecondary(); for (const sc of r.secondary) sc.write(); } }
+function step(dt) {
+  simT += dt;
+  if (Q.get('spin')) for (const r of rigs) r.root.rotation.y += dt * 0.8;
+  if (pose) { applyPose(); for (const r of rigs) { r.root.updateMatrixWorld(true); for (const f of r.postUpdate) f(r); } } else for (const r of rigs) r.update(dt);
+}
+function render() { cam.aspect = W / H; cam.updateProjectionMatrix(); cam.lookAt(target); sky.update(cam, 0); renderer.render(scene, cam); }
+window.__lab = { rigs, scene, step, render, cam, target, THREE };
+window.__labShot = (secs) => {
+  const n = Math.round(secs * 60); for (let i = 0; i < Math.max(1, n); i++) step(1 / 60);
+  if (pose) { for (const r of rigs) { r.root.updateMatrixWorld(true); for (const sc of r.secondary) sc.write(); } }
+  render(); const info = { tris: rigs.map((r) => triCount(r.root)), calls: rigs.map((r) => r.drawCalls()), gl: renderer.info.render.calls }; window.__stat = info; return info;
+};
+window.__labReady = Promise.resolve();
+document.getElementById('hud').textContent = Q.get('hud') ? view + ' rar' + rarQ : '';
+if (!navigator.webdriver && !Q.get('static')) { let last = performance.now(); (function loop(now) { const dt = Math.min(0.05, (now - last) / 1000); last = now; step(dt); render(); requestAnimationFrame(loop); })(last); } else render();
+</script></body></html>
