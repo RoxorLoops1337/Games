@@ -167,5 +167,14 @@ Gladiator diary on the profile (fights, level ups, nicknames, quests) and a name
 ## Next ideas
 - [ ] 75. Per-style entrance animations in the fight intro
 - [ ] 76. Diary export as part of the Share card
-- [ ] 77. Season prize choice (pick one of three)
+- [x] 77. Season prize choice (pick one of three)
 - [ ] 78. Arena crowd reacts to nicknames
+
+## Round 18 shipped
+Season prize is now a choice of one of three named items in a celebratory dialog.
+
+## Next ideas
+- [ ] 79. Diary lines in the Share card
+- [ ] 80. Fighter nickname banners in the fight intro
+- [ ] 81. Armory sorting and filters by affix
+- [ ] 82. Tutorial hints for new systems (ladder, presets, bounty)
