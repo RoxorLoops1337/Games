@@ -317,5 +317,17 @@ ok(strongWins >= 17, `level 10 beats level 1 (${strongWins}/20)`);
   const cr = LM.crier(S8, { nicks: n1 }); ok(cr.length >= 1 && cr.length <= 3 && S8.news.length === 0, 'the crier drains the news');
 }
 
+// round 9: champion duel, deed perks, forum
+{
+  const S9 = LM.newGame({ name: 'R9' }); const g = LM.makeGlad({ id: S9.nextId++, style: 'thraex', lvl: 6 }); S9.glads.push(g);
+  ok(!LM.champReady(S9), 'no champion challenge without a rival owner');
+  for (let i = 0; i < 3; i++) LM.ownerTick(S9, false); ok(LM.champReady(S9), 'three losses unlock the champion duel');
+  const opp = LM.champOpp(S9, g); ok(opp.lvl >= g.lvl + 1, 'the champion is stronger than your fighter');
+  const lost = LM.champResult(S9, false); ok(lost.gold === 0 && S9.rowner && !LM.champReady(S9), 'a lost duel can only be retried next week');
+  S9.week++; const g0 = S9.gold, win = LM.champResult(S9, true); ok(win.gold > 0 && S9.gold === g0 + win.gold && S9.rowner === null, 'winning the duel humbles the owner');
+  g.rec.w = 12; const st0 = g.st.wil; LM.earnNick(S9); ok(g.st.wil === st0 + 2, 'a deed nickname gives a small stat perk');
+  const cr = LM.crier(S9, { nicks: [] }); ok((S9.forum || []).length >= cr.length && S9.forum.length > 0, 'headlines are saved to the forum');
+}
+
 console.log(`ludus_maximus: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

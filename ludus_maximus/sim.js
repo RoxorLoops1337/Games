@@ -630,7 +630,7 @@
   // ---------- town crier, earned nicknames, rival owner ----------
   LM.earnNick = (S) => {
     const out = [];
-    S.glads.forEach((g) => { g.dd = g.dd || []; D.DEEDS.forEach((d) => { if (!g.dd.includes(d.id) && d.ok(g)) { g.dd.push(d.id); g.nick = d.n; out.push({ g, nick: d.n }); } }); });
+    S.glads.forEach((g) => { g.dd = g.dd || []; D.DEEDS.forEach((d) => { if (!g.dd.includes(d.id) && d.ok(g)) { g.dd.push(d.id); g.st[d.st] += 2; g.nick = d.n; out.push({ g, nick: d.n }); } }); });
     return out;
   };
   LM.ownerTick = (S, won) => {
@@ -639,12 +639,22 @@
     if (won) { o.l++; if (o.l >= 4) { const f = 50 + 15 * LM.maxLeague(S); S.fame += f; S.news.push(`${o.name} is humbled! Their ludus kneels to you (+${f} fame).`); S.rowner = null; } }
     else { o.w++; if (o.w % 3 === 0) S.news.push(`${o.name} boasts in the forum: "Your gladiators are soft!"`); }
   };
+  LM.champOpp = (S, g) => {
+    const rv = { id: null, name: pick(D.FIRST), nick: 'Champion', ludus: (S.rowner && S.rowner.name) || 'Rival Ludus', style: pick(D.STYLE_IDS), skin: pick(D.SKIN), hair: pick(D.HAIR), plume: pick(D.PLUME), face: Math.floor(rnd() * 3), trait: pick(D.TRAIT_IDS), color: pick(D.COLORS).c };
+    const o = mkOpp(S, rv, g.lvl + 2, 1.1, rnd, Math.min(3, LM.maxLeague(S)), false); o.rv = null; o.id = 'champ'; return o;
+  };
+  LM.champReady = (S) => !!(S.rowner && S.rowner.w >= 3 && S.champWeek !== S.week);
+  LM.champResult = (S, win) => {
+    S.champWeek = S.week; if (!win) { if (S.rowner) S.rowner.w++; return { gold: 0, fame: 0 }; }
+    const gold = Math.round((60 + 40 * LM.maxLeague(S)) * LM.diffGold(S)), fame = 60 + 20 * LM.maxLeague(S); S.gold += gold; S.fame += fame;
+    S.news = S.news || []; S.news.push(`${S.rowner ? S.rowner.name : 'The rival owner'} lost their champion to you and slinks away (+${fame} fame).`); S.rowner = null; S.stats.champs = (S.stats.champs || 0) + 1; return { gold, fame };
+  };
   LM.crier = (S, rep) => {
     const out = (S.news || []).splice(0); const top = S.glads.slice().sort((a, b) => b.fame - a.fame)[0];
     (rep.nicks || []).forEach((x) => out.push(`The crowd now calls ${x.g.name} "${x.nick}".`));
     if (top && top.fame > 0 && out.length < 3) out.push(pick(['The streets whisper about %n.', '%n draws crowds to the gates.', 'Poets are writing verses for %n.']).replace('%n', top.name));
     if (S.sponsor && S.sponsor.pledge && out.length < 3) out.push(`Your sponsor waits to see ${S.sponsor.pledge.n - S.sponsor.pledge.got > 0 ? S.sponsor.pledge.n - S.sponsor.pledge.got + ' more win(s)' : 'the pledge paid'}.`);
-    return out.slice(0, 3);
+    const res = out.slice(0, 3); S.forum = (S.forum || []).concat(res.map((t) => ({ w: S.week, t }))).slice(-30); return res;
   };
 
   // ---------- rival of the year: the pair that clashed most this season ----------

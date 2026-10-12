@@ -290,6 +290,24 @@
     await pickPends(S); await trophies(S);
   }
 
+  ACT.champ = () => {
+    const S = U.S(); if (!L.champReady(S)) return U.toast('No champion challenge this week');
+    const list = S.glads.filter((g) => g.inj <= 0 && g.en >= 30);
+    U.modal(`<h2>${esc(S.rowner.name)}'s champion</h2><div class="muted" style="margin-bottom:8px">A single duel against a stronger foe. Win and the rival owner is humbled. Needs 30+ energy.</div>` + (list.length ? list.map((g) => `<div class="itm" data-a="champgo" data-id="${g.id}"><div style="width:44px;height:52px;overflow:hidden;display:flex;align-items:flex-end;justify-content:center">${U.spr(g, { size: 46 })}</div><div class="sp"><div class="gname" style="font-size:13px">${esc(g.name)}</div><div class="small">Lv ${g.lvl}</div></div></div>`).join('') : '<div class="empty" style="color:var(--ink)">Nobody is fit to fight.</div>'));
+  };
+  ACT.champgo = async (el) => {
+    const S = U.S(); if (U.busy) return; const g = U.gOf(+el.dataset.id); U.closeModal(); U.busy = true;
+    try {
+      g.en = Math.max(0, g.en - 30); const opp = L.champOpp(S, g); const ev = { kind: 'champ', title: 'Champion duel', opps: [opp], league: 0, key: 'champ' + S.week };
+      await U.dialog(`<h2>The champion</h2><div class="row" style="justify-content:center">${A.gladOf(opp, { size: 60, tunic: opp.color, flip: true, mood: 'fight' })}</div><div class="small" style="text-align:center">${esc(opp.name)} of ${esc(opp.ludus)}, level ${opp.lvl}.</div>` + btn('Fight!', 'ok', 'red'));
+      const res = await fightScreen(S, [g], [opp], 'bal', { ev, augs: [] }); const r = L.champResult(S, !!res.win); U.snd(res.win ? 'win' : 'lose');
+      await U.dialog(`<div class="big ${res.win ? 'win' : 'lose'}">${res.win ? 'Champion down' : 'Defeated'}</div><div class="row wrap" style="justify-content:center">${res.win ? `<span class="pill">${A.icon('coin', 14)} +${fmt(r.gold)}</span><span class="pill">${A.icon('fame', 14)} +${r.fame}</span>` : '<span class="pill">The owner gloats...</span>'}</div>` + btn('Continue', 'ok', 'red'));
+    } catch (e) { console.error(e); U.toast('Oops: ' + e.message); } finally { U.busy = false; U.save(); U.render(); }
+  };
+  ACT.forum = () => {
+    const S = U.S(); U.modal('<h2>Forum</h2>' + ((S.forum || []).length ? S.forum.slice().reverse().map((x) => `<div class="itm" style="cursor:default"><span class="tag">Wk ${x.w}</span><div class="sp small">${esc(x.t)}</div></div>`).join('') : '<div class="empty" style="color:var(--ink)">No news yet. Play a week.</div>'));
+  };
+
   U.afterBoot = () => { U.checkPending(); };
   U.boot();
   U.afterBoot();
