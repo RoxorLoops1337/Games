@@ -247,6 +247,15 @@ Keystone balance pass. Mirror fights of all six keystones (thraex, murmillo, ret
 
 ## Next ideas
 - [ ] 111. Fight replay and crowd audio (55, 63)
-- [ ] 112. Minor rune balance pass
+- [x] 112. Minor rune balance pass
 - [ ] 113. More drill types for other buildings (109)
-- [ ] 114. Augment balance pass
+- [x] 114. Augment balance pass
+
+## Round 27 shipped
+Minor rune and augment balance pass. Minor runes (vs no minor, 150 fights per cell) all land at 49 to 57%, so no change. Augments (vs no augment, 100 fights each): silver now averages 60%, gold 63%, prismatic 79% (was 62, 62, 87). Nerfed Bull's Heart, Regeneration, Juggernaut, Firebrand, Berserker, Ascension, Invincible, Titanic Hunger, Storm Lord, Urf and Phoenix (revive now 25% HP, also for the Phoenix Feather relic). Buffed Glass Cannon and Phantom Dance.
+
+## Next ideas
+- [ ] 115. Fight replay and crowd audio (55, 63)
+- [ ] 116. Item affix balance pass
+- [ ] 117. Relic balance pass
+- [ ] 118. More drill types for other buildings (109)
