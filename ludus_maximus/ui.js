@@ -192,6 +192,10 @@
       modal(`<h2>Combo drill</h2><div class="muted" style="margin-bottom:6px">${esc(g.name)} drills ${D.SN[L.activity(g).s]}. Memorise the three moves, then repeat them in order.</div><div id="cseq" class="big" style="font-size:40px;text-align:center;letter-spacing:10px">${seq.map((x) => ar[x]).join(' ')}</div><div class="row" style="justify-content:center;gap:8px;margin-top:10px">${ar.map((a, i) => `<button class="btn" data-a="combo" data-v="${i}" style="font-size:26px;min-width:64px">${a}</button>`).join('')}</div><div id="dres" class="big" style="font-size:22px;margin-top:10px"></div>`);
       setTimeout(() => { const c = document.getElementById('cseq'); if (c) c.textContent = '? ? ?'; }, 1600); return;
     }
+    if (L.drillKind(S) === 'sprint') {
+      U.drillRun.mode = 'sprint'; U.drillRun.taps = 0; U.drillRun.t1 = null;
+      modal(`<h2>Sprint drill</h2><div class="muted" style="margin-bottom:6px">${esc(g.name)} drills ${D.SN[L.activity(g).s]}. Tap as fast as you can for 3 seconds after the first tap. 22 taps is perfect.</div><button class="btn full red" id="sb" data-a="sprinttap" style="min-height:90px;font-size:22px">TAP!</button><div id="dres" class="big" style="font-size:22px;margin-top:10px">0</div>`); return;
+    }
     if (L.drillKind(S) === 'react') {
       U.drillRun.mode = 'react'; U.drillRun.readyAt = performance.now() + 1000 + Math.random() * 2000;
       modal(`<h2>Reflex drill</h2><div class="muted" style="margin-bottom:6px">${esc(g.name)} drills ${D.SN[L.activity(g).s]}. Wait for the button to turn green, then tap as fast as you can. Too early counts as a miss.</div><button class="btn full" id="rb" data-a="drillstop" style="background:#8a8a8a;min-height:90px;font-size:22px">WAIT...</button><div id="dres" class="big" style="font-size:22px;margin-top:10px"></div>`);
@@ -202,8 +206,9 @@
     requestAnimationFrame(loop);
   };
   ACT.combo = (el) => { const r = U.drillRun; if (!r || r.done || r.mode !== 'combo') return; r.tap.push(+el.dataset.v); const c = document.getElementById('cseq'); if (c && c.textContent.includes('?')) c.textContent = r.tap.map((x) => ['\u2190', '\u2191', '\u2192'][x]).join(' '); if (r.tap.length >= 3) { r.acc = L.comboAcc(r.seq, r.tap); ACT.drillstop(); } };
+  ACT.sprinttap = () => { const r = U.drillRun; if (!r || r.done || r.mode !== 'sprint') return; if (!r.t1) { r.t1 = performance.now(); setTimeout(() => ACT.drillstop(), 3000); } r.taps++; U.snd('click'); const d = document.getElementById('dres'); if (d) d.textContent = r.taps; };
   ACT.drillstop = () => {
-    const r = U.drillRun; if (!r || r.done) return; r.done = true; const g = gOf(r.g); const acc = r.mode === 'combo' ? r.acc : r.mode === 'react' ? L.reactAcc(r.on ? performance.now() - r.readyAt : -1) : 1 - Math.abs(r.p - 0.5) * 2; const m = L.setDrill(S, g, acc);
+    const r = U.drillRun; if (!r || r.done) return; r.done = true; const g = gOf(r.g); const acc = r.mode === 'sprint' ? L.sprintAcc(r.taps) : r.mode === 'combo' ? r.acc : r.mode === 'react' ? L.reactAcc(r.on ? performance.now() - r.readyAt : -1) : 1 - Math.abs(r.p - 0.5) * 2; const m = L.setDrill(S, g, acc);
     if (r.mode === 'react' && r.on) { const ms = Math.round(performance.now() - r.readyAt); g.rtBest = Math.min(g.rtBest || 9999, ms); r.ms = ms; }
     const txt0 = r.ms ? ` (${r.ms} ms, best ${g.rtBest})` : '';
     const txt = (m >= 0.4 ? 'PERFECT! +40%' : m >= 0.25 ? 'Great! +25%' : m >= 0.1 ? 'Good. +10%' : 'Missed.') + txt0; $('#dres').textContent = txt; $('#dres').style.color = m >= 0.25 ? 'var(--green)' : 'var(--terra)'; U.snd(m >= 0.25 ? 'win' : 'miss'); save(); setTimeout(() => { closeModal(); render(); }, 900);

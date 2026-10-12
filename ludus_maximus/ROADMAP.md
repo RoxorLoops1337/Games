@@ -339,7 +339,7 @@ Wandering visitors (merchant, veteran trainer, bard, rumor scout): from week 2 a
 ## Next ideas
 - [x] 152. Tournament flow pass at phone size (147)
 - [x] 153. Visitor variety: a rival owner's spy, a bounty hunter, a healer for injuries
-- [ ] 154. Real replay (148)
+- [x] 154. Real replay (148)
 - [x] 155. Augment hints per style (149)
 
 ## Round 37 shipped
@@ -349,3 +349,6 @@ Wandering visitors (merchant, veteran trainer, bard, rumor scout): from week 2 a
 ## Round 38 shipped
 - Augment picker shows a "Fits your style" tag (soft hint, no hidden counters).
 - Bracket opponents no longer share your fighter name.
+
+## Round 39 shipped
+- Sprint drill: tap as fast as you can for 3 seconds (Sparring Ring level 2+, every fourth week).
