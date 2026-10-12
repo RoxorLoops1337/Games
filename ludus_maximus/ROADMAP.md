@@ -331,4 +331,13 @@ Level-up pick (mastery dialog), the fighter profile (stats, gear, ultimates, run
 - [ ] 148. Real replay (144)
 - [ ] 149. Augment hints per style (145)
 - [ ] 150. More drill types for other buildings (146)
-- [ ] 151. Idea: ludus visitors (a wandering merchant or trainer appears on the map for a week)
+- [x] 151. Idea: ludus visitors (a wandering merchant or trainer appears on the map for a week)
+
+## Round 36 shipped
+Wandering visitors (merchant, veteran trainer, bard, rumor scout): from week 2 a visitor may wait at the gates, the same one every time you look in a given week (seeded by save seed and week), with a Visit card on the Ludus tab (right under the map) and one choice per week. Merchant sells a rare item for 70 gold plus 45 per league, trainer gives +2 to a fighter's weakest stat for 40 plus 25 per league, bard gives everyone +12 morale and +8 energy for free, scout gives fame for free. The Town Crier announces a visitor. Verified in headless Chromium for the trainer, merchant and bard. The tournament flow pass (147) moves to next round.
+
+## Next ideas
+- [ ] 152. Tournament flow pass at phone size (147)
+- [ ] 153. Visitor variety: a rival owner's spy, a bounty hunter, a healer for injuries
+- [ ] 154. Real replay (148)
+- [ ] 155. Augment hints per style (149)

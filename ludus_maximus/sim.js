@@ -632,6 +632,28 @@
     const ls = g.ls || { dmg: 0, taken: 0, crits: 0, fights: 0, best: 0 }; const d = Math.round(u.dmg || 0);
     ls.dmg += d; ls.taken += Math.round(u.taken || 0); ls.crits += u.crits || 0; ls.fights++; ls.best = Math.max(ls.best, d); g.ls = ls; return ls;
   };
+  // ---------- wandering visitors: one small choice per week, deterministic per week ----------
+  LM.VISITORS = {
+    merchant: { n: 'Wandering Merchant', d: 'Sells a rare item at a friendly price.' },
+    trainer: { n: 'Veteran Trainer', d: 'Teaches one fighter a hard lesson: +2 to their weakest stat.' },
+    bard: { n: 'Traveling Bard', d: 'Sings for the whole ludus: +12 morale and +8 energy for everyone.' },
+    scout: { n: 'Rumor Scout', d: 'Spreads word of your ludus: a burst of fame.' },
+  };
+  LM.visitor = (S) => {
+    if (S.week < 2 || S.visitWeek === S.week) return null;
+    const r = mulberry(hash(S.seed + 'visit' + S.week)); if (r() > 0.6) return null;
+    const kind = ['merchant', 'trainer', 'bard', 'scout'][Math.floor(r() * 4)]; const ml = LM.maxLeague(S);
+    return { kind, name: LM.VISITORS[kind].n, d: LM.VISITORS[kind].d, cost: kind === 'merchant' ? 70 + 45 * ml : kind === 'trainer' ? 40 + 25 * ml : 0, seed: Math.floor(r() * 1e9) };
+  };
+  LM.visit = (S, v, g) => {
+    if (!v || S.visitWeek === S.week) return 'The visitor has moved on.'; if (S.gold < v.cost) return 'Not enough gold';
+    const ml = LM.maxLeague(S); let msg = '';
+    if (v.kind === 'merchant') { const it = genItem(mulberry(v.seed), { league: Math.min(3, ml + 1), ilvl: 3 + ml * 5 + Math.floor(S.week / 6), rar: Math.min(4, 2 + (ml >= 2 ? 1 : 0)) }); LM.addItem(S, it); msg = `You bought ${it.name}.`; }
+    else if (v.kind === 'trainer') { if (!g) return 'Pick a fighter'; const st = D.STATS.slice().sort((a, b) => g.st[a] - g.st[b])[0]; g.st[st] += 2; LM.diary(S, g, `Trained by a veteran: +2 ${D.SN[st]}.`); msg = `${g.name} gains +2 ${D.SN[st]}.`; }
+    else if (v.kind === 'bard') { S.glads.forEach((x) => { x.mo = clamp(x.mo + 12, 0, 100); x.en = clamp(x.en + 8, 0, 100); }); msg = 'The ludus sings along. Spirits are high!'; }
+    else { const f = 15 + 5 * ml; S.fame += f; msg = `Word spreads: +${f} fame.`; }
+    S.gold -= v.cost; S.visitWeek = S.week; return { msg };
+  };
   LM.diary = (S, g, t) => { g.dy = (g.dy || []).concat([{ w: S.week, t }]).slice(-12); };
   LM.forumAdd = (S, t) => { S.forum = (S.forum || []).concat([{ w: S.week, t }]).slice(-30); };
   LM.rivalryResolve = (S, a, b, choice, winnerId) => {
@@ -734,7 +756,7 @@
     const before = S.market.length; S.market = S.market.filter((x) => !x.sp); if (S.market.length === before) return false; S.raidWeek = S.week; return true;
   };
   LM.crier = (S, rep) => {
-    const out = (S.news || []).splice(0); const top = S.glads.slice().sort((a, b) => b.fame - a.fame)[0];
+    const out = (S.news || []).splice(0); { const vv = LM.visitor(S); if (vv) out.unshift(`A ${vv.name.toLowerCase()} waits at the gates.`); } const top = S.glads.slice().sort((a, b) => b.fame - a.fame)[0];
     (rep.nicks || []).forEach((x) => out.push(`The crowd now calls ${x.g.name} "${x.nick}".`));
     if (top && top.fame > 0 && out.length < 3) out.push(pick(['The streets whisper about %n.', '%n draws crowds to the gates.', 'Poets are writing verses for %n.']).replace('%n', top.name));
     if (S.sponsor && S.sponsor.pledge && out.length < 3) out.push(`Your sponsor waits to see ${S.sponsor.pledge.n - S.sponsor.pledge.got > 0 ? S.sponsor.pledge.n - S.sponsor.pledge.got + ' more win(s)' : 'the pledge paid'}.`);
