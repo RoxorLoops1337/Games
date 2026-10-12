@@ -164,18 +164,18 @@ function rimOf(sh, lip, wall) {
 export function mountShield(rig, kind, o = {}, rr = { r: 0, col: '#fff' }) {
   const wrist = rig.joints.wristL, holder = new THREE.Object3D(); holder.name = 'shield-' + kind; holder.position.set(0, -0.07, 0); wrist.add(holder); rig.addBone(holder);
   const cloth = '#' + new THREE.Color(rig.palette.cloth).getHexString(), sc = kind === 'scutum';
-  const R = sc ? 0.46 : 0.5, hw = sc ? 0.31 : 0.205, hh = sc ? 0.98 : 0.4, sh = shell(R, hw, hh, sc ? 5 : 4, sc ? 5 : 3, sc ? 8 : 4, sc ? 4 : 3), zc = sc ? 0.2 : 0.14, dy = sc ? 0.04 : 0;
+  const R = sc ? 0.46 : 0.5, hw = sc ? 0.31 : 0.205, hh = sc ? 0.98 : 0.4, sh = shell(R, hw, hh, sc ? 5 : 4, sc ? 5 : 3, sc ? 8 : 4, sc ? 4 : 3), zc = sc ? 0.2 : 0.14, dy = sc ? 0.04 : 0, cx = sc ? -0.1 : -0.04;
   const mat = rig.addMaterial('shield', new THREE.MeshStandardMaterial({ color: '#ffffff', map: shieldTexture(kind, cloth), roughness: 0.72, metalness: 0.05, vertexColors: true, side: THREE.DoubleSide }), 'cloth', { back: true });
   if (!mat.map) mat.color.set(cloth);
-  const place = (g) => xf(g, [-0.1, dy, zc - sh.sag]);
+  const place = (g) => xf(g, [cx, dy, zc - sh.sag]);
   rig.add('shield', place(sh.g.clone()), holder);
   const [lip, wall] = rimOf(sh, sc ? 0.05 : 0.036, sc ? 0.04 : 0.032);
   rig.add('metal', paint(place(lip), 1.1), holder); rig.add('metal', paint(place(wall), 0.7), holder);
   const bz = zc + 0.012;
-  { const br = sc ? 0.088 : 0.066; rig.add('metal', xf(lathe([[br, 0], [br * 0.92, br * 0.22], [br * 0.5, br * 0.46], [0, br * 0.52]], 8, 1, 1, 0, 1).rotateX(PI / 2), [0, dy, bz - 0.01]), holder); }
-  if (rr.r >= 1) gem(rig, holder, [0, dy, bz + (sc ? 0.05 : 0.04)], sc ? 0.026 : 0.02, { r: Math.max(2, rr.r), col: rr.col });
-  if (rr.r >= 3) for (const sy of [-1, 1]) gem(rig, holder, [0, dy + sy * hh * 0.42, zc - sh.sag * 0.15 + 0.012], 0.014, rr);
-  rig.add('leather', xf(boxG(0.16, 0.026, 0.02), [0, 0, 0.04]), holder); // grip bar (the back faces show bare leather via the shader)
+  { const br = sc ? 0.088 : 0.066; rig.add('metal', xf(lathe([[br, 0], [br * 0.92, br * 0.22], [br * 0.5, br * 0.46], [0, br * 0.52]], 8, 1, 1, 0, 1).rotateX(PI / 2), [cx, dy, bz - 0.01]), holder); }
+  if (rr.r >= 1) gem(rig, holder, [cx, dy, bz + (sc ? 0.05 : 0.04)], sc ? 0.026 : 0.02, { r: Math.max(2, rr.r), col: rr.col });
+  if (rr.r >= 3) for (const sy of [-1, 1]) gem(rig, holder, [cx, dy + sy * hh * 0.42, zc - sh.sag * 0.15 + 0.012], 0.014, rr);
+  rig.add('leather', xf(boxG(0.16, 0.026, 0.02), [cx * 0.4, 0, 0.04]), holder); // grip bar (the back faces show bare leather via the shader)
   rig.add('leather', xf(quadG(0.07, 0.05), [0, 0.12, 0.05]), holder); rig.add('leather', xf(quadG(0.07, 0.05), [0, -0.12, 0.05]), holder);
   const f = new V3(), n = new V3(), up = new V3(), x = new V3(), M = new THREE.Matrix4(), qb = new THREE.Quaternion(), qw = new THREE.Quaternion(), qi = new THREE.Quaternion(), qn = new THREE.Quaternion(), bf = new V3(0, 0, 1), w2 = new V3();
   rig.postUpdate.push(() => {

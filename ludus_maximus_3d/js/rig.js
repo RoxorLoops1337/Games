@@ -65,10 +65,11 @@ export function lathe(profile, seg = 8, sx = 1, sz = 1, ao = 0.2, lo = 0.72, p0 
   }
   return addAO(g, ao, lo);
 }
-export function capsule(len, rTop, rBot, seg = 7, bulge = 0.1) {
-  // hangs down from y=0 to y=-len, rounded caps, muscle bulge
+export function capsule(len, rTop, rBot, seg = 7, bulge = 0.1, topCap = true) {
+  // hangs down from y=0 to y=-len, rounded caps, muscle bulge. topCap=false leaves the top open (hidden inside the parent joint volume)
   const cb = rBot * 0.55, ct = rTop * 0.55, mid = lerp(rBot, rTop, 0.5) * (1 + bulge);
-  return lathe([[0, -len - cb], [rBot * 0.8, -len - cb * 0.5], [mid, -len * 0.5], [rTop, 0], [rTop * 0.72, ct * 0.7], [0, ct]], seg, 1, 1, 0.14, 0.8);
+  const pr = [[0, -len - cb], [rBot * 0.8, -len - cb * 0.5], [mid, -len * 0.5], [rTop, 0]]; if (topCap) pr.push([rTop * 0.72, ct * 0.7], [0, ct]);
+  return lathe(pr, seg, 1, 1, 0.14, 0.8);
 }
 export function col1(g) { if (!g.attributes.color) { const n = g.attributes.position.count; g.setAttribute('color', new THREE.BufferAttribute(new Float32Array(n * 3).fill(1), 3)); } return g; }
 export function boxG(w, h, d, ao = 0) { const g = new THREE.BoxGeometry(w, h, d); return addAO(g, ao, 0.8); }
@@ -854,13 +855,13 @@ export function buildGladiator(opts = {}) {
   // arms: deltoid, upper arm, forearm, fist with thumb and knuckle shading
   for (const [s, sg] of [['L', 1], ['R', -1]]) {
     A('skin', paint(sphereG(0.07 * B * AR, 6, 4, 1.05, 1, 1.0), (x, y, z, nx, ny) => 1 - 0.08 * Math.max(0, -ny)), J['shoulder' + s]);
-    A('skin', paint(capsule(DIM.upperArm, 0.074 * B * AR, 0.058 * B * AR, S6, 0.16), jt(DIM.upperArm)), J['shoulder' + s]);
-    A('skin', paint(capsule(DIM.foreArm, 0.058 * B * AR, 0.042 * B * AR, S6, 0.2), jt(DIM.foreArm)), J['elbow' + s]);
+    A('skin', paint(capsule(DIM.upperArm, 0.074 * B * AR, 0.058 * B * AR, S6, 0.16, false), jt(DIM.upperArm)), J['shoulder' + s]);
+    A('skin', paint(capsule(DIM.foreArm, 0.058 * B * AR, 0.042 * B * AR, S6, 0.2, false), jt(DIM.foreArm)), J['elbow' + s]);
     A('skin', paint(lathe([[0.04, -0.118], [0.052, -0.045], [0.046, -0.005], [0, 0.024]], 5, 1.0, 0.84, 0.12, 0.88), (x, y, z) => 1 - 0.1 * Math.exp(-sq((y + 0.1) / 0.02)) + 0.04 * sm01(-0.04, 0, y)), J['wrist' + s]);
     A('skin', xf(coneG(0.017, 0.07, 4), [sg * 0.036, -0.055, 0.03], [-Math.PI + 0.9, 0, sg * 0.15]), J['wrist' + s]); // thumb
     // legs
     A(legMat, paint(capsule(DIM.thigh, 0.104 * B * LG, 0.07 * B * LG, S6, 0.16), jt(DIM.thigh)), J['hip' + s]);
-    A(legMat, paint(capsule(DIM.shin, 0.07 * B * LG, 0.046 * B * LG, S6, 0.3), jt(DIM.shin)), J['knee' + s]);
+    A(legMat, paint(capsule(DIM.shin, 0.07 * B * LG, 0.046 * B * LG, S6, 0.3, false), jt(DIM.shin)), J['knee' + s]);
     const prof = [[0.05, -0.06], [0.05, 0.06], [0.036, 0.13], [0.0, 0.16]];
     const foot = lathe(prof, 5, 1, 1.0, 0.1, 0.85); foot.rotateX(Math.PI / 2); foot.scale(1, 1, 0.55); foot.translate(0, -DIM.footH + 0.03, 0.04);
     A('skin', foot, J['ankle' + s]);
