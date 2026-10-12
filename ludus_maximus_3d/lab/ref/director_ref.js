@@ -25,7 +25,7 @@ function sd(o, k, target, smooth, dt, maxSpeed = Infinity) {
   const t2 = o[k] - ch, tmp = (o[k + 'V'] + w * ch) * dt; o[k + 'V'] = (o[k + 'V'] - w * tmp) * e;
   let out = t2 + (ch + tmp) * e; if ((target - o[k] > 0) === (out > target)) { out = target; o[k + 'V'] = 0; } o[k] = out;
 }
-function sdAngle(o, k, target, smooth, dt) { const cur = o[k]; const t = cur + angDelta(cur, target); sd(o, k, t, smooth, dt); o[k] = wrap(o[k]); }
+function sdAngle(o, k, target, smooth, dt, maxSpeed) { const cur = o[k]; const t = cur + angDelta(cur, target); sd(o, k, t, smooth, dt, maxSpeed); o[k] = wrap(o[k]); }
 
 // ---------- camera math ----------
 function basis(yaw, pitch) { // forward looks along horizontal yaw, pitched DOWN by pitch (negative = looks up)
@@ -99,7 +99,11 @@ export class FightDirector {
 
   // ----- per frame -----
   update(dt, units) {
-    dt = clamp(dt, 0, 0.1); this.units = units || this.units; this.living = this.units.filter((u) => u.alive !== false);
+    dt = clamp(dt, 0, 0.1); this.units = units || this.units;
+    // smoothed velocities (look-ahead must not jump when a fighter dashes or stops)
+    const k = 1 - Math.exp(-dt / 0.3); this.sv = this.sv || new Map();
+    this.units = this.units.map((u) => { const v = this.sv.get(u.id) || { x: u.vx || 0, y: u.vy || 0 }; v.x += ((u.vx || 0) - v.x) * k; v.y += ((u.vy || 0) - v.y) * k; this.sv.set(u.id, v); return { ...u, vx: v.x, vy: v.y }; });
+    this.living = this.units.filter((u) => u.alive !== false);
     this.t += dt; this.trauma = Math.max(0, this.trauma - dt * 1.6);
     if (this.free) { this.free.idle += dt; if (this.freeTimeout && this.free.idle > this.freeTimeout) this.release(); }
     const w = this._want(dt);
@@ -112,7 +116,7 @@ export class FightDirector {
     } else tgt = { ...w, cx: w.c[0], cy: w.c[1], cz: w.c[2], st: { ...w.st, k: 1 } };
     const s = this.s, st = tgt.st, kk = tgt.st.k;
     if (!this.started) { s.yaw = tgt.yaw; s.pitch = tgt.pitch; s.cx = tgt.cx; s.cy = tgt.cy; s.cz = tgt.cz; s.d = tgt.d; s.fov = tgt.fov; this.started = true; }
-    sdAngle(s, 'yaw', tgt.yaw, st.yaw * kk, dt); sd(s, 'pitch', tgt.pitch, st.pitch * kk, dt);
+    sdAngle(s, 'yaw', tgt.yaw, st.yaw * kk, dt, st.yawMax ?? Infinity); sd(s, 'pitch', tgt.pitch, st.pitch * kk, dt);
     sd(s, 'cx', tgt.cx, st.c * kk, dt); sd(s, 'cy', tgt.cy, st.c * kk, dt); sd(s, 'cz', tgt.cz, st.c * kk, dt);
     sd(s, 'fov', tgt.fov, st.fov * kk, dt);
     sd(s, 'd', tgt.d, (tgt.d > s.d ? st.dUp : st.d) * kk, dt); // expand fast, contract slow
@@ -143,7 +147,7 @@ export class FightDirector {
     const alt = [yaw, yaw + Math.PI]; let best = 0, bestScore = 1e9;
     const tanV = Math.tan(fov * D2R / 2), tanH = tanV * this.aspect;
     alt.forEach((y, i) => { const c = recenter(pts, y, pitch), d = needD(pts, c, y, pitch, tanV, tanH, 0.9, 0.6, 0.3), pos = camPos(c, y, pitch, d);
-      const over = Math.max(0, Math.hypot(pos[0], pos[2]) - (this.R - this.wallMargin)), stick = Math.abs(angDelta(this.s.yaw, y)) / Math.PI * 4; bestScore > over + stick && ((bestScore = over + stick), (best = i)); });
+      const over = Math.max(0, Math.hypot(pos[0], pos[2]) - (this.R - this.wallMargin)), stick = Math.abs(angDelta(this.s.yaw, y)) / Math.PI * 10; bestScore > over + stick && ((bestScore = over + stick), (best = i)); });
     return alt[best];
   }
 
@@ -195,7 +199,7 @@ export class FightDirector {
     const phi = L.length > 1 && Math.hypot(sx, sy) > 1e-3 ? 0.5 * Math.atan2(sy, sx) : this.s.yaw - Math.PI / 2;
     let yaw = phi + (Math.PI / 2) * (1 - tall); const pitch = lerp(24, 30, tall) * D2R + tall * 12 * D2R;
     yaw = this._pickYaw(pts, yaw, pitch, fov);
-    return this._frame({ pts, yaw, pitch, fov, margin: lerp(0.86, 0.8, tall), minD: 7.5, padX: 0.7, st: { yaw: 0.6, pitch: 0.5, c: 0.28, d: 0.7, dUp: 0.14, fov: 0.5 } });
+    return this._frame({ pts, yaw, pitch, fov, margin: lerp(0.86, 0.8, tall), minD: 7.5, padX: 0.7, st: { yaw: 0.6, yawMax: 1.1, pitch: 0.5, c: 0.28, d: 0.7, dUp: 0.14, fov: 0.5 } });
   }
   _duel({ L, p, tall }) {
     const a = L.find((u) => u.id === p.a) || L[0], b = L.find((u) => u.id === p.b) || L.find((u) => u !== a); if (!a || !b) return null;
