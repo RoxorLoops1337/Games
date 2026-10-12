@@ -300,7 +300,16 @@ First-time-player pass in a fresh phone-sized browser: the start screen no longe
 First-week pass at 390x800, 360x640 and 1280x800: fresh start, how to play, home, fighters, arena, Next Week training and summary, Sponsors and More. No horizontal scroll, no overlaps. Fixed the one real issue: the "Pick an activity per fighter" hint on the Fighters tab was dark gray on dark brown and nearly unreadable.
 
 ## Next ideas
-- [ ] 135. First fight and first tournament pass (week 2 to 4) at phone size
+- [x] 135. First fight and first tournament pass (week 2 to 4) at phone size
 - [ ] 136. Real replay (131)
 - [ ] 137. Augment hints per style (132)
 - [ ] 138. More drill types for other buildings (133)
+
+## Round 33 shipped
+First fight pass at 390x800 (fresh start, week 2, enter a duel, pick a fighter, Next Week training, prep screen, augment pick, fight, skip, results). The flow reads well. One real issue fixed: the Arena tab had grown so much that the actual duels sat below the Pit, Weekly goals, Season ladder, Rival and Horde cards. The match list now comes first (with an empty-state note when nothing is announced) and those cards follow it.
+
+## Next ideas
+- [ ] 139. First tournament and first recruit/market pass at phone size
+- [ ] 140. Real replay (136)
+- [ ] 141. Augment hints per style (137)
+- [ ] 142. More drill types for other buildings (138)
