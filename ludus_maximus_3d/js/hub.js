@@ -489,7 +489,7 @@ export function createHub({ renderer, camera, audio, tier = 'high', post = null 
   const orb = { az: Math.PI + 0.4, pitch: 0.5, dist: 50, target: new V3(0, 1.0, 1.0), vAz: 0, vPitch: 0, vPan: new V3(), vZoom: 0, idleT: 0, touched: false, anim: null, follow: null, aspect: 1.6, enabled: false, drift: true };
   const overviewFor = (aspect) => {
     const vf = camera.fov * D2R, port = aspect < 0.95, halfW = port ? 23 : 29;
-    return { az: port ? Math.PI + 0.22 : Math.PI + 0.42, pitch: port ? 0.74 : 0.5, dist: clamp(halfW / (Math.tan(vf / 2) * aspect) * (port ? 1.0 : 1.04), DIST[0], DIST[1]), target: new V3(0, 1.0, port ? 1.0 : 1.5) };
+    return { az: port ? Math.PI + 0.22 : Math.PI + 0.42, pitch: port ? 0.9 : 0.5, dist: clamp(halfW / (Math.tan(vf / 2) * aspect) * (port ? 1.0 : 1.04), DIST[0], DIST[1]), target: new V3(0, 1.0, port ? 1.0 : 1.5) };
   };
   function clampOrbit() {
     orb.pitch = clamp(orb.pitch, PITCH[0], PITCH[1]); orb.dist = clamp(orb.dist, DIST[0], DIST[1]);
@@ -637,6 +637,7 @@ export function createHub({ renderer, camera, audio, tier = 'high', post = null 
   function applyPreset(p) {
     applyTOD(p, { rig, scene, sky, renderer, nightUniforms: [nightU] });
     for (let i = 0; i < MAXPLOT; i++) buildingUniforms.uGl.value[i] = clamp(p.night * 1.2);
+    const ei = 1 - 0.9 * clamp(p.night * 1.3); lib.roof.emissiveIntensity = lib.masonry.emissiveIntensity = lib.wood.emissiveIntensity = lib.cloth.emissiveIntensity = ei; lib.metal.emissiveIntensity = 0.3 + 0.5 * ei;
     flames && flames.update(hubT, p.night);
     smokeU.uLight.value.set(p.sunColor).lerp(new THREE.Color(0xd8d0e0), 0.45); smokeU.uDark.value.set(p.hemiGround).multiplyScalar(0.25);
     dust.setSunColor(p.sunColor);
