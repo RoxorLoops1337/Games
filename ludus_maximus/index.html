@@ -248,6 +248,7 @@ h1,h2,h3,.h,.btn,.chip,.tab,.pill,.tag,.st,.act,.ltab,.wtab,.tb,.sec,.adv,.float
 .vsp{filter:drop-shadow(0 6px 0 rgba(0,0,0,.5))}
 .vsn{font-family:var(--font);font-weight:900;color:var(--cream);text-transform:uppercase;font-size:15px;text-shadow:2px 2px 0 var(--ink)}
 .vsm{display:flex;gap:4px;align-items:center;font-family:var(--font);font-size:11px;color:var(--gold)}
+.vsv small{display:block;font-size:10px;color:var(--cream);text-shadow:1px 1px 0 var(--ink);text-align:center;margin-top:4px;letter-spacing:.5px}
 .vsv{font-family:var(--font);font-weight:900;font-size:54px;color:var(--gold);text-shadow:4px 4px 0 var(--terra),-2px -2px 0 var(--ink);animation:vspop .6s ease-out .3s both}
 @keyframes vspop{from{transform:scale(3);opacity:0}to{transform:scale(1);opacity:1}}
 .ubu{display:none;position:relative;font-family:var(--font);font-size:8px;color:var(--cream);text-transform:uppercase;opacity:.9}
@@ -264,6 +265,12 @@ h1,h2,h3,.h,.btn,.chip,.tab,.pill,.tag,.st,.act,.ltab,.wtab,.tb,.sec,.adv,.float
 .bark::after{content:"";position:absolute;left:50%;bottom:-9px;margin-left:-5px;border:5px solid transparent;border-top:6px solid var(--ink)}
 @keyframes barkin{0%{opacity:0;transform:translate(-50%,-70%) scale(.5)}12%{opacity:1;transform:translate(-50%,-100%) scale(1.1)}80%{opacity:1}100%{opacity:0;transform:translate(-50%,-120%)}}
 .fest{display:inline-block;font-family:var(--font);font-size:10px;text-transform:uppercase;color:#fff;border:2px solid var(--ink);border-radius:8px;padding:1px 7px}
+.troph{display:grid;grid-template-columns:repeat(6,1fr);gap:6px}
+.tr1{aspect-ratio:1;border:3px solid var(--ink);border-radius:12px;background:var(--gold);display:flex;align-items:center;justify-content:center;box-shadow:0 3px 0 var(--ink)}
+.tr1.lock{background:#6b6b73;opacity:.55;filter:grayscale(1)}
+.drillbar{position:relative;height:46px;background:var(--ink);border:3px solid var(--ink);border-radius:14px;overflow:hidden;margin:12px 0}
+.drillz{position:absolute;top:0;bottom:0;background:rgba(246,184,45,.45)}.drillz.g{left:30%;width:40%}.drillz.p{left:45%;width:10%;background:rgba(42,157,111,.8)}
+.drillm{position:absolute;top:-2px;bottom:-2px;width:8px;background:#fff;border:2px solid var(--ink);border-radius:5px}
 @keyframes bump{0%{transform:scale(1)}35%{transform:scale(1.22);background:var(--gold);color:var(--ink)}100%{transform:scale(1)}}
 .chip.bump{animation:bump .5s ease-out}
 @keyframes tabin{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}

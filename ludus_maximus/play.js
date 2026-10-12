@@ -26,7 +26,7 @@
       U.save(); U.render();
     }
     const fin = L.weekFinish(S); U.save(); U.render();
-    await U.dialog(summaryHtml(S, fin, wk));
+    await U.dialog(summaryHtml(S, fin, wk)); await trophies(S);
     await pendingEvent(S);
   }
   U.checkPending = async () => { const S = U.S(); if (S && S.pendingEv && !U.busy) { U.busy = true; try { await pendingEvent(S); } finally { U.busy = false; U.render(); } } };
@@ -48,6 +48,11 @@
     }
   }
   const pickTechs = pickPends;
+  async function trophies(S) {
+    const t = L.checkTrophies(S); if (!t.length) return; U.snd('levelup'); U.save();
+    await U.dialog(`<h2>${t.length > 1 ? 'Trophies earned!' : 'Trophy earned!'}</h2>` + t.map((x) => `<div class="itm" style="cursor:default;border-color:var(--gold);background:#fff3c4"><div class="sbadge" style="background:var(--gold);width:40px;height:40px">${A.icon('fame', 26)}</div><div class="sp"><div class="gname" style="font-size:14px">${esc(x.n)}</div><div class="muted" style="opacity:1">${esc(x.d)}</div><div class="row wrap" style="margin-top:3px">${x.r.gold ? `<span class="pill">${A.icon('coin', 12)} +${x.r.gold}</span>` : ''}${x.r.fame ? `<span class="pill">${A.icon('fame', 12)} +${x.r.fame}</span>` : ''}${x.r.laurels ? `<span class="pill">${A.icon('laurel', 12)} +${x.r.laurels}</span>` : ''}</div></div></div>`).join('') + btn('Shiny!', 'ok', 'green'));
+    U.render();
+  }
   async function pickAug(S, level, have, force, title, seed) {
     let offer = seed ? L.withRandom(seed, () => L.augOffer(S, level, have, force)) : L.augOffer(S, level, have, force); let rerolls = 1 + L.facPerks(S).rerolls;
     for (;;) {
@@ -124,6 +129,8 @@
     if (o.hpf != null && o.hpf < 1) h += `<div class="card" style="background:#f7c9c0"><b>Wounded:</b> starting at ${Math.round(o.hpf * 100)}% HP</div>`;
     if (gl.length > 1) h += `<div class="small">Synergy: ${ctx.list.length ? ctx.list.map((s) => `<b>${s.n}</b> (${s.d})`).join(', ') : 'none'}</div>`;
     const low = gl.filter((g) => g.en < 60); if (low.length) h += `<div class="small" style="color:var(--terra)">${low.map((g) => esc(g.name)).join(', ')} ${low.length > 1 ? 'are' : 'is'} tired (energy under 60). Stats reduced.</div>`;
+    const wxId = ev.key ? L.weather(S, ev.key) : 'clear'; if (wxId !== 'clear') h += `<div class="small" style="margin-top:4px"><b>Weather: ${D.WEATHER[wxId].n}.</b> ${D.WEATHER[wxId].d}</div>`;
+    if (ev.mut) h += `<div class="card" style="background:#e9d3ff;margin:6px 0"><b>Mutator: ${ev.mut.n}</b><div class="small">${ev.mut.d}</div></div>`;
     if (gl.length === 1) { const g = gl[0]; h += `<div class="small" style="margin-top:4px"><b>${esc(D.KEYSTONES[g.rune.k].n)}</b> rune · Ultimates: ${L.ultsOf(g).map((x) => '<b>' + D.ULTS[x].n + '</b>').join(', ')}${(S.relicOn || []).length ? ' · ' + S.relicOn.length + ' relic(s)' : ''}</div>`; }
     if (!o.pit) {
       h += `<div class="sec" style="color:var(--terra);text-shadow:none">The bookmaker</div><div class="small">The crowd only knows level and style, not stats. Spot a mispriced fight and back yourself. Pays <b>x${PREP.mult.toFixed(1)}</b> on a win.</div><div class="row wrap" style="margin-top:6px"><button class="btn sm on" data-a="pwager" data-v="0">No bet</button>${L.wagerOptions(S).map((v) => `<button class="btn sm ghost" data-a="pwager" data-v="${v}">${A.icon('coin', 12)}${fmt(v)}</button>`).join('')}</div>`;
@@ -179,7 +186,7 @@
     }
     if (rep.relic) await dropDialog('relic', rep.relic);
     if (rep.rune) await dropDialog('rune', rep.rune);
-    await pickPends(S);
+    await pickPends(S); await trophies(S);
   }
   async function dropDialog(kind, d) {
     if (kind === 'relic') await U.dialog(`<h2>Relic found!</h2><div class="itm" style="cursor:default;border-color:${d.c}"><div class="sp"><div class="gname">${esc(d.n)}</div><div class="muted" style="opacity:1">${d.d}</div></div></div><div class="small">Relics boost every fighter. Equip them in the Armory, Relics tab.</div>` + btn('Nice', 'ok', 'green'));
@@ -200,13 +207,14 @@
     try { await runPit(S, g, daily); } catch (e) { console.error(e); U.toast('Oops: ' + e.message); } finally { U.busy = false; U.save(); U.render(); }
   };
   async function runPit(S, g, daily) {
-    if (daily) S.daily = { day: L.dayKey(), best: 0 }; else S.pitWeek = S.week; g.en = Math.max(0, g.en - 30); const augs = []; let floor = 0; let hpf = 1; let lost = false;
+    if (daily) S.daily = { day: L.dayKey(), best: 0 }; else S.pitWeek = S.week;
+    const mut = L.mutator(daily ? 'd' + L.dayKey() : 'w' + S.week); g.en = Math.max(0, g.en - 30); const augs = []; let floor = 0; let hpf = 1; let lost = false;
     for (;;) {
       const opp = daily ? L.withRandom(L.dailySeed(floor + 1, 'o'), () => L.pitOpp(S, floor + 1, g)) : L.pitOpp(S, floor + 1, g); floor++;
-      const ev = { kind: 'pit', title: (floor % 5 === 0 ? 'BOSS: ' : '') + 'Pit floor ' + floor, opps: [opp], league: 0 };
+      const ev = { kind: 'pit', title: (floor % 5 === 0 ? 'BOSS: ' : '') + 'Pit floor ' + floor, opps: [opp], league: 0, key: (daily ? 'pitd' + L.dayKey() : 'pitw' + S.week) + ':' + floor, mut };
       const stance = await prep(S, ev, [g], [opp], { pit: true, hpf });
       augs.push(await pickAug(S, floor < 3 ? 0 : floor < 6 ? 1 : floor < 10 ? 2 : 3, augs, floor % 5 === 0, `Floor ${floor}: new augment`, daily ? L.dailySeed(floor, 'a') : null));
-      const res = await fightScreen(S, [g], [opp], stance, { ev, hpf: { [g.id]: hpf }, augs: augs.slice() });
+      const res = await fightScreen(S, [g], [opp], stance, { ev, hpf: { [g.id]: hpf }, augs: augs.slice(), mutator: mut });
       if (!res.win) { floor--; lost = true; break; }
       hpf = Math.min(1, res.hpf[g.id] + 0.25);
       const cur = L.pitReward(S, floor, [], false); const nx = floor + 1;
@@ -221,7 +229,7 @@
     U.snd(lost ? 'lose' : 'win');
     await U.dialog(`<div class="big ${lost ? 'lose' : 'win'}">${lost ? 'Fallen' : 'Cashed out'}</div><div style="text-align:center;margin:6px 0">${U.spr(g, { size: 80 })}</div><div class="row wrap" style="justify-content:center"><span class="pill">Floors ${floor}</span>${daily ? '<span class="tag blue">Daily</span>' : ''}${rw.laurel ? '<span class="pill">' + A.icon('laurel', 14) + ' +1 laurel</span>' : ''}<span class="pill">${A.icon('coin', 14)} +${fmt(rw.gold)}</span><span class="pill">${A.icon('fame', 14)} +${rw.fame}</span><span class="pill">+${xp} XP${up.length ? ' · LEVEL ' + up[up.length - 1] : ''}</span></div>${inj ? `<div class="small" style="color:var(--terra);text-align:center">${esc(inj)}</div>` : ''}` + rw.items.map((it) => `<div class="itm" style="cursor:default;margin-top:6px">${A.itemIcon(it.slot, it.rar, 38)}<div class="sp"><div class="gname" style="font-size:12px">${esc(it.name)}</div>${U.rarTag(it.rar)}</div><span class="tag green">Loot</span></div>`).join('') + btn('Continue', 'ok'));
     if (relic) await dropDialog('relic', relic); if (rune) await dropDialog('rune', rune);
-    await pickPends(S);
+    await pickPends(S); await trophies(S);
   }
 
   U.afterBoot = () => { U.checkPending(); };

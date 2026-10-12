@@ -238,5 +238,24 @@ ok(strongWins >= 17, `level 10 beats level 1 (${strongWins}/20)`);
   const lo = H.units.some((u) => u.hp < hp0 || u.maxhp !== u.hp) || H.units.some((u) => u.hp < u.maxhp); ok(lo || true, 'hazards resolve without errors');
 }
 
+// trophies, mutators, weather, drill, VIP events
+{
+  const S8 = LM.newGame({ name: 'Tr' }); ok(LM.checkTrophies(S8).length === 0, 'no trophies at the start');
+  S8.stats.wins = 12; S8.stats.upsets = 1; const got = LM.checkTrophies(S8).map((x) => x.id); ok(got.includes('first') && got.includes('wins10') && got.includes('upset') && !got.includes('wins50'), 'trophies are awarded for milestones');
+  const g0 = S8.gold; ok(LM.checkTrophies(S8).length === 0 && S8.gold === g0, 'trophies pay out only once');
+  ok(D.TROPHIES.every((t) => t.n && t.d && t.r), 'every trophy has text and a reward'); 
+  S8.glads.push(LM.makeGlad({ id: 3, lvl: 25 })); ok(LM.checkTrophies(S8).some((x) => x.id === 'lvl20'), 'level 20 trophy');
+  ok(LM.mutator('x1') === LM.mutator('x1') && D.MUTATORS.length >= 6, 'mutators are deterministic per tag');
+  const kinds = new Set(); for (let i = 0; i < 200; i++) kinds.add(LM.weather(S8, 'k' + i)); ok(kinds.size === 5 && LM.weather(S8, 'q') === LM.weather(S8, 'q'), 'weather is deterministic and varied');
+  ok(LM.drillMult(1) === 0.4 && LM.drillMult(0.5) === 0.1 && LM.drillMult(0.1) === 0, 'drill rewards accuracy');
+  const S9 = LM.newGame({ name: 'Dr' }); const g = LM.makeGlad({ id: S9.nextId++, lvl: 3 }); g.act = 'str'; S9.glads.push(g); ok(LM.canDrill(S9, g), 'a trainee can drill');
+  const s1 = (() => { const gg = JSON.parse(JSON.stringify(g)); const SS = JSON.parse(JSON.stringify(S9)); SS.glads = [gg]; LM.setRandom(seeded(1)); const b = gg.st.str; LM.weekTrain(SS); return gg.st.str - b; })();
+  const s2 = (() => { const gg = JSON.parse(JSON.stringify(g)); const SS = JSON.parse(JSON.stringify(S9)); SS.glads = [gg]; LM.setDrill(SS, gg, 1); LM.setRandom(seeded(1)); const b = gg.st.str; LM.weekTrain(SS); return gg.st.str - b; })();
+  ok(s2 > s1 * 1.3, 'a perfect drill boosts the weekly gain by 40%'); ok(!LM.canDrill(S9, Object.assign({}, g, { drill: { week: S9.week, m: 0.1 } })), 'one drill per week');
+  LM.setRandom(seeded(77)); ['sponsor', 'priest', 'champion', 'defector'].forEach((id) => { const S10 = LM.newGame({ name: 'V' }); S10.glads.push(LM.makeGlad({ id: S10.nextId++, lvl: 4 })); S10.gold = 500; S10.pendingEv = id; LM.EVENTS[id].c.forEach((_, i) => { S10.pendingEv = id; try { LM.runEvent(S10, i); ok(true, 'ok'); } catch (e) { ok(false, `VIP event ${id} choice ${i} throws`); } }); });
+  const S11 = LM.newGame({ name: 'Sp' }); S11.glads.push(LM.makeGlad({ id: S11.nextId++, lvl: 4 })); S11.pendingEv = 'sponsor'; LM.runEvent(S11, 0); const gd0 = S11.gold; LM.weekFinish(S11); ok(S11.gold > gd0 - LM.upkeep(S11) && S11.sponsor && S11.sponsor.weeks === 3, 'sponsor pays weekly for four weeks');
+  LM.setRandom(seeded(5));
+}
+
 console.log(`ludus_maximus: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

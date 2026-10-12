@@ -359,6 +359,51 @@
     murmillo: ['FOR ROME!', 'HOLD THE LINE!', 'SHIELDS UP!'], retiarius: ['CAUGHT YOU!', 'INTO THE NET!', 'NOWHERE TO RUN!'],
     thraex: ['TOO SLOW!', 'CATCH ME!', 'BLINK AND DIE!'], hoplomachus: ['KEEP BACK!', 'THE SPEAR FINDS YOU!', 'HAH!'], dimachaerus: ['NO MERCY!', 'CUT THEM DOWN!', 'TWO BLADES!'],
   };
+  // Trophies: earned once, paid once. r = reward.
+  D.TROPHIES = [
+    { id: 'first', n: 'First Blood', d: 'Win a fight.', r: { gold: 30 } },
+    { id: 'wins10', n: 'Crowd Pleaser', d: 'Win 10 fights.', r: { gold: 120 } },
+    { id: 'wins50', n: 'Fifty Fights', d: 'Win 50 fights.', r: { gold: 500, laurels: 1 } },
+    { id: 'champ', n: 'Champion', d: 'Win a tournament.', r: { gold: 150, fame: 20 } },
+    { id: 'champ5', n: 'Dynasty', d: 'Win 5 tournaments.', r: { gold: 600, laurels: 2 } },
+    { id: 'imperial', n: 'Emperor\'s Favorite', d: 'Win the Imperial Games.', r: { gold: 2000, laurels: 3 } },
+    { id: 'mercy5', n: 'Merciful', d: 'Show mercy 5 times.', r: { fame: 30 } },
+    { id: 'upset', n: 'Giant Killer', d: 'Win as the underdog (odds under 40%).', r: { gold: 100 } },
+    { id: 'upset5', n: 'Against All Odds', d: 'Win 5 times as the underdog.', r: { gold: 400, laurels: 1 } },
+    { id: 'team', n: 'Brothers in Arms', d: 'Win a team clash.', r: { gold: 120 } },
+    { id: 'pit5', n: 'Pit Delver', d: 'Reach Pit floor 5.', r: { gold: 150 } },
+    { id: 'pit10', n: 'Pit Lord', d: 'Reach Pit floor 10.', r: { gold: 500, laurels: 1 } },
+    { id: 'daily5', n: 'Daily Grind', d: 'Reach floor 5 in a Daily Descent.', r: { gold: 150 } },
+    { id: 'legendary', n: 'Legendary Find', d: 'Own a Legendary item.', r: { gold: 300 } },
+    { id: 'fullset', n: 'Matching Set', d: 'Wear a 4-piece set.', r: { gold: 200 } },
+    { id: 'forge5', n: 'Master Smith', d: 'Forge 5 items.', r: { gold: 200 } },
+    { id: 'rich', n: 'Denarii Dragon', d: 'Hold 5000 gold.', r: { fame: 40 } },
+    { id: 'lvl20', n: 'Veteran', d: 'Get a gladiator to level 20.', r: { gold: 400, laurels: 1 } },
+    { id: 'legend1', n: 'Hall of Fame', d: 'Retire a gladiator as a legend.', r: { gold: 150 } },
+    { id: 'runes', n: 'Rune Scholar', d: 'Unlock every keystone rune.', r: { gold: 300 } },
+    { id: 'relics6', n: 'Relic Hoarder', d: 'Own 6 relics.', r: { gold: 300, laurels: 1 } },
+    { id: 'faction', n: 'Beloved', d: 'Max out any faction.', r: { gold: 400, laurels: 1 } },
+    { id: 'festwin', n: 'Festive Fighter', d: 'Win during a festival week.', r: { gold: 100 } },
+    { id: 'ascended', n: 'New Dynasty', d: 'Found a new ludus.', r: { laurels: 2 } },
+  ];
+
+  // Pit mutators: both sides get the same twist (no counters, just a different fight).
+  D.MUTATORS = [
+    { id: 'glass', n: 'Glass Cannons', d: 'Everyone deals +40% damage and has 30% less HP.', syn: { atk: 0.4, hp: -0.3 } },
+    { id: 'giants', n: 'Giants', d: 'Everyone has 50% more HP but moves 15% slower.', syn: { hp: 0.5, spd: -0.15 } },
+    { id: 'bloodrush', n: 'Bloodrush', d: 'Everyone gains attack speed with every hit.', xfx: { frenzy: 3 } },
+    { id: 'overclock', n: 'Overclocked', d: 'Skills and ultimates recharge 3x as fast.', xfx: { haste: 8, ultcd: 4 } },
+    { id: 'thornfield', n: 'Thornfield', d: 'Everyone reflects 18% of damage taken.', xfx: { thorns: 3 } },
+    { id: 'ironclad', n: 'Ironclad', d: 'Everyone has +40% armor and a 16% HP shield.', syn: { def: 0.4 }, xfx: { shield: 2 } },
+  ];
+
+  D.WEATHER = {
+    clear: { n: 'Clear skies', d: 'No effect.' },
+    rain: { n: 'Rain', d: 'Slippery sand: everyone is 10% slower.', syn: { spd: -0.1 } },
+    dust: { n: 'Dust storm', d: 'Squinting fighters dodge and miss more (+10% evasion).', syn: { eva: 0.1 } },
+    heat: { n: 'Scorching heat', d: 'Tempers flare: everyone deals +10% damage.', syn: { atk: 0.1 } },
+    night: { n: 'Torchlit night', d: 'Dramatic shadows: +6% crit chance for everyone.', syn: { crit: 0.06 } },
+  };
   G.LM_D = D;
   if (typeof module !== 'undefined') module.exports = D;
 })(typeof globalThis !== 'undefined' ? globalThis : this);
