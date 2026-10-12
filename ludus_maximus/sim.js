@@ -529,7 +529,7 @@
       if (act.t === 'train') {
         const s = act.s; const base = 2.2 + rnd() * 1.6; const tal = 0.7 + 0.15 * g.tal[s];
         const food = 1 + (m.bon[s] || 0) + (m.bon.all || 0); const mood = 0.9 + (0.2 * g.mo) / 100; const enm = g.en < 25 ? 0.5 : 1;
-        const drill = g.drill && g.drill.week === S.week ? 1 + g.drill.m : 1; let gain = drill * base * tal * pal * food * (1 + (T.train || 0)) * mood * enm * LM.legendTrain(S, s) * (1 + 0.08 * ((S.perks || {}).train || 0));
+        const drill = g.drill && g.drill.week === S.week ? 1 + g.drill.m : 1; let gain = drill * base * tal * pal * food * (1 + (T.train || 0)) * (LM.fest(S, S.week) === 'minerva' ? 1.15 : 1) * mood * enm * LM.legendTrain(S, s) * (1 + 0.08 * ((S.perks || {}).train || 0));
         if (g.st[s] >= LM.cap(g)) { gain *= 0.2; line.txt = 'At the level cap, fight to grow further. '; }
         g.st[s] += gain; g.en = clamp(g.en - Math.round(22 * (1 - (T.tire || 0))), 0, 100); g.mo = clamp(g.mo - 1, 0, 100);
         line.txt += `+${gain.toFixed(1)} ${D.SA[s]}`; line.gain = gain; line.stat = s;

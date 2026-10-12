@@ -356,3 +356,7 @@ Wandering visitors (merchant, veteran trainer, bard, rumor scout): from week 2 a
 ## Round 40 shipped
 - Style-fit hint also in the Pit and Horde augment pickers.
 - Roadmap tidy: stale duplicate entries ticked.
+
+## Round 41 shipped
+- New festival: Rites of Minerva (+15% training gains that week).
+- Real fight replay assessed and deferred: the renderer uses frame-time steps and Math.random for hazards, so a faithful replay needs a fixed-step, seeded engine rewrite.
