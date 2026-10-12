@@ -7,6 +7,9 @@ import { createHubStub } from './hubstub.js';
 import { advanceWeek } from './flow.js';
 import { createPortraitRenderer } from './portrait.js';
 import { styleBadge } from './uihelpers.js';
+import { createTitle } from './title.js'; // ONBOARDING
+import { createTutorial } from './tutorial.js'; // ONBOARDING
+import * as Cer from './ceremonies.js'; // ONBOARDING
 
 const D = () => globalThis.LM_D, L = () => globalThis.LM;
 const SCREENS = ['building', 'roster', 'profile', 'recruit', 'arena', 'market', 'armory', 'more'];
@@ -58,20 +61,18 @@ export class Game {
   async boot() {
     await this.init();
     this.post.setScene(this.hub.scene); this.hub.enter(this.S || { plots: [], glads: [], rows: 2, week: 1 }); this.scene = 'title';
+    // ONBOARDING: cinematic title (js/title.js) replaces the old plain dialog
+    this.title = createTitle(this);
     for (;;) {
-      const logo = document.createElement('div'); logo.className = 'fv-logo';
-      logo.innerHTML = '<div style="font:900 38px/1.05 \'Trajan Pro\',\'Cinzel\',Georgia,serif;letter-spacing:.14em;color:#f2c14e;text-shadow:0 3px 0 #5a1f5e,0 0 24px rgba(242,193,78,.45);text-align:center">LUDUS<br>MAXIMUS</div><div style="text-align:center;font:600 13px system-ui,sans-serif;letter-spacing:.2em;color:#e8dcc0;margin-top:8px">GLADIATOR SCHOOL</div>';
-      logo.style.cssText = 'margin:8px 0 16px';
-      const acts = [];
-      if (this.hasSave()) acts.push({ label: 'Continue', value: 'continue', variant: 'gold', icon: 'arena' });
-      acts.push({ label: this.hasSave() ? 'New game' : 'Begin your ludus', value: 'new', variant: this.hasSave() ? 'bronze' : 'gold', icon: 'ludus' });
-      const c = await this.ask({ title: '', body: logo, actions: acts, dismiss: null });
+      const c = await this.title.show({ hasSave: this.hasSave() });
       this.audio.unlock && this.audio.unlock();
       if (c === 'continue' && this.loadSave()) break;
       if (c === 'new') { if (await this.newGameDialog()) break; }
     }
+    const lift = await this.title.hide(); // fades to black; hub is swapped in behind it
     this.setScene('hub');
     this.advBtn.style.display = ''; this.refresh();
+    lift && lift();
     if (!this.S.glads.length) this.open('recruit', { first: true });
   }
 
@@ -105,6 +106,7 @@ export class Game {
 
   frame(dt, t) {
     if (this.scene === 'hub') this.hub.update(dt, t);
+    else if (this.scene === 'title') { this.title && this.title.drive(dt, t); this.hub.update(dt, t); } // ONBOARDING
     else if (this.scene === 'fight') this.fightView.frame(dt, t);
   }
   resize(w, h) { this.hub && this.hub.resize && this.hub.resize(w, h); this.fightView && this.fightView.resize(w, h); }
