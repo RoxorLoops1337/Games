@@ -13,7 +13,7 @@ import { createGladiator } from './gladiator.js';
 export const portraitSync = () => null;
 
 const FRAMES = {
-  bust: { fov: 19, dist: 3.5, y: 1.55, tx: 0.0, yaw: 0.5 },
+  bust: { fov: 19, dist: 2.95, y: 1.6, tx: 0.0, yaw: 0.5 },
   three: { fov: 24, dist: 4.4, y: 1.25, tx: 0.0, yaw: 0.45 },
   full: { fov: 28, dist: 5.4, y: 0.98, tx: 0.0, yaw: 0.4 },
 };
