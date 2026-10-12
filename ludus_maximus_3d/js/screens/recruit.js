@@ -4,7 +4,6 @@ import { h, U, D, L, fmt, portrait, injectCss, addCss, chip, sec, statTag, wide,
 const CSS = `
 .rc-hero{text-align:center;display:grid;gap:6px;justify-items:center;padding:6px 4px 4px}
 .rc-hero .lx-laurel{width:140px;height:28px;color:#b8803a}
-.rc-hero h2{margin:0;font:900 clamp(22px,6.4vw,30px)/1.1 var(--lx-serif);letter-spacing:.06em;text-transform:uppercase;color:#5a1f5e;text-shadow:0 1px 0 rgba(255,240,200,.8)}
 .rc-hero p{margin:0;max-width:46ch;font:500 14px/20px var(--lx-sans);color:#4a3550;overflow-wrap:anywhere}
 .rc-grid{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(min(100%,270px),1fr));margin-top:10px}
 .rc-card{display:grid;gap:9px;align-content:start;transition:transform .2s var(--lx-ease),opacity .25s}
@@ -17,6 +16,7 @@ const CSS = `
 .lm-stag .lm-pips{grid-column:1/3}
 .rc-trait{font:600 12px/17px var(--lx-sans);color:#4a3550;overflow-wrap:anywhere}
 .rc-buy{display:grid;gap:6px}
+.rc-hire{flex:none;min-width:132px}
 .rc-price{display:inline-flex;align-items:center;gap:6px;font:900 20px var(--lx-sans);color:#7a5222}
 .rc-price.poor{color:#9d2a20}
 .rc-gold{display:flex;justify-content:center;gap:8px;flex-wrap:wrap}
@@ -29,7 +29,7 @@ export function open(ctx, arg) {
   const body = h('div', 'lm-sheetbody');
   let dead = false;
   const reroll = U.button({ label: 'New faces for 30 gold', icon: 'coin', variant: 'ghost', block: true, onClick: () => doReroll() });
-  const m = wide(ctx.sheet({ title: first ? 'Your first fighter' : 'Volunteers', body, actions: [reroll], onClose: () => { dead = true; } }), 980);
+  const m = wide(ctx.sheet({ title: first ? 'Choose your first fighter' : 'Volunteers', body, actions: [reroll], onClose: () => { dead = true; } }), 980);
   const commit = () => { ctx.save(); ctx.refresh(); };
 
   function doReroll() {
@@ -62,9 +62,9 @@ export function open(ctx, arg) {
     c.append(h('div', 'rc-trait', [h('b', '', 'Ultimate: '), lm.ultsOf(g).map((u) => d.ULTS[u].n).join(', '), '. ', h('b', '', 'Techniques: '), g.techs.map((t) => d.TECHS[t].n).join(', ')]));
     const buy = h('div', 'rc-buy');
     const price = h('div', 'rc-price lm-num' + (short ? ' poor' : ''), [U.icon('coin', 22), fmt(g.cost)]);
-    const btn = U.button({ label: 'Hire', icon: 'check', variant: 'gold', block: true, disabled: bad, onClick: () => hire(g, c) });
+    const btn = U.button({ label: 'Hire', icon: 'check', variant: 'gold', disabled: bad, onClick: () => hire(g, c) });
     btn.setAttribute('aria-label', `Hire ${g.name} for ${g.cost} gold`);
-    buy.append(h('div', 'lm-row', [price, h('span', 'lm-grow'), full ? chip('Barracks full', 'red') : short ? chip(`Need ${fmt(g.cost - S.gold)} more gold`, 'red') : null]), btn); c.append(buy);
+    btn.classList.add('rc-hire'); buy.append(h('div', 'lm-row', [price, h('span', 'lm-grow'), btn])); if (bad) buy.append(h('div', 'lm-chips', [full ? chip('Barracks full', 'red') : chip(`Need ${fmt(g.cost - S.gold)} more gold`, 'red')])); c.append(buy);
     return c;
   }
 
@@ -73,7 +73,7 @@ export function open(ctx, arg) {
     const cap = lm.rosterCap(S);
     body.replaceChildren();
     if (first) {
-      body.append(h('div', 'rc-hero', [U.laurel(), h('h2', '', 'Choose your first fighter'), h('p', '', 'Free citizens queue at the gate hoping for bread, glory and a bed. Pick the one who will carry your ludus. Look at their stats, talent pips and trait; you can hire more later.')]));
+      body.append(h('div', 'rc-hero', [U.laurel(), h('p', '', 'Three citizens wait at the gate hoping for bread, glory and a bed. Check their stats, talent pips and trait, then pick the one who will carry your ludus. You can hire more later.')]));
     } else {
       body.append(note(`Free citizens queue at the gate every week. ${S.glads.length}/${cap} beds used.`));
     }
