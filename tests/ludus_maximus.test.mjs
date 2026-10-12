@@ -423,7 +423,7 @@ ok(strongWins >= 17, `level 10 beats level 1 (${strongWins}/20)`);
 // round 24: combo drill
 {
   const S25 = LM.newGame({ name: 'R25' }); S25.week = 3; S25.plots[S25.plots.findIndex((p) => !p)] = { b: 'sparring', l: 5 }; ok(LM.drillKind(S25) === 'combo', 'a level 5 Sparring Ring unlocks the combo drill every third week');
-  ok(LM.comboAcc([0, 1, 2], [0, 1, 2]) === 1 && LM.comboAcc([0, 1, 2], [0, 1, 0]) === 0.8 && LM.comboAcc([0, 1, 2], [2, 2, 0]) === 0.5 && LM.comboAcc([0, 1, 2], [1, 2, 0]) === 0, 'combo accuracy counts the right moves');
+  ok(LM.comboAcc([0, 1, 2], [0, 1, 2]) === 1 && LM.comboAcc([0, 1, 2], [0, 1, 0]) === 0.8 && LM.comboAcc([0, 1, 2], [0, 2, 0]) === 0.5 && LM.comboAcc([0, 1, 2], [1, 2, 0]) === 0, 'combo accuracy counts the right moves');
   S25.week = 4; ok(LM.drillKind(S25) === 'react', 'other even weeks stay reflex drills'); S25.week = 5; ok(LM.drillKind(S25) === 'timing', 'the rest stay timing drills');
 }
 
