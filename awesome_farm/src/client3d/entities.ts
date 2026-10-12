@@ -52,7 +52,7 @@ export interface View {
     born?: { t: number; dur: number; k: 'grow' | 'bld' | 'pop'; s: { x: number; y: number; z: number } };
 }
 /** A pod in the air: thrown from a farmer to the creature it is meant for. */
-interface Flight { obj: Object3D; t: number; dur: number; x0: number; z0: number; x1: number; z1: number }
+interface Flight { obj: Object3D; t: number; dur: number; x0: number; z0: number; x1: number; z1: number; /** lower arc and smaller (a stacked item, not a pod) */ small?: boolean }
 /** A farmer on screen: the model, where it is, facing and walking, and the look it was dressed in. */
 export interface FarmerView { m: Farmer; x: number; z: number; face: number; moving: boolean; sx: number; sz: number; key: string; /** tethered to this farmer (a co-op chain) */ co?: string }
 export class Entities {
@@ -192,6 +192,14 @@ export class Entities {
         const v = this.views.get(e.id);
         if (v) v.podWait = dur;
     }
+    /** A stacked or fetched item arcs between a farmer and a chest, after `delay` seconds. */
+    flyItem(e: { item: string; x0: number; y0: number; x1: number; y1: number; d: number }) {
+        const model = dropModel(e.item);
+        model.obj.scale.setScalar(0.8);
+        model.obj.visible = false;
+        this.group.add(model.obj);
+        this.flights.push({ obj: model.obj, t: -e.d, dur: 0.3, x0: px(e.x0), z0: px(e.y0), x1: px(e.x1), z1: px(e.y1), small: true });
+    }
     /** Something new came into being (not part of the world that was just loaded): it grows in, pops in, or arcs out of where it came from. */
     private arrive(v: View, e: Ent) {
         const s = v.model.obj.scale, keep = { x: s.x, y: s.y, z: s.z };
@@ -233,9 +241,11 @@ export class Entities {
         for (let i = this.flights.length - 1; i >= 0; i--) {
             const f = this.flights[i];
             f.t += dt;
+            if (f.t < 0) continue;
+            f.obj.visible = true;
             const u = Math.min(1, f.t / f.dur);
             const x = f.x0 + (f.x1 - f.x0) * u, z = f.z0 + (f.z1 - f.z0) * u;
-            f.obj.position.set(x, groundY(x, z) + 0.45 + Math.sin(u * Math.PI) * 1.4, z);
+            f.obj.position.set(x, groundY(x, z) + 0.45 + Math.sin(u * Math.PI) * (f.small ? 0.8 : 1.4), z);
             f.obj.rotation.set(u * 9, 0, u * 6);
             if (u >= 1) { this.group.remove(f.obj); this.flights.splice(i, 1); }
         }

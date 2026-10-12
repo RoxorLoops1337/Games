@@ -244,6 +244,9 @@ class GameView3D implements View3D {
             case 'hop':
                 this.ents?.hop(e.id);
                 return;
+            case 'fly':
+                if (e.to === me) this.ents?.flyItem(e);
+                return;
             case 'work':
                 this.ents?.lunge(e.id, tiles(e.x), tiles(e.y), e.kind);
                 return;

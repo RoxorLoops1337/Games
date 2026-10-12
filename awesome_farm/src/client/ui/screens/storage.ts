@@ -14,6 +14,7 @@ import { isTouchUi } from '../../input/layout';
 import { countOf, derived, hasUnlock } from '../../../shared/sim/stats';
 import type { BuildE } from '../../../shared/sim/types';
 import { GridItem, ItemGrid } from '../grid';
+import { adopt, isNew, markSeen } from '../../seen';
 import { deviceText, Footer, GAP, onTap, QtyChips, rowBox, SearchBox, Section, Slot, TabBar, tipOn, ts, Win, type TipData } from '../kit';
 import { ListTools } from '../listtools';
 import { qtyAmount } from '../gestures';
@@ -123,6 +124,7 @@ export class ChestScreen implements Screen {
             this.strip.text.setText(filterLabel(b.fl));
         }
         const stored = (Object.entries(b.inv ?? {}) as [ItemId, number][]).filter(([id, n]) => n > 0 && this.search.matches(ITEMS[id].name));
+        adopt(ownedItems(me));
         const mineAll = ownedItems(me).filter((id) => this.search.matches(ITEMS[id].name));
         this.tools.present([...new Set([...stored.map(([id]) => id), ...mineAll])]);
         const inv = this.tools.apply(stored.map(([id]) => id), (id) => b.inv?.[id] ?? 0).map((id): [ItemId, number] => [id, b.inv?.[id] ?? 0]);
@@ -141,7 +143,8 @@ export class ChestScreen implements Screen {
         const mine = this.tools.apply(mineAll, (id) => countOf(me, id));
         this.bagSec.setRight(`${mine.length} kind${mine.length === 1 ? '' : 's'}`);
         this.right.setItems(mine.map((id): GridItem => ({
-            data: { icon: iconOf(id), count: countOf(me, id), rarity: ITEMS[id].rarity, dim: this.grave || !takes(b.fl, id), ...(me.fav?.includes(id) ? { badge: '★' } : {}) },
+            data: { icon: iconOf(id), count: countOf(me, id), rarity: ITEMS[id].rarity, dim: this.grave || !takes(b.fl, id), ...(me.fav?.includes(id) ? { badge: '★' } : {}), ...(isNew(id) ? { dot: true } : {}) },
+            seen: () => { if (markSeen(id)) this.key = ''; },
             star: () => send({ t: 'inv', op: 'fav', item: id }),
             tip: () => itemTip(id, { count: countOf(me, id), foot: this.grave ? 'A lost backpack only gives' : takes(b.fl, id) ? deviceText('Click: store all · Right-click: store one', 'Tap: store (x1, x10 or All below) · Hold: store one') : `This chest only takes ${filterLabel(b.fl).toLowerCase()}` }),
             click: (shift, q) => { if (!this.grave) send({ t: 'xfer', id: this.id, item: id, n: qtyAmount(q, countOf(me, id), shift, 'all'), dir: 'put', part: 'inv' }); },

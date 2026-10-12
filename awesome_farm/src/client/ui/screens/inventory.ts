@@ -9,6 +9,7 @@ import { PAL } from '../../../shared/palette';
 import { countOf, derived, itemCap, xpToNextOf } from '../../../shared/sim/stats';
 import { HOT_SLOTS, hotbarOf, hotKind } from '../../../shared/sim/hotbar';
 import { ItemGrid, GridItem } from '../grid';
+import { adopt, isNew, markSeen } from '../../seen';
 import { deviceText, onTap, SearchBox, Section, Slot, StatList, tipOn, Win, type Footer } from '../kit';
 import { ListTools } from '../listtools';
 import { inset, rect } from '../px';
@@ -137,12 +138,14 @@ export class InventoryScreen implements Screen {
         if (k === this.key) return;
         this.key = k;
         const send = this.ctx.send;
+        adopt(ITEM_ORDER.filter((id) => countOf(me, id) > 0));
         const owned = ITEM_ORDER.filter((id) => countOf(me, id) > 0 && this.search.matches(ITEMS[id].name, id.replace(/_/g, ' ')));
         this.tools.present(owned);
         const shown = this.tools.apply(owned, (id) => countOf(me, id));
         this.grid.setEmptyText(this.tools.filtering || this.search.value ? 'Nothing of this kind.\nPick All to see everything.' : 'Nothing here yet.\nGo harvest something!');
         const items: GridItem[] = shown.map((id) => ({
-            data: { icon: `i_${id}`, count: countOf(me, id), rarity: ITEMS[id].rarity, ...(me.fav?.includes(id) ? { badge: '★' } : {}) },
+            data: { icon: `i_${id}`, count: countOf(me, id), rarity: ITEMS[id].rarity, ...(me.fav?.includes(id) ? { badge: '★' } : {}), ...(isNew(id) ? { dot: true } : {}) },
+            seen: () => { if (markSeen(id)) this.key = ''; },
             star: () => send({ t: 'inv', op: 'fav', item: id }),
             tip: () => itemTip(id, { count: countOf(me, id), sellMul: derived(me).sellMul, foot: this.armed >= 0 ? `Click to put it in hotbar slot ${this.armed + 1}` : ITEMS[id].open ? 'Click to open it' : hotbarOf(this.ctx.me()).includes(id) ? 'Right-click to unpin from the hotbar' : 'Right-click to pin to the hotbar' }),
             click: (shift) => {

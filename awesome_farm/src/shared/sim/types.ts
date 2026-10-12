@@ -487,6 +487,8 @@ export type SimEvent =
     | { e: 'pod'; by: string; id: number; px: number; py: number; x: number; y: number; ok: boolean; pod: string }
     /** A den worker does a bit of work at `x,y`. */
     | { e: 'work'; id: number; kind: WorkKind; x: number; y: number }
+    /** A thing flies from `x0,y0` to `x1,y1` (Quick stack, Put all, Take all): `d` seconds of delay so several leave one after another. Sent to `to` only. */
+    | { e: 'fly'; to: string; item: ItemId; x0: number; y0: number; x1: number; y1: number; d: number }
     /** A creature hops for joy (it was petted, or the fire it sits at was kindled). */
     | { e: 'hop'; id: number; x: number; y: number }
     /** A warning on the ground: red until it resolves after `t` seconds. */

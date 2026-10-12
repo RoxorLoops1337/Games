@@ -61,3 +61,18 @@ test('Put all respects stars and the label; Take all empties the chest into your
     assert.equal(countOf(p, 'wood'), 20);
     assert.equal(Object.values(c.inv ?? {}).reduce((a, n) => a + (n ?? 0), 0), 0);
 });
+
+test('Quick stack and Take all send a few flying items to the one who did it', () => {
+    const { sim, p, chest } = yard();
+    const c = chest(8, 6, { wood: 3, stone: 1 });
+    sim.events = [];
+    sim.command('a', { t: 'inv', op: 'stash' });
+    const out = sim.events.filter((e) => e.e === 'fly');
+    assert.ok(out.length >= 2 && out.length <= 10);
+    assert.ok(out.every((e) => e.e === 'fly' && e.to === 'a' && e.d >= 0));
+    sim.events = [];
+    sim.command('a', { t: 'inv', op: 'chest', id: c.id, dir: 'take' });
+    const back = sim.events.filter((e) => e.e === 'fly');
+    assert.ok(back.length >= 2);
+    assert.ok(countOf(p, 'wood') > 0);
+});
