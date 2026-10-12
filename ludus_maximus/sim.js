@@ -175,7 +175,7 @@
     S.gold -= c; const ids = new Set(items.map((i) => i.id));
     S.items = S.items.filter((i) => !ids.has(i.id));
     const out = genItem(rnd, { slot: pick(items).slot, rar: rar + 1, ilvl: Math.max(...items.map((i) => i.ilvl)) + 1 });
-    S.items.push(out); LM.note(S, 'merge'); return { item: out };
+    S.items.push(out); S.stats.merges = (S.stats.merges || 0) + 1; LM.note(S, 'merge'); return { item: out };
   };
   LM.evolveCost = (it) => 120 * (it.rar + 1) * (it.rar + 1);
   LM.canEvolve = (S, it) => it.rar < 4 && it.up >= Math.max(1, LM.maxUp(S));
@@ -477,7 +477,8 @@
     ev.opps.forEach((o) => { if (!o.rv) return; S.rivals = S.rivals || {}; const r0 = S.rivals[o.rv] || { w: 0, l: 0, last: '' }; if (res.win || res.place === 1) { r0.w++; r0.last = 'w'; } else { r0.l++; r0.last = 'l'; } S.rivals[o.rv] = r0; });
     const wonAny = res.win || res.place === 1; rep.fac = [];
     if (wonAny) {
-      if (res.odds != null && res.odds < 0.4) rep.fac.push(LM.facGain(S, 'ple', 8));
+      if (res.odds != null && res.odds < 0.4) { rep.fac.push(LM.facGain(S, 'ple', 8)); S.stats.upsets = (S.stats.upsets || 0) + 1; }
+      if (LM.fest(S, ev.week)) S.stats.festWins = (S.stats.festWins || 0) + 1; if (ev.kind === 'team') S.stats.teamWins = (S.stats.teamWins || 0) + 1;
       if ((res.hype || 0) >= 100) rep.fac.push(LM.facGain(S, 'ple', 4));
       if (ev.kind === 'tourney' || ev.kind === 'grand') rep.fac.push(LM.facGain(S, 'sen', ev.kind === 'grand' ? 14 : 9));
       else rep.fac.push(LM.facGain(S, 'sen', 1));
@@ -517,7 +518,7 @@
       if (act.t === 'train') {
         const s = act.s; const base = 2.2 + rnd() * 1.6; const tal = 0.7 + 0.15 * g.tal[s];
         const food = 1 + (m.bon[s] || 0) + (m.bon.all || 0); const mood = 0.9 + (0.2 * g.mo) / 100; const enm = g.en < 25 ? 0.5 : 1;
-        let gain = base * tal * pal * food * (1 + (T.train || 0)) * mood * enm * LM.legendTrain(S, s) * (1 + 0.08 * ((S.perks || {}).train || 0));
+        const drill = g.drill && g.drill.week === S.week ? 1 + g.drill.m : 1; let gain = drill * base * tal * pal * food * (1 + (T.train || 0)) * mood * enm * LM.legendTrain(S, s) * (1 + 0.08 * ((S.perks || {}).train || 0));
         if (g.st[s] >= LM.cap(g)) { gain *= 0.2; line.txt = 'At the level cap, fight to grow further. '; }
         g.st[s] += gain; g.en = clamp(g.en - Math.round(22 * (1 - (T.tire || 0))), 0, 100); g.mo = clamp(g.mo - 1, 0, 100);
         line.txt += `+${gain.toFixed(1)} ${D.SA[s]}`; line.gain = gain; line.stat = s;
@@ -542,7 +543,8 @@
     const rep = { upkeep: 0, income: 0, notes: [], season: null };
     const up = LM.fest(S, S.week) === 'saturn' ? 0 : LM.upkeep(S); const paid = Math.min(S.gold, up); S.gold -= paid; rep.upkeep = paid;
     if (paid < up) { S.glads.forEach((g) => { g.mo = clamp(g.mo - 10, 0, 100); }); rep.notes.push('You could not pay the full upkeep. Morale dropped.'); }
-    const inc = LM.weeklyIncome(S) + LM.facPerks(S).weekly; S.gold += inc; rep.income = inc;
+    const inc = LM.weeklyIncome(S) + LM.facPerks(S).weekly + (S.sponsor && S.sponsor.weeks > 0 ? S.sponsor.gold : 0); S.gold += inc; rep.income = inc;
+    if (S.sponsor && S.sponsor.weeks > 0) { S.sponsor.weeks--; if (S.sponsor.weeks <= 0) { rep.notes.push('Your sponsor deal has ended.'); S.sponsor = null; } }
     const sh = LM.bfx(S, 'shrine'); if (sh.l) { const f = Math.round(sh.v * 60); S.fame += f; if (f) rep.notes.push(`The shrine drew ${f} fame.`); }
     Object.keys(S.entries).forEach((k) => { if (parseInt(k.split(':')[0], 10) <= S.week) delete S.entries[k]; });
     S.week++; S.stats.weeks++;
@@ -559,6 +561,24 @@
     return D.FESTIVALS[Math.floor(r() * D.FESTIVALS.length)];
   };
   LM.fest = (S, week) => (LM.festival(S, week) || {}).id || '';
+
+  // ---------- weather, mutators, trophies ----------
+  LM.weather = (S, key) => { const r = mulberry(hash(S.seed + 'wx' + key)); const x = r(); return x < 0.4 ? 'clear' : x < 0.55 ? 'rain' : x < 0.7 ? 'dust' : x < 0.85 ? 'heat' : 'night'; };
+  LM.mutator = (tag) => D.MUTATORS[hash('mut' + tag) % D.MUTATORS.length];
+  const itemsOf = (S) => S.items.concat(...S.glads.map((g) => D.SLOTS.map((x) => g.gear[x]).filter(Boolean)));
+  const TC = {
+    first: (S) => S.stats.wins >= 1, wins10: (S) => S.stats.wins >= 10, wins50: (S) => S.stats.wins >= 50, champ: (S) => S.stats.tourneys >= 1, champ5: (S) => S.stats.tourneys >= 5,
+    imperial: (S) => !!S.flags.imperial, mercy5: (S) => S.stats.spares >= 5, upset: (S) => (S.stats.upsets || 0) >= 1, upset5: (S) => (S.stats.upsets || 0) >= 5, team: (S) => (S.stats.teamWins || 0) >= 1,
+    pit5: (S) => (S.pitBest || 0) >= 5, pit10: (S) => (S.pitBest || 0) >= 10, daily5: (S) => (S.dailyBest || 0) >= 5, legendary: (S) => itemsOf(S).some((i) => i.rar >= 4),
+    fullset: (S) => S.glads.some((g) => Object.values(LM.setCounts(g)).some((n) => n >= 4)), forge5: (S) => (S.stats.merges || 0) >= 5, rich: (S) => S.gold >= 5000, lvl20: (S) => S.glads.some((g) => g.lvl >= 20),
+    legend1: (S) => (S.legends || []).length >= 1, runes: (S) => S.runes.k.length >= Object.keys(D.KEYSTONES).length, relics6: (S) => S.relics.length >= 6,
+    faction: (S) => ['sen', 'mer', 'ple'].some((id) => LM.facRep(S, id) >= 100), festwin: (S) => (S.stats.festWins || 0) >= 1, ascended: (S) => (S.ascensions || 0) >= 1,
+  };
+  LM.checkTrophies = (S) => {
+    S.trophies = S.trophies || {}; const out = [];
+    D.TROPHIES.forEach((t) => { if (!S.trophies[t.id] && TC[t.id] && TC[t.id](S)) { S.trophies[t.id] = S.week; S.gold += t.r.gold || 0; S.fame += t.r.fame || 0; S.laurels += t.r.laurels || 0; out.push(t); } });
+    return out;
+  };
 
   // ---------- factions ----------
   LM.facRep = (S, id) => ((S.fac || {})[id] || 0);
@@ -639,6 +659,11 @@
     S.contracts.splice(i, 1); LM.fillContracts(S); S.stats.contracts++; return c;
   };
 
+  // ---------- training drill (tap-timing minigame) ----------
+  LM.drillMult = (acc) => (acc >= 0.9 ? 0.4 : acc >= 0.7 ? 0.25 : acc >= 0.45 ? 0.1 : 0);
+  LM.canDrill = (S, g) => g.act && D.ACTS.find((a) => a.id === g.act).t === 'train' && !(g.drill && g.drill.week === S.week) && g.inj <= 0;
+  LM.setDrill = (S, g, acc) => { g.drill = { week: S.week, m: LM.drillMult(acc) }; return g.drill.m; };
+
   // ---------- random events ----------
   const rg = (S, pred) => { const a = S.glads.filter(pred || (() => true)); return a.length ? pick(a) : null; };
   LM.EVENTS = {
@@ -664,6 +689,22 @@
       t: 'You catch a rival ludus spy sketching your fighters.',
       c: [{ l: 'Parade them through town', run: (S) => { S.fame += 12; return '+12 fame.'; } }, { l: 'Let them go', run: () => 'They tip their hat.' }],
     },
+    sponsor: {
+      t: 'A wealthy merchant wants to sponsor one of your fighters for a month.',
+      c: [{ l: 'Accept the deal', run: (S) => { const g = rg(S); const gd = 25 + 15 * LM.maxLeague(S); S.sponsor = { weeks: 4, gold: gd, name: g.name }; return `${g.name} wears the merchant's colors: +${gd} gold per week for 4 weeks.`; } }, { l: 'Decline', run: () => 'The merchant tips his hat and leaves.' }],
+    },
+    priest: {
+      t: 'A traveling priest offers a blessing for the whole ludus.',
+      c: [{ l: 'Blessing of vigor (+15 energy)', run: (S) => { S.glads.forEach((g) => { g.en = clamp(g.en + 15, 0, 100); }); return 'Everyone feels refreshed.'; } }, { l: 'Blessing of spirit (+20 morale)', run: (S) => { S.glads.forEach((g) => { g.mo = clamp(g.mo + 20, 0, 100); }); return 'Spirits are sky high.'; } }, { l: 'Blessing of fortune (+25 fame)', run: (S) => { S.fame += 25; return 'Word of the blessing spreads. +25 fame.'; } }],
+    },
+    champion: {
+      t: 'A retired champion offers a private masterclass for a fee.',
+      c: [{ l: 'Pay 120 gold', run: (S) => { if (S.gold < 120) return 'You cannot afford it.'; const g = S.glads.slice().sort((a, b) => b.lvl - a.lvl)[0]; const s = pick(D.STATS); S.gold -= 120; g.st[s] += 6; return `${g.name} gained +6 ${D.SA[s]} from the masterclass.`; } }, { l: 'Politely refuse', run: () => 'The old champion shrugs.' }],
+    },
+    defector: {
+      t: 'A fighter from a rival ludus asks to defect to your school.',
+      c: [{ l: 'Welcome them', run: (S) => { if (S.glads.length >= LM.rosterCap(S)) return 'Your barracks are full, so they walk on.'; const ml = LM.maxLeague(S); const g = makeGlad({ lvl: 1 + ml * 3 + Math.floor(rnd() * 3), q: 0.6, id: S.nextId++, randRune: true }); g.act = 'rest'; S.glads.push(g); return `${g.name} (${D.STYLES[g.style].n}, Lv ${g.lvl}) joins your ludus!`; } }, { l: 'Send them away', run: () => 'Loyalty matters. They leave.' }],
+    },
     coins: { t: 'You find a pouch of coins under a practice dummy.', c: [{ l: 'Keep it', run: (S) => { const gd = 30 + 25 * LM.maxLeague(S); S.gold += gd; return `+${gd} gold.`; } }] },
     festival: {
       t: 'The town is holding a festival.',
@@ -688,7 +729,7 @@
   LM.ascend = (S) => {
     const gain = LM.laurelsFor(S); const keep = { fac: { sen: Math.floor(S.fac.sen / 2), mer: Math.floor(S.fac.mer / 2), ple: Math.floor(S.fac.ple / 2) }, perks: S.perks, laurels: S.laurels + gain, legends: S.legends, name: S.name, color: S.color, ascensions: (S.ascensions || 0) + 1, sound: S.sound, flags: { tutor: true }, stats: Object.assign({}, S.stats) };
     const N = LM.newGame({ name: keep.name, color: keep.color, perks: keep.perks, laurels: keep.laurels, legends: keep.legends, ascensions: keep.ascensions, sound: keep.sound });
-    N.stats = keep.stats; N.fac = keep.fac;
+    N.stats = keep.stats; N.fac = keep.fac; N.trophies = S.trophies || {};
     const snap = S.glads.concat(S.ghosts || []).filter((g) => g.st).sort((a, b) => b.lvl - a.lvl).slice(0, 6).map((g) => { const c = JSON.parse(JSON.stringify(g)); c.lud = 'Ghost of ' + S.name; c.act = 'rest'; return c; });
     N.ghosts = snap; return N;
   };
@@ -709,7 +750,7 @@
   LM.save = (S) => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { /* storage may be blocked */ } };
   LM.load = () => { try { const t = localStorage.getItem(KEY); if (!t) return null; const S = JSON.parse(t); return S && S.v === 1 ? LM.migrate(S) : null; } catch (e) { return null; } };
   LM.migrate = (S) => {
-    S.fac = S.fac || { sen: 0, mer: 0, ple: 0 };
+    S.fac = S.fac || { sen: 0, mer: 0, ple: 0 }; S.trophies = S.trophies || {};
     S.runes = S.runes || { k: D.RUNE_START.k.slice(), m: D.RUNE_START.m.slice() }; S.relics = S.relics || []; S.relicOn = S.relicOn || [];
     (S.glads || []).concat(S.ghosts || []).forEach((g) => {
       g.pend = g.pend || (g.pick ? [{ t: 'tech', o: g.pick }] : []); delete g.pick; g.mast = g.mast || []; g.rune = g.rune || { k: 'lethal', m: ['celerity', 'coup'] };

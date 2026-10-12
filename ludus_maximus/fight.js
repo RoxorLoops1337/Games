@@ -14,6 +14,9 @@
       const stB = L.oppStance(S, opps[0]); const odds = L.odds(S, gl, opps, stance, 30);
       const ctxA = L.teamCtx(S, gl, stance); const ctxB = L.teamCtx(null, opps, stB);
       (o.tricks || []).forEach((id) => { const T = D.TRICKS.find((t) => t.id === id); if (T.foe) mergeCtx(ctxB, { syn: T.foe, xfx: {} }); if (T.me) mergeCtx(ctxA, { syn: T.me, xfx: {} }); });
+      const wxId = o.weather || L.weather(S, ev.key || 'x' + S.week); const WX = D.WEATHER[wxId];
+      if (WX.syn) { mergeCtx(ctxA, { syn: WX.syn, xfx: {} }); mergeCtx(ctxB, { syn: WX.syn, xfx: {} }); }
+      if (o.mutator) { const mm = { syn: o.mutator.syn || {}, xfx: o.mutator.xfx || {} }; mergeCtx(ctxA, mm); mergeCtx(ctxB, mm); }
       if (o.augs && o.augs.length) mergeCtx(ctxA, L.augCtx(o.augs));
       if (o.foeAugs && o.foeAugs.length) mergeCtx(ctxB, L.augCtx(o.foeAugs));
       const unitsA = L.mkUnits(gl, 'A', ctxA, gl.map((g) => (o.hpf && o.hpf[g.id] != null ? o.hpf[g.id] : 1)));
@@ -27,7 +30,7 @@
       const bars = (side) => F.units.filter((u) => u.side === side).map((u) => `<div class="fu" id="fu-${u.id}"><div class="nm">${A.styleIcon(u.style, 16)}<span>${esc(u.name)}</span><b class="lv">${u.g.lvl}</b></div><div class="bar hp"><i id="hp-${u.id}" style="width:100%"></i><em id="sh-${u.id}"></em><span id="ht-${u.id}" class="hnum"></span></div></div>`).join('');
       const ubtn = unitsA.map((u) => `<div class="ur"><div class="who">${esc(u.name)}</div>${u.ults.map((c, k) => `<div class="ub" id="ub-${u.id}-${k}" data-a="fult" data-u="${u.id}" data-k="${k}" style="--c:${D.ULTS[c.id].c}"><div class="ubi">${A.ultIcon(c.id, 26)}</div><div class="ubn">${D.ULTS[c.id].n}</div><span class="ubu">${esc(u.name)}</span><i class="ubcd"></i><b class="ubt"></b></div>`).join('')}</div>`).join('');
       const augChips = (o.augs || []).map((a) => `<span class="achip" style="border-color:${D.TIERS[a.t].c}" title="${a.d}">${esc(a.n)}</span>`).join('');
-      root.innerHTML = `<div id="fight"><div class="inner"><div class="f-top"><div class="side">${bars('A')}</div><div class="h" style="color:#fff;align-self:center;font-size:14px;text-shadow:2px 2px 0 var(--ink)">VS</div><div class="side r">${bars('B')}</div></div><div class="f-stage" id="stage"><div id="cam"></div><canvas id="fxc"></canvas><div class="f-banner" id="fban"></div><div class="f-flash" id="fflash"></div><div class="f-vs" id="fvs"></div></div><div class="f-hype"><i id="hype"></i><span>Crowd hype</span></div><div class="f-log" id="flog">${esc(gl[0].name)} (${L.STANCES[stance]}) vs ${esc(opps[0].name)}.${augChips ? '' : ''}</div>${augChips ? `<div class="f-aug">${augChips}</div>` : ''}<div class="f-ults ${unitsA.length > 1 ? 'many' : ''}"><div class="favor" id="favor" data-a="ffavor">THE CROWD IS WITH YOU: tap for Crowd's Favor!</div>${ubtn}</div><div class="f-speed"><button class="btn sm on" data-a="fspeed" data-v="1">1x</button><button class="btn sm" data-a="fspeed" data-v="2">2x</button><button class="btn sm" data-a="fspeed" data-v="3">3x</button><button class="btn sm ${F.auto.A ? 'on' : ''}" id="fauto" data-a="fauto">Auto ult</button><button class="btn sm ghost" data-a="fskip">Skip</button></div></div></div>`;
+      root.innerHTML = `<div id="fight"><div class="inner"><div class="f-top"><div class="side">${bars('A')}</div><div class="h" style="color:#fff;align-self:center;font-size:14px;text-shadow:2px 2px 0 var(--ink)">VS</div><div class="side r">${bars('B')}</div></div><div class="f-stage" id="stage"><div id="cam"></div><canvas id="fxc"></canvas><div class="f-banner" id="fban"></div><div class="f-flash" id="fflash"></div><div class="f-vs" id="fvs"></div></div><div class="f-hype"><i id="hype"></i><span>Crowd hype</span></div><div class="f-log" id="flog">${esc(gl[0].name)} (${L.STANCES[stance]}) vs ${esc(opps[0].name)}. ${wxId !== 'clear' ? WX.n + ': ' + WX.d : ''}</div>${augChips ? `<div class="f-aug">${augChips}</div>` : ''}<div class="f-ults ${unitsA.length > 1 ? 'many' : ''}"><div class="favor" id="favor" data-a="ffavor">THE CROWD IS WITH YOU: tap for Crowd's Favor!</div>${ubtn}</div><div class="f-speed"><button class="btn sm on" data-a="fspeed" data-v="1">1x</button><button class="btn sm" data-a="fspeed" data-v="2">2x</button><button class="btn sm" data-a="fspeed" data-v="3">3x</button><button class="btn sm ${F.auto.A ? 'on' : ''}" id="fauto" data-a="fauto">Auto ult</button><button class="btn sm ghost" data-a="fskip">Skip</button></div></div></div>`;
       const stage = $('#stage'), cam = $('#cam'), cv = $('#fxc'); const W = stage.clientWidth, H = stage.clientHeight; const dpr = Math.min(2, G.devicePixelRatio || 1);
       cv.width = W * dpr; cv.height = H * dpr; cv.style.width = W + 'px'; cv.style.height = H + 'px'; const cx = cv.getContext('2d'); cx.scale(dpr, dpr);
       const fy0 = H * 0.27, fy1 = H * 0.97; const SX = (x) => W / 2 + x * ((W * 0.46) / R), SY = (y) => (fy0 + fy1) / 2 + y * (((fy1 - fy0) * 0.44) / R);
@@ -41,8 +44,8 @@
         u.elb.animate([{ opacity: 0, transform: 'scale(.3)' }, { opacity: 1, transform: 'scale(1)' }], { duration: 400, easing: 'ease-out' });
       });
       const vsCard = (us, side) => `<div class="vsc ${side}">${us.map((u) => `<div class="vsp">${A.gladOf(u.g, { size: us.length > 2 ? 52 : us.length > 1 ? 74 : 100, tunic: u.side === 'A' ? U.myColor() : u.g.color || '#3d3b46', mood: 'fight' })}</div><div class="vsn">${esc(u.name)}</div><div class="vsm">${A.styleIcon(u.style, 18)} Lv ${u.g.lvl}</div>`).join('')}</div>`;
-      $('#fvs').innerHTML = `${vsCard(unitsA, 'l')}<div class="vsv">VS</div>${vsCard(unitsB, 'r')}`;
-      const fx = { F, speed: 1, skip: false, intro: 2.7, freeze: 0, slow: 0, shake: 0, zoom: 0, flash: 0, parts: [], rings: [], lines: [], teles: [], done: false };
+      $('#fvs').innerHTML = `${vsCard(unitsA, 'l')}<div class="vsv">VS<small>${WX.n}${o.mutator ? ' · ' + o.mutator.n : ''}</small></div>${vsCard(unitsB, 'r')}`;
+      const fx = { F, wxT: 0, wx: wxId, speed: 1, skip: false, intro: 2.7, freeze: 0, slow: 0, shake: 0, zoom: 0, flash: 0, parts: [], rings: [], lines: [], teles: [], done: false };
       U.fight = fx;
       const el = (id) => document.getElementById(id);
       const byId = (id) => F.units.find((u) => u.id === id);
@@ -118,8 +121,15 @@
         unitsA.forEach((u) => u.ults.forEach((c, k) => { const b = el(`ub-${u.id}-${k}`); if (!b) return; const ready = c.cd <= 0 && !u.down; b.classList.toggle('ready', ready); b.classList.toggle('dead', u.down); b.querySelector('.ubcd').style.background = ready ? 'transparent' : `conic-gradient(rgba(20,16,15,.72) ${(c.cd / c.max) * 360}deg, transparent 0)`; b.querySelector('.ubt').textContent = ready || u.down ? '' : Math.ceil(c.cd); }));
         $('#hype').style.width = Math.min(100, F.hype) + '%'; el('favor').classList.toggle('on', F.favorReady); if (introDone) U.crowdLevel(F.hype / 100);
       }
+      function drawWeather(dt) {
+        const t = F.t + fx.wxT; fx.wxT += dt;
+        if (fx.wx === 'rain') { cx.strokeStyle = 'rgba(200,225,255,.6)'; cx.lineWidth = 1.5; cx.beginPath(); for (let i = 0; i < 70; i++) { const x = (i * 37 + t * 60) % W, y = ((i * 53 + t * 560) % (H + 40)) - 20; cx.moveTo(x, y); cx.lineTo(x - 5, y + 15); } cx.stroke(); cx.fillStyle = 'rgba(40,70,120,.14)'; cx.fillRect(0, 0, W, H); }
+        else if (fx.wx === 'dust') { cx.fillStyle = 'rgba(190,140,70,.2)'; cx.fillRect(0, 0, W, H); cx.fillStyle = 'rgba(230,190,120,.55)'; for (let i = 0; i < 40; i++) { const x = ((i * 91 + t * 140) % (W + 60)) - 30, y = (i * 47) % H; cx.fillRect(x, y, 14 + (i % 4) * 6, 2); } }
+        else if (fx.wx === 'heat') { cx.fillStyle = `rgba(255,110,20,${0.09 + 0.04 * Math.sin(t * 3)})`; cx.fillRect(0, 0, W, H); }
+        else if (fx.wx === 'night') { const g = cx.createRadialGradient(W / 2, H * 0.6, H * 0.12, W / 2, H * 0.6, H * 0.8); g.addColorStop(0, 'rgba(8,8,40,.12)'); g.addColorStop(1, 'rgba(8,8,40,.72)'); cx.fillStyle = g; cx.fillRect(0, 0, W, H); [W * 0.08, W * 0.92].forEach((x) => { const tg = cx.createRadialGradient(x, H * 0.3, 2, x, H * 0.3, H * 0.28); tg.addColorStop(0, `rgba(255,170,60,${0.5 + 0.12 * Math.sin(t * 9 + x)})`); tg.addColorStop(1, 'rgba(255,170,60,0)'); cx.fillStyle = tg; cx.fillRect(0, 0, W, H); }); }
+      }
       function drawFx(dt) {
-        cx.clearRect(0, 0, W, H);
+        cx.clearRect(0, 0, W, H); drawWeather(dt);
         fx.teles = fx.teles.filter((t) => (t.life -= dt) > 0); fx.teles.forEach((t) => { const k = 1 - t.life / t.max; cx.globalAlpha = 0.25 + 0.25 * Math.sin(k * 30); cx.fillStyle = '#d2412b'; cx.beginPath(); cx.ellipse(t.x, t.y, t.r, t.r * 0.62, 0, 0, 6.28); cx.fill(); cx.globalAlpha = 1; cx.strokeStyle = '#fff'; cx.lineWidth = 3; cx.beginPath(); cx.ellipse(t.x, t.y, t.r * (1 - k * 0.15), t.r * 0.62 * (1 - k * 0.15), 0, 0, 6.28); cx.stroke(); });
         fx.rings = fx.rings.filter((r) => (r.t -= dt) > 0); fx.rings.forEach((r) => { const k = 1 - r.t / r.life; cx.globalAlpha = 1 - k; cx.strokeStyle = r.c; cx.lineWidth = r.w; cx.beginPath(); cx.ellipse(r.x, r.y, 6 + (r.max - 6) * k, (6 + (r.max - 6) * k) * 0.62, 0, 0, 6.28); cx.stroke(); cx.globalAlpha = 1; });
         fx.lines = fx.lines.filter((l) => (l.life -= dt) > 0); fx.lines.forEach((l) => {
