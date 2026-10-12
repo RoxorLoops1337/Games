@@ -314,25 +314,25 @@ export function createHub({ renderer, camera, audio, tier = 'high', post = null 
         for (let j = 0; j < 4; j++) { const g = new THREE.IcosahedronGeometry(0.5 + r() * 0.4, 0); g.scale(1, 0.7, 1); g.translate(c.x + (r() - 0.5) * 8, base + 0.3, c.z + (r() - 0.5) * 5.4); leafGeos.push(leafCol(g, [0.2, 0.32, 0.1], [0.34, 0.46, 0.16], 1, 0.4, base)); }
         for (let j = 0; j < 3; j++) k.sphere('masonry', 0.3 + r() * 0.3, c.x + (r() - 0.5) * 8, base + 0.1, c.z + (r() - 0.5) * 5, 0xa8987c, { seg: 5, hseg: 3, sy: 0.7 });
         // for-sale post at the front corner
-        const px = c.x - 3.9, pz = c.z + 2.6;
+        const px = c.x + 3.0, pz = c.z - 2.8;
         k.cyl('wood', 0.07, 0.09, 2.2, px, base, pz, C.wood2, { seg: 6 }); k.box('wood', 1.0, 0.55, 0.07, px + 0.5, base + 1.35, pz, C.woodLt); k.box('wood', 1.0, 0.07, 0.09, px + 0.5, base + 1.9, pz, C.wood2);
         k.cyl('metal', 0.17, 0.17, 0.03, px + 0.5, base + 1.62, pz + 0.05, C.gold, { rx: Math.PI / 2, c: true, seg: 8 });
         k.sheet([px + 0.2, base + 1.7, pz + 0.06], [0.2, 0, 0], [0, -0.55, 0], 1, 2, 0xb5352a);
       }
       if (pl && !locked) {
         const R = buildParts(pl.b, pl.l, { accent });
-        const T4 = new THREE.Matrix4().makeTranslation(c.x, c.y, c.z);
+        const T4 = new THREE.Matrix4().makeTranslation(c.x, c.y, c.z).multiply(new THREE.Matrix4().makeRotationY(Math.PI));   // fronts face -z (the hill side, the default camera)
         for (const m of MATS) if (R.parts[m]) { const g = R.parts[m].clone(); g.applyMatrix4(T4); addPlotAttr(g, i + 1).attributes.aPlot.array.fill(i + 1); lists[m].push(g); }
-        for (const f of R.fx.flames) fx.flames.push({ x: f.x + c.x, y: f.y + c.y, z: f.z + c.z, s: f.s });
-        for (const f of R.fx.smoke) fx.smoke.push(Object.assign({}, f, { x: f.x + c.x, y: f.y + c.y, z: f.z + c.z }));
-        for (const f of R.fx.sparks) fx.sparks.push(Object.assign({}, f, { x: f.x + c.x, y: f.y + c.y, z: f.z + c.z }));
+        for (const f of R.fx.flames) fx.flames.push({ x: c.x - f.x, y: f.y + c.y, z: c.z - f.z, s: f.s });
+        for (const f of R.fx.smoke) fx.smoke.push(Object.assign({}, f, { x: c.x - f.x, y: f.y + c.y, z: c.z - f.z }));
+        for (const f of R.fx.sparks) fx.sparks.push(Object.assign({}, f, { x: c.x - f.x, y: f.y + c.y, z: c.z - f.z }));
       }
     }
     // festival bunting
     const fest = LMg() ? LMg().fest(St, St.week) : '';
     if (fest) {
       const cols = [0xb5352a, 0xf5c545, 0x2f78c4, 0x2f8f5a, 0x6a2470, 0xf0e4c6];
-      for (const zz of [Z0 - PZ / 2 + 0.2, Z0 - PZ * 1.5 + 0.2]) { const y0 = 4.4 + terraceH(rowOfZ(zz - 1)); for (const s of [-1, 1]) k.cyl('wood', 0.08, 0.1, 5.6, s * 22.6, terraceH(rowOfZ(zz - 1)), zz, C.wood2, { seg: 5 }); let prev = null; for (let j = 0; j <= 28; j++) { const t = j / 28, x = lerp(-22.6, 22.6, t), y = y0 + 0.5 - Math.sin(t * Math.PI) * 1.4; if (j > 0 && j % 1 === 0 && j < 28) k.sheet([x - 0.22, y, zz], [0.44, 0, 0], [0, -0.5, 0], 1, 2, cols[(j + hashStr(fest)) % cols.length], { ao: 0.2 }); if (prev) k.box('wood', Math.hypot(x - prev[0], y - prev[1]) + 0.02, 0.025, 0.025, (x + prev[0]) / 2, (y + prev[1]) / 2, zz, C.rope, { c: true, rz: Math.atan2(y - prev[1], x - prev[0]) }); prev = [x, y]; } }
+      for (const zz of [Z0 + PZ / 2 + 0.2, Z0 + PZ * 1.5 + 0.2]) { const y0 = 4.4 + terraceH(rowOfZ(zz + 1)); for (const s of [-1, 1]) k.cyl('wood', 0.08, 0.1, 5.6, s * 22.6, terraceH(rowOfZ(zz + 1)), zz, C.wood2, { seg: 5 }); let prev = null; for (let j = 0; j <= 28; j++) { const t = j / 28, x = lerp(-22.6, 22.6, t), y = y0 + 0.5 - Math.sin(t * Math.PI) * 1.4; if (j > 0 && j % 1 === 0 && j < 28) k.sheet([x - 0.22, y, zz], [0.44, 0, 0], [0, -0.5, 0], 1, 2, cols[(j + hashStr(fest)) % cols.length], { ao: 0.2 }); if (prev) k.box('wood', Math.hypot(x - prev[0], y - prev[1]) + 0.02, 0.025, 0.025, (x + prev[0]) / 2, (y + prev[1]) / 2, zz, C.rope, { c: true, rz: Math.atan2(y - prev[1], x - prev[0]) }); prev = [x, y]; } }
     }
     for (const m of MATS) for (const g of k.P[m]) push(m, g);
     for (const f of k.fx.flames) fx.flames.push(f); for (const f of k.fx.smoke) fx.smoke.push(f);
@@ -413,12 +413,12 @@ export function createHub({ renderer, camera, audio, tier = 'high', post = null 
     for (const a of list) {
       const g = a.g, kind = act(g.act), pP = plotWith(St, 'palaestra'), pS = plotWith(St, 'sparring'), pB = plotWith(St, 'barracks'), pM = plotWith(St, 'market'), pT = plotWith(St, 'scout'), pBa = plotWith(St, 'bath'), pSh = plotWith(St, 'shrine');
       let c = null, x = 0, z = 0, face = 0, mode = 'idle', armed = 0, sig = kind;
-      const at = (pi, dx, dz) => { c = plotCenter(pi); x = c.x + dx; z = c.z + dz; };
+      const at = (pi, dx, dz) => { c = plotCenter(pi); x = c.x - dx; z = c.z - dz; };   // building-local (front = +z) -> world (front = -z)
       if (TRAIN.has(kind)) {
         if (kind === 'wil' && pSh >= 0) { const s = nextSlot('wil'); at(pSh, -1.4 + s * 1.3, 2.4); mode = 'still'; face = Math.PI; }
         else if (pP >= 0) {
           const dum = [[-1.6, -0.2], [1.4, 0.0], [-0.1, 1.2], [2.9, 1.3]]; const s = nextSlot('pal');
-          if (kind === 'agi') { at(pP, -2.9, 2.2 + 0.0); mode = 'jog'; a.p2.set(c.x + 2.9, 0, z); armed = 0; }
+          if (kind === 'agi') { at(pP, -2.9, 2.2 + 0.0); mode = 'jog'; a.p2.set(c.x - 2.9, 0, z); armed = 0; }
           else { const d = dum[s % dum.length]; at(pP, d[0], d[1] + 1.15); mode = 'drill'; face = Math.PI; armed = 1; }
         } else { const s = nextSlot('yard'); x = -6 + s * 2.2; z = 15.6; mode = kind === 'agi' ? 'jog' : 'drill'; if (mode === 'jog') a.p2.set(x + 6, 0, z); face = Math.PI; armed = mode === 'drill' ? 1 : 0; }
       } else if (kind === 'spar') {
@@ -426,13 +426,13 @@ export function createHub({ renderer, camera, audio, tier = 'high', post = null 
         if (pi >= 0) at(pi, side * 1.0, -0.1 + (pair % 2) * 0.0); else { x = side * 1.0; z = 15.8; }
         mode = 'duel'; armed = 1; face = side > 0 ? -Math.PI / 2 : Math.PI / 2; a.role = s % 2; a.pair = pair; (sparPairs[pair] = sparPairs[pair] || []).push(a);
       } else if (kind === 'work') {
-        const pi = pM >= 0 ? pM : pB; const s = nextSlot('work'); if (pi >= 0) at(pi, -2.4 + s * 1.2, 2.45); else { x = 4 + s * 1.3; z = 15.8; } mode = 'walk'; a.p2.set(x + 2.4, 0, z); face = 0; armed = 0;
+        const pi = pM >= 0 ? pM : pB; const s = nextSlot('work'); if (pi >= 0) at(pi, -2.4 + s * 1.2, 2.45); else { x = 4 + s * 1.3; z = 15.8; } mode = 'walk'; a.p2.set(x - 2.4, 0, z); face = 0; armed = 0;
       } else if (kind === 'spy') {
         const pi = pT >= 0 ? pT : pB; const s = nextSlot('spy'); if (pi >= 0) at(pi, -2.2 + s * 1.0, 2.0); else { x = -9 + s * 1.2; z = 15.8; } mode = 'watch'; face = 0.4; armed = 0;
       } else { // rest and everything else: lounge near barracks / bath
         const pi = pB >= 0 ? pB : pBa; const s = nextSlot('rest'); if (pi >= 0) at(pi, 1.0 + (s % 4) * 0.85, 2.1 + Math.floor(s / 4) * 0.7); else { x = -3 + s * 1.0; z = 15.6; } mode = 'still'; face = -0.5 + (s % 3) * 0.5; armed = 0;
       }
-      sig = [kind, mode, Math.round(x * 10), Math.round(z * 10)].join('|');
+      sig = [kind, mode, Math.round(x * 10), Math.round(z * 10)].join('|'); if (c) face += Math.PI;
       if (sig !== a.sig) {
         a.sig = sig; a.home.set(x, groundAt(x, z), z); a.pos.copy(a.home); a.yaw = a.goalYaw = face; a.kind = mode; a.armedWant = armed;
         a.rig.animator.armedTarget = armed; a.rig.animator.armed = armed; a.timer = 0.5 + a.rnd() * 1.5; a.dir = 1; a.partner = null;
@@ -484,10 +484,10 @@ export function createHub({ renderer, camera, audio, tier = 'high', post = null 
 
   // ---------------------------------------------------------------------------------------- orbit camera
   const D2R = Math.PI / 180, PITCH = [15 * D2R, 70 * D2R], DIST = [11, 132];
-  const orb = { az: 0.45, pitch: 0.66, dist: 50, target: new V3(0, 1.5, 1.0), vAz: 0, vPitch: 0, vPan: new V3(), vZoom: 0, idleT: 0, touched: false, anim: null, follow: null, aspect: 1.6, enabled: false, drift: true };
+  const orb = { az: Math.PI + 0.4, pitch: 0.5, dist: 50, target: new V3(0, 1.0, 1.0), vAz: 0, vPitch: 0, vPan: new V3(), vZoom: 0, idleT: 0, touched: false, anim: null, follow: null, aspect: 1.6, enabled: false, drift: true };
   const overviewFor = (aspect) => {
     const vf = camera.fov * D2R, port = aspect < 0.95, halfW = port ? 23 : 29;
-    return { az: port ? 0.28 : 0.5, pitch: port ? 0.72 : 0.52, dist: clamp(halfW / (Math.tan(vf / 2) * aspect) * (port ? 1.0 : 1.04), DIST[0], DIST[1]), target: new V3(0, 1.5, port ? 0.5 : 2.0) };
+    return { az: port ? Math.PI + 0.22 : Math.PI + 0.42, pitch: port ? 0.74 : 0.5, dist: clamp(halfW / (Math.tan(vf / 2) * aspect) * (port ? 1.0 : 1.04), DIST[0], DIST[1]), target: new V3(0, 1.0, port ? 1.0 : 1.5) };
   };
   function clampOrbit() {
     orb.pitch = clamp(orb.pitch, PITCH[0], PITCH[1]); orb.dist = clamp(orb.dist, DIST[0], DIST[1]);
@@ -507,7 +507,7 @@ export function createHub({ renderer, camera, audio, tier = 'high', post = null 
   function focusPlot(i, opt = {}) {
     const c = plotCenter(i), p = S && S.plots[i], h = p ? buildParts(p.b, p.l).footprint.h : 2.5, port = orb.aspect < 0.95;
     orb.follow = null;
-    let az = orb.az; const front = Math.sin(az); if (Math.abs(front) > 0.7) az = Math.sign(front) * 0.7; // keep facades readable
+    let az = orb.az; const d = angDiff(Math.PI, az); if (Math.abs(d) > 0.7) az = Math.PI + Math.sign(d) * 0.7; // keep facades readable (fronts face -z)
     animateTo({ az, pitch: opt.pitch ?? clamp(orb.pitch, 0.5, 0.75), dist: opt.dist ?? (port ? 34 : 26) + h * 0.7, target: new V3(c.x, c.y + clamp(h * 0.42, 1.2, 3.4), c.z) }, opt.dur ?? 0.85);
     return c;
   }
@@ -594,11 +594,11 @@ export function createHub({ renderer, camera, audio, tier = 'high', post = null 
     }
     if (best) return best;
     // ground cells (empty pads and locked land)
-    for (const h of [terraceH(1), 0.2, terraceH(3)]) {
+    for (const h of [terraceH(1), 0.2, terraceH(0)]) {
       const plane = new THREE.Plane(new V3(0, 1, 0), -h); if (!_ray.intersectPlane(plane, _hit)) continue;
       const rr = rowOfZ(_hit.z), cc = Math.round((_hit.x - X0) / PX); if (cc < 0 || cc > 3) continue;
       const i = rr * COLS + cc, c = plotCenter(i);
-      if (Math.abs(_hit.x - c.x) < PX / 2 - 0.2 && Math.abs(_hit.z - c.z) < PZ / 2 - 0.1 && Math.abs(c.y - PAD - h) < 0.9 && _hit.z < Z0 + PZ / 2 && _hit.z > -CD) return { type: 'plot', i, empty: !S.plots[i], locked: rr >= rows };
+      if (Math.abs(_hit.x - c.x) < PX / 2 - 0.2 && Math.abs(_hit.z - c.z) < PZ / 2 - 0.1 && Math.abs(c.y - PAD - h) < 0.9 && _hit.z < FRONT_EDGE && _hit.z > -CD) return { type: 'plot', i, empty: !S.plots[i], locked: rr >= rows };
     }
     return null;
   }

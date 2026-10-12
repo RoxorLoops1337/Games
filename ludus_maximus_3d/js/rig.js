@@ -185,7 +185,7 @@ export function makeMaterials(p = DEFAULT_PALETTE) {
   const m = {
     skin: mk(p.skin, 0.58, 0), hair: mk(p.hair, 0.55, 0.05), cloth: mk(p.cloth, 0.9, 0, false, true), plume: mk(p.plume, 0.82, 0, false, true),
     leather: mk('#7a4e2c', 0.66, 0.05, true, true), metal: mk(p.metal, 0.34, 0.55, true, true), trim: mk('#f0be52', 0.28, 0.7, true, true),
-    eye: mk('#ffffff', 0.25, 0), gem: mk('#ffffff', 0.2, 0.2, true, true),
+    eye: new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.45, metalness: 0, vertexColors: true, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }), gem: mk('#ffffff', 0.2, 0.2, true, true),
   };
   m.hair.roughness = 0.5;
   for (const k in m) shadePatch(m[k], k);
@@ -623,6 +623,45 @@ export const FACES = [
   { j: 0.86, brow: 0.010, cheek: 0.012, chin: 0.008, nose: [0.82, 1.18], eye: '#5a7a9a', lid: 0.35, tilt: -0.18, mouth: -0.02, nx: 0.0 },
   { j: 1.10, brow: 0.021, cheek: 0.008, chin: 0.017, nose: [1.25, 0.95], eye: '#4a5a2a', lid: 0.65, tilt: 0.22, mouth: -0.16, nx: 0.012, scar: true },
 ];
+// Face decal: eyes, brows, mouth, nose shading, expression lines painted into a small canvas (cached per variant / eye / hair colour) and
+// mapped on a curved patch that follows the sculpted skull (about 70 triangles, one transparent draw). Alpha only, so it works on any skin tone.
+const faceCache = new Map();
+const FACE_W = 128, FACE_H = 160, FACE_PHI = 0.78, FACE_Y1 = 0.19;
+export function faceTexture(fi, eyeHex, hairHex) {
+  const key = fi + eyeHex + hairHex; if (faceCache.has(key)) return faceCache.get(key);
+  if (typeof document === 'undefined') return null;
+  const F = FACES[fi % 3], c = document.createElement('canvas'); c.width = FACE_W; c.height = FACE_H; const x = c.getContext('2d');
+  const hc = new THREE.Color(hairHex), browCol = `rgb(${Math.round(hc.r * 190 + 14)},${Math.round(hc.g * 190 + 10)},${Math.round(hc.b * 190 + 8)})`;
+  const px = (xm) => FACE_W / 2 + (Math.asin(clamp(xm / 0.09, -1, 1)) / FACE_PHI) * (FACE_W / 2), py = (ym) => FACE_H * (1 - ym / FACE_Y1);
+  const soft = (cx, cy, r, rgba, sx = 1) => { x.save(); x.translate(cx, cy); x.scale(sx, 1); const g = x.createRadialGradient(0, 0, 0, 0, 0, r); g.addColorStop(0, rgba); g.addColorStop(1, rgba.replace(/[\d.]+\)$/, '0)')); x.fillStyle = g; x.fillRect(-r, -r, r * 2, r * 2); x.restore(); };
+  for (const sg of [-1, 1]) {
+    const cx = px(sg * 0.037), cy = py(0.121), w = 12.5, tl = F.tilt * sg;
+    soft(cx, cy + 1, 17, 'rgba(70,25,15,0.30)', 1.1); soft(cx, cy + 9, 11, 'rgba(70,25,15,0.14)', 1.2); soft(px(sg * 0.068), py(0.083), 15, 'rgba(210,80,70,0.20)', 1.0);
+    // eye: almond sclera, iris, pupil, highlight, heavy upper lid
+    x.save(); x.beginPath(); x.moveTo(cx - w, cy + 1.5 + sg * -1 * 0); x.quadraticCurveTo(cx, cy - 9 + F.lid * 2, cx + w, cy + 1.5); x.quadraticCurveTo(cx, cy + 6.5, cx - w, cy + 1.5); x.closePath(); x.fillStyle = '#f1ebdd'; x.fill(); x.clip();
+    x.fillStyle = F.eye; x.beginPath(); x.arc(cx + sg * -0.6, cy, 5.6, 0, Math.PI * 2); x.fill(); x.fillStyle = '#0a0605'; x.beginPath(); x.arc(cx + sg * -0.6, cy, 2.7, 0, Math.PI * 2); x.fill();
+    x.fillStyle = 'rgba(255,255,255,0.9)'; x.beginPath(); x.arc(cx + 2, cy - 2.4, 1.3, 0, Math.PI * 2); x.fill(); const lg = x.createLinearGradient(0, cy - 8, 0, cy - 1); lg.addColorStop(0, 'rgba(40,15,8,0.65)'); lg.addColorStop(1, 'rgba(40,15,8,0)'); x.fillStyle = lg; x.fillRect(cx - w, cy - 9, w * 2, 8); x.restore();
+    x.strokeStyle = '#25120b'; x.lineWidth = 2.4; x.lineCap = 'round'; x.beginPath(); x.moveTo(cx - w - 0.5, cy + 1.5); x.quadraticCurveTo(cx, cy - 9.5 + F.lid * 2, cx + w + 0.5, cy + 1.5); x.stroke();
+    x.strokeStyle = 'rgba(70,30,20,0.5)'; x.lineWidth = 1.1; x.beginPath(); x.moveTo(cx - w + 2, cy + 2.5); x.quadraticCurveTo(cx, cy + 7.5, cx + w - 2, cy + 2.5); x.stroke();
+    // brow (expression comes from the tilt: inner end low = angry / grim, inner end high = raised / calm)
+    const bx = px(sg * 0.042), by = py(0.148), inner = sg * -1; x.save(); x.translate(bx, by); x.rotate(-tl * 1.2 * 1); x.fillStyle = browCol;
+    x.beginPath(); x.moveTo(-17, 2.5); x.quadraticCurveTo(-4, -5.5 - F.brow * 90, 17, -1.5); x.lineTo(17, 3.5); x.quadraticCurveTo(0, -0.5, -17, 5.5); x.closePath(); x.fill(); x.restore();
+    // nostril / nasolabial / laugh lines
+    soft(px(sg * 0.013 * F.nose[0]), py(0.079), 6, 'rgba(40,12,8,0.60)', 1.3);
+    x.strokeStyle = 'rgba(80,35,25,0.28)'; x.lineWidth = 1.6; x.beginPath(); x.moveTo(px(sg * 0.026), py(0.082)); x.quadraticCurveTo(px(sg * 0.036), py(0.062), px(sg * 0.036), py(0.044)); x.stroke();
+    if (fi === 2) { x.strokeStyle = 'rgba(70,30,20,0.35)'; x.lineWidth = 1.2; for (let k = 0; k < 3; k++) { x.beginPath(); x.moveTo(px(sg * 0.064), py(0.121 + (k - 1) * 0.008)); x.lineTo(px(sg * 0.074), py(0.121 + (k - 1) * 0.016)); x.stroke(); } }
+  }
+  // mouth: shadow, lips, parting line with corners following the variant's expression
+  const mx = FACE_W / 2, my = py(0.052), mw = 15;
+  soft(mx, my - 8, 12, 'rgba(70,25,15,0.2)', 1.6); soft(mx, my + 12, 12, 'rgba(70,25,15,0.22)', 1.6);
+  const cr = -F.mouth * 38; x.fillStyle = 'rgba(150,55,50,0.72)'; x.beginPath(); x.moveTo(mx - mw, my + cr * 0.3); x.quadraticCurveTo(mx - 6, my - 7, mx, my - 3.5); x.quadraticCurveTo(mx + 6, my - 7, mx + mw, my + cr * 0.3); x.quadraticCurveTo(mx, my + 1, mx - mw, my + cr * 0.3); x.fill();
+  x.fillStyle = 'rgba(190,95,88,0.7)'; x.beginPath(); x.moveTo(mx - mw + 1, my + cr * 0.3 + 0.5); x.quadraticCurveTo(mx, my + 1.5, mx + mw - 1, my + cr * 0.3 + 0.5); x.quadraticCurveTo(mx, my + 10, mx - mw + 1, my + cr * 0.3 + 0.5); x.fill();
+  x.strokeStyle = '#2a0e0a'; x.lineWidth = 1.9; x.lineCap = 'round'; x.beginPath(); x.moveTo(mx - mw - 1, my + cr * 0.3 - 1); x.quadraticCurveTo(mx, my + 1.5, mx + mw + 1, my + cr * 0.3 - 1); x.stroke();
+  x.fillStyle = 'rgba(255,255,255,0.18)'; x.beginPath(); x.ellipse(mx, my + 5, 5, 1.4, 0, 0, Math.PI * 2); x.fill();
+  soft(mx, py(0.01), 9, 'rgba(70,25,15,0.18)', 1.3); // chin
+  if (F.scar) { x.strokeStyle = 'rgba(235,190,170,0.75)'; x.lineWidth = 2.2; x.lineCap = 'round'; x.beginPath(); x.moveTo(px(0.078), py(0.134)); x.quadraticCurveTo(px(0.068), py(0.1), px(0.05), py(0.07)); x.stroke(); x.strokeStyle = 'rgba(90,30,25,0.6)'; x.lineWidth = 1; for (let k = 0; k < 4; k++) { const t = 0.15 + k * 0.22, X = px(0.078 - 0.028 * t), Y = py(0.134 - 0.064 * t); x.beginPath(); x.moveTo(X - 3, Y - 2); x.lineTo(X + 3, Y + 2); x.stroke(); } }
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; faceCache.set(key, t); return t;
+}
 // flat plate (2 triangles) in head space facing +Z (eyes, brows, lips: painted-on features cost almost nothing)
 function plate(w, h, p, rz = 0, rx = 0, ry = 0) { return xf(col1(new THREE.PlaneGeometry(w, h)), p, [rx, ry, rz]); }
 function disc(r, seg, p, sx = 1, sy = 1, rz = 0) { return xf(col1(new THREE.CircleGeometry(r, seg)), p, [0, 0, rz], [sx, sy, 1]); }
@@ -647,27 +686,19 @@ function buildHead(rig, look, bd) {
     return [r * k * (1 + nose), g * k * (1 - nose), b * k * (1 - nose)];
   });
   A('skin', skull);
-  const nz = surf(0, 0.1).z;
-  A('skin', xf(coneG(0.02 * F.nose[0], 0.045 * F.nose[1], 4), [0, 0.097, nz + 0.01], [Math.PI / 2 + 0.55, 0.785, 0], [1, 1, 0.8])); // pyramid nose
-  if (F.nx) A('skin', xf(boxG(0.01, 0.026, 0.01), [F.nx, 0.112, nz + 0.003], [0.1, 0, 0.35]));
-  const iris = new THREE.Color(F.eye);
-  for (const sg of [-1, 1]) {
-    const ex = sg * 0.037, ey = 0.121, ez = surf(ex, ey).z - 0.004, nr = Math.atan2(sg * 0.037, 0.1) * 0.7;
-    A('eye', paint(disc(0.0145, 6, [ex, ey, ez], 1.3, 0.85), [0.96, 0.93, 0.88]));
-    A('eye', paint(disc(0.0085, 6, [ex, ey, ez + 0.0012]), [iris.r * 2.4, iris.g * 2.4, iris.b * 2.4]));
-    A('eye', paint(disc(0.0042, 4, [ex, ey, ez + 0.0024]), [0.03, 0.02, 0.02]));
-    A('skin', paint(plate(0.038, 0.011, [ex, ey + 0.0105 - 0.005 * F.lid, ez + 0.0035], 0, 0.2), [0.78, 0.7, 0.68])); // upper lid shades the eye
-    // brow: tilt gives the expression (angry / calm / raised)
-    const by = 0.147 + (F.tilt < 0 ? 0.004 : 0), bz = surf(sg * 0.04, by).z + 0.004, th = sg * F.tilt;
-    A('hair', plate(0.05, 0.0105, [sg * 0.04, by, bz], th, 0.1));
-    A('skin', xf(sphereG(0.022, 5, 3), [sg * 0.099, 0.099, -0.004], [0, 0, sg * -0.08], [0.32, 1.0, 0.72]));
-  }
-  const my = 0.052, mz = surf(0, my).z;
-  A('eye', paint(plate(0.05, 0.0045, [0, my, mz + 0.0012], 0, -0.05), [0.3, 0.1, 0.09]));
-  for (const sg of [-1, 1]) A('eye', paint(plate(0.014, 0.0045, [sg * 0.0305, my + F.mouth * 0.4, surf(sg * 0.0305, my).z + 0.0015], sg * F.mouth, 0, sg * -0.35), [0.3, 0.1, 0.09]));
-  A('skin', paint(plate(0.044, 0.0085, [0, my + 0.0068, mz + 0.002], 0, -0.25), [0.9, 0.5, 0.48]));
-  A('skin', paint(plate(0.036, 0.0095, [0, my - 0.0075, mz + 0.002], 0, 0.2), [0.92, 0.55, 0.53]));
-  if (F.scar) { const pts = [surf(0.076, 0.13), surf(0.062, 0.1), surf(0.048, 0.07)].map((p) => p.add(new V3(0, 0, 0.0012))); A('skin', paint(ribbon(pts, 0.006, (p) => new V3(p.x / (HEAD_SX * HEAD_SX), 0, p.z / (HEAD_SZ * HEAD_SZ))), [1.2, 0.86, 0.84])); }
+  // nose: 4-triangle pyramid (bridge, tip, alae), wider / longer by variant
+  { const nz = surf(0, 0.12).z, n0 = F.nose[0], n1 = F.nose[1], tipZ = surf(0, 0.084).z + 0.021 * n1;
+    const v = [[0, 0.128, nz + 0.003], [-0.015 * n0, 0.082, surf(0, 0.082).z + 0.004], [0.015 * n0, 0.082, surf(0, 0.082).z + 0.004], [0, 0.079, tipZ]];
+    const pos = [v[0], v[1], v[3], v[0], v[3], v[2], v[3], v[1], v[2], v[0], v[2], v[1]].flat(); const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.computeVertexNormals(); A('skin', col1(g));
+    if (F.nx) A('skin', xf(boxG(0.01, 0.024, 0.01), [F.nx, 0.112, nz + 0.004], [0.1, 0, 0.35])); }
+  for (const sg of [-1, 1]) A('skin', xf(sphereG(0.022, 5, 3), [sg * 0.099, 0.099, -0.004], [0, 0, sg * -0.08], [0.32, 1.0, 0.72])); // ears
+  const tex = faceTexture(((look.face | 0) % 3 + 3) % 3, F.eye, '#' + new THREE.Color(rig.palette.hair).getHexString());
+  if (tex) { // decal patch
+    const ys = [0, 0.038, 0.076, 0.114, 0.152, FACE_Y1], dp = lathe(ys.map((y) => [skullR(prof, y) + 0.0025, y]), 8, HEAD_SX, HEAD_SZ, 0, 1, -FACE_PHI, FACE_PHI * 2);
+    sculpt(dp, bl); const P = dp.attributes.position, N = dp.attributes.normal; for (let i = 0; i < P.count; i++) P.setXYZ(i, P.getX(i) + N.getX(i) * 0.0025, P.getY(i) + N.getY(i) * 0.0025, P.getZ(i) + N.getZ(i) * 0.0025);
+    rig.mats.eye.map = tex; rig.mats.eye.needsUpdate = true; A('eye', dp);
+  } else for (const sg of [-1, 1]) { const ex = sg * 0.037, ey = 0.121, ez = surf(ex, ey).z + 0.003; A('eye', paint(disc(0.014, 6, [ex, ey, ez], 1.2, 0.8), [0.2, 0.15, 0.1])); }
+  if (false) for (const sg of [-1, 1]) A('hair', plate(0.05, 0.0105, [sg * 0.04, 0.147, surf(sg * 0.04, 0.147).z + 0.004], sg * F.tilt, 0.1));
   // hair
   const hairy = look.hair || 'short', off = hairy === 'crop' ? 0.004 : 0.008, yb = hairy === 'tied' ? 0.175 : hairy === 'crop' ? 0.185 : 0.165;
   if (hairy !== 'bald' && hairy !== 'none') {

@@ -114,7 +114,7 @@ async function hubMode() {
   hub.enter(S); hub.resize(innerWidth, innerHeight);
   window.__hub = hub; window.__S = S;
   const o = hub.orbit, cam = q.get('cam');
-  const PRE = { 1: { az: 0.3, pitch: 0.34, dist: 32, tx: 0, ty: 1.5, tz: 4 }, 2: { az: 0.2, pitch: 1.15, dist: 60, tx: 0, ty: 0, tz: 0 }, 3: { az: -0.5, pitch: 0.5, dist: 24, tx: -5, ty: 1.5, tz: 2 }, 4: { az: 0.9, pitch: 0.42, dist: 28, tx: 6, ty: 2, tz: -2 }, 5: { az: -0.9, pitch: 0.6, dist: 40, tx: 0, ty: 1, tz: -4 }, 6: { az: 3.0, pitch: 0.4, dist: 50, tx: 0, ty: 2, tz: 0 } };
+  const PI = Math.PI, PRE = { 1: { az: PI + 0.55, pitch: 0.3, dist: 34, tx: 0, ty: 1.5, tz: 2 }, 2: { az: PI + 0.2, pitch: 1.15, dist: 62, tx: 0, ty: 0, tz: 0 }, 3: { az: PI - 0.6, pitch: 0.5, dist: 24, tx: -5, ty: 2.5, tz: -8 }, 4: { az: PI + 0.9, pitch: 0.42, dist: 28, tx: 6, ty: 2, tz: -4 }, 5: { az: PI - 1.2, pitch: 0.6, dist: 40, tx: 0, ty: 1, tz: 0 }, 6: { az: PI - 0.15, pitch: 0.27, dist: 46, tx: 0, ty: 3, tz: 6 }, 7: { az: 0.45, pitch: 0.5, dist: 50, tx: 0, ty: 1, tz: 1 } };
   const P = PRE[cam]; if (P) { o.touched = true; o.az = P.az; o.pitch = P.pitch; o.dist = P.dist; o.target.set(P.tx, P.ty, P.tz); }
   for (const [k, f] of [['az', (v) => { o.az = v; }], ['pitch', (v) => { o.pitch = v; }], ['dist', (v) => { o.dist = v; }], ['tx', (v) => { o.target.x = v; }], ['ty', (v) => { o.target.y = v; }], ['tz', (v) => { o.target.z = v; }]]) if (q.get(k) !== null) { o.touched = true; f(+q.get(k)); }
   if (q.get('focus') !== null) { o.touched = true; hub.focusPlot(+q.get('focus'), { dur: 0.01 }); }

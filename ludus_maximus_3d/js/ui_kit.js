@@ -82,7 +82,7 @@ export function button({ label, icon: ic, variant = 'bronze', onClick, disabled 
   b.type = 'button'; b.disabled = disabled;
   if (ic) b.append(icon(ic, 20));
   const t = h('span', 'lx-btn-label', label); b.append(t);
-  if (sub) b.append(h('small', 'lx-btn-sub', sub));
+  if (sub) { b.append(h('small', 'lx-btn-sub', sub)); b.classList.add('lx-has-sub'); }
   b.addEventListener('click', (e) => { try { navigator.vibrate?.(8); } catch (_) {} onClick?.(e); });
   return b;
 }
@@ -223,13 +223,16 @@ export function cooldownRing({ ult = 'meteor', color = '#e8742a', size = 72, hot
 
 // ---------- tooltip (hover/focus on desktop, long-press on touch) ----------
 export function tooltip(target, text, { title } = {}) {
-  let tip;
-  const show = () => { tip = h('div', 'lx-tip', [title ? h('b', '', title) : null, h('span', '', text)]); document.body.append(tip);
-    const r = target.getBoundingClientRect(), w = tip.offsetWidth;
-    const x = Math.max(8, Math.min(innerWidth - w - 8, r.left + r.width / 2 - w / 2)); const above = r.top > tip.offsetHeight + 16;
-    tip.style.left = x + 'px'; tip.style.top = (above ? r.top - tip.offsetHeight - 8 : r.bottom + 8) + 'px'; requestAnimationFrame(() => tip.classList.add('lx-in')); };
-  const hide = () => { tip?.remove(); tip = null; clearTimeout(lp); };
-  let lp;
+  let tip, lp, auto;
+  const hide = () => { clearTimeout(lp); clearTimeout(auto); if (tip) { tip.remove(); tip = null; } };
+  const show = () => {
+    hide(); const t = tip = h('div', 'lx-tip', [title ? h('b', '', title) : null, h('span', '', text)]); document.body.append(t);
+    const r = target.getBoundingClientRect(), w = t.offsetWidth;
+    const x = Math.max(8, Math.min(innerWidth - w - 8, r.left + r.width / 2 - w / 2)); const above = r.top > t.offsetHeight + 16;
+    t.style.left = x + 'px'; t.style.top = (above ? r.top - t.offsetHeight - 8 : r.bottom + 8) + 'px';
+    requestAnimationFrame(() => { if (t.isConnected) t.classList.add('lx-in'); });
+    auto = setTimeout(() => { if (tip === t) hide(); }, 6000); // never leave an orphan if the target is removed while hovered
+  };
   target.addEventListener('pointerenter', (e) => { if (e.pointerType === 'mouse') show(); });
   target.addEventListener('pointerleave', hide); target.addEventListener('focus', show); target.addEventListener('blur', hide);
   target.addEventListener('pointerdown', (e) => { if (e.pointerType !== 'mouse') lp = setTimeout(show, 380); });

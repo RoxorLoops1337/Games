@@ -220,3 +220,6 @@ body.lx-reduce-motion *, body.lx-reduce-motion *::before, body.lx-reduce-motion 
 body.lx-reduce-motion .lx-rays { animation: none; } body.lx-reduce-motion .lx-spark { display: none; }
 body.lx-large-text { --lx-fs-s: 14px; --lx-fs-m: 17px; --lx-fs-l: 21px; --lx-fs-xl: 26px; }
 @media (min-width: 900px) { body.lx-large-text { --lx-fs-s: 15px; --lx-fs-m: 18px; --lx-fs-l: 22px; } }
+
+.lx-btn.lx-has-sub { flex-direction: column; gap: 2px; padding-top: 10px; padding-bottom: 10px; }
+.lx-btn.lx-has-sub > svg { display: none; }
