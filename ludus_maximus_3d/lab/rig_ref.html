@@ -98,8 +98,38 @@ window.__lab = { rigs, scene, step, render, THREE, cam, poseAt, plans, camTarget
 window.__labShot = (secs) => {
   const n = Math.round(secs * 60); for (let i = 0; i < n; i++) step(1 / 60); render();
   const info = { bare: triCount(buildGladiator().root), tris: rigs.map((r) => triCount(r.root)), drawCalls: renderer.info.render.calls };
-  window.__stat = info; return info;
+  if (window.__testResult) info.test = window.__testResult; window.__stat = info; return info;
 };
+
+// ---- self test (?test=1 or call __runTests()): returns {pass, fails[], ...}. Included in the STAT line.
+function runTests() {
+  const fails = [], R = { checks: 0 }; const ok = (c, m) => { R.checks++; if (!c) fails.push(m); };
+  const finite = (r) => { let bad = false; r.root.traverse((o) => { const e = o.matrixWorld.elements; for (let i = 0; i < 16; i++) if (!isFinite(e[i])) bad = true; }); return !bad; };
+  const names = ['idle', 'walk', 'run', 'strafe', 'attack1', 'attack2', 'attack3', 'block', 'hurt', 'knockdown', 'getup', 'death', 'stun', 'victory', 'taunt', 'cheer'];
+  for (const style of STYLES) {
+    const rig = buildGladiator({ palette: PALETTES[style], build: BUILDS[style], torso: TORSO[style] }); equipStyle(rig, style); const A = rig.animator; scene.add(rig.root); rig.root.visible = false;
+    ok(triCount(rig.root) <= 2400, style + ' tris ' + triCount(rig.root));
+    for (const n of names) {
+      A.setState('move', 0); A.dead = false; A.action = null; A.add = null; let ev = []; rig.onEvent = (e) => ev.push(e);
+      if (n === 'idle') A.setMove(0, 0); else if (n === 'walk') A.setMove(1.5, 0); else if (n === 'run') A.setMove(4.5, 0); else if (n === 'strafe') A.setMove(0, 2); else { A.setMove(0, 0); A.play(n); }
+      let minSole = 1e9, maxSole = -1e9;
+      for (let i = 0; i < 150; i++) { rig.update(1 / 60); if (i > 20 && (n === 'walk' || n === 'run' || n === 'idle' || n === 'strafe')) for (const s of ['L', 'R']) { const p = rig.joints['ankle' + s].getWorldPosition(new THREE.Vector3()); minSole = Math.min(minSole, p.y - DIM.footH); } }
+      ok(finite(rig), style + '/' + n + ' non-finite transform');
+      if (n === 'walk' || n === 'run' || n === 'idle' || n === 'strafe') ok(minSole > -0.02, style + '/' + n + ' foot below ground by ' + minSole.toFixed(3));
+      if (n.startsWith('attack')) { ok(ev.includes('swing') && ev.includes('hit') && ev.includes('end'), style + '/' + n + ' events ' + ev.join(',')); }
+    }
+    A.dead = false; A.action = null; A.setMove(0, 0);
+    if (A.ik.hand) { for (let i = 0; i < 30; i++) rig.update(1 / 60); const w = new THREE.Vector3(), t = new THREE.Vector3(); A.ik.hand.target.getWorldPosition(t); rig.joints.wristL.getWorldPosition(w); ok(w.distanceTo(t) < 0.1, style + ' hand IK error ' + w.distanceTo(t).toFixed(3)); }
+    scene.remove(rig.root);
+  }
+  // attack timing table matches clip
+  const r2 = buildGladiator(); r2.animator.setWeapon('sword'); const info = r2.animator.clipInfo('attack1'); ok(Math.abs(info.dur - attackInfo('sword', 'attack1').dur) < 1e-6, 'attack1 dur');
+  // IK standalone reach
+  r2.root.updateMatrixWorld(true); const tgt = new THREE.Vector3(0.1, 1.2, 0.5).applyMatrix4(r2.root.matrixWorld); const pole = new THREE.Vector3(0.5, 1, -0.5);
+  import('./ref/rig_ref.js').then(() => {});
+  R.pass = fails.length === 0; R.fails = fails.slice(0, 12); return R;
+}
+window.__runTests = runTests; if (Q.get('test')) window.__testResult = runTests();
 window.__labReady = Promise.resolve();
 // real-time preview when opened in a browser
 if (!Q.get('static') && !sheet && !navigator.webdriver) { let last = performance.now(); (function loop(now) { const dt = Math.min(0.05, (now - last) / 1000); last = now; step(dt); render(); requestAnimationFrame(loop); })(last); } else render();

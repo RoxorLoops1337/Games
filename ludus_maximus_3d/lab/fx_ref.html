@@ -119,7 +119,7 @@ if (ppost) { rt = new THREE.WebGLRenderTarget(W * renderer.getPixelRatio(), H * 
 void main(){ vec3 c = sceneFx(tDiffuse, vUv, uAspect); gl_FragColor = vec4(c,1.0);
  #include <tonemapping_fragment>
  #include <colorspace_fragment>
-}` })); quad.frustumCulled = false; qscene.add(quad); }
+}` })); quad.frustumCulled = false; qscene.add(quad); window.__quad = quad; window.__renderer = renderer; }
 
 function step(dt) {
   const t = feel.update(dt); simT += t.dt;

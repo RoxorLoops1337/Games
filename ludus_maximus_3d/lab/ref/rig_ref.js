@@ -214,7 +214,7 @@ export const WEAPON_POSES = {
     },
     attacks: {
       attack1: { // straight thrust
-        wind: { chest: [0.0, -0.6, 0], hips: [0, -0.65, 0], shoulderR: [-0.3, 0.1, -0.2], elbowR: [-1.9, 0, 0], wristR: [-0.4, 0, 0], hip: [0, -0.1, -0.06], body: [0, 0, -0.1], kneeL: [0.55, 0, 0], kneeR: [0.6, 0, 0] },
+        wind: { chest: [0.0, -0.6, 0], hips: [0, -0.65, 0], shoulderR: [-0.2, 0.1, -0.1], elbowR: [-1.6, 0, 0], wristR: [0.25, 0, 0], hip: [0, -0.1, -0.06], body: [0, 0, -0.1], kneeL: [0.55, 0, 0], kneeR: [0.6, 0, 0] },
         windHold: { chest: [0, -0.68, 0], shoulderR: [-0.2, 0.1, -0.2] },
         strike: { chest: [0.22, 0.45, 0], hips: [0, 0.25, 0], shoulderR: [-1.3, 0, -0.1], elbowR: [-0.12, 0, 0], wristR: [-0.3, 0, 0], hip: [0, -0.14, 0], body: [0, 0, 0.32], kneeL: [0.95, 0, 0], hipL: [-0.85, 0, 0.1], kneeR: [0.1, 0, 0], hipR: [0.55, 0, -0.1] },
         follow: { chest: [0.28, 0.5, 0], shoulderR: [-1.4, 0, -0.1], elbowR: [-0.05, 0, 0], body: [0, 0, 0.38] },
@@ -226,7 +226,7 @@ export const WEAPON_POSES = {
         follow: { chest: [0.58, 0.35, 0], body: [0, 0, 0.36] },
       },
       attack3: { // heavy lunge, big windup, long reach
-        wind: { chest: [-0.15, -0.9, 0], hips: [0, -0.9, 0], shoulderR: [-0.1, 0.1, -0.2], elbowR: [-2.0, 0, 0], wristR: [-0.4, 0, 0], hip: [0, -0.2, -0.1], body: [0, 0, -0.18], kneeL: [0.7, 0, 0], kneeR: [0.9, 0, 0] },
+        wind: { chest: [-0.15, -0.9, 0], hips: [0, -0.9, 0], shoulderR: [-0.1, 0.1, -0.1], elbowR: [-1.7, 0, 0], wristR: [0.3, 0, 0], hip: [0, -0.2, -0.1], body: [0, 0, -0.18], kneeL: [0.7, 0, 0], kneeR: [0.9, 0, 0] },
         windHold: { chest: [-0.2, -1.0, 0], hips: [0, -1.0, 0], body: [0, 0, -0.22] },
         strike: { chest: [0.3, 0.55, 0], hips: [0, 0.35, 0], shoulderR: [-1.4, 0, -0.1], elbowR: [-0.05, 0, 0], wristR: [-0.2, 0, 0], hip: [0, -0.3, 0.05], body: [0, 0, 0.55], kneeL: [1.3, 0, 0], hipL: [-1.05, 0, 0.1], kneeR: [0.05, 0, 0], hipR: [0.7, 0, -0.1] },
         follow: { chest: [0.38, 0.6, 0], body: [0, 0, 0.62], hip: [0, -0.34, 0.05] },
@@ -321,8 +321,8 @@ function buildStateClips(stance) {
   loop('strafe', 0.8, (t, P) => strafeSample(P, t / 0.8 * Math.PI * 2, 1, cx));
   clips.block = K('block', [
     { t: 0, p: 'guard' },
-    { t: 0.11, p: { chest: [0.14, -0.1, 0], spine: [0.08, 0, 0], head: [-0.14, 0.3, 0], shoulderL: [-1.3, 0.3, 0.15], elbowL: [-1.95, 0, 0], wristL: [-0.2, 0, 0], shoulderR: [-0.75, 0, -0.45], elbowR: [-1.5, 0, 0], hip: [0, -0.14, 0], kneeL: [0.7, 0, 0], kneeR: [0.6, 0, 0], hipL: [-0.4, 0, 0.12], body: [0, 0, -0.04] }, e: 'outBack' },
-    { t: 0.5, p: { chest: [0.16, -0.12, 0], shoulderL: [-1.35, 0.3, 0.15] }, e: 'inOutSine' },
+    { t: 0.11, p: { chest: [0.14, -0.1, 0], spine: [0.08, 0, 0], head: [-0.14, 0.3, 0], shoulderL: [-0.85, 0.2, 0.2], elbowL: [-1.65, 0, 0], wristL: [-0.2, 0, 0], shoulderR: [-0.75, 0, -0.45], elbowR: [-1.5, 0, 0], hip: [0, -0.14, 0], kneeL: [0.7, 0, 0], kneeR: [0.6, 0, 0], hipL: [-0.4, 0, 0.12], body: [0, 0, -0.04] }, e: 'outBack' },
+    { t: 0.5, p: { chest: [0.16, -0.12, 0], shoulderL: [-0.9, 0.2, 0.2] }, e: 'inOutSine' },
   ], { hold: true, mask: 'upper', ground: 1 });
   clips.blockHit = K('blockHit', [ // additive recoil when a block takes a hit
     { t: 0, p: {} }, { t: 0.05, p: { chest: [-0.12, 0, 0], shoulderL: [0.3, 0, 0], elbowL: [0.25, 0, 0], head: [0.08, 0, 0], hip: [0, -0.02, -0.04] }, e: 'outCubic' }, { t: 0.28, p: { chest: [0, 0, 0], shoulderL: [0, 0, 0], elbowL: [0, 0, 0], head: [0, 0, 0], hip: [0, 0, 0] }, e: 'outCubic' },
