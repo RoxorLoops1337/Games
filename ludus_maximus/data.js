@@ -353,6 +353,7 @@
     { id: 'saturn', n: 'Saturnalia', d: 'Shop prices -20% and no upkeep this week.', c: '#2a9d6f' },
     { id: 'ceres', n: 'Harvest Feast', d: 'Free menu this week and everyone recovers +10 energy.', c: '#c98a1a' },
     { id: 'jupiter', n: 'Imperial Visit', d: '+30% prize gold from fights this week.', c: '#f6b82d' },
+    { id: 'minerva', n: 'Rites of Minerva', d: 'Training gains +15% this week.', c: '#3b7dd8' },
     { id: 'bacchus', n: 'Games of Bacchus', d: 'The crowd roars 30% sooner this week.', c: '#7b4fb8' },
   ];
   D.BARKS = {
