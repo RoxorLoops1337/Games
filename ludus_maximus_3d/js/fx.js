@@ -417,12 +417,15 @@ export function createFx(scene, opts = {}) {
   // Directional dust trail for dashes / skids.
   fx.kickup = (pos, dir, n = 6, o = {}) => fx.dust(pos, n, { dir: { x: -dir.x, y: 0, z: -dir.z }, size: 0.7, speed: 0.7, ...o });
 
+  // Crisp hit flash: tiny hot core (6 frames), thin expanding ring, a few fine rays. Never a big blob: the visible
+  // footprint stays under ~0.6 world units for light hits and grows slowly with `size` (ults pass 2..4).
   fx.impactFlash = (pos, color = '#ffe9b0', size = 1) => {
-    const c = rgb(color), hot = mixc(c, WHITE, 0.7);
-    addL.add({ x: pos.x, y: pos.y, z: pos.z, life: 0.1, s0: size * 1.5, s1: size * 2.2, cell: CELL.glow, c0: hot, c1: c, g: 2.2, fp: 1.6, att: 0.01 });
-    addL.add({ x: pos.x, y: pos.y, z: pos.z, life: 0.16, s0: size * 1.6, s1: size * 2.8, cell: CELL.star4, c0: hot, c1: c, g: 3, rot: rnd() * TAU, rv: R_(-2, 2), fp: 1.3, att: 0.01 });
-    addL.add({ x: pos.x, y: pos.y, z: pos.z, life: 0.14, s0: size * 1.2, s1: size * 3.2, cell: CELL.burst, c0: hot, c1: c, g: 2.4, rot: rnd() * TAU, fp: 1.2, att: 0.01 });
-    if (size <= 2.2) addL.add({ x: pos.x, y: pos.y, z: pos.z, life: 0.2, s0: size * 0.4, s1: size * 2.4, cell: CELL.ring, c0: c, c1: c, g: 1.0, a: 0.8, fp: 1.1, att: 0.01 });
+    const c = rgb(color), hot = mixc(c, WHITE, 0.8), k = Math.min(size, 4), big = k > 2.2;
+    addL.add({ x: pos.x, y: pos.y, z: pos.z, life: 0.07, s0: k * 0.34, s1: k * 0.5, cell: CELL.glow, c0: hot, c1: c, g: 2.4, a: big ? 0.9 : 0.8, fp: 1.6, att: 0.01 });
+    addL.add({ x: pos.x, y: pos.y, z: pos.z, life: 0.05, s0: k * 0.16, s1: k * 0.1, cell: CELL.disc, c0: WHITE, c1: hot, g: 3.0, fp: 1.6, att: 0.01 });
+    addL.add({ x: pos.x, y: pos.y, z: pos.z, life: 0.11, s0: k * 0.45, s1: k * (big ? 2.0 : 1.05), cell: CELL.burst, c0: hot, c1: c, g: 1.8, a: 0.75, rot: rnd() * TAU, fp: 1.2, att: 0.01 });
+    addL.add({ x: pos.x, y: pos.y, z: pos.z, life: 0.17, s0: k * 0.25, s1: k * (big ? 1.7 : 1.0), cell: CELL.ring, c0: hot, c1: c, g: 1.1, a: 0.55, fp: 1.1, att: 0.01 });
+    if (big) addL.add({ x: pos.x, y: pos.y, z: pos.z, life: 0.16, s0: k * 0.8, s1: k * 1.5, cell: CELL.star4, c0: hot, c1: c, g: 1.8, a: 0.6, rot: rnd() * TAU, rv: R_(-2, 2), fp: 1.3, att: 0.01 });
   };
 
   fx.ring = (pos, color = '#f5ead2', size = 1.5, o = {}) => {
@@ -569,9 +572,11 @@ export function createFx(scene, opts = {}) {
   fx.hit = (pos, dir, o = {}) => {
     const cls = o.crit ? 'crit' : (o.dmgFrac || 0) > 0.12 ? 'heavy' : 'light'; const col = o.color || (cls === 'crit' ? '#ffd34d' : '#fff1cf');
     const d = dir || { x: 0, y: 0.2, z: 1 };
-    if (cls === 'light') { fx.spark(pos, d, 6, col); fx.impactFlash(pos, col, 0.7); fx.dust({ x: pos.x, y: groundY, z: pos.z }, 2, { size: 0.5, alpha: 0.4 }); }
-    else if (cls === 'heavy') { fx.spark(pos, d, 12, col); fx.impactFlash(pos, col, 1.1); fx.ring({ x: pos.x, y: 0, z: pos.z }, col, 1.3, { dur: 0.4 }); fx.dust({ x: pos.x, y: groundY, z: pos.z }, 6, { size: 0.8 }); fx.debris({ x: pos.x, y: groundY, z: pos.z }, 2, { size: 0.7 }); }
-    else { fx.spark(pos, d, 20, col, { speed: 9 }); fx.impactFlash(pos, col, 1.7); fx.shockwave({ x: pos.x, y: 0, z: pos.z }, 1.8, col, { dur: 0.45, dust: false, distort: 0.6 }); fx.dust({ x: pos.x, y: groundY, z: pos.z }, 8, { size: 1 }); fx.debris({ x: pos.x, y: groundY, z: pos.z }, 3); fx.decal({ x: pos.x, y: 0, z: pos.z }, 'scuff', { size: 1.1, angle: Math.atan2(d.z, d.x) }); }
+    // crisp, damage scaled: core flash + directional sparks + thin ground ring + a little sand. Big blobs are for ults only.
+    const f = Math.min(1, (o.dmgFrac || 0) / 0.3), G = { x: pos.x, y: groundY, z: pos.z }, W0 = { x: pos.x, y: 0, z: pos.z };
+    if (cls === 'light') { fx.spark(pos, d, 5, col, { speed: 6.5, size: 0.14 }); fx.impactFlash(pos, col, 0.55 + f * 0.3); fx.ring(W0, col, 0.9, { dur: 0.28, alpha: 0.5 }); fx.dust(G, 2, { size: 0.4, alpha: 0.35 }); fx.debris(G, 1, { size: 0.45 }); }
+    else if (cls === 'heavy') { fx.spark(pos, d, 9 + Math.round(f * 5), col, { speed: 8, size: 0.16 }); fx.impactFlash(pos, col, 0.8 + f * 0.3); fx.ring(W0, col, 1.4, { dur: 0.36, alpha: 0.65 }); fx.dust(G, 4, { size: 0.65, alpha: 0.5 }); fx.debris(G, 3, { size: 0.6 }); }
+    else { fx.spark(pos, d, 16, col, { speed: 10, size: 0.17 }); fx.spark(pos, d, 5, '#ffffff', { speed: 13, cone: 0.35, size: 0.12 }); fx.impactFlash(pos, col, 1.25); fx.shockwave(W0, 1.9, col, { dur: 0.42, dust: false, distort: 0.35, alpha: 0.7 }); fx.dust(G, 6, { size: 0.9, alpha: 0.55 }); fx.debris(G, 5, { size: 0.8 }); fx.decal(W0, 'scuff', { size: 1.1, angle: Math.atan2(d.z, d.x) }); }
     return cls;
   };
 
@@ -674,7 +679,7 @@ export function createFx(scene, opts = {}) {
         else if (el === 'holy') { addL.put(_p.x, _p.y + 1, _p.z, 3.0, c, 0.2 + 0.08 * Math.sin(tt * 6), CELL.glow, 0, 1.5); h.acc += dt * 18; while (h.acc >= 1) { h.acc--; const a = rnd() * TAU; addL.add({ x: _p.x + Math.cos(a) * 0.9, y: _p.y + 0.1, z: _p.z + Math.sin(a) * 0.9, vy: R_(1.5, 2.5), life: 0.9, s0: 0.16, s1: 0.03, cell: CELL.glow, c0: mixc(c, WHITE, 0.6), c1: c, g: 2.4 }); } }
       } else if (h.kind === 'status') {
         const tt = h.t, y = _p.y + h.headY;
-        if (h.st === 'stun') { const w = tt * 5.2; for (let k = 0; k < 3; k++) { const a = w + k * TAU / 3; const sx = _p.x + Math.cos(a) * 0.5, sz = _p.z + Math.sin(a) * 0.5, sy = y + Math.sin(tt * 7 + k) * 0.05; const back = Math.sin(a) < 0 ? 0.7 : 1; norL.put(sx, sy, sz, 0.8 * back, { r: 1, g: 0.78, b: 0.12 }, 1, CELL.star5, a * 0.5, 1.15); } }
+        if (h.st === 'stun') { const w = tt * 5.2; for (let k = 0; k < 3; k++) { const a = w + k * TAU / 3; const sx = _p.x + Math.cos(a) * 0.42, sz = _p.z + Math.sin(a) * 0.42, sy = y + Math.sin(tt * 7 + k) * 0.05; const back = Math.sin(a) < 0 ? 0.7 : 1; norL.put(sx, sy, sz, 0.38 * back, { r: 1, g: 0.78, b: 0.12 }, 1, CELL.star5, a * 0.5, 1.15); } }
         else if (h.st === 'slow') { for (let k = 0; k < 3; k++) { const ph = (tt * 1.1 + k / 3) % 1; norL.put(_p.x + (k - 1) * 0.34, y - ph * 0.7 + 0.1, _p.z, 0.7, { r: 0.3, g: 0.65, b: 1 }, Math.sin(ph * Math.PI), CELL.chevron, Math.PI, 1.1); } h.acc += dt * 5; while (h.acc >= 1) { h.acc--; const a = rnd() * TAU; addL.add({ x: _p.x + Math.cos(a) * 0.7, y: _p.y + 0.15, z: _p.z + Math.sin(a) * 0.7, vy: R_(0.2, 0.7), life: 0.7, s0: 0.12, s1: 0.02, cell: CELL.glow, c0: { r: 0.6, g: 0.85, b: 1 }, c1: { r: 0.3, g: 0.6, b: 1 }, g: 2 }); } }
         else if (h.st === 'bleed') { h.acc += dt * 9; const dc = rgb(h.o.color || '#e0283a'); while (h.acc >= 1) { h.acc--; const a = rnd() * TAU; norL.add({ x: _p.x + Math.cos(a) * 0.5, y: _p.y + R_(0.9, 1.6), z: _p.z + Math.sin(a) * 0.5, vx: Math.cos(a) * 0.3, vy: R_(0, 0.5), vz: Math.sin(a) * 0.4, life: 0.7, s0: 0.32, s1: 0.24, cell: CELL.drop, c0: dc, c1: dc, a: 1, grav: 9, fp: 0.5, att: 0.02 }); } }
         else if (h.st === 'blind') { for (let k = 0; k < 4; k++) { const a = tt * 4 + k * TAU / 4; norL.put(_p.x + Math.cos(a) * 0.4, y - 0.15 + Math.sin(tt * 3 + k) * 0.05, _p.z + Math.sin(a) * 0.4, 0.6, mixc(sand, WHITE, 0.55), 0.9, CELL.puffA, a); } }

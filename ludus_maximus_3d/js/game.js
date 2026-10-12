@@ -5,6 +5,8 @@ import { FightView } from './fightview.js';
 import { buildFight, fightResult } from './fightsetup.js';
 import { createHubStub } from './hubstub.js';
 import { advanceWeek } from './flow.js';
+import { createPortraitRenderer } from './portrait.js';
+import { styleBadge } from './uihelpers.js';
 
 const D = () => globalThis.LM_D, L = () => globalThis.LM;
 const SCREENS = ['building', 'roster', 'profile', 'recruit', 'arena', 'market', 'armory', 'more'];
@@ -20,7 +22,7 @@ export class Game {
 
   async init() {
     this.fightView = new FightView({ renderer: this.renderer, post: this.post, camera: this.camera, audio: this.audio, host: this.ui, tier: this.tier });
-    try { const mod = await import('./hub.js'); this.hub = mod.createHub({ renderer: this.renderer, camera: this.camera, audio: this.audio, tier: this.tier }); }
+    try { const mod = await import('./hub.js'); this.hub = mod.createHub({ renderer: this.renderer, camera: this.camera, post: this.post, audio: this.audio, tier: this.tier }); }
     catch (e) { console.warn('hub.js unavailable, using stub', e && e.message); this.hub = createHubStub({ renderer: this.renderer, camera: this.camera, audio: this.audio, tier: this.tier }); }
     this.hub.onPick = (sel) => this.onPick(sel);
     this.buildHud();
@@ -35,8 +37,21 @@ export class Game {
       get audio() { return g.audio; }, get hub() { return g.hub; },
       save: () => g.save(), refresh: () => g.refresh(), toast: (m, o) => { U.toast(m, o); }, ask: (o) => g.ask(o), open: (id, arg) => g.open(id, arg),
       sfx: (n, o) => g.audio.sfx(n, o), gOf: (id) => g.S.glads.find((x) => x.id === id),
+      portrait: (gl, size, opts) => g.portraitEl(gl, size, opts),
       closeAll: () => g.closeAll(), sheet: (o) => g.sheet(o), fmt: (n) => Math.round(n).toLocaleString('en-US'),
     };
+  }
+
+  /** round framed portrait of a gladiator: the style badge now, swapped for the 3D bust render when its queue turn comes */
+  portraitEl(gl, size = 56, opts = {}) {
+    const el = styleBadge(gl.style, size);
+    try {
+      const P = this._portraits || (this._portraits = createPortraitRenderer({ tier: this.tier })), px = size <= 64 ? 128 : 192;
+      const cv = P.portrait(gl, Object.assign({ w: px, h: px }, opts));
+      const put = () => { cv.style.cssText = 'width:100%;height:100%;display:block;border-radius:50%'; el.textContent = ''; el.style.overflow = 'hidden'; el.append(cv); };
+      if (cv.dataset.ready) put(); else cv.addEventListener('portrait', put, { once: true });
+    } catch (e) { /* keep the badge */ }
+    return el;
   }
 
   // ---------------------------------------------------------------- title / new game

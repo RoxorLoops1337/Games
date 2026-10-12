@@ -208,7 +208,7 @@ export function createArena({ crowd = 3700, density = 1, decalRes = 2048, seed =
     g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3)); g.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
     return g;
   })();
-  const sandMat = new THREE.MeshStandardMaterial({ map: sandTex.map, bumpMap: sandTex.bump, bumpScale: 3.0, vertexColors: true, roughness: 1, metalness: 0 });
+  const sandMat = new THREE.MeshStandardMaterial({ map: sandTex.map, bumpMap: sandTex.bump, bumpScale: 2.0, vertexColors: true, roughness: 1, metalness: 0 });
   const sand = new THREE.Mesh(sandGeo, sandMat); sand.receiveShadow = true; sand.name = 'sand'; group.add(sand);
 
   const DW = decalRes, DH = Math.round(decalRes * SB / SA);
@@ -220,12 +220,19 @@ export function createArena({ crowd = 3700, density = 1, decalRes = 2048, seed =
   dx.lineCap = 'round';
   for (let i = 0; i < 46; i++) {
     const f = 0.12 + i * 0.019 + rnd() * 0.004; const dark = i % 2;
-    dx.strokeStyle = dark ? 'rgba(120,84,48,0.20)' : 'rgba(255,236,190,0.17)'; dx.lineWidth = Math.max(1.5, ppm * (dark ? 0.05 : 0.04));
+    dx.strokeStyle = dark ? 'rgba(120,92,58,0.10)' : 'rgba(255,240,205,0.09)'; dx.lineWidth = Math.max(1.5, ppm * (dark ? 0.05 : 0.04));
     dx.beginPath(); dx.ellipse(DW / 2, DH / 2, (SA - 0.4) * f * ppm * 1.0, (SB - 0.4) * f * ppm * 1.0, 0, 0, TAU); dx.stroke();
   }
-  // heavy fighting-circle scuff in the middle
-  const cg = dx.createRadialGradient(DW / 2, DH / 2, 0, DW / 2, DH / 2, 6 * ppm);
-  cg.addColorStop(0, 'rgba(110,76,44,0.28)'); cg.addColorStop(1, 'rgba(110,76,44,0)'); dx.fillStyle = cg; dx.fillRect(DW / 2 - 6 * ppm, DH / 2 - 6 * ppm, 12 * ppm, 12 * ppm);
+  // trampled patches: many soft darker blotches, dense near the centre, thinning out (fighting-circle wear)
+  for (let i = 0; i < 90; i++) {
+    const a = rnd() * TAU, d = Math.pow(rnd(), 1.6) * 0.62, rx = (0.7 + rnd() * 1.9) * ppm, ry = rx * (0.45 + rnd() * 0.4);
+    const cx0 = DW / 2 + Math.cos(a) * d * SA * ppm, cy0 = DH / 2 + Math.sin(a) * d * SB * ppm * 1.1;
+    dx.save(); dx.translate(cx0, cy0); dx.rotate(rnd() * Math.PI); dx.scale(1, ry / rx);
+    const g = dx.createRadialGradient(0, 0, 0, 0, 0, rx); const al = 0.10 + (1 - d) * 0.14;
+    g.addColorStop(0, `rgba(122,92,58,${al})`); g.addColorStop(1, 'rgba(122,92,58,0)'); dx.fillStyle = g; dx.fillRect(-rx, -rx, rx * 2, rx * 2); dx.restore();
+  }
+  const cg = dx.createRadialGradient(DW / 2, DH / 2, 0, DW / 2, DH / 2, 7 * ppm);
+  cg.addColorStop(0, 'rgba(118,88,56,0.16)'); cg.addColorStop(1, 'rgba(118,88,56,0)'); dx.fillStyle = cg; dx.fillRect(DW / 2 - 7 * ppm, DH / 2 - 7 * ppm, 14 * ppm, 14 * ppm);
   let decalDirty = true;
   const decalGeo = sandGeo.clone(); {
     const p = decalGeo.attributes.position, uv = decalGeo.attributes.uv;

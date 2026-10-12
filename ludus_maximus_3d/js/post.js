@@ -28,7 +28,7 @@ export const GradeShader = {
     uShadowTint: { value: new THREE.Color(0.95, 0.93, 1.06) },   // cool violet-blue multiplier in shadows
     uHighTint: { value: new THREE.Color(1.12, 1.03, 0.88) },    // warm gold multiplier in highlights
     uSplit: { value: 1.0 },
-    uSat: { value: 1.08 }, uContrast: { value: 1.04 }, uLift: { value: new THREE.Color(0.012, 0.008, 0.02) },
+    uSat: { value: 0.98 }, uContrast: { value: 1.12 }, uLift: { value: new THREE.Color(0.012, 0.008, 0.02) },
     uCA: { value: 0.0 },                                        // chromatic aberration amount (pulse 0..~0.012)
     uZoom: { value: 0.0 }, uZoomCenter: { value: new THREE.Vector2(0.5, 0.5) }, // radial zoom blur (0..~0.06)
     uHeat: { value: 0.0 },                                      // heat haze strength (0..~0.004)

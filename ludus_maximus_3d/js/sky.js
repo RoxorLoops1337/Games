@@ -12,8 +12,8 @@ export const TOD = {
     cloudLit: 0xfff0e0, cloudShade: 0xb08aa0, cloudAmt: 0.55, stars: 0.0, exposure: 0.95, night: 0.0, sunSize: 0.03,
   },
   golden: {
-    sunElev: 16, sunAz: 232, sunColor: 0xffb25e, sunInt: 3.5,
-    hemiSky: 0xa4a2cc, hemiGround: 0xc98650, hemiInt: 1.35,
+    sunElev: 16, sunAz: 232, sunColor: 0xffc489, sunInt: 3.5,
+    hemiSky: 0x98a0d0, hemiGround: 0xb99872, hemiInt: 1.25,
     fog: 0xeab68a, fogDensity: 0.0024,
     skyTop: 0x3a6bb8, skyMid: 0xe0aa8e, skyHor: 0xffc27f, glow: 0xff9a40,
     cloudLit: 0xffd9a6, cloudShade: 0x8a6e9a, cloudAmt: 0.6, stars: 0.0, exposure: 0.9, night: 0.0, sunSize: 0.032,

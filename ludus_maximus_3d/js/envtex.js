@@ -56,7 +56,7 @@ function bake(size, fn, w = size, h = size) {
 
 /** Sun-baked raked sand: blotches, wind ripples, grain speckle. Tile = ~4 m. */
 export function makeSandTexture(size = 1024, seed = 3) {
-  const A = hex(0xd9b27c), B = hex(0xb98a55), C = hex(0xefd3a2), D = hex(0x9a6f42);
+  const A = hex(0xe6cfa2), B = hex(0xcdae7e), C = hex(0xf6e6c4), D = hex(0xa98a60);   // warm pale golden sand, low saturation
   return bake(size, (u, v, px, py, o) => {
     const big = tfbm(u * 4, v * 4, 4, 4, seed);
     const warp = tfbm(u * 8, v * 8, 8, 3, seed + 5);
@@ -65,9 +65,9 @@ export function makeSandTexture(size = 1024, seed = 3) {
     const fine = tfbm(u * 64, v * 64, 64, 2, seed + 2);
     let t = clamp01(big * 1.4 - 0.2);
     let c = mix3(A, B, t * 0.8);
-    c = mix3(c, C, clamp01(rip * 0.35 + fine * 0.25 - 0.1));
+    c = mix3(c, C, clamp01(rip * 0.16 + fine * 0.28 - 0.1));
     if (grain > 0.93) c = mix3(c, C, 0.5); else if (grain < 0.06) c = mix3(c, D, 0.45);
-    o.c = c; o.h = 0.45 + rip * 0.12 + fine * 0.25 + (grain - 0.5) * 0.18;
+    o.c = c; o.h = 0.45 + rip * 0.07 + fine * 0.25 + (grain - 0.5) * 0.18;
   });
 }
 
