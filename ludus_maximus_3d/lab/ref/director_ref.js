@@ -204,18 +204,19 @@ export class FightDirector {
   _ultimate({ L, t, p, tall }) {
     const dur = p.dur ?? 1.6, u = this.units.find((x) => x.id === p.unit) || L[0], tg = this.units.find((x) => x.id === p.target);
     if (!u) return this._follow({ L, t, tall }, this._fov(48));
-    const a = tg ? Math.atan2(tg.y - u.y, tg.x - u.x) : Math.atan2(-u.y, -u.x), side = (p.side ?? 1) * (50 * D2R);
-    const camA = a + side, yaw = camA + Math.PI, k = easeOut(t / dur);
+    const a = tg ? Math.atan2(tg.y - u.y, tg.x - u.x) : Math.atan2(-u.y, -u.x), k = easeOut(t / dur);
+    if (p._side === undefined) { // pick the shoulder whose camera spot lies deeper inside the bowl
+      const rad = (s) => Math.hypot(u.x + Math.cos(a + s) * 4, u.y + Math.sin(a + s) * 4); p._side = rad(50 * D2R) <= rad(-50 * D2R) ? 1 : -1; }
+    const camA = a + p._side * 50 * D2R, yaw = camA + Math.PI;
     const c0 = [u.x, 1.45 + 0.1 * k, u.y], pts = [[u.x, 0, u.y], [u.x, 2.4, u.y]];
     const r = this._frame({ pts, yaw, pitch: lerp(-9, -3, k) * D2R, fov: lerp(46, 36, k) + tall * 6, margin: lerp(0.82, 0.7, tall), minD: lerp(4.4, 3.4, k), padX: 1.1, padY: 0.4, recen: false, c0, noWall: true, st: { yaw: 0.05, pitch: 0.1, c: 0.05, d: 0.1, dUp: 0.1, fov: 0.12 } });
-    // slow-mo: hold ~0.2x then ramp back
-    r.timeScale = t < 0.45 ? 0.2 : lerp(0.2, 1, ease((t - 0.45) / (dur - 0.45))); r.rMax = this.R + 1.2; // camera may skim the wall for the hero shot
-    if (Math.hypot(...camPos(c0, yaw, r.pitch, r.d).filter((_, i) => i !== 1)) > this.R - 0.2) r.noWall = false;
+    // slow-mo: hold ~0.2x then ramp back to 1
+    r.timeScale = t < 0.45 ? 0.2 : lerp(0.2, 1, ease((t - 0.45) / (dur - 0.45)));
     this._endIf(dur, () => (p.back ? { name: p.back.name, p: p.back.p, blend: 0.45 } : { name: 'follow' })); this.pose.timeScale = r.timeScale; return r;
   }
   _kill({ L, t, p, tall }) {
     const dur = p.dur ?? 2.8, v = this.units.find((x) => x.id === p.victim) || p.at, kl = this.units.find((x) => x.id === p.killer);
-    const vx = v?.x ?? 0, vy = v?.y ?? 0; if (this.t === 0 || !p._yaw0) p._yaw0 = (kl ? Math.atan2(vy - kl.y, vx - kl.x) : 0) + (p.side ?? 1) * Math.PI / 2;
+    const vx = v?.x ?? 0, vy = v?.y ?? 0; if (p._yaw0 === undefined) p._yaw0 = (kl ? Math.atan2(vy - kl.y, vx - kl.x) : 0) + (p.side ?? 1) * Math.PI / 2;
     const yaw = p._yaw0 + t * 0.5 * (p.side ?? 1), pitch = lerp(6, 16, easeOut(t / dur)) * D2R + tall * 8 * D2R;
     const pts = [[vx, 0, vy], [vx, 1.9, vy]]; if (kl && Math.hypot(kl.x - vx, kl.y - vy) < 4.5) pts.push([kl.x, 0, kl.y], [kl.x, 2.2, kl.y]);
     const r = this._frame({ pts, yaw, pitch, fov: this._fov(40), margin: lerp(0.8, 0.72, tall), minD: 3.4, padX: 0.9, st: { yaw: 0.05, pitch: 0.3, c: 0.25, d: 0.4, dUp: 0.2, fov: 0.3 } });
