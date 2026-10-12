@@ -76,7 +76,7 @@
   function damage(F, t, amt, src) {
     t.hp -= amt; t.taken += amt;
     if (t.hp <= 0 && !t.down) {
-      if (t.fx.revive && !t.revived) { t.revived = true; t.hp = Math.round(t.maxhp * 0.25); t.s.inv = 1.2; emit(F, { k: 'revive', dst: t.id }); return; }
+      if (t.fx.revive && !t.revived) { t.revived = true; t.hp = Math.round(t.maxhp * 0.2); t.s.inv = 0.6; emit(F, { k: 'revive', dst: t.id }); return; }
       t.hp = 0; t.down = true; t.s = {}; emit(F, { k: 'down', dst: t.id, src: src && src.id }); F.hype += 10;
       if (!alive(F, t.side).length) finish(F, other(t.side));
     }
@@ -280,10 +280,10 @@
     const hk = hasteK(u) * dt; u.skills.forEach((k) => { k.cd = Math.max(0, k.cd - hk); }); const uk = ultK(u) * dt; u.ults.forEach((k) => { k.cd = Math.max(0, k.cd - uk); });
     if (u.frT > 0 && (u.frT -= dt) <= 0) u.stk.fr = 0; if (u.ltT > 0 && (u.ltT -= dt) <= 0) u.stk.lt = 0; if (u.cqT > 0 && (u.cqT -= dt) <= 0) u.stk.cq = 0;
     if (u.graspT > 0 && (u.graspT -= dt) <= 0) u.graspReady = true;
-    if (u.fx.regen) { u.racc += u.maxhp * 0.006 * u.fx.regen * dt; if (u.racc >= 1) { const h = Math.floor(u.racc); u.racc -= h; heal(F, u, h); } }
+    if (u.fx.regen) { u.racc += u.maxhp * 0.0025 * u.fx.regen * dt; if (u.racc >= 1) { const h = Math.floor(u.racc); u.racc -= h; heal(F, u, h); } }
     if (u.fx.lastbreath && !u.lbUsed && u.hp < u.maxhp * 0.3) { u.lbUsed = true; u.s.lastB = 5; heal(F, u, u.maxhp * 0.1); emit(F, { k: 'status', dst: u.id, st: 'rage' }); }
     if (s.bleed) { u.bacc += s.bleed.dps * dt; if (u.bacc >= 1) { const d = Math.floor(u.bacc); u.bacc -= d; emit(F, { k: 'bleed', dst: u.id, dmg: d }); damage(F, u, d, null); } }
-    if (u.fx.sear) { u.srT -= dt; if (u.srT <= 0) { u.srT = 0.5; alive(F, other(u.side)).forEach((f) => { if (dist(u, f) < 2.4) { const d = Math.max(1, Math.round(DK * u.atk * 0.1 * u.fx.sear * (60 / (60 + f.def)))); emit(F, { k: 'bleed', dst: f.id, dmg: d, fire: 1 }); damage(F, f, d, u); } }); } }
+    if (u.fx.sear) { u.srT -= dt; if (u.srT <= 0) { u.srT = 0.5; alive(F, other(u.side)).forEach((f) => { if (dist(u, f) < 2.4) { const d = Math.max(1, Math.round(DK * u.atk * 0.03 * u.fx.sear * (60 / (60 + f.def)))); emit(F, { k: 'bleed', dst: f.id, dmg: d, fire: 1 }); damage(F, f, d, u); } }); } }
     if (s.spin) { s.spin.tick -= dt; if (s.spin.tick <= 0) { s.spin.tick = 0.25; emit(F, { k: 'aoe', x: u.x, y: u.y, r: 2, c: '#c2395f' }); alive(F, other(u.side)).forEach((f) => { if (dist(u, f) < 2.1) strike(F, u, f, { mult: 0.4, sure: true, noProc: true, tag: 'tornado' }); }); } }
   }
   function think(F, u, dt) {

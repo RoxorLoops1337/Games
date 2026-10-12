@@ -256,6 +256,15 @@ Minor rune and augment balance pass. Minor runes (vs no minor, 150 fights per ce
 
 ## Next ideas
 - [ ] 115. Fight replay and crowd audio (55, 63)
-- [ ] 116. Item affix balance pass
+- [x] 116. Item affix balance pass
 - [ ] 117. Relic balance pass
 - [ ] 118. More drill types for other buildings (109)
+
+## Round 28 shipped
+Item affix balance pass with big samples (2000 fights per affix, a plain item vs the same item with the affix at value 2). Troll's Regeneration (was 74 to 91%) and Sunfire (was 89%) are nerfed, with descriptions corrected to the real numbers. Prismatic augments tightened: Phoenix revive now 20% HP and 0.6s of invulnerability, Titanic Hunger heals 8%, Storm Lord thunder 2, Ascension 12/12/7. Prismatic now averages about 76% (was 79 to 87), gold 63, silver 59. Note: small samples (100 fights) swing by 10 points; use 1000 or more per cell.
+
+## Next ideas
+- [ ] 119. Fight replay and crowd audio (55, 63)
+- [ ] 120. Relic balance pass (117)
+- [ ] 121. More drill types for other buildings (109, 118)
+- [ ] 122. Thorns and Thunder affix tuning (both about 65 to 68%)
