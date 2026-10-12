@@ -294,6 +294,8 @@ export interface PlayerS {
     boss?: Record<string, number>;   // bosses this player has helped defeat, by boss id
     pets?: Pet[];            // tamed creatures
     comp?: string;           // id of the pet walking beside you
+    /** An open trade with another farmer (sim/trade.ts): who, what you give, your coins, whether you accepted, and the time Accept unlocks. Public, never saved. */
+    trade?: { w: string; o: [ItemId, number][]; c: number; ok: 0 | 1; lock: number };
     fav?: ItemId[];          // starred items: Quick stack, Put all and the like never move them (sim/stash.ts)
     ride?: number;           // while riding your companion: the speed multiplier (public; sim/bond.ts cmdRide)
     petSeq?: number;
@@ -424,6 +426,10 @@ export type Cmd =
     | { t: 'pat' }
     | { t: 'ride' }
     /** Bulk item tools (sim/stash.ts): star an item, Quick stack into nearby chests, Put all / Take all at one chest. */
+    | { t: 'trade'; op: 'open'; who: string }
+    | { t: 'trade'; op: 'set'; item: ItemId; n: number }
+    | { t: 'trade'; op: 'coins'; n: number }
+    | { t: 'trade'; op: 'ok' | 'cancel' }
     | { t: 'inv'; op: 'fav'; item: ItemId }
     | { t: 'inv'; op: 'stash' }
     | { t: 'inv'; op: 'chest'; id: number; dir: 'put' | 'take' }

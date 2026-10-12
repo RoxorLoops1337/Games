@@ -36,6 +36,7 @@ import * as arts from './arts';
 import * as hearth from './hearth';
 import * as iridium from './iridium';
 import * as unstick from './unstick';
+import * as trade from './trade';
 import * as machines from './machines';
 import * as mail from './mail';
 import * as mines from './mines';
@@ -164,7 +165,7 @@ export class Sim {
         this.rng = new Rng(`${state.seed}:${state.tick}`);
         for (const p of state.plots) if (!p.owned && !p.dread) delete p.veins;         // (nobody's land has no ore until somebody takes it: ensureVeins)
         state.paused = false;                         // (a menu open when the page was saved paused the world: nobody is in that menu now)
-        for (const p of Object.values(state.players)) { p.online = false; p.moving = false; dev.strip(p); costatus.strip(p); satchel.tidy(p); arts.sync(p); delete p.cl; }
+        for (const p of Object.values(state.players)) { p.online = false; p.moving = false; delete p.trade; dev.strip(p); costatus.strip(p); satchel.tidy(p); arts.sync(p); delete p.cl; }
         rift.recover(this);
         hearth.tidy(this);                             // (a fill or a buff that belongs to no dusk goes)
         creatures.tidy(this);                          // (a creature "in" a hatchery that is gone is free)
@@ -534,6 +535,7 @@ export class Sim {
         machines.step(this, dt);
         iridium.step(this, dt);
         unstick.step(this);
+        trade.step(this);
         factory.stepFactory(this, dt);
         mobs.updateMobs(this, dt);
         mobs.updateProjs(this, dt);

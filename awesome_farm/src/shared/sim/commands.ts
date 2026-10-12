@@ -8,6 +8,7 @@ import { hitPoint } from '../geom';
 import * as blight from './blight';
 import * as bond from './bond';
 import * as stash from './stash';
+import * as trade from './trade';
 import * as boss from './boss';
 import * as combat from './combat';
 import * as costatus from './costatus';
@@ -108,6 +109,7 @@ export function command (sim: Sim, pid: string, c: Cmd) {
         case 'pat': return bond.cmdPat(sim, p);
         case 'ride': return bond.cmdRide(sim, p);
         case 'inv': return stash.cmdInv(sim, p, c);
+        case 'trade': return trade.cmdTrade(sim, p, c);
         case 'towerpick': return defense.cmdPick(sim, p, c);
         case 'towerrepair': return defense.cmdRepair(sim, p, c);
     }

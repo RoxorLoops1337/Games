@@ -15,6 +15,8 @@ export interface ScreenCtx {
     /** Open another screen, closing this one. */
     open (name: string, arg?: unknown): void;
     tip: Tooltip;
+    /** Offer a trade to the nearest friend in reach. */
+    startTrade (): void;
     /** Draw the world map into a graphics object (and optional labels container). */
     drawMap (g: Phaser.GameObjects.Graphics, x: number, y: number, cell: number, labels?: Phaser.GameObjects.Container, view?: { gx: number; gy: number; span: number }): void;
 }
