@@ -40,7 +40,7 @@ export function open(ctx, g, slot, onChange) {
     if (cur) {
       body.append(sec('Equipped'));
       const w = h('div', 'eq-item', [itemCard(cur, {})]);
-      w.append(U.button({ label: 'Remove', variant: 'ghost', block: true, onClick: () => { const e = lm.unequip(S, g, slot); if (e) { ctx.toast(e, { kind: 'bad' }); ctx.sfx('uiError'); return; } ctx.sfx('uiTap'); done(); m.close(); } }));
+      w.append(U.button({ label: 'Remove', variant: 'bronze', block: true, onClick: () => { const e = lm.unequip(S, g, slot); if (e) { ctx.toast(e, { kind: 'bad' }); ctx.sfx('uiError'); return; } ctx.sfx('uiTap'); done(); m.close(); } }));
       body.append(w);
     }
     const list = S.items.filter((i) => i.slot === slot).sort((a, b) => lm.itemScore(b) - lm.itemScore(a));
