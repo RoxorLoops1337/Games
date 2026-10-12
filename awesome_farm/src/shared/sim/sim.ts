@@ -34,6 +34,7 @@ import * as health from './health';
 import * as satchel from './satchel';
 import * as arts from './arts';
 import * as hearth from './hearth';
+import * as iridium from './iridium';
 import * as machines from './machines';
 import * as mail from './mail';
 import * as mines from './mines';
@@ -528,6 +529,7 @@ export class Sim {
         this.updateDrops(dt);
         gather.updateRespawn(this, dt);
         machines.step(this, dt);
+        iridium.step(this, dt);
         factory.stepFactory(this, dt);
         mobs.updateMobs(this, dt);
         mobs.updateProjs(this, dt);

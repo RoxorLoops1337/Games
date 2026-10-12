@@ -55,6 +55,7 @@ const ROWS: Row[] = [
     ['anvil', 'ring_iron', 1, { ironbar: 3 }, 8],
     ['anvil', 'ring_gold', 1, { goldbar: 2 }, 22, { req: 'smithing2' }],
     ['anvil', 'ring_steel', 1, { steel: 2, ironbar: 1 }, 24, { req: 'smithing2' }],
+    ['anvil', 'ring_iridium', 1, { iridium_bar: 2, goldbar: 1 }, 60, { req: 'smithing2' }],
     ['anvil', 'ring_crystal', 1, { crystal: 3, goldbar: 1 }, 50, { req: 'smithing3' }],
     ['anvil', 'ring_blight', 1, { blightcore: 2, ironbar: 2 }, 30],
     ['anvil', 'gear', 1, { ironbar: 2 }, 3],
@@ -156,6 +157,7 @@ const ROWS: Row[] = [
     ['furnace', 'goldbar', 1, { goldore: 1 }, 3, { time: 4.2 }],
     ['furnace', 'brick', 1, { clay: 2 }, 1, { time: 2.6 }],
     ['furnace', 'glass', 1, { sand: 2 }, 1, { time: 3 }],
+    ['furnace', 'iridium_bar', 1, { iridium_ore: 2, coal: 1 }, 10, { time: 8, req: 'smithing2' }],
     ['furnace', 'steel', 1, { ironbar: 2, coal: 1 }, 6, { time: 6, req: 'smithing2' }],
     ['sawmill', 'plank', 2, { wood: 1 }, 1, { time: 2 }],
     // assemblers build these on their own (pick one in the machine)

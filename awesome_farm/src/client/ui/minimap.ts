@@ -132,6 +132,14 @@ export class Minimap {
         }
         const toMap = (wx: number, wy: number) => ({ x: x + (wx / (PLOT * TILE) - SEA - ox) * cell, y: y + (wy / (PLOT * TILE) - SEA - oy) * cell });
         const inside = (m: { x: number; y: number }) => m.x >= x && m.y >= y && m.x <= x + size && m.y <= y + size;
+        // an iridium vein that has fallen: a violet mark that pulses (a reason to hurry: it sinks back in two days)
+        for (const e of Object.values(f.ents)) {
+            if (e.k !== 'node' || e.kind !== 'iridium') continue;
+            const m = toMap((e.tx + 0.5) * TILE, (e.ty + 0.5) * TILE);
+            if (!inside(m)) continue;
+            const r = (big ? 4 : 3) + Math.round(Math.sin(this.t * 5) * 1);
+            rect(g, m.x - r - 1, m.y - r - 1, r * 2 + 2, r * 2 + 2, PAL.ink); rect(g, m.x - r, m.y - r, r * 2, r * 2, 0xb48cf0); rect(g, m.x - 1, m.y - 1, 2, 2, PAL.snow);
+        }
         // the four rift islands live off the edge of the world: a violet diamond in each corner
         const riftSpot = (i: number) => ({ x: x + (i & 1 ? size - cell * 0.55 : cell * 0.55), y: y + (i & 2 ? size - cell * 0.55 : cell * 0.55) });
         for (let i = 0; i < RIFT_ISLANDS && !view; i++) {

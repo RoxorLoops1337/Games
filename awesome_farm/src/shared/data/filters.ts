@@ -19,10 +19,10 @@ const isRawFish = (i: ItemId) => i.startsWith('fish_') && i !== 'fish_pie';
 const IS = (...ids: ItemId[]) => { const s = new Set<ItemId>(ids); return (i: ItemId) => s.has(i); };
 
 export const FILTER_CATS: FilterCat[] = [
-    { id: 'ore', name: 'Ores', icon: 'iron', desc: 'Coal, iron, copper, gold ore and crystals.', has: IS('coal', 'iron', 'copper', 'goldore', 'crystal') },
+    { id: 'ore', name: 'Ores', icon: 'iron', desc: 'Coal, iron, copper, gold ore and crystals.', has: IS('coal', 'iron', 'copper', 'goldore', 'crystal', 'iridium_ore') },
     { id: 'gems', name: 'Gems', icon: 'gem_ruby_1', desc: 'Rough, cut and flawless gems for the sockets.', has: (i) => i.startsWith('gem_') },
     { id: 'stone', name: 'Stone & earth', icon: 'stone', desc: 'Stone, sand, clay, peat, bricks and glass.', has: IS('stone', 'sand', 'clay', 'peat', 'brick', 'glass') },
-    { id: 'bars', name: 'Bars', icon: 'ironbar', desc: 'Iron, copper and gold bars, and steel.', has: IS('ironbar', 'copperbar', 'goldbar', 'steel') },
+    { id: 'bars', name: 'Bars', icon: 'ironbar', desc: 'Iron, copper and gold bars, and steel.', has: IS('ironbar', 'copperbar', 'goldbar', 'steel', 'iridium_bar') },
     { id: 'wood', name: 'Wood & fibre', icon: 'wood', desc: 'Logs, planks, plant fibre, rope, cotton and cloth.', has: IS('wood', 'plank', 'fiber', 'rope', 'cotton', 'cloth', 'flax') },
     { id: 'parts', name: 'Machine parts', icon: 'gear', desc: 'Gears, wire, circuits, motors and cores.', has: IS('gear', 'wire', 'circuit', 'motor', 'core') },
     { id: 'seeds', name: 'Seeds', icon: 'seed_wheat', desc: 'Every kind of seed.', has: (i) => kindOf(i) === 'seed' },

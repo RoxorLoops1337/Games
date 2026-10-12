@@ -7,7 +7,7 @@ import type { Res } from './items';
 export type NodeKind =
     | 'tree' | 'rock' | 'iron' | 'copper' | 'gold' | 'coal' | 'sand' | 'clay' | 'peat' | 'crystal'
     | 'bush' | 'flower' | 'mushroom' | 'reeds' | 'herb' | 'cotton' | 'chest' | 'vault' | 'mound'
-    | 'titan_oak' | 'titan_rock' | 'nest';
+    | 'titan_oak' | 'titan_rock' | 'nest' | 'iridium';
 /** Skills key off the group (Lumberjack → wood, Prospector → ore…). */
 export type NodeGroup = 'wood' | 'stone' | 'ore' | 'earth' | 'gem' | 'plant' | 'chest' | 'nest';
 
@@ -25,6 +25,7 @@ interface NodeDef {
     drops: DropRoll[];
     minTier?: number;         // pick tier needed to damage it
     tall?: boolean;           // drawn above the player when they stand behind it
+    drillOnly?: true;         // only the Iridium Drill can work it (sim/iridium.ts): a pick does nothing
     titan?: true;             // a Titan node: only takes damage while two or more farmers are swinging at it together (sim/titan.ts); creatures cannot work it
 }
 
@@ -52,6 +53,7 @@ export const NODES: Record<NodeKind, NodeDef> = {
     sand:     { name: 'Sand dune', hp: 2, xp: 2, group: 'earth', tex: () => 'sand', hit: 'hitEarth', brk: 'breakEarth', drops: [['sand', 2, 4]] },
     clay:     { name: 'Clay bank', hp: 3, xp: 2, group: 'earth', tex: () => 'clay', hit: 'hitEarth', brk: 'breakEarth', drops: [['clay', 2, 3]] },
     peat:     { name: 'Peat mound', hp: 3, xp: 2, group: 'earth', tex: () => 'peat', hit: 'hitEarth', brk: 'breakEarth', drops: [['peat', 2, 3]] },
+    iridium:  { name: 'Iridium vein', hp: 10, xp: 1, group: 'gem', tex: () => 'iridium', hit: 'hitCrystal', brk: 'breakCrystal', drops: [['iridium_ore', 1, 1]], drillOnly: true, tall: true },
     crystal:  { name: 'Crystal cluster', hp: 10, xp: 16, group: 'gem', tex: () => 'crystal', hit: 'hitCrystal', brk: 'breakCrystal', drops: [['crystal', 1, 2], ['stone', 1, 1]], minTier: 2 },
     bush:     { name: 'Berry bush', hp: 1, xp: 1, group: 'plant', tex: () => 'bush', hit: 'breakPlant', brk: 'breakPlant', drops: [['berry', 1, 3], ['seed_carrot', 1, 1, 0.2], ['seed_pepper', 1, 1, 0.14]] },
     flower:   { name: 'Wildflower', hp: 1, xp: 1, group: 'plant', tex: () => 'flower', hit: 'breakPlant', brk: 'breakPlant', drops: [['seed_wheat', 1, 2, 0.85], ['seed_carrot', 1, 1, 0.3], ['seed_cotton', 1, 1, 0.2], ['seed_beet', 1, 1, 0.22], ['seed_corn', 1, 1, 0.18]] },

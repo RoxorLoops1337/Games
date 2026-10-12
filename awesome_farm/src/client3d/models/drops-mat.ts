@@ -258,6 +258,15 @@ export function crystalShard(mb: MB) {
     mb.main.dode(0.2, hg(R.stone, 0, 0.3, 0.5), { y: 0, sy: 0.4, j: 0.04 });
     glint(mb, -0.3, 0.7, 0.22, 0.04, 0xe8fbff, 1.8);
 }
+export function iridiumOre(mb: MB) {
+    const g = mb.glow(0xb48cf0, 1.3), V = R.violet;
+    const col = (i: number) => au((_x: number, y: number) => y > 0.6 ? 0xf0dcff : y > 0.3 ? V[2] : mix(V[0], V[1], 0.4 + i * 0.2));
+    spike(g, 0.78, 0.16, col(0), { rz: 0.06, ry: 0.4, j: 0.012, ao: false, v: 0.1 }, 5);
+    spike(g, 0.5, 0.12, col(1), { x: 0.25, z: 0.08, rz: -0.55, ry: 1, j: 0.012, ao: false, v: 0.1 }, 5);
+    spike(g, 0.42, 0.11, col(2), { x: -0.25, z: 0.1, rz: 0.6, ry: 2, j: 0.012, ao: false, v: 0.1 }, 5);
+    mb.main.dode(0.22, hg(R.stone, 0, 0.3, 0.5), { y: 0.02, sy: 0.45, j: 0.04 });
+    glint(mb, -0.28, 0.62, 0.2, 0.04, 0xf5e8ff, 1.8);
+}
 export function frostShard(mb: MB) {
     const g = mb.glow(0x4ab2cf, 0.8), I = R.ice;
     const col = (i: number) => au((_x: number, y: number) => y > 0.45 ? I[2] : y > 0.2 ? I[1] : mix(I[0], I[1], 0.4 + i * 0.1));
@@ -350,6 +359,8 @@ export const MATS: Record<string, DropSpec> = {
     copperbar: S((mb: MB) => ingots(mb, R.copper)),
     goldbar: S((mb: MB) => ingots(mb, R.gold, { spark: true })),
     steel: S((mb: MB) => ingots(mb, R.steel, { long: true, stamp: R.steel[0] })),
+    iridium_bar: S((mb: MB) => ingots(mb, R.violet, { spark: true })),
+    iridium_ore: S(iridiumOre),
     cloth: S((mb: MB) => cloth(mb, 0xecd5bb, 0xfff6e0, 0x4ab2cf)),
     rope: S(rope),
     gear: S(gearCog),

@@ -56,6 +56,10 @@ export const HOWTO: Partial<Record<BuildingKind, HowTo>> = {
         role: 'Mines the ore under it for ever', how: 'Put it on coloured ore. Needs power, and a belt, chest or inserter on the tile in front (the arrow shows the front).',
         example: { items: [P('drill', 0, 0), P('chest', 2, 0)], marks: [{ i: 0, t: 'on ore' }, { i: 1, t: 'ore' }] },
     },
+    iridium_drill: {
+        role: 'Drills the sky-metal beside it', how: 'Set it within 3 tiles of an iridium vein. USE takes the ore and mends it. Its noise draws waves of hunters: defend it.',
+        example: { items: [P('iridium_drill', 0, 0), P('campfire', 3, 0)], marks: [{ i: 0, t: 'by the vein' }] },
+    },
     assembler: {
         role: 'Builds parts from what it is fed', how: 'Needs power. Press E, pick what to build, then feed it from a chest with an inserter and empty it the same way.',
         example: { items: [P('chest', 0, 0), P('inserter', 1, 0), P('assembler', 2, 0), P('inserter', 4, 0), P('chest', 5, 0)], marks: [{ i: 0, t: 'bars' }, { i: 4, t: 'gears' }] },

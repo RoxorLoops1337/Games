@@ -43,6 +43,7 @@ export function hitNode (sim: Sim, p: PlayerS, n: NodeE) {
         sim.deny(p, `Needs a better pick`);
         return;
     }
+    if (def.drillOnly) { sim.float(sim.center(n).x, sim.center(n).y - 14, 'Only an Iridium Drill can work this', undefined, p.id); return; }
     if (def.titan) { titan.hit(sim, p, n); return; }                  // (a Titan node only takes damage from two farmers together)
     let dmg = d.toolPower;
     const nodeCrit = d.mods.nodeCrit ?? 0;

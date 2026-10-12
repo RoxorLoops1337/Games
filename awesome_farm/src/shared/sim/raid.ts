@@ -70,7 +70,7 @@ export function raidFor (sim: Sim, p: PlayerS, count: number): RaidPlan | null {
 }
 
 /** Where a sector's wave steps out: on the line from the base to its nest, `reach` px out, backed in toward the base until the spot is clear. */
-function stagingSpot (sim: Sim, base: { x: number; y: number }, nest: { x: number; y: number }, reach: number, dist: number): { x: number; y: number } {
+export function stagingSpot (sim: Sim, base: { x: number; y: number }, nest: { x: number; y: number }, reach: number, dist: number): { x: number; y: number } {
     const ux = (nest.x - base.x) / dist, uy = (nest.y - base.y) / dist;
     for (let back = 0; back < 20; back++) {
         const r = reach - back * TILE * 1.5;

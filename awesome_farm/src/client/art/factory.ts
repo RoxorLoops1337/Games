@@ -1,7 +1,7 @@
 // Factory sprites: belts (animated), drills, assemblers, generators (drawn top-down from
 // code), poles and turbines (side view), and the ore-vein decals painted on the ground.
 
-import { makeSprite } from './pixels';
+import { makeSprite, recolor } from './pixels';
 
 const g = (...rows: string[]): string[] => {
     const w = Math.max(...rows.map((r) => r.length));
@@ -135,6 +135,9 @@ function drillGrid (f: number): string[] {
     return toRows(m);
 }
 
+/** The Iridium Drill: the mining drill's body with the sky-metal's violet in the bit and the housing. */
+const iridiumDrillGrid = (f: number): string[] => recolor(drillGrid(f), { o: 'v', y: 'p', T: 'u', w: 'p', t: 'v' });
+
 function assemblerGrid (f: number): string[] {
     const m = blank(30, 30);
     housing(m);
@@ -262,7 +265,7 @@ const INSERTER_BASE = g(
 
 export const FACTORY_GRIDS: Record<string, string[]> = {
     pole: POLE, turbine_tower: TURBINE_TOWER, turbine_blades: BLADES, inserter_base: INSERTER_BASE,
-    drill0: drillGrid(0), drill1: drillGrid(1), assembler0: assemblerGrid(0), assembler1: assemblerGrid(1),
+    drill0: drillGrid(0), drill1: drillGrid(1), iridium_drill0: iridiumDrillGrid(0), iridium_drill1: iridiumDrillGrid(1), assembler0: assemblerGrid(0), assembler1: assemblerGrid(1),
     coalgen0: coalgenGrid(0), coalgen1: coalgenGrid(1),
     belt0: beltFrame(0), belt1: beltFrame(1), belt2: beltFrame(2), belt3: beltFrame(3),
     splitter0: splitterFrame(0), splitter1: splitterFrame(1), splitter2: splitterFrame(2), splitter3: splitterFrame(3),
@@ -280,6 +283,7 @@ export function registerFactoryArt (scene: Phaser.Scene) {
     makeSprite(scene, 'tunnel', [0, 1, 2, 3].map((f) => tunnelFrame(f, false)), false);
     makeSprite(scene, 'tunnelx', [0, 1, 2, 3].map((f) => tunnelFrame(f, true)), false);
     makeSprite(scene, 'drill', [drillGrid(0), drillGrid(1)]);
+    makeSprite(scene, 'iridium_drill', [iridiumDrillGrid(0), iridiumDrillGrid(1)]);
     makeSprite(scene, 'assembler', [assemblerGrid(0), assemblerGrid(1)]);
     makeSprite(scene, 'coalgen', [coalgenGrid(0), coalgenGrid(1)]);
     makeSprite(scene, 'solar', [solarGrid(0), solarGrid(1)]);

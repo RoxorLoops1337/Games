@@ -16,6 +16,7 @@ import * as defense from './defense';
 import * as gather from './gather';
 import * as mail from './mail';
 import * as potluck from './potluck';
+import * as iridium from './iridium';
 import * as machines from './machines';
 import * as mines from './mines';
 import * as quests from './quests';
@@ -213,6 +214,7 @@ export function cmdUse (sim: Sim, p: PlayerS, id: number, seed?: ItemId) {
         return;
     }
     if (b.kind === 'sleepbed') { bed.setBed(sim, p, b); return; }
+    if (b.kind === 'iridium_drill') { iridium.use(sim, p, b); return; }
     if (def.hp && !def.tower && !def.spike) { if (b.hp !== undefined) defense.repair(sim, p, b); return; }       // (using a hurt wall or doorway mends it for materials)
     if (def.tower || def.spike) { sim.events.push({ e: 'open', to: p.id, ui: 'tower', id: b.id }); return; }
     if (b.kind === 'weathervane') { sim.events.push({ e: 'open', to: p.id, ui: 'vane', id: b.id }); return; }       // (it only shows: nothing changes)

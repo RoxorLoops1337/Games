@@ -247,6 +247,17 @@ export const GUIDE: GuideTopic[] = [
         tips: ['The kind of a nest (Bone, Swarm, Beast or Spirit) says which monsters it hatches.'],
     },
     {
+        id: 'iridium', name: 'Iridium', icon: 'i_iridium_ore',
+        blurb: 'A violet metal falls from the sky for two days. Rush to it with a drill and defend the drill.',
+        steps: [
+            'Every so often a banner says "Iridium has fallen!" and a violet mark shows on the map (M). A vein surfaced on a far corner of your land and sinks back after two days.',
+            'A pick does nothing to it. Build an Iridium Drill (Steelwork, Industry tab) within 3 tiles of the vein: it drills ore on its own, one at a time.',
+            'The noise draws hunters. A wave steps out of a new direction every little while, bigger the more you drill, and goes for the drill. Walls and towers near it help; {use} mends it.',
+            'Press {use} on the drill to take the ore. Smelt two ore and a coal in a furnace for an Iridium Bar, then forge an Iridium Ring at the anvil.',
+        ],
+        tips: ['A drill that is broken takes the waiting ore with it: collect often.'],
+    },
+    {
         id: 'friends', name: 'Friends & online', icon: 'k_heart',
         blurb: 'Up to sixteen farmers share one world and one farm.',
         steps: [
