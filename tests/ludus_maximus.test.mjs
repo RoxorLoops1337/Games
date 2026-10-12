@@ -205,5 +205,19 @@ ok(strongWins >= 17, `level 10 beats level 1 (${strongWins}/20)`);
   const asc = LM.ascend(Object.assign(S4, { fame: 2000 })); ok(asc.fac.sen === Math.floor(S4.fac.sen / 2), 'half the reputation survives ascension');
 }
 
+// spy, stale intel, daily descent
+{
+  const S5 = LM.newGame({ name: 'Sp' }); const g = LM.makeGlad({ id: S5.nextId++, lvl: 3 }); g.act = 'spy'; S5.glads.push(g);
+  ok(LM.scoutLevel(S5) === 0 && LM.staleErr(S5, S5.week + 3) > 0 && LM.staleErr(S5, S5.week) === 0, 'intel is stale for future weeks only');
+  LM.weekTrain(S5); ok(LM.spyActive(S5) && LM.scoutLevel(S5) === 1, 'a spy mission lifts scouting by one level');
+  S5.week += 3; ok(!LM.spyActive(S5), 'spy intel expires after two weeks');
+  S5.plots[7] = { b: 'scout', l: 3 }; ok(LM.scoutLevel(S5) === 3 && LM.staleErr(S5, S5.week + 5) < LM.staleErr(LM.newGame({}), 6), 'a high Scout Tower slows the staleness');
+  ok(/^\d{4}-\d{2}-\d{2}$/.test(LM.dayKey()) && !LM.dailyDone(S5), 'daily key is a UTC date');
+  const a = LM.makeGlad({ lvl: 10 }); const o1 = LM.withRandom(LM.dailySeed(3, 'o'), () => LM.pitOpp(S5, 3, a)), o2 = LM.withRandom(LM.dailySeed(3, 'o'), () => LM.pitOpp(S5, 3, a));
+  ok(o1.name === o2.name && o1.style === o2.style && o1.lvl === o2.lvl, 'daily descent opponents are identical for everyone');
+  const f1 = LM.withRandom(LM.dailySeed(2, 'a'), () => LM.augOffer(S5, 1, [])).map((x) => x.id).join(), f2 = LM.withRandom(LM.dailySeed(2, 'a'), () => LM.augOffer(S5, 1, [])).map((x) => x.id).join();
+  ok(f1 === f2, 'daily augment offers are identical for everyone');
+}
+
 console.log(`ludus_maximus: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

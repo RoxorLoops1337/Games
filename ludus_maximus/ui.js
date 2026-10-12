@@ -113,7 +113,7 @@
     const has = (id) => L.plotOf(S, id) >= 0; const a = L.activity(g);
     if (g.inj > 0) return has('infirmary') ? 'infirmary' : 'barracks';
     if (a.t === 'train') return 'palaestra'; if (a.t === 'spar') return has('sparring') ? 'sparring' : 'palaestra';
-    if (a.t === 'rest') return has('bath') ? 'bath' : 'barracks'; return has('market') ? 'market' : 'barracks';
+    if (a.t === 'rest') return has('bath') ? 'bath' : 'barracks'; if (a.t === 'spy') return has('scout') ? 'scout' : 'barracks'; return has('market') ? 'market' : 'barracks';
   }
   function vLudus() {
     const cap = L.rosterCap(S); const season = Math.ceil(S.week / 12); const wk = ((S.week - 1) % 12) + 1;
@@ -163,7 +163,7 @@
   ACT.doup = (el) => { const e = L.upgrade(S, +el.dataset.i); if (e) return toast(e); U.snd('build'); save(); render(); ACT.plot(el); };
 
   // ---------- GLADIATORS ----------
-  const actLabel = { str: 'STR', agi: 'AGI', end: 'END', skl: 'SKL', wil: 'HRT', rest: 'Rest', spar: 'Spar', work: 'Job' };
+  const actLabel = { str: 'STR', agi: 'AGI', end: 'END', skl: 'SKL', wil: 'HRT', rest: 'Rest', spar: 'Spar', work: 'Job', spy: 'Spy' };
   function gcard(g) {
     const T = D.TRAITS[g.trait]; const entered = L.busy(S, g, S.week) ? 'this week' : L.busy(S, g, S.week + 1) ? 'next week' : '';
     const acts = D.ACTS.map((a) => `<div class="act ${g.act === a.id ? 'on' : ''} ${g.inj > 0 ? 'off' : ''}" data-a="setact" data-id="${g.id}" data-v="${a.id}" ${a.t === 'train' ? `style="border-bottom-color:${D.SC[a.s]}"` : ''}>${actLabel[a.id]}</div>`).join('');
@@ -259,7 +259,7 @@
     h += '<div class="wtabs">' + Array.from({ length: look }, (_, i) => `<div class="wtab ${ui.wk === i ? 'on' : ''}" data-a="wk" data-v="${i}">${i === 0 ? 'This week' : 'Week ' + (S.week + i)}</div>`).join('') + `</div>`;
     h += `<div class="card dark row" style="gap:10px">${A.icon('eye', 24)}<div class="small sp"><b class="h" style="font-size:12px;color:var(--gold)">Scouting level ${lv}</b><br>${L.fogNote[lv]}. Upgrade the Scout Tower to see more and look further ahead.</div></div>`;
     const used = S.pitWeek === S.week;
-    h += `<div class="card" style="background:var(--ink);color:var(--cream);border-color:var(--gold)"><div class="row"><div class="sp"><b class="h" style="color:var(--gold)">Pit of Trials</b><div class="small" style="font-weight:600">One fighter descends. Wounds carry over. Pick an augment before every floor, then cash out or push deeper. Best floor: <b>${S.pitBest || 0}</b></div></div><button class="btn sm ${used ? 'off' : 'red'}" data-a="pit">${used ? 'Done this week' : 'Descend'}</button></div></div>`;
+    h += `<div class="card" style="background:var(--ink);color:var(--cream);border-color:var(--gold)"><div class="row"><div class="sp"><b class="h" style="color:var(--gold)">Pit of Trials</b><div class="small" style="font-weight:600">One fighter descends. Wounds carry over. Pick an augment before every floor, then cash out or push deeper. Best floor: <b>${S.pitBest || 0}</b></div></div><div class="col" style="gap:6px"><button class="btn sm ${used ? 'off' : 'red'}" data-a="pit">${used ? 'Done this week' : 'Descend'}</button><button class="btn sm ${L.dailyDone(S) ? 'off' : 'blue'}" data-a="pitdaily">${L.dailyDone(S) ? 'Daily done' : 'Daily seed'}</button></div></div><div class="tiny" style="margin-top:6px;opacity:.85">Daily Descent: the same opponents and augment offers for everyone today. Best daily floor: <b>${S.dailyBest || 0}</b>. Resets at midnight UTC.</div></div>`;
     const Lg = D.LEAGUES[ui.league];
     if (ui.league > ml) return h + `<div class="card"><h3>${A.icon('lock', 18)} ${Lg.n}</h3>Reach ${Lg.fame} fame to enter (you have ${fmt(S.fame)}). ${Lg.d}</div>`;
     const week = S.week + ui.wk; const evs = L.events(S, week, ui.league);
@@ -292,7 +292,8 @@
     if (lv < 1) h += `<div class="row wrap">${D.STATS.map((s) => `<div class="st"><span style="background:${D.SC[s]}">${D.SA[s]}</span><b>?</b></div>`).join('')}</div><div class="muted" style="margin-top:6px">Build a Scout Tower to learn their stats, traits and gear.</div>`;
     else if (lv === 1) h += `<div class="row wrap">${D.STATS.map((s) => `<div class="st"><span style="background:${D.SC[s]}">${D.SA[s]}</span><b>${L.grade(o.st[s], o.lvl)}</b></div>`).join('')}</div><div class="small" style="margin-top:6px"><b>${D.TRAITS[o.trait].n}:</b> ${D.TRAITS[o.trait].d}</div><div class="muted">Scouting 2 reveals exact numbers, gear and win odds.</div>`;
     else {
-      h += `<div class="row wrap">${D.STATS.map((s) => `<div class="st"><span style="background:${D.SC[s]}">${D.SA[s]}</span><b>${Math.floor(o.st[s])}</b></div>`).join('')}</div><div class="small" style="margin-top:6px"><b>${D.TRAITS[o.trait].n}:</b> ${D.TRAITS[o.trait].d}</div>`;
+      const wk = ev ? ev.week : S.week; const err = L.staleErr(S, wk);
+      h += (err > 0 ? `<div class="small" style="color:var(--terra)"><b>Intel is ${L.weeksAhead(S, wk)} week(s) old.</b> Rivals keep training: real numbers may be up to ${Math.round(err * 100)}% higher. Spy or scout again closer to the date.</div>` : '') + `<div class="row wrap">${D.STATS.map((s) => `<div class="st"><span style="background:${D.SC[s]}">${D.SA[s]}</span><b>${err > 0 ? '~' : ''}${Math.floor(L.scoutVal(S, wk, o.st[s]))}</b></div>`).join('')}</div><div class="small" style="margin-top:6px"><b>${D.TRAITS[o.trait].n}:</b> ${D.TRAITS[o.trait].d}</div>`;
       h += '<div style="margin-top:8px">' + o.techs.map((t) => `<span class="pill" title="${D.TECHS[t].d}">${D.TECHS[t].n}</span>`).join(' ') + '</div>';
       h += `<div style="margin-top:6px" class="small"><b>Ultimates:</b> ${L.ultsOf(o).map((x) => D.ULTS[x].n).join(', ')} · <b>Rune:</b> ${D.KEYSTONES[o.rune.k].n}${lv >= 3 && o.mast.length ? ' · <b>Masteries:</b> ' + o.mast.map((m) => D.MASTS[m].n).join(', ') : ''}</div>`;
       h += '<div style="margin-top:8px">' + D.SLOTS.map((s) => { const it = o.gear[s]; return it ? `<div class="small"><span class="tag" style="background:${D.RAR[it.rar].c}">${D.SLOT_NAME[s]}</span> ${esc(it.name)}${lv >= 3 ? ' ' + it.af.map((a) => `<span class="tiny" style="color:#6a3bb0">${D.AFFIX[a.id].n}</span>`).join(' ') : ''}</div>` : ''; }).join('') + '</div>';
@@ -315,7 +316,7 @@
     if (!list.length) h += '<div class="empty" style="color:var(--ink)">No fighters.</div>';
     list.forEach((g) => {
       const busy = L.busy(S, g, wk); const bad = g.inj > 0 || busy; const a = L.adv(g.style, opp.style);
-      let odds = ''; if (!bad && ev.kind !== 'team') { const p = L.odds(S, [g], [opp], 'bal'); odds = lv >= 2 ? Math.round(p * 100) + '%' : lv === 1 ? (p > 0.6 ? 'Favoured' : p < 0.4 ? 'Underdog' : 'Even') : '?'; }
+      let odds = ''; if (!bad && ev.kind !== 'team') { const p = L.odds(S, [g], [opp], 'bal'); const pp = L.weeksAhead(S, wk) > 0 && lv < 3 ? Math.round(p * 10) / 10 : p; odds = lv >= 2 ? (pp !== p ? '~' : '') + Math.round(pp * 100) + '%' : lv === 1 ? (p > 0.6 ? 'Favoured' : p < 0.4 ? 'Underdog' : 'Even') : '?'; }
       h += `<div class="itm ${ui.pick.includes(g.id) ? 'sel' : ''}" style="${ui.pick.includes(g.id) ? 'background:var(--gold)' : ''}${bad ? ';opacity:.45' : ''}" data-a="pickg" data-id="${g.id}"><div style="width:44px;height:52px;overflow:hidden;display:flex;align-items:flex-end;justify-content:center">${spr(g, { size: 46 })}</div><div class="sp"><div class="gname" style="font-size:13px">${esc(g.name)}</div><div class="row wrap" style="gap:4px"><span class="pill">Lv ${g.lvl}</span>${A.styleIcon(g.style, 18)}${advTag(a)}${g.inj > 0 ? '<span class="tag red">Injured</span>' : busy ? '<span class="tag blue">Busy</span>' : ''}</div><div class="bar en" style="margin-top:3px"><i style="width:${g.en}%"></i></div></div>${odds ? `<div style="text-align:center"><div class="h" style="font-size:16px">${odds}</div><div class="tiny muted">win</div></div>` : ''}</div>`;
     });
     if (n > 1 && ui.pick.length === n) {
