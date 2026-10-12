@@ -31,6 +31,7 @@ const stats = () => { const i = renderer.info; return { calls: i.render.calls, t
 const hud = document.getElementById('hud');
 
 let frameFn = () => {}, resizeFn = () => {};
+const setFrame = (f) => { frameFn = f; }, setResize = (f) => { resizeFn = f; };
 function resize() { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); post.setSize(innerWidth, innerHeight); resizeFn(innerWidth, innerHeight); }
 addEventListener('resize', resize);
 
@@ -97,8 +98,34 @@ async function gallery() {
 
 // ------------------------------------------------------------------------------------------ hub
 async function hubMode() {
-  const { setupHubLab } = await import('./hub_lab_main.js');
-  return setupHubLab({ THREE, renderer, camera, post, tier, q, hud, lab, setFrame: (f) => { frameFn = f; }, setResize: (f) => { resizeFn = f; } });
+  const { createHub } = await import('../js/hub.js');
+  const LM = globalThis.LM, D = globalThis.LM_D;
+  const S = LM.newGame({ name: 'Lab Ludus', color: +(q.get('color') ?? 0) });
+  S.seed = 'lab' + (q.get('seed') || '1'); S.week = +(q.get('week') || 1); S.rows = +(q.get('rows') || 3);
+  const order = ['barracks', 'kitchen', 'market', 'forge', 'bath', 'infirmary', 'palaestra', 'stands', 'shrine', 'hall', 'sparring', 'scout'];
+  const full = q.get('full'), lvl = +(q.get('level') || (full ? 5 : 3));
+  if (full) { S.plots = new Array(16).fill(null); order.forEach((b, i) => { S.plots[i] = { b, l: lvl }; }); if (full === '2') S.plots[10] = null; }
+  else { S.plots[5] = { b: 'barracks', l: 4 }; S.plots[6] = { b: 'kitchen', l: 3 }; S.plots[2] = { b: 'palaestra', l: 3 }; S.plots[1] = { b: 'forge', l: 2 }; S.plots[0] = { b: 'market', l: 3 }; S.plots[4] = { b: 'bath', l: 2 }; S.plots[3] = { b: 'scout', l: 2 }; S.plots[7] = { b: 'sparring', l: 4 }; S.plots[9] = { b: 'infirmary', l: 3 }; }
+  const styles = D.STYLE_IDS || Object.keys(D.STYLES), acts = ['str', 'spar', 'spar', 'rest', 'agi', 'skl', 'work', 'spy', 'rest', 'end', 'wil', 'spar'];
+  const ng = +(q.get('glads') ?? 9);
+  for (let i = 0; i < ng; i++) { const g = LM.makeGlad({ style: styles[i % styles.length], lvl: 4 + (i % 4), id: i + 1, name: 'Gladiator ' + (i + 1), r: LM.mulberry(i * 977 + 5) }); g.act = acts[i % acts.length]; S.glads.push(g); S.nextId = i + 2; }
+  const hub = createHub({ renderer, camera, tier, post });
+  if (q.get('hour')) hub.setHour(+q.get('hour')); if (q.get('weather')) hub.setWeather(q.get('weather'));
+  hub.enter(S); hub.resize(innerWidth, innerHeight);
+  window.__hub = hub; window.__S = S;
+  const o = hub.orbit, cam = q.get('cam');
+  const PRE = { 1: { az: 0.3, pitch: 0.34, dist: 32, tx: 0, ty: 1.5, tz: 4 }, 2: { az: 0.2, pitch: 1.15, dist: 60, tx: 0, ty: 0, tz: 0 }, 3: { az: -0.5, pitch: 0.5, dist: 24, tx: -5, ty: 1.5, tz: 2 }, 4: { az: 0.9, pitch: 0.42, dist: 28, tx: 6, ty: 2, tz: -2 }, 5: { az: -0.9, pitch: 0.6, dist: 40, tx: 0, ty: 1, tz: -4 }, 6: { az: 3.0, pitch: 0.4, dist: 50, tx: 0, ty: 2, tz: 0 } };
+  const P = PRE[cam]; if (P) { o.az = P.az; o.pitch = P.pitch; o.dist = P.dist; o.target.set(P.tx, P.ty, P.tz); }
+  for (const [k, f] of [['az', (v) => { o.az = v; }], ['pitch', (v) => { o.pitch = v; }], ['dist', (v) => { o.dist = v; }], ['tx', (v) => { o.target.x = v; }], ['ty', (v) => { o.target.y = v; }], ['tz', (v) => { o.target.z = v; }]]) if (q.get(k) !== null) f(+q.get(k));
+  if (q.get('focus') !== null) { hub.focusPlot(+q.get('focus'), { dur: 0.01 }); }
+  if (q.get('gfocus') !== null) hub.focusGlad(+q.get('gfocus'));
+  if (q.get('sel')) { const [t, v] = q.get('sel').split(':'); hub.setSelection(t === 'plot' ? { type: 'plot', i: +v } : { type: 'glad', id: +v }); }
+  if (q.get('hover')) hub.setHover({ type: 'plot', i: +q.get('hover') });
+  if (q.get('nodrift')) o.drift = false;
+  hud.textContent = '';
+  setFrame((t, dt) => { hub.update(dt, t); });
+  setResize((w, h) => hub.resize(w, h));
+  return hub.scene;
 }
 main();
 </script></body></html>

@@ -314,7 +314,7 @@ export function createHub({ renderer, camera, audio, tier = 'high', post = null 
         const px = c.x - 3.9, pz = c.z + 2.6;
         k.cyl('wood', 0.07, 0.09, 2.2, px, base, pz, C.wood2, { seg: 6 }); k.box('wood', 1.0, 0.55, 0.07, px + 0.5, base + 1.35, pz, C.woodLt); k.box('wood', 1.0, 0.07, 0.09, px + 0.5, base + 1.9, pz, C.wood2);
         k.cyl('metal', 0.17, 0.17, 0.03, px + 0.5, base + 1.62, pz + 0.05, C.gold, { rx: Math.PI / 2, c: true, seg: 8 });
-        k.sheet([px + 0.05, base + 1.2, pz + 0.05], [0.0001, 0, 0.0001 + 0.0], [0, -0.0001, 0], 1, 1, 0xb5352a);
+        k.sheet([px + 0.2, base + 1.7, pz + 0.06], [0.2, 0, 0], [0, -0.55, 0], 1, 2, 0xb5352a);
       }
       if (pl && !locked) {
         const R = buildParts(pl.b, pl.l, { accent });
