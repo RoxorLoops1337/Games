@@ -76,7 +76,7 @@
   function damage(F, t, amt, src) {
     t.hp -= amt; t.taken += amt;
     if (t.hp <= 0 && !t.down) {
-      if (t.fx.revive && !t.revived) { t.revived = true; t.hp = Math.round(t.maxhp * 0.35); t.s.inv = 1.2; emit(F, { k: 'revive', dst: t.id }); return; }
+      if (t.fx.revive && !t.revived) { t.revived = true; t.hp = Math.round(t.maxhp * 0.25); t.s.inv = 1.2; emit(F, { k: 'revive', dst: t.id }); return; }
       t.hp = 0; t.down = true; t.s = {}; emit(F, { k: 'down', dst: t.id, src: src && src.id }); F.hype += 10;
       if (!alive(F, t.side).length) finish(F, other(t.side));
     }
