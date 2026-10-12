@@ -58,13 +58,13 @@ const cam = new THREE.PerspectiveCamera(32, W / H, 0.1, 60);
 
 const sheet = Q.get('sheet');
 if (sheet) {
-  const style = Q.get('style') || 'murmillo', n = +(Q.get('n') || 6), clip = sheet, t1 = +(Q.get('t1') || 0), t0 = +(Q.get('t0') || 0);
+  const TL = Q.get('times') ? Q.get('times').split(',').map(Number) : null; const style = Q.get('style') || 'murmillo', n = TL ? TL.length : +(Q.get('n') || 6), clip = sheet, t1 = +(Q.get('t1') || 0), t0 = +(Q.get('t0') || 0);
   const proto = spawn(style, 0); const dur = t1 || proto.animator.clips[clip].dur; scene.remove(proto.root); rigs.length = 0; gear.length = 0;
   const gap = +(Q.get('gap') || 1.45), view = Q.get('view') || '34';
   for (let i = 0; i < n; i++) {
-    const rig = spawn(style, (i - (n - 1) / 2) * gap); const t = n > 1 ? t0 + (dur - t0) * (i / (n - 1)) : t0;
+    const rig = spawn(style, (i - (n - 1) / 2) * gap); const t = TL ? TL[i] : n > 1 ? t0 + (dur - t0) * (i / (n - 1)) : t0;
     poseAt(rig, clip, t); rig.resetSecondary(); for (const sc of rig.secondary) sc.write(); rig.animator.update = () => {}; rig.animator.postIK = () => {}; rig.update = () => {};
-    rig.root.rotation.y = view === 'side' ? Math.PI / 2 : (view === '34' ? 0.5 : 0);
+    rig.root.rotation.y = view === 'side' ? Math.PI / 2 : (view === '34' ? 0.5 : view === '45' ? 0.9 : 0);
     const lab = document.createElement('div'); lab.style.cssText = 'position:fixed;bottom:6px;left:' + (50 + (i - (n - 1) / 2) * (100 / n * 0.9)) + '%;transform:translateX(-50%);text-shadow:0 1px 2px #000'; lab.textContent = t.toFixed(2) + 's'; document.body.appendChild(lab);
   }
   camTarget.set(0, 0.95, 0); cam.position.set(0, 1.45, Math.max(4.5, n * gap * 0.95)); cam.fov = 30;
