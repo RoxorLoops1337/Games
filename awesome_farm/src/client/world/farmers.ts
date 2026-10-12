@@ -213,8 +213,10 @@ export class Farmers {
         const speed = h.derivedMe().speed;
         const dx = (mx * speed + l.kx) * dt, dy = (my * speed + l.ky) * dt;
         l.kx *= Math.pow(0.001, dt); l.ky *= Math.pow(0.001, dt);
-        if (!h.world.boxBlocked(l.x + dx, l.y, 4, 3)) l.x += dx;
-        if (!h.world.boxBlocked(l.x, l.y + dy, 4, 3)) l.y += dy;
+        // (walls stop you; but a piece built on the spot you were walking onto leaves you inside it: from there every step may go, so you can walk out)
+        const inside = h.world.boxBlocked(l.x, l.y, 4, 3);
+        if (inside || !h.world.boxBlocked(l.x + dx, l.y, 4, 3)) l.x += dx;
+        if (inside || !h.world.boxBlocked(l.x, l.y + dy, 4, 3)) l.y += dy;
         if (pv) {
             pv.x = l.x; pv.y = l.y;
             this.draw(pv, moving, l.face, downed, dt);

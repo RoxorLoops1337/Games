@@ -35,6 +35,7 @@ import * as satchel from './satchel';
 import * as arts from './arts';
 import * as hearth from './hearth';
 import * as iridium from './iridium';
+import * as unstick from './unstick';
 import * as machines from './machines';
 import * as mail from './mail';
 import * as mines from './mines';
@@ -102,6 +103,8 @@ export class Sim {
     readonly devs = new Set<string>();
 
     /** The night's monsters still to come: near a farmer, on a plot, or (`raid`: a nest isle's plot) a raider marching on the base at rx, ry. */
+    /** Pieces just built that the farmers standing near them are checked against for a moment (sim/unstick.ts). */
+    watching: { tx: number; ty: number; w: number; h: number; by?: string; until: number }[] = [];
     nightSpawns: { at: number; kind?: MobKind; near?: string; plot?: number; raid?: number; rx?: number; ry?: number; sec?: number; sx?: number; sy?: number; first?: boolean }[] = [];
     /** Damage dealt to each monster by each player (boss rewards). Not saved. */
     private credits: Record<number, Record<string, number>> = {};
@@ -530,6 +533,7 @@ export class Sim {
         gather.updateRespawn(this, dt);
         machines.step(this, dt);
         iridium.step(this, dt);
+        unstick.step(this);
         factory.stepFactory(this, dt);
         mobs.updateMobs(this, dt);
         mobs.updateProjs(this, dt);
