@@ -68,7 +68,7 @@ const GLYPH_W = (ch) => ('I1!.:/ '.includes(ch) ? 0.4 : 'MW'.includes(ch) ? 0.82
 
 // ---------------- shaders ----------------
 const PART_VS = /* glsl */ `
-attribute vec4 aA; attribute vec4 aB; attribute vec4 aC; attribute vec4 aD;
+attribute vec4 aA; attribute vec4 aB; attribute vec4 aC; attribute vec4 aD; uniform float uFloor;
 varying vec2 vUv; varying vec4 vCol;
 void main(){
   vec3 c = aA.xyz; float size = aA.w; vec2 q = position.xy; vec3 wp;
@@ -83,6 +83,7 @@ void main(){
     vec3 up = vec3(viewMatrix[0][1], viewMatrix[1][1], viewMatrix[2][1]);
     wp = c + right * r.x + up * r.y;
   }
+  wp.y = max(wp.y, uFloor); // flatten against the ground instead of a hard depth clip line
   float ci = aD.x; vec2 cxy = vec2(mod(ci, 4.0), floor(ci / 4.0));
   vec2 uvq = uv; if (aD.z > 0.5) uvq.x = 1.0 - uvq.x; // mirror flag
   vUv = (vec2(cxy.x + 0.02 + uvq.x * 0.96, 3.0 - cxy.y + 0.02 + uvq.y * 0.96)) * 0.25;
@@ -235,6 +236,7 @@ const scaleC = (c, k) => ({ r: c.r * k, g: c.g * k, b: c.b * k });
 function mulberry(seed) { let a = seed >>> 0; return () => { a = (a + 0x6d2b79f5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
 
 // ---------------- particle layer (pooled sim + transient immediate writes) ----------------
+const FLOOR = { value: 0.04 };
 class Layer {
   constructor(max, additive, map, name) {
     this.max = max; this.n = 0; this.t = 0; this.alive = []; this.free = [];
@@ -244,7 +246,7 @@ class Layer {
     this.A = new Float32Array(max * 4); this.B = new Float32Array(max * 4); this.C = new Float32Array(max * 4); this.D = new Float32Array(max * 4);
     this.attrs = [['aA', this.A], ['aB', this.B], ['aC', this.C], ['aD', this.D]].map(([nm, arr]) => { const at = new THREE.InstancedBufferAttribute(arr, 4); at.setUsage(THREE.DynamicDrawUsage); g.setAttribute(nm, at); return at; });
     g.instanceCount = 0;
-    this.mat = new THREE.ShaderMaterial({ uniforms: { uMap: { value: map } }, vertexShader: PART_VS, fragmentShader: additive ? PART_FS_ADD : PART_FS_NORM, transparent: true, depthWrite: false, blending: additive ? THREE.AdditiveBlending : THREE.NormalBlending, side: THREE.DoubleSide });
+    this.mat = new THREE.ShaderMaterial({ uniforms: { uMap: { value: map }, uFloor: FLOOR }, vertexShader: PART_VS, fragmentShader: additive ? PART_FS_ADD : PART_FS_NORM, transparent: true, depthWrite: false, blending: additive ? THREE.AdditiveBlending : THREE.NormalBlending, side: THREE.DoubleSide });
     this.mesh = new THREE.Mesh(g, this.mat); this.mesh.frustumCulled = false; this.mesh.name = name; this.mesh.renderOrder = additive ? 4 : 2;
     this.geo = g;
   }
@@ -317,7 +319,7 @@ export function createFx(scene, opts = {}) {
   const rnd = mulberry(opts.seed || 1337);
   const R = opts.arenaRadius ?? 14, groundY = opts.groundY ?? 0, sand = rgb(opts.sand || '#d9b27c');
   const maxQ = opts.quality ?? 1; // 0.4..1 scales counts
-  const uTime = { value: 0 };
+  const uTime = { value: 0 }; FLOOR.value = (opts.groundY ?? 0) + 0.04;
   const fx = { time: 0, quality: maxQ, groups: [], _tmp: new THREE.Vector3(), cam: null };
   const root = new THREE.Group(); root.name = 'fx'; scene.add(root);
 
