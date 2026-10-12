@@ -404,5 +404,14 @@ ok(strongWins >= 17, `level 10 beats level 1 (${strongWins}/20)`);
   ok(S22.gold - g0 >= 2 * LM.goalPay(S22) - 1 && rp.notes.some((n) => /Weekly goals: 2\/3/.test(n)) && S22.wkWins === 0, 'finished goals pay and the counter resets');
 }
 
+// round 22: goal streak, palaestra drill perks
+{
+  const S23 = LM.newGame({ name: 'R23' }); S23.week = 2; const sp0 = LM.drillSpeed(S23); ok(sp0 <= 1.3 && sp0 >= 0.75, 'drill speed stays in range');
+  const g = LM.makeGlad({ id: S23.nextId++, style: 'thraex', lvl: 3 }); S23.glads.push(g); const m0 = LM.setDrill(S23, g, 1); ok(m0 >= 0.4, 'a perfect drill gives at least the base bonus'); ok(LM.setDrill(S23, g, 0) === 0, 'a missed drill gives nothing');
+  const run = () => { S23.wkWins = 2; S23.bountyWeek = S23.week; S23.hordeWeek = S23.week; const g0 = S23.gold; const rp = LM.weekFinish(S23); return { gain: S23.gold - g0, rp }; };
+  const r1 = run(); ok(S23.goalStreak === 1 && !r1.rp.notes.some((n) => /streak/.test(n)), 'the first full week starts a streak'); const r2 = run(); ok(S23.goalStreak === 2 && r2.rp.notes.some((n) => /streak x2/.test(n)), 'a second full week pays a streak bonus');
+  S23.wkWins = 0; S23.bountyWeek = -1; S23.hordeWeek = -1; LM.weekFinish(S23); ok(S23.goalStreak === 0, 'missing goals resets the streak');
+}
+
 console.log(`ludus_maximus: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
