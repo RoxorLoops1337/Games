@@ -122,8 +122,8 @@ export class FightDirector {
     if (w.pts) { d = Math.max(d, needD(w.pts, c, s.yaw, pitch, tanV, tanH, w.margin, w.padX, w.padY)); }
     d = clamp(d, 1.5, this.maxD);
     const rMax = w.rMax ?? this.R - this.wallMargin; let pos;
-    if (!w.noWall) { const q = this._lift(w.pts, c, s.yaw, pitch, d, tanV, tanH, w.margin, w.padX, w.padY, rMax); pitch = q.pi; d = q.d; }
-    pos = camPos(c, s.yaw, pitch, d);
+    pos = camPos(c, s.yaw, pitch, d); // soft limit lives in the (smoothed) target; this is only the emergency clamp just inside the wall
+    if (!w.noWall && Math.hypot(pos[0], pos[2]) > rMax + 0.25) { const q = this._lift(w.pts, c, s.yaw, pitch, d, tanV, tanH, w.margin, w.padX, w.padY, rMax + 0.25); pitch = q.pi; d = q.d; pos = camPos(c, s.yaw, pitch, d); }
     if (Math.hypot(pos[0], pos[2]) > rMax && !w.pts) { const k = rMax / Math.hypot(pos[0], pos[2]); pos[0] *= k; pos[2] *= k; } // unframed shots: push in
     if (pos[1] < this.minHeight) pos[1] = this.minHeight;
     const P = this.pose; P.pos.x = pos[0]; P.pos.y = pos[1]; P.pos.z = pos[2]; P.look.x = c[0]; P.look.y = c[1]; P.look.z = c[2]; P.fov = s.fov;
