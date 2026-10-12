@@ -21,7 +21,7 @@ Each gladiator customised from sim data: skin, hair, plume color, rarity-tinted 
 
 ## World
 - Ludus (hub): walled training courtyard on a hillside above the city, orbit/pan/zoom camera (touch friendly), 4x4 building plots like the sim (LM.COLS=4, plots up to 16) rendered as real 3D buildings (kitchen, barracks, palaestra, forge, infirmary, scout tower, etc., see core/data.js D.BUILD), upgrade levels visibly change meshes, ambient life (walking fighters, torch flames, smoke, birds, banners), day/night + weather.
-- Arena: elliptical colosseum bowl with tiers of instanced crowd (thousands of billboards/low-poly bodies with wave and cheer animation), arches, velarium shade cloth, banners, torches, sand floor with footprints/blood-free scuffs decal trail, gate portcullis intro, themed per league.
+- Arena: elliptical colosseum bowl with tiers of instanced crowd (thousands of billboards/low-poly bodies with wave and cheer animation), arches, velarium shade cloth, banners, torches, sand floor with footprints, scuffs and (gore setting permitting) blood decal trail, gate portcullis intro, themed per league.
 - Camera: cinematic director for fights (establishing flyover, tracking, ultimate close-ups with slow-mo, kill cam, victory orbit). Touch: tap ultimates, optional free orbit.
 
 ## Budgets

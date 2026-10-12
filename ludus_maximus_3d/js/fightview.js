@@ -5,6 +5,7 @@ import { createSky, createLightRig, applyTOD, TOD } from './sky.js';
 import { createArena } from './env_arena.js';
 import { createDustMotes, createGodRays } from './envfx.js';
 import { createFx } from './fx.js';
+import { createGore } from './gore.js';
 import { createFeel } from './feel.js';
 import { FightDirector } from './director.js';
 import { createGladiator } from './gladiator.js';
@@ -37,8 +38,10 @@ export class FightView {
     this.scene.add(this.godrays.mesh);
     this.dust = createDustMotes({ count: tier === 'low' ? 160 : 380, min: new THREE.Vector3(-28, 0.4, -20), max: new THREE.Vector3(28, 16, 20), size: 3, intensity: 1.1 });
     this.scene.add(this.dust.points);
-    this.fx = createFx(this.scene, { arenaRadius: 24, groundY: 0, sand: this.arena, quality: tier === 'low' ? 0.5 : tier === 'medium' ? 0.75 : 1, decalSize: 1024 });
+    // decal canvas covers +-17 m around the centre (fighters stay inside ~13 m): 2048 px high tier, so a blood splat is a few pixels wide, not a smudge
+    this.fx = createFx(this.scene, { arenaRadius: 15, groundY: 0, sand: this.arena, quality: tier === 'low' ? 0.5 : tier === 'medium' ? 0.75 : 1, decalSize: tier === 'low' ? 1024 : tier === 'medium' ? 1536 : 2048, decalGap: tier === 'low' ? 0.2 : 0.12, maxNorm: 1400 });
     this.feel = createFeel({ overlay: true, fov: camera.fov });
+    this.gore = createGore(this.fx, { scene: this.scene, audio, feel: this.feel, tier });
     this.dir = new FightDirector({ aspect: camera.aspect, radius: 13.2, gateAngle: 0 });
     this.t = 0; this.F = null; this.fm = new Map(); this.sim = 0; this.acc = 0; this.userSpeed = 1; this.phase = 'idle';
     this.buildHud();
@@ -69,6 +72,7 @@ export class FightView {
     this.dispose();
     this.F = F; this.opts = opts; this.replaying = !!opts.replay; this.tapI = 0; this.done = false; this.phase = 'intro'; this.phaseT = 0; this.skip = false; this.acc = 0; this.evSeen = 0; this.lastHitT = -9; this.recent = 0; this.intensity = 0.2; this.intTimer = 0;
     if (this.replaying) L().setRandom(L().mulberry(opts.replay.seed));
+    this.gore.setTier(this.tier); this.gore.reset(this.goreSeed(F, opts));
     this.hud.style.display = 'block'; this.fx.reset && this.fx.reset(); this.arena.setGate(0); this.arena.setHype(0.3); this.feel.reset && this.feel.reset();
     const nA = F.units.filter((u) => u.side === 'A').length, nB = F.units.length - nA;
     F.units.forEach((u) => {
@@ -77,7 +81,7 @@ export class FightView {
       const f = { u, rig, vx: 0, vz: 0, yaw: u.side === 'A' ? Math.PI / 2 : -Math.PI / 2, lx: gx, ly: u.y, handles: {}, atkN: 0, st: '', hpShown: u.hp, plate: null, ring: [], intro: { x: gx, y: u.y, tx: u.x, ty: u.y } };
       trimShadowCasters(rig.root, this.post.tier || this.tier); rig.root.position.set(gx, 0, u.y); this.scene.add(rig.root); rig.resetSecondary && rig.resetSecondary();
       const plate = U.nameplate({ name: u.name, level: u.g.lvl, hp: u.hp, maxHp: u.maxhp, team: u.side === 'A' ? 'ally' : 'foe', rank: 0 });
-      this.plates.append(plate); f.plate = plate; this.fm.set(u.id, f);
+      this.plates.append(plate); f.plate = plate; this.fm.set(u.id, f); this.gore.addFighter(u.id, rig, { maxhp: u.maxhp, side: u.side });
       if (u.side === 'B') { plate.style.pointerEvents = 'auto'; plate.style.cursor = 'pointer'; plate.addEventListener('pointerdown', () => this.focusUnit(u.id)); }
     });
     // ultimates (player side; none while replaying)
@@ -156,6 +160,14 @@ export class FightView {
     for (const f of this.fm.values()) { this.scene.remove(f.rig.root); f.rig.dispose && f.rig.dispose(); f.plate && f.plate.remove(); f.ring.forEach((r) => r.ring.remove()); }
     this.fm.clear(); if (this.ultBar) this.ultBar.innerHTML = '';
     if (this.fx && this.fx.clearDecals) this.fx.clearDecals();
+    if (this.gore) this.gore.reset(1);
+  }
+
+  /** cosmetic gore seed: the replay seed when replaying, else a hash of the roster (the sim RNG is never touched) */
+  goreSeed(F, opts) {
+    if (opts && opts.replay && opts.replay.seed != null) return opts.replay.seed >>> 0;
+    let h = 2166136261; for (const u of F.units) { const t = String(u.name) + u.id; for (let i = 0; i < t.length; i++) { h ^= t.charCodeAt(i); h = Math.imul(h, 16777619); } }
+    return h >>> 0;
   }
 
   resize(w, h) { this.dir.setAspect(w / h); }
@@ -165,7 +177,7 @@ export class FightView {
     this.t = t; realDt = Math.min(realDt, 0.1);
     this.sky.update(this.camera, t); this.arena.update(t, realDt); this.godrays.update(t); this.dust.update(t, this.renderer.getPixelRatio());
     const ft = this.feel.update(realDt);
-    if (!this.F) { this.camera.updateMatrixWorld(); this.fx.update(ft.dt, this.camera); return; }
+    if (!this.F) { this.camera.updateMatrixWorld(); this.fx.update(ft.dt, this.camera); this.gore.postFrame(realDt); return; }
     const F = this.F, speedUp = this.skip ? 8 : this.userSpeed;
     this.phaseT += realDt;
     // director first so timeScale (slow-mo cues) applies to this frame's sim
@@ -186,7 +198,7 @@ export class FightView {
     if (this.replaying && this.skip && !this.done) { this.done = true; L().setRandom(null); this.resolve && this.resolve({ replay: true }); }
     if (this.phase === 'outro') { this.outroT += realDt; if ((this.replaying ? this.outroT > 3 : this.outroT > 4.5) && !this.done) { if (this.replaying) L().setRandom(null); this.done = true; this.resolve && this.resolve({ winner: F.winner, F }); } }
 
-    this.fx.update(dt, this.camera);
+    this.gore.setTier(this.tier); this.fx.update(dt, this.camera); this.gore.postFrame(realDt);
     this.applyCamera(pose);
     this.updateHud(realDt, F);
     this.updateAudio(realDt, F);
@@ -212,7 +224,7 @@ export class FightView {
     for (const f of this.fm.values()) { if (!f.u.down && f.u.side === win) f.rig.animator.setState('victory'); }
     const alive = F.units.filter((u) => u.side === win && !u.down)[0];
     const lastDown = F.units.filter((u) => u.down && u.side !== win).pop();
-    this.dir.cue('kill', { victim: lastDown && lastDown.id, killer: alive && alive.id, next: { name: 'victory' } });
+    this.dir.cue('kill', { victim: lastDown && lastDown.id, killer: alive && alive.id, extra: lastDown && this.gore.framePoints(lastDown.id), next: { name: 'victory' } });
     this.audio.music.setMode(win === 'A' ? 'victory' : 'defeat'); this.audio.sfx(win === 'A' ? 'levelUp' : 'deathThud'); this.audio.sfx(win === 'A' ? 'crowdRoar' : 'crowdBoo');
     this.banner(win === 'A' ? 'VICTORY' : 'DEFEAT', win === 'A' ? 'kill' : 'crit');
     setTimeout(() => this.dir.setShot('victory', { winner: alive && alive.id }, 1.2), 2400);
@@ -299,7 +311,7 @@ export class FightView {
       case 'hit': {
         if (!dst) break; const frac = e.dmg / dst.maxhp, dir = src ? this.dirOf(src, dst) : new THREE.Vector3(0, 0, 1);
         if (e.hz) { this.num(dst, e.dmg + ' FIRE', 'fire'); fx.spark(this.chest(dst), new THREE.Vector3(0, 1, 0), 10, '#ffb347'); feel.addTrauma && feel.addTrauma(0.12); A.sfx('dust', { pan: pan(dst) }); this.flashHurt(fd, 0.1); break; }
-        fx.hit(this.chest(dst), dir, { dmgFrac: frac, crit: !!e.crit, color: src ? this.col(src) : undefined });
+        fx.hit(this.chest(dst), dir, { dmgFrac: frac, crit: !!e.crit, color: src ? this.col(src) : undefined, flesh: this.gore.on && !(dst.s && dst.s.guard) });
         this.num(dst, e.crit ? 'CRIT ' + e.dmg : String(e.dmg), e.crit ? 'crit' : (e.tech && !e.basic ? 'tech' : 'dmg'));
         if (e.save) this.num(dst, e.save, 'block');
         feel.impact('hit', { dmgFrac: frac, crit: !!e.crit, mine: dst.side === 'A', dir, color: src ? this.col(src) : undefined });
@@ -308,6 +320,7 @@ export class FightView {
         A.sfx(e.crit ? 'swordHitCrit' : (e.save || (dst.s && dst.s.guard)) ? 'shieldBlock' : 'swordHit', { pan: pan(dst) });
         if (Math.random() < 0.6) A.sfx('hurt', { voice: VOICE[dst.style] ?? 0, pan: pan(dst) });
         if (src && Math.random() < 0.25) A.sfx('grunt', { voice: VOICE[src.style] ?? 0, pan: pan(src) });
+        if (this.gore.on) { this.gore.onHit(dst.id, { pos: this.chest(dst), dx: dir.x, dz: dir.z, frac, crit: !!e.crit, blocked: !!(dst.s && dst.s.guard), lethal: !!dst.down, hpFrac: dst.hp / dst.maxhp, attacker: src && src.id, mine: dst.side === 'A' }); if (fd) fd.lastHit = { frac, crit: !!e.crit, dx: dir.x, dz: dir.z }; }
         this.recent += frac * 2 + (e.crit ? 0.25 : 0); this.lastHitT = this.t;
         this.arena.setHype(clamp(F.hype / 100 + 0.25, 0, 1));
         break;
@@ -319,6 +332,7 @@ export class FightView {
       case 'proj': if (src && dst) { const from = this.chest(src), to = this.chest(dst); fx.shoot(from, e.long ? from.clone().add(to.clone().sub(from).normalize().multiplyScalar(26)) : to, e.c || this.col(src), { speed: e.long ? 40 : 22 }); A.sfx('swish', { pitch: 1.3, heavy: !!e.long, pan: pan(src) }); if (fs) fs.rig.animator.play('attack3', { speed: 1.8 }); } break;
       case 'aoe': {
         const pos = new THREE.Vector3(e.x, 0.05, e.y), c = e.c || '#f5ead2';
+        if (e.big) this.bigAoeT = this.t;
         if (e.big) { fx.shockwave(pos, e.r, c); fx.dust(pos, 18); fx.debris && fx.debris(pos, 10); fx.groundDecal(pos, e.meteor ? 'scorch' : 'crater', { size: e.r * 1.3 }); feel.impact('aoe', { big: true }); A.sfx('ultEarth', { gain: 0.8 }); }
         else { fx.ring(pos, c, e.r); fx.dust(pos, 8); A.sfx('drum', { gain: 0.5 }); }
         if (e.meteor) { fx.ult.impact('fire', pos, e.r); feel.impact('meteor', {}); this.post.pulseCA && this.post.pulseCA(0.014); }
@@ -327,7 +341,7 @@ export class FightView {
       case 'tele': { const h = fx.tele(new THREE.Vector3(e.x, 0.05, e.y), e.r, e.t, e.c || '#e8742a'); (this.teles = this.teles || []).push(h); if (e.haz) this.banner('Fire jets! Get out of the red circle', 'info'); break; }
       case 'zap': if (src && dst) { fx.zap(this.chest(src), this.chest(dst), '#a8d8ff'); feel.addTrauma && feel.addTrauma(0.1); A.sfx('ultLightning', { gain: 0.4 }); } break;
       case 'hook': if (src && dst) { fx.chain(this.chest(src), this.chest(dst), '#d9e4ee'); fx.hit(this.chest(dst), this.dirOf(src, dst), { dmgFrac: 0.1 }); A.sfx('netThrow', { pan: pan(src) }); } break;
-      case 'bleed': if (dst && e.dmg >= 3) this.num(dst, '-' + e.dmg, e.fire ? 'fire' : 'thorn'); break;
+      case 'bleed': if (dst && e.dmg >= 3) this.num(dst, '-' + e.dmg, e.fire ? 'fire' : 'thorn'); if (dst && !e.fire && this.gore.on) this.gore.onBleed(dst.id, e.dmg); break;
       case 'thorn': if (dst) this.num(dst, e.dmg + ' THORNS', 'thorn'); break;
       case 'status': this.onStatus(e, dst); break;
       case 'resist': if (dst) this.num(dst, 'RESIST', 'status'); break;
@@ -346,11 +360,12 @@ export class FightView {
       }
       case 'down': if (dst) {
         const last = !F.units.some((u) => u.side === dst.side && !u.down && u !== dst);
-        fx.hit(this.chest(dst), src ? this.dirOf(src, dst) : new THREE.Vector3(1, 0, 0), { dmgFrac: 0.4, crit: true }); fx.dust(this.feet(dst), 14); fx.debris && fx.debris(this.feet(dst), 4); fx.groundDecal(this.feet(dst), 'scuff', { size: 1.6 });
+        fx.hit(this.chest(dst), src ? this.dirOf(src, dst) : new THREE.Vector3(1, 0, 0), { dmgFrac: 0.4, crit: true, flesh: this.gore.on }); fx.dust(this.feet(dst), 14); fx.debris && fx.debris(this.feet(dst), 4); fx.groundDecal(this.feet(dst), 'scuff', { size: 1.6 });
         this.num(dst, 'DOWN', 'miss'); feel.impact(last ? 'finalKill' : 'kill', {}); if (last && this.post.zoomPunch) this.post.zoomPunch(0.06);
         if (fd) { fd.rig.animator.play('death'); this.dropHandles(dst.id); fd.rig.flash(0.15, '#8a5530'); }
         A.sfx('deathCry', { voice: VOICE[dst.style] ?? 0, pan: pan(dst) }); setTimeout(() => A.sfx('deathThud', { pan: pan(dst) }), 350); A.sfx('crowdGasp'); this.bump = 0.4;
-        if (!last) this.dir.cue('kill', { victim: dst.id, killer: src && src.id });
+        if (this.gore.on) { const lh = fd && fd.lastHit, dd = src ? this.dirOf(src, dst) : new THREE.Vector3(1, 0, 0); this.gore.onDown(dst.id, { last, crit: !!(lh && lh.crit) && !!src, frac: lh ? lh.frac : 0.15, dx: lh ? lh.dx : dd.x, dz: lh ? lh.dz : dd.z, big: this.t - (this.bigAoeT ?? -9) < 0.7, mine: dst.side === 'A', noSrc: !src }); }
+        if (!last) this.dir.cue('kill', { victim: dst.id, killer: src && src.id, extra: this.gore.framePoints(dst.id) });
       } break;
       case 'revive': if (dst) { fx.ult.impact('holy', this.feet(dst), 2.4); feel.impact('revive', {}); this.num(dst, 'REVIVE!', 'tech'); A.sfx('healSparkle'); A.sfx('horn'); if (fd) { fd.rig.animator.dead = false; fd.rig.animator.setState('move'); fd.rig.animator.play('getup'); } } break;
       case 'roar': feel.impact('roar', {}); A.sfx(e.fav ? 'crowdCheer' : 'crowdRoar'); this.arena.setWave(1); setTimeout(() => this.arena.setWave(0), 3500); this.banner(e.fav ? "Crowd's Favor!" : D().CHANTS[(F.peak | 0) % D().CHANTS.length], e.fav ? 'ult' : 'info'); this.recent += 0.2; break;
@@ -373,7 +388,7 @@ export class FightView {
     if (!dst) return; const f = this.fm.get(dst.id), fx = this.fx, st = e.st; if (STATUS_LABEL[st]) this.num(dst, STATUS_LABEL[st], 'status');
     const key = st; if (f.handles[key]) { try { f.handles[key].stop(); } catch (er) { /* ignore */ } delete f.handles[key]; }
     const tgt = f.rig.root, t = e.t || 3;
-    if (STATUS_FX.has(st)) f.handles[key] = fx.status(tgt, st, t);
+    if (STATUS_FX.has(st) && !(st === 'bleed' && this.gore.on)) f.handles[key] = fx.status(tgt, st, t);
     else if (st === 'guard') f.handles[key] = fx.aura(tgt, '#9a6ad8', t || 4, { kind: 'guard' });
     else if (st === 'frenzy' || st === 'rage') f.handles[key] = fx.aura(tgt, '#d2412b', 6, { kind: 'rage' });
     else if (st === 'rally') f.handles[key] = fx.aura(tgt, '#2fb0a0', 6, { kind: 'rally' });

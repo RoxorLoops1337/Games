@@ -1,4 +1,4 @@
-// Ludus Maximus 3D: pooled combat VFX reference. Blood-free: sparks, dust, flashes, light.
+// Ludus Maximus 3D: pooled combat VFX reference: sparks, dust, flashes, light (blood and gore live in js/gore.js and draw through the hooks below).
 // 8 draw calls total, all pooled / instanced:
 //   decal (1 plane) | particles normal-blend (dust, smoke, drops) | debris (InstancedMesh) | rings+tele (GPU timed)
 //   particles additive (sparks, glows, stars, motes) | slash crescents (GPU timed) | ribbons (trails, bolts, beams) | glyph numbers
@@ -290,6 +290,12 @@ class Layer {
     A[i] = x; A[i + 1] = y; A[i + 2] = z; A[i + 3] = size; B[i] = 0; B[i + 1] = 1; B[i + 2] = 0; B[i + 3] = 0;
     C[i] = c.r * g; C[i + 1] = c.g * g; C[i + 2] = c.b * g; C[i + 3] = a; D[i] = cell; D[i + 1] = rot; D[i + 2] = 0; D[i + 3] = 0;
   }
+  // immediate stretched instance (blood streaks, gore): centred on x,y,z, aligned with (dx,dy,dz), `len` long and `size` wide
+  putS(x, y, z, size, c, a, cell, dx, dy, dz, len, g = 1) {
+    if (this.n >= this.max) return; const i = this.n++ * 4, A = this.A, B = this.B, C = this.C, D = this.D;
+    A[i] = x; A[i + 1] = y; A[i + 2] = z; A[i + 3] = size; B[i] = dx; B[i + 1] = dy; B[i + 2] = dz; B[i + 3] = Math.max(len, 1e-3);
+    C[i] = c.r * g; C[i + 1] = c.g * g; C[i + 2] = c.b * g; C[i + 3] = a; D[i] = cell; D[i + 1] = 0; D[i + 2] = 0; D[i + 3] = 0;
+  }
   flush() { this.geo.instanceCount = this.n; for (const a of this.attrs) { a.clearUpdateRanges(); if (this.n) a.addUpdateRange(0, this.n * 4); a.needsUpdate = true; } this.mesh.visible = this.n > 0; }
 }
 
@@ -320,18 +326,18 @@ export function createFx(scene, opts = {}) {
   const R = opts.arenaRadius ?? 14, groundY = opts.groundY ?? 0, sand = rgb(opts.sand || '#d9b27c');
   const maxQ = opts.quality ?? 1; // 0.4..1 scales counts
   const uTime = { value: 0 }; FLOOR.value = (opts.groundY ?? 0) + 0.04;
-  const fx = { time: 0, quality: maxQ, groups: [], _tmp: new THREE.Vector3(), cam: null };
+  const fx = { time: 0, quality: maxQ, groups: [], _tmp: new THREE.Vector3(), cam: null, hooks: [] };
   const root = new THREE.Group(); root.name = 'fx'; scene.add(root);
 
   const atlasTex = new THREE.CanvasTexture(buildAtlas(rnd)); atlasTex.generateMipmaps = false; atlasTex.minFilter = THREE.LinearFilter; atlasTex.magFilter = THREE.LinearFilter;
   const glyphTex = new THREE.CanvasTexture(buildGlyphAtlas()); glyphTex.generateMipmaps = false; glyphTex.minFilter = THREE.LinearFilter;
 
   // 1) ground decals
-  const DS = opts.decalSize ?? 1024, dcv = mkCanvas(DS, DS), dctx = dcv.getContext('2d'); const decalTex = new THREE.CanvasTexture(dcv); decalTex.colorSpace = THREE.SRGBColorSpace; decalTex.anisotropy = 4;
+  const DS = opts.decalSize ?? 1024, dcv = mkCanvas(DS, DS), dctx = dcv.getContext('2d'); const decalTex = new THREE.CanvasTexture(dcv); decalTex.colorSpace = THREE.SRGBColorSpace; decalTex.anisotropy = 1; decalTex.generateMipmaps = false; decalTex.minFilter = THREE.LinearFilter; decalTex.magFilter = THREE.LinearFilter; // no mipmaps (black-block flicker on re-upload)
   const decalExt = R + 2;
   const decalMesh = new THREE.Mesh(new THREE.PlaneGeometry(decalExt * 2, decalExt * 2).rotateX(-Math.PI / 2), new THREE.MeshLambertMaterial({ map: decalTex, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }));
-  decalMesh.position.y = groundY + 0.012; decalMesh.renderOrder = 1; decalMesh.name = 'decals'; decalMesh.receiveShadow = false; root.add(decalMesh);
-  let decalDirty = false, lastDecalUp = -1;
+  decalMesh.position.y = groundY + 0.012; decalMesh.renderOrder = 1; decalMesh.name = 'decals'; decalMesh.receiveShadow = true; root.add(decalMesh);
+  let decalDirty = false, lastDecalUp = -1; const decalGap = opts.decalGap ?? 0.1;
 
   // 2) particles
   const addL = new Layer(opts.maxAdd ?? 2600, true, atlasTex, 'particles_add'); const norL = new Layer(opts.maxNorm ?? 900, false, atlasTex, 'particles_norm');
@@ -564,6 +570,10 @@ export function createFx(scene, opts = {}) {
     g.restore(); decalDirty = true;
   };
   fx.clearDecals = () => { dctx.clearRect(0, 0, DS, DS); decalDirty = true; };
+  // raw access for gore.js: paint straight on the decal canvas (px per metre = k, origin at the arena centre). markDecals() schedules the throttled upload.
+  fx.decalDraw = { ctx: dctx, canvas: dcv, size: DS, k: DS / (decalExt * 2), ext: decalExt, toPx: (x, z) => [(x / (decalExt * 2) + 0.5) * DS, (z / (decalExt * 2) + 0.5) * DS] };
+  fx.markDecals = () => { decalDirty = true; };
+  fx.addNormalParticle = (o) => norL.add(o); fx.addGlowParticle = (o) => addL.add(o);
 
   // ====================================================================
   // COMPOSITES
@@ -574,9 +584,10 @@ export function createFx(scene, opts = {}) {
     const d = dir || { x: 0, y: 0.2, z: 1 };
     // crisp, damage scaled: core flash + directional sparks + thin ground ring + a little sand. Big blobs are for ults only.
     const f = Math.min(1, (o.dmgFrac || 0) / 0.3), G = { x: pos.x, y: groundY, z: pos.z }, W0 = { x: pos.x, y: 0, z: pos.z };
-    if (cls === 'light') { fx.spark(pos, d, 5, col, { speed: 6.5, size: 0.14 }); fx.impactFlash(pos, col, 0.55 + f * 0.3); fx.ring(W0, col, 0.9, { dur: 0.28, alpha: 0.5 }); fx.dust(G, 2, { size: 0.4, alpha: 0.35 }); fx.debris(G, 1, { size: 0.45 }); }
-    else if (cls === 'heavy') { fx.spark(pos, d, 9 + Math.round(f * 5), col, { speed: 8, size: 0.16 }); fx.impactFlash(pos, col, 0.8 + f * 0.3); fx.ring(W0, col, 1.4, { dur: 0.36, alpha: 0.65 }); fx.dust(G, 4, { size: 0.65, alpha: 0.5 }); fx.debris(G, 3, { size: 0.6 }); }
-    else { fx.spark(pos, d, 16, col, { speed: 10, size: 0.17 }); fx.spark(pos, d, 5, '#ffffff', { speed: 13, cone: 0.35, size: 0.12 }); fx.impactFlash(pos, col, 1.25); fx.shockwave(W0, 1.9, col, { dur: 0.42, dust: false, distort: 0.35, alpha: 0.7 }); fx.dust(G, 6, { size: 0.9, alpha: 0.55 }); fx.debris(G, 5, { size: 0.8 }); fx.decal(W0, 'scuff', { size: 1.1, angle: Math.atan2(d.z, d.x) }); }
+    const fl = o.flesh ? 0.3 : 1; // flesh hits (gore on): few sparks, the blood carries the impact
+    if (cls === 'light') { fx.spark(pos, d, Math.max(1, Math.round(5 * fl)), col, { speed: 6.5, size: 0.14 }); fx.impactFlash(pos, col, (0.55 + f * 0.3) * (o.flesh ? 0.6 : 1)); fx.ring(W0, col, 0.9, { dur: 0.28, alpha: 0.5 }); fx.dust(G, 2, { size: 0.4, alpha: 0.35 }); fx.debris(G, 1, { size: 0.45 }); }
+    else if (cls === 'heavy') { fx.spark(pos, d, Math.max(2, Math.round((9 + Math.round(f * 5)) * fl)), col, { speed: 8, size: 0.16 }); fx.impactFlash(pos, col, (0.8 + f * 0.3) * (o.flesh ? 0.6 : 1)); fx.ring(W0, col, 1.4, { dur: 0.36, alpha: 0.65 }); fx.dust(G, 4, { size: 0.65, alpha: 0.5 }); fx.debris(G, 3, { size: 0.6 }); }
+    else { fx.spark(pos, d, Math.max(3, Math.round(16 * fl)), col, { speed: 10, size: 0.17 }); fx.spark(pos, d, o.flesh ? 1 : 5, '#ffffff', { speed: 13, cone: 0.35, size: 0.12 }); fx.impactFlash(pos, col, o.flesh ? 0.9 : 1.25); fx.shockwave(W0, 1.9, col, { dur: 0.42, dust: false, distort: o.flesh ? 0.12 : 0.35, alpha: o.flesh ? 0.3 : 0.7 }); fx.dust(G, 6, { size: 0.9, alpha: 0.55 }); fx.debris(G, 5, { size: 0.8 }); fx.decal(W0, 'scuff', { size: 1.1, angle: Math.atan2(d.z, d.x) }); }
     return cls;
   };
 
@@ -757,9 +768,10 @@ export function createFx(scene, opts = {}) {
     for (let i = timers.length - 1; i >= 0; i--) if (fx.time >= timers[i].t) { const f = timers[i].fn; timers.splice(i, 1); f(); }
     addL.step(dt); norL.step(dt);
     updateEmitters(dt); ribbonStep(dt); debrisStep(dt);
+    for (let i = 0; i < fx.hooks.length; i++) fx.hooks[i](dt, norL, addL); // gore etc: immediate-mode instances written after the pooled step
     addL.flush(); norL.flush();
     for (let i = shocks.length - 1; i >= 0; i--) if (fx.time - shocks[i].t0 > shocks[i].dur) shocks.splice(i, 1);
-    if (decalDirty && fx.time - lastDecalUp > 0.1) { decalTex.needsUpdate = true; decalDirty = false; lastDecalUp = fx.time; } // throttled: a 1024 canvas upload costs a few ms
+    if (decalDirty && fx.time - lastDecalUp > decalGap) { decalTex.needsUpdate = true; decalDirty = false; lastDecalUp = fx.time; } // throttled: a 1024 canvas upload costs a few ms
   };
   fx.flushDecals = () => { if (decalDirty) { decalTex.needsUpdate = true; decalDirty = false; lastDecalUp = fx.time; } };
   fx.stats = () => ({ drawCalls: root.children.filter((m) => m.visible).length, particlesAdd: addL.alive.length, particlesNorm: norL.alive.length, instAdd: addL.n, instNorm: norL.n, emitters: emitters.length, ribbons: rib.slots.filter((s) => s.on).length });

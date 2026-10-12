@@ -83,7 +83,7 @@ Colors: element hex in `fx.ult.colorOf(el)`; tint hits with the skill color `c` 
 - Decal canvas upload is the one spike (1024 canvas); it is throttled to 10 Hz. Cap decals to ~1 per hit event class crit/heavy/down; call `clearDecals()` between fights.
 - Anchored emitters (status/aura/sustain) must be stopped when the unit dies, or they follow a corpse until `dur` ends.
 - Keep shake off UI: apply to the 3D camera only; flash overlay sits above canvas but below HUD (z-index 50).
-- Blood-free: bleed is small crimson drips (`status` option `{color}` to change), no splatter decals; scorch/scuff/crack only.
+- Blood and gore live in `js/gore.js` (skill `ludus3d-gore`): it draws through `fx.hooks`, `fx.decalDraw` and the normal-blend particle layer. With gore off, bleed is small crimson drips (`status` option `{color}`) and decals are scorch/scuff/crack only.
 
 ## Crisp hit pass (measured on screenshots)
 - impactFlash is now: 0.07 s glow core (size*0.34), 0.05 s white disc, 0.11 s burst rays (size*0.45 to *1.05), thin ring; star4 only for size > 2.2 (ults). The old 3 big overlapping additive sprites (size*1.5..3.2) covered whole fighters.

@@ -117,6 +117,13 @@ export const GradeShader = {
     }`,
 };
 
+// NaN / Inf guard: one bad HDR pixel (additive overdraw past half-float range, a normalize(0) in an fx shader) is smeared by the bloom blur into big black blocks that flicker with the effect.
+const SanitizeShader = {
+  uniforms: { tDiffuse: { value: null } },
+  vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+  fragmentShader: 'uniform sampler2D tDiffuse; varying vec2 vUv; void main(){ vec4 c = texture2D(tDiffuse, vUv); bool bad = !(c.r == c.r) || !(c.g == c.g) || !(c.b == c.b) || !(c.a == c.a); c.rgb = bad ? vec3(0.0) : clamp(c.rgb, vec3(0.0), vec3(24.0)); c.a = bad ? 1.0 : c.a; gl_FragColor = c; }',
+};
+
 export function createPost(renderer, scene, camera, { tier = detectTier() } = {}) {
   const size = renderer.getSize(new THREE.Vector2());
   const T = TIERS[tier];
@@ -126,7 +133,7 @@ export function createPost(renderer, scene, camera, { tier = detectTier() } = {}
   const bloom = new UnrealBloomPass(new THREE.Vector2(size.x * T.bloomScale, size.y * T.bloomScale), 0.55, 0.65, 1.02);
   const grade = new ShaderPass(GradeShader);
   const output = new OutputPass();
-  composer.addPass(renderPass); composer.addPass(bloom); composer.addPass(grade); composer.addPass(output);
+  composer.addPass(renderPass); composer.addPass(new ShaderPass(SanitizeShader)); composer.addPass(bloom); composer.addPass(grade); composer.addPass(output);
   const u = grade.uniforms;
   const api = {
     composer, bloom, grade, uniforms: u, tier, scale: 1, cssW: size.x, cssH: size.y,

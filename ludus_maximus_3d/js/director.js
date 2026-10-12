@@ -227,12 +227,14 @@ export class FightDirector {
     const vx = v?.x ?? 0, vy = v?.y ?? 0; if (p._yaw0 === undefined) p._yaw0 = (kl ? Math.atan2(vy - kl.y, vx - kl.x) : 0) + (p.side ?? 1) * Math.PI / 2;
     const yaw = p._yaw0 + t * 0.5 * (p.side ?? 1), pitch = lerp(6, 16, easeOut(t / dur)) * D2R + tall * 8 * D2R;
     const pts = [[vx, 0, vy], [vx, 1.9, vy]]; if (kl && Math.hypot(kl.x - vx, kl.y - vy) < 4.5) pts.push([kl.x, 0, kl.y], [kl.x, 2.2, kl.y]);
+    if (p.extra) for (const q of p.extra) pts.push(q); // gore: keep the flung limb / blood in frame
     const r = this._frame({ pts, yaw, pitch, fov: this._fov(40), margin: lerp(0.8, 0.72, tall), minD: 3.4, padX: 0.9, st: { yaw: 0.05, pitch: 0.3, c: 0.25, d: 0.4, dUp: 0.2, fov: 0.3 } });
     r.timeScale = lerp(0.25, 1, ease((t - 0.6) / (dur - 0.6))); this.pose.timeScale = r.timeScale;
     this._endIf(dur, p.next ?? null); return r;
   }
   _victory({ L, t, p, tall }) {
-    const pts = unitPts(L.length ? L : [{ x: 0, y: 0 }], 0, 2.4), yaw = (p.yaw0 ?? this.s.yaw) + t * 0.38, pitch = lerp(9, 17, ease(t / 6)) * D2R + tall * 8 * D2R;
+    if (p.yaw0 === undefined) p.yaw0 = this.s.yaw; // latched once: a target of (current yaw + k*t) runs away from the camera and spins faster the longer the shot lasts
+    const pts = unitPts(L.length ? L : [{ x: 0, y: 0 }], 0, 2.4), yaw = p.yaw0 + Math.min(t, 40) * 0.38, pitch = lerp(9, 17, ease(t / 6)) * D2R + tall * 8 * D2R;
     return this._frame({ pts, yaw, pitch, fov: this._fov(44), margin: lerp(0.8, 0.74, tall), minD: 4.8, padX: 0.9, st: { yaw: 0.05, pitch: 0.4, c: 0.35, d: 0.6, dUp: 0.2, fov: 0.5 } });
   }
 }
