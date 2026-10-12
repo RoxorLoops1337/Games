@@ -33,7 +33,12 @@
   };
   LM.rosterCap = (S) => D.BUILD.barracks.v[LM.plotOf(S, 'barracks') < 0 ? 0 : S.plots[LM.plotOf(S, 'barracks')].l];
   LM.armoryCap = (S) => 20 + LM.bfx(S, 'forge').l * 4 + (LM.bfx(S, 'forge').l ? 0 : 0);
-  LM.scoutLevel = (S) => D.BUILD.scout.v[LM.bfx(S, 'scout').l];
+  LM.spyActive = (S) => !!(S.spy && S.week <= S.spy.until);
+  LM.scoutLevel = (S) => Math.min(3, D.BUILD.scout.v[LM.bfx(S, 'scout').l] + (LM.spyActive(S) ? 1 : 0));
+  // intel gets stale: rivals keep training, so what you scouted weeks ago understates them
+  LM.weeksAhead = (S, week) => Math.max(0, week - S.week);
+  LM.staleErr = (S, week) => LM.weeksAhead(S, week) * 0.03 * (LM.scoutLevel(S) >= 3 ? 0.3 : 1);
+  LM.scoutVal = (S, week, v) => v * (1 - LM.staleErr(S, week));
   LM.lookahead = (S) => D.look(LM.bfx(S, 'scout').l);
   LM.maxLeague = (S) => { let m = 0; D.LEAGUES.forEach((L) => { if (S.fame >= L.fame) m = L.id; }); return m; };
   LM.buildCost = (id, lvl) => Math.round(D.BUILD[id].c0 * D.BMULT[lvl]);
@@ -377,6 +382,9 @@
     const o = mkOpp(S, rv, lvl, 0.78 + floor * 0.045 + (boss ? 0.15 : 0), rnd, Math.min(3, ml), boss);
     o.rv = null; o.id = 'pit' + floor; return o;
   };
+  LM.dayKey = () => new Date().toISOString().slice(0, 10);
+  LM.dailyDone = (S) => !!(S.daily && S.daily.day === LM.dayKey());
+  LM.dailySeed = (floor, tag) => mulberry(hash('daily' + LM.dayKey() + tag + floor));
   LM.pitReward = (S, floor, boons, lost) => {
     const ml = LM.maxLeague(S); const L0 = D.LEAGUES[ml];
     let gold = 0, fame = 0; for (let f = 1; f <= floor; f++) { gold += L0.purse * 0.3 * (1 + f * 0.18); fame += Math.round(L0.fameWin * 0.25 * (1 + f * 0.1)); }
@@ -516,6 +524,8 @@
       } else if (act.t === 'spar') {
         const xp = ring.l ? Math.round(ring.v) : 4; const up = LM.addXp(g, xp); g.st.skl += 0.4; g.en = clamp(g.en - 18, 0, 100);
         line.txt = `Sparred: +${xp} XP${up.length ? ', LEVEL ' + up[up.length - 1] + '!' : ''}`; sparrers.push(g);
+      } else if (act.t === 'spy') {
+        S.spy = { until: S.week + 2 }; g.en = clamp(g.en - 20, 0, 100); g.mo = clamp(g.mo + 1, 0, 100); line.txt = 'Spied on the rival ludi: scouting +1 level for 2 weeks';
       } else if (act.t === 'work') {
         const gd = Math.round((25 + g.lvl * 4) * (1 + 0.1 * ((S.perks || {}).gold || 0))); S.gold += gd; rep.work += gd; g.en = clamp(g.en - 28, 0, 100); g.mo = clamp(g.mo - 3, 0, 100); line.txt = `Odd jobs: +${gd} gold`;
       } else if (act.t === 'rest') {

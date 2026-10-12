@@ -190,6 +190,7 @@
     { id: 'end', n: 'Train END', t: 'train', s: 'end' }, { id: 'skl', n: 'Train SKL', t: 'train', s: 'skl' },
     { id: 'wil', n: 'Train HRT', t: 'train', s: 'wil' },
     { id: 'rest', n: 'Rest', t: 'rest' }, { id: 'spar', n: 'Spar', t: 'spar' }, { id: 'work', n: 'Odd Jobs', t: 'work' },
+    { id: 'spy', n: 'Spy', t: 'spy' },
   ];
 
   // pair/tri synergies for team fights

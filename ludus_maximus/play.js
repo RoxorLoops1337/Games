@@ -48,8 +48,8 @@
     }
   }
   const pickTechs = pickPends;
-  async function pickAug(S, level, have, force, title) {
-    let offer = L.augOffer(S, level, have, force); let rerolls = 1 + L.facPerks(S).rerolls;
+  async function pickAug(S, level, have, force, title, seed) {
+    let offer = seed ? L.withRandom(seed, () => L.augOffer(S, level, have, force)) : L.augOffer(S, level, have, force); let rerolls = 1 + L.facPerks(S).rerolls;
     for (;;) {
       const v = await U.dialog(`<h2>${title || 'Choose an augment'}</h2><div class="muted" style="margin-bottom:8px">Lasts for this fight${have && have.length ? ' (on top of ' + have.length + ' from earlier rounds)' : ''}. Silver, Gold or Prismatic: pick one.</div>` + offer.map((a) => `<div class="itm" data-a="res" data-v="${a.id}" style="border-color:${D.TIERS[a.t].c};box-shadow:0 0 0 3px ${D.TIERS[a.t].c}66"><div class="sp"><span class="tag" style="background:${D.TIERS[a.t].c}">${D.TIERS[a.t].n}</span><div class="gname" style="font-size:14px">${a.n}</div><div class="muted" style="opacity:1">${a.d}</div></div></div>`).join('') + (rerolls > 0 ? btn(`Reroll (${rerolls} free)`, 'reroll', 'ghost') : ''));
       if (v === 'reroll') { rerolls--; offer = L.augOffer(S, level, have, force); continue; }
@@ -187,22 +187,25 @@
   }
 
   // ---------- Pit of Trials ----------
-  ACT.pit = () => {
-    const S = U.S(); if (S.pitWeek === S.week) return U.toast('You already descended this week');
+  ACT.pit = (isDaily) => {
+    const S = U.S(); if (isDaily !== true) U.pitDaily = false; if (!U.pitDaily && S.pitWeek === S.week) return U.toast('You already descended this week');
     const list = S.glads.filter((g) => g.inj <= 0 && g.en >= 30);
-    U.modal(`<h2>Pit of Trials</h2><div class="muted" style="margin-bottom:8px">Pick one fighter (needs 30+ energy, costs 30). Floors get harder, every 5th is a boss. After each win pick a boon, then cash out or go deeper. Defeat keeps half the rewards.</div>` + (list.length ? list.map((g) => `<div class="itm" data-a="pitgo" data-id="${g.id}"><div style="width:44px;height:52px;overflow:hidden;display:flex;align-items:flex-end;justify-content:center">${U.spr(g, { size: 46 })}</div><div class="sp"><div class="gname" style="font-size:13px">${esc(g.name)}</div><div class="row"><span class="pill">Lv ${g.lvl}</span>${A.styleIcon(g.style, 18)}</div><div class="bar en" style="margin-top:3px"><i style="width:${g.en}%"></i></div></div></div>`).join('') : '<div class="empty" style="color:var(--ink)">Nobody is fit to descend.</div>'));
+    U.modal(`<h2>${U.pitDaily ? 'Daily Descent' : 'Pit of Trials'}</h2><div class="muted" style="margin-bottom:8px">${U.pitDaily ? 'Same opponents and augment offers for everyone today. +30% gold, and a laurel for reaching floor 5. ' : ''}Pick one fighter (needs 30+ energy, costs 30). Floors get harder, every 5th is a boss. After each win pick a boon, then cash out or go deeper. Defeat keeps half the rewards.</div>` + (list.length ? list.map((g) => `<div class="itm" data-a="pitgo" data-id="${g.id}"><div style="width:44px;height:52px;overflow:hidden;display:flex;align-items:flex-end;justify-content:center">${U.spr(g, { size: 46 })}</div><div class="sp"><div class="gname" style="font-size:13px">${esc(g.name)}</div><div class="row"><span class="pill">Lv ${g.lvl}</span>${A.styleIcon(g.style, 18)}</div><div class="bar en" style="margin-top:3px"><i style="width:${g.en}%"></i></div></div></div>`).join('') : '<div class="empty" style="color:var(--ink)">Nobody is fit to descend.</div>'));
+  };
+  ACT.pitdaily = () => {
+    const S = U.S(); if (L.dailyDone(S)) return U.toast('Come back tomorrow for the next Daily Descent'); U.pitDaily = true; ACT.pit(true);
   };
   ACT.pitgo = async (el) => {
-    const S = U.S(); if (U.busy) return; const g = U.gOf(+el.dataset.id); U.closeModal(); U.busy = true;
-    try { await runPit(S, g); } catch (e) { console.error(e); U.toast('Oops: ' + e.message); } finally { U.busy = false; U.save(); U.render(); }
+    const S = U.S(); if (U.busy) return; const g = U.gOf(+el.dataset.id); U.closeModal(); U.busy = true; const daily = !!U.pitDaily; U.pitDaily = false;
+    try { await runPit(S, g, daily); } catch (e) { console.error(e); U.toast('Oops: ' + e.message); } finally { U.busy = false; U.save(); U.render(); }
   };
-  async function runPit(S, g) {
-    S.pitWeek = S.week; g.en = Math.max(0, g.en - 30); const augs = []; let floor = 0; let hpf = 1; let lost = false;
+  async function runPit(S, g, daily) {
+    if (daily) S.daily = { day: L.dayKey(), best: 0 }; else S.pitWeek = S.week; g.en = Math.max(0, g.en - 30); const augs = []; let floor = 0; let hpf = 1; let lost = false;
     for (;;) {
-      const opp = L.pitOpp(S, floor + 1, g); floor++;
+      const opp = daily ? L.withRandom(L.dailySeed(floor + 1, 'o'), () => L.pitOpp(S, floor + 1, g)) : L.pitOpp(S, floor + 1, g); floor++;
       const ev = { kind: 'pit', title: (floor % 5 === 0 ? 'BOSS: ' : '') + 'Pit floor ' + floor, opps: [opp], league: 0 };
       const stance = await prep(S, ev, [g], [opp], { pit: true, hpf });
-      augs.push(await pickAug(S, floor < 3 ? 0 : floor < 6 ? 1 : floor < 10 ? 2 : 3, augs, floor % 5 === 0, `Floor ${floor}: new augment`));
+      augs.push(await pickAug(S, floor < 3 ? 0 : floor < 6 ? 1 : floor < 10 ? 2 : 3, augs, floor % 5 === 0, `Floor ${floor}: new augment`, daily ? L.dailySeed(floor, 'a') : null));
       const res = await fightScreen(S, [g], [opp], stance, { ev, hpf: { [g.id]: hpf }, augs: augs.slice() });
       if (!res.win) { floor--; lost = true; break; }
       hpf = Math.min(1, res.hpf[g.id] + 0.25);
@@ -210,13 +213,13 @@
       const go = await U.dialog(`<h2>Floor ${floor} cleared</h2><div class="small">${esc(g.name)} recovers to <b>${Math.round(hpf * 100)}% HP</b>. Banked: ${A.icon('coin', 12)} ${fmt(cur.gold)} · ${A.icon('fame', 12)} ${cur.fame}${cur.items.length ? ' · ' + cur.items.length + ' item(s)' : ''}${floor >= 5 ? ' · a relic for the boss' : ''}</div><div class="tiny muted" style="margin-top:6px">Augments: ${augs.map((b) => b.n).join(', ')}</div><div class="small" style="margin-top:6px">Floor ${nx}${nx % 5 === 0 ? ' is a BOSS floor' : ''} awaits. Each floor adds an augment.</div>` + btn('Descend!', 'go', 'red') + btn('Cash out', 'cash', 'ghost'));
       if (go === 'cash') break;
     }
-    const rw = L.pitReward(S, floor, [], lost); S.gold += rw.gold; S.fame += rw.fame; S.pitBest = Math.max(S.pitBest || 0, floor);
+    const rw = L.pitReward(S, floor, [], lost); if (daily) { rw.gold = Math.round(rw.gold * 1.3); S.daily.best = floor; S.dailyBest = Math.max(S.dailyBest || 0, floor); if (floor >= 5) { S.laurels += 1; rw.laurel = 1; } } S.gold += rw.gold; S.fame += rw.fame; S.pitBest = Math.max(S.pitBest || 0, floor);
     const xp = floor * 12 + 8; const up = L.addXp(g, xp); g.en = Math.max(0, g.en - 5); let inj = '';
     if (lost && Math.random() < 0.35) { g.inj = 1 + Math.floor(Math.random() * 2); inj = `${g.name} is injured for ${g.inj} week(s).`; }
     rw.items.forEach((it) => L.addItem(S, it));
     const relic = rw.boss ? L.dropRelic(S) : null; const rune = floor >= 3 && Math.random() < 0.5 ? L.unlockRune(S) : null;
     U.snd(lost ? 'lose' : 'win');
-    await U.dialog(`<div class="big ${lost ? 'lose' : 'win'}">${lost ? 'Fallen' : 'Cashed out'}</div><div style="text-align:center;margin:6px 0">${U.spr(g, { size: 80 })}</div><div class="row wrap" style="justify-content:center"><span class="pill">Floors ${floor}</span><span class="pill">${A.icon('coin', 14)} +${fmt(rw.gold)}</span><span class="pill">${A.icon('fame', 14)} +${rw.fame}</span><span class="pill">+${xp} XP${up.length ? ' · LEVEL ' + up[up.length - 1] : ''}</span></div>${inj ? `<div class="small" style="color:var(--terra);text-align:center">${esc(inj)}</div>` : ''}` + rw.items.map((it) => `<div class="itm" style="cursor:default;margin-top:6px">${A.itemIcon(it.slot, it.rar, 38)}<div class="sp"><div class="gname" style="font-size:12px">${esc(it.name)}</div>${U.rarTag(it.rar)}</div><span class="tag green">Loot</span></div>`).join('') + btn('Continue', 'ok'));
+    await U.dialog(`<div class="big ${lost ? 'lose' : 'win'}">${lost ? 'Fallen' : 'Cashed out'}</div><div style="text-align:center;margin:6px 0">${U.spr(g, { size: 80 })}</div><div class="row wrap" style="justify-content:center"><span class="pill">Floors ${floor}</span>${daily ? '<span class="tag blue">Daily</span>' : ''}${rw.laurel ? '<span class="pill">' + A.icon('laurel', 14) + ' +1 laurel</span>' : ''}<span class="pill">${A.icon('coin', 14)} +${fmt(rw.gold)}</span><span class="pill">${A.icon('fame', 14)} +${rw.fame}</span><span class="pill">+${xp} XP${up.length ? ' · LEVEL ' + up[up.length - 1] : ''}</span></div>${inj ? `<div class="small" style="color:var(--terra);text-align:center">${esc(inj)}</div>` : ''}` + rw.items.map((it) => `<div class="itm" style="cursor:default;margin-top:6px">${A.itemIcon(it.slot, it.rar, 38)}<div class="sp"><div class="gname" style="font-size:12px">${esc(it.name)}</div>${U.rarTag(it.rar)}</div><span class="tag green">Loot</span></div>`).join('') + btn('Continue', 'ok'));
     if (relic) await dropDialog('relic', relic); if (rune) await dropDialog('rune', rune);
     await pickPends(S);
   }
