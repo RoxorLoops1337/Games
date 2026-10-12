@@ -284,6 +284,13 @@ body.big #main{zoom:1.14}body.big .sheet{zoom:1.1}
 .brk .m{border:2px solid var(--ink);border-radius:8px;overflow:hidden;background:var(--cream);font-size:10px}
 .brk .p{display:flex;align-items:center;gap:4px;padding:2px 5px;white-space:nowrap;overflow:hidden}.brk .p.me{background:var(--gold)}.brk .p.w{font-weight:900}.brk .p.l{opacity:.4;text-decoration:line-through}
 .brk h4{margin:0 0 2px;font-family:var(--font);font-size:9px;text-transform:uppercase;text-align:center;color:var(--terra)}
+.ub.duo{flex:1 1 100%;height:44px;border-color:var(--gold);background:linear-gradient(90deg,var(--c),#14100f)}
+.f-ults.many .ub.duo{flex:1 1 100%}
+.cfw{position:absolute;inset:0;overflow:hidden;pointer-events:none;border-radius:inherit}
+.cf{position:absolute;top:-12px;width:8px;height:12px;animation:cff 2.6s linear infinite}
+@keyframes cff{0%{transform:translateY(0) rotate(0)}100%{transform:translateY(420px) rotate(560deg)}}
+.recap{background:linear-gradient(135deg,var(--violet),var(--terra));color:#fff;border:4px solid var(--ink);border-radius:16px;padding:12px;margin:8px 0;box-shadow:0 5px 0 var(--ink)}
+.recap b{font-family:var(--font)}
 @keyframes bump{0%{transform:scale(1)}35%{transform:scale(1.22);background:var(--gold);color:var(--ink)}100%{transform:scale(1)}}
 .chip.bump{animation:bump .5s ease-out}
 @keyframes tabin{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}

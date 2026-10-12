@@ -405,6 +405,22 @@
     heat: { n: 'Scorching heat', d: 'Tempers flare: everyone deals +10% damage.', syn: { atk: 0.1 } },
     night: { n: 'Torchlit night', d: 'Dramatic shadows: +6% crit chance for everyone.', syn: { crit: 0.06 } },
   };
+  D.STORIES = [
+    { id: 'freed', n: 'Freedman', text: 'Born in chains, this fighter wants freedom.', goal: { k: 'wins', n: 8 }, rew: { title: 'the Freedman', stat: 'wil', v: 6, fame: 20 } },
+    { id: 'deserter', n: 'Deserter', text: 'A deserter proving courage to the crowd.', goal: { k: 'wins', n: 6 }, rew: { title: 'the Steadfast', stat: 'end', v: 6, fame: 15 } },
+    { id: 'noble', n: 'Fallen Noble', text: 'Wants the family name back through fame.', goal: { k: 'fame', n: 60 }, rew: { title: 'the Patrician', stat: 'skl', v: 6, fame: 30 } },
+    { id: 'farmhand', n: 'Farmhand', text: 'Strong from the fields, hungry to master the blade.', goal: { k: 'lvl', n: 6 }, rew: { title: 'the Ploughman', stat: 'str', v: 6, fame: 10 } },
+    { id: 'thief', n: 'Street Thief', text: 'Quick hands, quicker feet, looking for a big score.', goal: { k: 'wins', n: 5 }, rew: { title: 'the Shadow', stat: 'agi', v: 6, fame: 10 } },
+    { id: 'priest', n: 'Lapsed Priest', text: "Seeks glory worth the gods' attention.", goal: { k: 'lvl', n: 8 }, rew: { title: 'the Devout', stat: 'wil', v: 7, fame: 25 } },
+    { id: 'orphan', n: 'Orphan', text: 'Fights to be remembered.', goal: { k: 'fame', n: 40 }, rew: { title: 'the Remembered', stat: 'agi', v: 5, fame: 20 } },
+    { id: 'veteran', n: 'Old Veteran', text: 'One last great season.', goal: { k: 'wins', n: 10 }, rew: { title: 'the Unbroken', stat: 'str', v: 7, fame: 25 } },
+  ];
+  D.DUOS = {
+    pincer: { n: 'Pincer Strike', d: 'Both dash onto the target: 140% damage each and a 1s stun.', c: '#22a58f', cd: 28 },
+    wall: { n: 'Phalanx Wall', d: 'Both take 50% less damage for 5s and shrug off crowd control. One taunts.', c: '#2f78c4', cd: 28 },
+    storm: { n: 'Twin Storm', d: 'Both enter a 5s frenzy (+60% attack speed, lifesteal) and shred everything nearby.', c: '#c2395f', cd: 28 },
+  };
+  D.DIFF_N = ['Relaxed', 'Standard', 'Brutal'];
   G.LM_D = D;
   if (typeof module !== 'undefined') module.exports = D;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

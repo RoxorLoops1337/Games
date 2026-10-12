@@ -26,7 +26,7 @@
       U.save(); U.render();
     }
     const fin = L.weekFinish(S); U.save(); U.render();
-    await U.dialog(summaryHtml(S, fin, wk)); await trophies(S);
+    await U.dialog(summaryHtml(S, fin, wk)); if (fin.story && fin.story.length) await stories(S, fin.story); await trophies(S);
     await rivalryEvent(S);
     await pendingEvent(S);
   }
@@ -49,6 +49,10 @@
     }
   }
   const pickTechs = pickPends;
+  const confetti = (n) => '<div class="cfw">' + Array.from({ length: n }, (_, i) => `<i class="cf" style="left:${(i * 37) % 100}%;background:${['#f6b82d', '#d2412b', '#2f78c4', '#2a9d6f', '#f5ead2'][i % 5]};animation-delay:${((i * 53) % 25) / 10}s;animation-duration:${2 + (i % 5) * 0.3}s"></i>`).join('') + '</div>';
+  async function stories(S, list) {
+    for (const x of list) { U.snd('levelup'); await U.dialog(`<h2>${esc(x.g.name)}'s story</h2><div class="row" style="justify-content:center">${U.spr(x.g, { size: 90 })}</div><div style="text-align:center;margin:6px 0"><b>${esc(x.st.n)}</b>: ${esc(x.st.text)}</div><div class="card" style="background:#fff3c4"><b>Goal reached!</b> ${esc(x.g.name)} is now ${esc(x.st.rew.title)}.<div class="row wrap" style="margin-top:4px"><span class="pill">+${x.st.rew.v} ${D.SA[x.st.rew.stat]}</span><span class="pill">${A.icon('fame', 12)} +${x.st.rew.fame}</span></div></div>` + btn('Wonderful', 'ok', 'green')); }
+  }
   async function trophies(S) {
     const t = L.checkTrophies(S); if (!t.length) return; U.snd('levelup'); U.save();
     await U.dialog(`<h2>${t.length > 1 ? 'Trophies earned!' : 'Trophy earned!'}</h2>` + t.map((x) => `<div class="itm" style="cursor:default;border-color:var(--gold);background:#fff3c4"><div class="sbadge" style="background:var(--gold);width:40px;height:40px">${A.icon('fame', 26)}</div><div class="sp"><div class="gname" style="font-size:14px">${esc(x.n)}</div><div class="muted" style="opacity:1">${esc(x.d)}</div><div class="row wrap" style="margin-top:3px">${x.r.gold ? `<span class="pill">${A.icon('coin', 12)} +${x.r.gold}</span>` : ''}${x.r.fame ? `<span class="pill">${A.icon('fame', 12)} +${x.r.fame}</span>` : ''}${x.r.laurels ? `<span class="pill">${A.icon('laurel', 12)} +${x.r.laurels}</span>` : ''}</div></div></div>`).join('') + btn('Shiny!', 'ok', 'green'));
@@ -73,7 +77,8 @@
   function summaryHtml(S, fin, wk) {
     let h = `<h2>Week ${wk} done</h2><div class="kv"><span>Upkeep paid</span><b>-${fmt(fin.upkeep)}</b></div><div class="kv"><span>Market income</span><b>+${fmt(fin.income)}</b></div><div class="kv"><span>Gold now</span><b>${fmt(S.gold)}</b></div>`;
     fin.notes.forEach((n) => { h += `<div class="small" style="margin-top:6px">${esc(n)}</div>`; });
-    if (fin.season) h += `<div class="card" style="margin-top:10px;background:var(--gold)"><b class="h">Season ${fin.season} begins!</b><div class="small">Rivals have grown stronger. New prizes, new faces.</div></div>`;
+    if (fin.season) h += `<div class="card" style="margin-top:10px;background:var(--gold);overflow:hidden">${confetti(24)}<b class="h">Season ${fin.season} begins!</b><div class="small">Rivals have grown stronger. New prizes, new faces.</div></div>`;
+    if (fin.recap) h += `<div class="recap"><b>SEASON ${fin.season - 1} RECAP</b><div class="small" style="font-weight:700;margin-top:4px">Record: <b>${fin.recap.wins}W ${fin.recap.losses}L</b> · Fame gained: <b>${fin.recap.fame}</b> · Tournaments won: <b>${fin.recap.tour}</b>${fin.recap.mvp ? `<br>MVP: <b>${esc(fin.recap.mvp.name)}</b> with ${fin.recap.mvp.w} win${fin.recap.mvp.w > 1 ? 's' : ''}` : ''}</div></div>`;
     return h + btn('Continue', 'ok');
   }
 
@@ -183,7 +188,7 @@
     const win = res.win;
     const isT = ev.kind === 'tourney' || ev.kind === 'grand';
     const place = res.place; const ord = (n) => (n === 1 ? '1st' : n === 2 ? '2nd' : n === 3 || n === 4 ? 'Semifinalist' : 'Out early');
-    let h = isT ? `<div class="big ${win ? 'win' : 'lose'}">${win ? 'CHAMPION' : ord(place)}</div>` : `<div class="big ${win ? 'win' : 'lose'}">${win ? 'Victory' : 'Defeat'}</div>`;
+    let h = isT && win ? confetti(40) : ''; h += isT ? `<div class="big ${win ? 'win' : 'lose'}">${win ? 'CHAMPION' : ord(place)}</div>` : `<div class="big ${win ? 'win' : 'lose'}">${win ? 'Victory' : 'Defeat'}</div>`;
     h += `<div class="row" style="justify-content:center;margin:6px 0">${gl.map((g) => U.spr(g, { size: 80, mood: win ? 'idle' : 'idle' })).join('')}</div>`;
     h += `<div class="row wrap" style="justify-content:center"><span class="pill">${A.icon('coin', 14)} +${fmt(rep.gold)}</span><span class="pill">${A.icon('fame', 14)} +${fmt(rep.fame)}</span>${res.odds != null && res.odds < 0.4 && win ? '<span class="tag green">Underdog win!</span>' : ''}</div>`;
     rep.notes.forEach((n) => { h += `<div class="small" style="text-align:center;margin-top:4px">${esc(n)}</div>`; });
@@ -251,6 +256,36 @@
     U.snd(lost ? 'lose' : 'win');
     await U.dialog(`<div class="big ${lost ? 'lose' : 'win'}">${lost ? 'Fallen' : 'Cashed out'}</div><div style="text-align:center;margin:6px 0">${U.spr(g, { size: 80 })}</div><div class="row wrap" style="justify-content:center"><span class="pill">Floors ${floor}</span>${daily ? '<span class="tag blue">Daily</span>' : ''}${rw.laurel ? '<span class="pill">' + A.icon('laurel', 14) + ' +1 laurel</span>' : ''}<span class="pill">${A.icon('coin', 14)} +${fmt(rw.gold)}</span><span class="pill">${A.icon('fame', 14)} +${rw.fame}</span><span class="pill">+${xp} XP${up.length ? ' · LEVEL ' + up[up.length - 1] : ''}</span></div>${inj ? `<div class="small" style="color:var(--terra);text-align:center">${esc(inj)}</div>` : ''}` + rw.items.map((it) => `<div class="itm" style="cursor:default;margin-top:6px">${A.itemIcon(it.slot, it.rar, 38)}<div class="sp"><div class="gname" style="font-size:12px">${esc(it.name)}</div>${U.rarTag(it.rar)}</div><span class="tag green">Loot</span></div>`).join('') + btn('Continue', 'ok'));
     if (relic) await dropDialog('relic', relic); if (rune) await dropDialog('rune', rune);
+    await pickPends(S); await trophies(S);
+  }
+
+  // ---------- Horde Trial ----------
+  ACT.horde = () => {
+    const S = U.S(); if (S.hordeWeek === S.week) return U.toast('You already faced the horde this week');
+    const list = S.glads.filter((g) => g.inj <= 0 && g.en >= 30);
+    U.modal(`<h2>Horde Trial</h2><div class="muted" style="margin-bottom:8px">One fighter against wave after wave of weaker foes, packs growing up to five. Every second wave you pick an augment. Retreat after any wave to keep the rewards; defeat keeps 60%. Needs 30+ energy.</div>` + (list.length ? list.map((g) => `<div class="itm" data-a="hordego" data-id="${g.id}"><div style="width:44px;height:52px;overflow:hidden;display:flex;align-items:flex-end;justify-content:center">${U.spr(g, { size: 46 })}</div><div class="sp"><div class="gname" style="font-size:13px">${esc(g.name)}</div><div class="row"><span class="pill">Lv ${g.lvl}</span>${A.styleIcon(g.style, 18)}</div></div></div>`).join('') : '<div class="empty" style="color:var(--ink)">Nobody is fit.</div>'));
+  };
+  ACT.hordego = async (el) => {
+    const S = U.S(); if (U.busy) return; const g = U.gOf(+el.dataset.id); U.closeModal(); U.busy = true;
+    try { await runHorde(S, g); } catch (e) { console.error(e); U.toast('Oops: ' + e.message); } finally { U.busy = false; U.save(); U.render(); }
+  };
+  async function runHorde(S, g) {
+    S.hordeWeek = S.week; g.en = Math.max(0, g.en - 30); const augs = []; let wave = 0; let hpf = 1; let lost = false;
+    for (;;) {
+      wave++; const opps = L.hordeWave(S, wave, g); const ev = { kind: 'horde', title: 'Horde wave ' + wave, opps, league: 0, key: 'horde' + S.week + ':' + wave };
+      await U.dialog(`<h2>Wave ${wave}</h2><div class="row" style="justify-content:center;gap:2px">${opps.map((o) => A.gladOf(o, { size: 50, tunic: o.color, flip: true, mood: 'fight' })).join('')}</div><div class="small" style="text-align:center">${opps.length} fighter${opps.length > 1 ? 's' : ''}, level ${opps[0].lvl}. ${esc(g.name)} starts at ${Math.round(hpf * 100)}% HP.</div>` + btn('Fight!', 'ok', 'red'));
+      if (wave % 2 === 0) augs.push(await pickAug(S, wave < 4 ? 0 : wave < 8 ? 1 : 2, augs, false, `Wave ${wave}: new augment`));
+      const res = await fightScreen(S, [g], opps, 'bal', { ev, hpf: { [g.id]: hpf }, augs: augs.slice() });
+      if (!res.win) { wave--; lost = true; break; }
+      hpf = Math.min(1, res.hpf[g.id] + 0.2); const cur = L.hordeReward(S, wave, false);
+      const go = await U.dialog(`<h2>Wave ${wave} cleared</h2><div class="small">${esc(g.name)} recovers to <b>${Math.round(hpf * 100)}% HP</b>. Banked: ${A.icon('coin', 12)} ${fmt(cur.gold)} · ${A.icon('fame', 12)} ${cur.fame}${cur.items.length ? ' · ' + cur.items.length + ' item(s)' : ''}</div>` + btn('Next wave', 'go', 'red') + btn('Retreat with rewards', 'cash', 'ghost'));
+      if (go === 'cash') break;
+    }
+    const rw = L.hordeReward(S, wave, lost); S.gold += rw.gold; S.fame += rw.fame; S.hordeBest = Math.max(S.hordeBest || 0, wave);
+    const xp = wave * 14 + 8; const up = L.addXp(g, xp); g.en = Math.max(0, g.en - 5); let inj = '';
+    if (lost && Math.random() < 0.3) { g.inj = 1; inj = `${g.name} is injured for 1 week.`; }
+    rw.items.forEach((it) => L.addItem(S, it)); U.snd(lost ? 'lose' : 'win');
+    await U.dialog(`<div class="big ${lost ? 'lose' : 'win'}">${lost ? 'Overrun' : 'Retreated'}</div><div style="text-align:center;margin:6px 0">${U.spr(g, { size: 80 })}</div><div class="row wrap" style="justify-content:center"><span class="pill">Waves ${wave}</span><span class="pill">${A.icon('coin', 14)} +${fmt(rw.gold)}</span><span class="pill">${A.icon('fame', 14)} +${rw.fame}</span><span class="pill">+${xp} XP${up.length ? ' · LEVEL ' + up[up.length - 1] : ''}</span></div>${inj ? `<div class="small" style="color:var(--terra);text-align:center">${esc(inj)}</div>` : ''}<div class="small" style="text-align:center">Best: wave ${S.hordeBest}</div>` + btn('Continue', 'ok'));
     await pickPends(S); await trophies(S);
   }
 

@@ -29,7 +29,7 @@
   L.mkUnits = (glads, side, ctx, hpFracs, grudge) => glads.map((g, i) => mkUnit(g, side, i, glads.length, ctx, hpFracs && hpFracs[i], grudge));
   L.createFight = (A, B, o) => {
     o = o || {};
-    return { t: 0, A, B, units: A.concat(B), ev: [], hype: 0, peak: 0, done: false, winner: null, auto: { A: !!o.autoA, B: true }, foc: { A: null, B: null }, quiet: !!o.quiet, sched: [], dtmax: 0.1, manualFavor: !!o.manualFavor, favorReady: false, hazards: o.hazards || 0, hazT: 7 + Math.random() * 3, zones: [] };
+    return { t: 0, A, B, units: A.concat(B), ev: [], hype: 0, peak: 0, done: false, winner: null, auto: { A: !!o.autoA, B: true }, foc: { A: null, B: null }, quiet: !!o.quiet, sched: [], dtmax: 0.1, duo: o.duo ? { ids: o.duo.ids, kind: o.duo.kind, cd: 10, max: D.DUOS[o.duo.kind].cd } : null, manualFavor: !!o.manualFavor, favorReady: false, hazards: o.hazards || 0, hazT: 7 + Math.random() * 3, zones: [] };
   };
 
   // ---------- derived live stats ----------
@@ -340,6 +340,19 @@
     emit(F, { k: 'roar', side, fav });
   }
   // the player's comeback button: only appears when the crowd backs your side (you are behind)
+  L.useDuo = (F) => {
+    const d = F.duo; if (!d || d.cd > 0 || F.done) return false; const us = d.ids.map((id) => F.units.find((u) => u.id === id)); if (us.some((u) => !u || u.down)) return false;
+    const [u1, u2] = us; const foes = alive(F, 'B'); if (!foes.length) return false; const t = (F.foc.A && foes.find((f) => f.id === F.foc.A)) || foes.sort((p, q) => dist(u1, p) - dist(u1, q))[0];
+    d.cd = d.max; F.hype += 25; emit(F, { k: 'ult', src: u1.id, id: 'duo:' + d.kind, c: D.DUOS[d.kind].c });
+    if (d.kind === 'pincer') {
+      [u1, u2].forEach((u, i) => { u.s.inv = 0.5; const ang = i ? 2.4 : -2.4; const tx = t.x + Math.cos(ang) * 1.2, ty = t.y + Math.sin(ang) * 1.2; startDash(F, u, tx, ty, () => { strike(F, u, t, { mult: 1.4, sure: true, noProc: true, tag: 'pincer' }); if (i === 1 && !t.down) cc(F, t, 'stun', 1, 1); emit(F, { k: 'aoe', x: t.x, y: t.y, r: 2, c: D.DUOS.pincer.c }); }); });
+    } else if (d.kind === 'wall') {
+      [u1, u2].forEach((u) => { u.s.guard = { f: 0.5, t: 5 }; u.s.ccimm = 5; emit(F, { k: 'aoe', x: u.x, y: u.y, r: 2, c: D.DUOS.wall.c }); }); u1.s.taunt = 4;
+    } else {
+      [u1, u2].forEach((u) => { u.s.rage = 5; u.s.ccimm = 5; emit(F, { k: 'aoe', x: u.x, y: u.y, r: 2.6, c: D.DUOS.storm.c }); alive(F, 'B').forEach((f) => { if (dist(u, f) < 3) strike(F, u, f, { mult: 0.6, sure: true, noProc: true, tag: 'twin storm' }); }); });
+    }
+    return true;
+  };
   L.useFavor = (F) => { if (!F.favorReady || F.done) return false; F.favorReady = false; roar(F, 'A'); return true; };
   function hazard(F) {
     const ang = rnd() * 6.28, rr = Math.sqrt(rnd()) * R * 0.72; const x = Math.cos(ang) * rr, y = Math.sin(ang) * rr; const big = F.hazards > 1; const r = big ? 2.7 : 2.1;
@@ -352,6 +365,7 @@
   L.step = (F, dt) => {
     if (F.done) return; F.t += dt;
     if (F.sched.length) { const due = F.sched.filter((e) => F.t >= e.at); if (due.length) { F.sched = F.sched.filter((e) => F.t < e.at); due.forEach((e) => e.fn()); } }
+    if (F.duo && F.duo.cd > 0) F.duo.cd -= dt;
     F.n = (F.n || 0) + 1; const us = F.n % 2 ? F.units : F.units.slice().reverse();
     for (let i = 0; i < us.length; i++) if (!us[i].down) upkeep(F, us[i], dt);
     if (F.done) return;
