@@ -23,13 +23,13 @@
       const root = $('#fightRoot');
 
       const bars = (side) => F.units.filter((u) => u.side === side).map((u) => `<div class="fu" id="fu-${u.id}"><div class="nm">${A.styleIcon(u.style, 16)}<span>${esc(u.name)}</span><b class="lv">${u.g.lvl}</b></div><div class="bar hp"><i id="hp-${u.id}" style="width:100%"></i><em id="sh-${u.id}"></em><span id="ht-${u.id}" class="hnum"></span></div></div>`).join('');
-      const ubtn = unitsA.map((u) => `<div class="ur"><div class="who">${esc(u.name)}</div>${u.ults.map((c, k) => `<div class="ub" id="ub-${u.id}-${k}" data-a="fult" data-u="${u.id}" data-k="${k}" style="--c:${D.ULTS[c.id].c}"><div class="ubi">${A.ultIcon(c.id, 26)}</div><div class="ubn">${D.ULTS[c.id].n}</div><i class="ubcd"></i><b class="ubt"></b></div>`).join('')}</div>`).join('');
+      const ubtn = unitsA.map((u) => `<div class="ur"><div class="who">${esc(u.name)}</div>${u.ults.map((c, k) => `<div class="ub" id="ub-${u.id}-${k}" data-a="fult" data-u="${u.id}" data-k="${k}" style="--c:${D.ULTS[c.id].c}"><div class="ubi">${A.ultIcon(c.id, 26)}</div><div class="ubn">${D.ULTS[c.id].n}</div><span class="ubu">${esc(u.name)}</span><i class="ubcd"></i><b class="ubt"></b></div>`).join('')}</div>`).join('');
       const augChips = (o.augs || []).map((a) => `<span class="achip" style="border-color:${D.TIERS[a.t].c}" title="${a.d}">${esc(a.n)}</span>`).join('');
-      root.innerHTML = `<div id="fight"><div class="inner"><div class="f-top"><div class="side">${bars('A')}</div><div class="h" style="color:#fff;align-self:center;font-size:14px;text-shadow:2px 2px 0 var(--ink)">VS</div><div class="side r">${bars('B')}</div></div><div class="f-stage" id="stage"><div id="cam"></div><canvas id="fxc"></canvas><div class="f-banner" id="fban"></div><div class="f-flash" id="fflash"></div></div><div class="f-hype"><i id="hype"></i><span>Crowd hype</span></div><div class="f-log" id="flog">${esc(gl[0].name)} (${L.STANCES[stance]}) vs ${esc(opps[0].name)}.${augChips ? '' : ''}</div>${augChips ? `<div class="f-aug">${augChips}</div>` : ''}<div class="f-ults ${unitsA.length > 1 ? 'many' : ''}">${ubtn}</div><div class="f-speed"><button class="btn sm on" data-a="fspeed" data-v="1">1x</button><button class="btn sm" data-a="fspeed" data-v="2">2x</button><button class="btn sm" data-a="fspeed" data-v="3">3x</button><button class="btn sm ${F.auto.A ? 'on' : ''}" id="fauto" data-a="fauto">Auto ult</button><button class="btn sm ghost" data-a="fskip">Skip</button></div></div></div>`;
+      root.innerHTML = `<div id="fight"><div class="inner"><div class="f-top"><div class="side">${bars('A')}</div><div class="h" style="color:#fff;align-self:center;font-size:14px;text-shadow:2px 2px 0 var(--ink)">VS</div><div class="side r">${bars('B')}</div></div><div class="f-stage" id="stage"><div id="cam"></div><canvas id="fxc"></canvas><div class="f-banner" id="fban"></div><div class="f-flash" id="fflash"></div><div class="f-vs" id="fvs"></div></div><div class="f-hype"><i id="hype"></i><span>Crowd hype</span></div><div class="f-log" id="flog">${esc(gl[0].name)} (${L.STANCES[stance]}) vs ${esc(opps[0].name)}.${augChips ? '' : ''}</div>${augChips ? `<div class="f-aug">${augChips}</div>` : ''}<div class="f-ults ${unitsA.length > 1 ? 'many' : ''}">${ubtn}</div><div class="f-speed"><button class="btn sm on" data-a="fspeed" data-v="1">1x</button><button class="btn sm" data-a="fspeed" data-v="2">2x</button><button class="btn sm" data-a="fspeed" data-v="3">3x</button><button class="btn sm ${F.auto.A ? 'on' : ''}" id="fauto" data-a="fauto">Auto ult</button><button class="btn sm ghost" data-a="fskip">Skip</button></div></div></div>`;
       const stage = $('#stage'), cam = $('#cam'), cv = $('#fxc'); const W = stage.clientWidth, H = stage.clientHeight; const dpr = Math.min(2, G.devicePixelRatio || 1);
       cv.width = W * dpr; cv.height = H * dpr; cv.style.width = W + 'px'; cv.style.height = H + 'px'; const cx = cv.getContext('2d'); cx.scale(dpr, dpr);
       const fy0 = H * 0.27, fy1 = H * 0.97; const SX = (x) => W / 2 + x * ((W * 0.46) / R), SY = (y) => (fy0 + fy1) / 2 + y * (((fy1 - fy0) * 0.44) / R);
-      const sw = Math.max(70, Math.min(150, W * 0.31)); const sh = sw * 1.34;
+      const many = Math.max(unitsA.length, unitsB.length); const sw = Math.max(58, Math.min(150, W * (many > 2 ? 0.24 : many > 1 ? 0.28 : 0.31))); const sh = sw * 1.34;
       cam.innerHTML = A.arenaBG2(W, H) + '<div id="world"></div>';
       const world = $('#world');
       F.units.forEach((u) => {
@@ -38,7 +38,9 @@
         world.appendChild(e); u.el = e; u.elb = e.querySelector('.fsb'); u.elhp = e.querySelector('.fhp'); u.elsh = e.querySelector('.fshd'); u.elst = e.querySelector('.fsts'); u.elstk = e.querySelector('.fstk'); u.elsd = e.querySelector('.fshadow'); u.stKey = '';
         u.elb.animate([{ opacity: 0, transform: 'scale(.3)' }, { opacity: 1, transform: 'scale(1)' }], { duration: 400, easing: 'ease-out' });
       });
-      const fx = { F, speed: 1, skip: false, intro: 1.5, freeze: 0, slow: 0, shake: 0, zoom: 0, flash: 0, parts: [], rings: [], lines: [], teles: [], done: false };
+      const vsCard = (us, side) => `<div class="vsc ${side}">${us.map((u) => `<div class="vsp">${A.gladOf(u.g, { size: us.length > 2 ? 52 : us.length > 1 ? 74 : 100, tunic: u.side === 'A' ? U.myColor() : u.g.color || '#3d3b46', mood: 'fight' })}</div><div class="vsn">${esc(u.name)}</div><div class="vsm">${A.styleIcon(u.style, 18)} Lv ${u.g.lvl}</div>`).join('')}</div>`;
+      $('#fvs').innerHTML = `${vsCard(unitsA, 'l')}<div class="vsv">VS</div>${vsCard(unitsB, 'r')}`;
+      const fx = { F, speed: 1, skip: false, intro: 2.7, freeze: 0, slow: 0, shake: 0, zoom: 0, flash: 0, parts: [], rings: [], lines: [], teles: [], done: false };
       U.fight = fx;
       const el = (id) => document.getElementById(id);
       const byId = (id) => F.units.find((u) => u.id === id);
@@ -72,7 +74,7 @@
           logt(`${src.name} hits ${dst.name} for ${e.dmg}${e.crit ? ' (CRIT)' : ''}.`);
         } else if (e.k === 'miss') { floatAt(dst, e.inv ? 'IMMUNE' : 'DODGE', 'miss'); dst.elb.animate([{ transform: 'translateX(0)' }, { transform: `translateX(${dst.face * 14}px)` }, { transform: 'translateX(0)' }], { duration: 220 }); U.snd('miss'); }
         else if (e.k === 'tech') { floatAt(src, D.TECHS[e.tech].n + '!', 'tech'); ring(P(src).x, P(src).y + sh * 0.3, 40, '#f5ead2'); U.snd('tech'); logt(`${src.name} uses ${D.TECHS[e.tech].n}!`); }
-        else if (e.k === 'ult') { const U0 = D.ULTS[e.id]; ban(U0.n + '!', U0.c); fx.flash = 0.35; fx.zoom = Math.max(fx.zoom, 0.06); shake(6); U.snd('roar'); logt(`${src.name} unleashes ${U0.n}!`); ring(P(src).x, P(src).y + sh * 0.3, 90, U0.c, true); }
+        else if (e.k === 'ult') { const U0 = D.ULTS[e.id]; ban(U0.n + '!', U0.c); fx.flash = 0.35; fx.zoom = Math.max(fx.zoom, 0.06); shake(6); U.snd('u_' + e.id); logt(`${src.name} unleashes ${U0.n}!`); ring(P(src).x, P(src).y + sh * 0.3, 90, U0.c, true); }
         else if (e.k === 'aoe') { const x = SX(e.x), y = SY(e.y); ring(x, y, mpx(e.r), e.c, e.big); dust(x, y, e.big ? 18 : 8); if (e.big) shake(e.meteor ? 12 : 7); if (e.meteor) { fx.flash = 0.5; spark(x, y, 30, '#ffb347', 320); U.snd('crit'); } }
         else if (e.k === 'tele') fx.teles.push({ x: SX(e.x), y: SY(e.y), r: mpx(e.r), life: e.t, max: e.t, c: e.c });
         else if (e.k === 'hook') { const a = P(src), b = P(dst); fx.lines.push({ pts: [[a.x, a.y], [b.x, b.y]], life: 0.5, max: 0.5, c: '#d9e4ee', w: 5, chain: 1, a: src, b: dst }); spark(b.x, b.y, 10, '#fff', 200); U.snd('hit'); }
@@ -84,7 +86,7 @@
         else if (e.k === 'rune') floatAt(src, e.id === 'grasp' ? 'GRASP' : e.id === 'electro' ? 'ELECTROCUTE' : 'PHASE RUSH', 'st');
         else if (e.k === 'status') { if (STL[e.st]) floatAt(dst, STL[e.st], 'st'); }
         else if (e.k === 'resist') floatAt(dst, 'RESIST', 'st');
-        else if (e.k === 'bleed') floatAt(dst, '-' + e.dmg, e.fire ? 'tech' : 'miss');
+        else if (e.k === 'bleed') { if (e.dmg >= 3) floatAt(dst, '-' + e.dmg, e.fire ? 'tech' : 'miss'); }
         else if (e.k === 'thorn') floatAt(dst, e.dmg + ' thorns', 'miss');
         else if (e.k === 'down') { dst.el.classList.add('dead'); const f = el('fu-' + e.dst); if (f) f.classList.add('dead'); logt(`${dst.name} is down!`); if (!sp) { fx.slow = 0.9; fx.flash = 0.25; shake(9); const p = P(dst); spark(p.x, p.y, 24, '#fff', 260); U.snd('crit'); } }
         else if (e.k === 'roar') { ban('Crowd roars!'); U.snd('roar'); shake(4); const bg = cam.querySelector('.arena-bg'); if (bg) { bg.classList.add('roar'); setTimeout(() => bg.classList.remove('roar'), 1500); } logt(e.side === 'A' ? 'The crowd backs YOU!' : 'The crowd backs the underdog!'); }
@@ -107,7 +109,7 @@
           if (u.side === 'B') u.el.classList.toggle('focus', F.foc.A === u.id);
         });
         unitsA.forEach((u) => u.ults.forEach((c, k) => { const b = el(`ub-${u.id}-${k}`); if (!b) return; const ready = c.cd <= 0 && !u.down; b.classList.toggle('ready', ready); b.classList.toggle('dead', u.down); b.querySelector('.ubcd').style.background = ready ? 'transparent' : `conic-gradient(rgba(20,16,15,.72) ${(c.cd / c.max) * 360}deg, transparent 0)`; b.querySelector('.ubt').textContent = ready || u.down ? '' : Math.ceil(c.cd); }));
-        $('#hype').style.width = Math.min(100, F.hype) + '%';
+        $('#hype').style.width = Math.min(100, F.hype) + '%'; if (introDone) U.crowdLevel(F.hype / 100);
       }
       function drawFx(dt) {
         cx.clearRect(0, 0, W, H);
@@ -128,12 +130,12 @@
         if (win) for (let i = 0; i < 70; i++) fx.parts.push({ x: Math.random() * W, y: -10 - Math.random() * 60, vx: (Math.random() - 0.5) * 60, vy: 60 + Math.random() * 120, life: 2.2, max: 2.2, c: ['#f6b82d', '#d2412b', '#2f78c4', '#f5ead2'][i % 4], r: 3 + Math.random() * 3, g: 30 });
         const hpf = {}; unitsA.forEach((u) => { hpf[u.g.id] = u.hp / u.maxhp; });
         const tick = (t) => { if (fx.over) return; const dt = Math.min(0.05, (t - last) / 1000); last = t; drawFx(dt); layout(); if (!fx.over) requestAnimationFrame(tick); }; requestAnimationFrame(tick);
-        setTimeout(() => { fx.over = true; root.innerHTML = ''; U.fight = null; resolve({ win, hype: Math.max(F.peak, F.hype), hpf, odds, F, stB }); }, 1900);
+        setTimeout(() => { fx.over = true; U.crowd(false); root.innerHTML = ''; U.fight = null; resolve({ win, hype: Math.max(F.peak, F.hype), hpf, odds, F, stB }); }, 1900);
       }
       function frame(now) {
         if (finished) return;
         const real = Math.min(0.1, (now - last) / 1000); last = now;
-        if (fx.intro > 0) { fx.intro -= real; const n = Math.ceil(fx.intro / 0.4); if (n !== countN && n > 0 && n <= 3) { countN = n; ban(String(n)); U.snd('click'); } if (fx.intro <= 0) { ban('FIGHT!', '#f6b82d'); U.snd('roar'); introDone = true; } }
+        if (fx.intro > 0) { fx.intro -= real; const n = Math.ceil(fx.intro / 0.4); if (n !== countN && n > 0 && n <= 3) { countN = n; ban(String(n)); U.snd('click'); } if (fx.intro <= 0) { ban('FIGHT!', '#f6b82d'); U.snd('roar'); introDone = true; const v = el('fvs'); if (v) v.remove(); U.crowd(true); } }
         else {
           let dt = real; if (fx.freeze > 0) { fx.freeze -= real; dt = 0; } if (fx.slow > 0) { fx.slow -= real; dt *= 0.3; }
           if (fx.skip) { let n = 0; while (!F.done && n++ < 6000) L.step(F, 0.1); } else { acc += dt * fx.speed; let n = 0; while (acc >= STEP && !F.done && n++ < 12) { L.step(F, STEP); acc -= STEP; } }
