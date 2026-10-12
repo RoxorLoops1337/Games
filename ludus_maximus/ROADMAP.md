@@ -366,3 +366,6 @@ Wandering visitors (merchant, veteran trainer, bard, rumor scout): from week 2 a
 
 ## Round 43 shipped
 - Browser tab title shows school name and week. Festival heads-up verified in a phone viewport.
+
+## Final state (round 44)
+Shipped as the finished version. Everything on the list is done except the real fight replay (needs a fixed-step, seeded fight engine; the fight log, fight stats card and killing-blow slow-mo stand in for it). Autonomous rounds stopped at the owner's request.
