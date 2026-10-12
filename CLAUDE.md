@@ -59,21 +59,6 @@ skills and failing connections to every session. To use one here for a single ta
 
 # Generating pixel-art assets (local ComfyUI)
 
-This repo has a local sprite generator under `tools/comfyui/`. When the user asks to
-create, generate, or make a sprite / icon / item / tile / portrait, use it instead of
-drawing by hand or reaching for a cloud service. Run from the repo root:
-
-    python tools/comfyui/make_sprite.py "<subject prompt>" --name <short-name> --size <px>
-
-- Auto-appends pixel-art style cues, renders on the local ComfyUI (SDXL + Pixel Art XL),
-  pixelates (downscale + palette + transparent bg), and writes `assets/<name>.png`.
-  Move the finished sprite into the game's art folder and wire it like the other art.
-- Default size 64; `--size 96` for more detail. Default palette is true color; pass
-  `--palette tools/comfyui/palettes/pico-8.gpl` for a stylized 16-color look.
-- `/sprite <subject>` is the slash-command shortcut (`.claude/commands/sprite.md`).
-- One-time: `pip install pillow numpy`; verify with `python tools/comfyui/make_sprite.py --check`.
-- Better models / quality knobs: see `tools/comfyui/README.md`.
-- **REQUIRES a reachable local ComfyUI** (default `127.0.0.1:8000`). This works from
-  Claude Code running on the owner's machine, NOT from cloud/web sessions, whose
-  container can't reach the local ComfyUI. The pixelate half (`pixelate.py`) runs
-  anywhere `pillow`+`numpy` are installed.
+When the user asks to create a sprite, icon, item, tile or portrait, use the local generator: `/sprite <subject>`
+(`.claude/commands/sprite.md` has the steps; options in `tools/comfyui/README.md`). It needs ComfyUI running on the
+owner's machine, so it does NOT work from cloud/web sessions: say so instead of trying.

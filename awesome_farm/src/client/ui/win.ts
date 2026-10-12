@@ -1,5 +1,5 @@
 // The window: a framed modal in one of three sizes with the red ribbon title, the close button, sections (recessed panels
-// with a heading) and ONE footer row. Everything a screen puts in it is panel-local; see the house style in CLAUDE.md.
+// with a heading) and ONE footer row. Everything a screen puts in it is panel-local; see the house style in docs/ui.md.
 
 import * as Phaser from 'phaser';
 import { PAL } from '../../shared/palette';
