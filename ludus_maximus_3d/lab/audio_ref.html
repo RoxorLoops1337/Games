@@ -35,7 +35,8 @@ mk('modes', 'stop', () => A.music.stop());
 for (const n of SFX_NAMES) mk('sfx', n, () => A.sfx(n, { voice: +$('voice').value, pan: +$('pan').value }));
 mk('sfx', 'swish (heavy flag)', () => A.sfx('swish', { heavy: true }));
 for (const e of ['fire', 'lightning', 'earth', 'wind', 'holy']) mk('sfx', 'ult:' + e, () => A.sfx('ult', { element: e }));
-// meter
-(function loop() { const c = A.ctx; if (c && !A._an) { try { const an = c.createAnalyser(); an.fftSize = 512; c.destination; A._an = an; } catch (e) {} } requestAnimationFrame(loop); })();
+// meter (analyser tap after the limiter)
+const buf = new Float32Array(1024);
+(function loop() { const an = A.analyser; if (an) { an.getFloatTimeDomainData(buf); let m = 0; for (const v of buf) m = Math.max(m, Math.abs(v)); $('bar').style.width = Math.min(100, m * 100) + '%'; } requestAnimationFrame(loop); })();
 window.__ready = true;
 </script></body></html>

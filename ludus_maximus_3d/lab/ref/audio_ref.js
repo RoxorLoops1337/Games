@@ -39,7 +39,7 @@ export function createAudio(opts = {}) {
   let seed = opts.seed == null ? 1337 : opts.seed >>> 0;
   let rng = mulberry(seed);
   const vol = { master: 0.9, music: 0.7, sfx: 0.9 };
-  let master, comp, limiter, musicBus, musicDuck, sfxBus, crowdBus, reverb, revSend, revMusic, revCrowd;
+  let analyser, master, comp, limiter, musicBus, musicDuck, sfxBus, crowdBus, reverb, revSend, revMusic, revCrowd;
   const noiseBuf = {};     // white/pink/brown 3s buffers
   const ksCache = new Map();
   let voicesOut = [];      // {end, pri}
@@ -58,6 +58,7 @@ export function createAudio(opts = {}) {
       limiter.threshold.value = -2; limiter.knee.value = 0; limiter.ratio.value = 20; limiter.attack.value = 0.001; limiter.release.value = 0.08;
       const trim = ctx.createGain(); trim.gain.value = 0.92;
       master.connect(comp); comp.connect(limiter); limiter.connect(trim); trim.connect(ctx.destination);
+      analyser = ctx.createAnalyser(); analyser.fftSize = 1024; trim.connect(analyser); // meter tap
       musicDuck = ctx.createGain(); musicBus = ctx.createGain(); musicBus.gain.value = vol.music;
       musicBus.connect(musicDuck); musicDuck.connect(master);
       sfxBus = ctx.createGain(); sfxBus.gain.value = vol.sfx; sfxBus.connect(master);
@@ -599,7 +600,7 @@ export function createAudio(opts = {}) {
     setMaster(v) { vol.master = clamp(v, 0, 1); if (ready) master.gain.setTargetAtTime(vol.master, ctx.currentTime, 0.02); },
     setMusic(v) { vol.music = clamp(v, 0, 1); if (ready) musicBus.gain.setTargetAtTime(vol.music, ctx.currentTime, 0.02); },
     setSfx(v) { vol.sfx = clamp(v, 0, 1); if (ready) { sfxBus.gain.setTargetAtTime(vol.sfx, ctx.currentTime, 0.02); crowdBus.gain.setTargetAtTime(vol.sfx, ctx.currentTime, 0.02); } },
-    get ctx() { return ctx; }, get supported() { return !dead; }, get state() { return ctx ? ctx.state : 'none'; },
+    get ctx() { return ctx; }, get analyser() { return analyser; }, get supported() { return !dead; }, get state() { return ctx ? ctx.state : 'none'; },
     suspend() { try { return ctx && ctx.suspend(); } catch (e) { return null; } },
     resume: tryResume,
     _ready: ensure,
