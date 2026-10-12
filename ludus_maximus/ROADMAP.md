@@ -129,7 +129,16 @@ Building upgrades now show on the map (flag, torch, weights, gold star as levels
 Ludus map weather and night tint (rain streaks, heat haze, dust, night), animated retirement ceremony with confetti and a rising portrait, trophy confetti and a Grand Collector bonus for earning every trophy. Replay (55) still needs fixed-step fights with recorded taps.
 
 ## Next ideas
-- [ ] 59. Weekly planner presets ("Boot camp", "Rest week")
-- [ ] 60. Fighter family trees and apprentices
+- [x] 59. Weekly planner presets ("Boot camp", "Rest week")
+- [x] 60. Fighter family trees and apprentices
 - [ ] 61. Sound: crowd ambience that follows hype
-- [ ] 62. Rival ludus raids on your market
+- [x] 62. Rival ludus raids on your market
+
+## Round 14 shipped
+Planner presets (Boot camp, Rest week, Odd jobs, Sparring), legend apprenticeships for new recruits, and rival owner raids that can snatch the market's special item. Crowd ambience (61) and replay (55) still open.
+
+## Next ideas
+- [ ] 63. Crowd ambience that follows hype (needs audio work)
+- [ ] 64. Season-long ladder with weekly rewards
+- [ ] 65. Fighter personality traits that react to events
+- [ ] 66. Share card for a champion (screenshot export)

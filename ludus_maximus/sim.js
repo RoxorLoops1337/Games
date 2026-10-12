@@ -672,6 +672,25 @@
     if (good) { g.mo = clamp(g.mo + 15, 0, 100); return `${g.name} saw a good omen in the sand. Morale up!`; }
     g.mo = clamp(g.mo - 12, 0, 100); g.en = clamp(g.en - 10, 0, 100); return `${g.name} had a bad night, restless with dark dreams.`;
   };
+  // planner presets, apprentices, market raids
+  LM.preset = (S, kind) => {
+    let n = 0;
+    S.glads.forEach((g) => {
+      if (g.inj > 0) return; let act = g.act;
+      if (kind === 'rest') act = 'rest'; else if (kind === 'work') act = g.en >= 40 ? 'work' : 'rest'; else if (kind === 'spar') act = g.en >= 45 ? 'spar' : 'rest';
+      else if (kind === 'boot') { if (g.en < 45) act = 'rest'; else { const st = D.STATS.slice().sort((a, b) => g.st[a] - g.st[b])[0]; act = st; } }
+      if (act !== g.act) { g.act = act; n++; }
+    });
+    return n;
+  };
+  LM.apprentice = (S, g) => {
+    const lg = (S.legends || []).find((l) => !l.mentored); if (!lg) return null;
+    lg.mentored = true; g.mentor = lg.name; g.st[lg.best] += 1; return lg;
+  };
+  LM.raid = (S) => {
+    if (!S.rowner || S.rowner.w < 2 || !S.market || rnd() > 0.35) return false;
+    const before = S.market.length; S.market = S.market.filter((x) => !x.sp); if (S.market.length === before) return false; S.raidWeek = S.week; return true;
+  };
   LM.crier = (S, rep) => {
     const out = (S.news || []).splice(0); const top = S.glads.slice().sort((a, b) => b.fame - a.fame)[0];
     (rep.nicks || []).forEach((x) => out.push(`The crowd now calls ${x.g.name} "${x.nick}".`));
@@ -727,11 +746,11 @@
   LM.rerollMarket = (S) => {
     const ml = LM.maxLeague(S); const luck = LM.bfx(S, 'shrine').v + ((S.perks || {}).luck || 0) * 0.05;
     S.market = []; for (let i = 0; i < 6; i++) S.market.push(genItem(rnd, { league: ml, ilvl: 2 + ml * 5 + Math.floor(S.week / 6), luck }));
-    const sp = genItem(rnd, { league: Math.min(3, ml + 1), ilvl: 3 + ml * 5 + Math.floor(S.week / 6), rar: Math.min(4, 2 + (ml >= 2 ? 1 : 0)), luck }); sp.sp = true; S.market.push(sp);
+    const sp = genItem(rnd, { league: Math.min(3, ml + 1), ilvl: 3 + ml * 5 + Math.floor(S.week / 6), rar: Math.min(4, 2 + (ml >= 2 ? 1 : 0)), luck }); sp.sp = true; S.market.push(sp); LM.raid(S);
   };
   LM.hire = (S, g) => {
     if (S.glads.length >= LM.rosterCap(S)) return 'Barracks full'; if (S.gold < g.cost) return 'Not enough gold';
-    S.gold -= g.cost; S.recruits = S.recruits.filter((x) => x !== g); delete g.cost; S.glads.push(g); return '';
+    LM.apprentice(S, g); S.gold -= g.cost; S.recruits = S.recruits.filter((x) => x !== g); delete g.cost; S.glads.push(g); return '';
   };
   LM.buyItem = (S, it) => {
     const p = LM.buyVal(S, it); if (S.gold < p) return 'Not enough gold'; S.gold -= p; S.market = S.market.filter((x) => x !== it); LM.addItem(S, it); return '';
