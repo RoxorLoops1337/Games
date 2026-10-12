@@ -212,5 +212,14 @@ Palaestra level now slows the training drill marker and adds a small bonus (trai
 ## Next ideas
 - [ ] 95. Entrance animations per style (91)
 - [ ] 96. Fight replay and crowd audio (92)
-- [ ] 97. Streak shown on the Weekly goals card
-- [ ] 98. A second drill type (reaction test) for Sparring Ring level 3
+- [x] 97. Streak shown on the Weekly goals card
+- [x] 98. A second drill type (reaction test) for Sparring Ring level 3
+
+## Round 23 shipped
+Reflex drill (wait for green, tap fast) on even weeks once the Sparring Ring is level 3, and the weekly goals card now shows your streak.
+
+## Next ideas
+- [ ] 99. Entrance animations per style (95)
+- [ ] 100. Fight replay and crowd audio (96)
+- [ ] 101. Reflex drill high score per fighter
+- [ ] 102. Third drill: combo memory
