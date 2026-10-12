@@ -61,37 +61,38 @@ async function main() {
 // ------------------------------------------------------------------------------------------ gallery
 async function gallery() {
   const B = await import('../js/buildings.js');
+  const { presetFor } = await import('../js/hub.js');
   const scene = new THREE.Scene();
   const sky = createSky(); scene.add(sky.mesh);
-  const rig = createLightRig(scene, { shadowSize: T.shadow, shadowRadius: 40, shadowCenter: new THREE.Vector3(0, 2, 0), far: 300 });
-  const preset = Object.assign({}, TOD.golden, { sunAz: +(q.get('az') ?? 300), sunElev: +(q.get('el') ?? 26) });
+  const rig = createLightRig(scene, { shadowSize: T.shadow, shadowRadius: 46, shadowCenter: new THREE.Vector3(0, 2, 0), far: 300 });
+  const preset = Object.assign({}, presetFor(+(q.get('hour') ?? 14), q.get('weather') || 'clear'), q.get('az') ? { sunAz: +q.get('az') } : { sunAz: 235 }, q.get('el') ? { sunElev: +q.get('el') } : {});
   applyTOD(preset, { rig, scene, sky, renderer });
-  const ids = q.get('build') === 'all' ? B.BUILDING_IDS : [q.get('build')];
+  const b = q.get('build');
+  const ids = b === 'all' ? B.BUILDING_IDS : b.split(',');
   const lv = q.get('level') || '5';
   const levels = lv === 'all' ? [1, 2, 3, 4, 5] : lv.split(',').map(Number);
   const glow = +(q.get('glow') ?? 0.0);
   const px = 10.4, pz = 8.2;
-  const ground = new THREE.Mesh(new THREE.PlaneGeometry(400, 400).rotateX(-Math.PI / 2), new THREE.MeshStandardMaterial({ color: 0xc9a56c, roughness: 1 }));
+  const ground = new THREE.Mesh(new THREE.PlaneGeometry(400, 400).rotateX(-Math.PI / 2), new THREE.MeshStandardMaterial({ color: 0xd8c8a6, roughness: 1 }));
   ground.receiveShadow = true; scene.add(ground);
-  const blds = []; const flamePts = [];
-  const cols = ids.length > 1 && levels.length === 1 ? 4 : levels.length === 1 ? 1 : 5;
+  const blds = [];
+  const grid = levels.length === 1 && ids.length > 1;       // many buildings, one level -> 4 columns
+  const cols = grid ? Math.min(4, ids.length) : levels.length, rowsN = grid ? Math.ceil(ids.length / cols) : ids.length;
   ids.forEach((id, i) => levels.forEach((l, j) => {
-    const b = B.createBuilding(id, l, { accent: +(q.get('accent') || 0x6a2470) });
-    const idx = levels.length === 1 ? i : (ids.length === 1 ? j : i * 5 + j);
-    const c = levels.length === 1 ? idx % cols : (ids.length === 1 ? j : j), r = levels.length === 1 ? Math.floor(idx / cols) : (ids.length === 1 ? 0 : i);
-    const nc = levels.length === 1 ? cols : 5, nr = Math.ceil((levels.length === 1 ? ids.length : ids.length) / (levels.length === 1 ? cols : 1));
-    b.group.position.set((c - (nc - 1) / 2) * px, 0, (r - (nr - 1) / 2) * pz);
-    b.setGlow(glow); scene.add(b.group); blds.push(b);
+    const bd = B.createBuilding(id, l, { accent: +(q.get('accent') || 0xb5352a) });
+    const c = grid ? i % cols : j, r = grid ? Math.floor(i / cols) : i;
+    // buildings in the hub face -z (rotated PI); the gallery faces the camera at +z so the fronts read like the hub from behind
+    bd.group.position.set((c - (cols - 1) / 2) * px, 0, (r - (rowsN - 1) / 2) * pz);
+    bd.setGlow(glow); scene.add(bd.group); blds.push(bd);
   }));
-  const info = blds.map((b) => `${b.id} L${b.level}: ${b.tris} tris, ${b.calls} calls`).join('\n');
-  hud.textContent = q.get('nohud') ? '' : info;
+  hud.textContent = q.get('nohud') ? '' : blds.map((x) => `${x.id} L${x.level}: ${x.tris} tris, ${x.calls} calls`).join('\n');
   window.__blds = blds;
-  const nr = Math.ceil(blds.length / cols), span = Math.max((cols) * px, nr * pz);
-  const az = +(q.get('caz') ?? 0.5), el = +(q.get('cel') ?? 0.62), dist = +(q.get('dist') ?? (span * 0.95 + 8));
-  const ctr = new THREE.Vector3(+(q.get('cx') ?? 0), 2, +(q.get('cz') ?? 0));
+  const span = Math.max(cols * px, rowsN * pz);
+  const az = +(q.get('caz') ?? 0.5), el = +(q.get('cel') ?? 0.55), dist = +(q.get('dist') ?? (span * 0.8 + 10));
+  const ctr = new THREE.Vector3(+(q.get('cx') ?? 0), 1.8, +(q.get('cz') ?? 0));
   frameFn = (t, dt) => {
     camera.position.set(ctr.x + Math.sin(az) * Math.cos(el) * dist, ctr.y + Math.sin(el) * dist, ctr.z + Math.cos(az) * Math.cos(el) * dist); camera.lookAt(ctr);
-    sky.update(camera, t); for (const b of blds) b.update(t, dt); rig.sun.target.position.copy(rig.shadowCenter);
+    sky.update(camera, t); for (const x of blds) x.update(t, dt); rig.sun.target.position.copy(rig.shadowCenter);
   };
   return scene;
 }

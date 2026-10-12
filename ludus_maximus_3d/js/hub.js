@@ -54,6 +54,7 @@ export function presetFor(hour, weather = 'clear') {
   let base = weather === 'night' ? Object.assign({}, TOD.night) : todFromHour(clamp(hour, 6.2, 19.2));
   if (WEATHER[weather]) base = lerpTOD(base, WEATHER[weather], weather === 'rain' ? 0.85 : weather === 'dust' ? 0.7 : 0.55);
   base.hemiInt *= weather === 'night' ? 1.0 : 1.2;
+  if (weather !== 'night') { const m = new THREE.Color(base.hemiGround).lerp(new THREE.Color(0x9c8090), 0.5); base.hemiGround = m.getHex(); }
   if (weather !== 'night') { const f = clamp((hour - 7) / 12); base.sunAz = 205 + 55 * f; base.sunElev = (weather === 'rain' ? 24 : 24 + 10 * Math.sin(Math.PI * f)) * (hour < 7 || hour > 18.4 ? 0.7 : 1); }
   return base;
 }
@@ -87,7 +88,7 @@ const LINK_VERT = `attribute vec3 aTan; attribute float aSide; attribute float a
     gl_Position = projectionMatrix * viewMatrix * vec4(p, 1.0); }`;
 const LINK_FRAG = `varying vec2 vUv; varying float vStr; uniform float uTime; uniform vec3 uColor;
   void main(){ float edge = 1.0 - pow(abs(vUv.y * 2.0 - 1.0), 2.0); float flow = 0.55 + 0.45 * sin(vUv.x * 40.0 - uTime * 2.2); float ends = smoothstep(0.0, 0.12, vUv.x) * smoothstep(1.0, 0.88, vUv.x);
-    float a = edge * flow * ends * (0.30 + 0.7 * vStr); gl_FragColor = vec4(uColor * (1.2 + vStr), a);
+    float a = edge * flow * ends * (0.16 + 0.84 * vStr); gl_FragColor = vec4(uColor * (1.2 + vStr), a);
     #include <tonemapping_fragment>
     #include <colorspace_fragment>
   }`;
@@ -195,7 +196,7 @@ export function createHub({ renderer, camera, audio, tier = 'high', post = null 
   const selMat = ringMaterial({ color: [2.2, 1.55, 0.5], width: 0.2 }), hovMat = ringMaterial({ color: [1.6, 1.2, 0.6], width: 0.12, alpha: 0.7 }), padMat = ringMaterial({ color: [1.5, 1.15, 0.5], width: 0.1, alpha: 0.45, speed: 0.5 });
   const selRing = ringMesh(selMat, 1), hovRing = ringMesh(hovMat, 1), padRings = ringMesh(padMat, 16);
   group.add(selRing, hovRing, padRings);
-  const linkU = { uTime: { value: 0 }, uW: { value: 0.1 }, uColor: { value: new THREE.Color(1.0, 0.75, 0.28) } };
+  const linkU = { uTime: { value: 0 }, uW: { value: 0.06 }, uColor: { value: new THREE.Color(1.0, 0.75, 0.28) } };
   const linkMesh = new THREE.Mesh(new THREE.BufferGeometry(), new THREE.ShaderMaterial({ uniforms: linkU, vertexShader: LINK_VERT, fragmentShader: LINK_FRAG, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, fog: false }));
   linkMesh.frustumCulled = false; linkMesh.renderOrder = 8; group.add(linkMesh);
   let links = [];   // {a, b, base: aStr offset}

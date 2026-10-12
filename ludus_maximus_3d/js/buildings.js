@@ -89,7 +89,7 @@ export function getLib() {
     }),
     glow: makeGlowMaterial(),
   };
-  LIB.roof.color.setRGB(0.80, 0.70, 0.66); LIB.masonry.color.setRGB(1.12, 1.08, 1.02); LIB.wood.color.setRGB(1.08, 1.05, 1.0);
+  LIB.roof.color.setRGB(0.74, 0.66, 0.63); LIB.masonry.color.setRGB(1.12, 1.08, 1.02); LIB.wood.color.setRGB(1.08, 1.05, 1.0);
   return LIB;
 }
 const MATS = ['masonry', 'roof', 'wood', 'metal', 'cloth', 'glow'];
