@@ -309,7 +309,16 @@ First-week pass at 390x800, 360x640 and 1280x800: fresh start, how to play, home
 First fight pass at 390x800 (fresh start, week 2, enter a duel, pick a fighter, Next Week training, prep screen, augment pick, fight, skip, results). The flow reads well. One real issue fixed: the Arena tab had grown so much that the actual duels sat below the Pit, Weekly goals, Season ladder, Rival and Horde cards. The match list now comes first (with an empty-state note when nothing is announced) and those cards follow it.
 
 ## Next ideas
-- [ ] 139. First tournament and first recruit/market pass at phone size
+- [x] 139. First tournament and first recruit/market pass at phone size
 - [ ] 140. Real replay (136)
 - [ ] 141. Augment hints per style (137)
 - [ ] 142. More drill types for other buildings (138)
+
+## Round 34 shipped
+Recruit modal, Market, item purchase and Forge checked at 390x800: all clean. One real bug fixed: the first-time tip banner from the Ludus tab (build and synergy advice) stayed on screen after switching to another tab, so the Armory showed building advice. Switching tabs, by tap or by the 1 to 5 keys, now clears the old tip and shows the new tab's tip.
+
+## Next ideas
+- [ ] 143. Level-up pick and first tournament pass at phone size
+- [ ] 144. Real replay (140)
+- [ ] 145. Augment hints per style (141)
+- [ ] 146. More drill types for other buildings (142)
