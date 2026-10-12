@@ -363,3 +363,6 @@ Wandering visitors (merchant, veteran trainer, bard, rumor scout): from week 2 a
 
 ## Round 42 shipped
 - Home screen shows a one-line heads-up when next week is a festival, so you can plan around it.
+
+## Round 43 shipped
+- Browser tab title shows school name and week. Festival heads-up verified in a phone viewport.
