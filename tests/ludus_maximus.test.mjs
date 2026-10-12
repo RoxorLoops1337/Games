@@ -349,5 +349,12 @@ ok(strongWins >= 17, `level 10 beats level 1 (${strongWins}/20)`);
   ok(seen > 5 && seen < 40, 'mood events happen now and then');
 }
 
+// round 13: Grand Collector bonus, map weather
+{
+  const S13b = LM.newGame({ name: 'R13' }); S13b.trophies = {}; D.TROPHIES.forEach((t) => { S13b.trophies[t.id] = 1; }); const l0 = S13b.laurels; const got = LM.checkTrophies(S13b);
+  ok(got.some((t) => t.id === 'all') && S13b.laurels === l0 + 3, 'collecting every trophy grants the Grand Collector bonus'); ok(!LM.checkTrophies(S13b).some((t) => t.id === 'all'), 'the collector bonus is only paid once');
+  ok(['clear', 'rain', 'dust', 'heat', 'night'].includes(LM.weather(S13b, 'map1')), 'map weather is one of the known kinds');
+}
+
 console.log(`ludus_maximus: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
