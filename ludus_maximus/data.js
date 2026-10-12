@@ -420,6 +420,7 @@
     wall: { n: 'Phalanx Wall', d: 'Both take 50% less damage for 5s and shrug off crowd control. One taunts.', c: '#2f78c4', cd: 28 },
     storm: { n: 'Twin Storm', d: 'Both enter a 5s frenzy (+60% attack speed, lifesteal) and shred everything nearby.', c: '#c2395f', cd: 28 },
   };
+  D.CHANTS = ['MAX-I-MUS!', 'BLOOD! BLOOD!', 'AVE! AVE!', 'FIGHT! FIGHT!', 'HAIL THE VICTOR!', 'ROAR! ROAR!'];
   D.DIFF_N = ['Relaxed', 'Standard', 'Brutal'];
   G.LM_D = D;
   if (typeof module !== 'undefined') module.exports = D;

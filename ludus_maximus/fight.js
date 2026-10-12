@@ -103,7 +103,7 @@
         else if (e.k === 'thorn') floatAt(dst, e.dmg + ' thorns', 'miss');
         else if (e.k === 'down') { fx.lastDown = dst; dst.el.classList.add('dead'); const f = el('fu-' + e.dst); if (f) f.classList.add('dead'); logt(`${dst.name} is down!`); if (!sp) { crowdWave(); if (F.done) fireworks(); fx.slow = 0.9; fx.flash = 0.25; shake(9); const p = P(dst); spark(p.x, p.y, 24, '#fff', 260); U.snd('crit'); } }
         else if (e.k === 'favorready') { ban("Crowd's Favor!", '#f6b82d'); U.snd('roar'); logt('The crowd is with you! Tap Crowd\'s Favor to turn the fight around.'); }
-        else if (e.k === 'roar') { crowdWave(); ban(e.fav ? "Crowd's Favor!" : 'Crowd roars!', e.fav ? '#f6b82d' : ''); U.snd('roar'); shake(4); const bg = cam.querySelector('.arena-bg'); if (bg) { bg.classList.add('roar'); setTimeout(() => bg.classList.remove('roar'), 1500); } logt(e.side === 'A' ? 'The crowd backs YOU!' : 'The crowd backs the underdog!'); }
+        else if (e.k === 'roar') { crowdWave(); ban(e.fav ? "Crowd's Favor!" : D.CHANTS[(F.peak | 0) % D.CHANTS.length], e.fav ? '#f6b82d' : ''); U.snd('roar'); shake(4); const bg = cam.querySelector('.arena-bg'); if (bg) { bg.classList.add('roar'); setTimeout(() => bg.classList.remove('roar'), 1500); } logt(e.side === 'A' ? 'The crowd backs YOU!' : 'The crowd backs the underdog!'); }
       }
 
       function layout() {
