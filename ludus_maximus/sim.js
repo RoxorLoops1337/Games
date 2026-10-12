@@ -461,7 +461,8 @@
     const big = ev.kind === 'tourney' || ev.kind === 'grand' ? 1.6 : 1;
     glads.forEach((g) => {
       const win = res.win; LM.favGain(g, win, res.hype || 0); const xp = Math.round((win ? 24 + oppLvl * 5 : 12 + oppLvl * 2) * big);
-      const up = LM.addXp(g, xp); rep.xp.push({ id: g.id, xp, up }); if (up.length) rep.lvl.push({ id: g.id, to: up[up.length - 1] });
+      const up = LM.addXp(g, xp); rep.xp.push({ id: g.id, xp, up }); if (up.length) { rep.lvl.push({ id: g.id, to: up[up.length - 1] }); LM.diary(S, g, `Reached level ${up[up.length - 1]}.`); }
+      LM.diary(S, g, `${win ? 'Won' : 'Lost'}: ${ev.title || ev.kind}.`);
       if (win) { g.rec.w++; g.sw = (g.sw || 0) + 1; g.mo = clamp(g.mo + 10, 0, 100); } else { g.rec.l++; g.mo = clamp(g.mo - 8, 0, 100); }
       g.fame += Math.round(fame / glads.length); g.en = clamp(g.en - 25, 0, 100);
       const hpf = res.hpf && res.hpf[g.id] != null ? res.hpf[g.id] : win ? 0.6 : 0.2;
@@ -555,6 +556,7 @@
       rep.recap = { wins: S.stats.wins - sl.wins, losses: S.stats.losses - sl.losses, fame: S.fame - sl.fame, tour: S.stats.tourneys - sl.tour, mvp: mvp && (mvp.sw || 0) > 0 ? { name: mvp.name, w: mvp.sw, id: mvp.id } : null };
       S.sl = { fame: S.fame, wins: S.stats.wins, losses: S.stats.losses, tour: S.stats.tourneys }; S.glads.forEach((g) => { g.sw = 0; });
       rep.recap.rival = LM.rivalOfYear(S);
+      { const ml = LM.maxLeague(S); const relic = genItem(rnd, { league: Math.min(3, ml + 1), ilvl: 4 + ml * 5 + S.season * 2, rar: Math.min(4, 3 + (ml >= 2 ? 1 : 0)) }); relic.name = `Season ${S.season - 1} ${relic.name}`; LM.addItem(S, relic); rep.recap.relic = relic.name; }
       S.awards = (S.awards || []).concat([{ season: S.season - 1, mvp: rep.recap.mvp ? rep.recap.mvp.name : null, wins: rep.recap.wins, rival: rep.recap.rival ? rep.recap.rival.a + ' and ' + rep.recap.rival.b : null }]).slice(-12);
     }
     S.market = null; S.recruits = null; LM.relTick(S); rep.story = LM.storyCheck(S);
@@ -609,6 +611,7 @@
     }
   };
   LM.rivalryOf = (S, a, b) => (S.rivalry || {})[bkey(a, b)] || 0;
+  LM.diary = (S, g, t) => { g.dy = (g.dy || []).concat([{ w: S.week, t }]).slice(-12); };
   LM.forumAdd = (S, t) => { S.forum = (S.forum || []).concat([{ w: S.week, t }]).slice(-30); };
   LM.rivalryResolve = (S, a, b, choice, winnerId) => {
     LM.forumAdd(S, choice === 'partner' ? `${a.name} and ${b.name} train as partners now.` : `${a.name} and ${b.name} settled things in the sand.`);
@@ -629,14 +632,14 @@
   LM.storyProg = (g) => { const st = LM.storyDef(g); if (!st) return 0; return st.goal.k === 'wins' ? g.rec.w : st.goal.k === 'lvl' ? g.lvl : g.fame; };
   LM.storyCheck = (S) => {
     const out = [];
-    S.glads.forEach((g) => { const st = LM.storyDef(g); if (!st || g.story.done || LM.storyProg(g) < st.goal.n) return; g.story.done = true; g.st[st.rew.stat] += st.rew.v; g.title = st.rew.title; S.fame += st.rew.fame; out.push({ g, st }); });
+    S.glads.forEach((g) => { const st = LM.storyDef(g); if (!st || g.story.done || LM.storyProg(g) < st.goal.n) return; g.story.done = true; LM.diary(S, g, `Completed their quest: ${st.rew.title}.`); g.st[st.rew.stat] += st.rew.v; g.title = st.rew.title; S.fame += st.rew.fame; out.push({ g, st }); });
     return out;
   };
 
   // ---------- town crier, earned nicknames, rival owner ----------
   LM.earnNick = (S) => {
     const out = [];
-    S.glads.forEach((g) => { g.dd = g.dd || []; D.DEEDS.forEach((d) => { if (!g.dd.includes(d.id) && d.ok(g)) { g.dd.push(d.id); g.st[d.st] += 2; g.nick = d.n; out.push({ g, nick: d.n }); } }); });
+    S.glads.forEach((g) => { g.dd = g.dd || []; D.DEEDS.forEach((d) => { if (!g.dd.includes(d.id) && d.ok(g)) { g.dd.push(d.id); LM.diary(S, g, `Earned the name "${d.n}".`); g.st[d.st] += 2; g.nick = d.n; out.push({ g, nick: d.n }); } }); });
     return out;
   };
   LM.ownerTick = (S, won) => {

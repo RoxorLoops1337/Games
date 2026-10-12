@@ -382,5 +382,13 @@ ok(strongWins >= 17, `level 10 beats level 1 (${strongWins}/20)`);
   S16.week = 12; a.sw = 3; LM.weekFinish(S16); ok((S16.awards || []).length === 1 && S16.awards[0].season === 1 && S16.awards[0].mvp === a.name, 'season rollover stores a season award');
 }
 
+// round 17: diary, season prize
+{
+  const S17 = LM.newGame({ name: 'R17' }); const g = LM.makeGlad({ id: S17.nextId++, style: 'thraex', lvl: 3 }); S17.glads.push(g);
+  LM.diary(S17, g, 'one'); for (let i = 0; i < 15; i++) LM.diary(S17, g, 'e' + i); ok(g.dy.length === 12 && g.dy[11].t === 'e14', 'the diary keeps the latest twelve entries');
+  g.rec.w = 12; LM.earnNick(S17); ok(g.dy.some((x) => /Crowd Pleaser/.test(x.t)), 'earning a nickname is written to the diary');
+  S17.week = 12; const n0 = S17.items.length; const rp = LM.weekFinish(S17); ok(rp.recap && rp.recap.relic && /Season 1/.test(rp.recap.relic) && S17.items.length === n0 + 1, 'a season rollover grants a named prize item');
+}
+
 console.log(`ludus_maximus: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

@@ -158,5 +158,14 @@ Sponsor banners under tournament brackets, rivalry events logged in the Forum, a
 ## Next ideas
 - [ ] 71. Training dummy upgrades for the drill minigame
 - [ ] 72. Per-style signature entrance animations
-- [ ] 73. Gladiator diary lines on the profile
-- [ ] 74. Seasonal events with unique reward items
+- [x] 73. Gladiator diary lines on the profile
+- [x] 74. Seasonal events with unique reward items
+
+## Round 17 shipped
+Gladiator diary on the profile (fights, level ups, nicknames, quests) and a named Season prize item at every season rollover. Dummy upgrades (71), entrance animations (72), crowd audio (63) and replay (55) still open.
+
+## Next ideas
+- [ ] 75. Per-style entrance animations in the fight intro
+- [ ] 76. Diary export as part of the Share card
+- [ ] 77. Season prize choice (pick one of three)
+- [ ] 78. Arena crowd reacts to nicknames
