@@ -136,6 +136,7 @@
     h += '</div>';
     const menu = D.MENUS.find((m) => m.id === S.menu) || D.MENUS[0];
     const inc = L.weeklyIncome(S), up = L.upkeep(S), mc = menu.c * S.glads.length;
+    { const vv = L.visitor(S); if (vv) h += `<div class="sec">Visitor</div><div class="card"><div class="row"><div class="sp"><b class="h">${vv.name}</b><div class="small" style="font-weight:600">${vv.d}${vv.cost ? ' Costs ' + vv.cost + ' gold.' : ''}</div></div><button class="btn sm" data-a="visit">Visit</button></div></div>`; }
     h += `<div class="sec">Kitchen</div><div class="card"><div class="row"><div class="sp"><div class="gname">${menu.n}</div><div class="muted">${menu.d}</div></div><button class="btn sm" data-a="menu">Change</button></div></div>`;
     const nt = Object.keys(S.trophies || {}).length; h += `<div class="sec">Trophy shelf ${nt}/${D.TROPHIES.length}</div><div class="card" style="padding:8px">${shelf(true)}</div>`;
     h += `<div class="sec">Weekly forecast</div><div class="card"><div class="kv"><span>Market income</span><b>+${fmt(inc)}</b></div><div class="kv"><span>Upkeep (${S.glads.length} fighters)</span><b>-${fmt(up)}</b></div><div class="kv"><span>Food (${menu.n})</span><b>-${fmt(mc)}</b></div><div class="muted" style="margin-top:6px">Tip: tap a building to upgrade it. Neighbours it likes add a +synergy bonus to its effect.</div></div>`;
@@ -209,6 +210,15 @@
   };
   ACT.setact = (el) => { const g = gOf(+el.dataset.id); g.act = el.dataset.v; U.snd('click'); save(); render(); };
   ACT.drillboard = () => { const l = S.glads.filter((g) => g.rtBest).sort((a, b) => a.rtBest - b.rtBest); modal('<h2>Drill board</h2><div class="muted" style="margin-bottom:6px">Best reflex times in your ludus. Reflex drills unlock with a level 3 Sparring Ring.</div>' + (l.length ? l.map((g, i) => `<div class="itm" style="cursor:default"><b style="width:22px">${i + 1}</b><div style="width:40px;height:46px;overflow:hidden;display:flex;align-items:flex-end;justify-content:center">${spr(g, { size: 42 })}</div><div class="sp"><div class="gname" style="font-size:13px">${esc(g.name)}</div></div><b>${g.rtBest} ms</b></div>`).join('') : '<div class="empty" style="color:var(--ink)">No reflex times yet.</div>')); };
+  ACT.visit = () => {
+    const v = L.visitor(S); if (!v) return toast('The visitor has moved on.');
+    const need = v.kind === 'trainer';
+    modal(`<h2>${esc(v.name)}</h2><div class="muted" style="margin-bottom:8px">${esc(v.d)}${v.cost ? ' Costs ' + v.cost + ' gold.' : ''}</div>` + (need ? S.glads.map((g) => `<div class="itm" data-a="visitgo" data-id="${g.id}"><div style="width:40px;height:46px;overflow:hidden;display:flex;align-items:flex-end;justify-content:center">${spr(g, { size: 42 })}</div><div class="sp"><div class="gname" style="font-size:13px">${esc(g.name)}</div></div></div>`).join('') : `<button class="btn full red" data-a="visitgo">${v.cost ? 'Accept (' + v.cost + ' gold)' : 'Accept'}</button>`));
+  };
+  ACT.visitgo = (el) => {
+    const v = L.visitor(S); const g = el.dataset.id ? gOf(+el.dataset.id) : null; const r = L.visit(S, v, g);
+    if (typeof r === 'string') return toast(r); U.snd('win'); save(); closeModal(); render(); toast(r.msg);
+  };
   ACT.preset = (el) => { const n = L.preset(S, el.dataset.v); U.snd('click'); save(); render(); toast(n ? `Plans set for ${n} fighter${n > 1 ? 's' : ''}.` : 'Nothing to change.'); };
   ACT.autoplan = () => {
     S.glads.forEach((g) => {
