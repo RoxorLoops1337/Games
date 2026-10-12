@@ -23,6 +23,8 @@ interface HintCtx {
     titan?: boolean;
     /** Your own companion walks beside you, close enough to pet. */
     petNear?: boolean;
+    /** Another farmer stands close enough to trade with. */
+    friendNear?: boolean;
     /** Rain still to come: 0 later today, 1 tomorrow, null (or left out) none in sight. */
     rain?: 0 | 1 | null;
     /** The dusk countdown is on (or it is night): only a hint about what is happening right now may speak. Optional. */
@@ -124,6 +126,21 @@ export const HINTS: Hint[] = [
         id: 'pat', icon: 'k_heart', color: PAL.blossom,
         when: (c) => !!c.petNear && !!c.me.comp,
         text: () => 'Press E next to your companion to pet it: it grows fonder, and a fond one digs up a gift each day (guide: H).',
+    },
+    {
+        id: 'stash', icon: 'k_bag', color: PAL.sand,
+        when: (c) => c.me.stats.built > 0 && Object.values(c.me.inv).reduce((a, n) => a + (n ?? 0), 0) >= 80,
+        text: () => 'Pockets filling up? Press G near your chests to quick stack: it puts things where they already live. Hover an item and press F to star it so it always stays with you.',
+    },
+    {
+        id: 'ride', icon: 'k_paw', color: PAL.blossom,
+        when: (c) => !!c.petNear && !!c.me.comp && !c.me.ride && (c.me.pets ?? []).some((p) => p.id === c.me.comp && p.lv >= 3 && (p.aff ?? 0) >= 10),
+        text: () => 'Your companion is big enough to carry you: press R beside it to ride for a faster run. A blow knocks you off.',
+    },
+    {
+        id: 'trade', icon: 'k_flag', color: PAL.gold,
+        when: (c) => !!c.friendNear && !c.me.trade,
+        text: () => 'A friend is close: press Y to trade. You both see both offers, and changing anything clears the Accepts, so nobody can swap the goods.',
     },
     {
         id: 'chute', icon: 'k_coin', color: PAL.gold,

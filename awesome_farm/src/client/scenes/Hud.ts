@@ -134,7 +134,7 @@ export class HudScene extends Phaser.Scene {
     private hints!: Hints;
     /** What the first-time hints look for in the world around you, looked at twice a second (not every frame: it walks the entities). */
     private hintScan = 0;
-    private hintNear = { windup: false, titan: false };
+    private hintNear = { windup: false, titan: false, friendNear: false };
     private tutorial!: Tutorial;
     private fpsT!: Phaser.GameObjects.Text;
     private barG!: Phaser.GameObjects.Graphics;
@@ -300,15 +300,23 @@ export class HudScene extends Phaser.Scene {
     }
 
     /** Y: offer a trade to the nearest friend who is close enough. */
-    startTrade () {
-        const f = this.farm, me = f.meS!;
-        if (!f.ready || me.downed > 0 || me.trade) return;
+    /** The nearest other farmer close enough to trade with. */
+    private friendInReach (): string | null {
+        const f = this.farm;
+        if (!f.ready) return null;
         let best: { id: string; d: number } | null = null;
         for (const q of Object.values(f.players)) {
             if (q.id === f.me || !q.online || q.downed > 0) continue;
             const d = Math.hypot(q.x - f.local.x, q.y - f.local.y);
             if (d <= TRADE_REACH && (!best || d < best.d)) best = { id: q.id, d };
         }
+        return best?.id ?? null;
+    }
+
+    startTrade () {
+        const f = this.farm, me = f.meS!;
+        if (!f.ready || me.downed > 0 || me.trade) return;
+        const best = this.friendInReach() ? { id: this.friendInReach()! } : null;
         if (!best) { this.toasts.push('No friend close enough to trade with', undefined, PAL.pebble); return; }
         f.send({ t: 'trade', op: 'open', who: best.id });
     }
@@ -387,6 +395,7 @@ export class HudScene extends Phaser.Scene {
         const k = keyOf(ev);
         const lower = k.length === 1 ? k.toLowerCase() : k;
         if (this.farm.meS!.downed > 0 && lower === 'r' && !this.screen) { ev.preventDefault(); this.farm.send({ t: 'respawn' }); return; }       // don't want to wait for a friend: wake up at home
+        if (!this.screen && lower === 'g' && !ev.ctrlKey && !ev.metaKey && !ev.altKey) { ev.preventDefault(); this.farm.send({ t: 'inv', op: 'stash' }); return; }       // quick stack into the chests round you
         if (!this.screen && lower === 'y' && !ev.ctrlKey && !ev.metaKey && !ev.altKey) { ev.preventDefault(); this.startTrade(); return; }       // trade with the nearest friend
         if (!this.screen && lower === 'r' && !ev.ctrlKey && !ev.metaKey && !ev.altKey) { ev.preventDefault(); this.farm.send({ t: 'ride' }); return; }       // climb on / off your companion
         if (!this.screen && (ev.key === '+' || ev.key === '=' || ev.key === 'Add' || ev.code === 'NumpadAdd')) { ev.preventDefault(); this.farm.zoomBy(1); return; }
@@ -461,7 +470,7 @@ export class HudScene extends Phaser.Scene {
         const coach = slots.get('card');
         if (this.labPanel) this.labPanel.update(dt, this.party.bottom, !!this.screen || this.photo);         // (the Defense Lab: its panel has the quests' place)
         else this.tracker.update(this.party.bottom, !!coach && this.tutorial.active, this.touchMode ? 340 : 470);
-        if ((this.hintScan -= dt) <= 0) { this.hintScan = 0.5; this.hintNear = { windup: f.windupNear(), titan: f.titanNear() }; }
+        if ((this.hintScan -= dt) <= 0) { this.hintScan = 0.5; this.hintNear = { windup: f.windupNear(), titan: f.titanNear(), friendNear: this.friendInReach() != null }; }
         this.hints.update(dt, { me, prompt: f.prompt, ...this.hintNear, petNear: !!f.petBeside(), rain: this.rainSoon() }, !!this.screen || me.downed > 0 || this.photo);
         // The top slot (see ui/slots.ts): the coach card and the tip cards wait for a banner, a banner waits for the cards to fade
         // away, and all of them wait for a window. Toasts sit in their own lane and hide under windows.
