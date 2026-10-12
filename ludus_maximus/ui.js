@@ -123,7 +123,7 @@
   }
   function vLudus() {
     const cap = L.rosterCap(S); const season = Math.ceil(S.week / 12); const wk = ((S.week - 1) % 12) + 1;
-    let h = `<div class="banner"><div style="flex:1"><h2>${esc(S.name)}</h2><div class="small" style="opacity:.9">Season ${season} · Week ${wk}/12 · ${S.glads.length}/${cap} fighters</div></div><span class="tag">${D.LEAGUES[L.maxLeague(S)].n}</span></div>${L.festival(S, S.week) ? `<div class="card" style="background:${L.festival(S, S.week).c};color:#fff;border-color:var(--ink)"><b class="h" style="font-size:13px">${L.festival(S, S.week).n}</b><div class="small" style="font-weight:700">${L.festival(S, S.week).d}</div></div>` : ''}`;
+    let h = `<div class="banner"><div style="flex:1"><h2>${esc(S.name)}</h2><div class="small" style="opacity:.9">Season ${season} · Week ${wk}/12 · ${S.glads.length}/${cap} fighters</div></div><span class="tag">${D.LEAGUES[L.maxLeague(S)].n}</span></div>${L.festival(S, S.week) ? `<div class="card" style="background:${L.festival(S, S.week).c};color:#fff;border-color:var(--ink)"><b class="h" style="font-size:13px">${L.festival(S, S.week).n}</b><div class="small" style="font-weight:700">${L.festival(S, S.week).d}</div></div>` : ''}${L.festival(S, S.week + 1) && S.week < 12 ? `<div class="small" style="margin:-4px 0 8px;font-weight:800;color:${L.festival(S, S.week + 1).c}">Next week: ${L.festival(S, S.week + 1).n}. ${L.festival(S, S.week + 1).d}</div>` : ''}`;
     const pplAt = {}; S.glads.forEach((g) => { (pplAt[where(g)] = pplAt[where(g)] || []).push(g); });
     h += `<div class="map wx-${L.weather(S, 'map' + S.week)}">`;
     for (let i = 0; i < 16; i++) {
