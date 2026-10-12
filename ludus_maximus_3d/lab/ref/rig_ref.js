@@ -284,7 +284,7 @@ function idleSample(t, P, c) {
   return P;
 }
 const GAITS = {
-  walk: { A: 0.42, K: 0.95, kBase: 0.08, arm: 0.5, elbow: 0.28, lean: 0.05, bob: 0, hipYaw: 0.16, chestYaw: 0.22, lock: 1 },
+  walk: { A: 0.4, K: 0.75, kBase: 0.08, arm: 0.5, elbow: 0.28, lean: 0.05, bob: 0, hipYaw: 0.16, chestYaw: 0.22, lock: 1 },
   run: { A: 0.85, K: 1.75, kBase: 0.25, arm: 0.95, elbow: 1.35, lean: 0.27, bob: 0.085, hipYaw: 0.22, chestYaw: 0.3, lock: 0.35 },
 };
 function gaitSample(P, p, g, c, backwards = false) {

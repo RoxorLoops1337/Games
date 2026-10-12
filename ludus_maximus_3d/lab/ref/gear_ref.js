@@ -63,8 +63,8 @@ export function makeHelm(rig, kind = 'murmillo') {
     const tail = part(boxG(0.02, 0.07, 0.1), m.trim, 'crestTail'); tail.position.set(0, 0.29, -0.16); tail.rotation.x = 0.5; g.add(tail);
   } else if (kind === 'thraex') { // brim + griffin crest
     const brim = part(new THREE.CylinderGeometry(0.15, 0.15, 0.012, 9), m.metal, 'brim'); col(brim.geometry); brim.position.set(0, 0.14, 0.02); brim.scale.set(0.95, 1, 1.2); g.add(brim);
-    const gr = part(boxG(0.02, 0.2, 0.2), m.trim, 'griffin'); gr.position.set(0, 0.34, -0.02); g.add(gr);
-    const beak = part(col(new THREE.ConeGeometry(0.04, 0.12, 4)), m.trim, 'beak'); beak.rotation.x = Math.PI / 2; beak.position.set(0, 0.4, 0.12); g.add(beak);
+    const gr = part(boxG(0.02, 0.1, 0.2), m.trim, 'griffin'); gr.position.set(0, 0.3, -0.03); g.add(gr);
+    const beak = part(col(new THREE.ConeGeometry(0.04, 0.12, 4)), m.trim, 'beak'); beak.rotation.x = Math.PI / 2; beak.position.set(0, 0.32, 0.12); g.add(beak);
   } else if (kind === 'hoplomachus') { // plume holder
     const hold = part(boxG(0.04, 0.05, 0.12), m.trim, 'holder'); hold.position.set(0, 0.275, 0); g.add(hold);
   }
