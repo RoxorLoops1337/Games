@@ -755,14 +755,16 @@ export function buildGladiator(opts = {}) {
       for (const k in by) {
         const list = by[k]; let nv = 0, ni = 0; for (const it of list) { nv += it.geo.attributes.position.count; ni += it.geo.index ? it.geo.index.count : it.geo.attributes.position.count; }
         const pos = new Float32Array(nv * 3), nor = new Float32Array(nv * 3), clr = new Float32Array(nv * 3), si = new Uint16Array(nv * 4), sw = new Float32Array(nv * 4), idx = new Uint32Array(ni);
+        const hasUV = list.some((it) => it.geo.attributes.uv), uvs = hasUV ? new Float32Array(nv * 2) : null;
         let vo = 0, io = 0;
         for (const it of list) {
-          const g = it.geo, n = g.attributes.position.count; pos.set(g.attributes.position.array, vo * 3); nor.set(g.attributes.normal.array, vo * 3); clr.set(g.attributes.color.array, vo * 3);
+          const g = it.geo, n = g.attributes.position.count; pos.set(g.attributes.position.array, vo * 3); nor.set(g.attributes.normal.array, vo * 3); clr.set(g.attributes.color.array, vo * 3); if (uvs && g.attributes.uv) uvs.set(g.attributes.uv.array, vo * 2);
           for (let i = 0; i < n; i++) { si[(vo + i) * 4] = it.bone; sw[(vo + i) * 4] = 1; }
           if (g.index) for (let i = 0; i < g.index.count; i++) idx[io++] = g.index.getX(i) + vo; else for (let i = 0; i < n; i++) idx[io++] = vo + i;
           vo += n;
         }
         const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(pos, 3)); geo.setAttribute('normal', new THREE.BufferAttribute(nor, 3)); geo.setAttribute('color', new THREE.BufferAttribute(clr, 3));
+        if (uvs) geo.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
         geo.setAttribute('skinIndex', new THREE.BufferAttribute(si, 4)); geo.setAttribute('skinWeight', new THREE.BufferAttribute(sw, 4)); geo.setIndex(new THREE.BufferAttribute(idx, 1));
         geo.boundingSphere = new THREE.Sphere(new V3(0, 1, 0), 3); geo.boundingBox = new THREE.Box3(new V3(-3, -1, -3), new V3(3, 3, 3));
         const m = new THREE.SkinnedMesh(geo, mats[k]); m.name = k; m.castShadow = true; m.receiveShadow = false; m.frustumCulled = false;

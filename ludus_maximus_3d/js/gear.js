@@ -167,7 +167,7 @@ export function mountShield(rig, kind, o = {}, rr = { r: 0, col: '#fff' }) {
   const R = sc ? 0.46 : 0.5, hw = sc ? 0.31 : 0.205, hh = sc ? 0.98 : 0.4, sh = shell(R, hw, hh, sc ? 5 : 4, sc ? 5 : 3, sc ? 8 : 4, sc ? 4 : 3), zc = sc ? 0.2 : 0.14, dy = sc ? 0.04 : 0;
   const mat = rig.addMaterial('shield', new THREE.MeshStandardMaterial({ color: '#ffffff', map: shieldTexture(kind, cloth), roughness: 0.72, metalness: 0.05, vertexColors: true, side: THREE.DoubleSide }), 'cloth', { back: true });
   if (!mat.map) mat.color.set(cloth);
-  const place = (g) => xf(g, [0, dy, zc - sh.sag]);
+  const place = (g) => xf(g, [-0.1, dy, zc - sh.sag]);
   rig.add('shield', place(sh.g.clone()), holder);
   const [lip, wall] = rimOf(sh, sc ? 0.05 : 0.036, sc ? 0.04 : 0.032);
   rig.add('metal', paint(place(lip), 1.1), holder); rig.add('metal', paint(place(wall), 0.7), holder);

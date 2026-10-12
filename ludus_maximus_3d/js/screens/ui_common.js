@@ -69,7 +69,7 @@ export function clearTips() { document.querySelectorAll('.lx-tip').forEach((e) =
 /** replace the title text of a sheet created by ctx.sheet */
 export function setTitle(m, text) { const t = m.el.querySelector('.lx-title'); if (t) t.textContent = text; }
 /** give a sheet a wider desktop layout */
-export function wide(m, px, cls = '') { const s = m.el.querySelector('.lx-sheet'); if (s) { s.style.setProperty('--lm-w', px + 'px'); s.classList.add('lm-wide', ...(cls ? [cls] : [])); } return m; }
+export function wide(m, px, cls = '') { const oc = m.close; m.close = () => { clearTips(); oc.call(m); }; const s = m.el.querySelector('.lx-sheet'); if (s) { s.style.setProperty('--lm-w', px + 'px'); s.classList.add('lm-wide', ...(cls ? [cls] : [])); } return m; }
 
 /** two grids of activity buttons (5 training stats, then rest/spar/jobs/spy). onPick(act) */
 export function activityGrid(g, onPick) {
