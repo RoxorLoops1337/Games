@@ -397,5 +397,12 @@ ok(strongWins >= 17, `level 10 beats level 1 (${strongWins}/20)`);
   const S21 = LM.newGame({ name: 'R21' }); S21.week = 12; S21.lastBackup = 11; ok(!LM.weekFinish(S21).notes.some((n) => /back up/.test(n)), 'a recent backup silences the reminder');
 }
 
+// round 21: weekly goals
+{
+  const S22 = LM.newGame({ name: 'R22' }); S22.week = 3; S22.wkWins = 2; S22.bountyWeek = 3; S22.hordeWeek = 1; const g = LM.weeklyGoals(S22);
+  ok(g.length === 3 && g[0].done && g[1].done && !g[2].done, 'goals reflect this week progress'); const g0 = S22.gold; const rp = LM.weekFinish(S22);
+  ok(S22.gold - g0 >= 2 * LM.goalPay(S22) - 1 && rp.notes.some((n) => /Weekly goals: 2\/3/.test(n)) && S22.wkWins === 0, 'finished goals pay and the counter resets');
+}
+
 console.log(`ludus_maximus: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
