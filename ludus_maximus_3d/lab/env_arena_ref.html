@@ -45,6 +45,7 @@ const SHOTS = [
   (t) => [[16, 2.4, -2], [-10, 9, -9]],                       // toward sun-side seats and velarium
   (t) => [[-62, 10, 52], [0, 8, 0]],                          // outside facade
   (t) => [[0, 1.7, 9], [0, 6.5, -14]],                        // low hero angle on the crowd
+  (t) => [[-48, 7, 6], [-39.5, 8, 0]],                         // facade close-up
 ];
 lab.run((t, dt) => {
   const [p, l] = SHOTS[cam](t);
