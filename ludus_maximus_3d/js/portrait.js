@@ -13,9 +13,9 @@ import { createGladiator } from './gladiator.js';
 export const portraitSync = () => null;
 
 const FRAMES = {
-  bust: { fov: 19, dist: 3.5, y: 1.55, tx: 0.0, yaw: -0.5 },
-  three: { fov: 24, dist: 4.4, y: 1.25, tx: 0.0, yaw: -0.45 },
-  full: { fov: 28, dist: 5.4, y: 0.98, tx: 0.0, yaw: -0.4 },
+  bust: { fov: 19, dist: 3.5, y: 1.55, tx: 0.0, yaw: 0.5 },
+  three: { fov: 24, dist: 4.4, y: 1.25, tx: 0.0, yaw: 0.45 },
+  full: { fov: 28, dist: 5.4, y: 0.98, tx: 0.0, yaw: 0.4 },
 };
 const POSES = { idle: null, guard: null, victory: 'victory', taunt: 'taunt', block: 'block' };
 const key = (g, o) => {
@@ -42,7 +42,7 @@ export function createPortraitRenderer({ renderer = null, tier = 'medium', maxCa
   const shared = !!renderer; let own = null, rt = null, rtW = 0, rtH = 0;
   const scene = new THREE.Scene(), cam = new THREE.PerspectiveCamera(20, 1, 0.1, 60);
   const key1 = new THREE.DirectionalLight(0xffc27a, shared ? 2.6 : 3.4), rim = new THREE.DirectionalLight(0x8fb2ff, shared ? 2.2 : 2.8), fill = new THREE.HemisphereLight(0x9db4e8, 0xb8743f, shared ? 0.85 : 1.0);
-  key1.position.set(-2.4, 2.4, 3.2); rim.position.set(3, 2.4, -2.4);
+  key1.position.set(2.4, 2.4, 3.2); rim.position.set(-3, 2.4, -2.4);
   scene.add(key1, rim, fill);
   const cache = new Map(), inflight = new Map(), queue = [];
   let raf = 0, disposed = false, rendered = 0, lastMs = 0, ctxLost = false;
@@ -64,6 +64,8 @@ export function createPortraitRenderer({ renderer = null, tier = 'medium', maxCa
     const rig = createGladiator(g, { seg: 8 });
     rig.root.rotation.y = fr.yaw; scene.add(rig.root);
     const clip = POSES[o.pose];
+    // bust: arms relaxed so the weapon and shield hang below the frame instead of covering the face ('guard' keeps them raised)
+    if (o.pose !== 'guard' && o.pose !== 'block' && (o.style || 'bust') === 'bust') { rig.animator.setWeapon('unarmed'); rig.animator.armed = 0; }
     if (clip === 'block' || clip === 'taunt') { rig.animator.play(clip); }
     else if (clip) rig.animator.setState(clip);
     for (let i = 0; i < 14; i++) rig.update(1 / 20);
