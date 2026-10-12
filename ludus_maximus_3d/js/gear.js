@@ -141,7 +141,7 @@ function makeNet(rig, o) {
 
 // ---------------------------------------------------------------- shields
 // Curved shell (cylindrical section) with a rounded-rectangle outline. P(u,v) in [0,1]^2 -> point; centre at z = sag.
-function shell(R, halfW, h, nu, nv, corner = 6) {
+function shell(R, halfW, h, nu, nv, corner = 6, steps = 4) {
   const hang = Math.asin(clamp(halfW / R, 0, 0.99));
   const P = (u, v) => { const t = v * 2 - 1, k = 1 - 0.2 * Math.pow(Math.abs(t), corner), a = (u * 2 - 1) * hang * k; return ps(R * Math.sin(a), t * h / 2, R * Math.cos(a) - R * Math.cos(hang)); };
   const N = (u, v) => { const p = P(u, v); return ps(p.x / R, 0, (p.z + R * Math.cos(hang)) / R).normalize(); };
@@ -149,13 +149,13 @@ function shell(R, halfW, h, nu, nv, corner = 6) {
   for (let j = 0; j <= nv; j++) for (let i = 0; i <= nu; i++) { const p = P(i / nu, j / nv), n = N(i / nu, j / nv); pos.push(p.x, p.y, p.z); nor.push(n.x, n.y, n.z); uv.push(i / nu, j / nv); }
   for (let j = 0; j < nv; j++) for (let i = 0; i < nu; i++) { const a = j * (nu + 1) + i, b = a + 1, c = a + nu + 1, d = c + 1; idx.push(a, b, c, b, d, c); }
   const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); g.setIndex(idx);
-  const col = new Float32Array(pos.length).fill(1); g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  g.setAttribute('color', new THREE.BufferAttribute(new Float32Array(pos.length).fill(1), 3));
   // perimeter loop: bottom -> right -> top -> left, with inward directions
   const per = [], add = (u, v) => { const p = P(u, v), n = N(u, v), c = P(0.5, 0.5), inn = ps(c.x - p.x, c.y - p.y, 0).normalize(); per.push({ p, n, inn }); };
-  const steps = 8; for (let i = 0; i < steps; i++) add(i / steps, 0); for (let j = 0; j < steps; j++) add(1, j / steps); for (let i = 0; i < steps; i++) add(1 - i / steps, 1); for (let j = 0; j < steps; j++) add(0, 1 - j / steps);
+  for (let i = 0; i < steps; i++) add(i / steps, 0); for (let j = 0; j < steps; j++) add(1, j / steps); for (let i = 0; i < steps; i++) add(1 - i / steps, 1); for (let j = 0; j < steps; j++) add(0, 1 - j / steps);
   per.push(per[0]); return { g, P, N, per, hang, sag: R * (1 - Math.cos(hang)) };
 }
-function rimOf(sh, lip, wall, edgeOut = 0) {
+function rimOf(sh, lip, wall) {
   const lipPts = sh.per.map((q) => q.p.clone().addScaledVector(q.inn, lip / 2).addScaledVector(q.n, 0.007)), wallPts = sh.per.map((q) => q.p.clone().addScaledVector(q.n, -wall / 2 + 0.004));
   return [ribbon(lipPts, lip, (p, i) => sh.per[i].n), ribbon(wallPts, wall, (p, i) => sh.per[i].inn.clone().multiplyScalar(-1))];
 }
@@ -163,29 +163,21 @@ function rimOf(sh, lip, wall, edgeOut = 0) {
 // forearm axis projected on the ground plane (so it never flops flat when the arm hangs) and its height axis stays along body up.
 export function mountShield(rig, kind, o = {}, rr = { r: 0, col: '#fff' }) {
   const wrist = rig.joints.wristL, holder = new THREE.Object3D(); holder.name = 'shield-' + kind; holder.position.set(0, -0.07, 0); wrist.add(holder); rig.addBone(holder);
-  const cloth = '#' + new THREE.Color(rig.palette.cloth).getHexString();
-  const sc = kind === 'scutum';
-  const R = sc ? 0.46 : 0.5, hw = sc ? 0.31 : 0.205, hh = sc ? 0.98 : 0.4, sh = shell(R, hw, hh, sc ? 9 : 6, sc ? 8 : 4, sc ? 8 : 4), zc = sc ? 0.2 : 0.14, dy = sc ? 0.04 : 0;
+  const cloth = '#' + new THREE.Color(rig.palette.cloth).getHexString(), sc = kind === 'scutum';
+  const R = sc ? 0.46 : 0.5, hw = sc ? 0.31 : 0.205, hh = sc ? 0.98 : 0.4, sh = shell(R, hw, hh, sc ? 5 : 4, sc ? 5 : 3, sc ? 8 : 4, sc ? 4 : 3), zc = sc ? 0.2 : 0.14, dy = sc ? 0.04 : 0;
   const mat = rig.addMaterial('shield', new THREE.MeshStandardMaterial({ color: '#ffffff', map: shieldTexture(kind, cloth), roughness: 0.72, metalness: 0.05, vertexColors: true, side: THREE.DoubleSide }), 'cloth', { back: true });
   if (!mat.map) mat.color.set(cloth);
   const place = (g) => xf(g, [0, dy, zc - sh.sag]);
   rig.add('shield', place(sh.g.clone()), holder);
   const [lip, wall] = rimOf(sh, sc ? 0.05 : 0.036, sc ? 0.04 : 0.032);
-  rig.add('metal', paint(place(lip), (x, y, z) => 1.1), holder); rig.add('metal', paint(place(wall), 0.7), holder);
-  const bz = zc + 0.015;
-  rig.add('metal', xf(sphereG(sc ? 0.082 : 0.062, 8, 4, 1, 1, 0.55), [0, dy, bz]), holder);
-  rig.add('trim', xf(torusG(sc ? 0.084 : 0.064, 0.008, 3, 10), [0, dy, bz - 0.005]), holder);
+  rig.add('metal', paint(place(lip), 1.1), holder); rig.add('metal', paint(place(wall), 0.7), holder);
+  const bz = zc + 0.012;
+  rig.add('metal', xf(sphereG(sc ? 0.082 : 0.062, 6, 3, 1, 1, 0.55), [0, dy, bz]), holder);
   if (rr.r >= 1) gem(rig, holder, [0, dy, bz + (sc ? 0.05 : 0.04)], sc ? 0.026 : 0.02, { r: Math.max(2, rr.r), col: rr.col });
   if (rr.r >= 3) for (const sy of [-1, 1]) gem(rig, holder, [0, dy + sy * hh * 0.42, zc - sh.sag * 0.15 + 0.012], 0.014, rr);
-  if (sc) { // spine ridge and corner studs
-    for (const sy of [-1, 1]) for (const sx of [-1, 1]) rig.add('trim', xf(sphereG(0.012, 5, 3), [sx * hw * 0.78, dy + sy * hh * 0.43, zc - sh.sag * 0.55 + 0.012]), holder);
-  }
-  // back: grip bar + arm strap (bare leather shows on the back faces through the material)
-  rig.add('leather', xf(cylG(0.014, 0.014, 0.15, 5), [0, dy * 0 - 0.0, 0.035], [0, 0, PI / 2]), holder);
-  rig.add('leather', xf(boxG(0.075, 0.03, 0.02), [0, 0.12, 0.052]), holder); rig.add('leather', xf(boxG(0.075, 0.03, 0.02), [0, -0.12, 0.052]), holder);
-  // stabiliser (body-space basis from the forearm heading), runs after IK
-  const f = new V3(), n = new V3(), up = new V3(), x = new V3(), M = new THREE.Matrix4(), qb = new THREE.Quaternion(), qw = new THREE.Quaternion(), qi = new THREE.Quaternion(), qn = new THREE.Quaternion(), bf = new V3(0, 0, 1);
-  const w2 = new V3();
+  rig.add('leather', xf(boxG(0.16, 0.026, 0.02), [0, 0, 0.04]), holder); // grip bar (the back faces show bare leather via the shader)
+  rig.add('leather', xf(quadG(0.07, 0.05), [0, 0.12, 0.05]), holder); rig.add('leather', xf(quadG(0.07, 0.05), [0, -0.12, 0.05]), holder);
+  const f = new V3(), n = new V3(), up = new V3(), x = new V3(), M = new THREE.Matrix4(), qb = new THREE.Quaternion(), qw = new THREE.Quaternion(), qi = new THREE.Quaternion(), qn = new THREE.Quaternion(), bf = new V3(0, 0, 1), w2 = new V3();
   rig.postUpdate.push(() => {
     wrist.getWorldQuaternion(qw); rig.body.getWorldQuaternion(qb); qi.copy(qb).invert();
     f.set(0, -1, 0).applyQuaternion(qw).applyQuaternion(qi); // forearm axis in body space
@@ -198,68 +190,60 @@ export function mountShield(rig, kind, o = {}, rr = { r: 0, col: '#fff' }) {
 }
 
 // ---------------------------------------------------------------- helms
-function faceBars(rig, head, R, y0, y1, xs, mat = 'metal') {
-  for (const x of xs) { const a = Math.asin(clamp(x / (R * 0.95), -0.95, 0.95)), z = R * 1.06 * Math.cos(a); rig.add(mat, xf(cylG(0.0042, 0.0042, y1 - y0, 4), [x, (y0 + y1) / 2, z], [0, 0, 0]), head); }
+function faceBars(rig, head, R, y0, y1, xs) {
+  for (const x of xs) { const a = Math.asin(clamp(x / (R * 0.95), -0.95, 0.95)), z = R * 1.06 * Math.cos(a); rig.add('metal', xf(cylG(0.0045, 0.0045, y1 - y0, 3), [x, (y0 + y1) / 2, z]), head); }
 }
-function domeG(R, yb, top, sx = 0.95, sz = 1.06, seg = 12) {
-  return lathe([[R, yb], [R * 1.04, yb + 0.06], [R * 1.03, yb + 0.13], [R * 0.95, yb + 0.19], [R * 0.7, top - 0.04], [R * 0.37, top - 0.012], [0, top]], seg, sx, sz, 0.1, 0.85);
+function domeG(R, yb, top, sx = 0.95, sz = 1.06, seg = 10) {
+  return lathe([[R, yb], [R * 1.03, yb + 0.13], [R * 0.93, yb + 0.2], [R * 0.52, top - 0.015], [0, top]], seg, sx, sz, 0.1, 0.85);
 }
+const mask = (y0, y1, sw, r0, r1, seg = 8) => lathe([[r0, y0], [r1, y1]], seg, 0.96, 1.06, 0, 1, -sw / 2, sw);
 function helmMurmillo(rig, o, rr) {
   const H = rig.joints.head, A = (m, g) => rig.add(m, g, H);
   A('metal', domeG(0.122, -0.005, 0.275));
-  A('metal', lathe([[0.19, -0.082], [0.15, -0.045], [0.122, -0.005]], 9, 0.95, 1.05, 0, 1, PI * 0.45, PI * 1.1)); // flared neck guard
-  A('trim', lathe([[0.19, -0.086], [0.192, -0.086], [0.192, -0.078], [0.19, -0.078]], 9, 0.95, 1.05, 0, 1, PI * 0.45, PI * 1.1));
-  const mask = (y0, y1, sw, r0, r1) => lathe([[r0, y0], [r1, y1]], 10, 0.96, 1.06, 0, 1, -sw / 2, sw);
+  A('metal', lathe([[0.18, -0.075], [0.122, -0.005]], 6, 0.95, 1.05, 0, 1, PI * 0.45, PI * 1.1)); // flared neck guard
   A('metal', paint(mask(-0.025, 0.098, PI * 1.32, 0.118, 0.131), (x, y) => 0.82 + 0.25 * sm01(-0.02, 0.1, y)));
   A('metal', mask(0.148, 0.205, PI * 1.32, 0.132, 0.13));
-  A('trim', mask(0.142, 0.15, PI * 1.32, 0.133, 0.133));
-  faceBars(rig, H, 0.132, 0.098, 0.15, [0, -0.074, 0.074, -0.108, 0.108]);
-  for (const sy of [0.02, 0.04]) A('metal', paint(xf(boxG(0.07, 0.007, 0.01), [0, sy, 0.139]), 0.12)); // breathing slits
-  for (const sg of [-1, 1]) A('metal', xf(sphereG(0.02, 5, 3), [sg * 0.118, 0.03, 0.0], [0, 0, 0], [0.5, 1, 1]));
-  // fish crest: extruded fin with a gold edge and a tail fin
-  const fin = extrude([[0.12, 0.2], [0.13, 0.285], [0.085, 0.345], [0.02, 0.395], [-0.05, 0.4], [-0.115, 0.37], [-0.17, 0.3], [-0.215, 0.215], [-0.17, 0.2], [-0.2, 0.15], [-0.1, 0.19], [0.0, 0.215], [0.08, 0.212]], 0.028, 0.004);
-  A('metal', xf(fin, [0, 0.03, 0], [0, -PI / 2, 0]));
-  A('trim', xf(extrude([[0.126, 0.26], [0.13, 0.285], [0.085, 0.345], [0.02, 0.395], [-0.05, 0.4], [-0.115, 0.37], [-0.12, 0.355], [-0.05, 0.384], [0.02, 0.379], [0.075, 0.33], [0.116, 0.275]], 0.034), [0, 0.03, 0], [0, -PI / 2, 0]));
-  A('trim', xf(sphereG(0.022, 6, 4), [0, 0.268, 0.1], [0, 0, 0], [0.8, 0.8, 1.2]));
-  A('trim', xf(sphereG(0.015, 5, 3), [0, 0.3, 0.11]));
+  A('trim', mask(0.142, 0.15, PI * 1.32, 0.134, 0.134, 8));
+  faceBars(rig, H, 0.132, 0.098, 0.15, [0, -0.074, 0.074, -0.106, 0.106]);
+  A('metal', paint(xf(quadG(0.07, 0.007), [0, 0.03, 0.138]), 0.12)); A('metal', paint(xf(quadG(0.07, 0.007), [0, 0.05, 0.138]), 0.12));
+  // fish crest: extruded fin
+  A('metal', xf(extrude([[0.12, 0.2], [0.125, 0.3], [0.04, 0.385], [-0.06, 0.4], [-0.15, 0.34], [-0.215, 0.215], [-0.17, 0.2], [-0.2, 0.15], [-0.05, 0.195], [0.08, 0.212]], 0.026), [0, 0.03, 0], [0, -PI / 2, 0]));
+  A('trim', xf(sphereG(0.02, 5, 3), [0, 0.268, 0.1], [0, 0, 0], [0.8, 0.8, 1.2]));
   if (rr.r >= 3) { gem(rig, H, [0, 0.17, 0.139], 0.016, rr); for (const sg of [-1, 1]) gem(rig, H, [sg * 0.095, 0.2, 0.09], 0.01, rr); }
-  if (rr.r >= 4) for (const sg of [-1, 1]) A('trim', xf(extrude([[0, 0], [0.09, 0.02], [0.17, 0.09], [0.1, 0.08], [0.15, 0.13], [0.06, 0.1], [0.03, 0.06]], 0.008), [sg * 0.125, 0.12, -0.02], [0, sg * PI / 2, sg * 0.4], [1, 1, 1])); // wings
+  if (rr.r >= 4) for (const sg of [-1, 1]) A('trim', xf(extrude([[0, 0], [0.09, 0.02], [0.17, 0.09], [0.1, 0.08], [0.06, 0.1]], 0.008), [sg * 0.125, 0.12, -0.02], [0, sg * PI / 2, sg * 0.4]));
 }
 function helmThraex(rig, o, rr) {
   const H = rig.joints.head, A = (m, g) => rig.add(m, g, H);
   A('metal', domeG(0.121, 0.0, 0.272));
-  A('metal', lathe([[0.215, 0.026], [0.19, 0.046], [0.135, 0.056]], 12, 1.0, 1.12, 0, 1)); A('trim', lathe([[0.217, 0.024], [0.219, 0.024], [0.219, 0.032], [0.217, 0.032]], 12, 1.0, 1.12, 0, 1));
-  const mask = (y0, y1, sw, r0, r1) => lathe([[r0, y0], [r1, y1]], 10, 0.96, 1.06, 0, 1, -sw / 2, sw);
+  A('metal', lathe([[0.215, 0.026], [0.135, 0.056]], 8, 1.0, 1.12, 0, 1));
   A('metal', mask(-0.02, 0.09, PI * 1.25, 0.118, 0.13)); A('metal', mask(0.138, 0.172, PI * 1.25, 0.131, 0.13));
-  faceBars(rig, H, 0.131, 0.09, 0.138, [-0.095, -0.062, -0.0, 0.062, 0.095, -0.03, 0.03].filter((x) => Math.abs(x) > 0.045 || x === 0));
-  for (const sy of [0.0, 0.02, 0.04, 0.06]) A('metal', paint(xf(boxG(0.012, 0.01, 0.01), [0, sy, 0.132]), 0.15));
+  faceBars(rig, H, 0.131, 0.09, 0.138, [-0.07, 0, 0.07]);
+  A('metal', paint(xf(quadG(0.03, 0.06), [0, 0.03, 0.133]), 0.12));
   // griffin crest: a high curved comb with a beak head at the front
-  A('metal', xf(extrude([[-0.15, 0.2], [-0.19, 0.3], [-0.14, 0.4], [-0.04, 0.45], [0.07, 0.44], [0.17, 0.4], [0.24, 0.33], [0.17, 0.35], [0.1, 0.34], [0.145, 0.27], [0.135, 0.2], [0.05, 0.255], [-0.05, 0.26]], 0.026, 0.004), [0, 0.02, 0], [0, -PI / 2, 0]));
-  A('trim', xf(extrude([[0.17, 0.4], [0.24, 0.33], [0.19, 0.345], [0.205, 0.37]], 0.034), [0, 0.02, 0], [0, -PI / 2, 0]));
-  A('trim', xf(sphereG(0.012, 5, 3), [0, 0.43, 0.16])); // eye
-  for (const sg of [-1, 1]) for (let i = 0; i < 3; i++) { // side feather fans
-    const L = [0.3, 0.36, 0.3][i], ang = 0.12 + i * 0.3; A('plume', paint(xf(coneG(0.036, L, 5), [sg * (0.118 + i * 0.01), 0.17 + L * 0.5 * Math.cos(ang), -0.01 - i * 0.012], [0.0, 0, -sg * ang], [1, 1, 0.2]), (x, y) => 0.78 + 0.3 * sm01(-L / 2, L / 2, y)));
+  A('metal', xf(extrude([[-0.15, 0.2], [-0.19, 0.3], [-0.12, 0.4], [0.0, 0.45], [0.15, 0.41], [0.24, 0.33], [0.15, 0.345], [0.145, 0.27], [0.135, 0.2], [0.0, 0.25]], 0.026), [0, 0.02, 0], [0, -PI / 2, 0]));
+  A('trim', xf(extrude([[0.15, 0.41], [0.24, 0.33], [0.19, 0.345], [0.2, 0.375]], 0.034), [0, 0.02, 0], [0, -PI / 2, 0]));
+  for (const sg of [-1, 1]) for (let i = 0; i < 2; i++) { // side feather fans
+    const L = [0.32, 0.36][i], ang = 0.15 + i * 0.4; A('plume', paint(xf(coneG(0.04, L, 4), [sg * (0.118 + i * 0.012), 0.17 + L * 0.5 * Math.cos(ang), -0.01 - i * 0.02], [0.0, 0, -sg * ang], [1, 1, 0.2]), (x, y) => 0.78 + 0.3 * sm01(-L / 2, L / 2, y)));
   }
-  if (rr.r >= 3) { gem(rig, H, [0, 0.165, 0.131], 0.014, rr); }
-  if (rr.r >= 4) A('trim', xf(torusG(0.126, 0.006, 3, 14), [0, 0.185, 0.0], [PI / 2, 0, 0], [0.95, 1.1, 1]));
+  if (rr.r >= 3) gem(rig, H, [0, 0.165, 0.131], 0.014, rr);
+  if (rr.r >= 4) A('trim', xf(torusG(0.126, 0.006, 3, 10), [0, 0.185, 0.0], [PI / 2, 0, 0], [0.95, 1.1, 1]));
 }
 function helmHoplo(rig, o, rr) {
   const H = rig.joints.head, A = (m, g) => rig.add(m, g, H);
-  A('metal', domeG(0.121, 0.005, 0.268, 0.95, 1.06, 12));
-  A('metal', lathe([[0.17, -0.07], [0.145, -0.04], [0.122, 0.0]], 9, 0.95, 1.05, 0, 1, PI * 0.5, PI)); // nape guard
-  A('metal', lathe([[0.126, 0.145], [0.134, 0.168], [0.128, 0.185]], 10, 0.95, 1.06, 0, 1, -PI * 0.55, PI * 1.1)); // brow band
-  A('trim', lathe([[0.136, 0.17], [0.138, 0.17], [0.138, 0.176], [0.136, 0.176]], 10, 0.95, 1.06, 0, 1, -PI * 0.55, PI * 1.1));
+  A('metal', domeG(0.121, 0.005, 0.268));
+  A('metal', lathe([[0.16, -0.065], [0.122, 0.0]], 6, 0.95, 1.05, 0, 1, PI * 0.5, PI)); // nape guard
+  A('metal', lathe([[0.134, 0.15], [0.128, 0.19]], 8, 0.95, 1.06, 0, 1, -PI * 0.55, PI * 1.1)); // brow band
   A('metal', xf(boxG(0.026, 0.12, 0.014), [0, 0.095, 0.138], [-0.05, 0, 0])); // nose guard
-  for (const sg of [-1, 1]) A('metal', lathe([[0.118, -0.045], [0.128, 0.04], [0.126, 0.11]], 7, 0.95, 1.06, 0, 1, sg > 0 ? PI * 0.28 : -PI * 0.28 - PI * 0.34, PI * 0.34)); // cheek guards
-  A('metal', xf(extrude([[-0.13, 0.22], [-0.12, 0.31], [0.0, 0.34], [0.12, 0.3], [0.13, 0.22], [0.0, 0.25]], 0.024, 0.004), [0, 0.04, 0], [0, -PI / 2, 0])); // crest holder
+  for (const sg of [-1, 1]) A('metal', lathe([[0.118, -0.045], [0.128, 0.11]], 5, 0.95, 1.06, 0, 1, sg > 0 ? PI * 0.28 : -PI * 0.28 - PI * 0.34, PI * 0.34)); // cheek guards
+  A('metal', xf(extrude([[-0.13, 0.22], [-0.1, 0.31], [0.12, 0.3], [0.13, 0.22], [0.0, 0.25]], 0.024), [0, 0.04, 0], [0, -PI / 2, 0])); // crest holder
   A('trim', xf(boxG(0.03, 0.02, 0.2), [0, 0.3, 0.0]));
   if (rr.r >= 3) gem(rig, H, [0, 0.178, 0.14], 0.014, rr);
-  if (rr.r >= 4) for (const sg of [-1, 1]) A('trim', xf(extrude([[0, 0], [0.09, 0.03], [0.15, 0.1], [0.08, 0.08], [0.05, 0.04]], 0.008), [sg * 0.122, 0.12, -0.02], [0, sg * PI / 2, sg * 0.4]));
+  if (rr.r >= 4) for (const sg of [-1, 1]) A('trim', xf(extrude([[0, 0], [0.09, 0.03], [0.15, 0.1], [0.08, 0.08]], 0.008), [sg * 0.122, 0.12, -0.02], [0, sg * PI / 2, sg * 0.4]));
 }
 function headband(rig, o) {
-  const H = rig.joints.head; rig.add('cloth', lathe([[0.113, 0.15], [0.118, 0.152], [0.118, 0.182], [0.113, 0.184]], 12, 0.95, 1.06, 0, 1), H);
-  rig.add('cloth', xf(boxG(0.04, 0.12, 0.014), [0.03, 0.12, -0.115], [0.3, 0, -0.35]), H); rig.add('cloth', xf(boxG(0.04, 0.1, 0.014), [-0.025, 0.11, -0.12], [0.4, 0, 0.3]), H);
-  rig.add('trim', xf(sphereG(0.014, 5, 3), [0, 0.168, 0.126], [0, 0, 0], [1, 1, 0.5]), H);
+  const H = rig.joints.head; rig.add('cloth', lathe([[0.115, 0.15], [0.118, 0.184]], 10, 0.95, 1.06, 0, 1), H);
+  rig.add('cloth', xf(quadG(0.045, 0.13), [0.03, 0.1, -0.12], [0.3, 0, -0.35]), H); rig.add('cloth', xf(quadG(0.045, 0.1), [-0.025, 0.1, -0.125], [0.4, 0, 0.3]), H);
+  rig.add('trim', xf(sphereG(0.014, 4, 3), [0, 0.168, 0.126], [0, 0, 0], [1, 1, 0.5]), H);
 }
 
 // ---------------------------------------------------------------- armour pieces
@@ -281,77 +265,69 @@ function loinFlap(rig, anchor, o = {}) {
   return rig.addSecondary(g);
 }
 function pteruges(rig, obj, n, r, y, len, w, mat = 'leather', o = {}) { rig.add(mat, tabRing(n, r, y, len, w, Object.assign({ sz: 0.82, flare: 0.045 }, o)), obj); }
+function ring(rig, obj, r0, r1, y0, y1, seg = 12, sz = 0.76, mat = 'leather', k = 1) { rig.add(mat, paint(lathe([[r0, y0], [r1, y1]], seg, 1, sz, 0, 1), k), obj); }
 function beltPlates(rig, B, o = {}) {
   const S = rig.joints.spine;
-  rig.add('leather', paint(lathe([[0.15 * B, -0.075], [0.172 * B, -0.075], [0.172 * B, 0.02], [0.15 * B, 0.02]], 12, 1, 0.76, 0, 1), (x, y) => 1 - 0.2 * Math.exp(-sq((y + 0.03) / 0.012))), S);
-  for (let i = -2; i <= 2; i++) { const a = i * 0.34, r = 0.176 * B; rig.add('metal', xf(boxG(0.062, 0.07, 0.012), [Math.sin(a) * r, -0.028, Math.cos(a) * r * 0.76], [0, a * 0.95, 0]), S); rig.add('trim', xf(sphereG(0.009, 4, 3), [Math.sin(a) * (r + 0.007), -0.028, Math.cos(a) * (r + 0.007) * 0.76]), S); }
-  rig.add('trim', xf(cylG(0.03, 0.03, 0.012, 7), [0, -0.028, 0.176 * B * 0.76 + 0.01], [PI / 2, 0, 0]), S);
+  ring(rig, S, 0.158 * B, 0.17 * B, -0.075, 0.02, 12, 0.76);
+  for (let i = -2; i <= 2; i++) { const a = i * 0.34, r = 0.176 * B; rig.add('metal', xf(quadG(0.062, 0.07), [Math.sin(a) * r, -0.028, Math.cos(a) * r * 0.76 + 0.004], [0, a * 0.95, 0]), S); }
+  rig.add('trim', xf(new THREE.CircleGeometry(0.03, 6), [0, -0.028, 0.176 * B * 0.76 + 0.008]), S);
 }
 function pouch(rig, side, o = {}) {
   const obj = rig.sockets['belt' + side], sg = side === 'L' ? 1 : -1;
-  rig.add('leather', xf(boxG(0.075, 0.085, 0.05), [sg * 0.015, -0.055, 0.02], [0, 0, sg * 0.05]), obj); rig.add('leather', paint(xf(boxG(0.08, 0.04, 0.054), [sg * 0.015, -0.025, 0.02], [0.1, 0, sg * 0.05]), 0.8), obj);
-  rig.add('trim', xf(sphereG(0.009, 4, 3), [sg * 0.015, -0.04, 0.05]), obj);
+  rig.add('leather', xf(boxG(0.075, 0.085, 0.05), [sg * 0.015, -0.055, 0.02], [0, 0, sg * 0.05]), obj); rig.add('leather', paint(xf(quadG(0.08, 0.04), [sg * 0.015, -0.03, 0.047], [0.2, 0, sg * 0.05]), 0.8), obj);
 }
 function greave(rig, side, B = 1, o = {}) {
-  const K = rig.joints['knee' + side], LG = rig.build.leg || 1; const prof = [], ts = [0.06, 0.3, 0.6, 0.9];
+  const K = rig.joints['knee' + side], LG = rig.build.leg || 1; const prof = [], ts = [0.06, 0.3, 0.62, 0.92];
   for (const t of ts) prof.push([(lerp(0.066, 0.045, t) * (1 + 0.14 * Math.sin(Math.PI * t))) * B * LG + 0.012, -t * 0.43]);
   prof.reverse();
-  rig.add('metal', lathe(prof, 9, 1.03, 1.1, 0.12, 0.8, -PI * 0.78, PI * 1.56), K);
-  rig.add('trim', lathe([[prof[0][0] + 0.002, prof[0][1] - 0.006], [prof[0][0] + 0.004, prof[0][1] - 0.006], [prof[0][0] + 0.004, prof[0][1]], [prof[0][0] + 0.002, prof[0][1]]], 9, 1.03, 1.1, 0, 1, -PI * 0.78, PI * 1.56), K);
-  rig.add('metal', xf(sphereG(0.062 * B, 6, 4), [0, 0.01, 0.05], [0, 0, 0], [1, 0.8, 0.55]), K); rig.add('trim', xf(sphereG(0.012, 4, 3), [0, 0.01, 0.092]), K);
+  rig.add('metal', lathe(prof, 7, 1.03, 1.1, 0.12, 0.8, -PI * 0.78, PI * 1.56), K);
+  rig.add('trim', xf(sphereG(0.014, 4, 3), [0, 0.0, 0.07 * B]), K);
 }
 function laceUp(rig, side, B = 1) { // sandal lacing wound up the shin
   const K = rig.joints['knee' + side], LG = rig.build.leg || 1;
-  for (let i = 0; i < 4; i++) { const t = 0.62 + i * 0.09, r = lerp(0.066, 0.045, t) * B * LG * 1.14 + 0.004; rig.add('leather', lathe([[r, -t * 0.43 - 0.009], [r + 0.005, -t * 0.43 - 0.009], [r + 0.005, -t * 0.43 + 0.009], [r, -t * 0.43 + 0.009]], 7, 1, 1, 0, 1), K); }
+  for (let i = 0; i < 3; i++) { const t = 0.66 + i * 0.1, r = lerp(0.066, 0.045, t) * B * LG * 1.14 + 0.004; rig.add('leather', lathe([[r, -t * 0.43 - 0.009], [r + 0.004, -t * 0.43 + 0.009]], 6, 1, 1, 0, 1), K); }
 }
 function wrap(rig, side, mat = 'cloth', y0 = -0.2, y1 = -0.27, B = 1) { // wrist wrap on the forearm
-  const E = rig.joints['elbow' + side], t = (y) => -y / 0.27, rf = (y) => lerp(0.054, 0.04, t(y)) * B * (rig.build.arm || 1) + 0.006;
-  rig.add(mat, lathe([[rf(y0), y0], [rf(y0) + 0.004, y0], [rf((y0 + y1) / 2) + 0.004, (y0 + y1) / 2], [rf(y1) + 0.004, y1], [rf(y1), y1]].sort((a, b) => a[1] - b[1]), 7, 1, 1, 0.1, 0.8), E);
+  const E = rig.joints['elbow' + side], rf = (y) => lerp(0.054, 0.04, -y / 0.27) * B * (rig.build.arm || 1) + 0.007;
+  rig.add(mat, lathe([[rf(y1), y1], [rf(y0), y0]], 6, 1, 1, 0.1, 0.8), E);
 }
 function manica(rig, side, B = 1) { // segmented arm guard on upper arm + forearm
   const AR = rig.build.arm || 1;
-  for (let i = 0; i < 3; i++) { const y = -0.05 - i * 0.075, r = (lerp(0.068, 0.054, (-y) / 0.3) * AR * B) + 0.01; rig.add('metal', lathe([[r * 0.96, y - 0.05], [r, y]], 8, 1, 1, 0.3, 0.7), rig.joints['shoulder' + side]); }
-  for (let i = 0; i < 4; i++) { const y = -0.01 - i * 0.065, r = (lerp(0.054, 0.04, (-y) / 0.27) * AR * B) + 0.009; rig.add('metal', lathe([[r * 0.93, y - 0.055], [r, y]], 8, 1, 1, 0.3, 0.7), rig.joints['elbow' + side]); }
-  rig.add('leather', xf(boxG(0.012, 0.2, 0.02), [0, -0.12, -0.06 * AR * B], [0, 0, 0]), rig.joints['elbow' + side]);
+  for (let i = 0; i < 2; i++) { const y = -0.07 - i * 0.1, r = (lerp(0.068, 0.054, (-y) / 0.3) * AR * B) + 0.01; rig.add('metal', lathe([[r * 0.94, y - 0.07], [r, y]], 6, 1, 1, 0.3, 0.7), rig.joints['shoulder' + side]); }
+  for (let i = 0; i < 3; i++) { const y = -0.015 - i * 0.075, r = (lerp(0.054, 0.04, (-y) / 0.27) * AR * B) + 0.009; rig.add('metal', lathe([[r * 0.93, y - 0.07], [r, y]], 6, 1, 1, 0.3, 0.7), rig.joints['elbow' + side]); }
 }
 function galerus(rig, rr, B = 1) {
   const S = rig.joints.shoulderL, A = (m, g) => rig.add(m, g, S);
-  A('metal', paint(lathe([[0.108, -0.02], [0.12, 0.015], [0.1, 0.06], [0.055, 0.095], [0, 0.11]], 10, 1.18, 1.0, 0.1, 0.8), 1));
-  A('trim', lathe([[0.108, -0.024], [0.11, -0.024], [0.122, 0.015], [0.12, 0.015]], 10, 1.18, 1.0, 0, 1));
-  A('metal', xf(extrude([[-0.02, 0.0], [0.18, 0.0], [0.17, 0.12], [0.12, 0.23], [0.02, 0.27], [-0.03, 0.2]], 0.014, 0.004), [-0.005, 0.0, 0.0], [0, PI / 2, -0.52], [1, 1, 1])); // standing flange
-  A('trim', xf(extrude([[-0.03, 0.2], [0.02, 0.27], [0.12, 0.23], [0.115, 0.215], [0.02, 0.255], [-0.02, 0.195]], 0.02), [-0.005, 0.0, 0.0], [0, PI / 2, -0.52]));
-  for (const a of [0, 1, 2, 3, 4]) A('trim', xf(sphereG(0.009, 4, 3), [Math.sin(a * 1.2 - 2.4) * 0.1, 0.045 - Math.abs(a - 2) * 0.014, Math.cos(a * 1.2 - 2.4) * 0.1]));
+  A('metal', lathe([[0.112, -0.02], [0.11, 0.05], [0.04, 0.095], [0, 0.11]], 8, 1.18, 1.0, 0.1, 0.8));
+  A('metal', xf(extrude([[-0.02, 0.0], [0.18, 0.0], [0.17, 0.12], [0.12, 0.23], [0.02, 0.27], [-0.03, 0.2]], 0.014, 0), [-0.005, 0.0, 0.0], [0, PI / 2, -0.52]));
+  A('trim', xf(new THREE.TorusGeometry(0.108, 0.006, 3, 8), [0, -0.02, 0], [PI / 2, 0, 0], [1.18, 1.0, 1]));
   gem(rig, S, [0.0, 0.1, 0.0], 0.014, rr);
 }
 function laurel(rig, B, sh, stars, lvl, onShell = 0) {
   const C = rig.joints.chest, n = clamp(stars | 0, 1, 5), gold = lvl >= 5 ? [1, 1, 1] : [0.72, 0.5, 0.3], cy = 0.2, Rr = 0.056;
   for (const sg of [-1, 1]) for (let i = 0; i < n; i++) {
-    const a = (0.45 + i * (1.95 / 5 + 0.0)) * 0.9 + 0.0, x = sg * Math.sin(a) * Rr, y = cy - Math.cos(a) * Rr, cp = chestPt(x, y, B, sh, 0.016 + onShell);
-    const q = xf(boxG(0.017, 0.03, 0.003), cp.p.toArray(), [-0.2, 0, sg * (a - PI / 2 + 0.45)]);
-    rig.add('trim', paint(q, gold), C);
+    const a = (0.45 + i * 0.39) * 0.9, x = sg * Math.sin(a) * Rr, y = cy - Math.cos(a) * Rr, cp = chestPt(x, y, B, sh, 0.016 + onShell);
+    rig.add('trim', paint(xf(quadG(0.02, 0.034), cp.p.toArray(), [-0.2, 0, sg * (a - PI / 2 + 0.45)]), gold), C);
   }
   const cp = chestPt(0, cy, B, sh, 0.02 + onShell);
-  if (lvl >= 8) rig.add('gem', paint(xf(sphereG(0.012, 5, 3), cp.p.toArray(), [0, 0, 0], [1, 1, 0.5]), [1.4, 1.1, 0.5]), C); else rig.add('trim', paint(xf(sphereG(0.011, 5, 3), cp.p.toArray(), [0, 0, 0], [1, 1, 0.5]), gold), C);
-  if (lvl >= 8) rig.add('trim', xf(sphereG(0.014, 5, 3), cp.p.toArray(), [0, 0, 0], [1, 1, 0.4]), C);
+  rig.add(lvl >= 8 ? 'gem' : 'trim', paint(xf(new THREE.CircleGeometry(0.014, 5), cp.p.toArray()), lvl >= 8 ? [1.4, 1.1, 0.5] : gold), C);
 }
 function baldric(rig, B, sh, dir = 1, o = {}) { // leather strap across the chest, optionally with a phalera disc
-  const pts = [], n = 7, C = rig.joints.chest;
+  const pts = [], n = 6, C = rig.joints.chest;
   for (let i = 0; i < n; i++) { const t = i / (n - 1), x = lerp(-dir * 0.19, dir * 0.15, t) * B, y = lerp(0.3, 0.0, t), cp = chestPt(x, y, B, sh, 0.012 + (o.off || 0)); pts.push(cp.p); }
   rig.add(o.mat || 'leather', ribbon(pts, o.w || 0.04, (p, i) => chestPt(pts[i].x, pts[i].y, B, sh, 0).n), C);
-  if (o.disc) { const cp = chestPt(0.0, 0.16, B, sh, 0.02 + (o.off || 0)); rig.add('trim', xf(cylG(0.032, 0.032, 0.008, 8), cp.p.toArray(), [PI / 2 - 0.1, 0, 0]), C); rig.add('metal', xf(sphereG(0.016, 5, 3), [cp.p.x, cp.p.y, cp.p.z + 0.006], [0, 0, 0], [1, 1, 0.5]), C); }
+  if (o.disc) { const cp = chestPt(0.0, 0.16, B, sh, 0.02 + (o.off || 0)); rig.add('trim', xf(new THREE.CircleGeometry(0.034, 6), cp.p.toArray(), [-0.1, 0, 0]), C); }
 }
 function segmentata(rig, B, sh, rr) { // lorica segmentata: stacked overlapping bands + shoulder lames
   const C = rig.joints.chest;
-  for (let i = 0; i < 5; i++) { const y0 = -0.03 + i * 0.058, y1 = y0 + 0.07; rig.add('metal', paint(lathe([[chestR(y0, B, sh) + 0.022, y0], [chestR(y1, B, sh) + 0.012, y1]], 12, 1, 0.72, 0.25, 0.72), 1), C); }
-  rig.add('trim', lathe([[chestR(0.285, B, sh) + 0.018, 0.285], [chestR(0.29, B, sh) + 0.02, 0.29], [chestR(0.29, B, sh) + 0.02, 0.298], [chestR(0.285, B, sh) + 0.018, 0.298]].sort((a, b) => a[1] - b[1]), 12, 1, 0.72, 0, 1), C);
-  for (const s of ['L', 'R']) for (let i = 0; i < 3; i++) { const y = 0.02 - i * 0.04, r = 0.093 - i * 0.004; rig.add('metal', lathe([[r * 0.96, y - 0.05], [r, y]], 9, 1.05, 1.0, 0.3, 0.7, -PI * 0.5, PI * 1.0), rig.joints['shoulder' + s]); }
+  for (let i = 0; i < 5; i++) { const y0 = -0.03 + i * 0.058, y1 = y0 + 0.07; rig.add('metal', lathe([[chestR(y0, B, sh) + 0.022, y0], [chestR(y1, B, sh) + 0.012, y1]], 10, 1, 0.72, 0.25, 0.72), C); }
+  ring(rig, C, chestR(0.29, B, sh) + 0.02, chestR(0.298, B, sh) + 0.02, 0.29, 0.298, 10, 0.72, 'trim');
+  for (const s of ['L', 'R']) for (let i = 0; i < 2; i++) { const y = 0.02 - i * 0.05, r = 0.093 - i * 0.004; rig.add('metal', lathe([[r * 0.94, y - 0.06], [r, y]], 6, 1.05, 1.0, 0.3, 0.7, -PI * 0.5, PI * 1.0), rig.joints['shoulder' + s]); }
   gem(rig, C, chestPt(0, 0.12, B, sh, 0.03).p.toArray(), 0.016, rr);
 }
-function jerkin(rig, B, sh, rr) { // thraex leather jerkin with studs and shoulder tabs
-  const C = rig.joints.chest, prof = []; for (const y of [-0.04, 0.04, 0.12, 0.2, 0.27, 0.31]) prof.push([chestR(y, B, sh) + 0.016, y]);
-  rig.add('leather', paint(lathe(prof, 14, 1, 0.72, 0.1, 0.8), (x, y, z) => 0.95 - 0.12 * Math.exp(-sq((y - 0.13) / 0.01)) * sm01(-0.05, 0.08, z)), C);
-  rig.add('trim', lathe([[chestR(0.3, B, sh) + 0.018, 0.3], [chestR(0.31, B, sh) + 0.02, 0.31]], 14, 1, 0.72, 0, 1), C);
-  for (let i = 0; i < 3; i++) for (const sg of [-1, 1]) { const cp = chestPt(sg * 0.06 * B, 0.07 + i * 0.075, B, sh, 0.026); rig.add('trim', xf(sphereG(0.0085, 4, 3), cp.p.toArray()), C); }
+function jerkin(rig, B, sh, rr) { // thraex leather jerkin with shoulder tabs
+  const C = rig.joints.chest, prof = []; for (const y of [-0.04, 0.09, 0.2, 0.3]) prof.push([chestR(y, B, sh) + 0.016, y]);
+  rig.add('leather', paint(lathe(prof, 12, 1, 0.72, 0.1, 0.8), (x, y, z) => 0.95 - 0.12 * Math.exp(-sq((y - 0.13) / 0.01)) * sm01(-0.05, 0.08, z)), C);
   for (const s of ['L', 'R']) rig.add('leather', tabRing(4, 0.088, 0.03, 0.12, 0.058, { sz: 1, flare: 0.03, arc: PI, a0: s === 'L' ? 0 : PI, shade: 0.7 }), rig.joints['shoulder' + s]);
   gem(rig, C, chestPt(0, 0.15, B, sh, 0.03).p.toArray(), 0.016, rr);
 }
@@ -365,8 +341,8 @@ export function equipStyle(rig, style, o = {}) {
   if (style === 'murmillo') {
     rig.animator.setWeapon('sword');
     out.weapon = makeSword(rig, o, rw); out.shield = mountShield(rig, 'scutum', o, rs); helmMurmillo(rig, o, rh);
-    manica(rig, 'R', B); greave(rig, 'L', B); wrap(rig, 'L', 'leather', -0.17, -0.25, B); laceUp(rig, 'R', B);
-    baldric(rig, B, sh, 1, { disc: true }); beltPlates(rig, B); pouch(rig, 'R'); pteruges(rig, J.hips, 12, 0.2 * B, -0.03, 0.18, 0.08, 'leather', { shade: 0.62 });
+    manica(rig, 'R', B); greave(rig, 'L', B); laceUp(rig, 'R', B);
+    baldric(rig, B, sh, 1, { disc: true }); beltPlates(rig, B); pteruges(rig, J.hips, 12, 0.2 * B, -0.03, 0.18, 0.08, 'leather', { shade: 0.62 });
     out.flap = loinFlap(rig, J.hips, { len: 0.34, w: 0.2 }); loinFlap(rig, J.hips, { len: 0.3, w: 0.22, back: true, z: 0.135 });
     gem(rig, J.chest, chestPt(0.0, 0.16, B, sh, 0.034).p.toArray(), 0.014, ra);
   } else if (style === 'retiarius') {
@@ -374,21 +350,21 @@ export function equipStyle(rig, style, o = {}) {
     out.weapon = makeSpear(rig, o, rw, true); rig.animator.ik.hand = { target: out.weapon.userData.gripB, w: 1, side: 'L' };
     galerus(rig, rs.r ? rs : ra, B); manica(rig, 'R', B); wrap(rig, 'L', 'cloth', -0.12, -0.25, B); laceUp(rig, 'L', B); laceUp(rig, 'R', B);
     baldric(rig, B, sh, -1, { w: 0.032 }); baldric(rig, B, sh, 1, { w: 0.03, off: 0.004 });
-    rig.add('leather', paint(lathe([[0.15 * B, -0.07], [0.162 * B, -0.07], [0.162 * B, 0.0], [0.15 * B, 0.0]], 12, 1, 0.76, 0, 1), 1), J.spine); pouch(rig, 'L'); pouch(rig, 'R');
+    ring(rig, J.spine, 0.156 * B, 0.164 * B, -0.07, 0.0); pouch(rig, 'L'); pouch(rig, 'R');
     out.flap = loinFlap(rig, J.hips, { len: 0.42, w: 0.19 }); loinFlap(rig, J.hips, { len: 0.38, w: 0.2, back: true, z: 0.135 });
     out.net = makeNet(rig, o);
     gem(rig, J.chest, chestPt(0.0, 0.2, B, sh, 0.034).p.toArray(), 0.012, ra);
   } else if (style === 'thraex') {
     rig.animator.setWeapon('sword');
     out.weapon = makeSword(rig, o, rw, true); out.shield = mountShield(rig, 'parmula', o, rs); helmThraex(rig, o, rh);
-    jerkin(rig, B, sh, ra); greave(rig, 'L', B); greave(rig, 'R', B); manica(rig, 'R', B);
+    jerkin(rig, B, sh, ra); greave(rig, 'L', B); greave(rig, 'R', B);
     beltPlates(rig, B); pouch(rig, 'L'); pteruges(rig, J.hips, 12, 0.2 * B, -0.03, 0.2, 0.082, 'leather', { shade: 0.6 }); pteruges(rig, J.hips, 12, 0.2 * B, -0.12, 0.1, 0.082, 'cloth', { a0: 0.26, shade: 0.7 });
     out.flap = loinFlap(rig, J.hips, { len: 0.3, w: 0.18 });
   } else if (style === 'hoplomachus') {
     rig.animator.setWeapon('spear');
     out.weapon = makeSpear(rig, o, rw, false); rig.animator.ik.hand = { target: out.weapon.userData.gripB, w: 1, side: 'L' };
     helmHoplo(rig, o, rh); segmentata(rig, B, sh, ra); greave(rig, 'L', B); greave(rig, 'R', B); wrap(rig, 'L', 'leather', -0.17, -0.25, B); wrap(rig, 'R', 'leather', -0.17, -0.25, B);
-    rig.add('leather', paint(lathe([[0.15 * B, -0.07], [0.165 * B, -0.07], [0.165 * B, 0.01], [0.15 * B, 0.01]], 12, 1, 0.76, 0, 1), 1), J.spine);
+    ring(rig, J.spine, 0.156 * B, 0.166 * B, -0.07, 0.01);
     pteruges(rig, J.hips, 12, 0.2 * B, -0.03, 0.19, 0.08, 'cloth', { shade: 0.65 }); pteruges(rig, J.hips, 12, 0.2 * B, -0.1, 0.11, 0.08, 'leather', { a0: 0.26, shade: 0.7 });
     out.flap = loinFlap(rig, J.hips, { len: 0.3, w: 0.2, material: rig.mats.plume });
     out.plume = addPlume(rig, { tall: 1.35, cols: 3, w: 0.085, z: 0.0 }); out.cloak = addCloak(rig);
@@ -396,15 +372,15 @@ export function equipStyle(rig, style, o = {}) {
     rig.animator.setWeapon('dual');
     out.weapon = makeSword(rig, o, rw, false, 'R'); out.weaponL = makeSword(rig, o, rw, false, 'L');
     headband(rig, o); baldric(rig, B, sh, 1, { disc: true, w: 0.045 }); baldric(rig, B, sh, -1, { w: 0.045, off: 0.004 });
-    for (const s of ['L', 'R']) { wrap(rig, s, 'cloth', -0.08, -0.26, B); rig.add('leather', lathe([[0.075 * B, -0.05], [0.08 * B, -0.05], [0.074 * B, -0.12], [0.07 * B, -0.12]], 8, 1, 1, 0.1, 0.8), J['shoulder' + s]); laceUp(rig, s, B); }
-    rig.add('leather', paint(lathe([[0.15 * B, -0.065], [0.166 * B, -0.065], [0.166 * B, 0.012], [0.152 * B, 0.012]], 12, 1, 0.76, 0, 1), 1), J.spine); pouch(rig, 'L');
+    for (const s of ['L', 'R']) { wrap(rig, s, 'cloth', -0.08, -0.26, B); ring(rig, J['shoulder' + s], 0.078 * B, 0.07 * B, -0.12, -0.05, 6, 1); laceUp(rig, s, B); }
+    ring(rig, J.spine, 0.156 * B, 0.166 * B, -0.065, 0.012); pouch(rig, 'L');
     out.flap = loinFlap(rig, J.hips, { len: 0.26, w: 0.2 }); loinFlap(rig, J.hips, { len: 0.22, w: 0.2, back: true, z: 0.135 });
   }
   // pips and charm
   laurel(rig, B, sh, o.stars || 1, o.lvl || 1, style === 'thraex' || style === 'hoplomachus' ? 0.024 : 0);
   if (o.rar && o.rar.charm !== undefined && o.rar.charm >= 0 && o.hasCharm) { // pendant on a cord
     const pts = [chestPt(-0.05, 0.3, B, sh, 0.012).p, chestPt(-0.03, 0.22, B, sh, 0.012).p, chestPt(0, 0.17, B, sh, 0.014).p, chestPt(0.03, 0.22, B, sh, 0.012).p, chestPt(0.05, 0.3, B, sh, 0.012).p];
-    rig.add('leather', ribbon(pts, 0.006, (p, i) => chestPt(pts[i].x, pts[i].y, B, sh, 0).n), J.chest); gem(rig, J.chest, [0, 0.165, chestPt(0, 0.165, B, sh, 0.03).p.z], 0.013, { r: Math.max(2, rc.r), col: rc.col });
+    rig.add('leather', ribbon(pts, 0.008, (p, i) => chestPt(pts[i].x, pts[i].y, B, sh, 0).n), J.chest); gem(rig, J.chest, [0, 0.165, chestPt(0, 0.165, B, sh, 0.03).p.z], 0.013, { r: Math.max(2, rc.r), col: rc.col });
   }
   // glow: strongest rarity among equipped items drives the emissive accent colour; legendary pulses
   const best = [rw, rs, ra, rh, rc].reduce((a, b) => (b.r > a.r ? b : a), { r: 0, col: '#fff' });
