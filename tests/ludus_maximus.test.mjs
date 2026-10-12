@@ -257,5 +257,22 @@ ok(strongWins >= 17, `level 10 beats level 1 (${strongWins}/20)`);
   LM.setRandom(seeded(5));
 }
 
+// relationships, bracket history, accessibility defaults
+{
+  const S12 = LM.newGame({ name: 'Rel' }); const a = LM.makeGlad({ id: S12.nextId++, style: 'thraex', lvl: 5 }), b = LM.makeGlad({ id: S12.nextId++, style: 'thraex', lvl: 5 }), c = LM.makeGlad({ id: S12.nextId++, style: 'murmillo', lvl: 5 });
+  a.act = b.act = 'str'; S12.glads.push(a, b, c);
+  for (let i = 0; i < 40 && !S12.pendingRiv; i++) LM.relTick(S12);
+  ok(S12.pendingRiv && S12.pendingRiv.includes(a.id) && S12.pendingRiv.includes(b.id), 'same-style fighters training the same stat become rivals');
+  ok(LM.rivalryOf(S12, a.id, c.id) === 0, 'unrelated fighters stay neutral');
+  const xa = a.xp + a.lvl * 1000, out = LM.rivalryResolve(S12, a, b, 'duel', a.id);
+  ok(S12.pendingRiv === null && LM.rivalryOf(S12, a.id, b.id) === 0 && S12.stats.bouts === 1 && out.lines.length, 'a friendly bout resolves the rivalry');
+  ok(LM.checkTrophies(S12).some((x) => x.id === 'bouts'), 'bout trophy');
+  S12.rivalry = {}; LM.addBond(S12, a.id, b.id, 60); const before = (() => { LM.relTick(S12); return LM.rivalryOf(S12, a.id, b.id); })();
+  const S13 = LM.newGame({ name: 'Rel2' }); const a2 = LM.makeGlad({ id: 1, style: 'thraex', lvl: 5 }), b2 = LM.makeGlad({ id: 2, style: 'thraex', lvl: 5 }); a2.act = b2.act = 'str'; S13.glads.push(a2, b2); LM.relTick(S13);
+  ok(before < LM.rivalryOf(S13, 1, 2), 'friends fall into rivalries more slowly');
+  LM.rivalryResolve(S12, a, b, 'partner', null); ok(LM.bond(S12, a.id, b.id) >= 80, 'partnering up adds bond');
+  const ev = LM.events(S12, 4, 0).find((e) => e.kind === 'tourney'); const T = LM.tourneyInit(S12, ev, a); LM.tourneyAdvance(S12, T, true); ok(T.hist.length === 1 && T.hist[0].length === 2 && T.hist[0].includes(0), 'bracket keeps round history');
+}
+
 console.log(`ludus_maximus: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

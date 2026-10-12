@@ -271,6 +271,19 @@ h1,h2,h3,.h,.btn,.chip,.tab,.pill,.tag,.st,.act,.ltab,.wtab,.tb,.sec,.adv,.float
 .drillbar{position:relative;height:46px;background:var(--ink);border:3px solid var(--ink);border-radius:14px;overflow:hidden;margin:12px 0}
 .drillz{position:absolute;top:0;bottom:0;background:rgba(246,184,45,.45)}.drillz.g{left:30%;width:40%}.drillz.p{left:45%;width:10%;background:rgba(42,157,111,.8)}
 .drillm{position:absolute;top:-2px;bottom:-2px;width:8px;background:#fff;border:2px solid var(--ink);border-radius:5px}
+body.rm *:not(.f-banner):not(.float):not(.bark):not(.f-vs):not(.vsc):not(.vsv){animation-duration:.001s!important;animation-iteration-count:1!important;transition-duration:.001s!important}
+body.big #main{zoom:1.14}body.big .sheet{zoom:1.1}
+.tile .people svg{animation:pace 3.6s linear infinite}
+.tile .people svg:nth-child(2){animation-duration:4.4s;animation-delay:-1.3s}.tile .people svg:nth-child(3){animation-duration:3.1s;animation-delay:-2.2s}
+@keyframes pace{0%{transform:translateX(-9px) scaleX(1)}49%{transform:translateX(9px) scaleX(1)}51%{transform:translateX(9px) scaleX(-1)}100%{transform:translateX(-9px) scaleX(-1)}}
+.tile.b-kitchen::before,.tile.b-bath::before,.tile.b-forge::before{content:"";position:absolute;right:22%;top:10px;width:7px;height:7px;border-radius:50%;background:rgba(255,255,255,.85);z-index:3;animation:puff 2.2s ease-out infinite;pointer-events:none}
+.tile.b-forge::before{background:#ffb347;right:30%;top:30px}
+.tile.b-bath::before{right:50%}
+@keyframes puff{0%{transform:translateY(8px) scale(.5);opacity:0}25%{opacity:.9}100%{transform:translateY(-18px) scale(1.5);opacity:0}}
+.brk{display:flex;gap:6px;overflow-x:auto;margin:6px 0}.brk .col{flex:1;display:flex;flex-direction:column;justify-content:space-around;gap:8px;min-width:96px}
+.brk .m{border:2px solid var(--ink);border-radius:8px;overflow:hidden;background:var(--cream);font-size:10px}
+.brk .p{display:flex;align-items:center;gap:4px;padding:2px 5px;white-space:nowrap;overflow:hidden}.brk .p.me{background:var(--gold)}.brk .p.w{font-weight:900}.brk .p.l{opacity:.4;text-decoration:line-through}
+.brk h4{margin:0 0 2px;font-family:var(--font);font-size:9px;text-transform:uppercase;text-align:center;color:var(--terra)}
 @keyframes bump{0%{transform:scale(1)}35%{transform:scale(1.22);background:var(--gold);color:var(--ink)}100%{transform:scale(1)}}
 .chip.bump{animation:bump .5s ease-out}
 @keyframes tabin{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}

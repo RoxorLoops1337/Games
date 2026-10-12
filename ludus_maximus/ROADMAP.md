@@ -40,9 +40,25 @@ Rules: small PRs, `npm run test:ludus` + `node build.js` + a headless-Chromium l
 - [x] Balance re-check: styles within about 42-57%
 
 ## Next ideas
-- [ ] 21. Fighter relationships (rivalries and friendships inside the ludus, events)
-- [ ] 22. Tournament bracket tree view
-- [ ] 23. Walking characters and ambient life on the ludus map
-- [ ] 24. Themed arenas per league (sunlit Pit, marble Colosseum, golden Imperial)
-- [ ] 25. Accessibility: volume slider, reduced motion toggle, colorblind-safe icons
-- [ ] 26. Performance pass for low-end phones (particle caps, DOM count)
+- [x] 21. Fighter relationships (rivalries and friendships inside the ludus, events)
+- [x] 22. Tournament bracket tree view
+- [x] 23. Walking characters and ambient life on the ludus map
+- [x] 24. Themed arenas per league (sunlit Pit, marble Colosseum, golden Imperial)
+- [x] 25. Accessibility: volume slider, reduced motion toggle, colorblind-safe icons
+- [x] 26. Performance pass for low-end phones (particle caps, DOM count)
+
+## Round 5 shipped
+- [x] Relationships: rivalries build between same-style fighters; at 45 the Rivalry Bout event (friendly arena duel, partner up, or ignore). Profile shows bonds and rivalries.
+- [x] Tournament bracket tree in the prep screen
+- [x] Themed arenas per league (dirt Pit, banner Provincial, arched Colosseum, gold Imperial)
+- [x] Ambient map life (pacing fighters, kitchen steam, forge sparks)
+- [x] Accessibility: volume steps, reduced motion, large text
+- [x] Performance: particle and float caps, lower canvas resolution
+
+## Next ideas
+- [ ] 27. Duo Ultimates: bonded pairs (bond 60+) unlock a combined ultimate in team fights
+- [ ] 28. Season finale spectacle (12-week championship with a cinematic intro and trophy ceremony)
+- [ ] 29. Fighter backstories and personal quests (one short goal per fighter that unlocks a unique trait)
+- [ ] 30. Crowd reactions in the stands (waves, fireworks on big kills)
+- [ ] 31. Endless Arena mode (survive waves, leaderboard-free high score)
+- [ ] 32. Balance re-check and difficulty slider (Relaxed / Standard / Brutal)

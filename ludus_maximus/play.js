@@ -27,9 +27,10 @@
     }
     const fin = L.weekFinish(S); U.save(); U.render();
     await U.dialog(summaryHtml(S, fin, wk)); await trophies(S);
+    await rivalryEvent(S);
     await pendingEvent(S);
   }
-  U.checkPending = async () => { const S = U.S(); if (S && S.pendingEv && !U.busy) { U.busy = true; try { await pendingEvent(S); } finally { U.busy = false; U.render(); } } };
+  U.checkPending = async () => { const S = U.S(); if (S && (S.pendingEv || S.pendingRiv) && !U.busy) { U.busy = true; try { await rivalryEvent(S); await pendingEvent(S); } finally { U.busy = false; U.render(); } } };
   async function pendingEvent(S) {
     if (!S.pendingEv) return;
     const E = L.EVENTS[S.pendingEv]; if (!E) { S.pendingEv = null; return; }
@@ -108,6 +109,26 @@
     await results(S, ev, [g], res, rep);
   }
 
+  function bracketHtml(T) {
+    const rounds = Math.log2(T.size); let h = '<div class="brk">';
+    for (let r = 0; r < rounds; r++) {
+      const names = ['Quarterfinal', 'Semifinal', 'Final']; const title = rounds === 2 ? ['Semifinal', 'Final'][r] : names[r];
+      const players = r === 0 ? Array.from({ length: T.size }, (_, i) => i) : (T.hist[r - 1] || Array(T.size >> r).fill(-1)); const done = r < T.hist.length;
+      h += `<div class="col"><h4>${title}</h4>`;
+      for (let i = 0; i < players.length; i += 2) {
+        h += '<div class="m">' + [players[i], players[i + 1]].map((sl) => { if (sl < 0 || sl === undefined) return '<div class="p">?</div>'; const g = T.slots[sl]; const won = done && T.hist[r].includes(sl); const cls = (sl === 0 ? 'me ' : '') + (done ? (won ? 'w' : 'l') : ''); return `<div class="p ${cls}">${A.styleIcon(g.style, 13)}<span>${sl === 0 ? 'YOU' : esc(g.name)}</span></div>`; }).join('') + '</div>';
+      }
+      h += '</div>';
+    }
+    return h + '</div>';
+  }
+  async function rivalryEvent(S) {
+    if (!S.pendingRiv) return; const [ia, ib] = S.pendingRiv; const a = U.gOf(ia), b = U.gOf(ib); if (!a || !b) { S.pendingRiv = null; return; }
+    const c = await U.dialog(`<h2>Rivalry boils over!</h2><div class="row" style="justify-content:space-around;align-items:flex-end">${U.spr(a, { size: 84, mood: 'fight' })}<div class="h" style="font-size:22px">VS</div>${U.spr(b, { size: 84, mood: 'fight', flip: true })}</div><div style="text-align:center;margin:6px 0"><b>${esc(a.name)}</b> and <b>${esc(b.name)}</b> keep going at each other. Something has to give.</div><button class="btn full red" data-a="res" data-v="duel">Settle it in the arena</button><div class="tiny muted" style="text-align:center">A friendly bout: nobody gets hurt. The winner gains 40 XP, the loser 20.</div><button class="btn full green" style="margin-top:8px" data-a="res" data-v="partner">Make them training partners (+20 bond)</button><button class="btn full ghost" style="margin-top:8px" data-a="res" data-v="ignore">Ignore it</button>`);
+    let winner = null;
+    if (c === 'duel') { const clone = Object.assign({}, b, { color: '#2f78c4', id: 'bout' + b.id }); const res = await fightScreen(S, [a], [clone], 'bal', { ev: { kind: 'spar', title: 'Rivalry Bout', league: 0, opps: [clone] } }); winner = res.win ? a.id : b.id; }
+    const out = L.rivalryResolve(S, a, b, c, winner); U.save(); U.render(); await U.dialog(`<h2>Rivalry</h2>${out.lines.map((x) => `<div style="margin:6px 0">${esc(x)}</div>`).join('')}` + btn('Okay', 'ok')); await pickPends(S); await trophies(S);
+  }
   // ---------- prep ----------
   const PREP = { wager: 0, mult: 1, tricks: {}, gold: 0, lvl: 1 };
   const STN = [['bal', '', ''], ['agg', 'red'], ['grd', 'blue'], ['cun', 'green']];
@@ -130,6 +151,7 @@
     if (gl.length > 1) h += `<div class="small">Synergy: ${ctx.list.length ? ctx.list.map((s) => `<b>${s.n}</b> (${s.d})`).join(', ') : 'none'}</div>`;
     const low = gl.filter((g) => g.en < 60); if (low.length) h += `<div class="small" style="color:var(--terra)">${low.map((g) => esc(g.name)).join(', ')} ${low.length > 1 ? 'are' : 'is'} tired (energy under 60). Stats reduced.</div>`;
     const wxId = ev.key ? L.weather(S, ev.key) : 'clear'; if (wxId !== 'clear') h += `<div class="small" style="margin-top:4px"><b>Weather: ${D.WEATHER[wxId].n}.</b> ${D.WEATHER[wxId].d}</div>`;
+    if (o.T) h += `<div class="sec" style="color:var(--terra);text-shadow:none">Bracket</div>` + bracketHtml(o.T);
     if (ev.mut) h += `<div class="card" style="background:#e9d3ff;margin:6px 0"><b>Mutator: ${ev.mut.n}</b><div class="small">${ev.mut.d}</div></div>`;
     if (gl.length === 1) { const g = gl[0]; h += `<div class="small" style="margin-top:4px"><b>${esc(D.KEYSTONES[g.rune.k].n)}</b> rune · Ultimates: ${L.ultsOf(g).map((x) => '<b>' + D.ULTS[x].n + '</b>').join(', ')}${(S.relicOn || []).length ? ' · ' + S.relicOn.length + ' relic(s)' : ''}</div>`; }
     if (!o.pit) {

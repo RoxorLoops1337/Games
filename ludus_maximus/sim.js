@@ -423,7 +423,7 @@
   LM.withdraw = (S, key) => { const e = S.entries[key]; if (!e) return; S.gold += e.paid; delete S.entries[key]; };
 
   // ---------- tournaments ----------
-  LM.tourneyInit = (S, ev, g) => ({ key: ev.key, size: ev.size, slots: [g].concat(ev.opps), alive: Array.from({ length: ev.size }, (_, i) => i), round: 0, hpf: 1, won: 0 });
+  LM.tourneyInit = (S, ev, g) => ({ key: ev.key, size: ev.size, slots: [g].concat(ev.opps), alive: Array.from({ length: ev.size }, (_, i) => i), hist: [], round: 0, hpf: 1, won: 0 });
   LM.tourneyOpp = (T) => { const mi = T.alive.indexOf(0); return T.slots[T.alive[mi ^ 1]]; };
   LM.tourneyPairs = (T) => { const p = []; for (let i = 0; i < T.alive.length; i += 2) p.push([T.alive[i], T.alive[i + 1]]); return p; };
   LM.tourneyAdvance = (S, T, iWon) => {
@@ -433,7 +433,7 @@
       const F = LM.quick(LM.mkUnits([T.slots[a]], 'A', { noperf: true }), LM.mkUnits([T.slots[b]], 'B', { noperf: true }), { autoA: true });
       next.push(F.winner === 'A' ? a : b);
     });
-    T.round++; T.alive = next; return { over: !iWon || next.length === 1, champion: iWon && next.length === 1 };
+    T.hist.push(next.slice()); T.round++; T.alive = next; return { over: !iWon || next.length === 1, champion: iWon && next.length === 1 };
   };
   // finishing place after elimination in the round just played (T.round already advanced)
   LM.placeOf = (T, champion) => (champion ? 1 : (T.size >> (T.round - 1)) / 2 + 1);
@@ -549,7 +549,7 @@
     Object.keys(S.entries).forEach((k) => { if (parseInt(k.split(':')[0], 10) <= S.week) delete S.entries[k]; });
     S.week++; S.stats.weeks++;
     if ((S.week - 1) % 12 === 0) { S.season = Math.ceil(S.week / 12); rep.season = S.season; }
-    S.market = null; S.recruits = null;
+    S.market = null; S.recruits = null; LM.relTick(S);
     LM.fillContracts(S);
     rep.ev = LM.rollEvent(S);
     return rep;
@@ -572,7 +572,7 @@
     pit5: (S) => (S.pitBest || 0) >= 5, pit10: (S) => (S.pitBest || 0) >= 10, daily5: (S) => (S.dailyBest || 0) >= 5, legendary: (S) => itemsOf(S).some((i) => i.rar >= 4),
     fullset: (S) => S.glads.some((g) => Object.values(LM.setCounts(g)).some((n) => n >= 4)), forge5: (S) => (S.stats.merges || 0) >= 5, rich: (S) => S.gold >= 5000, lvl20: (S) => S.glads.some((g) => g.lvl >= 20),
     legend1: (S) => (S.legends || []).length >= 1, runes: (S) => S.runes.k.length >= Object.keys(D.KEYSTONES).length, relics6: (S) => S.relics.length >= 6,
-    faction: (S) => ['sen', 'mer', 'ple'].some((id) => LM.facRep(S, id) >= 100), festwin: (S) => (S.stats.festWins || 0) >= 1, ascended: (S) => (S.ascensions || 0) >= 1,
+    bouts: (S) => (S.stats.bouts || 0) >= 1, faction: (S) => ['sen', 'mer', 'ple'].some((id) => LM.facRep(S, id) >= 100), festwin: (S) => (S.stats.festWins || 0) >= 1, ascended: (S) => (S.ascensions || 0) >= 1,
   };
   LM.checkTrophies = (S) => {
     S.trophies = S.trophies || {}; const out = [];
@@ -585,6 +585,29 @@
   LM.facTier = (S, id) => { const r = LM.facRep(S, id); return r >= 100 ? 4 : r >= 75 ? 3 : r >= 50 ? 2 : r >= 25 ? 1 : 0; };
   LM.facGain = (S, id, n) => { S.fac = S.fac || { sen: 0, mer: 0, ple: 0 }; const before = LM.facTier(S, id); S.fac[id] = clamp((S.fac[id] || 0) + n, 0, 100); const after = LM.facTier(S, id); return { text: `${D.FACTIONS[id].n} ${n >= 0 ? '+' : ''}${n}`, up: after > before ? D.FACTIONS[id].perks[after - 1] : '' }; };
   LM.facPerks = (S) => { const t = (id) => LM.facTier(S, id); return { fame: (t('sen') >= 1 ? 0.05 : 0) + (t('sen') >= 3 ? 0.1 : 0), slots: t('sen') >= 2 ? 1 : 0, weekly: (t('sen') >= 4 ? 40 : 0) + (t('mer') >= 4 ? 60 : 0), shop: t('mer') >= 1 ? 0.05 : 0, gold: t('mer') >= 2 ? 0.1 : 0, payout: t('mer') >= 3 ? 0.2 : 0, hype: t('ple') >= 1 ? 1.15 : 1, ultStart: t('ple') >= 2 ? 3 : 0, rerolls: t('ple') >= 3 ? 2 : 0, roarDmg: t('ple') >= 4 ? 0.08 : 0 }; };
+
+  // ---------- relationships: friendships (bonds) and rivalries inside the ludus ----------
+  LM.relTick = (S) => {
+    S.rivalry = S.rivalry || {}; const gs = S.glads.filter((g) => g.lvl >= 3 && g.inj <= 0);
+    for (let i = 0; i < gs.length; i++) for (let j = i + 1; j < gs.length; j++) {
+      const a = gs[i], b = gs[j]; const k = bkey(a.id, b.id); const friends = LM.bond(S, a.id, b.id) >= 50;
+      const add = ((a.style === b.style ? 3 : 0) + (a.act === b.act ? 2 : 0) + (a.fame > 0 && b.fame > 0 ? 1 : 0)) * (friends ? 0.4 : 1);
+      S.rivalry[k] = clamp((S.rivalry[k] || 0) + (add > 0 ? add : -1), 0, 100);
+      if (S.rivalry[k] >= 45 && !S.pendingRiv) S.pendingRiv = [a.id, b.id];
+    }
+  };
+  LM.rivalryOf = (S, a, b) => (S.rivalry || {})[bkey(a, b)] || 0;
+  LM.rivalryResolve = (S, a, b, choice, winnerId) => {
+    S.rivalry = S.rivalry || {}; const k = bkey(a.id, b.id); S.pendingRiv = null; const out = { lines: [] };
+    if (choice === 'duel') {
+      const w = winnerId === a.id ? a : b, l = w === a ? b : a; const up = LM.addXp(w, 40), up2 = LM.addXp(l, 20);
+      w.mo = clamp(w.mo + 15, 0, 100); l.mo = clamp(l.mo - 8, 0, 100); LM.addBond(S, a.id, b.id, 6); S.rivalry[k] = 0; S.stats.bouts = (S.stats.bouts || 0) + 1;
+      out.lines.push(`${w.name} wins the bout (+40 XP${up.length ? ', LEVEL ' + up[up.length - 1] : ''}). ${l.name} learns from it (+20 XP${up2.length ? ', LEVEL ' + up2[up2.length - 1] : ''}).`);
+    } else if (choice === 'partner') {
+      LM.addBond(S, a.id, b.id, 20); S.rivalry[k] = 0; a.mo = clamp(a.mo + 5, 0, 100); b.mo = clamp(b.mo + 5, 0, 100); out.lines.push(`${a.name} and ${b.name} train side by side now. Bond +20.`);
+    } else { S.rivalry[k] = Math.max(0, (S.rivalry[k] || 0) - 15); out.lines.push('The tension simmers down, for now.'); }
+    return out;
+  };
 
   // ---------- recruits & market ----------
   LM.genRecruit = (S) => {

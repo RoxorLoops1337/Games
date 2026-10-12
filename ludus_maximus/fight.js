@@ -31,11 +31,11 @@
       const ubtn = unitsA.map((u) => `<div class="ur"><div class="who">${esc(u.name)}</div>${u.ults.map((c, k) => `<div class="ub" id="ub-${u.id}-${k}" data-a="fult" data-u="${u.id}" data-k="${k}" style="--c:${D.ULTS[c.id].c}"><div class="ubi">${A.ultIcon(c.id, 26)}</div><div class="ubn">${D.ULTS[c.id].n}</div><span class="ubu">${esc(u.name)}</span><i class="ubcd"></i><b class="ubt"></b></div>`).join('')}</div>`).join('');
       const augChips = (o.augs || []).map((a) => `<span class="achip" style="border-color:${D.TIERS[a.t].c}" title="${a.d}">${esc(a.n)}</span>`).join('');
       root.innerHTML = `<div id="fight"><div class="inner"><div class="f-top"><div class="side">${bars('A')}</div><div class="h" style="color:#fff;align-self:center;font-size:14px;text-shadow:2px 2px 0 var(--ink)">VS</div><div class="side r">${bars('B')}</div></div><div class="f-stage" id="stage"><div id="cam"></div><canvas id="fxc"></canvas><div class="f-banner" id="fban"></div><div class="f-flash" id="fflash"></div><div class="f-vs" id="fvs"></div></div><div class="f-hype"><i id="hype"></i><span>Crowd hype</span></div><div class="f-log" id="flog">${esc(gl[0].name)} (${L.STANCES[stance]}) vs ${esc(opps[0].name)}. ${wxId !== 'clear' ? WX.n + ': ' + WX.d : ''}</div>${augChips ? `<div class="f-aug">${augChips}</div>` : ''}<div class="f-ults ${unitsA.length > 1 ? 'many' : ''}"><div class="favor" id="favor" data-a="ffavor">THE CROWD IS WITH YOU: tap for Crowd's Favor!</div>${ubtn}</div><div class="f-speed"><button class="btn sm on" data-a="fspeed" data-v="1">1x</button><button class="btn sm" data-a="fspeed" data-v="2">2x</button><button class="btn sm" data-a="fspeed" data-v="3">3x</button><button class="btn sm ${F.auto.A ? 'on' : ''}" id="fauto" data-a="fauto">Auto ult</button><button class="btn sm ghost" data-a="fskip">Skip</button></div></div></div>`;
-      const stage = $('#stage'), cam = $('#cam'), cv = $('#fxc'); const W = stage.clientWidth, H = stage.clientHeight; const dpr = Math.min(2, G.devicePixelRatio || 1);
+      const stage = $('#stage'), cam = $('#cam'), cv = $('#fxc'); const W = stage.clientWidth, H = stage.clientHeight; const dpr = Math.min(1.5, G.devicePixelRatio || 1);
       cv.width = W * dpr; cv.height = H * dpr; cv.style.width = W + 'px'; cv.style.height = H + 'px'; const cx = cv.getContext('2d'); cx.scale(dpr, dpr);
       const fy0 = H * 0.27, fy1 = H * 0.97; const SX = (x) => W / 2 + x * ((W * 0.46) / R), SY = (y) => (fy0 + fy1) / 2 + y * (((fy1 - fy0) * 0.44) / R);
       const many = Math.max(unitsA.length, unitsB.length); const sw = Math.max(58, Math.min(150, W * (many > 2 ? 0.24 : many > 1 ? 0.28 : 0.31))); const sh = sw * 1.34;
-      cam.innerHTML = A.arenaBG2(W, H) + '<div id="world"></div>';
+      cam.innerHTML = A.arenaBG2(W, H, ev.league || 0) + '<div id="world"></div>';
       const world = $('#world');
       F.units.forEach((u) => {
         const e = document.createElement('div'); e.className = 'fs ' + (u.side === 'B' ? 'foe' : 'mine'); e.id = 'fs-' + u.id; e.dataset.a = u.side === 'B' ? 'ffocus' : ''; e.dataset.id = u.id; e.style.width = sw + 'px'; e.style.height = sh + 'px';
@@ -55,11 +55,11 @@
       const shake = (n) => { fx.shake = Math.max(fx.shake, n); };
 
       // ----- particles & fx -----
-      const spark = (x, y, n, c, sp) => { for (let i = 0; i < n; i++) { const a = Math.random() * 6.28, v = (sp || 160) * (0.4 + Math.random()); fx.parts.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v - 40, life: 0.35 + Math.random() * 0.3, max: 0.65, c, r: 2 + Math.random() * 2.5, g: 380 }); } };
-      const dust = (x, y, n) => { for (let i = 0; i < n; i++) fx.parts.push({ x: x + (Math.random() - 0.5) * 20, y, vx: (Math.random() - 0.5) * 50, vy: -20 - Math.random() * 30, life: 0.5, max: 0.5, c: '#c9a360', r: 3 + Math.random() * 3, g: -10 }); };
+      const spark = (x, y, n, c, sp) => { if (fx.parts.length > 240) return; for (let i = 0; i < n; i++) { const a = Math.random() * 6.28, v = (sp || 160) * (0.4 + Math.random()); fx.parts.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v - 40, life: 0.35 + Math.random() * 0.3, max: 0.65, c, r: 2 + Math.random() * 2.5, g: 380 }); } };
+      const dust = (x, y, n) => { if (fx.parts.length > 240) return; for (let i = 0; i < n; i++) fx.parts.push({ x: x + (Math.random() - 0.5) * 20, y, vx: (Math.random() - 0.5) * 50, vy: -20 - Math.random() * 30, life: 0.5, max: 0.5, c: '#c9a360', r: 3 + Math.random() * 3, g: -10 }); };
       const ring = (x, y, r, c, big) => fx.rings.push({ x, y, r: 6, max: r, life: big ? 0.55 : 0.4, t: big ? 0.55 : 0.4, c, w: big ? 6 : 4 });
       const floatAt = (u, text, cls) => {
-        const p = P(u); const f = document.createElement('div'); f.className = 'float ' + (cls || ''); f.textContent = text; f.style.left = p.x + (Math.random() * 24 - 12) + 'px'; f.style.top = p.y - sh * 0.2 + 'px'; cam.appendChild(f); setTimeout(() => f.remove(), 1000);
+        const p = P(u); const old = cam.querySelectorAll('.float'); if (old.length > 14) old[0].remove(); const f = document.createElement('div'); f.className = 'float ' + (cls || ''); f.textContent = text; f.style.left = p.x + (Math.random() * 24 - 12) + 'px'; f.style.top = p.y - sh * 0.2 + 'px'; cam.appendChild(f); setTimeout(() => f.remove(), 1000);
       };
       const lightning = (a, b) => { const pts = [[a.x, a.y]]; const n = 6; for (let i = 1; i < n; i++) pts.push([a.x + ((b.x - a.x) * i) / n + (Math.random() - 0.5) * 22, a.y + ((b.y - a.y) * i) / n + (Math.random() - 0.5) * 22]); pts.push([b.x, b.y]); fx.lines.push({ pts, life: 0.2, max: 0.2, c: '#9fd8ff', w: 4 }); };
       const mpx = (m) => m * ((W * 0.46) / R);
@@ -151,7 +151,7 @@
       }
       function frame(now) {
         if (finished) return;
-        const real = Math.min(0.1, (now - last) / 1000); last = now;
+        const real = Math.min(0.1, (now - last) / 1000); last = now; if (U.calm()) { fx.freeze = 0; fx.slow = 0; fx.zoom = 0; fx.flash = 0; fx.shake = 0; }
         if (fx.intro > 0) { fx.intro -= real; const n = Math.ceil(fx.intro / 0.4); if (n !== countN && n > 0 && n <= 3) { countN = n; ban(String(n)); U.snd('click'); } if (fx.intro <= 0) { ban('FIGHT!', '#f6b82d'); U.snd('roar'); introDone = true; const v = el('fvs'); if (v) v.remove(); U.crowd(true); } }
         else {
           let dt = real; if (fx.freeze > 0) { fx.freeze -= real; dt = 0; } if (fx.slow > 0) { fx.slow -= real; dt *= 0.3; }
