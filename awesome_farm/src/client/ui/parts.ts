@@ -264,6 +264,7 @@ export class Slot {
     }
 
     get interactive () { return this.zone; }
+    get hovering () { return this.hover; }
 
     /** Show this (or nothing). The hotbar sets its slots every frame, so the same thing again costs nothing: only what changed is touched. */
     set (d: SlotData | null) {

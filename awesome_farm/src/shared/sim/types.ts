@@ -294,6 +294,7 @@ export interface PlayerS {
     boss?: Record<string, number>;   // bosses this player has helped defeat, by boss id
     pets?: Pet[];            // tamed creatures
     comp?: string;           // id of the pet walking beside you
+    fav?: ItemId[];          // starred items: Quick stack, Put all and the like never move them (sim/stash.ts)
     ride?: number;           // while riding your companion: the speed multiplier (public; sim/bond.ts cmdRide)
     petSeq?: number;
     dex?: string[];          // species you have befriended at least once
@@ -422,6 +423,10 @@ export type Cmd =
     /** Pet your companion: it must be yours and beside you (sim/bond.ts). */
     | { t: 'pat' }
     | { t: 'ride' }
+    /** Bulk item tools (sim/stash.ts): star an item, Quick stack into nearby chests, Put all / Take all at one chest. */
+    | { t: 'inv'; op: 'fav'; item: ItemId }
+    | { t: 'inv'; op: 'stash' }
+    | { t: 'inv'; op: 'chest'; id: number; dir: 'put' | 'take' }
     /** Take the i-th upgrade a tower offers (sim/defense.ts `cmdPick`). */
     | { t: 'towerpick'; id: number; i: number }
     /** Mend a hurt wall, doorway or tower for materials (sim/defense.ts `cmdRepair`). */

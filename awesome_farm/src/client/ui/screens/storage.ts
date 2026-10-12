@@ -48,9 +48,9 @@ export class ChestScreen implements Screen {
         this.win = new Win(ctx.scene, { size: 'large', title: def.name, icon: def.tex, accent: PAL.sand, onClose: () => ctx.close() });
         const w = this.win, touch = isTouchUi();
         this.foot = w.footer({
-            ...(this.grave ? { primary: { label: 'Take all', onClick: () => this.takeAll() } } : {}),
-            ...(sortable ? { secondary: [{ label: 'Sort & label…', onClick: () => ctx.open('chestcfg', { id: this.id }) }, { label: 'Quick stack', onClick: () => this.quickStack() }] } : {}),
-            hint: this.grave ? 'It was yours: take it all back. A friend can fetch it for you.' : deviceText('Click an item to move the whole stack across. Right-click moves just one.', 'Tap an item to move it across (x1, x10 or All below). Hold moves just one.'),
+            primary: { label: 'Take all', onClick: () => this.takeAll() },
+            ...(sortable ? { secondary: [{ label: 'Sort & label…', onClick: () => ctx.open('chestcfg', { id: this.id }) }, { label: 'Quick stack', onClick: () => this.quickStack() }, { label: 'Put all', onClick: () => ctx.send({ t: 'inv', op: 'chest', id: this.id, dir: 'put' }) }] } : {}),
+            hint: this.grave ? 'It was yours: take it all back. A friend can fetch it for you.' : deviceText('Click an item to move the whole stack across. Right-click moves just one. F stars an item (Put all and Quick stack skip stars).', 'Tap an item to move it across (x1, x10 or All below). Hold moves just one.'),
         });
         const body = w.body, cy = w.top + w.toolH / 2, sw = 230;
         // sort and filter both lists: Sort walks through the orders, the chips narrow it to one kind of thing
@@ -106,16 +106,14 @@ export class ChestScreen implements Screen {
     }
 
     private takeAll () {
-        const b = this.ent();
-        if (!b) return;
-        for (const [item, n] of Object.entries(b.inv ?? {}) as [ItemId, number][]) if (n > 0) this.ctx.send({ t: 'xfer', id: this.id, item, n, dir: 'take', part: 'inv' });
+        this.ctx.send({ t: 'inv', op: 'chest', id: this.id, dir: 'take' });
     }
 
     update () {
         const b = this.ent();
         if (!b) { this.ctx.close(); return; }
         const me = this.ctx.me();
-        const k = JSON.stringify([b.inv, b.cap, me.inv, this.search.value, b.fl, b.ic, this.tools.prefs]);
+        const k = JSON.stringify([b.inv, b.cap, me.inv, this.search.value, b.fl, b.ic, this.tools.prefs, me.fav]);
         if (k === this.key) return;
         this.key = k;
         const cap = storageOf(b);
@@ -143,11 +141,20 @@ export class ChestScreen implements Screen {
         const mine = this.tools.apply(mineAll, (id) => countOf(me, id));
         this.bagSec.setRight(`${mine.length} kind${mine.length === 1 ? '' : 's'}`);
         this.right.setItems(mine.map((id): GridItem => ({
-            data: { icon: iconOf(id), count: countOf(me, id), rarity: ITEMS[id].rarity, dim: this.grave || !takes(b.fl, id) },
+            data: { icon: iconOf(id), count: countOf(me, id), rarity: ITEMS[id].rarity, dim: this.grave || !takes(b.fl, id), ...(me.fav?.includes(id) ? { badge: '★' } : {}) },
+            star: () => send({ t: 'inv', op: 'fav', item: id }),
             tip: () => itemTip(id, { count: countOf(me, id), foot: this.grave ? 'A lost backpack only gives' : takes(b.fl, id) ? deviceText('Click: store all · Right-click: store one', 'Tap: store (x1, x10 or All below) · Hold: store one') : `This chest only takes ${filterLabel(b.fl).toLowerCase()}` }),
             click: (shift, q) => { if (!this.grave) send({ t: 'xfer', id: this.id, item: id, n: qtyAmount(q, countOf(me, id), shift, 'all'), dir: 'put', part: 'inv' }); },
             right: () => { if (!this.grave) send({ t: 'xfer', id: this.id, item: id, n: 1, dir: 'put', part: 'inv' }); },
         })));
+    }
+
+    onKey (k: string): boolean {
+        if (k.toLowerCase() !== 'f') return false;
+        const it = this.right.hoverItem();
+        if (!it?.star) return false;
+        it.star();
+        return true;
     }
 
     focusSearch () { this.search.focus(); }
