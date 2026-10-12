@@ -340,8 +340,12 @@ Wandering visitors (merchant, veteran trainer, bard, rumor scout): from week 2 a
 - [x] 152. Tournament flow pass at phone size (147)
 - [x] 153. Visitor variety: a rival owner's spy, a bounty hunter, a healer for injuries
 - [ ] 154. Real replay (148)
-- [ ] 155. Augment hints per style (149)
+- [x] 155. Augment hints per style (149)
 
 ## Round 37 shipped
 - Tournament flow pass at phone size: bracket, semifinal prep and results fine (cosmetic: rival names can match your fighters).
 - Visitor variety: Wandering Healer (injuries heal 2 weeks faster), Bounty Hunter (double purse bounty), Gossip Spy (rival owner loses lead or you gain fame).
+
+## Round 38 shipped
+- Augment picker shows a "Fits your style" tag (soft hint, no hidden counters).
+- Bracket opponents no longer share your fighter name.

@@ -352,6 +352,14 @@
     }
     return out;
   };
+  // Soft hint for the picker: does this augment boost a stat the style is already strong in?
+  LM.augFit = (style, a) => {
+    const m = D.STYLES[style].mul; const keys = Object.keys(a.syn || {});
+    if (keys.length) return keys.some((k) => (m[k] || 1) >= 1.08);
+    const x = Object.keys(a.xfx || {})[0]; if (!x) return false;
+    if (x === 'vamp' || x === 'riposte') return m.atk >= 1.05; if (x === 'thorns' || x === 'regen') return m.def >= 1 || m.hp >= 1.05;
+    return false;
+  };
   LM.augCtx = (augs) => { const syn = {}, xfx = {}; augs.forEach((b) => { if (b.syn) add(syn, b.syn); if (b.xfx) add(xfx, b.xfx); }); return { syn, xfx }; };
 
   // ---------- runes & relics ----------
@@ -425,7 +433,7 @@
   LM.withdraw = (S, key) => { const e = S.entries[key]; if (!e) return; S.gold += e.paid; delete S.entries[key]; };
 
   // ---------- tournaments ----------
-  LM.tourneyInit = (S, ev, g) => ({ key: ev.key, size: ev.size, slots: [g].concat(ev.opps), alive: Array.from({ length: ev.size }, (_, i) => i), hist: [], round: 0, hpf: 1, won: 0 });
+  LM.tourneyInit = (S, ev, g) => ({ key: ev.key, size: ev.size, slots: [g].concat(ev.opps.map((o) => (o.name === g.name ? Object.assign({}, o, { name: D.FIRST.find((n) => n !== g.name && !ev.opps.some((x) => x.name === n)) }) : o))), alive: Array.from({ length: ev.size }, (_, i) => i), hist: [], round: 0, hpf: 1, won: 0 });
   LM.tourneyOpp = (T) => { const mi = T.alive.indexOf(0); return T.slots[T.alive[mi ^ 1]]; };
   LM.tourneyPairs = (T) => { const p = []; for (let i = 0; i < T.alive.length; i += 2) p.push([T.alive[i], T.alive[i + 1]]); return p; };
   LM.tourneyAdvance = (S, T, iWon) => {
