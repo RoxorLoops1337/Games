@@ -8,9 +8,9 @@ Rules: small PRs, `npm run test:ludus` + `node build.js` + a headless-Chromium l
 - [x] 4. Sound: per-ultimate sfx, crowd ambience, level-up jingle
 - [x] 5. Forge: Evolve items (rarity up, keeps affixes, adds one)
 - [x] 6. Level-up celebration + roster "ready to level" polish
-- [ ] 7. Browser-verify: tournament + augment stacking, Pit run, second-ultimate pick, ascension, ghosts
-- [ ] 8. Fight replay / highlight (slow-mo of the killing blow)
+- [x] 7. Browser-verify: tournament + augment stacking, Pit run, second-ultimate pick, ascension, ghosts
+- [x] 8. Fight replay / highlight (slow-mo of the killing blow)
 - [ ] 9. Factions (Senate / Merchants / Plebs) rewarding mercy, showboat, upsets
 - [ ] 10. Spy activity (reveal a future event's fog), daily Pit seed with best-floor score
 - [ ] 11. Rivals that train week by week (intel goes stale)
-- [ ] 12. Tutorial coach marks for first week and first fight
+- [x] 12. Tutorial coach marks for first week and first fight

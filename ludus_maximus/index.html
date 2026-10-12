@@ -255,6 +255,8 @@ h1,h2,h3,.h,.btn,.chip,.tab,.pill,.tag,.st,.act,.ltab,.wtab,.tb,.sec,.adv,.float
 .f-ults.many .ub{flex:1 1 30%;height:50px}.f-ults.many .ubu{display:block}.f-ults.many .ubn{font-size:8px}.f-ults.many .ubi{display:none}
 .lvlup{font-family:var(--font);font-weight:900;text-align:center;font-size:26px;color:#fff;background:linear-gradient(90deg,var(--violet),var(--terra));border:4px solid var(--ink);border-radius:14px;padding:6px;margin:8px 0;text-shadow:2px 2px 0 var(--ink);animation:lvp .7s ease-out}
 @keyframes lvp{0%{transform:scale(.3) rotate(-6deg);opacity:0}60%{transform:scale(1.15) rotate(2deg);opacity:1}100%{transform:none}}
+#tip{position:absolute;left:10px;right:10px;bottom:84px;z-index:40;background:var(--ink);color:var(--cream);border:3px solid var(--gold);border-radius:14px;padding:10px 12px;font-size:13px;display:none;gap:8px;align-items:center;box-shadow:0 5px 0 #000}
+#tip.on{display:flex;animation:tabin .25s ease-out}#tip b{font-family:var(--font);color:var(--gold);text-transform:uppercase;font-size:11px}#tip .btn{flex:none}
 @keyframes bump{0%{transform:scale(1)}35%{transform:scale(1.22);background:var(--gold);color:var(--ink)}100%{transform:scale(1)}}
 .chip.bump{animation:bump .5s ease-out}
 @keyframes tabin{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}

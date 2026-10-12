@@ -88,7 +88,7 @@
         else if (e.k === 'resist') floatAt(dst, 'RESIST', 'st');
         else if (e.k === 'bleed') { if (e.dmg >= 3) floatAt(dst, '-' + e.dmg, e.fire ? 'tech' : 'miss'); }
         else if (e.k === 'thorn') floatAt(dst, e.dmg + ' thorns', 'miss');
-        else if (e.k === 'down') { dst.el.classList.add('dead'); const f = el('fu-' + e.dst); if (f) f.classList.add('dead'); logt(`${dst.name} is down!`); if (!sp) { fx.slow = 0.9; fx.flash = 0.25; shake(9); const p = P(dst); spark(p.x, p.y, 24, '#fff', 260); U.snd('crit'); } }
+        else if (e.k === 'down') { fx.lastDown = dst; dst.el.classList.add('dead'); const f = el('fu-' + e.dst); if (f) f.classList.add('dead'); logt(`${dst.name} is down!`); if (!sp) { fx.slow = 0.9; fx.flash = 0.25; shake(9); const p = P(dst); spark(p.x, p.y, 24, '#fff', 260); U.snd('crit'); } }
         else if (e.k === 'roar') { ban('Crowd roars!'); U.snd('roar'); shake(4); const bg = cam.querySelector('.arena-bg'); if (bg) { bg.classList.add('roar'); setTimeout(() => bg.classList.remove('roar'), 1500); } logt(e.side === 'A' ? 'The crowd backs YOU!' : 'The crowd backs the underdog!'); }
       }
 

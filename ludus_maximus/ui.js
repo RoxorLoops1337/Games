@@ -443,11 +443,26 @@
   ACT.ipick = (el) => {
     const g = ui.cands[+el.dataset.i]; S = L.newGame({ name: ui.introName, color: ui.introColor }); U.setS(S);
     g.id = S.nextId++; g.act = 'str'; S.glads.push(g); ui.cands = null; save(); render();
-    ACT.how(); S.flags.tutor = true;
+    ACT.how(); S.flags.tutor = true; S.flags.tips = { ludus: 1 };
   };
 
+  // ---------- first-time coach tips ----------
+  const TIPS = {
+    ludus: 'Tap a building to upgrade it. Buildings next to ones they like get a +synergy bonus. Then open Fighters.',
+    glads: 'Give each fighter a weekly activity: train a stat, rest, spar or work. It repeats every week. Tap a fighter for runes, ultimates and gear.',
+    arena: 'Matches are announced ahead. Scout opponents, tap Enter on a duel, then press GAMES DAY at the top. Try the Pit of Trials too.',
+    armory: 'Equip items from here, upgrade them at the Forge, merge three into one better, and equip Relics for ludus-wide bonuses.',
+    more: 'Sponsors pay for goals. The Hall of Legends and laurel perks power your long-term growth.',
+  };
+  U.tip = (key) => {
+    if (!S || !TIPS[key]) return; S.flags.tips = S.flags.tips || {}; if (S.flags.tips[key] || modalEl().className.includes('on') || document.getElementById('fight')) return;
+    S.flags.tips[key] = 1; save(); let t = $('#tip'); if (!t) { t = document.createElement('div'); t.id = 'tip'; $('#app').appendChild(t); }
+    t.innerHTML = `<b>Tip</b> ${TIPS[key]}<button class="btn sm" data-a="tipx">Got it</button>`; t.className = 'on';
+  };
+  ACT.tipx = () => { const t = $('#tip'); if (t) t.className = ''; };
+
   // ---------- routing ----------
-  ACT.tab = (el) => { ui.tab = el.dataset.v; U.snd('click'); render(); main().scrollTop = 0; const m = main(); m.classList.remove('tabin'); void m.offsetWidth; m.classList.add('tabin'); };
+  ACT.tab = (el) => { ui.tab = el.dataset.v; U.snd('click'); render(); main().scrollTop = 0; const m = main(); m.classList.remove('tabin'); void m.offsetWidth; m.classList.add('tabin'); setTimeout(() => U.tip(ui.tab), 500); };
   ACT.close = () => closeModal();
   ACT.res = (el) => { const r = U.res; U.res = null; closeModal(); if (r) r(el.dataset.v); };
   function render() {
@@ -466,7 +481,7 @@
     });
     document.addEventListener('keydown', (e) => { if (!S || e.target.tagName === 'INPUT') return; const m = { 1: 'ludus', 2: 'glads', 3: 'arena', 4: 'armory', 5: 'more' }[e.key]; if (m) { ui.tab = m; render(); } if ((e.key === ' ' || e.key === 'Enter') && !document.getElementById('fight') && modalEl().className === '') { ACT.next(); e.preventDefault(); } if (e.key === 'Escape') closeModal(); });
     S = L.load(); U.setS(S);
-    if (S) render(); else intro();
+    if (S) { render(); setTimeout(() => U.tip('ludus'), 800); } else intro();
   }
   U.boot = boot;
 })(typeof globalThis !== 'undefined' ? globalThis : this);
