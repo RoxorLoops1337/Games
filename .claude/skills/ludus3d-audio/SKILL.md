@@ -23,7 +23,7 @@ A.music.setMode('ludus'|'prep'|'arena'|'victory'|'defeat', { fade })  // crossfa
 A.music.setIntensity(0..1)              // smoothed, arena layers follow it
 A.music.stop(fade) A.music.seed(n)
 ```
-Graph: sources -> sfx/music/crowd buses -> master -> compressor (glue, -16 dB, 4:1) -> limiter (-2 dB, 20:1, 1 ms) -> 0.92 trim -> destination. Music bus has a duck gain; music and crowd get convolver sends (procedural 2.3 s colosseum IR, 28 ms predelay, darkening tail); sfx have a per-sound `wet` send. MUSIC_TRIM 0.38 keeps music about 8 dB under hits.
+Graph: sources -> sfx/music/crowd buses -> master -> compressor (glue, -16 dB, 4:1) -> limiter (-2 dB, 20:1, 1 ms) -> 0.92 trim -> destination. Music bus has a duck gain; music and crowd get convolver sends (procedural 2.3 s colosseum IR, 28 ms predelay, darkening tail); sfx have a per-sound `wet` send. MUSIC_TRIM 0.32 keeps music about 9 dB under hits.
 
 ## Level / mix table (post limiter, measured; peaks in dBFS)
 
@@ -32,12 +32,12 @@ Graph: sources -> sfx/music/crowd buses -> master -> compressor (glue, -16 dB, 4
 | ui tap/confirm/coin | -20 to -11 | tap quietest |
 | footstep, swish, miss, dust | -18 to -9 | spam sounds, keep low |
 | swordHit -11, shieldBlock -10, spear/bash -9..-8 | -11 to -8 | main combat layer |
-| grunt/hurt/deathCry | -14 to -4 | voices; hurt loudest |
+| grunt/hurt/deathCry | -10 to -5 | voices; hurt loudest |
 | crit, deathThud, drum | -6 to -4 | accent |
 | crowd one-shots | -10 to -4 | roar loudest |
 | crowd bed | -20 (0.2) / -11 (0.6) / -5 (1.0) | sits under everything |
 | fanfare, horn, gate, ults | -6 to -3 | duck music 45-55% |
-| music | -10 to -3 peak, about -26 to -18 RMS | arena louder with intensity (rms rises about 8 dB 0->1) |
+| music | -14 to -5 peak, about -30 to -21 RMS | arena rms rises about 9 dB from intensity 0 to 1 |
 Hard rule: nothing above -3 dBFS (limiter threshold -2). Sub bass below 60 Hz is inaudible on phones: every thump adds a 2x partial and drones start at 65+ Hz.
 
 ## Recipes (all in audio_ref.js, one function each)

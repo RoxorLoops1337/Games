@@ -173,7 +173,7 @@ function attackClip(weapon, name, stance, poses) {
 const SWORD_GUARD = {
   hips: [0.03, -0.3, 0], spine: [0.05, -0.1, 0], chest: [0.06, -0.15, 0], neck: [0, 0.1, 0], head: [-0.05, 0.4, 0],
   shoulderR: [-0.85, 0.1, -0.30], elbowR: [-1.35, 0, 0], wristR: [-0.15, 0, 0],
-  shoulderL: [-0.65, 0, 0.40], elbowL: [-1.55, 0, 0], wristL: [0, 0, 0],
+  shoulderL: [-0.35, 0, 0.30], elbowL: [-1.25, 0, 0], wristL: [0, 0, 0],
   hipL: [-0.30, 0, 0.12], kneeL: [0.42, 0, 0], hipR: [0.20, 0, -0.10], kneeR: [0.40, 0, 0], hip: [0, -0.07, 0],
 };
 export const WEAPON_POSES = {
@@ -207,8 +207,8 @@ export const WEAPON_POSES = {
   spear: {
     name: 'spear', weapon: 'spear', twoHand: true,
     guard: {
-      hips: [0.02, -0.4, 0], spine: [0.04, -0.15, 0], chest: [0.05, -0.2, 0], head: [-0.05, 0.5, 0],
-      shoulderR: [-0.55, 0.1, -0.35], elbowR: [-1.0, 0, 0], wristR: [-0.5, 0, 0],
+      hips: [0.02, -0.3, 0], spine: [0.04, -0.1, 0], chest: [0.05, -0.1, 0], head: [-0.05, 0.35, 0],
+      shoulderR: [-0.35, 0, 0.12], elbowR: [-1.3, 0, 0], wristR: [-0.25, 0, 0],
       shoulderL: [-0.9, 0, 0.3], elbowL: [-0.9, 0, 0], wristL: [0, 0, 0],
       hipL: [-0.34, 0, 0.1], kneeL: [0.45, 0, 0], hipR: [0.22, 0, -0.1], kneeR: [0.4, 0, 0], hip: [0, -0.08, 0],
     },
@@ -521,10 +521,10 @@ export function buildGladiator(opts = {}) {
   add(head, lathe([[0, -0.015], [0.055, -0.005], [0.08, 0.04], [0.098, 0.1], [0.105, 0.15], [0.09, 0.21], [0.05, 0.245], [0, 0.255]], 9, 0.93, 1.06, 0.15, 0.85), mats.skin, 'skull', 0, 0, 0.0);
   add(head, new THREE.ConeGeometry(0.018, 0.045, 4), mats.skin, 'nose', 0, 0.105, 0.108).rotation.x = Math.PI / 2 + 0.25;
   addAO(head.children[head.children.length - 1].geometry, 0, 1);
-  add(head, boxG(0.17, 0.018, 0.04), mats.hair, 'brow', 0, 0.138, 0.085);
+  add(head, boxG(0.15, 0.014, 0.03), mats.hair, 'brow', 0, 0.14, 0.088);
   for (const sg of [-1, 1]) add(head, boxG(0.022, 0.012, 0.01), mats.eye, 'eye', sg * 0.036, 0.122, 0.1);
   if ((opts.hair || 'short') !== 'none') {
-    const h = add(head, lathe([[0.1, 0.1], [0.108, 0.15], [0.095, 0.215], [0.055, 0.25], [0, 0.262]], 8, 0.96, 1.09, 0.1, 0.75), mats.hair, 'hair', 0, 0.0, -0.005); J.hair = h;
+    const h = add(head, lathe([[0.098, 0.15], [0.108, 0.17], [0.095, 0.225], [0.055, 0.255], [0, 0.266]], 8, 0.96, 1.06, 0.1, 0.8), mats.hair, 'hair', 0, 0.0, -0.02); J.hair = h;
   }
   // arms
   for (const [s, sg] of [['L', 1], ['R', -1]]) {
@@ -606,7 +606,7 @@ export function addPlume(rig, o = {}) {
 // Belt tassel / pteruges strip hanging from a socket.
 export function addTassel(rig, socketName, o = {}) {
   const rows = o.rows || 4, rl = (o.length || 0.22) / (rows - 1);
-  const g = new ChainMesh({ anchor: rig.sockets[socketName], rows, rowLen: rl, stiff: 0.05, stiffFall: 0.5, damping: 0.9, gravity: -12, shape: (r) => new V3(o.dx || 0, -r * rl, o.dz || 0), material: o.material || rig.mats.leather, radius: o.radius || [0.026, 0.02], flat: o.flat || [0.55, 1.2], name: 'tassel' });
+  const g = new ChainMesh({ anchor: rig.sockets[socketName], rows, rowLen: rl, stiff: 0.05, stiffFall: 0.5, damping: 0.9, gravity: -12, shape: (r) => new V3(o.dx || 0, -r * rl, o.dz || 0), material: o.material || rig.mats.leather, radius: o.radius || [0.026, 0.02], flat: o.flat || [0.55, 1.2], box: o.box, name: 'tassel' });
   return rig.addSecondary(g);
 }
 

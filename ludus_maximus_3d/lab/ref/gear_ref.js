@@ -29,7 +29,7 @@ export function makeSpear(rig, o = {}) {
   const shaft = part(col(new THREE.CylinderGeometry(0.017, 0.019, L, 6)), m.leather, 'shaft'); shaft.position.y = L / 2 - 0.45; g.add(shaft);
   const head = part(lathe([[0, 0], [0.034, 0.05], [0.03, 0.12], [0.012, 0.2], [0, 0.26]], 4, 1, 0.3, 0, 1), m.metal, 'head'); head.position.y = L - 0.45; g.add(head);
   const fer = part(col(new THREE.ConeGeometry(0.02, 0.08, 6)), m.metal, 'ferrule'); fer.rotation.x = Math.PI; fer.position.y = -0.47; g.add(fer);
-  const gb = new THREE.Object3D(); gb.name = 'gripB'; gb.position.y = o.gripB ?? 0.5; g.add(gb); g.userData.gripB = gb; return g;
+  const gb = new THREE.Object3D(); gb.name = 'gripB'; gb.position.y = o.gripB ?? 0.42; g.add(gb); g.userData.gripB = gb; return g;
 }
 export function makeTrident(rig) {
   const g = makeSpear(rig, { len: 1.85 }); g.name = 'trident'; const m = rig.mats, y0 = 1.85 - 0.45;
