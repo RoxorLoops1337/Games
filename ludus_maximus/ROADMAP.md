@@ -294,4 +294,13 @@ First-time-player pass in a fresh phone-sized browser: the start screen no longe
 - [ ] 131. Real replay (127)
 - [ ] 132. Augment hints per style (129)
 - [ ] 133. More drill types for other buildings (130)
-- [ ] 134. Continue the first-time pass: week 1 flow, first fight, first tournament
+- [x] 134. Continue the first-time pass: week 1 flow, first fight, first tournament
+
+## Round 32 shipped
+First-week pass at 390x800, 360x640 and 1280x800: fresh start, how to play, home, fighters, arena, Next Week training and summary, Sponsors and More. No horizontal scroll, no overlaps. Fixed the one real issue: the "Pick an activity per fighter" hint on the Fighters tab was dark gray on dark brown and nearly unreadable.
+
+## Next ideas
+- [ ] 135. First fight and first tournament pass (week 2 to 4) at phone size
+- [ ] 136. Real replay (131)
+- [ ] 137. Augment hints per style (132)
+- [ ] 138. More drill types for other buildings (133)
