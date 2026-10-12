@@ -86,7 +86,7 @@ const band = (r, y0, y1, seg = 6) => cylG(r, r, y1 - y0, seg, true).translate(0,
 function swordParts(rig, grp, o, rr, sica) {
   const A = (m, g) => rig.add(m, g, grp);
   const len = sica ? 0.5 : 0.6, w = sica ? 0.042 : 0.036;
-  A('metal', xf(blade(len, w, sica ? 0.2 : 0.13, sica ? 0.55 : 0), [0, 0.075, 0]));
+  A('steel', xf(blade(len, w, sica ? 0.2 : 0.13, sica ? 0.55 : 0), [0, 0.075, 0]));
   if (rr.r >= 3) A('gem', paint(xf(boxG(0.006, len * 0.5, 0.006), [0, 0.3, sica ? 0.012 : 0.0062]), tint(rr.col, 1.3)));
   else if (rr.r === 2) A('trim', paint(xf(boxG(0.005, len * 0.4, 0.005), [0, 0.27, 0.0062]), tint(rr.col, 1)));
   A('trim', xf(boxG(sica ? 0.07 : 0.1, 0.016, 0.03), [0, 0.068, 0])); // guard
@@ -102,19 +102,19 @@ function spearParts(rig, grp, trident, rr, o) {
   const A = (m, g) => rig.add(m, g, grp), L = trident ? 1.85 : 2.0, y0 = L - 0.45;
   A('leather', paint(xf(cylG(0.016, 0.019, L, 5), [0, L / 2 - 0.45, 0]), (x, y) => 0.9 + 0.2 * Math.sin(y * 9)));
   A('trim', xf(band(0.021, -0.006, 0.006))); A('trim', xf(band(0.021, 0.354, 0.366)));
-  A('metal', xf(coneG(0.022, 0.1, 5), [0, -0.5, 0], [PI, 0, 0])); A('trim', xf(band(0.022, -0.456, -0.444), [0, 0, 0]));
+  A('steel', xf(coneG(0.022, 0.1, 5), [0, -0.5, 0], [PI, 0, 0])); A('trim', xf(band(0.022, -0.456, -0.444), [0, 0, 0]));
   A('metal', xf(lathe([[0.03, 0], [0.02, 0.09]], 5, 1, 1, 0, 1), [0, y0 - 0.06, 0]));
   A('trim', xf(band(0.027, y0 - 0.026, y0 - 0.014)));
   if (trident) {
     A('metal', xf(boxG(0.15, 0.022, 0.026), [0, y0 + 0.012, 0]));
-    A('metal', xf(blade(0.26, 0.017, 0.7), [0, y0 + 0.02, 0])); // centre prong
+    A('steel', xf(blade(0.26, 0.017, 0.7), [0, y0 + 0.02, 0])); // centre prong
     for (const sg of [-1, 1]) {
-      A('metal', xf(blade(0.22, 0.014, 0.7), [sg * 0.068, y0 + 0.02, 0], [0, 0, sg * -0.05]));
-      A('metal', xf(coneG(0.012, 0.07, 4), [sg * 0.075, y0 + 0.12, 0], [0, 0, sg * -2.4])); // barb
+      A('steel', xf(blade(0.22, 0.014, 0.7), [sg * 0.068, y0 + 0.02, 0], [0, 0, sg * -0.05]));
+      A('steel', xf(coneG(0.012, 0.07, 4), [sg * 0.075, y0 + 0.12, 0], [0, 0, sg * -2.4])); // barb
     }
     if (rr.r >= 3) A('gem', paint(xf(boxG(0.008, 0.1, 0.008), [0, y0 + 0.12, 0.002]), tint(rr.col, 1.3)));
   } else {
-    A('metal', xf(blade(0.33, 0.05, 0.22), [0, y0 - 0.03, 0]));
+    A('steel', xf(blade(0.33, 0.05, 0.22), [0, y0 - 0.03, 0]));
     A('plume', xf(band(0.023, y0 - 0.1, y0 - 0.085)));
     A('plume', xf(quadG(0.03, 0.12), [0, y0 - 0.16, 0.018], [0, 0, 0.05]));
     if (rr.r >= 3) A('gem', paint(xf(boxG(0.006, 0.17, 0.006), [0, y0 + 0.1, 0.0068]), tint(rr.col, 1.3)));

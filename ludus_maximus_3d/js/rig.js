@@ -148,13 +148,14 @@ const SHADE = {
   plume: { fill: 0.24, fs: '#c0c0f0', fg: '#d09870', rim: 0.32, rc: '#b0c8ff', rp: 3.0, sss: 0.15, sc: '#ff9060', env: 0 },
   leather: { fill: 0.22, lift: 0.01, fs: '#b8b8e8', fg: '#c08860', rim: 0.35, rc: '#a8c0ff', rp: 4.5, sss: 0, sc: '#fff', env: 0.22, ew: 0.5 },
   metal: { fill: 0.04, fs: '#b8c0e8', fg: '#c89868', rim: 0.30, rc: '#c0d4ff', rp: 3.0, sss: 0, sc: '#fff', env: 1.0 },
+  steel: { fill: 0.04, fs: '#c0c8f0', fg: '#b09078', rim: 0.3, rc: '#d0e0ff', rp: 3.0, sss: 0, sc: '#fff', env: 1.15 },
   trim: { fill: 0.04, fs: '#c8c8f0', fg: '#d8a060', rim: 0.3, rc: '#ffe0b0', rp: 3.0, sss: 0, sc: '#fff', env: 1.1 },
   eye: { fill: 0.25, fs: '#ffffff', fg: '#ffeedd', rim: 0, rc: '#fff', rp: 3, sss: 0, sc: '#fff', env: 0 },
   gem: { fill: 0, fs: '#fff', fg: '#fff', rim: 0.2, rc: '#fff', rp: 2, sss: 0, sc: '#fff', env: 0.4 },
 };
 const _col = new THREE.Color();
 const v3s = (hex) => { _col.set(hex); return `vec3(${_col.r.toFixed(4)},${_col.g.toFixed(4)},${_col.b.toFixed(4)})`; };
-export const EDGE = { skin: 0.5, hair: 0.35, cloth: 0.4, plume: 0.35, leather: 0.4, metal: 0.3, trim: 0.2, eye: 0, gem: 0 };
+export const EDGE = { steel: 0.15, skin: 0.5, hair: 0.35, cloth: 0.4, plume: 0.35, leather: 0.4, metal: 0.3, trim: 0.2, eye: 0, gem: 0 };
 export function shadePatch(mat, key, xo = {}) {
   const k = SHADE[key]; if (!k) return; const ed = EDGE[key] || 0;
   const f = (n) => (+n).toFixed(3);
@@ -186,7 +187,7 @@ export function makeMaterials(p = DEFAULT_PALETTE) {
   const mk = (color, roughness, metalness, flat = false, ds = false) => new THREE.MeshStandardMaterial({ color, roughness, metalness, flatShading: flat, vertexColors: true, side: ds ? THREE.DoubleSide : THREE.FrontSide });
   const m = {
     skin: mk(p.skin, 0.5, 0), hair: mk(p.hair, 0.55, 0.05), cloth: mk(p.cloth, 0.9, 0, false, true), plume: mk(p.plume, 0.82, 0, false, true),
-    leather: mk('#7a4e2c', 0.66, 0.05, false, true), metal: mk(p.metal, 0.4, 0.8, false, true), trim: mk('#f0be52', 0.3, 0.85, false, true),
+    leather: mk('#7a4e2c', 0.66, 0.05, false, true), metal: mk(p.metal, 0.4, 0.8, false, true), trim: mk('#f0be52', 0.3, 0.85, false, true), steel: mk('#c4cad6', 0.28, 0.9, false, true),
     eye: new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.45, metalness: 0, vertexColors: true, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }), gem: mk('#ffffff', 0.2, 0.2, true, true),
   };
   m.hair.roughness = 0.5;
@@ -830,7 +831,7 @@ export function buildGladiator(opts = {}) {
   const jt = (len) => (x, y) => { const t = -y / len; return 1 - 0.1 * sm01(0.8, 1, t) - 0.06 * sm01(0.2, 0, t); }; // slightly ruddier / darker at the joint ends
 
   // torso: pelvis (cloth), abdomen, chest with pecs / clavicles / lats sculpted and painted, neck. Hidden pole rings are omitted.
-  A('cloth', paint(lathe([[0.14, -0.12], [0.186 * B, -0.02], [0.195 * B, 0.06], [0.158 * B * bd.waist, 0.12], [0, 0.13]], 8, 1, 0.72, 0.08, 0.9), (x, y) => 1 - 0.25 * sm01(-0.07, -0.13, y)), J.hips);
+  A('cloth', paint(lathe([[0.14, -0.12], [0.186 * B, -0.02], [0.195 * B, 0.06], [0.158 * B * bd.waist, 0.098], [0, 0.104]], 8, 1, 0.72, 0.08, 0.9), (x, y) => 1 - 0.25 * sm01(-0.07, -0.13, y)), J.hips);
   const ab = lathe([[0.152 * WS, -0.1], [0.148 * WS, -0.03], [0.158 * WS, 0.06], [0.172 * WS, 0.15], [0.185 * B, 0.225]], 10, 1, 0.74, 0.05, 0.92);
   const abl = []; for (let r = 0; r < 3; r++) for (const sg of [-1, 1]) abl.push({ p: [sg * 0.042 * WS, -0.02 + r * 0.068, 0.12], r: 0.036, a: 0.0085 });
   sculpt(ab, abl); paint(ab, (x, y, z) => { const fr = sm01(0, 0.08, z); const g1 = Math.exp(-sq(x / 0.012)) * fr * 0.13; const rows = (Math.exp(-sq(y / 0.012)) + Math.exp(-sq((y - 0.068) / 0.012)) + Math.exp(-sq((y - 0.136) / 0.012))) * fr * 0.07; return 1 - g1 - rows; });
@@ -853,13 +854,13 @@ export function buildGladiator(opts = {}) {
   // arms: deltoid, upper arm, forearm, fist with thumb and knuckle shading
   for (const [s, sg] of [['L', 1], ['R', -1]]) {
     A('skin', paint(sphereG(0.07 * B * AR, 6, 4, 1.05, 1, 1.0), (x, y, z, nx, ny) => 1 - 0.08 * Math.max(0, -ny)), J['shoulder' + s]);
-    A('skin', paint(capsule(DIM.upperArm, 0.068 * B * AR, 0.054 * B * AR, S6, 0.12), jt(DIM.upperArm)), J['shoulder' + s]);
-    A('skin', paint(capsule(DIM.foreArm, 0.054 * B * AR, 0.04 * B * AR, S6, 0.14), jt(DIM.foreArm)), J['elbow' + s]);
-    A('skin', paint(lathe([[0.034, -0.1], [0.044, -0.04], [0.04, -0.005], [0, 0.02]], 5, 1.0, 0.82, 0.12, 0.88), (x, y, z) => 1 - 0.1 * Math.exp(-sq((y + 0.1) / 0.02)) + 0.04 * sm01(-0.04, 0, y)), J['wrist' + s]);
-    A('skin', xf(coneG(0.014, 0.06, 4), [sg * 0.03, -0.05, 0.025], [-Math.PI + 0.9, 0, sg * 0.15]), J['wrist' + s]); // thumb
+    A('skin', paint(capsule(DIM.upperArm, 0.074 * B * AR, 0.058 * B * AR, S6, 0.16), jt(DIM.upperArm)), J['shoulder' + s]);
+    A('skin', paint(capsule(DIM.foreArm, 0.058 * B * AR, 0.042 * B * AR, S6, 0.2), jt(DIM.foreArm)), J['elbow' + s]);
+    A('skin', paint(lathe([[0.04, -0.118], [0.052, -0.045], [0.046, -0.005], [0, 0.024]], 5, 1.0, 0.84, 0.12, 0.88), (x, y, z) => 1 - 0.1 * Math.exp(-sq((y + 0.1) / 0.02)) + 0.04 * sm01(-0.04, 0, y)), J['wrist' + s]);
+    A('skin', xf(coneG(0.017, 0.07, 4), [sg * 0.036, -0.055, 0.03], [-Math.PI + 0.9, 0, sg * 0.15]), J['wrist' + s]); // thumb
     // legs
-    A(legMat, paint(capsule(DIM.thigh, 0.1 * B * LG, 0.066 * B * LG, S6, 0.1), jt(DIM.thigh)), J['hip' + s]);
-    A(legMat, paint(capsule(DIM.shin, 0.066 * B * LG, 0.045 * B * LG, S6, 0.14), jt(DIM.shin)), J['knee' + s]);
+    A(legMat, paint(capsule(DIM.thigh, 0.104 * B * LG, 0.07 * B * LG, S6, 0.16), jt(DIM.thigh)), J['hip' + s]);
+    A(legMat, paint(capsule(DIM.shin, 0.07 * B * LG, 0.046 * B * LG, S6, 0.3), jt(DIM.shin)), J['knee' + s]);
     const prof = [[0.05, -0.06], [0.05, 0.06], [0.036, 0.13], [0.0, 0.16]];
     const foot = lathe(prof, 5, 1, 1.0, 0.1, 0.85); foot.rotateX(Math.PI / 2); foot.scale(1, 1, 0.55); foot.translate(0, -DIM.footH + 0.03, 0.04);
     A('skin', foot, J['ankle' + s]);
