@@ -190,6 +190,11 @@
   const fightScreen = (S, gl, opps, stance, o) => G.LMFIGHT.run(S, gl, opps, stance, o);
 
   // ---------- results ----------
+  function statsHtml(res) {
+    if (!res || !res.F || !res.F.units) return '';
+    const us = res.F.units; const mx = Math.max(1, ...us.map((u) => u.dmg || 0));
+    return `<div class="sec" style="color:var(--terra);text-shadow:none">Fight stats</div><div class="card" style="padding:6px">` + us.map((u) => `<div class="small" style="font-weight:700;margin-bottom:3px"><span style="color:${u.side === 'A' ? 'var(--green)' : 'var(--terra)'}">${esc(u.name)}</span> ${Math.round(u.dmg || 0)} dmg · ${Math.round(u.taken || 0)} taken · ${u.crits || 0} crit${u.crits === 1 ? '' : 's'}<div style="height:6px;border:2px solid var(--ink);border-radius:4px;background:#fff;margin-top:2px"><i style="display:block;height:100%;width:${Math.round(100 * (u.dmg || 0) / mx)}%;background:${u.side === 'A' ? 'var(--green)' : 'var(--terra)'}"></i></div></div>`).join('') + '</div>';
+  }
   async function results(S, ev, gl, res, rep) {
     const win = res.win;
     const isT = ev.kind === 'tourney' || ev.kind === 'grand';
@@ -200,6 +205,7 @@
     rep.notes.forEach((n) => { h += `<div class="small" style="text-align:center;margin-top:4px">${esc(n)}</div>`; });
     (rep.fac || []).forEach((x) => { h += `<div class="small" style="text-align:center"><span class="tag blue">${esc(x.text)}</span>${x.up ? ' <b>New perk: ' + esc(x.up) + '</b>' : ''}</div>`; });
     h += '<div style="margin-top:8px">' + rep.xp.map((x) => { const g = U.gOf(x.id); return `<div class="kv"><span>${esc(g.name)}</span><b>+${x.xp} XP${x.up.length ? ' · LEVEL ' + x.up[x.up.length - 1] + '!' : ''}</b></div>`; }).join('') + '</div>';
+    h += statsHtml(res);
     rep.lvl.forEach((l) => { h += `<div class="lvlup">${esc(U.gOf(l.id).name)} reached LEVEL ${l.to}!</div>`; });
     if (rep.lvl.length) U.snd('levelup');
     rep.inj.forEach((i) => { h += `<div class="small" style="color:var(--terra)">${esc(U.gOf(i.id).name)} is injured for ${i.w} week${i.w > 1 ? 's' : ''}.</div>`; });
@@ -320,7 +326,7 @@
       g.en = Math.max(0, g.en - 30); const opp = L.bountyOpp(S, g); const ev = { kind: 'bounty', title: 'Bounty', opps: [opp], league: 0, key: 'bounty' + S.week };
       await U.dialog(`<h2>WANTED</h2><div class="row" style="justify-content:center">${A.gladOf(opp, { size: 60, tunic: opp.color, flip: true, mood: 'fight' })}</div><div class="small" style="text-align:center">${esc(opp.name)}, level ${opp.lvl}.</div>` + btn('Fight!', 'ok', 'red'));
       const res = await fightScreen(S, [g], [opp], 'bal', { ev, augs: [] }); const r = L.bountyResult(S, !!res.win); U.snd(res.win ? 'win' : 'lose'); if (res.win) L.favGain(g, true, 0);
-      await U.dialog(`<div class="big ${res.win ? 'win' : 'lose'}">${res.win ? 'Bounty claimed' : 'The outlaw escapes'}</div><div class="row wrap" style="justify-content:center">${res.win ? `<span class="pill">${A.icon('coin', 14)} +${fmt(r.gold)}</span><span class="pill">${A.icon('fame', 14)} +${r.fame}</span>` : ''}</div>` + btn('Continue', 'ok', 'red'));
+      await U.dialog(`<div class="big ${res.win ? 'win' : 'lose'}">${res.win ? 'Bounty claimed' : 'The outlaw escapes'}</div><div class="row wrap" style="justify-content:center">${res.win ? `<span class="pill">${A.icon('coin', 14)} +${fmt(r.gold)}</span><span class="pill">${A.icon('fame', 14)} +${r.fame}</span>` : ''}</div>` + statsHtml(res) + btn('Continue', 'ok', 'red'));
     } catch (e) { console.error(e); U.toast('Oops: ' + e.message); } finally { U.busy = false; U.save(); U.render(); }
   };
   ACT.forum = () => {
