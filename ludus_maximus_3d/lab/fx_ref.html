@@ -114,7 +114,7 @@ layout();
 const ppost = Q.get('post') === '1'; let rt, quad, qscene, qcam, shockV = [0, 1, 2, 3].map(() => new THREE.Vector4());
 if (ppost) { rt = new THREE.WebGLRenderTarget(W * renderer.getPixelRatio(), H * renderer.getPixelRatio(), { type: THREE.UnsignedByteType });
   qscene = new THREE.Scene(); qcam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
-  quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), new THREE.ShaderMaterial({ uniforms: { tDiffuse: { value: rt.texture }, uShock: { value: shockV }, uRadial: { value: 0 }, uChroma: { value: 0 }, uFlash: { value: new THREE.Vector4() }, uAspect: { value: W / H } },
+  quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), new THREE.ShaderMaterial({ uniforms: { tDiffuse: { value: rt.texture }, uShock: { value: shockV }, uRadial: { value: 0 }, uChroma: { value: 0 }, uFlash: { value: new THREE.Vector4(0, 0, 0, 0) }, uAspect: { value: W / H } },
     vertexShader: 'varying vec2 vUv; void main(){vUv=uv; gl_Position=vec4(position.xy,0.,1.);}', fragmentShader: `varying vec2 vUv; uniform sampler2D tDiffuse; uniform float uAspect; ${GRADE_FX_GLSL}
 void main(){ vec3 c = sceneFx(tDiffuse, vUv, uAspect); gl_FragColor = vec4(c,1.0);
  #include <tonemapping_fragment>
@@ -131,7 +131,7 @@ function render() {
   // director would place camera here, then feel.apply
   const keepP = camera.position.clone(), keepQ = camera.quaternion.clone();
   feel.apply(camera);
-  if (ppost) { fx.getShockwaves(camera, shockV, W / H); quad.material.uniforms.uRadial.value = feel.post.radial; quad.material.uniforms.uChroma.value = feel.post.chroma; renderer.setRenderTarget(rt); renderer.render(scene, camera); renderer.setRenderTarget(null); renderer.render(qscene, qcam); }
+  if (ppost) { fx.getShockwaves(camera, shockV, W / H); quad.material.uniforms.uRadial.value = feel.post.radial; quad.material.uniforms.uChroma.value = feel.post.chroma; quad.material.uniforms.uFlash.value.set(...feel.post.flashColor, feel.post.flash); renderer.setRenderTarget(rt); renderer.render(scene, camera); renderer.setRenderTarget(null); renderer.render(qscene, qcam); }
   else renderer.render(scene, camera);
   camera.position.copy(keepP); camera.quaternion.copy(keepQ); camera.fov = feel.state.fov0; camera.updateProjectionMatrix();
 }
