@@ -340,5 +340,14 @@ ok(strongWins >= 17, `level 10 beats level 1 (${strongWins}/20)`);
   const gold0 = S10.gold, br = LM.bountyResult(S10, true); ok(br.gold > 0 && S10.gold === gold0 + br.gold && !LM.bountyReady(S10), 'a claimed bounty pays once a week');
 }
 
+// round 11: special market item, mood events, fight log
+{
+  const S11 = LM.newGame({ name: 'R11' }); S11.week = 5; LM.rerollMarket(S11);
+  const sp = S11.market.filter((x) => x.sp); ok(sp.length === 1 && sp[0].rar >= 2, 'the market stocks one special item');
+  const plain = S11.market.find((x) => !x.sp); const cp = LM.buyVal(S11, sp[0]); sp[0].sp = false; const cn = LM.buyVal(S11, sp[0]); sp[0].sp = true; ok(cp > cn, 'special items cost more');
+  const g = LM.makeGlad({ id: S11.nextId++, style: 'thraex', lvl: 3 }); S11.glads.push(g); let seen = 0; for (let i = 0; i < 60; i++) { g.mo = 50; g.en = 50; if (LM.moodEvent(S11)) { seen++; ok(g.mo !== 50, 'a mood event moves morale'); } }
+  ok(seen > 5 && seen < 40, 'mood events happen now and then');
+}
+
 console.log(`ludus_maximus: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
