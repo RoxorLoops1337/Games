@@ -70,7 +70,7 @@ if (sheet) {
   camTarget.set(0, 0.95, 0); cam.position.set(0, 1.45, Math.max(4.5, n * gap * 0.95)); cam.fov = 30;
   document.getElementById('hud').textContent = style + ' / ' + clip;
 } else {
-  const xs = [-3.4, -1.7, 0, 1.7, 3.4], z = [0, 0, 0, 0, 0];
+  const xs = [-3.0, -1.5, 0, 1.5, 3.0], z = [0, 0, 0, 0, 0];
   STYLES.forEach((s, i) => spawn(s, xs[i], z[i]));
   // 0 murmillo: three-hit combo
   plan(rigs[0], 4.2, [[0.3, a('attack1')], [1.3, a('attack2')], [2.3, a('attack3')]]);
@@ -82,7 +82,7 @@ if (sheet) {
   plan(rigs[3], 5, [[0, (r) => r.animator.setMove(1.5, 0)], [1.8, (r) => { r.animator.setMove(0, 0); r.animator.play('attack1'); }], [2.8, a('attack3')], [4.0, a('taunt')]]);
   // 4 dimachaerus: strafe, double cut, victory
   plan(rigs[4], 5, [[0, (r) => r.animator.setMove(0, 2.0)], [1.6, (r) => { r.animator.setMove(0, 0); r.animator.play('attack1'); }], [2.4, a('attack3')], [3.4, (r) => r.animator.setState('victory')], [4.8, (r) => r.animator.setState('move')]]);
-  cam.position.set(0, 1.4, 7.4); cam.fov = 32; camTarget.set(0, 0.98, 0);
+  cam.position.set(0, 1.35, 9.2); cam.fov = 32; camTarget.set(0, 0.98, 0);
 }
 cam.lookAt(camTarget);
 let simT = 0;

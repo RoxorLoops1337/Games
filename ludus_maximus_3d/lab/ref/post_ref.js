@@ -25,7 +25,7 @@ export const GradeShader = {
     tDiffuse: { value: null }, uTime: { value: 0 },
     uVignette: { value: 0.42 }, uVigSoft: { value: 0.55 },
     uGrain: { value: 0.028 },
-    uShadowTint: { value: new THREE.Color(0.86, 0.9, 1.12) },   // cool violet-blue multiplier in shadows
+    uShadowTint: { value: new THREE.Color(0.95, 0.93, 1.06) },   // cool violet-blue multiplier in shadows
     uHighTint: { value: new THREE.Color(1.12, 1.03, 0.88) },    // warm gold multiplier in highlights
     uSplit: { value: 1.0 },
     uSat: { value: 1.08 }, uContrast: { value: 1.04 }, uLift: { value: new THREE.Color(0.012, 0.008, 0.02) },
@@ -136,7 +136,7 @@ export function createDynamicRes(post, { target = 1000 / 55, min = 0.55, onTierD
     tick(ms) {
       ms = Math.min(ms, 100); ema += (ms - ema) * 0.1; if (cool > 0) { cool--; return post.scale; }
       if (ema > target * 1.25) { slow++; fast = 0; } else if (ema < target * 0.8) { fast++; slow = 0; } else { slow = fast = 0; }
-      if (slow > 20 && post.scale > min) { post.scale = Math.max(min, +(post.scale - 0.1).toFixed(2)); post.setSize(post.cssW, post.cssH); slow = 0; cool = 45; }
+      if (slow > 20 && post.scale > min) { post.scale = Math.max(min, +(post.scale - 0.1).toFixed(2)); post.setSize(post.cssW, post.cssH); slow = 0; cool = 20; }
       else if (slow > 60 && post.scale <= min && onTierDemote) { onTierDemote(); slow = 0; cool = 90; }
       else if (fast > 120 && post.scale < 1) { post.scale = Math.min(1, +(post.scale + 0.1).toFixed(2)); post.setSize(post.cssW, post.cssH); fast = 0; cool = 90; }
       return post.scale;

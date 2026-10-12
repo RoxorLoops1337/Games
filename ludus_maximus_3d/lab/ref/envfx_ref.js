@@ -142,7 +142,7 @@ export function createFlames(points, { glowScale = 5 } = {}) {
   return {
     group: g, flame, glow,
     /** night 0..1 raises halo brightness (torches matter most at dusk/night) */
-    update(t, night = 0) { uTime.value = t; uGlow.value = 0.18 + 0.55 * night; uInt.value = 1.0 + 0.35 * night; },
+    update(t, night = 0) { uTime.value = t; uGlow.value = 0.14 + 0.26 * night; uInt.value = 1.0 + 0.35 * night; },
   };
 }
 

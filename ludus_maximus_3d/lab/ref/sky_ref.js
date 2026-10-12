@@ -13,9 +13,9 @@ export const TOD = {
   },
   golden: {
     sunElev: 16, sunAz: 232, sunColor: 0xffb25e, sunInt: 3.5,
-    hemiSky: 0x86a2d8, hemiGround: 0xb8743f, hemiInt: 1.0,
-    fog: 0xe9b88c, fogDensity: 0.0030,
-    skyTop: 0x3d6db8, skyMid: 0xc4a2a8, skyHor: 0xffc27f, glow: 0xff9a40,
+    hemiSky: 0xa4a2cc, hemiGround: 0xc98650, hemiInt: 1.35,
+    fog: 0xeab68a, fogDensity: 0.0024,
+    skyTop: 0x3a6bb8, skyMid: 0xe0aa8e, skyHor: 0xffc27f, glow: 0xff9a40,
     cloudLit: 0xffd9a6, cloudShade: 0x8a6e9a, cloudAmt: 0.6, stars: 0.0, exposure: 0.9, night: 0.0, sunSize: 0.032,
   },
   dusk: {
@@ -26,8 +26,8 @@ export const TOD = {
     cloudLit: 0xff9a70, cloudShade: 0x4a3a78, cloudAmt: 0.6, stars: 0.15, exposure: 1.0, night: 0.55, sunSize: 0.034,
   },
   night: {
-    sunElev: 38, sunAz: 120, sunColor: 0x8fa8ff, sunInt: 0.55, // "sun" light acts as moon
-    hemiSky: 0x24346a, hemiGround: 0x2c2440, hemiInt: 0.75,
+    sunElev: 38, sunAz: 120, sunColor: 0x8fa8ff, sunInt: 0.85, // "sun" light acts as moon
+    hemiSky: 0x2c3f7c, hemiGround: 0x3a2e4c, hemiInt: 1.05,
     fog: 0x0f1636, fogDensity: 0.0032,
     skyTop: 0x050a1e, skyMid: 0x0e1840, skyHor: 0x24325e, glow: 0x4a5fb0,
     cloudLit: 0x6a7ab8, cloudShade: 0x161c3c, cloudAmt: 0.35, stars: 1.0, exposure: 1.15, night: 1.0, sunSize: 0.02,
@@ -73,7 +73,7 @@ void main(){
   vec3 d = normalize(vDir);
   float e = d.y;
   vec3 col = mix(uHor, uMid, smoothstep(-0.02, 0.28, e));
-  col = mix(col, uTop, smoothstep(0.12, 0.85, e));
+  col = mix(col, uTop, smoothstep(0.16, 0.95, e));
   col = mix(col, uHor * 0.55, smoothstep(0.0, -0.35, e));          // below horizon (mostly hidden by terrain)
   float sd = max(dot(d, uSunDir), 0.0);
   float horizonBand = exp(-abs(e) * 5.0);
