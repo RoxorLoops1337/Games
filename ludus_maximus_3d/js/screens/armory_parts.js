@@ -126,6 +126,8 @@ button.am-row:hover{background:#fff6d8}
 .am-empty .lx-ico{color:#b79a64;margin-bottom:6px}
 .am-sets summary{cursor:pointer;min-height:44px;display:flex;align-items:center;font:800 12px/16px var(--lx-serif);letter-spacing:.14em;text-transform:uppercase;color:#7a2f30}
 .am-hero{display:flex;gap:12px;align-items:center}
+.am-hero .lx-btn{flex:none}
+.am-hero .am-hi{flex:1}
 .am-ribbon{position:absolute;top:-10px;left:12px;background:linear-gradient(180deg,#7a2f9e,#5a1f5e);color:#ffe08a;font:900 10px/16px var(--lx-serif);letter-spacing:.2em;text-transform:uppercase;padding:2px 12px;border-radius:4px;box-shadow:0 2px 4px rgba(0,0,0,.4)}
 @media(prefers-reduced-motion:reduce){.am-flare,.am-burst .am-ring,.am-burst .am-sp2,.am-pips i.nx,.am-pop{animation:none}.am-burst .am-bt{animation:am-fadeonly 1s forwards}}
 @keyframes am-fadeonly{0%{opacity:1}100%{opacity:0}}

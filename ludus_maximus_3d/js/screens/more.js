@@ -40,9 +40,9 @@ function ludusTab(ctx, root, draw) {
     const pr = Math.min(c.n, lm.contractProgress(S, c)), done = pr >= c.n;
     grid.append(card([h('div', 'ax-b', lm.contractText(c)), meter(pr, c.n, done ? 'var(--lx-stam)' : 'var(--lx-xp)'),
       h('div', 'ax-row ax-wrap ax-gap4', [pill(`${pr}/${c.n}`, { tone: done ? 'good' : '' }), goldPill(c.rew.gold, 'Gold reward'), famePill(c.rew.fame), c.rew.item ? pill(`${D.RAR[c.rew.item.rar].n} item`, { tone: 'warn', tip: c.rew.item.name }) : null]),
-      U.button({ label: done ? 'Claim' : 'In progress', variant: done ? 'gold' : 'ghost', disabled: !done, icon: done ? 'coin' : undefined, onClick: () => {
+      done ? U.button({ label: 'Claim reward', variant: 'gold', icon: 'coin', onClick: () => {
         const r = lm.claimContract(S, i); if (!r) return; ctx.save(); ctx.refresh(); ctx.sfx('coin'); U.toast(`Sponsor paid ${r.rew.gold} gold and ${r.rew.fame} fame!`, { kind: 'good', ico: 'coin' }); draw();
-      } })], done ? 'gold' : ''));
+      } }) : null], done ? 'gold' : ''));
   });
   root.append(grid);
   root.append(sec('Weekly goals'));
@@ -73,7 +73,7 @@ function visitorCard(ctx, v, draw) {
 function honorsTab(ctx, root, draw) {
   const S = ctx.S, lm = L(), got = S.trophies || {}, n = Object.keys(got).length;
   root.append(sec(`Trophies ${n}/${D.TROPHIES.length}`));
-  const g = h('div', 'ax-grid s');
+  const g = h('div', 'ax-grid t');
   D.TROPHIES.forEach((t) => {
     const has = got[t.id], b = h('button', 'ax-troph' + (has ? ' got' : ''), [U.icon(has ? 'star' : 'lock', 26), h('span', '', t.n)]); b.type = 'button'; b.setAttribute('aria-label', `${t.n}. ${has ? 'Earned' : 'Not earned yet'}`);
     b.style.color = has ? 'var(--lx-gold)' : 'var(--lx-travertine)';
@@ -96,8 +96,8 @@ function honorsTab(ctx, root, draw) {
   const slots = Math.round(lm.bfx(S, 'hall').v);
   root.append(sec('Legacy'));
   root.append(card([row([medal('fame', 'dark big'), col([h('div', 'ax-name', `${S.laurels} laurels`), note(`Reach the Imperial Games (1800 fame) or win them, then found a new ludus. You keep laurels, perks and legends, and start over faster.${S.ascensions ? ` New ludi founded: ${S.ascensions}.` : ''}`)], 'ax-grow')]),
-    actions([U.button({ label: 'Laurel perks', icon: 'fame', variant: 'bronze', onClick: () => perksSheet(ctx, draw) }), U.button({ label: `Hall of Legends (${(S.legends || []).length})`, icon: 'star', variant: 'bronze', onClick: () => legendsSheet(ctx) })]),
-    U.button({ label: `Found a new ludus (+${lm.laurelsFor(S)} laurels)`, icon: 'ludus', variant: lm.canAscend(S) ? 'danger' : 'ghost', block: true, disabled: !lm.canAscend(S), onClick: () => ascendFlow(ctx) }),
+    actions([U.button({ label: 'Perks', icon: 'fame', variant: 'bronze', onClick: () => perksSheet(ctx, draw) }), U.button({ label: `Legends (${(S.legends || []).length})`, icon: 'star', variant: 'bronze', onClick: () => legendsSheet(ctx) })]),
+    U.button({ label: `New ludus (+${lm.laurelsFor(S)})`, icon: 'ludus', sub: 'Found a new ludus and earn laurels', variant: lm.canAscend(S) ? 'danger' : 'ghost', block: true, disabled: !lm.canAscend(S), onClick: () => ascendFlow(ctx) }),
     !lm.canAscend(S) ? note(`Needs 1800 fame (you have ${fmt(S.fame)}) or an Imperial Games win. ${slots} statue slot${slots === 1 ? '' : 's'} in your Hall.`) : null], 'gold'));
 }
 

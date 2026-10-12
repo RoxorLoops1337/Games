@@ -43,7 +43,7 @@ function miniMap(ctx, cur, onPick) {
   for (let i = 0; i < 16; i++) {
     if (Math.floor(i / lm.COLS) > S.rows) continue; // show the next locked row only
     const p = S.plots[i], locked = i >= S.rows * lm.COLS, b = h('button', 'ax-pick' + (i === cur ? ' sel' : ''));
-    b.type = 'button'; b.style.cssText = 'flex-direction:column;justify-content:center;gap:2px;min-height:58px;padding:6px 4px;text-align:center';
+    b.type = 'button'; b.style.cssText = 'flex-direction:column;justify-content:center;gap:2px;min-height:52px;padding:4px 4px;text-align:center';
     if (nb.includes(i)) b.style.boxShadow = 'inset 0 0 0 2px rgba(91,122,58,.9)';
     const ic = h('span', '', U.icon(locked ? 'lock' : p ? ICON[p.b] || 'ludus' : 'star', 22));
     if (!p) ic.style.opacity = '.45';

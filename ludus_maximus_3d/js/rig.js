@@ -732,7 +732,7 @@ export function buildGladiator(opts = {}) {
 
   const rig = {
     root, body, joints: J, sockets: sk, mats, palette: pal, secondary: [], squash, flashState, build: bd, opts, look, glow, items, bones, rest,
-    parts: {}, gear: {}, skeleton: null,
+    parts: {}, gear: {}, skeleton: null, tag: '',
     postUpdate: [], // fn(rig) run after IK each frame (e.g. shield stabilisers)
     setPalette(p) { Object.assign(pal, p); mats.skin.color.set(pal.skin); mats.hair.color.set(pal.hair); mats.cloth.color.set(pal.cloth); mats.plume.color.set(pal.plume); mats.metal.color.set(pal.metal); },
     flash(dur = 0.12, color) { flashState.t = dur; flashState.dur = dur; if (color) flashState.color.set(color); },
@@ -742,7 +742,7 @@ export function buildGladiator(opts = {}) {
     // queue geometry (authored in `obj` local space; obj is a joint, socket or bone-like holder) into the merged skinned body
     add(mat, geo, obj) {
       let b = obj; while (b && !boneSet.has(b)) b = b.parent; if (!b) throw new Error('rig.add: object is not under a bone');
-      const g = geo.clone(); col1(g); if (!g.attributes.normal) g.computeVertexNormals(); g.applyMatrix4(restOf(obj)); items.push({ mat, geo: g, bone: bones.indexOf(b) }); return g;
+      const g = geo.clone(); col1(g); if (!g.attributes.normal) g.computeVertexNormals(); g.applyMatrix4(restOf(obj)); items.push({ mat, geo: g, bone: bones.indexOf(b), tag: rig.tag || '' }); return g;
     },
     addMaterial(key, mat, shade, xo) { mats[key] = mat; shadePatch(mat, shade || 'cloth', xo); if (!mat.userData.base) mat.userData.base = mat.emissive.clone(); return mat; },
     addBone(obj) { bones.push(obj); boneSet.add(obj); return bones.length - 1; },

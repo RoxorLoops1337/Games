@@ -47,6 +47,7 @@ const CSS = `
 .ax-col{display:flex;flex-direction:column;gap:6px;min-width:0}
 .ax-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:10px}
 .ax-grid.s{grid-template-columns:repeat(auto-fit,minmax(min(100%,150px),1fr));gap:8px}
+.ax-grid.t{grid-template-columns:repeat(auto-fill,minmax(min(100%,104px),1fr));gap:8px}
 .ax-name{font:700 var(--lx-fs-l)/1.2 var(--lx-serif);letter-spacing:.04em;color:var(--lx-gold);text-shadow:0 1px 0 rgba(0,0,0,.5)}
 .parch .ax-name{color:#5a1f5e;text-shadow:none}
 .ax-sub{font-size:var(--lx-fs-s);opacity:.82;line-height:1.35}

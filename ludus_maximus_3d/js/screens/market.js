@@ -45,11 +45,11 @@ export function open(ctx, arg) {
     if (full()) { const w = card('warn', [h('b', '', 'Armory full'), h('div', 'am-p', `Buying will sell your weakest item (${weakest().name}) automatically. Sell spare gear first, or upgrade the Forge for more room.`)]); w.style.marginTop = '8px'; out.append(w); }
     const vis = lm.visitor(S);
     if (vis) {
-      const c = card('gold', [h('div', 'am-hero', [h('span', 'am-badge', U.icon('scroll', 22)), h('div', 'am-hi', [h('div', 'am-name', vis.name), h('div', 'am-p', vis.d)]), U.button({ label: vis.cost ? vis.cost + 'g' : 'Free', variant: 'bronze', onClick: () => { st.view = { type: 'visitor' }; ctx.sfx('uiTap'); render(); content.scrollTop = 0; } })])]);
+      const c = card('gold', [h('div', 'am-hero', [h('span', 'am-badge', U.icon('scroll', 22)), h('div', 'am-hi', [h('div', 'am-name', vis.name), h('div', 'am-p', vis.d), h('div', 'am-small', vis.cost ? `Costs ${vis.cost} gold` : 'Free')]), U.button({ label: 'Meet', variant: 'bronze', onClick: () => { st.view = { type: 'visitor' }; ctx.sfx('uiTap'); render(); content.scrollTop = 0; } })])]);
       c.firstChild.firstChild.style.cssText = 'width:40px;height:40px;background:#5a1f5e'; c.style.marginTop = '10px'; c.append(h('span', 'am-ribbon', 'Visitor')); out.append(c);
     }
     const sp = S.market.find((i) => i.sp), rest = S.market.filter((i) => !i.sp);
-    out.append(secH('Special offer', tip('Special', 'A rare piece of gear sold at a 50% premium. A rival may buy it before you.', 'Special offer')));
+    out.append(secH('Special offer', tip('Premium', 'A rare piece of gear sold at a 50% premium. A rival may buy it before you.', 'Special offer')));
     if (sp) {
       const hero = card('gold', [h('div', 'am-hero', [itemHead(ctx, sp, 60)])]); hero.style.marginTop = '10px'; hero.append(h('span', 'am-ribbon', 'Special'));
       hero.firstChild.firstChild.style.flex = '1'; hero.append(statLine(sp), h('div', 'am-btns', [U.button({ label: 'Inspect', variant: 'bronze', onClick: () => openItem(sp) }), btn(ctx, { label: 'Buy', sub: ctx.fmt(price(sp)) + ' gold', icon: 'coin', variant: 'gold', off: S.gold < price(sp) ? 'Not enough gold' : '', onClick: () => buy(sp) })]));
@@ -81,9 +81,9 @@ export function open(ctx, arg) {
     const out = h('div'); out.append(backBtn('Market', () => { st.view = null; render(); }));
     const c = card(it.sp ? 'gold' : '', [itemHead(ctx, it)]); c.dataset.fx = '1';
     // compare against the fighter who would gain the most
-    const best = ctx.S.glads.length ? P.gainFor(ctx, it) : null;
-    let ref = null, refLab = '';
-    if (best && best.c) { ref = scaled(best.c); refLab = `Compared with ${best.g.name}'s ${best.c.name}`; } else if (best) { ref = {}; refLab = `${best.g.name} has nothing in this slot`; }
+    const wearers = ctx.S.glads.filter((g) => worn(g, it)).map((g) => ({ g, c: worn(g, it), d: lm.itemScore(it) - lm.itemScore(worn(g, it)) })).sort((a, b) => b.d - a.d);
+    const best = wearers[0] || null; let ref = null, refLab = '';
+    if (best) { ref = scaled(best.c); refLab = `Compared with ${best.g.name}'s ${best.c.name}`; } else if (ctx.S.glads.length) refLab = `Nobody wears a ${d.SLOT_NAME[it.slot].toLowerCase()} yet`;
     const sc = h('div'); sc.style.marginTop = '10px'; if (refLab) sc.append(h('div', 'am-small', refLab)); sc.append(statTable(it, ref ? { ref } : {})); c.append(sc);
     out.append(c, secH('Effects'), affixList(it)); const sb = setBlock(ctx, it); if (sb) out.append(secH('Set'), sb);
     out.append(secH('Your fighters'), compareList(ctx, it));
