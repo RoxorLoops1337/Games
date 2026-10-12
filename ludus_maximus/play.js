@@ -304,6 +304,20 @@
       await U.dialog(`<div class="big ${res.win ? 'win' : 'lose'}">${res.win ? 'Champion down' : 'Defeated'}</div><div class="row wrap" style="justify-content:center">${res.win ? `<span class="pill">${A.icon('coin', 14)} +${fmt(r.gold)}</span><span class="pill">${A.icon('fame', 14)} +${r.fame}</span>` : '<span class="pill">The owner gloats...</span>'}</div>` + btn('Continue', 'ok', 'red'));
     } catch (e) { console.error(e); U.toast('Oops: ' + e.message); } finally { U.busy = false; U.save(); U.render(); }
   };
+  ACT.bounty = () => {
+    const S = U.S(); if (!L.bountyReady(S)) return U.toast('The bounty board is empty');
+    const list = S.glads.filter((g) => g.inj <= 0 && g.en >= 30);
+    U.modal(`<h2>Bounty board</h2><div class="muted" style="margin-bottom:8px">A wanted outlaw fights one duel for the purse. Once a week. Needs 30+ energy.</div>` + (list.length ? list.map((g) => `<div class="itm" data-a="bountygo" data-id="${g.id}"><div style="width:44px;height:52px;overflow:hidden;display:flex;align-items:flex-end;justify-content:center">${U.spr(g, { size: 46 })}</div><div class="sp"><div class="gname" style="font-size:13px">${esc(g.name)}</div><div class="small">Lv ${g.lvl}</div></div></div>`).join('') : '<div class="empty" style="color:var(--ink)">Nobody is fit to fight.</div>'));
+  };
+  ACT.bountygo = async (el) => {
+    const S = U.S(); if (U.busy) return; const g = U.gOf(+el.dataset.id); U.closeModal(); U.busy = true;
+    try {
+      g.en = Math.max(0, g.en - 30); const opp = L.bountyOpp(S, g); const ev = { kind: 'bounty', title: 'Bounty', opps: [opp], league: 0, key: 'bounty' + S.week };
+      await U.dialog(`<h2>WANTED</h2><div class="row" style="justify-content:center">${A.gladOf(opp, { size: 60, tunic: opp.color, flip: true, mood: 'fight' })}</div><div class="small" style="text-align:center">${esc(opp.name)}, level ${opp.lvl}.</div>` + btn('Fight!', 'ok', 'red'));
+      const res = await fightScreen(S, [g], [opp], 'bal', { ev, augs: [] }); const r = L.bountyResult(S, !!res.win); U.snd(res.win ? 'win' : 'lose'); if (res.win) L.favGain(g, true, 0);
+      await U.dialog(`<div class="big ${res.win ? 'win' : 'lose'}">${res.win ? 'Bounty claimed' : 'The outlaw escapes'}</div><div class="row wrap" style="justify-content:center">${res.win ? `<span class="pill">${A.icon('coin', 14)} +${fmt(r.gold)}</span><span class="pill">${A.icon('fame', 14)} +${r.fame}</span>` : ''}</div>` + btn('Continue', 'ok', 'red'));
+    } catch (e) { console.error(e); U.toast('Oops: ' + e.message); } finally { U.busy = false; U.save(); U.render(); }
+  };
   ACT.forum = () => {
     const S = U.S(); U.modal('<h2>Forum</h2>' + ((S.forum || []).length ? S.forum.slice().reverse().map((x) => `<div class="itm" style="cursor:default"><span class="tag">Wk ${x.w}</span><div class="sp small">${esc(x.t)}</div></div>`).join('') : '<div class="empty" style="color:var(--ink)">No news yet. Play a week.</div>'));
   };
