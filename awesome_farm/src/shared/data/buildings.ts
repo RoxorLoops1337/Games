@@ -73,7 +73,7 @@ export type BuildingKind =
     | 'brickfloor' | 'carpet' | 'slatefloor'
     | 'wall_wood' | 'wall_stone' | 'wall_brick' | 'wall_window' | 'doorway' | 'roof_thatch' | 'roof_tile' | 'roof_slate'
     | 'lostpack' | 'mineshaft' | 'mineladder'
-    | 'chute' | 'weathervane'
+    | 'chute' | 'weathervane' | 'iridium_drill'
     | 'sleepbed'
     | 'wall_fort' | 'tower_archer' | 'ballista' | 'tesla' | 'spike';
 
@@ -95,6 +95,7 @@ export const BUILDINGS: Record<BuildingKind, BuildingDef> = {
     tunnelx:   { name: 'Tunnel Exit',   tex: 'tunnelx', size: [1, 1], cost: { ironbar: 4, gear: 2 }, cat: 'logistics', req: 'logistics', floor: true, solid: false, dir: true, desc: 'Where a belt comes back up. Face it the same way as its Tunnel Entrance, in line and up to 6 tiles away.' },
     inserter:  { name: 'Inserter',    tex: 'inserter', size: [1, 1], cost: { gear: 2, ironbar: 2, wire: 2 }, cat: 'logistics', req: 'logistics', dir: true, use: 3, desc: 'Moves items from the tile behind it to the tile in front: chests, machines, belts.' },
     drill:     { name: 'Mining Drill', tex: 'drill', size: [2, 2], cost: { gear: 6, ironbar: 8, circuit: 3, stone: 10 }, cat: 'industry', req: 'drills', dir: true, use: 20, desc: 'Mines the ore veins beneath it, forever. Outputs in front.' },
+    iridium_drill: { name: 'Iridium Drill', tex: 'iridium_drill', size: [2, 2], cost: { ironbar: 10, gear: 6, goldbar: 3, steel: 2 }, cat: 'industry', req: 'smithing2', hp: TUNING.blight.hp.stone, light: 30, desc: 'Set it within 3 tiles of an iridium vein: it drills ore on its own (USE to collect), and every wave of the sky-metal\u2019s hunters it draws will go for the drill. Mend it with USE.' },
     assembler: { name: 'Assembler',   tex: 'assembler', size: [2, 2], cost: { circuit: 6, gear: 8, ironbar: 10, glass: 4 }, cat: 'industry', req: 'assembly', proc: 'assembler', work: 'make', use: 30, desc: 'Builds gears, wire, circuits and more from whatever you feed it.' },
     pole:      { name: 'Power Pole',  tex: 'pole', size: [1, 1], cost: { plank: 2, wire: 2 }, cat: 'power', req: 'power', pole: true, desc: 'Wires up machines within 3 tiles and links to poles within 7.' },
     windturbine: { name: 'Wind Turbine', tex: 'windturbine', size: [2, 2], cost: { gear: 4, ironbar: 6, plank: 6, wire: 4 }, cat: 'power', req: 'power', gen: 40, desc: 'Free power, as much as the wind gives.' },

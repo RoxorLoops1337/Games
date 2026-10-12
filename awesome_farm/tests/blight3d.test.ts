@@ -142,7 +142,7 @@ test('a raider carries the Blight\'s red glow (the 2D light map\'s), which goes 
 });
 
 test('a hurt wall, doorway, fortified wall or tower shows cracks, chips and rubble by its hit points, and is whole again at dawn', () => {
-    assert.deepEqual(DAMAGE_KINDS.sort(), ['ballista', 'doorway', 'tesla', 'tower_archer', 'wall_brick', 'wall_fort', 'wall_stone', 'wall_window', 'wall_wood'].sort(), 'every piece with hit points, the towers too');
+    assert.deepEqual(DAMAGE_KINDS.sort(), ['ballista', 'doorway', 'iridium_drill', 'tesla', 'tower_archer', 'wall_brick', 'wall_fort', 'wall_stone', 'wall_window', 'wall_wood'].sort(), 'every piece with hit points, the towers too');
     assert.equal(damageStage(undefined, 100), 0);
     assert.deepEqual([100, 90, 60, 20, 0].map((hp) => damageStage(hp, 100)), [0, 1, 2, 3, 3]);
     const tris = (o: { traverse: (f: (m: unknown) => void) => void }) => { let n = 0; o.traverse((m) => { const g = (m as Mesh).geometry; if ((m as Mesh).isMesh && g) n += g.attributes.position.count / 3; }); return n; };

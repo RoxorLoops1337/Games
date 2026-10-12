@@ -141,8 +141,7 @@ function peat (p: Pix, rnd: () => number) {
     p.outline();
 }
 
-function crystal (p: Pix) {
-    const I = RAMP.ice;
+function crystal (p: Pix, I: readonly number[] = RAMP.ice) {
     // a little stone base
     p.ellipse(16, 17, 14, 3.4, STONE, { bias: 0.3 });
     // three separate pointed prisms: a lit left face, a darker right face, a glint
@@ -398,6 +397,7 @@ export function registerStorybookNature (scene: Phaser.Scene) {
     paint(scene, 'clay', 14, 8, clay, 6);
     paint(scene, 'peat', 13, 8, peat, 7);
     paint(scene, 'crystal', 16, 10, (p) => crystal(p), 1);
+    paint(scene, 'iridium', 16, 10, (p) => { crystal(p, RAMP.violet); for (const [x, y] of [[4, 3], [26, 5], [16, 1]]) { p.set(x, y, 0xf0dcff); p.set(x - 1, y, RAMP.violet[3]); p.set(x + 1, y, RAMP.violet[3]); p.set(x, y - 1, RAMP.violet[3]); p.set(x, y + 1, RAMP.violet[3]); } }, 1);
     paint(scene, 'reeds', 12, 9, (p) => reeds(p), 1);
     paint(scene, 'herb', 12, 8, (p) => herb(p), 1);
     paint(scene, 'cottonplant', 12, 8, (p, r) => cottonPlant(p, r, [[6, 5], [12, 3], [18, 6]]), 3);

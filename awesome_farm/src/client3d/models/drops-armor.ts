@@ -319,6 +319,7 @@ export const ARMOR: Record<string, DropSpec> = {
     ring_iron: S((mb: MB) => ring(mb, R.iron, 0xe4e8f4), { lean: 0.9 }),
     ring_gold: S((mb: MB) => ring(mb, R.gold, 0xe85d62), { lean: 0.9 }),
     ring_steel: S((mb: MB) => ring(mb, R.steel, 0x8aeaf8), { lean: 0.9 }),
+    ring_iridium: S((mb: MB) => ring(mb, R.steel, 0xd9b8ff, true), { lean: 0.9, spark: 0xb48cf0 }),
     ring_crystal: S((mb: MB) => ring(mb, R.gold, 0xcdf4ee, true), { lean: 0.9, spark: 0x8aeaf8 }),
     ring_blight: S((mb: MB) => ring(mb, R.iron, 0x9d6fdb, true), { lean: 0.9, pulse: true }),
     ring_slime: S((mb: MB) => ring(mb, [0x2d6a50, 0x5cb04f, 0x92d364, 0xd4f08a], 0xd4f08a, true), { lean: 0.9 }),

@@ -149,6 +149,20 @@ export const TUNING = {
     feastTopUp: 0.5,             // a dish is eaten only for a buff you hold less than this share of its time of (so a portion is never wasted)
     feastWindow: 30,             // s: the farmers who feasted within this long of each other fed "at once" (the chronicle line)
     /** The Blight (sim/blight.ts, sim/raid.ts): nests on dark islands out at sea, how they grow, spread and merge, and what they send against the farm. */
+    /** Iridium (sim/iridium.ts): a vein falls from the sky on somebody's land, sinks back after `lifeDays`, and only the Iridium Drill gets it out. */
+    iridium: {
+        fromDay: 2,              // the first vein can surface on this dawn
+        chance: 0.6,             // each dawn without a live vein
+        lifeDays: 2,             // dawns it stays (it sinks back at the second dawn after it surfaced)
+        ore: 10,                 // ore in a vein
+        cycle: 14,               // s the drill needs for one ore
+        range: 3,                // tiles from the drill's middle to the vein
+        waveEvery: 24,           // s between two waves while the drill works
+        waveMax: 6,              // raiders in one wave at most
+        wavePer: 3,              // one more raider in a wave for every this many ore drilled so far
+        spawnTiles: 18,          // tiles from the drill where a wave steps out
+        homeGap: 7,              // tiles from the farmer's home spot a vein keeps (the farther corners of the island)
+    },
     blight: {
         nests: 6,                // nests a world starts with (placed from the seed; an older world gets them when it loads)
         nestMinHomeGap: 7,       // plots (straight line) between a starting nest and any home

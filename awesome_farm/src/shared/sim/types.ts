@@ -54,6 +54,8 @@ export interface NodeE {
     id: number; k: 'node'; kind: NodeKind; tx: number; ty: number; hp: number; plot: number; gold?: 1;
     /** A Blight nest (sim/blight.ts): its full health (its level and kind are on its plot: `Plot.nl`, `Plot.nk`). */
     mhp?: number;
+    /** An iridium vein: it sinks back at this day's dawn (sim/iridium.ts). Its `hp` is the ore left in it. */
+    ex?: number;
 }
 export interface BuildE {
     id: number; k: 'bld'; kind: BuildingKind;
@@ -76,6 +78,10 @@ export interface BuildE {
     flt?: ItemId;            // inserter: only moves this item; sorter: the item that goes straight on; export chute: the only item it sells
     rr?: number;             // splitter / sorter: round-robin turn
     chg?: number;            // battery: stored power (units x seconds)
+    ip?: number;             // iridium drill: seconds into the current ore
+    iw?: number;             // … and into the next wave
+    ido?: number;            // … ore drilled so far (waves grow with it) and the number of waves sent
+    iwn?: number;
     boost?: number;          // world time until a creature's stoking speeds this machine up
     bs?: number;             // … and by how much (0.25 = a quarter faster)
     par?: [string, string];  // hatchery: the two parents resting in it

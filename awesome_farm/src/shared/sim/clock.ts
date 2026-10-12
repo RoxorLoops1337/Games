@@ -13,6 +13,7 @@ import * as dread from './dread';
 import * as fortune from './fortune';
 import * as gather from './gather';
 import * as hearth from './hearth';
+import * as iridium from './iridium';
 import * as mail from './mail';
 import * as mines from './mines';
 import * as mobs from './mobs';
@@ -147,6 +148,7 @@ export function dawn (sim: Sim) {
     s.night = false;
     s.day++;
     sim.nightSpawns = [];
+    iridium.onDawn(sim);
     if (seasonDay(s.day) === 1) seasonBegins(sim);
     if (sim.nightEv === 'bloodmoon') {
         for (const p of sim.online) {

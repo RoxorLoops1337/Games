@@ -286,13 +286,14 @@ export function peatMound(o: NodeOpts): NodeRig {
     if (o.gold) goldAura(rg, 0.6, 0.6);
     return rg;
 }
-export function crystalCluster(o: NodeOpts): NodeRig {
+export function crystalCluster(o: NodeOpts): NodeRig { return crystalMade(o, 'crystal', RAMP.ice, 0x7ae0f4); }
+/** The cluster in any colour: the ramp of its faces and the glow it gives off. */
+function crystalMade(o: NodeOpts, name: string, I: readonly number[], glow: number): NodeRig {
     const rg = rig(0);
-    const I = RAMP.ice;
-    rg.body.add(bake(`crystal|${o.seed % 4}|${o.gold ? 'g' : ''}`, (mb) => {
+    rg.body.add(bake(`${name}|${o.seed % 4}|${o.gold ? 'g' : ''}`, (mb) => {
         const r = seedRand(o.seed * 3 + 1);
         mb.main.ico(0.46, 0, byHeight(ST, 0, 0.3, 0.5), { y: 0, sy: 0.4, j: 0.07 });
-        const gl = mb.glow(o.gold ? 0xffe680 : 0x7ae0f4, 1.9);
+        const gl = mb.glow(o.gold ? 0xffe680 : glow, 1.9);
         const spec = [[0, 0, 0.9, 0.17], [0.27, 0.14, 0.62, 0.13], [-0.27, 0.12, 0.5, 0.13], [0.1, -0.28, 0.42, 0.11], [-0.1, 0.3, 0.36, 0.1]];
         spec.forEach(([x, z, h, w], i) => {
             const lean = i === 0 ? 0 : 0.28 + r() * 0.15, a = Math.atan2(z, x);
@@ -308,6 +309,18 @@ export function crystalCluster(o: NodeOpts): NodeRig {
             gl.hull(pts, col, { ...tr, ao: false, v: 0.1 });
         });
     }, o.seed));
+    return rg;
+}
+/** The iridium vein: violet, taller and more jagged than a crystal cluster, with a shard turning slowly above it. */
+const IRIDIUM_RAMP = [0x2d2147, 0x5d4a7c, 0x7a5cb8, 0x9d6fdb, 0xc9a8f0, 0xf79fc6];
+export function iridiumVein(o: NodeOpts): NodeRig {
+    const rg = crystalMade(o, 'iridium', IRIDIUM_RAMP, 0xb48cf0);
+    rg.body.scale.setScalar(1.25);
+    const shard = new THREE.Group();
+    shard.add(bake('iridium|shard', (mb) => { mb.glow(0xd9b8ff, 2.2).oct(0.12, 0xd9b8ff, { sy: 1.8, j: 0.01, ao: false, v: 0.05 }); }));
+    shard.position.set(0, 1.45, 0);
+    rg.obj.add(shard);
+    rg.extra = (_dt, t) => { shard.rotation.y = t * 1.4; shard.position.y = 1.45 + Math.sin(t * 2) * 0.06; };
     return rg;
 }
 export const pick = (R: readonly number[], t2: number): number => R[Math.max(0, Math.min(R.length - 1, Math.round(t2 * (R.length - 1))))];
@@ -489,6 +502,7 @@ export const BUILD: Record<string, ((o: NodeOpts) => NodeRig) | undefined> = {
     clay: clayBank,
     peat: peatMound,
     crystal: crystalCluster,
+    iridium: iridiumVein,
     iron: (o: NodeOpts) => oreRock('iron', o),
     copper: (o: NodeOpts) => oreRock('copper', o),
     gold: (o: NodeOpts) => oreRock('gold', o),

@@ -45,7 +45,7 @@ export const ATTUNE = 0.2;
 
 /** Which tag each ring carries: the attunement a worn ring gives. */
 export const RING_TAG: Record<string, RelicTag> = {
-    ring_copper: 'ember', ring_iron: 'iron', ring_gold: 'spirit', ring_steel: 'iron', ring_crystal: 'frost', ring_blight: 'spirit',
+    ring_copper: 'ember', ring_iron: 'iron', ring_gold: 'spirit', ring_steel: 'iron', ring_crystal: 'frost', ring_iridium: 'spirit', ring_blight: 'spirit',
     ring_slime: 'vine', ring_stone: 'iron', ring_hex: 'spirit', ring_sun: 'ember', ring_frost: 'frost',
 };
 
