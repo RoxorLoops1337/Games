@@ -171,5 +171,26 @@ ok(strongWins >= 17, `level 10 beats level 1 (${strongWins}/20)`);
   ok(seen, 'ghosts show up as hard-duel opponents');
 }
 
+// balance: no style is a runaway pick (equal level, random gear, seeded)
+{
+  let sd = 99; LM.setRandom(() => { sd = (sd * 16807) % 2147483647; return sd / 2147483647; });
+  const mk = (style) => { const g = LM.makeGlad({ style, lvl: 8, q: 0.5, randRune: true }); D.SLOTS.forEach((sl) => { if (LM.rand() < 0.6) g.gear[sl] = LM.genItem(null, { slot: sl, ilvl: 8, rar: 1 + Math.floor(LM.rand() * 2) }); }); return g; };
+  const wr = {}; let dur = 0, cnt = 0;
+  D.STYLE_IDS.forEach((a) => { let w = 0, n = 0; D.STYLE_IDS.forEach((b) => { if (a === b) return; for (let i = 0; i < 25; i++) { const F = LM.quick(LM.mkUnits([mk(a)], 'A', {}), LM.mkUnits([mk(b)], 'B', {})); n++; if (F.winner === 'A') w++; dur += F.t; cnt++; } }); wr[a] = w / n; });
+  D.STYLE_IDS.forEach((s) => ok(wr[s] > 0.36 && wr[s] < 0.64, `${s} winrate ${Math.round(wr[s] * 100)}% stays in the 36-64% band`));
+  ok(dur / cnt > 12 && dur / cnt < 40, `average fight lasts ${(dur / cnt).toFixed(1)}s (12-40s)`);
+  LM.setRandom(seeded(5));
+}
+// forge evolve
+{
+  const S3 = LM.newGame({ name: 'E' }); S3.plots[7] = { b: 'forge', l: 1 }; S3.gold = 99999;
+  const it = LM.genItem(null, { slot: 'weapon', rar: 2, ilvl: 5 }); S3.items.push(it); const af0 = it.af.map((a) => a.id);
+  ok(LM.evolve(S3, it) !== '', 'cannot evolve before the item is fully upgraded');
+  while (it.up < LM.maxUp(S3)) LM.upgradeItem(S3, it);
+  ok(LM.evolve(S3, it) === '' && it.rar === 3 && it.up === 0, 'evolve raises rarity and resets upgrades');
+  ok(af0.every((id) => it.af.some((a) => a.id === id)) && it.af.length >= af0.length, 'evolve keeps affixes');
+  const leg = LM.genItem(null, { slot: 'helm', rar: 4, ilvl: 5 }); ok(LM.evolve(S3, leg) === 'Already legendary', 'legendary cannot evolve');
+}
+
 console.log(`ludus_maximus: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

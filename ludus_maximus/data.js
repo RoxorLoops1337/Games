@@ -30,31 +30,31 @@
     murmillo: {
       id: 'murmillo', n: 'Murmillo', role: 'Bulwark', c: '#2f78c4', sig: 'shieldbash',
       d: 'Tower shield, steady sword. Walls off Raiders and Duelists.',
-      mul: { hp: 1.12, atk: 0.95, def: 1.12, spd: 0.88, crit: 0.9, eva: 0.7 },
+      mul: { hp: 1.02, atk: 0.95, def: 1.02, spd: 0.9, crit: 0.9, eva: 0.7 },
       base: { str: 11, agi: 7, end: 14, skl: 9, wil: 11 }, beats: ['thraex', 'dimachaerus'],
     },
     retiarius: {
       id: 'retiarius', n: 'Retiarius', role: 'Trapper', c: '#22a58f', sig: 'netthrow',
       d: 'Net and trident. Tangles slow Bulwarks and out-reaches Lancers.',
-      mul: { hp: 1.0, atk: 1.05, def: 0.92, spd: 1.1, crit: 1, eva: 1.15 },
+      mul: { hp: 1.08, atk: 1.1, def: 0.95, spd: 1.1, crit: 1, eva: 1.15 },
       base: { str: 8, agi: 12, end: 9, skl: 13, wil: 10 }, beats: ['murmillo', 'hoplomachus'],
     },
     thraex: {
       id: 'thraex', n: 'Thraex', role: 'Raider', c: '#e0742a', sig: 'flurry',
       d: 'Quick curved blade. Dodges nets and slips inside spears.',
-      mul: { hp: 1.0, atk: 1.06, def: 0.9, spd: 1.12, crit: 1.22, eva: 1.1 },
+      mul: { hp: 1.06, atk: 1.15, def: 0.95, spd: 1.12, crit: 1.22, eva: 1.1 },
       base: { str: 10, agi: 14, end: 8, skl: 12, wil: 9 }, beats: ['retiarius', 'hoplomachus'],
     },
     hoplomachus: {
       id: 'hoplomachus', n: 'Hoplomachus', role: 'Lancer', c: '#b8892a', sig: 'lunge',
       d: 'Long spear, round shield. Keeps Duelists at bay and cracks Bulwarks.',
-      mul: { hp: 1.02, atk: 1.08, def: 1, spd: 0.95, crit: 1, eva: 0.9 },
+      mul: { hp: 1.08, atk: 1.14, def: 1.02, spd: 1, crit: 1, eva: 0.9 },
       base: { str: 13, agi: 9, end: 11, skl: 11, wil: 9 }, beats: ['dimachaerus', 'murmillo'],
     },
     dimachaerus: {
       id: 'dimachaerus', n: 'Dimachaerus', role: 'Duelist', c: '#c2395f', sig: 'crossslash',
       d: 'Two blades, no shield. Shreds nets and Raiders, bounces off armor.',
-      mul: { hp: 0.97, atk: 1.15, def: 0.85, spd: 1.08, crit: 1.15, eva: 1 },
+      mul: { hp: 0.97, atk: 1.07, def: 0.82, spd: 1.05, crit: 1.15, eva: 1 },
       base: { str: 13, agi: 12, end: 7, skl: 11, wil: 9 }, beats: ['retiarius', 'thraex'],
     },
   };

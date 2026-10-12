@@ -172,6 +172,18 @@
     const out = genItem(rnd, { slot: pick(items).slot, rar: rar + 1, ilvl: Math.max(...items.map((i) => i.ilvl)) + 1 });
     S.items.push(out); LM.note(S, 'merge'); return { item: out };
   };
+  LM.evolveCost = (it) => 120 * (it.rar + 1) * (it.rar + 1);
+  LM.canEvolve = (S, it) => it.rar < 4 && it.up >= Math.max(1, LM.maxUp(S));
+  // Evolve: a fully upgraded item becomes the next rarity, keeps its affixes and set, gains one more affix.
+  LM.evolve = (S, it) => {
+    if (it.rar >= 4) return 'Already legendary'; if (!LM.canEvolve(S, it)) return 'Upgrade it to the Forge limit first';
+    const c = LM.evolveCost(it); if (S.gold < c) return 'Not enough gold';
+    S.gold -= c; const n = genItem(rnd, { slot: it.slot, rar: it.rar + 1, ilvl: it.ilvl + 2 });
+    const have = new Set(it.af.map((a) => a.id)); const af = it.af.map((a) => ({ id: a.id, v: a.id === 'stalwart' ? 1 : Math.min(3, a.v + (rnd() < 0.4 ? 1 : 0)) }));
+    n.af.forEach((a) => { if (af.length < D.RAR[n.rar].af && !have.has(a.id)) { af.push(a); have.add(a.id); } });
+    it.rar = n.rar; it.ilvl = n.ilvl; it.st = n.st; it.af = af; it.up = 0; it.set = it.set || n.set;
+    it.name = it.set ? `${D.SETS[it.set].n} ${it.name.split(' ').slice(-1)[0]}` : `${D.ADJ[it.rar][Math.floor(rnd() * D.ADJ[it.rar].length)]} ${it.name.split(' ').slice(-1)[0]}`; return '';
+  };
   LM.reforgeCost = (it) => 90 * it.rar;
   LM.reforge = (S, it) => {
     if (!it.af.length) return 'No affix to reforge'; const c = LM.reforgeCost(it); if (S.gold < c) return 'Not enough gold';

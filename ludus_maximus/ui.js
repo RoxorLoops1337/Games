@@ -25,6 +25,23 @@
       g.gain.setValueAtTime(vol || 0.06, t0); g.gain.exponentialRampToValueAtTime(0.0001, t0 + d); o.connect(g); g.connect(ac.destination); o.start(t0); o.stop(t0 + d + 0.02);
     } catch (e) { /* audio unavailable */ }
   }
+  function noise(d, vol, f0, f1, delay) {
+    try {
+      ac = ac || new (window.AudioContext || window.webkitAudioContext)(); const t0 = ac.currentTime + (delay || 0); const n = Math.floor(ac.sampleRate * d); const buf = ac.createBuffer(1, n, ac.sampleRate); const dd = buf.getChannelData(0);
+      for (let i = 0; i < n; i++) dd[i] = (Math.random() * 2 - 1) * (1 - i / n);
+      const s = ac.createBufferSource(); s.buffer = buf; const fl = ac.createBiquadFilter(); fl.type = 'bandpass'; fl.frequency.setValueAtTime(f0, t0); if (f1) fl.frequency.exponentialRampToValueAtTime(f1, t0 + d); const g = ac.createGain(); g.gain.value = vol; s.connect(fl); fl.connect(g); g.connect(ac.destination); s.start(t0);
+    } catch (e) { /* audio unavailable */ }
+  }
+  let crowd = null;
+  U.crowd = (on) => {
+    try {
+      if (!on) { if (crowd) { crowd.g.gain.setTargetAtTime(0, ac.currentTime, 0.2); const c = crowd; setTimeout(() => { try { c.s.stop(); } catch (e) { /* stopped */ } }, 500); crowd = null; } return; }
+      if (S && S.sound === false) return; ac = ac || new (window.AudioContext || window.webkitAudioContext)(); if (crowd) return;
+      const n = ac.sampleRate * 2; const buf = ac.createBuffer(1, n, ac.sampleRate); const d = buf.getChannelData(0); for (let i = 0; i < n; i++) d[i] = Math.random() * 2 - 1;
+      const s = ac.createBufferSource(); s.buffer = buf; s.loop = true; const f = ac.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = 520; f.Q.value = 0.6; const g = ac.createGain(); g.gain.value = 0.0001; s.connect(f); f.connect(g); g.connect(ac.destination); s.start(); g.gain.setTargetAtTime(0.025, ac.currentTime, 0.4); crowd = { s, g, f };
+    } catch (e) { /* audio unavailable */ }
+  };
+  U.crowdLevel = (x) => { if (crowd) { crowd.g.gain.setTargetAtTime(0.02 + 0.05 * Math.min(1, x), ac.currentTime, 0.15); crowd.f.frequency.setTargetAtTime(480 + 400 * Math.min(1, x), ac.currentTime, 0.2); } };
   U.snd = (n) => {
     if (S && S.sound === false) return;
     if (n === 'click') tone(520, 0.05, 'square', 0.04);
@@ -36,6 +53,16 @@
     else if (n === 'roar') { tone(90, 0.7, 'sawtooth', 0.08, 180); tone(140, 0.7, 'sawtooth', 0.05, 90); }
     else if (n === 'win') [523, 659, 784, 1046].forEach((f, i) => tone(f, 0.22, 'square', 0.06, 0, i * 0.12));
     else if (n === 'lose') [392, 330, 262].forEach((f, i) => tone(f, 0.3, 'triangle', 0.07, 0, i * 0.16));
+    else if (n === 'levelup') [392, 523, 659, 784, 1046].forEach((f, i) => tone(f, 0.18, 'square', 0.05, 0, i * 0.08));
+    else if (n === 'u_pulverize') { tone(70, 0.5, 'sawtooth', 0.1, 35); noise(0.4, 0.08, 300, 80); }
+    else if (n === 'u_hookshot') { tone(300, 0.25, 'square', 0.05, 1200); noise(0.2, 0.04, 2000, 600, 0.2); }
+    else if (n === 'u_bladedance') { noise(0.3, 0.07, 800, 4000); tone(500, 0.2, 'sawtooth', 0.04, 1500); }
+    else if (n === 'u_skewer') { noise(0.35, 0.07, 3000, 700); tone(900, 0.3, 'triangle', 0.04, 300); }
+    else if (n === 'u_tornado') { [0, 0.1, 0.2, 0.3].forEach((d, i) => tone(300 + (i % 2) * 120, 0.12, 'sawtooth', 0.04, 0, d)); noise(0.8, 0.05, 600, 1500); }
+    else if (n === 'u_unbreakable') { [523, 784, 1046].forEach((f, i) => tone(f, 0.4, 'triangle', 0.06, 0, i * 0.07)); }
+    else if (n === 'u_bloodrage') { tone(110, 0.5, 'sawtooth', 0.09, 70); tone(165, 0.5, 'square', 0.04, 90); }
+    else if (n === 'u_meteor') { tone(900, 0.9, 'sawtooth', 0.05, 90); noise(0.5, 0.1, 400, 60, 0.85); }
+    else if (n === 'u_duststorm') noise(0.9, 0.07, 1500, 300);
     else if (n === 'build') { tone(200, 0.08, 'square', 0.06); tone(300, 0.1, 'square', 0.06, 0, 0.09); }
   };
 
@@ -356,11 +383,12 @@
     const maxUp = L.maxUp(S); const upc = L.upCost(it);
     modal(`<h2>${esc(it.name)} ${it.up ? '+' + it.up : ''}</h2>${rarTag(it.rar)} <span class="pill">${D.SLOT_NAME[it.slot]}</span> <span class="pill">ilvl ${it.ilvl}</span><div class="muted" style="opacity:1;margin:8px 0">${fmtSt(it)}</div>${affTxt(it)}${it.set ? `<div class="small" style="margin-top:6px"><b>${D.SETS[it.set].n} set:</b> 2pc ${D.SETS[it.set].d2}; 4pc ${D.SETS[it.set].d4}</div>` : ''}
     <div class="sec" style="color:var(--terra);text-shadow:none">Equip on</div>${S.glads.map((g) => { const c = g.gear[it.slot]; return `<div class="itm" data-a="equipon" data-id="${g.id}" data-v="${it.id}"><div style="width:36px;height:42px;overflow:hidden;display:flex;align-items:flex-end;justify-content:center">${spr(g, { size: 38 })}</div><div class="sp"><div class="gname" style="font-size:12px">${esc(g.name)}</div><div class="tiny muted">${c ? 'Now: ' + esc(c.name) : 'Empty slot'}</div></div>${c ? (L.itemScore(it) > L.itemScore(c) ? '<span class="tag green">Better</span>' : '<span class="tag grey">Worse</span>') : '<span class="tag green">New</span>'}</div>`; }).join('')}
-    <div class="row wrap" style="margin-top:10px"><button class="btn sm ${it.up >= maxUp || S.gold < upc ? 'off' : ''}" data-a="upitem" data-id="${it.id}">${it.up >= maxUp ? (maxUp ? 'Upgrade the Forge' : 'Build a Forge') : 'Upgrade +' + (it.up + 1) + ' · ' + fmt(upc)}</button><button class="btn sm ghost ${it.af.length && S.gold >= L.reforgeCost(it) ? '' : 'off'}" data-a="reforge" data-id="${it.id}">Reforge affix · ${L.reforgeCost(it)}</button><button class="btn sm red" data-a="sell" data-id="${it.id}">Sell ${fmt(L.sellVal(it))}</button></div>`);
+    <div class="row wrap" style="margin-top:10px"><button class="btn sm ${it.up >= maxUp || S.gold < upc ? 'off' : ''}" data-a="upitem" data-id="${it.id}">${it.up >= maxUp ? (maxUp ? 'Upgrade the Forge' : 'Build a Forge') : 'Upgrade +' + (it.up + 1) + ' · ' + fmt(upc)}</button><button class="btn sm ghost ${it.af.length && S.gold >= L.reforgeCost(it) ? '' : 'off'}" data-a="reforge" data-id="${it.id}">Reforge affix · ${L.reforgeCost(it)}</button>${it.rar < 4 ? `<button class="btn sm blue ${L.canEvolve(S, it) && S.gold >= L.evolveCost(it) ? 'pulse' : L.canEvolve(S, it) ? '' : 'off'}" data-a="evolve" data-id="${it.id}">Evolve to ${D.RAR[it.rar + 1].n} · ${fmt(L.evolveCost(it))}</button>` : ''}<button class="btn sm red" data-a="sell" data-id="${it.id}">Sell ${fmt(L.sellVal(it))}</button></div>`);
   };
   ACT.equipon = (el) => { const g = gOf(+el.dataset.id); const it = S.items.find((i) => i.id === el.dataset.v); L.equip(S, g, it); U.snd('build'); save(); closeModal(); render(); toast(g.name + ' equipped ' + it.name); };
   ACT.upitem = (el) => { const it = S.items.find((i) => i.id === el.dataset.id); const e = L.upgradeItem(S, it); if (e) return toast(e); U.snd('build'); save(); render(); ACT.item(el); };
   ACT.reforge = (el) => { const it = S.items.find((i) => i.id === el.dataset.id); const e = L.reforge(S, it); if (e) return toast(e); U.snd('build'); save(); render(); ACT.item(el); };
+  ACT.evolve = (el) => { const it = S.items.find((i) => i.id === el.dataset.id); const e = L.evolve(S, it); if (e) return toast(e); U.snd('levelup'); save(); render(); ACT.item(el); toast(it.name + ' evolved!'); };
   ACT.sell = (el) => { const it = S.items.find((i) => i.id === el.dataset.id); L.sellItem(S, it); U.snd('coin'); save(); closeModal(); render(); };
 
   // ---------- MORE ----------

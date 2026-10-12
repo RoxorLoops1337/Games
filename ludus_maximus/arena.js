@@ -15,7 +15,7 @@
     const d = L.derive(g, ctx); const fx = d.fx; const maxhp = Math.round(d.hp);
     return {
       id: side + i, side, i, g, name: g.name, style: g.style, tr: D.TRAITS[g.trait] || {},
-      x: side === 'A' ? -6.4 : 6.4, y: (i - (n - 1) / 2) * 3.4, z: 0, face: side === 'A' ? 1 : -1, mvx: 0, mvy: 0, kx: 0, ky: 0, spdNow: 0,
+      x: side === 'A' ? -6.4 : 6.4, y: (i - (n - 1) / 2) * (n > 2 ? 4.3 : 3.6), z: 0, face: side === 'A' ? 1 : -1, mvx: 0, mvy: 0, kx: 0, ky: 0, spdNow: 0,
       maxhp, hp: Math.max(1, Math.round(maxhp * (hpFrac == null ? 1 : hpFrac))), shield: fx.shield ? maxhp * 0.08 * fx.shield : 0,
       atk: d.atk, def: d.def, ms: 2.7 + d.spd * 0.026, aps: 0.5 + d.spd * 0.0095, range: D.RANGE[g.style],
       crit: d.crit, eva: d.eva, fx, wil: g.st.wil, rk: g.rune ? g.rune.k : null, rm: new Set(g.rune ? g.rune.m : []),

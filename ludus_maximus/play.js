@@ -159,6 +159,8 @@
     h += `<div class="row wrap" style="justify-content:center"><span class="pill">${A.icon('coin', 14)} +${fmt(rep.gold)}</span><span class="pill">${A.icon('fame', 14)} +${fmt(rep.fame)}</span>${res.odds != null && res.odds < 0.4 && win ? '<span class="tag green">Underdog win!</span>' : ''}</div>`;
     rep.notes.forEach((n) => { h += `<div class="small" style="text-align:center;margin-top:4px">${esc(n)}</div>`; });
     h += '<div style="margin-top:8px">' + rep.xp.map((x) => { const g = U.gOf(x.id); return `<div class="kv"><span>${esc(g.name)}</span><b>+${x.xp} XP${x.up.length ? ' · LEVEL ' + x.up[x.up.length - 1] + '!' : ''}</b></div>`; }).join('') + '</div>';
+    rep.lvl.forEach((l) => { h += `<div class="lvlup">${esc(U.gOf(l.id).name)} reached LEVEL ${l.to}!</div>`; });
+    if (rep.lvl.length) U.snd('levelup');
     rep.inj.forEach((i) => { h += `<div class="small" style="color:var(--terra)">${esc(U.gOf(i.id).name)} is injured for ${i.w} week${i.w > 1 ? 's' : ''}.</div>`; });
     rep.loot.forEach((it) => { h += `<div class="itm" style="cursor:default;margin-top:6px">${A.itemIcon(it.slot, it.rar, 38)}<div class="sp"><div class="gname" style="font-size:12px">${esc(it.name)}</div>${U.rarTag(it.rar)}<div class="muted" style="opacity:1">${U.fmtSt(it)}</div></div><span class="tag green">Loot!</span></div>`; });
     U.snd(win ? 'win' : 'lose');
