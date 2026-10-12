@@ -193,13 +193,16 @@ export function mountShield(rig, kind, o = {}, rr = { r: 0, col: '#fff' }) {
 function faceBars(rig, head, R, y0, y1, xs) {
   for (const x of xs) { const a = Math.asin(clamp(x / (R * 0.95), -0.95, 0.95)), z = R * 1.06 * Math.cos(a); rig.add('metal', xf(cylG(0.0045, 0.0045, y1 - y0, 3), [x, (y0 + y1) / 2, z]), head); }
 }
-function domeG(R, yb, top, sx = 0.95, sz = 1.06, seg = 12) {
-  const h = top - yb; return lathe([[R, yb], [R * 1.03, yb + h * 0.4], [R * 0.9, yb + h * 0.72], [R * 0.6, yb + h * 0.92], [R * 0.25, top - 0.005], [0, top]], seg, sx, sz, 0.1, 0.85);
+// helmet skull: a cap above the brow line (full circle) plus a bowl behind and beside the head, open at the front so the face shows through the visor
+function helmShell(rig, head, R, top, yb, yc = 0.15, sx = 0.95, sz = 1.06) {
+  const h = top - yc;
+  rig.add('metal', lathe([[R * 1.01, yc], [R * 0.96, yc + h * 0.34], [R * 0.74, yc + h * 0.7], [R * 0.42, yc + h * 0.92], [0, top]], 12, sx, sz, 0.1, 0.85), head);
+  rig.add('metal', lathe([[R * 0.99, yb], [R * 1.01, yc]], 8, sx, sz, 0.1, 0.85, PI * 0.36, PI * 1.28), head);
 }
 const mask = (y0, y1, sw, r0, r1, seg = 8) => lathe([[r0, y0], [r1, y1]], seg, 0.96, 1.06, 0, 1, -sw / 2, sw);
 function helmMurmillo(rig, o, rr) {
   const H = rig.joints.head, A = (m, g) => rig.add(m, g, H);
-  A('metal', domeG(0.122, -0.005, 0.275));
+  helmShell(rig, H, 0.122, 0.275, -0.005);
   A('metal', lathe([[0.18, -0.075], [0.122, -0.005]], 6, 0.95, 1.05, 0, 1, PI * 0.45, PI * 1.1)); // flared neck guard
   A('metal', paint(mask(-0.025, 0.098, PI * 1.32, 0.118, 0.131), (x, y) => 0.82 + 0.25 * sm01(-0.02, 0.1, y)));
   A('metal', mask(0.148, 0.205, PI * 1.32, 0.132, 0.13));
@@ -214,7 +217,7 @@ function helmMurmillo(rig, o, rr) {
 }
 function helmThraex(rig, o, rr) {
   const H = rig.joints.head, A = (m, g) => rig.add(m, g, H);
-  A('metal', domeG(0.121, 0.0, 0.272));
+  helmShell(rig, H, 0.121, 0.272, 0.0);
   A('metal', lathe([[0.215, 0.026], [0.135, 0.056]], 8, 1.0, 1.12, 0, 1));
   A('metal', mask(-0.02, 0.09, PI * 1.25, 0.118, 0.13)); A('metal', mask(0.138, 0.172, PI * 1.25, 0.131, 0.13));
   faceBars(rig, H, 0.131, 0.09, 0.138, [-0.07, 0, 0.07]);
@@ -232,9 +235,9 @@ function helmThraex(rig, o, rr) {
 }
 function helmHoplo(rig, o, rr) {
   const H = rig.joints.head, A = (m, g) => rig.add(m, g, H);
-  A('metal', domeG(0.121, 0.005, 0.268));
+  helmShell(rig, H, 0.121, 0.268, 0.005, 0.17);
   A('metal', lathe([[0.16, -0.065], [0.122, 0.0]], 6, 0.95, 1.05, 0, 1, PI * 0.5, PI)); // nape guard
-  A('metal', lathe([[0.134, 0.15], [0.128, 0.19]], 8, 0.95, 1.06, 0, 1, -PI * 0.55, PI * 1.1)); // brow band
+  A('metal', lathe([[0.134, 0.15], [0.128, 0.19]], 8, 0.95, 1.06, 0, 1, -PI * 0.5, PI)); // brow band
   A('metal', xf(boxG(0.026, 0.12, 0.014), [0, 0.095, 0.138], [-0.05, 0, 0])); // nose guard
   for (const sg of [-1, 1]) A('metal', lathe([[0.118, -0.045], [0.128, 0.11]], 5, 0.95, 1.06, 0, 1, sg > 0 ? PI * 0.28 : -PI * 0.28 - PI * 0.34, PI * 0.34)); // cheek guards
   A('metal', xf(extrude([[-0.13, 0.22], [-0.1, 0.31], [0.12, 0.3], [0.13, 0.22], [0.0, 0.25]], 0.024), [0, 0.04, 0], [0, -PI / 2, 0])); // crest holder
