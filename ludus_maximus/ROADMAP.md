@@ -273,7 +273,16 @@ Item affix balance pass with big samples (2000 fights per affix, a plain item vs
 Relic balance pass (2000 fights each vs no relic): Phoenix Feather was 80% (revive scaled by value, now 10% HP, 70%), Heart of the Titan 70% (HP 12 to 8%, 64%), Crown of Thorns and the Thorned affix reflect 5% per level (65%), Stormcaller thunder 30% per level (63%), Sunfire burn 5% per level. Relics now average 59%, item affixes 48 to 68%, augments 59 / 63 / 76% by tier. Rule of thumb from the data: a 10% damage edge already wins about 65% of fights, so "balanced" perks should land around 55 to 65%.
 
 ## Next ideas
-- [ ] 123. Fight replay and crowd audio (55, 63)
+- [x] 123. Fight replay and crowd audio (55, 63)
 - [ ] 124. Style-specific augment/affix recommendations in the UI
 - [ ] 125. More drill types for other buildings (109)
 - [ ] 126. Sunfire and Troll's still lead affixes at 67 to 68%
+
+## Round 30 shipped
+Crowd audio that follows hype was already in (U.crowd and U.crowdLevel), so item 63 is done. New: a Fight stats card (damage dealt, damage taken, crits, with bars) on the results screen and on the bounty and champion duel results. This is the lite replacement for a full replay. Verified in headless Chromium through a bounty fight.
+
+## Next ideas
+- [ ] 127. Real replay (fixed-step fights with recorded ultimate taps)
+- [ ] 128. Fight stats history per fighter (lifetime damage, crits)
+- [ ] 129. Augment hints per style (124)
+- [ ] 130. More drill types for other buildings (109)
