@@ -703,7 +703,7 @@ function buildHead(rig, look, bd) {
 // opts: {palette, build:{bulk,height,shoulder,arm,waist,leg,head,seg}, look:{face,hair:'short|crop|long|tied|bald',beard:0|1|2}, torso, legsBare, boots, belt, name, weapon}
 export function buildGladiator(opts = {}) {
   const pal = Object.assign({}, DEFAULT_PALETTE, opts.palette || {}), mats = makeMaterials(pal);
-  const bd = Object.assign({ bulk: 1, height: 1, shoulder: 1, arm: 1, waist: 1, leg: 1, head: 1, seg: 6 }, opts.build || {}), B = bd.bulk, S = bd.seg + 1, WS = (1 + (B - 1) * 0.6) * bd.waist;
+  const bd = Object.assign({ bulk: 1, height: 1, shoulder: 1, arm: 1, waist: 1, leg: 1, head: 1, seg: 6 }, opts.build || {}), B = bd.bulk, S = bd.seg, WS = (1 + (B - 1) * 0.6) * bd.waist;
   const look = Object.assign({ face: 0, hair: 'short', beard: 0 }, opts.look || {}); if (opts.hair === 'none') look.hair = 'bald';
   const root = new THREE.Group(); root.name = opts.name || 'gladiator'; const body = new THREE.Group(); body.name = 'body'; root.add(body); body.scale.setScalar(bd.height);
   const J = {}, rest = new Map(); rest.set(root, new THREE.Matrix4()); rest.set(body, new THREE.Matrix4().makeScale(bd.height, bd.height, bd.height));
@@ -794,16 +794,16 @@ export function buildGladiator(opts = {}) {
   const tm = opts.torso && opts.torso !== 'skin' && mats[opts.torso] ? opts.torso : 'skin', legMat = opts.legsBare === false ? 'cloth' : 'skin', AR = bd.arm, LG = bd.leg;
   const jt = (len) => (x, y) => { const t = -y / len; return 1 - 0.1 * sm01(0.8, 1, t) - 0.06 * sm01(0.2, 0, t); }; // slightly ruddier / darker at the joint ends
 
-  // torso: pelvis (cloth), abdomen, chest with pecs / clavicles / lats sculpted and painted, neck
-  A('cloth', paint(lathe([[0, -0.14], [0.14, -0.12], [0.186 * B, -0.02], [0.195 * B, 0.06], [0.158 * B * bd.waist, 0.12], [0, 0.13]], 10, 1, 0.72, 0.08, 0.9), (x, y) => 1 - 0.25 * sm01(-0.07, -0.13, y)), J.hips);
-  const ab = lathe([[0, -0.115], [0.152 * WS, -0.1], [0.148 * WS, -0.03], [0.154 * WS, 0.04], [0.164 * WS, 0.11], [0.178 * WS, 0.17], [0.185 * B, 0.225]], 12, 1, 0.74, 0.05, 0.92);
+  // torso: pelvis (cloth), abdomen, chest with pecs / clavicles / lats sculpted and painted, neck. Hidden pole rings are omitted.
+  A('cloth', paint(lathe([[0.14, -0.12], [0.186 * B, -0.02], [0.195 * B, 0.06], [0.158 * B * bd.waist, 0.12], [0, 0.13]], 8, 1, 0.72, 0.08, 0.9), (x, y) => 1 - 0.25 * sm01(-0.07, -0.13, y)), J.hips);
+  const ab = lathe([[0.152 * WS, -0.1], [0.148 * WS, -0.03], [0.158 * WS, 0.06], [0.172 * WS, 0.15], [0.185 * B, 0.225]], 10, 1, 0.74, 0.05, 0.92);
   const abl = []; for (let r = 0; r < 3; r++) for (const sg of [-1, 1]) abl.push({ p: [sg * 0.042 * WS, -0.02 + r * 0.068, 0.12], r: 0.036, a: 0.0085 });
-  sculpt(ab, abl); paint(ab, (x, y, z) => { const fr = sm01(0, 0.08, z); const g1 = Math.exp(-sq(x / 0.012)) * fr * 0.13; const rows = (Math.exp(-sq((y + 0.0) / 0.012)) + Math.exp(-sq((y - 0.068) / 0.012)) + Math.exp(-sq((y - 0.136) / 0.012))) * fr * 0.07; return 1 - g1 - rows; });
+  sculpt(ab, abl); paint(ab, (x, y, z) => { const fr = sm01(0, 0.08, z); const g1 = Math.exp(-sq(x / 0.012)) * fr * 0.13; const rows = (Math.exp(-sq(y / 0.012)) + Math.exp(-sq((y - 0.068) / 0.012)) + Math.exp(-sq((y - 0.136) / 0.012))) * fr * 0.07; return 1 - g1 - rows; });
   A(tm, ab, J.spine);
   const sh = bd.shoulder;
-  const chest = lathe([[0, -0.045], [0.166 * B, -0.035], [0.206 * B, 0.035], [0.236 * B, 0.11], [0.256 * B * (0.94 + 0.06 * sh), 0.19], [0.244 * B * (0.94 + 0.06 * sh), 0.265], [0.17 * B, 0.325], [0.095, 0.358], [0, 0.372]], 14, 1, 0.72, 0.06, 0.92);
+  const chest = lathe([[0.166 * B, -0.035], [0.236 * B, 0.11], [0.256 * B * (0.94 + 0.06 * sh), 0.19], [0.244 * B * (0.94 + 0.06 * sh), 0.265], [0.17 * B, 0.325], [0.095, 0.358], [0, 0.372]], 12, 1, 0.72, 0.06, 0.92);
   const cb = [];
-  for (const sg of [-1, 1]) cb.push({ p: [sg * 0.092 * B, 0.17, 0.125], r: 0.078, a: 0.024 }, { p: [sg * 0.075, 0.305, 0.1], r: 0.035, a: 0.007 }, { p: [sg * 0.1, 0.33, -0.03], r: 0.065, a: 0.014 }, { p: [sg * 0.13 * B, 0.1, -0.125], r: 0.09, a: 0.016 }, { p: [sg * 0.2 * B, 0.22, 0.04], r: 0.06, a: 0.008 });
+  for (const sg of [-1, 1]) cb.push({ p: [sg * 0.092 * B, 0.17, 0.125], r: 0.078, a: 0.024 }, { p: [sg * 0.075, 0.305, 0.1], r: 0.035, a: 0.007 }, { p: [sg * 0.1, 0.33, -0.03], r: 0.065, a: 0.014 }, { p: [sg * 0.13 * B, 0.1, -0.125], r: 0.09, a: 0.016 });
   sculpt(chest, cb);
   paint(chest, (x, y, z) => {
     const fr = sm01(0, 0.1, z), gr = Math.exp(-sq(x / 0.02)) * fr * sm01(0.05, 0.14, y) * sm01(0.27, 0.2, y) * 0.16;
@@ -812,30 +812,29 @@ export function buildGladiator(opts = {}) {
     return 1 - gr - under - clav + 0.05 * sm01(0.17, 0.3, y) * fr;
   });
   A(tm, chest, J.chest);
-  A('skin', paint(lathe([[0, -0.05], [0.068 * B, -0.05], [0.06, 0.04], [0.056, 0.09], [0, 0.1]], 8, 1, 1, 0.2, 0.8), (x, y, z) => 1 - 0.15 * sm01(0.02, -0.05, y)), J.neck);
+  A('skin', paint(lathe([[0.068 * B, -0.05], [0.058, 0.04], [0, 0.1]], 6, 1, 1, 0.2, 0.8), (x, y, z) => 1 - 0.15 * sm01(0.02, -0.05, y)), J.neck);
   buildHead(rig, look, bd);
+  const S6 = 6;
   // arms: deltoid, upper arm, forearm, fist with thumb and knuckle shading
   for (const [s, sg] of [['L', 1], ['R', -1]]) {
-    A('skin', paint(sphereG(0.07 * B * AR, 7, 5, 1.05, 1, 1.0), (x, y, z, nx, ny) => 1 - 0.08 * Math.max(0, -ny)), J['shoulder' + s]);
-    A('skin', paint(capsule(DIM.upperArm, 0.068 * B * AR, 0.054 * B * AR, S, 0.12), jt(DIM.upperArm)), J['shoulder' + s]);
-    A('skin', paint(capsule(DIM.foreArm, 0.054 * B * AR, 0.04 * B * AR, S, 0.14), jt(DIM.foreArm)), J['elbow' + s]);
-    A('skin', paint(lathe([[0, -0.118], [0.034, -0.095], [0.04, -0.06], [0.044, -0.015], [0.03, 0.01], [0, 0.02]], 6, 1.0, 0.82, 0.12, 0.88), (x, y, z) => 1 - 0.1 * Math.exp(-sq((y + 0.1) / 0.02)) + 0.04 * sm01(-0.04, 0, y)), J['wrist' + s]);
-    A('skin', xf(capsule(0.045, 0.013, 0.01, 5, 0), [sg * 0.03, -0.034, 0.025], [-0.9, 0, sg * 0.15]), J['wrist' + s]); // thumb
+    A('skin', paint(sphereG(0.07 * B * AR, 6, 4, 1.05, 1, 1.0), (x, y, z, nx, ny) => 1 - 0.08 * Math.max(0, -ny)), J['shoulder' + s]);
+    A('skin', paint(capsule(DIM.upperArm, 0.068 * B * AR, 0.054 * B * AR, S6, 0.12), jt(DIM.upperArm)), J['shoulder' + s]);
+    A('skin', paint(capsule(DIM.foreArm, 0.054 * B * AR, 0.04 * B * AR, S6, 0.14), jt(DIM.foreArm)), J['elbow' + s]);
+    A('skin', paint(lathe([[0.034, -0.1], [0.044, -0.04], [0.04, -0.005], [0, 0.02]], 5, 1.0, 0.82, 0.12, 0.88), (x, y, z) => 1 - 0.1 * Math.exp(-sq((y + 0.1) / 0.02)) + 0.04 * sm01(-0.04, 0, y)), J['wrist' + s]);
+    A('skin', xf(coneG(0.014, 0.06, 4), [sg * 0.03, -0.05, 0.025], [-Math.PI + 0.9, 0, sg * 0.15]), J['wrist' + s]); // thumb
     // legs
-    A(legMat, paint(capsule(DIM.thigh, 0.1 * B * LG, 0.066 * B * LG, S, 0.1), jt(DIM.thigh)), J['hip' + s]);
-    A(legMat, paint(capsule(DIM.shin, 0.066 * B * LG, 0.045 * B * LG, S, 0.14), jt(DIM.shin)), J['knee' + s]);
-    const prof = [[0, -0.11], [0.05, -0.06], [0.05, 0.06], [0.036, 0.13], [0.0, 0.16]];
-    const foot = lathe(prof, 6, 1, 1.0, 0.1, 0.85); foot.rotateX(Math.PI / 2); foot.scale(1, 1, 0.55); foot.translate(0, -DIM.footH + 0.03, 0.04);
-    if (opts.boots === false) A('skin', foot, J['ankle' + s]);
-    else {
-      A('skin', foot, J['ankle' + s]);
-      const sole = lathe(prof.map((p) => [p[0] + (p[0] ? 0.006 : 0), p[1]]), 6, 1, 1, 0, 1); sole.rotateX(Math.PI / 2); sole.scale(1.04, 1, 0.2); sole.translate(0, -DIM.footH + 0.0075, 0.04); A('leather', paint(sole, 0.7), J['ankle' + s]);
-      A('leather', lathe([[0.052, -0.046], [0.058, -0.046], [0.058, -0.012], [0.052, -0.012]], 7, 1, 1, 0, 1), J['ankle' + s]);
-      A('leather', xf(boxG(0.1, 0.01, 0.014), [0, -0.05, 0.075], [0.45, 0, 0]), J['ankle' + s]);
-      A('leather', xf(boxG(0.1, 0.01, 0.014), [0, -0.054, 0.045], [0.2, 0, 0]), J['ankle' + s]);
+    A(legMat, paint(capsule(DIM.thigh, 0.1 * B * LG, 0.066 * B * LG, S6, 0.1), jt(DIM.thigh)), J['hip' + s]);
+    A(legMat, paint(capsule(DIM.shin, 0.066 * B * LG, 0.045 * B * LG, S6, 0.14), jt(DIM.shin)), J['knee' + s]);
+    const prof = [[0.05, -0.06], [0.05, 0.06], [0.036, 0.13], [0.0, 0.16]];
+    const foot = lathe(prof, 5, 1, 1.0, 0.1, 0.85); foot.rotateX(Math.PI / 2); foot.scale(1, 1, 0.55); foot.translate(0, -DIM.footH + 0.03, 0.04);
+    A('skin', foot, J['ankle' + s]);
+    if (opts.boots !== false) {
+      const sole = lathe([[0.056, -0.06], [0.056, 0.06], [0.042, 0.136]], 5, 1, 1, 0, 1); sole.rotateX(Math.PI / 2); sole.scale(1.04, 1, 0.2); sole.translate(0, -DIM.footH + 0.0075, 0.04); A('leather', paint(sole, 0.7), J['ankle' + s]);
+      A('leather', lathe([[0.056, -0.046], [0.056, -0.012]], 6, 1, 1, 0, 1), J['ankle' + s]);
+      A('leather', xf(quadG(0.1, 0.012), [0, -0.052, 0.07], [-0.55, 0, 0]), J['ankle' + s]);
     }
   }
-  if (opts.belt !== false) A('leather', paint(lathe([[0.152 * WS, -0.065], [0.166 * WS, -0.065], [0.166 * WS, 0.012], [0.152 * WS, 0.012]], 12, 1, 0.76, 0, 1), (x, y, z) => 1 - 0.18 * Math.exp(-sq((y + 0.02) / 0.01))), J.spine);
+  if (opts.belt !== false) A('leather', paint(lathe([[0.158 * WS, -0.065], [0.164 * WS, 0.012]], 12, 1, 0.76, 0, 1), 1), J.spine);
   rig.animator = new Animator(rig, opts.weapon || 'unarmed');
   rig.rebuild();
   return rig;
