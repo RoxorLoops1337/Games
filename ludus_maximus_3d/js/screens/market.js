@@ -133,9 +133,10 @@ export function open(ctx, arg) {
     if (!list.length) { out.append(emptyState('shield', 'No spare items to sell.')); return out; }
     const bulk = (label, key, fn) => {
       const sel = list.filter(fn), total = sel.reduce((a, i) => a + lm.sellVal(i), 0), armed = st.confirm === key;
-      return btn(ctx, { label: armed ? 'Tap again to sell' : label, sub: sel.length ? `${sel.length} items, ${ctx.fmt(total)} gold` : 'none', icon: 'coin', variant: armed ? 'danger' : 'bronze', off: sel.length ? '' : 'Nothing matches', onClick: () => {
+      const b = btn(ctx, { label: armed ? 'Tap again to sell' : label, icon: 'coin', variant: armed ? 'danger' : 'bronze', off: sel.length ? '' : 'Nothing matches', onClick: () => {
         if (!armed) { arm_(key); return; }
         sel.forEach((i) => lm.sellItem(S, i)); st.confirm = null; sync(); ctx.sfx('coin'); ctx.toast(`Sold ${sel.length} items for ${ctx.fmt(total)} gold`, { kind: 'good', ico: 'coin' }); render(); } });
+      const w = h('div', 'am-bulk', [b, h('div', 'am-small', sel.length ? `${sel.length} item${sel.length === 1 ? '' : 's'}, ${ctx.fmt(total)} gold` : 'None to sell')]); return w;
     };
     out.append(h('div', 'am-btns', [bulk('Sell all Common', 'c0', (i) => i.rar === 0 && !i.up), bulk('Sell Fine and below', 'c1', (i) => i.rar <= 1 && !i.up)]));
     out.append(secH('Your spare items', h('span', 'am-small', list.length + ' items')));

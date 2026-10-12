@@ -76,6 +76,8 @@ button.am-row:hover{background:#fff6d8}
 .am-tag.pos{background:#d6f0c4;color:#1f5a28}.am-tag.neg{background:#f3d2c9;color:#7d2119}.am-tag.new{background:#ffe9a8;color:#6a4a00}.am-tag.neu{background:#e4dccb;color:#5a4222}
 .am-btns{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
 .am-btns .lx-btn{flex:1 1 130px}
+.am-bulk{flex:1 1 150px;display:flex;flex-direction:column;gap:4px;align-items:stretch;text-align:center}
+.am-bulk .lx-btn{flex:none;width:100%}
 .am-off{filter:grayscale(.85) brightness(.78)!important;cursor:not-allowed}
 .am-back{align-self:flex-start;margin-bottom:8px}
 .am-seg{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;gap:4px;padding:3px;border-radius:8px;background:rgba(90,66,34,.16);margin-bottom:10px}
