@@ -22,6 +22,7 @@ const CSS = `
 .ax-tab{flex:1;min-height:44px;padding:6px 8px;border:0;border-radius:7px;background:transparent;color:var(--lx-travertine);font:700 var(--lx-fs-s)/1.1 var(--lx-serif);letter-spacing:.08em;text-transform:uppercase;cursor:pointer;touch-action:manipulation;display:flex;align-items:center;justify-content:center;gap:6px;transition:background .15s,color .15s}
 .ax-tab:hover{background:rgba(242,193,78,.12)}
 .ax-tab.on{background:linear-gradient(180deg,#ffe08a,#f2c14e 50%,#c98e24);color:#2a1a08;box-shadow:0 2px 0 #7a5222,inset 0 1px 0 rgba(255,255,255,.6)}
+@media (max-width:520px){.ax-tab .lx-ico{display:none}.ax-tab{letter-spacing:.04em;padding:6px 2px}}
 .ax-tab:focus-visible,.ax-chipbtn:focus-visible,.ax-pick:focus-visible,.ax-tap:focus-visible{outline:3px solid #fff;outline-offset:2px}
 .ax-scroll{display:flex;gap:8px;overflow-x:auto;padding:2px 2px 6px;scroll-snap-type:x proximity;scrollbar-width:none;-webkit-overflow-scrolling:touch}
 .ax-scroll::-webkit-scrollbar{display:none}

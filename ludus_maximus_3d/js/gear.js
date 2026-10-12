@@ -6,6 +6,7 @@ import * as THREE from 'three';
 import { lathe, capsule, boxG, sphereG, cylG, coneG, torusG, xf, paint, ribbon, tabRing, extrude, sm01, addCloak, addPlume, ClothGrid, shadePatch, clamp, lerp } from './rig.js';
 
 const V3 = THREE.Vector3;
+const sq = (v) => v * v;
 const PI = Math.PI;
 const ps = (...a) => new V3(...a);
 
@@ -281,7 +282,7 @@ function loinFlap(rig, anchor, o = {}) {
 function pteruges(rig, obj, n, r, y, len, w, mat = 'leather', o = {}) { rig.add(mat, tabRing(n, r, y, len, w, Object.assign({ sz: 0.82, flare: 0.045 }, o)), obj); }
 function beltPlates(rig, B, o = {}) {
   const S = rig.joints.spine;
-  rig.add('leather', paint(lathe([[0.15 * B, -0.075], [0.172 * B, -0.075], [0.172 * B, 0.02], [0.15 * B, 0.02]], 12, 1, 0.76, 0, 1), (x, y) => 1 - 0.2 * Math.exp(-((y + 0.03) / 0.012) ** 2)), S);
+  rig.add('leather', paint(lathe([[0.15 * B, -0.075], [0.172 * B, -0.075], [0.172 * B, 0.02], [0.15 * B, 0.02]], 12, 1, 0.76, 0, 1), (x, y) => 1 - 0.2 * Math.exp(-sq((y + 0.03) / 0.012))), S);
   for (let i = -2; i <= 2; i++) { const a = i * 0.34, r = 0.176 * B; rig.add('metal', xf(boxG(0.062, 0.07, 0.012), [Math.sin(a) * r, -0.028, Math.cos(a) * r * 0.76], [0, a * 0.95, 0]), S); rig.add('trim', xf(sphereG(0.009, 4, 3), [Math.sin(a) * (r + 0.007), -0.028, Math.cos(a) * (r + 0.007) * 0.76]), S); }
   rig.add('trim', xf(cylG(0.03, 0.03, 0.012, 7), [0, -0.028, 0.176 * B * 0.76 + 0.01], [PI / 2, 0, 0]), S);
 }
@@ -347,7 +348,7 @@ function segmentata(rig, B, sh, rr) { // lorica segmentata: stacked overlapping 
 }
 function jerkin(rig, B, sh, rr) { // thraex leather jerkin with studs and shoulder tabs
   const C = rig.joints.chest, prof = []; for (const y of [-0.04, 0.04, 0.12, 0.2, 0.27, 0.31]) prof.push([chestR(y, B, sh) + 0.016, y]);
-  rig.add('leather', paint(lathe(prof, 14, 1, 0.72, 0.1, 0.8), (x, y, z) => 0.95 - 0.12 * Math.exp(-((y - 0.13) / 0.01) ** 2) * sm01(-0.05, 0.08, z)), C);
+  rig.add('leather', paint(lathe(prof, 14, 1, 0.72, 0.1, 0.8), (x, y, z) => 0.95 - 0.12 * Math.exp(-sq((y - 0.13) / 0.01)) * sm01(-0.05, 0.08, z)), C);
   rig.add('trim', lathe([[chestR(0.3, B, sh) + 0.018, 0.3], [chestR(0.31, B, sh) + 0.02, 0.31]], 14, 1, 0.72, 0, 1), C);
   for (let i = 0; i < 3; i++) for (const sg of [-1, 1]) { const cp = chestPt(sg * 0.06 * B, 0.07 + i * 0.075, B, sh, 0.026); rig.add('trim', xf(sphereG(0.0085, 4, 3), cp.p.toArray()), C); }
   for (const s of ['L', 'R']) rig.add('leather', tabRing(4, 0.088, 0.03, 0.12, 0.058, { sz: 1, flare: 0.03, arc: PI, a0: s === 'L' ? 0 : PI, shade: 0.7 }), rig.joints['shoulder' + s]);

@@ -32,7 +32,7 @@ function schedule(ctx, scr, root, draw) {
   if (st.wk >= look) st.wk = 0;
   entriesCard(ctx, root, draw);
   root.append(chipRow(D.LEAGUES.map((Lg) => ({ id: Lg.id, label: Lg.n, lock: Lg.id > ml, tip: Lg.id > ml ? `Reach ${Lg.fame} fame to enter.` : Lg.d })), st.league, (id) => { st.league = id; ctx.sfx('uiTap'); draw(); }));
-  root.append(chipRow(Array.from({ length: look }, (_, i) => ({ id: i, label: i === 0 ? 'This week' : 'Week ' + (S.week + i), sub: lm.festival(S, S.week + i) ? '★' : '' })), st.wk, (id) => { st.wk = id; ctx.sfx('uiTap'); draw(); }));
+  if (look > 1) root.append(chipRow(Array.from({ length: look }, (_, i) => ({ id: i, label: i === 0 ? 'This week' : 'Week ' + (S.week + i), sub: lm.festival(S, S.week + i) ? '★' : '' })), st.wk, (id) => { st.wk = id; ctx.sfx('uiTap'); draw(); }));
   // scouting
   const sb = U.button({ label: 'Scout Tower', variant: 'ghost', icon: 'scroll', onClick: () => { const i = lm.plotOf(S, 'scout'); const e = S.plots.findIndex((p, k) => !p && k < S.rows * lm.COLS); if (i >= 0) ctx.open('building', { plot: i }); else if (e >= 0) ctx.open('building', { type: 'plot', i: e, empty: true }); else U.toast('No free plot. Buy land first.', { kind: 'bad' }); } });
   root.append(card([row([medal('scroll', 'dark'), col([h('div', 'ax-name', `Scouting level ${lv}`), note(`${lm.fogNote[lv]}. A taller Scout Tower reveals more and looks further ahead (now ${look} week${look > 1 ? 's' : ''}).`)], 'ax-grow')]), lm.spyActive(S) ? pill('A spy boosts scouting this week', { tone: 'good' }) : null, sb], ''));

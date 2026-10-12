@@ -3,8 +3,12 @@ import { h, U, D, L, fmt, portrait, injectCss, addCss, chip, sec, pips, wide, se
 import { itemCard, SLOT_ICON, fmtSt } from '../uihelpers.js';
 
 const CSS = `
-.pf-hero{display:grid;gap:10px}
-.pf-top{display:flex;gap:14px;align-items:center;min-width:0}
+.pf-hero{display:grid;gap:10px 14px;grid-template-columns:auto minmax(0,1fr);align-items:center}
+.pf-id{display:grid;gap:4px;min-width:0}
+.pf-meters{grid-column:1/3;display:grid;gap:6px}
+.pf-m{display:grid;grid-template-columns:50px 1fr 46px;gap:8px;align-items:center;font:700 11px var(--lx-sans);letter-spacing:.04em;text-transform:uppercase;color:#5a4560}
+.pf-m b{text-align:right;color:#2a1a30}
+@media(min-width:700px){.pf-hero{grid-template-columns:auto minmax(0,1.2fr) minmax(0,1fr)}.pf-meters{grid-column:auto}}
 .pf-ph{position:relative;flex:none;border-radius:50%;padding:4px;background:radial-gradient(circle at 35% 30%,#ffe08a,#b8803a);box-shadow:0 4px 10px rgba(60,40,10,.4)}
 .pf-xp{display:grid;grid-template-columns:auto 1fr;gap:8px;align-items:center;font:700 12px var(--lx-sans);color:#5a4560}
 .pf-style{font:600 13px/18px var(--lx-sans);color:#4a3550;overflow-wrap:anywhere}
@@ -50,7 +54,7 @@ export function open(ctx, arg) {
   if (!g) { ctx.toast('That fighter is gone.', { kind: 'bad' }); return; }
   const owned = S.glads.includes(g);
   const body = h('div', 'lm-sheetbody');
-  const m = wide(ctx.sheet({ title: g.name, body, actions: owned ? [U.button({ label: 'Roster', icon: 'roster', variant: 'bronze', block: true, onClick: () => ctx.open('roster') })] : [] }), 780);
+  const m = wide(ctx.sheet({ title: g.name, body, actions: [] }), 800);
   let tab = 'stats', dead = false; const origClose = m.close; m.close = () => { dead = true; origClose.call(m); };
   const commit = () => { ctx.save(); ctx.refresh(); };
   const redraw = () => { if (!dead) { setTitle(m, g.name); render(); } };
@@ -60,18 +64,18 @@ export function open(ctx, arg) {
     const st = d.STYLES[g.style], T = d.TRAITS[g.trait];
     const c = h('div', 'lm-card pf-hero');
     const sc = chip(st.n, 'bronze'); sc.style.background = st.c; U.tooltip(sc, `${st.role}. ${st.d} Beats ${st.beats.map((b) => d.STYLES[b].n).join(' and ')} by a small margin.`, { title: st.n });
-    const ph = h('div', 'pf-ph', portrait(ctx, g, 88));
+    const ph = h('div', 'pf-ph', portrait(ctx, g, 76));
     const rec = chip(`${g.rec.w}W ${g.rec.l}L`, 'grey', 'Career record in the arena');
-    const nameBox = h('div', 'lm-grow', [h('div', 'lm-h1', g.name), (g.nick || g.title) ? h('div', 'lm-sub', [g.nick || '', g.nick && g.title ? ' · ' : '', g.title ? h('b', '', g.title) : ''].filter((x) => x !== '')) : null,
-      h('div', 'lm-chips', [sc, chip('Lv ' + g.lvl, 'gold'), rec]), h('div', '', U.stars(lm.stars(g), 5))]);
-    U.tooltip(nameBox.lastChild, 'Stars show natural talent across the five stats.', { title: 'Stars' });
-    c.append(h('div', 'pf-top', [ph, nameBox]));
-    c.append(h('div', 'pf-style', `${st.role}. ${st.d}`));
-    c.append(h('div', 'lm-chips', [chip(T.n, 'purple'), h('span', 'lm-sub', T.d)]));
+    const stars = h('div', '', U.stars(lm.stars(g), 5)); U.tooltip(stars, 'Stars show natural talent across the five stats.', { title: 'Stars' });
+    const tr = h('div', 'lm-chips', [chip(T.n, 'purple'), h('span', 'lm-sub', T.d)]);
+    const nameBox = h('div', 'pf-id', [h('div', 'lm-h1', g.name), (g.nick || g.title) ? h('div', 'lm-sub', [g.nick || '', g.nick && g.title ? ' · ' : '', g.title ? h('b', '', g.title) : ''].filter((x) => x !== '')) : null, h('div', 'lm-chips', [sc, chip('Lv ' + g.lvl, 'gold'), rec]), stars, tr]);
     const need = lm.need(g.lvl);
-    c.append(h('div', 'pf-xp', [h('span', 'lm-num', `XP ${Math.floor(g.xp)}/${need}`), U.bar({ value: g.xp, max: need, kind: 'xp', height: 10 })]));
-    c.append(h('div', 'pf-xp', [h('span', 'lm-num', `Energy ${Math.round(g.en)}`), U.bar({ value: g.en, max: 100, kind: 'stam', height: 8 })]));
-    c.append(h('div', 'pf-xp', [h('span', 'lm-num', `Morale ${Math.round(g.mo)}`), U.bar({ value: g.mo, max: 100, kind: 'foe', height: 8 })]));
+    const mt = (label, bar, val) => h('div', 'pf-m', [h('span', 'lm-num', label), bar, h('b', 'lm-num', val)]);
+    const meters = h('div', 'pf-meters', [
+      mt('XP', U.bar({ value: g.xp, max: need, kind: 'xp', height: 9 }), `${Math.floor(g.xp)}/${need}`),
+      mt('Energy', U.bar({ value: g.en, max: 100, kind: 'stam', height: 9 }), Math.round(g.en)),
+      mt('Morale', U.bar({ value: g.mo, max: 100, kind: 'foe', height: 9 }), Math.round(g.mo))]);
+    c.append(ph, nameBox, meters);
     return c;
   }
 
@@ -188,6 +192,7 @@ export function open(ctx, arg) {
   // ------------------------------------------------------------ skills tab
   function skillsTab() {
     const box = h('div');
+    { const st = d.STYLES[g.style]; box.append(sec('Fighting style'), h('div', 'lm-card', [h('div', 'lm-row lm-wrap', [h('b', 'lm-name', st.n), chip(st.role, 'bronze')]), h('div', 'lm-sub', st.d), h('div', 'lm-sub', `Small edge against ${st.beats.map((b) => d.STYLES[b].n).join(' and ')}.`)])); }
     box.append(sec('Ultimates', h('span', 'lm-sub', 'you trigger these')));
     const ul = h('div', 'pf-list');
     lm.ultsOf(g).forEach((id) => { const u = d.ULTS[id]; const c = h('div', 'lm-card pf-ult', [h('span', 'pf-ult-i', U.icon(id, 24)), h('div', 'lm-grow', [h('div', 'lm-row lm-wrap', [h('b', 'lm-name', u.n), chip(u.cd + 's', 'bronze', 'Cooldown')]), h('div', 'lm-sub', u.d)])]); c.style.setProperty('--uc', u.c); ul.append(c); });
