@@ -71,10 +71,13 @@ export function createLudus({ density = 1, seed = 5 } = {}) {
       const band = Math.floor((x * 0.03 + z * 0.012) + n1 * 3) % 3;
       c = mixc(c, band === 0 ? field1 : band === 1 ? field2 : plain, valley * 0.85);
       c = mixc(c, olive, sstep(0.0, 1.0, nz(x, z, 0.03, 2, 40) * 1.4 - 0.5) * (1 - valley) * sstep(8, 30, Math.abs(x) + Math.abs(z)) * 0.5);
+      const patch = nz(x, z, 0.09, 3, 31), straw = nz(x, z, 0.05, 3, 33);
+      c = mixc(c, lin(0x4c6a2c), clamp(patch * 2.2 - 0.9) * 0.65 * (1 - valley));
+      c = mixc(c, lin(0xcdb26c), clamp(straw * 2.0 - 0.8) * 0.55 * (1 - valley));
       const near = Math.abs(x - pathX(z)); const onRoad = z > CD + 4 ? 1 - sstep(2.2, 4.2, near) : 0;
       c = mixc(c, road, onRoad);
       c = mixc(c, earth, (1 - sstep(0, 5, Math.max(Math.abs(x) - CW - 5, Math.abs(z) - CD - 5))) * 0.7);   // packed earth ledge hugging the wall
-      const shade = 0.88 + n2 * 0.24;
+      const shade = 1.22 + n2 * 0.28;
       col.push(c[0] * shade, c[1] * shade, c[2] * shade);
     }
     for (let j = 0; j < TS; j++) for (let i = 0; i < TS; i++) { const a = j * (TS + 1) + i, b = a + 1, c2 = a + TS + 1, d = c2 + 1; idx.push(a, c2, b, b, c2, d); }
@@ -135,8 +138,8 @@ export function createLudus({ density = 1, seed = 5 } = {}) {
   // portico: marble columns along the north wall + sloped tile roof + back colonnade shadow
   {
     const cols = 11, cz = -CD + 4.4, colH = 4.4;
-    const cg = new THREE.CylinderGeometry(0.36, 0.42, colH, 14, 1);
-    colorize(cg, (x, y) => 0.7 + 0.3 * (y / colH + 0.5));
+    let cg = new THREE.CylinderGeometry(0.36, 0.42, colH, 14, 1);
+    cg = colorize(cg, (x, y) => 0.7 + 0.3 * (y / colH + 0.5));
     const capG = new THREE.BoxGeometry(1.1, 0.3, 1.1), baseG = new THREE.BoxGeometry(1.0, 0.25, 1.0);
     const colMesh = new THREE.InstancedMesh(prepGeo(cg, { uvScale: 0.5 }), new THREE.MeshStandardMaterial({ map: marble.map, bumpMap: marble.bump, bumpScale: 1, vertexColors: true, roughness: 0.4, metalness: 0.0 }), cols);
     const capMesh = new THREE.InstancedMesh(prepGeo(capG), new THREE.MeshStandardMaterial({ color: 0xf2ede2, roughness: 0.45 }), cols * 2);
@@ -152,15 +155,16 @@ export function createLudus({ density = 1, seed = 5 } = {}) {
     const sl = new THREE.Mesh(prepGeo(slope, { uvScale: 0.5 }), roofMat); sl.castShadow = sl.receiveShadow = true; group.add(sl);
     // dark back wall of portico (reads as deep shade)
     const back = new THREE.BoxGeometry(44, colH, 0.2); back.translate(0, colH / 2 + 0.25, -CD + 1.2);
-    const bm = new THREE.Mesh(back, new THREE.MeshLambertMaterial({ color: 0x5a3a2c })); group.add(bm);
+    const bm = new THREE.Mesh(back, new THREE.MeshLambertMaterial({ color: 0x6e5240 })); group.add(bm);
   }
 
   // ---------------- pool + fountain ----------------
   {
     const px = -9, pz = 7, W = 8, D = 5;
-    const rim = new THREE.BoxGeometry(W + 1.2, 0.45, D + 1.2); rim.translate(px, 0.22, pz);
-    const rm = new THREE.Mesh(prepGeo(rim, { uvScale: 0.3 }), new THREE.MeshStandardMaterial({ map: marble.map, bumpMap: marble.bump, roughness: 0.35 })); rm.castShadow = rm.receiveShadow = true; group.add(rm);
-    const water = createWater(W, D); water.mesh.position.set(px, 0.43, pz); group.add(water.mesh); group.userData.water = water;
+    const rimParts = [[W + 1.2, 0.6, 0.6, 0, -D / 2 - 0.3], [W + 1.2, 0.6, 0.6, 0, D / 2 + 0.3], [0.6, 0.6, D, -W / 2 - 0.3, 0], [0.6, 0.6, D, W / 2 + 0.3, 0]].map(([w, h, d, ox, oz]) => { const g = new THREE.BoxGeometry(w, h, d); g.translate(px + ox, 0.3, pz + oz); return g; });
+    const rm = new THREE.Mesh(mergeGeos(rimParts), new THREE.MeshStandardMaterial({ map: marble.map, bumpMap: marble.bump, roughness: 0.35, vertexColors: true })); rm.castShadow = rm.receiveShadow = true; group.add(rm);
+    const basin = new THREE.Mesh(new THREE.BoxGeometry(W, 0.3, D), new THREE.MeshLambertMaterial({ color: 0x2a4a50 })); basin.position.set(px, 0.05, pz); group.add(basin);
+    const water = createWater(W, D); water.mesh.position.set(px, 0.36, pz); group.add(water.mesh); group.userData.water = water;
     trees.water = water;
   }
 
@@ -179,19 +183,19 @@ export function createLudus({ density = 1, seed = 5 } = {}) {
     mesh.castShadow = true; group.add(mesh);
     const prof = [[0.0, 0.0], [0.16, 0.0], [0.26, 0.15], [0.3, 0.45], [0.22, 0.75], [0.1, 0.9], [0.1, 1.0], [0.16, 1.05], [0.16, 1.1]].map(([r, y]) => new THREE.Vector2(r, y));
     const ag = colorize(new THREE.LatheGeometry(prof, 10), (x, y) => 0.7 + 0.3 * Math.min(1, y));
-    const am = new THREE.InstancedMesh(ag, new THREE.MeshStandardMaterial({ color: 0xb5532f, roughness: 0.8, vertexColors: true }), 14);
+    const am = new THREE.InstancedMesh(ag, new THREE.MeshStandardMaterial({ color: 0xa8643c, roughness: 0.8, vertexColors: true }), 14);
     for (let i = 0; i < 14; i++) { const side = i % 2 ? 1 : -1, x = -CW + 3 + (i * 3.2) % (CW * 1.8), z = i < 7 ? CD - 1.6 : -CD + 1.7; m.compose(new THREE.Vector3(x * (i % 3 ? 1 : 0.9), 0, z), q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), i), new THREE.Vector3(1.4, 1.4, 1.4)); am.setMatrixAt(i, m); void side; }
     am.castShadow = true; group.add(am);
   }
-  const flames = createFlames(flamePts, { glowScale: 4.5 }); group.add(flames.group);
+  const flames = createFlames(flamePts, { glowScale: 3.2 }); group.add(flames.group);
 
   // ---------------- trees: cypress, olive, stone pine (instanced, vertex sway, baked AO colors) ----------------
   const jitterGeo = (g, amp, seedK) => { const p = g.attributes.position; for (let i = 0; i < p.count; i++) { const x = p.getX(i), y = p.getY(i), z = p.getZ(i); const k = (tfbm(x * 1.7 + 50, y * 1.7 + z * 1.1, 1024, 2, seedK) - 0.5) * amp; p.setXYZ(i, x + k, y + k * 0.6, z + k * 0.8); } return g; };
-  const treeMat = (key, amp) => patchMaterial(new THREE.MeshLambertMaterial({ vertexColors: true }), {
+  const treeMat = (key, H, A) => patchMaterial(new THREE.MeshLambertMaterial({ vertexColors: true }), {
     key, uniforms: { uTime: U.uTime, uWind: U.uWind },
     vPars: 'uniform float uTime, uWind;',
-    vBody: `vec3 ip = instanceMatrix[3].xyz; float hh = max(position.y, 0.0) * ${amp.toFixed(3)};
-      float w = hh * hh * uWind; transformed.x += sin(uTime * 1.25 + ip.x * 0.31 + ip.z * 0.23) * w + sin(uTime * 2.7 + ip.z * 0.4) * w * 0.25;
+    vBody: `vec3 ip = instanceMatrix[3].xyz; float hh = clamp(position.y / ${H.toFixed(1)}, 0.0, 1.0);
+      float w = hh * hh * ${A.toFixed(3)} * uWind; transformed.x += sin(uTime * 1.25 + ip.x * 0.31 + ip.z * 0.23) * w + sin(uTime * 2.7 + ip.z * 0.4) * w * 0.25;
       transformed.z += cos(uTime * 1.05 + ip.z * 0.29 + ip.x * 0.17) * w * 0.7;`,
   });
   const cypressGeo = (() => {
@@ -251,15 +255,26 @@ export function createLudus({ density = 1, seed = 5 } = {}) {
   for (let i = 0; i < 26; i++) { const x = (rnd() - 0.5) * 220, z = -CD - 6 + rnd() * 130; if (inCourt(x, z, 10) || terrainHeight(x, z) < -20) continue; treePlace.pine.push([x, terrainHeight(x, z), z, 0.85 + rnd() * 0.5]); }
   for (let i = 0; i < 6; i++) { const x = (i - 2.5) * 11, z = CD + 7 + rnd() * 3; treePlace.pine.push([x, terrainHeight(x, z), z, 0.8 + rnd() * 0.2]); }
   const treeMeshes = [];
-  const mkTrees = (name, geo, arr, amp, shadow) => {
-    const mesh = new THREE.InstancedMesh(geo, treeMat(name, amp), arr.length); mesh.name = name;
+  const mkTrees = (name, geo, arr, H, A, shadow) => {
+    const mesh = new THREE.InstancedMesh(geo, treeMat(name, H, A), arr.length); mesh.name = name;
     const m = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler();
     arr.forEach(([x, y, z, sc], i) => { q.setFromEuler(e.set(0, rnd() * TAU, 0)); m.compose(new THREE.Vector3(x, y - 0.1, z), q, new THREE.Vector3(sc, sc * (0.9 + rnd() * 0.3), sc)); mesh.setMatrixAt(i, m); });
     mesh.castShadow = shadow; mesh.receiveShadow = false; mesh.frustumCulled = false; group.add(mesh); treeMeshes.push([mesh, arr.length]); return mesh;
   };
-  mkTrees('cypress', cypressGeo, treePlace.cypress, 1 / 9 * 3.2, true);
-  mkTrees('olive', oliveGeo, treePlace.olive, 0.16, true);
-  mkTrees('pine', pineGeo, treePlace.pine, 0.1, true);
+  mkTrees('cypress', cypressGeo, treePlace.cypress, 9, 0.28, true);
+  mkTrees('olive', oliveGeo, treePlace.olive, 4.2, 0.12, true);
+  mkTrees('pine', pineGeo, treePlace.pine, 9, 0.18, true);
+  // scrub bushes: cheap jittered blobs scattered over the hillside for texture
+  {
+    let bg = new THREE.IcosahedronGeometry(0.9, 0); const p = bg.attributes.position; for (let i = 0; i < p.count; i++) p.setY(i, p.getY(i) * 0.7 + 0.4);
+    jitterGeo(bg, 0.5, 120); bg = colorize(bg, (x, y) => mixc(lin(0x4a5a2c), lin(0xa0a458), clamp((y - 0.1) / 1.0)));
+    const arr = [];
+    for (let i = 0; i < 520; i++) { const a = rnd() * TAU, r = 30 + Math.pow(rnd(), 0.8) * 190, x = Math.cos(a) * r * 1.2, z = Math.sin(a) * r * 0.9 + 10; if (inCourt(x, z, 7)) continue; const hh = terrainHeight(x, z); if (hh < -22) continue; arr.push([x, hh, z, 0.6 + rnd() * 1.4]); }
+    const bm = new THREE.InstancedMesh(bg, new THREE.MeshLambertMaterial({ vertexColors: true }), arr.length); bm.name = 'bushes'; bm.frustumCulled = false;
+    const m4 = new THREE.Matrix4(), q4 = new THREE.Quaternion(), e4 = new THREE.Euler();
+    arr.forEach(([x, y, z, sc], i) => { q4.setFromEuler(e4.set(0, rnd() * TAU, 0)); m4.compose(new THREE.Vector3(x, y - 0.1, z), q4, new THREE.Vector3(sc * 1.4, sc, sc * 1.2)); bm.setMatrixAt(i, m4); });
+    group.add(bm); treeMeshes.push([bm, arr.length]);
+  }
   const blobs = [];
   treePlace.cypress.forEach(([x, y, z, sc]) => blobs.push({ x, y, z, r: 1.7 * sc, rz: 1.7 * sc }));
   treePlace.olive.forEach(([x, y, z, sc]) => blobs.push({ x: x + 0.8, y, z: z + 0.5, r: 3.2 * sc, rz: 2.6 * sc }));
@@ -269,10 +284,10 @@ export function createLudus({ density = 1, seed = 5 } = {}) {
   // ---------------- distant city: houses, windows, aqueduct, temple, Colosseum ----------------
   {
     const houseGeo = (() => {
-      const wall = new THREE.BoxGeometry(1, 1, 1); wall.translate(0, 0.5, 0);
-      colorize(wall, (x, y, z, nx, ny) => { const k = ny > 0.5 ? 1 : 0.6 + 0.4 * (y + 0.5 > 0.5 ? (y) : y); const c = mixc(lin(0xd9c3a0), lin(0xf0e2c4), clamp(y)); return [c[0] * k, c[1] * k, c[2] * k]; });
-      const roof = new THREE.CylinderGeometry(0.0, 0.78, 0.4, 4, 1); roof.rotateY(Math.PI / 4); roof.scale(1.0, 1, 1.0); roof.translate(0, 1.2, 0);
-      colorize(roof, (x, y) => { const t = clamp((y - 1.0) / 0.4); return mixc(lin(0xa84a2a), lin(0xd9703e), 1 - t * 0.6 + 0.2); });
+      let wall = new THREE.BoxGeometry(1, 1, 1); wall.translate(0, 0.5, 0);
+      wall = colorize(wall, (x, y, z, nx, ny) => { const k = ny > 0.5 ? 1 : 0.6 + 0.4 * (y + 0.5 > 0.5 ? (y) : y); const c = mixc(lin(0xd9c3a0), lin(0xf0e2c4), clamp(y)); return [c[0] * k, c[1] * k, c[2] * k]; });
+      let roof = new THREE.CylinderGeometry(0.0, 0.8, 0.16, 4, 1); roof.rotateY(Math.PI / 4); roof.scale(1.0, 1, 1.0); roof.translate(0, 1.07, 0);
+      roof = colorize(roof, (x, y) => { const t = clamp((y - 1.0) / 0.16); return mixc(lin(0xb4502c), lin(0xe07a44), 1 - t); });
       return mergeGeos([wall, roof]);
     })();
     const NH = Math.round(780 * density);
@@ -361,8 +376,11 @@ export function createLudus({ density = 1, seed = 5 } = {}) {
         vec3 c = vec3(sin(a) * R + 10.0, 26.0 + aB.y * 22.0 + sin(a * 2.0 + aB.x) * 2.5, cos(a) * R * 0.7 + 60.0);
         float ca = cos(-a), sa = sin(-a); p.xz = mat2(ca, -sa, sa, ca) * p.xz;
         gl_Position = projectionMatrix * viewMatrix * vec4(c + p, 1.0); }`,
-      fragmentShader: `uniform vec3 uCol; void main(){ gl_FragColor = vec4(uCol, 1.0); #include <tonemapping_fragment>
-        #include <colorspace_fragment> }`,
+      fragmentShader: `uniform vec3 uCol;
+      void main(){ gl_FragColor = vec4(uCol, 1.0);
+      #include <tonemapping_fragment>
+      #include <colorspace_fragment>
+      }`,
     });
     const birds = new THREE.InstancedMesh(bg, bm, NBd); birds.frustumCulled = false; birds.name = 'birds'; group.add(birds);
     for (let i = 0; i < NBd; i++) birds.setMatrixAt(i, new THREE.Matrix4());
@@ -385,5 +403,6 @@ export function createLudus({ density = 1, seed = 5 } = {}) {
     setDensity(d) { for (const [mesh, n] of treeMeshes) mesh.count = Math.floor(n * d); cityObjs.houses.count = Math.floor(cityObjs.houses.instanceMatrix.count * d); cityObjs.wins.count = Math.floor(cityObjs.nWin * d); },
     dispose() { group.traverse((o) => { if (o.geometry) o.geometry.dispose(); if (o.material) (Array.isArray(o.material) ? o.material : [o.material]).forEach((m) => m.dispose()); }); },
   };
+  api.setDensity(density);
   return api;
 }

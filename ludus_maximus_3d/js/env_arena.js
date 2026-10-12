@@ -65,12 +65,9 @@ function sweep(segs, N, { skip, tint, uvM = 6 } = {}) {
       const e2 = [V[2].p[0] - V[0].p[0], V[2].p[1] - V[0].p[1], V[2].p[2] - V[0].p[2]];
       const cr = [e1[1] * e2[2] - e1[2] * e2[1], e1[2] * e2[0] - e1[0] * e2[2], e1[0] * e2[1] - e1[1] * e2[0]];
       const dn = V[0].n; const flip = cr[0] * dn[0] + cr[1] * dn[1] + cr[2] * dn[2] < 0;
-      const order = flip ? [0, 2, 1, 1, 2, 3] : [0, 1, 2, 2, 1, 3];
-      // (0,1,2) vs (0,2,1): for the flipped case use (0,2,1) and (1,2,3) reversed => (1,2,3)->(1,3,2)? keep consistent:
       const tris = flip ? [[0, 2, 1], [1, 2, 3]] : [[0, 1, 2], [2, 1, 3]];
       // second triangle winding must match first; (2,1,3) is the consistent partner of (0,1,2); (1,2,3) of (0,2,1)
       for (const tri of tris) for (const k of tri) { const q = V[k]; pos.push(...q.p); nor.push(...q.n); uv.push(...q.uv); col.push(...q.c); }
-      void order;
     }
   }
   const g = new THREE.BufferGeometry();
@@ -255,7 +252,7 @@ export function createArena({ crowd = 3700, density = 1, decalRes = 2048, seed =
 
   // ---------------- void arches, archivolts, columns, windows, niches ----------------
   const voidMat = new THREE.MeshBasicMaterial({ vertexColors: true, color: 0xffffff });
-  const archBase = archShape(1.15, 2.9, 1.15), voidGeo = new THREE.ShapeGeometry(archBase, 10);
+  const archBase = archShape(1.15, 2.9, 1.15), voidGeo = new THREE.ShapeGeometry(archBase, 6);
   { const p = voidGeo.attributes.position, c = []; for (let i = 0; i < p.count; i++) { const t = Math.min(1, p.getY(i) / 4); c.push(0.012 + 0.05 * t, 0.009 + 0.03 * t, 0.02 + 0.045 * t); } voidGeo.setAttribute('color', new THREE.Float32BufferAttribute(c, 3)); }
   const BAYS = 60;
   const outer = arcThetas(FD, BAYS, 0.5), pier = arcThetas(FD, BAYS, 0);   // arches at bay centers, columns at boundaries
@@ -269,7 +266,7 @@ export function createArena({ crowd = 3700, density = 1, decalRes = 2048, seed =
   // archivolt (stone ring around each opening)
   const hole = new THREE.Path(); hole.moveTo(-1.15, 0); hole.lineTo(-1.15, 2.9); hole.absellipse(0, 2.9, 1.15, 1.15, Math.PI, 0, true); hole.lineTo(1.15, 0); hole.lineTo(-1.15, 0);
   const ringShape = new THREE.Shape(); ringShape.moveTo(-1.5, 0); ringShape.lineTo(1.5, 0); ringShape.lineTo(1.5, 2.9); ringShape.absellipse(0, 2.9, 1.5, 1.5, 0, Math.PI, false); ringShape.lineTo(-1.5, 0); ringShape.holes.push(hole);
-  const ringGeo = prepGeo(new THREE.ExtrudeGeometry(ringShape, { depth: 0.45, bevelEnabled: false, curveSegments: 10 }), { uvScale: 0.25 });
+  const ringGeo = prepGeo(new THREE.ExtrudeGeometry(ringShape, { depth: 0.45, bevelEnabled: false, curveSegments: 4 }), { uvScale: 0.25 });
   { const c = ringGeo.attributes.color, p = ringGeo.attributes.position; for (let i = 0; i < p.count; i++) { const k = 0.8 + 0.2 * Math.min(1, p.getY(i) / 4); c.setXYZ(i, k, k, k); } }
   const ringMesh = new THREE.InstancedMesh(ringGeo, stoneMat, archM.length); ringMesh.castShadow = ringMesh.receiveShadow = true;
   archM.forEach((m, i) => { const mm = m.clone(); const p = new THREE.Vector3(), q = new THREE.Quaternion(), sc = new THREE.Vector3(); mm.decompose(p, q, sc); const fwd = new THREE.Vector3(0, 0, 1).applyQuaternion(q); p.addScaledVector(fwd, -0.05); ringMesh.setMatrixAt(i, new THREE.Matrix4().compose(p, q, sc)); });
@@ -311,7 +308,7 @@ export function createArena({ crowd = 3700, density = 1, decalRes = 2048, seed =
   const gateFrame = (() => {
     const o = new THREE.Shape(); o.moveTo(-hw - 0.8, 0); o.lineTo(hw + 0.8, 0); o.lineTo(hw + 0.8, PH + 0.1); o.lineTo(-hw - 0.8, PH + 0.1); o.lineTo(-hw - 0.8, 0);
     const h = new THREE.Path(); h.moveTo(-hw, 0); h.lineTo(hw, 0); h.lineTo(hw, gh); h.absellipse(0, gh, hw, rise, 0, Math.PI, false); h.lineTo(-hw, 0); o.holes.push(h);
-    const g = prepGeo(new THREE.ExtrudeGeometry(o, { depth: 0.9, bevelEnabled: false, curveSegments: 12 }), { uvScale: 0.17 }); g.translate(0, 0, -0.45); return g;
+    const g = prepGeo(new THREE.ExtrudeGeometry(o, { depth: 0.9, bevelEnabled: false, curveSegments: 8 }), { uvScale: 0.17 }); g.translate(0, 0, -0.45); return g;
   })();
   const tunnelGeo = new THREE.BoxGeometry(hw * 2 + 0.1, PH, 3.6); tunnelGeo.translate(0, PH / 2, -1.8 - 0.4);
   const tunnelMat = new THREE.MeshBasicMaterial({ color: 0x0b0912, side: THREE.BackSide });
@@ -350,7 +347,7 @@ export function createArena({ crowd = 3700, density = 1, decalRes = 2048, seed =
   const brMesh = new THREE.InstancedMesh(brGeo, bronzeMat, 4);
   brPos.forEach(([x, z], i) => { brMesh.setMatrixAt(i, new THREE.Matrix4().makeTranslation(x, 0, z)); flamePts.push({ x, y: 1.3, z, s: 1.7 }); });
   brMesh.castShadow = true; group.add(brMesh);
-  const flames = createFlames(flamePts, { glowScale: 5 }); group.add(flames.group);
+  const flames = createFlames(flamePts, { glowScale: 3.4 }); group.add(flames.group);
 
   // ---------------- banners (vertex sway) + masts ----------------
   const banGeo = new THREE.PlaneGeometry(1.4, 3.6, 3, 12); banGeo.translate(0, -1.8, 0);
@@ -382,18 +379,9 @@ export function createArena({ crowd = 3700, density = 1, decalRes = 2048, seed =
 
   // ---------------- velarium: translucent striped sails ----------------
   const SAILS = 30, SEG = 6, RAD = 7, vN = SAILS * SEG, dInV = 5.5, dOutV = FD - 0.7;
-  const vPos = [], vUv = [], vCol = [], vSw = [], vIdx = [];
+  const vIdx = [];
   const cream = C(0xf3e6c8), terra = C(0xc4663f);
-  for (let r = 0; r <= RAD; r++) for (let j = 0; j <= vN; j++) {
-    const th = (j / vN) * TAU, f = (j % SEG) / SEG, sIdx = Math.floor(j / SEG) % 2 === 0 ? cream : terra, fr = j === vN ? 1 : f;
-    const sr = r / RAD, dd = lerp(dInV, dOutV, sr), p = P(dd, th);
-    const fSail = (j % SEG === 0 && j > 0 && j < vN) ? 0 : fr; void fSail;
-    const sag = Math.sin(Math.PI * f) * (0.55 + 0.9 * Math.sin(Math.PI * sr)) * (0.3 + 0.7 * sr);
-    vPos.push(p[0], lerp(15.0, 21.2, Math.pow(sr, 0.9)) - sag, p[1]);
-    vUv.push(f, sr); const c = ((Math.floor(Math.min(j, vN - 1) / SEG) % 2) === 0) ? cream : terra; void sIdx;
-    vCol.push(c.r, c.g, c.b); vSw.push(Math.sin(Math.PI * f) * Math.sin(Math.PI * Math.min(1, sr * 1.15)) * (0.4 + 0.6 * (1 - sr)));
-  }
-  // sails need their own vertices per sail edge for u in 0..1: duplicate per sail by building quads separately
+  // each sail owns its vertices (uv.x 0..1 per sail, parity picks cream/terracotta via vertex color)
   const sPos = [], sUv = [], sCol = [], sSw = [];
   for (let sIdx = 0; sIdx < SAILS; sIdx++) {
     const c = sIdx % 2 === 0 ? cream : terra, base = sPos.length / 3;
@@ -405,7 +393,6 @@ export function createArena({ crowd = 3700, density = 1, decalRes = 2048, seed =
     }
     for (let r = 0; r < RAD; r++) for (let k = 0; k < SEG; k++) { const a = base + r * (SEG + 1) + k, b = a + 1, c2 = a + SEG + 1, d2 = c2 + 1; vIdx.push(a, c2, b, b, c2, d2); }
   }
-  void vPos; void vUv; void vCol; void vSw;
   const velGeo = new THREE.BufferGeometry(); velGeo.setIndex(vIdx);
   velGeo.setAttribute('position', new THREE.Float32BufferAttribute(sPos, 3)); velGeo.setAttribute('uv', new THREE.Float32BufferAttribute(sUv, 2));
   velGeo.setAttribute('color', new THREE.Float32BufferAttribute(sCol, 3)); velGeo.setAttribute('aSway', new THREE.Float32BufferAttribute(sSw, 1)); velGeo.computeVertexNormals();
@@ -420,10 +407,10 @@ export function createArena({ crowd = 3700, density = 1, decalRes = 2048, seed =
   // ---------------- crowd: ONE InstancedMesh, animated in the vertex shader ----------------
   const parts = [];
   const addPart = (g, id) => { g = g.toNonIndexed(); const n = g.attributes.position.count; g.setAttribute('aPart', new THREE.BufferAttribute(new Float32Array(n).fill(id), 1)); parts.push(g); };
-  { const g = new THREE.CylinderGeometry(0.17, 0.15, 0.62, 6, 1); g.translate(0, 0.39, 0); addPart(g, 0); }
-  { const g = new THREE.IcosahedronGeometry(0.12, 0); g.translate(0, 0.86, 0.01); addPart(g, 1); }
-  { const g = new THREE.CylinderGeometry(0.04, 0.032, 0.34, 4, 1, true); g.translate(-0.21, 0.51, 0); addPart(g, 2); }
-  { const g = new THREE.CylinderGeometry(0.04, 0.032, 0.34, 4, 1, true); g.translate(0.21, 0.51, 0); addPart(g, 3); }
+  { const g = new THREE.CylinderGeometry(0.2, 0.15, 0.62, 6, 1); g.translate(0, 0.39, 0); addPart(g, 0); }
+  { const g = new THREE.IcosahedronGeometry(0.135, 0); g.translate(0, 0.88, 0.01); addPart(g, 1); }
+  { const g = new THREE.CylinderGeometry(0.04, 0.032, 0.34, 4, 1, true); g.translate(-0.25, 0.51, 0); addPart(g, 2); }
+  { const g = new THREE.CylinderGeometry(0.04, 0.032, 0.34, 4, 1, true); g.translate(0.25, 0.51, 0); addPart(g, 3); }
   const crowdGeo = mergeGeos(parts.map((g) => { if (!g.attributes.uv) g.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(g.attributes.position.count * 2), 2)); return g; }));
   // seats
   const seats = [];
@@ -467,16 +454,16 @@ export function createArena({ crowd = 3700, density = 1, decalRes = 2048, seed =
         float side = aPart < 2.5 ? -1.0 : 1.0;
         float raise = clamp(uHype * 1.6 - aRand.z * 0.9 + pulse * 1.3, 0.0, 1.0);
         float a2 = raise * (2.55 + 0.45 * sin(uTime * 10.0 + ph));
-        vec2 rel = vec2(position.x - side * 0.21, position.y - 0.68);
+        vec2 rel = vec2(position.x - side * 0.25, position.y - 0.68);
         float cs = cos(a2), sn = sin(a2) * side;
         vec2 r = vec2(rel.x * cs - rel.y * sn, rel.x * sn + rel.y * cs);
-        transformed.x = side * 0.21 + r.x + idle;
+        transformed.x = side * 0.25 + r.x + idle;
         transformed.y = (0.68 + r.y) * stretch + hop;
       }`,
     fPars: 'varying float vPart; varying float vSkin; varying float vHair; varying float vLy;',
     fBody: `
       vec3 skin = mix(vec3(0.62, 0.34, 0.18), vec3(0.17, 0.06, 0.027), vSkin);
-      if (vPart > 0.5 && vPart < 1.5) { vec3 hairC = mix(vec3(0.012, 0.009, 0.006), vec3(0.2, 0.1, 0.04), vHair); diffuseColor.rgb = vLy > 0.895 ? hairC : skin; }
+      if (vPart > 0.5 && vPart < 1.5) { vec3 hairC = mix(vec3(0.012, 0.009, 0.006), vec3(0.2, 0.1, 0.04), vHair); diffuseColor.rgb = vLy > 0.925 ? hairC : skin; }
       else if (vPart > 1.5) diffuseColor.rgb = mix(skin, diffuseColor.rgb, step(0.45, vHair));
       diffuseColor.rgb *= 0.55 + 0.45 * smoothstep(0.05, 0.85, vLy);`,
   });

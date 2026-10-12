@@ -2,7 +2,7 @@
 import * as THREE from 'three';
 import { createPost, createDynamicRes, TIERS, detectTier } from './post.js';
 import { createAudio } from './audio.js';
-import { FightView } from './fightview.js';
+import { Game } from './game.js';
 
 const q = new URLSearchParams(location.search);
 const canvas = document.getElementById('gl'), ui = document.getElementById('ui');
@@ -21,11 +21,9 @@ const post = createPost(renderer, dummy, camera, { tier });
 const dyn = createDynamicRes(post, { onTierDemote() { const order = ['high', 'medium', 'low']; const i = order.indexOf(post.tier); if (i < order.length - 1) post.setTier(order[i + 1]); } });
 post.setScene = (s) => { post.composer.passes[0].scene = s; };
 
-const view = new FightView({ renderer, post, camera, audio, host: ui, tier });
-post.setScene(view.scene);
-
-const resize = () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); post.setSize(innerWidth, innerHeight); view.resize(innerWidth, innerHeight); };
-resize(); addEventListener('resize', resize);
+const game = new Game({ renderer, camera, post, audio, ui, tier });
+const resize = () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); post.setSize(innerWidth, innerHeight); game.resize(innerWidth, innerHeight); };
+addEventListener('resize', resize);
 
 // audio unlock on the first gesture (iOS needs touchend)
 const unlock = () => { audio.unlock && audio.unlock().then((ok) => { if (ok) for (const ev of ['pointerdown', 'touchend', 'keydown']) removeEventListener(ev, unlock, true); }); };
@@ -50,22 +48,24 @@ function loop(now) {
   if (q.get('manual')) { requestAnimationFrame(loop); last = now; return; }
   const dt = Math.min(0.1, (now - last) / 1000); last = now; clock += dt; frames++;
   dyn.tick(dt * 1000);
-  view.frame(dt, clock);
+  game.frame(dt, clock);
   renderer.info.reset(); post.render(dt, clock);
   requestAnimationFrame(loop);
 }
 
 const api = window.__LM3D = {
-  THREE, renderer, camera, post, view, audio, tier,
-  stats() { const i = renderer.info; return { calls: i.render.calls, triangles: i.render.triangles, geometries: i.memory.geometries, textures: i.memory.textures, tier: post.tier, scale: post.scale, frames, cam: [camera.position.x, camera.position.y, camera.position.z].map((v) => +v.toFixed(1)), fov: +camera.fov.toFixed(1), phase: view.phase, shot: view.dir.pose.shot }; },
+  THREE, renderer, camera, post, game, audio, tier,
+  get view() { return game.fightView; },
+  stats() { const i = renderer.info; return { calls: i.render.calls, triangles: i.render.triangles, geometries: i.memory.geometries, textures: i.memory.textures, tier: post.tier, scale: post.scale, frames, cam: [camera.position.x, camera.position.y, camera.position.z].map((v) => +v.toFixed(1)), fov: +camera.fov.toFixed(1), scene: game.scene, phase: game.fightView && game.fightView.phase, shot: game.fightView && game.fightView.dir.pose.shot }; },
   makeDemoFight,
-  startDemo(o = {}) { const F = makeDemoFight(o); api.F = F; return view.start(F, o); },
+  startDemo(o = {}) { const F = makeDemoFight(o); api.F = F; game.setScene('fight'); return game.fightView.start(F, o); },
   // deterministic stepping for screenshots (headless software GL is slow): advance N frames of dt
-  advance(seconds, dt = 1 / 30) { const n = Math.round(seconds / dt); for (let i = 0; i < n; i++) { clock += dt; view.frame(dt, clock); } renderer.info.reset(); post.render(dt, clock); return api.stats(); },
+  advance(seconds, dt = 1 / 30) { const n = Math.round(seconds / dt); for (let i = 0; i < n; i++) { clock += dt; game.frame(dt, clock); } renderer.info.reset(); post.render(dt, clock); return api.stats(); },
 };
-requestAnimationFrame(loop);
-setTimeout(() => { const b = document.getElementById('boot'); b.style.opacity = 0; setTimeout(() => b.remove(), 700); }, 200);
-if (q.get('demo')) {
-  const o = { a: q.get('a') || undefined, b: q.get('b') || undefined, lvl: +(q.get('lvl') || 5), team: +(q.get('team') || 0), auto: q.get('auto') !== '0', haz: q.get('haz') === '1' };
-  api.startDemo(o);
-}
+const hideBoot = () => { const b = document.getElementById('boot'); if (!b) return; b.style.opacity = 0; setTimeout(() => b.remove(), 700); };
+(async () => {
+  await game.init(); resize(); requestAnimationFrame(loop); hideBoot();
+  if (q.get('demo')) { const o = { a: q.get('a') || undefined, b: q.get('b') || undefined, lvl: +(q.get('lvl') || 5), team: +(q.get('team') || 0), auto: q.get('auto') !== '0', haz: q.get('haz') === '1' }; api.startDemo(o); return; }
+  if (q.get('new')) { game.newGame({ name: 'Ludus Aurelia', color: '#2f78c4' }); if (q.get('rich')) { game.S.gold += 5000; game.S.fame += 300; } game.setScene('hub'); game.refresh(); if (!game.S.glads.length && !q.get('empty')) game.open('recruit', { first: true }); return; }
+  await game.boot();
+})();
