@@ -186,8 +186,8 @@
   ACT.drill = (el) => {
     const g = gOf(+el.dataset.id); if (!g || !L.canDrill(S, g)) return toast('Set a training activity first. One drill per fighter each week.');
     U.drillRun = { g: g.id, t0: performance.now(), done: false };
-    modal(`<h2>Training drill</h2><div class="muted" style="margin-bottom:6px">${esc(g.name)} drills ${D.SN[L.activity(g).s]}. Stop the marker in the green zone for a bonus on this week's gain.</div><div class="drillbar"><div class="drillz g"></div><div class="drillz p"></div><div class="drillm" id="dm"></div></div><button class="btn full red" data-a="drillstop">STOP!</button><div id="dres" class="big" style="font-size:22px;margin-top:10px"></div>`);
-    const loop = () => { const r = U.drillRun; const m = document.getElementById('dm'); if (!r || r.done || !m) return; const t = (performance.now() - r.t0) / 1000 * 1.3; const ph = t % 2; const p = ph < 1 ? ph : 2 - ph; m.style.left = `calc(${p * 100}% - 4px)`; r.p = p; requestAnimationFrame(loop); };
+    modal(`<h2>Training drill</h2><div class="muted" style="margin-bottom:6px">${esc(g.name)} drills ${D.SN[L.activity(g).s]}. Stop the marker in the green zone for a bonus on this week's gain. A better Palaestra slows the marker and adds a little bonus.</div><div class="drillbar"><div class="drillz g"></div><div class="drillz p"></div><div class="drillm" id="dm"></div></div><button class="btn full red" data-a="drillstop">STOP!</button><div id="dres" class="big" style="font-size:22px;margin-top:10px"></div>`);
+    const loop = () => { const r = U.drillRun; const m = document.getElementById('dm'); if (!r || r.done || !m) return; const t = (performance.now() - r.t0) / 1000 * L.drillSpeed(S); const ph = t % 2; const p = ph < 1 ? ph : 2 - ph; m.style.left = `calc(${p * 100}% - 4px)`; r.p = p; requestAnimationFrame(loop); };
     requestAnimationFrame(loop);
   };
   ACT.drillstop = () => {

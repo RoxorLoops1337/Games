@@ -550,7 +550,9 @@
     if (S.sponsor && S.sponsor.weeks > 0) { S.sponsor.weeks--; if (S.sponsor.weeks <= 0) { const pl = S.sponsor.pledge; if (pl && pl.got >= pl.n) { S.gold += pl.bonus; rep.income += pl.bonus; rep.notes.push(`Pledge kept! The merchant adds a ${pl.bonus} gold bonus.`); } else rep.notes.push(pl ? `Your sponsor deal has ended. Pledge missed (${pl.got}/${pl.n} wins).` : 'Your sponsor deal has ended.'); S.sponsor = null; } }
     const sh = LM.bfx(S, 'shrine'); if (sh.l) { const f = Math.round(sh.v * 60); S.fame += f; if (f) rep.notes.push(`The shrine drew ${f} fame.`); }
     Object.keys(S.entries).forEach((k) => { if (parseInt(k.split(':')[0], 10) <= S.week) delete S.entries[k]; });
-    { const gl = LM.weeklyGoals(S).filter((x) => x.done); if (gl.length) { const pay = gl.length * LM.goalPay(S); S.gold += pay; rep.income += pay; rep.notes.push(`Weekly goals: ${gl.length}/3 done, +${pay} gold.`); } S.wkWins = 0; }
+    { const gl = LM.weeklyGoals(S).filter((x) => x.done); if (gl.length) { const pay = gl.length * LM.goalPay(S); S.gold += pay; rep.income += pay; rep.notes.push(`Weekly goals: ${gl.length}/3 done, +${pay} gold.`); }
+      if (gl.length === 3) { S.goalStreak = (S.goalStreak || 0) + 1; if (S.goalStreak >= 2) { const sb = Math.min(5, S.goalStreak) * LM.goalPay(S); S.gold += sb; rep.income += sb; rep.notes.push(`Goal streak x${S.goalStreak}! +${sb} gold.`); } } else S.goalStreak = 0;
+      S.wkWins = 0; }
     S.week++; S.stats.weeks++; S.glads.forEach((g) => { g.fav = Math.max(0, (g.fav || 0) - 2); });
     if ((S.week - 1) % 12 === 0) {
       S.season = Math.ceil(S.week / 12); rep.season = S.season; const sl = S.sl || { fame: 0, wins: 0, losses: 0, tour: 0 }; const mvp = S.glads.slice().sort((a, b) => (b.sw || 0) - (a.sw || 0))[0];
@@ -846,8 +848,9 @@
 
   // ---------- training drill (tap-timing minigame) ----------
   LM.drillMult = (acc) => (acc >= 0.9 ? 0.4 : acc >= 0.7 ? 0.25 : acc >= 0.45 ? 0.1 : 0);
+  LM.drillSpeed = (S) => Math.max(0.75, 1.3 - 0.1 * LM.bfx(S, 'palaestra').l);
   LM.canDrill = (S, g) => g.act && D.ACTS.find((a) => a.id === g.act).t === 'train' && !(g.drill && g.drill.week === S.week) && g.inj <= 0;
-  LM.setDrill = (S, g, acc) => { g.drill = { week: S.week, m: LM.drillMult(acc) }; return g.drill.m; };
+  LM.setDrill = (S, g, acc) => { const base = LM.drillMult(acc); g.drill = { week: S.week, m: base > 0 ? base + 0.03 * LM.bfx(S, 'palaestra').l : 0 }; return g.drill.m; };
 
   // ---------- random events ----------
   const rg = (S, pred) => { const a = S.glads.filter(pred || (() => true)); return a.length ? pick(a) : null; };

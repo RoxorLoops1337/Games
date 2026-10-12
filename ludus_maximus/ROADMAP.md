@@ -203,5 +203,14 @@ Weekly goals board (win 2 fights, claim the bounty, face the horde; each pays go
 ## Next ideas
 - [ ] 91. Entrance animations per style (84, 88)
 - [ ] 92. Fight replay and crowd audio (55, 63)
-- [ ] 93. Training dummy upgrades (71)
-- [ ] 94. Goal streak bonus for finishing all three goals several weeks in a row
+- [x] 93. Training dummy upgrades (71)
+- [x] 94. Goal streak bonus for finishing all three goals several weeks in a row
+
+## Round 22 shipped
+Palaestra level now slows the training drill marker and adds a small bonus (training dummy upgrades), and a goal streak pays extra when you finish all three weekly goals in consecutive weeks.
+
+## Next ideas
+- [ ] 95. Entrance animations per style (91)
+- [ ] 96. Fight replay and crowd audio (92)
+- [ ] 97. Streak shown on the Weekly goals card
+- [ ] 98. A second drill type (reaction test) for Sparring Ring level 3
