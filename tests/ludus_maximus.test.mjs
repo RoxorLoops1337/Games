@@ -329,5 +329,16 @@ ok(strongWins >= 17, `level 10 beats level 1 (${strongWins}/20)`);
   const cr = LM.crier(S9, { nicks: [] }); ok((S9.forum || []).length >= cr.length && S9.forum.length > 0, 'headlines are saved to the forum');
 }
 
+// round 10: infirmary, crowd favorite, bounty board
+{
+  const S10 = LM.newGame({ name: 'R10' }); const g = LM.makeGlad({ id: S10.nextId++, style: 'thraex', lvl: 5 }); S10.glads.push(g); S10.gold = 1000;
+  g.inj = 3; const g0 = S10.gold; ok(LM.treat(S10, g, 'doc') === '' && g.inj === 1 && S10.gold < g0, 'the physician cuts two weeks');
+  S10.gold = 0; ok(LM.treat(S10, g, 'pou') !== '', 'treatment needs gold'); S10.gold = 500; let healed = 0; for (let i = 0; i < 30; i++) { g.inj = 2; LM.treat(S10, g, 'pou'); if (g.inj === 1) healed++; } ok(healed > 8 && healed < 30, 'the poultice works sometimes');
+  g.fav = 0; LM.favGain(g, true, 0); LM.favGain(g, true, 120); ok(g.fav === 16, 'wins raise crowd favorite'); LM.favGain(g, false, 0); ok(g.fav === 12, 'losses lower it');
+  g.fav = 100; ok(Math.abs(LM.favMul([g]) - 1.2) < 1e-9 && LM.favMul([{ fav: 0 }]) === 1, 'crowd favorite boosts purses by up to 20%');
+  S10.week = 3; ok(LM.bountyReady(S10), 'the bounty board is open'); const bo = LM.bountyOpp(S10, g); ok(bo.nick === 'Outlaw', 'bounty targets are outlaws');
+  const gold0 = S10.gold, br = LM.bountyResult(S10, true); ok(br.gold > 0 && S10.gold === gold0 + br.gold && !LM.bountyReady(S10), 'a claimed bounty pays once a week');
+}
+
 console.log(`ludus_maximus: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

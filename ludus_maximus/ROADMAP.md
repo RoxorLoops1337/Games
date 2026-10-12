@@ -94,7 +94,16 @@ Town Crier headlines in the week summary, nicknames earned from deeds, a bobbing
 Champion duel against the rival owner's best fighter, small stat perks for deed nicknames, a Forum log of past headlines, and seasonal arena decorations (blossoms, sun glow, leaves, snow).
 
 ## Next ideas
-- [ ] 45. Gladiator injuries with a recovery minigame at the infirmary
-- [ ] 46. Weekly bounty board with named targets
-- [ ] 47. Crowd favorite meter per fighter that affects purses
+- [x] 45. Gladiator injuries with a recovery minigame at the infirmary
+- [x] 46. Weekly bounty board with named targets
+- [x] 47. Crowd favorite meter per fighter that affects purses
 - [ ] 48. Replay the last fight from the results screen
+
+## Round 10 shipped
+Infirmary treatments (poultice or physician), per-fighter crowd favorite that lifts purses up to 20%, and a weekly Bounty board duel against a named outlaw. Replay (48) is deferred.
+
+## Next ideas
+- [ ] 48. Replay the last fight from the results screen
+- [ ] 49. Fighter mood events (a bad night, a good omen)
+- [ ] 50. Buildable gym equipment with visible upgrades on the map
+- [ ] 51. Weekly special market with rare gear

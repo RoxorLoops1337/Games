@@ -456,11 +456,11 @@
     let ft = 0; glads.forEach((g) => { ft += (D.TRAITS[g.trait].fame || 0); ['weapon', 'shield', 'armor', 'helm', 'charm'].forEach((s) => { const it = g.gear[s]; if (it) it.af.forEach((a) => { if (a.id === 'showy') ft += 0.1 * a.v; }); }); });
     fame *= 1 + ft / glads.length + LM.facPerks(S).fame + (LM.fest(S, ev.week) === 'mars' ? 0.25 : 0);
     const perks = S.perks || {}; gold *= LM.diffGold(S); gold *= 1 + 0.1 * (perks.gold || 0) + (LM.fest(S, ev.week) === 'jupiter' ? 0.3 : 0) + LM.facPerks(S).gold + LM.relicGold(S) + (glads.some((g) => g.rune && g.rune.k === 'first') ? 0.1 : 0) + (res.win || res.place ? LM.bfx(S, 'stands').v : 0); fame *= 1 + (res.win ? LM.bfx(S, 'stands').v * 0.5 : 0);
-    gold = Math.round(gold); fame = Math.round(fame); S.gold += gold; S.fame += fame; rep.gold = gold; rep.fame = fame;
+    gold *= LM.favMul(glads); gold = Math.round(gold); fame = Math.round(fame); S.gold += gold; S.fame += fame; rep.gold = gold; rep.fame = fame;
     const oppLvl = Math.max(...ev.opps.map((o) => o.lvl));
     const big = ev.kind === 'tourney' || ev.kind === 'grand' ? 1.6 : 1;
     glads.forEach((g) => {
-      const win = res.win; const xp = Math.round((win ? 24 + oppLvl * 5 : 12 + oppLvl * 2) * big);
+      const win = res.win; LM.favGain(g, win, res.hype || 0); const xp = Math.round((win ? 24 + oppLvl * 5 : 12 + oppLvl * 2) * big);
       const up = LM.addXp(g, xp); rep.xp.push({ id: g.id, xp, up }); if (up.length) rep.lvl.push({ id: g.id, to: up[up.length - 1] });
       if (win) { g.rec.w++; g.sw = (g.sw || 0) + 1; g.mo = clamp(g.mo + 10, 0, 100); } else { g.rec.l++; g.mo = clamp(g.mo - 8, 0, 100); }
       g.fame += Math.round(fame / glads.length); g.en = clamp(g.en - 25, 0, 100);
@@ -549,7 +549,7 @@
     if (S.sponsor && S.sponsor.weeks > 0) { S.sponsor.weeks--; if (S.sponsor.weeks <= 0) { const pl = S.sponsor.pledge; if (pl && pl.got >= pl.n) { S.gold += pl.bonus; rep.income += pl.bonus; rep.notes.push(`Pledge kept! The merchant adds a ${pl.bonus} gold bonus.`); } else rep.notes.push(pl ? `Your sponsor deal has ended. Pledge missed (${pl.got}/${pl.n} wins).` : 'Your sponsor deal has ended.'); S.sponsor = null; } }
     const sh = LM.bfx(S, 'shrine'); if (sh.l) { const f = Math.round(sh.v * 60); S.fame += f; if (f) rep.notes.push(`The shrine drew ${f} fame.`); }
     Object.keys(S.entries).forEach((k) => { if (parseInt(k.split(':')[0], 10) <= S.week) delete S.entries[k]; });
-    S.week++; S.stats.weeks++;
+    S.week++; S.stats.weeks++; S.glads.forEach((g) => { g.fav = Math.max(0, (g.fav || 0) - 2); });
     if ((S.week - 1) % 12 === 0) {
       S.season = Math.ceil(S.week / 12); rep.season = S.season; const sl = S.sl || { fame: 0, wins: 0, losses: 0, tour: 0 }; const mvp = S.glads.slice().sort((a, b) => (b.sw || 0) - (a.sw || 0))[0];
       rep.recap = { wins: S.stats.wins - sl.wins, losses: S.stats.losses - sl.losses, fame: S.fame - sl.fame, tour: S.stats.tourneys - sl.tour, mvp: mvp && (mvp.sw || 0) > 0 ? { name: mvp.name, w: mvp.sw, id: mvp.id } : null };
@@ -648,6 +648,22 @@
     S.champWeek = S.week; if (!win) { if (S.rowner) S.rowner.w++; return { gold: 0, fame: 0 }; }
     const gold = Math.round((60 + 40 * LM.maxLeague(S)) * LM.diffGold(S)), fame = 60 + 20 * LM.maxLeague(S); S.gold += gold; S.fame += fame;
     S.news = S.news || []; S.news.push(`${S.rowner ? S.rowner.name : 'The rival owner'} lost their champion to you and slinks away (+${fame} fame).`); S.rowner = null; S.stats.champs = (S.stats.champs || 0) + 1; return { gold, fame };
+  };
+  // infirmary treatment, crowd favorite, bounty board
+  LM.treat = (S, g, kind) => {
+    if (g.inj <= 0) return 'Not injured'; const ml = LM.maxLeague(S); const cost = kind === 'doc' ? 60 + 25 * ml : 20 + 10 * ml;
+    if (S.gold < cost) return 'Need ' + cost + ' gold'; S.gold -= cost;
+    if (kind === 'doc') g.inj = Math.max(0, g.inj - 2); else if (rnd() < 0.6) g.inj = Math.max(0, g.inj - 1); else return '';
+    return '';
+  };
+  LM.treatCost = (S, kind) => (kind === 'doc' ? 60 + 25 * LM.maxLeague(S) : 20 + 10 * LM.maxLeague(S));
+  LM.favMul = (glads) => 1 + 0.2 * (glads.reduce((a, g) => a + (g.fav || 0), 0) / Math.max(1, glads.length)) / 100;
+  LM.favGain = (g, win, hype) => { g.fav = clamp((g.fav || 0) + (win ? (hype >= 100 ? 10 : 6) : -4), 0, 100); };
+  LM.bountyReady = (S) => S.week >= 2 && S.bountyWeek !== S.week;
+  LM.bountyOpp = (S, g) => { const o = LM.champOpp(S, g); o.nick = 'Outlaw'; o.ludus = 'Wanted'; o.id = 'bounty'; return o; };
+  LM.bountyResult = (S, win) => {
+    S.bountyWeek = S.week; if (!win) return { gold: 0, fame: 0 };
+    const gold = Math.round((50 + 35 * LM.maxLeague(S)) * LM.diffGold(S)), fame = 20 + 10 * LM.maxLeague(S); S.gold += gold; S.fame += fame; S.stats.bounties = (S.stats.bounties || 0) + 1; return { gold, fame };
   };
   LM.crier = (S, rep) => {
     const out = (S.news || []).splice(0); const top = S.glads.slice().sort((a, b) => b.fame - a.fame)[0];
