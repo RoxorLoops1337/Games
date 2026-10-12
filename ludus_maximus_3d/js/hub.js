@@ -53,6 +53,7 @@ const WEATHER = {
 export function presetFor(hour, weather = 'clear') {
   let base = weather === 'night' ? Object.assign({}, TOD.night) : todFromHour(clamp(hour, 6.2, 19.2));
   if (WEATHER[weather]) base = lerpTOD(base, WEATHER[weather], weather === 'rain' ? 0.85 : weather === 'dust' ? 0.7 : 0.55);
+  base.hemiInt *= weather === 'night' ? 1.0 : 1.2;
   if (weather !== 'night') { const f = clamp((hour - 7) / 12); base.sunAz = 205 + 55 * f; base.sunElev = (weather === 'rain' ? 24 : 24 + 10 * Math.sin(Math.PI * f)) * (hour < 7 || hour > 18.4 ? 0.7 : 1); }
   return base;
 }
