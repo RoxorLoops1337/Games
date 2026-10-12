@@ -754,6 +754,7 @@ export function createFx(scene, opts = {}) {
     for (let i = shocks.length - 1; i >= 0; i--) if (fx.time - shocks[i].t0 > shocks[i].dur) shocks.splice(i, 1);
     if (decalDirty && fx.time - lastDecalUp > 0.1) { decalTex.needsUpdate = true; decalDirty = false; lastDecalUp = fx.time; } // throttled: a 1024 canvas upload costs a few ms
   };
+  fx.flushDecals = () => { if (decalDirty) { decalTex.needsUpdate = true; decalDirty = false; lastDecalUp = fx.time; } };
   fx.stats = () => ({ drawCalls: root.children.filter((m) => m.visible).length, particlesAdd: addL.alive.length, particlesNorm: norL.alive.length, instAdd: addL.n, instNorm: norL.n, emitters: emitters.length, ribbons: rib.slots.filter((s) => s.on).length });
   fx.group = root; fx.decalTexture = decalTex; fx.decalCanvas = dcv; fx.elements = EL; fx.CELL = CELL;
   fx.setGlyphEm = (v) => { glyphUni.uEm.value = v; };

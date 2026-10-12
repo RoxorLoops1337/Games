@@ -119,7 +119,7 @@ if (ppost) { rt = new THREE.WebGLRenderTarget(W * renderer.getPixelRatio(), H * 
 void main(){ vec3 c = sceneFx(tDiffuse, vUv, uAspect); gl_FragColor = vec4(c,1.0);
  #include <tonemapping_fragment>
  #include <colorspace_fragment>
-}` })); qscene.add(quad); }
+}` })); quad.frustumCulled = false; qscene.add(quad); }
 
 function step(dt) {
   const t = feel.update(dt); simT += t.dt;
@@ -143,7 +143,7 @@ window.__labShot = (secs) => {
   const dt = 1 / 60, n = Math.round(secs / dt); let maxMs = 0, sumMs = 0;
   for (let i = 0; i < n; i++) { const a = performance.now(); step(dt); const b = performance.now() - a; maxMs = Math.max(maxMs, b); sumMs += b; }
   if (Q.get('shake')) { feel.addTrauma(+Q.get('shake')); feel.update(0.016); }
-  renderer.info.reset(); render(); const st = stats(); window.__stat = { ...st, updateMsAvg: +(sumMs / Math.max(1, n)).toFixed(3), updateMsMax: +maxMs.toFixed(2) };
+  fx.flushDecals(); renderer.info.reset(); render(); const st = stats(); window.__stat = { ...st, updateMsAvg: +(sumMs / Math.max(1, n)).toFixed(3), updateMsMax: +maxMs.toFixed(2) };
   return window.__stat;
 };
 window.__labReady = Promise.resolve();
