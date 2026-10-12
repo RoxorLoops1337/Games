@@ -76,7 +76,7 @@
   function damage(F, t, amt, src) {
     t.hp -= amt; t.taken += amt;
     if (t.hp <= 0 && !t.down) {
-      if (t.fx.revive && !t.revived) { t.revived = true; t.hp = Math.round(t.maxhp * 0.2); t.s.inv = 0.6; emit(F, { k: 'revive', dst: t.id }); return; }
+      if (t.fx.revive && !t.revived) { t.revived = true; t.hp = Math.round(t.maxhp * 0.2 * Math.min(1, t.fx.revive)); t.s.inv = 0.6; emit(F, { k: 'revive', dst: t.id }); return; }
       t.hp = 0; t.down = true; t.s = {}; emit(F, { k: 'down', dst: t.id, src: src && src.id }); F.hype += 10;
       if (!alive(F, t.side).length) finish(F, other(t.side));
     }
@@ -133,13 +133,13 @@
       u.hits.push(F.t); u.hits = u.hits.filter((x) => F.t - x <= 3);
       if (u.rk === 'electro' && u.hits.length >= 3 && F.t >= u.elecAt) { u.elecAt = F.t + 7; u.hits.length = 0; emit(F, { k: 'rune', src: u.id, id: 'electro' }); zap(F, u, t, 1.2, 'electro'); }
       if (u.rk === 'phase' && u.hits.length >= 3 && F.t >= u.phaseAt) { u.phaseAt = F.t + 4; u.hits.length = 0; u.s.phase = 3; emit(F, { k: 'rune', src: u.id, id: 'phase' }); }
-      if (fx.thunder) { u.thCnt++; if (u.thCnt >= 3) { u.thCnt = 0; zap(F, u, t, 0.35 * fx.thunder, 'thunder'); } }
+      if (fx.thunder) { u.thCnt++; if (u.thCnt >= 3) { u.thCnt = 0; zap(F, u, t, 0.3 * fx.thunder, 'thunder'); } }
     }
     if (u.rk === 'conq' && (u.stk.cq || 0) >= 8) heal(F, u, dmg * 0.06);
     if (fx.vamp) heal(F, u, dmg * fx.vamp * 0.04);
     if (u.s.rage) heal(F, u, dmg * 0.15);
     if (!t.down && ((fx.bleed && rnd() < fx.bleed * 0.15) || (crit && u.tr.bleedcrit))) { t.s.bleed = { dps: u.atk * 0.1 * DK, t: 4 }; emit(F, { k: 'status', dst: t.id, st: 'bleed' }); }
-    if (t.fx.thorns && !u.down) { const r = Math.round(dmg * t.fx.thorns * 0.06); if (r > 0) { emit(F, { k: 'thorn', src: t.id, dst: u.id, dmg: r }); damage(F, u, r, t); } }
+    if (t.fx.thorns && !u.down) { const r = Math.round(dmg * t.fx.thorns * 0.05); if (r > 0) { emit(F, { k: 'thorn', src: t.id, dst: u.id, dmg: r }); damage(F, u, r, t); } }
     if (!o.noRip && !t.down && !u.down && t.fx.riposte && rnd() < t.fx.riposte * 0.08) strike(F, t, u, { mult: 0.7, noRip: true, noProc: true, tag: 'riposte' });
   }
 
@@ -283,7 +283,7 @@
     if (u.fx.regen) { u.racc += u.maxhp * 0.0025 * u.fx.regen * dt; if (u.racc >= 1) { const h = Math.floor(u.racc); u.racc -= h; heal(F, u, h); } }
     if (u.fx.lastbreath && !u.lbUsed && u.hp < u.maxhp * 0.3) { u.lbUsed = true; u.s.lastB = 5; heal(F, u, u.maxhp * 0.1); emit(F, { k: 'status', dst: u.id, st: 'rage' }); }
     if (s.bleed) { u.bacc += s.bleed.dps * dt; if (u.bacc >= 1) { const d = Math.floor(u.bacc); u.bacc -= d; emit(F, { k: 'bleed', dst: u.id, dmg: d }); damage(F, u, d, null); } }
-    if (u.fx.sear) { u.srT -= dt; if (u.srT <= 0) { u.srT = 0.5; alive(F, other(u.side)).forEach((f) => { if (dist(u, f) < 2.4) { const d = Math.max(1, Math.round(DK * u.atk * 0.03 * u.fx.sear * (60 / (60 + f.def)))); emit(F, { k: 'bleed', dst: f.id, dmg: d, fire: 1 }); damage(F, f, d, u); } }); } }
+    if (u.fx.sear) { u.srT -= dt; if (u.srT <= 0) { u.srT = 0.5; alive(F, other(u.side)).forEach((f) => { if (dist(u, f) < 2.4) { const d = Math.max(1, Math.round(DK * u.atk * 0.025 * u.fx.sear * (60 / (60 + f.def)))); emit(F, { k: 'bleed', dst: f.id, dmg: d, fire: 1 }); damage(F, f, d, u); } }); } }
     if (s.spin) { s.spin.tick -= dt; if (s.spin.tick <= 0) { s.spin.tick = 0.25; emit(F, { k: 'aoe', x: u.x, y: u.y, r: 2, c: '#c2395f' }); alive(F, other(u.side)).forEach((f) => { if (dist(u, f) < 2.1) strike(F, u, f, { mult: 0.4, sure: true, noProc: true, tag: 'tornado' }); }); } }
   }
   function think(F, u, dt) {

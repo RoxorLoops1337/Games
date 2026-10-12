@@ -265,6 +265,15 @@ Item affix balance pass with big samples (2000 fights per affix, a plain item vs
 
 ## Next ideas
 - [ ] 119. Fight replay and crowd audio (55, 63)
-- [ ] 120. Relic balance pass (117)
+- [x] 120. Relic balance pass (117)
 - [ ] 121. More drill types for other buildings (109, 118)
-- [ ] 122. Thorns and Thunder affix tuning (both about 65 to 68%)
+- [x] 122. Thorns and Thunder affix tuning (both about 65 to 68%)
+
+## Round 29 shipped
+Relic balance pass (2000 fights each vs no relic): Phoenix Feather was 80% (revive scaled by value, now 10% HP, 70%), Heart of the Titan 70% (HP 12 to 8%, 64%), Crown of Thorns and the Thorned affix reflect 5% per level (65%), Stormcaller thunder 30% per level (63%), Sunfire burn 5% per level. Relics now average 59%, item affixes 48 to 68%, augments 59 / 63 / 76% by tier. Rule of thumb from the data: a 10% damage edge already wins about 65% of fights, so "balanced" perks should land around 55 to 65%.
+
+## Next ideas
+- [ ] 123. Fight replay and crowd audio (55, 63)
+- [ ] 124. Style-specific augment/affix recommendations in the UI
+- [ ] 125. More drill types for other buildings (109)
+- [ ] 126. Sunfire and Troll's still lead affixes at 67 to 68%
