@@ -253,9 +253,9 @@
     lethal: { n: 'Lethal Tempo', d: 'Each hit grants +6% attack speed (6 stacks). At full stacks you also run 12% faster.', c: '#e0742a' },
     conq: { n: 'Conqueror', d: 'Each hit grants +2.5% damage (8 stacks). At full stacks heal 6% of damage dealt.', c: '#d2412b' },
     electro: { n: 'Electrocute', d: '3 hits within 3s trigger a lightning burst worth 120% damage (every 7s).', c: '#4aa3f0' },
-    grasp: { n: 'Grasp of the Undying', d: 'Every 4s your next hit deals 3.5% of their max HP, heals you 2% and grows your max HP.', c: '#2a9d6f' },
-    phase: { n: 'Phase Rush', d: '3 hits within 3s give +35% move speed and +15% attack speed for 3s (every 8s).', c: '#22b5a0' },
-    first: { n: 'First Strike', d: 'Your first hit on each enemy deals +35% damage. Win bonus: +10% gold.', c: '#f6b82d' },
+    grasp: { n: 'Grasp of the Undying', d: 'Every 5s your next hit deals 2% of their max HP, heals you 1.5% and grows your max HP.', c: '#2a9d6f' },
+    phase: { n: 'Phase Rush', d: '3 hits within 3s give +35% move speed and +40% attack speed for 3s (every 4s).', c: '#22b5a0' },
+    first: { n: 'First Strike', d: 'Your first hit on each enemy deals +120% damage, all hits +5%. Win bonus: +10% gold.', c: '#f6b82d' },
   };
   D.MINORS = {
     coup: { n: 'Coup de Grace', d: '+8% damage to enemies under 40% HP.' },
@@ -425,6 +425,7 @@
     { id: 'w10', n: 'Crowd Pleaser', st: 'wil', ok: (g) => g.rec.w >= 10 }, { id: 'w25', n: 'the Unbroken', st: 'end', ok: (g) => g.rec.w >= 25 && g.rec.l <= 3 },
     { id: 'f300', n: 'Arena Darling', st: 'agi', ok: (g) => g.fame >= 300 }, { id: 'l15', n: 'Old Iron', st: 'str', ok: (g) => g.lvl >= 15 }, { id: 'w50', n: 'the Legend', st: 'str', ok: (g) => g.rec.w >= 50 },
   ];
+  D.CHAMP_TAUNT = { murmillo: 'Break against my shield!', retiarius: 'Tangled before you even start!', thraex: 'Quick blades, quick graves.', hoplomachus: 'My spear finds every gap.', dimachaerus: 'Two swords and no mercy.' };
   D.DIFF_N = ['Relaxed', 'Standard', 'Brutal'];
   G.LM_D = D;
   if (typeof module !== 'undefined') module.exports = D;

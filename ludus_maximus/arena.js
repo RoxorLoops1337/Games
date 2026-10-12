@@ -39,7 +39,7 @@
     let m = 1 + (u.stk.fr || 0) * 0.03 * (u.fx.frenzy || 0); const s = u.s;
     if (u.rk === 'lethal') m += (u.stk.lt || 0) * 0.06;
     if (u.rm.has('celerity')) m += 0.04;
-    if (s.rage) m += 0.6; if (s.rally) m += s.rally.spd; if (s.lastB) m += 0.4; if (s.phase) m += 0.15; if (s.roar) m += 0.15;
+    if (s.rage) m += 0.6; if (s.rally) m += s.rally.spd; if (s.lastB) m += 0.4; if (s.phase) m += 0.4; if (s.roar) m += 0.15;
     if (s.slow) m *= s.slow.f;
     return u.aps * m;
   }
@@ -98,8 +98,8 @@
     if (rnd() > hc) { emit(F, { k: 'miss', src: u.id, dst: t.id }); return 0; }
     const df = t.def * (1 + (t.s.frenzy ? t.s.frenzy.def : 0)) * (1 - (o.ignore || 0)) * (1 - Math.min(0.6, 0.08 * (u.fx.pen || 0)));
     let dmg = DK * u.atk * (o.mult || 1) * (0.85 + rnd() * 0.3) * (60 / (60 + Math.max(0, df))) * dmgMul(F, u, t, o);
-    if (u.rk === 'first') { u.fs = u.fs || new Set(); if (!u.fs.has(t.id)) { u.fs.add(t.id); dmg *= 1.35; } }
-    if (u.rk === 'grasp' && u.graspReady && o.basic) { dmg += t.maxhp * 0.035; u.graspReady = false; u.graspT = 4; heal(F, u, u.maxhp * 0.02); const g = Math.round(u.maxhp * 0.004); u.maxhp += g; u.hp += g; emit(F, { k: 'rune', src: u.id, id: 'grasp' }); }
+    if (u.rk === 'first') { u.fs = u.fs || new Set(); if (!u.fs.has(t.id)) { u.fs.add(t.id); dmg *= 2.2; } dmg *= 1.05; }
+    if (u.rk === 'grasp' && u.graspReady && o.basic) { dmg += t.maxhp * 0.02; u.graspReady = false; u.graspT = 5; heal(F, u, u.maxhp * 0.015); const g = Math.round(u.maxhp * 0.003); u.maxhp += g; u.hp += g; emit(F, { k: 'rune', src: u.id, id: 'grasp' }); }
     const crit = rnd() < clamp(u.crit + (o.critB || 0), 0, 0.8); if (crit) dmg *= 1.6 + 0.15 * (u.fx.critdmg || 0);
     if (t.s.guard) dmg *= 1 - t.s.guard.f;
     if (t.rm.has('bone') && t.noDmgT >= 3) { dmg *= 0.75; t.noDmgT = 0; }
@@ -132,7 +132,7 @@
       if (fx.sprint) u.s.sprint = { v: fx.sprint, t: 1.5 };
       u.hits.push(F.t); u.hits = u.hits.filter((x) => F.t - x <= 3);
       if (u.rk === 'electro' && u.hits.length >= 3 && F.t >= u.elecAt) { u.elecAt = F.t + 7; u.hits.length = 0; emit(F, { k: 'rune', src: u.id, id: 'electro' }); zap(F, u, t, 1.2, 'electro'); }
-      if (u.rk === 'phase' && u.hits.length >= 3 && F.t >= u.phaseAt) { u.phaseAt = F.t + 8; u.hits.length = 0; u.s.phase = 3; emit(F, { k: 'rune', src: u.id, id: 'phase' }); }
+      if (u.rk === 'phase' && u.hits.length >= 3 && F.t >= u.phaseAt) { u.phaseAt = F.t + 4; u.hits.length = 0; u.s.phase = 3; emit(F, { k: 'rune', src: u.id, id: 'phase' }); }
       if (fx.thunder) { u.thCnt++; if (u.thCnt >= 3) { u.thCnt = 0; zap(F, u, t, 0.35 * fx.thunder, 'thunder'); } }
     }
     if (u.rk === 'conq' && (u.stk.cq || 0) >= 8) heal(F, u, dmg * 0.06);

@@ -238,6 +238,15 @@ Per-style entrance animations on the VS splash (stomp, spin, leap, slide, skew),
 
 ## Next ideas
 - [ ] 107. Fight replay and crowd audio (55, 63, 104)
-- [ ] 108. Rival owner champion taunts per style
+- [x] 108. Rival owner champion taunts per style
 - [ ] 109. More drill types for other buildings
-- [ ] 110. Second balance pass on items and runes
+- [x] 110. Second balance pass on items and runes
+
+## Round 26 shipped
+Keystone balance pass. Mirror fights of all six keystones (thraex, murmillo, retiarius at levels 8 and 15, 120 fights per cell) found Grasp at 71% and Phase Rush and First Strike at 30 to 33%. Grasp now hits for 2% every 5s (heal 1.5%), First Strike opens with +120% and gives +5% damage, Phase Rush gives +40% attack speed every 4s. All keystones now sit between 42 and 59%. Champion duel now shows a per-style taunt.
+
+## Next ideas
+- [ ] 111. Fight replay and crowd audio (55, 63)
+- [ ] 112. Minor rune balance pass
+- [ ] 113. More drill types for other buildings (109)
+- [ ] 114. Augment balance pass
