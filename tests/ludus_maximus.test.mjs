@@ -454,5 +454,14 @@ ok(strongWins >= 17, `level 10 beats level 1 (${strongWins}/20)`);
   const sp = find('spy'); S38.rowner = { name: 'Rival', w: 5, l: 0 }; LM.visit(S38, sp, null); ok(S38.rowner.w === 3, 'the spy cuts the rival owner lead'); S38.visitWeek = 0; S38.rowner = null; const f0 = S38.fame; LM.visit(S38, sp, null); ok(S38.fame === f0 + 10, 'the spy gives fame when there is no rival owner');
 }
 
+{ // round 38: augment fit hints and bracket name collisions
+  const g = LM.makeGlad ? null : null;
+  ok(LM.augFit('retiarius', { syn: { atk: 0.12 } }) === true, 'augment boosting a strong stat fits the style');
+  ok(LM.augFit('murmillo', { syn: { eva: 0.08 } }) === false, 'augment on a weak stat does not fit');
+  const S = LM.newGame(); const me = { id: 1, name: 'Marcus' }; const opp = (n) => ({ name: n });
+  const T = LM.tourneyInit(S, { key: 'k', size: 4, opps: [opp('Marcus'), opp('Titus'), opp('Lucius')] }, me);
+  ok(T.slots.filter((x) => x.name === 'Marcus').length === 1, 'no bracket opponent shares your fighter name');
+}
+
 console.log(`ludus_maximus: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

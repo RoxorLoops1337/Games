@@ -63,10 +63,10 @@
     await U.dialog(confetti(18) + `<h2>${t.length > 1 ? 'Trophies earned!' : 'Trophy earned!'}</h2>` + t.map((x) => `<div class="itm" style="cursor:default;border-color:var(--gold);background:#fff3c4"><div class="sbadge" style="background:var(--gold);width:40px;height:40px">${A.icon('fame', 26)}</div><div class="sp"><div class="gname" style="font-size:14px">${esc(x.n)}</div><div class="muted" style="opacity:1">${esc(x.d)}</div><div class="row wrap" style="margin-top:3px">${x.r.gold ? `<span class="pill">${A.icon('coin', 12)} +${x.r.gold}</span>` : ''}${x.r.fame ? `<span class="pill">${A.icon('fame', 12)} +${x.r.fame}</span>` : ''}${x.r.laurels ? `<span class="pill">${A.icon('laurel', 12)} +${x.r.laurels}</span>` : ''}</div></div></div>`).join('') + btn('Shiny!', 'ok', 'green'));
     U.render();
   }
-  async function pickAug(S, level, have, force, title, seed) {
+  async function pickAug(S, level, have, force, title, seed, style) {
     let offer = seed ? L.withRandom(seed, () => L.augOffer(S, level, have, force)) : L.augOffer(S, level, have, force); let rerolls = 1 + L.facPerks(S).rerolls;
     for (;;) {
-      const v = await U.dialog(`<h2>${title || 'Choose an augment'}</h2><div class="muted" style="margin-bottom:8px">Lasts for this fight${have && have.length ? ' (on top of ' + have.length + ' from earlier rounds)' : ''}. Silver, Gold or Prismatic: pick one.</div>` + offer.map((a) => `<div class="itm" data-a="res" data-v="${a.id}" style="border-color:${D.TIERS[a.t].c};box-shadow:0 0 0 3px ${D.TIERS[a.t].c}66"><div class="sp"><span class="tag" style="background:${D.TIERS[a.t].c}">${D.TIERS[a.t].n}</span><div class="gname" style="font-size:14px">${a.n}</div><div class="muted" style="opacity:1">${a.d}</div></div></div>`).join('') + (rerolls > 0 ? btn(`Reroll (${rerolls} free)`, 'reroll', 'ghost') : ''));
+      const v = await U.dialog(`<h2>${title || 'Choose an augment'}</h2><div class="muted" style="margin-bottom:8px">Lasts for this fight${have && have.length ? ' (on top of ' + have.length + ' from earlier rounds)' : ''}. Silver, Gold or Prismatic: pick one.</div>` + offer.map((a) => `<div class="itm" data-a="res" data-v="${a.id}" style="border-color:${D.TIERS[a.t].c};box-shadow:0 0 0 3px ${D.TIERS[a.t].c}66"><div class="sp"><span class="tag" style="background:${D.TIERS[a.t].c}">${D.TIERS[a.t].n}</span><div class="gname" style="font-size:14px">${a.n}${style && L.augFit(style, a) ? ' <span class="tag" style="background:#2b9348">Fits your style</span>' : ''}</div><div class="muted" style="opacity:1">${a.d}</div></div></div>`).join('') + (rerolls > 0 ? btn(`Reroll (${rerolls} free)`, 'reroll', 'ghost') : ''));
       if (v === 'reroll') { rerolls--; offer = L.augOffer(S, level, have, force); continue; }
       return D.AUGMENTS.find((a) => a.id === v);
     }
@@ -92,7 +92,7 @@
   async function runEvent(S, ev, gl, en) {
     if (ev.kind === 'tourney' || ev.kind === 'grand') return runTourney(S, ev, gl[0]);
     const stance = await prep(S, ev, gl, ev.opps, {}); const bet = commit(S);
-    const aug = await pickAug(S, ev.league, [], ev.kind === 'grand');
+    const aug = await pickAug(S, ev.league, [], ev.kind === 'grand', null, null, gl[0] && gl[0].style);
     const res = await fightScreen(S, gl, ev.opps, stance, { ev, tricks: bet.tricks, augs: [aug] });
     const rep = L.settle(S, ev, gl, res); settleBets(S, bet, res, rep.notes);
     await results(S, ev, gl, res, rep);
@@ -103,7 +103,7 @@
     for (;;) {
       const opp = L.tourneyOpp(T); const name = names[T.round];
       const stance = await prep(S, ev, [g], [opp], { T, name, hpf: T.hpf }); const bet = commit(S);
-      augs.push(await pickAug(S, Math.min(3, ev.league + (T.round >= 1 ? 1 : 0)), augs, ev.kind === 'grand' && T.round === names.length - 1, `${name}: new augment`));
+      augs.push(await pickAug(S, Math.min(3, ev.league + (T.round >= 1 ? 1 : 0)), augs, ev.kind === 'grand' && T.round === names.length - 1, `${name}: new augment`, null, g.style));
       const res = await fightScreen(S, [g], [opp], stance, { ev, hpf: { [g.id]: T.hpf }, tricks: bet.tricks, augs: augs.slice() });
       settleBets(S, bet, res, notes);
       hype = Math.max(hype, res.hype); hpf = res.hpf[g.id]; if (odds == null) odds = res.odds;
