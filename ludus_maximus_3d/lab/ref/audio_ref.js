@@ -65,7 +65,7 @@ export function createAudio(opts = {}) {
       // colosseum space: procedural IR convolver, three sends
       reverb = ctx.createConvolver(); reverb.buffer = makeIR(2.3);
       const wet = ctx.createGain(); wet.gain.value = 0.8; reverb.connect(wet); wet.connect(master);
-      revSend = ctx.createGain(); revSend.gain.value = 1; revSend.connect(reverb); sfxBus.connect(ctx.createGain()); // sfx dry only; per-sound sends below
+      revSend = ctx.createGain(); revSend.gain.value = 1; revSend.connect(reverb);
       revMusic = ctx.createGain(); revMusic.gain.value = 0.22; musicBus.connect(revMusic); revMusic.connect(reverb);
       revCrowd = ctx.createGain(); revCrowd.gain.value = 0.18; crowdBus.connect(revCrowd); revCrowd.connect(reverb);
       for (const k of ['white', 'pink', 'brown']) noiseBuf[k] = makeNoise(k, 3);
@@ -91,16 +91,16 @@ export function createAudio(opts = {}) {
     return b;
   }
   function makeNoise(kind, sec) {
-    const sr = ctx.sampleRate, n = Math.floor(sr * sec), b = ctx.createBuffer(1, n, sr), d = b.getChannelData(0), r = mulberry(7 + kind.length);
+    const sr = ctx.sampleRate, n = Math.floor(sr * sec), x = Math.floor(sr * 0.05), src = new Float32Array(n + x), r = mulberry(7 + kind.length);
     let b0 = 0, b1 = 0, b2 = 0, last = 0;
-    for (let i = 0; i < n; i++) {
+    for (let i = 0; i < n + x; i++) {
       const w = r() * 2 - 1;
-      if (kind === 'white') d[i] = w;
-      else if (kind === 'pink') { b0 = 0.99765 * b0 + w * 0.0990460; b1 = 0.963 * b1 + w * 0.2965164; b2 = 0.57 * b2 + w * 1.0526913; d[i] = (b0 + b1 + b2 + w * 0.1848) * 0.22; }
-      else { last = (last + 0.02 * w) / 1.02; d[i] = last * 3.2; }
+      if (kind === 'white') src[i] = w;
+      else if (kind === 'pink') { b0 = 0.99765 * b0 + w * 0.0990460; b1 = 0.963 * b1 + w * 0.2965164; b2 = 0.57 * b2 + w * 1.0526913; src[i] = (b0 + b1 + b2 + w * 0.1848) * 0.22; }
+      else { last = (last + 0.02 * w) / 1.02; src[i] = last * 3.2; }
     }
-    // short crossfade so the loop is seamless
-    const x = Math.floor(sr * 0.05); for (let i = 0; i < x; i++) { const a = i / x; d[i] = d[i] * a + d[n - x + i] * (1 - a) * 0; }
+    const b = ctx.createBuffer(1, n, sr), d = b.getChannelData(0);
+    for (let i = 0; i < n; i++) d[i] = i < x ? src[i] * (i / x) + src[n + i] * (1 - i / x) : src[i]; // seamless loop
     return b;
   }
 
@@ -591,8 +591,6 @@ export function createAudio(opts = {}) {
   music.mode = () => curMode;
   music.pump = pump;
   music.seed = (s) => { seed = s >>> 0; rng = mulberry(seed ^ 0x9e3779b9); };
-  music.modes = MODES_LIST();
-  function MODES_LIST() { return MUSIC_MODES.slice(); }
 
   // ---------- public ----------
   const api = {

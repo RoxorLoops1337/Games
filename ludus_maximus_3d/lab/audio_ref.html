@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Audio Ref Lab</title>
+<style>
+:root{--bg:#2a2540;--fg:#e8dcc0;--ac:#f2c14e;--bt:#5a1f5e}
+body{background:var(--bg);color:var(--fg);font:14px system-ui,sans-serif;margin:0;padding:16px}
+h1{font-size:18px;color:var(--ac)} h2{font-size:14px;margin:18px 0 6px;color:#d9b27c}
+button{background:var(--bt);color:var(--fg);border:1px solid #8a4a8e;border-radius:6px;padding:10px 12px;min-height:44px;margin:3px;font:inherit}
+button:active,button.on{background:var(--ac);color:#222}
+label{display:inline-block;margin:6px 12px 6px 0} input[type=range]{vertical-align:middle;width:140px}
+#meter{height:10px;background:#111;border-radius:5px;overflow:hidden;margin:8px 0}#bar{height:100%;width:0;background:var(--ac)}
+</style></head><body>
+<h1>Ludus Maximus 3D audio reference lab</h1>
+<button id="unlock">Unlock audio</button><span id="st"></span>
+<div id="meter"><div id="bar"></div></div>
+<label>master <input id="vm" type="range" min="0" max="1" step=".01" value=".9"></label>
+<label>music <input id="vmu" type="range" min="0" max="1" step=".01" value=".7"></label>
+<label>sfx <input id="vs" type="range" min="0" max="1" step=".01" value=".9"></label>
+<label>voice <select id="voice"><option>0</option><option>1</option><option>2</option><option>3</option></select></label>
+<label>pan <input id="pan" type="range" min="-1" max="1" step=".1" value="0"></label>
+<h2>Music (crossfades)</h2><div id="modes"></div>
+<label>intensity <input id="int" type="range" min="0" max="1" step=".01" value=".3"></label>
+<label>crowd bed <input id="crowd" type="range" min="0" max="1" step=".01" value="0"></label>
+<h2>SFX</h2><div id="sfx"></div>
+<script type="module">
+import { createAudio, SFX_NAMES, MUSIC_MODES } from './ref/audio_ref.js';
+const A = createAudio({ log: false }); window.__audio = A;
+const $ = (id) => document.getElementById(id);
+$('unlock').onclick = async () => { $('st').textContent = (await A.unlock()) ? ' running' : ' blocked'; };
+$('vm').oninput = (e) => A.setMaster(+e.target.value); $('vmu').oninput = (e) => A.setMusic(+e.target.value); $('vs').oninput = (e) => A.setSfx(+e.target.value);
+$('int').oninput = (e) => A.music.setIntensity(+e.target.value); $('crowd').oninput = (e) => A.crowd(+e.target.value);
+const mk = (host, label, fn) => { const b = document.createElement('button'); b.textContent = label; b.onclick = () => { A.unlock().then(() => fn(b)); }; $(host).appendChild(b); };
+for (const m of MUSIC_MODES) mk('modes', m, (b) => { A.music.setMode(m, { fade: 1.5 }); document.querySelectorAll('#modes button').forEach((x) => x.classList.toggle('on', x === b)); });
+mk('modes', 'stop', () => A.music.stop());
+for (const n of SFX_NAMES) mk('sfx', n, () => A.sfx(n, { voice: +$('voice').value, pan: +$('pan').value }));
+mk('sfx', 'swish (heavy flag)', () => A.sfx('swish', { heavy: true }));
+for (const e of ['fire', 'lightning', 'earth', 'wind', 'holy']) mk('sfx', 'ult:' + e, () => A.sfx('ult', { element: e }));
+// meter
+(function loop() { const c = A.ctx; if (c && !A._an) { try { const an = c.createAnalyser(); an.fftSize = 512; c.destination; A._an = an; } catch (e) {} } requestAnimationFrame(loop); })();
+window.__ready = true;
+</script></body></html>
