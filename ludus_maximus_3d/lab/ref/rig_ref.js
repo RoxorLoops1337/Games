@@ -234,6 +234,11 @@ export const WEAPON_POSES = {
     },
   },
 };
+// two-hand spear: adduct the rear (right) arm so the shaft runs near the body centreline and the front hand can reach it
+(function adductSpear() {
+  const sp = WEAPON_POSES.spear, shift = (p) => { if (p.shoulderR) p.shoulderR = [p.shoulderR[0], p.shoulderR[1], p.shoulderR[2] + 0.42]; };
+  shift(sp.guard); for (const n in sp.attacks) for (const k in sp.attacks[n]) shift(sp.attacks[n][k]);
+})();
 // dual blades: both hands hold swords. Stance = sword guard with mirrored left arm; attacks reuse sword poses.
 (function buildDual() {
   const g = Object.assign({}, SWORD_GUARD, { shoulderL: [-0.85, -0.1, 0.30], elbowL: [-1.35, 0, 0], wristL: [-0.15, 0, 0] });

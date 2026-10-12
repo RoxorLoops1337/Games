@@ -664,7 +664,7 @@ export function createFx(scene, opts = {}) {
         const c = h.c, tt = h.t, el = h.el;
         if (el === 'wind') { // tornado funnel of spiraling dust + streaks
           h.acc += dt * 90 * fx.quality; while (h.acc >= 1) { h.acc--; const y = rnd() * 3.4, a = rnd() * TAU, rr = 0.3 + y * 0.32 * h.radius * 0.7 + R_(0, 0.2);
-            const wnd = { x: _p.x + Math.cos(a) * rr, y: groundY + y, z: _p.z + Math.sin(a) * rr, vx: -Math.sin(a) * 6.5, vz: Math.cos(a) * 6.5, vy: R_(0.5, 2), swirl: 0, life: R_(0.5, 0.9), s0: R_(0.5, 0.8), s1: R_(1.4, 2.0), cell: rnd() < 0.5 ? CELL.puffA : CELL.puffB, rot: rnd() * TAU, c0: mixc(sand, WHITE, 0.65), c1: sand, a: 0.65, fp: 1.2 };
+            const wnd = { x: _p.x + Math.cos(a) * rr, y: groundY + y, z: _p.z + Math.sin(a) * rr, vx: -Math.sin(a) * 6.5, vz: Math.cos(a) * 6.5, vy: R_(0.5, 2), swirl: 0, life: R_(0.5, 0.9), s0: R_(0.5, 0.8), s1: R_(1.4, 2.0), cell: rnd() < 0.5 ? CELL.puffA : CELL.puffB, rot: rnd() * TAU, c0: mixc(sand, WHITE, 0.65), c1: sand, a: 0.9, fp: 1.2 };
             norL.add(wnd); if (rnd() < 0.5) addL.add({ x: wnd.x, y: wnd.y, z: wnd.z, vx: wnd.vx, vz: wnd.vz, vy: wnd.vy, life: 0.25, s0: 0.07, s1: 0.04, st: 0.06, cell: CELL.streak, c0: { r: 0.9, g: 1, b: 0.95 }, c1: c, g: 1.5, fp: 1 }); }
         } else if (el === 'fire') { // rage: rising flame wisps + heat glow
           addL.put(_p.x, _p.y + 1, _p.z, 2.4 + 0.3 * Math.sin(tt * 18), c, 0.24, CELL.glow, 0, 1.4);
