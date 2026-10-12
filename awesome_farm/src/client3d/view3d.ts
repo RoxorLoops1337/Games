@@ -230,6 +230,12 @@ class GameView3D implements View3D {
             case 'swing':
                 if (e.by !== me) this.swingT.set(e.by, SWING);
                 return;
+            case 'pod':
+                this.ents?.throwPod(e);
+                return;
+            case 'hop':
+                this.ents?.hop(e.id);
+                return;
             default:
                 return;
         }
@@ -362,7 +368,9 @@ class GameView3D implements View3D {
             seen.add(p.id);
             const s = Math.max(0, (this.swingT.get(p.id) ?? 0) - dt);
             this.swingT.set(p.id, s);
-            ents.setFarmer(p.id, p.p, tiles(p.x), tiles(p.y), p.fx, p.fy, p.moving, s > 0 ? 1 - s / SWING : 0, p.hold ?? undefined, dt);
+            // a farmer with a line in the water holds a rod (yours: the best you carry)
+            const rod = p.p.line ? (['rod_master', 'rod_fine', 'rod'].find((r) => ((p.p as { inv?: Record<string, number> }).inv?.[r] ?? 0) > 0) ?? 'rod') : undefined;
+            ents.setFarmer(p.id, p.p, tiles(p.x), tiles(p.y), p.fx, p.fy, p.moving, s > 0 ? 1 - s / SWING : 0, rod ?? p.hold ?? undefined, dt);
             this.impacts.feetOf(p.id, tiles(p.x), tiles(p.y), p.moving && !(p.p.downed > 0), dt);
         }
         for (const id of ents.farmerIds()) if (!seen.has(id)) { ents.dropFarmer(id); this.swingT.delete(id); this.impacts.drop(id); }

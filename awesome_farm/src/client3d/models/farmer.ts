@@ -198,6 +198,7 @@ export class Farmer {
     }
     /** What is in the hand: any gear item id, '' / null for nothing, undefined to go back to the worn weapon (else the pick). */
     hold(item: string | null | undefined) {
+        if (item === this.holdOverride) return;                  // (asked every frame: only a change rebuilds what is in the hand)
         this.holdOverride = item;
         this.holdTool();
     }

@@ -151,7 +151,7 @@ export class BuildViews {
         rows.forEach((d, i) => {
             const tex = iconOf(d.it), x = Math.round(v.x + (i - (rows.length - 1) / 2) * step), y = v.y - 11;
             let im = list[i];
-            if (!im) { im = s.add.image(x, y, tex, 0).setOrigin(0.5, 1).setScale(0.5).setDepth(v.y + 0.4); list[i] = im; }
+            if (!im) { im = overlay3d(s.add.image(x, y, tex, 0).setOrigin(0.5, 1).setScale(0.5).setDepth(v.y + 0.4), 0.35); list[i] = im; }       // (a world overlay: the 3D table shows its dishes too)
             const changed = im.texture.key !== tex;
             im.setTexture(tex, 0).setPosition(x, y).setVisible(true).setAlpha(d.n <= 1 ? 0.75 : 1);
             if (!first && changed) { squash(s, im, 1.5, 0.6, 110); this.h.pop(x, y - 4, 2); }

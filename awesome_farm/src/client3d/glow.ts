@@ -71,6 +71,9 @@ export function softDisc () {
 
 const MAX_POOLS = 64;
 
+/** The hearth ring over a fire is drawn this many times its first size (it has to read from the 3D camera's distance). */
+const RING_K = 1.9;
+
 export class Glows {
     /** The light you carry (2D: everyone carries a little light; brighter at night, much brighter in the caves). */
     readonly carry = new PointLight(0xffe9c8, 0, 5, 1.4);
@@ -198,19 +201,22 @@ export class Glows {
                 r.dots.scale.set(rx, rz, 1);
                 (r.dots.material as MeshBasicMaterial).color.setHex(full ? 0xffd966 : 0xfff6e0);
                 (r.dots.material as MeshBasicMaterial).opacity = full ? 0.75 : fill > 0 ? 0.45 + 0.4 * fill : 0.32;
-                r.glow.visible = on && full;
+                // the warm pool on the ground grows as company gathers and breathes once the fire is kindled
+                r.glow.visible = on && fill > 0.02;
                 r.glow.position.set(cx, 0.04, cz);
-                r.glow.scale.set(rx * 1.1, rz * 1.1, 1);
+                const grow = (0.3 + 0.7 * fill) * (full ? 1 + Math.sin(t * 3) * 0.04 : 1);
+                r.glow.scale.set(rx * 1.1 * grow, rz * 1.1 * grow, 1);
                 // the ring over the fire, filling
                 const ringOn = fill > 0.001;
-                for (const m of [r.track, r.fill, r.flame]) { m.visible = ringOn; m.position.set(cx, 2.15, cz); }
+                for (const m of [r.track, r.fill, r.flame]) { m.visible = ringOn; m.position.set(cx, 2.5, cz); m.scale.setScalar(RING_K); }
                 if (ringOn && Math.abs(fill - r.at) > 0.004) {
                     r.at = fill;
                     r.fill.geometry.dispose();
                     r.fill.geometry = new RingGeometry(0.22, 0.3, 32, 1, Math.PI / 2, -Math.PI * 2 * Math.max(0.02, fill));
                 }
                 r.fill.material.color.setHex(full ? 0xffd966 : 0xf8a24a);
-                r.fill.scale.setScalar(full ? 1 + Math.sin(t * 6) * 0.06 : 1);
+                r.fill.scale.setScalar(RING_K * (full ? 1 + Math.sin(t * 6) * 0.07 : 1));
+                r.flame.scale.setScalar(RING_K * (full ? 1.15 + Math.sin(t * 9) * 0.1 : 1));
             }
         }
         for (const [id, r] of this.rings) if (!seen.has(id)) { for (const m of [r.dots, r.fill, r.track, r.flame, r.glow]) this.hearth.remove(m); r.fill.geometry.dispose(); (r.dots.material as MeshBasicMaterial).dispose(); r.fill.material.dispose(); this.rings.delete(id); }
