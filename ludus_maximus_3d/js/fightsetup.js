@@ -22,12 +22,17 @@ export function buildFight(S, gl, opps, stance, o = {}) {
   if (dp) F.duo = { ids: ['A' + dp.a, 'A' + dp.b], kind: dp.kind, cd: 10, max: d.DUOS[dp.kind].cd };
   if (fp.roarDmg) unitsA.forEach((u) => { u.fx.roarDmg = fp.roarDmg; });
   if (fp.ultStart) unitsA.forEach((u) => u.ults.forEach((c) => { c.cd = Math.max(0, c.cd - fp.ultStart); }));
+  // deterministic replay: reseed right after building, snapshot, then record taps (see FightView.tap and Game.watchReplay)
+  const seed = (Math.random() * 4294967296) >>> 0; lm.setRandom(lm.mulberry(seed));
+  F.replay = { seed, taps: [], snap: null };
   F.meta = { weather: wxId, WX, odds, stB, league: ev.league || 0, season: S.season || 1, title: ev.title || '' };
+  F.replay.snap = structuredClone(F);
   return F;
 }
 
 /** result object shaped like the 2D game's fight result: {win, hype, hpf, odds, F, stB} */
 export function fightResult(F, gl) {
+  L().setRandom(null);
   const hpf = {}; F.units.filter((u) => u.side === 'A').forEach((u) => { hpf[u.g.id] = u.hp / u.maxhp; });
   return { win: F.winner === 'A', hype: Math.max(F.peak, F.hype), hpf, odds: F.meta.odds, F, stB: F.meta.stB };
 }

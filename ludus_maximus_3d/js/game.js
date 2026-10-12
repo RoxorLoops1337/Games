@@ -103,6 +103,14 @@ export class Game {
     return res;
   }
 
+  /** re-run a finished fight deterministically (same seed, same snapshot, same taps) in the 3D arena */
+  async watchReplay(res) {
+    const R = res && res.F && res.F.replay; if (!R || !R.snap) return;
+    const F2 = structuredClone(R.snap); F2.replay = R; this.setScene('fight');
+    await this.fightView.start(F2, { replay: R, league: res.F.meta ? res.F.meta.league : 0, noSplash: true });
+    const lm = L(); lm.setRandom(null);
+  }
+
   returnToHub() { this.fightView.hud.style.display = 'none'; this.fightView.dispose(); this.setScene('hub'); }
 
   // ---------------------------------------------------------------- HUD

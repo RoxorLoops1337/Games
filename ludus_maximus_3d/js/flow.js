@@ -250,7 +250,14 @@ export async function results(ctx, ev, gl, res, rep) {
     const m = lm.mercy(S, ev, rep, c);
     if (m.joined) await ctx.ask({ title: 'A new recruit!', body: para(`${m.joined.name} (${d.STYLES[m.joined.style].n}, Lv ${m.joined.lvl}) was moved by your mercy and joins your ludus!`), actions: ok('Welcome!'), dismiss: 'ok' });
     else if (c === 'mercy') U.toast(`The crowd loves it. +${m.f} fame.`, { kind: 'good' }); else U.toast(`+${m.gd} gold from the crowd.`, { kind: 'good' });
-  } else await ctx.ask({ title: win ? 'Victory' : 'Defeat', body, actions, dismiss: 'ok' });
+  } else {
+    const hasReplay = res.F && res.F.replay && res.F.replay.snap;
+    for (;;) {
+      const acts = hasReplay ? [...actions, { label: 'Watch replay', value: 'replay', variant: 'ghost', icon: 'arena' }] : actions;
+      const v = await ctx.ask({ title: win ? 'Victory' : 'Defeat', body, actions: acts, dismiss: 'ok' });
+      if (v !== 'replay') break; await ctx.game.watchReplay(res);
+    }
+  }
   if (rep.choice) {
     const wrap = h('div'), body2 = h('div', '', [para("Choose one prize from the Emperor's gift table."), wrap]);
     const id = await new Promise((resolve) => { const m = ctx.sheet({ title: "Champion's loot", body: body2, onClose: () => resolve(rep.choice[0].id) }); rep.choice.forEach((it) => wrap.append(itemCard(it, { onClick: () => { resolve(it.id); m.close(); } }))); });
