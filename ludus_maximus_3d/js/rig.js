@@ -704,7 +704,7 @@ function buildHead(rig, look, bd) {
   } else for (const sg of [-1, 1]) { const ex = sg * 0.037, ey = 0.121, ez = surf(ex, ey).z + 0.003; A('eye', paint(disc(0.014, 6, [ex, ey, ez], 1.2, 0.8), [0.2, 0.15, 0.1])); }
   if (false) for (const sg of [-1, 1]) A('hair', plate(0.05, 0.0105, [sg * 0.04, 0.147, surf(sg * 0.04, 0.147).z + 0.004], sg * F.tilt, 0.1));
   // hair
-  const hairy = look.hair || 'short', off = hairy === 'crop' ? 0.004 : 0.008, yb = hairy === 'tied' ? 0.175 : hairy === 'crop' ? 0.185 : 0.165;
+  const hairy = look.hair || 'short', off = hairy === 'crop' ? 0.005 : 0.012, yb = hairy === 'tied' ? 0.175 : hairy === 'crop' ? 0.185 : 0.165;
   if (hairy !== 'bald' && hairy !== 'none') {
     const ys = [yb, 0.205, 0.238, 0.262];
     const pts = ys.map((y) => [skullR(prof, y) + off + (y < 0.2 ? 0.004 : 0), y]); pts.push([0, 0.272]);
@@ -718,8 +718,8 @@ function buildHead(rig, look, bd) {
       for (const sg of [-1, 1]) A('hair', xf(boxG(0.022, 0.18, 0.05), [sg * 0.103, 0.06, 0.012], [0, 0, sg * 0.05]));
     }
     if (hairy === 'tied') {
-      A('hair', xf(capsule(0.2, 0.03, 0.012, 5, 0.1), [0, 0.2, -0.108], [2.3, 0, 0]));
-      A('cloth', xf(lathe([[0.034, -0.01], [0.036, 0.012]], 6, 1, 1, 0, 1), [0, 0.2, -0.112], [2.3, 0, 0]));
+      A('hair', xf(capsule(0.2, 0.03, 0.014, 5, 0.1), [0, 0.19, -0.104], [0.55, 0, 0]));
+      A('cloth', xf(lathe([[0.034, -0.012], [0.036, 0.012]], 6, 1, 1, 0, 1), [0, 0.19, -0.108], [0.55, 0, 0]));
     }
   }
   const my = 0.052, mz = surf(0, my).z, bd2 = look.beard | 0; // 0 none, 1 short, 2 full

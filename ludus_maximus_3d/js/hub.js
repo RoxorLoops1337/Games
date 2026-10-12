@@ -266,9 +266,10 @@ export function createHub({ renderer, camera, audio, tier = 'high', post = null 
     // cypress + olive in the forecourt
     const lg = []; const r = rngOf(5);
     const cypress = (x, z, s) => { const prof = [[0.001, 0], [0.55, 0.15], [0.95, 1.3], [0.9, 3.0], [0.62, 5.0], [0.2, 6.6], [0.001, 7.1]].map(([a, y]) => new THREE.Vector2(a * s, y * s)); const g = new THREE.LatheGeometry(prof, 8); g.rotateY(r() * 3); g.translate(x, 0, z); lg.push(leafCol(g, [0.07, 0.17, 0.07], [0.15, 0.32, 0.1], 7.1 * s, 0.35)); };
-    const olive = (x, z, s) => { const tr = new THREE.CylinderGeometry(0.16 * s, 0.26 * s, 2.0 * s, 6); tr.translate(x, s, z); lg.push(leafCol(tr, [0.2, 0.13, 0.08], [0.28, 0.18, 0.1], 2 * s, 0)); for (let i = 0; i < 4; i++) { const sp = new THREE.IcosahedronGeometry(1.2 * s, 1); sp.scale(1, 0.72, 1); sp.translate(x + (r() - 0.5) * 1.6 * s, 2.4 * s + r() * 0.5 * s, z + (r() - 0.5) * 1.6 * s); lg.push(leafCol(sp, [0.2, 0.28, 0.12], [0.36, 0.46, 0.2], 3.4 * s, 0.6, 2.2 * s)); } };
+    const olive = (x, z, s, y = 0) => { const tr = new THREE.CylinderGeometry(0.16 * s, 0.26 * s, 2.0 * s, 6); tr.translate(x, y + s, z); lg.push(leafCol(tr, [0.2, 0.13, 0.08], [0.28, 0.18, 0.1], 2 * s, 0)); for (let i = 0; i < 4; i++) { const sp = new THREE.IcosahedronGeometry(1.2 * s, 1); sp.scale(1, 0.72, 1); sp.translate(x + (r() - 0.5) * 1.6 * s, y + 2.4 * s + r() * 0.5 * s, z + (r() - 0.5) * 1.6 * s); lg.push(leafCol(sp, [0.2, 0.28, 0.12], [0.36, 0.46, 0.2], 3.4 * s, 0.6, y + 2.2 * s)); } };
     for (const x of [-19, -13.5, -8, 8, 13.5, 19]) cypress(x, 16.6 + (Math.abs(x) % 3) * 0.2, 0.6 + (Math.abs(x * 7) % 5) * 0.05);
     olive(-21.4, 16.2, 0.9); olive(21.4, 16.0, 1.0); olive(-5.8, 17.0, 0.7); olive(5.9, 17.2, 0.75);
+    for (let rr = 0; rr < 4; rr++) for (const sx of [-1, 1]) olive(sx * 22.2, Z0 + rr * PZ + (rr % 2 ? 1.2 : -1.2), 0.5 + 0.06 * ((rr + (sx > 0 ? 1 : 0)) % 3), terraceH(rr));
     staticLeaf = lg;
   }
   function leafCol(g, lo, hi, H, sway, y0 = 0) {
@@ -311,6 +312,7 @@ export function createHub({ renderer, camera, audio, tier = 'high', post = null 
         k.box('masonry', 9.0, PAD, 6.2, c.x, base, c.z, 0xd8c8a6, { ao: 0.2 });
         k.box('masonry', 9.3, 0.05, 6.5, c.x, base, c.z, 0xb9a47c, { ao: 0.2 });
         if (!pl) pads.push(c);
+        { const pxx = c.x + 4.15, pzz = c.z - 3.0; k.amphora(pxx, pzz, c.y, 0.8, C.clay); for (let b = 0; b < 5; b++) k.cone('cloth', 0.13, 0.5 + r() * 0.2, pxx + (r() - 0.5) * 0.22, c.y + 0.74, pzz + (r() - 0.5) * 0.22, b % 2 ? C.leaf : C.leaf2, { seg: 5, sway: 0.6, ao: 0.4 }); }
       } else {
         for (let j = 0; j < 22; j++) { const x = c.x + (r() - 0.5) * 9.4, z = c.z + (r() - 0.5) * 6.6, hh = 0.45 + r() * 0.7; for (let b = 0; b < 3; b++) { const g = new THREE.ConeGeometry(0.1 + r() * 0.06, hh, 4); g.rotateZ((r() - 0.5) * 0.5); g.translate(x + (b - 1) * 0.12, base + hh / 2, z + (r() - 0.5) * 0.2); leafGeos.push(leafCol(g, [0.18, 0.28, 0.08], [0.46, 0.55, 0.18], hh, 0.7, base)); } }
         for (let j = 0; j < 4; j++) { const g = new THREE.IcosahedronGeometry(0.5 + r() * 0.4, 0); g.scale(1, 0.7, 1); g.translate(c.x + (r() - 0.5) * 8, base + 0.3, c.z + (r() - 0.5) * 5.4); leafGeos.push(leafCol(g, [0.2, 0.32, 0.1], [0.34, 0.46, 0.16], 1, 0.4, base)); }
@@ -552,7 +554,7 @@ export function createHub({ renderer, camera, audio, tier = 'high', post = null 
   function onMove(e) {
     if (!orb.enabled) return;
     const p = ptrs.get(e.pointerId);
-    if (!p) { if (e.pointerType === 'mouse' && performance.now() - lastHoverT > 40) { lastHoverT = performance.now(); const h = pick(e.clientX, e.clientY); setHover(h && h.type === 'plot' && h.empty && h.locked ? h : h); emit('hover', h, e); } return; }
+    if (!p) { if (e.pointerType === 'mouse' && performance.now() - lastHoverT > 40) { lastHoverT = performance.now(); const h = pick(e.clientX, e.clientY); setHover(h); emit('hover', h, e); } return; }
     const dx = e.clientX - p.x, dy = e.clientY - p.y; p.x = e.clientX; p.y = e.clientY; touchedNow();
     if (tap) { tap.moved += Math.abs(dx) + Math.abs(dy); }
     if (ptrs.size === 1) {
@@ -644,10 +646,10 @@ export function createHub({ renderer, camera, audio, tier = 'high', post = null 
   }
   const dust = env.dust;
   function weatherState(St) { return weatherOverride || (LMg() ? LMg().weather(St, 'w' + St.week) : 'clear'); }
-  let rainAmt = 0, rainTarget = 0, heatTarget = 0;
+  let rainAmt = 0, rainTarget = 0, heatTarget = 0, todKey = '';
   function refreshSky(St, instant) {
-    weatherNow = weatherState(St); const h = hourOverride ?? hourOf(St);
-    setTarget(presetFor(h, weatherNow), instant);
+    weatherNow = weatherState(St); const h = hourOverride ?? hourOf(St), key = h.toFixed(2) + weatherNow;
+    if (key !== todKey || instant) { todKey = key; setTarget(presetFor(h, weatherNow), instant); }
     rainTarget = weatherNow === 'rain' ? 1 : 0; heatTarget = weatherNow === 'heat' ? 1 : 0;
     dust.uniforms.uInt.value = weatherNow === 'dust' ? 3.2 : 1.5; dust.uniforms.uWind.value.set(weatherNow === 'dust' ? 3.2 : 0.5, 0.04, weatherNow === 'dust' ? 1.0 : 0.2);
     buildingUniforms.uWind.value = weatherNow === 'dust' ? 2.4 : weatherNow === 'rain' ? 1.8 : 1.0; smokeU.uWind.value = buildingUniforms.uWind.value;

@@ -8,7 +8,7 @@ canvas{display:block}#hud{position:fixed;left:8px;top:6px;text-shadow:0 1px 2px 
 </head><body><div id="hud"></div>
 <script type="module">
 // Character showcase: 5 styles x 3 palettes under the arena light rig (js/sky.js golden preset as fightview uses it).
-// Params: view=grid|close|one|three  pal=0..2 (one palette row / the palette of a single view)  style=<id> (one)  rot=<deg yaw offset>  spin=1 (live turntable)
+// Params: view=grid|close|one|three|turn(n=6 copies at spaced yaw)|heads(hair/beard/face variants)  pal=0..2 (one palette row / the palette of a single view)  style=<id> (one)  rot=<deg yaw offset>  spin=1 (live turntable)
 //         rar=0..4 (rarity of every equipped item)  lvl=<n>  stars via lvl  pose=<clip>  t=<seconds into the pose>  face=0..2  hair=short|crop|long|tied|bald  beard=0..2  cam=<x,y,z,tx,ty,tz>  fov=<deg>
 import * as THREE from 'three';
 import { poseAt, triCount } from '../js/rig.js';
@@ -36,11 +36,11 @@ const PALS = [
 ];
 const rarQ = Q.get('rar') != null ? +Q.get('rar') : 0, lvlQ = +(Q.get('lvl') || 8);
 const rigs = [];
-function spawn(style, pal, x, z, yaw, k) {
+function spawn(style, pal, x, z, yaw, k, ov) {
   const g = LM.makeGlad({ style, lvl: lvlQ, id: 11 + k, name: 'Lab' + style + pal, r: LM.mulberry(1000 + k * 17), q: 0.8 });
   Object.assign(g, PALS[pal], { face: Q.get('face') != null ? +Q.get('face') : (k % 3) });
   for (const s of ['weapon', 'shield', 'armor', 'helm', 'charm']) g.gear[s] = { slot: s, rar: rarQ, name: s };
-  const over = {}; if (Q.get('hair')) over.hair = Q.get('hair'); if (Q.get('beard') != null) over.beard = +Q.get('beard');
+  const over = Object.assign({}, ov || {}); if (Q.get('hair')) over.hair = Q.get('hair'); if (Q.get('beard') != null) over.beard = +Q.get('beard');
   const rig = createGladiator(g, { look: over });
   rig.root.position.set(x, 0, z); rig.root.rotation.y = yaw; scene.add(rig.root); rig.animator.armed = 1;
   rig.update(0.016); rig.resetSecondary(); rigs.push(rig); return rig;
@@ -50,11 +50,17 @@ const cam = new THREE.PerspectiveCamera(+(Q.get('fov') || 30), W / H, 0.1, 400);
 let k = 0;
 if (view === 'grid') {
   const rows = palQ != null ? [+palQ] : [0, 1, 2];
-  rows.forEach((p, ri) => STYLES.forEach((s, ci) => spawn(s, p, (ci - 2) * 1.9, (ri - (rows.length - 1) / 2) * -2.3, yaw34, k++)));
-  const n = rows.length; cam.position.set(0, 2.2 + n * 0.5, 9.2 + n * 2.2); target.set(0, 0.95, 0); cam.fov = rows.length === 1 ? 25 : 30;
+  rows.forEach((p, ri) => STYLES.forEach((s, ci) => spawn(s, p, (ci - 2) * 1.9, (ri - (rows.length - 1) / 2) * -2.9, yaw34, k++)));
+  const n = rows.length; if (n === 1) { cam.position.set(0, 2.4, 11.4); target.set(0, 0.95, 0); cam.fov = 25; } else { cam.position.set(0, 6.6, 15.5); target.set(0, 0.55, 0.2); cam.fov = 27; }
 } else if (view === 'close') {
   const p = +(palQ || 0); STYLES.forEach((s, ci) => spawn(s, p, (ci - 2) * 0.62, 0, 0.5 + rot, k++));
   cam.position.set(0.0, 1.58, 3.1); target.set(0, 1.53, 0); cam.fov = 17;
+} else if (view === 'heads') { // hair / beard / face variants of one style, head and shoulders
+  const st = Q.get('style') || 'dimachaerus', H = ['short', 'crop', 'long', 'tied', 'bald'], Bd = [0, 1, 2, 0, 2];
+  H.forEach((h, i) => spawn(st, i % 3, (i - 2) * 0.55, 0, 0.45 + rot, i, { hair: h, beard: Bd[i] })); cam.position.set(0, 1.82, 3.0); target.set(0, 1.72, 0); cam.fov = 17;
+} else if (view === 'turn') { // turntable strip: n copies of one gladiator at evenly spaced yaw (rot = start angle)
+  const st = Q.get('style') || 'murmillo', n = +(Q.get('n') || 6); for (let i = 0; i < n; i++) spawn(st, +(palQ || 0), (i - (n - 1) / 2) * 1.35, 0, rot + (i / n) * Math.PI * 2, +(Q.get('k') || 0));
+  cam.position.set(0, 1.5, 4.0 + n * 0.55); target.set(0, 0.95, 0); cam.fov = 30;
 } else if (view === 'three') { // three palettes of one style at 3/4, full body
   const st = Q.get('style') || 'murmillo'; [0, 1, 2].forEach((p, i) => spawn(st, p, (i - 1) * 1.7, 0, yaw34, k++)); cam.position.set(0, 1.5, 6.4); target.set(0, 0.95, 0); cam.fov = 28;
 } else { // one

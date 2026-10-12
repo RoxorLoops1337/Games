@@ -325,15 +325,21 @@ function baldric(rig, B, sh, dir = 1, o = {}) { // leather strap across the ches
 }
 function segmentata(rig, B, sh, rr) { // lorica segmentata: stacked overlapping bands + shoulder lames
   const C = rig.joints.chest;
-  for (let i = 0; i < 4; i++) { const y0 = -0.03 + i * 0.075, y1 = y0 + 0.09; rig.add('metal', lathe([[chestR(y0, B, sh) + 0.022, y0], [chestR(y1, B, sh) + 0.012, y1]], 10, 1, 0.72, 0.25, 0.72), C); }
-  ring(rig, C, chestR(0.29, B, sh) + 0.02, chestR(0.298, B, sh) + 0.02, 0.29, 0.298, 10, 0.72, 'trim');
+  for (let i = 0; i < 4; i++) { const y0 = -0.03 + i * 0.075, y1 = y0 + 0.09; rig.add('metal', lathe([[chestR(y0, B, sh) + 0.022, y0], [chestR(y1, B, sh) + 0.012, y1]], 12, 1, 0.72, 0.25, 0.72), C); }
+  ring(rig, C, chestR(0.29, B, sh) + 0.02, chestR(0.298, B, sh) + 0.02, 0.29, 0.298, 12, 0.72, 'trim');
   for (const s of ['L', 'R']) for (let i = 0; i < 2; i++) { const y = 0.02 - i * 0.05, r = 0.093 - i * 0.004; rig.add('metal', lathe([[r * 0.94, y - 0.06], [r, y]], 6, 1.05, 1.0, 0.3, 0.7, -PI * 0.5, PI * 1.0), rig.joints['shoulder' + s]); }
   gem(rig, C, chestPt(0, 0.12, B, sh, 0.03).p.toArray(), 0.016, rr);
 }
-function jerkin(rig, B, sh, rr) { // thraex leather jerkin with shoulder tabs
+function jerkin(rig, B, sh, rr) { // thraex leather jerkin: shoulder straps, gold neckline, hem tabs
   const C = rig.joints.chest, prof = []; for (const y of [-0.04, 0.09, 0.2, 0.3]) prof.push([chestR(y, B, sh) + 0.016, y]);
   rig.add('leather', paint(lathe(prof, 12, 1, 0.72, 0.1, 0.8), (x, y, z) => 0.95 - 0.12 * Math.exp(-sq((y - 0.13) / 0.01)) * sm01(-0.05, 0.08, z)), C);
-  for (const s of ['L', 'R']) rig.add('leather', tabRing(4, 0.088, 0.03, 0.12, 0.058, { sz: 1, flare: 0.03, arc: PI, a0: s === 'L' ? 0 : PI, shade: 0.7 }), rig.joints['shoulder' + s]);
+  ring(rig, C, chestR(0.298, B, sh) + 0.02, chestR(0.305, B, sh) + 0.021, 0.29, 0.305, 12, 0.72, 'trim');
+  rig.add('leather', tabRing(12, chestR(-0.03, B, sh) + 0.012, -0.03, 0.1, 0.075, { sz: 0.72, flare: 0.03, tip: 0.8, shade: 0.7 }), C);
+  for (const sg of [-1, 1]) { // shoulder straps front -> over the shoulder -> back
+    const pts = [ps(sg * 0.1 * B, 0.29, chestR(0.29, B, sh) * 0.72 * 0.9 + 0.02), ps(sg * 0.14 * B, 0.345, 0.02), ps(sg * 0.1 * B, 0.29, -chestR(0.29, B, sh) * 0.72 * 0.9 - 0.02)];
+    rig.add('leather', ribbon(pts, 0.055, (p, i) => ps(sg * 0.3, 1, i === 0 ? 0.3 : i === 2 ? -0.3 : 0)), C);
+  }
+  for (const s of ['L', 'R']) rig.add('leather', tabRing(4, 0.09, 0.03, 0.13, 0.075, { sz: 1, flare: 0.03, tip: 0.85, arc: PI, a0: s === 'L' ? 0 : PI, shade: 0.7 }), rig.joints['shoulder' + s]);
   gem(rig, C, chestPt(0, 0.15, B, sh, 0.03).p.toArray(), 0.016, rr);
 }
 

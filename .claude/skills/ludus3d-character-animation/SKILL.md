@@ -91,3 +91,42 @@ Rules of thumb: windup 25 to 35 percent of total for light, 40 percent for heavy
 1. Factory: `createGladiator(sim unit)` = buildGladiator with palette from unit data, style gear from gear.js, laurel pips as small trim meshes on `chestFront`.
 2. Each frame from fightview: `setMove(localVz, localVx)` from unit velocity rotated into facing, `root.rotation.y` toward target, `rig.update(dt)`.
 3. Sim events to clips: attack start `play('attackN',{speed: ref.dur/sim.attackTime})`; on `hit` event apply damage, `hitStop`, camera shake; got hit `hurt(dir)` + `flash` + `squashKick(-0.08)`; blocking `play('block')` and `release()`; stun `setState('stun')` then `setState('move')`; knockdown `play('knockdown')` then `play('getup')`; kill `play('death')`; win `setState('victory')`; crowd taunt/cheer for ludus idle life.
+
+---
+
+# Update: character polish pass (game code in `ludus_maximus_3d/js/`, source of truth; `lab/ref` is frozen history)
+
+Files: `js/rig.js` (body, head/face/hair, materials, skinning, Animator, cloth), `js/gear.js` (weapons, shields, helms, armour, rarity accents, laurels, `equipStyle(rig, style, o)`), `js/gladiator.js` (`createGladiator(unitOrGlad, opts)`, `lookFor(g, style)`). Labs: `lab/char_lab.html` (showcase) and `lab/rig_test.html` (headless checks, 543 of them, must say PASS).
+
+## How the rig is drawn now (draw calls 100 -> 10..13 per fighter)
+- Every static part is authored as geometry in the local frame of a joint, socket or holder and queued with `rig.add(matKey, geo, obj)` (geometry is cloned and baked to the REST pose). `rig.rebuild()` merges the queue per material into ONE `SkinnedMesh` per material, rigid weights (one bone per vertex), one shared `THREE.Skeleton` whose bones are the existing joint Object3Ds (names, sockets, pivots unchanged, so Animator, IK, hit flash, squash all work). Skinned meshes live under `rig.root` (not `body`), `frustumCulled=false`, bind matrix identity. `equipStyle` ends with `rig.rebuild()`.
+- Extra bones: `rig.addBone(obj)` (the shield holder is one, its orientation is set every frame by a `postUpdate` stabiliser, so the shield geometry is skinned to it and still follows the arm while staying readable).
+- Weapons: empty `Object3D` in `handR/handL` socket (carries `userData.tip`, `gripB` for the spear IK) plus geometry baked to it. Never reuse a geometry object after `rig.add` (it is cloned, but `xf/paint` mutate in place).
+- Still separate meshes: cloth (`ClothGrid`: loin flaps with thigh collision, cloak, plume ribbon, retiarius net with diamond alpha texture, `net.setAnchor(obj)` to throw it later), shield face (own textured material, skinned to the holder).
+- Materials per rig: skin, hair, cloth, plume, leather, metal, trim, steel (blades), eye (= face decal), gem (emissive rarity stones), plus `shield` and `net` via `rig.addMaterial(key, mat, shadeKind, {back})`. All use vertex colours (AO and paint multiply the base colour; every geometry needs a `color` attribute: use `col1/paint/xf` helpers). `uv` is merged too (needed by the shield).
+- Character-only shading lives in the material shader (`shadePatch`, `SHADE` table): sky/ground fill + albedo independent lift (dark skin never goes black), cool narrow fresnel rim, warm subsurface-ish bleed on skin, dark edge term (separates fighters from bright sand), faux sky/ground reflection so metals work with no env map (the arena has none). No scene lights were added. `customProgramCacheKey` per kind; `onBeforeCompile` runs per material, so uniforms are baked as constants.
+- Legendary / epic: `rig.setGlow(hex, base, amp, speed)` drives the gem material emissive (`update()` pulses it); metal tint = best rarity (`metalFor`), per-slot accents: weapon inlay + pommel gem, shield boss gem and rim gems, helm brow gem (legendary: gold wings / ring), armour gem, charm pendant.
+
+## Geometry kit (rig.js exports)
+`lathe(profile, seg, sx, sz, ao, lo, phi0, phiLen)` (partial sweeps; phi 0 = +Z, so a front mask is `-len/2`), `capsule(len, rTop, rBot, seg, bulge, topCap)`, `boxG, sphereG, cylG, coneG, torusG, quadG`, `xf(geo, pos, euler, scale)`, `paint(geo, rgb|fn(x,y,z,nx,ny,nz))`, `sculpt(geo, blobs)` (gaussian bumps along normals), `ribbon(points, width, normalFn)` (straps follow the chest), `tabRing` (pteruges), `extrude(outline, depth)` (crests, flanges), `faceTexture`, `shadePatch`.
+Face: 14-ish ring skull lathe sculpted per variant (`FACES[0..2]`: square jaw, lean cheekbones, rugged + scar), painted eyes/brows/mouth/nose shading in a cached canvas decal on a 48 triangle patch, pyramid nose, ears, beard (0 none, 1 short, 2 full), hair `short|crop|long|tied|bald`. Under a visor the face shows through the eye window (helms are a cap + a rear bowl, open at the front).
+
+## Budgets (tests enforce: tris <= 2500, draw calls <= 14)
+Bare body with hair 1300 to 1500 tris. Dressed worst case (all legendary, full beard): murmillo 2343, retiarius 2127, thraex 2383, hoplomachus 2265, dimachaerus 1939; typical 2000 to 2250. Draw calls 10 to 13. Update cost 0.14 ms per rig frame, build 9 ms per rig. Savings that paid for detail: open-ended limb capsules (no hidden caps, -144), no pole rings that sit inside other parts, quads instead of boxes for flat trim, painted features instead of geometry.
+
+## Shield rules
+Holder at the fist (`wristL` + (0,-0.07,0)); scutum = cylindrical section (R 0.46, 0.62 x 0.98), rounded-rectangle outline, lip + edge-wall rim ribbons, domed boss, grip bar and straps, emblem canvas (winged thunderbolt in the tunic colour, cached per colour); parmula = small curved square with a sun-disc emblem. The shell is shifted 0.1 toward the body centre so it covers the torso. Back faces are painted bare leather in the shader (`xo.back`), so no back shell is needed.
+
+## Pitfalls found in this pass
+- `-(expr) ** 2` is a SyntaxError (module fails to load everywhere): use a `sq()` helper.
+- Shells over the chest must use the same radial segment count as the chest lathe (12) or facets interleave and poke through; offsets for straps/laurels on a faceted, sculpted chest need >= 0.026.
+- `DoubleSide` materials flip normals by winding: ribbon/tab/quad winding must be CCW seen from the normal side, or lighting inverts.
+- Merging geometry drops attributes you do not copy (the shield texture showed as one texel until `uv` was merged).
+- `onBeforeCompile` only runs when a material first compiles that variant: bake constants into the GLSL, give each kind its own `customProgramCacheKey`.
+- Bind the skeleton with explicit inverses from the REST pose (`rig.restOf`), never from the current pose, and never call `SkinnedMesh.bind` without a bind matrix (it would recompute from the posed bones).
+- Hair cap hairline: lower the bottom ring at the back and over the ears or it reads as a swim cap.
+
+## Recipes
+- New helm: `helmShell(rig, head, R, top, yBowl, yCap)` then visor masks (`mask`), `faceBars`, crest via `extrude(...)` rotated `[0,-PI/2,0]`.
+- New armour piece: author in the joint frame, `rig.add('metal'|'leather'|'trim'|'cloth', geo, rig.joints.chest)`, check `chestR/chestPt` for surface offsets, then run `lab/rig_test.html` and `char_lab.html?view=grid`.
+- Lab params: `view=grid|close|one|three|turn|heads`, `pal`, `style`, `rar`, `lvl`, `rot`, `spin=1`, `pose=<clip>&t=<s>`, `cam=x,y,z,tx,ty,tz`, `fov`, `sun`, `az`, `face`, `hair`, `beard`. Shot: `node tools/3d_shot.mjs "http://127.0.0.1:PORT/ludus_maximus_3d/lab/char_lab.html?view=grid" out.png --w 1500 --h 900 --secs 1`.
