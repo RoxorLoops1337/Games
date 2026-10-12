@@ -257,6 +257,7 @@
     const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 800" width="600" height="800"><rect width="600" height="800" fill="#2b1810"/><rect x="18" y="18" width="564" height="764" rx="26" fill="#f5ead2" stroke="#14100f" stroke-width="8"/><rect x="40" y="40" width="520" height="90" rx="14" fill="#d2412b" stroke="#14100f" stroke-width="6"/><text x="300" y="100" text-anchor="middle" font-family="Impact,Arial Black,sans-serif" font-size="44" fill="#f6b82d" stroke="#14100f" stroke-width="2">${esc2(g.name).toUpperCase()}</text><circle cx="300" cy="420" r="210" fill="#e6c27d" stroke="#14100f" stroke-width="6"/>${sp}${(g.dy || []).slice(-2).map((x, i) => `<text x="300" y="${652 + i * 18}" text-anchor="middle" font-family="Arial,sans-serif" font-size="14" fill="#5a4630">${esc2('Wk ' + x.w + ': ' + x.t)}</text>`).join('')}<text x="300" y="690" text-anchor="middle" font-family="Impact,Arial Black,sans-serif" font-size="34" fill="#14100f">${esc2(g.title || g.nick || '')}</text><text x="300" y="735" text-anchor="middle" font-family="Arial,sans-serif" font-weight="bold" font-size="26" fill="#14100f">${esc2(T.n)} · Lv ${g.lvl} · ${g.rec.w}W ${g.rec.l}L</text><text x="300" y="768" text-anchor="middle" font-family="Arial,sans-serif" font-size="18" fill="#7a5a3a">Ludus Maximus · ${esc2(S.name)}</text></svg>`;
     try { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml' })); a.download = 'ludus-' + g.name.replace(/\W+/g, '-').toLowerCase() + '.svg'; document.body.appendChild(a); a.click(); a.remove(); toast('Share card saved'); } catch (e) { toast('Could not save the card'); }
   };
+  ACT.armaff = () => { const have = []; S.items.forEach((it) => it.af.forEach((x) => { if (!have.includes(x.id)) have.push(x.id); })); const list = [''].concat(have); const i = list.indexOf(ui.armAff || ''); ui.armAff = list[(i + 1) % list.length]; U.snd('click'); render(); };
   ACT.armsort = () => { ui.armSort = { rar: 'slot', slot: 'score', score: 'rar' }[ui.armSort || 'rar']; U.snd('click'); render(); };
   ACT.autoeq = (el) => { const g = gOf(+el.dataset.id); L.autoEquip(S, g); save(); ACT.gdetail(g.id); render(); };
   ACT.rename = (el) => { const g = gOf(+el.dataset.id); const n = prompt('New name', g.name); if (n && n.trim()) { g.name = n.trim().slice(0, 16); save(); ACT.gdetail(g.id); render(); } };
@@ -382,8 +383,8 @@
     const sub = ui.arm;
     let h = `<div class="ltabs">${[['inv', 'Items'], ['relics', 'Relics'], ['shop', 'Market'], ['forge', 'Forge']].map(([id, n]) => `<div class="ltab ${sub === id ? 'on' : ''}" data-a="armsub" data-v="${id}">${n}</div>`).join('')}</div>`;
     if (sub === 'inv') {
-      const sk = ui.armSort || 'rar'; const items = S.items.slice().sort((a, b) => (sk === 'slot' ? D.SLOTS.indexOf(a.slot) - D.SLOTS.indexOf(b.slot) : sk === 'score' ? L.itemScore(b) - L.itemScore(a) : 0) || b.rar - a.rar || L.itemScore(b) - L.itemScore(a));
-      h += `<div class="muted" style="margin-bottom:8px;color:var(--cream2)">${items.length}/${L.armoryCap(S)} items. Tap one to equip, upgrade or sell. <span class="tag" data-a="armsort" style="cursor:pointer">Sort: ${{ rar: 'Rarity', slot: 'Slot', score: 'Power' }[sk]}</span></div>`;
+      const sk = ui.armSort || 'rar'; const af0 = ui.armAff || ''; const items = S.items.filter((it) => !af0 || it.af.some((x) => x.id === af0)).sort((a, b) => (sk === 'slot' ? D.SLOTS.indexOf(a.slot) - D.SLOTS.indexOf(b.slot) : sk === 'score' ? L.itemScore(b) - L.itemScore(a) : 0) || b.rar - a.rar || L.itemScore(b) - L.itemScore(a));
+      h += `<div class="muted" style="margin-bottom:8px;color:var(--cream2)">${items.length}/${L.armoryCap(S)} items. Tap one to equip, upgrade or sell. <span class="tag" data-a="armsort" style="cursor:pointer">Sort: ${{ rar: 'Rarity', slot: 'Slot', score: 'Power' }[sk]}</span> <span class="tag" data-a="armaff" style="cursor:pointer">Affix: ${af0 ? D.AFFIX[af0].n : 'All'}</span></div>`;
       h += items.length ? '<div class="igrid">' + items.map((it) => icell(it)).join('') + '</div>' : '<div class="empty">No spare items. Win fights, enter tournaments, or visit the Market.</div>';
     } else if (sub === 'relics') {
       const slots = L.relicSlots(S);
@@ -463,7 +464,7 @@
   ACT.calm = () => optSet('rm', !U.calm());
   ACT.big = () => optSet('big', !(S.opts && S.opts.big));
   ACT.sound = () => { S.sound = S.sound === false; save(); render(); };
-  ACT.export = () => { const c = L.exportCode(S); modal(`<h2>Save code</h2><div class="muted">Copy this to back up or move your ludus.</div><textarea readonly style="width:100%;height:140px;margin-top:8px;font-size:11px;border:3px solid var(--ink);border-radius:10px;user-select:text;-webkit-user-select:text">${c}</textarea>`); };
+  ACT.export = () => { const c = L.exportCode(S); S.lastBackup = S.week; save(); modal(`<h2>Save code</h2><div class="muted">Copy this to back up or move your ludus.</div><textarea readonly style="width:100%;height:140px;margin-top:8px;font-size:11px;border:3px solid var(--ink);border-radius:10px;user-select:text;-webkit-user-select:text">${c}</textarea>`); };
   ACT.import = () => { const t = prompt('Paste a save code'); if (!t) return; const N = L.importCode(t); if (!N) return toast('That code did not work'); S = N; U.setS(S); save(); render(); toast('Save loaded'); };
   ACT.reset = () => { if (!confirm('Delete your ludus and start over?')) return; if (!confirm('Really? This cannot be undone.')) return; L.wipe(); S = null; U.setS(null); intro(); };
   ACT.how = () => {
