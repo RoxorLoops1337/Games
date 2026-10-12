@@ -221,5 +221,14 @@ Reflex drill (wait for green, tap fast) on even weeks once the Sparring Ring is 
 ## Next ideas
 - [ ] 99. Entrance animations per style (95)
 - [ ] 100. Fight replay and crowd audio (96)
-- [ ] 101. Reflex drill high score per fighter
-- [ ] 102. Third drill: combo memory
+- [x] 101. Reflex drill high score per fighter
+- [x] 102. Third drill: combo memory
+
+## Round 24 shipped
+Reflex drill verified in headless Chromium (it works), reflex best time stored per fighter, and a combo memory drill (watch three arrows, repeat them) every third week at Sparring Ring level 5. Also verified in the browser.
+
+## Next ideas
+- [ ] 103. Entrance animations per style (99)
+- [ ] 104. Fight replay and crowd audio (100)
+- [ ] 105. Drill leaderboard across your fighters
+- [ ] 106. Rival owner taunts shown in the fight intro
