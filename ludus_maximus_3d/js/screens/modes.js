@@ -56,7 +56,7 @@ function xpInjury(ctx, g, xp, lost, chance, maxWeeks) {
 }
 
 async function drops(ctx, relic, rune) {
-  const d = D();
+  const d = D;
   if (relic) await ctx.ask({ title: 'Relic found!', body: p(`${relic.n}: ${relic.d}. Relics boost every fighter. Equip them in the Armory.`), actions: dismissOk('Nice'), dismiss: 'ok' });
   if (rune) { const r = rune.kind === 'k' ? d.KEYSTONES[rune.id] : d.MINORS[rune.id]; await ctx.ask({ title: 'Rune unlocked!', body: p(`${r.n} (${rune.kind === 'k' ? 'Keystone' : 'Minor'}): ${r.d}. Set it on a fighter in their profile.`), actions: dismissOk('Nice'), dismiss: 'ok' }); }
 }
@@ -154,7 +154,7 @@ export async function startChamp(ctx) {
   if (!g) return;
   await session(ctx, async () => {
     g.en = Math.max(0, g.en - MIN_EN); const opp = L().champOpp(S, g), ev = { kind: 'champ', title: 'Champion duel', opps: [opp], league: 0, key: 'champ' + S.week };
-    const taunt = D().CHAMP_TAUNT && D().CHAMP_TAUNT[opp.style] || 'Come and fight.';
+    const taunt = D.CHAMP_TAUNT && D.CHAMP_TAUNT[opp.style] || 'Come and fight.';
     await ctx.ask({ title: 'The champion', body: infoBody([oppStrip([opp]), p(`${opp.name} of ${opp.ludus}, level ${opp.lvl}.`), h('p', '', `"${taunt}"`)]), actions: dismissOk('Fight!', 'danger'), dismiss: 'ok' });
     const res = await fightScreen(ctx, [g], [opp], 'bal', { ev, augs: [] }); const r = L().champResult(S, !!res.win);
     ctx.game.returnToHub(); ctx.sfx(res.win ? 'crowdCheer' : 'crowdBoo'); ctx.save(); ctx.refresh();

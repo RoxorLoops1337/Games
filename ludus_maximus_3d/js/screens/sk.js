@@ -3,7 +3,7 @@
 import * as U from '../ui_kit.js';
 import { styleBadge, chip, itemCard } from '../uihelpers.js';
 
-export const D = () => globalThis.LM_D, L = () => globalThis.LM;
+export const D = new Proxy({}, { get: (_, k) => globalThis.LM_D[k] }), L = () => globalThis.LM;
 export const h = U.h;
 export { U, styleBadge, chip, itemCard };
 export const fmt = (n) => Math.round(n).toLocaleString('en-US');
@@ -198,13 +198,13 @@ export function actions(btns) { return h('div', 'ax-actions', btns); }
 
 /** a style badge with a tooltip describing the style and its edge */
 export function styleTag(style, size = 40) {
-  const S = D().STYLES[style], b = styleBadge(style, size); b.tabIndex = 0; b.setAttribute('role', 'img'); b.setAttribute('aria-label', S.n);
+  const S = D.STYLES[style], b = styleBadge(style, size); b.tabIndex = 0; b.setAttribute('role', 'img'); b.setAttribute('aria-label', S.n);
   U.tooltip(b, `${S.role}. ${S.d}`, { title: S.n }); return b;
 }
 
 /** small row of opponents shown at fight intros */
 export function oppStrip(opps, fogLv = 3) {
-  return h('div', 'ax-row ax-wrap', opps.map((o) => h('div', 'ax-opp', [styleBadge(o.style, 36), h('div', '', [h('div', 'ax-oname', o.name), h('small', '', `Lv ${o.lvl} ${D().STYLES[o.style].n}`)])])));
+  return h('div', 'ax-row ax-wrap', opps.map((o) => h('div', 'ax-opp', [styleBadge(o.style, 36), h('div', '', [h('div', 'ax-oname', o.name), h('small', '', `Lv ${o.lvl} ${D.STYLES[o.style].n}`)])])));
 }
 
 // ------------------------------------------------------------------ fighter picker
@@ -222,7 +222,7 @@ export function pickFighters(ctx, o) {
       if (n > 1) root.append(hint(`Choose ${n} fighters. Selected ${sel.length} of ${n}.`));
       if (!S.glads.length) root.append(empty('roster', 'Your barracks are empty', 'Recruit a gladiator first.'));
       S.glads.forEach((g) => {
-        const inf = o.info(g) || {}, bad = !!inf.reason, on = sel.includes(g.id), st = D().STYLES[g.style];
+        const inf = o.info(g) || {}, bad = !!inf.reason, on = sel.includes(g.id), st = D.STYLES[g.style];
         const b = h('div', 'ax-pick' + (on ? ' sel' : '')); b.tabIndex = 0; b.setAttribute('role', 'button'); b.setAttribute('aria-pressed', on ? 'true' : 'false'); if (bad) b.setAttribute('aria-disabled', 'true');
         const en = h('div', 'ax-bar'); en.style.setProperty('--w', g.en + '%'); en.style.setProperty('--c', 'var(--lx-stam)'); en.append(h('i')); en.style.height = '6px'; en.title = `Energy ${Math.round(g.en)}`;
         b.append(h('span', 'ax-check', U.icon('check', 16)), styleBadge(g.style, 44),
