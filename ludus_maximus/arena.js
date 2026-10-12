@@ -68,6 +68,7 @@
     if (u.stk.gr) m *= 1 + 0.006 * (u.fx.grow || 0) * u.stk.gr;
     if (u.fx.ramp) m *= 1 + 0.03 * u.fx.ramp * Math.min(5, Math.floor(F.t / 5));
     if (u.rm.has('gather')) m *= 1 + 0.01 * Math.min(6, Math.floor(F.t / 5));
+    if (u.s.roar && u.fx.roarDmg) m *= 1 + u.fx.roarDmg;
     if (F.t > 40) m *= 1 + (F.t - 40) * 0.03;
     if (o.exec && tp < o.exec.th) m *= o.exec.m / (o.mult || 1);
     return m;
@@ -346,7 +347,7 @@
     for (let i = 0; i < us.length; i++) think(F, us[i], dt);
     for (let i = 0; i < us.length; i++) motion(F, us[i], dt);
     separate(F);
-    if (F.hype >= 100 && !F.done) roar(F);
+    if (F.hype >= 100 / (F.hypeK || 1) && !F.done) roar(F);
     F.peak = Math.max(F.peak, F.hype);
     if (!F.done && F.t > 95) { const hp = (s) => F.units.filter((u) => u.side === s).reduce((a, u) => a + u.hp / u.maxhp, 0); finish(F, hp('A') >= hp('B') ? 'A' : 'B'); }
   };

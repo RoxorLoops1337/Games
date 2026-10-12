@@ -49,10 +49,10 @@
   }
   const pickTechs = pickPends;
   async function pickAug(S, level, have, force, title) {
-    let offer = L.augOffer(S, level, have, force); let rerolled = false;
+    let offer = L.augOffer(S, level, have, force); let rerolls = 1 + L.facPerks(S).rerolls;
     for (;;) {
-      const v = await U.dialog(`<h2>${title || 'Choose an augment'}</h2><div class="muted" style="margin-bottom:8px">Lasts for this fight${have && have.length ? ' (on top of ' + have.length + ' from earlier rounds)' : ''}. Silver, Gold or Prismatic: pick one.</div>` + offer.map((a) => `<div class="itm" data-a="res" data-v="${a.id}" style="border-color:${D.TIERS[a.t].c};box-shadow:0 0 0 3px ${D.TIERS[a.t].c}66"><div class="sp"><span class="tag" style="background:${D.TIERS[a.t].c}">${D.TIERS[a.t].n}</span><div class="gname" style="font-size:14px">${a.n}</div><div class="muted" style="opacity:1">${a.d}</div></div></div>`).join('') + (rerolled ? '' : btn('Reroll (free, once)', 'reroll', 'ghost')));
-      if (v === 'reroll') { rerolled = true; offer = L.augOffer(S, level, have, force); continue; }
+      const v = await U.dialog(`<h2>${title || 'Choose an augment'}</h2><div class="muted" style="margin-bottom:8px">Lasts for this fight${have && have.length ? ' (on top of ' + have.length + ' from earlier rounds)' : ''}. Silver, Gold or Prismatic: pick one.</div>` + offer.map((a) => `<div class="itm" data-a="res" data-v="${a.id}" style="border-color:${D.TIERS[a.t].c};box-shadow:0 0 0 3px ${D.TIERS[a.t].c}66"><div class="sp"><span class="tag" style="background:${D.TIERS[a.t].c}">${D.TIERS[a.t].n}</span><div class="gname" style="font-size:14px">${a.n}</div><div class="muted" style="opacity:1">${a.d}</div></div></div>`).join('') + (rerolls > 0 ? btn(`Reroll (${rerolls} free)`, 'reroll', 'ghost') : ''));
+      if (v === 'reroll') { rerolls--; offer = L.augOffer(S, level, have, force); continue; }
       return D.AUGMENTS.find((a) => a.id === v);
     }
   }
@@ -117,7 +117,7 @@
   ACT.ptrick = (el) => { const id = el.dataset.v; const T = D.TRICKS.find((t) => t.id === id); if (!PREP.tricks[id] && prepCost() + trickCost(T) > PREP.gold) return U.toast('Not enough gold'); PREP.tricks[id] = !PREP.tricks[id]; U.snd('click'); prepPaint(); };
   function prep(S, ev, gl, opps, o) {
     const lv = L.scoutLevel(S); const a = L.adv(gl[0].style, opps[0].style); const ctx = L.teamCtx(S, gl, 'bal');
-    PREP.wager = 0; PREP.tricks = {}; PREP.gold = S.gold; PREP.lvl = Math.round(opps.reduce((x, y) => x + y.lvl, 0) / opps.length); PREP.mult = L.wagerMult(gl, opps);
+    PREP.wager = 0; PREP.tricks = {}; PREP.gold = S.gold; PREP.lvl = Math.round(opps.reduce((x, y) => x + y.lvl, 0) / opps.length); PREP.mult = L.wagerMult(gl, opps, S);
     let h = `<h2>${o.name ? o.name + ': ' : ''}${ev.title}</h2>`;
     h += `<div class="row" style="justify-content:space-around;align-items:flex-end"><div style="text-align:center">${gl.map((g) => U.spr(g, { size: 70 })).join('')}<div class="gname" style="font-size:12px">${gl.map((g) => esc(g.name)).join(' & ')}</div></div><div class="h" style="font-size:22px">VS</div><div style="text-align:center">${opps.map((x) => A.gladOf(x, { size: 70, tunic: x.color, flip: true, mood: 'fight' })).join('')}<div class="gname" style="font-size:12px">${opps.map((x) => esc(x.name)).join(' & ')}</div></div></div>`;
     h += `<div class="row wrap" style="justify-content:center;margin:8px 0">${gl.length === 1 && opps.length === 1 ? U.advTag(a) : ''}${opps.map((x) => A.styleIcon(x.style, 22)).join('')}${opps[0].gh ? '<span class="tag" style="background:#7d7d8c;color:#fff">Your old champion</span>' : ''}</div>`;
@@ -143,8 +143,8 @@
     return { wager: PREP.wager, mult: PREP.mult, tricks };
   }
   function settleBets(S, bet, res, notes) {
-    if (bet.wager) { if (res.win) { const w = Math.round(bet.wager * bet.mult); S.gold += w; notes.push(`Bet won: +${fmt(w - bet.wager)} gold`); U.snd('coin'); } else notes.push(`Bet lost: -${fmt(bet.wager)} gold`); }
-    bet.tricks.forEach((id) => { const T = D.TRICKS.find((t) => t.id === id); if (T.risk && Math.random() < T.risk) { S.fame = Math.max(0, S.fame - 15); notes.push(`Caught ${T.n.toLowerCase()}! -15 fame`); } });
+    if (bet.wager) { if (res.win) { const w = Math.round(bet.wager * bet.mult); S.gold += w; notes.push(`Bet won: +${fmt(w - bet.wager)} gold`); L.facGain(S, 'mer', 4); U.snd('coin'); } else notes.push(`Bet lost: -${fmt(bet.wager)} gold`); }
+    bet.tricks.forEach((id) => { const T = D.TRICKS.find((t) => t.id === id); if (T.risk && Math.random() < T.risk) { S.fame = Math.max(0, S.fame - 15); L.facGain(S, 'sen', -8); notes.push(`Caught ${T.n.toLowerCase()}! -15 fame, the Senate frowns`); } });
   }
 
   const fightScreen = (S, gl, opps, stance, o) => G.LMFIGHT.run(S, gl, opps, stance, o);
@@ -158,6 +158,7 @@
     h += `<div class="row" style="justify-content:center;margin:6px 0">${gl.map((g) => U.spr(g, { size: 80, mood: win ? 'idle' : 'idle' })).join('')}</div>`;
     h += `<div class="row wrap" style="justify-content:center"><span class="pill">${A.icon('coin', 14)} +${fmt(rep.gold)}</span><span class="pill">${A.icon('fame', 14)} +${fmt(rep.fame)}</span>${res.odds != null && res.odds < 0.4 && win ? '<span class="tag green">Underdog win!</span>' : ''}</div>`;
     rep.notes.forEach((n) => { h += `<div class="small" style="text-align:center;margin-top:4px">${esc(n)}</div>`; });
+    (rep.fac || []).forEach((x) => { h += `<div class="small" style="text-align:center"><span class="tag blue">${esc(x.text)}</span>${x.up ? ' <b>New perk: ' + esc(x.up) + '</b>' : ''}</div>`; });
     h += '<div style="margin-top:8px">' + rep.xp.map((x) => { const g = U.gOf(x.id); return `<div class="kv"><span>${esc(g.name)}</span><b>+${x.xp} XP${x.up.length ? ' · LEVEL ' + x.up[x.up.length - 1] + '!' : ''}</b></div>`; }).join('') + '</div>';
     rep.lvl.forEach((l) => { h += `<div class="lvlup">${esc(U.gOf(l.id).name)} reached LEVEL ${l.to}!</div>`; });
     if (rep.lvl.length) U.snd('levelup');

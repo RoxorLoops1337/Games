@@ -192,5 +192,18 @@ ok(strongWins >= 17, `level 10 beats level 1 (${strongWins}/20)`);
   const leg = LM.genItem(null, { slot: 'helm', rar: 4, ilvl: 5 }); ok(LM.evolve(S3, leg) === 'Already legendary', 'legendary cannot evolve');
 }
 
+// factions
+{
+  const S4 = LM.newGame({ name: 'F' }); ok(LM.facTier(S4, 'sen') === 0 && LM.facPerks(S4).fame === 0, 'factions start neutral');
+  const g1 = LM.facGain(S4, 'sen', 30); ok(LM.facTier(S4, 'sen') === 1 && g1.up === D.FACTIONS.sen.perks[0] && LM.facPerks(S4).fame === 0.05, 'reputation unlocks a perk tier');
+  LM.facGain(S4, 'sen', 40); ok(LM.facTier(S4, 'sen') === 2 && LM.relicSlots(S4) === LM.relicSlots(LM.newGame({})) + 1, 'senate 50 gives a relic slot');
+  LM.facGain(S4, 'ple', 200); ok(LM.facRep(S4, 'ple') === 100 && LM.facPerks(S4).rerolls === 2 && LM.facPerks(S4).hype > 1, 'reputation caps at 100 and plebs perks apply');
+  LM.facGain(S4, 'mer', 80); const a = LM.makeGlad({ lvl: 5 }), b = LM.makeGlad({ lvl: 5 }); ok(LM.wagerMult([a], [b], S4) > LM.wagerMult([a], [b]), 'merchant perk improves payouts');
+  const ev = LM.events(S4, 1, 0)[1]; const gg = LM.makeGlad({ id: 77, lvl: 5 }); S4.glads.push(gg); const before = S4.fac.ple; LM.settle(S4, ev, [gg], { win: true, hype: 120, odds: 0.2, hpf: { 77: 0.5 } });
+  ok(S4.fac.sen >= 1 && (S4.fac.ple === 100 || S4.fac.ple > before), 'winning as the underdog pleases the plebs');
+  const F = LM.createFight(LM.mkUnits([a], 'A', {}), LM.mkUnits([b], 'B', {}), { quiet: true }); F.hypeK = 2; F.hype = 55; LM.step(F, 0.05); ok(F.hype === 0 || F.peak >= 50, 'hypeK makes the crowd roar sooner');
+  const asc = LM.ascend(Object.assign(S4, { fame: 2000 })); ok(asc.fac.sen === Math.floor(S4.fac.sen / 2), 'half the reputation survives ascension');
+}
+
 console.log(`ludus_maximus: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

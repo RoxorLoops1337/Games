@@ -148,7 +148,7 @@
   }
   LM.genItem = genItem;
   LM.sellVal = (it) => Math.round((8 + it.ilvl * 2.2) * D.RAR[it.rar].m * D.RAR[it.rar].m * (1 + 0.35 * it.up));
-  LM.buyVal = (S, it) => Math.round(LM.sellVal(it) * 3.5 * (1 - 0.03 * LM.bfx(S, 'market').l));
+  LM.buyVal = (S, it) => Math.round(LM.sellVal(it) * 3.5 * (1 - 0.03 * LM.bfx(S, 'market').l - LM.facPerks(S).shop));
   LM.upCost = (it) => Math.round((20 + it.ilvl * 6) * D.RAR[it.rar].m * Math.pow(it.up + 1, 1.4));
   LM.maxUp = (S) => D.BUILD.forge.v[LM.bfx(S, 'forge').l];
   LM.itemScore = (it) => {
@@ -330,7 +330,7 @@
     const ad = gl.length === 1 && opps.length === 1 ? LM.adv(gl[0].style, opps[0].style) : 0;
     return clamp(0.5 + 0.04 * (avg(gl) - avg(opps)) + 0.12 * ad, 0.08, 0.92);
   };
-  LM.wagerMult = (gl, opps) => Math.round(clamp(0.93 / LM.publicOdds(gl, opps), 1.1, 8) * 10) / 10;
+  LM.wagerMult = (gl, opps, S) => Math.round(clamp(0.93 / LM.publicOdds(gl, opps) + (S ? LM.facPerks(S).payout : 0), 1.1, 8) * 10) / 10;
   LM.wagerOptions = (S) => [0.1, 0.25, 0.5].map((f) => Math.min(Math.round(S.gold * f), 2000)).filter((v) => v >= 5);
 
 
@@ -358,7 +358,7 @@
     if (!LM.runeOwned(S, 'm', id)) return; const m = g.rune.m; const i = m.indexOf(id);
     if (i >= 0) m.splice(i, 1); else { if (m.length >= 2) m.shift(); m.push(id); }
   };
-  LM.relicSlots = (S) => 2 + LM.bfx(S, 'shrine').l;
+  LM.relicSlots = (S) => 2 + LM.bfx(S, 'shrine').l + LM.facPerks(S).slots;
   LM.dropRelic = (S) => {
     const pool = D.RELICS.filter((r) => !(S.relics || []).includes(r.id)); if (!pool.length) return null;
     const r = pick(pool); S.relics.push(r.id); if (S.relicOn.length < LM.relicSlots(S)) S.relicOn.push(r.id); return r;
@@ -444,8 +444,8 @@
     if (ev.kind === 'duel' && res.win && LM.isRevenge(S, ev)) { gold *= 1.25; fame *= 1.25; rep.notes.push('Revenge bonus +25%'); }
     fame *= 0.85 + Math.min(res.hype || 0, 100) / 300;
     let ft = 0; glads.forEach((g) => { ft += (D.TRAITS[g.trait].fame || 0); ['weapon', 'shield', 'armor', 'helm', 'charm'].forEach((s) => { const it = g.gear[s]; if (it) it.af.forEach((a) => { if (a.id === 'showy') ft += 0.1 * a.v; }); }); });
-    fame *= 1 + ft / glads.length;
-    const perks = S.perks || {}; gold *= 1 + 0.1 * (perks.gold || 0) + LM.relicGold(S) + (glads.some((g) => g.rune && g.rune.k === 'first') ? 0.1 : 0) + (res.win || res.place ? LM.bfx(S, 'stands').v : 0); fame *= 1 + (res.win ? LM.bfx(S, 'stands').v * 0.5 : 0);
+    fame *= 1 + ft / glads.length + LM.facPerks(S).fame;
+    const perks = S.perks || {}; gold *= 1 + 0.1 * (perks.gold || 0) + LM.facPerks(S).gold + LM.relicGold(S) + (glads.some((g) => g.rune && g.rune.k === 'first') ? 0.1 : 0) + (res.win || res.place ? LM.bfx(S, 'stands').v : 0); fame *= 1 + (res.win ? LM.bfx(S, 'stands').v * 0.5 : 0);
     gold = Math.round(gold); fame = Math.round(fame); S.gold += gold; S.fame += fame; rep.gold = gold; rep.fame = fame;
     const oppLvl = Math.max(...ev.opps.map((o) => o.lvl));
     const big = ev.kind === 'tourney' || ev.kind === 'grand' ? 1.6 : 1;
@@ -467,21 +467,27 @@
     rep.loot.forEach((it) => { const sold = LM.addItem(S, it); if (sold) rep.notes.push(`Armory full: sold ${sold.name}`); });
     // rivals head-to-head
     ev.opps.forEach((o) => { if (!o.rv) return; S.rivals = S.rivals || {}; const r0 = S.rivals[o.rv] || { w: 0, l: 0, last: '' }; if (res.win || res.place === 1) { r0.w++; r0.last = 'w'; } else { r0.l++; r0.last = 'l'; } S.rivals[o.rv] = r0; });
-    const wonAny = res.win || res.place === 1;
+    const wonAny = res.win || res.place === 1; rep.fac = [];
+    if (wonAny) {
+      if (res.odds != null && res.odds < 0.4) rep.fac.push(LM.facGain(S, 'ple', 8));
+      if ((res.hype || 0) >= 100) rep.fac.push(LM.facGain(S, 'ple', 4));
+      if (ev.kind === 'tourney' || ev.kind === 'grand') rep.fac.push(LM.facGain(S, 'sen', ev.kind === 'grand' ? 14 : 9));
+      else rep.fac.push(LM.facGain(S, 'sen', 1));
+    }
     S.stats.fights++; if (wonAny) S.stats.wins++; else S.stats.losses++;
     if (wonAny) { LM.note(S, 'win', { styles: glads.map((g) => g.style), kind: ev.kind }); if (ev.kind === 'tourney' || ev.kind === 'grand') { S.stats.tourneys++; LM.note(S, 'tourney'); if (ev.kind === 'grand' && ev.league === 3) S.flags.imperial = true; } if (ev.kind === 'team') LM.note(S, 'team'); if (res.odds != null && res.odds < 0.4) LM.note(S, 'upset'); }
     return rep;
   };
   LM.mercy = (S, ev, rep, choice) => {
     if (choice === 'mercy') {
-      const f = Math.round(rep.fame * 0.2) + 2; S.fame += f; rep.fame += f; S.stats.spares++; LM.note(S, 'mercy');
+      const f = Math.round(rep.fame * 0.2) + 2; S.fame += f; rep.fame += f; S.stats.spares++; LM.note(S, 'mercy'); LM.facGain(S, 'sen', 6); LM.facGain(S, 'ple', 2);
       const o = ev.opps[0]; const cap = LM.rosterCap(S);
       if (ev.kind === 'duel' && S.glads.length < cap && rnd() < 0.3) {
         const g = JSON.parse(JSON.stringify(o)); g.id = S.nextId++; g.act = 'rest'; g.en = 100; g.mo = 80; g.inj = 0; g.rv = null; g.color = null; g.rec = { w: 0, l: 0 }; g.fame = 0; S.glads.push(g); return { f, joined: g };
       }
       return { f };
     }
-    const gd = Math.round(rep.gold * 0.2) + 5; S.gold += gd; rep.gold += gd; return { gd };
+    const gd = Math.round(rep.gold * 0.2) + 5; S.gold += gd; rep.gold += gd; LM.facGain(S, 'mer', 5); return { gd };
   };
 
   // ---------- weekly economy ----------
@@ -526,7 +532,7 @@
     const rep = { upkeep: 0, income: 0, notes: [], season: null };
     const up = LM.upkeep(S); const paid = Math.min(S.gold, up); S.gold -= paid; rep.upkeep = paid;
     if (paid < up) { S.glads.forEach((g) => { g.mo = clamp(g.mo - 10, 0, 100); }); rep.notes.push('You could not pay the full upkeep. Morale dropped.'); }
-    const inc = LM.weeklyIncome(S); S.gold += inc; rep.income = inc;
+    const inc = LM.weeklyIncome(S) + LM.facPerks(S).weekly; S.gold += inc; rep.income = inc;
     const sh = LM.bfx(S, 'shrine'); if (sh.l) { const f = Math.round(sh.v * 60); S.fame += f; if (f) rep.notes.push(`The shrine drew ${f} fame.`); }
     Object.keys(S.entries).forEach((k) => { if (parseInt(k.split(':')[0], 10) <= S.week) delete S.entries[k]; });
     S.week++; S.stats.weeks++;
@@ -536,6 +542,12 @@
     rep.ev = LM.rollEvent(S);
     return rep;
   };
+
+  // ---------- factions ----------
+  LM.facRep = (S, id) => ((S.fac || {})[id] || 0);
+  LM.facTier = (S, id) => { const r = LM.facRep(S, id); return r >= 100 ? 4 : r >= 75 ? 3 : r >= 50 ? 2 : r >= 25 ? 1 : 0; };
+  LM.facGain = (S, id, n) => { S.fac = S.fac || { sen: 0, mer: 0, ple: 0 }; const before = LM.facTier(S, id); S.fac[id] = clamp((S.fac[id] || 0) + n, 0, 100); const after = LM.facTier(S, id); return { text: `${D.FACTIONS[id].n} ${n >= 0 ? '+' : ''}${n}`, up: after > before ? D.FACTIONS[id].perks[after - 1] : '' }; };
+  LM.facPerks = (S) => { const t = (id) => LM.facTier(S, id); return { fame: (t('sen') >= 1 ? 0.05 : 0) + (t('sen') >= 3 ? 0.1 : 0), slots: t('sen') >= 2 ? 1 : 0, weekly: (t('sen') >= 4 ? 40 : 0) + (t('mer') >= 4 ? 60 : 0), shop: t('mer') >= 1 ? 0.05 : 0, gold: t('mer') >= 2 ? 0.1 : 0, payout: t('mer') >= 3 ? 0.2 : 0, hype: t('ple') >= 1 ? 1.15 : 1, ultStart: t('ple') >= 2 ? 3 : 0, rerolls: t('ple') >= 3 ? 2 : 0, roarDmg: t('ple') >= 4 ? 0.08 : 0 }; };
 
   // ---------- recruits & market ----------
   LM.genRecruit = (S) => {
@@ -657,9 +669,9 @@
   LM.buyPerk = (S, id) => { const p = D.PERKS.find((x) => x.id === id); const lv = (S.perks[id] || 0); if (lv >= p.max) return 'Max'; const c = LM.perkCost(S, p); if (S.laurels < c) return 'Not enough laurels'; S.laurels -= c; S.perks[id] = lv + 1; return ''; };
   LM.canAscend = (S) => S.fame >= 1800 || S.flags.imperial;
   LM.ascend = (S) => {
-    const gain = LM.laurelsFor(S); const keep = { perks: S.perks, laurels: S.laurels + gain, legends: S.legends, name: S.name, color: S.color, ascensions: (S.ascensions || 0) + 1, sound: S.sound, flags: { tutor: true }, stats: Object.assign({}, S.stats) };
+    const gain = LM.laurelsFor(S); const keep = { fac: { sen: Math.floor(S.fac.sen / 2), mer: Math.floor(S.fac.mer / 2), ple: Math.floor(S.fac.ple / 2) }, perks: S.perks, laurels: S.laurels + gain, legends: S.legends, name: S.name, color: S.color, ascensions: (S.ascensions || 0) + 1, sound: S.sound, flags: { tutor: true }, stats: Object.assign({}, S.stats) };
     const N = LM.newGame({ name: keep.name, color: keep.color, perks: keep.perks, laurels: keep.laurels, legends: keep.legends, ascensions: keep.ascensions, sound: keep.sound });
-    N.stats = keep.stats;
+    N.stats = keep.stats; N.fac = keep.fac;
     const snap = S.glads.concat(S.ghosts || []).filter((g) => g.st).sort((a, b) => b.lvl - a.lvl).slice(0, 6).map((g) => { const c = JSON.parse(JSON.stringify(g)); c.lud = 'Ghost of ' + S.name; c.act = 'rest'; return c; });
     N.ghosts = snap; return N;
   };
@@ -670,7 +682,7 @@
     const S = {
       v: 1, name: o.name || 'Ludus Maximus', color: o.color || 0, seed: Math.floor(rnd() * 1e9).toString(36), week: 1, season: 1,
       gold: 250 + 150 * (perks.start || 0), fame: 0, laurels: o.laurels || 0, perks, rows: 2, plots: new Array(16).fill(null), glads: [], nextId: 1, items: [],
-      runes: { k: D.RUNE_START.k.slice(), m: D.RUNE_START.m.slice() }, relics: [], relicOn: [], entries: {}, menu: 'barley', rivals: {}, contracts: [], legends: o.legends || [], bonds: {}, market: null, recruits: null, pendingEv: null,
+      fac: { sen: 0, mer: 0, ple: 0 }, runes: { k: D.RUNE_START.k.slice(), m: D.RUNE_START.m.slice() }, relics: [], relicOn: [], entries: {}, menu: 'barley', rivals: {}, contracts: [], legends: o.legends || [], bonds: {}, market: null, recruits: null, pendingEv: null,
       stats: { fights: 0, wins: 0, losses: 0, tourneys: 0, spares: 0, weeks: 0, contracts: 0 }, flags: o.flags || {}, ascensions: o.ascensions || 0, sound: o.sound !== false,
     };
     S.plots[6] = { b: 'kitchen', l: 1 }; S.plots[5] = { b: 'barracks', l: 1 + Math.min(1, perks.start || 0) }; S.plots[2] = { b: 'palaestra', l: 1 };
@@ -680,6 +692,7 @@
   LM.save = (S) => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { /* storage may be blocked */ } };
   LM.load = () => { try { const t = localStorage.getItem(KEY); if (!t) return null; const S = JSON.parse(t); return S && S.v === 1 ? LM.migrate(S) : null; } catch (e) { return null; } };
   LM.migrate = (S) => {
+    S.fac = S.fac || { sen: 0, mer: 0, ple: 0 };
     S.runes = S.runes || { k: D.RUNE_START.k.slice(), m: D.RUNE_START.m.slice() }; S.relics = S.relics || []; S.relicOn = S.relicOn || [];
     (S.glads || []).concat(S.ghosts || []).forEach((g) => {
       g.pend = g.pend || (g.pick ? [{ t: 'tech', o: g.pick }] : []); delete g.pick; g.mast = g.mast || []; g.rune = g.rune || { k: 'lethal', m: ['celerity', 'coup'] };
