@@ -139,6 +139,15 @@ Planner presets (Boot camp, Rest week, Odd jobs, Sparring), legend apprenticeshi
 
 ## Next ideas
 - [ ] 63. Crowd ambience that follows hype (needs audio work)
-- [ ] 64. Season-long ladder with weekly rewards
-- [ ] 65. Fighter personality traits that react to events
-- [ ] 66. Share card for a champion (screenshot export)
+- [x] 64. Season-long ladder with weekly rewards
+- [x] 65. Fighter personality traits that react to events
+- [x] 66. Share card for a champion (screenshot export)
+
+## Round 15 shipped
+Season ladder (win milestones pay once per season), trait-flavored mood events (Showman, Hothead, Lucky, Cool Head and more), and a downloadable Share card poster for any fighter. Crowd audio (63) and replay (55) still open. Also restored round 14 helpers after a bad edit (caught by tests before merge).
+
+## Next ideas
+- [ ] 67. Tournament brackets with sponsor banners
+- [ ] 68. Fighter rivalries show up in the Forum
+- [ ] 69. Training dummy minigame upgrades
+- [ ] 70. Season trophy cabinet with a yearly award

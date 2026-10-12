@@ -365,5 +365,14 @@ ok(strongWins >= 17, `level 10 beats level 1 (${strongWins}/20)`);
   S14.rowner = { name: 'Rival', w: 3, l: 0 }; S14.week = 4; let raided = 0; for (let i = 0; i < 60; i++) { LM.rerollMarket(S14); if (!S14.market.some((x) => x.sp)) raided++; } ok(raided > 5 && raided < 55, 'the rival owner sometimes raids the special item');
 }
 
+// round 15: season ladder, trait-flavored moods
+{
+  const S15 = LM.newGame({ name: 'R15' }); S15.week = 3; S15.stats.wins = 3; const g0 = S15.gold; const r1 = LM.ladderCheck(S15);
+  ok(r1.length === 1 && S15.gold > g0, 'three wins reach the first ladder reward'); ok(LM.ladderCheck(S15).length === 0, 'ladder rewards pay once');
+  S15.stats.wins = 10; ok(LM.ladderCheck(S15).length === 2, 'skipping tiers pays each one'); S15.week = 13; S15.sl.wins = 10; S15.stats.wins = 13; ok(LM.ladderCheck(S15).length === 1, 'a new season resets the ladder');
+  const g = LM.makeGlad({ id: S15.nextId++, style: 'thraex', lvl: 3 }); g.trait = 'hothead'; S15.glads.push(g); let flavored = false; for (let i = 0; i < 200 && !flavored; i++) { const m = LM.moodEvent(S15); if (m && /bench|wrestling/.test(m)) flavored = true; }
+  ok(flavored, 'traits flavor mood events');
+}
+
 console.log(`ludus_maximus: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
