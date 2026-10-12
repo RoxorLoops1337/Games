@@ -140,14 +140,14 @@ export function createArena({ crowd = 3700, density = 1, decalRes = 2048, seed =
   const rowsInfo = [];      // {d, y, tw} per seat row (crowd rows)
   const segs = [];
   // podium wall (faces arena) with AO + purple frieze + gold line
-  segs.push({ a: [0, 0], b: [0, 1.5], ca: [0.5, 0.45, 0.42], cb: [0.9, 0.86, 0.8], face: 'in' });
-  segs.push({ a: [0, 1.5], b: [0, 1.95], ca: [0.92, 0.88, 0.82], cb: [0.95, 0.9, 0.84], face: 'in', v0: 1.5 });
+  segs.push({ a: [0, 0], b: [0, 1.5], ca: [0.5, 0.45, 0.42], cb: [0.9, 0.86, 0.8], face: 'in', gate: true });
+  segs.push({ a: [0, 1.5], b: [0, 1.95], ca: [0.92, 0.88, 0.82], cb: [0.95, 0.9, 0.84], face: 'in', gate: true, v0: 1.5 });
   const FRIEZE = [[0.62, 0.3, 0.68], [0.55, 0.28, 0.62]];
-  segs.push({ a: [-0.02, 1.95], b: [-0.02, 2.45], ca: FRIEZE[0], cb: FRIEZE[1], face: 'in', v0: 1.95 });
-  segs.push({ a: [-0.03, 2.45], b: [-0.03, 2.58], ca: [1.2, 0.95, 0.4], cb: [1.2, 0.95, 0.4], face: 'in', v0: 2.45 });
-  segs.push({ a: [0, 2.58], b: [0, PH], ca: [0.98, 0.94, 0.88], cb: [1.0, 0.96, 0.9], face: 'in', v0: 2.58 });
-  segs.push({ a: [-0.2, PH], b: [0.25, PH], ca: 1.0, cb: 1.0, face: 'up' });                   // coping
-  segs.push({ a: [-0.2, PH - 0.0], b: [-0.2, PH - 0.22], ca: 0.9, cb: 0.7, face: 'in' });
+  segs.push({ a: [-0.02, 1.95], b: [-0.02, 2.45], ca: FRIEZE[0], cb: FRIEZE[1], face: 'in', gate: true, v0: 1.95 });
+  segs.push({ a: [-0.03, 2.45], b: [-0.03, 2.58], ca: [1.2, 0.95, 0.4], cb: [1.2, 0.95, 0.4], face: 'in', gate: true, v0: 2.45 });
+  segs.push({ a: [0, 2.58], b: [0, PH], ca: [0.98, 0.94, 0.88], cb: [1.0, 0.96, 0.9], face: 'in', gate: true, v0: 2.58 });
+  segs.push({ a: [-0.2, PH], b: [0.25, PH], ca: 1.0, cb: 1.0, face: 'up', gate: true });                   // coping
+  segs.push({ a: [-0.2, PH - 0.0], b: [-0.2, PH - 0.22], ca: 0.9, cb: 0.7, face: 'in', gate: true });
   let d = 0.25, y = PH;
   for (let k = 0; k < 15; k++) {
     if (k === 9) {                                                                                // praecinctio: wide walkway + balteus wall
@@ -184,7 +184,7 @@ export function createArena({ crowd = 3700, density = 1, decalRes = 2048, seed =
   segs.push({ a: [FD, FH + 0.05], b: [FD + 0.4, FH + 0.05], ca: 1.1, cb: 1.1, face: 'up' });
 
   const stoneGeo = sweep(segs, N, {
-    skip: (j, th, sg) => sg.a[0] <= 0.3 && sg.b[0] <= 0.3 && sg.a[1] < PH && sg.b[1] <= PH + 0.001 && sg.face === 'in' && inGate(th) && sg.b[1] <= PH && sg.a[0] <= 0 && !(sg.b[1] <= 0.0),
+    skip: (j, th, sg) => sg.gate && inGate(th),
     tint: (j, sg) => ((j % per) === 0 && sg.face !== 'out' && sg.a[1] >= PH) ? 0.72 : 1,
   });
   const stoneMat = new THREE.MeshStandardMaterial({ map: stone.map, bumpMap: stone.bump, bumpScale: 2.2, vertexColors: true, roughness: 0.93, metalness: 0 });
