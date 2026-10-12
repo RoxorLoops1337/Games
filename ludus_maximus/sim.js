@@ -558,6 +558,7 @@
     }
     S.market = null; S.recruits = null; LM.relTick(S); rep.story = LM.storyCheck(S);
     LM.fillContracts(S);
+    LM.ladderCheck(S).forEach((r) => { rep.notes.push(`Season ladder: ${r.n} wins reached! +${r.gold} gold, +${r.fame} fame.`); });
     { const me = LM.moodEvent(S); if (me) rep.notes.push(me); }
     rep.nicks = LM.earnNick(S); rep.news = LM.crier(S, rep);
     rep.ev = LM.rollEvent(S);
@@ -667,10 +668,24 @@
     S.bountyWeek = S.week; if (!win) return { gold: 0, fame: 0 };
     const gold = Math.round((50 + 35 * LM.maxLeague(S)) * LM.diffGold(S)), fame = 20 + 10 * LM.maxLeague(S); S.gold += gold; S.fame += fame; S.stats.bounties = (S.stats.bounties || 0) + 1; return { gold, fame };
   };
+  LM.TRAIT_MOOD = {
+    showman: { good: 'practiced a flourish and drew a crowd', bad: 'was upstaged at supper and sulks' },
+    hothead: { good: 'won a wrestling bet in the barracks', bad: 'smashed a bench in a rage' },
+    lucky: { good: 'found a coin in the sand' }, coolhead: { bad: 'shrugged off a restless night' },
+    frugal: { good: 'saved a few coins and smiles about it' }, hordearius: { good: 'enjoyed a second bowl of barley' },
+  };
   LM.moodEvent = (S) => {
-    if (!S.glads.length || rnd() > 0.3) return null; const g = pick(S.glads); const good = rnd() < 0.5;
-    if (good) { g.mo = clamp(g.mo + 15, 0, 100); return `${g.name} saw a good omen in the sand. Morale up!`; }
-    g.mo = clamp(g.mo - 12, 0, 100); g.en = clamp(g.en - 10, 0, 100); return `${g.name} had a bad night, restless with dark dreams.`;
+    if (!S.glads.length || rnd() > 0.3) return null; const g = pick(S.glads); const good = rnd() < 0.5; const tm = LM.TRAIT_MOOD[g.trait] || {};
+    if (good) { g.mo = clamp(g.mo + (g.trait === 'lucky' ? 22 : 15), 0, 100); return `${g.name} ${tm.good || 'saw a good omen in the sand'}. Morale up!`; }
+    const k = g.trait === 'coolhead' ? 0.5 : 1; g.mo = clamp(g.mo - 12 * k, 0, 100); g.en = clamp(g.en - 10 * k, 0, 100); return `${g.name} ${tm.bad || 'had a bad night, restless with dark dreams'}.`;
+  };
+  // season ladder: win milestones inside each season pay out once
+  LM.LADDER = [{ n: 3, gold: 60, fame: 20 }, { n: 6, gold: 120, fame: 40 }, { n: 10, gold: 220, fame: 80 }, { n: 15, gold: 400, fame: 150 }];
+  LM.ladderWins = (S) => S.stats.wins - ((S.sl || {}).wins || 0);
+  LM.ladderCheck = (S) => {
+    const season = Math.ceil(S.week / 12); if (!S.ladder || S.ladder.season !== season) S.ladder = { season, tier: 0 }; const w = LM.ladderWins(S); const out = [];
+    LM.LADDER.forEach((t, i) => { if (i >= S.ladder.tier && w >= t.n) { S.ladder.tier = i + 1; const gold = Math.round(t.gold * LM.diffGold(S)); S.gold += gold; S.fame += t.fame; out.push({ n: t.n, gold, fame: t.fame }); } });
+    return out;
   };
   // planner presets, apprentices, market raids
   LM.preset = (S, kind) => {
