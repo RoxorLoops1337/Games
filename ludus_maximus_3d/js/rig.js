@@ -142,11 +142,11 @@ export const DEFAULT_PALETTE = { skin: '#c98d62', hair: '#2b1b12', cloth: '#a845
 // go flat brown, a cool fresnel rim for separation from sand, a warm subsurface-ish bleed at grazing angles on skin, and a faux
 // sky/ground reflection so metals read without an environment map (the arena has none).
 const SHADE = {
-  skin: { fill: 0.20, fs: '#c8c8ff', fg: '#d8a880', rim: 0.40, rc: '#a8c4ff', rp: 2.8, sss: 0.16, sc: '#ff7a50', env: 0 },
-  hair: { fill: 0.22, fs: '#b8b8f0', fg: '#8a6a50', rim: 0.45, rc: '#b0c8ff', rp: 2.6, sss: 0, sc: '#fff', env: 0.10 },
-  cloth: { fill: 0.24, fs: '#c0c0f0', fg: '#d09870', rim: 0.30, rc: '#a8c0ff', rp: 3.0, sss: 0.10, sc: '#ff9060', env: 0 },
+  skin: { fill: 0.20, fs: '#c8c8ff', fg: '#d8a880', rim: 0.55, rc: '#a8c4ff', rp: 4.5, sss: 0.16, sc: '#ff7a50', env: 0 },
+  hair: { fill: 0.22, fs: '#b8b8f0', fg: '#8a6a50', rim: 0.5, rc: '#b0c8ff', rp: 4.0, sss: 0, sc: '#fff', env: 0.10 },
+  cloth: { fill: 0.24, fs: '#c0c0f0', fg: '#d09870', rim: 0.40, rc: '#a8c0ff', rp: 4.5, sss: 0.10, sc: '#ff9060', env: 0 },
   plume: { fill: 0.24, fs: '#c0c0f0', fg: '#d09870', rim: 0.32, rc: '#b0c8ff', rp: 3.0, sss: 0.15, sc: '#ff9060', env: 0 },
-  leather: { fill: 0.22, fs: '#b8b8e8', fg: '#c08860', rim: 0.28, rc: '#a8c0ff', rp: 3.0, sss: 0, sc: '#fff', env: 0.20 },
+  leather: { fill: 0.22, fs: '#b8b8e8', fg: '#c08860', rim: 0.35, rc: '#a8c0ff', rp: 4.5, sss: 0, sc: '#fff', env: 0.20 },
   metal: { fill: 0.05, fs: '#b8c0e8', fg: '#c89868', rim: 0.40, rc: '#c0d4ff', rp: 2.4, sss: 0, sc: '#fff', env: 0.55 },
   trim: { fill: 0.06, fs: '#c8c8f0', fg: '#d8a060', rim: 0.35, rc: '#ffe0b0', rp: 2.4, sss: 0, sc: '#fff', env: 0.75 },
   eye: { fill: 0.25, fs: '#ffffff', fg: '#ffeedd', rim: 0, rc: '#fff', rp: 3, sss: 0, sc: '#fff', env: 0 },
@@ -154,8 +154,9 @@ const SHADE = {
 };
 const _col = new THREE.Color();
 const v3s = (hex) => { _col.set(hex); return `vec3(${_col.r.toFixed(4)},${_col.g.toFixed(4)},${_col.b.toFixed(4)})`; };
+export const EDGE = { skin: 0.5, hair: 0.35, cloth: 0.4, plume: 0.35, leather: 0.4, metal: 0.3, trim: 0.2, eye: 0, gem: 0 };
 export function shadePatch(mat, key, xo = {}) {
-  const k = SHADE[key]; if (!k) return;
+  const k = SHADE[key]; if (!k) return; const ed = EDGE[key] || 0;
   const f = (n) => (+n).toFixed(3);
   const code = `{
   vec3 vdC = normalize(vViewPosition);
@@ -170,6 +171,7 @@ export function shadePatch(mat, key, xo = {}) {
   ${k.env > 0 ? `{ vec3 rWC = inverseTransformDirection(reflect(-vdC, normal), viewMatrix); float hC = rWC.y;
     vec3 eC = mix(vec3(0.46,0.34,0.26), vec3(0.62,0.74,1.0), smoothstep(-0.35, 0.8, hC)); eC += vec3(1.0,0.78,0.5) * exp(-pow((hC - 0.14) * 3.6, 2.0)) * 0.9;
     float frC = 0.4 + 0.6 * pow(1.0 - ndvC, 2.0); addC += albC * eC * ${f(k.env)} * frC; } ` : ''}
+  outgoingLight *= 1.0 - ${f(ed)} * pow(1.0 - ndvC, 2.6);
   outgoingLight += addC;
 }
 `;
