@@ -179,3 +179,42 @@ export function makeCourtyardFloor(w = 1536, h = 1250, sandTile, seed = 7) {
   x.fillStyle = vg2; x.fillRect(0, 0, w, h);
   return tex(c, true, false);
 }
+
+/** Terracotta roof tiles (curved rows). Tile = 2 m x 2 m (8 columns x 8 rows). */
+export function makeRoofTexture(size = 256, seed = 5) {
+  return bake(size, (u, v, px, py, o) => {
+    const cols = 8, rows = 8;
+    const row = Math.floor(v * rows), off = (row % 2) * 0.5;
+    const fu = ((u * cols + off) % 1 + 1) % 1, fv = (v * rows) % 1;
+    const id = hash(Math.floor(u * cols + off) % cols, row, seed);
+    const curve = Math.sin(fu * Math.PI);                       // convex tile profile
+    const lap = Math.min(1, fv * 3);                            // shaded overlap at the tile top edge
+    const n = tfbm(u * 24, v * 24, 24, 3, seed);
+    const k = 0.55 + curve * 0.4 + lap * 0.12 + (id - 0.5) * 0.18 + (n - 0.5) * 0.2;
+    const c = mix3(hex(0x8f3d22), hex(0xcf7a48), clamp01(k - 0.35));
+    o.c = [c[0] * (0.7 + k * 0.45), c[1] * (0.7 + k * 0.45), c[2] * (0.7 + k * 0.45)];
+    o.h = 0.3 + curve * 0.5 - (1 - lap) * 0.15;
+  });
+}
+
+/** Distant Colosseum facade strip (3 arch tiers + attic). Wraps horizontally every `bays` bays. Color only. */
+export function makeColosseumFacade(w = 1024, h = 512, bays = 8) {
+  const c = canvas(w, h), x = c.getContext('2d');
+  const g = x.createLinearGradient(0, 0, 0, h); g.addColorStop(0, '#e9dcbc'); g.addColorStop(1, '#cdb88f');
+  x.fillStyle = g; x.fillRect(0, 0, w, h);
+  for (let i = 0; i < 900; i++) { x.fillStyle = `rgba(${90 + (i * 7) % 60},${70 + (i * 5) % 40},50,0.05)`; x.fillRect((i * 97) % w, (i * 53) % h, 18 + (i % 9) * 6, 3); }
+  const bw = w / bays, tierH = h * 0.27, attic = h - tierH * 3;
+  for (let t = 0; t < 3; t++) {
+    const yb = h - t * tierH;                                    // tier bottom (canvas y grows down)
+    for (let b = 0; b < bays; b++) {
+      const cx = b * bw + bw / 2, aw = bw * 0.54, ah = tierH * 0.74;
+      x.fillStyle = '#2c2230'; x.beginPath(); x.moveTo(cx - aw / 2, yb - 4); x.lineTo(cx - aw / 2, yb - ah + aw / 2); x.arc(cx, yb - ah + aw / 2, aw / 2, Math.PI, 0); x.lineTo(cx + aw / 2, yb - 4); x.fill();
+      x.fillStyle = 'rgba(255,230,190,0.35)'; x.fillRect(cx - aw / 2 - 5, yb - ah, 5, ah - 4);                  // lit pier edge
+      x.fillStyle = 'rgba(70,50,40,0.28)'; x.fillRect(cx + aw / 2, yb - ah, 5, ah - 4);
+    }
+    x.fillStyle = 'rgba(80,60,45,0.55)'; x.fillRect(0, yb - tierH, w, 4);                                         // cornice shadow line
+    x.fillStyle = 'rgba(255,240,210,0.4)'; x.fillRect(0, yb - tierH - 3, w, 3);
+  }
+  for (let b = 0; b < bays; b++) { x.fillStyle = '#4a3a3a'; x.fillRect(b * bw + bw * 0.4, attic * 0.35, bw * 0.2, attic * 0.35); }
+  const t = tex(c, true); t.wrapT = THREE.ClampToEdgeWrapping; return t;
+}
