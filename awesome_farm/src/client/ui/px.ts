@@ -193,7 +193,9 @@ export function slotBox (g: G, x: number, y: number, size: number, rarity = 0, o
     if (!o.empty) {
         const c = RARITY_COLORS[rarity];
         rect(g, x + 3, y + size - 4, size - 6, 1.5, c, rarity ? 1 : 0.7);
-        if (rarity >= 2) { rect(g, x + 2.5, y + 2.5, 2, 2, c); rect(g, x + size - 4.5, y + 2.5, 2, 2, c); }
+        if (rarity >= 2) { rect(g, x + 2.5, y + 2.5, 2, 2, c); rect(g, x + size - 4.5, y + 2.5, 2, 2, c); }       // (shapes as well as colour: two studs from Rare,
+        if (rarity >= 3) { rect(g, x + 2.5, y + size - 7.5, 2, 2, c); rect(g, x + size - 4.5, y + size - 7.5, 2, 2, c); }   // four from Epic,
+        if (rarity >= 4) g.lineStyle(1, c, 0.8).strokeRect(x + 2, y + 2, size - 4, size - 4);                        // and a thin frame at Legendary)
     }
     if (o.hover) g.lineStyle(1.5, WOOD[3], 1).strokeRect(x + 1, y + 1, size - 2, size - 2);
     if (o.selected) g.lineStyle(1.5, BRASS.lo, 1).strokeRect(x + 1, y + 1, size - 2, size - 2);
