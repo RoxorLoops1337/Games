@@ -274,5 +274,26 @@ ok(strongWins >= 17, `level 10 beats level 1 (${strongWins}/20)`);
   const ev = LM.events(S12, 4, 0).find((e) => e.kind === 'tourney'); const T = LM.tourneyInit(S12, ev, a); LM.tourneyAdvance(S12, T, true); ok(T.hist.length === 1 && T.hist[0].length === 2 && T.hist[0].includes(0), 'bracket keeps round history');
 }
 
+// round 6: backstories, difficulty, horde, duo ultimates
+{
+  const S6 = LM.newGame({ name: 'R6' }); const g1 = LM.makeGlad({ id: S6.nextId++, style: 'murmillo', lvl: 3 }), g2 = LM.makeGlad({ id: S6.nextId++, style: 'thraex', lvl: 3 }); S6.glads.push(g1, g2);
+  LM.assignStory(g1); ok(g1.story && LM.storyDef(g1), 'gladiators get a backstory');
+  const st = LM.storyDef(g1); if (st.goal.k === 'lvl') g1.lvl = st.goal.n; else if (st.goal.k === 'wins') g1.rec.w = st.goal.n; else g1.fame = st.goal.n;
+  const f0 = S6.fame, c1 = LM.storyCheck(S6); ok(c1.length === 1 && g1.title && S6.fame >= f0, 'backstory completes and awards a title');
+  ok(LM.storyCheck(S6).length === 0, 'backstory reward is given only once');
+  ok(LM.diffMul({ opts: { diff: 0 } }) < 1 && LM.diffMul({ opts: { diff: 2 } }) > 1 && LM.diffMul({ opts: {} }) === 1, 'difficulty scales opponents');
+  const w1 = LM.hordeWave(S6, 1, g1), w6 = LM.hordeWave(S6, 6, g1); ok(w1.length >= 1 && w6.length > w1.length && w6.length <= 5, 'horde waves grow');
+  const r4 = LM.hordeReward(S6, 4, false), r4l = LM.hordeReward(S6, 4, true); ok(r4.gold > LM.hordeReward(S6, 1, false).gold && r4l.gold < r4.gold, 'horde rewards scale and losing keeps less');
+  const g3 = LM.makeGlad({ id: 99, style: 'murmillo', lvl: 3 }), g4 = LM.makeGlad({ id: 98, style: 'thraex', lvl: 3 });
+  ok(LM.duoPair(S6, [g3, g4]) === null, 'no duo without a bond');
+  LM.addBond(S6, 99, 98, 70); const dp = LM.duoPair(S6, [g3, g4]); ok(dp && dp.kind === 'wall', 'murmillo pair gives the wall duo');
+  for (const kind of ['pincer', 'wall', 'storm']) {
+    const A = LM.mkUnits([g3, g4], 'A', {}), B = LM.mkUnits([LM.makeGlad({ lvl: 3 }), LM.makeGlad({ lvl: 3 })], 'B', {});
+    const F = LM.createFight(A, B, { autoA: true, quiet: true, duo: { ids: [A[0].id, A[1].id], kind } });
+    ok(!LM.useDuo(F), `${kind} duo starts on cooldown`); F.duo.cd = 0; ok(LM.useDuo(F) && F.duo.cd > 0, `${kind} duo fires`); ok(!LM.useDuo(F), `${kind} duo refuses while cooling`);
+    let n = 0; while (!F.done && n++ < 1500) LM.step(F, 0.1); ok(F.done, `${kind} fight still ends`);
+  }
+}
+
 console.log(`ludus_maximus: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

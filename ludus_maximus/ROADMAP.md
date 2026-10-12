@@ -56,9 +56,18 @@ Rules: small PRs, `npm run test:ludus` + `node build.js` + a headless-Chromium l
 - [x] Performance: particle and float caps, lower canvas resolution
 
 ## Next ideas
-- [ ] 27. Duo Ultimates: bonded pairs (bond 60+) unlock a combined ultimate in team fights
-- [ ] 28. Season finale spectacle (12-week championship with a cinematic intro and trophy ceremony)
-- [ ] 29. Fighter backstories and personal quests (one short goal per fighter that unlocks a unique trait)
-- [ ] 30. Crowd reactions in the stands (waves, fireworks on big kills)
-- [ ] 31. Endless Arena mode (survive waves, leaderboard-free high score)
-- [ ] 32. Balance re-check and difficulty slider (Relaxed / Standard / Brutal)
+- [x] 27. Duo Ultimates: bonded pairs (bond 60+) unlock a combined ultimate in team fights
+- [x] 28. Season finale spectacle (12-week championship with a cinematic intro and trophy ceremony)
+- [x] 29. Fighter backstories and personal quests (one short goal per fighter that unlocks a unique trait)
+- [x] 30. Crowd reactions in the stands (waves, fireworks on big kills)
+- [x] 31. Horde Trial (one fighter vs escalating packs, weekly, best wave saved)
+- [x] 32. Balance re-check and difficulty slider (Relaxed / Standard / Brutal)
+
+## Round 6 shipped
+Duo ultimates (pincer, wall, storm), season recap with confetti, fighter backstories with titles, crowd wave and fireworks, Horde Trial, difficulty setting (Relaxed / Standard / Brutal). Fixed a duoPair index bug found by the new tests.
+
+## Next ideas
+- [ ] 33. Stable rivalries across seasons with a rival-of-the-year award
+- [ ] 34. Sponsor contracts with weekly goals and bonus purses
+- [ ] 35. Gladiator retirement ceremony and hall of fame wall
+- [ ] 36. Arena crowd chants synced to hype
