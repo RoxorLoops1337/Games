@@ -102,11 +102,11 @@ void main(){
   float cs = cos(uSunSize);
   float disc = smoothstep(cs - 0.0006, cs + 0.00025, sd);
   col += uSunCol * disc * uSunInt;
-  col += (hash21(gl_FragCoord.xy) - 0.5) * (1.0/255.0);               // de-band
+  col += (h21(gl_FragCoord.xy) - 0.5) * (1.0/255.0);               // de-band
   gl_FragColor = vec4(col, 1.0);
   #include <tonemapping_fragment>
   #include <colorspace_fragment>
-}`.replace('hash21(gl_FragCoord.xy)', 'h21(gl_FragCoord.xy)');
+}`;
 
 export function createSky() {
   const u = {
@@ -116,7 +116,7 @@ export function createSky() {
   };
   const mat = new THREE.ShaderMaterial({ uniforms: u, vertexShader: VERT, fragmentShader: FRAG, side: THREE.BackSide, depthWrite: false, fog: false });
   const mesh = new THREE.Mesh(new THREE.SphereGeometry(1, 32, 16), mat);
-  mesh.frustumCleanup = false; mesh.frustumCulled = false; mesh.renderOrder = -10;
+  mesh.frustumCulled = false; mesh.renderOrder = -10;
   mesh.name = 'sky';
   return { mesh, uniforms: u, update(camera, t) { mesh.position.copy(camera.position); mesh.scale.setScalar(camera.far * 0.5); u.uTime.value = t; } };
 }
