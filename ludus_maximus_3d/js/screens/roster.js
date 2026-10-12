@@ -15,7 +15,7 @@ const CSS = `
 .lm-rc-head{display:flex;gap:12px;align-items:center;padding:2px;margin:-2px;border-radius:10px;cursor:pointer;min-width:0;-webkit-tap-highlight-color:transparent}
 .lm-rc-head:hover{background:rgba(242,193,78,.18)}
 .lm-rc-head:focus-visible{outline:3px solid #5a1f5e;outline-offset:1px}
-.lm-rc-go{flex:none;color:#7a5222;opacity:.8}
+.lm-rc-go{flex:none;color:#7a5222;font:700 34px/1 var(--lx-sans);padding:0 4px}
 .lm-stylechip{color:#fff;text-shadow:0 1px 1px rgba(0,0,0,.45)}
 .lm-meters{display:grid;gap:5px}
 .lm-act-g{display:grid;gap:6px}
@@ -124,7 +124,7 @@ export function open(ctx) {
     const st = d.STYLES[g.style], T = d.TRAITS[g.trait];
     const stylechip = chip(st.n, 'bronze'); stylechip.classList.add('lm-stylechip'); stylechip.style.background = st.c;
     const nm = h('div', 'lm-name', [g.name, g.nick ? h('small', '', ' ' + g.nick) : null]);
-    const head = h('div', 'lm-rc-head', [portrait(ctx, g, 60), h('div', 'lm-grow', [nm, h('div', 'lm-chips', [stylechip, chip('Lv ' + g.lvl, 'gold'), chip(T.n, 'purple', T.d)]), h('div', '', U.stars(lm.stars(g), 5))]), U.icon('scroll', 22, 'lm-rc-go')]);
+    const head = h('div', 'lm-rc-head', [portrait(ctx, g, 60), h('div', 'lm-grow', [nm, h('div', 'lm-chips', [stylechip, chip('Lv ' + g.lvl, 'gold'), chip(T.n, 'purple', T.d)]), h('div', '', U.stars(lm.stars(g), 5))]), h('span', 'lm-rc-go', '\u203a')]);
         head.setAttribute('role', 'button'); head.tabIndex = 0; head.setAttribute('aria-label', `Open profile of ${g.name}`);
     const go = () => { sw('uiTap'); ctx.open('profile', g.id); };
     head.addEventListener('click', go); head.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); } });
