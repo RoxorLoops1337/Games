@@ -49,7 +49,7 @@ if (scene === 'hud' || scene === 'fight') {
   const mid = document.createElement('div'); mid.style.flex = '1'; mid.style.pointerEvents = 'none';
   hud.append(top, mid, ults); view.append(hud);
   const bn = document.createElement('div'); bn.className = 'lx-banners'; view.append(bn);
-  U.banner('Crixus is stunned', 'info', bn); U.banner('Meteor Strike!', 'ult', bn); U.banner('Critical hit 214', 'crit', bn);
+  U.banner('Crixus is stunned', 'info', bn, 99999); U.banner('Meteor Strike!', 'ult', bn, 99999); U.banner('Critical hit 214', 'crit', bn, 99999);
   place();
   p1.hp.set(142, 180); p2.hp.set(160, 200);
   setTimeout(() => { p2.hp.set(70, 200); }, 150);  // damage ghost demo
@@ -73,7 +73,7 @@ if (scene === 'manage') {
 if (scene === 'kit') {
   const g = document.createElement('div'); g.className = 'gallery';
   const sec = (t, ...k) => { const p = U.panel({ title: t, variant: 'bronze' }); p.body.append(...k); return p; };
-  const ul = document.createElement('div'); ul.className = 'ults'; ULTS.forEach(([u,c],i)=>{ const r = U.cooldownRing({ ult: u, color: c, size: 64 }); r.set(i % 3 === 0 ? 0 : 0.2 * (i % 5 + 1), 9); ul.append(r); U.tooltip(r, 'Slam the sand: every enemy nearby is knocked up.', { title: u }); });
+  const ul = document.createElement('div'); ul.className = 'ults'; ULTS.forEach(([u,c],i)=>{ const r = U.cooldownRing({ ult: u, color: c, size: 64 }); r.set(i % 2 === 0 ? 0 : 0.2 * (i % 5 + 1), 9); ul.append(r); U.tooltip(r, 'Slam the sand: every enemy nearby is knocked up.', { title: u }); });
   g.append(sec('Ultimates', ul));
   const btns = document.createElement('div'); btns.className = 'col';
   btns.append(U.button({ label: 'Enter the arena', variant: 'gold', icon: 'arena', block: true }), U.button({ label: 'Train', variant: 'bronze', icon: 'sword', block: true, sub: '40 gold' }), U.button({ label: 'Retreat', variant: 'ghost', block: true }), U.button({ label: 'Release', variant: 'danger', block: true }), U.button({ label: 'Locked', variant: 'bronze', block: true, disabled: true, icon: 'lock' }));
@@ -93,7 +93,7 @@ if (scene === 'kit') {
   view.append(g);
   document.getElementById('navhost').append(U.nav([{icon:'ludus',label:'Ludus'},{icon:'roster',label:'Roster',badge:2},{icon:'arena',label:'Arena'},{icon:'market',label:'Market'},{icon:'scroll',label:'Orders'}], null, 0));
   f1.remove(); f2.remove(); plates.remove();
-  U.toast('Gold +500', { kind: 'good', ico: 'coin', ms: 99999 }); U.toast('Not enough gold', { kind: 'bad', ico: 'lock', ms: 99999 });
+  if (q.get('toasts')) { U.toast('Gold +500', { kind: 'good', ico: 'coin', ms: 99999 }); U.toast('Not enough gold', { kind: 'bad', ico: 'lock', ms: 99999 }); }
 }
 if (scene === 'vs') { f1.remove(); f2.remove(); plates.remove(); U.vsSplash({ a: { name: 'Spartacus', sub: 'Thraex, level 7', stars: 3 }, b: { name: 'Crixus the Gaul', sub: 'Murmillo, level 8', stars: 4 }, league: 'Colosseum, Bronze league', ms: 99999 }); }
 if (scene === 'levelup') { f1.remove(); f2.remove(); plates.remove(); U.levelUp({ name: 'Marcus Aurelius', level: 8, ms: 99999 }); }

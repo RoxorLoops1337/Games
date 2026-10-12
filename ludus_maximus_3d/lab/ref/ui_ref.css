@@ -66,7 +66,7 @@
 .lx-bar-hp { --c: var(--lx-hp); } .lx-bar-foe { --c: var(--lx-foe); } .lx-bar-stam { --c: var(--lx-stam); } .lx-bar-xp { --c: var(--lx-xp); }
 .lx-bar-ghost { background: #f4d27a; transition: transform .45s var(--lx-ease-out); }
 .lx-bar-ticks { background: repeating-linear-gradient(90deg, transparent 0, transparent calc(var(--lx-seg, 25%) - 1.500px), rgba(10, 6, 20, .75) calc(var(--lx-seg, 25%) - 1.500px), rgba(10, 6, 20, .75) var(--lx-seg, 25%)); }
-.lx-bar:not([style*='--lx-seg']) .lx-bar-ticks { display: none; }
+.lx-bar:not(.lx-seg) .lx-bar-ticks { display: none; }
 .lx-bar-txt { position: absolute; inset: 0; display: grid; place-items: center; font-size: calc(var(--lx-bar-h, 14px) - 3px); font-weight: 700; color: #fff; text-shadow: 0 1px 2px #000; font-variant-numeric: tabular-nums; pointer-events: none; }
 .lx-bar.lx-hit { animation: lx-shake .22s; }
 @keyframes lx-shake { 20% { transform: translateX(-2px); } 50% { transform: translateX(2px); } 80% { transform: translateX(-1px); } }
@@ -98,7 +98,7 @@
 
 /* ---------- nameplate ---------- */
 .lx-plates { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
-.lx-plate { position: absolute; left: 0; top: 0; width: 112px; display: flex; flex-direction: column; align-items: center; gap: 3px; will-change: transform; --lx-s: 1; }
+.lx-plate { position: absolute; left: 0; top: 0; width: 136px; display: flex; flex-direction: column; align-items: center; gap: 3px; will-change: transform; --lx-s: 1; }
 .lx-plate > * { transform: scale(var(--lx-s)); transform-origin: 50% 100%; }
 .lx-plate-top { display: flex; align-items: center; gap: 5px; max-width: 100%; padding: 1px 8px 1px 2px; border-radius: 999px; background: rgba(20, 15, 34, .78); border: 1px solid rgba(242, 193, 78, .5); }
 .lx-lvl { display: grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; font-size: 11px; font-weight: 800; color: #2a1a08; background: radial-gradient(circle at 35% 30%, #ffe08a, #c98e24); flex: none; }

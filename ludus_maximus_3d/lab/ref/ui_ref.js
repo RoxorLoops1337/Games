@@ -110,7 +110,7 @@ export function bar({ value = 1, max = 1, kind = 'hp', segments = 0, label = '',
     last = v; txt.textContent = label === 'num' ? `${Math.ceil(v)} / ${Math.ceil(max)}` : label;
     el.setAttribute('aria-valuenow', Math.round(v));
   };
-  if (segments) ticks.style.setProperty('--lx-seg', (100 * segments / max) + '%');
+  if (segments) { el.style.setProperty('--lx-seg', (100 * segments / max) + '%'); el.classList.add('lx-seg'); }
   el.setAttribute('role', 'progressbar'); el.setAttribute('aria-valuemax', Math.round(max)); el.set(value, max);
   ghost.style.transitionDuration = '0s'; return el;
 }
@@ -257,11 +257,11 @@ export function vsSplash({ a, b, league = '', host = document.body, ms = 2200 } 
   return new Promise((res) => setTimeout(() => { el.classList.add('lx-out'); setTimeout(() => { el.remove(); res(); }, reduced() ? 0 : 400); }, reduced() ? Math.min(ms, 1200) : ms));
 }
 // Combat banner: stacked event lines that slide in at top-center and fade (max 3). kind: 'crit'|'ult'|'kill'|'info'
-export function banner(text, kind = 'info', host) {
+export function banner(text, kind = 'info', host, ms = 2200) {
   host = host || document.querySelector('.lx-banners') || document.body.appendChild(h('div', 'lx-banners'));
   const e = h('div', `lx-banner lx-b-${kind}`, h('span', '', text)); host.append(e);
   while (host.children.length > 3) host.firstChild.remove();
-  setTimeout(() => { e.classList.add('lx-out'); setTimeout(() => e.remove(), reduced() ? 0 : 300); }, 2200); return e;
+  setTimeout(() => { e.classList.add('lx-out'); setTimeout(() => e.remove(), reduced() ? 0 : 300); }, ms); return e;
 }
 // Level-up celebration: rays + laurel + big number. Returns the element (auto removes).
 export function levelUp({ name, level, host = document.body, ms = 2600 } = {}) {
