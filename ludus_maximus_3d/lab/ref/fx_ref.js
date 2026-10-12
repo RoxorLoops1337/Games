@@ -134,7 +134,7 @@ void main(){
   else if (t < 4.5) { float prog = clamp(age, 0.0, 1.0); float ang = atan(vP.y, vP.x);
     float edge = smoothstep(0.9, 0.95, r) * (1.0 - smoothstep(0.97, 1.0, r)); float pulse = 0.6 + 0.4 * sin(vT * 14.0);
     float stripes = step(0.5, fract(ang * 1.5915 * 3.0 + r * 5.0 - vT * 1.5));
-    float inner = r < prog ? 0.34 : 0.12; a = edge * (0.8 + 0.5 * pulse) + (1.0 - step(0.9, r)) * inner * (0.6 + 0.4 * stripes) + (r < prog && r > prog - 0.05 ? 0.5 : 0.0);
+    float inner = r < prog ? 0.2 : 0.07; a = edge * (0.8 + 0.5 * pulse) + (1.0 - step(0.9, r)) * inner * (0.8 + 0.2 * stripes) + (r < prog && r > prog - 0.05 ? 0.5 : 0.0);
     hot = edge * pulse; if (age > 1.0) { a *= 1.0 - (age - 1.0) * 5.0; } }
   else { float e = 1.0 - (1.0 - pow(1.0 - age, 2.0)); float w = 0.1; float band = smoothstep(e - 0.02, e, r) * (1.0 - smoothstep(e, e + w, r)); a = band * pow(age, 0.5) * (1.0 - age * 0.3); hot = band; }
   if (a < 0.004) discard;
@@ -404,13 +404,13 @@ export function createFx(scene, opts = {}) {
 
   // Dust: sand-colored soft puffs kicked outward, normal blending (reads on bright sand).
   fx.dust = (pos, n = 8, o = {}) => {
-    const k = o.size ?? 1, up = o.up ?? 1, base = o.color ? rgb(o.color) : sand, lite = mixc(base, WHITE, 0.25), dark = mixc(base, { r: 0.3, g: 0.2, b: 0.12 }, 0.35);
+    const k = o.size ?? 1, up = o.up ?? 1, base = o.color ? rgb(o.color) : sand, lite = mixc(base, WHITE, 0.6), dark = mixc(base, { r: 0.3, g: 0.2, b: 0.12 }, 0.2);
     const dir = o.dir ? dirOf(o.dir) : null; n = N(n);
     for (let i = 0; i < n; i++) {
       const a = rnd() * TAU, s = R_(0.6, 2.4) * (o.speed ?? 1);
       let vx = Math.cos(a) * s, vz = Math.sin(a) * s; if (dir) { vx = vx * 0.5 + dir.x * s; vz = vz * 0.5 + dir.z * s; }
       norL.add({ x: pos.x + vx * 0.05, y: Math.max(pos.y, groundY) + 0.06, z: pos.z + vz * 0.05, vx, vy: R_(0.3, 1.1) * up, vz, life: R_(0.55, 1.1), s0: R_(0.3, 0.5) * k, s1: R_(1.2, 2.0) * k, cell: rnd() < 0.5 ? CELL.puffA : CELL.puffB, rot: rnd() * TAU, rv: (rnd() - 0.5) * 1.2,
-        c0: lite, c1: dark, a: o.alpha ?? 0.5, drag: 2.4, grav: -0.15, fp: 1.4, att: 0.08, turb: 1.2 });
+        c0: lite, c1: dark, a: o.alpha ?? 0.75, drag: 2.4, grav: -0.15, fp: 1.4, att: 0.08, turb: 1.2 });
     }
   };
   // Directional dust trail for dashes / skids.
@@ -432,7 +432,7 @@ export function createFx(scene, opts = {}) {
     _v.set(pos.x, groundY + 0.03, pos.z); _m.compose(_v, _q.identity(), _s.set(r, 1, r));
     setTimed(ringMesh, allocTimed(ringMesh), _m, rgb(color), o.alpha ?? 1, uTime.value, o.dur ?? 0.65, 1, 0);
     if (o.dust !== false) { const n = N(Math.round(8 + r * 3)); for (let i = 0; i < n; i++) { const a = i / n * TAU + rnd() * 0.3, s = r * R_(1.0, 1.7);
-      norL.add({ x: pos.x + Math.cos(a) * r * 0.15, y: groundY + 0.1, z: pos.z + Math.sin(a) * r * 0.15, vx: Math.cos(a) * s, vz: Math.sin(a) * s, vy: R_(0.2, 0.7), life: R_(0.7, 1.2), s0: 0.45, s1: R_(1.6, 2.6), cell: rnd() < 0.5 ? CELL.puffA : CELL.puffB, rot: rnd() * TAU, c0: mixc(sand, WHITE, 0.3), c1: mixc(sand, { r: 0.3, g: 0.2, b: 0.12 }, 0.3), a: 0.55, drag: 3.2, fp: 1.3, att: 0.05 }); } }
+      norL.add({ x: pos.x + Math.cos(a) * r * 0.15, y: groundY + 0.1, z: pos.z + Math.sin(a) * r * 0.15, vx: Math.cos(a) * s, vz: Math.sin(a) * s, vy: R_(0.2, 0.7), life: R_(0.7, 1.2), s0: 0.45, s1: R_(1.6, 2.6), cell: rnd() < 0.5 ? CELL.puffA : CELL.puffB, rot: rnd() * TAU, c0: mixc(sand, WHITE, 0.6), c1: mixc(sand, { r: 0.3, g: 0.2, b: 0.12 }, 0.2), a: 0.8, drag: 3.2, fp: 1.3, att: 0.05 }); } }
     shocks.push({ x: pos.x, y: groundY, z: pos.z, t0: uTime.value, dur: o.dur ?? 0.65, r, str: o.distort ?? 1 });
   };
   const shocks = [];
@@ -481,12 +481,12 @@ export function createFx(scene, opts = {}) {
     const s = ribbonSlot(); if (!s) return null; s.kind = 'beam'; s.P0 = null; setCol(s, color, o.glow ?? 2); s.a = a; s.b = b; s.life = o.life ?? 0.25; s.age = 0; s.width = o.width ?? 0.12; s.n = o.pts ?? 14; s.jag = o.jag ?? 0; s.flick = o.flicker ?? 0; s.sag = o.sag ?? 0; s.rej = 0; s.fade = o.fade ?? 1; return s;
   };
   fx.zap = (a, b, color = '#a8d8ff', o = {}) => {
-    const s = fx.beam(a, b, color, { life: 0.22, width: 0.14, jag: 0.22, flicker: 0.04, pts: 16, glow: 2.6, ...o });
+    const s = fx.beam(a, b, color, { life: 0.24, width: 0.2, jag: 0.22, flicker: 0.04, pts: 16, glow: 2.6, ...o });
     if (s && o.branch !== false) { P(a, _p); P(b, _p2); for (let k = 0; k < (o.branches ?? 1); k++) { const t = R_(0.3, 0.7); const mid = new THREE.Vector3().lerpVectors(_p, _p2, t); const end = mid.clone().add(new THREE.Vector3(R_(-1, 1), R_(-0.5, 0.6), R_(-1, 1)).multiplyScalar(_p.distanceTo(_p2) * 0.35)); fx.beam(mid, end, color, { life: 0.16, width: 0.07, jag: 0.14, flicker: 0.04, pts: 8, glow: 2 }); } }
     if (o.sparks !== false) { P(b, _p2); fx.spark(_p2, null, 6, color, { speed: 5 }); }
     return s;
   };
-  fx.chain = (a, b, color = '#d9e4ee', o = {}) => { const s = fx.beam(a, b, color, { life: o.life ?? 0.45, width: 0.07, glow: 1.2, sag: 0.35, pts: 14, ...o }); P(b, _p2); fx.spark(_p2, null, 8, '#ffffff', { speed: 5 }); return s; };
+  fx.chain = (a, b, color = '#d9e4ee', o = {}) => { const s = fx.beam(a, b, color, { life: o.life ?? 0.45, width: 0.12, glow: 1.4, sag: 0.35, pts: 14, ...o }); P(b, _p2); fx.spark(_p2, null, 8, '#ffffff', { speed: 5 }); return s; };
 
   // Trail ribbon following an object / fn. o.base: second point source -> ribbon spans tip..base (sword swoosh).
   fx.trail = (target, color = '#ffffff', o = {}) => {
@@ -521,7 +521,7 @@ export function createFx(scene, opts = {}) {
   fx.heal = (target, n = 10, o = {}) => {
     P(target, _p); const c = rgb(o.color || '#7dffb4'), hot = mixc(c, WHITE, 0.5); n = N(n);
     for (let i = 0; i < n; i++) { const a = rnd() * TAU, rr = R_(0.3, 0.7); const isPlus = i % 3 === 0;
-      addL.add({ x: _p.x + Math.cos(a) * rr, y: _p.y + R_(0.1, 0.8), z: _p.z + Math.sin(a) * rr, vy: R_(0.8, 1.8), vx: -Math.sin(a) * 0.5, vz: Math.cos(a) * 0.5, delay: i * 0.04, life: R_(0.8, 1.2), s0: isPlus ? 0.26 : 0.2, s1: isPlus ? 0.18 : 0.06, cell: isPlus ? CELL.plus : CELL.glow, c0: isPlus ? hot : c, c1: c, g: isPlus ? 1.5 : 2, fp: 1.1, att: 0.15, swirl: 2.5 }); }
+      addL.add({ x: _p.x + Math.cos(a) * rr, y: _p.y + R_(0.1, 0.8), z: _p.z + Math.sin(a) * rr, vy: R_(0.8, 1.8), vx: -Math.sin(a) * 0.5, vz: Math.cos(a) * 0.5, delay: i * 0.04, life: R_(0.8, 1.2), s0: isPlus ? 0.5 : 0.3, s1: isPlus ? 0.36 : 0.1, cell: isPlus ? CELL.plus : CELL.glow, c0: isPlus ? hot : c, c1: c, g: isPlus ? 1.8 : 2.4, fp: 1.0, att: 0.15, swirl: 2.5 }); }
     addL.add({ x: _p.x, y: _p.y + 0.9, z: _p.z, life: 0.45, s0: 0.8, s1: 2.6, cell: CELL.glow, c0: c, c1: c, g: 1.0, a: 0.5, fp: 1.4 });
     fx.ring(_p, o.color || '#7dffb4', 1.1, { dur: 0.6, alpha: 0.7 });
   };
@@ -586,7 +586,7 @@ export function createFx(scene, opts = {}) {
       for (let k = 0; k < N(28); k++) { const a = rnd() * TAU, r = R_(1.6, 3), h = R_(0.1, 2.2); addL.add({ x: pos.x + Math.cos(a) * r, y: groundY + h, z: pos.z + Math.sin(a) * r, vx: -Math.cos(a) * r / 0.35, vz: -Math.sin(a) * r / 0.35, vy: (y - h) / 0.35, life: 0.35, s0: 0.2, s1: 0.04, cell: CELL.glow, c0: c, c1: hot, g: 2.4, fp: 0.4, att: 0.1, st: 0 }); }
       addL.add({ x: pos.x, y: y + 0.4, z: pos.z, life: 0.5, s0: 1.2, s1: 3.6, cell: CELL.glow, c0: hot, c1: c, g: 1.6, a: 0.8, fp: 1.4 });
       addL.add({ x: pos.x, y: y + 0.4, z: pos.z, life: 0.4, s0: 1.0, s1: 3.0, cell: CELL.star4, c0: hot, c1: c, g: 2.5, rot: rnd() * TAU, rv: 1.5, fp: 1.2 });
-      if (el === 'holy' || el === 'wind') beamUp(pos, c, 0.6);
+      if (el === 'holy') beamUp(pos, c, 0.45);
     },
     // main hit (r = world radius)
     impact(el, pos, r = 3.2, color) {
@@ -612,7 +612,7 @@ export function createFx(scene, opts = {}) {
         case 'wind': {
           for (let k = 0; k < 3; k++) later(k * 0.1, () => fx.shockwave(gp, r * (0.9 + k * 0.35), '#d8fff0', { dur: 0.7, dust: false, distort: 0.8 }));
           for (let k = 0; k < 6; k++) { const a = k / 6 * TAU; fx.slash({ x: pos.x + Math.cos(a) * r * 0.55, y: 0.9, z: pos.z + Math.sin(a) * r * 0.55 }, { x: -Math.sin(a), y: 0, z: Math.cos(a) }, '#d8fff0', 1.6, { tilt: 0.25, dur: 0.4 }); }
-          for (let i = 0; i < N(34); i++) { const a = rnd() * TAU, s = R_(r * 0.5, r * 1.5); norL.add({ x: pos.x, y: groundY + R_(0.05, 0.7), z: pos.z, vx: Math.cos(a) * s, vz: Math.sin(a) * s, vy: R_(0.2, 1.4), swirl: 3.5, life: R_(0.8, 1.4), s0: 0.4, s1: R_(1.4, 2.2), cell: rnd() < 0.5 ? CELL.puffA : CELL.puffB, rot: rnd() * TAU, c0: mixc(sand, WHITE, 0.4), c1: sand, a: 0.45, drag: 1.8, fp: 1.2 }); }
+          for (let i = 0; i < N(34); i++) { const a = rnd() * TAU, s = R_(r * 0.5, r * 1.5); norL.add({ x: pos.x, y: groundY + R_(0.05, 0.7), z: pos.z, vx: Math.cos(a) * s, vz: Math.sin(a) * s, vy: R_(0.2, 1.4), swirl: 3.5, life: R_(0.8, 1.4), s0: 0.4, s1: R_(1.4, 2.2), cell: rnd() < 0.5 ? CELL.puffA : CELL.puffB, rot: rnd() * TAU, c0: mixc(sand, WHITE, 0.6), c1: sand, a: 0.7, drag: 1.8, fp: 1.2 }); }
           for (let i = 0; i < N(20); i++) { const a = rnd() * TAU, s = R_(2, 6); addL.add({ x: pos.x, y: 0.3, z: pos.z, vx: Math.cos(a) * s, vz: Math.sin(a) * s, vy: R_(0.5, 2), swirl: 4, life: R_(0.6, 1.1), s0: 0.1, s1: 0.04, cell: CELL.glow, c0: hot, c1: c, g: 2, drag: 1.2 }); }
           fx.decal(gp, 'scuff', { size: r * 0.8 }); break; }
         case 'holy': {
@@ -630,7 +630,7 @@ export function createFx(scene, opts = {}) {
   };
   function beamUp(pos, c, life) { // vertical light pillar via 2 camera-facing ribbons
     const bot = new THREE.Vector3(pos.x, groundY, pos.z), top = new THREE.Vector3(pos.x, 18, pos.z);
-    fx.beam(bot, top, c, { life, width: 2.2, pts: 2, glow: 1.4, fade: 0.6 }); fx.beam(bot, top, '#ffffff', { life: life * 0.8, width: 0.7, pts: 2, glow: 2.2, fade: 0.6 });
+    fx.beam(bot, top, c, { life, width: 1.1, pts: 2, glow: 1.1, fade: 0.6 }); fx.beam(bot, top, '#ffffff', { life: life * 0.7, width: 0.3, pts: 2, glow: 2.0, fade: 0.6 });
   }
   // deferred calls on fx time
   const timers = [];
@@ -663,7 +663,7 @@ export function createFx(scene, opts = {}) {
         const c = h.c, tt = h.t, el = h.el;
         if (el === 'wind') { // tornado funnel of spiraling dust + streaks
           h.acc += dt * 60 * fx.quality; while (h.acc >= 1) { h.acc--; const y = rnd() * 3.4, a = rnd() * TAU, rr = 0.3 + y * 0.32 * h.radius * 0.7 + R_(0, 0.2);
-            const wnd = { x: _p.x + Math.cos(a) * rr, y: groundY + y, z: _p.z + Math.sin(a) * rr, vx: -Math.sin(a) * 6.5, vz: Math.cos(a) * 6.5, vy: R_(0.5, 2), swirl: 0, life: R_(0.35, 0.6), s0: R_(0.3, 0.5), s1: R_(0.8, 1.3), cell: rnd() < 0.5 ? CELL.puffA : CELL.puffB, rot: rnd() * TAU, c0: mixc(sand, WHITE, 0.5), c1: sand, a: 0.4, fp: 1.2 };
+            const wnd = { x: _p.x + Math.cos(a) * rr, y: groundY + y, z: _p.z + Math.sin(a) * rr, vx: -Math.sin(a) * 6.5, vz: Math.cos(a) * 6.5, vy: R_(0.5, 2), swirl: 0, life: R_(0.35, 0.6), s0: R_(0.3, 0.5), s1: R_(0.8, 1.3), cell: rnd() < 0.5 ? CELL.puffA : CELL.puffB, rot: rnd() * TAU, c0: mixc(sand, WHITE, 0.65), c1: sand, a: 0.65, fp: 1.2 };
             norL.add(wnd); if (rnd() < 0.5) addL.add({ x: wnd.x, y: wnd.y, z: wnd.z, vx: wnd.vx, vz: wnd.vz, vy: wnd.vy, life: 0.25, s0: 0.07, s1: 0.04, st: 0.06, cell: CELL.streak, c0: { r: 0.9, g: 1, b: 0.95 }, c1: c, g: 1.5, fp: 1 }); }
         } else if (el === 'fire') { // rage: rising flame wisps + heat glow
           addL.put(_p.x, _p.y + 1, _p.z, 2.4 + 0.3 * Math.sin(tt * 18), c, 0.24, CELL.glow, 0, 1.4);
@@ -673,13 +673,13 @@ export function createFx(scene, opts = {}) {
         else if (el === 'holy') { addL.put(_p.x, _p.y + 1, _p.z, 3.0, c, 0.2 + 0.08 * Math.sin(tt * 6), CELL.glow, 0, 1.5); h.acc += dt * 18; while (h.acc >= 1) { h.acc--; const a = rnd() * TAU; addL.add({ x: _p.x + Math.cos(a) * 0.9, y: _p.y + 0.1, z: _p.z + Math.sin(a) * 0.9, vy: R_(1.5, 2.5), life: 0.9, s0: 0.16, s1: 0.03, cell: CELL.glow, c0: mixc(c, WHITE, 0.6), c1: c, g: 2.4 }); } }
       } else if (h.kind === 'status') {
         const tt = h.t, y = _p.y + h.headY;
-        if (h.st === 'stun') { const w = tt * 5.2; for (let k = 0; k < 3; k++) { const a = w + k * TAU / 3; const sx = _p.x + Math.cos(a) * 0.5, sz = _p.z + Math.sin(a) * 0.5, sy = y + Math.sin(tt * 7 + k) * 0.05; const back = Math.sin(a) < 0 ? 0.7 : 1; addL.put(sx, sy, sz, 0.36 * back, { r: 1, g: 0.82, b: 0.2 }, 1, CELL.star5, a * 0.5, 1.8); addL.put(sx, sy, sz, 0.8 * back, { r: 1, g: 0.8, b: 0.2 }, 0.35, CELL.glow, 0, 1.2); } }
-        else if (h.st === 'slow') { for (let k = 0; k < 3; k++) { const ph = (tt * 1.1 + k / 3) % 1; addL.put(_p.x + (k - 1) * 0.28, y - ph * 0.7 + 0.1, _p.z, 0.3, { r: 0.4, g: 0.7, b: 1 }, Math.sin(ph * Math.PI), CELL.chevron, Math.PI, 1.8); } h.acc += dt * 5; while (h.acc >= 1) { h.acc--; const a = rnd() * TAU; addL.add({ x: _p.x + Math.cos(a) * 0.7, y: _p.y + 0.15, z: _p.z + Math.sin(a) * 0.7, vy: R_(0.2, 0.7), life: 0.7, s0: 0.12, s1: 0.02, cell: CELL.glow, c0: { r: 0.6, g: 0.85, b: 1 }, c1: { r: 0.3, g: 0.6, b: 1 }, g: 2 }); } }
-        else if (h.st === 'bleed') { h.acc += dt * 7; const dc = rgb(h.o.color || '#c4322a'); while (h.acc >= 1) { h.acc--; const a = rnd() * TAU; norL.add({ x: _p.x + Math.cos(a) * 0.25, y: _p.y + R_(0.9, 1.5), z: _p.z + Math.sin(a) * 0.25, vx: Math.cos(a) * 0.4, vy: R_(0, 0.5), vz: Math.sin(a) * 0.4, life: 0.55, s0: 0.1, s1: 0.07, cell: CELL.drop, c0: dc, c1: scaleC(dc, 0.6), a: 0.95, grav: 9, fp: 0.5, att: 0.02 }); } }
-        else if (h.st === 'blind') { for (let k = 0; k < 4; k++) { const a = tt * 4 + k * TAU / 4; norL.put(_p.x + Math.cos(a) * 0.4, y - 0.15 + Math.sin(tt * 3 + k) * 0.05, _p.z + Math.sin(a) * 0.4, 0.35, mixc(sand, WHITE, 0.2), 0.6, CELL.puffA, a); } }
+        if (h.st === 'stun') { const w = tt * 5.2; for (let k = 0; k < 3; k++) { const a = w + k * TAU / 3; const sx = _p.x + Math.cos(a) * 0.5, sz = _p.z + Math.sin(a) * 0.5, sy = y + Math.sin(tt * 7 + k) * 0.05; const back = Math.sin(a) < 0 ? 0.7 : 1; addL.put(sx, sy, sz, 0.55 * back, { r: 1, g: 0.8, b: 0.15 }, 1, CELL.star5, a * 0.5, 1.6); addL.put(sx, sy, sz, 0.9 * back, { r: 1, g: 0.7, b: 0.1 }, 0.25, CELL.glow, 0, 1.0); } }
+        else if (h.st === 'slow') { for (let k = 0; k < 3; k++) { const ph = (tt * 1.1 + k / 3) % 1; addL.put(_p.x + (k - 1) * 0.28, y - ph * 0.7 + 0.1, _p.z, 0.5, { r: 0.25, g: 0.6, b: 1 }, Math.sin(ph * Math.PI), CELL.chevron, Math.PI, 2.2); } h.acc += dt * 5; while (h.acc >= 1) { h.acc--; const a = rnd() * TAU; addL.add({ x: _p.x + Math.cos(a) * 0.7, y: _p.y + 0.15, z: _p.z + Math.sin(a) * 0.7, vy: R_(0.2, 0.7), life: 0.7, s0: 0.12, s1: 0.02, cell: CELL.glow, c0: { r: 0.6, g: 0.85, b: 1 }, c1: { r: 0.3, g: 0.6, b: 1 }, g: 2 }); } }
+        else if (h.st === 'bleed') { h.acc += dt * 9; const dc = rgb(h.o.color || '#c4322a'); while (h.acc >= 1) { h.acc--; const a = rnd() * TAU; norL.add({ x: _p.x + Math.cos(a) * 0.25, y: _p.y + R_(0.9, 1.5), z: _p.z + Math.sin(a) * 0.25, vx: Math.cos(a) * 0.4, vy: R_(0, 0.5), vz: Math.sin(a) * 0.4, life: 0.6, s0: 0.2, s1: 0.14, cell: CELL.drop, c0: dc, c1: scaleC(dc, 0.6), a: 0.95, grav: 9, fp: 0.5, att: 0.02 }); } }
+        else if (h.st === 'blind') { for (let k = 0; k < 4; k++) { const a = tt * 4 + k * TAU / 4; norL.put(_p.x + Math.cos(a) * 0.4, y - 0.15 + Math.sin(tt * 3 + k) * 0.05, _p.z + Math.sin(a) * 0.4, 0.6, mixc(sand, WHITE, 0.55), 0.9, CELL.puffA, a); } }
         else if (h.st === 'root') { h.acc += dt * 6; if (h.acc > 1) { h.acc = 0; fx.dust({ x: _p.x, y: groundY, z: _p.z }, 1, { size: 0.5, alpha: 0.4 }); } }
         else if (h.st === 'taunt') { const b = 1 + 0.15 * Math.sin(tt * 10); addL.put(_p.x, y + 0.1, _p.z, 0.55 * b, { r: 1, g: 0.35, b: 0.15 }, 1, CELL.exclaim, 0, 1.8); addL.put(_p.x, y + 0.1, _p.z, 1.0, { r: 1, g: 0.3, b: 0.1 }, 0.3, CELL.glow, 0, 1.2); }
-        else if (h.st === 'burn') { h.acc += dt * 24; while (h.acc >= 1) { h.acc--; const a = rnd() * TAU; addL.add({ x: _p.x + Math.cos(a) * 0.3, y: _p.y + R_(0.2, 1.4), z: _p.z + Math.sin(a) * 0.3, vy: R_(1, 2), life: R_(0.35, 0.6), s0: 0.25, s1: 0.04, cell: CELL.glow, c0: { r: 1, g: 0.7, b: 0.3 }, c1: { r: 1, g: 0.2, b: 0.02 }, g: 1.8, turb: 2 }); } }
+        else if (h.st === 'burn') { h.acc += dt * 24; while (h.acc >= 1) { h.acc--; const a = rnd() * TAU; addL.add({ x: _p.x + Math.cos(a) * 0.3, y: _p.y + R_(0.2, 1.4), z: _p.z + Math.sin(a) * 0.3, vy: R_(1, 2), life: R_(0.4, 0.7), s0: 0.55, s1: 0.1, cell: CELL.glow, c0: { r: 1, g: 0.75, b: 0.3 }, c1: { r: 1, g: 0.2, b: 0.02 }, g: 2.2, turb: 2 }); } }
       }
     }
   }
