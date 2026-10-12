@@ -18,7 +18,7 @@ function chestR(y, B = 1, sh = 1) { // chest x-radius at local y (matches rig.js
   return 0.09;
 }
 // point on the chest front at (x, y) lifted by off, plus its outward normal
-function chestPt(x, y, B, sh, off = 0.012) {
+function chestPt(x, y, B, sh, off = 0.03) {
   const r = chestR(y, B, sh), rz = r * 0.72, u = clamp(x / r, -0.97, 0.97), z = rz * Math.sqrt(1 - u * u);
   return { p: ps(x, y, z + off), n: ps(x / (r * r), 0, z / (rz * rz)).normalize() };
 }
@@ -306,17 +306,17 @@ function galerus(rig, rr, B = 1) {
 function laurel(rig, B, sh, stars, lvl, onShell = 0) {
   const C = rig.joints.chest, n = clamp(stars | 0, 1, 5), gold = lvl >= 5 ? [1, 1, 1] : [0.72, 0.5, 0.3], cy = 0.2, Rr = 0.056;
   for (const sg of [-1, 1]) for (let i = 0; i < n; i++) {
-    const a = (0.45 + i * 0.39) * 0.9, x = sg * Math.sin(a) * Rr, y = cy - Math.cos(a) * Rr, cp = chestPt(x, y, B, sh, 0.016 + onShell);
+    const a = (0.45 + i * 0.39) * 0.9, x = sg * Math.sin(a) * Rr, y = cy - Math.cos(a) * Rr, cp = chestPt(x, y, B, sh, 0.034 + onShell);
     rig.add('trim', paint(xf(quadG(0.02, 0.034), cp.p.toArray(), [-0.2, 0, sg * (a - PI / 2 + 0.45)]), gold), C);
   }
-  const cp = chestPt(0, cy, B, sh, 0.02 + onShell);
+  const cp = chestPt(0, cy, B, sh, 0.036 + onShell);
   rig.add(lvl >= 8 ? 'gem' : 'trim', paint(xf(new THREE.CircleGeometry(0.014, 5), cp.p.toArray()), lvl >= 8 ? [1.4, 1.1, 0.5] : gold), C);
 }
 function baldric(rig, B, sh, dir = 1, o = {}) { // leather strap across the chest, optionally with a phalera disc
   const pts = [], n = 6, C = rig.joints.chest;
-  for (let i = 0; i < n; i++) { const t = i / (n - 1), x = lerp(-dir * 0.19, dir * 0.15, t) * B, y = lerp(0.3, 0.0, t), cp = chestPt(x, y, B, sh, 0.012 + (o.off || 0)); pts.push(cp.p); }
+  for (let i = 0; i < n; i++) { const t = i / (n - 1), x = lerp(-dir * 0.19, dir * 0.15, t) * B, y = lerp(0.3, 0.0, t), cp = chestPt(x, y, B, sh, 0.026 + (o.off || 0)); pts.push(cp.p); }
   rig.add(o.mat || 'leather', ribbon(pts, o.w || 0.04, (p, i) => chestPt(pts[i].x, pts[i].y, B, sh, 0).n), C);
-  if (o.disc) { const cp = chestPt(0.0, 0.16, B, sh, 0.02 + (o.off || 0)); rig.add('trim', xf(new THREE.CircleGeometry(0.034, 6), cp.p.toArray(), [-0.1, 0, 0]), C); }
+  if (o.disc) { const cp = chestPt(0.0, 0.16, B, sh, 0.034 + (o.off || 0)); rig.add('trim', xf(new THREE.CircleGeometry(0.034, 6), cp.p.toArray(), [-0.1, 0, 0]), C); }
 }
 function segmentata(rig, B, sh, rr) { // lorica segmentata: stacked overlapping bands + shoulder lames
   const C = rig.joints.chest;
@@ -377,7 +377,7 @@ export function equipStyle(rig, style, o = {}) {
     out.flap = loinFlap(rig, J.hips, { len: 0.26, w: 0.2 }); loinFlap(rig, J.hips, { len: 0.22, w: 0.2, back: true, z: 0.135 });
   }
   // pips and charm
-  laurel(rig, B, sh, o.stars || 1, o.lvl || 1, style === 'thraex' || style === 'hoplomachus' ? 0.024 : 0);
+  laurel(rig, B, sh, o.stars || 1, o.lvl || 1, style === 'thraex' || style === 'hoplomachus' ? 0.012 : 0);
   if (o.rar && o.rar.charm !== undefined && o.rar.charm >= 0 && o.hasCharm) { // pendant on a cord
     const pts = [chestPt(-0.05, 0.3, B, sh, 0.012).p, chestPt(-0.03, 0.22, B, sh, 0.012).p, chestPt(0, 0.17, B, sh, 0.014).p, chestPt(0.03, 0.22, B, sh, 0.012).p, chestPt(0.05, 0.3, B, sh, 0.012).p];
     rig.add('leather', ribbon(pts, 0.008, (p, i) => chestPt(pts[i].x, pts[i].y, B, sh, 0).n), J.chest); gem(rig, J.chest, [0, 0.165, chestPt(0, 0.165, B, sh, 0.03).p.z], 0.013, { r: Math.max(2, rc.r), col: rc.col });

@@ -51,7 +51,7 @@ export function createGladiator(unitOrGlad, opts = {}) {
   const rig = buildGladiator({
     palette: { skin: g.skin, hair: g.hair, cloth, plume: g.plume, metal: metalFor(g) },
     build: Object.assign({ seg: opts.seg || 6 }, lk.build, opts.build || {}), look: Object.assign(lk.look, opts.look || {}),
-    name: g.name || 'gladiator',
+    name: g.name || 'gladiator', sculpt: !(style === 'thraex' || style === 'hoplomachus'),
   });
   const rar = {}, gear = g.gear || {};
   for (const k of ['weapon', 'shield', 'armor', 'helm', 'charm']) rar[k] = Math.max(0, rarOf(gear[k]));

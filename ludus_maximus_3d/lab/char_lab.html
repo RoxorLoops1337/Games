@@ -59,7 +59,7 @@ if (view === 'grid') {
   const st = Q.get('style') || 'murmillo'; [0, 1, 2].forEach((p, i) => spawn(st, p, (i - 1) * 1.7, 0, yaw34, k++)); cam.position.set(0, 1.5, 6.4); target.set(0, 0.95, 0); cam.fov = 28;
 } else { // one
   const st = Q.get('style') || 'murmillo'; spawn(st, +(palQ || 0), 0, 0, yaw34, +(Q.get('k') || 0)); cam.position.set(0, 1.35, 4.6); target.set(0, 0.95, 0); cam.fov = 28;
-  if (view === 'one' && Q.get('part') === 'head') { cam.position.set(0.5, 1.7, 1.5); target.set(0, 1.68, 0); cam.fov = 22; }
+  if (view === 'one' && Q.get('part') === 'head') { cam.position.set(0.0, 1.84, 2.1); target.set(0, 1.76, 0); cam.fov = 17; }
 }
 if (Q.get('cam')) { const c = Q.get('cam').split(',').map(Number); cam.position.set(c[0], c[1], c[2]); target.set(c[3], c[4], c[5]); }
 const pose = Q.get('pose'), pt = +(Q.get('t') || 0);

@@ -142,7 +142,7 @@ export const DEFAULT_PALETTE = { skin: '#c98d62', hair: '#2b1b12', cloth: '#a845
 // go flat brown, a cool fresnel rim for separation from sand, a warm subsurface-ish bleed at grazing angles on skin, and a faux
 // sky/ground reflection so metals read without an environment map (the arena has none).
 const SHADE = {
-  skin: { fill: 0.30, fs: '#c4c2ff', fg: '#e8a070', rim: 0.50, rc: '#a8c4ff', rp: 2.6, sss: 0.34, sc: '#ff6a3a', env: 0 },
+  skin: { fill: 0.20, fs: '#c8c8ff', fg: '#d8a880', rim: 0.40, rc: '#a8c4ff', rp: 2.8, sss: 0.16, sc: '#ff7a50', env: 0 },
   hair: { fill: 0.22, fs: '#b8b8f0', fg: '#8a6a50', rim: 0.45, rc: '#b0c8ff', rp: 2.6, sss: 0, sc: '#fff', env: 0.10 },
   cloth: { fill: 0.24, fs: '#c0c0f0', fg: '#d09870', rim: 0.30, rc: '#a8c0ff', rp: 3.0, sss: 0.10, sc: '#ff9060', env: 0 },
   plume: { fill: 0.24, fs: '#c0c0f0', fg: '#d09870', rim: 0.32, rc: '#b0c8ff', rp: 3.0, sss: 0.15, sc: '#ff9060', env: 0 },
@@ -804,8 +804,8 @@ export function buildGladiator(opts = {}) {
   A(tm, ab, J.spine);
   const sh = bd.shoulder;
   const chest = lathe([[0.166 * B, -0.035], [0.236 * B, 0.11], [0.256 * B * (0.94 + 0.06 * sh), 0.19], [0.244 * B * (0.94 + 0.06 * sh), 0.265], [0.17 * B, 0.325], [0.095, 0.358], [0, 0.372]], 12, 1, 0.72, 0.06, 0.92);
-  const cb = [];
-  for (const sg of [-1, 1]) cb.push({ p: [sg * 0.092 * B, 0.17, 0.125], r: 0.078, a: 0.024 }, { p: [sg * 0.075, 0.305, 0.1], r: 0.035, a: 0.007 }, { p: [sg * 0.1, 0.33, -0.03], r: 0.065, a: 0.014 }, { p: [sg * 0.13 * B, 0.1, -0.125], r: 0.09, a: 0.016 });
+  const cb = [], SC = opts.sculpt === false ? 0 : 1;
+  for (const sg of [-1, 1]) cb.push({ p: [sg * 0.092 * B, 0.17, 0.125], r: 0.078, a: 0.02 * SC }, { p: [sg * 0.075, 0.305, 0.1], r: 0.035, a: 0.006 * SC }, { p: [sg * 0.1, 0.33, -0.03], r: 0.065, a: 0.012 * SC }, { p: [sg * 0.13 * B, 0.1, -0.125], r: 0.09, a: 0.014 * SC });
   sculpt(chest, cb);
   paint(chest, (x, y, z) => {
     const fr = sm01(0, 0.1, z), gr = Math.exp(-sq(x / 0.02)) * fr * sm01(0.05, 0.14, y) * sm01(0.27, 0.2, y) * 0.16;
