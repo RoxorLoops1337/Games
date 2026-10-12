@@ -142,11 +142,11 @@ export const DEFAULT_PALETTE = { skin: '#c98d62', hair: '#2b1b12', cloth: '#a845
 // go flat brown, a cool fresnel rim for separation from sand, a warm subsurface-ish bleed at grazing angles on skin, and a faux
 // sky/ground reflection so metals read without an environment map (the arena has none).
 const SHADE = {
-  skin: { fill: 0.20, fs: '#c8c8ff', fg: '#d8a880', rim: 0.55, rc: '#a8c4ff', rp: 4.5, sss: 0.16, sc: '#ff7a50', env: 0 },
-  hair: { fill: 0.22, fs: '#b8b8f0', fg: '#8a6a50', rim: 0.5, rc: '#b0c8ff', rp: 4.0, sss: 0, sc: '#fff', env: 0.10 },
+  skin: { fill: 0.18, lift: 0.028, fs: '#c8c8ff', fg: '#d8a880', rim: 0.55, rc: '#a8c4ff', rp: 4.5, sss: 0.14, sc: '#ff7a50', env: 0.07, ew: 0.9 },
+  hair: { fill: 0.22, lift: 0.012, fs: '#b8b8f0', fg: '#8a6a50', rim: 0.5, rc: '#b0c8ff', rp: 4.0, sss: 0, sc: '#fff', env: 0.14, ew: 0.8 },
   cloth: { fill: 0.24, fs: '#c0c0f0', fg: '#d09870', rim: 0.40, rc: '#a8c0ff', rp: 4.5, sss: 0.10, sc: '#ff9060', env: 0 },
   plume: { fill: 0.24, fs: '#c0c0f0', fg: '#d09870', rim: 0.32, rc: '#b0c8ff', rp: 3.0, sss: 0.15, sc: '#ff9060', env: 0 },
-  leather: { fill: 0.22, fs: '#b8b8e8', fg: '#c08860', rim: 0.35, rc: '#a8c0ff', rp: 4.5, sss: 0, sc: '#fff', env: 0.20 },
+  leather: { fill: 0.22, lift: 0.01, fs: '#b8b8e8', fg: '#c08860', rim: 0.35, rc: '#a8c0ff', rp: 4.5, sss: 0, sc: '#fff', env: 0.22, ew: 0.5 },
   metal: { fill: 0.05, fs: '#b8c0e8', fg: '#c89868', rim: 0.40, rc: '#c0d4ff', rp: 2.4, sss: 0, sc: '#fff', env: 0.55 },
   trim: { fill: 0.06, fs: '#c8c8f0', fg: '#d8a060', rim: 0.35, rc: '#ffe0b0', rp: 2.4, sss: 0, sc: '#fff', env: 0.75 },
   eye: { fill: 0.25, fs: '#ffffff', fg: '#ffeedd', rim: 0, rc: '#fff', rp: 3, sss: 0, sc: '#fff', env: 0 },
@@ -164,13 +164,13 @@ export function shadePatch(mat, key, xo = {}) {
   vec3 nWC = inverseTransformDirection(normal, viewMatrix);
   float upC = nWC.y * 0.5 + 0.5;
   vec3 albC = diffuseColor.rgb;
-  vec3 addC = albC * mix(${v3s(k.fg)}, ${v3s(k.fs)}, upC) * ${f(k.fill)};
+  vec3 addC = albC * mix(${v3s(k.fg)}, ${v3s(k.fs)}, upC) * ${f(k.fill)} + mix(${v3s(k.fg)}, ${v3s(k.fs)}, upC) * (0.35 + 2.2 * albC) * ${f(k.lift || 0)};
   float rimC = pow(1.0 - ndvC, ${f(k.rp)});
   addC += ${v3s(k.rc)} * rimC * ${f(k.rim)} * (0.35 + 0.65 * upC) * (0.55 + 0.45 * length(albC));
   addC += albC * ${v3s(k.sc)} * pow(1.0 - ndvC, 2.0) * ${f(k.sss)};
   ${k.env > 0 ? `{ vec3 rWC = inverseTransformDirection(reflect(-vdC, normal), viewMatrix); float hC = rWC.y;
     vec3 eC = mix(vec3(0.46,0.34,0.26), vec3(0.62,0.74,1.0), smoothstep(-0.35, 0.8, hC)); eC += vec3(1.0,0.78,0.5) * exp(-pow((hC - 0.14) * 3.6, 2.0)) * 0.9;
-    float frC = 0.4 + 0.6 * pow(1.0 - ndvC, 2.0); addC += albC * eC * ${f(k.env)} * frC; } ` : ''}
+    float frC = 0.4 + 0.6 * pow(1.0 - ndvC, 2.0); addC += mix(albC, vec3(1.0), ${f(k.ew || 0)}) * eC * ${f(k.env)} * frC; } ` : ''}
   outgoingLight *= 1.0 - ${f(ed)} * pow(1.0 - ndvC, 2.6);
   outgoingLight += addC;
 }
@@ -185,7 +185,7 @@ export function shadePatch(mat, key, xo = {}) {
 export function makeMaterials(p = DEFAULT_PALETTE) {
   const mk = (color, roughness, metalness, flat = false, ds = false) => new THREE.MeshStandardMaterial({ color, roughness, metalness, flatShading: flat, vertexColors: true, side: ds ? THREE.DoubleSide : THREE.FrontSide });
   const m = {
-    skin: mk(p.skin, 0.58, 0), hair: mk(p.hair, 0.55, 0.05), cloth: mk(p.cloth, 0.9, 0, false, true), plume: mk(p.plume, 0.82, 0, false, true),
+    skin: mk(p.skin, 0.5, 0), hair: mk(p.hair, 0.55, 0.05), cloth: mk(p.cloth, 0.9, 0, false, true), plume: mk(p.plume, 0.82, 0, false, true),
     leather: mk('#7a4e2c', 0.66, 0.05, true, true), metal: mk(p.metal, 0.34, 0.55, true, true), trim: mk('#f0be52', 0.28, 0.7, true, true),
     eye: new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.45, metalness: 0, vertexColors: true, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }), gem: mk('#ffffff', 0.2, 0.2, true, true),
   };
