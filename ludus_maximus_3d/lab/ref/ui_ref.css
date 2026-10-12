@@ -116,7 +116,7 @@
 .lx-ult-prog { fill: none; stroke: var(--lx-uc); stroke-width: 6; stroke-linecap: round; transition: stroke-dashoffset .25s linear; filter: drop-shadow(0 0 3px var(--lx-uc)); }
 .lx-ult-core { position: absolute; inset: 8px; border-radius: 50%; display: grid; place-items: center; background: radial-gradient(circle at 50% 35%, color-mix(in srgb, var(--lx-uc) 55%, #1d1830), #1d1830 80%); color: #fff; }
 .lx-ult-core .lx-ico { stroke-width: 1.900; filter: drop-shadow(0 1px 2px #000); }
-.lx-ult-sec { position: absolute; inset: 0; display: grid; place-items: center; font-size: calc(var(--lx-us) * .34); font-weight: 800; color: #fff; text-shadow: 0 2px 4px #000; background: rgba(10, 6, 20, .5); border-radius: 50%; }
+.lx-ult-sec { position: absolute; inset: 0; display: grid; place-items: center; font-size: calc(var(--lx-us) * .3); font-weight: 800; color: #fff; text-shadow: 0 2px 4px #000; background: rgba(10, 6, 20, .38); border-radius: 50%; }
 .lx-ult-sec:empty { display: none; }
 .lx-ult:disabled .lx-ult-core { filter: grayscale(.7) brightness(.7); }
 .lx-ult-key { position: absolute; right: -2px; bottom: -2px; font: 700 11px var(--lx-sans); background: #140f22; border: 1px solid var(--lx-bronze); border-radius: 4px; padding: 1px 5px; color: var(--lx-gold); }
