@@ -16,10 +16,10 @@ export function open(ctx, arg) {
   const root = h('div', 'am-root'), content = h('div', 'am-content'), tabsEl = h('div', 'am-tabs');
   tabsEl.setAttribute('role', 'tablist');
   const gold = P.goldChip(ctx);
-  const arm = U.button({ label: 'Armory', icon: 'shield', variant: 'bronze', onClick: () => ctx.open('armory') });
+  const arm = U.iconButton('shield', 'Open the Armory', () => ctx.open('armory'));
   const capLab = h('div', 'am-cap'); const capBar = U.bar({ value: 0, max: 1, kind: 'xp', height: 8 });
   capLab.append(h('div', '', [tip('Armory space', 'Spare items you own. When it is full, buying loot sells your weakest item automatically.', 'Capacity'), document.createTextNode(' '), h('span', 'am-capn')]), capBar);
-  root.append(h('div', 'am-top', [gold, h('span', 'am-sp'), arm]), capLab, tabsEl, content);
+  root.append(h('div', 'am-top', [gold, capLab, arm]), tabsEl, content);
   const TABS = [['shop', 'Shop', 'market'], ['sell', 'Sell', 'coin']];
   const tabBtns = TABS.map(([id, label, ic]) => { const b = h('button', 'am-tab', [U.icon(ic, 20), h('span', '', label)]); b.type = 'button'; b.setAttribute('role', 'tab'); b.addEventListener('click', () => { ctx.sfx('uiTap'); st.tab = id; st.view = null; st.confirm = null; render(); content.scrollTop = 0; }); tabsEl.append(b); return b; });
   tabsEl.style.gridAutoColumns = '1fr';

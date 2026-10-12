@@ -264,7 +264,7 @@ function headband(rig, o) {
 function loinFlap(rig, anchor, o = {}) {
   const rows = o.rows || 4, cols = o.cols || 3, len = o.len || 0.3, rl = len / (rows - 1), back = !!o.back, w = o.w || 0.2;
   const thighs = [['hipL', 'kneeL', 'ankleL'], ['hipR', 'kneeR', 'ankleR']], a = new V3(), b = new V3(), ab = new V3(), ap = new V3();
-  const J = rig.joints, R = 0.118;
+  const J = rig.joints, R = 0.108 * (rig.build.bulk || 1) * (rig.build.leg || 1) + 0.012;
   const g = new ClothGrid({
     anchor, rows, cols, rowLen: rl, stiff: 0.3, stiffFall: 0.55, damping: 0.9, gravity: -9, side: new V3(1, 0, 0),
     shape: (r) => new V3(o.x || 0, (o.y || 0) - r * rl * 0.97, (back ? -1 : 1) * ((o.z || 0.145) + r * 0.014)), widthFn: (r) => w * (1 + 0.15 * r / (rows - 1)), material: o.material || rig.mats.cloth, name: 'flap', tipShade: 0.62, fold: true,
@@ -325,7 +325,7 @@ function laurel(rig, B, sh, stars, lvl, onShell = 0) {
   const C = rig.joints.chest, n = clamp(stars | 0, 1, 5), gold = lvl >= 5 ? [1, 1, 1] : [0.72, 0.5, 0.3], cy = 0.2, Rr = 0.056;
   for (const sg of [-1, 1]) for (let i = 0; i < n; i++) {
     const a = (0.45 + i * (1.95 / 5 + 0.0)) * 0.9 + 0.0, x = sg * Math.sin(a) * Rr, y = cy - Math.cos(a) * Rr, cp = chestPt(x, y, B, sh, 0.016 + onShell);
-    const q = xf(boxG(0.017, 0.03, 0.003), cp.p.toArray(), [-0.2, 0, sg * (a + 0.5) * 0.9 + (sg > 0 ? 0 : 0)]);
+    const q = xf(boxG(0.017, 0.03, 0.003), cp.p.toArray(), [-0.2, 0, sg * (a - PI / 2 + 0.45)]);
     rig.add('trim', paint(q, gold), C);
   }
   const cp = chestPt(0, cy, B, sh, 0.02 + onShell);
@@ -350,7 +350,7 @@ function jerkin(rig, B, sh, rr) { // thraex leather jerkin with studs and should
   rig.add('leather', paint(lathe(prof, 14, 1, 0.72, 0.1, 0.8), (x, y, z) => 0.95 - 0.12 * Math.exp(-((y - 0.13) / 0.01) ** 2) * sm01(-0.05, 0.08, z)), C);
   rig.add('trim', lathe([[chestR(0.3, B, sh) + 0.018, 0.3], [chestR(0.31, B, sh) + 0.02, 0.31]], 14, 1, 0.72, 0, 1), C);
   for (let i = 0; i < 3; i++) for (const sg of [-1, 1]) { const cp = chestPt(sg * 0.06 * B, 0.07 + i * 0.075, B, sh, 0.026); rig.add('trim', xf(sphereG(0.0085, 4, 3), cp.p.toArray()), C); }
-  for (const s of ['L', 'R']) rig.add('leather', tabRing(4, 0.088, 0.03, 0.12, 0.058, { sz: 1, flare: 0.03, arc: PI, a0: s === 'L' ? PI * 0.25 : -PI * 1.25 + 0.0, shade: 0.7 }), rig.joints['shoulder' + s]);
+  for (const s of ['L', 'R']) rig.add('leather', tabRing(4, 0.088, 0.03, 0.12, 0.058, { sz: 1, flare: 0.03, arc: PI, a0: s === 'L' ? 0 : PI, shade: 0.7 }), rig.joints['shoulder' + s]);
   gem(rig, C, chestPt(0, 0.15, B, sh, 0.03).p.toArray(), 0.016, rr);
 }
 
