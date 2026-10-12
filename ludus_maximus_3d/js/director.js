@@ -199,7 +199,7 @@ export class FightDirector {
     const phi = L.length > 1 && Math.hypot(sx, sy) > 1e-3 ? 0.5 * Math.atan2(sy, sx) : this.s.yaw - Math.PI / 2;
     let yaw = phi + (Math.PI / 2) * (1 - tall); const pitch = lerp(24, 30, tall) * D2R + tall * 12 * D2R;
     yaw = this._pickYaw(pts, yaw, pitch, fov);
-    return this._frame({ pts, yaw, pitch, fov, margin: lerp(0.86, 0.8, tall), minD: 7.5, padX: 0.7, st: { yaw: 0.6, yawMax: 1.1, pitch: 0.5, c: 0.28, d: 0.7, dUp: 0.14, fov: 0.5 } });
+    return this._frame({ pts, yaw, pitch, fov, margin: lerp(0.86, 0.8, tall), minD: 7.5, padX: 1.5, padY: 0.5, st: { yaw: 0.6, yawMax: 1.1, pitch: 0.5, c: 0.28, d: 0.7, dUp: 0.14, fov: 0.5 } });
   }
   _duel({ L, p, tall }) {
     const a = L.find((u) => u.id === p.a) || L[0], b = L.find((u) => u.id === p.b) || L.find((u) => u !== a); if (!a || !b) return null;

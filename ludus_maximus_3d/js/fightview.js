@@ -199,16 +199,16 @@ export class FightView {
   // Establishing flyover is authored here (the director frames fighters; this one frames the bowl): sweep in from above the gate to hero height.
   introPose(t) {
     const k = clamp(t / 3.0, 0, 1), e = k * k * (3 - 2 * k), tall = Number.isFinite(this.dir.tall) ? this.dir.tall : 0;
-    const a = [-16, 31, 47], b = [-17.5, 3.4, 8.5], pos = [0, 1, 2].map((i) => a[i] + (b[i] - a[i]) * e);
+    const a = [-16, 31, 47], b = [-17.5 - 3 * tall, 3.4 + 0.6 * tall, 8.5 - 5 * tall], pos = [0, 1, 2].map((i) => a[i] + (b[i] - a[i]) * e);
     pos[0] += Math.sin(k * 3.1) * 3; const look = { x: 1 * e, y: 6 - 4.6 * e, z: -2 * (1 - e) };
-    return { pos: { x: pos[0], y: pos[1], z: pos[2] + tall * 6 }, look, fov: 48 + tall * 12, timeScale: 1 };
+    return { pos: { x: pos[0], y: pos[1], z: pos[2] }, look, fov: 48 + tall * 12, timeScale: 1 };
   }
 
   applyCamera(pose) {
     if (this.phase === 'intro' && this.phaseT < 3.0) pose = this.introPose(this.phaseT);
     const c = this.camera; c.position.set(pose.pos.x, pose.pos.y, pose.pos.z); c.lookAt(pose.look.x, pose.look.y, pose.look.z);
     if (Math.abs(c.fov - pose.fov) > 0.01) { c.fov = pose.fov; c.updateProjectionMatrix(); }
-    this.feel.apply(c); c.updateMatrixWorld();
+    this.feel.setBaseFov(pose.fov); this.feel.apply(c); c.updateMatrixWorld();
   }
 
   // ---------------------------------------------------------------- actors
