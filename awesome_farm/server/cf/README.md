@@ -65,3 +65,7 @@ Durable Object named after the world id, so each has its own save, backups and f
 - The old plain addresses (`/status`, `/ws`, `/admin`) still reach the first world (Meadow), so existing saves and links keep working.
 - Add a world: add a line to `WORLDS` and run `npm run cf:deploy`. No new migration is needed.
 - Set `PUBLIC_SERVER` in `servers.ts` to the worker address so players get the buttons without typing anything.
+
+
+## One double-click update
+`awesome_farm\update-and-deploy.bat` pulls the newest code from GitHub (`git pull`), installs packages and deploys all worlds; it can also rebuild the PC server. The deploy publishes the code that is on your PC, so a pull is always needed first (the file does it).
