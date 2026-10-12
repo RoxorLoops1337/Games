@@ -623,15 +623,18 @@ export const FACES = [
   { j: 0.86, brow: 0.010, cheek: 0.012, chin: 0.008, nose: [0.82, 1.18], eye: '#5a7a9a', lid: 0.35, tilt: -0.18, mouth: -0.02, nx: 0.0 },
   { j: 1.10, brow: 0.021, cheek: 0.008, chin: 0.017, nose: [1.25, 0.95], eye: '#4a5a2a', lid: 0.65, tilt: 0.22, mouth: -0.16, nx: 0.012, scar: true },
 ];
+// flat plate (2 triangles) in head space facing +Z (eyes, brows, lips: painted-on features cost almost nothing)
+function plate(w, h, p, rz = 0, rx = 0, ry = 0) { return xf(col1(new THREE.PlaneGeometry(w, h)), p, [rx, ry, rz]); }
+function disc(r, seg, p, sx = 1, sy = 1, rz = 0) { return xf(col1(new THREE.CircleGeometry(r, seg)), p, [0, 0, rz], [sx, sy, 1]); }
 function buildHead(rig, look, bd) {
   const A = (m, g, o) => rig.add(m, g, o || rig.joints.head);
-  const F = FACES[(look.face | 0) % 3], prof = SKULL(F.j), hs = bd.head || 1;
+  const F = FACES[(look.face | 0) % 3], prof = SKULL(F.j);
   const surf = (x, y, off = 0) => { const R = skullR(prof, y), u = clamp(x / (R * HEAD_SX + 1e-5), -0.98, 0.98); return new V3(x, y, HEAD_SZ * R * Math.sqrt(1 - u * u) + off); };
-  const skull = lathe(prof, 14, HEAD_SX, HEAD_SZ, 0.1, 0.86);
+  const skull = lathe([prof[0], prof[2], prof[3], prof[4], prof[5], prof[6], prof[7], prof[8], prof[9]], 12, HEAD_SX, HEAD_SZ, 0.1, 0.86);
   const bl = [];
   for (const sg of [-1, 1]) {
-    bl.push({ p: [sg * 0.04, 0.142, surf(sg * 0.04, 0.142).z], r: 0.034, a: F.brow }, { p: [sg * 0.037, 0.122, surf(sg * 0.037, 0.122).z], r: 0.021, a: -0.007 },
-      { p: [sg * 0.068, 0.088, surf(sg * 0.068, 0.088).z], r: 0.034, a: F.cheek }, { p: [sg * 0.05, 0.008, surf(sg * 0.05, 0.008).z], r: 0.026, a: F.j > 1.05 ? 0.008 : 0.002 });
+    bl.push({ p: [sg * 0.04, 0.142, surf(sg * 0.04, 0.142).z], r: 0.034, a: F.brow }, { p: [sg * 0.037, 0.122, surf(sg * 0.037, 0.122).z], r: 0.021, a: -0.006 },
+      { p: [sg * 0.068, 0.088, surf(sg * 0.068, 0.088).z], r: 0.034, a: F.cheek });
   }
   bl.push({ p: [0, 0.002, surf(0, 0.002).z], r: 0.028, a: F.chin }, { p: [0, 0.19, surf(0, 0.19).z], r: 0.05, a: 0.004 });
   sculpt(skull, bl);
@@ -640,69 +643,59 @@ function buildHead(rig, look, bd) {
     const ch = Math.exp(-((Math.abs(x) - 0.068) ** 2 + (y - 0.083) ** 2) / 0.0012) * front; r *= 1 + 0.05 * ch; g *= 1 - 0.15 * ch; b *= 1 - 0.14 * ch;
     const es = Math.exp(-((Math.abs(x) - 0.037) ** 2 + (y - 0.124) ** 2) / 0.0007) * front; const e = 1 - 0.2 * es; r *= e; g *= e * 0.97; b *= e * 0.99;
     const uj = 1 - 0.22 * sm01(0.02, -0.02, y); const fh = 1 + 0.06 * sm01(0.16, 0.225, y) * front; const k = uj * fh;
-    const nose = Math.exp(-(x * x + (y - 0.075) ** 2) / 0.0006) * front * 0.1; // nose tip a bit ruddy
+    const nose = Math.exp(-(x * x + (y - 0.075) ** 2) / 0.0006) * front * 0.1;
     return [r * k * (1 + nose), g * k * (1 - nose), b * k * (1 - nose)];
   });
   A('skin', skull);
-  // nose: bridge wedge + nostril wings
   const nz = surf(0, 0.1).z;
-  A('skin', paint(xf(coneG(0.02 * F.nose[0], 0.042 * F.nose[1], 4), [0, 0.098, nz + 0.008], [Math.PI / 2 + 0.55, 0.785, 0], [1, 1, 0.8]), (x, y, z) => 1)); // pyramid pointing forward and down
-  for (const sg of [-1, 1]) A('skin', xf(sphereG(0.0105 * F.nose[0], 5, 3), [sg * 0.013 * F.nose[0], 0.083, nz - 0.003], [0, 0, 0], [1.1, 0.8, 0.9]));
-  if (F.nx) A('skin', xf(boxG(0.012, 0.03, 0.012), [F.nx, 0.112, nz + 0.002], [0.1, 0, 0.35])); // broken bridge
-  // eyes: sclera + iris + pupil in the eye material (white base, colour in vertex colour)
+  A('skin', xf(coneG(0.02 * F.nose[0], 0.045 * F.nose[1], 4), [0, 0.097, nz + 0.01], [Math.PI / 2 + 0.55, 0.785, 0], [1, 1, 0.8])); // pyramid nose
+  if (F.nx) A('skin', xf(boxG(0.01, 0.026, 0.01), [F.nx, 0.112, nz + 0.003], [0.1, 0, 0.35]));
   const iris = new THREE.Color(F.eye);
   for (const sg of [-1, 1]) {
-    const ex = sg * 0.037, ey = 0.121, ez = surf(ex, ey).z - 0.007;
-    A('eye', paint(xf(sphereG(0.0145, 6, 4), [ex, ey, ez], [0, 0, 0], [1.25, 0.8, 0.75]), [0.96, 0.93, 0.88]));
-    A('eye', paint(xf(cylG(0.0075, 0.0075, 0.004, 6), [ex, ey, ez + 0.0085], [Math.PI / 2, 0, 0]), [iris.r * 2.2, iris.g * 2.2, iris.b * 2.2]));
-    A('eye', paint(xf(cylG(0.0035, 0.0035, 0.004, 5), [ex, ey, ez + 0.0102], [Math.PI / 2, 0, 0]), [0.03, 0.02, 0.02]));
-    A('skin', paint(xf(boxG(0.036, 0.0075, 0.018), [ex, ey + 0.011 - 0.004 * F.lid, ez + 0.0035], [0.25, 0, 0]), [0.82, 0.74, 0.72])); // upper lid
-    A('skin', paint(xf(boxG(0.03, 0.005, 0.012), [ex, ey - 0.0118, ez + 0.001], [-0.1, 0, 0]), [0.9, 0.82, 0.8])); // lower lid
-    // brow: two segments, tilt gives the expression (angry / calm / raised)
-    const by = 0.146 + (F.tilt < 0 ? 0.004 : 0), bz = surf(sg * 0.04, by).z + 0.003, th = sg * F.tilt;
-    A('hair', xf(boxG(0.028, 0.0095, 0.01), [sg * 0.026, by - 0.0035 * Math.sign(F.tilt || 1) * 0.5, bz], [0.15, 0, th]));
-    A('hair', xf(boxG(0.026, 0.0085, 0.01), [sg * 0.052, by + 0.0035 * Math.sign(F.tilt || 1) * 0.5, bz - 0.005], [0.15, sg * -0.35, th]));
-    // ears
-    A('skin', paint(xf(sphereG(0.024, 6, 4), [sg * 0.099, 0.099, -0.004], [0, 0, sg * -0.08], [0.32, 1.0, 0.72]), (x, y, z, nx) => 1 - 0.18 * Math.max(0, -nx * sg)));
+    const ex = sg * 0.037, ey = 0.121, ez = surf(ex, ey).z - 0.004, nr = Math.atan2(sg * 0.037, 0.1) * 0.7;
+    A('eye', paint(disc(0.0145, 6, [ex, ey, ez], 1.3, 0.85), [0.96, 0.93, 0.88]));
+    A('eye', paint(disc(0.0085, 6, [ex, ey, ez + 0.0012]), [iris.r * 2.4, iris.g * 2.4, iris.b * 2.4]));
+    A('eye', paint(disc(0.0042, 4, [ex, ey, ez + 0.0024]), [0.03, 0.02, 0.02]));
+    A('skin', paint(plate(0.038, 0.011, [ex, ey + 0.0105 - 0.005 * F.lid, ez + 0.0035], 0, 0.2), [0.78, 0.7, 0.68])); // upper lid shades the eye
+    // brow: tilt gives the expression (angry / calm / raised)
+    const by = 0.147 + (F.tilt < 0 ? 0.004 : 0), bz = surf(sg * 0.04, by).z + 0.004, th = sg * F.tilt;
+    A('hair', plate(0.05, 0.0105, [sg * 0.04, by, bz], th, 0.1));
+    A('skin', xf(sphereG(0.022, 5, 3), [sg * 0.099, 0.099, -0.004], [0, 0, sg * -0.08], [0.32, 1.0, 0.72]));
   }
-  // mouth: dark line (slight smile / grim by variant), upper + lower lip
   const my = 0.052, mz = surf(0, my).z;
-  A('eye', paint(xf(boxG(0.022, 0.0042, 0.006), [0, my, mz - 0.001]), [0.3, 0.1, 0.09]));
-  for (const sg of [-1, 1]) A('eye', paint(xf(boxG(0.016, 0.0042, 0.006), [sg * 0.0185, my + F.mouth * 0.07 * 0.5, surf(sg * 0.0185, my).z - 0.001], [0, sg * -0.5, sg * F.mouth]), [0.3, 0.1, 0.09]));
-  A('skin', paint(xf(boxG(0.046, 0.0065, 0.009), [0, my + 0.0058, mz + 0.0006], [0.2, 0, 0]), [0.9, 0.52, 0.5]));
-  A('skin', paint(xf(boxG(0.036, 0.0075, 0.009), [0, my - 0.0072, mz + 0.0006], [-0.15, 0, 0]), [0.92, 0.56, 0.54]));
-  if (F.scar) { const pts = [surf(0.076, 0.13), surf(0.066, 0.108), surf(0.058, 0.09), surf(0.048, 0.07)].map((p) => p.add(new V3(0, 0, 0.0012))); A('skin', paint(ribbon(pts, 0.006, (p) => new V3(p.x / (HEAD_SX * HEAD_SX), 0, p.z / (HEAD_SZ * HEAD_SZ))), [1.2, 0.86, 0.84])); }
+  A('eye', paint(plate(0.05, 0.0045, [0, my, mz + 0.0012], 0, -0.05), [0.3, 0.1, 0.09]));
+  for (const sg of [-1, 1]) A('eye', paint(plate(0.014, 0.0045, [sg * 0.0305, my + F.mouth * 0.4, surf(sg * 0.0305, my).z + 0.0015], sg * F.mouth, 0, sg * -0.35), [0.3, 0.1, 0.09]));
+  A('skin', paint(plate(0.044, 0.0085, [0, my + 0.0068, mz + 0.002], 0, -0.25), [0.9, 0.5, 0.48]));
+  A('skin', paint(plate(0.036, 0.0095, [0, my - 0.0075, mz + 0.002], 0, 0.2), [0.92, 0.55, 0.53]));
+  if (F.scar) { const pts = [surf(0.076, 0.13), surf(0.062, 0.1), surf(0.048, 0.07)].map((p) => p.add(new V3(0, 0, 0.0012))); A('skin', paint(ribbon(pts, 0.006, (p) => new V3(p.x / (HEAD_SX * HEAD_SX), 0, p.z / (HEAD_SZ * HEAD_SZ))), [1.2, 0.86, 0.84])); }
   // hair
   const hairy = look.hair || 'short', off = hairy === 'crop' ? 0.004 : 0.008, yb = hairy === 'tied' ? 0.175 : hairy === 'crop' ? 0.185 : 0.165;
   if (hairy !== 'bald' && hairy !== 'none') {
-    const ys = [yb, 0.2, 0.228, 0.25, 0.262];
+    const ys = [yb, 0.205, 0.238, 0.262];
     const pts = ys.map((y) => [skullR(prof, y) + off + (y < 0.2 ? 0.004 : 0), y]); pts.push([0, 0.272]);
-    const cap = lathe(pts, 12, HEAD_SX, HEAD_SZ, 0, 1);
+    const cap = lathe(pts, 10, HEAD_SX, HEAD_SZ, 0, 1);
     const P = cap.attributes.position;
-    for (let i = 0; i < P.count; i++) { // hairline: high on the forehead, low at the nape and over the ears
-      const y = P.getY(i); if (Math.abs(y - yb) < 1e-5) { const z = P.getZ(i), x = P.getX(i), back = Math.max(0, -z / 0.1), side = Math.abs(x) / 0.1; P.setY(i, y - 0.075 * back - 0.03 * side * (1 - back) + 0.015 * Math.max(0, z / 0.1) * (1 - side)); }
-    }
+    for (let i = 0; i < P.count; i++) { const y = P.getY(i); if (Math.abs(y - yb) < 1e-5) { const z = P.getZ(i), x = P.getX(i), back = Math.max(0, -z / 0.1), side = Math.abs(x) / 0.1; P.setY(i, y - 0.075 * back - 0.03 * side * (1 - back) + 0.015 * Math.max(0, z / 0.1) * (1 - side)); } }
     paint(cap, (x, y, z) => 1 - 0.18 * sm01(0.2, 0.165, y) + 0.1 * sm01(0.22, 0.26, y)); A('hair', cap);
-    if (hairy === 'short') for (let i = -2; i <= 2; i++) A('hair', xf(boxG(0.034, 0.05 - Math.abs(i) * 0.006, 0.014), [i * 0.036, yb + 0.012, surf(i * 0.036, yb).z + 0.006 - Math.abs(i) * 0.004], [0.5 - Math.abs(i) * 0.1, -i * 0.14, i * 0.08]));
+    if (hairy === 'short') for (const i of [-1, 0, 1]) A('hair', xf(coneG(0.022, 0.05, 3), [i * 0.05, yb + 0.012, surf(i * 0.05, yb).z + 0.004], [Math.PI * 0.75, 0, i * 0.2], [1.3, 1, 0.6]));
     if (hairy === 'long') {
-      A('hair', paint(lathe([[0.07, -0.31], [0.098, -0.22], [0.112, -0.1], [0.116, 0.04], [0.11, 0.15]], 8, 0.96, 0.9, 0, 1, Math.PI * 0.52, Math.PI * 0.96), (x, y) => 1 - 0.3 * sm01(-0.05, -0.31, y) * 0.5), rig.joints.head);
+      A('hair', paint(lathe([[0.07, -0.31], [0.1, -0.15], [0.116, 0.04], [0.11, 0.15]], 7, 0.96, 0.9, 0, 1, Math.PI * 0.52, Math.PI * 0.96), (x, y) => 1 - 0.15 * sm01(-0.05, -0.31, y)));
       for (const sg of [-1, 1]) A('hair', xf(boxG(0.022, 0.18, 0.05), [sg * 0.103, 0.06, 0.012], [0, 0, sg * 0.05]));
     }
     if (hairy === 'tied') {
-      A('hair', xf(capsule(0.2, 0.03, 0.012, 6, 0.1), [0, 0.2, -0.108], [2.3, 0, 0]));
-      A('cloth', xf(lathe([[0.034, -0.01], [0.036, -0.01], [0.036, 0.012], [0.034, 0.012]], 7, 1, 1, 0, 1), [0, 0.2, -0.112], [2.3, 0, 0]));
+      A('hair', xf(capsule(0.2, 0.03, 0.012, 5, 0.1), [0, 0.2, -0.108], [2.3, 0, 0]));
+      A('cloth', xf(lathe([[0.034, -0.01], [0.036, 0.012]], 6, 1, 1, 0, 1), [0, 0.2, -0.112], [2.3, 0, 0]));
     }
   }
-  const bd2 = look.beard | 0; // 0 none, 1 short/stubble, 2 full
+  const bd2 = look.beard | 0; // 0 none, 1 short, 2 full
   if (bd2) {
     const lo = bd2 === 2 ? -0.07 : -0.045, o = bd2 === 2 ? 0.011 : 0.006, L = Math.PI * 1.2;
-    const bp = [[0.02, lo], [skullR(prof, -0.01) + o, -0.02], [skullR(prof, 0.02) + o, 0.02], [skullR(prof, 0.044) + o * 0.8, 0.044]];
-    const beard = lathe(bp, 11, HEAD_SX, HEAD_SZ, 0, 1, -L / 2, L);
-    const BP = beard.attributes.position; for (let i = 0; i < BP.count; i++) if (BP.getY(i) <= lo + 1e-4 && bd2 === 2) BP.setZ(i, BP.getZ(i) + 0.03 * Math.max(0, Math.cos(Math.atan2(BP.getX(i), BP.getZ(i)))));
+    const bp = [[0.02, lo], [skullR(prof, -0.01) + o, -0.02], [skullR(prof, 0.03) + o, 0.025], [skullR(prof, 0.044) + o * 0.8, 0.044]];
+    const beard = lathe(bp, 9, HEAD_SX, HEAD_SZ, 0, 1, -L / 2, L);
+    const BP = beard.attributes.position; if (bd2 === 2) for (let i = 0; i < BP.count; i++) if (BP.getY(i) <= lo + 1e-4) BP.setZ(i, BP.getZ(i) + 0.03 * Math.max(0, Math.cos(Math.atan2(BP.getX(i), BP.getZ(i)))));
     paint(beard, (x, y) => 0.8 + 0.2 * sm01(lo, 0.04, y)); A('hair', beard);
     for (const sg of [-1, 1]) A('hair', xf(boxG(0.014, 0.075, 0.034), [sg * 0.096, 0.088, -0.002], [0, 0, sg * 0.04]));
-    A('hair', xf(boxG(0.058, 0.011, 0.014), [0, my + 0.0125, mz + 0.003], [0.15, 0, 0]));
-    if (bd2 === 2) A('hair', xf(boxG(0.03, 0.03, 0.022), [0, lo + 0.012, surf(0, -0.03).z + 0.026], [-0.4, 0, 0]));
+    A('hair', plate(0.056, 0.016, [0, my + 0.0145, mz + 0.004], 0, -0.1));
   }
 }
 

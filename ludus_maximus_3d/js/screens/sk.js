@@ -94,6 +94,7 @@ const CSS = `
 .ax-switch[aria-checked=true]{background:linear-gradient(180deg,#c98e24,#f2c14e)}
 .ax-switch[aria-checked=true]::after{transform:translateX(24px)}
 .ax-tap{min-height:44px}
+.ax-sticky{position:sticky;bottom:-10px;margin:0 -2px -10px;padding:14px 2px 12px;background:linear-gradient(180deg,rgba(29,24,48,0),#1d1830 38%);z-index:2}
 .ax-range{width:100%;height:44px;accent-color:#f2c14e;background:transparent;cursor:pointer}
 .ax-switchrow{display:flex;align-items:center;gap:12px;min-height:48px}
 .ax-ta{width:100%;min-height:120px;resize:vertical;border-radius:8px;border:2px solid var(--lx-bronze);background:#140f22;color:var(--lx-travertine);font:12px/1.35 ui-monospace,Consolas,monospace;padding:8px;user-select:text;-webkit-user-select:text}
@@ -242,7 +243,7 @@ export function pickFighters(ctx, o) {
       const gs = sel.map((id) => ctx.gOf(id)).filter(Boolean);
       const ft = o.footer && o.footer(gs); if (ft) root.append(ft);
       const cf = o.confirm ? o.confirm(gs) : { label: 'Confirm' }; const ready = gs.length === n && !cf.disabled;
-      root.append(U.button({ label: cf.label, sub: cf.sub, variant: 'gold', block: true, icon: 'check', disabled: !ready, onClick: () => { ctx.sfx('uiConfirm'); finish(sel.slice()); } }));
+      root.append(h('div', 'ax-sticky', U.button({ label: cf.label, sub: cf.sub, variant: 'gold', block: true, icon: 'check', disabled: !ready, onClick: () => { ctx.sfx('uiConfirm'); finish(sel.slice()); } })));
     });
     draw();
   });

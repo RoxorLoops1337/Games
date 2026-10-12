@@ -202,7 +202,7 @@ function modes(ctx, root, draw) {
     chips: [pill(`Best floor ${S.pitBest || 0}`, { tone: 'gold' }), pill(`Daily best ${S.dailyBest || 0}`, { tone: 'vio', tip: 'Daily Descent: the same opponents and augment offers for everyone today. Resets at midnight UTC.', tipTitle: 'Daily Descent' }),
       pill(`This week: ${mutW.n}`, { tone: 'warn', tip: mutW.d, tipTitle: 'Mutator' }), pill(`Daily: ${mutD.n}`, { tone: 'warn', tip: mutD.d, tipTitle: 'Mutator' })],
     btns: [U.button({ label: pit.used ? 'Done this week' : 'Descend', variant: 'danger', icon: 'skull', disabled: pit.used, onClick: () => startPit(ctx, false) }),
-      U.button({ label: pit.dailyDone ? 'Daily done' : 'Daily seed', variant: 'bronze', icon: 'star', disabled: pit.dailyDone, onClick: () => startPit(ctx, true) })],
+      U.button({ label: pit.dailyDone ? 'Daily done' : 'Daily', variant: 'bronze', icon: 'star', disabled: pit.dailyDone, onClick: () => startPit(ctx, true) })],
   }));
   root.append(modeCard({
     ico: 'roster', title: 'Horde Trial', tone: 'purple', text: 'One fighter against growing packs of weaker foes, up to five at once. Retreat after any wave to keep the rewards; defeat keeps 60%.',
