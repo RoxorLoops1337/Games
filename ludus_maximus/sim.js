@@ -555,6 +555,7 @@
       rep.recap = { wins: S.stats.wins - sl.wins, losses: S.stats.losses - sl.losses, fame: S.fame - sl.fame, tour: S.stats.tourneys - sl.tour, mvp: mvp && (mvp.sw || 0) > 0 ? { name: mvp.name, w: mvp.sw, id: mvp.id } : null };
       S.sl = { fame: S.fame, wins: S.stats.wins, losses: S.stats.losses, tour: S.stats.tourneys }; S.glads.forEach((g) => { g.sw = 0; });
       rep.recap.rival = LM.rivalOfYear(S);
+      S.awards = (S.awards || []).concat([{ season: S.season - 1, mvp: rep.recap.mvp ? rep.recap.mvp.name : null, wins: rep.recap.wins, rival: rep.recap.rival ? rep.recap.rival.a + ' and ' + rep.recap.rival.b : null }]).slice(-12);
     }
     S.market = null; S.recruits = null; LM.relTick(S); rep.story = LM.storyCheck(S);
     LM.fillContracts(S);
@@ -604,11 +605,13 @@
       const a = gs[i], b = gs[j]; const k = bkey(a.id, b.id); const friends = LM.bond(S, a.id, b.id) >= 50;
       const add = ((a.style === b.style ? 3 : 0) + (a.act === b.act ? 2 : 0) + (a.fame > 0 && b.fame > 0 ? 1 : 0)) * (friends ? 0.4 : 1);
       S.rivalry[k] = clamp((S.rivalry[k] || 0) + (add > 0 ? add : -1), 0, 100); if (add > 0) { S.rvy = S.rvy || {}; S.rvy[k] = (S.rvy[k] || 0) + add; }
-      if (S.rivalry[k] >= 45 && !S.pendingRiv) S.pendingRiv = [a.id, b.id];
+      if (S.rivalry[k] >= 45 && !S.pendingRiv) { S.pendingRiv = [a.id, b.id]; LM.forumAdd(S, `Tension rises between ${a.name} and ${b.name}.`); }
     }
   };
   LM.rivalryOf = (S, a, b) => (S.rivalry || {})[bkey(a, b)] || 0;
+  LM.forumAdd = (S, t) => { S.forum = (S.forum || []).concat([{ w: S.week, t }]).slice(-30); };
   LM.rivalryResolve = (S, a, b, choice, winnerId) => {
+    LM.forumAdd(S, choice === 'partner' ? `${a.name} and ${b.name} train as partners now.` : `${a.name} and ${b.name} settled things in the sand.`);
     S.rivalry = S.rivalry || {}; const k = bkey(a.id, b.id); S.pendingRiv = null; const out = { lines: [] };
     if (choice === 'duel') {
       const w = winnerId === a.id ? a : b, l = w === a ? b : a; const up = LM.addXp(w, 40), up2 = LM.addXp(l, 20);

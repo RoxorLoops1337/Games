@@ -147,7 +147,16 @@ Planner presets (Boot camp, Rest week, Odd jobs, Sparring), legend apprenticeshi
 Season ladder (win milestones pay once per season), trait-flavored mood events (Showman, Hothead, Lucky, Cool Head and more), and a downloadable Share card poster for any fighter. Crowd audio (63) and replay (55) still open. Also restored round 14 helpers after a bad edit (caught by tests before merge).
 
 ## Next ideas
-- [ ] 67. Tournament brackets with sponsor banners
-- [ ] 68. Fighter rivalries show up in the Forum
+- [x] 67. Tournament brackets with sponsor banners
+- [x] 68. Fighter rivalries show up in the Forum
 - [ ] 69. Training dummy minigame upgrades
-- [ ] 70. Season trophy cabinet with a yearly award
+- [x] 70. Season trophy cabinet with a yearly award
+
+## Round 16 shipped
+Sponsor banners under tournament brackets, rivalry events logged in the Forum, and a Season awards list (wins, MVP, rivals of the year). Training dummy upgrades (69), crowd audio (63) and replay (55) still open.
+
+## Next ideas
+- [ ] 71. Training dummy upgrades for the drill minigame
+- [ ] 72. Per-style signature entrance animations
+- [ ] 73. Gladiator diary lines on the profile
+- [ ] 74. Seasonal events with unique reward items
