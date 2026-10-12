@@ -117,7 +117,7 @@
   }
   function vLudus() {
     const cap = L.rosterCap(S); const season = Math.ceil(S.week / 12); const wk = ((S.week - 1) % 12) + 1;
-    let h = `<div class="banner"><div style="flex:1"><h2>${esc(S.name)}</h2><div class="small" style="opacity:.9">Season ${season} · Week ${wk}/12 · ${S.glads.length}/${cap} fighters</div></div><span class="tag">${D.LEAGUES[L.maxLeague(S)].n}</span></div>`;
+    let h = `<div class="banner"><div style="flex:1"><h2>${esc(S.name)}</h2><div class="small" style="opacity:.9">Season ${season} · Week ${wk}/12 · ${S.glads.length}/${cap} fighters</div></div><span class="tag">${D.LEAGUES[L.maxLeague(S)].n}</span></div>${L.festival(S, S.week) ? `<div class="card" style="background:${L.festival(S, S.week).c};color:#fff;border-color:var(--ink)"><b class="h" style="font-size:13px">${L.festival(S, S.week).n}</b><div class="small" style="font-weight:700">${L.festival(S, S.week).d}</div></div>` : ''}`;
     const pplAt = {}; S.glads.forEach((g) => { (pplAt[where(g)] = pplAt[where(g)] || []).push(g); });
     h += '<div class="map">';
     for (let i = 0; i < 16; i++) {
@@ -256,13 +256,14 @@
     const ml = L.maxLeague(S); const lv = fogLevel(); const look = L.lookahead(S);
     if (ui.wk >= look) ui.wk = 0;
     let h = '<div class="ltabs">' + D.LEAGUES.map((Lg) => `<div class="ltab ${ui.league === Lg.id ? 'on' : ''} ${Lg.id > ml ? 'lock' : ''}" data-a="league" data-v="${Lg.id}">${Lg.id > ml ? A.icon('lock', 12) : ''} ${Lg.n}</div>`).join('') + '</div>';
-    h += '<div class="wtabs">' + Array.from({ length: look }, (_, i) => `<div class="wtab ${ui.wk === i ? 'on' : ''}" data-a="wk" data-v="${i}">${i === 0 ? 'This week' : 'Week ' + (S.week + i)}</div>`).join('') + `</div>`;
+    h += '<div class="wtabs">' + Array.from({ length: look }, (_, i) => `<div class="wtab ${ui.wk === i ? 'on' : ''}" data-a="wk" data-v="${i}">${i === 0 ? 'This week' : 'Week ' + (S.week + i)}${L.festival(S, S.week + i) ? ' \u2605' : ''}</div>`).join('') + `</div>`;
     h += `<div class="card dark row" style="gap:10px">${A.icon('eye', 24)}<div class="small sp"><b class="h" style="font-size:12px;color:var(--gold)">Scouting level ${lv}</b><br>${L.fogNote[lv]}. Upgrade the Scout Tower to see more and look further ahead.</div></div>`;
     const used = S.pitWeek === S.week;
     h += `<div class="card" style="background:var(--ink);color:var(--cream);border-color:var(--gold)"><div class="row"><div class="sp"><b class="h" style="color:var(--gold)">Pit of Trials</b><div class="small" style="font-weight:600">One fighter descends. Wounds carry over. Pick an augment before every floor, then cash out or push deeper. Best floor: <b>${S.pitBest || 0}</b></div></div><div class="col" style="gap:6px"><button class="btn sm ${used ? 'off' : 'red'}" data-a="pit">${used ? 'Done this week' : 'Descend'}</button><button class="btn sm ${L.dailyDone(S) ? 'off' : 'blue'}" data-a="pitdaily">${L.dailyDone(S) ? 'Daily done' : 'Daily seed'}</button></div></div><div class="tiny" style="margin-top:6px;opacity:.85">Daily Descent: the same opponents and augment offers for everyone today. Best daily floor: <b>${S.dailyBest || 0}</b>. Resets at midnight UTC.</div></div>`;
     const Lg = D.LEAGUES[ui.league];
     if (ui.league > ml) return h + `<div class="card"><h3>${A.icon('lock', 18)} ${Lg.n}</h3>Reach ${Lg.fame} fame to enter (you have ${fmt(S.fame)}). ${Lg.d}</div>`;
-    const week = S.week + ui.wk; const evs = L.events(S, week, ui.league);
+    const week = S.week + ui.wk; const evs = L.events(S, week, ui.league); const fs = L.festival(S, week);
+    if (fs) h += `<div class="card" style="background:${fs.c};color:#fff"><b class="h" style="font-size:13px">${fs.n} this week</b><div class="small" style="font-weight:700">${fs.d}</div></div>`;
     evs.forEach((ev) => {
       const en = S.entries[ev.key]; const cls = ev.kind === 'grand' ? 'g' : ev.kind === 'tourney' ? 't' : ev.kind === 'team' ? 'm' : '';
       const rev = L.isRevenge(S, ev);

@@ -153,7 +153,7 @@
   }
   LM.genItem = genItem;
   LM.sellVal = (it) => Math.round((8 + it.ilvl * 2.2) * D.RAR[it.rar].m * D.RAR[it.rar].m * (1 + 0.35 * it.up));
-  LM.buyVal = (S, it) => Math.round(LM.sellVal(it) * 3.5 * (1 - 0.03 * LM.bfx(S, 'market').l - LM.facPerks(S).shop));
+  LM.buyVal = (S, it) => Math.round(LM.sellVal(it) * 3.5 * (1 - 0.03 * LM.bfx(S, 'market').l - LM.facPerks(S).shop - (LM.fest(S, S.week) === 'saturn' ? 0.2 : 0)));
   LM.upCost = (it) => Math.round((20 + it.ilvl * 6) * D.RAR[it.rar].m * Math.pow(it.up + 1, 1.4));
   LM.maxUp = (S) => D.BUILD.forge.v[LM.bfx(S, 'forge').l];
   LM.itemScore = (it) => {
@@ -452,8 +452,8 @@
     if (ev.kind === 'duel' && res.win && LM.isRevenge(S, ev)) { gold *= 1.25; fame *= 1.25; rep.notes.push('Revenge bonus +25%'); }
     fame *= 0.85 + Math.min(res.hype || 0, 100) / 300;
     let ft = 0; glads.forEach((g) => { ft += (D.TRAITS[g.trait].fame || 0); ['weapon', 'shield', 'armor', 'helm', 'charm'].forEach((s) => { const it = g.gear[s]; if (it) it.af.forEach((a) => { if (a.id === 'showy') ft += 0.1 * a.v; }); }); });
-    fame *= 1 + ft / glads.length + LM.facPerks(S).fame;
-    const perks = S.perks || {}; gold *= 1 + 0.1 * (perks.gold || 0) + LM.facPerks(S).gold + LM.relicGold(S) + (glads.some((g) => g.rune && g.rune.k === 'first') ? 0.1 : 0) + (res.win || res.place ? LM.bfx(S, 'stands').v : 0); fame *= 1 + (res.win ? LM.bfx(S, 'stands').v * 0.5 : 0);
+    fame *= 1 + ft / glads.length + LM.facPerks(S).fame + (LM.fest(S, ev.week) === 'mars' ? 0.25 : 0);
+    const perks = S.perks || {}; gold *= 1 + 0.1 * (perks.gold || 0) + (LM.fest(S, ev.week) === 'jupiter' ? 0.3 : 0) + LM.facPerks(S).gold + LM.relicGold(S) + (glads.some((g) => g.rune && g.rune.k === 'first') ? 0.1 : 0) + (res.win || res.place ? LM.bfx(S, 'stands').v : 0); fame *= 1 + (res.win ? LM.bfx(S, 'stands').v * 0.5 : 0);
     gold = Math.round(gold); fame = Math.round(fame); S.gold += gold; S.fame += fame; rep.gold = gold; rep.fame = fame;
     const oppLvl = Math.max(...ev.opps.map((o) => o.lvl));
     const big = ev.kind === 'tourney' || ev.kind === 'grand' ? 1.6 : 1;
@@ -507,7 +507,7 @@
     const rep = { lines: [], work: 0, menuCost: 0 };
     const menu = D.MENUS.find((m) => m.id === S.menu) || D.MENUS[0];
     let m = LM.menuOk(S, menu) ? menu : D.MENUS[0];
-    const cost = m.c * S.glads.length; if (S.gold >= cost) { S.gold -= cost; rep.menuCost = cost; } else m = D.MENUS[0];
+    const free = LM.fest(S, S.week) === 'ceres'; const cost = free ? 0 : m.c * S.glads.length; if (S.gold >= cost) { S.gold -= cost; rep.menuCost = cost; } else m = D.MENUS[0];
     const ring = LM.bfx(S, 'sparring'); const pal = 1 + LM.bfx(S, 'palaestra').v; const bath = LM.bfx(S, 'bath').v; const inf = LM.bfx(S, 'infirmary').v;
     const sparrers = [];
     S.glads.forEach((g) => {
@@ -531,7 +531,7 @@
       } else if (act.t === 'rest') {
         g.en = clamp(g.en + 45 + bath, 0, 100); g.mo = clamp(g.mo + 3, 0, 100); if (!line.txt) line.txt = 'Rested';
       }
-      g.en = clamp(g.en + 18 + (T.regen || 0) + (m.en || 0), 0, 100); g.mo = clamp(g.mo + (m.mo || 0), 0, 100);
+      g.en = clamp(g.en + 18 + (T.regen || 0) + (m.en || 0) + (free ? 10 : 0), 0, 100); g.mo = clamp(g.mo + (m.mo || 0), 0, 100);
       rep.lines.push(line);
     });
     for (let i = 0; i < sparrers.length; i++) for (let j = i + 1; j < sparrers.length; j++) LM.addBond(S, sparrers[i].id, sparrers[j].id, 3);
@@ -540,7 +540,7 @@
   LM.dueKeys = (S) => Object.keys(S.entries).filter((k) => k.split(':')[0] === String(S.week));
   LM.weekFinish = (S) => {
     const rep = { upkeep: 0, income: 0, notes: [], season: null };
-    const up = LM.upkeep(S); const paid = Math.min(S.gold, up); S.gold -= paid; rep.upkeep = paid;
+    const up = LM.fest(S, S.week) === 'saturn' ? 0 : LM.upkeep(S); const paid = Math.min(S.gold, up); S.gold -= paid; rep.upkeep = paid;
     if (paid < up) { S.glads.forEach((g) => { g.mo = clamp(g.mo - 10, 0, 100); }); rep.notes.push('You could not pay the full upkeep. Morale dropped.'); }
     const inc = LM.weeklyIncome(S) + LM.facPerks(S).weekly; S.gold += inc; rep.income = inc;
     const sh = LM.bfx(S, 'shrine'); if (sh.l) { const f = Math.round(sh.v * 60); S.fame += f; if (f) rep.notes.push(`The shrine drew ${f} fame.`); }
@@ -552,6 +552,13 @@
     rep.ev = LM.rollEvent(S);
     return rep;
   };
+
+  // ---------- festival weeks ----------
+  LM.festival = (S, week) => {
+    if (week < 2) return null; const r = mulberry(hash(S.seed + 'fest' + week)); if (r() > 0.34) return null;
+    return D.FESTIVALS[Math.floor(r() * D.FESTIVALS.length)];
+  };
+  LM.fest = (S, week) => (LM.festival(S, week) || {}).id || '';
 
   // ---------- factions ----------
   LM.facRep = (S, id) => ((S.fac || {})[id] || 0);

@@ -198,7 +198,7 @@ h1,h2,h3,.h{font-family:var(--font);text-transform:uppercase;letter-spacing:.5px
 .float.crit{font-size:30px;color:var(--gold)}
 .float.heal{color:#7dffb4}.float.miss{color:#ddd;font-size:14px}.float.tech{font-size:15px;color:var(--gold)}.float.st{font-size:12px;color:#ffd0a0}
 @keyframes fl{0%{transform:translate(-50%,0) scale(.6);opacity:0}15%{transform:translate(-50%,-8px) scale(1.2);opacity:1}100%{transform:translate(-50%,-58px) scale(1);opacity:0}}
-.f-banner{position:absolute;left:0;right:0;top:34%;text-align:center;font-family:var(--font);font-size:38px;color:var(--gold);text-shadow:3px 3px 0 var(--ink),-2px -2px 0 var(--ink);pointer-events:none;opacity:0;text-transform:uppercase;z-index:980}
+.f-banner{position:absolute;left:0;right:0;top:34%;text-align:center;font-family:var(--font);font-size:34px;color:var(--gold);text-shadow:3px 3px 0 var(--ink),-2px -2px 0 var(--ink);pointer-events:none;opacity:0;text-transform:uppercase;z-index:980}
 .f-banner.on{animation:ban 1.3s ease-out}
 @keyframes ban{0%{opacity:0;transform:scale(.4)}15%{opacity:1;transform:scale(1.18)}70%{opacity:1;transform:scale(1)}100%{opacity:0;transform:scale(1.25)}}
 .f-top{display:flex;gap:6px;padding:calc(env(safe-area-inset-top) + 8px) 8px 6px;background:var(--terra);border-bottom:4px solid var(--ink);flex:none}
@@ -257,6 +257,13 @@ h1,h2,h3,.h,.btn,.chip,.tab,.pill,.tag,.st,.act,.ltab,.wtab,.tb,.sec,.adv,.float
 @keyframes lvp{0%{transform:scale(.3) rotate(-6deg);opacity:0}60%{transform:scale(1.15) rotate(2deg);opacity:1}100%{transform:none}}
 #tip{position:absolute;left:10px;right:10px;bottom:84px;z-index:40;background:var(--ink);color:var(--cream);border:3px solid var(--gold);border-radius:14px;padding:10px 12px;font-size:13px;display:none;gap:8px;align-items:center;box-shadow:0 5px 0 #000}
 #tip.on{display:flex;animation:tabin .25s ease-out}#tip b{font-family:var(--font);color:var(--gold);text-transform:uppercase;font-size:11px}#tip .btn{flex:none}
+@keyframes favp{0%,100%{transform:scale(1)}50%{transform:scale(1.04)}}
+.favor{display:none;flex:1 1 100%;text-align:center;font-family:var(--font);font-weight:900;text-transform:uppercase;font-size:12px;color:var(--ink);background:linear-gradient(90deg,#f6b82d,#ffe38a,#f6b82d);border:3px solid var(--ink);border-radius:12px;padding:10px 6px;cursor:pointer;box-shadow:0 4px 0 var(--ink),0 0 18px 4px rgba(246,184,45,.8);animation:favp .7s ease-in-out infinite}
+.favor.on{display:block}
+.bark{position:absolute;transform:translate(-50%,-100%);background:#fff;color:var(--ink);font-family:var(--font);font-weight:900;font-size:11px;border:3px solid var(--ink);border-radius:12px;padding:3px 8px;white-space:nowrap;pointer-events:none;z-index:850;animation:barkin 1.3s ease-out forwards}
+.bark::after{content:"";position:absolute;left:50%;bottom:-9px;margin-left:-5px;border:5px solid transparent;border-top:6px solid var(--ink)}
+@keyframes barkin{0%{opacity:0;transform:translate(-50%,-70%) scale(.5)}12%{opacity:1;transform:translate(-50%,-100%) scale(1.1)}80%{opacity:1}100%{opacity:0;transform:translate(-50%,-120%)}}
+.fest{display:inline-block;font-family:var(--font);font-size:10px;text-transform:uppercase;color:#fff;border:2px solid var(--ink);border-radius:8px;padding:1px 7px}
 @keyframes bump{0%{transform:scale(1)}35%{transform:scale(1.22);background:var(--gold);color:var(--ink)}100%{transform:scale(1)}}
 .chip.bump{animation:bump .5s ease-out}
 @keyframes tabin{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}

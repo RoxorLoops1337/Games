@@ -29,7 +29,7 @@
   L.mkUnits = (glads, side, ctx, hpFracs, grudge) => glads.map((g, i) => mkUnit(g, side, i, glads.length, ctx, hpFracs && hpFracs[i], grudge));
   L.createFight = (A, B, o) => {
     o = o || {};
-    return { t: 0, A, B, units: A.concat(B), ev: [], hype: 0, peak: 0, done: false, winner: null, auto: { A: !!o.autoA, B: true }, foc: { A: null, B: null }, quiet: !!o.quiet, sched: [], dtmax: 0.1 };
+    return { t: 0, A, B, units: A.concat(B), ev: [], hype: 0, peak: 0, done: false, winner: null, auto: { A: !!o.autoA, B: true }, foc: { A: null, B: null }, quiet: !!o.quiet, sched: [], dtmax: 0.1, manualFavor: !!o.manualFavor, favorReady: false, hazards: o.hazards || 0, hazT: 7 + Math.random() * 3, zones: [] };
   };
 
   // ---------- derived live stats ----------
@@ -291,6 +291,7 @@
     if (s.stun || s.air || s.dash || s.pull) { u.mvx = u.mvy = 0; return; }
     if (u.cast > 0) { u.cast -= dt; u.mvx = u.mvy = 0; return; }
     if (u.wind > 0) { u.wind -= dt; u.mvx = u.mvy = 0; if (u.wind <= 0) resolveAttack(F, u); return; }
+    if (F.zones.length) { const z = F.zones.find((q) => Math.hypot(u.x - q.x, u.y - q.y) < q.r + 0.6); if (z) { const dx = u.x - z.x, dy = u.y - z.y, l = Math.hypot(dx, dy) || 1; u.mvx = dx / l; u.mvy = dy / l; return; } }
     const foes = alive(F, other(u.side)); if (!foes.length) return;
     const t = chooseTarget(F, u, foes); u.tgt = t.id; const d = dist(u, t);
     if (Math.abs(t.x - u.x) > 0.15) u.face = t.x > u.x ? 1 : -1;
@@ -331,12 +332,22 @@
       if (d < min) { if (d < 0.001) { dx = rnd() - 0.5; dy = rnd() - 0.5; d = Math.hypot(dx, dy) || 1; } const p = (min - d) / 2; const nx = dx / d, ny = dy / d; if (!a.s.dash) { a.x -= nx * p; a.y -= ny * p; } if (!b.s.dash) { b.x += nx * p; b.y += ny * p; } }
     }
   }
-  function roar(F) {
+  const sideHp = (F, s) => { const us = F.units.filter((u) => u.side === s); return us.reduce((a, u) => a + u.hp, 0) / us.reduce((a, u) => a + u.maxhp, 0); };
+  function roar(F, forced) {
     F.peak = Math.max(F.peak, F.hype); F.hype = 0;
-    const hpf = (s) => { const us = F.units.filter((u) => u.side === s); return us.reduce((a, u) => a + u.hp, 0) / us.reduce((a, u) => a + u.maxhp, 0); };
-    const side = hpf('A') <= hpf('B') ? 'A' : 'B';
-    alive(F, side).forEach((u) => { u.s.roar = 4; u.ults.forEach((c) => { c.cd = Math.max(0, c.cd - 4); }); });
-    emit(F, { k: 'roar', side });
+    const side = forced || (sideHp(F, 'A') <= sideHp(F, 'B') ? 'A' : 'B'); const fav = !!forced;
+    alive(F, side).forEach((u) => { u.s.roar = fav ? 6 : 4; u.ults.forEach((c) => { c.cd = Math.max(0, c.cd - (fav ? 5 : 4)); }); if (fav) heal(F, u, u.maxhp * 0.15); });
+    emit(F, { k: 'roar', side, fav });
+  }
+  // the player's comeback button: only appears when the crowd backs your side (you are behind)
+  L.useFavor = (F) => { if (!F.favorReady || F.done) return false; F.favorReady = false; roar(F, 'A'); return true; };
+  function hazard(F) {
+    const ang = rnd() * 6.28, rr = Math.sqrt(rnd()) * R * 0.72; const x = Math.cos(ang) * rr, y = Math.sin(ang) * rr; const big = F.hazards > 1; const r = big ? 2.7 : 2.1;
+    F.zones.push({ x, y, r, at: F.t + 1.5 }); emit(F, { k: 'tele', x, y, r, t: 1.5, c: '#e8742a', haz: 1 });
+    F.sched.push({ at: F.t + 1.5, fn: () => {
+      F.zones = F.zones.filter((z) => z.at > F.t + 0.01 || z.x !== x); if (F.done) return; emit(F, { k: 'aoe', x, y, r, c: '#e8742a', big: 1, haz: 1 });
+      F.units.filter((u) => !u.down && Math.hypot(u.x - x, u.y - y) <= r).forEach((u) => { if (u.s.inv) return; const dmg = Math.round(u.maxhp * (big ? 0.09 : 0.06)); emit(F, { k: 'hit', src: null, dst: u.id, dmg, crit: false, adv: 0, tech: 'hazard', hz: 1 }); damage(F, u, dmg, null); if (!u.down) cc(F, u, 'air', 0.8, 0.8); });
+    } });
   }
   L.step = (F, dt) => {
     if (F.done) return; F.t += dt;
@@ -347,7 +358,11 @@
     for (let i = 0; i < us.length; i++) think(F, us[i], dt);
     for (let i = 0; i < us.length; i++) motion(F, us[i], dt);
     separate(F);
-    if (F.hype >= 100 / (F.hypeK || 1) && !F.done) roar(F);
+    if (F.hype >= 100 / (F.hypeK || 1) && !F.done) {
+      const behind = sideHp(F, 'A') <= sideHp(F, 'B');
+      if (F.manualFavor && behind) { if (!F.favorReady) { F.favorReady = true; F.hype = 100 / (F.hypeK || 1); emit(F, { k: 'favorready' }); } else F.hype = Math.min(F.hype, 100 / (F.hypeK || 1)); } else roar(F, F.manualFavor && !behind ? 'B' : null);
+    }
+    if (F.hazards && !F.done) { F.hazT -= dt; if (F.hazT <= 0) { F.hazT = 11 + rnd() * 5; hazard(F); } }
     F.peak = Math.max(F.peak, F.hype);
     if (!F.done && F.t > 95) { const hp = (s) => F.units.filter((u) => u.side === s).reduce((a, u) => a + u.hp / u.maxhp, 0); finish(F, hp('A') >= hp('B') ? 'A' : 'B'); }
   };
