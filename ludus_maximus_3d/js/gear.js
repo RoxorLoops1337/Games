@@ -193,7 +193,7 @@ export function mountShield(rig, kind, o = {}, rr = { r: 0, col: '#fff' }) {
 function faceBars(rig, head, R, y0, y1, xs) {
   for (const x of xs) { const a = Math.asin(clamp(x / (R * 0.95), -0.95, 0.95)), z = R * 1.06 * Math.cos(a); rig.add('metal', xf(cylG(0.0045, 0.0045, y1 - y0, 3), [x, (y0 + y1) / 2, z]), head); }
 }
-function domeG(R, yb, top, sx = 0.95, sz = 1.06, seg = 10) {
+function domeG(R, yb, top, sx = 0.95, sz = 1.06, seg = 12) {
   const h = top - yb; return lathe([[R, yb], [R * 1.03, yb + h * 0.4], [R * 0.9, yb + h * 0.72], [R * 0.6, yb + h * 0.92], [R * 0.25, top - 0.005], [0, top]], seg, sx, sz, 0.1, 0.85);
 }
 const mask = (y0, y1, sw, r0, r1, seg = 8) => lathe([[r0, y0], [r1, y1]], seg, 0.96, 1.06, 0, 1, -sw / 2, sw);
@@ -222,8 +222,10 @@ function helmThraex(rig, o, rr) {
   // griffin crest: a high curved comb with a beak head at the front
   A('metal', xf(extrude([[-0.15, 0.2], [-0.19, 0.3], [-0.12, 0.4], [0.0, 0.45], [0.15, 0.41], [0.24, 0.33], [0.15, 0.345], [0.145, 0.27], [0.135, 0.2], [0.0, 0.25]], 0.026), [0, 0.02, 0], [0, -PI / 2, 0]));
   A('trim', xf(extrude([[0.15, 0.41], [0.24, 0.33], [0.19, 0.345], [0.2, 0.375]], 0.034), [0, 0.02, 0], [0, -PI / 2, 0]));
-  for (const sg of [-1, 1]) for (let i = 0; i < 2; i++) { // side feather fans
-    const L = [0.32, 0.36][i], ang = 0.15 + i * 0.4; A('plume', paint(xf(coneG(0.04, L, 4), [sg * (0.118 + i * 0.012), 0.17 + L * 0.5 * Math.cos(ang), -0.01 - i * 0.02], [0.0, 0, -sg * ang], [1, 1, 0.2]), (x, y) => 0.78 + 0.3 * sm01(-L / 2, L / 2, y)));
+  for (const sg of [-1, 1]) for (let i = 0; i < 3; i++) { // side feather fans: curved tapered blades
+    const L = [0.3, 0.36, 0.3][i], ang = 0.05 + i * 0.3, pts = [];
+    for (let k = 0; k < 4; k++) { const t = k / 3; pts.push(ps(sg * (0.115 + Math.sin(ang) * L * t + 0.05 * t * t), 0.2 + Math.cos(ang) * L * t, -0.02 - i * 0.018 - 0.07 * t * t)); }
+    A('plume', paint(ribbon(pts, (t) => 0.05 * (1 - 0.85 * t) + 0.006, () => ps(0, 0, 1)), (x, y) => 0.8 + 0.3 * sm01(0.2, 0.55, y)));
   }
   if (rr.r >= 3) gem(rig, H, [0, 0.165, 0.131], 0.014, rr);
   if (rr.r >= 4) A('trim', xf(torusG(0.126, 0.006, 3, 10), [0, 0.185, 0.0], [PI / 2, 0, 0], [0.95, 1.1, 1]));

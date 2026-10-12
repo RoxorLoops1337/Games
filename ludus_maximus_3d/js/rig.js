@@ -186,7 +186,7 @@ export function makeMaterials(p = DEFAULT_PALETTE) {
   const mk = (color, roughness, metalness, flat = false, ds = false) => new THREE.MeshStandardMaterial({ color, roughness, metalness, flatShading: flat, vertexColors: true, side: ds ? THREE.DoubleSide : THREE.FrontSide });
   const m = {
     skin: mk(p.skin, 0.5, 0), hair: mk(p.hair, 0.55, 0.05), cloth: mk(p.cloth, 0.9, 0, false, true), plume: mk(p.plume, 0.82, 0, false, true),
-    leather: mk('#7a4e2c', 0.66, 0.05, true, true), metal: mk(p.metal, 0.4, 0.8, true, true), trim: mk('#f0be52', 0.3, 0.85, true, true),
+    leather: mk('#7a4e2c', 0.66, 0.05, false, true), metal: mk(p.metal, 0.4, 0.8, false, true), trim: mk('#f0be52', 0.3, 0.85, false, true),
     eye: new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.45, metalness: 0, vertexColors: true, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }), gem: mk('#ffffff', 0.2, 0.2, true, true),
   };
   m.hair.roughness = 0.5;
