@@ -8,7 +8,8 @@
 
 export const SFX_NAMES = ['swordHit', 'swordHitCrit', 'shieldBlock', 'metalClang', 'swish', 'swishHeavy', 'miss', 'grunt', 'hurt', 'deathCry', 'deathThud',
   'footstep', 'dust', 'netThrow', 'spearThrust', 'bash', 'stunChime', 'healSparkle', 'levelUp', 'coin', 'uiTap', 'uiConfirm', 'uiError', 'gate', 'horn',
-  'ultFire', 'ultLightning', 'ultEarth', 'ultWind', 'ultHoly', 'crowdGasp', 'crowdCheer', 'crowdRoar', 'crowdBoo', 'crowdChant', 'drum'];
+  'ultFire', 'ultLightning', 'ultEarth', 'ultWind', 'ultHoly', 'crowdGasp', 'crowdCheer', 'crowdRoar', 'crowdBoo', 'crowdChant', 'drum',
+  'slashWet', 'crunch', 'boneSnap', 'spurt', 'splat', 'gibThud', 'crowdGore'];
 export const MUSIC_MODES = ['ludus', 'prep', 'arena', 'victory', 'defeat'];
 
 const MUSIC_TRIM = 0.32;      // music sits about 6 dB under the sfx at equal slider positions
@@ -377,6 +378,43 @@ export function createAudio(opts = {}) {
     for (let i = 0; i < 4; i++) { const tt = t + i * 0.7; burst(tt, 0.45, d, { f0: 600, f1: 500, q: 1.3, g: 0.6, a: 0.06, kind: 'pink' }); crowdVoices(tt, 0.5, d, 6, { vowel: i % 2 ? 'a' : 'o', pitch: 0.85, vg: 0.14, p0: 1.0, p1: 0.97 }); drumHit(d, tt, 85, 0.5, {}); } // stomp-clap pulse
   });
   def('drum', 0.9, 1.0, 1, 0.3, 0, 4, (t, d, o) => { const k = o.kind || 'low'; drumHit(d, t, hz(o, k === 'low' ? 78 : k === 'mid' ? 105 : 145), 1, { tymp: k !== 'tom', dec: k === 'low' ? 0.7 : 0.45, skin: 1 }); });
+
+  // ---- gore (js/gore.js): wet slashes, bone, hiss of arterial spray, splats, limbs landing, the crowd gasping then roaring
+  def('slashWet', 0.9, 0.45, 2, 0.1, 0, 4, (t, d, o) => {
+    burst(t, 0.16, d, { f0: hz(o, 1800), f1: 450, q: 0.8, g: 0.8, a: 0.004 });
+    burst(t + 0.01, 0.24, d, { type: 'lowpass', f0: 950, f1: 170, g: 0.75, kind: 'pink', a: 0.01 });
+    for (let i = 0; i < 5; i++) burst(t + 0.02 + i * 0.026 * (0.6 + rng()), 0.032, d, { f0: 500 + rng() * 900, q: 4, g: 0.26, a: 0.002, kind: 'pink' }); // squelch
+    thump(t, hz(o, 120), 55, 0.12, 0.5, d);
+  });
+  def('crunch', 0.9, 0.5, 3, 0.12, 0, 3, (t, d, o) => {
+    for (let i = 0; i < 4; i++) burst(t + i * 0.018 * (0.5 + rng()), 0.05, d, { type: 'lowpass', f0: hz(o, 2600) * (0.6 + rng() * 0.6), f1: 300, g: 0.9, a: 0.001 });
+    partials(t, hz(o, 260), [1, 1.6, 2.4], [0.3, 0.2, 0.12], 0.12, d, 'triangle');
+    thump(t, hz(o, 90), 45, 0.18, 0.8, d);
+  });
+  def('boneSnap', 1.0, 0.45, 4, 0.2, 0.2, 2, (t, d, o) => {
+    burst(t, 0.012, d, { type: 'highpass', f0: 5000, g: 1, a: 0.0005 });
+    osc('sine', hz(o, 1500), t, 0.07, (() => { const g = G(0); env(g.gain, t, 0.001, 0.5, 0.06); g.connect(d); return g; })(), { f1: 300 });
+    partials(t + 0.035, hz(o, 700), [1, 2.3], [0.3, 0.15], 0.12, d, 'square');
+    burst(t + 0.02, 0.12, d, { type: 'lowpass', f0: 2000, f1: 250, g: 0.6, a: 0.002 });
+    thump(t, hz(o, 150), 60, 0.25, 0.9, d);
+  });
+  def('spurt', 0.7, 0.9, 1, 0.1, 0, 2, (t, d, o) => {
+    for (let i = 0; i < 3; i++) { burst(t + i * 0.26, 0.24, d, { f0: 3400, f1: 1700, q: 1.2, g: 0.5 - i * 0.1, a: 0.05 }); burst(t + i * 0.26, 0.2, d, { type: 'lowpass', f0: 700, f1: 300, g: 0.35 - i * 0.07, kind: 'pink', a: 0.04 }); }
+  });
+  def('splat', 1.0, 0.5, 3, 0.12, 0.1, 3, (t, d, o) => {
+    burst(t, 0.2, d, { type: 'lowpass', f0: 1300, f1: 160, g: 1, kind: 'pink', a: 0.003 });
+    thump(t, hz(o, 150), 60, 0.2, 0.9, d);
+    for (let i = 0; i < 6; i++) burst(t + 0.04 + rng() * 0.2, 0.026, d, { f0: 1500 + rng() * 2000, q: 3, g: 0.15, a: 0.002 });
+  });
+  def('gibThud', 1.0, 0.45, 2, 0.15, 0, 3, (t, d, o) => {
+    thump(t, hz(o, 100), 46, 0.28, 0.9, d);
+    burst(t, 0.22, d, { type: 'lowpass', f0: 600, f1: 120, g: 0.8, kind: 'brown', a: 0.002 });
+    burst(t, 0.08, d, { f0: 1100, q: 1.2, g: 0.25, kind: 'pink', a: 0.002 });
+  });
+  def('crowdGore', 0.85, 2.8, 3, 0.55, 0.3, 1, (t, d, o) => {
+    burst(t, 0.6, d, { f0: 700, f1: 2300, q: 1.2, g: 0.9, a: 0.2, kind: 'pink' }); crowdVoices(t, 0.7, d, 8, { vowel: 'a', pitch: 1.1, p0: 1.3, p1: 1.0, vg: 0.09 });
+    burst(t + 0.45, 2.2, d, { f0: 450, f1: 1000, q: 0.7, g: 1, a: 0.7, kind: 'pink' }); crowdVoices(t + 0.45, 2.0, d, 14, { vowel: 'o', pitch: 0.9, p0: 0.95, p1: 1.25, vg: 0.11 });
+  });
 
   // ---------- sfx dispatch ----------
   function sfx(name, o = {}) {

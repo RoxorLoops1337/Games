@@ -3,7 +3,7 @@ import { U, h, D, L, fmt, openScreen, sec, card, row, col, note, hint, kv, medal
 import { legendsSheet, perksSheet, ascendFlow } from './legacy.js';
 
 const PREF_KEY = 'ludus_maximus_3d_prefs';
-const DEF = { master: 0.9, music: 0.7, sfx: 0.9, muted: false, rm: false, big: false };
+const DEF = { master: 0.9, music: 0.7, sfx: 0.9, muted: false, rm: false, big: false, gore: 'full' };
 let tab = 'ludus';
 
 // ------------------------------------------------------------------ preferences (localStorage, safe)
@@ -12,6 +12,7 @@ function writePrefs(p) { try { localStorage.setItem(PREF_KEY, JSON.stringify(p))
 /** apply stored preferences to audio and the document. Safe to call at boot (pass game.ctx or {audio}). */
 export function applyPrefs(ctx) {
   const p = readPrefs(), a = ctx && ctx.audio;
+  globalThis.LM3D_GORE = ['off', 'low', 'full'].includes(p.gore) ? p.gore : 'full'; // read by js/gore.js at the start of every fight
   try { document.body.classList.toggle('lx-large-text', !!p.big); document.body.classList.toggle('lx-reduce-motion', !!p.rm); } catch (e) { /* no body yet */ }
   if (a) { try { a.setMaster(p.muted ? 0 : p.master); a.setMusic(p.music); a.setSfx(p.sfx); } catch (e) { /* audio not ready */ } }
   return p;
@@ -115,9 +116,16 @@ function settingsTab(ctx, root, draw) {
   root.append(sec('Comfort'));
   const setOpt = (k, pk, v) => { S.opts[k] = v; p[pk] = v; save(); ctx.save(); applyPrefs(ctx); };
   root.append(card([
-    toggle('Reduced motion', 'Calms menu animations and transitions. Fights keep their effects.', !!(S.opts.rm || p.rm), (v) => setOpt('rm', 'rm', v)),
+    toggle('Reduced motion', 'Calms menu animations and transitions, shakes less and turns gore off.', !!(S.opts.rm || p.rm), (v) => setOpt('rm', 'rm', v)),
     toggle('Large text', 'Bigger text in menus and dialogs.', !!(S.opts.big || p.big), (v) => setOpt('big', 'big', v)),
   ]));
+  root.append(sec('Violence'));
+  const gl = h('div', 'ax-grid s'), gnote = { off: 'No blood, no wounds, no dismemberment.', low: 'Blood splashes and wounds. No dismemberment.', full: 'Arterial sprays, pools, wounds and dismemberment.' };
+  for (const lv of ['off', 'low', 'full']) {
+    const b = h('button', 'ax-pick' + (p.gore === lv ? ' sel' : '')); b.type = 'button'; b.style.cssText = 'flex-direction:column;align-items:flex-start;text-align:left'; b.setAttribute('aria-pressed', p.gore === lv ? 'true' : 'false');
+    b.append(h('div', 'ax-b', { off: 'Gore: Off', low: 'Gore: Low', full: 'Gore: Full' }[lv]), h('div', 'ax-sub', gnote[lv])); b.onclick = () => { p.gore = lv; save(); applyPrefs(ctx); ctx.sfx('uiConfirm'); draw(); }; gl.append(b);
+  }
+  root.append(card([gl, note('Fights are graphic in the arena. Reduced motion always turns gore off.')]));
   root.append(sec('Play'));
   const cur = S.opts.diff != null ? S.opts.diff : 1;
   const effects = ['Rivals 12% weaker, +10% gold', 'Rivals as designed', 'Rivals 12% stronger, +15% gold'];

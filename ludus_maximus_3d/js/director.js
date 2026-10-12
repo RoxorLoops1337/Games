@@ -227,6 +227,7 @@ export class FightDirector {
     const vx = v?.x ?? 0, vy = v?.y ?? 0; if (p._yaw0 === undefined) p._yaw0 = (kl ? Math.atan2(vy - kl.y, vx - kl.x) : 0) + (p.side ?? 1) * Math.PI / 2;
     const yaw = p._yaw0 + t * 0.5 * (p.side ?? 1), pitch = lerp(6, 16, easeOut(t / dur)) * D2R + tall * 8 * D2R;
     const pts = [[vx, 0, vy], [vx, 1.9, vy]]; if (kl && Math.hypot(kl.x - vx, kl.y - vy) < 4.5) pts.push([kl.x, 0, kl.y], [kl.x, 2.2, kl.y]);
+    if (p.extra) for (const q of p.extra) pts.push(q); // gore: keep the flung limb / blood in frame
     const r = this._frame({ pts, yaw, pitch, fov: this._fov(40), margin: lerp(0.8, 0.72, tall), minD: 3.4, padX: 0.9, st: { yaw: 0.05, pitch: 0.3, c: 0.25, d: 0.4, dUp: 0.2, fov: 0.3 } });
     r.timeScale = lerp(0.25, 1, ease((t - 0.6) / (dur - 0.6))); this.pose.timeScale = r.timeScale;
     this._endIf(dur, p.next ?? null); return r;

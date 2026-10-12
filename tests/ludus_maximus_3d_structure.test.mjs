@@ -92,5 +92,24 @@ for (const fn of ['newGame', 'makeGlad', 'mkUnits', 'createFight', 'step', 'useU
   ok(F.done && G.done && F.winner === G.winner && F.n === G.n && F.units.every((u, i) => u.hp === G.units[i].hp), `replay matches (winner ${F.winner}/${G.winner}, steps ${F.n}/${G.n})`);
 }
 
+// 9. gore: files, hooks, the Gore pref, the sfx, and the "never touches the sim RNG" rule
+{
+  const rd = (f) => readFileSync(join(root, 'js', f), 'utf8');
+  const gore = rd('gore.js'), fv = rd('fightview.js'), more = rd('screens/more.js'), au = rd('audio.js'), rig = rd('rig.js'), fxs = rd('fx.js'), dir = rd('director.js');
+  ok(existsSync(join(root, 'js', 'gore.js')) && /export function createGore/.test(gore) && /export function goreLevel/.test(gore), 'js/gore.js exports createGore and goreLevel');
+  ok(!/Math\.random/.test(gore), 'gore.js has no Math.random (own seeded RNG, replays render the same gore)');
+  ok(!/setRandom|LM\.|globalThis\.LM\b/.test(gore), 'gore.js never touches the sim or its RNG');
+  ok(/mulberry/.test(gore) && /G\.reset = \(seed/.test(gore), 'gore reseeds from the fight / replay seed');
+  ok(/import \{ createGore \} from '\.\/gore\.js'/.test(fv) && /gore\.onHit\(/.test(fv) && /gore\.onDown\(/.test(fv) && /gore\.onBleed\(/.test(fv) && /gore\.postFrame\(/.test(fv), 'fightview feeds hit, down, bleed and the vignette frame to gore');
+  ok(/replay\.seed/.test(fv) && /goreSeed/.test(fv), 'fightview seeds gore from the replay seed');
+  ok(/p\.extra/.test(dir), 'kill shot frames gore extra points (the flung limb)');
+  ok(/PREF_KEY = 'ludus_maximus_3d_prefs'/.test(more) && /gore: 'full'/.test(more) && /Gore: Off/.test(more) && /Gore: Low/.test(more) && /Gore: Full/.test(more) && /LM3D_GORE/.test(more), 'More > Settings has the Gore level in the existing prefs object (default full)');
+  ok(/lx-reduce-motion/.test(gore) && /prefers-reduced-motion/.test(gore), 'reduced motion turns gore off');
+  for (const n of ['slashWet', 'crunch', 'boneSnap', 'spurt', 'splat', 'gibThud', 'crowdGore']) ok(new RegExp("'" + n + "'").test(au.match(/SFX_NAMES = \[[\s\S]*?\];/)[0]) && new RegExp("def\\('" + n + "'").test(au), 'audio.js has sfx ' + n);
+  ok(/export function makeBloodUniforms/.test(rig) && /sever\(part\)/.test(rig) && /addWound\(/.test(rig) && /restoreParts\(/.test(rig), 'rig.js has blood uniforms, wounds and sever');
+  ok(/putS\(/.test(fxs) && /hooks: \[\]/.test(fxs) && /decalDraw/.test(fxs), 'fx.js exposes the gore hooks');
+  ok(/gore_gibs/.test(gore) && (gore.match(/new THREE\.InstancedMesh/g) || []).length === 1, 'gore adds a single instanced draw call');
+}
+
 console.log(`ludus_maximus_3d structure: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

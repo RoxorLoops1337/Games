@@ -157,6 +157,38 @@ const SHADE = {
 const _col = new THREE.Color();
 const v3s = (hex) => { _col.set(hex); return `vec3(${_col.r.toFixed(4)},${_col.g.toFixed(4)},${_col.b.toFixed(4)})`; };
 export const EDGE = { steel: 0.15, skin: 0.5, hair: 0.35, cloth: 0.4, plume: 0.35, leather: 0.4, metal: 0.3, trim: 0.2, eye: 0, gem: 0 };
+// ---------------------------------------------------------------- gore: blood / wounds / stumps (fragment overlay driven by per-rig uniforms)
+// Rest-space position (vBP = the un-skinned vertex position, stable on the body) drives: soak (noise threshold rising with uBlood), up to 6 gashes
+// (centre + half length, direction + strength) with a halo and a runnel below, and up to 3 cut stumps (raw flesh + bone). One branch when idle.
+export const MAX_WOUNDS = 6, MAX_CUTS = 3; let bloodSeed = 1;
+export function makeBloodUniforms() {
+  const arr = (n) => Array.from({ length: n }, () => new THREE.Vector4());
+  return { uBlood: { value: 0 }, uBFresh: { value: 0 }, uBOn: { value: 0 }, uBSeed: { value: (bloodSeed++ * 7.31) % 20 }, uWound: { value: arr(MAX_WOUNDS) }, uWoundD: { value: arr(MAX_WOUNDS) }, uCut: { value: arr(MAX_CUTS) } };
+}
+const BLOOD_HEAD = `varying vec3 vBP; uniform float uBlood, uBFresh, uBOn, uBSeed; uniform vec4 uWound[${MAX_WOUNDS}]; uniform vec4 uWoundD[${MAX_WOUNDS}]; uniform vec4 uCut[${MAX_CUTS}]; float gBM;
+float bh(vec3 p){ p = fract(p * 0.3183099 + 0.1); p *= 17.0; return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }
+float bn(vec3 p){ vec3 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
+  return mix(mix(mix(bh(i), bh(i + vec3(1,0,0)), f.x), mix(bh(i + vec3(0,1,0)), bh(i + vec3(1,1,0)), f.x), f.y), mix(mix(bh(i + vec3(0,0,1)), bh(i + vec3(1,0,1)), f.x), mix(bh(i + vec3(0,1,1)), bh(i + vec3(1,1,1)), f.x), f.y), f.z); }`;
+const bloodCode = (gash) => `gBM = 0.0;
+if (uBOn > 0.5) {
+  vec3 bp = vBP; float n1 = bn(bp * 13.0 + uBSeed), n2 = bn(bp * 41.0 + uBSeed * 1.7), st = bn(vec3(bp.x * 24.0, bp.y * 2.4, bp.z * 24.0) + uBSeed * 2.3);
+  float bodyN = 0.5 * n1 + 0.25 * n2 + 0.5 * st; float thr = 1.24 - uBlood * 0.5 + 0.2 * (1.0 - smoothstep(0.25, 1.0, bp.y)) - 0.1 * uBlood * smoothstep(0.3, 1.5, bp.y);
+  float mask = smoothstep(thr, thr + 0.16, bodyN) * 0.88; float gsh = 0.0, wm = 0.0;
+  for (int i = 0; i < ${MAX_WOUNDS}; i++) { vec4 w = uWound[i], d = uWoundD[i]; if (d.w > 0.0) {
+    vec3 dl = bp - w.xyz; float al = dot(dl, d.xyz), ac = length(dl - d.xyz * al), len = w.w;
+    float halo = exp(-dot(dl, dl) / (len * len * 1.5)) * 0.9 * d.w;
+    float run = smoothstep(0.03, 0.0, length(dl.xz + vec2(sin(dl.y * 45.0 + float(i)) * 0.008, 0.0))) * step(dl.y, 0.0) * (1.0 - clamp(-dl.y / (len * 2.8), 0.0, 1.0)) * 0.95 * d.w;
+    wm = max(wm, max(halo, run)); mask = max(mask, wm);
+    ${gash ? 'gsh = max(gsh, (1.0 - smoothstep(len * 0.72, len, abs(al))) * (1.0 - smoothstep(0.014, 0.03, ac)) * d.w);' : ''}
+  } }
+  vec3 bcol = mix(vec3(0.05, 0.005, 0.007), vec3(0.19, 0.009, 0.013), uBFresh * (0.5 + 0.5 * n1));
+  bcol = mix(bcol, mix(vec3(0.12, 0.009, 0.011), vec3(0.4, 0.016, 0.022), 0.35 + 0.65 * uBFresh), wm);
+  bcol = mix(bcol, vec3(0.02, 0.0, 0.002), gsh * 0.85); mask = max(mask, gsh);
+  diffuseColor.rgb = mix(diffuseColor.rgb, bcol, clamp(mask, 0.0, 1.0) * 0.95); gBM = clamp(mask, 0.0, 1.0);
+  for (int i = 0; i < ${MAX_CUTS}; i++) { vec4 c = uCut[i]; if (c.w > 0.0) { float dc = length(bp - c.xyz); float cm = 1.0 - smoothstep(c.w * 0.82, c.w, dc);
+    vec3 raw = mix(vec3(0.34, 0.012, 0.016), vec3(0.62, 0.05, 0.05), bn(bp * 70.0) * 0.8); raw = mix(raw, vec3(0.7, 0.55, 0.42), 1.0 - smoothstep(c.w * 0.18, c.w * 0.34, dc));
+    diffuseColor.rgb = mix(diffuseColor.rgb, raw, cm); gBM = max(gBM, cm); } }
+}`;
 export function shadePatch(mat, key, xo = {}) {
   const k = SHADE[key]; if (!k) return; const ed = EDGE[key] || 0;
   const f = (n) => (+n).toFixed(3);
@@ -177,14 +209,24 @@ export function shadePatch(mat, key, xo = {}) {
   outgoingLight += addC;
 }
 `;
+  const bu = xo.blood;
   mat.onBeforeCompile = (sh) => {
     sh.fragmentShader = sh.fragmentShader.replace('#include <opaque_fragment>', code + '#include <opaque_fragment>');
     if (xo.back) sh.fragmentShader = sh.fragmentShader.replace('#include <color_fragment>', '#include <color_fragment>\n if (!gl_FrontFacing) diffuseColor.rgb = vec3(0.10, 0.062, 0.04);'); // back of a shield: bare leather
+    if (bu) { // gore: blood soak, wounds and stumps painted from rest-space position (shared per rig uniforms, see makeBloodUniforms)
+      Object.assign(sh.uniforms, bu);
+      sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vBP;').replace('#include <begin_vertex>', '#include <begin_vertex>\nvBP = position;');
+      sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\n' + BLOOD_HEAD).replace('#include <color_fragment>', '#include <color_fragment>\n' + bloodCode(xo.gash !== false))
+        .replace('outgoingLight += addC;', 'outgoingLight += addC * (1.0 - gBM * 0.65);')
+        .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\n roughnessFactor = mix(roughnessFactor, mix(0.82, 0.24, uBFresh), gBM);')
+        .replace('#include <metalnessmap_fragment>', '#include <metalnessmap_fragment>\n metalnessFactor *= 1.0 - gBM * 0.9;');
+    }
   };
-  mat.customProgramCacheKey = () => 'lmc-' + key + (mat.flatShading ? 'f' : 's') + (xo.back ? 'b' : '');
+  mat.customProgramCacheKey = () => 'lmc-' + key + (mat.flatShading ? 'f' : 's') + (xo.back ? 'b' : '') + (bu ? (xo.gash === false ? 'B' : 'G') : '');
   if (!mat.userData.base) mat.userData.base = mat.emissive.clone();
 }
-export function makeMaterials(p = DEFAULT_PALETTE) {
+const BLOODY = { skin: 1, cloth: 1, leather: 1, metal: 0, steel: 0, trim: 0 }; // 1 = also shows gashes, 0 = stains only (armour)
+export function makeMaterials(p = DEFAULT_PALETTE, blood = null) {
   const mk = (color, roughness, metalness, flat = false, ds = false) => new THREE.MeshStandardMaterial({ color, roughness, metalness, flatShading: flat, vertexColors: true, side: ds ? THREE.DoubleSide : THREE.FrontSide });
   const m = {
     skin: mk(p.skin, 0.5, 0), hair: mk(p.hair, 0.55, 0.05), cloth: mk(p.cloth, 0.9, 0, false, true), plume: mk(p.plume, 0.82, 0, false, true),
@@ -192,7 +234,7 @@ export function makeMaterials(p = DEFAULT_PALETTE) {
     eye: new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.45, metalness: 0, vertexColors: true, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }), gem: mk('#ffffff', 0.2, 0.2, true, true),
   };
   m.hair.roughness = 0.5;
-  for (const k in m) shadePatch(m[k], k);
+  for (const k in m) shadePatch(m[k], k, blood && k in BLOODY ? { blood, gash: !!BLOODY[k] } : {});
   return m;
 }
 
@@ -737,7 +779,7 @@ function buildHead(rig, look, bd) {
 // ---------------------------------------------------------------- builder
 // opts: {palette, build:{bulk,height,shoulder,arm,waist,leg,head,seg}, look:{face,hair:'short|crop|long|tied|bald',beard:0|1|2}, torso, legsBare, boots, belt, name, weapon}
 export function buildGladiator(opts = {}) {
-  const pal = Object.assign({}, DEFAULT_PALETTE, opts.palette || {}), mats = makeMaterials(pal);
+  const pal = Object.assign({}, DEFAULT_PALETTE, opts.palette || {}), bloodU = makeBloodUniforms(), mats = makeMaterials(pal, bloodU);
   const bd = Object.assign({ bulk: 1, height: 1, shoulder: 1, arm: 1, waist: 1, leg: 1, head: 1, seg: 6 }, opts.build || {}), B = bd.bulk, S = bd.seg, WS = (1 + (B - 1) * 0.6) * bd.waist;
   const look = Object.assign({ face: 0, hair: 'short', beard: 0 }, opts.look || {}); if (opts.hair === 'none') look.hair = 'bald';
   const root = new THREE.Group(); root.name = opts.name || 'gladiator'; const body = new THREE.Group(); body.name = 'body'; root.add(body); body.scale.setScalar(bd.height);
@@ -765,6 +807,15 @@ export function buildGladiator(opts = {}) {
   };
   const glow = { color: new THREE.Color('#ffffff'), on: false, base: 0.6, amp: 0.4, speed: 3, t: 0 };
 
+  const blood = { amount: 0, fresh: 0, wounds: [], cuts: [], wi: 0 };
+  const sync = () => { bloodU.uBlood.value = blood.amount; bloodU.uBOn.value = blood.amount > 0.002 || blood.wounds.length || blood.cuts.length ? 1 : 0; };
+  const PARTS = { // joint = the joint collapsed to hide the part, obj/off = where the cut is, axis (in axisObj frame) points from the body toward the part
+    head: { joint: 'head', obj: 'neck', off: [0, 0.07, 0], axis: [0, 1, 0], axisObj: 'neck', r: 0.075, len: 0.27, type: 'head' },
+    forearmL: { joint: 'elbowL', obj: 'elbowL', off: [0, 0, 0], axis: [0, -1, 0], axisObj: 'shoulderL', r: 0.066, len: 0.39, type: 'limb', side: 1 }, forearmR: { joint: 'elbowR', obj: 'elbowR', off: [0, 0, 0], axis: [0, -1, 0], axisObj: 'shoulderR', r: 0.066, len: 0.39, type: 'limb', side: -1 },
+    armL: { joint: 'shoulderL', obj: 'shoulderL', off: [0, 0, 0], axis: [0, -1, 0], axisObj: 'chest', r: 0.095, len: 0.68, type: 'limb', side: 1 }, armR: { joint: 'shoulderR', obj: 'shoulderR', off: [0, 0, 0], axis: [0, -1, 0], axisObj: 'chest', r: 0.095, len: 0.68, type: 'limb', side: -1 },
+    shinL: { joint: 'kneeL', obj: 'kneeL', off: [0, 0, 0], axis: [0, -1, 0], axisObj: 'hipL', r: 0.082, len: 0.56, type: 'limb', side: 1 }, shinR: { joint: 'kneeR', obj: 'kneeR', off: [0, 0, 0], axis: [0, -1, 0], axisObj: 'hipR', r: 0.082, len: 0.56, type: 'limb', side: -1 },
+    legL: { joint: 'hipL', obj: 'hipL', off: [0, 0, 0], axis: [0, -1, 0], axisObj: 'hips', r: 0.115, len: 1.0, type: 'limb', side: 1 }, legR: { joint: 'hipR', obj: 'hipR', off: [0, 0, 0], axis: [0, -1, 0], axisObj: 'hips', r: 0.115, len: 1.0, type: 'limb', side: -1 },
+  };
   const rig = {
     root, body, joints: J, sockets: sk, mats, palette: pal, secondary: [], squash, flashState, build: bd, opts, look, glow, items, bones, rest,
     parts: {}, gear: {}, skeleton: null, tag: '',
@@ -779,7 +830,7 @@ export function buildGladiator(opts = {}) {
       let b = obj; while (b && !boneSet.has(b)) b = b.parent; if (!b) throw new Error('rig.add: object is not under a bone');
       const g = geo.clone(); col1(g); if (!g.attributes.normal) g.computeVertexNormals(); g.applyMatrix4(restOf(obj)); items.push({ mat, geo: g, bone: bones.indexOf(b), tag: rig.tag || '' }); return g;
     },
-    addMaterial(key, mat, shade, xo) { mats[key] = mat; shadePatch(mat, shade || 'cloth', xo); if (!mat.userData.base) mat.userData.base = mat.emissive.clone(); return mat; },
+    addMaterial(key, mat, shade, xo) { mats[key] = mat; shadePatch(mat, shade || 'cloth', Object.assign({ blood: bloodU, gash: false }, xo)); if (!mat.userData.base) mat.userData.base = mat.emissive.clone(); return mat; },
     addBone(obj) { bones.push(obj); boneSet.add(obj); return bones.length - 1; },
     restOf,
     // (re)build one SkinnedMesh per material from the queued parts. Call after adding gear. Rigid weights, shared skeleton.
@@ -820,11 +871,42 @@ export function buildGladiator(opts = {}) {
       for (const f of rig.postUpdate) f(rig);
       for (const s of rig.secondary) s.update(dt);
       const sq = squash.update(dt); body.scale.set(bd.height / Math.sqrt(1 + sq), bd.height * (1 + sq), bd.height / Math.sqrt(1 + sq));
+      if (blood.fresh > 0) { blood.fresh = Math.max(0, blood.fresh - dt / 9); bloodU.uBFresh.value = blood.fresh; }
       if (flashState.t > 0) { flashState.t = Math.max(0, flashState.t - dt); }
       const f = flashState.t > 0 ? flashState.t / flashState.dur : 0;
       glow.t += dt; const gi = glow.on ? glow.base + glow.amp * Math.sin(glow.t * glow.speed) : 0; mats.gem.userData.base.copy(glow.color).multiplyScalar(gi);
       for (const k in mats) { const m = mats[k]; if (!m.userData.base) continue; m.emissive.copy(m.userData.base); if (f > 0) m.emissive.lerp(flashState.color, f); m.emissiveIntensity = 1; }
     },
+    // ---- gore API (see js/gore.js). Rest space = the un-skinned space the geometry is authored in (root space with body scale baked).
+    bloodU, blood, severed: {},
+    jointRest(name, local = [0, 0, 0]) { return new V3(local[0], local[1], local[2]).applyMatrix4(restOf(J[name])); },
+    /** soak 0..1 over the whole body; fresh = wet gloss bump (decays over ~9 s) */
+    addBlood(amount, fresh = 1) { blood.amount = clamp(blood.amount + amount, 0, 1); blood.fresh = Math.max(blood.fresh, fresh); sync(); },
+    setBlood(amount, fresh = 0) { blood.amount = clamp(amount, 0, 1); blood.fresh = fresh; bloodU.uBFresh.value = fresh; sync(); },
+    /** gash at a rest-space point; dir = unit slash direction in rest space; half = half length (m); strength 0..1. Oldest wound is recycled. */
+    addWound(pt, dir, half = 0.09, strength = 1) {
+      const i = blood.wounds.length < MAX_WOUNDS ? blood.wounds.length : (blood.wi = ((blood.wi | 0) + 1) % MAX_WOUNDS); const w = { x: pt.x, y: pt.y, z: pt.z, hx: dir.x, hy: dir.y, hz: dir.z, half, s: strength };
+      blood.wounds[i] = w; bloodU.uWound.value[i].set(pt.x, pt.y, pt.z, half); bloodU.uWoundD.value[i].set(dir.x, dir.y, dir.z, strength); sync(); return i;
+    },
+    clearBlood() { blood.amount = 0; blood.fresh = 0; blood.wounds.length = 0; blood.wi = 0; for (const v of bloodU.uWound.value) v.set(0, 0, 0, 0); for (const v of bloodU.uWoundD.value) v.set(0, 0, 0, 0); rig.restoreParts(); bloodU.uBFresh.value = 0; sync(); },
+    /** hide a body part by collapsing its joint (everything skinned below it vanishes) and paint the stump. Returns the cut frame or null. */
+    sever(part) {
+      const P = PARTS[part]; if (!P || rig.severed[part]) return null; const j = J[P.joint]; if (!j) return null;
+      rig.root.updateMatrixWorld(true); const f = rig.partFrame(part);
+      j.scale.setScalar(1e-4); rig.severed[part] = true; blood.cuts.push(part);
+      const c = rig.jointRest(P.obj, P.off); bloodU.uCut.value[(blood.cuts.length - 1) % MAX_CUTS].set(c.x, c.y, c.z, P.r);
+      if (part === 'head') for (const s of rig.secondary) if (s.mesh && s.mesh.name === 'plume') s.mesh.visible = false;
+      if ((part === 'armL' || part === 'forearmL') && rig.animator.ik.hand && rig.animator.ik.hand.side === 'L') { rig.animator.ik.hand._w = rig.animator.ik.hand.w; rig.animator.ik.hand.w = 0; }
+      blood.fresh = 1; sync(); return f;
+    },
+    /** world-space cut frame of a part: {pos, axis (unit, pointing from the body toward where the part was), len, r, type} */
+    partFrame(part) {
+      const P = PARTS[part]; if (!P) return null; const o = J[P.obj], ax = J[P.axisObj]; o.updateWorldMatrix(true, false); ax.updateWorldMatrix(true, false);
+      const pos = new V3(P.off[0], P.off[1], P.off[2]).applyMatrix4(o.matrixWorld), axis = new V3(P.axis[0], P.axis[1], P.axis[2]).transformDirection(ax.matrixWorld);
+      return { pos, axis, anchor: ax, len: P.len, r: P.r, type: P.type, side: P.side || 0, scale: rig.root.scale.y * bd.height };
+    },
+    restoreParts() { for (const part in rig.severed) { const P = PARTS[part]; J[P.joint].scale.setScalar(1); } rig.severed = {}; blood.cuts.length = 0; for (const v of bloodU.uCut.value) v.set(0, 0, 0, 0);
+      for (const s of rig.secondary) if (s.mesh && s.mesh.name === 'plume') s.mesh.visible = true; const h = rig.animator.ik.hand; if (h && h._w !== undefined) { h.w = h._w; delete h._w; } },
     dispose() { root.traverse((o) => { if (o.geometry) o.geometry.dispose(); }); for (const k in mats) mats[k].dispose(); rig.skeleton && rig.skeleton.dispose(); },
   };
   const A = (m, g, o) => rig.add(m, g, o);
