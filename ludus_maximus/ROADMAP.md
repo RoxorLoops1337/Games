@@ -121,6 +121,15 @@ Building upgrades now show on the map (flag, torch, weights, gold star as levels
 
 ## Next ideas
 - [ ] 55. Record ultimate taps and use a fixed step so fights can be replayed
-- [ ] 56. Ludus map weather and night lighting
-- [ ] 57. Fighter retirement ceremony animation
-- [ ] 58. Achievements screen polish with rewards
+- [x] 56. Ludus map weather and night lighting
+- [x] 57. Fighter retirement ceremony animation
+- [x] 58. Achievements screen polish with rewards
+
+## Round 13 shipped
+Ludus map weather and night tint (rain streaks, heat haze, dust, night), animated retirement ceremony with confetti and a rising portrait, trophy confetti and a Grand Collector bonus for earning every trophy. Replay (55) still needs fixed-step fights with recorded taps.
+
+## Next ideas
+- [ ] 59. Weekly planner presets ("Boot camp", "Rest week")
+- [ ] 60. Fighter family trees and apprentices
+- [ ] 61. Sound: crowd ambience that follows hype
+- [ ] 62. Rival ludus raids on your market

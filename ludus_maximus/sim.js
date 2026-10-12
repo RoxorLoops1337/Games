@@ -586,6 +586,7 @@
   LM.checkTrophies = (S) => {
     S.trophies = S.trophies || {}; const out = [];
     D.TROPHIES.forEach((t) => { if (!S.trophies[t.id] && TC[t.id] && TC[t.id](S)) { S.trophies[t.id] = S.week; S.gold += t.r.gold || 0; S.fame += t.r.fame || 0; S.laurels += t.r.laurels || 0; out.push(t); } });
+    S.flags = S.flags || {}; if (!S.flags.allTroph && Object.keys(S.trophies).length >= D.TROPHIES.length) { S.flags.allTroph = true; S.laurels += 3; out.push({ id: 'all', n: 'Grand Collector', d: 'Earn every trophy.', r: { laurels: 3 } }); }
     return out;
   };
 

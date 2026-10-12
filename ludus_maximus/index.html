@@ -72,6 +72,14 @@ h1,h2,h3,.h{font-family:var(--font);text-transform:uppercase;letter-spacing:.5px
 .banner{background:var(--terra);border:4px solid var(--ink);border-radius:14px;padding:10px 12px;margin-bottom:12px;color:#fff;box-shadow:0 5px 0 var(--ink);display:flex;align-items:center;gap:10px;position:relative;overflow:hidden}
 .banner h2{font-size:18px;text-shadow:2px 2px 0 var(--ink)}
 .banner::after{content:"";position:absolute;right:-20px;top:-20px;width:90px;height:90px;border-radius:50%;background:var(--gold);opacity:.25}
+.map{position:relative}
+.map.wx-night::after,.map.wx-rain::after,.map.wx-heat::after,.map.wx-dust::after{content:'';position:absolute;inset:0;border-radius:10px;pointer-events:none}
+.map.wx-night::after{background:rgba(10,14,60,.38)}
+.map.wx-heat::after{background:rgba(255,150,40,.14)}
+.map.wx-dust::after{background:rgba(214,170,100,.22)}
+.map.wx-rain::after{background:repeating-linear-gradient(105deg,rgba(60,90,160,.0) 0 10px,rgba(60,90,160,.22) 10px 11px);background-size:40px 40px;animation:rainmap .5s linear infinite}
+@keyframes rainmap{to{background-position:-12px 40px}}
+.cere{text-align:center;overflow:hidden;position:relative}.cere .spr2{animation:cereup 1.4s ease-out both}@keyframes cereup{from{transform:translateY(40px) scale(.6);opacity:0}to{transform:none;opacity:1}}
 .map{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;background:#b28a4a;padding:6px;border:4px solid var(--ink);border-radius:14px;box-shadow:0 5px 0 var(--ink);background-image:radial-gradient(#a37c3e 2px,transparent 3px);background-size:16px 16px}
 .tile{aspect-ratio:1/1.05;background:var(--sand);border:3px solid var(--ink);border-radius:10px;position:relative;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;cursor:pointer;overflow:hidden;padding-bottom:2px}
 .tile.empty{background:rgba(230,194,125,.45);border-style:dashed;color:rgba(20,16,15,.5);justify-content:center;align-items:center}

@@ -55,7 +55,7 @@
   }
   async function trophies(S) {
     const t = L.checkTrophies(S); if (!t.length) return; U.snd('levelup'); U.save();
-    await U.dialog(`<h2>${t.length > 1 ? 'Trophies earned!' : 'Trophy earned!'}</h2>` + t.map((x) => `<div class="itm" style="cursor:default;border-color:var(--gold);background:#fff3c4"><div class="sbadge" style="background:var(--gold);width:40px;height:40px">${A.icon('fame', 26)}</div><div class="sp"><div class="gname" style="font-size:14px">${esc(x.n)}</div><div class="muted" style="opacity:1">${esc(x.d)}</div><div class="row wrap" style="margin-top:3px">${x.r.gold ? `<span class="pill">${A.icon('coin', 12)} +${x.r.gold}</span>` : ''}${x.r.fame ? `<span class="pill">${A.icon('fame', 12)} +${x.r.fame}</span>` : ''}${x.r.laurels ? `<span class="pill">${A.icon('laurel', 12)} +${x.r.laurels}</span>` : ''}</div></div></div>`).join('') + btn('Shiny!', 'ok', 'green'));
+    await U.dialog(confetti(18) + `<h2>${t.length > 1 ? 'Trophies earned!' : 'Trophy earned!'}</h2>` + t.map((x) => `<div class="itm" style="cursor:default;border-color:var(--gold);background:#fff3c4"><div class="sbadge" style="background:var(--gold);width:40px;height:40px">${A.icon('fame', 26)}</div><div class="sp"><div class="gname" style="font-size:14px">${esc(x.n)}</div><div class="muted" style="opacity:1">${esc(x.d)}</div><div class="row wrap" style="margin-top:3px">${x.r.gold ? `<span class="pill">${A.icon('coin', 12)} +${x.r.gold}</span>` : ''}${x.r.fame ? `<span class="pill">${A.icon('fame', 12)} +${x.r.fame}</span>` : ''}${x.r.laurels ? `<span class="pill">${A.icon('laurel', 12)} +${x.r.laurels}</span>` : ''}</div></div></div>`).join('') + btn('Shiny!', 'ok', 'green'));
     U.render();
   }
   async function pickAug(S, level, have, force, title, seed) {
