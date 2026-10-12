@@ -356,5 +356,14 @@ ok(strongWins >= 17, `level 10 beats level 1 (${strongWins}/20)`);
   ok(['clear', 'rain', 'dust', 'heat', 'night'].includes(LM.weather(S13b, 'map1')), 'map weather is one of the known kinds');
 }
 
+// round 14: presets, apprentices, raids
+{
+  const S14 = LM.newGame({ name: 'R14' }); const a = LM.makeGlad({ id: S14.nextId++, style: 'thraex', lvl: 4 }), b = LM.makeGlad({ id: S14.nextId++, style: 'murmillo', lvl: 4 }); a.en = 90; b.en = 20; a.act = b.act = 'work'; S14.glads.push(a, b);
+  LM.preset(S14, 'boot'); ok(D.STATS.includes(a.act) && b.act === 'rest', 'boot camp trains the weakest stat and rests the tired');
+  ok(LM.preset(S14, 'rest') >= 1 && a.act === 'rest', 'rest week puts everyone to bed'); a.inj = 2; ok(LM.preset(S14, 'spar') === 0 || a.act === 'rest', 'injured fighters keep resting');
+  S14.legends = [{ name: 'Old Hero', best: 'str' }]; const c = LM.makeGlad({ id: 99, style: 'thraex', lvl: 2 }); const s0 = c.st.str; ok(LM.apprentice(S14, c) && c.st.str === s0 + 1 && c.mentor === 'Old Hero', 'a legend mentors a new recruit'); ok(LM.apprentice(S14, LM.makeGlad({ id: 98, style: 'thraex', lvl: 2 })) === null, 'each legend mentors only once');
+  S14.rowner = { name: 'Rival', w: 3, l: 0 }; S14.week = 4; let raided = 0; for (let i = 0; i < 60; i++) { LM.rerollMarket(S14); if (!S14.market.some((x) => x.sp)) raided++; } ok(raided > 5 && raided < 55, 'the rival owner sometimes raids the special item');
+}
+
 console.log(`ludus_maximus: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
