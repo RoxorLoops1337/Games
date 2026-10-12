@@ -528,7 +528,7 @@
   ACT.tipx = () => { const t = $('#tip'); if (t) t.className = ''; };
 
   // ---------- routing ----------
-  ACT.tab = (el) => { ui.tab = el.dataset.v; U.snd('click'); render(); main().scrollTop = 0; const m = main(); m.classList.remove('tabin'); void m.offsetWidth; m.classList.add('tabin'); setTimeout(() => U.tip(ui.tab), 500); };
+  ACT.tab = (el) => { ACT.tipx(); ui.tab = el.dataset.v; U.snd('click'); render(); main().scrollTop = 0; const m = main(); m.classList.remove('tabin'); void m.offsetWidth; m.classList.add('tabin'); setTimeout(() => U.tip(ui.tab), 500); };
   ACT.close = () => closeModal();
   ACT.res = (el) => { const r = U.res; U.res = null; closeModal(); if (r) r(el.dataset.v); };
   function render() {
@@ -545,7 +545,7 @@
       const el = e.target.closest('[data-a]'); if (!el) return;
       const f = ACT[el.dataset.a]; if (f) { try { f(el, e); } catch (err) { console.error(err); toast('Oops: ' + err.message); } }
     });
-    document.addEventListener('keydown', (e) => { if (!S || e.target.tagName === 'INPUT') return; const m = { 1: 'ludus', 2: 'glads', 3: 'arena', 4: 'armory', 5: 'more' }[e.key]; if (m) { ui.tab = m; render(); } if ((e.key === ' ' || e.key === 'Enter') && !document.getElementById('fight') && modalEl().className === '') { ACT.next(); e.preventDefault(); } if (e.key === 'Escape') closeModal(); });
+    document.addEventListener('keydown', (e) => { if (!S || e.target.tagName === 'INPUT') return; const m = { 1: 'ludus', 2: 'glads', 3: 'arena', 4: 'armory', 5: 'more' }[e.key]; if (m) { ACT.tipx(); ui.tab = m; render(); setTimeout(() => U.tip(ui.tab), 500); } if ((e.key === ' ' || e.key === 'Enter') && !document.getElementById('fight') && modalEl().className === '') { ACT.next(); e.preventDefault(); } if (e.key === 'Escape') closeModal(); });
     S = L.load(); U.setS(S);
     if (S) { render(); setTimeout(() => U.tip('ludus'), 800); } else intro();
   }
