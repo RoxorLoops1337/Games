@@ -562,6 +562,7 @@
     S.market = null; S.recruits = null; LM.relTick(S); rep.story = LM.storyCheck(S);
     LM.fillContracts(S);
     LM.ladderCheck(S).forEach((r) => { rep.notes.push(`Season ladder: ${r.n} wins reached! +${r.gold} gold, +${r.fame} fame.`); });
+    if (S.week - (S.lastBackup || 0) >= 12 && S.week % 4 === 1) rep.notes.push('Tip: back up your ludus. Open More, then Save code, and keep the code somewhere safe.');
     { const me = LM.moodEvent(S); if (me) rep.notes.push(me); }
     rep.nicks = LM.earnNick(S); rep.news = LM.crier(S, rep);
     rep.ev = LM.rollEvent(S);

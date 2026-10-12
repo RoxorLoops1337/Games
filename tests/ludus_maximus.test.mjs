@@ -391,5 +391,11 @@ ok(strongWins >= 17, `level 10 beats level 1 (${strongWins}/20)`);
   LM.takePrize(S17, rp.recap.prizes[1]); ok(S17.items.length === n0 + 1, 'taking a prize adds exactly that item');
 }
 
+// round 20: backup reminder
+{
+  const S20 = LM.newGame({ name: 'R20' }); S20.week = 12; S20.lastBackup = 0; const rp = LM.weekFinish(S20); ok(rp.notes.some((n) => /back up/.test(n)), 'an old save gets a backup reminder');
+  const S21 = LM.newGame({ name: 'R21' }); S21.week = 12; S21.lastBackup = 11; ok(!LM.weekFinish(S21).notes.some((n) => /back up/.test(n)), 'a recent backup silences the reminder');
+}
+
 console.log(`ludus_maximus: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

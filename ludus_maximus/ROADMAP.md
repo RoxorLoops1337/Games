@@ -183,7 +183,16 @@ Season prize is now a choice of one of three named items in a celebratory dialog
 Diary lines on the Share card, nickname or title under each fighter in the fight intro, armory sort (rarity, slot, power), and updated tutorial tips that mention the newer systems.
 
 ## Next ideas
-- [ ] 83. Armory filter by affix
+- [x] 83. Armory filter by affix
 - [ ] 84. Fight intro entrance animations per style (careful with sprite transforms)
 - [ ] 85. Weekly quests board mixing bounty and ladder goals
-- [ ] 86. Cloud save export reminder
+- [x] 86. Cloud save export reminder
+
+## Round 20 shipped
+Armory affix filter, and a backup reminder in the week summary when your save code is more than 12 weeks old.
+
+## Next ideas
+- [ ] 87. Weekly quests board (85 carried over)
+- [ ] 88. Entrance animations per style (84 carried over)
+- [ ] 89. Fight replay and crowd audio (55, 63 carried over)
+- [ ] 90. Balance pass across all styles after the new systems
