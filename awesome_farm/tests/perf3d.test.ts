@@ -206,3 +206,15 @@ test('the sun\'s shadow box fits the view, in steps, and slides in whole texels'
     const wide = viewExtent(new OrthographicCamera(-20, 20, 11.25, -11.25, 1, 400));
     assert.ok(fitShadow(sun, wide, 1024) > half);
 });
+
+test('Auto can climb back: 45 calm seconds after a step down try the heavier level again; a slow second try is not repeated', async () => {
+    const { AutoRecover } = await import('../src/client3d/quality');
+    const calm = (r: InstanceType<typeof AutoRecover>, secs: number, ms = 16) => { let up = 0; for (let t = 0; t < secs * 1000; t += ms) if (r.frame(ms)) up++; return up; };
+    assert.equal(calm(new AutoRecover(), 30), 0, 'not yet');
+    assert.equal(calm(new AutoRecover(), 46), 1, 'after 45 calm seconds');
+    const choppy = new AutoRecover(); let up = 0;
+    for (let t = 0; t < 120000; t += 16) if (choppy.frame(t % 800 < 100 ? 60 : 16)) up++;
+    assert.equal(up, 0, 'frames that keep hitching do not count as calm');
+    const hitch = new AutoRecover();
+    assert.equal(hitch.frame(5000), false, 'a long gap (a hidden tab) is not counted either');
+});

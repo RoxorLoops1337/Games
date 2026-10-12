@@ -83,5 +83,26 @@ export class AutoStep {
     }
 }
 
+/**
+ * The way back up. A single heavy moment (a big raid, a boss, a laggy second) should not leave a player on Low for the whole
+ * session: after Auto stepped down, 45 seconds of calm play (nearly every frame under ~24 ms) try the level that was too heavy ONCE
+ * more. If that level turns out slow again, it stays given up for the session (`AutoStep` steps down again and the view freezes).
+ */
+export class AutoRecover {
+    private seen = 0;
+    private calm = 0;
+    reset () { this.seen = 0; this.calm = 0; }
+    /** Feed one frame's real duration (ms); true when it is time to try the heavier level again. */
+    frame (ms: number): boolean {
+        if (!(ms > 0) || ms > 250) return false;
+        this.seen += ms;
+        if (ms <= 24) this.calm += ms;
+        if (this.seen < 45000) return false;
+        const up = this.calm >= this.seen * 0.97;
+        this.reset();
+        return up;
+    }
+}
+
 /** One level down (Low stays Low). */
 export const stepDown = (l: QualityLevel): QualityLevel => (l === 'high' ? 'medium' : 'low');

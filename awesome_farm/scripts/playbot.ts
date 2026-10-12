@@ -256,15 +256,26 @@ export class Bot {
         return 'acting';
     }
 
+    /** Every node on owned land, looked up at most twice a second (the bot used to walk the whole world's entities on every step). */
+    private nodeCache: NodeE[] = [];
+    private nodeAt = -1;
+    private nodesOnMyLand (): NodeE[] {
+        if (this.tick - this.nodeAt >= 10) {
+            const owned = new Set(this.sim.s.plots.filter((q) => q.owned).map((q) => q.i));
+            this.nodeCache = Object.values(this.sim.s.ents).filter((e): e is NodeE => e.k === 'node' && owned.has(e.plot));
+            this.nodeAt = this.tick;
+        }
+        return this.nodeCache.filter((e) => this.sim.s.ents[e.id] === e || this.sim.s.ents[e.id]?.k === 'node');
+    }
+
     /** Break nodes that drop `res` until there are enough; buy land when the land we own has none. */
     private gather (res: Res, n: number): string {
         const kinds = nodesGiving(res);
         if (!kinds.length) return `${res} comes from monsters or the mines, which the bot does not visit`;
         const p = this.p, sim = this.sim, d = derived(p);
-        const owned = new Set(sim.s.plots.filter((q) => q.owned).map((q) => q.i));
         let best: NodeE | null = null, bd = Infinity;
-        for (const e of Object.values(sim.s.ents)) {
-            if (e.k !== 'node' || !kinds.includes(e.kind) || !owned.has(e.plot) || this.skip.has(e.id)) continue;
+        for (const e of this.nodesOnMyLand()) {
+            if (!kinds.includes(e.kind) || this.skip.has(e.id)) continue;
             const def = NODES[e.kind];
             if (def.minTier !== undefined && d.toolTier < def.minTier) continue;
             const ec = sim.center(e), dd = Math.hypot(ec.x - p.x, ec.y - p.y);
@@ -318,10 +329,9 @@ export class Bot {
     private grind () {
         const kinds: NodeKind[] = ['tree', 'rock', 'bush'];
         const p = this.p, sim = this.sim;
-        const owned = new Set(sim.s.plots.filter((q) => q.owned).map((q) => q.i));
         let best: NodeE | null = null, bd = Infinity;
-        for (const e of Object.values(sim.s.ents)) {
-            if (e.k !== 'node' || !kinds.includes(e.kind) || !owned.has(e.plot) || this.skip.has(e.id)) continue;
+        for (const e of this.nodesOnMyLand()) {
+            if (!kinds.includes(e.kind) || this.skip.has(e.id)) continue;
             const ec = sim.center(e), dd = Math.hypot(ec.x - p.x, ec.y - p.y);
             if (dd < bd) { bd = dd; best = e; }
         }

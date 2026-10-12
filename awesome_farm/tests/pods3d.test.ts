@@ -22,7 +22,7 @@ function setup () {
     const w = new World(plots, 'pods3d'), scene = new Scene(), ents = new Entities(scene, w);
     const o = w.plotOrigin(plots[0]);
     const x = (o.tx + 8.5) * 16, y = (o.ty + 8.5) * 16;
-    const sp = SPECIES_LIST[0].id;
+    const sp = SPECIES_LIST[0];
     const crit = (extra: Partial<CritE> = {}) => ({ id: 7, k: 'crit', sp, x, y, mode: 0, ...extra }) as unknown as CritE;
     return { ents, x, y, crit, cx: x / 16, cz: y / 16 };
 }
@@ -71,4 +71,56 @@ test('a hop leaps with a squash and settles back to rest', () => {
     run(ents, cx, cz, 1);
     assert.equal(v.hop, undefined, 'and is done');
     assert.equal(v.model.obj.scale.x, 1);
+});
+
+test('something new grows in, pops in or arcs out; a world just loaded is simply there', () => {
+    const { ents, x, y, cx, cz } = setup();
+    const node = { id: 20, k: 'node', kind: 'tree', tx: Math.floor(cx) + 2, ty: Math.floor(cz), hp: 3, plot: 0 } as never;
+    ents.upsert(node, true);
+    const v = ents.views.get(20)!;
+    ents.update(1 / 30, 0, cx, cz);
+    assert.ok(v.model.obj.scale.y < 0.7, `a new tree starts small (${v.model.obj.scale.y})`);
+    run(ents, cx, cz, 0.6);
+    assert.equal(v.model.obj.scale.y, 1, 'and is full size after');
+    assert.equal(v.born, undefined);
+    ents.upsert({ id: 21, k: 'node', kind: 'tree', tx: Math.floor(cx) + 3, ty: Math.floor(cz), hp: 3, plot: 0 } as never);
+    assert.equal(ents.views.get(21)!.born, undefined, 'a tree that was already there does not grow');
+    // a drop arcs out from where it popped
+    ents.upsert({ id: 22, k: 'drop', res: 'wood', x, y, ox: x - 48, oy: y, age: 0 } as never, true);
+    const d = ents.views.get(22)!;
+    assert.ok(Math.abs(d.x - (x - 48) / 16) < 0.01, 'it starts at its origin');
+    run(ents, cx, cz, 0.7);
+    assert.ok(Math.abs(d.x - x / 16) < 0.05, 'and ends where it lies');
+});
+
+test('a worker lunges at its target and settles; a Perfect dash flashes the farmer', async () => {
+    const { ents, crit, cx, cz } = setup();
+    ents.upsert(crit());
+    run(ents, cx, cz, 0.1);
+    const v = ents.views.get(7)!, x0 = v.model.obj.position.x;
+    ents.lunge(7, cx + 3, cz, 'mine');
+    let far = 0;
+    for (let t = 0; t < 0.5; t += 1 / 30) { ents.update(1 / 30, t, cx, cz); far = Math.max(far, v.model.obj.position.x - x0); }
+    assert.ok(far > 0.3, `it darts toward the target (${far})`);
+    run(ents, cx, cz, 1);
+    assert.equal(v.lunge, undefined);
+    assert.equal(v.model.obj.scale.x, 1);
+    const { farmerModel } = await import('../src/client3d/models/farmer');
+    const m = farmerModel(undefined, 0, {});
+    m.react(3, 0, false, 0.016);
+    m.flash();
+    m.react(3, 0, false, 0.016);
+    assert.ok((m as unknown as { flashing: unknown }).flashing, 'the body is white for a moment');
+});
+
+test('buildings that are roofs, walls, fences and decor take snow on top; machines do not', async () => {
+    const { dressSnow } = await import('../src/client3d/seasons');
+    const { buildingModel } = await import('../src/client3d/models/buildings');
+    const wall = buildingModel('wall_wood', { rot: 0, seed: 1, mask: 0 });
+    const before = new Set<unknown>();
+    wall.obj.traverse((o) => { const m = (o as { material?: unknown }).material; if (m) before.add(m); });
+    dressSnow(wall.obj);
+    let changed = 0;
+    wall.obj.traverse((o) => { const m = (o as { material?: unknown }).material; if (m && !before.has(m)) changed++; });
+    assert.ok(changed > 0, 'the wall wears snow-ready materials');
 });

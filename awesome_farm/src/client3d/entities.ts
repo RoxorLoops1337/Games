@@ -18,6 +18,7 @@ import { shotModel } from './models/shots';
 import { layChain, STATUS_MODELS } from './models/costatus';
 import { MOBS } from '../shared/data/mobs';
 import { WATER_Y } from './terrain';
+import { dressSnow } from './seasons';
 import { wadeDepth, type Wading } from './wade';
 
 /** Pieces of one family join their neighbours (walls, fences, belts ...): which family a building kind belongs to, if any. */
@@ -31,6 +32,9 @@ export function familyOf(kind: string) {
     return null;
 }
 export const px = (v: number) => v / TILE;
+/** Buildings that take snow on top in winter: the house pieces and the decor (roofs, walls, fences, benches...), not the machines. */
+const snowy = (kind: BuildingKind) => { const d = BUILDINGS[kind] as BuildingDef; return !!(d.roof || d.wall || d.gate) || d.cat === 'home' || d.cat === 'decor'; };
+const outBack = (t: number) => { const c1 = 1.70158, c3 = c1 + 1; return 1 + c3 * (t - 1) ** 3 + c1 * (t - 1) ** 2; };
 /** What the view keeps for one entity: its latest state, its model, where it is drawn and facing, the hurt flash, hp, how it joins
  * its family, its hp bar and the roof fade. */
 export interface View {
@@ -42,6 +46,10 @@ export interface View {
     podWait?: number; pod?: Object3D;
     /** a creature hopping for joy (petted, or glad at a kindled fire) */
     hop?: { t: number; dur: number };
+    /** a worker darting at its target and back (tiles to go) */
+    lunge?: { t: number; dur: number; dx: number; dz: number };
+    /** just arrived: a node or building grows in, a creature or monster pops in, a drop arcs out from where it came */
+    born?: { t: number; dur: number; k: 'grow' | 'bld' | 'pop'; s: { x: number; y: number; z: number } };
 }
 /** A pod in the air: thrown from a farmer to the creature it is meant for. */
 interface Flight { obj: Object3D; t: number; dur: number; x0: number; z0: number; x1: number; z1: number }
@@ -124,12 +132,13 @@ export class Entities {
                 z = px(e.y);
         }
         model.apply?.(e);
+        if (e.k === 'bld' && snowy(e.kind)) dressSnow(model.obj);
         model.obj.position.set(x, groundY(x, z), z);
         this.group.add(model.obj);
         return { e, model, x, z, face: 0, px: x, pz: z, moving: false, hurt: 0, hp: e.k === 'mob' ? e.hp : 0, mask };
     }
     /** The simulation sent this entity (new, or changed). */
-    upsert(e: Ent) {
+    upsert(e: Ent, pop = false) {
         const old = this.views.get(e.id);
         if (e.k === 'bld') {
             const f = familyOf(e.kind), [w, h] = BUILDINGS[e.kind].size;
@@ -139,6 +148,7 @@ export class Entities {
             const v = this.make(e);
             if (!v) return;
             this.views.set(e.id, v);
+            if (pop) this.arrive(v, e);
             if (e.k === 'bld' && familyOf(e.kind)) this.refreshAround(e);
             return;
         }
@@ -182,6 +192,38 @@ export class Entities {
         const v = this.views.get(e.id);
         if (v) v.podWait = dur;
     }
+    /** Something new came into being (not part of the world that was just loaded): it grows in, pops in, or arcs out of where it came from. */
+    private arrive(v: View, e: Ent) {
+        const s = v.model.obj.scale, keep = { x: s.x, y: s.y, z: s.z };
+        if (e.k === 'node' || (e.k === 'bld' && !BUILDINGS[e.kind].floor)) v.born = { t: 0, dur: e.k === 'bld' ? 0.32 : 0.26, k: e.k === 'bld' ? 'bld' : 'grow', s: keep };
+        else if (e.k === 'crit' || e.k === 'mob') v.born = { t: 0, dur: 0.35, k: 'pop', s: keep };
+        else if (e.k === 'drop') { v.x = px(e.ox); v.z = px(e.oy); v.px = v.x; v.pz = v.z; v.born = { t: 0, dur: 0.38, k: 'grow', s: keep }; }
+        if (v.born && e.k !== 'drop') this.arrived?.(e, px(e.k === 'bld' ? e.tx + BUILDINGS[e.kind].size[0] / 2 : e.k === 'node' ? e.tx + 0.5 : e.x), px(e.k === 'bld' ? e.ty + BUILDINGS[e.kind].size[1] / 2 : e.k === 'node' ? e.ty + 0.5 : e.y));
+    }
+    /** Called with where a new node, building, creature or monster appeared, for a puff of dust (the view owns the particles). */
+    arrived?: (e: Ent, x: number, z: number) => void;
+    private bornStep(v: View, dt: number) {
+        const b = v.born!, o = v.model.obj;
+        b.t += dt;
+        const u = Math.min(1, b.t / b.dur);
+        if (v.e.k === 'drop') {
+            o.position.y += Math.sin(u * Math.PI) * 0.45;           // (it slides to where it lies in the usual way; this is the hop on the way)
+        } else if (b.k === 'bld') {
+            const e = outBack(u);
+            o.scale.set(b.s.x * (1 + 0.3 * (1 - e)), b.s.y * (0.2 + 0.8 * e), b.s.z * (1 + 0.3 * (1 - e)));
+        } else {
+            const e = Math.max(0.01, outBack(u));
+            o.scale.set(b.s.x * e, b.s.y * e, b.s.z * e);
+        }
+        if (u >= 1) { o.scale.set(b.s.x, b.s.y, b.s.z); v.born = undefined; }
+    }
+    /** A worker darts toward its target and back. */
+    lunge(id: number, x: number, z: number, kind: string) {
+        const v = this.views.get(id);
+        if (!v) return;
+        const dx = x - v.x, dz = z - v.z, l = Math.max(0.0625, Math.hypot(dx, dz)), reach = Math.min(1, l * 0.6);
+        v.lunge = { t: 0, dur: kind === 'guard' ? 0.34 : 0.7, dx: dx / l * reach, dz: dz / l * reach };
+    }
     /** A creature hops for joy. */
     hop(id: number) {
         const v = this.views.get(id);
@@ -214,14 +256,24 @@ export class Entities {
             v.pod.position.set(v.x, groundY(v.x, v.z) + 0.3, v.z);
             v.pod.rotation.set(0, 0, shaking ? Math.sin(t * 26) * 0.45 : 0);
         } else if (v.pod) v.pod.visible = false;
+        const o = v.model.obj;
+        let sx = 1, sy = 1;
         if (v.hop && !inPod) {
             v.hop.t += dt;
             const p = Math.min(1, v.hop.t / v.hop.dur), air = Math.abs(Math.sin(p * Math.PI * 2)), rest = 1 - p;
-            v.model.obj.position.y += air * 0.5 * (1 - p * 0.3);
-            const sx = 1 + (1 - air) * 0.09 * rest, sy = 1 - (1 - air) * 0.11 * rest;
-            v.model.obj.scale.set(sx, sy, sx);
-            if (p >= 1) { v.hop = undefined; v.model.obj.scale.set(1, 1, 1); }
+            o.position.y += air * 0.5 * (1 - p * 0.3);
+            sx *= 1 + (1 - air) * 0.09 * rest; sy *= 1 - (1 - air) * 0.11 * rest;
+            if (p >= 1) v.hop = undefined;
         }
+        if (v.lunge && !inPod) {
+            v.lunge.t += dt;
+            const p = Math.min(1, v.lunge.t / v.lunge.dur), s = Math.sin(p * Math.PI);
+            o.position.x += v.lunge.dx * s; o.position.z += v.lunge.dz * s; o.position.y += s * 0.2;
+            sx *= 1 + s * 0.12; sy *= 1 - s * 0.08;
+            if (p >= 1) v.lunge = undefined;
+        }
+        if (sx !== 1 || sy !== 1) o.scale.set(sx, sy, sx);
+        else if (!v.born && (o.scale.x !== 1 || o.scale.y !== 1)) o.scale.set(1, 1, 1);
     }
     /** A joining piece appeared or went: its neighbours of the same family redraw with their new connections. */
     refreshAround(e: BuildE) {
@@ -243,6 +295,7 @@ export class Entities {
             const [bw, bh] = BUILDINGS[v.e.kind].size;
             const m = buildingModel(v.e.kind, { rot: v.e.rot ?? 0, seed: v.e.id, mask });
             m.apply?.(v.e);                                     // (its state carries over: a hurt wall keeps its cracks)
+            if (snowy(v.e.kind)) dressSnow(m.obj);
             m.obj.position.set(v.e.tx + bw / 2, 0, v.e.ty + bh / 2);
             this.group.add(m.obj);
             v.model = m;
@@ -347,6 +400,7 @@ export class Entities {
                 else if (e.k === 'crit') { v.model.pose?.(v.face, v.moving, e.mode === 2 && e.ac === 'idle' && !v.moving, dt); this.critStep(v, e, dt, t); }
                 if (e.k === 'mob' && e.hp < e.mhp) this.hpBar(v, e.hp / e.mhp, 1.9, v.model.obj.position.y); // a monster's entity carries no radius: every bar sits at the same height
                 else if (v.bar) v.bar.visible = false;
+                if (v.born) this.bornStep(v, dt);
             } else {
                 const dxn = Math.abs(v.x - cx), dzn = Math.abs(v.z - cz);
                 if (dxn > sx || dzn > sz) {
@@ -354,6 +408,7 @@ export class Entities {
                     continue;
                 }
                 v.model.obj.visible = true;
+                if (v.born) this.bornStep(v, dt);
             }
             v.model.update?.(dt, t);
         }

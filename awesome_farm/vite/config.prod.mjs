@@ -7,7 +7,8 @@ export default defineConfig({
         rollupOptions: {
             output: {
                 manualChunks: {
-                    phaser: ['phaser']
+                    phaser: ['phaser'],
+                    three: ['three']       // (the 3D view's engine in a file of its own: a game update does not make 3D players download it again)
                 }
             }
         },
