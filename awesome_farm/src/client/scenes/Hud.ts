@@ -70,6 +70,8 @@ import { WaystoneScreen } from '../ui/screens/waystone';
 import { LookScreen } from '../ui/screens/look';
 import { WishScreen } from '../ui/screens/wish';
 import { MailScreen } from '../ui/screens/mail';
+import { TradeScreen } from '../ui/screens/trade';
+import { TRADE_REACH } from '../../shared/sim/trade';
 import { TableScreen } from '../ui/screens/table';
 import { shouldWelcome, WelcomeScreen } from '../ui/screens/welcome';
 import { ChestSetupScreen } from '../ui/screens/chestcfg';
@@ -87,13 +89,13 @@ const DOWN = { x: TOP_SLOT.x, y: TOP_SLOT.y, w: TOP_SLOT.w, h: 96, hFriends: 118
 /** The window each `open` event's building kind gets, opened with `{ id }`. */
 const UI_SCREEN: Partial<Record<UiKind, string>> = { proc: 'machine', device: 'device', altar: 'altar', den: 'den', waystone: 'waystone', dock: 'dock', hatchery: 'hatchery', vane: 'vane', chest: 'chest', bed: 'bed', fortune: 'wheel', mail: 'mail', table: 'table', tower: 'tower' };
 /** Windows a hotkey does not swap away from (they belong to the thing in front of you, or hold a moment that should not be skipped). */
-const STICKY = new Set(['machine', 'device', 'altar', 'den', 'chest', 'chestcfg', 'bed', 'dock', 'hatchery', 'boons', 'riftend', 'loot', 'wheel', 'story']);
+const STICKY = new Set(['machine', 'device', 'altar', 'den', 'chest', 'chestcfg', 'trade', 'bed', 'dock', 'hatchery', 'boons', 'riftend', 'loot', 'wheel', 'story']);
 
 const SCREENS: Record<string, new (ctx: ScreenCtx, arg?: unknown) => Screen> = {
     inventory: InventoryScreen, gear: GearScreen, arts: ArtsScreen, craft: CraftScreen, skills: SkillScreen, build: BuildScreen,
     machine: MachineScreen, device: DeviceScreen, altar: AltarScreen, creatures: CreatureScreen, den: DenScreen, journal: JournalScreen, guide: GuideScreen, launcher: LauncherScreen, jobpost: JobPostScreen, crewpick: CrewPickScreen, waystone: WaystoneScreen, welcome: WelcomeScreen, chest: ChestScreen, chestcfg: ChestSetupScreen, market: MarketScreen, bed: BedScreen, menu: MenuScreen, map: MenuScreen,
     dock: DockScreen, boons: BoonScreen, riftend: RiftEndScreen, hatchery: HatcheryScreen, blueprints: BlueprintScreen,
-    loot: LootScreen, wheel: WheelScreen, story: StoryScreen, look: LookScreen, dev: DevToolsScreen, wish: WishScreen, mail: MailScreen, vane: VaneScreen, table: TableScreen, tower: TowerScreen,
+    loot: LootScreen, wheel: WheelScreen, story: StoryScreen, look: LookScreen, dev: DevToolsScreen, wish: WishScreen, mail: MailScreen, trade: TradeScreen, vane: VaneScreen, table: TableScreen, tower: TowerScreen,
 };
 
 export class HudScene extends Phaser.Scene {
@@ -103,6 +105,7 @@ export class HudScene extends Phaser.Scene {
     private riftHud!: RiftHud;
     private fishHud!: FishHud;
     private boonSeen = '';
+    private tradeShown = '';
     private chat!: ChatUI;
     private compCard!: CompanionCard;
     private party!: PartyList;
@@ -291,8 +294,23 @@ export class HudScene extends Phaser.Scene {
             toast: (t, i, c) => this.toasts.push(t, i, c),
             close: () => this.closeScreen(),
             open: (name, arg) => this.openScreen(name, arg),
+            startTrade: () => { this.closeScreen(); this.startTrade(); },
             drawMap: (g, x, y, cell, labels, view) => this.layer.drawMinimap(g, x, y, cell, labels, true, true, view),
         };
+    }
+
+    /** Y: offer a trade to the nearest friend who is close enough. */
+    startTrade () {
+        const f = this.farm, me = f.meS!;
+        if (!f.ready || me.downed > 0 || me.trade) return;
+        let best: { id: string; d: number } | null = null;
+        for (const q of Object.values(f.players)) {
+            if (q.id === f.me || !q.online || q.downed > 0) continue;
+            const d = Math.hypot(q.x - f.local.x, q.y - f.local.y);
+            if (d <= TRADE_REACH && (!best || d < best.d)) best = { id: q.id, d };
+        }
+        if (!best) { this.toasts.push('No friend close enough to trade with', undefined, PAL.pebble); return; }
+        f.send({ t: 'trade', op: 'open', who: best.id });
     }
 
     openScreen (name: string, arg?: unknown) {
@@ -369,6 +387,7 @@ export class HudScene extends Phaser.Scene {
         const k = keyOf(ev);
         const lower = k.length === 1 ? k.toLowerCase() : k;
         if (this.farm.meS!.downed > 0 && lower === 'r' && !this.screen) { ev.preventDefault(); this.farm.send({ t: 'respawn' }); return; }       // don't want to wait for a friend: wake up at home
+        if (!this.screen && lower === 'y' && !ev.ctrlKey && !ev.metaKey && !ev.altKey) { ev.preventDefault(); this.startTrade(); return; }       // trade with the nearest friend
         if (!this.screen && lower === 'r' && !ev.ctrlKey && !ev.metaKey && !ev.altKey) { ev.preventDefault(); this.farm.send({ t: 'ride' }); return; }       // climb on / off your companion
         if (!this.screen && (ev.key === '+' || ev.key === '=' || ev.key === 'Add' || ev.code === 'NumpadAdd')) { ev.preventDefault(); this.farm.zoomBy(1); return; }
         if (!this.screen && (ev.key === '-' || ev.key === '_' || ev.key === 'Subtract' || ev.code === 'NumpadSubtract')) { ev.preventDefault(); this.farm.zoomBy(-1); return; }
@@ -412,6 +431,9 @@ export class HudScene extends Phaser.Scene {
             this.statusT.setText(f.clock.paused && !this.screen ? 'Paused' : '');
         }
         const me = f.meS!;
+        // a trade a friend opened with you (or you opened) shows its window once, until it ends
+        if (me.trade && this.tradeShown !== me.trade.w && me.downed <= 0) { this.tradeShown = me.trade.w; this.openScreen('trade'); }
+        else if (!me.trade) this.tradeShown = '';
         if (!this.screen && this.queued.length && me.downed <= 0) { const [n, a] = this.queued.shift()!; this.openScreen(n, a); }
         this.night.update(dt, f.viewMode === '2d');
         updateMusic({ night: f.nightAmount(), rain: this.night.rainLevel, boss: this.bossBar.cur ? 1 : me.rift?.ph === 1 ? 0.35 : this.night.event === 'bloodmoon' ? 0.3 : 0, phase: this.bossBar.cur?.phase ?? 0, under: f.undergroundAmount(), dread: f.dreadAmount() });

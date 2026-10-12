@@ -40,7 +40,7 @@ export class InventoryScreen implements Screen {
         const s = ctx.scene;
         this.win = new Win(s, { size: 'large', title: 'Backpack', icon: 'k_bag', accent: PAL.gold, onClose: () => ctx.close() });
         const w = this.win;
-        this.foot = w.footer({ info: '', infoW: 110, secondary: [{ label: 'Rings  (U)', onClick: () => ctx.open('gear'), icon: 'i_ring_copper' }, { label: deviceText('Quick stack  (Q)', 'Quick stack'), onClick: () => ctx.send({ t: 'inv', op: 'stash' }) }], hint: deviceText('Click an item to equip, eat or open it.  F stars it so Quick stack leaves it alone.', 'Tap an item to equip, eat or open it.') });
+        this.foot = w.footer({ info: '', infoW: 110, secondary: [{ label: 'Rings  (U)', onClick: () => ctx.open('gear'), icon: 'i_ring_copper' }, { label: deviceText('Quick stack  (Q)', 'Quick stack'), onClick: () => ctx.send({ t: 'inv', op: 'stash' }) }, { label: deviceText('Trade  (Y)', 'Trade'), onClick: () => ctx.startTrade() }], hint: deviceText('Click an item to equip, eat or open it.  F stars it so Quick stack leaves it alone.', 'Tap an item to equip, eat or open it.') });
         const body = w.body, lw = 300, gx = 8;
 
         // ── left: what you wear, and your stats ──
