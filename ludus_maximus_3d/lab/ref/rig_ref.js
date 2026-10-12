@@ -560,7 +560,7 @@ export function buildGladiator(opts = {}) {
   sockets('beltBack', J.hips, 0, 0.02, -0.12);
 
   // squash/stretch, flash
-  const squash = new Spring1(300, 17); const flashState = { t: 0, dur: 0.12, color: new THREE.Color(1, 0.85, 0.7) };
+  const squash = new Spring1(300, 17); const flashState = { t: 0, dur: 0.12, color: new THREE.Color(0.7, 0.5, 0.3) };
 
   const rig = {
     root, body, joints: J, sockets: sk, mats, palette: pal, secondary: [], squash, flashState, build: bd, opts,
@@ -623,7 +623,6 @@ export function addTassel(rig, socketName, o = {}) {
 }
 
 // ---------------------------------------------------------------- Animator
-const MAKE_IDS = ['sample'];
 class QPose { constructor() { this.q = JOINTS.map(() => new Q()); this.hip = new V3(); this.body = new V3(); this.brot = new Q(); this.ground = 1; this.lock = 1; }
   copy(o) { for (let i = 0; i < this.q.length; i++) this.q[i].copy(o.q[i]); this.hip.copy(o.hip); this.body.copy(o.body); this.brot.copy(o.brot); this.ground = o.ground; this.lock = o.lock; return this; } }
 const _e = new E();
@@ -685,7 +684,6 @@ export class Animator {
     const side = Math.abs(mv.vx) / (s + 1e-4), back = mv.vz < -0.05;
     const ph = this.mv.phase;
     idleSample(t, this.PA, c);
-    const stride = lerp(1.55, 2.9, runW / (walkW + runW + 1e-4));
     P.copy(this.PA); if (idleW < 1) {
       const gw = (1 - idleW);
       gaitSample(this.PB, ph, GAITS.walk, c, back); gaitSample(this.PC, ph, GAITS.run, c, back);
@@ -720,7 +718,6 @@ export class Animator {
         const mask = MASKS[this.actionMask];
         // upper-mask attacks need the legs from base; add lunge only from full-mask
         out = blendQ(this.QA, this.QB, this.actionW, mask, this.QC); if (mask) { out.body.copy(this.QA.body); out.hip.copy(this.QA.hip); }
-        if (this.actionMask === 'upper') { out.hip.y += 0; }
       }
     }
     // snapshot crossfade (inertial blend from the pose we left)

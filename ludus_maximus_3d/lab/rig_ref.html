@@ -82,7 +82,7 @@ if (sheet) {
   plan(rigs[3], 5, [[0, (r) => r.animator.setMove(1.5, 0)], [1.8, (r) => { r.animator.setMove(0, 0); r.animator.play('attack1'); }], [2.8, a('attack3')], [4.0, a('taunt')]]);
   // 4 dimachaerus: strafe, double cut, victory
   plan(rigs[4], 5, [[0, (r) => r.animator.setMove(0, 2.0)], [1.6, (r) => { r.animator.setMove(0, 0); r.animator.play('attack1'); }], [2.4, a('attack3')], [3.4, (r) => r.animator.setState('victory')], [4.8, (r) => r.animator.setState('move')]]);
-  cam.position.set(0, 1.45, 8.6); cam.fov = 32; camTarget.set(0, 0.98, 0);
+  cam.position.set(0, 1.4, 7.4); cam.fov = 32; camTarget.set(0, 0.98, 0);
 }
 cam.lookAt(camTarget);
 let simT = 0;
