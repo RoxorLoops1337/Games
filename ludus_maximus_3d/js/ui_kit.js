@@ -1,7 +1,7 @@
 // Ludus Maximus 3D UI reference helpers. Pure DOM + inline SVG, no deps. Pair with ui_ref.css.
 // Everything returns an HTMLElement (with small control methods attached as properties).
 const SVGNS = 'http://www.w3.org/2000/svg';
-export const reduced = () => typeof matchMedia !== 'undefined' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+export const reduced = () => (typeof document !== 'undefined' && document.body && document.body.classList.contains('lx-reduce-motion')) || (typeof matchMedia !== 'undefined' && matchMedia('(prefers-reduced-motion: reduce)').matches);
 
 export function h(tag, cls, kids) {
   const e = document.createElement(tag);

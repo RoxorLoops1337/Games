@@ -24,6 +24,7 @@ export class Game {
     catch (e) { console.warn('hub.js unavailable, using stub', e && e.message); this.hub = createHubStub({ renderer: this.renderer, camera: this.camera, audio: this.audio, tier: this.tier }); }
     this.hub.onPick = (sel) => this.onPick(sel);
     this.buildHud();
+    import('./screens/more.js').then((m) => m.applyPrefs && m.applyPrefs(this.ctx)).catch(() => {});
   }
 
   // ---------------------------------------------------------------- ctx for screens
