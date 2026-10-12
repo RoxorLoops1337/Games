@@ -1,5 +1,6 @@
 // The weekly flow: training report -> level picks -> due fights (prep, augment, 3D fight, results) -> week summary -> events.
 // Ported from ludus_maximus/play.js on top of the same sim (core/sim.js), presented with the 3D arena and the Roman UI kit.
+import * as Cer from './ceremonies.js'; // ONBOARDING
 import { U, h, fmt, fmtSt, chip, itemCard, gladRow, section, para, kv, grid, styleBadge, ordinal, RAR_KEY } from './uihelpers.js';
 
 const D = () => globalThis.LM_D, L = () => globalThis.LM;
@@ -44,9 +45,9 @@ const PICKT = {
 export async function pickPends(ctx) {
   for (const g of ctx.S.glads) {
     let guard = 0;
+    if (g.pend && g.pend.length) Cer.levelUp(ctx, g, g.lvl); // ONBOARDING: fanfare (deduped per level)
     while (g.pend && g.pend.length && guard++ < 8) {
       const p0 = g.pend[0], M = PICKT[p0.t];
-      ctx.sfx('levelUp');
       const body = h('div', '', [para(`Level ${g.lvl}. Choose one for good.`), ...p0.o.map((t) => { const c = h('div', '', [h('b', '', M[3](t)), h('div', '', M[2](t))]); c.style.cssText = 'padding:6px 8px;margin:4px 0;font:600 13px/17px system-ui,sans-serif;color:#33243a;background:rgba(255,255,255,.35);border-radius:8px'; return c; })]);
       const t = await ctx.ask({ title: `${g.name}: ${M[0]}`, body, actions: p0.o.map((t) => ({ label: `${M[1]} ${M[3](t)}`, value: t })), dismiss: p0.o[0] });
       L().choosePick(g, t);
@@ -55,6 +56,7 @@ export async function pickPends(ctx) {
 }
 
 async function weekSummary(ctx, fin, wk) {
+  if (fin.recap) await Cer.seasonFinale(ctx, fin); // ONBOARDING: season finale ceremony
   const S = ctx.S, body = h('div', '', [kv('Upkeep paid', '-' + fmt(fin.upkeep)), kv('Market income', '+' + fmt(fin.income)), kv('Gold now', fmt(S.gold))]);
   if (fin.news && fin.news.length) { const c = h('div', '', [h('b', '', 'TOWN CRIER'), ...fin.news.map((n) => h('div', '', n))]); c.style.cssText = 'margin:10px 0;padding:8px 10px;border-radius:8px;background:#f2e2b6;color:#33243a;font:600 13px/18px system-ui,sans-serif'; body.append(c); }
   (fin.notes || []).forEach((n) => body.append(para(n)));
@@ -80,7 +82,9 @@ async function prizePick(ctx, prizes) {
 }
 
 async function trophies(ctx) {
-  const t = L().checkTrophies(ctx.S); if (!t.length) return; ctx.sfx('levelUp'); ctx.save();
+  const t = L().checkTrophies(ctx.S); if (!t.length) return; ctx.save();
+  if (await Cer.trophy(ctx, t) != null) { ctx.refresh(); return; } // ONBOARDING: ceremony; falls back to the plain dialog below if it failed
+  ctx.sfx('levelUp');
   const body = h('div', '', t.map((x) => h('div', '', [h('b', '', x.n), h('div', '', x.d), h('div', '', [x.r.gold ? chip('+' + x.r.gold + ' gold', '#b8803a') : '', x.r.fame ? chip('+' + x.r.fame + ' fame', '#7b4fb8') : '', x.r.laurels ? chip('+' + x.r.laurels + ' laurels', '#5b7a3a') : ''])])));
   body.style.cssText = 'font:600 14px/20px system-ui,sans-serif;color:#33243a';
   await ctx.ask({ title: t.length > 1 ? 'Trophies earned!' : 'Trophy earned!', body, actions: ok('Shiny!'), dismiss: 'ok' }); ctx.refresh();
@@ -239,7 +243,7 @@ export async function results(ctx, ev, gl, res, rep) {
   rep.xp.forEach((x) => { const g = ctx.gOf(x.id); body.append(kv(g.name, `+${x.xp} XP${x.up.length ? ' · LEVEL ' + x.up[x.up.length - 1] + '!' : ''}`)); });
   const stats = statsEl(ctx, res); if (stats) body.append(section('Fight stats'), stats);
   rep.lvl.forEach((l) => body.append(para(`${ctx.gOf(l.id).name} reached LEVEL ${l.to}!`)));
-  if (rep.lvl.length) ctx.sfx('levelUp');
+  rep.lvl.forEach((l) => Cer.levelUp(ctx, ctx.gOf(l.id), l.to)); // ONBOARDING
   rep.inj.forEach((i) => body.append(para(`${ctx.gOf(i.id).name} is injured for ${i.w} week${i.w > 1 ? 's' : ''}.`)));
   rep.loot.forEach((it) => body.append(itemCard(it, { tag: 'Loot!' })));
   let actions = ok('Continue', win ? 'gold' : 'bronze');

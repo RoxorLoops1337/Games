@@ -9,6 +9,7 @@ import { createFeel } from './feel.js';
 import { FightDirector } from './director.js';
 import { createGladiator } from './gladiator.js';
 import * as U from './ui_kit.js';
+import { trimShadowCasters } from './post.js';
 
 const D = () => globalThis.LM_D, L = () => globalThis.LM;
 const STEP = 1 / 30;
@@ -25,7 +26,7 @@ export class FightView {
     this.scene = new THREE.Scene(); post.setScene && post.setScene(this.scene);
     this.sky = createSky(); this.scene.add(this.sky.mesh);
     this.light = createLightRig(this.scene, { shadowSize: tier === 'low' ? 1024 : tier === 'medium' ? 1536 : 2048, shadowRadius: 34, shadowCenter: new THREE.Vector3(0, 0, 0), far: 300 });
-    this.arena = createArena({ density: tier === 'low' ? 0.45 : tier === 'medium' ? 0.7 : 1, decalRes: tier === 'low' ? 1024 : 2048 });
+    this.arena = createArena({ density: tier === 'low' ? 0.45 : tier === 'medium' ? 0.7 : 1, decalRes: tier === 'low' ? 1024 : 2048, lite: tier !== 'high' });
     this.scene.add(this.arena.group);
     this.preset = Object.assign({}, TOD.golden, { sunElev: 46, sunAz: 205 });
     applyTOD(this.preset, { rig: this.light, scene: this.scene, sky: this.sky, renderer, nightUniforms: [{ set value(v) { this._a && this._a(v); } }] });
@@ -74,7 +75,7 @@ export class FightView {
       const rig = createGladiator(u, { tunic: u.side === 'B' ? (u.g.color || null) : (u.g.color || null) });
       const gx = u.side === 'A' ? -22 : 22;
       const f = { u, rig, vx: 0, vz: 0, yaw: u.side === 'A' ? Math.PI / 2 : -Math.PI / 2, lx: gx, ly: u.y, handles: {}, atkN: 0, st: '', hpShown: u.hp, plate: null, ring: [], intro: { x: gx, y: u.y, tx: u.x, ty: u.y } };
-      rig.root.position.set(gx, 0, u.y); this.scene.add(rig.root); rig.resetSecondary && rig.resetSecondary();
+      trimShadowCasters(rig.root, this.post.tier || this.tier); rig.root.position.set(gx, 0, u.y); this.scene.add(rig.root); rig.resetSecondary && rig.resetSecondary();
       const plate = U.nameplate({ name: u.name, level: u.g.lvl, hp: u.hp, maxHp: u.maxhp, team: u.side === 'A' ? 'ally' : 'foe', rank: 0 });
       this.plates.append(plate); f.plate = plate; this.fm.set(u.id, f);
       if (u.side === 'B') { plate.style.pointerEvents = 'auto'; plate.style.cursor = 'pointer'; plate.addEventListener('pointerdown', () => this.focusUnit(u.id)); }

@@ -7,7 +7,7 @@ import { createHubStub } from './hubstub.js';
 import { advanceWeek } from './flow.js';
 import { createPortraitRenderer } from './portrait.js';
 import { styleBadge } from './uihelpers.js';
-import { createTitle } from './title.js'; // ONBOARDING
+import { createTitle, titleState } from './title.js'; // ONBOARDING
 import { createTutorial } from './tutorial.js'; // ONBOARDING
 import * as Cer from './ceremonies.js'; // ONBOARDING
 
@@ -29,6 +29,7 @@ export class Game {
     catch (e) { console.warn('hub.js unavailable, using stub', e && e.message); this.hub = createHubStub({ renderer: this.renderer, camera: this.camera, audio: this.audio, tier: this.tier }); }
     this.hub.onPick = (sel) => this.onPick(sel);
     this.buildHud();
+    this.tutorial = createTutorial(this); // ONBOARDING
     import('./screens/more.js').then((m) => m.applyPrefs && m.applyPrefs(this.ctx)).catch(() => {});
   }
 
@@ -59,8 +60,8 @@ export class Game {
 
   // ---------------------------------------------------------------- title / new game
   async boot() {
-    await this.init();
-    this.post.setScene(this.hub.scene); this.hub.enter(this.S || { plots: [], glads: [], rows: 2, week: 1 }); this.scene = 'title';
+    if (!this.hub) await this.init(); // ONBOARDING fix: main.js already ran init(); a second run built a second hub, FightView and HUD
+    this.post.setScene(this.hub.scene); this.hub.enter(this.S || titleState()); this.scene = 'title'; // ONBOARDING: save or showcase ludus behind the logo
     // ONBOARDING: cinematic title (js/title.js) replaces the old plain dialog
     this.title = createTitle(this);
     for (;;) {
@@ -100,7 +101,7 @@ export class Game {
     if (this.scene === name) return;
     if (this.scene === 'hub') this.hub.exit && this.hub.exit();
     this.scene = name;
-    if (name === 'hub') { this.post.setScene(this.hub.scene); this.hub.enter(this.S); this.hud.style.display = 'flex'; this.audio.music.setMode('ludus', { fade: 1.2 }); this.audio.crowd(0); this.refresh(); }
+    if (name === 'hub') { this.post.setScene(this.hub.scene); this.hub.enter(this.S); this.hud.style.display = 'flex'; this.audio.music.setMode('ludus', { fade: 1.2 }); this.audio.crowd(0); this.refresh(); this.tutorial && this.tutorial.maybeStart(); /* ONBOARDING */ }
     else if (name === 'fight') { this.post.setScene(this.fightView.scene); this.hud.style.display = 'none'; }
   }
 
@@ -143,7 +144,7 @@ export class Game {
     const mid = document.createElement('div'); mid.style.cssText = 'flex:1;pointer-events:none';
     const bottom = document.createElement('div'); bottom.style.cssText = 'display:flex;flex-direction:column;align-items:center;gap:10px';
     this.advBtn = U.button({ label: 'Advance week', variant: 'gold', icon: 'arena', onClick: () => this.advance() });
-    this.nav = U.nav([{ icon: 'ludus', label: 'Ludus' }, { icon: 'roster', label: 'Roster' }, { icon: 'arena', label: 'Arena' }, { icon: 'market', label: 'Market' }, { icon: 'scroll', label: 'More' }], (i) => this.onNav(i), 0);
+    this.nav = U.nav([{ icon: 'ludus', label: 'Ludus' }, { icon: 'roster', label: 'Roster' }, { icon: 'arena', label: 'Arena' }, { icon: 'market', label: 'Market' }, { icon: 'scroll', label: 'More' }], (it, i) => this.onNav(i), 0) /* ONBOARDING fix: kit nav calls onSelect(item, index) */;
     bottom.append(this.advBtn, this.nav);
     this.hud.append(top, mid, bottom);
   }
@@ -173,6 +174,8 @@ export class Game {
   // ---------------------------------------------------------------- dialogs and screens
   /** Promise modal. opts: {title, body: Node|string, actions: [{label, value, variant, icon, sub, keepOpen}], dismiss: value on close} */
   ask(opts) {
+    // ONBOARDING: retirement report gets the eulogy ceremony (profile.js owns the dialog, ceremonies.js dresses it)
+    if (opts && opts.title === 'Hall of Legends' && !opts._cer && this.S && this.S.legends && this.S.legends.length) { const lg = this.S.legends[this.S.legends.length - 1]; const r = Cer.eulogy(this.ctx, { kind: 'retire', legend: lg, body: opts.body, actions: opts.actions, dismiss: opts.dismiss }); if (r) return r; }
     return new Promise((resolve) => {
       let done = false; const fin = (v) => { if (done) return; done = true; m.close(); resolve(v); };
       const acts = (opts.actions || []).map((a) => U.button({ label: a.label, variant: a.variant || 'gold', icon: a.icon, sub: a.sub, block: true, onClick: () => { this.audio.sfx('uiTap'); fin(a.value); } }));

@@ -1,0 +1,164 @@
+// First-run guided tutorial: spotlight ring around the real DOM element + a kit-style tooltip card.
+// State lives inside the save object (S.flags.tut), never in a new localStorage key. Skippable at every step, honours ?notut=1.
+// The current step is DERIVED from state every tick (first step whose met() is false), so playing out of order never breaks it.
+//   const tut = createTutorial(game);  tut.maybeStart();  tut.skip();  tut.restart();  tut.state()
+// No em dashes. Styles: .lx-tut* in css/ui.css.
+import * as U from './ui_kit.js';
+
+const h = U.h;
+const QS = new URLSearchParams(location.search);
+
+// ---------------------------------------------------------------- DOM probes (screens belong to other teams, so we look at the DOM)
+const live = (sel, root = document) => [...root.querySelectorAll(sel)].filter((e) => { const r = e.getBoundingClientRect(); return r.width > 4 && r.height > 4; });
+const scrims = () => [...document.querySelectorAll('.lx-scrim:not(.lx-out)')];
+const titleOf = (s) => ((s && s.querySelector('.lx-panel-head .lx-title')) || { textContent: '' }).textContent.trim();
+const topScrim = () => { const a = scrims(); return a[a.length - 1] || null; };
+const sheetWith = (name) => scrims().find((s) => titleOf(s) === name) || null;
+const byText = (root, sel, re) => live(sel, root).find((e) => re.test(e.textContent));
+
+export function createTutorial(game) {
+  let root, card, ring, dim, raf = 0, curId = null, running = false, lastTarget = null, wasHidden = true, shownId = null, shownAt = 0;
+
+  const S = () => game.S;
+  const T = () => { const s = S(); if (!s) return null; s.flags = s.flags || {}; return s.flags.tut && typeof s.flags.tut === 'object' ? s.flags.tut : null; };
+  const mark = (k) => { const t = T(); if (t && !t[k]) { t[k] = 1; game.save(); } };
+  const resultsOpen = () => /^(Victory|Defeat|Duel won)$/.test(titleOf(topScrim()));
+  const fightOver = () => resultsOpen() || (game.scene === 'fight' && game.fightView && game.fightView.phase === 'outro');
+
+  // ---------------------------------------------------------------- steps
+  // target(): Element | null. met(t): step finished. when(): optional gate (return false to stay silent). pos: card placement hint.
+  const STEPS = [
+    { id: 'welcome', title: 'Welcome, Lanista', text: 'You run a gladiator school. Hire a fighter, train him each week, then send him to the arena for gold and glory. I will show you the way.', manual: 'Show me', block: true,
+      met: (t) => !!t.welcome, when: () => game.scene === 'hub' },
+    { id: 'hire', title: 'Hire your first fighter', text: 'Three citizens wait at the gate. Compare their stats and talent pips, then tap Hire on the one you like.',
+      target: () => { const s = scrims().find((x) => /fighter|volunteers/i.test(titleOf(x))); return s ? byText(s, '.rc-hire, .lx-btn-gold', /Hire/) : null; },
+      met: (t) => S().glads.length > 0, when: () => game.scene === 'hub', rescue: () => { if (!S().glads.length && !scrims().length) game.open('recruit', { first: true }); } },
+    { id: 'roster', title: 'Open the Roster', text: 'Your fighters live here. Tap Roster to see their health, energy and what they will do this week.', hubOnly: true,
+      target: () => navItem(1), met: (t) => !!t.rosterOpened || !!t.trained },
+    { id: 'train', title: 'Plan their week', text: 'Each week a fighter follows a plan. Tap a stat to train it, or let Auto-plan choose for you. Tired fighters should rest.', manual: 'Got it', pos: 'below',
+      target: () => { const s = sheetWith('Roster'); if (!s) return null; return byText(s, '.lx-btn', /Auto-plan/) || live('.lm-act-w', s)[0] || null; },
+      met: (t) => !!t.trained || (!!t.rosterOpened && !sheetWith('Roster')), when: () => !!sheetWith('Roster') },
+    { id: 'arena', title: 'Visit the Arena', text: 'Fights pay gold, fame and loot. Open the Arena to see the events on offer this week.', hubOnly: true,
+      target: () => navItem(2), met: (t) => !!t.arenaOpened || entries() > 0 },
+    { id: 'enter', title: 'Enter a duel', text: 'Pick an event you can win and tap Enter, then choose your fighter. A duel is a safe first test: the crowd decides his fate.', pos: 'above',
+      target: () => { const s = sheetWith('The Arena'); if (!s || topScrim() !== s) return null; return byText(s, '.lx-btn-gold', /Enter/) || null; },
+      met: (t) => entries() > 0 || (!!t.arenaOpened && !scrims().length), when: () => !!sheetWith('The Arena') },
+    { id: 'advance', title: 'Advance the week', text: 'Time to move on. Fighters train, then every fight you entered begins. Tap Advance week.', hubOnly: true,
+      target: () => game.advBtn, met: (t) => !!t.advanced },
+    { id: 'fight', title: 'Read the fight', text: 'The crowd rewards a bold hand. When Crowd\'s Favor glows, tap it for a surge of strength. Tap a ready ultimate ring, or leave Auto ult on.', manual: 'Got it', pos: 'top', passive: true,
+      target: () => { const f = live('.lx-btn-gold.lx-pulse', document.querySelector('.fv-hud') || document)[0]; return f || live('.lx-ult')[0] || null; },
+      met: (t) => !!t.fightSeen || fightOver() || (!!t.advanced && !game.busy), when: () => game.scene === 'fight' && game.fightView && game.fightView.phase === 'fight' },
+    { id: 'results', title: 'The spoils', text: 'Gold, fame, experience and sometimes loot. Winning a duel lets you show mercy for fame, or showboat for gold. Hurt fighters need rest.', manual: 'Got it', pos: 'top', passive: true,
+      met: (t) => !!t.resSeen || (!!t.advanced && !game.busy), when: () => resultsOpen() },
+    { id: 'week', title: 'The loop is yours', text: 'That is the whole cycle: plan, enter, advance. Spend gold on recruits and buildings, and chase the trophies. Tap Advance week whenever you are ready. Ave!', manual: 'Begin', hubOnly: true, last: true,
+      target: () => game.advBtn, met: (t) => !!t.done2, when: () => !game.busy && game.scene === 'hub' },
+  ];
+  function navItem(i) { const n = game.nav; return n ? n.children[i] : null; }
+  function entries() { const e = S() && S().entries; return e ? Object.keys(e).length : 0; }
+
+  // ---------------------------------------------------------------- overlay
+  function build() {
+    root = h('div', 'lx-tut'); root.setAttribute('role', 'dialog'); root.setAttribute('aria-label', 'Tutorial');
+    dim = h('div', 'lx-tut-dim'); ring = h('div', 'lx-tut-ring'); ring.append(h('i'));
+    card = U.panel({ variant: 'parchment', cls: 'lx-tut-card' });
+    root.append(dim, ring, card); document.body.append(root); // body, not #ui: modals live on body and #ui is a lower stacking context
+  }
+
+  function showStep(st, t) {
+    const idx = STEPS.indexOf(st);
+    if (curId !== st.id) { curId = st.id; lastTarget = null; fillCard(st, idx); }
+    st.rescue && st.rescue();
+    let tg = st.target ? st.target() : null;
+    // hub-level steps must not point at things hidden under a modal or a running week
+    const covered = st.hubOnly && (scrims().length > 0 || game.busy || game.scene !== 'hub');
+    if (covered || (st.target && !tg && !st.passive && st.id !== 'hire')) return hide();
+    if (st.when && !st.when()) return hide();
+    if (!root.isConnected) document.body.append(root);
+    if (shownId !== st.id) { shownId = st.id; shownAt = performance.now(); card.classList.remove('pop'); void card.offsetWidth; card.classList.add('pop'); try { game.audio.sfx('uiTap', { gain: 0.5 }); } catch (e) { /* locked */ } }
+    if (st.passive && performance.now() - shownAt > 16000) return advance(st);
+    root.classList.add('on'); root.classList.toggle('block', !!st.block && !tg); wasHidden = false;
+    if (tg !== lastTarget) { lastTarget = tg; if (tg && tg.scrollIntoView) { try { tg.scrollIntoView({ block: 'nearest', inline: 'nearest' }); } catch (e) { /* ignore */ } } }
+    placeRing(tg); placeCard(st, tg);
+  }
+  function hide() { if (!wasHidden) { root.classList.remove('on'); wasHidden = true; } }
+
+  function fillCard(st, idx) {
+    const body = card.body; body.replaceChildren(); card.querySelector('.lx-tut-caret') && card.querySelector('.lx-tut-caret').remove();
+    const dots = h('div', 'lx-tut-dots', STEPS.map((s, i) => h('i', i === idx ? 'on' : i < idx ? 'done' : '')));
+    const skip = U.button({ label: 'Skip tutorial', variant: 'ghost', onClick: () => finish(true) }); skip.classList.add('lx-tut-skip');
+    const acts = h('div', 'lx-tut-acts', [skip]);
+    if (st.manual) acts.append(U.button({ label: st.manual, variant: 'gold', icon: st.last ? 'star' : 'check', onClick: () => advance(st) }));
+    body.append(h('div', 'lx-tut-top', [dots, h('span', 'lx-tut-n lx-num', `${idx + 1}/${STEPS.length}`)]), h('div', 'lx-tut-title lx-engrave', st.title), h('div', 'lx-tut-text', st.text), acts);
+    card.append(h('i', 'lx-tut-caret'));
+    card.dataset.step = st.id;
+  }
+  function advance(st) {
+    const t = T(); if (!t) return;
+    const flag = { welcome: 'welcome', train: 'trained', fight: 'fightSeen', results: 'resSeen', week: 'done2' }[st.id]; if (flag) t[flag] = 1;
+    game.save(); curId = null; shownId = null;
+  }
+
+  function placeRing(tg) {
+    if (!tg) { ring.style.opacity = 0; ring.style.transform = 'translate(-9999px,0)'; return; }
+    const r = tg.getBoundingClientRect(), pad = 7;
+    const br = parseFloat(getComputedStyle(tg).borderTopLeftRadius) || 8, s = ring.style;
+    s.opacity = 1; s.width = `${r.width + pad * 2}px`; s.height = `${r.height + pad * 2}px`; s.transform = `translate(${(r.left - pad).toFixed(1)}px,${(r.top - pad).toFixed(1)}px)`; s.borderRadius = `${Math.min(r.height / 2 + pad, br + pad)}px`;
+  }
+  function placeCard(st, tg) {
+    const W = innerWidth, Hh = innerHeight, cw = Math.min(W - 24, 360), ch = card.offsetHeight || 190, gap = 16;
+    card.style.width = cw + 'px';
+    let x, y, caretX = null, caretUp = false;
+    if (!tg || st.pos === 'top') { x = st.pos === 'top' && W > 760 ? 16 : (W - cw) / 2; y = st.pos === 'top' ? 64 + (parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--lx-sat')) || 0) : (Hh - ch) / 2; }
+    if (tg) {
+      const r = tg.getBoundingClientRect(), cx = r.left + r.width / 2;
+      if (st.pos !== 'top') x = Math.max(12, Math.min(W - cw - 12, cx - cw / 2));
+      const spaceBelow = Hh - r.bottom, spaceAbove = r.top, below = st.pos === 'below' ? spaceBelow > ch + gap : st.pos === 'above' ? !(spaceAbove > ch + gap) : spaceBelow > spaceAbove;
+      if (st.pos !== 'top') { y = below ? r.bottom + gap + 4 : r.top - ch - gap - 4; caretUp = below; caretX = Math.max(22, Math.min(cw - 22, cx - x)); }
+      y = Math.max(8, Math.min(Hh - ch - 8, y));
+    }
+    card.style.transform = `translate(${x.toFixed(0)}px,${y.toFixed(0)}px)`;
+    const c = card.querySelector('.lx-tut-caret');
+    if (c) { c.style.display = caretX == null ? 'none' : ''; if (caretX != null) { c.style.left = caretX + 'px'; c.classList.toggle('up', caretUp); } }
+  }
+
+  // ---------------------------------------------------------------- engine
+  function tick() {
+    raf = requestAnimationFrame(tick);
+    const t = T(); if (!t || t.done) return stop();
+    // passive observers: record what the player has done
+    if (sheetWith('Roster')) { if (!t.rosterOpened) mark('rosterOpened'); }
+    if (sheetWith('The Arena')) { if (!t.arenaOpened) mark('arenaOpened'); }
+    if (game.busy && !t.advanced) mark('advanced');
+    if (game.scene === 'fight' && t.advanced && !t.fightSeen && curId === 'fight' && game.fightView && game.fightView.phase === 'outro') mark('fightSeen');
+    const st = STEPS.find((s) => !s.met(t));
+    if (!st) return finish(false);
+    // a step ahead of the player's state: pending steps (fight/results) wait silently
+    showStep(st, t);
+  }
+  function start() { if (running) return; running = true; if (!root) build(); raf = requestAnimationFrame(tick); }
+  function stop() { running = false; cancelAnimationFrame(raf); if (root) { root.classList.remove('on'); setTimeout(() => root && !running && root.remove(), 400); } curId = null; }
+  function finish(skipped) {
+    const t = T(); if (t) { t.done = 1; t.skipped = !!skipped; game.save(); }
+    stop();
+    if (skipped) U.toast('Tutorial skipped. You can replay it from More, Help.', { kind: 'info', ico: 'scroll' });
+    else { try { game.audio.sfx('levelUp'); } catch (e) { /* locked */ } U.toast('Tutorial complete. Ave, Lanista!', { kind: 'good', ico: 'star' }); }
+  }
+
+  const api = {
+    get active() { return running; },
+    state: () => (T() ? Object.assign({}, T(), { step: curId }) : null),
+    /** call whenever the hub scene is entered: starts a fresh tutorial only on a brand new ludus */
+    maybeStart() {
+      if (QS.get('notut') || running) return; const s = S(); if (!s) return; s.flags = s.flags || {};
+      if (s.flags.tut === undefined) {
+        const fresh = s.week <= 1 && !(s.stats && s.stats.fights) && !s.flags.tutor && !(s.legends && s.legends.length);
+        s.flags.tut = fresh ? { v: 1 } : { v: 1, done: 1, auto: 1 }; game.save();
+      }
+      if (T() && !T().done) start();
+    },
+    skip() { if (running) finish(true); },
+    /** replay from the start (e.g. a button in More, Help) */
+    restart() { const s = S(); if (!s) return; s.flags = s.flags || {}; s.flags.tut = { v: 1 }; game.save(); running = false; curId = null; start(); },
+  };
+  return api;
+}

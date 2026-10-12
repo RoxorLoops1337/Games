@@ -41,7 +41,7 @@ export function terrainHeight(x, z) {
 }
 const pathX = (z) => 8 * Math.sin(z * 0.022) + 4 * Math.sin(z * 0.053 + 1.0);   // winding road from the front gate down to the city
 
-export function createLudus({ density = 1, seed = 5 } = {}) {
+export function createLudus({ density = 1, seed = 5, terrainSeg = 150, farShadows = true } = {}) {
   let s = seed; const rnd = () => (s = (s * 16807) % 2147483647) / 2147483647;
   const group = new THREE.Group(); group.name = 'ludus';
   const U = { uTime: { value: 0 }, uWind: { value: 1 }, uNight: { value: 0 } };
@@ -53,7 +53,7 @@ export function createLudus({ density = 1, seed = 5 } = {}) {
   const trees = {}, cityObjs = {};
 
   // ---------------- terrain ----------------
-  const TS = 150, EXT = 460;
+  const TS = terrainSeg, EXT = 460;
   {
     const pos = [], col = [], uv = [], idx = [];
     const grass = lin(0x8b8a46), grass2 = lin(0x5f7a38), dry = lin(0xb69b5c), rock = lin(0x9c8c76), earth = lin(0x9a7a50), road = lin(0xcbaa78), olive = lin(0x6d7a3e), field1 = lin(0x9aa24a), field2 = lin(0xc2a45a), plain = lin(0x8d8f4c);
@@ -262,7 +262,7 @@ export function createLudus({ density = 1, seed = 5 } = {}) {
     mesh.castShadow = shadow; mesh.receiveShadow = false; mesh.frustumCulled = false; group.add(mesh); treeMeshes.push([mesh, arr.length]); return mesh;
   };
   mkTrees('cypress', cypressGeo, treePlace.cypress, 9, 0.28, true);
-  mkTrees('olive', oliveGeo, treePlace.olive, 4.2, 0.12, true);
+  mkTrees('olive', oliveGeo, treePlace.olive, 4.2, 0.12, farShadows);   // far groves: shadow pass re-draws every instance, ~58k tris for little visible gain
   mkTrees('pine', pineGeo, treePlace.pine, 9, 0.18, true);
   // scrub bushes: cheap jittered blobs scattered over the hillside for texture
   {

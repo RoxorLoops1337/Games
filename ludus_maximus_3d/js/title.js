@@ -11,6 +11,18 @@ const ease = (t) => t * t * (3 - 2 * t);
 const PERIOD = 56; // seconds for one full out-and-back of the dolly
 const HOUR = 17.7; // golden hour
 
+/** what the title scene shows behind the logo: the player's own ludus when a save exists, else a handsome showcase school */
+export function titleState() {
+  const LM = globalThis.LM; let S = null;
+  try { S = LM.load(); } catch (e) { S = null; }
+  if (S) return S;
+  S = LM.newGame({ name: 'Ludus Aurelia', color: 1 }); S.rows = 3; S.week = 5;
+  const lay = ['forge', 'infirmary', 'palaestra', 'stands', 'bath', 'barracks', 'kitchen', 'market', 'shrine', 'sparring', 'scout', 'hall'], lv = [3, 2, 3, 2, 2, 3, 2, 2, 3, 2, 1, 2];
+  S.plots = new Array(16).fill(null); lay.forEach((b, i) => { S.plots[i] = { b, l: lv[i] }; });
+  ['murmillo', 'thraex', 'retiarius', 'hoplomachus', 'dimachaerus'].forEach((st, i) => { try { S.glads.push(LM.makeGlad({ id: S.nextId++, style: st, lvl: 3 + i })); } catch (e) { /* ignore */ } });
+  return S;
+}
+
 export function createTitle(game) {
   const { hub, camera, audio } = game;
   let root, resolve, active = false, t0 = 0, fov0 = 42, clock = 0;
@@ -68,7 +80,7 @@ export function createTitle(game) {
     const o = hub.orbit; if (!o) return;
     const u = ease(0.5 - 0.5 * Math.cos((clock / PERIOD) * Math.PI * 2)), k = ease(clamp(clock / 2.5)); // k: gentle start
     const asp = camera.aspect, port = asp < 0.95, wide = clamp((asp - 0.45) / 1.4);
-    const dist = lerp(port ? 84 : 66, port ? 62 : 46, u), tz = lerp(port ? 4 : 8, -4, u);
+    const dist = lerp(port ? 88 : 68, port ? 68 : 52, u), tz = lerp(port ? 4 : 8, -4, u);
     o.anim = null; o.follow = null; o.vAz = o.vPitch = o.vZoom = 0; o.vPan.set(0, 0, 0); o.idleT = 0;
     o.az = Math.PI + lerp(1.05, 0.38, u) * (port ? 0.8 : 1) + (1 - k) * 0.25;
     o.pitch = lerp(0.3, 0.42, u) + (port ? 0.1 : 0) - (1 - k) * 0.06;

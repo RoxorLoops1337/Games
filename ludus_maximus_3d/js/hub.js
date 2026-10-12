@@ -160,7 +160,7 @@ export function createHub({ renderer, camera, audio, tier = 'high', post = null 
   // ---- sky, light, environment
   const sky = createSky(); scene.add(sky.mesh);
   const rig = createLightRig(scene, { shadowSize: T().shadow, shadowRadius: 36, shadowCenter: new V3(0, 1, 1), near: 1, far: 260 });
-  const env = createLudus({ density: Math.max(0.5, T().crowd * 0.8) }); group.add(env.group);
+  const env = createLudus({ density: Math.max(0.5, T().crowd * 0.8), terrainSeg: tier === 'low' ? 112 : 150, farShadows: tier === 'high' }); group.add(env.group);
   { // strip the env's own walls/portico/pool/torches: the hub builds its own lower wall and terraces
     const keep = new Set(['terrain', 'courtyard_floor', 'dust', 'birds', 'blobshadows']);
     const bb = new THREE.Box3(), kill = [];

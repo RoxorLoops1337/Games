@@ -121,7 +121,7 @@ function makeSailTexture() {
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; return t;
 }
 
-export function createArena({ crowd = 3700, density = 1, decalRes = 2048, seed = 7 } = {}) {
+export function createArena({ crowd = 3700, density = 1, decalRes = 2048, seed = 7, lite = false } = {}) {
   let s = seed; const rnd = () => (s = (s * 16807) % 2147483647) / 2147483647;
   const group = new THREE.Group(); group.name = 'arena';
   const U = { uTime: { value: 0 }, uHype: { value: 0 }, uWave: { value: 0 }, uWaveSpeed: { value: 1.5 }, uWaveK: { value: 2 }, uAxisR: { value: SA / SB }, uWind: { value: 1 } };
@@ -347,13 +347,13 @@ export function createArena({ crowd = 3700, density = 1, decalRes = 2048, seed =
   const torchMesh = new THREE.InstancedMesh(torchGeo, bronzeMat, tTh.length);
   const flamePts = [];
   tTh.forEach((th, i) => { const m = ringMatrix(0, th, 1.55, { inward: true, dOff: -0.25 }); torchMesh.setMatrixAt(i, m); const p = new THREE.Vector3().setFromMatrixPosition(m); flamePts.push({ x: p.x, y: p.y + 1.05, z: p.z, s: 0.8 }); });
-  torchMesh.castShadow = true; group.add(torchMesh);
+  torchMesh.castShadow = !lite; group.add(torchMesh);
   // brazier tripods flanking gates
   const brGeo = mergeGeos([(() => { const c = new THREE.CylinderGeometry(0.42, 0.2, 0.34, 10); c.translate(0, 1.15, 0); return c; })(), ...[0, 1, 2].map((k) => { const c = new THREE.CylinderGeometry(0.03, 0.04, 1.2, 5); c.translate(0.22, 0.6, 0); c.rotateY((k / 3) * TAU); return c; })]);
   const brPos = [[SA - 2.6, 2.7], [SA - 2.6, -2.7], [-SA + 2.6, 2.7], [-SA + 2.6, -2.7]];
   const brMesh = new THREE.InstancedMesh(brGeo, bronzeMat, 4);
   brPos.forEach(([x, z], i) => { brMesh.setMatrixAt(i, new THREE.Matrix4().makeTranslation(x, 0, z)); flamePts.push({ x, y: 1.3, z, s: 1.7 }); });
-  brMesh.castShadow = true; group.add(brMesh);
+  brMesh.castShadow = !lite; group.add(brMesh);
   const flames = createFlames(flamePts, { glowScale: 3.4 }); group.add(flames.group);
 
   // ---------------- banners (vertex sway) + masts ----------------
@@ -382,7 +382,7 @@ export function createArena({ crowd = 3700, density = 1, decalRes = 2048, seed =
     const j = bTh.length + i; varAttr[j] = (i + 1) % 3;
     const m = ringMatrix(FD - 0.5, th, FH + 6.3, { inward: false, scale: 0.55, yaw: Math.PI / 2, dOff: 0.0 }); banMesh.setMatrixAt(j, m);
   });
-  mastMesh.castShadow = true; group.add(mastMesh, banMesh);
+  mastMesh.castShadow = !lite; group.add(mastMesh, banMesh);
 
   // ---------------- velarium: translucent striped sails ----------------
   const SAILS = 30, SEG = 6, RAD = 7, vN = SAILS * SEG, dInV = 5.5, dOutV = FD - 0.7;
@@ -414,10 +414,11 @@ export function createArena({ crowd = 3700, density = 1, decalRes = 2048, seed =
   // ---------------- crowd: ONE InstancedMesh, animated in the vertex shader ----------------
   const parts = [];
   const addPart = (g, id) => { g = g.toNonIndexed(); const n = g.attributes.position.count; g.setAttribute('aPart', new THREE.BufferAttribute(new Float32Array(n).fill(id), 1)); parts.push(g); };
-  { const g = new THREE.CylinderGeometry(0.2, 0.15, 0.62, 6, 1); g.translate(0, 0.39, 0); addPart(g, 0); }
-  { const g = new THREE.IcosahedronGeometry(0.135, 0); g.translate(0, 0.88, 0.01); addPart(g, 1); }
-  { const g = new THREE.CylinderGeometry(0.04, 0.032, 0.34, 4, 1, true); g.translate(-0.25, 0.51, 0); addPart(g, 2); }
-  { const g = new THREE.CylinderGeometry(0.04, 0.032, 0.34, 4, 1, true); g.translate(0.25, 0.51, 0); addPart(g, 3); }
+  // lite (low tier): 40 tris per spectator instead of 60
+  { const g = new THREE.CylinderGeometry(0.2, 0.15, 0.62, lite ? 5 : 6, 1); g.translate(0, 0.39, 0); addPart(g, 0); }
+  { const g = lite ? new THREE.OctahedronGeometry(0.14, 0) : new THREE.IcosahedronGeometry(0.135, 0); g.translate(0, 0.88, 0.01); addPart(g, 1); }
+  { const g = new THREE.CylinderGeometry(0.04, 0.032, 0.34, lite ? 3 : 4, 1, true); g.translate(-0.25, 0.51, 0); addPart(g, 2); }
+  { const g = new THREE.CylinderGeometry(0.04, 0.032, 0.34, lite ? 3 : 4, 1, true); g.translate(0.25, 0.51, 0); addPart(g, 3); }
   const crowdGeo = mergeGeos(parts.map((g) => { if (!g.attributes.uv) g.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(g.attributes.position.count * 2), 2)); return g; }));
   // seats
   const seats = [];

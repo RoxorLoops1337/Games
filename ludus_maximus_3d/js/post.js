@@ -14,9 +14,50 @@ export const TIERS = {
   medium: { dprCap: 1.5, msaa: 0, bloom: 0.8, bloomScale: 0.35, shadow: 1024, crowd: 0.8, grain: 1, ca: 1, dust: 0.6 },
   low:    { dprCap: 1.0, msaa: 0, bloom: 0.0, bloomScale: 0.25, shadow: 1024, crowd: 0.55, grain: 0, ca: 0, dust: 0.3 },
 };
-export function detectTier() {
-  const mobile = /Android|iPhone|iPad|Mobi/i.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && innerWidth < 1100);
-  return mobile ? 'medium' : 'high';
+const TIER_ORDER = ['low', 'medium', 'high'];
+const TIER_KEY = 'ludus3d_tier_cap';
+/** Highest tier a previous session on this device had to fall back to (written by the governor). null when unknown. */
+export function savedTierCap() { try { const [v, t] = String(localStorage.getItem(TIER_KEY) || '').split(':'); return TIERS[v] && Date.now() - (+t || 0) < 14 * 864e5 ? v : null; } catch (e) { return null; } }
+export function saveTierCap(name) { try { if (TIERS[name]) localStorage.setItem(TIER_KEY, name + ':' + Date.now()); } catch (e) { /* storage blocked */ } }
+/**
+ * Pick a tier from the device when no ?tier= is given. Phones/tablets (coarse pointer or touch UA):
+ *   low  : <= 4 GB RAM or <= 4 cores, or unknown strength with a small screen;
+ *   medium : >= 6 GB (or iOS, which hides deviceMemory) AND >= 6 cores.
+ * Desktops: high, medium with <= 2 cores or <= 2 GB. (`env.software` forces low but main.js leaves it unset so automation keeps high.)
+ * A tier the governor demoted to on this device earlier acts as a cap.
+ */
+export function detectTier(env = {}) {
+  const nav = env.navigator || (typeof navigator !== 'undefined' ? navigator : {});
+  const ua = nav.userAgent || '', cores = env.cores ?? nav.hardwareConcurrency ?? 0, mem = env.mem ?? nav.deviceMemory ?? 0;
+  const coarse = env.coarse ?? (typeof matchMedia !== 'undefined' && matchMedia('(pointer: coarse)').matches);
+  const w = env.width ?? (typeof innerWidth !== 'undefined' ? innerWidth : 1280);
+  const mobile = /Android|iPhone|iPad|iPod|Mobi/i.test(ua) || (coarse && (w < 1100 || (nav.maxTouchPoints || 0) > 1)) || ((nav.maxTouchPoints || 0) > 1 && /Macintosh/.test(ua) && w < 1100);
+  const ios = /iPhone|iPad|iPod/i.test(ua) || (/Macintosh/.test(ua) && (nav.maxTouchPoints || 0) > 1);
+  let t;
+  if (mobile) {
+    const strong = (ios || mem >= 6) && (cores >= 6 || !cores);
+    t = (mem && mem <= 4) || (cores && cores <= 4) ? 'low' : strong ? 'medium' : 'low';
+  } else {
+    t = (cores && cores <= 2) || (mem && mem <= 2) ? 'medium' : 'high';   // desktops stay high: the dynamic-res governor handles the rest
+    if (env.software) t = 'low';
+  }
+  const cap = env.cap === undefined ? savedTierCap() : env.cap;
+  if (cap && TIER_ORDER.indexOf(cap) < TIER_ORDER.indexOf(t)) t = cap;
+  return t;
+}
+/** True for a software rasteriser (SwiftShader, llvmpipe): no use pretending it is a GPU. */
+export function isSoftwareGL(renderer) {
+  try { const gl = renderer.getContext(), ext = gl.getExtension('WEBGL_debug_renderer_info'); const r = ext ? String(gl.getParameter(ext.UNMASKED_RENDERER_WEBGL)) : ''; return /swiftshader|llvmpipe|software/i.test(r); } catch (e) { return false; }
+}
+/**
+ * Shadow-pass cost trim for gladiator rigs: every caster is one extra draw call per mesh, and a rig has ~11 tiny meshes.
+ * Eyes and cloth flaps never cast; medium also drops hair/trim/plume, low also drops steel (weapon blades) and nets.
+ */
+const NO_CAST = { high: /^(eye|flap)$/, medium: /^(eye|flap|hair|trim|plume)$/, low: /^(eye|flap|hair|trim|plume|steel|net)$/ };
+export function trimShadowCasters(root, tier = 'high') {
+  const re = NO_CAST[tier] || NO_CAST.high; let n = 0;
+  root.traverse((o) => { if (o.isMesh && o.castShadow && re.test(o.name || '')) { o.castShadow = false; n++; } });
+  return n;
 }
 
 export const GradeShader = {
@@ -108,16 +149,19 @@ export function createPost(renderer, scene, camera, { tier = detectTier() } = {}
       return pr;
     },
     /** Short chromatic aberration punch on heavy hits. Decays in render(). */
-    pulseCA(a = 0.012) { api._caPulse = a; },
-    zoomPunch(a = 0.05, cx = 0.5, cy = 0.5) { api._zoomPulse = a; u.uZoomCenter.value.set(cx, cy); },
+    pulseCA(a = 0.012) { if (!api.reducedMotion) api._caPulse = a; },
+    zoomPunch(a = 0.05, cx = 0.5, cy = 0.5) { if (api.reducedMotion) return; api._zoomPulse = a; u.uZoomCenter.value.set(cx, cy); },
+    /** prefers-reduced-motion: no CA pulse, no zoom blur, no heat-haze wobble, no film-grain flicker */
+    reducedMotion: false,
     render(dt, t) {
       u.uTime.value = t;
       api._caPulse = (api._caPulse || 0) * Math.exp(-dt * 9); api._zoomPulse = (api._zoomPulse || 0) * Math.exp(-dt * 7);
       u.uCA.value = (api._ca === 0 ? 0 : api._caPulse + 0.0008 * (api._ca === 0 ? 0 : 1)); // 0.0008 = permanent whisper of fringing
       u.uZoom.value = api._zoomPulse > 0.002 ? api._zoomPulse : 0;
+      if (api.reducedMotion) { u.uCA.value = 0; u.uZoom.value = 0; u.uHeat.value = 0; }
       composer.render(dt);
     },
-    dispose() { composer.dispose(); rt.dispose(); },
+    dispose() { bloom.dispose && bloom.dispose(); composer.dispose(); rt.dispose(); },
   };
   api._ca = T.ca;
   bloom.enabled = T.bloom > 0; bloom.strength = api.bloomBase.strength * T.bloom;
@@ -127,19 +171,32 @@ export function createPost(renderer, scene, camera, { tier = detectTier() } = {}
 
 /**
  * Dynamic resolution scaler. Call tick(frameMs) every frame. Steps scale in 0.1 increments between min..1.
- * Drops fast (2 slow frames), recovers slowly (120 fast frames). Also reports when to demote the tier.
+ * Drops fast (20 slow frames), then demotes the tier after 150 more slow frames (2.5 s) at the floor.
+ * Recovery: a 60 Hz display never produces frames under 16.7 ms, so "fast" is judged against the best frame time
+ * seen recently (vsync) instead of an absolute 14 ms that could never be met. A recovery that fails (drop again within
+ * 600 frames) doubles the wait before the next attempt (240 -> 480 -> ... 3840 frames), so a borderline device stops oscillating.
+ * reset() ignores the next `warm` frames (scene switch, shader compile, tab resume) so one-off hitches never cost resolution.
  */
-export function createDynamicRes(post, { target = 1000 / 55, min = 0.55, onTierDemote } = {}) {
-  let ema = target, slow = 0, fast = 0, cool = 0;
-  return {
+export function createDynamicRes(post, { target = 1000 / 55, min = 0.55, warm = 45, onTierDemote } = {}) {
+  let ema = target, slow = 0, fast = 0, cool = 0, skip = warm, best = 1000, sinceUp = 1e9, wait = 240, bestAge = 0;
+  const api = {
     get ms() { return ema; },
+    get recoverWait() { return wait; },
+    reset(frames = warm) { skip = frames; slow = fast = 0; ema = Math.min(ema, target); bestAge = 0; },
     tick(ms) {
-      ms = Math.min(ms, 100); ema += (ms - ema) * 0.1; if (cool > 0) { cool--; return post.scale; }
-      if (ema > target * 1.25) { slow++; fast = 0; } else if (ema < target * 0.8) { fast++; slow = 0; } else { slow = fast = 0; }
-      if (slow > 20 && post.scale > min) { post.scale = Math.max(min, +(post.scale - 0.1).toFixed(2)); post.setSize(post.cssW, post.cssH); slow = 0; cool = 20; }
-      else if (slow > 60 && post.scale <= min && onTierDemote) { onTierDemote(); slow = 0; cool = 90; }
-      else if (fast > 120 && post.scale < 1) { post.scale = Math.min(1, +(post.scale + 0.1).toFixed(2)); post.setSize(post.cssW, post.cssH); fast = 0; cool = 90; }
+      if (skip > 0) { skip--; return post.scale; }
+      ms = Math.min(ms, 100); ema += (ms - ema) * 0.1; sinceUp++;
+      if (ms >= 4) { if (ms < best) { best = ms; bestAge = 0; } else if (++bestAge > 600) { best = Math.min(best * 1.05, ema); bestAge = 0; } }   // vsync estimate drifts up when never re-hit
+      if (cool > 0) { cool--; return post.scale; }
+      const fastLim = Math.max(target * 0.8, best * 1.12);
+      if (ema > target * 1.25) { slow++; fast = 0; } else if (ema < fastLim) { fast++; slow = 0; } else { slow = fast = 0; }
+      if (slow > 20 && post.scale > min) {
+        if (sinceUp < 600) wait = Math.min(3840, wait * 2);
+        post.scale = Math.max(min, +(post.scale - 0.1).toFixed(2)); post.setSize(post.cssW, post.cssH); slow = 0; cool = 20;
+      } else if (slow > 150 && post.scale <= min && onTierDemote) { onTierDemote(); slow = 0; cool = 90; best = 1000; }
+      else if (fast > wait && post.scale < 1) { post.scale = Math.min(1, +(post.scale + 0.1).toFixed(2)); post.setSize(post.cssW, post.cssH); fast = 0; cool = 90; sinceUp = 0; }
       return post.scale;
     },
   };
+  return api;
 }
