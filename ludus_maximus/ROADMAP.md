@@ -67,7 +67,16 @@ Rules: small PRs, `npm run test:ludus` + `node build.js` + a headless-Chromium l
 Duo ultimates (pincer, wall, storm), season recap with confetti, fighter backstories with titles, crowd wave and fireworks, Horde Trial, difficulty setting (Relaxed / Standard / Brutal). Fixed a duoPair index bug found by the new tests.
 
 ## Next ideas
-- [ ] 33. Stable rivalries across seasons with a rival-of-the-year award
-- [ ] 34. Sponsor contracts with weekly goals and bonus purses
-- [ ] 35. Gladiator retirement ceremony and hall of fame wall
-- [ ] 36. Arena crowd chants synced to hype
+- [x] 33. Stable rivalries across seasons with a rival-of-the-year award
+- [x] 34. Sponsor contracts with weekly goals and bonus purses
+- [x] 35. Gladiator retirement ceremony and hall of fame wall
+- [x] 36. Arena crowd chants synced to hype
+
+## Round 7 shipped
+Rival of the Year award in the season recap, sponsor pledges (win 3 fights for a bonus), retirement pension and ceremony stamp in the Hall of Legends, crowd chants on roars.
+
+## Next ideas
+- [ ] 37. Weekly town crier headlines about your fighters
+- [ ] 38. Fighter nicknames earned from deeds
+- [ ] 39. Training montage animation after the weekly plan
+- [ ] 40. Rival ludus owners with a recurring storyline

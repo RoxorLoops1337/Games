@@ -485,7 +485,7 @@
       if (ev.kind === 'tourney' || ev.kind === 'grand') rep.fac.push(LM.facGain(S, 'sen', ev.kind === 'grand' ? 14 : 9));
       else rep.fac.push(LM.facGain(S, 'sen', 1));
     }
-    S.stats.fights++; if (wonAny) S.stats.wins++; else S.stats.losses++;
+    S.stats.fights++; if (wonAny) { S.stats.wins++; if (S.sponsor && S.sponsor.pledge) S.sponsor.pledge.got++; } else S.stats.losses++;
     if (wonAny) { LM.note(S, 'win', { styles: glads.map((g) => g.style), kind: ev.kind }); if (ev.kind === 'tourney' || ev.kind === 'grand') { S.stats.tourneys++; LM.note(S, 'tourney'); if (ev.kind === 'grand' && ev.league === 3) S.flags.imperial = true; } if (ev.kind === 'team') LM.note(S, 'team'); if (res.odds != null && res.odds < 0.4) LM.note(S, 'upset'); }
     return rep;
   };
@@ -546,7 +546,7 @@
     const up = LM.fest(S, S.week) === 'saturn' ? 0 : LM.upkeep(S); const paid = Math.min(S.gold, up); S.gold -= paid; rep.upkeep = paid;
     if (paid < up) { S.glads.forEach((g) => { g.mo = clamp(g.mo - 10, 0, 100); }); rep.notes.push('You could not pay the full upkeep. Morale dropped.'); }
     const inc = LM.weeklyIncome(S) + LM.facPerks(S).weekly + (S.sponsor && S.sponsor.weeks > 0 ? S.sponsor.gold : 0); S.gold += inc; rep.income = inc;
-    if (S.sponsor && S.sponsor.weeks > 0) { S.sponsor.weeks--; if (S.sponsor.weeks <= 0) { rep.notes.push('Your sponsor deal has ended.'); S.sponsor = null; } }
+    if (S.sponsor && S.sponsor.weeks > 0) { S.sponsor.weeks--; if (S.sponsor.weeks <= 0) { const pl = S.sponsor.pledge; if (pl && pl.got >= pl.n) { S.gold += pl.bonus; rep.income += pl.bonus; rep.notes.push(`Pledge kept! The merchant adds a ${pl.bonus} gold bonus.`); } else rep.notes.push(pl ? `Your sponsor deal has ended. Pledge missed (${pl.got}/${pl.n} wins).` : 'Your sponsor deal has ended.'); S.sponsor = null; } }
     const sh = LM.bfx(S, 'shrine'); if (sh.l) { const f = Math.round(sh.v * 60); S.fame += f; if (f) rep.notes.push(`The shrine drew ${f} fame.`); }
     Object.keys(S.entries).forEach((k) => { if (parseInt(k.split(':')[0], 10) <= S.week) delete S.entries[k]; });
     S.week++; S.stats.weeks++;
@@ -554,6 +554,7 @@
       S.season = Math.ceil(S.week / 12); rep.season = S.season; const sl = S.sl || { fame: 0, wins: 0, losses: 0, tour: 0 }; const mvp = S.glads.slice().sort((a, b) => (b.sw || 0) - (a.sw || 0))[0];
       rep.recap = { wins: S.stats.wins - sl.wins, losses: S.stats.losses - sl.losses, fame: S.fame - sl.fame, tour: S.stats.tourneys - sl.tour, mvp: mvp && (mvp.sw || 0) > 0 ? { name: mvp.name, w: mvp.sw, id: mvp.id } : null };
       S.sl = { fame: S.fame, wins: S.stats.wins, losses: S.stats.losses, tour: S.stats.tourneys }; S.glads.forEach((g) => { g.sw = 0; });
+      rep.recap.rival = LM.rivalOfYear(S);
     }
     S.market = null; S.recruits = null; LM.relTick(S); rep.story = LM.storyCheck(S);
     LM.fillContracts(S);
@@ -598,7 +599,7 @@
     for (let i = 0; i < gs.length; i++) for (let j = i + 1; j < gs.length; j++) {
       const a = gs[i], b = gs[j]; const k = bkey(a.id, b.id); const friends = LM.bond(S, a.id, b.id) >= 50;
       const add = ((a.style === b.style ? 3 : 0) + (a.act === b.act ? 2 : 0) + (a.fame > 0 && b.fame > 0 ? 1 : 0)) * (friends ? 0.4 : 1);
-      S.rivalry[k] = clamp((S.rivalry[k] || 0) + (add > 0 ? add : -1), 0, 100);
+      S.rivalry[k] = clamp((S.rivalry[k] || 0) + (add > 0 ? add : -1), 0, 100); if (add > 0) { S.rvy = S.rvy || {}; S.rvy[k] = (S.rvy[k] || 0) + add; }
       if (S.rivalry[k] >= 45 && !S.pendingRiv) S.pendingRiv = [a.id, b.id];
     }
   };
@@ -623,6 +624,15 @@
     const out = [];
     S.glads.forEach((g) => { const st = LM.storyDef(g); if (!st || g.story.done || LM.storyProg(g) < st.goal.n) return; g.story.done = true; g.st[st.rew.stat] += st.rew.v; g.title = st.rew.title; S.fame += st.rew.fame; out.push({ g, st }); });
     return out;
+  };
+
+  // ---------- rival of the year: the pair that clashed most this season ----------
+  LM.rivalOfYear = (S) => {
+    const rv = S.rvy || {}; S.rvy = {}; let best = null;
+    Object.keys(rv).forEach((k) => { const ids = k.split('-').map(Number); const a = S.glads.find((g) => g.id === ids[0]), b = S.glads.find((g) => g.id === ids[1]); if (a && b && rv[k] >= 12 && (!best || rv[k] > best.v)) best = { a, b, v: rv[k] }; });
+    if (!best) return null;
+    const fame = 40 + 10 * LM.maxLeague(S); S.fame += fame; [best.a, best.b].forEach((g) => { g.mo = clamp(g.mo + 12, 0, 100); }); LM.addBond(S, best.a.id, best.b.id, 10);
+    return { a: best.a.name, b: best.b.name, fame };
   };
 
   // ---------- horde trial: one fighter against escalating packs ----------
@@ -681,8 +691,9 @@
   LM.retire = (S, g) => {
     if (g.lvl < 8) return 'Needs level 8';
     const best = D.STATS.reduce((a, s) => (g.st[s] > g.st[a] ? s : a), 'str');
-    S.legends = S.legends || []; S.legends.push({ name: g.name, nick: g.nick, style: g.style, lvl: g.lvl, best, w: g.rec.w, l: g.rec.l, skin: g.skin, hair: g.hair, plume: g.plume, face: g.face });
-    LM.release(S, g); return '';
+    S.legends = S.legends || []; const pen = { gold: 40 + g.lvl * 15 + g.rec.w * 3, fame: 20 + g.rec.w * 2 }; S.gold += pen.gold; S.fame += pen.fame;
+    S.legends.push({ name: g.name, nick: g.nick, style: g.style, lvl: g.lvl, best, w: g.rec.w, l: g.rec.l, skin: g.skin, hair: g.hair, plume: g.plume, face: g.face, title: g.title || '', wk: S.week });
+    S.lastRetire = pen; LM.release(S, g); return '';
   };
 
   // ---------- contracts ----------
@@ -755,7 +766,7 @@
     },
     sponsor: {
       t: 'A wealthy merchant wants to sponsor one of your fighters for a month.',
-      c: [{ l: 'Accept the deal', run: (S) => { const g = rg(S); const gd = 25 + 15 * LM.maxLeague(S); S.sponsor = { weeks: 4, gold: gd, name: g.name }; return `${g.name} wears the merchant's colors: +${gd} gold per week for 4 weeks.`; } }, { l: 'Decline', run: () => 'The merchant tips his hat and leaves.' }],
+      c: [{ l: 'Accept the deal', run: (S) => { const g = rg(S); const gd = 25 + 15 * LM.maxLeague(S); S.sponsor = { weeks: 4, gold: gd, name: g.name, pledge: { n: 3, got: 0, bonus: gd * 4 } }; return `${g.name} wears the merchant's colors: +${gd} gold per week for 4 weeks. Pledge: win 3 fights in that time for a ${gd * 4} gold bonus.`; } }, { l: 'Decline', run: () => 'The merchant tips his hat and leaves.' }],
     },
     priest: {
       t: 'A traveling priest offers a blessing for the whole ludus.',

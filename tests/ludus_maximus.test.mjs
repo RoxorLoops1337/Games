@@ -295,5 +295,18 @@ ok(strongWins >= 17, `level 10 beats level 1 (${strongWins}/20)`);
   }
 }
 
+// round 7: rival of the year, sponsor pledge, retirement pension
+{
+  const S7 = LM.newGame({ name: 'R7' }); const a = LM.makeGlad({ id: S7.nextId++, style: 'thraex', lvl: 9 }), b = LM.makeGlad({ id: S7.nextId++, style: 'thraex', lvl: 9 }); S7.glads.push(a, b);
+  ok(LM.rivalOfYear(S7) === null, 'no rival of the year without clashes');
+  a.act = b.act = 'str'; for (let i = 0; i < 6; i++) { LM.relTick(S7); S7.pendingRiv = null; }
+  const f0 = S7.fame, ry = LM.rivalOfYear(S7); ok(ry && S7.fame > f0 && Object.keys(S7.rvy).length === 0, 'rival of the year rewards fame and resets');
+  S7.sponsor = { weeks: 1, gold: 50, name: 'x', pledge: { n: 2, got: 2, bonus: 200 } }; const g0 = S7.gold; const rp = LM.weekFinish(S7);
+  ok(S7.sponsor === null && S7.gold >= g0 + 200 && rp.notes.some((n) => /Pledge kept/.test(n)), 'a kept sponsor pledge pays the bonus');
+  S7.sponsor = { weeks: 1, gold: 50, name: 'x', pledge: { n: 3, got: 1, bonus: 200 } }; const rp2 = LM.weekFinish(S7); ok(rp2.notes.some((n) => /Pledge missed/.test(n)), 'a missed pledge pays nothing');
+  const gold1 = S7.gold; ok(LM.retire(S7, a) === '' && S7.gold > gold1 && S7.legends[0].wk === S7.week && S7.lastRetire.gold > 0, 'retiring pays a pension and stamps the legend');
+  ok(D.CHANTS.length >= 5, 'crowd has chants');
+}
+
 console.log(`ludus_maximus: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
