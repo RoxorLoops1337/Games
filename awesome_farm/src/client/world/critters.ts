@@ -6,6 +6,7 @@ import * as Phaser from 'phaser';
 import { ACTIVITY, spOf, STATUS_INFO, WORK_INFO } from '../../shared/data/creatures';
 import { PAL } from '../../shared/palette';
 import type { CritE, SimEvent } from '../../shared/sim/types';
+import { overlay3d } from './view3d-bridge';
 
 type Img = Phaser.GameObjects.Image;
 type Spr = Phaser.GameObjects.Sprite;
@@ -144,7 +145,8 @@ function drawBubble (scene: Phaser.Scene, v: CritViewLike, e: CritE, spr: Spr, p
     const act = !wst && (e.mode === 2 || e.mode === 1) && e.ac ? ACTIVITY[e.ac] : undefined;
     const icon = wst ? wst.icon : act?.icon;
     if (icon && !inPod && scene.textures.exists(icon)) {
-        if (!v.bub) { v.bub = scene.add.image(0, 0, 'bubble', 0); v.bubIcon = scene.add.image(0, 0, icon, 0).setScale(0.75); }
+        if (!v.bub) {   // (world overlays: the 3D view shows the bubble too)
+            v.bub = overlay3d(scene.add.image(0, 0, 'bubble', 0)); v.bubIcon = overlay3d(scene.add.image(0, 0, icon, 0).setScale(0.75)); }
         const hop = Math.abs(Math.sin(t * 3 + e.id)) * (wst ? 2 : 1);
         const bx = Math.round(v.x + pose.ox), by = Math.round(v.y + pose.oy - spr.displayHeight - 8 - hop);
         const quiet = !wst && (e.ac === 'idle' || e.ac === 'walk');
@@ -160,7 +162,7 @@ function drawCargo (scene: Phaser.Scene, v: CritViewLike, e: CritE, spr: Spr, po
     const cargo = e.mode === 2 && !inPod ? e.ld?.[0] : undefined;
     const cargoTex = cargo ? `i_${cargo[0]}` : '';
     if (cargo && scene.textures.exists(cargoTex)) {
-        if (!v.cargo) v.cargo = scene.add.image(0, 0, cargoTex, 0).setScale(0.7);
+        if (!v.cargo) v.cargo = overlay3d(scene.add.image(0, 0, cargoTex, 0).setScale(0.7));
         else if (v.cargo.texture.key !== cargoTex) v.cargo.setTexture(cargoTex, 0);
         v.cargo.setVisible(true).setPosition(Math.round(v.x + pose.ox + (spr.flipX ? -7 : 7)), Math.round(v.y + pose.oy - spr.displayHeight * 0.45 + Math.sin(t * 9 + e.id) * (moving ? 1 : 0))).setDepth(v.y + 2);
     } else v.cargo?.setVisible(false);
@@ -204,7 +206,7 @@ export class CritFx {
         v.lunge = { t: 0, dur: e.kind === 'guard' ? 0.34 : 0.7, dx: (dx / l) * reach, dy: (dy / l) * reach * 0.6 };
         v.wicon?.destroy();
         const info = WORK_INFO[e.kind];
-        v.wicon = this.scene.add.image(v.x, v.y, info.icon, 0).setScale(1).setDepth(9e4);
+        v.wicon = overlay3d(this.scene.add.image(v.x, v.y, info.icon, 0).setScale(1).setDepth(9e4));
         v.wiconT = 0;
     }
 }

@@ -38,7 +38,13 @@ export interface View {
     bar?: Group; roofA?: number; fade?: Material[];
     /** a Blight raider: how far it stands in the sea (0 on land, 1 wading to the waist) */
     wade?: number;
+    /** a creature being caught: seconds until the thrown pod lands, and the pod that holds it afterwards */
+    podWait?: number; pod?: Object3D;
+    /** a creature hopping for joy (petted, or glad at a kindled fire) */
+    hop?: { t: number; dur: number };
 }
+/** A pod in the air: thrown from a farmer to the creature it is meant for. */
+interface Flight { obj: Object3D; t: number; dur: number; x0: number; z0: number; x1: number; z1: number }
 /** A farmer on screen: the model, where it is, facing and walking, and the look it was dressed in. */
 export interface FarmerView { m: Farmer; x: number; z: number; face: number; moving: boolean; sx: number; sz: number; key: string; /** tethered to this farmer (a co-op chain) */ co?: string }
 export class Entities {
@@ -55,6 +61,7 @@ export class Entities {
     gone?: (obj: Object3D) => void;
     /** The foam a wading raider leaves (wade.ts), when the view has it. */
     wading?: Wading;
+    flights: Flight[] = [];
     leaving: { obj: Object3D; model: Model; t: number; k: 'mob' | 'drop'; x: number; z: number; tx: number; tz: number; face: number }[] = [];
     constructor(scene: Scene, world: World) {
         this.world = world;
@@ -150,6 +157,7 @@ export class Entities {
             }
         }
         if (v.bar) this.group.remove(v.bar);
+        if (v.pod) { this.group.remove(v.pod); v.pod = undefined; }
         this.views.delete(id);
         this.wading?.forget(id);
         if ((v.e.k === 'mob' || v.e.k === 'drop') && v.model.obj.visible) {
@@ -162,6 +170,58 @@ export class Entities {
             v.model.dispose?.();
         }
         if (v.e.k === 'bld' && familyOf(v.e.kind)) this.refreshAround(v.e);
+    }
+    /** A pod is thrown at a creature: it flies in an arc (the creature stays where it is until the pod lands, then the pod holds it). */
+    throwPod(e: { id: number; px: number; py: number; x: number; y: number; pod: string }) {
+        const x0 = px(e.px), z0 = px(e.py), x1 = px(e.x), z1 = px(e.y);
+        const dur = Math.max(0.26, Math.hypot(e.x - e.px, e.y - e.py) * 0.0032);
+        const model = dropModel(e.pod);
+        model.obj.scale.setScalar(1.15);
+        this.group.add(model.obj);
+        this.flights.push({ obj: model.obj, t: 0, dur, x0, z0, x1, z1 });
+        const v = this.views.get(e.id);
+        if (v) v.podWait = dur;
+    }
+    /** A creature hops for joy. */
+    hop(id: number) {
+        const v = this.views.get(id);
+        if (v) v.hop = { t: 0, dur: 0.72 };
+    }
+    private updateFlights(dt: number) {
+        for (let i = this.flights.length - 1; i >= 0; i--) {
+            const f = this.flights[i];
+            f.t += dt;
+            const u = Math.min(1, f.t / f.dur);
+            const x = f.x0 + (f.x1 - f.x0) * u, z = f.z0 + (f.z1 - f.z0) * u;
+            f.obj.position.set(x, groundY(x, z) + 0.45 + Math.sin(u * Math.PI) * 1.4, z);
+            f.obj.rotation.set(u * 9, 0, u * 6);
+            if (u >= 1) { this.group.remove(f.obj); this.flights.splice(i, 1); }
+        }
+    }
+    /** The creature inside a pod is gone and the pod rocks in its place (three rocks, as in 2D); a hop is a leap with a squash. */
+    private critStep(v: View, e: Extract<Ent, { k: 'crit' }>, dt: number, t: number) {
+        if ((v.podWait ?? 0) > 0) v.podWait = (v.podWait ?? 0) - dt;
+        const inPod = (e.st ?? 0) === 2 && (v.podWait ?? 0) <= 0;
+        v.model.obj.visible = !inPod;
+        if (inPod) {
+            if (!v.pod) {
+                v.pod = dropModel(e.cat?.pod ?? 'pod').obj;
+                v.pod.scale.setScalar(1.15);
+                this.group.add(v.pod);
+            }
+            const a = e.a ?? 0, shaking = (a < 1.55 && a > 1.25) || (a < 1.05 && a > 0.75) || (a < 0.55 && a > 0.25);
+            v.pod.visible = true;
+            v.pod.position.set(v.x, groundY(v.x, v.z) + 0.3, v.z);
+            v.pod.rotation.set(0, 0, shaking ? Math.sin(t * 26) * 0.45 : 0);
+        } else if (v.pod) v.pod.visible = false;
+        if (v.hop && !inPod) {
+            v.hop.t += dt;
+            const p = Math.min(1, v.hop.t / v.hop.dur), air = Math.abs(Math.sin(p * Math.PI * 2)), rest = 1 - p;
+            v.model.obj.position.y += air * 0.5 * (1 - p * 0.3);
+            const sx = 1 + (1 - air) * 0.09 * rest, sy = 1 - (1 - air) * 0.11 * rest;
+            v.model.obj.scale.set(sx, sy, sx);
+            if (p >= 1) { v.hop = undefined; v.model.obj.scale.set(1, 1, 1); }
+        }
     }
     /** A joining piece appeared or went: its neighbours of the same family redraw with their new connections. */
     refreshAround(e: BuildE) {
@@ -284,7 +344,7 @@ export class Entities {
                 v.hurt = Math.max(0, v.hurt - dt * 4);
                 if (e.k === 'mob') v.model.pose?.(v.face, v.moving, v.hurt, dt);
                 // a den worker with nothing to do curls up and sleeps (the rig's z's) until its next job
-                else if (e.k === 'crit') v.model.pose?.(v.face, v.moving, e.mode === 2 && e.ac === 'idle' && !v.moving, dt);
+                else if (e.k === 'crit') { v.model.pose?.(v.face, v.moving, e.mode === 2 && e.ac === 'idle' && !v.moving, dt); this.critStep(v, e, dt, t); }
                 if (e.k === 'mob' && e.hp < e.mhp) this.hpBar(v, e.hp / e.mhp, 1.9, v.model.obj.position.y); // a monster's entity carries no radius: every bar sits at the same height
                 else if (v.bar) v.bar.visible = false;
             } else {
@@ -298,6 +358,7 @@ export class Entities {
             v.model.update?.(dt, t);
         }
         this.updateLeaving(dt, t);
+        this.updateFlights(dt);
         this.drawChains(t);
     }
     /**
