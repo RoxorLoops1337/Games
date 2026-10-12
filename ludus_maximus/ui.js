@@ -180,7 +180,7 @@
     let h = `<div class="row" style="margin-bottom:10px"><div class="sec sp" style="margin:0">Fighters ${S.glads.length}/${L.rosterCap(S)}</div><button class="btn sm ghost" data-a="autoplan">Auto-plan</button><button class="btn sm" data-a="recruit">${A.icon('plus', 14)} Recruit</button></div><div class="row wrap" style="margin-bottom:8px;gap:4px"><span class="tiny">Presets:</span><button class="btn sm ghost" data-a="preset" data-v="boot">Boot camp</button><button class="btn sm ghost" data-a="preset" data-v="rest">Rest week</button><button class="btn sm ghost" data-a="preset" data-v="work">Odd jobs</button><button class="btn sm ghost" data-a="preset" data-v="spar">Sparring</button><button class="btn sm ghost" data-a="drillboard">Drill board</button></div>`;
     if (!S.glads.length) h += '<div class="empty">No gladiators. Recruit someone!</div>';
     h += S.glads.map(gcard).join('');
-    h += '<div class="muted" style="text-align:center">Pick an activity per fighter. It repeats every week until you change it. Fighters entered in games should rest to arrive fresh.</div>';
+    h += '<div class="muted" style="text-align:center;color:var(--cream2);opacity:1">Pick an activity per fighter. It repeats every week until you change it. Fighters entered in games should rest to arrive fresh.</div>';
     return h;
   }
   ACT.drill = (el) => {
