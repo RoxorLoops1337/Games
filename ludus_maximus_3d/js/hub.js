@@ -157,7 +157,7 @@ export function createHub({ renderer, camera, audio, tier = 'high', post = null 
   // ---- sky, light, environment
   const sky = createSky(); scene.add(sky.mesh);
   const rig = createLightRig(scene, { shadowSize: T().shadow, shadowRadius: 36, shadowCenter: new V3(0, 1, 1), near: 1, far: 260 });
-  const env = createLudus({ density: Math.max(0.5, T().crowd) }); group.add(env.group);
+  const env = createLudus({ density: Math.max(0.5, T().crowd * 0.8) }); group.add(env.group);
   { // strip the env's own walls/portico/pool/torches: the hub builds its own lower wall and terraces
     const keep = new Set(['terrain', 'courtyard_floor', 'dust', 'birds', 'blobshadows']);
     const bb = new THREE.Box3(), kill = [];
@@ -224,7 +224,7 @@ export function createHub({ renderer, camera, audio, tier = 'high', post = null 
     const cap = (w, d, x, z, ry) => k.box('roof', w, 0.4, d, x, WH, z, 0xffffff, { ry });
     // perimeter wall with a darker plinth and tile cap
     for (const [w, d, x, z] of [[2 * CW + WT, WT, 0, -CD], [WT, 2 * CD, -CW, 0], [WT, 2 * CD, CW, 0]]) { wall(w + 0.0, 0.7, d + 0.2, x, 0, z, 0xcdb78f); wall(w, WH - 0.7, d, x, 0.7, z); cap(w + 0.3, d + 0.6, x, z); }
-    const sw = CW - GATE - 1.3; for (const s of [-1, 1]) { wall(sw, 0.7, WT + 0.2, s * (GATE + 2.6 + sw / 2), 0, CD, 0xcdb78f); wall(sw, WH - 0.7, WT, s * (GATE + 2.6 + sw / 2), 0.7, CD); cap(sw + 0.3, WT + 0.6, s * (GATE + 2.6 + sw / 2), CD); }
+    const sw = CW - GATE - 1.3, FH = 1.7; for (const s of [-1, 1]) { wall(sw, 0.6, WT + 0.2, s * (GATE + 2.6 + sw / 2), 0, CD, 0xcdb78f); wall(sw, FH - 0.6, WT, s * (GATE + 2.6 + sw / 2), 0.6, CD); k.box('roof', sw + 0.3, 0.3, WT + 0.6, s * (GATE + 2.6 + sw / 2), FH, CD, 0xffffff); }
     // pilasters on the inner faces + buttresses outside
     for (let x = -CW + 5; x < CW - 2; x += 6.4) { if (Math.abs(x) < GATE + 4) { continue; } wall(0.7, WH - 0.2, 0.5, x, 0, -inZ + 0.1); wall(0.7, WH - 0.2, 0.5, x, 0, inZ - 0.1); wall(0.9, WH + 0.5, 0.9, x, 0, -CD - WT / 2 - 0.3); wall(0.9, WH + 0.5, 0.9, x, 0, CD + WT / 2 + 0.3); }
     for (let z = -CD + 5; z < CD - 3; z += 6.4) { wall(0.5, WH - 0.2, 0.7, -inX + 0.1, 0, z); wall(0.5, WH - 0.2, 0.7, inX - 0.1, 0, z); wall(0.9, WH + 0.5, 0.9, -CW - WT / 2 - 0.3, 0, z); wall(0.9, WH + 0.5, 0.9, CW + WT / 2 + 0.3, 0, z); }
@@ -246,7 +246,7 @@ export function createHub({ renderer, camera, audio, tier = 'high', post = null 
     wall(2 * GATE + 2.6, 1.7, WT + 1.2, 0, WH + 0.7, CD, C.trav); k.box('roof', 2 * GATE + 3.4, 0.5, WT + 1.8, 0, WH + 2.4, CD, 0xffffff);
     k.box('metal', 2 * GATE + 2.7, 0.1, 0.1, 0, WH + 0.62, CD + WT / 2 + 0.7, C.gold);
     // wall torches (inner faces)
-    for (let x = -CW + 4; x < CW; x += 8) { if (Math.abs(x) < GATE + 3) continue; k.torch(x, 2.1, inZ - 0.15, { s: 0.8, dz: -1 }); k.torch(x + 4, 2.1, -inZ + 0.15, { s: 0.8 }); }
+    for (let x = -CW + 4; x < CW; x += 8) { if (Math.abs(x) < GATE + 3) continue; k.torch(x, 1.3, inZ - 0.15, { s: 0.8, dz: -1 }); k.torch(x + 4, 2.1, -inZ + 0.15, { s: 0.8 }); }
     for (const z of [-11, -3, 5, 13]) { k.at(-inX + 0.2, 0, z, Math.PI / 2, () => k.torch(0, 2.1, 0, { s: 0.8 })); k.at(inX - 0.2, 0, z, -Math.PI / 2, () => k.torch(0, 2.1, 0, { s: 0.8 })); }
     // terraces: retaining walls with coping, stairs at the central aisle
     for (let r = 0; r < 4; r++) {
@@ -484,7 +484,7 @@ export function createHub({ renderer, camera, audio, tier = 'high', post = null 
   const orb = { az: 0.45, pitch: 0.66, dist: 50, target: new V3(0, 1.5, 1.0), vAz: 0, vPitch: 0, vPan: new V3(), vZoom: 0, idleT: 0, touched: false, anim: null, follow: null, aspect: 1.6, enabled: false, drift: true };
   const overviewFor = (aspect) => {
     const vf = camera.fov * D2R, port = aspect < 0.95, halfW = port ? 23 : 29;
-    return { az: port ? 0.28 : 0.45, pitch: port ? 0.74 : 0.62, dist: clamp(halfW / (Math.tan(vf / 2) * aspect) * (port ? 1.0 : 1.04), DIST[0], DIST[1]), target: new V3(0, 1.5, port ? 0.5 : 2.0) };
+    return { az: port ? 0.28 : 0.5, pitch: port ? 0.72 : 0.52, dist: clamp(halfW / (Math.tan(vf / 2) * aspect) * (port ? 1.0 : 1.04), DIST[0], DIST[1]), target: new V3(0, 1.5, port ? 0.5 : 2.0) };
   };
   function clampOrbit() {
     orb.pitch = clamp(orb.pitch, PITCH[0], PITCH[1]); orb.dist = clamp(orb.dist, DIST[0], DIST[1]);

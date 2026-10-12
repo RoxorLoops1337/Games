@@ -143,7 +143,7 @@ export function open(ctx, arg) {
     list.forEach((it) => {
       const v = lm.sellVal(it), needs = it.rar >= 2 || it.up > 0, armed = st.confirm === it.id;
       const row = h('div', 'am-row', [U.rarityFrame(P.RAR_KEY[it.rar], U.icon(P.SLOT_ICON[it.slot], 20), 44), h('div', 'am-mid', [h('div', 'am-t', it.name + (it.up ? ' +' + it.up : '')), h('div', 'am-s', `${d.RAR[it.rar].n} ${d.SLOT_NAME[it.slot]} · Power ${P.power(it)}${it.set ? ' · ' + d.SETS[it.set].n : ''}`)])]);
-      const b = U.button({ label: armed ? 'Sure?' : 'Sell', sub: ctx.fmt(v), variant: armed ? 'danger' : 'ghost', onClick: () => {
+      const b = U.button({ label: armed ? 'Sure?' : 'Sell', sub: ctx.fmt(v), variant: armed ? 'danger' : 'bronze', onClick: () => {
         if (needs && !armed) { arm_(it.id); return; }
         lm.sellItem(S, it); st.confirm = null; sync(); ctx.sfx('coin'); ctx.toast(`Sold ${it.name} for ${ctx.fmt(v)} gold`, { kind: 'good', ico: 'coin' }); render(); } });
       b.style.flex = 'none'; b.style.minWidth = '84px'; b.style.padding = '6px 10px'; row.append(b); out.append(row);
