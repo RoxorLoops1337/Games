@@ -713,7 +713,7 @@ export class Animator {
       }
     }
     // snapshot crossfade (inertial blend from the pose we left)
-    if (this.snapW > 0) { this.snapW = Math.max(0, this.snapW - dt / this.snapDur); const w = ease.inOutCubic(this.snapW); if (out !== this.QC) { this.QC.copy(out); out = this.QC; } blendQ(this.QC, this.snap, w, null, this.QB); out = this.QB; if (out !== this.QB) out = this.QB; }
+    if (this.snapW > 0) { this.snapW = Math.max(0, this.snapW - dt / this.snapDur); const w = ease.inOutCubic(this.snapW); if (out !== this.QC) { this.QC.copy(out); out = this.QC; } blendQ(this.QC, this.snap, w, null, this.QB); out = this.QB; }
     // additive layer (hurt flinch)
     if (this.add) {
       this.addT += dt; const clip = this.add;
@@ -773,10 +773,9 @@ export class Animator {
         solveTwoBone(J['hip' + s], knee, ankle, _w, _pp, 1, 1); J['hip' + s].updateMatrixWorld(true);
         _w.setFromMatrixPosition(ankle.matrixWorld).applyMatrix4(bi);
       }
-      // foot flat on the floor while near it (yaw from FK), blend to FK when lifted
+      // foot flat on the floor while near it (yaw taken from FK), blend back to FK when lifted
       ankle.getWorldQuaternion(kq); _u.set(0, 0, 1).applyQuaternion(kq); const yaw = Math.atan2(_u.x, _u.z);
-      bq.setFromAxisAngle(_y.set(0, 1, 0), yaw); body.getWorldQuaternion(kq); bq.premultiply(kq.identity().copy(kq)); // yaw in body frame, then body orientation
-      bq.setFromAxisAngle(_y.set(0, 1, 0), yaw); // world-yaw flat orientation
+      bq.setFromAxisAngle(_y.set(0, 1, 0), yaw);
       knee.getWorldQuaternion(kq); flatQ.copy(kq).invert().multiply(bq);
       const flatW = 1 - smooth(DIM.footH + 0.02, DIM.footH + 0.12, _w.y / sc);
       ankle.quaternion.slerp(flatQ, flatW * this.finalGround);
