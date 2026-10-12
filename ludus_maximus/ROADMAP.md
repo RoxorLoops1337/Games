@@ -318,7 +318,17 @@ First fight pass at 390x800 (fresh start, week 2, enter a duel, pick a fighter, 
 Recruit modal, Market, item purchase and Forge checked at 390x800: all clean. One real bug fixed: the first-time tip banner from the Ludus tab (build and synergy advice) stayed on screen after switching to another tab, so the Armory showed building advice. Switching tabs, by tap or by the 1 to 5 keys, now clears the old tip and shows the new tab's tip.
 
 ## Next ideas
-- [ ] 143. Level-up pick and first tournament pass at phone size
+- [x] 143. Level-up pick and first tournament pass at phone size
 - [ ] 144. Real replay (140)
 - [ ] 145. Augment hints per style (141)
 - [ ] 146. More drill types for other buildings (142)
+
+## Round 35 shipped
+Level-up pick (mastery dialog), the fighter profile (stats, gear, ultimates, runes), More tab (sponsors, trophies, records, settings, how to play, export save) and the Pit of Trials fighter picker checked at 390x800. All clean, no changes needed. The first-time-player pass is complete (start, how to play, week 1, first fight, recruit, market, forge, level-up, More, Pit).
+
+## Next ideas
+- [ ] 147. Tournament flow pass at phone size (bracket view, carry-over HP)
+- [ ] 148. Real replay (144)
+- [ ] 149. Augment hints per style (145)
+- [ ] 150. More drill types for other buildings (146)
+- [ ] 151. Idea: ludus visitors (a wandering merchant or trainer appears on the map for a week)
