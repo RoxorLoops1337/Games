@@ -413,5 +413,12 @@ ok(strongWins >= 17, `level 10 beats level 1 (${strongWins}/20)`);
   S23.wkWins = 0; S23.bountyWeek = -1; S23.hordeWeek = -1; LM.weekFinish(S23); ok(S23.goalStreak === 0, 'missing goals resets the streak');
 }
 
+// round 23: reflex drill
+{
+  const S24 = LM.newGame({ name: 'R24' }); S24.week = 2; ok(LM.drillKind(S24) === 'timing', 'the reflex drill needs a Sparring Ring');
+  S24.plots[S24.plots.findIndex((p) => !p)] = { b: 'sparring', l: 3 }; ok(LM.drillKind(S24) === 'react', 'a level 3 Sparring Ring unlocks reflex drills on even weeks'); S24.week = 3; ok(LM.drillKind(S24) === 'timing', 'odd weeks keep the timing drill');
+  ok(LM.reactAcc(-1) === 0 && LM.reactAcc(200) === 1 && LM.reactAcc(500) === 0.55 && LM.reactAcc(900) === 0.2, 'reaction time maps to accuracy');
+}
+
 console.log(`ludus_maximus: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
