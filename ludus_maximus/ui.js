@@ -254,9 +254,10 @@
   ACT.share = (el) => {
     const g = gOf(+el.dataset.id); const sp = A.gladOf(g, { size: 340, tunic: g.color || myColor(), mood: 'happy' }).replace('<svg class="gl', '<svg x="130" y="170" class="gl');
     const T = D.STYLES[g.style]; const esc2 = (t) => String(t).replace(/[<>&]/g, '');
-    const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 800" width="600" height="800"><rect width="600" height="800" fill="#2b1810"/><rect x="18" y="18" width="564" height="764" rx="26" fill="#f5ead2" stroke="#14100f" stroke-width="8"/><rect x="40" y="40" width="520" height="90" rx="14" fill="#d2412b" stroke="#14100f" stroke-width="6"/><text x="300" y="100" text-anchor="middle" font-family="Impact,Arial Black,sans-serif" font-size="44" fill="#f6b82d" stroke="#14100f" stroke-width="2">${esc2(g.name).toUpperCase()}</text><circle cx="300" cy="420" r="210" fill="#e6c27d" stroke="#14100f" stroke-width="6"/>${sp}<text x="300" y="690" text-anchor="middle" font-family="Impact,Arial Black,sans-serif" font-size="34" fill="#14100f">${esc2(g.title || g.nick || '')}</text><text x="300" y="735" text-anchor="middle" font-family="Arial,sans-serif" font-weight="bold" font-size="26" fill="#14100f">${esc2(T.n)} · Lv ${g.lvl} · ${g.rec.w}W ${g.rec.l}L</text><text x="300" y="768" text-anchor="middle" font-family="Arial,sans-serif" font-size="18" fill="#7a5a3a">Ludus Maximus · ${esc2(S.name)}</text></svg>`;
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 800" width="600" height="800"><rect width="600" height="800" fill="#2b1810"/><rect x="18" y="18" width="564" height="764" rx="26" fill="#f5ead2" stroke="#14100f" stroke-width="8"/><rect x="40" y="40" width="520" height="90" rx="14" fill="#d2412b" stroke="#14100f" stroke-width="6"/><text x="300" y="100" text-anchor="middle" font-family="Impact,Arial Black,sans-serif" font-size="44" fill="#f6b82d" stroke="#14100f" stroke-width="2">${esc2(g.name).toUpperCase()}</text><circle cx="300" cy="420" r="210" fill="#e6c27d" stroke="#14100f" stroke-width="6"/>${sp}${(g.dy || []).slice(-2).map((x, i) => `<text x="300" y="${652 + i * 18}" text-anchor="middle" font-family="Arial,sans-serif" font-size="14" fill="#5a4630">${esc2('Wk ' + x.w + ': ' + x.t)}</text>`).join('')}<text x="300" y="690" text-anchor="middle" font-family="Impact,Arial Black,sans-serif" font-size="34" fill="#14100f">${esc2(g.title || g.nick || '')}</text><text x="300" y="735" text-anchor="middle" font-family="Arial,sans-serif" font-weight="bold" font-size="26" fill="#14100f">${esc2(T.n)} · Lv ${g.lvl} · ${g.rec.w}W ${g.rec.l}L</text><text x="300" y="768" text-anchor="middle" font-family="Arial,sans-serif" font-size="18" fill="#7a5a3a">Ludus Maximus · ${esc2(S.name)}</text></svg>`;
     try { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml' })); a.download = 'ludus-' + g.name.replace(/\W+/g, '-').toLowerCase() + '.svg'; document.body.appendChild(a); a.click(); a.remove(); toast('Share card saved'); } catch (e) { toast('Could not save the card'); }
   };
+  ACT.armsort = () => { ui.armSort = { rar: 'slot', slot: 'score', score: 'rar' }[ui.armSort || 'rar']; U.snd('click'); render(); };
   ACT.autoeq = (el) => { const g = gOf(+el.dataset.id); L.autoEquip(S, g); save(); ACT.gdetail(g.id); render(); };
   ACT.rename = (el) => { const g = gOf(+el.dataset.id); const n = prompt('New name', g.name); if (n && n.trim()) { g.name = n.trim().slice(0, 16); save(); ACT.gdetail(g.id); render(); } };
   ACT.retrainm = (el) => {
@@ -381,8 +382,8 @@
     const sub = ui.arm;
     let h = `<div class="ltabs">${[['inv', 'Items'], ['relics', 'Relics'], ['shop', 'Market'], ['forge', 'Forge']].map(([id, n]) => `<div class="ltab ${sub === id ? 'on' : ''}" data-a="armsub" data-v="${id}">${n}</div>`).join('')}</div>`;
     if (sub === 'inv') {
-      const items = S.items.slice().sort((a, b) => b.rar - a.rar || L.itemScore(b) - L.itemScore(a));
-      h += `<div class="muted" style="margin-bottom:8px;color:var(--cream2)">${items.length}/${L.armoryCap(S)} items. Tap one to equip, upgrade or sell.</div>`;
+      const sk = ui.armSort || 'rar'; const items = S.items.slice().sort((a, b) => (sk === 'slot' ? D.SLOTS.indexOf(a.slot) - D.SLOTS.indexOf(b.slot) : sk === 'score' ? L.itemScore(b) - L.itemScore(a) : 0) || b.rar - a.rar || L.itemScore(b) - L.itemScore(a));
+      h += `<div class="muted" style="margin-bottom:8px;color:var(--cream2)">${items.length}/${L.armoryCap(S)} items. Tap one to equip, upgrade or sell. <span class="tag" data-a="armsort" style="cursor:pointer">Sort: ${{ rar: 'Rarity', slot: 'Slot', score: 'Power' }[sk]}</span></div>`;
       h += items.length ? '<div class="igrid">' + items.map((it) => icell(it)).join('') + '</div>' : '<div class="empty">No spare items. Win fights, enter tournaments, or visit the Market.</div>';
     } else if (sub === 'relics') {
       const slots = L.relicSlots(S);
@@ -495,8 +496,8 @@
   // ---------- first-time coach tips ----------
   const TIPS = {
     ludus: 'Tap a building to upgrade it. Buildings next to ones they like get a +synergy bonus. Then open Fighters.',
-    glads: 'Give each fighter a weekly activity: train a stat, rest, spar or work. It repeats every week. Tap a fighter for runes, ultimates and gear.',
-    arena: 'Matches are announced ahead. Scout opponents, tap Enter on a duel, then press GAMES DAY at the top. Try the Pit of Trials too.',
+    glads: 'Give each fighter a weekly activity: train a stat, rest, spar or work. It repeats every week. Tap a fighter for runes, ultimates and gear. Presets set everyone at once, and diaries, share cards and treatments live on the profile.',
+    arena: 'Matches are announced ahead. Scout opponents, tap Enter on a duel, then press GAMES DAY at the top. Try the Pit of Trials too. Climb the season ladder for rewards, claim the weekly Bounty, and duel the rival owner\'s champion once he leads you.',
     armory: 'Equip items from here, upgrade them at the Forge, merge three into one better, and equip Relics for ludus-wide bonuses.',
     more: 'Sponsors pay for goals. The Hall of Legends and laurel perks power your long-term growth.',
   };

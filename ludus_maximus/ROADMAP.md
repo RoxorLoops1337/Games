@@ -174,7 +174,16 @@ Gladiator diary on the profile (fights, level ups, nicknames, quests) and a name
 Season prize is now a choice of one of three named items in a celebratory dialog.
 
 ## Next ideas
-- [ ] 79. Diary lines in the Share card
-- [ ] 80. Fighter nickname banners in the fight intro
-- [ ] 81. Armory sorting and filters by affix
-- [ ] 82. Tutorial hints for new systems (ladder, presets, bounty)
+- [x] 79. Diary lines in the Share card
+- [x] 80. Fighter nickname banners in the fight intro
+- [x] 81. Armory sorting and filters by affix
+- [x] 82. Tutorial hints for new systems (ladder, presets, bounty)
+
+## Round 19 shipped
+Diary lines on the Share card, nickname or title under each fighter in the fight intro, armory sort (rarity, slot, power), and updated tutorial tips that mention the newer systems.
+
+## Next ideas
+- [ ] 83. Armory filter by affix
+- [ ] 84. Fight intro entrance animations per style (careful with sprite transforms)
+- [ ] 85. Weekly quests board mixing bounty and ladder goals
+- [ ] 86. Cloud save export reminder
