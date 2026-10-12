@@ -67,7 +67,7 @@ const CSS = `
 .ax-evt{font:700 var(--lx-fs-l)/1.15 var(--lx-serif);letter-spacing:.05em;color:#fff4d8;text-shadow:0 2px 0 rgba(0,0,0,.5)}
 .ax-opp{display:flex;align-items:center;gap:8px;padding:6px 10px 6px 6px;border-radius:999px;background:rgba(10,6,24,.5);box-shadow:inset 0 0 0 1px rgba(242,193,78,.25);cursor:pointer;min-height:44px;border:0;color:inherit;font:inherit;text-align:left;touch-action:manipulation}
 .ax-opp:hover{box-shadow:inset 0 0 0 1.5px var(--lx-gold)}
-.ax-opp.big{border-radius:12px;padding:8px 12px 8px 8px;flex:1}
+.ax-opp.big{border-radius:12px;padding:8px 12px 8px 8px;flex:1 1 150px}
 .ax-opp .ax-oname{font:700 var(--lx-fs-s)/1.2 var(--lx-sans);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:132px}
 .ax-opp.big .ax-oname{font-size:var(--lx-fs-m);max-width:none}
 .ax-opp small{display:block;font-size:11px;opacity:.8;font-weight:600}
@@ -228,7 +228,8 @@ export function pickFighters(ctx, o) {
         const en = h('div', 'ax-bar'); en.style.setProperty('--w', g.en + '%'); en.style.setProperty('--c', 'var(--lx-stam)'); en.append(h('i')); en.style.height = '6px'; en.title = `Energy ${Math.round(g.en)}`;
         b.append(h('span', 'ax-check', U.icon('check', 16)), styleBadge(g.style, 44),
           h('div', 'ax-grow ax-col ax-gap4', [h('div', 'ax-b', g.name + (g.nick ? ` "${g.nick}"` : '')), h('div', 'ax-sub', `${st.n} · Level ${g.lvl}`), en,
-            h('div', 'ax-row ax-wrap ax-gap4', [bad ? pill(inf.reason, { tone: 'bad' }) : null, ...(inf.badges || [])])]), inf.right || null);
+            h('div', 'ax-row ax-wrap ax-gap4', [bad ? pill(inf.reason, { tone: 'bad' }) : null, ...(inf.badges || [])])]));
+        if (inf.right) b.append(inf.right);
         const act = () => {
           if (bad) { ctx.sfx('uiError'); U.toast(inf.reason, { kind: 'bad' }); return; }
           const i = sel.indexOf(g.id);

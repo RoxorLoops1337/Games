@@ -106,7 +106,7 @@ function boxG(w, h, d, texM, centered) {
   return g;
 }
 
-class Kit {
+export class Kit {
   constructor(seed, accent) {
     this.P = {}; for (const m of MATS) this.P[m] = [];
     this.fx = { flames: [], smoke: [], sparks: [] };
@@ -124,6 +124,7 @@ class Kit {
     const p = g.attributes.position, n = g.attributes.normal, c = g.attributes.color, uv = g.attributes.uv;
     const base = colOf(hex), H = this.H, ao = o.ao === undefined ? 1 : o.ao, jit = 1 + (this.rnd() - 0.5) * 0.07;
     const em = o.em;
+    let y0 = 1e9, y1 = -1e9; if (o.sway) for (let i = 0; i < p.count; i++) { const y = p.getY(i); if (y < y0) y0 = y; if (y > y1) y1 = y; }
     for (let i = 0; i < p.count; i++) {
       let k = 1;
       if (mat !== 'glow') {
@@ -135,6 +136,7 @@ class Kit {
       }
       c.setXYZ(i, base[0] * k, base[1] * k, base[2] * k);
       if (mat === 'glow') uv.setXY(i, em ? em[0] : 0, em ? em[1] : 0);
+      else if (o.sway) uv.setXY(i, Math.pow((p.getY(i) - y0) / Math.max(0.01, y1 - y0), 1.5) * o.sway, uv.getY(i));
     }
     this.P[mat].push(g);
   }
@@ -312,7 +314,7 @@ class Kit {
     const nx = Math.max(2, Math.round(w / 0.32)), nz = Math.max(1, Math.round(d / 0.32));
     for (let i = 0; i < nx; i++) for (let j = 0; j < nz; j++) {
       const px = x - w / 2 + (i + 0.5) * w / nx + (this.rnd() - 0.5) * 0.08, pz = z - d / 2 + (j + 0.5) * d / nz + (this.rnd() - 0.5) * 0.08, r = 0.1 + this.rnd() * 0.07;
-      this.cone('masonry', r, 0.34 + this.rnd() * 0.18, px, y + 0.26, pz, this.rnd() > 0.7 ? C.leaf2 : hex, { seg: 5, ao: 0.5 });
+      this.cone('cloth', r, 0.34 + this.rnd() * 0.18, px, y + 0.26, pz, this.rnd() > 0.7 ? C.leaf2 : hex, { seg: 5, ao: 0.5, sway: 0.5 });
     }
   }
 }
@@ -767,6 +769,7 @@ DESIGN.hall = (k, lv) => {
 // public API
 // ---------------------------------------------------------------------------------------------
 export const BUILDING_IDS = Object.keys(DESIGN);
+export { MATS, C as PALETTE, DESIGN };
 const CACHE = new Map();
 const ACC_DEFAULT = 0x6a2470;
 

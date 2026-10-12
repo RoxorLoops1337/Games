@@ -1,5 +1,5 @@
 // Gladiator profile: hero, stats, gear, skills, life (story, bonds, diary) and management (rename, retrain, retire, release).
-import { h, U, D, L, fmt, portrait, injectCss, addCss, chip, sec, pips, wide, setTitle, empty, note, confirm, promptText } from './ui_common.js';
+import { h, U, D, L, fmt, portrait, injectCss, addCss, chip, sec, pips, wide, setTitle, empty, note, confirm, promptText, activityGrid, actDesc } from './ui_common.js';
 import { itemCard, SLOT_ICON, fmtSt } from '../uihelpers.js';
 
 const CSS = `
@@ -151,15 +151,7 @@ export function open(ctx, arg) {
   }
 
   function activityPicker() {
-    const wrap = h('div', 'lm-btnrow');
-    d.ACTS.forEach((a) => {
-      const b = h('button', 'lm-act', a.n); b.type = 'button'; b.setAttribute('aria-pressed', g.act === a.id); b.disabled = g.inj > 0;
-      b.style.cssText = 'flex:1 1 96px;font-size:11px;padding:6px 4px 9px';
-      if (a.t === 'train') b.style.setProperty('--sc', d.SC[a.s]);
-      b.addEventListener('click', () => { g.act = a.id; ctx.sfx('uiTap'); ctx.save(); redraw(); });
-      wrap.append(b);
-    });
-    return wrap;
+    return h('div', '', [activityGrid(g, (a) => { g.act = a.id; ctx.sfx('uiTap'); ctx.save(); redraw(); }), h('div', 'lm-note', lm.activity(g) ? actDesc(lm.activity(g)) : '')]);
   }
 
   // ------------------------------------------------------------ gear tab

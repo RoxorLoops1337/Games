@@ -1,5 +1,5 @@
 // Roster screen: every fighter at a glance, quick weekly activity assignment, planner presets, kitchen menu, recruit entry.
-import { h, U, D, L, fmt, portrait, injectCss, addCss, chip, sec, wide, ACT_SHORT, actDesc, empty, note } from './ui_common.js';
+import { h, U, D, L, fmt, portrait, injectCss, addCss, chip, sec, wide, actDesc, activityGrid, empty, note } from './ui_common.js';
 
 const CSS = `
 .lm-r-top{display:grid;gap:10px;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));align-items:stretch}
@@ -18,16 +18,6 @@ const CSS = `
 .lm-rc-go{flex:none;color:#7a5222;font:700 34px/1 var(--lx-sans);padding:0 4px}
 .lm-stylechip{color:#fff;text-shadow:0 1px 1px rgba(0,0,0,.45)}
 .lm-meters{display:grid;gap:5px}
-.lm-act-g{display:grid;gap:6px}
-.lm-act-g.g5{grid-template-columns:repeat(5,minmax(0,1fr))}
-.lm-act-g.g4{grid-template-columns:repeat(4,minmax(0,1fr))}
-.lm-act{position:relative;min-height:44px;padding:6px 2px 8px;border-radius:8px;cursor:pointer;touch-action:manipulation;font:800 12px/1.1 var(--lx-serif);letter-spacing:.05em;text-transform:uppercase;color:#4a3550;background:linear-gradient(180deg,rgba(255,255,255,.7),rgba(235,220,185,.7));border:1.5px solid rgba(122,82,34,.5);box-shadow:0 2px 0 rgba(122,82,34,.55);transition:transform .08s,box-shadow .08s;overflow:hidden;text-overflow:ellipsis}
-.lm-act::after{content:'';position:absolute;left:8px;right:8px;bottom:3px;height:3px;border-radius:2px;background:var(--sc,transparent)}
-.lm-act:active:not(:disabled){transform:translateY(2px);box-shadow:0 0 0 rgba(0,0,0,0)}
-.lm-act[aria-pressed=true]{background:linear-gradient(180deg,#ffe08a,#e0a82e);color:#3b2711;border-color:#8a5a14;box-shadow:0 2px 0 #7a5222,0 0 10px rgba(242,193,78,.6)}
-.lm-act:disabled{opacity:.5;cursor:not-allowed}
-.lm-act:focus-visible{outline:3px solid #5a1f5e;outline-offset:1px}
-.lm-actd{font:600 12px/17px var(--lx-sans);color:#5a4560;overflow-wrap:anywhere;min-height:17px}
 .lm-menu-opt{display:flex;gap:10px;align-items:center;width:100%;text-align:left;min-height:56px;cursor:pointer;font-family:inherit;color:inherit}
 .lm-menu-opt[aria-pressed=true]{border-color:#c98e24;box-shadow:0 0 0 2px #f2c14e,0 2px 6px rgba(60,40,10,.2)}
 .lm-menu-opt:disabled{opacity:.55;cursor:not-allowed}
@@ -109,16 +99,6 @@ export function open(ctx) {
     ctx.sheet({ title: 'Drill board', body: b });
   }
 
-  function actBtn(g, a, onPick) {
-    const b = h('button', 'lm-act', ACT_SHORT[a.id]); b.type = 'button';
-    b.setAttribute('aria-pressed', g.act === a.id); b.setAttribute('aria-label', a.n + (g.act === a.id ? ' (selected)' : ''));
-    if (a.t === 'train') b.style.setProperty('--sc', d.SC[a.s]);
-    b.disabled = g.inj > 0;
-    U.tooltip(b, actDesc(a), { title: a.n });
-    b.addEventListener('click', () => onPick(a));
-    return b;
-  }
-
   function card(g) {
     const c = h('div', 'lm-card lm-rc' + (g.inj > 0 ? ' lm-dim' : ''));
     const st = d.STYLES[g.style], T = d.TRAITS[g.trait];
@@ -148,9 +128,7 @@ export function open(ctx) {
     const desc = h('div', 'lm-actd', g.inj > 0 ? 'Recovering: injured fighters rest automatically.' : actDesc(lm.activity(g)));
     const swap = () => { const n = card(g); c.replaceWith(n); };
     const pick = (a) => { g.act = a.id; sw('uiTap'); ctx.save(); swap(); };
-    const g1 = h('div', 'lm-act-g g5', d.ACTS.filter((a) => a.t === 'train').map((a) => actBtn(g, a, pick)));
-    const g2 = h('div', 'lm-act-g g4', d.ACTS.filter((a) => a.t !== 'train').map((a) => actBtn(g, a, pick)));
-    c.append(g1, g2, desc);
+    c.append(activityGrid(g, pick), desc);
 
     if (lm.canDrill(S, g)) {
       c.append(U.button({ label: 'Training drill', icon: 'bladedance', variant: 'gold', block: true, onClick: async () => { const mod = await import('./drill.js'); mod.open(ctx, g, () => { commit(); if (!dead) swap(); }); } }));

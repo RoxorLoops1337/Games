@@ -68,7 +68,33 @@ export function setTitle(m, text) { const t = m.el.querySelector('.lx-title'); i
 /** give a sheet a wider desktop layout */
 export function wide(m, px, cls = '') { const s = m.el.querySelector('.lx-sheet'); if (s) { s.style.setProperty('--lm-w', px + 'px'); s.classList.add('lm-wide', ...(cls ? [cls] : [])); } return m; }
 
+/** two grids of activity buttons (5 training stats, then rest/spar/jobs/spy). onPick(act) */
+export function activityGrid(g, onPick) {
+  const d = D();
+  const mk = (a) => {
+    const b = h('button', 'lm-act', ACT_SHORT[a.id]); b.type = 'button';
+    b.setAttribute('aria-pressed', g.act === a.id); b.setAttribute('aria-label', a.n + (g.act === a.id ? ' (selected)' : ''));
+    if (a.t === 'train') b.style.setProperty('--sc', d.SC[a.s]);
+    b.disabled = g.inj > 0; U.tooltip(b, actDesc(a), { title: a.n });
+    b.addEventListener('click', () => onPick(a)); return b;
+  };
+  return h('div', 'lm-act-w', [h('div', 'lm-act-g g5', d.ACTS.filter((a) => a.t === 'train').map(mk)), h('div', 'lm-act-g g4', d.ACTS.filter((a) => a.t !== 'train').map(mk))]);
+}
+
 const CSS = `
+.lm-act-w{display:grid;gap:6px}
+.lm-act-g{display:grid;gap:6px}
+.lm-act-g.g5{grid-template-columns:repeat(5,minmax(0,1fr))}
+.lm-act-g.g4{grid-template-columns:repeat(4,minmax(0,1fr))}
+.lm-act{position:relative;min-height:44px;padding:6px 2px 8px;border-radius:8px;cursor:pointer;touch-action:manipulation;font:800 12px/1.1 var(--lx-serif);letter-spacing:.05em;text-transform:uppercase;color:#4a3550;background:linear-gradient(180deg,rgba(255,255,255,.7),rgba(235,220,185,.7));border:1.5px solid rgba(122,82,34,.5);box-shadow:0 2px 0 rgba(122,82,34,.55);transition:transform .08s,box-shadow .08s;overflow:hidden;text-overflow:ellipsis}
+.lm-act::after{content:'';position:absolute;left:8px;right:8px;bottom:3px;height:3px;border-radius:2px;background:var(--sc,transparent)}
+.lm-act:active:not(:disabled){transform:translateY(2px);box-shadow:0 0 0 rgba(0,0,0,0)}
+.lm-act[aria-pressed=true]{background:linear-gradient(180deg,#ffe08a,#e0a82e);color:#3b2711;border-color:#8a5a14;box-shadow:0 2px 0 #7a5222,0 0 10px rgba(242,193,78,.6)}
+.lm-act:disabled{opacity:.5;cursor:not-allowed}
+.lm-act:focus-visible{outline:3px solid #5a1f5e;outline-offset:1px}
+.lm-actd{font:600 12px/17px var(--lx-sans);color:#5a4560;overflow-wrap:anywhere;min-height:17px}
+
+
 .lm-wide{max-width:var(--lm-w,560px)}
 .lm-sheetbody{color:#3a2a18;font-size:var(--lx-fs-m);min-width:0}
 .lm-sheetbody *{box-sizing:border-box}
