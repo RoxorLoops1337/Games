@@ -15,6 +15,8 @@ export interface GridItem {
     right?: () => void;
     /** No right-click action, but Shift does something: a long press on a phone does that (click with shift held). */
     holdIsShift?: boolean;
+    /** Star or unstar it (the F key while the pointer is over it). */
+    star?: () => void;
 }
 
 export class ItemGrid {
@@ -50,6 +52,12 @@ export class ItemGrid {
         if (emptyText) {
             this.empty = win.text(emptyText, x + (this.w - 10) / 2, y + this.h / 2, ts('body'), PAL.pebble, { origin: [0.5, 0.5], align: 'center', bold: false, wrap: Math.max(120, this.w - 40) }).setVisible(false);
         }
+    }
+
+    /** The item under the pointer, if any. */
+    hoverItem (): GridItem | undefined {
+        const i = this.slots.findIndex((s) => s.hovering);
+        return i < 0 ? undefined : this.items[this.offset * this.cols + i];
     }
 
     /** How many columns and rows of slots fit in a rectangle (a scroll bar takes 10 from the width). */
