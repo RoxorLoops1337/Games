@@ -153,7 +153,7 @@
   }
   LM.genItem = genItem;
   LM.sellVal = (it) => Math.round((8 + it.ilvl * 2.2) * D.RAR[it.rar].m * D.RAR[it.rar].m * (1 + 0.35 * it.up));
-  LM.buyVal = (S, it) => Math.round(LM.sellVal(it) * 3.5 * (1 - 0.03 * LM.bfx(S, 'market').l - LM.facPerks(S).shop - (LM.fest(S, S.week) === 'saturn' ? 0.2 : 0)));
+  LM.buyVal = (S, it) => Math.round(LM.sellVal(it) * 3.5 * (it.sp ? 1.5 : 1) * (1 - 0.03 * LM.bfx(S, 'market').l - LM.facPerks(S).shop - (LM.fest(S, S.week) === 'saturn' ? 0.2 : 0)));
   LM.upCost = (it) => Math.round((20 + it.ilvl * 6) * D.RAR[it.rar].m * Math.pow(it.up + 1, 1.4));
   LM.maxUp = (S) => D.BUILD.forge.v[LM.bfx(S, 'forge').l];
   LM.itemScore = (it) => {
@@ -485,7 +485,7 @@
       if (ev.kind === 'tourney' || ev.kind === 'grand') rep.fac.push(LM.facGain(S, 'sen', ev.kind === 'grand' ? 14 : 9));
       else rep.fac.push(LM.facGain(S, 'sen', 1));
     }
-    LM.ownerTick(S, wonAny); S.stats.fights++; if (wonAny) { S.stats.wins++; if (S.sponsor && S.sponsor.pledge) S.sponsor.pledge.got++; } else S.stats.losses++;
+    LM.ownerTick(S, wonAny); S.forum = (S.forum || []).concat([{ w: S.week, t: `${wonAny ? 'Won' : 'Lost'}: ${ev.title || ev.kind} (hype ${Math.round(res.hype || 0)})` }]).slice(-30); S.stats.fights++; if (wonAny) { S.stats.wins++; if (S.sponsor && S.sponsor.pledge) S.sponsor.pledge.got++; } else S.stats.losses++;
     if (wonAny) { LM.note(S, 'win', { styles: glads.map((g) => g.style), kind: ev.kind }); if (ev.kind === 'tourney' || ev.kind === 'grand') { S.stats.tourneys++; LM.note(S, 'tourney'); if (ev.kind === 'grand' && ev.league === 3) S.flags.imperial = true; } if (ev.kind === 'team') LM.note(S, 'team'); if (res.odds != null && res.odds < 0.4) LM.note(S, 'upset'); }
     return rep;
   };
@@ -558,6 +558,7 @@
     }
     S.market = null; S.recruits = null; LM.relTick(S); rep.story = LM.storyCheck(S);
     LM.fillContracts(S);
+    { const me = LM.moodEvent(S); if (me) rep.notes.push(me); }
     rep.nicks = LM.earnNick(S); rep.news = LM.crier(S, rep);
     rep.ev = LM.rollEvent(S);
     return rep;
@@ -665,6 +666,11 @@
     S.bountyWeek = S.week; if (!win) return { gold: 0, fame: 0 };
     const gold = Math.round((50 + 35 * LM.maxLeague(S)) * LM.diffGold(S)), fame = 20 + 10 * LM.maxLeague(S); S.gold += gold; S.fame += fame; S.stats.bounties = (S.stats.bounties || 0) + 1; return { gold, fame };
   };
+  LM.moodEvent = (S) => {
+    if (!S.glads.length || rnd() > 0.3) return null; const g = pick(S.glads); const good = rnd() < 0.5;
+    if (good) { g.mo = clamp(g.mo + 15, 0, 100); return `${g.name} saw a good omen in the sand. Morale up!`; }
+    g.mo = clamp(g.mo - 12, 0, 100); g.en = clamp(g.en - 10, 0, 100); return `${g.name} had a bad night, restless with dark dreams.`;
+  };
   LM.crier = (S, rep) => {
     const out = (S.news || []).splice(0); const top = S.glads.slice().sort((a, b) => b.fame - a.fame)[0];
     (rep.nicks || []).forEach((x) => out.push(`The crowd now calls ${x.g.name} "${x.nick}".`));
@@ -720,6 +726,7 @@
   LM.rerollMarket = (S) => {
     const ml = LM.maxLeague(S); const luck = LM.bfx(S, 'shrine').v + ((S.perks || {}).luck || 0) * 0.05;
     S.market = []; for (let i = 0; i < 6; i++) S.market.push(genItem(rnd, { league: ml, ilvl: 2 + ml * 5 + Math.floor(S.week / 6), luck }));
+    const sp = genItem(rnd, { league: Math.min(3, ml + 1), ilvl: 3 + ml * 5 + Math.floor(S.week / 6), rar: Math.min(4, 2 + (ml >= 2 ? 1 : 0)), luck }); sp.sp = true; S.market.push(sp);
   };
   LM.hire = (S, g) => {
     if (S.glads.length >= LM.rosterCap(S)) return 'Barracks full'; if (S.gold < g.cost) return 'Not enough gold';

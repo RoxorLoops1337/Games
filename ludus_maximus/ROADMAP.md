@@ -104,6 +104,14 @@ Infirmary treatments (poultice or physician), per-fighter crowd favorite that li
 
 ## Next ideas
 - [ ] 48. Replay the last fight from the results screen
-- [ ] 49. Fighter mood events (a bad night, a good omen)
+- [x] 49. Fighter mood events (a bad night, a good omen)
 - [ ] 50. Buildable gym equipment with visible upgrades on the map
-- [ ] 51. Weekly special market with rare gear
+- [x] 51. Weekly special market with rare gear
+
+## Round 11 shipped
+Weekly special market item (rare gear at a premium), random mood events (good omens, bad nights), a fight log in the Forum (lite replay), and a Fan fave badge. Full replay (48) and gym equipment on the map (50) are deferred.
+
+## Next ideas
+- [ ] 52. Deterministic fight seeds so a real replay is possible
+- [ ] 53. Visible gym equipment upgrades on the ludus map
+- [ ] 54. Fighter portraits with mood faces
