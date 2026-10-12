@@ -548,6 +548,7 @@
   ACT.res = (el) => { const r = U.res; U.res = null; closeModal(); if (r) r(el.dataset.v); };
   function render() {
     if (!S) return;
+    try { document.title = `${S.name} · Week ${S.week} | Ludus Maximus`; } catch (e) { /* title is cosmetic */ }
     applyOpts(); const sc = main().scrollTop; renderHud();
     const V = { ludus: vLudus, glads: vGlads, arena: vArena, armory: vArmory, more: vMore };
     main().innerHTML = V[ui.tab](); main().scrollTop = sc;
