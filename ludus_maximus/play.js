@@ -304,7 +304,7 @@
     const S = U.S(); if (U.busy) return; const g = U.gOf(+el.dataset.id); U.closeModal(); U.busy = true;
     try {
       g.en = Math.max(0, g.en - 30); const opp = L.champOpp(S, g); const ev = { kind: 'champ', title: 'Champion duel', opps: [opp], league: 0, key: 'champ' + S.week };
-      await U.dialog(`<h2>The champion</h2><div class="row" style="justify-content:center">${A.gladOf(opp, { size: 60, tunic: opp.color, flip: true, mood: 'fight' })}</div><div class="small" style="text-align:center">${esc(opp.name)} of ${esc(opp.ludus)}, level ${opp.lvl}.</div>` + btn('Fight!', 'ok', 'red'));
+      await U.dialog(`<h2>The champion</h2><div class="row" style="justify-content:center">${A.gladOf(opp, { size: 60, tunic: opp.color, flip: true, mood: 'fight' })}</div><div class="small" style="text-align:center">${esc(opp.name)} of ${esc(opp.ludus)}, level ${opp.lvl}.<br><i>"${D.CHAMP_TAUNT[opp.style] || 'Come and fight.'}"</i></div>` + btn('Fight!', 'ok', 'red'));
       const res = await fightScreen(S, [g], [opp], 'bal', { ev, augs: [] }); const r = L.champResult(S, !!res.win); U.snd(res.win ? 'win' : 'lose');
       await U.dialog(`<div class="big ${res.win ? 'win' : 'lose'}">${res.win ? 'Champion down' : 'Defeated'}</div><div class="row wrap" style="justify-content:center">${res.win ? `<span class="pill">${A.icon('coin', 14)} +${fmt(r.gold)}</span><span class="pill">${A.icon('fame', 14)} +${r.fame}</span>` : '<span class="pill">The owner gloats...</span>'}</div>` + btn('Continue', 'ok', 'red'));
     } catch (e) { console.error(e); U.toast('Oops: ' + e.message); } finally { U.busy = false; U.save(); U.render(); }
