@@ -29,15 +29,16 @@ const rngOf = (seed) => { let s = (seed | 0) || 1; return () => (s = (s * 16807)
 const hashStr = (str) => { let h = 7; for (let i = 0; i < str.length; i++) h = (h * 31 + str.charCodeAt(i)) | 0; return Math.abs(h); };
 
 // ------------------------------------------------------------------------------------------ layout
-export const LAYOUT = { COLS: 4, ROWS: 4, PX: 10.6, PZ: 7.8, X0: -15.9, Z0: 10.6, STEP: 0.55, BASE: 0.06, PAD: 0.1, CW: 24, CD: 19, WT: 1.2, WH: 3.2 };
+export const LAYOUT = { COLS: 4, ROWS: 4, PX: 10.6, PZ: 7.8, X0: -15.9, Z0: -12.8, STEP: 0.55, BASE: 0.06, PAD: 0.1, CW: 24, CD: 19, WT: 1.2, WH: 3.2 };
 const { COLS, PX, PZ, X0, Z0, STEP, BASE, PAD, CW, CD, WT, WH } = LAYOUT;
-export const terraceH = (r) => BASE + STEP * clamp(r, 0, 3);
+export const terraceH = (r) => BASE + STEP * (3 - clamp(r, 0, 3));
 export const plotRC = (i) => [Math.floor(i / COLS), i % COLS];
-export function plotCenter(i, out = new V3()) { const [r, c] = plotRC(i); return out.set(X0 + c * PX, terraceH(r) + PAD, Z0 - r * PZ); }
-const rowOfZ = (z) => clamp(Math.floor((Z0 + PZ / 2 - z) / PZ), 0, 3);
+export function plotCenter(i, out = new V3()) { const [r, c] = plotRC(i); return out.set(X0 + c * PX, terraceH(r) + PAD, Z0 + r * PZ); }
+const rowOfZ = (z) => clamp(Math.floor((z - (Z0 - PZ / 2)) / PZ), 0, 3);
+const FRONT_EDGE = Z0 + 3 * PZ + PZ / 2;   // z of the lowest terrace's front edge (the forecourt starts here)
 /** ground height anywhere in the courtyard (terraces + pads). */
 export function groundAt(x, z) {
-  if (z > Z0 + PZ / 2) return 0.0;
+  if (z > FRONT_EDGE) return 0.0;
   const r = rowOfZ(z), c = clamp(Math.round((x - X0) / PX), 0, 3), i = r * COLS + c, p = plotCenter(i);
   return terraceH(r) + (Math.abs(x - p.x) < 4.5 && Math.abs(z - p.z) < 3.1 ? PAD : 0);
 }
@@ -52,7 +53,7 @@ const WEATHER = {
 export function presetFor(hour, weather = 'clear') {
   let base = weather === 'night' ? Object.assign({}, TOD.night) : todFromHour(clamp(hour, 6.2, 19.2));
   if (WEATHER[weather]) base = lerpTOD(base, WEATHER[weather], weather === 'rain' ? 0.85 : weather === 'dust' ? 0.7 : 0.55);
-  if (weather !== 'night') { const f = clamp((hour - 7) / 12); base.sunAz = (40 - 85 * f + 360) % 360; base.sunElev = (weather === 'rain' ? 24 : 24 + 10 * Math.sin(Math.PI * f)) * (hour < 7 || hour > 18.4 ? 0.7 : 1); }
+  if (weather !== 'night') { const f = clamp((hour - 7) / 12); base.sunAz = 205 + 55 * f; base.sunElev = (weather === 'rain' ? 24 : 24 + 10 * Math.sin(Math.PI * f)) * (hour < 7 || hour > 18.4 ? 0.7 : 1); }
   return base;
 }
 const hourOf = (S) => 9 + (((S.week || 1) - 1) % 12) * 0.8;
@@ -223,10 +224,12 @@ export function createHub({ renderer, camera, audio, tier = 'high', post = null 
     const wall = (w, h, d, x, y, z, hex = C.trav) => k.box('masonry', w, h, d, x, y, z, hex);
     const cap = (w, d, x, z, ry) => k.box('roof', w, 0.4, d, x, WH, z, 0xffffff, { ry });
     // perimeter wall with a darker plinth and tile cap
-    for (const [w, d, x, z] of [[2 * CW + WT, WT, 0, -CD], [WT, 2 * CD, -CW, 0], [WT, 2 * CD, CW, 0]]) { wall(w + 0.0, 0.7, d + 0.2, x, 0, z, 0xcdb78f); wall(w, WH - 0.7, d, x, 0.7, z); cap(w + 0.3, d + 0.6, x, z); }
-    const sw = CW - GATE - 1.3, FH = 1.7; for (const s of [-1, 1]) { wall(sw, 0.6, WT + 0.2, s * (GATE + 2.6 + sw / 2), 0, CD, 0xcdb78f); wall(sw, FH - 0.6, WT, s * (GATE + 2.6 + sw / 2), 0.6, CD); k.box('roof', sw + 0.3, 0.3, WT + 0.6, s * (GATE + 2.6 + sw / 2), FH, CD, 0xffffff); }
+    const BH = 1.7;   // the back wall (nearest the default camera) is low so row 0 is never hidden
+    wall(2 * CW + WT, 0.6, WT + 0.2, 0, 0, -CD, 0xcdb78f); wall(2 * CW + WT, BH - 0.6, WT, 0, 0.6, -CD); k.box('roof', 2 * CW + WT + 0.3, 0.3, WT + 0.6, 0, BH, -CD, 0xffffff);
+    for (const [w, d, x, z] of [[WT, 2 * CD, -CW, 0], [WT, 2 * CD, CW, 0]]) { wall(w + 0.0, 0.7, d + 0.2, x, 0, z, 0xcdb78f); wall(w, WH - 0.7, d, x, 0.7, z); cap(w + 0.3, d + 0.6, x, z); }
+    const sw = CW - GATE - 2.6; for (const s of [-1, 1]) { wall(sw, 0.7, WT + 0.2, s * (GATE + 2.6 + sw / 2), 0, CD, 0xcdb78f); wall(sw, WH - 0.7, WT, s * (GATE + 2.6 + sw / 2), 0.7, CD); cap(sw + 0.3, WT + 0.6, s * (GATE + 2.6 + sw / 2), CD); }
     // pilasters on the inner faces + buttresses outside
-    for (let x = -CW + 5; x < CW - 2; x += 6.4) { if (Math.abs(x) < GATE + 4) { continue; } wall(0.7, WH - 0.2, 0.5, x, 0, -inZ + 0.1); wall(0.7, WH - 0.2, 0.5, x, 0, inZ - 0.1); wall(0.9, WH + 0.5, 0.9, x, 0, -CD - WT / 2 - 0.3); wall(0.9, WH + 0.5, 0.9, x, 0, CD + WT / 2 + 0.3); }
+    for (let x = -CW + 5; x < CW - 2; x += 6.4) { wall(0.7, BH - 0.2, 0.5, x, 0, -inZ + 0.1); if (Math.abs(x) < GATE + 4) continue; wall(0.7, WH - 0.2, 0.5, x, 0, inZ - 0.1); wall(0.9, BH + 0.4, 0.9, x, 0, -CD - WT / 2 - 0.3); wall(0.9, WH + 0.5, 0.9, x, 0, CD + WT / 2 + 0.3); }
     for (let z = -CD + 5; z < CD - 3; z += 6.4) { wall(0.5, WH - 0.2, 0.7, -inX + 0.1, 0, z); wall(0.5, WH - 0.2, 0.7, inX - 0.1, 0, z); wall(0.9, WH + 0.5, 0.9, -CW - WT / 2 - 0.3, 0, z); wall(0.9, WH + 0.5, 0.9, CW + WT / 2 + 0.3, 0, z); }
     // corner towers
     for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
@@ -234,35 +237,35 @@ export function createHub({ renderer, camera, audio, tier = 'high', post = null 
       k.cyl('masonry', 2.55, 2.8, 6.4, cx, 0, cz, C.trav, { seg: 12 }); k.cyl('masonry', 2.9, 2.9, 0.4, cx, 6.2, cz, C.trav, { seg: 12 }); k.cone('roof', 3.3, 3.4, cx, 6.6, cz, 0xffffff, { seg: 12 });
       k.cone('metal', 0.14, 0.7, cx, 9.9, cz, C.gold, { seg: 5 });
       for (let i = 0; i < 4; i++) { const a = i * TAU / 4 + Math.PI / 4; k.at(cx, 0, cz, a, () => k.box('glow', 0.18, 0.7, 0.06, 0, 4.2, 2.6, [2.9, 1.5, 0.55], { em: [1, 0], ao: 0 })); }
-      k.banner(cx - sx * 2.2, cz - sz * 2.2, 0, 0, 0x6a2470, { noPole: true, bar: 5.9, w: 0.7, h: 1.6, gold: true, ry: sz > 0 ? 0 : Math.PI });
+      k.banner(cx - sx * 2.35, cz - sz * 2.35, 0, 0, 0x6a2470, { noPole: true, bar: 5.9, w: 0.7, h: 1.6, gold: true, ry: Math.PI });
     }
     // gate: pylons, lintel, open timber doors, braziers, banners
     for (const s of [-1, 1]) {
       wall(2.6, WH + 2.4, WT + 1.2, s * (GATE + 1.3), 0, CD, C.trav); k.box('roof', 3.1, 0.5, WT + 1.8, s * (GATE + 1.3), WH + 2.4, CD, 0xffffff);
-      k.at(s * (GATE + 1.3), 0, CD + WT / 2 + 0.7, 0, () => { k.banner(0, 0.05, 0, 0, 0x6a2470, { noPole: true, bar: WH + 1.9, w: 0.9, h: 2.4, gold: true }); });
+      k.at(s * (GATE + 1.3), 0, CD - WT / 2 - 0.85, Math.PI, () => { k.banner(0, 0, 0, 0, 0x6a2470, { noPole: true, bar: WH + 1.9, w: 0.9, h: 2.4, gold: true }); });
       k.box('wood', 0.3, 3.8, 3.0, s * (GATE - 0.1), 0, CD - 0.1, C.wood2, { ry: s * 1.35 }); k.box('metal', 0.34, 0.12, 3.0, s * (GATE - 0.1), 2.8, CD - 0.1, C.iron, { ry: s * 1.35 }); k.box('metal', 0.34, 0.12, 3.0, s * (GATE - 0.1), 0.9, CD - 0.1, C.iron, { ry: s * 1.35 });
       k.brazier(s * (GATE + 0.0), inZ - 1.2, 0, 1.0, { gold: true });
     }
     wall(2 * GATE + 2.6, 1.7, WT + 1.2, 0, WH + 0.7, CD, C.trav); k.box('roof', 2 * GATE + 3.4, 0.5, WT + 1.8, 0, WH + 2.4, CD, 0xffffff);
     k.box('metal', 2 * GATE + 2.7, 0.1, 0.1, 0, WH + 0.62, CD + WT / 2 + 0.7, C.gold);
     // wall torches (inner faces)
-    for (let x = -CW + 4; x < CW; x += 8) { if (Math.abs(x) < GATE + 3) continue; k.torch(x, 1.3, inZ - 0.15, { s: 0.8, dz: -1 }); k.torch(x + 4, 2.1, -inZ + 0.15, { s: 0.8 }); }
+    for (let x = -CW + 4; x < CW; x += 8) { if (Math.abs(x) < GATE + 3) continue; k.torch(x, 2.1, inZ - 0.15, { s: 0.8, dz: -1 }); k.torch(x + 4, 1.2, -inZ + 0.15, { s: 0.8 }); }
     for (const z of [-11, -3, 5, 13]) { k.at(-inX + 0.2, 0, z, Math.PI / 2, () => k.torch(0, 2.1, 0, { s: 0.8 })); k.at(inX - 0.2, 0, z, -Math.PI / 2, () => k.torch(0, 2.1, 0, { s: 0.8 })); }
     // terraces: retaining walls with coping, stairs at the central aisle
     for (let r = 0; r < 4; r++) {
-      const zc = Z0 - r * PZ, h = terraceH(r), zb = r === 3 ? -inZ - 0.2 : zc - PZ / 2, zf = zc + PZ / 2;
-      wall(2 * (inX + 0.1), h, zf - zb, 0, 0, (zf + zb) / 2, r === 0 ? 0xcdb78f : C.trav);
-      if (r > 0) { wall(2 * inX, 0.12, 0.6, 0, h, zf - 0.05, C.marble); for (let j = 0; j < 3; j++) k.box('masonry', 2.4, (j + 1) * (STEP / 3.4), 0.42, 0, h - STEP, zf + 0.35 + (2 - j) * 0.42, C.trav); }
+      const zc = Z0 + r * PZ, h = terraceH(r), zb = r === 0 ? -inZ - 0.2 : zc - PZ / 2, zf = zc + PZ / 2;
+      wall(2 * (inX + 0.1), h, zf - zb, 0, 0, (zf + zb) / 2, r === 3 ? 0xcdb78f : C.trav);
+      if (r < 3) { wall(2 * inX, 0.12, 0.6, 0, h, zf - 0.05, C.marble); for (let j = 0; j < 3; j++) k.box('masonry', 2.4, (j + 1) * (STEP / 3.4), 0.42, 0, h - STEP, zf + 0.35 + (2 - j) * 0.42, C.trav); }
       else { k.box('masonry', 2 * inX, 0.1, 0.5, 0, 0, zf + 0.1, C.marble); }
     }
     // central flagged path from the gate to the first terrace
-    k.box('masonry', 3.4, 0.05, CD - (Z0 + PZ / 2) + 0.3, 0, 0.0, (CD + (Z0 + PZ / 2)) / 2, 0xc9b48c);
+    k.box('masonry', 3.4, 0.05, CD - FRONT_EDGE + 0.3, 0, 0.0, (CD + FRONT_EDGE) / 2, 0xc9b48c);
     staticParts = k.P; staticFx = k.fx;
     // cypress + olive in the forecourt
     const lg = []; const r = rngOf(5);
     const cypress = (x, z, s) => { const prof = [[0.001, 0], [0.55, 0.15], [0.95, 1.3], [0.9, 3.0], [0.62, 5.0], [0.2, 6.6], [0.001, 7.1]].map(([a, y]) => new THREE.Vector2(a * s, y * s)); const g = new THREE.LatheGeometry(prof, 8); g.rotateY(r() * 3); g.translate(x, 0, z); lg.push(leafCol(g, [0.07, 0.17, 0.07], [0.15, 0.32, 0.1], 7.1 * s, 0.35)); };
     const olive = (x, z, s) => { const tr = new THREE.CylinderGeometry(0.16 * s, 0.26 * s, 2.0 * s, 6); tr.translate(x, s, z); lg.push(leafCol(tr, [0.2, 0.13, 0.08], [0.28, 0.18, 0.1], 2 * s, 0)); for (let i = 0; i < 4; i++) { const sp = new THREE.IcosahedronGeometry(1.2 * s, 1); sp.scale(1, 0.72, 1); sp.translate(x + (r() - 0.5) * 1.6 * s, 2.4 * s + r() * 0.5 * s, z + (r() - 0.5) * 1.6 * s); lg.push(leafCol(sp, [0.2, 0.28, 0.12], [0.36, 0.46, 0.2], 3.4 * s, 0.6, 2.2 * s)); } };
-    for (const x of [-19, -13.5, -8, 8, 13.5, 19]) cypress(x, 16.6 + (Math.abs(x) % 3) * 0.2, 0.8 + (Math.abs(x * 7) % 5) * 0.06);
+    for (const x of [-19, -13.5, -8, 8, 13.5, 19]) cypress(x, 16.6 + (Math.abs(x) % 3) * 0.2, 0.6 + (Math.abs(x * 7) % 5) * 0.05);
     olive(-21.4, 16.2, 0.9); olive(21.4, 16.0, 1.0); olive(-5.8, 17.0, 0.7); olive(5.9, 17.2, 0.75);
     staticLeaf = lg;
   }
@@ -286,7 +289,7 @@ export function createHub({ renderer, camera, audio, tier = 'high', post = null 
     // terrace tops (vertex colored sand / overgrown)
     const tops = [];
     for (let rr = 0; rr < 4; rr++) {
-      const zc = Z0 - rr * PZ, zf = zc + PZ / 2, zb = rr === 3 ? -CD + WT / 2 - 0.2 : zc - PZ / 2, w = 2 * (CW - WT / 2 - 0.1), d = zf - zb, nx = 36, nz = Math.max(3, Math.round(d / 1.1));
+      const zc = Z0 + rr * PZ, zf = zc + PZ / 2, zb = rr === 0 ? -CD + WT / 2 - 0.2 : zc - PZ / 2, w = 2 * (CW - WT / 2 - 0.1), d = zf - zb, nx = 36, nz = Math.max(3, Math.round(d / 1.1));
       const g = new THREE.PlaneGeometry(w, d, nx, nz); g.rotateX(-Math.PI / 2); g.translate(0, terraceH(rr) + 0.012, (zf + zb) / 2);
       const p = g.attributes.position, uv = g.attributes.uv, col = new Float32Array(p.count * 3), locked = rr >= rows;
       for (let i = 0; i < p.count; i++) {

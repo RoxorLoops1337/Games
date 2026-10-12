@@ -66,6 +66,6 @@ const hideBoot = () => { const b = document.getElementById('boot'); if (!b) retu
 (async () => {
   await game.init(); resize(); requestAnimationFrame(loop); hideBoot();
   if (q.get('demo')) { const o = { a: q.get('a') || undefined, b: q.get('b') || undefined, lvl: +(q.get('lvl') || 5), team: +(q.get('team') || 0), auto: q.get('auto') !== '0', haz: q.get('haz') === '1' }; api.startDemo(o); return; }
-  if (q.get('new')) { game.newGame({ name: 'Ludus Aurelia', color: '#2f78c4' }); if (q.get('rich')) { game.S.gold += 5000; game.S.fame += 300; } game.setScene('hub'); game.refresh(); if (!game.S.glads.length && !q.get('empty')) game.open('recruit', { first: true }); return; }
+  if (q.get('new')) { game.newGame({ name: 'Ludus Aurelia', color: 1 }); if (q.get('rich')) { game.S.gold += 5000; game.S.fame += 300; } game.setScene('hub'); game.refresh(); if (!game.S.glads.length && !q.get('empty')) game.open('recruit', { first: true }); return; }
   await game.boot();
 })();

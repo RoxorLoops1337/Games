@@ -70,7 +70,7 @@ export class Game {
     const p = document.createElement('p'); p.textContent = 'Name your school and choose its colors. You start with a kitchen, barracks and training ground, and a purse to recruit your first fighters.'; p.style.cssText = 'font:500 14px/20px system-ui,sans-serif;color:#33243a';
     body.append(p, inp, sw);
     const v = await this.ask({ title: 'Found your ludus', body, actions: [{ label: 'Open the gates', value: 'go', variant: 'gold', icon: 'arena' }], dismiss: null });
-    if (v !== 'go') return false; this.newGame({ name: (name || 'Ludus Aurelia').trim() || 'Ludus Aurelia', color: d.COLORS[color].c }); return true;
+    if (v !== 'go') return false; this.newGame({ name: (name || 'Ludus Aurelia').trim() || 'Ludus Aurelia', color }); return true;
   }
 
   // ---------------------------------------------------------------- state
