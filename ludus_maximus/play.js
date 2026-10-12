@@ -126,7 +126,7 @@
       }
       h += '</div>';
     }
-    return h + '</div>';
+    const sp = [0, 1, 2, 3].map((i) => D.LUDI[(T.size + i * 3) % D.LUDI.length]); return h + '</div><div class="spons">' + sp.map((n, i) => `<span style="background:${['#d2412b', '#2f78c4', '#2a9d6f', '#7b4fb8'][i]}">${esc(n)}</span>`).join('') + '</div>';
   }
   async function rivalryEvent(S) {
     if (!S.pendingRiv) return; const [ia, ib] = S.pendingRiv; const a = U.gOf(ia), b = U.gOf(ib); if (!a || !b) { S.pendingRiv = null; return; }

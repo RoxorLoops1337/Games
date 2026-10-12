@@ -374,5 +374,13 @@ ok(strongWins >= 17, `level 10 beats level 1 (${strongWins}/20)`);
   ok(flavored, 'traits flavor mood events');
 }
 
+// round 16: season awards, rivalry forum entries
+{
+  const S16 = LM.newGame({ name: 'R16' }); const a = LM.makeGlad({ id: S16.nextId++, style: 'thraex', lvl: 5 }), b = LM.makeGlad({ id: S16.nextId++, style: 'thraex', lvl: 5 }); a.act = b.act = 'str'; S16.glads.push(a, b);
+  for (let i = 0; i < 40 && !S16.pendingRiv; i++) LM.relTick(S16); ok((S16.forum || []).some((x) => /Tension/.test(x.t)), 'a brewing rivalry is logged in the forum');
+  LM.rivalryResolve(S16, a, b, 'partner', null); ok(S16.forum.some((x) => /partners/.test(x.t)), 'resolving a rivalry is logged');
+  S16.week = 12; a.sw = 3; LM.weekFinish(S16); ok((S16.awards || []).length === 1 && S16.awards[0].season === 1 && S16.awards[0].mvp === a.name, 'season rollover stores a season award');
+}
+
 console.log(`ludus_maximus: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
