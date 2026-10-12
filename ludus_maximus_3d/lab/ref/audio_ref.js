@@ -11,6 +11,7 @@ export const SFX_NAMES = ['swordHit', 'swordHitCrit', 'shieldBlock', 'metalClang
   'ultFire', 'ultLightning', 'ultEarth', 'ultWind', 'ultHoly', 'crowdGasp', 'crowdCheer', 'crowdRoar', 'crowdBoo', 'crowdChant', 'drum'];
 export const MUSIC_MODES = ['ludus', 'prep', 'arena', 'victory', 'defeat'];
 
+const MUSIC_TRIM = 0.5;      // music sits about 6 dB under the sfx at equal slider positions
 const NOTE = (midi) => 440 * Math.pow(2, (midi - 69) / 12);
 const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
 const sstep = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
@@ -59,7 +60,7 @@ export function createAudio(opts = {}) {
       const trim = ctx.createGain(); trim.gain.value = 0.92;
       master.connect(comp); comp.connect(limiter); limiter.connect(trim); trim.connect(ctx.destination);
       analyser = ctx.createAnalyser(); analyser.fftSize = 1024; trim.connect(analyser); // meter tap
-      musicDuck = ctx.createGain(); musicBus = ctx.createGain(); musicBus.gain.value = vol.music;
+      musicDuck = ctx.createGain(); musicBus = ctx.createGain(); musicBus.gain.value = vol.music * MUSIC_TRIM;
       musicBus.connect(musicDuck); musicDuck.connect(master);
       sfxBus = ctx.createGain(); sfxBus.gain.value = vol.sfx; sfxBus.connect(master);
       crowdBus = ctx.createGain(); crowdBus.gain.value = vol.sfx; crowdBus.connect(master);
@@ -130,11 +131,12 @@ export function createAudio(opts = {}) {
     ratios.forEach((r, i) => { const g = ctx.createGain(); env(g.gain, t, 0.002, amps[i] == null ? 0.3 : amps[i], decay / (1 + i * 0.55)); g.connect(dest); osc(type, f * r, t, decay, g); });
   }
   // thump: pitch-dropping sine
-  function thump(t, f0, f1, dur, g, dest) { const e = ctx.createGain(); env(e.gain, t, 0.002, g, dur); e.connect(dest); osc('sine', f0, t, dur, e, { f1, fd: dur * 0.6 }); }
+  function thump(t, f0, f1, dur, g, dest) { const e = ctx.createGain(); env(e.gain, t, 0.002, g, dur); e.connect(dest); osc('sine', f0, t, dur, e, { f1, fd: dur * 0.6 });
+    const h = ctx.createGain(); env(h.gain, t, 0.002, g * 0.4, dur * 0.5); h.connect(dest); osc('triangle', f0 * 2, t, dur * 0.5, h, { f1: f1 * 2, fd: dur * 0.3 }); } // 2nd partial keeps it audible on phone speakers
   // formant voice: sawtooth through 3 parallel band-pass filters (+breath noise)
   function voice(t, dur, dest, o) {
     const V = VOICES[clamp(o.voice | 0, 0, 3)], F = VOWEL[o.vowel || V.v], f0 = V.f0 * (o.pitch || 1);
-    const sum = ctx.createGain(); env(sum.gain, t, o.a || 0.012, o.g || 0.6, dur);
+    const sum = ctx.createGain(); envASR(sum.gain, t, o.a || 0.012, o.g || 0.6, dur * 0.5, dur * 0.5);
     sum.connect(dest);
     const src = ctx.createGain();
     const s = ctx.createOscillator(); s.type = 'sawtooth';
@@ -214,7 +216,7 @@ export function createAudio(opts = {}) {
   const def = (name, lvl, dur, pri, wet, duck, max, fn) => { T[name] = { lvl, dur, pri, wet, duck, max, fn }; };
   const hz = (o, f) => f * (o.pitch || 1);
 
-  def('swordHit', 0.9, 0.5, 2, 0.12, 0, 5, (t, d, o) => {
+  def('swordHit', 1.0, 0.5, 2, 0.12, 0, 5, (t, d, o) => {
     burst(t, 0.09, d, { f0: 3200, f1: 1100, q: 0.9, g: 0.9 });
     partials(t, hz(o, 1750), [1, 1.51, 2.37, 3.9], [0.22, 0.16, 0.1, 0.06], 0.28, d, 'triangle');
     thump(t, hz(o, 170), 62, 0.14, 0.6, d);
@@ -222,7 +224,7 @@ export function createAudio(opts = {}) {
   def('swordHitCrit', 1.0, 1.4, 4, 0.3, 0.45, 3, (t, d, o) => {
     burst(t, 0.12, d, { f0: 4500, f1: 900, q: 0.8, g: 1 });
     partials(t, hz(o, 1420), [1, 1.51, 2.37, 3.9, 5.6], [0.3, 0.22, 0.15, 0.1, 0.06], 0.75, d, 'triangle');
-    thump(t, hz(o, 120), 40, 0.4, 1, d);
+    thump(t, hz(o, 130), 55, 0.4, 1, d);
     burst(t + 0.01, 0.6, d, { type: 'highpass', f0: 6000, g: 0.25, a: 0.01 });
     osc('sawtooth', hz(o, 90), t, 0.25, (() => { const g = G(0); env(g.gain, t, 0.002, 0.25, 0.22); g.connect(d); return g; })(), { f1: 38 });
   });
@@ -240,27 +242,27 @@ export function createAudio(opts = {}) {
     burst(t, dur, d, { f0: (heavy ? 260 : 700) * (o.pitch || 1), f1: (heavy ? 1500 : 3600) * (o.pitch || 1) * up / 1.4, q: heavy ? 1.6 : 2.2, g: heavy ? 0.9 : 0.7, a: dur * 0.45 });
     if (heavy) burst(t, dur, d, { type: 'lowpass', f0: 500, f1: 150, g: 0.4, a: dur * 0.4, kind: 'pink' });
   };
-  def('swish', 0.62, 0.3, 1, 0.08, 0, 4, (t, d, o) => swishFn(!!o.heavy)(t, d, o));
-  def('swishHeavy', 0.75, 0.5, 1, 0.1, 0, 3, swishFn(true));
+  def('swish', 0.85, 0.3, 1, 0.08, 0, 4, (t, d, o) => swishFn(!!o.heavy)(t, d, o));
+  def('swishHeavy', 0.9, 0.5, 1, 0.1, 0, 3, swishFn(true));
   def('miss', 0.5, 0.35, 1, 0.1, 0, 3, (t, d, o) => {
     burst(t, 0.22, d, { f0: 2400 * (o.pitch || 1), f1: 500, q: 1.4, g: 0.7, a: 0.05 });
     burst(t + 0.05, 0.12, d, { type: 'highpass', f0: 4000, g: 0.15, a: 0.03 });
   });
-  def('grunt', 0.8, 0.5, 2, 0.1, 0, 4, (t, d, o) => { voice(t, 0.22, d, { voice: o.voice, pitch: o.pitch, g: 0.9, p0: 1.15, p1: 0.82, breath: 0.45 }); });
-  def('hurt', 0.85, 0.7, 3, 0.14, 0, 3, (t, d, o) => {
+  def('grunt', 1.5, 0.5, 2, 0.1, 0, 4, (t, d, o) => { voice(t, 0.22, d, { voice: o.voice, pitch: o.pitch, g: 0.9, p0: 1.15, p1: 0.82, breath: 0.45 }); });
+  def('hurt', 1.3, 0.7, 3, 0.14, 0, 3, (t, d, o) => {
     voice(t, 0.38, d, { voice: o.voice, pitch: (o.pitch || 1) * 1.35, g: 0.95, p0: 1.0, p1: 1.35, vowel: 'a', breath: 0.35, a: 0.01, vib: 31 });
     voice(t + 0.05, 0.3, d, { voice: o.voice, pitch: (o.pitch || 1) * 1.1, g: 0.5, p0: 1.1, p1: 0.7, vowel: 'o', breath: 0.2 });
   });
-  def('deathCry', 0.85, 1.4, 4, 0.3, 0, 2, (t, d, o) => {
+  def('deathCry', 1.0, 1.4, 4, 0.3, 0, 2, (t, d, o) => {
     voice(t, 1.1, d, { voice: o.voice, pitch: (o.pitch || 1) * 1.4, g: 0.95, p0: 1.2, p1: 0.45, vowel: 'a', fEnd: 0.7, breath: 0.4, a: 0.04, vib: 24, rasp: 2 });
   });
   def('deathThud', 1.0, 1.0, 4, 0.2, 0.3, 2, (t, d, o) => {
-    thump(t, hz(o, 85), 34, 0.5, 1, d);
+    thump(t, hz(o, 110), 50, 0.5, 1, d);
     burst(t, 0.3, d, { type: 'lowpass', f0: 900, f1: 120, g: 0.8, kind: 'pink' });
     burst(t + 0.05, 0.5, d, { type: 'bandpass', f0: 2500, f1: 1200, q: 0.6, g: 0.18, a: 0.05, kind: 'white' }); // sand scatter
     partials(t + 0.02, hz(o, 420), [1, 1.6], [0.12, 0.08], 0.2, d, 'triangle'); // armor rattle
   });
-  def('footstep', 0.5, 0.25, 0, 0.04, 0, 3, (t, d, o) => {
+  def('footstep', 0.75, 0.25, 0, 0.04, 0, 3, (t, d, o) => {
     burst(t, 0.12, d, { type: 'lowpass', f0: 1500 * (o.pitch || 1), f1: 350, g: 0.8, kind: 'pink', a: 0.004 });
     for (let i = 0; i < 4; i++) burst(t + 0.01 + i * 0.012 * rng(), 0.03, d, { type: 'highpass', f0: 3500 + rng() * 2500, g: 0.12 + rng() * 0.08, a: 0.002 }); // grit
     thump(t, 100, 55, 0.07, 0.35, d);
@@ -268,11 +270,11 @@ export function createAudio(opts = {}) {
   def('dust', 0.45, 0.6, 0, 0.1, 0, 3, (t, d, o) => {
     burst(t, 0.5, d, { type: 'bandpass', f0: 1400, f1: 500, q: 0.5, g: 0.6, a: 0.08, kind: 'pink' });
   });
-  def('netThrow', 0.7, 0.8, 2, 0.12, 0, 2, (t, d, o) => {
-    burst(t, 0.45, d, { f0: 500, f1: 2200, q: 1.5, g: 0.7, a: 0.2 });
+  def('netThrow', 0.45, 0.8, 2, 0.12, 0, 2, (t, d, o) => {
+    burst(t, 0.45, d, { f0: 400, f1: 1800, q: 1.5, g: 0.9, a: 0.2 });
     const g = G(0); env(g.gain, t + 0.05, 0.15, 0.5, 0.45); g.connect(d);
     const am = ctx.createGain(); am.gain.value = 0.5; const lf = ctx.createOscillator(); lf.frequency.value = 34; const lg = G(0.5); lf.connect(lg); lg.connect(am.gain); lf.start(t); lf.stop(t + 0.7);
-    const f = ctx.createBiquadFilter(); f.type = 'highpass'; f.frequency.value = 2500; noise('white', t + 0.05, 0.6, am); am.connect(f); f.connect(g); // rope flutter
+    const f = ctx.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = 2600; f.Q.value = 0.8; noise('white', t + 0.05, 0.6, am); am.connect(f); f.connect(g); // rope flutter
   });
   def('spearThrust', 0.75, 0.4, 2, 0.1, 0, 4, (t, d, o) => {
     burst(t, 0.14, d, { f0: 1000, f1: 5200, q: 2.6, g: 0.8, a: 0.05 });
@@ -296,27 +298,27 @@ export function createAudio(opts = {}) {
     const f = hz(o, NOTE(62)); // D4
     const seq = [[0, 0.16, 0], [0.18, 0.16, 0], [0.36, 0.16, 0], [0.56, 0.5, 4], [1.1, 0.2, 2], [1.32, 0.9, 7]];
     seq.forEach(([dt, du, s], i) => { brass(d, t + dt, f * Math.pow(2, s / 12), du, 0.5 * k, { a: 0.02 }); if (i > 2) brass(d, t + dt, f * Math.pow(2, (s + 7) / 12) * 0.5, du, 0.3 * k, { a: 0.03, bright: 0.8 }); });
-    drumHit(d, t, 70, 0.7, { tymp: 1, dec: 0.6 }); drumHit(d, t + 1.32, 70, 0.8, { tymp: 1, dec: 0.9 }); crash(d, t + 1.32, 0.25, 1.4);
+    drumHit(d, t, 80, 0.7, { tymp: 1, dec: 0.6 }); drumHit(d, t + 1.32, 80, 0.8, { tymp: 1, dec: 0.9 }); crash(d, t + 1.32, 0.25, 1.4);
   };
-  def('levelUp', 0.65, 2.6, 3, 0.3, 0.5, 1, (t, d, o) => fanfare(t, d, o, 1));
+  def('levelUp', 0.5, 2.6, 3, 0.3, 0.5, 1, (t, d, o) => fanfare(t, d, o, 1));
   def('coin', 0.5, 0.5, 0, 0.12, 0, 4, (t, d, o) => {
     [[0, 1318.5], [0.07, 1975.5]].forEach(([dt, f]) => { const g = G(0); env(g.gain, t + dt, 0.002, 0.4, dt ? 0.35 : 0.1); g.connect(d); osc('square', hz(o, f), t + dt, 0.4, g); osc('sine', hz(o, f) * 2.01, t + dt, 0.3, (() => { const x = G(0.3); x.connect(g); return x; })()); });
   });
-  def('uiTap', 0.38, 0.12, 0, 0.0, 0, 4, (t, d, o) => { const g = G(0); env(g.gain, t, 0.001, 0.5, 0.05); g.connect(d); osc('triangle', hz(o, 820), t, 0.06, g, { f1: 520 }); });
+  def('uiTap', 0.9, 0.12, 0, 0.0, 0, 4, (t, d, o) => { const g = G(0); env(g.gain, t, 0.001, 0.5, 0.09); g.connect(d); osc('triangle', hz(o, 820), t, 0.1, g, { f1: 520 }); });
   def('uiConfirm', 0.45, 0.45, 1, 0.1, 0, 2, (t, d, o) => {
     [[0, 523.25], [0.08, 783.99]].forEach(([dt, f]) => { const g = G(0); env(g.gain, t + dt, 0.003, 0.5, 0.25); g.connect(d); osc('triangle', hz(o, f), t + dt, 0.3, g); osc('sine', hz(o, f) * 2, t + dt, 0.2, (() => { const x = G(0.2); x.connect(g); return x; })()); });
   });
-  def('uiError', 0.45, 0.4, 1, 0.05, 0, 2, (t, d, o) => {
+  def('uiError', 0.3, 0.4, 1, 0.05, 0, 2, (t, d, o) => {
     [0, 0.12].forEach((dt) => { const g = G(0); env(g.gain, t + dt, 0.003, 0.4, 0.1); g.connect(d); const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 900; lp.connect(g); osc('square', hz(o, 165), t + dt, 0.14, lp); osc('square', hz(o, 165) * 1.06, t + dt, 0.14, lp); });
   });
-  def('gate', 0.9, 3.2, 3, 0.35, 0.4, 1, (t, d, o) => {
+  def('gate', 0.6, 3.2, 3, 0.35, 0.4, 1, (t, d, o) => {
     const dur = 2.6, g = G(0); g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(1, t + 0.4); g.gain.setValueAtTime(1, t + dur - 0.5); g.gain.exponentialRampToValueAtTime(0.0001, t + dur + 0.3); g.connect(d);
     const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.setValueAtTime(140, t); lp.frequency.linearRampToValueAtTime(330, t + dur); lp.Q.value = 2; lp.connect(g);
     const am = ctx.createGain(); am.gain.value = 0.6; const lf = ctx.createOscillator(); lf.frequency.value = 13; const lg = G(0.4); lf.connect(lg); lg.connect(am.gain); lf.start(t); lf.stop(t + dur + 0.4);
     noise('brown', t, dur + 0.3, am); am.connect(lp);
-    thump(t, 52, 38, dur, 0.5, d);
+    thump(t, 74, 52, dur, 0.4, d);
     for (let i = 0; i < 14; i++) { const tt = t + 0.2 + rng() * (dur - 0.4); partials(tt, 1800 + rng() * 2500, [1, 2.76], [0.08, 0.05], 0.12, d, 'square'); } // chain links
-    thump(t + dur + 0.2, 70, 35, 0.5, 0.9, d); // final slam
+    thump(t + dur + 0.2, 95, 50, 0.5, 0.9, d); // final slam
     burst(t + dur + 0.2, 0.3, d, { type: 'lowpass', f0: 900, f1: 150, g: 0.6, kind: 'pink' });
   });
   def('horn', 0.75, 2.6, 3, 0.45, 0.5, 1, (t, d, o) => {
@@ -329,19 +331,19 @@ export function createAudio(opts = {}) {
     ultFire: (t, d, o) => {
       burst(t, 1.3, d, { type: 'lowpass', f0: 250, f1: 3200, q: 1.5, g: 1, a: 0.5, kind: 'pink' });
       for (let i = 0; i < 26; i++) burst(t + 0.2 + rng() * 1.0, 0.03, d, { type: 'highpass', f0: 2500 + rng() * 3000, g: 0.25 * rng(), a: 0.002 }); // crackle
-      thump(t + 0.5, 90, 40, 0.8, 0.9, d);
+      thump(t + 0.5, 100, 50, 0.8, 0.9, d);
       brass(d, t, 73.4, 1.0, 0.45, { a: 0.4, rel: 0.4, bright: 0.9 });
     },
     ultLightning: (t, d, o) => {
       burst(t, 0.05, d, { type: 'highpass', f0: 3000, g: 1, a: 0.0015 });
       for (let i = 0; i < 5; i++) { const tt = t + i * 0.045; const g = G(0); env(g.gain, tt, 0.001, 0.4, 0.05); g.connect(d); osc('sawtooth', 5000 - i * 700, tt, 0.06, g, { f1: 400 }); }
       burst(t + 0.05, 1.4, d, { type: 'lowpass', f0: 400, f1: 70, g: 0.9, a: 0.1, kind: 'brown' }); // thunder
-      thump(t + 0.08, 70, 32, 0.9, 0.9, d);
+      thump(t + 0.08, 90, 45, 0.9, 0.9, d);
     },
     ultEarth: (t, d, o) => {
-      thump(t, 62, 28, 1.2, 1, d); thump(t + 0.25, 48, 26, 1.0, 0.8, d);
-      burst(t, 1.5, d, { type: 'lowpass', f0: 500, f1: 90, g: 0.9, a: 0.05, kind: 'brown' });
-      for (let i = 0; i < 18; i++) burst(t + 0.1 + rng() * 1.2, 0.07, d, { f0: 300 + rng() * 900, q: 3, g: 0.25 + rng() * 0.2, a: 0.003, kind: 'white' }); // rock debris
+      thump(t, 95, 48, 1.0, 1, d); thump(t + 0.25, 75, 42, 0.9, 0.8, d);
+      burst(t, 1.5, d, { type: 'lowpass', f0: 900, f1: 160, g: 0.9, a: 0.05, kind: 'brown' });
+      for (let i = 0; i < 26; i++) burst(t + 0.1 + rng() * 1.2, 0.08, d, { f0: 300 + rng() * 1400, q: 3, g: 0.45 + rng() * 0.3, a: 0.003, kind: 'white' }); // rock debris
     },
     ultWind: (t, d, o) => {
       [0, 0.25, 0.5].forEach((dt, i) => burst(t + dt, 1.1, d, { f0: 500 + i * 250, f1: 2600 - i * 300, q: 6, g: 0.55, a: 0.45 }));
@@ -353,7 +355,7 @@ export function createAudio(opts = {}) {
       burst(t + 0.4, 1.0, d, { type: 'highpass', f0: 8000, g: 0.05, a: 0.4 });
     },
   };
-  for (const k of Object.keys(ult)) def(k, 0.9, 2.2, 4, 0.35, 0.55, 2, ult[k]);
+  for (const k of Object.keys(ult)) def(k, { ultFire: 0.65, ultLightning: 0.7, ultEarth: 0.7, ultWind: 1.0, ultHoly: 0.75 }[k], 2.2, 4, 0.35, 0.55, 2, ult[k]);
   // crowd one-shots: formant-filtered noise + a handful of pitched voices
   function crowdVoices(t, dur, d, n, o) {
     for (let i = 0; i < n; i++) voice(t + rng() * dur * 0.25, dur * (0.55 + rng() * 0.4), d, { voice: i & 1 ? 1 : 0, pitch: (o.pitch || 1) * (0.85 + rng() * 0.8), vowel: o.vowel || 'o', g: (o.vg || 0.12), p0: o.p0 || 1, p1: o.p1 || 1, a: dur * 0.3, breath: 0.2, vib: 5 + rng() * 3, rasp: 3, fEnd: o.fEnd });
@@ -363,7 +365,7 @@ export function createAudio(opts = {}) {
     burst(t, 2.0, d, { f0: 900, f1: 1400, q: 0.9, g: 0.8, a: 0.4, kind: 'pink' }); crowdVoices(t, 1.8, d, 10, { vowel: 'a', p0: 1.0, p1: 1.15 });
     for (let i = 0; i < 12; i++) burst(t + 0.3 + rng() * 1.5, 0.03, d, { f0: 1500 + rng() * 1500, q: 1, g: 0.15, a: 0.001 }); // claps
   });
-  def('crowdRoar', 0.95, 3.2, 2, 0.55, 0.35, 1, (t, d, o) => {
+  def('crowdRoar', 0.8, 3.2, 2, 0.55, 0.35, 1, (t, d, o) => {
     burst(t, 3.0, d, { f0: 450, f1: 1100, q: 0.7, g: 1, a: 0.8, kind: 'pink' }); burst(t, 3.0, d, { type: 'lowpass', f0: 300, g: 0.7, a: 0.6, kind: 'brown' });
     crowdVoices(t, 2.8, d, 16, { vowel: 'o', pitch: 0.9, p0: 0.95, p1: 1.2, vg: 0.1 });
   });
@@ -374,7 +376,7 @@ export function createAudio(opts = {}) {
   def('crowdChant', 0.65, 3.2, 1, 0.55, 0, 1, (t, d, o) => {
     for (let i = 0; i < 4; i++) { const tt = t + i * 0.7; burst(tt, 0.45, d, { f0: 600, f1: 500, q: 1.3, g: 0.6, a: 0.06, kind: 'pink' }); crowdVoices(tt, 0.5, d, 6, { vowel: i % 2 ? 'a' : 'o', pitch: 0.85, vg: 0.14, p0: 1.0, p1: 0.97 }); drumHit(d, tt, 85, 0.5, {}); } // stomp-clap pulse
   });
-  def('drum', 0.9, 1.0, 1, 0.3, 0, 4, (t, d, o) => { const k = o.kind || 'low'; drumHit(d, t, hz(o, k === 'low' ? 62 : k === 'mid' ? 90 : 130), 1, { tymp: k !== 'tom', dec: k === 'low' ? 0.7 : 0.45, skin: 1 }); });
+  def('drum', 0.9, 1.0, 1, 0.3, 0, 4, (t, d, o) => { const k = o.kind || 'low'; drumHit(d, t, hz(o, k === 'low' ? 78 : k === 'mid' ? 105 : 145), 1, { tymp: k !== 'tom', dec: k === 'low' ? 0.7 : 0.45, skin: 1 }); });
 
   // ---------- sfx dispatch ----------
   function sfx(name, o = {}) {
@@ -429,10 +431,10 @@ export function createAudio(opts = {}) {
       out.gain.value = 0.0001;
     }
     const t = ctx.currentTime, first = bed.level < 0, tc = first ? 0.001 : 0.4, L = level;
-    const target = L <= 0.001 ? 0 : 0.05 + 0.5 * Math.pow(L, 1.3);
+    const target = L <= 0.001 ? 0 : 0.03 + 0.32 * Math.pow(L, 1.3);
     bed.out.gain.setTargetAtTime(Math.max(0.0001, target), t, tc);
     bed.body.fl.frequency.setTargetAtTime(380 + 420 * L, t, tc); bed.f1.fl.frequency.setTargetAtTime(700 + 260 * L, t, tc); bed.f2.fl.frequency.setTargetAtTime(1100 + 400 * L, t, tc);
-    bed.air.gg.gain.setTargetAtTime(0.04 + 0.2 * L * L, t, tc); bed.low.gg.gain.setTargetAtTime(0.2 + 0.7 * L, t, tc);
+    bed.air.gg.gain.setTargetAtTime(0.03 + 0.07 * L * L, t, tc); bed.low.gg.gain.setTargetAtTime(0.2 + 0.7 * L, t, tc);
     bed.level = L;
     if (L <= 0.001) { const b = bed; bed = null; const stopAt = t + 2.5; for (const k of ['body', 'f1', 'f2', 'air', 'low']) { try { b[k].s.stop(stopAt); } catch (e) { /* ignore */ } } }
   }
@@ -462,37 +464,37 @@ export function createAudio(opts = {}) {
     },
     prep: {
       bpm: (p) => 76 + 8 * curInt, tonic: NOTE(38), // D2
-      init(p) { p.drone = makeDrone(p, NOTE(26), 0.22); p.drone2 = null; },
+      init(p) { p.drone = makeDrone(p, NOTE(38), 0.2); },
       bar(p, bar, t) { p.r = mulberry(hash(seed, 'prep', Math.floor(bar / 4))); p.tens = clamp(bar / 24 + 0.3 * curInt, 0, 1); },
       step(p, s, t, sp) {
         const tn = MODES.prep.tonic, tens = p.tens || 0, bar = p.bar;
-        if (s === 0) { drumHit(p.bus, t, 58, 0.85, { tymp: 1, dec: 0.8 }); L(p, t, 'drum'); }
-        if (s === 3 && bar % 2) drumHit(p.bus, t, 58, 0.4, { tymp: 1, dec: 0.5 });
-        if (s === 8) drumHit(p.bus, t, 70, 0.55 + 0.2 * tens, { tymp: 1, dec: 0.6 });
-        if (s === 10 && tens > 0.4) drumHit(p.bus, t, 66, 0.35, { tymp: 1, dec: 0.4 });
+        if (s === 0) { drumHit(p.bus, t, 72, 0.85, { tymp: 1, dec: 0.8 }); L(p, t, 'drum'); }
+        if (s === 3 && bar % 2) drumHit(p.bus, t, 72, 0.4, { tymp: 1, dec: 0.5 });
+        if (s === 8) drumHit(p.bus, t, 88, 0.55 + 0.2 * tens, { tymp: 1, dec: 0.6 });
+        if (s === 10 && tens > 0.4) drumHit(p.bus, t, 82, 0.35, { tymp: 1, dec: 0.4 });
         if (s % 4 === 0) { const g = G(0); env(g.gain, t, 0.001, 0.08 + 0.1 * tens, 0.04); g.connect(p.bus); osc('sine', 1250, t, 0.05, g); } // wooden tick
         if (s % 2 === 0 && tens > 0.1) strings(p.bus, t, degFreq(tn * 2, SCALES.phryg, [0, 0, 1, 0, 4, 0, 1, 0][(s / 2) % 8]), sp * 1.6, 0.05 + 0.1 * tens, { cut: 900 + 1500 * tens });
         if (s === 0 && bar % 4 === 2) brass(p.bus, t, degFreq(tn * 2, SCALES.phryg, bar % 8 === 2 ? 0 : 1), sp * 12, 0.22, { a: 1.0, rel: 0.6, bright: 0.45 });
-        if (s === 0) setDrone(p, degFreq(tn / 2, SCALES.phryg, bar % 8 < 4 ? 0 : 1), t);
+        if (s === 0) setDrone(p, degFreq(tn, SCALES.phryg, bar % 8 < 4 ? 0 : 1), t);
         if (s === 0 && bar % 2 === 0) pluck(p.bus, t, degFreq(tn * 4, SCALES.phryg, [4, 3, 1, 0][(bar / 2) % 4 | 0] + 0), 0.1, { dur: 2.4, bright: 0.3 });
       },
     },
     arena: {
       bpm: () => 100 + 24 * curInt, tonic: NOTE(40), // E2
-      init(p) { p.drone = makeDrone(p, NOTE(28), 0.2); },
+      init(p) { p.drone = makeDrone(p, NOTE(40), 0.18); },
       bar(p, bar, t) { const ph = Math.floor(bar / 4); p.r = mulberry(hash(seed, 'arena', ph)); p.stab = [[0, 6, 10], [0, 3, 6, 10], [0, 4, 8, 12], [0, 7, 10, 14]][Math.floor(p.r() * 4)]; p.ost = Array.from({ length: 8 }, () => [0, 0, 0, 1, 4, 2][Math.floor(p.r() * 6)]); p.chordDeg = [0, 0, 5, 1][bar % 4]; },
       step(p, s, t, sp) {
         const I = curInt, bar = p.bar, tn = MODES.arena.tonic, sc = SCALES.phrygDom;
         const gDr = 0.5 + 0.5 * I;
-        if (s === 0 || s === 8) { drumHit(p.bus, t, 55, 0.95 * gDr, { tymp: 1, dec: 0.8 }); L(p, t, 'drum'); }
+        if (s === 0 || s === 8) { drumHit(p.bus, t, 70, 0.95 * gDr, { tymp: 1, dec: 0.8 }); L(p, t, 'drum'); }
         if ((s === 4 || s === 12) && I > 0.22) { drumHit(p.bus, t, 78, 0.7 * gDr * sstep(0.22, 0.45, I), { dec: 0.4, skin: 1 }); L(p, t, 'drum2'); }
         if (s % 4 === 2 && I > 0.5) drumHit(p.bus, t, 100, 0.4 * sstep(0.5, 0.75, I), { dec: 0.2, skin: 1 });
         if (I > 0.78 && (s >= 12 || (bar % 4 === 3 && s >= 8)) && s % 1 === 0) drumHit(p.bus, t, 70 + (s - 8) * 4, 0.3 * sstep(0.78, 0.95, I), { dec: 0.15 }); // 16th roll pickup
-        if (s % 2 === 0 && I > 0.12) strings(p.bus, t, degFreq(tn * 4, sc, p.ost[(s / 2) % 8]), sp * 1.7, (0.07 + 0.08 * (s % 4 === 0)) * sstep(0.12, 0.55, I), { cut: 1300 + 2200 * I }), L(p, t, 'ost');
+        if (s % 2 === 0) strings(p.bus, t, degFreq(tn * 4, sc, p.ost[(s / 2) % 8]), sp * 1.7, (0.07 + 0.08 * (s % 4 === 0)) * (0.3 + 0.7 * sstep(0.1, 0.55, I)), { cut: 900 + 2600 * I }), L(p, t, 'ost');
         if (I > 0.3 && p.stab.includes(s)) { const g = 0.38 * sstep(0.3, 0.6, I), r = degFreq(tn * 2, sc, p.chordDeg); brass(p.bus, t, r, sp * 1.8, g, { a: 0.012, rel: 0.1, bright: 1.1 }); brass(p.bus, t, r * 1.4983, sp * 1.8, g * 0.7, { a: 0.012, rel: 0.1 }); if (I > 0.7) brass(p.bus, t, r * 2, sp * 1.8, g * 0.6, { a: 0.012, rel: 0.1 }); L(p, t, 'brass'); }
         if (s === 0 && I > 0.55 && bar % 2 === 0) { const g = 0.07 * sstep(0.55, 0.85, I); [0, 2, 4].forEach((d) => strings(p.bus, t, degFreq(tn * 4, sc, p.chordDeg + d), sp * 30, g, { a: 0.9, rel: 0.9, cut: 2400 })); }
         if (s === 0 && bar % 8 === 0 && I > 0.6) crash(p.bus, t, 0.14);
-        if (s === 0) setDrone(p, degFreq(tn / 2, sc, p.chordDeg), t);
+        if (s === 0) { setDrone(p, degFreq(tn, sc, p.chordDeg), t); if (bar % 2 === 0) pluck(p.bus, t, degFreq(tn * 2, sc, p.chordDeg + 4), 0.12, { dur: 2.4, bright: 0.3 }); }
         if (p.drone) p.drone.g.gain.setTargetAtTime(0.1 + 0.18 * I, t, 0.3);
       },
     },
@@ -501,16 +503,16 @@ export function createAudio(opts = {}) {
       init(p) { p.drone = makeDrone(p, NOTE(38), 0.1); p.drone.g.gain.value = 0; },
       bar(p, bar, t) {
         p.r = mulberry(hash(seed, 'victory', Math.floor(bar / 4)));
-        if (bar === 0) { const sp = 60 / 112 / 4; const f = NOTE(62); [[0, 2, 0], [2.5, 1.5, 0], [4, 2, 4], [6, 2, 7], [8, 4, 12]].forEach(([st, du, sm], i) => { brass(p.bus, t + st * sp, f * Math.pow(2, sm / 12), du * sp, 0.55, { a: 0.02 }); brass(p.bus, t + st * sp, f * Math.pow(2, (sm + 7) / 12) * 0.5, du * sp, 0.3, { a: 0.03 }); }); drumHit(p.bus, t, 70, 0.9, { tymp: 1, dec: 0.9 }); for (let i = 0; i < 8; i++) drumHit(p.bus, t + i * sp, 72, 0.3 + i * 0.04, { tymp: 1, dec: 0.2 }); crash(p.bus, t + 8 * sp, 0.3, 2.2); L(p, t, 'stinger'); }
+        if (bar === 0) { const sp = 60 / 112 / 4; const f = NOTE(62); [[0, 2, 0], [2.5, 1.5, 0], [4, 2, 4], [6, 2, 7], [8, 8, 12]].forEach(([st, du, sm], i) => { brass(p.bus, t + st * sp, f * Math.pow(2, sm / 12), du * sp, 0.55, { a: 0.02 }); brass(p.bus, t + st * sp, f * Math.pow(2, (sm + 7) / 12) * 0.5, du * sp, 0.3, { a: 0.03 }); }); drumHit(p.bus, t, 70, 0.9, { tymp: 1, dec: 0.9 }); for (let i = 0; i < 16; i++) drumHit(p.bus, t + i * sp, 84, 0.25 + i * 0.03, { tymp: 1, dec: 0.2 }); crash(p.bus, t + 8 * sp, 0.3, 2.2); crash(p.bus, t + 16 * sp, 0.12, 1.5); L(p, t, 'stinger'); }
         p.prog = [[0, 3, 4, 0], [0, 4, 5, 3], [0, 5, 3, 4]][Math.floor(p.r() * 3)];
       },
       step(p, s, t, sp) {
         const bar = p.bar, tn = MODES.victory.tonic, sc = SCALES.major;
-        if (bar < 2) { if (bar === 1 && s === 0) crash(p.bus, t, 0.05, 0.4); return; }
+        if (bar < 1) return;
         const deg = p.prog[bar % 4], ch = [deg, deg + 2, deg + 4, deg + 7];
         if (s === 0) { p.drone.g.gain.setTargetAtTime(0.12, t, 0.3); setDrone(p, degFreq(tn / 2, sc, deg), t); }
         pluck(p.bus, t, degFreq(tn * 2, sc, ch[[0, 1, 2, 3, 2, 1, 3, 2][s % 8]]), s % 2 ? 0.11 : 0.19, { bright: 0.6 });
-        if (s === 0 || s === 8) drumHit(p.bus, t, 62, 0.8, { tymp: 1, dec: 0.5 });
+        if (s === 0 || s === 8) drumHit(p.bus, t, 78, 0.8, { tymp: 1, dec: 0.5 });
         if (s === 4 || s === 12) drumHit(p.bus, t, 95, 0.5, { skin: 1, dec: 0.3 });
         if (s % 2 === 0) shaker(p.bus, t, 0.07);
         if ((s === 0 || s === 6 || s === 10) && bar % 2 === 0) { brass(p.bus, t, degFreq(tn * 2, sc, deg + [0, 4, 2][[0, 6, 10].indexOf(s)]), sp * 3, 0.3, { a: 0.02 }); L(p, t, 'brass'); }
@@ -520,12 +522,12 @@ export function createAudio(opts = {}) {
     },
     defeat: {
       bpm: () => 58, tonic: NOTE(50), // D3 minor
-      init(p) { p.drone = makeDrone(p, NOTE(26), 0.2); },
+      init(p) { p.drone = makeDrone(p, NOTE(38), 0.18); },
       bar(p, bar, t) { p.r = mulberry(hash(seed, 'defeat', Math.floor(bar / 4))); p.prog = [[0, -2, -1, 0], [0, 3, -2, 0], [0, -3, -2, -1]][Math.floor(p.r() * 3)]; p.mel = Array.from({ length: 4 }, () => [4, 3, 2, 1, 0][Math.floor(p.r() * 5)]); },
       step(p, s, t, sp) {
         const bar = p.bar, tn = MODES.defeat.tonic, sc = SCALES.aeolian, deg = p.prog[bar % 4];
-        if (s === 0) { setDrone(p, degFreq(tn / 2, sc, deg), t); drumHit(p.bus, t, 52, 0.55, { tymp: 1, dec: 1.0 }); pluck(p.bus, t, degFreq(tn, sc, deg), 0.2, { dur: 2.6, bright: 0.25 }); L(p, t, 'drum'); }
-        if (s === 8 && bar % 2) drumHit(p.bus, t, 52, 0.25, { tymp: 1, dec: 0.6 });
+        if (s === 0) { setDrone(p, degFreq(tn / 2, sc, deg), t); drumHit(p.bus, t, 62, 0.55, { tymp: 1, dec: 1.0 }); pluck(p.bus, t, degFreq(tn, sc, deg), 0.2, { dur: 2.6, bright: 0.25 }); L(p, t, 'drum'); }
+        if (s === 8 && bar % 2) drumHit(p.bus, t, 62, 0.25, { tymp: 1, dec: 0.6 });
         if (s % 4 === 0 && s) pluck(p.bus, t, degFreq(tn * 2, sc, deg + [2, 4, 1, 0][s / 4 % 4 | 0]), 0.1, { bright: 0.3, dur: 2 });
         if (s === 0 && bar % 2 === 0) flute(p.bus, t + sp * 2, degFreq(tn * 2, sc, deg + 7 + p.mel[(bar / 2) % 4 | 0]), sp * 11, 0.13);
         if (s === 0 && bar % 4 === 0) strings(p.bus, t, degFreq(tn, sc, deg + 4), sp * 60, 0.05, { a: 1.5, rel: 1.5, cut: 700 });
@@ -535,7 +537,7 @@ export function createAudio(opts = {}) {
   function makeDrone(p, f, g) {
     const out = ctx.createGain(); out.gain.value = g; out.connect(p.bus);
     const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 420; lp.Q.value = 0.8; lp.connect(out);
-    const os = [['sawtooth', 1, -6, 0.5], ['sawtooth', 1, 7, 0.5], ['sine', 1.5, 0, 0.35], ['sine', 0.5, 0, 0.5]].map(([ty, m, dt, gg]) => { const o = ctx.createOscillator(); o.type = ty; o.frequency.value = f * m; o.detune.value = dt; const x = G(gg); o.connect(x); x.connect(lp); o.start(ctx.currentTime); return { o, m }; });
+    const os = [['sawtooth', 1, -6, 0.5], ['sawtooth', 1, 7, 0.5], ['sine', 1.5, 0, 0.3], ['sine', 1, 0, 0.5]].map(([ty, m, dt, gg]) => { const o = ctx.createOscillator(); o.type = ty; o.frequency.value = f * m; o.detune.value = dt; const x = G(gg); o.connect(x); x.connect(lp); o.start(ctx.currentTime); return { o, m }; });
     return { g: out, os, f };
   }
   function setDrone(p, f, t) { if (!p.drone) return; p.drone.os.forEach(({ o, m }) => { o.frequency.setTargetAtTime(f * m, t, 0.25); }); }
@@ -598,7 +600,7 @@ export function createAudio(opts = {}) {
     sfxNames: SFX_NAMES.slice(), musicModes: MUSIC_MODES.slice(), music, sfx, crowd, duck,
     unlock() { if (!ensure()) return Promise.resolve(false); try { const p = ctx.resume(); return Promise.resolve(p).then(() => ctx.state === 'running').catch(() => false); } catch (e) { return Promise.resolve(false); } },
     setMaster(v) { vol.master = clamp(v, 0, 1); if (ready) master.gain.setTargetAtTime(vol.master, ctx.currentTime, 0.02); },
-    setMusic(v) { vol.music = clamp(v, 0, 1); if (ready) musicBus.gain.setTargetAtTime(vol.music, ctx.currentTime, 0.02); },
+    setMusic(v) { vol.music = clamp(v, 0, 1); if (ready) musicBus.gain.setTargetAtTime(vol.music * MUSIC_TRIM, ctx.currentTime, 0.02); },
     setSfx(v) { vol.sfx = clamp(v, 0, 1); if (ready) { sfxBus.gain.setTargetAtTime(vol.sfx, ctx.currentTime, 0.02); crowdBus.gain.setTargetAtTime(vol.sfx, ctx.currentTime, 0.02); } },
     get ctx() { return ctx; }, get analyser() { return analyser; }, get supported() { return !dead; }, get state() { return ctx ? ctx.state : 'none'; },
     suspend() { try { return ctx && ctx.suspend(); } catch (e) { return null; } },

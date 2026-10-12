@@ -121,10 +121,9 @@ export class FightDirector {
     const tanV = Math.tan(s.fov * D2R / 2), tanH = tanV * this.aspect;
     if (w.pts) { d = Math.max(d, needD(w.pts, c, s.yaw, pitch, tanV, tanH, w.margin, w.padX, w.padY)); }
     d = clamp(d, 1.5, this.maxD);
-    const rMax = w.rMax ?? this.R - this.wallMargin; let pos = camPos(c, s.yaw, pitch, d);
-    for (let i = 0; i < 30 && Math.hypot(pos[0], pos[2]) > rMax && pitch < 86 * D2R && !w.noWall; i++) {
-      pitch += 3 * D2R; if (w.pts) d = Math.max(d, needD(w.pts, c, s.yaw, pitch, tanV, tanH, w.margin, w.padX, w.padY)); d = Math.min(d, this.maxD); pos = camPos(c, s.yaw, pitch, d);
-    }
+    const rMax = w.rMax ?? this.R - this.wallMargin; let pos;
+    if (!w.noWall) { const q = this._lift(w.pts, c, s.yaw, pitch, d, tanV, tanH, w.margin, w.padX, w.padY, rMax); pitch = q.pi; d = q.d; }
+    pos = camPos(c, s.yaw, pitch, d);
     if (Math.hypot(pos[0], pos[2]) > rMax && !w.pts) { const k = rMax / Math.hypot(pos[0], pos[2]); pos[0] *= k; pos[2] *= k; } // unframed shots: push in
     if (pos[1] < this.minHeight) pos[1] = this.minHeight;
     const P = this.pose; P.pos.x = pos[0]; P.pos.y = pos[1]; P.pos.z = pos[2]; P.look.x = c[0]; P.look.y = c[1]; P.look.z = c[2]; P.fov = s.fov;
@@ -132,6 +131,12 @@ export class FightDirector {
     return P;
   }
 
+  // Smallest pitch >= pitch0 at which the camera sits inside the bowl (bisection, so it is continuous in the inputs).
+  _lift(pts, c, yaw, pitch0, dMin, tanV, tanH, margin, padX, padY, rMax, extra = 0) {
+    const at = (pi) => { let d = Math.max(dMin, pts ? needD(pts, c, yaw, pi, tanV, tanH, margin, padX, padY) + extra : dMin); d = Math.min(d, this.maxD); const q = camPos(c, yaw, pi, d); return { pi, d, r: Math.hypot(q[0], q[2]) }; };
+    let a = at(pitch0); if (a.r <= rMax) return a; let lo = pitch0, hi = 86 * D2R, h = at(hi); if (h.r > rMax) return h;
+    for (let i = 0; i < 16; i++) { const m = (lo + hi) / 2, x = at(m); if (x.r <= rMax) { hi = m; h = x; } else lo = m; } return h;
+  }
   _fov(base) { return base + this.tall * 10; } // phones: wider vertical fov so a narrow horizontal view still sees the action
   // Choose yaw (+pi alternative) to minimise forced pitch raise; sticky to current yaw.
   _pickYaw(pts, yaw, pitch, fov) {
@@ -161,9 +166,8 @@ export class FightDirector {
   _frame({ pts, yaw, pitch, fov, margin = 0.9, minD = 3, padX = 0.6, padY = 0.3, extra = 0, st, timeScale, recen = true, c0, rMax, noWall }) {
     const tanV = Math.tan(fov * D2R / 2), tanH = tanV * this.aspect;
     const c = recen ? recenter(pts, yaw, pitch) : c0;
-    // raise pitch until camera is inside bowl (unless noWall)
     let pi = pitch, d = Math.max(minD, needD(pts, c, yaw, pi, tanV, tanH, margin, padX, padY)) + extra;
-    if (!noWall) for (let i = 0; i < 30; i++) { const pos = camPos(c, yaw, pi, d); if (Math.hypot(pos[0], pos[2]) <= (rMax ?? this.R - this.wallMargin) || pi > 86 * D2R) break; pi += 3 * D2R; d = Math.max(minD, needD(pts, c, yaw, pi, tanV, tanH, margin, padX, padY)) + extra; }
+    if (!noWall) { const q = this._lift(pts, c, yaw, pitch, minD, tanV, tanH, margin, padX, padY, rMax ?? this.R - this.wallMargin, extra); pi = q.pi; d = q.d; }
     return { yaw, pitch: pi, c, d: Math.min(d, this.maxD), fov, pts, margin, padX, padY, st, timeScale, rMax, noWall };
   }
   _free() {

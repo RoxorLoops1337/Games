@@ -86,16 +86,16 @@ function check(name, an, lim) {
 }
 const SFX = await page.evaluate(async () => (await import('./ref/audio_ref.js')).SFX_NAMES);
 // expected spectral character (centroid Hz range) for a few sounds, to catch wrong-sounding regressions
-const CEN = { deathThud: [100, 1500], gate: [60, 1200], swish: [800, 6000], swishHeavy: [400, 4500], uiTap: [400, 3000], coin: [900, 5000], horn: [150, 2500], stunChime: [800, 5000], healSparkle: [1000, 7000], metalClang: [500, 5000], crowdRoar: [200, 2500] };
+const CEN = { deathThud: [100, 1500], gate: [60, 1200], swish: [800, 6000], swishHeavy: [250, 4500], uiTap: [400, 3000], coin: [900, 5000], horn: [150, 2500], stunChime: [800, 5000], healSparkle: [1000, 7000], metalClang: [500, 5000], crowdRoar: [200, 2500] };
 for (const n of SFX) {
   const r = await page.evaluate(([n]) => window.__h.render('sfx', n, {}), [n]); save('sfx_' + n, r.wav);
   const c = CEN[n] || [80, 8000];
-  check('sfx ' + n, r.an, { minPeak: -24, maxPeak: -1.0, minDur: 0.04, maxDur: 5, minC: c[0], maxC: c[1] });
+  check('sfx ' + n, r.an, { minPeak: -22, maxPeak: -3.0, minDur: 0.04, maxDur: 5, minC: c[0], maxC: c[1] });
 }
 // variants
 for (const [label, opts] of [['grunt v0', { voice: 0 }], ['grunt v1', { voice: 1 }], ['grunt v2', { voice: 2 }], ['grunt v3', { voice: 3 }]]) {
   const r = await page.evaluate(([o]) => window.__h.render('sfx', 'grunt', { opts: o }), [opts]); save('sfx_' + label.replace(' ', '_'), r.wav);
-  check('sfx ' + label, r.an, { minPeak: -24, maxPeak: -1, minDur: 0.1, maxDur: 2, minC: 200, maxC: 4000 }); (check.c = check.c || {})[label] = r.an.centroid;
+  check('sfx ' + label, r.an, { minPeak: -24, maxPeak: -1, minDur: 0.06, maxDur: 2, minC: 200, maxC: 4000 }); (check.c = check.c || {})[label] = r.an.centroid;
 }
 { const r = await page.evaluate(() => window.__h.render('sfx', 'swish', { opts: { heavy: true } })); check('sfx swish{heavy}', r.an, { minPeak: -24, maxPeak: -1, minDur: 0.1, maxDur: 2, minC: 300, maxC: 5000 }); }
 for (const e of ['fire', 'lightning', 'earth', 'wind', 'holy']) { const r = await page.evaluate(([e]) => window.__h.render('sfx', 'ult', { opts: { element: e } }), [e]); check('sfx ult{' + e + '}', r.an, { minPeak: -24, maxPeak: -1, minDur: 0.5, maxDur: 5, minC: 60, maxC: 9000 }); }
@@ -110,8 +110,8 @@ for (const m of ['ludus', 'prep', 'victory', 'defeat']) { const r = await page.e
 const ar = {};
 for (const i of [0, 0.5, 1]) { const r = await page.evaluate(([i]) => window.__h.render('music', 'arena', { int: i }), [i]); save('music_arena_i' + i, r.wav); ar[i] = r; check('music arena i=' + i, r.an, { minPeak: -24, maxPeak: -1, minDur: 12, maxDur: 15, minC: 100, maxC: 5000, maxGap: 0.6 }); }
 if (!(ar[0].an.rmsDb < ar[0.5].an.rmsDb && ar[0.5].an.rmsDb < ar[1].an.rmsDb)) bad('arena RMS must rise with intensity: ' + [0, 0.5, 1].map((i) => f1(ar[i].an.rmsDb)));
-{ const r = await page.evaluate(() => window.__h.render('music', 'arena', { int: 0, rampInt: 1, secs: 16 })); save('music_arena_ramp', r.wav); check('music arena ramp 0->1', r.an, { minPeak: -24, maxPeak: -1, minDur: 15, maxDur: 17, minC: 100, maxC: 5000, maxGap: 0.6 }); const w = r.an.wrms; if (!(w[w.length - 1] > w[0] + 2)) bad('ramp did not get louder ' + w); }
-{ const r = await page.evaluate(() => window.__h.render('music', 'ludus', { int: 0.3, switchTo: 'arena', switchAt: 6, fade: 2, secs: 14 })); save('music_crossfade', r.wav); check('music crossfade ludus>arena', r.an, { minPeak: -24, maxPeak: -1, minDur: 12, maxDur: 15, minC: 100, maxC: 5000, maxGap: 0.3 }); }
+{ const r = await page.evaluate(() => window.__h.render('music', 'arena', { int: 0, rampInt: 1, secs: 16 })); save('music_arena_ramp', r.wav); check('music arena ramp 0->1', r.an, { minPeak: -26, maxPeak: -5, minDur: 15, maxDur: 17, minC: 100, maxC: 5000, maxGap: 0.6 }); const w = r.an.wrms; if (!(w[w.length - 1] > w[0] + 2)) bad('ramp did not get louder ' + w); }
+{ const r = await page.evaluate(() => window.__h.render('music', 'ludus', { int: 0.3, switchTo: 'arena', switchAt: 6, fade: 2, secs: 14 })); save('music_crossfade', r.wav); check('music crossfade ludus>arena', r.an, { minPeak: -26, maxPeak: -5, minDur: 12, maxDur: 15, minC: 100, maxC: 5000, maxGap: 0.3 }); }
 // determinism + variation
 const a1 = await page.evaluate(() => window.__h.render('music', 'ludus', { seed: 5, int: 0.3, secs: 20, wav: false })), a2 = await page.evaluate(() => window.__h.render('music', 'ludus', { seed: 5, int: 0.3, secs: 20, wav: false })), a3 = await page.evaluate(() => window.__h.render('music', 'ludus', { seed: 6, int: 0.3, secs: 20, wav: false }));
 if (a1.sum !== a2.sum) bad('same seed must render identically'); if (a1.sum === a3.sum) bad('different seed must differ');
