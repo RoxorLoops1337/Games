@@ -249,7 +249,7 @@ export class Slot {
     private hover = false;
     selected = false;
 
-    constructor (scene: Phaser.Scene, x: number, y: number, readonly size = 44, o: { iconScale?: number } = {}) {
+    constructor (private scene: Phaser.Scene, x: number, y: number, readonly size = 44, o: { iconScale?: number } = {}) {
         this.g = scene.add.graphics();
         this.im = scene.add.image(size / 2, size / 2 - 1, '__DEFAULT', 0).setVisible(false).setScale(o.iconScale ?? Math.max(1, Math.floor((size - 10) / 14)));
         this.cnt = label(scene, size - 3, size - 3, '', 12, PAL.cream, { origin: [1, 1], stroke: 3 });
@@ -272,6 +272,7 @@ export class Slot {
         if (!d && !o) return;
         if (d && o && d.icon === o.icon && d.count === o.count && d.rarity === o.rarity && d.dim === o.dim && d.badge === o.badge && d.bad === o.bad && d.overlay === o.overlay && d.scale === o.scale) return;
         const boxChanged = !d !== !o || (d?.rarity ?? 0) !== (o?.rarity ?? 0);
+        const gained = !!d && !!o && d.icon === o.icon && (d.count ?? 0) > (o.count ?? 0);       // (the same thing, more of it: the icon gives a little hop)
         this.data = d;
         if (d) {
             if (this.im.texture.key !== d.icon) this.im.setTexture(d.icon, 0);
@@ -287,6 +288,14 @@ export class Slot {
             this.badge.setText('');
         }
         if (boxChanged) this.draw();
+        if (gained && this.im.visible) this.pop();
+    }
+
+    private pop () {
+        const base = this.data?.scale ?? this.baseScale;
+        this.scene.tweens.killTweensOf(this.im);
+        this.im.setScale(base * 1.28);
+        this.scene.tweens.add({ targets: this.im, scaleX: base, scaleY: base, duration: 170, ease: 'Back.Out' });
     }
 
     setSelected (on: boolean) { if (this.selected === on) return; this.selected = on; this.draw(); }
