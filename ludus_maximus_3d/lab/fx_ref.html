@@ -34,7 +34,7 @@ const floor = new THREE.Mesh(new THREE.CircleGeometry(60, 64).rotateX(-Math.PI /
 scene.add(new THREE.HemisphereLight('#b8c4e8', '#b08850', 1.3));
 const sun = new THREE.DirectionalLight('#ffe2b0', 1.9); sun.position.set(-10, 14, 8); sun.castShadow = true; sun.shadow.mapSize.set(1024, 1024); const sc = sun.shadow.camera; sc.left = -30; sc.right = 30; sc.top = 30; sc.bottom = -30; scene.add(sun);
 const pillarM = new THREE.MeshLambertMaterial({ color: '#e8dcc0' });
-function pillar(x, z) { const m = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 0.7, 4.5, 14), pillarM); m.position.set(x, 2.25, z); m.castShadow = m.receiveShadow = true; scene.add(m); }
+function pillar(x, z) { const m = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 0.7, 4.5, 14), pillarM); m.position.set(x, 2.25, z); m.castShadow = m.receiveShadow = true; scene.add(m); return m; }
 const sheetName = Q.get('sheet');
 const fx = createFx(scene, { arenaRadius: 40, seed: 99, decalSize: 2048 });
 const feel = createFeel({ overlay: false, fov: camera.fov, seed: 3 });
@@ -86,24 +86,26 @@ const FX = {
   crackle: (o) => { const d = dummy(o.x, o.z); sh.tmp.push(d); fx.ult.sustain('lightning', d, 6); },
 };
 const GROUPS = {
-  hits: ['spark', 'dust', 'flash', 'slash', 'ring', 'shockwave', 'hitLight', 'hitHeavy', 'hitCrit', 'debris', 'decals', 'numbers'],
-  beams: ['zap', 'chain', 'trail', 'swordTrail', 'projectile', 'tele'],
-  status: ['stun', 'slow', 'bleed', 'blind', 'taunt', 'burn', 'heal', 'auraBuff', 'auraGuard', 'auraRage', 'auraRally', 'tornado'],
-  ults: ['ultFire', 'ultLightning', 'ultEarth', 'ultWind', 'ultHoly', 'rageFire', 'crackle'],
+  h1: ['spark', 'dust', 'flash', 'slash', 'ring', 'shockwave'], h2: ['hitLight', 'hitHeavy', 'hitCrit', 'debris', 'decals', 'numbers'],
+  b1: ['zap', 'chain', 'trail', 'swordTrail', 'projectile', 'tele'], s1: ['stun', 'slow', 'bleed', 'blind', 'taunt', 'burn'], s2: ['heal', 'auraBuff', 'auraGuard', 'auraRage', 'auraRally', 'tornado'],
+  u1: ['ultFire', 'ultLightning', 'ultEarth'], u2: ['ultWind', 'ultHoly', 'rageFire'], u3: ['crackle'],
 };
-GROUPS.all = [].concat(GROUPS.hits, GROUPS.beams, GROUPS.status, GROUPS.ults);
+GROUPS.all = [].concat(...Object.values(GROUPS));
 const PERIOD = { tele: 2.2, ultFire: 3, tornado: 6 };
 
 // ---------- scenario control ----------
 let list = [], cells = [], simT = 0, started = false;
+const pillars = [];
 function layout() {
   const name = Q.get('fx'); list = sheetName ? GROUPS[sheetName] || GROUPS.all : [name || 'hitCrit'];
-  cells = list.map((n, i) => { if (!sheetName) return { n, o: V(0, 0, 0) }; const cols = Math.ceil(Math.sqrt(list.length * 1.4)); return { n, o: V((i % cols - (cols - 1) / 2) * 8.5, 0, (Math.floor(i / cols) - (Math.ceil(list.length / cols) - 1) / 2) * 7) }; });
-  if (sheetName) { const cols = Math.ceil(Math.sqrt(list.length * 1.4)), rows = Math.ceil(list.length / cols); const span = Math.max(cols * 8.5, rows * 7 * 1.5); camera.position.set(0, span * 0.52, span * 0.62 + 4); camera.lookAt(0, 0.5, 0.5); camera.fov = 42; }
+  const cols = sheetName ? Math.min(3, list.length) : 1, rows = Math.ceil(list.length / cols), SX = 6.4, SZ = 6.2;
+  cells = list.map((n, i) => ({ n, o: V((i % cols - (cols - 1) / 2) * SX, 0, (Math.floor(i / cols) - (rows - 1) / 2) * SZ) }));
+  if (sheetName) { const d = Math.max(cols * SX * 0.85, rows * SZ * 1.2) + 3; camera.position.set(0, d * 0.58, d * 0.78 + 1); camera.lookAt(0, 0.5, 0.4); camera.fov = 42; }
   else { camera.position.set(0, 5.5, 9.5); camera.lookAt(0, 0.9, 0); camera.fov = 40; }
   camera.updateProjectionMatrix(); feel.setBaseFov(camera.fov);
-  scene.children.filter((c) => c.userData.pillar).forEach((c) => scene.remove(c));
-  [[-6, -6], [6, -6], [-6, 6], [6, 6], [0, -9]].forEach(([x, z]) => pillar(x, z));
+  pillars.splice(0).forEach((m) => scene.remove(m));
+  const zb = -(rows * SZ) / 2 - 2.5, xb = (cols * SX) / 2 + 1.5;
+  [[-xb, zb], [0, zb - 1], [xb, zb], [-xb, zb + rows * SZ * 0.5], [xb, zb + rows * SZ * 0.5]].forEach(([x, z]) => pillars.push(pillar(x, z)));
 }
 function clearTmp() { sh.tmp.forEach((d) => scene.remove(d)); sh.tmp = []; sh.anim = []; sh.stopAt = []; }
 function trigger() { clearTmp(); cells.forEach((c) => FX[c.n](c.o)); }

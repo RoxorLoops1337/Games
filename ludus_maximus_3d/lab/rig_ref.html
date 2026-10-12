@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Rig reference lab</title>
+<style>html,body{margin:0;height:100%;background:#2a2540;overflow:hidden;font:12px system-ui,sans-serif;color:#f2e6c8}
+canvas{display:block}#hud{position:fixed;left:8px;top:6px;text-shadow:0 1px 2px #000;white-space:pre;pointer-events:none}</style>
+<script type="importmap">{"imports":{"three":"../vendor/three.module.min.js","three/addons/":"../vendor/jsm/"}}</script>
+</head><body><div id="hud"></div>
+<script type="module">
+import * as THREE from 'three';
+import { buildGladiator, poseAt, triCount, attackInfo, JOINTS, DIM } from './ref/rig_ref.js';
+import { equipStyle, STYLES } from './ref/gear_ref.js';
+
+const Q = new URLSearchParams(location.search);
+const W = innerWidth, H = innerHeight;
+const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+renderer.setPixelRatio(1); renderer.setSize(W, H); renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.05; renderer.outputColorSpace = THREE.SRGBColorSpace;
+document.body.appendChild(renderer.domElement);
+const scene = new THREE.Scene(); scene.background = new THREE.Color('#3a3150'); scene.fog = new THREE.Fog('#4a3a52', 9, 24);
+
+// procedural environment: warm sky gradient + sand bounce, so metals have something to reflect
+{
+  const env = new THREE.Scene();
+  const sky = new THREE.Mesh(new THREE.SphereGeometry(10, 16, 12), new THREE.ShaderMaterial({ side: THREE.BackSide, uniforms: {}, vertexShader: 'varying vec3 p;void main(){p=position;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}',
+    fragmentShader: 'varying vec3 p;void main(){float h=normalize(p).y;vec3 top=vec3(.35,.5,.85),hor=vec3(1.,.78,.5),bot=vec3(.55,.4,.28);vec3 c=h>0.?mix(hor,top,pow(h,.6)):mix(hor,bot,pow(-h,.5));float sun=pow(max(dot(normalize(p),normalize(vec3(.6,.4,.7))),0.),30.);gl_FragColor=vec4(c+vec3(1.,.8,.5)*sun*3.,1.);}' }));
+  env.add(sky);
+  const pm = new THREE.PMREMGenerator(renderer); scene.environment = pm.fromScene(env, 0.02).texture; scene.environmentIntensity = 0.55;
+}
+scene.add(new THREE.HemisphereLight('#a9b8e8', '#a8744a', 0.55));
+const key = new THREE.DirectionalLight('#ffd7a0', 3.0); key.position.set(4, 5.5, 5); key.castShadow = true; key.shadow.mapSize.set(2048, 2048);
+Object.assign(key.shadow.camera, { left: -6, right: 6, top: 4, bottom: -3, near: 1, far: 20 }); key.shadow.bias = -0.0004; key.shadow.normalBias = 0.02; scene.add(key);
+const rim = new THREE.DirectionalLight('#9fb8ff', 2.2); rim.position.set(-3, 3.5, -5); scene.add(rim);
+const rim2 = new THREE.DirectionalLight('#ffb070', 1.2); rim2.position.set(5, 2, -4); scene.add(rim2);
+const ground = new THREE.Mesh(new THREE.CircleGeometry(14, 48), new THREE.MeshStandardMaterial({ color: '#d9b27c', roughness: 1 })); ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; scene.add(ground);
+
+const PALETTES = {
+  murmillo: { skin: '#c98d62', hair: '#2b1b12', cloth: '#a8452a', plume: '#b5271f', metal: '#c08a3e' },
+  retiarius: { skin: '#a8714a', hair: '#1c1410', cloth: '#6f8a9a', plume: '#3c5a7a', metal: '#9aa0a8' },
+  thraex: { skin: '#e0ac84', hair: '#6a4423', cloth: '#5a1f5e', plume: '#7a2a7a', metal: '#b8803a' },
+  hoplomachus: { skin: '#d49a70', hair: '#3a2a1a', cloth: '#e8dcc0', plume: '#a3221b', metal: '#d6b35a' },
+  dimachaerus: { skin: '#7a4f34', hair: '#120c08', cloth: '#5b7a3a', plume: '#b8803a', metal: '#aab0b8' },
+};
+const BUILDS = { murmillo: { bulk: 1.12 }, retiarius: { bulk: 0.92, height: 1.04 }, thraex: { bulk: 1.0 }, hoplomachus: { bulk: 1.05, height: 1.02 }, dimachaerus: { bulk: 1.0, shoulder: 1.05 } };
+const TORSO = { murmillo: 'skin', retiarius: 'cloth', thraex: 'skin', hoplomachus: 'cloth', dimachaerus: 'skin' };
+
+const rigs = [], gear = [];
+function spawn(style, x, z = 0) {
+  const rig = buildGladiator({ palette: PALETTES[style], build: BUILDS[style], torso: TORSO[style], name: style });
+  rig.root.position.set(x, 0, z); scene.add(rig.root); gear.push(equipStyle(rig, style)); rig.update(0.016); rig.resetSecondary(); rigs.push(rig); return rig;
+}
+
+// scripted plans: [{t, fn}] repeating every `period`
+const plans = [];
+function plan(rig, period, steps) { plans.push({ rig, period, steps, last: -1, label: '' }); }
+const a = (n, o) => (r) => { r.animator.play(n, o); };
+const camTarget = new THREE.Vector3(0, 1.0, 0);
+const cam = new THREE.PerspectiveCamera(32, W / H, 0.1, 60);
+
+const sheet = Q.get('sheet');
+if (sheet) {
+  const style = Q.get('style') || 'murmillo', n = +(Q.get('n') || 6), clip = sheet, t1 = +(Q.get('t1') || 0), t0 = +(Q.get('t0') || 0);
+  const proto = spawn(style, 0); const dur = t1 || proto.animator.clips[clip].dur; scene.remove(proto.root); rigs.length = 0; gear.length = 0;
+  const gap = +(Q.get('gap') || 1.45), view = Q.get('view') || '34';
+  for (let i = 0; i < n; i++) {
+    const rig = spawn(style, (i - (n - 1) / 2) * gap); const t = t0 + (dur - t0) * (i / (n - 1));
+    poseAt(rig, clip, t); rig.animator.update = () => {}; rig.animator.postIK = () => {}; rig.update = () => {};
+    rig.root.rotation.y = view === 'side' ? Math.PI / 2 : (view === '34' ? 0.5 : 0);
+    const lab = document.createElement('div'); lab.style.cssText = 'position:fixed;bottom:6px;left:' + (50 + (i - (n - 1) / 2) * (100 / n * 0.9)) + '%;transform:translateX(-50%);text-shadow:0 1px 2px #000'; lab.textContent = t.toFixed(2) + 's'; document.body.appendChild(lab);
+  }
+  camTarget.set(0, 0.95, 0); cam.position.set(0, 1.45, Math.max(4.5, n * gap * 0.95)); cam.fov = 30;
+  document.getElementById('hud').textContent = style + ' / ' + clip;
+} else {
+  const xs = [-3.4, -1.7, 0, 1.7, 3.4], z = [0, 0, 0, 0, 0];
+  STYLES.forEach((s, i) => spawn(s, xs[i], z[i]));
+  // 0 murmillo: three-hit combo
+  plan(rigs[0], 4.2, [[0.3, a('attack1')], [1.3, a('attack2')], [2.3, a('attack3')]]);
+  // 1 retiarius: jog in place then spear thrust
+  plan(rigs[1], 4, [[0, (r) => { r.animator.setMove(3.6, 0); }], [2.4, (r) => { r.animator.setMove(0, 0); r.animator.play('attack1'); }]]);
+  // 2 thraex: block and take a hit, then flinch
+  plan(rigs[2], 4, [[0.2, a('block')], [1.2, (r) => { r.animator.hurt(1, 1); r.flash(0.12); r.squashKick(-0.08); }], [2.4, (r) => r.animator.release()], [3.0, a('hurt')]]);
+  // 3 hoplomachus: walk then thrust 2, then taunt
+  plan(rigs[3], 5, [[0, (r) => r.animator.setMove(1.5, 0)], [1.8, (r) => { r.animator.setMove(0, 0); r.animator.play('attack1'); }], [2.8, a('attack3')], [4.0, a('taunt')]]);
+  // 4 dimachaerus: strafe, double cut, victory
+  plan(rigs[4], 5, [[0, (r) => r.animator.setMove(0, 2.0)], [1.6, (r) => { r.animator.setMove(0, 0); r.animator.play('attack1'); }], [2.4, a('attack3')], [3.4, (r) => r.animator.setState('victory')], [4.8, (r) => r.animator.setState('move')]]);
+  cam.position.set(0, 1.5, 10.6); cam.fov = 32; camTarget.set(0, 0.98, 0);
+}
+cam.lookAt(camTarget);
+let simT = 0;
+function stepPlans() {
+  for (const p of plans) {
+    const t = simT % p.period, prevT = (simT - 1 / 60 + p.period * 100) % p.period;
+    for (const [st, fn] of p.steps) if ((prevT < st && t >= st) || (simT < 1 / 60 && st <= 0)) fn(p.rig);
+  }
+}
+function step(dt) { simT += dt; stepPlans(); for (const r of rigs) r.update(dt); }
+function render() { cam.aspect = W / H; cam.updateProjectionMatrix(); cam.lookAt(camTarget); renderer.render(scene, cam); }
+window.__lab = { rigs, scene, step, render, THREE, cam, poseAt, plans, camTarget, get simT() { return simT; } };
+window.__labShot = (secs) => {
+  const n = Math.round(secs * 60); for (let i = 0; i < n; i++) step(1 / 60); render();
+  const info = { bare: triCount(buildGladiator().root), tris: rigs.map((r) => triCount(r.root)), drawCalls: renderer.info.render.calls };
+  window.__stat = info; return info;
+};
+window.__labReady = Promise.resolve();
+// real-time preview when opened in a browser
+if (!Q.get('static') && !sheet && !navigator.webdriver) { let last = performance.now(); (function loop(now) { const dt = Math.min(0.05, (now - last) / 1000); last = now; step(dt); render(); requestAnimationFrame(loop); })(last); } else render();
+</script></body></html>
