@@ -638,12 +638,15 @@
     trainer: { n: 'Veteran Trainer', d: 'Teaches one fighter a hard lesson: +2 to their weakest stat.' },
     bard: { n: 'Traveling Bard', d: 'Sings for the whole ludus: +12 morale and +8 energy for everyone.' },
     scout: { n: 'Rumor Scout', d: 'Spreads word of your ludus: a burst of fame.' },
+    healer: { n: 'Wandering Healer', d: 'Tends your wounded: every injury heals 2 weeks faster.' },
+    hunter: { n: 'Bounty Hunter', d: 'Posts a fresh bounty with a double purse this week.' },
+    spy: { n: 'Gossip Spy', d: "Spreads doubt about your rival owner: they lose 2 points of their lead, or you gain a little fame." },
   };
   LM.visitor = (S) => {
     if (S.week < 2 || S.visitWeek === S.week) return null;
     const r = mulberry(hash(S.seed + 'visit' + S.week)); if (r() > 0.6) return null;
-    const kind = ['merchant', 'trainer', 'bard', 'scout'][Math.floor(r() * 4)]; const ml = LM.maxLeague(S);
-    return { kind, name: LM.VISITORS[kind].n, d: LM.VISITORS[kind].d, cost: kind === 'merchant' ? 70 + 45 * ml : kind === 'trainer' ? 40 + 25 * ml : 0, seed: Math.floor(r() * 1e9) };
+    const KINDS = ['merchant', 'trainer', 'bard', 'scout', 'healer', 'hunter', 'spy']; const kind = KINDS[Math.floor(r() * KINDS.length)]; const ml = LM.maxLeague(S);
+    return { kind, name: LM.VISITORS[kind].n, d: LM.VISITORS[kind].d, cost: kind === 'merchant' ? 70 + 45 * ml : kind === 'trainer' ? 40 + 25 * ml : kind === 'healer' ? 30 + 20 * ml : 0, seed: Math.floor(r() * 1e9) };
   };
   LM.visit = (S, v, g) => {
     if (!v || S.visitWeek === S.week) return 'The visitor has moved on.'; if (S.gold < v.cost) return 'Not enough gold';
@@ -651,6 +654,9 @@
     if (v.kind === 'merchant') { const it = genItem(mulberry(v.seed), { league: Math.min(3, ml + 1), ilvl: 3 + ml * 5 + Math.floor(S.week / 6), rar: Math.min(4, 2 + (ml >= 2 ? 1 : 0)) }); LM.addItem(S, it); msg = `You bought ${it.name}.`; }
     else if (v.kind === 'trainer') { if (!g) return 'Pick a fighter'; const st = D.STATS.slice().sort((a, b) => g.st[a] - g.st[b])[0]; g.st[st] += 2; LM.diary(S, g, `Trained by a veteran: +2 ${D.SN[st]}.`); msg = `${g.name} gains +2 ${D.SN[st]}.`; }
     else if (v.kind === 'bard') { S.glads.forEach((x) => { x.mo = clamp(x.mo + 12, 0, 100); x.en = clamp(x.en + 8, 0, 100); }); msg = 'The ludus sings along. Spirits are high!'; }
+    else if (v.kind === 'healer') { const hurt = S.glads.filter((x) => x.inj > 0); if (!hurt.length) return 'Nobody is injured'; hurt.forEach((x) => { x.inj = Math.max(0, x.inj - 2); }); msg = `${hurt.length} fighter${hurt.length > 1 ? 's' : ''} healed up.`; }
+    else if (v.kind === 'hunter') { S.bountyWeek = null; S.bountyBonus = S.week; msg = 'A fresh bounty is posted with a double purse.'; }
+    else if (v.kind === 'spy') { if (S.rowner) { S.rowner.w = Math.max(0, S.rowner.w - 2); msg = `${S.rowner.name} loses face. Their lead shrinks.`; } else { S.fame += 10; msg = 'Rumors help your name: +10 fame.'; } }
     else { const f = 15 + 5 * ml; S.fame += f; msg = `Word spreads: +${f} fame.`; }
     S.gold -= v.cost; S.visitWeek = S.week; return { msg };
   };
@@ -715,7 +721,7 @@
   LM.bountyOpp = (S, g) => { const o = LM.champOpp(S, g); o.nick = 'Outlaw'; o.ludus = 'Wanted'; o.id = 'bounty'; return o; };
   LM.bountyResult = (S, win) => {
     S.bountyWeek = S.week; if (!win) return { gold: 0, fame: 0 };
-    const gold = Math.round((50 + 35 * LM.maxLeague(S)) * LM.diffGold(S)), fame = 20 + 10 * LM.maxLeague(S); S.gold += gold; S.fame += fame; S.stats.bounties = (S.stats.bounties || 0) + 1; return { gold, fame };
+    const gold = Math.round((50 + 35 * LM.maxLeague(S)) * LM.diffGold(S) * (S.bountyBonus === S.week ? 2 : 1)), fame = 20 + 10 * LM.maxLeague(S); S.gold += gold; S.fame += fame; S.stats.bounties = (S.stats.bounties || 0) + 1; return { gold, fame };
   };
   LM.TRAIT_MOOD = {
     showman: { good: 'practiced a flourish and drew a crowd', bad: 'was upstaged at supper and sulks' },

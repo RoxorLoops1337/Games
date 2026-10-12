@@ -337,7 +337,11 @@ Level-up pick (mastery dialog), the fighter profile (stats, gear, ultimates, run
 Wandering visitors (merchant, veteran trainer, bard, rumor scout): from week 2 a visitor may wait at the gates, the same one every time you look in a given week (seeded by save seed and week), with a Visit card on the Ludus tab (right under the map) and one choice per week. Merchant sells a rare item for 70 gold plus 45 per league, trainer gives +2 to a fighter's weakest stat for 40 plus 25 per league, bard gives everyone +12 morale and +8 energy for free, scout gives fame for free. The Town Crier announces a visitor. Verified in headless Chromium for the trainer, merchant and bard. The tournament flow pass (147) moves to next round.
 
 ## Next ideas
-- [ ] 152. Tournament flow pass at phone size (147)
-- [ ] 153. Visitor variety: a rival owner's spy, a bounty hunter, a healer for injuries
+- [x] 152. Tournament flow pass at phone size (147)
+- [x] 153. Visitor variety: a rival owner's spy, a bounty hunter, a healer for injuries
 - [ ] 154. Real replay (148)
 - [ ] 155. Augment hints per style (149)
+
+## Round 37 shipped
+- Tournament flow pass at phone size: bracket, semifinal prep and results fine (cosmetic: rival names can match your fighters).
+- Visitor variety: Wandering Healer (injuries heal 2 weeks faster), Bounty Hunter (double purse bounty), Gossip Spy (rival owner loses lead or you gain fame).

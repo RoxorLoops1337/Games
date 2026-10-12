@@ -437,12 +437,21 @@ ok(strongWins >= 17, `level 10 beats level 1 (${strongWins}/20)`);
 {
   const S36 = LM.newGame({ name: 'R36' }); S36.gold = 2000; const g = LM.makeGlad({ id: S36.nextId++, style: 'thraex', lvl: 4 }); S36.glads.push(g);
   const seen = {}; for (let w = 2; w < 80; w++) { S36.week = w; S36.visitWeek = 0; const v = LM.visitor(S36); if (v) seen[v.kind] = (seen[v.kind] || 0) + 1; }
-  ok(['merchant', 'trainer', 'bard', 'scout'].every((k) => seen[k] > 0), 'every kind of visitor turns up over a season or two');
+  ok(['merchant', 'trainer', 'bard', 'scout', 'healer', 'hunter', 'spy'].every((k) => seen[k] > 0), 'every kind of visitor turns up over a season or two');
   S36.week = 2; S36.visitWeek = 0; let w = 2; while (!LM.visitor(S36) && w < 80) { w++; S36.week = w; } const v = LM.visitor(S36); ok(v && JSON.stringify(v) === JSON.stringify(LM.visitor(S36)), 'the visitor is the same every time you look in a given week');
   const before = { gold: S36.gold, items: S36.items.length, st: JSON.stringify(g.st), fame: S36.fame, mo: g.mo };
   const r = LM.visit(S36, v, g); ok(typeof r === 'object' && r.msg, 'visiting works'); ok(S36.visitWeek === S36.week && LM.visitor(S36) === null, 'only one visit per week'); ok(typeof LM.visit(S36, v, g) === 'string', 'a second visit is refused');
   ok(S36.gold === before.gold - v.cost && (S36.items.length > before.items || JSON.stringify(g.st) !== before.st || S36.fame > before.fame || g.mo >= before.mo), 'the visit costs gold and gives something');
   const S37 = LM.newGame({ name: 'R37' }); S37.gold = 0; S37.week = 2; let hit = false; for (let k = 2; k < 80 && !hit; k++) { S37.week = k; S37.visitWeek = 0; const vv = LM.visitor(S37); if (vv && vv.cost > 0) { hit = true; ok(LM.visit(S37, vv, S37.glads[0]) === 'Not enough gold', 'a paid visit needs the gold'); } } ok(hit, 'a paid visitor exists');
+}
+
+// round 37: visitor variety
+{
+  const S38 = LM.newGame({ name: 'R38' }); S38.gold = 1000; const g = LM.makeGlad({ id: S38.nextId++, style: 'thraex', lvl: 4 }); S38.glads.push(g);
+  const find = (kind) => { for (let w = 2; w < 400; w++) { S38.week = w; S38.visitWeek = 0; const v = LM.visitor(S38); if (v && v.kind === kind) return v; } return null; };
+  const h = find('healer'); ok(h && h.cost > 0, 'a healer shows up'); ok(LM.visit(S38, h, null) === 'Nobody is injured' && S38.visitWeek === 0, 'the healer refuses when nobody is hurt and keeps your gold'); g.inj = 3; const g0 = S38.gold; ok(LM.visit(S38, h, null).msg && g.inj === 1 && S38.gold === g0 - h.cost, 'the healer cuts injuries by two weeks');
+  const hu = find('hunter'); S38.bountyWeek = S38.week; ok(!LM.bountyReady(S38), 'bounty already claimed'); LM.visit(S38, hu, null); ok(LM.bountyReady(S38) && S38.bountyBonus === S38.week, 'the hunter posts a fresh bounty'); const gb = S38.gold; const r1 = LM.bountyResult(S38, true); S38.bountyBonus = 0; S38.bountyWeek = null; const gb2 = S38.gold; const r2 = LM.bountyResult(S38, true); ok(r1.gold === 2 * r2.gold, 'the hunter doubles the purse');
+  const sp = find('spy'); S38.rowner = { name: 'Rival', w: 5, l: 0 }; LM.visit(S38, sp, null); ok(S38.rowner.w === 3, 'the spy cuts the rival owner lead'); S38.visitWeek = 0; S38.rowner = null; const f0 = S38.fame; LM.visit(S38, sp, null); ok(S38.fame === f0 + 10, 'the spy gives fame when there is no rival owner');
 }
 
 console.log(`ludus_maximus: ${pass} passed, ${fail} failed`);
