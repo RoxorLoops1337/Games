@@ -75,8 +75,8 @@
   function head(style, o) {
     const hc = o.gear.helm ? D.RAR[o.gear.helm.rar].c : IRON; const pl = o.plume; const hair = o.hair;
     const eyes = (y) => `<circle cx="54" cy="${y}" r="2.8" fill="${INK}"/><circle cx="68" cy="${y}" r="2.8" fill="${INK}"/>`;
-    const brows = (y) => (o.mood === 'fight' ? `<path d="M49 ${y - 5}l9 3M73 ${y - 5}l-9 3" stroke="${INK}" stroke-width="3" stroke-linecap="round"/>` : `<path d="M49 ${y - 5}l9 -1M73 ${y - 5}l-9 -1" stroke="${INK}" stroke-width="2.4" stroke-linecap="round"/>`);
-    const mouth = o.mood === 'fight' ? `<path d="M55 49q6 -4 12 0" fill="none" stroke="${INK}" stroke-width="2.6" stroke-linecap="round"/>` : `<path d="M56 48q5 3 10 0" fill="none" stroke="${INK}" stroke-width="2.6" stroke-linecap="round"/>`;
+    const brows = (y) => (o.mood === 'sad' ? `<path d="M49 ${y - 3}l9 -4M73 ${y - 3}l-9 -4" stroke="${INK}" stroke-width="2.6" stroke-linecap="round"/>` : o.mood === 'fight' ? `<path d="M49 ${y - 5}l9 3M73 ${y - 5}l-9 3" stroke="${INK}" stroke-width="3" stroke-linecap="round"/>` : `<path d="M49 ${y - 5}l9 -1M73 ${y - 5}l-9 -1" stroke="${INK}" stroke-width="2.4" stroke-linecap="round"/>`);
+    const mouth = o.mood === 'happy' ? `<path d="M54 46q7 8 14 0" fill="#fff" stroke="${INK}" stroke-width="2.6" stroke-linecap="round"/>` : o.mood === 'sad' ? `<path d="M56 52q5 -5 10 0" fill="none" stroke="${INK}" stroke-width="2.6" stroke-linecap="round"/>` : o.mood === 'fight' ? `<path d="M55 49q6 -4 12 0" fill="none" stroke="${INK}" stroke-width="2.6" stroke-linecap="round"/>` : `<path d="M56 48q5 3 10 0" fill="none" stroke="${INK}" stroke-width="2.6" stroke-linecap="round"/>`;
     const face = `<circle cx="61" cy="38" r="19" fill="${o.skin}" ${sw}/>`;
     if (style === 'murmillo') return `<path d="M58 22 Q62 -4 86 4 Q74 10 70 22Z" fill="${pl}" ${sw}/>` + face + mouth + `<path d="M41 36 Q41 14 61 14 Q81 14 81 36 L81 40 L41 40Z" fill="${hc}" ${sw}/><rect x="45" y="32" width="32" height="10" rx="3" fill="${INK}"/><path d="M52 37h6M64 37h6" stroke="#f5ead2" stroke-width="3" stroke-linecap="round"/>`;
     if (style === 'thraex') return `<path d="M50 20 Q56 -6 84 2 Q70 6 72 22Z" fill="${pl}" ${sw}/>` + face + eyes(40) + brows(40) + mouth + `<path d="M43 30 Q43 12 61 12 Q79 12 79 30Z" fill="${hc}" ${sw}/><ellipse cx="61" cy="30" rx="26" ry="5" fill="${hc}" ${sw}/><path d="M46 36 Q61 44 76 36 L76 41 Q61 48 46 41Z" fill="${hc}" ${sw}/>`;
@@ -151,7 +151,14 @@ ${head(style, oo)}
     stands: `<path d="M4 70V40C4 24 24 14 50 14s46 10 46 26v30z" fill="${W}"/><path d="M14 70V44C14 34 30 26 50 26s36 8 36 18v26z" fill="#c98a52"/><path d="M26 70V48c0-8 11-14 24-14s24 6 24 14v22z" fill="${R}"/><path d="M50 34V70" stroke="${INK}"/><path d="M8 14V2l14 5-14 5" fill="${GD}"/><path d="M92 14V2L78 7l14 5" fill="${GD}"/>`,
     hall: `<rect x="14" y="62" width="72" height="12" fill="${ST}"/><rect x="26" y="50" width="48" height="12" fill="${W}"/><circle cx="50" cy="20" r="8" fill="${GD}"/><path d="M38 50V30c0-6 24-6 24 0v20z" fill="${GD}"/><path d="M30 50V36l8 4M70 50V36l-8 4" fill="${GD}"/><path d="M22 48c-8-6-8-16-4-22M78 48c8-6 8-16 4-22" fill="none" stroke="${LF}" stroke-width="5"/>`,
   };
-  A.building = (id, size) => `<svg class="bld" viewBox="-2 -8 104 90" width="${size || 90}" height="${(size || 90) * 0.86}" stroke="${INK}" stroke-width="3" stroke-linejoin="round" stroke-linecap="round">${B[id] || ''}</svg>`;
+  A.building = (id, size, lvl) => {
+    let up = '';
+    if (lvl >= 2) up += `<path d="M4 70V40" stroke-width="3"/><path d="M4 40h14l-4 5l4 5H4z" fill="#d2412b" stroke-width="2"/>`;
+    if (lvl >= 3) up += `<rect x="90" y="56" width="6" height="16" fill="#8a5a2b" stroke-width="2"/><path d="M93 56c-6-6 0-9 0-15c6 6 6 10 0 15z" fill="#ffb347" stroke-width="2"/>`;
+    if (lvl >= 4) up += `<rect x="20" y="74" width="12" height="5" fill="#9aa0a6" stroke-width="2"/><circle cx="19" cy="76" r="4" fill="#5b6066" stroke-width="2"/><circle cx="33" cy="76" r="4" fill="#5b6066" stroke-width="2"/>`;
+    if (lvl >= 5) up += `<path d="M50 -4l3.5 7 7.5 1-5.5 5 1.5 7.5-7-4-7 4 1.5-7.5-5.5-5 7.5-1z" fill="#f6b82d" stroke-width="2"/>`;
+    return `<svg class="bld" viewBox="-2 -8 104 90" width="${size || 90}" height="${(size || 90) * 0.86}" stroke="${INK}" stroke-width="3" stroke-linejoin="round" stroke-linecap="round">${B[id] || ''}${up}</svg>`;
+  };
 
   // ---------- arena backdrop ----------
   A.arenaBG = () => {

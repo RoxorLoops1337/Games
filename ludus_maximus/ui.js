@@ -97,7 +97,7 @@
   U.fmtSt = fmtSt;
   const gOf = (id) => S.glads.find((g) => g.id === id);
   U.gOf = gOf;
-  const spr = (g, o) => A.gladOf(g, Object.assign({ tunic: g.color || myColor() }, o));
+  const spr = (g, o) => A.gladOf(g, Object.assign({ tunic: g.color || myColor(), mood: g.mo >= 80 ? 'happy' : g.mo <= 30 ? 'sad' : 'idle' }, o));
   U.spr = spr;
   const need = () => L.dueKeys(S).length;
 
@@ -131,7 +131,7 @@
       const p = S.plots[i];
       if (!p) { h += `<div class="tile empty" data-a="plot" data-i="${i}">${A.icon('plus', 26)}</div>`; continue; }
       const syn = L.synAt(S, i); const people = (pplAt[p.b] || []).slice(0, 3).map((g) => spr(g, { size: 26 })).join('');
-      h += `<div class="tile b-${p.b}" data-a="plot" data-i="${i}">${A.building(p.b, 100)}${people ? `<div class="people">${people}</div>` : ''}<span class="lv">L${p.l}</span>${syn ? `<span class="sy">+${syn}</span>` : ''}<span class="lbl">${D.BUILD[p.b].n}</span></div>`;
+      h += `<div class="tile b-${p.b}" data-a="plot" data-i="${i}">${A.building(p.b, 100, p.l)}${people ? `<div class="people">${people}</div>` : ''}<span class="lv">L${p.l}</span>${syn ? `<span class="sy">+${syn}</span>` : ''}<span class="lbl">${D.BUILD[p.b].n}</span></div>`;
     }
     h += '</div>';
     const menu = D.MENUS.find((m) => m.id === S.menu) || D.MENUS[0];
