@@ -360,3 +360,6 @@ Wandering visitors (merchant, veteran trainer, bard, rumor scout): from week 2 a
 ## Round 41 shipped
 - New festival: Rites of Minerva (+15% training gains that week).
 - Real fight replay assessed and deferred: the renderer uses frame-time steps and Math.random for hazards, so a faithful replay needs a fixed-step, seeded engine rewrite.
+
+## Round 42 shipped
+- Home screen shows a one-line heads-up when next week is a festival, so you can plan around it.
