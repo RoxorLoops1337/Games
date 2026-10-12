@@ -36,7 +36,7 @@ const sun = new THREE.DirectionalLight('#ffe2b0', 1.9); sun.position.set(-10, 14
 const pillarM = new THREE.MeshLambertMaterial({ color: '#e8dcc0' });
 function pillar(x, z) { const m = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 0.7, 4.5, 14), pillarM); m.position.set(x, 2.25, z); m.castShadow = m.receiveShadow = true; scene.add(m); return m; }
 const sheetName = Q.get('sheet');
-const fx = createFx(scene, { arenaRadius: 40, seed: 99, decalSize: 2048 });
+const fx = createFx(scene, { arenaRadius: 40, seed: 99, decalSize: 1024 });
 const feel = createFeel({ overlay: false, fov: camera.fov, seed: 3 });
 
 // dummy gladiators (capsule + head)

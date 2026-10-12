@@ -34,8 +34,8 @@ export const FEEL = {
   },
   fov: { crit: 2.2, heavy: 1.4, kill: 4, ult: 5, meteor: 7 }, // degrees of punch-in (negative fov delta)
   flash: { crit: [1, 0.95, 0.8, 0.12], kill: [1, 1, 1, 0.3], ult: null /* use element color, 0.28 */, meteor: [1, 0.8, 0.5, 0.5], revive: [1, 0.9, 0.5, 0.3] },
-  maxShakePos: 0.32, // world units at trauma 1 (camera ~14 units from action)
-  maxShakeRot: 1.6 * Math.PI / 180, // radians (yaw, pitch), roll is 60% of this
+  maxShakePos: 0.6, // world units at trauma 1 (camera ~14 units from action)
+  maxShakeRot: 3 * Math.PI / 180, // radians (yaw, pitch), roll is 60% of this
   traumaDecay: 1.15, // trauma/s
   freq: 17, // noise Hz at trauma 1 (scaled down for low trauma)
 };
@@ -89,7 +89,7 @@ export function createFeel(opts = {}) {
       if (S.slow && S.slow.scale < scale && S.slow.age < S.slow.inT + S.slow.hold) return;
       S.slow = { scale, hold, inT, outT, age: 0 };
     },
-    fovPunch(deg) { if (S.reducedMotion) return; S.fovV -= deg * scl() * 28; /* impulse into a critically damped spring */ },
+    fovPunch(deg) { if (S.reducedMotion) return; S.fovV -= deg * scl() * 22 * Math.E; /* impulse into a critically damped spring: peak offset = deg */ },
     flash(r, g, b, a, decay = 4) { const k = (S.reducedMotion ? 0.3 : 1) * S.intensity; S.flashCol = [r, g, b]; S.flashA = Math.max(S.flashA, a * k); S.flashDecay = decay; },
     flashHex(hex, a, decay) { const c = parseInt(hex.slice(1), 16); api.flash(((c >> 16) & 255) / 255, ((c >> 8) & 255) / 255, (c & 255) / 255, a, decay); },
     setBaseFov(f) { S.fov0 = f; },
@@ -143,7 +143,7 @@ export function createFeel(opts = {}) {
       // kick decay (exponential, ~120ms half life)
       const kd = Math.exp(-realDt * 11); S.kx *= kd; S.ky *= kd; S.kz *= kd;
       // fov spring: critically damped toward 0
-      const w = 22; const a = -w * w * S.fovO - 2 * w * S.fovV; S.fovV += a * realDt; S.fovO += S.fovV * realDt;
+      const w = 22, ex = Math.exp(-w * realDt), tmp = S.fovV + w * S.fovO; S.fovO = (S.fovO + tmp * realDt) * ex; S.fovV = (S.fovV - w * tmp * realDt) * ex; // exact critically damped step
       if (Math.abs(S.fovO) < 1e-4 && Math.abs(S.fovV) < 1e-3) { S.fovO = 0; S.fovV = 0; }
       // flash
       S.flashA = Math.max(0, S.flashA - S.flashDecay * realDt * Math.max(0.15, S.flashA));

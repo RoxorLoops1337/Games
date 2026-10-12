@@ -329,7 +329,7 @@ export function createFx(scene, opts = {}) {
   const decalExt = R + 2;
   const decalMesh = new THREE.Mesh(new THREE.PlaneGeometry(decalExt * 2, decalExt * 2).rotateX(-Math.PI / 2), new THREE.MeshLambertMaterial({ map: decalTex, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }));
   decalMesh.position.y = groundY + 0.012; decalMesh.renderOrder = 1; decalMesh.name = 'decals'; decalMesh.receiveShadow = false; root.add(decalMesh);
-  let decalDirty = false;
+  let decalDirty = false, lastDecalUp = -1;
 
   // 2) particles
   const addL = new Layer(opts.maxAdd ?? 2600, true, atlasTex, 'particles_add'); const norL = new Layer(opts.maxNorm ?? 900, false, atlasTex, 'particles_norm');
@@ -752,7 +752,7 @@ export function createFx(scene, opts = {}) {
     updateEmitters(dt); ribbonStep(dt); debrisStep(dt);
     addL.flush(); norL.flush();
     for (let i = shocks.length - 1; i >= 0; i--) if (fx.time - shocks[i].t0 > shocks[i].dur) shocks.splice(i, 1);
-    if (decalDirty) { decalTex.needsUpdate = true; decalDirty = false; }
+    if (decalDirty && fx.time - lastDecalUp > 0.1) { decalTex.needsUpdate = true; decalDirty = false; lastDecalUp = fx.time; } // throttled: a 1024 canvas upload costs a few ms
   };
   fx.stats = () => ({ drawCalls: root.children.filter((m) => m.visible).length, particlesAdd: addL.alive.length, particlesNorm: norL.alive.length, instAdd: addL.n, instNorm: norL.n, emitters: emitters.length, ribbons: rib.slots.filter((s) => s.on).length });
   fx.group = root; fx.decalTexture = decalTex; fx.decalCanvas = dcv; fx.elements = EL; fx.CELL = CELL;
