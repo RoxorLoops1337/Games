@@ -256,7 +256,7 @@ export function createArena({ crowd = 3700, density = 1, decalRes = 2048, seed =
   // ---------------- void arches, archivolts, columns, windows, niches ----------------
   const voidMat = new THREE.MeshBasicMaterial({ vertexColors: true, color: 0xffffff });
   const archBase = archShape(1.15, 2.9, 1.15), voidGeo = new THREE.ShapeGeometry(archBase, 10);
-  { const p = voidGeo.attributes.position, c = []; for (let i = 0; i < p.count; i++) { const t = Math.min(1, p.getY(i) / 4); c.push(0.10 + 0.22 * t, 0.075 + 0.14 * t, 0.12 + 0.17 * t); } voidGeo.setAttribute('color', new THREE.Float32BufferAttribute(c, 3)); }
+  { const p = voidGeo.attributes.position, c = []; for (let i = 0; i < p.count; i++) { const t = Math.min(1, p.getY(i) / 4); c.push(0.012 + 0.05 * t, 0.009 + 0.03 * t, 0.02 + 0.045 * t); } voidGeo.setAttribute('color', new THREE.Float32BufferAttribute(c, 3)); }
   const BAYS = 60;
   const outer = arcThetas(FD, BAYS, 0.5), pier = arcThetas(FD, BAYS, 0);   // arches at bay centers, columns at boundaries
   const voidMats = [];
@@ -280,13 +280,13 @@ export function createArena({ crowd = 3700, density = 1, decalRes = 2048, seed =
   const colMesh = new THREE.InstancedMesh(colGeo, stoneMat, BAYS * 3);
   for (let t = 0; t < 3; t++) for (let i = 0; i < BAYS; i++) { const m = ringMatrix(FD, pier.thetas[i], t * TIER + (TIER - 0.5) / 2 + 0.05, { inward: false, dOff: 0.12 }); colMesh.setMatrixAt(t * BAYS + i, m); }
   colMesh.castShadow = colMesh.receiveShadow = true; group.add(colMesh);
-  const winGeo = (() => { const g = new THREE.PlaneGeometry(0.9, 1.5); g.translate(0, 0.75, 0); const c = []; const p = g.attributes.position; for (let i = 0; i < p.count; i++) { const t = p.getY(i) / 1.5; c.push(0.08 + 0.2 * t, 0.06 + 0.12 * t, 0.1 + 0.15 * t); } g.setAttribute('color', new THREE.Float32BufferAttribute(c, 3)); return g; })();
+  const winGeo = (() => { const g = new THREE.PlaneGeometry(0.9, 1.5); g.translate(0, 0.75, 0); const c = []; const p = g.attributes.position; for (let i = 0; i < p.count; i++) { const t = p.getY(i) / 1.5; c.push(0.01 + 0.04 * t, 0.008 + 0.025 * t, 0.016 + 0.04 * t); } g.setAttribute('color', new THREE.Float32BufferAttribute(c, 3)); return g; })();
   const winMesh = new THREE.InstancedMesh(winGeo, voidMat, BAYS * 2);
   for (let i = 0; i < BAYS; i++) { winMesh.setMatrixAt(i, ringMatrix(FD, outer.thetas[i], 3 * TIER + 0.9, { inward: false, dOff: 0.06 })); winMesh.setMatrixAt(BAYS + i, ringMatrix(dIn, inner.thetas[i], 16.8, { inward: true, dOff: -0.04, scale: { x: 0.7, y: 0.6, z: 1 } })); }
   group.add(winMesh);
   // podium niches with iron bars (ground-level wall detail)
   const nicheShape = archShape(0.5, 1.0, 0.5), nicheGeo = new THREE.ShapeGeometry(nicheShape, 8);
-  { const p = nicheGeo.attributes.position, c = []; for (let i = 0; i < p.count; i++) { const t = Math.min(1, p.getY(i) / 1.6); c.push(0.06 + 0.1 * t, 0.045 + 0.07 * t, 0.07 + 0.09 * t); } nicheGeo.setAttribute('color', new THREE.Float32BufferAttribute(c, 3)); }
+  { const p = nicheGeo.attributes.position, c = []; for (let i = 0; i < p.count; i++) { const t = Math.min(1, p.getY(i) / 1.6); c.push(0.006 + 0.03 * t, 0.005 + 0.02 * t, 0.01 + 0.03 * t); } nicheGeo.setAttribute('color', new THREE.Float32BufferAttribute(c, 3)); }
   const nich = arcThetas(0, 44, 0.5).thetas.filter((th) => !inGate(th) && angDist(th, Math.PI / 2) > 0.05);
   const nicheMesh = new THREE.InstancedMesh(nicheGeo, voidMat, nich.length);
   nich.forEach((th, i) => nicheMesh.setMatrixAt(i, ringMatrix(0, th, 0.35, { inward: true, dOff: -0.04 })));
