@@ -119,7 +119,7 @@ function runTests() {
       if (n.startsWith('attack')) { ok(ev.includes('swing') && ev.includes('hit') && ev.includes('end'), style + '/' + n + ' events ' + ev.join(',')); }
     }
     A.dead = false; A.action = null; A.setMove(0, 0);
-    if (A.ik.hand) { for (let i = 0; i < 30; i++) rig.update(1 / 60); const w = new THREE.Vector3(), t = new THREE.Vector3(); A.ik.hand.target.getWorldPosition(t); rig.joints.wristL.getWorldPosition(w); ok(w.distanceTo(t) < 0.1, style + ' hand IK error ' + w.distanceTo(t).toFixed(3)); }
+    if (A.ik.hand) { for (let i = 0; i < 30; i++) rig.update(1 / 60); const w = new THREE.Vector3(), t = new THREE.Vector3(); t.copy(A.ik.hand.lastTarget); rig.joints.wristL.getWorldPosition(w); ok(w.distanceTo(t) < 0.1, style + ' hand IK error ' + w.distanceTo(t).toFixed(3)); }
     scene.remove(rig.root);
   }
   // attack timing table matches clip

@@ -397,7 +397,7 @@ export function createFx(scene, opts = {}) {
     for (let i = 0; i < n; i++) {
       const cone = o.cone ?? 0.9, s = spd * (0.45 + rnd() * 0.9);
       addL.add({ x: pos.x, y: pos.y, z: pos.z, vx: (d.x + (rnd() - 0.5) * cone * 2) * s, vy: (d.y * 0.6 + rnd() * 0.9 + 0.2) * s * 0.7, vz: (d.z + (rnd() - 0.5) * cone * 2) * s,
-        life: R_(0.25, 0.55) * (o.life ?? 1), s0: o.size ?? 0.13, s1: 0.05, st: 0.07, cell: CELL.streak, c0: hot, c1: scaleC(c, 0.6), g: 2.4, drag: 1.4, grav: 16, bounce: 0.35, floor: groundY + 0.03, fp: 0.9, att: 0.02 });
+        life: R_(0.25, 0.55) * (o.life ?? 1), s0: o.size ?? 0.18, s1: 0.06, st: 0.07, cell: CELL.streak, c0: hot, c1: scaleC(c, 0.6), g: 2.4, drag: 1.4, grav: 16, bounce: 0.35, floor: groundY + 0.03, fp: 0.9, att: 0.02 });
     }
     // a few lingering embers
     for (let i = 0; i < Math.ceil(n / 5); i++) addL.add({ x: pos.x, y: pos.y, z: pos.z, vx: (rnd() - 0.5) * 2, vy: R_(0.5, 2), vz: (rnd() - 0.5) * 2, life: R_(0.4, 0.8), s0: 0.09, s1: 0.02, cell: CELL.ember, c0: hot, c1: c, g: 2, drag: 1.5, grav: 2, fp: 1 });

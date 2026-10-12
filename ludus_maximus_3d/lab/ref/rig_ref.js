@@ -757,6 +757,13 @@ export class Animator {
     if (tgt && w > 0) {
       const side = this.ik.hand.side || 'L', sg = side === 'L' ? 1 : -1;
       tgt.updateWorldMatrix(true, false); _w.setFromMatrixPosition(tgt.matrixWorld);
+      if (this.ik.hand.slide !== false) { // slide the front hand along the shaft to the farthest point it can reach (real spear grip behaviour)
+        const wp = tgt.parent; wp.updateWorldMatrix(true, false); _t.setFromMatrixPosition(wp.matrixWorld); _u.set(0, 1, 0).transformDirection(wp.matrixWorld);
+        _p.setFromMatrixPosition(J['shoulder' + side].matrixWorld); _x.copy(_t).sub(_p); const bb = _x.dot(_u), cc = _x.lengthSq() - (this.ik.hand.reach ?? 0.5) ** 2, disc = bb * bb - cc;
+        let sl = disc >= 0 ? -bb + Math.sqrt(disc) : -bb; sl = clamp(sl, 0.1, Math.max(0.2, tgt.position.y * 1.4));
+        const h = this.ik.hand; h.s = h.s === undefined ? sl : h.s + (sl - h.s) * Math.min(1, (this._dt || 0.016) * 14); _w.copy(_t).addScaledVector(_u, h.s);
+      }
+      this.ik.hand.lastTarget = (this.ik.hand.lastTarget || new V3()).copy(_w);
       _pp.set(sg * 0.5, -0.3, -0.7); J.chest.localToWorld(_pp);
       solveTwoBone(J['shoulder' + side], J['elbow' + side], J['wrist' + side], _w, _pp, -1, w, 0.0);
       J.chest.updateMatrixWorld(true);
