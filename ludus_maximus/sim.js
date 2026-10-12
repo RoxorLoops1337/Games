@@ -628,6 +628,10 @@
     { id: 'horde', t: 'Face the horde', done: S.hordeWeek === S.week, p: S.hordeWeek === S.week ? '1/1' : '0/1' },
   ];
   LM.goalPay = (S) => 20 + 10 * LM.maxLeague(S);
+  LM.recordLife = (g, u) => {
+    const ls = g.ls || { dmg: 0, taken: 0, crits: 0, fights: 0, best: 0 }; const d = Math.round(u.dmg || 0);
+    ls.dmg += d; ls.taken += Math.round(u.taken || 0); ls.crits += u.crits || 0; ls.fights++; ls.best = Math.max(ls.best, d); g.ls = ls; return ls;
+  };
   LM.diary = (S, g, t) => { g.dy = (g.dy || []).concat([{ w: S.week, t }]).slice(-12); };
   LM.forumAdd = (S, t) => { S.forum = (S.forum || []).concat([{ w: S.week, t }]).slice(-30); };
   LM.rivalryResolve = (S, a, b, choice, winnerId) => {

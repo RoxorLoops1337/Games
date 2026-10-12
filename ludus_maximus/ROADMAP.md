@@ -283,6 +283,15 @@ Crowd audio that follows hype was already in (U.crowd and U.crowdLevel), so item
 
 ## Next ideas
 - [ ] 127. Real replay (fixed-step fights with recorded ultimate taps)
-- [ ] 128. Fight stats history per fighter (lifetime damage, crits)
+- [x] 128. Fight stats history per fighter (lifetime damage, crits)
 - [ ] 129. Augment hints per style (124)
 - [ ] 130. More drill types for other buildings (109)
+
+## Round 31 shipped
+First-time-player pass in a fresh phone-sized browser: the start screen no longer says "Counter-pick" (the retrain text neither), the How to play sheet no longer lets the close button overlap its first lines, and every sheet title keeps clear of the close button. New: Career stats on the fighter profile (fights logged, damage dealt and taken, crits, best fight), recorded from every fight stats screen.
+
+## Next ideas
+- [ ] 131. Real replay (127)
+- [ ] 132. Augment hints per style (129)
+- [ ] 133. More drill types for other buildings (130)
+- [ ] 134. Continue the first-time pass: week 1 flow, first fight, first tournament
