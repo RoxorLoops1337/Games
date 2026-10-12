@@ -313,6 +313,12 @@ function strafeSample(P, p, sx, c) { // sx: +1 moving to character left
 function buildStateClips(stance) {
   const K = (n, keys, o) => keyClip(n, keys, o, stance);
   const clips = {};
+  // loop clips for debugging/sheets and for direct use (the Animator blend tree uses the same samplers)
+  const cx = { armed: stance.armedArms === 0 ? 0 : 1, alert: stance.armedArms === 0 ? 0 : 0.5, stance };
+  const loop = (n, dur, fn) => { clips[n] = { name: n, dur, loop: true, hold: false, mask: 'full', additive: false, events: [], fadeIn: 0.1, fadeOut: 0.1, sample(t, P) { return fn(t % dur, P); } }; };
+  loop('idle', 6.8, (t, P) => idleSample(t, P, cx)); loop('walk', 1.0, (t, P) => { gaitSample(P, t * Math.PI * 2, GAITS.walk, cx); applyArmed(P, cx, cx.armed * 0.9); return P; });
+  loop('run', 0.6, (t, P) => { gaitSample(P, t / 0.6 * Math.PI * 2, GAITS.run, cx); applyArmed(P, cx, cx.armed * 0.9); return P; });
+  loop('strafe', 0.8, (t, P) => strafeSample(P, t / 0.8 * Math.PI * 2, 1, cx));
   clips.block = K('block', [
     { t: 0, p: 'guard' },
     { t: 0.11, p: { chest: [0.14, -0.1, 0], spine: [0.08, 0, 0], head: [-0.14, 0.3, 0], shoulderL: [-1.3, 0.3, 0.15], elbowL: [-1.95, 0, 0], wristL: [-0.2, 0, 0], shoulderR: [-0.75, 0, -0.45], elbowR: [-1.5, 0, 0], hip: [0, -0.14, 0], kneeL: [0.7, 0, 0], kneeR: [0.6, 0, 0], hipL: [-0.4, 0, 0.12], body: [0, 0, -0.04] }, e: 'outBack' },
@@ -529,8 +535,8 @@ export function buildGladiator(opts = {}) {
   // arms
   for (const [s, sg] of [['L', 1], ['R', -1]]) {
     add(J['shoulder' + s], sphereG(0.07 * B, 6, 4), torsoMat === mats.skin ? mats.skin : torsoMat, 'deltoid' + s);
-    add(J['shoulder' + s], capsule(DIM.upperArm, 0.062 * B, 0.05 * B, S, 0.12), armMat, 'upperArm' + s);
-    add(J['elbow' + s], capsule(DIM.foreArm, 0.05 * B, 0.036 * B, S, 0.14), armMat, 'foreArm' + s);
+    add(J['shoulder' + s], capsule(DIM.upperArm, 0.068 * B, 0.054 * B, S, 0.12), armMat, 'upperArm' + s);
+    add(J['elbow' + s], capsule(DIM.foreArm, 0.054 * B, 0.04 * B, S, 0.14), armMat, 'foreArm' + s);
     const hand = add(J['wrist' + s], lathe([[0, -0.115], [0.036, -0.07], [0.042, -0.01], [0, 0.02]], 5, 1.0, 0.8, 0.15, 0.85), mats.skin, 'hand' + s);
     // socket: weapon authored along +Y with grip at origin; Rx(pi) maps weapon +Y to wrist -Y (blade continues the forearm).
     const sock = new THREE.Object3D(); sock.name = 'hand' + s + 'Socket'; sock.position.set(0, -0.075, 0); sock.rotation.x = Math.PI; J['wrist' + s].add(sock); J['hand' + s] = sock;
