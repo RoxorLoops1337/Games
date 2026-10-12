@@ -576,25 +576,29 @@ export function createHub({ renderer, camera, audio, tier = 'high', post = null 
   const onLeave = () => { setHover(null); };
 
   // ---------------------------------------------------------------------------------------- picking
-  const _box = new THREE.Box3(), _hit = new V3(), _ray = new THREE.Ray();
+  const _box = new THREE.Box3(), _hit = new V3(), _hit2 = new V3(), _ray = new THREE.Ray(), _far = new THREE.Ray();
   function pick(clientX, clientY) {
     if (!S) return null; const r = dom.getBoundingClientRect();
     ndc.set(((clientX - r.left) / r.width) * 2 - 1, -((clientY - r.top) / r.height) * 2 + 1); camera.updateMatrixWorld();
     raycaster.setFromCamera(ndc, camera); _ray.copy(raycaster.ray);
-    let best = null, bt = 1e9;
-    // gladiators: capsule-ish proxy (sphere chain)
+    let gBest = null, gt = 1e9, pBest = null, pt = 1e9, pExit = 0;
+    // gladiators: sphere chain proxy along the body
     for (const a of actors.values()) {
-      for (const yy of [0.35, 0.9, 1.45]) { const c = new V3(a.pos.x, a.pos.y + yy, a.pos.z), d = _ray.distanceSqToPoint(c); if (d < 0.5 * 0.5) { const t = c.clone().sub(_ray.origin).dot(_ray.direction); if (t > 0 && t < bt) { bt = t; best = { type: 'glad', id: a.id }; } } }
+      for (const yy of [0.35, 0.9, 1.45]) { const c = new V3(a.pos.x, a.pos.y + yy, a.pos.z), d = _ray.distanceSqToPoint(c); if (d < 0.5 * 0.5) { const t = c.clone().sub(_ray.origin).dot(_ray.direction); if (t > 0 && t < gt) { gt = t; gBest = { type: 'glad', id: a.id }; } } }
     }
-    // plot buildings: footprint boxes
+    // plot buildings: footprint boxes (remember the exit distance so gladiators standing inside an open court win)
     const rows = S.rows || 2;
     for (let i = 0; i < 16; i++) {
       const [rr] = plotRC(i); if (rr >= rows) continue; const p = S.plots[i]; if (!p) continue;
       const c = plotCenter(i), fp = buildParts(p.b, p.l).footprint;
       _box.min.set(c.x - fp.w / 2, c.y, c.z - fp.d / 2); _box.max.set(c.x + fp.w / 2, c.y + Math.min(fp.h, 12), c.z + fp.d / 2);
-      if (_ray.intersectBox(_box, _hit)) { const t = _hit.distanceTo(_ray.origin); if (t < bt) { bt = t; best = { type: 'plot', i, empty: false, locked: false }; } }
+      if (_ray.intersectBox(_box, _hit)) {
+        const t = _hit.distanceTo(_ray.origin);
+        if (t < pt) { pt = t; pBest = { type: 'plot', i, empty: false, locked: false }; _far.origin.copy(_ray.direction).multiplyScalar(t + 60).add(_ray.origin); _far.direction.copy(_ray.direction).negate(); pExit = _far.intersectBox(_box, _hit2) ? _hit2.distanceTo(_ray.origin) : t + 8; }
+      }
     }
-    if (best) return best;
+    if (gBest && (!pBest || gt < pt || gt < pExit)) return gBest;
+    if (pBest) return pBest;
     // ground cells (empty pads and locked land)
     for (const h of [terraceH(1), 0.2, terraceH(0)]) {
       const plane = new THREE.Plane(new V3(0, 1, 0), -h); if (!_ray.intersectPlane(plane, _hit)) continue;

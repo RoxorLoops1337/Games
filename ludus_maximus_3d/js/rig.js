@@ -694,10 +694,10 @@ function buildHead(rig, look, bd) {
     const v = [[0, 0.128, nz + 0.003], [-0.015 * n0, 0.082, surf(0, 0.082).z + 0.004], [0.015 * n0, 0.082, surf(0, 0.082).z + 0.004], [0, 0.079, tipZ]];
     const pos = [v[0], v[1], v[3], v[0], v[3], v[2], v[3], v[1], v[2], v[0], v[2], v[1]].flat(); const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.computeVertexNormals(); A('skin', col1(g));
     if (F.nx) A('skin', xf(boxG(0.01, 0.024, 0.01), [F.nx, 0.112, nz + 0.004], [0.1, 0, 0.35])); }
-  for (const sg of [-1, 1]) A('skin', xf(sphereG(0.022, 5, 3), [sg * 0.099, 0.099, -0.004], [0, 0, sg * -0.08], [0.32, 1.0, 0.72])); // ears
+  for (const sg of [-1, 1]) A('skin', xf(sphereG(0.024, 4, 2), [sg * 0.099, 0.099, -0.004], [0, 0, sg * -0.08], [0.32, 1.0, 0.72])); // ears
   const tex = faceTexture(((look.face | 0) % 3 + 3) % 3, F.eye, '#' + new THREE.Color(rig.palette.hair).getHexString());
   if (tex) { // decal patch
-    const ys = [0, 0.038, 0.076, 0.114, 0.152, FACE_Y1], dp = lathe(ys.map((y) => [skullR(prof, y) + 0.0025, y]), 8, HEAD_SX, HEAD_SZ, 0, 1, -FACE_PHI, FACE_PHI * 2);
+    const ys = [0, 0.0475, 0.095, 0.1425, FACE_Y1], dp = lathe(ys.map((y) => [skullR(prof, y) + 0.0025, y]), 6, HEAD_SX, HEAD_SZ, 0, 1, -FACE_PHI, FACE_PHI * 2);
     sculpt(dp, bl); const P = dp.attributes.position, N = dp.attributes.normal; for (let i = 0; i < P.count; i++) P.setXYZ(i, P.getX(i) + N.getX(i) * 0.0025, P.getY(i) + N.getY(i) * 0.0025, P.getZ(i) + N.getZ(i) * 0.0025);
     rig.mats.eye.map = tex; rig.mats.eye.needsUpdate = true; A('eye', dp);
   } else for (const sg of [-1, 1]) { const ex = sg * 0.037, ey = 0.121, ez = surf(ex, ey).z + 0.003; A('eye', paint(disc(0.014, 6, [ex, ey, ez], 1.2, 0.8), [0.2, 0.15, 0.1])); }

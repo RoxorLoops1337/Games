@@ -282,7 +282,7 @@ function pouch(rig, side, o = {}) {
   rig.add('leather', xf(boxG(0.075, 0.085, 0.05), [sg * 0.015, -0.055, 0.02], [0, 0, sg * 0.05]), obj); rig.add('leather', paint(xf(quadG(0.08, 0.04), [sg * 0.015, -0.03, 0.047], [0.2, 0, sg * 0.05]), 0.8), obj);
 }
 function greave(rig, side, B = 1, o = {}) {
-  const K = rig.joints['knee' + side], LG = rig.build.leg || 1; const prof = [], ts = [0.06, 0.3, 0.62, 0.92];
+  const K = rig.joints['knee' + side], LG = rig.build.leg || 1; const prof = [], ts = [0.08, 0.45, 0.92];
   for (const t of ts) prof.push([(lerp(0.066, 0.045, t) * (1 + 0.14 * Math.sin(Math.PI * t))) * B * LG + 0.012, -t * 0.43]);
   prof.reverse();
   rig.add('metal', lathe(prof, 7, 1.03, 1.1, 0.12, 0.8, -PI * 0.78, PI * 1.56), K);
@@ -325,7 +325,7 @@ function baldric(rig, B, sh, dir = 1, o = {}) { // leather strap across the ches
 }
 function segmentata(rig, B, sh, rr) { // lorica segmentata: stacked overlapping bands + shoulder lames
   const C = rig.joints.chest;
-  for (let i = 0; i < 5; i++) { const y0 = -0.03 + i * 0.058, y1 = y0 + 0.07; rig.add('metal', lathe([[chestR(y0, B, sh) + 0.022, y0], [chestR(y1, B, sh) + 0.012, y1]], 10, 1, 0.72, 0.25, 0.72), C); }
+  for (let i = 0; i < 4; i++) { const y0 = -0.03 + i * 0.075, y1 = y0 + 0.09; rig.add('metal', lathe([[chestR(y0, B, sh) + 0.022, y0], [chestR(y1, B, sh) + 0.012, y1]], 10, 1, 0.72, 0.25, 0.72), C); }
   ring(rig, C, chestR(0.29, B, sh) + 0.02, chestR(0.298, B, sh) + 0.02, 0.29, 0.298, 10, 0.72, 'trim');
   for (const s of ['L', 'R']) for (let i = 0; i < 2; i++) { const y = 0.02 - i * 0.05, r = 0.093 - i * 0.004; rig.add('metal', lathe([[r * 0.94, y - 0.06], [r, y]], 6, 1.05, 1.0, 0.3, 0.7, -PI * 0.5, PI * 1.0), rig.joints['shoulder' + s]); }
   gem(rig, C, chestPt(0, 0.12, B, sh, 0.03).p.toArray(), 0.016, rr);
@@ -346,7 +346,7 @@ export function equipStyle(rig, style, o = {}) {
   if (style === 'murmillo') {
     rig.animator.setWeapon('sword');
     out.weapon = makeSword(rig, o, rw); out.shield = mountShield(rig, 'scutum', o, rs); helmMurmillo(rig, o, rh);
-    manica(rig, 'R', B); greave(rig, 'L', B); laceUp(rig, 'R', B);
+    manica(rig, 'R', B); greave(rig, 'L', B);
     baldric(rig, B, sh, 1, { disc: true }); beltPlates(rig, B); pteruges(rig, J.hips, 12, 0.2 * B, -0.03, 0.18, 0.08, 'leather', { shade: 0.62 });
     out.flap = loinFlap(rig, J.hips, { len: 0.34, w: 0.2 }); loinFlap(rig, J.hips, { len: 0.3, w: 0.22, back: true, z: 0.135 });
     gem(rig, J.chest, chestPt(0.0, 0.16, B, sh, 0.034).p.toArray(), 0.014, ra);
