@@ -406,7 +406,8 @@ export class HudLayer {
         this.dayT.setText(`${c.night ? 'Night' : 'Day'} ${c.day}`);
         this.timeT.setText(hhmm(hour));
         const sd = SEASONS[seasonOf(c.day)];
-        if (this.seasonName !== sd.name) { this.seasonName = sd.name; this.seasonT.setText(sd.name).setColor(hex(deepen(sd.color, 0.72))); }
+        const seasonLabel = this.farm.dusk ? `${sd.name} · Long Dusk` : sd.name;
+        if (this.seasonName !== seasonLabel) { this.seasonName = seasonLabel; this.seasonT.setText(seasonLabel).setColor(hex(this.farm.dusk ? PAL.plum : deepen(sd.color, 0.72))); }
         // coins
         if (this.coinShown !== me.coins) {
             const diff = me.coins - this.coinShown;

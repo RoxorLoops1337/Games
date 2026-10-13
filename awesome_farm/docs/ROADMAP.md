@@ -66,4 +66,4 @@ split big ones into slices (rules, art, polish).
 - [ ] B3 The Long Dusk (new game plus)
   - [x] B3a Dusk Beacon (sleeps until every boss has fallen; lit: wild monsters 8 levels tougher and 1.5x loot; all server-side, no protocol change)
   - [ ] B3b Dusk-only bosses and rewards
-  - [ ] B3c A Dusk page in the journal
+  - [x] B3c Dusk indicator (the season label on the HUD reads "Spring · Long Dusk" in violet while it is on; the tick now carries it; PROTOCOL 48)

@@ -44,3 +44,24 @@ test('lit, monsters are tougher by the tuned number of levels; put out, they are
     const calm = spawn(sim, x + 40, y);
     assert.equal(calm.lv, plain.lv);
 });
+
+test('the host tells every client whether the Long Dusk is on', async () => {
+    const { SimHost } = await import('../src/shared/net/host');
+    const { PROTOCOL } = await import('../src/shared/net/protocol');
+    type Peer = import('../src/shared/net/host').Peer;
+    type Tick = import('../src/shared/net/protocol').TickMsg;
+    const msgs: { t: string; dusk?: number }[] = [];
+    const peer = { send: (t: string) => { msgs.push(JSON.parse(t)); } } as Peer;
+    const sim = Sim.create('DUSK-3', 'c');
+    const host = new SimHost(sim, 'Test', '');
+    host.attach(peer);
+    host.receive(peer, JSON.stringify({ t: 'hello', v: PROTOCOL, id: 'a', name: 'A' }));
+    sim.s.dusk = 1;
+    for (let i = 0; i < 80; i++) host.update(1 / 20);
+    const ticks = msgs.filter((m): m is Tick & { dusk?: number } => m.t === 'tick');
+    assert.ok(ticks.some((t) => t.dusk === 1), 'a tick carries the Dusk');
+    sim.s.dusk = 0;
+    msgs.length = 0;
+    for (let i = 0; i < 80; i++) host.update(1 / 20);
+    assert.ok(msgs.filter((m) => m.t === 'tick').some((t) => (t as { dusk?: number }).dusk === 0), 'and so does the end of it');
+});
