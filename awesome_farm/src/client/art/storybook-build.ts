@@ -226,6 +226,15 @@ function museum (p: Pix) {
     p.outline();
 }
 
+function coffer (p: Pix) {
+    // a squat iron-bound strongbox with a gold coin on the lid
+    lit(p, 1, 6, 14, 8, W); p.rect(2, 7, 12, 1, W[3]);
+    p.rect(1, 9, 14, 1, 0x7a7f9e); p.rect(7, 6, 2, 8, 0x7a7f9e);
+    p.ellipse(8, 5, 4, 2.2, [0xb8862e, 0xf0b93a, 0xffd966]);
+    p.set(8, 10, 0x35305c);
+    p.outline();
+}
+
 function market (p: Pix, rnd: () => number) {
     // a striped awning over a counter loaded with produce
     for (const x of [2, 31]) lit(p, x, 6, 3, 19, W);
@@ -367,6 +376,7 @@ export function registerStorybookBuildings (scene: Phaser.Scene) {
     paint(scene, 'sawmill', 32, 15, (p) => sawmill(p), 1);
     paint(scene, 'millstone', 14, 10, (p) => millstone(p), 1);
     paint(scene, 'beehive', 14, 19, (p) => beehive(p), 1);
+    paint(scene, 'coffer', 16, 15, (p) => coffer(p), 1);
     paint(scene, 'museum', 32, 19, (p) => museum(p), 1);
     paint(scene, 'fishpond', 32, 15, (p) => fishpond(p), 1);
     paint(scene, 'market', 18, 13, market, 5);
