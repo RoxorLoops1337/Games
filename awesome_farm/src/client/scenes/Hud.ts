@@ -296,6 +296,7 @@ export class HudScene extends Phaser.Scene {
             close: () => this.closeScreen(),
             open: (name, arg) => this.openScreen(name, arg),
             startTrade: () => { this.closeScreen(); this.startTrade(); },
+            friendInReach: () => this.friendInReach(),
             drawMap: (g, x, y, cell, labels, view) => this.layer.drawMinimap(g, x, y, cell, labels, true, true, view),
         };
     }

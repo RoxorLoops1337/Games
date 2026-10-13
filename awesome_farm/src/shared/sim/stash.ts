@@ -11,6 +11,7 @@ import { takes } from '../data/filters';
 import { ITEM_ORDER, ITEMS, type ItemId } from '../data/items';
 import { PAL } from '../palette';
 import { dist } from '../geom';
+import { TRADE_REACH } from './trade';
 import { invDrop, invHas, invPut, invSum } from './machines';
 import type { Sim } from './sim';
 import { addItem, countOf, itemCap, sellValue, takeItem } from './stats';
@@ -83,6 +84,7 @@ export function cmdInv (sim: Sim, p: PlayerS, c: Extract<Cmd, { t: 'inv' }>) {
     if (sim.s.paused || p.downed > 0) return;
     if (c.op === 'fav') return fav(sim, p, c.item);
     if (c.op === 'stash') return stash(sim, p);
+    if (c.op === 'give') return give(sim, p, c.who, c.item, c.n);
     if (c.op === 'sellall') return sellAll(sim, p, c.items);
     if (c.op === 'undosale') return undoSale(sim, p);
     if (c.op === 'chest') return chestAll(sim, p, c.id, c.dir);
@@ -110,6 +112,25 @@ function sellAll (sim: Sim, p: PlayerS, items: unknown) {
     sim.fx('sell', p.x, p.y - 10, p.id);
     sim.float(p.x, p.y - 22, `+${coins} coins`, PAL.gold, p.id, 'sell');
     sim.float(p.x, p.y - 36, `Sold ${units} (${kinds} kind${kinds === 1 ? '' : 's'})`, PAL.cream, p.id, 'aff');
+}
+
+/** Hand some of one kind to a friend standing close (no window, no accept: a gift). Their pack must have room. */
+function give (sim: Sim, p: PlayerS, who: string, item: ItemId, n: number) {
+    const q = sim.s.players[who];
+    if (!q || q.id === p.id || !q.online || q.downed > 0 || !ITEMS[item] || ITEMS[item].gear) return;
+    if (Math.hypot(q.x - p.x, q.y - p.y) > TRADE_REACH) { sim.deny(p, `${q.name} is too far away`); return; }
+    const want = Math.min(Math.floor(Number(n) || 0), countOf(p, item));
+    if (want < 1) return;
+    const room = itemCap(q, item) - countOf(q, item);
+    const sent = Math.min(want, room);
+    if (sent < 1) { sim.deny(p, `${q.name} cannot carry any more ${ITEMS[item].name}`); return; }
+    takeItem(p, item, sent);
+    addItem(q, item, sent);
+    sim.fx('collect', q.x, q.y - 6, q.id);
+    sim.float(p.x, p.y - 26, `Gave ${sent} ${ITEMS[item].name} to ${q.name}`, PAL.lime, p.id, 'aff');
+    sim.float(q.x, q.y - 26, `${p.name} gave you ${sent} ${ITEMS[item].name}`, PAL.lime, q.id, 'aff');
+    sim.events.push({ e: 'fly', to: q.id, item, x0: p.x, y0: p.y - 10, x1: q.x, y1: q.y - 10, d: 0 });
+    sim.events.push({ e: 'fly', to: p.id, item, x0: p.x, y0: p.y - 10, x1: q.x, y1: q.y - 10, d: 0 });
 }
 
 function fav (sim: Sim, p: PlayerS, item: ItemId) {

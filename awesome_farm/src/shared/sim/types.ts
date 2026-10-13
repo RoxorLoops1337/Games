@@ -434,6 +434,7 @@ export type Cmd =
     | { t: 'trade'; op: 'ok' | 'cancel' }
     | { t: 'inv'; op: 'fav'; item: ItemId }
     | { t: 'inv'; op: 'stash' }
+    | { t: 'inv'; op: 'give'; who: string; item: ItemId; n: number }
     | { t: 'inv'; op: 'undosale' }
     | { t: 'inv'; op: 'sellall'; items: ItemId[] }
     | { t: 'inv'; op: 'chest'; id: number; dir: 'put' | 'take' }
