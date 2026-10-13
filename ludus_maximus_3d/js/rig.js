@@ -1788,6 +1788,7 @@ export class Animator {
   update(dt) {
     if (this.hitStopT > 0) { this.hitStopT -= dt; dt *= 0.04; }
     dt *= this.timeScale; this.t += dt; this.stateT += dt;
+    { const sp = Math.hypot(this.mv.vx, this.mv.vz); this.exert = clamp(this.exert + (sp > 2.6 ? 0.03 : sp > 0.4 ? 0.006 : 0) * dt * 10 - 0.035 * dt, 0, 1); this.breath += dt * Math.PI * 2 / 3.4 * (1 + 1.6 * this.exert) * (this.dead ? 0 : 1); }
     this.armed += (this.armedTarget - this.armed) * Math.min(1, dt * 6); this.alert += ((this.alertTarget || this.armedTarget * 0.0) - this.alert) * Math.min(1, dt * 5);
     // advance gait phase by distance travelled: foot speed matches ground speed (no skating)
     const s = Math.hypot(this.mv.vx, this.mv.vz), runW = smooth(2.6, 4.4, s), stride = lerp(1.55, 2.9, runW), dirSign = this.mv.vz < -0.05 && Math.abs(this.mv.vz) > Math.abs(this.mv.vx) ? -1 : 1;
@@ -1814,12 +1815,20 @@ export class Animator {
     if (this.snapW > 0) { this.snapW = Math.max(0, this.snapW - dt / this.snapDur); const w = ease.inOutCubic(this.snapW); if (out !== this.QC) { this.QC.copy(out); out = this.QC; } blendQ(this.QC, this.snap, w, null, this.QB); out = this.QB; }
     // additive layer (hurt flinch)
     if (this.add) {
-      this.addT += dt; const clip = this.add;
-      if (this.addT >= clip.dur) this.add = null; else {
+      this.addT += dt; const clip = this.add, hi = this.addHigh;
+      if (this.addT >= clip.dur) { this.add = null; this.add2 = null; } else {
         clip.sample(this.addT, this.PB);
         const amp = this.addAmp, d = this.addDir; // d>0: hit from front (recoil back); d<0 from behind (lurch forward)
-        for (let i = 0; i < JOINTS.length; i++) { this.PB.r[i * 3] *= amp * (JOINTS[i].startsWith('hip') && JOINTS[i].length === 4 ? 1 : d); this.PB.r[i * 3 + 1] *= amp; this.PB.r[i * 3 + 2] *= amp; }
+        for (let i = 0; i < JOINTS.length; i++) {
+          const jn = JOINTS[i], hipJ = jn.startsWith('hip') && jn.length === 4, fh = (jn === 'head' || jn === 'neck') ? 0.6 + 0.9 * hi : (jn.startsWith('knee') || hipJ) ? 1 + (0.5 - hi) * 1.2 : 1;
+          this.PB.r[i * 3] *= amp * fh * (hipJ ? 1 : d); this.PB.r[i * 3 + 1] *= amp; this.PB.r[i * 3 + 2] *= amp;
+        }
         this.PB.hip[2] *= amp * d; this.PB.hip[1] *= amp;
+        if (this.add2 && this.addSide) { // lateral layer: twist and roll away from the side the blow came from
+          const c2 = this.add2, s = Math.sign(this.addSide), f = amp * Math.min(1, Math.abs(this.addSide)); c2.sample(Math.min(this.addT, c2.dur), this.PA);
+          for (let i = 0; i < JOINTS.length; i++) { this.PB.r[i * 3] += this.PA.r[i * 3] * f; this.PB.r[i * 3 + 1] += this.PA.r[i * 3 + 1] * f * s; this.PB.r[i * 3 + 2] += this.PA.r[i * 3 + 2] * f * s; }
+          this.PB.hip[0] += this.PA.hip[0] * f * s;
+        }
         for (let i = 0; i < JOINTS.length; i++) { _e.set(this.PB.r[i * 3], this.PB.r[i * 3 + 1], this.PB.r[i * 3 + 2], ORDER[JOINTS[i]] || 'XYZ'); this.QAdd.q[i].setFromEuler(_e); }
         if (out !== this.QB) { this.QB.copy(out); out = this.QB; }
         for (let i = 0; i < JOINTS.length; i++) out.q[i].multiply(this.QAdd.q[i]);
