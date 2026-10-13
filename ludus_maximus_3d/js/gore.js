@@ -85,8 +85,9 @@ export function createGore(fx, o = {}) {
   function lens(pos, n, size) {
     if (!G.on || typeof document === 'undefined') return; n = Math.round(n * (G.level === 'low' ? 0.5 : 1)); if (n <= 0 || !lensEnsure()) return; const cam = fx.cam;
     for (let i = 0; i < n; i++) {
-      let nx = RR(0.12, 0.88), ny = RR(0.1, 0.8);
-      if (cam) { _pr.set(pos.x, pos.y, pos.z).project(cam); if (_pr.z < 1 && Math.abs(_pr.x) < 1.2 && Math.abs(_pr.y) < 1.2) { nx = clamp(0.5 + _pr.x * 0.75 + RR(-0.3, 0.3), 0.06, 0.94); ny = clamp(0.5 - _pr.y * 0.75 + RR(-0.26, 0.2), 0.06, 0.9); } } // pushed outward so the drops sit around the action, not on the fighters }
+      // drops stick to the edges of the lens (the side the action is on), so the fighters in the middle stay readable
+      let side = R() < 0.5 ? -1 : 1; if (cam) { _pr.set(pos.x, pos.y, pos.z).project(cam); if (_pr.z < 1 && Math.abs(_pr.x) > 0.25 && R() < 0.7) side = _pr.x < 0 ? -1 : 1; }
+      const nx = side < 0 ? RR(0.03, 0.24) : RR(0.76, 0.97), ny = RR(0.12, 0.88);
       lensAdd(nx, ny, size * RR(0.8, 1.35), RR(1.8, 3.2));
     }
   }
@@ -452,7 +453,7 @@ export function createGore(fx, o = {}) {
   G.onHit = (id, e) => {
     if (!G.on) return; const f = fighterOf(id); if (!f) return; const fr = clamp(e.frac, 0, 1.2);
     if (e.blocked && fr < 0.22) return;
-    const k = K(), heavy = fr > 0.1 || e.crit, deep = fr > 0.16 || e.crit, n = Math.round((11 + fr * 230 + (e.crit ? 52 : 0)) * k), sp = 4.2 + fr * 16 + (e.crit ? 3.5 : 0);
+    const k = K(), heavy = fr > 0.12 || e.crit, deep = fr > 0.16 || e.crit, n = Math.round((11 + fr * 230 + (e.crit ? 52 : 0)) * k), sp = 4.2 + fr * 16 + (e.crit ? 3.5 : 0);
     const at = e.attacker && fighterOf(e.attacker), beastAt = !!(at && at.rig.beast), px = panOf(e.pos.x);
     f.dir.set(e.dx, 0, e.dz);
     fan(e.pos, e.dx, e.dz, Math.round(n * 0.66), { speed: sp, cone: 0.5, elMin: 0.05, elMax: 0.95, size: 1.15 + fr * 1.0 });
