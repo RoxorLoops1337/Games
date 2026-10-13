@@ -71,6 +71,7 @@ import { LookScreen } from '../ui/screens/look';
 import { WishScreen } from '../ui/screens/wish';
 import { MailScreen } from '../ui/screens/mail';
 import { TradeScreen } from '../ui/screens/trade';
+import { NeedsScreen } from '../ui/screens/needs';
 import { TRADE_REACH } from '../../shared/sim/trade';
 import { TableScreen } from '../ui/screens/table';
 import { shouldWelcome, WelcomeScreen } from '../ui/screens/welcome';
@@ -95,7 +96,7 @@ const SCREENS: Record<string, new (ctx: ScreenCtx, arg?: unknown) => Screen> = {
     inventory: InventoryScreen, gear: GearScreen, arts: ArtsScreen, craft: CraftScreen, skills: SkillScreen, build: BuildScreen,
     machine: MachineScreen, device: DeviceScreen, altar: AltarScreen, creatures: CreatureScreen, den: DenScreen, journal: JournalScreen, guide: GuideScreen, launcher: LauncherScreen, jobpost: JobPostScreen, crewpick: CrewPickScreen, waystone: WaystoneScreen, welcome: WelcomeScreen, chest: ChestScreen, chestcfg: ChestSetupScreen, market: MarketScreen, bed: BedScreen, menu: MenuScreen, map: MenuScreen,
     dock: DockScreen, boons: BoonScreen, riftend: RiftEndScreen, hatchery: HatcheryScreen, blueprints: BlueprintScreen,
-    loot: LootScreen, wheel: WheelScreen, story: StoryScreen, look: LookScreen, dev: DevToolsScreen, wish: WishScreen, mail: MailScreen, trade: TradeScreen, vane: VaneScreen, table: TableScreen, tower: TowerScreen,
+    loot: LootScreen, wheel: WheelScreen, story: StoryScreen, look: LookScreen, dev: DevToolsScreen, wish: WishScreen, mail: MailScreen, trade: TradeScreen, needs: NeedsScreen, vane: VaneScreen, table: TableScreen, tower: TowerScreen,
 };
 
 export class HudScene extends Phaser.Scene {
@@ -403,7 +404,7 @@ export class HudScene extends Phaser.Scene {
         if (k === 'F2') { ev.preventDefault(); this.setPhoto(!this.photo); return; }
         if (this.photo && (k === 'Escape' || k === 'Enter')) { ev.preventDefault(); this.setPhoto(false); return; }
         if (!this.screen && lower === FACTORY_VIEW_KEY.toLowerCase() && !ev.ctrlKey && !ev.metaKey && !ev.altKey) { ev.preventDefault(); this.farm.fv.toggle(); return; }
-        const hot: Record<string, string> = { i: 'inventory', Tab: 'inventory', c: 'craft', k: 'skills', u: 'gear', p: 'creatures', j: 'journal', b: 'build', v: 'blueprints', m: 'map', h: 'guide' };
+        const hot: Record<string, string> = { i: 'inventory', Tab: 'inventory', c: 'craft', k: 'skills', u: 'gear', p: 'creatures', j: 'journal', b: 'build', v: 'blueprints', m: 'map', h: 'guide', t: 'needs' };
         if (this.screen) {
             if (k === '/' && this.screen.focusSearch) { ev.preventDefault(); this.screen.focusSearch(); return; }
             if (this.screen.onKey?.(k, ev)) return;
