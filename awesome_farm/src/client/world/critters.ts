@@ -26,6 +26,7 @@ interface CritViewLike {
     wicon?: Img;             // the little job icon that floats up
     wiconT?: number;
     stars?: Img[];           // awakening stars circling its head
+    shine?: Img;             // a shiny one's twinkle
     bub?: Img;               // a worker's status bubble, and the icon inside it
     cargo?: Img;             // what an island worker is carrying
     bubIcon?: Img;
@@ -136,6 +137,13 @@ function drawStars (scene: Phaser.Scene, v: CritViewLike, e: CritE, spr: Spr, po
             im.setVisible(i < stars).setPosition(Math.round(v.x + pose.ox + Math.cos(a) * 9), Math.round(top + Math.sin(a) * 2.5)).setDepth(v.y + (Math.sin(a) > 0 ? 3 : -1));
         });
     } else v.stars?.forEach((im) => im.setVisible(false));
+    if (e.shiny && !inPod) {                // a shiny one: a pink-gold tint and a little twinkle that comes and goes over its back
+        spr.setTint(0xffd2f2);
+        v.shine ??= overlay3d(scene.add.image(0, 0, 'k_star', 0).setTint(PAL.blossom));
+        const tw = Math.max(0, Math.sin(t * 2.4 + e.id));
+        v.shine.setVisible(tw > 0.05).setScale(0.35 + tw * 0.5).setAlpha(tw).setAngle(t * 90)
+            .setPosition(Math.round(v.x + pose.ox + Math.sin(t * 1.3 + e.id) * 6), Math.round(v.y + pose.oy - spr.displayHeight * (0.45 + 0.3 * Math.sin(t * 0.9 + e.id)))).setDepth(v.y + 5);
+    } else if (v.shine) v.shine.setVisible(false);
     if (v.shadow) { if (stars >= 2) v.shadow.setTint(PAL.gold).setAlpha(0.45); else if (stars === 0) v.shadow.setTint(PAL.ink); }
 }
 
