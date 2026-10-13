@@ -61,3 +61,12 @@ test('a short chain pays nothing', () => {
     run(sim, 0.5);
     assert.equal(a.coins, before);
 });
+
+test('only a lantern or lamp post lit for today glows as a festival light', async () => {
+    const { festivalLit } = await import('../src/shared/data/festival');
+    assert.equal(festivalLit({ kind: 'lantern', kd: 7 }, 7), true);
+    assert.equal(festivalLit({ kind: 'lamppost', kd: 7 }, 7), true);
+    assert.equal(festivalLit({ kind: 'lantern', kd: 7 }, 14), false, 'last season\'s flame is out');
+    assert.equal(festivalLit({ kind: 'lantern' }, 7), false);
+    assert.equal(festivalLit({ kind: 'campfire', kd: 7 }, 7), false);
+});

@@ -3,6 +3,7 @@ import { type Material, type Mesh, type MeshStandardMaterial, type Object3D, Ort
 import { NET, TILE, TUNING } from '../shared/config';
 import { type BuildingKind, BUILDINGS } from '../shared/data/buildings';
 import { SPECIES } from '../shared/data/creatures';
+import { festivalLit } from '../shared/data/festival';
 import { type ItemId, ITEMS, type Res } from '../shared/data/items';
 import { MOBS } from '../shared/data/mobs';
 import { applyPlayerDelta, type PlayerDelta, type PlayerView, type ServerMsg, type TickMsg } from '../shared/net/protocol';
@@ -755,7 +756,8 @@ export function boot() {
                 const d = BUILDINGS[e.kind];
                 if (!d.light) continue;
                 const [bw, bh] = d.size, fire = e.kind === 'campfire' || e.kind === 'furnace';
-                spots.push({ x: e.tx + bw / 2, y: e.kind === 'lamppost' ? 2.3 : 1.1, z: e.ty + bh / 2, color: fire ? 0xff9a40 : e.kind === 'lamppost' || e.kind === 'lantern' ? 0xffd890 : 0x9fe0ff, power: Math.min(1.4, d.light / 60), range: Math.min(12, 3 + d.light / 12) });
+                const fest = festivalLit(e, clock.day);       // (lit for the festival: a bigger, golder light)
+                spots.push({ x: e.tx + bw / 2, y: e.kind === 'lamppost' ? 2.3 : 1.1, z: e.ty + bh / 2, color: fest ? 0xffc040 : fire ? 0xff9a40 : e.kind === 'lamppost' || e.kind === 'lantern' ? 0xffd890 : 0x9fe0ff, power: Math.min(1.4, d.light / 60) * (fest ? 1.5 : 1), range: Math.min(12, 3 + d.light / 12) * (fest ? 1.6 : 1) });
             }
         }
         lamps.update(spots, camT.x, camT.z, Math.max(sky.night, rainAmt * 0.3), t2);
