@@ -1062,7 +1062,7 @@ export function createAudio(opts = {}) {
   function sweepNodes() { if (ready) sweep(NOW()); }
   function disposePlayer(p) {
     p.stopped = true; const i = players.indexOf(p); if (i >= 0) players.splice(i, 1);
-    try { if (p.drone) p.drone.os.forEach(({ o }) => o.stop(NOW() + 0.01)); p.bus.disconnect(); p.rev.disconnect(); for (const g of Object.values(p.st)) g.disconnect(); } catch (e) { /* ignore */ }
+    try { if (p.drone) p.drone.os.forEach(({ o }) => o.stop(NOW() + 0.01)); if (!OFFLINE) { p.bus.disconnect(); p.rev.disconnect(); for (const g of Object.values(p.st)) g.disconnect(); } } catch (e) { /* ignore */ }
   }
   function startPump() { if (pumpTimer || OFFLINE) return; pumpTimer = setInterval(() => { if (ctx && ctx.state === 'running') pump(ctx.currentTime + 0.3); }, 45); }
   const xfade = (n, up) => { const a = new Float32Array(n); for (let i = 0; i < n; i++) { const x = i / (n - 1); a[i] = up ? Math.sin(x * Math.PI / 2) : Math.cos(x * Math.PI / 2); } return a; };
