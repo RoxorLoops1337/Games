@@ -622,3 +622,80 @@ canvas.lx-bl-focus:focus-visible, .lx-bl-focus:focus-visible { outline: 3px soli
 .lx-tut-card.lx-tut-compact .lx-tut-title { font-size: 15px; }
 .lx-cer-conf.gone { opacity: 0 !important; transition: opacity .3s; animation-play-state: paused; }
 .lx-scrim > .lx-sheet { z-index: 2; }
+
+/* ======================================================================================================
+   UI PASS 2: one design language for every sheet, robust short-height layout, no mid-word breaks, docked results.
+   SKIN RULE (learn it once): every sheet shares the SAME CHROME: bronze frame, a purple title plate with a gilt serif title, the key strip, one X.
+   The BODY says what kind of place it is: PARCHMENT = ledgers about your people and goods (Roster, Profile, Recruit, Market, Armory, results, reports);
+   NIGHT PURPLE = places and plans (Arena, World, More and Settings, Building) and night scenes (eulogy, season finale, pause). Dark never appears
+   on a ledger body and parchment never on a night body, except cards that are marked on purpose (.ax-card.parch, .am-card.dark).
+   ====================================================================================================== */
+.lx-sheet { max-height: calc(100vh - var(--lx-sat) - 8px); max-height: calc(100dvh - var(--lx-sat) - 8px); }
+@media (min-width: 700px) { .lx-sheet { max-height: calc(100vh - 28px); max-height: calc(100dvh - 28px); } }
+.lx-sheet.lx-marble { border-color: var(--lx-bronze); }
+.lx-sheet.lx-keyed { padding-top: 0; overflow: hidden; }
+.lx-sheet.lx-keyed::before { left: 0; right: 0; top: 0; height: 12px; background-color: #2a1d40; background-image: var(--lx-key); background-position: left center; opacity: 1; z-index: 2; }
+.lx-sheet .lx-panel-head { position: relative; z-index: 1; margin: 0; padding: 16px 52px 8px; background: linear-gradient(180deg, #2a1d40 0%, #3b2552 100%); border-bottom: 2px solid var(--lx-bronze); box-shadow: 0 3px 8px rgba(20, 10, 30, .28); flex: none; }
+.lx-sheet .lx-title { color: var(--lx-gold); text-shadow: 0 2px 0 rgba(0, 0, 0, .6); font-size: var(--lx-fs-l); }
+.lx-sheet .lx-rule { background: linear-gradient(90deg, transparent, var(--lx-gold) 50%, transparent); opacity: .5; }
+.lx-sheet .lx-panel-body { padding: 10px 12px 10px; }
+.lx-sheet-x { top: 1px; right: 2px; background: transparent; border: 0; box-shadow: none; color: var(--lx-gold); z-index: 4; }
+.lx-sheet-x:hover:not(:disabled) { background: rgba(242, 193, 78, .16); filter: none; } .lx-sheet-x:active:not(:disabled) { transform: none; box-shadow: none; background: rgba(242, 193, 78, .28); }
+.lx-grab { top: 5px; background: rgba(255, 240, 200, .38); z-index: 3; }
+@media (max-width: 699px) { .lx-sheet.lx-keyed::before { display: none; } .lx-sheet .lx-panel-head { padding-top: 15px; } }
+.lx-sheet-scroll { flex: 1 1 auto; min-height: 0; }
+.lx-sheet-scroll.lx-more { -webkit-mask-image: linear-gradient(#000 calc(100% - 24px), transparent); mask-image: linear-gradient(#000 calc(100% - 24px), transparent); } /* a soft fade says "more below" */
+.lx-actions { flex: none; padding-top: 10px; position: relative; }
+.lx-actions::before { content: ''; position: absolute; left: -4px; right: -4px; top: 0; height: 1px; background: linear-gradient(90deg, transparent, rgba(122, 82, 34, .5), transparent); }
+@media (max-height: 760px) {
+  .lx-actions { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr)); gap: 6px; padding-top: 8px; }
+  .lx-actions .lx-btn { flex: none; min-height: 40px; padding: 5px 12px; }
+  .lx-actions .lx-btn-sub { font-size: 10.5px; line-height: 1.2; }
+  .lx-sheet .lx-panel-body { padding: 8px 10px 8px; }
+}
+@media (max-height: 760px) and (pointer: coarse) { .lx-actions .lx-btn { min-height: 44px; } }
+/* a sheet that may not be closed says why, and nudges instead of vanishing */
+.lx-why { margin: 0 0 8px; padding: 6px 10px; border-radius: 8px; font: 600 var(--lx-fs-s)/1.35 var(--lx-sans); background: rgba(122, 82, 34, .14); box-shadow: inset 0 0 0 1px rgba(122, 82, 34, .35); }
+.lx-nudge { animation: lx-nudge .32s; } @keyframes lx-nudge { 25% { transform: translateX(-6px); } 75% { transform: translateX(6px); } }
+/* toasts inside a sheet: a strip between the body and the buttons, never over the title */
+.lx-toast.lx-toast-strip { flex: none; margin-top: 8px; padding: 7px 12px; animation: lx-tin .25s var(--lx-ease); font-size: var(--lx-fs-s); }
+.lx-toast.lx-toast-strip.lx-out { opacity: 0; transform: none; transition: opacity .26s; }
+/* the hub HUD's bottom group (advance + nav) and the camera button hide while a sheet is open: no faint clutter under the dim */
+body.lx-modal-open .lx-hud-bottom, body.lx-modal-open:not(.lx-peeked) .lx-photo-fab { visibility: hidden; }
+
+/* docked result dialogs (flow.js results): low, narrow, a light gradient instead of a full dim, and a pill that folds it away to see the scene */
+.lx-scrim.lx-dock-low { pointer-events: none; align-items: flex-end; background: transparent; }
+.lx-scrim.lx-dock-low.lx-in { background: linear-gradient(180deg, transparent 40%, rgba(14, 9, 28, .5) 100%); }
+.lx-dock-low .lx-sheet { pointer-events: auto; max-width: min(640px, 100%); max-height: min(58vh, 560px); max-height: min(58dvh, 560px); border-radius: 14px 14px 0 0; transform: translateY(100%); opacity: 1; transition: transform .35s var(--lx-ease-out); }
+.lx-dock-low.lx-in .lx-sheet { transform: none; opacity: 1; }
+.lx-dock-low.lx-in.lx-peeked .lx-sheet { transform: translateY(calc(100% - 50px)); }
+.lx-dock-low.lx-out .lx-sheet { transform: translateY(100%); opacity: 1; }
+.lx-peek { position: absolute; right: 12px; top: -44px; z-index: 5; display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 0 14px; border-radius: 999px; cursor: pointer; background: rgba(29, 24, 48, .86); color: var(--lx-gold); border: 1.5px solid rgba(242, 193, 78, .7); font: 700 var(--lx-fs-s)/1 var(--lx-serif); letter-spacing: .08em; text-transform: uppercase; box-shadow: 0 4px 12px rgba(0, 0, 0, .5); touch-action: manipulation; }
+.lx-peek:hover { background: rgba(58, 34, 80, .95); } .lx-peek:focus-visible { outline: 3px solid #fff; outline-offset: 2px; }
+@media (pointer: coarse) { .lx-peek { min-height: 44px; } }
+@media (max-height: 520px) { .lx-dock-low .lx-sheet { max-height: 62vh; max-height: 62dvh; } }
+
+/* labels never break inside a word (the fitter in ui_kit.js shrinks them instead) */
+.ax { overflow-wrap: break-word; word-break: normal; }
+.lx-btn, .ax-tab, .ax-chipbtn, .ax-pill, .lm-tab, .am-tab, .lm-act, .lm-chip, .lx-nav-i, .lx-chip, .lx-ttl-tog, .ax-opp, .ax-pick { overflow-wrap: normal; word-break: normal; hyphens: manual; }
+.ax-tab, .lm-tab, .am-tab { white-space: nowrap; }
+.ax-tab span, .lm-tab span, .am-tab span { white-space: nowrap; }
+
+/* bottom nav on wide screens: a proper dock, big icons, readable labels */
+@media (min-width: 900px) {
+  .lx-hud .lx-nav { width: min(100% - 40px, 820px); padding: 8px 16px calc(8px + var(--lx-sab)); border-radius: 16px 16px 0 0; border: 2px solid var(--lx-bronze); border-bottom: 0; gap: 8px; }
+  .lx-nav-i { flex: 1 1 0; min-height: 66px; gap: 5px; font-size: 13.5px; letter-spacing: .1em; border-radius: 10px; }
+  .lx-nav-i .lx-ico { width: 30px; height: 30px; }
+  .lx-nav-i:hover:not(.on) { background: rgba(242, 193, 78, .1); color: #f6e2b0; }
+  .lx-nav-i.on::after { width: 40px; }
+  .lx-badge { right: calc(50% - 30px); }
+}
+
+/* empty states: a medallion, what this is, how to unlock it, one button that takes you there */
+.lx-es { display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; padding: 16px 14px 18px; margin: 6px auto; max-width: 440px; }
+.lx-es-ico { width: 56px; height: 56px; border-radius: 50%; display: grid; place-items: center; background: radial-gradient(circle at 35% 30%, #d8a35c, #7a5222 80%); color: #fff2d6; box-shadow: 0 3px 0 #4a2f12, inset 0 0 0 2px rgba(255, 255, 255, .3); }
+.lx-es-t { font: 700 var(--lx-fs-l)/1.2 var(--lx-serif); letter-spacing: .08em; text-transform: uppercase; margin: 2px 0 0; }
+.lx-es-d { margin: 0; font: 500 var(--lx-fs-m)/1.45 var(--lx-sans); opacity: .9; max-width: 38ch; }
+.lx-es-how { margin: 0; font: 700 var(--lx-fs-s)/1.35 var(--lx-sans); padding: 5px 12px; border-radius: 999px; background: rgba(122, 82, 34, .16); box-shadow: inset 0 0 0 1px rgba(122, 82, 34, .35); }
+.ax-sheet .lx-es-how { background: rgba(242, 193, 78, .12); box-shadow: inset 0 0 0 1px rgba(242, 193, 78, .35); color: var(--lx-gold); }
+.lx-es .lx-btn { margin-top: 6px; min-width: 190px; }
