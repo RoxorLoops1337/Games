@@ -954,7 +954,7 @@ const LEGACY_IDS = ['patron', 'brawl', 'trainer', 'spoiled', 'spy', 'sponsor', '
 { // round 48: BEAST real animals (js/beast.js headless: budgets per tier, smooth skin weights, paw planting, idle life, blood that stays on the wound)
   const had = { window: typeof globalThis.window, document: typeof globalThis.document };
   if (!globalThis.window) globalThis.window = globalThis; if (!globalThis.document) globalThis.document = { createElement: () => ({ getContext: () => null }) };
-  const { createBeast, JN } = await import('../ludus_maximus_3d/js/beast.js'), V = { low: { a: 1050, e: 1600 }, medium: { a: 3900, e: 5200 }, high: { a: 9500, e: 9500 } };
+  const { createBeast, JN } = await import('../ludus_maximus_3d/js/beast.js'), V = { low: { a: 1050, e: 1600 }, medium: { a: 4200, e: 5200 }, high: { a: 11000, e: 11000 } };
   for (const kind of ['lion', 'wolf', 'bear', 'boar', 'nemean', 'elephant']) for (const dt of ['low', 'medium', 'high']) {
     const rec = LM.makeBeast(kind, 6, { r: LM.mulberry(5), id: 't' }), rig = createBeast(rec, { detail: dt }), lim = V[dt][kind === 'elephant' ? 'e' : 'a'];
     ok(rig.triangles() <= lim && rig.drawCalls() <= 8, `${kind} ${dt}: ${rig.triangles()} tris (limit ${lim}) and ${rig.drawCalls()} calls (limit 8)`);

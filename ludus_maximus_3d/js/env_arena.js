@@ -672,7 +672,7 @@ export function createArena({ crowd = 3700, density = 1, decalRes = 2048, seed =
       } else {
         float t = vR2.x, wreath = step(0.40, t) * step(t, 0.52), hat = step(0.52, t) * step(t, 0.70), hood = step(0.70, t) * step(t, 0.84);
         vec3 hc = hairC;
-        hc = mix(hc, vec3(0.2, 0.3, 0.07), wreath * (1.0 - smoothstep(0.03, 0.07, vLp.y - 0.88)));
+        hc = mix(hc, vec3(0.11, 0.16, 0.045), wreath * (1.0 - smoothstep(0.03, 0.07, vLp.y - 0.88)));
         hc = mix(hc, mix(base * 1.05, vec3(0.64, 0.52, 0.3), step(0.5, fract(vR2.y * 7.0))), hat);
         hc = mix(hc, base * vec3(0.6, 0.55, 0.55), hood);
         diffuseColor.rgb = hc;

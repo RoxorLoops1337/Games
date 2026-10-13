@@ -388,11 +388,12 @@ function clipsFor(sp) {
 // tiers: seg radial segments, sub samples per control span, cap rounded cap rings, sw / sh sphere detail, mane strand cards, shells fur shell layers, claws / teeth / whisk / tufts / lids counts.
 // low keeps the old budget (about 1000 triangles per animal), medium and high spend the headroom on anatomy, strand cards and fur shells.
 const DETAIL = {
-  low: { seg: 4, sub: 1, cap: 1, sw: 5, sh: 3, mane: 22, mseg: 2, shells: 0, claws: 0, teeth: 0, whisk: 0, tufts: 0, lids: 0, detailEye: 0, ruff: 0 },
-  medium: { seg: 7, sub: 2, cap: 1, sw: 8, sh: 5, mane: 70, mseg: 3, shells: 0, claws: 2, teeth: 2, whisk: 3, tufts: 8, lids: 1, detailEye: 1, ruff: 1 },
-  high: { seg: 10, sub: 2, cap: 2, sw: 12, sh: 8, mane: 230, mseg: 4, shells: 3, claws: 3, teeth: 4, whisk: 5, tufts: 16, lids: 1, detailEye: 1, ruff: 2 },
+  low: { seg: 4, sub: 1, cap: 1, sw: 5, sh: 3, mane: 24, mseg: 2, shells: 0, claws: 0, teeth: 0, whisk: 0, tufts: 0, lids: 0, detailEye: 0, ruff: 0 },
+  medium: { seg: 7, sub: 2, cap: 1, sw: 8, sh: 5, mane: 90, mseg: 3, shells: 0, claws: 2, teeth: 2, whisk: 3, tufts: 8, lids: 1, detailEye: 1, ruff: 1 },
+  high: { seg: 10, sub: 2, cap: 2, sw: 12, sh: 8, mane: 300, mseg: 4, shells: 3, claws: 3, teeth: 4, whisk: 5, tufts: 16, lids: 1, detailEye: 1, ruff: 2 },
 };
 
+const GEO_CACHE = new Map();
 export function beastKindOf(x) { const g = x && (x.g || x); return (g && (g.beast || (x.beast))) || (x && x.style) || 'lion'; }
 
 /** unitOrRecord: arena unit ({g}) or a beast record from LM.makeBeast. opts: {detail, scale, kind, look} */
@@ -457,6 +458,10 @@ export function createBeast(unitOrRec, opts = {}) {
   const furCol = (belly = 1, saddle = 0.1, ao = 0.2) => (x, y, z, nx, ny) => { const b = sm(0.1, -0.85, ny) * belly; const c = mix(FUR, BEL, b); const k = 1 - saddle * sm(0.4, 1, ny) - ao * sm(0.2, 0.9, -ny) * (1 - belly * 0.5); return c.clone().multiplyScalar(k); };
   const limbCol = (sockY, amt, dark = DK, belly = 0.12) => (x, y, z, nx, ny) => { const c = mix(FUR, BEL, sm(0.1, -0.85, ny) * belly); return mix(c, dark, sm(sockY, sockY * 0.35, y) * amt).multiplyScalar(1 - 0.12 * sm(0.2, 0.9, -ny)); };
   const WL = Math.max(1, S), dir = new V3();
+  // geometry cache: the merged skinned geometry of a (species, tier, coat) is built once and shared by every rig of it (3 wolves, 2 boars, the same lion in the next hunt)
+  const ckey = kind + '|' + dname + '|' + look.coat.toFixed(2) + '|' + look.mane.toFixed(2), cached = GEO_CACHE.get(ckey);
+  if (cached) { GEO_CACHE.delete(ckey); GEO_CACHE.set(ckey, cached); }
+  if (!cached) {
   // ---- torso: one continuous skin from the rump to the chest, blended over the three spine bones
   const hz = jp('hips').z, hy = jp('hips').y, cz = jp('chest').z, cy = jp('chest').y, span = cz - hz, axY = (t) => hy + (cy - hy) * t, axZ = (t) => hz + span * t;
   const rr = (a, m = 1) => [SS(a[0]) * m, SS(a[1]) * m], wst = T.waist || 1;
@@ -562,7 +567,7 @@ export function createBeast(unitOrRec, opts = {}) {
   const mj = (u, l) => { const w = sm(0.3, 1.0, u), m = clamp(0.3 + 0.15 * l, 0, 0.75); return [[bIdx.neck, (1 - w) * (1 - m)], [bIdx.mane1, (1 - w) * m], [bIdx.chest, w * (1 - m)], [bIdx.mane2, w * m]]; };
   if (sp.hasMane) { // lion / Nemean mane: a dark core, then layered tapered strand cards (volumetric, swaying on the mane joints)
     const hN = jp('head'), cN = jp('chest'), ax = new V3(cN.x - hN.x, cN.y - hN.y, cN.z - hN.z), axl = ax.length(), axn = ax.clone().normalize(), e1 = new V3(1, 0, 0), e2 = new V3().crossVectors(axn, e1).normalize();
-    const core = blob(SS(0.34), SS(0.35), SS(0.3), DT.sw, DT.sh); setColor(core, (x, y, z, nx, ny) => mix(MANE, DK, 0.2 + 0.2 * sm(0.5, -0.5, ny))); abs(core, 'neck', [0, SS(-0.01), SS(-0.1)]); addSkin2('fur', core, 'neck', 'chest', (x, y, z) => sm(jp('neck').z - SS(0.28), jp('neck').z + SS(0.12), z));
+    const core = blob(SS(0.34), SS(0.35), SS(0.3), DT.sw, DT.sh); setColor(core, (x, y, z, nx, ny) => mix(mix(MANE, hexC('#8a5a2a'), 0.3), DK, 0.15 * sm(0.5, -0.5, ny))); abs(core, 'neck', [0, SS(-0.01), SS(-0.1)]); addSkin2('fur', core, 'neck', 'chest', (x, y, z) => sm(jp('neck').z - SS(0.28), jp('neck').z + SS(0.12), z));
     const bm = blob(SS(0.2), SS(0.14), SS(0.3), DT.sw, DT.sh); setColor(bm, (x, y) => mix(MANE, FUR, sm(0.0, -0.14, y - jp('chest').y) * 0.5)); abs(bm, 'chest', [0, SS(-0.12), SS(0.0)]); addRigid('fur', bm, 'chest');
     const bl = new Blades(), L = DT.mane >= 100 ? 4 : DT.mane >= 50 ? 3 : 2, ms = DT.mseg, tipC = sp.gold ? hexC('#e8c050') : mix(MANE, hexC('#c08a38'), 0.75);
     for (let l = 0; l < L; l++) {
@@ -571,11 +576,18 @@ export function createBeast(unitOrRec, opts = {}) {
         const hh = h01(k * 7.3 + l * 3.1 + seed), a2 = (k + 0.5 * (l % 2) + hh * 0.5) / cnt * TAU, u = 0.04 + 1.0 * h01(k * 2.7 + l * 5.9 + 0.3 + seed) * (1 - 0.25 * l / L);
         const cx = Math.cos(a2), sy = Math.sin(a2), rd = rad * (0.85 + 0.35 * u) * (sy < -0.3 ? 0.9 : 1);
         const o = [hN.x + axn.x * axl * u + (e1.x * cx + e2.x * sy) * rd, hN.y + axn.y * axl * u + (e1.y * cx + e2.y * sy) * rd * 1.05, hN.z + axn.z * axl * u + (e1.z * cx + e2.z * sy) * rd - SS(0.04)];
-        dir.set(e1.x * cx + e2.x * sy, e1.y * cx + e2.y * sy, e1.z * cx + e2.z * sy).multiplyScalar(0.5).addScaledVector(axn, 0.95).add(new V3(0, -0.1 - 0.25 * (1 - sy) * 0.5, -0.05)).normalize();
+        dir.set(e1.x * cx + e2.x * sy, e1.y * cx + e2.y * sy, e1.z * cx + e2.z * sy).multiplyScalar(0.5).addScaledVector(axn, 0.95).add(new V3(0, -0.03 - 0.1 * (1 - sy) * 0.5, -0.05)).normalize();
         const ln = len * (0.8 + 0.55 * hh) * (1 + 0.5 * u);
         dir.x += (h01(k * 1.7 + l) - 0.5) * 0.45; dir.y += (h01(k * 2.9 + l * 3) - 0.5) * 0.3; dir.normalize();
-        bl.add(o, dir, ln, SS(0.032 + 0.01 * l), ms, new V3(0, -ln * (0.3 + 0.1 * l), 0), mix(DK, MANE, 0.5 + 0.1 * l).multiplyScalar(0.8 + 0.4 * hh), mix(MANE, tipC, 0.2 + 0.25 * l + (sp.gold ? 0.2 * h01(k) : 0)).multiplyScalar(0.85 + 0.35 * hh), mj(u, l), new V3(e1.x * cx + e2.x * sy, e1.y * cx + e2.y * sy, e1.z * cx + e2.z * sy));
+        bl.add(o, dir, ln, SS(0.026 + 0.008 * l), ms, new V3(0, -ln * (0.16 + 0.06 * l), 0), mix(DK, MANE, 0.5 + 0.1 * l).multiplyScalar(0.8 + 0.4 * hh), mix(MANE, tipC, 0.2 + 0.25 * l + (sp.gold ? 0.2 * h01(k) : 0)).multiplyScalar(0.85 + 0.35 * hh), mj(u, l), new V3(e1.x * cx + e2.x * sy, e1.y * cx + e2.y * sy, e1.z * cx + e2.z * sy));
       }
+    }
+    // crown: cards around the back of the head that sweep over the neck and shoulders
+    for (let k = 0, n = Math.round(DT.mane * 0.26); k < n; k++) {
+      const hh = h01(k * 6.1 + seed + 40), a2 = (k + hh) / n * Math.PI * 1.3 - 0.15 * Math.PI, cx = Math.cos(a2), sy = Math.sin(a2), rd = SS(0.17 + 0.05 * hh), u = 0.0 + 0.12 * h01(k * 3.9 + 7);
+      const o = [hN.x + axn.x * axl * u + (e1.x * cx + e2.x * sy) * rd, hN.y + axn.y * axl * u + (e1.y * cx + e2.y * sy) * rd, hN.z + axn.z * axl * u + (e1.z * cx + e2.z * sy) * rd - SS(0.05)];
+      dir.set(e1.x * cx + e2.x * sy, e1.y * cx + e2.y * sy, e1.z * cx + e2.z * sy).multiplyScalar(0.7).addScaledVector(axn, 0.75).add(new V3((hh - 0.5) * 0.3, 0.12, 0)).normalize(); const ln = SS(0.18 + 0.12 * hh);
+      bl.add(o, dir, ln, SS(0.028), ms, new V3(0, -ln * 0.28, 0), mix(DK, MANE, 0.6).multiplyScalar(0.8 + 0.4 * hh), mix(MANE, tipC, 0.4 + 0.3 * hh), mj(0.12 + u, 3), new V3(e1.x * cx + e2.x * sy, e1.y * cx + e2.y * sy, e1.z * cx + e2.z * sy));
     }
     // chest and belly fringe, cheek ruff
     for (let k = 0; k < Math.round(DT.mane * 0.14); k++) { const hh = h01(k * 3.3 + seed), t = k / Math.max(1, Math.round(DT.mane * 0.14) - 1); dir.set((hh - 0.5) * 0.4, -1, -0.15).normalize(); bl.add([(hh - 0.5) * SS(0.3), axY(0.55 + 0.4 * t) - SS(T.chest[1]) * 0.9, axZ(0.55 + 0.45 * t) + SS(0.05)], dir, SS(0.1 + 0.08 * hh), SS(0.02), ms, new V3(0, -SS(0.03), -SS(0.03)), mix(FUR, MANE, 0.3), mix(MANE, tipC, 0.4), [[bIdx.chest, 1]], new V3(1, 0, 0)); }
@@ -672,13 +684,16 @@ export function createBeast(unitOrRec, opts = {}) {
     }
   }
 
+  }   // end of the geometry build (skipped on a cache hit)
+
   // ---- merge to one skinned mesh per material
   const parts = {};
   function rebuild() {
-    for (const k in parts) { root.remove(parts[k]); parts[k].geometry.dispose(); delete parts[k]; }
+    for (const k in parts) { root.remove(parts[k]); if (!parts[k].geometry.userData.shared) parts[k].geometry.dispose(); delete parts[k]; }
     const skeleton = new THREE.Skeleton(bones, bones.map((b) => new THREE.Matrix4().makeTranslation(...rest.get(b).toArray()).invert()));
     const by = {}; for (const it of items) (by[it.mat] = by[it.mat] || []).push(it);
-    for (const k in by) {
+    const built = cached || {};
+    if (!cached) for (const k in by) {
       const list = by[k]; let nv = 0, ni = 0; for (const it of list) { nv += it.geo.attributes.position.count; ni += it.geo.index ? it.geo.index.count : it.geo.attributes.position.count; }
       const hasLayer = k === 'shell', pos = new Float32Array(nv * 3), nor = new Float32Array(nv * 3), clr = new Float32Array(nv * 3), si = new Uint16Array(nv * 4), sw = new Float32Array(nv * 4), lay = hasLayer ? new Float32Array(nv) : null, idx = new Uint32Array(ni); let vo = 0, io = 0;
       for (const it of list) {
@@ -690,8 +705,11 @@ export function createBeast(unitOrRec, opts = {}) {
       }
       const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(pos, 3)); geo.setAttribute('normal', new THREE.BufferAttribute(nor, 3)); geo.setAttribute('color', new THREE.BufferAttribute(clr, 3));
       geo.setAttribute('skinIndex', new THREE.BufferAttribute(si, 4)); geo.setAttribute('skinWeight', new THREE.BufferAttribute(sw, 4)); if (lay) geo.setAttribute('aLayer', new THREE.BufferAttribute(lay, 1)); geo.setIndex(new THREE.BufferAttribute(idx, 1));
-      geo.boundingSphere = new THREE.Sphere(new V3(0, 1, 0), 8); geo.boundingBox = new THREE.Box3(new V3(-8, -1, -8), new V3(8, 8, 8));
-      const m = new THREE.SkinnedMesh(geo, mats[k]); m.name = k; m.castShadow = k !== 'shell'; m.receiveShadow = false; m.frustumCulled = false; root.add(m); m.bind(skeleton, new THREE.Matrix4()); parts[k] = m;
+      geo.boundingSphere = new THREE.Sphere(new V3(0, 1, 0), 8); geo.boundingBox = new THREE.Box3(new V3(-8, -1, -8), new V3(8, 8, 8)); geo.userData.shared = true; built[k] = geo;
+    }
+    if (!cached) { GEO_CACHE.set(ckey, built); while (GEO_CACHE.size > 9) { const old = GEO_CACHE.keys().next().value; for (const g2 of Object.values(GEO_CACHE.get(old))) g2.dispose(); GEO_CACHE.delete(old); } }
+    for (const k in built) {
+      const geo = built[k], m = new THREE.SkinnedMesh(geo, mats[k]); m.name = k; m.castShadow = k !== 'shell'; m.receiveShadow = false; m.frustumCulled = false; root.add(m); m.bind(skeleton, new THREE.Matrix4()); parts[k] = m;
     }
     rig.skeleton = skeleton; rig.parts = parts;
   }
@@ -726,7 +744,7 @@ export function createBeast(unitOrRec, opts = {}) {
     clearBlood() { blood.amount = 0; blood.fresh = 0; blood.wounds.length = 0; blood.wi = 0; blood.last = -1; for (const v of bu.uWound.value) v.set(0, 0, 0, 0); for (const v of bu.uWoundD.value) v.set(0, 0, 0, 0); bu.uBFresh.value = 0; syncBlood(); },
     sever() { return null }, partFrame() { return null }, restoreParts() {}, reattachAll() {}, detachable() { return []; }, detachPart() { return null; },
     update(dt) { animator.update(dt); },
-    dispose() { root.traverse((o) => { if (o.geometry) o.geometry.dispose(); }); for (const k in mats) mats[k].dispose(); rig.skeleton && rig.skeleton.dispose(); },
+    dispose() { root.traverse((o) => { if (o.geometry && !o.geometry.userData.shared) o.geometry.dispose(); }); for (const k in mats) mats[k].dispose(); rig.skeleton && rig.skeleton.dispose(); },
     onEvent: null, setWeapon() {},
   };
   const animator = new BeastAnimator(rig, sp, J, rest, squash, flashState, bu, mats);

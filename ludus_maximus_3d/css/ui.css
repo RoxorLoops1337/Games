@@ -659,7 +659,7 @@ canvas.lx-bl-focus:focus-visible, .lx-bl-focus:focus-visible { outline: 3px soli
 .lx-why { margin: 0 0 8px; padding: 6px 10px; border-radius: 8px; font: 600 var(--lx-fs-s)/1.35 var(--lx-sans); background: rgba(122, 82, 34, .14); box-shadow: inset 0 0 0 1px rgba(122, 82, 34, .35); }
 .lx-nudge { animation: lx-nudge .32s; } @keyframes lx-nudge { 25% { transform: translateX(-6px); } 75% { transform: translateX(6px); } }
 /* toasts inside a sheet: a strip between the body and the buttons, never over the title */
-.lx-toast.lx-toast-strip { flex: none; margin-top: 8px; padding: 7px 12px; animation: lx-tin .25s var(--lx-ease); font-size: var(--lx-fs-s); }
+.lx-toast.lx-toast-strip { flex: none; margin-top: 8px; padding: 7px 12px; animation: none; opacity: 1; font-size: var(--lx-fs-s); } /* no entry animation: it must be readable even when frames are slow */
 .lx-toast.lx-toast-strip.lx-out { opacity: 0; transform: none; transition: opacity .26s; }
 /* the hub HUD's bottom group (advance + nav) and the camera button hide while a sheet is open: no faint clutter under the dim */
 body.lx-modal-open .lx-hud-bottom, body.lx-modal-open:not(.lx-peeked) .lx-photo-fab { visibility: hidden; }
@@ -712,3 +712,5 @@ body.lx-photo-on .lx-banners, body.lx-photo-on .lx-fv-verdict { display: none !i
 @media (max-width: 699px) { .lx-sheet .lx-panel-head { border-radius: 12px 12px 0 0; } }
 .lx-dock-low .lx-sheet .lx-panel-head { border-radius: 12px 12px 0 0; }
 .lx-scrim.lx-out, .lx-scrim.lx-out * { pointer-events: none !important; } /* a dialog that is closing never catches a tap meant for the next one */
+/* the fight HUD dims and goes inert behind a modal (the pause menu), but not behind a docked result dialog: the replay bar and photo button stay usable there */
+body.lx-modal-open:not(.lx-dock-open) .lx-fv-hud, body.lx-modal-open:not(.lx-dock-open) .lx-fv-top { opacity: .28; filter: saturate(.5); pointer-events: none; transition: opacity .2s; }

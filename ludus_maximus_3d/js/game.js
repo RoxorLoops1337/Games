@@ -327,7 +327,9 @@ export class Game {
     const S = this.S; if (!S) return;
     this.goldC.set(S.gold); this.fameC.set(S.fame);
     const f = L().festival ? L().festival(S, S.week) : null;
-    this.weekChip.textContent = `SEASON ${S.season} · WEEK ${((S.week - 1) % 12) + 1}${f && f.n ? ' · ' + String(f.n).toUpperCase() : ''}`;
+    const wk = ((S.week - 1) % 12) + 1, narrow = typeof innerWidth === 'number' && innerWidth <= 430; // phones: 'S1 · W3' so the chip, the counters and the gear fit one row
+    this.weekChip.textContent = `${narrow ? 'S' + S.season : 'SEASON ' + S.season} · ${narrow ? 'W' : 'WEEK '}${wk}${f && f.n && !narrow ? ' · ' + String(f.n).toUpperCase() : ''}`;
+    if (!this._wkResize) { this._wkResize = true; let wasNarrow = narrow; addEventListener('resize', () => { const n = innerWidth <= 430; if (n !== wasNarrow) { wasNarrow = n; this.refresh(); } }); }
     const due = L().dueKeys(S).length;
     // QA: screen reader labels for the HUD
     this.goldC.setAttribute('role', 'group'); this.goldC.setAttribute('aria-label', `Gold ${Math.round(S.gold)}`); this.fameC.setAttribute('role', 'group'); this.fameC.setAttribute('aria-label', `Fame ${Math.round(S.fame)}`);

@@ -82,7 +82,7 @@ if (Q.get('test') === '1') {
   for (const kd of KINDS) for (const dt of ['low', 'medium', 'high']) {
     const rec = LM.makeBeast(kd, 6, { r: LM.mulberry(5), id: 't' }), rig = createBeast(rec, { detail: dt }); ts.add(rig.root);
     const tr = rig.triangles(), dc = rig.drawCalls(); R.tris[kd + ':' + dt] = tr; R.calls[kd + ':' + dt] = dc;
-    ok(tr <= (dt === 'high' ? 9500 : dt === 'medium' ? (kd === 'elephant' ? 5200 : 3900) : (kd === 'elephant' ? 1600 : 1050)), `${kd} ${dt} tris ${tr}`); ok(dc <= 8, `${kd} ${dt} calls ${dc}`);
+    ok(tr <= (dt === 'high' ? 11000 : dt === 'medium' ? (kd === 'elephant' ? 5200 : 4200) : (kd === 'elephant' ? 1600 : 1050)), `${kd} ${dt} tris ${tr}`); ok(dc <= 8, `${kd} ${dt} calls ${dc}`);
     rig.root.traverse((o) => { if (o.isMesh) { ok(!!o.geometry.attributes.color, `${kd} ${o.name} colour`); if (o.isSkinnedMesh) ok(o.skeleton === rig.skeleton, `${kd} skeleton shared`); } });
     // skinning: every vertex has valid bone indices and weights summing to one; the limbs, torso and neck are really blended (many vertices follow two or more bones)
     { let multi = 0, total = 0, badW = 0, badI = 0; const nb = rig.skeleton.bones.length; rig.root.traverse((o) => { if (!o.isSkinnedMesh) return; const si = o.geometry.attributes.skinIndex, sw = o.geometry.attributes.skinWeight; for (let v = 0; v < sw.count; v++) { let t = 0, n = 0; for (let q = 0; q < 4; q++) { const w = sw.getComponent(v, q); t += w; if (w > 0.02) { n++; if (si.getComponent(v, q) >= nb) badI++; } } if (Math.abs(t - 1) > 0.02) badW++; if (n > 1) multi++; total++; } });

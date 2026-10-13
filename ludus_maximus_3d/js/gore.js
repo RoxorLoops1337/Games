@@ -97,11 +97,11 @@ export function createGore(fx, o = {}) {
   function measureCover() {
     let sum = 0, n = 0; for (let y = 0; y < COV_N; y++) for (let x = 0; x < COV_N; x++) { if (Math.hypot(x - 15.5, y - 15.5) > 14) continue; sum += covGrid[y * COV_N + x]; n++; } G.cover = Math.min(1, sum / n * 1.35);
   }
-  const capK = () => 1 - sstep(0.1, 0.24, G.cover);   // 1 = fresh sand, 0 = already well covered
+  const capK = () => 1 - sstep(0.08, 0.2, G.cover);   // 1 = fresh sand, 0 = already well covered
   function dryAll() { // old blood goes darker and browner (source-atop only touches painted pixels)
     if (dryN >= 14) return; dryN++; dctx.save(); dctx.globalCompositeOperation = 'source-atop'; dctx.fillStyle = 'rgba(38,6,5,0.045)'; dctx.fillRect(0, 0, DD.size, DD.size);   // darker, browner
     dctx.globalCompositeOperation = 'destination-out'; dctx.fillStyle = 'rgba(0,0,0,0.04)'; dctx.fillRect(0, 0, DD.size, DD.size); dctx.restore(); fx.markDecals();   // and thinner: the sand shows through old blood (about 0.57x after 14 passes)
-    for (let i = 0; i < covGrid.length; i++) covGrid[i] *= 0.965;   // the coverage estimate follows the thinning, so new blood is not starved by stains that have already faded
+    for (let i = 0; i < covGrid.length; i++) covGrid[i] *= 0.985;   // the coverage estimate follows the thinning only a little (old stains are fainter, not gone)
   }
   function clearUnderFeet() { // gently lift the stains right under living fighters
     dctx.save(); dctx.globalCompositeOperation = 'destination-out';

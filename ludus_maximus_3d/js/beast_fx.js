@@ -5,6 +5,9 @@ import * as THREE from 'three';
 import { createBeast } from './beast.js';
 
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
+/** how big a beast FEELS (sounds, shake, dust, slash height): the rig size, or its height over 2.2 m (the war elephant has rig size 1 but is the biggest thing in the arena) */
+const _pw = new THREE.Vector3();
+const bigOf = (rig) => Math.max((rig && rig.size) || 1, ((rig && rig.nameH) || 0) / 2.2);
 /** heavier beasts shrug off shoves (fightview MASS table is extended with these) */
 export const MASS = { wolf: 1.3, lion: 1.8, bear: 3.2, boar: 2.4, nemean: 5, elephant: 9 };
 const ATK_CLIP = { bite: 'bite', claw: 'claw', pounce: 'pounce', maul: 'maul', swipe: 'swipe', swat: 'swat', gore: 'gore' };
@@ -29,9 +32,9 @@ function prefetchBusts(view) {
 
 /** after fightview has created the fighter record: paw thuds on the big ones, per-fighter state */
 export function setup(view, f, u) {
-  const rig = f.rig, size = rig.size || 1, prev = rig.onEvent;
+  const rig = f.rig, size = bigOf(rig), prev = rig.onEvent;
   f.beast = true;
-  if (size >= 1.3) rig.onEvent = (n, c) => { if (prev) prev(n, c); if (n === 'step' && !view.silent && view.phase === 'fight') { const d = view.camera.position.distanceTo(rig.root.position); if (d < 26) { view.audio.sfx('pawThud', { pitch: 1.1 / Math.sqrt(size), gain: clamp(0.5 + size * 0.14, 0.4, 1) * (1 - d / 30), pan: clamp(rig.root.position.x / 12, -1, 1) }); if (size >= 2 && d < 20) view.feel.addTrauma && view.feel.addTrauma(0.03 * size); } } };
+  if (size >= 1.3) rig.onEvent = (n, c) => { if (prev) prev(n, c); if (n === 'step' && !view.silent && view.phase === 'fight') { const d = view.camera.position.distanceTo(rig.root.position); if (d < 26) { view.audio.sfx('pawThud', { pitch: 1.1 / Math.sqrt(size), gain: clamp(0.5 + size * 0.14, 0.4, 1) * (1 - d / 30), pan: clamp(rig.root.position.x / 12, -1, 1) }); if (size >= 2 && d < 20) { view.feel.addTrauma && view.feel.addTrauma(0.03 * size); const j = rig.joints[(c && c.front ? 'wrist' : 'ankle') + ((c && c.side) || 'L')]; if (j && view.fx.dust) { j.getWorldPosition(_pw); _pw.y = 0.05; view.fx.dust(_pw, 2, { size: 0.5, alpha: 0.3 }); } } } } };
 }
 
 /** 'atk' event from a beast: pick the clip and sync its hit frame to the sim's windup */
@@ -39,7 +42,7 @@ export function atk(view, e, src, dst, fs) {
   if (!fs) return; const an = fs.rig.animator, kind = e.beast || 'bite', name = ATK_CLIP[kind] || 'bite', info = an.clipInfo(name) || { hitAt: 0.3 };
   const wind = e.w || 0.22, speed = kind === 'pounce' ? 1 : clamp(info.hitAt / Math.max(0.1, wind), 0.7, 2.6);
   an.mode = an.mode === 'charge' && kind !== 'pounce' ? '' : an.mode; an.release(); an.play(name, { speed }); fs.rig.squashKick(-0.05);
-  if (dst && (kind === 'claw' || kind === 'swipe' || kind === 'swat' || kind === 'maul')) { const dir = view.dirOf(src, dst); view.fx.later(wind * 0.45, () => { if (!view.F.done) view.fx.slash(view.chest(src, 0.9 * (fs.rig.size || 1)), dir, '#f0e6d0', 1.6 + (fs.rig.size || 1) * 0.5); }); }
+  if (dst && (kind === 'claw' || kind === 'swipe' || kind === 'swat' || kind === 'maul')) { const dir = view.dirOf(src, dst); view.fx.later(wind * 0.45, () => { if (!view.F.done) view.fx.slash(view.chest(src, 0.9 * bigOf(fs.rig)), dir, '#f0e6d0', 1.6 + bigOf(fs.rig) * 0.5); }); }
   if (kind === 'pounce') view.audio.sfx('beastGrowl', { kind: src.beast, pitch: VOICE_PITCH[src.beast], pan: clamp(src.x / 12, -1, 1) });
 }
 
@@ -48,7 +51,7 @@ export function hitFx(view, e, src, dst, fd) {
   const A = view.audio, tag = e.tech || 'bite', pan = clamp(dst.x / 12, -1, 1);
   if (src && src.beast) {
     const snd = tag === 'claw' || tag === 'swipe' || tag === 'swat' ? 'beastClaw' : tag === 'gore' ? 'beastGore' : tag === 'bite' || tag === 'maul' ? 'beastBite' : tag === 'javelin' ? 'spearThrust' : 'beastSlam';
-    A.sfx(snd, { pan, pitch: 1 / Math.sqrt(Math.max(0.6, (view.fm.get(src.id) || { rig: {} }).rig.size || 1)) });
+    A.sfx(snd, { pan, pitch: 1 / Math.sqrt(Math.max(0.6, bigOf((view.fm.get(src.id) || { rig: {} }).rig))) });
     if (HEAVY.has(tag)) { view.fx.dust(view.feet(dst), 7); view.feel.addTrauma && view.feel.addTrauma(0.1 + (src.boss ? 0.1 : 0)); }
     if (Math.random() < 0.25 && tag !== 'javelin') A.sfx('beastGrowl', { kind: src.beast, pitch: VOICE_PITCH[src.beast], pan: clamp(src.x / 12, -1, 1), gain: 0.6 });
   }
@@ -66,7 +69,7 @@ export function down(view, dst) {
 
 /** the sim's own 'beast' events: roar, howl, enrage, telegraph, charge, land, stomp, javelin, winded */
 export function event(view, e, src, dst, fs, fd) {
-  if (!src) return; const A = view.audio, fx = view.fx, feel = view.feel, kind = src.beast, pan = clamp(src.x / 12, -1, 1), an = fs && fs.rig.animator, size = (fs && fs.rig.size) || 1;
+  if (!src) return; const A = view.audio, fx = view.fx, feel = view.feel, kind = src.beast, pan = clamp(src.x / 12, -1, 1), an = fs && fs.rig.animator, size = fs ? bigOf(fs.rig) : 1;
   switch (e.a) {
     case 'roar': case 'howl':
       if (an) { an.release(); an.play(e.a === 'howl' ? 'howl' : 'roar'); }

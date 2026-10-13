@@ -495,7 +495,7 @@ export class FightView {
     const F = this.F, pt = this.phaseT > 0 ? this.phaseT : 0, k = clamp(pt / INTRO_T, 0, 1), e = 1 - (1 - k) * (1 - k);
     if (pt > 0.05 && !this.gateOpen) { this.gateOpen = true; this.arena.setGate(1, 0); this.arena.setGate(1, 1); }
     if (pt > 0.25 && !this.introRoar) { this.introRoar = true; this.audio.sfx('crowdRoar', { gain: 0.75 }); this.arena.setWave && this.arena.setWave(1); this.after(1800, () => this.arena.setWave && this.arena.setWave(0)); }
-    if (pt > INTRO_CAM - 0.1 && this.dir.pose.shot === 'establishing') { this.dir.seedFromPose(this.introPose(INTRO_CAM)); this.dir.setShot('gate', { gateAngle: 0, dur: INTRO_T - INTRO_CAM + 0.4 }, 0.6); }
+    if (pt > INTRO_CAM - 0.1 && this.dir.pose.shot === 'establishing') { this.dir.seedFromPose(this.introPose(INTRO_CAM)); if (this.dir.tall > 0.5) this.dir.setShot('follow', {}, 0.9); else this.dir.setShot('gate', { gateAngle: 0, dur: INTRO_T - INTRO_CAM + 0.4 }, 0.6); }   // phone: the gate shot sits outside the bowl and gets lifted near top-down, so go straight to the follow framing
     for (const f of this.fm.values()) {
       const u = f.u; const x = f.intro.x + (f.intro.tx - f.intro.x) * e; f.rx = x; f.ry = u.y; f.px0 = x; f.pz0 = u.y;
       const speed = (f.intro.tx - f.intro.x) * (2 * (1 - k)) / INTRO_T;

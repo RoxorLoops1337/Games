@@ -37,6 +37,7 @@ const P = {
   scroll: '<path d="M7 4h11a2 2 0 0 1 2 2v1H9v11a2 2 0 0 1-4 0V6a2 2 0 0 1 2-2zM9 10h8M9 14h6"/>',
   skull: '<path d="M5 11a7 7 0 0 1 14 0c0 2-1 3-2 4v3H7v-3c-1-1-2-2-2-4zM9.500 11h.01M14.500 11h.01M10 18v-2M14 18v-2"/>',
   close: '<path d="M6 6l12 12M18 6L6 18"/>',
+  play: '<path d="M8 5l11 7-11 7z"/>',
   hammer: '<path d="M14 4l6 6-2 2-1-1-3 3-4-4 3-3-1-1z"/><path d="M11 11L4 18l2 2 7-7"/>', // MOVE
   gear: '<circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.600 5.600l2.100 2.100M16.300 16.300l2.100 2.100M5.600 18.400l2.100-2.100M16.300 7.700l2.100-2.100"/>',
   check: '<path d="M5 12l5 5 9-10"/>',
@@ -219,7 +220,7 @@ export function modal({ title, body, actions = [], onClose, host = document.body
   scrim.append(sheet); host.append(scrim);
   const prevFocus = document.activeElement; let closed = false;
   const strips = [];
-  const api = { el: scrim, closable, sheet,
+  const api = { el: scrim, closable, sheet, dock,
     /** toast shown INSIDE this sheet (between the body and the action row): it can never cover the title or the text */
     strip(msg, { kind = 'info', ms = 2600, ico } = {}) {
       const t = h('div', `lx-toast lx-toast-${kind} lx-toast-strip`, [ico ? icon(ico, 18) : null, h('span', '', msg)]); t.setAttribute('role', 'status');
@@ -230,7 +231,7 @@ export function modal({ title, body, actions = [], onClose, host = document.body
     },
     close() {
     if (closed) return; closed = true; const i = modalStack.indexOf(api); if (i >= 0) modalStack.splice(i, 1);
-    document.body.classList.toggle('lx-modal-open', modalStack.length > 0); if (peeked) document.body.classList.remove('lx-peeked');
+    document.body.classList.toggle('lx-modal-open', modalStack.length > 0); document.body.classList.toggle('lx-dock-open', modalStack.some((m) => m.dock)); if (peeked) document.body.classList.remove('lx-peeked');
     for (const r of strips.splice(0)) { clearTimeout(r.timer); const left = r.end - performance.now(); if (left > 400) toast(r.msg, { kind: r.kind, ico: r.ico, ms: left }); } // a toast raised just before the sheet closed ("X joined your ludus") still gets seen
     scrim.classList.add('lx-out'); setTimeout(() => scrim.remove(), reduced() ? 0 : 220);
     const nextTop = modalStack[modalStack.length - 1]; if (nextTop) { if (!nextTop.el.contains(document.activeElement)) (focusables(nextTop.el)[0] || nextTop.el).focus?.({ preventScroll: true }); } else prevFocus?.focus?.({ preventScroll: true });
@@ -239,7 +240,7 @@ export function modal({ title, body, actions = [], onClose, host = document.body
   { const sc = sheet.querySelector('.lx-sheet-scroll'); // soft fade at the bottom edge while there is more to scroll
     const upd = () => { if (!sc.isConnected) return; sc.classList.toggle('lx-more', sc.scrollHeight - sc.scrollTop - sc.clientHeight > 6); };
     sc.addEventListener('scroll', upd, { passive: true }); try { new ResizeObserver(upd).observe(sc); new MutationObserver(upd).observe(sc, { childList: true, subtree: true }); } catch (e) { /* no observers */ } setTimeout(upd, 60); }
-  modalStack.push(api); document.body.classList.add('lx-modal-open'); try { document.dispatchEvent(new CustomEvent('lx-modal-open')); } catch (e) { /* old engine */ }
+  modalStack.push(api); document.body.classList.add('lx-modal-open'); document.body.classList.toggle('lx-dock-open', modalStack.some((m) => m.dock)); try { document.dispatchEvent(new CustomEvent('lx-modal-open')); } catch (e) { /* old engine */ }
   if (!kbOn) { kbOn = true; document.addEventListener('keydown', onModalKey, true); }
   scrim.addEventListener('pointerdown', (e) => { if (e.target === scrim && closable && !dock) api.close(); });
   // the slide-in class lands on the next frame, or after 70 ms when frames are slow (software GL, a busy device): a sheet must never wait offscreen behind its own dim

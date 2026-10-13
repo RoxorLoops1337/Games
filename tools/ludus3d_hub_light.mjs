@@ -1,5 +1,5 @@
 // Ludus Maximus 3D: hub light/legibility check. One browser session, many weather x hour states.
-//   node tools/ludus3d_hub_light.mjs <outPrefix> [--w 390] [--h 800] [--tier low] [--states night@22,clear@12,heat@13] [--min night=48,clear=60] [--extra "query"] [--eval "js"] [--advance 1.5] [--noshot] [--ui]
+//   node tools/ludus3d_hub_light.mjs <outPrefix> [--w 390] [--h 800] [--tier low] [--states night@22,clear@12,heat@13] [--min night=48,clear=60] [--extra "query"] [--eval "js"] [--advance 1.5] [--noshot] [--ui] [--rearr]
 // For each state: setWeather/setHour, advance, screenshot, then the mean luminance (0..255, sRGB Rec709) of the BUILDINGS area (centre 80% x, 28..78% y),
 // of the whole frame, and the 5th/95th percentile spread. Exit code 1 when a state's buildings-area mean is under its --min threshold (default: night 40, others 55).
 import { chromium } from '/opt/node22/lib/node_modules/playwright/index.mjs';
@@ -18,12 +18,22 @@ await page.evaluate(() => { const g = window.__LM3D.game, LM = globalThis.LM; if
 if (opt('eval', '')) await page.evaluate(opt('eval', ''));
 const keepUi = a.includes('--ui');
 if (!keepUi) await page.addStyleTag({ content: 'body > *:not(canvas):not(script) { display: none !important }' });   // measure the 3D world, not the HUD
+if (a.includes('--rearr')) {   // open Rearrange, lift a building, preview an empty plot (markers, ghost) and keep them for every state
+  const info = await page.evaluate(async () => {
+    const g = window.__LM3D.game, LM = globalThis.LM, S = g.S; S.gold = Math.max(S.gold, 900);
+    const from = S.plots.findIndex((p, i) => p && !LM.moveWhySource(S, i)), to = S.plots.findIndex((p, i) => !p && i < S.rows * LM.COLS);
+    document.querySelector('.lx-rr-fab').click(); await new Promise((r) => setTimeout(r, 600));
+    g.rearr.tap(from); await new Promise((r) => setTimeout(r, 200)); g.rearr.tap(to); await new Promise((r) => setTimeout(r, 300));
+    return { from, to, active: g.rearr.active };
+  });
+  console.log('rearrange', JSON.stringify(info));
+}
 let bad = 0;
 for (const s of states) {
   await page.evaluate(({ s }) => { const h = window.__LM3D.game.hub; h.setWeather(s.w); h.setHour(s.h); }, { s });
   await page.evaluate((d) => window.__LM3D.advance(d), adv);
   const f = `${out}_${s.w}${s.h == null ? '' : s.h}.png`;
-  const buf = await page.screenshot({ path: opt('noshot', null) ? undefined : f, timeout: 240000 });
+  const buf = await page.screenshot({ path: opt('noshot', null) ? undefined : f, timeout: 900000 });
   const r = await page.evaluate(async (b64) => {
     const img = new Image(); img.src = 'data:image/png;base64,' + b64; await img.decode();
     const c = document.createElement('canvas'); c.width = img.width; c.height = img.height; const g = c.getContext('2d'); g.drawImage(img, 0, 0);
@@ -34,6 +44,7 @@ for (const s of states) {
     const w = img.width, h = img.height;
     return { buildings: lum(w * 0.1, h * 0.28, w * 0.9, h * 0.78), frame: lum(0, 0, w, h) };
   }, buf.toString('base64'));
+  const st = await page.evaluate(() => window.__LM3D.stats()); console.log('  stats', st.calls + ' calls', st.triangles + ' tris');
   const key = s.w === 'night' || (s.h != null && (s.h >= 21 || s.h < 5)) ? 'night' : 'day', min = mins[s.w + (s.h ?? '')] ?? mins[s.w] ?? mins[key] ?? (key === 'night' ? 40 : 55);
   const ok = r.buildings.mean >= min; if (!ok) bad++;
   console.log(`${ok ? 'PASS' : 'FAIL'} ${s.w}@${s.h ?? 'auto'} buildings mean ${r.buildings.mean} (min ${min}) p5 ${r.buildings.p5} p95 ${r.buildings.p95} | frame mean ${r.frame.mean}  ${f}`);
