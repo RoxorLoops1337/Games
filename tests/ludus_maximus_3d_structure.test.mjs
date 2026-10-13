@@ -465,7 +465,7 @@ for (const fn of ['newGame', 'makeGlad', 'mkUnits', 'createFight', 'step', 'useU
 }
 
 { // audio loudness calibration: every music mode has a level entry and a bounded boost, bass management exists
-  const au = rd('../js/audio.js'), db = au.slice(au.indexOf('const MODE_DB'), au.indexOf('const MODE_DB') + 400);
+  const au = readFileSync(join(root, 'js/audio.js'), 'utf8'), db = au.slice(au.indexOf('const MODE_DB'), au.indexOf('const MODE_DB') + 400);
   const modes = ['ludus', 'prep', 'arena', 'beast', 'boss', 'victory', 'defeat', 'title', 'results', 'season', 'elegy'];
   ok(modes.every((m) => new RegExp('\\b' + m + ': ').test(db)), 'audio: MODE_DB has a calibrated level for every music mode');
   const nums = (db.slice(0, db.indexOf('};')).match(/-?\d+(\.\d+)?/g) || []).map(Number);
