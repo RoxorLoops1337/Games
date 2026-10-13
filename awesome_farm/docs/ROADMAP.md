@@ -18,7 +18,7 @@ split big ones into slices (rules, art, polish).
 - [x] S26 Chest labels in the factory view (already built: a labelled chest wears its icon in the world, which the Factory view keeps lit; the minimap stays free of item icons by design)
 
 ## Phase 2: rhythm and economy (medium + small)
-- [ ] M6 Welcome-back digest
+- [x] M6 Welcome-back digest (toasts on return after 5 min or a new day: days passed, what needs you, who is here)
 - [ ] M7 Living market prices + Hot Item of the day
 - [ ] S33 Weather-aware hints
 - [ ] S22 Rainbow's end

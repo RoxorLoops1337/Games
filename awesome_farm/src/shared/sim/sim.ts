@@ -36,6 +36,7 @@ import * as arts from './arts';
 import * as hearth from './hearth';
 import * as iridium from './iridium';
 import * as unstick from './unstick';
+import * as digest from './digest';
 import * as hotbar from './hotbar';
 import * as trade from './trade';
 import * as machines from './machines';
@@ -397,6 +398,7 @@ export class Sim {
         scholar.grant(this, p);
         tellLessons(this, p, true);
         mail.onJoin(this, p);
+        digest.welcomeBack(this, p);
         this.fx('join', p.x, p.y - 8, p.id);
         this.bannerOthers(id, `${p.name} joined`, undefined, PAL.lime);
         return p;
@@ -411,6 +413,7 @@ export class Sim {
         fishing.stop(p);
         costatus.clear(this, p);
         if (p.downed > 0) { if (wasOnExpedition) this.respawnHome(p); else health.die(this, p); }       // (leaving while down does not dodge it)
+        digest.noteLeave(this, p);
         p.online = false;
         p.moving = false;
         this.fresh();
