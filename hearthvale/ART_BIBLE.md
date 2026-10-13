@@ -34,3 +34,19 @@ Colours: `import { P } from './palette.js'`. Materials: `soft(color)` (matte), `
 2. Build `hearthvale/lab/<yourpage>.html` using `lab/stage.js` (see `lab/_check.html`).
 3. `node hearthvale/lab/shot.mjs <page>.html out.png "yaw=0.5&pitch=0.6&dist=9&x=0&z=0" 1000 700` then LOOK at the PNG (Read it). Judge it against the 10 rules. Iterate at least 5 rounds: wide shot, close-up, game-camera shot (`dist=30&pitch=0.9`), night shot (`night=1`).
 4. Compare against the references you researched. Fix what looks off, not what you already like.
+
+
+## ROUND 2 DIRECTION: "Happy Light" (this overrides anything above that feels darker or moodier)
+The target is the warm, bright, friendly, high-key cuteness of cozy life-sim games (think the Animal Crossing family of
+looks, as a mood, not as assets: ORIGINAL designs only). When in doubt, make it rounder, brighter, softer and happier.
+
+1. **High-key light.** No object may look dark or heavy. Shadows are lavender-teal and soft, never black or brown. Fake AO strength <= 0.18.
+   Lightest value on top, midtones everywhere else. Colours are clean, saturated pastel candy: blush pink, butter yellow, mint, sky blue, peach, lilac, leaf green.
+2. **Cheerful faces.** Characters: simple glossy dot eyes (big), tiny blush ovals, a clear happy smile, small button nose or none. Everyone looks friendly.
+3. **Diverse people.** Five skin tones (peach, light, tan, golden brown, deep brown), all clearly lit and warm, never muddy or dark; deep brown must look as bright and happy as peach. Mix tones freely across a village. Varied body builds (round, tall, small), ages, and hair in warm browns plus fun colours (honey, ginger, lilac, pink, teal, white-silver). No near-black hair or clothes.
+4. **Outfit variety.** Each villager wears a DIFFERENT happy colour (use `P.outfit` plus pastels); the owner colour appears only as a small accent (scarf, hat band, apron trim). Never a whole village in one colour.
+5. **Everything has charm details:** flower boxes, bunting flags, round windows with curtains, lanterns, little signs, bees and butterflies, pastel plaster walls (pink, mint, butter, sky) with cream trim, wavy shingle rows, mushroom and flower accents, stepping stones, picket fences.
+6. **Nature is soft and blossomy:** fluffy round trees, pink blossom trees, fruit trees, flower meadows in every corner, mushrooms, lily pads on turquoise water, clover and daisies in the grass, gentle sparkles.
+7. **Animals are huggable:** big eyes, round bodies, tiny legs, visible smiles, blush. Add friendly extras (ducks, puppies, kittens, snails).
+8. **Motion is bouncy:** squash and stretch, idle sways, happy hops. Nothing stiff.
+9. **Same budgets and contracts as before.** Do not rename exported functions or named children; the game already uses them.
