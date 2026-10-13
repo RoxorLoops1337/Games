@@ -711,3 +711,4 @@ body.lx-photo-on .lx-banners, body.lx-photo-on .lx-fv-verdict { display: none !i
 
 @media (max-width: 699px) { .lx-sheet .lx-panel-head { border-radius: 12px 12px 0 0; } }
 .lx-dock-low .lx-sheet .lx-panel-head { border-radius: 12px 12px 0 0; }
+.lx-scrim.lx-out, .lx-scrim.lx-out * { pointer-events: none !important; } /* a dialog that is closing never catches a tap meant for the next one */
