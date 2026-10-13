@@ -432,7 +432,7 @@ for (const fn of ['newGame', 'makeGlad', 'mkUnits', 'createFight', 'step', 'useU
   ok(/G\.tier === 'low' \? 240 : G\.tier === 'medium' \? 420 : 620/.test(gore), 'gore: droplet pool 240 / 420 / 620 by tier');
   ok(/ringCap = \(\) => \(G\.tier === 'low' \? 16 : G\.tier === 'medium' \? 30 : 44\)/.test(gore) && /MAXLH \+ ringCap\(\)/.test(gore), 'gore: the chunk ring is capped per tier (16 / 30 / 44) so the gib mesh stays inside the mobile triangle budget');
   ok(/function fighterDrips/.test(gore) && /f\.wet/.test(gore) && /f\.leak/.test(gore) && /fArr\.length/.test(gore), 'gore: blades drip until the fight ends, wounded fighters leak and leave a trail (array loop, no iterator per frame)');
-  ok(/function chunk\(pos, bx, bz, kind = 0\)/.test(gore) && /G\.full && heavy/.test(gore), 'gore: flesh, bone shards and blood-soaked sand clumps fly off heavy hits at Full only');
+  ok(/function chunk\(pos, bx, bz, kind = 0\)/.test(gore) && /G\.full && (e\.crit || fr > 0\.25)/.test(gore), 'gore: flesh, bone shards and blood-soaked sand clumps fly off heavy hits at Full only');
   ok(/ctx\.last/.test(gore) && /feel\.kick/.test(gore) && /sfx\('cleave'/.test(gore) && /sfx\('squelch'/.test(gore), 'gore: the finishing blow adds a mist cloud, flesh, a second spray, a camera shove and the cleave');
   ok(/p\.rMax2|rMax2/.test(gore) && /stampPool\(p, 0\.55\)/.test(gore), 'gore: finished pools keep creeping out with a wet rim');
   ok(/'squelch', 'cleave'/.test(au) && /def\('squelch'/.test(au) && /def\('cleave'/.test(au) && /squelch\|cleave/.test(au), 'audio: squelch and cleave exist and are in the gore voice category');

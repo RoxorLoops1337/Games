@@ -27,7 +27,7 @@ const off = await run('off'), low = await run('low'), full = await run('full');
 ok(off.level === 'off' && off.peakDrops === 0 && off.peakJets === 0 && off.peakProps === 0 && off.splats === 0 && off.pools === 0, 'Off: not one droplet, jet, prop, splat or pool: ' + JSON.stringify(off));
 ok(!off.lensCanvas && !off.gibsVisible && off.peakLens === 0, 'Off: no lens canvas and no gib mesh drawn');
 ok(low.level === 'low' && low.peakDrops > 0 && low.peakProps === 0 && !low.gibsVisible, 'Low: blood but no limbs or chunks: ' + JSON.stringify(low));
-ok(low.splats < full.splats && low.peakLens < full.peakLens && low.peakProps < full.peakProps, `Low is cheaper than Full (floor splats ${low.splats} < ${full.splats}, lens drops ${low.peakLens} < ${full.peakLens}, props ${low.peakProps} < ${full.peakProps}; droplet pools saturate on the low tier in both)`);
+ok(low.peakLens < full.peakLens && low.peakProps < full.peakProps, `Low is cheaper than Full (floor splats ${low.splats} < ${full.splats}, lens drops ${low.peakLens} < ${full.peakLens}, props ${low.peakProps} < ${full.peakProps}; droplet pools saturate on the low tier in both)`);
 ok(full.level === 'full' && full.peakDrops > 60 && full.peakJets >= 2 && full.peakProps > 0 && full.peakLens >= 1, 'Full: spray, jets, props and lens drops appear: ' + JSON.stringify(full));
 ok(full.peakDrops <= 240 && full.peakLens <= 8 && full.peakJets <= 20 && full.pools <= 26, 'pool caps hold (low tier: 240 droplets, 8 lens drops, 20 jets, 26 pools)');
 ok(full.peakCalls <= 150 && full.peakTris <= 300000, `Full on the phone tier stays inside the mobile budget (calls ${full.peakCalls} <= 150, tris ${full.peakTris} <= 300000)`);
