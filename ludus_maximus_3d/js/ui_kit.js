@@ -389,8 +389,13 @@ export function fitLabels(root = document) {
   }
 }
 if (typeof document !== 'undefined' && typeof MutationObserver !== 'undefined') {
-  let ft = 0; const run = () => { ft = 0; try { fitLabels(document); } catch (e) { /* layout not ready */ } };
-  const kick = () => { if (!ft) ft = setTimeout(run, 40); };
-  const start = () => { try { new MutationObserver(kick).observe(document.body, { childList: true, subtree: true, characterData: true }); addEventListener('resize', kick); kick(); } catch (e) { /* ignore */ } };
+  // only sheets and the hub HUD are watched (never the fight HUD, whose text changes every frame); one pass per 150 ms at most
+  let ft = 0; const roots = new Set();
+  const run = () => { ft = 0; const rs = [...roots]; roots.clear(); for (const r of rs) { try { if (r.isConnected) fitLabels(r); } catch (e) { /* layout not ready */ } } };
+  const kick = (list) => {
+    for (const m of list || []) { const t = m.target && (m.target.nodeType === 1 ? m.target : m.target.parentElement); const r = t && t.closest && t.closest('.lx-scrim, .lx-hud'); if (r && !r.classList.contains('lx-fv-hud') && !(t.closest('.lx-fv-hud'))) roots.add(r); }
+    if (roots.size && !ft) ft = setTimeout(run, 150);
+  };
+  const start = () => { try { new MutationObserver(kick).observe(document.body, { childList: true, subtree: true }); addEventListener('resize', () => { document.querySelectorAll('.lx-scrim, .lx-hud').forEach((r) => roots.add(r)); if (!ft) ft = setTimeout(run, 150); }); document.querySelectorAll('.lx-scrim, .lx-hud').forEach((r) => roots.add(r)); if (roots.size) ft = setTimeout(run, 150); } catch (e) { /* ignore */ } };
   if (document.body) start(); else document.addEventListener('DOMContentLoaded', start);
 }
