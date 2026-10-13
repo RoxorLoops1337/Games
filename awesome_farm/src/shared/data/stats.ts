@@ -108,6 +108,7 @@ export type BuffId = 'sated' | 'swift' | 'mighty' | 'ironhide' | 'mending' | 'lu
     | 'studious' | 'insight' | 'kinship'   // (the XP brews of the Alchemy Table: data/items.ts)
     | 'scholarday'    // (Scholar's Day: everybody learns twice as much until dawn: sim/scholar.ts)
     | 'perfect'       // (a Perfect dash: every hit is a critical one, and the next swing at a monster spends it: sim/sim.ts + sim/combat.ts)
+    | 'cosy'        // (a furnished, walled-in room: sim/cosy.ts)
     | 'hearth'      // (Hearthside: earned at a fire at dusk with company, lasts until dawn: sim/hearth.ts)
     | 'devgod' | 'devspeed';       // (the developer menu's: sim/dev.ts hands them out and takes them back; they never reach a save)
 
@@ -130,5 +131,6 @@ export const BUFFS: Record<BuffId, { name: string; desc: string; icon: string; m
     devspeed: { name: 'Dev speed', desc: 'Developer menu: twice as fast on your feet.', icon: 'i_potion_swift', good: true, mods: { moveSpeed: 1, swingSpeed: 0.5 } },
     perfect:  { name: 'Perfect',    desc: 'Your next hit on a monster is a critical one.', icon: 'k_star', good: true, mods: { crit: 1 } },
     harvest:  { name: 'Bountiful',  desc: 'The land gives more.',           icon: 'i_carrot',       good: true, mods: { wood: 1, stone: 1, ore: 1, plant: 1 } },
+    cosy:     { name: 'Cosy',       desc: 'A snug, furnished room: energy and hearts come back faster while you stay.', icon: 'i_soup', good: true, mods: { energyRegen: 0.5, healPower: 0.15 } },
     hearth:   { name: 'Hearthside', desc: 'Warm company: hearts and energy come back faster, and +15% XP until dawn.', icon: 'i_soup', good: true, mods: { energyRegen: 0.8, healPower: 0.25, xp: 0.15 } },
 };
