@@ -19,6 +19,8 @@ import type { BuildE, Cmd, Inv, PlayerS } from './types';
 import { storageOf } from './uber';
 
 export const OUT_CAP = 200;
+/** What a Speed Module adds to a machine's speed (one per machine). */
+export const MODULE_SPEED = 0.25;
 
 // ── small inventory helpers (shared by the factory, the creatures and the status text) ──
 export const invHas = (inv: Inv | undefined, id: ItemId) => inv?.[id] ?? 0;
@@ -207,7 +209,7 @@ export function step (sim: Sim, dt: number) {
             }
         }
         if (def.fuel && (b.fuel ?? 0) <= 0) continue;     // out of fuel: waits
-        const speed = (1 + (od?.mods.machineSpeed ?? 0) + (b.kind === 'furnace' ? od?.mods.smelt ?? 0 : 0) + ((b.boost ?? 0) > sim.s.time ? b.bs ?? 0.25 : 0)) * (def.use ? (b.pw ?? 0) : 1);
+        const speed = (1 + (od?.mods.machineSpeed ?? 0) + (b.mod === 'speed' ? MODULE_SPEED : 0) + (b.kind === 'furnace' ? od?.mods.smelt ?? 0 : 0) + ((b.boost ?? 0) > sim.s.time ? b.bs ?? 0.25 : 0)) * (def.use ? (b.pw ?? 0) : 1);
         b.prog = (b.prog ?? 0) + dt * speed;
         if (def.fuel) b.fuel = (b.fuel ?? 0) - dt;
         if (b.prog >= r.time) {
@@ -227,6 +229,23 @@ export function step (sim: Sim, dt: number) {
 }
 
 // ── commands ───────────────────────────────────────────────────────────────
+/** Slot a Speed Module into a machine that makes things on its own, or take it back out. */
+export function cmdModule (sim: Sim, p: PlayerS, c: Extract<Cmd, { t: 'module' }>) {
+    const b = sim.reachableBuilding(p, c.id);
+    if (!b || !BUILDINGS[b.kind].proc) return;
+    if (c.op === 'put') {
+        if (b.mod) { sim.deny(p, 'It already has a module'); return; }
+        if (!takeItem(p, 'module_speed', 1)) { sim.deny(p, 'You have no Speed Module'); return; }
+        b.mod = 'speed';
+        sim.float(sim.center(b).x, sim.center(b).y - 14, 'Speed Module: +25% speed', PAL.gold, p.id);
+    } else if (c.op === 'take') {
+        if (!b.mod) return;
+        b.mod = undefined;
+        addItem(p, 'module_speed', 1);
+    } else return;
+    sim.touch(b);
+}
+
 export function cmdXfer (sim: Sim, p: PlayerS, c: Extract<Cmd, { t: 'xfer' }>) {
     const b = sim.reachableBuilding(p, c.id);
     const def = b && BUILDINGS[b.kind];

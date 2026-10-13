@@ -52,7 +52,7 @@ split big ones into slices (rules, art, polish).
   - [x] B5c Shared blueprint book (Blueprint Shelf: share your newest blueprint, others copy it into their book; PROTOCOL 46)
 - [ ] B4 Factory v2: modules, chest gauge, harvester arm + sprinkler
   - [x] B4a Chest fill gauge (a little bar at the foot of every chest with something in it: green, gold, red)
-  - [ ] B4b Machine modules (speed, efficiency)
+  - [x] B4b Speed Module (assembler recipe; slot one into a machine for +25% speed with the Module button; PROTOCOL 47; efficiency module still to do)
   - [ ] B4c Harvester arm
   - [ ] B4d Sprinkler
 - [ ] B1 Cottages: the folk move in

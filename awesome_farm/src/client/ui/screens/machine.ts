@@ -55,7 +55,7 @@ export class MachineScreen implements Screen {
         const w = this.win;
         w.footer({
             primary: { label: 'Collect all', onClick: () => ctx.send({ t: 'collect', id: this.id }) },
-            secondary: [{ label: 'Load all', onClick: () => ctx.send({ t: 'load', id: this.id }) }],
+            secondary: [{ label: 'Load all', onClick: () => ctx.send({ t: 'load', id: this.id }) }, { label: 'Module', w: 100, onClick: () => ctx.send({ t: 'module', id: this.id, op: this.ent()?.mod ? 'take' : 'put' }) }],
             hint: deviceText('Click a slot to take what is in it. Click your items below to load them.', 'Tap a slot to take what is in it. Tap your items below to load them.'),
         });
         const body = w.body, rowA = 164, rowB = body.h - stripH() - GAP - rowA - GAP;
