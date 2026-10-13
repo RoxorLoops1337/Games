@@ -12,7 +12,7 @@
     "test": "node tools/check-changed.mjs",
     "test:battlecall": "node tests/battle_call_engine.test.mjs && node tests/battle_call_server.test.mjs",
     "test:kingshot": "node tests/kingshot_endless.test.mjs",
-    "test:hearthvale": "node tests/hearthvale.test.mjs && node tests/hearthvale_server.test.mjs",
+    "test:hearthvale": "node tests/hearthvale.test.mjs && node tests/hearthvale_fuzz.test.mjs && node tests/hearthvale_server.test.mjs",
     "test:encore": "node tests/encore_island.test.mjs && node tests/encore_island_audio.test.mjs && node tests/encore_island_3d.test.mjs && node tests/encore_island_tutorial.test.mjs && node tests/encore_island_lands.test.mjs && node tests/encore_island_gear.test.mjs && node tests/encore_island_crew.test.mjs && node tests/encore_island_meta.test.mjs && node tests/encore_island_rivals.test.mjs && node tests/encore_island_view3d.test.mjs",
     "test:headliner": "node tests/headliner.test.mjs",
     "test:horde": "node tests/horde_runner.test.mjs",

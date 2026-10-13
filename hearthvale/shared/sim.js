@@ -127,14 +127,16 @@ const building = (P, id) => P.buildings.find(b => b.id === id);
 export function command(W, pid, c) {
   const P = W.players[pid]; if (!P || !c || typeof c.op !== 'string') return { ok: false, err: 'no player' };
   const fn = OPS[c.op]; if (!fn) return { ok: false, err: 'unknown op' };
-  const r = fn(W, P, c) || { ok: true };
+  let r; try { r = fn(W, P, c) || { ok: true }; } catch (e) { return { ok: false, err: 'error' }; }
   if (r.ok !== false) P.rev++;
   return r;
 }
+const own = (o, k) => typeof k === 'string' && Object.prototype.hasOwnProperty.call(o, k);
 const num = (x) => Number.isFinite(x) ? Math.floor(x) : NaN;
 const OPS = {
   place(W, P, c) {
-    const d = BUILDINGS[c.type]; if (!d) return { ok: false, err: 'unknown building' };
+    if (!own(BUILDINGS, c.type)) return { ok: false, err: 'unknown building' };
+    const d = BUILDINGS[c.type]; if (d.hidden) return { ok: false, err: 'unknown building' };
     const x = num(c.x), y = num(c.y); if (isNaN(x) || isNaN(y)) return { ok: false, err: 'bad pos' };
     if (P.level < d.lvl) return { ok: false, err: 'level ' + d.lvl + ' needed' };
     if (!hasTech(P, d.tech)) return { ok: false, err: 'research ' + TECH[d.tech].name };
@@ -181,7 +183,7 @@ const OPS = {
     const b = building(P, c.id); const d = b && BUILDINGS[b.type];
     if (!b || !b.built || !d.craft) return { ok: false, err: 'cannot craft' };
     const r = c.recipe;
-    if (!d.craft.includes(r)) return { ok: false, err: 'wrong recipe' };
+    if (!d.craft.includes(r) || !own(RECIPES, r)) return { ok: false, err: 'wrong recipe' };
     const n = Math.max(1, Math.min(10, num(c.n) || 1));
     if (b.queue.reduce((s, q) => s + q.n, 0) + n > 20) return { ok: false, err: 'queue full' };
     const last = b.queue[b.queue.length - 1];
@@ -195,7 +197,7 @@ const OPS = {
     b.queue.splice(c.i, 1);
   },
   research(W, P, c) {
-    const t = TECH[c.tech], b = building(P, c.id);
+    const t = own(TECH, c.tech) ? TECH[c.tech] : null, b = building(P, c.id);
     if (!t || P.tech[c.tech] || !b || b.type !== 'study' || !b.built) return { ok: false, err: 'cannot research' };
     if (b.research) return { ok: false, err: 'busy' };
     if (P.res.scrolls < t.scrolls) return { ok: false, err: 'need ' + t.scrolls + ' scrolls' };
@@ -210,12 +212,12 @@ const OPS = {
   sell(W, P, c) {
     if (!P.buildings.some(b => b.type === 'market' && b.built)) return { ok: false, err: 'build a Market' };
     if (!GOODS.includes(c.res)) return { ok: false };
-    const n = Math.min(num(c.n) || 0, P.res[c.res]); if (n <= 0) return { ok: false };
+    const n = Math.min(num(c.n) || 0, P.res[c.res]); if (!(n > 0)) return { ok: false };
     P.res[c.res] -= n; P.coins += n * SELL[c.res]; bump(P, 'sold', n);
   },
   contribute(W, P, c) {
-    const o = W.valley.orders.find(o => o.id === c.id); if (!o || o.done || !(c.res in o.need)) return { ok: false, err: 'not needed' };
-    const n = Math.min(num(c.n) || 0, P.res[c.res], o.need[c.res] - o.got[c.res]); if (n <= 0) return { ok: false, err: 'nothing to give' };
+    const o = W.valley.orders.find(o => o.id === c.id); if (!o || o.done || !own(o.need, c.res)) return { ok: false, err: 'not needed' };
+    const n = Math.min(num(c.n) || 0, P.res[c.res], o.need[c.res] - o.got[c.res]); if (!(n > 0)) return { ok: false, err: 'nothing to give' };
     P.res[c.res] -= n; o.got[c.res] += n; o.contrib[P.id] = (o.contrib[P.id] || 0) + n * SELL[c.res]; bump(P, 'gave', n);
     if (Object.keys(o.need).every(k => o.got[k] >= o.need[k])) finishOrder(W, o);
   },

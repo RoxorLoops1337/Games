@@ -10,6 +10,7 @@ export const MAX_LEVEL = LEVEL_XP.length;
 
 // size w x h in tiles, build = worker-seconds, lvl = village level needed, tech = research needed
 export const BUILDINGS = {
+  hall:       { name: 'Hearth Hall', w: 3, h: 3, cost: {}, build: 1, lvl: 99, xp: 0, hidden: true },
   house:      { name: 'Cottage',    w: 2, h: 2, cost: { wood: 15, clay: 5 },            build: 8,  lvl: 1, xp: 8,  housing: 2 },
   farm:       { name: 'Wheat Field', w: 3, h: 2, cost: { wood: 10 },                   build: 5,  lvl: 1, xp: 5,  field: true },
   kitchen:    { name: 'Kitchen',    w: 2, h: 2, cost: { wood: 20, stone: 5 },           build: 9,  lvl: 1, xp: 10, craft: ['soup'] },

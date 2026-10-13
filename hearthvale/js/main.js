@@ -103,12 +103,15 @@ function placeLabels() {
   for (const [id, l] of labels) { const V = view.villages.get(id); if (!V) { l.style.display = 'none'; continue; } const s = view.project(V.group.position.x, 3.4, V.group.position.z - 5); l.style.display = s.vis && view.look.dist < 70 ? '' : 'none'; l.style.left = s.x + 'px'; l.style.top = s.y + 'px'; }
 }
 
+// a press on a panel pauses its refresh so a tap never lands on a button that was just rebuilt
+let pressed = false;
+for (const id of ['#panel', '#sheet']) { const e = $(id); e.addEventListener('pointerdown', () => { pressed = true; }); for (const ev of ['pointerup', 'pointercancel']) e.addEventListener(ev, () => { pressed = false; setTimeout(() => { if (panel) refreshPanel(); if (selected && selected.k) refreshSheet(); }, 30); }); }
 // ---------- panels ----------
 function openPanel(name) { if (panel === name) { closePanel(); return; } panel = name; $('#panel').hidden = false; refreshPanel(true); }
 function closePanel() { panel = null; $('#panel').hidden = true; }
 let chatDraft = '';
 function refreshPanel(force) {
-  const el = $('#panel'); if (!panel) return;
+  const el = $('#panel'); if (!panel || (pressed && !force)) return;
   if (panel === 'chat' && !force && document.activeElement && document.activeElement.id === 'chatIn') { renderChatLog(); return; }
   const head = (t) => `<h3>${t}<button class="x" id="px">✖</button></h3>`;
   let h = '';
@@ -117,7 +120,7 @@ function refreshPanel(force) {
   } else if (panel === 'valley') {
     const V = snap.valley, lo = VALLEY_LEVEL_XP[V.level - 1], hi = VALLEY_LEVEL_XP[V.level] || lo + 1;
     h = head('🌄 Valley board · Lv ' + V.level) + `<div class="bar"><i style="width:${Math.min(100, (V.xp - lo) / (hi - lo) * 100)}%"></i></div><div class="small">Everyone fills these orders together. Rewards are shared by how much you gave.</div>`;
-    h += `<div class="row small" style="margin:6px 0">${V.fields.map(f => { const d = VALLEY_FIELDS.find(x => x.id === f.id); return `<span class="chip" data-f="${f.id}">${ICON[d.res]} ${f.stock}</span>`; }).join('')}</div>`;
+    h += `<div class="row small" style="margin:6px 0">${V.fields.map(f => { const d = VALLEY_FIELDS.find(x => x.id === f.id); return `<span class="chip" data-f="${f.id}">${ICON[d.res]} ${Math.round(f.stock / 10) * 10}</span>`; }).join('')}</div>`;
     h += V.orders.map(o => `<div class="order ${o.done ? 'done' : ''}"><b>Order #${o.id}</b> ${o.done ? '✅ Done!' : ''}${Object.keys(o.need).map(g => `<div class="need"><span>${ICON[g]}</span><div class="bar"><i style="width:${o.got[g] / o.need[g] * 100}%"></i></div><span>${o.got[g]}/${o.need[g]}</span>${o.done || o.got[g] >= o.need[g] ? '' : `<button data-o="${o.id}" data-g="${g}">Give</button>`}</div>`).join('')}<div class="small">Reward ${o.reward.coins}🪙 ${o.reward.scrolls}📜 ${o.reward.xp}xp${o.contrib[myId] ? ' · you gave ' + o.contrib[myId] : ''}</div></div>`).join('');
   } else if (panel === 'players') {
     h = head('👥 Villages (' + snap.players.length + '/16)') + [...snap.players].sort((a, b) => b.level - a.level).map(p => `<div class="pl" data-p="${p.id}"><span class="dot" style="background:${p.color}"></span><b>${esc(p.name)}</b><span class="small">Lv ${p.level} ${p.online ? '🟢' : '💤'}</span><span style="flex:1"></span><button>Visit</button></div>`).join('');
@@ -126,7 +129,8 @@ function refreshPanel(force) {
   } else if (panel === 'menu') {
     h = head('⚙️ Menu') + `<div class="row"><button id="mRename">✏️ Rename village</button>${link.kind === 'solo' ? '<button id="mReset">🗑 New solo game</button>' : ''}<button id="mFs">⛶ Fullscreen</button></div><p class="small">${link.kind === 'solo' ? 'Solo mode: five friendly neighbour villages share your valley. Your game saves in this browser.' : 'Connected to a server. Your village is tied to this browser, so keep your link.'}</p><p class="small">Controls: drag to pan, pinch or wheel to zoom, right-drag or two fingers to rotate. Tap trees, rocks and clay to send a villager. Tap buildings to use them.</p>`;
   }
-  el.innerHTML = h;
+  if (!force && el.dataset.h === h) { if (panel === 'chat') renderChatLog(); return; }
+  const keep = el.scrollTop; el.dataset.h = h; el.innerHTML = h; el.scrollTop = keep;
   $('#px').onclick = closePanel;
   el.querySelectorAll('[data-o]').forEach(b => b.onclick = () => { const o = snap.valley.orders.find(o => o.id == b.dataset.o); const g = b.dataset.g; cmd({ op: 'contribute', id: o.id, res: g, n: o.need[g] - o.got[g] }); });
   el.querySelectorAll('[data-f]').forEach(c => c.onclick = () => { cmd({ op: 'assign', k: 'valley', id: c.dataset.f }); toast('Villager sent to the field'); });
@@ -147,7 +151,7 @@ function renderChatLog() { const l = $('#chatlog'); if (!l) return; l.innerHTML 
 // ---------- build menu & placing ----------
 function openBuildMenu() {
   const s = $('#sheet'); s.hidden = false; selected = { menu: true };
-  const rows = Object.entries(BUILDINGS).map(([id, d]) => {
+  const rows = Object.entries(BUILDINGS).filter(([, d]) => !d.hidden).map(([id, d]) => {
     const lock = you.level < d.lvl ? 'Level ' + d.lvl : d.tech && !you.tech[d.tech] ? 'Research ' + TECH[d.tech].name : null;
     return `<div class="card ${lock ? 'lock' : ''}" data-b="${id}"><div class="nm">${d.name}</div><div class="small">${d.w}×${d.h}</div><div class="cost">${lock ? '🔒 ' + lock : costStr(d.cost)}</div></div>`;
   }).join('');
@@ -156,7 +160,7 @@ function openBuildMenu() {
   s.querySelectorAll('[data-b]').forEach(c => c.onclick = () => startPlace(c.dataset.b));
 }
 function startPlace(type, moveId = null) {
-  const d = BUILDINGS[type]; const lock = you.level < d.lvl ? 'Reach level ' + d.lvl : d.tech && !you.tech[d.tech] ? 'Research ' + TECH[d.tech].name + ' first' : !moveId && !canAfford(d.cost) ? 'Not enough resources' : null;
+  const d = BUILDINGS[type]; if (!d || d.hidden) return; const lock = you.level < d.lvl ? 'Reach level ' + d.lvl : d.tech && !you.tech[d.tech] ? 'Research ' + TECH[d.tech].name + ' first' : !moveId && !canAfford(d.cost) ? 'Not enough resources' : null;
   if (lock) { toast(lock); sfx('bad'); return; }
   closeSheet(); mode = { type, moveId }; view.setGhost(type, myPub().color);
   const spot = _fs(fakeP(), d.w, d.h, 0) || { x: 0, y: 0 }; ghostTo(spot.x, spot.y);
@@ -181,24 +185,25 @@ function cancelPlace() { mode = null; view.setGhost(null); view.hideGrids(); $('
 
 // ---------- selection sheet ----------
 function closeSheet() { selected = null; $('#sheet').hidden = true; view.select(null); }
-function sheet(html) { const s = $('#sheet'); s.hidden = false; s.innerHTML = html; const x = $('#sx'); if (x) x.onclick = closeSheet; return s; }
-function refreshSheet() { if (selected && selected.k) showSelection(selected, true); else if (selected && selected.menu) { /* keep menu stable */ } }
+let sheetKey = '';
+function sheet(html) { const s = $('#sheet'); s.hidden = false; const same = s.dataset.h === html && sheetKey === JSON.stringify(selected); if (!same) { const keep = s.scrollTop; s.dataset.h = html; sheetKey = JSON.stringify(selected); s.innerHTML = html; s.scrollTop = keep; } const x = $('#sx'); if (x) x.onclick = closeSheet; s.same = same; return s; }
+function refreshSheet() { if (pressed) return; if (selected && selected.k) showSelection(selected, true); else if (selected && selected.menu) { /* keep menu stable */ } }
 function showSelection(sel, silent) {
   selected = sel;
   if (sel.k === 'bld') {
     const mine = sel.pid === myId; const pub = snap.players.find(p => p.id === sel.pid); const b = pub && pub.b.find(x => x[0] === sel.id); if (!b) { closeSheet(); return; }
-    const type = b[1], d = type === 'hall' ? { name: 'Hearth Hall', w: 3, h: 3 } : BUILDINGS[type]; const st = mine && you.buildings.find(x => x.id === sel.id);
+    const type = b[1], d = BUILDINGS[type] || { name: type, w: 2, h: 2 }; const st = mine && you.buildings.find(x => x.id === sel.id);
     let h = `<h3>${d.name}<button class="x" id="sx">✖</button></h3>`;
     if (!mine) { h += `<div class="small">Belongs to ${esc(pub.name)}</div>`; return sheet(h); }
-    if (b[4] < 1) { h += `<div class="bar"><i style="width:${b[4] * 100}%"></i></div><div class="small">Under construction. A villager is on the way.</div><div class="row" style="margin-top:8px"><button id="aHelp">👷 Send a builder</button><button id="aDem">🗑 Cancel</button></div>`; const s = sheet(h); $('#aHelp').onclick = () => cmd({ op: 'assign', k: 'bld', id: sel.id }); $('#aDem').onclick = () => { cmd({ op: 'demolish', id: sel.id }); closeSheet(); }; return; }
+    if (b[4] < 1) { h += `<div class="bar"><i style="width:${Math.round(b[4] * 20) * 5}%"></i></div><div class="small">Under construction. A villager is on the way.</div><div class="row" style="margin-top:8px"><button id="aHelp">👷 Send a builder</button><button id="aDem">🗑 Cancel</button></div>`; const s = sheet(h); $('#aHelp').onclick = () => cmd({ op: 'assign', k: 'bld', id: sel.id }); $('#aDem').onclick = () => { cmd({ op: 'demolish', id: sel.id }); closeSheet(); }; return; }
     if (type === 'hall') {
       h += `<div>Villagers ${you.villagers.length}/${you.housing} · Storage ${you.cap} per good · Level ${you.level}</div><div class="row" style="margin:8px 0"><button id="aHire" ${you.villagers.length >= you.housing ? 'disabled' : ''}>🧑‍🌾 Welcome a villager (${costStr(you.hire)})</button></div>`;
       h += you.villagers.length >= you.housing ? '<div class="small">Build more Cottages to make room.</div>' : '';
-      h += '<div class="small">Villagers</div>' + you.villagers.map(v => `<div class="pl" data-v="${v.id}"><b>${esc(v.name)}</b><span class="small">${stateText(v)}</span><span style="flex:1"></span><span class="small">🍲 ${v.hunger}%</span></div>`).join('');
+      h += '<div class="small">Villagers</div>' + you.villagers.map(v => `<div class="pl" data-v="${v.id}"><b>${esc(v.name)}</b><span class="small">${stateText(v)}</span><span style="flex:1"></span><span class="small">🍲 ${Math.round(v.hunger / 10) * 10}%</span></div>`).join('');
       const s = sheet(h); const hb = $('#aHire'); if (hb) hb.onclick = () => cmd({ op: 'hire' }); s.querySelectorAll('[data-v]').forEach(r => r.onclick = () => showSelection({ k: 'vil', id: +r.dataset.v, pid: myId })); return;
     }
     if (d.field) {
-      const stg = b[5], txt = stg === 'empty' ? 'Ready to sow' : stg === 'grow' ? 'Growing ' + Math.round(b[6] * 100) + '%' : 'Ripe, ready to harvest!';
+      const stg = b[5], txt = stg === 'empty' ? 'Ready to sow' : stg === 'grow' ? 'Growing ' + Math.round(b[6] * 10) * 10 + '%' : 'Ripe, ready to harvest!';
       h += `<div>${txt}</div><div class="row" style="margin-top:8px"><button id="aGo" ${stg === 'grow' ? 'disabled' : ''}>${stg === 'ripe' ? '🌾 Harvest' : '🌱 Sow'}</button>`;
     } else if (d.craft) {
       h += `<div class="row">`;
@@ -207,7 +212,7 @@ function showSelection(sel, silent) {
       if (st && st.queue.length) h += '<div class="small" style="margin-top:6px">Queue: ' + st.queue.map((q, i) => `<span class="chip" data-dq="${i}">${ICON[q.recipe]}×${q.n}${q.started ? ' ⏳' : ''} ✖</span>`).join(' ') + '</div>';
       if (d.research) {
         h += '<div class="small" style="margin-top:8px">Research</div><div class="grid">' + Object.entries(TECH).map(([id, t]) => `<div class="card ${you.tech[id] ? 'lock' : ''}" data-t="${id}"><div class="nm">${t.name}</div><div class="small">${t.desc}</div><div class="cost">${you.tech[id] ? '✅ Learned' : (you.res.scrolls < t.scrolls ? '<span class="bad">' : '<span>') + '📜' + t.scrolls + '</span>'}</div></div>`).join('') + '</div>';
-        if (st && st.research) h += `<div class="small">Studying ${TECH[st.research.tech].name}... ${Math.ceil(st.research.left)}s</div>`;
+        if (st && st.research) h += `<div class="small">Studying ${TECH[st.research.tech].name}... ${Math.ceil(st.research.left / 5) * 5}s</div>`;
       }
       h += `<div class="row" style="margin-top:8px">`;
     } else if (d.market) {
@@ -226,7 +231,7 @@ function showSelection(sel, silent) {
     $('#aDem').onclick = () => { if (confirm('Demolish ' + d.name + '? You get part of the cost back.')) { cmd({ op: 'demolish', id: sel.id }); closeSheet(); } };
   } else if (sel.k === 'vil') {
     const v = you.villagers.find(v => v.id === sel.id); if (!v || sel.pid !== myId) { closeSheet(); return; }
-    const s = sheet(`<h3>🧑‍🌾 ${esc(v.name)}<button class="x" id="sx">✖</button></h3><div>${stateText(v)}</div><div class="bar"><i style="width:${v.hunger}%"></i></div><div class="small">Hunger (eats soup automatically)</div><div class="row" style="margin-top:8px"><button id="vRecall">🛑 Stop task</button></div><div class="small" style="margin-top:6px">Now tap something to give this villager a job.</div>`);
+    const s = sheet(`<h3>🧑‍🌾 ${esc(v.name)}<button class="x" id="sx">✖</button></h3><div>${stateText(v)}</div><div class="bar"><i style="width:${Math.round(v.hunger / 10) * 10}%"></i></div><div class="small">Hunger (eats soup automatically)</div><div class="row" style="margin-top:8px"><button id="vRecall">🛑 Stop task</button></div><div class="small" style="margin-top:6px">Now tap something to give this villager a job.</div>`);
     $('#vRecall').onclick = () => cmd({ op: 'recall', vid: v.id });
   }
 }
