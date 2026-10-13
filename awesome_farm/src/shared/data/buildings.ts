@@ -69,7 +69,7 @@ export type BuildingKind =
     | 'workbench' | 'bed' | 'campfire' | 'chest' | 'market' | 'furnace' | 'sawmill' | 'millstone' | 'fishpond' | 'beehive'
     | 'anvil' | 'kitchen' | 'loom' | 'alchemy' | 'lantern' | 'fence' | 'path' | 'planks' | 'bench' | 'mill'
     | 'belt' | 'splitter' | 'sorter' | 'tunnel' | 'tunnelx' | 'solar' | 'battery' | 'inserter' | 'drill' | 'pole' | 'windturbine' | 'coalgen' | 'assembler' | 'steelchest' | 'uberchest' | 'altar' | 'den' | 'waystone' | 'dock' | 'riftforge' | 'hatchery' | 'fortune'
-    | 'hedge' | 'flowerbed' | 'statue' | 'banner' | 'table' | 'signpost' | 'lamppost' | 'fountain' | 'stonewall' | 'barrel' | 'haybale' | 'scarecrow' | 'mailbox' | 'museum' | 'coffer' | 'board' | 'shelf' | 'sprinkler'
+    | 'hedge' | 'flowerbed' | 'statue' | 'banner' | 'table' | 'signpost' | 'lamppost' | 'fountain' | 'stonewall' | 'barrel' | 'haybale' | 'scarecrow' | 'mailbox' | 'museum' | 'coffer' | 'board' | 'shelf' | 'sprinkler' | 'harvester'
     | 'brickfloor' | 'carpet' | 'slatefloor'
     | 'wall_wood' | 'wall_stone' | 'wall_brick' | 'wall_window' | 'doorway' | 'roof_thatch' | 'roof_tile' | 'roof_slate' | 'roof_glass'
     | 'lostpack' | 'mineshaft' | 'mineladder'
@@ -125,6 +125,7 @@ export const BUILDINGS: Record<BuildingKind, BuildingDef> = {
     barrel:    { name: 'Barrel',       tex: 'barrel',    size: [1, 1], cost: { plank: 3 }, cat: 'decor', desc: 'Nobody remembers what is in it.' },
     haybale:   { name: 'Hay Bale',     tex: 'haybale',   size: [1, 1], cost: { wheat: 3 }, cat: 'decor', desc: 'Farm-fresh and very sittable.' },
     table:     { name: 'Table',        tex: 'table',     size: [2, 1], cost: { plank: 4 }, cat: 'decor', desc: 'A potluck table: friends set out up to four dishes with a buff, and whoever uses it eats a portion of every one at once.' },
+    harvester: { name: 'Harvester Arm', tex: 'harvester', size: [1, 1], cost: { ironbar: 4, gear: 2, plank: 4 }, cat: 'farm', req: 'logistics', desc: 'Harvests a ripe bed within 2 tiles every few seconds and puts the crops in a chest within 3 tiles (on the ground if there is none). Leaves giant crops for you.' },
     sprinkler: { name: 'Sprinkler', tex: 'sprinkler', size: [1, 1], cost: { ironbar: 2, plank: 4 }, cat: 'farm', desc: 'Keeps the garden beds around it growing 30% faster. Reaches 3 tiles. Needs no power.' },
     shelf:     { name: 'Blueprint Shelf', tex: 'shelf', size: [1, 1], cost: { plank: 8, rope: 2 }, cat: 'special', desc: 'Share a blueprint from your book with the whole farm. Anyone can copy one into their own book.' },
     board:     { name: 'Request Board', tex: 'board', size: [1, 1], cost: { plank: 8, rope: 2 }, cat: 'special', desc: 'Pin what the farm needs and pay the reward up front. Anyone who hands the items in collects the coins; the items go to you.' },

@@ -34,6 +34,7 @@ import * as health from './health';
 import * as satchel from './satchel';
 import * as arts from './arts';
 import * as cosy from './cosy';
+import * as harvester from './harvester';
 import * as hearth from './hearth';
 import * as iridium from './iridium';
 import * as unstick from './unstick';
@@ -539,6 +540,7 @@ export class Sim {
         this.updateDrops(dt);
         gather.updateRespawn(this, dt);
         machines.step(this, dt);
+        harvester.step(this, dt);
         iridium.step(this, dt);
         unstick.step(this);
         trade.step(this);

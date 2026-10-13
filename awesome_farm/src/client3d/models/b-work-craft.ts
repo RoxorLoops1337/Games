@@ -474,5 +474,22 @@ export function sprinkler(_o: BOpts): Model<BuildE> {
     root.add(head);
     return { obj: root, update(dt: number) { head.rotation.y += dt * 2.5; } };
 }
+export function harvester(_o: BOpts): Model<BuildE> {
+    const root = new THREE.Group();
+    root.add(bake('work.harvester', (mb) => {
+        const b = mb.main;
+        b.box(0.5, 0.14, 0.5, 0x56526a, { y: 0.07, j: 0.01 });
+        b.cyl(0.07, 0.07, 0.5, 6, 0x7a7f9e, { y: 0.4, j: 0.006 });
+    }));
+    const arm = new THREE.Group();
+    arm.position.y = 0.62;
+    arm.add(bake('work.harvester.arm', (mb) => {
+        const b = mb.main;
+        b.box(0.7, 0.07, 0.07, 0x9ea4bf, { x: 0.3, j: 0.006 });
+        b.box(0.1, 0.12, 0.14, 0xb0b5cc, { x: 0.66, y: -0.05, j: 0.006 });
+    }));
+    root.add(arm);
+    return { obj: root, update(_dt: number, t: number) { arm.rotation.y = Math.sin(t * 0.8) * 1.2; } };
+}
 export const SL1 = 0x7a7f9e;
-export const CRAFT = { workbench, anvil, kitchen, loom, alchemy, furnace, sawmill, millstone, fishpond, beehive, museum, coffer, board, shelf, sprinkler };
+export const CRAFT = { workbench, anvil, kitchen, loom, alchemy, furnace, sawmill, millstone, fishpond, beehive, museum, coffer, board, shelf, sprinkler, harvester };

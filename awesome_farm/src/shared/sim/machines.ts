@@ -118,16 +118,17 @@ export function harvestBed (sim: Sim, p: PlayerS, b: BuildE) {
 }
 
 /** Harvest one ripe bed; returns how many crops dropped. */
-function harvestOne (sim: Sim, p: PlayerS, b: BuildE): number {
+export function harvestOne (sim: Sim, p: PlayerS, b: BuildE, sink?: (item: ItemId) => void): number {
     const def = b.plant ? CROPS[b.plant] : undefined;
     if (b.crop !== 2 || !def || !b.plant) return 0;
     const c = sim.center(b);
     const d = sim.derivedOf(p);
     const count = sim.rng.int(def.yield[0], def.yield[1]) + Math.floor(d.mods.cropYield ?? 0)
         + (sim.rng.chance((d.mods.cropYield ?? 0) % 1) ? 1 : 0) + (sim.rng.chance(seasonDef(sim.s.day).yield) ? 1 : 0);
-    for (let i = 0; i < count; i++) sim.spawnDrop(def.out, c.x, c.y);
+    const put = (item: ItemId) => { if (sink) sink(item); else sim.spawnDrop(item, c.x, c.y); };
+    for (let i = 0; i < count; i++) put(def.out);
     const dropped = count;
-    if (sim.rng.chance(def.seedBack + (d.mods.seedChance ?? 0))) sim.spawnDrop(b.plant, c.x, c.y);
+    if (sim.rng.chance(def.seedBack + (d.mods.seedChance ?? 0))) put(b.plant);
     b.crop = -1;
     b.plant = undefined;
     b.growT = 0;
