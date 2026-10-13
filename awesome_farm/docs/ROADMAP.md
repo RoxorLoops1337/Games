@@ -33,7 +33,7 @@ split big ones into slices (rules, art, polish).
 - [x] M9 Orchard and apiary (oaks drop apples, Beehive turns berries into honey, Honey Apple Tart at the Kitchen)
 - [x] M14 Elite affixes (swift, armored, volatile, mending; tinted, named on the kill)
 - [x] M10 Creature signature moves (every 4th companion strike, one move per element)
-- [ ] M11 Day and night shifts for workers
+- [x] M11 Day and night shifts for workers (Day/Night button on the creature card: day, night or round the clock; PROTOCOL 43)
 - [ ] M12 Cosy room score + dye vat
 - [ ] M13 Museum of odd things
 - [ ] S31 Pet nicknames in chat/plates, pet in photo mode
