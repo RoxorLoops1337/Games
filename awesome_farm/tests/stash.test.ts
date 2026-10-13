@@ -140,3 +140,14 @@ test('crafting to a chest sends the new goods to a chest that holds that kind, a
     sim.command('a', { t: 'craft', recipe: 'workbench:plank', n: 1, chest: true });
     assert.ok(lone && countOf(p, 'plank') >= 2, 'a chest that holds none of it is not used');
 });
+
+test('a chest knows how full it is: the gauge fraction and its colour', async () => {
+    const { fillColor, fillOf, storageOf } = await import('../src/shared/sim/uber');
+    const room = storageOf({ kind: 'chest' });
+    assert.ok(room > 0);
+    assert.equal(fillOf({ kind: 'chest', inv: {} }), 0);
+    assert.equal(fillOf({ kind: 'chest', inv: { wood: room / 2 } }), 0.5);
+    assert.equal(fillOf({ kind: 'chest', inv: { wood: room * 3 } }), 1, 'never past full');
+    assert.equal(fillOf({ kind: 'furnace', inv: { wood: 5 } }), 0, 'no room: no gauge');
+    assert.ok(fillColor(0.2) !== fillColor(0.8) && fillColor(0.8) !== fillColor(0.95));
+});
