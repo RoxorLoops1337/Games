@@ -229,3 +229,6 @@ button.small-b{font-size:13px;padding:4px 12px}
 .cot::before{content:"";position:absolute;left:-14%;right:-14%;bottom:92%;height:78%;background:linear-gradient(#ff9ba0,#ee6f7c);clip-path:polygon(50% 0,100% 100%,0 100%);border-radius:6px}
 .cot::after{content:"";position:absolute;left:38%;width:24%;bottom:0;height:56%;background:#b9824f;border-radius:99px 99px 0 0;}
 @media (max-width:640px){.cot{right:6%;bottom:34%}.t3{right:30%}.t4{right:2%}.t1{left:2%}.hills{height:38vh}}
+.panel .x{width:44px;height:44px;min-height:44px}.panel h3{min-height:50px}
+.chip[data-f]{height:44px;padding-right:14px;font-size:16px}
+@media (max-width:640px){.chip[data-f]{height:44px}}

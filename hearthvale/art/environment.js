@@ -288,7 +288,7 @@ function cloverInto(b, x, y, z, s = 1) {
 function carpetInto(b, v, nb = 10) {
   const r = krng(v * 29 + 3), pal = [['#ffb7d0', '#ffffff', '#ff9ec4'], ['#fff2a0', '#ffffff', '#ffd23a'], ['#d4c4ff', '#ffffff', '#b8a4ff'], ['#ffc8a8', '#fff2a0', '#ffffff']][v % 4];
   b.add(G.disc(8), { p: [0, 0.015, 0], s: [0.62, 1, 0.55], c: '#74dc54', grad: 0, ao: 0, sw: 0.1 });
-  for (let i = 0; i < nb; i++) { const a = r() * TAU, rr = Math.sqrt(r()) * 0.46, x = Math.cos(a) * rr, z = Math.sin(a) * rr * 0.9; b.add(G.disc(5), { p: [x, 0.03 + i * 0.002, z], s: [0.13, 1, 0.13], c: pal[i % 3], grad: 0, ao: 0, sw: 0.1 }); b.add(G.disc(4), { p: [x, 0.04 + i * 0.002, z], s: [0.05, 1, 0.05], c: '#ffd23a', grad: 0, ao: 0, sw: 0.1 }); }
+  for (let i = 0; i < nb; i++) { const a = r() * TAU, rr = Math.sqrt(r()) * 0.46, x = Math.cos(a) * rr, z = Math.sin(a) * rr * 0.9; b.add(G.disc(6), { p: [x, 0.03 + i * 0.002, z], s: [0.13, 1, 0.13], c: pal[i % 3], grad: 0, ao: 0, sw: 0.1 }); b.add(G.disc(4), { p: [x, 0.04 + i * 0.002, z], s: [0.05, 1, 0.05], c: '#ffd23a', grad: 0, ao: 0, sw: 0.1 }); }
 }
 /** three little pastel pebbles */
 function pebblesInto(b, x, y, z, s = 1, v = 0) {
@@ -414,8 +414,8 @@ export function rockModel(seed = 0) { const s = Math.abs(Math.floor(seed)) % 6; 
 function clayInto(b, seed) {
   const r = krng(seed * 13 + 3);
   // earthen bowl: raised rim, wet glossy terracotta inside
-  b.add(G.lathe([[0.7, 0], [0.64, 0.06], [0.56, 0.17], [0.46, 0.18], [0.38, 0.1], [0.3, 0.07], [0.0, 0.07]], 11), { c: '#f0bd88', grad: 0.7, ao: 0.16, aoH: 0.2, facet: 0.03, seed });
-  b.lump(0.4, 0, 0.075, 0, '#f58e58', { m: 'gloss', d: 1, s: [1, 0.12, 1], jit: 0.06, grad: 0.5, ao: 0 });
+  b.add(G.lathe([[0.7, 0], [0.64, 0.06], [0.56, 0.17], [0.46, 0.18], [0.38, 0.1], [0.3, 0.07], [0.0, 0.07]], 11), { c: '#f4a46c', grad: 0.6, ao: 0.16, aoH: 0.2, facet: 0.03, seed });
+  b.lump(0.4, 0, 0.075, 0, '#ff9a5e', { m: 'gloss', d: 1, s: [1, 0.12, 1], jit: 0.06, grad: 0.5, ao: 0 });
   for (const [x, z, rad] of [[0.52, -0.3, 0.17], [-0.5, -0.32, 0.14], [0.2, 0.58, 0.15]]) b.lump(rad, x, rad * 0.55 + 0.03, z, '#f27f4e', { m: 'gloss', d: 0, s: [1.1, 0.7, 1], jit: 0.12, grad: 0.6, ao: 0.05, seed: r() * 9 });
   for (let i = 0; i < 2; i++) { const a = r() * TAU; b.rock(0.05, Math.cos(a) * 0.62, 0.03, Math.sin(a) * 0.62, '#f6ecd4', { d: 0, seed: i }); }
   b.lump(0.035, 0.1, 0.1, -0.05, '#ffe0c0', { m: 'gloss', d: 0, ao: 0, grad: 0 });

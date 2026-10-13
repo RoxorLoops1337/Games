@@ -19,7 +19,7 @@ await p.evaluate(async (preset) => {
   for (const b of P.buildings) { b.built = true; b.progress = 1; if (b.type === 'house' || b.type === 'kitchen') b.lvl = 2; if (b.type === 'hall') b.lvl = 3; }
   for (const vi of P.villagers) vi.task = null; for (let i = 0; i < 3; i++) { const n = P.nodes.filter((n) => n.type === 'tree')[i]; if (n) m.command(W, 'me', { op: 'assign', k: 'node', id: n.id }); }
   for (let i = 0; i < 30; i++) m.tick(W, 0.1);
-  const day = preset === 'night' ? 300 : 130; v.worldT = day; v.weatherAt = () => (preset === 'rain' ? 1 : 0); v.rainGoal = preset === 'rain' ? 1 : 0; if (preset === 'rain') v.rainAmt = 1;
+  const target = preset === 'night' ? 300 : 130; W.t = target - 130; v.worldT = target; v.weatherAt = () => (preset === 'rain' ? 1 : 0); v.rainGoal = preset === 'rain' ? 1 : 0; if (preset === 'rain') v.rainAmt = 1;
   v.goal.dist = preset === 'close' ? 14 : preset === 'valley' ? 70 : 26; if (preset === 'valley') { v.goal.x = 0; v.goal.z = 0; v.goal.pitch = 0.95; }
 }, preset);
 const click = async (sel) => { try { await p.evaluate((s) => document.querySelector(s).click(), sel); } catch {} };

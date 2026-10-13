@@ -65,10 +65,10 @@ export const GEO = {
 /* ------------------------------------------------------------------ builder: collects geometry with vertex colours, merges per material */
 const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _e = new THREE.Euler(), _p = new THREE.Vector3(), _s = new THREE.Vector3();
 const _base = new THREE.Color(), _c = new THREE.Color(), _tmp = new THREE.Color();
-// own material (not the shared soft() cache): a fake high-key fill adds 30% of the vertex colour as emission so shaded sides stay pastel, never grey
+// own material (not the shared soft() cache): a fake high-key fill adds 36% of the vertex colour as emission so shaded sides stay pastel, never grey
 export const CMAT = new THREE.MeshStandardMaterial({ color: '#ffffff', vertexColors: true, roughness: 0.88, metalness: 0 });
-CMAT.onBeforeCompile = (sh) => { sh.fragmentShader = sh.fragmentShader.replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n totalEmissiveRadiance += diffuseColor.rgb * 0.3;'); };
-CMAT.customProgramCacheKey = () => 'hv-highkey';
+export function highKey(m, k = 0.36) { m.onBeforeCompile = (sh) => { sh.fragmentShader = sh.fragmentShader.replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n totalEmissiveRadiance += diffuseColor.rgb * ' + k.toFixed(2) + ';'); }; m.customProgramCacheKey = () => 'hv-highkey' + k; return m; }
+highKey(CMAT);
 
 export class B {
   constructor(ox = 0, oy = 0, oz = 0, defMat = CMAT) { this.o = [ox, oy, oz]; this.defMat = defMat; this.map = new Map(); }
@@ -125,7 +125,7 @@ export function meshCount(obj) { let n = 0; obj.traverse((o) => { if (o.isMesh) 
 /* ------------------------------------------------------------------ helpers for animals */
 const EYE = '#2b2036', BLUSH = '#ff93b0', SMILE = '#7d3a4a', WHITE = '#ffffff';
 const EYEMAT = soft('#ffffff', { vertexColors: true, roughness: 0.22, metalness: 0.05 });
-const SHELLMAT = soft('#ffffff', { vertexColors: true, roughness: 0.3, metalness: 0.05 });
+const SHELLMAT = highKey(new THREE.MeshStandardMaterial({ color: '#ffffff', vertexColors: true, roughness: 0.3, metalness: 0.05 }), 0.3);
 const mix = (a, b, t) => '#' + new THREE.Color(a).lerp(new THREE.Color(b), t).getHexString();
 
 /** Lavender-teal blob shadow (shared geometry, one material per opacity). Used under every critter and prop. */
@@ -195,8 +195,8 @@ export function sheepModel(seed = 0) {
   const root = new THREE.Group(); shadowOf(root, 0.52, 0.2, 0.95, 1.3);
   part(root, 'body', 0, 0, 0, (b) => {
     if (!sheared) {
-      b.sph(wool, 0, 0.42, -0.02, 0.3, 0.27, 0.34, { w: 8, h: 5 });
-      for (const [x, y, z, r] of [[-0.17, 0.56, 0.1, 0.2], [0.17, 0.56, 0.1, 0.2], [0, 0.6, -0.14, 0.21], [0, 0.46, -0.34, 0.17]]) b.sph(wool, x * (0.96 + R() * 0.08), y + R() * 0.02, z, r, r * 0.9, r, { w: 6, h: 4 });
+      b.sph(wool, 0, 0.42, -0.02, 0.29, 0.26, 0.33, { w: 6, h: 4 });
+      for (const [x, y, z, r] of [[-0.18, 0.5, 0.1, 0.21], [0.18, 0.5, 0.1, 0.21], [0, 0.6, -0.1, 0.22], ...(crown || bow ? [[0, 0.46, -0.3, 0.2]] : [[-0.15, 0.44, -0.3, 0.17], [0.15, 0.44, -0.3, 0.17]])]) b.sph(wool, x * (0.96 + R() * 0.08), y + R() * 0.02, z, r, r * 0.92, r, { w: 7, h: 4 });
     } else { b.sph(skin, 0, 0.4, 0, 0.22, 0.21, 0.3, { w: 8, h: 5 }); b.sph(wool, 0, 0.57, 0, 0.1, 0.07, 0.12, { w: 5, h: 3 }); b.sph(wool, 0, 0.42, -0.3, 0.09, 0.09, 0.09, { w: 5, h: 3 }); }
   });
   const body = root.getObjectByName('body'), hc = [0, 0.5, 0.4], hr = [0.18, 0.165, 0.16];
@@ -212,7 +212,7 @@ export function sheepModel(seed = 0) {
   part(head, 'earL', 0.14, 0.58, 0.4, (b) => b.sph('#ffb9bf', 0.23, 0.56, 0.4, 0.085, 0.035, 0.055, { w: 4, h: 3, r: [0, 0, -0.35] }));
   part(head, 'earR', -0.14, 0.58, 0.4, (b) => b.sph('#ffb9bf', -0.23, 0.56, 0.4, 0.085, 0.035, 0.055, { w: 4, h: 3, r: [0, 0, 0.35] }));
   part(body, 'tail', 0, 0.5, -0.36, (b) => b.sph(sheared ? skin : wool, 0, 0.5, -0.43, 0.085, 0.085, 0.09, { w: 5, h: 3 }));
-  legGroup(root, 0.2, [[0.13, 0.17], [-0.13, 0.17], [0.13, -0.2], [-0.13, -0.2]], (b, x, z) => b.cyl(leg, x, 0.1, z, 0.058, 0.2, { n: 5, rt: 0.85, open: true }));
+  legGroup(root, 0.2, [[0.13, 0.17], [-0.13, 0.17], [0.13, -0.2], [-0.13, -0.2]], (b, x, z) => b.cyl(leg, x, 0.1, z, 0.065, 0.2, { n: 4, rt: 0.85, open: true }));
   return finish(root, 'sheep', 0, seed);
 }
 
@@ -246,7 +246,7 @@ export function cowModel(seed = 0) {
   const root = new THREE.Group(); shadowOf(root, 0.62, 0.2, 0.8, 1.45);
   part(root, 'body', 0, 0, 0, (b) => {
     b.sph(V.c, 0, 0.56, 0, 0.37, 0.33, 0.52, { w: 8, h: 5 });
-    b.sph(V.p, 0.17, 0.76, -0.1, 0.17, 0.12, 0.17, { w: 5, h: 3 }); b.sph(V.p, -0.22, 0.6, 0.12, 0.13, 0.15, 0.17, { w: 5, h: 3 });
+    b.sph(V.p, 0.15, 0.78, -0.1, 0.21, 0.14, 0.2, { w: 5, h: 3 }); b.sph(V.p, -0.25, 0.6, 0.12, 0.13, 0.17, 0.2, { w: 5, h: 3 });
   });
   const body = root.getObjectByName('body'), hc = [0, 0.74, 0.68], hr = [0.25, 0.22, 0.21], sc = [0, 0.655, 0.86], sr = [0.15, 0.1, 0.1];
   const head = part(body, 'head', 0, 0.68, 0.5, (b) => {
@@ -257,13 +257,14 @@ export function cowModel(seed = 0) {
     b.cone('#fff0cf', 0.14, 0.9, 0.68, 0.04, 0.12, { n: 4, r: [0, 0, -0.5] }); b.cone('#fff0cf', -0.14, 0.9, 0.68, 0.04, 0.12, { n: 4, r: [0, 0, 0.5] });
     b.sph(V.p, 0, 0.93, 0.72, 0.09, 0.05, 0.08, { w: 5, h: 3 });
     b.cyl('#6fd47a', 0, 0.58, 0.55, 0.21, 0.04, { n: 8, open: true, r: [0.25, 0, 0] });
-    for (let i = 0; i < 5; i++) { const a = -1.15 + i * 0.575; b.sph(FLOWERS[i], Math.sin(a) * 0.21, 0.575 - Math.abs(a) * 0.005, 0.55 + Math.cos(a) * 0.18, 0.045, 0.04, 0.045, { w: 4, h: 3, sh: 0.05 }); }
+    for (let i = 0; i < 5; i++) { const a = -1.15 + i * 0.575; b.sph(FLOWERS[i], Math.sin(a) * 0.22, 0.575 - Math.abs(a) * 0.005, 0.55 + Math.cos(a) * 0.19, 0.07, 0.06, 0.07, { w: 4, h: 3, sh: 0.05 }); }
   });
   eyes(head, hc, hr, 0.64, 0.14, 0.06);
   part(head, 'earL', 0.2, 0.82, 0.68, (b) => b.sph(V.c, 0.31, 0.8, 0.68, 0.11, 0.04, 0.07, { w: 5, h: 3, r: [0, 0, -0.3] }));
   part(head, 'earR', -0.2, 0.82, 0.68, (b) => b.sph(V.c, -0.31, 0.8, 0.68, 0.11, 0.04, 0.07, { w: 5, h: 3, r: [0, 0, 0.3] }));
   part(body, 'tail', 0, 0.85, -0.5, (b) => { b.cyl(V.c, 0, 0.66, -0.57, 0.022, 0.36, { n: 4, open: true }); b.sph(V.p, 0, 0.45, -0.57, 0.055, 0.08, 0.055, { w: 5, h: 3 }); });
-  legGroup(root, 0.3, [[0.2, 0.34], [-0.2, 0.34], [0.2, -0.32], [-0.2, -0.32]], (b, x, z) => b.cyl(V.c, x, 0.15, z, 0.1, 0.3, { n: 5, rt: 0.85, open: true, fn: (lx, ly, lz, t) => (t < 0.2 ? '#f6c9a6' : null) }));
+  legGroup(root, 0.3, [[0.2, 0.34], [-0.2, 0.34], [0.2, -0.32], [-0.2, -0.32]], (b, x, z) => b.cyl(V.c, x, 0.15, z, 0.115, 0.3, { n: 5, rt: 0.85, open: true, fn: (lx, ly, lz, t) => (t < 0.2 ? '#f6c9a6' : null) }));
+  body.position.y = -0.07; // lower the whole barrel so the legs read as short and chunky
   return finish(root, 'cow', 0, seed);
 }
 
@@ -290,8 +291,9 @@ function canine(seed, pup) {
   const ey = hy + 0.06, ez = hz;
   part(head, 'earL', 0.1, ey + 0.06, ez, (b) => b.sph(V.d, 0.17, ey - (pup ? 0.04 : 0), ez, 0.05, pup ? 0.12 : 0.1, 0.075, { w: 5, h: 4, r: [0, 0, -0.3] }));
   part(head, 'earR', -0.1, ey + 0.06, ez, (b) => b.sph(V.d, -0.17, ey - (pup ? 0.04 : 0), ez, 0.05, pup ? 0.12 : 0.1, 0.075, { w: 5, h: 4, r: [0, 0, 0.3] }));
-  part(body, 'tail', 0, bh + 0.08, -0.27 * S, (b) => { const z = -0.3 * S; b.sph(V.c, 0, bh + 0.1, z, 0.045, 0.07, 0.045, { w: 5, h: 3, r: [-0.5, 0, 0] }); b.sph(V.c, 0, bh + 0.18, z - 0.03, 0.045, 0.07, 0.045, { w: 5, h: 3 }); b.sph(V.l, 0, bh + 0.25, z - 0.02, 0.042, 0.05, 0.042, { w: 5, h: 3 }); });
-  legGroup(root, 0.2 * S + 0.02, [[0.09, 0.17 * S], [-0.09, 0.17 * S], [0.09, -0.17 * S], [-0.09, -0.17 * S]], (b, x, z) => b.cyl(V.c, x, 0.1 * S, z, 0.045, 0.2 * S, { n: 5, open: true, fn: (lx, ly, lz, t) => (t < 0.22 ? V.l : null) }));
+  part(body, 'tail', 0, bh + 0.08, -0.27 * S, (b) => { const z = -0.3 * S; b.sph(V.c, 0, bh + 0.09, z, 0.06, 0.08, 0.06, { w: 5, h: 3, r: [-0.5, 0, 0] }); b.sph(V.c, 0, bh + 0.17, z - 0.03, 0.055, 0.075, 0.055, { w: 5, h: 3 }); b.sph(V.l, 0, bh + 0.24, z - 0.02, 0.05, 0.06, 0.05, { w: 5, h: 3 }); });
+  legGroup(root, 0.2 * S + 0.02, [[0.09, 0.17 * S], [-0.09, 0.17 * S], [0.09, -0.17 * S], [-0.09, -0.17 * S]], (b, x, z) => b.cyl(V.c, x, 0.1 * S, z, pup ? 0.062 : 0.056, 0.2 * S, { n: 5, open: true, fn: (lx, ly, lz, t) => (t < 0.22 ? V.l : null) }));
+  body.position.y = pup ? -0.055 : -0.03; // sit lower: short, chunky legs
   return finish(root, pup ? 'puppy' : 'dog', 0, seed);
 }
 export const dogModel = (seed = 0) => canine(seed, false);
@@ -319,7 +321,8 @@ function feline(seed, kit) {
   part(head, 'earR', -0.085, eyc, hz, (b) => { b.cone(V.c, -0.095, eyc + 0.05, hz, 0.055, 0.12, { n: 4, r: [0, 0, 0.18] }); b.cone('#ffb3c4', -0.095, eyc + 0.04, hz + 0.02, 0.03, 0.08, { n: 4, r: [0, 0, 0.18] }); });
   part(body, 'tail', 0, 0.28 * S, -0.2 * S, (b) => { const P = [[0.3, -0.27, 0.058], [0.39, -0.31, 0.052], [0.48, -0.3, 0.048], [0.55, -0.26, 0.045]]; for (const [y, z, r] of P) b.sph(V.c, 0, y * S + 0.02, z * S, r, r, r, { w: 5, h: 3 }); b.sph(vi === 3 ? V.s : V.l, 0, 0.56 * S + 0.02, -0.23 * S, 0.038, 0.038, 0.038, { w: 4, h: 3 }); });
   part(body, 'collar', 0, 0.3 * S, 0.14 * S, (b) => { b.cyl(bell, 0, hy - 0.12, hz - 0.03, hr[0] * 0.8, 0.035, { n: 8, open: true, r: [0.3, 0, 0] }); b.sph('#ffd84a', 0, hy - 0.15, hz + 0.07, 0.03, 0.03, 0.03, { w: 4, h: 3, sh: 0 }); });
-  legGroup(root, 0.15 * S + 0.02, [[0.07, 0.14 * S], [-0.07, 0.14 * S], [0.07, -0.14 * S], [-0.07, -0.14 * S]], (b, x, z) => b.cyl(V.c, x, 0.075 * S + 0.005, z, 0.036, 0.15 * S, { n: 5, open: true, fn: (lx, ly, lz, t) => (t < 0.25 ? V.l : null) }));
+  legGroup(root, 0.15 * S + 0.02, [[0.07, 0.14 * S], [-0.07, 0.14 * S], [0.07, -0.14 * S], [-0.07, -0.14 * S]], (b, x, z) => b.cyl(V.c, x, 0.075 * S + 0.005, z, 0.045, 0.15 * S, { n: 5, open: true, fn: (lx, ly, lz, t) => (t < 0.25 ? V.l : null) }));
+  body.position.y = kit ? -0.05 : -0.035;
   return finish(root, kit ? 'kitten' : 'cat', 0, seed);
 }
 export const catModel = (seed = 0) => feline(seed, false);
@@ -390,9 +393,9 @@ export function birdModel(seed = 0) {
   const head = part(body, 'head', 0, 0.05, 0.1, (b) => {
     b.sph(V.c, hc[0], hc[1], hc[2], hr[0], hr[1], hr[2], { w: 7, h: 5 }); b.cone('#ffb23a', 0, 0.1, 0.215, 0.026, 0.06, { n: 4, r: [PI / 2, 0, 0] });
     if (vi === 1) b.cone(V.w, 0, 0.2, 0.1, 0.02, 0.06, { n: 3, r: [-0.4, 0, 0] });
-    face(b, hc, hr, { r: 0.036, az: 0.82, el: 0.12, baz: 0.3, bel: 0.2, smile: false });
+    face(b, hc, hr, { r: 0.044, az: 0.8, el: 0.12, baz: 0.3, bel: 0.2, smile: false });
   });
-  eyes(head, hc, hr, 0.82, 0.12, 0.036);
+  eyes(head, hc, hr, 0.8, 0.12, 0.044);
   part(body, 'wingL', 0.07, 0.04, 0, (b) => { b.sph(V.w, 0.16, 0.04, -0.01, 0.1, 0.016, 0.075, { w: 6, h: 3 }); b.sph(V.t, 0.1, 0.046, 0.01, 0.05, 0.018, 0.06, { w: 4, h: 3 }); });
   part(body, 'wingR', -0.07, 0.04, 0, (b) => { b.sph(V.w, -0.16, 0.04, -0.01, 0.1, 0.016, 0.075, { w: 6, h: 3 }); b.sph(V.t, -0.1, 0.046, 0.01, 0.05, 0.018, 0.06, { w: 4, h: 3 }); });
   part(body, 'tail', 0, 0, -0.12, (b) => b.sph(V.w, 0, 0.0, -0.2, 0.05, 0.014, 0.1, { w: 5, h: 3 }));
@@ -400,12 +403,12 @@ export function birdModel(seed = 0) {
 }
 
 /* ------------------------------------------------------------------ BUTTERFLY */
-const WINGMAT = soft('#ffffff', { vertexColors: true, side: THREE.DoubleSide });
+const WINGMAT = highKey(new THREE.MeshStandardMaterial({ color: '#ffffff', vertexColors: true, side: THREE.DoubleSide, roughness: 0.85 }), 0.3);
 const BUTTER = ['#ff8fb3', '#ffd24a', '#7fc8ff', '#c59bff', '#7fe3b0', '#ffa86a'];
 export function butterflyModel(color = '#ff8fb3') {
   if (typeof color !== 'string') color = BUTTER[(((color | 0) % BUTTER.length) + BUTTER.length) % BUTTER.length];
   const root = new THREE.Group(); const sh = shadowOf(root, 0.1, 0.2, 1, 1); sh.position.y = -0.5;
-  const base = new THREE.Color(color), rim = base.clone().lerp(new THREE.Color('#ffffff'), 0.7), dot = base.clone().lerp(new THREE.Color('#ffffff'), 0.35).offsetHSL(0.04, 0, -0.1);
+  const base = new THREE.Color(color), rim = base.clone().lerp(new THREE.Color('#ffffff'), 0.45), dot = base.clone().offsetHSL(0.03, 0.1, -0.12);
   part(root, 'body', 0, 0, 0, (b) => { b.cyl('#8a6a5a', 0, 0, 0, 0.014, 0.1, { n: 5, r: [PI / 2, 0, 0], sh: 0 }); b.sph('#8a6a5a', 0, 0, 0.06, 0.022, 0.022, 0.022, { w: 5, h: 3, sh: 0 }); });
   const wing = (s) => (b) => {
     const fn = (lx, ly, lz) => { const r = Math.hypot(lx, lz); return r > 0.82 ? rim : r < 0.18 ? dot : null; };
@@ -471,7 +474,7 @@ export function beeModel() {
 /* ------------------------------------------------------------------ SNAIL (tiny, shiny shell) */
 // variants: shell colour 0 pink, 1 mint, 2 butter, 3 lilac
 export function snailModel(seed = 0) {
-  const vi = ((seed % 4) + 4) % 4, S = [{ a: '#ff9ec2', b: '#ffd5e5', c: '#ff6fa3' }, { a: '#7fe3b8', b: '#c9f7e3', c: '#44c995' }, { a: '#ffd84a', b: '#fff1a8', c: '#f5b72a' }, { a: '#c5a6ff', b: '#e8dcff', c: '#9f7ae8' }][vi], skin = '#ffe6c8';
+  const vi = ((seed % 4) + 4) % 4, S = [{ a: '#ffd5e5', b: '#ff8fba', c: '#ff5f9c' }, { a: '#c9f7e3', b: '#6fe0b0', c: '#3cc890' }, { a: '#fff1a8', b: '#ffd24a', c: '#f5a81a' }, { a: '#e8dcff', b: '#b898ff', c: '#8f6ae8' }][vi], skin = '#ffe0bd';
   const root = new THREE.Group(); shadowOf(root, 0.2, 0.2, 0.8, 1.5);
   part(root, 'body', 0, 0, 0, (b) => { b.sph(skin, 0, 0.065, -0.02, 0.1, 0.065, 0.2, { w: 7, h: 4 }); });
   const body = root.getObjectByName('body'), hc = [0, 0.15, 0.18], hr = [0.078, 0.075, 0.072];

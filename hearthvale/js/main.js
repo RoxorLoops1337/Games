@@ -90,11 +90,11 @@ function onSnap(s) {
   for (const p of you.popups || []) popup(p);
   for (const e of s.events || []) {
     if (e.t === 'levelup' && e.pid === myId) { toast('Village level ' + e.level + '!', 'star'); sfx('level'); const V = view.villages.get(myId); if (V) view.burst(V.group.position.x, V.group.position.z); }
-    else if (e.t === 'quest' && e.pid === myId) { toast('Quest complete!', 'quests'); sfx('coin'); }
+    else if (e.t === 'quest' && e.pid === myId) { toast('Quest complete!', 'quests'); sfx('coin'); const V = view.villages.get(myId); if (V) view.star(V.group.position.x, V.group.position.z); }
     else if (e.t === 'built' && e.pid === myId) { sfx('done'); const V = view.villages.get(myId); const m = V && V.b.get(e.id); if (m) view.burst(V.group.position.x + m.position.x, V.group.position.z + m.position.z, '#fff3a0'); }
-    else if (e.t === 'order') { toast('A Valley order was finished!', 'scrolls'); sfx('done'); }
+    else if (e.t === 'order') { toast('A Valley order was finished!', 'scrolls'); sfx('done'); view.burst(0, 0, '#ff9ec7'); }
     else if (e.t === 'valleylevel') toast('The Valley reached level ' + e.level + '!', 'valley');
-    else if (e.t === 'gift' && e.to === myId) { toast('A neighbour sent you ' + e.n + ' ' + e.res, 'gift'); sfx('coin'); }
+    else if (e.t === 'gift' && e.to === myId) { toast('A neighbour sent you ' + e.n + ' ' + e.res, 'gift'); sfx('coin'); const V = view.villages.get(myId); if (V) view.hearts(V.group.position.x, V.group.position.z); }
     else if (e.t === 'emote') { const p = s.players.find(p => p.id === e.pid); if (p) { const V = view.villages.get(p.id); if (V) popupAt(V.group.position.x, 3.5, V.group.position.z, e.e); } }
   }
   if (selected) refreshSheet();

@@ -18,14 +18,14 @@
 
 import * as THREE from 'three';
 import { soft, rng } from './artkit.js';
-import { B, CMAT, GEO, part, pboxGeo, blobShadow, decal, smileGeo, lift } from './critters.js';
+import { B, CMAT, GEO, part, pboxGeo, blobShadow, decal, smileGeo, lift, highKey } from './critters.js';
 
 const PI = Math.PI;
 export const lampMat = new THREE.MeshStandardMaterial({ color: '#fff1b8', emissive: '#ffc94a', emissiveIntensity: 0.35, roughness: 0.4 });
 export const flameMat = new THREE.MeshBasicMaterial({ color: '#ffb23c', vertexColors: true, transparent: true, opacity: 0.95 });
 export const lanternMat = new THREE.MeshStandardMaterial({ color: '#ffe9a8', emissive: '#ffb73a', emissiveIntensity: 0.3, roughness: 0.5 });
 const TWO = new THREE.MeshStandardMaterial({ color: '#ffffff', vertexColors: true, side: THREE.DoubleSide, roughness: 0.9 });
-TWO.onBeforeCompile = (sh) => { sh.fragmentShader = sh.fragmentShader.replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n totalEmissiveRadiance += diffuseColor.rgb * 0.3;'); }; TWO.customProgramCacheKey = () => 'hv-highkey2';
+highKey(TWO, 0.3);
 
 // honey wood + candy paint
 const W = { light: '#f8dca6', mid: '#efc17e', dark: '#dca463', deep: '#bf8650' };
