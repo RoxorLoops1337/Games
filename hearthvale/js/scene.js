@@ -103,7 +103,7 @@ export class View {
     this.cloudU = { uTex: { value: tex }, uT: { value: 0 }, uAmt: { value: 0.2 }, uCol: { value: new THREE.Color('#7e74d0') } };
     const cs = this.cloudShadow = new THREE.Mesh(new THREE.PlaneGeometry(170, 170), new THREE.ShaderMaterial({ uniforms: this.cloudU, transparent: true, depthWrite: false,
       vertexShader: 'varying vec2 vW; void main(){ vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xz; gl_Position = projectionMatrix * viewMatrix * w; }',
-      fragmentShader: 'uniform sampler2D uTex; uniform float uT; uniform float uAmt; uniform vec3 uCol; varying vec2 vW; void main(){ vec2 p = vW * 0.011 + vec2(uT * 0.0075, uT * 0.0035); float n = texture2D(uTex, p).r * 0.7 + texture2D(uTex, p * 2.7 + 0.37).r * 0.3; float sh = smoothstep(0.5, 0.74, n); float e = 1.0 - smoothstep(56.0, 74.0, length(vW)); float a = sh * uAmt * e; if (a < 0.003) discard; gl_FragColor = vec4(uCol, a); }' }));
+      fragmentShader: 'uniform sampler2D uTex; uniform float uT; uniform float uAmt; uniform vec3 uCol; varying vec2 vW; void main(){ vec2 p = vW * 0.0065 + vec2(uT * 0.0042, uT * 0.002); float n = texture2D(uTex, p).r * 0.7 + texture2D(uTex, p * 3.1 + 0.37).r * 0.3; float sh = smoothstep(0.54, 0.86, n); float e = 1.0 - smoothstep(56.0, 74.0, length(vW)); float a = sh * uAmt * e; if (a < 0.003) discard; gl_FragColor = vec4(uCol, a); }' }));
     cs.rotation.x = -Math.PI / 2; cs.position.y = 0.32; cs.renderOrder = 3; cs.frustumCulled = false; cs.raycast = () => {}; this.scene.add(cs);
     // sea: sun glints that follow the sun, tiny caustic net (high), on top of the art module's own shader
     this.waterU = { uSunW: { value: new THREE.Vector3(0.4, 0.8, 0.4) }, uSunC: { value: new THREE.Color('#fff2d0') }, uGlint: { value: 1 } };
@@ -231,18 +231,21 @@ export class View {
     this.sunGlow.position.set(this.cam.position.x + Math.cos(a) * 280, this.cam.position.y + Math.max(0.04, sn) * 260 - 10, this.cam.position.z - 120);
     this.sunGlow.visible = sn > -0.05 && ra < 0.7; this.sunGlow.material.opacity = Math.min(1, (sn + 0.05) * 5) * (1 - ra); this.sunGlow.material.color.set('#ffffff').lerp(C.tmp.set('#ffb070'), dusk * 0.6);
     // high-key light: strong soft fill from the hemisphere so shadows stay bright, a golden sun, a lavender moon
-    this.sun.intensity = (1.5 + 0.62 * day) * (1 - 0.3 * ra); this.sun.color.set('#c9d2ff').lerp(C.tmp.set('#fff1cf'), day).lerp(C.tmp.set('#ffb070'), dusk * 0.5);
-    this.hemi.intensity = 1.3 + 0.62 * day + 0.2 * ra; this.hemi.color.set('#b5c2ff').lerp(C.tmp.set('#ecefff'), day); this.hemi.groundColor.set('#9ccc78').lerp(C.tmp.set('#b4ea84'), day);
+    this.sun.intensity = (1.15 + 0.7 * day) * (1 - 0.3 * ra); this.sun.color.set('#c9d2ff').lerp(C.tmp.set('#fff1cf'), day).lerp(C.tmp.set('#ffb070'), dusk * 0.5);
+    this.hemi.intensity = 1.2 + 1.0 * day + 0.2 * ra; this.hemi.color.set('#b5c2ff').lerp(C.tmp.set('#ecefff'), day); this.hemi.groundColor.set('#9ccc78').lerp(C.tmp.set('#b4ea84'), day);
     this.night = 1 - day;
     this.winMat.emissiveIntensity = Math.max(0, 1 - day * 1.6) * 1.6; this.lanternMat.emissiveIntensity = (1 - day) * 2.4; envLantern.emissiveIntensity = (1 - day) * 2.4; lampMat.emissiveIntensity = 0.25 + (1 - day) * 2.2; propLantern.emissiveIntensity = 0.25 + (1 - day) * 2.2;
     cloudMat.color.set('#ffffff').lerp(C.tmp.set('#8d9cc8'), (1 - day) * 0.8); this.fx.setLight && this.fx.setLight(0.4 + 0.6 * day);
-    this.r.toneMappingExposure = 1.1 + 0.04 * day;
+    this.r.toneMappingExposure = 1.02 + 0.04 * day;
     // everything below is also a pure function of (time, rain, tier)
     this._sn = sn; this._dusk = dusk; this._day = day; const tc = this.tc || TIERS.medium, sunUp = sm(sn, -0.02, 0.14) * (1 - ra);
-    this.rim.intensity = tc.rim * 0.6 * day * (1 - 0.6 * ra); this.rim.color.set('#ffd6b0').lerp(C.tmp.set('#ffb98a'), dusk * 0.6);
-    this.cloudU.uAmt.value = tc.cloudShadow * 0.21 * day * (1 - ra); this.cloudU.uT.value = this.t; this.cloudShadow.visible = this.cloudU.uAmt.value > 0.004;
+    // tier-driven strengths ease toward their targets, so a live tier change never pops
+    const tb = this._tb || (this._tb = { rim: tc.rim, cs: tc.cloudShadow, bk: tc.bloomK, w: tc.water ? 1 : 0, wc: tc.water > 1 ? 1 : 0 }), tk = Math.min(1, dt * 2.5);
+    tb.rim += (tc.rim - tb.rim) * tk; tb.cs += (tc.cloudShadow - tb.cs) * tk; tb.bk += (tc.bloomK - tb.bk) * tk; tb.w += ((tc.water ? 1 : 0) - tb.w) * tk; tb.wc += ((tc.water > 1 ? 1 : 0) - tb.wc) * tk;
+    this.rim.intensity = tb.rim * 0.6 * day * (1 - 0.6 * ra); this.rim.color.set('#ffd6b0').lerp(C.tmp.set('#ffb98a'), dusk * 0.6);
+    this.cloudU.uAmt.value = tb.cs * 0.2 * day * (1 - ra); this.cloudU.uT.value = this.t; this.cloudShadow.visible = this.cloudU.uAmt.value > 0.004;
     const W = this.waterU; W.uSunW.value.set(Math.cos(a) * 280, Math.max(0.04, sn) * 260 - 10, -120).normalize();
-    W.uSunC.value.set('#fff2d0').lerp(C.tmp.set('#ffb070'), dusk * 0.6).multiplyScalar(tc.water ? (0.25 + 0.75 * sunUp) * 1.1 : 0); W.uGlint.value = tc.water > 1 ? 1 : 0;
+    W.uSunC.value.set('#fff2d0').lerp(C.tmp.set('#ffb070'), dusk * 0.6).multiplyScalar(tb.w * (0.25 + 0.75 * sunUp) * 1.1); W.uGlint.value = tb.wc;
   }
   // shadow camera: tight around the look target, in quantised steps and snapped to shadow texels so panning never shimmers
   shadowFollow(L) {
@@ -259,9 +262,9 @@ export class View {
     const P = this.post, U = P.U, L = this.look, c = this.tc, night = this._day === undefined ? 0 : 1 - this._day, ra = this.rainAmt, F = this._flash;
     const sm = (x, a, b) => { const k = Math.max(0, Math.min(1, (x - a) / (b - a))); return k * k * (3 - 2 * k); };
     U.uTilt.value = c.dof ? Math.max(this._photo ? 0.55 : 0, sm(L.dist, 14, 60) * (0.5 + 0.5 * sm(L.pitch, 0.35, 0.95))) : 0;
-    U.uExposure.value = this.r.toneMappingExposure; U.uTime.value = this.t; U.uVig.value = this._photo ? 0.8 : 0.55;
-    U.uBloom.value = 0.55 * (c.bloomK || 0) * (1 + 0.6 * night); P.thr = 1.55 - 0.55 * night + 0.2 * ra;
-    U.uSat.value = 1.2 - 0.05 * night + 0.03 * this._dusk; U.uTintH.value.set(1.04 + 0.03 * this._dusk, 1.01, 0.95 - 0.04 * this._dusk);
+    U.uExposure.value = this.r.toneMappingExposure * (1 - 0.08 * night); U.uTintS.value.set(0.97 - 0.05 * night, 0.95 - 0.02 * night, 1.05 + 0.05 * night); U.uTime.value = this.t; U.uVig.value = this._photo ? 0.8 : 0.55;
+    U.uBloom.value = 0.55 * (this._tb ? this._tb.bk : c.bloomK) * (c.bloom ? 1 : 0) * (1 + 0.6 * night); P.thr = 1.55 - 0.55 * night + 0.2 * ra;
+    U.uSat.value = 1.2 - 0.05 * night + 0.03 * this._dusk - 0.1 * ra; U.uExposure.value *= 1 - 0.05 * ra; U.uTintH.value.set(1.04 + 0.03 * this._dusk, 1.01, 0.95 - 0.04 * this._dusk);
     U.uGrain.value = c.grain ? 0.02 : 0;
     // sun on screen (for flare and rays); fades out when behind the camera, below the horizon or raining
     const sp = this.sunGlow.position, v = this._sv || (this._sv = new THREE.Vector3()), cp = this.cam.position;

@@ -1,0 +1,37 @@
+<!doctype html><meta charset="utf-8"><title>Hearthvale monument lab</title>
+<script type="importmap">{ "imports": { "three": "../vendor/three.module.min.js", "three/addons/": "../vendor/jsm/" } }</script>
+<style>.lb{position:fixed;pointer-events:none;font:600 12px system-ui;color:#2a2438;background:#fffc;border-radius:6px;padding:1px 6px;transform:translate(-50%,0)}#st{position:fixed;left:6px;top:6px;font:11px/1.25 monospace;background:#000a;color:#fff;padding:6px;white-space:pre;display:none}</style>
+<div id="st"></div>
+<script type="module">
+// The Great Project monument lab.  Query: layout=row (all 6 stages side by side, default) | one (a single stage: &stage=3)  &night=1  &labels=1  &stats=1
+// camera: yaw pitch dist x z (stage.js).  Animated children are driven here the way the game should: flag (wave), bell (swing), spinz (sails), beam (sweep), lanterns (sway).
+import * as THREE from 'three';
+import { mountStage } from './stage.js';
+import { monumentModel, monumentTopY, MONUMENT_STAGES } from '../art/monument.js';
+import { windowMat, lanternMat } from '../art/buildings.js';
+const q = new URLSearchParams(location.search), night = +q.get('night') || 0, layout = q.get('layout') || 'row';
+const st = mountStage(), anim = [], labels = [], stats = {};
+function count(o) { let m = 0, t = 0; o.traverse((c) => { if (c.isMesh) { m++; const g = c.geometry; t += (g.index ? g.index.count : g.attributes.position.count) / 3; } }); return { meshes: m, tris: Math.round(t) }; }
+function put(stage, x, z) {
+  const o = monumentModel(stage); st.add(o, x, z); stats[stage] = { ...count(o), topY: monumentTopY(stage) };
+  o.traverse((c) => { if (['flag', 'bell', 'spinz', 'beam', 'lanterns'].includes(c.name)) anim.push(c); });
+  if (q.get('labels')) { const d = document.createElement('div'); d.className = 'lb'; d.textContent = 'stage ' + stage; document.body.appendChild(d); labels.push({ d, p: new THREE.Vector3(x, 0, z + 2.6) }); }
+}
+if (layout === 'one') { const s = +q.get('stage') || 0; put(s, 0, 0); st.look.dist = +q.get('dist') || 16; st.look.y = +q.get('y') || monumentTopY(s) * 0.35; }
+else { const gap = +q.get('gap') || 5.6, only = (q.get('stages') || '0,1,2,3,4,5').split(',').map(Number); only.forEach((s, i) => put(s, (i - (only.length - 1) / 2) * gap, 0)); st.look.dist = +q.get('dist') || 34; st.look.y = +q.get('y') || 3; }
+windowMat.emissiveIntensity = night ? 1.5 : 0; lanternMat.emissiveIntensity = night ? 2.0 : 0;
+const vp = new THREE.Vector3();
+st.onTick((dt, t) => {
+  for (const o of anim) {
+    if (o.name === 'flag') o.rotation.y = Math.sin(t * 3 + o.id) * 0.25;
+    else if (o.name === 'bell') o.rotation.z = Math.sin(t * 2.4) * 0.35;
+    else if (o.name === 'spinz') o.rotation.z += dt * 0.7;
+    else if (o.name === 'beam') o.rotation.y += dt * 0.9;
+    else if (o.name === 'lanterns') { o.rotation.z = Math.sin(t * 1.1) * 0.025; o.rotation.x = Math.sin(t * 0.9 + 1) * 0.025; }
+  }
+  for (const l of labels) { vp.copy(l.p).project(st.cam); l.d.style.left = (vp.x * 0.5 + 0.5) * innerWidth + 'px'; l.d.style.top = (-vp.y * 0.5 + 0.5) * innerHeight + 'px'; }
+});
+window.__stats = stats; console.log(JSON.stringify(stats));
+if (q.get('stats')) { const el = document.getElementById('st'); el.style.display = 'block'; el.textContent = Object.entries(stats).map(([k, v]) => `stage ${k}: ${v.tris}t / ${v.meshes}m  topY ${v.topY}`).join('\n'); }
+st.ready();
+</script>

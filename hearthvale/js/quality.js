@@ -89,7 +89,7 @@ export class Adaptive {
     const probing = this.age < this.warm / 60 + this.probeSecs + 1;
     if (this.ms > this.downMs) { this.bad += dt; this.good = 0; } else if (this.ms < this.upMs) { this.good += dt; this.bad = Math.max(0, this.bad - dt * 2); } else { this.bad = Math.max(0, this.bad - dt); this.good = Math.max(0, this.good - dt * 0.5); }
     const i = ORDER.indexOf(this.tier);
-    if (this.bad >= (probing ? this.downSecs * 0.6 : this.downSecs)) {
+    if (this.bad >= (probing ? this.downSecs * 0.6 : this.downSecs) && this.sinceChange >= 1.5) {   // at least 1.5 s between drops: judge the effect of the last one
       this.bad = 0; this.good = 0; this.sinceChange = 0;
       if (this.clock - this.lastUp < this.regretSecs) { this.lockLen = Math.min(480, this.lockLen * 2); this.lock = this.lockLen; }
       if (i > this._lo()) { this.tier = ORDER[i - 1]; return { tier: this.tier, pr: this.pr, reason: 'slow' }; }
