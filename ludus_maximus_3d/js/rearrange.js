@@ -72,8 +72,7 @@ export function createRearrange(game) {
   // ---------------------------------------------------------------- UI chrome
   function build() {
     SK.injectCss(); ensureCss();
-    if (false) { const t = document.createElement('style'); t.id = 'lx-rr-modecss'; t.textContent = CSS; document.head.appendChild(t); }
-    bar = document.createElement('div'); bar.className = 'lx-rr-modebar'; bar.setAttribute('role', 'group'); bar.setAttribute('aria-label', 'Rearrange mode'); bar.dataset.tutSheet = 'rearrange';
+    bar = document.createElement('div'); bar.className = 'lx-rr-modebar'; bar.setAttribute('role', 'group'); bar.setAttribute('aria-label', 'Rearrange mode');
     msgEl = document.createElement('div'); msgEl.className = 'lx-rr-msg'; msgEl.setAttribute('aria-hidden', 'true');
     const ttl = document.createElement('b'); ttl.textContent = 'Rearrange';
     undoB = document.createElement('button'); undoB.type = 'button'; undoB.className = 'alt'; undoB.hidden = true; undoB.addEventListener('click', () => api.undoAll());

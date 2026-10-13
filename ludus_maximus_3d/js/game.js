@@ -11,6 +11,7 @@ import { createTitle, titleState } from './title.js'; // ONBOARDING
 import { createTutorial } from './tutorial.js'; // ONBOARDING
 import * as Cer from './ceremonies.js'; // ONBOARDING
 import { createPhoto } from './photo.js'; // PHOTO
+import { createRearrange } from './rearrange.js'; // MOVE
 import * as ET from './envtex.js'; // PERF: texture release / re-warm between scenes
 
 const bm = (k) => { const b = window.__bootT; if (b) b[k] = Math.round(performance.now() - b.t0); };   // boot phase marks (main.js stats().boot)
@@ -316,6 +317,7 @@ export class Game {
     bottom.append(this.advBtn, this.nav);
     this.hud.append(top, mid, bottom);
     try { this.photo = createPhoto(this); } catch (e) { console.warn('photo mode unavailable', e && e.message); } // PHOTO: camera button (bottom corner), fight outro button, share card
+    try { this.rearr = createRearrange(this); } catch (e) { console.warn('rearrange mode unavailable', e && e.message); } // MOVE: hammer button (bottom right), mode in js/rearrange.js
     // TUT: stable hooks for the tutorial spotlight (never look up buttons by their text)
     this.advBtn.dataset.tut = 'advance'; ['ludus', 'roster', 'arena', 'market', 'more'].forEach((k, i) => { const n = this.nav.children[i]; if (n) n.dataset.tut = 'nav-' + k; });
   }
@@ -340,6 +342,7 @@ export class Game {
 
   async advance() {
     if (this.busy) return; const S = this.S;
+    this.rearr && this.rearr.stop(true); // MOVE: leave rearrange mode before a week runs
     if (!S.glads.length) { this.audio.sfx('uiTap'); this.open('recruit', { first: true }); return; } // the button reads "Hire your first fighter" until someone is hired
     // QA friction: new players press Advance without having entered anything, then wonder why nothing happens. Say so, only in the first weeks.
     if (!L().dueKeys(S).length && (S.stats.weeks || 0) < 3) U.toast('No fight entered this week: your fighters will only train. Open the Arena to enter one.', { kind: 'info', ms: 4200 });
@@ -367,6 +370,7 @@ export class Game {
 
   async open(id, arg) {
     if (!SCREENS.includes(id)) return;
+    this.rearr && this.rearr.stop(true); // MOVE
     try {
       const mod = this.mods[id] || (this.mods[id] = await import(`./screens/${id}.js`));
       this.closeAll(); this.audio.sfx('uiTap'); return mod.open(this.ctx, arg);

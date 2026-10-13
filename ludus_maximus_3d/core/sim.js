@@ -288,7 +288,7 @@
     (opps || []).forEach((o) => {
       if (!o) return;
       if (used.has(o.name)) {
-        const taken = (x) => used.has(x) || (opps || []).some((p) => p && p !== o && p.name === x), N = D.FIRST.length, st = LM.hash(String(o.name)) % N;
+        const taken = (x) => used.has(x) || (opps || []).some((p) => p && p !== o && p.name === x), N = D.FIRST.length, st = (LM.hash(String(o.name)) >>> 0) % N;
         for (let i = 0; i < N; i++) { const cand = D.FIRST[(st + i) % N]; if (!taken(cand)) { o.name = cand; n++; break; } }
       }
       used.add(o.name);
