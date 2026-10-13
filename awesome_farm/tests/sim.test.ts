@@ -382,6 +382,30 @@ test('a Harvester Arm harvests ripe beds in reach into a nearby chest, and leave
     assert.ok(a.stats.harvested >= 1, 'it counts for its builder');
 });
 
+test('an Efficiency Module stretches fuel, gives a free batch now and then, and the Module button picks the right one', () => {
+    const sim = Sim.create('TEST-EFF', 'test');
+    const a = sim.join('a', 'A')!;
+    const plain = placeNear(sim, a, 'furnace', { inv: {}, out: {}, fin: {}, fuel: 0, prog: 0, by: 'a' });
+    const eff = placeNear(sim, a, 'furnace', { inv: {}, out: {}, fin: {}, fuel: 0, prog: 0, by: 'a' });
+    give(sim, 'a', 'module_eff', 1);
+    sim.command('a', { t: 'module', id: eff.id, op: 'put' });
+    assert.equal(eff.mod, 'eff', 'no Speed Module in the pockets: the Efficiency one goes in');
+    assert.equal(countOf(a, 'module_eff'), 0);
+    for (const f of [plain, eff]) f.fin = { coal: 4 };
+    give(sim, 'a', 'iron', 8);
+    for (const f of [plain, eff]) sim.command('a', { t: 'xfer', id: f.id, item: 'iron', n: 4, dir: 'put' });
+    run(sim, 1);
+    assert.ok((eff.fuel ?? 0) > (plain.fuel ?? 0), `a lit coal burns longer in the module's machine (${eff.fuel} vs ${plain.fuel})`);
+    run(sim, 40);
+    assert.ok((eff.out?.ironbar ?? 0) >= (plain.out?.ironbar ?? 0), 'and never makes less');
+    sim.command('a', { t: 'module', id: eff.id, op: 'take' });
+    assert.equal(eff.mod, undefined);
+    assert.equal(countOf(a, 'module_eff'), 1, 'the same module comes back');
+    give(sim, 'a', 'module_speed', 1);
+    sim.command('a', { t: 'module', id: eff.id, op: 'put' });
+    assert.equal(eff.mod, 'speed', 'with both in the pockets the Speed Module goes first');
+});
+
 test('a Sprinkler makes the beds around it grow faster, and only those in reach', () => {
     const sim = Sim.create('TEST-SPR', 'test');
     const a = sim.join('a', 'A')!;

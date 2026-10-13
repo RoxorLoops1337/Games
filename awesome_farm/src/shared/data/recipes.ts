@@ -173,6 +173,7 @@ const ROWS: Row[] = [
     ['assembler', 'bread', 1, { flour: 2 }, 2, { time: 4 }],
     ['assembler', 'pod', 2, { plank: 2, fiber: 3, slimegel: 1 }, 2, { time: 3, req: 'taming' }],
     ['assembler', 'treat', 2, { flour: 1, berry: 2 }, 2, { time: 3, req: 'taming' }],
+    ['assembler', 'module_eff', 1, { circuit: 2, gear: 2, glass: 2 }, 8, { time: 12, req: 'engineering' }],
     ['assembler', 'module_speed', 1, { circuit: 2, gear: 2, wire: 4 }, 8, { time: 12, req: 'engineering' }],
     ['assembler', 'core', 1, { circuit: 4, motor: 2, crystal: 2 }, 12, { time: 20, req: 'engineering' }],
     ['millstone', 'flour', 1, { wheat: 2 }, 1, { time: 3 }],

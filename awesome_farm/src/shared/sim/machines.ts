@@ -21,6 +21,8 @@ import { storageOf } from './uber';
 export const OUT_CAP = 200;
 /** What a Speed Module adds to a machine's speed (one per machine). */
 export const MODULE_SPEED = 0.25;
+/** What an Efficiency Module does: fuel lasts this much longer, and now and then a batch comes out doubled. */
+export const MODULE_FUEL = 0.25, MODULE_FREE = 0.1;
 
 // ── small inventory helpers (shared by the factory, the creatures and the status text) ──
 export const invHas = (inv: Inv | undefined, id: ItemId) => inv?.[id] ?? 0;
@@ -218,7 +220,7 @@ export function step (sim: Sim, dt: number) {
             const fuelItem = bestFuel((i) => invHas(b.fin, i));
             if (fuelItem) {
                 invDrop(b.fin, fuelItem, 1);
-                b.fuel = fuelValue(fuelItem) * (1 + (od?.mods.fuelSave ?? 0));
+                b.fuel = fuelValue(fuelItem) * (1 + (od?.mods.fuelSave ?? 0) + (b.mod === 'eff' ? MODULE_FUEL : 0));
                 sim.touch(b);
             }
         }
@@ -229,6 +231,7 @@ export function step (sim: Sim, dt: number) {
         if (b.prog >= r.time) {
             for (const [id, n] of Object.entries(r.in) as [ItemId, number][]) invDrop(b.inv!, id, n);       // (satisfied: the inputs are there)
             invPut((b.out ??= {}), r.out, r.n);
+            if (b.mod === 'eff' && sim.rng.chance(MODULE_FREE)) invPut(b.out, r.out, r.n);          // (an Efficiency Module: now and then a free batch)
             sim.s.prod ??= {};
             sim.s.prod[r.out] = (sim.s.prod[r.out] ?? 0) + r.n;
             if (owner) quests.count(owner, `make:${r.out}`, r.n);
@@ -243,19 +246,20 @@ export function step (sim: Sim, dt: number) {
 }
 
 // ── commands ───────────────────────────────────────────────────────────────
-/** Slot a Speed Module into a machine that makes things on its own, or take it back out. */
+/** Slot a module you carry (a Speed Module first, else an Efficiency Module) into a machine that makes things on its own, or take it back out. */
 export function cmdModule (sim: Sim, p: PlayerS, c: Extract<Cmd, { t: 'module' }>) {
     const b = sim.reachableBuilding(p, c.id);
     if (!b || !BUILDINGS[b.kind].proc) return;
     if (c.op === 'put') {
         if (b.mod) { sim.deny(p, 'It already has a module'); return; }
-        if (!takeItem(p, 'module_speed', 1)) { sim.deny(p, 'You have no Speed Module'); return; }
-        b.mod = 'speed';
-        sim.float(sim.center(b).x, sim.center(b).y - 14, 'Speed Module: +25% speed', PAL.gold, p.id);
+        const kind = countOf(p, 'module_speed') > 0 ? 'speed' : countOf(p, 'module_eff') > 0 ? 'eff' : null;
+        if (!kind || !takeItem(p, kind === 'speed' ? 'module_speed' : 'module_eff', 1)) { sim.deny(p, 'You have no module to slot in'); return; }
+        b.mod = kind;
+        sim.float(sim.center(b).x, sim.center(b).y - 14, kind === 'speed' ? 'Speed Module: +25% speed' : 'Efficiency Module: fuel lasts longer, a free batch now and then', PAL.gold, p.id);
     } else if (c.op === 'take') {
         if (!b.mod) return;
+        addItem(p, b.mod === 'eff' ? 'module_eff' : 'module_speed', 1);
         b.mod = undefined;
-        addItem(p, 'module_speed', 1);
     } else return;
     sim.touch(b);
 }
