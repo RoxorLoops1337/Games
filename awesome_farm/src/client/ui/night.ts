@@ -100,6 +100,8 @@ export class NightLayer {
     private t = 0;
     /** Current weather for others to read (music, sim hints). */
     rainLevel = 0;
+    /** 0..1: standing under a roof (the streaks fade and the rain sounds muffled). Set by the HUD, eased there. */
+    sheltered = 0;
     /** The special night in progress (for the music). */
     event: ReturnType<typeof nightEvent> = null;
     private meteors: { x: number; y: number; t: number }[] = [];
@@ -349,6 +351,7 @@ export class NightLayer {
         });
         // ── rain (snow in winter) ──
         const g = this.rain;
+        g.setAlpha(1 - this.sheltered * 0.7);
         const rl = w.rain;
         if (rl > 0.02 || this.rainDrawn) g.clear();
         this.rainDrawn = rl > 0.02;
