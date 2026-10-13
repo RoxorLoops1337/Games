@@ -174,6 +174,15 @@ const ROWS: Row[] = [
     ['assembler', 'treat', 2, { flour: 1, berry: 2 }, 2, { time: 3, req: 'taming' }],
     ['assembler', 'core', 1, { circuit: 4, motor: 2, crystal: 2 }, 12, { time: 20, req: 'engineering' }],
     ['millstone', 'flour', 1, { wheat: 2 }, 1, { time: 3 }],
+    // the fish pond: a fish and bait in, two fish out (the dearer the fish, the slower it breeds)
+    ['pond', 'fish_minnow', 2, { fish_minnow: 1 }, 0, { time: 20 }],
+    ['pond', 'fish_carp', 2, { fish_carp: 1, bait: 1 }, 1, { time: 45 }],
+    ['pond', 'fish_perch', 2, { fish_perch: 1, bait: 1 }, 1, { time: 45 }],
+    ['pond', 'fish_trout', 2, { fish_trout: 1, bait: 1 }, 2, { time: 70 }],
+    ['pond', 'fish_bass', 2, { fish_bass: 1, bait: 1 }, 2, { time: 70 }],
+    ['pond', 'fish_eel', 2, { fish_eel: 1, bait: 1 }, 2, { time: 70 }],
+    ['pond', 'fish_catfish', 2, { fish_catfish: 1, bait: 1 }, 2, { time: 70 }],
+    ['pond', 'fish_koi', 2, { fish_koi: 1, bait: 2 }, 4, { time: 120 }],
 ];
 
 export const RECIPES: Record<string, Recipe> = {};

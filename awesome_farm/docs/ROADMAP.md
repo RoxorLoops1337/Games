@@ -29,7 +29,7 @@ split big ones into slices (rules, art, polish).
 - [x] S20 Hotbar drag reorder (drag a slot onto another swaps; pinning an item that sits elsewhere already swaps)
 
 ## Phase 3: new systems (medium)
-- [ ] M8 Fish pond
+- [x] M8 Fish pond (Fish Pond building: a fish and bait in, two fish out; art, 3D model, wiki, how-to)
 - [ ] M9 Orchard and apiary
 - [ ] M14 Elite affixes
 - [ ] M10 Creature signature moves
