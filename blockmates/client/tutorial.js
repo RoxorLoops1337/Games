@@ -3,7 +3,7 @@ import { I, B } from '../shared/data.js';
 
 const has = (G, name, n = 1) => G.count(I[name]) >= n;
 export const STEPS = [
-  { text: 'Hold the left mouse button on a tree to chop it.', done: (G) => has(G, 'log') || has(G, 'planks') },
+  { text: 'Click a tree: your character walks over and chops it.', done: (G) => has(G, 'log') || has(G, 'planks') },
   { text: 'Press E and craft planks from your logs.', done: (G) => has(G, 'planks') || G.stations.has('bench') },
   { text: 'Craft a workbench, then place it with the right mouse button.', done: (G) => G.stations.has('bench') },
   { text: 'Dig down with your pickaxe and collect 10 cobblestone.', done: (G) => has(G, 'cobble', 10) || G.stations.has('furnace') },
@@ -33,7 +33,7 @@ export class Tutorial {
     if (this.i >= STEPS.length || this.hidden) { this.el.style.display = 'none'; return; }
     this.el.style.display = 'block';
     let t = STEPS[this.i].text;
-    if (document.body.classList.contains('touch')) t = t.replace('Hold the left mouse button on', 'Touch and hold').replace('Press E and', 'Tap Bag and').replace('right mouse button', 'Place mode').replace(' (right click)', '');
+    if (document.body.classList.contains('touch')) t = t.replace('Click a tree', 'Tap a tree').replace('Press E and', 'Tap Bag and').replace('right mouse button', 'Place mode').replace(' (right click)', '');
     this.el.innerHTML = `<small>Goal ${this.i + 1}/${STEPS.length}</small> ${t} <i>(H hides)</i>`;
   }
 }
