@@ -2199,6 +2199,40 @@
     return RJ.bake(cid, { pose: kp.pose, mix, t: tq, expr: kitExpr(o.expr), flip: !!o.flip, s: ks, noShadow: o.shadow === false, post, postKey: post ? 'gloss' + gloss.toFixed(2) : '' });
   }
 
+  // LIVE SLOTS (o.reuse: true, set by the combat scene): drawing a figure live costs 7 ms or more (about 4000 path ops and 70 clips), and a fight draws two of them every
+  // frame, plus a flash pass and afterimages on a hit. A slot keeps the last live render of one figure (per cast id, flip, shadow, expr and raster scale) on its own
+  // canvas and blits it until the animation clock moves on one step (1/15 s idle, 1/30 s in a one-shot pose, staggered per hero so two figures never re-render on the
+  // same frame). A change of pose, of blend target, or a one-shot restarting re-renders at once, so reactions are never late. The extra passes of one frame share the slot.
+  const SLOTS = new Map();
+  const SLOT_DT = { idle: 1 / 15, walk: 1 / 15 };
+  function liveFrame(ctx, id, cid, kp, o, ks, x, y) {
+    if (typeof document === 'undefined' || !document || typeof document.createElement !== 'function') return false;
+    const B = RJ.BAKE_BOX, w = B.x1 - B.x0, h = B.y1 - B.y0, flip = !!o.flip, ox = flip ? -B.x1 : B.x0;
+    const q = Math.max(0.5, Math.min(3, Math.round(ks * 20) / 20)), res = ART.res > 0 ? ART.res : 1;
+    const expr = kitExpr(o.expr), noShadow = o.shadow === false;
+    const key = cid + '|' + (flip ? 1 : 0) + '|' + (noShadow ? 0 : 1) + '|' + (expr || '') + '|' + q + '|' + res;
+    let sl = SLOTS.get(key);
+    if (!sl) {
+      let c = null, g = null;
+      try { c = document.createElement('canvas'); c.width = Math.ceil(w * q * res); c.height = Math.ceil(h * q * res); g = c.getContext && c.getContext('2d'); } catch (e) { c = null; }
+      if (!c || !g) return false;
+      if (SLOTS.size >= 24) SLOTS.clear();
+      sl = { c, g, pose: '', mix: '', t: 0, pt: 0, bucket: NaN };
+      SLOTS.set(key, sl);
+    }
+    const t = num(o.t), pt = num(o.pt), dt = own(SLOT_DT, kp.pose) ? SLOT_DT[kp.pose] : 1 / 30;
+    const mixPose = kp.mix ? kp.mix.pose : '', bucket = Math.floor(t / dt + (id.charCodeAt(0) % 7) / 7);
+    if (sl.pose !== kp.pose || sl.mix !== mixPose || pt < sl.pt - 1e-6 || bucket !== sl.bucket) {
+      const g = sl.g;
+      g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, sl.c.width, sl.c.height);
+      g.setTransform(q * res, 0, 0, q * res, 0, 0);
+      RJ.draw(g, cid, { x: -ox, y: -B.y0, s: 1, pose: kp.pose, mix: kp.mix, t, flip, expr, noShadow });
+      sl.pose = kp.pose; sl.mix = mixPose; sl.pt = pt; sl.bucket = bucket;
+    }
+    ART.blit(ctx, sl.c, x + ox * ks, y + B.y0 * ks, w * ks, h * ks);
+    return true;
+  }
+
   // ART.hero.draw(ctx, heroId, {x, y, s, pose, t, pt, flip, alpha, glow, shadow, skin, gloss, cache, expr})
   function drawHero(ctx, id, o) {
     if (!ctx) return;
@@ -2220,6 +2254,7 @@
       }
       const gloss = clamp(num(o.gloss), 0, 1);
       if (o.cache === true || gloss > 0.01 || tk.lowQ() || s < SMALL_S) cachedFrame(cid, kp, o, ks).draw(ctx, x, y, ks);
+      else if (o.reuse === true && liveFrame(ctx, id, cid, kp, o, ks, x, y)) { /* blitted from the live slot */ }
       else RJ.draw(ctx, cid, { x, y, s: ks, pose: kp.pose, mix: kp.mix, t: num(o.t), flip: !!o.flip, expr: kitExpr(o.expr), noShadow: o.shadow === false });
     } catch (e) { warnOnce('draw ' + id, e); } finally { ctx.restore(); }
   }
