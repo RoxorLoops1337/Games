@@ -1,6 +1,7 @@
 // Three.js view of the valley: terrain, villages, villagers, camera and picking.
 import * as THREE from 'three';
-import { treeModel, rockModel, clayModel, stumpModel, boardModel, box, cyl, cone, ball, mat } from './models.js';
+import { box, cyl, cone, ball, mat } from './models.js';
+import { treeModel, rockModel, clayModel, stumpModel, boardModel, fieldModel, plazaModel, plotModel, islandModel, lanternMat as envLantern } from '../art/environment.js';
 import { BUILD, farmModel, setFarmStage, constructionSite, windowMat, lanternMat } from '../art/buildings.js';
 import { villagerModel, setPose, setMood } from '../art/characters.js';
 import { sheepModel, cowModel, chickenModel, bunnyModel, birdModel, cloudModel, butterflyModel, animateCritter, cloudMat } from '../art/critters.js';
@@ -33,33 +34,14 @@ export class View {
 
   buildTerrain() {
     const s = this.scene;
-    const sea = new THREE.Mesh(new THREE.CircleGeometry(400, 48), new THREE.MeshStandardMaterial({ color: '#4fb6e0', roughness: 0.35, metalness: 0.1 })); sea.rotation.x = -Math.PI / 2; sea.position.y = -2.2; sea.receiveShadow = true; s.add(sea);
-    const R = 66;
-    const cliff = new THREE.Mesh(new THREE.CylinderGeometry(R, R - 4, 3.2, 64, 1), mat('#8f6f4b')); cliff.position.y = -1.6; cliff.receiveShadow = true; s.add(cliff);
-    const top = new THREE.Mesh(new THREE.CylinderGeometry(R, R, 0.2, 64), mat('#8ec65a')); top.position.y = -0.1; top.receiveShadow = true; s.add(top);
-    const plaza = new THREE.Mesh(new THREE.CylinderGeometry(9, 9, 0.12, 40), mat('#d9c9a0')); plaza.position.y = 0.0; plaza.receiveShadow = true; s.add(plaza);
-    // scatter of decorative trees and bushes on the rim and between villages
-    let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
-    for (let i = 0; i < 90; i++) {
-      const a = rnd() * Math.PI * 2, rad = 52 + rnd() * 12; const t = treeModel(i); t.position.set(Math.cos(a) * rad, 0, Math.sin(a) * rad); t.scale.setScalar(0.9 + rnd() * 0.9); s.add(t);
-    }
-    for (let i = 0; i < 40; i++) {
-      const a = rnd() * Math.PI * 2, rad = 14 + rnd() * 20; if (Math.abs(((a * 16 / (Math.PI * 2)) % 1) - 0.5) > 0.0) { /* keep */ }
-      const b = ball(0.35 + rnd() * 0.2, ['#6bb554', '#7cc65e', '#5aa84a'][i % 3], Math.cos(a) * rad, 0.2, Math.sin(a) * rad); b.scale.y *= 0.7; s.add(b);
-    }
+    this.island = islandModel(72); s.add(this.island);
+    s.add(plazaModel(9));
     // the valley square: notice board + the four shared fields
-    const board = boardModel(); board.position.set(0, 0, 0); s.add(board); this.board = board;
-    board.traverse(o => { if (o.isMesh) { o.userData.pick = { k: 'board' }; } }); this.pickables.push(board);
+    const board = boardModel(); board.position.set(0, 0.1, 0); s.add(board); this.board = board;
+    board.traverse(o => { if (o.isMesh) o.userData.pick = { k: 'board' }; }); this.pickables.push(board);
     for (const f of VALLEY_FIELDS) {
-      const g = new THREE.Group(); g.position.set(Math.cos(f.ang) * VALLEY_FIELD_RADIUS, 0, Math.sin(f.ang) * VALLEY_FIELD_RADIUS);
-      g.add(cyl(3.6, 3.6, 0.12, f.type === 'tree' ? '#6aa84a' : f.type === 'clay' ? '#a8683c' : f.type === 'rock' ? '#a0a39e' : '#e5c354', 0, 0, 0, 24));
-      const stuff = new THREE.Group(); g.add(stuff); g.userData.stuff = stuff; g.userData.type = f.type;
-      for (let i = 0; i < 14; i++) {
-        const a = i * 2.4, rr = 0.6 + (i % 5) * 0.55;
-        let m;
-        if (f.type === 'tree') m = treeModel(i); else if (f.type === 'rock') m = rockModel(i); else if (f.type === 'clay') m = clayModel(); else { m = box(0.18, 0.7, 0.18, '#e6c44a'); }
-        m.position.set(Math.cos(a) * rr, 0.1, Math.sin(a) * rr); if (f.type === 'wheat') m.scale.y = 1 + (i % 3) * 0.2; if (f.type === 'clay') { m.position.y = 0.12; m.scale.setScalar(1.2); } stuff.add(m);
-      }
+      const g = fieldModel(f.type, f.ang); g.position.set(Math.cos(f.ang) * VALLEY_FIELD_RADIUS, 0, Math.sin(f.ang) * VALLEY_FIELD_RADIUS);
+      g.userData.stuff = g.getObjectByName('stuff') || g; g.userData.type = f.type;
       g.traverse(o => { if (o.isMesh) o.userData.pick = { k: 'valley', id: f.id }; }); this.pickables.push(g);
       s.add(g); this.fieldMeshes[f.id] = g;
     }
@@ -67,7 +49,7 @@ export class View {
 
   buildLife() {
     const s = this.scene; this.clouds = []; this.flies = []; this.critters = [];
-    for (let i = 0; i < 12; i++) { const c = cloudModel(i); c.position.set((i * 37) % 240 - 120, 38 + (i % 4) * 5, ((i * 53) % 200) - 100); c.scale.setScalar(2.2 + (i % 3) * 0.9); c.userData.sky = true; s.add(c); this.clouds.push(c); }
+    for (let i = 0; i < 12; i++) { const c = cloudModel(i); c.position.set((i * 37) % 240 - 120, 84 + (i % 4) * 6, ((i * 53) % 200) - 100); c.scale.setScalar(3.4 + (i % 3) * 1.2); c.userData.sky = true; s.add(c); this.clouds.push(c); }
     const cols = ['#ffd84a', '#ff9ec7', '#ffffff', '#9ad0ff'];
     for (let i = 0; i < 28; i++) { const b = butterflyModel(cols[i % 4]); const a = (i / 28) * Math.PI * 2, r = 12 + (i % 7) * 6; b.userData = { ...b.userData, cx: Math.cos(a) * r, cz: Math.sin(a) * r, ph: i, sp: 0.4 + (i % 5) * 0.12, rad: 1.5 + (i % 3) }; s.add(b); this.flies.push(b); }
     // farm life on the valley meadow: wanderers pick a random spot near home every few seconds
@@ -96,7 +78,7 @@ export class View {
     this.scene.background.copy(sky); this.scene.fog.color.copy(sky).lerp(new C('#ffffff'), 0.15 * day);
     this.sun.intensity = 0.9 + 1.7 * day; this.sun.color.set('#ffe9c4').lerp(new C('#ff9a5a'), dusk * 0.7).lerp(new C('#9db4ff'), 1 - day);
     this.sun.position.set(Math.cos(a) * 42, Math.max(6, Math.abs(sn) * 52 + 6), 22); this.hemi.intensity = 0.85 + 0.4 * day; this.hemi.color.set('#8aa0e0').lerp(new C('#dff3ff'), day);
-    this.winMat.emissiveIntensity = (1 - day) * 1.6; this.night = 1 - day; this.lanternMat.emissiveIntensity = (1 - day) * 2.4; cloudMat.color.set('#ffffff').lerp(new C('#6f7fb0'), (1 - day) * 0.8); this.fx.setLight && this.fx.setLight(0.35 + 0.65 * day);
+    this.winMat.emissiveIntensity = (1 - day) * 1.6; this.night = 1 - day; this.lanternMat.emissiveIntensity = (1 - day) * 2.4; envLantern.emissiveIntensity = (1 - day) * 2.4; cloudMat.color.set('#ffffff').lerp(new C('#6f7fb0'), (1 - day) * 0.8); this.fx.setLight && this.fx.setLight(0.35 + 0.65 * day);
     this.r.toneMappingExposure = 0.95 + 0.1 * day;
   }
 
@@ -106,13 +88,10 @@ export class View {
     if (V) return V;
     V = { id: p.id, group: new THREE.Group(), b: new Map(), n: new Map(), p, flag: null };
     V.group.position.set(p.ox, 0, p.oz); this.scene.add(V.group);
-    const plot = new THREE.Mesh(new THREE.BoxGeometry(PLOT, 0.16, PLOT), mat('#9ad464')); plot.position.y = 0.05; plot.receiveShadow = true; V.group.add(plot);
-    const border = new THREE.Mesh(new THREE.BoxGeometry(PLOT + 0.6, 0.12, PLOT + 0.6), mat(p.color)); border.position.y = -0.02; border.receiveShadow = true; V.group.add(border);
+    const plot = plotModel(p.color, Math.atan2(-p.oz, -p.ox)); V.group.add(plot); V.flag = plot.getObjectByName('flag');
     // soft checker so the tile grid reads
     const checker = new THREE.Mesh(new THREE.PlaneGeometry(PLOT, PLOT, PLOT, PLOT), new THREE.MeshBasicMaterial({ visible: false })); checker.rotation.x = -Math.PI / 2; checker.position.y = 0.14; V.group.add(checker);
     const grid = new THREE.GridHelper(PLOT, PLOT, 0x000000, 0x000000); grid.material.transparent = true; grid.material.opacity = 0.0; grid.position.y = 0.15; V.group.add(grid); V.grid = grid;
-    const pole = cyl(0.06, 0.06, 2.6, '#5a4630', -PLOT / 2 - 0.3, 0, PLOT / 2 + 0.3, 6); V.group.add(pole);
-    const flag = box(1.0, 0.6, 0.05, p.color, -PLOT / 2 + 0.2, 1.9, PLOT / 2 + 0.3); V.group.add(flag); V.flag = flag;
     this.villages.set(p.id, V); return V;
   }
   local(V, tx, ty, w = 1, h = 1) { return new THREE.Vector3(tx + w / 2 - PLOT / 2, 0.14, ty + h / 2 - PLOT / 2); }
@@ -267,6 +246,7 @@ export class View {
       else { u.mode = u.kind === 'sheep' || u.kind === 'cow' ? 'graze' : 'idle'; if (u.wait <= 0) { u.wait = 2 + Math.random() * 6; const a = Math.random() * 6.28, r = Math.random() * u.rad; u.tx = u.hx + Math.cos(a) * r; u.tz = u.hz + Math.sin(a) * r; } }
       animateCritter(m, u.mode, this.t, 1, u.seed);
     }
+    for (const V of this.villages.values()) if (V.flag) V.flag.rotation.y = Math.sin(this.t * 2 + V.p.slot) * 0.15;
     if (this.board) this.board.rotation.y = Math.sin(this.t * 0.5) * 0.03;
     this.r.render(this.scene, this.cam);
   }

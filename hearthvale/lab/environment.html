@@ -10,6 +10,10 @@ const q = new URLSearchParams(location.search), view = q.get('view') || 'gallery
 const st = mountStage(); const stats = [];
 st.scene.fog = new THREE.Fog(night ? '#3a5496' : '#bfe6f7', 70, 190);
 if (night) E.lanternMat.emissiveIntensity = 3;
+if (q.get('sunset')) { // warm low-sun grade for the review shots
+  st.sun.color.set('#ff9a5a'); st.sun.intensity = 2.1; st.scene.background.set('#ff9d6c'); st.scene.fog.color.set('#ffb892'); E.lanternMat.emissiveIntensity = 2;
+  st.scene.traverse((o) => { if (o.isHemisphereLight) { o.color.set('#ffc9a0'); o.groundColor.set('#a06a48'); o.intensity = 0.9; } });
+}
 const T = (name, fn, x, z) => { try { const o = fn(); st.add(o, x, z); stats.push([name, E.countTris(o)]); return o; } catch (e) { console.error(name, e.message, e.stack); return null; } };
 const anim = [];
 if (view === 'island') {
@@ -36,7 +40,7 @@ if (view === 'island') {
   const V = { gallery: [0, 0, 22], nodes: [0, 3, 12], fields: [-5, -16, 36], board: [-14, 12, 10], plaza: [0, -42, 30], plots: [0, 40, 60], bits: [16, 12, 12] }[view] || [0, 0, 22];
   st.look.x = +(q.get('x') ?? V[0]); st.look.z = +(q.get('z') ?? V[1]); st.look.dist = +(q.get('dist') ?? V[2]);
 }
-window.__stats = stats; st.scene.traverse((o) => { if (o.name === 'island') window.__scatter = o.userData.scatter; });
+window.__st = st; window.__stats = stats; st.scene.traverse((o) => { if (o.name === 'island') window.__scatter = o.userData.scatter; });
 // animations: the game drives named children; the lab does the same
 st.onTick((dt, t) => st.scene.traverse((o) => {
   if (o.name === 'flag') o.rotation.y = Math.sin(t * 3) * 0.25; else if (o.name === 'flag2') o.rotation.y = Math.sin(t * 3 + 1) * 0.25;

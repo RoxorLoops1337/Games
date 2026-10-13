@@ -1,7 +1,7 @@
 // Hearthvale authoritative simulation. Pure JS, no DOM, no timers: the server and the
 // solo client both drive it with tick(W, dt) and command(W, pid, cmd).
 import {
-  GOODS, PLOT, MAX_PLAYERS, VILLAGE_RING, LEVEL_XP, MAX_LEVEL, BUILDINGS, RECIPES, TECH,
+  GOODS, PLOT, MAX_PLAYERS, RING_HALF, LEVEL_XP, MAX_LEVEL, BUILDINGS, RECIPES, TECH,
   NODE_TYPES, MAX_BLD_LEVEL, upgradeCost, upgradeNeedsLevel, VALLEY_FIELDS, VALLEY_FIELD_RADIUS, VALLEY_LEVEL_XP, QUESTS, SELL,
 } from './data.js';
 
@@ -24,9 +24,11 @@ export function createWorld(seed = 1) {
 }
 const uid = (W) => W.nextId++;
 export const ordersFor = (lvl) => 3 + Math.min(lvl, 6);
+// villages sit on a square ring around the valley: slot 0 is a corner, spacing 17.5 so 16-tile plots never overlap
 export const slotOrigin = (slot) => {
-  const a = (slot / MAX_PLAYERS) * Math.PI * 2 - Math.PI / 2;
-  return { ox: Math.cos(a) * VILLAGE_RING, oz: Math.sin(a) * VILLAGE_RING, ang: a };
+  const H = RING_HALF, d = slot * (8 * H / MAX_PLAYERS), side = Math.floor(d / (2 * H)) % 4, u = d % (2 * H) - H;
+  const [ox, oz] = side === 0 ? [u, -H] : side === 1 ? [H, u] : side === 2 ? [-u, H] : [-H, -u];
+  return { ox, oz, ang: Math.atan2(oz, ox) };
 };
 export const levelOf = (xp) => { let l = 1; for (let i = 1; i < MAX_LEVEL; i++) if (xp >= LEVEL_XP[i]) l = i + 1; return l; };
 export const tileToWorld = (P, tx, ty) => ({ x: P.ox + tx - PLOT / 2, z: P.oz + ty - PLOT / 2 });
@@ -451,6 +453,10 @@ export function flushEvents(W) { W.events.length = 0; }
 export function serialize(W) { return JSON.stringify(W, (k, v) => k === 'rnd' ? undefined : v); }
 export function deserialize(s) {
   const W = JSON.parse(s); W.rnd = rng((W.seed + Math.floor(W.t)) | 0);
-  for (const P of Object.values(W.players)) { P.online = false; P.popups = []; }
+  for (const P of Object.values(W.players)) {
+    P.online = false; P.popups = [];
+    // saves from the old circular layout: move the village (and its villagers) to the square ring
+    const o = slotOrigin(P.slot); if (Math.abs(o.ox - P.ox) > 0.01 || Math.abs(o.oz - P.oz) > 0.01) { const dx = o.ox - P.ox, dz = o.oz - P.oz; for (const v of P.villagers) { v.x += dx; v.z += dz; } P.ox = o.ox; P.oz = o.oz; P.ang = o.ang; }
+  }
   return W;
 }

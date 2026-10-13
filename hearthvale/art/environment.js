@@ -27,6 +27,7 @@
 //  - All matte props share ONE material (`envMat`) with a built-in wind shader; sway needs no per-frame code.
 //  - Lanterns use the exported `lanternMat`: drive its emissiveIntensity at night (or copy the buildings.js one into it).
 import * as THREE from 'three';
+import { slotOrigin as simSlot } from '../shared/sim.js';
 import { rng as krng, roundedBoxGeo } from './artkit.js';
 import { P } from './palette.js';
 
@@ -98,6 +99,7 @@ const G = {
   cyl: (ratio = 1, seg = 8, open = false) => gc(`cyl${ratio},${seg},${open}`, () => { const g = new THREE.CylinderGeometry(ratio, 1, 1, seg, 1, open); g.translate(0, 0.5, 0); return g; }),
   /** rounded box base at y=0 (centre in x/z) */
   box: () => gc('box', () => { const g = roundedBoxGeo(1, 1, 1, 0.14, 1).clone(); g.translate(0, 0.5, 0); return g; }),
+  rbox: (w, h, d) => gc(`rbox${w.toFixed(3)},${h.toFixed(3)},${d.toFixed(3)}`, () => { const g = roundedBoxGeo(w, h, d, Math.min(0.07, Math.min(w, h, d) * 0.3), 1).clone(); g.translate(0, h / 2, 0); return g; }),
   plain: () => gc('plain', () => { const g = new THREE.BoxGeometry(1, 1, 1); g.translate(0, 0.5, 0); return g; }),
   octa: () => gc('octa', () => { const g = new THREE.OctahedronGeometry(1, 0); g.computeVertexNormals(); return g; }),
   /** flat disc facing up, unit radius */
@@ -145,7 +147,10 @@ class Builder {
     this.tris += cnt / 3; return this;
   }
   // ---- shorthands
-  box(w, h, d, x, y, z, c, o = {}) { return this.add(Math.min(w, h, d) < 0.09 || w * h * d < 0.03 ? G.plain() : G.box(), { p: [x, y, z], s: [w, h, d], c, ...o }); }
+  box(w, h, d, x, y, z, c, o = {}) {
+    if (Math.min(w, h, d) < 0.09 || w * h * d < 0.03) return this.add(G.plain(), { p: [x, y, z], s: [w, h, d], c, ...o });
+    return this.add(G.rbox(w, h, d), { p: [x, y, z], c, ...o });   // real-size bevel (no anisotropic stretching)
+  }
   plain(w, h, d, x, y, z, c, o = {}) { return this.add(G.plain(), { p: [x, y, z], s: [w, h, d], c, ...o }); }
   cyl(rt, rb, h, x, y, z, c, o = {}) { return this.add(G.cyl(rb > 0 ? rt / rb : 0, o.seg || 8, o.open), { p: [x, y, z], s: [rb, h, rb], c, ...o }); }
   lump(r, x, y, z, c, o = {}) { const s = o.s || [1, 1, 1]; const ss = typeof s === 'number' ? [s, s, s] : s; return this.add(G.lump(o.d ?? 1, o.seed || 1, o.jit ?? 0.1, o.up ?? 0.25), { p: [x, y, z], c, ...o, s: [r * ss[0], r * ss[1], r * ss[2]] }); }
@@ -234,8 +239,6 @@ function triGeo(tris, up = true) {
   g.computeBoundingBox(); g.userData.y0 = g.boundingBox.min.y; g.userData.y1 = g.boundingBox.max.y; return g;
 }
 const paint = (x, z, a, b, sc = 0.5, lo = 0.35, hi = 0.65) => col(a).clone().lerp(col(b), sstep(lo, hi, fbm(x * sc + 11, z * sc + 7)));
-const ang = (x, z) => Math.atan2(z, x);
-const dist2 = (ax, az, bx, bz) => Math.hypot(ax - bx, az - bz);
 
 // ------------------------------------------------------------------ small prop parts (write into a Builder)
 const WOOD = P.wood, WOOD_D = P.bark;
@@ -299,9 +302,10 @@ function treeInto(b, sp, v, lod) {
     const cs = [[0, 1.2, 0, 0.55, lc, 2], [-0.4, 1.0, 0.1, 0.38, dark, 1], [0.4, 1.05, -0.05, 0.38, dark, 1], [0.0, 1.05, 0.4, 0.36, dark, 1], [-0.05, 1.08, -0.4, 0.34, lc, 1], [0.04, 1.62, 0, 0.36, lc, 1]];
     if (hi) { for (const [x, y, z, rad, c, d] of cs) L(x, y, z, rad, c, { d: d === 2 ? 1 : 1, s: [1, 0.86, 1] }); L(0.2, 1.8, 0.1, 0.2, light, { d: 0 }); }
     else { L(0, 1.2, 0, 0.55, lc, { s: [1, 0.86, 1] }); L(-0.38, 1.0, 0.1, 0.36, dark, { d: 0 }); L(0.4, 1.05, -0.05, 0.36, dark, { d: 0 }); L(0.04, 1.62, 0, 0.34, lc, { d: 0 }); }
-    const na = hi ? 10 : 5;
+    const act = hi ? cs : [cs[0], cs[1], cs[2], cs[5]], na = hi ? 10 : 5;
     for (let i = 0; i < na; i++) {
-      const k = i % 6, c = cs[k], a = i * 2.4 + 0.5, e = k === 0 ? 0.15 + r() * 0.5 : -0.2 + r() * 0.5; let dx = Math.cos(a), dz = Math.sin(a); if (k > 0 && k < 5) { const l = Math.hypot(c[0], c[2]) || 1; dx = c[0] / l + dx * 0.4; dz = c[2] / l + dz * 0.4; const m = Math.hypot(dx, dz); dx /= m; dz /= m; }
+      const k = i % act.length, c = act[k], a = i * 2.4 + 0.5, side = Math.abs(c[0]) + Math.abs(c[2]) > 0.2, e = side ? -0.2 + r() * 0.5 : 0.15 + r() * 0.5; let dx = Math.cos(a), dz = Math.sin(a);
+      if (side) { const l = Math.hypot(c[0], c[2]) || 1; dx = c[0] / l + dx * 0.4; dz = c[2] / l + dz * 0.4; const m = Math.hypot(dx, dz); dx /= m; dz /= m; }
       const rr = c[3] * 1.03, ce = Math.cos(e), ap = [c[0] + dx * ce * rr, c[1] + Math.sin(e) * rr * 0.86, c[2] + dz * ce * rr];
       b.lump(0.1, ap[0], ap[1], ap[2], '#ea3a2e', { d: 0, grad: 0.4, ao: 0, jit: 0.04 }); if (hi) b.add(G.octa(), { p: [ap[0] - 0.035, ap[1] + 0.045, ap[2] + 0.05], s: 0.028, c: '#ffb0a0', grad: 0, ao: 0 });
     }
@@ -312,7 +316,7 @@ const SHADOW_R = { oak: 0.78, pine: 0.66, birch: 0.62, apple: 0.82 };
 export function bakedTree(sp, v = 0, lod = 0) { return baked(`tree:${sp}:${v}:${lod}`, (b) => { treeInto(b, sp, v, lod); b.shadow(0, 0, SHADOW_R[sp], 0.34, 1, 1, 0.03); }); }
 /** Tree resource node. Species chosen by seed (oak 40%, pine/birch/apple 20% each). ~1 unit footprint, 1.8 to 2.6 tall. opts: { species, lod } */
 export function treeModel(seed = 0, opts = {}) {
-  const s = Math.abs(Math.floor(seed)), sp = opts.species || SPECIES_BY_SEED[s % 10], v = Math.floor(s / 10) % 3 + (sp === 'oak' ? 0 : 0);
+  const s = Math.abs(Math.floor(seed)), sp = opts.species || SPECIES_BY_SEED[s % 10], v = Math.floor(s / 10) % 3;
   const g = instantiate(bakedTree(sp, v, opts.lod || 0)); const h = hash(s * 1.3, 4.1);
   g.rotation.y = h * TAU; g.scale.setScalar(0.94 + 0.14 * hash(s, 9.7)); g.userData = { species: sp, topY: sp === 'pine' ? 2.5 : sp === 'birch' ? 2.4 : sp === 'oak' ? 2.2 : 1.9 };
   return g;
@@ -320,7 +324,7 @@ export function treeModel(seed = 0, opts = {}) {
 
 function stumpInto(b, big = false) {
   const s = big ? 1.25 : 1;
-  b.add(G.lathe([[0.36 * s, 0], [0.28 * s, 0.06], [0.22 * s, 0.3 * s], [0.215 * s, 0.34 * s]], 9), { c: P.bark, grad: 0.7, ao: 0.4, aoH: 0.25 });
+  b.add(G.lathe([[0.3 * s, 0], [0.255 * s, 0.1 * s], [0.225 * s, 0.3 * s], [0.215 * s, 0.34 * s]], 10), { c: P.bark, grad: 0.7, ao: 0.4, aoH: 0.25 });
   b.add(G.rings(), { p: [0, 0.34 * s + 0.004, 0], s: 0.215 * s, ao: 0 });
   for (const [a, rr] of [[0.6, 0.27], [2.7, 0.26], [4.5, 0.25]]) b.lump(0.09 * s, Math.cos(a) * rr * s, 0.04, Math.sin(a) * rr * s, P.barkDark, { d: 0, s: [1.4, 0.55, 0.8], grad: 0.5, ao: 0.1, jit: 0.05 });
   b.lump(0.06 * s, 0.1 * s, 0.37 * s, -0.12 * s, P.leafLight, { d: 0, s: [1.3, 0.7, 1], grad: 0.6, ao: 0 });
@@ -330,16 +334,16 @@ export function stumpModel() { return make('stump', (b) => { stumpInto(b); b.sha
 
 function boulderCluster(b, seed, big = 1) {
   const r = krng(seed * 31 + 5), warm = r() < 0.5, base = warm ? ['#aaa59c', '#bdb8ad', '#8f8a82'] : [P.stone, P.stoneLight, P.stoneDark];
-  const part = (rad, x, z, sx, sy, sz, i) => {
-    const y = rad * sy * 0.55 * 0.9; b.rock(rad, x, y, z, base[i % 3], { s: [sx, sy, sz], d: 1, seed: seed + i, r: [0, r() * TAU, 0], moss: { c: '#6f9a42', amt: 0.55 }, ao: 0.4, aoH: 0.35 });
+  const part = (rad, x, z, sx, sy, sz, i, dd = 1) => {
+    const y = rad * sy * 0.55 * 0.9; b.rock(rad, x, y, z, base[i % 3], { s: [sx, sy, sz], d: dd, seed: seed + i, r: [0, r() * TAU, 0], moss: { c: '#6f9a42', amt: 0.55 }, ao: 0.4, aoH: 0.35 });
     return [x, y, z, rad * sx, rad * sy, rad * sz];
   };
-  const m = part(0.46 * big, 0, 0, 1.15, 0.95, 1.0, 0), s1 = part(0.31 * big, 0.5 * big, 0.2 * big, 1, 0.85, 1, 1), s2 = part(0.25 * big, -0.4 * big, 0.28 * big, 1.1, 0.8, 1, 2), s3 = part(0.15 * big, -0.1 * big, -0.5 * big, 1, 0.8, 1, 1);
+  const m = part(0.46 * big, 0, 0, 1.15, 0.95, 1.0, 0), s1 = part(0.31 * big, 0.5 * big, 0.2 * big, 1, 0.85, 1, 1), s2 = part(0.25 * big, -0.4 * big, 0.28 * big, 1.1, 0.8, 1, 2), s3 = part(0.15 * big, -0.1 * big, -0.5 * big, 1, 0.8, 1, 1, 0);
   // pale crystals from the main boulder and one smaller
   const cr = (cx, cy, cz, h, tx, tz, c = '#e8f4ff') => b.add(G.octa(), { m: 'gloss', p: [cx, cy, cz], s: [h * 0.28, h, h * 0.28], r: [tx, 0, tz], c, grad: 0.5, ao: 0 });
   cr(m[0] + 0.12 * big, m[1] + m[4] * 0.85, m[2] - 0.08 * big, 0.2 * big, 0.2, -0.25); cr(m[0] - 0.08 * big, m[1] + m[4] * 0.95, m[2] + 0.1 * big, 0.14 * big, -0.3, 0.2, '#cfe4f4'); cr(s1[0], s1[1] + s1[4] * 0.8, s1[2], 0.12 * big, 0.2, 0.25, '#f2faff');
   // ore speckles: small pale chips pressed into the faces
-  for (let i = 0; i < 7; i++) { const t = [m, s1, s2][i % 3], a = r() * TAU, e = 0.1 + r() * 0.5; const x = t[0] + Math.cos(a) * Math.cos(e) * t[3] * 0.93, y = t[1] + Math.sin(e) * t[4] * 0.9, z = t[2] + Math.sin(a) * Math.cos(e) * t[5] * 0.93; b.add(G.rock(0, 3 + i, 0.15), { p: [x, y, z], s: 0.04 * big, c: i % 2 ? '#e9f1f5' : '#f3d58a', grad: 0.3, ao: 0 }); }
+  for (let i = 0; i < 4; i++) { const t = [m, s1, s2][i % 3], a = r() * TAU, e = 0.1 + r() * 0.5; const x = t[0] + Math.cos(a) * Math.cos(e) * t[3] * 0.93, y = t[1] + Math.sin(e) * t[4] * 0.9, z = t[2] + Math.sin(a) * Math.cos(e) * t[5] * 0.93; b.add(G.rock(0, 3 + i, 0.15), { p: [x, y, z], s: 0.04 * big, c: i % 2 ? '#e9f1f5' : '#f3d58a', grad: 0.3, ao: 0 }); }
   tuftInto(b, m[0] + 0.02, m[1] + m[4] * 0.88, m[2], 0.8 * big, P.leaf, 4, 0.7);
 }
 /** Stone resource node: faceted boulder cluster, mossy top, pale crystals and ore speckles. 1x1 footprint, ~0.8 tall. */
@@ -348,11 +352,10 @@ export function rockModel(seed = 0) { const s = Math.abs(Math.floor(seed)) % 6; 
 function clayInto(b, seed) {
   const r = krng(seed * 13 + 3);
   // earthen bowl: raised rim, wet clay inside
-  b.add(G.lathe([[0.7, 0], [0.64, 0.06], [0.56, 0.17], [0.46, 0.18], [0.38, 0.1], [0.3, 0.07], [0.0, 0.07]], 14), { c: '#9a6a43', grad: 0.8, ao: 0.4, aoH: 0.2, facet: 0.04, seed });
+  b.add(G.lathe([[0.7, 0], [0.64, 0.06], [0.56, 0.17], [0.46, 0.18], [0.38, 0.1], [0.3, 0.07], [0.0, 0.07]], 11), { c: '#9a6a43', grad: 0.8, ao: 0.4, aoH: 0.2, facet: 0.04, seed });
   b.lump(0.4, 0, 0.075, 0, '#d4703a', { m: 'gloss', d: 1, s: [1, 0.12, 1], jit: 0.06, grad: 0.7, ao: 0 });
-  b.lump(0.14, -0.1, 0.1, 0.06, '#e68a4c', { m: 'gloss', d: 1, s: [1.2, 0.6, 1], jit: 0.1, grad: 0.7, ao: 0 });
-  for (const [x, z, rad] of [[0.52, -0.3, 0.17], [-0.5, -0.32, 0.14], [0.2, 0.58, 0.15]]) b.lump(rad, x, rad * 0.55 + 0.03, z, '#c96f3e', { m: 'gloss', d: 1, s: [1.1, 0.7, 1], jit: 0.12, grad: 0.8, ao: 0.1, seed: r() * 9 });
-  for (let i = 0; i < 3; i++) { const a = r() * TAU; b.rock(0.045, Math.cos(a) * 0.62, 0.03, Math.sin(a) * 0.62, '#8f8a82', { d: 0, seed: i }); }
+  for (const [x, z, rad] of [[0.52, -0.3, 0.17], [-0.5, -0.32, 0.14], [0.2, 0.58, 0.15]]) b.lump(rad, x, rad * 0.55 + 0.03, z, '#c96f3e', { m: 'gloss', d: 0, s: [1.1, 0.7, 1], jit: 0.12, grad: 0.8, ao: 0.1, seed: r() * 9 });
+  for (let i = 0; i < 2; i++) { const a = r() * TAU; b.rock(0.045, Math.cos(a) * 0.62, 0.03, Math.sin(a) * 0.62, '#8f8a82', { d: 0, seed: i }); }
   // shovel stuck in the clay
   b.cyl(0.018, 0.02, 0.62, -0.12, 0.1, 0.1, WOOD, { seg: 5, r: [0.1, 0, 0.32], ao: 0 }); b.box(0.12, 0.04, 0.05, -0.31, 0.7, 0.17, WOOD_D, { r: [0.1, 0, 0.32], ao: 0 });
   b.box(0.12, 0.17, 0.025, -0.1, 0.05, 0.1, '#9aa3ad', { r: [0.1, 0, 0.32], ao: 0, grad: 0.6 });
@@ -419,7 +422,7 @@ function instancedFrom(e, items, { cast = true, tint = 0.07, seed = 1 } = {}) {
   items.forEach((it, i) => { m.compose(new THREE.Vector3(it.x, it.y || 0, it.z), new THREE.Quaternion().setFromEuler(new THREE.Euler(0, it.yaw || 0, 0)), new THREE.Vector3().setScalar(it.s || 1)); im.setMatrixAt(i, m); c.setRGB(1 + (r() - 0.5) * 2 * tint, 1 + (r() - 0.5) * 2 * tint * 0.7, 1 + (r() - 0.5) * 2 * tint); im.setColorAt(i, c); });
   im.instanceMatrix.needsUpdate = true; im.castShadow = cast; im.receiveShadow = true; im.onBeforeRender = windTick; im.frustumCulled = false; return im;
 }
-const slotOrigin = (i) => { const a = i / 16 * TAU - Math.PI / 2; return [Math.cos(a) * 40, Math.sin(a) * 40]; };
+const slotOrigin = (i) => { const o = simSlot(i); return [o.ox, o.oz]; };
 const FIELD_ANG = [0, Math.PI / 2, Math.PI, Math.PI * 1.5];
 /** default no-go zones for decoration: plaza, the four valley fields, the 16 village plots */
 export function isFree(x, z, pad = 0) {
@@ -432,7 +435,7 @@ export function isFree(x, z, pad = 0) {
 // =================================================================== 2. VALLEY FIELDS
 const FY = 0.1;   // top of every field/plaza base
 /** round dressed ground disc: top at FY, soft lip, dark earth skirt. colorFn(x,z) -> colour */
-function fieldBase(b, R, colorFn, { rows = 5, segs = 40, carve } = {}) {
+function fieldBase(b, R, colorFn, { rows = 9, segs = 56, carve } = {}) {
   const rr = []; for (let i = 0; i < rows; i++) rr.push(R * (i / (rows - 1)) * (i === rows - 1 ? 0.95 : 1));
   const skirt = col('#8a6240'), R0 = rows - 1;
   const mk = (r, y, c) => ({ r, y, c });
@@ -464,7 +467,7 @@ function treeFieldStatic(b) {
   // signpost at the path start
   b.cyl(0.04, 0.05, 0.85, 0.9, FY, 2.95, WOOD_D, { seg: 6 }); b.box(0.5, 0.17, 0.05, 0.9, FY + 0.5, 2.97, P.woodLight, { r: [0, -0.2, 0.03], grad: 0.5, ao: 0 }); b.box(0.3, 0.13, 0.05, 0.88, FY + 0.7, 2.93, P.woodLight, { r: [0, 0.3, -0.04], grad: 0.5, ao: 0 });
   for (const [x, z, s] of [[-1.9, 0.6, 1], [2.4, 1.2, 0.8], [1.1, -1.9, 1.1], [-2.5, -1.0, 0.8]]) { mushroomInto(b, x, z, s, FY); mushroomInto(b, x + 0.18 * s, z + 0.1, 0.6 * s, FY); }
-  for (const [x, z, s] of [[-2.7, 1.5, 1], [2.9, -0.3, 1.1], [-0.4, -2.9, 1.2], [1.6, 2.5, 0.9]]) b.xf(x, FY, z, s, x, () => bushInto(b, 1, 1));
+  for (const [x, z, s] of [[-2.7, 1.5, 1], [-0.4, -2.9, 1.2]]) b.xf(x, FY, z, s, x, () => bushInto(b, 1, 0));
 }
 function treeFieldSway(b) { const r = krng(5); for (let i = 0; i < 26; i++) { const a = r() * TAU, rr = 0.8 + r() * 2.7; const x = Math.cos(a) * rr, z = Math.sin(a) * rr; if (Math.abs(x) < 0.7 && z > 0.4) continue; tuftInto(b, x, FY, z, 1.1 + r() * 0.5, r() < 0.5 ? P.leafDark : P.leaf, 6, 1); }
   for (let i = 0; i < 6; i++) { const a = r() * TAU, rr = 1.8 + r() * 1.4, x = Math.cos(a) * rr, z = Math.sin(a) * rr; if (Math.abs(x) < 0.8 && z > 0.4) continue; for (let k = 0; k < 3; k++) flowerInto(b, x + r() * 0.2, FY, z + r() * 0.2, FLOWERS[(i + k) % 6], 1, 0.16); } }
@@ -488,7 +491,7 @@ function clayFieldStatic(b) {
   fieldBase(b, 3.6, (x, z) => {
     const rd = riverDist(x, z); let c = paint(x, z, tan, '#c19460', 0.7); c.lerp(sand, sstep(0.9, 0.35, rd) * 0.8); c.lerp(wet, sstep(0.3, 0.0, rd)); c.lerp(path, dirtPath(x, z) * 0.7);
     const pd = Math.hypot(x - 0.05, z - 0.3); c.lerp(wet, sstep(1.9, 1.5, pd) * 0.5); return c;
-  }, { rows: 9, segs: 56, carve: (x, z) => -0.07 * (1 - sstep(-0.1, 0.5, riverDist(x, z))) });
+  }, { rows: 10, segs: 56, carve: (x, z) => -0.07 * (1 - sstep(-0.1, 0.5, riverDist(x, z))) });
   // river water
   const rings = []; const N = 24;
   for (let i = 0; i <= N; i++) { const t = i / N, p = RIVER.getPointAt(t), d = RIVER.getTangentAt(t), w = riverW(t) * 1.02; const nx = -d.z, nz = d.x, y = FY - 0.045; rings.push([[-1, '#7fd6ea'], [-0.5, '#58bfe6'], [0, '#3fa9d9'], [0.5, '#58bfe6'], [1, '#7fd6ea']].map(([u, c]) => ({ x: p.x + nx * u * w, y: y + (u === 0 ? 0 : 0.004), z: p.z + nz * u * w, c }))); }
@@ -511,7 +514,7 @@ function clayFieldStatic(b) {
     b.shadow(0, 0, 0.7, 0.25, 1.1, 0.7, 0.01);
   });
   for (const [x, z] of [[-2.3, 0.3], [2.4, 0.7], [-0.6, 2.7], [2.1, 2.3], [-1.6, -1.2]]) { b.rock(0.12 + hash(x, z) * 0.08, x, FY + 0.05, z, '#9b968c', { d: 0, seed: x * 3, s: [1.2, 0.8, 1] }); }
-  for (const [x, z] of [[-1.6, 2.6], [1.0, -1.3]]) b.xf(x, FY, z, 1, x, () => bushInto(b, 2, 1));
+  for (const [x, z] of [[-1.6, 2.6], [1.0, -1.3]]) b.xf(x, FY, z, 1, x, () => bushInto(b, 2, 0));
 }
 function claySway(b) {
   const r = krng(17);
@@ -545,7 +548,7 @@ function ledgeInto(b, rIn, rOut, h, a0, a1, seed) {
   b.geo(g, 'matte', { ao: 0.3, aoH: 0.3 });
 }
 function rockFieldStatic(b) {
-  fieldBase(b, 3.6, quarryColor, { rows: 6 });
+  fieldBase(b, 3.6, quarryColor, { rows: 9 });
   const D = Math.PI / 180;
   ledgeInto(b, 2.0, 2.65, 0.4, 205 * D, 335 * D, 1); ledgeInto(b, 2.65, 3.2, 0.78, 195 * D, 345 * D, 2); ledgeInto(b, 3.2, 3.56, 1.16, 185 * D, 355 * D, 3);
   for (const [a, rr, h, s] of [[205, 2.35, 0.4, 0.38], [335, 2.35, 0.4, 0.38], [195, 2.95, 0.78, 0.42], [345, 2.95, 0.78, 0.42], [185, 3.38, 1.16, 0.32], [355, 3.38, 1.16, 0.32]]) b.rock(s, Math.cos(a * D) * rr, FY + s * 0.4, Math.sin(a * D) * rr, '#a39f98', { d: 1, seed: a, s: [1.1, 0.9, 1.1], moss: { c: '#6b9a3a', amt: 0.7 } });
@@ -582,7 +585,7 @@ function rockFieldStuff(b) {
 function rockFieldSway(b) { const r = krng(3); for (let i = 0; i < 12; i++) { const a = r() * TAU, rr = 0.5 + r() * 2.9, x = Math.cos(a) * rr, z = Math.sin(a) * rr; if (Math.abs(x) < 0.6 && z > 0.4) continue; if (z < -1.6 && Math.abs(x) < 2.6) continue; tuftInto(b, x, FY, z, 0.9, '#8dbb55', 4, 1); } }
 
 // ---- Golden Meadow
-const COLS_X = [-2.5, -2.05, -1.6, -1.15, -0.7, 0.7, 1.15, 1.6, 2.05, 2.5];
+const COLS_X = [-2.6, -2.1, -1.6, -1.1, -0.7, 0.7, 1.1, 1.6, 2.1, 2.6];
 function wheatFieldStatic(b) {
   const soil = col('#c9a04e'), furrow = col('#a9803d'), straw = col('#ead08a'), edge = col('#a6c658');
   fieldBase(b, 3.6, (x, z) => {
@@ -601,24 +604,23 @@ function wheatFieldStatic(b) {
     b.shadow(0, 0, 0.7, 0.28, 1, 1, 0.01);
   });
   // hay bales and a pitchfork
-  for (const [x, z, y, yaw] of [[2.55, 1.35, 0, 0.5], [2.1, 1.85, 0, 0.9], [2.4, 1.55, 0.5, 0.65]]) { b.add(G.cyl(1, 14), { p: [x, FY + 0.36 + y, z], s: [0.36, 0.55, 0.36], r: [0, yaw, Math.PI / 2], c: '#e3bd57', grad: 0.8, ao: 0.2, facet: 0.03 }); b.cyl(0.372, 0.372, 0.05, x, FY + y + 0.36 - 0.36 + 0.0, z, '#b9803a', { seg: 8, ao: 0, r: [0, yaw, Math.PI / 2], grad: 0 }); }
+  for (const [x, z, y, yaw] of [[2.55, 1.35, 0, 0.5], [2.1, 1.85, 0, 0.9], [2.4, 1.55, 0.62, 0.65]]) logInto(b, x, FY + y, z, 0.62, 0.34, yaw, '#e3bd57');
   b.shadow(2.35, 1.6, 1.2, 0.25, 1.2, 1, 0.01);
   b.cyl(0.015, 0.02, 0.95, -2.5, FY, 1.6, WOOD, { seg: 5, r: [0.2, 0, 0.1], ao: 0 }); b.box(0.2, 0.03, 0.03, -2.54, FY + 0.93, 1.5, '#6e747c', { r: [0.2, 0, 0.1], ao: 0 });
   for (const [x, z] of [[-2.9, -1.0], [-2.6, 2.0], [2.9, -1.1], [0.0, 3.0], [-1.0, 3.0]]) { for (let k = 0; k < 4; k++) flowerInto(b, x + (k - 1.5) * 0.12, FY, z + hash(k, x) * 0.2, k % 2 ? '#e8564a' : '#6fb4f0', 1, 0.2); }
-  for (const [x, z] of [[-2.5, 2.1]]) b.xf(x, FY, z, 0.8, x, () => bushInto(b, 0, 1));
+  for (const [x, z] of [[-2.5, 2.1]]) b.xf(x, FY, z, 0.8, x, () => bushInto(b, 0, 0));
 }
 function wheatTuft(b, x, z, v, ripe) {
-  b.lump(0.2, x, FY + 0.05, z, ripe ? '#cf9f3a' : '#9bb844', { d: 0, s: [1.2, 0.55, 1.2], grad: 0.7, ao: 0, sw: 0.5, ph: hash(x * 0.7, z * 0.9) * TAU });
-  const r = krng(Math.floor(x * 100 + z * 37) + v), n = 5, c0 = ripe ? '#d9ae3c' : '#b4c24a', c1 = ripe ? '#f6cc4e' : '#9bc050', ph = hash(x * 0.7, z * 0.9) * TAU;
+  const r = krng(Math.floor(x * 100 + z * 37) + v), n = 4, c0 = ripe ? '#d6a937' : '#a9bf48', c1 = ripe ? '#f7cf4f' : '#a5c451', ph = hash(x * 0.7, z * 0.9) * TAU;
   for (let i = 0; i < n; i++) {
-    const a = r() * TAU, lean = 0.05 + r() * 0.22, h = 0.62 + r() * 0.22, bx = x + Math.cos(a) * 0.07, bz = z + Math.sin(a) * 0.07, dx = Math.sin(lean) * Math.sin(a), dy = Math.cos(lean), dz = Math.sin(lean) * Math.cos(a);
-    b.add(G.cyl(0, 3, true), { p: [bx, FY, bz], s: [0.05, h, 0.05], r: [lean, a, 0], c: c0, grad: 0.7, ao: 0.25, aoH: 0.3, sw: 1.2, ph });
-    b.add(G.cyl(0, 4, true), { p: [bx + dx * (h - 0.09), FY + dy * (h - 0.09), bz + dz * (h - 0.09)], s: [0.075, 0.27, 0.075], r: [lean, a, 0], c: c1, grad: 0.5, ao: 0, swc: 1.15, ph });
+    const a = r() * TAU, lean = 0.06 + r() * 0.24, h = 0.6 + r() * 0.25, bx = x + Math.cos(a) * 0.08, bz = z + Math.sin(a) * 0.08, dx = Math.sin(lean) * Math.sin(a), dy = Math.cos(lean), dz = Math.sin(lean) * Math.cos(a);
+    b.add(G.cyl(0.3, 3, true), { p: [bx, FY, bz], s: [0.04, h, 0.04], r: [lean, a, 0], c: c0, grad: 0.7, ao: 0.25, aoH: 0.3, sw: 1.2, ph });
+    b.add(G.octa(), { p: [bx + dx * h, FY + dy * h - 0.02, bz + dz * h], s: [0.05, 0.14, 0.05], r: [lean, a, 0], c: c1, grad: 0.5, ao: 0, swc: 1.15, ph });
   }
 }
 function wheatFieldStuff(b) {   // lives inside the sway group
   const r = krng(31); let k = 0;
-  for (const x0 of COLS_X) for (let z0 = -2.9; z0 <= 3.0; z0 += 0.44) {
+  for (const x0 of COLS_X) for (let z0 = -2.9; z0 <= 3.0; z0 += 0.46) {
     const x = x0 + (r() - 0.5) * 0.12, z = z0 + (r() - 0.5) * 0.12, rr = Math.hypot(x, z); if (rr > 3.05) continue; if (Math.hypot(x, z + 1.45) < 1.05) continue;
     wheatTuft(b, x, z, k++, r() > 0.08);
   }
@@ -651,10 +653,17 @@ export function fieldModel(type, ang) {
 const CLOTH = new Map();
 function clothGeo(hex, trim = '#fff2cf', w = 0.85, h = 0.52) {
   const k = `${hex}:${trim}:${w}:${h}`; let g = CLOTH.get(k); if (g) return g;
-  const s = new THREE.Shape(); s.moveTo(0, h / 2); s.lineTo(w, h / 2); s.lineTo(w * 0.76, 0); s.lineTo(w, -h / 2); s.lineTo(0, -h / 2); s.closePath();
-  g = new THREE.ExtrudeGeometry(s, { depth: 0.03, bevelEnabled: false }); g.translate(0, 0, -0.015); const p = g.attributes.position, c = new Float32Array(p.count * 3), main = col(hex), tr = col(trim), tmp = new THREE.Color();
-  for (let i = 0; i < p.count; i++) { const x = p.getX(i), y = p.getY(i); tone(main, 0.5 + y / h * 0.6, 0.6, tmp); if (x < 0.1 || Math.abs(y) > h / 2 - 0.045) tmp.copy(tr); c[i * 3] = tmp.r; c[i * 3 + 1] = tmp.g; c[i * 3 + 2] = tmp.b; }
-  g.setAttribute('color', new THREE.BufferAttribute(c, 3)); g.computeVertexNormals(); CLOTH.set(k, g); return g;
+  // swallowtail pennant as a 6x3 grid, both faces (single-sided material), column 0 is the pole sleeve in the trim colour
+  const NX = 5, main = col(hex), tr = col(trim), V = [], tmp = new THREE.Color();
+  for (let j = 0; j < 3; j++) for (let i = 0; i <= NX; i++) {
+    const x = (i === NX && j === 1 ? 0.76 : i / NX) * w, y = (1 - j) * h / 2; tone(main, 0.5 + (1 - j) * 0.12, 0.5, tmp); if (i === 0) tmp.copy(tr); else if (i === 1) tmp.lerp(tr, 0.35);
+    V.push([x, y, 0, tmp.r, tmp.g, tmp.b]);
+  }
+  const pos = [], nor = [], colr = [], at = (j, i) => V[j * (NX + 1) + i];
+  const tri = (a, b, c, nz) => { for (const q of nz > 0 ? [a, b, c] : [a, c, b]) { pos.push(q[0], q[1], nz * 0.012); nor.push(0, 0.45, nz * 0.9); colr.push(q[3], q[4], q[5]); } };
+  for (let j = 0; j < 2; j++) for (let i = 0; i < NX; i++) { const a = at(j, i), b = at(j, i + 1), c = at(j + 1, i), d = at(j + 1, i + 1); for (const nz of [1, -1]) { tri(a, c, b, nz); tri(b, c, d, nz); } }
+  g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3)); g.setAttribute('color', new THREE.Float32BufferAttribute(colr, 3));
+  g.computeBoundingBox(); CLOTH.set(k, g); return g;
 }
 const flagCloth = (hex, trim, w, h) => baked(`cloth:${hex}:${trim}:${w}:${h}`, (b) => b.geo(clothGeo(hex, trim, w, h), 'matte', { ao: 0 }));
 /** a pennant group pivoting at its pole edge, cloth extends along +X. */
@@ -669,12 +678,12 @@ function lanternGroup(name, scale = 1) {
 
 // =================================================================== 3. NOTICE BOARD
 function boardStatic(b) {
-  const stone = '#c4bdae', wood = '#cf9658', woodD = '#a06a40', cork = '#ecca92';
+  const stone = '#c4bdae', wood = '#cf9658', woodD = '#a06a40', cork = '#f6dcaa';
   b.box(3.5, 0.15, 1.25, 0, 0, 0, stone, { grad: 0.7, ao: 0.4 }); b.box(3.1, 0.14, 0.95, 0, 0.15, 0, '#c9c2b4', { grad: 0.7, ao: 0.1 });
   const top = 0.29;
   for (const x of [-1.1, 1.1]) { b.box(0.34, 2.1, 0.34, x, top, 0, wood, { grad: 0.8, ao: 0.4, aoH: 0.5 }); b.box(0.42, 0.18, 0.42, x, top, 0, woodD, { grad: 0.5, ao: 0.1 }); b.box(0.42, 0.1, 0.42, x, top + 1.9, 0, woodD, { ao: 0 }); }
   // framed cork board
-  b.box(2.2, 1.34, 0.14, 0, 0.95, -0.02, woodD, { grad: 0.6, ao: 0, r: 0 }); b.box(1.96, 1.1, 0.08, 0, 1.07, 0.08, cork, { grad: 0.5, ao: 0, facet: 0.02 });
+  b.box(2.2, 1.34, 0.14, 0, 0.95, -0.02, woodD, { grad: 0.2, ao: 0, r: 0 }); b.box(1.96, 1.1, 0.08, 0, 1.07, 0.08, cork, { grad: 0.12, ao: 0, facet: 0.02 });
   for (let i = -2; i <= 2; i++) b.plain(0.012, 1.06, 0.012, i * 0.38, 1.09, 0.125, '#b8915a', { ao: 0, grad: 0 });
   b.box(2.4, 0.09, 0.4, 0, 0.82, 0.14, woodD, { ao: 0, grad: 0.4 });
   const notes = [[-0.72, 1.72, 0.3, 0.36, 0.08, '#fffbe8'], [-0.3, 1.8, 0.26, 0.3, -0.06, '#fff0a8'], [0.14, 1.74, 0.3, 0.38, 0.05, '#e4f1ff'], [0.58, 1.8, 0.28, 0.32, -0.1, '#ffe2e2'], [-0.62, 1.3, 0.28, 0.3, -0.05, '#fff0a8'], [-0.18, 1.3, 0.34, 0.36, 0.07, '#ffffff'], [0.3, 1.32, 0.26, 0.3, -0.07, '#ffe6b0'], [0.7, 1.3, 0.3, 0.3, 0.06, '#e2f3dc']];
@@ -780,7 +789,7 @@ function plazaInto(b, R) {
     b.add(G.lathe([[1.0, 0], [1.05, 0.1], [1.02, 0.28], [0.92, 0.3], [0.88, 0.18], [0.0, 0.2]], 18), { c: '#c4bcae', grad: 0.8, ao: 0.3, aoH: 0.25, facet: 0.03 }); b.lump(0.9, 0, 0.19, 0, '#6b4a30', { d: 1, s: [1, 0.12, 1], jit: 0, ao: 0 });
     const r = krng(ang * 100 | 0); for (let i = 0; i < 22; i++) { const a = r() * TAU, rr = (tree ? 0.35 : 0.1) + r() * 0.62; flowerInto(b, Math.cos(a) * rr, 0.2, Math.sin(a) * rr, FLOWERS[(i + (tree ? 0 : 2)) % 6], 1.15, 0.13 + r() * 0.1); }
     for (let i = 0; i < 6; i++) { const a = i * 1.05, rr = 0.55 + r() * 0.2; b.lump(0.2, Math.cos(a) * rr, 0.26, Math.sin(a) * rr, '#58b04a', { d: 0, s: [1.2, 0.6, 1.2], ao: 0, grad: 0.7, sw: 0.4 }); }
-    if (tree) b.xf(0, 0.2, 0, 0.62, 1, () => treeInto(b, 'apple', 1, 0)); else for (let i = 0; i < 8; i++) { const a = i * 0.8; b.lump(0.2, Math.cos(a) * 0.3, 0.36 + (i % 2) * 0.1, Math.sin(a) * 0.3, FLOWERS[(i * 2) % 6], { d: 1, grad: 0.7, ao: 0, s: [1, 0.8, 1] }); }
+    if (tree) b.xf(0, 0.2, 0, 0.62, 1, () => treeInto(b, 'apple', 1, 0)); else for (let i = 0; i < 8; i++) { const a = i * 0.8; b.lump(0.2, Math.cos(a) * 0.3, 0.36 + (i % 2) * 0.1, Math.sin(a) * 0.3, FLOWERS[(i * 2) % 6], { d: 0, grad: 0.7, ao: 0, s: [1, 0.8, 1] }); }
     b.shadow(0, 0, 1.6, 0.25, 1, 1, 0.0);
   });
   bed(Math.PI + D45, true); bed(Math.PI * 1.75, false);
@@ -814,12 +823,12 @@ function plazaInto(b, R) {
 export function plazaModel(radius = 9) { const g = instantiate(baked(`plaza:${radius}`, (b) => plazaInto(b, radius)), { shadows: false }); g.name = 'plaza'; g.userData.radius = radius; return g; }
 
 // =================================================================== 5. VILLAGE PLOT
-const PLOT_N = 16, PH = 8.15;   // tiles per side; centre line of the border
+const PLOT_N = 16, PH = 8.25;   // tiles per side; centre line of the border
 const gz0 = PH + 0.02;
 function plotInto(b, hex) {
-  const own = col(hex), ownL = own.clone().lerp(col('#ffffff'), 0.28), ownD = own.clone().multiplyScalar(0.72), TOP = 0.14; b.floor = TOP;
+  const own = col(hex), ownL = own.clone().lerp(col('#ffffff'), 0.16), ownD = own.clone().multiplyScalar(0.72), TOP = 0.14; b.floor = TOP;
   // 16x16 grass tiles: gentle checker + painterly patches, darker near the border (cheap AO)
-  { const tris = [], gA = col(P.grass), gB = col('#a6dc6c'), gD = col('#86c455');
+  { const tris = [], gA = col(P.grass), gB = col('#a3da6a'), gD = col('#86c455');
     for (let i = 0; i < PLOT_N; i++) for (let j = 0; j < PLOT_N; j++) {
       const base = ((i + j) % 2 ? gA : gB).clone().lerp(gD, sstep(0.45, 0.8, fbm(i * 0.35 + 3, j * 0.35 + 8)) * 0.55).multiplyScalar(0.975 + hash(i, j) * 0.05);
       const corner = (x, z) => { const d = Math.min(8 - Math.abs(x), 8 - Math.abs(z)); return base.clone().multiplyScalar(0.84 + 0.16 * sstep(0, 1.6, d)); };
@@ -840,7 +849,7 @@ function plotInto(b, hex) {
       pts2.forEach((p, pi) => {
         const nx0 = p[0], nz0 = p[1]; // outward normal = direction from the nearest point of the inner rounded square
         const cx = clamp(nx0, -R2, R2), cz = clamp(nz0, -R2, R2); let ux = nx0 - cx, uz = nz0 - cz; const ul = Math.hypot(ux, uz) || 1; if (ul < 1e-6) { ux = 0; uz = 1; } else { ux /= ul; uz /= ul; }
-        const pr = [[0.2, -0.15, '#7a5638'], [0.2, 0.07, '#7a5638'], [0.2, 0.1, ownD], [0.2, 0.22, own], [0.13, 0.31, ownL], [-0.12, 0.31, ownL], [-0.2, 0.17, sc]];
+        const pr = [[0.25, -0.15, '#7a5638'], [0.25, 0.07, '#7a5638'], [0.25, 0.1, ownD], [0.25, 0.22, own], [0.17, 0.31, own], [-0.14, 0.31, own], [-0.25, 0.17, sc]];
         const edgeK = pi === 0 || pi === pts2.length - 1 ? 0.86 : 1;
         rings.push(pr.map(([u, y, c]) => { const cc = col(c).clone().multiplyScalar(edgeK); return { x: nx0 + ux * u, y, z: nz0 + uz * u, c: cc }; }));
       });
@@ -851,7 +860,7 @@ function plotInto(b, hex) {
   // hedge bushes outside the border, owner-colour blossoms on some; none at the gate
   { const r = krng(hex.length * 7 + (own.getHex() % 997)); let n = 0;
     for (let s = 0; s < 4; s++) for (let i = 0; i < 6; i++) { const t = -6.9 + i * 2.78 + (r() - 0.5) * 0.4, off = PH + 0.52 + (r() - 0.5) * 0.12; let x, z; if (s === 0) { x = t; z = off; if (Math.abs(x) < 2.2) continue; } else if (s === 1) { x = off; z = t; } else if (s === 2) { x = t; z = -off; } else { x = -off; z = t; }
-      const sc = 0.85 + r() * 0.5; b.lump(0.3 * sc, x, 0.14 + 0.2 * sc, z, ['#4fa845', '#5cb44a', '#46a04c'][n++ % 3], { d: 0, s: [1.3, 0.9, 1.0], jit: 0.12, seed: n, grad: 0.95, ao: 0.2, aoH: 0.3, r: [0, r() * 3, 0] });
+      const sc = 0.85 + r() * 0.5; b.lump(0.3 * sc, x, 0.14 + 0.2 * sc, z, ['#4fa845', '#5cb44a', '#46a04c'][n++ % 3], { d: 0, s: [1.3, 0.9, 1.0], jit: 0.2, seed: n, grad: 0.95, ao: 0.2, aoH: 0.3, r: [0, r() * 3, 0] });
       if (n % 2 === 0) b.lump(0.07, x + 0.12, 0.14 + 0.43 * sc, z + 0.05, own, { d: 0, grad: 0.4, ao: 0 }); } }
   // gate arch on the +Z side, owner colour
   { const gx = 1.45, gz = PH + 0.02;
@@ -998,6 +1007,6 @@ export function islandModel(R = 66, opts = {}) {
   }
   g.add(falls);
   g.userData = { heightAt: hy, shore, seaY, R };
-  if (opts.scatter !== false) g.userData.scatter = scatter(g, krng(opts.seed || 7), { R, shore, heightAt: hy, counts: opts.counts });
+  if (opts.scatter !== false) g.userData.scatter = scatter(g, krng(opts.seed || 7), { R, shore, heightAt: hy, counts: opts.counts, isFree: opts.isFree });
   return g;
 }

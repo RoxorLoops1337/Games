@@ -4,7 +4,8 @@ export const ICON = { wood: '🪵', clay: '🧱', stone: '🪨', wheat: '🌾', 
 export const SELL = { wood: 1, clay: 1, stone: 2, wheat: 1, planks: 3, bricks: 4, flour: 3, bread: 8, soup: 5, scrolls: 10 };
 export const PLOT = 16;            // tiles per village side
 export const MAX_PLAYERS = 16;
-export const VILLAGE_RING = 40;    // radius of the ring of villages
+export const RING_HALF = 35;       // villages sit on a square ring: half side length (4 corners + 3 per side = 16 plots of 16 tiles, 17.5 apart)
+export const VILLAGE_RING = 44;    // legacy: kept for old imports
 export const LEVEL_XP = [0, 30, 90, 190, 330, 520, 760, 1050, 1400, 1800, 2300, 2900, 3600, 4400, 5300];
 export const MAX_LEVEL = LEVEL_XP.length;
 
