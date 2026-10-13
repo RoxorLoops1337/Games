@@ -68,11 +68,23 @@ export function createGladiator(unitOrGlad, opts = {}) {
   const rar = {}, gear = g.gear || {};
   for (const k of ['weapon', 'shield', 'armor', 'helm', 'charm']) rar[k] = Math.max(0, rarOf(gear[k]));
   const Lm = LMg(), stars = opts.stars || (Lm && Lm.stars ? Lm.stars(g) : 1);
-  const out = equipStyle(rig, style, { rar, rarCol: D().RAR.map((x) => x.c), stars, lvl: g.lvl || 1, hasCharm: !!gear.charm });
+  const out = equipStyle(rig, style, { rar, rarCol: D().RAR.map((x) => x.c), stars, lvl: g.lvl || 1, hasCharm: !!gear.charm, g });
   rig.animator.armed = 1;
   rig.style = style; rig.g = g;
   if (opts.scale) rig.root.scale.setScalar(opts.scale);
   rig.root.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = false; o.frustumCulled = false; } });
+  // SCARS: a cheap limp / stiff arm layered on top of the clip player (no per-joint speed API exists): after the animator wrote the joints, nudge them
+  const sc = g.scars || [];
+  if (sc.indexOf('bad_knee') >= 0 || sc.indexOf('stiff_arm') >= 0 || sc.indexOf('old_ribs') >= 0) {
+    const an = rig.animator, up0 = an.update.bind(an), J = rig.joints, knee = sc.indexOf('bad_knee') >= 0, arm = sc.indexOf('stiff_arm') >= 0, ribs = sc.indexOf('old_ribs') >= 0, qx = new THREE.Quaternion(), ax = new THREE.Vector3(1, 0, 0), az = new THREE.Vector3(0, 0, 1);
+    an.update = (dt) => {
+      up0(dt);
+      const mv = Math.min(1, Math.hypot(an.mv.vx, an.mv.vz) / 2.2), idle = !an.action && !an.dead;
+      if (knee && mv > 0.05) { const ph = Math.sin(an.mv.phase), dip = 0.5 + 0.5 * ph; J.hips.position.y -= 0.032 * mv * dip; J.kneeL.quaternion.multiply(qx.setFromAxisAngle(ax, -0.1 * mv * dip)); J.hips.quaternion.multiply(qx.setFromAxisAngle(az, 0.05 * mv * (dip - 0.5))); }
+      if (arm && idle) J.shoulderR.quaternion.multiply(qx.setFromAxisAngle(az, 0.1));
+      if (ribs && idle) J.chest.quaternion.multiply(qx.setFromAxisAngle(ax, 0.045));
+    };
+  }
   rig.resetSecondary();
   rig.setMetal = (hex) => rig.setPalette({ metal: hex });
   return rig;

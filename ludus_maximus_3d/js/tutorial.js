@@ -30,7 +30,8 @@ export function createTutorial(game) {
   // target(): Element | null. met(t): step finished. when(): optional gate (return false to stay silent). pos: card placement hint.
   const STEPS = [
     { id: 'welcome', title: 'Welcome, Lanista', text: 'You run a gladiator school. Hire a fighter, train them each week, then send them to the arena for gold and glory. I will show you the way.', manual: 'Show me', block: true,
-      met: (t) => !!t.welcome, when: () => game.scene === 'hub' },
+      met: (t) => !!t.welcome, when: () => game.scene === 'hub',
+      avoid: () => { const s = sheetBy('recruit'); return s ? (live('.rc-card', s)[0] || tutEl(s, 'hire')) : null; } }, // the card must never sit on the first recruit card
     { id: 'hire', title: 'Hire your first fighter', text: 'Three citizens wait at the gate. Compare their stats and talent pips, then tap Hire on the one you like.',
       target: () => { const s = sheetBy('recruit'); return s ? tutEl(s, 'hire') : null; },
       met: (t) => S().glads.length > 0, when: () => game.scene === 'hub', rescue: () => { if (!S().glads.length && !scrims().length) game.open('recruit', { first: true }); } },
@@ -46,7 +47,7 @@ export function createTutorial(game) {
       met: (t) => entries() > 0 || (!!t.arenaOpened && !scrims().length), when: () => !!sheetBy('arena') },
     { id: 'advance', title: 'Advance the week', text: 'Time to move on. Fighters train, then every fight you entered begins. Tap Advance week.', hubOnly: true,
       target: () => tutEl(null, 'advance') || game.advBtn, met: (t) => !!t.advanced },
-    { id: 'fight', title: 'Read the fight', text: 'The crowd rewards a bold hand. When Crowd\'s Favor glows, tap it for a surge of strength. Tap a ready ultimate ring, or leave Auto ult on.', manual: 'Got it', pos: 'top', passive: true,
+    { id: 'fight', title: 'Read the fight', text: 'The crowd rewards a bold hand. When Crowd\'s Favor glows, tap it for a surge of strength. Tap a ready ultimate ring, or leave Auto ult on. Tap an enemy to focus it; hold the arena (or press 1 to 6) for orders like Press, Hold and Guard, each with a cost.' /* TACTICS: orders */, manual: 'Got it', pos: 'top', passive: true,
       target: () => { const fv = game.fightView, vis = (e) => e && e.isConnected && e.getBoundingClientRect().width > 4 ? e : null; return vis(fv && fv.favorBtn) || (fv && fv.ultBar && vis(fv.ultBar.firstElementChild)) || null; },
       met: (t) => !!t.fightSeen || fightOver() || (!!t.advanced && !game.busy), when: () => game.scene === 'fight' && game.fightView && game.fightView.phase === 'fight' },
     { id: 'results', title: 'The spoils', text: 'Gold, fame, experience and sometimes loot. Winning a duel lets you show mercy for fame, or showboat for gold. Hurt fighters need rest.', manual: 'Got it', pos: 'top', passive: true,
@@ -105,16 +106,31 @@ export function createTutorial(game) {
     s.opacity = 1; s.width = `${r.width + pad * 2}px`; s.height = `${r.height + pad * 2}px`; s.transform = `translate(${(r.left - pad).toFixed(1)}px,${(r.top - pad).toFixed(1)}px)`; s.borderRadius = `${Math.min(r.height / 2 + pad, br + pad)}px`;
   }
   function placeCard(st, tg) {
-    const W = innerWidth, Hh = innerHeight, cw = Math.min(W - 24, 360), ch = card.offsetHeight || 190, gap = 16;
-    card.style.width = cw + 'px';
+    const W = innerWidth, Hh = innerHeight, cw = Math.min(W - 24, 360), gap = 16, sat = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--lx-sat')) || 0;
+    card.style.width = cw + 'px'; card.classList.remove('lx-tut-compact'); let ch = card.offsetHeight || 190;
     let x, y, caretX = null, caretUp = false;
-    if (!tg || st.pos === 'top') { x = st.pos === 'top' && W > 760 ? 16 : (W - cw) / 2; y = st.pos === 'top' ? 64 + (parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--lx-sat')) || 0) : (Hh - ch) / 2; }
+    if (!tg || st.pos === 'top') { x = st.pos === 'top' && W > 760 ? 16 : (W - cw) / 2; y = st.pos === 'top' ? 64 + sat : (Hh - ch) / 2; }
     if (tg) {
       const r = tg.getBoundingClientRect(), cx = r.left + r.width / 2;
       if (st.pos !== 'top') x = Math.max(12, Math.min(W - cw - 12, cx - cw / 2));
       const spaceBelow = Hh - r.bottom, spaceAbove = r.top, below = st.pos === 'below' ? spaceBelow > ch + gap : st.pos === 'above' ? !(spaceAbove > ch + gap) : spaceBelow > spaceAbove;
       if (st.pos !== 'top') { y = below ? r.bottom + gap + 4 : r.top - ch - gap - 4; caretUp = below; caretX = Math.max(22, Math.min(cw - 22, cx - x)); }
       y = Math.max(8, Math.min(Hh - ch - 8, y));
+    }
+    // the card must never cover the thing it points at (or, for a card with no target, the element in st.avoid): look for a free spot, else shrink
+    const av = tg || (st.avoid && st.avoid()); const ar = av ? av.getBoundingClientRect() : null;
+    if (ar && ar.width > 4) {
+      const hit = (cx0, cy0, w, hh) => cx0 < ar.right + 6 && cx0 + w > ar.left - 6 && cy0 < ar.bottom + 6 && cy0 + hh > ar.top - 6;
+      if (hit(x, y, cw, ch)) {
+        const cx0 = Math.max(12, Math.min(W - cw - 12, ar.left + ar.width / 2 - cw / 2)), top = 8 + sat, bot = Hh - ch - 8;
+        const cands = [[(W - cw) / 2, top, 'top'], [(W - cw) / 2, bot, 'bottom'], [cx0, ar.top - ch - gap, 'above'], [cx0, ar.bottom + gap, 'below'], [12, (Hh - ch) / 2, 'left'], [W - cw - 12, (Hh - ch) / 2, 'right']];
+        let best = cands.find(([cx1, cy1]) => cy1 >= 8 && cy1 + ch <= Hh - 8 && !hit(cx1, cy1, cw, ch));
+        if (!best) { // compact card (no dots, short text) in the biggest free band
+          card.classList.add('lx-tut-compact'); ch = card.offsetHeight || 120;
+          const fit = [[(W - cw) / 2, top, 'top'], [(W - cw) / 2, Hh - ch - 8, 'bottom']]; best = fit.find(([cx1, cy1]) => !hit(cx1, cy1, cw, ch)) || (ar.top - top > Hh - ar.bottom ? fit[0] : fit[1]);
+        }
+        x = best[0]; y = best[1]; if (tg) { caretUp = best[2] === 'below' || best[2] === 'bottom'; caretX = best[2] === 'above' || best[2] === 'below' ? Math.max(22, Math.min(cw - 22, ar.left + ar.width / 2 - x)) : null; }
+      }
     }
     card.style.transform = `translate(${x.toFixed(0)}px,${y.toFixed(0)}px)`;
     const c = card.querySelector('.lx-tut-caret');

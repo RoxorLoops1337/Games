@@ -247,5 +247,81 @@ for (const fn of ['newGame', 'makeGlad', 'mkUnits', 'createFight', 'step', 'useU
   ok(/mips: 3/.test(post) && /leather\|steel/.test(post), 'medium: 3 bloom mips, leaner shadow casters');
 }
 
+// 9. fight tactics, readability, tournament presentation and the highlight reel (fight team round 3): files exist, are wired, copy has no em dashes
+{
+  const rd = (f) => readFileSync(join(root, f), 'utf8'), fv = rd('js/fightview.js'), tac = rd('js/tactics.js'), bk = rd('js/bracket.js'), rl = rd('js/reel.js'), ar = rd('core/arena.js'), fl = rd('js/flow.js'), sa = rd('js/screens/arena.js'), gm2 = rd('js/game.js'), fx2 = rd('js/fx.js');
+  for (const f of ['js/tactics.js', 'js/bracket.js', 'js/reel.js']) ok(existsSync(join(root, f)), f + ' exists');
+  for (const [n, src] of [['tactics', tac], ['bracket', bk], ['reel', rl], ['fightview', fv], ['arena core', ar]]) ok(!/—/.test(src), n + ' has no em dash');
+  ok(/createTactics\(this\)/.test(fv) && /applyTap/.test(fv) && /t\.kind === 'stance'/.test(fv) && /command\(kind, a, b\)/.test(fv) && /canOrder\(\)/.test(fv), 'orders go through tap() (recorded by sim step) and applyTap (replay)');
+  ok(/L\.command = /.test(ar) && /L\.CMD = /.test(ar) && /cmdAI/.test(ar) && /TELE_ULT/.test(ar), 'sim: LM.command, LM.CMD, foe tactics (cmdAI) and ultimate telegraphs');
+  ok(/!F\.cmdAI/.test(fv) && /replay\.snap\.cmdAI = true/.test(fv), 'live fights switch foe tactics on and the replay snapshot agrees');
+  ok(/KEYS = \['press', 'hold', 'retreat', 'guard', 'swap', 'rally'\]/.test(tac) && /T\.hotkey = /.test(tac) && /openWheel/.test(tac) && /pointerdown/.test(tac) && /setPointerCapture/.test(tac) && /stateOf\(/.test(tac), 'dock with hotkeys 1 to 6, radial wheel on long press, cooldown state');
+  ok(/Shift\+1/.test(fv) && /\^\[1-6\]\$/.test(fv), 'speed moved to Shift+1/2/3, digits 1 to 6 are orders');
+  ok(/drawFrame\(/.test(tac) && /tac-danger/.test(tac) && /\[7, 5\]/.test(tac) && /T\.links/.test(tac) && /off-screen/.test(tac), 'overlay: team rings (dashed foes), links option, danger vignette, off-screen arrows');
+  ok(/ik = Math\.max\(0\.5/.test(fx2), 'status icons shrink in close shots');
+  ok(/num\(u, text, kind\) \{/.test(fv) && /tl\.length >= 7/.test(fv), 'damage numbers: global budget and per-target declutter');
+  ok(/export function showBracket/.test(bk) && /export function vsIntro/.test(bk) && /export function crowdOdds/.test(bk) && /Bracket\.showBracket\(ctx, T, \{ mode: 'before'/.test(fl) && /mode: 'after'/.test(fl) && /bracketPreview/.test(sa), 'bracket tablet is used by tournaments and the Arena screen');
+  ok(/vsIntro\(/.test(fv) && /THEME_INTRO/.test(bk), 'fight intro per theme');
+  ok(/pickSegments/.test(rl) && /createReel\(this\)/.test(fv) && /watchReplay\(res, \{ reel: true \}\)/.test(fl) && /reel: !!o\.reel/.test(gm2) && /captureStream/.test(rl) && /MediaRecorder/.test(rl) && /R\.screenshot/.test(rl), 'highlight reel: scored moments, replay seek, MediaRecorder with screenshot fallback');
+  const tut = rd('js/tutorial.js'); ok(/orders/.test(tut) && /Tap an enemy to focus/.test(tut), 'tutorial mentions orders and focus');
+}
+// the pure reel picker (no DOM): 3 segments at most, the final blow is always in, spacing keeps the cuts apart
+{
+  const { pickSegments } = await import('../ludus_maximus_3d/js/reel.js');
+  const mom = [{ n: 100, kind: 'hit', score: 30, label: 'Crushing blow', src: 'A0', dst: 'B0' }, { n: 110, kind: 'hit', score: 25, label: 'Heavy hit', src: 'A0', dst: 'B0' }, { n: 400, kind: 'ult', score: 45, label: 'Meteor', src: 'B0' }, { n: 420, kind: 'hit', score: 22, label: 'Heavy hit', src: 'B0', dst: 'A0' }, { n: 700, kind: 'hit', score: 20, label: 'Critical blow', src: 'A0', dst: 'B0' }, { n: 900, kind: 'down', score: 100, label: 'The final blow', src: 'A0', dst: 'B0', final: true }, { n: 905, kind: 'hit', score: 5, label: 'x' }];
+  const s = pickSegments(mom, 905, 3);
+  ok(s.length === 3 && s.some((x) => x.final && x.label === 'The final blow'), 'reel keeps the final blow and at most 3 moments');
+  ok(s.every((x, i) => i === 0 || x.a >= s[i - 1].b - 1), 'reel segments are in order and do not overlap');
+  ok(s.every((x) => x.a >= 0 && x.a < x.b), 'reel windows are valid');
+  ok(pickSegments([], 100).length === 0 && pickSegments(null, 100).length === 0, 'no moments, no reel');
+  ok(pickSegments([{ n: 50, kind: 'hit', score: 20, label: 'a' }], 60).length === 1, 'a single moment makes a single cut');
+  const bm = await import('../ludus_maximus_3d/js/bracket.js').catch((e) => ({ err: e }));
+  // bracket.js touches document only inside functions: the pure model is testable under Node
+  if (bm.bracketModel) {
+    const T = { size: 8, slots: Array.from({ length: 8 }, (_, i) => ({ name: 'S' + i, lvl: 3 + i, style: 'murmillo' })), alive: [0, 1, 2, 3, 4, 5, 6, 7], hist: [[0, 3, 4, 7]], round: 1 };
+    const M = bm.bracketModel(T);
+    ok(M.n === 3 && M.rounds.length === 3 && M.rounds[0].matches.length === 4 && M.rounds[1].matches.length === 2 && M.rounds[2].matches.length === 1, 'bracket model has 4, 2 and 1 bouts');
+    ok(M.rounds[0].matches.map((m) => m.w).join() === '0,3,4,7' && M.rounds[1].matches[0].a === 0 && M.rounds[1].matches[0].b === 3 && M.rounds[1].matches[1].a === 4, 'winners advance in pair order');
+    ok(bm.roundNames(8).join() === 'Quarterfinal,Semifinal,Final' && bm.roundNames(4).join() === 'Semifinal,Final', 'round names');
+    ok(bm.crowdOdds({ lvl: 9, style: 'murmillo' }, { lvl: 3, style: 'murmillo' }) > 0.7 && Math.abs(bm.crowdOdds({ lvl: 5, style: 'thraex' }, { lvl: 5, style: 'thraex' }) - 0.5) < 1e-9, 'crowd odds follow level, not stats');
+  } else ok(false, 'bracket.js loads under Node: ' + (bm.err && bm.err.message));
+}
+
+
+// 13. perf pass 3: worker / IndexedDB textures, lazy FightView, texture memory, governor and the ?perf=1 overlay (appended by the perf team)
+{
+  const rd = (f) => readFileSync(join(root, f), 'utf8');
+  const et = rd('js/envtex.js'), gen = rd('js/envtex_gen.js'), wk = rd('js/envtex_worker.js'), gm = rd('js/game.js'), mn = rd('js/main.js'), ps = rd('js/post.js'), html = rd('index.html'), rg = rd('js/rig.js');
+  ok(/export const GEN_VERSION/.test(gen) && /export function generate\(/.test(gen) && /export function specKey/.test(gen) && !/from 'three'|document\.|window\./.test(gen), 'envtex_gen.js is pure (no three, no DOM) and versioned for the IndexedDB cache');
+  ok(/from '\.\/envtex_gen\.js'/.test(wk) && /self\.onmessage/.test(wk) && /\[r\.color\.buffer, r\.bump\.buffer\]/.test(wk), 'envtex_worker.js bakes with envtex_gen.js and transfers the buffers');
+  ok(/new Worker\(new URL\('\.\/envtex_worker\.js', import\.meta\.url\), \{ type: 'module' \}\)/.test(et) && /indexedDB\.open\('lm3d_tex'/.test(et) && /export function prepare\(/.test(et) && /export const PLAN/.test(et) && /export function configure\(/.test(et), 'envtex.js: worker pool, IndexedDB cache, prepare(), PLAN and configure()');
+  ok(/take\(spec\)/.test(et) && /generate\(spec\)/.test(et) && /export function sceneTextures/.test(et) && /export function releaseTextures/.test(et) && /export function warmTextures/.test(et), 'envtex.js: synchronous fallback (miss) and the release / re-warm helpers');
+  ok(/ET\.prepare\(ET\.PLAN\.hub\(\)/.test(mn) && /ET\.configure\(/.test(mn) && /bootfill/.test(mn) && /id="bootfill"/.test(html) && /id="bootbar"/.test(html), 'boot: textures start baking at the top of main.js, the boot overlay has a progress bar');
+  ok(/ensureFightView\(\)/.test(gm) && /prewarm\(o = \{\}\)/.test(gm) && /markInteractive\(/.test(gm) && /await this\.prewarm\(\{ immediate: true \}\)/.test(gm) && !/this\.fightView = new FightView\(\{[^}]*\}\);\n\s*try \{ const mod = await import\('\.\/hub\.js'\)/.test(gm), 'game.js: FightView is built lazily / in idle time, a fight waits for it');
+  ok(/later\(fn\)/.test(gm) && /this\.later\(\(\) => \{ this\.audio\.music\.setMode/.test(gm), 'game.js: hub audio is deferred until the game is interactive');
+  ok(/memSwap\(to\)/.test(gm) && /memPressure\(\)/.test(gm) && /ET\.releaseTextures/.test(gm) && /ET\.warmTextures/.test(gm), 'game.js: low tier releases the other scene\'s procedural textures and re-uploads them before the scene shows');
+  ok(/setScene\(n\)/.test(ps) && /setVsync\(ms, certain/.test(ps) && /hardReset\(/.test(ps) && /ceil/.test(ps) && /locked30/.test(ps), 'post.js: governor with per-scene state, vsync awareness, failed-recovery ceiling and 30 Hz lock detection');
+  ok(/sampleRefresh\(/.test(mn) && /PressureObserver/.test(mn) && /perfOverlay\(/.test(mn) && /q\.get\('perf'\)/.test(mn) && /lx-perfhud/.test(mn) && /pacing:/.test(mn), 'main.js: refresh-rate detection, thermal hint, ?perf=1 overlay, stats().pacing');
+  ok(/prep: \(\) => \{[^}]*bInv/.test(rg) && !/a\.setXYZ\(i, _w\.x/.test(rg), 'rig.js: cloak collider reads the body matrices once per step, cloth write() avoids setXYZ');
+  const bs = rd('js/beast.js');
+  ok(/class Clip \{/.test(rg) && /Clip\.prototype|^  sample\(t, P\) \{/m.test(rg) && /return new Clip\(name, keys/.test(rg) && !/c\.sample = function/.test(rg), 'rig.js: every clip is an instance of one Clip class (one shape, one prototype sample)');
+  ok(/function eulerAll\(/.test(rg) && /function slerpA\(/.test(rg) && /function mulQ\(/.test(rg) && /function scaleAdd\(/.test(rg) && /function writeJoints\(/.test(rg) && /Float64Array\(NJ \* 4\)/.test(rg), 'rig.js: the pose mixer works on flat Float64Arrays with every per-joint loop in its own small function');
+  ok(/function evalClip\(/.test(bs) && /function writeQuats\(/.test(bs) && /function composeOut\(/.test(bs) && !/j\.rotation\.set\(out\[i\]/.test(bs), 'beast.js: clips sampled over typed key arrays, joint quaternions written without Euler.set');
+  ok(/async jitWarm\(/.test(gm) && /deferMusic\(\)/.test(gm) && /noJit/.test(mn), 'game.js: JIT warm-up of the kept warm rigs and the deferred music calls');
+}
+
+{ // block 13: wave 3 (scars on bodies, fight hurt, keyboard hub, tutorial placement, trophies, bestiary art)
+  const rd = (f) => readFileSync(join(root, f), 'utf8'), gear = rd('js/gear.js'), gl = rd('js/gladiator.js'), por = rd('js/portrait.js'), hub = rd('js/hub.js'), tut = rd('js/tutorial.js'), sk = rd('js/screens/sk.js'), fl = rd('js/flow.js'), gly = rd('js/glyphs.js'), css = rd('css/ui.css'), ven = rd('js/screens/venatio.js'), more = rd('js/screens/more.js');
+  ok(/export function addMarks\(rig, g\)/.test(gear) && /gash_scar/.test(gear) && /lost_eye/.test(gear) && /old_ribs/.test(gear) && /stiff_arm/.test(gear) && /bad_knee/.test(gear) && /ringing/.test(gear) && /burn/.test(gear) && /whip/.test(gear) && /addMaterial\('linen'/.test(gear), 'gear.js: every scar id and bandages are drawn');
+  ok(/addMarks\(rig, o\.g\)/.test(gear) && /, g \}\);/.test(gl) && /an\.update = \(dt\)/.test(gl), 'gladiator.js passes the record to the gear and layers the limp');
+  ok(/scars \|\| \[\]\)\.join/.test(por) && /wounds \|\| \[\]\)\.filter/.test(por), 'portrait cache key includes scars and wounds');
+  ok(/markSig/.test(hub) && /onKeyDown/.test(hub) && /aria-live/.test(hub) && /lx-bl-focus/.test(hub) && /pointerdown/.test(hub) && /wheel/.test(hub), 'hub.js: keyboard orbit with aria-live hint and focus ring, pointer input kept');
+  ok(/avoid:/.test(tut) && /lx-tut-compact/.test(tut) && /lx-tut-compact/.test(css), 'tutorial.js: card avoids the element it points at');
+  ok(/hurtKind/.test(sk) && /ax-hurtbtn/.test(sk) && /hurtRisk/.test(sk) && /ids\.hurt/.test(rd('js/screens/arena.js')) && /entryReady/.test(fl) && /hurtResolve/.test(fl) && /hurtMark/.test(rd('js/screens/modes.js')) && /hurtMark/.test(ven), 'fight hurt: picker option, entry, flow and mode wiring');
+  ok(/export function glyph\(/.test(gly) && /export function emblem\(/.test(gly) && /export function trophyIcon/.test(gly) && /emblem\(b\.kind/.test(ven) && /glyph\(trophyIcon/.test(more) && /trophyProgress/.test(more) && /Cer\.trophy/.test(sk), 'glyphs, emblems, trophy progress and the ceremony on unlock are wired');
+  for (const [n, t] of [['glyphs.js', gly], ['gear.js', gear], ['css', css]]) ok(!t.includes('\u2014'), n + ': no em dashes');
+  ok(/\.lx-bl-grid/.test(css) && /\.lx-bl-hubhint/.test(css) && /\.lx-bl-kills/.test(css), 'css/ui.css: lx-bl block present');
+}
+
 console.log(`ludus_maximus_3d structure: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

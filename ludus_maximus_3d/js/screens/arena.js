@@ -3,6 +3,7 @@ import { U, h, D, L, fmt, openScreen, sec, card, row, col, note, hint, kv, medal
 import { startPit, startHorde, startChamp, startBounty, pitState, hordeState, champState, bountyState } from './modes.js';
 import { legendsSheet } from './legacy.js';
 import { venatioCard } from './venatio.js'; // BEAST: Venatio, the beast hunts
+import { showBracket } from '../bracket.js'; // BRACKET: marble bracket preview
 
 const KIND = {
   duel: { ico: 'sword', k: '#7a5222', label: 'Duel' },
@@ -90,9 +91,16 @@ function eventCard(ctx, ev, lv, draw) {
   if (en) {
     foot.append(col([h('div', 'ax-b', 'ENTERED'), h('div', 'ax-sub', en.ids.map((id) => (ctx.gOf(id) || { name: '?' }).name).join(', '))], 'ax-grow'), U.button({ label: 'Withdraw', variant: 'ghost', onClick: () => withdraw(ctx, ev, draw) }));
   } else {
-    foot.append(U.button({ label: 'Scout', variant: 'ghost', icon: 'scroll', onClick: () => dossier(ctx, ev, 0) }), h('span', 'ax-grow'), (() => { const eb = U.button({ label: 'Enter', variant: 'gold', icon: 'sword', onClick: () => enter(ctx, ev, lv, draw) }); eb.dataset.tut = 'enter'; if (ev.kind === 'duel') eb.dataset.tutKind = 'duel'; return eb; })());
+    foot.append(U.button({ label: 'Scout', variant: 'ghost', icon: 'scroll', onClick: () => dossier(ctx, ev, 0) }), ...(ev.kind === 'tourney' || ev.kind === 'grand' ? [U.button({ label: 'Bracket', variant: 'ghost', icon: 'fame', onClick: () => bracketPreview(ctx, ev) })] : []), h('span', 'ax-grow'), (() => { const eb = U.button({ label: 'Enter', variant: 'gold', icon: 'sword', onClick: () => enter(ctx, ev, lv, draw) }); eb.dataset.tut = 'enter'; if (ev.kind === 'duel') eb.dataset.tutKind = 'duel'; return eb; })());
   }
   return card([head, tags, opps, rew, foot], en ? 'gold' : ev.kind === 'grand' ? 'gold' : ev.kind === 'tourney' ? 'purple' : '');
+}
+
+/** BRACKET: the seeding as announced, on the marble tablet. Your champion is the entered fighter, else your best. */
+function bracketPreview(ctx, ev) {
+  const S = ctx.S, lm = L(), en = S.entries[ev.key], g = (en && ctx.gOf(en.ids[0])) || S.glads.slice().sort((a, b) => b.lvl - a.lvl)[0];
+  if (!g) { U.toast('Recruit a gladiator to see where you would stand.', { kind: 'info' }); return; }
+  ctx.sfx('uiTap'); showBracket(ctx, lm.tourneyInit(S, ev, g), { mode: 'preview', ev });
 }
 
 function oppButton(ctx, ev, i, lv) {
@@ -160,7 +168,7 @@ async function enter(ctx, ev, lv, draw) {
     note(n > 1 ? `Pick ${n} fighters. Style fit and bonds matter.` : bracket ? 'Pick your champion. Wounds carry over between bracket rounds.' : 'Pick your fighter.'),
   ]);
   const ids = await pickFighters(ctx, {
-    title: ev.title, intro, n,
+    title: ev.title, intro, n, hurtKind: ev.kind, // WAVE3: fight hurt
     info(g) {
       if (g.inj > 0) return { reason: `Injured ${g.inj}w` };
       if (lm.busy(S, g, ev.week)) return { reason: 'Entered elsewhere that week' };
@@ -186,7 +194,7 @@ async function enter(ctx, ev, lv, draw) {
     confirm() { const short = ev.fee - S.gold; return { label: `Enter for ${fmt(ev.fee)} gold`, disabled: short > 0, sub: short > 0 ? `Need ${fmt(short)} more gold` : undefined }; },
   });
   if (!ids) return;
-  const e = lm.enter(S, ev, ids.slice(), 'bal');
+  const e = lm.enter(S, ev, ids.slice(), 'bal', { hurt: ids.hurt || [] }); // WAVE3
   if (e) { ctx.sfx('uiError'); U.toast(e, { kind: 'bad' }); return; }
   ctx.save(); ctx.refresh(); ctx.sfx('uiConfirm'); U.toast('Entered! See you on games day.', { kind: 'good', ico: 'check' }); if (draw) draw();
 }

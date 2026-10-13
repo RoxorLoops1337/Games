@@ -5,6 +5,7 @@
 //   eulogy(ctx, o)              Promise, retirement / fallen farewell (o.body = the caller's own report node)
 // Every entry point is wrapped so a ceremony can never break the weekly flow. No em dashes. Styles: .lx-cer-* in css/ui.css.
 import * as U from './ui_kit.js';
+import { glyph, trophyIcon } from './glyphs.js'; // WAVE3
 
 const h = U.h;
 const fmt = (n) => Math.round(n).toLocaleString('en-US');
@@ -62,10 +63,11 @@ const CUP = '<svg viewBox="0 0 64 64" class="lx-cer-cupsvg" aria-hidden="true"><
 export const trophy = safe(async (ctx, list) => {
   const body = h('div', 'lx-cer-troph');
   list.forEach((x) => {
-    const cup = h('div', 'lx-cer-cup'); cup.innerHTML = CUP;
+    const cup = h('div', 'lx-cer-cup'); cup.innerHTML = x.ic || x.id ? `<div class="lx-bl-cmedal">${glyph(trophyIcon(x), { size: 54, sw: 1.7 })}</div>` : CUP; // WAVE3: per-trophy glyph
     const chips = h('div', 'lx-cer-chips', [x.r && x.r.gold ? h('span', 'lx-cer-chip gold', `+${x.r.gold} gold`) : null, x.r && x.r.fame ? h('span', 'lx-cer-chip fame', `+${x.r.fame} fame`) : null, x.r && x.r.laurels ? h('span', 'lx-cer-chip laurel', `+${x.r.laurels} laurels`) : null]);
     body.append(h('div', 'lx-cer-tr', [h('div', 'lx-cer-cupwrap', [h('i', 'lx-rays'), cup]), h('div', 'lx-cer-trname lx-engrave', x.n), h('div', 'lx-cer-trdesc', x.d), chips]));
   });
+  try { const D = globalThis.LM_D, S = ctx.S, got = Object.keys(S.trophies || {}).length; if (D && D.TROPHIES) body.append(h('div', 'lx-bl-tcount', `${got} of ${D.TROPHIES.length} trophies in your hall`)); } catch (e) { /* optional */ }
   const p = ctx.ask({ title: list.length > 1 ? 'Trophies earned' : 'Trophy earned', body, actions: [{ label: 'Magnificent', value: 'ok', variant: 'gold', icon: 'star' }], dismiss: 'ok' });
   tag('lx-cer-scrim');
   sfx(ctx, 'levelUp'); setTimeout(() => { sfx(ctx, 'crowdRoar', { gain: 0.8 }); confetti({ n: 70, y: 0.4 }); confetti({ n: 40, mode: 'rain' }); }, 380);
@@ -84,7 +86,7 @@ export const seasonFinale = safe(async (ctx, fin) => {
   if (r.mvp) { let ph = null; const mg = S.glads.find((x) => x.name === r.mvp.name); try { ph = mg && ctx.portrait ? ctx.portrait(mg, 64) : null; } catch (e) { ph = null; } body.append(h('div', 'lx-cer-mvp', [ph ? h('div', 'lx-cer-mvpph', ph) : U.icon('star', 28), h('div', '', [h('small', '', 'Most valuable gladiator'), h('b', '', `${r.mvp.name}`), h('span', '', ` ${r.mvp.w} win${r.mvp.w === 1 ? '' : 's'}`)])])); }
   if (r.rival) body.append(h('div', 'lx-cer-riv', [h('small', '', 'Rivals of the year'), h('b', '', `${r.rival.a} and ${r.rival.b}`), h('span', '', ` +${r.rival.fame} fame`)]));
   body.append(h('div', 'lx-cer-next', `Season ${fin.season} awaits. The rivals have grown stronger.`));
-  try { ctx.audio.music.setMode('victory', { fade: 0.3 }); } catch (e) { /* locked */ }
+  try { ctx.audio.music.setMode('season', { fade: 0.3 }); } catch (e) { /* locked */ }
   const p = ctx.ask({ title: 'Season finale', body, actions: [{ label: `Onward to season ${fin.season}`, value: 'ok', variant: 'gold', icon: 'arena' }], dismiss: 'ok' });
   tag('lx-cer-scrim'); tag('lx-cer-fin');
   sfx(ctx, 'horn'); setTimeout(() => sfx(ctx, 'crowdRoar'), 700);
@@ -111,6 +113,6 @@ export const eulogy = safe(async (ctx, o) => {
     h('div', 'lx-cer-quote', `"${pickLine(kind, name, (lg.w || 0) + (lg.l || 0))}"`), o.body || null]);
   const p = ctx.ask({ title: kind === 'fallen' ? 'In memoriam' : 'Hall of Legends', body, actions: o.actions || [{ label: 'Farewell', value: 'ok', variant: 'gold' }], dismiss: o.dismiss === undefined ? 'ok' : o.dismiss, _cer: true });
   tag('lx-cer-scrim'); tag('lx-cer-eulscrim');
-  if (kind === 'fallen') { sfx(ctx, 'deathThud', { gain: 0.6 }); setTimeout(() => sfx(ctx, 'crowdGasp'), 300); } else { sfx(ctx, 'horn', { gain: 0.6 }); setTimeout(() => sfx(ctx, 'crowdChant', { gain: 0.8 }), 900); setTimeout(() => confetti({ n: 36, mode: 'rain', colors: ['#f2c14e', '#fff3c8', '#d9b27c'] }), 900); }
+  if (kind === 'fallen') { try { ctx.audio.music.setMode('elegy', { fade: 0.6 }); p.then(() => { try { ctx.audio.music.setMode('ludus', { fade: 2 }); } catch (e) { /* locked */ } }); } catch (e) { /* locked */ } sfx(ctx, 'deathThud', { gain: 0.6 }); setTimeout(() => sfx(ctx, 'crowdGasp'), 300); } else { sfx(ctx, 'horn', { gain: 0.6 }); setTimeout(() => sfx(ctx, 'crowdChant', { gain: 0.8 }), 900); setTimeout(() => confetti({ n: 36, mode: 'rain', colors: ['#f2c14e', '#fff3c8', '#d9b27c'] }), 900); }
   return p;
 });

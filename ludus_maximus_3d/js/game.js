@@ -11,7 +11,9 @@ import { createTitle, titleState } from './title.js'; // ONBOARDING
 import { createTutorial } from './tutorial.js'; // ONBOARDING
 import * as Cer from './ceremonies.js'; // ONBOARDING
 import { createPhoto } from './photo.js'; // PHOTO
+import * as ET from './envtex.js'; // PERF: texture release / re-warm between scenes
 
+const bm = (k) => { const b = window.__bootT; if (b) b[k] = Math.round(performance.now() - b.t0); };   // boot phase marks (main.js stats().boot)
 const D = () => globalThis.LM_D, L = () => globalThis.LM;
 const SCREENS = ['building', 'roster', 'profile', 'recruit', 'arena', 'market', 'armory', 'more', 'world', 'infirmary', 'sponsors', 'events']; // WAVE2 infirmary/sponsors/events (screens/*.js)
 // 'world' = calendar, rival ludi, barracks, memorial (screens/world.js)
@@ -20,9 +22,11 @@ const TUT_SHEETS = [[/^Roster$/, 'roster'], [/^The Arena$/, 'arena'], [/^(Choose
 const tutKey = (title) => { const t = String(title || ''); const r = TUT_SHEETS.find(([re]) => re.test(t)); return r ? r[1] : ''; };
 
 export class Game {
-  constructor({ renderer, camera, post, audio, ui, tier }) {
+  constructor({ renderer, camera, post, audio, ui, tier, tex }) {
     Object.assign(this, { renderer, camera, post, audio, ui, tier });
+    this.tex = tex || {}; this.fightView = null; this.warming = false; this.memLog = { releases: 0, freedMB: 0, warms: 0 }; // PERF: FightView is built lazily, see ensureFightView
     this.S = null; this.busy = false; this.scene = 'none'; this.mods = {}; this.modals = [];
+    this.deferMusic();
     this.hud = document.createElement('div'); this.hud.className = 'lx-hud fv-main-hud'; this.hud.style.display = 'none'; this.hud.setAttribute('role', 'region'); this.hud.setAttribute('aria-label', 'Ludus controls'); // QA
     ui.append(this.hud);
     this.ctx = this.makeCtx();
@@ -32,10 +36,13 @@ export class Game {
     try { await this.init0(); } catch (e) { this.fatal(e); throw e; } // QA: a failed start shows a way out instead of a frozen "Forging the arena" screen
   }
   async init0() {
-    this.fightView = new FightView({ renderer: this.renderer, post: this.post, camera: this.camera, audio: this.audio, host: this.ui, tier: this.tier });
+    // PERF: the hub (title backdrop) comes first; its procedural textures were baked in a worker / read from IndexedDB while the modules loaded.
+    // The FightView (arena, crowd, fx, gore) is built in idle time after the hub is interactive (prewarm) or on the first fight (ensureFightView).
+    try { await this.tex.hub; } catch (e) { /* the make* calls bake synchronously on a miss */ }
+    bm('texHub');
     try { const mod = await import('./hub.js'); this.hub = mod.createHub({ renderer: this.renderer, camera: this.camera, post: this.post, audio: this.audio, tier: this.tier }); }
     catch (e) { console.warn('hub.js unavailable, using stub', e && e.message); this.hub = createHubStub({ renderer: this.renderer, camera: this.camera, audio: this.audio, tier: this.tier }); }
-    this.hub.onPick = (sel) => this.onPick(sel);
+    bm('hubBuilt'); this.hub.onPick = (sel) => this.onPick(sel);
     this.buildHud(); this.guardErrors();
     this.tutorial = createTutorial(this); // ONBOARDING
     import('./screens/more.js').then((m) => m.applyPrefs && m.applyPrefs(this.ctx)).catch(() => {});
@@ -158,8 +165,109 @@ export class Game {
     if (this.scene === name) return;
     if (this.scene === 'hub') this.hub.exit && this.hub.exit();
     this.scene = name;
-    if (name === 'hub') { this.post.setScene(this.hub.scene); this.hub.enter(this.S); this.hud.style.display = 'flex'; this.audio.music.setMode('ludus', { fade: 1.2 }); this.audio.crowd(0); this.refresh(); this.tutorial && this.tutorial.maybeStart(); /* ONBOARDING */ }
-    else if (name === 'fight') { this.post.setScene(this.fightView.scene); this.hud.style.display = 'none'; }
+    if (name === 'hub') { this.memSwap('hub'); this.post.setScene(this.hub.scene); this.hub.enter(this.S); this.hud.style.display = 'flex'; this.later(() => { this.audio.music.setMode('ludus', { fade: 1.2 }); this.audio.crowd(0); }); this.refresh(); this.tutorial && this.tutorial.maybeStart(); /* ONBOARDING */ }
+    else if (name === 'fight') { const fv = this.ensureFightView(); this.memSwap('fight'); this.post.setScene(fv.scene); this.hud.style.display = 'none'; }
+  }
+
+  // ---------------------------------------------------------------- PERF: lazy FightView, idle warm-up, audio deferral, texture memory
+  /** audio work (AudioContext graph, 170 ms of IR / noise synthesis) is not needed to show the hub: it runs once the game is interactive (markInteractive) or at once if that already happened */
+  later(fn) { if (this.interactive) { this.drainLater(); try { fn(); } catch (e) { console.warn('audio', e && e.message); } } else (this._later || (this._later = [])).push(fn); }
+  drainLater() { for (const f of (this._later || []).splice(0)) { try { f(); } catch (e) { console.warn('audio', e && e.message); } } }
+  /** the title (title.js) and the hub ask for music while the game boots: those calls are queued and replayed in order once the game is interactive, so the AudioContext graph (about 170 ms) is not built behind the boot overlay */
+  deferMusic() {
+    const m = this.audio && this.audio.music; if (!m) return;
+    for (const k of ['setMode', 'setIntensity']) {
+      const f = m[k]; if (typeof f !== 'function') continue;
+      m[k] = (...a) => { if (this.interactive) { this.drainLater(); return f.apply(m, a); } (this._later || (this._later = [])).push(() => f.apply(m, a)); return true; };
+    }
+  }
+  /** called by main.js when the boot overlay lifts: flushes deferred audio work in idle time and starts the background FightView build + shader warm-up */
+  markInteractive(o = {}) {
+    if (this.interactive) return; this.interactive = true;
+    const run = () => this.drainLater();
+    (typeof requestIdleCallback === 'function' ? (f) => requestIdleCallback(f, { timeout: 1500 }) : (f) => setTimeout(f, 300))(run);
+    if (o.prewarm !== false) this.prewarm();
+  }
+  /** the FightView is built on first use; building it must not disturb whatever the composer is currently showing */
+  ensureFightView() {
+    if (this.fightView) return this.fightView;
+    const prev = this.post.composer.passes[0].scene, t0 = performance.now();
+    this.fightView = new FightView({ renderer: this.renderer, post: this.post, camera: this.camera, audio: this.audio, host: this.ui, tier: this.tier });
+    if (prev) this.post.setScene(prev);
+    { const h = this.fightView.hud; if (h && h.parentNode === this.ui && this.hud.nextSibling !== h) this.ui.insertBefore(h, this.hud.nextSibling); }   // same stacking slot as when it was built at boot (right after the hub HUD, under tutorial / title layers)
+    if (this._rw) this.fightView.resize(this._rw, this._rh);
+    this.fvBuildMs = Math.round(performance.now() - t0);
+    try { this.onFightView && this.onFightView(this.fightView); } catch (e) { console.warn('onFightView', e && e.message); }
+    return this.fightView;
+  }
+  /**
+   * Build the FightView and compile its shaders while the player looks at the title / hub. `immediate` skips the idle wait (a fight is about to start).
+   * Resolves when the arena is ready to fight in. The main loop pauses while `warming` (warm() moves the camera and the composer scene).
+   */
+  prewarm(o = {}) {
+    if (o.immediate) { this._pwNow = true; this._pwWake && this._pwWake(); }
+    if (this._pw) return this._pw;
+    const pause = (ms) => new Promise((res) => { if (this._pwNow) return res(); const t = setTimeout(res, ms); this._pwWake = () => { clearTimeout(t); res(); }; });
+    const idle = () => new Promise((res) => { if (this._pwNow || typeof requestIdleCallback !== 'function') return pause(60).then(res); requestIdleCallback(() => res(), { timeout: 2500 }); });
+    return (this._pw = (async () => {
+      await pause(o.delay === undefined ? 400 : o.delay); await idle();
+      try { await this.tex.arena; } catch (e) { /* sync bake on a miss */ }
+      const t0 = performance.now();
+      this.ensureFightView(); await idle();
+      if (!this.noWarm && this.fightView.warm) {
+        const sc = this.post.composer.passes[0].scene; this.warming = true;
+        try { await this.fightView.warm(); } catch (e) { console.warn('warm', e && e.message); }
+        finally { this.warming = false; this.post.setScene(sc); if (this.scene !== 'fight') { try { this.post.render(0, 0); } catch (e) { /* the loop redraws */ } } }   // put the hub back on the canvas before the next paint
+      }
+      if (!this.noJit) await this.jitWarm(this._pwNow ? 120 : 200);
+      this.warmMs = Math.round(performance.now() - t0); this._pwDone = true;
+      this.onWarmed && this.onWarmed();
+    })());
+  }
+
+  /**
+   * JIT warm-up: V8 compiles Animator.update, the pose samplers and the cloth step from what they have run so far. A fight started cold runs them in the interpreter and baseline tiers
+   * (every double result boxed: 15 to 30 KB of garbage per frame in the first seconds, measured) until they tier up, and every new rig set can throw optimised code away.
+   * So the kept warm rigs (FightView.warm) walk, run, strafe, attack, get hurt and cross-fade for `frames` frames in small time slices before the first fight. Idle time only.
+   */
+  async jitWarm(frames = 200) {
+    const rigs = this.fightView && this.fightView.warmRigs; if (!rigs || !rigs.length) return;
+    const t0 = performance.now(); let n = 0; const dt = 1 / 30, atk = ['attack1', 'attack2', 'attack3'];
+    while (n < frames) {
+      const t1 = performance.now();
+      while (n < frames && performance.now() - t1 < 7) {   // 7 ms slices: the page stays responsive
+        for (let i = 0; i < rigs.length; i++) {
+          const r = rigs[i], A = r.animator, ph = n * 0.12 + i, k = (n + i * 7) % 90;
+          A.setMove(k < 20 ? 0 : k < 45 ? 1.4 : 3.4, k > 60 ? 0.5 : 0);
+          if (k === 3 || k === 50) { try { A.play(atk[(n + i) % 3]); } catch (e) { /* style without that clip */ } }
+          if (k === 30) A.hurt({ x: 0.4, z: 0.9 }, 1);
+          if (k === 70) A.setState('taunt', 0.2); else if (k === 85 && A.state !== 'move') A.setState('move', 0.2);
+          r.root.rotation.y = Math.sin(ph * 0.3); r.update(dt);
+        }
+        n++;
+      }
+      await new Promise((res) => setTimeout(res, 0));
+    }
+    for (const r of rigs) { const A = r.animator; A.setMove(0, 0); A.action = null; A.add = null; A.add2 = null; A.snapW = 0; A.state = 'move'; A.dead = false; A.hasLast = false; r.root.rotation.y = 0; try { r.update(dt); } catch (e) { /* ignore */ } }
+    this.jitMs = Math.round(performance.now() - t0);
+  }
+
+  /** low tier / low memory phones: the GPU copies of the OTHER scene's procedural textures are released when the resident total passes the budget, and re-uploaded
+   *  (before the first frame, so there is no visible pop) when that scene comes back. The CPU bytes stay, three re-uploads from them. */
+  memPressure() {
+    const m = navigator.deviceMemory || 0, weak = this.tier === 'low' || (m && m <= 3);   // phones on the low tier, or any device that reports <= 3 GB
+    if (!weak) return false;
+    const mem = this.renderer.info.memory;   // geometries / textures alive in this context; the procedural ones are counted in MB (they are the ones we can give back)
+    return mem.textures >= 24 || ET.residentMB(this.renderer) >= (m && m <= 2 ? 4 : 6);
+  }
+  memSwap(to) {
+    const fv = this.fightView, hub = this.hub; if (!fv || !hub || !hub.scene || this._memOff) return;
+    const mine = ET.sceneTextures(to === 'fight' ? fv.scene : hub.scene), other = ET.sceneTextures(to === 'fight' ? hub.scene : fv.scene), r = this.renderer;
+    if (this.memPressure()) {
+      const drop = new Set([...other].filter((t) => !mine.has(t))), mb = ET.releaseTextures(r, drop);
+      if (mb > 0) { this.memLog.releases++; this.memLog.freedMB += mb; }
+    }
+    const n = ET.warmTextures(r, mine); if (n) this.memLog.warms += n;
   }
 
   frame(dt, t) {
@@ -168,11 +276,13 @@ export class Game {
     else if (this.scene === 'fight') this.fightView.frame(dt, t);
     this.photo && this.photo.frame(dt, t); // PHOTO: fab visibility + free camera override (after the scene moved the camera)
   }
-  resize(w, h) { this.hub && this.hub.resize && this.hub.resize(w, h); this.fightView && this.fightView.resize(w, h); }
+  resize(w, h) { this._rw = w; this._rh = h; this.hub && this.hub.resize && this.hub.resize(w, h); this.fightView && this.fightView.resize(w, h); }
 
   /** play one fight in the 3D arena; resolves with the 2D-compatible result object */
   async playFight(gl, opps, stance, o = {}) {
     const S = this.S, F = buildFight(S, gl, opps, stance, o);
+    if (!this._pwDone) U.toast('The arena is being readied...', { kind: 'info', ms: 2200 });
+    await this.prewarm({ immediate: true });   // PERF: usually long done (idle); if the player is fast, the arena finishes building / compiling here
     this.setScene('fight');
     this.fightView.setMeta && this.fightView.setMeta(F.meta);
     const r = await this.fightView.start(F, { league: (o.ev && o.ev.league) || 0, ev: o.ev, augs: o.augs });
@@ -181,14 +291,14 @@ export class Game {
   }
 
   /** re-run a finished fight deterministically (same seed, same snapshot, same taps) in the 3D arena */
-  async watchReplay(res) {
+  async watchReplay(res, o = {}) { // REEL: o.reel plays the highlight reel instead of the full replay
     const R = res && res.F && res.F.replay; if (!R || !R.snap) return;
-    const F2 = structuredClone(R.snap); F2.replay = R; this.setScene('fight');
-    await this.fightView.start(F2, { replay: R, league: res.F.meta ? res.F.meta.league : 0, noSplash: true });
+    const F2 = structuredClone(R.snap); F2.replay = R; await this.prewarm({ immediate: true }); this.setScene('fight');
+    await this.fightView.start(F2, { replay: R, league: res.F.meta ? res.F.meta.league : 0, noSplash: true, reel: !!o.reel });
     const lm = L(); lm.setRandom(null);
   }
 
-  returnToHub() { this.fightView.hud.style.display = 'none'; this.fightView.dispose(); this.setScene('hub'); }
+  returnToHub() { if (this.fightView) { this.fightView.hud.style.display = 'none'; this.fightView.dispose(); } this.setScene('hub'); }
 
   // ---------------------------------------------------------------- HUD
   buildHud() {

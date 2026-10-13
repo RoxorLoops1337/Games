@@ -1,113 +1,119 @@
 ---
 name: ludus3d-audio
-description: Ludus Maximus 3D only. Procedural Web Audio engine for js/audio.js (no audio files): sfx catalog with recipes, crowd bed, adaptive music (ludus, prep, arena, victory, defeat), mix levels, autoplay/iOS rules, and the arena.js event to sound mapping. Reference code and verifier live in ludus_maximus_3d/lab/.
+description: Ludus Maximus 3D only. Procedural Web Audio engine for js/audio.js (no audio files): sfx catalog with recipes, weapon x armour variation, spatial sfx (HRTF-like pan, camera distance), crowd bed that follows the fight, adaptive music for 11 modes (ludus by time of day, prep, arena, beast, boss, victory, defeat, title, results, season, elegy), mastering chain and scene reverb, voice caps, and the offline analysis tool tools/ludus3d_audio_check.mjs that measures loudness, clipping, spectrum, seams and node leaks. Read before touching js/audio.js or any audio call.
 ---
 
 # Ludus 3D audio (procedural, zero files)
 
-Reference implementation (tested, copy it into `js/audio.js`, keep the API): `ludus_maximus_3d/lab/ref/audio_ref.js`.
-Listen: `lab/audio_ref.html` (serve repo root, click Unlock, then any button). Verify: `node ludus_maximus_3d/lab/audio_ref_verify.mjs [outDir]` (Chromium, OfflineAudioContext, asserts non-silent / no clip / duration / spectrum / seed determinism / intensity monotonic, prints table, writes WAVs). Re-run it after every level or recipe change; it must say ALL OK.
-Sources of knowledge: Web Audio spec recipes, Farnell "Designing Sound" style (noise + filters + envelopes), Karplus-Strong; written from experience, no live web research was possible.
+Live engine: `ludus_maximus_3d/js/audio.js` (about 1200 lines, one file, ES module, `createAudio(opts)`).
+Listen: `lab/audio_lab.html` (serve repo root, click Unlock; every sfx, music mode, scene, pan, distance, weapon and armour is a control).
+Verify: `node tools/ludus3d_audio_check.mjs` renders everything OFFLINE (OfflineAudioContext in headless Chromium), measures the buffers and writes `tools/ludus3d_audio_report.md` (before/after against `tools/ludus3d_audio_baseline.json`). Options: `--quick` (no 60 s burst, no mixes), `--sfx a,b`, `--modes arena,ludus`, `--no-sfx`, `--no-music`, `--wav DIR` (write WAVs to listen), `--engine FILE` (check another engine file, e.g. the previous version), `--save-baseline`. Full run takes about 15 to 25 minutes, `--quick --no-sfx` about 40 s. Re-run after every recipe or level change.
+The old reference `lab/ref/audio_ref.js` and `lab/audio_ref_verify.mjs` are the first generation; the live engine has replaced them.
+`node tests/ludus_maximus_3d_structure.test.mjs` greps audio.js for `def('name'`, `const ambient = `, `music.setHubTime`, `function attachUi`, `SFX_NAMES` entries: keep those literal strings.
 
-## API
+## API (every name stays; new ones marked +)
 
 ```js
 import { createAudio } from './audio.js';
-const A = createAudio({ seed });        // never throws; all calls are no-ops without AudioContext (Node, old browsers)
-A.unlock();                             // call inside the first pointerdown/keydown/touchend handler. returns Promise<bool>
-A.setMaster(v) A.setMusic(v) A.setSfx(v)             // 0..1 (sfx slider also drives crowd)
-A.sfx(name, { pan:-1..1, gain:1, pitch:1, voice:0..3, heavy:bool, element, kind, when })  // returns false if dropped
-A.crowd(level)                          // continuous bed, 0 stops (fades), call every frame or on change, smoothed internally
-A.duck(amount, hold)                    // sidechain duck of music (big sfx already do it)
-A.music.setMode('ludus'|'prep'|'arena'|'victory'|'defeat', { fade })  // crossfade, same mode = no-op
-A.music.setIntensity(0..1)              // smoothed, arena layers follow it
-A.music.stop(fade) A.music.seed(n)
+const A = createAudio({ seed });        // never throws; no-ops without AudioContext. opts.ctx/now/enforce/log are for tests
+A.unlock()                              // inside a user gesture; starts a silent buffer too (iOS); returns Promise<bool>
+A.setMaster(v) A.setMusic(v) A.setSfx(v)             // 0..1; sfx slider also drives crowd and ambience; 0 is silence (verified)
+A.sfx(name, { pan:-1..1, gain, pitch, voice:0..3, heavy, element, kind, when,
+              vel:0..1,                 // + hit strength: level 0.55..1 and brightness
+              weapon:'sword|spear|axe|mace|dagger', armor:'none|leather|bronze|mail|plate',   // + swordHit timbre; absent = armour round-robin
+              pos:[x,y,z], dist,        // + world position (needs setListener) or plain distance in metres: pan, level, air absorption, wetter
+              surface:'sand|stone' })   // + footstep
+A.setListener({ pos:[x,y,z], yaw })     // + camera. right vector = (cos yaw, -sin yaw); or { pos, right:[rx,rz] }; setListener(null) turns it off
+A.setScene('arena'|'hub'|'indoor', {fade, lock})   // + reverb space; music.setMode picks one by itself (below)
+A.crowd(level) A.duck(amount, hold)
+A.music.setMode(mode, { fade, at, sync, keepScene })   // crossfade (equal power); default waits for the old mode's next bar line if within 2.6 s
+A.music.setIntensity(0..1)  A.music.setHubTime(hour, night)  A.music.stop(fade)  A.music.seed(n)
+A.music.accent('hit'|'crit'|'down')    // + lands a tymp / cymbal+taiko / low impact on the next 8th
+A.ambient {start, stop, update(state), thunder(delay)}   A.attachUi(root, {hover, tap})   A.ui.{hover,tap,select,open,close}
+A.suspend() A.resume()                  // suspend() is a deliberate pause: gestures and visibility changes will NOT resume it until resume()
+A._stats()                              // + strips, voices, players, errors, lastError (swallowed exceptions; tests read it)
 ```
-Graph: sources -> sfx/music/crowd buses -> master -> compressor (glue, -16 dB, 4:1) -> limiter (-2 dB, 20:1, 1 ms) -> 0.92 trim -> destination. Music bus has a duck gain; music and crowd get convolver sends (procedural 2.3 s colosseum IR, 28 ms predelay, darkening tail); sfx have a per-sound `wet` send. MUSIC_TRIM 0.32 keeps music about 9 dB under hits.
+Music modes: `ludus prep arena victory defeat` (old) and + `title results season elegy beast boss`. Reverb scene by mode: hub for ludus/results, indoor for title/elegy, arena stone hall for the rest.
 
-## Level / mix table (post limiter, measured; peaks in dBFS)
+## Graph and mastering
 
-| group | peak | notes |
-|---|---|---|
-| ui tap/confirm/coin | -20 to -11 | tap quietest |
-| footstep, swish, miss, dust | -18 to -9 | spam sounds, keep low |
-| swordHit -11, shieldBlock -10, spear/bash -9..-8 | -11 to -8 | main combat layer |
-| grunt/hurt/deathCry | -10 to -5 | voices; hurt loudest |
-| crit, deathThud, drum | -6 to -4 | accent |
-| crowd one-shots | -10 to -4 | roar loudest |
-| crowd bed | -20 (0.2) / -11 (0.6) / -5 (1.0) | sits under everything |
-| fanfare, horn, gate, ults | -6 to -3 | duck music 45-55% |
-| music | -14 to -5 peak, about -30 to -21 RMS | arena rms rises about 9 dB from intensity 0 to 1 |
-Hard rule: nothing above -3 dBFS (limiter threshold -2). Sub bass below 60 Hz is inaudible on phones: every thump adds a 2x partial and drones start at 65+ Hz.
+sfx/crowd strips + music bus -> master -> 22 Hz high-pass (DC, sub rumble) -> makeup -> glue compressor (-18 dB, 3.5:1) -> safety limiter (-3 dB, 20:1, 1 ms) -> tanh soft clip -> 0.94 trim -> destination. Nothing leaves above about -3 dBFS (measured). Music has a duck gain (shallow duck never cancels a deeper one) and two quiet Haas copies (19 and 27 ms, panned +-0.75) for gentle width. Two reverbs: stone hall IR (2.3 s, 28 ms predelay, darkening) and open-air IR (1.1 s, building slap); `applyScene` crossfades their returns; music stems and sfx strips send into the same input.
 
-## Recipes (all in audio_ref.js, one function each)
+Loudness: `MUSIC_TRIM` and `MAKEUP` at the top of audio.js were calibrated with the fight mix in the tool report (target about -16 LUFS integrated, K-weighted, in a busy fight; calm fight a bit lower). Change them, re-run, read the "Fight mix" table.
 
-Primitives: `burst()` = looped noise buffer (white/pink/brown, 3 s, seamless) -> biquad with exponential frequency sweep -> AR gain. `thump()` = sine pitch drop + octave triangle. `partials()` = inharmonic sines for metal. `voice()` = sawtooth (pitch glide, 27 Hz rasp jitter) + breath noise into 3 parallel band-pass formants. `brass()` = 3 detuned saws, low-pass that opens (f*1.5 to f*6) then settles, +6 dB at 900 Hz, +3 dB at 2.3 kHz, 60 ms pitch scoop from -50 cents. `pluck()` = Karplus-Strong precomputed into an AudioBuffer and cached per pitch (a feedback DelayNode cannot go above about 340 Hz). `flute()` = sine + soft triangle octave + band-passed breath, vibrato fading in. `strings()` = 2 detuned saws, low-pass.
+## SFX engine
 
-- swordHit: noise 3.2k to 1.1k (90 ms) + metal partials 1750x[1,1.51,2.37,3.9] + thump 170 to 62. Crit adds 1420 Hz ring 0.75 s, sub saw boom, shimmer, ducks music.
-- shieldBlock: thump 230 to 95 + low-passed noise + square partials 640. metalClang: partials 610x[1,2.76,5.4,8.93,12.1], 1.2 s tail.
-- swish light: band noise 700 to 3600 Hz, 160 ms, slow attack; heavy: 260 to 1500, 340 ms + pink low layer. miss: downward sweep, soft.
-- grunt/hurt/deathCry: `voice()` with `voice` 0 brute (92 Hz, vowel o), 1 veteran (122, a), 2 youth (175, e), 3 lithe (235, a). grunt falls 1.15 to 0.82, hurt rises 1.0 to 1.35 (yelp, vowel a) , death falls 1.2 to 0.45 with formants closing.
-- deathThud: thump 110 to 50 + pink low noise + sand scatter noise + tiny armor rattle. footstep: low-passed pink thump + 4 grit ticks. dust: band noise 1400 to 500.
-- netThrow: rising noise + AM 34 Hz flutter band (rope). spearThrust: fast 1k to 5.2k sweep + tk. bash: thump + wood crack (2.2 kHz band) + square partials.
-- stunChime: three bell notes 1568 Hz (middle one lowered) partials [1,2.01,3]. healSparkle: sine run on a major pentatonic from 1318 Hz with 3rd harmonic. coin: square 1318 then 1975. uiTap: triangle 820 to 520, 90 ms. uiConfirm: 523 then 784. uiError: 2 detuned low squares 165 Hz through low-pass.
-- levelUp: brass fanfare D (3 repeated notes, rise to F#, A) + timpani + crash. horn (cornu): G2 98 Hz, slow attack 0.18, rising fifth call, dark (bright 0.7), big reverb send.
-- gate: brown noise low-passed 140 to 330 Hz, AM 13 Hz, 14 random chain clinks, final slam. drum: tympani = thump + inharmonic partials [1.504,1.99,2.44] + skin click.
-- ults: fire = rising low-passed pink roar + crackle ticks + low brass; lightning = 3 kHz crack + saw zaps 5k down to 400 + brown thunder; earth = double thump + brown rumble + rock debris ticks; wind = three overlapping resonant sweeps (Q 6) + ghost whistle; holy = 4 formant "ah" voices on a major chord + bell arpeggio + high shimmer.
-- crowd one-shots: gasp = pink noise 700 to 2200 inhale; cheer/roar/boo/chant = pink noise band + N detuned formant voices (vowel a for cheer, o roar, u boo falling) + claps; chant = 4 pulses with stomp drum.
-- crowd(level) bed: pink murmur band (380 to 800 Hz) + two narrow formant bands (700-960, 1100-1500) with slow LFO swells (0.11 to 0.6 Hz) + brown stomp rumble + faint high rustle. Target gain 0.03 + 0.32*level^1.3, time constant 0.4 s.
+- Each sfx = `def(name, level, nominalDuration, priority, reverbSend, musicDuck, maxConcurrent, fn)`. `cat` comes from `catOf(name)`; caps per category (`CAP`): combat 12, voice 6, crowd 3, ui 5, amb 8, big 4, beast 5, gore 6; global 28 soft (spam sounds dropped) and 40 hard. A full category steals its lowest-priority oldest voice with a 12 ms fade; a lower priority newcomer is dropped. Retrigger guard 30 ms per name+voice.
+- Pooled spatial strips (`makeStrip`, `acquire`, `release`, ~10 nodes each, up to 32 kept): input gain, per-ear delay (ITD up to 0.65 ms), per-ear low-pass (head shadow on the far ear, air absorption with distance), constant-power pan, merger, plus the reverb send. A strip is reserved until nominal duration + 0.25 s, so `dur` in `def` must cover the real tail.
+- Variation in `sfx()`: round-robin counter `cur.rr`, pitch/filter jitter `cur.j` (applied inside `osc()`, `burst()`), velocity brightness `cur.b`, gain jitter +-1.4 dB (ui +-0.4), voice/beast pitch jitter. The synthesis helpers read the module-level `cur`; do not call sfx from inside an sfx fn.
+- Cheap noise: `spikes(t, dur, dest, n, opts)` = n random clicks through ONE noise source/filter/gain (3 nodes). Use it for grit, crackle, debris, rattle instead of n x `burst`.
+- `crowdVoices` shares one formant bank for N sawtooth throats (2 nodes per voice). Do not go back to one formant bank per voice (that was 216 nodes for a roar).
+- swordHit: `WEAP` x `ARM` matrix (sword spear axe mace dagger x none leather bronze mail plate). New: `parry` (steel on steel), `crowdShout` (internal, lone voice from the stands), shieldBlock alternates wood and bronze rim, footstep is heel+toe on sand with 4 grain patterns (`heavy` or plate/mail adds a tink, `surface:'stone'` for a hard click).
+- Crowd bed: murmur + two vowel bands with LFO swells + stomp rumble (1.9 Hz pulse) + claps + an excited screaming layer above level 0.55, lone shouts every 1 to 3 s above 0.3, and `crowdKick` swells it on big events (`CROWD_KICK` table: crit, deathThud, ults, gore, beast roar...). All oscillators and sources are stopped when the bed fades out.
 
 ## Music engine
 
-Scheduler: a 45 ms `setInterval` calls `pump(ctx.currentTime + 0.3)`; each player schedules 16th-note steps ahead on the audio clock (never schedule from setTimeout time). Each mode is {bpm, init, bar(p,bar,t), step(p,s,t,sp)}; a player has its own bus, drone oscillators and seeded RNG `mulberry(hash(seed, mode, phrase))` re-rolled every 4 bars (chord progression, rhythm cell, motif, stab pattern), so phrases differ but the same seed replays exactly. setMode fades the old player out and new in (1.5 s default, victory/defeat cut in fast), old players die after the fade.
-- ludus 92 bpm, D Dorian with Phrygian dominant on cadence bars: drone D2, lyre (KS pluck) 8th arpeggio with swing and random dropouts, flute motif on odd bars, frame drum + shaker.
-- prep 76-84 bpm, D Phrygian: tympani heartbeat, wood tick, quiet low strings ostinato whose cutoff rises with bar count (tension), brass swell every 4 bars.
-- arena 100 to 124 bpm (follows intensity), E Phrygian dominant. Layers by intensity I: drone + tympani on 1 and 3 (always), strings ostinato (always, louder from 0.1), skin drum on 2 and 4 from 0.22, offbeat drums from 0.5, brass stabs root+fifth from 0.3 (octave at 0.7), high string pad from 0.55, 16th roll pickups from 0.78, crash every 8 bars from 0.6. Each gate uses smoothstep so layers fade in, never switch.
-- victory: 1 bar brass stinger (timpani roll + crash) then D major loop (fast lyre arpeggio, brass counter, flute). defeat: 58 bpm D Aeolian, funeral drum, sparse lyre, low string swell, long flute.
+Scheduler: 45 ms `setInterval` calls `pump(ctx.currentTime + 0.3)`; each player schedules 16th-note steps on the audio clock. Each mode = `{bpm(), tonic, scene, cfg, init(p), bar(p, bar), step(p, s, t, sp)}`; a player owns 8 stems (`perc low str brass pad lead lyre fx`: gain trim, pan, reverb send) feeding its bus; fades are equal-power `setValueCurveAtTime`.
+- Harmony: `setChord(p, bassRoot, intervals, melodyScale)`; bass note is `rootF`, `p.ch.tones` is the voicing an octave above; 8-bar chord plans per mode (semitone roots + MIN/MAJ/DIM), re-picked every 8 bars from a seeded RNG. Melody scale follows the chord (phrygian over minor, phrygian-dominant over the major V, dorian/mixolydian in the hub), so every motif note is diatonic to its chord.
+- Motif development (`makeMotif`, `develop`): a 4-note rhythmic cell is stated (bars 0-1), sequenced up a step (2-3), inverted (4-5), then cadences to the root (6-7); the bar after each statement answers with the first half. Motif changes every 24 to 32 bars. `leadMotif` hands the note to a voice (aulos, brass, lyre).
+- Humanising: `hum(p, kind)` timing per section (perc +-3 ms, strings late 4 to 18 ms, brass, lead rubato), `vv()` velocity +-10 %. Never earlier than the player's own start.
+- Instruments: `ens` string ensemble (3 detuned saws, bow-like cutoff swell, delayed vibrato), `brass`, `choir` ('ah' formants on detuned saws), `aulos` (double reed: two beating saws, nasal peak, breath, scoop), `pluck` (Karplus-Strong buffers cached per pitch), `frameDrum` (bodhran), `taiko`, `drumHit` (tympani), `snare`, `shaker`, `crash`, `riser` (rising noise + gliding saw, last 70 ms empty), `impact`.
+- Arena family (`arenaMode(id, cfg)`: arena E Phrygian 100 to 124 bpm; beast A Phrygian tribal 92 to 122 with 3+3+2 frame drums, cimbasso, bone-flute howls, string clusters; boss D Phrygian 80 to 106 with brass chorale and choir). Layers fade in with `gate(a,b)` of the smoothed intensity: tymp always, skin drums from 0.22, stabs from 0.3, melody on aulos then brass at 0.55, pad/choir from 0.5/0.78, rolls from 0.78. An intensity jump over 0.2 in one bar schedules a riser into the next bar and an impact + taiko on its downbeat.
+- Others: ludus (D Dorian, lyre arpeggio, aulos motif, frame drum, pad; dusk/night/dawn layers via `setHubTime`), prep (D Phrygian dread, rising tension, riser into the phrase end), victory (stinger + D major march, loop ends on V so it wraps), defeat (D Aeolian funeral march 58 bpm), title (68 bpm cinematic: cornu call, theme on lyre then brass, riser into the loop), results (D Lydian calm), season (stinger + D major procession, 100 bpm), elegy (48 bpm, drone, failing heartbeat, aulos lament, silences).
+- Crossfades are bar-synchronous: `setMode` starts the new mode on the old mode's next bar line if that is within 2.6 s (stingers victory/defeat/season start at once).
 
-### Intensity from fight hype (feed `music.setIntensity` ~4 times per second, smoothing is internal)
-`target = 0.15 + 0.25*alivePressure + 0.3*recentDamageRate + 0.2*ultActive + 0.1*lowHpFighter`, each term 0..1; bump by +0.25 on crit/ult/down (decay 0.5/s); last fighter standing under 25% HP: force 0.9; roar event: +0.2. Typical flow: gate opens 0.2, trading blows 0.4-0.6, ult/kill 0.9, then back down. Call `crowd(level)` with `0.25 + 0.75*intensity` and fire crowdRoar/gasp on the matching events. Set mode 'prep' during pre-fight screens, 'arena' at gate open, 'victory'/'defeat' on `end`, 'ludus' in the hub.
+Intensity feed from the fight (unchanged): `target = 0.15 + 0.25*alivePressure + 0.3*recentDamageRate + 0.2*ultActive + 0.1*lowHp`, bump +0.25 on crit/ult/down, last fighter under 25 % HP forces 0.9; `crowd(0.25 + 0.75*intensity)`.
 
-## arena.js event -> sound
+## arena.js event -> sound (what fightview.js does; callers keep using sfx names)
 
 | event | sound |
 |---|---|
 | atk | none (wait for hit/miss), maybe swish at wind-up with `heavy` for big weapons |
-| hit | swordHit; `crit` -> swordHitCrit; blocked/`save`/guard -> shieldBlock; `tech` bash -> bash; spear style `tech` -> spearThrust; add hurt (voice of dst) 60% of hits, grunt for attacker 25%; `hz` (hazard) -> dust; pan from x position |
+| hit | swordHit (`weapon`, `armor`, `vel` now supported); `crit` -> swordHitCrit; blocked/save/guard -> shieldBlock; parry -> `parry`; `tech` bash -> bash; spear `tech` -> spearThrust; hurt (voice of dst) 60 %, grunt for attacker 25 %; hazard -> dust |
 | miss | miss (inv -> metalClang) |
-| whiff | swish |
+| whiff / proj | swish (proj pitch 1.3, `long` heavy) |
 | dash | dust + footstep (pitch 0.9) |
-| proj | swish (pitch 1.3; `long` heavy) |
-| aoe | big -> ultEarth style thump; else drum 'mid'; color maps element (red/orange fire, blue/yellow lightning, brown earth, white holy) |
-| tele | rising low drum tick, or none (visual warning), at most one per 0.5 s |
-| zap | ultLightning at gain 0.4 |
-| hook | netThrow |
-| bleed | tiny dust at gain 0.3, throttled to 1 per fighter per 0.8 s |
-| status | stun -> stunChime; guard -> shieldBlock gain 0.5; rage/frenzy -> drum low; rally -> uiConfirm |
+| aoe | big -> ultEarth style thump; else drum 'mid'; colour maps element |
+| zap / hook | ultLightning gain 0.4 / netThrow |
+| bleed | tiny dust gain 0.3, 1 per fighter per 0.8 s |
+| status | stun -> stunChime; guard -> shieldBlock 0.5; rage/frenzy -> drum low; rally -> uiConfirm |
 | heal | healSparkle |
-| down | deathCry (voice) then deathThud at +0.35 s, crowdGasp, intensity bump |
-| ult / rune | element sting (`ult` with element), duck music, crowdRoar after 0.6 s |
-| roar | crowdRoar (fav true: crowdCheer plus chant), bed boost |
-| revive | healSparkle + horn |
-| favorready | uiConfirm + crowdCheer |
+| down | deathCry then deathThud at +0.35 s, crowdGasp, intensity bump, `music.accent('down')` |
+| ult / rune | element sting (ducks music), crowdRoar after 0.6 s |
+| roar | crowdRoar (fav true: crowdCheer plus chant) |
 | end | music victory/defeat, crowdRoar or crowdBoo |
-Hub UI: uiTap on every button, uiConfirm on accept, uiError on invalid, coin on gold change, levelUp on level up, gate when arena doors open, horn at fight start.
+Hub UI: uiTap on every button, uiConfirm on accept, uiError on invalid, coin on gold change, levelUp on level up, gate when the doors open, horn at fight start.
+
+## Level table (post master chain, peaks in dBFS, from the report)
+UI -24 to -12 (tap and hover quietest), footstep/swish/miss/dust -20 to -10, main combat layer (swordHit, shieldBlock, spear, bash) -14 to -8 before the pan-law makeup, voices -10 to -5, crit/deathThud/drum -9 to -4, ults/gate/horn/levelUp -7 to -3, crowd one-shots -10 to -4, crowd bed -20 (0.2) / -11 (0.6) / -5 (1.0). Hard rule: nothing above -3 dBFS.
+
+## What the analysis found (first run, old engine) and what changed
+
+- Music was 95 to 99 % of its energy below 300 Hz (centroid 130 to 230 Hz): drones, tymp and brass all sat in the sub range. Now chord voicings sit an octave up, low stems are trimmed, mid register carries strings/brass/aulos (centroid 250 to 1000 Hz, 15 to 80 % above 300 Hz depending on mode).
+- Stereo width was -22 dB side/mid (effectively mono); now about -13 dB.
+- Master peaks reached -0.9 dBFS; now limited near -3 dBFS with a soft clip.
+- Crowd one-shots built 160 to 350 nodes per trigger; now 50 to 150. Ult fire/earth 90+ nodes -> 25 to 30 (spikes).
+- Sources started without stop (leak) in a 60 s fight: crowd LFOs and ambience oscillators; now zero.
+- uiHover was -31 dBFS (inaudible), spurt harsh (62 % above 2.5 kHz), owl and footstep repeated, several sounds thin (no body below 300 Hz).
 
 ## Pitfalls
 
-- Autoplay: create/resume the context only from a user gesture (`pointerdown`, `touchend`, `keydown`; on iOS `touchstart` does not unlock). Call `unlock()` in every gesture until it returns true. sfx() before running drops sounds on purpose (otherwise a burst plays on resume).
-- iOS: the silent mute switch silences Web Audio; context can go `interrupted` after calls or tab switches, so resume on `statechange` and `visibilitychange`; use `webkitAudioContext` fallback; no `createStereoPanner` on very old Safari (guarded); keep sample rate default (a forced rate fails).
-- Never `new AudioContext` at module load. Never schedule with setTimeout for rhythm: use the lookahead scheduler.
+- Autoplay: create/resume the context only from a user gesture (`pointerdown`, `touchend`, `keydown`; on iOS `touchstart` does not unlock). Call `unlock()` in every gesture until it returns true. sfx() before running drops sounds on purpose.
+- iOS: mute switch silences Web Audio; context can go `interrupted`: the engine resumes on `statechange`, `visibilitychange` and any later gesture, unless `suspend()` was called on purpose (pause) and not yet `resume()`d.
+- Never `new AudioContext` at module load. Never schedule rhythm with setTimeout: use the lookahead pump. Never schedule a time below 0 (`env`/`osc` throw RangeError); the engine swallows step exceptions and counts them in `_stats().errors`, so tests must read it.
 - Exponential ramps cannot start/end at 0 (use 0.00001) and need a prior setValueAtTime.
-- Always `stop()` oscillators and `disconnect()` finished buses, otherwise nodes leak (the engine does so on fade end). Cap polyphony: per-sound max concurrent, 28 voices soft, 40 hard, retrigger guard 30 ms per sound, spam sounds (swish, footstep, bleed) must be throttled by the caller too.
-- Feedback delay lines are quantised to 128 samples inside a cycle: use precomputed buffers for pitched plucks.
-- Do not trust peak before the limiter: judge levels after it (the verifier does). A hot music bus will make the limiter pump the sfx.
-- No Math.random in music: seeded RNG only, so tests are deterministic.
-- Offer a mute toggle persisted in localStorage (wrap in try/catch) and pause on `visibilitychange`.
+- Always `stop()` oscillators and sources (the tool counts sources started without stop; must be about 0). LFOs and drone oscillators of a faded player are stopped in `setMode` and `disposePlayer`.
+- Do not judge levels before the limiter; the tool measures after the whole chain.
+- No Math.random: seeded RNG only (`rng`, `p.r`, `p.hr`), tests are deterministic per seed.
+- A strip is reused after `dur + 0.25`: a sfx whose real tail is longer than its `dur` gets its pan/low-pass changed mid tail.
+- Hooks that need other files (not done here, ask the owner): see the report of the audio pass: pass `weapon`, `armor`, `vel`, `pos` and `setListener` from fightview.js; use modes title/results/season/elegy/beast/boss from title.js, screens, ceremonies.js and fightview.js; call `music.accent`.
 
-## Hub ambience, time of day and ui hooks (HUB-AUDIO, additive)
-- New sfx (all in SFX_NAMES): `uiHover uiSelect uiOpen uiClose` (ui), `bird owl hammer clink chop sizzle thock thunder` (ambience). Use `audio.ui.hover/tap/select/open/close()` or `sfx(name)`.
-- `audio.ambient` ({start, stop, update(state), thunder(delay)}): beds (wind, distant crowd murmur that grows with gladiators and festivals, rain hiss, crickets at night), birds by day (more at dawn and dusk, few in rain), owl at night, far clinks, and workshops near the camera focus panned to their side: forge (4 strikes then a breath, queued 0.35 s ahead), kitchen (chop runs, sizzle, pot clinks), training yard (thocks, grunts, footsteps scaled by drill/spar counts), market (coins), bath (drips). `update` starts the beds lazily once the context runs; the hub feeds it every 0.25 s.
-- `music.setHubTime(hour, night)` drives the `ludus` mode (kept as one mode, adapts smoothly): tempo 92 down to 78 at night, percussion x(1 - 0.65 night), a string pad swells at dusk/night, dawn adds a high flute, deep night adds sparse bell plucks, no flute lead at night. `music.hubTod` exposes the state.
-- `audio.attachUi(root, {hover, tap})` adds a throttled hover tick for buttons (mouse only); taps are off by default because `game.open/ask` already play `uiTap`.
-- Offline check: `createAudio({ctx: new OfflineAudioContext(...)})`, call `ambient.update` 24 times, render: day rms 0.17 peak 0.88 with every new sfx spammed, no exceptions.
+## Hub ambience, time of day and ui hooks (HUB-AUDIO, additive, unchanged API)
+- sfx `uiHover uiSelect uiOpen uiClose` (ui), `bird owl hammer clink chop sizzle thock thunder` (ambience). `audio.ambient.update(state)` every 0.25 s from the hub: beds (wind, distant crowd, rain hiss, crickets) and workshops near the camera focus panned to their side. Its oscillators and sources are now stopped on `ambient.stop()`.
+- `music.setHubTime(hour, night)` drives ludus: tempo 92 down to 78 at night, percussion x(1 - 0.65 night), string pad swells at dusk/night, dawn adds a high aulos, deep night adds sparse bell plucks.
+- `audio.attachUi(root, {hover, tap})` adds a throttled hover tick (mouse only); taps off by default because `game.open/ask` already play `uiTap`.
+
+## Tool usage notes (added at the end of the audio pass)
+- The machine is often loaded by other agents: run stages separately and merge through a cache: `node tools/ludus3d_audio_check.mjs --stages sfx --cache C.json`, then `--stages music`, `--stages mix`, `--stages burst`, `--stages misc` with the same `--cache`; the report is rebuilt from the merged cache each time. A full single run can exceed 30 minutes under load.
+- OfflineAudioContext caveat: `disconnect()` is not time-scheduled, so `disposePlayer` skips it when offline (otherwise a faded-out player is erased from the whole render). Determinism check compares samples with a 0.002 tolerance (convolver/compressor float noise is about 1e-5).
+- Open items: fight mix loudness calibration to -16 LUFS (MUSIC_TRIM 0.4, MAKEUP 1.0 are not yet tuned from a measured mix), 60 s burst node-flatness run of the new engine, and the sfx table of the new engine were not completed (see the pass report).

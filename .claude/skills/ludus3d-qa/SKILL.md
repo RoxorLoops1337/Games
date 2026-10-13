@@ -57,3 +57,7 @@ Findings are de-duplicated by kind plus message, so one repeated bug is one line
 * `closeAll()` marks scrims `lx-out` for 220 ms before removal: count `.lx-scrim:not(.lx-out)`.
 * ext.js is edited by several agents: add only inside tagged blocks and re-read before editing. `LM.migrate` is wrapped several times (venatio, QA, sponsors...). Order does not matter for the QA wrapper because `sanitize` runs first inside it, but never move `LM.load` / `LM.save` back to the sim.js versions: `loadEx` and the failure flag live in the QA block.
 * No em dashes anywhere (the structure test greps).
+
+## Wave 3 notes
+- New interactive controls: the hub canvas (keyboard camera), the "Fight hurt" button in fighter pickers (44px, aria-pressed, aria-label with the numbers) and the trophy cards (`.lx-bl-card`, aria-label with progress). The monkey's first run at 390x800 and 800x390 after wave 3 is clean for these.
+- A fresh profile always opens the recruit sheet first, which traps keys; test keyboard camera with `empty=1` plus `rich=1` URLs.

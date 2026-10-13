@@ -764,5 +764,95 @@ const LEGACY_IDS = ['patron', 'brawl', 'trainer', 'spoiled', 'spy', 'sponsor', '
   } catch (err) { ok(false, 'Venatio tests crashed: ' + (err && err.stack || err)); }
 }
 
+// TACTICS: player commands (stances, Swap, Rally), their costs, replay safety and the foe's visible tactics
+{
+  const mk = (st, id, lvl = 6) => LM.makeGlad({ style: st, lvl, id, name: 'T' + id, r: LM.mulberry(id * 31 + lvl) });
+  const fight = (nA, nB, o, seed = 5) => { LM.setRandom(LM.mulberry(seed)); const A = LM.mkUnits(Array.from({ length: nA }, (_, i) => mk(['murmillo', 'thraex', 'hoplomachus'][i], 10 + i)), 'A', {}), B = LM.mkUnits(Array.from({ length: nB }, (_, i) => mk(['thraex', 'murmillo', 'retiarius'][i], 20 + i)), 'B', {}); return LM.createFight(A, B, o || {}); };
+  const run = (F, n, dt = 1 / 30) => { const ev = []; for (let i = 0; i < n && !F.done; i++) { LM.step(F, dt); ev.push(...F.ev.splice(0)); } return ev; };
+  ok(LM.CMD_ORDER.length === 6 && LM.CMD_ORDER.every((k) => LM.CMD[k].gain && LM.CMD[k].cost), 'every command lists its gain and its cost');
+  // stances: use, cooldown, cancel
+  let F = fight(1, 1); const u = F.units[0];
+  ok(LM.command(F, 'stance', 'A0', 'press') === true && u.s.press && LM.stanceOf(u) === 'press' && u.cmdCd === LM.CMD.press.cd, 'Press starts and the stance cooldown runs');
+  ok(LM.command(F, 'stance', 'A0', 'hold') === 'cd', 'a second stance is refused while the cooldown runs');
+  ok(LM.command(F, 'stance', 'A0', 'none') === true && !LM.stanceOf(u), 'a stance can be cancelled for free');
+  ok(LM.command(F, 'stance', 'B0', 'bogus') === false && LM.command(F, 'stance', 'ZZ', 'press') === false, 'bad stance or unit is refused');
+  run(F, 40 * 30); ok((u.cmdCd || 0) <= 0 || F.done, 'the stance cooldown expires');
+  // Press: more damage dealt and taken; same seed, same fight
+  const dmgOf = (stance) => { const G = fight(1, 1, {}, 9); if (stance) LM.command(G, 'stance', 'A0', stance); run(G, 8 * 30); return [G.units[0].dmg, G.units[0].taken]; };
+  const base = dmgOf(null), pr = dmgOf('press');
+  ok(pr[0] > base[0] && pr[1] >= base[1], `Press trades defence for damage (${pr} vs ${base})`);
+  // Hold: does not chase; Retreat: backs away and never attacks; Guard: no swings, reduced damage
+  F = fight(1, 1); F.units[0].x = -8; F.units[1].x = 8; LM.command(F, 'stance', 'A0', 'hold'); const hx = F.units[0].x; run(F, 3 * 30); ok(Math.abs(F.units[0].x - hx) < 0.01, 'Hold stands its ground instead of chasing');
+  F = fight(1, 1); F.units[0].x = -1; F.units[1].x = 0.5; F.units[0].y = F.units[1].y = 0; LM.command(F, 'stance', 'A0', 'retreat'); const ev = run(F, 2 * 30);
+  ok(!ev.some((e) => e.k === 'atk' && e.src === 'A0'), 'a retreating fighter does not attack'); ok(Math.hypot(F.units[0].x - F.units[1].x, F.units[0].y - F.units[1].y) > 2.0, 'Fall back opens distance from the foe');
+  F = fight(1, 1); F.units[0].x = -1; F.units[1].x = 0.5; F.units[0].y = F.units[1].y = 0; LM.command(F, 'stance', 'A0', 'guard'); ok(F.units[0].s.guard && F.units[0].s.guard.f === 0.4 && F.units[0].s.gstance, 'Guard raises a 40% block');
+  ok(!run(F, 3 * 30).some((e) => e.k === 'atk' && e.src === 'A0'), 'a guarding fighter does not swing'); ok(!LM.stanceOf(F.units[0]) || F.t < 4.5, 'stances end by themselves'); run(F, 3 * 30); ok(!F.units[0].s.gstance && !(F.units[0].s.guard && F.units[0].s.guard.stance), 'the guard stance ends on time');
+  // Rally: team buff with a visible cost and a cooldown; Swap needs a pair and two foes
+  F = fight(2, 2); ok(LM.command(F, 'rally') === 'cd', 'Rally is not ready at the first bell'); run(F, 7 * 30);
+  const rr = LM.command(F, 'rally'), u0 = F.units[0], withR = LM.apsOf(u0), r0 = u0.s.rally; delete u0.s.rally; const noR = LM.apsOf(u0); u0.s.rally = r0;
+  ok(rr === true && r0 && F.units[1].s.expo && withR > noR * 1.1, 'Rally speeds the team up and exposes it'); ok(LM.command(F, 'rally') === 'cd', 'Rally goes on a long cooldown');
+  F = fight(2, 2); const ev2 = (run(F, 20), LM.command(F, 'swap')); ok(ev2 === true && F.units[0].swap && F.units[1].swap && F.units[0].swap.id !== undefined, 'Swap sets a new target for each partner'); ok(F.units[0].atkT >= 0.69, 'Swap costs a short re-aim');
+  run(F, 3); F.ev.length = 0; run(F, 2); ok(F.units[0].tgt === F.units[0].swap.id || F.units[0].down, 'the swapped target is honoured'); ok(LM.command(F, 'swap') === 'cd', 'Swap has a cooldown');
+  ok(LM.command(fight(1, 2), 'swap') === false && LM.command(fight(2, 1), 'swap') === false, 'Swap is refused without two partners and two foes');
+  // replay safety: the same taps at the same step counts reproduce the fight exactly
+  const play = (seed) => { const G = fight(2, 2, { cmdAI: true }, seed); const taps = [[40, 'stance', 'A0', 'press'], [70, 'swap'], [120, 'rally'], [150, 'stance', 'A1', 'guard']]; let ti = 0;
+    while (!G.done && (G.n || 0) < 4000) { while (ti < taps.length && taps[ti][0] <= (G.n || 0)) { const t = taps[ti++]; LM.command(G, t[1], t[2], t[3]); } LM.step(G, 1 / 30); G.ev.length = 0; } return G; };
+  const r1 = play(77), r2 = play(77); ok(r1.done && r1.n === r2.n && r1.winner === r2.winner && r1.units.every((x, i) => x.hp === r2.units[i].hp), 'a fight with commands and a foe that uses tactics replays identically');
+  const snap = (() => { const G = fight(2, 2, { cmdAI: true }, 3); return structuredClone(G); })(); ok(snap.cmd && snap.cmdAI === true, 'the command state survives the replay snapshot clone');
+  // the foe answers visibly, and only in live fights (cmdAI)
+  F = fight(1, 1, { cmdAI: true }); F.t = 5; F.units[1].hp = Math.round(F.units[1].maxhp * 0.15); F.units[0].x = -1; F.units[1].x = 1; F.units[0].y = F.units[1].y = 0; const ev3 = run(F, 3);
+  ok(ev3.some((e) => e.k === 'cmd' && e.a === 'retreat' && e.side === 'B'), 'a nearly beaten foe falls back and says so'); 
+  F = fight(1, 1); F.t = 5; F.units[1].hp = Math.round(F.units[1].maxhp * 0.15); F.units[0].x = -1; F.units[1].x = 1; F.units[0].y = F.units[1].y = 0; ok(!run(F, 3).some((e) => e.k === 'cmd'), 'without cmdAI (quick sims, odds) the foe never uses tactics');
+  F = fight(1, 1, { cmdAI: true }); F.units[0].x = -1; F.units[1].x = 1; F.units[0].y = F.units[1].y = 0; const pl = F.units[1].ults.find((x) => x.id === 'pulverize'); 
+  const bu = LM.makeGlad({ style: 'murmillo', lvl: 8, id: 90 }); bu.ult = 'pulverize'; const FB = LM.createFight(LM.mkUnits([mk('thraex', 1)], 'A', {}), LM.mkUnits([bu], 'B', {}), { cmdAI: true });
+  FB.units[0].x = -1; FB.units[1].x = 1; FB.units[0].y = FB.units[1].y = 0; const slot = FB.units[1].ults[0]; slot.cd = 0; let tele = null, hitAt = -1; const hp0 = FB.units[0].hp;
+  for (let i = 0; i < 90 && !FB.done; i++) { LM.step(FB, 1 / 30); for (const e of FB.ev.splice(0)) { if (e.k === 'tele' && e.ult && !tele) tele = { t: FB.t, e }; if (e.k === 'aoe' && e.big && hitAt < 0) hitAt = FB.t; } }
+  if (slot.id === 'pulverize') ok(tele && hitAt > tele.t + 0.3 && tele.e.r === 3.6, 'the foe\'s pulverize is announced by a ground telegraph before it lands'); else ok(true, 'ult slot not pulverize on this roster');
+  const q = LM.quick(LM.mkUnits([mk('murmillo', 5)], 'A', {}), LM.mkUnits([mk('thraex', 6)], 'B', {})); ok(q.done && !q.cmdAI, 'quick sims do not use foe tactics');
+}
+
+{ // round 47: FIGHT HURT (wave 3)
+  const S = LM.newGame({ name: 'Hurt', seed: 'hurt47' }); S.gold = 9999; const g = LM.makeGlad({ id: S.nextId++, style: 'thraex', lvl: 4 }); S.glads.push(g);
+  const ev = LM.events(S, 2, 0).find((e) => e.kind === 'duel');
+  LM.woundGive(S, g, 2, 'arm'); ok(g.inj > 0 && LM.hurtOk(S, g), 'a wounded fighter may be sent hurt');
+  const healthy = LM.derive(g, { noperf: true }); LM.hurtMark(S, g, true); const hurt = LM.derive(g, { noperf: true });
+  ok(hurt.atk < healthy.atk * 0.9 && hurt.hp < healthy.hp, 'fighting hurt costs damage and health'); LM.hurtMark(S, g, false); ok(LM.derive(g, { noperf: true }).atk === healthy.atk, 'no penalty when not marked');
+  const R = LM.hurtRisk(S, g); ok(R.win > 0 && R.lose > R.win && R.lose <= 0.9 && R.text.length >= 3 && R.addLose > R.addWin, 'risk is explicit: lose is worse than win, penalties are listed');
+  if (ev) {
+    ok(LM.enter(S, ev, [g.id], 'bal') === 'A fighter is injured', 'a wounded fighter cannot enter by default');
+    ok(LM.enter(S, ev, [g.id], 'bal', { hurt: [g.id] }) === '' && S.entries[ev.key].hurt[0] === g.id && g.inj > 0, 'with the hurt option the entry is accepted and remembered, and the wound stays');
+    ok(LM.entryReady(S, S.entries[ev.key]), 'a hurt entry stays valid'); const plain = { ids: [g.id] }; ok(!LM.entryReady(S, plain), 'a plain entry with a wounded fighter is cancelled');
+  } else ok(true, 'no duel event in this fixture');
+  // worsening roll: deterministic, wins are gentler than losses, idempotent per result
+  const trial = (win, n) => { let w = 0; for (let i = 0; i < n; i++) { const S2 = LM.newGame({ name: 'H', seed: 'h' + i }); const g2 = LM.makeGlad({ id: S2.nextId++, style: 'murmillo', lvl: 3 }); S2.glads.push(g2); LM.woundGive(S2, g2, 2, 'knee'); LM.hurtMark(S2, g2, true); const r = LM.hurtAfter(S2, g2, { win }); if (r.worse) w++; } return w / n; };
+  const pw = trial(true, 300), pl = trial(false, 300); ok(pw > 0.1 && pw < 0.6 && pl > pw + 0.15, `worsening is rarer after a win (${pw.toFixed(2)}) than a loss (${pl.toFixed(2)})`);
+  ok(trial(false, 40) === trial(false, 40), 'the worsening roll is deterministic for a seed');
+  const S3 = LM.newGame({ name: 'W', seed: 'w3' }), g3 = LM.makeGlad({ id: S3.nextId++, style: 'murmillo', lvl: 3 }); S3.glads.push(g3); LM.woundGive(S3, g3, 2, 'arm'); LM.hurtMark(S3, g3, true);
+  const res = { win: false }, w0 = g3.inj; const a = LM.hurtResolve(S3, [g3], res, 'pit'), n1 = a.length, b = LM.hurtResolve(S3, [g3], res, 'pit'); ok(n1 === 1 && b.length === 1, 'one roll per fight result');
+  if (a[0].worse) ok(g3.inj === w0 + 2 && g3.wounds.some((x) => x.worse === 1), 'a worsened wound gains weeks and is flagged'); else ok(g3.inj === w0, 'a held wound is unchanged');
+  ok(typeof LM.hurtLine(a[0]) === 'string' && !LM.hurtLine(a[0]).includes('\u2014'), 'the report line is plain text');
+  LM.extWeek(S3, { notes: [] }); ok(!g3.hurtFight, 'the hurt mark is cleared at week end'); ok(LM.hurtAfter(S3, g3, { win: true }) === null, 'unmarked fighters never roll');
+  const g4 = LM.makeGlad({ id: 999, style: 'murmillo', lvl: 3 }); ok(!LM.hurtOk(S3, g4), 'a healthy fighter has no hurt option');
+}
+{ // round 48: TROPHIES wave 3
+  const S = LM.newGame({ name: 'Tr3', seed: 'tr3' }); const n0 = D.TROPHIES.length; const ids = D.TROPHIES.map((t) => t.id);
+  ok(new Set(ids).size === ids.length && n0 >= 16 + 9 + 20, `trophy ids are unique and there are at least 45 (${n0})`);
+  ok(['kill_wolf', 'kill_boar', 'kill_lion', 'kill_bear', 'kill_nemean', 'kill_elephant', 'solo_lion', 'menagerie', 'allpelts'].every((id) => ids.includes(id)), 'Venatio trophies exist in D.TROPHIES');
+  ok(D.TROPHIES.every((t) => t.n && t.d && t.r && !/\u2014/.test(t.n + t.d)), 'every trophy has text and a reward, no em dashes');
+  ok(LM.checkTrophies(S).length === 0, 'a fresh ludus earns nothing');
+  const V = LM.venatio(S); V.kills.lion = 1; const got = LM.checkTrophies(S).map((t) => t.id); ok(got.includes('kill_lion') && !got.includes('kill_wolf') && !got.includes('solo_lion'), 'killing a lion pays the lion trophy only');
+  const gold0 = S.gold; ok(LM.checkTrophies(S).length === 0 && S.gold === gold0, 'new trophies pay once');
+  ok(LM.trophyProgress(S, 'allpelts')[1] === D.BEAST_IDS.length && LM.trophyProgress(S, 'allpelts')[0] === 1, 'progress counts beast kinds');
+  V.solo = { lion: 1 }; V.cleared = { menagerie: 1 }; D.BEAST_IDS.forEach((k) => { V.kills[k] = Math.max(1, V.kills[k] || 0); });
+  const g2 = LM.checkTrophies(S).map((t) => t.id); ok(['solo_lion', 'menagerie', 'allpelts', 'kill_nemean', 'kill_elephant'].every((id) => g2.includes(id)), 'solo, menagerie and all pelts unlock');
+  S.stats.streakBest = 10; S.stats.wins = 100; S.stats.hcSeasons = 1; S.freed = [{ name: 'X', wk: 1, lvl: 3 }]; S.stats.pitPerfect = 1; const g3 = LM.checkTrophies(S).map((t) => t.id);
+  ok(['streak5', 'streak10', 'wins100', 'hc1', 'freed1', 'pitperf'].every((id) => g3.includes(id)), 'streak, century, Hardcore season, freed man and Flawless Descent unlock');
+  ok(LM.trophyProgress(S, 'wins50')[1] === 50 && LM.trophyProgress(S, 'nosuch') === null, 'progress exists for old trophies and is null for unknown ids');
+  const S5 = LM.newGame({ name: 'Str', seed: 'str5' }), g5 = LM.makeGlad({ id: S5.nextId++, style: 'murmillo', lvl: 3 }); S5.glads.push(g5);
+  const ev = LM.events(S5, 2, 0).find((e) => e.kind === 'duel'); for (let i = 0; i < 3; i++) LM.settle(S5, ev, [g5], { win: true, hpf: { [g5.id]: 1 }, odds: 0.5, place: 1 });
+  ok(S5.stats.streak === 3, 'settle keeps a win streak counter'); S5.stats.streak = 4; LM.settle(S5, ev, [g5], { win: true, hpf: { [g5.id]: 1 }, odds: 0.5 }); ok(S5.stats.streakBest >= 5, 'streak best follows wins'); LM.settle(S5, ev, [g5], { win: false, hpf: { [g5.id]: 0.1 }, odds: 0.5 }); ok(S5.stats.streak === 0, 'a loss resets the streak');
+  const old = LM.migrate(JSON.parse(JSON.stringify(S))); ok(old.trophies.kill_lion, 'trophies survive migrate');
+}
+
 console.log(`ludus_maximus: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

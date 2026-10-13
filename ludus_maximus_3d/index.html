@@ -13,6 +13,8 @@
   #ui { position: fixed; inset: 0; pointer-events: none; }
   #ui > * { pointer-events: auto; }
   #boot { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 14px; background: radial-gradient(ellipse at 50% 40%, #3a2a50, #1d1830); color: #f2c14e; font: 700 22px/1.2 'Trajan Pro','Cinzel','Cormorant Garamond','Palatino Linotype',Georgia,serif; letter-spacing: .18em; text-transform: uppercase; z-index: 99; transition: opacity .6s; }
+  #bootbar { width: min(220px, 56vw); height: 4px; border-radius: 3px; background: rgba(242,193,78,.18); overflow: hidden; }
+  #bootbar i { display: block; height: 100%; background: linear-gradient(90deg, #d9b27c, #f2c14e); transform-origin: 0 50%; transform: scaleX(.02); transition: transform .35s ease-out; }
   #boot small { font: 600 12px system-ui, sans-serif; letter-spacing: .08em; color: #d9b27c; opacity: .8; text-transform: none; }
   #err { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; text-align: center; padding: 24px; background: #1d1830; color: #f2c14e; font: 700 16px system-ui, sans-serif; z-index: 100; }
 </style>
@@ -35,6 +37,8 @@
 <link rel="modulepreload" href="js/ui_kit.js">
 <link rel="modulepreload" href="js/flow.js">
 <link rel="modulepreload" href="js/envtex.js">
+<link rel="modulepreload" href="js/envtex_gen.js">
+<link rel="modulepreload" href="js/envtex_worker.js">
 <link rel="modulepreload" href="js/envfx.js">
 <link rel="modulepreload" href="js/env_ludus.js">
 <link rel="modulepreload" href="js/buildings.js">
@@ -67,7 +71,7 @@
 <body class="lx-root">
 <canvas id="gl"></canvas>
 <div id="ui"></div>
-<div id="boot">Ludus Maximus<small id="bootmsg">Forging the arena...</small></div>
+<div id="boot">Ludus Maximus<div id="bootbar" role="progressbar" aria-label="Loading"><i id="bootfill"></i></div><small id="bootmsg">Forging the arena...</small></div>
 <div id="err">WebGL is not available on this device.</div>
 <script src="core/data.js"></script>
 <script src="core/sim.js"></script>

@@ -479,7 +479,7 @@ export function createHub({ renderer, camera, audio, tier = 'high', post = null 
   const _gm = new THREE.Matrix4();
   class Actor {
     constructor(g, i) {
-      this.g = g; this.id = g.id; this.rig = bakeSkinned(createGladiator(g)); this.rig.root.name = 'glad_' + g.id; group.add(this.rig.root); if (this.rig.skin) this.rig.skin.castShadow = tier !== 'low';
+      this.g = g; this.id = g.id; this.mk = markSig(g); this.rig = bakeSkinned(createGladiator(g)); this.rig.root.name = 'glad_' + g.id; group.add(this.rig.root); if (this.rig.skin) this.rig.skin.castShadow = tier !== 'low';
       this.pos = new V3(); this.yaw = 0; this.goalYaw = 0; this.speed = 0; this.kind = 'idle'; this.timer = 1 + (i % 5) * 0.4; this.q = []; this.seed = hashStr(String(g.id)) % 1000; this.rnd = rngOf(this.seed + 11);
       this.home = new V3(); this.p2 = new V3(); this.dir = 1; this.partner = null; this.role = 0; this.sig = ''; this.lg = 0; this.lgT = 0; this.phase = 0; this.hits = 0;
     }
@@ -570,10 +570,11 @@ export function createHub({ renderer, camera, audio, tier = 'high', post = null 
     a.rig.root.position.set(a.pos.x, groundAt(a.pos.x, a.pos.z), a.pos.z); a.rig.root.rotation.y = a.yaw;
     a.rig.update(dt);
   }
+  const markSig = (g) => (g.scars || []).join('+') + '|' + (g.wounds || []).filter((w) => w.w > 0).map((w) => w.part).sort().join('+');
   function syncGlads(St) {
     const want = (St.glads || []).slice(0, maxGlads), ids = new Set(want.map((g) => g.id));
     for (const [id, a] of actors) if (!ids.has(id)) { a.dispose(); actors.delete(id); }
-    want.forEach((g, i) => { let a = actors.get(g.id); if (!a) { a = new Actor(g, i); actors.set(g.id, a); } else { a.g = g; } });
+    want.forEach((g, i) => { let a = actors.get(g.id); if (a && a.mk !== markSig(g)) { a.dispose(); actors.delete(g.id); a = null; } /* scars or bandages changed: rebuild the body */ if (!a) { a = new Actor(g, i); actors.set(g.id, a); } else { a.g = g; } });
     assign(St);
   }
 
@@ -617,6 +618,7 @@ export function createHub({ renderer, camera, audio, tier = 'high', post = null 
       const tt = A.to.target.clone(); if (orb.follow) tt.set(orb.follow.pos.x, orb.follow.pos.y + 1.0, orb.follow.pos.z);
       orb.target.lerpVectors(A.from.target, tt, e); if (A.t >= A.dur) orb.anim = null; orb.idleT = 0;
     } else {
+      stepKeys(dt);
       if (orb.follow) { const f = orb.follow; orb.target.x += (f.pos.x - orb.target.x) * Math.min(1, dt * 4); orb.target.z += (f.pos.z - orb.target.z) * Math.min(1, dt * 4); orb.target.y += (f.pos.y + 1.0 - orb.target.y) * Math.min(1, dt * 4); }
       orb.az += orb.vAz * dt; orb.pitch += orb.vPitch * dt; orb.dist *= Math.exp(orb.vZoom * dt); orb.target.addScaledVector(orb.vPan, dt);
       const k = Math.exp(-dt * 5.0); orb.vAz *= k; orb.vPitch *= k; orb.vZoom *= k; orb.vPan.multiplyScalar(k);
@@ -625,12 +627,42 @@ export function createHub({ renderer, camera, audio, tier = 'high', post = null 
     }
     applyCamera();
   }
+  // ---- keyboard camera (WAVE3): arrows / WASD pan, Q E rotate, + - zoom, PageUp PageDown tilt, Home or 0 = overview. The canvas is focusable with a visible ring and an aria-live hint.
+  const keysHeld = new Set(); let hintEl = null, srEl = null, hintT = 0, srT = 0;
+  const KEYMAP = { arrowup: 'f', w: 'f', arrowdown: 'b', s: 'b', arrowleft: 'l', a: 'l', arrowright: 'r', d: 'r', q: 'rotL', e: 'rotR', '+': 'zin', '=': 'zin', add: 'zin', '-': 'zout', _: 'zout', subtract: 'zout', pageup: 'tiltU', pagedown: 'tiltD' };
+  const HINT = 'Camera: arrow keys or WASD pan, Q and E rotate, plus and minus zoom, Page Up and Down tilt, Home resets.';
+  function ensureHint() {
+    if (hintEl || typeof document === 'undefined') return;
+    hintEl = document.createElement('div'); hintEl.className = 'lx-bl-hubhint'; hintEl.setAttribute('aria-hidden', 'true'); hintEl.textContent = HINT;
+    srEl = document.createElement('div'); srEl.className = 'lx-bl-sr'; srEl.setAttribute('role', 'status'); srEl.setAttribute('aria-live', 'polite'); document.body.append(hintEl, srEl);
+  }
+  const say = (txt) => { if (!srEl) return; clearTimeout(srT); srT = setTimeout(() => { srEl.textContent = ''; srEl.textContent = txt; }, 350); };
+  const showHint = (on) => { ensureHint(); if (!hintEl) return; hintEl.classList.toggle('on', !!on); clearTimeout(hintT); if (on) hintT = setTimeout(() => hintEl && hintEl.classList.remove('on'), 7000); };
+  function onKeyDown(e) {
+    if (!orb.enabled || e.ctrlKey || e.metaKey || e.altKey) return; const k = (e.key || '').toLowerCase();
+    if (k === 'home' || k === '0') { e.preventDefault(); overview(false); say('Camera reset to the overview.'); return; }
+    if (k === 'escape') { dom.blur(); return; }
+    const a = KEYMAP[k]; if (!a) return; e.preventDefault(); keysHeld.add(a); touchedNow(); showHint(false);
+  }
+  function onKeyUp(e) {
+    const a = KEYMAP[(e.key || '').toLowerCase()]; if (!a) return; keysHeld.delete(a);
+    if (!keysHeld.size) say(`Camera: zoom ${Math.round(((DIST[1] - orb.dist) / (DIST[1] - DIST[0])) * 100)} percent, turned ${Math.round((((orb.az - (Math.PI + 0.4)) * 180 / Math.PI) % 360 + 360) % 360)} degrees from the default view}.`);
+  }
+  const onFocus = () => { if (orb.enabled) showHint(true); }, onBlurKb = () => { keysHeld.clear(); showHint(false); };
+  function stepKeys(dt) {
+    if (!keysHeld.size) return; touchedNow(); orb.follow = null;
+    const f = (keysHeld.has('f') ? 1 : 0) - (keysHeld.has('b') ? 1 : 0), r = (keysHeld.has('r') ? 1 : 0) - (keysHeld.has('l') ? 1 : 0), sp = orb.dist * 0.7 * dt;
+    if (f || r) { const fx = -Math.sin(orb.az), fz = -Math.cos(orb.az); orb.target.x += (fx * f + -fz * r) * sp; orb.target.z += (fz * f + fx * r) * sp; }
+    orb.az += ((keysHeld.has('rotR') ? 1 : 0) - (keysHeld.has('rotL') ? 1 : 0)) * 1.3 * dt;
+    orb.dist *= Math.exp(((keysHeld.has('zout') ? 1 : 0) - (keysHeld.has('zin') ? 1 : 0)) * 0.9 * dt);
+    orb.pitch += ((keysHeld.has('tiltU') ? 1 : 0) - (keysHeld.has('tiltD') ? 1 : 0)) * 0.7 * dt;
+  }
   // ---- pointer input
   const ptrs = new Map(); let tap = null, pinch = null, lastHoverT = 0;
   const raycaster = new THREE.Raycaster(); const ndc = new THREE.Vector2();
   const touchedNow = () => { orb.idleT = 0; orb.touched = true; orb.anim = null; };
   function onDown(e) {
-    if (!orb.enabled) return; try { dom.setPointerCapture(e.pointerId); } catch (err) { /* */ }
+    if (!orb.enabled) return; try { dom.setPointerCapture(e.pointerId); } catch (err) { /* */ } try { dom.focus({ preventScroll: true }); } catch (err) { /* */ }
     ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY, btn: e.button, t: performance.now() });
     touchedNow(); orb.vAz = orb.vPitch = 0; orb.vPan.set(0, 0, 0);
     if (ptrs.size === 1) tap = { x: e.clientX, y: e.clientY, t: performance.now(), moved: 0, id: e.pointerId };
@@ -852,6 +884,8 @@ export function createHub({ renderer, camera, audio, tier = 'high', post = null 
       dom.style.touchAction = 'none'; dom.style.cursor = 'grab';
       dom.addEventListener('pointerdown', onDown); dom.addEventListener('pointermove', onMove); dom.addEventListener('pointerup', onUp); dom.addEventListener('pointercancel', onUp);
       dom.addEventListener('wheel', onWheel, { passive: false }); dom.addEventListener('contextmenu', onCtx); dom.addEventListener('pointerleave', onLeave);
+      dom.tabIndex = 0; dom.classList.add('lx-bl-focus'); dom.setAttribute('role', 'application'); dom.setAttribute('aria-label', 'Your ludus. Arrow keys or WASD pan the camera, Q and E rotate, plus and minus zoom.');
+      dom.addEventListener('keydown', onKeyDown); dom.addEventListener('keyup', onKeyUp); dom.addEventListener('focus', onFocus); dom.addEventListener('blur', onBlurKb);
       try { audio && audio.attachUi && audio.attachUi(document.getElementById('ui'), { hover: true }); } catch (err) { /* audio optional */ }
       orb.enabled = true; entered = true; orb.aspect = (dom.clientWidth || 1100) / (dom.clientHeight || 650); camera.aspect = orb.aspect; camera.updateProjectionMatrix();
       hub.refresh(St, true); overview(true);
@@ -861,6 +895,7 @@ export function createHub({ renderer, camera, audio, tier = 'high', post = null 
       orb.enabled = false; entered = false; ptrs.clear(); try { audio && audio.ambient && audio.ambient.stop(); } catch (err) { /* audio optional */ }
       dom.removeEventListener('pointerdown', onDown); dom.removeEventListener('pointermove', onMove); dom.removeEventListener('pointerup', onUp); dom.removeEventListener('pointercancel', onUp);
       dom.removeEventListener('wheel', onWheel); dom.removeEventListener('contextmenu', onCtx); dom.removeEventListener('pointerleave', onLeave);
+      dom.removeEventListener('keydown', onKeyDown); dom.removeEventListener('keyup', onKeyUp); dom.removeEventListener('focus', onFocus); dom.removeEventListener('blur', onBlurKb); keysHeld.clear(); showHint(false); dom.removeAttribute('tabindex');
       preview = -1; hideCard(); setHover(null);
     },
     refresh(St, instant = false) {

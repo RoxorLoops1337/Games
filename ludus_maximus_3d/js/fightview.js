@@ -12,6 +12,9 @@ import { createGladiator } from './gladiator.js';
 import * as BF from './beast_fx.js'; // BEAST: Venatio beasts (rig, sounds, events)
 import * as U from './ui_kit.js';
 import { trimShadowCasters } from './post.js';
+import { createTactics } from './tactics.js'; // TACTICS: orders, readability overlay
+import { vsIntro } from './bracket.js'; // BRACKET: VS intro
+import { createReel, injectReelCss } from './reel.js'; // REEL: highlight reel + share clip
 
 const D = () => globalThis.LM_D, L = () => globalThis.LM;
 const STEP = 1 / 30;
@@ -33,7 +36,12 @@ const quietFx = (real) => new Proxy(real, { get: (t, k) => (k === 'groundDecal' 
 const _head = new THREE.Vector3(), _hp = new THREE.Vector3(), _kp = new THREE.Vector3(), _kd = new THREE.Vector3(), KICK = { size: 0.45 }; // per-frame temporaries (no allocation in the frame loop)
 const readSpeed = () => { try { const v = +localStorage.getItem(SPEED_KEY); return SPEEDS.includes(v) ? v : 1; } catch (e) { return 1; } };
 const STATUS_FX = new Set(['stun', 'slow', 'bleed', 'blind', 'taunt', 'root', 'burn']);
-const STATUS_LABEL = { stun: 'STUNNED', slow: 'SLOWED', bleed: 'BLEEDING', blind: 'BLINDED', taunt: 'TAUNT', netted: 'NETTED', guard: 'GUARD', frenzy: 'FRENZY', rage: 'RAGE', rally: 'RALLY', root: 'ROOTED', air: 'KNOCKED UP', spin: 'WHIRLING' };
+const STATUS_LABEL = { expo: 'EXPOSED', stun: 'STUNNED', slow: 'SLOWED', bleed: 'BLEEDING', blind: 'BLINDED', taunt: 'TAUNT', netted: 'NETTED', guard: 'GUARD', frenzy: 'FRENZY', rage: 'RAGE', rally: 'RALLY', root: 'ROOTED', air: 'KNOCKED UP', spin: 'WHIRLING' };
+
+// audio variation: which weapon rang on whose armour (the audio engine round-robins when it gets nothing)
+const WEAPON_SND = { murmillo: 'sword', thraex: 'sword', retiarius: 'spear', hoplomachus: 'spear', dimachaerus: 'dagger' };
+const weaponOf = (u) => WEAPON_SND[u && u.style] || 'sword';
+const armorOf = (u) => { const a = u && u.g && u.g.gear && u.g.gear.armor; const r = a ? (typeof a.rar === 'number' ? a.rar : typeof a.r === 'number' ? a.r : 0) : -1; return r < 0 ? 'none' : ['leather', 'leather', 'bronze', 'mail', 'plate'][Math.min(4, r)]; };
 
 // keeps the kit button's label span (aria / styling) when the text changes
 function setBtnLabel(b, text) { const l = b.querySelector && b.querySelector('.lx-btn-label'); if (l) l.textContent = text; else b.textContent = text; }
@@ -62,7 +70,8 @@ export class FightView {
     this.dir = new FightDirector({ aspect: camera.aspect, radius: 13.2, gateAngle: 0 });
     this.t = 0; this.F = null; this.fm = new Map(); this.sim = 0; this.acc = 0; this.userSpeed = readSpeed(); this.phase = 'idle';
     this.paused = false; this.pauseModal = null; this.ex = null; this.execPending = null; this.forfeited = false; this.rate = 1; this.camMode = 'auto'; this.epoch = 0; this.lsK = 0; this.ls = null; this.lsCool = 0;
-    this.buildHud(); this.bindInput();
+    this.tacSlow = 1; this.buildHud(); this.bindInput(); this.tac = createTactics(this); // TACTICS
+    injectReelCss(); this.reel = createReel(this); // REEL
   }
 
   // ---------------------------------------------------------------- HUD
@@ -73,7 +82,7 @@ export class FightView {
     this.hudBox = document.createElement('div'); this.hudBox.className = 'lx-hud';
     const top = document.createElement('div'); top.className = 'lx-hud-top';
     this.speedBtn = U.button({ label: 'x' + this.userSpeed, variant: 'bronze', onClick: () => this.setSpeed(SPEEDS[(SPEEDS.indexOf(this.userSpeed) + 1) % SPEEDS.length]) });
-    this.speedBtn.setAttribute('aria-label', 'Game speed'); this.speedBtn.title = 'Game speed (1, 2, 3)';
+    this.speedBtn.setAttribute('aria-label', 'Game speed'); this.speedBtn.title = 'Game speed (Shift+1, 2, 3)';
     this.pauseBtn = U.button({ label: '', variant: 'bronze', onClick: () => this.pause(!this.paused) }); this.pauseBtn.setAttribute('aria-label', 'Pause'); this.pauseBtn.title = 'Pause (P)'; this.pauseBtn.classList.add('lx-fv-pause');
     this.pauseBtn.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M8 5v14M16 5v14" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" fill="none"/></svg>';
     this.skipBtn = U.button({ label: 'Skip', variant: 'ghost', onClick: () => { this.skip = true; } });
@@ -130,8 +139,12 @@ export class FightView {
       if (document.querySelector('.lx-scrim') && !this.pauseModal) return;   // some other dialog owns the keyboard
       const k = e.key;
       if (k === 'p' || k === 'P') { e.preventDefault(); this.pause(!this.paused); }
+      else if (k === 'Escape' && this.tac && this.tac.wheelOpen && this.tac.wheelOpen()) this.tac.closeWheel();
       else if (k === 'Escape' && !this.paused) this.pause(true);
-      else if (!this.replaying && (k === '1' || k === '2' || k === '3')) this.setSpeed(+k);
+      else if (!this.replaying && e.shiftKey && /^Digit[123]$/.test(e.code || '')) this.setSpeed(+e.code.slice(5));   // TACTICS: 1 to 6 are orders now, speed is Shift+1/2/3
+      else if (!this.replaying && /^[1-6]$/.test(k) && this.canOrder()) { e.preventDefault(); this.tac.hotkey(+k); }
+      else if (!this.replaying && k === 'Tab' && this.canOrder()) { e.preventDefault(); this.tac.cycleSel(); }
+      else if (!this.replaying && (k === 'f' || k === 'F') && this.canOrder()) { e.preventDefault(); this.tac.cycleFocus(); }
     };
     document.addEventListener('keydown', this._key);
     // replay: drag the canvas to orbit (the camera switches to a free orbit around the action; the 'Auto' chip hands it back)
@@ -149,6 +162,15 @@ export class FightView {
     this.audio.sfx('uiTap', { gain: 0.4 });
   }
 
+  /** TACTICS: orders are possible only in a live fight (not a replay, not paused, not in the intro or the outro) */
+  canOrder() { return !!(this.F && !this.F.done && this.phase === 'fight' && !this.paused && !this.replaying && !this.skip); }
+  /** an order through tap() so it is recorded by sim step: ('stance', unitId, 'press'|'hold'|'retreat'|'guard'|'none'), ('swap', 'A'), ('rally', 'A') */
+  command(kind, a, b) {
+    if (!this.canOrder()) return false; const r = this.tap(kind, a, b);
+    if (r === true) this.audio.sfx(kind === 'rally' ? 'horn' : 'uiConfirm', { gain: 0.6 });
+    else { this.audio.sfx('uiError'); this.banner(r === 'cd' ? 'Not ready yet' : kind === 'swap' ? 'Swap needs two partners and two foes' : 'Cannot do that now', 'info'); }
+    return r;
+  }
   canPause() { return !!(this.F && !this.F.done && this.phase === 'fight'); }
   syncPauseBtn() {
     if (!this.pauseBtn) return; const dis = !this.canPause();
@@ -181,7 +203,7 @@ export class FightView {
     const sw = (label, on, cb) => { const r = el('div', 'lx-fv-pmrow'), b = el('button', 'lx-fv-chip lx-fv-sw'); b.type = 'button'; b.setAttribute('role', 'switch'); const draw = (v) => { b.setAttribute('aria-checked', v ? 'true' : 'false'); b.setAttribute('aria-pressed', v ? 'true' : 'false'); b.textContent = v ? 'On' : 'Off'; }; draw(on); b.onclick = () => { on = !on; draw(on); cb(on); this.audio.sfx('uiTap', { gain: 0.4 }); }; r.append(el('span', 'lx-fv-pml', label), b); return r; };
     const [spRow, spBtns] = seg('Speed', SPEEDS.map((v) => [v, 'x' + v]), this.userSpeed, (v) => this.setSpeed(v)); this.pmSpeed = spBtns;
     const [gRow] = seg('Gore', [['off', 'Off'], ['low', 'Low'], ['full', 'Full']], p.gore || 'full', (v) => this.setPref('gore', v));
-    body.append(spRow, gRow, sw('Sound', !p.muted, (v) => this.setPref('muted', !v)), sw('Reduced motion', !!p.rm, (v) => this.setPref('rm', v)));
+    body.append(spRow, gRow, sw('Sound', !p.muted, (v) => this.setPref('muted', !v)), sw('Reduced motion', !!p.rm, (v) => this.setPref('rm', v)), sw('Target links', p.links !== false, (v) => { this.setPref('links', v); this.tac.setLinks(v); }));
     const resume = U.button({ label: 'Resume', variant: 'gold', icon: 'sword', block: true, onClick: () => this.pause(false) });
     const quit = U.button({ label: 'Quit fight', variant: 'danger', block: true, onClick: () => this.confirmQuit() });
     const m = U.modal({ title: 'Paused', body, actions: [resume, quit], onClose: () => { if (this.pauseModal === m) { this.pauseModal = null; this.pause(false); } } });
@@ -203,7 +225,7 @@ export class FightView {
   // ---------------------------------------------------------------- replay controls: pause, restart, scrub, rate, camera presets
   buildReplayBar() {
     if (this.rbar) { this.rbar.remove(); this.rbar = null; }
-    this.speedBtn.style.display = this.replaying ? 'none' : ''; if (!this.replaying) return;
+    this.speedBtn.style.display = this.replaying ? 'none' : ''; if (!this.replaying || (this.opts && this.opts.reel)) return;   // REEL: the reel has its own controls
     const el = (t, c, txt) => { const e = document.createElement(t); if (c) e.className = c; if (txt != null) e.textContent = txt; return e; };
     const bar = this.rbar = el('div', 'lx-fv-rbar'); bar.style.pointerEvents = 'auto';
     const chip = (txt, label, on) => { const b = el('button', 'lx-fv-chip', txt); b.type = 'button'; b.setAttribute('aria-label', label); b.onclick = () => { on(); this.audio.sfx('uiTap', { gain: 0.4 }); }; return b; };
@@ -248,7 +270,7 @@ export class FightView {
   restartReplay() {
     const R = this.opts.replay, keep = { p: this.promise, r: this.resolve }, o = this.opts, cam = this.camMode, rate = this.rate, was = this.paused;
     this.paused = false; const F2 = structuredClone(R.snap); F2.replay = R;
-    this.start(F2, o); this.promise = keep.p; this.resolve = keep.r; this.rate = rate; if (cam !== 'auto' && cam !== 'free') this.setCam(cam); this.paused = was; this.syncReplayBar();
+    this._restarting = true; try { this.start(F2, o); } finally { this._restarting = false; } this.promise = keep.p; this.resolve = keep.r; this.rate = rate; if (cam !== 'auto' && cam !== 'free') this.setCam(cam); this.paused = was; this.syncReplayBar();
   }
   fastForward(n) {
     const F = this.F, lm = L(), au = this.audio, sfx0 = au.sfx, crowd0 = au.crowd, real = this.fx, quiet = quietFx(real), t0 = performance.now(), NEAR = 45; let i = 0, crossed = false; this.epoch++;
@@ -269,10 +291,11 @@ export class FightView {
   /** F: fight from core/arena.js createFight. opts: {league, intro:true, quiet}. Resolves with {winner, F} after the outro. */
   start(F, opts = {}) {
     this.dispose(); this.clearEnd(); this.ultBar.style.visibility = ''; if (this.extras) this.extras.style.visibility = '';
-    this.resetPresentation(); this.F = F; this.opts = opts; this.replaying = !!opts.replay; this.tapI = 0; this.done = false; this.phase = 'intro'; this.phaseT = 0; this.skip = false; this.acc = 0; this.evSeen = 0; this.lastHitT = -9; this.recent = 0; this.intensity = 0.2; this.intTimer = 0;
+    this.resetPresentation(); if (!opts.replay && !F.cmdAI && !F.quiet) { F.cmdAI = true; if (F.replay && F.replay.snap) F.replay.snap.cmdAI = true; }   // TACTICS: live foes use tactics; the replay snapshot must agree
+    this.F = F; this.opts = opts; this.replaying = !!opts.replay; this.tapI = 0; this.done = false; this.phase = 'intro'; this.phaseT = 0; this.skip = false; this.acc = 0; this.evSeen = 0; this.lastHitT = -9; this.recent = 0; this.intensity = 0.2; this.intTimer = 0;
     if (this.replaying) L().setRandom(L().mulberry(opts.replay.seed));
     this.gore.setTier(this.tier); this.gore.reset(this.goreSeed(F, opts));
-    this.hud.style.display = 'block'; this.fx.reset && this.fx.reset(); this.arena.setGate(0); this.arena.setHype(0.3); this.feel.reset && this.feel.reset();
+    this.hud.style.display = 'block'; this.tac.start(F, !!opts.replay); this.fx.reset && this.fx.reset(); this.arena.setGate(0); this.arena.setHype(0.3); this.feel.reset && this.feel.reset();
     const nA = F.units.filter((u) => u.side === 'A').length, nB = F.units.length - nA;
     F.units.forEach((u) => {
       const rig = u.beast ? BF.makeRig(this, u) : createGladiator(u, { tunic: u.side === 'B' ? (u.g.color || null) : (u.g.color || null) }); // BEAST: beasts get their own rig
@@ -282,6 +305,7 @@ export class FightView {
       const plate = U.nameplate({ name: u.name, level: u.g.lvl, hp: u.hp, maxHp: u.maxhp, team: u.side === 'A' ? 'ally' : 'foe', rank: 0 });
       this.plates.append(plate); f.plate = plate; this.fm.set(u.id, f); this._fmL = null; this.gore.addFighter(u.id, rig, { maxhp: u.maxhp, side: u.side }); if (u.beast) BF.setup(this, f, u); // BEAST
       if (u.side === 'B') { plate.style.pointerEvents = 'auto'; plate.style.cursor = 'pointer'; plate.addEventListener('pointerdown', () => this.focusUnit(u.id)); }
+      else if (!u.beast && !this.replaying) { plate.style.pointerEvents = 'auto'; plate.style.cursor = 'pointer'; plate.addEventListener('pointerdown', () => this.tac.selectUnit(u.id)); }   // TACTICS: tap an ally plate to give it orders
     });
     // ultimates (player side; none while replaying)
     const mine = this.replaying ? [] : F.units.filter((u) => u.side === 'A'); let hk = 0;
@@ -292,14 +316,16 @@ export class FightView {
     this.applyWeather(F.meta ? F.meta.weather : 'clear');
     { const m = F.meta || {}, id = pickTheme(m); this.theme = id; this.arena.setTheme(id, { rig: this.light, scene: this.scene, sky: this.sky, renderer: this.renderer, wx: m.weather, night: themeNight(id, m) }); } // ARENA_THEME: per-fight arena look (env_arena.js THEMES)
     if (!this.replaying) this.buildExtras(F); else if (this.extras) { this.extras.remove(); this.extras = null; if (this.autoBtnOld) { this.autoBtnOld.remove(); this.autoBtnOld = null; } }
-    if (!opts.noSplash && !this.replaying) { const a = F.units.filter((u) => u.side === 'A'), b = F.units.filter((u) => u.side === 'B'); const side = (us) => ({ name: us.map((u) => u.name).join(' & '), sub: us.map((u) => D().STYLES[u.style].n).join(' / ') + ' \u00b7 Lv ' + Math.round(us.reduce((x, u) => x + u.g.lvl, 0) / us.length), stars: Math.min(5, Math.round(us.reduce((x, u) => x + (L().stars ? L().stars(u.g) : 0), 0) / us.length)) }); setTimeout(() => U.vsSplash({ a: side(a), b: side(b), league: opts.league != null && D().LEAGUES[opts.league] ? D().LEAGUES[opts.league].n : '', host: this.host, ms: 2300 }), 350); }
+    if (!opts.noSplash && !this.replaying) { const a = F.units.filter((u) => u.side === 'A'), b = F.units.filter((u) => u.side === 'B'); setTimeout(() => { if (this.F === F && !this.done) vsIntro({ a, b, meta: F.meta || {}, theme: this.theme, league: opts.league != null && D().LEAGUES[opts.league] ? D().LEAGUES[opts.league].n : '', host: this.host, ms: 2700 }); }, 350); }   // BRACKET: stronger VS (busts, theme colour, event title)
     this.dir.setAspect(this.camera.aspect);
     this.dir.setShot('establishing', { dur: 3.2 }, 0); this.gateOpen = false;
-    this.audio.music.setMode('arena', { fade: 1.2 }); this.audio.music.setIntensity(0.15); this.audio.crowd(0.3);
+    this.audio.music.setMode(F.units.some((u) => u.beast && /nemean|elephant/.test(String(u.style || u.species || u.kind || ''))) ? 'boss' : F.units.some((u) => u.beast) ? 'beast' : 'arena', { fade: 1.2 }); this.audio.music.setIntensity(0.15); this.audio.crowd(0.3);
     this.audio.sfx('gate'); this.audio.sfx('horn');
     if (this.replaying) { this.phase = 'fight'; this.phaseT = 0; for (const f of this.fm.values()) { f.rx = f.u.x; f.ry = f.u.y; f.rig.root.position.set(f.u.x, 0, f.u.y); } this.arena.setGate(1); this.dir.setShot('follow', {}, 0); this.banner('REPLAY', 'info'); this.skipBtn.textContent = 'Exit'; } else this.skipBtn.textContent = 'Skip';
     this.buildReplayBar(); this.syncPauseBtn(); this.updateSpeedLabel();
     this.promise = new Promise((res) => { this.resolve = res; });
+    if (opts.reel && this.replaying) this.reel.begin(opts.replay);   // REEL
+    else if (!this.replaying) this.reel.reset();
     return this.promise;
   }
 
@@ -345,6 +371,7 @@ export class FightView {
     if (t.kind === 'favor') return lm.useFavor(F);
     if (t.kind === 'focus') { lm.focus(F, 'A', t.a); return true; }
     if (t.kind === 'auto') { F.auto.A = !!t.a; return true; }
+    if (t.kind === 'stance' || t.kind === 'swap' || t.kind === 'rally') return lm.command(F, t.kind, t.a, t.b);   // TACTICS
     return false;
   }
 
@@ -369,7 +396,7 @@ export class FightView {
   updateSpeedLabel() { setBtnLabel(this.speedBtn, 'x' + this.userSpeed); }
 
   dispose() {
-    this.resetPresentation();
+    this.resetPresentation(); this.tac && this.tac.stop(); this.reel && this.reel.stop(!!this._restarting);
     for (const f of this.fm.values()) { this.scene.remove(f.rig.root); f.rig.dispose && f.rig.dispose(); f.plate && f.plate.remove(); f.ring.forEach((r) => r.ring.remove()); }
     this.fm.clear(); this._fmL = null; if (this.ultBar) this.ultBar.innerHTML = '';
     if (this.fx && this.fx.clearDecals) this.fx.clearDecals();
@@ -383,7 +410,7 @@ export class FightView {
     return h >>> 0;
   }
 
-  resize(w, h) { this.cw = 0; this.dir.setAspect(w / h); }
+  resize(w, h) { this.cw = 0; this.dir.setAspect(w / h); this.tac && this.tac.resize(); }
 
   // ---------------------------------------------------------------- per frame
   frame(realDt, t) {
@@ -402,7 +429,7 @@ export class FightView {
     const tail = fight ? this.updateLastStand(realDt, F) : 1;               // last victim on a sliver of hp: slow-mo tail + duel shoulder cam (presentation only, the sim just takes more frames)
     // dt = game seconds this frame (slow-mo, hit-stop, execution ramp). The sim advances dt * speed; animation and fx follow it (up to x3) so x2 / x3 look like fast-forward
     // and never desync from the sim. Audio is untouched (no pitch change): sounds are event driven.
-    const dt = ft.dt * (fight ? pose.timeScale * tail : this.phase === 'outro' && this.ex ? this.ex.scale : 1), vdt = dt * (fight ? Math.min(speedUp, 3) : this.skip ? 3 : 1);
+    const dt = ft.dt * (fight ? pose.timeScale * tail * (this.tacSlow || 1) : this.phase === 'outro' && this.ex ? this.ex.scale : 1), vdt = dt * (fight ? Math.min(speedUp, 3) : this.skip ? 3 : 1);
 
     if (this.phase === 'intro') this.introStep(realDt, dt);
     else if (fight) {
@@ -418,12 +445,12 @@ export class FightView {
     if (this.phase === 'outro') {
       if (!this.ex || this.ex.done) this.outroT += realDt * (this.skip ? 3 : 1);
       const lim = this.replaying ? (this.ex ? 2.6 : 3) : (this.ex ? 4.2 : 5.4);
-      if (this.outroT > lim && !this.done) { if (this.replaying) L().setRandom(null); this.done = true; this.clearEnd(); this.resolve && this.resolve({ winner: F.winner, F }); }
+      if (this.outroT > lim && !this.done && !this.reel.on) { if (this.replaying) L().setRandom(null); this.done = true; this.clearEnd(); this.resolve && this.resolve({ winner: F.winner, F }); }
     }
 
-    this.gore.setTier(this.tier); this.fx.update(vdt, this.camera); this.gore.postFrame(realDt);
+    this.gore.setTier(this.tier); this.fx.update(vdt, this.camera); this.gore.postFrame(realDt); this.reel.tick(realDt);
     this.applyCamera(pose);
-    this.updateHud(realDt, F);
+    this.updateHud(realDt, F); this.tac.frame(realDt, F, t);
     this.updateAudio(realDt, F);
     this.updateRain(realDt, t);
   }
@@ -439,7 +466,7 @@ export class FightView {
   framePaused(realDt) {
     const F = this.F, units = F.units.map((u) => { const f = this.fm.get(u.id); return { id: u.id, x: f.rx ?? u.x, y: f.ry ?? u.y, vx: 0, vy: 0, team: u.side === 'A' ? 0 : 1, alive: !u.down }; });
     if (this.camSpin && this.dir.free) this.dir.freeOrbit(this.camSpin * realDt);
-    const pose = this.dir.update(this.dir.free ? realDt : 0, units); this.applyCamera(pose); this.gore.postFrame(realDt); this.updateReplayBar(); this.syncPauseBtn();
+    const pose = this.dir.update(this.dir.free ? realDt : 0, units); this.applyCamera(pose); this.gore.postFrame(realDt); this.updateReplayBar(); this.syncPauseBtn(); this.tac.frame(realDt, F, this.t);
   }
 
   /** the last living unit of a side is on a sliver of hp while the other side still stands: ease the game clock down and frame the pair with the duel camera */
@@ -471,7 +498,7 @@ export class FightView {
   }
 
   endFight() {
-    const F = this.F; this.phase = 'outro'; this.outroT = 0;
+    const F = this.F; this.phase = 'outro'; this.outroT = 0; if (!this.replaying) this.reel.finish(F);   // REEL: the best moments are stored on the replay record
     const win = F.winner;
     if (F.replay) F.replay.total = F.n || 0;                       // the replay scrubber needs the length of the fight
     this.ultBar.style.visibility = 'hidden'; if (this.extras) this.extras.style.visibility = 'hidden';
@@ -571,6 +598,7 @@ export class FightView {
 
   /** big VICTORY / DEFEAT title: arrives after the kill cam has shown the blow (CSS delay), stays until the results hand-off */
   showEnd(win) {
+    if (this.reel && this.reel.on) return;   // REEL: the reel has its own end card
     this.clearEnd(); const el = this.endEl = document.createElement('div'); el.className = 'lx-fv-end ' + (win ? 'lx-fv-win' : 'lx-fv-lose');
     const k = document.createElement('span'); k.textContent = win ? 'The crowd roars' : 'The crowd falls silent'; const b = document.createElement('b'); b.textContent = win ? 'VICTORY' : 'DEFEAT'; el.append(k, b); this.hud.append(el);
   }
@@ -589,6 +617,7 @@ export class FightView {
     const c = this.camera; c.position.set(pose.pos.x, pose.pos.y, pose.pos.z); c.lookAt(pose.look.x, pose.look.y, pose.look.z);
     if (Math.abs(c.fov - pose.fov) > 0.01) { c.fov = pose.fov; c.updateProjectionMatrix(); }
     this.feel.setBaseFov(pose.fov); this.feel.apply(c); c.updateMatrixWorld();
+    if (this.audio.setListener) this.audio.setListener({ pos: [pose.pos.x, pose.pos.y, pose.pos.z], yaw: Math.atan2(-(pose.look.x - pose.pos.x), -(pose.look.z - pose.pos.z)) }); // spatial sfx follow the camera
   }
 
   // ---------------------------------------------------------------- actors
@@ -657,7 +686,7 @@ export class FightView {
     const hb = this.host.getBoundingClientRect(), rel = (b) => b && { l: b.left - hb.left, r: b.right - hb.left, t: b.top - hb.top, b: b.bottom - hb.top };
     const kids = [...this.topRow.children].map(R).filter(Boolean), bot = [];
     let top = null; if (kids.length) top = { l: Math.min(...kids.map((b) => b.left)) - hb.left - 4, r: Math.max(...kids.map((b) => b.right)) - hb.left + 4, t: 0, b: Math.max(...kids.map((b) => b.bottom)) - hb.top + 4 };
-    for (const el of [this.extras && [...this.extras.children].filter((c) => c.style.display !== 'none')[0] && this.extras, ...this.ultBar.children]) { const r = rel(R(el)); if (r) bot.push(r); }
+    for (const el of [this.extras && [...this.extras.children].filter((c) => c.style.display !== 'none')[0] && this.extras, ...this.ultBar.children, ...(this.tac ? this.tac.avoidEls() : [])]) { const r = rel(R(el)); if (r) bot.push(r); }
     this.avoid.top = top; this.avoid.bottom = bot; this.avoid.sat = top ? Math.max(0, top.b - 40) : 0;
   }
   /** project the head, then slide the plate so it never covers the top button row or the bottom ult buttons, and never leaves the screen */
@@ -691,7 +720,7 @@ export class FightView {
   }
 
   onEvent(e) {
-    const F = this.F, fx = this.fx, A = this.audio, feel = this.feel;
+    const F = this.F, fx = this.fx, A = this.audio, feel = this.feel; this.tac.onEvent(e, F); this.reel.record(F, e);
     const src = e.src ? this.unitById(e.src) : null, dst = e.dst ? this.unitById(e.dst) : null;
     const fs = src && this.fm.get(src.id), fd = dst && this.fm.get(dst.id);
     const pan = (u) => clamp((u.x) / 12, -1, 1);
@@ -721,7 +750,7 @@ export class FightView {
           this.shove(fd, dir, clamp((dst.s && dst.s.guard ? 0.8 + frac * 2 : (frac > 0.03 ? 1.0 + frac * 6.5 : 0.6) + (e.crit ? 1.6 : 0)) / (MASS[dst.style] || 1), 0, 7));
         }
         if (fs && frac > 0.08) fs.rig.animator.hitStop(0.04);
-        if (!(src && src.beast)) A.sfx(e.crit ? 'swordHitCrit' : (e.save || (dst.s && dst.s.guard)) ? 'shieldBlock' : 'swordHit', { pan: pan(dst) }); // BEAST: bites and claws have their own sounds
+        if (!(src && src.beast)) { A.sfx(e.crit ? 'swordHitCrit' : (e.save || (dst.s && dst.s.guard)) ? 'shieldBlock' : 'swordHit', { pan: pan(dst), weapon: src ? weaponOf(src) : undefined, armor: armorOf(dst), vel: clamp(0.3 + frac * 4, 0.3, 1), pos: [dst.x, 0, dst.y] }); if (e.crit && A.music && A.music.accent) A.music.accent('crit'); } // BEAST: bites and claws have their own sounds
         if (src && src.beast || dst.beast) BF.hitFx(this, e, src, dst, fd); // BEAST
         if (!dst.beast && Math.random() < 0.6) A.sfx('hurt', { voice: VOICE[dst.style] ?? 0, pan: pan(dst) });
         if (src && !src.beast && Math.random() < 0.25) A.sfx('grunt', { voice: VOICE[src.style] ?? 0, pan: pan(src) });
@@ -731,7 +760,7 @@ export class FightView {
         this.arena.setHype(clamp(F.hype / 100 + 0.25, 0, 1));
         break;
       }
-      case 'miss': if (dst) { this.num(dst, e.inv ? 'IMMUNE' : 'DODGE', 'miss'); fx.kickup(this.feet(dst), src ? this.dirOf(src, dst) : new THREE.Vector3(1, 0, 0), 4); A.sfx(e.inv ? 'metalClang' : 'miss', { pan: pan(dst) }); } break;
+      case 'miss': if (dst) { this.num(dst, e.inv ? 'IMMUNE' : 'DODGE', 'miss'); fx.kickup(this.feet(dst), src ? this.dirOf(src, dst) : new THREE.Vector3(1, 0, 0), 4); A.sfx(e.inv ? 'parry' : 'miss', { pan: pan(dst) }); } break;
       case 'whiff': if (src) A.sfx('swish', { pan: pan(src), gain: 0.5 }); break;
       case 'tech': if (src) { this.num(src, (D().TECHS[e.tech] || {}).n + '!', 'tech'); fx.ring(this.feet(src), '#f5ead2', 1.8); A.sfx('uiConfirm', { gain: 0.5 }); if (fs) { const an = fs.rig.animator; an.play('attack3', { speed: 1.9 }); } } break;
       case 'dash': if (src) { fx.kickup(this.feet(src), new THREE.Vector3(src.face, 0, 0), 8); A.sfx('dust', { pan: pan(src) }); A.sfx('footstep', { pitch: 0.9 }); fx.trail && fx.trail(fs ? fs.rig.root : this.chest(src), this.col(src)); } break;
@@ -745,7 +774,12 @@ export class FightView {
         if (e.big) for (const f of this.fm.values()) { if (f.u.down) continue; const ddx = (f.rx ?? f.u.x) - e.x, ddz = (f.ry ?? f.u.y) - e.y, d = Math.hypot(ddx, ddz), reach = e.r * 1.5 + 1; if (d < reach) this.shove(f, d < 0.05 ? { x: f.u.side === 'A' ? -1 : 1, z: 0 } : { x: ddx, z: ddz }, 6.5 * (1 - d / reach) / (MASS[f.u.style] || 1)); }
         break;
       }
-      case 'tele': { const h = fx.tele(new THREE.Vector3(e.x, 0.05, e.y), e.r, e.t, e.c || '#e8742a'); (this.teles = this.teles || []).push(h); if (e.haz) this.banner('Fire jets! Get out of the red circle', 'info'); else this.meteorFall(e); break; }
+      case 'tele': {
+        if (e.ult) { // TACTICS: a foe's big ultimate is announced (ground disc or lane drawn by the tactics overlay), the caster glows
+          if (!e.len) { const h = fx.tele(new THREE.Vector3(e.x, 0.05, e.y), e.r, e.t, e.c || '#ff6a2a'); (this.teles = this.teles || []).push(h); }
+          if (fs) fs.rig.flash(Math.min(0.55, e.t), '#ff7a40'); if (src && src.side === 'B') this.banner(((D().ULTS[e.ult] || {}).n || 'Ultimate') + ' incoming!', 'ult'); A.sfx('drum', { gain: 0.7 }); break;
+        }
+        const h = fx.tele(new THREE.Vector3(e.x, 0.05, e.y), e.r, e.t, e.c || '#e8742a'); (this.teles = this.teles || []).push(h); if (e.haz) this.banner('Fire jets! Get out of the red circle', 'info'); else this.meteorFall(e); break; }
       case 'zap': if (src && dst) { fx.zap(this.chest(src), this.chest(dst), '#a8d8ff'); feel.addTrauma && feel.addTrauma(0.1); A.sfx('ultLightning', { gain: 0.4 }); } break;
       case 'hook': if (src && dst) { fx.chain(this.chest(src), this.chest(dst), '#d9e4ee'); fx.shoot(this.chest(src), this.chest(dst), '#eef4fa', { speed: 70, size: 0.22 }); fx.hit(this.chest(dst), this.dirOf(src, dst), { dmgFrac: 0.1 }); A.sfx('netThrow', { pan: pan(src) }); } break;
       case 'bleed': if (dst && e.dmg >= 3) this.num(dst, '-' + e.dmg, e.fire ? 'fire' : 'thorn'); if (dst && !e.fire && this.gore.on) this.gore.onBleed(dst.id, e.dmg); break;
@@ -769,7 +803,7 @@ export class FightView {
         const last = !F.units.some((u) => u.side === dst.side && !u.down && u !== dst);
         if (last && this.canExec(src, dst)) { this.execPending = { src, dst }; this.bump = 0.4; break; }   // staged as an execution once the fight view reaches endFight (startExec)
         fx.hit(this.chest(dst), src ? this.dirOf(src, dst) : new THREE.Vector3(1, 0, 0), { dmgFrac: 0.4, crit: true, flesh: this.gore.on }); fx.dust(this.feet(dst), 14); fx.debris && fx.debris(this.feet(dst), 4); fx.groundDecal(this.feet(dst), 'scuff', { size: 1.6 });
-        this.num(dst, 'DOWN', 'miss'); feel.impact(last ? 'finalKill' : 'kill', {}); if (last && this.post.zoomPunch) this.post.zoomPunch(0.028);
+        this.num(dst, 'DOWN', 'miss'); feel.impact(last ? 'finalKill' : 'kill', {}); if (A.music && A.music.accent) A.music.accent('down'); if (last && this.post.zoomPunch) this.post.zoomPunch(0.028);
         if (fd) { const an = fd.rig.animator, dd0 = src ? this.dirOf(src, dst) : null, ld = dd0 && fd.rig.localDir ? fd.rig.localDir(-dd0.x, -dd0.z) : 1; if (an.die) an.die(ld, { heavy: !!(fd.lastHit && (fd.lastHit.crit || fd.lastHit.frac > 0.3)) }); else an.play('death'); this.dropHandles(dst.id); fd.rig.flash(0.15, '#8a5530'); this.shove(fd, src ? this.dirOf(src, dst) : { x: 1, z: 0 }, 4 / (MASS[dst.style] || 1)); }
         if (dst.beast) BF.down(this, dst); else { A.sfx('deathCry', { voice: VOICE[dst.style] ?? 0, pan: pan(dst) }); this.after(350, () => A.sfx('deathThud', { pan: pan(dst) })); A.sfx('crowdGasp'); } this.bump = 0.4; // BEAST
         if (this.gore.on) { const lh = fd && fd.lastHit, dd = src ? this.dirOf(src, dst) : new THREE.Vector3(1, 0, 0); this.gore.onDown(dst.id, { last, crit: !!(lh && lh.crit) && !!src, frac: lh ? lh.frac : 0.15, dx: lh ? lh.dx : dd.x, dz: lh ? lh.dz : dd.z, big: this.t - (this.bigAoeT ?? -9) < 0.7, mine: dst.side === 'A', noSrc: !src }); }
@@ -777,6 +811,13 @@ export class FightView {
       } break;
       case 'revive': if (dst) { fx.ult.impact('holy', this.feet(dst), 2.4); feel.impact('revive', {}); this.num(dst, 'REVIVE!', 'tech'); A.sfx('healSparkle'); A.sfx('horn'); if (fd) { fd.rig.animator.dead = false; fd.rig.animator.setState('move'); fd.rig.animator.play('getup'); } } break;
       case 'roar': feel.impact('roar', {}); A.sfx(e.fav ? 'crowdCheer' : 'crowdRoar'); this.arena.setWave(1); this.after(3500, () => this.arena.setWave(0)); this.banner(e.fav ? "Crowd's Favor!" : D().CHANTS[(F.peak | 0) % D().CHANTS.length], e.fav ? 'ult' : 'info'); this.recent += 0.2; break;
+      case 'cmd': { // TACTICS: an order was given (ours or the foe's): label, ring, banner
+        const C = (L().CMD || {})[e.a] || { n: e.a, c: '#f2c14e' }, mine = e.side === 'A', who = src ? src.name : '';
+        if (src) { this.num(src, C.n.toUpperCase(), 'status'); fx.ring(this.feet(src), C.c, e.a === 'rally' ? 2.4 : 1.7); }
+        if (mine) this.banner(e.a === 'rally' ? 'Rally! Swing faster, guard lower' : e.a === 'swap' ? 'Partners swap targets' : who + ': ' + C.n, 'info');
+        else this.banner(e.a === 'retreat' ? who + ' falls back' : e.a === 'press' ? who + ' presses the attack' : e.a === 'hold' ? who + ' holds the line' : who + ': ' + C.n, 'info');
+        A.sfx(e.a === 'rally' ? 'horn' : e.a === 'press' ? 'drum' : 'uiConfirm', { gain: mine ? 0.5 : 0.7 }); if (src && e.a === 'rally') this.arena.setWave(1), this.after(2200, () => this.arena.setWave(0)); break;
+      }
       case 'beast': BF.event(this, e, src, dst, fs, fd); break; // BEAST: roar, howl, enrage, telegraph, charge, land, stomp, javelin
       case 'favorready': this.banner("Crowd's Favor ready!", 'ult'); A.sfx('crowdCheer'); break;
       default: break;
@@ -791,10 +832,19 @@ export class FightView {
     const h = this.fx.shoot(from, to, e.c || '#ff9a3a', { speed: from.distanceTo(to) / T, size: 0.62 }); this.audio.sfx('swish', { pitch: 0.5, gain: 0.6, heavy: true }); return h;
   }
 
-  /** floating number with per-target stacking so simultaneous numbers fan out instead of overlapping */
+  /** floating number with per-target stacking so simultaneous numbers fan out instead of overlapping.
+   *  READABILITY declutter: a global budget (7 per 0.6 s, crits and DOWN always pass), tiny hits are dropped while a target already shows two numbers,
+   *  repeated status words are merged, and the size follows the share of max hp (small hits are smaller, big ones larger). */
   num(u, text, kind) {
-    const f = this.fm.get(u.id); const now = this.t; f.nums = (f.nums || []).filter((x) => now - x < 0.7); const k = f.nums.length; f.nums.push(now);
-    const p = this.chest(u, 1.95 + 0.34 * Math.min(k, 5)); p.x += ((k % 2) ? 1 : -1) * 0.18 * Math.min(k, 3); this.fx.number(p, text, kind);
+    const f = this.fm.get(u.id); const now = this.t; f.nums = (f.nums || []).filter((x) => now - x < 0.7); const k = f.nums.length;
+    const pri = kind === 'crit' || text === 'DOWN' || kind === 'heal' && k === 0, tl = this.numT = (this.numT || []).filter((x) => now - x < 0.6);
+    if (!pri && tl.length >= 7) return;
+    let scale = 1;
+    if (kind === 'dmg' || kind === 'fire' || kind === 'thorn') { const v = parseInt(text, 10) || 0, fr = u.maxhp ? v / u.maxhp : 0.1; if (fr < 0.035 && k >= 2) return; scale = clamp(0.72 + fr * 3.2, 0.72, 1.3); }
+    else if (kind === 'status' || kind === 'tech') { if (f.lastWord === text && now - (f.lastWordT ?? -9) < 1.4) return; if (kind === 'status' && now - (f.lastWordT ?? -9) < 0.45) return; f.lastWord = text; f.lastWordT = now; scale = 0.82; }
+    else if (kind === 'crit') scale = 1.1;
+    tl.push(now); f.nums.push(now);
+    const p = this.chest(u, 1.95 + 0.34 * Math.min(k, 5)); p.x += ((k % 2) ? 1 : -1) * 0.18 * Math.min(k, 3); this.fx.number(p, text, kind, { scale });
   }
   nearestFoe(u) { let best = null, bd = 1e9; for (const o of this.F.units) { if (o.side === u.side || o.down) continue; const d = Math.hypot(o.x - u.x, o.y - u.y); if (d < bd) { bd = d; best = o; } } return best; }
   flashHurt(fd, frac) { if (!fd) return; fd.rig.flash(0.09 + Math.min(0.08, frac), '#8a5530'); fd.rig.squashKick && fd.rig.squashKick(-0.05 - Math.min(0.1, frac)); }

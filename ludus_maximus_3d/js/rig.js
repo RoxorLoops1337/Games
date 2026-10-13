@@ -347,29 +347,44 @@ export function mirrorPose(p) {
 // ---------------------------------------------------------------- keyframed clips
 // keys: [{t:seconds, p:sparsePose|'guard', e:easeName (arrival easing)}]. Unspecified joints inherit the previous key.
 // A clip is {name, dur, loop, hold, mask:'full'|'upper', additive, events:[{t,name}], sample(t,P)}.
+// PERF: every clip is an instance of ONE class with a fixed set of fields and ONE shared sample() on the prototype. Clips used to be object literals whose shape depended on the options
+// (4 hidden classes) with a fresh sample closure each (195 distinct call targets per rig set); attack clips even replaced sample on the instance. That polymorphism made V8 throw the
+// optimised Animator.update away whenever a new fight created rigs (optimisation status flipped to "not optimised" after fight starts), and unoptimised code boxes every double.
+class Clip {
+  constructor(name, dur, full, o) {
+    this.name = name; this.dur = dur; this.loop = false; this.hold = false; this.mask = 'full'; this.additive = false; this.events = []; this.fadeIn = 0.07; this.fadeOut = 0.12;
+    this.ground = undefined; this.info = undefined; this.weapon = undefined; this.weaponTwoHand = undefined;
+    this.full = full; this.fn = null; this.lag = null;   // fn: procedural loop clip (idle / walk / run / strafe); lag: scratch Pose of an attack clip (distal joints trail the clip time)
+    if (o) for (const k in o) this[k] = o[k];
+  }
+  sample(t, P) {
+    if (this.fn !== null) return this.fn(t % this.dur, P);
+    if (this.lag === null) return this.keys(t, P);
+    const L = this.lag; this.keys(t, P); this.keys(t - 0.04 > 0 ? t - 0.04 : 0, L);   // overlapping action: distal joints trail a little (whip / follow-through)
+    for (let n = 0; n < LAG_I.length; n++) { const i = LAG_I[n], w = LAG_W[n]; for (let k = 0; k < 3; k++) { const x = P.r[i + k]; P.r[i + k] = x + (L.r[i + k] - x) * w; } }
+    return P;
+  }
+  keys(t, P) {
+    const full = this.full;
+    t = t > 0 ? t : 0; if (!this.loop && t > this.dur) t = this.dur; else if (this.loop && this.dur > 0) t = t % this.dur;
+    let i = 0; while (i < full.length - 2 && t > full[i + 1].t) i++;
+    const a = full[i], b = full[Math.min(i + 1, full.length - 1)];
+    const u = b.t > a.t ? clamp((t - a.t) / (b.t - a.t), 0, 1) : 1, k = b.e(u);
+    // PERF: keys are densified once (lazily), so sampling is one mix of two flat poses instead of two sparse applies with for-in
+    const A = a.d || (a.d = new Pose().clear().apply(a.p)), B = b.d || (b.d = new Pose().clear().apply(b.p)), g = this.ground;
+    P.clear(); if (g !== undefined) P.ground = g;
+    P.mix(A, B, k);
+    if (g !== undefined) P.ground = g;
+    return P;
+  }
+}
 export function keyClip(name, keys, o = {}, stance = null) {
   const full = []; let prev = {};
   for (const k of keys) {
     const src = k.p === 'guard' ? (stance ? stance.guard : {}) : k.p;
-    prev = Object.assign({}, prev, src); full.push({ t: k.t, p: prev, e: ease[k.e || 'inOutCubic'] });
+    prev = Object.assign({}, prev, src); full.push({ t: k.t, p: prev, e: ease[k.e || 'inOutCubic'], d: null });
   }
-  const base = new Pose();
-  const clip = Object.assign({
-    name, dur: keys[keys.length - 1].t, loop: false, hold: false, mask: 'full', additive: false, events: [], fadeIn: 0.07, fadeOut: 0.12,
-    sample(t, P) {
-      t = Math.max(0, t); if (!this.loop && t > this.dur) t = this.dur; else if (this.loop && this.dur > 0) t = t % this.dur;
-      let i = 0; while (i < full.length - 2 && t > full[i + 1].t) i++;
-      const a = full[i], b = full[Math.min(i + 1, full.length - 1)];
-      const u = b.t > a.t ? clamp((t - a.t) / (b.t - a.t), 0, 1) : 1, k = b.e(u);
-      // PERF: keys are densified once (lazily), so sampling is one mix of two flat poses instead of two sparse applies with for-in
-      const A = a.d || (a.d = new Pose().clear().apply(a.p)), B = b.d || (b.d = new Pose().clear().apply(b.p));
-      P.clear(); if (o.ground !== undefined) P.ground = o.ground;
-      P.mix(A, B, k);
-      if (o.ground !== undefined) P.ground = o.ground;
-      return P;
-    },
-  }, o);
-  return clip;
+  return new Clip(name, keys[keys.length - 1].t, full, o);
 }
 
 // ---------------------------------------------------------------- attack timing tables (seconds at speed 1)
@@ -407,7 +422,7 @@ function attackClip(weapon, name, stance, poses) {
   ];
   keys[3].t = Math.min(keys[3].t, t2 - 0.01);
   const c = keyClip(name, keys, { mask: 'full', events: [{ t: t1, name: 'swing' }, { t: t1 + T.strike * 0.85, name: 'hit' }], weapon }, stance);
-  const base = c.sample, P2 = new Pose(); c.sample = function (t, P) { base.call(this, t, P); base.call(this, Math.max(0, t - 0.04), P2); for (let n = 0; n < LAG_I.length; n++) { const i = LAG_I[n], w = LAG_W[n]; for (let k = 0; k < 3; k++) { const x = P.r[i + k]; P.r[i + k] = x + (P2.r[i + k] - x) * w; } } return P; };
+  c.lag = new Pose();
   c.info = attackInfo(weapon, name); return c;
 }
 
@@ -561,7 +576,7 @@ function idleSample(t, P, c) {
   r[O_neck] = -0.02 * br; r[O_neck + 1] = 0; r[O_neck + 2] = 0;
   r[O_head] = -0.015 * br - 0.04 * al; r[O_head + 1] = 0.06 * Math.sin(t * 0.4 + 1); r[O_head + 2] = 0.01 * sh;
   relaxedArms(P, t, c, 0.02 * br); r[O_sL + 2] += 0.012 * br; r[O_sR + 2] += -0.012 * br;
-  const wl = Math.max(0, sh), wr = Math.max(0, -sh); // unweighted leg flexes a little
+  const wl = sh > 0 ? sh : 0, wr = sh < 0 ? -sh : 0; // unweighted leg flexes a little
   r[O_hL] = -0.03 - 0.16 * al; r[O_hL + 1] = 0.1; r[O_hL + 2] = 0.07 + 0.03 * wl; r[O_hR] = -0.02 - 0.12 * al; r[O_hR + 1] = -0.1; r[O_hR + 2] = -0.07 - 0.03 * wr;
   r[O_kL] = 0.05 + 0.06 * wr + 0.35 * al; r[O_kL + 1] = 0; r[O_kL + 2] = 0; r[O_kR] = 0.05 + 0.06 * wl + 0.3 * al; r[O_kR + 1] = 0; r[O_kR + 2] = 0;
   applyArmed(P, c, c.armed);
@@ -586,13 +601,13 @@ function gaitSample(P, p, g, c, backwards = false) {
   r[O_chest] = g.lean * 0.6; r[O_chest + 1] = -g.chestYaw * s; r[O_chest + 2] = 0;
   r[O_neck] = -g.lean * 0.3; r[O_neck + 1] = 0; r[O_neck + 2] = 0; r[O_head] = -g.lean * 0.5; r[O_head + 1] = g.chestYaw * 0.6 * s; r[O_head + 2] = 0;
   r[O_sL] = g.arm * s; r[O_sL + 1] = 0; r[O_sL + 2] = 0.09; r[O_sR] = g.arm * sR; r[O_sR + 1] = 0; r[O_sR + 2] = -0.09;
-  r[O_eL] = -g.elbow - 0.25 * g.arm * Math.max(0, -s); r[O_eL + 1] = 0; r[O_eL + 2] = 0; r[O_eR] = -g.elbow - 0.25 * g.arm * Math.max(0, -sR); r[O_eR + 1] = 0; r[O_eR + 2] = 0;
+  r[O_eL] = -g.elbow - 0.25 * g.arm * (s < 0 ? -s : 0); r[O_eL + 1] = 0; r[O_eL + 2] = 0; r[O_eR] = -g.elbow - 0.25 * g.arm * (sR < 0 ? -sR : 0); r[O_eR + 1] = 0; r[O_eR + 2] = 0;
   P.hip[1] = g.bob * (0.5 - 0.5 * Math.cos(2 * p + 0.3)) - (g.bob ? 0.03 : 0); P.hip[0] = 0.015 * s; P.lock = g.lock; return P;
 }
 function strafeSample(P, p, sx, c) { // sx: +1 moving to character left
   P.clear(); const r = P.r, s = Math.sin(p), sR = Math.sin(p + Math.PI);
   r[O_hL] = -0.08; r[O_hL + 1] = 0; r[O_hL + 2] = 0.1 + sx * 0.38 * s; r[O_hR] = -0.08; r[O_hR + 1] = 0; r[O_hR + 2] = -0.1 + sx * 0.38 * sR;
-  r[O_kL] = 0.2 + 0.7 * Math.max(0, Math.cos(p)); r[O_kL + 1] = 0; r[O_kL + 2] = 0; r[O_kR] = 0.2 + 0.7 * Math.max(0, Math.cos(p + Math.PI)); r[O_kR + 1] = 0; r[O_kR + 2] = 0;
+  const cp = Math.cos(p), cq = Math.cos(p + Math.PI); r[O_kL] = 0.2 + 0.7 * (cp > 0 ? cp : 0); r[O_kL + 1] = 0; r[O_kL + 2] = 0; r[O_kR] = 0.2 + 0.7 * (cq > 0 ? cq : 0); r[O_kR + 1] = 0; r[O_kR + 2] = 0;
   r[O_hips] = 0.02; r[O_hips + 1] = 0; r[O_hips + 2] = -0.05 * sx * s; r[O_chest] = 0.1; r[O_chest + 1] = 0; r[O_chest + 2] = 0.03 * sx * s; r[O_head] = -0.04; r[O_head + 1] = 0; r[O_head + 2] = 0;
   relaxedArms(P, p, c, 0); P.hip[1] = -0.05; P.lock = 1; return P;
 }
@@ -603,7 +618,7 @@ function buildStateClips(stance, style) {
   const clips = {};
   // loop clips for debugging/sheets and for direct use (the Animator blend tree uses the same samplers)
   const cx = { armed: stance.armedArms === 0 ? 0 : 1, alert: stance.armedArms === 0 ? 0 : 0.5, stance };
-  const loop = (n, dur, fn) => { clips[n] = { name: n, dur, loop: true, hold: false, mask: 'full', additive: false, events: [], fadeIn: 0.1, fadeOut: 0.1, sample(t, P) { return fn(t % dur, P); } }; };
+  const loop = (n, dur, fn) => { const c = new Clip(n, dur, null, { loop: true, fadeIn: 0.1, fadeOut: 0.1 }); c.fn = fn; clips[n] = c; };
   loop('idle', 6.8, (t, P) => idleSample(t, P, cx)); loop('walk', 1.0, (t, P) => { gaitSample(P, t * Math.PI * 2, GAITS.walk, cx); applyArmed(P, cx, cx.armed * 0.9); return P; });
   loop('run', 0.6, (t, P) => { gaitSample(P, t / 0.6 * Math.PI * 2, GAITS.run, cx); applyArmed(P, cx, cx.armed * 0.9); return P; });
   loop('strafe', 0.8, (t, P) => strafeSample(P, t / 0.8 * Math.PI * 2, 1, cx));
@@ -866,7 +881,7 @@ export function solveTwoBone(upper, mid, end, targetWorld, poleWorld, bendSign =
   _t.copy(targetWorld).applyMatrix4(_m).sub(upper.position); _p.copy(poleWorld).applyMatrix4(_m).sub(upper.position);
   const L1 = mid.position.length(), L2 = end.position.length() + endOffset;
   let d = _t.length(); const dd = clamp(d, Math.abs(L1 - L2) + 1e-4, L1 + L2 - 1e-4);
-  _u.copy(_t).divideScalar(Math.max(d, 1e-6));
+  _u.copy(_t).divideScalar(d > 1e-6 ? d : 1e-6);
   _pp.copy(_p).addScaledVector(_u, -_p.dot(_u)); if (_pp.lengthSq() < 1e-8) _pp.set(0, 0, 1).addScaledVector(_u, -_u.z); _pp.normalize();
   const cosB = clamp((L1 * L1 + dd * dd - L2 * L2) / (2 * L1 * dd), -1, 1), sinB = Math.sqrt(1 - cosB * cosB);
   _du.copy(_u).multiplyScalar(cosB).addScaledVector(_pp, sinB);
@@ -877,7 +892,7 @@ export function solveTwoBone(upper, mid, end, targetWorld, poleWorld, bendSign =
   _m.makeBasis(_x, _y, _z); _q.setFromRotationMatrix(_m);
   _q2.setFromAxisAngle(_hx.set(1, 0, 0), bendSign * ang);
   if (w >= 1) { qCopy(upper.quaternion, _q); qCopy(mid.quaternion, _q2); } else { qSlerp(upper.quaternion, _q, w); qSlerp(mid.quaternion, _q2, w); }
-  return Math.max(0, d - (L1 + L2));
+  const ov = d - (L1 + L2); return ov > 0 ? ov : 0;
 }
 
 // ---------------------------------------------------------------- scalar spring (squash/stretch, kicks)
@@ -907,7 +922,7 @@ class VerletGrid {
   rowWs() { return this.wRow || (this.wRow = Float64Array.from({ length: this.rows }, (_, i) => this.widthFn(i))); }
   reset() { for (let i = 0; i < this.p.length; i++) { this.p[i].copy(this.rest[i]).applyMatrix4(this.anchor.matrixWorld); this.pp[i].copy(this.p[i]); } this.inited = true; }
   update(dt) {
-    if (!this.inited) this.reset(); this.acc += Math.min(dt, 0.05); const h = 1 / 60;
+    if (!this.inited) this.reset(); this.acc += dt < 0.05 ? dt : 0.05; const h = 1 / 60;
     while (this.acc >= h) { this.step(h); this.acc -= h; }
     this.write();
   }
@@ -951,7 +966,9 @@ export class ClothGrid extends VerletGrid {
   }
   write() {
     const par = this.mesh.parent; if (!par) return; _inv.copy(par.matrixWorld).invert(); const a = this.geo.attributes.position;
-    for (let i = 0; i < this.p.length; i++) { _w.copy(this.p[i]).applyMatrix4(_inv); a.setXYZ(i, _w.x, _w.y, _w.z); }
+    // PERF: affine transform inline into the typed array (setXYZ / applyMatrix4 with computed doubles boxed three HeapNumbers per vertex; rigid matrices have w = 1)
+    const m = _inv.elements, m0 = m[0], m1 = m[1], m2 = m[2], m4 = m[4], m5 = m[5], m6 = m[6], m8 = m[8], m9 = m[9], m10 = m[10], m12 = m[12], m13 = m[13], m14 = m[14], arr = a.array, P = this.p;
+    for (let i = 0, o = 0; i < P.length; i++, o += 3) { const v = P[i], x = v.x, y = v.y, z = v.z; arr[o] = m0 * x + m4 * y + m8 * z + m12; arr[o + 1] = m1 * x + m5 * y + m9 * z + m13; arr[o + 2] = m2 * x + m6 * y + m10 * z + m14; }
     a.needsUpdate = true; this.gridNormals(); if (this.hostAttrs) { this.hostAttrs[0].needsUpdate = true; this.hostAttrs[1].needsUpdate = true; }
   }
   /** PERF: BufferGeometry.computeVertexNormals allocates six Vector3 per call (about 480 B x 3 cloths x 6 rigs per frame); same area weighted result, scratch free */
@@ -1644,10 +1661,10 @@ export function buildGladiator(opts = {}) {
       // PERF LOD: a far / tiny fighter (rig.lod = 1, set by the scene) steps its cloth every other frame with the summed dt
       if (rig.lod) { rig._sd = (rig._sd || 0) + dt; if ((rig._sk = (rig._sk | 0) + 1) % (rig.lod + 1) === 0) { const d2 = rig._sd; rig._sd = 0; for (let i = 0; i < rig.secondary.length; i++) rig.secondary[i].update(d2); } }
       else { rig._sd = 0; for (let i = 0; i < rig.secondary.length; i++) rig.secondary[i].update(dt); }
-      const sq = squash.update(dt); body.scale.set(bd.height / Math.sqrt(1 + sq), bd.height * (1 + sq), bd.height / Math.sqrt(1 + sq));
-      { const tgt = rig.exertionOverride !== null ? rig.exertionOverride : rig.animator.exert; rig.sweat += (tgt - rig.sweat) * Math.min(1, dt * (tgt > rig.sweat ? 0.7 : 0.12)); bloodU.uSweat.value = rig.sweat; }
-      if (blood.fresh > 0) { blood.fresh = Math.max(0, blood.fresh - dt / 9); bloodU.uBFresh.value = blood.fresh; }
-      if (flashState.t > 0) { flashState.t = Math.max(0, flashState.t - dt); }
+      const sq = squash.update(dt), sk = bd.height / Math.sqrt(1 + sq), bsc = body.scale; bsc.x = sk; bsc.y = bd.height * (1 + sq); bsc.z = sk;   // PERF: field writes (Vector3.set with three computed doubles boxed them)
+      { const tgt = rig.exertionOverride !== null ? rig.exertionOverride : rig.animator.exert; { const k = dt * (tgt > rig.sweat ? 0.7 : 0.12); rig.sweat += (tgt - rig.sweat) * (k < 1 ? k : 1); } bloodU.uSweat.value = rig.sweat; }
+      if (blood.fresh > 0) { { const f9 = blood.fresh - dt / 9; blood.fresh = f9 > 0 ? f9 : 0; } bloodU.uBFresh.value = blood.fresh; }
+      if (flashState.t > 0) { { const ft = flashState.t - dt; flashState.t = ft > 0 ? ft : 0; } }
       const f = flashState.t > 0 ? flashState.t / flashState.dur : 0;
       glow.t += dt; const gi = glow.on ? glow.base + glow.amp * Math.sin(glow.t * glow.speed) : 0; mats.gem.userData.base.copy(glow.color).multiplyScalar(gi);
       // PERF: emissive only needs a write while a flash / glow runs (and once after it ends); an idle rig skipped ~13 material copies per frame
@@ -1790,15 +1807,19 @@ export function buildGladiator(opts = {}) {
 // Cloak helper: ClothGrid on the back, collides with a torso ellipse so it hangs behind the body.
 export function addCloak(rig, o = {}) {
   const cols = o.cols || 5, rows = o.rows || 6, len = o.length || 0.78, w0 = 0.46, w1 = 0.7, rl = len / (rows - 1);
-  const tmp = new V3();
+  const tmp = new V3(), bInv = new THREE.Matrix4(), bFwd = new THREE.Matrix4(); let H = rig.build.height;
   const g = new ClothGrid({
+    // PERF: the body matrices are read once per verlet step (prep), not per vertex per iteration (worldToLocal re-walked the parent chain and inverted a matrix every call)
+    prep: () => { H = rig.build.height; rig.body.updateWorldMatrix(true, false); bFwd.copy(rig.body.matrixWorld); bInv.copy(bFwd).invert(); },
     anchor: rig.joints.chest, rows, cols, rowLen: rl, stiff: 0.12, stiffFall: 0.85, damping: 0.95, gravity: -9, side: new V3(1, 0, 0),
     shape: (r) => new V3(0, 0.27 - r * rl * 0.98, -0.16 - r * 0.02), widthFn: (r) => lerp(w0, w1, r / (rows - 1)), material: o.material || rig.mats.clothF || rig.mats.cloth, name: 'cloak', tipShade: 0.65, fold: true,
     collide: (p) => { // push out of the body ellipse (body-local), keeps the cloak behind the torso/legs
-      tmp.copy(p); rig.body.worldToLocal(tmp); const y = tmp.y / rig.build.height;
-      if (y < 0.1) { tmp.y = 0.1 * rig.build.height; }
-      if (y > 0.35 && y < 1.75) { const rx = 0.29, rz = y > 1.0 ? 0.2 : 0.17; const e = (tmp.x / rx) ** 2 + (tmp.z / rz) ** 2; if (e < 1 && tmp.z < 0.1) { const k = 1 / Math.sqrt(Math.max(e, 1e-4)); tmp.x *= k; tmp.z *= k; } }
-      rig.body.localToWorld(tmp); p.copy(tmp);
+      const mi = bInv.elements, px = p.x, py = p.y, pz = p.z;
+      let tx = mi[0] * px + mi[4] * py + mi[8] * pz + mi[12], ty = mi[1] * px + mi[5] * py + mi[9] * pz + mi[13], tz = mi[2] * px + mi[6] * py + mi[10] * pz + mi[14];
+      const y = ty / H;
+      if (y < 0.1) { ty = 0.1 * H; }
+      if (y > 0.35 && y < 1.75) { const rz = y > 1.0 ? 0.2 : 0.17, ex = tx / 0.29, ez = tz / rz, e = ex * ex + ez * ez; if (e < 1 && tz < 0.1) { const k = 1 / Math.sqrt(e > 1e-4 ? e : 1e-4); tx *= k; tz *= k; } }
+      const mf = bFwd.elements; p.x = mf[0] * tx + mf[4] * ty + mf[8] * tz + mf[12]; p.y = mf[1] * tx + mf[5] * ty + mf[9] * tz + mf[13]; p.z = mf[2] * tx + mf[6] * ty + mf[10] * tz + mf[14];
     },
   });
   return rig.addSecondary(g);
@@ -1821,19 +1842,79 @@ export function addTassel(rig, socketName, o = {}) {
 }
 
 // ---------------------------------------------------------------- Animator
-class QPose { constructor() { this.q = JOINTS.map(() => new Q()); this.hip = new V3(); this.body = new V3(); this.brot = new Q(); this.ground = 1; this.lock = 1; }
-  copy(o) { for (let i = 0; i < this.q.length; i++) this.q[i].copy(o.q[i]); this.hip.copy(o.hip); this.body.copy(o.body); this.brot.copy(o.brot); this.ground = o.ground; this.lock = o.lock; return this; } }
-const _e = new E(), _fq = new Q(), _kq = new Q(), _bq = new Q();
-const ORD = JOINTS.map((n) => ORDER[n] || 'XYZ');   // PERF: per-joint euler order and flags resolved once (no string work per frame)
+// PERF: the pose mixer works on flat Float64Arrays (quaternions as x,y,z,w quadruples) with the math of three's Euler/Quaternion inlined. Every call of a three method with a
+// computed double (Euler.set x3, Quaternion.slerp t, lerpVectors t, Vector3.set x3) boxed a HeapNumber unless V8 inlined it, which in a function this big it does not:
+// 6 rigs x (toQ + blendQ + additive) were most of the 12 to 20 KB per frame "inside Animator.update". The results equal three's (same formulas, verified in lab/rig_test.html).
+const NJ = JOINTS.length;
+class QPose {
+  constructor() { this.q = new Float64Array(NJ * 4); for (let i = 0; i < NJ; i++) this.q[i * 4 + 3] = 1; this.hip = new Float64Array(3); this.body = new Float64Array(3); this.brot = new Float64Array([0, 0, 0, 1]); this.ground = 1; this.lock = 1; }
+  copy(o) { this.q.set(o.q); this.hip.set(o.hip); this.body.set(o.body); this.brot.set(o.brot); this.ground = o.ground; this.lock = o.lock; return this; }
+}
+const _fq = new Q(), _kq = new Q(), _bq = new Q();
+const YXZ = JOINTS.map((n) => (ORDER[n] || 'XYZ') === 'YXZ');   // PERF: the rig only uses YXZ (spine chain, head) and XYZ; resolved once (no string work per frame)
 const IS_HIP4 = JOINTS.map((n) => n.startsWith('hip') && n.length === 4), ADD_FH = JOINTS.map((n) => (n === 'head' || n === 'neck') ? 1 : (n.startsWith('knee') || (n.startsWith('hip') && n.length === 4)) ? 2 : 0);
+const SLT = new Float64Array(1);   // the slerp factor travels in here: an argument that is a computed double would be boxed on every call
+/** euler angles of every joint (r = x,y,z triples) -> quaternions (q = x,y,z,w quadruples): three's Quaternion.setFromEuler for the XYZ and YXZ orders */
+function eulerAll(r, q) {
+  for (let i = 0, o = 0; i < NJ; i++, o += 4) {
+    const x = r[i * 3], y = r[i * 3 + 1], z = r[i * 3 + 2], c1 = Math.cos(x / 2), c2 = Math.cos(y / 2), c3 = Math.cos(z / 2), s1 = Math.sin(x / 2), s2 = Math.sin(y / 2), s3 = Math.sin(z / 2);
+    if (YXZ[i]) { q[o] = s1 * c2 * c3 + c1 * s2 * s3; q[o + 1] = c1 * s2 * c3 - s1 * c2 * s3; q[o + 2] = c1 * c2 * s3 - s1 * s2 * c3; q[o + 3] = c1 * c2 * c3 + s1 * s2 * s3; }
+    else { q[o] = s1 * c2 * c3 + c1 * s2 * s3; q[o + 1] = c1 * s2 * c3 - s1 * c2 * s3; q[o + 2] = c1 * c2 * s3 + s1 * s2 * c3; q[o + 3] = c1 * c2 * c3 - s1 * s2 * s3; }
+  }
+}
+/** out[oo..] = slerp(a[ao..], b[bo..], SLT[0]) exactly like three's Quaternion.slerp (shortest arc, normalised linear fallback for tiny angles) */
+function slerpA(out, oo, a, ao, b, bo) {
+  const t = SLT[0], x = a[ao], y = a[ao + 1], z = a[ao + 2], w = a[ao + 3];
+  if (t === 0) { out[oo] = x; out[oo + 1] = y; out[oo + 2] = z; out[oo + 3] = w; return; }
+  let bx = b[bo], by = b[bo + 1], bz = b[bo + 2], bw = b[bo + 3];
+  if (t === 1) { out[oo] = bx; out[oo + 1] = by; out[oo + 2] = bz; out[oo + 3] = bw; return; }
+  let cosHalf = w * bw + x * bx + y * by + z * bz;
+  if (cosHalf < 0) { bw = -bw; bx = -bx; by = -by; bz = -bz; cosHalf = -cosHalf; }
+  if (cosHalf >= 1.0) { out[oo] = x; out[oo + 1] = y; out[oo + 2] = z; out[oo + 3] = w; return; }
+  const sqrSin = 1.0 - cosHalf * cosHalf;
+  if (sqrSin <= Number.EPSILON) {
+    const sc = 1 - t; let nw = sc * w + t * bw, nx = sc * x + t * bx, ny = sc * y + t * by, nz = sc * z + t * bz; let l = Math.sqrt(nx * nx + ny * ny + nz * nz + nw * nw);
+    if (l === 0) { nx = ny = nz = 0; nw = 1; } else { l = 1 / l; nx *= l; ny *= l; nz *= l; nw *= l; }
+    out[oo] = nx; out[oo + 1] = ny; out[oo + 2] = nz; out[oo + 3] = nw; return;
+  }
+  const sinHalf = Math.sqrt(sqrSin), half = Math.atan2(sinHalf, cosHalf), ra = Math.sin((1 - t) * half) / sinHalf, rb = Math.sin(t * half) / sinHalf;
+  out[oo] = x * ra + bx * rb; out[oo + 1] = y * ra + by * rb; out[oo + 2] = z * ra + bz * rb; out[oo + 3] = w * ra + bw * rb;
+}
 function toQ(P, out) {
-  for (let i = 0; i < JOINTS.length; i++) { _e.set(P.r[i * 3], P.r[i * 3 + 1], P.r[i * 3 + 2], ORD[i]); out.q[i].setFromEuler(_e); }
-  out.hip.fromArray(P.hip); out.body.fromArray(P.body); _e.set(P.brot[0], P.brot[1], P.brot[2], 'XYZ'); out.brot.setFromEuler(_e); out.ground = P.ground; out.lock = P.lock; return out;
+  eulerAll(P.r, out.q);
+  const r = P.brot, x = r[0], y = r[1], z = r[2], c1 = Math.cos(x / 2), c2 = Math.cos(y / 2), c3 = Math.cos(z / 2), s1 = Math.sin(x / 2), s2 = Math.sin(y / 2), s3 = Math.sin(z / 2), b = out.brot;
+  b[0] = s1 * c2 * c3 + c1 * s2 * s3; b[1] = c1 * s2 * c3 - s1 * c2 * s3; b[2] = c1 * c2 * s3 + s1 * s2 * c3; b[3] = c1 * c2 * c3 - s1 * s2 * s3;
+  for (let k = 0; k < 3; k++) { out.hip[k] = P.hip[k]; out.body[k] = P.body[k]; }
+  out.ground = P.ground; out.lock = P.lock; return out;
 }
 function blendQ(a, b, t, mask, out) { // out = slerp(a,b,t) per joint with per-joint mask (null = full)
-  for (let i = 0; i < JOINTS.length; i++) { const w = mask ? (mask[i] ? t : 0) : t; out.q[i].copy(a.q[i]); if (w > 0) out.q[i].slerp(b.q[i], w); }   // (slerp is three's)
-  const wf = mask && mask.noBody ? 0 : t; out.hip.lerpVectors(a.hip, b.hip, wf); out.body.lerpVectors(a.body, b.body, wf); out.brot.copy(a.brot).slerp(b.brot, wf); out.ground = a.ground + (b.ground - a.ground) * wf; out.lock = a.lock + (b.lock - a.lock) * wf; return out;
+  const oq = out.q, aq = a.q, bq = b.q;
+  for (let i = 0, o = 0; i < NJ; i++, o += 4) {
+    const w = mask ? (mask[i] ? t : 0) : t;
+    if (w > 0) { SLT[0] = w; slerpA(oq, o, aq, o, bq, o); } else { oq[o] = aq[o]; oq[o + 1] = aq[o + 1]; oq[o + 2] = aq[o + 2]; oq[o + 3] = aq[o + 3]; }
+  }
+  const wf = mask && mask.noBody ? 0 : t;
+  for (let k = 0; k < 3; k++) { const hx = a.hip[k]; out.hip[k] = hx + (b.hip[k] - hx) * wf; const bx = a.body[k]; out.body[k] = bx + (b.body[k] - bx) * wf; }
+  SLT[0] = wf; slerpA(out.brot, 0, a.brot, 0, b.brot, 0);
+  out.ground = a.ground + (b.ground - a.ground) * wf; out.lock = a.lock + (b.lock - a.lock) * wf; return out;
 }
+// PERF: every per-joint loop of Animator.update lives in a small function of its own. While V8 has not tiered the big update() up (after every deopt, and for the first seconds of a
+// session) its own frame runs in the interpreter, where EVERY double result is a heap number: a 22-joint loop of 28 flops was ~10 KB of garbage per call inside update itself. A tiny loop
+// function reaches the optimising tiers after a handful of calls and then runs unboxed.
+function mulQ(oq, aq) {   // oq *= aq per joint (Hamilton product, three's Quaternion.multiply)
+  for (let o = 0; o < NJ * 4; o += 4) {
+    const ax = oq[o], ay = oq[o + 1], az = oq[o + 2], aw = oq[o + 3], bx = aq[o], by = aq[o + 1], bz = aq[o + 2], bw = aq[o + 3];
+    oq[o] = ax * bw + aw * bx + ay * bz - az * by; oq[o + 1] = ay * bw + aw * by + az * bx - ax * bz; oq[o + 2] = az * bw + aw * bz + ax * by - ay * bx; oq[o + 3] = aw * bw - ax * bx - ay * by - az * bz;
+  }
+}
+function scaleAdd(r, amp, d, hi) {   // hurt flinch amplitude per joint: head / neck react to the height of the blow, hips and knees to its direction
+  for (let i = 0; i < NJ; i++) {
+    const hipJ = IS_HIP4[i], fk = ADD_FH[i], fh = fk === 1 ? 0.6 + 0.9 * hi : fk === 2 ? 1 + (0.5 - hi) * 1.2 : 1;
+    r[i * 3] *= amp * fh * (hipJ ? 1 : d); r[i * 3 + 1] *= amp; r[i * 3 + 2] *= amp;
+  }
+}
+function addLateral(r, pa, f, s) { for (let i = 0; i < NJ; i++) { r[i * 3] += pa[i * 3] * f; r[i * 3 + 1] += pa[i * 3 + 1] * f * s; r[i * 3 + 2] += pa[i * 3 + 2] * f * s; } }   // lateral twist / roll layer
+function writeJoints(JL, q4) { for (let i = 0, o = 0; i < JL.length; i++, o += 4) { const jq = JL[i].quaternion; jq._x = q4[o]; jq._y = q4[o + 1]; jq._z = q4[o + 2]; jq._w = q4[o + 3]; } }   // quiet writes: no change callback, matrices read the quaternion
 const MASKS = { full: null, upper: Object.assign(JOINTS.map((n) => UPPER_SET.has(n)), { noBody: true }) };
 
 export class Animator {
@@ -1919,7 +2000,7 @@ export class Animator {
     if (this.hitStopT > 0) { this.hitStopT -= dt; dt *= 0.04; }
     dt *= this.timeScale; this.t += dt; this.stateT += dt;
     { const sp = Math.sqrt(this.mv.vx * this.mv.vx + this.mv.vz * this.mv.vz); this.exert = clamp(this.exert + (sp > 2.6 ? 0.03 : sp > 0.4 ? 0.006 : 0) * dt * 10 - 0.035 * dt, 0, 1); this.breath += dt * Math.PI * 2 / 3.4 * (1 + 1.6 * this.exert) * (this.dead ? 0 : 1); }
-    this.armed += (this.armedTarget - this.armed) * Math.min(1, dt * 6); this.alert += ((this.alertTarget || this.armedTarget * 0.0) - this.alert) * Math.min(1, dt * 5);
+    { const k6 = dt * 6, k5 = dt * 5; this.armed += (this.armedTarget - this.armed) * (k6 < 1 ? k6 : 1); this.alert += ((this.alertTarget || this.armedTarget * 0.0) - this.alert) * (k5 < 1 ? k5 : 1); }
     // advance gait phase by distance travelled: foot speed matches ground speed (no skating)
     const s = Math.sqrt(this.mv.vx * this.mv.vx + this.mv.vz * this.mv.vz), runW = smooth(2.6, 4.4, s), stride = lerp(1.55, 2.9, runW), dirSign = this.mv.vz < -0.05 && Math.abs(this.mv.vz) > Math.abs(this.mv.vx) ? -1 : 1;
     const prev = this.mv.phase; this.mv.phase += dirSign * (s / stride) * Math.PI * 2 * dt;
@@ -1935,48 +2016,45 @@ export class Animator {
       else {
         clip.sample(this.actionT, this.PB); toQ(this.PB, this.QB);
         const fin = clip.fadeIn; this.actionW = clip.hold || this.actionT < dur - clip.fadeOut ? smooth(0, fin, this.actionT) : smooth(0, clip.fadeOut, dur - this.actionT) ;
-        if (clip.hold) this.actionW = Math.min(1, this.actionT / Math.max(0.001, fin));
+        if (clip.hold) { const q = this.actionT / (fin > 0.001 ? fin : 0.001); this.actionW = q < 1 ? q : 1; }
         const mask = MASKS[this.actionMask];
         // upper-mask attacks need the legs from base; add lunge only from full-mask
-        out = blendQ(this.QA, this.QB, this.actionW, mask, this.QC); if (mask) { out.body.copy(this.QA.body); out.hip.copy(this.QA.hip); }
+        out = blendQ(this.QA, this.QB, this.actionW, mask, this.QC); if (mask) { out.body.set(this.QA.body); out.hip.set(this.QA.hip); }
       }
     }
     // snapshot crossfade (inertial blend from the pose we left)
-    if (this.snapW > 0) { this.snapW = Math.max(0, this.snapW - dt / this.snapDur); const w = ease.inOutCubic(this.snapW); if (out !== this.QC) { this.QC.copy(out); out = this.QC; } blendQ(this.QC, this.snap, w, null, this.QB); out = this.QB; }
+    if (this.snapW > 0) { { const sw = this.snapW - dt / this.snapDur; this.snapW = sw > 0 ? sw : 0; } const w = ease.inOutCubic(this.snapW); if (out !== this.QC) { this.QC.copy(out); out = this.QC; } blendQ(this.QC, this.snap, w, null, this.QB); out = this.QB; }
     // additive layer (hurt flinch)
     if (this.add) {
       this.addT += dt; const clip = this.add, hi = this.addHigh;
       if (this.addT >= clip.dur) { this.add = null; this.add2 = null; } else {
         clip.sample(this.addT, this.PB);
         const amp = this.addAmp, d = this.addDir; // d>0: hit from front (recoil back); d<0 from behind (lurch forward)
-        for (let i = 0; i < JOINTS.length; i++) {
-          const hipJ = IS_HIP4[i], fk = ADD_FH[i], fh = fk === 1 ? 0.6 + 0.9 * hi : fk === 2 ? 1 + (0.5 - hi) * 1.2 : 1;
-          this.PB.r[i * 3] *= amp * fh * (hipJ ? 1 : d); this.PB.r[i * 3 + 1] *= amp; this.PB.r[i * 3 + 2] *= amp;
-        }
+        scaleAdd(this.PB.r, amp, d, hi);
         this.PB.hip[2] *= amp * d; this.PB.hip[1] *= amp;
         if (this.add2 && this.addSide) { // lateral layer: twist and roll away from the side the blow came from
-          const c2 = this.add2, s = Math.sign(this.addSide), f = amp * Math.min(1, Math.abs(this.addSide)); c2.sample(Math.min(this.addT, c2.dur), this.PA);
-          for (let i = 0; i < JOINTS.length; i++) { this.PB.r[i * 3] += this.PA.r[i * 3] * f; this.PB.r[i * 3 + 1] += this.PA.r[i * 3 + 1] * f * s; this.PB.r[i * 3 + 2] += this.PA.r[i * 3 + 2] * f * s; }
+          const c2 = this.add2, as = this.addSide, s = as > 0 ? 1 : as < 0 ? -1 : 0, aa = as < 0 ? -as : as, f = amp * (aa < 1 ? aa : 1); c2.sample(this.addT < c2.dur ? this.addT : c2.dur, this.PA);
+          addLateral(this.PB.r, this.PA.r, f, s);
           this.PB.hip[0] += this.PA.hip[0] * f * s;
         }
-        for (let i = 0; i < JOINTS.length; i++) { _e.set(this.PB.r[i * 3], this.PB.r[i * 3 + 1], this.PB.r[i * 3 + 2], ORD[i]); this.QAdd.q[i].setFromEuler(_e); }
+        eulerAll(this.PB.r, this.QAdd.q);
         if (out !== this.QB) { this.QB.copy(out); out = this.QB; }
-        for (let i = 0; i < JOINTS.length; i++) out.q[i].multiply(this.QAdd.q[i]);
-        out.hip.x += this.PB.hip[0]; out.hip.y += this.PB.hip[1]; out.hip.z += this.PB.hip[2];
+        mulQ(out.q, this.QAdd.q);   // out *= add
+        out.hip[0] += this.PB.hip[0]; out.hip[1] += this.PB.hip[1]; out.hip[2] += this.PB.hip[2];
       }
     }
     this.last.copy(out); this.hasLast = true;
     // write to joints
     const J = this.rig.joints, JL = this._jl || (this._jl = JOINTS.map((n) => J[n]));
     // PERF: the joint quaternion is written without its change callback (which re-derives the unused joint Euler and allocated in three); matrices read the quaternion
-    for (let i = 0; i < JL.length; i++) { const jq = JL[i].quaternion, oq = out.q[i]; jq._x = oq._x; jq._y = oq._y; jq._z = oq._z; jq._w = oq._w; }
+    writeJoints(JL, out.q);
     // head look-at (additive yaw split neck/head)
     if (this.look.target && this.look.w > 0) {
       _w.copy(this.look.target); this.rig.body.worldToLocal(_w); let yaw = Math.atan2(_w.x, _w.z); yaw = clamp(yaw, -1.0, 1.0) * this.look.w;
       _q.setFromAxisAngle(_u.set(0, 1, 0), yaw * 0.4); J.neck.quaternion.premultiply(_q); _q.setFromAxisAngle(_u.set(0, 1, 0), yaw * 0.5); J.head.quaternion.premultiply(_q);
     }
-    J.hips.position.set(this.restPos.x + out.hip.x, this.restPos.y + out.hip.y, this.restPos.z + out.hip.z);
-    this.rig.body.position.copy(out.body); qCopy(this.rig.body.quaternion, out.brot);
+    { const hp = J.hips.position, rp = this.restPos, oh = out.hip, bp = this.rig.body.position, ob = out.body, bq = this.rig.body.quaternion, br = out.brot;   // plain field writes: no calls with computed doubles
+      hp.x = rp.x + oh[0]; hp.y = rp.y + oh[1]; hp.z = rp.z + oh[2]; bp.x = ob[0]; bp.y = ob[1]; bp.z = ob[2]; bq._x = br[0]; bq._y = br[1]; bq._z = br[2]; bq._w = br[3]; }
     this.finalGround = out.ground; this.finalLock = out.lock;
     this.groundSmooth = this.groundSmooth ?? 0;
     this._dt = dt;
@@ -1993,7 +2071,7 @@ export class Animator {
         const wp = tgt.parent; wp.updateWorldMatrix(true, false); _t.setFromMatrixPosition(wp.matrixWorld); _u.set(0, 1, 0).transformDirection(wp.matrixWorld);
         _p.setFromMatrixPosition(J['shoulder' + side].matrixWorld); _x.copy(_t).sub(_p); const bb = _x.dot(_u), cc = _x.lengthSq() - (this.ik.hand.reach ?? 0.5) ** 2, disc = bb * bb - cc;
         let sl = disc >= 0 ? -bb + Math.sqrt(disc) : -bb; sl = clamp(sl, 0.1, Math.max(0.2, tgt.position.y * 1.4));
-        const h = this.ik.hand; h.s = h.s === undefined ? sl : h.s + (sl - h.s) * Math.min(1, (this._dt || 0.016) * 14); _w.copy(_t).addScaledVector(_u, h.s);
+        const h = this.ik.hand; h.s = h.s === undefined ? sl : h.s + (sl - h.s) * (((this._dt || 0.016) * 14) < 1 ? (this._dt || 0.016) * 14 : 1); _w.copy(_t).addScaledVector(_u, h.s);
       }
       this.ik.hand.lastTarget = (this.ik.hand.lastTarget || new V3()).copy(_w);
       _pp.set(sg * 0.5, -0.3, -0.7); J.chest.localToWorld(_pp);
@@ -2005,7 +2083,7 @@ export class Animator {
     let minY = 1e9; const bi = _inv.copy(body.matrixWorld).invert(); const sc = rig.build.height;
     const fj = this._fj || (this._fj = [{ s: 'L', ankle: J.ankleL, knee: J.kneeL, hip: J.hipL }, { s: 'R', ankle: J.ankleR, knee: J.kneeR, hip: J.hipR }]);   // PERF: cached joint lookups, no string concat / array literals per frame
     for (let n = 0; n < 2; n++) { _w.setFromMatrixPosition(fj[n].ankle.matrixWorld).applyMatrix4(bi); const yy = _w.y / sc; if (yy < minY) minY = yy; }
-    const want = (DIM.footH - minY) * this.finalLock; const k = Math.min(1, (this._dt || 0.016) * 22);
+    const want = (DIM.footH - minY) * this.finalLock; const k22 = (this._dt || 0.016) * 22, k = k22 < 1 ? k22 : 1;
     this.groundFix += (clamp(want, -0.18, 0.12) - this.groundFix) * k;
     J.hips.position.y += this.groundFix; J.hips.updateMatrixWorld(true);
     const flatQ = _fq, kq = _kq, bq = _bq;
@@ -2033,7 +2111,7 @@ export function triCount(obj) { let n = 0; obj.traverse((o) => { if (o.isMesh &&
 // Pose-sheet helper: sample clip at time t into rig joints without advancing state (for debugging / lab sheets).
 export function poseAt(rig, clipName, t) {
   const a = rig.animator; const clip = a.clips[clipName]; const P = new Pose(); clip.sample(t, P);
-  const q = toQ(P, new QPose()); for (let i = 0; i < JOINTS.length; i++) rig.joints[JOINTS[i]].quaternion.copy(q.q[i]);
+  const q = toQ(P, new QPose()); for (let i = 0; i < JOINTS.length; i++) rig.joints[JOINTS[i]].quaternion.set(q.q[i * 4], q.q[i * 4 + 1], q.q[i * 4 + 2], q.q[i * 4 + 3]);
   rig.joints.hips.position.set(0, DIM.hipY + P.hip[1], P.hip[2]); rig.body.position.fromArray(P.body); rig.body.quaternion.setFromEuler(new E(P.brot[0], P.brot[1], P.brot[2]));
   a.finalGround = P.ground; a.finalLock = P.lock; a.groundFix = 0; rig.root.updateMatrixWorld(true); a._dt = 1; a.postIK(); rig.root.updateMatrixWorld(true); for (const f of rig.postUpdate) f(rig);
 }

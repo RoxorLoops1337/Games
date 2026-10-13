@@ -96,7 +96,7 @@ export function createTitle(game) {
       active = true; clock = 0; t0 = performance.now(); fov0 = camera.fov;
       camera.fov = 32; camera.updateProjectionMatrix();
       try { hub.setHour(HOUR); hub.setWeather && hub.setWeather('clear'); } catch (e) { /* hub without hooks */ }
-      try { audio.music.setMode('ludus', { fade: 2.5 }); audio.music.setIntensity && audio.music.setIntensity(0.55); } catch (e) { /* audio locked */ }
+      try { audio.music.setMode('title', { fade: 2.5 }); audio.music.setIntensity && audio.music.setIntensity(0.55); } catch (e) { /* audio locked */ }
       if (root) root.remove();
       root = build(hasSave); game.ui.append(root);
       requestAnimationFrame(() => root.classList.add('on'));

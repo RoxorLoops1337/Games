@@ -92,5 +92,28 @@ ok(Number.isInteger(LM.SAVE_VER) && LM.SAVE_VER >= 2, 'a schema version exists')
 // ascend keeps the version and the memorial wall
 { const S = fresh(); S.fame = 2000; S.fallen = [{ name: 'Old Friend', lvl: 6 }]; const N = LM.ascend(S); ok(N.fallen.length === 1, 'new ludus keeps the memorial'); LM.save(N); ok(LM.loadEx().status === 'ok', 'a founded ludus loads cleanly'); }
 
+// fight orders, foe tactics and highlight moments never reach the save: the fight object lives and dies with the fight, the save key and shape are untouched
+{
+  const S = fresh(); const a = S.glads.slice(0, 2), b = [LM.makeGlad({ id: 90, style: 'thraex', lvl: 4, name: 'Foe1' }), LM.makeGlad({ id: 91, style: 'murmillo', lvl: 4, name: 'Foe2' })];
+  LM.setRandom(LM.mulberry(12)); const F = LM.createFight(LM.mkUnits(a, 'A', {}), LM.mkUnits(b, 'B', {}), { cmdAI: true }); F.replay = { seed: 12, taps: [], snap: null, moments: [{ a: 0, b: 90, n: 40, kind: 'hit', label: 'Heavy hit', src: 'A0', dst: 'B0', score: 12, final: false }] };
+  F.replay.snap = structuredClone(F); LM.command(F, 'stance', 'A0', 'press'); LM.command(F, 'rally', 'A'); for (let i = 0; i < 120; i++) LM.step(F, 1 / 30); F.ev.length = 0;
+  ok(F.units[0].s.press || F.units[0].s.rally || F.units[0].cmdCd > 0, 'orders mark the unit state');
+  const before = JSON.stringify(S); S.fame += 1; S.fame -= 1; LM.save(S); const raw = mem.get(KEY);
+  ok(JSON.parse(raw).v === 1 && !/cmdCd|cmdAI|moments|"swap"|gstance|expo/.test(raw), 'the save carries no fight, order or reel data');
+  ok(JSON.stringify(LM.load()).length > 100 && LM.SAVE_KEY === KEY, 'the same key still loads');
+  ok(JSON.parse(JSON.stringify(F.replay.moments))[0].label === 'Heavy hit' && JSON.parse(JSON.stringify(F.replay.snap)).cmd.rally >= 0, 'moments and the replay snapshot are plain JSON');
+  const prefs = JSON.stringify({ gore: 'full', links: false }); localStorage.setItem('ludus_maximus_3d_prefs', prefs); ok(JSON.parse(localStorage.getItem('ludus_maximus_3d_prefs')).links === false, 'the target-links option lives inside the existing prefs key (no new key)');
+  void before;
+}
+
+{ // wave 3: fight hurt and trophy state survive a save round trip and an old save migrates
+  const S = LM.newGame({ name: 'W3', seed: 'w3s' }), g = LM.makeGlad({ id: S.nextId++, style: 'murmillo', lvl: 3 }); S.glads.push(g); LM.woundGive(S, g, 2, 'arm'); LM.hurtMark(S, g, true); S.stats.streakBest = 7; LM.venatio(S).solo = { lion: 1 }; S.stats.hurtWins = 2;
+  const back = LM.migrate(JSON.parse(JSON.stringify(S)));
+  ok(back.stats.streakBest === 7 && back.venatio.solo.lion === 1 && back.stats.hurtWins === 2, 'streak, solo kills and hurt wins survive');
+  ok(!back.glads[0].hurtFight && back.glads[0].wounds.length === 1, 'the transient hurt mark is dropped on load, the wound stays');
+  const old = LM.migrate({ glads: [{ id: 1, name: 'Old', style: 'murmillo', lvl: 2, st: {}, inj: 2 }] }); ok(Array.isArray(old.glads[0].wounds) && Array.isArray(old.glads[0].scars), 'an old save gets wound and scar lists');
+  ok(typeof LM.checkTrophies(back) === 'object', 'trophies run on a migrated save');
+}
+
 console.log(`ludus_maximus_3d_saves: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

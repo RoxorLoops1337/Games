@@ -36,7 +36,8 @@ function riskPill(ctx, g, kind, depth = 1) {
 async function pickOne(ctx, title, intro, confirmLabel, risk) {
   const base = fitInfo();
   const info = risk ? (g) => { const r = base(g); if (!r.reason) { const rp = riskPill(ctx, g, risk.kind, risk.depth); if (rp) r.badges = [...(r.badges || []), rp]; } return r; } : base;
-  const ids = await pickFighters(ctx, { title, intro, n: 1, info, confirm: () => ({ label: confirmLabel || 'Fight' }) });
+  const ids = await pickFighters(ctx, { title, intro, n: 1, info, hurtKind: (risk && risk.kind) || 'mode', confirm: () => ({ label: confirmLabel || 'Fight' }) }); // WAVE3: hurtKind
+  if (ids && ids.hurt && ids.hurt.length) L().hurtMark(ctx.S, ctx.gOf(ids[0]), true);
   return ids ? ctx.gOf(ids[0]) : null;
 }
 
@@ -46,6 +47,7 @@ async function session(ctx, fn, tab = 'modes') {
   try { ctx.closeAll(); await fn(); }
   catch (e) { console.error(e); U.toast('Oops: ' + e.message, { kind: 'bad' }); }
   finally {
+    try { L().hurtClear(ctx.S); } catch (e) { /* wave 3 */ }
     game.busy = false; try { game.scene === 'fight' && game.returnToHub(); } catch (e) { console.error(e); }
     ctx.save(); ctx.refresh(); ctx.open('arena', { tab });
   }
@@ -58,7 +60,7 @@ const p = (t) => h('p', '', t);
 
 function xpInjury(ctx, g, xp, lost, chance, maxWeeks) {
   const up = L().addXp(g, xp); g.en = Math.max(0, g.en - 5); let inj = '';
-  if (lost && Math.random() < chance) { g.inj = 1 + Math.floor(Math.random() * maxWeeks); inj = `${g.name} is injured for ${g.inj} week${g.inj > 1 ? 's' : ''}.`; }
+  if (lost && Math.random() < chance) { g.inj = Math.max(g.inj || 0, 1 + Math.floor(Math.random() * maxWeeks)); inj = `${g.name} is injured for ${g.inj} week${g.inj > 1 ? 's' : ''}.`; }
   return { up, inj };
 }
 
@@ -84,7 +86,7 @@ async function runPit(ctx, g, daily) {
   const S = ctx.S, lm = L();
   if (daily) S.daily = { day: lm.dayKey(), best: 0 }; else S.pitWeek = S.week;
   const mut = lm.mutator(daily ? 'd' + lm.dayKey() : 'w' + S.week); g.en = Math.max(0, g.en - MIN_EN);
-  const augs = []; let floor = 0, hpf = 1, lost = false, fellAt = null;
+  const augs = []; let floor = 0, hpf = 1, lost = false, fellAt = null, minHpf = 1; // WAVE3: minHpf feeds the Flawless Descent trophy
   for (;;) {
     const opp = daily ? lm.withRandom(lm.dailySeed(floor + 1, 'o'), () => lm.pitOpp(S, floor + 1, g)) : lm.pitOpp(S, floor + 1, g); floor++;
     const ev = { kind: 'pit', title: (floor % 5 === 0 ? 'BOSS: ' : '') + 'Pit floor ' + floor, opps: [opp], league: 0, key: (daily ? 'pitd' + lm.dayKey() : 'pitw' + S.week) + ':' + floor, mut };
@@ -92,7 +94,7 @@ async function runPit(ctx, g, daily) {
     augs.push(await pickAug(ctx, floor < 3 ? 0 : floor < 6 ? 1 : floor < 10 ? 2 : 3, augs, floor % 5 === 0, `Floor ${floor}: new augment`, daily ? lm.dailySeed(floor, 'a') : null, g.style));
     const res = await fightScreen(ctx, [g], [opp], stance, { ev, hpf: { [g.id]: hpf }, augs: augs.slice(), mutator: mut });
     if (!res.win) { fellAt = { depth: floor, boss: floor % 5 === 0, res }; floor--; lost = true; break; }
-    hpf = Math.min(1, res.hpf[g.id] + 0.25);
+    minHpf = Math.min(minHpf, res.hpf[g.id]); hpf = Math.min(1, res.hpf[g.id] + 0.25);
     const cur = lm.pitReward(S, floor, [], false), nx = floor + 1;
     const body = infoBody([
       p(`${g.name} recovers to ${Math.round(hpf * 100)}% HP.`),
@@ -103,6 +105,7 @@ async function runPit(ctx, g, daily) {
     const go = await ctx.ask({ title: `Floor ${floor} cleared`, body, actions: [{ label: 'Descend!', value: 'go', variant: 'danger', icon: 'skull' }, { label: 'Cash out', value: 'cash', variant: 'ghost' }], dismiss: 'cash' });
     if (go === 'cash') break;
   }
+  if (!lost && floor >= 5 && minHpf >= 0.4) S.stats.pitPerfect = (S.stats.pitPerfect || 0) + 1; // WAVE3: Flawless Descent
   const rw = lm.pitReward(S, floor, [], lost);
   if (daily) { rw.gold = Math.round(rw.gold * 1.3); S.daily.best = floor; S.dailyBest = Math.max(S.dailyBest || 0, floor); if (floor >= 5) { S.laurels += 1; rw.laurel = 1; } }
   S.gold += rw.gold; S.fame += rw.fame; S.pitBest = Math.max(S.pitBest || 0, floor);

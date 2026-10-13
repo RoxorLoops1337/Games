@@ -76,6 +76,9 @@ const CSS = `
 .ax-fog{filter:grayscale(.8) brightness(.8)}
 .ax-pick{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:10px;min-height:64px;background:rgba(10,6,24,.4);box-shadow:inset 0 0 0 1px rgba(242,193,78,.22);cursor:pointer;touch-action:manipulation;border:0;color:inherit;font:inherit;text-align:left;width:100%}
 .ax-pick:hover:not([aria-disabled=true]){box-shadow:inset 0 0 0 1.5px rgba(242,193,78,.7)}
+.ax-pick.hurt{box-shadow:inset 0 0 0 1px rgba(240,120,100,.55)}
+.ax-hurtbtn{border:0;cursor:pointer;min-height:44px;padding:6px 12px;touch-action:manipulation;align-self:flex-start}
+.ax-hurtbtn:focus-visible{outline:3px solid #fff;outline-offset:2px}
 .ax-pick.sel{background:linear-gradient(90deg,rgba(242,193,78,.28),rgba(242,193,78,.08));box-shadow:inset 0 0 0 2px var(--lx-gold)}
 .ax-pick[aria-disabled=true]{opacity:.5;cursor:not-allowed}
 .ax-check{flex:none;width:26px;height:26px;border-radius:50%;display:grid;place-items:center;box-shadow:inset 0 0 0 2px rgba(242,193,78,.5);color:transparent}
@@ -222,34 +225,59 @@ export function oppStrip(opps, fogLv = 3) {
  */
 export function pickFighters(ctx, o) {
   return new Promise((resolve) => {
-    const S = ctx.S, n = o.n || 1; let sel = [], done = false;
+    const S = ctx.S, n = o.n || 1, lm = L(); let sel = [], done = false; const hurtSet = new Set();
     const scr = openScreen(ctx, { title: o.title, mid: true, onClose: () => { if (!done) { done = true; resolve(null); } } });
-    const finish = (v) => { if (done) return; done = true; resolve(v); scr.close(); };
+    const finish = (v) => { if (done) return; done = true; v.hurt = v.filter((id) => hurtSet.has(id)); resolve(v); scr.close(); };
+    // FIGHT HURT: with o.hurtKind a wounded fighter is not blocked, they get an explicit "Fight hurt" choice with the trade-off (stat penalty, chance the wound worsens)
+    const infoOf = (g) => {
+      if (o.hurtKind && lm.hurtOk && lm.hurtOk(S, g) && g.inj > 0) {
+        const inj = g.inj; g.inj = 0; let inf; try { inf = lm.withHurt(S, g, () => o.info(g)) || {}; } finally { g.inj = inj; }
+        if (!inf.reason) return Object.assign({}, inf, { hurtable: true });
+      }
+      return o.info(g) || {};
+    };
+    const hurtPanel = (gs) => {
+      const hs = gs.filter((g) => hurtSet.has(g.id)); if (!hs.length) return null;
+      return card([row([medal('skull', 'dark'), h('div', 'ax-name', 'Fighting hurt')]), ...hs.map((g) => { const R = lm.hurtRisk(S, g);
+        return col([h('div', 'ax-b', g.name), h('div', 'ax-row ax-wrap ax-gap4', R.text.map((t) => pill(t, { tone: 'bad' }))),
+          kv('Wound worsens if you win', `${Math.round(R.win * 100)}% (+${R.addWin} week)`), kv('Wound worsens if you lose', `${Math.round(R.lose * 100)}% (+${R.addLose} weeks, may add a new wound)`)], 'ax-gap4'); }),
+        note('A hurt fighter is weaker for the whole fight. Resting instead heals the wound for free.')], 'red');
+    };
     const draw = () => scr.render((root) => {
       if (o.intro) root.append(typeof o.intro === 'string' ? note(o.intro) : o.intro);
       if (n > 1) root.append(hint(`Choose ${n} fighters. Selected ${sel.length} of ${n}.`));
       if (!S.glads.length) root.append(empty('roster', 'Your barracks are empty', 'Recruit a gladiator first.'));
       S.glads.forEach((g) => {
-        const inf = o.info(g) || {}, bad = !!inf.reason, on = sel.includes(g.id), st = D.STYLES[g.style];
-        const b = h('div', 'ax-pick' + (on ? ' sel' : '')); b.tabIndex = 0; b.setAttribute('role', 'button'); b.setAttribute('aria-pressed', on ? 'true' : 'false'); if (bad) b.setAttribute('aria-disabled', 'true');
+        const inf = infoOf(g), hurtable = !!inf.hurtable, bad = !!inf.reason, on = sel.includes(g.id), st = D.STYLES[g.style];
+        const b = h('div', 'ax-pick' + (on ? ' sel' : '') + (hurtable ? ' hurt' : '')); b.tabIndex = 0; b.setAttribute('role', 'button'); b.setAttribute('aria-pressed', on ? 'true' : 'false'); if (bad) b.setAttribute('aria-disabled', 'true');
         const en = h('div', 'ax-bar'); en.style.setProperty('--w', g.en + '%'); en.style.setProperty('--c', 'var(--lx-stam)'); en.append(h('i')); en.style.height = '6px'; en.title = `Energy ${Math.round(g.en)}`;
+        const R = hurtable ? lm.hurtRisk(S, g) : null;
+        const hb = hurtable ? h('button', 'ax-pill ' + (hurtSet.has(g.id) ? 'bad' : 'warn') + ' ax-hurtbtn', [U.icon('skull', 14), h('span', '', hurtSet.has(g.id) ? 'Fighting hurt' : 'Fight hurt')]) : null;
+        if (hb) { hb.type = 'button'; hb.setAttribute('aria-pressed', hurtSet.has(g.id) ? 'true' : 'false'); hb.setAttribute('aria-label', `Fight hurt: ${R.text.join(', ')}. Wound worsens ${Math.round(R.win * 100)} percent if you win, ${Math.round(R.lose * 100)} percent if you lose.`); }
         b.append(h('span', 'ax-check', U.icon('check', 16)), styleBadge(g.style, 44),
           h('div', 'ax-grow ax-col ax-gap4', [h('div', 'ax-b', g.name + (g.nick ? ` "${g.nick}"` : '')), h('div', 'ax-sub', `${st.n} · Level ${g.lvl}`), en,
-            h('div', 'ax-row ax-wrap ax-gap4', [bad ? pill(inf.reason, { tone: 'bad' }) : null, ...(inf.badges || []), ...woundBadges(g)])]));
+            h('div', 'ax-row ax-wrap ax-gap4', [bad ? pill(inf.reason, { tone: 'bad' }) : null, ...(hurtable ? [pill(`Injured ${g.inj}w`, { tone: 'bad' }), pill(`${R.text[0] || 'Weaker'}${R.text.length > 1 ? ' +' + (R.text.length - 1) : ''}`, { tone: 'warn', tip: R.text.join(', '), tipTitle: 'Fight hurt' }), pill(`Worsens ${Math.round(R.win * 100)}% / ${Math.round(R.lose * 100)}%`, { tone: 'warn', tip: `Chance the wound gets worse: ${Math.round(R.win * 100)}% if you win, ${Math.round(R.lose * 100)}% if you lose.`, tipTitle: 'Worsening risk' })] : []), ...(inf.badges || []), ...woundBadges(g)]), hb]));
         if (inf.right) b.append(inf.right);
-        const act = () => {
-          if (bad) { ctx.sfx('uiError'); U.toast(inf.reason, { kind: 'bad' }); return; }
+        const toggle = (hurt) => {
           const i = sel.indexOf(g.id);
-          if (i >= 0) sel.splice(i, 1); else { if (sel.length >= n) sel.shift(); sel.push(g.id); }
+          if (hurt) { if (i >= 0 && hurtSet.has(g.id)) { sel.splice(i, 1); hurtSet.delete(g.id); } else { if (i < 0) { if (sel.length >= n) hurtSet.delete(sel.shift()); sel.push(g.id); } hurtSet.add(g.id); } }
+          else if (i >= 0) { sel.splice(i, 1); hurtSet.delete(g.id); } else { if (sel.length >= n) hurtSet.delete(sel.shift()); sel.push(g.id); }
           ctx.sfx('uiTap'); draw();
         };
-        b.onclick = act; b.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); act(); } };
+        const act = () => {
+          if (hurtable) { ctx.sfx('uiError'); U.toast(`${g.name} is injured for ${g.inj} week${g.inj > 1 ? 's' : ''}. Tap Fight hurt to take the risk.`, { kind: 'bad' }); return; }
+          if (bad) { ctx.sfx('uiError'); U.toast(inf.reason, { kind: 'bad' }); return; }
+          toggle(false);
+        };
+        b.onclick = (e) => { if (e.target.closest && e.target.closest('.ax-hurtbtn')) { e.stopPropagation(); toggle(true); return; } act(); };
+        b.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); if (e.target.classList && e.target.classList.contains('ax-hurtbtn')) toggle(true); else act(); } };
         root.append(b);
       });
       const gs = sel.map((id) => ctx.gOf(id)).filter(Boolean);
+      const hp = hurtPanel(gs); if (hp) root.append(hp);
       const ft = o.footer && o.footer(gs); if (ft) root.append(ft);
       const cf = o.confirm ? o.confirm(gs) : { label: 'Confirm' }; const ready = gs.length === n && !cf.disabled;
-      root.append(h('div', 'ax-sticky', U.button({ label: cf.label, sub: cf.sub, variant: 'gold', block: true, icon: 'check', disabled: !ready, onClick: () => { ctx.sfx('uiConfirm'); finish(sel.slice()); } })));
+      root.append(h('div', 'ax-sticky', U.button({ label: cf.label, sub: hurtSet.size && !cf.sub ? 'Fighting hurt' : cf.sub, variant: hurtSet.size ? 'danger' : 'gold', block: true, icon: 'check', disabled: !ready, onClick: () => { ctx.sfx('uiConfirm'); finish(sel.slice()); } })));
     });
     draw();
   });
@@ -283,7 +311,9 @@ export function fightStats(ctx, res) {
 
 /** the "trophy earned" dialog, same rewards as the weekly flow */
 export async function awardTrophies(ctx) {
-  const t = L().checkTrophies(ctx.S); if (!t.length) return; ctx.sfx('levelUp'); ctx.save();
+  const t = L().checkTrophies(ctx.S); if (!t.length) return; ctx.save();
+  try { const Cer = await import('../ceremonies.js'); if (await Cer.trophy(ctx, t) != null) { ctx.refresh(); return; } } catch (e) { /* plain dialog below */ } // WAVE3: ceremony on every unlock
+  ctx.sfx('levelUp');
   const body = h('div', 'ax-col', t.map((x) => h('div', '', [h('b', '', x.n), h('div', '', x.d), h('div', '', [x.r.gold ? chip('+' + x.r.gold + ' gold', '#b8803a') : '', x.r.fame ? chip('+' + x.r.fame + ' fame', '#7b4fb8') : '', x.r.laurels ? chip('+' + x.r.laurels + ' laurels', '#5b7a3a') : ''])])));
   body.style.cssText = 'font:600 14px/20px system-ui,sans-serif;color:#33243a';
   await ctx.ask({ title: t.length > 1 ? 'Trophies earned!' : 'Trophy earned!', body, actions: [{ label: 'Shiny!', value: 'ok', variant: 'gold' }], dismiss: 'ok' }); ctx.refresh();

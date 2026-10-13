@@ -1,5 +1,6 @@
 // More screen: sponsors, visitors, factions, trophies, records, legacy, settings, how to play, save tools, credits.
-import { U, h, D, L, fmt, openScreen, sec, card, row, col, note, hint, kv, medal, pill, goldPill, famePill, tabs, meter, toggle, slider, empty, actions, styleBadge, pickFighters, confirmDialog } from './sk.js';
+import { U, h, D, L, fmt, openScreen, sec, card, row, col, note, hint, kv, medal, pill, goldPill, famePill, tabs, meter, toggle, slider, empty, actions, styleBadge, pickFighters, confirmDialog, chipRow } from './sk.js';
+import { glyph, trophyIcon } from '../glyphs.js'; // WAVE3: trophy glyphs
 import { legendsSheet, perksSheet, ascendFlow } from './legacy.js';
 
 const PREF_KEY = 'ludus_maximus_3d_prefs';
@@ -79,18 +80,28 @@ function visitorCard(ctx, v, draw) {
 // ------------------------------------------------------------------ honors: trophies, records, legacy
 function honorsTab(ctx, root, draw) {
   const S = ctx.S, lm = L(), got = S.trophies || {}, n = Object.keys(got).length;
+  // WAVE3: trophies by category, SVG glyphs, progress bars, a summary bar
+  const CATS = ['All', 'Glory', 'Venatio', 'Survival', 'Ludus'], cat = honorsTab._cat || 'All';
+  const catOf = (t) => t.cat || 'Glory', list = D.TROPHIES.filter((t) => cat === 'All' || catOf(t) === cat);
   root.append(sec(`Trophies ${n}/${D.TROPHIES.length}`));
-  const g = h('div', 'ax-grid t');
-  D.TROPHIES.forEach((t) => {
-    const has = got[t.id], b = h('button', 'ax-troph' + (has ? ' got' : ''), [U.icon(has ? 'star' : 'lock', 26), h('span', '', t.n)]); b.type = 'button'; b.setAttribute('aria-label', `${t.n}. ${has ? 'Earned' : 'Not earned yet'}`);
-    b.style.color = has ? 'var(--lx-gold)' : 'var(--lx-travertine)';
+  root.append(h('div', 'lx-bl-sum', [meter(n, D.TROPHIES.length, 'var(--lx-gold)', 'Trophies earned'), h('div', 'ax-sub', n >= D.TROPHIES.length ? 'Every trophy earned. The Grand Collector.' : `${D.TROPHIES.length - n} to go. Open one to see its reward and your progress.`)]));
+  root.append(chipRow(CATS.map((c) => ({ id: c, label: c, sub: c === 'All' ? '' : `${D.TROPHIES.filter((t) => catOf(t) === c && got[t.id]).length}/${D.TROPHIES.filter((t) => catOf(t) === c).length}` })), cat, (id) => { honorsTab._cat = id; draw(); }));
+  const g = h('div', 'lx-bl-grid');
+  list.slice().sort((a, b2) => (got[b2.id] ? 1 : 0) - (got[a.id] ? 1 : 0) || 0).forEach((t) => {
+    const has = got[t.id], pg = lm.trophyProgress ? lm.trophyProgress(S, t.id) : null, b = h('button', 'lx-bl-card' + (has ? ' got' : '')); b.type = 'button';
+    const ico = h('span', 'lx-bl-ico'); ico.innerHTML = has ? glyph(trophyIcon(t), { size: 30 }) : (pg && pg[0] > 0 ? glyph(trophyIcon(t), { size: 30 }) : glyph('lock', { size: 26 })); ico.style.opacity = has ? 1 : pg && pg[0] > 0 ? 0.75 : 0.6;
+    b.append(ico, h('span', 'lx-bl-n', t.n), has ? h('span', 'lx-bl-st', 'Earned') : pg ? h('span', 'lx-bl-pg', [h('i', '', '')]) : h('span', 'lx-bl-st dim', 'Locked'));
+    if (!has && pg) { const bar = b.querySelector('.lx-bl-pg i'); bar.style.width = Math.round((pg[0] / Math.max(1, pg[1])) * 100) + '%'; b.append(h('span', 'lx-bl-pn', `${Math.round(pg[0])}/${pg[1]}`)); }
+    b.setAttribute('aria-label', `${t.n}. ${has ? 'Earned' : pg ? `Progress ${Math.round(pg[0])} of ${pg[1]}` : 'Not earned yet'}`);
     b.onclick = () => {
       const rw = [t.r.gold ? t.r.gold + ' gold' : '', t.r.fame ? t.r.fame + ' fame' : '', t.r.laurels ? t.r.laurels + ' laurel(s)' : ''].filter(Boolean).join(', ');
-      const body = h('div', 'ax-col', [h('p', '', t.d), h('p', '', has ? `Earned in week ${has}.` : 'Not earned yet.'), h('p', '', `Reward: ${rw}.`)]); body.style.cssText = 'color:#33243a;font:500 14px/20px system-ui,sans-serif';
+      const big = h('div', 'lx-bl-big'); big.innerHTML = glyph(trophyIcon(t), { size: 64, sw: 1.8 }); big.style.opacity = has ? 1 : 0.55;
+      const body = h('div', 'ax-col', [big, h('p', '', t.d), h('p', '', has ? `Earned in week ${has}.` : 'Not earned yet.'), pg && !has ? meter(pg[0], pg[1], '#7a3fa8', 'Trophy progress') : null, pg && !has ? h('p', '', `Progress: ${Math.round(pg[0])} of ${pg[1]}.`) : null, h('p', '', `Reward: ${rw}.`)]); body.style.cssText = 'color:#33243a;font:500 14px/20px system-ui,sans-serif';
       ctx.ask({ title: t.n, body, actions: [{ label: 'Close', value: 'ok', variant: 'bronze' }], dismiss: 'ok' });
     };
     g.append(b);
   });
+  if (!list.length) root.append(empty('lock', 'Nothing here yet', 'Play on and this shelf fills up.'));
   root.append(g);
   const st = S.stats || {};
   root.append(sec('Records'));
