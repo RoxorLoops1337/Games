@@ -55,7 +55,9 @@ export class WorldDO {
     const pair = new WebSocketPair();
     const [client, server] = Object.values(pair);
     server.accept();
-    const id = w.connect((o) => { try { server.send(JSON.stringify(o)); } catch { /* socket closing */ } });
+    const send = (o) => { try { server.send(JSON.stringify(o)); } catch { /* socket closing */ } };
+    send.close = () => { try { server.close(1000, 'bye'); } catch { /* closed */ } };
+    const id = w.connect(send);
     server.addEventListener('message', (e) => { try { w.message(id, JSON.parse(e.data)); } catch { /* ignore garbage */ } });
     const bye = () => { try { w.disconnect(id); } catch { /* already gone */ } if (w.players.size === 0) this.save(); };
     server.addEventListener('close', bye); server.addEventListener('error', bye);

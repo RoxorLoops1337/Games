@@ -372,5 +372,14 @@ test('a client that goes silent stops walking', () => {
   assert.ok(x2 > x1, 'walked while input kept arriving');
 });
 
+test('idle players are dropped after the idle limit, active ones are not', () => {
+  const w = new World({ seed: 5, idleMinutes: 1 });
+  const a = client(w, 'Afk'), b = client(w, 'Busy'); run(w, 10);
+  for (let sec = 0; sec < 75; sec++) { w.message(a.id, { t: 'i', k: 0, s: sec }); w.message(b.id, { t: 'i', k: sec % 2 ? 2 : 0, s: sec }); run(w, 30); }
+  assert.ok(!w.players.has(a.id), 'idle player dropped');
+  assert.ok(w.players.has(b.id), 'active player stays');
+  assert.ok(a.last('deny'));
+});
+
 console.log(`\n${passed} passed`);
 

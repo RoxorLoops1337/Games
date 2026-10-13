@@ -55,6 +55,7 @@ export class World {
     this.motd = opts.motd || 'Welcome! Chop a tree, build a workbench, and explore.';
     this.password = opts.password || '';
     this.pvp = !!opts.pvp;
+    this.idleMinutes = opts.idleMinutes ?? 20;
     this.maxPlayers = opts.maxPlayers || MAX_PLAYERS;
     this.spawn = spawnPoint(this.terrain);
     this._rs = (this.seed ^ 0x9e3779b9) >>> 0;
@@ -202,7 +203,9 @@ export class World {
   disconnect(id) {
     const p = this.players.get(id);
     if (p) { this.cancelTrade(p, 'left'); this.savePlayer(p); this.players.delete(id); this.sysChat(`${p.name} left`); this.broadcast({ t: 'leave', id }); }
+    const f = this.conns.get(id);
     this.conns.delete(id); this.rates.delete(id);
+    if (f && f.close) { try { f.close(); } catch { /* already closed */ } } // kicked or idle: hang up
   }
   send(id, obj) { const f = this.conns.get(id); if (f) f(obj); }
   broadcast(obj, except) { for (const id of this.players.keys()) if (id !== except) this.send(id, obj); }
@@ -221,6 +224,7 @@ export class World {
     const p = this.players.get(id);
     if (!p) return;
     const h = Object.hasOwn(HANDLERS, m.t) ? HANDLERS[m.t] : null;
+    if (m.t !== 'i' || m.k !== p.keys) p.lastReal = this.tick_n; // keep-alive input does not count as being active
     if (h) h(this, p, m);
   }
 
@@ -259,7 +263,7 @@ export class World {
       inv: new Array(SLOTS).fill(null), armor: [null, null, null],
       spawnPt: { x: sp.x, y: sp.y }, dead: false, respawnAt: 0, mining: null, atkCd: 0, hurtCd: 0,
       known: new Set(), openChest: null, chatBudget: 8, foodT: 0, regenT: 0, lastAct: this.tick_n, sleeping: false, kills: 0, deaths: 0,
-      swing: 0, emote: '', emoteT: 0, shootCd: 0, ping: 0,
+      swing: 0, emote: '', emoteT: 0, shootCd: 0, ping: 0, lastReal: this.tick_n,
     };
     if (acc && acc.inv) {
       p.inv = acc.inv.map((s) => (s && ITEMS[s.id] ? { ...s } : null));
@@ -904,6 +908,7 @@ export class World {
     if (this.tick_n % TICK === 0) this.tradeCheck();
     for (const a of [...this.arrows.values()]) this.tickArrow(a);
     if (this.tick_n % 3 === 0) stepLiquids(this, 600);
+    if (this.tick_n % (TICK * 10) === 0) for (const p of [...this.players.values()]) if (this.tick_n - p.lastReal > TICK * 60 * this.idleMinutes) { this.send(p.id, { t: 'deny', why: 'You were away for a while, so the slot was freed. Come back any time!' }); this.disconnect(p.id); }
     if (this.tick_n % TICK === 0) { spawnTick(this); this.randomTicks(); for (const p of this.players.values()) p.chatBudget = Math.min(8, p.chatBudget + 2); }
     if (this.tick_n % 2 === 0) this.snapshots();
     this.flushTiles();

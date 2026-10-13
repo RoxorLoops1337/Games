@@ -65,6 +65,7 @@ export function startServer(opts = {}) {
       const payload = Buffer.from(JSON.stringify(obj));
       socket.write(frame(payload, 0x1));
     };
+    send.close = () => socket.end(frame(Buffer.alloc(0), 0x8));
     const id = world.connect(send);
     socket.on('data', (chunk) => {
       buf = Buffer.concat([buf, chunk]);

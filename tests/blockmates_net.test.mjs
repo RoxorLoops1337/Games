@@ -52,6 +52,9 @@ try {
   bots[4].ws.close();
   await sleep(300);
   assert.equal(srv.world.players.size, MAX_PLAYERS - 1); ok('disconnect frees a slot');
+  bots[0].send({ t: 'chat', text: '/kick Bot5' });
+  await sleep(500);
+  assert.equal(bots[5].ws.readyState, 3); assert.ok(bots[5].last('deny')); ok('an operator can kick, and the socket is closed');
   for (const b of bots) b.ws.close();
 
   // the save file round trip, with the file sitting inside the served folder
@@ -69,4 +72,4 @@ try {
   srv.stop();
 }
 console.log(`\n${passed} passed`);
-process.exit(passed === 12 ? 0 : 1);
+process.exit(passed === 13 ? 0 : 1);
