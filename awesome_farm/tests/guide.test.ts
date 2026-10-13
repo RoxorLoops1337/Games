@@ -190,3 +190,14 @@ test('the automation pages name real skills, buildings, layouts and the true num
     assert.ok(power.includes(`steady ${BUILDINGS.coalgen.gen}`), 'coal generator output');
     assert.ok(power.includes(`drill uses ${BUILDINGS.drill.use} units, an inserter ${BUILDINGS.inserter.use} and an assembler ${BUILDINGS.assembler.use}`), 'what machines draw');
 });
+
+test('the Blood Moon and winter hints speak only when they are close', () => {
+    const p = Sim.create('hint', 'h').join('a', 'A')!;
+    p.level = 5; p.cnt = { 'build:bed': 3 };
+    const ids = (c: { moon?: 0 | 1 | 2 | null; winter?: 0 | 1 | 2 | null }) => HINTS.filter((h) => h.when({ me: p, prompt: '', ...c })).map((h) => h.id);
+    assert.ok(!ids({}).includes('moon') && !ids({ moon: null }).includes('moon'));
+    assert.ok(ids({ moon: 1 }).includes('moon'));
+    assert.ok(ids({ winter: 2 }).includes('winter'));
+    const t = HINTS.find((h) => h.id === 'moon')!.text({ me: p, prompt: '', moon: 0 }, { fish: 'Q' });
+    assert.match(t, /tonight/);
+});

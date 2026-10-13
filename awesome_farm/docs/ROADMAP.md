@@ -20,7 +20,7 @@ split big ones into slices (rules, art, polish).
 ## Phase 2: rhythm and economy (medium + small)
 - [x] M6 Welcome-back digest (toasts on return after 5 min or a new day: days passed, what needs you, who is here)
 - [x] M7 Living market prices + Hot Item of the day (1% a unit down to 60%, fades 30% a morning, hot item +50%)
-- [ ] S33 Weather-aware hints
+- [x] S33 Weather-aware hints (rain already existed; added Blood Moon and winter heads-ups)
 - [ ] S22 Rainbow's end
 - [ ] S32 Seasonal special nights
 - [ ] S24 Harvest chain chimes
