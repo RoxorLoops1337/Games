@@ -62,7 +62,7 @@ export const GUIDE: GuideTopic[] = [
             'Sell crops at a Market Stall, cook them at a Kitchen, or grind wheat into flour at a Millstone. A little of your harvest becomes seed for the next round.',
             `A Weather Vane (Build, Decor) shows the next three days: rain (crops grow up to ${Math.round(TUNING.rainGrow * 100)}% faster in it), fog, and the nights to come, such as the Blood Moon, meteors and fairies. {press} {use} on it.`,
         ],
-        tips: ['Give a creature the Farm task (P, then click it) and it harvests, replants and waters while you do something else.', 'Beds sit under you, so walking through your garden never gets stuck.'],
+        tips: ['Give a creature the Farm task (P, then click it) and it harvests, replants and waters while you do something else.', 'Plant the same crop in a 2 x 2 of beds and let them ripen together: pressing E on one harvests a giant crop, twice the usual, and sometimes a crate. A Glass Roof over beds keeps them growing at full speed in winter.'],
     },
     {
         id: 'fish', name: 'Fishing', icon: 'i_rod',
