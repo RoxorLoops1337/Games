@@ -3,10 +3,11 @@ import * as THREE from 'three';
 import { box, cyl, cone, ball, mat } from './models.js';
 import { treeModel, rockModel, clayModel, stumpModel, boardModel, fieldModel, plazaModel, plotModel, islandModel, lanternMat as envLantern } from '../art/environment.js';
 import { BUILD, farmModel, setFarmStage, constructionSite, windowMat, lanternMat } from '../art/buildings.js';
-import { villagerModel, setPose, setMood } from '../art/characters.js';
+import { villagerModel, setPose, setMood, setEmote, setVillagerLight } from '../art/characters.js';
+import { monumentModel, MONUMENT_STAGES } from '../art/monument.js';
 import { sheepModel, cowModel, chickenModel, bunnyModel, puppyModel, kittenModel, snailModel, froggyModel, ducklingModel, birdModel, cloudModel, butterflyModel, animateCritter, cloudMat } from '../art/critters.js';
 import { Fx } from '../art/fx.js';
-import { picnicModel, flowerCartModel, swingModel, hammockModel, birdBathModel, pumpkinPatchModel, beeSkepModel, animateProp, lampPostModel, mailboxModel, lampMat, lanternMat as propLantern, flameMat } from '../art/props.js';
+import { cartModel, tentModel, picnicModel, flowerCartModel, swingModel, hammockModel, birdBathModel, pumpkinPatchModel, beeSkepModel, animateProp, lampPostModel, mailboxModel, lampMat, lanternMat as propLantern, flameMat } from '../art/props.js';
 import { Post } from './post.js';
 import { TIERS, ORDER, detectTier, startPixelRatio, Adaptive, loadChoice, saveChoice, loadCap, saveCap, isSoftwareRenderer } from './quality.js';
 import { PLOT, VALLEY_FIELDS, VALLEY_FIELD_RADIUS, BUILDINGS, NODE_TYPES } from '../shared/data.js';
@@ -174,6 +175,10 @@ export class View {
     put(flowerCartModel(), 3 * q, 16.5, -0.5); put(pumpkinPatchModel(), 3 * q - 0.3, 20, 0);
     put(swingModel(), 5 * q, 17.5, 0.4); put(birdBathModel(), 5 * q + 0.3, 14.5, 0);
     put(hammockModel(), 7 * q, 17.5, -0.4);
+    // the Great Project monument (grows through 6 stages) stands north of the notice board
+    this.monStage = -1; this.monHolder = new THREE.Group(); this.monHolder.position.set(0, 0.1, -5.4); s.add(this.monHolder); this.pickables.push(this.monHolder);
+    // the travelling merchant's stall appears by the plaza while the merchant is in the valley
+    this.merchant = new THREE.Group(); const mc = cartModel(), mt = tentModel(); mt.position.set(-2.6, 0, 0); mc.position.set(0.4, 0, 0.6); this.noCast(mc); this.noCast(mt); this.merchant.add(mt, mc); this.merchant.position.set(5.6, 0.1, 6.6); this.merchant.rotation.y = -0.7; this.merchant.visible = false; s.add(this.merchant);
   }
 
   buildLife() {
@@ -233,7 +238,7 @@ export class View {
     // high-key light: strong soft fill from the hemisphere so shadows stay bright, a golden sun, a lavender moon
     this.sun.intensity = (1.15 + 0.7 * day) * (1 - 0.3 * ra); this.sun.color.set('#c9d2ff').lerp(C.tmp.set('#fff1cf'), day).lerp(C.tmp.set('#ffb070'), dusk * 0.5);
     this.hemi.intensity = 1.2 + 1.0 * day + 0.2 * ra; this.hemi.color.set('#b5c2ff').lerp(C.tmp.set('#ecefff'), day); this.hemi.groundColor.set('#9ccc78').lerp(C.tmp.set('#b4ea84'), day);
-    this.night = 1 - day;
+    this.night = 1 - day; setVillagerLight(Math.max(0.15, day));
     this.winMat.emissiveIntensity = Math.max(0, 1 - day * 1.6) * 1.6; this.lanternMat.emissiveIntensity = (1 - day) * 2.4; envLantern.emissiveIntensity = (1 - day) * 2.4; lampMat.emissiveIntensity = 0.25 + (1 - day) * 2.2; propLantern.emissiveIntensity = 0.25 + (1 - day) * 2.2;
     cloudMat.color.set('#ffffff').lerp(C.tmp.set('#8d9cc8'), (1 - day) * 0.8); this.fx.setLight && this.fx.setLight(0.4 + 0.6 * day);
     this.r.toneMappingExposure = 1.02 + 0.04 * day;
@@ -324,14 +329,14 @@ export class View {
           const info = { id, color: p.color, lvl };
           const mod = type === 'farm' ? farmModel(info) : BUILD[type] ? BUILD[type](info) : BUILD.house(info);
           mod.traverse(o => { if (o.isMesh) o.userData.pick = { k: 'bld', id, pid: p.id }; }); m.add(mod);
-          u.model = mod; u.lvl = lvl; u.spin = mod.getObjectByName('spin'); u.spinz = mod.getObjectByName('spinz'); u.flag = mod.getObjectByName('flag');
+          u.model = mod; u.lvl = lvl; u.spin = mod.getObjectByName('spin'); u.spinz = mod.getObjectByName('spinz'); u.flag = mod.getObjectByName('flag'); u.boat = mod.getObjectByName('boat'); u.door = mod.getObjectByName('door');
           u.chimneys = []; mod.traverse(o => { if (o.name === 'chimney') u.chimneys.push(o); });
           if (u.pop === undefined) { u.pop = 0; m.scale.setScalar(0.01); } else { this.fx.sparkle(V.group.position.x + m.position.x, 1.5, V.group.position.z + m.position.z, '#ffd84a'); }
         }
         const d = BUILDINGS[type] || { w: 3, h: 3 };
         const pos = this.local(V, x, y, d.w, d.h); m.position.set(pos.x, 0.14, pos.z); m.userData.x = x; m.userData.y = y;
         m.userData.prog = prog; m.userData.stage = stage; m.userData.crop = crop; m.userData.busy = stage === 'busy';
-        if (type === 'farm') setFarmStage(m, stage, crop);
+        if (type === 'farm' || type === 'orchard') setFarmStage(m.userData.model, stage, crop);
       }
       for (const [id, m] of V.b) if (!bs.has(id)) { V.group.remove(m); this.unpick(m); V.b.delete(id); this.fx.dust(V.group.position.x + m.position.x, 0.5, V.group.position.z + m.position.z); }
       // nodes
@@ -364,7 +369,35 @@ export class View {
     for (const [pid, V] of this.villages) if (!seen.has(pid)) { this.scene.remove(V.group); this.villages.delete(pid); }
     const alive = new Set(); for (const p of snap.players) for (const v of p.v) alive.add(v[0]);
     for (const [id, m] of this.villagers) if (!alive.has(id)) { this.scene.remove(m); this.unpick(m); this.villagers.delete(id); }
+    this.syncValley(snap);
     for (const f of snap.valley.fields) { const g = this.fieldMeshes[f.id]; if (g) { const d = VALLEY_FIELDS.find(x => x.id === f.id); const k = Math.max(0.15, f.stock / d.max); g.userData.stuff.scale.setScalar(0.5 + 0.5 * k); g.userData.stuff.position.y = (k < 0.2 ? -0.15 : 0); } }
+  }
+  // valley-wide state: the monument stage, festival lights and fireworks, the travelling merchant
+  syncValley(snap) {
+    const V = snap.valley, st = Math.max(0, Math.min(MONUMENT_STAGES - 1, (V.project && V.project.stage) | 0));
+    if (st !== this.monStage) {
+      const first = this.monStage < 0; this.monStage = st;
+      while (this.monHolder.children.length) this.monHolder.remove(this.monHolder.children[0]);
+      const mod = monumentModel(st); this.noCast(mod, o => st >= 2); this.monHolder.add(mod); this.monModel = mod;
+      mod.traverse(o => { if (o.isMesh) o.userData.pick = { k: 'project' }; });
+      this.mon = { flag: mod.getObjectByName('flag'), spinz: mod.getObjectByName('spinz'), beam: mod.getObjectByName('beam'), bell: mod.getObjectByName('bell'), lanterns: mod.getObjectByName('lanterns') };
+      if (!first) this.celebrate('project', 0, -5.4);
+    }
+    this.festivalUntil = V.event && V.event.kind === 'festival' ? V.event.until : 0; this.simT = snap.t;
+    const mer = !!(V.merchant && V.merchant.until > snap.t); if (mer !== this.merchant.visible) { this.merchant.visible = mer; if (mer) this.fx.confetti(5.6, 2, 6.6); }
+  }
+  // one call for every celebration the HUD wants: kind = levelup | built | harvest | project | festival | daily | ach | cheer | craft
+  celebrate(kind, x = 0, z = 0, a = {}) {
+    const f = this.fx;
+    if (kind === 'levelup') { f.levelUp(x, 0.3, z); this.shake(0.25, 0.4); this.flash('#fff6b0', 0.18, 0.5); }
+    else if (kind === 'built') { f.build(x, 0.2, z, a.w || 2, a.h || 2); this.punch(0.03); }
+    else if (kind === 'harvest') f.harvest(x, 1, z, a.color || '#ffd84a');
+    else if (kind === 'project') { for (let i = 0; i < 5; i++) setTimeout(() => f.fireworks(x + (Math.random() - 0.5) * 10, 9 + Math.random() * 5, z + (Math.random() - 0.5) * 8), i * 380); f.levelUp(x, 0.3, z); f.confetti(x, 6, z); this.shake(0.3, 0.6); this.punch(0.06); this.flash('#ffe6f2', 0.22, 0.7); }
+    else if (kind === 'daily') f.coinBurst(x, 1.5, z, 14);
+    else if (kind === 'ach') { f.star(x, 2.2, z, '#ffd84a'); f.sparkle(x, 2, z, '#ffd84a'); f.cheer(x, 2.2, z); }
+    else if (kind === 'cheer') f.cheer(x, 2.2, z);
+    else if (kind === 'craft') f.craft(x, 1.6, z);
+    else if (kind === 'festival') f.fireworks(x, 10, z);
   }
   unpick(m) { const i = this.pickables.indexOf(m); if (i >= 0) this.pickables.splice(i, 1); }
 
@@ -451,6 +484,8 @@ export class View {
       const walking = d > 0.03;
       const pose = walking ? 'walk' : (u.state === 'work' || u.state === 'build') ? 'work' : 'idle';
       setPose(m, pose, this.t, u.phase);
+      const wantEmote = u.state === 'hungry' ? 'sweat' : u.state === 'blocked' ? 'question' : u.state === 'full' ? 'exclamation' : null;
+      if (u.emote !== wantEmote) { u.emote = wantEmote; setEmote(m, wantEmote, 0); }
       const mood = u.state === 'hungry' ? 'hungry' : u.state === 'blocked' || u.state === 'full' ? 'tired' : (u.state === 'work' || u.state === 'build') ? 'busy' : 'happy';
       if (u.mood !== mood) { u.mood = mood; setMood(m, mood); }
       m.position.y = 0.14;
@@ -462,6 +497,8 @@ export class View {
         else m.scale.set(1, 1, 1);
         if (u.model) { u.model.scale.y = u.prog < 1 ? 0.2 + u.prog * 0.8 : 1; if (u.site) u.site.visible = u.prog < 1; }
         if (u.flag) u.flag.rotation.y = Math.sin(this.t * 2.2 + u.id) * 0.18;
+        if (u.boat) u.boat.position.y = (u.boat.userData.baseY || 0.2) + Math.sin(this.t * 1.7 + u.id) * 0.05;
+        if (u.door) { const open = u.stage === 'ready' ? 0.42 : 0; u.door.userData.x0 = u.door.userData.x0 ?? u.door.position.x; u.door.position.x += (u.door.userData.x0 + open - u.door.position.x) * Math.min(1, dt * 4); }
         if (u.spin) u.spin.rotation.x += dt * (u.busy ? 14 : 1);
         if (u.spinz) u.spinz.rotation.z += dt * 0.8;
         if (u.busy && u.prog >= 1 && u.chimneys && u.chimneys.length && Math.random() < dt * 3) { const c = u.chimneys[(Math.random() * u.chimneys.length) | 0]; c.getWorldPosition(this._v || (this._v = new THREE.Vector3())); this.fx.smoke(this._v.x, this._v.y, this._v.z); }
@@ -486,6 +523,13 @@ export class View {
       animateCritter(m, u.mode, this.t, 1, u.seed);
     }
     for (const V of this.villages.values()) if (V.flag) V.flag.rotation.y = Math.sin(this.t * 2 + V.p.slot) * 0.15;
+    if (this.mon) {
+      const M = this.mon; if (M.flag) M.flag.rotation.y = Math.sin(this.t * 2.1) * 0.2; if (M.spinz) M.spinz.rotation.z += dt * 0.7; if (M.beam) M.beam.rotation.y += dt * 1.1;
+      if (M.bell) M.bell.rotation.z = Math.sin(this.t * 1.3) * 0.06; if (M.lanterns) M.lanterns.rotation.y += dt * 0.15;
+    }
+    if (this.festivalUntil && this.simT !== undefined && (this.worldSimT = (this.worldSimT || 0)) !== undefined) {
+      this._fw = (this._fw || 0) - dt; if (this._fw <= 0 && (this.night || 0) > 0.3) { this._fw = 1.1 + Math.random() * 1.4; this.fx.fireworks((Math.random() - 0.5) * 30, 11 + Math.random() * 6, (Math.random() - 0.5) * 30); }
+    }
     if (this.board) this.board.rotation.y = Math.sin(this.t * 0.5) * 0.03;
     this.finishFrame(dt);
   }
