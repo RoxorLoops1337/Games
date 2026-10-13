@@ -20,10 +20,15 @@ function confettiLayer() {
   if (!layer || !layer.isConnected) { layer = h('div', 'lx-cer-layer'); layer.setAttribute('aria-hidden', 'true'); document.body.append(layer); }
   return layer;
 }
+// layering: the body-level layer is z 48, under every modal (50), so a dialog's title and text are never drawn over. A level-up burst passes `into` (its own overlay) and sits under that overlay's text.
+// A pending burst is cleared the moment a dialog opens (ui_kit fires lx-modal-open), so confetti never trails into the next dialog.
+if (typeof document !== 'undefined') document.addEventListener('lx-modal-open', () => { if (layer && layer.isConnected) layer.querySelectorAll('.lx-cer-conf').forEach((e) => e.classList.add('gone')); setTimeout(() => { if (layer && layer.isConnected) layer.replaceChildren(); }, 450); });
 /** mode 'burst' shoots up from (x,y) in viewport fractions then falls; 'rain' drops from the top edge */
-export function confetti({ n = 48, mode = 'burst', x = 0.5, y = 0.55, colors = GOLDS, ms = 3600 } = {}) {
+export function confetti({ n = 48, mode = 'burst', x = 0.5, y = 0.55, colors = GOLDS, ms = 3600, into = null } = {}) {
   if (U.reduced()) return;
-  const host = confettiLayer(), els = [];
+  let host = confettiLayer(); const sc = [...document.querySelectorAll('.lx-scrim:not(.lx-out)')].pop(), into2 = into || sc; // inside the open dialog's scrim the pieces sit under the sheet (z 2), so text is never covered
+  if (into2 && into2.isConnected) { host = h('div', 'lx-cer-layer inlay'); host.setAttribute('aria-hidden', 'true'); if (into2 === sc) into2.prepend(host); else into2.append(host); setTimeout(() => host.remove(), ms + 1600); }
+  const els = [];
   for (let i = 0; i < n; i++) {
     const p = h('i', 'lx-cer-conf ' + mode); const r = (k) => ((i * 7919 + k * 104729) % 1000) / 1000;
     const spread = (r(1) - 0.5) * (mode === 'burst' ? 560 : 120);
@@ -52,7 +57,7 @@ const playLevel = safe(async (ctx, g, level) => {
   el.setAttribute('role', 'status'); document.body.append(el);
   void el.offsetWidth; el.classList.add('in');
   sfx(ctx, 'levelUp'); setTimeout(() => sfx(ctx, 'crowdCheer', { gain: 0.7 }), 420);
-  const num = el.querySelector('.lx-cer-num'); setTimeout(() => { num.textContent = String(level); num.classList.add('pop'); confetti({ n: 56, y: 0.45 }); }, U.reduced() ? 0 : 520);
+  const num = el.querySelector('.lx-cer-num'); setTimeout(() => { num.textContent = String(level); num.classList.add('pop'); confetti({ n: 56, y: 0.45, into: el }); }, U.reduced() ? 0 : 520);
   await new Promise((done) => { let t = setTimeout(done, globalThis.__CER_HOLD || (U.reduced() ? 1400 : 2700)); el.addEventListener('pointerdown', () => { clearTimeout(t); done(); }); });
   el.classList.add('out'); await wait(380); el.remove();
 });

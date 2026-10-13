@@ -185,6 +185,17 @@
   D.look = l => [1, 2, 2, 3, 4, 5, 6][l] || 2;
   D.RLEVELCAP = [2, 3, 4, 5]; // building level cap by league
 
+  // MOVE: rearranging the ludus (rules in core/ext.js, section MOVE). Nothing here is a counter mechanic: moving costs gold and a short downtime, nothing else.
+  D.MOVE = {
+    pinned: { hall: 'The Hall of Legends is built around consecrated statues and the memorial. It cannot be moved.' },   // buildings that stay where they are
+    big: ['stands', 'sparring'],        // crowd-facing, arena-side buildings: heavy timber and stone, x1.4 price
+    bigMult: 1.4, lv5Mult: 1.5,         // level 5 buildings: marble and masons, x1.5
+    rate: 0.07,                         // of the gold invested in the building (all levels), per step of distance factor
+    swapRate: 0.4,                      // a swap costs 40% of both moves together and one week less downtime for each
+    undoRefund: 0.75,                   // undo in the same week returns 75% of the price
+    minGold: 20,
+  };
+
   D.ACTS = [
     { id: 'str', n: 'Train STR', t: 'train', s: 'str' }, { id: 'agi', n: 'Train AGI', t: 'train', s: 'agi' },
     { id: 'end', n: 'Train END', t: 'train', s: 'end' }, { id: 'skl', n: 'Train SKL', t: 'train', s: 'skl' },

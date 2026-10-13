@@ -36,6 +36,7 @@ const P = {
   scroll: '<path d="M7 4h11a2 2 0 0 1 2 2v1H9v11a2 2 0 0 1-4 0V6a2 2 0 0 1 2-2zM9 10h8M9 14h6"/>',
   skull: '<path d="M5 11a7 7 0 0 1 14 0c0 2-1 3-2 4v3H7v-3c-1-1-2-2-2-4zM9.500 11h.01M14.500 11h.01M10 18v-2M14 18v-2"/>',
   close: '<path d="M6 6l12 12M18 6L6 18"/>',
+  hammer: '<path d="M14 4l6 6-2 2-1-1-3 3-4-4 3-3-1-1z"/><path d="M11 11L4 18l2 2 7-7"/>', // MOVE
   gear: '<circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.600 5.600l2.100 2.100M16.300 16.300l2.100 2.100M5.600 18.400l2.100-2.100M16.300 7.700l2.100-2.100"/>',
   check: '<path d="M5 12l5 5 9-10"/>',
   lock: '<rect x="6" y="11" width="12" height="9" rx="1.500"/><path d="M8.500 11V8a3.500 3.500 0 0 1 7 0v3"/>',
@@ -183,7 +184,7 @@ function onModalKey(e) {
     return;
   }
   const el = top.el;
-  if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); top.close(); return; }
+  if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); if (top.closable === false) { top.sheet.classList.remove('lx-nudge'); void top.sheet.offsetWidth; top.sheet.classList.add('lx-nudge'); return; } top.close(); return; }
   if (e.key === 'Tab') {
     const f = focusables(el); if (!f.length) { e.preventDefault(); return; }
     const first = f[0], last = f[f.length - 1], a = document.activeElement;
@@ -197,24 +198,46 @@ function onModalKey(e) {
     if (spatialFocus(el, a, dir)) e.preventDefault();
   }
 }
-export function modal({ title, body, actions = [], onClose, host = document.body } = {}) {
-  const scrim = h('div', 'lx-scrim'); const sheet = panel({ title, variant: 'marble', cls: 'lx-sheet' });
+// opts: closable (default true; false hides the X and ignores Escape / scrim taps, the sheet says why via `why`), cls (extra sheet classes),
+// dock 'low' (result dialogs: docked to the bottom, light dim, a 'See the finish' peek button collapses it so the scene shows).
+export function modal({ title, body, actions = [], onClose, host = document.body, closable = true, why = '', cls = '', dock = '', peekLabel = 'See the finish' } = {}) {
+  const scrim = h('div', 'lx-scrim' + (dock ? ' lx-dock-' + dock : '')); const sheet = panel({ title, variant: 'marble', cls: 'lx-sheet' + (cls ? ' ' + cls : '') });
   sheet.setAttribute('role', 'dialog'); sheet.setAttribute('aria-modal', 'true'); sheet.tabIndex = -1;
   const tt = sheet.querySelector('.lx-title'); if (tt) { tt.id = 'lx-mt-' + (++modalUid); sheet.setAttribute('aria-labelledby', tt.id); } else sheet.setAttribute('aria-label', 'Dialog');
   const grab = h('i', 'lx-grab'); grab.setAttribute('aria-hidden', 'true'); sheet.prepend(grab);
   sheet.body.append(h('div', 'lx-sheet-scroll', body));
   if (actions.length) sheet.body.append(h('div', 'lx-actions', actions));
-  const x = iconButton('close', 'Close', () => api.close()); x.classList.add('lx-sheet-x'); sheet.append(x);
+  const x = iconButton('close', 'Close', () => api.close()); x.classList.add('lx-sheet-x'); if (closable) sheet.append(x);
+  if (!closable && why) sheet.body.insertBefore(h('p', 'lx-why', why), sheet.body.firstChild);
+  let peeked = false, pk = null;
+  if (dock) { // docked result dialogs: the scene (finisher, winner pose) stays visible; one tap folds the sheet down to its title bar
+    pk = h('button', 'lx-peek'); pk.type = 'button'; pk.setAttribute('aria-expanded', 'true'); pk.append(icon('arena', 16), h('span', '', peekLabel));
+    pk.addEventListener('click', () => { peeked = !peeked; scrim.classList.toggle('lx-peeked', peeked); pk.setAttribute('aria-expanded', String(!peeked)); pk.lastChild.textContent = peeked ? 'Back to results' : peekLabel; });
+    sheet.append(pk);
+  }
   scrim.append(sheet); host.append(scrim);
   const prevFocus = document.activeElement; let closed = false;
-  const api = { el: scrim, close() {
+  const strips = [];
+  const api = { el: scrim, closable, sheet,
+    /** toast shown INSIDE this sheet (between the body and the action row): it can never cover the title or the text */
+    strip(msg, { kind = 'info', ms = 2600, ico } = {}) {
+      const t = h('div', `lx-toast lx-toast-${kind} lx-toast-strip`, [ico ? icon(ico, 18) : null, h('span', '', msg)]); t.setAttribute('role', 'status');
+      const act = sheet.body.querySelector(':scope > .lx-actions'); sheet.body.insertBefore(t, act || null);
+      while (sheet.body.querySelectorAll(':scope > .lx-toast-strip').length > 2) sheet.body.querySelector(':scope > .lx-toast-strip').remove();
+      const rec = { t, msg, kind, ico, end: performance.now() + ms };
+      rec.timer = setTimeout(() => { t.classList.add('lx-out'); setTimeout(() => { t.remove(); const i = strips.indexOf(rec); if (i >= 0) strips.splice(i, 1); }, reduced() ? 0 : 260); }, ms); strips.push(rec); return t;
+    },
+    close() {
     if (closed) return; closed = true; const i = modalStack.indexOf(api); if (i >= 0) modalStack.splice(i, 1);
+    document.body.classList.toggle('lx-modal-open', modalStack.length > 0);
+    for (const r of strips.splice(0)) { clearTimeout(r.timer); const left = r.end - performance.now(); if (left > 400) toast(r.msg, { kind: r.kind, ico: r.ico, ms: left }); } // a toast raised just before the sheet closed ("X joined your ludus") still gets seen
     scrim.classList.add('lx-out'); setTimeout(() => scrim.remove(), reduced() ? 0 : 220);
     const nextTop = modalStack[modalStack.length - 1]; if (nextTop) { if (!nextTop.el.contains(document.activeElement)) (focusables(nextTop.el)[0] || nextTop.el).focus?.({ preventScroll: true }); } else prevFocus?.focus?.({ preventScroll: true });
     onClose?.();
   } };
-  modalStack.push(api); if (!kbOn) { kbOn = true; document.addEventListener('keydown', onModalKey, true); }
-  scrim.addEventListener('pointerdown', (e) => { if (e.target === scrim) api.close(); });
+  modalStack.push(api); document.body.classList.add('lx-modal-open'); try { document.dispatchEvent(new CustomEvent('lx-modal-open')); } catch (e) { /* old engine */ }
+  if (!kbOn) { kbOn = true; document.addEventListener('keydown', onModalKey, true); }
+  scrim.addEventListener('pointerdown', (e) => { if (e.target === scrim && closable && !dock) api.close(); });
   requestAnimationFrame(() => { scrim.classList.add('lx-in'); if (!scrim.contains(document.activeElement)) (sheet.querySelector('.lx-btn-gold') || x).focus?.({ preventScroll: true }); });
   return api;
 }
@@ -228,6 +251,8 @@ export function download(filename, text, type = 'application/json') {
 // ---------- toast ----------
 let toastHost;
 export function toast(msg, { kind = 'info', ms = 2600, ico, host = document.body } = {}) {
+  // layering rule: toasts sit above the HUD and below every modal. While a modal is open the toast moves INTO its sheet (a strip above the buttons), so it never covers a title.
+  const top = modalStack[modalStack.length - 1]; if (top && top.strip && host === document.body && top.el.isConnected) return top.strip(msg, { kind, ms, ico });
   if (!toastHost || !toastHost.isConnected) { toastHost = h('div', 'lx-toasts'); toastHost.setAttribute('role', 'status'); toastHost.setAttribute('aria-live', 'polite'); host.append(toastHost); }
   const t = h('div', `lx-toast lx-toast-${kind}`, [ico ? icon(ico, 20) : null, h('span', '', msg)]);
   toastHost.append(t); while (toastHost.children.length > 3) toastHost.firstChild.remove();
@@ -328,4 +353,29 @@ export function levelUp({ name, level, host = document.body, ms = 2600 } = {}) {
     h('div', 'lx-lvlup-n lx-num', level), h('div', 'lx-lvlup-name lx-engrave', name)]);
   for (let i = 0; i < 14; i++) { const s = h('i', 'lx-spark'); s.style.setProperty('--a', (i * 360 / 14) + 'deg'); s.style.setProperty('--d', (90 + (i % 3) * 40) + 'px'); el.append(s); }
   host.append(el); setTimeout(() => { el.classList.add('lx-out'); setTimeout(() => el.remove(), 400); }, reduced() ? 1400 : ms); return el;
+}
+
+// ---------- label fitter (no mid-word breaks) ----------
+// Buttons, tabs, chips and nav labels never break inside a word (CSS: overflow-wrap normal). When a single word is wider than its box the font shrinks in
+// half-pixel steps down to 9px, then the tracking tightens; it never breaks. Runs on every sheet that opens, on DOM changes inside sheets and the HUD, on resize.
+const FIT_SEL = '.lx-btn-label, .lx-nav-i span, .ax-tab span, .ax-tab, .lm-tab span, .lm-tab, .am-tab span, .am-tab, .lm-act, .ax-chipbtn span, .lx-ttl-tog, .lx-chip, .lm-chip, .lx-btn-sub, .lx-title';
+export function fitLabels(root = document) {
+  const els = root.querySelectorAll ? root.querySelectorAll(FIT_SEL) : [];
+  for (const e of els) {
+    if (!e.isConnected || !e.clientWidth) continue;
+    const base = e.dataset.fit0 ? +e.dataset.fit0 : 0;
+    if (base && e.dataset.fitW === String(e.clientWidth) && e.dataset.fitT === e.textContent) continue; // unchanged since the last fit
+    if (base) { e.style.fontSize = ''; e.style.letterSpacing = ''; }
+    if (e.scrollWidth <= e.clientWidth + 1) { delete e.dataset.fit0; continue; }
+    const f0 = parseFloat(getComputedStyle(e).fontSize) || 14; let f = f0, n = 0;
+    while (e.scrollWidth > e.clientWidth + 1 && f > 9 && n++ < 24) { f -= 0.5; e.style.fontSize = f + 'px'; }
+    if (e.scrollWidth > e.clientWidth + 1) e.style.letterSpacing = '0';
+    e.dataset.fit0 = String(f0); e.dataset.fitW = String(e.clientWidth); e.dataset.fitT = e.textContent;
+  }
+}
+if (typeof document !== 'undefined' && typeof MutationObserver !== 'undefined') {
+  let ft = 0; const run = () => { ft = 0; try { fitLabels(document); } catch (e) { /* layout not ready */ } };
+  const kick = () => { if (!ft) ft = setTimeout(run, 40); };
+  const start = () => { try { new MutationObserver(kick).observe(document.body, { childList: true, subtree: true, characterData: true }); addEventListener('resize', kick); kick(); } catch (e) { /* ignore */ } };
+  if (document.body) start(); else document.addEventListener('DOMContentLoaded', start);
 }

@@ -30,7 +30,7 @@ const WIN = [2.9, 1.5, 0.55];       // lit window HDR (blooms when glow=1)
 // ---------------------------------------------------------------------------------------------
 // shared materials + uniforms
 // ---------------------------------------------------------------------------------------------
-export const buildingUniforms = { uTime: { value: 0 }, uWind: { value: 1 }, uHL: { value: new Float32Array(MAXPLOT) }, uGl: { value: new Float32Array(MAXPLOT) } };
+export const buildingUniforms = { uTime: { value: 0 }, uWind: { value: 1 }, uHL: { value: new Float32Array(MAXPLOT) }, uGl: { value: new Float32Array(MAXPLOT) }, uOff: { value: Array.from({ length: MAXPLOT }, () => new THREE.Vector3()) } };   // MOVE: uOff[plot+1] lifts / shifts a whole plot (rearrange mode and cinematic), index 0 stays zero
 
 function woodTexture() {
   const c = document.createElement('canvas'); c.width = c.height = 256; const x = c.getContext('2d');
@@ -49,9 +49,9 @@ let LIB = null;
 /** Extra fragment hook (rim highlight) on top of patchMaterial. */
 function litPatch(mat, key, { vBody = '', vPars = '' } = {}) {
   patchMaterial(mat, {
-    key, uniforms: { uHL: buildingUniforms.uHL, uTime: buildingUniforms.uTime, uWind: buildingUniforms.uWind },
-    vPars: `attribute float aPlot; varying float vHL; uniform float uHL[${MAXPLOT}]; uniform float uTime, uWind;\n${vPars}`,
-    vBody: `vHL = uHL[int(aPlot + 0.5)];\n${vBody}`,
+    key, uniforms: { uHL: buildingUniforms.uHL, uTime: buildingUniforms.uTime, uWind: buildingUniforms.uWind, uOff: buildingUniforms.uOff },
+    vPars: `attribute float aPlot; varying float vHL; uniform float uHL[${MAXPLOT}]; uniform vec3 uOff[${MAXPLOT}]; uniform float uTime, uWind;\n${vPars}`,
+    vBody: `vHL = uHL[int(aPlot + 0.5)];\n${vBody}\ntransformed += uOff[int(aPlot + 0.5)];`,
     fPars: 'varying float vHL;',
   });
   const inner = mat.onBeforeCompile;
@@ -65,9 +65,9 @@ function litPatch(mat, key, { vBody = '', vPars = '' } = {}) {
 export function makeGlowMaterial(glArr = buildingUniforms.uGl) {
   const m = new THREE.MeshBasicMaterial({ vertexColors: true });
   patchMaterial(m, {
-    key: 'bld_glow', uniforms: { uGl: glArr === buildingUniforms.uGl ? buildingUniforms.uGl : { value: glArr }, uTime: buildingUniforms.uTime },
-    vPars: `attribute float aPlot; varying float vGl; varying vec2 vEm; uniform float uGl[${MAXPLOT}];`,
-    vBody: 'vGl = uGl[int(aPlot + 0.5)]; vEm = uv;',
+    key: 'bld_glow', uniforms: { uGl: glArr === buildingUniforms.uGl ? buildingUniforms.uGl : { value: glArr }, uTime: buildingUniforms.uTime, uOff: buildingUniforms.uOff },
+    vPars: `attribute float aPlot; varying float vGl; varying vec2 vEm; uniform float uGl[${MAXPLOT}]; uniform vec3 uOff[${MAXPLOT}];`,
+    vBody: 'vGl = uGl[int(aPlot + 0.5)]; vEm = uv; transformed += uOff[int(aPlot + 0.5)];',
     fPars: 'varying float vGl; varying vec2 vEm; uniform float uTime;',
     fBody: 'float lit = max(vEm.y, 0.12 + vGl * 3.4); diffuseColor.rgb *= mix(1.0, lit * (0.93 + 0.07 * sin(uTime * 8.0 + vEm.x * 40.0)), step(0.5, vEm.x));',
   });
@@ -866,4 +866,117 @@ export function createBuilding(id, level, opts = {}) {
     setGlow(v) { glowU[0] = v; },
     dispose() { glowMat.dispose(); },
   };
+}
+
+// ---------------------------------------------------------------------------------------------
+// MOVE: construction sites (a building being rebuilt after the owner moved it), workers and the crane
+// ---------------------------------------------------------------------------------------------
+const SITE_CACHE = new Map();
+const SITE_FRAC = [0.3, 0.55, 0.8];   // shell height (fraction of the finished building) per stage
+const _scaleM = new THREE.Matrix4();
+/** stage 0..2 from progress 0..1 (weeks done / weeks total). */
+export const siteStage = (p) => (p < 0.34 ? 0 : p < 0.67 ? 1 : 2);
+/**
+ * A construction site for (id, level): the finished walls cut down to a partial height (no roof, glass, banners), timber scaffolding with planked decks and a ladder,
+ * a tarp, stacked stone and timber, a rope fence at the front and (stage 2) the bare roof frame. Same shape as buildParts() so the hub merges it per material.
+ * Also returns `workers`: local spots {x,y,z,ry} for the animated crew (hub InstancedMesh). Cached.
+ */
+export function buildSite(id, level, stage = 0, opts = {}) {
+  stage = clamp(Math.round(stage), 0, 2);
+  const full = buildParts(id, level, opts), accent = opts.accent ?? ACC_DEFAULT, key = `${id}|${full.level}|${stage}|${accent}`;
+  if (SITE_CACHE.has(key)) return SITE_CACHE.get(key);
+  const fp = full.footprint, f = SITE_FRAC[stage], top = Math.max(1.3, fp.h * f * 0.85);
+  const k = new Kit(id.length * 71 + stage * 13 + 5, accent); k.H = 6;
+  const hw = fp.w / 2 + 0.75, hd = fp.d / 2 + 0.75, H = Math.min(fp.h + 1.2, top + 1.9 + stage * 0.5), deck = [1.45, 2.9, 4.3].filter((y) => y < H - 0.5);
+  // poles along the long sides and at the corners
+  const nx = Math.max(2, Math.round(fp.w / 2.7)), px = []; for (let i = 0; i <= nx; i++) px.push(-hw + (2 * hw * i) / nx);
+  for (const z of [-hd, hd]) for (const x of px) k.cyl('wood', 0.075, 0.09, H, x, 0, z, C.woodLt, { seg: 5, ao: 0.3 });
+  // ledgers + planked decks on both long sides, a short deck across the back
+  for (const y of deck) {
+    for (const z of [-hd, hd]) { k.box('wood', 2 * hw + 0.2, 0.09, 0.09, 0, y - 0.08, z, C.wood2, { c: true, ao: 0.3 }); k.box('wood', 2 * hw, 0.07, 0.95, 0, y - 0.1, z + (z > 0 ? -0.35 : 0.35), C.wood, { c: true, ao: 0.35 }); }
+    for (const x of [-hw, hw]) k.box('wood', 0.09, 0.09, 2 * hd, x, y - 0.08, 0, C.wood2, { c: true, ao: 0.3 });
+    for (const z of [-hd, hd]) k.box('wood', 2 * hw, 0.06, 0.06, 0, y + 0.55, z, C.rope, { c: true, ao: 0.3 });   // guard rail
+  }
+  // diagonal braces on the front and the back face
+  for (const z of [-hd, hd]) for (let i = 0; i < nx; i += 2) { const x0 = px[i], x1 = px[Math.min(nx, i + 1)]; const L = Math.hypot(x1 - x0, H - 0.4); k.box('wood', L, 0.07, 0.06, (x0 + x1) / 2, H / 2, z + (z > 0 ? 0.05 : -0.05), C.wood2, { c: true, rz: Math.atan2(H - 0.4, x1 - x0), ao: 0.3 }); }
+  // ladder at the front-left, rungs every 0.4 m
+  { const lx = -hw + 0.7, lh = deck.length ? deck[deck.length - 1] : 1.4; for (const s of [-0.2, 0.2]) k.box('wood', 0.07, lh + 0.4, 0.07, lx + s, 0, hd + 0.35, C.wood2, { rx: -0.14, ao: 0.3 }); for (let y = 0.35; y < lh; y += 0.4) k.box('wood', 0.46, 0.05, 0.05, lx, y, hd + 0.35 - y * 0.14, C.woodLt, { c: true, ao: 0.3 }); }
+  // tarp hanging on the back (cloth sways) and a pennant
+  k.sheet([-hw + 0.3, Math.max(1.2, H - 0.1), -hd - 0.12], [2 * hw - 0.6, 0, 0], [0, -Math.max(1.2, H - 0.6) * 0.9, 0], 3, 3, C.cream, { ao: 0.4 });
+  if (stage >= 1) k.sheet([hw + 0.1, H - 0.2, -hd + 0.4], [0, 0, 2.2], [0, -1.7, 0], 2, 3, C.red, { ao: 0.4 });
+  // stacked cut stone, timber, a barrel and a sawhorse near the front-right
+  for (let i = 0; i < 6; i++) k.box('masonry', 0.72, 0.36, 0.42, hw - 0.9 + (i % 3) * 0.8 - 0.8, Math.floor(i / 3) * 0.36, hd + 1.05 + (i % 2) * 0.04, i % 2 ? C.trav : C.stone, { ry: (i % 3) * 0.05, ao: 0.4 });
+  for (let i = 0; i < 5; i++) k.cyl('wood', 0.1, 0.1, 2.0, hw - 2.6, 0.1 + (i % 3) * 0.19 + (i > 2 ? 0.1 : 0), hd + 0.9 + (i % 3) * 0.2, C.woodLt, { seg: 5, rz: Math.PI / 2, c: true, ao: 0.4 });
+  k.barrel(-hw - 0.2, hd + 0.9, 0, 0.8);
+  for (const s of [-1, 1]) { k.box('wood', 0.07, 0.8, 0.07, -0.9 + s * 0.45, 0, hd + 1.9, C.wood2, { rx: 0.2 * s }); k.box('wood', 0.07, 0.8, 0.07, -0.9 + s * 0.45, 0, hd + 1.9, C.wood2, { rx: -0.2 * s }); k.box('wood', 1.4, 0.07, 0.12, -0.9, 0.7, hd + 1.9, C.wood, { c: true }); }
+  // rope fence: stakes around the foot of the site, a rope between them at the front
+  { const sx = [-hw - 0.5, -hw / 2, 0, hw / 2, hw + 0.5], z = hd + 1.8; for (const x of sx) k.box('wood', 0.07, 0.9, 0.07, x, 0, z, C.wood2, { ao: 0.3 }); k.box('wood', 2 * hw + 1.0, 0.025, 0.025, 0, 0.82, z, C.red, { c: true }); }
+  // the partial shell: finished masonry / wood / metal squashed to the stage height, no roof, no windows, no banners
+  const parts = {}, sc = new THREE.Matrix4().makeScale(1, f, 1), lift = new THREE.Matrix4();
+  void _scaleM; void lift;
+  for (const m of MATS) { const list = k.P[m].slice(); if ((m === 'masonry' || m === 'wood' || m === 'metal') && full.parts[m]) list.push(full.parts[m].clone().applyMatrix4(sc)); if (list.length) { const g = mergeGeometries(list, false); g.computeBoundingSphere(); parts[m] = g; } }
+  // stage 2 adds the bare roof frame (ridge beam and rafters) on top of the shell
+  if (stage === 2) { const k2 = new Kit(9, accent); k2.H = 6; const y0 = fp.h * f * 0.97, w2 = fp.w * 0.82, d2 = fp.d * 0.8; k2.box('wood', w2, 0.2, 0.2, 0, y0 + 1.3, 0, C.wood2, { c: true }); for (let i = 0; i < 6; i++) for (const s of [-1, 1]) { const x = -w2 / 2 + 0.3 + i * ((w2 - 0.6) / 5); k2.box('wood', 0.12, 0.12, d2 / 2 + 0.2, x, y0 + 0.65, s * d2 / 4, C.woodLt, { c: true, rx: -s * Math.atan2(1.3, d2 / 2) }); } if (k2.P.wood.length) parts.wood = mergeGeometries([parts.wood, ...k2.P.wood], false); }
+  let tris = 0, calls = 0; for (const m of MATS) if (parts[m]) { tris += parts[m].attributes.position.count / 3; calls++; }
+  // crew spots: ground, first deck, second deck, roof frame
+  const w = [{ x: hw + 0.9, y: 0, z: 0.8, ry: Math.PI * 0.5 }, { x: -0.8, y: 0, z: hd + 0.6, ry: Math.PI }, { x: 1.4, y: 0, z: hd + 0.9, ry: Math.PI * 0.9 }];
+  if (deck[0]) w.push({ x: -hw * 0.5, y: deck[0], z: hd - 0.35, ry: Math.PI }, { x: hw * 0.4, y: deck[0], z: -hd + 0.35, ry: 0 });
+  if (deck[1]) w.push({ x: hw * 0.6, y: deck[1], z: hd - 0.35, ry: Math.PI }, { x: -hw * 0.2, y: deck[1], z: -hd + 0.35, ry: 0 });
+  const res = { id, level: full.level, stage, parts, fx: { flames: [], smoke: [], sparks: [] }, tris: Math.round(tris), calls, footprint: full.footprint, workers: w.slice(0, 3 + stage * 2 + (deck.length > 1 ? 1 : 0)), site: true };
+  SITE_CACHE.set(key, res); return res;
+}
+
+let WORKER_GEO = null;
+/** one crew member (~150 triangles): legs, tunic, head, and an arm with a mallet flagged by `aArm` so the vertex shader can swing it. Vertex colors are linear. */
+export function workerGeometry() {
+  if (WORKER_GEO) return WORKER_GEO;
+  const list = [], add = (g, rgb, arm = 0, ry = 0) => { g = g.index ? g.toNonIndexed() : g; const n = g.attributes.position.count, c = new Float32Array(n * 3), a = new Float32Array(n).fill(arm); for (let i = 0; i < n; i++) { c[i * 3] = rgb[0]; c[i * 3 + 1] = rgb[1]; c[i * 3 + 2] = rgb[2]; } g.setAttribute('color', new THREE.BufferAttribute(c, 3)); g.setAttribute('aArm', new THREE.BufferAttribute(a, 1)); g.deleteAttribute('uv'); list.push(g); void ry; };
+  const bx = (w, h, d, x, y, z) => { const g = new THREE.BoxGeometry(w, h, d); g.translate(x, y + h / 2, z); return g; };
+  add(bx(0.11, 0.46, 0.14, -0.08, 0, 0), [0.2, 0.14, 0.1]); add(bx(0.11, 0.46, 0.14, 0.08, 0, 0), [0.2, 0.14, 0.1]);                 // legs
+  add(bx(0.34, 0.5, 0.2, 0, 0.44, 0), [0.62, 0.44, 0.24]);                                                                          // tunic
+  add(bx(0.36, 0.08, 0.22, 0, 0.44, 0), [0.28, 0.16, 0.08]);                                                                        // belt
+  const hd = new THREE.SphereGeometry(0.115, 6, 5); hd.translate(0, 1.07, 0); add(hd, [0.62, 0.38, 0.24]);                           // head
+  add(bx(0.2, 0.05, 0.2, 0, 1.17, 0), [0.45, 0.4, 0.28]);                                                                           // cap
+  add(bx(0.09, 0.09, 0.42, -0.23, 0.82, 0.18), [0.62, 0.38, 0.24], 1);                                                              // arm (swings about the shoulder)
+  add(bx(0.07, 0.07, 0.07, 0.23, 0.82, 0), [0.62, 0.38, 0.24]);                                                                     // idle arm
+  add(bx(0.2, 0.1, 0.1, -0.23, 0.79, 0.42), [0.16, 0.14, 0.14], 1);                                                                 // mallet head
+  WORKER_GEO = mergeGeometries(list, false); return WORKER_GEO;
+}
+/** InstancedMesh of `n` workers; the hub sets the matrices every frame. instanceColor varies the tunics a little. */
+export function makeWorkerMesh(n) {
+  const mat = patchMaterial(new THREE.MeshLambertMaterial({ vertexColors: true }), {
+    key: 'bld_worker', uniforms: { uTime: buildingUniforms.uTime },
+    vPars: 'attribute float aArm; uniform float uTime;',
+    vBody: `if (aArm > 0.5) { float ph = instanceMatrix[3].x * 3.1 + instanceMatrix[3].z * 1.7; float a = sin(uTime * 7.5 + ph) * 0.75 - 0.55; vec3 pv = vec3(-0.23, 0.82, 0.0); vec3 q = transformed - pv; float cs = cos(a), sn = sin(a); q = vec3(q.x, q.y * cs - q.z * sn, q.y * sn + q.z * cs); transformed = pv + q; }`,
+  });
+  const m = new THREE.InstancedMesh(workerGeometry(), mat, n); m.count = 0; m.frustumCulled = false; m.castShadow = true; m.name = 'site_workers';
+  const col = new THREE.Color(); for (let i = 0; i < n; i++) { const t = 0.7 + ((i * 37) % 11) / 11 * 0.6; m.setColorAt(i, col.setRGB(t, t * (0.9 + ((i * 13) % 5) * 0.04), t * (0.8 + ((i * 7) % 4) * 0.08))); }
+  return m;
+}
+
+/** The tower crane used in the move cinematic: { group, setPose({az, load, lift, show}) }. 4 meshes (mast, jib, rope, load), shared wood material. */
+export function makeCrane() {
+  const lib = getLib(), group = new THREE.Group(); group.name = 'move_crane';
+  const kM = new Kit(3, 0x6a2470); kM.H = 12; const MH = 9.2;
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) kM.box('wood', 0.16, MH, 0.16, sx * 0.4, 0, sz * 0.4, C.wood2, { ao: 0.2 });
+  for (let y = 0.9; y < MH; y += 1.5) { for (const s of [-1, 1]) { kM.box('wood', 0.9, 0.08, 0.08, 0, y, s * 0.4, C.woodLt, { c: true, ao: 0.2 }); kM.box('wood', 0.08, 0.08, 0.9, s * 0.4, y, 0, C.woodLt, { c: true, ao: 0.2 }); kM.box('wood', 1.2, 0.07, 0.07, 0, y + 0.7, s * 0.4, C.wood, { c: true, rz: 0.7 * s, ao: 0.2 }); } }
+  kM.box('wood', 2.3, 0.35, 2.3, 0, 0, 0, C.stone, { ao: 0.3 }); kM.box('wood', 1.2, 0.4, 1.2, 0, MH, 0, C.iron, { ao: 0.2 });
+  const mast = new THREE.Mesh(mergeGeometries(kM.P.wood, false), lib.wood); mast.castShadow = true; group.add(mast);
+  const kJ = new Kit(4, 0x6a2470); kJ.H = 12; const L = 7.6;
+  kJ.box('wood', 0.12, 0.12, L + 2.2, 0.28, 0.6, (L - 2.2) / 2, C.wood2, { c: true, ao: 0.2 }); kJ.box('wood', 0.12, 0.12, L + 2.2, -0.28, 0.6, (L - 2.2) / 2, C.wood2, { c: true, ao: 0.2 }); kJ.box('wood', 0.1, 0.1, L + 2.2, 0, 0.1, (L - 2.2) / 2, C.wood2, { c: true, ao: 0.2 });
+  for (let z = -1.8, i = 0; z < L - 0.6; z += 0.9, i++) kJ.box('wood', 0.06, 0.06, 0.95, 0, 0.35, z + 0.45, C.woodLt, { c: true, rx: (i % 2 ? 1 : -1) * 0.66, ao: 0.2 });
+  kJ.box('wood', 0.9, 0.7, 0.9, 0, 0.1, -2.3, C.stone, { ao: 0.3 }); kJ.cyl('wood', 0.1, 0.1, 0.9, 0, 0.35, L - 0.1, C.iron, { rz: Math.PI / 2, c: true, seg: 6 });
+  const jib = new THREE.Mesh(mergeGeometries(kJ.P.wood, false), lib.wood); jib.position.y = MH + 0.2; jib.castShadow = true; group.add(jib);
+  const rope = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 1, 4).translate(0, -0.5, 0), new THREE.MeshBasicMaterial({ color: 0xc9b07a })); rope.frustumCulled = false; jib.add(rope);
+  const kL = new Kit(6, 0x6a2470); kL.H = 3; kL.box('wood', 0.38, 0.3, 0.3, 0, -0.3, 0, C.iron, { ao: 0.4 }); for (let i = 0; i < 4; i++) kL.cyl('wood', 0.09, 0.09, 1.4, -0.28 + i * 0.19, -0.75 - (i % 2) * 0.1, 0, C.woodLt, { rz: Math.PI / 2, c: true, seg: 5, ry: 0.5, ao: 0.4 });
+  const load = new THREE.Mesh(mergeGeometries(kL.P.wood, false), lib.wood); load.frustumCulled = false; load.castShadow = true; jib.add(load);
+  const api = {
+    group, jib, mast, rope, load, tipZ: L - 0.1,
+    /** az = jib yaw (0 points +z), reach 0..1 of the jib, drop = metres the load hangs below the jib tip height, show = load visible */
+    setPose({ az = 0, reach = 1, drop = 5, show = true } = {}) {
+      jib.rotation.y = az; const z = 1.5 + (L - 1.7) * clamp(reach); rope.position.set(0, 0.3, z); rope.scale.set(1, Math.max(0.2, drop), 1); load.position.set(0, 0.3 - drop, z); load.visible = show; rope.visible = show;
+    },
+    dispose() { for (const m of [mast, jib, rope, load]) { m.geometry && m.geometry.dispose(); } rope.material.dispose(); },
+  };
+  api.setPose(); return api;
 }

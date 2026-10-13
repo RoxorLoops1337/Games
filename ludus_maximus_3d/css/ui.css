@@ -37,7 +37,7 @@
 .lx-marble.lx-keyed::before, .lx-parchment.lx-keyed::before { background-image: var(--lx-key-d); }
 .lx-panel-head { display: flex; align-items: center; gap: 10px; padding: 8px 14px 0; }
 .lx-rule { flex: 1; height: 2px; background: linear-gradient(90deg, transparent, currentColor 50%, transparent); opacity: .45; }
-.lx-title { margin: 0; font-size: var(--lx-fs-l); font-weight: 700; text-align: center; max-width: 100%; overflow-wrap: anywhere; line-height: 1.15; }
+.lx-title { margin: 0; font-size: var(--lx-fs-l); font-weight: 700; text-align: center; max-width: 100%; overflow-wrap: break-word; word-break: normal; line-height: 1.15; }
 .lx-bronze .lx-title, .lx-dark .lx-title { color: var(--lx-gold); text-shadow: 0 2px 0 rgba(0, 0, 0, .55); }
 .lx-panel-body { padding: 10px 14px 14px; position: relative; z-index: 1; }
 
@@ -46,7 +46,7 @@
   font-family: var(--lx-serif); font-weight: 700; letter-spacing: .07em; text-transform: uppercase; font-size: var(--lx-fs-m); line-height: 1.1; text-align: center;
   border: 2px solid #3b2711; color: #2a1a08; touch-action: manipulation; user-select: none; -webkit-user-select: none;
   transition: transform .09s var(--lx-ease-out), box-shadow .09s, filter .15s; max-width: 100%; }
-.lx-btn-label { overflow-wrap: anywhere; min-width: 0; }
+.lx-btn-label { overflow-wrap: normal; word-break: normal; hyphens: manual; min-width: 0; }
 .lx-btn-sub { display: block; font-family: var(--lx-sans); font-size: 11px; letter-spacing: 0; text-transform: none; opacity: .75; font-weight: 500; }
 .lx-block { display: flex; width: 100%; }
 .lx-btn-gold { background: linear-gradient(180deg, #ffe08a 0%, #f2c14e 45%, #c98e24 100%); box-shadow: 0 4px 0 #7a5222, 0 7px 14px rgba(0, 0, 0, .45), inset 0 1px 0 rgba(255, 255, 255, .7); }
@@ -154,7 +154,7 @@
 @media (min-width: 700px) { .lx-scrim { align-items: center; } .lx-sheet { border-radius: var(--lx-r); transform: translateY(20px) scale(.97); opacity: 0; transition: transform .25s var(--lx-ease-out), opacity .2s; } .lx-in .lx-sheet { opacity: 1; transform: none; } .lx-out .lx-sheet { opacity: 0; transform: scale(.97); } }
 
 /* ---------- toasts ---------- */
-.lx-toasts { position: fixed; z-index: 60; left: 50%; top: calc(var(--lx-sat) + 62px); transform: translateX(-50%); display: flex; flex-direction: column; gap: 8px; width: min(92vw, 420px); pointer-events: none; }
+.lx-toasts { position: fixed; z-index: 45; left: 50%; top: calc(var(--lx-sat) + 62px); transform: translateX(-50%); display: flex; flex-direction: column; gap: 8px; width: min(92vw, 420px); pointer-events: none; }
 .lx-toast { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-radius: 6px; font-weight: 600; font-size: var(--lx-fs-m); background: linear-gradient(180deg, #3b2711, #24160a); border: 1.500px solid var(--lx-bronze); box-shadow: 0 6px 16px rgba(0, 0, 0, .5); animation: lx-tin .3s var(--lx-ease); overflow-wrap: anywhere; }
 .lx-toast-good { border-color: #7ac06a; } .lx-toast-good .lx-ico { color: #9fe08a; } .lx-toast-bad { border-color: #e0644f; } .lx-toast-bad .lx-ico { color: #ff9a85; } .lx-toast-info .lx-ico { color: var(--lx-gold); }
 .lx-toast.lx-out { opacity: 0; transform: translateY(-8px); transition: .26s; }
@@ -279,7 +279,9 @@ body.lx-reduce-motion .lx-ttl-embers, body.lx-reduce-motion .lx-ttl-word::after 
 /* ======================================================================================================
    Ceremonies (.lx-cer-*). Level up, trophies, season finale, eulogy. Appended by the onboarding team.
    ====================================================================================================== */
-.lx-cer-layer { position: fixed; inset: 0; z-index: 70; pointer-events: none; overflow: hidden; }
+.lx-cer-layer { position: fixed; inset: 0; z-index: 48; pointer-events: none; overflow: hidden; } /* UI rule: confetti sits BELOW every modal (50) so it never draws over a title */
+.lx-cer-layer.inlay { position: absolute; z-index: 1; } /* the level-up burst lives INSIDE its overlay, under the text (text is z 2) */
+.lx-cer-lvl > .lx-cer-ring, .lx-cer-lvl > .lx-cer-laurel, .lx-cer-lvl > .lx-cer-kicker, .lx-cer-lvl > .lx-cer-num, .lx-cer-lvl > .lx-cer-name, .lx-cer-lvl > .lx-cer-sub { position: relative; z-index: 2; }
 .lx-cer-conf { position: absolute; width: var(--w); height: calc(var(--w) * 1.6); background: var(--c); border-radius: 1px; opacity: 0; animation: lx-cer-burst var(--dur) cubic-bezier(.2, .7, .4, 1) var(--del) forwards; box-shadow: 0 0 4px rgba(255, 220, 120, .5); }
 .lx-cer-conf.round { border-radius: 50%; height: var(--w); }
 .lx-cer-conf.rain { animation-name: lx-cer-rain; animation-timing-function: linear; }
@@ -618,3 +620,5 @@ canvas.lx-bl-focus:focus-visible, .lx-bl-focus:focus-visible { outline: 3px soli
 .lx-tut-card.lx-tut-compact .lx-panel-body { padding: 8px 12px; gap: 4px; }
 .lx-tut-card.lx-tut-compact .lx-tut-text { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; font-size: 13px; line-height: 1.3; }
 .lx-tut-card.lx-tut-compact .lx-tut-title { font-size: 15px; }
+.lx-cer-conf.gone { opacity: 0 !important; transition: opacity .3s; animation-play-state: paused; }
+.lx-scrim > .lx-sheet { z-index: 2; }

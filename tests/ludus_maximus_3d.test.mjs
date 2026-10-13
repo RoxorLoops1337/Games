@@ -854,5 +854,86 @@ const LEGACY_IDS = ['patron', 'brawl', 'trainer', 'spoiled', 'spy', 'sponsor', '
   const old = LM.migrate(JSON.parse(JSON.stringify(S))); ok(old.trophies.kill_lion, 'trophies survive migrate');
 }
 
+{ // round 49: MOVE, rearranging the ludus (core/ext.js MOVE block, D.MOVE)
+  const mk = (seed) => { const S = LM.newGame({ name: 'Mv', seed }); S.gold = 20000; S.fame = 900; S.rows = 4; return S; };
+  const S = mk('mv1'), kit = S.plots[6], bar = S.plots[5], pal = S.plots[2];
+  ok(kit.b === 'kitchen' && bar.b === 'barracks' && pal.b === 'palaestra', 'start layout: kitchen 6, barracks 5, palaestra 2');
+  // data: pinned and big lists exist, prices scale with level and distance
+  ok(D.MOVE.pinned.hall && D.MOVE.big.includes('stands') && D.MOVE.undoRefund > 0 && D.MOVE.undoRefund < 1, 'D.MOVE has pinned, big and the undo refund');
+  const q1 = LM.moveQuote(S, 6, 10), q3 = LM.moveQuote(S, 6, 14);
+  ok(q1.ok && q1.kind === 'move' && q1.d === 1 && q3.d === 2 && q3.gold >= q1.gold, 'a longer move never costs less');
+  const mkL = (id, l, at) => { const T = mk('mvl'); T.plots = new Array(16).fill(null); T.plots[at] = { b: id, l }; return T; };
+  const c = (id, l, to) => LM.moveQuote(mkL(id, l, 0), 0, to).gold;
+  ok(c('forge', 1, 1) < c('forge', 3, 1) && c('forge', 3, 1) < c('forge', 5, 1), 'price rises with building level');
+  ok(c('forge', 3, 1) < c('forge', 3, 5) && c('forge', 3, 5) < c('forge', 3, 15), 'price rises with distance');
+  ok(c('stands', 3, 1) > c('forge', 3, 1) * 1.2 && c('stands', 3, 1) > 0, 'the crowd-facing Stands cost more than a forge of the same level');
+  ok(c('forge', 5, 1) >= c('forge', 4, 1) * 1.5, 'level 5 carries the marble surcharge');
+  const wk = (id, l, to) => LM.moveQuote(mkL(id, l, 0), 0, to).weeks[0];
+  ok(wk('forge', 1, 1) === 1 && wk('forge', 3, 1) === 2 && wk('forge', 5, 1) === 3 && wk('forge', 1, 15) === 2 && wk('forge', 5, 15) === 3, 'downtime is 1 to 3 weeks by level and distance');
+  ok(c('forge', 1, 1) >= D.MOVE.minGold, 'there is a minimum price');
+  // refusals
+  const T0 = mk('mv2'); T0.plots[9] = { b: 'hall', l: 1 };
+  ok(/consecrated/.test(LM.moveBuilding(T0, 9, 10)) && T0.plots[9].b === 'hall' && T0.gold === 20000, 'a pinned building (Hall of Legends) refuses with its reason and costs nothing');
+  ok(/cannot be moved/.test(LM.moveBuilding(T0, 6, 9)), 'nothing can swap with a pinned building');
+  ok(LM.moveBuilding(T0, 6, 6) !== '' && LM.moveBuilding(T0, 3, 7) === 'Nothing to move here', 'same plot and empty source are refused');
+  const T1 = mk('mv3'); T1.rows = 2;
+  ok(/Unclaimed/.test(LM.moveBuilding(T1, 6, 12)), 'locked land is refused');
+  const T2 = mk('mv4'); T2.gold = 3; ok(/Not enough gold/.test(LM.moveBuilding(T2, 6, 7)) && T2.gold === 3 && T2.plots[6].b === 'kitchen', 'short gold refuses and changes nothing');
+  const T3 = mk('mv5'); ok(/fight or event/.test(LM.moveBuilding(T3, 6, 7, { busy: true })) && T3.gold === 20000, 'refused while a fight or event is in progress (opts.busy)');
+  T3.pendingEv = 'plague'; ok(/pending event/.test(LM.moveBuilding(T3, 6, 7)), 'refused with an event waiting');
+  // a move: gold, record, perks pause
+  const U = mk('mv6'); const g1 = LM.makeGlad({ id: U.nextId++, style: 'murmillo', lvl: 3 }); U.glads.push(g1);
+  const lvl0 = LM.bfx(U, 'palaestra').v, price = LM.moveQuote(U, 2, 3).gold;
+  ok(LM.moveBuilding(U, 2, 3) === '' && U.gold === 20000 - price && !U.plots[2] && U.plots[3].b === 'palaestra', 'moving into an empty plot pays the quote and relocates it');
+  const mv = LM.moving(U, 3); ok(mv && mv.f === 2 && mv.s === U.week && mv.u === U.week + 1 && U.plots[3].l === 1, 'the plot carries the construction record and keeps its level');
+  ok(LM.bfx(U, 'palaestra').l === 0 && LM.bfx(U, 'palaestra').v === 0 && lvl0 > 0, 'perks pause while the building is under construction');
+  ok(/Under construction/.test(LM.upgrade(U, 3)) && /Still under construction/.test(LM.moveBuilding(U, 3, 4)), 'cannot upgrade or move again while rebuilding');
+  const capB = LM.rosterCap(U); LM.moveBuilding(U, 5, 4); ok(LM.rosterCap(U) === D.BUILD.barracks.v[1] && capB >= 3, 'barracks keep tent beds while moving, nobody is evicted');
+  // week passes: the building is back
+  const notes = []; U.week++; LM.extWeek(U, { notes }); ok(U.plots[3].mv === undefined && U.plots[4].mv === undefined && LM.bfx(U, 'palaestra').l === 1 && LM.rosterCap(U) === cap0(), 'after the downtime perks are restored and the record is dropped');
+  function cap0() { return D.BUILD.barracks.v[1]; }
+  ok(notes.length === 2 && /new place/.test(notes[0]), 'finishing reports a line in the week summary');
+  // longer downtime counts down
+  const V = mk('mv7'); V.plots[6].l = 3; LM.moveBuilding(V, 6, 15); const w3 = LM.moving(V, 15).w; ok(w3 >= 2, 'a level 3 building across the yard takes 2 or more weeks');
+  V.week++; LM.extWeek(V, { notes: [] }); ok(LM.moving(V, 15) && LM.bfx(V, 'kitchen').l === 0, 'still rebuilding after 1 of the weeks');
+  for (let i = 1; i < w3; i++) { V.week++; LM.extWeek(V, { notes: [] }); } ok(!LM.moving(V, 15) && LM.bfx(V, 'kitchen').l === 3, 'ready after the full downtime, level kept');
+  // adjacency is recomputed after a move
+  const W = mk('mv8'); W.plots = new Array(16).fill(null); W.plots[0] = { b: 'palaestra', l: 2 }; W.plots[1] = { b: 'infirmary', l: 1 }; W.plots[3] = { b: 'kitchen', l: 1 };
+  ok(LM.synAt(W, 0) === 1, 'palaestra next to the infirmary has synergy 1');
+  const eff = LM.moveEffects(W, 1, 5); ok(LM.synAt(W, 0) === 1, 'moveEffects is a preview and changes nothing');
+  ok(eff.some((e) => e.b === 'palaestra' && e.now === 0 && e.pct === -10), 'the preview names the palaestra losing its +10%');
+  const v0 = LM.bfx(W, 'palaestra').v; LM.moveBuilding(W, 1, 5); W.week++; LM.extWeek(W, { notes: [] });
+  ok(LM.synAt(W, 0) === 0 && LM.bfx(W, 'palaestra').v < v0 && LM.bfx(W, 'palaestra').syn === 0, 'after moving away the neighbour bonus is gone');
+  const v1 = LM.bfx(W, 'palaestra').v; LM.moveBuilding(W, 5, 1); ok(LM.synAt(W, 0) === 0, 'a neighbour under construction gives no synergy yet'); W.week++; LM.extWeek(W, { notes: [] });
+  ok(LM.synAt(W, 0) === 1 && LM.bfx(W, 'palaestra').v > v1, 'moving back next to the partner restores the bonus once the work is done');
+  // swap: cheaper than two moves, shorter, both go under construction
+  const X = mk('mv9'); X.plots[6].l = 2; X.plots[2].l = 2; const qs = LM.moveQuote(X, 6, 2), qa = LM.moveQuote(mkL('kitchen', 2, 0), 0, 4);
+  ok(qs.kind === 'swap' && qs.weeks[0] >= 1 && qs.weeks[1] >= 1, 'a built destination quotes a swap');
+  const twoMoves = LM.moveQuote(Object.assign(mk('x'), { plots: (() => { const a = new Array(16).fill(null); a[6] = { b: 'kitchen', l: 2 }; return a; })() }), 6, 2).gold + LM.moveQuote(Object.assign(mk('y'), { plots: (() => { const a = new Array(16).fill(null); a[2] = { b: 'palaestra', l: 2 }; return a; })() }), 2, 6).gold;
+  ok(qs.gold < twoMoves, `a swap (${qs.gold}) costs less than two moves (${twoMoves})`);
+  ok(qs.weeks[0] <= LM.moveQuote(mkL('kitchen', 2, 0), 0, 4).weeks[0], 'a swap is never slower than a move'); void qa;
+  const g0 = X.gold; ok(LM.moveBuilding(X, 6, 2) === '' && X.gold === g0 - qs.gold && X.plots[6].b === 'palaestra' && X.plots[2].b === 'kitchen' && LM.moving(X, 6) && LM.moving(X, 2), 'a swap exchanges both and pauses both');
+  ok(LM.bfx(X, 'kitchen').l === 0 && LM.bfx(X, 'palaestra').l === 0, 'both swapped buildings give no perks while rebuilding');
+  // undo
+  const Y = mk('mv10'); const yg = Y.gold; LM.moveBuilding(Y, 6, 10); const paid = yg - Y.gold, ui = LM.moveUndoInfo(Y, 10);
+  ok(ui.ok && ui.refund === Math.floor(paid * D.MOVE.undoRefund) && ui.refund < paid, 'undo returns a part of the price, not all of it');
+  ok(LM.moveUndo(Y, 10) === '' && Y.plots[6].b === 'kitchen' && !Y.plots[10] && Y.plots[6].mv === undefined && Y.gold === yg - paid + ui.refund && LM.bfx(Y, 'kitchen').l === 1, 'undo puts the building back, drops the record and refunds');
+  ok(LM.moveUndo(Y, 10) === 'Nothing to undo', 'there is nothing to undo twice');
+  const Z = mk('mv11'); LM.moveBuilding(Z, 6, 2); const zi = Z.gold; ok(LM.moveUndo(Z, 6) === '' && Z.plots[6].b === 'kitchen' && Z.plots[2].b === 'palaestra' && Z.gold > zi && !Z.plots[6].mv && !Z.plots[2].mv, 'undo of a swap restores both');
+  const Q = mk('mv12'); Q.plots[6].l = 3; LM.moveBuilding(Q, 6, 10); Q.week++; ok(!LM.moveUndoInfo(Q, 10).ok && /already started/.test(LM.moveUndo(Q, 10)), 'undo only works in the week of the move');
+  // save round trip, old saves, damaged records
+  const R = mk('mv13'); LM.moveBuilding(R, 6, 14); const raw = JSON.stringify(R), back = LM.migrate(JSON.parse(raw));
+  ok(back.plots[14].b === 'kitchen' && LM.moving(back, 14) && LM.moving(back, 14).f === 6 && LM.bfx(back, 'kitchen').l === 0, 'a save in the middle of a move round-trips with the record');
+  ok(LM.moveUndo(back, 14) === '' && back.plots[6].b === 'kitchen', 'undo works after a reload');
+  const old = JSON.parse(JSON.stringify(mk('mv14'))); old.plots.forEach((p) => p && delete p.mv); delete old.sv; delete old.stats.moves;
+  const oldM = LM.migrate(old); ok(oldM.plots[6].b === 'kitchen' && LM.bfx(oldM, 'kitchen').l === 1 && LM.moveBuilding(oldM, 6, 7) === '', 'an old save without mv loads and can move');
+  const bad = JSON.parse(JSON.stringify(mk('mv15'))); bad.plots[6].mv = 'junk'; bad.plots[5].mv = { u: 'x' }; bad.plots[2].mv = { s: 1, u: 2 }; bad.week = 9;
+  const badM = LM.migrate(bad); ok(!badM.plots[6].mv && !badM.plots[5].mv && !badM.plots[2].mv && LM.bfx(badM, 'kitchen').l === 1, 'garbage and expired records are dropped on load');
+  const fut = JSON.parse(JSON.stringify(mk('mv16'))); fut.plots[6].mv = { f: 99, s: 1, u: 99 }; const futM = LM.migrate(fut); ok(futM.plots[6].mv && futM.plots[6].mv.f === -1 && LM.moveUndoInfo(futM, 6).ok === false, 'a broken origin index is neutralised (no undo)');
+  // a whole week with a building under construction runs through the normal weekly flow
+  const E = mk('mv17'); const eg = LM.makeGlad({ id: E.nextId++, style: 'thraex', lvl: 2 }); eg.act = 'str'; E.glads.push(eg);
+  LM.moveBuilding(E, 2, 3); const rep = LM.weekFinish ? LM.weekFinish(E) : null; ok(!rep || (Array.isArray(rep.notes) && E.plots[3].mv === undefined), 'weekFinish completes a 1-week move and reports it');
+}
+
 console.log(`ludus_maximus: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

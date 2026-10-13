@@ -550,13 +550,17 @@ export function createArena({ crowd = 3700, density = 1, decalRes = 2048, seed =
   const velarium = new THREE.Mesh(velGeo, velMat); velarium.castShadow = true; velarium.receiveShadow = true; velarium.name = 'velarium'; group.add(velarium);
 
   // ---------------- crowd: ONE InstancedMesh, animated in the vertex shader ----------------
+  // Round 3: readable spectators. Hi tier (91 tris): tapered torso, head, hair / cap / hood / laurel dome (15 tris, collapsed for the bald), two-segment arms with an
+  // elbow. Lite (medium, low: 40 tris, unchanged geometry): same shader, no dome (a hair cap is painted on the head), one-segment arms. Per instance (aRand, aRand2):
+  // skin, hair colour, headwear type, outfit (tunic with belt and sleeves / draped toga with folds / hooded cloak), a sash, standing fans (rows near the camera) and
+  // senators (the imperial box). Arms: idle on the lap, clapping forearms, one arm waving or both arms cheering, all driven by uHype and the wave, zero CPU per frame.
   const parts = [];
   const addPart = (g, id) => { g = g.toNonIndexed(); const n = g.attributes.position.count; g.setAttribute('aPart', new THREE.BufferAttribute(new Float32Array(n).fill(id), 1)); parts.push(g); };
-  // lite (low tier): 40 tris per spectator instead of 60
   { const g = new THREE.CylinderGeometry(0.2, 0.15, 0.62, lite ? 5 : 6, 1); g.translate(0, 0.39, 0); addPart(g, 0); }
   { const g = lite ? new THREE.OctahedronGeometry(0.14, 0) : new THREE.IcosahedronGeometry(0.135, 0); g.translate(0, 0.88, 0.01); addPart(g, 1); }
-  { const g = new THREE.CylinderGeometry(0.04, 0.032, 0.34, lite ? 3 : 4, 1, true); g.translate(-0.25, 0.51, 0); addPart(g, 2); }
-  { const g = new THREE.CylinderGeometry(0.04, 0.032, 0.34, lite ? 3 : 4, 1, true); g.translate(0.25, 0.51, 0); addPart(g, 3); }
+  { const g = lite ? new THREE.CylinderGeometry(0.04, 0.032, 0.34, 3, 1, true) : new THREE.CylinderGeometry(0.044, 0.034, 0.34, 4, 2, true); g.translate(-0.25, 0.51, 0); addPart(g, 2); }
+  { const g = lite ? new THREE.CylinderGeometry(0.04, 0.032, 0.34, 3, 1, true) : new THREE.CylinderGeometry(0.044, 0.034, 0.34, 4, 2, true); g.translate(0.25, 0.51, 0); addPart(g, 3); }
+  if (!lite) { const g = new THREE.SphereGeometry(0.152, 5, 2, 0, TAU, 0, Math.PI * 0.58); g.translate(0, 0.88, 0.0); addPart(g, 4); }
   const crowdGeo = mergeGeos(parts.map((g) => { if (!g.attributes.uv) g.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(g.attributes.position.count * 2), 2)); return g; }));
   // seats
   const seats = [];
@@ -575,49 +579,117 @@ export function createArena({ crowd = 3700, density = 1, decalRes = 2048, seed =
     }
   });
   for (let i = seats.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [seats[i], seats[j]] = [seats[j], seats[i]]; }
-  const total = Math.min(seats.length, crowd);
-  const aRand = new Float32Array(total * 4);
-  const palPleb = [0xb58a5a, 0x8a5a3a, 0xc9a66b, 0x7a5a3c, 0x9a4a38, 0xd8c8a0, 0x6a7a4a, 0xa6783f, 0xc0703a, 0x8a6d58, 0x5f6b7a];
+  // featured spectators: senators in the two imperial boxes (instances 0..F-1, always inside the visible count, hidden unless the imperial dress is active)
+  const boxM = [Math.PI / 2, -Math.PI / 2].map((th) => ringMatrix(rowsInfo[6].d + 0.3, th, rowsInfo[6].y + 0.02, { inward: true }));
+  const featured = [];
+  boxM.forEach((M) => [[-2.4, -0.75], [-1.2, -0.75], [0, -0.75], [1.2, -0.75], [2.4, -0.75], [-0.6, 0.05], [0.6, 0.05]].forEach(([x, z]) => featured.push(new THREE.Matrix4().multiplyMatrices(M, new THREE.Matrix4().makeTranslation(x, 0.5, z)))));
+  const F = featured.length, baseN = Math.min(seats.length, crowd), total = baseN + F;
+  const aRand = new Float32Array(total * 4), aRand2 = new Float32Array(total * 4);
+  const inBox = new Uint8Array(total), isFeat = new Uint8Array(total);
+  const palPleb = [0xb58a5a, 0x8a5a3a, 0xc9a66b, 0x7a5a3c, 0x9a4a38, 0xd8c8a0, 0x6a7a4a, 0xa6783f, 0xc0703a, 0x8a6d58, 0x5f6b7a, 0x3f5f8f, 0x8f3a34, 0x4f7a58, 0xc9a13c, 0x6b4a73, 0xe0d6bc, 0x2f3a4a];
   const palPat = [0xf4efe2, 0xe9e0cc, 0xf4efe2, 0x5a1f5e, 0xd8cfe0, 0x9a2f3c];
   const crowdMat = patchMaterial(new THREE.MeshLambertMaterial({ vertexColors: false }), {
-    key: 'crowd', uniforms: { uTime: U.uTime, uHype: U.uHype, uWave: U.uWave, uWaveSpeed: U.uWaveSpeed, uWaveK: U.uWaveK, uAxisR: U.uAxisR },
-    vPars: `attribute float aPart; attribute vec4 aRand; uniform float uTime, uHype, uWave, uWaveSpeed, uWaveK, uAxisR;
-      varying float vPart; varying float vSkin; varying float vHair; varying float vLy;`,
+    key: 'crowd3' + (lite ? 'L' : 'H'), uniforms: { uTime: U.uTime, uHype: U.uHype, uWave: U.uWave, uWaveSpeed: U.uWaveSpeed, uWaveK: U.uWaveK, uAxisR: U.uAxisR },
+    vPars: `attribute float aPart; attribute vec4 aRand; attribute vec4 aRand2; uniform float uTime, uHype, uWave, uWaveSpeed, uWaveK, uAxisR;
+      varying float vPart; varying float vSkin; varying float vHair; varying float vLy; varying vec3 vR2; varying float vFlag; varying vec3 vLp; varying float vHy;`,
     vBody: `
       vec3 ip = instanceMatrix[3].xyz;
       float ang = atan(ip.z * uAxisR, ip.x);
       float wv = sin(ang * uWaveK - uTime * uWaveSpeed);
       float pulse = uWave * smoothstep(0.3, 0.95, wv);
       float ph = aRand.x * 6.2831;
+      float fl = floor(aRand2.w), fw = fract(aRand2.w);
+      float stand = step(0.5, fl) * step(fl, 1.5), sen = step(1.5, fl);
+      float hype = uHype * (1.0 - 0.55 * sen);
       float beat = max(0.0, sin(uTime * (6.0 + aRand.w * 3.5) + ph));
-      float hop = uHype * beat * (0.06 + 0.16 * aRand.w);
+      float hop = hype * beat * (0.06 + 0.16 * aRand.w) * (1.0 + 0.7 * stand);
       float idle = (0.012 + 0.012 * aRand.w) * sin(uTime * (1.1 + aRand.w * 0.8) + ph) * (0.3 + position.y);
-      float stretch = 1.0 + pulse * 0.6 + uHype * 0.04 * beat;
-      vLy = position.y; vPart = aPart; vSkin = aRand.y; vHair = aRand.z;
+      float stretch = 1.0 + pulse * 0.6 + hype * 0.04 * beat;
+      float lift = stand * 0.38;
+      vLy = position.y; vPart = aPart; vSkin = aRand.y; vHair = aRand.z; vR2 = aRand2.xyz; vFlag = fl; vLp = position;
       transformed.x += idle;
-      transformed.y = position.y * stretch + hop;
-      if (aPart > 1.5) {
+      transformed.y = (position.y + lift) * stretch + hop;
+      if (aPart < 0.5) {
+        float top = step(0.4, position.y);
+        if (stand > 0.5) { transformed.y = mix(0.0, position.y + lift, top) * stretch + hop; transformed.xz *= mix(0.7, 1.0, top); }
+      } else if (aPart > 3.5) {
+        float t = aRand2.x, bald = step(0.84, t), hat = step(0.52, t) * step(t, 0.70), hood = step(0.70, t) * step(t, 0.84);
+        vec3 rel = position - vec3(0.0, 0.88, 0.0);
+        rel.y += 0.035 * smoothstep(0.0, 0.12, rel.z) * (1.0 - hood);
+        vec3 sc = mix(vec3(1.0), vec3(1.1, 1.5, 1.1), hat); sc = mix(sc, vec3(1.18, 1.1, 1.22), hood); sc *= 1.0 - bald;
+        rel.z -= 0.02 * hood; rel.y += 0.03 * hat;
+        rel *= sc; transformed.xz = rel.xz + vec2(idle, 0.0); transformed.y = (0.88 + rel.y + lift) * stretch + hop;
+      }
+      if (aPart > 1.5 && aPart < 3.5) {
         float side = aPart < 2.5 ? -1.0 : 1.0;
-        float raise = clamp(uHype * 1.6 - aRand.z * 0.9 + pulse * 1.3, 0.0, 1.0);
-        float a2 = raise * (2.55 + 0.45 * sin(uTime * 10.0 + ph));
-        vec2 rel = vec2(position.x - side * 0.25, position.y - 0.68);
+        float raise = clamp(hype * 1.6 - aRand.z * 0.9 + pulse * 1.3, 0.0, 1.0);
+        float oneArm = step(0.55, fw);
+        float rr = side > 0.0 ? raise : raise * mix(1.0, 0.18, oneArm);
+        float clap = (1.0 - rr) * smoothstep(0.1, 0.45, hype) * step(fw, 0.5) * (1.0 - sen * 0.7);
+        float cb = 0.5 + 0.5 * sin(uTime * (7.0 + aRand.w * 3.0) + ph);
+        vec3 rel = vec3(position.x - side * 0.25, position.y - 0.68, position.z);
+        rel.xz *= 1.0 + 0.55 * step(position.y, 0.4);
+        float bend = 0.4 + 1.15 * clap * (1.0 - 0.45 * cb) + rr * (0.2 + 0.45 * (0.5 + 0.5 * sin(uTime * 9.0 + ph + side)));
+        float wb = step(position.y, 0.5);
+        { vec3 e = rel - vec3(0.0, -0.17, 0.0); float cb2 = cos(-bend), sb2 = sin(-bend); vec3 r2 = vec3(e.x, e.y * cb2 - e.z * sb2, e.y * sb2 + e.z * cb2) + vec3(0.0, -0.17, 0.0); rel = mix(rel, r2, wb); }
+        float fwd = 0.18 + clap * (0.95 + 0.2 * cb);
+        { float cf = cos(-fwd), sf = sin(-fwd); rel = vec3(rel.x, rel.y * cf - rel.z * sf, rel.y * sf + rel.z * cf); }
+        float a2 = rr * (2.55 + 0.45 * sin(uTime * 10.0 + ph)) - clap * 0.35 + 0.1;
         float cs = cos(a2), sn = sin(a2) * side;
         vec2 r = vec2(rel.x * cs - rel.y * sn, rel.x * sn + rel.y * cs);
-        transformed.x = side * 0.25 + r.x + idle;
-        transformed.y = (0.68 + r.y) * stretch + hop;
-      }`,
-    fPars: 'varying float vPart; varying float vSkin; varying float vHair; varying float vLy;',
+        transformed.x = side * 0.25 + r.x + idle; transformed.z = rel.z;
+        transformed.y = (0.68 + lift + r.y) * stretch + hop;
+      }
+      vHy = transformed.y;`,
+    fPars: 'varying float vPart; varying float vSkin; varying float vHair; varying float vLy; varying vec3 vR2; varying float vFlag; varying vec3 vLp; varying float vHy;',
     fBody: `
-      vec3 skin = mix(vec3(0.62, 0.34, 0.18), vec3(0.17, 0.06, 0.027), vSkin);
-      if (vPart > 0.5 && vPart < 1.5) { vec3 hairC = mix(vec3(0.012, 0.009, 0.006), vec3(0.2, 0.1, 0.04), vHair); diffuseColor.rgb = vLy > 0.925 ? hairC : skin; }
-      else if (vPart > 1.5) diffuseColor.rgb = mix(skin, diffuseColor.rgb, step(0.45, vHair));
+      vec3 base = diffuseColor.rgb;
+      vec3 skin = mix(mix(vec3(0.60, 0.36, 0.22), vec3(0.34, 0.17, 0.09), smoothstep(0.0, 0.5, vSkin)), vec3(0.14, 0.06, 0.03), smoothstep(0.5, 1.0, vSkin));
+      float ou = vR2.z, sen = step(1.5, vFlag), toga = step(0.5, ou) * step(ou, 0.85), cloak = step(0.85, ou);
+      toga = max(toga, sen); cloak *= 1.0 - sen;
+      float hs = vR2.y * 6.0; vec3 hairC = hs < 1.0 ? vec3(0.012, 0.009, 0.007) : hs < 2.0 ? vec3(0.05, 0.03, 0.018) : hs < 3.0 ? vec3(0.13, 0.065, 0.03) : hs < 4.0 ? vec3(0.26, 0.09, 0.035) : hs < 5.0 ? vec3(0.34, 0.33, 0.32) : vec3(0.5, 0.35, 0.14);
+      vec3 togaC = mix(vec3(0.7, 0.66, 0.56), base, 0.14 * (1.0 - sen)); togaC = mix(togaC, vec3(0.8, 0.77, 0.7), sen);
+      togaC *= 0.8 + 0.2 * sin(vLp.x * 15.0 + vLp.y * 22.0);
+      vec3 cloakC = base * vec3(0.55, 0.5, 0.5);
+      if (vPart < 0.5) {
+        vec3 c = base;
+        c = mix(c, c * 0.45, step(0.335, vLy) * step(vLy, 0.385) * (1.0 - toga) * (1.0 - cloak));          // belt
+        c = mix(c, togaC, toga); c = mix(c, cloakC, cloak);
+        float band = 1.0 - smoothstep(0.02, 0.034, abs(vLp.x + (vLy - 0.4) * 0.35 - 0.06));               // purple stripe: broad on senators, thin on a few others
+        c = mix(c, vec3(0.34, 0.05, 0.3), band * toga * max(sen, step(0.72, vR2.x)) * step(0.0, vLp.z + 0.05));
+        c = mix(c, skin, step(0.69, vLy) * (1.0 - smoothstep(0.07, 0.1, length(vLp.xz))));               // neckline
+        if (vFlag > 0.5 && vFlag < 1.5) c = mix(c, skin, 1.0 - smoothstep(0.0, 0.01, vHy - 0.5));        // standing fans: bare shins under the hem
+        diffuseColor.rgb = c;
+      } else if (vPart < 1.5) {
+        vec3 hc = hairC; ${lite ? '' : 'hc = skin;'}
+        ${lite ? 'diffuseColor.rgb = vLy > 0.925 ? hc : skin;' : 'diffuseColor.rgb = skin;'}
+      } else if (vPart < 3.5) {
+        float left = step(vPart, 2.5);
+        float cover = max(cloak, toga * left);
+        vec3 sl = mix(base, togaC, toga); sl = mix(sl, cloakC, cloak);
+        float sleeve = max(cover, step(0.52, vLy) * step(0.4, vR2.x + vR2.y * 0.5) * (1.0 - toga));
+        diffuseColor.rgb = mix(skin, sl, sleeve);
+      } else {
+        float t = vR2.x, wreath = step(0.40, t) * step(t, 0.52), hat = step(0.52, t) * step(t, 0.70), hood = step(0.70, t) * step(t, 0.84);
+        vec3 hc = hairC;
+        hc = mix(hc, vec3(0.2, 0.3, 0.07), wreath * (1.0 - smoothstep(0.03, 0.07, vLp.y - 0.88)));
+        hc = mix(hc, mix(base * 1.05, vec3(0.64, 0.52, 0.3), step(0.5, fract(vR2.y * 7.0))), hat);
+        hc = mix(hc, base * vec3(0.6, 0.55, 0.55), hood);
+        diffuseColor.rgb = hc;
+      }
       diffuseColor.rgb *= 0.55 + 0.45 * smoothstep(0.05, 0.85, vLy);`,
   });
   crowdGeo.setAttribute('aRand', new THREE.InstancedBufferAttribute(aRand, 4));
+  crowdGeo.setAttribute('aRand2', new THREE.InstancedBufferAttribute(aRand2, 4));
   const crowdMesh = new THREE.InstancedMesh(crowdGeo, crowdMat, total); crowdMesh.name = 'crowd'; crowdMesh.receiveShadow = true; crowdMesh.frustumCulled = false;
-  const col = new THREE.Color();
-  for (let i = 0; i < total; i++) {
-    const st = seats[i], n = NRM(st.d, st.th), p = P(st.d, st.th);
+  const col = new THREE.Color(), rc = ((a) => () => (a = (a * 16807) % 2147483647) / 2147483647)(99173), _fm = new THREE.Matrix4(), _fp = new THREE.Vector3(), _fq = new THREE.Quaternion(), _fs = new THREE.Vector3();
+  for (let i = 0; i < F; i++) {   // senators: ivory togas with a purple stripe, wreaths or bald, grey and brown hair, one standing at the rail now and then
+    crowdMesh.setMatrixAt(i, featured[i]); isFeat[i] = 1; col.setHex(0xf0ead8); crowdMesh.setColorAt(i, col);
+    const r = rc(); aRand[i * 4] = rc(); aRand[i * 4 + 1] = 0.05 + rc() * 0.35; aRand[i * 4 + 2] = rc() * 0.4; aRand[i * 4 + 3] = rc();
+    aRand2[i * 4] = r < 0.55 ? 0.46 : 0.9; aRand2[i * 4 + 1] = r < 0.5 ? 0.75 : 0.4; aRand2[i * 4 + 2] = 0.7; aRand2[i * 4 + 3] = 2 + rc();
+  }
+  for (let j = 0; j < baseN; j++) {
+    const i = F + j, st = seats[j], n = NRM(st.d, st.th), p = P(st.d, st.th);
     const jit = (rnd() - 0.5) * 0.25;
     const yaw = Math.atan2(-n[0], -n[1]) + jit + (rnd() - 0.5) * 0.2;
     const sc = 0.92 + rnd() * 0.2;
@@ -627,12 +699,15 @@ export function createArena({ crowd = 3700, density = 1, decalRes = 2048, seed =
     col.offsetHSL(0, (rnd() - 0.5) * 0.08, (rnd() - 0.5) * 0.08);
     crowdMesh.setColorAt(i, col);
     aRand[i * 4] = rnd(); aRand[i * 4 + 1] = Math.pow(rnd(), 1.3); aRand[i * 4 + 2] = rnd(); aRand[i * 4 + 3] = rnd();
+    const standing = rc() < (st.k < 5 ? 0.09 : 0.018);
+    aRand2[i * 4] = rc(); aRand2[i * 4 + 1] = rc(); aRand2[i * 4 + 2] = patrician ? 0.5 + rc() * 0.35 : rc(); aRand2[i * 4 + 3] = (standing ? 1 : 0) + rc() * 0.999;
+    for (let b = 0; b < 2; b++) { _fm.copy(boxM[b]).invert(); _fp.set(p[0], st.y, p[1]).applyMatrix4(_fm); if (Math.abs(_fp.x) < 3.9 && Math.abs(_fp.z) < 2.1 && Math.abs(_fp.y) < 1.4) inBox[i] = 1; }
   }
   crowdMesh.instanceMatrix.needsUpdate = true; if (crowdMesh.instanceColor) crowdMesh.instanceColor.needsUpdate = true;
   group.add(crowdMesh);
   const crowdTotal = total;
   let tierDensity = density, themeDensity = 1;
-  const recount = () => { crowdMesh.count = Math.floor(total * Math.max(0, Math.min(1, tierDensity)) * themeDensity); };
+  const recount = () => { crowdMesh.count = F + Math.floor(baseN * Math.max(0, Math.min(1, tierDensity)) * themeDensity); };
   recount();
 
   // ---------------- blob shadows under braziers (cheap contact) ----------------
@@ -655,12 +730,13 @@ export function createArena({ crowd = 3700, density = 1, decalRes = 2048, seed =
 
   // crowd: row visibility + outfit palettes (instance matrices keep the originals in M0, hidden seats are collapsed)
   const M0 = crowdMesh.instanceMatrix.array.slice(), rowOf = new Uint8Array(total);
-  for (let i = 0; i < total; i++) rowOf[i] = seats[i].k;
-  function dressCrowd(c, seed) {
-    const arr = crowdMesh.instanceMatrix.array, r = lcg(seed), pl = c.pleb || palPleb, pt = c.pat || palPat, col2 = new THREE.Color();
+  for (let j = 0; j < baseN; j++) rowOf[F + j] = seats[j].k;
+  function dressCrowd(c, seed, dress = []) {
+    const arr = crowdMesh.instanceMatrix.array, r = lcg(seed), pl = c.pleb || palPleb, pt = c.pat || palPat, col2 = new THREE.Color(), imp = dress.indexOf('imperial') >= 0;
     for (let i = 0; i < total; i++) {
-      const vis = rowOf[i] <= (c.rows == null ? 99 : c.rows);
+      const vis = isFeat[i] ? imp : (rowOf[i] <= (c.rows == null ? 99 : c.rows)) && !(imp && inBox[i]);
       for (let e = 0; e < 16; e++) arr[i * 16 + e] = vis ? M0[i * 16 + e] : (e === 15 ? 1 : 0);
+      if (isFeat[i]) continue;
       const patrician = rowOf[i] < 4 ? r() < c.patLow : r() < c.patHigh;
       col2.setHex((patrician ? pt : pl)[Math.floor(r() * (patrician ? pt.length : pl.length))]); col2.offsetHSL(0, (r() - 0.5) * 0.08, (r() - 0.5) * 0.08);
       crowdMesh.setColorAt(i, col2);
@@ -759,7 +835,7 @@ export function createArena({ crowd = 3700, density = 1, decalRes = 2048, seed =
     bronzeMat.color.setHex(th.gold);
     velarium.visible = !!th.velarium; velMat.color.setHex(th.velTint || 0xffffff);
     banMat.color.setHex(th.banners.tint); thinBanners(th.banners.count);
-    themeDensity = th.crowd.density; dressCrowd(th.crowd, 4242 + curTheme.length * 31); recount();
+    themeDensity = th.crowd.density; dressCrowd(th.crowd, 4242 + curTheme.length * 31, th.dress); recount();
     for (const k of Object.keys(dressG)) dressG[k].visible = false;
     for (const k of th.dress) { if (!dressG[k]) { dressG[k] = dressBuild[k](); group.add(dressG[k]); } dressG[k].visible = true; }
     for (const k of Object.keys(hz)) hz[k].visible = false;

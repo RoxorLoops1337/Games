@@ -67,7 +67,7 @@ export const GradeShader = {
     uVignette: { value: 0.42 }, uVigSoft: { value: 0.55 },
     uGrain: { value: 0.028 },
     uShadowTint: { value: new THREE.Color(0.95, 0.93, 1.06) },   // cool violet-blue multiplier in shadows
-    uHighTint: { value: new THREE.Color(1.12, 1.03, 0.88) },    // warm gold multiplier in highlights
+    uHighTint: { value: new THREE.Color(1.08, 1.02, 0.92) },    // warm gold multiplier in highlights
     uSplit: { value: 1.0 },
     uSat: { value: 0.98 }, uContrast: { value: 1.12 }, uLift: { value: new THREE.Color(0.012, 0.008, 0.02) },
     uCA: { value: 0.0 },                                        // chromatic aberration amount (pulse 0..~0.012)
@@ -107,8 +107,9 @@ export const GradeShader = {
       col *= mix(vec3(1.0), tint, uSplit);
       col += uLift * (1.0 - smoothstep(0.0, 0.25, l));                     // lifted violet blacks, never pure black
       l = dot(col, vec3(0.2126, 0.7152, 0.0722));
-      col = mix(vec3(l), col, uSat);
+      col = mix(vec3(l), col, uSat + 0.1 * smoothstep(0.35, 1.2, l));   // chroma hold: lit skin / cloth keep their hue instead of washing toward white
       col = (col - 0.18) * uContrast + 0.18;
+      { float lk = dot(col, vec3(0.2126, 0.7152, 0.0722)), ov = max(lk - 1.0, 0.0); col *= (lk - ov + ov / (1.0 + ov * 0.4)) / max(lk, 1e-4); }   // highlight shoulder before ACES: lit fighters roll off instead of clipping pink-white
       float v = smoothstep(0.85, uVigSoft * 0.35, length(dc * vec2(1.0, 1.05)) );
       col *= mix(1.0 - uVignette, 1.0, v);
       float g = h21(gl_FragCoord.xy + fract(uTime) * 91.7) - 0.5;

@@ -183,10 +183,10 @@ export const DEFAULT_PALETTE = { skin: '#c98d62', hair: '#2b1b12', cloth: '#a845
 // go flat brown, a cool fresnel rim for separation from sand, a warm subsurface-ish bleed at grazing angles on skin, and a faux
 // sky/ground reflection so metals read without an environment map (the arena has none).
 const SHADE = {
-  skin: { fill: 0.15, lift: 0.024, fs: '#c8c8ff', fg: '#d8a880', rim: 0.55, rc: '#a8c4ff', rp: 4.5, sss: 0.14, sc: '#ff7a50', env: 0.07, ew: 0.9, wrap: 0.4, wc: '#ff7f55', kick: 0.17, kc: '#8aa6ff' },
+  skin: { fill: 0.12, lift: 0.016, fs: '#c8cce8', fg: '#cfa07c', rim: 0.24, rc: '#c6d6e6', rp: 5.0, sss: 0.045, sc: '#d9794c', env: 0.06, ew: 0.9, wrap: 0.3, wc: '#e08c5a', kick: 0.12, kc: '#94a8d8' },
   hair: { fill: 0.15, lift: 0.008, fs: '#b8b8f0', fg: '#8a6a50', rim: 0.4, rc: '#b0c8ff', rp: 4.0, sss: 0, sc: '#fff', env: 0.1, ew: 0.8, wrap: 0.2, wc: '#ffb070', kick: 0.14, kc: '#9ab4ff', shine: 0.22 },
-  cloth: { fill: 0.22, fs: '#c0c0f0', fg: '#d09870', rim: 0.40, rc: '#a8c0ff', rp: 4.5, sss: 0.10, sc: '#ff9060', env: 0, wrap: 0.3, wc: '#ff8a60', kick: 0.16, kc: '#98b0ff' },
-  plume: { fill: 0.22, fs: '#c0c0f0', fg: '#d09870', rim: 0.32, rc: '#b0c8ff', rp: 3.0, sss: 0.15, sc: '#ff9060', env: 0, wrap: 0.4, wc: '#ff8a60', kick: 0.14, kc: '#98b0ff' },
+  cloth: { fill: 0.2, fs: '#c0c0f0', fg: '#c89870', rim: 0.30, rc: '#b4c8f0', rp: 5.0, sss: 0.04, sc: '#e08560', env: 0, wrap: 0.25, wc: '#e88d60', kick: 0.14, kc: '#98b0ff' },
+  plume: { fill: 0.2, fs: '#c0c0f0', fg: '#c89870', rim: 0.3, rc: '#b8ccf4', rp: 3.5, sss: 0.06, sc: '#ff9060', env: 0, wrap: 0.4, wc: '#ff8a60', kick: 0.14, kc: '#98b0ff' },
   leather: { fill: 0.2, lift: 0.01, fs: '#b8b8e8', fg: '#c08860', rim: 0.35, rc: '#a8c0ff', rp: 4.5, sss: 0, sc: '#fff', env: 0.22, ew: 0.5, wrap: 0.12, wc: '#ffa070', kick: 0.16, kc: '#98b0ff' },
   metal: { fill: 0.04, fs: '#b8c0e8', fg: '#c89868', rim: 0.30, rc: '#c0d4ff', rp: 3.0, sss: 0, sc: '#fff', env: 1.0, kick: 0.07, kc: '#a8bcff' },
   steel: { fill: 0.04, fs: '#c0c8f0', fg: '#b09078', rim: 0.3, rc: '#d0e0ff', rp: 3.0, sss: 0, sc: '#fff', env: 1.15, kick: 0.05, kc: '#a8bcff' },
@@ -210,30 +210,63 @@ export function makeBloodUniforms() {
 const BLOOD_HEAD = `varying vec3 vBP; uniform float uBlood, uBFresh, uBOn, uBSeed, uSweat; uniform vec4 uWound[${MAX_WOUNDS}]; uniform vec4 uWoundD[${MAX_WOUNDS}]; uniform vec4 uCut[${MAX_CUTS}]; float gBM; float gSW;
 float bh(vec3 p){ p = fract(p * 0.3183099 + 0.1); p *= 17.0; return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }
 float bn(vec3 p){ vec3 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
-  return mix(mix(mix(bh(i), bh(i + vec3(1,0,0)), f.x), mix(bh(i + vec3(0,1,0)), bh(i + vec3(1,1,0)), f.x), f.y), mix(mix(bh(i + vec3(0,0,1)), bh(i + vec3(1,0,1)), f.x), mix(bh(i + vec3(0,1,1)), bh(i + vec3(1,1,1)), f.x), f.y), f.z); }`;
+  return mix(mix(mix(bh(i), bh(i + vec3(1,0,0)), f.x), mix(bh(i + vec3(0,1,0)), bh(i + vec3(1,1,0)), f.x), f.y), mix(mix(bh(i + vec3(0,0,1)), bh(i + vec3(1,0,1)), f.x), mix(bh(i + vec3(0,1,1)), bh(i + vec3(1,1,1)), f.x), f.y), f.z); }
+float spotsB(vec3 p, float S, float dens, float rmax, vec3 sc){ p *= S; vec3 c = floor(p), f = p - c;
+  float h0 = bh(c + uBSeed), r = rmax * (0.35 + 0.65 * bh(c * 0.73 + 19.1));
+  vec3 ctr = vec3(0.25 + 0.5 * bh(c * 1.31 + 7.7), 0.25 + 0.5 * bh(c * 0.57 + 2.9), 0.25 + 0.5 * bh(c * 2.1 + 3.3));
+  float d = length((f - ctr) * sc); return step(h0, dens) * (1.0 - smoothstep(r * 0.62, r, d)); }`;
 const sweatCode = `gSW = 0.0;
 if (uSweat > 0.01) { float sb = smoothstep(0.5 - 0.3 * uSweat, 0.85, bn(vBP * 30.0 + uBSeed)); float zone = 0.4 + 0.6 * smoothstep(0.55, 1.45, vBP.y);
   gSW = clamp(uSweat * (0.22 + 0.5 * sb) * zone, 0.0, 1.0); diffuseColor.rgb *= 1.0 - 0.1 * gSW; }`;
-const bloodCode = (gash) => `gBM = 0.0;
+// BODY BLOOD (round 3): no more big-noise soak (it read as leopard spots). Blood is built from what real blood does:
+//  - wound halo: soft stain around the cut, biased DOWN (gravity), never a perfect ellipse
+//  - drip lanes: thin vertical streaks that start at each wound, their length grows as the blood runs (uBFresh 1 -> 0 over ~9 s), a fatter bead at the tip
+//  - spray: crisp small round droplets (two sizes), dense near wounds, sparse elsewhere, cap on contrast
+//  - soak (cloth, leather, hair only): wet darkening that climbs from the hem, multiplicative so the weave and the tunic colour survive
+//  - ageing: bright wet crimson -> dark congealed maroon, gloss drops from a wet 0.12 to a tacky 0.5 roughness
+// Total paint coverage is capped (BL_CAP) so skin, cloth and metal stay readable under the winner's blood.
+const BL_CAP = '0.84';
+const BLOOD_KIND = { skin: { hem: 0, spray: 1.0, soak: 0 }, cloth: { hem: 1, spray: 0.8, soak: 1 }, plume: { hem: 0.5, spray: 0.6, soak: 1 }, leather: { hem: 0.8, spray: 0.8, soak: 1 }, hair: { hem: 0, spray: 0.5, soak: 1 }, metal: { hem: 0, spray: 0.7, soak: 0 }, steel: { hem: 0, spray: 0.7, soak: 0 }, trim: { hem: 0, spray: 0.6, soak: 0 } };
+const bloodCode = (gash, key = 'skin') => { const K = BLOOD_KIND[key] || BLOOD_KIND.skin; return `gBM = 0.0;
 if (uBOn > 0.5) {
-  vec3 bp = vBP; float n1 = bn(bp * 13.0 + uBSeed), n2 = bn(bp * 41.0 + uBSeed * 1.7), st = bn(vec3(bp.x * 24.0, bp.y * 2.4, bp.z * 24.0) + uBSeed * 2.3);
-  float bodyN = 0.5 * n1 + 0.25 * n2 + 0.5 * st; float thr = 1.24 - uBlood * 0.5 + 0.2 * (1.0 - smoothstep(0.25, 1.0, bp.y)) - 0.1 * uBlood * smoothstep(0.3, 1.5, bp.y);
-  float mask = smoothstep(thr, thr + 0.16, bodyN) * 0.88; float gsh = 0.0, wm = 0.0;
+  vec3 bp = vBP; float bl = uBlood, fr = uBFresh, age = 1.0 - fr;
+  float lowN = bn(bp * 6.0 + uBSeed);
+  float halo = 0.0, strk = 0.0, near = 0.0, gsh = 0.0;
   for (int i = 0; i < ${MAX_WOUNDS}; i++) { vec4 w = uWound[i], d = uWoundD[i]; if (d.w > 0.0) {
-    vec3 dl = bp - w.xyz; float al = dot(dl, d.xyz), ac = length(dl - d.xyz * al), len = w.w;
-    float halo = exp(-dot(dl, dl) / (len * len * 1.5)) * 0.9 * d.w;
-    float run = smoothstep(0.03, 0.0, length(dl.xz + vec2(sin(dl.y * 45.0 + float(i)) * 0.008, 0.0))) * step(dl.y, 0.0) * (1.0 - clamp(-dl.y / (len * 2.8), 0.0, 1.0)) * 0.95 * d.w;
-    wm = max(wm, max(halo, run)); mask = max(mask, wm);
-    ${gash ? 'gsh = max(gsh, (1.0 - smoothstep(len * 0.72, len, abs(al))) * (1.0 - smoothstep(0.014, 0.03, ac)) * d.w);' : ''}
+    vec3 dl = bp - w.xyz; float len = w.w;
+    float dy = dl.y < 0.0 ? dl.y * 0.55 : dl.y * 1.35;
+    float dd = dot(dl.xz, dl.xz) + dy * dy;
+    halo = max(halo, exp(-dd / (len * len * (0.9 + 1.1 * lowN))) * d.w);
+    near = max(near, exp(-dd / 0.085) * d.w);
+    float lane = dot(dl.xz, vec2(0.83, 0.56)) / 0.017 + float(i) * 3.7 + uBSeed;
+    float li = floor(lane), lf = fract(lane) + 0.14 * sin(dl.y * 38.0 + li * 2.1);
+    float r1 = bh(vec3(li, float(i), uBSeed)), r2 = bh(vec3(li * 1.7 + 3.1, uBSeed, float(i) + 1.0));
+    float t = -dl.y / ((0.1 + len * (1.0 + 3.4 * r1 * r1)) * mix(0.4, 1.0, age));
+    float spread = 1.0 - smoothstep(len * 0.55, len * 1.15, abs(dot(dl.xz, vec2(0.83, 0.56))));
+    float wd = (0.12 + 0.2 * r2) * (1.0 + 0.9 * smoothstep(0.72, 0.93, t) * (1.0 - smoothstep(0.95, 1.0, t)));
+    float lane1 = (1.0 - smoothstep(wd * 0.55, wd, abs(lf - 0.5))) * smoothstep(-0.04, 0.02, t) * (1.0 - smoothstep(0.9, 1.0, t)) * step(r2, 0.28 + 0.5 * d.w) * spread;
+    strk = max(strk, lane1 * d.w);
+    ${gash ? 'vec3 ac = dl - d.xyz * dot(dl, d.xyz); gsh = max(gsh, (1.0 - smoothstep(len * 0.72, len, abs(dot(dl, d.xyz)))) * (1.0 - smoothstep(0.012, 0.026, length(ac))) * d.w);' : ''}
   } }
-  vec3 bcol = mix(vec3(0.05, 0.005, 0.007), vec3(0.19, 0.009, 0.013), uBFresh * (0.5 + 0.5 * n1));
-  bcol = mix(bcol, mix(vec3(0.12, 0.009, 0.011), vec3(0.4, 0.016, 0.022), 0.35 + 0.65 * uBFresh), wm);
-  bcol = mix(bcol, vec3(0.02, 0.0, 0.002), gsh * 0.85); mask = max(mask, gsh);
-  diffuseColor.rgb = mix(diffuseColor.rgb, bcol, clamp(mask, 0.0, 1.0) * 0.95); gBM = clamp(mask, 0.0, 1.0);
+  float dens = bl * (0.14 + 0.86 * near) * ${(K.spray).toFixed(2)};
+  float spray = max(spotsB(bp, 17.0, dens * 0.8, 0.26, vec3(1.0, 0.8, 1.0)), spotsB(bp + 0.37, 47.0, dens * 1.5, 0.28, vec3(1.0, 0.75, 1.0)));
+  float paint = clamp(max(max(halo * 0.9, strk * 0.9), max(spray * 0.85, gsh)), 0.0, ${BL_CAP});
+  float thick = clamp(max(halo * 1.1, strk * 0.55 + spray * 0.4), 0.0, 1.0);
+  vec3 wetC = mix(vec3(0.17, 0.019, 0.016), vec3(0.44, 0.012, 0.018), fr);
+  vec3 thickC = mix(vec3(0.21, 0.021, 0.018), vec3(0.56, 0.016, 0.024), fr);
+  vec3 bcol = mix(wetC, thickC, thick) * (0.9 + 0.2 * lowN);
+  bcol = mix(bcol, vec3(0.03, 0.0, 0.004), gsh * 0.8);
+  float soakM = 0.0;
+  ${K.soak ? `{ float ceil1 = 0.78 + 0.55 * bl, hemK = ${K.hem.toFixed(2)};
+    soakM = bl * smoothstep(ceil1, ceil1 - 0.3, bp.y) * (0.5 + 0.5 * hemK) * (0.7 + 0.3 * lowN) + 0.5 * halo * bl;
+    soakM = clamp(soakM, 0.0, 0.62); vec3 wetTint = mix(vec3(0.3, 0.07, 0.07), vec3(0.34, 0.1, 0.09), age);
+    diffuseColor.rgb *= mix(vec3(1.0), wetTint + 0.15, soakM * (0.8 + 0.2 * age)); }` : ''}
+  diffuseColor.rgb = mix(diffuseColor.rgb, bcol, paint * 0.93);
+  gBM = clamp(max(paint, soakM * 0.8), 0.0, 1.0);
   for (int i = 0; i < ${MAX_CUTS}; i++) { vec4 c = uCut[i]; if (c.w > 0.0) { float dc = length(bp - c.xyz); float cm = 1.0 - smoothstep(c.w * 0.82, c.w, dc);
     vec3 raw = mix(vec3(0.34, 0.012, 0.016), vec3(0.62, 0.05, 0.05), bn(bp * 70.0) * 0.8); raw = mix(raw, vec3(0.7, 0.55, 0.42), 1.0 - smoothstep(c.w * 0.18, c.w * 0.34, dc));
     diffuseColor.rgb = mix(diffuseColor.rgb, raw, cm); gBM = max(gBM, cm); } }
-}`;
+}`; };
 function lightChunk(k) { // RE_Direct_Physical with a wrap-lit warm terminator (subsurface-ish) and a cool back fill on the side facing away from each light
   const f = (n) => (+n).toFixed(3), tgt = 'reflectedLight.directDiffuse += irradiance * BRDF_Lambert( material.diffuseColor );';
   const src = THREE.ShaderChunk.lights_physical_pars_fragment; if (!src.includes(tgt)) return null;
@@ -259,7 +292,7 @@ export function shadePatch(mat, key, xo = {}) {
   ${k.shine ? `addC += albC * ${v3s('#fff0d8')} * exp(-pow((nWC.y - 0.42) * 3.0, 2.0)) * ${f(k.shine)} * (0.4 + 0.6 * ndvC);` : ''}
   ${envOn ? `{ vec3 rWC = inverseTransformDirection(reflect(-vdC, normal), viewMatrix); float hC = rWC.y;
     vec3 eC = mix(vec3(0.46,0.34,0.26), vec3(0.62,0.74,1.0), smoothstep(-0.35, 0.8, hC)); eC += vec3(1.0,0.78,0.5) * exp(-pow((hC - 0.14) * 3.6, 2.0)) * 0.9;
-    float frC = 0.4 + 0.6 * pow(1.0 - ndvC, 2.0); addC += mix(albC, vec3(1.0), ${f(k.ew || 0)}) * eC * ${f(k.env || 0)} * frC + eC * frC * (0.2 * gSW + 0.5 * gBM * uBFresh); } ` : ''}
+    float frC = 0.4 + 0.6 * pow(1.0 - ndvC, 2.0); addC += mix(albC, vec3(1.0), ${f(k.ew || 0)}) * eC * ${f(k.env || 0)} * frC + eC * frC * (0.2 * gSW + 0.55 * gBM * (0.3 + 0.7 * uBFresh)); } ` : ''}
   outgoingLight *= 1.0 - ${f(ed)} * pow(1.0 - ndvC, 2.6);
   outgoingLight += addC;
 }
@@ -277,9 +310,9 @@ export function shadePatch(mat, key, xo = {}) {
     if (bu) { // gore: blood soak, wounds and stumps painted from rest-space position (shared per rig uniforms, see makeBloodUniforms)
       Object.assign(sh.uniforms, bu);
       sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vBP;' + (face ? 'varying vec2 vFuv;' : '')).replace('#include <begin_vertex>', '#include <begin_vertex>\n' + (free ? 'vBP = vec3((uv.x - 0.5) * 0.55, 0.9 + (uv.y - 1.0) * 0.9, -0.2 + 0.1 * uv.x);' : 'vBP = position;') + (face ? '\nvFuv = uv;' : ''));
-      sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\n' + head + BLOOD_HEAD).replace('#include <color_fragment>', '#include <color_fragment>\n' + colorX + (sweat ? sweatCode : 'gSW = 0.0;') + '\n' + bloodCode(xo.gash !== false))
+      sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\n' + head + BLOOD_HEAD).replace('#include <color_fragment>', '#include <color_fragment>\n' + colorX + (sweat ? sweatCode : 'gSW = 0.0;') + '\n' + bloodCode(xo.gash !== false, key))
         .replace('outgoingLight += addC;', 'outgoingLight += addC * (1.0 - gBM * 0.65);')
-        .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\n roughnessFactor = mix(roughnessFactor, mix(0.82, 0.16, uBFresh), gBM); roughnessFactor = mix(roughnessFactor, 0.14, gSW * 0.85);')
+        .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\n roughnessFactor = mix(roughnessFactor, mix(0.5, 0.12, uBFresh), gBM); roughnessFactor = mix(roughnessFactor, 0.14, gSW * 0.85);')
         .replace('#include <metalnessmap_fragment>', '#include <metalnessmap_fragment>\n metalnessFactor *= 1.0 - gBM * 0.9;');
     } else {
       sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nfloat gBM = 0.0, gSW = 0.0; const float uBFresh = 0.0;');
