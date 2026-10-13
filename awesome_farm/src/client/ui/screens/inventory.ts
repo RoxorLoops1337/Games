@@ -13,6 +13,7 @@ import { adopt, isNew, markSeen } from '../../seen';
 import { deviceText, onTap, SearchBox, Section, Slot, StatList, tipOn, Win, type Footer } from '../kit';
 import { ListTools } from '../listtools';
 import { inset, rect } from '../px';
+import { SS } from '../../res';
 import { itemTip, wornFor } from '../tips';
 import type { Screen, ScreenCtx } from './types';
 
@@ -92,12 +93,24 @@ export class InventoryScreen implements Screen {
         this.grid = new ItemGrid(w, this.carrying.inner.x, this.carrying.inner.y + chipsH, g.cols, g.rows, 44, 4, 'Nothing here yet.\nGo harvest something!');
         w.keep(s.add.zone(0, 0, 1, 1));
         // the hotbar, editable: click a slot, then an item (or right-click an item to pin it; on a phone, hold it)
-        const hot = w.section(rx, body.y + body.h - hotH, rw, hotH, 'Hotbar', { right: deviceText('Click a slot, then an item.  Right-click an item to pin or unpin it.', 'Tap a slot, then an item.  Hold an item to pin or unpin it.') });
+        const hot = w.section(rx, body.y + body.h - hotH, rw, hotH, 'Hotbar', { right: deviceText('Click a slot, then an item, or drag slots to swap.  Right-click an item to pin or unpin it.', 'Tap a slot, then an item.  Hold an item to pin or unpin it.') });
         for (let i = 0; i < HOT_SLOTS; i++) {
             const sl = new Slot(s, 0, 0, 40);
             w.putAt(sl.root, hot.inner.x + i * 44, hot.inner.y + 2);
             this.strip.push(sl);
             onTap(sl.interactive, () => { this.armed = this.armed === i ? -1 : i; this.key = ''; }, () => { ctx.send({ t: 'hot', slot: i, item: null }); if (this.armed === i) this.armed = -1; this.key = ''; });
+            // drag a slot onto another to swap them (the sim already swaps when an item is pinned where another sits)
+            sl.interactive.on('pointerdown', (ptr: Phaser.Input.Pointer) => {
+                const from = hotbarOf(ctx.me())[i];
+                if (!from) return;
+                s.input.once('pointerup', (up: Phaser.Input.Pointer) => {
+                    if (Phaser.Math.Distance.Between(ptr.downX, ptr.downY, up.x, up.y) < 14 * SS) return;
+                    const to = this.strip.findIndex((o) => o !== sl && o.interactive.getBounds().contains(up.x, up.y));
+                    if (to < 0) return;
+                    ctx.send({ t: 'hot', slot: to, item: from });
+                    this.armed = -1; this.key = '';
+                });
+            });
             tipOn(sl.interactive, () => {
                 const id = hotbarOf(ctx.me())[i];
                 const foot = this.armed === i ? 'Now click an item to put here' : 'Click to choose an item for this slot  ·  right-click to clear';

@@ -26,7 +26,7 @@ split big ones into slices (rules, art, polish).
 - [x] S24 Harvest chain chimes (your own pickups and harvests climb a pentatonic ladder)
 - [x] S23 Roof rain (rain streaks fade and the rain sound muffles under a roof)
 - [x] S19 Craft-to-chest toggle (a To chest switch in Crafting)
-- [ ] S20 Hotbar drag reorder / swap with a backpack row
+- [x] S20 Hotbar drag reorder (drag a slot onto another swaps; pinning an item that sits elsewhere already swaps)
 
 ## Phase 3: new systems (medium)
 - [ ] M8 Fish pond
