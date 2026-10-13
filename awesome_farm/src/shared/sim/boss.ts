@@ -25,6 +25,8 @@ const SHOT: Record<string, ProjKind> = { slime: 'spore', stone: 'rock', bog: 'or
 /** Bosses that hover at range instead of walking up to you (px). */
 const HOVER: Record<string, number> = { bog: 90, heart: 110 };
 
+/** How much more health an altar boss woken in the Long Dusk has. */
+export const DUSK_BOSS_HP = 1.6;
 const crossed = (t0: number, t1: number, at: number) => t0 < at && t1 >= at;
 
 // ── summoning ───────────────────────────────────────────────────────────────
@@ -43,7 +45,7 @@ export function summonBoss (sim: Sim, p: PlayerS, altar: BuildE, bossId: string)
     const near = sim.online.filter((q) => dist(q.x, q.y, (altar.tx + 1) * TILE, (altar.ty + 1) * TILE) < TUNING.altarParty).length;
     const def = MOBS[entry.kind];
     const hx = (altar.tx + 1) * TILE, hy = (altar.ty + 2) * TILE;
-    const hp = Math.round(def.hp * (1 + 0.55 * (Math.max(1, near) - 1)));
+    const hp = Math.round(def.hp * (1 + 0.55 * (Math.max(1, near) - 1)) * (sim.s.dusk ? DUSK_BOSS_HP : 1));          // (an altar boss woken in the Long Dusk is tougher)
     // appear a little way off, on land
     let x = hx, y = hy + 44;
     for (const [ox, oy] of [[0, 44], [0, -44], [44, 8], [-44, 8], [30, 36], [-30, 36]]) {
@@ -434,7 +436,9 @@ export function defeat (sim: Sim, e: MobE) {
         quests.count(q, `boss:${info.id}`);
         const rng = sim.rng;
         const items: [ItemId, number][] = [[info.trophy, 1], ...(sim.s.dusk ? [['trophy_dusk', 1] as [ItemId, number]] : []), ...fortune.bossCrates(sim, q, info.id)];       // (a boss that falls in the Long Dusk also leaves a Dusk Crown)
-        for (const [item, chance, min = 1, max = min] of def.drops) if (rng.chance(chance)) items.push([item, rng.int(min, max)]);
+        for (let roll = 0; roll < (sim.s.dusk && !e.zone ? 2 : 1); roll++) {          // (and in the Long Dusk it drops its spoils twice)
+            for (const [item, chance, min = 1, max = min] of def.drops) if (rng.chance(chance)) items.push([item, rng.int(min, max)]);
+        }
         if (first) {
             items.push([info.gear[0], 1]);
             if (info.gear[1] && rng.chance(0.5)) items.push([info.gear[1], 1]);
