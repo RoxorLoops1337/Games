@@ -5,6 +5,18 @@ boot, sounds are synthesised): inspired by the genre, no code or assets taken fr
 
 Play: `https://games-71g.pages.dev/blockmates/` (solo works at once, the world is saved in the browser).
 
+## What is in it
+
+- A 1536 x 224 tile world: plains, forests, deserts, tundra with pines, mountains, oceans, caves, underground lakes and lava,
+  ores from coal to titanium and sunstone, shrines with waystones, ruins and buried chests.
+- Mining with tool tiers, crafting stations (workbench, furnace, anvil), chests, doors, beds, ladders, platforms, torches,
+  coloured wool, farming, fishing, cooking, armor and a bow.
+- Buddies: hire helpers with a Buddy Bell and set them to follow, chop, mine, farm or guard.
+- Player to player trading with escrow, waystone travel, sleeping to skip the night, chat, emotes, a world map.
+- The Stone Warden boss (craft a Warden Sigil, use it deep underground), night creatures, cave skitters.
+- Day and night, weather, smooth lighting, fireflies, butterflies, bats, fully synthesised sound and music.
+- Water and lava flow; water meeting lava makes stone and obsidian.
+
 ## Host a 16-player world
 
 ### Option A: your own computer or a VPS (no dependencies)
@@ -43,4 +55,5 @@ F2 photo, Esc menu. Operators: `/time day|night`, `/tp name`, `/give item n`, `/
 | `server/node.js` | dependency free WebSocket server + static file server |
 | `server/cf/` | Cloudflare Worker + Durable Object |
 | `client/` | `art.js` (all painting), `render.js`, `cworld.js` (tiles, sections, light), `game.js`, `ui.js`, `net.js`, `audio.js`, `main.js` |
+| `server/bots.js` | load test: `node blockmates/server/bots.js ws://localhost:8787/ws 16 30` |
 | `tests/blockmates_*.test.mjs` | headless suites (`npm run test:blockmates`) |
