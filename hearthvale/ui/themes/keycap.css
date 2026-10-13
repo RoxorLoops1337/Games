@@ -50,7 +50,7 @@ html[data-ui="keycap"] :is(.b,.rb,.pill,.gp,.mini-b),html[data-ui="keycap"] #car
   transform:perspective(560px) rotateX(var(--ty)) rotateY(var(--tx)) translate3d(0,var(--yy),calc(var(--zz)*-1));
   backface-visibility:hidden;-webkit-backface-visibility:hidden;
   transition:transform .55s var(--kc-spring);
-  filter:none;
+  filter:none;will-change:transform;
 }
 /* the base plate: ground footprint, walls (shaded from a top-left light) and the contact shadow plane */
 html[data-ui="keycap"] :is(.b,.rb,.pill,.gp,.mini-b)::before,html[data-ui="keycap"] #card::before{
@@ -76,7 +76,7 @@ html[data-ui="keycap"] :is(.rb,.pill,.gp,.mini-b,.b.small-b){--d:7px;--ps:1.0125
 html[data-ui="keycap"] :is(.b.big,#bBuild,#quick){--d:12px;--ps:1.0215;--w:7px;--f:4px}
 html[data-ui="keycap"] #card{--d:8px;--ps:1.0145;--w:5px;--f:3px}
 /* hover and tilt (JS toggles .kc-live while the pointer is over the key and .kc-down while pressed) */
-html[data-ui="keycap"] :is(.b,.rb,.pill,.gp,#card,.mini-b).kc-live{transition:transform .1s ease-out;will-change:transform}
+html[data-ui="keycap"] :is(.b,.rb,.pill,.gp,#card,.mini-b).kc-live{transition:transform .1s ease-out}
 html[data-ui="keycap"] :is(.b,.rb,.pill,.gp,#card,.mini-b):is(:active,.kc-down):not(.off){
   --f:1px;--w:1.5px;--yy:3px;--zz:6px;transition:transform .07s ease-out;
 }
@@ -286,7 +286,7 @@ html[data-ui="keycap"][data-reduce="1"] :is(#quick,#soupAlert,#tools .rb.visitor
 
 /* ---------- low quality: no 3D context, a flat extrude made of two shadows, no noise ---------- */
 html[data-ui="keycap"] body.lowfx :is(.b,.rb,.pill,.gp,#card,.mini-b){
-  transform-style:flat;transform:none;--yy:0px;
+  transform-style:flat;transform:none;will-change:auto;--yy:0px;
   background:radial-gradient(ellipse 98% 125% at 62% 72%,var(--k1) 0%,var(--k2) 54%,var(--k3) 100%);
   box-shadow:inset 1px 2px 2px -1px rgba(255,255,255,.8),0 4px 0 var(--w2),0 7px 6px -2px rgba(var(--kc-shadow),.4);
   transition:transform .12s ease-out,box-shadow .12s ease-out}

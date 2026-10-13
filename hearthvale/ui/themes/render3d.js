@@ -75,10 +75,10 @@ function ringLevels(o) {
 const _h = {};
 function tones(hex, pressed) {
   const c = new THREE.Color(hex); c.getHSL(_h, THREE.SRGBColorSpace);
-  const h = _h.h, s = _h.s, l = _h.l, k = pressed ? 0.9 : 1;
+  const h = _h.h, s = _h.s, l = _h.l, k = pressed ? 0.9 : 1, lt = Math.max(0, l - 0.72) / 0.28;   // light colours get a softer, less orange wall
   const mk = (ds, dl) => new THREE.Color().setHSL(h, Math.min(1, Math.max(0, s + ds)), Math.min(1, Math.max(0, (l + dl) * k)), THREE.SRGBColorSpace);
   return {
-    top: mk(-0.04, 0.10).lerp(WARM, 0.18), mid: mk(0, 0), low: mk(0.12, -0.10), rim: mk(0.15, -0.30), wall: mk(0.16, -0.24), wallLow: mk(0.16, -0.33), glow: mk(-0.1, 0.16),
+    top: mk(-0.04, 0.10).lerp(WARM, 0.18), mid: mk(0, 0), low: mk(0.12, -0.10), rim: mk(0.15, -0.30), wall: mk(0.16 - lt * 0.3, -0.24 - lt * 0.12), wallLow: mk(0.16 - lt * 0.3, -0.33 - lt * 0.12), glow: mk(-0.1, 0.16),
   };
 }
 const _c = new THREE.Color();
@@ -195,6 +195,8 @@ const SPEC = {
     gloss: { inset: 11, top: 3, h: 17, bounce: 10, binset: 12, glint: [14.5, 8.2, 2.1] } },
   round: { kind: 'solid', fw: 48, fh: 48, r: 24, mt: 3, ml: 4, mr: 4, mb: 12, D0: 8, DP: 3, Rb: 6.5, Hd: 5, rimW: 1.1, glowW: 2.6, shOff: 3.2, shBlur: 5, shA: 0.34,
     gloss: { round: true, cy: 0.27, rx: 0.34, ry: 0.19, bounce: 9, binset: 9, glint: [13, 11, 1.9] } },
+  roundL: { kind: 'solid', fw: 66, fh: 66, r: 33, mt: 3, ml: 4, mr: 4, mb: 13, D0: 9, DP: 3.4, Rb: 8, Hd: 6.5, rimW: 1.2, glowW: 3, shOff: 3.6, shBlur: 6, shA: 0.34,
+    gloss: { round: true, cy: 0.26, rx: 0.34, ry: 0.19, bounce: 11, binset: 12, glint: [17.5, 14, 2.4] } },
   card: { kind: 'solid', fw: 50, fh: 50, r: 20, mt: 2, ml: 3, mr: 3, mb: 9, D0: 5.5, DP: 2.2, Rb: 4.5, Hd: 2.6, rimW: 1, glowW: 2.2, shOff: 2.5, shBlur: 4.5, shA: 0.26,
     gloss: { inset: 10, top: 2.4, h: 11, bounce: 7, binset: 10, glint: [12, 6, 1.6] } },
   dot: { kind: 'solid', fw: 38, fh: 38, r: 19, mt: 1, ml: 3, mr: 3, mb: 5, D0: 4.5, DP: 2, Rb: 4.2, Hd: 3, rimW: 1.2, glowW: 1.6, shOff: 1.4, shBlur: 2.2, shA: 0.35,
@@ -262,6 +264,7 @@ const BAR_HEX = { gold: '#ffc22e', green: '#5cc23f', blue: '#4aaee6', pink: '#f0
 
 const FAMILIES = [
   { id: 'round', spec: 'round', colors: ROUND_C, poses: 2, pre: 'round' },
+  { id: 'roundL', spec: 'roundL', colors: ['gold', 'red'], poses: 2, pre: 'roundL' },
   { id: 'pill', spec: 'pill', colors: PILL_C, poses: 2, pre: 'pill' },
   { id: 'card', spec: 'card', colors: CARD_C, poses: 1, pre: 'card', dn: ['cCream', 'cGreen'] },
   { id: 'bar', spec: 'bar', colors: BAR_C, poses: 1, pre: 'bar', hex: BAR_HEX },
@@ -280,7 +283,7 @@ export async function renderAll({ onSprite, onFamily, isDead = () => false, only
     for (const fam of FAMILIES) {
       if (only && !only.includes(fam.id)) continue;
       const spec = SPEC[fam.spec];
-      const info = fam.id === 'bar' ? sliceInfo(spec, S, 'bar') : sliceInfo(spec, S, fam.id === 'round' ? 'round' : '');
+      const info = fam.id === 'bar' ? sliceInfo(spec, S, 'bar') : sliceInfo(spec, S, fam.id.startsWith('round') ? 'round' : '');
       onSprite && onSprite(`--r3-${fam.id}-slice`, info.slice); onSprite && onSprite(`--r3-${fam.id}-width`, info.width); onSprite && onSprite(`--r3-${fam.id}-outset`, info.outset);
       for (const c of fam.colors) {
         for (const pressed of fam.poses === 2 ? [false, true] : (fam.dn && fam.dn.includes(c) ? [false, true] : [false])) {

@@ -35,6 +35,8 @@ html[data-ui="render3d"] #tools .rb:nth-child(4){--r3-ru:var(--r3-round-gold-up)
 html[data-ui="render3d"] #tools .rb:nth-child(5){--r3-ru:var(--r3-round-sky-up);--r3-rd:var(--r3-round-sky-dn);--c1:#e6f7ff;--c2:#b9e3fa;--ed:#82b9d8}
 html[data-ui="render3d"] #tools .rb:nth-child(6){--r3-ru:var(--r3-round-rose-up);--r3-rd:var(--r3-round-rose-dn);--c1:#ffeaf1;--c2:#ffc4d6;--ed:#e29bb0}
 html[data-ui="render3d"] .b.big{--r3-sw:5px}
+html[data-ui="render3d"] :is(.badge-new,.ribbon){--r3-sw:2.2px}
+html[data-ui="render3d"] .tb .tc{--r3-sw:2.4px}
 html[data-ui="render3d"] .b.small-b,html[data-ui="render3d"] .mini-b{--r3-sw:3.4px}
 
 /* ---------- text: a strong outline on every control ---------- */
@@ -44,6 +46,7 @@ html[data-ui="render3d"] .gp.full,html[data-ui="render3d"] .gp.more,html[data-ui
 html[data-ui="render3d"] .b:is(.b-cream,:not([class*="b-"])){-webkit-text-stroke:3.4px #fff;text-shadow:0 1px 0 rgba(255,255,255,.9)}
 html[data-ui="render3d"] .rb{-webkit-text-stroke-width:0}
 html[data-ui="render3d"] #card #ptitle{-webkit-text-stroke:2.5px #fff;text-shadow:none;color:var(--lilac2)}
+html[data-ui="render3d"] .gp.more{--r3-sw:2.6px}
 html[data-ui="render3d"] .gp small,html[data-ui="render3d"] .b small,html[data-ui="render3d"] .pill small{-webkit-text-stroke-width:2.6px}
 html[data-ui="render3d"] :is(.b,.rb,.pill,.gp,.mini-b) .ic{filter:drop-shadow(0 1.5px 0 rgba(60,30,10,.42)) drop-shadow(0 0 1px rgba(255,255,255,.4))}
 html[data-ui="render3d"] .b.off,html[data-ui="render3d"] .rb.off{opacity:.72;filter:saturate(.4) brightness(1.05)}
@@ -65,6 +68,8 @@ html[data-ui="render3d"][data-r3~="round"] :is(.b.round,.rb,#quick,.stepper .b,.
 html[data-ui="render3d"][data-r3~="round"] :is(.b.round,.rb,#quick,.stepper .b,.emotes .b,.mini-b.x,.mini-b[data-m=stop],.pinb):active{border-image-source:var(--r3-rd);transform:translateY(3px) perspective(260px) rotateX(var(--r3-rx,0deg)) rotateY(var(--r3-ry,0deg)) scale(.985);transition-duration:.05s}
 html[data-ui="render3d"][data-r3~="round"] .b.off:active{border-image-source:var(--r3-ru);transform:none}
 html[data-ui="render3d"] #quick{animation:r3bob 2s ease-in-out infinite}
+html[data-ui="render3d"][data-r3~="roundL"] #quick{border-image-source:var(--r3-roundL-gold-up);border-image-slice:var(--r3-roundL-slice) fill;border-image-width:var(--r3-roundL-width);border-image-outset:var(--r3-roundL-outset)}
+html[data-ui="render3d"][data-r3~="roundL"] #quick:active{border-image-source:var(--r3-roundL-gold-dn)}
 @keyframes r3bob{50%{translate:0 -3px}}
 
 /* ---------- sprites: card family (plates) ---------- */
@@ -102,6 +107,7 @@ html[data-ui="render3d"] .bar.r i,html[data-ui="render3d"] .mbar.low i{--r3-bar:
 /* ---------- small round things: pips, new badges, level chips ---------- */
 html[data-ui="render3d"][data-r3~="dot"] :is(.pip,.badge-new,.av .lv,.label .lv,.qitem .qn,.tb .tc,.ribbon){border:0;box-shadow:none;background:var(--r3-dot) 0 0/100% 100% no-repeat;--r3-dot:var(--r3-dot-red);overflow:visible}
 html[data-ui="render3d"][data-r3~="dot"] .pip{min-width:25px;height:25px;top:-9px;right:-8px;line-height:21px;font-size:12.5px}
+html[data-ui="render3d"][data-r3~="dot"] button.tab .pip{top:0;right:2px;min-width:21px;height:21px;line-height:17px;font-size:11px;--r3-sw:2.6px}
 html[data-ui="render3d"][data-r3~="dot"] .pip.dot{min-width:19px;width:19px;height:19px;top:-6px;right:-5px}
 html[data-ui="render3d"][data-r3~="dot"] .av .lv{--r3-dot:var(--r3-dot-green);min-width:28px;height:28px;right:-8px;bottom:-9px;line-height:24px}
 html[data-ui="render3d"][data-r3~="dot"] .label .lv{--r3-dot:var(--r3-dot-green);padding:0 7px}
@@ -112,7 +118,8 @@ html[data-ui="render3d"][data-r3~="dot"] .badge-new.sale,html[data-ui="render3d"
 html[data-ui="render3d"] .av .lv,html[data-ui="render3d"] .label .lv,html[data-ui="render3d"] .qitem .qn,html[data-ui="render3d"] .pip{--r3-st:#7a1f1a}
 html[data-ui="render3d"] .av .lv,html[data-ui="render3d"] .label .lv,html[data-ui="render3d"] .qitem .qn{--r3-st:#2b6a1d}
 html[data-ui="render3d"] .tb .tc,html[data-ui="render3d"] .ribbon{--r3-st:#a02a58}
-html[data-ui="render3d"] :is(.pip,.badge-new,.av .lv,.label .lv,.qitem .qn,.tb .tc,.ribbon){--r3-tx:#fff;--r3-sw:3px;border-color:transparent}
+html[data-ui="render3d"] :is(.pip,.badge-new,.av .lv,.label .lv,.qitem .qn,.tb .tc,.ribbon){--r3-tx:#fff;border-color:transparent}
+html[data-ui="render3d"] :is(.pip,.av .lv,.label .lv,.qitem .qn){--r3-sw:3px}
 
 /* ---------- rings and medallions ---------- */
 html[data-ui="render3d"][data-r3~="ring"] .th::after,html[data-ui="render3d"][data-r3~="ring"] .av .face::after{content:"";position:absolute;inset:-3px;pointer-events:none;border-radius:50%;border:1px solid transparent;border-image:var(--r3-ring-cream) 50% / 50% stretch;z-index:3}

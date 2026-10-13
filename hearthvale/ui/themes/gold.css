@@ -359,7 +359,7 @@ html[data-ui="gold"] #saveCard small{color:#c9f5dc}
 html[data-ui="gold"] body.lowfx .b::after,html[data-ui="gold"] body.lowfx .rb::after,html[data-ui="gold"] body.lowfx .pill::after,html[data-ui="gold"] body.lowfx .gp::after,html[data-ui="gold"] body.lowfx #card::after,html[data-ui="gold"] body.lowfx .mini-b::after{animation:none;background:none}
 html[data-ui="gold"] body.lowfx .b:active::after,html[data-ui="gold"] body.lowfx .rb:active::after{animation:gdflash .5s ease-out 1 both;background:linear-gradient(105deg,transparent 30%,rgba(255,244,190,.9) 47%,#fff 50%,rgba(255,244,190,.9) 53%,transparent 70%) 0 0/320% 100% no-repeat}
 html[data-ui="gold"] body.lowfx .b,html[data-ui="gold"] body.lowfx .rb,html[data-ui="gold"] body.lowfx .pill,html[data-ui="gold"] body.lowfx .gp,html[data-ui="gold"] body.lowfx #card,html[data-ui="gold"] body.lowfx .mini-b{background-image:var(--gloss),linear-gradient(180deg,var(--en1),var(--en2)),var(--nil),var(--band),var(--metal)}
-html[data-ui="gold"] body.lowfx .sheet::before,html[data-ui="gold"] body.lowfx .sheet::after{display:none}
+
 html[data-ui="gold"] body.lowfx .sh-head,html[data-ui="gold"] body.lowfx .banner{filter:none!important}
 html[data-ui="gold"] body.lowfx .sec,html[data-ui="gold"] body.lowfx .card,html[data-ui="gold"] body.lowfx .tb{box-shadow:0 0 0 1px rgba(30,12,0,.7),0 3px 0 1px #6a430c}
 @media (prefers-reduced-motion:reduce){html[data-ui="gold"] .b::after,html[data-ui="gold"] .rb::after,html[data-ui="gold"] .pill::after,html[data-ui="gold"] .gp::after,html[data-ui="gold"] #card::after{animation:none!important}}
