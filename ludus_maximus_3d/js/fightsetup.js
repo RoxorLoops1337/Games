@@ -18,6 +18,7 @@ export function buildFight(S, gl, opps, stance, o = {}) {
   const unitsA = lm.mkUnits(gl, 'A', ctxA, gl.map((g) => (o.hpf && o.hpf[g.id] != null ? o.hpf[g.id] : 1)));
   const unitsB = lm.mkUnits(opps, 'B', ctxB);
   if (lm.isRevenge(S, ev)) unitsA.forEach((u) => { u.grudge = true; });
+  unitsB.forEach((u) => { if (u.g && lm.vendetta && lm.vendetta(S, u.g.rv)) u.grudge = true; });   // FATE: you killed one of his school: vendetta (+8% damage, see arena.js)
   const F = lm.createFight(unitsA, unitsB, { autoA: !!S.flags.auto, manualFavor: true, hazards: (ev.league || 0) >= 2 ? 2 : (ev.league || 0) >= 1 ? 1 : 0 });
   const fp = lm.facPerks(S); F.hypeK = fp.hype * (lm.fest(S, S.week) === 'bacchus' ? 1.3 : 1);
   const dp = unitsA.length > 1 ? lm.duoPair(S, gl) : null;

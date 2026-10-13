@@ -417,7 +417,7 @@
     if (!Array.isArray(S.plots)) { note('plots'); S.plots = []; }
     while (S.plots.length < 16) S.plots.push(null); S.plots = S.plots.slice(0, 16).map((p) => (p && typeof p === 'object' && D.BUILD[p.b] && fin(p.l) ? p : null));
     for (const k of ['sen', 'mer', 'ple']) if (!fin(S.fac[k])) S.fac[k] = 0;
-    for (const k of ['fights', 'wins', 'losses', 'tourneys', 'spares', 'weeks', 'contracts']) if (!fin(S.stats[k])) S.stats[k] = 0;
+    for (const k of ['fights', 'wins', 'losses', 'tourneys', 'spares', 'kills', 'ransoms', 'weeks', 'contracts']) if (!fin(S.stats[k])) S.stats[k] = 0;   // FATE: kills and ransoms are new, old saves get 0
     const seen = new Set(), keep = [];
     for (const g of S.glads) {
       if (!isObj(g) || !D.STYLES[g.style] || !isObj(g.st) || !fin(g.id) || seen.has(g.id)) { note('dropped an unreadable gladiator'); continue; }
@@ -1047,6 +1047,8 @@
   add('streak10', 'Unbroken', 'Win 10 events in a row.', { gold: 300, fame: 15, laurels: 1 }, 'flame', 'Glory', (S) => st(S, 'streakBest') >= 10, (S) => [Math.min(10, st(S, 'streakBest')), 10]);
   add('wins100', 'Hundred Victories', 'Win 100 fights.', { gold: 900, laurels: 2 }, 'laurel', 'Glory', (S) => st(S, 'wins') >= 100, (S) => [Math.min(100, st(S, 'wins')), 100]);
   add('champ1', 'Duelist', 'Defeat the rival owner\'s champion.', { gold: 150, fame: 10 }, 'sword', 'Glory', (S) => st(S, 'champs') >= 1, (S) => [Math.min(1, st(S, 'champs')), 1]);
+  add('blood5', 'Blood Sport', 'Kill 5 beaten foes when the crowd asks for blood.', { gold: 80, fame: 8 }, 'skull', 'Glory', (S) => st(S, 'kills') >= 5, (S) => [Math.min(5, st(S, 'kills')), 5]);
+  add('ransom3', 'Ransomer', 'Take a ransom for 3 beaten foes.', { gold: 150, fame: 5 }, 'coin', 'Glory', (S) => st(S, 'ransoms') >= 3, (S) => [Math.min(3, st(S, 'ransoms')), 3]);
   add('bounty3', 'Bounty Hunter', 'Claim 3 bounties.', { gold: 200, fame: 10 }, 'scroll', 'Glory', (S) => st(S, 'bounties') >= 3, (S) => [Math.min(3, st(S, 'bounties')), 3]);
   add('pitperf', 'Flawless Descent', 'Clear 5 Pit floors in one descent without any fight ending below 40% health.', { gold: 300, fame: 15 }, 'skull', 'Glory', (S) => st(S, 'pitPerfect') >= 1, (S) => [Math.min(1, st(S, 'pitPerfect')), 1]);
   add('hurtwin', 'Walk It Off', 'Win a fight with a wounded fighter.', { gold: 100, fame: 5 }, 'bandage', 'Glory', (S) => st(S, 'hurtWins') >= 1, (S) => [Math.min(1, st(S, 'hurtWins')), 1]);

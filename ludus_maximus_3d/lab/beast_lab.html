@@ -58,6 +58,13 @@ if (view === 'grid') {
   const r = spawn(which, 0, 0, yaw0, k++); pose(r, anim, tq);
   const s = SPECIES[which].size * (which === 'elephant' ? 2.0 : 1); cam.position.set(0, 1.5 * s + 0.6, 6.0 * s + 1.5); target.set(0, 0.85 * s + 0.2, 0); cam.fov = 30;
 }
+// focus=head|face: camera on the head joint (az = degrees around the beast from its front, dist metres, dy / fz offsets), expr=calm|wary|angry|enraged|snarl (animator.setMood when present)
+if (Q.get('expr') && rigs[0] && rigs[0].animator.setMood) { rigs.forEach((r) => { r.animator.setMood(Q.get('expr')); for (let i = 0; i < 30; i++) r.update(1 / 30); }); }
+if (Q.get('focus') && rigs[0]) {
+  const r = rigs[0], hp = new THREE.Vector3(), s = r.size * (r.beast === 'elephant' ? 1.7 : 1), az = (+(Q.get('az') || 30)) * Math.PI / 180 + r.root.rotation.y, d = +(Q.get('dist') || 1.15 * s);
+  r.root.updateMatrixWorld(true); r.joints.head.getWorldPosition(hp); hp.y += +(Q.get('dy') || 0) * s; const fz = +(Q.get('fz') || 0.18) * s; hp.x += Math.sin(r.root.rotation.y) * fz; hp.z += Math.cos(r.root.rotation.y) * fz;
+  cam.position.set(hp.x + Math.sin(az) * d, hp.y + 0.12 * s, hp.z + Math.cos(az) * d); target.copy(hp); cam.fov = +(Q.get('fov') || 30);
+}
 if (Q.get('cam')) { const c = Q.get('cam').split(',').map(Number); cam.position.set(c[0], c[1], c[2]); target.set(c[3], c[4], c[5]); }
 if (Q.get('blood') || Q.get('wounds')) rigs.forEach((r, i) => { const k = Math.max(1, r.size); for (let j = 0; j < +(Q.get('wounds') || 0); j++) r.addWound(r.jointRest(j % 3 === 2 ? 'hipL' : 'chest', [(j % 2 ? 1 : -1) * 0.24 / k, (0.05 + 0.05 * j) / k, 0.04 * j / k]), new THREE.Vector3(0.5, 0.8, 0.2).normalize(), 0.1, 1); r.addBlood(+(Q.get('blood') || 0.4), 1); });   // wounds sit on the flank surface, then the blood lands on the last one
 if (Q.get('hide')) rigs.forEach((r) => Q.get('hide').split(',').forEach((n) => { if (r.parts[n]) r.parts[n].visible = false; }));

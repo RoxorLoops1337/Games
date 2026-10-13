@@ -604,16 +604,83 @@
     if (wonAny) { LM.note(S, 'win', { styles: glads.map((g) => g.style), kind: ev.kind }); if (ev.kind === 'tourney' || ev.kind === 'grand') { S.stats.tourneys++; LM.note(S, 'tourney'); if (ev.kind === 'grand' && ev.league === 3) S.flags.imperial = true; } if (ev.kind === 'team') LM.note(S, 'team'); if (res.odds != null && res.odds < 0.4) LM.note(S, 'upset'); }
     return rep;
   };
-  LM.mercy = (S, ev, rep, choice) => {
-    if (choice === 'mercy') {
-      const f = Math.round(rep.fame * 0.2) + 2; S.fame += f; rep.fame += f; S.stats.spares++; LM.note(S, 'mercy'); LM.facGain(S, 'sen', 6); LM.facGain(S, 'ple', 2);
-      const o = ev.opps[0]; const cap = LM.rosterCap(S);
-      if (ev.kind === 'duel' && S.glads.length < cap && rnd() < 0.3) {
-        const g = JSON.parse(JSON.stringify(o)); g.id = S.nextId++; g.act = 'rest'; g.en = 100; g.mo = 80; g.inj = 0; g.rv = null; g.color = null; g.rec = { w: 0, l: 0 }; g.fame = 0; delete g.story; LM.assignStory(g); S.glads.push(g); return { f, joined: g };
-      }
-      return { f };
+  // ---------- FATE: what becomes of the beaten foe (kill / spare / ransom / showboat) ----------
+  // The sim never kills the last foe by itself: the fight ends with him DOWN and the choice resolves him. The numbers below are exact: the decision
+  // panel in the fight view shows them (LM.fateOffers) and LM.fate applies the very same ones, so the results sheet always matches.
+  LM.FATE_KINDS = { duel: 1, tourney: 1, grand: 1, team: 1 };   // hunts, pit floors, horde waves, bounties, champions and sparring keep their own endings
+  LM.fateOk = (ev, foe) => !!(ev && LM.FATE_KINDS[ev.kind] && foe && !foe.beast);
+  /** base fame and purse of ONE bout of this event (a tournament or team purse is for the whole event, so those use the league's single-bout numbers) */
+  LM.fateBase = (ev) => { const L = D.LEAGUES[Math.max(0, Math.min(3, ev.league | 0))]; return { fame: ev.kind === 'duel' && ev.fame ? ev.fame : L.fameWin, purse: ev.kind === 'duel' && ev.purse ? ev.purse : L.purse }; };
+  /** who would pay for him: the rival ludus he fights for (matched by name to one of the four rival schools when it is one of them) */
+  LM.fateOwner = (S, foe) => {
+    const name = foe && !foe.gh && (foe.lud || foe.ludus); if (!name) return null;
+    const sch = LM.ludiOf && S ? LM.ludiInit(S).list.find((l) => l.name === name) : null;
+    return { name, school: sch || null, wealth: sch ? clamp(sch.str, 0.85, 1.2) : 1 };
+  };
+  LM.vendetta = (S, rv) => { const r = rv && S && S.rivals && S.rivals[rv]; return !!(r && r.vend && S.week - r.vend <= 12); };
+  /** chance (0..1) that a spared foe asks to join you: 30% base, Barracks +2% per level, a humble foe more, a proud one less, a showman in the ludus helps; 0 when the barracks are full */
+  LM.fateJoin = (S, foe) => {
+    if (!foe || foe.beast || S.glads.length >= LM.rosterCap(S)) return 0;
+    let p = 0.3 + 0.02 * LM.bfx(S, 'barracks').l; const top = S.glads.reduce((a, g) => Math.max(a, g.lvl), 1);
+    p += foe.lvl <= top ? 0.06 : foe.lvl > top + 2 ? -0.06 : 0;
+    const T = foe.trait; if (T === 'hothead' || T === 'grudge' || T === 'bloodlust') p -= 0.08; else if (T === 'frugal' || T === 'underdog' || T === 'coolhead') p += 0.05;
+    if (S.glads.some((g) => g.trait === 'showman')) p += 0.04;
+    return Math.round(clamp(p, 0.08, 0.6) * 100) / 100;
+  };
+  const sg = (n) => (n > 0 ? '+' : '') + n;
+  /** the choices for a beaten foe, with exact numbers. ids: kill, spare, ransom (when someone would pay) or show (the crowd tips instead). def = 'spare' */
+  LM.fateOffers = (S, ev, foe) => {
+    if (!LM.fateOk(ev, foe)) return null;
+    const B = LM.fateBase(ev), own = LM.fateOwner(S, foe), sch = own && own.school, tmp = LM.sponsorHas && LM.sponsorHas(S, 'temple') ? 1 : 0, vend = !!(foe.rv && !foe.gh);
+    const kill = { id: 'kill', label: 'Kill him', fame: Math.round(B.fame * 0.4) + 4, gold: 0, hype: 15, fac: { sen: -5, ple: 4 }, temple: tmp ? -8 : 0, ludus: sch ? -10 : 0, vend, join: 0 };
+    const spare = { id: 'spare', label: 'Spare him', fame: Math.round(B.fame * 0.2) + 2, gold: 0, hype: 6, fac: { sen: 6, ple: 2 }, temple: tmp ? 3 : 0, ludus: sch ? 3 : 0, vend: false, join: LM.fateJoin(S, foe) };
+    const third = own
+      ? { id: 'ransom', label: 'Take the ransom', fame: Math.round(B.fame * 0.05) + 1, gold: Math.max(20, Math.round((B.purse * 0.45 + foe.lvl * 8) * own.wealth)), hype: 0, fac: { mer: 4, ple: -1 }, temple: 0, ludus: sch ? 6 : 0, vend: false, join: 0 }
+      : { id: 'show', label: 'Showboat', fame: 0, gold: Math.round(B.purse * 0.2) + 5, hype: 4, fac: { mer: 5 }, temple: 0, ludus: 0, vend: false, join: 0 };
+    const opts = [kill, spare, third];
+    for (const o of opts) {
+      o.gain = []; o.cost = [];
+      if (o.fame) o.gain.push(`${sg(o.fame)} fame`); if (o.gold) o.gain.push(`${sg(o.gold)} gold`); if (o.hype) o.gain.push(`Crowd hype ${sg(o.hype)}`);
+      const fl = [['sen', 'Senate'], ['ple', 'Plebs'], ['mer', 'Merchants']];
+      for (const [k, nm] of fl) { const v = o.fac[k]; if (v) (v > 0 ? o.gain : o.cost).push(`${nm} ${sg(v)}`); }
+      if (o.temple) (o.temple > 0 ? o.gain : o.cost).push(`Temple of Mars regard ${sg(o.temple)}`);
+      if (o.ludus) (o.ludus > 0 ? o.gain : o.cost).push(`${own.name} regard ${sg(o.ludus)}`);
+      if (o.join) o.gain.push(`${Math.round(o.join * 100)}% he joins your ludus`);
+      if (o.id === 'kill') { o.cost.push('No recruit, no ransom'); if (o.vend) o.cost.push('Vendetta: his comrades fight you with +8% damage'); }
+      if (o.id === 'spare') { o.cost.push('Less fame than a kill'); if (!o.join) o.cost.push(S.glads.length >= LM.rosterCap(S) ? 'Barracks full: he cannot join' : 'No recruit chance'); }
+      if (o.id === 'ransom') o.cost.push('He goes home: no recruit chance');
+      if (o.id === 'show') o.cost.push('No fame bonus, no recruit chance');
     }
-    const gd = Math.round(rep.gold * 0.2) + 5; S.gold += gd; rep.gold += gd; LM.facGain(S, 'mer', 5); return { gd };
+    third.why = own ? '' : 'Nobody would pay for him, so the crowd tips you instead';
+    return { foe: { name: foe.name, style: foe.style, lvl: foe.lvl, ludus: own ? own.name : '' }, opts, def: 'spare', owner: own };
+  };
+  /** apply a decision. rep (optional) is the settle report: its fame / gold totals and notes are updated. No choice or an unknown one means spare. Returns the applied result. */
+  LM.fate = (S, ev, rep, choice, foe) => {
+    const off = LM.fateOffers(S, ev, foe); if (!off) return null;
+    const o = off.opts.find((x) => x.id === choice) || off.opts[1], own = off.owner, lines = [];
+    S.fame += o.fame; S.gold += o.gold; if (rep) { rep.fame = (rep.fame || 0) + o.fame; rep.gold = (rep.gold || 0) + o.gold; }
+    for (const k in o.fac) LM.facGain(S, k, o.fac[k]);
+    if (o.temple && LM.sponsorRel) LM.sponsorRel(S, 'temple', o.temple);
+    if (o.ludus && own && own.school) own.school.rel = clamp(own.school.rel + o.ludus, -100, 100);
+    S.stats = S.stats || {};
+    if (o.id === 'kill') {
+      S.stats.kills = (S.stats.kills || 0) + 1;
+      if (o.vend) { S.rivals = S.rivals || {}; const r0 = S.rivals[foe.rv] || { w: 0, l: 0, last: '' }; r0.vend = S.week; S.rivals[foe.rv] = r0; }
+    } else if (o.id === 'spare') { S.stats.spares++; LM.note(S, 'mercy'); }
+    else if (o.id === 'ransom') S.stats.ransoms = (S.stats.ransoms || 0) + 1;
+    let joined = null;
+    if (o.id === 'spare' && o.join && rnd() < o.join) {
+      const g = JSON.parse(JSON.stringify(foe)); g.id = S.nextId++; g.act = 'rest'; g.en = 100; g.mo = 80; g.inj = 0; g.rv = null; delete g.lud; delete g.ludus; delete g.gh; g.color = null; g.rec = { w: 0, l: 0 }; g.fame = 0; delete g.story; LM.assignStory(g); S.glads.push(g); joined = g;
+    }
+    const head = o.id === 'kill' ? `You killed ${foe.name}.` : o.id === 'spare' ? `You spared ${foe.name}.` : o.id === 'ransom' ? `${own.name} paid ${o.gold} gold to keep ${foe.name} alive.` : `You played to the crowd over ${foe.name}.`;
+    lines.push(head, ...o.gain.filter((x) => !/he joins/.test(x)), ...o.cost.filter((x) => /Senate|Plebs|Merchants|regard|Vendetta/.test(x)));
+    if (rep && rep.notes) rep.notes.push(head);
+    return { id: o.id, fame: o.fame, gold: o.gold, hype: o.hype, joined, lines, head, name: foe.name };
+  };
+  /** old two-button API (kept for old callers and tests): 'mercy' spares, anything else showboats */
+  LM.mercy = (S, ev, rep, choice) => {
+    const o = ev.opps[0], r = LM.fate(S, ev, rep, choice === 'mercy' ? 'spare' : 'show', o); if (!r) return choice === 'mercy' ? { f: 0 } : { gd: 0 };
+    return choice === 'mercy' ? { f: r.fame, joined: r.joined } : { gd: r.gold };
   };
 
   // ---------- weekly economy ----------
@@ -1080,7 +1147,7 @@
       v: 1, name: o.name || 'Ludus Maximus', color: o.color || 0, seed: Math.floor(rnd() * 1e9).toString(36), week: 1, season: 1,
       gold: 250 + 150 * (perks.start || 0), fame: 0, laurels: o.laurels || 0, perks, rows: 2, plots: new Array(16).fill(null), glads: [], nextId: 1, items: [],
       fac: { sen: 0, mer: 0, ple: 0 }, sl: { fame: 0, wins: 0, losses: 0, tour: 0 }, runes: { k: D.RUNE_START.k.slice(), m: D.RUNE_START.m.slice() }, relics: [], relicOn: [], entries: {}, menu: 'barley', rivals: {}, contracts: [], legends: o.legends || [], bonds: {}, market: null, recruits: null, pendingEv: null,
-      stats: { fights: 0, wins: 0, losses: 0, tourneys: 0, spares: 0, weeks: 0, contracts: 0 }, flags: o.flags || {}, ascensions: o.ascensions || 0, sound: o.sound !== false,
+      stats: { fights: 0, wins: 0, losses: 0, tourneys: 0, spares: 0, kills: 0, ransoms: 0, weeks: 0, contracts: 0 }, flags: o.flags || {}, ascensions: o.ascensions || 0, sound: o.sound !== false,
     };
     S.plots[6] = { b: 'kitchen', l: 1 }; S.plots[5] = { b: 'barracks', l: 1 + Math.min(1, perks.start || 0) }; S.plots[2] = { b: 'palaestra', l: 1 };
     LM.fillContracts(S); LM.ensureShops(S); return S;

@@ -117,6 +117,7 @@
     let m = 1; const av = L.adv(u.style, t.style); m *= av > 0 ? 1.1 : av < 0 ? 0.92 : 1;
     if (av < 0 && u.tr.underdog) m *= 1 + u.tr.underdog;
     if (u.grudge && u.tr.grudge) m *= 1 + u.tr.grudge;
+    else if (u.grudge && u.side === 'B') m *= 1.08;   // FATE: a vendetta (you killed one of his school) makes the foe hit harder; player revenge stays trait-only
     if (u.s.frenzy) m *= 1 + u.s.frenzy.atk;
     if (u.fx.fury) m *= 1 + u.fx.fury * 0.1 * (1 - u.hp / u.maxhp);
     if (u.rm.has('laststand')) m *= 1 + 0.12 * (1 - u.hp / u.maxhp);
