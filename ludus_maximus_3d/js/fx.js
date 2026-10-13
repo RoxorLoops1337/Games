@@ -588,6 +588,7 @@ export function createFx(scene, opts = {}) {
   // Floating numbers / words. kind: 'dmg' | 'crit' | 'heal' | 'miss' | 'tech' | 'status' | 'thorn' | 'fire'
   const NK = { dmg: ['#fff3d6', 1.0, 1.35, 0], crit: ['#ffc83a', 1.75, 1.9, 1], heal: ['#7dffb4', 1.05, 1.1, 0], miss: ['#b8b8c4', 0.75, 0.9, 0], tech: ['#ffb061', 0.95, 1.2, 0], status: ['#c9a6ff', 0.8, 1.0, 0], thorn: ['#e88a8a', 0.8, 1.0, 0], fire: ['#ff8a3a', 0.9, 1.2, 0], block: ['#9fd0ff', 0.9, 1.0, 0] };
   fx.number = (pos, text, kind = 'dmg', o = {}) => {
+    if (typeof document !== 'undefined' && document.body && document.body.classList.contains('lx-photo-on')) return;   // photo mode: no new combat text over the shot
     const k = NK[kind] || NK.dmg; text = String(text).toUpperCase(); const c = rgb(o.color || k[0]), sc = (o.scale ?? 1) * k[1];
     let total = 0; for (const ch of text) total += GLYPH_W(ch); let x = -total / 2; const life = o.life ?? (kind === 'crit' ? 1.15 : 0.95); const t0 = uTime.value;
     const drift = (o.drift ?? (rnd() - 0.5) * 1.2) * sc, rise = k[2] * (o.rise ?? 1) * sc * 1.15;
