@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { TILE } from '../src/shared/config';
-import { FOLK_NAMES, FRIEND_AT, TRADES } from '../src/shared/data/folk';
+import { FOLK_NAMES, FRIEND_AT, hearts, MAX_HEARTS, REQUEST_COINS, REQUEST_FRIEND, TRADES } from '../src/shared/data/folk';
 import { onDawn, use } from '../src/shared/sim/cottage';
 import { Sim } from '../src/shared/sim/sim';
 import type { BuildE } from '../src/shared/sim/types';
@@ -46,4 +46,21 @@ test('one gift a day, a gift of their trade, and a friend gives a little more', 
     assert.equal(home.res!.v, 2, 'the next day another');
     for (let d = 0; d < FRIEND_AT; d++) { sim.s.day += 1; use(sim, a, home); }
     assert.ok(home.res!.v > FRIEND_AT, 'a friend by now');
+});
+
+test('a request: bring what they ask for, earn coins and friendship hearts', () => {
+    const { sim, a, homes } = setup('COT-3');
+    const home = homes[0];
+    onDawn(sim);
+    for (let i = 0; i < 40 && !home.res!.q; i++) { sim.s.day++; onDawn(sim); }
+    assert.ok(home.res!.q, 'a settled villager asks for something sooner or later');
+    const item = home.res!.q as keyof typeof a.inv, n = home.res!.qn!;
+    a.inv[item] = n;
+    const coins = a.coins, v = home.res!.v;
+    use(sim, a, home);
+    assert.equal(a.coins, coins + REQUEST_COINS);
+    assert.ok(home.res!.v >= v + REQUEST_FRIEND);
+    assert.ok(!home.res!.q, 'the request is closed');
+    assert.equal(hearts(0), 0);
+    assert.equal(hearts(100), MAX_HEARTS);
 });

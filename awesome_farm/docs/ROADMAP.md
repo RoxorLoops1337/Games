@@ -59,7 +59,7 @@ split big ones into slices (rules, art, polish).
 - [ ] B1 Cottages: the folk move in
   - [x] B1a Cottage building: a villager (name + trade) moves in at dawn, one trade gift a day with E, bigger gifts once a friend; no protocol change
   - [x] B1b Villagers walk about (a folk entity with art), name plates
-  - [ ] B1c Friendship hearts and requests
+  - [x] B1c Friendship hearts and requests
 - [ ] B2 Festival eve + the Lantern Chain
   - [x] B2a Festival eve (last day of each season): E on lanterns, longest chain of 4+ pays everyone at dawn; no protocol change
   - [x] B2b Festival look: lanterns lit for the festival burn bigger and golder at night, in 2D and 3D (bunting and a festival song still to do)
