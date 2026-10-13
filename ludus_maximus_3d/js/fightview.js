@@ -38,6 +38,11 @@ const readSpeed = () => { try { const v = +localStorage.getItem(SPEED_KEY); retu
 const STATUS_FX = new Set(['stun', 'slow', 'bleed', 'blind', 'taunt', 'root', 'burn']);
 const STATUS_LABEL = { expo: 'EXPOSED', stun: 'STUNNED', slow: 'SLOWED', bleed: 'BLEEDING', blind: 'BLINDED', taunt: 'TAUNT', netted: 'NETTED', guard: 'GUARD', frenzy: 'FRENZY', rage: 'RAGE', rally: 'RALLY', root: 'ROOTED', air: 'KNOCKED UP', spin: 'WHIRLING' };
 
+// audio variation: which weapon rang on whose armour (the audio engine round-robins when it gets nothing)
+const WEAPON_SND = { murmillo: 'sword', thraex: 'sword', retiarius: 'spear', hoplomachus: 'spear', dimachaerus: 'dagger' };
+const weaponOf = (u) => WEAPON_SND[u && u.style] || 'sword';
+const armorOf = (u) => { const a = u && u.g && u.g.gear && u.g.gear.armor; const r = a ? (typeof a.rar === 'number' ? a.rar : typeof a.r === 'number' ? a.r : 0) : -1; return r < 0 ? 'none' : ['leather', 'leather', 'bronze', 'mail', 'plate'][Math.min(4, r)]; };
+
 // keeps the kit button's label span (aria / styling) when the text changes
 function setBtnLabel(b, text) { const l = b.querySelector && b.querySelector('.lx-btn-label'); if (l) l.textContent = text; else b.textContent = text; }
 
@@ -314,7 +319,7 @@ export class FightView {
     if (!opts.noSplash && !this.replaying) { const a = F.units.filter((u) => u.side === 'A'), b = F.units.filter((u) => u.side === 'B'); setTimeout(() => { if (this.F === F && !this.done) vsIntro({ a, b, meta: F.meta || {}, theme: this.theme, league: opts.league != null && D().LEAGUES[opts.league] ? D().LEAGUES[opts.league].n : '', host: this.host, ms: 2700 }); }, 350); }   // BRACKET: stronger VS (busts, theme colour, event title)
     this.dir.setAspect(this.camera.aspect);
     this.dir.setShot('establishing', { dur: 3.2 }, 0); this.gateOpen = false;
-    this.audio.music.setMode('arena', { fade: 1.2 }); this.audio.music.setIntensity(0.15); this.audio.crowd(0.3);
+    this.audio.music.setMode(F.units.some((u) => u.beast && /nemean|elephant/.test(String(u.style || u.species || u.kind || ''))) ? 'boss' : F.units.some((u) => u.beast) ? 'beast' : 'arena', { fade: 1.2 }); this.audio.music.setIntensity(0.15); this.audio.crowd(0.3);
     this.audio.sfx('gate'); this.audio.sfx('horn');
     if (this.replaying) { this.phase = 'fight'; this.phaseT = 0; for (const f of this.fm.values()) { f.rx = f.u.x; f.ry = f.u.y; f.rig.root.position.set(f.u.x, 0, f.u.y); } this.arena.setGate(1); this.dir.setShot('follow', {}, 0); this.banner('REPLAY', 'info'); this.skipBtn.textContent = 'Exit'; } else this.skipBtn.textContent = 'Skip';
     this.buildReplayBar(); this.syncPauseBtn(); this.updateSpeedLabel();
@@ -612,6 +617,7 @@ export class FightView {
     const c = this.camera; c.position.set(pose.pos.x, pose.pos.y, pose.pos.z); c.lookAt(pose.look.x, pose.look.y, pose.look.z);
     if (Math.abs(c.fov - pose.fov) > 0.01) { c.fov = pose.fov; c.updateProjectionMatrix(); }
     this.feel.setBaseFov(pose.fov); this.feel.apply(c); c.updateMatrixWorld();
+    if (this.audio.setListener) this.audio.setListener({ pos: [pose.pos.x, pose.pos.y, pose.pos.z], yaw: Math.atan2(-(pose.look.x - pose.pos.x), -(pose.look.z - pose.pos.z)) }); // spatial sfx follow the camera
   }
 
   // ---------------------------------------------------------------- actors
@@ -744,7 +750,7 @@ export class FightView {
           this.shove(fd, dir, clamp((dst.s && dst.s.guard ? 0.8 + frac * 2 : (frac > 0.03 ? 1.0 + frac * 6.5 : 0.6) + (e.crit ? 1.6 : 0)) / (MASS[dst.style] || 1), 0, 7));
         }
         if (fs && frac > 0.08) fs.rig.animator.hitStop(0.04);
-        if (!(src && src.beast)) A.sfx(e.crit ? 'swordHitCrit' : (e.save || (dst.s && dst.s.guard)) ? 'shieldBlock' : 'swordHit', { pan: pan(dst) }); // BEAST: bites and claws have their own sounds
+        if (!(src && src.beast)) { A.sfx(e.crit ? 'swordHitCrit' : (e.save || (dst.s && dst.s.guard)) ? 'shieldBlock' : 'swordHit', { pan: pan(dst), weapon: src ? weaponOf(src) : undefined, armor: armorOf(dst), vel: clamp(0.3 + frac * 4, 0.3, 1), pos: [dst.x, 0, dst.y] }); if (e.crit && A.music && A.music.accent) A.music.accent('crit'); } // BEAST: bites and claws have their own sounds
         if (src && src.beast || dst.beast) BF.hitFx(this, e, src, dst, fd); // BEAST
         if (!dst.beast && Math.random() < 0.6) A.sfx('hurt', { voice: VOICE[dst.style] ?? 0, pan: pan(dst) });
         if (src && !src.beast && Math.random() < 0.25) A.sfx('grunt', { voice: VOICE[src.style] ?? 0, pan: pan(src) });
@@ -754,7 +760,7 @@ export class FightView {
         this.arena.setHype(clamp(F.hype / 100 + 0.25, 0, 1));
         break;
       }
-      case 'miss': if (dst) { this.num(dst, e.inv ? 'IMMUNE' : 'DODGE', 'miss'); fx.kickup(this.feet(dst), src ? this.dirOf(src, dst) : new THREE.Vector3(1, 0, 0), 4); A.sfx(e.inv ? 'metalClang' : 'miss', { pan: pan(dst) }); } break;
+      case 'miss': if (dst) { this.num(dst, e.inv ? 'IMMUNE' : 'DODGE', 'miss'); fx.kickup(this.feet(dst), src ? this.dirOf(src, dst) : new THREE.Vector3(1, 0, 0), 4); A.sfx(e.inv ? 'parry' : 'miss', { pan: pan(dst) }); } break;
       case 'whiff': if (src) A.sfx('swish', { pan: pan(src), gain: 0.5 }); break;
       case 'tech': if (src) { this.num(src, (D().TECHS[e.tech] || {}).n + '!', 'tech'); fx.ring(this.feet(src), '#f5ead2', 1.8); A.sfx('uiConfirm', { gain: 0.5 }); if (fs) { const an = fs.rig.animator; an.play('attack3', { speed: 1.9 }); } } break;
       case 'dash': if (src) { fx.kickup(this.feet(src), new THREE.Vector3(src.face, 0, 0), 8); A.sfx('dust', { pan: pan(src) }); A.sfx('footstep', { pitch: 0.9 }); fx.trail && fx.trail(fs ? fs.rig.root : this.chest(src), this.col(src)); } break;
@@ -797,7 +803,7 @@ export class FightView {
         const last = !F.units.some((u) => u.side === dst.side && !u.down && u !== dst);
         if (last && this.canExec(src, dst)) { this.execPending = { src, dst }; this.bump = 0.4; break; }   // staged as an execution once the fight view reaches endFight (startExec)
         fx.hit(this.chest(dst), src ? this.dirOf(src, dst) : new THREE.Vector3(1, 0, 0), { dmgFrac: 0.4, crit: true, flesh: this.gore.on }); fx.dust(this.feet(dst), 14); fx.debris && fx.debris(this.feet(dst), 4); fx.groundDecal(this.feet(dst), 'scuff', { size: 1.6 });
-        this.num(dst, 'DOWN', 'miss'); feel.impact(last ? 'finalKill' : 'kill', {}); if (last && this.post.zoomPunch) this.post.zoomPunch(0.028);
+        this.num(dst, 'DOWN', 'miss'); feel.impact(last ? 'finalKill' : 'kill', {}); if (A.music && A.music.accent) A.music.accent('down'); if (last && this.post.zoomPunch) this.post.zoomPunch(0.028);
         if (fd) { const an = fd.rig.animator, dd0 = src ? this.dirOf(src, dst) : null, ld = dd0 && fd.rig.localDir ? fd.rig.localDir(-dd0.x, -dd0.z) : 1; if (an.die) an.die(ld, { heavy: !!(fd.lastHit && (fd.lastHit.crit || fd.lastHit.frac > 0.3)) }); else an.play('death'); this.dropHandles(dst.id); fd.rig.flash(0.15, '#8a5530'); this.shove(fd, src ? this.dirOf(src, dst) : { x: 1, z: 0 }, 4 / (MASS[dst.style] || 1)); }
         if (dst.beast) BF.down(this, dst); else { A.sfx('deathCry', { voice: VOICE[dst.style] ?? 0, pan: pan(dst) }); this.after(350, () => A.sfx('deathThud', { pan: pan(dst) })); A.sfx('crowdGasp'); } this.bump = 0.4; // BEAST
         if (this.gore.on) { const lh = fd && fd.lastHit, dd = src ? this.dirOf(src, dst) : new THREE.Vector3(1, 0, 0); this.gore.onDown(dst.id, { last, crit: !!(lh && lh.crit) && !!src, frac: lh ? lh.frac : 0.15, dx: lh ? lh.dx : dd.x, dz: lh ? lh.dz : dd.z, big: this.t - (this.bigAoeT ?? -9) < 0.7, mine: dst.side === 'A', noSrc: !src }); }

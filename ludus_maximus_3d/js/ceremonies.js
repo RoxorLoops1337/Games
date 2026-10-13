@@ -86,7 +86,7 @@ export const seasonFinale = safe(async (ctx, fin) => {
   if (r.mvp) { let ph = null; const mg = S.glads.find((x) => x.name === r.mvp.name); try { ph = mg && ctx.portrait ? ctx.portrait(mg, 64) : null; } catch (e) { ph = null; } body.append(h('div', 'lx-cer-mvp', [ph ? h('div', 'lx-cer-mvpph', ph) : U.icon('star', 28), h('div', '', [h('small', '', 'Most valuable gladiator'), h('b', '', `${r.mvp.name}`), h('span', '', ` ${r.mvp.w} win${r.mvp.w === 1 ? '' : 's'}`)])])); }
   if (r.rival) body.append(h('div', 'lx-cer-riv', [h('small', '', 'Rivals of the year'), h('b', '', `${r.rival.a} and ${r.rival.b}`), h('span', '', ` +${r.rival.fame} fame`)]));
   body.append(h('div', 'lx-cer-next', `Season ${fin.season} awaits. The rivals have grown stronger.`));
-  try { ctx.audio.music.setMode('victory', { fade: 0.3 }); } catch (e) { /* locked */ }
+  try { ctx.audio.music.setMode('season', { fade: 0.3 }); } catch (e) { /* locked */ }
   const p = ctx.ask({ title: 'Season finale', body, actions: [{ label: `Onward to season ${fin.season}`, value: 'ok', variant: 'gold', icon: 'arena' }], dismiss: 'ok' });
   tag('lx-cer-scrim'); tag('lx-cer-fin');
   sfx(ctx, 'horn'); setTimeout(() => sfx(ctx, 'crowdRoar'), 700);
@@ -113,6 +113,6 @@ export const eulogy = safe(async (ctx, o) => {
     h('div', 'lx-cer-quote', `"${pickLine(kind, name, (lg.w || 0) + (lg.l || 0))}"`), o.body || null]);
   const p = ctx.ask({ title: kind === 'fallen' ? 'In memoriam' : 'Hall of Legends', body, actions: o.actions || [{ label: 'Farewell', value: 'ok', variant: 'gold' }], dismiss: o.dismiss === undefined ? 'ok' : o.dismiss, _cer: true });
   tag('lx-cer-scrim'); tag('lx-cer-eulscrim');
-  if (kind === 'fallen') { sfx(ctx, 'deathThud', { gain: 0.6 }); setTimeout(() => sfx(ctx, 'crowdGasp'), 300); } else { sfx(ctx, 'horn', { gain: 0.6 }); setTimeout(() => sfx(ctx, 'crowdChant', { gain: 0.8 }), 900); setTimeout(() => confetti({ n: 36, mode: 'rain', colors: ['#f2c14e', '#fff3c8', '#d9b27c'] }), 900); }
+  if (kind === 'fallen') { try { ctx.audio.music.setMode('elegy', { fade: 0.6 }); p.then(() => { try { ctx.audio.music.setMode('ludus', { fade: 2 }); } catch (e) { /* locked */ } }); } catch (e) { /* locked */ } sfx(ctx, 'deathThud', { gain: 0.6 }); setTimeout(() => sfx(ctx, 'crowdGasp'), 300); } else { sfx(ctx, 'horn', { gain: 0.6 }); setTimeout(() => sfx(ctx, 'crowdChant', { gain: 0.8 }), 900); setTimeout(() => confetti({ n: 36, mode: 'rain', colors: ['#f2c14e', '#fff3c8', '#d9b27c'] }), 900); }
   return p;
 });
