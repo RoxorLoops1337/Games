@@ -58,6 +58,29 @@ export class UI {
     this.death = el('div', 'death hidden', r); this.death.innerHTML = '<div><h1>You fell over</h1><p>Getting back up...</p></div>';
     this.status = el('div', 'status', r);
     this.touch();
+    // drag and drop: pick a slot up, move the mouse, let go over another slot
+    addEventListener('mousemove', (e) => {
+      if (!this.pick || !this.dragStart || !this.open || this.open === 'trade') { this.ghost && this.ghost.remove(); this.ghost = null; return; }
+      if (Math.hypot(e.clientX - this.dragStart.x, e.clientY - this.dragStart.y) < 8) return;
+      const src = this.pick[0] === 'inv' ? this.G.inv[this.pick[1]] : this.pick[0] === 'armor' ? this.G.armor[this.pick[1]] : this.G.chest && this.G.chest.inv[this.pick[1]];
+      if (!src) return;
+      if (!this.ghost) { this.ghost = el('img', 'dragghost', this.root); this.ghost.src = iconURL(src.id); }
+      this.ghost.style.left = e.clientX - 20 + 'px'; this.ghost.style.top = e.clientY - 20 + 'px';
+    });
+    addEventListener('mouseup', (e) => {
+      if (this.ghost) { this.ghost.remove(); this.ghost = null; }
+      if (!this.pick || !this.dragStart || !this.open || this.open === 'trade') return;
+      if (Math.hypot(e.clientX - this.dragStart.x, e.clientY - this.dragStart.y) < 8) return;
+      const t = document.elementFromPoint(e.clientX, e.clientY);
+      const slot = t && t.closest && t.closest('.slot');
+      this.dragStart = null;
+      if (!slot || !slot.dataset.k) return;
+      const [pk, pi, half] = this.pick; this.pick = null;
+      const src = pk === 'inv' ? this.G.inv[pi] : pk === 'armor' ? this.G.armor[pi] : this.G.chest && this.G.chest.inv[pi];
+      const n = half && src && src.n > 1 ? Math.ceil(src.n / 2) : undefined;
+      if (!(pk === slot.dataset.k && pi === +slot.dataset.i)) this.G.send({ t: 'move', from: [pk, pi], to: [slot.dataset.k, +slot.dataset.i], n });
+      this.renderPanel();
+    });
   }
   slotEl(parent) {
     const s = el('div', 'slot', parent);
@@ -163,14 +186,14 @@ export class UI {
     if (this.open === 'chest' && G.chest) {
       el('h3', '', left).textContent = 'Chest';
       const grid = el('div', 'grid chest', left);
-      G.chest.inv.forEach((st, i) => { const s = this.slotEl(grid); this.fill(s, st); s.onmousedown = (e) => this.slotClick(e, 'chest', i); s.onmouseenter = () => this.showTip(st); s.onmouseleave = () => this.tip.classList.remove('on'); });
+      G.chest.inv.forEach((st, i) => { const s = this.slotEl(grid); s.dataset.k = 'chest'; s.dataset.i = i; this.fill(s, st); s.onmousedown = (e) => this.slotClick(e, 'chest', i); s.onmouseenter = () => this.showTip(st); s.onmouseleave = () => this.tip.classList.remove('on'); });
     }
     el('h3', '', left).textContent = 'Backpack';
     const arm = el('div', 'armor', left);
-    ['Head', 'Body', 'Feet'].forEach((n, i) => { const s = this.slotEl(arm); s.classList.add('arm'); s.dataset.ph = n; this.fill(s, G.armor[i]); s.onmousedown = (e) => this.slotClick(e, 'armor', i); s.onmouseenter = () => this.showTip(G.armor[i]); s.onmouseleave = () => this.tip.classList.remove('on'); });
+    ['Head', 'Body', 'Feet'].forEach((n, i) => { const s = this.slotEl(arm); s.classList.add('arm'); s.dataset.ph = n; s.dataset.k = 'armor'; s.dataset.i = i; this.fill(s, G.armor[i]); s.onmousedown = (e) => this.slotClick(e, 'armor', i); s.onmouseenter = () => this.showTip(G.armor[i]); s.onmouseleave = () => this.tip.classList.remove('on'); });
     const sum = el('div', 'armsum', arm); sum.textContent = 'Armor ' + G.armor.reduce((a, s) => a + (s ? ITEMS[s.id].armor : 0), 0);
     const grid = el('div', 'grid', left);
-    for (let i = 0; i < PLAYER.inv; i++) { const s = this.slotEl(grid); this.fill(s, G.inv[i]); if (i < 10) s.classList.add('hot'); if (this.pick && this.pick[0] === 'inv' && this.pick[1] === i) s.classList.add('pick'); s.onmousedown = (e) => this.slotClick(e, 'inv', i); s.onmouseenter = () => this.showTip(G.inv[i]); s.onmouseleave = () => this.tip.classList.remove('on'); }
+    for (let i = 0; i < PLAYER.inv; i++) { const s = this.slotEl(grid); s.dataset.k = 'inv'; s.dataset.i = i; this.fill(s, G.inv[i]); if (i < 10) s.classList.add('hot'); if (this.pick && this.pick[0] === 'inv' && this.pick[1] === i) s.classList.add('pick'); s.onmousedown = (e) => this.slotClick(e, 'inv', i); s.onmouseenter = () => this.showTip(G.inv[i]); s.onmouseleave = () => this.tip.classList.remove('on'); }
     const hint = el('p', 'hint', left); hint.textContent = 'Click a slot, then another to move or swap. Right click moves half. Q drops the held item.';
     // crafting
     const right = el('div', 'col craft', p);
@@ -221,6 +244,8 @@ export class UI {
 
   slotClick(e, kind, i) {
     e.preventDefault(); e.stopPropagation();
+    if (e.currentTarget && e.currentTarget.dataset) { e.currentTarget.dataset.k = kind; e.currentTarget.dataset.i = i; }
+    this.dragStart = { x: e.clientX, y: e.clientY };
     const G = this.G;
     if (!this.open) return;
     const stackOf = (k, idx) => (k === 'inv' ? G.inv[idx] : k === 'armor' ? G.armor[idx] : G.chest && G.chest.inv[idx]);
