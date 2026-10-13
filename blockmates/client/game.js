@@ -54,10 +54,15 @@ export class Game {
   // ------------------------------------------------------------ connection
   async join(net, profile) {
     this.reset();
+    this.leaving = false; this.retries = 0;
     this.net = net; this.profile = profile;
     this.status = 'Connecting...';
     net.onmsg = (m) => this.onmsg(m);
-    net.onclose = () => { if (this.joined) { this.status = 'Disconnected.'; this.leave(true, 'Connection lost.'); } };
+    net.onclose = () => {
+      if (!this.joined || this.leaving) return;
+      if (net.url && (this.retries || 0) < 12) { this.retry(profile, net.url); return; } // online: try to get back in
+      this.status = 'Disconnected.'; this.leave(true, 'Connection lost.');
+    };
     await net.open();
     net.send({ t: 'join', name: profile.name, token: profile.token, look: profile.look, password: profile.password || '' });
     this.pinger = setInterval(() => net.send({ t: 'ping', c: performance.now() }), 2000);
@@ -66,9 +71,37 @@ export class Game {
     requestAnimationFrame((n) => this.frame(n));
     this.sound.start();
   }
+  // the same name and secret come back to the same character; the server may need a moment to drop the old socket
+  async retry(profile, url) {
+    if (this.retrying || this.leaving) return;
+    this.retrying = true;
+    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+    const { WSNet } = await import('./net.js');
+    while (!this.leaving && this.retries < 12) {
+      this.retries++;
+      this.status = `Connection lost. Reconnecting (${this.retries}/12)...`;
+      this.joined = false; clearInterval(this.pinger);
+      const old = this.net; this.net = null; try { old && old.close(); } catch { /* closed */ }
+      await sleep(1500);
+      if (this.leaving) break;
+      try {
+        const net = new WSNet(url);
+        net.onmsg = (m) => this.onmsg(m);
+        net.onclose = () => { if (!this.leaving && this.net === net) this.retry(profile, url); };
+        await net.open();
+        this.net = net;
+        net.send({ t: 'join', name: profile.name, token: profile.token, look: profile.look, password: profile.password || '' });
+        this.pinger = setInterval(() => net.send({ t: 'ping', c: performance.now() }), 2000);
+        for (let i = 0; i < 16 && !this.joined && !this.leaving; i++) await sleep(250);
+        if (this.joined) { this.retrying = false; return; }
+      } catch { /* try again */ }
+    }
+    this.retrying = false;
+    if (!this.leaving) this.leave(true, 'Could not reconnect.');
+  }
   send(o) { if (this.net) this.net.send(o); }
   leave(silent, msg) {
-    clearInterval(this.pinger);
+    this.leaving = true; clearInterval(this.pinger);
     const net = this.net; this.net = null;
     if (net && !silent) { try { net.close(); } catch { /* closed */ } }
     this.running = false; this.joined = false;
@@ -82,7 +115,7 @@ export class Game {
   onmsg(m) {
     switch (m.t) {
       case 'welcome': {
-        this.myId = m.id; this.worldName = m.name; this.time = m.time; this.day = m.day; this.time0 = performance.now();
+        this.retries = 0; this.myId = m.id; this.worldName = m.name; this.time = m.time; this.day = m.day; this.time0 = performance.now();
         this.me.id = m.id; this.me.x = m.you.x; this.me.y = m.you.y; this.me.look = m.you.look; this.me.name = this.profile.name;
         this.hp = m.you.hp; this.food = m.you.food; this.op = m.op;
         for (const p of m.players) this.addPlayer(p);
@@ -94,7 +127,7 @@ export class Game {
         this.waystones = m.waystones;
         break;
       }
-      case 'deny': this.leave(true, m.why); break;
+      case 'deny': if (this.retrying) break; this.leave(true, m.why); break;
       case 'c': this.cw.setChunk(m.cx, m.d, m.m); break;
       case 'uc': this.cw.dropChunk(m.cx); break;
       case 'b': {
@@ -377,7 +410,7 @@ export class Game {
     this.t += dt;
     this.acc += dt;
     while (this.acc >= DT) { this.acc -= DT; this.fixedStep(); }
-    if (!this.joined) { this.r.resize(); return; }
+    if (!this.joined) { this.r.resize(); this.ui.status.textContent = this.status; return; }
     this.update(dt);
     this.r.frame(this);
     this.frames++; this.fpsT += dt;

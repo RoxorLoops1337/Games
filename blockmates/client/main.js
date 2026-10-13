@@ -120,4 +120,5 @@ game.onleave = (msg) => {
   menuRun = true; lastT = performance.now(); requestAnimationFrame(menuLoop);
   $('err').textContent = msg || '';
 };
-(async () => { try { const s = await idbStore.load(); $('soloinfo').textContent = s ? `Saved world found: day ${s.state.day}. Your progress continues.` : 'A fresh world is made for you on this device.'; } catch { $('soloinfo').textContent = 'Saving may be unavailable in this browser mode.'; } })();
+$('newworld').onclick = async (e) => { e.preventDefault(); if (!confirm('Delete your saved solo world and start a new one?')) return; await idbStore.wipe(); profile.soloSeed = 1 + Math.floor(Math.random() * 2e9); save(); $('soloinfo').textContent = 'A fresh world is made for you on this device.'; $('newworld').style.display = 'none'; };
+(async () => { try { const s = await idbStore.load(); if (s) $('newworld').style.display = 'inline'; $('soloinfo').textContent = s ? `Saved world found: day ${s.state.day}. Your progress continues.` : 'A fresh world is made for you on this device.'; } catch { $('soloinfo').textContent = 'Saving may be unavailable in this browser mode.'; } })();
