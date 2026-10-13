@@ -164,8 +164,8 @@ test('night spawns hostile creatures and daytime passive ones', () => {
   const w = new World({ seed: 5 });
   const c = client(w, 'Hal'); run(w, 30);
   w.time = 600 * 0.7;
-  run(w, 30 * 40);
-  const types = new Set([...w.mobs.values()].map((m) => m.type));
+  const types = new Set();
+  for (let sec = 0; sec < 40; sec++) { run(w, 30); c.p().hp = 20; for (const m of w.mobs.values()) types.add(m.type); }
   assert.ok(types.has('gloomling'), 'night spawn: ' + [...types]);
   void c;
 });
@@ -341,6 +341,26 @@ test('fishing: cast into water, wait, catch; breaks off when you walk away', () 
   assert.ok(got >= 1, 'caught something');
   p.x += 8; run(w, 3);
   assert.equal(p.fishing, null, 'line lost when walking off');
+});
+
+test('worlds come with shrines, ruins and buried loot that survives a save', () => {
+  const w = new World({ seed: 1337 });
+  for (let cx = 0; cx < W / CHUNK; cx++) w.chunk(cx);
+  const kinds = {};
+  for (const [, m] of w.meta) kinds[m.k] = (kinds[m.k] || 0) + 1;
+  assert.ok(kinds.waystone >= 3, 'shrines ' + JSON.stringify(kinds));
+  assert.ok(kinds.chest >= 10, 'chests ' + JSON.stringify(kinds));
+  // a shrine stands near the spawn point
+  const near = [...w.meta].some(([k, m]) => m.k === 'waystone' && Math.abs(+k.split(',')[0] - w.spawn.x) < 20);
+  assert.ok(near, 'shrine near spawn');
+  for (const [k, m] of w.meta) if (m.k === 'chest') { const [x, y] = k.split(',').map(Number); assert.equal(w.fgAt(x, y), B.chest); assert.ok(m.inv.some(Boolean), 'loot at ' + k); }
+  // chunks with structures are saved; taking loot is remembered
+  const [k0, chest] = [...w.meta].find(([, m]) => m.k === 'chest');
+  chest.inv.fill(null);
+  const saved = JSON.parse(JSON.stringify({ s: w.exportState(), c: w.allModifiedChunks() }));
+  const w2 = new World({ seed: 1 }); w2.importState(saved.s); for (const [cx, b] of Object.entries(saved.c)) w2.importChunk(+cx, b);
+  w2.chunk(Math.floor(+k0.split(',')[0] / CHUNK));
+  assert.ok(w2.metaGet(...k0.split(',').map(Number)).inv.every((q) => !q), 'looted chest stays empty');
 });
 
 console.log(`\n${passed} passed`);

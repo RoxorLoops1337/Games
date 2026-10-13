@@ -13,6 +13,13 @@ import { spawnTick, updateMob, damageMob, spawnMob } from './mobs.js';
 import { spawnNpc, updateNpc, setJob, JOBS, MAX_BUDDIES } from './npcs.js';
 
 const NC = W / CHUNK;
+// [item, min, max, chance] per tier: 0 ruins, 1 shallow, 2 middle, 3 deep
+const LOOT = [
+  [['torch', 3, 8, 1], ['bread', 2, 4, 0.8], ['planks', 6, 14, 0.8], ['coal', 2, 6, 0.7], ['apple', 1, 3, 0.6], ['seeds', 2, 5, 0.6], ['copper_ingot', 1, 3, 0.35], ['wood_sword', 1, 1, 0.3], ['leather_helmet', 1, 1, 0.2]],
+  [['torch', 4, 10, 1], ['coal', 3, 8, 0.8], ['copper_ingot', 2, 5, 0.7], ['tin_ingot', 2, 4, 0.5], ['cooked_meat', 1, 3, 0.6], ['flint', 2, 5, 0.5], ['arrow', 6, 14, 0.4], ['bow', 1, 1, 0.25], ['iron_ingot', 1, 3, 0.35], ['leather_chest', 1, 1, 0.2]],
+  [['iron_ingot', 3, 7, 0.8], ['gold_ingot', 1, 3, 0.5], ['crystal_shard', 1, 3, 0.5], ['glowshard', 1, 2, 0.5], ['cooked_meat', 2, 4, 0.7], ['iron_pickaxe', 1, 1, 0.12], ['copper_chest', 1, 1, 0.2], ['iron_helmet', 1, 1, 0.15], ['fishing_rod', 1, 1, 0.3]],
+  [['gold_ingot', 3, 6, 0.8], ['titanium_ingot', 1, 3, 0.55], ['sunstone', 1, 3, 0.5], ['glowshard', 2, 4, 0.7], ['golden_apple', 1, 2, 0.5], ['crystal_shard', 2, 4, 0.7], ['buddy_bell', 1, 1, 0.2], ['titanium_helmet', 1, 1, 0.1], ['iron_chest', 1, 1, 0.2]],
+];
 const SLOTS = PLAYER.inv;
 const dist2 = (ax, ay, bx, by) => (ax - bx) * (ax - bx) + (ay - by) * (ay - by);
 const r2 = (v) => Math.round(v * 100) / 100;
@@ -70,8 +77,78 @@ export class World {
       const g = this.terrain.chunk(cx);
       c = { fg: g.fg, bg: g.bg, liq: g.liq, mod: false, dirty: false };
       this.chunks.set(cx, c);
+      this.populate(cx, c);
     }
     return c;
+  }
+
+  // shrines, ruins and buried chests: written into a fresh chunk once. The chunk is then saved like an edited one, so
+  // loot taken from a chest never comes back after a restart.
+  populate(cx, c) {
+    const x0 = cx * CHUNK, T = this.terrain;
+    const set = (x, y, id) => { c.fg[(x - x0) * H + y] = id; };
+    const bgset = (x, y, id) => { c.bg[(x - x0) * H + y] = id; };
+    const get = (x, y) => c.fg[(x - x0) * H + y];
+    let any = false;
+    const spawnChunk = Math.floor(this.spawn.x / CHUNK);
+    const wantShrine = cx % 8 === 3 || cx === spawnChunk;
+    const shrineX = cx === spawnChunk ? Math.min(x0 + 27, Math.max(x0 + 4, Math.floor(this.spawn.x) + 7 > x0 + 27 ? Math.floor(this.spawn.x) - 7 : Math.floor(this.spawn.x) + 7)) : x0 + 16;
+    const dry = (x) => T.surface(x) < SEA - 2;
+    if (wantShrine && dry(shrineX) && cx > 1 && cx < NC - 2) {
+      let top = 1e9;
+      for (let x = shrineX - 3; x <= shrineX + 3; x++) top = Math.min(top, T.surface(x));
+      for (let x = shrineX - 3; x <= shrineX + 3; x++) {
+        for (let y = top - 7; y < top; y++) set(x, y, 0);
+        for (let y = top; y <= T.surface(x); y++) set(x, y, B.stone_brick);
+        set(x, top, B.stone_brick);
+      }
+      set(shrineX - 3, top - 1, B.stone_brick); set(shrineX + 3, top - 1, B.stone_brick);
+      set(shrineX, top - 1, B.waystone);
+      set(shrineX - 2, top - 1, B.torch); set(shrineX + 2, top - 1, B.torch);
+      this.meta.set(shrineX + ',' + (top - 1), { k: 'waystone', name: 'Shrine ' + (cx + 1), owner: 'the world' });
+      any = true;
+    } else if (T.biomeAt(x0 + 16) !== 'desert' && hash2(this.seed, cx, 71) < 0.4) {
+      // a small ruin: brick floor, walls, roof, planks wall, a chest and a torch
+      const rx = x0 + 6 + Math.floor(hash2(this.seed, cx, 72) * 14);
+      if (dry(rx) && dry(rx + 6)) {
+        let top = 1e9; for (let x = rx; x <= rx + 6; x++) top = Math.min(top, T.surface(x));
+        for (let x = rx; x <= rx + 6; x++) {
+          for (let y = top - 6; y < top; y++) set(x, y, 0);
+          for (let y = top; y <= T.surface(x); y++) set(x, y, B.stone_brick);
+        }
+        for (let y = top - 4; y < top; y++) { set(rx, y, B.stone_brick); set(rx + 6, y, B.stone_brick); }
+        for (let x = rx; x <= rx + 6; x++) set(x, top - 5, B.stone_brick);
+        set(rx, top - 1, 0); set(rx, top - 2, 0); // a doorway on the left
+        for (let x = rx + 1; x <= rx + 5; x++) for (let y = top - 4; y < top; y++) bgset(x, y, B.planks);
+        set(rx + 3, top - 1, B.chest); this.fillChest(rx + 3, top - 1, 0);
+        set(rx + 5, top - 1, B.torch); set(rx + 1, top - 3, B.cobweb);
+        any = true;
+      }
+    }
+    // buried chests in caves
+    for (let k = 0; k < 3; k++) {
+      for (let tries = 0; tries < 12; tries++) {
+        const x = x0 + 2 + Math.floor(hash2(this.seed, cx * 7 + k, 80 + tries) * 28), y = SEA + 22 + Math.floor(hash2(this.seed, cx * 7 + k, 120 + tries) * (H - SEA - 40));
+        if (get(x, y) === 0 && get(x, y + 1) !== 0 && BLOCKS[get(x, y + 1)].solid && !c.liq[(x - x0) * H + y] && (k === 0 || hash2(this.seed, cx, 90 + k) < 0.5)) {
+          set(x, y, B.chest); this.fillChest(x, y, y > SEA + 100 ? 3 : y > SEA + 55 ? 2 : 1);
+          any = true; break;
+        }
+      }
+    }
+    if (any) c.mod = c.dirty = true;
+  }
+  fillChest(x, y, tier) {
+    const slots = new Array(24).fill(null);
+    const table = LOOT[tier];
+    for (const [name, lo, hi, ch] of table) {
+      if (this.rng() > ch) continue;
+      const cnt = lo + Math.floor(this.rng() * (hi - lo + 1));
+      const def = ITEMS[I[name]];
+      let i = Math.floor(this.rng() * 24);
+      while (slots[i]) i = (i + 1) % 24;
+      slots[i] = { id: I[name], n: cnt, ...(def.dur ? { d: def.dur } : {}) };
+    }
+    this.meta.set(x + ',' + y, { k: 'chest', inv: slots });
   }
   fgAt(x, y) {
     if (x < 0 || x >= W || y >= H) return B.bedrock;

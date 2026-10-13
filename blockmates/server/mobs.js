@@ -24,7 +24,7 @@ export function spawnMob(world, type, x, y) {
 function findSurfaceSpawn(world, x) {
   const s = world.terrain.surface(x);
   if (s >= SEA - 1) return null;
-  if (world.fgAt(x, s - 1) || world.fgAt(x, s - 2)) return null;
+  if (world.solidAt(x, s - 1) || world.solidAt(x, s - 2) || world.liqAt(x, s - 1)) return null;
   return s;
 }
 
