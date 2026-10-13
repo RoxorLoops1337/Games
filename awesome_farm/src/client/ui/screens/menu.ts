@@ -203,7 +203,7 @@ export class MenuScreen implements Screen {
         label(L, IN_Y + 122, 'Music volume');
         pane.add(this.win.put(slider(s, 0, 0, 200, settings.music, (v) => { settings.music = v; saveSettings(); }, PAL.plum).root, L + colW - 204, IN_Y + 132));
         this.heading(L, IN_Y + 168, colW, 'Screen');
-        toggle(L, IN_Y + 204, 'Shake and vibration', undefined, () => settings.shake, (v) => { settings.shake = v; });
+        toggle(L, IN_Y + 204, 'Shake, flashes, vibration', 'Off: no shake, slow motion, flashes or buzz.', () => settings.shake, (v) => { settings.shake = v; });
         toggle(L, IN_Y + 244, 'Show FPS', undefined, () => settings.fps, (v) => { settings.fps = v; });
         // the view: 2D (the classic) or 3D (beta); the same world, menus and keys (world/view3d-bridge.ts). Live, or one reload back into this world.
         const farm = this.ctx.farm;
@@ -232,7 +232,8 @@ export class MenuScreen implements Screen {
         toggle(Rx, IN_Y + 38, 'Tips', deviceText('Short hints now and then. The guide (H) keeps them.', 'Short hints now and then. How to play keeps them.'), () => tutorialApi.tipsOn(), (v) => { tutorialApi.setTips(v); });
         label(Rx, IN_Y + 98, 'Tutorial', 'Walk through the starting steps again.');
         pane.button(Rx + colW - 70, IN_Y + 108, 140, ROW_H, 'Replay tutorial', () => { tutorialApi.replay(); this.ctx.close(); }, { style: STYLES.lime, size: 14 });
-        this.heading(Rx, IN_Y + 176, colW, 'Keyboard');
+        toggle(Rx, IN_Y + 142, 'Larger text', 'Bigger letters in windows. Reopen a window to see it.', () => settings.bigText, (v) => { settings.bigText = v; });
+        this.heading(Rx, IN_Y + 188, colW, 'Keyboard');
         const kbNote = pane.text('', Rx, IN_Y + 235, fit(11), PAL.pebble, { bold: false, wrap: colW - 160 });
         const kbLabel = () => settings.keyboard === 'auto' ? 'Auto' : settings.keyboard.toUpperCase();
         const showKb = () => kbNote.setText(`${settings.keyboard === 'auto' ? `Detected ${detectedName()}` : 'Set by you'}  ·  move with ${moveKeys(' ')}`);

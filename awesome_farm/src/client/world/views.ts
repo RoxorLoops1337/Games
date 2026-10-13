@@ -28,6 +28,8 @@ export interface EntView {
     lunge?: { t: number; dur: number; dx: number; dy: number };
     hop?: { t: number; dur: number };      // creature: a hop for joy
     hgShown?: number;      // a fire at dusk: how full its hearth ring is drawn (it glides to the world's value)
+    gauge?: Img[];         // a chest with something in it: how full it is, a little bar under it
+    gaugeKey?: string;
     tag?: Img[];           // a sorted chest: the plate and icon it wears
     wicon?: Img;
     bub?: Img;
@@ -35,6 +37,7 @@ export interface EntView {
     cargo?: Img;
     wiconT?: number;
     stars?: Img[];
+    plate?: Phaser.GameObjects.Text;
     shine?: Img;
     link?: Phaser.GameObjects.Graphics;    // tunnel entrance: the dotted line to its exit
     linkKey?: string;
@@ -49,8 +52,9 @@ export interface EntView {
 /** Destroy everything a view owns; with `keepSprite` the sprite itself is left for a parting animation. */
 export function destroyView (v: EntView, keepSprite = false) {
     if (!keepSprite) v.sprite.destroy();
-    v.shadow?.destroy(); v.crop?.destroy(); v.blades?.destroy(); v.sky?.destroy(); v.glow?.destroy(); v.mark?.destroy(); v.pod?.destroy(); v.wicon?.destroy(); v.bub?.destroy(); v.bubIcon?.destroy(); v.cargo?.destroy(); v.stars?.forEach((i) => i.destroy()); v.shine?.destroy(); v.link?.destroy();
+    v.shadow?.destroy(); v.crop?.destroy(); v.blades?.destroy(); v.sky?.destroy(); v.glow?.destroy(); v.mark?.destroy(); v.pod?.destroy(); v.wicon?.destroy(); v.bub?.destroy(); v.bubIcon?.destroy(); v.cargo?.destroy(); v.stars?.forEach((i) => i.destroy()); v.shine?.destroy(); v.plate?.destroy(); v.link?.destroy();
     v.tag?.forEach((i) => i.destroy());
+    v.gauge?.forEach((i) => i.destroy());
     for (const i of v.items ?? []) i?.destroy();
     v.hand?.destroy(); v.pwIcon?.destroy();
     v.dishes?.forEach((i) => i.destroy());

@@ -22,8 +22,8 @@ test('recipes reference real items, valid stations and unlock tokens', () => {
         assert.ok(ITEMS[r.out], `${r.id}: unknown output`);
         for (const id of Object.keys(r.in)) assert.ok(id === 'coin' || ITEMS[id as ItemId], `${r.id}: unknown input ${id}`);
         if (r.req) assert.ok(tokens.has(r.req), `${r.id}: token "${r.req}" is granted by no skill`);
-        assert.ok(r.station in { hand: 1, workbench: 1, anvil: 1, kitchen: 1, loom: 1, alchemy: 1, altar: 1, riftforge: 1, furnace: 1, sawmill: 1, millstone: 1, assembler: 1 }, `${r.id}: bad station`);
-        if (['furnace', 'sawmill', 'millstone', 'assembler'].includes(r.station)) assert.ok(r.time > 0, `${r.id}: processors need a time`);
+        assert.ok(r.station in { hand: 1, workbench: 1, anvil: 1, kitchen: 1, loom: 1, alchemy: 1, altar: 1, riftforge: 1, furnace: 1, sawmill: 1, millstone: 1, assembler: 1, pond: 1, hive: 1 }, `${r.id}: bad station`);
+        if (['furnace', 'sawmill', 'millstone', 'assembler', 'pond', 'hive'].includes(r.station)) assert.ok(r.time > 0, `${r.id}: processors need a time`);
     }
 });
 

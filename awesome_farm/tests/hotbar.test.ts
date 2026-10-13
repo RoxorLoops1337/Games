@@ -80,3 +80,19 @@ test('your hotbar survives a save and a load, and a corrupt one is tidied', () =
     assert.equal(bar.length, HOT_SLOTS);
     assert.deepEqual(bar.slice(0, 3), ['wood', null, null]);
 });
+
+test('a pinned food that runs out is replaced by the next one you carry; gear and empty stock are left alone', async () => {
+    const { Sim } = await import('../src/shared/sim/sim');
+    const { hotbarOf } = await import('../src/shared/sim/hotbar');
+    const sim = Sim.create('refill', 'r');
+    const p = sim.join('a', 'A')!;
+    p.inv = { berry: 2 };
+    sim.command('a', { t: 'hot', slot: 2, item: 'berry' });
+    assert.equal(hotbarOf(p)[2], 'berry');
+    p.inv = { carrot: 4 };                                    // the berries are used up, and some carrots are picked
+    for (let i = 0; i < 30; i++) sim.step(0.05);
+    assert.equal(hotbarOf(p)[2], 'carrot', 'the carrots stand in');
+    p.inv = {};
+    for (let i = 0; i < 30; i++) sim.step(0.05);
+    assert.equal(hotbarOf(p)[2], 'carrot', 'nothing to swap in: the slot stays as it was');
+});

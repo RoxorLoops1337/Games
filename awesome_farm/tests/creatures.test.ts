@@ -2,11 +2,12 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { TILE } from '../src/shared/config';
-import { AWAKENINGS, BREED_SECS, breedOffspring, catchChance, PET_NAMES, Pet, petAtk, petMaxHp, pickSpecies, SPECIES, SPECIES_LIST, spOf, starsOf, workCycle } from '../src/shared/data/creatures';
+import { onStrike } from '../src/shared/sim/signature';
+import { AWAKENINGS, SIGNATURE_EVERY, BREED_SECS, breedOffspring, catchChance, PET_NAMES, Pet, petAtk, petMaxHp, pickSpecies, SPECIES, SPECIES_LIST, spOf, starsOf, workCycle } from '../src/shared/data/creatures';
 import { SPROUTS } from '../src/shared/data/look';
 import { GIVERS } from '../src/shared/data/sidequests';
 import { Rng } from '../src/shared/rng';
-import { breedTime, cmdPet, petsOf, rosterCap, workSlots } from '../src/shared/sim/creatures';
+import { breedTime, cmdPet, offShift, petsOf, rosterCap, workSlots } from '../src/shared/sim/creatures';
 import { Sim } from '../src/shared/sim/sim';
 import { countOf } from '../src/shared/sim/stats';
 import type { BuildE, CritE, MobE, NodeE } from '../src/shared/sim/types';
@@ -387,4 +388,45 @@ test('awakening: levels and late-game goods buy stars, stars make a creature str
     cmdPet(sim, p, { t: 'pet', op: 'awaken', pet: b.id });
     assert.equal(starsOf(b), 0);
     assert.equal(countOf(p, 'treat'), 6);
+});
+
+test('a companion fires its signature move on every fourth strike', () => {
+    const { sim, p } = yard('SIG-1');
+    const c = sim.add<CritE>({ k: 'crit', sp: 'frostpup', x: p.x, y: p.y, vx: 0, vy: 0, t: 0, lv: 3, mode: 1, owner: p.id });
+    const m = sim.add<MobE>({ k: 'mob', kind: 'skeleton', x: p.x + 20, y: p.y, hp: 999, mhp: 999, vx: 0, vy: 0, t: 0, hopT: 0, knockT: 0 });
+    for (let i = 0; i < SIGNATURE_EVERY - 1; i++) assert.equal(onStrike(sim, c, p, m, 1), false);
+    assert.equal(onStrike(sim, c, p, m, 1), true);
+    assert.ok((m.stun ?? 0) > 1, 'frost freezes the target');
+    assert.equal(c.sg, 0, 'the count starts over');
+});
+
+test('a worker on the night shift rests by day, and the shift button cycles day, night, round the clock', () => {
+    const { sim, p } = yard('SHIFT-1');
+    const pt = pet('fuzzle');
+    p.pets = [pt];
+    cmdPet(sim, p, { t: 'pet', op: 'shift', pet: pt.id });
+    assert.equal(pt.sh, 'day');
+    cmdPet(sim, p, { t: 'pet', op: 'shift', pet: pt.id });
+    assert.equal(pt.sh, 'night');
+    sim.s.night = false;
+    assert.equal(offShift(sim, pt), true, 'daytime is off shift for a night worker');
+    sim.s.night = true;
+    assert.equal(offShift(sim, pt), false);
+    cmdPet(sim, p, { t: 'pet', op: 'shift', pet: pt.id });
+    assert.equal(pt.sh, undefined);
+    sim.s.night = false;
+    assert.equal(offShift(sim, pt), false, 'no shift: always on');
+});
+
+test('a companion carries its name for the plate over its head, and a rename shows at once', () => {
+    const { sim, p } = yard('PLATE-1');
+    const pt = pet('hopper', { name: 'Biscuit' });
+    p.pets = [pt];
+    p.comp = pt.id;
+    run(sim, 1);
+    const comp = crits(sim).find((c) => c.mode === 1 && c.pid === pt.id);
+    assert.equal(comp?.nm, 'Biscuit');
+    cmdPet(sim, p, { t: 'pet', op: 'rename', pet: pt.id, name: 'Waffle' });
+    run(sim, 1);
+    assert.equal(comp?.nm, 'Waffle');
 });

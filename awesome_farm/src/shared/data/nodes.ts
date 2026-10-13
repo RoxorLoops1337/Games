@@ -44,7 +44,7 @@ export const TITAN = {
 } as const;
 
 export const NODES: Record<NodeKind, NodeDef> = {
-    tree:     { name: 'Tree', hp: 3, xp: 2, group: 'wood', tex: (b) => (b === 'snowcap' ? 'pine' : 'tree'), hit: 'hitWood', brk: 'breakTree', drops: [['wood', 2, 3], ['seed_pumpkin', 1, 1, 0.08]], tall: true },
+    tree:     { name: 'Tree', hp: 3, xp: 2, group: 'wood', tex: (b) => (b === 'snowcap' ? 'pine' : 'tree'), hit: 'hitWood', brk: 'breakTree', drops: [['wood', 2, 3], ['seed_pumpkin', 1, 1, 0.08], ['apple', 1, 2, 0.14]], tall: true },
     rock:     { name: 'Boulder', hp: 4, xp: 3, group: 'stone', tex: () => 'rock', hit: 'hitStone', brk: 'breakRock', drops: [['stone', 2, 3], ['coal', 1, 1, 0.25]] },
     iron:     { name: 'Iron vein', hp: 6, xp: 5, group: 'ore', tex: () => 'ore_iron', hit: 'hitStone', brk: 'breakOre', drops: [['iron', 1, 2], ['stone', 1, 1]] },
     copper:   { name: 'Copper vein', hp: 6, xp: 5, group: 'ore', tex: () => 'ore_copper', hit: 'hitStone', brk: 'breakOre', drops: [['copper', 1, 2], ['stone', 1, 1]] },

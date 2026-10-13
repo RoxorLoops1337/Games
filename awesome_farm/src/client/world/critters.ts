@@ -26,6 +26,7 @@ interface CritViewLike {
     wicon?: Img;             // the little job icon that floats up
     wiconT?: number;
     stars?: Img[];           // awakening stars circling its head
+    plate?: Phaser.GameObjects.Text;     // a companion's name over its head
     shine?: Img;             // a shiny one's twinkle
     bub?: Img;               // a worker's status bubble, and the icon inside it
     cargo?: Img;             // what an island worker is carrying
@@ -73,6 +74,7 @@ export function animateCrit (scene: Phaser.Scene, v: CritViewLike, e: CritE, dt:
     spr.setFrame(pose.frame).setPosition(v.x + pose.ox, v.y + pose.oy).setDepth(v.y).setScale(pose.sx, pose.sy).setRotation(0);
     v.shadow?.setPosition(v.x, v.y);
     drawStars(scene, v, e, spr, pose, t, inPod);
+    drawPlate(scene, v, e, spr, pose, inPod);
     drawBubble(scene, v, e, spr, pose, t, inPod);
     drawCargo(scene, v, e, spr, pose, t, inPod, moving);
     driftJobIcon(v, spr, dt);
@@ -145,6 +147,14 @@ function drawStars (scene: Phaser.Scene, v: CritViewLike, e: CritE, spr: Spr, po
             .setPosition(Math.round(v.x + pose.ox + Math.sin(t * 1.3 + e.id) * 6), Math.round(v.y + pose.oy - spr.displayHeight * (0.45 + 0.3 * Math.sin(t * 0.9 + e.id)))).setDepth(v.y + 5);
     } else if (v.shine) v.shine.setVisible(false);
     if (v.shadow) { if (stars >= 2) v.shadow.setTint(PAL.gold).setAlpha(0.45); else if (stars === 0) v.shadow.setTint(PAL.ink); }
+}
+
+/** A companion's name hangs over its head in small letters (so a photo of you and your friend tells who is who). */
+function drawPlate (scene: Phaser.Scene, v: CritViewLike, e: CritE, spr: Spr, pose: Pose, inPod: boolean) {
+    if (e.mode !== 1 || !e.nm || inPod) { v.plate?.setVisible(false); return; }
+    if (!v.plate) v.plate = overlay3d(scene.add.text(0, 0, e.nm, { fontFamily: 'Pixelify Sans', fontSize: '12px', color: '#fff6e0', stroke: '#2a1d2c', strokeThickness: 3 }).setOrigin(0.5, 1).setAlpha(0.85));
+    else if (v.plate.text !== e.nm) v.plate.setText(e.nm);
+    v.plate.setVisible(true).setPosition(Math.round(v.x + pose.ox), Math.round(v.y + pose.oy - spr.displayHeight - ((e.star ?? 0) > 0 ? 10 : 3))).setDepth(v.y + 6);
 }
 
 /** A worker that needs something (or has finished) shows a speech bubble with what it is; one that is simply busy shows what it is doing, in a smaller bubble. */

@@ -11,7 +11,7 @@ import { affordIn, chestsAround, haveIn, timesIn } from '../../../shared/sim/poo
 import { countOf, hasUnlock } from '../../../shared/sim/stats';
 import { GridItem, ItemGrid } from '../grid';
 import { CostList, deviceText, Footer, GAP, Section, SearchBox, ts, TabBar, Win } from '../kit';
-import { hex, inset, RARITY_TEXT } from '../px';
+import { hex, inset, RARITY_TEXT, STYLES } from '../px';
 import { recipeTip } from '../tips';
 import { canStaff, stripH, WorkerStrip } from '../workercard';
 import type { Screen, ScreenCtx } from './types';
@@ -19,6 +19,16 @@ import type { Screen, ScreenCtx } from './types';
 const STATIONS: StationId[] = ['hand', 'workbench', 'anvil', 'kitchen', 'loom', 'alchemy'];
 const ICONS: Record<StationId, string> = { hand: 'k_fist', workbench: 'workbench', anvil: 'anvil', kitchen: 'kitchen', loom: 'loom', alchemy: 'alchemy', altar: 'altar', riftforge: 'riftforge' };
 const TAB_NAMES: Partial<Record<StationId, string>> = { hand: 'By hand', alchemy: 'Alchemy' };
+
+// what this browser crafted lately, newest first (a "Recent" tab lists them): never shared, never sent anywhere
+const RECENT_KEY = 'awesome_farm_recentcraft_v1';
+const RECENT_MAX = 12;
+const readRecent = (): string[] => { try { const v = JSON.parse(localStorage.getItem(RECENT_KEY) ?? '[]'); return Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string' && x in RECIPES).slice(0, RECENT_MAX) : []; } catch { return []; } };
+const writeRecent = (l: string[]) => { try { localStorage.setItem(RECENT_KEY, JSON.stringify(l)); } catch { /* private mode */ } };
+const RECENT = 'recent' as StationId;
+const CHEST_KEY = 'awesome_farm_craftchest_v1';
+const readChest = () => { try { return localStorage.getItem(CHEST_KEY) === '1'; } catch { return false; } };
+const writeChest = (on: boolean) => { try { localStorage.setItem(CHEST_KEY, on ? '1' : '0'); } catch { /* private mode */ } };
 
 export class CraftScreen implements Screen {
     private win: Win;
@@ -36,6 +46,9 @@ export class CraftScreen implements Screen {
     private emptyNote: Phaser.GameObjects.Text;
     private bandNote: Phaser.GameObjects.Text;
     private key = '';
+    private recent = readRecent();
+    /** Send what is crafted to a chest in reach that holds that kind (remembered in this browser). */
+    private toChest = readChest();
     private search: SearchBox;
     private strip: WorkerStrip;
 
@@ -48,12 +61,14 @@ export class CraftScreen implements Screen {
         this.foot = w.footer({
             primary: { label: 'Craft', onClick: () => this.craft(1) },
             extras: [{ label: '×5', onClick: () => this.craft(5), w: 56 }, { label: 'Max', onClick: () => this.craft(999), w: 64 }],
+            secondary: [{ label: readChest() ? 'To chest: on' : 'To chest: off', w: 130, onClick: () => { this.toChest = !this.toChest; writeChest(this.toChest); this.foot.secondary[0].setLabel(this.toChest ? 'To chest: on' : 'To chest: off'); this.foot.secondary[0].setStyle(this.toChest ? STYLES.lime : STYLES.dark); } }],
             hint: deviceText('Pick a recipe, then Craft. Hover a recipe to see what it needs.', 'Pick a recipe, then Craft.'),
         });
+        if (this.toChest) this.foot.secondary[0].setStyle(STYLES.lime);
         const body = w.body, cy = w.top + w.toolH / 2;
         // the toolbar: which workshop, and a search through every recipe
         const sw = 190;
-        this.tabs = new TabBar(w, body.x, cy, STATIONS.map((st) => ({ id: st, label: TAB_NAMES[st] ?? STATION_NAMES[st], icon: ICONS[st], iconScale: 1 })), this.station, (id) => { this.station = id as StationId; this.selected = null; this.key = ''; }, { maxW: body.w - sw - 16, tip: (id) => this.stationTip(id as StationId) });
+        this.tabs = new TabBar(w, body.x, cy, [...STATIONS.map((st) => ({ id: st as string, label: TAB_NAMES[st] ?? STATION_NAMES[st], icon: ICONS[st], iconScale: 1 })), { id: RECENT as string, label: 'Recent', icon: 'k_star', iconScale: 1 }], this.station, (id) => { this.station = id as StationId; this.selected = null; this.key = ''; }, { maxW: body.w - sw - 16, tip: (id) => this.stationTip(id as StationId) });
         this.search = new SearchBox(w, body.x + body.w - sw, cy, sw, () => { this.key = ''; }, deviceText('Search every recipe  ( / )', 'Search recipes…'));
         // below: the recipes, what the chosen one is and needs, and (at a workshop) the creature working there
         const top = w.under.y, stripY = body.y + body.h - stripH(), h = stripY - GAP - top;
@@ -80,6 +95,7 @@ export class CraftScreen implements Screen {
     }
 
     private stationTip (st: StationId) {
+        if (st === RECENT) return { title: 'Recent', color: PAL.cream, lines: [{ t: 'The recipes you crafted lately, newest first.', c: PAL.pebble }] };
         const near = st === 'hand' || !!this.ctx.farm.stationNear(st);
         const lines = [{ t: near ? 'Available — you are close enough to use it.' : `Build a ${STATION_NAMES[st]} and stand next to it.`, c: near ? PAL.lime : PAL.berry }];
         return { title: STATION_NAMES[st], color: PAL.cream, lines };
@@ -94,7 +110,9 @@ export class CraftScreen implements Screen {
             max = Math.min(25, timesIn(me, chestsAround(Object.values(this.ctx.farm.ents), me.x, me.y), r.in));
             if (max <= 0) max = 1;
         }
-        this.ctx.send({ t: 'craft', recipe: r.id, n: max });
+        this.ctx.send({ t: 'craft', recipe: r.id, n: max, ...(this.toChest ? { chest: true } : {}) });
+        this.recent = [r.id, ...this.recent.filter((x) => x !== r.id)].slice(0, RECENT_MAX);
+        writeRecent(this.recent);
     }
 
     wheel (dy: number, x: number, y: number) { if (this.grid.contains(x, y)) this.grid.scroll(dy); }
@@ -106,19 +124,19 @@ export class CraftScreen implements Screen {
         // a station is listed once its building is unlocked in the skill tree (the Workbench and your hands always are), or when you stand at one
         const vis = listedStations(me, STATIONS, (st) => near[st]);
         const chests = chestsAround(Object.values(f.ents), me.x, me.y);
-        const k = JSON.stringify([me.inv, me.points, Object.keys(me.skills).length, this.station, this.selected, near, this.search.value, vis, chests.map((c) => [c.id, c.inv])]);
+        const k = JSON.stringify([me.inv, me.points, Object.keys(me.skills).length, this.station, this.selected, near, this.search.value, vis, chests.map((c) => [c.id, c.inv]), this.recent]);
         if (k === this.key) return;
         this.key = k;
-        if (!vis.includes(this.station) && !this.search.value) { this.station = vis[0] ?? 'hand'; this.selected = null; }
+        if (this.station !== RECENT && !vis.includes(this.station) && !this.search.value) { this.station = vis[0] ?? 'hand'; this.selected = null; }
         // the workshops along the top: only the ones you have, a green dot on the one you stand next to
-        this.tabs.layout(vis);
+        this.tabs.layout(this.recent.length ? [...vis, RECENT] : vis);
         this.tabs.set(this.search.value ? '' : this.station);
         for (const st of STATIONS) { this.tabs.setMark(st, st !== 'hand' && near[st] ? PAL.lime : null); this.tabs.setDim(st, !near[st]); }
         // recipes
         // a search looks through every station's recipes (by what it makes or what it needs)
         const list = this.search.value
             ? STATIONS.flatMap((st) => recipesFor(st)).filter((r) => this.search.matches(ITEMS[r.out].name, ...Object.keys(r.in).map((res) => resName(res as Res))))
-            : recipesFor(this.station);
+            : this.station === RECENT ? this.recent.map((id) => RECIPES[id]).filter((r) => !!r) : recipesFor(this.station);
         const items: GridItem[] = list.map((r) => {
             const ok = affordIn(me, chests, r.in) && hasUnlock(me, r.req) && near[r.station];
             const locked = !hasUnlock(me, r.req);
@@ -129,7 +147,7 @@ export class CraftScreen implements Screen {
             };
         });
         if (!this.selected || !list.find((r) => r.id === this.selected)) this.selected = list[0]?.id ?? null;
-        this.recSec.setTitle(this.search.value ? 'Search results' : `${STATION_NAMES[this.station]} recipes`);
+        this.recSec.setTitle(this.search.value ? 'Search results' : this.station === RECENT ? 'Recently crafted' : `${STATION_NAMES[this.station]} recipes`);
         this.recSec.setRight(`${list.length} recipe${list.length === 1 ? '' : 's'}`);
         this.grid.setItems(items);
         this.drawDetail(me, near, chests);
@@ -137,7 +155,7 @@ export class CraftScreen implements Screen {
         // (a farmer with no creature and no Taming yet is not told about workers at all: nothing they could act on)
         const staff = canStaff(me);
         const stripOn = staff && ORDER_STATIONS.includes(this.station) && !!f.stationNear(this.station);
-        this.bandNote.setVisible(!stripOn).setText(this.station === 'hand' ? `No workshop needed: these you can make anywhere.${staff ? ' Build a workshop and a creature can run it for you.' : ''}` : staff ? `A creature can run the ${STATION_NAMES[this.station]} for you: open it (stand next to it, ${deviceText('press E', 'tap USE')}) and choose "Put a creature to work".` : '');
+        this.bandNote.setVisible(!stripOn).setText(this.station === RECENT ? 'What you made lately, newest first: stand at the right workshop and press Craft.' : this.station === 'hand' ? `No workshop needed: these you can make anywhere.${staff ? ' Build a workshop and a creature can run it for you.' : ''}` : staff ? `A creature can run the ${STATION_NAMES[this.station]} for you: open it (stand next to it, ${deviceText('press E', 'tap USE')}) and choose "Put a creature to work".` : '');
     }
 
     private drawDetail (me: ReturnType<ScreenCtx['me']>, near: Record<string, boolean>, chests: ReturnType<typeof chestsAround>) {

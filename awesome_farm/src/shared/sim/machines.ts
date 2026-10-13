@@ -2,6 +2,7 @@
 // commands that move items in and out of buildings. This is also where belts, inserters,
 // drills and power plug in later.
 
+import { harvestMoon } from './specialnights';
 import { TILE, TUNING } from '../config';
 import { seasonDef } from '../season';
 import { BUILDINGS, CROPS } from '../data/buildings';
@@ -18,6 +19,8 @@ import type { BuildE, Cmd, Inv, PlayerS } from './types';
 import { storageOf } from './uber';
 
 export const OUT_CAP = 200;
+/** What a Speed Module adds to a machine's speed (one per machine). */
+export const MODULE_SPEED = 0.25;
 
 // ── small inventory helpers (shared by the factory, the creatures and the status text) ──
 export const invHas = (inv: Inv | undefined, id: ItemId) => inv?.[id] ?? 0;
@@ -164,6 +167,19 @@ export function seasonGrow (sim: Sim, b: BuildE): number {
     return glassed(sim, b) ? Math.max(g, 1) * TUNING.glasshouseGrow : g;
 }
 
+/** A bed within reach of a Sprinkler grows faster (one is enough: they do not stack with each other). */
+export function sprinkled (sim: Sim, b: BuildE): number {
+    const list = sim.buildings('sprinkler');
+    if (!list.length) return 1;
+    const reach = TUNING.sprinklerRange * TILE;
+    const c = sim.center(b);
+    for (const s of list) {
+        const d = sim.center(s);
+        if (Math.hypot(d.x - c.x, d.y - c.y) <= reach) return TUNING.sprinklerGrow;
+    }
+    return 1;
+}
+
 export function step (sim: Sim, dt: number) {
     sim.machineT += dt;
     const rain = weatherAt(sim.s.seed, sim.s.day, sim.s.clock).rain;
@@ -176,7 +192,7 @@ export function step (sim: Sim, dt: number) {
                 const crop = b.plant ? CROPS[b.plant] : undefined;
                 const owner = b.by ? sim.s.players[b.by] : undefined;
                 if (!crop) { b.crop = -1; sim.touch(b); continue; }
-                b.growT = (b.growT ?? 0) + dt * (owner ? sim.derivedOf(owner).growMul : 1) * (1 + TUNING.rainGrow * rain) * seasonGrow(sim, b);
+                b.growT = (b.growT ?? 0) + dt * (owner ? sim.derivedOf(owner).growMul : 1) * (1 + TUNING.rainGrow * rain) * seasonGrow(sim, b) * sprinkled(sim, b) * harvestMoon(sim);
                 if (b.growT >= crop.stageSecs) { b.growT = 0; b.crop++; sim.touch(b); }
             }
             continue;
@@ -206,7 +222,7 @@ export function step (sim: Sim, dt: number) {
             }
         }
         if (def.fuel && (b.fuel ?? 0) <= 0) continue;     // out of fuel: waits
-        const speed = (1 + (od?.mods.machineSpeed ?? 0) + (b.kind === 'furnace' ? od?.mods.smelt ?? 0 : 0) + ((b.boost ?? 0) > sim.s.time ? b.bs ?? 0.25 : 0)) * (def.use ? (b.pw ?? 0) : 1);
+        const speed = (1 + (od?.mods.machineSpeed ?? 0) + (b.mod === 'speed' ? MODULE_SPEED : 0) + (b.kind === 'furnace' ? od?.mods.smelt ?? 0 : 0) + ((b.boost ?? 0) > sim.s.time ? b.bs ?? 0.25 : 0)) * (def.use ? (b.pw ?? 0) : 1);
         b.prog = (b.prog ?? 0) + dt * speed;
         if (def.fuel) b.fuel = (b.fuel ?? 0) - dt;
         if (b.prog >= r.time) {
@@ -226,6 +242,23 @@ export function step (sim: Sim, dt: number) {
 }
 
 // ── commands ───────────────────────────────────────────────────────────────
+/** Slot a Speed Module into a machine that makes things on its own, or take it back out. */
+export function cmdModule (sim: Sim, p: PlayerS, c: Extract<Cmd, { t: 'module' }>) {
+    const b = sim.reachableBuilding(p, c.id);
+    if (!b || !BUILDINGS[b.kind].proc) return;
+    if (c.op === 'put') {
+        if (b.mod) { sim.deny(p, 'It already has a module'); return; }
+        if (!takeItem(p, 'module_speed', 1)) { sim.deny(p, 'You have no Speed Module'); return; }
+        b.mod = 'speed';
+        sim.float(sim.center(b).x, sim.center(b).y - 14, 'Speed Module: +25% speed', PAL.gold, p.id);
+    } else if (c.op === 'take') {
+        if (!b.mod) return;
+        b.mod = undefined;
+        addItem(p, 'module_speed', 1);
+    } else return;
+    sim.touch(b);
+}
+
 export function cmdXfer (sim: Sim, p: PlayerS, c: Extract<Cmd, { t: 'xfer' }>) {
     const b = sim.reachableBuilding(p, c.id);
     const def = b && BUILDINGS[b.kind];
@@ -250,6 +283,7 @@ export function cmdXfer (sim: Sim, p: PlayerS, c: Extract<Cmd, { t: 'xfer' }>) {
         takeItem(p, c.item, n);
         invPut(target, c.item, n);
         b.by = p.id;
+        if (def.storage) b.use = { p: p.id, t: sim.s.time };
         sim.touch(b);
         sim.fx('load', centre.x, centre.y, p.id);
         if (def.storage) quests.count(p, 'stash');       // (the tutorial counts it)
@@ -259,6 +293,7 @@ export function cmdXfer (sim: Sim, p: PlayerS, c: Extract<Cmd, { t: 'xfer' }>) {
         n = addItem(p, c.item, n);
         if (n <= 0) { sim.deny(p, 'Your pockets are full'); return; }
         invDrop(target, c.item, n);
+        if (def.storage) b.use = { p: p.id, t: sim.s.time };
         sim.touch(b);
         sim.fx('collect', centre.x, centre.y, p.id);
         death.tidy(sim, b);

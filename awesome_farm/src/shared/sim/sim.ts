@@ -33,9 +33,13 @@ import * as gather from './gather';
 import * as health from './health';
 import * as satchel from './satchel';
 import * as arts from './arts';
+import * as cosy from './cosy';
 import * as hearth from './hearth';
 import * as iridium from './iridium';
 import * as unstick from './unstick';
+import * as digest from './digest';
+import * as hotbar from './hotbar';
+import * as rainbow from './rainbow';
 import * as trade from './trade';
 import * as machines from './machines';
 import * as mail from './mail';
@@ -396,6 +400,7 @@ export class Sim {
         scholar.grant(this, p);
         tellLessons(this, p, true);
         mail.onJoin(this, p);
+        digest.welcomeBack(this, p);
         this.fx('join', p.x, p.y - 8, p.id);
         this.bannerOthers(id, `${p.name} joined`, undefined, PAL.lime);
         return p;
@@ -410,6 +415,7 @@ export class Sim {
         fishing.stop(p);
         costatus.clear(this, p);
         if (p.downed > 0) { if (wasOnExpedition) this.respawnHome(p); else health.die(this, p); }       // (leaving while down does not dodge it)
+        digest.noteLeave(this, p);
         p.online = false;
         p.moving = false;
         this.fresh();
@@ -536,6 +542,8 @@ export class Sim {
         iridium.step(this, dt);
         unstick.step(this);
         trade.step(this);
+        hotbar.step(this, dt);
+        rainbow.step(this);
         factory.stepFactory(this, dt);
         mobs.updateMobs(this, dt);
         mobs.updateProjs(this, dt);
@@ -550,6 +558,7 @@ export class Sim {
         fishing.update(this, dt);
         creatures.update(this, dt);
         hearth.update(this, dt);
+        cosy.update(this, dt);
         quests.update(this, dt);
         wish.update(this);
         if (this.lab) lab.step(this);                 // (the Defense Lab holds its clock)

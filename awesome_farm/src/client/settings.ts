@@ -11,7 +11,7 @@ export type ViewMode = '2d' | '3d';
 export type Quality3D = 'auto' | 'low' | 'medium' | 'high';
 export const QUALITY_CHOICES: readonly Quality3D[] = ['auto', 'low', 'medium', 'high'];
 
-const DEFAULTS = { sound: true, shake: true, volume: 0.8, music: 0.5, fps: false, keyboard: 'auto' as KeyboardSetting, fullscreen: true, zoom: 3, view: '2d' as ViewMode, quality3d: 'auto' as Quality3D };
+const DEFAULTS = { sound: true, shake: true, volume: 0.8, music: 0.5, fps: false, keyboard: 'auto' as KeyboardSetting, fullscreen: true, bigText: false, zoom: 3, view: '2d' as ViewMode, quality3d: 'auto' as Quality3D };
 
 /** The settings as stored (a JSON string, or nothing yet) over the defaults; a view that is not '3d' is the classic one, an unknown 3D quality is Auto. */
 export function parseSettings (raw: string | null) {

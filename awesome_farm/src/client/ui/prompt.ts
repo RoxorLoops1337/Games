@@ -1,6 +1,7 @@
 // The bottom line: what E (or USE) would do right now, in key names on a computer and button names on a phone.
 // A pure string builder over what the Game scene knows; it never touches Phaser.
 
+import { busyUser } from '../../shared/sim/stash';
 import { BIOME_DEFS, MODS } from '../../shared/data/biomes';
 import { BUILDINGS, BuildingKind, CROPS, STATION_NAMES } from '../../shared/data/buildings';
 import { spOf } from '../../shared/data/creatures';
@@ -32,6 +33,9 @@ const PROMPTS: Partial<Record<BuildingKind, (b: BuildE, hold: string) => string>
     hatchery: (b, hold) => (b.egg ? `E: Hatch the egg${hold}` : b.par ? `An egg is forming…${hold}` : `E: Breed two creatures${hold}`),
     campfire: (_b, hold) => `Campfire — monsters keep away${hold}`,
     weathervane: (_b, hold) => `E: Read the forecast${hold}`,
+    shelf: (b, hold) => `E: Blueprint Shelf (${b.bps?.length ?? 0} shared)${hold}`,
+    board: (b, hold) => `E: Request Board (${b.ask?.length ?? 0} open)${hold}`,
+    coffer: (b, hold) => `E: Open the coffer (${b.cof?.c ?? 0} coins)${hold}`,
     chute: (_b, hold) => `E: Inspect Export Chute${hold}`,
 };
 
@@ -112,7 +116,7 @@ function promptText (h: PromptHost): string {
         if (def.station) return `E: Use ${STATION_NAMES[def.station]}${hold}`;
         if (def.proc) return `E: Open ${def.name}${(b.prog ?? 0) > 0 ? ' (working…)' : ''}${hold}`;
         if (def.grave) return `E: Take your things back${hold}`;
-        if (def.storage) return `E: Open ${def.name}${hold}`;
+        if (def.storage) { const who = busyUser(b, h.clock.time, me.id); return `E: Open ${def.name}${who ? ` (${h.players[who]?.name ?? 'a friend'} is using it)` : ''}${hold}`; }
         if (b.kind === 'table') return `E: ${potluck.promptOf(me, b, h.clock.time, (id) => potluck.cookName(h.players, id))}${h.distToBuilding(b) < d.reach + 6 ? hold : ''}`;
         if (def.hp && !def.tower && !def.spike && b.hp !== undefined) return `E: Repair ${def.name} (${Object.entries(repairCostOf(b)).map(([r, n]) => `${n} ${ITEMS[r as keyof typeof ITEMS]?.name ?? r}`).join(', ')})${hold}`;
         if (def.tower || def.spike) return `E: ${pending(b) > 0 ? 'Choose an upgrade' : def.name}${b.hp !== undefined ? ` (${Math.ceil(b.hp)} / ${maxHp(b)})` : ''}${hold}`;

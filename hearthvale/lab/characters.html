@@ -1,0 +1,44 @@
+<!doctype html><meta charset="utf-8"><title>Villager lab</title>
+<script type="importmap">{ "imports": { "three": "../vendor/three.module.min.js", "three/addons/": "../vendor/jsm/" } }</script>
+<style>#hud{position:fixed;left:8px;top:6px;font:12px/1.3 monospace;color:#234;background:#fff8;padding:3px 6px;border-radius:6px;pointer-events:none}</style>
+<div id="hud"></div>
+<script type="module">
+import * as K from '../art/artkit.js'; import { mountStage } from './stage.js'; import { P } from '../art/palette.js';
+import { villagerModel, setPose, setMood, randomVillager, PROFESSIONS, triangles } from '../art/characters.js';
+const q = new URLSearchParams(location.search); const st = mountStage();
+const anims = []; let maxTri = 0, sumTri = 0, n = 0;
+function put(g, x, z, pose = 'idle', ph = 0) { st.add(g, x, z); anims.push({ g, pose, ph }); const t = triangles(g); maxTri = Math.max(maxTri, t); sumTri += t; n++; return g; }
+const TOOLS = ['none', 'axe', 'pick', 'hoe', 'hammer', 'ladle', 'scroll', 'basket'];
+if (q.get('game')) {
+  // game-camera test: a little plaza with houses and 40 busy villagers
+  for (const [x, z, c] of [[-6, -5, P.roofRed], [0, -6, P.roofBlue], [6, -5, P.roofOrange], [-7, 4, P.roofTeal], [7, 5, P.roofPurple]]) st.add(K.group(K.rbox(2.4, 1.2, 2.4, P.plasterWarm), K.gable(2.8, 1.1, 2.7, c, 0, 1.2)), x, z);
+  const poses = ['walk', 'work', 'idle', 'carry', 'cheer', 'walk'];
+  for (let i = 0; i < 40; i++) { const a = i * 2.4, r = 2 + (i % 7) * 1.5; const g = randomVillager(i + 3, P.outfit[i % 8]); g.rotation.y = a; put(g, Math.cos(a) * r, Math.sin(a * 1.3) * r * 0.8, poses[i % 6], i * 0.7); g.userData.walkc = [Math.cos(a) * r, Math.sin(a * 1.3) * r * 0.8, a]; }
+  if (!q.has('dist')) st.look.dist = 30; if (!q.has('pitch')) st.look.pitch = 0.9;
+} else {
+  const sec = q.get('sec'); const on = (k) => !sec || sec === k; const Z = (k, z) => (sec ? 0 : z);
+  // 1. line-up of 24
+  if (on('line')) for (let i = 0; i < 24; i++) { const g = randomVillager(i * 5 + 1, P.outfit[i % 8]); put(g, ((i % 12) - 5.5) * 1.3, Math.floor(i / 12) * 1.5, 'idle', i * 0.9); }
+  // 2. poses
+  if (on('pose')) ['idle', 'walk', 'work', 'carry', 'cheer', 'sleep'].forEach((p, i) => put(villagerModel(P.outfit[i], 11 + i * 7, { tool: p === 'work' ? 'axe' : 'none' }), (i - 2.5) * 1.6, Z('pose', 6), p, i));
+  // 3. tools
+  if (on('tools')) TOOLS.forEach((tl, i) => put(villagerModel(P.outfit[i], 20 + i * 9, { tool: tl }), (i - 3.5) * 1.5, Z('tools', 9), tl === 'none' ? 'idle' : 'work', i));
+  // 4. children and elders
+  if (on('age')) { for (let i = 0; i < 5; i++) put(villagerModel(P.outfit[i + 1], 30 + i * 11, { age: 'child', tool: TOOLS[i + 1] }), (i - 5) * 1.25 - 0.3, Z('age', 12), 'idle', i);
+  for (let i = 0; i < 5; i++) put(villagerModel(P.outfit[i + 2], 40 + i * 9, { age: 'elder', tool: i === 4 ? 'scroll' : 'none' }), i * 1.25 + 0.8, Z('age', 12), 'idle', i); }
+  // 5. moods x faces
+  if (on('mood')) ['happy', 'tired', 'hungry', 'busy'].forEach((m, i) => [0, 1, 2].forEach((f, j) => { const g = villagerModel(P.outfit[(i + j) % 8], 3 + f * 10 + j, {}); setMood(g, m); put(g, (i * 3 + j - 5.5) * 1.3, Z('mood', 15), 'idle', i + j); }));
+  // 6. professions
+  if (on('prof')) PROFESSIONS.forEach((p, i) => put(villagerModel(P.outfit[i], 50 + i * 3, { tool: p.tool }), (i - 3.5) * 1.5, Z('prof', 18), 'work', i));
+  if (!q.has('dist')) st.look.dist = 20;
+}
+const only = q.get('pose'), mood = q.get('mood');
+if (only) for (const a of anims) a.pose = only;
+if (mood) for (const a of anims) setMood(a.g, mood);
+const fr = q.has('t') ? +q.get('t') : null;
+st.onTick((dt, t) => { const tt = fr ?? t + 1; for (const a of anims) setPose(a.g, a.pose, tt, a.ph); });
+document.getElementById('hud').textContent = q.get('hud') === '0' ? '' : `villagers ${n}  tris max ${Math.round(maxTri)} avg ${Math.round(sumTri / n)}`;
+if (q.get('hud') === '0') document.getElementById('hud').style.display = 'none';
+window.__tris = { max: maxTri, avg: sumTri / n };
+st.ready();
+</script>

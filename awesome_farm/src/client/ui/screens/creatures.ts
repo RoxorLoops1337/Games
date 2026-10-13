@@ -4,7 +4,7 @@
 import { critTex } from '../../art/storybook-critters';
 import type * as Phaser from 'phaser';
 import {
-    AWAKENINGS, catchChance, ELEMENT_COLOR, ELEMENT_NAME, PET_MAX_LEVEL, petAtk, petMaxHp, Pet, petXpNeed, POD_POWER, RARITY_COLORS, RARITY_NAMES,
+    AWAKENINGS, catchChance, SIGNATURE, SIGNATURE_EVERY, ELEMENT_COLOR, ELEMENT_NAME, PET_MAX_LEVEL, petAtk, petMaxHp, Pet, petXpNeed, POD_POWER, RARITY_COLORS, RARITY_NAMES,
     SPECIES_LIST, spOf, STAR_MAX, STAR_POWER, STAR_WORK, starsOf, STATUS_INFO, TRAITS, WORK_INFO, WORK_KINDS, workCycle, FIELD_INFO, FIELD_TASKS, type WorkKind,
 } from '../../../shared/data/creatures';
 import { BIOME_DEFS } from '../../../shared/data/biomes';
@@ -100,7 +100,7 @@ export class CreatureScreen implements Screen {
         this.foot = w.footer({
             primary: { label: 'Give a job…', w: 150, onClick: () => this.job() },
             extras: [{ label: 'Call home', w: 120, onClick: () => this.pet('unassign') }, { label: 'Awaken', w: 130, onClick: () => { const p = this.cur(); if (p) ctx.send({ t: 'pet', op: 'awaken', pet: p.id }); } }, { label: 'Take along', w: 130, style: STYLES.lime, onClick: () => this.pet('companion') }],
-            secondary: [{ label: 'Rename', w: 100, onClick: () => this.rename() }, { label: 'Release', w: 100, style: STYLES.berry, onClick: () => this.pet('release') }],
+            secondary: [{ label: 'Day/Night', w: 100, onClick: () => { const p = this.cur(); if (p) ctx.send({ t: 'pet', op: 'shift', pet: p.id }); } }, { label: 'Rename', w: 100, onClick: () => this.rename() }, { label: 'Release', w: 100, style: STYLES.berry, onClick: () => this.pet('release') }],
             hint: '',
         });
         this.btns = { job: this.foot.primary!, unassign: this.foot.extras[0], awaken: this.foot.extras[1], companion: this.foot.extras[2], rename: this.foot.secondary[0], release: this.foot.secondary[1] };
@@ -407,7 +407,7 @@ export class CreatureScreen implements Screen {
         this.affT.setText(`♥ ${bond.level.name}  ${bond.aff}/${AFFECTION_MAX}`).setColor(hex(bond.level.color));
         p.traits.forEach((t, i) => this.traitT[i]?.setText(`★ ${TRAITS[t].name}`));
         const bondLine = `${bond.level.line}${bond.next ? ` (${bond.next.at - bond.aff} more to ${bond.next.name}: ${isTouchUi() ? 'tap USE' : 'press E'} beside it to pet it)` : ''}`;
-        const line1 = sp.desc + (p.traits.length ? '\n' + p.traits.map((t) => `${TRAITS[t].name}: ${TRAITS[t].desc}`).join('   ') : '');
+        const line1 = sp.desc + `\nEvery ${SIGNATURE_EVERY}th strike: ${SIGNATURE[sp.element].name}. ${SIGNATURE[sp.element].desc}` + (p.traits.length ? '\n' + p.traits.map((t) => `${TRAITS[t].name}: ${TRAITS[t].desc}`).join('   ') : '');
         this.descT.setText(line1 + '\n' + bondLine);
         const ownerWork = derived(me).mods.work ?? 0;
         const colW = Math.floor(this.dw / 2);

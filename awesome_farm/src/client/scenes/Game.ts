@@ -10,6 +10,8 @@
 // The view setting (2D, or 3D beta) changes only who draws the world and how a pointer becomes a spot in it: see
 // world/view3d-bridge.ts. In 3D this scene is hidden but runs exactly as in 2D, feeding the 3D view the same state and events.
 
+import { feetTile } from '../../shared/geom';
+import { hotItem, unitMul, worthOf, type MarketState } from '../../shared/data/market';
 import * as Phaser from 'phaser';
 import { RIFT_ISLANDS, TILE, TUNING, WORLD_TILES, ZOOM } from '../../shared/config';
 import { dist } from '../../shared/geom';
@@ -150,6 +152,7 @@ export class GameScene extends Phaser.Scene {
     private gates: Spr[] = [];
     private gateFrame = -1;
     private shopState: Shop | null = null;
+    private mktState: MarketState | undefined;
     private chron: ChronEntry[] = [];
     private wishS: WishState | null = null;
     private combat!: CombatFx;
@@ -608,6 +611,7 @@ export class GameScene extends Phaser.Scene {
         this.seed = state.seed;
         this.prodHist.reset(state.prod ?? {}, this.clock.time);
         this.shopState = state.shop ?? null;
+        this.mktState = state.mkt;
         this.chron = (state.chron ?? []).slice();
         this.wishS = state.wish ?? null;
         this.players = {};
@@ -632,6 +636,7 @@ export class GameScene extends Phaser.Scene {
         this.applyClock(m);
         if (m.prod) this.prodHist.set(m.prod, this.clock.time);
         if (m.shop) this.shopState = m.shop;
+        if (m.mkt) this.mktState = m.mkt;
         if (m.plots.length) {
             const risen: Plot[] = [], changed: Plot[] = [];
             for (const p of m.plots) {
@@ -875,6 +880,7 @@ export class GameScene extends Phaser.Scene {
         v.mark?.setVisible(false); v.bub?.setVisible(false); v.bubIcon?.setVisible(false); v.cargo?.setVisible(false); v.pod?.setVisible(false);
         v.stars?.forEach((im) => im.setVisible(false));
         v.shine?.setVisible(false);
+        v.plate?.setVisible(false);
     }
 
     private updateViews (dt: number) {
@@ -991,6 +997,8 @@ export class GameScene extends Phaser.Scene {
     get underNow () { return this.amb.underNow; }
     get underground () { return this.amb.underNow; }
     undergroundAmount () { return this.amb.undergroundAmount(); }
+    /** Is the farmer standing under a roof (the rain is muffled there)? */
+    underRoof () { const { tx, ty } = feetTile(this.local); return this.world.roofAt(tx, ty) !== 0; }
     caveDepthHere () { return this.amb.caveDepthHere(); }
     dreadAmount () { return this.amb.dreadAmount(); }
     /** Items the farm's machines have made so far (for production goals). */
@@ -999,6 +1007,12 @@ export class GameScene extends Phaser.Scene {
     prodRates (bars = 24) { return this.prodHist.rates(this.clock.time, bars); }
     serverSeed () { return this.seed; }
     shop () { return this.shopState; }
+    /** What one more unit of this kind is worth against its base price right now (living prices: sag when sold a lot, +50% when hot). */
+    marketMul (item: ItemId) { return unitMul(this.mktState, this.seed, item, this.clock.day); }
+    /** What `n` units are worth in base coins right now. */
+    marketWorth (item: ItemId, n: number) { return worthOf(this.mktState, this.seed, item, n, this.clock.day); }
+    /** The day's Hot Item. */
+    hotItem () { return hotItem(this.seed, this.clock.day); }
     /** The farm chronicle, oldest first (the Journal's Chronicle tab). */
     chronicle () { return this.chron; }
     /** The season wish vote (the Season wish window and the chip beside the buffs). */
@@ -1068,6 +1082,15 @@ export class GameScene extends Phaser.Scene {
         if (this.blueprints.length > MAX_SAVED) this.blueprints.length = MAX_SAVED;
         saveBlueprints(this.blueprints);
         this.emitEvent('hud:toast', { text: `Saved ${bp.name}: ${bp.items.length} piece${bp.items.length > 1 ? 's' : ''}  (V to open your book)`, icon: 'k_gear', color: PAL.gold });
+    }
+
+    /** Copy a layout from the Blueprint Shelf into the book (newest first). */
+    adoptBlueprint (name: string, items: Blueprint['items']) {
+        const bp: Blueprint = { id: `${Date.now().toString(36)}${Math.floor(Math.random() * 1296).toString(36)}`, name: name.slice(0, 24) || 'Shared', items: items.map((it) => ({ ...it })) };
+        this.blueprints.unshift(bp);
+        if (this.blueprints.length > MAX_SAVED) this.blueprints.length = MAX_SAVED;
+        saveBlueprints(this.blueprints);
+        this.emitEvent('hud:toast', { text: `Copied ${bp.name} to your book (V)`, icon: 'k_gear', color: PAL.gold });
     }
 
     deleteBlueprint (id: string) {

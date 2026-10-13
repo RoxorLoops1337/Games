@@ -77,6 +77,17 @@ type Element = 'leaf' | 'earth' | 'fire' | 'frost' | 'spark' | 'shadow' | 'light
 export const ELEMENT_COLOR: Record<Element, number> = {
     leaf: PAL.leaf, earth: PAL.dirt, fire: PAL.pumpkin, frost: PAL.foam, spark: PAL.gold, shadow: PAL.plum, light: PAL.cream,
 };
+/** The signature move: every few strikes a companion does something only its element can. */
+export const SIGNATURE_EVERY = 4;
+export const SIGNATURE: Record<Element, { name: string; desc: string }> = {
+    fire:   { name: 'Ember burst',   desc: 'Sets the ground alight: monsters beside the target take half damage too.' },
+    frost:  { name: 'Deep chill',    desc: 'Freezes the target in place for a moment.' },
+    spark:  { name: 'Chain lightning', desc: 'The bolt jumps to two more monsters nearby.' },
+    earth:  { name: 'Tremor',        desc: 'Slams the ground: a big knock back and a short stun around the target.' },
+    leaf:   { name: 'Mending breeze', desc: 'Heals its farmer by half a heart.' },
+    light:  { name: 'Flash',         desc: 'Dazzles everything near the target for a moment.' },
+    shadow: { name: 'Shadow bite',   desc: 'A bite from the dark that hits for two and a half times.' },
+};
 export const ELEMENT_NAME: Record<Element, string> = { leaf: 'Leaf', earth: 'Earth', fire: 'Fire', frost: 'Frost', spark: 'Spark', shadow: 'Shadow', light: 'Light' };
 
 export type TraitId = 'diligent' | 'fierce' | 'hardy' | 'lucky' | 'swift' | 'bright' | 'tireless' | 'bold';
@@ -148,6 +159,7 @@ export interface Pet {
     hp?: number;                // current health as a companion (undefined = full)
     star?: number;              // awakening stars, 0..STAR_MAX
     shiny?: 1;                  // a colour-shifted, sparkling one (1 in 64 wild creatures, 1 in 32 eggs): purely a collector's mark
+    sh?: 'day' | 'night';       // a worker's shift: it only works then, and rests the other half (none: round the clock)
     task?: WorkKind;            // what it does beside you as your companion (none: stays at heel)
     post?: Post;                // its standing job: an island to work or a machine to run (it needs no den)
     ps?: PostStatus;            // how that is going

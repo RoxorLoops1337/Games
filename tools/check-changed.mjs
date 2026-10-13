@@ -33,6 +33,7 @@ const GAME_SUITES = {
   kingshot_endless: ['test:kingshot'],
   encore_island: ['test:encore'],
   encore_island_3d: ['test:encore'],
+  hearthvale: ['test:hearthvale'],
   headliner: ['test:headliner'],
   horde_runner: ['test:horde'],
   spijker_master: ['test:spijker'],
@@ -70,6 +71,7 @@ const GAME_SUITES = {
   hocus_vocus: ['test:hocus_vocus'],
   beatbox_heroes: ['test:heroes'],
   LoopDoku: ['test:loopdoku'],
+  blockmates: ['test:blockmates'],
 };
 
 // Folders the site serves that have no test suite: a change there only needs

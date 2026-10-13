@@ -191,6 +191,74 @@ function millstone (p: Pix) {
     p.outline();
 }
 
+function fishpond (p: Pix) {
+    // a stone-rimmed pool of green water with a ripple, a lily pad and a gold fish
+    p.ellipse(16, 9, 15.5, 7, [0x6b6f8c, 0x8a8fae, 0xb0b5cc], { bias: 0.1 });
+    p.ellipse(16, 9, 13.5, 5.2, [0x2f6f8c, 0x3f8fae, 0x6cc0d8], { bias: 0.2 });
+    p.ellipse(11, 8, 3, 1.4, [0x9be0ee]);
+    p.ellipse(22, 11, 2.4, 1.3, [0x4caf50, 0x7ccf64]);
+    p.rect(19, 10, 3, 1, 0x2f6f8c);
+    p.poly([[13, 11], [17, 10], [20, 11], [17, 12]], 0xf0a030);
+    p.set(12, 11, 0xf0a030); p.set(20, 10, 0xffd060);
+    p.outline();
+}
+
+function beehive (p: Pix) {
+    // a stacked straw skep on a little stand, bees buzzing at the door
+    lit(p, 4, 16, 6, 3, W);
+    p.ellipse(7, 12, 5.5, 4.5, [0xb8862e, 0xf0b93a, 0xffd966], { bias: 0.1 });
+    p.ellipse(7, 8, 4.5, 3.4, [0xb8862e, 0xf0b93a, 0xffd966], { bias: 0.1 });
+    p.ellipse(7, 4, 3, 2.4, [0xb8862e, 0xf0b93a, 0xffd966], { bias: 0.1 });
+    p.ellipse(7, 13, 1.5, 1.4, [0x35305c]);
+    p.set(11, 9, 0x35305c); p.set(12, 8, 0xffd966); p.set(2, 6, 0x35305c); p.set(3, 5, 0xffd966);
+    p.outline();
+}
+
+function museum (p: Pix) {
+    // a wooden case with a glass top and a few treasures on blue velvet
+    lit(p, 1, 10, 30, 8, W); p.rect(2, 11, 28, 1, W[3]);
+    p.rect(3, 4, 26, 7, 0xcdf3fa);
+    p.rect(3, 4, 26, 1, 0xffffff);
+    p.rect(4, 8, 24, 3, 0x2f4f8c);
+    p.ellipse(9, 7, 2.2, 1.8, [0xc0392b, 0xff6b5c]);
+    p.ellipse(16, 7, 2.4, 1.6, [0xf0a030, 0xffd966]);
+    p.poly([[21, 9], [23, 5], [25, 9]], 0x6cc0d8);
+    p.outline();
+}
+
+function coffer (p: Pix) {
+    // a squat iron-bound strongbox with a gold coin on the lid
+    lit(p, 1, 6, 14, 8, W); p.rect(2, 7, 12, 1, W[3]);
+    p.rect(1, 9, 14, 1, 0x7a7f9e); p.rect(7, 6, 2, 8, 0x7a7f9e);
+    p.ellipse(8, 5, 4, 2.2, [0xb8862e, 0xf0b93a, 0xffd966]);
+    p.set(8, 10, 0x35305c);
+    p.outline();
+}
+
+function board (p: Pix) {
+    // a notice board on two posts, with three pinned notes
+    lit(p, 2, 8, 2, 8, W); lit(p, 12, 8, 2, 8, W);
+    lit(p, 0, 1, 16, 9, W); p.rect(1, 2, 14, 7, 0xe8d8a8);
+    p.rect(2, 3, 4, 4, 0xffffff); p.rect(7, 3, 3, 3, 0xffd966); p.rect(11, 4, 3, 4, 0xcdf3fa);
+    p.set(3, 3, 0xc0392b); p.set(8, 3, 0xc0392b); p.set(12, 4, 0xc0392b);
+    p.outline();
+}
+
+function shelf (p: Pix) {
+    // a small bookcase with rolled blueprints
+    lit(p, 1, 2, 14, 13, W); p.rect(2, 3, 12, 5, W[1]); p.rect(2, 9, 12, 5, W[1]);
+    for (const [x, y, c] of [[3, 4, 0xcdf3fa], [6, 4, 0xe8d8a8], [9, 5, 0xcdf3fa], [3, 10, 0xe8d8a8], [7, 10, 0xcdf3fa], [11, 10, 0xe8d8a8]] as const) p.rect(x, y, 3, 4, c);
+    p.outline();
+}
+
+function sprinkler (p: Pix) {
+    // a short iron post with a spinning head and a few drops
+    p.rect(7, 5, 2, 9, 0x7a7f9e); p.rect(5, 13, 6, 2, 0x56526a);
+    p.ellipse(8, 4, 3.4, 1.8, [0x7a7f9e, 0xb0b5cc, 0xd9dcea]);
+    for (const [x, y] of [[3, 2], [13, 2], [2, 5], [14, 5], [5, 0], [11, 0]] as const) p.set(x, y, 0x6cc0d8);
+    p.outline();
+}
+
 function market (p: Pix, rnd: () => number) {
     // a striped awning over a counter loaded with produce
     for (const x of [2, 31]) lit(p, x, 6, 3, 19, W);
@@ -331,6 +399,13 @@ export function registerStorybookBuildings (scene: Phaser.Scene) {
     paint(scene, 'alchemy', 14, 11, alchemy, 2);
     paint(scene, 'sawmill', 32, 15, (p) => sawmill(p), 1);
     paint(scene, 'millstone', 14, 10, (p) => millstone(p), 1);
+    paint(scene, 'beehive', 14, 19, (p) => beehive(p), 1);
+    paint(scene, 'sprinkler', 16, 16, (p) => sprinkler(p), 1);
+    paint(scene, 'shelf', 16, 16, (p) => shelf(p), 1);
+    paint(scene, 'board', 16, 16, (p) => board(p), 1);
+    paint(scene, 'coffer', 16, 15, (p) => coffer(p), 1);
+    paint(scene, 'museum', 32, 19, (p) => museum(p), 1);
+    paint(scene, 'fishpond', 32, 15, (p) => fishpond(p), 1);
     paint(scene, 'market', 18, 13, market, 5);
     paint(scene, 'mill', 16, 17, (p) => mill(p), 1);
     paintFrames(scene, 'mill_blades', 25, 25, 1, (p) => millBlades(p, 0), 1);

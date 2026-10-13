@@ -302,6 +302,17 @@ export function pickRaider (kind: NestKindId, level: number, roll: () => number)
     return list[0];
 }
 
+/** What makes one elite different from another: each carries one trait, shown by its tint and named when it falls. */
+export type AffixId = 'swift' | 'armored' | 'volatile' | 'mending';
+export const AFFIXES: Record<AffixId, { name: string; color: number; tip: string }> = {
+    swift:    { name: 'Swift',    color: 0xffe08a, tip: 'Runs a third faster.' },
+    armored:  { name: 'Armored',  color: 0xb0b5cc, tip: 'Takes 40% less damage.' },
+    volatile: { name: 'Volatile', color: 0xff9a6a, tip: 'Bursts when it dies: step back.' },
+    mending:  { name: 'Mending',  color: 0x9be88a, tip: 'Heals itself while you hesitate.' },
+};
+export const AFFIX_IDS = Object.keys(AFFIXES) as AffixId[];
+export const AFFIX_SPEED = 1.35, AFFIX_ARMOR = 0.6, AFFIX_HEAL = 0.04, AFFIX_BURST = 38;
+
 /** Elites only show up once you have found your feet, then get more common. */
 export const eliteChance = (level: number) => level < 6 ? 0 : Math.min(0.22, 0.012 * (level - 4));
 

@@ -340,6 +340,66 @@ test('sawmill doubles planks; millstone grinds wheat; chests hold items for anyo
     assert.equal(chest.inv!.plank, 5);
 });
 
+test('a Speed Module makes a machine a quarter faster, one per machine, and comes back out', () => {
+    const run2 = (withModule: boolean) => {
+        const sim = Sim.create('TEST-MOD' + (withModule ? 'A' : 'B'), 'test');
+        const a = sim.join('a', 'A')!;
+        const mill = placeNear(sim, a, 'millstone', { inv: {}, out: {}, fuel: 0, prog: 0, by: 'a' });
+        give(sim, 'a', 'wheat', 2);
+        if (withModule) { give(sim, 'a', 'module_speed', 2); sim.command('a', { t: 'module', id: mill.id, op: 'put' }); sim.command('a', { t: 'module', id: mill.id, op: 'put' }); }
+        sim.command('a', { t: 'xfer', id: mill.id, item: 'wheat', n: 2, dir: 'put' });
+        run(sim, 2.5);
+        return { mill, a, done: (mill.out?.flour ?? 0) > 0 };
+    };
+    const slow = run2(false), fast = run2(true);
+    assert.equal(slow.done, false, 'three seconds a batch: not yet at 2.5');
+    assert.equal(fast.done, true, 'with a module 3 / 1.25 = 2.4 seconds');
+    assert.equal(fast.mill.mod, 'speed');
+    assert.equal(countOf(fast.a, 'module_speed'), 1, 'only one is slotted');
+    const sim = Sim.create('TEST-MODC', 'test');
+    const a = sim.join('a', 'A')!;
+    const mill = placeNear(sim, a, 'millstone', { inv: {}, out: {}, fuel: 0, prog: 0, by: 'a' });
+    give(sim, 'a', 'module_speed', 1);
+    sim.command('a', { t: 'module', id: mill.id, op: 'put' });
+    sim.command('a', { t: 'module', id: mill.id, op: 'take' });
+    assert.equal(mill.mod, undefined);
+    assert.equal(countOf(a, 'module_speed'), 1);
+});
+
+test('a Sprinkler makes the beds around it grow faster, and only those in reach', () => {
+    const sim = Sim.create('TEST-SPR', 'test');
+    const a = sim.join('a', 'A')!;
+    const o = sim.world.plotOrigin(sim.homePlot(a.slot));
+    const bed = (dx: number) => sim.add<BuildE>({ k: 'bld', kind: 'bed', tx: o.tx + 4 + dx, ty: o.ty + 8, rot: 0, crop: 0, plant: 'seed_wheat', growT: 0, by: 'a' });
+    const near = bed(0), far = bed(12);
+    sim.add<BuildE>({ k: 'bld', kind: 'sprinkler', tx: o.tx + 5, ty: o.ty + 8, rot: 0 });
+    run(sim, 3);
+    assert.ok((near.growT ?? 0) > 0 && (far.growT ?? 0) > 0);
+    const ratio = (near.growT ?? 0) / (far.growT ?? 1);
+    assert.ok(Math.abs(ratio - 1.3) < 0.02, `near beds grow 30% faster (${ratio})`);
+});
+
+test('a beehive turns berries into honey', () => {
+    const sim = Sim.create('TEST-11H', 'test');
+    const a = sim.join('a', 'A')!;
+    const hive = placeNear(sim, a, 'beehive', { inv: {}, out: {}, fuel: 0, prog: 0, by: 'a' });
+    give(sim, 'a', 'berry', 3);
+    sim.command('a', { t: 'xfer', id: hive.id, item: 'berry', n: 3, dir: 'put' });
+    run(sim, 45);
+    assert.equal(hive.out!.honey, 1);
+});
+
+test('a fish pond turns a carp and some bait into two carp', () => {
+    const sim = Sim.create('TEST-11P', 'test');
+    const a = sim.join('a', 'A')!;
+    const pond = placeNear(sim, a, 'fishpond', { inv: {}, out: {}, fuel: 0, prog: 0, by: 'a' });
+    give(sim, 'a', 'fish_carp', 1); give(sim, 'a', 'bait', 1);
+    sim.command('a', { t: 'xfer', id: pond.id, item: 'fish_carp', n: 1, dir: 'put' });
+    sim.command('a', { t: 'xfer', id: pond.id, item: 'bait', n: 1, dir: 'put' });
+    run(sim, 50);
+    assert.equal(pond.out!.fish_carp, 2);
+});
+
 test('food restores energy, potions heal and grant buffs that expire', () => {
     const sim = Sim.create('TEST-12', 'test');
     const a = sim.join('a', 'A')!;

@@ -13,7 +13,8 @@ import { adopt, isNew, markSeen } from '../../seen';
 import { deviceText, onTap, SearchBox, Section, Slot, StatList, tipOn, Win, type Footer } from '../kit';
 import { ListTools } from '../listtools';
 import { inset, rect } from '../px';
-import { itemTip } from '../tips';
+import { SS } from '../../res';
+import { itemTip, wornFor } from '../tips';
 import type { Screen, ScreenCtx } from './types';
 
 type Slot6 = Exclude<GearSlot, 'ring'>;
@@ -38,12 +39,14 @@ export class InventoryScreen implements Screen {
     private armed = -1;
     /** Phones: while on, a tap stars or unstars an item instead of using it. */
     private starMode = false;
+    /** While on, a click gives the item to the nearest friend (Shift: all, right-click: one) instead of using it. */
+    private giveMode = false;
 
     constructor (private ctx: ScreenCtx) {
         const s = ctx.scene;
         this.win = new Win(s, { size: 'large', title: 'Backpack', icon: 'k_bag', accent: PAL.gold, onClose: () => ctx.close() });
         const w = this.win;
-        this.foot = w.footer({ info: '', infoW: 110, secondary: [{ label: 'Rings  (U)', onClick: () => ctx.open('gear'), icon: 'i_ring_copper' }, { label: deviceText('Quick stack  (Q)', 'Quick stack'), onClick: () => ctx.send({ t: 'inv', op: 'stash' }) }, { label: deviceText('Trade  (Y)', 'Trade'), onClick: () => ctx.startTrade() }, { label: '★ Star', onClick: () => { this.starMode = !this.starMode; this.key = ''; this.foot.setHint(this.starMode ? 'Star mode: tap items to star or unstar them. Tap ★ Star again to finish.' : deviceText('Click an item to equip, eat or open it.  F stars it so Quick stack leaves it alone.', 'Tap an item to equip, eat or open it.')); } }], hint: deviceText('Click an item to equip, eat or open it.  F stars it so Quick stack leaves it alone.', 'Tap an item to equip, eat or open it.') });
+        this.foot = w.footer({ info: '', infoW: 110, secondary: [{ label: 'Rings  (U)', onClick: () => ctx.open('gear'), icon: 'i_ring_copper' }, { label: deviceText('Quick stack  (Q)', 'Quick stack'), onClick: () => ctx.send({ t: 'inv', op: 'stash' }) }, { label: deviceText('Trade  (Y)', 'Trade'), onClick: () => ctx.startTrade() }, { label: 'Give', onClick: () => { this.giveMode = !this.giveMode; this.starMode = false; this.key = ''; this.foot.setHint(this.giveMode ? 'Give mode: click an item to hand 10 to the nearest friend (Shift: all, right-click: one). Click Give again to finish.' : deviceText('Click an item to equip, eat or open it.  F stars it so Quick stack leaves it alone.', 'Tap an item to equip, eat or open it.')); } }, { label: '★ Star', onClick: () => { this.starMode = !this.starMode; this.key = ''; this.foot.setHint(this.starMode ? 'Star mode: tap items to star or unstar them. Tap ★ Star again to finish.' : deviceText('Click an item to equip, eat or open it.  F stars it so Quick stack leaves it alone.', 'Tap an item to equip, eat or open it.')); } }], hint: deviceText('Click an item to equip, eat or open it.  F stars it so Quick stack leaves it alone.', 'Tap an item to equip, eat or open it.') });
         const body = w.body, lw = 300, gx = 8;
 
         // ── left: what you wear, and your stats ──
@@ -90,18 +93,36 @@ export class InventoryScreen implements Screen {
         this.grid = new ItemGrid(w, this.carrying.inner.x, this.carrying.inner.y + chipsH, g.cols, g.rows, 44, 4, 'Nothing here yet.\nGo harvest something!');
         w.keep(s.add.zone(0, 0, 1, 1));
         // the hotbar, editable: click a slot, then an item (or right-click an item to pin it; on a phone, hold it)
-        const hot = w.section(rx, body.y + body.h - hotH, rw, hotH, 'Hotbar', { right: deviceText('Click a slot, then an item.  Right-click an item to pin or unpin it.', 'Tap a slot, then an item.  Hold an item to pin or unpin it.') });
+        const hot = w.section(rx, body.y + body.h - hotH, rw, hotH, 'Hotbar', { right: deviceText('Click a slot, then an item, or drag slots to swap.  Right-click an item to pin or unpin it.', 'Tap a slot, then an item.  Hold an item to pin or unpin it.') });
         for (let i = 0; i < HOT_SLOTS; i++) {
             const sl = new Slot(s, 0, 0, 40);
             w.putAt(sl.root, hot.inner.x + i * 44, hot.inner.y + 2);
             this.strip.push(sl);
             onTap(sl.interactive, () => { this.armed = this.armed === i ? -1 : i; this.key = ''; }, () => { ctx.send({ t: 'hot', slot: i, item: null }); if (this.armed === i) this.armed = -1; this.key = ''; });
+            // drag a slot onto another to swap them (the sim already swaps when an item is pinned where another sits)
+            sl.interactive.on('pointerdown', (ptr: Phaser.Input.Pointer) => {
+                const from = hotbarOf(ctx.me())[i];
+                if (!from) return;
+                s.input.once('pointerup', (up: Phaser.Input.Pointer) => {
+                    if (Phaser.Math.Distance.Between(ptr.downX, ptr.downY, up.x, up.y) < 14 * SS) return;
+                    const to = this.strip.findIndex((o) => o !== sl && o.interactive.getBounds().contains(up.x, up.y));
+                    if (to < 0) return;
+                    ctx.send({ t: 'hot', slot: to, item: from });
+                    this.armed = -1; this.key = '';
+                });
+            });
             tipOn(sl.interactive, () => {
                 const id = hotbarOf(ctx.me())[i];
                 const foot = this.armed === i ? 'Now click an item to put here' : 'Click to choose an item for this slot  ·  right-click to clear';
                 return id ? itemTip(id, { count: countOf(ctx.me(), id), foot: `Key ${i + 1}  ·  ${foot}` }) : { title: `Hotbar slot ${i + 1}`, color: PAL.pebble, lines: [{ t: foot, c: PAL.pebble }] };
             });
         }
+    }
+
+    private giveTo (item: ItemId, n: number) {
+        const who = this.ctx.friendInReach();
+        if (!who) { this.ctx.toast('No friend close enough: stand next to them', undefined, PAL.pebble); return; }
+        this.ctx.send({ t: 'inv', op: 'give', who, item, n });
     }
 
     private dress (me: ReturnType<ScreenCtx['me']>) {
@@ -136,7 +157,7 @@ export class InventoryScreen implements Screen {
 
     update () {
         const me = this.ctx.me();
-        const k = JSON.stringify([me.inv, me.equip, me.hot, me.coins, me.level, me.xp | 0, me.skills, me.buffs.length, this.tools.prefs, me.points, this.armed, this.search.value, me.fav, this.starMode]);
+        const k = JSON.stringify([me.inv, me.equip, me.hot, me.coins, me.level, me.xp | 0, me.skills, me.buffs.length, this.tools.prefs, me.points, this.armed, this.search.value, me.fav, this.starMode, this.giveMode]);
         if (k === this.key) return;
         this.key = k;
         const send = this.ctx.send;
@@ -149,8 +170,9 @@ export class InventoryScreen implements Screen {
             data: { icon: `i_${id}`, count: countOf(me, id), rarity: ITEMS[id].rarity, ...(me.fav?.includes(id) ? { badge: '★' } : {}), ...(isNew(id) ? { dot: true } : {}) },
             seen: () => { if (markSeen(id)) this.key = ''; },
             star: () => send({ t: 'inv', op: 'fav', item: id }),
-            tip: () => itemTip(id, { count: countOf(me, id), sellMul: derived(me).sellMul, foot: this.armed >= 0 ? `Click to put it in hotbar slot ${this.armed + 1}` : ITEMS[id].open ? 'Click to open it' : hotbarOf(this.ctx.me()).includes(id) ? 'Right-click to unpin from the hotbar' : 'Right-click to pin to the hotbar' }),
+            tip: () => itemTip(id, { count: countOf(me, id), sellMul: derived(me).sellMul, worn: wornFor(me, id), foot: this.armed >= 0 ? `Click to put it in hotbar slot ${this.armed + 1}` : ITEMS[id].open ? 'Click to open it' : hotbarOf(this.ctx.me()).includes(id) ? 'Right-click to unpin from the hotbar' : 'Right-click to pin to the hotbar' }),
             click: (shift) => {
+                if (this.giveMode) { this.giveTo(id, shift ? countOf(me, id) : 10); return; }
                 if (this.starMode) { send({ t: 'inv', op: 'fav', item: id }); return; }
                 if (this.armed >= 0 || shift) { this.pin(id); return; }
                 const def = ITEMS[id];
@@ -159,7 +181,7 @@ export class InventoryScreen implements Screen {
                 else if (def.open) send({ t: 'crate', item: id });
                 else if (def.relic || parseGem(id)) this.ctx.open('gear');
             },
-            right: () => this.pin(id),
+            right: () => { if (this.giveMode) this.giveTo(id, 1); else this.pin(id); },
         }));
         this.grid.setItems(items);
         this.carrying.setRight(`${items.length} kind${items.length === 1 ? '' : 's'}  ·  up to ${itemCap(me, 'wood')} of each`);
