@@ -29,7 +29,7 @@ export function createTutorial(game) {
   // ---------------------------------------------------------------- steps
   // target(): Element | null. met(t): step finished. when(): optional gate (return false to stay silent). pos: card placement hint.
   const STEPS = [
-    { id: 'welcome', title: 'Welcome, Lanista', text: 'You run a gladiator school. Hire a fighter, train them each week, then send him to the arena for gold and glory. I will show you the way.', manual: 'Show me', block: true,
+    { id: 'welcome', title: 'Welcome, Lanista', text: 'You run a gladiator school. Hire a fighter, train them each week, then send them to the arena for gold and glory. I will show you the way.', manual: 'Show me', block: true,
       met: (t) => !!t.welcome, when: () => game.scene === 'hub' },
     { id: 'hire', title: 'Hire your first fighter', text: 'Three citizens wait at the gate. Compare their stats and talent pips, then tap Hire on the one you like.',
       target: () => { const s = sheetBy('recruit'); return s ? tutEl(s, 'hire') : null; },

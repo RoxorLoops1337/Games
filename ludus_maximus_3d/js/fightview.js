@@ -30,6 +30,7 @@ const RATES = [0.25, 0.5, 1, 2];
 /** replay seeking: fx calls for events far from the seek target are dropped (a Proxy that swallows everything except the persistent sand decals) */
 const NOOP = new Proxy(function () {}, { get: () => NOOP, apply: () => NOOP });
 const quietFx = (real) => new Proxy(real, { get: (t, k) => (k === 'groundDecal' || k === 'decal' || k === 'markDecals' || k === 'decalDraw' ? t[k] : NOOP) });
+const _head = new THREE.Vector3(), _hp = new THREE.Vector3(), _kp = new THREE.Vector3(), _kd = new THREE.Vector3(), KICK = { size: 0.45 }; // per-frame temporaries (no allocation in the frame loop)
 const readSpeed = () => { try { const v = +localStorage.getItem(SPEED_KEY); return SPEEDS.includes(v) ? v : 1; } catch (e) { return 1; } };
 const STATUS_FX = new Set(['stun', 'slow', 'bleed', 'blind', 'taunt', 'root', 'burn']);
 const STATUS_LABEL = { stun: 'STUNNED', slow: 'SLOWED', bleed: 'BLEEDING', blind: 'BLINDED', taunt: 'TAUNT', netted: 'NETTED', guard: 'GUARD', frenzy: 'FRENZY', rage: 'RAGE', rally: 'RALLY', root: 'ROOTED', air: 'KNOCKED UP', spin: 'WHIRLING' };
@@ -393,7 +394,7 @@ export class FightView {
     if (this.phase === 'intro' && this.skip) this.phaseT = Math.max(this.phaseT, 4.3);
     // director first so timeScale (slow-mo cues) applies to this frame's sim
     if (this.camSpin && this.dir.free) this.dir.freeOrbit(this.camSpin * realDt);
-    const units = F.units.map((u) => { const f = this.fm.get(u.id); return { id: u.id, x: f.rx ?? u.x, y: f.ry ?? u.y, vx: f.vx, vy: f.vz, team: u.side === 'A' ? 0 : 1, alive: !u.down, h: f.rig.beast ? f.rig.nameH : undefined, r: f.rig.beast ? f.rig.beastR : undefined }; }); // BEAST: big beasts widen the camera framing
+    const units = this.dirUnits(F);
     const pose = this.dir.update(realDt, units);
     const tail = fight ? this.updateLastStand(realDt, F) : 1;               // last victim on a sliver of hp: slow-mo tail + duel shoulder cam (presentation only, the sim just takes more frames)
     // dt = game seconds this frame (slow-mo, hit-stop, execution ramp). The sim advances dt * speed; animation and fx follow it (up to x3) so x2 / x3 look like fast-forward
@@ -424,6 +425,13 @@ export class FightView {
     this.updateRain(realDt, t);
   }
 
+  /** director input, rewritten in place every frame (the same objects, no per-frame allocation) */
+  dirUnits(F) {
+    const a = this._du || (this._du = []); if (a.length !== F.units.length || a._F !== F) { a.length = 0; a._F = F; for (const u of F.units) a.push({ id: u.id, x: 0, y: 0, vx: 0, vy: 0, team: u.side === 'A' ? 0 : 1, alive: true, h: undefined, r: undefined }); }
+    for (let i = 0; i < a.length; i++) { const u = F.units[i], f = this.fm.get(u.id), o = a[i], b = f.rig.beast; o.x = f.rx ?? u.x; o.y = f.ry ?? u.y; o.vx = f.vx; o.vy = f.vz; o.alive = !u.down; o.h = b ? f.rig.nameH : undefined; o.r = b ? f.rig.beastR : undefined; } // BEAST: big beasts widen the camera framing
+    return a;
+  }
+
   /** frozen frame: nothing simulates, the camera still settles (and orbits while dragging in a replay) so a paused replay can be inspected */
   framePaused(realDt) {
     const F = this.F, units = F.units.map((u) => { const f = this.fm.get(u.id); return { id: u.id, x: f.rx ?? u.x, y: f.ry ?? u.y, vx: 0, vy: 0, team: u.side === 'A' ? 0 : 1, alive: !u.down }; });
@@ -434,7 +442,8 @@ export class FightView {
   /** the last living unit of a side is on a sliver of hp while the other side still stands: ease the game clock down and frame the pair with the duel camera */
   updateLastStand(realDt, F) {
     let vic = null, best = 1;
-    if (!F.done) for (const side of ['A', 'B']) { const mine = F.units.filter((u) => u.side === side && !u.down), foes = F.units.some((u) => u.side !== side && !u.down); if (mine.length === 1 && foes) { const fr = mine[0].hp / mine[0].maxhp; if (fr < 0.14 && fr < best) { best = fr; vic = mine[0]; } } }
+    if (!F.done) { let nA = 0, nB = 0, lA = null, lB = null; for (const u of F.units) if (!u.down) { if (u.side === 'A') { nA++; lA = u; } else { nB++; lB = u; } }
+      if (nA === 1 && nB > 0) { const fr = lA.hp / lA.maxhp; if (fr < 0.14 && fr < best) { best = fr; vic = lA; } } if (nB === 1 && nA > 0) { const fr = lB.hp / lB.maxhp; if (fr < 0.14 && fr < best) { best = fr; vic = lB; } } }
     if (this.lsCool > 0) this.lsCool -= realDt; let target = 0;
     if (vic && this.lsCool <= 0 && F.t > 3) {
       if (!this.ls || this.ls.id !== vic.id) { this.ls = { id: vic.id, t: 0 }; const foe = this.nearestFoe(vic); if (foe) this.dir.setShot('duel', { a: vic.id, b: foe.id, side: 1 }, 0.6); }
@@ -613,7 +622,7 @@ export class FightView {
       rig.update(dt);
       // plate
       f.hpShown += (u.hp - f.hpShown) * 0.2; f.plate.hp && f.plate.hp.set(u.hp, u.maxhp);
-      const head = new THREE.Vector3(X, (rig.nameH || 2.05) * (rig.root.scale.y || 1), Z); // BEAST: rig.nameH = beast height
+      const head = _head.set(X, (rig.nameH || 2.05) * (rig.root.scale.y || 1), Z); // BEAST: rig.nameH = beast height
       this.placePlate(f.plate, head, this.renderer.domElement.clientWidth, this.renderer.domElement.clientHeight);
       f.plate.style.opacity = dn || this.phase === 'intro' || this.phase === 'outro' ? 0.0 : 1;
     }
@@ -626,7 +635,7 @@ export class FightView {
     const m = Math.hypot(p.x, p.z); if (m > 0.9) { p.x *= 0.9 / m; p.z *= 0.9 / m; }
     if (Math.abs(p.x) + Math.abs(p.z) + Math.abs(p.vx) + Math.abs(p.vz) < 0.003) { p.x = p.z = p.vx = p.vz = 0; return; }
     const sp = Math.hypot(p.vx, p.vz); f.skidT -= dt;
-    if (sp > 1.4 && f.skidT <= 0 && !this.silent) { f.skidT = 0.09; this.fx.kickup(new THREE.Vector3(f.rx + p.x, 0.05, f.ry + p.z), new THREE.Vector3(p.vx / sp, 0, p.vz / sp), 2, { size: 0.45 }); }  // heel dust while the shove is fast
+    if (sp > 1.4 && f.skidT <= 0 && !this.silent) { f.skidT = 0.09; this.fx.kickup(_kp.set(f.rx + p.x, 0.05, f.ry + p.z), _kd.set(p.vx / sp, 0, p.vz / sp), 2, KICK); }  // heel dust while the shove is fast
   }
   /** shove fighter f along (dir.x, dir.z) with an impulse of v m/s (presentation only). Big shoves also drag a short skid mark through the sand. */
   shove(f, dir, v) {
@@ -645,7 +654,7 @@ export class FightView {
   }
   /** project the head, then slide the plate so it never covers the top button row or the bottom ult buttons, and never leaves the screen */
   placePlate(plate, head, w, h) {
-    const cam = this.camera, p = head.clone(); p.y += 0.35; p.project(cam);
+    const cam = this.camera, p = _hp.copy(head); p.y += 0.35; p.project(cam);
     const vis = p.z > -1 && p.z < 1 && Math.abs(p.x) < 1.15 && Math.abs(p.y) < 1.15;
     if ((this.avoid.n++ % 20) === 0) this.measureHud();
     const PW = w < 420 ? 112 : 136, PH = 44, gx = 6; let x = (p.x * 0.5 + 0.5) * w, y = (-p.y * 0.5 + 0.5) * h; // y = bottom edge of the plate

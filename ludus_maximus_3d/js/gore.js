@@ -85,7 +85,7 @@ export function createGore(fx, o = {}) {
   // dry old blood darker, and let the sand clear a little under standing fighters so silhouettes and shadows stay readable
   // long fights: estimate how much of the sand is covered and thin new stains out as it fills, dry old blood darker, and let the sand clear a little under standing
   // fighters so silhouettes and shadows stay readable. Coverage is tracked analytically on a 32 x 32 grid (every stamp adds its area): reading the decal canvas back
-  // (drawImage + getImageData on a GPU canvas) stalled the GPU pipeline for a visible hitch every 1.5 s.
+  // (a canvas readback) stalled the GPU pipeline for a visible hitch every 1.5 s.
   const COV_N = 32, covGrid = new Float32Array(COV_N * COV_N), COV_CELL = (DD.ext * 2) / COV_N, COV_AREA = COV_CELL * COV_CELL; let covT = 0, dryT = 0, dryN = 0, fadeT = 0;
   G.cover = 0;
   function addCover(x, z, r, a = 0.7) { // area of a stamp of radius r (m), spread over the cells it touches, saturating per cell

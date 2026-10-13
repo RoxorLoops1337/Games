@@ -29,11 +29,14 @@ export class Game {
   }
 
   async init() {
+    try { await this.init0(); } catch (e) { this.fatal(e); throw e; } // QA: a failed start shows a way out instead of a frozen "Forging the arena" screen
+  }
+  async init0() {
     this.fightView = new FightView({ renderer: this.renderer, post: this.post, camera: this.camera, audio: this.audio, host: this.ui, tier: this.tier });
     try { const mod = await import('./hub.js'); this.hub = mod.createHub({ renderer: this.renderer, camera: this.camera, post: this.post, audio: this.audio, tier: this.tier }); }
     catch (e) { console.warn('hub.js unavailable, using stub', e && e.message); this.hub = createHubStub({ renderer: this.renderer, camera: this.camera, audio: this.audio, tier: this.tier }); }
     this.hub.onPick = (sel) => this.onPick(sel);
-    this.buildHud();
+    this.buildHud(); this.guardErrors();
     this.tutorial = createTutorial(this); // ONBOARDING
     import('./screens/more.js').then((m) => m.applyPrefs && m.applyPrefs(this.ctx)).catch(() => {});
   }
@@ -81,6 +84,31 @@ export class Game {
     this.advBtn.style.display = ''; this.refresh();
     lift && lift();
     if (!this.S.glads.length) this.open('recruit', { first: true });
+  }
+
+  /** QA: full screen recovery card for a start-up failure. Reload, keep the save safe, or reset it (the damaged copy is stashed, never lost). */
+  fatal(e) {
+    if (this._fatal) return; console.error('fatal', e);
+    const el = this._fatal = document.createElement('div'); el.className = 'lx-perf lx-perf-ctx'; el.setAttribute('role', 'alert');
+    const card = document.createElement('div'); card.className = 'lx-perf-card';
+    const t = document.createElement('b'); t.textContent = 'The arena could not open';
+    const p = document.createElement('p'); p.textContent = 'Something went wrong while starting the game. Your saved ludus has not been touched.';
+    const m = document.createElement('p'); m.textContent = String((e && e.message) || e || '').slice(0, 140); m.style.cssText = 'opacity:.7;font-size:12px;overflow-wrap:anywhere';
+    const mk = (label, fn) => { const b = document.createElement('button'); b.type = 'button'; b.className = 'lx-perf-btn'; b.textContent = label; b.style.cssText = 'display:block;width:100%'; b.onclick = fn; return b; };
+    card.append(t, p, m, mk('Reload the game', () => location.reload()));
+    if (L() && L().SAVE_KEY && localStorage.getItem(L().SAVE_KEY)) {
+      card.append(mk('Download my save file', () => { try { U.download('ludus_maximus_save.json', localStorage.getItem(L().SAVE_KEY) || ''); } catch (er) { /* blocked */ } }),
+        mk('Reset and start over', () => { if (confirm('Set the current save aside and start a new ludus? The old one is kept in this browser as a backup.')) { try { L().stashCorrupt(localStorage.getItem(L().SAVE_KEY)); } catch (er) { /* ignore */ } location.reload(); } }));
+    }
+    el.append(card); document.body.append(el); const b = document.getElementById('boot'); if (b) b.remove();
+    card.querySelector('button').focus();
+  }
+  /** QA: uncaught errors and rejections after start-up never leave the player guessing: one calm toast a minute, the game keeps running */
+  guardErrors() {
+    if (this._guard) return; this._guard = true; let last = 0;
+    const say = () => { if (Date.now() - last < 60000 || !this.S) return; last = Date.now(); U.toast('Something went wrong in the background. Your ludus is saved. Reload if anything looks stuck.', { kind: 'bad', ms: 6000 }); };
+    addEventListener('error', (ev) => { if (ev && ev.message && !/ResizeObserver/.test(ev.message)) say(); });
+    addEventListener('unhandledrejection', say);
   }
 
   /** QA: inspect the stored save before the title. Corrupt -> recovery dialog; newer -> a warning toast after load. */

@@ -75,6 +75,8 @@ export function auditFn(opts) {
         break; // only the nearest clipping ancestor matters
       }
     }
+    // chrome labels (nav, tabs, chips, button labels) must never be ellipsised: a truncated 'Rost...' is a layout bug, unlike a long fighter name
+    if (getComputedStyle(e).textOverflow === 'ellipsis' && e.scrollWidth > e.clientWidth + 1 && e.matches('.lx-nav-i span, .lx-btn-label, .ax-tab span, .ax-chipbtn span, .lx-ttl-tog')) out.push({ kind: 'clipped', sev: 'med', msg: `${sel(e)} label is truncated with an ellipsis (${e.scrollWidth} > ${e.clientWidth})` });
     // text clipped inside its own box
     const cs = getComputedStyle(e);
     if (e.childNodes.length && [...e.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim()) && tag !== 'textarea' && tag !== 'option') {
@@ -257,7 +259,7 @@ export async function advanceWeek(h, { maxSteps = 700, replay = false } = {}) {
       return { adv: true };
     }, replay && replays < 1);
     if (st.done) { if (st.err) h.add('stuck', 'high', 'advance week', 'flow threw: ' + st.err); await sweepRejections(h); return { steps: guard, titles }; }
-    if (st.clicked !== undefined) { titles.push(st.clicked); if (/\[replay\]/.test(st.clicked)) replays++; await audit(h, 'dialog ' + st.clicked.slice(0, 30)); await h.page.waitForTimeout(260); continue; }
+    if (st.clicked !== undefined) { titles.push(st.clicked); if (/\[replay\]/.test(st.clicked)) replays++; await h.page.waitForTimeout(450); /* let the flow open the next dialog before measuring */ await audit(h, 'after dialog ' + st.clicked.slice(0, 30)); continue; }
     await h.page.evaluate(() => window.__LM3D.advance(1.5));
   }
   h.add('stuck', 'high', 'advance week', `week flow did not finish after ${maxSteps} steps; last dialogs: ${titles.slice(-4).join(' | ')}`);

@@ -171,3 +171,6 @@ Direction convention: `dir = {x, z}` unit vector FROM the victim TOWARD the atta
 - Arms raised forward in a prone pose dig into the floor (body forward is down): lay them back along the sides (shoulder x +0.5) or straight overhead (-3.0).
 - Armour radii need a margin on the HD limbs (`hdk(rig)` in gear.js): biceps +20 percent, flexors +24 percent, calf +38 percent.
 - hub.js `bakeSkinned` maps every mesh under root to bone 0 (pre-existing since the skinned-body pass), so hub gladiators are frozen poses; not touched here.
+
+# Update: how the fight view uses the close-up animator states
+Directional `hurt / stagger / die` are fed `rig.localDir(-dir)` (unchanged). New: `executed()` + `finisher()` + `executeKill()` drive the execution (see ludus3d-vfx-gamefeel "Update: weight, finisher, speed"); the victim must not receive `release()` while kneeling (fightview clears `guarding / st / air / spin`). Visual root shoves (`f.pu`) ride on top of the clips' own `body` offsets, so stagger clips and shoves add up (keep shove peaks under 0.5 m).

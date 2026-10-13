@@ -56,3 +56,39 @@ geometries 66, textures 38, programs 57, DOM nodes 184, JS heap 38 to 40 MB: ide
 2. New small meshes on rigs: name them, then add the name to `NO_CAST` if they should not cast on low.
 3. Do not `await startDemo()` in tests: the promise resolves when the fight ends.
 4. Every added caster is 2 calls on high; check the 3v3 low number (<= 150) after touching gladiators, gear or the arena.
+
+# Update: fight QoL pass (draw calls, warm-up, spikes, GC, power)
+
+## Draw calls, 3v3 390x800, max over a 30 s fight (software GL, `peak` sampler = advance 0.5 s, read `renderer.info`)
+| tier | before (same sampler, old behaviour emulated) | after | note |
+|---|---|---|---|
+| low | 144 (lead measured 147) | **131** | shadow casters drop `leather` |
+| medium | 151 (lead measured 160) | **136** | bloom 5 to 3 mips (-4 passes), casters drop `leather` + `steel` (-11 shadow calls), idle fx meshes hidden |
+| high | 166 | 169 | unchanged on purpose (casters, 5 mips); far inside the desktop budget of 300 |
+- `post.TIERS.*.mips`: medium runs `UnrealBloomPass.nMips = 3` with factors `[1, .85, .7, 0, 0]` (setTier re-applies). Check the glow visually if you touch it.
+- fx: rings, slashes, ribbons and numbers draw only while something in them is alive (`ringAlive`/`slashAlive` mirror the shader dead tests, `gEnd` for numbers). Idle fx = decals + debris only.
+- Still unmerged (not in my files): arena unnamed meshes (9) and flames (2), rig flaps / plumes (2 calls each).
+
+## Shader warm-up (`FightView.warm()`, called by main.js behind the boot overlay, `?nowarm=1` skips it)
+Builds a rig of every style, the gib mesh (`gore.warm`), every pooled fx mesh (`fx.setWarm`), makes every hidden mesh visible once (theme / weather props), compiles with the composer render target bound (programs are keyed by it), then draws one frame (shadow depth, bloom, grade, output, decal texture). On high it also builds every arena theme's lazy dressing. Gotchas learned:
+- three destroys a program when the last material using it is disposed. Real rigs are disposed after every fight, so the warm rigs are KEPT (`warmRigs`, detached, not disposed) to keep their programs alive for the whole session.
+- Measured: programs after warm 62 (high), 52 (medium); a whole fight adds 0 on high, 2 on medium/low (hay and horizon of themes that are only built lazily; memory forbids pre-building them on phones). Software GL: warm 3 to 10 s, a real GPU compiles in a fraction. `window.__LM3D` is published after the warm, so tools never race it.
+- Keep `visible=false` props out of the warm with `userData.noWarm = true`.
+
+## Frame spikes: `__LM3D.stats().spikes`
+`{frames, avg, p95, max, spikeMs (25), spikeCount, worst, recent[{n, work, gap, scene, phase, cause: 'compile'|'advance'|'', programs}]}`. `work` = CPU ms of frame + render submit; a frame that created programs is tagged `compile`. `resetSpikes()`, `setSpikeMs(ms)`. Ignores 45 frames after resume.
+
+## Decal canvas and coverage
+- Full 2048 upload = 16 MB; now `fx.markDecals(x, z, r)` marks 512 px tiles (4x4, 2x2 on 1024) and `uploadDecals` pushes at most 2 dirty tiles per step with `texSubImage2D` (1 MB each; only tiles ever painted are re-marked by the global dry pass). First upload and `clearDecals` use `needsUpdate`. `fx.decalStats {tiles, full, ms}`; a 40 s 3v3: 239 tile uploads, 1 full. Software GL cannot show GPU upload time; the saving is 16x fewer bytes per update.
+- gore coverage cap is now analytic (32x32 grid, union of stamp areas, x1.35): the old `drawImage` + `getImageData` of the decal canvas every 1.5 s was a GPU readback stall (one 2.4 s hitch seen in software GL). Calibrated against the canvas measure: 0.24 vs 0.195 at 40 s.
+
+## GC / allocation (Chrome heap sampling incl. collected objects, 300 frames of 3v3 medium)
+149 KB/frame before this pass is the figure of the whole frame (about 4.5 MB/s at 30 Hz, a minor GC every few seconds). Top: rig.js `update` 13 KB (not mine), gore hook 9 KB (double fields of pooled droplets), fightview `syncFighters` 5 KB + `stepPush`. Fixed in fightview: plate head vectors, kickup temporaries, pooled director unit list, last-stand without `filter`. Recipe: `HeapProfiler.startSampling` with `includeObjectsCollectedByMajorGC/MinorGC: true`, `--js-flags=--expose-gc`.
+
+## Battery / thermal (main.js `PWR`, `fpsCap`)
+30 fps when the governor demoted to low, battery under 20 % and discharging, the hub idle 5 s without input (no modal open), or `?fps=30`. A capped loop skips `dyn.tick` (resets it) so the governor never reads 33 ms as slow. `stats().fpsCap`.
+
+## Startup
+47 JS files, 2.1 MB uncompressed (three 675 KB, rig 199 KB); vendor/jsm already holds only the 5 addons used. Added `modulepreload` for the heavy static chain (flattens the serial import discovery), boot messages per stage. Hub is already a dynamic import. Ready (software GL, low) about 9.5 s of which warm 3 s.
+
+## Leak check (10 fight -> hub cycles, 3v3 low, forced GC): geometries 130, textures 47, programs 72, DOM 161, heap 40 MB, identical from cycle 1 (the warm builds everything up front).

@@ -229,5 +229,23 @@ for (const fn of ['newGame', 'makeGlad', 'mkUnits', 'createFight', 'step', 'useU
   ok(!/—/.test(beast + bfx + ven), 'no em dashes in the beast files');
 }
 
+
+// 11. fight QoL pass: finisher, weight, pause / speed / replay controls, perf (appended by the fight team)
+{
+  const rd = (f) => readFileSync(join(root, f), 'utf8');
+  const fv = rd('js/fightview.js'), fxs = rd('js/fx.js'), gore = rd('js/gore.js'), main = rd('js/main.js'), post = rd('js/post.js'), dir = rd('js/director.js'), css = rd('css/ui.css'), html = rd('index.html');
+  ok(/startExec\(/.test(fv) && /execHit\(/.test(fv) && /canExec\(/.test(fv) && /executeKill\(\)/.test(fv) && /\.finisher\(\{/.test(fv) && /execPending/.test(fv), 'finisher: last kill staged as an execution (presentation only)');
+  ok(/kind === 'duel' && win === 'A'/.test(fv) && /NO_EXEC/.test(fv) && /clips\.finisher/.test(fv), 'finisher: mercy duels are not struck, sparring and beast rigs skipped');
+  ok(/tight/.test(dir) && /tight: true/.test(fv), 'kill cam has a tight execution framing');
+  ok(/stepPush\(/.test(fv) && /shove\(/.test(fv) && /MASS\[/.test(fv) && /'skid'/.test(fv), 'weight: visual shove spring, skid marks, heavier styles move less');
+  ok(/pause\(on\)/.test(fv) && /openPauseMenu/.test(fv) && /confirmQuit/.test(fv) && /forfeit\(\)/.test(fv) && /lx-fv-pause/.test(css), 'pause button + menu + quit confirm');
+  ok(/SPEEDS = \[1, 2, 3\]/.test(fv) && /Math\.min\(speedUp, 3\)/.test(fv), 'speed x1 x2 x3 scales sim and animation, audio untouched');
+  ok(/seekTo\(/.test(fv) && /restartReplay\(/.test(fv) && /CAMS = /.test(fv) && /lx-fv-rbar/.test(css) && /replay\.total|F\.replay\.total/.test(fv), 'replay controls: scrub, rate, camera presets');
+  ok(/async warm\(\)/.test(fv) && /warmUp\(\)/.test(main) && /setWarm/.test(fxs) && /G\.warm/.test(gore) && /warmRigs/.test(fv), 'shader warm-up behind the boot overlay');
+  ok(/uploadDecals/.test(fxs) && /texSubImage2D/.test(fxs) && /decPainted/.test(fxs) && /addCover/.test(gore) && !/getImageData/.test(gore), 'decal canvas: tiled partial upload, no GPU readback for coverage');
+  ok(/spikes: frameStats\(\)/.test(main) && /recordFrame/.test(main) && /fpsCap/.test(main) && /modulepreload/.test(html), 'frame spikes in stats, fps cap, modulepreload');
+  ok(/mips: 3/.test(post) && /leather\|steel/.test(post), 'medium: 3 bloom mips, leaner shadow casters');
+}
+
 console.log(`ludus_maximus_3d structure: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

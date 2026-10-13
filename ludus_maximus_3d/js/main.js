@@ -30,8 +30,16 @@ function applyTier(name) {
   post.setTier(name); game.tier = name;
   try { game.hub && game.hub.setTier && game.hub.setTier(name); } catch (e) { console.warn('hub.setTier', e && e.message); }
   const fv = game.fightView; if (fv) { fv.tier = name; fv.arena && fv.arena.setDensity(DENSITY[name]); }
+  if (name === 'low') PWR.demoted = true;
   if (!forcedTier) saveTierCap(name);   // remembered 14 days, so the next load starts at the tier this device can hold
 }
+// ---------------------------------------------------------------- battery / thermal: frame-rate cap
+// 30 fps when (a) the governor had to demote to the low tier (the device cannot hold 60 anyway: steadier frames, less heat), (b) the battery is under 20% and not charging,
+// (c) the hub has had no input for 5 s (ambient life only), (d) ?fps=30 (tests). Fights on a capable device stay uncapped.
+const PWR = { demoted: false, saver: false, lastInput: performance.now(), cap: 0 };
+for (const ev of ['pointerdown', 'pointermove', 'keydown', 'wheel', 'touchstart']) addEventListener(ev, () => { PWR.lastInput = performance.now(); }, { passive: true, capture: true });
+try { navigator.getBattery && navigator.getBattery().then((b) => { const f = () => { PWR.saver = !b.charging && b.level < 0.2; }; f(); b.addEventListener('levelchange', f); b.addEventListener('chargingchange', f); }).catch(() => {}); } catch (e) { /* no battery API */ }
+const fpsCap = (now) => (q.get('fps') ? +q.get('fps') : (PWR.demoted && post.tier === 'low') || PWR.saver || (game.scene === 'hub' && now - PWR.lastInput > 5000 && !document.querySelector('.lx-scrim')) ? 30 : 0);
 const dyn = createDynamicRes(post, { onTierDemote() { const order = ['high', 'medium', 'low']; const i = order.indexOf(post.tier); if (i < order.length - 1) applyTier(order[i + 1]); } });
 post.setScene = (s) => { post.composer.passes[0].scene = s; };
 
@@ -94,12 +102,13 @@ const halt = () => { if (rafId) cancelAnimationFrame(rafId); rafId = 0; };
 function loop(now) {
   rafId = 0; schedule();   // re-arm FIRST: an exception below must not stop the game
   if (q.get('manual')) { last = now; return; }
+  PWR.cap = fpsCap(now); if (PWR.cap && now - last < 1000 / PWR.cap - 3) return;   // frame-rate cap (see PWR)
   const gap = now - last, dt = Math.min(0.1, gap / 1000); last = now;
   const w0 = performance.now();
   try {
     clock += dt; frames++;
     if ((frames & 15) === 0) syncMotion();
-    dyn.tick(dt * 1000);
+    if (!PWR.cap) dyn.tick(dt * 1000); else dyn.reset(20);   // a capped 30 fps loop must not look slow to the governor
     game.frame(dt, clock);
     renderer.info.reset(); post.render(dt, clock);
   } catch (e) { if (frameErrs++ < 5) console.error('frame', e); }
@@ -143,7 +152,7 @@ let loseExt = null;
 const api = {
   THREE, renderer, camera, post, game, audio, dyn, get tier() { return post.tier; }, forcedTier,
   get view() { return game.fightView; },
-  stats() { const i = renderer.info; return { calls: i.render.calls, triangles: i.render.triangles, geometries: i.memory.geometries, textures: i.memory.textures, programs: i.programs ? i.programs.length : 0, tier: post.tier, scale: post.scale, frames, spikes: frameStats(), decal: game.fightView && game.fightView.fx && game.fightView.fx.decalStats ? Object.assign({}, game.fightView.fx.decalStats) : null, warmMs: api.warmMs, cam: [camera.position.x, camera.position.y, camera.position.z].map((v) => +v.toFixed(1)), fov: +camera.fov.toFixed(1), scene: game.scene, phase: game.fightView && game.fightView.phase, shot: game.fightView && game.fightView.dir.pose.shot, lost, paused, reduced: rmApplied }; },
+  stats() { const i = renderer.info; return { calls: i.render.calls, triangles: i.render.triangles, geometries: i.memory.geometries, textures: i.memory.textures, programs: i.programs ? i.programs.length : 0, tier: post.tier, scale: post.scale, frames, spikes: frameStats(), decal: game.fightView && game.fightView.fx && game.fightView.fx.decalStats ? Object.assign({}, game.fightView.fx.decalStats) : null, warmMs: api.warmMs, fpsCap: PWR.cap, saver: PWR.saver, cam: [camera.position.x, camera.position.y, camera.position.z].map((v) => +v.toFixed(1)), fov: +camera.fov.toFixed(1), scene: game.scene, phase: game.fightView && game.fightView.phase, shot: game.fightView && game.fightView.dir.pose.shot, lost, paused, reduced: rmApplied }; },
   makeDemoFight,
   startDemo(o = {}) { const F = makeDemoFight(o); api.F = F; game.setScene('fight'); return game.fightView.start(F, o); },
   // deterministic stepping for screenshots (headless software GL is slow): advance N frames of dt
@@ -164,12 +173,13 @@ async function warmUp() {
   try { if (!q.get('nowarm') && game.fightView && game.fightView.warm) await game.fightView.warm(); } catch (e) { console.warn('warm', e && e.message); }
   api.warmMs = Math.round(performance.now() - t0);
 }
+const bootMsg = (m) => { const e = document.getElementById('bootmsg'); if (e) e.textContent = m; };
 const nextFrames = (n) => new Promise((res) => { const f = () => (--n <= 0 ? res() : requestAnimationFrame(f)); requestAnimationFrame(f); });
 // window.__LM3D is published once the game is ready (init + warm-up + first scene), so test tools that wait for it never race the boot.
 (async () => {
   const reveal = async () => { await nextFrames(q.get('manual') ? 1 : 3); FT.ignore = 45; hideBoot(); };
   try {
-    await game.init(); resize(true); syncMotion(); await warmUp(); window.__LM3D = api; schedule();
+    bootMsg('Raising the walls...'); await game.init(); resize(true); syncMotion(); bootMsg('Lighting the torches...'); await warmUp(); bootMsg('The gates open...'); window.__LM3D = api; schedule();
     if (q.get('demo')) { const o = { a: q.get('a') || undefined, b: q.get('b') || undefined, lvl: +(q.get('lvl') || 5), team: +(q.get('team') || 0), auto: q.get('auto') !== '0', haz: q.get('haz') === '1', hunt: q.get('hunt') || undefined }; api.startDemo(o); await reveal(); return; }
     if (q.get('new')) { game.newGame({ name: 'Ludus Aurelia', color: 1 }); if (q.get('rich')) { game.S.gold += 5000; game.S.fame += 300; } game.setScene('hub'); game.refresh(); if (!game.S.glads.length && !q.get('empty')) game.open('recruit', { first: true }); await reveal(); return; }
     const booted = game.boot(); await reveal(); await booted;

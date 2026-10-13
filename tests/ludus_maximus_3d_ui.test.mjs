@@ -82,12 +82,27 @@ const scrims = (h) => h.page.evaluate(() => document.querySelectorAll('.lx-scrim
   }
   ok(busy.length === 0, 'Reduced motion leaves no running UI animation: ' + busy.join(' | '));
   await h.page.evaluate(() => document.body.classList.remove('lx-reduce-motion'));
+  // the OS setting alone (no in-game toggle) also calms the menus
+  await h.page.emulateMedia({ reducedMotion: 'reduce' });
+  let osBusy = [];
+  for (const id of ['market', 'more']) {
+    if (!(await openScreen(h, id))) continue; await h.page.waitForTimeout(150);
+    osBusy.push(...await h.page.evaluate(() => document.getAnimations().filter((x) => { const t = x.effect && x.effect.target; const ct = x.effect && x.effect.getComputedTiming(); return t && t.closest && t.closest('#ui, .lx-scrim') && x.playState === 'running' && ct.activeDuration > 50; }).map((x) => x.animationName || x.transitionProperty || 'anim').slice(0, 3)));
+    await closeAll(h);
+  }
+  ok(osBusy.length === 0, 'prefers-reduced-motion alone leaves no running UI animation: ' + osBusy.join(','));
+  await h.page.emulateMedia({ reducedMotion: 'no-preference' });
+  // start-up failure card
+  const fat = await h.page.evaluate(() => { window.__LM3D.game.fatal(new Error('test failure')); const a = document.querySelector('.lx-perf-ctx[role=alert]:not([hidden])'); return a && { text: a.textContent, btns: [...a.querySelectorAll('button')].map((b) => b.textContent) }; });
+  ok(fat && /could not open/.test(fat.text) && fat.btns.includes('Reload the game') && fat.btns.some((t) => /Download my save/.test(t)) && fat.btns.some((t) => /Reset/.test(t)), 'the start-up failure card offers reload, download and reset: ' + JSON.stringify(fat));
+  await h.page.evaluate(() => { const a = [...document.querySelectorAll('.lx-perf-ctx')].find((x) => /could not open/.test(x.textContent)); a && a.remove(); window.__LM3D.game._fatal = null; });
 
   // ultimate cooldown ring: text and label cues, not colour alone
   const ring = await h.page.evaluate(async () => { const U = await import('/ludus_maximus_3d/js/ui_kit.js'); const b = U.cooldownRing({ ult: 'meteor', color: '#e8742a', size: 72, hotkey: 'Q' }); document.body.append(b); const out = {}; b.set(0); out.ready = { label: b.getAttribute('aria-label'), text: b.querySelector('.lx-ult-sec').textContent, disabled: b.disabled }; b.set(0.5, 5); out.cool = { label: b.getAttribute('aria-label'), text: b.querySelector('.lx-ult-sec').textContent, disabled: b.disabled }; b.remove(); return out; });
   ok(ring.ready.text === 'GO' && /ready$/.test(ring.ready.label) && !ring.ready.disabled, 'ready ultimate says GO and is labelled ready: ' + JSON.stringify(ring.ready));
   ok(ring.cool.text === '5' && /ready in 5 seconds/.test(ring.cool.label) && ring.cool.disabled, 'cooling ultimate shows seconds and a spoken label: ' + JSON.stringify(ring.cool));
-  ok(h.F.list.filter((f) => f.sev === 'high').length === 0, 'no console errors or page errors: ' + JSON.stringify(h.F.list.filter((f) => f.sev === 'high').slice(0, 3)));
+  const real = h.F.list.filter((f) => f.sev === 'high' && !/test failure/.test(f.msg)); // the fatal card test logs on purpose
+  ok(real.length === 0, 'no console errors or page errors: ' + JSON.stringify(real.slice(0, 3)));
   await h.browser.close();
 }
 

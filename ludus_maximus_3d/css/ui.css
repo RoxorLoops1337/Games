@@ -502,6 +502,8 @@ html, body { max-width: 100%; overflow-x: hidden; }
 }
 /* replay bar: the selected chip lost its gold fill to the bar's own chip rule (dark text on dark); restore it */
 body .lx-fv-rbar .lx-fv-chip[aria-pressed=true] { background: linear-gradient(180deg, #f2c14e, #c9922e); border-color: #7a5222; color: #2a1a30; box-shadow: 0 0 0 2px rgba(242, 193, 78, .35); }
+/* bottom nav: the HUD column centres its children, so the nav shrank to its content and squeezed 'Roster' and 'Market' into ellipses on phones */
+.lx-hud .lx-nav { width: min(100%, 520px); align-self: center; }
 /* title settings: toggles and sliders were 40px */
 .lx-ttl-tog { min-height: 44px; }
 .lx-ttl-row input[type=range] { min-height: 44px; }
