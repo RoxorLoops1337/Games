@@ -14,8 +14,8 @@ split big ones into slices (rules, art, polish).
 - [x] S30 Give item to a nearby friend (Give mode in the backpack)
 - [x] S27 Auto-sort backpack (already true: the list is always sorted by your saved order, which is remembered per window)
 - [x] S29 Trade history (last five trades, shown in the trade window)
-- [ ] S25 Mailbox flag visible from afar
-- [ ] S26 Chest labels in the factory view / minimap
+- [x] S25 Mailbox flag visible from afar (already built: the flag goes up on every mailbox when post waits, in 2D and 3D)
+- [x] S26 Chest labels in the factory view (already built: a labelled chest wears its icon in the world, which the Factory view keeps lit; the minimap stays free of item icons by design)
 
 ## Phase 2: rhythm and economy (medium + small)
 - [ ] M6 Welcome-back digest
