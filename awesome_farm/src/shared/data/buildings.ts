@@ -3,12 +3,12 @@ import type { WorkKind } from './creatures';
 import type { Cost, ItemId } from './items';
 
 export type StationId = 'hand' | 'workbench' | 'anvil' | 'kitchen' | 'loom' | 'alchemy' | 'altar' | 'riftforge';
-export type ProcId = 'furnace' | 'sawmill' | 'millstone' | 'assembler' | 'pond' | 'hive';
+export type ProcId = 'furnace' | 'sawmill' | 'millstone' | 'assembler' | 'pond' | 'hive' | 'vat';
 export type BuildCat = 'craft' | 'industry' | 'power' | 'logistics' | 'farm' | 'storage' | 'light' | 'home' | 'defense' | 'decor' | 'special';
 
 export const STATION_NAMES: Record<StationId | ProcId, string> = {
     hand: 'By hand', workbench: 'Workbench', anvil: 'Anvil', kitchen: 'Kitchen', loom: 'Loom', alchemy: 'Alchemy Table', altar: 'Boss Altar', riftforge: 'Rift Forge',
-    furnace: 'Furnace', sawmill: 'Sawmill', millstone: 'Millstone', assembler: 'Assembler', pond: 'Fish Pond', hive: 'Beehive',
+    furnace: 'Furnace', sawmill: 'Sawmill', millstone: 'Millstone', assembler: 'Assembler', pond: 'Fish Pond', hive: 'Beehive', vat: 'Dye Vat',
 };
 
 /** Workshops where a creature can work through an order (the machines run on their own and just need supplying). */
@@ -66,7 +66,7 @@ export interface BuildingDef {
 export const isBeltLike = (kind: string) => kind === 'belt' || kind === 'splitter' || kind === 'sorter' || kind === 'tunnel' || kind === 'tunnelx';
 
 export type BuildingKind =
-    | 'workbench' | 'bed' | 'campfire' | 'chest' | 'market' | 'furnace' | 'sawmill' | 'millstone' | 'fishpond' | 'beehive'
+    | 'workbench' | 'bed' | 'campfire' | 'chest' | 'market' | 'furnace' | 'sawmill' | 'millstone' | 'fishpond' | 'beehive' | 'dyevat'
     | 'anvil' | 'kitchen' | 'loom' | 'alchemy' | 'lantern' | 'fence' | 'path' | 'planks' | 'bench' | 'mill'
     | 'belt' | 'splitter' | 'sorter' | 'tunnel' | 'tunnelx' | 'solar' | 'battery' | 'inserter' | 'drill' | 'pole' | 'windturbine' | 'coalgen' | 'assembler' | 'steelchest' | 'uberchest' | 'altar' | 'den' | 'waystone' | 'dock' | 'riftforge' | 'hatchery' | 'fortune'
     | 'hedge' | 'flowerbed' | 'statue' | 'banner' | 'table' | 'signpost' | 'lamppost' | 'fountain' | 'stonewall' | 'barrel' | 'haybale' | 'scarecrow' | 'mailbox' | 'museum' | 'coffer' | 'board' | 'shelf' | 'sprinkler' | 'harvester' | 'cottage' | 'beacon'
@@ -90,6 +90,7 @@ export const BUILDINGS: Record<BuildingKind, BuildingDef> = {
 
     fishpond:  { name: 'Fish Pond',   tex: 'fishpond',  size: [2, 1], cost: { stone: 16, plank: 4, clay: 6 }, cat: 'industry', proc: 'pond', work: 'make', desc: 'Fish multiply here. Feed it a fish and some bait and it gives back two.' },
 
+    dyevat:    { name: 'Dye Vat',   tex: 'dyevat',    size: [1, 1], cost: { plank: 8, clay: 4, fiber: 4 }, cat: 'industry', proc: 'vat', work: 'make', desc: 'Steep cloth with berries to dye it a rich colour. Dyed cloth sells for a good deal more.' },
     beehive:   { name: 'Beehive',    tex: 'beehive',   size: [1, 1], cost: { plank: 6, fiber: 4 }, cat: 'farm', proc: 'hive', work: 'make', desc: 'Bees turn berries into honey. Shake apples from oak trees too: honey and apples make a tart.' },
 
     belt:      { name: 'Conveyor Belt', tex: 'belt', size: [1, 1], cost: { ironbar: 1 }, cat: 'logistics', req: 'logistics', floor: true, solid: false, dir: true, desc: 'Carries items along. R rotates it; drag to lay a line.' },

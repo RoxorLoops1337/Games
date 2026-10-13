@@ -80,6 +80,10 @@ export const HOWTO: Partial<Record<BuildingKind, HowTo>> = {
         role: 'Makes honey', how: 'Feed it berries by hand (E) or with an inserter; honey comes out. It needs no fuel and no power.',
         example: lineOf('beehive'),
     },
+    dyevat: {
+        role: 'Dyes cloth', how: 'Feed it cloth and berries by hand (E) or with an inserter; dyed cloth comes out. It needs no fuel and no power.',
+        example: lineOf('dyevat'),
+    },
     fishpond: {
         role: 'Breeds fish', how: 'Feed it a fish and some bait by hand (E) or with an inserter; two fish come out. It needs no fuel and no power.',
         example: { items: [P('chest', 0, 0), P('inserter', 1, 0), P('fishpond', 2, 0), P('inserter', 4, 0), P('chest', 5, 0)], marks: [{ i: 0, t: 'fish' }, { i: 4, t: 'fish' }] },

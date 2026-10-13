@@ -2,8 +2,9 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { TILE } from '../src/shared/config';
-import { FOLK_NAMES, FRIEND_AT, TRADES } from '../src/shared/data/folk';
-import { onDawn, use } from '../src/shared/sim/cottage';
+import { FOLK_NAMES, FRIEND_AT, hearts, MAX_HEARTS, REQUEST_COINS, REQUEST_FRIEND, TRADES } from '../src/shared/data/folk';
+import { isEve } from '../src/shared/data/festival';
+import { onDawn, STALL_COST, STALL_PRIZE, use } from '../src/shared/sim/cottage';
 import { Sim } from '../src/shared/sim/sim';
 import type { BuildE } from '../src/shared/sim/types';
 
@@ -46,4 +47,38 @@ test('one gift a day, a gift of their trade, and a friend gives a little more', 
     assert.equal(home.res!.v, 2, 'the next day another');
     for (let d = 0; d < FRIEND_AT; d++) { sim.s.day += 1; use(sim, a, home); }
     assert.ok(home.res!.v > FRIEND_AT, 'a friend by now');
+});
+
+test('a request: bring what they ask for, earn coins and friendship hearts', () => {
+    const { sim, a, homes } = setup('COT-3');
+    const home = homes[0];
+    onDawn(sim);
+    for (let i = 0; i < 40 && !home.res!.q; i++) { sim.s.day++; onDawn(sim); }
+    assert.ok(home.res!.q, 'a settled villager asks for something sooner or later');
+    const item = home.res!.q as keyof typeof a.inv, n = home.res!.qn!;
+    a.inv[item] = n;
+    const coins = a.coins, v = home.res!.v;
+    use(sim, a, home);
+    assert.equal(a.coins, coins + REQUEST_COINS);
+    assert.ok(home.res!.v >= v + REQUEST_FRIEND);
+    assert.ok(!home.res!.q, 'the request is closed');
+    assert.equal(hearts(0), 0);
+    assert.equal(hearts(100), MAX_HEARTS);
+});
+
+test('festival night: the cottage is a ring-toss stall', () => {
+    const { sim, a, homes } = setup('COT-4');
+    const home = homes[0];
+    onDawn(sim);
+    sim.s.day = 7; sim.s.night = true;          // the last day of a season, after dark
+    assert.ok(isEve(sim.s.day));
+    a.coins = 100;
+    let wins = 0;
+    for (let i = 0; i < 20; i++) { const c = a.coins; use(sim, a, home); if (a.coins > c) wins++; }
+    assert.ok(wins > 0 && wins < 20, 'some throws hit, some miss');
+    assert.equal(a.coins, 100 - 20 * STALL_COST + wins * STALL_PRIZE);
+    a.coins = 2;
+    use(sim, a, home);
+    assert.equal(a.coins, 2, 'no throw without the coins');
+    assert.equal(home.res!.v, 0, 'a stall is not a visit');
 });

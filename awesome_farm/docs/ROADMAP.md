@@ -35,7 +35,7 @@ split big ones into slices (rules, art, polish).
 - [x] M10 Creature signature moves (every 4th companion strike, one move per element)
 - [x] M11 Day and night shifts for workers (Day/Night button on the creature card: day, night or round the clock; PROTOCOL 43)
 - [x] M12 Cosy room score (a furnished walled-in room gives the Cosy buff; score = furniture + variety)
-- [ ] M12b Dye vat (split off M12)
+- [x] M12b Dye vat (cloth + berries into dyed cloth)
 - [x] M13 Museum of odd things (Museum Case: E donates one of each trophy, fish and gem; prizes at 5, 10, 20, 30 and all)
 - [x] S31 Pet nicknames on plates (a companion wears its name over its head, so photo mode shows who is who)
 
@@ -50,21 +50,21 @@ split big ones into slices (rules, art, polish).
   - [x] B5a Farm Coffer (anyone pays in, take back only your own, tops up land purchases; PROTOCOL 44)
   - [x] B5b Request board (post "plank 50", reward held up front, others fill it for the coins; PROTOCOL 45)
   - [x] B5c Shared blueprint book (Blueprint Shelf: share your newest blueprint, others copy it into their book; PROTOCOL 46)
-- [ ] B4 Factory v2: modules, chest gauge, harvester arm + sprinkler
+- [x] B4 Factory v2: modules, chest gauge, harvester arm + sprinkler
   - [x] B4a Chest fill gauge (a little bar at the foot of every chest with something in it: green, gold, red)
   - [x] B4b Speed Module (assembler recipe; slot one into a machine for +25% speed with the Module button; PROTOCOL 47)
   - [x] B4e Efficiency Module (assembler recipe; fuel lasts 25% longer and 10% of batches come out doubled; the Module button slots a Speed Module first, else an Efficiency one; no protocol change)
   - [x] B4c Harvester Arm (harvests ripe beds within 2 tiles into a chest within 3, no power, no protocol change)
   - [x] B4d Sprinkler (beds within 3 tiles grow 30% faster, no power, no protocol change)
-- [ ] B1 Cottages: the folk move in
+- [x] B1 Cottages: the folk move in
   - [x] B1a Cottage building: a villager (name + trade) moves in at dawn, one trade gift a day with E, bigger gifts once a friend; no protocol change
   - [x] B1b Villagers walk about (a folk entity with art), name plates
-  - [ ] B1c Friendship hearts and requests
-- [ ] B2 Festival eve + the Lantern Chain
+  - [x] B1c Friendship hearts and requests
+- [x] B2 Festival eve + the Lantern Chain
   - [x] B2a Festival eve (last day of each season): E on lanterns, longest chain of 4+ pays everyone at dawn; no protocol change
   - [x] B2b Festival look: lanterns lit for the festival burn bigger and golder at night, in 2D and 3D (bunting and a festival song still to do)
-  - [ ] B2c Festival stalls and games
-- [ ] B3 The Long Dusk (new game plus)
+  - [x] B2c Festival stalls and games (ring toss at every cottage on festival night)
+- [x] B3 The Long Dusk (new game plus)
   - [x] B3a Dusk Beacon (sleeps until every boss has fallen; lit: wild monsters 8 levels tougher and 1.5x loot; all server-side, no protocol change)
-  - [x] B3b Dusk Crown (a boss that falls in the Long Dusk also drops a Dusk Crown trophy to everyone who fought; it joins the museum set; dusk-only bosses still to do)
+  - [x] B3b Dusk Crown (a boss that falls in the Long Dusk also drops a Dusk Crown trophy to everyone who fought; it joins the museum set; an altar boss woken in the Long Dusk has 1.6x health and drops its spoils twice)
   - [x] B3c Dusk indicator (the season label on the HUD reads "Spring · Long Dusk" in violet while it is on; the tick now carries it; PROTOCOL 48)

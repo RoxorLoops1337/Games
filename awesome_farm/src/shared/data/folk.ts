@@ -18,3 +18,13 @@ export const TRADES: Trade[] = [
 
 /** How many visits (days a gift was given) make a friend: from then on the gift is bigger. */
 export const FRIEND_AT = 5;
+
+/** Hearts a villager shows: one for every HEART_EVERY friendship points, up to MAX_HEARTS. */
+export const HEART_EVERY = 2;
+export const MAX_HEARTS = 5;
+export const hearts = (v: number) => Math.min(MAX_HEARTS, Math.floor(v / HEART_EVERY));
+
+/** What a villager may ask for at dawn (an item and how many); bringing it earns REQUEST_FRIEND friendship points and REQUEST_COINS coins. */
+export const WISHES: [ItemId, number][] = [['bread', 2], ['carrot', 4], ['fish_carp', 2], ['honey', 1], ['plank', 6], ['stone', 10], ['fiber', 8], ['berry', 6]];
+export const REQUEST_FRIEND = 2;
+export const REQUEST_COINS = 25;

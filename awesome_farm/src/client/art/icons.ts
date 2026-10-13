@@ -120,6 +120,7 @@ const SPEC: Partial<Record<ItemId, IconSpec>> = {
     iridium_bar: { shape: 'ingot', mat: MAT.void }, iridium_ore: { shape: 'chunk', mat: MAT.void },
     steel: { shape: 'ingot', mat: MAT.steel },
     cloth: { shape: 'cloth', mat: MAT.cloth, accent: 'F' },
+    dyed_cloth: { shape: 'cloth', mat: ['r', 'p', 'n'], accent: 'y' },
     rope: { shape: 'coil', mat: MAT.sand },
     gear: { shape: 'gear', mat: MAT.iron },
     wire: { shape: 'coil', mat: MAT.copper },

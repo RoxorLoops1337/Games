@@ -362,6 +362,7 @@ export const MATS: Record<string, DropSpec> = {
     iridium_bar: S((mb: MB) => ingots(mb, R.violet, { spark: true })),
     iridium_ore: S(iridiumOre),
     cloth: S((mb: MB) => cloth(mb, 0xecd5bb, 0xfff6e0, 0x4ab2cf)),
+    dyed_cloth: S((mb: MB) => cloth(mb, 0xb8487e, 0xe88cb8, 0xf0b93a)),
     rope: S(rope),
     gear: S(gearCog),
     wire: S(wireSpool, { lean: 0.35 }),
