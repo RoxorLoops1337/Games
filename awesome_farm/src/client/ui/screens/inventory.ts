@@ -38,12 +38,14 @@ export class InventoryScreen implements Screen {
     private armed = -1;
     /** Phones: while on, a tap stars or unstars an item instead of using it. */
     private starMode = false;
+    /** While on, a click gives the item to the nearest friend (Shift: all, right-click: one) instead of using it. */
+    private giveMode = false;
 
     constructor (private ctx: ScreenCtx) {
         const s = ctx.scene;
         this.win = new Win(s, { size: 'large', title: 'Backpack', icon: 'k_bag', accent: PAL.gold, onClose: () => ctx.close() });
         const w = this.win;
-        this.foot = w.footer({ info: '', infoW: 110, secondary: [{ label: 'Rings  (U)', onClick: () => ctx.open('gear'), icon: 'i_ring_copper' }, { label: deviceText('Quick stack  (Q)', 'Quick stack'), onClick: () => ctx.send({ t: 'inv', op: 'stash' }) }, { label: deviceText('Trade  (Y)', 'Trade'), onClick: () => ctx.startTrade() }, { label: '★ Star', onClick: () => { this.starMode = !this.starMode; this.key = ''; this.foot.setHint(this.starMode ? 'Star mode: tap items to star or unstar them. Tap ★ Star again to finish.' : deviceText('Click an item to equip, eat or open it.  F stars it so Quick stack leaves it alone.', 'Tap an item to equip, eat or open it.')); } }], hint: deviceText('Click an item to equip, eat or open it.  F stars it so Quick stack leaves it alone.', 'Tap an item to equip, eat or open it.') });
+        this.foot = w.footer({ info: '', infoW: 110, secondary: [{ label: 'Rings  (U)', onClick: () => ctx.open('gear'), icon: 'i_ring_copper' }, { label: deviceText('Quick stack  (Q)', 'Quick stack'), onClick: () => ctx.send({ t: 'inv', op: 'stash' }) }, { label: deviceText('Trade  (Y)', 'Trade'), onClick: () => ctx.startTrade() }, { label: 'Give', onClick: () => { this.giveMode = !this.giveMode; this.starMode = false; this.key = ''; this.foot.setHint(this.giveMode ? 'Give mode: click an item to hand 10 to the nearest friend (Shift: all, right-click: one). Click Give again to finish.' : deviceText('Click an item to equip, eat or open it.  F stars it so Quick stack leaves it alone.', 'Tap an item to equip, eat or open it.')); } }, { label: '★ Star', onClick: () => { this.starMode = !this.starMode; this.key = ''; this.foot.setHint(this.starMode ? 'Star mode: tap items to star or unstar them. Tap ★ Star again to finish.' : deviceText('Click an item to equip, eat or open it.  F stars it so Quick stack leaves it alone.', 'Tap an item to equip, eat or open it.')); } }], hint: deviceText('Click an item to equip, eat or open it.  F stars it so Quick stack leaves it alone.', 'Tap an item to equip, eat or open it.') });
         const body = w.body, lw = 300, gx = 8;
 
         // ── left: what you wear, and your stats ──
@@ -104,6 +106,12 @@ export class InventoryScreen implements Screen {
         }
     }
 
+    private giveTo (item: ItemId, n: number) {
+        const who = this.ctx.friendInReach();
+        if (!who) { this.ctx.toast('No friend close enough: stand next to them', undefined, PAL.pebble); return; }
+        this.ctx.send({ t: 'inv', op: 'give', who, item, n });
+    }
+
     private dress (me: ReturnType<ScreenCtx['me']>) {
         const show = (slot: 'cloak' | 'packBack' | 'body' | 'charm' | 'pack' | 'head', key: string | null) => {
             const im = this.doll[slot];
@@ -136,7 +144,7 @@ export class InventoryScreen implements Screen {
 
     update () {
         const me = this.ctx.me();
-        const k = JSON.stringify([me.inv, me.equip, me.hot, me.coins, me.level, me.xp | 0, me.skills, me.buffs.length, this.tools.prefs, me.points, this.armed, this.search.value, me.fav, this.starMode]);
+        const k = JSON.stringify([me.inv, me.equip, me.hot, me.coins, me.level, me.xp | 0, me.skills, me.buffs.length, this.tools.prefs, me.points, this.armed, this.search.value, me.fav, this.starMode, this.giveMode]);
         if (k === this.key) return;
         this.key = k;
         const send = this.ctx.send;
@@ -151,6 +159,7 @@ export class InventoryScreen implements Screen {
             star: () => send({ t: 'inv', op: 'fav', item: id }),
             tip: () => itemTip(id, { count: countOf(me, id), sellMul: derived(me).sellMul, worn: wornFor(me, id), foot: this.armed >= 0 ? `Click to put it in hotbar slot ${this.armed + 1}` : ITEMS[id].open ? 'Click to open it' : hotbarOf(this.ctx.me()).includes(id) ? 'Right-click to unpin from the hotbar' : 'Right-click to pin to the hotbar' }),
             click: (shift) => {
+                if (this.giveMode) { this.giveTo(id, shift ? countOf(me, id) : 10); return; }
                 if (this.starMode) { send({ t: 'inv', op: 'fav', item: id }); return; }
                 if (this.armed >= 0 || shift) { this.pin(id); return; }
                 const def = ITEMS[id];
@@ -159,7 +168,7 @@ export class InventoryScreen implements Screen {
                 else if (def.open) send({ t: 'crate', item: id });
                 else if (def.relic || parseGem(id)) this.ctx.open('gear');
             },
-            right: () => this.pin(id),
+            right: () => { if (this.giveMode) this.giveTo(id, 1); else this.pin(id); },
         }));
         this.grid.setItems(items);
         this.carrying.setRight(`${items.length} kind${items.length === 1 ? '' : 's'}  ·  up to ${itemCap(me, 'wood')} of each`);

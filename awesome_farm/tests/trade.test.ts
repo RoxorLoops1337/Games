@@ -76,3 +76,19 @@ test('walking away, going down or logging off cancels it; strangers and busy far
     busy.sim.leave('b'); busy.sim.step(0.05);
     assert.equal(busy.a.trade, undefined);
 });
+
+test('giving: a friend in reach gets the goods at once; too far, a full pack, gear or yourself are refused', () => {
+    const { sim, a, b } = pair();
+    sim.command('a', { t: 'inv', op: 'give', who: 'b', item: 'wood', n: 12 });
+    assert.equal(countOf(a, 'wood'), 18); assert.equal(countOf(b, 'wood'), 12);
+    sim.command('a', { t: 'inv', op: 'give', who: 'b', item: 'wood', n: 999 });
+    assert.equal(countOf(a, 'wood'), 0, 'gives all it has');
+    sim.command('a', { t: 'inv', op: 'give', who: 'a', item: 'iron', n: 1 });
+    assert.equal(countOf(a, 'iron'), 4, 'not to yourself');
+    b.inv.iron = itemCap(b, 'iron');
+    sim.command('a', { t: 'inv', op: 'give', who: 'b', item: 'iron', n: 4 });
+    assert.equal(countOf(a, 'iron'), 4, 'their pack is full');
+    b.inv.iron = 0; b.x += 30 * TILE;
+    sim.command('a', { t: 'inv', op: 'give', who: 'b', item: 'iron', n: 4 });
+    assert.equal(countOf(a, 'iron'), 4, 'too far');
+});

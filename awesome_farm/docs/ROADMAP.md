@@ -11,7 +11,7 @@ split big ones into slices (rules, art, polish).
 - [x] S18 Recent recipes tab in Crafting
 - [x] S21 Item comparison tooltips with green/red deltas (always on when a different piece is worn)
 - [x] S28 Quick-sell undo window (10 s, Undo sale button at the market)
-- [ ] S30 Give item to a nearby friend (no full trade window)
+- [x] S30 Give item to a nearby friend (Give mode in the backpack)
 - [ ] S27 Auto-sort backpack setting
 - [ ] S29 Trade history (last few trades)
 - [ ] S25 Mailbox flag visible from afar
