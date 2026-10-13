@@ -71,7 +71,7 @@ export type BuildingKind =
     | 'belt' | 'splitter' | 'sorter' | 'tunnel' | 'tunnelx' | 'solar' | 'battery' | 'inserter' | 'drill' | 'pole' | 'windturbine' | 'coalgen' | 'assembler' | 'steelchest' | 'uberchest' | 'altar' | 'den' | 'waystone' | 'dock' | 'riftforge' | 'hatchery' | 'fortune'
     | 'hedge' | 'flowerbed' | 'statue' | 'banner' | 'table' | 'signpost' | 'lamppost' | 'fountain' | 'stonewall' | 'barrel' | 'haybale' | 'scarecrow' | 'mailbox'
     | 'brickfloor' | 'carpet' | 'slatefloor'
-    | 'wall_wood' | 'wall_stone' | 'wall_brick' | 'wall_window' | 'doorway' | 'roof_thatch' | 'roof_tile' | 'roof_slate'
+    | 'wall_wood' | 'wall_stone' | 'wall_brick' | 'wall_window' | 'doorway' | 'roof_thatch' | 'roof_tile' | 'roof_slate' | 'roof_glass'
     | 'lostpack' | 'mineshaft' | 'mineladder'
     | 'chute' | 'weathervane' | 'iridium_drill'
     | 'sleepbed'
@@ -143,6 +143,7 @@ export const BUILDINGS: Record<BuildingKind, BuildingDef> = {
     doorway:     { name: 'Doorway',      tex: 'doorway',    size: [1, 1], cost: { plank: 3 }, cat: 'home', walk: true, gate: true, dir: true, hp: TUNING.blight.hp.doorway, desc: 'You walk straight through; monsters cannot. R turns it to fit a wall running up and down.' },
     roof_thatch: { name: 'Thatch Roof',  tex: 'roof_thatch', size: [1, 1], cost: { fiber: 3, plank: 1 }, cat: 'home', roof: true, desc: 'Goes over a floor and furniture. Fades away when you stand underneath. Drag to cover a room.' },
     roof_tile:   { name: 'Tile Roof',    tex: 'roof_tile',  size: [1, 1], cost: { brick: 1, plank: 1 }, cat: 'home', roof: true, desc: 'Terracotta tiles. Goes over a floor; fades when you are underneath.' },
+    roof_glass:  { name: 'Glass Roof',   tex: 'roof_glass', size: [1, 1], cost: { glass: 2, plank: 1 }, cat: 'farm', roof: true, desc: 'A greenhouse roof: garden beds under it grow at full speed in any season (winter too), and a little faster. Fades when you are underneath.' },
     roof_slate:  { name: 'Slate Roof',   tex: 'roof_slate', size: [1, 1], cost: { stone: 2, plank: 1 }, cat: 'home', roof: true, desc: 'Grey slate. Goes over a floor; fades when you are underneath.' },
     sleepbed:    { name: 'Bed',          tex: 'sleepbed',   size: [1, 2], cost: { plank: 4, wood: 2 }, cat: 'craft', desc: 'Press E on it to make it your home: after a fall you wake up here instead. One spot each, a new bed moves it. Build one by every outpost.' },
 

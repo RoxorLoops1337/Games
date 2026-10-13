@@ -122,6 +122,18 @@ function findRecipe (sim: Sim, b: BuildE) {
     return null;
 }
 
+/** Is this garden bed under a Glass Roof? */
+export function glassed (sim: Sim, b: BuildE): boolean {
+    const r = sim.s.ents[sim.world.roofAt(b.tx, b.ty)];
+    return r?.k === 'bld' && r.kind === 'roof_glass';
+}
+
+/** The season's growth speed for this bed: a greenhouse is never slower than a plain day, and a little faster. */
+export function seasonGrow (sim: Sim, b: BuildE): number {
+    const g = seasonDef(sim.s.day).grow;
+    return glassed(sim, b) ? Math.max(g, 1) * TUNING.glasshouseGrow : g;
+}
+
 export function step (sim: Sim, dt: number) {
     sim.machineT += dt;
     const rain = weatherAt(sim.s.seed, sim.s.day, sim.s.clock).rain;
@@ -134,7 +146,7 @@ export function step (sim: Sim, dt: number) {
                 const crop = b.plant ? CROPS[b.plant] : undefined;
                 const owner = b.by ? sim.s.players[b.by] : undefined;
                 if (!crop) { b.crop = -1; sim.touch(b); continue; }
-                b.growT = (b.growT ?? 0) + dt * (owner ? sim.derivedOf(owner).growMul : 1) * (1 + TUNING.rainGrow * rain) * seasonDef(sim.s.day).grow;
+                b.growT = (b.growT ?? 0) + dt * (owner ? sim.derivedOf(owner).growMul : 1) * (1 + TUNING.rainGrow * rain) * seasonGrow(sim, b);
                 if (b.growT >= crop.stageSecs) { b.growT = 0; b.crop++; sim.touch(b); }
             }
             continue;

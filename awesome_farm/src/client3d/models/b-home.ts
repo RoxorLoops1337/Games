@@ -17,6 +17,7 @@ export const HOME: Record<string, BuildingMaker> = {
     roof_thatch: (o) => roofModel('thatch', o),
     roof_tile: (o) => roofModel('tile', o),
     roof_slate: (o) => roofModel('slate', o),
+    roof_glass: (o) => roofModel('glass', o),
     path: (o) => floorModel('path', o),
     planks: (o) => floorModel('planks', o),
     brickfloor: (o) => floorModel('brickfloor', o),

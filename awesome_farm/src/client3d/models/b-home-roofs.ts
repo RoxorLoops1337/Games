@@ -8,13 +8,15 @@ export const YB = 1.6;
 export const FA = 0.07;
 export const OV = 0.08;
 export const TILE = [0x7a2f2a, 0xa84a3a, 0xd0684a, 0xf08a64];
+export const GLASS = [0x5a8fa8, 0x8fc6d8, 0xb8e6f0, 0xe0f8ff];
 export const SLATE = [0x3a3c52, 0x555878, 0x747aa0, 0x9ea4c8];
 /** A roof covering: its colour ramp, shingles per row (0: thatch), staggered rows, rows per slope, shading, colour noise, fascia colours. */
 export interface RoofStyle { ramp: readonly number[]; per: number; stagger: boolean; rows: number; shade: number; noise: number; fascia: number[] }
 export const STYLES: Record<string, RoofStyle> = {
     thatch: { ramp: RAMP.thatch, per: 0, stagger: false, rows: 4, shade: 0.22, noise: 0.5, fascia: [RAMP.thatch[1], RAMP.straw[1]] },
     tile: { ramp: TILE, per: 4, stagger: false, rows: 4, shade: 0.3, noise: 0.18, fascia: [TILE[0], TILE[1]] },
-    slate: { ramp: SLATE, per: 4, stagger: true, rows: 5, shade: 0.22, noise: 0.5, fascia: [SLATE[0], SLATE[1]] }
+    slate: { ramp: SLATE, per: 4, stagger: true, rows: 5, shade: 0.22, noise: 0.5, fascia: [SLATE[0], SLATE[1]] },
+    glass: { ramp: GLASS, per: 3, stagger: false, rows: 3, shade: 0.12, noise: 0.16, fascia: [GLASS[0], GLASS[1]] }
 };
 export const lp = (a: Pt, b: Pt, t2: number): Pt => [lerp(a[0], b[0], t2), lerp(a[1], b[1], t2), lerp(a[2], b[2], t2)];
 export function cellCol(rs: RoofStyle, style: string, r: number, k: number, seed: number, shaded: boolean) {
@@ -125,8 +127,8 @@ export function buildRoof(mb: MB, style: string, mask: number, seed: number) {
     else if (ridgeZ && !ridgeX) ridgeCap(b, style, tzN, tzS, 0, Ht, false);
 }
 export function ridgeCap(b: Bld, style: string, a0: number, a1: number, c: number, y: number, alongX: boolean) {
-    const col = style === 'thatch' ? RAMP.straw[1] : style === 'tile' ? TILE[0] : SLATE[0];
-    const top = style === 'thatch' ? RAMP.straw[2] : style === 'tile' ? TILE[1] : SLATE[1];
+    const col = style === 'thatch' ? RAMP.straw[1] : style === 'tile' ? TILE[0] : style === 'glass' ? GLASS[0] : SLATE[0];
+    const top = style === 'thatch' ? RAMP.straw[2] : style === 'tile' ? TILE[1] : style === 'glass' ? GLASS[1] : SLATE[1];
     const w = style === 'thatch' ? 0.07 : 0.05, h = style === 'thatch' ? 0.07 : 0.05;
     if (alongX) {
         fT(b, a0, a1, y + h, c - w, c + w, top, { v: 0.05, ao: false });
