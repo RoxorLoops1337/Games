@@ -107,6 +107,7 @@ export class HudScene extends Phaser.Scene {
     private fishHud!: FishHud;
     private boonSeen = '';
     private tradeShown = '';
+    private shelter = 0;
     private chat!: ChatUI;
     private compCard!: CompanionCard;
     private party!: PartyList;
@@ -460,7 +461,9 @@ export class HudScene extends Phaser.Scene {
         else if (!me.trade) this.tradeShown = '';
         if (!this.screen && this.queued.length && me.downed <= 0) { const [n, a] = this.queued.shift()!; this.openScreen(n, a); }
         this.night.update(dt, f.viewMode === '2d');
-        updateMusic({ night: f.nightAmount(), rain: this.night.rainLevel, boss: this.bossBar.cur ? 1 : me.rift?.ph === 1 ? 0.35 : this.night.event === 'bloodmoon' ? 0.3 : 0, phase: this.bossBar.cur?.phase ?? 0, under: f.undergroundAmount(), dread: f.dreadAmount() });
+        this.shelter += ((f.underRoof() ? 1 : 0) - this.shelter) * Math.min(1, dt * 2.5);
+        this.night.sheltered = this.shelter;
+        updateMusic({ night: f.nightAmount(), rain: this.night.rainLevel * (1 - this.shelter * 0.65), boss: this.bossBar.cur ? 1 : me.rift?.ph === 1 ? 0.35 : this.night.event === 'bloodmoon' ? 0.3 : 0, phase: this.bossBar.cur?.phase ?? 0, under: f.undergroundAmount(), dread: f.dreadAmount() });
         this.arrange(dt, me);
         this.layer.update(dt);
         this.tip.follow(this.input.activePointer);

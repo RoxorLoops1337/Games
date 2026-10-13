@@ -10,6 +10,7 @@
 // The view setting (2D, or 3D beta) changes only who draws the world and how a pointer becomes a spot in it: see
 // world/view3d-bridge.ts. In 3D this scene is hidden but runs exactly as in 2D, feeding the 3D view the same state and events.
 
+import { feetTile } from '../../shared/geom';
 import { hotItem, unitMul, worthOf, type MarketState } from '../../shared/data/market';
 import * as Phaser from 'phaser';
 import { RIFT_ISLANDS, TILE, TUNING, WORLD_TILES, ZOOM } from '../../shared/config';
@@ -995,6 +996,8 @@ export class GameScene extends Phaser.Scene {
     get underNow () { return this.amb.underNow; }
     get underground () { return this.amb.underNow; }
     undergroundAmount () { return this.amb.undergroundAmount(); }
+    /** Is the farmer standing under a roof (the rain is muffled there)? */
+    underRoof () { const { tx, ty } = feetTile(this.local); return this.world.roofAt(tx, ty) !== 0; }
     caveDepthHere () { return this.amb.caveDepthHere(); }
     dreadAmount () { return this.amb.dreadAmount(); }
     /** Items the farm's machines have made so far (for production goals). */
