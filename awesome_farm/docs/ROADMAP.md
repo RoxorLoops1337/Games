@@ -61,7 +61,7 @@ split big ones into slices (rules, art, polish).
   - [ ] B1c Friendship hearts and requests
 - [ ] B2 Festival eve + the Lantern Chain
   - [x] B2a Festival eve (last day of each season): E on lanterns, longest chain of 4+ pays everyone at dawn; no protocol change
-  - [ ] B2b Festival look: lit lanterns glow, bunting, a festival song
+  - [x] B2b Festival look: lanterns lit for the festival burn bigger and golder at night, in 2D and 3D (bunting and a festival song still to do)
   - [ ] B2c Festival stalls and games
 - [ ] B3 The Long Dusk (new game plus)
   - [x] B3a Dusk Beacon (sleeps until every boss has fallen; lit: wild monsters 8 levels tougher and 1.5x loot; all server-side, no protocol change)

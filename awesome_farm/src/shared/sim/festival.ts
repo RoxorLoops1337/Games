@@ -4,7 +4,8 @@
 // lantern itself (`BuildE.kd`, the day it was lit), so nothing is saved apart from the buildings.
 
 import { TILE } from '../config';
-import { seasonDay, seasonOf, SEASON_DAYS, SEASONS } from '../season';
+import { festivalLit, isEve } from '../data/festival';
+import { seasonOf, SEASONS } from '../season';
 import { PAL } from '../palette';
 import * as chronicle from './chronicle';
 import type { Sim } from './sim';
@@ -16,8 +17,7 @@ export const CHAIN_COINS = 15;     // coins each farmer gets for every lantern i
 export const CHAIN_LUCKY = 8;      // chain length that also earns the Lucky buff
 export const USE_REACH = 40;
 
-/** Is this the day of a festival (the last day of a season)? Its night is the festival night. */
-export const isEve = (day: number) => seasonDay(day) === SEASON_DAYS;
+export { festivalLit, isEve };
 
 const lanterns = (sim: Sim) => [...sim.buildings('lantern'), ...sim.buildings('lamppost')];
 export const litTonight = (sim: Sim) => lanterns(sim).filter((b) => b.kd === sim.s.day);
