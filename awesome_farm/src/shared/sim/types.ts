@@ -174,6 +174,7 @@ export interface CritE {
     tx?: number; ty?: number; wk?: WorkKind; // where it is working, and at what
     w?: number;              // seconds of work animation left
     cat?: { by: string; ok: boolean; pod: string }; // a pod is shaking on it
+    sg?: number;             // a companion's strikes since its last signature move (sim/signature.ts)
     jt?: number;             // companion field work: the entity it is heading for or working on
     jp?: number;             // … seconds spent on it so far
     js?: number;             // … seconds until it looks for the next job

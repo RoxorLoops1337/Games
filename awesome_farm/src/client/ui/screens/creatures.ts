@@ -4,7 +4,7 @@
 import { critTex } from '../../art/storybook-critters';
 import type * as Phaser from 'phaser';
 import {
-    AWAKENINGS, catchChance, ELEMENT_COLOR, ELEMENT_NAME, PET_MAX_LEVEL, petAtk, petMaxHp, Pet, petXpNeed, POD_POWER, RARITY_COLORS, RARITY_NAMES,
+    AWAKENINGS, catchChance, SIGNATURE, SIGNATURE_EVERY, ELEMENT_COLOR, ELEMENT_NAME, PET_MAX_LEVEL, petAtk, petMaxHp, Pet, petXpNeed, POD_POWER, RARITY_COLORS, RARITY_NAMES,
     SPECIES_LIST, spOf, STAR_MAX, STAR_POWER, STAR_WORK, starsOf, STATUS_INFO, TRAITS, WORK_INFO, WORK_KINDS, workCycle, FIELD_INFO, FIELD_TASKS, type WorkKind,
 } from '../../../shared/data/creatures';
 import { BIOME_DEFS } from '../../../shared/data/biomes';
@@ -407,7 +407,7 @@ export class CreatureScreen implements Screen {
         this.affT.setText(`♥ ${bond.level.name}  ${bond.aff}/${AFFECTION_MAX}`).setColor(hex(bond.level.color));
         p.traits.forEach((t, i) => this.traitT[i]?.setText(`★ ${TRAITS[t].name}`));
         const bondLine = `${bond.level.line}${bond.next ? ` (${bond.next.at - bond.aff} more to ${bond.next.name}: ${isTouchUi() ? 'tap USE' : 'press E'} beside it to pet it)` : ''}`;
-        const line1 = sp.desc + (p.traits.length ? '\n' + p.traits.map((t) => `${TRAITS[t].name}: ${TRAITS[t].desc}`).join('   ') : '');
+        const line1 = sp.desc + `\nEvery ${SIGNATURE_EVERY}th strike: ${SIGNATURE[sp.element].name}. ${SIGNATURE[sp.element].desc}` + (p.traits.length ? '\n' + p.traits.map((t) => `${TRAITS[t].name}: ${TRAITS[t].desc}`).join('   ') : '');
         this.descT.setText(line1 + '\n' + bondLine);
         const ownerWork = derived(me).mods.work ?? 0;
         const colW = Math.floor(this.dw / 2);
