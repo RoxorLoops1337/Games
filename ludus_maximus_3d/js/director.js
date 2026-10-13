@@ -268,7 +268,8 @@ export class FightDirector {
     if (p._yaw0 === undefined) { // the shoulder whose camera spot lies deeper inside the bowl
       const a0 = Math.atan2(by, bx), spot = (sd) => Math.hypot(vx - Math.cos(a0 + sd * Math.PI / 2) * 6, vy - Math.sin(a0 + sd * Math.PI / 2) * 6);
       p.side = p.side ?? (spot(1) <= spot(-1) ? 1 : -1); p._yaw0 = a0 + p.side * Math.PI / 2; }
-    const k = easeOut(t / dur), yaw = p._yaw0 + p.side * 0.5 * k, pitch = lerp(7, 15, k) * D2R + tall * 8 * D2R;
+    const k = easeOut(t / dur), fl = p.fl === 'low' ? 1 : p.fl === 'orbit' ? 2 : p.fl === 'high' ? 3 : 0;   // FATE: finishing-move flavours of the tight kill shot (low hero angle, slow quarter orbit, high look-down)
+    const yaw = p._yaw0 + p.side * (fl === 2 ? 1.0 : fl === 1 ? 0.35 : 0.5) * k, pitch = (fl === 1 ? lerp(1, 7, k) : fl === 3 ? lerp(18, 24, k) : lerp(7, 15, k)) * D2R + tall * 8 * D2R;
     const pts = [[vx, 0, vy], [vx, 1.9, vy], [vx + bx * 0.5, 1.3, vy + by * 0.5]];
     if (near) pts.push([kl.x, 0.2, kl.y], [kl.x, 2.2, kl.y]);
     const fall = ease((t - 0.25) / 0.9); pts.push([vx + bx * (0.6 + 1.5 * fall), 0.1, vy + by * (0.6 + 1.5 * fall)]); // the body going down

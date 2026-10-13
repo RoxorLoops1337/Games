@@ -615,10 +615,37 @@ export function createGore(fx, o = {}) {
       if (G.full) for (let i = 0, m = Math.round(6 * (K() > 0.6 ? 1 : 0.6)); i < m; i++) chunk(_a, dx * 3, dz * 3, i % 3 === 2 ? 1 : 0);
       sfx('cleave', { pan: panOf(x), gain: 1, pitch: 0.85 }); sfx('crowdGore', { gain: 0.8 });
     }
-    let part = pickPart(f, ctx), took = false;
+    let part = ctx.part ? (f.rig.severed[ctx.part] ? null : ctx.part) : pickPart(f, ctx), took = false;   // FATE: a finishing move names the part it takes (head for a beheading); everything else rolls as before
     if (part && G.sever(id, part, dx, dz, ctx.big ? 1.3 : 1)) took = true;
     if (ctx.big && G.full) { const ex = ['armL', 'forearmR', 'shinL', 'shinR'].find((p) => !f.rig.severed[p] && p !== part); if (ex) G.sever(id, ex, dx + RR(-0.8, 0.8), dz + RR(-0.8, 0.8), 1.4); chestPos(f, _a, 1.1); for (let i = 0, m = Math.round(26 * K()); i < m; i++) chunk(_a, dx, dz); fan(_a, 0, 1, Math.round(70 * K()), { speed: 9, cone: Math.PI, elMin: 0.2, elMax: 1.4, size: 1.3 }); addPool(x, z, 1.9, 0.3); sfx('crowdGore', { gain: 1 }); }
     return took ? part : null;
+  };
+
+  /** FATE: the gore of a chosen finishing move, ON TOP of onDown(last). kind: cleave | behead | scissor | impale. dx,dz = blow direction (killer to victim).
+   *  Off: nothing. Low: blood only (no props, half counts through K()). Full: meat, extra jets, severed parts come from onDown({part}). One-off, no per-frame work. */
+  G.finisher = (id, kind, dx, dz) => {
+    if (!G.on) return; const f = fighterOf(id); if (!f) return; const l = Math.hypot(dx, dz) || 1; dx /= l; dz /= l;
+    const px = panOf(chestPos(f, _a, 1.3).x), k = K();
+    if (kind === 'cleave') { // overhead chop: a diagonal gash down the chest, a wide spray in the blow direction and a rain of meat
+      placeWound(f, dx, dz, 0.9); placeWound(f, dx, dz, 0.7); f.rig.addBlood(0.35, 1);
+      fan(_a, dx, dz, Math.round(70 * k), { speed: 12.5, cone: 0.55, elMin: 0.2, elMax: 1.25, size: 1.7 }); fan(_a, 0, 1, Math.round(26 * k), { speed: 6.5, cone: Math.PI, elMin: 0.9, elMax: 1.4, size: 1.2 });
+      addJet({ obj: f.rig.joints.chest, pos: _a, dir: _d.set(dx * 0.5, 1, dz * 0.5).normalize().clone(), speed: 9.5, rate: 170, life: 4.2, period: 0.62, duty: 0.6, cone: 0.2, size: 1.5, beat: true, delay: 0.05 });
+      if (G.full) for (let i = 0, m = Math.round(8 * (K() > 0.6 ? 1 : 0.6)); i < m; i++) chunk(_a, dx * 3.5, dz * 3.5, i % 4 === 3 ? 1 : 0);
+      addPool(_a.x + dx * 0.7, _a.z + dz * 0.7, 2.1 * POOLK(), 0.3); lens(_a, 2, 0.3); sfx('cleave', { pan: px, gain: 1, pitch: 0.7 }); sfx('crunch', { pan: px, gain: 1, pitch: 0.7 }); G.pulse(1);
+    } else if (kind === 'behead' || kind === 'scissor') { // head comes off (onDown named it): a stump fountain is added by sever; here the body keeps spurting and the sand gets a long arc
+      f.rig.addBlood(0.25, 1); fan(_a.set(_a.x, 1.5, _a.z), dx, dz, Math.round(55 * k), { speed: 11, cone: 0.35, elMin: 0.0, elMax: 0.9, size: 1.5 });
+      stampSmear(_a.x, _a.z, _a.x + dx * 2.6, _a.z + dz * 2.6, 0.42, 0.9); addPool(_a.x + dx * 0.9, _a.z + dz * 0.9, 1.9 * POOLK(), 0.26, 0.2);
+      if (kind === 'scissor') { fan(_a, -dz, dx, Math.round(30 * k), { speed: 9, cone: 0.3, elMin: 0.1, elMax: 0.8, size: 1.3 }); fan(_a, dz, -dx, Math.round(30 * k), { speed: 9, cone: 0.3, elMin: 0.1, elMax: 0.8, size: 1.3 }); }
+      lens(_a, 3, 0.3); sfx('slashWet', { pan: px, gain: 1, pitch: 0.8 }); G.pulse(1);
+    } else if (kind === 'impale') { // thrust through the chest: a gush at the entry and a second one out of the back, then it keeps pumping
+      placeWound(f, dx, dz, 0.8); f.rig.addBlood(0.4, 1); chestPos(f, _a, 1.15);
+      fan(_a, -dx, -dz, Math.round(46 * k), { speed: 7, cone: 0.5, elMin: 0.1, elMax: 1.0, size: 1.5 }); fan(_a, dx, dz, Math.round(54 * k), { speed: 12, cone: 0.28, elMin: 0.0, elMax: 0.7, size: 1.8 });
+      addJet({ obj: f.rig.joints.chest, pos: _a, dir: _d.set(-dx, 0.45, -dz).normalize().clone(), speed: 7.5, rate: 150, life: 4.6, period: 0.58, duty: 0.62, cone: 0.15, size: 1.4, beat: true });
+      addJet({ obj: f.rig.joints.chest, pos: _a, dir: _d.set(dx, 0.5, dz).normalize().clone(), speed: 9, rate: 150, life: 4.6, period: 0.58, duty: 0.62, cone: 0.15, size: 1.4, beat: true, delay: 0.12 });
+      if (G.full) for (let i = 0; i < 4; i++) chunk(_a, dx * 3, dz * 3, i === 3 ? 1 : 0);
+      addPool(_a.x, _a.z, 1.7 * POOLK(), 0.28); lens(_a, 2, 0.28); sfx('spurt', { pan: px, gain: 1 }); sfx('squelch', { pan: px, gain: 1, pitch: 0.7 }); G.pulse(0.9);
+    }
+    f.leak = 1;
   };
 
   /** replay seek: drop everything airborne (droplets, jets), grow the pools and let the flung props land, so skipped time leaves only what stays on the sand */
