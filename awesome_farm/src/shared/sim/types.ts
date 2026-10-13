@@ -119,6 +119,7 @@ export interface MobE {
     t: number; hopT: number; knockT: number;
     lv?: number;             // the level this monster was tuned to (the party's average when it spawned)
     el?: 1;                  // elite: tougher, nastier, better loot
+    af?: 'swift' | 'armored' | 'volatile' | 'mending';   // an elite's trait (data/mobs.ts AFFIXES)
     guard?: 1;               // keeps its post: not swept away at dawn
     rift?: number;           // an expedition monster: the rift island it belongs to (never swept away at dawn)
     rb?: 1;                  // the guardian at the end of an expedition: fights with a boss's patterns
