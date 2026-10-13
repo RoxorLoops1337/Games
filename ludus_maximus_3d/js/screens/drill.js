@@ -2,12 +2,15 @@
 import { h, U, D, L, portrait, injectCss, addCss, chip, wide } from './ui_common.js';
 
 const CSS = `
-.dr{display:grid;gap:12px;justify-items:stretch}
+.dr{display:grid;gap:10px;justify-items:stretch;padding-bottom:10px}
+/* DRILL-FEEL: the sheet scroller never shows bars here (transient transforms used to flash them); it can still scroll on very short screens */
+.lx-sheet-scroll:has(.dr){overflow-x:hidden;scrollbar-width:none}
+.lx-sheet-scroll:has(.dr)::-webkit-scrollbar{display:none}
 .dr-head{display:flex;gap:12px;align-items:center;min-width:0}
 .dr-help{margin:0;font:600 14px/20px var(--lx-sans);color:#4a3550;overflow-wrap:break-word}
-.dr-res{min-height:64px;display:grid;place-items:center;text-align:center;font:900 26px/30px var(--lx-serif);letter-spacing:.06em;text-transform:uppercase;overflow-wrap:break-word}
+.dr-res{min-height:52px;display:grid;place-items:center;text-align:center;font:900 26px/30px var(--lx-serif);letter-spacing:.06em;text-transform:uppercase;overflow-wrap:break-word}
 .dr-res small{display:block;font:700 13px var(--lx-sans);letter-spacing:.02em;text-transform:none;color:#5a4560;margin-top:2px}
-.dr-res.pop{animation:dr-pop .5s var(--lx-ease) both}
+.dr-res.pop>div{animation:dr-pop .5s var(--lx-ease) both}   /* animate the shrink-wrapped child, not the full-width box (that overflowed the scroller) */
 .dr-res.good{color:#2f7a3f;text-shadow:0 0 14px rgba(95,174,110,.55)} .dr-res.perfect{color:#b07a10;text-shadow:0 0 18px rgba(242,193,78,.9)} .dr-res.bad{color:#9d2a20}
 @keyframes dr-pop{from{transform:scale(.5);opacity:0}60%{transform:scale(1.12)}}
 .dr-track{position:relative;height:64px;border-radius:12px;background:linear-gradient(180deg,#2a2540,#140f22);box-shadow:inset 0 3px 8px #000,0 0 0 2px #b8803a;overflow:hidden;touch-action:manipulation;cursor:pointer}
@@ -16,7 +19,7 @@ const CSS = `
 .dr-m{position:absolute;top:-4px;bottom:-4px;width:10px;margin-left:-5px;border-radius:5px;background:linear-gradient(180deg,#fff,#e8dcc0);box-shadow:0 0 12px #fff,0 0 0 2px #1d1830;will-change:left}
 .dr-track.hit{animation:dr-flash .4s}
 @keyframes dr-flash{30%{box-shadow:inset 0 3px 8px #000,0 0 0 2px #b8803a,0 0 28px 6px rgba(242,193,78,.9)}}
-.dr-pad{min-height:150px;width:100%;border-radius:18px;border:0;cursor:pointer;touch-action:manipulation;user-select:none;-webkit-user-select:none;font:900 32px/1 var(--lx-serif);letter-spacing:.1em;text-transform:uppercase;color:#fff;text-shadow:0 2px 3px rgba(0,0,0,.6);position:relative;overflow:hidden;
+.dr-pad{min-height:clamp(100px,18dvh,150px);width:100%;border-radius:18px;border:0;cursor:pointer;touch-action:manipulation;user-select:none;-webkit-user-select:none;font:900 32px/1 var(--lx-serif);letter-spacing:.1em;text-transform:uppercase;color:#fff;text-shadow:0 2px 3px rgba(0,0,0,.6);position:relative;overflow:hidden;
   background:linear-gradient(180deg,#e0644f,#9d2a20);box-shadow:0 7px 0 #4a120d,0 12px 20px rgba(0,0,0,.4),inset 0 2px 0 rgba(255,255,255,.4);transition:transform .06s,box-shadow .06s,background .15s}
 .dr-pad:active:not(:disabled){transform:translateY(5px);box-shadow:0 2px 0 #4a120d,0 4px 8px rgba(0,0,0,.4)}
 .dr-pad:disabled{filter:grayscale(.7) brightness(.8);cursor:default}
@@ -37,6 +40,22 @@ const CSS = `
 .dr-key:disabled{filter:grayscale(.8) brightness(.8);cursor:default}
 .dr-key:focus-visible{outline:4px solid #5a1f5e;outline-offset:3px}
 .dr-time{height:10px}
+.dr-track::before{content:'';position:absolute;inset:0;background:repeating-linear-gradient(90deg,rgba(255,255,255,.05) 0 2px,transparent 2px 10%);pointer-events:none}
+.dr-track.in .dr-z.z3{box-shadow:0 0 26px rgba(255,224,138,1),0 0 6px #fff;filter:brightness(1.25)}
+.dr-track.in .dr-m{box-shadow:0 0 18px #ffe08a,0 0 0 2px #1d1830;background:linear-gradient(180deg,#fff,#ffe08a)}
+.dr-m::after{content:'';position:absolute;left:50%;top:50%;width:46px;height:46px;margin:-23px;border-radius:50%;border:3px solid rgba(255,255,255,.9);opacity:0;pointer-events:none}
+.dr-track.hit .dr-m::after{animation:dr-burst .55s ease-out forwards}
+@keyframes dr-burst{from{transform:scale(.3);opacity:1}to{transform:scale(2.4);opacity:0}}
+.dr-track.hit.perfect{animation:dr-flash .45s,dr-thump .3s}
+.dr-track.hit.miss{animation:dr-shake .38s}
+@keyframes dr-thump{40%{transform:scaleY(1.12)}}
+@keyframes dr-shake{20%{transform:translateX(-7px)}40%{transform:translateX(6px)}60%{transform:translateX(-4px)}80%{transform:translateX(2px)}}
+.dr-pad.stop{animation:dr-breathe 1s ease-in-out infinite}
+@keyframes dr-breathe{50%{filter:brightness(1.1)}}
+.dr-tile{transition:transform .18s var(--lx-ease)} .dr-tile.ok,.dr-tile.no{animation:dr-tilepop .3s var(--lx-ease)}
+@keyframes dr-tilepop{from{transform:scale(.6)}60%{transform:scale(1.12)}}
+@media (prefers-reduced-motion:reduce){.dr-pad.stop,.dr-track.hit.miss,.dr-track.hit.perfect{animation:none}.dr-track.hit .dr-m::after{animation:none}}
+body.lx-reduced .dr-pad.stop,body.lx-reduced .dr-track.hit.miss,body.lx-reduced .dr-track.hit.perfect{animation:none}
 `;
 const ARROWS = ['←', '↑', '→'];
 
@@ -80,10 +99,10 @@ export function open(ctx, g, onDone) {
     track.append(h('i', 'dr-z z1'), h('i', 'dr-z z2'), h('i', 'dr-z z3'), mk);
     const btn = h('button', 'dr-pad stop', 'Stop!'); btn.type = 'button';
     stage.append(track, btn);
-    const t0 = performance.now(); let p = 0;
-    const loop = () => { if (done || dead) return; const t = (performance.now() - t0) / 1000 * lm.drillSpeed(S), ph = t % 2; p = ph < 1 ? ph : 2 - ph; mk.style.left = (p * 100) + '%'; raf = requestAnimationFrame(loop); };
+    const t0 = performance.now(); let p = 0, wasIn = false;
+    const loop = () => { if (done || dead) return; const t = (performance.now() - t0) / 1000 * lm.drillSpeed(S), ph = t % 2; p = ph < 1 ? ph : 2 - ph; mk.style.left = (p * 100) + '%'; const inz = Math.abs(p - 0.5) < 0.05; if (inz !== wasIn) { wasIn = inz; track.classList.toggle('in', inz); } raf = requestAnimationFrame(loop); };
     raf = requestAnimationFrame(loop);
-    const stop = () => { if (done) return; track.classList.add('hit'); finish(1 - Math.abs(p - 0.5) * 2); };
+    const stop = () => { if (done) return; const acc = 1 - Math.abs(p - 0.5) * 2; track.classList.remove('in'); track.classList.add('hit', acc >= 0.9 ? 'perfect' : acc < 0.55 ? 'miss' : 'ok'); ctx.sfx(acc >= 0.9 ? 'uiConfirm' : acc < 0.55 ? 'uiError' : 'uiTap', { gain: 0.7 }); finish(acc); };
     btn.addEventListener('pointerdown', (e) => { e.preventDefault(); stop(); }); track.addEventListener('pointerdown', stop); keyFn = stop;
     btn.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); stop(); } });
     setTimeout(() => btn.focus({ preventScroll: true }), 150);
