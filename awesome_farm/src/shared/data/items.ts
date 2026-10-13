@@ -77,6 +77,7 @@ export const ITEMS = {
     iridium_bar: it('Iridium Bar', 'material', 90, 'Smelted iridium: dense, cold and faintly warm to the touch.', { rarity: 3 }),
     goldbar:  it('Gold Bar',    'material', 14, 'Soft, bright, valuable.', { rarity: 2 }),
     steel:    it('Steel',       'material', 18, 'Iron tempered with coal. Hard and keen.', { rarity: 2 }),
+    dyed_cloth: it('Dyed Cloth', 'material', 22, 'Cloth steeped in berry dye. Fetches a fine price at the market.'),
     cloth:    it('Cloth',       'material', 6, 'Woven cotton. Clothes, bags and banners.'),
     rope:     it('Rope',        'material', 3, 'Twisted fiber.'),
     gear:     it('Gear',        'material', 10, 'Toothed wheel. Every machine wants a few.', { rarity: 1 }),

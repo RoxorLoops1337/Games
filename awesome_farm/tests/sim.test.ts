@@ -609,3 +609,15 @@ test('the per-step caches notice a buff given or ended inside a step, and a kind
     assert.equal(sim.factoryN, 1);
     assert.ok(sim.powerDirty, 'a pole makes the grid stale');
 });
+
+test('a dye vat steeps cloth and berries into dyed cloth', () => {
+    const sim = Sim.create('TEST-11V', 'test');
+    const a = sim.join('a', 'A')!;
+    const vat = placeNear(sim, a, 'dyevat', { inv: {}, out: {}, fuel: 0, prog: 0, by: 'a' });
+    give(sim, 'a', 'cloth', 1);
+    give(sim, 'a', 'berry', 2);
+    sim.command('a', { t: 'xfer', id: vat.id, item: 'cloth', n: 1, dir: 'put' });
+    sim.command('a', { t: 'xfer', id: vat.id, item: 'berry', n: 2, dir: 'put' });
+    run(sim, 30);
+    assert.equal(vat.out!.dyed_cloth, 1);
+});

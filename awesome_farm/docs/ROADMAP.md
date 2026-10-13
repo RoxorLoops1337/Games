@@ -35,7 +35,7 @@ split big ones into slices (rules, art, polish).
 - [x] M10 Creature signature moves (every 4th companion strike, one move per element)
 - [x] M11 Day and night shifts for workers (Day/Night button on the creature card: day, night or round the clock; PROTOCOL 43)
 - [x] M12 Cosy room score (a furnished walled-in room gives the Cosy buff; score = furniture + variety)
-- [ ] M12b Dye vat (split off M12)
+- [x] M12b Dye vat (cloth + berries into dyed cloth)
 - [x] M13 Museum of odd things (Museum Case: E donates one of each trophy, fish and gem; prizes at 5, 10, 20, 30 and all)
 - [x] S31 Pet nicknames on plates (a companion wears its name over its head, so photo mode shows who is who)
 

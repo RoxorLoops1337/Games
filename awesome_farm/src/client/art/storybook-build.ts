@@ -214,6 +214,16 @@ function beehive (p: Pix) {
     p.outline();
 }
 
+function dyevat (p: Pix) {
+    // a squat wooden tub of berry-red dye with a paddle and a dripping scrap of cloth
+    lit(p, 1, 6, 12, 8, W);
+    p.rect(2, 5, 10, 2, 0xb8487e); p.rect(3, 5, 8, 1, 0xe88cb8);
+    p.rect(2, 8, 10, 1, W[3]);
+    p.rect(11, 1, 1, 7, W[2]); p.rect(10, 0, 3, 1, W[1]);
+    p.rect(4, 4, 3, 2, 0xe88cb8);
+    p.outline();
+}
+
 function museum (p: Pix) {
     // a wooden case with a glass top and a few treasures on blue velvet
     lit(p, 1, 10, 30, 8, W); p.rect(2, 11, 28, 1, W[3]);
@@ -427,6 +437,7 @@ export function registerStorybookBuildings (scene: Phaser.Scene) {
     paint(scene, 'alchemy', 14, 11, alchemy, 2);
     paint(scene, 'sawmill', 32, 15, (p) => sawmill(p), 1);
     paint(scene, 'millstone', 14, 10, (p) => millstone(p), 1);
+    paint(scene, 'dyevat', 14, 15, (p) => dyevat(p), 1);
     paint(scene, 'beehive', 14, 19, (p) => beehive(p), 1);
     paint(scene, 'beacon', 16, 16, (p) => beacon(p), 1);
     paint(scene, 'cottage', 32, 32, (p) => cottage(p), 1);
