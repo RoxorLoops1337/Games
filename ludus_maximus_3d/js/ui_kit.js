@@ -93,7 +93,7 @@ export function iconButton(name, label, onClick) {
 
 // ---------- bar (hp / stamina / xp) with segment ticks and damage ghost ----------
 // kind: 'hp' | 'stam' | 'xp' | 'foe'. segments: tick every N units (e.g. 25 -> ticks per 25 hp).
-export function bar({ value = 1, max = 1, kind = 'hp', segments = 0, label = '', height = 14, cls = '' } = {}) {
+export function bar({ value = 1, max = 1, kind = 'hp', segments = 0, label = '', height = 14, cls = '', name = '' } = {}) {
   const el = h('div', `lx-bar lx-bar-${kind} ${cls}`);
   el.style.setProperty('--lx-bar-h', height + 'px');
   const ghost = h('i', 'lx-bar-ghost'), fill = h('i', 'lx-bar-fill'), ticks = h('i', 'lx-bar-ticks'), txt = h('span', 'lx-bar-txt');
@@ -111,7 +111,7 @@ export function bar({ value = 1, max = 1, kind = 'hp', segments = 0, label = '',
     el.setAttribute('aria-valuenow', Math.round(v));
   };
   if (segments) { el.style.setProperty('--lx-seg', (100 * segments / max) + '%'); el.classList.add('lx-seg'); }
-  el.setAttribute('role', 'progressbar'); el.setAttribute('aria-valuemax', Math.round(max)); el.set(value, max);
+  el.setAttribute('role', 'progressbar'); el.setAttribute('aria-valuemin', '0'); el.setAttribute('aria-valuemax', Math.round(max)); el.setAttribute('aria-label', name || { hp: 'Health', stam: 'Stamina', xp: 'Experience' }[kind] || 'Progress'); el.set(value, max);
   ghost.style.transitionDuration = '0s'; return el;
 }
 
@@ -140,8 +140,10 @@ export function rarityFrame(rarity = 'common', child, size = 56) {
 // plate.track(worldVec3, camera, w, h): works with any THREE.Vector3 (needs .clone().project(camera)); hides when behind camera / off-screen.
 export function nameplate({ name, level = 1, hp = 1, maxHp = 1, team = 'ally', rank = 0 } = {}) {
   const el = h('div', `lx-plate lx-team-${team}`);
-  const hb = bar({ value: hp, max: maxHp, kind: team === 'foe' ? 'foe' : 'hp', segments: Math.max(1, maxHp / 4), height: 8 });
-  el.append(h('div', 'lx-plate-top', [h('span', 'lx-lvl lx-num', level), h('span', 'lx-plate-name', name)]), hb);
+  const hb = bar({ value: hp, max: maxHp, kind: team === 'foe' ? 'foe' : 'hp', segments: Math.max(1, maxHp / 4), height: 8, name: team === 'foe' ? 'Enemy health' : 'Health' });
+  const tm = h('span', 'lx-plate-team', icon(team === 'foe' ? 'skull' : 'shield', 12)); tm.setAttribute('aria-hidden', 'true'); // QA: side is a shape and a dashed edge, not only a colour
+  el.setAttribute('role', 'group'); el.setAttribute('aria-label', `${name}, level ${level}, ${team === 'foe' ? 'enemy' : 'your fighter'}`);
+  el.append(h('div', 'lx-plate-top', [tm, h('span', 'lx-lvl lx-num', level), h('span', 'lx-plate-name', name)]), hb);
   if (rank) el.append(stars(rank, 5));
   el.hp = hb;
   el.place = (x, y, vis = true) => { el.style.transform = `translate3d(${x.toFixed(1)}px,${y.toFixed(1)}px,0) translate(-50%,-100%)`; el.style.visibility = vis ? '' : 'hidden'; };

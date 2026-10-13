@@ -48,6 +48,12 @@ const scrims = (h) => h.page.evaluate(() => document.querySelectorAll('.lx-scrim
   ok(left.n === 1 && left.v === 'esc' && left.title === 'More', 'Escape closes only the top dialog and resolves it with its dismiss value: ' + JSON.stringify(left));
   await press(h, 'Escape'); await h.page.waitForTimeout(350); ok((await scrims(h)) === 0, 'a second Escape closes the screen');
 
+  // the buildings screen is reachable without the 3D scene (keyboard and screen reader players cannot tap a plot)
+  await openScreen(h, 'more', { tab: 'ludus' });
+  await h.page.evaluate(() => [...document.querySelectorAll('.lx-scrim:not(.lx-out) button')].find((b) => /Open buildings/.test(b.textContent)).click());
+  await h.page.waitForFunction(() => { const t = document.querySelector('.lx-scrim:not(.lx-out) .lx-title'); return t && t.textContent === 'Your Ludus'; }, null, { timeout: 20000 }).catch(() => {});
+  ok(await h.page.evaluate(() => (document.querySelector('.lx-scrim:not(.lx-out) .lx-title') || {}).textContent === 'Your Ludus'), 'More, Ludus opens the buildings screen');
+  await closeAll(h);
   // text size: zoom scales px-based screens too. Compare a hard coded px font (profile meter labels) and a var based one
   const gidv = await gid(h);
   await openScreen(h, 'profile', gidv); await settle(h);

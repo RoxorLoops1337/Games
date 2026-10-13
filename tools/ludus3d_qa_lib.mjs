@@ -53,7 +53,7 @@ export function auditFn(opts) {
   const roots = [...document.querySelectorAll('#ui, .lx-scrim, .lx-toasts, .lx-perf')].filter((r) => r.id === 'ui' || r.hidden !== true);
   const els = new Set(); for (const r of roots) { r.querySelectorAll('*').forEach((e) => els.add(e)); }
   const doc = document.documentElement; if (doc.scrollWidth > vw + 1) out.push({ kind: 'overflow', sev: 'high', msg: `page scrolls horizontally (${doc.scrollWidth} > ${vw})` });
-  const skip = (e) => e.closest('svg') && e.tagName.toLowerCase() !== 'svg' || e.closest('.lx-out') || e.closest('.lx-tip') || e.closest('[data-qa-skip]') || e.closest('.lx-tut-ring') || e.closest('.lx-ttl-embers');
+  const skip = (e) => e.closest('svg') && e.tagName.toLowerCase() !== 'svg' || e.closest('.lx-out') || e.closest('.lx-tip') || e.closest('[data-qa-skip]') || e.closest('.lx-tut-ring') || e.closest('.lx-ttl-embers') || e.closest('.lx-vs, .lx-lvlup, .lx-cer-layer, .lx-cer-lvl, .lx-banners'); // slide-in splashes and ceremonies are mid-animation by design
   for (const e of els) {
     if (skip(e) || !visibleDeep(e) || !vis(e)) continue;
     const r = e.getBoundingClientRect(); const tag = e.tagName.toLowerCase();
@@ -90,11 +90,18 @@ export function auditFn(opts) {
       if ((r.width < 43.5 || r.height < 43.5) && !(tag === 'input' && e.type === 'range' && r.height >= 43.5)) out.push({ kind: 'tap', sev: 'med', msg: `${sel(e)} is ${Math.round(r.width)}x${Math.round(r.height)}px (< 44)` });
     }
     // unnamed controls
-    if (/^(button|a)$/.test(tag) || e.getAttribute('role') === 'button' || e.getAttribute('role') === 'switch') {
+    if (/^(button|a)$/.test(tag) || /^(button|switch|progressbar|tab)$/.test(e.getAttribute('role') || '')) {
       const nm = (e.getAttribute('aria-label') || e.getAttribute('aria-labelledby') || e.textContent || e.title || '').trim();
       if (!nm) out.push({ kind: 'a11y', sev: 'med', msg: `${sel(e)} has no accessible name` });
     }
     if (tag === 'input' && e.type !== 'hidden' && !(e.getAttribute('aria-label') || e.labels && e.labels.length || e.title)) out.push({ kind: 'a11y', sev: 'med', msg: `${sel(e)} input without label` });
+  }
+  // HUD controls must not sit on top of each other (a floating camera button over the nav, replay chips over the pause button...)
+  const hudBtns = [...document.querySelectorAll('.lx-hud button, .lx-photo-fab, .lx-fv-top button, .lx-fv-rbar button, .lx-ult')].filter((b) => visibleDeep(b) && vis(b) && !b.disabled);
+  for (let i = 0; i < hudBtns.length; i++) for (let j = i + 1; j < hudBtns.length; j++) {
+    const a = hudBtns[i], b = hudBtns[j]; if (a.contains(b) || b.contains(a)) continue; const ra = a.getBoundingClientRect(), rb = b.getBoundingClientRect();
+    const w = Math.min(ra.right, rb.right) - Math.max(ra.left, rb.left), hh = Math.min(ra.bottom, rb.bottom) - Math.max(ra.top, rb.top);
+    if (w > 6 && hh > 6) out.push({ kind: 'overlap', sev: 'high', msg: `${sel(a)} overlaps ${sel(b)} by ${Math.round(w)}x${Math.round(hh)}px` });
   }
   // sheets must fit the viewport and the close button must be reachable
   document.querySelectorAll('.lx-scrim:not(.lx-out) .lx-sheet').forEach((s) => {
@@ -241,29 +248,53 @@ export async function apiAction(h, name) {
   return r;
 }
 
-/** advance a week through the real flow: auto-click dialogs, step the 3D fights; detect a stuck flow */
-export async function advanceWeek(h, { maxSteps = 700, replay = false } = {}) {
-  h.cur.where = 'advance week';
+/**
+ * drive any async game flow to its end: auto-click dialogs (first enabled action, or the one matching `prefer`), pick the first fighter in
+ * pickFighters sheets, step the 3D fight, audit after every dialog. `start` is a function string evaluated in the page that returns a promise.
+ */
+export async function driveFlow(h, start, { label = 'flow', maxSteps = 700, replay = false, prefer = '' } = {}) {
+  h.cur.where = label;
   const titles = [];
-  await h.page.evaluate(() => { window.__bot = { done: false, err: null }; const g = window.__LM3D.game; g.advance().then(() => { window.__bot.done = true; }).catch((e) => { window.__bot.err = String(e); window.__bot.done = true; }); });
+  await h.page.evaluate((src) => { window.__bot = { done: false, err: null }; const g = window.__LM3D.game; Promise.resolve().then(() => (0, eval)(src)(g)).then(() => { window.__bot.done = true; }).catch((e) => { window.__bot.err = String(e && e.stack || e); window.__bot.done = true; }); }, start);
   let guard = 0, replays = 0;
   while (guard++ < maxSteps) {
-    const st = await h.page.evaluate((wantReplay) => {
+    const st = await h.page.evaluate(([wantReplay, pref]) => {
       if (window.__bot.done) return { done: true, err: window.__bot.err };
+      const top = [...document.querySelectorAll('.lx-scrim:not(.lx-out)')].pop();
+      if (top && top.querySelector('.ax-pick')) { // fighter picker: select the first free fighter, then confirm
+        const confirm = top.querySelector('.ax-sticky .lx-btn:not([disabled])');
+        if (confirm) { confirm.click(); return { clicked: 'picker confirm' }; }
+        const pk = [...top.querySelectorAll('.ax-pick')].find((x) => x.getAttribute('aria-disabled') !== 'true');
+        if (pk) { pk.click(); return { clicked: 'picker select' }; }
+        const x = top.querySelector('.lx-sheet-x'); if (x) { x.click(); return { clicked: 'picker close (no free fighter)' }; }
+      }
       const acts = [...document.querySelectorAll('.lx-scrim:not(.lx-out) .lx-actions .lx-btn')].filter((b) => !b.disabled);
       if (acts.length) {
         const title = (document.querySelector('.lx-scrim:not(.lx-out) .lx-title') || {}).textContent || '';
         const rp = wantReplay && acts.find((b) => /replay/i.test(b.textContent));
-        (rp || acts[0]).click(); return { clicked: title + (rp ? ' [replay]' : '') };
+        const pf = pref && acts.find((b) => new RegExp(pref, 'i').test(b.textContent));
+        (rp || pf || acts[0]).click(); return { clicked: title + (rp ? ' [replay]' : '') };
       }
       return { adv: true };
-    }, replay && replays < 1);
-    if (st.done) { if (st.err) h.add('stuck', 'high', 'advance week', 'flow threw: ' + st.err); await sweepRejections(h); return { steps: guard, titles }; }
+    }, [replay && replays < 1, prefer]);
+    if (st.done) { if (st.err) h.add('stuck', 'high', label, 'flow threw: ' + st.err.slice(0, 300)); await sweepRejections(h); return { steps: guard, titles }; }
     if (st.clicked !== undefined) { titles.push(st.clicked); if (/\[replay\]/.test(st.clicked)) replays++; await h.page.waitForTimeout(450); /* let the flow open the next dialog before measuring */ await audit(h, 'after dialog ' + st.clicked.slice(0, 30)); continue; }
     await h.page.evaluate(() => window.__LM3D.advance(1.5));
   }
-  h.add('stuck', 'high', 'advance week', `week flow did not finish after ${maxSteps} steps; last dialogs: ${titles.slice(-4).join(' | ')}`);
+  h.add('stuck', 'high', label, `${label} did not finish after ${maxSteps} steps; last dialogs: ${titles.slice(-4).join(' | ')}`);
   return { steps: guard, titles, stuck: true };
+}
+/** advance a week through the real flow (see driveFlow) */
+export const advanceWeek = (h, o = {}) => driveFlow(h, '(g) => g.advance()', Object.assign({ label: 'advance week' }, o));
+/** the challenge modes of the Arena (Pit, Daily, Horde trial, champion duel, bounty), each driven to the end and cashed out at the first chance */
+export async function playModes(h, names = ['bounty', 'horde', 'pit', 'champ']) {
+  const out = {};
+  for (const n of names) {
+    const fn = { pit: 'startPit(g.ctx, false)', daily: 'startPit(g.ctx, true)', horde: 'startHorde(g.ctx)', champ: 'startChamp(g.ctx)', bounty: 'startBounty(g.ctx)' }[n];
+    out[n] = await driveFlow(h, `async (g) => { const m = await import('/ludus_maximus_3d/js/screens/modes.js'); return m.${fn}; }`, { label: 'mode ' + n, maxSteps: 500, prefer: 'cash|retreat|leave|collect|claim|walk away|continue|close|ok' });
+    await closeAll(h); await h.page.evaluate(() => { const g = window.__LM3D.game; if (g.scene !== 'hub') g.returnToHub(); g.refresh(); });
+  }
+  return out;
 }
 
 async function photoToggle(h) {
@@ -340,6 +371,7 @@ export async function monkey(o = {}) {
       }
     }
     if (o.weeks && weeks === 0) { await closeAll(h); await apiAction(h, 'enter'); await advanceWeek(h, { replay: !!o.replay }); await audit(h, 'hub after week'); }
+    if (o.modes) { await closeAll(h); await playModes(h, Array.isArray(o.modes) ? o.modes : undefined); await audit(h, 'hub after modes'); await checkState(h, 'after modes'); }
     await checkState(h, 'end of run');
     const long = await h.page.evaluate(() => window.__qa.long.splice(0)); const worst = Math.max(0, ...long);
     if (worst > 1500) h.add('slow', 'low', 'run', `longest main-thread task ${worst}ms (software GL, informational)`);

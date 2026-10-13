@@ -112,8 +112,8 @@ export function open(ctx) {
 
     const meter = (label, bar, val, tip) => { const r = h('div', 'lm-meter', [h('span', '', label), bar, h('b', 'lm-num', val)]); U.tooltip(r, tip, { title: label }); return r; };
     c.append(h('div', 'lm-meters', [
-      meter('Energy', U.bar({ value: g.en, max: 100, kind: 'stam', height: 8 }), Math.round(g.en), 'Energy: training and fights drain it. Below 60 a fighter performs worse in the arena.'),
-      meter('Morale', U.bar({ value: g.mo, max: 100, kind: 'foe', height: 8 }), Math.round(g.mo), 'Morale: a happy fighter hits harder and learns faster.'),
+      meter('Energy', U.bar({ value: g.en, max: 100, kind: 'stam', height: 8, name: 'Energy' }), Math.round(g.en), 'Energy: training and fights drain it. Below 60 a fighter performs worse in the arena.'),
+      meter('Morale', U.bar({ value: g.mo, max: 100, kind: 'foe', height: 8, name: 'Morale' }), Math.round(g.mo), 'Morale: a happy fighter hits harder and learns faster.'),
       meter('XP', U.bar({ value: g.xp, max: lm.need(g.lvl), kind: 'xp', height: 8 }), `${Math.floor(g.xp)}`, `Experience: ${Math.floor(g.xp)} of ${lm.need(g.lvl)} to level ${g.lvl + 1}.`),
     ]));
 

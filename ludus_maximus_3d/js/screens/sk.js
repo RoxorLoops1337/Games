@@ -184,7 +184,7 @@ export function chipRow(items, active, onSelect) {
   return el;
 }
 
-export function meter(v, max, color) { const b = h('div', 'ax-bar'); b.style.setProperty('--w', Math.max(0, Math.min(100, (v / Math.max(1, max)) * 100)) + '%'); if (color) b.style.setProperty('--c', color); b.setAttribute('role', 'progressbar'); b.setAttribute('aria-valuenow', Math.round(v)); b.setAttribute('aria-valuemax', Math.round(max)); b.append(h('i')); return b; }
+export function meter(v, max, color, label = 'Progress') { const b = h('div', 'ax-bar'); b.style.setProperty('--w', Math.max(0, Math.min(100, (v / Math.max(1, max)) * 100)) + '%'); if (color) b.style.setProperty('--c', color); b.setAttribute('role', 'progressbar'); b.setAttribute('aria-valuenow', Math.round(v)); b.setAttribute('aria-valuemin', '0'); b.setAttribute('aria-valuemax', Math.round(max)); b.setAttribute('aria-label', `${label}: ${Math.round(v)} of ${Math.round(max)}`); b.append(h('i')); return b; }
 
 export function toggle(label, sub, on, onChange) {
   const sw = h('button', 'ax-switch'); sw.type = 'button'; sw.setAttribute('role', 'switch'); sw.setAttribute('aria-checked', on ? 'true' : 'false'); sw.setAttribute('aria-label', label);

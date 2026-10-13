@@ -504,6 +504,10 @@ html, body { max-width: 100%; overflow-x: hidden; }
 body .lx-fv-rbar .lx-fv-chip[aria-pressed=true] { background: linear-gradient(180deg, #f2c14e, #c9922e); border-color: #7a5222; color: #2a1a30; box-shadow: 0 0 0 2px rgba(242, 193, 78, .35); }
 /* bottom nav: the HUD column centres its children, so the nav shrank to its content and squeezed 'Roster' and 'Market' into ellipses on phones */
 .lx-hud .lx-nav { width: min(100%, 520px); align-self: center; }
+/* phones: the nav now spans the screen, so the photo button rides above it instead of covering 'Ludus' */
+@media (max-width: 600px) and (min-height: 521px) { body .lx-photo-fab { bottom: calc(var(--lx-sab) + 86px); } }
+/* nameplates: enemy plates get a dashed edge and a skull, yours a shield (colour blind safe) */
+.lx-plate-team { display: inline-flex; margin-left: 4px; opacity: .9; } .lx-team-foe .lx-plate-top { border-style: dashed; border-width: 1.5px; }
 /* title settings: toggles and sliders were 40px */
 .lx-ttl-tog { min-height: 44px; }
 .lx-ttl-row input[type=range] { min-height: 44px; }

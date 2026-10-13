@@ -36,6 +36,8 @@ function ludusTab(ctx, root, draw) {
   const S = ctx.S, lm = L();
   const v = lm.visitor(S);
   if (v) root.append(visitorCard(ctx, v, draw));
+  root.append(sec('Buildings'));
+  root.append(card([note('Build and upgrade the kitchen, barracks, forge and the rest of your ludus. You can also tap a plot in the ludus view.'), U.button({ label: 'Open buildings', icon: 'ludus', variant: 'bronze', block: true, onClick: () => ctx.open('building', {}) })])); // QA: the plot screen used to open only by tapping the 3D scene, which keyboard and screen reader players cannot do
   root.append(sec('The world'));
   root.append(card([note('Plan the whole season, deal with the rival schools, look after the barracks, and honor the fallen.'), actions([U.button({ label: 'Calendar', icon: 'scroll', variant: 'bronze', onClick: () => ctx.open('world', { tab: 'calendar' }) }), U.button({ label: 'Rival ludi', icon: 'skull', variant: 'bronze', onClick: () => ctx.open('world', { tab: 'rivals' }) }), U.button({ label: 'Barracks', icon: 'roster', variant: 'bronze', onClick: () => ctx.open('world', { tab: 'barracks' }) }), U.button({ label: `Memorial (${(S.fallen || []).length})`, icon: 'fame', variant: 'bronze', onClick: () => ctx.open('world', { tab: 'memorial' }) }), U.button({ label: 'Infirmary', icon: 'heart', variant: 'bronze', onClick: () => ctx.open('world', { tab: 'infirmary' }) }), U.button({ label: 'Patrons', icon: 'coin', variant: 'bronze', onClick: () => ctx.open('world', { tab: 'patrons' }) }), U.button({ label: 'Chronicle', icon: 'scroll', variant: 'bronze', onClick: () => ctx.open('world', { tab: 'chronicle' }) })])]));
   root.append(sec('Sponsors'));
@@ -152,7 +154,7 @@ function helpTab(ctx, root, draw) {
     ['Build your fighters', 'Gear with on-hit effects and sets, a Keystone rune plus two minors, masteries at levels 5, 10, 15 and 20, techniques that fire on their own, and ultimates you trigger.'],
     ['Scout the Arena', 'Matches are announced weeks ahead. A Scout Tower reveals more about rivals and shows more weeks. Style matchups give a small edge only.'],
     ['Fight live', 'Gladiators move, strike and cast on their own. Tap your ultimates at the right moment and tap an enemy to focus it. Before each fight pick an augment.'],
-    ['Grow', 'Win gold, fame, loot, runes and relics. Upgrade buildings (neighbors add synergy), merge gear, bet on mispriced fights, try the Pit of Trials, then found a new ludus for laurels.'],
+    ['Grow', 'Win gold, fame, loot, runes and relics. Upgrade buildings from More, Ludus, or by tapping a plot (neighbors add synergy), merge gear, bet on mispriced fights, try the Pit of Trials, then found a new ludus for laurels.'],
     ['Wounds, patrons, events', 'Injuries hit a body part (arm, knee, head, eye, ribs) and some heal into permanent scars that cost something. In the Infirmary decide per wound: rest it for free or pay to treat it, each with its own risk. Patrons sign contracts with demands, pay weekly and bite when you fail. Weekly events can chain into later consequences; the Chronicle keeps the log. All three are tabs of The World.'],
     ['Mind the world', 'In More, the Calendar shows the whole season. Rival ludi have natures: gift the greedy, train with the honorable. Mentors and feasts lift the barracks. The Pit, Horde, duels with champions and bounties can kill a fighter; honor them on the memorial wall.'],
   ];
