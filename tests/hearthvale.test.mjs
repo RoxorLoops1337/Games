@@ -57,6 +57,16 @@ const run = (W, secs) => { for (let i = 0; i < secs * 10; i++) S.tick(W, 0.1); }
   const W2 = S.deserialize(S.serialize(W)); ok(W2.players.a.res.wood === P.res.wood, 'save round trips'); S.tick(W2, 0.1); ok(true, 'restored world ticks');
   P.res.soup = 0; for (const v of P.villagers) v.hunger = 0; run(W, 10); ok(P.villagers.some(v => v.state === 'hungry'), 'starving villagers stop');
 }
+// the square ring of villages: 16 plots that never overlap, and old circular saves are migrated
+{
+  const W = S.createWorld(51); for (let i = 0; i < 16; i++) S.addPlayer(W, 'p' + i, 'P' + i);
+  const ps = Object.values(W.players); let overlaps = 0;
+  for (const a of ps) for (const b of ps) if (a !== b && Math.abs(a.ox - b.ox) < 16 && Math.abs(a.oz - b.oz) < 16) overlaps++;
+  ok(overlaps === 0, 'no two village plots overlap');
+  const q = ps[3], v0 = q.villagers[0]; const old = { x: v0.x - q.ox, z: v0.z - q.oz }; q.ox = 40; q.oz = 5; v0.x = q.ox + old.x; v0.z = q.oz + old.z;
+  const W2 = S.deserialize(S.serialize(W)); const q2 = W2.players[q.id]; const o = S.slotOrigin(q.slot);
+  ok(q2.ox === o.ox && q2.oz === o.oz, 'an old save is moved onto the square ring'); ok(Math.abs(q2.villagers[0].x - (o.ox + old.x)) < 1e-6, 'its villagers move with it');
+}
 // gifting
 {
   const W = S.createWorld(41); const A = S.addPlayer(W, 'a', 'A'), B = S.addPlayer(W, 'b', 'B');
@@ -88,6 +98,6 @@ const run = (W, secs) => { for (let i = 0; i < secs * 10; i++) S.tick(W, 0.1); }
   const { readFileSync, existsSync } = await import('node:fs');
   const html = readFileSync(new URL('../hearthvale/index.html', import.meta.url), 'utf8');
   ok(/"three": "\.\/vendor\/three\.module\.min\.js"/.test(html), 'import map points at vendored three');
-  for (const f of ['vendor/three.module.min.js', 'js/main.js', 'js/scene.js', 'js/models.js', 'js/net.js', 'style.css']) ok(existsSync(new URL('../hearthvale/' + f, import.meta.url)), f + ' exists');
+  for (const f of ['vendor/three.module.min.js', 'js/main.js', 'js/scene.js', 'js/models.js', 'js/net.js', 'style.css', 'art/buildings.js', 'art/characters.js', 'art/environment.js', 'art/critters.js', 'art/props.js', 'art/fx.js', 'vendor/jsm/utils/BufferGeometryUtils.js']) ok(existsSync(new URL('../hearthvale/' + f, import.meta.url)), f + ' exists');
 }
 console.log('hearthvale: ' + n + ' checks passed');

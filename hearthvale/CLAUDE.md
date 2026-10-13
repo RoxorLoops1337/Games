@@ -14,12 +14,15 @@ Link: `https://games-71g.pages.dev/hearthvale/` (solo works at once). Server: se
 - `shared/host.js`   platform-neutral host (connections, rate limit, snapshots). Used by the Node server and the Durable Object.
 - `server/server.mjs` zero-dependency Node HTTP + WebSocket server (`node hearthvale/server/server.mjs`, PORT, DATA_DIR). `server/ws.mjs` is a tiny RFC6455 implementation.
 - `server/cf/`       Cloudflare Worker + Durable Object (deploy by hand, see its README). Never shipped by Pages.
+- `art/`             the art team's modules (read `ART_BIBLE.md` first): `buildings.js`, `characters.js`, `environment.js`, `critters.js`, `props.js`, `fx.js`, plus `artkit.js` + `palette.js`. All procedural, vertex-coloured, budgeted (`tests/hearthvale_art.test.mjs` enforces triangle and mesh limits). `js/models.js` is the OLD basic art, only a few helpers still used.
+- `lab/`             dev-only art lab pages (never shipped): `lab/<page>.html` + `lab/shot.mjs` for headless screenshots.
 - `js/`              client: `main.js` (HUD, input, panels), `scene.js` (three.js view), `models.js` (procedural low-poly art), `net.js` (solo + WebSocket links).
 - `vendor/three.module.min.js` vendored three.js (no CDN, no build step).
 
 ## Rules
 - No image files: all art is procedural geometry, sound is synthesised.
 - Never rename the `hearthvale.*` localStorage keys (solo saves) or the folder.
+- Villages sit on a square ring (`slotOrigin` in sim.js, 17.5 apart, never overlapping); old circular saves are migrated in `deserialize`.
 - Snapshot tuple shapes in `snapshot()` are read by `scene.js` (`b`, `n`, `v` arrays): change both together.
 - Panels re-render only when their HTML changes and pause while a pointer is down, so taps never hit a rebuilt button.
 - Tests: `npm run test:hearthvale` (sim, fuzz, host, live 16-socket server). Add new behaviour to `tests/hearthvale*.test.mjs`.

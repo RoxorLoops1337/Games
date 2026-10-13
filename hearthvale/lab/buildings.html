@@ -1,0 +1,69 @@
+<!doctype html><meta charset="utf-8"><title>Hearthvale buildings lab</title>
+<script type="importmap">{ "imports": { "three": "../vendor/three.module.min.js", "three/addons/": "../vendor/jsm/" } }</script>
+<style>.lb{position:fixed;pointer-events:none;font:600 11px system-ui;color:#2a2438;background:#fffc;border-radius:6px;padding:1px 5px;transform:translate(-50%,0)}#st{position:fixed;left:6px;top:6px;font:11px/1.25 monospace;background:#000a;color:#fff;padding:6px;white-space:pre;display:none}</style>
+<div id="st"></div>
+<script type="module">
+// Query: ?layout=rows (default) | village | focus   &focus=kitchen  &lvl=1,2,3 (focus levels, or rows level pair)  &night=1  &labels=1  &stats=1
+// camera: yaw pitch dist x z (stage.js).  Rows layout: z=-? lvl1 row, z=+? lvl3 row.
+import * as THREE from 'three';
+import { mountStage } from './stage.js';
+import { BUILD, farmModel, setFarmStage, constructionSite, windowMat, lanternMat } from '../art/buildings.js';
+import { BUILDINGS } from '../shared/data.js';
+const q = new URLSearchParams(location.search), night = +q.get('night') || 0, layout = q.get('layout') || 'rows';
+const st = mountStage();
+const TYPES = ['hall', 'house', 'kitchen', 'sawmill', 'kiln', 'storehouse', 'study', 'mill', 'bakery', 'market', 'flowers', 'lantern', 'fountain', 'banner'];
+const lvls = (q.get('lvl') || (layout === 'rows' ? '1,3' : '1,2,3')).split(',').map(Number);
+const anim = [], flags = [], smoke = [], labels = [], stats = {};
+const colors = ['#e8564a', '#4a90e0', '#52b56a', '#a65bd6'];
+function count(o) { let m = 0, t = 0; o.traverse((c) => { if (c.isMesh) { m++; const g = c.geometry; t += (g.index ? g.index.count : g.attributes.position.count) / 3; } }); return { meshes: m, tris: Math.round(t) }; }
+function put(obj, x, z, label) {
+  st.add(obj, x, z); if (q.get('squash')) obj.scale.y = +q.get('squash'); obj.traverse((c) => { if (c.name === 'spin') anim.push(['x', c]); if (c.name === 'spinz') anim.push(['z', c]); if (c.name === 'flag') flags.push(c); if (c.name === 'chimney') smoke.push(c); });
+  if (q.get('labels')) { const d = document.createElement('div'); d.className = 'lb'; d.textContent = label; document.body.appendChild(d); labels.push({ d, p: new THREE.Vector3(x, 0, z + 1.2) }); }
+}
+function mk(type, lvl, id) { const info = { id, color: colors[id % 4], lvl }; const o = BUILD[type](info); const s = count(o); (stats[type] ||= {})[lvl] = s; return o; }
+if (layout === 'rows') {
+  const rowsLvl = lvls.slice(0, 2), W = { hall: 3.4, farm: 3.5, site: 2.6, fountain: 2.6 };
+  const items = TYPES.map((t) => ({ k: t, w: W[t] || (['flowers', 'lantern', 'banner'].includes(t) ? 1.6 : 2.5) })).concat(['empty', 'grow', 'ripe'].map((s) => ({ k: 'farm', s, w: W.farm })), [{ k: 'site', w: W.site }]);
+  let tot = 0; for (const it of items) { it.x = tot + it.w / 2; tot += it.w; }
+  rowsLvl.forEach((lvl, r) => {
+    const z = (r - (rowsLvl.length - 1) / 2) * 6.2;
+    items.forEach((it, i) => {
+      const x = it.x - tot / 2; let o;
+      if (it.k === 'farm') { o = farmModel({ id: 1, color: colors[0], lvl }); setFarmStage(o, it.s, it.s === 'grow' ? 0.6 : 0); (stats.farm ||= {})[it.s] = count(o); }
+      else if (it.k === 'site') { o = constructionSite(2, 2); (stats.site ||= {})[lvl] = count(o); }
+      else o = mk(it.k, lvl, i + 1);
+      put(o, x, z, it.k + (it.s ? ' ' + it.s : '') + ' L' + lvl);
+    });
+  });
+  st.look.dist = +q.get('dist') || 56;
+} else if (layout === 'focus') {
+  const t = q.get('focus') || 'house'; lvls.forEach((l, i) => put(mk(t, l, +q.get('id') || 1), (i - (lvls.length - 1) / 2) * (+q.get('gap') || 3.6), 0, t + ' L' + l));
+  if (t === 'farm') { /* handled by farm layout */ }
+  if (!q.get('dist')) st.look.dist = 7 + lvls.length * 1.6;
+} else if (layout === 'farm') {
+  ['empty', 'grow', 'ripe'].forEach((s, i) => { const f = farmModel({ id: 1 }); setFarmStage(f, s, 0.6); put(f, (i - 1) * 3.6, 0, s); }); put(constructionSite(2, 2), 4.6, 4, 'site'); put(constructionSite(3, 3), -3.5, 4.5, 'site3');
+  if (!q.get('dist')) st.look.dist = 12;
+} else { // village: buildings on a tight tile grid like the game (2x2 cells, hall 3x3, decor 1x1)
+  const lvl = lvls[0], at = (t, x, z, id = 1) => put(mk(t, lvl, id), x, z);
+  at('hall', 0, -3.5); at('house', -3.4, -2.6, 1); at('house', 3.4, -2.6, 3);
+  at('kitchen', -3, 0.4); at('sawmill', -0.8, 0.5); at('kiln', 1.6, 0.5); at('storehouse', 4, 0.5);
+  at('study', -3, 3.0); at('mill', -0.8, 3.0); at('bakery', 1.6, 3.0); at('market', 4, 3.0);
+  at('fountain', 0.4, 5.6); at('flowers', -1.4, 5.6, 2); at('lantern', 2.0, 5.2); at('banner', 3.4, 5.4); at('house', -3.2, 5.4, 5); at('house', 5.6, -2.6, 2);
+  const f = farmModel({ id: 1 }); setFarmStage(f, 'ripe', 1); put(f, -6.4, 0.5);
+  st.look.x = 0; st.look.z = 1.2; if (!q.get('dist')) st.look.dist = 26;
+}
+const set = night ? 1.6 : 0; windowMat.emissiveIntensity = night ? 1.5 : 0; lanternMat.emissiveIntensity = night ? 2.0 : 0;
+// smoke puffs from every chimney anchor
+const puffs = []; const pm = new THREE.MeshBasicMaterial({ color: '#fff', transparent: true, opacity: 0.7, depthWrite: false }), pg = new THREE.SphereGeometry(0.1, 8, 6);
+for (const a of smoke) for (let i = 0; i < 4; i++) { const m = new THREE.Mesh(pg, pm.clone()); m.userData = { a, t: i / 4 }; st.scene.add(m); puffs.push(m); }
+const vp = new THREE.Vector3();
+st.onTick((dt, t) => {
+  for (const [ax, o] of anim) o.rotation[ax] += dt * (ax === 'x' ? 4 : 0.8);
+  flags.forEach((f, i) => { f.rotation.y = Math.sin(t * 3 + i) * 0.25; });
+  for (const m of puffs) { const u = m.userData; u.t = (u.t + dt * 0.4) % 1; u.a.getWorldPosition(vp); m.position.set(vp.x + u.t * 0.25, vp.y + u.t * 0.9, vp.z); m.scale.setScalar(0.6 + u.t * 1.8); m.material.opacity = 0.7 * (1 - u.t); }
+  for (const l of labels) { vp.copy(l.p).project(st.cam); l.d.style.left = (vp.x * 0.5 + 0.5) * innerWidth + 'px'; l.d.style.top = (-vp.y * 0.5 + 0.5) * innerHeight + 'px'; }
+});
+window.__stats = stats; console.log(JSON.stringify(stats));
+if (q.get('stats')) { const el = document.getElementById('st'); el.style.display = 'block'; el.textContent = Object.entries(stats).map(([k, v]) => k + ' ' + Object.entries(v).map(([l, s]) => `${l}:${s.tris}t/${s.meshes}m`).join(' ')).join('\n'); }
+st.ready();
+</script>

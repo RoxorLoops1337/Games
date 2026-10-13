@@ -285,7 +285,7 @@ cv.addEventListener('pointermove', (e) => {
     else if (!tap || tap.moved > 6) pan(dx, dy);
   } else if (ptrs.size === 2) {
     const [a, b] = [...ptrs.values()]; const dist = Math.hypot(a.x - b.x, a.y - b.y), ang = Math.atan2(b.y - a.y, b.x - a.x);
-    if (lastPinch) { L.dist = Math.max(8, Math.min(90, L.dist * (lastPinch.d / dist))); L.yaw -= (ang - lastPinch.a); }
+    if (lastPinch) { L.dist = Math.max(8, Math.min(72, L.dist * (lastPinch.d / dist))); L.yaw -= (ang - lastPinch.a); }
     lastPinch = { d: dist, a: ang }; if (tap) tap.moved = 99;
   }
 });
@@ -301,7 +301,7 @@ cv.addEventListener('pointerup', (e) => {
   tap = null;
 });
 cv.addEventListener('pointercancel', (e) => { ptrs.delete(e.pointerId); tap = null; });
-cv.addEventListener('wheel', (e) => { e.preventDefault(); view.goal.dist = Math.max(8, Math.min(90, view.goal.dist * Math.exp(e.deltaY * 0.0012))); }, { passive: false });
+cv.addEventListener('wheel', (e) => { e.preventDefault(); view.goal.dist = Math.max(8, Math.min(72, view.goal.dist * Math.exp(e.deltaY * 0.0012))); }, { passive: false });
 addEventListener('keydown', (e) => {
   if (e.target.tagName === 'INPUT') return;
   const L = view.goal, s = L.dist * 0.04;
