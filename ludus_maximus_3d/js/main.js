@@ -12,6 +12,10 @@ const q = new URLSearchParams(location.search);
 const canvas = document.getElementById('gl'), ui = document.getElementById('ui');
 const fail = (m) => { const e = document.getElementById('err'); e.textContent = m || e.textContent; e.style.display = 'flex'; };
 
+// anything thrown before the game is up (createPost, scene setup) must not leave "Forging the arena" on screen forever
+const bootFail = (e) => { if (!window.__LM3D) fail('The arena could not start: ' + ((e && (e.message || e.reason && e.reason.message)) || 'unknown error') + '. Reload to try again.'); };
+addEventListener('error', bootFail); addEventListener('unhandledrejection', bootFail);
+
 let renderer;
 try { renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance' }); } catch (e) { fail('WebGL is not available on this device. Try another browser, or enable hardware acceleration.'); throw e; }
 renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 0.9;
