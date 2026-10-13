@@ -15,6 +15,18 @@ export const isUber = (b: { kind: string }) => b.kind === UBER;
 /** A chest's room: its kind's, or for an Uber Chest the room all of them give together. Pure: the client reads it too. */
 export const storageOf = (b: Pick<BuildE, 'kind' | 'cap'>) => (isUber(b) ? b.cap ?? BUILDINGS.uberchest.storage! : BUILDINGS[b.kind].storage ?? 0);
 
+/** How full a chest is, 0..1 (0 for a building with no room). Pure: the world view draws a gauge from it. */
+export const fillOf = (b: Pick<BuildE, 'kind' | 'cap' | 'inv'>) => {
+    const room = storageOf(b);
+    if (room <= 0) return 0;
+    let n = 0;
+    for (const v of Object.values(b.inv ?? {})) n += v ?? 0;
+    return Math.min(1, n / room);
+};
+
+/** The colour of a chest's gauge: calm while there is room, warm when it is getting full, red when it is nearly out of room. */
+export const fillColor = (f: number) => (f >= 0.9 ? 0xd85a5a : f >= 0.7 ? 0xf0b93a : 0x7ccf64);
+
 /** The same list with only its first Uber Chest (they are one store: counting two would count it twice). */
 export function oneUber<T extends { kind: string }> (list: T[]): T[] {
     let seen = false;
