@@ -66,5 +66,5 @@ split big ones into slices (rules, art, polish).
   - [x] B2c Festival stalls and games (ring toss at every cottage on festival night)
 - [ ] B3 The Long Dusk (new game plus)
   - [x] B3a Dusk Beacon (sleeps until every boss has fallen; lit: wild monsters 8 levels tougher and 1.5x loot; all server-side, no protocol change)
-  - [x] B3b Dusk Crown (a boss that falls in the Long Dusk also drops a Dusk Crown trophy to everyone who fought; it joins the museum set; dusk-only bosses still to do)
+  - [x] B3b Dusk Crown (a boss that falls in the Long Dusk also drops a Dusk Crown trophy to everyone who fought; it joins the museum set; an altar boss woken in the Long Dusk has 1.6x health and drops its spoils twice)
   - [x] B3c Dusk indicator (the season label on the HUD reads "Spring · Long Dusk" in violet while it is on; the tick now carries it; PROTOCOL 48)

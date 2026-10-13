@@ -5,6 +5,7 @@ import { TILE, TUNING } from '../src/shared/config';
 import { COOP_PATTERNS } from '../src/shared/data/costatus';
 import { ITEMS } from '../src/shared/data/items';
 import { BOSS_ORDER, BOSSES, type CoPattern, isBoss, MOBS, type PatternId } from '../src/shared/data/mobs';
+import { DUSK_BOSS_HP } from '../src/shared/sim/boss';
 import { Sim } from '../src/shared/sim/sim';
 import { countOf } from '../src/shared/sim/stats';
 import type { BuildE, MobE, PlayerS, SimEvent } from '../src/shared/sim/types';
@@ -281,4 +282,13 @@ test('a Dread warden is the altar boss of its kind with the configured hearts an
         assert.ok(w.hx !== undefined && w.hy !== undefined && w.alt === undefined, 'posted at its block, not an altar');
         assert.ok(BOSS_ORDER.includes(MOBS[w.kind].boss!.id));
     }
+});
+
+test('an altar boss woken in the Long Dusk is tougher', () => {
+    const plain = arena('BOSS-DUSK-1');
+    const base = summon(plain.sim, plain.p, plain.altar, 'slime')!.mhp;
+    const dark = arena('BOSS-DUSK-1');
+    dark.sim.s.dusk = 1;
+    const tough = summon(dark.sim, dark.p, dark.altar, 'slime')!.mhp;
+    assert.equal(tough, Math.round(base * DUSK_BOSS_HP));
 });
