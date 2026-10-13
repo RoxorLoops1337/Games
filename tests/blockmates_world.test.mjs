@@ -53,11 +53,11 @@ test('a player joins, falls to the ground and walks', () => {
   const p = c.p();
   assert.ok(p.onGround, 'on ground');
   const x0 = p.x;
-  p.keys = K_RIGHT;
+  w.message(c.id, { t: 'i', k: K_RIGHT, s: 1 });
   run(w, 30);
   assert.ok(p.x > x0 + 4, 'walked ' + (p.x - x0));
-  p.keys = 0; run(w, 20);
-  const y0 = p.y; p.keys = K_JUMP; run(w, 8);
+  w.message(c.id, { t: 'i', k: 0, s: 2 }); run(w, 20);
+  const y0 = p.y; w.message(c.id, { t: 'i', k: K_JUMP, s: 3 }); run(w, 8);
   assert.ok(p.y < y0 - 1, 'jumped');
 });
 
@@ -264,9 +264,8 @@ test('16 players fit, the 17th is refused, snapshots stay small', () => {
   assert.equal(w.players.size, MAX_PLAYERS);
   const extra = client(w, 'Extra');
   assert.ok(extra.last('deny'));
-  for (const c of cs) c.p().keys = i_rand(c.id) ? K_RIGHT : 0;
   const t0 = process.hrtime.bigint();
-  run(w, 300);
+  for (let sec = 0; sec < 10; sec++) { for (const c of cs) w.message(c.id, { t: 'i', k: i_rand(c.id) ? K_RIGHT : 0, s: sec }); run(w, 30); }
   const ms = Number(process.hrtime.bigint() - t0) / 1e6 / 300;
   console.log(`     16 players: ${ms.toFixed(2)} ms per tick`);
   assert.ok(ms < 20, 'tick cost ' + ms);
@@ -363,4 +362,15 @@ test('worlds come with shrines, ruins and buried loot that survives a save', () 
   assert.ok(w2.metaGet(...k0.split(',').map(Number)).inv.every((q) => !q), 'looted chest stays empty');
 });
 
+test('a client that goes silent stops walking', () => {
+  const w = new World({ seed: 5 });
+  const c = client(w, 'Quiet'); run(w, 60);
+  w.message(c.id, { t: 'i', k: K_RIGHT, s: 1 });
+  run(w, 30); const x1 = c.p().x;
+  run(w, 90); const x2 = c.p().x;
+  run(w, 60); assert.ok(Math.abs(c.p().x - x2) < 0.5, 'stopped');
+  assert.ok(x2 > x1, 'walked while input kept arriving');
+});
+
 console.log(`\n${passed} passed`);
+

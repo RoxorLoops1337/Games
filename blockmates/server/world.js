@@ -919,7 +919,7 @@ export class World {
       return;
     }
     const wasGround = p.onGround;
-    const f = stepBody(this, p, p.keys);
+    const f = stepBody(this, p, this.tick_n - p.lastAct > TICK * 1.5 ? 0 : p.keys); // a silent client (hidden tab) stops walking
     p.x = clamp(p.x, 1, W - 1);
     if (p.y > H + 5) this.hurtPlayer(p, 99, null);
     // fall damage
