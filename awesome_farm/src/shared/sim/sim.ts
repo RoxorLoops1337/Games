@@ -33,6 +33,7 @@ import * as gather from './gather';
 import * as health from './health';
 import * as satchel from './satchel';
 import * as arts from './arts';
+import * as cosy from './cosy';
 import * as hearth from './hearth';
 import * as iridium from './iridium';
 import * as unstick from './unstick';
@@ -557,6 +558,7 @@ export class Sim {
         fishing.update(this, dt);
         creatures.update(this, dt);
         hearth.update(this, dt);
+        cosy.update(this, dt);
         quests.update(this, dt);
         wish.update(this);
         if (this.lab) lab.step(this);                 // (the Defense Lab holds its clock)
