@@ -566,6 +566,7 @@ body.lx-hc .lx-tip { background: #000; color: #fff; border: 2px solid #fff; }
 .lx-fv-chip[aria-pressed=true] { background: linear-gradient(180deg, #f2c14e, #c9922e); border-color: #7a5222; color: #2a1a30; box-shadow: 0 0 0 2px rgba(242, 193, 78, .35); }
 .lx-fv-chip:focus-visible { outline: 3px solid var(--lx-gold); outline-offset: 2px; }
 .lx-fv-pause-scrim .lx-sheet-scroll { padding: 2px 4px; }
+.lx-fv-pml { display: flex; flex-direction: column; gap: 3px; } .lx-fv-pmh { font: 600 11px/1.2 var(--lx-sans); letter-spacing: 0; text-transform: none; opacity: .75; } /* PAUSE MENU hint line */
 /* replay bar: three rows (scrub, rate, camera) above the safe area; wraps on phones */
 .lx-fv-rbar { position: absolute; left: 8px; right: 8px; bottom: calc(var(--lx-sab, 0px) + 8px); z-index: 32; display: flex; flex-direction: column; gap: 6px; padding: 8px 10px; border-radius: 12px; background: rgba(29, 24, 48, .78); border: 2px solid var(--lx-bronze); max-width: 560px; margin: 0 auto; backdrop-filter: blur(4px); }
 .lx-fv-rrow { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; justify-content: center; }

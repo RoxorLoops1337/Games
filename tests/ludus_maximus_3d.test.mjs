@@ -951,5 +951,32 @@ const LEGACY_IDS = ['patron', 'brawl', 'trainer', 'spoiled', 'spy', 'sponsor', '
   ok(clash === 0, 'no event over 24 weeks pairs the fighter with a same-named opponent');
 }
 
+{ // round 48: BEAST real animals (js/beast.js headless: budgets per tier, smooth skin weights, paw planting, idle life, blood that stays on the wound)
+  const had = { window: typeof globalThis.window, document: typeof globalThis.document };
+  if (!globalThis.window) globalThis.window = globalThis; if (!globalThis.document) globalThis.document = { createElement: () => ({ getContext: () => null }) };
+  const { createBeast, JN } = await import('../ludus_maximus_3d/js/beast.js'), V = { low: { a: 1050, e: 1600 }, medium: { a: 3900, e: 5200 }, high: { a: 9500, e: 9500 } };
+  for (const kind of ['lion', 'wolf', 'bear', 'boar', 'nemean', 'elephant']) for (const dt of ['low', 'medium', 'high']) {
+    const rec = LM.makeBeast(kind, 6, { r: LM.mulberry(5), id: 't' }), rig = createBeast(rec, { detail: dt }), lim = V[dt][kind === 'elephant' ? 'e' : 'a'];
+    ok(rig.triangles() <= lim && rig.drawCalls() <= 8, `${kind} ${dt}: ${rig.triangles()} tris (limit ${lim}) and ${rig.drawCalls()} calls (limit 8)`);
+    let bad = 0, multi = 0, total = 0; const nb = rig.skeleton.bones.length;
+    rig.root.traverse((o) => { if (!o.isSkinnedMesh) return; const si = o.geometry.attributes.skinIndex, sw = o.geometry.attributes.skinWeight; for (let v = 0; v < sw.count; v++) { let t = 0, n = 0; for (let q = 0; q < 4; q++) { const w = sw.getComponent(v, q); t += w; if (w > 0.02) { n++; if (si.getComponent(v, q) >= nb) bad++; } } if (Math.abs(t - 1) > 0.02) bad++; if (n > 1) multi++; total++; } });
+    ok(bad === 0, `${kind} ${dt}: every vertex has valid bones and weights summing to one`); if (dt !== 'low') ok(multi / total > 0.12, `${kind} ${dt}: smooth skinning blends bones on ${(100 * multi / total).toFixed(0)}% of the vertices`);
+    if (dt !== 'high') continue;
+    const A = rig.animator, P = [['wristL', 0], ['wristR', 1], ['ankleL', 2], ['ankleR', 3]], v3 = (n) => { const e = rig.joints[n].matrixWorld.elements; return e[13]; };
+    for (let i = 0; i < 50; i++) rig.update(1 / 60);
+    let worst = 0; for (const [n, i] of P) worst = Math.max(worst, Math.abs(v3(n) - A.pads[i] * 0.98)); ok(worst < 0.03 * Math.max(1, rig.size), `${kind}: standing paws are planted on the sand (worst ${worst.toFixed(3)} m)`);
+    let fin = true, steps = 0; rig.onEvent = (e) => { if (e === 'step') steps++; };
+    for (const sp of [1, 3, 6]) { A.setMove(sp, 0); for (let i = 0; i < 150; i++) { rig.update(1 / 60); for (const k of rig.root.children[0].children) { const e = k.matrixWorld.elements; for (let j = 0; j < 16; j++) if (!isFinite(e[j])) fin = false; } } }
+    ok(fin && steps >= 6, `${kind}: walk, trot and gallop stay finite and emit steps (${steps})`); A.setMove(0, 0);
+    let blinks = 0, was = false, y0 = 9, y1 = -9; for (let i = 0; i < 40 * 30; i++) { rig.update(1 / 30); if (i < 20 * 30) continue; const l = A.out[JN.indexOf('lidL') * 3] > 1.0; if (l && !was) blinks++; was = l; const hy = A.out[JN.indexOf('head') * 3 + 1]; y0 = Math.min(y0, hy); y1 = Math.max(y1, hy); }
+    ok(blinks >= 2 && y1 - y0 > 0.08, `${kind}: idle life (blinks ${blinks}, head wander ${(y1 - y0).toFixed(2)} rad)`);
+    rig.clearBlood(); rig.addWound(rig.jointRest('chest', [0.1, 0.1, 0.1]), { x: 0, y: 1, z: 0 }, 0.1, 1); const s0 = rig.bloodU.uWoundD.value[0].w; rig.addBlood(0.2, 1); rig.addBlood(0.2, 1);
+    ok(rig.bloodU.uWoundD.value[0].w > s0 + 0.5 && rig.bloodU.uBlood.value < 0.3, `${kind}: blood soaks the wound, not the whole coat`);
+    for (const n of ['bite', 'claw', 'pounce', 'roar', 'death', 'hurt']) { A.dead = false; A.action = null; A.play(n); if (n === 'death') A.dead = true; for (let i = 0; i < 120; i++) rig.update(1 / 60); const e = rig.joints.head.matrixWorld.elements; ok(isFinite(e[12]) && isFinite(e[13]) && isFinite(e[14]), `${kind}: clip ${n} stays finite`); }
+    rig.dispose();
+  }
+  if (had.window === 'undefined') delete globalThis.window; if (had.document === 'undefined') delete globalThis.document;
+}
+
 console.log(`ludus_maximus: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

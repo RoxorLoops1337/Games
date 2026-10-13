@@ -51,8 +51,8 @@ const WEATHER = {
 };
 /** hour (0..24) + weather -> preset. Sun swings front-right (morning) to front-left (evening) so facades are always modelled by 3/4 light. */
 /** [HUB-NIGHT] hub moonlight: cool directional key (soft shadows), generous cool fill and fog tint so buildings and plots stay readable, warm light comes from windows and torch pools. */
-const NIGHT = { sunElev: 40, sunAz: 238, sunColor: 0xa6bcff, sunInt: 3.1, hemiSky: 0x5a74c8, hemiGround: 0x3a3558, hemiInt: 1.6, fog: 0x16225a, fogDensity: 0.0029,
-  skyTop: 0x0a1640, skyMid: 0x1c2e6e, skyHor: 0x41589a, glow: 0x6078c8, cloudLit: 0x8092ca, cloudShade: 0x242e5c, cloudAmt: 0.3, stars: 1.0, exposure: 1.32, night: 1.0, sunSize: 0.03 };
+const NIGHT = { sunElev: 40, sunAz: 238, sunColor: 0xa6bcff, sunInt: 2.9, hemiSky: 0x5a74c8, hemiGround: 0x3a3558, hemiInt: 1.3, fog: 0x16225a, fogDensity: 0.0029,
+  skyTop: 0x0a1640, skyMid: 0x1c2e6e, skyHor: 0x41589a, glow: 0x6078c8, cloudLit: 0x8092ca, cloudShade: 0x242e5c, cloudAmt: 0.3, stars: 1.0, exposure: 1.24, night: 1.0, sunSize: 0.03 };
 export function presetFor(hour, weather = 'clear') {
   const hh = ((hour % 24) + 24) % 24, nightW = weather === 'night';
   let base = nightW ? Object.assign({}, NIGHT) : todFromHour(hh);
@@ -60,7 +60,7 @@ export function presetFor(hour, weather = 'clear') {
   if (WEATHER[weather]) base = lerpTOD(base, WEATHER[weather], weather === 'rain' ? 0.85 : weather === 'dust' ? 0.7 : 0.55);
   if (!nightW && nK > 0) { const n0 = base.night; base = lerpTOD(base, NIGHT, nK * (weather === 'rain' ? 0.82 : 0.94)); base.night = Math.max(n0, nK); }   // night wins over day weather; rain keeps a little grey so streaks read
   else if (!nightW && weather !== 'clear' && WEATHER[weather]) base.night = Math.max(base.night, WEATHER[weather].night);
-  base.hemiInt *= nightW ? 1.0 : 1 + 0.2 * (1 - nK);
+  base.hemiInt *= nightW ? 1.0 : (1 + 0.2 * (1 - nK)) * (1 + 0.3 * clamp(base.night / 0.55) * (1 - nK));   // dusk and dawn get a little more sky fill
   const dayK = nightW ? 0 : 1 - clamp((base.night - 0.25) / 0.45);   // 1 by day, 0 once the moon is up
   if (!nightW) { const m = new THREE.Color(base.hemiGround).lerp(new THREE.Color(0x9c8090), 0.5 * dayK); base.hemiGround = m.getHex(); }
   if (dayK > 0) {
@@ -262,7 +262,7 @@ export function createHub({ renderer, camera, audio, tier = 'high', post = null 
       vertexShader: `varying vec2 vP; varying float vS; uniform float uTime; void main(){ vec3 c = instanceMatrix[3].xyz; vP = position.xz * 2.0; vS = fract(sin(dot(c.xz, vec2(12.9, 78.2))) * 43758.5);
         gl_Position = projectionMatrix * viewMatrix * modelMatrix * instanceMatrix * vec4(position, 1.0); }`,
       fragmentShader: `varying vec2 vP; varying float vS; uniform float uTime, uAmt; void main(){ float r = length(vP); float f = 0.82 + 0.18 * sin(uTime * (7.0 + vS * 4.0) + vS * 40.0) * sin(uTime * 3.1 + vS * 9.0);
-        float a = pow(max(1.0 - r, 0.0), 2.2) * uAmt * f; gl_FragColor = vec4(vec3(1.5, 0.82, 0.36) * a * 0.62, a);
+        float a = pow(max(1.0 - r, 0.0), 2.2) * uAmt * f; gl_FragColor = vec4(vec3(1.5, 0.82, 0.36) * a * 0.9, a);
         #include <tonemapping_fragment>
         #include <colorspace_fragment>
       }` }), 160);
@@ -462,7 +462,7 @@ export function createHub({ renderer, camera, audio, tier = 'high', post = null 
   }
   function rebuildFx() {
     flameGroup.clear(); if (flames) flames = null;
-    { const mm = new THREE.Matrix4(); let n = 0; for (const f of buildFx.flames) { if (n >= 160) break; const gy = Math.max(groundAt(f.x, f.z), 0) + 0.05, rad = (3.2 + 2.2 * (f.s || 1)); mm.makeScale(rad, 1, rad).setPosition(f.x, f.y > 3.5 ? gy + 1.2 : gy, f.z); poolMesh.setMatrixAt(n++, mm); }
+    { const mm = new THREE.Matrix4(); let n = 0; for (const f of buildFx.flames) { if (n >= 160) break; const gy = Math.max(groundAt(f.x, f.z), 0) + 0.05, rad = (3.8 + 2.4 * (f.s || 1)); mm.makeScale(rad, 1, rad).setPosition(f.x, f.y > 3.5 ? gy + 1.2 : gy, f.z); poolMesh.setMatrixAt(n++, mm); }
       poolMesh.count = n; poolMesh.instanceMatrix.needsUpdate = true; }
     if (buildFx.flames.length) { flames = createFlames(buildFx.flames, { glowScale: 3.2 }); flameGroup.add(flames.group); }
     // smoke: 18 puffs per emitter

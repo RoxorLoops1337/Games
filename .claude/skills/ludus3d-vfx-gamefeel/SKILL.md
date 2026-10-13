@@ -106,3 +106,7 @@ Colors: element hex in `fx.ult.colorOf(el)`; tint hits with the skill color `c` 
 - Status icons (`fx.status` stun stars, slow chevrons, blind puffs, taunt mark) scale with camera distance: `ik = clamp(dist / 11, 0.5, 1.05)` (and `o.iconK`), so close shots no longer show huge icons.
 - Damage numbers (`FightView.num`): global budget of 7 per 0.6 s (crits, DOWN and first heals always pass), a hit under 3.5% of max hp is dropped while its target already shows two numbers, repeated status words merge (same word within 1.4 s, any status label within 0.45 s), the size follows the share of max hp (0.72x to 1.3x).
 - Foe ultimate telegraph: `tele` event with `ult` -> `fx.tele` disc under the caster (lanes are drawn by the tactics overlay), caster `rig.flash`, banner "X incoming!", sound `drum`. See the ui-cinematics skill for the overlay.
+
+# Update: dust is soft sand, not cotton (fx.js)
+- `fx.dust` puffs: alpha capped at 0.4 (call alpha x 0.5), start size 0.18 to 0.3 (x0.8), end 0.75 to 1.25, life 0.4 to 0.75 s, tint = warm sand (`dustWarm` to `dustDark`, no white mix; shockwave dust 0.25 white), drag 2.6. A token bucket (`dustTok`, 28 puffs, refill 30/s, 16/s when `fx.quality < 0.7`) caps simultaneous puffs: team fights fire many hits a second and the burst takes what is left. Low tier also halves the count. No per-frame allocation: the bucket is two scalars updated in `fx.update`.
+- Rule: dust must never hide a fighter. If you add a new `fx.dust` caller keep `size <= 1` and alpha at the default.

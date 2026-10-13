@@ -792,7 +792,7 @@ class BeastAnimator {
     const G = this.sp.gait, v = Math.sqrt(this.mv.vz * this.mv.vz + this.mv.vx * this.mv.vx), pb = this.pb, S = this.sp.size, big = this.sp.id === 'elephant', pace = !!G.pace;
     this.speed += (v - this.speed) * Math.min(1, dt * 10); const gv = this.speed;
     const wk = sm(0.12, G.walkV * 0.8, gv), s1 = pace ? 0 : sm(G.walkV * 1.12, G.trotV * 0.95, gv), s2 = sm(G.trotV * 1.08, G.runV * 0.86, gv), gm = this.gaitMix; gm.s1 += (s1 - gm.s1) * Math.min(1, dt * 6); gm.s2 += (s2 - gm.s2) * Math.min(1, dt * 6);
-    const stride = lerp(lerp(G.strideW, G.strideT, gm.s1), G.strideR, gm.s2), W = pace ? GAITS.pace : GAITS.walk, T = pace ? GAITS.pace : GAITS.trot, R = GAITS.gallop;
+    const stride = lerp(lerp(G.strideW, G.strideT, gm.s1), G.strideR, gm.s2) * S, W = pace ? GAITS.pace : GAITS.walk, T = pace ? GAITS.pace : GAITS.trot, R = GAITS.gallop;
     const duty = lerp(lerp(W.d, T.d, gm.s1), R.d, gm.s2) - (big ? 0 : 0);
     if (gv > 0.12) this.phase = (this.phase + (Math.sign(this.mv.vz || 1) * gv * dt) / stride) % 1; if (this.phase < 0) this.phase += 1;
     const ph = this.phase, half = Math.min(stride * duty * 0.5, this.legL[0] * 0.92);

@@ -450,14 +450,17 @@ export function createFx(scene, opts = {}) {
   };
 
   // Dust: sand-colored soft puffs kicked outward, normal blending (reads on bright sand).
+  // DUST (soft warm sand, never opaque cotton): low alpha, small, short lived, tinted sand instead of white. A token bucket caps simultaneous puffs
+  // (team fights fire dozens of hits a second): it refills with time (fx.update), a big burst takes what is left and the rest is dropped. Low tier: half.
+  let dustTok = 28; const dustWarm = mixc(sand, { r: 1, g: 0.86, b: 0.62 }, 0.35), dustDark = mixc(sand, { r: 0.3, g: 0.2, b: 0.12 }, 0.45);
   fx.dust = (pos, n = 8, o = {}) => {
-    const k = o.size ?? 1, up = o.up ?? 1, base = o.color ? rgb(o.color) : sand, lite = mixc(base, WHITE, 0.6), dark = mixc(base, { r: 0.3, g: 0.2, b: 0.12 }, 0.2);
-    const dir = o.dir ? dirOf(o.dir) : null; n = N(n);
+    const k = (o.size ?? 1) * 0.8, up = o.up ?? 1, lite = o.color ? mixc(rgb(o.color), WHITE, 0.2) : dustWarm, dark = o.color ? mixc(rgb(o.color), { r: 0.3, g: 0.2, b: 0.12 }, 0.4) : dustDark;
+    const dir = o.dir ? dirOf(o.dir) : null; n = N(n); const cap = fx.quality < 0.7 ? 0.5 : 1; n = Math.min(Math.ceil(n * cap), Math.floor(dustTok)); if (n <= 0) return; dustTok -= n;
     for (let i = 0; i < n; i++) {
       const a = rnd() * TAU, s = R_(0.6, 2.4) * (o.speed ?? 1);
       let vx = Math.cos(a) * s, vz = Math.sin(a) * s; if (dir) { vx = vx * 0.5 + dir.x * s; vz = vz * 0.5 + dir.z * s; }
-      norL.add({ x: pos.x + vx * 0.05, y: Math.max(pos.y, groundY) + 0.06, z: pos.z + vz * 0.05, vx, vy: R_(0.3, 1.1) * up, vz, life: R_(0.55, 1.1), s0: R_(0.3, 0.5) * k, s1: R_(1.2, 2.0) * k, cell: rnd() < 0.5 ? CELL.puffA : CELL.puffB, rot: rnd() * TAU, rv: (rnd() - 0.5) * 1.2,
-        c0: lite, c1: dark, a: o.alpha ?? 0.75, drag: 2.4, grav: -0.15, fp: 1.4, att: 0.08, turb: 1.2 });
+      norL.add({ x: pos.x + vx * 0.05, y: Math.max(pos.y, groundY) + 0.06, z: pos.z + vz * 0.05, vx, vy: R_(0.3, 1.0) * up, vz, life: R_(0.4, 0.75), s0: R_(0.18, 0.3) * k, s1: R_(0.75, 1.25) * k, cell: rnd() < 0.5 ? CELL.puffA : CELL.puffB, rot: rnd() * TAU, rv: (rnd() - 0.5) * 1.2,
+        c0: lite, c1: dark, a: Math.min(0.4, (o.alpha ?? 0.75) * 0.5), drag: 2.6, grav: -0.15, fp: 1.1, att: 0.1, turb: 1.0 });
     }
   };
   // Directional dust trail for dashes / skids.
@@ -482,7 +485,7 @@ export function createFx(scene, opts = {}) {
     _v.set(pos.x, groundY + 0.03, pos.z); _m.compose(_v, _q.identity(), _s.set(r, 1, r));
     setTimed(ringMesh, allocTimed(ringMesh), _m, rgb(color), o.alpha ?? 1, uTime.value, o.dur ?? 0.65, 1, 0);
     if (o.dust !== false) { const n = N(Math.round(8 + r * 3)); for (let i = 0; i < n; i++) { const a = i / n * TAU + rnd() * 0.3, s = r * R_(1.0, 1.7);
-      norL.add({ x: pos.x + Math.cos(a) * r * 0.15, y: groundY + 0.1, z: pos.z + Math.sin(a) * r * 0.15, vx: Math.cos(a) * s, vz: Math.sin(a) * s, vy: R_(0.2, 0.7), life: R_(0.7, 1.2), s0: 0.45, s1: R_(1.6, 2.6), cell: rnd() < 0.5 ? CELL.puffA : CELL.puffB, rot: rnd() * TAU, c0: mixc(sand, WHITE, 0.6), c1: mixc(sand, { r: 0.3, g: 0.2, b: 0.12 }, 0.2), a: 0.8, drag: 3.2, fp: 1.3, att: 0.05 }); } }
+      norL.add({ x: pos.x + Math.cos(a) * r * 0.15, y: groundY + 0.1, z: pos.z + Math.sin(a) * r * 0.15, vx: Math.cos(a) * s, vz: Math.sin(a) * s, vy: R_(0.2, 0.7), life: R_(0.7, 1.2), s0: 0.45, s1: R_(1.6, 2.6), cell: rnd() < 0.5 ? CELL.puffA : CELL.puffB, rot: rnd() * TAU, c0: mixc(sand, WHITE, 0.25), c1: mixc(sand, { r: 0.3, g: 0.2, b: 0.12 }, 0.35), a: 0.42, drag: 3.2, fp: 1.3, att: 0.05 }); } }
     shocks.push({ x: pos.x, y: groundY, z: pos.z, t0: uTime.value, dur: o.dur ?? 0.65, r, str: o.distort ?? 1 });
   };
   const shocks = [];
@@ -821,7 +824,7 @@ export function createFx(scene, opts = {}) {
   fx.update = (dt, camera) => {
     dt = Math.min(dt, 0.1);
     if (camera) { fx.cam = camera; camera.getWorldPosition(camPos); }
-    fx.time += dt; uTime.value = fx.time;
+    fx.time += dt; uTime.value = fx.time; dustTok = dustTok + dt * (fx.quality < 0.7 ? 16 : 30); if (dustTok > 28) dustTok = 28;
     for (let i = timers.length - 1; i >= 0; i--) if (fx.time >= timers[i].t) { const f = timers[i].fn; timers.splice(i, 1); f(); }
     addL.step(dt); norL.step(dt);
     updateEmitters(dt); ribbonStep(dt); debrisStep(dt);

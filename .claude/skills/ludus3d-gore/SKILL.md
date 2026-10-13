@@ -67,3 +67,9 @@ Tier scales counts (high 1, medium 0.75, low 0.5), droplet pool (460 / 320 / 200
 # Update: execution gore, decal marking, coverage
 - `gore.onDown(id, {last: true, crit: true, dx, dz})` is now called from the finisher's `hit` event (fightview `execHit`), so the head goes with the blow. Other kills unchanged.
 - Every stamp calls `fx.markDecals(x, z, r)` (tile upload) and `addCover(x, z, r, a)` (analytic coverage grid); never read the decal canvas back. `gore.settle()` clears airborne drops / jets and lets props land (replay seeks); `gore.warm(on)` builds and draws the gib mesh once for shader warm-up.
+
+# Update: floor blood pass (organic splats, thinner, aging)
+- Splat sprites are now three families (gore.js `SPR_R` round, `SPR_T` teardrop with a tail and droplets along +x, `SPR_S` fine spray): noise-eroded closed paths (three sine octaves + pseudopods), alpha 0.6 to 0.9 rim to centre, no radial spikes. `stampSplat` picks the family from size and stretch (size under 0.14 = spray, stretch over 1.35 = teardrop), jitters angle and alpha. Droplet landing sizes are skewed small (`1.6 + 2.8 * R * R` times the drop size, clamp 0.07 to 0.42) so most splats are small and a few are big.
+- Aging: `dryAll` (every 5 s, up to 14 passes) darkens painted pixels (source-atop) AND thins them (destination-out 4 percent, about 0.57x alpha after 14 passes) and decays the coverage grid by 3.5 percent, so old blood is a dull brown stain and the sand shows through; fresh blood stays bright and opaque.
+- Footprints: `f.foot *= 0.66` per step and stop under 0.12, so 4 to 5 prints that get paler, then clean sand.
+- Coverage is still analytic (`addCover`); never read the decal canvas back in the game. For tuning, a test tool may read `fx.decalCanvas` ONCE per sample (alpha over 50 inside the arena radius): the 60 s 3v3 target is about 25 percent at most.

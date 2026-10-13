@@ -27,6 +27,7 @@ const P = {
   fame: '<path d="M12 21c-5-2-7-6-7-11M12 21c5-2 7-6 7-11M12 21V8"/><path d="M7 8c0-2 1-3 2-3 0 2-1 3-2 3zM17 8c0-2-1-3-2-3 0 2 1 3 2 3zM12 8c-1-1-1-3 0-4 1 1 1 3 0 4z"/>',
   star: '<path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z"/>',
   heart: '<path d="M12 20S4 15 4 9.5A4.2 4.2 0 0 1 12 8a4.2 4.2 0 0 1 8 1.5C20 15 12 20 12 20z"/>',
+  play: '<path d="M7 4.5l12 7.5-12 7.5z" fill="currentColor"/>', // PAUSE MENU: Resume icon (was the sword)
   sword: '<path d="M5 19L17 7l3-3 0 3-3 3L7 21zM4 20l2 2M13 11l3 3"/>',
   shield: '<path d="M12 3l7 3v5c0 5-3 8-7 10-4-2-7-5-7-10V6z"/>',
   ludus: '<path d="M3 21h18M5 21V10l7-5 7 5v11M9 21v-6h6v6"/>',
@@ -241,7 +242,9 @@ export function modal({ title, body, actions = [], onClose, host = document.body
   modalStack.push(api); document.body.classList.add('lx-modal-open'); try { document.dispatchEvent(new CustomEvent('lx-modal-open')); } catch (e) { /* old engine */ }
   if (!kbOn) { kbOn = true; document.addEventListener('keydown', onModalKey, true); }
   scrim.addEventListener('pointerdown', (e) => { if (e.target === scrim && closable && !dock) api.close(); });
-  requestAnimationFrame(() => { scrim.classList.add('lx-in'); if (!scrim.contains(document.activeElement)) (sheet.querySelector('.lx-btn-gold') || sheet).focus?.({ preventScroll: true }); });
+  // the slide-in class lands on the next frame, or after 70 ms when frames are slow (software GL, a busy device): a sheet must never wait offscreen behind its own dim
+  let shownIn = false; const showIn = () => { if (shownIn) return; shownIn = true; scrim.classList.add('lx-in'); if (!scrim.contains(document.activeElement)) (sheet.querySelector('.lx-btn-gold') || sheet).focus?.({ preventScroll: true }); };
+  requestAnimationFrame(showIn); setTimeout(showIn, 70);
   return api;
 }
 

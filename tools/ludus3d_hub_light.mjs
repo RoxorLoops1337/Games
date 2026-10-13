@@ -12,8 +12,9 @@ const exe = process.env.PW_CHROMIUM || '/opt/pw-browsers/chromium-1194/chrome-li
 const browser = await chromium.launch({ executablePath: exe, args: ['--use-angle=swiftshader', '--use-gl=angle', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
 const page = await browser.newPage({ viewport: { width: W, height: H }, deviceScaleFactor: 1 });
 let errs = 0; page.on('pageerror', (e) => { errs++; console.log('PAGE ERROR', e.message.slice(0, 400)); });
-await page.goto(url); await page.waitForFunction(() => window.__LM3D, null, { timeout: 90000 });
-await page.evaluate(() => { for (const b of document.querySelectorAll('button')) if (/decide later/i.test(b.textContent)) b.click(); });   // first-run recruit sheet
+await page.goto(url); await page.waitForFunction(() => window.__LM3D && window.__LM3D.game && window.__LM3D.game.S, null, { timeout: 90000 });
+await page.evaluate(() => { const g = window.__LM3D.game, LM = globalThis.LM; if (g && g.S && !g.S.glads.length) { ['murmillo', 'thraex'].forEach((st, i) => g.S.glads.push(LM.makeGlad({ id: g.S.nextId++, style: st, lvl: 2 + i }))); g.S.flags.noRecruit = 1; }
+  for (const b of document.querySelectorAll('button')) if (/decide later/i.test(b.textContent)) b.click(); });   // first-run recruit sheet
 if (opt('eval', '')) await page.evaluate(opt('eval', ''));
 const keepUi = a.includes('--ui');
 if (!keepUi) await page.addStyleTag({ content: 'body > *:not(canvas):not(script) { display: none !important }' });   // measure the 3D world, not the HUD

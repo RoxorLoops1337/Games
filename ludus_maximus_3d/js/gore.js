@@ -57,27 +57,28 @@ export function createGore(fx, o = {}) {
 
   // ------------------------------------------------------------------ decal painting on fx's canvas
   const DD = fx.decalDraw, dctx = DD.ctx;
-  const SPR = []; {
+  // splat sprites (128 px, +x = travel direction): noise-eroded organic blobs (low alpha rim, no radial spikes), teardrops with a tail and satellite droplets
+  // along the travel axis, and fine sprays of tiny droplets. SPR_R round, SPR_T elongated, SPR_S spray.
+  const SPR_R = [], SPR_T = [], SPR_S = [];
+  {
     const rnd = mulberry(4242);
-    for (let v = 0; v < 6; v++) {
-      const c = mk(128, 128), g = c.getContext('2d'); g.translate(64, 64);
-      // thin radiating drops and satellites
-      const n = 5 + ((rnd() * 5) | 0);
-      for (let i = 0; i < n; i++) {
-        const a = rnd() * TAU, L = 30 + rnd() * 30, w = 1.4 + rnd() * 2.4; g.fillStyle = `rgba(104,9,11,${0.7 + rnd() * 0.25})`;
-        g.save(); g.rotate(a); g.beginPath(); g.moveTo(14, -w); g.quadraticCurveTo(L * 0.6, -w * 0.5, L, 0); g.quadraticCurveTo(L * 0.6, w * 0.5, 14, w); g.fill();
-        g.beginPath(); g.arc(L + 3 + rnd() * 3, 0, 1.6 + rnd() * 2.2, 0, TAU); g.fill(); g.restore();
+    const blob = (g, r0, tail, lobes) => { // closed path with 3 noise octaves + bites; tail stretches the +x side into a teardrop
+      const ph = [rnd() * TAU, rnd() * TAU, rnd() * TAU, rnd() * TAU], amp = [0.18 + rnd() * 0.12, 0.1 + rnd() * 0.08, 0.06 + rnd() * 0.06, 0.04 + rnd() * 0.04], n = 56;
+      g.beginPath();
+      for (let i = 0; i <= n; i++) {
+        const a = i / n * TAU; let m = 1 + amp[0] * Math.sin(a * 2 + ph[0]) + amp[1] * Math.sin(a * 3 + ph[1]) + amp[2] * Math.sin(a * 5 + ph[2]) + amp[3] * Math.sin(a * 9 + ph[3]);
+        const c = Math.cos(a); if (c > 0) m += tail * Math.pow(c, 3) * (1 + 0.25 * Math.sin(a * 4 + ph[0])); else m *= 1 - 0.18 * tail * Math.pow(-c, 2); // tapered tail, blunt back
+        for (let l = 0; l < lobes; l++) m += 0.22 * Math.exp(-Math.pow(wrapA(a - ph[l % 4] * 1.3) * 3.2, 2)); // pseudopods
+        const r = r0 * m, x = c * r, y = Math.sin(a) * r * (1 - 0.18 * Math.min(1, tail)); i ? g.lineTo(x, y) : g.moveTo(x, y);
       }
-      for (let i = 0; i < 5; i++) { const a = rnd() * TAU, d = 36 + rnd() * 24; g.beginPath(); g.arc(Math.cos(a) * d, Math.sin(a) * d, 1.2 + rnd() * 2.6, 0, TAU); g.fillStyle = 'rgba(96,8,10,0.85)'; g.fill(); }
-      // main irregular blob
-      const m = 12, pts = []; for (let i = 0; i < m; i++) { const a = i / m * TAU, r = 15 + rnd() * 13; pts.push([Math.cos(a) * r, Math.sin(a) * r]); }
-      g.beginPath(); for (let i = 0; i < m; i++) { const p0 = pts[i], p1 = pts[(i + 1) % m], mx = (p0[0] + p1[0]) / 2, my = (p0[1] + p1[1]) / 2; if (i === 0) g.moveTo(mx, my); else g.quadraticCurveTo(p0[0], p0[1], mx, my); }
-      g.quadraticCurveTo(pts[0][0], pts[0][1], (pts[0][0] + pts[1][0]) / 2, (pts[0][1] + pts[1][1]) / 2); g.closePath();
-      const gr = g.createRadialGradient(-3, -3, 2, 0, 0, 30); gr.addColorStop(0, 'rgba(150,14,16,0.97)'); gr.addColorStop(0.6, 'rgba(112,9,12,0.95)'); gr.addColorStop(1, 'rgba(84,7,9,0.9)'); g.fillStyle = gr; g.fill();
-      g.fillStyle = 'rgba(214,52,56,0.5)'; g.beginPath(); g.ellipse(-5, -7, 7 + rnd() * 3, 3.4, -0.5, 0, TAU); g.fill(); // wet highlight (dried by the dry pass)
-      g.fillStyle = 'rgba(255,225,220,0.45)'; g.beginPath(); g.ellipse(-7, -9, 2.4, 1.2, -0.5, 0, TAU); g.fill();
-      SPR.push(c);
-    }
+      g.closePath();
+    };
+    const wrapA = (a) => { a %= TAU; return a > Math.PI ? a - TAU : a < -Math.PI ? a + TAU : a; };
+    const paint = (g, r0) => { const gr = g.createRadialGradient(-r0 * 0.15, -r0 * 0.1, 1, 0, 0, r0 * 1.5); gr.addColorStop(0, 'rgba(128,12,14,0.9)'); gr.addColorStop(0.55, 'rgba(104,9,12,0.82)'); gr.addColorStop(1, 'rgba(84,7,9,0.6)'); g.fillStyle = gr; g.fill(); };
+    const dots = (g, n, d0, d1, spread, dirBias) => { for (let i = 0; i < n; i++) { const a = (rnd() - 0.5) * spread + (dirBias ? 0 : rnd() * TAU), d = d0 + (d1 - d0) * Math.pow(rnd(), 0.8), r = 0.9 + Math.pow(rnd(), 2.2) * 3.2; g.fillStyle = `rgba(${96 + (rnd() * 20) | 0},8,10,${0.55 + rnd() * 0.3})`; g.beginPath(); g.ellipse(Math.cos(a) * d, Math.sin(a) * d, r * (dirBias ? 1.5 : 1), r, a, 0, TAU); g.fill(); } };
+    for (let v = 0; v < 5; v++) { const c = mk(128, 128), g = c.getContext('2d'); g.translate(64, 64); const r0 = 13 + rnd() * 6; blob(g, r0, 0, 1 + (v % 3)); paint(g, r0); dots(g, 4 + ((rnd() * 7) | 0), r0 * 1.45, 46, TAU, false); g.fillStyle = 'rgba(190,40,44,0.2)'; g.beginPath(); g.ellipse(-r0 * 0.3, -r0 * 0.35, r0 * 0.3, r0 * 0.12, -0.5, 0, TAU); g.fill(); SPR_R.push(c); }
+    for (let v = 0; v < 5; v++) { const c = mk(128, 128), g = c.getContext('2d'); g.translate(-6, 64); const r0 = 9 + rnd() * 4; blob(g, r0, 1.3 + rnd() * 1.2, v % 2); paint(g, r0); dots(g, 6 + ((rnd() * 8) | 0), r0 * 2.2, 66, 0.9, true); dots(g, 3, r0 * 1.3, r0 * 2.2, TAU, false); SPR_T.push(c); }
+    for (let v = 0; v < 3; v++) { const c = mk(128, 128), g = c.getContext('2d'); g.translate(64, 64); dots(g, 14 + ((rnd() * 10) | 0), 4, 54, TAU, false); const r0 = 4 + rnd() * 3; blob(g, r0, 0, 0); paint(g, r0); SPR_S.push(c); }
   }
   const drySq = []; // {t, x, z, r}
   let splatBudget = 0;
@@ -98,7 +99,9 @@ export function createGore(fx, o = {}) {
   }
   const capK = () => 1 - sstep(0.1, 0.24, G.cover);   // 1 = fresh sand, 0 = already well covered
   function dryAll() { // old blood goes darker and browner (source-atop only touches painted pixels)
-    if (dryN >= 7) return; dryN++; dctx.save(); dctx.globalCompositeOperation = 'source-atop'; dctx.fillStyle = 'rgba(38,6,5,0.055)'; dctx.fillRect(0, 0, DD.size, DD.size); dctx.restore(); fx.markDecals();
+    if (dryN >= 14) return; dryN++; dctx.save(); dctx.globalCompositeOperation = 'source-atop'; dctx.fillStyle = 'rgba(38,6,5,0.045)'; dctx.fillRect(0, 0, DD.size, DD.size);   // darker, browner
+    dctx.globalCompositeOperation = 'destination-out'; dctx.fillStyle = 'rgba(0,0,0,0.04)'; dctx.fillRect(0, 0, DD.size, DD.size); dctx.restore(); fx.markDecals();   // and thinner: the sand shows through old blood (about 0.57x after 14 passes)
+    for (let i = 0; i < covGrid.length; i++) covGrid[i] *= 0.965;   // the coverage estimate follows the thinning, so new blood is not starved by stains that have already faded
   }
   function clearUnderFeet() { // gently lift the stains right under living fighters
     dctx.save(); dctx.globalCompositeOperation = 'destination-out';
@@ -107,9 +110,10 @@ export function createGore(fx, o = {}) {
   }
   function stampSplat(x, z, size, ang, stretch = 1, a = 1) {
     const ck = capK(); if (splatBudget <= 0 && size < 0.3) return; if (G.counts.splats > 650 && size < 0.3 && R() < 0.7) return; if (ck < 1 && size < 0.35 && R() > 0.25 + 0.75 * ck) return; splatBudget--; G.counts.splats++;
+    const sp = size < 0.14 ? SPR_S : stretch > 1.35 ? SPR_T : SPR_R, img = sp[(R() * sp.length) | 0];
     const [px, pz] = DD.toPx(x, z), s = size * DD.k * (128 / 58) * (0.78 + 0.22 * ck);
-    dctx.save(); dctx.translate(px, pz); dctx.rotate(ang); dctx.scale(stretch, 1); dctx.globalAlpha = a * (0.6 + 0.4 * ck); dctx.drawImage(SPR[(R() * SPR.length) | 0], -s / 2, -s / 2, s, s); dctx.restore();
-    fx.markDecals(x, z, size * 0.9); addCover(x, z, size * 0.62, 0.8);
+    dctx.save(); dctx.translate(px, pz); dctx.rotate(ang + (R() - 0.5) * 0.25); dctx.scale(stretch > 1.35 ? 1 + (stretch - 1.35) * 0.25 : stretch, 1); dctx.globalAlpha = a * (0.55 + 0.45 * ck) * (0.82 + 0.18 * R()); dctx.drawImage(img, -s / 2, -s / 2, s, s); dctx.restore();
+    fx.markDecals(x, z, size * 0.9); addCover(x, z, size * 0.5, 0.7);
   }
   function stampSmear(x0, z0, x1, z1, w, a = 0.8) {
     const [a0, b0] = DD.toPx(x0, z0), [a1, b1] = DD.toPx(x1, z1); dctx.save(); dctx.lineCap = 'round';
@@ -151,7 +155,7 @@ export function createGore(fx, o = {}) {
     }
   }
   function land(d) {
-    const sp = Math.sqrt(d.vx * d.vx + d.vz * d.vz), size = clamp(d.s * RR(3.4, 5.2), 0.1, 0.5), st = 1 + Math.min(1.7, sp * 0.16);
+    const sp = Math.sqrt(d.vx * d.vx + d.vz * d.vz), size = clamp(d.s * (1.6 + 2.8 * R() * R()), 0.07, 0.42), st = 1 + Math.min(1.7, sp * 0.16);
     stampSplat(d.x, d.z, size, Math.atan2(d.vz, d.vx), st, 0.9);
     if (!d.child && d.s > 0.07 && R() < 0.5 && dfree.length > 40) { for (let i = 0; i < 2; i++) { const a = R() * TAU, s2 = RR(1.2, 3); drop(d.x, 0.05, d.z, Math.cos(a) * s2 + d.vx * 0.2, RR(1.5, 3.2), Math.sin(a) * s2 + d.vz * 0.2, d.s * 0.5, R(), true); } }
   }
@@ -360,7 +364,7 @@ export function createGore(fx, o = {}) {
   function onStep(f, side) {
     if (!G.on || f.down) return; const a = f.rig.joints['ankle' + (side || 'L')]; if (!a) return; a.getWorldPosition(_p);
     if (f.foot < 0.9 && inPool(_p.x, _p.z)) f.foot = 1;
-    if (f.foot > 0.06) { const yaw = f.rig.root.rotation.y; stampFoot(_p.x, _p.z, -yaw + Math.PI / 2, side === 'L' ? 1 : -1, clamp(f.foot * 0.85, 0, 0.8)); f.foot *= 0.8; }
+    if (f.foot > 0.12) { const yaw = f.rig.root.rotation.y; stampFoot(_p.x, _p.z, -yaw + Math.PI / 2, side === 'L' ? 1 : -1, clamp(f.foot * 0.7, 0, 0.62)); f.foot *= 0.66; }   // 4 to 5 prints, each paler, then clean
   }
 
   // wound placement in rest space from the world hit direction (the surface that faces the attacker)
@@ -400,7 +404,7 @@ export function createGore(fx, o = {}) {
     f.rig.addBlood(fr * 0.8 + (e.crit ? 0.07 : 0) + 0.012, 1);
     const at = e.attacker && fighterOf(e.attacker); if (at && heavy) at.rig.addBlood(fr * 0.3 + 0.02, 1);
     // ground: an immediate splash fan on the sand near the victim
-    if (heavy) for (let i = 0, m = Math.round(RR(2, 4) * k); i < m; i++) stampSplat(e.pos.x + e.dx * RR(0.3, 1.8) + RR(-0.3, 0.3), e.pos.z + e.dz * RR(0.3, 1.8) + RR(-0.3, 0.3), RR(0.18, 0.4) * (0.7 + fr), Math.atan2(e.dz, e.dx), RR(1.4, 2.2), 0.9);
+    if (heavy) for (let i = 0, m = Math.round(RR(2, 4) * k); i < m; i++) stampSplat(e.pos.x + e.dx * RR(0.3, 1.8) + RR(-0.3, 0.3), e.pos.z + e.dz * RR(0.3, 1.8) + RR(-0.3, 0.3), RR(0.14, 0.3) * (0.7 + fr), Math.atan2(e.dz, e.dx), RR(1.5, 2.3), 0.9);
     f.bleed = Math.max(f.bleed || 0, fr);
     const px = panOf(e.pos.x);
     sfx('slashWet', { pan: px, gain: clamp(0.5 + fr * 2, 0.5, 1) });

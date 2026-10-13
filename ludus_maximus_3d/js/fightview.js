@@ -22,6 +22,7 @@ const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 const VOICE = { murmillo: 0, hoplomachus: 1, retiarius: 2, dimachaerus: 1, thraex: 3 };
 const ULT_EL = { pulverize: 'earth', hookshot: 'earth', bladedance: 'wind', skewer: 'wind', tornado: 'wind', unbreakable: 'holy', bloodrage: 'fire', meteor: 'fire', duststorm: 'wind' };
 const COLOR_EL = (c) => { c = (c || '').toLowerCase(); if (/e8742a|d2412b|e0742a|f6b82d/.test(c)) return 'fire'; if (/3f7fd6|2f78c4|a8d8ff/.test(c)) return 'lightning'; if (/c98a52|b8892a/.test(c)) return 'earth'; return 'holy'; };
+const INTRO_X = 15, INTRO_T = 2.3, INTRO_CAM = 1.4, INTRO_HOLD = 1.9;   // INTRO: gate start distance, marching time, hand-off from the authored sweep to the director, wait while the VS splash is up
 const SPEED_KEY = 'ludus3d_fv_speed', PREF_KEY = 'ludus_maximus_3d_prefs', SPEEDS = [1, 2, 3];
 const D2R = Math.PI / 180, smooth01 = (t) => { t = Math.max(0, Math.min(1, t)); return t * t * (3 - 2 * t); };
 const MASS = { murmillo: 0.75, hoplomachus: 0.85, dimachaerus: 1, thraex: 1.1, retiarius: 1.2 }; // heavy armour shoves less
@@ -149,7 +150,7 @@ export class FightView {
     document.addEventListener('keydown', this._key);
     // replay: drag the canvas to orbit (the camera switches to a free orbit around the action; the 'Auto' chip hands it back)
     const cv = this.renderer.domElement; let drag = null;
-    cv.addEventListener('pointerdown', (e) => { if (this.replaying && this.F) drag = { x: e.clientX, y: e.clientY, id: e.pointerId }; });
+    cv.addEventListener('pointerdown', (e) => { if (this.F && !this.replaying && this.phase === 'intro') this.skip = true; /* INTRO: tap to skip */ if (this.replaying && this.F) drag = { x: e.clientX, y: e.clientY, id: e.pointerId }; });
     cv.addEventListener('pointermove', (e) => { if (!drag || e.pointerId !== drag.id) return; const dx = e.clientX - drag.x, dy = e.clientY - drag.y; drag.x = e.clientX; drag.y = e.clientY; if (this.camMode === 'auto' || !this.dir.free) this.setCam('wide'); this.dir.freeOrbit(-dx * 0.008, dy * 0.006, 0); this.camMode = 'free'; this.syncReplayBar(); });
     const up = (e) => { if (drag && e.pointerId === drag.id) drag = null; };
     cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', up);
@@ -188,8 +189,10 @@ export class FightView {
       this.paused = false; try { this.audio.resume && this.audio.resume(); } catch (e) { /* audio is optional */ }
       if (this.pauseModal) { const m = this.pauseModal; this.pauseModal = null; m.close(); }
     }
-    this.syncPauseBtn(); this.syncReplayBar();
+    this.dimHud(this.paused && !this.replaying); this.syncPauseBtn(); this.syncReplayBar();
   }
+  /** PAUSE MENU: while the pause sheet is open the live HUD (plates, ult rings, banners, links) is dimmed almost out so the menu is the only thing to read */
+  dimHud(on) { const h = this.hud; if (!h) return; h.style.transition = 'opacity .18s'; h.style.opacity = on ? '0.1' : ''; }
   readPrefs() { try { return JSON.parse(localStorage.getItem(PREF_KEY) || '{}') || {}; } catch (e) { return {}; } }
   /** quick settings write the same prefs as More > Settings, then re-apply them through screens/more.js applyPrefs (gore level, reduced motion class, volumes) */
   setPref(k, v) {
@@ -200,11 +203,11 @@ export class FightView {
   openPauseMenu() {
     const p = this.readPrefs(), el = (t, c, kids) => { const e = document.createElement(t); if (c) e.className = c; if (kids) [].concat(kids).forEach((x) => e.append(x)); return e; };
     const body = el('div', 'lx-fv-pm'), seg = (label, opts, cur, on) => { const r = el('div', 'lx-fv-pmrow'), g = el('div', 'lx-fv-seg'), bs = opts.map(([v, t]) => { const b = el('button', 'lx-fv-chip'); b.type = 'button'; b.textContent = t; b.setAttribute('aria-pressed', String(v) === String(cur) ? 'true' : 'false'); b.onclick = () => { bs.forEach((x) => x.setAttribute('aria-pressed', x === b ? 'true' : 'false')); on(v); this.audio.sfx('uiTap', { gain: 0.4 }); }; g.append(b); return b; }); r.append(el('span', 'lx-fv-pml', label), g); return [r, bs]; };
-    const sw = (label, on, cb) => { const r = el('div', 'lx-fv-pmrow'), b = el('button', 'lx-fv-chip lx-fv-sw'); b.type = 'button'; b.setAttribute('role', 'switch'); const draw = (v) => { b.setAttribute('aria-checked', v ? 'true' : 'false'); b.setAttribute('aria-pressed', v ? 'true' : 'false'); b.textContent = v ? 'On' : 'Off'; }; draw(on); b.onclick = () => { on = !on; draw(on); cb(on); this.audio.sfx('uiTap', { gain: 0.4 }); }; r.append(el('span', 'lx-fv-pml', label), b); return r; };
+    const sw = (label, on, cb, hint) => { const r = el('div', 'lx-fv-pmrow'), b = el('button', 'lx-fv-chip lx-fv-sw'); b.type = 'button'; b.setAttribute('role', 'switch'); const draw = (v) => { b.setAttribute('aria-checked', v ? 'true' : 'false'); b.setAttribute('aria-pressed', v ? 'true' : 'false'); b.textContent = v ? 'On' : 'Off'; }; draw(on); b.onclick = () => { on = !on; draw(on); cb(on); this.audio.sfx('uiTap', { gain: 0.4 }); }; r.append(hint ? el('span', 'lx-fv-pml', [label, el('small', 'lx-fv-pmh', hint)]) : el('span', 'lx-fv-pml', label), b); return r; };
     const [spRow, spBtns] = seg('Speed', SPEEDS.map((v) => [v, 'x' + v]), this.userSpeed, (v) => this.setSpeed(v)); this.pmSpeed = spBtns;
     const [gRow] = seg('Gore', [['off', 'Off'], ['low', 'Low'], ['full', 'Full']], p.gore || 'full', (v) => this.setPref('gore', v));
-    body.append(spRow, gRow, sw('Sound', !p.muted, (v) => this.setPref('muted', !v)), sw('Reduced motion', !!p.rm, (v) => this.setPref('rm', v)), sw('Target links', p.links !== false, (v) => { this.setPref('links', v); this.tac.setLinks(v); }));
-    const resume = U.button({ label: 'Resume', variant: 'gold', icon: 'sword', block: true, onClick: () => this.pause(false) });
+    body.append(spRow, gRow, sw('Sound', !p.muted, (v) => this.setPref('muted', !v)), sw('Reduced motion', !!p.rm, (v) => this.setPref('rm', v)), sw('Show who targets whom', p.links !== false, (v) => { this.setPref('links', v); this.tac.setLinks(v); }, 'Lines between fighters and their targets'));
+    const resume = U.button({ label: 'Resume', variant: 'gold', icon: 'play', block: true, onClick: () => this.pause(false) });
     const quit = U.button({ label: 'Quit fight', variant: 'danger', block: true, onClick: () => this.confirmQuit() });
     const m = U.modal({ title: 'Paused', body, actions: [resume, quit], onClose: () => { if (this.pauseModal === m) { this.pauseModal = null; this.pause(false); } } });
     this.pauseModal = m; m.el.classList.add('lx-fv-pause-scrim');
@@ -292,14 +295,14 @@ export class FightView {
   start(F, opts = {}) {
     this.dispose(); this.clearEnd(); this.ultBar.style.visibility = ''; if (this.extras) this.extras.style.visibility = '';
     this.resetPresentation(); if (!opts.replay && !F.cmdAI && !F.quiet) { F.cmdAI = true; if (F.replay && F.replay.snap) F.replay.snap.cmdAI = true; }   // TACTICS: live foes use tactics; the replay snapshot must agree
-    this.F = F; this.opts = opts; this.replaying = !!opts.replay; this.tapI = 0; this.done = false; this.phase = 'intro'; this.phaseT = 0; this.skip = false; this.acc = 0; this.evSeen = 0; this.lastHitT = -9; this.recent = 0; this.intensity = 0.2; this.intTimer = 0;
+    this.F = F; this.opts = opts; this.replaying = !!opts.replay; this.tapI = 0; this.done = false; this.phase = 'intro'; this.phaseT = (!opts.noSplash && !opts.replay) ? -INTRO_HOLD : 0; this.skip = false; this.acc = 0; this.evSeen = 0; this.lastHitT = -9; this.recent = 0; this.intensity = 0.2; this.intTimer = 0;
     if (this.replaying) L().setRandom(L().mulberry(opts.replay.seed));
     this.gore.setTier(this.tier); this.gore.reset(this.goreSeed(F, opts));
     this.hud.style.display = 'block'; this.tac.start(F, !!opts.replay); this.fx.reset && this.fx.reset(); this.arena.setGate(0); this.arena.setHype(0.3); this.feel.reset && this.feel.reset();
     const nA = F.units.filter((u) => u.side === 'A').length, nB = F.units.length - nA;
     F.units.forEach((u) => {
       const rig = u.beast ? BF.makeRig(this, u) : createGladiator(u, { tunic: u.side === 'B' ? (u.g.color || null) : (u.g.color || null), team: u.side }); /* READ: team accent tint (gladiator.js teamTint) */ // BEAST: beasts get their own rig
-      const gx = u.side === 'A' ? -22 : 22;
+      const gx = u.side === 'A' ? -INTRO_X : INTRO_X;   // INTRO: they start just outside the gates (visible from the first frame), not 22 m away
       const f = { u, rig, vx: 0, vz: 0, yaw: u.side === 'A' ? Math.PI / 2 : -Math.PI / 2, lx: gx, ly: u.y, handles: {}, atkN: 0, st: '', hpShown: u.hp, plate: null, ring: [], intro: { x: gx, y: u.y, tx: u.x, ty: u.y }, pu: { x: 0, z: 0, vx: 0, vz: 0 }, rx: u.x, ry: u.y, px0: gx, pz0: u.y, X: gx, Z: u.y, skidT: 0, ov: null, kneel: false, faceTo: null,
         // PERF: every field a fighter ever gets is declared here in one fixed order, so all fighters share ONE hidden class (fields added later in different orders gave 4 to 5 maps: the per-frame code went megamorphic and boxed every double it stored)
         spin: false, guarding: false, air: false, hpSet: -1, hpSetMax: -1, hpT: -9, plX: -1, plY: -1, plV: null, plS: -1, plOp: -1, nums: null, lastHit: null, lastHitT: -9, lastWord: '', lastWordT: -9, skidAt: -9 };
@@ -318,9 +321,9 @@ export class FightView {
     this.applyWeather(F.meta ? F.meta.weather : 'clear');
     { const m = F.meta || {}, id = pickTheme(m); this.theme = id; this.arena.setTheme(id, { rig: this.light, scene: this.scene, sky: this.sky, renderer: this.renderer, wx: m.weather, night: themeNight(id, m) }); } // ARENA_THEME: per-fight arena look (env_arena.js THEMES)
     if (!this.replaying) this.buildExtras(F); else if (this.extras) { this.extras.remove(); this.extras = null; if (this.autoBtnOld) { this.autoBtnOld.remove(); this.autoBtnOld = null; } }
-    if (!opts.noSplash && !this.replaying) { const a = F.units.filter((u) => u.side === 'A'), b = F.units.filter((u) => u.side === 'B'); setTimeout(() => { if (this.F === F && !this.done) vsIntro({ a, b, meta: F.meta || {}, theme: this.theme, league: opts.league != null && D().LEAGUES[opts.league] ? D().LEAGUES[opts.league].n : '', host: this.host, ms: 2700 }); }, 350); }   // BRACKET: stronger VS (busts, theme colour, event title)
+    if (!opts.noSplash && !this.replaying) { const a = F.units.filter((u) => u.side === 'A'), b = F.units.filter((u) => u.side === 'B'); setTimeout(() => { if (this.F === F && !this.done) vsIntro({ a, b, meta: F.meta || {}, theme: this.theme, league: opts.league != null && D().LEAGUES[opts.league] ? D().LEAGUES[opts.league].n : '', host: this.host, ms: 2000 }); }, 350); }   // BRACKET: stronger VS (busts, theme colour, event title)
     this.dir.setAspect(this.camera.aspect);
-    this.dir.setShot('establishing', { dur: 3.2 }, 0); this.gateOpen = false;
+    this.dir.setShot('establishing', { dur: 3.2 }, 0); this.gateOpen = false; this.introRoar = false;
     this.audio.music.setMode(F.units.some((u) => u.beast && /nemean|elephant/.test(String(u.style || u.species || u.kind || ''))) ? 'boss' : F.units.some((u) => u.beast) ? 'beast' : 'arena', { fade: 1.2 }); this.audio.music.setIntensity(0.15); this.audio.crowd(0.3);
     this.audio.sfx('gate'); this.audio.sfx('horn');
     if (this.replaying) { this.phase = 'fight'; this.phaseT = 0; for (const f of this.fm.values()) { f.rx = f.u.x; f.ry = f.u.y; f.rig.root.position.set(f.u.x, 0, f.u.y); } this.arena.setGate(1); this.dir.setShot('follow', {}, 0); this.banner('REPLAY', 'info'); this.skipBtn.textContent = 'Exit'; } else this.skipBtn.textContent = 'Skip';
@@ -390,7 +393,7 @@ export class FightView {
   resetPresentation() {
     if (this.pauseModal) { const m = this.pauseModal; this.pauseModal = null; try { m.close(); } catch (e) { /* closed */ } }
     if (this.paused) { this.paused = false; try { this.audio.resume && this.audio.resume(); } catch (e) { /* audio is optional */ } }
-    this.ex = null; this.execPending = null; this.forfeited = false; this.rate = 1; this.camMode = 'auto'; this.camSpin = 0; this.scrubbing = false; this.silent = false; this.epoch++; this.lsK = 0; this.ls = null; this.lsCool = 0;
+    this.dimHud(false); this.ex = null; this.execPending = null; this.forfeited = false; this.rate = 1; this.camMode = 'auto'; this.camSpin = 0; this.scrubbing = false; this.silent = false; this.epoch++; this.lsK = 0; this.ls = null; this.lsCool = 0;
     if (this.dir) { this.dir.free = null; this.dir.freeTimeout = 6; }
     if (this.verdictEl) { this.verdictEl.remove(); this.verdictEl = null; }
     if (this.rbar) { this.rbar.remove(); this.rbar = null; }
@@ -423,7 +426,7 @@ export class FightView {
     if (!this.F) { this.camera.updateMatrixWorld(); this.fx.update(ft.dt, this.camera); this.gore.postFrame(realDt); return; }
     const F = this.F, speedUp = this.skip ? 8 : this.replaying ? this.rate : this.userSpeed, fight = this.phase === 'fight';
     this.phaseT += realDt;
-    if (this.phase === 'intro' && this.skip) this.phaseT = Math.max(this.phaseT, 4.3);
+    if (this.phase === 'intro' && this.skip) this.phaseT = Math.max(this.phaseT, INTRO_T + 0.1);
     // director first so timeScale (slow-mo cues) applies to this frame's sim
     if (this.camSpin && this.dir.free) this.dir.freeOrbit(this.camSpin * realDt);
     const units = this.dirUnits(F);
@@ -486,117 +489,21 @@ export class FightView {
   }
   endLastStand() { this.ls = null; if (this.dir.shot && this.dir.shot.name === 'duel') this.dir.setShot('follow', {}, 0.8); }
 
+  // INTRO (under 2.5 s after the VS splash): the gates open at once, both sides march in (ease-out, so they are already moving on the first frame) while the camera
+  // sweeps from a high gate-side vantage down to the gate shot, with a crowd roar. A tap on the arena skips it. phaseT starts at -INTRO_HOLD while the VS splash covers the screen.
   introStep(realDt, dt) {
-    const F = this.F; const k = clamp(this.phaseT / 4.2, 0, 1); const e = k * k * (3 - 2 * k);
-    if (this.phaseT > 2.0 && !this.gateOpen) { this.gateOpen = true; this.arena.setGate(1, 0); this.arena.setGate(1, 1); }
-    if (this.phaseT > 2.9 && this.dir.pose.shot === 'establishing') this.dir.setShot('gate', { gateAngle: 0, dur: 1.6 }, 0.5);
+    const F = this.F, pt = this.phaseT > 0 ? this.phaseT : 0, k = clamp(pt / INTRO_T, 0, 1), e = 1 - (1 - k) * (1 - k);
+    if (pt > 0.05 && !this.gateOpen) { this.gateOpen = true; this.arena.setGate(1, 0); this.arena.setGate(1, 1); }
+    if (pt > 0.25 && !this.introRoar) { this.introRoar = true; this.audio.sfx('crowdRoar', { gain: 0.75 }); this.arena.setWave && this.arena.setWave(1); this.after(1800, () => this.arena.setWave && this.arena.setWave(0)); }
+    if (pt > INTRO_CAM - 0.1 && this.dir.pose.shot === 'establishing') { this.dir.seedFromPose(this.introPose(INTRO_CAM)); this.dir.setShot('gate', { gateAngle: 0, dur: INTRO_T - INTRO_CAM + 0.4 }, 0.6); }
     for (const f of this.fm.values()) {
       const u = f.u; const x = f.intro.x + (f.intro.tx - f.intro.x) * e; f.rx = x; f.ry = u.y; f.px0 = x; f.pz0 = u.y;
-      const speed = (f.intro.tx - f.intro.x) * (6 * k * (1 - k)) / 4.2;
+      const speed = (f.intro.tx - f.intro.x) * (2 * (1 - k)) / INTRO_T;
       f.vx = speed; f.vz = 0; f.yaw = u.side === 'A' ? Math.PI / 2 : -Math.PI / 2;
       const fwd = Math.abs(speed); f.rig.animator.setMove(fwd, 0); f.rig.root.position.set(x, 0, u.y); f.rig.root.rotation.y = f.yaw; f.rig.update(dt);
     }
     if (k >= 1) { this.phase = 'fight'; this.phaseT = 0; this.dir.setShot('follow', {}, 1.0); this.banner('FIGHT!', 'ult'); this.audio.sfx('drum'); this.feel.impact && this.feel.impact('roar', {}); for (const f of this.fm.values()) { f.rx = f.u.x; f.ry = f.u.y; } }
   }
-
-  endFight() {
-    const F = this.F; this.phase = 'outro'; this.outroT = 0; if (!this.replaying) this.reel.finish(F);   // REEL: the best moments are stored on the replay record
-    const win = F.winner;
-    if (F.replay) F.replay.total = F.n || 0;                       // the replay scrubber needs the length of the fight
-    this.ultBar.style.visibility = 'hidden'; if (this.extras) this.extras.style.visibility = 'hidden';
-    for (const f of this.fm.values()) { if (!f.u.down && f.u.side === win) f.rig.animator.setState('victory'); }
-    if (this.execPending && !this.forfeited && !this.skip && this.startExec()) return;   // the sim's last blow is staged as an execution (see startExec)
-    this.execPending = null;
-    const alive = F.units.filter((u) => u.side === win && !u.down)[0];
-    const lastDown = F.units.filter((u) => u.down && u.side !== win).pop();
-    if (this.forfeited) this.dir.setShot('victory', { winner: alive && alive.id }, 1.0);
-    else this.dir.cue('kill', { victim: lastDown && lastDown.id, killer: alive && alive.id, extra: lastDown && this.gore.framePoints(lastDown.id), next: { name: 'victory', p: { winner: alive && alive.id }, blend: 1.2 } });
-    this.audio.music.setMode(win === 'A' ? 'victory' : 'defeat'); this.audio.sfx(win === 'A' ? 'levelUp' : 'deathThud'); this.audio.sfx(win === 'A' ? 'crowdRoar' : 'crowdBoo');
-    this.showEnd(win === 'A');
-  }
-
-  // ---------------------------------------------------------------- finisher: the sim's last blow staged as an execution
-  // Presentation only. The sim has already ended (F.done) when its final 'down' event arrives, so nothing is held or changed: the victim kneels, the
-  // killer walks up (visual position blend), the crowd hushes, the finisher clip lands and its 'hit' event triggers the death, the gore and the roar.
-  // Duels won by the player are not struck (mercy is decided in the results dialog): the victim kneels and the winner stands over them.
-  canExec(src, dst) {
-    if (!src || !dst || this.forfeited || this.skip) return false;
-    const m = this.F.meta; if (m && NO_EXEC.has(m.kind)) return false;
-    const fs = this.fm.get(src.id), fd = this.fm.get(dst.id); if (!fs || !fd) return false;
-    const as = fs.rig.animator, ds = fd.rig.animator; if (!as.clips || !as.clips.finisher || !ds.clips || !ds.clips.execKneel) return false;   // beast rigs have no finisher clips
-    if (src.down || (src.s && (src.s.stun || src.s.spin || src.s.air)) || fs.air || fd.air || fd.spin) return false;
-    if (this.t - (this.bigAoeT ?? -9) < 0.8) return false;         // an ultimate that gibs is its own finale
-    return Math.hypot(src.x - dst.x, src.y - dst.y) <= 6;           // ranged kills keep the plain fall
-  }
-  startExec() {
-    const P = this.execPending; this.execPending = null; if (!P) return false;
-    const F = this.F, src = P.src, dst = P.dst, fs = this.fm.get(src.id), fd = this.fm.get(dst.id), win = F.winner;
-    let dx = fs.rx - fd.rx, dz = fs.ry - fd.ry; const dist = Math.hypot(dx, dz) || 1; dx /= dist; dz /= dist;
-    const tx = fd.rx + dx * 1.1, tz = fd.ry + dz * 1.1, mercy = !!(F.meta && F.meta.kind === 'duel' && win === 'A');
-    const ex = this.ex = { src, dst, fs, fd, stage: 'approach', t: 0, scale: 0.8, hit: false, ended: false, done: false, mercy, win, sT: 0, dx, dz, back: false };
-    // victim: kneels in place, facing the executioner (no stale sim states may fire on it)
-    fd.kneel = true; fd.guarding = false; fd.st = ''; fd.air = false; fd.spin = false; fd.faceTo = { x: tx, z: tz }; this.dropHandles(dst.id);
-    fd.rig.animator.executed();
-    // killer: walks to 1.1 m in front of the victim and faces it
-    fs.faceTo = { x: fd.rx, z: fd.ry }; fs.ov = { x0: fs.rx, z0: fs.ry, x1: tx, z1: tz, t: 0, dur: Math.max(0.4, Math.min(1.7, (dist - 1.1) / 2.4)) }; fs.rig.animator.setState('move');
-    const an = fs.rig.animator, prev = an.onEvent;
-    an.onEvent = (n, clip) => { if (prev) prev(n, clip); if (clip && clip.name === 'finisher') { if (n === 'hit') this.execHit(); else if (n === 'end') ex.ended = true; } };
-    ex.restoreEv = () => { if (an.onEvent !== prev) an.onEvent = prev; };
-    // crowd hush, music drops, kill camera frames the pair side-on for the whole sequence
-    this.audio.crowd(0.08); this.audio.music.setIntensity(0.1); this.audio.duck && this.audio.duck(0.55, 2.2);
-    this.dir.cue('kill', { victim: dst.id, killer: src.id, dur: 5.5, next: null, tight: true });
-    this.bump = 0;
-    return true;
-  }
-  execStep(dt, realDt) {
-    const ex = this.ex; if (!ex || ex.done) return; ex.t += realDt; const fs = ex.fs, an = fs.rig.animator;
-    if (ex.t > 9) { this.execDone(); return; }   // safety net: never strand the outro
-    if (ex.stage === 'approach') {
-      ex.scale = 0.75 + 0.25 * smooth01(ex.t / 0.9);
-      if (!fs.ov || fs.ov.t >= fs.ov.dur) this.execStrike();
-    } else if (ex.mercy) { ex.scale = 1; ex.sT += realDt; if (ex.sT > 2.1) this.execDone(); }
-    else {
-      const a = an.action && an.action.name === 'finisher' ? an.actionT : -1;   // clip time of the finisher (swing at 0.5, hit at 0.62)
-      ex.scale = ex.hit ? 1 : a < 0.3 ? 0.8 : a < 0.52 ? 0.28 : 0.5;          // the raised blade hangs in slow motion, the swing follows at half speed
-      if (ex.hit && !ex.back && a >= 0.98) { ex.back = true; fs.ov = { x0: fs.rx, z0: fs.ry, x1: fs.rx + ex.dx * 0.95, z1: fs.ry + ex.dz * 0.95, t: 0, dur: 1.1 }; }   // step back off the corpse (the body falls toward the killer)
-      if (ex.ended || (ex.hit && a < 0 && ex.t > ex.hitAt + 0.5)) this.execDone();
-    }
-  }
-  execStrike() {
-    const ex = this.ex, an = ex.fs.rig.animator; ex.stage = 'strike';
-    if (ex.mercy) { an.setState('victory'); this.showVerdict('wait'); this.audio.sfx('horn', { gain: 0.6 }); return; }
-    an.finisher({ fade: 0.25 }); this.showVerdict('down');
-  }
-  /** the finisher's 'hit' event: the victim dies, the blood flies, the crowd roars */
-  execHit() {
-    const ex = this.ex; if (!ex || ex.hit) return; ex.hit = true; ex.hitAt = ex.t;
-    const { src, dst, fs, fd } = ex, F = this.F, fx = this.fx, A = this.audio, dir = this.dirOf(src, dst), pan = clamp(dst.x / 12, -1, 1);
-    fd.kneel = false; fd.rig.animator.executeKill(); fd.rig.flash(0.15, '#8a5530'); fs.rig.animator.hitStop(0.07);
-    fx.hit(this.chest(dst), dir, { dmgFrac: 0.4, crit: true, flesh: this.gore.on }); fx.dust(this.feet(dst), 14); fx.debris && fx.debris(this.feet(dst), 4); fx.groundDecal(this.feet(dst), 'scuff', { size: 1.6 });
-    this.num(dst, 'DOWN', 'miss'); this.feel.impact('finalKill', {}); if (this.post.zoomPunch) this.post.zoomPunch(0.028);
-    A.sfx('swordHitCrit', { pan }); A.sfx('deathCry', { voice: VOICE[dst.style] ?? 0, pan }); this.after(350, () => A.sfx('deathThud', { pan })); A.sfx('crowdGasp');
-    if (this.gore.on) { const lh = fd.lastHit; this.gore.onDown(dst.id, { last: true, crit: true, frac: lh ? Math.max(0.25, lh.frac) : 0.3, dx: dir.x, dz: dir.z, big: false, mine: dst.side === 'A', noSrc: false });
-      if (this.dir.shot && this.dir.shot.name === 'kill') this.dir.shot.p.extra = this.gore.framePoints(dst.id); }   // keep a flung head in the kill shot
-    this.hideVerdict(); this.execFinale(ex.win);
-  }
-  /** crowd: hush (set at the start), then the roar (or the boos) and the result music */
-  execFinale(win) {
-    this.after(650, () => { this.audio.crowd(0.95); this.audio.music.setMode(win === 'A' ? 'victory' : 'defeat'); this.audio.sfx(win === 'A' ? 'levelUp' : 'deathThud', { gain: 0.8 }); this.audio.sfx(win === 'A' ? 'crowdRoar' : 'crowdBoo'); });
-  }
-  execDone() {
-    const ex = this.ex; if (!ex || ex.done) return; ex.done = true; ex.restoreEv && ex.restoreEv(); this.hideVerdict();
-    if (ex.mercy) this.execFinale(ex.win);
-    for (const f of this.fm.values()) if (!f.u.down && f.u.side === ex.win) f.rig.animator.setState('victory');
-    this.dir.setShot('victory', { winner: ex.src.id }, 1.2); this.showEnd(ex.win === 'A');
-  }
-  showVerdict(kind) {
-    this.hideVerdict(); const win = this.F.winner === 'A', el = this.verdictEl = document.createElement('div'); el.className = 'lx-fv-verdict lx-fv-v-' + kind;
-    el.innerHTML = '<svg viewBox="0 0 64 64" width="64" height="64" aria-hidden="true"><path fill="currentColor" d="M10 28h10v26H10zM24 28l9-18c3-1 6 1 6 5v10h14c3 0 5 3 4 6l-5 19c-1 3-3 4-6 4H24z"/></svg><span></span>';
-    el.lastChild.textContent = kind === 'wait' ? 'The crowd waits for your word' : win ? 'The crowd demands blood' : 'The crowd turns its thumbs down'; this.hud.append(el);
-  }
-  hideVerdict() { const el = this.verdictEl; if (!el) return; this.verdictEl = null; el.classList.add('lx-fv-v-out'); setTimeout(() => el.remove(), 500); }
-  /** deferred call that dies with the fight (and is skipped while seeking a replay) */
-  after(ms, fn) { const ep = this.epoch; setTimeout(() => { if (ep === this.epoch && !this.paused) fn(); }, ms); }
 
   /** big VICTORY / DEFEAT title: arrives after the kill cam has shown the blow (CSS delay), stays until the results hand-off */
   showEnd(win) {
@@ -608,14 +515,14 @@ export class FightView {
 
   // Establishing flyover is authored here (the director frames fighters; this one frames the bowl): sweep in from above the gate to hero height.
   introPose(t) {
-    const k = clamp(t / 3.0, 0, 1), e = k * k * (3 - 2 * k), tall = Number.isFinite(this.dir.tall) ? this.dir.tall : 0;
-    const a = [-16, 31, 47], b = [-17.5 - 3 * tall, 3.4 + 0.6 * tall, 8.5 - 5 * tall], pos = [0, 1, 2].map((i) => a[i] + (b[i] - a[i]) * e);
-    pos[0] += Math.sin(k * 3.1) * 3; const look = { x: 1 * e, y: 6 - 4.6 * e, z: -2 * (1 - e) };
+    const k = clamp(t / INTRO_CAM, 0, 1), e = k * k * (3 - 2 * k), tall = Number.isFinite(this.dir.tall) ? this.dir.tall : 0;
+    const a = [-19, 10.5 + 2.5 * tall, 17 - 12 * tall], b = [-17.5 - 3 * tall, 3.4 + 0.6 * tall, 8.5 - 5 * tall], pos = [0, 1, 2].map((i) => a[i] + (b[i] - a[i]) * e);
+    pos[0] += Math.sin(k * 3.1) * 1.5; const look = { x: 1 * e, y: 2.2 - 0.8 * e, z: -2 * (1 - e) };
     return { pos: { x: pos[0], y: pos[1], z: pos[2] }, look, fov: 48 + tall * 12, timeScale: 1 };
   }
 
   applyCamera(pose) {
-    if (this.phase === 'intro' && this.phaseT < 3.0) pose = this.introPose(this.phaseT);
+    if (this.phase === 'intro' && this.phaseT < INTRO_CAM) pose = this.introPose(this.phaseT > 0 ? this.phaseT : 0);
     const c = this.camera; c.position.set(pose.pos.x, pose.pos.y, pose.pos.z); c.lookAt(pose.look.x, pose.look.y, pose.look.z);
     if (Math.abs(c.fov - pose.fov) > 0.01) { c.fov = pose.fov; c.updateProjectionMatrix(); }
     this.feel.setBaseFov(pose.fov); this.feel.apply(c); c.updateMatrixWorld();

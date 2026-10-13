@@ -387,5 +387,15 @@ for (const fn of ['newGame', 'makeGlad', 'mkUnits', 'createFight', 'step', 'useU
   for (const f of ['tools/ludus3d_hub_light.mjs']) ok(!readFileSync(join(here, '..', f), 'utf8').includes('\u2014'), f + ': no em dashes');
 }
 
+{ // BEAST real animals: lofted smooth skin, strand cards, fur shells, wound based blood, eyes and lids, paw planting, VS portraits
+  const rd = (f) => readFileSync(join(root, f), 'utf8'), beast = rd('js/beast.js'), bfx = rd('js/beast_fx.js'), br = rd('js/bracket.js'), por = rd('js/portrait.js'), lab = rd('lab/beast_lab.html');
+  ok(/function loft\(/.test(beast) && /function skinKnots\(/.test(beast) && /class Blades/.test(beast) && /rs = new Float32Array/.test(beast), 'beast.js: lofted surfaces with per vertex skin weights and strand card batches');
+  ok(/mats\.shell = furMaterial/.test(beast) && /mats\.mane = furMaterial/.test(beast) && /discard/.test(beast) && /dFdx\(-vViewPosition\)/.test(beast), 'beast.js: fur shells, mane cards and the derivative bump fur shader');
+  ok(/soak/.test(beast) && /if \(false\) \{/.test(beast) && /uWoundD\.value\[i\]\.w/.test(beast), 'beast.js: wound based blood (the shared uniform soak is switched off)');
+  ok(/'eyeL', 'eyeR', 'lidL', 'lidR', 'mane1', 'mane2'/.test(beast) && /plant\(out, dt\)/.test(beast) && /fid\.type/.test(beast) && /GAITS/.test(beast), 'beast.js: eye and lid joints, mane joints, paw planting, fidgets and gait tables');
+  ok(/prefetchBusts/.test(bfx) && /bustPlaceholder/.test(br) && !/c\.removeAttribute\('width'\)/.test(br) && /createBeast\(g, \{ detail: 'medium' \}\)/.test(por) && /BUST_AIM/.test(por), 'VS splash: busts prefetched, a medallion placeholder, cached canvases no longer wiped, medium detail beast portraits');
+  ok(/view === 'portrait'/.test(lab) && /uWoundD/.test(lab) && /idle paws planted/.test(lab) && !/\u2014/.test(beast + bfx + lab + br), 'beast lab: portrait view and the extended checks, no em dashes');
+}
+
 console.log(`ludus_maximus_3d structure: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

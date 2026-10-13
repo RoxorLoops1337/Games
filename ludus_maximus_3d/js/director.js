@@ -106,6 +106,12 @@ export class FightDirector {
     if (!this.free) this.free = { yaw: this.s.yaw, pitch: this.s.pitch, d: this.s.d, idle: 0 };
     const f = this.free; f.yaw = wrap(f.yaw + dYaw); f.pitch = clamp(f.pitch + dPitch, 4 * D2R, 80 * D2R); f.d = clamp(f.d * (1 + dZoom), 3, 40); f.idle = 0;
   }
+  /** INTRO: continue from an authored camera pose (pos/look/fov) so the hand-off to the first director shot has no jump */
+  seedFromPose(pose) {
+    const fx = pose.look.x - pose.pos.x, fy = pose.look.y - pose.pos.y, fz = pose.look.z - pose.pos.z, d = Math.hypot(fx, fy, fz) || 1, s = this.s;
+    s.yaw = Math.atan2(fz, fx); s.pitch = -Math.asin(clamp(fy / d, -1, 1)); s.cx = pose.look.x; s.cy = pose.look.y; s.cz = pose.look.z; s.d = d; s.fov = pose.fov;
+    s.yawV = s.pitchV = s.cxV = s.cyV = s.czV = s.dV = s.fovV = 0; this.started = true;
+  }
   release() { this.free = null; this.blend = 0; this.blendDur = 0.9; this.from = { ...this.s }; }
 
   // ----- per frame -----
@@ -225,9 +231,12 @@ export class FightDirector {
     let sx = 0, sy = 0, cx = 0, cy = 0; for (let i = 0; i < L.length; i++) { cx += L[i].x; cy += L[i].y; } cx /= L.length || 1; cy /= L.length || 1;
     for (let i = 0; i < L.length; i++) { const u = L[i]; sx += (u.x - cx) * (u.x - cx) - (u.y - cy) * (u.y - cy); sy += 2 * (u.x - cx) * (u.y - cy); }
     const phi = L.length > 1 && Math.sqrt(sx * sx + sy * sy) > 1e-3 ? 0.5 * Math.atan2(sy, sx) : this.s.yaw - Math.PI / 2;
-    let yaw = phi + (Math.PI / 2) * (1 - tall); const pitch = lerp(24, 30, tall) * D2R + tall * 12 * D2R;
+    // PHONE (tall): spread runs up the screen but dead-on it stacks the fighters into one column, so the view is turned ~30 degrees off the spread axis (they separate sideways
+    // and read as bodies, not a blob); a lower pitch (34, was 42 and then lifted to 48+ at 3v3 by the bowl limit) and tighter side padding / margin keep the camera
+    // close enough that the bowl limit no longer forces a near top-down view, and the limit itself is 1.2 m looser on a phone (the camera clears the 3 m podium wall).
+    let yaw = phi + (Math.PI / 2) * (1 - tall) + tall * 0.52; const pitch = lerp(24, 30, tall) * D2R + tall * 4 * D2R;
     yaw = this._pickYaw(pts, yaw, pitch, fov);
-    return this._frame({ pts, yaw, pitch, fov, margin: lerp(0.86, 0.8, tall), minD: 7.5, padX: 1.5, padY: 0.5, st: { yaw: 0.6, yawMax: 1.1, pitch: 0.5, c: 0.28, d: 0.7, dUp: 0.14, fov: 0.5 } });
+    return this._frame({ pts, yaw, pitch, fov, margin: lerp(0.86, 0.9, tall), minD: 7.5 - 1.5 * tall, padX: lerp(1.5, 0.8, tall), padY: 0.5, rMax: this.R - this.wallMargin + tall * 1.2, st: { yaw: 0.6, yawMax: 1.1, pitch: 0.5, c: 0.28, d: 0.7, dUp: 0.14, fov: 0.5 } });
   }
   _duel({ L, p, tall }) {
     const a = L.find((u) => u.id === p.a) || L[0], b = L.find((u) => u.id === p.b) || L.find((u) => u !== a); if (!a || !b) return null;
@@ -272,7 +281,11 @@ export class FightDirector {
   _victory({ L, t, p, tall }) {
     if (p.yaw0 === undefined) p.yaw0 = this.s.yaw; // latched once: a target of (current yaw + k*t) runs away from the camera and spins faster the longer the shot lasts
     const pts = unitPts(L.length ? L : [{ x: 0, y: 0 }], 0, 2.4), yaw = p.yaw0 + Math.min(t, 40) * 0.1 * ease(t / 2.5), pitch = lerp(9, 17, ease(t / 6)) * D2R + tall * 8 * D2R;
-    return this._frame({ pts, yaw, pitch, fov: this._fov(44), margin: lerp(0.8, 0.74, tall), minD: 4.8, padX: 0.9, st: { yaw: 0.05, pitch: 0.4, c: 0.35, d: 0.6, dUp: 0.2, fov: 0.5 } });
+    // BANNER: the DOM VICTORY / DEFEAT title sits in the top third, so the winner is framed LOWER: the look point is raised along the camera up axis (subjects slide down the
+    // screen) and the fit margin is tightened to match. The hard framing check keeps working because the reported margin covers the shifted bottom edge (margin + shift).
+    const sh = lerp(0.3, 0.26, tall), mg = lerp(0.66, 0.62, tall), r = this._frame({ pts, yaw, pitch, fov: this._fov(44), margin: mg, minD: 4.8, padX: 0.9, st: { yaw: 0.05, pitch: 0.4, c: 0.35, d: 0.6, dUp: 0.2, fov: 0.5 } });
+    const tv = Math.tan(r.fov * D2R / 2), u = basis(r.yaw, r.pitch).u, dl = sh * r.d * tv; r.c[0] += u[0] * dl; r.c[1] += u[1] * dl; r.c[2] += u[2] * dl; r.margin = mg + sh;
+    return r;
   }
 }
 
