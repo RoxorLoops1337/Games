@@ -87,6 +87,7 @@ const STATIC_PATHS = [
   'pixel_colony',
   'ludus_maximus',
   'ludus_maximus_3d',
+  'blockmates',
   'tools',
 ];
 

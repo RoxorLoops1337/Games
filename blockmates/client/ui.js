@@ -1,0 +1,307 @@
+// DOM interface: hotbar, vitals, inventory + crafting, chests, chat, minimap, menus.
+import { ITEMS, BLOCKS, RECIPES, PLAYER, I } from '../shared/data.js';
+import { itemIcon, drawChar, SKINS, HAIRS, SHIRTS, PANTS, HAIR_STYLES } from './art.js';
+
+const el = (tag, cls, parent) => { const e = document.createElement(tag); if (cls) e.className = cls; if (parent) parent.appendChild(e); return e; };
+const urlCache = new Map();
+export function iconURL(id) { let u = urlCache.get(id); if (!u) { u = itemIcon(id).toDataURL(); urlCache.set(id, u); } return u; }
+
+function heartIcon(kind) {
+  const c = document.createElement('canvas'); c.width = c.height = 18; const g = c.getContext('2d');
+  const path = () => { g.beginPath(); g.moveTo(9, 16); g.bezierCurveTo(-3, 8, 2, -1, 9, 5); g.bezierCurveTo(16, -1, 21, 8, 9, 16); g.closePath(); };
+  if (kind === 'heart') { path(); g.fillStyle = '#e63950'; g.fill(); g.strokeStyle = '#5a0c1a'; g.lineWidth = 1.5; g.stroke(); g.fillStyle = 'rgba(255,255,255,0.5)'; g.fillRect(4, 4, 3, 2); }
+  else if (kind === 'heart0') { path(); g.fillStyle = 'rgba(0,0,0,0.35)'; g.fill(); g.strokeStyle = 'rgba(255,255,255,0.35)'; g.lineWidth = 1.2; g.stroke(); }
+  else if (kind === 'food') { g.fillStyle = '#c9803a'; g.beginPath(); g.ellipse(8, 8, 6, 5, -0.5, 0, 7); g.fill(); g.strokeStyle = '#4a280e'; g.lineWidth = 1.5; g.stroke(); g.fillStyle = '#f2ead0'; g.fillRect(12, 11, 3, 6); g.beginPath(); g.arc(14, 17, 2, 0, 7); g.fill(); g.fillStyle = 'rgba(255,255,255,0.4)'; g.fillRect(4, 5, 4, 2); }
+  else if (kind === 'food0') { g.fillStyle = 'rgba(0,0,0,0.35)'; g.beginPath(); g.ellipse(8, 8, 6, 5, -0.5, 0, 7); g.fill(); g.strokeStyle = 'rgba(255,255,255,0.3)'; g.stroke(); }
+  else if (kind === 'bubble') { g.fillStyle = 'rgba(150,210,255,0.5)'; g.beginPath(); g.arc(9, 9, 6.5, 0, 7); g.fill(); g.strokeStyle = '#d6efff'; g.lineWidth = 1.5; g.stroke(); g.fillStyle = '#fff'; g.fillRect(6, 5, 2, 2); }
+  return c.toDataURL();
+}
+
+export class UI {
+  constructor(G) {
+    this.G = G; this.open = null; this.pick = null; this.filter = ''; this.cat = 'all'; this.chatOpen = false; this.toastT = 0;
+    this.icons = { heart: heartIcon('heart'), heart0: heartIcon('heart0'), food: heartIcon('food'), food0: heartIcon('food0'), bubble: heartIcon('bubble') };
+    this.root = document.getElementById('hud');
+    this.build();
+  }
+  build() {
+    const r = this.root;
+    r.innerHTML = '';
+    this.vitals = el('div', 'vitals', r);
+    this.hearts = el('div', 'row', this.vitals); this.foods = el('div', 'row', this.vitals); this.bubbles = el('div', 'row', this.vitals);
+    this.clock = el('div', 'clock', r);
+    this.mapBox = el('div', 'mapbox', r); this.mapCv = el('canvas', '', this.mapBox); this.mapCv.width = 180; this.mapCv.height = 110;
+    this.hotbar = el('div', 'hotbar', r);
+    this.hotSlots = [];
+    for (let i = 0; i < PLAYER.hotbar; i++) {
+      const s = this.slotEl(this.hotbar); s.dataset.k = 'inv'; s.dataset.i = i;
+      const n = el('span', 'key', s); n.textContent = (i + 1) % 10;
+      s.onmousedown = (e) => { e.stopPropagation(); if (this.open) this.slotClick(e, 'inv', i); else this.G.selectSlot(i); };
+      this.hotSlots.push(s);
+    }
+    this.chat = el('div', 'chat', r); this.chatLog = el('div', 'log', this.chat);
+    this.chatIn = el('input', 'chatin', this.chat); this.chatIn.maxLength = 150; this.chatIn.placeholder = 'Say something. Enter sends, Esc cancels.';
+    this.chatIn.onkeydown = (e) => {
+      e.stopPropagation();
+      if (e.key === 'Enter') { const t = this.chatIn.value.trim(); if (t) this.G.send({ t: 'chat', text: t }); this.closeChat(); }
+      else if (e.key === 'Escape') this.closeChat();
+    };
+    this.toast = el('div', 'toast', r);
+    this.players = el('div', 'playerlist', r);
+    this.tip = el('div', 'tip', r);
+    this.panel = el('div', 'panel hidden', r);
+    this.modal = el('div', 'modal hidden', r);
+    this.death = el('div', 'death hidden', r); this.death.innerHTML = '<div><h1>You fell over</h1><p>Getting back up...</p></div>';
+    this.status = el('div', 'status', r);
+    this.touch();
+  }
+  slotEl(parent) {
+    const s = el('div', 'slot', parent);
+    const img = el('img', '', s); img.draggable = false; img.style.display = 'none';
+    el('span', 'cnt', s); const d = el('div', 'dur', s); el('i', '', d);
+    return s;
+  }
+  fill(s, st) {
+    const img = s.children[0], cnt = s.querySelector('.cnt'), dur = s.querySelector('.dur');
+    if (!st) { img.style.display = 'none'; cnt.textContent = ''; dur.style.display = 'none'; s.title = ''; return; }
+    const def = ITEMS[st.id];
+    img.style.display = 'block'; const u = iconURL(st.id); if (img.src !== u) img.src = u;
+    cnt.textContent = st.n > 1 ? st.n : '';
+    if (st.d && def.dur) { dur.style.display = 'block'; const f = Math.max(0, st.d / def.dur); const b = dur.firstChild; b.style.width = f * 100 + '%'; b.style.background = f > 0.5 ? '#6fcf4a' : f > 0.2 ? '#f2d33c' : '#e24a4a'; }
+    else dur.style.display = 'none';
+  }
+
+  // ------------------------------------------------------------ per-frame updates
+  update() {
+    const G = this.G;
+    if (!G.joined) return;
+    this.hotSlots.forEach((s, i) => { this.fill(s, G.inv[i]); s.classList.toggle('sel', i === G.sel); s.classList.toggle('pick', !!this.pick && this.pick[0] === 'inv' && this.pick[1] === i); });
+    const hp = Math.ceil(G.hp / 2), food = Math.ceil(G.food / 2);
+    if (this._v !== hp + '|' + food + '|' + Math.ceil(G.breath)) {
+      this._v = hp + '|' + food + '|' + Math.ceil(G.breath);
+      this.hearts.innerHTML = Array.from({ length: PLAYER.hp / 2 }, (_, i) => `<img src="${i < hp ? this.icons.heart : this.icons.heart0}">`).join('');
+      this.foods.innerHTML = Array.from({ length: PLAYER.food / 2 }, (_, i) => `<img src="${i < food ? this.icons.food : this.icons.food0}">`).join('');
+      this.bubbles.innerHTML = G.breath < 10 ? Array.from({ length: Math.ceil(G.breath) }, () => `<img src="${this.icons.bubble}">`).join('') : '';
+    }
+    const t = G.time / 600, hh = Math.floor(((t * 24 + 6) % 24)), mm = Math.floor((((t * 24 + 6) % 1) * 60) / 10) * 10;
+    this.clock.textContent = `Day ${G.day}  ${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
+    this.death.classList.toggle('hidden', !G.me.dead);
+    this.status.textContent = G.status;
+    if (this.toastT > 0) { this.toastT -= 1 / 60; if (this.toastT <= 0) this.toast.classList.remove('on'); }
+    // chat fade
+    const now = performance.now();
+    for (const c of this.chatLog.children) c.classList.toggle('old', !this.chatOpen && now - c._t > 9000);
+    this.players.classList.toggle('on', G.showPlayers);
+    if (G.showPlayers) {
+      this.players.innerHTML = `<h3>${G.worldName} <small>${G.players.size} online</small></h3>` + [...G.players.values()].map((p) => `<div class="pl"><canvas width="26" height="34" data-id="${p.id}"></canvas><b>${esc(p.name)}</b><span>${p.id === G.myId ? G.ping + ' ms' : ''}</span></div>`).join('');
+      for (const cv of this.players.querySelectorAll('canvas')) drawChar(cv, G.players.get(+cv.dataset.id).look);
+    }
+  }
+  say(from, text, sys) {
+    const d = el('div', 'msg' + (sys ? ' sys' : ''), this.chatLog); d._t = performance.now();
+    d.innerHTML = (from ? `<b>${esc(from)}</b> ` : '') + esc(text);
+    while (this.chatLog.children.length > 60) this.chatLog.firstChild.remove();
+    this.chatLog.scrollTop = 1e6;
+  }
+  showToast(text) { this.toast.textContent = text; this.toast.classList.add('on'); this.toastT = 2.6; }
+  openChat(pre = '') { this.chatOpen = true; this.chat.classList.add('open'); this.chatIn.value = pre; this.chatIn.focus(); }
+  closeChat() { this.chatOpen = false; this.chat.classList.remove('open'); this.chatIn.blur(); this.chatIn.value = ''; }
+
+  // ------------------------------------------------------------ inventory panel
+  toggleInv(force) {
+    if (this.open === 'inv' && force !== 'keep') { this.closePanel(); return; }
+    this.open = 'inv'; this.pick = null; this.renderPanel();
+  }
+  closePanel() {
+    if (this.open === 'chest' || this.G.chest) this.G.send({ t: 'chestclose' });
+    this.G.chest = null; this.open = null; this.pick = null; this.panel.classList.add('hidden'); this.tip.classList.remove('on');
+  }
+  openChest() { this.open = 'chest'; this.pick = null; this.renderPanel(); }
+  renderPanel() {
+    const G = this.G, p = this.panel;
+    p.classList.remove('hidden');
+    p.innerHTML = '';
+    const left = el('div', 'col', p);
+    if (this.open === 'chest' && G.chest) {
+      el('h3', '', left).textContent = 'Chest';
+      const grid = el('div', 'grid chest', left);
+      G.chest.inv.forEach((st, i) => { const s = this.slotEl(grid); this.fill(s, st); s.onmousedown = (e) => this.slotClick(e, 'chest', i); s.onmouseenter = () => this.showTip(st); s.onmouseleave = () => this.tip.classList.remove('on'); });
+    }
+    el('h3', '', left).textContent = 'Backpack';
+    const arm = el('div', 'armor', left);
+    ['Head', 'Body', 'Feet'].forEach((n, i) => { const s = this.slotEl(arm); s.classList.add('arm'); s.dataset.ph = n; this.fill(s, G.armor[i]); s.onmousedown = (e) => this.slotClick(e, 'armor', i); s.onmouseenter = () => this.showTip(G.armor[i]); s.onmouseleave = () => this.tip.classList.remove('on'); });
+    const sum = el('div', 'armsum', arm); sum.textContent = 'Armor ' + G.armor.reduce((a, s) => a + (s ? ITEMS[s.id].armor : 0), 0);
+    const grid = el('div', 'grid', left);
+    for (let i = 0; i < PLAYER.inv; i++) { const s = this.slotEl(grid); this.fill(s, G.inv[i]); if (i < 10) s.classList.add('hot'); if (this.pick && this.pick[0] === 'inv' && this.pick[1] === i) s.classList.add('pick'); s.onmousedown = (e) => this.slotClick(e, 'inv', i); s.onmouseenter = () => this.showTip(G.inv[i]); s.onmouseleave = () => this.tip.classList.remove('on'); }
+    const hint = el('p', 'hint', left); hint.textContent = 'Click a slot, then another to move or swap. Right click moves half. Q drops the held item.';
+    // crafting
+    const right = el('div', 'col craft', p);
+    el('h3', '', right).textContent = 'Crafting';
+    const tools = el('div', 'tools', right);
+    const search = el('input', '', tools); search.placeholder = 'Search'; search.value = this.filter; search.onkeydown = (e) => e.stopPropagation();
+    search.oninput = () => { this.filter = search.value.toLowerCase(); this.renderRecipes(list); };
+    for (const c of ['all', 'tools', 'blocks', 'food', 'stuff']) { const b = el('button', this.cat === c ? 'on' : '', tools); b.textContent = c; b.onclick = () => { this.cat = c; this.renderPanel(); }; }
+    const list = el('div', 'recipes', right);
+    this.renderRecipes(list);
+    const close = el('button', 'x', p); close.textContent = '×'; close.onclick = () => this.closePanel();
+  }
+  catOf(def) {
+    if (def.tool || def.armor) return 'tools';
+    if (def.food) return 'food';
+    if (def.place) return 'blocks';
+    return 'stuff';
+  }
+  renderRecipes(list) {
+    const G = this.G;
+    list.innerHTML = '';
+    const have = (id) => G.count(id);
+    const rows = [];
+    RECIPES.forEach((r, ri) => {
+      const def = ITEMS[r.out];
+      if (this.cat !== 'all' && this.catOf(def) !== this.cat) return;
+      if (this.filter && !def.label.toLowerCase().includes(this.filter)) return;
+      const hasStation = r.st === 'hand' || G.stations.has(r.st);
+      const can = hasStation && r.in.every(([id, c]) => have(id) >= c);
+      const some = r.in.some(([id]) => have(id) > 0);
+      rows.push({ r, ri, def, can, some, hasStation });
+    });
+    rows.sort((a, b) => (b.can - a.can) || (b.some - a.some));
+    for (const { r, ri, def, can, hasStation } of rows) {
+      const d = el('div', 'rec' + (can ? ' can' : ''), list);
+      const img = el('img', '', d); img.src = iconURL(r.out);
+      const info = el('div', 'info', d);
+      el('b', '', info).textContent = def.label + (r.n > 1 ? ' ×' + r.n : '');
+      const ing = el('div', 'ing', info);
+      for (const [id, c] of r.in) { const sp = el('span', have(id) >= c ? 'ok' : 'no', ing); sp.innerHTML = `<img src="${iconURL(id)}">${have(id)}/${c}`; sp.title = ITEMS[id].label; }
+      if (r.st !== 'hand') { const st = el('em', hasStation ? 'ok' : 'no', info); st.textContent = 'needs ' + r.st; }
+      d.onmousedown = (e) => { e.preventDefault(); if (!can) { this.G.sound.play('click'); return; } this.G.send({ t: 'craft', r: ri, n: e.shiftKey ? 5 : 1 }); };
+      d.onmouseenter = () => this.showTip({ id: r.out, n: r.n }); d.onmouseleave = () => this.tip.classList.remove('on');
+    }
+    if (!rows.length) el('p', 'hint', list).textContent = 'Nothing here yet. Gather wood to start.';
+  }
+  refreshPanel() { if (this.open) this.renderPanel(); }
+
+  slotClick(e, kind, i) {
+    e.preventDefault(); e.stopPropagation();
+    const G = this.G;
+    if (!this.open) return;
+    const stackOf = (k, idx) => (k === 'inv' ? G.inv[idx] : k === 'armor' ? G.armor[idx] : G.chest && G.chest.inv[idx]);
+    if (!this.pick) {
+      if (!stackOf(kind, i)) return;
+      // shift+click: quick move between chest and backpack
+      if (e.shiftKey && G.chest && kind !== 'armor') {
+        const to = kind === 'inv' ? 'chest' : 'inv';
+        const arr = to === 'chest' ? G.chest.inv : G.inv;
+        let ti = arr.findIndex((s, j) => s && s.id === stackOf(kind, i).id && (to !== 'inv' || true));
+        if (ti < 0) ti = arr.findIndex((s) => !s);
+        if (ti >= 0) G.send({ t: 'move', from: [kind, i], to: [to, ti] });
+        return;
+      }
+      if (kind === 'inv' && e.button === 2 && ITEMS[G.inv[i].id].armor || kind === 'inv' && e.button === 2 && ITEMS[G.inv[i].id].food) { G.send({ t: 'use', i }); return; }
+      this.pick = [kind, i, e.button === 2]; this.renderPanel(); return;
+    }
+    const [pk, pi, half] = this.pick;
+    this.pick = null;
+    if (!(pk === kind && pi === i)) {
+      const src = stackOf(pk, pi);
+      const n = half && src && src.n > 1 ? Math.ceil(src.n / 2) : undefined;
+      G.send({ t: 'move', from: [pk, pi], to: [kind, i], n });
+    }
+    this.renderPanel();
+  }
+  showTip(st) {
+    if (!st) { this.tip.classList.remove('on'); return; }
+    const def = ITEMS[st.id];
+    let h = `<b>${def.label}</b>`;
+    if (def.tool && def.tool !== 'sword' && def.tool !== 'bow') h += `<br>${def.tool} · power ${def.power.toFixed(1)} · tier ${def.tier}`;
+    if (def.dmg) h += `<br>damage ${def.dmg.toFixed(1)}`;
+    if (def.armor) h += `<br>armor ${def.armor}`;
+    if (def.food) h += `<br>restores ${def.food / 2} food${def.heal ? ', ' + def.heal / 2 + ' hearts' : ''}`;
+    if (st.d && def.dur) h += `<br>durability ${st.d}/${def.dur}`;
+    if (def.place && BLOCKS[def.place].station) h += `<br>crafting station`;
+    this.tip.innerHTML = h; this.tip.classList.add('on');
+  }
+
+  // ------------------------------------------------------------ modals
+  showModal(html, setup) {
+    this.modal.innerHTML = html; this.modal.classList.remove('hidden'); this.modalOpen = true;
+    if (setup) setup(this.modal);
+  }
+  hideModal() { this.modal.classList.add('hidden'); this.modalOpen = false; this.G.canvas.focus(); }
+  signEdit(x, y, text) {
+    this.showModal(`<div class="card"><h2>Sign</h2><input id="mtext" maxlength="60" value="${esc(text)}"><div class="btns"><button id="mok">Save</button><button id="mno">Cancel</button></div></div>`, (m) => {
+      const i = m.querySelector('#mtext'); i.focus(); i.select();
+      i.onkeydown = (e) => { e.stopPropagation(); if (e.key === 'Enter') m.querySelector('#mok').click(); if (e.key === 'Escape') this.hideModal(); };
+      m.querySelector('#mok').onclick = () => { this.G.send({ t: 'sign', x, y, text: i.value }); this.hideModal(); };
+      m.querySelector('#mno').onclick = () => this.hideModal();
+    });
+  }
+  waystones(from, list) {
+    const G = this.G;
+    const rows = list.filter((w) => !(w.x === from[0] && w.y === from[1])).map((w) => `<button class="way" data-x="${w.x}" data-y="${w.y}"><b>${esc(w.name)}</b><small>${esc(w.owner || '')} · ${Math.abs(w.x - Math.floor(G.me.x))} tiles away</small></button>`).join('') || '<p>No other waystones yet. Build another one somewhere!</p>';
+    const here = list.find((w) => w.x === from[0] && w.y === from[1]);
+    this.showModal(`<div class="card"><h2>Waystone</h2><p class="hint">Travel costs one <img class="inl" src="${iconURL(I.glowshard)}"> glowshard.</p><input id="wname" maxlength="16" value="${esc(here ? here.name : '')}" placeholder="Name this waystone"><div class="ways">${rows}</div><div class="btns"><button id="mno">Close</button></div></div>`, (m) => {
+      const wi = m.querySelector('#wname'); wi.onkeydown = (e) => { e.stopPropagation(); if (e.key === 'Enter') { G.send({ t: 'wname', x: from[0], y: from[1], name: wi.value }); wi.blur(); } };
+      wi.onchange = () => G.send({ t: 'wname', x: from[0], y: from[1], name: wi.value });
+      m.querySelectorAll('.way').forEach((b) => { b.onclick = () => { G.send({ t: 'way', x: +b.dataset.x, y: +b.dataset.y }); this.hideModal(); }; });
+      m.querySelector('#mno').onclick = () => this.hideModal();
+    });
+  }
+  pause() {
+    const G = this.G;
+    this.showModal(`<div class="card"><h2>Paused</h2>
+      <label>Sound <input id="vs" type="range" min="0" max="100" value="${Math.round(G.sound.vol * 100)}"></label>
+      <label>Music <input id="vm" type="range" min="0" max="100" value="${Math.round(G.sound.musicVol * 100)}"></label>
+      <label>Zoom <input id="vz" type="range" min="60" max="180" value="${Math.round(G.zoom * 100)}"></label>
+      <div class="keys"><b>WASD / arrows</b> move, <b>Space</b> jump, <b>Shift</b> run, <b>Left mouse</b> mine and attack, <b>Right mouse</b> place or use, <b>Shift + click</b> back wall, <b>1-0 / wheel</b> hotbar, <b>E</b> backpack, <b>Q</b> drop, <b>T</b> chat, <b>Tab</b> players, <b>F</b> eat, <b>V</b> emote, <b>+/-</b> zoom, <b>F2</b> photo</div>
+      <div class="btns"><button id="mok">Resume</button><button id="mleave">Leave world</button></div></div>`, (m) => {
+      m.querySelector('#vs').oninput = (e) => G.sound.setVol(e.target.value / 100, G.sound.musicVol);
+      m.querySelector('#vm').oninput = (e) => G.sound.setVol(G.sound.vol, e.target.value / 100);
+      m.querySelector('#vz').oninput = (e) => { G.zoom = e.target.value / 100; };
+      m.querySelector('#mok').onclick = () => this.hideModal();
+      m.querySelector('#mleave').onclick = () => { this.hideModal(); G.leave(); };
+    });
+  }
+
+  // ------------------------------------------------------------ minimap
+  drawMap() {
+    const G = this.G, cv = this.mapCv, g = cv.getContext('2d');
+    const img = g.createImageData(180, 110), d = img.data;
+    const px = Math.floor(G.me.x) - 90, py = Math.floor(G.me.y) - 55;
+    for (let j = 0; j < 110; j++) for (let i = 0; i < 180; i++) {
+      const x = px + i, y = py + j, o = (j * 180 + i) * 4;
+      let c = null;
+      const fg = G.cw.chunks.has((x / 32) | 0) ? G.cw.fgAt(x, y) : -1;
+      if (fg === -1) { d[o + 3] = 255; d[o] = 12; d[o + 1] = 14; d[o + 2] = 24; continue; }
+      const lq = G.cw.liqAt(x, y);
+      if (fg && fg !== 0) c = BLOCKS[fg].color; else if (lq) c = (lq >> 4) === 2 ? '#ff6a1a' : '#3a86e0'; else if (G.cw.bgAt(x, y)) c = '#2c2a3a'; else c = (y < 92 ? '#8fd0ff' : '#1a1a28');
+      const n = parseInt(c.slice(1), 16);
+      d[o] = (n >> 16) & 255; d[o + 1] = (n >> 8) & 255; d[o + 2] = n & 255; d[o + 3] = 255;
+    }
+    g.putImageData(img, 0, 0);
+    g.fillStyle = '#fff'; g.fillRect(88, 53, 4, 5); g.strokeStyle = '#000'; g.strokeRect(87.5, 52.5, 5, 6);
+    g.fillStyle = '#ffe14a';
+    for (const p of G.players.values()) if (p !== G.me) { const x = Math.floor(p.x) - px, y = Math.floor(p.y) - py - 1; if (x >= 0 && x < 180 && y >= 0 && y < 110) g.fillRect(x - 1, y - 1, 3, 3); }
+    g.fillStyle = '#ff5050';
+    for (const m of G.mobs.values()) { const x = Math.floor(m.x) - px, y = Math.floor(m.y) - py - 1; if (x >= 0 && x < 180 && y >= 0 && y < 110) g.fillRect(x, y, 2, 2); }
+  }
+
+  // ------------------------------------------------------------ touch controls
+  touch() {
+    if (!('ontouchstart' in window) && !(navigator.maxTouchPoints > 0)) return;
+    const G = this.G;
+    document.body.classList.add('touch');
+    const t = el('div', 'touchpad', this.root);
+    const mk = (cls, label, bit) => {
+      const b = el('button', cls, t); b.textContent = label;
+      const on = (e) => { e.preventDefault(); G.touchKeys |= bit; b.classList.add('down'); }, off = (e) => { e.preventDefault(); G.touchKeys &= ~bit; b.classList.remove('down'); };
+      b.addEventListener('touchstart', on, { passive: false }); b.addEventListener('touchend', off); b.addEventListener('touchcancel', off);
+    };
+    mk('l', '◀', 1); mk('r', '▶', 2); mk('j', '▲', 16); mk('d', '▼', 8);
+    const mode = el('button', 'mode', t); mode.textContent = 'Mine';
+    mode.onclick = () => { G.touchMode = G.touchMode === 'mine' ? 'place' : 'mine'; mode.textContent = G.touchMode === 'mine' ? 'Mine' : 'Place'; };
+    const inv = el('button', 'invb', t); inv.textContent = 'Bag'; inv.onclick = () => this.toggleInv();
+    const chat = el('button', 'chatb', t); chat.textContent = 'Chat'; chat.onclick = () => this.openChat();
+  }
+}
+export const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
