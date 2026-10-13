@@ -59,7 +59,7 @@ function begin(l) {
     s.chat = chatLog;
     snap = s; myId = l.id; you = s.you;
     if (!you) return;
-    view.sync(s, myId); view.setTime(s.t + 60); setAmbient(view.night || 0, view.rainAmt || 0);
+    view.sync(s, myId); view.setTime(s.t + 130); setAmbient(view.night || 0, view.rainAmt || 0);
     if (first) { first = false; $('#title').hidden = true; $('#hud').hidden = false; view.focusVillage(myId, 26); setupHud(); }
     onSnap(s);
   };

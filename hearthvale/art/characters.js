@@ -216,7 +216,7 @@ export function villagerModel(color = '#e8564a', hat = 0, opts = {}) {
   const rnd = rng(((hat | 0) + 1) * 7919 + (opts.seed | 0) * 104729 + 13); const pick = (a) => a[Math.floor(rnd() * a.length)];
   const child = age === 'child', elder = age === 'elder';
   // appearance picks
-  const skinW = rnd(), skin = mixHex(P.skin[skinW < 0.3 ? 0 : skinW < 0.58 ? 1 : skinW < 0.8 ? 2 : skinW < 0.92 ? 3 : 4], '#ffc9a0', 0.14), skinD = mixHex(skin, '#a0503a', 0.3), blush = mixHex(skin, '#ff5a78', 0.5);
+  const skinW = rnd(), skin = mixHex(P.skin[skinW < 0.3 ? 0 : skinW < 0.55 ? 1 : skinW < 0.76 ? 2 : skinW < 0.91 ? 3 : 4], '#ffd2b0', 0.1), skinD = mixHex(skin, '#a0503a', 0.3), blush = mixHex(skin, '#ff5a78', 0.5);
   let hair = pick(P.hair); if (elder) hair = pick(['#e8e0d0', '#d6d6dc', '#b9b4aa']);
   const style = opts.style || (tool !== 'none' ? prof.style : pick(STYLES));
   let gear = opts.gear; if (!gear) { const pool = prof.hats && rnd() < 0.75 ? prof.hats : GEARS; gear = pick(pool); if (elder && ['pigtails', 'crown', 'flowers'].includes(gear)) gear = pick(['short', 'cap', 'bun', 'bandana']); if (child && gear === 'crown' && rnd() < 0.5) gear = 'short'; }
