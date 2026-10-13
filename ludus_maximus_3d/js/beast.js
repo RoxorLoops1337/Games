@@ -151,7 +151,7 @@ const ELEPHANT = {
   torso: { hipsZ: -0.95, chestZ: 0.85, rump: [0.58, 0.64], mid: [0.64, 0.7], chest: [0.62, 0.7], len: 0.7, waist: 1.0 },
   front: { dx: 0.42, sy: -0.35, sz: 0.0, up: [-0.55, 0.0], lo: [-0.6, 0.0], pad: 0.12, r: [0.33, 0.27, 0.23], paw: [0.23, 0.09, 0.25] },
   hind: { dx: 0.42, hy: -0.32, hz: 0, up: [-0.5, 0.1], lo: [-0.55, -0.1], pad: 0.12, r: [0.36, 0.27, 0.22], paw: [0.23, 0.09, 0.25] },
-  tail: { n: 2, len: 0.45, r: 0.045, at: [0.0, 0.1, -0.5], tuft: 0.07 }, eye: '#2a1a10', fur: '#8d8681', belly: '#a79f95', dark: '#5f5753', mane: '#5f5c58', nose: '#6a6560', muz: '#b79088',
+  tail: { n: 2, len: 0.45, r: 0.045, at: [0.0, 0.1, -0.5], tuft: 0.07 }, eye: '#2a1a10', fur: '#7b746f', belly: '#948b82', dark: '#4a423e', mane: '#5f5c58', nose: '#6a6560', muz: '#b79088',
   gait: { walkV: 1.6, trotV: 3.4, runV: 6.5, strideW: 2.2, strideT: 3.0, strideR: 4.8, pace: true }, size: 1, h: 4.4, r: 2.2, nameH: 4.9, trunk: true, rider: true,
 };
 SPECIES.elephant = ELEPHANT;
@@ -161,7 +161,7 @@ SPECIES.elephant = ELEPHANT;
 const FURK = {
   wolf: { grain: 0.22, sc: 46, salt: 0.22, bump: 0.006, rim: 0.55, edge: 0.34, pv: 0.18 }, lion: { grain: 0.15, sc: 40, salt: 0.08, bump: 0.005, rim: 0.6, edge: 0.34, pv: 0.12 },
   bear: { grain: 0.24, sc: 36, salt: 0.14, bump: 0.006, rim: 0.5, edge: 0.34, pv: 0.14 }, boar: { grain: 0.3, sc: 54, salt: 0.18, bristle: 1, bump: 0.007, rim: 0.35, edge: 0.34, pv: 0.18 },
-  nemean: { grain: 0.12, sc: 38, salt: 0.06, glint: 1, bump: 0.004, rim: 0.7, edge: 0.3, pv: 0.1 }, elephant: { grain: 0.06, sc: 22, wrinkle: 1, bump: 0.007, rim: 0.34, edge: 0.4, pv: 0.3 },
+  nemean: { grain: 0.12, sc: 38, salt: 0.06, glint: 1, bump: 0.004, rim: 0.7, edge: 0.3, pv: 0.1 }, elephant: { grain: 0.06, sc: 22, wrinkle: 1, bump: 0.007, rim: 0.5, edge: 0.55, pv: 0.3 },
 };
 /** the fur / skin material. kind 'cloth' (animals) or 'leather' (elephant) supplies the lighting wrap; this adds strand grain, fur relief (derivative bump), a warm velvet rim, a dark contour,
  *  and its OWN blood model: wound based wet clumps that darken the fur instead of tinting it (the shared uniforms of makeBloodUniforms drive it, shadePatch's uniform soak is switched off). */
@@ -177,7 +177,7 @@ function furMaterial(id, bu, shadeKind = 'cloth', o = {}) {
   ${F.salt ? `diffuseColor.rgb *= 1.0 - ${f(F.salt)} * smoothstep(0.62, 0.9, f2);` : ''}
   float pv = bn(fp * ${big ? '2.4' : '4.2'} + 17.0); diffuseColor.rgb *= 1.0 + ${f(F.pv)} * (pv - 0.5) * 2.0;
   ${F.bristle ? `float bs = smoothstep(0.55, 0.85, sin(fp.z * 26.0 + bn(fp * 6.0) * 3.0) * 0.5 + 0.5) * smoothstep(0.55, 0.9, fp.y) * smoothstep(0.25, 0.0, abs(fp.x)); diffuseColor.rgb *= 1.0 - 0.45 * bs;` : ''}
-  ${F.wrinkle ? `float wr = sin(fp.y * 52.0 + bn(fp * 7.0) * 6.0) * 0.5 + 0.5; float wr2 = sin((fp.z + fp.x * 0.6) * 40.0 + bn(fp * 11.0) * 5.0) * 0.5 + 0.5; diffuseColor.rgb *= 0.8 + 0.12 * wr + 0.08 * wr2; float dust = smoothstep(0.55, 0.0, fp.y) * 0.35 + 0.08; diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.62, 0.5, 0.36), dust * (0.4 + 0.6 * bn(fp * 9.0)));` : ''}
+  ${F.wrinkle ? `float wr = sin(fp.y * 52.0 + bn(fp * 7.0) * 6.0) * 0.5 + 0.5; float wr2 = sin((fp.z + fp.x * 0.6) * 40.0 + bn(fp * 11.0) * 5.0) * 0.5 + 0.5; diffuseColor.rgb *= 0.8 + 0.12 * wr + 0.08 * wr2; float dust = smoothstep(0.35, 0.0, fp.y) * 0.3 + 0.04; diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.62, 0.5, 0.36), dust * (0.4 + 0.6 * bn(fp * 9.0)));` : ''}
   ${F.glint ? `diffuseColor.rgb += vec3(0.16, 0.1, 0.01) * pow(bn(fp * 46.0), 5.0) * 1.4;` : ''}
   ${shell ? `float sh = bn(fp * ${f(F.sc * 0.8)} + 5.3) * 0.6 + bn(fp * ${f(F.sc * 2.0)} + 1.1) * 0.4; if (sh < vLayer * 0.92 + 0.04) discard; diffuseColor.rgb *= 0.9 + 0.2 * vLayer;` : ''}
   // blood: wound based, wet clumps that darken the fur (the strand texture stays visible), runnels fall with gravity, a small spatter low on the body; dries brown
@@ -423,7 +423,7 @@ export function createBeast(unitOrRec, opts = {}) {
     mk('hip' + s, J.hips, sg * SS(H.dx), SS(H.hy), SS(H.hz)); mk('knee' + s, J['hip' + s], 0, SS(H.up[0]), SS(H.up[1])); mk('ankle' + s, J['knee' + s], 0, SS(H.lo[0]), SS(H.lo[1]));
   }
   if (sp.trunk) { let p = J.head; for (let i = 1; i <= 4; i++) p = mk('trunk' + i, p, 0, i === 1 ? -SS(0.18) : -SS(0.42), i === 1 ? SS(0.38) : SS(0.08)); }
-  if (sp.rider) { mk('rider', J.chest, 0, SS(0.78) + SS(0.35), -SS(0.15)); mk('riderArm', J.rider, -SS(0.2), SS(0.5), SS(0.04)); mk('flag1', J.spine, SS(0.4), SS(1.5), -SS(0.62)); mk('flag2', J.spine, -SS(0.4), SS(1.5), -SS(0.62)); }
+  if (sp.rider) { mk('rider', J.chest, 0, SS(0.78) + SS(0.35), -SS(0.15)); mk('riderArm', J.rider, -SS(0.2), SS(0.5), SS(0.04)); mk('flag1', J.spine, SS(0.4), SS(2.1), -SS(0.62)); mk('flag2', J.spine, -SS(0.4), SS(2.1), -SS(0.62)); }
   const bones = JN.filter((n) => J[n]).map((n) => J[n]), bIdx = {}; bones.forEach((b, i) => { bIdx[b.name] = i; });
 
   // --- materials (per rig so flash / blood never leak)
@@ -626,8 +626,8 @@ export function createBeast(unitOrRec, opts = {}) {
     // tail tuft bristles
     // harness, blanket, howdah, banners
     const sj = jp('spine'), SP = (x, y, z) => [sj.x + x * k, sj.y + y * k, sj.z + z * k];
-    { const bl = blob(0.64 * k, 0.1 * k, 0.74 * k, DT.sw, 4); setColor(bl, flat('#8a1c1c')); abs(bl, 'spine', [0, 0.6 * k, -0.12 * k]); addRigid('cloth', bl, 'spine'); }
-    for (const sg of [1, -1]) { const dr = new THREE.PlaneGeometry(0.9 * k, 0.55 * k, 3, 2); dr.rotateY(Math.PI / 2); abs(dr, 'spine', [sg * 0.66 * k, 0.28 * k, -0.12 * k]); setColor(dr, (x, y) => (y < sj.y + 0.1 * k ? hexC('#d4a63c') : hexC('#8a1c1c'))); addRigid('cloth', dr, 'spine'); }
+    { const bl = blob(0.74 * k, 0.16 * k, 0.86 * k, DT.sw, 5); setColor(bl, (x, y, z, nx, ny) => (Math.abs(Math.abs(x - sj.x) - 0.5 * k) < 0.035 * k || Math.abs(Math.abs(z - sj.z + 0.12 * k) - 0.62 * k) < 0.035 * k ? hexC('#e0b84a') : hexC('#a01e1e'))); abs(bl, 'spine', [0, 0.56 * k, -0.12 * k]); setColor(bl, (x, y, z, nx, ny) => (Math.abs(Math.abs(x - sj.x) - 0.5 * k) < 0.035 * k || Math.abs(Math.abs(z - sj.z + 0.12 * k) - 0.6 * k) < 0.035 * k ? hexC('#e0b84a') : hexC('#a01e1e'))); addRigid('cloth', bl, 'spine'); }
+    for (const sg of [1, -1]) { const dr = new THREE.PlaneGeometry(1.0 * k, 0.7 * k, 3, 2); dr.rotateY(Math.PI / 2); abs(dr, 'spine', [sg * 0.72 * k, 0.2 * k, -0.12 * k]); setColor(dr, (x, y) => (y < sj.y - 0.1 * k ? hexC('#e0b84a') : hexC('#a01e1e'))); addRigid('cloth', dr, 'spine'); }
     if (!LOW) { const gi = loft([{ p: SP(-0.6, 0.35, 0), r: [0.03 * k, 0.04 * k] }, { p: SP(-0.66, -0.2, 0), r: [0.03 * k, 0.04 * k] }, { p: SP(-0.58, -0.58, 0), r: [0.03 * k, 0.04 * k] }, { p: SP(0, -0.68, 0), r: [0.03 * k, 0.04 * k] }, { p: SP(0.58, -0.58, 0), r: [0.03 * k, 0.04 * k] }, { p: SP(0.66, -0.2, 0), r: [0.03 * k, 0.04 * k] }, { p: SP(0.6, 0.35, 0), r: [0.03 * k, 0.04 * k] }], { seg: 4, sub: 1, cap: 0, caps: [false, false], up: [0, 0, 1] }); setColor(gi, flat('#4a2e1a')); addRigid('leather', gi, 'spine'); }
     const plat = new THREE.BoxGeometry(0.84 * k, 0.07 * k, 0.96 * k); setColor(plat, (x, y, z) => mix(hexC('#6a4528'), hexC('#8a5a30'), 0.5 + 0.5 * Math.sin(x * 60))); abs(plat, 'spine', [0, 0.71 * k, -0.12 * k]); addRigid('leather', plat, 'spine');
     for (const [x, z] of [[0.4, 0.34], [-0.4, 0.34], [0.4, -0.58], [-0.4, -0.58]]) { const po = new THREE.CylinderGeometry(0.022 * k, 0.026 * k, 0.5 * k, 6); setColor(po, flat('#5a3a20')); abs(po, 'spine', [x * k, 0.99 * k, z * k]); addRigid('leather', po, 'spine'); if (!LOW) { const fn = blob(0.04 * k, 0.04 * k, 0.04 * k, 6, 4); setColor(fn, flat('#e0b84a')); abs(fn, 'spine', [x * k, 1.26 * k, z * k]); addRigid('metal', fn, 'spine'); } }
@@ -636,11 +636,11 @@ export function createBeast(unitOrRec, opts = {}) {
     { const sh = new THREE.CylinderGeometry(0.17 * k, 0.17 * k, 0.025 * k, LOW ? 8 : 14); sh.rotateX(Math.PI / 2); abs(sh, 'spine', [0.0, 1.02 * k, 0.37 * k]); setColor(sh, (x, y, z, nx, ny, nzz) => (Math.abs(nzz) > 0.6 ? mix(hexC('#8a1c1c'), hexC('#d4a63c'), sm(0.1 * k, 0.15 * k, Math.hypot(x - sj.x, y - (sj.y + 1.02 * k)))) : hexC('#d4a63c'))); addRigid('metal', sh, 'spine'); const bs = blob(0.04 * k, 0.04 * k, 0.025 * k, 8, 4); setColor(bs, flat('#f0d070')); abs(bs, 'spine', [0, 1.02 * k, 0.4 * k]); addRigid('metal', bs, 'spine'); }
     // banners: poles and waving cloth (cloth weights follow the flag joints so they stream)
     for (const [sg, fj] of [[1, 'flag1'], [-1, 'flag2']]) {
-      const pole = new THREE.CylinderGeometry(0.014 * k, 0.018 * k, 1.4 * k, 6); setColor(pole, flat('#5a3a20')); abs(pole, 'spine', [sg * 0.4 * k, 1.0 * k, -0.62 * k]); addRigid('leather', pole, 'spine');
-      const tip = cone(0.026 * k, 0.1 * k, 4); setColor(tip, flat('#e8c050')); abs(tip, 'spine', [sg * 0.4 * k, 1.7 * k, -0.62 * k]); addRigid('metal', tip, 'spine');
-      const fl = new THREE.PlaneGeometry(0.62 * k, 0.5 * k, DT.sub > 1 ? 6 : 3, DT.sub > 1 ? 3 : 2); fl.rotateY(-Math.PI / 2); abs(fl, 'spine', [sg * 0.4 * k, 1.33 * k, -0.62 * k - 0.31 * k]);
-      setColor(fl, (x, y, z) => { const u = ((sj.z - 0.62 * k) - z) / (0.62 * k), v = (y - (sj.y + 1.33 * k)) / (0.25 * k), edge = Math.abs(v) > 0.82 || u > 0.9 || u < 0.08, em = Math.hypot((u - 0.5) * 1.2, v * 0.85) < 0.3; return edge || em ? hexC('#e0b84a') : hexC('#a01e1e'); });
-      addSkin2('flag', fl, fj, 'spine', (x, y, z) => sm(0.0, 0.5 * k, (sj.z - 0.62 * k) - z));
+      const pole = new THREE.CylinderGeometry(0.016 * k, 0.02 * k, 2.0 * k, 6); setColor(pole, flat('#5a3a20')); abs(pole, 'spine', [sg * 0.4 * k, 1.3 * k, -0.62 * k]); addRigid('leather', pole, 'spine');
+      const tip = cone(0.03 * k, 0.14 * k, 4); setColor(tip, flat('#e8c050')); abs(tip, 'spine', [sg * 0.4 * k, 2.3 * k, -0.62 * k]); addRigid('metal', tip, 'spine');
+      const fl = new THREE.PlaneGeometry(0.85 * k, 0.7 * k, DT.sub > 1 ? 6 : 3, DT.sub > 1 ? 3 : 2); fl.rotateY(-Math.PI / 2); abs(fl, 'spine', [sg * 0.4 * k, 1.85 * k, -0.62 * k - 0.425 * k]);
+      setColor(fl, (x, y, z) => { const u = ((sj.z - 0.62 * k) - z) / (0.85 * k), v = (y - (sj.y + 1.85 * k)) / (0.35 * k), edge = Math.abs(v) > 0.82 || u > 0.9 || u < 0.08, em = Math.hypot((u - 0.5) * 1.2, v * 0.85) < 0.3; return edge || em ? hexC('#e0b84a') : hexC('#a01e1e'); });
+      addSkin2('flag', fl, fj, 'spine', (x, y, z) => sm(0.0, 0.7 * k, (sj.z - 0.62 * k) - z));
     }
     // the handler: an armoured guard seated in the howdah (cuirass bands, pteruges, crested helmet, bracers, javelin)
     const rj = jp('rider'), RP = (x, y, z) => [rj.x + x * k, rj.y + y * k, rj.z + z * k], bands = DT.sub > 1 ? 7 : 3;
