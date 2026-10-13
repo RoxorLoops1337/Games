@@ -1084,6 +1084,15 @@ export class GameScene extends Phaser.Scene {
         this.emitEvent('hud:toast', { text: `Saved ${bp.name}: ${bp.items.length} piece${bp.items.length > 1 ? 's' : ''}  (V to open your book)`, icon: 'k_gear', color: PAL.gold });
     }
 
+    /** Copy a layout from the Blueprint Shelf into the book (newest first). */
+    adoptBlueprint (name: string, items: Blueprint['items']) {
+        const bp: Blueprint = { id: `${Date.now().toString(36)}${Math.floor(Math.random() * 1296).toString(36)}`, name: name.slice(0, 24) || 'Shared', items: items.map((it) => ({ ...it })) };
+        this.blueprints.unshift(bp);
+        if (this.blueprints.length > MAX_SAVED) this.blueprints.length = MAX_SAVED;
+        saveBlueprints(this.blueprints);
+        this.emitEvent('hud:toast', { text: `Copied ${bp.name} to your book (V)`, icon: 'k_gear', color: PAL.gold });
+    }
+
     deleteBlueprint (id: string) {
         this.blueprints = this.blueprints.filter((b) => b.id !== id);
         saveBlueprints(this.blueprints);

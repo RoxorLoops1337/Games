@@ -46,10 +46,10 @@ split big ones into slices (rules, art, polish).
 - [x] S34 Playbot short run as a health check (already built: tests/playbot.test.ts plays the first 3 days inside npm test)
 
 ## Phase 5: the big five (each in slices)
-- [ ] B5 Shared farm tools: coffer, request board, blueprint book
+- [x] B5 Shared farm tools: coffer, request board, blueprint book
   - [x] B5a Farm Coffer (anyone pays in, take back only your own, tops up land purchases; PROTOCOL 44)
   - [x] B5b Request board (post "plank 50", reward held up front, others fill it for the coins; PROTOCOL 45)
-  - [ ] B5c Shared blueprint book
+  - [x] B5c Shared blueprint book (Blueprint Shelf: share your newest blueprint, others copy it into their book; PROTOCOL 46)
 - [ ] B4 Factory v2: modules, chest gauge, harvester arm + sprinkler
 - [ ] B1 Cottages: the folk move in
 - [ ] B2 Festival eve + the Lantern Chain
