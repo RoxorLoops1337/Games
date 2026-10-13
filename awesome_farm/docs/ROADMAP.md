@@ -64,3 +64,6 @@ split big ones into slices (rules, art, polish).
   - [ ] B2b Festival look: lit lanterns glow, bunting, a festival song
   - [ ] B2c Festival stalls and games
 - [ ] B3 The Long Dusk (new game plus)
+  - [x] B3a Dusk Beacon (sleeps until every boss has fallen; lit: wild monsters 8 levels tougher and 1.5x loot; all server-side, no protocol change)
+  - [ ] B3b Dusk-only bosses and rewards
+  - [ ] B3c A Dusk page in the journal

@@ -279,6 +279,14 @@ function cottage (p: Pix) {
     p.outline();
 }
 
+function beacon (p: Pix) {
+    // an iron brazier on a stone foot with a violet flame
+    lit(p, 3, 11, 10, 4, ST); p.rect(6, 6, 4, 6, 0x56526a);
+    p.ellipse(8, 6, 5, 2, [0x56526a, 0x7a7f9e, 0xb0b5cc]);
+    p.poly([[8, 0], [11, 5], [8, 6], [5, 5]], (u) => (u < 0.5 ? 0x9d6fdb : 0xc9a6f0)); p.rect(7, 3, 2, 3, 0xeedcff);
+    p.outline();
+}
+
 function market (p: Pix, rnd: () => number) {
     // a striped awning over a counter loaded with produce
     for (const x of [2, 31]) lit(p, x, 6, 3, 19, W);
@@ -420,6 +428,7 @@ export function registerStorybookBuildings (scene: Phaser.Scene) {
     paint(scene, 'sawmill', 32, 15, (p) => sawmill(p), 1);
     paint(scene, 'millstone', 14, 10, (p) => millstone(p), 1);
     paint(scene, 'beehive', 14, 19, (p) => beehive(p), 1);
+    paint(scene, 'beacon', 16, 16, (p) => beacon(p), 1);
     paint(scene, 'cottage', 32, 32, (p) => cottage(p), 1);
     paint(scene, 'harvester', 16, 16, (p) => harvester(p), 1);
     paint(scene, 'sprinkler', 16, 16, (p) => sprinkler(p), 1);

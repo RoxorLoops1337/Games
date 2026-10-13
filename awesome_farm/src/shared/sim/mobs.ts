@@ -86,7 +86,7 @@ export function spawnMob (sim: Sim, kind: MobKind | undefined, near?: string, pl
 function place (sim: Sim, kind: MobKind, x: number, y: number, o: SpawnOpts): MobE {
     const def = MOBS[kind];
     const elite = !!o.elite && !def.boss;
-    const lv = o.lv ?? threatAt(sim, x, y);
+    const lv = (o.lv ?? threatAt(sim, x, y)) + (sim.s.dusk && !def.boss && o.rift === undefined ? TUNING.duskLevels : 0);
     // bosses are the same fight every time (their patterns are the challenge); everyone else is tuned to the level
     const hp = Math.max(1, Math.round((def.boss ? def.hp : scaledHp(def, lv, elite)) * (o.hm ?? 1)));
     const soft = o.rift === undefined && !def.boss ? softHit(lv) : 1;
@@ -283,7 +283,7 @@ function rollLoot (sim: Sim, e: MobE, by?: PlayerS) {
     const def = MOBS[e.kind];
     const rng = sim.rng;
     const luck = by ? derived(by).luck : 0;
-    const mul = e.el ? 1.6 : 1;
+    const mul = (e.el ? 1.6 : 1) * (sim.s.dusk && e.rift === undefined ? TUNING.duskLoot : 1);
     const coins = rng.int(def.coins[0], def.coins[1]) * (e.el ? 2 : 1) * (sim.nightEv === 'bloodmoon' ? 2 : 1);
     for (let i = 0; i < coins; i++) sim.spawnDrop('coin', e.x, e.y - 5);
     for (const [item, chance, min = 1, max = min] of def.drops) {

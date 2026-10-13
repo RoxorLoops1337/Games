@@ -503,5 +503,19 @@ export function cottage(_o: BOpts): Model<BuildE> {
     }));
     return { obj: root };
 }
+export function beacon(_o: BOpts): Model<BuildE> {
+    const root = new THREE.Group();
+    root.add(bake('work.beacon', (mb) => {
+        const b = mb.main;
+        b.cyl(0.3, 0.38, 0.3, 8, sc(0.7), { y: 0.15, j: 0.012 });
+        b.cyl(0.2, 0.26, 0.4, 8, 0x56526a, { y: 0.5, j: 0.01 });
+        b.cyl(0.36, 0.22, 0.14, 8, 0x7a7f9e, { y: 0.77, j: 0.008 });
+    }));
+    const flame = new THREE.Group();
+    flame.position.y = 0.95;
+    flame.add(bake('work.beacon.flame', (mb) => { mb.main.ico(0.16, 0, 0xc9a6f0, { sy: 1.8, j: 0.02 }); }));
+    root.add(flame);
+    return { obj: root, update(_dt: number, t: number) { flame.scale.setScalar(1 + Math.sin(t * 6) * 0.08); } };
+}
 export const SL1 = 0x7a7f9e;
-export const CRAFT = { workbench, anvil, kitchen, loom, alchemy, furnace, sawmill, millstone, fishpond, beehive, museum, coffer, board, shelf, sprinkler, harvester, cottage };
+export const CRAFT = { workbench, anvil, kitchen, loom, alchemy, furnace, sawmill, millstone, fishpond, beehive, museum, coffer, board, shelf, sprinkler, harvester, cottage, beacon };
