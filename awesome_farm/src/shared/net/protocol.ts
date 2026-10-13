@@ -3,7 +3,7 @@
 
 import type { Cmd, Ent, PlayerS, Plot, Shop, SimEvent, WorldState } from '../sim/types';
 
-export const PROTOCOL = 47;
+export const PROTOCOL = 48;
 
 export type ClientMsg =
     /** `acct`: sign in as a named farmer with a secret word, from any device (the server remembers it, as a hash). */
@@ -45,6 +45,7 @@ export interface TickMsg {
     prod?: Record<string, number>;   // what the farm's machines have made (sent about once a second)
     shop?: Shop;                     // the trader's stock (same cadence)
     mkt?: { d: number; s: Record<string, number> };   // living prices (same cadence)
+    dusk?: number;                   // the Long Dusk is on (1) or off (0) (same cadence; absent: unchanged)
     players: PlayerDelta[];
     ev: SimEvent[];
 }

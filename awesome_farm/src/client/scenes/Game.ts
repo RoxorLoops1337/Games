@@ -153,6 +153,8 @@ export class GameScene extends Phaser.Scene {
     private gateFrame = -1;
     private shopState: Shop | null = null;
     private mktState: MarketState | undefined;
+    /** The Long Dusk is on (the HUD says so beside the season). */
+    dusk = 0;
     private chron: ChronEntry[] = [];
     private wishS: WishState | null = null;
     private combat!: CombatFx;
@@ -612,6 +614,7 @@ export class GameScene extends Phaser.Scene {
         this.prodHist.reset(state.prod ?? {}, this.clock.time);
         this.shopState = state.shop ?? null;
         this.mktState = state.mkt;
+        this.dusk = state.dusk ?? 0;
         this.chron = (state.chron ?? []).slice();
         this.wishS = state.wish ?? null;
         this.players = {};
@@ -637,6 +640,7 @@ export class GameScene extends Phaser.Scene {
         if (m.prod) this.prodHist.set(m.prod, this.clock.time);
         if (m.shop) this.shopState = m.shop;
         if (m.mkt) this.mktState = m.mkt;
+        if (m.dusk !== undefined) this.dusk = m.dusk;
         if (m.plots.length) {
             const risen: Plot[] = [], changed: Plot[] = [];
             for (const p of m.plots) {
