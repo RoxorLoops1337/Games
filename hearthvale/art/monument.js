@@ -13,7 +13,7 @@ const { THREE, K, P, G, add, rb, bx, cyl, cone, sp, bl, lcyl, ring, fdisc, disc,
 const { TIM, TIM2, WOODL, WOOD, PLANK, STONE, STONEL, STONED, IRON, GOLD, GOLDD, CREAM, CHIM, BUNT, DEEP } = C;
 
 export const MONUMENT_STAGES = 6;
-const TOPY = [2.9, 3.0, 6.7, 7.4, 9.0, 9.6];
+const TOPY = [2.9, 3.0, 6.9, 7.4, 9.2, 9.6];
 /** height (in units) where the game puts the upgrade star for a stage */
 export const monumentTopY = (stage) => TOPY[Math.max(0, Math.min(MONUMENT_STAGES - 1, stage | 0))];
 
@@ -125,22 +125,22 @@ const BW = 1.36;
 function keep(g, st) {
   // round plinth in the basin, square keep with pilasters, clock faces on all four sides
   add(g, tagged(K.lathe([[0.001, 0.2], [1.02, 0.2], [1.08, 0.34], [1.0, 0.7], [0.92, 0.78], [0.001, 0.8]], STONEL, 0, 0, 0, { seg: 24 }), 4));
-  const H = 3.9, y0 = 0.74, wall = rb(BW, H, BW, PINK, 0, y0, 0, 0.14); wall.userData.kind = 1; add(g, wall);
+  const H = 3.2, y0 = 0.74, wall = rb(BW, H, BW, PINK, 0, y0, 0, 0.14); wall.userData.kind = 1; add(g, wall);
   add(g, rb(BW + 0.16, 0.26, BW + 0.16, STONEL, 0, y0, 0, 0.06));
   around(4, BW / 2 * 1.41, Math.PI / 4, (x, z) => add(g, cyl(0.1, 0.11, H - 0.15, CREAM, x, y0 + 0.05, z, 8)));
   const ct = y0 + H;
   add(g, rb(BW + 0.34, 0.16, BW + 0.34, CREAM, 0, ct - 0.02, 0, 0.05), rb(BW + 0.1, 0.1, BW + 0.1, '#ffe48a', 0, ct - 0.12, 0, 0.04));
   // door, windows
   add(g, place((() => { const d = G(); add(d, arch(0.62, 1.0, CREAM, 0, 0, 0.012), arch(0.5, 0.9, '#9fd6ff', 0, 0, 0.034), qd(0.02, 0.7, '#cfeaff', -0.12, 0.3, 0.046), qd(0.02, 0.7, '#cfeaff', 0.12, 0.3, 0.046), qd(0.02, 0.5, '#cfeaff', 0, 0.55, 0.046), sp(0.04, GOLD, 0.16, 0.45, 0.06, { q: 0 }), fdisc(0.1, windowMat, 0, 0.78, 0.05, 0, false, 10), bx(1.1, 0.07, 0.4, STONEL, 0, -0.04, 0.16), bx(0.9, 0.07, 0.3, STONE, 0, -0.1, 0.34)); return d; })(), 0, y0 + 0.02, BW / 2));
-  for (const s of [-1, 1]) add(g, place((() => { const w = G(); add(w, arch(0.36, 0.86, CREAM, 0, 0, 0.012), arch(0.26, 0.76, windowMat, 0, 0.05, 0.03), qd(0.02, 0.76, CREAM, 0, 0.43, 0.04), bx(0.46, 0.05, 0.12, CREAM, 0, -0.03, 0.05)); return w; })(), s * 0.42, y0 + 1.15, BW / 2));
+  for (const s of [-1, 1]) add(g, place((() => { const w = G(); add(w, arch(0.34, 0.8, CREAM, 0, 0, 0.012), arch(0.24, 0.7, windowMat, 0, 0.05, 0.03), qd(0.02, 0.7, CREAM, 0, 0.4, 0.04), bx(0.44, 0.05, 0.12, CREAM, 0, -0.03, 0.05)); return w; })(), s * 0.42, y0 + 1.02, BW / 2));
   for (const s of [-1, 1]) add(g, place((() => { const w = G(); add(w, arch(0.3, 0.7, CREAM, 0, 0, 0.012), arch(0.22, 0.62, windowMat, 0, 0.04, 0.03), qd(0.02, 0.62, CREAM, 0, 0.35, 0.04)); return w; })(), BW / 2, y0 + 1.5, s * 0.3, Math.PI / 2), place((() => { const w = G(); add(w, arch(0.3, 0.7, CREAM, 0, 0, 0.012), arch(0.22, 0.62, windowMat, 0, 0.04, 0.03), qd(0.02, 0.62, CREAM, 0, 0.35, 0.04)); return w; })(), -BW / 2, y0 + 1.5, s * 0.3, -Math.PI / 2));
   // clock faces
-  const cy = y0 + 2.95;
+  const cy = y0 + 2.4;
   for (const a of [0, Math.PI / 2, Math.PI, -Math.PI / 2]) {
     const f = G(); add(f, fdisc(0.46, GOLD, 0, 0, 0.02, 0, false, 20), fdisc(0.4, '#fffaf0', 0, 0, 0.034, 0, false, 20), qd(0.04, 0.12, DEEP, 0, 0.3, 0.05), qd(0.04, 0.12, DEEP, 0, -0.3, 0.05), qd(0.12, 0.04, DEEP, 0.3, 0, 0.05), qd(0.12, 0.04, DEEP, -0.3, 0, 0.05), bar(0, 0, 0.05, 0.0, 0.26, 0.06, 0.04, IRON), bar(0, 0, 0.055, 0.17, -0.06, 0.065, 0.045, IRON), sp(0.035, GOLD, 0, 0, 0.07, { q: 0 }));
     f.position.set(Math.sin(a) * (BW / 2 - 0.0), cy, Math.cos(a) * (BW / 2)); f.rotation.y = a; g.add(f);
   }
-  heart(0.2, '#ff8fb5', 0, y0 + 1.95, BW / 2 + 0.03);
+  heart(0.15, '#ff8fb5', 0, y0 + 1.72, BW / 2 + 0.03);
   return ct + 0.14;
 }
 function belfry(g, st, top) {
@@ -150,20 +150,20 @@ function belfry(g, st, top) {
   around(4, 0.52 * 1.41, Math.PI / 4, (x, z) => add(g, rb(0.17, bh, 0.17, CREAM, x, top + 0.08, z, 0.05)));
   add(g, rb(BW + 0.22, 0.14, BW + 0.22, '#fff4d6', 0, top + bh + 0.06, 0, 0.05));
   const ry = top + bh + 0.2;
-  add(g, cone(1.12, 1.15, ROOFC, 0, ry, 0, 4, Math.PI / 4), ring(0.82, 0.05, shade(ROOFC, 0.2), 0, ry + 0.02, 0, 4)); g.children[g.children.length - 1].rotation.y = Math.PI / 4;
-  add(g, cyl(0.04, 0.04, 0.35, GOLDD, 0, ry + 1.12, 0, 6), sp(0.1, GOLD, 0, ry + 1.5, 0, { q: 1 }));
+  add(g, cone(1.12, 1.0, ROOFC, 0, ry, 0, 4, Math.PI / 4), ring(0.82, 0.05, shade(ROOFC, 0.2), 0, ry + 0.02, 0, 4)); g.children[g.children.length - 1].rotation.y = Math.PI / 4;
+  add(g, cyl(0.04, 0.04, 0.3, GOLDD, 0, ry + 0.98, 0, 6), sp(0.1, GOLD, 0, ry + 1.3, 0, { q: 1 }));
   const bell = G(); bell.name = 'bell'; add(bell, K.lathe([[0.001, 0.0], [0.07, 0.02], [0.2, 0.0], [0.28, -0.3], [0.3, -0.42], [0.2, -0.38], [0.18, -0.2], [0.001, -0.14]].map(([r, y]) => [r, y]), GOLD, 0, 0, 0, { seg: 14 }), sp(0.07, GOLDD, 0, -0.44, 0, { q: 0 }), bar(0, 0.0, 0, 0, 0.14, 0, 0.04, IRON));
   bell.position.set(0, top + bh - 0.1, 0); g.add(bell); add(g, bar(-0.4, top + bh + 0.04, 0, 0.4, top + bh + 0.04, 0, 0.06, TIM2), bar(0, top + bh + 0.04, 0, 0, top + bh - 0.1, 0, 0.03, IRON));
-  const flag = G(); flag.name = 'flag'; add(flag, rb(0.8, 0.46, 0.04, '#ff8fb5', 0.42, -0.26, 0, 0.02), bx(0.8, 0.07, 0.05, GOLD, 0.42, -0.12, 0), heart(0.1, '#ffffff', 0.42, -0.28, 0.03)); add(g, bar(0, ry + 1.5, 0, 0, ry + 2.35, 0, 0.035, GOLDD)); flag.position.set(0.02, ry + 2.3, 0); g.add(flag);
+  const flag = G(); flag.name = 'flag'; add(flag, rb(0.8, 0.46, 0.04, '#ff8fb5', 0.42, -0.26, 0, 0.02), bx(0.8, 0.07, 0.05, GOLD, 0.42, -0.12, 0), heart(0.1, '#ffffff', 0.42, -0.28, 0.03)); add(g, bar(0, ry + 1.3, 0, 0, ry + 1.8, 0, 0.035, GOLDD)); flag.position.set(0.02, ry + 1.78, 0); g.add(flag);
   return ry + 1.6;
 }
 function windmillCap(g, st, top) {
   // octagonal drum, pink dome, a gold heart, four colourful sails on a hub (named spinz)
-  add(g, rb(BW + 0.06, 0.1, BW + 0.06, '#fff4d6', 0, top, 0, 0.04), K.lathe([[0.001, 0], [0.82, 0], [0.84, 0.1], [0.78, 0.7]], '#fff8e6', 0, top + 0.08, 0, { seg: 20 }));
-  const dy = top + 0.78;
+  add(g, rb(BW + 0.06, 0.1, BW + 0.06, '#fff4d6', 0, top, 0, 0.04), K.lathe([[0.001, 0], [0.82, 0], [0.84, 0.1], [0.78, 1.0]], '#fff8e6', 0, top + 0.08, 0, { seg: 20 }));
+  const dy = top + 1.08;
   add(g, K.lathe([[0.9, 0], [0.88, 0.1], [0.74, 0.4], [0.5, 0.65], [0.22, 0.82], [0.001, 0.88]], '#ff9fbd', 0, dy, 0, { seg: 22 }), cyl(0.92, 0.9, 0.06, GOLDD, 0, dy - 0.03, 0, 22));
   add(g, cyl(0.035, 0.035, 0.4, GOLDD, 0, dy + 0.84, 0, 6), sp(0.1, GOLD, 0, dy + 1.28, 0, { q: 1 }));
-  add(g, place((() => { const w = G(); add(w, fdisc(0.2, CREAM, 0, 0, 0.02, 0, false, 14), fdisc(0.15, windowMat, 0, 0, 0.034, 0, false, 14)); return w; })(), 0, top + 0.45, 0.8));
+  add(g, place((() => { const w = G(); add(w, fdisc(0.2, CREAM, 0, 0, 0.02, 0, false, 14), fdisc(0.15, windowMat, 0, 0, 0.034, 0, false, 14)); return w; })(), 0, top + 0.6, 0.8));
   const hub = new THREE.Vector3(0, dy + 0.05, 1.0);
   add(g, lcyl('z', 0.06, 0.45, TIM2, hub.x, hub.y, hub.z - 0.15, 8));
   const sails = G(); sails.name = 'spinz'; sails.position.copy(hub);
@@ -182,7 +182,7 @@ function windmillCap(g, st, top) {
 function lighthouse(g, st, top) {
   // round striped tower above the clock keep, gallery, glowing lantern room, gold dome, sweeping beam
   add(g, rb(BW + 0.06, 0.1, BW + 0.06, '#fff4d6', 0, top, 0, 0.04), K.lathe([[0.001, 0], [0.86, 0], [0.88, 0.08], [0.7, 0.3]], '#fff8e6', 0, top + 0.08, 0, { seg: 24 }));
-  const y0 = top + 0.4, n = 6, h = 0.55;
+  const y0 = top + 0.4, n = 5, h = 0.5;
   for (let i = 0; i < n; i++) { const r0 = 0.7 - i * 0.035, r1 = 0.7 - (i + 1) * 0.035; add(g, K.cyl(r1, r0, h, i % 2 ? '#fff4e4' : '#ff9fbd', 0, y0 + i * h, 0, { seg: 24 })); }
   const gy = y0 + n * h;
   add(g, cyl(0.86, 0.66, 0.14, GOLDD, 0, gy, 0, 24), cyl(0.9, 0.9, 0.06, '#fff4d6', 0, gy + 0.14, 0, 24));
@@ -193,8 +193,8 @@ function lighthouse(g, st, top) {
   around(7, 0.47, 0.1, (x, z) => add(g, bx(0.05, 0.66, 0.05, CREAM, x - 0.025, ly, z - 0.025)));
   add(g, K.lathe([[0.62, 0], [0.58, 0.1], [0.44, 0.3], [0.2, 0.5], [0.001, 0.58]], GOLD, 0, ly + 0.72, 0, { seg: 18 }), cyl(0.03, 0.03, 0.3, GOLDD, 0, ly + 1.28, 0, 6), sp(0.09, GOLD, 0, ly + 1.62, 0, { q: 1 }));
   // doorway and round windows on the stripes
-  for (const [yy, a] of [[y0 + 0.6, 0.6], [y0 + 1.5, -0.7], [y0 + 2.4, 0.5]]) { const w = G(); add(w, fdisc(0.15, CREAM, 0, 0, 0.0, 0, false, 12), fdisc(0.11, windowMat, 0, 0, 0.02, 0, false, 12)); const rr = 0.66 - ((yy - y0) / h) * 0.035; w.position.set(Math.sin(a) * rr, yy, Math.cos(a) * rr); w.rotation.y = a; g.add(w); }
-  const flag = G(); flag.name = 'flag'; add(flag, rb(0.7, 0.4, 0.04, '#ff8fb5', 0.38, -0.23, 0, 0.02), bx(0.7, 0.06, 0.05, GOLD, 0.38, -0.11, 0), heart(0.09, '#ffffff', 0.38, -0.24, 0.03)); add(g, bar(0, ly + 1.62, 0, 0, ly + 2.3, 0, 0.03, GOLDD)); flag.position.set(0.02, ly + 2.25, 0); g.add(flag);
+  for (const [yy, a] of [[y0 + 0.5, 0.6], [y0 + 1.3, -0.7], [y0 + 2.1, 0.5]]) { const w = G(); add(w, fdisc(0.15, CREAM, 0, 0, 0.0, 0, false, 12), fdisc(0.11, windowMat, 0, 0, 0.02, 0, false, 12)); const rr = 0.66 - ((yy - y0) / h) * 0.035; w.position.set(Math.sin(a) * rr, yy, Math.cos(a) * rr); w.rotation.y = a; g.add(w); }
+  const flag = G(); flag.name = 'flag'; add(flag, rb(0.7, 0.4, 0.04, '#ff8fb5', 0.38, -0.23, 0, 0.02), bx(0.7, 0.06, 0.05, GOLD, 0.38, -0.11, 0), heart(0.09, '#ffffff', 0.38, -0.24, 0.03)); add(g, bar(0, ly + 1.62, 0, 0, ly + 2.0, 0, 0.03, GOLDD)); flag.position.set(0.02, ly + 1.97, 0); g.add(flag);
   // the sweeping light: two soft fans from the lantern (the game rotates `beam` about Y)
   const beam = new THREE.Group(); beam.name = 'beam'; beam.position.set(0, ly + 0.33, 0);
   const pos = [], colr = [], idx = [], N = 6, L = 7.5, wide = 0.13;
@@ -203,7 +203,7 @@ function lighthouse(g, st, top) {
   // fade along the length: vertex colour 0 at the far edge, 1 at the lantern; additive blending keeps it a soft glow
   const bm = new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.4, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }); bm.userData.special = true;
   const bmesh = new THREE.Mesh(bg, bm); bmesh.renderOrder = 3; bmesh.castShadow = false; beam.add(bmesh); g.add(beam);
-  return ly + 2.3;
+  return ly + 2.0;
 }
 
 // ---------------------------------------------------------------- stage 5: the Great Tree of Hearthvale
@@ -224,7 +224,7 @@ function greatTree(g) {
   for (const [a, y] of [[0.95, 1.9], [-0.95, 2.1], [2.3, 2.0]]) { const w = G(); add(w, fdisc(0.2, CREAM, 0, 0, 0.0, 0, false, 14), fdisc(0.15, windowMat, 0, 0, 0.02, 0, false, 14), qd(0.02, 0.3, CREAM, 0, 0, 0.03), qd(0.3, 0.02, CREAM, 0, 0, 0.03)); w.position.set(Math.sin(a) * 0.72, y, Math.cos(a) * 0.72); w.rotation.y = a; g.add(w); }
   // canopy: big smooth pastel clumps (kind 8 dapple), light on top
   const clumps = [], PK = ['#ffa8c8', '#ffb8d2', '#ffc6dc', '#ff9cc0', '#f4b8ff', '#ffb0cb'];
-  around(7, 1.85, 0.2, (x, z, a, i) => clumps.push([x, 5.3 + (i % 2) * 0.25, z, 0.88, PK[i % 6]]));
+  around(7, 1.6, 0.2, (x, z, a, i) => clumps.push([x, 5.3 + (i % 2) * 0.25, z, 0.88, PK[i % 6]]));
   around(6, 1.15, 0.6, (x, z, a, i) => clumps.push([x, 6.5 + (i % 2) * 0.2, z, 0.98, PK[(i + 2) % 6]]));
   around(3, 0.55, 0.0, (x, z, a, i) => clumps.push([x, 7.6, z, 0.9, i % 2 ? '#ffd2e2' : '#ffc0d8']));
   clumps.push([0, 8.5, 0, 0.9, '#ffdbe8']);

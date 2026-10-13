@@ -175,7 +175,7 @@ export class Fx {
   }
   /** ground poof: building placed, footsteps, landing (warm cream puffs) */
   dust(x, y, z) {
-    for (let i = 0; i < 6; i++) { const a = (i / 6) * 6.283 + rnd(), sp = rr(0.6, 1.4); this._p(this.A, K_DUST, T_PUFF, x + Math.cos(a) * 0.1, y + 0.05, z + Math.sin(a) * 0.1, Math.cos(a) * sp, rr(0.2, 0.6), Math.sin(a) * sp, rr(0.55, 0.85), rr(0.5, 0.7), rr(1.3, 1.8), 1, 0.96, 0.88, 0.7, { rot: rnd() * 6.28, vr: rr(-1.5, 1.5) }); }
+    for (let i = 0; i < 6; i++) { const a = (i / 6) * 6.283 + rnd(), sp = rr(0.6, 1.4); this._p(this.A, K_DUST, T_PUFF, x + Math.cos(a) * 0.1, y + 0.05, z + Math.sin(a) * 0.1, Math.cos(a) * sp, rr(0.2, 0.6), Math.sin(a) * sp, rr(0.55, 0.85), rr(0.5, 0.7), rr(1.3, 1.8), 1, 0.96, 0.88, 0.7, { rot: rnd() * 6.28, vr: rr(-1.5, 1.5), gy: y }); }
   }
   /** twinkling warm stars: a coloured star (so it stays warm on a bright meadow) plus an additive glow twin. Default warm butter-gold. */
   sparkle(x, y, z, color = '#ffc247') {
@@ -208,7 +208,7 @@ export class Fx {
   /** water splash: droplets + foam + soft double ripple ring (also fine as a rain-drop hit) */
   splash(x, y, z) {
     for (let i = 0; i < 9; i++) { const a = rnd() * 6.283, sp = rr(0.4, 1.3); this._p(this.A, K_DROP, T_DROP, x, y + 0.03, z, Math.cos(a) * sp, rr(2.6, 4.2), Math.sin(a) * sp, rr(0.5, 0.75), rr(0.12, 0.18), rr(0.06, 0.1), 0.78, 0.94, 1, 0.9); }
-    this._p(this.A, K_FOAM, T_PUFF, x, y + 0.08, z, 0, 0.4, 0, 0.5, 0.25, 0.65, 0.95, 1, 1, 0.55, { rot: rnd() * 6 });
+    this._p(this.A, K_FOAM, T_PUFF, x, y + 0.08, z, 0, 0.4, 0, 0.5, 0.25, 0.65, 0.95, 1, 1, 0.55, { rot: rnd() * 6, gy: y });
     this._p(this.A, K_RING, T_RING, x, y + 0.04, z, 0, 0, 0, 0.8, 0.2, 1.3, 0.85, 0.97, 1, 0.8, { flat: true });
     this._p(this.A, K_RING, T_RING, x, y + 0.045, z, 0, 0, 0, 0.8, 0.12, 0.85, 0.85, 0.97, 1, 0.6, { flat: true, delay: 0.12 });
   }
@@ -274,10 +274,11 @@ export class Fx {
     for (let i = 0; i < n; i++) {
       let t = (i / n) * per, ex, ez; if (t < w) { ex = -hw + t; ez = -hh; } else if (t < w + h) { ex = hw; ez = -hh + (t - w); } else if (t < 2 * w + h) { ex = hw - (t - w - h); ez = hh; } else { ex = -hw; ez = hh - (t - 2 * w - h); }
       const l = Math.hypot(ex, ez) || 1, sp = rr(0.5, 1.2);
-      this._p(this.A, K_DUST, T_PUFF, x + ex, y + 0.12, z + ez, (ex / l) * sp, rr(0.3, 0.8), (ez / l) * sp, rr(0.8, 1.3), rr(0.7, 0.95), rr(1.9, 2.6), 1, 0.96, 0.88, 0.75, { rot: rnd() * 6.28, vr: rr(-1.2, 1.2), delay: rnd() * 0.12 });
+      this._p(this.A, K_DUST, T_PUFF, x + ex, y + 0.12, z + ez, (ex / l) * sp, rr(0.3, 0.8), (ez / l) * sp, rr(0.8, 1.3), rr(0.7, 0.95), rr(1.9, 2.6), 1, 0.96, 0.88, 0.75, { rot: rnd() * 6.28, vr: rr(-1.2, 1.2), delay: rnd() * 0.12, gy: y });
     }
     for (let i = 0; i < 12; i++) { this._rgb(PAL_WOOD[i % 4]); const a = rnd() * 6.283, sp = rr(1.0, 3.0); this._p(this.A, K_CHIP, T_RECT, x + rr(-hw, hw) * 0.6, y + 0.5, z + rr(-hh, hh) * 0.6, Math.cos(a) * sp, rr(3.2, 5.8), Math.sin(a) * sp, rr(1.6, 2.2), rr(0.1, 0.17), rr(0.1, 0.17), _rgb.r, _rgb.g, _rgb.b, 1, { rot: rnd() * 6.28, vr: rr(-9, 9), aux: rr(8, 14), gy: y + 0.05, delay: rnd() * 0.1 }); }
     this._rgb('#ffe9a0'); for (const [sx, sz] of [[-hw, -hh], [hw, -hh], [hw, hh], [-hw, hh]]) for (let k = 0; k < 2; k++) this._p(this.Add, K_SPARK, T_STAR4, x + sx, y + 0.2, z + sz, rr(-0.4, 0.4), rr(0.8, 1.8), rr(-0.4, 0.4), rr(0.7, 1.1), rr(0.3, 0.48), 0.05, _rgb.r, _rgb.g, _rgb.b, 1, { rot: rnd() * 3, vr: rr(-3, 3), delay: 0.15 + rnd() * 0.25 });
+    this._p(this.A, K_RING, T_RING, x, y + 0.05, z, 0, 0, 0, 0.8, 0.5, Math.max(w, h) * 1.3, 1, 0.96, 0.86, 0.5, { flat: true });
   }
   /** a crop or resource is collected: a leafy burst, little bits in the item colour that arc and drop, a pop star and sparkles */
   harvest(x, y, z, color = '#ffd84a') {
@@ -442,7 +443,9 @@ export class Fx {
       d[b + VX] = vx; d[b + VY] = vy; d[b + VZ] = vz;
       d[b + X] += vx * dt; d[b + Y] += vy * dt; d[b + Z] += vz * dt;
       if (d[b + FLAT] === 0 && d[b + Y] < 0.02 && (ty === K_LEAF || ty === K_DROP || ty === K_PETAL)) { alpha *= 0.0; }
-      A[o] = d[b + X]; A[o + 1] = d[b + Y]; A[o + 2] = d[b + Z]; A[o + 3] = d[b + ROT];
+      // soft puffs standing on the ground are lifted so their lower half never gets sliced off by the ground plane (the depth test)
+      const lift = (ty === K_DUST || ty === K_FOAM) && d[b + GY] > -90 ? Math.max(0, size * 0.42 - (d[b + Y] - d[b + GY])) : 0;
+      A[o] = d[b + X]; A[o + 1] = d[b + Y] + lift; A[o + 2] = d[b + Z]; A[o + 3] = d[b + ROT];
       const sx = ty === K_COIN ? Math.max(0.12, d[b + AUX2]) * size : size;
       Bq[o] = sx; Bq[o + 1] = Math.abs(sy) * size + 0.0001; Bq[o + 2] = d[b + TILE]; Bq[o + 3] = d[b + FLAT];
       C[o] = d[b + CR]; C[o + 1] = d[b + CG]; C[o + 2] = d[b + CB]; C[o + 3] = alpha;

@@ -11,10 +11,10 @@
 <div id="ui"></div><div id="hud"></div>
 <script type="module">
 import * as K from '../art/artkit.js'; import { mountStage } from './stage.js'; import { P } from '../art/palette.js';
-import { villagerModel, setPose, setMood, setEmote, setCarry, randomVillager, PROFESSIONS, triangles, POSES, MOODS, EMOTES, CARRY_KINDS } from '../art/characters.js';
+import { setVillagerLight, villagerModel, setPose, setMood, setEmote, setCarry, randomVillager, PROFESSIONS, triangles, POSES, MOODS, EMOTES, CARRY_KINDS } from '../art/characters.js';
 const q = new URLSearchParams(location.search); const st = mountStage();
 const anims = []; let maxTri = 0, sumTri = 0, n = 0;
-let LOD = q.get('lod') || undefined;
+let LOD = q.get('lod') || undefined; if (+q.get('night')) setVillagerLight(0.3);
 const state = { pose: q.get('pose') || null, mood: q.get('mood') || null, emote: q.get('emote') || null, carry: q.get('carry') || null };
 function put(g, x, z, pose = 'idle', ph = 0) { st.add(g, x, z); anims.push({ g, pose, ph }); const t = triangles(g); maxTri = Math.max(maxTri, t); sumTri += t; n++; return g; }
 const V = (c, h, o = {}) => villagerModel(c, h, { lod: LOD, ...o });

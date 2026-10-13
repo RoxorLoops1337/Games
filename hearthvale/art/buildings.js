@@ -944,7 +944,7 @@ function gambrel(g, o) {
 
 // ---------------------------------------------------------------- HENHOUSE (2x2): raised coop, ramp, nest box, fenced run, two hens
 BUILD.coop = (info) => {
-  const L = lv(info), id = info.id | 0, g = G(), own = info.color || P.red, wallC = '#ffe98a', rc = '#ff9a8a', hx = -0.4, hz = -0.44, W = 1.14, D = 0.9, H = 0.62, y0 = 0.22;
+  const L = lv(info), id = info.id | 0, g = G(), own = info.color || P.red, wallC = '#ffe98a', rc = '#ff9a8a', hx = -0.34, hz = -0.38, W = 1.1, D = 0.88, H = 0.62, y0 = 0.22;
   const flr = bx(1.9, 0.04, 1.0, '#f7e4aa', 0, 0, 0.5); flr.userData.kind = 7; add(g, flr);
   for (const sx of [-1, 1]) for (const sz of [-1, 1]) add(g, cyl(0.05, 0.06, y0 + 0.02, TIM2, hx + sx * (W / 2 - 0.08), 0, hz + sz * (D / 2 - 0.08), 6));
   const wall = rb(W, H, D, wallC, hx, y0, hz, 0.1); wall.userData.kind = 1; add(g, wall, rb(W + 0.08, 0.05, D + 0.08, TIM, hx, y0 - 0.03, hz, 0.02));
@@ -979,10 +979,10 @@ function cowHead(g, x, y, z, s = 1, ry = 0) {
   k.scale.setScalar(s); return add(g, place(k, x, y, z, ry));
 }
 BUILD.barn = (info) => {
-  const L = lv(info), id = info.id | 0, g = G(), own = info.color || P.red, RED = '#ff8f86', RC = '#8fa6f5', W = 1.3, D = 1.7, H = 0.74, bx0 = -0.78, bz = -0.1, FOUND = 0.12;
+  const L = lv(info), id = info.id | 0, g = G(), own = info.color || P.red, RED = '#ff8f86', RC = '#8fa6f5', W = 1.26, D = 1.55, H = 0.74, bx0 = -0.78, bz = -0.15, FOUND = 0.12;
   const top = shell(g, W, D, H, RED, { x: bx0, z: bz, found: FOUND, kind: 6, axis: 1, trim: L === 3 ? '#fff0b0' : CREAM });
   const ry0 = top + 0.05, rise = [0.74, 0.8, 0.88][L - 1], fz = bz + D / 2;
-  gambrel(g, { x: bx0, y: ry0, z: bz, hw: W / 2 + 0.16, kz: 0.34, kh: 0.4, rise, len: D + 0.34, col: RC, ridgeCol: L === 3 ? GOLD : null, wd: W, base: -0.07, fillCol: RED });
+  gambrel(g, { x: bx0, y: ry0, z: bz, hw: W / 2 + 0.16, kz: 0.34, kh: 0.4, rise, len: D + 0.2, col: RC, ridgeCol: L === 3 ? GOLD : null, wd: W, base: -0.07, fillCol: RED });
   const gz = fz + 0.025;
   // main doors: static leaf + sliding `door`
   add(g, bx(0.9, 0.62, 0.05, CREAM, bx0, FOUND, gz - 0.01), rb(0.4, 0.55, 0.05, '#ff7d73', bx0 - 0.21, FOUND + 0.02, gz + 0.03, 0.02));
@@ -1001,14 +1001,14 @@ BUILD.barn = (info) => {
   const cy = ry0 + rise, cz = bz - 0.2;
   add(g, rb(0.24, 0.2, 0.24, '#fff3e0', bx0, cy - 0.02, cz, 0.06), cone(0.22, 0.2, L === 3 ? GOLD : RC, bx0, cy + 0.18, cz, 8, 0), fdisc(0.055, windowMat, bx0, cy + 0.08, cz + 0.123, 0, false, 8)); vane(g, bx0, cy + 0.36, cz, 0.9);
   // paddock
-  const fc = '#fff4de'; fence(g, 0.05, 0.96, 1.45, 0.96, { h: 0.3, gaps: [[0.4, 0.6]], c: fc }); fence(g, 1.45, 0.96, 1.45, -0.92, { h: 0.3, c: fc }); fence(g, 1.45, -0.92, 0.05, -0.92, { h: 0.3, c: fc });
-  const dirt = bx(1.4, 0.03, 1.84, '#f3dfa8', 0.75, 0, 0.02); dirt.userData.kind = 7; add(g, dirt);
-  hayBale(g, 0.38, 0.03, -0.45, 0.2, 0.34, 'z'); hayBale(g, 0.38, 0.03, -0.0, 0.17, 0.3, 'z');
+  const fc = '#fff4de'; fence(g, 0.0, 0.9, 1.42, 0.9, { h: 0.3, gaps: [[0.4, 0.6]], c: fc }); fence(g, 1.42, 0.9, 1.42, -0.9, { h: 0.3, c: fc }); fence(g, 1.42, -0.9, 0.0, -0.9, { h: 0.3, c: fc });
+  const dirt = bx(1.4, 0.03, 1.8, '#f3dfa8', 0.72, 0, 0.0); dirt.userData.kind = 7; add(g, dirt);
+  hayBale(g, 0.36, 0.03, -0.5, 0.2, 0.34, 'z'); hayBale(g, 0.36, 0.03, -0.1, 0.17, 0.3, 'z');
   add(g, rb(0.2, 0.15, 0.62, TIM, 1.1, 0.0, -0.2, 0.05), disc(0.1, waterMat, 1.1, 0.145, -0.2, 8)); g.children[g.children.length - 1].scale.set(0.9, 1, 2.6);
-  add(g, rb(0.07, 0.62, 0.07, TIM2, 0.95, 0, 0.62, 0.03)); cowHead(g, 0.95, 0.74, 0.64, 1.15, -0.1);
-  bed(g, 0.5, 1.0, 3, 0.35, id); bed(g, 1.15, 1.0, 2, 0.2, id + 1); butterfly(g, 0.8, 0.9, 0.4, '#ffa6c9'); pot(g, bx0 + 0.55, FOUND, fz + 0.12, 1, P.butter); pot(g, bx0 - 0.55, FOUND, fz + 0.12, 1, P.blossomDeep);
-  if (L >= 2) { bunting(g, [bx0 - W / 2 + 0.05, top - 0.04, fz + 0.1], [bx0 + W / 2 - 0.05, top - 0.04, fz + 0.1], 7, 0.12, 0.07, id); hayBale(g, 0.38, 0.38, -0.2, 0.15, 0.28, 'z'); }
-  if (L >= 3) { for (const sx of [-1, 1]) { add(g, cyl(0.04, 0.05, 0.5, CREAM, 0.75 + sx * 0.17, 0, 0.98, 6)); lantern(g, 0.75 + sx * 0.17, 0.5, 0.98, 1, true); } const f = G(); add(f, bar(0, 0, 0, 0, 0.5, 0, 0.025, GOLDD), rb(0.3, 0.18, 0.02, own, 0.16, 0.3, 0, 0.02)); f.position.set(bx0 - 0.5, ry0 + 0.45, fz - 0.1); g.add(f); }
+  add(g, rb(0.07, 0.62, 0.07, TIM2, 0.95, 0, 0.58, 0.03)); cowHead(g, 0.95, 0.74, 0.6, 1.1, -0.1);
+  bed(g, 0.5, 0.95, 3, 0.35, id); bed(g, 1.15, 0.95, 2, 0.2, id + 1); butterfly(g, 0.8, 0.9, 0.4, '#ffa6c9'); pot(g, bx0 + 0.55, FOUND, fz + 0.12, 1, P.butter); pot(g, bx0 - 0.55, FOUND, fz + 0.12, 1, P.blossomDeep);
+  if (L >= 2) { bunting(g, [bx0 - W / 2 + 0.05, top - 0.04, fz + 0.1], [bx0 + W / 2 - 0.05, top - 0.04, fz + 0.1], 7, 0.12, 0.07, id); hayBale(g, 0.36, 0.38, -0.3, 0.15, 0.28, 'z'); }
+  if (L >= 3) { for (const sx of [-1, 1]) { add(g, cyl(0.04, 0.05, 0.5, CREAM, 0.7 + sx * 0.17, 0, 0.92, 6)); lantern(g, 0.7 + sx * 0.17, 0.5, 0.92, 1, true); } const f = G(); add(f, bar(0, 0, 0, 0, 0.5, 0, 0.025, GOLDD), rb(0.3, 0.18, 0.02, own, 0.16, 0.3, 0, 0.02)); f.position.set(bx0 - 0.5, ry0 + 0.45, fz - 0.1); g.add(f); }
   return finish(g, cy + 0.36 + 0.6, [3.2, 2.3, 0.9]);
 };
 
@@ -1060,20 +1060,20 @@ export function orchardModel(info = {}) {
   const lx = 0.0, lz = -0.55; add(g, bar(lx - 0.07, 0.1, lz + 0.12, lx - 0.1, 0.9, lz - 0.02, 0.035, WOODL), bar(lx + 0.07, 0.1, lz + 0.12, lx + 0.1, 0.9, lz - 0.02, 0.035, WOODL)); for (let i = 0; i < 5; i++) add(g, bar(lx - 0.075 - i * 0.006, 0.2 + i * 0.15, lz + 0.1 - i * 0.025, lx + 0.075 + i * 0.006, 0.2 + i * 0.15, lz + 0.1 - i * 0.025, 0.025, TIM2));
   crate(g, 0.22, 1.05, 0.1, 0.28, PLANK, 0.2); for (let i = 0; i < 3; i++) add(g, sp(0.055, FRUIT[i % 2 * 2], 0.15 + (i % 2) * 0.1, 0.4, 1.0 + (i >> 1) * 0.09, { q: 0 }));
   add(g, K.lathe([[0.001, 0], [0.1, 0], [0.14, 0.12], [0.12, 0.12]], '#e8c07a', -0.35, 0.1, 1.05, { seg: 8 })); for (let i = 0; i < 3; i++) add(g, sp(0.045, FRUIT[1 + i % 2], -0.35 + (i - 1) * 0.06, 0.24, 1.05, { q: 0 }));
-  bed(g, -1.1, 1.18, 3, 0.4, id); bed(g, 1.1, 1.18, 2, 0.2, id + 1); butterfly(g, 0.5, 1.0, 0.8, '#ffa6c9');
+  bed(g, -1.1, 1.18, 3, 0.4, id); butterfly(g, 0.5, 1.0, 0.8, '#ffa6c9');
   if (L >= 2) { bunting(g, [-fx, 0.68, fz], [fx, 0.68, fz], 10, 0.2, 0.07, id); for (const [x, z] of [[-1.25, 0.1], [1.25, -0.1]]) pot(g, x, 0.1, z, 1.1, P.blossomDeep); }
   if (L >= 3) for (const sx of [-1, 1]) { add(g, cyl(0.04, 0.05, 0.74, CREAM, sx * 1.42, 0.0, 1.42, 6)); lantern(g, sx * 1.42, 0.74, 1.42, 1.0, true); }
   if (L >= 3) add(g, bar(-0.2, 0.1, -1.2, -0.2, 0.9, -1.2, 0.04, GOLDD), bar(0.2, 0.1, -1.2, 0.2, 0.9, -1.2, 0.04, GOLDD), rb(0.5, 0.16, 0.03, '#fff2c8', 0, 0.78, -1.2, 0.015), sp(0.06, GOLD, 0, 0.98, -1.2, { q: 0 }));
   const out = finish(g, 1.7 + (L === 3 ? 0.25 : 0), [3.2, 3.2, 0.7]);
   // the crops: one merged canopy + one merged fruit mesh per tree, scaled about the trunk top by setFarmStage
   const crops = new THREE.Group(); crops.name = 'crops'; const kids = [], rr = K.rng(id + 11);
-  if (!_canopyGeo) { const g1 = new THREE.SphereGeometry(1, 12, 8), p = g1.attributes.position; for (let i = 0; i < p.count; i++) { const y = p.getY(i); p.setY(i, y * (y < 0 ? 0.72 : 1)); } g1.computeVertexNormals(); _canopyGeo = g1; }
+  if (!_canopyGeo) { const g1 = new THREE.SphereGeometry(1, 11, 7), p = g1.attributes.position; for (let i = 0; i < p.count; i++) { const y = p.getY(i); p.setY(i, y * (y < 0 ? 0.72 : 1)); } g1.computeVertexNormals(); _canopyGeo = g1; }
   trees.forEach(([x, z], i) => {
     const T = new THREE.Group(); T.position.set(x, 0.62, z);
     const parts = [], mk = (geo, r, ry_, dx, dy, dz) => { const m = new THREE.Mesh(geo, col('#fff')); m.scale.set(r, r * ry_, r); m.position.set(dx, dy, dz); return m; };
     parts.push(mk(_canopyGeo, 0.5, 0.96, 0, 0.34, 0)); for (const [dx, dy, dz, r] of [[0.32, 0.3, 0.12, 0.3], [-0.3, 0.38, -0.1, 0.28], [0.02, 0.78, 0.0, 0.3]]) parts.push(mk(BUN, r, 0.95, dx, dy, dz));
     const can = fuse(parts, i % 2 ? '#8fe06a' : '#a2ee74'); can.userData.kind = 8; bake(can); T.add(can);
-    const fp = []; for (let k = 0; k < 6; k++) { const a = k * 2.4 + i, h = 0.1 + rr() * 0.62, rad = Math.max(0.28, 0.5 * Math.sqrt(Math.max(0.05, 1 - Math.pow((h - 0.34) / 0.66, 2)))); fp.push(mk(SPT, 0.1, 1, Math.cos(a) * rad, h + 0.04, Math.sin(a) * rad)); }
+    const fp = []; for (let k = 0; k < 5; k++) { const a = k * 2.4 + i, h = 0.1 + rr() * 0.62, rad = Math.max(0.28, 0.5 * Math.sqrt(Math.max(0.05, 1 - Math.pow((h - 0.34) / 0.66, 2)))); fp.push(mk(SPT, 0.1, 1, Math.cos(a) * rad, h + 0.04, Math.sin(a) * rad)); }
     const fr = fuse(fp, lit(FRUIT[i % 4], 0.35)); T.add(fr); crops.add(T); kids.push({ T, fr });
   });
   out.add(crops); out.userData.crops = crops; out.userData.orchard = kids; setFarmStage(out, 'empty', 0);
@@ -1085,13 +1085,13 @@ BUILD.orchard = (info) => orchardModel(info);
 BUILD.dock = (info) => {
   const L = lv(info), id = info.id | 0, g = G(), own = info.color || P.red, TEAL = '#4cc9b0', HUT = '#ffe9b8', WS = 0.72;
   // pond with a soft stone bank
-  const pond = new THREE.Group(); pond.position.set(0.55, 0, 0.2); pond.scale.set(1.0, 1, 0.66);
+  const pond = new THREE.Group(); pond.position.set(0.5, 0, 0.12); pond.scale.set(0.92, 1, 0.64);
   add(pond, K.lathe([[0.0001, 0.02], [1.0, 0.02], [1.1, 0.07], [1.02, 0.12]], '#e8dcc0', 0, 0, 0, { seg: 18 }), disc(0.99, waterMat, 0, 0.04, 0, 18));
   g.add(pond);
-  for (let i = 0; i < 7; i++) { const a = 2.7 + i * 0.52; add(g, sp(0.07 + (i % 3) * 0.02, i % 2 ? STONED : STONEL, 0.55 + Math.cos(a) * 1.1, 0.08, 0.2 + Math.sin(a) * 0.72, { q: 0, sy: 0.65 })); }
+  for (let i = 0; i < 7; i++) { const a = 2.7 + i * 0.52; add(g, sp(0.07 + (i % 3) * 0.02, i % 2 ? STONED : STONEL, 0.5 + Math.cos(a) * 1.0, 0.08, 0.12 + Math.sin(a) * 0.68, { q: 0, sy: 0.65 })); }
   for (const [x, z, r] of [[1.05, 0.55, 0.1], [0.25, -0.1, 0.07]]) { add(g, fdisc(r, '#7fdc6a', x, 0.065, z, 0, false, 8)); g.children[g.children.length - 1].rotation.set(-Math.PI / 2, 0, 0); }
   // hut deck + hut
-  const hx = -0.9, hz = -0.45, dk = rb(1.0, 0.08, 0.95, PLANK, hx, 0.1, hz + 0.0, 0.03); dk.userData.kind = 6; dk.userData.axis = 2; add(g, dk);
+  const hx = -0.88, hz = -0.5, dk = rb(1.0, 0.08, 0.95, PLANK, hx, 0.1, hz + 0.0, 0.03); dk.userData.kind = 6; dk.userData.axis = 2; add(g, dk);
   for (const sx of [-1, 1]) for (const sz of [-1, 1]) add(g, cyl(0.045, 0.05, 0.12, TIM2, hx + sx * 0.42, 0, hz + sz * 0.4, 6));
   const W = 0.78, D = 0.66, H = 0.56, y0 = 0.18, w = rb(W, H, D, HUT, hx - 0.03, y0, hz - 0.1, 0.1); w.userData.kind = 6; w.userData.axis = 1; add(g, w);
   const ry0 = y0 + H + 0.05, rise = [0.42, 0.48, 0.56][L - 1], fz = hz - 0.1 + D / 2;
@@ -1102,29 +1102,29 @@ BUILD.dock = (info) => {
   // fish sign over the door
   add(g, bar(hx - 0.2, y0 + 0.62, fz + 0.02, hx - 0.2, y0 + 0.62, fz + 0.2, 0.03, TIM2), rb(0.26, 0.15, 0.04, '#fff2c8', hx - 0.2, y0 + 0.46, fz + 0.2, 0.02)); fish(g, hx - 0.2, y0 + 0.53, fz + 0.23, 0.0, '#ff9a8a', 0.8); g.children[g.children.length - 1].rotation.z = 0;
   // drying rack with fish and a net
-  const rx = hx - 0.45, rz = hz + 0.55; add(g, bar(rx - 0.0, 0.1, rz, rx, 0.78, rz, 0.04, TIM2), bar(rx + 0.62, 0.1, rz, rx + 0.62, 0.78, rz, 0.04, TIM2), bar(rx - 0.04, 0.76, rz, rx + 0.66, 0.76, rz, 0.04, TIM2));
+  const rx = hx - 0.35, rz = hz + 0.52; add(g, bar(rx - 0.0, 0.1, rz, rx, 0.78, rz, 0.04, TIM2), bar(rx + 0.62, 0.1, rz, rx + 0.62, 0.78, rz, 0.04, TIM2), bar(rx - 0.04, 0.76, rz, rx + 0.66, 0.76, rz, 0.04, TIM2));
   for (let i = 0; i < 2; i++) { add(g, bar(rx + 0.14 + i * 0.17, 0.76, rz, rx + 0.14 + i * 0.17, 0.62, rz, 0.012, CREAM)); fish(g, rx + 0.14 + i * 0.17, 0.5, rz, Math.PI / 2, i % 2 ? '#ffb27a' : '#8fd0ff', 0.8); g.children[g.children.length - 1].rotation.x = Math.PI / 2; }
   const net = qd(0.6, 0.42, '#e8d4a0', hx + 0.0, y0 + 0.35, hz - 0.1 - D / 2 - 0.02, Math.PI); net.userData.kind = 12; net.userData.axis = 0; add(g, net);
   const net2 = qd(0.5, 0.36, '#f0dcae', hx - 0.14, y0 + 0.28, fz + 0.04); add(g, net2); net2.userData.kind = 12; net2.position.set(hx - W / 2 - 0.05, y0 + 0.3, hz - 0.1); net2.rotation.y = -Math.PI / 2; net2.scale.set(0.5, 0.36, 1);
   // pier
-  const pl = rb(1.75, 0.07, 0.5, PLANK, 0.75, 0.1, -0.2, 0.02); pl.userData.kind = 6; pl.userData.axis = 2; add(g, pl);
-  const pxs = [-0.05, 0.75, 1.55]; for (const x of pxs) for (const z of [-0.45, 0.05]) add(g, K.cyl(0.045, 0.055, 0.56, TIM2, x, 0, z, { seg: 6 }));
-  for (let i = 0; i < pxs.length - 1; i++) for (const z of [0.05]) { const x0 = pxs[i], x1 = pxs[i + 1]; add(g, bar(x0, 0.54, z, (x0 + x1) / 2, 0.46, z, 0.02, '#f3e3c0'), bar((x0 + x1) / 2, 0.46, z, x1, 0.54, z, 0.02, '#f3e3c0')); }
-  for (const [x, z] of [[-0.05, 0.05], [1.55, 0.05]]) { add(g, cyl(0.035, 0.045, 0.3, IRON, x, 0.58, z, 6)); lantern(g, x, 0.84, z, 1.0, L === 3); }
+  const pl = rb(1.6, 0.07, 0.5, PLANK, 0.7, 0.1, -0.25, 0.02); pl.userData.kind = 6; pl.userData.axis = 2; add(g, pl);
+  const pxs = [-0.05, 0.7, 1.45]; for (const x of pxs) for (const z of [-0.5, 0.0]) add(g, K.cyl(0.045, 0.055, 0.56, TIM2, x, 0, z, { seg: 6 }));
+  for (let i = 0; i < pxs.length - 1; i++) for (const z of [0.0]) { const x0 = pxs[i], x1 = pxs[i + 1]; add(g, bar(x0, 0.54, z, (x0 + x1) / 2, 0.46, z, 0.02, '#f3e3c0'), bar((x0 + x1) / 2, 0.46, z, x1, 0.54, z, 0.02, '#f3e3c0')); }
+  for (const [x, z] of [[-0.05, 0.0], [1.45, 0.0]]) { add(g, cyl(0.035, 0.045, 0.3, IRON, x, 0.58, z, 6)); lantern(g, x, 0.84, z, 1.0, L === 3); }
   // buckets, crate, floats
-  bucket(g, 0.15, -0.1, '#ffd24a', 0.17, 1.1, '#8fd0ff'); fish(g, 0.1, 0.2, -0.2, 0.6, '#ff9a8a', 0.7); bucket(g, 0.36, -0.3, '#ff9fbd', 0.17, 1.0, '#ffb27a'); crate(g, 0.66, -0.2, 0.17, 0.24, PLANK, 0.3);
-  for (let i = 0; i < 2; i++) add(g, sp(0.05, ['#ff6b6b', '#fffaf0'][i], 1.0 + i * 0.07, 0.2, -0.1, { q: 0 }));
+  bucket(g, 0.15, -0.15, '#ffd24a', 0.17, 1.1, '#8fd0ff'); fish(g, 0.1, 0.2, -0.25, 0.6, '#ff9a8a', 0.7); bucket(g, 0.36, -0.35, '#ff9fbd', 0.17, 1.0, '#ffb27a'); crate(g, 0.66, -0.25, 0.17, 0.24, PLANK, 0.3);
+  for (let i = 0; i < 2; i++) add(g, sp(0.05, ['#ff6b6b', '#fffaf0'][i], 1.0 + i * 0.07, 0.2, -0.15, { q: 0 }));
   // the boat
   const boat = G(); boat.name = 'boat';
   const hull = new THREE.Mesh(new THREE.SphereGeometry(1, 12, 5, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2), col('#ff9a8a')); hull.scale.set(0.5, 0.22, 0.22); hull.position.y = 0.0; sh(hull); boat.add(hull);
   boat.add(ring(1.0, 0.04, '#fffaf0', 0, -0.025, 0, 12), disc(0.46, '#ffe0b0', 0, -0.07, 0, 12), bx(0.04, 0.03, 0.4, TIM2, 0.1, -0.12, 0), bx(0.04, 0.03, 0.4, TIM2, -0.18, -0.12, 0), bar(-0.2, -0.05, -0.18, 0.28, 0.1, -0.5, 0.025, TIM), bar(0.1, -0.05, 0.18, -0.35, 0.1, 0.52, 0.025, TIM));
   boat.children[0].scale.set(0.5, 0.22, 0.22); boat.children[1].scale.set(0.5, 1, 0.22); boat.children[2].scale.set(0.5, 1, 0.22);
   fish(boat, -0.28, -0.04, 0.0, 1.2, '#ffb27a', 0.6); sp(0.05, '#ffe27a', 0.3, -0.04, 0.0);
-  boat.position.set(0.6, 0.2, 0.5); boat.userData.baseY = 0.2; boat.rotation.y = 0.35; boat.scale.setScalar(1.15); g.add(boat);
-  add(g, bar(0.75, 0.52, 0.05, 0.95, 0.12, 0.4, 0.016, '#f3e3c0'));
-  bed(g, hx + 0.9, 0.45, 2, 0.3, id); butterfly(g, 0.9, 0.7, 0.2, '#ffa6c9');
-  if (L >= 2) { bunting(g, [-0.05, 0.54, 0.07], [1.55, 0.54, 0.07], 9, 0.12, 0.06, id); for (const [x, c] of [[hx - 0.45, '#ff6b6b'], [hx - 0.52, '#fffaf0']]) add(g, sp(0.07, c, x, y0 + 0.48 - (c === '#fffaf0' ? 0.12 : 0), fz - 0.1, { q: 0 })); hang(g, hx + 0.38, y0 + 0.28, fz + 0.1, L === 3); barrel(g, 1.35, -0.25, WOOD, 1.0, 0.17); }
-  if (L >= 3) { const f = G(); add(f, bar(0, 0, 0, 0, 0.5, 0, 0.025, GOLDD), rb(0.3, 0.18, 0.02, own, 0.16, 0.3, 0, 0.02)); f.position.set(hx + 0.2, ry0 + rise, hz - 0.1); g.add(f); vane(g, hx - 0.4, ry0 + rise + 0.03, hz - 0.1, 0.7); { add(g, cyl(0.035, 0.045, 0.3, GOLDD, 0.75, 0.58, 0.05, 6)); lantern(g, 0.75, 0.84, 0.05, 0.9, true); } }
+  boat.position.set(0.55, 0.2, 0.42); boat.userData.baseY = 0.2; boat.rotation.y = 0.35; boat.scale.setScalar(1.05); g.add(boat);
+  add(g, bar(0.7, 0.5, 0.0, 0.9, 0.12, 0.34, 0.016, '#f3e3c0'));
+  bed(g, hx + 0.9, 0.4, 2, 0.3, id); butterfly(g, 0.9, 0.7, 0.2, '#ffa6c9');
+  if (L >= 2) { bunting(g, [-0.05, 0.54, 0.02], [1.45, 0.54, 0.02], 9, 0.12, 0.06, id); for (const [x, c] of [[hx - 0.45, '#ff6b6b'], [hx - 0.52, '#fffaf0']]) add(g, sp(0.07, c, x, y0 + 0.48 - (c === '#fffaf0' ? 0.12 : 0), fz - 0.1, { q: 0 })); hang(g, hx + 0.38, y0 + 0.28, fz + 0.1, L === 3); barrel(g, 1.25, -0.3, WOOD, 1.0, 0.17); }
+  if (L >= 3) { const f = G(); add(f, bar(0, 0, 0, 0, 0.5, 0, 0.025, GOLDD), rb(0.3, 0.18, 0.02, own, 0.16, 0.3, 0, 0.02)); f.position.set(hx + 0.2, ry0 + rise, hz - 0.1); g.add(f); vane(g, hx - 0.4, ry0 + rise + 0.03, hz - 0.1, 0.7); { add(g, cyl(0.035, 0.045, 0.3, GOLDD, 0.7, 0.58, 0.0, 6)); lantern(g, 0.7, 0.84, 0.0, 0.9, true); } }
   return finish(g, ry0 + rise + (L === 3 ? 0.7 : 0.3), [3.2, 2.2, 0.7]);
 };
 
@@ -1148,8 +1148,8 @@ BUILD.pantry = (info) => {
   add(g, lcyl('x', 0.024, aw1 - aw0, '#e84a5f', (aw0 + aw1) / 2, ah - 0.195, fz + 0.4, 6), bar(aw0 + 0.02, ah, fz, aw0 + 0.02, ah - 0.2, fz + 0.4, 0.028, IRON), bar(aw1 - 0.02, ah, fz, aw1 - 0.02, ah - 0.2, fz + 0.4, 0.028, IRON));
   add(g, place(door3(0.3, 0.54, own, { gold: L === 3, mat: '#ffb6cf' }), 0.42, 0.2, fz + 0.01));
   // round pie sign on a bracket at the right corner
-  const px = 0.92, py = top - 0.1;
-  add(g, bar(W / 2 - 0.02, py + 0.05, fz + 0.04, px + 0.1, py + 0.05, fz + 0.04, 0.035, TIM2), bar(px, py + 0.05, fz + 0.04, px, py - 0.08, fz + 0.04, 0.012, CREAM));
+  const px = 0.78, py = top - 0.1;
+  add(g, bar(W / 2 - 0.02, py + 0.05, fz + 0.04, px + 0.06, py + 0.05, fz + 0.04, 0.035, TIM2), bar(px, py + 0.05, fz + 0.04, px, py - 0.08, fz + 0.04, 0.012, CREAM));
   pie(g, px, py - 0.4, fz + 0.06, 0.3, Math.PI / 2 * 0.95, '#e8a458', '#ff6f8a'); for (const [dx, dy] of [[-0.09, 0.07], [0.1, 0.02], [0.0, -0.1], [0.08, 0.14]]) add(g, sp(0.035, '#d8264d', px + dx, py - 0.4 + dy, fz + 0.14, { q: 0 }));
   // chimney, pie table
   chimney(g, -0.5, z0 - 0.25, surf(-0.5) - 0.3, surf(-0.5) + [0.3, 0.38, 0.46][L - 1], 0.26, CHIM);
@@ -1179,7 +1179,7 @@ BUILD.weavery = (info) => {
   add(g, place(window3(0.16, 0.16, { round: true, curt: '#ffb6cf' }), x0 + W / 2 + 0.005, 0.7, z0 + 0.1, Math.PI / 2));
   chimney(g, x0 + 0.3, z0 - 0.25, surf(0.3) - 0.3, surf(0.3) + [0.3, 0.38, 0.46][L - 1], 0.24, CHIM);
   // the wheel (named spin, spins about its own axis X, mounted turned toward the street)
-  const mount = new THREE.Group(); mount.userData.mount = true; mount.position.set(0.72, 0.5, 0.52); mount.rotation.y = -0.85;
+  const mount = new THREE.Group(); mount.userData.mount = true; mount.position.set(0.66, 0.5, 0.45); mount.rotation.y = -0.85;
   const spin = G(); spin.name = 'spin';
   add(spin, lcyl('x', 0.36, 0.04, TIM, 0, 0, 0, 20), lcyl('x', 0.3, 0.05, '#f6d6a0', 0, 0, 0, 20), lcyl('x', 0.07, 0.1, GOLDD, 0, 0, 0, 8));
   for (let i = 0; i < 6; i++) { const a = i * Math.PI / 3; add(spin, bar(0, Math.cos(a) * 0.05, Math.sin(a) * 0.05, 0, Math.cos(a) * 0.33, Math.sin(a) * 0.33, 0.035, TIM2)); }
@@ -1187,14 +1187,14 @@ BUILD.weavery = (info) => {
   mount.add(spin); g.add(mount);
   const fr = G(); add(fr, bar(0, -0.5, -0.24, 0.0, 0.0, 0.0, 0.05, TIM2), bar(0, -0.5, 0.24, 0.0, 0.0, 0.0, 0.05, TIM2), rb(0.1, 0.05, 0.6, WOODL, 0, -0.5, 0, 0.02), bar(0.12, -0.46, 0.0, 0.12, -0.2, 0.0, 0.04, TIM2), sp(0.09, '#fffaf0', 0.14, -0.14, 0.0, { q: 1 })); fr.userData.mount = false; mount.add(fr);
   // yarn balls in a basket
-  add(g, K.lathe([[0.001, 0], [0.12, 0], [0.17, 0.12], [0.15, 0.13]], '#e8c07a', -0.78, 0.0, fz + 0.7, { seg: 10 }));
-  ['#ff8fb5', '#8fd0ff', '#ffe27a', '#b79cf0', '#9be88a'].forEach((c, i) => add(g, sp(0.06, c, -0.78 + (i % 3 - 1) * 0.085, 0.16 + (i > 2 ? 0.06 : 0), fz + 0.7 + (i % 2) * 0.05 - 0.02, { q: 1 })));
+  add(g, K.lathe([[0.001, 0], [0.12, 0], [0.17, 0.12], [0.15, 0.13]], '#e8c07a', -0.78, 0.0, fz + 0.58, { seg: 10 }));
+  ['#ff8fb5', '#8fd0ff', '#ffe27a', '#b79cf0', '#9be88a'].forEach((c, i) => add(g, sp(0.06, c, -0.78 + (i % 3 - 1) * 0.085, 0.16 + (i > 2 ? 0.06 : 0), fz + 0.58 + (i % 2) * 0.05 - 0.02, { q: 1 })));
   
   // dye tubs
-  for (const [x, c] of [[-0.22, '#ff8fb5'], [-0.02, '#8fd0ff']]) { add(g, K.lathe([[0.001, 0], [0.12, 0], [0.14, 0.22], [0.125, 0.22]], '#f3bd7c', x, 0.0, fz + 0.55, { seg: 10 }), disc(0.125, c, x, 0.2, fz + 0.55, 10)); }
-  add(g, bar(-0.22, 0.1, fz + 0.55, -0.15, 0.5, fz + 0.5, 0.025, TIM2));
+  for (const [x, c] of [[-0.22, '#ff8fb5'], [-0.02, '#8fd0ff']]) { add(g, K.lathe([[0.001, 0], [0.12, 0], [0.14, 0.22], [0.125, 0.22]], '#f3bd7c', x, 0.0, fz + 0.5, { seg: 10 }), disc(0.125, c, x, 0.2, fz + 0.5, 10)); }
+  add(g, bar(-0.22, 0.1, fz + 0.5, -0.15, 0.5, fz + 0.45, 0.025, TIM2));
   // drying rack with dyed strips (named flag: sways)
-  const rx = -1.0, rz = fz + 0.42; add(g, bar(rx, 0.17, rz, rx, 1.0, rz, 0.05, TIM2), bar(rx + 0.52, 0.17, rz, rx + 0.52, 1.0, rz, 0.05, TIM2), bar(rx - 0.03, 0.98, rz, rx + 0.56, 0.98, rz, 0.045, TIM2), sp(0.05, GOLD, rx, 1.05, rz, { q: 0 }), sp(0.05, GOLD, rx + 0.52, 1.05, rz, { q: 0 }));
+  const rx = -0.97, rz = fz + 0.36; add(g, bar(rx, 0.17, rz, rx, 1.0, rz, 0.05, TIM2), bar(rx + 0.52, 0.17, rz, rx + 0.52, 1.0, rz, 0.05, TIM2), bar(rx - 0.03, 0.98, rz, rx + 0.56, 0.98, rz, 0.045, TIM2), sp(0.05, GOLD, rx, 1.05, rz, { q: 0 }), sp(0.05, GOLD, rx + 0.52, 1.05, rz, { q: 0 }));
   const strips = G(); strips.name = 'flag'; strips.position.set(rx, 0.96, rz);
   ['#ff8fb5', '#ffe27a', '#8fd0ff', '#9be88a', '#c9a8ff'].forEach((c, i) => { const q = qd(0.09, 0.5 + (i % 3) * 0.1, c, 0.07 + i * 0.1, -0.27 - (i % 3) * 0.05, 0.0, 0); q.userData.kind = 10; strips.add(q); });
   g.add(strips);
@@ -1208,28 +1208,28 @@ BUILD.weavery = (info) => {
 /** wrap a prop: fit = { s, ry, y }, extras(g, L, id, own) adds flowers, bunting, gold... (merged into 1 to 3 meshes), topY = marker height */
 function decorWrap(make, fit, info, topY, extras) {
   const L = lv(info), id = info.id | 0, own = info.color || P.red, root = new THREE.Group(), p = make();
-  p.scale.setScalar(fit.s || 1); if (fit.ry) p.rotation.y = fit.ry; if (fit.y) p.position.y = fit.y; root.add(p);
+  p.scale.setScalar(fit.s || 1); if (fit.ry) p.rotation.y = fit.ry; if (fit.y) p.position.y = fit.y; if (fit.z) p.position.z = fit.z; root.add(p);
   const g = G(); extras(g, L, id, own); root.add(finish(g, topY + (L === 3 ? 0.15 : 0)));
   root.userData.topY = topY + (L === 3 ? 0.15 : 0); root.userData.prop = true; return root;
 }
 const gstar = (g, x, y, z, r = 0.06) => add(g, star(r, GOLD, x, y, z, 0));
-BUILD.bench = (info) => decorWrap(benchModel, { s: 1.5 }, info, 1.15, (g, L, id) => {
+BUILD.bench = (info) => decorWrap(benchModel, { s: 1.4 }, info, 1.15, (g, L, id) => {
   bed(g, -0.82, 0.08, 2, 0.2, id); bed(g, 0.82, 0.08, 2, 0.2, id + 1); butterfly(g, 0.5, 0.8, 0.3, '#ffa6c9');
   if (L >= 2) { pot(g, -0.96, 0.0, -0.1, 1.1, P.blossomDeep); pot(g, 0.96, 0.0, -0.1, 1.1, P.butter); add(g, cyl(0.035, 0.045, 0.78, IRON, 0.98, 0, 0.12, 6)); lantern(g, 0.98, 0.78, 0.12, 1.0, L === 3); ivy(g, -0.7, -0.3, 0.6, id, 0.07); }
   if (L >= 3) { cat(g, 0.3, 0.52, 0.0, '#ffd6a0', 0.3); for (const s of [-1, 1]) add(g, sp(0.06, GOLD, s * 0.72, 0.86, -0.28, { q: 1 })); bunting(g, [-0.9, 0.9, -0.3], [0.9, 0.9, -0.3], 8, 0.12, 0.06, id); }
 });
-BUILD.birdbath = (info) => decorWrap(birdBathModel, { s: 1.0 }, info, 1.0, (g, L, id) => {
+BUILD.birdbath = (info) => decorWrap(birdBathModel, { s: 0.9 }, info, 1.0, (g, L, id) => {
   bed(g, 0.0, 0.4, 3, 0.45, id); bed(g, -0.38, -0.1, 2, 0.2, id + 2); bed(g, 0.4, -0.15, 2, 0.2, id + 4);
   if (L >= 2) { for (let i = 0; i < 6; i++) { const a = i * 1.05; add(g, sp(0.05, i % 2 ? STONEL : STONED, Math.cos(a) * 0.46, 0.03, Math.sin(a) * 0.46, { q: 0, sy: 0.6 })); } butterfly(g, 0.2, 0.85, 0.2, '#ffa6c9'); butterfly(g, -0.3, 0.7, -0.2, '#ffd24a', 1); }
   if (L >= 3) { add(g, ring(0.41, 0.03, GOLD, 0, 0.63, 0, 14)); gstar(g, -0.3, 0.95, 0.1, 0.07); gstar(g, 0.34, 0.8, -0.15, 0.05); add(g, cyl(0.03, 0.04, 0.55, GOLDD, -0.4, 0, 0.3, 6)); lantern(g, -0.4, 0.55, 0.3, 0.9, true); }
 });
-BUILD.scarecrow = (info) => decorWrap(scarecrowModel, { s: 0.72 }, info, 1.45, (g, L, id) => {
+BUILD.scarecrow = (info) => decorWrap(scarecrowModel, { s: 0.64 }, info, 1.45, (g, L, id) => {
   for (let i = 0; i < 3; i++) add(g, sp(0.09, ['#ffa23c', '#ffb85a', '#ff9a4a'][i], -0.28 + i * 0.28 + (i === 2 ? 0.0 : 0), 0.08, 0.34 - (i % 2) * 0.06, { q: 1, sy: 0.8 }), cyl(0.012, 0.015, 0.05, '#7fcf5a', -0.28 + i * 0.28, 0.14, 0.34 - (i % 2) * 0.06, 5));
   bed(g, 0.3, -0.32, 2, 0.2, id); hayBale(g, -0.3, 0.0, -0.3, 0.11, 0.2, 'x');
   if (L >= 2) { const cx = 0.38, cy = 1.0; add(g, sp(0.06, '#7e78b8', cx, cy, 0.0, { q: 1, sx: 1.1 }), sp(0.04, '#7e78b8', cx + 0.05, cy + 0.07, 0.03, { q: 0 }), cone(0.015, 0.05, '#ffb23c', cx + 0.1, cy + 0.07, 0.03, 4, -Math.PI / 2), sp(0.045, '#7e78b8', cx - 0.07, cy - 0.01, 0.0, { q: 0, sx: 1.6, sy: 0.5 })); bed(g, -0.36, 0.3, 2, 0.2, id + 3); }
   if (L >= 3) { gstar(g, 0.0, 1.92, 0.2, 0.06); add(g, rb(0.1, 0.28, 0.02, '#ff8fb5', -0.07, 0.86, 0.14, 0.01)); for (let i = 0; i < 3; i++) add(g, cyl(0.012, 0.012, 0.3, '#ffe27a', 0.42 + i * 0.03, 0.0, -0.28 + (i % 2) * 0.03, 4), sp(0.03, '#ffd24a', 0.42 + i * 0.03, 0.31, -0.28 + (i % 2) * 0.03, { q: 0, sy: 1.8 })); }
 });
-BUILD.picnic = (info) => decorWrap(picnicModel, { s: 1.25 }, info, 0.9, (g, L, id) => {
+BUILD.picnic = (info) => decorWrap(picnicModel, { s: 1.12 }, info, 0.9, (g, L, id) => {
   bed(g, -0.82, 0.8, 3, 0.4, id); bed(g, 0.85, -0.8, 3, 0.4, id + 1); bed(g, 0.9, 0.82, 2, 0.2, id + 2); butterfly(g, 0.2, 0.7, 0.5, '#ffa6c9'); butterfly(g, -0.5, 0.6, -0.2, '#ffd24a', 1);
   if (L >= 2) { const px = 0.55, pz = -0.6; add(g, bar(px, 0.0, pz, px, 1.1, pz, 0.03, '#fff3d6'), sp(0.04, GOLD, px, 1.14, pz, { q: 0 })); const c1 = cone(0.55, 0.28, '#ff9fbd', px, 0.98, pz, 12, 0); add(g, c1, ring(0.545, 0.05, '#fffaf0', px, 0.94, pz, 12)); }
   if (L >= 3) { for (const [x, z] of [[-0.95, -0.9], [0.95, 0.95]]) { add(g, cyl(0.035, 0.045, 0.6, IRON, x, 0, z, 6)); lantern(g, x, 0.6, z, 1.0, true); } bunting(g, [-0.95, 0.62, -0.9], [0.95, 0.62, 0.95], 9, 0.14, 0.06, id); }
@@ -1240,27 +1240,27 @@ BUILD.swing = (info) => decorWrap(swingModel, { s: 1.0 }, info, 1.95, (g, L, id)
   if (L >= 2) { for (const s of [-1, 1]) add(g, sp(0.07, GOLD, s * 0.7, 1.78, 0.45, { q: 1 })); pot(g, 0.0, 0.0, 0.85, 1.2, P.butter); }
   if (L >= 3) { add(g, bar(0.0, 1.74, 0.0, 0.0, 1.5, 0.0, 0.012, GOLDD)); lantern(g, 0.0, 1.38, 0.0, 0.8, true); gstar(g, -0.45, 1.85, 0.0, 0.07); gstar(g, 0.45, 1.85, 0.0, 0.07); }
 });
-BUILD.flowercart = (info) => decorWrap(flowerCartModel, { s: 1.25 }, info, 1.45, (g, L, id) => {
+BUILD.flowercart = (info) => decorWrap(flowerCartModel, { s: 0.88, z: -0.18 }, info, 1.45, (g, L, id) => {
   bucket(g, -0.8, 0.2, '#a9ecc9', 0.0, 1.4); bucket(g, 0.8, 0.25, '#ffb5cf', 0.0, 1.4); bucket(g, 0.7, -0.15, '#ffe58c', 0.0, 1.2);
   for (const [x, z, c] of [[-0.8, 0.2, P.blossomDeep], [0.8, 0.25, '#c9a8ff'], [0.7, -0.15, '#ffffff']]) { add(g, bl(0.1, P.leafLight, x, 0.26, z, 0.7)); for (let i = 0; i < 3; i++) add(g, bl(0.06, i % 2 ? c : P.butter, x + (i - 1) * 0.07, 0.36 + (i % 2) * 0.04, z + 0.01, 1, i + x * 5)); }
   bed(g, -0.35, 0.45, 3, 0.4, id); butterfly(g, 0.1, 1.0, 0.4, '#ffa6c9');
   if (L >= 2) { bed(g, 0.3, 0.5, 3, 0.35, id + 2); pot(g, -0.55, 0.0, -0.3, 1.1, P.blossomDeep); pot(g, 0.55, 0.0, -0.4, 1.0, '#c9a8ff'); bunting(g, [-0.5, 1.25, 0.2], [0.5, 1.25, 0.2], 6, 0.1, 0.06, id); }
   if (L >= 3) { for (const s of [-1, 1]) add(g, sp(0.06, GOLD, s * 0.52, 1.28, 0.0, { q: 1 })); gstar(g, 0.0, 1.5, 0.1, 0.07); butterfly(g, -0.4, 1.2, 0.3, '#c9a8ff', 2); }
 });
-BUILD.pumpkins = (info) => decorWrap(pumpkinPatchModel, { s: 1.15 }, info, 0.75, (g, L, id) => {
+BUILD.pumpkins = (info) => decorWrap(pumpkinPatchModel, { s: 1.05 }, info, 0.75, (g, L, id) => {
   const pump = (x, z, r, c, glow) => { add(g, sp(r, glow ? lanternMat : c, x, r * 0.85, z, { sx: 1.15, sy: 0.85, q: r < 0.1 ? 1 : 2 }), cyl(0.014, 0.02, r * 0.5, '#7fcf5a', x, r * 1.55, z, 5)); };
   pump(-0.9, -0.8, 0.14, '#ffa23c'); pump(0.95, 0.85, 0.12, '#ffb85a'); pump(-0.95, 0.85, 0.13, '#ff9a4a');
   hayBale(g, 0.95, 0.0, -0.75, 0.15, 0.26, 'x'); bed(g, 0.0, 0.95, 3, 0.4, id); butterfly(g, 0.3, 0.8, 0.4, '#ffd24a');
   if (L >= 2) { pump(0.0, -0.95, 0.15, '#ffa23c', true); pump(-0.5, 0.85, 0.1, '#ffe27a'); bunting(g, [-0.95, 0.5, -0.95], [0.95, 0.5, -0.95], 8, 0.1, 0.06, id); }
   if (L >= 3) { pump(0.55, 0.95, 0.12, '#ffa23c', true); for (const x of [-0.95, 0.95]) { add(g, cyl(0.035, 0.045, 0.52, IRON, x, 0, -0.95, 6)); } gstar(g, 0.0, 0.62, -0.95, 0.07); }
 });
-BUILD.hammock = (info) => decorWrap(hammockModel, { s: 1.15 }, info, 1.2, (g, L, id) => {
+BUILD.hammock = (info) => decorWrap(hammockModel, { s: 1.0 }, info, 1.2, (g, L, id) => {
   bed(g, -0.5, 0.45, 3, 0.4, id); bed(g, 0.55, 0.42, 3, 0.4, id + 1); butterfly(g, 0.2, 0.9, 0.3, '#ffa6c9');
   add(g, rb(0.22, 0.2, 0.22, WOODL, 0.1, 0.0, -0.45, 0.04), cyl(0.05, 0.04, 0.07, '#fffaf0', 0.1, 0.2, -0.45, 8), sp(0.02, '#8fd0ff', 0.1, 0.26, -0.45, { q: 0 }));
   if (L >= 2) { for (const s of [-1, 1]) { pot(g, s * 0.98, 0.0, 0.2, 1.1, s > 0 ? P.blossomDeep : P.butter); } add(g, bar(0.92, 1.1, 0.0, 0.92, 1.0, 0.0, 0.012, CREAM)); lantern(g, 0.92, 0.85, 0.0, 0.9, L === 3); }
   if (L >= 3) { for (const s of [-1, 1]) add(g, sp(0.07, GOLD, s * 0.92, 1.24, 0.0, { q: 1 })); bunting(g, [-0.92, 1.18, 0.0], [0.92, 1.18, 0.0], 9, 0.1, 0.06, id); }
 });
-BUILD.beeskep = (info) => decorWrap(beeSkepModel, { s: 1.15 }, info, 1.0, (g, L, id) => {
+BUILD.beeskep = (info) => decorWrap(beeSkepModel, { s: 0.95 }, info, 1.0, (g, L, id) => {
   for (let i = 0; i < 5; i++) { const a = i * 1.26 + 0.3, r = 0.4; add(g, cyl(0.012, 0.014, 0.28, '#7fcf5a', Math.cos(a) * r, 0.0, Math.sin(a) * r, 4), sp(0.05, i % 2 ? '#c9a8ff' : '#ffffff', Math.cos(a) * r, 0.3, Math.sin(a) * r, { q: 0, sy: 1.4 })); }
   bed(g, 0.3, 0.45, 2, 0.2, id); bed(g, -0.35, 0.4, 2, 0.2, id + 3);
   if (L >= 2) { add(g, K.lathe([[0.001, 0], [0.16, 0], [0.14, 0.2], [0.001, 0.26]], '#ffd870', -0.38, 0.0, -0.2, { seg: 8 })); add(g, rb(0.2, 0.15, 0.18, WOODL, 0.32, 0.0, -0.32, 0.04)); jar(g, 0.32, 0.15, -0.32, '#ffb23a', 1.0); butterfly(g, 0.1, 0.8, 0.3, '#ffd24a'); }

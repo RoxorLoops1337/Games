@@ -78,7 +78,7 @@ function colored(kind, color) {
   const k = Q + kind + color; let g = colGeoCache.get(k);
   if (!g) {
     const b = baseGeo(kind), noAO = kind.startsWith('hemi') || kind === 'dot';
-    g = b.clone(); g.userData.kind = kind; const [c0s, c1s, opt = ''] = color.split('|'); const c0 = new THREE.Color(c0s), c1 = c1s && c1s !== c0s ? new THREE.Color(c1s) : null;
+    g = b.clone(); const [c0s, c1s, opt = ''] = color.split('|'); const c0 = new THREE.Color(c0s), c1 = c1s && c1s !== c0s ? new THREE.Color(c1s) : null;
     const n = g.attributes.position.count, a = new Float32Array(n * 3), nr = g.attributes.normal, ps = g.attributes.position, tmp = new THREE.Color();
     const fold = opt.includes('f'), warm = opt.includes('w'), rad = opt.includes('z'), inv = opt.includes('i'), skipAO = noAO || opt.includes('n'), sh = warm ? SHADE_W : SHADE_V, y0 = b.boundingBox.min.y, yh = Math.max(1e-6, b.boundingBox.max.y - y0);
     for (let i = 0; i < n; i++) {
@@ -105,6 +105,8 @@ function withRim(m) {
   m.customProgramCacheKey = () => 'hv-rim1'; return m;
 }
 const vcMat = withRim(soft('#ffffff', { vertexColors: true, emissive: '#ffb890', emissiveIntensity: 0.1 }));
+/** dim every villager's self-lit fill and rim for night: v = 1 (day) .. 0 (deep night). Cheap: two numbers shared by every villager. */
+export function setVillagerLight(v) { v = Math.max(0, Math.min(1, v)); rimU.value = 0.2 * v; vcMat.emissiveIntensity = 0.03 + 0.07 * v; }
 const eyeMat = gloss('#ffffff', { vertexColors: true, roughness: 0.12 });
 const hiMat = soft('#ffffff', { emissive: '#ffffff', emissiveIntensity: 0.9 });
 
