@@ -14,7 +14,29 @@ import type { TipData, TipLine } from './kit';
 
 const KIND_NAMES: Record<string, string> = { material: 'Material', food: 'Food', seed: 'Seed', potion: 'Potion', gear: 'Gear', misc: 'Item' };
 
-export function itemTip (id: ItemId, o: { count?: number; sellMul?: number; foot?: string } = {}): TipData {
+/** The piece worn in the slot this gear would take (rings: none, there are five fingers), for the comparison lines. */
+export const wornFor = (p: Pick<PlayerS, 'equip'>, id: ItemId): ItemId | undefined => {
+    const g = ITEMS[id].gear;
+    return g && g.slot !== 'ring' && p.equip[g.slot] && p.equip[g.slot] !== id ? p.equip[g.slot] : undefined;
+};
+
+/** What this piece changes against the one worn: +2 mining power, -0.1 damage, +5% move speed… (green better, red worse). */
+function compareLines (g: NonNullable<(typeof ITEMS)[ItemId]['gear']>, w: ItemId): TipLine[] {
+    const cur = ITEMS[w].gear;
+    if (!cur) return [];
+    const out: TipLine[] = [];
+    const num = (label: string, a = 0, b = 0) => { const d = Math.round((a - b) * 100) / 100; if (d) out.push({ t: `${d > 0 ? '+' : ''}${d} ${label}`, c: d > 0 ? PAL.lime : PAL.berry }); };
+    num('mining power', g.power, cur.power);
+    num('damage', g.dmg, cur.dmg);
+    if (g.wtype && cur.wtype) num('reach', g.reach, cur.reach);
+    for (const k of new Set([...Object.keys(g.mods ?? {}), ...Object.keys(cur.mods ?? {})]) as Set<StatKey>) {
+        const d = ((g.mods?.[k] ?? 0) - (cur.mods?.[k] ?? 0));
+        if (Math.abs(d) > 1e-9) out.push({ t: `${d > 0 ? '+' : ''}${modLine(k, d).replace(/^\+/, '')}`, c: d > 0 ? PAL.lime : PAL.berry });
+    }
+    return out.length ? [{ t: `Against your ${ITEMS[w].name}:`, c: PAL.cream }, ...out] : [{ t: `About the same as your ${ITEMS[w].name}.`, c: PAL.pebble }];
+}
+
+export function itemTip (id: ItemId, o: { count?: number; sellMul?: number; foot?: string; worn?: ItemId } = {}): TipData {
     const d = ITEMS[id];
     const lines: TipLine[] = [{ t: d.desc, c: PAL.pebble }];
     const g = d.gear;
@@ -23,6 +45,7 @@ export function itemTip (id: ItemId, o: { count?: number; sellMul?: number; foot
         if (g.dmg) lines.push({ t: `Damage ${g.dmg}  ·  ${g.wtype}  ·  reach ${g.reach}`, c: PAL.lime });
         for (const [k, v] of Object.entries(g.mods ?? {}) as [StatKey, number][]) lines.push({ t: modLine(k, v), c: v < 0 && (k === 'moveSpeed') ? PAL.berry : PAL.lime });
     }
+    if (g && o.worn) lines.push(...compareLines(g, o.worn));
     const rl = (d as { relic?: RelicDef }).relic;
     if (rl) lines.push({ t: `${TAG_INFO[rl.tag].name} relic  ·  ${SIZES[rl.size].join(' x ')} cells  ·  gives ${TAG_INFO[rl.tag].word}`, c: TAG_INFO[rl.tag].color }, { t: 'Lay it in the Relic Satchel (U). Relics of one kind that touch give more; touching kinds make combos.', c: PAL.pebble });
     if (d.food) lines.push({ t: `Restores ${d.food} energy`, c: PAL.gold });
@@ -60,7 +83,7 @@ export function buildingTip (p: PlayerS, kind: keyof typeof BUILDINGS): TipData 
 }
 
 export function recipeTip (p: PlayerS, r: Recipe): TipData {
-    const t = itemTip(r.out);
+    const t = itemTip(r.out, { worn: wornFor(p, r.out) });
     const lines = [...(t.lines ?? [])];
     lines.push({ t: 'Needs:', c: PAL.cream }, ...costLines(p, r.in));
     if (r.req && !hasUnlock(p, r.req)) lines.push({ t: `Locked: ${UNLOCK_INFO[r.req] ?? r.req}`, c: PAL.berry });

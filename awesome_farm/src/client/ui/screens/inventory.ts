@@ -13,7 +13,7 @@ import { adopt, isNew, markSeen } from '../../seen';
 import { deviceText, onTap, SearchBox, Section, Slot, StatList, tipOn, Win, type Footer } from '../kit';
 import { ListTools } from '../listtools';
 import { inset, rect } from '../px';
-import { itemTip } from '../tips';
+import { itemTip, wornFor } from '../tips';
 import type { Screen, ScreenCtx } from './types';
 
 type Slot6 = Exclude<GearSlot, 'ring'>;
@@ -149,7 +149,7 @@ export class InventoryScreen implements Screen {
             data: { icon: `i_${id}`, count: countOf(me, id), rarity: ITEMS[id].rarity, ...(me.fav?.includes(id) ? { badge: '★' } : {}), ...(isNew(id) ? { dot: true } : {}) },
             seen: () => { if (markSeen(id)) this.key = ''; },
             star: () => send({ t: 'inv', op: 'fav', item: id }),
-            tip: () => itemTip(id, { count: countOf(me, id), sellMul: derived(me).sellMul, foot: this.armed >= 0 ? `Click to put it in hotbar slot ${this.armed + 1}` : ITEMS[id].open ? 'Click to open it' : hotbarOf(this.ctx.me()).includes(id) ? 'Right-click to unpin from the hotbar' : 'Right-click to pin to the hotbar' }),
+            tip: () => itemTip(id, { count: countOf(me, id), sellMul: derived(me).sellMul, worn: wornFor(me, id), foot: this.armed >= 0 ? `Click to put it in hotbar slot ${this.armed + 1}` : ITEMS[id].open ? 'Click to open it' : hotbarOf(this.ctx.me()).includes(id) ? 'Right-click to unpin from the hotbar' : 'Right-click to pin to the hotbar' }),
             click: (shift) => {
                 if (this.starMode) { send({ t: 'inv', op: 'fav', item: id }); return; }
                 if (this.armed >= 0 || shift) { this.pin(id); return; }
