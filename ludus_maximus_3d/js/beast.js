@@ -1118,7 +1118,7 @@ class BeastAnimator {
         if (!idle) this.stT[i] = -1;
         else if (this.stT[i] < 0 && d > this.stepAt && stepping < 2 && this.stT[i ^ 1] < 0 && this.stCool[i] <= 0 && Math.abs(Math.atan2(Math.sin(root.rotation.y - this.lkY[i]), Math.cos(root.rotation.y - this.lkY[i]))) > 0.1) { this.stT[i] = 0; this.stF[i * 2] = lk[o]; this.stF[i * 2 + 1] = lk[o + 2]; stepping++; }
         let lift = 0;
-        if (this.stT[i] >= 0) { const u = this.stT[i] + dt / 0.26, e = (u > 1 ? 1 : u) * (u > 1 ? 1 : u) * (3 - 2 * (u > 1 ? 1 : u)); lk[o] = this.stF[i * 2] + (cx - this.stF[i * 2]) * e; lk[o + 2] = this.stF[i * 2 + 1] + (cz - this.stF[i * 2 + 1]) * e; lift = Math.sin(Math.PI * (u > 1 ? 1 : u)) * this.stepLift; this.stT[i] = u >= 1 ? -1 : u; if (u >= 1) { this.stCool[i] = 1.5; this.lkY[i] = root.rotation.y; } }
+        if (this.stT[i] >= 0) { const u = this.stT[i] + dt / 0.26, e = (u > 1 ? 1 : u) * (u > 1 ? 1 : u) * (3 - 2 * (u > 1 ? 1 : u)); lk[o] = this.stF[i * 2] + (cx - this.stF[i * 2]) * e; lk[o + 2] = this.stF[i * 2 + 1] + (cz - this.stF[i * 2 + 1]) * e; lift = Math.sin(Math.PI * (u > 1 ? 1 : u)) * this.stepLift; this.stT[i] = u >= 1 ? -1 : u; if (u >= 1) { this.stCool[i] = 0.35; this.lkY[i] = root.rotation.y; } }
         this.lkW[i] = Math.min(1, this.lkW[i] + dt / 0.025); w = this.lkW[i] * this.legW[i]; solve = true; tx = lk[o]; ty = ground + lift * sc; tz = lk[o + 2];
       } else {
         this.lkOn[i] = 0; this.stT[i] = -1; const k = Math.exp(-dt / 0.09); for (let q = 0; q < 3; q++) { ikD[o + q] *= k; ikR[o + q] *= k; }
