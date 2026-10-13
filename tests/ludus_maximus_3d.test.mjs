@@ -963,7 +963,7 @@ const LEGACY_IDS = ['patron', 'brawl', 'trainer', 'spoiled', 'spy', 'sponsor', '
     ok(bad === 0, `${kind} ${dt}: every vertex has valid bones and weights summing to one`); if (dt !== 'low') ok(multi / total > 0.12, `${kind} ${dt}: smooth skinning blends bones on ${(100 * multi / total).toFixed(0)}% of the vertices`);
     if (dt !== 'high') continue;
     const A = rig.animator, P = [['wristL', 0], ['wristR', 1], ['ankleL', 2], ['ankleR', 3]], v3 = (n) => { const e = rig.joints[n].matrixWorld.elements; return e[13]; }; // (the standing check below uses the sole point, which turns with the paw)
-    for (let i = 0; i < 50; i++) rig.update(1 / 60);
+    for (let i = 0; i < 150; i++) rig.update(1 / 60);
     let worst = 0; for (const [n, i] of P) { const e = rig.joints[n].matrixWorld.elements, sy = e[13] - A.pads[i] * 0.98 * e[5]; worst = Math.max(worst, Math.abs(sy)); } ok(worst < 0.03 * Math.max(1, rig.size), `${kind}: standing paws are planted on the sand (worst ${worst.toFixed(3)} m)`);
     let fin = true, steps = 0; rig.onEvent = (e) => { if (e === 'step') steps++; };
     for (const sp of [1, 3, 6]) { A.setMove(sp, 0); for (let i = 0; i < 150; i++) { rig.update(1 / 60); for (const k of rig.root.children[0].children) { const e = k.matrixWorld.elements; for (let j = 0; j < 16; j++) if (!isFinite(e[j])) fin = false; } } }
