@@ -36,6 +36,7 @@ import * as arts from './arts';
 import * as hearth from './hearth';
 import * as iridium from './iridium';
 import * as unstick from './unstick';
+import * as hotbar from './hotbar';
 import * as trade from './trade';
 import * as machines from './machines';
 import * as mail from './mail';
@@ -536,6 +537,7 @@ export class Sim {
         iridium.step(this, dt);
         unstick.step(this);
         trade.step(this);
+        hotbar.step(this, dt);
         factory.stepFactory(this, dt);
         mobs.updateMobs(this, dt);
         mobs.updateProjs(this, dt);
