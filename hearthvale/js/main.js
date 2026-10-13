@@ -1,6 +1,7 @@
 // Hearthvale client: title screen, HUD, input, panels.
 import { View } from './scene.js';
 import { soloLink, wsLink } from './net.js';
+import { toggleAudio, setAmbient, audioOn, wantsMusic } from './audio.js';
 import { findSpot as _fs } from '../shared/sim.js';
 import { BUILDINGS, RECIPES, TECH, MAX_BLD_LEVEL, upgradeCost, upgradeNeedsLevel, UPGRADE_NOTE, ICON, GOODS, SELL, QUESTS, LEVEL_XP, VALLEY_LEVEL_XP, PLOT, VALLEY_FIELDS, NODE_TYPES } from '../shared/data.js';
 
@@ -8,7 +9,7 @@ const $ = (s) => document.querySelector(s);
 const qs = new URLSearchParams(location.search);
 const view = new View($('#gl'));
 let link = null, snap = null, you = null, myId = null, mode = null, selected = null, panel = null, prevSnapT = 0;
-const labels = new Map();
+const labels = new Map(); const known = new Map(); let chatLog = [];
 const HINTS = { q_wood: 'Tap a tree to send a villager', q_house: 'Build > Cottage, tap the grass, Place', q_farm: 'Build > Wheat Field, then tap it to sow', q_wheat: 'Tap the field when it is golden', q_kitch: 'Build > Kitchen', q_soup: 'Tap the Kitchen, cook soup', q_hire: 'Tap the Hearth Hall', q_lvl2: 'Keep gathering and building to earn XP', q_order: 'Open the Valley board 📜 and tap Give', q_saw: 'Needs level 2', q_plank: 'Tap the Sawmill, saw planks', q_study: 'Needs level 3', q_lvl5: 'Fill Valley orders for big XP' };
 
 // ---------- tiny synth sfx ----------
@@ -51,9 +52,14 @@ function begin(l) {
   link = l; l.onNack = (err) => { toast(err); sfx('bad'); };
   let first = true;
   l.onSnap = (s) => {
+    // delta snapshots: villages whose buildings/nodes did not change come without them, keep the last ones
+    for (const p of s.players) { const k = known.get(p.id) || {}; if (p.b) k.b = p.b; else p.b = k.b || []; if (p.n) k.n = p.n; else p.n = k.n || []; known.set(p.id, k); }
+    for (const id of [...known.keys()]) if (!s.players.some(p => p.id === id)) known.delete(id);
+    if (s.chat.length || !chatLog.length) { const seen = new Set(chatLog.map(c => c.t + c.pid + c.text)); for (const c of s.chat) if (!seen.has(c.t + c.pid + c.text)) chatLog.push(c); chatLog = chatLog.slice(-60); }
+    s.chat = chatLog;
     snap = s; myId = l.id; you = s.you;
     if (!you) return;
-    view.sync(s, myId); view.setTime(s.t + 60);
+    view.sync(s, myId); view.setTime(s.t + 60); setAmbient(view.night || 0, view.rainAmt || 0);
     if (first) { first = false; $('#title').hidden = true; $('#hud').hidden = false; view.focusVillage(myId, 26); setupHud(); }
     onSnap(s);
   };
@@ -84,6 +90,7 @@ function onSnap(s) {
     else if (e.t === 'built' && e.pid === myId) { sfx('done'); const V = view.villages.get(myId); const m = V && V.b.get(e.id); if (m) view.burst(V.group.position.x + m.position.x, V.group.position.z + m.position.z, '#fff3a0'); }
     else if (e.t === 'order') { toast('📜 A Valley order was finished!'); sfx('done'); }
     else if (e.t === 'valleylevel') toast('🌄 The Valley reached level ' + e.level + '!');
+    else if (e.t === 'gift' && e.to === myId) { toast('🎁 A neighbour sent you ' + e.n + ' ' + ICON[e.res]); sfx('coin'); }
     else if (e.t === 'emote') { const p = s.players.find(p => p.id === e.pid); if (p) { const V = view.villages.get(p.id); if (V) popupAt(V.group.position.x, 3.5, V.group.position.z, e.e); } }
   }
   if (selected) refreshSheet();
@@ -122,7 +129,7 @@ for (const id of ['#panel', '#sheet']) { const e = $(id); e.addEventListener('po
 // ---------- panels ----------
 function openPanel(name) { if (panel === name) { closePanel(); return; } panel = name; $('#panel').hidden = false; refreshPanel(true); }
 function closePanel() { panel = null; $('#panel').hidden = true; }
-let chatDraft = '';
+let chatDraft = '', giftFor = null;
 function refreshPanel(force) {
   const el = $('#panel'); if (!panel || (pressed && !force)) return;
   if (panel === 'chat' && !force && document.activeElement && document.activeElement.id === 'chatIn') { renderChatLog(); return; }
@@ -136,18 +143,19 @@ function refreshPanel(force) {
     h += `<div class="row small" style="margin:6px 0">${V.fields.map(f => { const d = VALLEY_FIELDS.find(x => x.id === f.id); return `<span class="chip" data-f="${f.id}">${ICON[d.res]} ${Math.round(f.stock / 10) * 10}</span>`; }).join('')}</div>`;
     h += V.orders.map(o => `<div class="order ${o.done ? 'done' : ''}"><b>Order #${o.id}</b> ${o.done ? '✅ Done!' : ''}${Object.keys(o.need).map(g => `<div class="need"><span>${ICON[g]}</span><div class="bar"><i style="width:${o.got[g] / o.need[g] * 100}%"></i></div><span>${o.got[g]}/${o.need[g]}</span>${o.done || o.got[g] >= o.need[g] ? '' : `<button data-o="${o.id}" data-g="${g}">Give</button>`}</div>`).join('')}<div class="small">Reward ${o.reward.coins}🪙 ${o.reward.scrolls}📜 ${o.reward.xp}xp${o.contrib[myId] ? ' · you gave ' + o.contrib[myId] : ''}</div></div>`).join('');
   } else if (panel === 'players') {
-    h = head('👥 Villages (' + snap.players.length + '/16)') + [...snap.players].sort((a, b) => b.level - a.level).map(p => `<div class="pl" data-p="${p.id}"><span class="dot" style="background:${p.color}"></span><b>${esc(p.name)}</b><span class="small">Lv ${p.level} ${p.online ? '🟢' : '💤'}</span><span style="flex:1"></span><button>Visit</button></div>`).join('');
+    h = head('👥 Villages (' + snap.players.length + '/16)') + [...snap.players].sort((a, b) => b.level - a.level).map(p => `<div class="pl" data-p="${p.id}"><span class="dot" style="background:${p.color}"></span><b>${esc(p.name)}</b><span class="small">Lv ${p.level} ${p.online ? '🟢' : '💤'}</span><span style="flex:1"></span>${p.id === myId ? '' : `<button data-gift="${p.id}">🎁</button>`}<button>Visit</button></div>${giftFor === p.id ? `<div class="row" style="margin:-2px 0 8px">${GOODS.filter(g => you.res[g] >= 5).map(g => `<button data-give="${g}">${ICON[g]} 5</button>`).join('') || '<span class="small">Nothing to give yet</span>'}</div>` : ''}`).join('');
   } else if (panel === 'chat') {
     h = head('💬 Chat') + `<div class="chatlog" id="chatlog"></div><input id="chatIn" maxlength="120" placeholder="Say hello..." value="${esc(chatDraft)}"><div class="emotes">${['👋', '❤️', '😂', '🎉', '🙏', '🌾'].map(e => `<button data-e="${e}">${e}</button>`).join('')}</div>`;
   } else if (panel === 'menu') {
-    h = head('⚙️ Menu') + `<div class="row"><button id="mRename">✏️ Rename village</button>${link.kind === 'solo' ? '<button id="mReset">🗑 New solo game</button>' : ''}<button id="mFs">⛶ Fullscreen</button></div><p class="small">${link.kind === 'solo' ? 'Solo mode: five friendly neighbour villages share your valley. Your game saves in this browser.' : 'Connected to a server. Your village is tied to this browser, so keep your link.'}</p><p class="small">Controls: drag to pan, pinch or wheel to zoom, right-drag or two fingers to rotate. Tap trees, rocks and clay to send a villager. Tap buildings to use them.</p>`;
+    h = head('⚙️ Menu') + `<div class="row"><button id="mRename">✏️ Rename village</button>${link.kind === 'solo' ? '<button id="mReset">🗑 New solo game</button>' : ''}<button id="mFs">⛶ Fullscreen</button><button id="mMus">${audioOn() ? '🔊 Music on' : '🔈 Music off'}</button>${link.kind === 'server' ? '<button id="mInv">🔗 Copy invite link</button>' : ''}</div><p class="small">${link.kind === 'solo' ? 'Solo mode: five friendly neighbour villages share your valley. Your game saves in this browser.' : 'Connected to a server. Your village is tied to this browser, so keep your link.'}</p><p class="small">Controls: drag to pan, pinch or wheel to zoom, right-drag or two fingers to rotate. Tap trees, rocks and clay to send a villager. Tap buildings to use them.</p>`;
   }
   if (!force && el.dataset.h === h) { if (panel === 'chat') renderChatLog(); return; }
   const keep = el.scrollTop; el.dataset.h = h; el.innerHTML = h; el.scrollTop = keep;
   $('#px').onclick = closePanel;
   el.querySelectorAll('[data-o]').forEach(b => b.onclick = () => { const o = snap.valley.orders.find(o => o.id == b.dataset.o); const g = b.dataset.g; cmd({ op: 'contribute', id: o.id, res: g, n: o.need[g] - o.got[g] }); });
   el.querySelectorAll('[data-f]').forEach(c => c.onclick = () => { cmd({ op: 'assign', k: 'valley', id: c.dataset.f }); toast('Villager sent to the field'); });
-  el.querySelectorAll('.pl').forEach(r => r.onclick = () => { view.focusVillage(r.dataset.p, 26); });
+  el.querySelectorAll('.pl').forEach(r => r.onclick = (e) => { if (e.target.dataset.gift) { giftFor = giftFor === e.target.dataset.gift ? null : e.target.dataset.gift; refreshPanel(true); return; } view.focusVillage(r.dataset.p, 26); });
+  el.querySelectorAll('[data-give]').forEach(b => b.onclick = () => { cmd({ op: 'gift', to: giftFor, res: b.dataset.give, n: 5 }); sfx('coin'); });
   if (panel === 'chat') {
     renderChatLog(); const inp = $('#chatIn'); inp.oninput = () => chatDraft = inp.value;
     inp.onkeydown = (e) => { e.stopPropagation(); if (e.key === 'Enter' && inp.value.trim()) { link.cmd({ op: 'chat', text: inp.value }); chatDraft = ''; inp.value = ''; } };
@@ -156,6 +164,8 @@ function refreshPanel(force) {
   if (panel === 'menu') {
     $('#mRename').onclick = () => { const n = prompt('Village name', myPub().name); if (n) link.cmd({ op: 'rename', name: n }); };
     const r = $('#mReset'); if (r) r.onclick = () => { if (confirm('Delete your solo game and start over?')) link.reset(); };
+    $('#mMus').onclick = () => { toggleAudio(); refreshPanel(true); };
+    const inv = $('#mInv'); if (inv) inv.onclick = () => { const u = location.origin + location.pathname + '?server=' + encodeURIComponent(link.url || '') + '&auto'; (navigator.clipboard ? navigator.clipboard.writeText(u) : Promise.reject()).then(() => toast('Invite link copied!'), () => prompt('Copy this link', u)); };
     $('#mFs').onclick = () => (document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen && document.documentElement.requestFullscreen());
   }
 }
@@ -324,6 +334,8 @@ function onTap(x, y) {
   if (hit.k === 'vil') { closePanel(); view.select(hit.obj, 0.5); showSelection({ k: 'vil', id: hit.id, pid: hit.pid }); }
 }
 
+addEventListener('pointerdown', () => { if (!audioOn() && wantsMusic() && !musicTried) { musicTried = true; toggleAudio(true); } }, { once: false });
+let musicTried = false;
 // ---------- main loop ----------
 let lastT = performance.now();
 function loop(t) { const dt = Math.min(0.1, (t - lastT) / 1000); lastT = t; view.frame(dt); placeLabels(); requestAnimationFrame(loop); }

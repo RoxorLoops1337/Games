@@ -67,10 +67,19 @@ export class View {
     const cols = ['#ffd84a', '#ff9ec7', '#ffffff', '#9ad0ff'];
     for (let i = 0; i < 28; i++) { const b = butterflyModel(cols[i % 4]); const a = (i / 28) * Math.PI * 2, r = 12 + (i % 7) * 6; b.userData = { cx: Math.cos(a) * r, cz: Math.sin(a) * r, ph: i, sp: 0.4 + (i % 5) * 0.12, rad: 1.5 + (i % 3) }; s.add(b); this.flies.push(b); }
     for (let i = 0; i < 9; i++) { const m = sheepModel(); const a = i * 0.7, r = 6 + (i % 3) * 3.5; m.position.set(Math.cos(a) * r, 0, Math.sin(a) * r); m.userData = { tx: m.position.x, tz: m.position.z, wait: Math.random() * 3 }; s.add(m); this.sheep.push(m); }
+    // rain: one LineSegments, positions recycled around the camera target
+    const N = 700, pos = new Float32Array(N * 6); this.rainPos = pos; this.rainN = N;
+    for (let i = 0; i < N; i++) { const x = (Math.random() - 0.5) * 60, y = Math.random() * 30, z = (Math.random() - 0.5) * 60; pos.set([x, y, z, x - 0.12, y - 0.9, z], i * 6); }
+    const rg = new THREE.BufferGeometry(); rg.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    this.rain = new THREE.LineSegments(rg, new THREE.LineBasicMaterial({ color: '#cfe6ff', transparent: true, opacity: 0.55 })); this.rain.frustumCulled = false; this.rain.visible = false; s.add(this.rain);
+    this.rainAmt = 0; this.wet = 0;
     this.winMat = mat('#8fc7e8', WIN_OPTS); this.lanternMat = mat('#ffe08a', LANT);
   }
   // t = shared world seconds, so every player sees the same sun
+  // shared weather: a hash of the world's 4-minute block decides if it rains (about one block in four)
+  weatherAt(t) { const k = Math.floor(t / 240); const h = Math.sin(k * 12.9898 + 4.1414) * 43758.5453; const r = h - Math.floor(h); return r < 0.26 ? 1 : 0; }
   setTime(t) {
+    this.rainGoal = this.weatherAt(t);
     const ph = ((t / 360) % 1 + 1) % 1, a = (ph - 0.25) * Math.PI * 2, sn = Math.sin(a);
     const day = Math.max(0, Math.min(1, sn * 1.5 + 0.25)), dusk = Math.max(0, 1 - Math.abs(sn) * 3.2);
     const C = THREE.Color, sky = new C('#3a5496').lerp(new C('#a9dcf3'), day).lerp(new C('#ff9d6c'), dusk * 0.55);
@@ -223,6 +232,10 @@ export class View {
       const f = this.fx[i]; f.life -= dt; f.m.position.x += f.vx * dt; f.m.position.y += f.vy * dt; f.m.position.z += f.vz * dt; if (f.g) f.vy -= f.g * dt; f.m.material.opacity = Math.max(0, f.life);
       f.m.material.transparent = true; if (f.life <= 0) { this.scene.remove(f.m); this.fx.splice(i, 1); }
     }
+    this.rainAmt += ((this.rainGoal || 0) - this.rainAmt) * Math.min(1, dt * 0.5); const ra = this.rainAmt;
+    this.rain.visible = ra > 0.05; this.rain.material.opacity = 0.55 * ra;
+    if (this.rain.visible) { const p = this.rainPos; for (let i = 0; i < this.rainN; i++) { const o = i * 6; p[o + 1] -= dt * 28; p[o + 4] -= dt * 28; if (p[o + 1] < 0) { const y = 28 + Math.random() * 4; p[o + 1] = y; p[o + 4] = y - 0.9; } } this.rain.geometry.attributes.position.needsUpdate = true; this.rain.position.set(this.look.x, 0, this.look.z); }
+    this.scene.fog.near = 70 - 40 * ra; this.scene.fog.far = 190 - 90 * ra; if (ra > 0.05) { this.scene.background.lerp(new THREE.Color('#8a9aa8'), ra * 0.6); this.scene.fog.color.copy(this.scene.background); this.sun.intensity *= 1 - 0.45 * ra; }
     for (const c of this.clouds) { c.position.x += dt * 0.8; if (c.position.x > 130) c.position.x = -130; }
     for (const b of this.flies) { const u = b.userData, a = this.t * u.sp + u.ph; b.position.set(u.cx + Math.cos(a) * u.rad, 0.9 + Math.sin(a * 1.7) * 0.4, u.cz + Math.sin(a) * u.rad); b.rotation.y = -a; const f = Math.sin(this.t * 22 + u.ph) * 0.9; b.getObjectByName('wl').rotation.y = f; b.getObjectByName('wr').rotation.y = -f; b.visible = (this.night || 0) < 0.6; }
     for (const m of this.sheep) {

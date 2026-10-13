@@ -7,7 +7,7 @@ import { BUILDINGS, TECH, RECIPES, GOODS, VALLEY_FIELDS } from '../hearthvale/sh
 const W = S.createWorld(99); const r = S.rng(4242); const pick = (a) => a[Math.floor(r() * a.length)];
 for (let i = 0; i < 16; i++) S.addPlayer(W, 'p' + i, 'P' + i);
 const junk = [null, undefined, NaN, Infinity, -1, 1e9, 'x', {}, [], '__proto__', 0.5];
-const ops = ['upgrade', 'place', 'move', 'demolish', 'assign', 'recall', 'queue', 'dequeue', 'research', 'hire', 'sell', 'contribute', 'chat', 'emote', 'rename', 'bogus'];
+const ops = ['gift', 'upgrade', 'place', 'move', 'demolish', 'assign', 'recall', 'queue', 'dequeue', 'research', 'hire', 'sell', 'contribute', 'chat', 'emote', 'rename', 'bogus'];
 let cmds = 0;
 for (let step = 0; step < 18000; step++) {
   if (step % 3 === 0) {
@@ -15,7 +15,7 @@ for (let step = 0; step < 18000; step++) {
     const b = P.buildings.length ? pick(P.buildings) : null, n = P.nodes.length ? pick(P.nodes) : null, v = P.villagers.length ? pick(P.villagers) : null, o = pick(W.valley.orders);
     const c = { op, type: r() < 0.9 ? pick(Object.keys(BUILDINGS)) : pick(junk), x: Math.floor(r() * 18) - 1, y: Math.floor(r() * 18) - 1, id: r() < 0.9 ? (b ? b.id : 0) : pick(junk),
       k: pick(['node', 'bld', 'valley', 'zzz']), vid: v && r() < 0.7 ? v.id : pick(junk), recipe: pick([...Object.keys(RECIPES), 'zzz']), n: r() < 0.8 ? Math.floor(r() * 12) : pick(junk), tech: pick([...Object.keys(TECH), 'zzz']),
-      res: pick([...GOODS, 'coins', 'zzz', '__proto__']), i: r() < 0.8 ? 0 : pick(junk), text: r() < 0.5 ? 'hi' : pick(junk), name: pick(['Bob', '', pick(junk)]), e: '👋' };
+      res: pick([...GOODS, 'coins', 'zzz', '__proto__']), i: r() < 0.8 ? 0 : pick(junk), text: r() < 0.5 ? 'hi' : pick(junk), name: pick(['Bob', '', pick(junk)]), e: '👋', to: r() < 0.7 ? 'p' + Math.floor(r() * 16) : pick(junk) };
     if (c.op === 'assign' && c.k === 'node' && n) c.id = n.id; if (c.op === 'assign' && c.k === 'valley') c.id = pick(VALLEY_FIELDS).id; if (c.op === 'contribute') c.id = o.id;
     if (r() < 0.05) P.res = { ...P.res, ...Object.fromEntries(GOODS.map(g => [g, 50])) };   // keep the economy moving
     S.command(W, id, c); cmds++;

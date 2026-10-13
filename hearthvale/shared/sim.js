@@ -232,6 +232,15 @@ const OPS = {
     P.res[c.res] -= n; o.got[c.res] += n; o.contrib[P.id] = (o.contrib[P.id] || 0) + n * SELL[c.res]; bump(P, 'gave', n);
     if (Object.keys(o.need).every(k => o.got[k] >= o.need[k])) finishOrder(W, o);
   },
+  gift(W, P, c) {
+    const to = own(W.players, c.to) ? W.players[c.to] : null; if (!to || to === P) return { ok: false, err: 'no such village' };
+    if (!GOODS.includes(c.res)) return { ok: false, err: 'bad good' };
+    if (W.t < (P.giftAt || 0)) return { ok: false, err: 'wait a moment' };
+    const n = Math.min(Math.max(0, num(c.n) || 0), 20, P.res[c.res]); if (!(n > 0)) return { ok: false, err: 'nothing to give' };
+    const g = give(to, c.res, n); if (g <= 0) return { ok: false, err: to.name + ' has no room' };
+    P.res[c.res] -= g; P.giftAt = W.t + 3; bump(P, 'gifted', g); popup(to, P.name + ' sent ' + g + ICONS[c.res], to.ox, to.oz); to.rev++;
+    W.events.push({ t: 'gift', from: P.id, to: to.id, res: c.res, n: g });
+  },
   chat(W, P, c) {
     const text = String(c.text || '').slice(0, 120).trim(); if (!text) return { ok: false };
     W.chat.push({ t: W.t, pid: P.id, name: P.name, color: P.color, text }); if (W.chat.length > 60) W.chat.shift();
@@ -388,21 +397,46 @@ export function tick(W, dt) {
 
 // ---------- snapshots ----------
 const r1 = (n) => Math.round(n * 10) / 10;
-export function snapshot(W, pid) {
-  const players = [];
+// ctx (optional, one per connection) turns on delta sending: buildings/nodes of a village are only sent
+// when they changed since this connection last got them, and chat only when there are new lines.
+export function publicParts(W) {
+  const parts = new Map();
   for (const P of Object.values(W.players)) {
-    players.push({ id: P.id, name: P.name, color: P.color, slot: P.slot, ox: P.ox, oz: P.oz, ang: P.ang, level: P.level, online: P.online,
-      b: P.buildings.map(b => [b.id, b.type, b.x, b.y, b.built ? 1 : r1(b.progress), b.stage || ((b.queue && b.queue.length) || b.research || b.up ? 'busy' : ''), b.stage === 'grow' ? r1(b.crop) : 0, b.lvl || 1, b.up ? r1(b.up.p) : 0]),
-      n: P.nodes.map(n => [n.id, n.type, n.x, n.y, n.amount > 0 ? 1 : 0]),
-      v: P.villagers.map(v => [v.id, r1(v.x), r1(v.z), v.state, v.hat, v.face ? r1(v.face) : 0, v.name]) });
+    const b = P.buildings.map(b => [b.id, b.type, b.x, b.y, b.built ? 1 : r1(b.progress), b.stage || ((b.queue && b.queue.length) || b.research || b.up ? 'busy' : ''), b.stage === 'grow' ? r1(b.crop) : 0, b.lvl || 1, b.up ? r1(b.up.p) : 0]);
+    const n = P.nodes.map(n => [n.id, n.type, n.x, n.y, n.amount > 0 ? 1 : 0]);
+    parts.set(P.id, { b, n, bs: JSON.stringify(b), ns: JSON.stringify(n) });
   }
+  return parts;
+}
+function publicParts1(P) { return publicParts({ players: { x: P } }).get(P.id); }
+export function snapshot(W, pid, ctx = null, parts = null) {
+  const players = []; parts = ctx ? (parts || publicParts(W)) : null;
+  for (const P of Object.values(W.players)) {
+    const e = { id: P.id, name: P.name, color: P.color, slot: P.slot, ox: P.ox, oz: P.oz, ang: P.ang, level: P.level, online: P.online,
+      v: P.villagers.map(v => [v.id, r1(v.x), r1(v.z), v.state, v.hat, v.face ? r1(v.face) : 0, v.name]) };
+    if (!ctx) {
+      const pp = publicParts1(P); e.b = pp.b; e.n = pp.n;
+    } else {
+      const pp = parts.get(P.id), last = ctx.last.get(P.id) || {};
+      if (last.bs !== pp.bs) e.b = pp.b; if (last.ns !== pp.ns) e.n = pp.n;
+      ctx.last.set(P.id, { bs: pp.bs, ns: pp.ns });
+    }
+    players.push(e);
+  }
+  if (ctx) for (const id of [...ctx.last.keys()]) if (!W.players[id]) ctx.last.delete(id);
   const me = W.players[pid]; let you = null;
   if (me) {
     you = { id: me.id, res: me.res, coins: me.coins, xp: me.xp, level: me.level, cap: capOf(me), housing: housingOf(me), tech: me.tech, quests: me.questsDone, stats: me.stats,
       hire: hireCost(me), buildings: me.buildings.map(b => ({ id: b.id, type: b.type, lvl: b.lvl || 1, up: !!b.up, queue: b.queue, research: b.research || null, stage: b.stage, crop: b.crop })),
       villagers: me.villagers.map(v => ({ id: v.id, name: v.name, state: v.state, hunger: Math.round(v.hunger), task: v.task })), popups: me.popups.splice(0) };
   }
-  return { t: r1(W.t), you, players, valley: { xp: W.valley.xp, level: W.valley.level, orders: W.valley.orders, fields: W.valley.fields.map(f => ({ id: f.id, stock: Math.floor(f.stock) })) }, chat: W.chat.slice(-30), events: W.events };
+  return { t: r1(W.t), you, players, valley: { xp: W.valley.xp, level: W.valley.level, orders: W.valley.orders, fields: W.valley.fields.map(f => ({ id: f.id, stock: Math.floor(f.stock) })) }, chat: chatFor(W, ctx), events: W.events };
+}
+function chatFor(W, ctx) {
+  if (!ctx) return W.chat.slice(-30);
+  const t0 = ctx.chatT === undefined ? -1 : ctx.chatT; const out = W.chat.filter(c => c.t > t0).slice(-30);
+  if (W.chat.length) ctx.chatT = W.chat[W.chat.length - 1].t; else ctx.chatT = ctx.chatT === undefined ? -1 : ctx.chatT;
+  return out;
 }
 export function flushEvents(W) { W.events.length = 0; }
 export function serialize(W) { return JSON.stringify(W, (k, v) => k === 'rnd' ? undefined : v); }

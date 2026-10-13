@@ -21,7 +21,7 @@ export class Host {
   catchUp(sleptMs) { let left = Math.min(MAX_CATCHUP_S, Math.max(0, sleptMs / 1000)); while (left > 0) { const dt = Math.min(0.5, left); S.tick(this.W, dt); left -= dt; } S.flushEvents(this.W); this.last = this.now(); }
   attach(peer) {
     const W = this.W; let pid = null, budget = 40;
-    const conn = { peer, get pid() { return pid; } };
+    const conn = { peer, ctx: { last: new Map() }, get pid() { return pid; } };
     const refill = setInterval(() => { budget = Math.min(40, budget + 20); }, 1000); refill.unref && refill.unref();
     const send = (o) => peer.send(JSON.stringify(o));
     conn.message = async (raw) => {
@@ -36,7 +36,7 @@ export class Host {
         const P = S.addPlayer(W, id, String(m.name || '').slice(0, 16) || 'Villager');
         if (!P) { send({ t: 'full' }); peer.close(1000); conn.joining = false; return; }
         pid = id; this.conns.add(conn); this.dirty = true;
-        send({ t: 'welcome', id, tick: TICK_MS }); send({ t: 'snap', s: S.snapshot(W, pid) });
+        send({ t: 'welcome', id, tick: TICK_MS }); send({ t: 'snap', s: S.snapshot(W, pid, conn.ctx) });
         W.chat.push({ t: W.t, pid: 'sys', name: '', color: '#aaa', text: P.name + ' joined the valley' }); if (W.chat.length > 60) W.chat.shift();
         return;
       }
@@ -54,10 +54,11 @@ export class Host {
     const now = this.now(); const dt = (now - this.last) / 1000; this.last = now;
     S.tick(this.W, dt); this.tickN++;
     if (this.tickN % SNAP_EVERY === 0) {
+      const parts = S.publicParts(this.W);
       for (const c of this.conns) {
         if (!c.pid) continue;
         if ((c.peer.backlog || 0) > 400000) continue;      // slow client: skip, never queue
-        try { c.peer.send(JSON.stringify({ t: 'snap', s: S.snapshot(this.W, c.pid) })); } catch {}
+        try { c.peer.send(JSON.stringify({ t: 'snap', s: S.snapshot(this.W, c.pid, c.ctx, parts) })); } catch {}
       }
       S.flushEvents(this.W);
     }

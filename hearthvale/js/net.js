@@ -29,7 +29,7 @@ export function soloLink(name, token) {
 }
 
 export function wsLink(url, name, token, hooks = {}) {
-  const link = { id: null, kind: 'server', onSnap: null, onNack: null, lag: 0, state: 'connecting' };
+  const link = { id: null, kind: 'server', url, onSnap: null, onNack: null, lag: 0, state: 'connecting' };
   let ws, retry = 0, closed = false, pingN = 0, pings = {};
   const connect = () => {
     ws = new WebSocket(url); link.state = 'connecting';

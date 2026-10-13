@@ -57,6 +57,13 @@ const run = (W, secs) => { for (let i = 0; i < secs * 10; i++) S.tick(W, 0.1); }
   const W2 = S.deserialize(S.serialize(W)); ok(W2.players.a.res.wood === P.res.wood, 'save round trips'); S.tick(W2, 0.1); ok(true, 'restored world ticks');
   P.res.soup = 0; for (const v of P.villagers) v.hunger = 0; run(W, 10); ok(P.villagers.some(v => v.state === 'hungry'), 'starving villagers stop');
 }
+// gifting
+{
+  const W = S.createWorld(41); const A = S.addPlayer(W, 'a', 'A'), B = S.addPlayer(W, 'b', 'B');
+  const w0 = B.res.wood; ok(S.command(W, 'a', { op: 'gift', to: 'b', res: 'wood', n: 5 }).ok, 'gift sent'); ok(B.res.wood === w0 + 5, 'gift arrived');
+  ok(S.command(W, 'a', { op: 'gift', to: 'b', res: 'wood', n: 5 }).ok === false, 'gifts are rate limited');
+  ok(S.command(W, 'a', { op: 'gift', to: 'a', res: 'wood', n: 5 }).ok === false, 'cannot gift yourself'); ok(S.command(W, 'a', { op: 'gift', to: '__proto__', res: 'wood', n: 5 }).ok === false, 'bad target refused');
+}
 // upgrades
 {
   const W = S.createWorld(31); const P = S.addPlayer(W, 'a', 'Ann'); P.level = 6; P.xp = 760; Object.keys(P.res).forEach(k => P.res[k] = 90);
