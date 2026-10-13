@@ -116,7 +116,6 @@ class Blades {
   }
 }
 
-globalThis.__legIK = { legFK, legSolve };
 // ------------------------------------------------------------------ species definitions (metres at unit size; +Z forward). The skeleton and gait numbers drive the animator; the rest drives the lofts.
 // front/hind chains: offsets are relative to the parent joint, so the rest pose is a real bent leg. hipsY / chestY are derived so the paws stand on y=0.
 const LION = {
@@ -892,7 +891,7 @@ function legFK(lg, v, out) {
 function legSolve(lg, tg, v, lim) {
   legFK(lg, v, _fA); let e0 = (tg.x - _fA.x) * (tg.x - _fA.x) + 9 * (tg.y - _fA.y) * (tg.y - _fA.y) + (tg.z - _fA.z) * (tg.z - _fA.z);
   if (v[0] !== 0 || v[1] !== 0 || v[2] !== 0) { const a = v[0], b = v[1], c = v[2]; v[0] = v[1] = v[2] = 0; legFK(lg, v, _fA); const e1 = (tg.x - _fA.x) * (tg.x - _fA.x) + 9 * (tg.y - _fA.y) * (tg.y - _fA.y) + (tg.z - _fA.z) * (tg.z - _fA.z); if (e1 > e0) { v[0] = a; v[1] = b; v[2] = c; } }
-  for (let it = 0; it < (globalThis.__IKIT || 4); it++) {
+  for (let it = 0; it < 4; it++) {
     legFK(lg, v, _fA); const ex = tg.x - _fA.x, ey = 3 * (tg.y - _fA.y), ez = tg.z - _fA.z; if (ex * ex + ey * ey + ez * ez < 4e-6) break;
     for (let k = 0; k < 3; k++) { const o = v[k]; v[k] = o + 0.01; legFK(lg, v, _fB); v[k] = o; _Jm[k] = (_fB.x - _fA.x) / 0.01; _Jm[3 + k] = 3 * (_fB.y - _fA.y) / 0.01; _Jm[6 + k] = (_fB.z - _fA.z) / 0.01; }   // J[row][col]
     for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++) _Am[r * 3 + c] = _Jm[r] * _Jm[c] + _Jm[3 + r] * _Jm[3 + c] + _Jm[6 + r] * _Jm[6 + c] + (r === c ? (r === 2 ? 0.08 : r === 1 ? 0.05 : 0.02) : 0);   // JtJ + damping (the elbow is the stiffest variable: the leg swings from the shoulder and bends as much as the reach needs)
@@ -1131,7 +1130,6 @@ class BeastAnimator {
         const lim = lg.lim, lo = lg.front ? -0.15 : -0.45; lim[0] = -1.1; lim[1] = 1.1; lim[2] = -0.45; lim[3] = 0.45; lim[4] = lo - q[3]; lim[5] = 2.3 - q[3];
         v[0] = ikR[o]; v[1] = ikR[o + 1]; v[2] = ikR[o + 2]; _tg.set(tx, ty, tz); legSolve(lg, _tg, v, lim);
         ikR[o] = v[0]; ikR[o + 1] = v[1]; ikR[o + 2] = v[2]; ikD[o] = v[0] * w; ikD[o + 1] = v[1] * w; ikD[o + 2] = v[2] * w;
-        if (globalThis.__BDBG) { legFK(lg, v, _fA); globalThis.__BDBG.push([i, cx, cy, cz, tx, ty, tz, _fA.x, _fA.y, _fA.z, w, v[0], v[1], v[2]]); }
         if (grounded && this.stT[i] < 0) { legFK(lg, v, _fA); const ex = _fA.x - tx, ez = _fA.z - tz, em = Math.sqrt(ex * ex + ez * ez); if (em > 0.012 * sc) { const k = 1 - 0.012 * sc / em; lk[o] += ex * k; lk[o + 2] += ez * k; } }   // out of reach: the pin is dragged by the foot, nothing more
       }
       if (Math.abs(ikD[o]) + Math.abs(ikD[o + 1]) + Math.abs(ikD[o + 2]) > 1e-4) {
