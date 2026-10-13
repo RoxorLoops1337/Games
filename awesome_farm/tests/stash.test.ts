@@ -103,3 +103,24 @@ test('a chest remembers who used it last, and a friend sees it as busy for a few
     assert.equal(busyUser(c, sim.s.time + BUSY_SECS + 1, 'b'), null, 'and it clears itself');
     assert.ok(p);
 });
+
+test('a sale can be taken back for ten seconds, runs of clicks count as one, and not once the coins are spent', async () => {
+    const { UNDO_SECS } = await import('../src/shared/sim/stash');
+    const { sim, p, o } = (() => { const y = yard(); const o = y.sim.world.plotOrigin(y.sim.homePlot(y.p.slot)); return { ...y, o }; })();
+    sim.add<BuildE>({ k: 'bld', kind: 'market', tx: o.tx + 7, ty: o.ty + 6, rot: 0, by: 'a' });
+    p.inv = { wood: 20, stone: 10 }; p.coins = 0;
+    sim.command('a', { t: 'sell', item: 'wood', n: 20 });
+    sim.command('a', { t: 'sell', item: 'stone', n: 10 });
+    assert.ok(p.coins > 0 && countOf(p, 'wood') === 0);
+    sim.command('a', { t: 'inv', op: 'undosale' });
+    assert.equal(countOf(p, 'wood'), 20); assert.equal(countOf(p, 'stone'), 10); assert.equal(p.coins, 0, 'both clicks undone together');
+    sim.command('a', { t: 'inv', op: 'undosale' });
+    assert.equal(p.coins, 0, 'nothing more to take back');
+    sim.command('a', { t: 'sell', item: 'wood', n: 5 });
+    p.coins = 0;                                           // spent
+    sim.command('a', { t: 'inv', op: 'undosale' });
+    assert.equal(countOf(p, 'wood'), 15, 'refused: the coins are gone');
+    p.coins = 100; sim.s.time += UNDO_SECS + 1;
+    sim.command('a', { t: 'inv', op: 'undosale' });
+    assert.equal(countOf(p, 'wood'), 15, 'too late');
+});

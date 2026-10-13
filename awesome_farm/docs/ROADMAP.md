@@ -10,7 +10,7 @@ split big ones into slices (rules, art, polish).
 - [x] S17 Hotbar auto-refill of a pinned stack (food, potions and seeds)
 - [x] S18 Recent recipes tab in Crafting
 - [x] S21 Item comparison tooltips with green/red deltas (always on when a different piece is worn)
-- [ ] S28 Quick-sell undo window
+- [x] S28 Quick-sell undo window (10 s, Undo sale button at the market)
 - [ ] S30 Give item to a nearby friend (no full trade window)
 - [ ] S27 Auto-sort backpack setting
 - [ ] S29 Trade history (last few trades)

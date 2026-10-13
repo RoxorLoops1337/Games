@@ -1,5 +1,6 @@
 // Player actions that move things around: building, crafting, gear, food, trade, skills.
 
+import { recordSale } from './stash';
 import { TILE, TUNING } from '../config';
 import { BIOME_DEFS, MODS } from '../data/biomes';
 import { BUILDINGS, BuildingKind, isBeltLike, SEED_IDS } from '../data/buildings';
@@ -363,6 +364,7 @@ export function cmdSell (sim: Sim, p: PlayerS, item: ItemId, n: number) {
     const coins = Math.max(1, Math.round(sellValue(p, item, n)));
     takeItem(p, item, n);
     p.coins += coins;
+    recordSale(sim, p, item, n, coins);
     quests.count(p, 'sell', coins);
     sim.fx('sell', p.x, p.y - 10, p.id);
     sim.float(p.x, p.y - 22, `+${coins} coins`, PAL.gold, p.id, 'sell');
