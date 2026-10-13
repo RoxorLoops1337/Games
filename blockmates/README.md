@@ -26,7 +26,8 @@ node blockmates/server/node.js --port 8787 --save world.json --name "Our world" 
 ```
 
 Needs Node 18+. The same process serves the game page, so friends on your network open `http://<your-ip>:8787/`, and anyone
-can also use the hosted page and type your address into "Join a server". For internet play put it behind a TLS proxy
+can also use the hosted page and type your address into "Join a server" (browsers only allow a secure `wss://` address from the
+hosted https page, so a plain home server is joined by opening its own `http://` page instead). For internet play put it behind a TLS proxy
 (Caddy, nginx, Cloudflare Tunnel) and share `wss://your-host`. Flags: `--seed`, `--password`, `--ops a,b`, `--port`.
 The first player to join a brand new world is its operator.
 
