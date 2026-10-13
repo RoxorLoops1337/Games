@@ -424,5 +424,16 @@ export function museum(_o: BOpts): Model<BuildE> {
     }));
     return { obj: root };
 }
+export function coffer(_o: BOpts): Model<BuildE> {
+    const root = new THREE.Group();
+    root.add(bake('work.coffer', (mb) => {
+        const b = mb.main;
+        b.box(0.7, 0.4, 0.5, wc(0.7), { y: 0.2, j: 0.012 });
+        b.box(0.72, 0.06, 0.52, 0x7a7f9e, { y: 0.28, j: 0.004 });
+        b.box(0.08, 0.42, 0.52, 0x7a7f9e, { y: 0.21, j: 0.004 });
+        b.cyl(0.1, 0.1, 0.03, 8, 0xffd966, { y: 0.44, z: 0, ao: false });
+    }));
+    return { obj: root };
+}
 export const SL1 = 0x7a7f9e;
-export const CRAFT = { workbench, anvil, kitchen, loom, alchemy, furnace, sawmill, millstone, fishpond, beehive, museum };
+export const CRAFT = { workbench, anvil, kitchen, loom, alchemy, furnace, sawmill, millstone, fishpond, beehive, museum, coffer };

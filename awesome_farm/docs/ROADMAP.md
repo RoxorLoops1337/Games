@@ -47,6 +47,9 @@ split big ones into slices (rules, art, polish).
 
 ## Phase 5: the big five (each in slices)
 - [ ] B5 Shared farm tools: coffer, request board, blueprint book
+  - [x] B5a Farm Coffer (anyone pays in, take back only your own, tops up land purchases; PROTOCOL 44)
+  - [ ] B5b Request board (post what the farm needs; others fill it)
+  - [ ] B5c Shared blueprint book
 - [ ] B4 Factory v2: modules, chest gauge, harvester arm + sprinkler
 - [ ] B1 Cottages: the folk move in
 - [ ] B2 Festival eve + the Lantern Chain

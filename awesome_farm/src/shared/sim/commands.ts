@@ -7,6 +7,7 @@ import { cleanLook, cleanScarf } from '../data/look';
 import { hitPoint } from '../geom';
 import * as blight from './blight';
 import * as bond from './bond';
+import * as coffer from './coffer';
 import * as stash from './stash';
 import * as trade from './trade';
 import * as boss from './boss';
@@ -69,6 +70,7 @@ export function command (sim: Sim, pid: string, c: Cmd) {
         case 'crate': return fortune.cmdCrate(sim, p, c);
         case 'fortune': return fortune.cmdFortune(sim, p, c);
         case 'buy': return economy.cmdBuy(sim, p, c.plot);
+        case 'coffer': return coffer.cmdCoffer(sim, p, c);
         case 'build': return economy.cmdBuild(sim, p, c.kind, c.tx, c.ty, c.rot ?? 0);
         case 'bp': return economy.cmdBlueprint(sim, p, c);
         case 'demolish': return economy.cmdDemolish(sim, p, c.id);
