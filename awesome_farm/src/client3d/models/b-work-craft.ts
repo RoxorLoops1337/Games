@@ -424,5 +424,38 @@ export function museum(_o: BOpts): Model<BuildE> {
     }));
     return { obj: root };
 }
+export function coffer(_o: BOpts): Model<BuildE> {
+    const root = new THREE.Group();
+    root.add(bake('work.coffer', (mb) => {
+        const b = mb.main;
+        b.box(0.7, 0.4, 0.5, wc(0.7), { y: 0.2, j: 0.012 });
+        b.box(0.72, 0.06, 0.52, 0x7a7f9e, { y: 0.28, j: 0.004 });
+        b.box(0.08, 0.42, 0.52, 0x7a7f9e, { y: 0.21, j: 0.004 });
+        b.cyl(0.1, 0.1, 0.03, 8, 0xffd966, { y: 0.44, z: 0, ao: false });
+    }));
+    return { obj: root };
+}
+export function board(_o: BOpts): Model<BuildE> {
+    const root = new THREE.Group();
+    root.add(bake('work.board', (mb) => {
+        const b = mb.main;
+        for (const x of [-0.35, 0.35]) b.box(0.07, 0.8, 0.07, wc(0.55), { x, y: 0.4, z: 0, j: 0.006 });
+        b.box(0.9, 0.5, 0.05, wc(0.8), { y: 0.65, z: 0.04, j: 0.008 });
+        b.box(0.22, 0.2, 0.01, 0xffffff, { x: -0.25, y: 0.7, z: 0.08, ao: false });
+        b.box(0.18, 0.16, 0.01, 0xffd966, { x: 0.05, y: 0.62, z: 0.08, ao: false });
+        b.box(0.18, 0.22, 0.01, 0xcdf3fa, { x: 0.3, y: 0.7, z: 0.08, ao: false });
+    }));
+    return { obj: root };
+}
+export function shelf(_o: BOpts): Model<BuildE> {
+    const root = new THREE.Group();
+    root.add(bake('work.shelf', (mb) => {
+        const b = mb.main;
+        b.box(0.8, 0.9, 0.3, wc(0.7), { y: 0.45, j: 0.01 });
+        for (const y of [0.3, 0.62]) b.box(0.7, 0.02, 0.26, wc(0.9), { y, z: 0.03, ao: false });
+        for (const [x, y, c] of [[-0.22, 0.4, 0xcdf3fa], [0, 0.4, 0xe8d8a8], [0.22, 0.4, 0xcdf3fa], [-0.15, 0.74, 0xe8d8a8], [0.15, 0.74, 0xcdf3fa]] as const) b.box(0.14, 0.18, 0.1, c, { x, y, z: 0.1, j: 0.004 });
+    }));
+    return { obj: root };
+}
 export const SL1 = 0x7a7f9e;
-export const CRAFT = { workbench, anvil, kitchen, loom, alchemy, furnace, sawmill, millstone, fishpond, beehive, museum };
+export const CRAFT = { workbench, anvil, kitchen, loom, alchemy, furnace, sawmill, millstone, fishpond, beehive, museum, coffer, board, shelf };

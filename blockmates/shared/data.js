@@ -33,7 +33,7 @@ blk('ice', { hard: 0.8, need: 1, color: '#a9dcf5' });
 blk('clay', { hard: 0.7, tool: 'shovel', color: '#b0775e' });
 blk('gravel', { hard: 0.6, tool: 'shovel', color: '#79767a', gravity: true });
 blk('bedrock', { hard: 1e9, need: 99, color: '#262630' });
-blk('log', { hard: 1.4, tool: 'axe', color: '#7a4e2a' });
+blk('log', { hard: 1.4, tool: 'axe', solid: false, color: '#7a4e2a' }); // trunks are scenery you walk past, like the trees of the genre
 blk('leaves', { hard: 0.25, tool: 'axe', solid: false, drop: 'sapling', dropChance: 0.18, color: '#3f9a3a', leafy: true });
 blk('cactus', { hard: 0.5, tool: 'axe', solid: false, color: '#3f8a4e', hurts: 1 });
 blk('coal_ore', { hard: 2.8, need: 1, drop: 'coal', color: '#33343a' });

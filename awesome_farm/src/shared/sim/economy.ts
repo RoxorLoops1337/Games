@@ -16,6 +16,7 @@ import * as bed from './bed';
 import * as chronicle from './chronicle';
 import * as defense from './defense';
 import * as gather from './gather';
+import { coverShortfall } from './coffer';
 import * as museum from './museum';
 import * as mail from './mail';
 import * as potluck from './potluck';
@@ -167,6 +168,7 @@ export function cmdBuy (sim: Sim, p: PlayerS, plotIndex: number) {
     if (plot?.blight === 1) { sim.deny(p, 'Destroy the Blight nest first'); return; }
     if (!plot || !sim.world.isPurchasable(plot)) return;
     const price = Math.max(1, Math.round(sim.world.price(plot, p.plotsBought) * derived(p).landMul));
+    if (p.coins < price) coverShortfall(sim, p, price - p.coins);          // (the farm coffers top up what you lack, when they hold enough)
     if (p.coins < price) { sim.deny(p, `Needs ${price} coins`); return; }
     p.coins -= price;
     p.plotsBought++;
@@ -206,6 +208,9 @@ export function cmdUse (sim: Sim, p: PlayerS, id: number, seed?: ItemId) {
     if (b.kind === 'mineladder') { mines.ascend(sim, p, b); return; }
     if (b.kind === 'mailbox') { mail.open(sim, p, b); return; }
     if (b.kind === 'museum') { museum.use(sim, p, b); return; }
+    if (b.kind === 'shelf') { sim.events.push({ e: 'open', to: p.id, ui: 'shelf', id: b.id }); return; }
+    if (b.kind === 'board') { sim.events.push({ e: 'open', to: p.id, ui: 'board', id: b.id }); return; }
+    if (b.kind === 'coffer') { sim.events.push({ e: 'open', to: p.id, ui: 'coffer', id: b.id }); return; }
     if (b.kind === 'den') { sim.events.push({ e: 'open', to: p.id, ui: 'den', id: b.id }); return; }
     if (b.kind === 'altar') { sim.events.push({ e: 'open', to: p.id, ui: 'altar', id: b.id }); return; }
     if (b.kind === 'hatchery') { sim.events.push({ e: 'open', to: p.id, ui: 'hatchery', id: b.id }); return; }

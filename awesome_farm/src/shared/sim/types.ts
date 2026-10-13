@@ -62,6 +62,10 @@ export interface BuildE {
     tx: number; ty: number;  // top-left tile of the footprint
     rot: number;             // 0..3, for directional machines
     inv?: Inv;               // chest contents / processor inputs (an Uber Chest's is the world's shared store: sim/uber.ts)
+    ask?: { rid: number; by: string; who: string; it: ItemId; n: number; got: number; ea: number }[];   // a Request Board: what is asked for, how much is in, the reward a unit pays (sim/board.ts)
+    bps?: { sid: number; by: string; who: string; name: string; items: BlueprintItem[] }[];   // a Blueprint Shelf: layouts farmers shared (sim/shelf.ts)
+    mod?: 'speed';           // a module slotted into a machine (sim/machines.ts: cmdModule)
+    cof?: { c: number; by: Record<string, number> };   // a Farm Coffer: the coins in it and who put in how much (sim/coffer.ts)
     cap?: number;            // an Uber Chest: the room all of them give together (sim/uber.ts: storageOf)
     out?: Inv;               // processor outputs
     fin?: Inv;               // the fuel ITEMS waiting to be burned (coal, planks…): what is loaded into the fuel slot
@@ -392,6 +396,10 @@ export type Cmd =
     /** The Fortune Wheel: spin it, or press your luck with the last coin prize (`double`), or `take` it as it is. */
     | { t: 'fortune'; op: 'spin' | 'double' | 'take'; id: number }
     | { t: 'buy'; plot: number }
+    | { t: 'board'; op: 'post' | 'fill' | 'cancel'; id: number; rid?: number; n?: number; text?: string }
+    | { t: 'module'; id: number; op: 'put' | 'take' }
+    | { t: 'shelf'; op: 'publish' | 'remove'; id: number; sid?: number; name?: string; items?: BlueprintItem[] }
+    | { t: 'coffer'; op: 'put' | 'take'; id: number; n: number }
     | { t: 'build'; kind: BuildingKind; tx: number; ty: number; rot?: number }
     | { t: 'demolish'; id: number }
     | { t: 'eat'; item?: ItemId }
@@ -464,7 +472,7 @@ export type Cmd =
     | { t: 'dev'; key: string }
     | { t: 'devdo'; op: DevOp; id?: string; who?: string; n?: number; lv?: number; x?: number; y?: number; at?: 'feet' | 'front'; elite?: boolean; on?: boolean };
 
-export type UiKind = 'fortune' | 'market' | 'station' | 'proc' | 'chest' | 'bed' | 'device' | 'altar' | 'den' | 'waystone' | 'dock' | 'hatchery' | 'wish' | 'mail' | 'vane' | 'table' | 'tower';
+export type UiKind = 'fortune' | 'market' | 'station' | 'proc' | 'chest' | 'bed' | 'device' | 'altar' | 'den' | 'waystone' | 'dock' | 'hatchery' | 'wish' | 'mail' | 'vane' | 'table' | 'tower' | 'coffer' | 'board' | 'shelf';
 
 /** Things that happened — clients turn them into FX, floating text and banners. */
 /** One farmer's luck: the daily free spin, the spin price, the jackpot and crate pity, and the coin prize they may still gamble. */

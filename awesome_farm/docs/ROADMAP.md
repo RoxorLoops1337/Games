@@ -41,13 +41,20 @@ split big ones into slices (rules, art, polish).
 
 ## Phase 4: polish and health (small + medium)
 - [x] M15 Accessibility pass 1 (the Shake switch now also turns off lightning flashes, slow motion and buzzing, and says so)
-- [ ] M15b Larger text option, colour-blind marks, phone pack leftovers
-- [ ] S35 Settings polish
-- [ ] S34 Playbot short run as a health check
+- [ ] M15b Colour-blind marks, phone pack leftovers (larger text shipped with S35)
+- [x] S35 Settings polish (Larger text switch, settings rows tidied; shown in the headless browser)
+- [x] S34 Playbot short run as a health check (already built: tests/playbot.test.ts plays the first 3 days inside npm test)
 
 ## Phase 5: the big five (each in slices)
-- [ ] B5 Shared farm tools: coffer, request board, blueprint book
+- [x] B5 Shared farm tools: coffer, request board, blueprint book
+  - [x] B5a Farm Coffer (anyone pays in, take back only your own, tops up land purchases; PROTOCOL 44)
+  - [x] B5b Request board (post "plank 50", reward held up front, others fill it for the coins; PROTOCOL 45)
+  - [x] B5c Shared blueprint book (Blueprint Shelf: share your newest blueprint, others copy it into their book; PROTOCOL 46)
 - [ ] B4 Factory v2: modules, chest gauge, harvester arm + sprinkler
+  - [x] B4a Chest fill gauge (a little bar at the foot of every chest with something in it: green, gold, red)
+  - [x] B4b Speed Module (assembler recipe; slot one into a machine for +25% speed with the Module button; PROTOCOL 47; efficiency module still to do)
+  - [ ] B4c Harvester arm
+  - [ ] B4d Sprinkler
 - [ ] B1 Cottages: the folk move in
 - [ ] B2 Festival eve + the Lantern Chain
 - [ ] B3 The Long Dusk (new game plus)

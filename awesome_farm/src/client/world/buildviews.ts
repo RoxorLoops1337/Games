@@ -9,6 +9,7 @@ import { chestIcon } from '../../shared/data/filters';
 import { iconOf } from '../../shared/data/items';
 import { PAL } from '../../shared/palette';
 import * as potluck from '../../shared/sim/potluck';
+import { fillColor, fillOf } from '../../shared/sim/uber';
 import type { BuildE, Ent } from '../../shared/sim/types';
 import type { World } from '../../shared/world';
 import { squash } from './farmers';
@@ -106,7 +107,7 @@ export class BuildViews {
         if (isBeltLike(b.kind) || b.kind === 'drill') (v.sprite as Spr).setAngle((b.rot & 3) * 90);
         if (b.kind === 'doorway') (v.sprite as Img).setAngle((b.rot & 1) * 90);
         if (BUILDINGS[b.kind].wall || BUILDINGS[b.kind].gate) this.rejoinWalls(b);
-        if (BUILDINGS[b.kind].storage && !BUILDINGS[b.kind].pets) this.refreshTag(v, b);
+        if (BUILDINGS[b.kind].storage && !BUILDINGS[b.kind].pets) { this.refreshTag(v, b); this.refreshGauge(v, b); }
         if (b.kind === 'table') { this.refreshDishes(v, b); return; }
         if (b.kind !== 'bed') return;
         const crop = b.plant ? CROPS[b.plant] : undefined;
@@ -136,6 +137,18 @@ export class BuildViews {
         } else v.tag[2].setTexture(tex, 0).setDisplaySize(10, 10);
         squash(s, v.tag[2], 1.5, 0.6, 110);
         this.h.pop(v.x, v.y - 15, 2);
+    }
+
+    /** A chest with something in it wears a thin bar at its foot: how full it is, green then gold then red (so a full chest is seen from afar, before a drill backs up). */
+    private refreshGauge (v: EntView, b: BuildE) {
+        const f = fillOf(b);
+        const w = Math.max(1, Math.round(f * 10)), key = `${w}`;
+        if (f <= 0) { v.gauge?.forEach((i) => i.destroy()); v.gauge = undefined; v.gaugeKey = undefined; return; }
+        if (v.gaugeKey === key) return;
+        v.gaugeKey = key;
+        const s = this.scene, y = v.y + 3, depth = v.y + 0.5;
+        if (!v.gauge) v.gauge = [overlay3d(s.add.image(v.x, y, 'px').setDisplaySize(12, 4).setTint(PAL.ink).setDepth(depth)), overlay3d(s.add.image(v.x - 5, y, 'px').setOrigin(0, 0.5).setDepth(depth + 0.01))];
+        v.gauge[1].setDisplaySize(w, 2).setTint(fillColor(f));
     }
 
     /** A potluck table shows what is on it: a clean runner and a little icon of each dish (up to four), side by side. */

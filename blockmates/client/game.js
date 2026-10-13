@@ -7,8 +7,9 @@ import { Sound } from './audio.js';
 import { UI } from './ui.js';
 import { clamp, daylight } from '../shared/util.js';
 import { SKINS } from './art.js';
-import { JOBS } from '../server/npcs.js';
+import { JOBS, findPath } from '../server/npcs.js';
 import { Tutorial } from './tutorial.js';
+import { planDig, blockers, bestTool } from './dig.js';
 import { phaseOf } from '../shared/util.js';
 
 const INTERACTIVE = new Set(['door_closed', 'door_open', 'door_top_closed', 'door_top_open', 'chest', 'sign', 'bed', 'waystone']);
@@ -43,7 +44,7 @@ export class Game {
     this.me = { x: 0, y: 0, vx: 0, vy: 0, w: PLAYER.w, h: PLAYER.h, onGround: false, dir: 1, dead: false, look: {}, name: '', anim: 0, id: 0 };
     this.cam = { x: 0, y: 0 };
     this.server = null; this.snapAt = 0; this.ping = 0; this.seq = 0; this.lastKeys = -1; this.sendT = 0;
-    this.mining = null; this.chest = null; this.stations = new Set(); this.stT = 0;
+    this.order = null; this.mining = null; this.chest = null; this.stations = new Set(); this.stT = 0;
     this.hurtFlash = 0; this.under = false; this.showPlayers = false; this.shake = 0;
     this.actT = 0; this.atkT = 0; this.stepT = 0; this.prevGround = false; this.prevVy = 0; this.mapT = 0;
     this.cursor = null; this.ghost = 0; this.t = 0; this.time0 = 0;
@@ -245,19 +246,19 @@ export class Game {
     addEventListener('keydown', (e) => this.onKey(e, true));
     addEventListener('keyup', (e) => this.onKey(e, false));
     addEventListener('blur', () => { this.keys.clear(); this.mouse.l = this.mouse.r = false; });
-    cv.addEventListener('mousedown', (e) => { this.sound.start(); this.mouse.x = e.offsetX; this.mouse.y = e.offsetY; if (e.button === 0) this.mouse.l = true; if (e.button === 2) { this.mouse.r = true; this.rClick = true; } e.preventDefault(); });
+    cv.addEventListener('mousedown', (e) => { this.sound.start(); this.mouse.x = e.offsetX; this.mouse.y = e.offsetY; if (e.button === 0) { this.mouse.l = true; this.pointerDown(); } if (e.button === 2) { this.mouse.r = true; this.rClick = true; } e.preventDefault(); });
     addEventListener('mouseup', (e) => { if (e.button === 0) this.mouse.l = false; if (e.button === 2) this.mouse.r = false; });
     cv.addEventListener('mousemove', (e) => { this.mouse.x = e.offsetX; this.mouse.y = e.offsetY; });
     cv.addEventListener('contextmenu', (e) => e.preventDefault());
     addEventListener('mousemove', (e) => { this.lastMouse = { x: e.clientX, y: e.clientY }; const t = this.ui.tip; if (t.classList.contains('on')) { t.style.left = e.clientX + 14 + 'px'; t.style.top = e.clientY + 14 + 'px'; } });
     cv.addEventListener('wheel', (e) => {
       e.preventDefault();
-      if (e.ctrlKey) { this.zoom = clamp(this.zoom * (e.deltaY < 0 ? 1.1 : 0.9), 0.5, 2.2); return; }
+      if (e.ctrlKey) { this.zoom = clamp(this.zoom * (e.deltaY < 0 ? 1.1 : 0.9), 0.3, 2.2); return; }
       this.selectSlot((this.sel + (e.deltaY > 0 ? 1 : 9)) % 10);
     }, { passive: false });
     // touch: one finger on the world = mine/place at that spot
     const tpos = (t) => { const r = cv.getBoundingClientRect(); return [t.clientX - r.left, t.clientY - r.top]; };
-    cv.addEventListener('touchstart', (e) => { this.sound.start(); const [x, y] = tpos(e.changedTouches[0]); this.mouse.x = x; this.mouse.y = y; if (this.touchMode === 'mine') this.mouse.l = true; else { this.mouse.r = true; this.rClick = true; } e.preventDefault(); }, { passive: false });
+    cv.addEventListener('touchstart', (e) => { this.sound.start(); const [x, y] = tpos(e.changedTouches[0]); this.mouse.x = x; this.mouse.y = y; if (this.touchMode === 'mine') { this.mouse.l = true; this.pointerDown(); } else { this.mouse.r = true; this.rClick = true; } e.preventDefault(); }, { passive: false });
     cv.addEventListener('touchmove', (e) => { const [x, y] = tpos(e.changedTouches[0]); this.mouse.x = x; this.mouse.y = y; e.preventDefault(); }, { passive: false });
     const tend = (e) => { this.mouse.l = this.mouse.r = false; e.preventDefault(); };
     cv.addEventListener('touchend', tend, { passive: false }); cv.addEventListener('touchcancel', tend, { passive: false });
@@ -269,7 +270,7 @@ export class Game {
     const k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
     if (down) {
       if (this.ui.modalOpen) { if (k === 'Escape' || (k === 'v' && this.ui.modal.querySelector('.emotes'))) this.ui.hideModal(); else if (/^[1-9]$/.test(k) && this.ui.modal.querySelector('.emotes')) { this.send({ t: 'emote', e: +k }); this.ui.hideModal(); } return; }
-      if (k === 'Escape') { if (this.ui.open) this.ui.closePanel(); else this.ui.pause(); e.preventDefault(); return; }
+      if (k === 'Escape') { if (this.order) { this.order = null; e.preventDefault(); return; } if (this.ui.open) this.ui.closePanel(); else this.ui.pause(); e.preventDefault(); return; }
       if (k === 'e' || k === 'i') { this.ui.toggleInv(); e.preventDefault(); return; }
       if (k === 't' || k === 'Enter') { this.ui.openChat(); e.preventDefault(); return; }
       if (k === '/') { this.ui.openChat('/'); e.preventDefault(); return; }
@@ -278,8 +279,8 @@ export class Game {
       if (k === 'q' && !e.repeat) { const i = this.sel; if (this.inv[i]) this.send({ t: 'drop', i, n: e.shiftKey ? this.inv[i].n : 1 }); return; }
       if (k === 'f' && !e.repeat) { this.send({ t: 'use', i: this.sel }); return; }
       if (k === 'v' && !e.repeat) { this.ui.emoteBar(); return; }
-      if (k === '+' || k === '=') { this.zoom = clamp(this.zoom * 1.1, 0.5, 2.2); return; }
-      if (k === '-') { this.zoom = clamp(this.zoom / 1.1, 0.5, 2.2); return; }
+      if (k === '+' || k === '=') { this.zoom = clamp(this.zoom * 1.1, 0.3, 2.2); return; }
+      if (k === '-') { this.zoom = clamp(this.zoom / 1.1, 0.3, 2.2); return; }
       if (k === 'h') { this.tut.toggle(); return; }
       if (k === 'm') { this.ui.worldMap(); e.preventDefault(); return; }
       if (k === 'F2') { this.photo(); e.preventDefault(); return; }
@@ -297,8 +298,115 @@ export class Game {
       this.canvas.toBlob((b) => { const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = 'blockmates-' + Date.now() + '.png'; a.click(); hud.style.visibility = ''; });
     }));
   }
+  // ---- tap to act: a click on a block walks over and mines it, a click on open ground walks there
+  pointerDown() {
+    if (!this.joined || this.me.dead || this.ui.open || this.ui.modalOpen || this.ui.chatOpen) return;
+    const c = this.cellAtMouse(), me = this.me;
+    const held = this.held, def = held && ITEMS[held.id];
+    if (def && def.tool === 'bow') return;
+    for (const m of this.mobs.values()) { const md = MOBS[m.type]; if (Math.abs(c.wx - m.x) < md.w / 2 + 0.5 && c.wy > m.y - md.h - 0.5 && c.wy < m.y + 0.4) { this.order = Math.hypot(m.x - me.x, m.y - me.y) > 3 ? { kind: 'walk', x: Math.floor(m.x), y: Math.floor(m.y - 0.1), mob: m.id } : null; return; } }
+    if (c.y < 1 || c.y >= H - 1) return;
+    const now = performance.now();
+    const dbl = this._lastClick && now - this._lastClick.t < 380 && this._lastClick.x === c.x && this._lastClick.y === c.y;
+    this._lastClick = { t: now, x: c.x, y: c.y };
+    if (dbl) { // double click: dig a way there
+      this.order = { kind: 'dig', x: c.x, y: c.y, t: 0, path: null, pt: 0, pi: 1 };
+      this.mark = { x: c.x, y: c.y, kind: 'dig' }; this.markT = 3;
+      this.ui.showToast('Digging a way there...');
+      return;
+    }
+    const fg = this.cw.fgAt(c.x, c.y);
+    const bgMine = this.keys.has('Shift') && this.cw.bgAt(c.x, c.y) && !fg;
+    if ((fg && !BLOCKS[fg].plant) || bgMine || (fg && BLOCKS[fg].plant)) { this.order = { kind: 'mine', x: c.x, y: c.y, l: bgMine ? 1 : 0, t: 0, path: null, pt: 0 }; this.markT = 0.6; this.mark = { x: c.x, y: c.y, kind: 'mine' }; return; }
+    // open space: walk to the ground below the click
+    let fy = c.y;
+    for (let k = 0; k < 14 && !this.cw.solidAt(c.x, fy + 1); k++) fy++;
+    this.order = { kind: 'walk', x: c.x, y: fy, t: 0, path: null, pt: 0 };
+    this.mark = { x: c.x, y: fy, kind: 'walk' }; this.markT = 0.8;
+  }
+  orderKeys(dt) {
+    const o = this.order, me = this.me;
+    this.orderMine = null;
+    if (!o) return 0;
+    const cx = Math.floor(me.x), cy = Math.floor(me.y - 0.01);
+    if (o.kind === 'dig') return this.digKeys(o, dt);
+    let goal;
+    if (o.kind === 'mine') {
+      const id = o.l === 0 ? this.cw.fgAt(o.x, o.y) : this.cw.bgAt(o.x, o.y);
+      if (!id || (o.l === 1 && this.cw.fgAt(o.x, o.y))) { this.order = null; return 0; }
+      const d = Math.hypot(o.x + 0.5 - me.x, o.y + 0.5 - (me.y - 0.9));
+      if (d <= 3.4) { me.dir = o.x + 0.5 >= me.x ? 1 : -1; this.autoTool(id); this.orderMine = o; return 0; } // close enough: stand still and mine
+      goal = (x, y) => { const dx = x + 0.5 - (o.x + 0.5), dy = y - 0.4 - (o.y + 0.5); return (x !== o.x || y - 1 !== o.y) && dx * dx + dy * dy <= 3 * 3; };
+    } else {
+      if (o.mob) { const m = this.mobs.get(o.mob); if (!m) { this.order = null; return 0; } o.x = Math.floor(m.x); o.y = Math.floor(m.y - 0.1); if (Math.hypot(m.x - me.x, m.y - me.y) < 2.2) { this.order = null; return 0; } }
+      if (Math.abs(me.x - (o.x + 0.5)) < 0.35 && Math.abs(cy - o.y) < 2) { this.order = null; return 0; }
+      goal = (x, y) => x === o.x && Math.abs(y - o.y) <= 0;
+    }
+    o.pt -= dt;
+    if (o.pt <= 0 || !o.path) {
+      o.pt = 0.8;
+      o.path = findPath(this.cw, cx, cy, goal, 4000);
+      o.pi = 1;
+      if (!o.path && o.kind === 'walk') o.path = [[cx, cy], [o.x, o.y]]; // no route found: just head that way
+      if (!o.path) { o.fail = (o.fail || 0) + 1; if (o.fail > 3) { this.order = null; this.ui.showToast('Cannot reach that.'); } return 0; }
+    }
+    let keys = 0;
+    while (o.pi < o.path.length && Math.abs(me.x - (o.path[o.pi][0] + 0.5)) < 0.3 && Math.abs((me.y - 0.01) - (o.path[o.pi][1] + 0.99)) < 1.3) o.pi++;
+    if (o.pi < o.path.length) {
+      const [px, py] = o.path[o.pi];
+      const tx = px + 0.5;
+      if (tx > me.x + 0.08) keys |= K_RIGHT; else if (tx < me.x - 0.08) keys |= K_LEFT;
+      if (py < cy && me.onGround && Math.abs(me.x - tx) < 1.5) keys |= K_JUMP;
+      if (me.hitWall && me.onGround) keys |= K_JUMP;
+      me.hitWall = false;
+    }
+    return keys;
+  }
+  digKeys(o, dt) {
+    const me = this.me, cx = Math.floor(me.x), cy = Math.floor(me.y - 0.01);
+    if (cx === o.x && cy === o.y) { this.order = null; this.ui.showToast('Arrived.'); return 0; }
+    o.pt -= dt;
+    if (!o.path || o.pt <= 0 || o.dirty) {
+      o.pt = 1.2; o.dirty = false;
+      o.path = planDig(this.cw, this.inv, cx, cy, o.x, o.y);
+      o.pi = 1;
+      if (!o.path) { this.order = null; this.ui.showToast("Can't dig a way there with these tools."); return 0; }
+    }
+    // keep to the plan: skip nodes we already stand on
+    while (o.pi < o.path.length && o.path[o.pi][0] === cx && o.path[o.pi][1] === cy) o.pi++;
+    if (o.pi >= o.path.length) { o.pt = 0; return 0; }
+    const next = o.path[o.pi];
+    const bl = blockers(this.cw, [cx, cy], next);
+    if (bl.length) {
+      const [bx, by] = bl[0];
+      const id = this.cw.fgAt(bx, by);
+      this.autoTool(id);
+      this.orderMine = { x: bx, y: by, l: 0 };
+      me.dir = bx + 0.5 >= me.x ? 1 : -1;
+      return 0; // stand still and dig
+    }
+    let keys = 0;
+    const tx = next[0] + 0.5;
+    if (tx > me.x + 0.1) keys |= K_RIGHT; else if (tx < me.x - 0.1) keys |= K_LEFT;
+    if (next[1] < cy && me.onGround) keys |= K_JUMP;
+    if (Math.abs(me.x - tx) < 0.2 && next[0] === cx) { /* straight down: just fall */ }
+    return keys;
+  }
+  // hold the best tool for the block in front of us
+  autoTool(blockId) {
+    if (!blockId) return;
+    const bd = BLOCKS[blockId], kind = bd.tool === 'any' ? null : bd.tool;
+    if (!kind) return;
+    const { slot } = bestTool(this.inv, kind);
+    if (slot >= 0 && slot !== this.sel) this.selectSlot(slot);
+  }
   inputKeys() {
     if (this.ui.chatOpen || this.ui.modalOpen) return 0;
+    const manual = this.rawKeys();
+    if (manual) { if (this.order) this.order = null; return manual; }
+    return this.orderKeys(DT);
+  }
+  rawKeys() {
     const k = this.keys;
     let m = this.touchKeys;
     if (k.has('a') || k.has('ArrowLeft')) m |= K_LEFT;
@@ -352,6 +460,7 @@ export class Game {
     const dx = c.x + 0.5 - me.x, dy = c.y + 0.5 - (me.y - 0.9);
     const reach = dx * dx + dy * dy <= REACH * REACH;
     this.cursor = { x: c.x, y: c.y, ok: c.y >= 0 && c.y < H, reach };
+    this.markT = Math.max(0, (this.markT || 0) - dt);
     const held = this.held, def = held && ITEMS[held.id];
     // what is under the pointer
     let hover = '';
@@ -371,6 +480,13 @@ export class Game {
       if (!this.cw.fgAt(c.x, c.y) && !bd.door) this.ghost = def.place;
     }
     this.actT -= dt; this.atkT -= dt;
+    const om = this.orderMine;
+    if (om && this.order && !this.mouse.l && this.actT <= 0) {
+      this.actT = 0.1; me.dir = om.x + 0.5 >= me.x ? 1 : -1; this.swingNow = true;
+      this.send({ t: 'mine', x: om.x, y: om.y, l: om.l });
+      if (this.mining && (this.mining.x !== om.x || this.mining.y !== om.y)) this.mining = null;
+      if (this.order.kind === 'dig' && this.cw.fgAt(om.x, om.y) === 0) this.order.dirty = true;
+    }
     if (this.mouse.l) {
       me.dir = c.wx >= me.x ? 1 : -1;
       if (def && def.tool === 'bow') {
@@ -438,7 +554,7 @@ export class Game {
     this.time += dt;
     // my entry in the player table follows the predicted body
     const mp = this.players.get(this.myId);
-    if (mp) { mp.x = me.x; mp.y = me.y; mp.vx = me.vx; mp.vy = me.vy; mp.dir = me.dir; mp.onGround = me.onGround; mp.dead = me.dead; mp.climb = !!(me.flags && me.flags.climb); mp.wet = !!(me.flags && me.flags.wet); mp.name = this.profile.name; mp.look = me.look; if (this.mouse.l && !this.ui.open) mp.swingT = Math.max(mp.swingT, 0.01); }
+    if (mp) { mp.x = me.x; mp.y = me.y; mp.vx = me.vx; mp.vy = me.vy; mp.dir = me.dir; mp.onGround = me.onGround; mp.dead = me.dead; mp.climb = !!(me.flags && me.flags.climb); mp.wet = !!(me.flags && me.flags.wet); mp.name = this.profile.name; mp.look = me.look; if ((this.mouse.l || this.swingNow) && !this.ui.open && mp.swingT <= 0) mp.swingT = 0.3; this.swingNow = false; }
     this.actions(dt);
     const k = Math.min(1, dt * 14);
     for (const p of this.players.values()) {
