@@ -234,7 +234,7 @@ for (const fn of ['newGame', 'makeGlad', 'mkUnits', 'createFight', 'step', 'useU
 {
   const rd = (f) => readFileSync(join(root, f), 'utf8');
   const fv = rd('js/fightview.js'), fxs = rd('js/fx.js'), gore = rd('js/gore.js'), main = rd('js/main.js'), post = rd('js/post.js'), dir = rd('js/director.js'), css = rd('css/ui.css'), html = rd('index.html');
-  ok(/startExec\(/.test(fv) && /execHit\(/.test(fv) && /canExec\(/.test(fv) && /executeKill\(\)/.test(fv) && /\.finisher\(\{/.test(fv) && /execPending/.test(fv), 'finisher: last kill staged as an execution (presentation only)');
+  ok(/startExec\(/.test(fv) && /execHit\(/.test(fv) && /canExec\(/.test(fv) && /executeKill\(\)/.test(fv) && /(\.finisher\(\{|\.play\(ex\.clip)/.test(fv) && /execPending/.test(fv), 'finisher: last kill staged as an execution (presentation only)');
   ok(/kind === 'duel' && win === 'A'/.test(fv) && /NO_EXEC/.test(fv) && /clips\.finisher/.test(fv), 'finisher: mercy duels are not struck, sparring and beast rigs skipped');
   ok(/tight/.test(dir) && /tight: true/.test(fv), 'kill cam has a tight execution framing');
   ok(/stepPush\(/.test(fv) && /shove\(/.test(fv) && /MASS\[/.test(fv) && /'skid'/.test(fv), 'weight: visual shove spring, skid marks, heavier styles move less');
@@ -438,6 +438,30 @@ for (const fn of ['newGame', 'makeGlad', 'mkUnits', 'createFight', 'step', 'useU
   ok(/'squelch', 'cleave'/.test(au) && /def\('squelch'/.test(au) && /def\('cleave'/.test(au) && /squelch\|cleave/.test(au), 'audio: squelch and cleave exist and are in the gore voice category');
   ok(/opts\.maxNorm \?\? 1300/.test(fxs), 'fx: the normal-blend particle pool holds the extra droplets (1300)');
   ok((gore.match(/new THREE\.InstancedMesh/g) || []).length === 1 && !/Math\.random/.test(gore) && !/LM\./.test(gore) && !/—/.test(gore + au), 'gore: still one instanced draw call, no Math.random, no sim access, no em dash');
+}
+
+// 12. FATE: kill / spare / ransom decision at the end of a won fight (appended by the fate team)
+{
+  const rd = (f) => readFileSync(join(root, f), 'utf8');
+  const fv = rd('js/fightview.js'), flow = rd('js/flow.js'), kit = rd('js/ui_kit.js'), css = rd('css/ui.css'), gore = rd('js/gore.js'), dir = rd('js/director.js'), sim = rd('core/sim.js'), ext = rd('core/ext.js'), setup = rd('js/fightsetup.js'), arena = rd('core/arena.js');
+  ok(/export function fatePanel/.test(kit) && /lx-fate-opt/.test(kit) && /role', 'group'/.test(kit) && /aria-label/.test(kit) && /dataset\.def/.test(kit), 'fate: the ui kit has a fatePanel with labelled option buttons and a default');
+  ok(/\.lx-fate-opt/.test(css) && /min-height: var\(--lx-tap\)/.test(css) && /@media \(max-width: 700px\)/.test(css.slice(css.indexOf('FATE: decision panel'))) && /prefers-reduced-motion/.test(css.slice(css.indexOf('FATE: decision panel'))), 'fate: panel css has 44px taps, a phone layout and a reduced motion rule');
+  ok(/askFate\(/.test(fv) && /fatePicked\(/.test(fv) && /fatePanel/.test(fv) && /fateOffers/.test(fv) && /replay\.fate|rep\.fate/.test(fv), 'fate: the fight view asks, records the choice in F.replay.fate and plays it back in replays');
+  ok(/\^\[1-9\]\$/.test(fv) && /fateIds/.test(fv) && /k === 'Enter'/.test(fv), 'fate: keys 1 to 3 choose, Enter takes the default');
+  ok(/const FIN = \{/.test(fv) && ['cleave', 'behead', 'scissor', 'impale'].every((k) => new RegExp(k + ': \\{ id').test(fv)) && /FIN_OF = \{[^}]*murmillo[^}]*thraex[^}]*dimachaerus[^}]*hoplomachus[^}]*retiarius/.test(fv), 'fate: four finishing moves, chosen only by the killer weapon style');
+  ok(/clip: 'finisher'/.test(fv) && /clip: 'attack1'/.test(fv) && /clip: 'attack3'/.test(fv) && !/new Animator|addClip|defineClip/.test(fv), 'fate: the finishing moves reuse existing clips (finisher, attack1, attack3), no new animation system');
+  ok(/G\.finisher = \(id, kind, dx, dz\)/.test(gore) && /if \(!G\.on\) return/.test(gore.slice(gore.indexOf('G.finisher'))) && /ctx\.part/.test(gore) && !/Math\.random/.test(gore), 'fate: gore.finisher is a no-op with Gore Off, part override in onDown, still no Math.random');
+  ok(/p\.fl === 'low'/.test(dir) && /p\.lift/.test(dir), 'fate: the kill cam has finishing-move flavours and a lift out from behind the panel');
+  ok(/U\.reduced\(\)/.test(fv.slice(fv.indexOf('execHit(')) ) && /zoomPunch && !rm/.test(fv), 'fate: reduced motion skips the zoom punch, the orbit and the twist');
+  ok(/LM\.fateOffers = /.test(sim) && /LM\.fate = /.test(sim) && /LM\.fateOk = /.test(sim) && /LM\.fateHype/.test(sim) && /LM\.vendetta/.test(sim), 'fate: sim API present');
+  ok(/'kills', 'ransoms'/.test(ext) && /add\('blood5'/.test(ext) && /add\('ransom3'/.test(ext), 'fate: old saves get kills and ransoms at 0, two trophies');
+  ok(/1\.08/.test(arena) && /vendetta/.test(setup) && /fate/.test(setup), 'fate: vendetta damage in arena.js, wired in fightsetup, the result carries the fate');
+  ok(/fateStep\(/.test(flow) && /fateDock\(/.test(flow) && /joinDialog\(/.test(flow) && /The crowd's verdict/.test(flow) && !/Show mercy/.test(flow), 'fate: results report the verdict; a dock fallback asks when the arena did not');
+  ok(/'tourney'|tourney/.test(sim.slice(sim.indexOf('FATE_KINDS'), sim.indexOf('FATE_KINDS') + 200)) && !/FATE_KINDS = \{[^}]*(hunt|pit|horde|bounty|champ)/.test(sim), 'fate: duel, tournament and team only; hunts, pit, horde, bounty and champion keep their endings');
+  const mine = [kit.slice(kit.indexOf('FATE: the decision panel')), css.slice(css.indexOf('FATE: decision panel')), fv.slice(fv.indexOf('THE DECISION (kill')), sim.slice(sim.indexOf('FATE: what becomes'), sim.indexOf('weekly economy')), flow.slice(flow.indexOf('the foe the decision is about'), flow.indexOf('if (rep.choice)')), gore.slice(gore.indexOf('G.finisher'), gore.indexOf('replay seek'))].join('\n');
+  ok(!new RegExp('[\u2014\u2013]').test(mine) && !new RegExp('\u2014').test(rd('../tools/ludus3d_bot.mjs') + rd('../tools/ludus3d_qa_lib.mjs')), 'fate: no em or en dashes in the new strings');
+  const qa = rd('../tools/ludus3d_qa_lib.mjs'), bot = rd('../tools/ludus3d_bot.mjs');
+  ok(/lx-fate-opt/.test(qa) && /lx-fate-opt/.test(bot) && /fateAudit/.test(qa), 'fate: the bot and the monkey answer the decision panel (and audit it)');
 }
 
 console.log(`ludus_maximus_3d structure: ${pass} passed, ${fail} failed`);

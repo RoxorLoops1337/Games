@@ -675,8 +675,9 @@
     const head = o.id === 'kill' ? `You killed ${foe.name}.` : o.id === 'spare' ? `You spared ${foe.name}.` : o.id === 'ransom' ? `${own.name} paid ${o.gold} gold to keep ${foe.name} alive.` : `You played to the crowd over ${foe.name}.`;
     lines.push(head, ...o.gain.filter((x) => !/he joins/.test(x)), ...o.cost.filter((x) => /Senate|Plebs|Merchants|regard|Vendetta/.test(x)));
     if (rep && rep.notes) rep.notes.push(head);
-    return { id: o.id, fame: o.fame, gold: o.gold, hype: o.hype, joined, lines, head, name: foe.name };
+    return { id: o.id, fame: o.fame, gold: o.gold, hype: o.hype, joined, lines, head, name: foe.name, gain: o.gain.filter((x) => !/he joins/.test(x)), cost: o.cost };
   };
+  LM.fateHype = (choice) => ({ kill: 15, spare: 6, show: 4, ransom: 0 }[choice] || 0);   // the same numbers as in the offers (hype shown on the buttons)
   /** old two-button API (kept for old callers and tests): 'mercy' spares, anything else showboats */
   LM.mercy = (S, ev, rep, choice) => {
     const o = ev.opps[0], r = LM.fate(S, ev, rep, choice === 'mercy' ? 'spare' : 'show', o); if (!r) return choice === 'mercy' ? { f: 0 } : { gd: 0 };

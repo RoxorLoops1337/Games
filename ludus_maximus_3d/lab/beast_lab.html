@@ -33,7 +33,10 @@ function spawn(kind, x, z, yaw, k) {
 function pose(rig, name, t) {
   const A = rig.animator; A.setMove(0, 0); A.dead = false; A.action = null;
   if (name === 'idle') { for (let i = 0; i < 20; i++) rig.update(1 / 30); return; }
-  if (name === 'walk' || name === 'run') { const G = rig.animator.sp.gait, v = name === 'walk' ? G.walkV : G.runV; A.setMove(v, 0); A.speed = v; for (let i = 0; i < 40; i++) rig.update(1 / 30); const steps = Math.round(t * 30); for (let i = 0; i < steps; i++) rig.update(1 / 30); return; }
+  if (name === 'walk' || name === 'trot' || name === 'run') {   // the root really travels (stance paws are pinned in world space), ending where it was placed
+    const G = rig.animator.sp.gait, v = name === 'walk' ? G.walkV : name === 'trot' ? G.trotV : G.runV, steps = Math.round(t * 30) + 40, yw = rig.root.rotation.y, dx = Math.sin(yw), dz = Math.cos(yw), x1 = rig.root.position.x, z1 = rig.root.position.z;
+    rig.root.position.x = x1 - dx * v * steps / 30; rig.root.position.z = z1 - dz * v * steps / 30; A.setMove(v, 0); A.speed = v;
+    for (let i = 0; i < steps; i++) { rig.root.position.x += dx * v / 30; rig.root.position.z += dz * v / 30; rig.update(1 / 30); } return; }
   for (let i = 0; i < 10; i++) rig.update(1 / 30);
   A.play(name === 'knock' ? 'knockdown' : name); if (name === 'death') A.dead = true; const steps = Math.round(t * 60); for (let i = 0; i < steps; i++) rig.update(1 / 60); rig.update(0.0001);
 }

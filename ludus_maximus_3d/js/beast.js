@@ -152,7 +152,7 @@ const ELEPHANT = {
   front: { dx: 0.42, sy: -0.35, sz: 0.0, up: [-0.55, 0.0], lo: [-0.6, 0.0], pad: 0.12, r: [0.33, 0.27, 0.23], paw: [0.23, 0.09, 0.25] },
   hind: { dx: 0.42, hy: -0.32, hz: 0, up: [-0.5, 0.1], lo: [-0.55, -0.1], pad: 0.12, r: [0.36, 0.27, 0.22], paw: [0.23, 0.09, 0.25] },
   tail: { n: 2, len: 0.45, r: 0.045, at: [0.0, 0.1, -0.5], tuft: 0.07 }, eye: '#2a1a10', fur: '#7b746f', belly: '#948b82', dark: '#4a423e', mane: '#5f5c58', nose: '#6a6560', muz: '#b79088',
-  gait: { walkV: 1.6, trotV: 3.4, runV: 6.5, strideW: 2.2, strideT: 3.0, strideR: 4.8, pace: true }, size: 1, h: 4.4, r: 2.2, nameH: 4.9, trunk: true, rider: true,
+  gait: { walkV: 1.6, trotV: 3.4, runV: 6.5, strideW: 2.2, strideT: 3.0, strideR: 4.8, pace: true, rf: 0.6 }, size: 1, h: 4.4, r: 2.2, nameH: 4.9, trunk: true, rider: true,
 };
 SPECIES.elephant = ELEPHANT;
 
@@ -233,18 +233,18 @@ function plainMat(color, kind, rough, metal, bu, blood = true, o = {}) {
 }
 
 // ------------------------------------------------------------------ clip tables (authored, sparse: only the channels a clip names are overridden)
-const JN = ['hips', 'spine', 'chest', 'neck', 'head', 'jaw', 'earL', 'earR', 'tail1', 'tail2', 'tail3', 'shoulderL', 'elbowL', 'wristL', 'shoulderR', 'elbowR', 'wristR', 'hipL', 'kneeL', 'ankleL', 'hipR', 'kneeR', 'ankleR', 'trunk1', 'trunk2', 'trunk3', 'trunk4', 'rider', 'riderArm', 'eyeL', 'eyeR', 'lidL', 'lidR', 'mane1', 'mane2', 'flag1', 'flag2'];
+const JN = ['hips', 'spine', 'chest', 'neck', 'head', 'jaw', 'earL', 'earR', 'tail1', 'tail2', 'tail3', 'shoulderL', 'elbowL', 'wristL', 'shoulderR', 'elbowR', 'wristR', 'hipL', 'kneeL', 'ankleL', 'hipR', 'kneeR', 'ankleR', 'trunk1', 'trunk2', 'trunk3', 'trunk4', 'rider', 'riderArm', 'eyeL', 'eyeR', 'lidL', 'lidR', 'mane1', 'mane2', 'flag1', 'flag2', 'browL', 'browR', 'lipL', 'lipR'];
 const JI = {}; JN.forEach((n, i) => { JI[n] = i; });
 // PERF: channel offsets resolved once (the per-frame code used string concatenation, array literals and closures for these)
 const LEG_I = [['shoulderL', 'elbowL', 'wristL'], ['shoulderR', 'elbowR', 'wristR'], ['hipL', 'kneeL', 'ankleL'], ['hipR', 'kneeR', 'ankleR']].map((r) => r.map((n) => JI[n] * 3));
-const TAIL_I = [1, 2, 3].map((i) => JI['tail' + i] * 3), TRUNK_I = [1, 2, 3, 4].map((i) => JI['trunk' + i] * 3), EAR_I = [JI.earL * 3, JI.earR * 3], EYE_I = [JI.eyeL * 3, JI.eyeR * 3], LID_I = [JI.lidL * 3, JI.lidR * 3], MANE_I = [JI.mane1 * 3, JI.mane2 * 3], FLAG_I = [JI.flag1 * 3, JI.flag2 * 3];
+const TAIL_I = [1, 2, 3].map((i) => JI['tail' + i] * 3), TRUNK_I = [1, 2, 3, 4].map((i) => JI['trunk' + i] * 3), EAR_I = [JI.earL * 3, JI.earR * 3], EYE_I = [JI.eyeL * 3, JI.eyeR * 3], LID_I = [JI.lidL * 3, JI.lidR * 3], MANE_I = [JI.mane1 * 3, JI.mane2 * 3], FLAG_I = [JI.flag1 * 3, JI.flag2 * 3], BROW_I = [JI.browL * 3, JI.browR * 3], LIP_I = [JI.lipL * 3, JI.lipR * 3];
 const NB = JN.length * 3, BODY = ['bodyX', 'bodyY', 'bodyZ', 'bodyP', 'bodyR', 'bodyW']; // body channels follow the joints
 const CH = {}; JN.forEach((n, i) => { CH[n] = i * 3; }); BODY.forEach((n, i) => { CH[n] = NB + i; });
 const BX = NB, BY = NB + 1, BZ = NB + 2, BP = NB + 3, BR = NB + 4, BW = NB + 5;
 const NCH = NB + BODY.length;
 const EASE = { lin: (t) => t, in: (t) => t * t, out: (t) => 1 - (1 - t) * (1 - t), io: (t) => (t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2), cub: (t) => t * t * t, back: (t) => { const c = 1.7; return 1 + (c + 1) * Math.pow(t - 1, 3) + c * Math.pow(t - 1, 2); } };
 // pose shorthands: ears -> both ears pitch, lids -> both lids (0 open, 1.3 shut), mane -> both mane joints, sh / hp / el / kn -> both shoulders / hips / elbows / knees (x), eyes -> both eyes [yaw, pitch]
-const SHORT = { ears: (v) => ({ earL: [v, 0, 0], earR: [v, 0, 0] }), lids: (v) => ({ lidL: [v, 0, 0], lidR: [v, 0, 0] }), mane: (v) => ({ mane1: [v, 0, 0], mane2: [v * 0.6, 0, 0] }), sh: (v) => ({ shoulderL: [v, 0, 0], shoulderR: [v, 0, 0] }), hp: (v) => ({ hipL: [v, 0, 0], hipR: [v, 0, 0] }), el: (v) => ({ elbowL: [v, 0, 0], elbowR: [v, 0, 0] }), kn: (v) => ({ kneeL: [v, 0, 0], kneeR: [v, 0, 0] }) };
+const SHORT = { ears: (v) => ({ earL: [v, 0, 0], earR: [v, 0, 0] }), lids: (v) => ({ lidL: [v, 0, 0], lidR: [v, 0, 0] }), mane: (v) => ({ mane1: [v, 0, 0], mane2: [v * 0.6, 0, 0] }), snarl: (v) => ({ lipL: [-0.25 * v, 0, 1.0 * v], lipR: [-0.25 * v, 0, -1.0 * v], browL: [0.5 * v, 0, 0.3 * v], browR: [0.5 * v, 0, -0.3 * v] }), sh: (v) => ({ shoulderL: [v, 0, 0], shoulderR: [v, 0, 0] }), hp: (v) => ({ hipL: [v, 0, 0], hipR: [v, 0, 0] }), el: (v) => ({ elbowL: [v, 0, 0], elbowR: [v, 0, 0] }), kn: (v) => ({ kneeL: [v, 0, 0], kneeR: [v, 0, 0] }) };
 /** keys: [[t, {chan: value | [x,y,z]}, ease?], ...]; ease applies to the segment ARRIVING at that key. info: {swing, hit, recover} seconds. A channel that ends before the clip does returns to 0 at the end. */
 function clip(name, dur, keys, o = {}) {
   const chans = new Map();
@@ -293,42 +293,42 @@ function clipsFor(sp) {
   const bw = wolf ? 0.7 : 0.95, b1 = wolf ? 0.15 : 0.22, b2 = wolf ? 0.27 : 0.33;
   C.bite = clip('bite', bw, [
     [0, {}],
-    [b1, { neck: [-0.5, 0, 0], head: [-0.35, 0, 0], jaw: [1.0, 0, 0], chest: [-0.16, 0, 0], bodyZ: -0.16 * K, bodyP: -0.07, bodyY: -0.04 * K, kn: 0.3, hp: 0.12, sh: 0.1, ears: -0.7, lids: 0.35, tail1: [-0.4, 0, 0], mane: -0.12 }, 'out'],
-    [b2, { neck: [0.5, 0, 0], head: [0.22, 0, 0], jaw: [0.04, 0, 0], chest: [0.14, 0, 0], bodyZ: 0.46 * K, bodyP: 0.1, bodyY: -0.06 * K, sh: -0.55, el: 0.1, hp: -0.25, kn: 0.1, ears: -0.9, lids: 0.7, tail1: [0.3, 0, 0], mane: 0.12 }, 'cub'],
+    [b1, { neck: [-0.5, 0, 0], head: [-0.35, 0, 0], jaw: [1.0, 0, 0], chest: [-0.16, 0, 0], bodyZ: -0.16 * K, bodyP: -0.07, bodyY: -0.04 * K, kn: 0.3, hp: 0.12, sh: 0.1, ears: -0.7, lids: 0.45, snarl: 1.0, tail1: [-0.4, 0, 0], mane: -0.12 }, 'out'],
+    [b2, { neck: [0.5, 0, 0], head: [0.22, 0, 0], jaw: [0.04, 0, 0], chest: [0.14, 0, 0], bodyZ: 0.46 * K, bodyP: 0.1, bodyY: -0.06 * K, sh: -0.55, el: 0.1, hp: -0.25, kn: 0.1, ears: -0.9, lids: 0.8, snarl: 0.8, tail1: [0.3, 0, 0], mane: 0.12 }, 'cub'],
     [b2 + 0.07, { neck: [0.36, 0.38, 0], head: [0.18, 0.15, 0], chest: [0.1, 0.1, 0], bodyZ: 0.4 * K, jaw: [0.0, 0, 0], sh: -0.4 }, 'out'],
     [b2 + 0.14, { neck: [0.36, -0.38, 0], head: [0.18, -0.15, 0], chest: [0.1, -0.1, 0], bodyZ: 0.36 * K }, 'io'],
-    [b2 + 0.24, { neck: [0.24, 0.1, 0], head: [0.1, 0, 0], bodyZ: 0.26 * K, sh: -0.2, ears: -0.4, lids: 0.2 }, 'out'],
+    [b2 + 0.24, { neck: [0.24, 0.1, 0], head: [0.1, 0, 0], bodyZ: 0.26 * K, sh: -0.2, ears: -0.4, lids: 0.3, snarl: 0.3 }, 'out'],
   ], { swing: b1, hit: b2, recover: wolf ? 0.42 : 0.52, fo: 0.2 });
   // ---- claw / swipe: weight onto the hind legs, paw up and back (anticipation), strike across with a body twist, hold, return
   const hi = bear ? -1.7 : -1.45;
   C.claw = clip('claw', 0.85, [
     [0, {}],
-    [0.22, { chest: [-0.34 * up * 1.2, 0.22, 0], shoulderR: [hi, 0, 0.45], elbowR: [0.45, 0, 0], wristR: [0.7, 0, 0], neck: [-0.18, 0.28, 0], head: [-0.1, 0, 0], jaw: [0.5, 0, 0], bodyZ: -0.1 * K, bodyP: -0.14, bodyY: 0.04 * K, hp: 0.15, kn: 0.2, shoulderL: [0.15, 0, 0], ears: -0.8, lids: 0.45, mane: -0.12 }, 'out'],
-    [0.33, { chest: [-0.15, -0.5, 0], shoulderR: [hi * 0.55, 0, -0.7], elbowR: [0.1, 0, 0], wristR: [0.25, 0, 0], neck: [0.1, -0.3, 0], jaw: [0.9, 0, 0], bodyZ: 0.3 * K, bodyP: 0.02, bodyY: -0.03 * K, bodyW: -0.12, mane: 0.1 }, 'cub'],
-    [0.46, { chest: [-0.05, -0.38, 0], shoulderR: [-0.7, 0, -0.45], elbowR: [0.3, 0, 0], neck: [0.1, -0.25, 0], jaw: [0.3, 0, 0], bodyZ: 0.22 * K, bodyW: -0.08 }, 'out'],
+    [0.22, { chest: [-0.34 * up * 1.2, 0.22, 0], shoulderR: [hi, 0, 0.45], elbowR: [0.45, 0, 0], wristR: [0.7, 0, 0], neck: [-0.18, 0.28, 0], head: [-0.1, 0, 0], jaw: [0.5, 0, 0], bodyZ: -0.1 * K, bodyP: -0.14, bodyY: 0.04 * K, hp: 0.15, kn: 0.2, shoulderL: [0.15, 0, 0], ears: -0.8, lids: 0.55, snarl: 0.9, mane: -0.12 }, 'out'],
+    [0.33, { chest: [-0.15, -0.5, 0], shoulderR: [hi * 0.55, 0, -0.7], elbowR: [0.1, 0, 0], wristR: [0.25, 0, 0], neck: [0.1, -0.3, 0], jaw: [0.9, 0, 0], bodyZ: 0.3 * K, bodyP: 0.02, bodyY: -0.03 * K, bodyW: -0.12, snarl: 1.0, lids: 0.8, mane: 0.1 }, 'cub'],
+    [0.46, { chest: [-0.05, -0.38, 0], shoulderR: [-0.7, 0, -0.45], elbowR: [0.3, 0, 0], neck: [0.1, -0.25, 0], jaw: [0.3, 0, 0], bodyZ: 0.22 * K, bodyW: -0.08, snarl: 0.4 }, 'out'],
   ], { swing: 0.22, hit: 0.33, recover: 0.48 });
   // ---- swipe (bear / elephant swat): heavy two-handed sweep
   const s1 = big ? 0.42 : 0.3, s2 = big ? 0.58 : 0.44;
   C.swipe = clip('swipe', big ? 1.25 : 1.1, [
     [0, {}],
-    [s1, { chest: [-0.5 * up, 0.4, 0], shoulderL: [-1.7 * (big ? 0.35 : 1), 0, 0.55], shoulderR: [-1.15, 0, 0.35], neck: [-0.3, 0.35, 0], head: [-0.18, 0, 0], jaw: [0.6, 0, 0], bodyP: -0.2 * up, bodyZ: -0.16 * K, hp: 0.15, kn: 0.2, ears: -0.8, lids: 0.4, trunk1: [-0.7, 0.7, 0], trunk2: [-0.5, 0.6, 0], trunk3: [-0.4, 0.5, 0] }, 'out'],
-    [s2, { chest: [-0.12, -0.6, 0], shoulderL: [-0.95, 0, -0.8], shoulderR: [-0.75, 0, -0.55], neck: [0.14, -0.5, 0], jaw: [0.15, 0, 0], bodyZ: 0.34 * K, bodyP: 0.06, bodyW: -0.16, lids: 0.7, trunk1: [-0.1, -1.1, 0], trunk2: [-0.1, -1.0, 0], trunk3: [-0.1, -0.8, 0] }, 'cub'],
+    [s1, { chest: [-0.5 * up, 0.4, 0], shoulderL: [-1.7 * (big ? 0.35 : 1), 0, 0.55], shoulderR: [-1.15, 0, 0.35], neck: [-0.3, 0.35, 0], head: [-0.18, 0, 0], jaw: [0.6, 0, 0], bodyP: -0.2 * up, bodyZ: -0.16 * K, hp: 0.15, kn: 0.2, ears: -0.8, lids: 0.5, snarl: 0.9, trunk1: [-0.7, 0.7, 0], trunk2: [-0.5, 0.6, 0], trunk3: [-0.4, 0.5, 0] }, 'out'],
+    [s2, { chest: [-0.12, -0.6, 0], shoulderL: [-0.95, 0, -0.8], shoulderR: [-0.75, 0, -0.55], neck: [0.14, -0.5, 0], jaw: [0.15, 0, 0], bodyZ: 0.34 * K, bodyP: 0.06, bodyW: -0.16, lids: 0.8, snarl: 0.9, trunk1: [-0.1, -1.1, 0], trunk2: [-0.1, -1.0, 0], trunk3: [-0.1, -0.8, 0] }, 'cub'],
     [big ? 0.85 : 0.68, { chest: [0, -0.26, 0], bodyZ: 0.18 * K, bodyW: -0.06 }, 'out'],
   ], { swing: s1, hit: s2, recover: big ? 0.85 : 0.68 });
   C.swat = C.swipe;
   // ---- maul: rear back, bite, double rake, bite again
   C.maul = clip('maul', 1.3, [
     [0, {}],
-    [0.24, { neck: [-0.5, 0, 0], head: [-0.35, 0, 0], jaw: [1.0, 0, 0], chest: [-0.36, 0, 0], shoulderL: [-1.3, 0, 0.35], shoulderR: [-1.3, 0, -0.35], bodyP: -0.2, bodyZ: -0.14 * K, bodyY: 0.04 * K, hp: 0.2, kn: 0.3, ears: -0.9, lids: 0.5, mane: -0.2 }, 'out'],
-    [0.38, { neck: [0.5, 0, 0], head: [0.25, 0, 0], jaw: [0.0, 0, 0], chest: [0.15, 0, 0], shoulderL: [-0.65, 0, -0.45], shoulderR: [-0.65, 0, 0.45], bodyP: 0.1, bodyZ: 0.4 * K, bodyY: -0.05 * K, lids: 0.8, mane: 0.14 }, 'cub'],
+    [0.24, { neck: [-0.5, 0, 0], head: [-0.35, 0, 0], jaw: [1.0, 0, 0], chest: [-0.36, 0, 0], shoulderL: [-1.3, 0, 0.35], shoulderR: [-1.3, 0, -0.35], bodyP: -0.2, bodyZ: -0.14 * K, bodyY: 0.04 * K, hp: 0.2, kn: 0.3, ears: -0.9, lids: 0.6, snarl: 1.0, mane: -0.2 }, 'out'],
+    [0.38, { neck: [0.5, 0, 0], head: [0.25, 0, 0], jaw: [0.0, 0, 0], chest: [0.15, 0, 0], shoulderL: [-0.65, 0, -0.45], shoulderR: [-0.65, 0, 0.45], bodyP: 0.1, bodyZ: 0.4 * K, bodyY: -0.05 * K, lids: 0.85, snarl: 0.9, mane: 0.14 }, 'cub'],
     [0.64, { neck: [0.14, 0.4, 0], chest: [-0.14, 0.45, 0], shoulderL: [-1.35, 0, 0.4], shoulderR: [-0.35, 0, 0], bodyZ: 0.28 * K, jaw: [0.5, 0, 0] }, 'io'],
     [0.8, { neck: [0.14, -0.4, 0], chest: [-0.05, -0.45, 0], shoulderL: [-0.5, 0, -0.55], bodyZ: 0.36 * K, jaw: [0.2, 0, 0] }, 'cub'],
-    [0.92, { neck: [0.4, 0, 0], jaw: [0.0, 0, 0], chest: [0.1, 0, 0], bodyZ: 0.3 * K }, 'out'],
+    [0.92, { neck: [0.4, 0, 0], jaw: [0.0, 0, 0], chest: [0.1, 0, 0], bodyZ: 0.3 * K, snarl: 0.3 }, 'out'],
   ], { swing: 0.24, hit: 0.38, recover: 0.82 });
   // ---- gore (boar): back up, head up and back (anticipation), drive the head down and hook it up and out, toss
   C.gore = clip('gore', 0.9, [
     [0, {}],
-    [0.17, { neck: [-0.35, 0, 0], head: [-0.2, 0, 0], jaw: [0.2, 0, 0], chest: [-0.05, 0, 0], bodyZ: -0.16 * K, bodyY: 0.03 * K, sh: 0.25, kn: 0.25, hp: 0.15, ears: -0.6, lids: 0.5 }, 'out'],
+    [0.17, { neck: [-0.35, 0, 0], head: [-0.2, 0, 0], jaw: [0.2, 0, 0], chest: [-0.05, 0, 0], bodyZ: -0.16 * K, bodyY: 0.03 * K, sh: 0.25, kn: 0.25, hp: 0.15, ears: -0.6, lids: 0.55, snarl: 0.5 }, 'out'],
     [0.26, { neck: [0.8, 0, 0], head: [0.55, 0, 0], chest: [0.12, 0, 0], bodyZ: 0.12 * K, bodyP: 0.1, bodyY: -0.08 * K, sh: 0.35, lids: 0.9 }, 'cub'],
     [0.38, { neck: [-0.7, 0.2, 0], head: [-0.55, 0, 0], chest: [-0.12, 0.1, 0], bodyZ: 0.38 * K, bodyP: -0.06, sh: -0.45, bodyY: 0.0 }, 'out'],
     [0.56, { neck: [-0.25, -0.15, 0], head: [-0.2, 0, 0], bodyZ: 0.26 * K }, 'out'],
@@ -336,8 +336,8 @@ function clipsFor(sp) {
   // ---- pounce: flat deep crouch (sim windup 0.38), explosive leap with stretched body, claws out, heavy crash and absorb
   C.pounce = clip('pounce', 1.5, [
     [0, {}],
-    [0.34, { bodyY: -0.26 * sp.size, bodyP: 0.14, chest: [0.26, 0, 0], neck: [0.18, 0, 0], head: [-0.12, 0, 0], shoulderL: [0.6, 0, 0], shoulderR: [0.6, 0, 0], elbowL: [1.15, 0, 0], elbowR: [1.15, 0, 0], hipL: [-0.65, 0, 0], hipR: [-0.65, 0, 0], kneeL: [1.35, 0, 0], kneeR: [1.35, 0, 0], ankleL: [-0.55, 0, 0], ankleR: [-0.55, 0, 0], tail1: [-0.3, 0, 0], jaw: [0.3, 0, 0], ears: -0.9, lids: 0.6, mane: -0.2 }, 'out'],
-    [0.5, { bodyY: 0.55 * sp.size, bodyZ: 0.55 * sp.size, bodyP: -0.2, chest: [-0.24, 0, 0], neck: [-0.18, 0, 0], head: [0.05, 0, 0], jaw: [1.0, 0, 0], shoulderL: [-1.35, 0, 0.3], shoulderR: [-1.35, 0, -0.3], elbowL: [0.1, 0, 0], elbowR: [0.1, 0, 0], wristL: [0.45, 0, 0], wristR: [0.45, 0, 0], hipL: [0.8, 0, 0], hipR: [0.8, 0, 0], kneeL: [0.1, 0, 0], kneeR: [0.1, 0, 0], ankleL: [0.6, 0, 0], ankleR: [0.6, 0, 0], tail1: [0.35, 0, 0], lids: 0.2, mane: 0.25 }, 'out'],
+    [0.34, { bodyY: -0.26 * sp.size, bodyP: 0.14, chest: [0.26, 0, 0], neck: [0.18, 0, 0], head: [-0.12, 0, 0], shoulderL: [0.6, 0, 0], shoulderR: [0.6, 0, 0], elbowL: [1.15, 0, 0], elbowR: [1.15, 0, 0], hipL: [-0.65, 0, 0], hipR: [-0.65, 0, 0], kneeL: [1.35, 0, 0], kneeR: [1.35, 0, 0], ankleL: [-0.55, 0, 0], ankleR: [-0.55, 0, 0], tail1: [-0.3, 0, 0], jaw: [0.3, 0, 0], ears: -0.9, lids: 0.6, snarl: 0.9, mane: -0.2 }, 'out'],
+    [0.5, { bodyY: 0.55 * sp.size, bodyZ: 0.55 * sp.size, bodyP: -0.2, chest: [-0.24, 0, 0], neck: [-0.18, 0, 0], head: [0.05, 0, 0], jaw: [1.0, 0, 0], shoulderL: [-1.35, 0, 0.3], shoulderR: [-1.35, 0, -0.3], elbowL: [0.1, 0, 0], elbowR: [0.1, 0, 0], wristL: [0.45, 0, 0], wristR: [0.45, 0, 0], hipL: [0.8, 0, 0], hipR: [0.8, 0, 0], kneeL: [0.1, 0, 0], kneeR: [0.1, 0, 0], ankleL: [0.6, 0, 0], ankleR: [0.6, 0, 0], tail1: [0.35, 0, 0], lids: 0.35, snarl: 1.0, mane: 0.25 }, 'out'],
     [0.7, { bodyY: 0.1 * sp.size, bodyZ: 0.78 * sp.size, bodyP: 0.14, chest: [0.1, 0, 0], neck: [0.4, 0, 0], jaw: [0.2, 0, 0], shoulderL: [-1.05, 0, 0.35], shoulderR: [-1.05, 0, -0.35], elbowL: [0.2, 0, 0], elbowR: [0.2, 0, 0], hipL: [0.55, 0, 0], hipR: [0.55, 0, 0], lids: 0.9 }, 'in'],
     [0.86, { bodyY: -0.12 * sp.size, bodyZ: 0.68 * sp.size, bodyP: 0.14, chest: [0.16, 0, 0], neck: [0.24, 0, 0], jaw: [0, 0, 0], shoulderL: [-0.5, 0, 0.1], shoulderR: [-0.5, 0, -0.1], elbowL: [1.0, 0, 0], elbowR: [1.0, 0, 0], hipL: [-0.2, 0, 0], hipR: [-0.2, 0, 0], kneeL: [0.8, 0, 0], kneeR: [0.8, 0, 0], ankleL: [-0.2, 0, 0], ankleR: [-0.2, 0, 0], lids: 0.4 }, 'out'],
     [1.1, { bodyY: -0.04 * sp.size, bodyZ: 0.5 * sp.size, bodyP: 0.04 }, 'io'],
@@ -346,11 +346,11 @@ function clipsFor(sp) {
   const standUp = bear ? 1 : big ? 0.7 : lion ? 0.55 : 0.3;
   C.roar = clip('roar', big ? 2.0 : 1.6, [
     [0, {}],
-    [big ? 0.55 : 0.32, { chest: [-0.36 * up * (0.8 + standUp * 0.5), 0, 0], neck: [-0.55, 0, 0], head: [-0.4, 0, 0], jaw: [big ? 0.3 : 1.1, 0, 0], bodyP: -0.12 * up - standUp * (bear ? 0.5 : 0.25), bodyY: 0.05 + standUp * 0.12 * K, sh: -0.5 * up - standUp * 0.7, el: standUp * 0.7, hp: standUp * 0.12, kn: standUp * 0.12, tail1: [-0.3, 0, 0], trunk1: [-0.95, 0, 0], trunk2: [-0.75, 0, 0], trunk3: [-0.55, 0, 0], trunk4: [-0.45, 0, 0], ears: big ? 0.0 : -0.8, earL: [0, 0.6, 0], earR: [0, -0.6, 0], lids: 0.5, mane: 0.3 }, 'back'],
-    [big ? 1.5 : 1.15, { chest: [-0.32 * up * (0.8 + standUp * 0.5), 0, 0], neck: [-0.5, 0, 0], head: [-0.36, 0, 0], jaw: [big ? 0.3 : 1.05, 0, 0], bodyP: -0.12 * up - standUp * (bear ? 0.5 : 0.25), bodyY: 0.05 + standUp * 0.12 * K, lids: 0.55 }, 'lin'],
-    [big ? 2.0 : 1.6, { chest: [0, 0, 0], neck: [0, 0, 0], head: [0, 0, 0], jaw: [0, 0, 0], bodyP: 0, bodyY: 0 }, 'io'],
+    [big ? 0.55 : 0.32, { chest: [-0.36 * up * (0.8 + standUp * 0.5), 0, 0], neck: [-0.55, 0, 0], head: [-0.4, 0, 0], jaw: [big ? 0.3 : 1.1, 0, 0], bodyP: -0.12 * up - standUp * (bear ? 0.5 : 0.25), bodyY: 0.05 + standUp * 0.12 * K, sh: -0.5 * up - standUp * 0.7, el: standUp * 0.7, hp: standUp * 0.12, kn: standUp * 0.12, tail1: [-0.3, 0, 0], trunk1: [-0.95, 0, 0], trunk2: [-0.75, 0, 0], trunk3: [-0.55, 0, 0], trunk4: [-0.45, 0, 0], ears: big ? 0.0 : -0.8, earL: [0, 0.6, 0], earR: [0, -0.6, 0], lids: 0.6, snarl: 1.1, mane: 0.3 }, 'back'],
+    [big ? 1.5 : 1.15, { chest: [-0.32 * up * (0.8 + standUp * 0.5), 0, 0], neck: [-0.5, 0, 0], head: [-0.36, 0, 0], jaw: [big ? 0.3 : 1.05, 0, 0], bodyP: -0.12 * up - standUp * (bear ? 0.5 : 0.25), bodyY: 0.05 + standUp * 0.12 * K, lids: 0.6, snarl: 1.1 }, 'lin'],
+    [big ? 2.0 : 1.6, { chest: [0, 0, 0], neck: [0, 0, 0], head: [0, 0, 0], jaw: [0, 0, 0], bodyP: 0, bodyY: 0, snarl: 0 }, 'io'],
   ], { swing: 0.3, hit: 0.5, recover: 1.1, fo: 0.35 });
-  C.howl = clip('howl', 1.8, [[0, {}], [0.4, { neck: [-1.0, 0, 0], head: [-0.6, 0, 0], jaw: [0.5, 0, 0], chest: [-0.2, 0, 0], bodyP: -0.08, sh: -0.1, lids: 0.7, ears: -0.4 }, 'out'], [1.4, { neck: [-1.0, 0, 0], head: [-0.6, 0, 0], jaw: [0.4, 0, 0], chest: [-0.2, 0, 0], bodyP: -0.08, lids: 0.8 }, 'lin'], [1.8, { neck: [0, 0, 0], head: [0, 0, 0], jaw: [0, 0, 0], chest: [0, 0, 0] }, 'io']], { swing: 0.35, hit: 0.6, recover: 1.2, fo: 0.3 });
+  C.howl = clip('howl', 1.8, [[0, {}], [0.4, { neck: [-1.0, 0, 0], head: [-0.6, 0, 0], jaw: [0.5, 0, 0], chest: [-0.2, 0, 0], bodyP: -0.08, sh: -0.1, lids: 0.7, snarl: 0.35, ears: -0.4 }, 'out'], [1.4, { neck: [-1.0, 0, 0], head: [-0.6, 0, 0], jaw: [0.4, 0, 0], chest: [-0.2, 0, 0], bodyP: -0.08, lids: 0.8 }, 'lin'], [1.8, { neck: [0, 0, 0], head: [0, 0, 0], jaw: [0, 0, 0], chest: [0, 0, 0] }, 'io']], { swing: 0.35, hit: 0.6, recover: 1.2, fo: 0.3 });
   // ---- boar / elephant: paw the ground (charge telegraph, loops while held), stomp
   C.paw = clip('paw', 0.5, [[0, { neck: [0.45, 0, 0], head: [0.35, 0, 0], shoulderR: [-0.2, 0, 0], lids: 0.6, ears: -0.7 }], [0.12, { shoulderR: [-1.15, 0, 0], elbowR: [0.6, 0, 0], neck: [0.55, 0, 0], head: [0.35, 0, 0], bodyP: 0.12, chest: [0.12, 0, 0] }, 'out'], [0.25, { shoulderR: [-0.1, 0, 0], elbowR: [0.1, 0, 0], neck: [0.55, 0, 0], head: [0.35, 0, 0], bodyP: 0.14, chest: [0.14, 0, 0] }, 'in'], [0.37, { shoulderR: [-1.15, 0, 0], elbowR: [0.6, 0, 0], bodyP: 0.12 }, 'out'], [0.5, { shoulderR: [-0.1, 0, 0], elbowR: [0.1, 0, 0], bodyP: 0.14 }, 'in']], { swing: 0.2, hit: 0.3, recover: 0.4, loop: true, fi: 0.1, fo: 0.2, add: false });
   C.stomp = clip('stomp', 1.5, [
@@ -361,7 +361,7 @@ function clipsFor(sp) {
   ], { swing: 0.45, hit: 0.62, recover: 0.85, ground: 0.2 });
   C.javelin = clip('javelin', 1.3, [[0, {}], [0.32, { riderArm: [-2.5, 0, 0], rider: [-0.28, 0, 0] }, 'out'], [0.5, { riderArm: [-0.2, 0, 0], rider: [0.38, 0, 0] }, 'cub']], { swing: 0.3, hit: 0.5, recover: 0.75 });
   // ---- reactions (hurt is additive on top of the spring flinch: a heavy recoil, one eye screwed shut, the tail whips)
-  C.hurt = clip('hurt', 0.55, [[0, {}], [0.07, { chest: [-0.26, 0, 0], neck: [-0.3, 0, 0], head: [-0.26, 0, 0], jaw: [0.5, 0, 0], bodyZ: -0.12 * K, bodyY: -0.04 * K, tail1: [-0.4, 0.3, 0], lids: 1.1, ears: -0.9, mane: -0.15, sh: 0.1, kn: 0.15 }, 'out'], [0.2, { chest: [-0.12, 0, 0], neck: [-0.14, 0, 0], head: [-0.1, 0, 0], jaw: [0.2, 0, 0], bodyZ: -0.05 * K, lids: 0.6 }, 'out']], { add: true, fi: 0.02, fo: 0.22 });
+  C.hurt = clip('hurt', 0.55, [[0, {}], [0.07, { chest: [-0.26, 0, 0], neck: [-0.3, 0, 0], head: [-0.26, 0, 0], jaw: [0.5, 0, 0], bodyZ: -0.12 * K, bodyY: -0.04 * K, tail1: [-0.4, 0.3, 0], lids: 1.1, snarl: 0.9, ears: -0.9, mane: -0.15, sh: 0.1, kn: 0.15 }, 'out'], [0.2, { chest: [-0.12, 0, 0], neck: [-0.14, 0, 0], head: [-0.1, 0, 0], jaw: [0.2, 0, 0], bodyZ: -0.05 * K, lids: 0.6 }, 'out']], { add: true, fi: 0.02, fo: 0.22 });
   C.stun = clip('stun', 1.2, [[0, { neck: [0.4, -0.55, 0], head: [0.32, 0, 0.18], chest: [0.12, 0, 0], jaw: [0.25, 0, 0], lids: 0.8, bodyY: -0.04 * K, kn: 0.15, sh: 0.1 }], [0.3, { neck: [0.4, 0.55, 0], head: [0.32, 0, -0.18] }, 'io'], [0.6, { neck: [0.4, -0.55, 0], head: [0.32, 0, 0.18] }, 'io'], [0.9, { neck: [0.4, 0.55, 0], head: [0.32, 0, -0.18] }, 'io'], [1.2, { neck: [0.4, -0.55, 0], head: [0.32, 0, 0.18] }, 'io']], { loop: true, hold: true, fi: 0.2, bodyY0: -0.05 });
   C.knockdown = clip('knockdown', 1.0, [[0, {}], [0.2, { bodyP: -0.3, bodyY: 0.1 * K, chest: [-0.34, 0, 0], neck: [-0.45, 0, 0], jaw: [0.7, 0, 0], shoulderL: [-0.9, 0, 0.5], shoulderR: [-0.9, 0, -0.5], hipL: [0.7, 0, 0], hipR: [0.7, 0, 0], lids: 1.0 }, 'out'], [0.5, { bodyP: 0.0, bodyY: -0.18 * K, bodyR: 0.55, chest: [0, 0, 0.1], neck: [0.2, 0, 0], jaw: [0.2, 0, 0], shoulderL: [-0.4, 0, 0.6], shoulderR: [-0.4, 0, -0.6], hipL: [0.4, 0, 0.3], hipR: [0.4, 0, -0.3], lids: 0.9 }, 'in'], [0.62, { bodyY: -0.15 * K }, 'out'], [1.0, { bodyR: 0.55, bodyY: -0.2 * K, neck: [0.25, 0, 0], jaw: [0.15, 0, 0], shoulderL: [-0.4, 0, 0.6], shoulderR: [-0.4, 0, -0.6], hipL: [0.4, 0, 0.3], hipR: [0.4, 0, -0.3], lids: 0.6 }, 'lin']], { hold: true, ground: 0.2 });
   C.getup = clip('getup', 0.95, [[0, { bodyR: 0.55, bodyY: -0.2 * K, neck: [0.25, 0, 0], shoulderL: [-0.4, 0, 0.6], shoulderR: [-0.4, 0, -0.6], hipL: [0.4, 0, 0.3], hipR: [0.4, 0, -0.3], lids: 0.6 }], [0.42, { bodyR: 0.1, bodyY: -0.2 * K, shoulderL: [-0.9, 0, 0], shoulderR: [-0.9, 0, 0], hipL: [0.55, 0, 0], hipR: [0.55, 0, 0], neck: [0.15, 0, 0], lids: 0.3 }, 'io'], [0.95, { bodyR: 0, bodyY: 0, shoulderL: [0, 0, 0], shoulderR: [0, 0, 0], hipL: [0, 0, 0], hipR: [0, 0, 0], neck: [0, 0, 0], lids: 0 }, 'io']], { fi: 0.03 });
@@ -369,15 +369,15 @@ function clipsFor(sp) {
   const d = big ? 1.35 : 1;
   C.death = clip('death', big ? 3.0 : 2.1, [
     [0, {}],
-    [0.18 * d, { chest: [-0.3, 0, 0], neck: [-0.4, 0, 0], head: [-0.3, 0, 0], jaw: [0.8, 0, 0], bodyZ: -0.2 * K, bodyY: 0.0, tail1: [-0.5, 0, 0], lids: 1.0, ears: -0.9, sh: 0.2 }, 'out'],
-    [0.5 * d, { bodyY: -0.16 * K, bodyP: 0.08, chest: [0.1, 0, 0], neck: [0.2, 0, 0], head: [0.18, 0, 0], jaw: [0.5, 0, 0], shoulderL: [0.5, 0, 0.1], shoulderR: [0.5, 0, -0.1], elbowL: [1.3, 0, 0], elbowR: [1.3, 0, 0], wristL: [0.4, 0, 0], wristR: [0.4, 0, 0], hp: 0.25, kn: 0.35, lids: 1.2, ears: -0.5 }, 'in'],
+    [0.18 * d, { chest: [-0.3, 0, 0], neck: [-0.4, 0, 0], head: [-0.3, 0, 0], jaw: [0.8, 0, 0], bodyZ: -0.2 * K, bodyY: 0.0, tail1: [-0.5, 0, 0], lids: 1.0, snarl: 0.8, ears: -0.9, sh: 0.2 }, 'out'],
+    [0.5 * d, { bodyY: -0.16 * K, bodyP: 0.08, chest: [0.1, 0, 0], neck: [0.2, 0, 0], head: [0.18, 0, 0], jaw: [0.5, 0, 0], shoulderL: [0.5, 0, 0.1], shoulderR: [0.5, 0, -0.1], elbowL: [1.3, 0, 0], elbowR: [1.3, 0, 0], wristL: [0.4, 0, 0], wristR: [0.4, 0, 0], hp: 0.25, kn: 0.35, lids: 1.2, snarl: 0.2, ears: -0.5 }, 'in'],
     [0.9 * d, { bodyY: -0.36 * K, bodyP: 0.2, chest: [0.12, 0, 0], neck: [0.4, 0, 0], head: [0.34, 0, 0], jaw: [0.4, 0, 0], shoulderL: [0.5, 0, 0.1], shoulderR: [0.5, 0, -0.1], elbowL: [1.4, 0, 0], elbowR: [1.4, 0, 0], hipL: [-0.7, 0, 0.1], hipR: [-0.7, 0, -0.1], kneeL: [1.35, 0, 0], kneeR: [1.35, 0, 0], ankleL: [-0.6, 0, 0], ankleR: [-0.6, 0, 0], lids: 1.3 }, 'in'],
     [1.35 * d, { bodyY: -0.46 * K, bodyP: 0.06, bodyR: 1.5, chest: [0.05, 0, 0.1], neck: [0.3, 0.3, 0], head: [0.25, 0, 0], jaw: [0.3, 0, 0], shoulderL: [-0.7, 0, 0.9], shoulderR: [0.7, 0, -0.7], elbowL: [0.4, 0, 0], elbowR: [0.5, 0, 0], hipL: [0.5, 0, 0.5], hipR: [-0.5, 0, -0.4], kneeL: [0.4, 0, 0], kneeR: [0.5, 0, 0], ankleL: [0.2, 0, 0], ankleR: [0.2, 0, 0], tail1: [0, 0.3, 0] }, 'cub'],
     [1.5 * d, { bodyY: -0.4 * K, bodyR: 1.45, jaw: [0.34, 0, 0] }, 'out'],
     [1.75 * d, { bodyY: -0.47 * K, bodyR: 1.5, jaw: [0.25, 0, 0], shoulderL: [-0.75, 0, 0.95], shoulderR: [0.75, 0, -0.75], tail1: [0.1, 0.4, 0] }, 'io'],
     [(big ? 3.0 : 2.1), { bodyY: -0.48 * K, bodyR: 1.5, jaw: [0.2, 0, 0], neck: [0.32, 0.3, 0], shoulderL: [-0.75, 0, 0.95], shoulderR: [0.75, 0, -0.75], tail1: [0, 0.4, 0] }, 'out'],
   ], { hold: true, ground: 0.25, fi: 0.05, swing: 0, hit: 0, recover: 1 });
-  C.victory = clip('victory', 1.7, [[0, {}], [0.45, { chest: [-0.34 * up, 0, 0], neck: [-0.5, 0, 0], head: [-0.34, 0, 0], jaw: [big ? 0.3 : 1.0, 0, 0], bodyP: -0.1 * up - standUp * 0.2, sh: -0.35 * up, trunk1: [-0.95, 0, 0], trunk2: [-0.75, 0, 0], mane: 0.3, lids: 0.4 }, 'back'], [1.7, { chest: [-0.22 * up, 0, 0], neck: [-0.4, 0, 0], head: [-0.25, 0, 0], jaw: [0.2, 0, 0], bodyP: -0.06 * up, sh: -0.2 * up, mane: 0.15 }, 'io']], { hold: true });
+  C.victory = clip('victory', 1.7, [[0, {}], [0.45, { chest: [-0.34 * up, 0, 0], neck: [-0.5, 0, 0], head: [-0.34, 0, 0], jaw: [big ? 0.3 : 1.0, 0, 0], bodyP: -0.1 * up - standUp * 0.2, sh: -0.35 * up, trunk1: [-0.95, 0, 0], trunk2: [-0.75, 0, 0], mane: 0.3, lids: 0.4, snarl: 0.5 }, 'back'], [1.7, { chest: [-0.22 * up, 0, 0], neck: [-0.4, 0, 0], head: [-0.25, 0, 0], jaw: [0.2, 0, 0], bodyP: -0.06 * up, sh: -0.2 * up, mane: 0.15 }, 'io']], { hold: true });
   // alias gladiator clip names so generic fightview code never breaks
   C.attack1 = id === 'wolf' || boar ? C.bite : bear || big ? C.swipe : C.claw; C.attack2 = boar ? C.gore : C.bite; C.attack3 = bear ? C.maul : (lion ? C.maul : C.bite);
   C.block = C.hurt; C.taunt = C.roar; C.cheer = C.roar; C.idle = null;
@@ -388,9 +388,9 @@ function clipsFor(sp) {
 // tiers: seg radial segments, sub samples per control span, cap rounded cap rings, sw / sh sphere detail, mane strand cards, shells fur shell layers, claws / teeth / whisk / tufts / lids counts.
 // low keeps the old budget (about 1000 triangles per animal), medium and high spend the headroom on anatomy, strand cards and fur shells.
 const DETAIL = {
-  low: { seg: 4, sub: 1, cap: 1, sw: 5, sh: 3, mane: 24, mseg: 2, shells: 0, claws: 0, teeth: 0, whisk: 0, tufts: 0, lids: 0, detailEye: 0, ruff: 0 },
-  medium: { seg: 7, sub: 2, cap: 1, sw: 8, sh: 5, mane: 90, mseg: 3, shells: 0, claws: 2, teeth: 2, whisk: 3, tufts: 8, lids: 1, detailEye: 1, ruff: 1 },
-  high: { seg: 10, sub: 2, cap: 2, sw: 12, sh: 8, mane: 300, mseg: 4, shells: 3, claws: 3, teeth: 4, whisk: 5, tufts: 16, lids: 1, detailEye: 1, ruff: 2 },
+  low: { seg: 4, sub: 1, cap: 1, sw: 5, sh: 3, mane: 24, mseg: 2, shells: 0, claws: 0, teeth: 0, whisk: 0, tufts: 0, lids: 0, detailEye: 0, ruff: 0, face: 0 },
+  medium: { seg: 7, sub: 2, cap: 1, sw: 8, sh: 5, mane: 90, mseg: 3, shells: 0, claws: 2, teeth: 4, whisk: 3, tufts: 8, lids: 1, detailEye: 1, ruff: 1, face: 1 },
+  high: { seg: 10, sub: 2, cap: 2, sw: 12, sh: 8, mane: 300, mseg: 4, shells: 3, claws: 3, teeth: 4, whisk: 5, tufts: 16, lids: 1, detailEye: 1, ruff: 2, face: 2 },
 };
 
 const GEO_CACHE = new Map();
@@ -415,7 +415,11 @@ export function createBeast(unitOrRec, opts = {}) {
   mk('jaw', J.head, 0, SS(sp.jawAt[0]), SS(sp.jawAt[1]));
   const E = sp.earAt; mk('earL', J.head, SS(E[0]), SS(E[1]), SS(E[2])); mk('earR', J.head, -SS(E[0]), SS(E[1]), SS(E[2]));
   const eyeP = big ? [0.29, 0.07, 0.2] : [HS.sk[0] * 0.8, HS.sk[1] * 0.3, HS.sk[2] * 0.9];
+  const cat = kind === 'lion' || kind === 'nemean', ER = kind === 'bear' || kind === 'boar' ? 0.02 : kind === 'wolf' ? 0.021 : 0.026, FDROP = kind === 'boar' ? 0.5 : kind === 'wolf' ? 0.3 : 0.24, tipY = -HS.sk[1] * FDROP, tipZ = HS.sk[2] + HS.sn[2];
   for (const [s, sg] of [['L', 1], ['R', -1]]) { mk('eye' + s, J.head, sg * SS(eyeP[0]), SS(eyeP[1]), SS(eyeP[2])); mk('lid' + s, J.head, sg * SS(eyeP[0]), SS(eyeP[1]), SS(eyeP[2])); }
+  for (const [s, sg] of [['L', 1], ['R', -1]]) {   // brow bones (frown) and, on the animals, lip bones (snarl); the brow pivots just above the eye
+    if (big) mk('brow' + s, J.head, sg * SS(eyeP[0] * 0.95), SS(eyeP[1] + 0.07), SS(eyeP[2] - 0.004)); else { mk('brow' + s, J.head, sg * SS(eyeP[0] * 0.95), SS(eyeP[1] + ER * 1.6), SS(eyeP[2] - 0.004)); mk('lip' + s, J.head, sg * SS(HS.sn[0] * 0.7), SS(tipY - HS.sn[1] * 0.18), SS(HS.sk[2] + HS.sn[2] * 0.5)); }
+  }
   if (!big) { mk('mane1', J.neck, 0, 0, 0); mk('mane2', J.chest, 0, 0, 0); }
   let tp = J.hips; const TL = sp.tail;
   for (let i = 0; i < 3; i++) { tp = mk('tail' + (i + 1), tp, i === 0 ? SS(TL.at[0]) : 0, i === 0 ? SS(TL.at[1]) : -SS(0.02), i === 0 ? SS(TL.at[2]) : -SS(TL.len)); }
@@ -484,48 +488,86 @@ export function createBeast(unitOrRec, opts = {}) {
   // ---- head (cranium and muzzle are one lofted wedge), jaw, nose, eyes, lids, brows, ears, teeth, whiskers
   const sk = HS.sk, sn = HS.sn, hj = jp('head'), HP = (x, y, z) => [hj.x + x * S, hj.y + y * S, hj.z + z * S];
   if (!big) {
-    const drop = kind === 'boar' ? 0.5 : kind === 'wolf' ? 0.3 : 0.24, wide = kind === 'wolf' ? 1.2 : kind === 'boar' ? 1.1 : 1.32, tipY = -sk[1] * drop, tipZ = sk[2] + sn[2];
+    const wide = kind === 'wolf' ? 1.2 : kind === 'boar' ? 1.1 : 1.32;
     const headCtrl = [
       { p: HP(0, 0, -0.04), r: [SS(sk[0] * 0.8), SS(sk[1] * 0.85)] }, { p: HP(0, 0.005, sk[2] * 0.32), r: [SS(sk[0]), SS(sk[1] * (kind === 'bear' ? 1.05 : 1))] }, { p: HP(0, -0.004, sk[2] * 0.72), r: [SS(sk[0] * 0.94), SS(sk[1] * 0.92)] },
       { p: HP(0, tipY * 0.6 - 0.01, sk[2] + sn[2] * 0.14), r: [SS(sn[0] * wide), SS(sn[1] * 1.28)] }, { p: HP(0, tipY * 0.85, sk[2] + sn[2] * 0.62), r: [SS(sn[0] * (wide * 0.92)), SS(sn[1] * (kind === 'boar' ? 1.0 : 1.12))] }, { p: HP(0, tipY, tipZ), r: [SS(sn[0] * (kind === 'boar' ? 1.05 : 0.95)), SS(sn[1] * (kind === 'boar' ? 0.95 : 0.9))] },
     ];
-    const hdCol = (x, y, z, nx, ny, nz) => { const lz = (z - hj.z) / S, lx = Math.abs(x - hj.x) / S; let c = mix(FUR, BEL, sm(0.0, -0.9, ny) * 0.55); c = mix(c, MUZ, sm(sk[2] * 0.95, sk[2] + sn[2] * 0.5, lz) * (kind === 'boar' ? 0.35 : 0.8)); if (kind === 'wolf') c = mix(c, DK, sm(0.1, 0.9, ny) * sm(sk[2] * 0.7, sk[2] + sn[2] * 0.7, lz) * 0.55 * (1 - sm(0.02, 0.05, lx))); if (kind === 'lion' || kind === 'nemean') c = mix(c, DK, sm(0.2, 1, ny) * sm(0.0, 0.12, (y - hj.y) / S) * 0.0); return c.multiplyScalar(1 - 0.12 * sm(0.2, 0.9, -ny)); };
+    const hdCol = (x, y, z, nx, ny, nz) => { const lz = (z - hj.z) / S, lx = Math.abs(x - hj.x) / S; let c = mix(FUR, BEL, sm(0.0, -0.9, ny) * 0.55); c = mix(c, MUZ, sm(sk[2] * 0.95, sk[2] + sn[2] * 0.5, lz) * (kind === 'boar' ? 0.35 : 0.8)); if (kind === 'wolf') c = mix(c, DK, sm(0.1, 0.9, ny) * sm(sk[2] * 0.7, sk[2] + sn[2] * 0.7, lz) * 0.55 * (1 - sm(0.02, 0.05, lx))); if (kind === 'lion' || kind === 'nemean') c = mix(c, DK, sm(0.2, 1, ny) * sm(0.0, 0.12, (y - hj.y) / S) * 0.0); const ly = (y - hj.y) / S, ex0 = eyeP[0], d = Math.hypot(lx - ex0, ly - eyeP[1], lz - eyeP[2]) / ER; c = mix(c, DK, sm(3.4, 1.3, d) * 0.55);   // the eye socket darkens the skull around the eye
+      if (cat || kind === 'wolf') c = mix(c, DK, sm(ER * 0.7, ER * 0.2, Math.abs(lx - ex0 * 0.7)) * sm(eyeP[1] - ER * 5.2, eyeP[1] - ER * 1.2, ly) * sm(eyeP[1] - ER * 0.7, eyeP[1] - ER * 1.5, ly) * sm(eyeP[2] - ER * 1.2, eyeP[2] - ER * 0.2, lz) * 0.5);   // tear stripe
+      return c.multiplyScalar(1 - 0.12 * sm(0.2, 0.9, -ny)); };
     addLoft('fur', headCtrl, { caps: [true, true], cap: Math.max(1, DT.cap) }, [['head', 0]], 0.5, hdCol, 0);
-    // brow ridges and cheeks
-    if (!LOW) for (const sg of [1, -1]) {
-      const br = blob(SS(sk[0] * 0.36), SS(sk[1] * 0.2), SS(sk[2] * 0.34), 7, 4); setColor(br, (x, y, z, nx, ny) => mix(FUR, DK, 0.42 + 0.2 * sm(0, 1, ny))); abs(br, 'head', [sg * SS(sk[0] * 0.62), SS(sk[1] * 0.5), SS(sk[2] * 0.82)], [0.0, 0, sg * -0.28]); addRigid('fur', br, 'head');
-      if (kind === 'lion' || kind === 'nemean' || kind === 'bear') { const ck = blob(SS(sk[0] * 0.3), SS(sk[1] * 0.4), SS(sk[2] * 0.38), 7, 4); setColor(ck, (x, y, z, nx, ny) => mix(FUR, BEL, 0.3)); abs(ck, 'head', [sg * SS(sk[0] * 0.78), -SS(sk[1] * 0.2), SS(sk[2] * 0.58)]); addRigid('fur', ck, 'head'); }
-      if (kind === 'lion' || kind === 'nemean' || kind === 'wolf') { const wp = blob(SS(sn[0] * 0.45), SS(sn[1] * 0.45), SS(sn[2] * 0.3), 7, 4); setColor(wp, (x, y, z, nx, ny) => mix(MUZ, BEL, 0.3)); abs(wp, 'head', [sg * SS(sn[0] * 0.78), SS(tipY * 0.9 - 0.012), SS(sk[2] + sn[2] * 0.52)]); addRigid('fur', wp, 'head'); }
+    // ---- sculpted face. HL(x, y, z) = absolute rest position from head-local units (x S). FC: 0 low, 1 medium, 2 high.
+    // brow ridge over a dark eye socket (hinged on the brow bone, frowns on a snarl), nose bridge, nose leather with nostrils and a philtrum, upper lip flaps on the lip bones over a gum strip and the fangs,
+    // a lower jaw with a lip line. A snarl rolls the flaps outward and up (teeth show), a roar opens the jaw.
+    const FC = DT.face, HL = (x, y, z) => [hj.x + x * S, hj.y + y * S, hj.z + z * S], ex = eyeP[0], ey = eyeP[1], ez = eyeP[2];
+    const ringAt = (z) => { // interpolate the head loft rings: centre y, half width and half height at rest-space z
+      const R = headCtrl; let i = 0; while (i < R.length - 2 && z > R[i + 1].p[2]) i++; const a = R[i], b = R[i + 1], t = clamp((z - a.p[2]) / Math.max(1e-5, b.p[2] - a.p[2]), 0, 1);
+      return { y: a.p[1] + (b.p[1] - a.p[1]) * t, rx: a.r[0] + (b.r[0] - a.r[0]) * t, ry: a.r[1] + (b.r[1] - a.r[1]) * t };
+    };
+    const gumAt = (x, z) => { const r = ringAt(z), q = clamp(Math.abs(x) / r.rx, 0, 0.98); return r.y - r.ry * Math.sqrt(1 - q * q) * 0.95; };
+    const lipY = tipY - sn[1] * 0.95;
+    for (const sg of [1, -1]) {
+      const s = sg > 0 ? 'L' : 'R', eyeW = jp('eye' + s);
+      // brow ridge: a heavy tapered tube over the eye
+      { const rb = ER * (kind === 'boar' ? 0.85 : 1.2);
+        if (FC) { const br = loft([{ p: HL(sg * ex * 0.3, ey + ER * 2.0, ez + ER * 1.0), r: SS(rb * 0.75) }, { p: HL(sg * ex * 0.85, ey + ER * 2.3, ez + ER * 0.1), r: SS(rb) }, { p: HL(sg * ex * 1.18, ey + ER * 1.55, ez - ER * 1.8), r: SS(rb * 0.5) }], { seg: FC > 1 ? 6 : 5, sub: 1, cap: 1 }); setColor(br, (x, y, z, nx, ny) => mix(mix(FUR, DK, 0.5), FUR, 0.25 * sm(0.3, 1, ny))); addRigid('fur', br, 'brow' + s); }
+        else { const br = blob(SS(ER * 2.3), SS(ER * 0.95), SS(ER * 1.7), 5, 3); setColor(br, (x, y, z, nx, ny) => mix(FUR, DK, 0.5)); place(br, HL(sg * ex * 0.78, ey + ER * 1.9, ez - 0.012), [0, 0, sg * -0.25]); addRigid('fur', br, 'brow' + s); } }
+      // eye socket: a dark hollow that rims the eyeball, set a little behind it
+      if (FC) { const so = blob(SS(ER * 1.7), SS(ER * 1.4), SS(ER * 1.2), 7, 4); setColor(so, (x, y, z, nx, ny) => mix(mix(DK, hexC('#120905'), 0.55), FUR, 0.2 * sm(0.2, 1, ny))); place(so, [eyeW.x + sg * SS(ER * 0.15), eyeW.y - SS(ER * 0.1), eyeW.z - SS(ER * 0.5)]); addRigid('fur', so, 'head'); }
+      // cheek mound under the eye
+      if (FC && (cat || kind === 'bear')) { const ck = blob(SS(sk[0] * 0.3), SS(sk[1] * 0.36), SS(sk[2] * 0.36), 7, 4); setColor(ck, (x, y, z, nx, ny) => mix(FUR, BEL, 0.3 + 0.2 * sm(0, -1, ny))); place(ck, HL(sg * sk[0] * 0.8, -sk[1] * 0.22, sk[2] * 0.6)); addRigid('fur', ck, 'head'); }
+      // upper lip flap on the lip bone, with a dark lip edge
+      if (FC && kind !== 'boar') {
+        const lp = jp('lip' + s), flap = blob(SS(sn[0] * 0.24), SS(sn[1] * 0.56), SS(sn[2] * 0.5), 7, 4);
+        setColor(flap, (x, y, z, nx, ny) => mix(mix(MUZ, BEL, 0.25), mix(FUR, DK, 0.3), 0.3 * sm(0.4, 1, ny)).multiplyScalar(0.92 + 0.12 * sm(-1, 0.5, ny))); place(flap, [lp.x + sg * SS(sn[0] * 0.22), lp.y - SS(sn[1] * 0.4), lp.z + SS(sn[2] * 0.04)], [0, 0, sg * 0.1]); addRigid('fur', flap, 'lip' + s);
+        const le = loft([{ p: [lp.x + sg * SS(sn[0] * 0.3), lp.y - SS(sn[1] * 0.93), lp.z - SS(sn[2] * 0.46)], r: SS(0.0045) }, { p: [lp.x + sg * SS(sn[0] * 0.3), lp.y - SS(sn[1] * 0.95), lp.z - SS(sn[2] * 0.02)], r: SS(0.005) }, { p: [lp.x + sg * SS(sn[0] * 0.05), lp.y - SS(sn[1] * 0.86), lp.z + SS(sn[2] * 0.5)], r: SS(0.004) }], { seg: 4, sub: 1, cap: 1 }); setColor(le, flat('#241412')); addRigid('eye', le, 'lip' + s);
+      }
+      // ears
+      { const ej = jp('ear' + s), inner = sp.ears === 'point' ? hexC('#c7bdb0') : sp.ears === 'flap' ? hexC('#8a6a58') : hexC('#b4907c'); let ear;
+        if (sp.ears === 'point') { ear = cone(SS(0.058), SS(0.17), 4); ear.scale(1, 1, 0.45); ear.rotateX(-0.12); ear.rotateZ(sg * -0.18); if (FC) { const e2 = cone(SS(0.04), SS(0.13), 4); e2.scale(1, 1, 0.3); e2.translate(0, 0.004 * S, SS(0.014)); e2.rotateX(-0.12); e2.rotateZ(sg * -0.18); setColor(e2, flat('#d9d0c4')); e2.translate(ej.x, ej.y, ej.z); addSkin2('fur', e2, 'ear' + s, 'head', (x, y) => sm(ej.y - 0.005, ej.y + SS(0.1), y)); } }
+        else if (sp.ears === 'flap') { ear = blob(SS(0.07), SS(0.1), SS(0.022), 7, 4); ear.translate(sg * SS(0.02), SS(0.07), 0); ear.rotateX(0.35); ear.rotateZ(sg * -0.5); }
+        else { // round ear: a cup (dark back, light inner fur facing forward) on the ear bone
+          const er2 = SS(sp.id === 'bear' ? 0.055 : 0.07); ear = new THREE.SphereGeometry(1, FC ? 8 : 6, FC ? 4 : 3, 0, TAU, 0, Math.PI * 0.5); ear.scale(er2, er2, SS(0.04)); ear.rotateX(Math.PI * 0.5 - 0.25); ear.translate(0, SS(0.04), -SS(0.012));
+          if (FC) { const dsk = new THREE.CircleGeometry(1, 8); dsk.scale(er2 * 0.82, er2 * 0.82, 1); dsk.translate(0, SS(0.04), SS(0.02)); dsk.rotateX(-0.2); setColor(dsk, (x, y, z) => mix(hexC('#8a6a5a'), inner, 0.6 + 0.4 * sm(0.0, 0.06 * S, y))); dsk.translate(ej.x, ej.y, ej.z); addSkin2('fur', dsk, 'ear' + s, 'head', (x, y) => sm(ej.y - 0.005, ej.y + SS(0.1), y)); } }
+        setColor(ear, (x, y, z, nx, ny, nz) => (nz > 0.25 && sp.ears !== 'round' ? mix(inner, FUR, 0.2 + 0.4 * sm(0, 0.12 * S, y)) : mix(FUR, DK, 0.5 + 0.3 * sm(0, 0.1 * S, y)))); ear.translate(ej.x, ej.y, ej.z);
+        addSkin2('fur', ear, 'ear' + s, 'head', (x, y) => sm(ej.y - 0.005, ej.y + SS(0.1), y)); }
+      // eye: iris and pupil painted by vertex colour (the ball turns with the eye joint), the lid hinges over it
+      { const eyb = blob(SS(ER), SS(ER), SS(ER), FC > 1 ? 10 : FC ? 8 : 5, FC > 1 ? 7 : FC ? 5 : 3);
+        setColor(eyb, (x, y, z, nx, ny, nzz) => { const q = Math.hypot(nx, ny); if (nzz > 0.9 && q < 0.3) return hexC('#050404'); if (nzz > 0.55) return EYE.clone().multiplyScalar(0.55 + 0.7 * sm(0.55, 0.9, nzz)); return EYE.clone().multiplyScalar(0.28); });
+        abs(eyb, 'eye' + s, [0, 0, 0]); addRigid('eye', eyb, 'eye' + s);
+        if (DT.lids) { const lid = new THREE.SphereGeometry(1, 9, 4, 0, TAU, 0, Math.PI / 2); lid.scale(SS(ER * 1.22), SS(ER * 1.22), SS(ER * 1.22)); lid.rotateX(-1.25); setColor(lid, (x, y, z, nx, ny) => mix(FUR, DK, 0.62)); abs(lid, 'lid' + s, [0, 0, 0]); addRigid('fur', lid, 'lid' + s); } }
     }
-    // nose pad (and nostrils)
-    { const bw = kind === 'boar' ? 1.1 : 0.82, nz = blob(SS(sn[0] * bw), SS(sn[1] * (kind === 'boar' ? 0.95 : 0.62)), SS(kind === 'boar' ? 0.04 : 0.032), LOW ? 5 : 8, LOW ? 3 : 5); setColor(nz, (x, y, z, nx, ny, nzz) => { const c = hexC(kind === 'boar' ? '#a86f66' : '#2a1a18'); const ns = Math.abs(Math.abs(x) / (SS(sn[0]) * bw) - 0.42) < 0.2 && nzz > 0.4 && y < 0 ? 0.35 : 1; return c.clone().multiplyScalar(ns); }); abs(nz, 'head', [0, SS(tipY + (kind === 'boar' ? 0.0 : sn[1] * 0.42)), SS(tipZ + 0.014)]); addRigid('eye', nz, 'head');
-      if (!LOW) for (const sg of [1, -1]) { const lp = blob(SS(0.004), SS(0.005), SS(sn[2] * 0.62), 5, 3); setColor(lp, flat(kind === 'boar' ? '#3a2018' : '#2a1a18')); abs(lp, 'head', [sg * SS(sn[0] * 0.9), SS(tipY - sn[1] * 0.5), SS(sk[2] + sn[2] * 0.52)], [0, sg * 0.1, 0]); addRigid('eye', lp, 'head'); } }
-    // lower jaw (follows the jaw bone), mouth interior and tongue
+    // nose bridge: a low ridge from between the brows to the nose leather
+    if (FC) { const tops = [2, 3, 4, 5].map((i) => headCtrl[i]), nb = loft(tops.map((rg, k) => ({ p: [rg.p[0], rg.p[1] + rg.r[1] * (k === 3 ? 0.78 : 0.93), rg.p[2]], r: [SS(sn[0] * (0.34 - 0.04 * k)), SS(sn[1] * (0.22 - 0.03 * k))] })), { seg: 5, sub: 1, cap: 1 });
+      setColor(nb, (x, y, z, nx, ny) => (kind === 'wolf' ? mix(FUR, DK, 0.55) : kind === 'bear' ? mix(FUR, DK, 0.12) : kind === 'boar' ? mix(FUR, DK, 0.2) : mix(FUR, DK, 0.18))); addRigid('fur', nb, 'head'); }
+    // nose leather with two nostrils (and flaring wings at the high tier) and a philtrum line down to the lip
+    { const bw = kind === 'boar' ? 1.1 : 0.82, nzh = kind === 'boar' ? 0.95 : 0.6, nz = blob(SS(sn[0] * bw), SS(sn[1] * nzh), SS(kind === 'boar' ? 0.045 : 0.034), LOW ? 5 : 8, LOW ? 3 : 5), padC = kind === 'wolf' ? '#171414' : kind === 'boar' ? '#a8756a' : cat ? '#4a2c26' : '#1c1412';
+      setColor(nz, (x, y, z, nx, ny, nzz) => hexC(padC).multiplyScalar(0.8 + 0.3 * sm(-0.5, 0.8, ny))); const nzY = tipY + (kind === 'boar' ? 0.0 : sn[1] * 0.4); abs(nz, 'head', [0, SS(nzY), SS(tipZ + 0.014)]); addRigid('eye', nz, 'head');
+      if (FC) for (const sg of [1, -1]) {
+        const nr = blob(SS(sn[0] * (kind === 'boar' ? 0.2 : 0.17)), SS(sn[1] * (kind === 'boar' ? 0.26 : 0.16)), SS(0.011), 6, 3); setColor(nr, flat(kind === 'boar' ? '#3a1812' : '#070404')); abs(nr, 'head', [sg * SS(sn[0] * (kind === 'boar' ? 0.45 : 0.36)), SS(nzY - sn[1] * (kind === 'boar' ? 0.0 : 0.05)), SS(tipZ + 0.014 + (kind === 'boar' ? 0.036 : 0.026))], [0, sg * 0.3, sg * -0.25]); addRigid('eye', nr, 'head');
+        if (FC > 1 && kind !== 'boar') { const wn = blob(SS(sn[0] * 0.15), SS(sn[1] * 0.2), SS(0.016), 6, 3); setColor(wn, flat(padC)); abs(wn, 'head', [sg * SS(sn[0] * 0.7), SS(nzY - sn[1] * 0.06), SS(tipZ + 0.008)], [0, sg * 0.6, 0]); addRigid('eye', wn, 'head'); }
+      }
+      if (FC > 1 && kind !== 'boar') { const ph = loft([{ p: HL(0, nzY - sn[1] * 0.4, tipZ + 0.022), r: SS(0.004) }, { p: HL(0, lipY + sn[1] * 0.1, tipZ + 0.002), r: SS(0.0035) }], { seg: 4, sub: 1, cap: 1 }); setColor(ph, flat('#241412')); addRigid('eye', ph, 'head'); } }
+    // gum strip under the upper lip (a U along the muzzle), visible when the lips pull back
+    if (FC && kind !== 'boar') { const zs = [[0.74, sk[2] + sn[2] * 0.2], [0.72, sk[2] + sn[2] * 0.58], [0.46, tipZ - 0.02], [0, tipZ - 0.004], [-0.46, tipZ - 0.02], [-0.72, sk[2] + sn[2] * 0.58], [-0.74, sk[2] + sn[2] * 0.2]];
+      const gm = loft(zs.map(([q, z]) => { const r = ringAt(z), x = q * r.rx; return { p: [hj.x + x, gumAt(x, z) + SS(0.006), z], r: SS(0.011) }; }), { seg: 4, sub: 1, cap: 1 }); setColor(gm, flat('#7a2430')); addRigid('eye', gm, 'head'); }
+    // lower jaw (follows the jaw bone), lower lip line, mouth interior and tongue
     const jw = HS.jaw, jy = -sn[1] * 0.38;
     addLoft('fur', [{ p: P3('jaw', 0, SS(jy * 0.7), SS(-0.02)), r: [SS(sn[0] * 1.15), SS(sn[1] * 0.7)] }, { p: P3('jaw', 0, SS(jy), SS(jw * 0.45)), r: [SS(sn[0] * 0.98), SS(sn[1] * 0.55)] }, { p: P3('jaw', 0, SS(jy * 1.05), SS(jw * 0.95)), r: [SS(sn[0] * 0.64), SS(sn[1] * 0.42)] }], { caps: [false, true] }, [['jaw', 0]], 0.5, (x, y, z, nx, ny) => mix(mix(BEL, MUZ, 0.5), FUR, sm(0, 0.9, ny) * 0.35), 0);
-    if (!LOW) { const mo = blob(SS(sn[0] * 0.82), SS(sn[1] * 0.4), SS(jw * 0.52), 8, 4); setColor(mo, flat('#4a1218')); abs(mo, 'jaw', [0, SS(jy * 0.85 + sn[1] * 0.45), SS(jw * 0.46)]); addRigid('eye', mo, 'jaw');
-      const tg = blob(SS(sn[0] * 0.46), SS(sn[1] * 0.26), SS(jw * 0.46), 8, 4); setColor(tg, flat('#c4606c')); abs(tg, 'jaw', [0, SS(jy * 0.85 + sn[1] * 0.72), SS(jw * 0.46)]); addRigid('eye', tg, 'jaw'); }
-    // teeth
-    const fang = kind === 'wolf' ? 0.034 : kind === 'bear' ? 0.04 : kind === 'boar' ? 0.02 : 0.052;
+    if (FC > 1 && kind !== 'boar') { const ll = loft([{ p: P3('jaw', SS(sn[0] * 0.86), SS(jy + sn[1] * 0.4), SS(-0.01)), r: SS(0.004) }, { p: P3('jaw', SS(sn[0] * 0.72), SS(jy + sn[1] * 0.42), SS(jw * 0.5)), r: SS(0.0045) }, { p: P3('jaw', 0, SS(jy + sn[1] * 0.38), SS(jw * 0.97)), r: SS(0.005) }, { p: P3('jaw', -SS(sn[0] * 0.72), SS(jy + sn[1] * 0.42), SS(jw * 0.5)), r: SS(0.0045) }, { p: P3('jaw', -SS(sn[0] * 0.86), SS(jy + sn[1] * 0.4), SS(-0.01)), r: SS(0.004) }], { seg: 4, sub: 1, cap: 1 }); setColor(ll, flat('#241412')); addRigid('eye', ll, 'jaw'); }
+    if (FC) { const mo = blob(SS(sn[0] * 0.82), SS(sn[1] * 0.4), SS(jw * 0.52), 7, 3); setColor(mo, flat('#4a1218')); abs(mo, 'jaw', [0, SS(jy * 0.85 + sn[1] * 0.45), SS(jw * 0.46)]); addRigid('eye', mo, 'jaw');
+      const tg = blob(SS(sn[0] * 0.46), SS(sn[1] * 0.26), SS(jw * 0.46), 7, 3); setColor(tg, flat('#c4606c')); abs(tg, 'jaw', [0, SS(jy * 0.85 + sn[1] * 0.72), SS(jw * 0.46)]); addRigid('eye', tg, 'jaw'); }
+    // teeth: canines up and down (medium), incisors and cheek teeth (high)
+    const fang = kind === 'wolf' ? 0.038 : kind === 'bear' ? 0.044 : kind === 'boar' ? 0.02 : 0.058;
     for (let i = 0; i < DT.teeth; i++) {
-      const sg = i % 2 ? -1 : 1, upT = i < 2, f = cone(SS(fang * 0.28), SS(upT ? fang : fang * 0.82), 5); setColor(f, flat('#f4edd8'));
-      if (upT) { abs(f, 'head', [sg * SS(sn[0] * 0.62), SS(tipY * 0.85 - sn[1] * 0.8), SS(sk[2] + sn[2] * 0.8)], [Math.PI, 0, 0]); addRigid('bone', f, 'head'); } else { abs(f, 'jaw', [sg * SS(sn[0] * 0.5), SS(jy + sn[1] * 0.3), SS(jw * 0.86)]); addRigid('bone', f, 'jaw'); }
+      const sg = i % 2 ? -1 : 1, upT = i < 2, fl = SS(upT ? fang : fang * 0.82), f = cone(SS(fang * 0.3), fl, 5); setColor(f, (x, y) => mix(hexC('#cdbf96'), hexC('#f6f0dc'), sm(0, fl * 0.7, y)));
+      if (upT) { const zz = hj.z + SS(sk[2] + sn[2] * 0.8), xx = sg * SS(sn[0] * 0.62); place(f, [hj.x + xx, gumAt(xx, zz) + SS(0.004), zz], [Math.PI, 0, 0]); addRigid('bone', f, 'head'); } else { abs(f, 'jaw', [sg * SS(sn[0] * 0.5), SS(jy + sn[1] * 0.3), SS(jw * 0.86)]); addRigid('bone', f, 'jaw'); }
     }
-    if (DT.teeth >= 4) for (let i = -2; i <= 2; i++) { const f = cone(SS(0.007), SS(0.016), 4); setColor(f, flat('#f1ead6')); abs(f, 'head', [SS(i * sn[0] * 0.2), SS(tipY * 0.85 - sn[1] * 0.78), SS(sk[2] + sn[2] * 0.97)], [Math.PI, 0, 0]); addRigid('bone', f, 'head'); }
-    // eyes: an iris and pupil painted by the vertex colour, so they turn with the eyeball joint; lids hinge over them
-    for (const sg of [1, -1]) {
-      const s = sg > 0 ? 'L' : 'R', er = kind === 'bear' ? 0.02 : kind === 'boar' ? 0.02 : kind === 'wolf' ? 0.021 : 0.026, ey = blob(SS(er), SS(er), SS(er), DT.detailEye ? 10 : 5, DT.detailEye ? 7 : 3);
-      setColor(ey, (x, y, z, nx, ny, nzz) => { const q = Math.hypot(nx, ny) ; if (nzz > 0.9 && q < 0.3) return hexC('#050404'); if (nzz > 0.55) return EYE.clone().multiplyScalar(0.55 + 0.7 * sm(0.55, 0.9, nzz)); return EYE.clone().multiplyScalar(0.28); });
-      abs(ey, 'eye' + s, [0, 0, 0]); addRigid('eye', ey, 'eye' + s);
-      if (DT.lids) { const lid = new THREE.SphereGeometry(1, 9, 4, 0, TAU, 0, Math.PI / 2); lid.scale(SS(er * 1.2), SS(er * 1.2), SS(er * 1.2)); lid.rotateX(-1.25); setColor(lid, (x, y, z, nx, ny) => mix(FUR, DK, 0.55)); abs(lid, 'lid' + s, [0, 0, 0]); addRigid('fur', lid, 'lid' + s); }
-    }
-    // ears
-    for (const sg of [1, -1]) {
-      const s = sg > 0 ? 'L' : 'R', ej = jp('ear' + s), inner = sp.ears === 'point' ? hexC('#bdb3a6') : sp.ears === 'flap' ? hexC('#8a6a58') : hexC('#a07a64');
-      let ear; if (sp.ears === 'point') { ear = cone(SS(0.058), SS(0.17), 4); ear.scale(1, 1, 0.45); ear.rotateX(-0.12); ear.rotateZ(sg * -0.18); } else if (sp.ears === 'flap') { ear = blob(SS(0.07), SS(0.1), SS(0.022), 7, 4); ear.translate(sg * SS(0.02), SS(0.07), 0); ear.rotateX(0.35); ear.rotateZ(sg * -0.5); } else { ear = blob(SS(sp.id === 'bear' ? 0.055 : 0.07), SS(sp.id === 'bear' ? 0.055 : 0.07), SS(0.032), 8, 5); ear.translate(0, SS(0.035), 0); }
-      setColor(ear, (x, y, z, nx, ny, nz) => (nz > 0.25 ? mix(inner, FUR, 0.2 + 0.4 * sm(0, 0.12 * S, y)) : mix(FUR, DK, 0.55 + 0.25 * sm(0, 0.1 * S, y)))); ear.translate(ej.x, ej.y, ej.z);
-      addSkin2('fur', ear, 'ear' + s, 'head', (x, y) => sm(ej.y - 0.005, ej.y + SS(0.1), y));
-      if (sp.ears === 'point' && DT.tufts) { const t = blob(SS(0.02), SS(0.03), SS(0.01), 5, 3); setColor(t, flat('#d8d0c4')); }
+    if (FC > 1 && kind !== 'boar') {
+      for (let i = -2; i <= 2; i++) { const f = cone(SS(0.008), SS(0.02), 3); setColor(f, flat('#f1ead6')); const zz = tipZ - 0.012 - Math.abs(i) * 0.012, xx = i * sn[0] * 0.21; place(f, [hj.x + xx * S, gumAt(xx * S, hj.z + zz * S) + SS(0.004), hj.z + zz * S], [Math.PI, 0, 0]); addRigid('bone', f, 'head'); }
+      for (let i = -2; i <= 2; i++) { const f = cone(SS(0.0075), SS(0.017), 3); setColor(f, flat('#eee6d0')); abs(f, 'jaw', [i * SS(sn[0] * 0.19), SS(jy + sn[1] * 0.38), SS(jw * 0.95 - Math.abs(i) * 0.01)]); addRigid('bone', f, 'jaw'); }
+      for (const sg of [1, -1]) for (let i = 0; i < 3; i++) { const f = cone(SS(0.0075), SS(0.016), 3); setColor(f, flat('#e8dfc6')); const zz = sk[2] + sn[2] * (0.28 + 0.1 * i), xx = sg * sn[0] * 0.78; place(f, [hj.x + xx * S, gumAt(xx * S, hj.z + zz * S) + SS(0.004), hj.z + zz * S], [Math.PI, 0, 0]); addRigid('bone', f, 'head'); }
     }
     // whiskers: thin cards from the whisker pads, bending down
     if (DT.whisk) { const bl = new Blades(), hb = [[bIdx.head, 1]]; for (const sg of [1, -1]) for (let i = 0; i < DT.whisk; i++) { const a = (i - (DT.whisk - 1) / 2) * 0.16, rt = HP(sg * sn[0] * 0.62, tipY * 0.9 + 0.006 + i * 0.004, sk[2] + sn[2] * 0.5 + 0.012); dir.set(sg * 0.9, 0.12 + a * 0.5, 0.45 + a * 0.4).normalize(); bl.add(rt, dir, SS(kind === 'wolf' ? 0.085 : 0.11), SS(0.0035), 2, new V3(0, -SS(0.035), 0), hexC('#e9e3d6'), hexC('#c9c2b4'), hb, new V3(0, 1, 0)); } bladesTo('bone', bl); }
@@ -771,6 +813,32 @@ function writeQuat(q, out, o) {
 // gait tables: phase offsets for LF, RF, LH, RH, duty factor (fraction of the cycle a paw is on the ground)
 const GAITS = { walk: { o: [0.25, 0.75, 0.0, 0.5], d: 0.7 }, trot: { o: [0.0, 0.5, 0.5, 0.0], d: 0.54 }, gallop: { o: [0.55, 0.45, 0.0, 0.1], d: 0.38 }, pace: { o: [0.0, 0.5, 0.0, 0.5], d: 0.68 } };
 const _ik = { p1: new V3(), p2: new V3(), a: new V3(), r: new V3(), c: new V3() };
+/** facial expression presets (animator.setMood): snarl = lips pulled up and back (teeth), brows frown; squint = lids half shut; wide = lids open wide, brows up (enraged); jaw = mouth part */
+const MOODS = { calm: { snarl: 0, squint: 0, wide: 0, jaw: 0 }, wary: { snarl: 0.08, squint: 0.2, wide: 0, jaw: 0 }, angry: { snarl: 0.55, squint: 0.4, wide: 0, jaw: 0.04 }, growl: { snarl: 0.8, squint: 0.35, wide: 0, jaw: 0.22 }, snarl: { snarl: 1, squint: 0.5, wide: 0, jaw: 0.1 }, enraged: { snarl: 0.8, squint: 0, wide: 1, jaw: 0.14 } };
+// foot locking scratch (stance paws are pinned in world space by a damped 3 DOF solve on shoulder pitch, shoulder roll and elbow pitch; no allocation per frame)
+const _E = new THREE.Euler(), _L4 = new THREE.Matrix4(), _M0 = new THREE.Matrix4(), _M1 = new THREE.Matrix4(), _M2 = new THREE.Matrix4(), _fA = new V3(), _fB = new V3(), _tg = new V3();
+const _v3 = new Float64Array(3), _Jm = new Float64Array(9), _Am = new Float64Array(9), _bv = new Float64Array(3), _dl = new Float64Array(3);
+/** sole position (world) of a leg for the angle offsets v = [d shoulder pitch, d shoulder roll, d elbow pitch] added to the pose in lg.q (the wrist keeps the paw's total pitch) */
+function legFK(lg, v, out) {
+  const q = lg.q;
+  _L4.makeRotationFromEuler(_E.set(q[0] + v[0], q[1], q[2] + v[1], 'XYZ')).setPosition(lg.s); _M0.multiplyMatrices(lg.par.matrixWorld, _L4);
+  _L4.makeRotationFromEuler(_E.set(q[3] + v[2], q[4], q[5], 'XYZ')).setPosition(lg.a); _M1.multiplyMatrices(_M0, _L4);
+  _L4.makeRotationFromEuler(_E.set(q[6] - v[0] - v[2], q[7], q[8], 'XYZ')).setPosition(lg.b); _M2.multiplyMatrices(_M1, _L4);
+  out.copy(lg.c).applyMatrix4(_M2);
+}
+/** damped least squares: move v so the sole reaches tg (3 iterations from the current offsets in v) */
+function legSolve(lg, tg, v, lim) {
+  for (let it = 0; it < 3; it++) {
+    legFK(lg, v, _fA); const ex = tg.x - _fA.x, ey = tg.y - _fA.y, ez = tg.z - _fA.z; if (ex * ex + ey * ey + ez * ez < 1e-6) break;
+    for (let k = 0; k < 3; k++) { const o = v[k]; v[k] = o + 0.01; legFK(lg, v, _fB); v[k] = o; _Jm[k] = (_fB.x - _fA.x) / 0.01; _Jm[3 + k] = (_fB.y - _fA.y) / 0.01; _Jm[6 + k] = (_fB.z - _fA.z) / 0.01; }   // J[row][col]
+    for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++) _Am[r * 3 + c] = _Jm[r] * _Jm[c] + _Jm[3 + r] * _Jm[3 + c] + _Jm[6 + r] * _Jm[6 + c] + (r === c ? 0.02 : 0);   // JtJ + damping
+    _bv[0] = _Jm[0] * ex + _Jm[3] * ey + _Jm[6] * ez; _bv[1] = _Jm[1] * ex + _Jm[4] * ey + _Jm[7] * ez; _bv[2] = _Jm[2] * ex + _Jm[5] * ey + _Jm[8] * ez;
+    const a = _Am[0], b = _Am[1], c = _Am[2], d = _Am[3], e = _Am[4], f = _Am[5], g = _Am[6], h = _Am[7], i = _Am[8];
+    const A = e * i - f * h, B = -(d * i - f * g), C = d * h - e * g, det = a * A + b * B + c * C; if (Math.abs(det) < 1e-9) break;
+    const idt = 1 / det; _dl[0] = (A * _bv[0] + (-(b * i - c * h)) * _bv[1] + (b * f - c * e) * _bv[2]) * idt; _dl[1] = (B * _bv[0] + (a * i - c * g) * _bv[1] + (-(a * f - c * d)) * _bv[2]) * idt; _dl[2] = (C * _bv[0] + (-(a * h - b * g)) * _bv[1] + (a * e - b * d) * _bv[2]) * idt;
+    for (let k = 0; k < 3; k++) { const st = _dl[k] > 0.5 ? 0.5 : _dl[k] < -0.5 ? -0.5 : _dl[k]; let nv = v[k] + st; nv = nv < lim[k * 2] ? lim[k * 2] : nv > lim[k * 2 + 1] ? lim[k * 2 + 1] : nv; v[k] = nv; }
+  }
+}
 class BeastAnimator {
   constructor(rig, sp, J, rest, squash, flashState, bu, mats) {
     this.rig = rig; this.sp = sp; this.J = J; this.squash = squash; this.flashState = flashState; this.mats = mats;
@@ -784,9 +852,16 @@ class BeastAnimator {
     this.go2 = [sp.gait.strideW, sp.gait.strideT, sp.gait.strideR]; this.gaitMix = { s1: 0, s2: 0 }; this.offs = new Float32Array([0.25, 0.75, 0, 0.5]); this.blinkT = 0;
     const F = sp.front, H = sp.hind; this.legL = [Math.hypot(F.up[0] + F.lo[0] - F.pad, F.up[1] + F.lo[1]), 0, Math.hypot(H.up[0] + H.lo[0] - H.pad, H.up[1] + H.lo[1])].map((v) => v * sp.size); this.legJ = [['shoulderL', 'elbowL', 'wristL'], ['shoulderR', 'elbowR', 'wristR'], ['hipL', 'kneeL', 'ankleL'], ['hipR', 'kneeR', 'ankleR']].map((r) => r.map((n) => J[n]));
     this.pads = [F.pad, F.pad, H.pad, H.pad].map((v) => v * sp.size); this.stance = [1, 1, 1, 1];
+    // expression layer (setMood) and stance paw locks
+    this.mood = { snarl: 0, squint: 0, wide: 0, jaw: 0 }; this.moodT = { snarl: 0, squint: 0, wide: 0, jaw: 0 }; this.moodName = 'calm'; this.enraged = false; this.stride = 1;
+    this.lkOn = new Uint8Array(4); this.lkW = new Float32Array(4); this.lk = new Float64Array(12); this.ikD = new Float64Array(12); this.ikV = new Float64Array(3); this.stT = new Float32Array(4).fill(-1); this.stF = new Float64Array(8); this.drop = 0; this.dropN = 0; this.lastRoot = { x: 0, z: 0, yaw: 0, ok: false };
+    const col = sp.id === 'elephant'; this.leash = (col ? 0.09 : 0.2) * this.legL[0]; this.stepAt = (col ? 0.07 : 0.14) * this.legL[0]; this.stepLift = (col ? 0.12 : 0.2) * this.legL[0]; this.slip = 0;
+    this.lg = this.legJ.map((jr, i) => ({ par: jr[0].parent, s: jr[0].position, a: jr[1].position, b: jr[2].position, c: new V3(0, -this.pads[i] * 0.98, 0), Lmax: jr[1].position.length() + jr[2].position.length() + this.pads[i] * 0.98, q: new Float64Array(9), i0: LEG_I[i][0], i1: LEG_I[i][1], i2: LEG_I[i][2], lim: new Float64Array(6), front: i < 2 }));
   }
-  reset() { this.pb.fill(0); this.pa.fill(0); this.out.fill(0); this.snap.fill(0); this.phase = 0; this.action = null; this.dead = false; this.state = 'move'; this.snapT = 1; this.groundOff = 0; this.hurtS.x = 0; this.hurtS.v = 0; this.go = 0; this.rig.body.position.set(0, 0, 0); this.rig.body.rotation.set(0, 0, 0); this.lastYaw = null; for (const k in this.sec) { this.sec[k].x = 0; this.sec[k].v = 0; } this.fid.slot = -1; }
+  reset() { this.pb.fill(0); this.pa.fill(0); this.out.fill(0); this.snap.fill(0); this.phase = 0; this.action = null; this.dead = false; this.state = 'move'; this.snapT = 1; this.groundOff = 0; this.hurtS.x = 0; this.hurtS.v = 0; this.go = 0; this.rig.body.position.set(0, 0, 0); this.rig.body.rotation.set(0, 0, 0); this.lastYaw = null; for (const k in this.sec) { this.sec[k].x = 0; this.sec[k].v = 0; } this.fid.slot = -1; this.lkOn.fill(0); this.lkW.fill(0); this.ikD.fill(0); this.stT.fill(-1); this.lastRoot.ok = false; this.drop = 0; this.dropN = 0; }
   setMove(vz, vx = 0) { this.mv.vz = vz; this.mv.vx = vx; }
+  /** facial expression: 'calm' | 'wary' | 'angry' | 'growl' | 'snarl' | 'enraged', or {snarl, squint, wide, jaw} (0..1). Smoothed into brows, lips, lids, jaw and ears; clips override the channels they name. */
+  setMood(m) { const P = typeof m === 'string' ? (MOODS[m] || MOODS.calm) : Object.assign({ snarl: 0, squint: 0, wide: 0, jaw: 0 }, m); this.moodName = typeof m === 'string' ? m : 'custom'; this.enraged = this.moodName === 'enraged'; Object.assign(this.moodT, { snarl: 0, squint: 0, wide: 0, jaw: 0 }, P); }
   setWeapon() {} setAlert() {}
   setState(name) { if (name === 'move' || !name) { if (this.state !== 'move') this.fade(0.2); this.state = 'move'; this.stateClip = null; return; } this.fade(0.2); this.state = name; this.stateClip = this.clips[name] || (name === 'victory' || name === 'cheer' || name === 'taunt' ? this.clips.victory : null); if (this.stateClip) this.action = { c: this.stateClip, t: 0, speed: 1, hold: true, ended: false, ev: 0 }; }
   fade(d) { this.snap.set(this.out); this.snapT = 0; this.snapDur = d; }
@@ -810,16 +885,18 @@ class BeastAnimator {
     const G = this.sp.gait, v = Math.sqrt(this.mv.vz * this.mv.vz + this.mv.vx * this.mv.vx), pb = this.pb, S = this.sp.size, big = this.sp.id === 'elephant', pace = !!G.pace;
     this.speed += (v - this.speed) * Math.min(1, dt * 10); const gv = this.speed;
     const wk = sm(0.12, G.walkV * 0.8, gv), s1 = pace ? 0 : sm(G.walkV * 1.12, G.trotV * 0.95, gv), s2 = sm(G.trotV * 1.08, G.runV * 0.86, gv), gm = this.gaitMix; gm.s1 += (s1 - gm.s1) * Math.min(1, dt * 6); gm.s2 += (s2 - gm.s2) * Math.min(1, dt * 6);
-    const stride = lerp(lerp(G.strideW, G.strideT, gm.s1), G.strideR, gm.s2) * S, W = pace ? GAITS.pace : GAITS.walk, T = pace ? GAITS.pace : GAITS.trot, R = GAITS.gallop;
-    const duty = lerp(lerp(W.d, T.d, gm.s1), R.d, gm.s2) - (big ? 0 : 0);
-    if (gv > 0.12) this.phase = (this.phase + (Math.sign(this.mv.vz || 1) * gv * dt) / stride) % 1; if (this.phase < 0) this.phase += 1;
-    const ph = this.phase, half = Math.min(stride * duty * 0.5, this.legL[0] * 0.92);
+    const stride0 = lerp(lerp(G.strideW, G.strideT, gm.s1), G.strideR, gm.s2) * S, W = pace ? GAITS.pace : GAITS.walk, T = pace ? GAITS.pace : GAITS.trot, R = GAITS.gallop;
+    const duty = lerp(lerp(W.d, T.d, gm.s1), R.d, gm.s2);
+    // stride matched to the reach: a stance paw has to travel as far as the body does (stride x duty) and a leg only swings so far, so a sprint takes shorter, quicker strides instead of skating
+    const reach = Math.min(this.legL[0], this.legL[2]) * (G.rf || 0.46), stride = Math.min(stride0, (2 * reach) / Math.max(0.3, duty)); this.stride = stride;
+    if (v > 0.12) this.phase = (this.phase + (Math.sign(this.mv.vz || 1) * v * dt) / stride) % 1; if (this.phase < 0) this.phase += 1;   // the cycle follows the DISTANCE actually travelled (raw speed, not the smoothed one)
+    const ph = this.phase, half = stride * duty * 0.5, am = sm(0.04, 0.4, v);
     const rn = gm.s2, tn = gm.s1 * (1 - gm.s2);
     for (let i = 0; i < 4; i++) {   // 0 LF, 1 RF, 2 LH, 3 RH
       const o = lerp(lerp(W.o[i], T.o[i], gm.s1), R.o[i], gm.s2), front = i < 2, jn = LEG_I[i], Lg = this.legL[front ? 0 : 2], c = (ph + o + 1) % 1;
       let fz, lift = 0, st = 1;   // fz: how far forward of the neutral paw position (metres); lift: 0..1 swing arc
       if (c < duty) { const u = c / duty; fz = half * (1 - 2 * u); } else { const u = (c - duty) / (1 - duty), e = u * u * (3 - 2 * u); fz = -half + 2 * half * e; lift = Math.sin(Math.PI * u); st = 0; }
-      const ang = -Math.asin(clamp(fz / Lg, -0.95, 0.95)) * wk, lf = lift * wk, comp = (1 - lift) * Math.sin(Math.PI * clamp(c / duty, 0, 1)) * wk * (c < duty ? 1 : 0);
+      const ang = -Math.asin(clamp(fz / Lg, -0.95, 0.95)) * am, lf = lift * am, comp = (1 - lift) * Math.sin(Math.PI * clamp(c / duty, 0, 1)) * am * (c < duty ? 1 : 0);
       if (front) { pb[jn[0]] = ang * 0.92 - lf * 0.2; pb[jn[1]] = (0.1 + 1.25 * lf * lf + 0.12 * comp) * (big ? 0.55 : 1) - 0.04; pb[jn[2]] = -pb[jn[0]] * 0.5 - pb[jn[1]] * 0.5 + 0.05 + lf * 0.35; }
       else { pb[jn[0]] = ang * 1.0 + 0.06 + lf * 0.12; pb[jn[1]] = (0.1 + 1.1 * lf * lf + 0.1 * comp) * (big ? 0.55 : 1) + 0.1 + 0.1 * clamp(-ang, 0, 1); pb[jn[2]] = -pb[jn[0]] * 0.45 - pb[jn[1]] * 0.55 + 0.06 + lf * 0.45; }
       pb[jn[0] + 2] = 0;
@@ -871,8 +948,15 @@ class BeastAnimator {
     const eyaw = -(pb[JI.head * 3 + 1] + pb[JI.neck * 3 + 1]) * 0.6 + Math.sin(t * 1.9) * 0.05 + Math.sin(t * 5.3) * 0.015 + Math.sin(t * 0.7 + 2) * 0.1, epit = -(pb[JI.head * 3] + pb[JI.neck * 3]) * 0.35 + Math.sin(t * 1.3) * 0.03;
     for (let i = 0; i < 2; i++) { pb[EYE_I[i] + 1] = eyaw * alive; pb[EYE_I[i]] = epit * alive; }
     const per2 = 3.4 + h01(Math.floor(t / 4.1) + 3) * 2.2, bt = ((t % per2) + per2) % per2, blink = bt < 0.15 ? Math.sin(Math.PI * bt / 0.15) : 0, fight = this.action && !this.action.hold ? 0.35 : 0, base = (0.1 + 0.1 * idle + 0.1 * Math.max(0, br) * idle) * alive;
-    const lid = base + (1.35 - base) * blink * alive + fight;
+    // ---- expression: the mood eases in (snarl: brows frown and lips pull back to show the teeth; squint: lids half shut; wide: lids and brows up, panting jaw)
+    const mo = this.mood, mt = this.moodT, mk = dt > 0 ? Math.min(1, dt * 7) : 1; mo.snarl += (mt.snarl - mo.snarl) * mk; mo.squint += (mt.squint - mo.squint) * mk; mo.wide += (mt.wide - mo.wide) * mk; mo.jaw += (mt.jaw - mo.jaw) * mk;
+    const sn = mo.snarl * alive, sq = mo.squint * alive, wd = mo.wide * alive;
+    const lid = base + (1.35 - base) * blink * alive + fight + sq * 0.5 - wd * (base + 0.34);
     pb[LID_I[0]] += lid; pb[LID_I[1]] += lid;
+    { const bx = sn * 0.5 + sq * 0.22 - wd * 0.2, bz = sn * 0.3 + sq * 0.1; pb[BROW_I[0]] += bx; pb[BROW_I[1]] += bx; pb[BROW_I[0] + 2] += bz; pb[BROW_I[1] + 2] -= bz;
+      pb[LIP_I[0]] += -0.25 * sn; pb[LIP_I[1]] += -0.25 * sn; pb[LIP_I[0] + 2] += sn; pb[LIP_I[1] + 2] -= sn;
+      pb[JI.jaw * 3] += (mo.jaw + sn * 0.06) * alive + Math.sin(this.t * 9.5) * 0.035 * wd; pb[JI.head * 3] += 0.05 * sn;
+      if (!big) { const ep = -(sn * 0.55 + sq * 0.25); pb[EAR_I[0]] += ep; pb[EAR_I[1]] += ep; } else { pb[EAR_I[0] + 1] += wd * 0.35 + sn * 0.15; pb[EAR_I[1] + 1] -= wd * 0.35 + sn * 0.15; } }
     // ---- secondary motion: tail, ears, mane and banners lag behind the body (springs driven by the turn rate and the speed changes)
     const yaw = this.rig.root.rotation.y; let yr = 0; if (this.lastYaw !== null && dt > 0) { let d = yaw - this.lastYaw; d = Math.atan2(Math.sin(d), Math.cos(d)); yr = clamp(d / dt, -8, 8); } this.lastYaw = yaw;
     const ac = dt > 0 ? clamp((this.speed - this.lastSpeed) / dt, -10, 10) : 0; this.lastSpeed = this.speed;
@@ -930,42 +1014,67 @@ class BeastAnimator {
     const body = rig.body, bx = out[BX], by = out[BY], bz = out[BZ], bp = out[BP], br2 = out[BR], bw = out[BW];
     { const x = bp, y = bw, z = br2, c1 = Math.cos(x / 2), c2 = Math.cos(y / 2), c3 = Math.cos(z / 2), s1 = Math.sin(x / 2), s2 = Math.sin(y / 2), s3 = Math.sin(z / 2), q = body.quaternion;   // body.rotation.set(bp, bw, br2, 'XYZ') without the callback
       q._x = s1 * c2 * c3 + c1 * s2 * s3; q._y = c1 * s2 * c3 - s1 * c2 * s3; q._z = c1 * c2 * s3 + s1 * s2 * c3; q._w = c1 * c2 * c3 - s1 * s2 * s3; }
-    const bpos = body.position; bpos.x = bx; bpos.y = by + this.go; bpos.z = bz;
+    const bpos = body.position; bpos.x = bx; bpos.y = by + this.go - this.drop; bpos.z = bz;
     const sq = this.squash.update(dt), sk = 1 / Math.sqrt(1 + sq), bsc = body.scale; bsc.x = sk; bsc.y = 1 + sq; bsc.z = sk;
     rig.root.updateMatrixWorld(true);
     const air = a && a.c.ground !== undefined;
-    if (!air) this.plant(out, dt);
+    if (!air) this.lockFeet(out, dt); else { this.lkOn.fill(0); this.stT.fill(-1); this.ikD.fill(0); this.drop *= 0.8; if (this.ikR) this.ikR.fill(0); }
     const fl = this.flashState; if (fl.t > 0) { const ft = fl.t - dt; fl.t = ft > 0 ? ft : 0; } const f = fl.t > 0 ? fl.t / fl.dur : 0;
     if (rig.blood.fresh > 0) { { const f9 = rig.blood.fresh - dt / 9; rig.blood.fresh = f9 > 0 ? f9 : 0; } rig.bloodU.uBFresh.value = rig.blood.fresh; }
     if (f > 0 || this._emD !== false) { for (const k in this.mats) { const m = this.mats[k]; if (!m.userData.base) m.userData.base = m.emissive.clone(); m.emissive.copy(m.userData.base); if (f > 0) m.emissive.lerp(fl.color, f); } this._emD = f > 0; }   // PERF: only while a flash runs (and once after)
     this.groundFix(dt, air ? 0 : 1, a ? a.c : null);
   }
-  /** vertical paw planting: a paw that is meant to be on the ground (stance, idle) is put exactly on the sand by bending its elbow / knee (one analytic step on the current pose),
-   *  and a paw below the sand is lifted whatever it is doing. Paws a clip moves (raised, kicking) are left alone. */
-  plant(out, dt) {
-    const rig = this.rig, ground = rig.root.position.y, sc = rig.root.scale.y, I = _ik;
+  /** stance paw locking. A paw that is meant to be on the ground (idle, or the stance phase of the gait) is PINNED in world space: the first frame of a stance the sole's world position is recorded
+   *  and every frame after, a damped 3 DOF solve (shoulder pitch, shoulder roll, elbow pitch; the wrist keeps the paw's pitch) puts the sole back on that spot at sand height. So a paw does not skate
+   *  when the speed changes, on a sprint, in a turn or after a shove. The lock is released when the gait lifts the paw (the correction fades in 0.09 s), a leash (0.2 leg lengths) drags the pin along
+   *  when the body outruns it, and at idle a paw whose pin drifted from its neutral spot under the body (the beast turned) takes a real step (0.26 s arc), never both paws of a pair at once.
+   *  Paws a clip moves (legW 0) are left alone. A teleport (root jumps) forgets the pins. */
+  lockFeet(out, dt) {
+    const rig = this.rig, root = rig.root, ground = root.position.y, sc = root.scale.y, idle = this.gw.move < 0.05, lk = this.lk, ikD = this.ikD, lr = this.lastRoot, v = this.ikV;
+    { const rx = root.position.x, rz = root.position.z, ry = root.rotation.y; if (lr.ok) { const dx = rx - lr.x, dz = rz - lr.z; let dy = ry - lr.yaw; dy = Math.atan2(Math.sin(dy), Math.cos(dy)); if (dx * dx + dz * dz > 1.0 || Math.abs(dy) > 1.2) { this.lkOn.fill(0); ikD.fill(0); this.ikR = null; this.stT.fill(-1); } } lr.x = rx; lr.z = rz; lr.yaw = ry; lr.ok = true; }
+    const ikR = this.ikR || (this.ikR = new Float64Array(12)); let stepping = 0; for (let i = 0; i < 4; i++) if (this.stT[i] >= 0) stepping++;
     for (let i = 0; i < 4; i++) {
-      const jr = this.legJ[i], j1 = jr[1], j2 = jr[2], front = i < 2; if (!j1 || !j2) continue;
-      I.c.set(0, -this.pads[i] * 0.98, 0).applyMatrix4(j2.matrixWorld);
-      const e = I.c.y - ground; let wgt = this.legW[i] * (this.stance[i] || 0) * (this.gw.move > 0.05 ? 1 : 1);
-      if (this.gw.move < 0.05) wgt = this.legW[i];
-      if (e < -0.004 * sc) wgt = Math.max(wgt, this.legW[i] > 0.05 ? 1 : 0.6);
-      if (wgt < 0.02 || Math.abs(e) < 0.004 * sc) continue;
-      I.p1.setFromMatrixPosition(j1.matrixWorld); I.p2.setFromMatrixPosition(j2.matrixWorld); I.r.subVectors(I.p2, I.p1);
-      const me = j1.matrixWorld.elements; I.a.set(me[0], me[1], me[2]).normalize(); const dy = I.a.z * I.r.x - I.a.x * I.r.z;   // (a x r).y
-      if (Math.abs(dy) < 0.05 * I.r.length()) continue;
-      let d = clamp(-e / dy, -0.5, 0.5) * wgt * 0.9; const ch = LEG_I[i][1], lo = front ? -0.12 : -0.4; if (out[ch] + d < lo) d = lo - out[ch];
-      if (Math.abs(d) < 1e-4) continue;
-      out[ch] += d; out[LEG_I[i][2]] -= d * 0.8; writeQuat(j1.quaternion, out, ch); writeQuat(j2.quaternion, out, LEG_I[i][2]); j1.updateMatrixWorld(true);
+      const lg = this.lg[i], o = i * 3, j2 = this.legJ[i][2]; if (!lg.par || !j2) continue;
+      _fA.copy(lg.c).applyMatrix4(j2.matrixWorld); const cx = _fA.x, cy = _fA.y, cz = _fA.z;   // where the animation puts the sole
+      const grounded = this.legW[i] > 0.05 && (idle || this.stance[i] === 1);
+      let solve = false, tx = 0, ty = 0, tz = 0, w = 0; if (i === 0) this.dropN = 0;
+      if (grounded) {
+        if (!this.lkOn[i]) { this.lkOn[i] = 1; lk[o] = cx; lk[o + 1] = ground; lk[o + 2] = cz; this.lkW[i] = 0; this.stT[i] = -1; }
+        let dx = lk[o] - cx, dz = lk[o + 2] - cz, d = Math.sqrt(dx * dx + dz * dz);
+        if (d > this.leash) { const k = this.leash / d; lk[o] = cx + dx * k; lk[o + 2] = cz + dz * k; d = this.leash; }
+        if (!idle) this.stT[i] = -1;
+        else if (this.stT[i] < 0 && d > this.stepAt && stepping < 2 && this.stT[i ^ 1] < 0) { this.stT[i] = 0; this.stF[i * 2] = lk[o]; this.stF[i * 2 + 1] = lk[o + 2]; stepping++; }
+        let lift = 0;
+        if (this.stT[i] >= 0) { const u = this.stT[i] + dt / 0.26, e = (u > 1 ? 1 : u) * (u > 1 ? 1 : u) * (3 - 2 * (u > 1 ? 1 : u)); lk[o] = this.stF[i * 2] + (cx - this.stF[i * 2]) * e; lk[o + 2] = this.stF[i * 2 + 1] + (cz - this.stF[i * 2 + 1]) * e; lift = Math.sin(Math.PI * (u > 1 ? 1 : u)) * this.stepLift; this.stT[i] = u >= 1 ? -1 : u; }
+        this.lkW[i] = Math.min(1, this.lkW[i] + dt / 0.025); w = this.lkW[i] * this.legW[i]; solve = true; tx = lk[o]; ty = ground + lift * sc; tz = lk[o + 2];
+        // the body sinks when a pinned paw is further than a (slightly bent) leg reaches: hip height over the pin vs sqrt(L^2 - run^2), smoothed after the loop
+        _fB.setFromMatrixPosition(this.legJ[i][0].matrixWorld); { const rx = _fB.x - tx, rz = _fB.z - tz, hy = _fB.y + this.drop - this.go - ty, L = lg.Lmax * sc * 0.985, need = hy - Math.sqrt(Math.max(0.0004, L * L - rx * rx - rz * rz)); if (need > this.dropN) this.dropN = need; }
+      } else {
+        this.lkOn[i] = 0; this.stT[i] = -1; const k = Math.exp(-dt / 0.09); for (let q = 0; q < 3; q++) { ikD[o + q] *= k; ikR[o + q] *= k; }
+        if (cy < ground - 0.004 * sc && this.legW[i] > 0.05) { solve = true; tx = cx; ty = ground; tz = cz; w = 1; }   // a swinging paw never dips under the sand
+      }
+      const el = out[this.legJ[i] ? LEG_I[i][1] : 0], jn = LEG_I[i];
+      if (solve) {
+        const q = lg.q; q[0] = out[jn[0]]; q[1] = out[jn[0] + 1]; q[2] = out[jn[0] + 2]; q[3] = out[jn[1]]; q[4] = out[jn[1] + 1]; q[5] = out[jn[1] + 2]; q[6] = out[jn[2]]; q[7] = out[jn[2] + 1]; q[8] = out[jn[2] + 2];
+        const lim = lg.lim, lo = lg.front ? -0.15 : -0.45; lim[0] = -1.1; lim[1] = 1.1; lim[2] = -0.45; lim[3] = 0.45; lim[4] = lo - q[3]; lim[5] = 2.3 - q[3];
+        v[0] = ikR[o]; v[1] = ikR[o + 1]; v[2] = ikR[o + 2]; _tg.set(tx, ty, tz); legSolve(lg, _tg, v, lim);
+        ikR[o] = v[0]; ikR[o + 1] = v[1]; ikR[o + 2] = v[2]; ikD[o] = v[0] * w; ikD[o + 1] = v[1] * w; ikD[o + 2] = v[2] * w;
+      }
+      if (Math.abs(ikD[o]) + Math.abs(ikD[o + 1]) + Math.abs(ikD[o + 2]) > 1e-4) {
+        out[jn[0]] += ikD[o]; out[jn[0] + 2] += ikD[o + 1]; out[jn[1]] += ikD[o + 2]; out[jn[2]] -= ikD[o] + ikD[o + 2];
+        const J0 = this.legJ[i][0]; writeQuat(J0.quaternion, out, jn[0]); writeQuat(this.legJ[i][1].quaternion, out, jn[1]); writeQuat(j2.quaternion, out, jn[2]); J0.updateMatrixWorld(true);
+      }
     }
+    { const tgt = this.dropN > 0 ? Math.min(this.dropN, 0.16 * this.legL[0]) : 0, k = tgt > this.drop ? Math.min(1, dt * 22) : Math.min(1, dt * 7); this.drop += (tgt - this.drop) * k; }
   }
   groundFix(dt, grounded, c) {
     const J = this.J, rig = this.rig, sp = this.sp, S = sp.size, _v = this._gv || (this._gv = new V3()); let low = 1e9;
     const pj = this._pj || (this._pj = [J.wristL, J.wristR, J.ankleL, J.ankleR]), pp = this._pp || (this._pp = [sp.front.pad, sp.front.pad, sp.hind.pad, sp.hind.pad]);
-    for (let i = 0; i < 4; i++) { _v.setFromMatrixPosition(pj[i].matrixWorld); const yy = _v.y - pp[i] * S * 0.98 * rig.root.scale.y; if (yy < low) low = yy; }   // matrices were just updated by update(): no per-joint parent walk
+    for (let i = 0; i < 4; i++) { _v.set(0, -pp[i] * S * 0.98, 0).applyMatrix4(pj[i].matrixWorld); const yy = _v.y; if (yy < low) low = yy; }   // the sole point turns with the paw (the same point the paw locks use)   // matrices were just updated by update(): no per-joint parent walk
     const err = low - rig.root.position.y; // > 0: floating, < 0: sunk
     if (c && (c.ground === 0)) return;
-    if (err < 0) this.go += -err; else if (grounded || !c) { const mv = dt * 1.6 * S; this.go -= err < mv ? err : mv; }
+    if (this.lkOn[0] + this.lkOn[1] + this.lkOn[2] + this.lkOn[3] > 0 && grounded) { this.go += (err < -0.03 * S ? -err - 0.03 * S : 0) - this.go * Math.min(1, dt * 10); }   // paws are pinned (drop + IK set the height); only a paw buried deeper than 3 cm lifts the body
+    else if (err < 0) this.go += -err; else if (grounded || !c) { const mv = dt * 1.6 * S; this.go -= err < mv ? err : mv; }
     this.go = clamp(this.go, -0.6 * S, 0.8 * S);
   }
 }

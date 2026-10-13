@@ -132,6 +132,7 @@ export async function prep(ctx, ev, gl, opps, o = {}) {
   tags.style.cssText = 'display:flex;gap:8px;justify-content:center;align-items:center;margin:6px 0'; body.append(tags);
   if (o.hpf != null && o.hpf < 1) body.append(para(`Wounded: starting at ${Math.round(o.hpf * 100)}% HP`));
   if (ctxA.list && ctxA.list.length && gl.length > 1) body.append(para('Synergy: ' + ctxA.list.map((s) => `${s.n} (${s.d})`).join(', ')));
+  const vd = opps.find((x) => x.rv && lm.vendetta && lm.vendetta(S, x.rv)); if (vd) body.append(para(`Vendetta: ${vd.name}'s school remembers the comrade you killed. They hit 8% harder.`)); // FATE
   const low = gl.filter((g) => g.en < 60); if (low.length) body.append(para(`${low.map((g) => g.name).join(', ')} ${low.length > 1 ? 'are' : 'is'} tired (energy under 60). Stats reduced.`));
   const wx = ev.key ? lm.weather(S, ev.key) : 'clear'; if (wx !== 'clear') body.append(para(`Weather: ${d.WEATHER[wx].n}. ${d.WEATHER[wx].d}`));
   if (ev.mut) body.append(para(`Mutator: ${ev.mut.n}. ${ev.mut.d}`));
@@ -225,7 +226,7 @@ async function runEvent(ctx, ev, gl, en) {
 }
 
 async function runTourney(ctx, ev, g) {
-  const S = ctx.S, lm = L(), T = lm.tourneyInit(S, ev, g); let champion = false, hype = 0, hpf = 1, odds = null; const notes = [], augs = [], shows = [];
+  const S = ctx.S, lm = L(), T = lm.tourneyInit(S, ev, g); let champion = false, hype = 0, hpf = 1, odds = null; const notes = [], augs = [], shows = [], fates = [];
   const names = ev.size === 8 ? ['Quarterfinal', 'Semifinal', 'Final'] : ['Semifinal', 'Final'];
   for (;;) {
     const opp = lm.tourneyOpp(T), name = names[T.round];
@@ -234,6 +235,7 @@ async function runTourney(ctx, ev, g) {
     augs.push(await pickAug(ctx, Math.min(3, ev.league + (T.round >= 1 ? 1 : 0)), augs, ev.kind === 'grand' && T.round === names.length - 1, `${name}: new augment`, null, g.style));
     const res = await fightScreen(ctx, [g], [opp], stance, { ev: Object.assign({}, ev, { title: `${ev.title}: ${name}` }), hpf: { [g.id]: T.hpf }, tricks: bet.tricks, augs: augs.slice() }); // BRACKET: the round name rides in the title (VS intro)
     settleBets(ctx, bet, res, notes); shows.push(res.show | 0); // PLAN: the Showmanship level of each round
+    if (res.win) { const fr = await fateStep(ctx, ev, res, null); if (fr) { fates.push(fr); await joinDialog(ctx, fr); } } // FATE: spare, ransom or kill the beaten finalist of this round
     hype = Math.max(hype, res.hype); hpf = res.hpf[g.id]; if (odds == null) odds = res.odds;
     const r = lm.tourneyAdvance(S, T, res.win);
     const nextHpf = Math.min(1, hpf + 0.4 + (g.trait === 'hordearius' ? 0.1 : 0));
@@ -245,6 +247,7 @@ async function runTourney(ctx, ev, g) {
   }
   const place = lm.placeOf(T, champion), res = { win: champion, place, hype, hpf: { [g.id]: hpf }, odds, show: shows.length ? Math.round(shows.reduce((x, y) => x + y, 0) / shows.length) : 0 };
   const rep = lm.settle(S, ev, [g], res); rep.notes.push(...notes);
+  if (fates.length) { rep.fates = fates; rep.fame += fates.reduce((a, x) => a + x.fame, 0); rep.gold += fates.reduce((a, x) => a + x.gold, 0); } // FATE: already paid out round by round, shown in the totals
   await results(ctx, ev, [g], res, rep);
   if (!champion) await mortalCheck(ctx, [g], res, { kind: 'event' }); // FALLEN: only deadly in Hardcore
 }
@@ -258,15 +261,50 @@ function statsEl(ctx, res) {
   return box;
 }
 
+/** the foe the decision is about: the one recorded by the fight view (last down), else the strongest enemy fighter */
+function fateFoe(res) {
+  const us = res && res.F && res.F.units; if (!us) return null;
+  let u = res.fate && res.fate.foe ? us.find((x) => x.id === res.fate.foe) : null;
+  if (!u) u = us.filter((x) => x.side === 'B' && !x.beast).reduce((b, x) => (!b || x.g.lvl >= b.g.lvl ? x : b), null);
+  return u ? u.g : null;
+}
+/** fallback decision when the arena did not ask (skipped fight, ranged kill, fast-forward): the same options as the fight view, in the docked sheet */
+async function fateDock(ctx, ev, res, foe) {
+  const lm = L(), d = D(), off = lm.fateOffers(ctx.S, ev, foe); if (!off) return 'spare';
+  const body = h('div', '', [para(`${foe.name} (${d.STYLES[foe.style].n}, level ${foe.lvl}${off.foe.ludus ? ', ' + off.foe.ludus : ''}) lies beaten. The crowd waits for your word.`)]);
+  const actions = off.opts.map((o) => ({ label: o.label, sub: [...o.gain, ...o.cost].join(' · '), value: o.id, variant: o.id === 'kill' ? 'danger' : o.id === off.def ? 'gold' : 'bronze', icon: o.id === 'kill' ? 'sword' : o.id === 'spare' ? 'heart' : 'coin' }));
+  const hasMom = res.F && res.F.replay && res.F.replay.snap && res.F.replay.moments && res.F.replay.moments.length;
+  let c; for (;;) { c = await ctx.ask({ title: 'Decide his fate', tut: 'results', dock: 'low', body, actions: hasMom ? [...actions, { label: 'Watch highlights', sub: 'the best moments, shareable', value: 'reel', variant: 'ghost', icon: 'arena' }] : actions, dismiss: off.def }); if (c !== 'reel') break; await ctx.game.watchReplay(res, { reel: true }); }
+  return c;
+}
+/** decide (in the arena, else in the dock) and apply the fate of the beaten foe. Returns the applied result (see LM.fate) or null when this fight has no decision. */
+async function fateStep(ctx, ev, res, rep) {
+  const lm = L(), foe = res && res.win ? fateFoe(res) : null; if (!foe || !lm.fateOk(ev, foe)) return null;
+  const id = (res.fate && res.fate.choice) || await fateDock(ctx, ev, res, foe);
+  const r = lm.fate(ctx.S, ev, rep, id, foe); ctx.save(); return r;
+}
+async function joinDialog(ctx, r) {
+  if (!r || !r.joined) return; ctx.sfx('levelUp'); ctx.refresh();
+  await ctx.ask({ title: 'A new recruit!', body: para(`${r.joined.name} (${D().STYLES[r.joined.style].n}, Lv ${r.joined.lvl}) was moved by your mercy and joins your ludus!`), actions: ok('Welcome!'), dismiss: 'ok' });
+}
+function fateEl(fates) {
+  const box = h('div');
+  fates.forEach((r) => { box.append(para(r.head), h('div', '', [...r.gain.map((t) => chip(t, '#2b9348')), ...r.cost.filter((t) => /Senate|Plebs|Merchants|regard|Vendetta|Temple/.test(t)).map((t) => chip(t, '#b5532f'))])); box.lastChild.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;margin:4px 0 8px'; });
+  return box;
+}
+
 export async function results(ctx, ev, gl, res, rep) {
   const S = ctx.S, lm = L(), d = D(), win = res.win, isT = ev.kind === 'tourney' || ev.kind === 'grand', place = res.place;
   const ord = (n) => (n === 1 ? '1st' : n === 2 ? '2nd' : n === 3 || n === 4 ? 'Semifinalist' : 'Out early');
+  let fates = rep.fates || [];
+  if (win && !isT) { const fr = await fateStep(ctx, ev, res, rep); if (fr) { fates = [fr]; rep.fates = fates; } }   // FATE: duels and team clashes decide here (tournaments decided round by round)
   const body = h('div');
   const big = h('div', '', isT ? (win ? 'CHAMPION' : ord(place)) : (win ? 'VICTORY' : 'DEFEAT'));
   big.style.cssText = `text-align:center;font:900 30px/36px 'Trajan Pro','Cinzel',Georgia,serif;letter-spacing:.12em;color:${win ? '#9a6a10' : '#7a2f30'}`;
   const gold = h('div', '', [chip('+' + fmt(rep.gold) + ' gold', '#b8803a'), chip('+' + fmt(rep.fame) + ' fame', '#7b4fb8'), res.odds != null && res.odds < 0.4 && win ? chip('Underdog win!', '#2b9348') : '']);
   gold.style.cssText = 'text-align:center;margin:8px 0';
   body.append(big, gold);
+  if (fates.length) body.append(section("The crowd's verdict"), fateEl(fates));
   (rep.notes || []).forEach((n) => body.append(para(n)));
   (rep.fac || []).forEach((x) => body.append(para(`${x.text}${x.up ? ' New perk: ' + x.up : ''}`)));
   body.append(section('Experience'));
@@ -276,16 +314,8 @@ export async function results(ctx, ev, gl, res, rep) {
   rep.lvl.forEach((l) => Cer.levelUp(ctx, ctx.gOf(l.id), l.to)); // ONBOARDING
   rep.inj.forEach((i) => body.append(para(`${ctx.gOf(i.id).name} is injured for ${i.w} week${i.w > 1 ? 's' : ''}.`)));
   rep.loot.forEach((it) => body.append(itemCard(it, { tag: 'Loot!' })));
-  let actions = ok('Continue', win ? 'gold' : 'bronze');
-  if (win && ev.kind === 'duel') {
-    body.append(section('The crowd waits. Your call.'));
-    actions = [{ label: 'Show mercy', sub: 'more fame, 30% they join you', value: 'mercy', variant: 'gold' }, { label: 'Showboat', sub: 'extra gold', value: 'show', variant: 'ghost' }];
-    const hasMom = res.F && res.F.replay && res.F.replay.snap && res.F.replay.moments && res.F.replay.moments.length; // REEL: highlights before the verdict
-    let c; for (;;) { c = await ctx.ask({ title: ev.title || 'Duel', tut: 'results', dock: 'low', body, actions: hasMom ? [...actions, { label: 'Watch highlights', sub: 'the best moments, shareable', value: 'reel', variant: 'bronze', icon: 'arena' }] : actions, dismiss: 'show' }); if (c !== 'reel') break; await ctx.game.watchReplay(res, { reel: true }); }
-    const m = lm.mercy(S, ev, rep, c);
-    if (m.joined) await ctx.ask({ title: 'A new recruit!', body: para(`${m.joined.name} (${d.STYLES[m.joined.style].n}, Lv ${m.joined.lvl}) was moved by your mercy and joins your ludus!`), actions: ok('Welcome!'), dismiss: 'ok' });
-    else if (c === 'mercy') U.toast(`The crowd loves it. +${m.f} fame.`, { kind: 'good' }); else U.toast(`+${m.gd} gold from the crowd.`, { kind: 'good' });
-  } else {
+  const actions = ok('Continue', win ? 'gold' : 'bronze');
+  {
     const hasReplay = res.F && res.F.replay && res.F.replay.snap;
     for (;;) {
       const hasMom = hasReplay && res.F.replay.moments && res.F.replay.moments.length; // REEL
@@ -294,6 +324,7 @@ export async function results(ctx, ev, gl, res, rep) {
       if (v !== 'replay' && v !== 'reel') break; await ctx.game.watchReplay(res, { reel: v === 'reel' });
     }
   }
+  if (!isT && fates.length) await joinDialog(ctx, fates[0]);   // FATE: "X joins your ludus" after the results sheet
   if (rep.choice) {
     const wrap = h('div'), body2 = h('div', '', [para("Choose one prize from the Emperor's gift table."), wrap]);
     const id = await new Promise((resolve) => { const m = ctx.sheet({ title: "Champion's loot", body: body2, onClose: () => resolve(rep.choice[0].id) }); rep.choice.forEach((it) => wrap.append(itemCard(it, { onClick: () => { resolve(it.id); m.close(); } }))); });

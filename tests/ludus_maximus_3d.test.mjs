@@ -1078,5 +1078,61 @@ const LEGACY_IDS = ['patron', 'brawl', 'trainer', 'spoiled', 'spy', 'sponsor', '
     ok(LM.SAVE_KEY === 'ludus_maximus_3d_v1', 'the save key is untouched'); }
 }
 
+// ---- FATE: kill / spare / ransom for the beaten foe (core/sim.js LM.fateOffers / LM.fate)
+{
+  const mkS = (seed, lvl = 6) => { LM.setRandom(LM.mulberry(LM.hash('fs' + seed))); const S = LM.newGame({ name: 'Fate', seed }); S.gold = 1000; S.fame = 200; S.week = 5; S.glads.push(LM.makeGlad({ id: S.nextId++, style: 'murmillo', lvl, trait: 'frugal' })); LM.setRandom(null); return S; };
+  const S0 = mkS('fate1'), duelOf = (S, lg = 1) => LM.events(S, 5, lg).find((e) => e.kind === 'duel'), ev0 = duelOf(S0), foe0 = ev0.opps[0];
+  const off = LM.fateOffers(S0, ev0, foe0), by = (o, id) => o.opts.find((x) => x.id === id);
+  ok(off && off.opts.map((o) => o.id).join() === 'kill,spare,ransom' && off.def === 'spare', 'a rival-ludus foe offers kill, spare, ransom with spare as the default');
+  ok(by(off, 'kill').fame > by(off, 'spare').fame && by(off, 'spare').fame > by(off, 'ransom').fame, `fame: kill ${by(off, 'kill').fame} > spare ${by(off, 'spare').fame} > ransom ${by(off, 'ransom').fame}`);
+  ok(by(off, 'kill').fame >= 2 * by(off, 'spare').fame - 1, 'a kill is worth about double the mercy bonus');
+  ok(by(off, 'ransom').gold > 0 && by(off, 'kill').gold === 0 && by(off, 'spare').gold === 0, 'only the ransom pays gold');
+  const ghost = Object.assign({}, foe0, { gh: true, lud: undefined, ludus: undefined }), offG = LM.fateOffers(S0, ev0, ghost);
+  ok(offG.opts[2].id === 'show' && offG.opts[2].why && by(offG, 'show').gold < by(off, 'ransom').gold, 'a foe nobody would pay for gets the Showboat instead, with the reason, and it pays less than a ransom');
+  ok(by(off, 'ransom').gold >= 2 * by(offG, 'show').gold, 'the ransom pays at least twice what the showboat did');
+  ok(by(off, 'kill').cost.some((c) => /Senate/.test(c)) && by(off, 'kill').gain.some((c) => /Plebs/.test(c)) && by(off, 'kill').cost.some((c) => /Vendetta/.test(c)), 'the kill costs Senate standing, Plebs love it, a vendetta follows');
+  ok(by(off, 'spare').gain.some((c) => /Senate \+6/.test(c)) && by(off, 'spare').gain.some((c) => /% he joins/.test(c)), 'the spare shows its Senate gain and the recruit chance');
+  ok(LM.fateOffers(S0, { kind: 'hunt', league: 0 }, { beast: 'lion', lvl: 5 }) === null && ['hunt', 'pit', 'horde', 'bounty', 'champ', 'spar'].every((k) => LM.fateOffers(S0, Object.assign({}, ev0, { kind: k }), foe0) === null), 'no decision for beasts, hunts, pit floors, hordes, bounties, champions or sparring');
+  ok(['duel', 'tourney', 'grand', 'team'].every((k) => LM.fateOffers(S0, Object.assign({}, ev0, { kind: k }), foe0)), 'duels, tournament rounds and team clashes all get the decision');
+  // numbers shown = numbers applied
+  const fresh = () => { const S = mkS('fate2'); S.glads[0].lvl = 6; return S; };
+  for (const id of ['kill', 'spare', 'ransom']) {
+    const S = fresh(), ev = duelOf(S), foe = ev.opps[0], o = by(LM.fateOffers(S, ev, foe), id), f0 = S.fame, g0 = S.gold, rep = { fame: 10, gold: 5, notes: [] }, st0 = S.fac ? Object.assign({}, S.fac) : { sen: 0, mer: 0, ple: 0 };
+    LM.setRandom(LM.mulberry(5)); const r = LM.fate(S, ev, rep, id, foe); LM.setRandom(null);
+    ok(r.id === id && S.fame - f0 === o.fame && S.gold - g0 === o.gold && rep.fame === 10 + o.fame && rep.gold === 5 + o.gold, `${id}: fame and gold applied are the printed ones`);
+    ok(((S.fac.sen || 0) - (st0.sen || 0)) === Math.max(-(st0.sen || 0), o.fac.sen || 0) || (st0.sen || 0) + (o.fac.sen || 0) < 0, `${id}: Senate standing moves by the printed amount (clamped at 0)`);
+  }
+  { const S = fresh(), ev = duelOf(S), foe = ev.opps[0]; LM.fate(S, ev, null, 'kill', foe); ok(S.stats.kills === 1 && LM.vendetta(S, foe.rv) && !S.stats.ransoms, 'a kill counts, marks a vendetta on the rival, and is not a spare');
+    const S2 = fresh(), e2 = duelOf(S2), f2 = e2.opps[0]; LM.fate(S2, e2, null, 'ransom', f2); ok(S2.stats.ransoms === 1 && S2.stats.spares === 0 && !LM.vendetta(S2, f2.rv), 'a ransom counts, is not a spare, and starts no vendetta');
+    const S3 = fresh(), e3 = duelOf(S3), f3 = e3.opps[0]; const sp0 = S3.stats.spares; LM.fate(S3, e3, null, 'spare', f3); ok(S3.stats.spares === sp0 + 1, 'a spare counts toward mercy contracts and the Merciful trophy'); }
+  // no choice means spare; unknown means spare
+  { const S = fresh(), ev = duelOf(S), foe = ev.opps[0]; LM.setRandom(LM.mulberry(2)); const r = LM.fate(S, ev, null, undefined, foe), r2 = LM.fate(fresh(), ev, null, 'zzz', foe); LM.setRandom(null); ok(r.id === 'spare' && r2.id === 'spare', 'no choice (auto, fast-forward, bots) defaults to spare'); }
+  // recruit chance: bounds, determinism, full barracks
+  { let joins = 0, N = 400, lo = 1, hi = 0; const chance = []; for (let i = 0; i < N; i++) { const S = mkS('fj' + (i % 7)); const ev = duelOf(S), foe = ev.opps[0]; chance.push(LM.fateJoin(S, foe)); S.glads.length = 1; LM.setRandom(LM.mulberry(1000 + i)); const r = LM.fate(S, ev, null, 'spare', foe); LM.setRandom(null); if (r.joined) { joins++; ok(S.glads.length === 2 && r.joined.id !== foe.id && r.joined.rv == null && S.glads.includes(r.joined), 'a recruit is a copy added to the roster'); } }
+    lo = Math.min(...chance); hi = Math.max(...chance); const mean = chance.reduce((a, b) => a + b, 0) / N;
+    ok(lo >= 0.08 && hi <= 0.6, `recruit chance stays in 8%..60% (${lo}..${hi})`); ok(Math.abs(joins / N - mean) < 0.07, `recruits follow the chance over ${N} seeds (${(joins / N).toFixed(2)} vs ${mean.toFixed(2)})`); ok(mean >= 0.25 && mean <= 0.45, `the base is around 30% (mean ${mean.toFixed(2)})`);
+    const S = mkS('full'); while (S.glads.length < LM.rosterCap(S)) S.glads.push(LM.makeGlad({ id: S.nextId++, lvl: 3 })); const ev = duelOf(S); ok(LM.fateJoin(S, ev.opps[0]) === 0 && by(LM.fateOffers(S, ev, ev.opps[0]), 'spare').cost.some((c) => /Barracks full/.test(c)), 'a full barracks means no recruit chance, and the panel says why');
+    const Sb = mkS('bar'); const base = LM.fateJoin(Sb, duelOf(Sb).opps[0]); Sb.glads.push(LM.makeGlad({ id: 99, lvl: 2, trait: 'showman' })); ok(LM.fateJoin(Sb, duelOf(Sb).opps[0]) > base, 'a showman in the ludus helps persuade'); }
+  // determinism
+  { const run = () => { const S = mkS('det'); const ev = duelOf(S), foe = ev.opps[0]; LM.setRandom(LM.mulberry(77)); const r = LM.fate(S, ev, null, 'spare', foe); LM.setRandom(null); return JSON.stringify([r.id, r.fame, r.gold, !!r.joined, S.fame, S.fac, S.stats]); }; ok(run() === run(), 'the same seed gives the same outcome'); }
+  // unit shape unchanged
+  { const g = LM.makeGlad({ style: 'thraex', lvl: 4 }), k0 = Object.keys(LM.mkUnits([g], 'A', {})[0]).join(); const S = mkS('shape'); const ev = duelOf(S); LM.fate(S, ev, null, 'kill', ev.opps[0]); const k1 = Object.keys(LM.mkUnits([g], 'B', {})[0]).join(); ok(k0 === k1 && !k1.split(',').some((k) => /^(fate|kills?|killed|vend\w*|ransom\w*)$/i.test(k)), 'unit shape is unchanged by the decision (no new fields)'); }
+  // old save: no kills, no ransoms, rivals without vend
+  { const S = mkS('old'); delete S.stats.kills; delete S.stats.ransoms; S.rivals = { '1-0': { w: 1, l: 0, last: 'w' } }; const M = LM.migrate(JSON.parse(JSON.stringify(S))); ok(M.stats.kills === 0 && M.stats.ransoms === 0 && !LM.vendetta(M, '1-0') && M.stats.spares === S.stats.spares, 'an old save loads with kills and ransoms at 0 and no vendetta');
+    const ev = duelOf(M), r = LM.fate(M, ev, null, 'kill', ev.opps[0]); ok(r.id === 'kill' && M.stats.kills === 1, 'and the decision works on it'); }
+  // vendetta fades after 12 weeks
+  { const S = mkS('vend'); const ev = duelOf(S), foe = ev.opps[0]; LM.fate(S, ev, null, 'kill', foe); ok(LM.vendetta(S, foe.rv), 'vendetta set'); S.week += 13; ok(!LM.vendetta(S, foe.rv), 'a vendetta fades after 12 weeks'); }
+  // trophies
+  { const S = mkS('tr'); S.stats.kills = 5; S.stats.ransoms = 3; const got = LM.checkTrophies(S).map((t) => t.id); ok(got.includes('blood5') && got.includes('ransom3'), 'Blood Sport and Ransomer trophies unlock'); }
+  // rival ludus relation: ransom up, kill down (when the foe belongs to one of the four rival schools)
+  { const S = mkS('rel'); const sch = LM.ludiInit(S).list[0]; const ev = duelOf(S), foe = Object.assign({}, ev.opps[0], { lud: sch.name }); const r0 = sch.rel; LM.fate(S, ev, null, 'ransom', foe); const r1 = sch.rel; LM.fate(S, ev, null, 'kill', foe); ok(r1 > r0 && sch.rel < r1, `ransom raises (${r0} to ${r1}) and a kill lowers (${sch.rel}) the school's regard`); }
+  // balance sanity: the kill bonus stays a fraction of what the win itself pays, in every league and difficulty
+  { let worst = 0, n = 0; for (let lg = 0; lg <= 3; lg++) for (let wk of [2, 6, 10]) { const S = mkS('bal' + lg + wk); const evs = LM.events(S, wk, lg).filter((e) => LM.FATE_KINDS[e.kind]); for (const e of evs) { const o = by(LM.fateOffers(S, e, e.opps[0]), 'kill'); const win = e.kind === 'duel' ? e.fame : LM.fateBase(e).fame; const ratio = o.fame / Math.max(1, win); worst = Math.max(worst, ratio); n++; } }
+    ok(n > 20 && worst <= 1.7, `the kill bonus is at most ${worst.toFixed(2)}x the base win fame over ${n} events (the early-game flat part dominates, late game about 0.4x)`);
+    const S = mkS('balx'); const e = LM.events(S, 6, 2).find((x) => x.kind === 'duel'); const k = by(LM.fateOffers(S, e, e.opps[0]), 'kill'); ok(k.fame / e.fame <= 0.55, `in the Colosseum a kill adds about ${Math.round(100 * k.fame / e.fame)}% of the win fame`); }
+  ok(LM.fateHype('kill') > LM.fateHype('spare') && LM.fateHype('spare') > LM.fateHype('ransom') && LM.fateHype('kill') === by(off, 'kill').hype, 'crowd hype: kill > spare > ransom, the same numbers as printed');
+  ok(LM.mercy(mkS('m1'), ev0, null, 'mercy').f > 0, 'the old LM.mercy API still works');
+}
+
 console.log(`ludus_maximus: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

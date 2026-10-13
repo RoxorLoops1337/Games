@@ -268,6 +268,8 @@ export async function driveFlow(h, start, { label = 'flow', maxSteps = 700, repl
         if (pk) { pk.click(); return { clicked: 'picker select' }; }
         const x = top.querySelector('.lx-sheet-x'); if (x) { x.click(); return { clicked: 'picker close (no free fighter)' }; }
       }
+      const fo = [...document.querySelectorAll('.lx-fate .lx-fate-opt:not([disabled])')];   // FATE: the decision panel in the fight view (kill / spare / ransom); answered with a real click, rotating through the options
+      if (fo.length && !document.querySelector('.lx-scrim:not(.lx-out)')) { if (!window.__fateAud) { window.__fateAud = 1; return { fateAudit: true }; } window.__fateAud = 0; window.__fateN = (window.__fateN | 0) + 1; const b = fo[window.__fateN % fo.length]; b.click(); return { clicked: 'fate ' + b.dataset.id }; }
       const acts = [...document.querySelectorAll('.lx-scrim:not(.lx-out) .lx-actions .lx-btn')].filter((b) => !b.disabled);
       if (acts.length) {
         const title = (document.querySelector('.lx-scrim:not(.lx-out) .lx-title') || {}).textContent || '';
@@ -278,6 +280,7 @@ export async function driveFlow(h, start, { label = 'flow', maxSteps = 700, repl
       return { adv: true };
     }, [replay && replays < 1, prefer]);
     if (st.done) { if (st.err) h.add('stuck', 'high', label, 'flow threw: ' + st.err.slice(0, 300)); await sweepRejections(h); return { steps: guard, titles }; }
+    if (st.fateAudit) { await h.page.waitForTimeout(800); await audit(h, 'fate panel'); continue; }   // FATE: layout / tap-target audit of the decision panel before it is answered
     if (st.clicked !== undefined) { titles.push(st.clicked); if (/\[replay\]/.test(st.clicked)) replays++; await h.page.waitForTimeout(450); /* let the flow open the next dialog before measuring */ await audit(h, 'after dialog ' + st.clicked.slice(0, 30)); continue; }
     await h.page.evaluate(() => window.__LM3D.advance(1.5));
   }

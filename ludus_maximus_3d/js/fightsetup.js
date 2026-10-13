@@ -38,5 +38,7 @@ export function buildFight(S, gl, opps, stance, o = {}) {
 export function fightResult(F, gl) {
   L().setRandom(null);
   const hpf = {}; F.units.filter((u) => u.side === 'A').forEach((u) => { hpf[u.g.id] = u.hp / u.maxhp; });
-  return { win: F.winner === 'A', hype: Math.max(F.peak, F.hype), hpf, odds: F.meta.odds, F, stB: F.meta.stB, show: F.meta.show | 0 };
+  const fate = F.replay && F.replay.fate ? F.replay.fate : null;   // FATE: the decision made at the end of the fight (kill / spare / ransom), undefined when it was not asked in the arena
+  const hype = Math.max(F.peak, F.hype) + (fate && L().fateHype ? L().fateHype(fate.choice) : 0);   // the crowd reacts to the verdict (kill +15, mercy +6); settle caps hype at 100
+  return { win: F.winner === 'A', hype, hpf, odds: F.meta.odds, F, stB: F.meta.stB, show: F.meta.show | 0, fate };
 }

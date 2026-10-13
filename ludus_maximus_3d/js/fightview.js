@@ -27,6 +27,15 @@ const SPEED_KEY = 'ludus3d_fv_speed', PREF_KEY = 'ludus_maximus_3d_prefs', SPEED
 const D2R = Math.PI / 180, smooth01 = (t) => { t = Math.max(0, Math.min(1, t)); return t * t * (3 - 2 * t); };
 const MASS = { murmillo: 0.75, hoplomachus: 0.85, dimachaerus: 1, thraex: 1.1, retiarius: 1.2 }; // heavy armour shoves less
 Object.assign(MASS, BF.MASS); // BEAST: heavier beasts shrug off shoves
+/** FATE: the finishing moves. clip = animator clip played by the killer (all exist: finisher, attack1, attack3), speed = clip speed, fl = kill-cam flavour (director _kill),
+ *  gore = js/gore.js finisher kind, part = body part the blow takes (Full gore only), twist = wring the blade after the hit. Chosen only by the killer's style (FIN_OF). */
+const FIN = {
+  cleave: { id: 'cleave', name: 'Overhead cleave', clip: 'finisher', speed: 1, fl: 'low', gore: 'cleave', part: 'armL', twist: false },
+  behead: { id: 'behead', name: 'Beheading slash', clip: 'attack1', speed: 0.55, fl: 'orbit', gore: 'behead', part: 'head', twist: false },
+  scissor: { id: 'scissor', name: 'Crossed blades', clip: 'finisher', speed: 0.9, fl: 'orbit', gore: 'scissor', part: 'head', twist: false },
+  impale: { id: 'impale', name: 'Thrust and twist', clip: 'attack3', speed: 0.7, fl: 'high', gore: 'impale', part: null, twist: true },
+};
+const FIN_OF = { murmillo: 'cleave', thraex: 'behead', dimachaerus: 'scissor', hoplomachus: 'impale', retiarius: 'impale' };
 const NO_EXEC = new Set(['spar']);                                   // sparring partners are never executed
 // replay camera presets: pitch (deg), distance (m), spin (rad/s, 0 = fixed). 'auto' hands the camera back to the director.
 const CAMS = { auto: null, wide: { pitch: 36, d: 24 }, side: { pitch: 12, d: 13, side: true }, low: { pitch: 5, d: 8.5, side: true }, top: { pitch: 72, d: 22 }, orbit: { pitch: 22, d: 15, spin: 0.35 } };
@@ -70,7 +79,7 @@ export class FightView {
     this.gore = createGore(this.fx, { scene: this.scene, audio, feel: this.feel, tier });
     this.dir = new FightDirector({ aspect: camera.aspect, radius: 13.2, gateAngle: 0 });
     this.t = 0; this.F = null; this.fm = new Map(); this.sim = 0; this.acc = 0; this.userSpeed = readSpeed(); this.phase = 'idle';
-    this.paused = false; this.pauseModal = null; this.ex = null; this.execPending = null; this.forfeited = false; this.rate = 1; this.camMode = 'auto'; this.epoch = 0; this.lsK = 0; this.ls = null; this.lsCool = 0;
+    this.paused = false; this.pauseModal = null; this.ex = null; this.execPending = null; this.fateUi = null; this.fateIds = null; this.forfeited = false; this.rate = 1; this.camMode = 'auto'; this.epoch = 0; this.lsK = 0; this.ls = null; this.lsCool = 0;
     this.tacSlow = 1; this.buildHud(); this.bindInput(); this.tac = createTactics(this); // TACTICS
     injectReelCss(); this.reel = createReel(this); // REEL
   }
@@ -139,6 +148,10 @@ export class FightView {
       const tg = e.target; if (tg && /^(INPUT|TEXTAREA|SELECT)$/.test(tg.tagName) && tg.type !== 'range') return;
       if (document.querySelector('.lx-scrim') && !this.pauseModal) return;   // some other dialog owns the keyboard
       const k = e.key;
+      if (this.fateUi && this.fateIds) { // FATE: 1 / 2 / 3 choose, Enter takes the default (Space and Enter on a focused option click it natively)
+        if (/^[1-9]$/.test(k) && this.fateIds[+k - 1]) { e.preventDefault(); this.fatePick(this.fateIds[+k - 1]); return; }
+        if (k === 'Enter' && !(tg && tg.tagName === 'BUTTON')) { e.preventDefault(); this.fatePick(this.ex && this.ex.offers ? this.ex.offers.def : 'spare'); return; }
+      }
       if (k === 'p' || k === 'P') { e.preventDefault(); this.pause(!this.paused); }
       else if (k === 'Escape' && this.tac && this.tac.wheelOpen && this.tac.wheelOpen()) this.tac.closeWheel();
       else if (k === 'Escape' && !this.paused) this.pause(true);
@@ -396,6 +409,7 @@ export class FightView {
     this.dimHud(false); this.ex = null; this.execPending = null; this.forfeited = false; this.rate = 1; this.camMode = 'auto'; this.camSpin = 0; this.scrubbing = false; this.silent = false; this.epoch++; this.lsK = 0; this.ls = null; this.lsCool = 0;
     if (this.dir) { this.dir.free = null; this.dir.freeTimeout = 6; }
     if (this.verdictEl) { this.verdictEl.remove(); this.verdictEl = null; }
+    if (this.fateUi) { try { this.fateUi.fate.close(); } catch (e) { /* gone */ } this.fateUi = null; this.fateIds = null; }   // FATE
     if (this.rbar) { this.rbar.remove(); this.rbar = null; }
   }
   updateSpeedLabel() { setBtnLabel(this.speedBtn, 'x' + this.userSpeed); }
@@ -521,10 +535,12 @@ export class FightView {
     this.showEnd(win === 'A');
   }
 
-  // ---------------------------------------------------------------- finisher: the sim's last blow staged as an execution
+  // ---------------------------------------------------------------- finisher: the sim's last blow staged as an execution, or (player wins) THE DECISION
   // Presentation only. The sim has already ended (F.done) when its final 'down' event arrives, so nothing is held or changed: the victim kneels, the
-  // killer walks up (visual position blend), the crowd hushes, the finisher clip lands and its 'hit' event triggers the death, the gore and the roar.
-  // Duels won by the player are not struck (mercy is decided in the results dialog): the victim kneels and the winner stands over them.
+  // killer walks up (visual position blend), the crowd hushes. When the player won a fate event (LM.FATE_KINDS: duel, tournament round, team clash) the
+  // fight now ends in a DECISION MOMENT: the foe stays on his knees, the panel (ui_kit fatePanel) offers Kill / Spare / Ransom with exact numbers, and the
+  // choice is recorded in F.replay.fate (a result-phase input: the sim stream is never touched, replays play the recorded choice). Kill plays one of the finishing
+  // moves in FIN (picked from the killer's weapon style); the others show a mercy beat. Everything else (a loss, pit, bounty, champion, hunts) keeps the plain execution.
   canExec(src, dst) {
     if (!src || !dst || this.forfeited || this.skip) return false;
     const m = this.F.meta; if (m && NO_EXEC.has(m.kind)) return false;
@@ -534,67 +550,142 @@ export class FightView {
     if (this.t - (this.bigAoeT ?? -9) < 0.8) return false;         // an ultimate that gibs is its own finale
     return Math.hypot(src.x - dst.x, src.y - dst.y) <= 6;           // ranged kills keep the plain fall
   }
+  /** the decision applies when the player won a fate event; replays only when a choice was recorded (older results keep the plain kneel) */
+  fateOn(dst) {
+    const F = this.F, ev = this.opts && this.opts.ev, S = globalThis.__LM3D && globalThis.__LM3D.game && globalThis.__LM3D.game.S;
+    if (F.winner !== 'A' || !ev || !S || !L().fateOk || !L().fateOk(ev, dst.g)) return null;
+    if (this.replaying) return this.opts.replay && this.opts.replay.fate ? { S, ev, rec: this.opts.replay.fate } : null;
+    return { S, ev, rec: null };
+  }
   startExec() {
     const P = this.execPending; this.execPending = null; if (!P) return false;
-    const F = this.F, src = P.src, dst = P.dst, fs = this.fm.get(src.id), fd = this.fm.get(dst.id), win = F.winner;
+    const F = this.F, src = P.src, dst = P.dst, fs = this.fm.get(src.id), fd = this.fm.get(dst.id), win = F.winner, fate = this.fateOn(dst);
     let dx = fs.rx - fd.rx, dz = fs.ry - fd.ry; const dist = Math.hypot(dx, dz) || 1; dx /= dist; dz /= dist;
-    const tx = fd.rx + dx * 1.1, tz = fd.ry + dz * 1.1, mercy = !!(F.meta && F.meta.kind === 'duel' && win === 'A');
-    const ex = this.ex = { src, dst, fs, fd, stage: 'approach', t: 0, scale: 0.8, hit: false, ended: false, done: false, mercy, win, sT: 0, dx, dz, back: false };
+    const tx = fd.rx + dx * 1.1, tz = fd.ry + dz * 1.1, mercy = !fate && !!(F.meta && F.meta.kind === 'duel' && win === 'A');   // no decision available (old replay, no game state): kneel and stand over him, the results dock asks
+    const ex = this.ex = { src, dst, fs, fd, stage: 'approach', t: 0, scale: 0.8, hit: false, ended: false, done: false, mercy, win, sT: 0, dx, dz, back: false, fate, wait: false, auto: 0, choice: '', v: null, clip: 'finisher', info: null, twT: -1 };
     // victim: kneels in place, facing the executioner (no stale sim states may fire on it)
     fd.kneel = true; fd.guarding = false; fd.st = ''; fd.air = false; fd.spin = false; fd.faceTo = { x: tx, z: tz }; this.dropHandles(dst.id);
     fd.rig.animator.executed();
     // killer: walks to 1.1 m in front of the victim and faces it
     fs.faceTo = { x: fd.rx, z: fd.ry }; fs.ov = { x0: fs.rx, z0: fs.ry, x1: tx, z1: tz, t: 0, dur: Math.max(0.4, Math.min(1.7, (dist - 1.1) / 2.4)) }; fs.rig.animator.setState('move');
     const an = fs.rig.animator, prev = an.onEvent;
-    an.onEvent = (n, clip) => { if (prev) prev(n, clip); if (clip && clip.name === 'finisher') { if (n === 'hit') this.execHit(); else if (n === 'end') ex.ended = true; } };
+    an.onEvent = (n, clip) => { if (prev) prev(n, clip); if (clip && clip.name === ex.clip) { if (n === 'hit') this.execHit(); else if (n === 'end') ex.ended = true; } };
     ex.restoreEv = () => { if (an.onEvent !== prev) an.onEvent = prev; };
-    // crowd hush, music drops, kill camera frames the pair side-on for the whole sequence
+    // crowd hush, music drops, kill camera frames the pair side-on for the whole sequence (raised out from behind the decision panel when there is one)
     this.audio.crowd(0.08); this.audio.music.setIntensity(0.1); this.audio.duck && this.audio.duck(0.55, 2.2);
-    this.dir.cue('kill', { victim: dst.id, killer: src.id, dur: 5.5, next: null, tight: true });
+    this.dir.cue('kill', { victim: dst.id, killer: src.id, dur: fate ? 90 : 5.5, next: null, tight: true, lift: fate ? this.fateLift() : 0 });
     this.bump = 0;
     return true;
   }
+  fateLift() { const a = this.camera.aspect; return a < 0.8 ? 0.2 : a < 1.2 ? 0.14 : 0.1; }
   execStep(dt, realDt) {
-    const ex = this.ex; if (!ex || ex.done) return; ex.t += realDt; const fs = ex.fs, an = fs.rig.animator;
+    const ex = this.ex; if (!ex || ex.done) return;
+    if (ex.wait) { this.fateWait(ex, realDt); return; }   // the decision panel is open: the scene holds, the crowd waits
+    ex.t += realDt; const fs = ex.fs, an = fs.rig.animator;
     if (ex.t > 9) { this.execDone(); return; }   // safety net: never strand the outro
     if (ex.stage === 'approach') {
       ex.scale = 0.75 + 0.25 * smooth01(ex.t / 0.9);
       if (!fs.ov || fs.ov.t >= fs.ov.dur) this.execStrike();
-    } else if (ex.mercy) { ex.scale = 1; ex.sT += realDt; if (ex.sT > 2.1) this.execDone(); }
+    } else if (ex.mercy) { ex.scale = 1; ex.sT += realDt; if (ex.sT > (ex.choice ? 2.4 : 2.1)) this.execDone(); }
     else {
-      const a = an.action && an.action.name === 'finisher' ? an.actionT : -1;   // clip time of the finisher (swing at 0.5, hit at 0.62)
-      ex.scale = ex.hit ? 1 : a < 0.3 ? 0.8 : a < 0.52 ? 0.28 : 0.5;          // the raised blade hangs in slow motion, the swing follows at half speed
-      if (ex.hit && !ex.back && a >= 0.98) { ex.back = true; fs.ov = { x0: fs.rx, z0: fs.ry, x1: fs.rx + ex.dx * 0.95, z1: fs.ry + ex.dz * 0.95, t: 0, dur: 1.1 }; }   // step back off the corpse (the body falls toward the killer)
+      const info = ex.info, a = an.action && an.action.name === ex.clip ? an.actionT : -1, hitAt = info ? info.hitAt : 0.62, rm = U.reduced();   // clip time: the swing is at ~0.8 of the hit time, the hit at hitAt
+      ex.scale = ex.hit ? 1 : a < hitAt * 0.5 ? 0.8 : a < hitAt * 0.84 ? (rm ? 0.55 : 0.28) : 0.5;   // the raised blade hangs in slow motion, the swing follows at half speed
+      if (ex.hit && !ex.back && a >= (info ? info.dur : 1.9) * 0.5) { ex.back = true; fs.ov = { x0: fs.rx, z0: fs.ry, x1: fs.rx + ex.dx * 0.95, z1: fs.ry + ex.dz * 0.95, t: 0, dur: 1.1 }; }   // step back off the corpse (the body falls toward the killer)
+      if (ex.twT >= 0) this.execTwist(ex, realDt);
       if (ex.ended || (ex.hit && a < 0 && ex.t > ex.hitAt + 0.5)) this.execDone();
     }
   }
+  /** at the end of the approach: ask the player (live), play the recorded choice (replay) or strike (a plain execution) */
   execStrike() {
     const ex = this.ex, an = ex.fs.rig.animator; ex.stage = 'strike';
+    if (ex.fate) {
+      this.showVerdict('wait'); this.audio.sfx('horn', { gain: 0.6 });
+      if (ex.fate.rec) { this.fatePicked(ex.fate.rec.choice); return; }
+      if (this.askFate(ex)) return;
+      ex.fate = null; ex.mercy = true; an.setState('victory'); return;   // no offers (should not happen): the old kneel
+    }
     if (ex.mercy) { an.setState('victory'); this.showVerdict('wait'); this.audio.sfx('horn', { gain: 0.6 }); return; }
-    an.finisher({ fade: 0.25 }); this.showVerdict('down');
+    this.execBlow(ex, FIN.cleave);
+  }
+  /** start the killing blow with a finishing-move variant (v is an entry of FIN): clip, speed, camera flavour */
+  execBlow(ex, v) {
+    const an = ex.fs.rig.animator; ex.v = v; ex.clip = an.clips[v.clip] ? v.clip : 'finisher'; ex.mercy = false; ex.stage = 'strike';
+    ex.info = an.clipInfo(ex.clip); an.play(ex.clip, { fade: 0.25, speed: v.speed });
+    this.showVerdict('down');
+    if (ex.fate) this.dir.cue('kill', { victim: ex.dst.id, killer: ex.src.id, dur: 5.5, next: null, tight: true, fl: U.reduced() ? '' : v.fl, lift: this.fateLift() * 0.5 });   // the long waiting shot becomes the variant's own camera
   }
   /** the finisher's 'hit' event: the victim dies, the blood flies, the crowd roars */
   execHit() {
     const ex = this.ex; if (!ex || ex.hit) return; ex.hit = true; ex.hitAt = ex.t;
-    const { src, dst, fs, fd } = ex, F = this.F, fx = this.fx, A = this.audio, dir = this.dirOf(src, dst), pan = clamp(dst.x / 12, -1, 1);
-    fd.kneel = false; fd.rig.animator.executeKill(); fd.rig.flash(0.15, '#8a5530'); fs.rig.animator.hitStop(0.07);
-    fx.hit(this.chest(dst), dir, { dmgFrac: 0.4, crit: true, flesh: this.gore.on }); fx.dust(this.feet(dst), 14); fx.debris && fx.debris(this.feet(dst), 4); fx.groundDecal(this.feet(dst), 'scuff', { size: 1.6 });
-    this.num(dst, 'DOWN', 'miss'); this.feel.impact('finalKill', {}); if (this.post.zoomPunch) this.post.zoomPunch(0.028);
-    A.sfx('swordHitCrit', { pan }); A.sfx('deathCry', { voice: VOICE[dst.style] ?? 0, pan }); this.after(350, () => A.sfx('deathThud', { pan })); A.sfx('crowdGasp');
-    if (this.gore.on) { const lh = fd.lastHit; this.gore.onDown(dst.id, { last: true, crit: true, frac: lh ? Math.max(0.25, lh.frac) : 0.3, dx: dir.x, dz: dir.z, big: false, mine: dst.side === 'A', noSrc: false });
+    const { src, dst, fs, fd } = ex, F = this.F, fx = this.fx, A = this.audio, dir = this.dirOf(src, dst), pan = clamp(dst.x / 12, -1, 1), v = ex.v || FIN.cleave, rm = U.reduced(), big = !!ex.fate;   // a chosen kill is bigger than a plain execution
+    fd.kneel = false; fd.rig.animator.executeKill(); fd.rig.flash(0.15, '#8a5530'); fs.rig.animator.hitStop(big ? 0.12 : 0.07);
+    fx.hit(this.chest(dst), dir, { dmgFrac: big ? 0.6 : 0.4, crit: true, flesh: this.gore.on }); fx.dust(this.feet(dst), big ? 22 : 14); fx.debris && fx.debris(this.feet(dst), big ? 7 : 4); fx.groundDecal(this.feet(dst), 'scuff', { size: 1.6 });
+    if (big) { fx.shockwave && fx.shockwave(this.feet(dst), 2.4, '#f5ead2'); this.feel.impact('aoe', { big: true }); }
+    this.num(dst, 'DOWN', 'miss'); this.feel.impact('finalKill', {}); if (this.post.zoomPunch && !rm) this.post.zoomPunch(big ? 0.045 : 0.028); if (big && !rm) this.caPulse(0.005);
+    A.sfx('swordHitCrit', { pan }); A.sfx('deathCry', { voice: VOICE[dst.style] ?? 0, pan }); this.after(350, () => A.sfx('deathThud', { pan })); A.sfx('crowdGasp'); if (big) this.after(500, () => { A.sfx('crowdRoar', { gain: 1 }); A.sfx('crowdGore', { gain: 0.8 }); });
+    if (this.gore.on) { const lh = fd.lastHit; this.gore.onDown(dst.id, { last: true, crit: true, frac: lh ? Math.max(0.25, lh.frac) : 0.3, dx: dir.x, dz: dir.z, big: false, mine: dst.side === 'A', noSrc: false, part: ex.fate ? v.part : undefined });
+      if (ex.fate) this.gore.finisher(dst.id, v.gore, dir.x, dir.z);
       if (this.dir.shot && this.dir.shot.name === 'kill') this.dir.shot.p.extra = this.gore.framePoints(dst.id); }   // keep a flung head in the kill shot
+    if (v.twist && !rm) ex.twT = 0;   // thrust and twist: the killer wrings the blade
     this.hideVerdict(); this.execFinale(ex.win);
+  }
+  /** impale: the killer turns the blade in the wound (a quick wobble of his facing, no allocation) */
+  execTwist(ex, dt) {
+    ex.twT += dt; const k = ex.twT / 0.55; if (k >= 1) { ex.twT = -1; ex.fs.faceTo.x = ex.fd.rx; ex.fs.faceTo.z = ex.fd.ry; return; }
+    const ang = Math.sin(k * 20) * 0.5 * (1 - k), c = Math.cos(ang), sn = Math.sin(ang), fs = ex.fs, vx = ex.fd.rx - fs.rx, vz = ex.fd.ry - fs.ry;
+    fs.faceTo.x = fs.rx + vx * c - vz * sn; fs.faceTo.z = fs.ry + vx * sn + vz * c;
   }
   /** crowd: hush (set at the start), then the roar (or the boos) and the result music */
   execFinale(win) {
     this.after(650, () => { this.audio.crowd(0.95); this.audio.music.setMode(win === 'A' ? 'victory' : 'defeat'); this.audio.sfx(win === 'A' ? 'levelUp' : 'deathThud', { gain: 0.8 }); this.audio.sfx(win === 'A' ? 'crowdRoar' : 'crowdBoo'); });
   }
   execDone() {
-    const ex = this.ex; if (!ex || ex.done) return; ex.done = true; ex.restoreEv && ex.restoreEv(); this.hideVerdict();
+    const ex = this.ex; if (!ex || ex.done) return; ex.done = true; ex.restoreEv && ex.restoreEv(); this.hideVerdict(); this.closeFate();
     if (ex.mercy) this.execFinale(ex.win);
     for (const f of this.fm.values()) if (!f.u.down && f.u.side === ex.win) f.rig.animator.setState('victory');
     this.dir.setShot('victory', { winner: ex.src.id }, 1.2); this.showEnd(ex.win === 'A');
   }
+
+  // ---------------------------------------------------------------- THE DECISION (kill / spare / ransom)
+  /** build and show the decision panel; false when there is nothing to offer */
+  askFate(ex) {
+    const o = ex.fate, off = L().fateOffers(o.S, o.ev, ex.dst.g); if (!off) return false;
+    const d = D(), F = this.F, src = ex.src, dst = ex.dst, ICON = { kill: 'sword', spare: 'heart', ransom: 'coin', show: 'coin' };
+    const left = Math.max(1, Math.round((src.hp / src.maxhp) * 100)), team = F.units.filter((u) => u.side === 'A').length > 1;
+    const how = team ? `Last foe standing. ${src.name} struck the final blow.` : `Beaten by ${src.name} in ${Math.round(F.t || 0)}s, ${left}% health left.`;
+    const offers = off.opts.map((x) => ({ id: x.id, label: x.label, icon: ICON[x.id], gain: x.gain, cost: x.cost, why: x.why || '', def: x.id === off.def }));
+    ex.offers = off; this.fateIds = offers.map((x) => x.id);
+    const el = this.fateUi = U.fatePanel({ foe: { name: dst.name, sub: `${d.STYLES[dst.style].n}, level ${dst.g.lvl}${off.foe.ludus ? ', ' + off.foe.ludus : ''}`, bust: this.fateBust(dst.g) }, how, offers, onPick: (id) => this.fatePicked(id), title: 'Decide his fate' });
+    this.hud.append(el); ex.wait = true; ex.auto = F.autoA ? 6 : 0; ex.autoT = ex.auto; ex.scale = 1;
+    this.audio.sfx('uiOpen', { gain: 0.5 }); setTimeout(() => { if (this.fateUi === el) el.fate.focus(); }, 80);
+    return true;
+  }
+  fateBust(g) {
+    try { const game = globalThis.__LM3D && globalThis.__LM3D.game; if (!game || !g) return null; if (!game._portraits && game.portraitEl) game.portraitEl(g, 40); const P = game._portraits; if (!P || !P.portrait) return null; return P.portrait(g, { w: 44, h: 50, style: 'bust' }); } catch (e) { return null; }
+  }
+  /** while the panel is open: nothing moves; with Auto on, the default (spare) is taken after a short countdown so autoplay is never stuck */
+  fateWait(ex, realDt) {
+    ex.scale = 1; if (!ex.auto || this.paused) return; ex.autoT -= realDt; if (this.fateUi) this.fateUi.fate.count(Math.ceil(ex.autoT));
+    if (ex.autoT <= 0) this.fatePicked(ex.offers ? ex.offers.def : 'spare');
+  }
+  closeFate() { if (this.fateUi) { const el = this.fateUi; this.fateUi = null; el.fate.close(); } this.fateIds = null; }
+  /** programmatic / keyboard entry */
+  fatePick(id) { if (this.fateUi) this.fateUi.fate.pick(id); }
+  /** the choice is made (panel, key, auto or replay): record it and play it out */
+  fatePicked(id) {
+    const ex = this.ex; if (!ex || ex.done || ex.choice) return; ex.choice = id; ex.wait = false; ex.t = 0; this.hideVerdict();
+    if (this.fateUi) { const el = this.fateUi; this.fateUi = null; el.classList.add('lx-fate-out'); setTimeout(() => el.remove(), 300); }
+    const rep = this.F.replay; if (rep && !this.replaying) rep.fate = { choice: id, foe: ex.dst.id, n: this.F.n | 0 };
+    if (id === 'kill') { this.audio.sfx('drum', { gain: 0.8 }); this.execBlow(ex, this.finisherOf(ex.src)); return; }
+    ex.mercy = true; ex.sT = 0; ex.scale = 1; const an = ex.fs.rig.animator; an.setState('victory');
+    const off = ex.offers || (ex.fate && L().fateOffers(ex.fate.S, ex.fate.ev, ex.dst.g)), o = off && off.opts.find((x) => x.id === id);
+    this.dir.cue('kill', { victim: ex.dst.id, killer: ex.src.id, dur: 4, next: null, tight: true, fl: 'orbit', lift: this.fateLift() * 0.5 });
+    if (id === 'ransom' || id === 'show') { this.audio.sfx('coin'); this.audio.sfx('crowdCheer', { gain: 0.7 }); this.banner(o ? `${id === 'ransom' ? 'Ransom paid' : 'The crowd tips you'}: +${o.gold} gold` : 'Ransom paid', 'ult'); }
+    else { this.audio.sfx('horn', { gain: 0.8 }); this.audio.sfx('crowdCheer'); this.banner('Mercy! The crowd cheers', 'ult'); this.fx.ring && this.fx.ring(this.feet(ex.dst), '#f2c14e', 2.2); this.feel.impact && this.feel.impact('roar', {}); }
+  }
+  /** the finishing move for a killer, chosen only from his weapon style (deterministic): sword styles chop or slash, the twin blades cross, spear and trident thrust */
+  finisherOf(u) { return FIN[FIN_OF[u && u.style] || 'cleave']; }
+
   showVerdict(kind) {
     this.hideVerdict(); const win = this.F.winner === 'A', el = this.verdictEl = document.createElement('div'); el.className = 'lx-fv-verdict lx-fv-v-' + kind;
     el.innerHTML = '<svg viewBox="0 0 64 64" width="64" height="64" aria-hidden="true"><path fill="currentColor" d="M10 28h10v26H10zM24 28l9-18c3-1 6 1 6 5v10h14c3 0 5 3 4 6l-5 19c-1 3-3 4-6 4H24z"/></svg><span></span>';

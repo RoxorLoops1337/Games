@@ -105,7 +105,7 @@ function honorsTab(ctx, root, draw) {
   root.append(g);
   const st = S.stats || {};
   root.append(sec('Records'));
-  root.append(card([kv('Fights', fmt(st.fights || 0)), kv('Wins / Losses', `${st.wins || 0} / ${st.losses || 0}`), kv('Tournaments won', fmt(st.tourneys || 0)), kv('Mercies shown', fmt(st.spares || 0)), kv('Weeks run', fmt(st.weeks || 0)),
+  root.append(card([kv('Fights', fmt(st.fights || 0)), kv('Wins / Losses', `${st.wins || 0} / ${st.losses || 0}`), kv('Tournaments won', fmt(st.tourneys || 0)), kv('Mercies shown', fmt(st.spares || 0)), kv('Foes killed / ransomed', `${fmt(st.kills || 0)} / ${fmt(st.ransoms || 0)}`), kv('Weeks run', fmt(st.weeks || 0)),
     kv('Fallen fighters', fmt(st.fallen || 0)), kv('Best Pit floor', fmt(S.pitBest || 0)), kv('Best Daily floor', fmt(S.dailyBest || 0)), kv('Best Horde wave', fmt(S.hordeBest || 0)), kv('Bounties claimed', fmt(st.bounties || 0)), kv('Champions beaten', fmt(st.champs || 0)), kv('Contracts done', fmt(st.contracts || 0))]));
   if ((S.awards || []).length) {
     root.append(sec('Season awards'));

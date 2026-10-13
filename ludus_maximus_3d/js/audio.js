@@ -1046,11 +1046,44 @@ export function createAudio(opts = {}) {
 
   // ---- player lifecycle ----
   const STEMS = { perc: { pan: 0, send: 0.1, g: 0.62 }, low: { pan: 0, send: 0.06, g: 0.5 }, str: { pan: -0.22, send: 0.26, g: 1.3 }, brass: { pan: 0.18, send: 0.3, g: 1.25 }, pad: { pan: 0, send: 0.4, g: 1.2 }, lead: { pan: 0.3, send: 0.32, g: 1.15 }, lyre: { pan: -0.35, send: 0.28, g: 1.25 }, fx: { pan: 0, send: 0.45, g: 0.9 } };   // g = stem trim: the low stems are held down so the mix is not all sub
+  // Loudness calibration per mode (dB added on top of MUSIC_TRIM, measured with tools/ludus3d_audio_check.mjs, integrated K-weighted LUFS).
+  // [calm, mid, combat] at intensity 0, 0.5, 1 (interpolated with curInt), or a single number for modes without an intensity axis. Targets: -18 to -20 LUFS at the normal intensity, swing calm to combat at most 6 dB.
+  const MODE_DB = { ludus: 11, prep: 6.5, arena: [6.2, 4, 2.2], beast: [7.3, 3.1, 1.2], boss: [6.4, 3.9, 2.1], victory: 1, defeat: 4.6, title: 3.2, results: 9.3, season: -0.3, elegy: 7.4 };
+  // Bass management for small speakers: the low stem (drone) and the percussion stem lose some weight and feed a harmonic exciter (low-passed, saturated, high-passed copy) so the fundamentals stay felt on big speakers while the harmonics carry the line on a phone.
+  // low: dB cut on the low stem at intensity 0 (fades out by intensity 1), perc: same for the perc stem, ex: exciter send, hp: high-pass on the low stem in Hz
+  const MODE_SHAPE = { def: { low: -3, perc: -1, ex: 0.3, hp: 40 }, prep: { low: -7, perc: -4, ex: 0.7, hp: 55 }, arena: { low: -7, perc: -4, ex: 0.7, hp: 55 }, beast: { low: -7, perc: -5, ex: 0.7, hp: 55 }, boss: { low: -6, perc: -4, ex: 0.6, hp: 55 } };
+  const dbG = (d) => Math.pow(10, d / 20);
+  function modeDb(mode, I) { const d = MODE_DB[mode]; if (typeof d === 'number') return d; return I < 0.5 ? d[0] + (d[1] - d[0]) * (I / 0.5) : d[1] + (d[2] - d[1]) * ((I - 0.5) / 0.5); }
+  function exciterCurve() { const n = 1024, c = new Float32Array(n), o = Math.tanh(0.35); for (let i = 0; i < n; i++) { const x = (i / (n - 1)) * 2 - 1; c[i] = Math.tanh(x * 6 + 0.35) - o; } return c; }
+  let excCurve = null;
   function newPlayer(mode, t) {
     const M = MODES[mode], bus = G(0), rev = G(0); bus.connect(musicBus); rev.connect(revMusic);
-    const p = { mode, M, bus, rev, st: {}, next: t, step: 0, bar: 0, startT: t, stopped: false, hr: mulberry(hash(seed, 'hum', mode)), r: mulberry(1), pb: 0 };
-    for (const [k, c] of Object.entries(STEMS)) { const g = G(c.g); let tail = g; if (ctx.createStereoPanner && c.pan) { const pn = ctx.createStereoPanner(); pn.pan.value = c.pan; g.connect(pn); tail = pn; } tail.connect(bus); const sd = G(c.send); g.connect(sd); sd.connect(rev); p.st[k] = g; }
-    M.init(p); return p;
+    const p = { mode, M, bus, rev, st: {}, base: {}, next: t, step: 0, bar: 0, startT: t, stopped: false, hr: mulberry(hash(seed, 'hum', mode)), r: mulberry(1), pb: 0 };
+    const sh = MODE_SHAPE[mode] || MODE_SHAPE.def; p.shape = sh;
+    for (const [k, c] of Object.entries(STEMS)) {
+      const g = G(c.g); let tail = g;
+      if (k === 'low') { const hp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = sh.hp; hp.Q.value = 0.7; g.connect(hp); tail = hp; }
+      if (ctx.createStereoPanner && c.pan) { const pn = ctx.createStereoPanner(); pn.pan.value = c.pan; tail.connect(pn); tail = pn; }
+      tail.connect(bus); const sd = G(c.send); g.connect(sd); sd.connect(rev); p.st[k] = g; p.base[k] = c.g;
+      if ((k === 'low' || k === 'perc') && sh.ex > 0) { // harmonic exciter, parallel
+        if (!excCurve) excCurve = exciterCurve();
+        const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 230; lp.Q.value = 0.6;
+        const pre = G(k === 'low' ? 5 : 3), ws = ctx.createWaveShaper(); ws.curve = excCurve;
+        const hp2 = ctx.createBiquadFilter(); hp2.type = 'highpass'; hp2.frequency.value = 240; hp2.Q.value = 0.6;
+        const ex = G(0); g.connect(lp); lp.connect(pre); pre.connect(ws); ws.connect(hp2); hp2.connect(ex); ex.connect(bus); (p.ex || (p.ex = [])).push(ex); p['ex_' + k] = ex;
+      }
+    }
+    M.init(p); applyLevels(p, t, 0.001); return p;
+  }
+  // per bar: mode loudness (follows the smoothed intensity) and bass management (strongest when calm)
+  function applyLevels(p, t, tc) {
+    const I = curInt, lv = dbG(modeDb(p.mode, I)), sh = p.shape, calm = 1 - I, tcv = tc || 0.5;
+    for (const k of Object.keys(p.st)) {
+      let m = lv; if (k === 'low') m *= dbG(sh.low * calm); else if (k === 'perc') m *= dbG(sh.perc * calm);
+      try { p.st[k].gain.setTargetAtTime(p.base[k] * m, Math.max(t, 0), tcv); } catch (e) { /* ignore */ }
+    }
+    if (p.ex_low) { try { p.ex_low.gain.setTargetAtTime(0.09 * sh.ex * lv * (0.5 + 0.5 * calm), Math.max(t, 0), tcv); } catch (e) { /* ignore */ } }
+    if (p.ex_perc) { try { p.ex_perc.gain.setTargetAtTime(0.09 * sh.ex * lv * (0.5 + 0.5 * calm), Math.max(t, 0), tcv); } catch (e) { /* ignore */ } }
   }
   function pump(until) {
     if (!ready) return;
@@ -1059,7 +1092,7 @@ export function createAudio(opts = {}) {
       while (p.next < until && !p.stopped && guard++ < 400) {
         const s = p.step % 16, sp = 60 / p.M.bpm(p) / 4;
         curInt += (intensityTarget - curInt) * 0.12;
-        if (s === 0) { p.bar = Math.floor(p.step / 16); try { p.M.bar(p, p.bar, p.next); } catch (e) { errs.n++; errs.last = p.mode + ' bar: ' + (e && e.stack || e); } }
+        if (s === 0) { p.bar = Math.floor(p.step / 16); applyLevels(p, p.next, 0.4); try { p.M.bar(p, p.bar, p.next); } catch (e) { errs.n++; errs.last = p.mode + ' bar: ' + (e && e.stack || e); } }
         const swing = (p.mode === 'ludus' && s % 2 === 1) ? sp * 0.12 : 0;
         if (p.acc && p.acc.length && s % 2 === 0) accentNow(p, p.acc.shift(), p.next);
         try { p.M.step(p, s, p.next + swing, sp); } catch (e) { errs.n++; errs.last = p.mode + ': ' + (e && e.stack || e); }   // keep scheduling; tools read audio._stats().errors
