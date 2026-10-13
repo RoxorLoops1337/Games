@@ -82,7 +82,7 @@ export function removePlayer(W, id, forget = false) {
 }
 function spawnVillager(W, P) {
   const hall = P.buildings[0], c = tileToWorld(P, hall.x + 1.5, hall.y + 3.5);
-  const v = { id: uid(W), name: VILLAGER_NAMES[(W.nextId * 7) % VILLAGER_NAMES.length], x: c.x + (W.rnd() - 0.5) * 2, z: c.z + (W.rnd() - 0.5), hunger: HUNGER_MAX, task: null, state: 'idle', work: 0, hat: Math.floor(W.rnd() * 6), carry: null };
+  const v = { id: uid(W), name: VILLAGER_NAMES[(W.nextId * 7) % VILLAGER_NAMES.length], x: c.x + (W.rnd() - 0.5) * 2, z: c.z + (W.rnd() - 0.5), hunger: HUNGER_MAX, task: null, state: 'idle', work: 0, hat: Math.floor(W.rnd() * 100), carry: null };
   P.villagers.push(v); P.vrev++;
   return v;
 }
@@ -395,6 +395,15 @@ export function tick(W, dt) {
   while (V.orders.length < ordersFor(V.level)) V.orders.push(makeOrder(W));
 }
 
+// the tool a villager visibly holds, derived from the job (client art picks the model from it)
+const FIELD_TOOL = { vf_wood: 'axe', vf_clay: 'hoe', vf_stone: 'pick', vf_wheat: 'hoe' }, NODE_TOOL = { tree: 'axe', rock: 'pick', clay: 'hoe' };
+export function toolOf(P, v) {
+  const t = v.task; if (!t) return 'none';
+  if (t.k === 'node') { const n = P.nodes.find(n => n.id === t.id); return n ? NODE_TOOL[n.type] : 'none'; }
+  if (t.k === 'valley') return FIELD_TOOL[t.id] || 'none';
+  if (t.k === 'bld') { const b = building(P, t.id); if (!b) return 'none'; if (!b.built || b.up) return 'hammer'; const d = BUILDINGS[b.type] || {}; if (d.field) return 'hoe'; if (b.type === 'study') return 'scroll'; if (d.craft) return 'ladle'; }
+  return 'none';
+}
 // ---------- snapshots ----------
 const r1 = (n) => Math.round(n * 10) / 10;
 // ctx (optional, one per connection) turns on delta sending: buildings/nodes of a village are only sent
@@ -413,7 +422,7 @@ export function snapshot(W, pid, ctx = null, parts = null) {
   const players = []; parts = ctx ? (parts || publicParts(W)) : null;
   for (const P of Object.values(W.players)) {
     const e = { id: P.id, name: P.name, color: P.color, slot: P.slot, ox: P.ox, oz: P.oz, ang: P.ang, level: P.level, online: P.online,
-      v: P.villagers.map(v => [v.id, r1(v.x), r1(v.z), v.state, v.hat, v.face ? r1(v.face) : 0, v.name]) };
+      v: P.villagers.map(v => [v.id, r1(v.x), r1(v.z), v.state, v.hat, v.face ? r1(v.face) : 0, v.name, toolOf(P, v)]) };
     if (!ctx) {
       const pp = publicParts1(P); e.b = pp.b; e.n = pp.n;
     } else {

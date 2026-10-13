@@ -58,7 +58,7 @@ function windify(m) {
     sh.uniforms.uWindT = WIND;
     sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nuniform float uWindT;').replace('#include <begin_vertex>',
       `vec3 transformed = vec3( position );
-       float wW = uv.x; if ( wW > 0.0 ) { float ph = uv.y;
+       float wW = uv.x; if ( wW < 0.0 ) { wW = -wW; transformed.z += ( sin( uWindT * 5.0 + position.x * 5.5 + uv.y ) * 0.11 + sin( uWindT * 8.0 + position.x * 9.0 ) * 0.03 ) * wW; transformed.y += sin( uWindT * 5.0 + position.x * 5.5 + uv.y + 1.2 ) * 0.02 * wW; } else if ( wW > 0.0 ) { float ph = uv.y;
          transformed.x += ( sin( uWindT * 1.7 + ph + position.x * 0.5 + position.z * 0.35 ) + 0.35 * sin( uWindT * 3.3 + ph * 2.0 ) ) * 0.05 * wW;
          transformed.z += cos( uWindT * 1.45 + ph * 1.3 + position.z * 0.45 ) * 0.032 * wW; }`);
   };
@@ -123,13 +123,14 @@ class Builder {
     const p = g.attributes.position, n = g.attributes.normal, gcol = g.attributes.color, idx = g.index, cnt = idx ? idx.count : p.count;
     const y0 = g.userData.y0 ?? 0, y1 = g.userData.y1 ?? 1, ih = 1 / Math.max(1e-6, y1 - y0), grad = o.grad ?? 0.6, ao = o.ao ?? 0.3, aoH = o.aoH ?? 0.45, facet = o.facet || 0, seed = o.seed || 0;
     if (!gcol) _bc.copy(col(o.c ?? '#ffffff'));
+    if (o.swx && !g.boundingBox) g.computeBoundingBox(); const bbx0 = g.boundingBox ? g.boundingBox.min.x : 0, bbw = g.boundingBox ? Math.max(1e-6, g.boundingBox.max.x - g.boundingBox.min.x) : 1;
     const shadow = o.m === 'shadow'; let phase = 0;
     const cx = _m.elements[12], cz = _m.elements[14]; phase = (hash(cx * 0.37, cz * 0.53) * TAU);
     let fj = 1;
     for (let k = 0; k < cnt; k++) {
       const i = idx ? idx.getX(k) : k;
       if (facet && k % 3 === 0) fj = 1 + (hash(k * 0.173 + seed, seed * 3.1 + (k % 7)) - 0.5) * 2 * facet;
-      _v.fromBufferAttribute(p, i); const t = (_v.y - y0) * ih; _v.applyMatrix4(_m);
+      _v.fromBufferAttribute(p, i); const t = (_v.y - y0) * ih, lx = (_v.x - bbx0) / bbw; _v.applyMatrix4(_m);
       set.pos.push(_v.x, _v.y, _v.z);
       let nx = 0, ny = 1, nz = 0; if (n) { _v.fromBufferAttribute(n, i).applyMatrix3(_n3).normalize(); nx = _v.x; ny = _v.y; nz = _v.z; }
       set.nor.push(nx, ny, nz);
@@ -139,12 +140,12 @@ class Builder {
       if (fj !== 1) _c.multiplyScalar(fj);
       if (ao > 0) { const yy = _v.y - this.floor; _c.multiplyScalar(1 - ao * Math.pow(1 - sstep(0, aoH, yy), 1.5)); }
       set.col.push(_c.r, _c.g, _c.b);
-      set.uv.push(o.swc != null ? o.swc : o.sw ? o.sw * (0.25 + 0.75 * t) : 0, o.ph != null ? o.ph : phase);
+      set.uv.push(o.swx ? -o.swx * clamp(lx) : o.swc != null ? o.swc : o.sw ? o.sw * (0.25 + 0.75 * t) : 0, o.ph != null ? o.ph : phase);
     }
     this.tris += cnt / 3; return this;
   }
   // ---- shorthands
-  box(w, h, d, x, y, z, c, o = {}) { return this.add(G.box(), { p: [x, y, z], s: [w, h, d], c, ...o }); }
+  box(w, h, d, x, y, z, c, o = {}) { return this.add(Math.min(w, h, d) < 0.09 || w * h * d < 0.03 ? G.plain() : G.box(), { p: [x, y, z], s: [w, h, d], c, ...o }); }
   plain(w, h, d, x, y, z, c, o = {}) { return this.add(G.plain(), { p: [x, y, z], s: [w, h, d], c, ...o }); }
   cyl(rt, rb, h, x, y, z, c, o = {}) { return this.add(G.cyl(rb > 0 ? rt / rb : 0, o.seg || 8, o.open), { p: [x, y, z], s: [rb, h, rb], c, ...o }); }
   lump(r, x, y, z, c, o = {}) { const s = o.s || [1, 1, 1]; const ss = typeof s === 'number' ? [s, s, s] : s; return this.add(G.lump(o.d ?? 1, o.seed || 1, o.jit ?? 0.1, o.up ?? 0.25), { p: [x, y, z], c, ...o, s: [r * ss[0], r * ss[1], r * ss[2]] }); }
@@ -238,10 +239,10 @@ const dist2 = (ax, az, bx, bz) => Math.hypot(ax - bx, az - bz);
 
 // ------------------------------------------------------------------ small prop parts (write into a Builder)
 const WOOD = P.wood, WOOD_D = P.bark;
-function mushroomInto(b, x, z, s = 1, y = 0, cap = '#e8564a') {
-  b.cyl(0.035 * s, 0.05 * s, 0.1 * s, x, y, z, '#f6ead0', { seg: 6, ao: 0.1 });
-  b.lump(0.11 * s, x, y + 0.11 * s, z, cap, { d: 1, s: [1, 0.7, 1], jit: 0.04, grad: 0.7, ao: 0 });
-  for (const [dx, dz, rr] of [[0.04, 0.04, 0.025], [-0.05, 0.02, 0.02], [0.0, -0.06, 0.022]]) b.lump(rr * s, x + dx * s, y + 0.17 * s, z + dz * s, '#fffaf0', { d: 0, grad: 0, ao: 0 });
+function mushroomInto(b, x, z, s = 1, y = 0, cap = '#e8564a', dots = true) {
+  b.cyl(0.035 * s, 0.05 * s, 0.1 * s, x, y, z, '#f6ead0', { seg: 5, ao: 0.1 });
+  b.lump(0.11 * s, x, y + 0.11 * s, z, cap, { d: dots ? 1 : 0, s: [1, 0.7, 1], jit: 0.04, grad: 0.7, ao: 0 });
+  if (dots) for (const [dx, dz, rr] of [[0.04, 0.04, 0.025], [-0.05, 0.02, 0.02], [0.0, -0.06, 0.022]]) b.add(G.octa(), { p: [x + dx * s, y + 0.17 * s, z + dz * s], s: rr * s, c: '#fffaf0', grad: 0, ao: 0 });
 }
 function tuftInto(b, x, y, z, s = 1, c = P.grassDark, n = 5, sw = 1) {
   const r = krng(Math.floor(x * 97 + z * 57 + 3));
@@ -250,9 +251,9 @@ function tuftInto(b, x, y, z, s = 1, c = P.grassDark, n = 5, sw = 1) {
     b.add(G.cyl(0, 3, true), { p: [x + Math.cos(a) * 0.04 * s, y, z + Math.sin(a) * 0.04 * s], s: [rad, h, rad], r: [lean, a, 0], c, grad: 0.9, ao: 0, sw });
   }
 }
-function flowerInto(b, x, y, z, color, s = 1, h = 0.18) {
-  b.add(G.cyl(0, 3, true), { p: [x, y, z], s: [0.012 * s, h * s, 0.012 * s], c: '#4f9a3a', grad: 0.3, ao: 0, sw: 0.9 });
-  b.lump(0.055 * s, x, y + h * s, z, color, { d: 0, s: [1, 0.6, 1], jit: 0.05, grad: 0.4, ao: 0, sw: 0.9 }); b.lump(0.02 * s, x, y + h * s + 0.02 * s, z, '#ffd24a', { d: 0, grad: 0, ao: 0, sw: 0.9 });
+function flowerInto(b, x, y, z, color, s = 1, h = 0.18, dot = false) {
+  b.add(G.cyl(0, 3, true), { p: [x, y, z], s: [0.014 * s, h * s, 0.014 * s], c: '#4f9a3a', grad: 0.3, ao: 0, sw: 0.9 });
+  b.add(G.octa(), { p: [x, y + h * s, z], s: [0.065 * s, 0.045 * s, 0.065 * s], c: color, grad: 0.5, ao: 0, sw: 0.9 }); if (dot) b.lump(0.022 * s, x, y + h * s + 0.03 * s, z, '#ffd24a', { d: 0, grad: 0, ao: 0, sw: 0.9 });
 }
 const FLOWERS = ['#ef7fb0', '#fff6e0', '#ffd24a', '#a78bf0', '#ff8a5c', '#6fb4f0'];
 function logInto(b, x, y, z, len, rad, yaw, c = '#a8683f') {
@@ -284,8 +285,8 @@ function treeInto(b, sp, v, lod) {
     } else { L(0, 1.32, 0, 0.5, lc, {}); L(-0.3, 1.1, 0.1, 0.34, dark, { d: 0 }); L(0.3, 1.14, -0.06, 0.34, dark, { d: 0 }); L(0.04, 1.78, 0, 0.34, lc, { d: 1 }); L(0.2, 1.9, 0.1, 0.17, light, { d: 0 }); }
   } else if (sp === 'pine') {
     trunk(0.1, 0.07, 0.8, P.barkDark, hi ? 7 : 5);
-    const tiers = hi ? [[0.55, 0.74, 0.5], [0.46, 1.16, 0.48], [0.36, 1.56, 0.46], [0.25, 1.95, 0.5]] : [[0.55, 0.78, 0.5], [0.42, 1.28, 0.48], [0.27, 1.78, 0.5]];
-    tiers.forEach(([rad, y, sy], i) => { L(j(0.04), y, j(0.04), rad, i % 2 ? dark : lc, { s: [1, sy, 1], jit: 0.14, up: 0.45, seed: v + i }); });
+    const tiers = hi ? [[0.6, 0.72, 0.62], [0.5, 1.12, 0.6], [0.4, 1.5, 0.58], [0.28, 1.86, 0.6]] : [[0.6, 0.78, 0.62], [0.46, 1.25, 0.6], [0.3, 1.72, 0.6]];
+    tiers.forEach(([rad, y, sy], i) => { L(j(0.09), y, j(0.09), rad, i % 2 ? dark : lc, { s: [1, sy, 1], jit: 0.2, up: 0.5, seed: v + i }); });
     if (hi) { L(0.36, 0.7, 0.14, 0.2, dark, { d: 0, s: [1, 0.6, 1] }); L(-0.34, 0.74, -0.18, 0.2, dark, { d: 0, s: [1, 0.6, 1] }); L(0.0, 1.12, -0.38, 0.17, lc, { d: 0, s: [1, 0.6, 1] }); }
     L(0.0, tiers[tiers.length - 1][1] + 0.3, 0, 0.13, light, { d: 0, s: [1, 1.5, 1], up: 0.1 });
   } else if (sp === 'birch') {
@@ -298,9 +299,12 @@ function treeInto(b, sp, v, lod) {
     const cs = [[0, 1.2, 0, 0.55, lc, 2], [-0.4, 1.0, 0.1, 0.38, dark, 1], [0.4, 1.05, -0.05, 0.38, dark, 1], [0.0, 1.05, 0.4, 0.36, dark, 1], [-0.05, 1.08, -0.4, 0.34, lc, 1], [0.04, 1.62, 0, 0.36, lc, 1]];
     if (hi) { for (const [x, y, z, rad, c, d] of cs) L(x, y, z, rad, c, { d: d === 2 ? 1 : 1, s: [1, 0.86, 1] }); L(0.2, 1.8, 0.1, 0.2, light, { d: 0 }); }
     else { L(0, 1.2, 0, 0.55, lc, { s: [1, 0.86, 1] }); L(-0.38, 1.0, 0.1, 0.36, dark, { d: 0 }); L(0.4, 1.05, -0.05, 0.36, dark, { d: 0 }); L(0.04, 1.62, 0, 0.34, lc, { d: 0 }); }
-    const na = hi ? 8 : 4;
-    for (let i = 0; i < na; i++) { const c = cs[i % 5], a = j(Math.PI) + i * 2.4, e = -0.15 + r() * 0.5, rr = c[3] * 0.96; const ap = [c[0] + Math.cos(a) * Math.cos(e) * rr, c[1] + Math.sin(e) * rr * 0.86, c[2] + Math.sin(a) * Math.cos(e) * rr];
-      b.lump(0.075, ap[0], ap[1], ap[2], '#e5392f', { d: 0, grad: 0.5, ao: 0, jit: 0.04 }); if (hi) b.lump(0.025, ap[0], ap[1] + 0.07, ap[2], '#5a3a22', { d: 0, grad: 0, ao: 0 }); }
+    const na = hi ? 10 : 5;
+    for (let i = 0; i < na; i++) {
+      const k = i % 6, c = cs[k], a = i * 2.4 + 0.5, e = k === 0 ? 0.15 + r() * 0.5 : -0.2 + r() * 0.5; let dx = Math.cos(a), dz = Math.sin(a); if (k > 0 && k < 5) { const l = Math.hypot(c[0], c[2]) || 1; dx = c[0] / l + dx * 0.4; dz = c[2] / l + dz * 0.4; const m = Math.hypot(dx, dz); dx /= m; dz /= m; }
+      const rr = c[3] * 1.03, ce = Math.cos(e), ap = [c[0] + dx * ce * rr, c[1] + Math.sin(e) * rr * 0.86, c[2] + dz * ce * rr];
+      b.lump(0.1, ap[0], ap[1], ap[2], '#ea3a2e', { d: 0, grad: 0.4, ao: 0, jit: 0.04 }); if (hi) b.add(G.octa(), { p: [ap[0] - 0.035, ap[1] + 0.045, ap[2] + 0.05], s: 0.028, c: '#ffb0a0', grad: 0, ao: 0 });
+    }
   }
 }
 const SHADOW_R = { oak: 0.78, pine: 0.66, birch: 0.62, apple: 0.82 };
@@ -327,7 +331,7 @@ export function stumpModel() { return make('stump', (b) => { stumpInto(b); b.sha
 function boulderCluster(b, seed, big = 1) {
   const r = krng(seed * 31 + 5), warm = r() < 0.5, base = warm ? ['#aaa59c', '#bdb8ad', '#8f8a82'] : [P.stone, P.stoneLight, P.stoneDark];
   const part = (rad, x, z, sx, sy, sz, i) => {
-    const y = rad * sy * 0.55 * 0.9; b.rock(rad, x, y, z, base[i % 3], { s: [sx, sy, sz], d: 1, seed: seed + i, r: [0, r() * TAU, 0], moss: { c: '#6b9a3a', amt: 0.9 }, ao: 0.4, aoH: 0.35 });
+    const y = rad * sy * 0.55 * 0.9; b.rock(rad, x, y, z, base[i % 3], { s: [sx, sy, sz], d: 1, seed: seed + i, r: [0, r() * TAU, 0], moss: { c: '#6f9a42', amt: 0.55 }, ao: 0.4, aoH: 0.35 });
     return [x, y, z, rad * sx, rad * sy, rad * sz];
   };
   const m = part(0.46 * big, 0, 0, 1.15, 0.95, 1.0, 0), s1 = part(0.31 * big, 0.5 * big, 0.2 * big, 1, 0.85, 1, 1), s2 = part(0.25 * big, -0.4 * big, 0.28 * big, 1.1, 0.8, 1, 2), s3 = part(0.15 * big, -0.1 * big, -0.5 * big, 1, 0.8, 1, 1);
@@ -363,12 +367,12 @@ export function countTris(o) {
 
 // =================================================================== SMALL SCATTER PIECES
 const smallModel = (key, build, shadow) => { const g = instantiate(baked(key, (b) => { build(b); if (shadow) b.shadow(0, 0, shadow, 0.22); })); return g; };
-function tuftClump(b, v) { const c = [P.grassDark, P.leaf, '#6fb84a', '#8cc84e'][v % 4]; tuftInto(b, 0, 0, 0, 1.15, c, 6, 1); tuftInto(b, 0.05, 0, 0.03, 0.8, '#a6dd62', 3, 1); }
+function tuftClump(b, v) { const c = [P.grassDark, P.leaf, '#6fb84a', '#8cc84e'][v % 4]; tuftInto(b, 0, 0, 0, 1.15, c, 4, 1); tuftInto(b, 0.05, 0, 0.03, 0.8, '#a6dd62', 2, 1); }
 /** a clump of spiky grass blades (about 20 tris), sways in the wind shader. */
 export function tuftModel(seed = 0) { return smallModel(`tuft:${Math.abs(seed | 0) % 4}`, (b) => tuftClump(b, Math.abs(seed | 0))); }
 function bushInto(b, v, lod = 0) {
   const r = krng(v * 41 + 9), c = ['#4fa845', '#5cb44a', '#3f9a50'][v % 3], dark = col(c).clone().multiplyScalar(0.8), light = '#8fdc62', d = lod ? 0 : 1;
-  b.lump(0.36, 0, 0.27, 0, c, { d, seed: v, grad: 0.95, ao: 0.25, aoH: 0.3, s: [1.1, 0.85, 1], sw: 0.3 });
+  b.lump(0.36, 0, 0.27, 0, c, { d: 1, seed: v, grad: 0.95, ao: 0.25, aoH: 0.3, s: [1.1, 0.85, 1], sw: 0.3 });
   b.lump(0.27, -0.3, 0.2, 0.12, dark, { d, seed: v + 1, grad: 0.95, ao: 0.25, aoH: 0.3, sw: 0.3 }); b.lump(0.26, 0.28, 0.2, -0.1, dark, { d, seed: v + 2, grad: 0.95, ao: 0.25, aoH: 0.3, sw: 0.3 });
   b.lump(0.2, 0.0, 0.5, 0.0, light, { d: 0, grad: 0.8, ao: 0, sw: 0.3 });
   if (!lod && v % 3 !== 2) for (let i = 0; i < 5; i++) { const a = i * 1.9 + r(), e = 0.2 + r() * 0.8; b.lump(0.04, Math.cos(a) * 0.36 * Math.cos(e) * 1.1, 0.27 + Math.sin(e) * 0.3, Math.sin(a) * 0.36 * Math.cos(e), v % 3 === 0 ? '#e8564a' : '#fff6e0', { d: 0, grad: 0.3, ao: 0 }); }
@@ -378,14 +382,14 @@ export function bushModel(seed = 0, opts = {}) { const v = Math.abs(seed | 0) % 
 function flowerPatchInto(b, v) {
   const r = krng(v * 17 + 4), pal = [[0, 2], [3, 1], [4, 2], [5, 1], [0, 1]][v % 5];
   b.lump(0.2, 0, 0.04, 0, '#58b04a', { d: 0, s: [1.4, 0.4, 1.4], grad: 0.8, ao: 0.1, sw: 0.4 });
-  for (let i = 0; i < 6; i++) { const a = i * 1.05 + r() * 0.5, rr = 0.06 + r() * 0.17; flowerInto(b, Math.cos(a) * rr, 0.03, Math.sin(a) * rr, FLOWERS[pal[i % 2]], 0.95 + r() * 0.5, 0.15 + r() * 0.1); }
+  for (let i = 0; i < 5; i++) { const a = i * 1.26 + r() * 0.5, rr = 0.06 + r() * 0.17; flowerInto(b, Math.cos(a) * rr, 0.03, Math.sin(a) * rr, FLOWERS[pal[i % 2]], 1.05 + r() * 0.5, 0.15 + r() * 0.1); }
 }
 /** a patch of 6 flowers on a leaf mound */
 export function flowerPatch(seed = 0) { return smallModel(`flowers:${Math.abs(seed | 0) % 5}`, (b) => flowerPatchInto(b, Math.abs(seed | 0))); }
 /** two or three toadstools */
 export function mushroomModel(seed = 0) { const v = Math.abs(seed | 0) % 2; return smallModel(`mush:${v}`, (b) => { mushroomInto(b, 0, 0, 1, 0, v ? '#e8564a' : '#e8923a'); mushroomInto(b, 0.14, 0.08, 0.65, 0, v ? '#e8564a' : '#e8923a'); mushroomInto(b, -0.1, 0.12, 0.5, 0, '#f6d27a'); }, 0.3); }
-function stoneInto(b, v) { const c = [P.stone, '#b6b1a6', P.stoneLight][v % 3]; b.rock(0.2, 0, 0.1, 0, c, { d: 1, seed: v, s: [1.2, 0.8, 1], moss: { c: '#6b9a3a', amt: 0.8 }, ao: 0.4 }); b.rock(0.11, 0.24, 0.05, 0.1, c, { d: 0, seed: v + 3, s: [1, 0.8, 1] }); }
-export function stoneModel(seed = 0) { const v = Math.abs(seed | 0) % 3; return smallModel(`stone:${v}`, (b) => stoneInto(b, v), 0.4); }
+function stoneInto(b, v, lean) { const c = [P.stone, '#b6b1a6', P.stoneLight][v % 3]; b.rock(0.2, 0, 0.1, 0, c, { d: lean ? 0 : 1, seed: v, s: [1.2, 0.8, 1], moss: { c: '#6b9a3a', amt: 0.8 }, ao: 0.4 }); if (!lean) b.rock(0.11, 0.24, 0.05, 0.1, c, { d: 0, seed: v + 3, s: [1, 0.8, 1] }); }
+export function stoneModel(seed = 0) { const v = Math.abs(seed | 0) % 3; return smallModel(`stone:${v}`, (b) => stoneInto(b, v, false), 0.4); }
 /** a wooden picket-rail fence segment of length len along X (centred), ~0.65 tall */
 export function fenceModel(len = 2, opts = {}) {
   const n = Math.max(1, Math.round(len / 1.0)), step = len / n, c = opts.color || P.woodLight;
@@ -468,10 +472,10 @@ function treeFieldStuff(b) {
   const r = krng(11), placed = [], SP = ['oak', 'pine', 'birch', 'apple', 'oak', 'pine', 'oak'];
   let guard = 0; while (placed.length < 13 && guard++ < 400) {
     const a = r() * TAU, rr = 1.6 + r() * 1.75, x = Math.cos(a) * rr, z = Math.sin(a) * rr;
-    if (Math.hypot(x, z - 0.45) < 1.35) continue; if (Math.abs(x - 0.22 * Math.sin(z * 1.1)) < 0.85 && z > 0.2) continue; if (placed.some((p) => Math.hypot(p[0] - x, p[1] - z) < 0.98)) continue;
+    if (Math.hypot(x, z - 0.45) < 1.35 || Math.hypot(x + 1.43, z - 1.75) < 1.35 || Math.hypot(x - 1.4, z + 0.2) < 1.15 || Math.hypot(x - 0.9, z - 2.95) < 0.8) continue; if (Math.abs(x - 0.22 * Math.sin(z * 1.1)) < 0.85 && z > 0.2) continue; if (placed.some((p) => Math.hypot(p[0] - x, p[1] - z) < 0.98)) continue;
     placed.push([x, z]);
   }
-  placed.forEach(([x, z], i) => { const sp = SP[i % SP.length], v = i % 3, s = 0.82 + 0.28 * r(); b.xf(x, FY, z, s, r() * TAU, () => { treeInto(b, sp, v, i % 3 === 0 ? 0 : 1); }); b.shadow(x, z, SHADOW_R[sp] * s, 0.3, 1, 1, 0.01); });
+  placed.forEach(([x, z], i) => { const sp = SP[i % SP.length], v = i % 3, s = 0.82 + 0.28 * r(); b.xf(x, FY, z, s, r() * TAU, () => { treeInto(b, sp, v, i % 4 === 0 ? 0 : 1); }); b.shadow(x, z, SHADOW_R[sp] * s, 0.3, 1, 1, 0.01); });
 }
 
 // ---- Riverbank Clay
@@ -547,7 +551,7 @@ function rockFieldStatic(b) {
   for (const [a, rr, h, s] of [[205, 2.35, 0.4, 0.38], [335, 2.35, 0.4, 0.38], [195, 2.95, 0.78, 0.42], [345, 2.95, 0.78, 0.42], [185, 3.38, 1.16, 0.32], [355, 3.38, 1.16, 0.32]]) b.rock(s, Math.cos(a * D) * rr, FY + s * 0.4, Math.sin(a * D) * rr, '#a39f98', { d: 1, seed: a, s: [1.1, 0.9, 1.1], moss: { c: '#6b9a3a', amt: 0.7 } });
   b.shadow(0, -2.4, 2.2, 0.16, 1.5, 0.7, 0.0);
   // moss and grass on the top ledge
-  for (let i = 0; i < 9; i++) { const a = (190 + 160 * hash(i, 1)) * D; b.lump(0.2, Math.cos(a) * 3.4, FY + 1.18, Math.sin(a) * 3.4, '#6fb04a', { d: 0, s: [1.5, 0.4, 1.2], grad: 0.7, ao: 0 }); }
+  for (let i = 0; i < 7; i++) { const a = (192 + 156 * hash(i, 1)) * D; tuftInto(b, Math.cos(a) * 3.38, FY + 1.17, Math.sin(a) * 3.38, 1.1, '#6fb04a', 5, 0.8); }
   // cut stone blocks stacked near the path, a barrel, a pickaxe in a block
   b.xf(1.5, FY, 1.2, 1, 0.5, () => { b.box(0.7, 0.32, 0.45, 0, 0, 0, '#c4bfb4', { grad: 0.8, facet: 0.03 }); b.box(0.7, 0.32, 0.45, 0.02, 0.32, 0, '#b9b4a9', { r: [0, 0.1, 0], grad: 0.8 }); b.box(0.5, 0.28, 0.4, 0.8, 0, 0.1, '#bdb8ad', { r: [0, -0.2, 0], grad: 0.8 }); b.shadow(0.3, 0, 0.9, 0.25, 1.2, 0.7, 0.01);
     b.cyl(0.02, 0.025, 0.55, 0.0, 0.62, 0.0, WOOD, { seg: 5, r: [0, 0, 0.9], ao: 0 }); b.box(0.36, 0.05, 0.05, -0.2, 0.9, 0, '#6e747c', { r: [0, 0, 0.9], ao: 0, grad: 0.5 }); });
@@ -572,8 +576,8 @@ function craneHoist(b) {
   b.cyl(0.02, 0.02, 0.1, 0, -0.1, 0, '#6e747c', { seg: 5, ao: 0 });
 }
 function rockFieldStuff(b) {
-  const spots = [[1.2, 0.5, 0.9], [-1.0, -0.1, 1.1], [0.1, -1.2, 1.0], [-0.1, 1.2, 0.8], [-1.7, -1.0, 0.8]];
-  spots.forEach(([x, z, s], i) => { b.xf(x, FY, z, s * 1.35, i * 1.9, () => boulderCluster(b, i + 1, 1)); b.shadow(x, z, s * 1.2, 0.3, 1.1, 1, 0.01); });
+  const spots = [[1.35, 0.7, 0.8], [-1.2, -0.1, 0.95], [-0.4, -1.2, 0.8], [0.4, 1.3, 0.6]];
+  spots.forEach(([x, z, s], i) => { b.xf(x, FY, z, s * 1.15, i * 1.9, () => boulderCluster(b, i + 1, 1)); b.shadow(x, z, s * 1.2, 0.3, 1.1, 1, 0.01); });
 }
 function rockFieldSway(b) { const r = krng(3); for (let i = 0; i < 12; i++) { const a = r() * TAU, rr = 0.5 + r() * 2.9, x = Math.cos(a) * rr, z = Math.sin(a) * rr; if (Math.abs(x) < 0.6 && z > 0.4) continue; if (z < -1.6 && Math.abs(x) < 2.6) continue; tuftInto(b, x, FY, z, 0.9, '#8dbb55', 4, 1); } }
 
@@ -601,14 +605,15 @@ function wheatFieldStatic(b) {
   b.shadow(2.35, 1.6, 1.2, 0.25, 1.2, 1, 0.01);
   b.cyl(0.015, 0.02, 0.95, -2.5, FY, 1.6, WOOD, { seg: 5, r: [0.2, 0, 0.1], ao: 0 }); b.box(0.2, 0.03, 0.03, -2.54, FY + 0.93, 1.5, '#6e747c', { r: [0.2, 0, 0.1], ao: 0 });
   for (const [x, z] of [[-2.9, -1.0], [-2.6, 2.0], [2.9, -1.1], [0.0, 3.0], [-1.0, 3.0]]) { for (let k = 0; k < 4; k++) flowerInto(b, x + (k - 1.5) * 0.12, FY, z + hash(k, x) * 0.2, k % 2 ? '#e8564a' : '#6fb4f0', 1, 0.2); }
-  for (const [x, z] of [[-2.2, 2.2], [1.3, 2.9]]) b.xf(x, FY, z, 0.9, x, () => bushInto(b, 0, 1));
+  for (const [x, z] of [[-2.5, 2.1]]) b.xf(x, FY, z, 0.8, x, () => bushInto(b, 0, 1));
 }
 function wheatTuft(b, x, z, v, ripe) {
+  b.lump(0.2, x, FY + 0.05, z, ripe ? '#cf9f3a' : '#9bb844', { d: 0, s: [1.2, 0.55, 1.2], grad: 0.7, ao: 0, sw: 0.5, ph: hash(x * 0.7, z * 0.9) * TAU });
   const r = krng(Math.floor(x * 100 + z * 37) + v), n = 5, c0 = ripe ? '#d9ae3c' : '#b4c24a', c1 = ripe ? '#f6cc4e' : '#9bc050', ph = hash(x * 0.7, z * 0.9) * TAU;
   for (let i = 0; i < n; i++) {
     const a = r() * TAU, lean = 0.05 + r() * 0.22, h = 0.62 + r() * 0.22, bx = x + Math.cos(a) * 0.07, bz = z + Math.sin(a) * 0.07, dx = Math.sin(lean) * Math.sin(a), dy = Math.cos(lean), dz = Math.sin(lean) * Math.cos(a);
-    b.add(G.cyl(0, 3, true), { p: [bx, FY, bz], s: [0.034, h, 0.034], r: [lean, a, 0], c: c0, grad: 0.7, ao: 0.25, aoH: 0.3, sw: 1.2, ph });
-    b.add(G.cyl(0, 4, true), { p: [bx + dx * (h - 0.09), FY + dy * (h - 0.09), bz + dz * (h - 0.09)], s: [0.05, 0.2, 0.05], r: [lean, a, 0], c: c1, grad: 0.5, ao: 0, swc: 1.15, ph });
+    b.add(G.cyl(0, 3, true), { p: [bx, FY, bz], s: [0.05, h, 0.05], r: [lean, a, 0], c: c0, grad: 0.7, ao: 0.25, aoH: 0.3, sw: 1.2, ph });
+    b.add(G.cyl(0, 4, true), { p: [bx + dx * (h - 0.09), FY + dy * (h - 0.09), bz + dz * (h - 0.09)], s: [0.075, 0.27, 0.075], r: [lean, a, 0], c: c1, grad: 0.5, ao: 0, swc: 1.15, ph });
   }
 }
 function wheatFieldStuff(b) {   // lives inside the sway group
@@ -643,14 +648,15 @@ export function fieldModel(type, ang) {
 }
 
 // =================================================================== flags, lanterns (named animated parts)
-function flagCloth(hex, trim = '#fff2cf', w = 0.85, h = 0.52) {
-  return baked(`cloth:${hex}:${trim}:${w}`, (b) => {
-    const s = new THREE.Shape(); s.moveTo(0, h / 2); s.lineTo(w, h / 2); s.lineTo(w * 0.76, 0); s.lineTo(w, -h / 2); s.lineTo(0, -h / 2); s.closePath();
-    const g = new THREE.ExtrudeGeometry(s, { depth: 0.03, bevelEnabled: false }); g.translate(0, 0, -0.015); const p = g.attributes.position, c = new Float32Array(p.count * 3), main = col(hex), tr = col(trim), tmp = new THREE.Color();
-    for (let i = 0; i < p.count; i++) { const x = p.getX(i), y = p.getY(i); tone(main, 0.5 + y / h * 0.6, 0.6, tmp); if (x < 0.1 || Math.abs(y) > h / 2 - 0.045) tmp.copy(tr); c[i * 3] = tmp.r; c[i * 3 + 1] = tmp.g; c[i * 3 + 2] = tmp.b; }
-    g.setAttribute('color', new THREE.BufferAttribute(c, 3)); g.computeVertexNormals(); b.geo(g, 'matte', { ao: 0, sw: 0.0 });
-  });
+const CLOTH = new Map();
+function clothGeo(hex, trim = '#fff2cf', w = 0.85, h = 0.52) {
+  const k = `${hex}:${trim}:${w}:${h}`; let g = CLOTH.get(k); if (g) return g;
+  const s = new THREE.Shape(); s.moveTo(0, h / 2); s.lineTo(w, h / 2); s.lineTo(w * 0.76, 0); s.lineTo(w, -h / 2); s.lineTo(0, -h / 2); s.closePath();
+  g = new THREE.ExtrudeGeometry(s, { depth: 0.03, bevelEnabled: false }); g.translate(0, 0, -0.015); const p = g.attributes.position, c = new Float32Array(p.count * 3), main = col(hex), tr = col(trim), tmp = new THREE.Color();
+  for (let i = 0; i < p.count; i++) { const x = p.getX(i), y = p.getY(i); tone(main, 0.5 + y / h * 0.6, 0.6, tmp); if (x < 0.1 || Math.abs(y) > h / 2 - 0.045) tmp.copy(tr); c[i * 3] = tmp.r; c[i * 3 + 1] = tmp.g; c[i * 3 + 2] = tmp.b; }
+  g.setAttribute('color', new THREE.BufferAttribute(c, 3)); g.computeVertexNormals(); CLOTH.set(k, g); return g;
 }
+const flagCloth = (hex, trim, w, h) => baked(`cloth:${hex}:${trim}:${w}:${h}`, (b) => b.geo(clothGeo(hex, trim, w, h), 'matte', { ao: 0 }));
 /** a pennant group pivoting at its pole edge, cloth extends along +X. */
 function flagGroup(name, hex, trim, w, h) { const g = instantiate(flagCloth(hex, trim, w, h)); g.name = name; g.children.forEach((m) => { m.onBeforeRender = windTick; }); return g; }
 function lanternGroup(name, scale = 1) {
@@ -663,7 +669,7 @@ function lanternGroup(name, scale = 1) {
 
 // =================================================================== 3. NOTICE BOARD
 function boardStatic(b) {
-  const stone = '#b9b2a4', wood = '#b47a45', woodD = '#8a5a3a', cork = '#d6b078';
+  const stone = '#c4bdae', wood = '#cf9658', woodD = '#a06a40', cork = '#ecca92';
   b.box(3.5, 0.15, 1.25, 0, 0, 0, stone, { grad: 0.7, ao: 0.4 }); b.box(3.1, 0.14, 0.95, 0, 0.15, 0, '#c9c2b4', { grad: 0.7, ao: 0.1 });
   const top = 0.29;
   for (const x of [-1.1, 1.1]) { b.box(0.34, 2.1, 0.34, x, top, 0, wood, { grad: 0.8, ao: 0.4, aoH: 0.5 }); b.box(0.42, 0.18, 0.42, x, top, 0, woodD, { grad: 0.5, ao: 0.1 }); b.box(0.42, 0.1, 0.42, x, top + 1.9, 0, woodD, { ao: 0 }); }
@@ -809,6 +815,7 @@ export function plazaModel(radius = 9) { const g = instantiate(baked(`plaza:${ra
 
 // =================================================================== 5. VILLAGE PLOT
 const PLOT_N = 16, PH = 8.15;   // tiles per side; centre line of the border
+const gz0 = PH + 0.02;
 function plotInto(b, hex) {
   const own = col(hex), ownL = own.clone().lerp(col('#ffffff'), 0.28), ownD = own.clone().multiplyScalar(0.72), TOP = 0.14; b.floor = TOP;
   // 16x16 grass tiles: gentle checker + painterly patches, darker near the border (cheap AO)
@@ -829,7 +836,7 @@ function plotInto(b, hex) {
     const stones = ['#c4bcae', '#b8b0a2', '#cbc3b5'];
     order.forEach((blk, bi) => {
       const sc = col(stones[bi % 3]).clone().multiplyScalar(0.96 + hash(bi, 2) * 0.08);
-      const pts2 = blk.length === 2 ? [blk[0], [(blk[0][0] + blk[1][0]) / 2, (blk[0][1] + blk[1][1]) / 2], blk[1]] : blk;
+      const pts2 = blk;
       pts2.forEach((p, pi) => {
         const nx0 = p[0], nz0 = p[1]; // outward normal = direction from the nearest point of the inner rounded square
         const cx = clamp(nx0, -R2, R2), cz = clamp(nz0, -R2, R2); let ux = nx0 - cx, uz = nz0 - cz; const ul = Math.hypot(ux, uz) || 1; if (ul < 1e-6) { ux = 0; uz = 1; } else { ux /= ul; uz /= ul; }
@@ -848,13 +855,16 @@ function plotInto(b, hex) {
       if (n % 2 === 0) b.lump(0.07, x + 0.12, 0.14 + 0.43 * sc, z + 0.05, own, { d: 0, grad: 0.4, ao: 0 }); } }
   // gate arch on the +Z side, owner colour
   { const gx = 1.45, gz = PH + 0.02;
-    for (const sx of [-1, 1]) { b.box(0.56, 0.55, 0.56, sx * gx, 0.0, gz, '#c4bcae', { grad: 0.8, ao: 0.3, aoH: 0.3 }); b.box(0.34, 1.5, 0.34, sx * gx, 0.5, gz, own, { grad: 0.8, ao: 0.2 }); b.lump(0.2, sx * gx, 2.02, gz, ownL, { d: 1, grad: 0.7, ao: 0, s: [1, 0.9, 1] }); }
+    for (const sx of [-1, 1]) { b.box(0.56, 0.55, 0.56, sx * gx, 0.0, gz, '#c4bcae', { grad: 0.8, ao: 0.3, aoH: 0.3 }); b.box(0.34, 1.5, 0.34, sx * gx, 0.5, gz, own, { grad: 0.8, ao: 0.2 }); b.lump(0.2, sx * gx, 2.02, gz, ownL, { d: 0, grad: 0.7, ao: 0, s: [1, 0.9, 1] }); }
     const rings = []; for (let i = 0; i <= 10; i++) { const t = Math.PI - i / 10 * Math.PI, x = Math.cos(t) * gx, y = 1.78 + Math.sin(t) * 0.7, nl = Math.hypot(Math.cos(t) / gx, Math.sin(t) / 0.7), nx = Math.cos(t) / gx / nl, ny = Math.sin(t) / 0.7 / nl; rings.push([[-0.11, -0.11], [0.11, -0.11], [0.11, 0.11], [-0.11, 0.11], [-0.11, -0.11]].map(([a, zo]) => ({ x: x + nx * a, y: y + ny * a, z: gz + zo, c: a > 0 ? ownL : own }))); }
     b.geo(sweepGeo(rings, { orient: 'out' }), 'matte', { ao: 0 });
-    b.lump(0.13, 0, 2.72, gz, '#ffd24a', { d: 1, grad: 0.7, ao: 0 });
+    b.lump(0.13, 0, 2.72, gz, '#ffd24a', { d: 0, grad: 0.7, ao: 0 });
     for (let i = 0; i < 4; i++) b.rock(0.19, 0.0 + (i % 2) * 0.1 - 0.05, 0.14 + 0.02, 6.9 - i * 0.85, '#d8d0be', { d: 0, s: [1.2, 0.2, 1], seed: i, grad: 0.5, ao: 0, facet: 0.03 }); }
-  // corner posts: stone foot, wooden pole, gold cap (pennants are separate named children)
-  for (const [sx, sz] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) { const x = sx * (PH + 0.12), z = sz * (PH + 0.12); b.cyl(0.26, 0.32, 0.45, x, 0, z, '#c4bcae', { seg: 8, grad: 0.8, ao: 0.3, aoH: 0.3 }); b.cyl(0.06, 0.09, 2.1, x, 0.4, z, '#a8723f', { seg: 6, grad: 0.7, ao: 0 }); b.lump(0.1, x, 2.5, z, '#ffd24a', { d: 1, grad: 0.7, ao: 0 }); }
+  // gate lantern and the three static (wind-fluttering) pennants
+  { b.cyl(0.012, 0.012, 0.2, 0, 2.18, gz0, '#4a4036', { seg: 4, ao: 0, grad: 0 }); b.box(0.18, 0.26, 0.18, 0, 1.9, gz0, '#ffe08a', { m: 'lantern', ao: 0 }); b.cyl(0.0, 0.13, 0.08, 0, 2.16, gz0, '#4a4036', { seg: 6, ao: 0 });
+    for (const [sx, sz] of [[1, -1], [1, 1], [-1, 1]]) b.add(clothGeo(own.getStyle ? '#' + own.getHexString() : hex, '#fff2cf', 1.15, 0.66), { p: [sx * (PH + 0.12) + 0.04, 2.45, sz * (PH + 0.12)], swx: 1, ao: 0 }); }
+  // corner posts: stone foot, wooden pole, gold cap
+  for (const [sx, sz] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) { const x = sx * (PH + 0.12), z = sz * (PH + 0.12); b.cyl(0.26, 0.32, 0.45, x, 0, z, '#c4bcae', { seg: 8, grad: 0.8, ao: 0.3, aoH: 0.3 }); b.cyl(0.06, 0.09, 2.1, x, 0.4, z, '#a8723f', { seg: 6, grad: 0.7, ao: 0 }); b.lump(0.1, x, 2.5, z, '#ffd24a', { d: 0, grad: 0.7, ao: 0 }); }
 }
 function arcDec(cx, cz, a0, a1, rad, seg) { const o = []; for (let i = 0; i <= seg; i++) { const a = a0 + (a1 - a0) * i / seg; o.push([cx + Math.cos(a) * rad, cz + Math.sin(a) * rad]); } return o; }
 /**
@@ -866,8 +876,7 @@ function arcDec(cx, cz, a0, a1, rad, seg) { const o = []; for (let i = 0; i <= s
 export function plotModel(colorHex = '#e8564a', toCentre) {
   const hex = col(colorHex).getHexString(), g = instantiate(baked(`plot:${hex}`, (b) => plotInto(b, '#' + hex)), { shadows: false }); g.name = 'plot';
   const own = '#' + hex;
-  [[-1, -1], [1, -1], [1, 1], [-1, 1]].forEach(([sx, sz], i) => { const f = flagGroup(i ? `flag${i + 1}` : 'flag', own, '#fff2cf', 1.15, 0.66); f.position.set(sx * (PH + 0.12), 2.45, sz * (PH + 0.12)); g.add(f); });
-  const lan = lanternGroup('gatelantern', 0.8); lan.position.set(0, 2.38, PH + 0.02); g.add(lan);
+  const f = flagGroup('flag', own, '#fff2cf', 1.15, 0.66); f.position.set(-(PH + 0.12), 2.45, -(PH + 0.12)); g.add(f);   // the other three pennants flutter in the wind shader
   if (toCentre != null) { const d = typeof toCentre === 'number' ? { x: Math.cos(toCentre), z: Math.sin(toCentre) } : toCentre; g.rotation.y = Math.round(Math.atan2(d.x, d.z) / (Math.PI / 2)) * (Math.PI / 2); }
   g.userData.top = TOP_Y; return g;
 }
@@ -880,7 +889,7 @@ const TOP_Y = 0.14;
  * USES InstancedMesh: one per species/variant (trees: 8, bushes 3, tufts 4, flowers 5, mushrooms 2, stones 3 = about 25 draw calls). Returns { name: triangles }.
  */
 export function scatter(group, rng, o = {}) {
-  const R = o.R || 66, shore = o.shore || (() => R), hy = o.heightAt || (() => 0), free = o.isFree || isFree, n = { trees: 100, bushes: 58, tufts: 420, flowers: 34, mushrooms: 14, stones: 40, ...(o.counts || {}) };
+  const R = o.R || 66, shore = o.shore || (() => R), hy = o.heightAt || (() => 0), free = o.isFree || isFree, n = { trees: 110, bushes: 46, tufts: 340, flowers: 34, mushrooms: 14, stones: 40, ...(o.counts || {}) };
   const stats = {}, add = (name, entries) => { let t = 0; for (const [e, items, opt] of entries) { const im = instancedFrom(e, items, opt); if (!im) continue; im.name = name; group.add(im); t += (e.tris || 0) * items.length; } stats[name] = Math.round(t); };
   const grid = new Map(), taken = (x, z, rr) => { const cx = Math.floor(x / rr), cz = Math.floor(z / rr); for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) { const l = grid.get((cx + i) + ',' + (cz + j)); if (l) for (const p of l) if (Math.hypot(p[0] - x, p[1] - z) < rr) return true; } const k = cx + ',' + cz; (grid.get(k) || grid.set(k, []).get(k)).push([x, z]); return false; };
   const pick = (cond, tries = 4000) => { for (let i = 0; i < tries; i++) { const th = rng() * TAU, s = shore(th), c = cond(th, s); if (c) return c; } return null; };
@@ -894,8 +903,8 @@ export function scatter(group, rng, o = {}) {
   { const sp = spots(n.bushes, 2, 48, 0.8), by = split(sp, 3); add('bushes', by.map((it, v) => [baked(`bush:${v}:1`, (b) => bushInto(b, v, 1)), it, { seed: v }])); }
   { const sp = spots(n.tufts, 0.5, 60, 0.3).map((p) => ({ ...p, s: 0.8 + rng() * 0.9 })), by = split(sp, 4); add('tufts', by.map((it, v) => [baked(`tuft:${v}`, (b) => tuftClump(b, v)), it, { cast: false, seed: v, tint: 0.1 }])); }
   { const sp = spots(n.flowers, 2, 56, 0.9), by = split(sp, 5); add('flowers', by.map((it, v) => [baked(`flowers:${v}`, (b) => flowerPatchInto(b, v)), it, { cast: false, seed: v, tint: 0.03 }])); }
-  { const sp = spots(n.mushrooms, 2, 15, 0.8), by = split(sp, 2); add('mushrooms', by.map((it, v) => [baked(`mush:${v}`, (b) => { mushroomInto(b, 0, 0, 1, 0, v ? '#e8564a' : '#e8923a'); mushroomInto(b, 0.14, 0.08, 0.65, 0, v ? '#e8564a' : '#e8923a'); mushroomInto(b, -0.1, 0.12, 0.5, 0, '#f6d27a'); }), it, { seed: v }])); }
-  { const sp = spots(n.stones, 1, 56, 0.8), by = split(sp, 3); add('stones', by.map((it, v) => [baked(`stone:${v}`, (b) => stoneInto(b, v)), it, { seed: v }])); }
+  { const sp = spots(n.mushrooms, 2, 15, 0.8), by = split(sp, 2); add('mushrooms', by.map((it, v) => [baked(`mushL:${v}`, (b) => { mushroomInto(b, 0, 0, 1, 0, v ? '#e8564a' : '#e8923a', false); mushroomInto(b, 0.14, 0.08, 0.65, 0, v ? '#e8564a' : '#e8923a', false); }), it, { seed: v }])); }
+  { const sp = spots(n.stones, 1, 56, 0.8), by = split(sp, 3); add('stones', by.map((it, v) => [baked(`stoneL:${v}`, (b) => stoneInto(b, v, true)), it, { seed: v }])); }
   stats.total = Object.values(stats).reduce((a, b) => a + b, 0); return stats;
 }
 
@@ -903,10 +912,10 @@ export function scatter(group, rng, o = {}) {
 const shoreOf = (R, th) => R * (1 + 0.035 * Math.sin(3 * th + 0.7) + 0.025 * Math.sin(5 * th + 2.1) + 0.02 * Math.sin(9 * th + 0.3) + 0.01 * Math.sin(17 * th + 1.3));
 const ridgeAmp = (th) => 0.5 * (0.6 + 0.8 * vn(th * 6 + 3, 1.7));
 const heightOf = (R) => (x, z) => { const r = Math.hypot(x, z), th = Math.atan2(z, x), d = shoreOf(R, th) - r; if (d > 12) return 0; return ridgeAmp(th) * sstep(12, 6, d) - 0.85 * sstep(2.5, 0, d); };
-const STRATA = [ // y, radius factor, colour, noise group
-  [0.0, 1.0, '#8fcb55', 0], [-0.28, 0.997, '#6aa042', 0], [-0.31, 0.996, '#6b4426', 1], [-1.2, 0.99, '#7d5230', 1], [-1.23, 0.99, '#c28a52', 2], [-2.3, 0.984, '#b97c48', 2],
-  [-2.33, 0.978, '#d6ad72', 3], [-3.3, 0.972, '#c99f66', 3], [-3.33, 0.965, '#9a948c', 4], [-4.5, 0.955, '#8a847c', 4], [-4.53, 0.945, '#cfa874', 5], [-5.6, 0.93, '#bf9760', 5],
-  [-5.63, 0.915, '#7d7770', 6], [-7.5, 0.86, '#6b6560', 6], [-9.5, 0.7, '#5b5651', 7],
+const STRATA = [ // y, radius factor, colour, noise group (hard colour edges = duplicated rows)
+  [0.0, 1.0, '#8fcb55', 0], [-0.3, 0.998, '#6aa042', 0], [-0.33, 0.998, '#6f4829', 1], [-1.1, 0.996, '#7d5230', 1], [-1.13, 0.996, '#c28a52', 2], [-2.3, 0.993, '#b97c48', 2],
+  [-2.33, 0.991, '#dcb47a', 3], [-3.4, 0.989, '#cfa56c', 3], [-3.43, 0.987, '#9a948c', 4], [-4.7, 0.983, '#8a847c', 4], [-4.73, 0.98, '#d3ad78', 5], [-5.9, 0.972, '#bf9760', 5],
+  [-5.93, 0.96, '#7d7770', 6], [-7.8, 0.92, '#6b6560', 6], [-10, 0.78, '#5b5651', 7],
 ];
 const SEA_ROWS = [[-4, '#8fe3dc'], [0, '#8fe3dc'], [1.6, '#74d8e4'], [4, '#58c6ec'], [8, '#44b3e4'], [15, '#38a4dc'], [28, '#2f98d4'], [50, '#2a8ccb'], [90, '#2680c0'], [160, '#2478b8'], [300, '#2474b2'], [420, '#2474b2']];
 function addFx(m, fragment, extraUniforms) {
@@ -917,7 +926,7 @@ function addFx(m, fragment, extraUniforms) {
   m.customProgramCacheKey = () => 'hvfx' + fragment.length; return m;
 }
 let _foamMat, _fallMat, _seaMat;
-const foamMat = () => _foamMat ||= addFx(new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, depthWrite: false, fog: true }), 'diffuseColor.a *= 0.72 + 0.28 * sin( vF.x * 5.0 - uWindT * 1.5 + vF.y * 9.0 );');
+const foamMat = () => _foamMat ||= addFx(new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, depthWrite: false, fog: true, side: THREE.DoubleSide }), 'diffuseColor.a *= 0.72 + 0.28 * sin( vF.x * 5.0 - uWindT * 1.5 + vF.y * 9.0 );');
 const fallMat = () => _fallMat ||= addFx(new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.88, side: THREE.DoubleSide, fog: true }), 'float sf = sin( vF.x * 38.0 ) * sin( vF.y * 1.7 - uWindT * 4.5 ); diffuseColor.rgb = mix( diffuseColor.rgb, vec3( 1.0 ), 0.4 * smoothstep( 0.15, 1.0, sf ) );');
 const seaMaterial = () => _seaMat ||= (() => { const m = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.3, metalness: 0.1 });
   m.onBeforeCompile = (sh) => { sh.uniforms.uWindT = WIND; sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec2 vSea;').replace('#include <begin_vertex>', '#include <begin_vertex>\nvSea = (modelMatrix * vec4( position, 1.0 )).xz;');
