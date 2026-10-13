@@ -15,6 +15,7 @@ import type { World } from '../../shared/world';
 import { squash } from './farmers';
 import type { EntView } from './views';
 import { overlay3d } from './view3d-bridge';
+import { settings } from '../settings';
 
 type Img = Phaser.GameObjects.Image;
 type Spr = Phaser.GameObjects.Sprite;
@@ -142,13 +143,16 @@ export class BuildViews {
     /** A chest with something in it wears a thin bar at its foot: how full it is, green then gold then red (so a full chest is seen from afar, before a drill backs up). */
     private refreshGauge (v: EntView, b: BuildE) {
         const f = fillOf(b);
-        const w = Math.max(1, Math.round(f * 10)), key = `${w}`;
+        const w = Math.max(1, Math.round(f * 10)), key = `${w}${settings.marks ? 'm' : ''}`;
         if (f <= 0) { v.gauge?.forEach((i) => i.destroy()); v.gauge = undefined; v.gaugeKey = undefined; return; }
         if (v.gaugeKey === key) return;
         v.gaugeKey = key;
         const s = this.scene, y = v.y + 3, depth = v.y + 0.5;
         if (!v.gauge) v.gauge = [overlay3d(s.add.image(v.x, y, 'px').setDisplaySize(12, 4).setTint(PAL.ink).setDepth(depth)), overlay3d(s.add.image(v.x - 5, y, 'px').setOrigin(0, 0.5).setDepth(depth + 0.01))];
         v.gauge[1].setDisplaySize(w, 2).setTint(fillColor(f));
+        // with shape marks on, notches at 70% and 90% stand where the colour changes
+        if (settings.marks) { v.gauge[2] ??= overlay3d(s.add.image(v.x - 5 + 7, y, 'px').setOrigin(0, 0.5).setDisplaySize(1, 4).setTint(PAL.ink).setDepth(depth + 0.02)); v.gauge[3] ??= overlay3d(s.add.image(v.x - 5 + 9, y, 'px').setOrigin(0, 0.5).setDisplaySize(1, 4).setTint(PAL.ink).setDepth(depth + 0.02)); }
+        else if (v.gauge.length > 2) { v.gauge.splice(2).forEach((i) => i.destroy()); }
     }
 
     /** A potluck table shows what is on it: a clean runner and a little icon of each dish (up to four), side by side. */
