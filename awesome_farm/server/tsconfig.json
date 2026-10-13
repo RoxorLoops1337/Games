@@ -16,6 +16,7 @@
     "exclude": [
         "../tests/art.test.ts",
         "../tests/haptics.test.ts",
+        "../tests/settings.test.ts",
         "../tests/compare.test.ts",
         "../tests/chain.test.ts",
         "../tests/keyboard.test.ts",
