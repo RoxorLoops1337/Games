@@ -410,5 +410,19 @@ export function beehive(_o: BOpts): Model<BuildE> {
         update(_dt: number, t: number) { bees.update(t, on); },
     };
 }
+export function museum(_o: BOpts): Model<BuildE> {
+    const root = new THREE.Group();
+    root.add(bake('work.museum', (mb) => {
+        const b = mb.main;
+        b.box(1.8, 0.4, 0.8, wc(0.7), { y: 0.2, j: 0.012 });
+        b.box(1.6, 0.04, 0.6, 0x2f4f8c, { y: 0.42, ao: false });
+        b.box(1.7, 0.03, 0.7, 0xcdf3fa, { y: 0.75, ao: false });
+        for (const x of [-0.82, 0.82]) for (const z of [-0.32, 0.32]) b.box(0.05, 0.36, 0.05, wc(0.55), { x, y: 0.58, z, j: 0.004 });
+        b.ico(0.12, 0, 0xff6b5c, { x: -0.5, y: 0.55, sy: 0.9, j: 0.01 });
+        b.ico(0.14, 0, 0xffd966, { x: 0, y: 0.56, sy: 0.7, j: 0.01 });
+        b.ico(0.1, 0, 0x6cc0d8, { x: 0.5, y: 0.55, sy: 1.2, j: 0.01 });
+    }));
+    return { obj: root };
+}
 export const SL1 = 0x7a7f9e;
-export const CRAFT = { workbench, anvil, kitchen, loom, alchemy, furnace, sawmill, millstone, fishpond, beehive };
+export const CRAFT = { workbench, anvil, kitchen, loom, alchemy, furnace, sawmill, millstone, fishpond, beehive, museum };

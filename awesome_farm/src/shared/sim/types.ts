@@ -303,6 +303,7 @@ export interface PlayerS {
     /** The last few completed trades, newest first (sim/trade.ts): the day, who with, what you gave and what you got. Private, saved. */
     tlog?: { d: number; w: string; gave: string; got: string }[];
     left?: { t: number; d: number };   // when this farmer last left (world time and day): the welcome-back digest reads it (sim/digest.ts)
+    museum?: ItemId[];       // the kinds this farmer has put in the museum (sim/museum.ts)
     fav?: ItemId[];          // starred items: Quick stack, Put all and the like never move them (sim/stash.ts)
     ride?: number;           // while riding your companion: the speed multiplier (public; sim/bond.ts cmdRide)
     petSeq?: number;
