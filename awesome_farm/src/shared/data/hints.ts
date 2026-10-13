@@ -128,6 +128,11 @@ export const HINTS: Hint[] = [
         text: () => 'Press E next to your companion to pet it: it grows fonder, and a fond one digs up a gift each day (guide: H).',
     },
     {
+        id: 'needs', icon: 'k_flag', color: PAL.pumpkin,
+        when: (c) => c.me.stats.built >= 12,
+        text: () => 'Your farm is getting big: press T to see what needs you (ripe crops, machines out of fuel, full chests) and ping the nearest one.',
+    },
+    {
         id: 'stash', icon: 'k_bag', color: PAL.sand,
         when: (c) => c.me.stats.built > 0 && Object.values(c.me.inv).reduce((a, n) => a + (n ?? 0), 0) >= 80,
         text: () => 'Pockets filling up? Press O near your chests to quick stack: it puts things where they already live. Hover an item and press F to star it so it always stays with you.',
