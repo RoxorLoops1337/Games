@@ -403,9 +403,16 @@ function syncWorkers (sim: Sim, crits: CritE[]) {
     for (const [key, c] of have) if (!wanted.has(key) && sim.s.ents[c.id]) { dropLoad(sim, c); sim.remove(c.id); crits.splice(crits.indexOf(c), 1); }
 }
 
+/** Is this worker's shift over (it only works by day or only by night)? */
+export const offShift = (sim: Sim, pet: Pet) => !!pet.sh && (sim.s.night ? 'night' : 'day') !== pet.sh;
+
 function workerStep (sim: Sim, c: CritE, dt: number) {
     const owner = c.owner ? sim.s.players[c.owner] : undefined;
     const pet = owner && c.pid ? findPet(owner, c.pid) : undefined;
+    if (owner && pet && offShift(sim, pet)) {                                          // off shift: resting where it stands
+        c.vx = 0; c.vy = 0; c.ac = 'idle'; if (pet.post) c.ws = 'idle'; sim.touch(c);
+        return;
+    }
     if (owner && pet?.post) { jobs.postStep(sim, c, owner, pet, dt); return; }       // a standing job at an island or a machine
     const den = c.den ? sim.s.ents[c.den] : undefined;
     if (!owner || !pet || !den || den.k !== 'bld') { sim.remove(c.id); return; }
@@ -684,6 +691,12 @@ export function cmdPet (sim: Sim, p: PlayerS, c: Extract<Cmd, { t: 'pet' }>) {
             if (p.comp === pet.id) p.comp = undefined;
             sim.give(p, 'coin', 3 * pet.lv);
             sim.float(p.x, p.y - 24, `${pet.name} went back to the wild`, PAL.cream, p.id);
+            return;
+        }
+        case 'shift': {
+            const next = pet.sh === undefined ? 'day' : pet.sh === 'day' ? 'night' : undefined;
+            pet.sh = next;
+            sim.float(p.x, p.y - 26, `${pet.name}: ${next ? `${next} shift only` : 'works round the clock'}`, PAL.cream, p.id);
             return;
         }
         case 'rename': {

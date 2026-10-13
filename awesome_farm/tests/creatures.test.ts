@@ -7,7 +7,7 @@ import { AWAKENINGS, SIGNATURE_EVERY, BREED_SECS, breedOffspring, catchChance, P
 import { SPROUTS } from '../src/shared/data/look';
 import { GIVERS } from '../src/shared/data/sidequests';
 import { Rng } from '../src/shared/rng';
-import { breedTime, cmdPet, petsOf, rosterCap, workSlots } from '../src/shared/sim/creatures';
+import { breedTime, cmdPet, offShift, petsOf, rosterCap, workSlots } from '../src/shared/sim/creatures';
 import { Sim } from '../src/shared/sim/sim';
 import { countOf } from '../src/shared/sim/stats';
 import type { BuildE, CritE, MobE, NodeE } from '../src/shared/sim/types';
@@ -398,4 +398,22 @@ test('a companion fires its signature move on every fourth strike', () => {
     assert.equal(onStrike(sim, c, p, m, 1), true);
     assert.ok((m.stun ?? 0) > 1, 'frost freezes the target');
     assert.equal(c.sg, 0, 'the count starts over');
+});
+
+test('a worker on the night shift rests by day, and the shift button cycles day, night, round the clock', () => {
+    const { sim, p } = yard('SHIFT-1');
+    const pt = pet('fuzzle');
+    p.pets = [pt];
+    cmdPet(sim, p, { t: 'pet', op: 'shift', pet: pt.id });
+    assert.equal(pt.sh, 'day');
+    cmdPet(sim, p, { t: 'pet', op: 'shift', pet: pt.id });
+    assert.equal(pt.sh, 'night');
+    sim.s.night = false;
+    assert.equal(offShift(sim, pt), true, 'daytime is off shift for a night worker');
+    sim.s.night = true;
+    assert.equal(offShift(sim, pt), false);
+    cmdPet(sim, p, { t: 'pet', op: 'shift', pet: pt.id });
+    assert.equal(pt.sh, undefined);
+    sim.s.night = false;
+    assert.equal(offShift(sim, pt), false, 'no shift: always on');
 });

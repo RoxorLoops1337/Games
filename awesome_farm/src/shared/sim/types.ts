@@ -448,7 +448,7 @@ export type Cmd =
     | { t: 'towerpick'; id: number; i: number }
     /** Mend a hurt wall, doorway or tower for materials (sim/defense.ts `cmdRepair`). */
     | { t: 'towerrepair'; id: number }
-    | { t: 'pet'; op: 'companion' | 'rest' | 'assign' | 'unassign' | 'feed' | 'release' | 'rename' | 'awaken' | 'task' | 'post' | 'order'; pet: string; den?: number; item?: ItemId; name?: string; task?: WorkKind | null; at?: { plot?: number; job?: WorkKind; bld?: number }; rcp?: string; n?: number }
+    | { t: 'pet'; op: 'companion' | 'rest' | 'assign' | 'unassign' | 'feed' | 'release' | 'rename' | 'awaken' | 'task' | 'post' | 'order' | 'shift'; pet: string; den?: number; item?: ItemId; name?: string; task?: WorkKind | null; at?: { plot?: number; job?: WorkKind; bld?: number }; rcp?: string; n?: number }
     | { t: 'rift'; op: 'launch'; id: number; tier: number; omens?: string[]; daily?: boolean }
     | { t: 'rift'; op: 'pick'; i: number }
     | { t: 'rift'; op: 'leave' }

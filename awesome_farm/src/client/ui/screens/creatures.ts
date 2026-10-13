@@ -100,7 +100,7 @@ export class CreatureScreen implements Screen {
         this.foot = w.footer({
             primary: { label: 'Give a job…', w: 150, onClick: () => this.job() },
             extras: [{ label: 'Call home', w: 120, onClick: () => this.pet('unassign') }, { label: 'Awaken', w: 130, onClick: () => { const p = this.cur(); if (p) ctx.send({ t: 'pet', op: 'awaken', pet: p.id }); } }, { label: 'Take along', w: 130, style: STYLES.lime, onClick: () => this.pet('companion') }],
-            secondary: [{ label: 'Rename', w: 100, onClick: () => this.rename() }, { label: 'Release', w: 100, style: STYLES.berry, onClick: () => this.pet('release') }],
+            secondary: [{ label: 'Day/Night', w: 100, onClick: () => { const p = this.cur(); if (p) ctx.send({ t: 'pet', op: 'shift', pet: p.id }); } }, { label: 'Rename', w: 100, onClick: () => this.rename() }, { label: 'Release', w: 100, style: STYLES.berry, onClick: () => this.pet('release') }],
             hint: '',
         });
         this.btns = { job: this.foot.primary!, unassign: this.foot.extras[0], awaken: this.foot.extras[1], companion: this.foot.extras[2], rename: this.foot.secondary[0], release: this.foot.secondary[1] };
