@@ -219,9 +219,37 @@ export class Game {
         try { await this.fightView.warm(); } catch (e) { console.warn('warm', e && e.message); }
         finally { this.warming = false; this.post.setScene(sc); if (this.scene !== 'fight') { try { this.post.render(0, 0); } catch (e) { /* the loop redraws */ } } }   // put the hub back on the canvas before the next paint
       }
+      if (!this.noJit) await this.jitWarm(this._pwNow ? 120 : 200);
       this.warmMs = Math.round(performance.now() - t0); this._pwDone = true;
       this.onWarmed && this.onWarmed();
     })());
+  }
+
+  /**
+   * JIT warm-up: V8 compiles Animator.update, the pose samplers and the cloth step from what they have run so far. A fight started cold runs them in the interpreter and baseline tiers
+   * (every double result boxed: 15 to 30 KB of garbage per frame in the first seconds, measured) until they tier up, and every new rig set can throw optimised code away.
+   * So the kept warm rigs (FightView.warm) walk, run, strafe, attack, get hurt and cross-fade for `frames` frames in small time slices before the first fight. Idle time only.
+   */
+  async jitWarm(frames = 200) {
+    const rigs = this.fightView && this.fightView.warmRigs; if (!rigs || !rigs.length) return;
+    const t0 = performance.now(); let n = 0; const dt = 1 / 30, atk = ['attack1', 'attack2', 'attack3'];
+    while (n < frames) {
+      const t1 = performance.now();
+      while (n < frames && performance.now() - t1 < 7) {   // 7 ms slices: the page stays responsive
+        for (let i = 0; i < rigs.length; i++) {
+          const r = rigs[i], A = r.animator, ph = n * 0.12 + i, k = (n + i * 7) % 90;
+          A.setMove(k < 20 ? 0 : k < 45 ? 1.4 : 3.4, k > 60 ? 0.5 : 0);
+          if (k === 3 || k === 50) { try { A.play(atk[(n + i) % 3]); } catch (e) { /* style without that clip */ } }
+          if (k === 30) A.hurt({ x: 0.4, z: 0.9 }, 1);
+          if (k === 70) A.setState('taunt', 0.2); else if (k === 85 && A.state !== 'move') A.setState('move', 0.2);
+          r.root.rotation.y = Math.sin(ph * 0.3); r.update(dt);
+        }
+        n++;
+      }
+      await new Promise((res) => setTimeout(res, 0));
+    }
+    for (const r of rigs) { const A = r.animator; A.setMove(0, 0); A.action = null; A.add = null; A.add2 = null; A.snapW = 0; A.state = 'move'; A.dead = false; A.hasLast = false; r.root.rotation.y = 0; try { r.update(dt); } catch (e) { /* ignore */ } }
+    this.jitMs = Math.round(performance.now() - t0);
   }
 
   /** low tier / low memory phones: the GPU copies of the OTHER scene's procedural textures are released when the resident total passes the budget, and re-uploaded

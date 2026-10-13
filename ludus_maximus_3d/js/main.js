@@ -73,7 +73,7 @@ const fpsCap = (now) => {
 const dyn = createDynamicRes(post, { onTierDemote() { const order = ['high', 'medium', 'low']; const i = order.indexOf(post.tier); if (i < order.length - 1) applyTier(order[i + 1]); } });
 post.setScene = (s) => { post.composer.passes[0].scene = s; };
 
-const game = new Game({ renderer, camera, post, audio, ui, tier, tex }); game.noWarm = !!q.get('nowarm');
+const game = new Game({ renderer, camera, post, audio, ui, tier, tex }); game.noWarm = !!q.get('nowarm'); game.noJit = !!q.get('nojit');
 mark('game');
 
 // ---------------------------------------------------------------- resize / orientation (coalesced into one rAF; iOS reports stale sizes right after rotation)
@@ -209,7 +209,7 @@ let loseExt = null;
 const api = {
   THREE, renderer, camera, post, game, audio, dyn, get tier() { return post.tier; }, forcedTier,
   get view() { return game.fightView || game.ensureFightView(); },
-  stats() { const i = renderer.info; return { calls: i.render.calls, triangles: i.render.triangles, geometries: i.memory.geometries, textures: i.memory.textures, programs: i.programs ? i.programs.length : 0, tier: post.tier, scale: post.scale, frames, spikes: frameStats(), decal: game.fightView && game.fightView.fx && game.fightView.fx.decalStats ? Object.assign({}, game.fightView.fx.decalStats) : null, warmMs: game.warmMs !== undefined ? game.warmMs : api.warmMs, fpsCap: PWR.cap, saver: PWR.saver, pacing: { hz: +RG.hz.toFixed(1), vsync: +RG.vsync.toFixed(2), cap: PWR.cap, hot: PWR.hot, pressure: PWR.pressure, gov: dyn.state && dyn.state() }, boot: Object.assign({}, BT), tex: ET.stats(), texQ: ET.quality(), mem: { texMB: +ET.residentMB(renderer).toFixed(1), log: game.memLog, fvBuildMs: game.fvBuildMs }, fv: !!game.fightView, cam: [camera.position.x, camera.position.y, camera.position.z].map((v) => +v.toFixed(1)), fov: +camera.fov.toFixed(1), scene: game.scene, phase: game.fightView && game.fightView.phase, shot: game.fightView && game.fightView.dir.pose.shot, lost, paused, reduced: rmApplied }; },
+  stats() { const i = renderer.info; return { calls: i.render.calls, triangles: i.render.triangles, geometries: i.memory.geometries, textures: i.memory.textures, programs: i.programs ? i.programs.length : 0, tier: post.tier, scale: post.scale, frames, spikes: frameStats(), decal: game.fightView && game.fightView.fx && game.fightView.fx.decalStats ? Object.assign({}, game.fightView.fx.decalStats) : null, warmMs: game.warmMs !== undefined ? game.warmMs : api.warmMs, fpsCap: PWR.cap, saver: PWR.saver, pacing: { hz: +RG.hz.toFixed(1), vsync: +RG.vsync.toFixed(2), cap: PWR.cap, hot: PWR.hot, pressure: PWR.pressure, gov: dyn.state && dyn.state() }, boot: Object.assign({}, BT), tex: ET.stats(), texQ: ET.quality(), mem: { texMB: +ET.residentMB(renderer).toFixed(1), log: game.memLog, fvBuildMs: game.fvBuildMs, jitMs: game.jitMs }, fv: !!game.fightView, cam: [camera.position.x, camera.position.y, camera.position.z].map((v) => +v.toFixed(1)), fov: +camera.fov.toFixed(1), scene: game.scene, phase: game.fightView && game.fightView.phase, shot: game.fightView && game.fightView.dir.pose.shot, lost, paused, reduced: rmApplied }; },
   makeDemoFight,
   startDemo(o = {}) { const F = makeDemoFight(o); api.F = F; game.setScene('fight'); return game.fightView.start(F, o); },   // setScene builds the FightView on demand
   // deterministic stepping for screenshots (headless software GL is slow): advance N frames of dt

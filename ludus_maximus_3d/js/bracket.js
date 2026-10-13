@@ -76,19 +76,21 @@ const CSS = `
 .vs3-bar{position:absolute;left:0;right:0;height:calc(11vh + var(--lx-sat,0px));background:linear-gradient(180deg,#0b0713,rgba(11,7,19,.0));}
 .vs3-bar.t{top:0}.vs3-bar.b{bottom:0;transform:rotate(180deg);height:calc(13vh + var(--lx-sab,0px))}
 .vs3-half{position:absolute;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:5px;padding:0 12px 6px;box-sizing:border-box}
-.vs3-half.a{left:0;top:15vh;width:56%;bottom:36vh;animation:vs3-l .6s cubic-bezier(.2,.9,.25,1.1) both}
-.vs3-half.b{right:0;top:36vh;width:56%;bottom:15vh;animation:vs3-r .6s .14s cubic-bezier(.2,.9,.25,1.1) both}
+.vs3-half.a{left:0;top:13vh;width:56%;bottom:40vh;align-items:flex-start;text-align:left;animation:vs3-l .6s cubic-bezier(.2,.9,.25,1.1) both}
+.vs3-half.b{right:0;top:40vh;width:56%;bottom:13vh;align-items:flex-end;text-align:right;animation:vs3-r .6s .14s cubic-bezier(.2,.9,.25,1.1) both}
 @keyframes vs3-l{from{transform:translateX(-110%)}to{transform:none}}@keyframes vs3-r{from{transform:translateX(110%)}to{transform:none}}
 .vs3-bg{position:absolute;inset:0;z-index:-1;background:linear-gradient(100deg,rgba(18,12,30,.82),color-mix(in srgb,var(--tc) 22%,rgba(18,12,30,.7)) 60%,rgba(18,12,30,0));clip-path:polygon(0 0,100% 0,88% 100%,0 100%);box-shadow:inset 0 -3px 0 var(--tc)}
 .vs3-half.b .vs3-bg{background:linear-gradient(260deg,rgba(18,12,30,.82),color-mix(in srgb,#c2392f 22%,rgba(18,12,30,.7)) 60%,rgba(18,12,30,0));clip-path:polygon(12% 0,100% 0,100% 100%,0 100%);box-shadow:inset 0 3px 0 #c2392f}
-.vs3-busts{display:flex;align-items:flex-end;justify-content:center;gap:4px;flex:1 1 0;min-height:0;width:100%;padding-top:8px;box-sizing:border-box}
+.vs3-half.a .vs3-busts{justify-content:flex-start}.vs3-half.b .vs3-busts{justify-content:flex-end}
+.vs3-busts{display:flex;align-items:flex-end;gap:4px;flex:1 1 0;min-height:0;width:100%;padding-top:8px;box-sizing:border-box}
 .vs3-bust{height:100%;max-height:min(40vh,290px);width:auto;max-width:calc(50% - 2px);aspect-ratio:192/232;object-fit:cover;object-position:50% 20%;border-radius:46% 46% 8px 8px/30% 30% 8px 8px;box-shadow:inset 0 0 0 3px var(--tc),0 6px 18px rgba(0,0,0,.6);background:#2a2540;min-width:0}
 .vs3-busts>.vs3-bust:only-child{max-width:80%}
 .vs3-half.b .vs3-bust{box-shadow:inset 0 0 0 3px #c2392f,0 6px 18px rgba(0,0,0,.6)}
-.vs3-nm{font:900 clamp(18px,6vw,34px)/1.05 var(--lx-serif,Georgia,serif);letter-spacing:.07em;text-transform:uppercase;color:var(--tc);text-shadow:0 2px 0 #000,0 0 18px rgba(0,0,0,.8);text-align:center;max-width:100%;overflow-wrap:anywhere}
+.vs3-nm,.vs3-sub{max-width:calc(100% - 38px)}
+.vs3-nm{font:900 clamp(17px,5.4vw,34px)/1.05 var(--lx-serif,Georgia,serif);letter-spacing:.07em;text-transform:uppercase;color:var(--tc);text-shadow:0 2px 0 #000,0 0 18px rgba(0,0,0,.8);overflow-wrap:anywhere}
 .vs3-half.b .vs3-nm{color:#ff9d8f}
-.vs3-sub{font:700 clamp(10px,2.8vw,13px)/1.2 var(--lx-sans,system-ui);letter-spacing:.14em;text-transform:uppercase;opacity:.9;text-align:center;text-shadow:0 1px 3px #000}
-.vs3-seal{position:absolute;left:50%;top:50%;width:clamp(74px,22vw,110px);height:clamp(74px,22vw,110px);margin:calc(clamp(74px,22vw,110px) / -2) 0 0 calc(clamp(74px,22vw,110px) / -2);border-radius:50%;display:grid;place-items:center;z-index:3;background:radial-gradient(circle at 35% 30%,#ffe08a,#c98e24 60%,#6a4210);box-shadow:0 0 0 4px #3b1a08,0 0 36px rgba(242,193,78,.85),inset 0 0 0 3px rgba(255,255,255,.35);animation:vs3-seal .7s .35s cubic-bezier(.3,1.9,.5,1) both}
+.vs3-sub{font:700 clamp(10px,2.8vw,13px)/1.2 var(--lx-sans,system-ui);letter-spacing:.14em;text-transform:uppercase;opacity:.9;text-shadow:0 1px 3px #000}
+.vs3-seal{position:absolute;left:50%;top:50%;width:clamp(64px,18vw,104px);height:clamp(64px,18vw,104px);margin:calc(clamp(64px,18vw,104px) / -2) 0 0 calc(clamp(64px,18vw,104px) / -2);border-radius:50%;display:grid;place-items:center;z-index:3;background:radial-gradient(circle at 35% 30%,#ffe08a,#c98e24 60%,#6a4210);box-shadow:0 0 0 4px #3b1a08,0 0 36px rgba(242,193,78,.85),inset 0 0 0 3px rgba(255,255,255,.35);animation:vs3-seal .7s .35s cubic-bezier(.3,1.9,.5,1) both}
 .vs3-seal b{font:900 clamp(30px,9vw,46px)/1 var(--lx-serif,Georgia,serif);color:#3b1a08;text-shadow:0 1px 0 rgba(255,255,255,.5)}
 @keyframes vs3-seal{from{transform:scale(3.2) rotate(-25deg);opacity:0}to{transform:none;opacity:1}}
 .vs3-flash{position:absolute;inset:0;background:#fff;opacity:0;animation:vs3-fl .5s .38s ease-out both;z-index:4}

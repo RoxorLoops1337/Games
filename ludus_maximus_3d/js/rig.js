@@ -347,29 +347,44 @@ export function mirrorPose(p) {
 // ---------------------------------------------------------------- keyframed clips
 // keys: [{t:seconds, p:sparsePose|'guard', e:easeName (arrival easing)}]. Unspecified joints inherit the previous key.
 // A clip is {name, dur, loop, hold, mask:'full'|'upper', additive, events:[{t,name}], sample(t,P)}.
+// PERF: every clip is an instance of ONE class with a fixed set of fields and ONE shared sample() on the prototype. Clips used to be object literals whose shape depended on the options
+// (4 hidden classes) with a fresh sample closure each (195 distinct call targets per rig set); attack clips even replaced sample on the instance. That polymorphism made V8 throw the
+// optimised Animator.update away whenever a new fight created rigs (optimisation status flipped to "not optimised" after fight starts), and unoptimised code boxes every double.
+class Clip {
+  constructor(name, dur, full, o) {
+    this.name = name; this.dur = dur; this.loop = false; this.hold = false; this.mask = 'full'; this.additive = false; this.events = []; this.fadeIn = 0.07; this.fadeOut = 0.12;
+    this.ground = undefined; this.info = undefined; this.weapon = undefined; this.weaponTwoHand = undefined;
+    this.full = full; this.fn = null; this.lag = null;   // fn: procedural loop clip (idle / walk / run / strafe); lag: scratch Pose of an attack clip (distal joints trail the clip time)
+    if (o) for (const k in o) this[k] = o[k];
+  }
+  sample(t, P) {
+    if (this.fn !== null) return this.fn(t % this.dur, P);
+    if (this.lag === null) return this.keys(t, P);
+    const L = this.lag; this.keys(t, P); this.keys(t - 0.04 > 0 ? t - 0.04 : 0, L);   // overlapping action: distal joints trail a little (whip / follow-through)
+    for (let n = 0; n < LAG_I.length; n++) { const i = LAG_I[n], w = LAG_W[n]; for (let k = 0; k < 3; k++) { const x = P.r[i + k]; P.r[i + k] = x + (L.r[i + k] - x) * w; } }
+    return P;
+  }
+  keys(t, P) {
+    const full = this.full;
+    t = t > 0 ? t : 0; if (!this.loop && t > this.dur) t = this.dur; else if (this.loop && this.dur > 0) t = t % this.dur;
+    let i = 0; while (i < full.length - 2 && t > full[i + 1].t) i++;
+    const a = full[i], b = full[Math.min(i + 1, full.length - 1)];
+    const u = b.t > a.t ? clamp((t - a.t) / (b.t - a.t), 0, 1) : 1, k = b.e(u);
+    // PERF: keys are densified once (lazily), so sampling is one mix of two flat poses instead of two sparse applies with for-in
+    const A = a.d || (a.d = new Pose().clear().apply(a.p)), B = b.d || (b.d = new Pose().clear().apply(b.p)), g = this.ground;
+    P.clear(); if (g !== undefined) P.ground = g;
+    P.mix(A, B, k);
+    if (g !== undefined) P.ground = g;
+    return P;
+  }
+}
 export function keyClip(name, keys, o = {}, stance = null) {
   const full = []; let prev = {};
   for (const k of keys) {
     const src = k.p === 'guard' ? (stance ? stance.guard : {}) : k.p;
-    prev = Object.assign({}, prev, src); full.push({ t: k.t, p: prev, e: ease[k.e || 'inOutCubic'] });
+    prev = Object.assign({}, prev, src); full.push({ t: k.t, p: prev, e: ease[k.e || 'inOutCubic'], d: null });
   }
-  const base = new Pose();
-  const clip = Object.assign({
-    name, dur: keys[keys.length - 1].t, loop: false, hold: false, mask: 'full', additive: false, events: [], fadeIn: 0.07, fadeOut: 0.12,
-    sample(t, P) {
-      t = t > 0 ? t : 0; if (!this.loop && t > this.dur) t = this.dur; else if (this.loop && this.dur > 0) t = t % this.dur;
-      let i = 0; while (i < full.length - 2 && t > full[i + 1].t) i++;
-      const a = full[i], b = full[Math.min(i + 1, full.length - 1)];
-      const u = b.t > a.t ? clamp((t - a.t) / (b.t - a.t), 0, 1) : 1, k = b.e(u);
-      // PERF: keys are densified once (lazily), so sampling is one mix of two flat poses instead of two sparse applies with for-in
-      const A = a.d || (a.d = new Pose().clear().apply(a.p)), B = b.d || (b.d = new Pose().clear().apply(b.p));
-      P.clear(); if (o.ground !== undefined) P.ground = o.ground;
-      P.mix(A, B, k);
-      if (o.ground !== undefined) P.ground = o.ground;
-      return P;
-    },
-  }, o);
-  return clip;
+  return new Clip(name, keys[keys.length - 1].t, full, o);
 }
 
 // ---------------------------------------------------------------- attack timing tables (seconds at speed 1)
@@ -407,7 +422,7 @@ function attackClip(weapon, name, stance, poses) {
   ];
   keys[3].t = Math.min(keys[3].t, t2 - 0.01);
   const c = keyClip(name, keys, { mask: 'full', events: [{ t: t1, name: 'swing' }, { t: t1 + T.strike * 0.85, name: 'hit' }], weapon }, stance);
-  const base = c.sample, P2 = new Pose(); c.sample = function (t, P) { base.call(this, t, P); base.call(this, Math.max(0, t - 0.04), P2); for (let n = 0; n < LAG_I.length; n++) { const i = LAG_I[n], w = LAG_W[n]; for (let k = 0; k < 3; k++) { const x = P.r[i + k]; P.r[i + k] = x + (P2.r[i + k] - x) * w; } } return P; };
+  c.lag = new Pose();
   c.info = attackInfo(weapon, name); return c;
 }
 
@@ -603,7 +618,7 @@ function buildStateClips(stance, style) {
   const clips = {};
   // loop clips for debugging/sheets and for direct use (the Animator blend tree uses the same samplers)
   const cx = { armed: stance.armedArms === 0 ? 0 : 1, alert: stance.armedArms === 0 ? 0 : 0.5, stance };
-  const loop = (n, dur, fn) => { clips[n] = { name: n, dur, loop: true, hold: false, mask: 'full', additive: false, events: [], fadeIn: 0.1, fadeOut: 0.1, sample(t, P) { return fn(t % dur, P); } }; };
+  const loop = (n, dur, fn) => { const c = new Clip(n, dur, null, { loop: true, fadeIn: 0.1, fadeOut: 0.1 }); c.fn = fn; clips[n] = c; };
   loop('idle', 6.8, (t, P) => idleSample(t, P, cx)); loop('walk', 1.0, (t, P) => { gaitSample(P, t * Math.PI * 2, GAITS.walk, cx); applyArmed(P, cx, cx.armed * 0.9); return P; });
   loop('run', 0.6, (t, P) => { gaitSample(P, t / 0.6 * Math.PI * 2, GAITS.run, cx); applyArmed(P, cx, cx.armed * 0.9); return P; });
   loop('strafe', 0.8, (t, P) => strafeSample(P, t / 0.8 * Math.PI * 2, 1, cx));

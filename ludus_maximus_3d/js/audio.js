@@ -87,7 +87,8 @@ export function createAudio(opts = {}) {
       limiter.threshold.value = -3; limiter.knee.value = 0; limiter.ratio.value = 20; limiter.attack.value = 0.001; limiter.release.value = 0.09;
       clip = ctx.createWaveShaper(); const cv = new Float32Array(2049); for (let i = 0; i < cv.length; i++) cv[i] = Math.tanh((i / 1024 - 1) * 1.0); clip.curve = cv; try { clip.oversample = '2x'; } catch (e) { /* ignore */ }
       const trim = ctx.createGain(); trim.gain.value = 0.94;
-      master.connect(makeup); makeup.connect(comp); comp.connect(limiter); limiter.connect(clip); clip.connect(trim); trim.connect(ctx.destination);
+      const hp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 22; hp.Q.value = 0.6;   // DC and subsonic rumble waste headroom
+      master.connect(hp); hp.connect(makeup); makeup.connect(comp); comp.connect(limiter); limiter.connect(clip); clip.connect(trim); trim.connect(ctx.destination);
       analyser = ctx.createAnalyser(); analyser.fftSize = 1024; trim.connect(analyser); // meter tap
       musicDuck = ctx.createGain(); musicBus = ctx.createGain(); musicBus.gain.value = vol.music * MUSIC_TRIM;
       musicBus.connect(musicDuck); musicDuck.connect(master);
@@ -256,7 +257,7 @@ export function createAudio(opts = {}) {
     burst(t, 0.09, d, { f0: W.nf * (A.flesh ? 0.55 : 1), f1: 1100, q: 0.9, g: 0.8 });
     if (A.ring > 0) partials(t, hz(o, W.f * A.f), [1, 1.51, 2.37, 3.9], [0.22, 0.16, 0.1, 0.06].map((x) => x * W.ring * A.ring), W.dec * A.dec, d, 'triangle');
     if (A.thud || A.flesh) burst(t, 0.16, d, { type: 'lowpass', f0: 1500, f1: 260, g: A.flesh ? 0.85 : 0.5, kind: 'pink', a: 0.003 });
-    if (A.rattle) for (let i = 0; i < 5; i++) partials(t + 0.008 + rng() * 0.07, 2600 + rng() * 2600, [1, 2.3], [0.05, 0.03], 0.05, d, 'sine');
+    if (A.rattle) spikes(t, 0.09, d, 5, { type: 'bandpass', f0: 2600, fr: 2600, q: 3, g: 0.14, w: 0.03, t0: 0.008 });
     thump(t, hz(o, W.th), 62, 0.14 + (W.tg > 1 ? 0.06 : 0), W.tg, d);
     burst(t + 0.002, 0.2, d, { type: 'lowpass', f0: 800, f1: 180, g: 0.3, kind: 'brown', a: 0.002 });   // body
   });
@@ -315,7 +316,7 @@ export function createAudio(opts = {}) {
     burst(t, 0.11, d, { type: 'lowpass', f0: (stone ? 3000 : 1400 + 140 * k) * (o.pitch || 1), f1: 330, g: 0.75 * w, kind: 'pink', a: 0.004 });
     burst(t + sh, 0.08, d, { type: 'lowpass', f0: (stone ? 2400 : 1000) * (o.pitch || 1), f1: 280, g: 0.42 * w, kind: 'pink', a: 0.004 });
     const n = stone ? 2 : 3 + (k & 1);
-    for (let i = 0; i < n; i++) burst(t + 0.006 + rng() * 0.09, 0.028, d, { type: 'bandpass', f0: 2200 + rng() * 3200, q: 1.1, g: 0.1 + rng() * 0.07, a: 0.002 });   // sand grains
+    spikes(t, 0.1, d, n, { type: 'bandpass', f0: 2200, fr: 3200, q: 1.1, g: 0.14, w: 0.028, t0: 0.006 });   // sand grains
     thump(t, 100 * w, 55, 0.07, 0.4 * w, d);
     if (o.heavy || cur.armor === 'plate' || cur.armor === 'mail') partials(t + 0.01, 2400 + rng() * 1800, [1, 2.4], [0.04, 0.025], 0.06, d, 'sine');
   });
@@ -364,7 +365,7 @@ export function createAudio(opts = {}) {
   def('uiError', 0.3, 0.4, 1, 0.05, 0, 2, (t, d, o) => {
     [0, 0.12].forEach((dt) => { const g = G(0); env(g.gain, t + dt, 0.003, 0.4, 0.1); g.connect(d); const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 900; lp.connect(g); osc('square', hz(o, 165), t + dt, 0.14, lp); osc('square', hz(o, 165) * 1.06, t + dt, 0.14, lp); });
   });
-  def('gate', 0.6, 3.2, 3, 0.35, 0.4, 1, (t, d, o) => {
+  def('gate', 0.6, 3.8, 3, 0.35, 0.4, 1, (t, d, o) => {
     const dur = 2.6, g = G(0); g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(1, t + 0.4); g.gain.setValueAtTime(1, t + dur - 0.5); g.gain.exponentialRampToValueAtTime(0.0001, t + dur + 0.3); g.connect(d);
     const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.setValueAtTime(140, t); lp.frequency.linearRampToValueAtTime(330, t + dur); lp.Q.value = 2; lp.connect(g);
     const am = ctx.createGain(); am.gain.value = 0.6; const lf = ctx.createOscillator(); lf.frequency.value = 13; const lg = G(0.4); lf.connect(lg); lg.connect(am.gain); lf.start(t); lf.stop(t + dur + 0.4);
@@ -374,7 +375,7 @@ export function createAudio(opts = {}) {
     thump(t + dur + 0.2, 95, 50, 0.5, 0.9, d); // final slam
     burst(t + dur + 0.2, 0.3, d, { type: 'lowpass', f0: 900, f1: 150, g: 0.6, kind: 'pink' });
   });
-  def('horn', 0.75, 2.6, 3, 0.45, 0.5, 1, (t, d, o) => {
+  def('horn', 0.75, 3.1, 3, 0.45, 0.5, 1, (t, d, o) => {
     const f = hz(o, 98); // G2 cornu
     brass(d, t, f, 1.5, 0.7, { a: 0.18, rel: 0.5, bright: 0.7 });
     brass(d, t + 1.7, f * 1.5, 0.8, 0.6, { a: 0.12, rel: 0.6, bright: 0.7 }); // call and rising fifth
@@ -480,7 +481,7 @@ export function createAudio(opts = {}) {
   });
 
   // ---- hub ui hooks and ludus ambience one-shots (HUB-AUDIO). All quiet: they live under the music and the crowd.
-  def('uiHover', 1.0, 0.08, 0, 0.0, 0, 2, (t, d, o) => { const g = G(0); env(g.gain, t, 0.001, 0.3, 0.05); g.connect(d); osc('sine', hz(o, 1180), t, 0.07, g, { f1: 1500 }); });
+  def('uiHover', 1.7, 0.08, 0, 0.0, 0, 2, (t, d, o) => { const g = G(0); env(g.gain, t, 0.001, 0.3, 0.05); g.connect(d); osc('sine', hz(o, 1180), t, 0.07, g, { f1: 1500 }); });
   def('uiSelect', 0.7, 0.3, 1, 0.12, 0, 2, (t, d, o) => {   // marble tick + a rising wooden chime: a building was picked
     thump(t, 330, 190, 0.1, 0.3, d); [[0, 660], [0.06, 990]].forEach(([dt, f]) => { const g = G(0); env(g.gain, t + dt, 0.002, 0.3, 0.2); g.connect(d); osc('triangle', hz(o, f), t + dt, 0.22, g); });
   });
@@ -532,6 +533,7 @@ export function createAudio(opts = {}) {
     const v = ctx.createOscillator(), vg = ctx.createGain(); v.frequency.value = 5.5; vg.gain.value = 9; v.connect(vg); vg.connect(s1.frequency); s1.connect(e); [s1, v].forEach((x) => { x.start(t); x.stop(t + 2.0); });
     const h = G(0.25); const s2 = ctx.createOscillator(); s2.type = 'sine'; s2.frequency.setValueAtTime(b * 1.6, t); s2.frequency.exponentialRampToValueAtTime(b * 2.9, t + 0.7); s2.frequency.exponentialRampToValueAtTime(b * 2.4, t + 1.9); s2.connect(h); h.connect(e); s2.start(t); s2.stop(t + 2.0);
     burst(t, 1.8, d, { f0: 1800, q: 1.4, g: 0.05, a: 0.4, kind: 'pink' });
+    burst(t, 2.0, d, { type: 'lowpass', f0: 260, f1: 180, q: 0.8, g: 0.22, a: 0.5, kind: 'brown' });   // chest of the howl
   });
   def('beastGrowl', 0.8, 0.8, 2, 0.2, 0, 3, (t, d, o) => { const k = bk(o); growl(t, 0.55, d, (k === 2 ? 130 : k === 3 ? 75 : k === 6 ? 90 : 95) * (o.pitch || 1), 70, 0.8, { trem: 31, depth: 0.1, cut0: k === 2 ? 900 : 650, cut1: 300, q: 2.6, hold: 0.4 }); });
   def('beastHurt', 0.9, 0.7, 3, 0.18, 0, 3, (t, d, o) => {
@@ -566,7 +568,7 @@ export function createAudio(opts = {}) {
   function makeStrip() {
     const inp = G(1), wet = G(0), mg = ctx.createChannelMerger(2), outG = G(1), st = { inp, wet, mg, outG, bus: null };
     for (const [side, ch] of [['L', 0], ['R', 1]]) {
-      const d = ctx.createDelay(0.01), lp = ctx.createBiquadFilter(), g = G(0.7071); lp.type = 'lowpass'; lp.Q.value = 0.5; lp.frequency.value = 20000;
+      const d = ctx.createDelay(0.01), lp = ctx.createBiquadFilter(), g = G(1); lp.type = 'lowpass'; lp.Q.value = 0.5; lp.frequency.value = 20000;
       inp.connect(d); d.connect(lp); lp.connect(g); g.connect(mg, 0, ch); st['d' + side] = d; st['lp' + side] = lp; st['g' + side] = g;
     }
     mg.connect(outG); inp.connect(wet); wet.connect(revIn); strips.made++; return st;
@@ -618,7 +620,7 @@ export function createAudio(opts = {}) {
     const level = e.lvl * (o.gain == null ? 1 : o.gain) * gj * att * (0.55 + 0.45 * Math.pow(Math.min(1.2, vel), 0.8));
     const s = acquire(cat === 'crowd' ? crowdBus : sfxBus), pa = (sp.pan + 1) * Math.PI / 4, ap = Math.abs(sp.pan), itd = 0.00065 * ap;
     s.inp.gain.setValueAtTime(level, t); s.outG.gain.setValueAtTime(1, t); s.wet.gain.setValueAtTime(e.wet * (o.wet == null ? 1 : o.wet) * (1 + d / 18), t);
-    s.gL.gain.setValueAtTime(Math.cos(pa), t); s.gR.gain.setValueAtTime(Math.sin(pa), t);
+    s.gL.gain.setValueAtTime(Math.cos(pa) * 1.4142, t); s.gR.gain.setValueAtTime(Math.sin(pa) * 1.4142, t);   // constant power, centre = unity per ear
     s.dL.delayTime.setValueAtTime(sp.pan > 0 ? itd : 0, t); s.dR.delayTime.setValueAtTime(sp.pan < 0 ? itd : 0, t);
     const shadow = 19000 * Math.pow(0.18, ap * ap);   // head shadow darkens the far ear
     s.lpL.frequency.setValueAtTime(Math.min(fc, sp.pan > 0 ? shadow : 19000), t); s.lpR.frequency.setValueAtTime(Math.min(fc, sp.pan < 0 ? shadow : 19000), t);
@@ -737,7 +739,7 @@ export function createAudio(opts = {}) {
     return m.map((n, i) => ({ s: n.s, d: i === m.length - 1 ? 0 : i === m.length - 2 ? 1 : n.d, len: i === m.length - 1 ? 14 - n.s : n.len }));
   }
   // chord of a bar: tones near the mode's bass register, a chord-relative melody scale, and its quality
-  function setChord(p, rootF, ivs, sc, o = {}) { p.ch = { rootF, ivs, tones: chordSemi(rootF, ivs), sc, dom: !!o.dom }; }
+  function setChord(p, rootF, ivs, sc, o = {}) { p.ch = { rootF, ivs, tones: chordSemi(rootF * 2, ivs), sc, dom: !!o.dom }; }   // rootF = bass note, tones = voicing an octave above (keeps strings and brass out of the sub range)
   const melF = (p, d, oct = 2) => degFreq(p.ch.rootF * oct, p.ch.sc, d);
   const hum = (p, kind) => { const r = p.hr(), v = kind === 'perc' ? (r - 0.5) * 0.006 : kind === 'str' ? 0.004 + r * 0.014 : kind === 'brass' ? (r - 0.4) * 0.012 : kind === 'lead' ? (r - 0.35) * 0.03 : (r - 0.5) * 0.014; return Math.max(v, p.startT - p.next); };   // timing feel per section; never earlier than the player's own start
   const vv = (p, base, acc = 1) => base * (0.9 + p.hr() * 0.2) * acc;
@@ -754,12 +756,12 @@ export function createAudio(opts = {}) {
   // ---- shared pieces used by several modes ----
   // pad: sustained strings (and optionally choir) on the chord for `bars` bars
   function padChord(p, t, sp, bars, g, o = {}) {
-    const dur = sp * 16 * bars; const tones = p.ch.tones.map((f) => f * (o.oct || 2));
+    const dur = sp * 16 * bars; const tones = p.ch.tones.map((f) => f * (o.oct || 1));
     tones.forEach((f, i) => ens(p.st.pad, t, f, dur, g * (i ? 0.8 : 1), { a: o.a || 1.2, rel: 1.2, cut: o.cut || 1400 }));
     if (o.choir) choir(p.st.pad, t, tones.slice(0, 3), dur, o.choir, { a: 1.4, rel: 1.4 });
   }
   function lyreArp(p, t, s, g, idxs, o = {}) {
-    const tn = p.ch.tones, n = tn.length, k = idxs[(s >> (o.div || 1)) % idxs.length]; const f = tn[k % n] * (o.oct || 2) * (k >= n ? 2 : 1);
+    const tn = p.ch.tones, n = tn.length, k = idxs[(s >> (o.div || 1)) % idxs.length]; const f = tn[k % n] * (o.oct || 1) * (k >= n ? 2 : 1);
     pluck(p.st.lyre, t, f, g, { bright: o.bright == null ? 0.45 : o.bright, dur: o.dur || 1.6 });
   }
   function leadMotif(p, t, s, sp, bar, gain, voiceFn) {   // plays the motif note that starts on step s (if any); k from the position in the 8-bar phrase
@@ -791,7 +793,7 @@ export function createAudio(opts = {}) {
     step(p, s, t, sp) {
       const pb = p.pb, hr = hum(p, 'lyre'); tickHubTod(); const pk = 1 - 0.65 * hubTod.n, n = hubTod.n;
       const bar = p.bar;
-      if (s % 2 === 0) { const i = (s / 2) % 8, idx = [0, 1, 2, 3, 2, 1, 2, 3][i]; if (p.r() > 0.12) { lyreArp(p, t + (s % 4 === 2 ? sp * 0.18 : 0) + hr, s, vv(p, 0.2 + (s === 0 ? 0.07 : 0)), [idx], { div: 99, bright: 0.45 }); L(p, t, 'lyre'); } }
+      if (s % 2 === 0) { const i = (s / 2) % 8, idx = [0, 1, 2, 3, 2, 1, 2, 3][i]; if (p.r() > 0.12) { lyreArp(p, t + (s % 4 === 2 ? sp * 0.18 : 0) + hr, s, vv(p, 0.2 + (s === 0 ? 0.07 : 0)), [idx], { div: 0, bright: 0.45 }); L(p, t, 'lyre'); } }
       if (s === 0) pluck(p.st.low, t, p.ch.rootF, 0.24, { dur: 2.2, bright: 0.3 });
       if (p.lead && n < 0.6) leadMotif(p, t + hum(p, 'lead'), s, sp, bar, 0.13, (f, d, g) => { if (pb < 4 && curInt > 0.1 || pb >= 4) aulos(p.st.lead, t + hum(p, 'lead'), f, d, g * 0.9, { scoop: true }); });
       if (s === 0 || s === 8) frameDrum(p.st.perc, t + hum(p, 'perc'), vv(p, 0.2 * pk, s ? 0.8 : 1), { f: 100 });
@@ -823,7 +825,7 @@ export function createAudio(opts = {}) {
       if (s === 8) drumHit(p.st.perc, t, 88, vv(p, 0.55 + 0.2 * tens), { tymp: 1, dec: 0.6 });
       if (s === 10 && tens > 0.4) drumHit(p.st.perc, t, 82, 0.35, { tymp: 1, dec: 0.4 });
       if (s % 4 === 0) { const g = G(0); env(g.gain, t, 0.001, 0.07 + 0.09 * tens, 0.04); g.connect(p.st.perc); osc('sine', 1250, t, 0.05, g); }
-      if (s % 2 === 0 && tens > 0.1) { const tn = p.ch.tones; ens(p.st.str, t + hum(p, 'str'), [tn[0], tn[0], tn[0] * Math.pow(2, 1 / 12), tn[0], tn[2], tn[0], tn[0] * Math.pow(2, 1 / 12), tn[0]][(s / 2) % 8] * 2, sp * 1.6, vv(p, 0.05 + 0.1 * tens), { cut: 900 + 1500 * tens, a: 0.02 }); }
+      if (s % 2 === 0 && tens > 0.1) { const tn = p.ch.tones; ens(p.st.str, t + hum(p, 'str'), [tn[0], tn[0], tn[0] * Math.pow(2, 1 / 12), tn[0], tn[2], tn[0], tn[0] * Math.pow(2, 1 / 12), tn[0]][(s / 2) % 8], sp * 1.6, vv(p, 0.05 + 0.1 * tens), { cut: 900 + 1500 * tens, a: 0.02 }); }
       if (s === 0 && (pb === 2 || pb === 6)) brass(p.st.brass, t, p.ch.rootF * 2, sp * 14, 0.2, { a: 1.0, rel: 0.6, bright: 0.45 });
       if (s === 0 && pb % 4 === 0) padChord(p, t, sp, 4, 0.03 + 0.04 * tens, { cut: 700 + 800 * tens, choir: tens > 0.45 ? 0.05 * tens : 0 });
       if (s === 0 && pb === 0 && bar > 0) taiko(p.st.perc, t, 0.5, { f: 55 });
@@ -842,7 +844,7 @@ export function createAudio(opts = {}) {
   function arenaMode(id, cfg) {
     return {
       bpm: () => cfg.bpm0 + cfg.bpmR * curInt, tonic: NOTE(cfg.midi), scene: 'arena', cfg,
-      init(p) { p.drone = makeDrone(p, NOTE(cfg.midi - 12), 0.18); p.lastI = curInt; p.rising = 0; },
+      init(p) { p.drone = makeDrone(p, NOTE(cfg.midi - 12), 0.1); p.lastI = curInt; p.rising = 0; },
       bar(p, bar) {
         const M = MODES[id]; p.pb = bar % 8;
         if (p.pb === 0) { p.r = phraseSeed(p, Math.floor(bar / 8)); p.prog = pick(p.r, ARENA_PROGS[id]); p.motif = makeMotif(phraseSeed(p, 'm' + Math.floor(bar / 24))); p.stab = pick(p.r, cfg.tribal ? [[0, 3, 6, 8, 11, 14]] : [[0, 6, 10], [0, 3, 6, 10], [0, 4, 8, 12], [0, 7, 10, 14]]); p.ost = Array.from({ length: 8 }, () => pick(p.r, [0, 0, 0, 1, 2, 4])); p.leadOct = 2; }
@@ -870,8 +872,8 @@ export function createAudio(opts = {}) {
         }
         if (s % 2 === 0 && I > 0.62) shaker(P, t, 0.04 + 0.05 * gate(0.62, 1));
         // strings ostinato (spiccato 8ths on chord tones) and sustained high pad
-        if (s % 2 === 0) { const k = p.ost[(s / 2) % 8], f = k === 4 ? tn[2] : k === 2 ? tn[1] : k === 1 ? root * 1.0595 : root; ens(p.st.str, t + hum(p, 'str'), f * 2, sp * 1.7, vv(p, (0.07 + 0.08 * (s % 4 === 0)) * (0.3 + 0.7 * gate(0.1, 0.55))), { cut: 900 + 2600 * I, a: 0.012, rel: 0.05 }); L(p, t, 'ost'); }
-        if (s === 0 && I > 0.5 && pb % 2 === 0) padChord(p, t, sp, 2, 0.06 * gate(0.5, 0.85), { oct: 4, cut: 2400, a: 0.9, choir: I > 0.78 || cfg.chorale ? 0.07 * gate(0.65, 1) : 0 });
+        if (s % 2 === 0) { const k = p.ost[(s / 2) % 8], f = k === 4 ? tn[2] : k === 2 ? tn[1] : k === 1 ? tn[0] * 1.0595 : tn[0]; ens(p.st.str, t + hum(p, 'str'), f * 2, sp * 1.7, vv(p, (0.07 + 0.08 * (s % 4 === 0)) * (0.3 + 0.7 * gate(0.1, 0.55))), { cut: 900 + 2600 * I, a: 0.012, rel: 0.05 }); L(p, t, 'ost'); }
+        if (s === 0 && I > 0.5 && pb % 2 === 0) padChord(p, t, sp, 2, 0.06 * gate(0.5, 0.85), { oct: 2, cut: 2400, a: 0.9, choir: I > 0.78 || cfg.chorale ? 0.07 * gate(0.65, 1) : 0 });
         // low brass ostinato (cimbasso) under the drive
         if (I > 0.38 && s % 4 === 0 && (cfg.tribal || cfg.chorale)) brass(p.st.low, t, root, sp * 3.2, 0.2 * gate(0.38, 0.65), { a: 0.02, rel: 0.1, bright: 0.45 });
         // brass stabs
@@ -887,7 +889,7 @@ export function createAudio(opts = {}) {
         if (s === 0 && pb === 0 && I > 0.6) crash(p.st.fx, t, 0.14);
         if (pb === 7 && s === 0 && I > 0.55) riser(p.st.fx, t, sp * 16, 0.12 * gate(0.55, 0.9), { f: root, top: 6000 });
         if (s === 0) { if (pb % 2 === 0) pluck(p.st.lyre, t, melF(p, 4, 2), 0.1 * (1 - gate(0.3, 0.7)), { dur: 2.4, bright: 0.3 }); }
-        if (p.drone) p.drone.g.gain.setTargetAtTime(0.1 + 0.18 * I, t, 0.3);
+        if (p.drone) p.drone.g.gain.setTargetAtTime(0.07 + 0.1 * I, t, 0.3);
       },
     };
   }
@@ -936,7 +938,7 @@ export function createAudio(opts = {}) {
       if (s === 0) { setDrone(p, p.ch.rootF / 2, t); drumHit(p.st.perc, t, 62, vv(p, 0.55), { tymp: 1, dec: 1.0 }); pluck(p.st.lyre, t, p.ch.rootF, 0.2, { dur: 2.6, bright: 0.25 }); L(p, t, 'drum'); }
       if (s === 8 && bar % 2) drumHit(p.st.perc, t, 62, 0.25, { tymp: 1, dec: 0.6 });
       if (s % 4 === 0 && s) lyreArp(p, t, s, 0.09, [1, 2, 0, 2], { div: 2, bright: 0.3, dur: 2 });
-      if (s === 0 && pb % 4 === 0) brassChord(p.st.brass, t, [p.ch.tones[0], p.ch.tones[2]], sp * 28, 0.22, { a: 0.9, rel: 1.2, bright: 0.35 });
+      if (s === 0 && pb % 4 === 0) brassChord(p.st.brass, t, [p.ch.tones[0] / 2, p.ch.tones[2] / 2], sp * 28, 0.22, { a: 0.9, rel: 1.2, bright: 0.35 });
       if (s === 0 && pb % 4 === 0) padChord(p, t, sp, 4, 0.045, { cut: 700, a: 1.5 });
       leadMotif(p, t + sp * 0.5, s, sp, bar, 0.13, (f, d, g) => aulos(p.st.lead, t + sp * 0.5, f, d * 1.5, g, { a: 0.09, rel: 0.4, breath: 0.16 }));
     },
@@ -959,7 +961,7 @@ export function createAudio(opts = {}) {
       if (s === 0 && pb % 2 === 0) padChord(p, t, sp, 2, 0.05 + 0.02 * (pb >= 4), { cut: 1100 + 700 * (pb >= 4), a: 1.4, choir: pb >= 2 ? 0.045 : 0 });
       if (pb < 4 && s % 4 === 0) lyreArp(p, t + hum(p, 'lyre'), s, vv(p, 0.12), [0, 1, 2, 1], { div: 2, bright: 0.4, dur: 2.2 });
       leadMotif(p, t + hum(p, 'lead'), s, sp, bar, 0.3, (f, d, g) => { if (pb < 4) pluck(p.st.lyre, t, f * 2, g * 0.9, { dur: 2.4, bright: 0.5 }); else brass(p.st.brass, t + hum(p, 'brass'), f, d * 1.4, g * 0.9, { a: 0.05, rel: 0.25, bright: 0.8 }); });
-      if (pb >= 4 && s % 2 === 0) ens(p.st.str, t + hum(p, 'str'), tn[(s / 2) % 3] * 2, sp * 1.7, vv(p, 0.04 + 0.01 * (pb - 4)), { cut: 1700, a: 0.01 });
+      if (pb >= 4 && s % 2 === 0) ens(p.st.str, t + hum(p, 'str'), tn[(s / 2) % 3], sp * 1.7, vv(p, 0.04 + 0.01 * (pb - 4)), { cut: 1700, a: 0.01 });
       if (pb === 7 && s === 0) { riser(p.st.fx, t, sp * 16, 0.2, { f: p.ch.rootF, top: 5800 }); }
       if (pb === 0 && s === 0 && bar > 0) { impact(p.st.fx, t, 0.45); }
       if (p.drone) p.drone.g.gain.setTargetAtTime(0.16 + 0.04 * (pb >= 4), t, 0.5);
@@ -1000,8 +1002,8 @@ export function createAudio(opts = {}) {
       if (s === 0 || s === 8) drumHit(p.st.perc, t, 70, vv(p, 0.85), { tymp: 1, dec: 0.6 });
       if (s === 4 || s === 12) snare(p.st.perc, t + hum(p, 'perc'), vv(p, 0.17));
       if (s % 4 === 2) shaker(p.st.perc, t, 0.07);
-      if (s === 0 && pb % 2 === 0) { brassChord(p.st.brass, t, [tn[0], tn[2], tn[0] * 2], sp * 30, 0.3, { a: 0.25, rel: 0.7, bright: 0.8 }); padChord(p, t, sp, 2, 0.05, { oct: 2, cut: 2200, a: 0.5, choir: 0.07 }); }
-      if (s % 2 === 0) ens(p.st.str, t + hum(p, 'str'), tn[(s / 2) % 3] * 4, sp * 1.7, vv(p, 0.06), { cut: 2600, a: 0.01 });
+      if (s === 0 && pb % 2 === 0) { brassChord(p.st.brass, t, [tn[0] / 2, tn[2] / 2, tn[0]], sp * 30, 0.3, { a: 0.25, rel: 0.7, bright: 0.8 }); padChord(p, t, sp, 2, 0.05, { oct: 1, cut: 2200, a: 0.5, choir: 0.07 }); }
+      if (s % 2 === 0) ens(p.st.str, t + hum(p, 'str'), tn[(s / 2) % 3] * 2, sp * 1.7, vv(p, 0.06), { cut: 2600, a: 0.01 });
       leadMotif(p, t, s, sp, bar, 0.32, (f, d, g) => brass(p.st.brass, t + hum(p, 'brass'), f, d, g, { a: 0.025, rel: 0.12, bright: 1.0 }));
       if (s === 0 && pb === 0) crash(p.st.fx, t, 0.16, 2.4);
       if (pb === 7 && s === 0) riser(p.st.fx, t, sp * 16, 0.14, { f: p.ch.rootF, top: 6500 });
@@ -1020,7 +1022,7 @@ export function createAudio(opts = {}) {
       const pb = p.pb;
       if (s === 0 && pb % 2 === 0) { frameDrum(p.st.perc, t, 0.34, { f: 78 }); frameDrum(p.st.perc, t + sp * 3.2, 0.2 - 0.02 * pb, { f: 78 }); L(p, t, 'drum'); }
       if (s === 0 && pb % 4 === 0) padChord(p, t, sp, 4, 0.05, { cut: 800, a: 2.0 });
-      if (s === 0 && pb === 4) choir(p.st.pad, t, p.ch.tones.map((f) => f * 2).slice(0, 2), sp * 32, 0.05, { a: 2.0, rel: 2.0 });
+      if (s === 0 && pb === 4) choir(p.st.pad, t, p.ch.tones.slice(0, 2), sp * 32, 0.05, { a: 2.0, rel: 2.0 });
       if (pb % 2 === 1 || pb === 6) leadMotif(p, t + sp * 0.4, s, sp, p.bar, 0.16, (f, d, g) => aulos(p.st.lead, t + sp * 0.4, f, d * 2.2, g, { a: 0.12, rel: 0.6, breath: 0.18, scoop: true }));
       if (s === 0 && pb === 7) pluck(p.st.lyre, t, melF(p, 0, 2), 0.14, { dur: 3, bright: 0.2 });
     },
@@ -1028,11 +1030,11 @@ export function createAudio(opts = {}) {
   for (const k of Object.keys(MODES)) MODES[k].id = k;
 
   // ---- player lifecycle ----
-  const STEMS = { perc: { pan: 0, send: 0.1 }, low: { pan: 0, send: 0.06 }, str: { pan: -0.22, send: 0.26 }, brass: { pan: 0.18, send: 0.3 }, pad: { pan: 0, send: 0.4 }, lead: { pan: 0.3, send: 0.32 }, lyre: { pan: -0.35, send: 0.28 }, fx: { pan: 0, send: 0.45 } };
+  const STEMS = { perc: { pan: 0, send: 0.1, g: 0.78 }, low: { pan: 0, send: 0.06, g: 0.55 }, str: { pan: -0.22, send: 0.26, g: 1.1 }, brass: { pan: 0.18, send: 0.3, g: 1.1 }, pad: { pan: 0, send: 0.4, g: 1.1 }, lead: { pan: 0.3, send: 0.32, g: 1.15 }, lyre: { pan: -0.35, send: 0.28, g: 1.25 }, fx: { pan: 0, send: 0.45, g: 0.9 } };   // g = stem trim: the low stems are held down so the mix is not all sub
   function newPlayer(mode, t) {
     const M = MODES[mode], bus = G(0), rev = G(0); bus.connect(musicBus); rev.connect(revMusic);
     const p = { mode, M, bus, rev, st: {}, next: t, step: 0, bar: 0, startT: t, stopped: false, hr: mulberry(hash(seed, 'hum', mode)), r: mulberry(1), pb: 0 };
-    for (const [k, c] of Object.entries(STEMS)) { const g = G(1); let tail = g; if (ctx.createStereoPanner && c.pan) { const pn = ctx.createStereoPanner(); pn.pan.value = c.pan; g.connect(pn); tail = pn; } tail.connect(bus); const sd = G(c.send); g.connect(sd); sd.connect(rev); p.st[k] = g; }
+    for (const [k, c] of Object.entries(STEMS)) { const g = G(c.g); let tail = g; if (ctx.createStereoPanner && c.pan) { const pn = ctx.createStereoPanner(); pn.pan.value = c.pan; g.connect(pn); tail = pn; } tail.connect(bus); const sd = G(c.send); g.connect(sd); sd.connect(rev); p.st[k] = g; }
     M.init(p); return p;
   }
   function pump(until) {
