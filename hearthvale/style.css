@@ -232,3 +232,6 @@ button.small-b{font-size:13px;padding:4px 12px}
 .panel .x{width:44px;height:44px;min-height:44px}.panel h3{min-height:50px}
 .chip[data-f]{height:44px;padding-right:14px;font-size:16px}
 @media (max-width:640px){.chip[data-f]{height:44px}}
+
+/* Happy Light colour grade: a touch more saturation and sparkle on the 3D view (browser-composited, near free) */
+canvas#gl{filter:saturate(1.25) contrast(1.06)}

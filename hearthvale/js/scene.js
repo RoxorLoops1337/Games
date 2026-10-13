@@ -16,7 +16,15 @@ export class View {
     this.prMax = Math.min(devicePixelRatio || 1, 2); this.pr = this.prMax; this.frameMs = 16; this.frames = 0; r.setPixelRatio(this.pr); r.shadowMap.enabled = true; r.shadowMap.type = THREE.PCFSoftShadowMap;
     r.toneMapping = THREE.ACESFilmicToneMapping; r.toneMappingExposure = 1.05;
     const s = this.scene = new THREE.Scene(); s.background = new THREE.Color('#a9dcf3'); s.fog = new THREE.Fog('#bfe6f7', 70, 190);
-    this.cam = new THREE.PerspectiveCamera(42, 1, 0.5, 400);
+    this.cam = new THREE.PerspectiveCamera(42, 1, 0.5, 600);
+    // sky dome: vivid gradient from a bright horizon to a deep-blue zenith, plus a glowing sun that crosses the sky
+    this.skyU = { top: { value: new THREE.Color('#6ec6ff') }, mid: { value: new THREE.Color('#bfeaff') }, hor: { value: new THREE.Color('#f4fbff') } };
+    this.dome = new THREE.Mesh(new THREE.SphereGeometry(450, 32, 16), new THREE.ShaderMaterial({ uniforms: this.skyU, side: THREE.BackSide, depthWrite: false, fog: false, toneMapped: false,
+      vertexShader: 'varying vec3 vP; void main(){ vP = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }',
+      fragmentShader: 'uniform vec3 top; uniform vec3 mid; uniform vec3 hor; varying vec3 vP; void main(){ float h = clamp(vP.y, 0.0, 1.0); vec3 c = mix(hor, mid, smoothstep(0.0, 0.25, h)); c = mix(c, top, smoothstep(0.2, 0.9, h)); gl_FragColor = vec4(c, 1.0); }' }));
+    this.dome.renderOrder = -10; this.dome.frustumCulled = false; s.add(this.dome);
+    { const cv = document.createElement('canvas'); cv.width = cv.height = 128; const g = cv.getContext('2d'), gr = g.createRadialGradient(64, 64, 0, 64, 64, 64); gr.addColorStop(0, 'rgba(255,255,240,1)'); gr.addColorStop(0.18, 'rgba(255,240,180,0.95)'); gr.addColorStop(0.45, 'rgba(255,214,140,0.35)'); gr.addColorStop(1, 'rgba(255,200,120,0)'); g.fillStyle = gr; g.fillRect(0, 0, 128, 128);
+      this.sunGlow = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(cv), transparent: true, depthWrite: false, depthTest: false, fog: false, toneMapped: false, blending: THREE.AdditiveBlending })); this.sunGlow.scale.set(150, 150, 1); this.sunGlow.renderOrder = -9; s.add(this.sunGlow); }
     this.look = { x: 0, z: 0, dist: 34, yaw: 0.0, pitch: 0.95 }; this.goal = { ...this.look };
     const hemi = this.hemi = new THREE.HemisphereLight('#dff3ff', '#7da05a', 1.05); s.add(hemi);
     const sun = this.sun = new THREE.DirectionalLight('#fff1d0', 2.4); sun.castShadow = true; sun.shadow.mapSize.set(1536, 1536);
@@ -97,19 +105,29 @@ export class View {
     const t = (this.worldT = (this.worldT || 0) + dt);
     this.rainAmt += ((this.rainGoal || 0) - this.rainAmt) * Math.min(1, dt * 0.5); const ra = this.rainAmt;
     const ph = ((t / 360) % 1 + 1) % 1, a = (ph - 0.25) * Math.PI * 2, sn = Math.sin(a);
-    const day = Math.max(0, Math.min(1, sn * 1.5 + 0.3)), dusk = Math.max(0, 1 - Math.abs(sn) * 3.2);
-    const C = this._C || (this._C = { sky: new THREE.Color(), tmp: new THREE.Color(), night: new THREE.Color('#4a62a8'), dayC: new THREE.Color('#bfe9ff'), dusk: new THREE.Color('#ffb48a'), grey: new THREE.Color('#a9b9c8'), white: new THREE.Color('#ffffff') });
-    // sky: bright candy blue by day, soft indigo at night, peach at dawn and dusk, pearly grey in rain
-    C.sky.copy(C.night).lerp(C.dayC, day).lerp(C.dusk, dusk * 0.5).lerp(C.grey, ra * 0.55);
-    this.scene.background.copy(C.sky); this.scene.fog.color.copy(C.sky).lerp(C.white, 0.2 * day);
-    this.scene.fog.near = 90 - 45 * ra; this.scene.fog.far = 230 - 110 * ra;
-    // high-key light: strong soft fill from the hemisphere so shadows stay bright and friendly
-    this.sun.intensity = (0.8 + 1.8 * day) * (1 - 0.4 * ra); this.sun.color.set('#fff6e0').lerp(C.tmp.set('#ffb070'), dusk * 0.6).lerp(C.tmp.set('#a9bcff'), 1 - day);
-    this.hemi.intensity = 0.95 + 0.4 * day + 0.2 * ra; this.hemi.color.set('#9fb4f0').lerp(C.tmp.set('#ffffff'), day); this.hemi.groundColor.set('#8fbf6a').lerp(C.tmp.set('#a8e07a'), day);
+    // a long sunny day, a short golden dusk and a gentle bright-lavender night (never gloomy)
+    const sm = (x, e0, e1) => { const k = Math.max(0, Math.min(1, (x - e0) / (e1 - e0))); return k * k * (3 - 2 * k); };
+    const day = sm(sn, -0.3, 0.2), dusk = Math.max(0, 1 - Math.abs(sn + 0.05) * 3.4);
+    const C = this._C || (this._C = { sky: new THREE.Color(), tmp: new THREE.Color(), white: new THREE.Color('#ffffff'),
+      topD: new THREE.Color('#5fbfff'), midD: new THREE.Color('#aee6ff'), horD: new THREE.Color('#fff8ec'),
+      topN: new THREE.Color('#6f7fe0'), midN: new THREE.Color('#9aa6f2'), horN: new THREE.Color('#d6d0ff'),
+      topS: new THREE.Color('#7fa8ff'), midS: new THREE.Color('#ffb8a0'), horS: new THREE.Color('#ffe0a8'), grey: new THREE.Color('#c4d2e2') });
+    const U = this.skyU; U.top.value.copy(C.topN).lerp(C.topD, day).lerp(C.topS, dusk * 0.55).lerp(C.grey, ra * 0.5);
+    U.mid.value.copy(C.midN).lerp(C.midD, day).lerp(C.midS, dusk * 0.75).lerp(C.grey, ra * 0.6);
+    U.hor.value.copy(C.horN).lerp(C.horD, day).lerp(C.horS, dusk * 0.85).lerp(C.grey, ra * 0.65);
+    this.scene.background.copy(U.mid.value); this.scene.fog.color.copy(U.hor.value);
+    this.scene.fog.near = 100 - 50 * ra; this.scene.fog.far = 260 - 120 * ra;
+    this.dome.position.copy(this.cam.position);
+    // the sun glow crosses the sky (west to east over the valley) and warms at the horizon
+    this.sunGlow.position.set(this.cam.position.x + Math.cos(a) * 280, this.cam.position.y + Math.max(0.04, sn) * 260 - 10, this.cam.position.z - 120);
+    this.sunGlow.visible = sn > -0.05 && ra < 0.7; this.sunGlow.material.opacity = Math.min(1, (sn + 0.05) * 5) * (1 - ra); this.sunGlow.material.color.set('#ffffff').lerp(C.tmp.set('#ffb070'), dusk * 0.6);
+    // high-key light: strong soft fill from the hemisphere so shadows stay bright, a golden sun, a lavender moon
+    this.sun.intensity = (1.55 + 1.0 * day) * (1 - 0.3 * ra); this.sun.color.set('#c9d2ff').lerp(C.tmp.set('#fff1cf'), day).lerp(C.tmp.set('#ffb070'), dusk * 0.5);
+    this.hemi.intensity = 1.25 + 0.3 * day + 0.2 * ra; this.hemi.color.set('#b5c2ff').lerp(C.tmp.set('#ffffff'), day); this.hemi.groundColor.set('#9ccc78').lerp(C.tmp.set('#b4ea84'), day);
     this.night = 1 - day;
-    this.winMat.emissiveIntensity = (1 - day) * 1.6; this.lanternMat.emissiveIntensity = (1 - day) * 2.4; envLantern.emissiveIntensity = (1 - day) * 2.4; lampMat.emissiveIntensity = 0.25 + (1 - day) * 2.2; propLantern.emissiveIntensity = 0.25 + (1 - day) * 2.2;
+    this.winMat.emissiveIntensity = Math.max(0, 1 - day * 1.6) * 1.6; this.lanternMat.emissiveIntensity = (1 - day) * 2.4; envLantern.emissiveIntensity = (1 - day) * 2.4; lampMat.emissiveIntensity = 0.25 + (1 - day) * 2.2; propLantern.emissiveIntensity = 0.25 + (1 - day) * 2.2;
     cloudMat.color.set('#ffffff').lerp(C.tmp.set('#8d9cc8'), (1 - day) * 0.8); this.fx.setLight && this.fx.setLight(0.4 + 0.6 * day);
-    this.r.toneMappingExposure = 1.02 + 0.06 * day;
+    this.r.toneMappingExposure = 1.1 + 0.04 * day;
   }
 
   // ----- village sync -----
