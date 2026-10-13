@@ -330,17 +330,17 @@ export class Game {
     // QA: screen reader labels for the HUD
     this.goldC.setAttribute('role', 'group'); this.goldC.setAttribute('aria-label', `Gold ${Math.round(S.gold)}`); this.fameC.setAttribute('role', 'group'); this.fameC.setAttribute('aria-label', `Fame ${Math.round(S.fame)}`);
     this.weekChip.setAttribute('aria-label', `Season ${S.season}, week ${((S.week - 1) % 12) + 1}${f && f.n ? ', ' + f.n : ''}`);
-    this.advBtn.setAttribute('aria-label', `Advance week${due ? `, ${due} fight${due === 1 ? '' : 's'} due` : ''}`);
+    this.advBtn.setAttribute('aria-label', !S.glads.length ? 'Hire your first fighter' : `Advance week${due ? `, ${due} fight${due === 1 ? '' : 's'} due` : ''}`);
     this.advBtn.querySelector('span') ? 0 : 0;
     const lab = this.advBtn.querySelector('.lx-btn-label') || this.advBtn;
-    if (!S.glads.length) this.advBtn.title = 'Recruit a gladiator first';
-    this.advBtn.dataset.due = due; this.advBtn.classList.toggle('lx-pulse', !!due);
+    const none = !S.glads.length; if (lab) lab.textContent = none ? 'Hire your first fighter' : 'Advance week'; this.advBtn.title = none ? 'Choose the first fighter for your ludus' : ''; this.advBtn.classList.toggle('lx-pulse', none || !!due);
+    this.advBtn.dataset.due = due;
     this.hub && this.hub.refresh && this.hub.refresh(S);
   }
 
   async advance() {
     if (this.busy) return; const S = this.S;
-    if (!S.glads.length) { U.toast('Recruit a gladiator first', { kind: 'bad' }); this.audio.sfx('uiError'); this.open('recruit'); return; }
+    if (!S.glads.length) { this.audio.sfx('uiTap'); this.open('recruit', { first: true }); return; } // the button reads "Hire your first fighter" until someone is hired
     // QA friction: new players press Advance without having entered anything, then wonder why nothing happens. Say so, only in the first weeks.
     if (!L().dueKeys(S).length && (S.stats.weeks || 0) < 3) U.toast('No fight entered this week: your fighters will only train. Open the Arena to enter one.', { kind: 'info', ms: 4200 });
     this.busy = true; this.audio.sfx('uiConfirm'); this.closeAll();

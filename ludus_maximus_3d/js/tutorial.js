@@ -33,8 +33,8 @@ export function createTutorial(game) {
       met: (t) => !!t.welcome, when: () => game.scene === 'hub',
       avoid: () => { const s = sheetBy('recruit'); return s ? (live('.rc-card', s)[0] || tutEl(s, 'hire')) : null; } }, // the card must never sit on the first recruit card
     { id: 'hire', title: 'Hire your first fighter', text: 'Three citizens wait at the gate. Compare their stats and talent pips, then tap Hire on the one you like.',
-      target: () => { const s = sheetBy('recruit'); return s ? tutEl(s, 'hire') : null; },
-      met: (t) => S().glads.length > 0, when: () => game.scene === 'hub', rescue: () => { if (!S().glads.length && !scrims().length) game.open('recruit', { first: true }); } },
+      target: () => { const s = sheetBy('recruit'); return s ? tutEl(s, 'hire') : (game._recruitLater ? game.advBtn : null); }, // the sheet was closed on purpose: point at the hub button that reopens it
+      met: (t) => S().glads.length > 0, when: () => game.scene === 'hub', rescue: () => { if (!S().glads.length && !scrims().length && !game._recruitLater) game.open('recruit', { first: true }); } }, // never fight a player who closed the sheet
     { id: 'roster', title: 'Open the Roster', text: 'Your fighters live here. Tap Roster to see their health, energy and what they will do this week.', hubOnly: true,
       target: () => tutEl(null, 'nav-roster'), met: (t) => !!t.rosterOpened || !!t.trained },
     { id: 'train', title: 'Plan their week', text: 'Each week a fighter follows a plan. Tap a stat to train it, or let Auto-plan choose for you. Tired fighters should rest.', manual: 'Got it', pos: 'below',
