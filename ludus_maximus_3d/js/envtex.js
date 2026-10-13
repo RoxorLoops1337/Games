@@ -72,9 +72,12 @@ export function makeSandTexture(size = 1024, seed = 3) {
 }
 
 /** Travertine ashlar blocks. Tile covers `bx` x `by` blocks. Mortar is dark + recessed. */
+// PERF: identical stone parameters (the hub buildings and the ludus walls ask for the same travertine) are generated once and shared (about 160 ms per 512 tile)
+const STONE_MEMO = new Map();
 export function makeStoneTexture(size = 512, { bx = 4, by = 6, base = 0xe8dcc0, tint = 0xb69a6a, seed = 11, mortar = 0x7a6a55 } = {}) {
+  const key = [size, bx, by, base, tint, seed, mortar].join(','), hit = STONE_MEMO.get(key); if (hit) return hit;
   const A = hex(base), T = hex(tint), M = hex(mortar);
-  return bake(size, (u, v, px, py, o) => {
+  const res = bake(size, (u, v, px, py, o) => {
     const row = Math.floor(v * by), off = (row % 2) * 0.5;
     const fu = ((u * bx + off) % 1 + 1) % 1, fv = (v * by) % 1;
     const col = Math.floor(u * bx + off);
@@ -91,6 +94,7 @@ export function makeStoneTexture(size = 512, { bx = 4, by = 6, base = 0xe8dcc0, 
     c = mix3(M, c, edge);
     o.c = c; o.h = edge * (0.55 + n1 * 0.25 + n2 * 0.1) - pit * 0.12;
   });
+  STONE_MEMO.set(key, res); return res;
 }
 
 /** Marble with warped veins. Tile = ~2 m. */

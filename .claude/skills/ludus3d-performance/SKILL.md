@@ -92,3 +92,73 @@ Builds a rig of every style, the gib mesh (`gore.warm`), every pooled fx mesh (`
 47 JS files, 2.1 MB uncompressed (three 675 KB, rig 199 KB); vendor/jsm already holds only the 5 addons used. Added `modulepreload` for the heavy static chain (flattens the serial import discovery), boot messages per stage. Hub is already a dynamic import. Ready (software GL, low) about 9.5 s of which warm 3 s.
 
 ## Leak check (10 fight -> hub cycles, 3v3 low, forced GC): geometries 130, textures 47, programs 72, DOM 161, heap 40 MB, identical from cycle 1 (the warm builds everything up front).
+
+# Update: optimisation pass 2 (CPU, GC, draw calls, memory, load) with before/after
+
+All numbers: software GL (Chromium swiftshader), 390x800 unless said, tier shown, `?manual=1`. GPU time is meaningless here, so the work targets CPU, allocations, draw calls, bytes and load. "Before" = the tree at the start of this pass (the figures of the pass above). The measuring scripts were throw-away Playwright files (CDP `Profiler`, `HeapProfiler.startSampling` with collected objects included, `renderer.info`, an `onBeforeRender` / `onBeforeShadow` hook that lists what is really drawn); the recipes are written down per section so they can be rebuilt.
+
+## 1. CPU (3v3 medium, 20 simulated s = 600 `advance` frames, update only, no render)
+| | before | after |
+|---|---|---|
+| game.frame CPU per frame | 6.9 ms | 2.9 ms |
+Top self-time before: `syncFighters` 1199 ms (26 %), `updateMatrixWorld` 243, `el.set` (HUD bar) 202, rig `step` 111, `update` 101, `collide` 76. Fixed:
+- **Forced layout in the nameplates** (the real top offender): `placePlate` read `canvas.clientWidth/Height` after the previous plate had written its style (a layout flush per fighter per frame) and `measureHud` ran `getBoundingClientRect` every 20th plate. Now the canvas size is cached (reset in `resize`), `measureHud` is time based (350 ms, or every 120th plate), plate position / opacity / scale are only written when they changed, the HP bar only when the value changed (and at most 10x per second per fighter, each damaged write forces a layout inside ui_kit), cooldown rings only when the ring visibly changed. `syncFighters` self time 1199 ms to 42 ms.
+- Verlet cloth: row widths cached in a `Float64Array` (a `widthFn` closure call per pair per iteration boxed a double each time), index maths inline, leg capsules for the flap collider measured once per step (`prep`) instead of per vertex per iteration, normals computed by `ClothGrid.gridNormals` (three's `computeVertexNormals` allocates six Vector3 per call).
+- Cloth LOD: `rig.lod = 1` when a fighter is more than 30 m from the camera (fightview sets it every 8th frame): cloth steps every other frame with the summed dt.
+- Animator: `keyClip.sample` mixes two pre-densified flat poses (was two sparse `for in` applies), attack LAG loop on flat arrays, `emissive` of the 13 materials is only rewritten while a flash or glow runs, joint quaternions are written without three's change callback (`qCopy` / `qSlerp`, the joint Euler angles are never read; the callback re-derived Euler angles and boxed doubles on every joint, every frame).
+- Hub ambient life was already negligible (0.05 ms per frame: only characters within 95 m update).
+- Where the rest goes (3v3, ms per frame of the 2.9): rig.update x6 1.3, cloth 0.45, fx 0.3, director 0.05, HUD DOM 0.1.
+
+## 2. GC / allocations (3v3 medium, heap sampling incl. collected objects, KB per frame)
+| | before | after |
+|---|---|---|
+| cold (300 frames after 4 s) | 113 to 135 | 83 |
+| steady (after 3 to 4 warm fights, JIT stable) | 99 | 78 to 84 (varies by fight) |
+| gore droplet hook | 17 (cold) / 4.7 | 5 / 1 |
+| `VerletGrid.step` + normals | 2.4 + about 13 | 0.1 |
+| hunt (pride) cold | n/a | 87 |
+**The goal of 40 KB was not reached.** What was learned (use it): V8 allocates a HeapNumber (16 B) for every double that crosses a call that is not inlined, and for every double result of a call that is not inlined. Tiny helpers called with doubles (`lerp`, `clamp` through `Math.max/min`, `Pose.set(j, x, y, z)`, `Math.hypot`, `Vector3` getters, a `widthFn` closure, `layer.putS(12 doubles)`) are the allocation sources, not objects. Fixes that worked: write straight into typed arrays in the hot loop (gore: 12 KB to 1), inline `lerp`/ternary clamp (`rig.js` `clamp` is now a ternary, `Pose.mix` inline: update 10.4 to 5 KB in a move-only test), `Math.sqrt(x*x+y*y)` instead of `Math.hypot`, no closures / array literals / string concatenation per frame (hoisted index tables in rig.js and beast.js), flat arrays instead of Map or `for in` iteration per frame (beast clip channels, fightview fighter list), xorshift instead of `Math.random` in fx particles. `%GetOptimizationStatus` shows Animator.update TurboFan-optimised yet it still allocates about 2 to 3 KB per call (12 to 20 KB per frame for six rigs); the cause was not found (the additive and action layers are not it: skipping them saves about 5 KB).
+Remaining top (KB per frame, steady): Animator.update 12 to 20, director.js 8 to 13 (arrays and object spread per frame by design: `units.map({...u})`, `basis` is now memoised), `syncFighters` 6.5, fx `Layer.step` 4, `updateEmitters` 2.8, `postIK` 2.6, gore jets 1.6.
+
+## 3. Draw calls (peak over 14 s, 390x800)
+| scene | tier | before | after | target |
+|---|---|---|---|---|
+| fight 3v3 | low | 131 | **115** | <= 120 |
+| fight 3v3 | medium | 134 | **120** (118 to 120 over 29 s) | <= 130 |
+| fight 3v3 | high | 169 | 152 | |
+| hub, 12 gladiators | low | 46 | **39** (40 when it rains: the rain lines are one more call) | <= 40 |
+| hub | medium / high | 65 / 76 | 62 / 76 | |
+Hunts (medium, 10 s): lion 58, wolves 65, boars 65, bears 81, pride 83, nemean 97, menagerie 102.
+What merged (count each x2 for casters because the shadow pass redraws them):
+- Arena: ring archivolts, engaged columns and the two gate frames are baked into the `stone` mesh (they share its material); `arch_voids` + windows + niches are one MeshBasic mesh; torches, braziers and bronze clipei are one `bronze_fittings` mesh; the two gate tunnels are one `gate_tunnels` mesh; flames and halos are ONE instanced mesh with an `aKind` attribute (`createFlames` returns `flame` and `glow` both pointing to `flames_all`). 14 calls fewer, costs about 3.5 MB of CPU geometry (baked, not instanced). `envfx.bakeInstances(im)` does the baking.
+- Rigs: the front and back loin flaps are one mesh (`mergeCloths(rig, list)` in rig.js: the grids keep their own geometry objects but their position / normal arrays are views into one shared buffer, so `detachPart`, the hub bake and the gore props still work). -4 main + shadow draws per 3v3.
+- Hub: aqueduct + temple + forum columns + the Colosseum seating cone are one `city_static` mesh (the cone was a BackSide mesh; flipped winding and normals it shades identically as a FrontSide part); empty smoke / spark Points are hidden (an empty Points is still a call); on LOW the gladiators stop casting shadows (5 skinned shadow draws) and get a soft blob each, appended to the env's `blobshadows` instanced mesh (same call as the tree blobs). Compare a screenshot at 390x800: the figures are still grounded, the shadow is a blob instead of a silhouette.
+- Pitfall: `onBeforeRender` also fires for objects three then skips (instance count 0 or an empty Points); `renderer.info.render.calls` is the truth. `onBeforeShadow` lists the shadow-pass draws.
+- Not merged: the nine skinned parts per rig (skin, cloth, leather, steel, trim, eye, hair, metal, shield: separate shader patches), the three hub rings, hub smoke vs sparks (different shaders), the Colosseum facade (own texture and DoubleSide).
+
+## 4. Memory
+Texture sizes (RGBA + mips estimate, uploaded textures):
+| texture | before | after |
+|---|---|---|
+| hub courtyard floor, low / medium / high | 1536x1250 10.0 MB | 1029x838 4.5 MB / 1290x1050 7.2 MB / unchanged |
+| hub Colosseum facade, low / medium / high | 2048x768 8.2 MB | 1372x515 3.7 MB / 1720x645 5.8 MB / unchanged |
+| arena sand decal, medium | 2048x1350 11 MB | 1536x1012 6.2 MB |
+Both big hub textures use a `k` scale: the same picture is drawn into a smaller canvas (`ctx.scale(k, k)`), so nothing else changes. `createLudus({ texK })`, hub passes 0.67 / 0.84 / 1. Textures the page references at low (CPU-side estimate, the hub and the fight scene both exist after boot): hub screen 41.9 MB, 3v3 screen 53.2 MB (fx decals 4 MB, sand map + bump 10.9 MB, arena decal 2.7 MB, stone, banners). High: decals 16 MB + arena decal 10.8 MB are the big ones (kept: blood sharpness).
+Leak check, 10 fight to hub cycles, 3v3 low, forced GC: geometries 115, textures 47, programs 70, JS heap 44.8 to 45.5 MB, identical from cycle 1. (The DOM count grows in this recipe because `returnToHub` is called before the VS splash timers fire; it is the splash waiting for its real-time timeout, not a leak.) Rig geometry is NOT shared between rigs of one style (palette, build and gear differ per gladiator, and `items` keep their parts for `detachPart`); a rig is about 1k tris, so it is cheap.
+
+## 5. Load (title path, ?tier=low, software GL)
+| | before | after |
+|---|---|---|
+| JS requests / bytes | 51 files / 2203 KB | same (static copy: Cloudflare compresses) |
+| all JS downloaded, 80 ms RTT | 3.5 s (median) | 0.45 s |
+| all JS downloaded, 160 ms RTT | 3.97 s | 0.65 s |
+| `window.__LM3D` ready, no warm, 80 ms RTT (median of 5) | 4.4 s | 4.07 s |
+| ready, 160 ms RTT (median of 3) | 5.0 s | 4.76 s |
+| ready on a local server, with warm | 9.2 to 10.0 s | same |
+What changed: `index.html` now preloads the whole static import graph (depth 2 to 5: ui_kit, flow, envtex, envfx, env_ludus, beast, director, feel, sky, title, tutorial, ceremonies, portrait, photo, the postprocessing addons, BufferGeometryUtils) plus the hub's own `buildings.js` and `screens/more.js`; before, `buildings.js` was fetched only after FightView had been built (t = 1.9 s) and `more.js` at 4.2 s. `main.js` is NOT preloaded on purpose: the structure test finds the first `js/main.js` in the file and wants it after the core scripts (the preload scanner already fetches the module script). `build.js` output checked: `dist/ludus_maximus_3d` has the same 70 files as the source, `lab/` is empty (DEV_ONLY), every href in index.html exists.
+Where the software-GL boot goes (CPU profile, 10 s): three.js 6.3 s (shader compiles and render target allocation, GPU artefact), `envtex.js` procedural textures 2.0 s (REAL CPU: 12 textures, `bake` 1M-pixel loops: sand 1024 = 560 ms, stone 512 = 120 to 160 ms), `createArena` 1.5 s and `createHub` 1.5 s (mostly those textures), warm 3.9 s (mostly shader compiles), audio 0.3 s. Done: identical stone parameters are generated once (`makeStoneTexture` memo, about 160 ms in the hub path). Tried and dropped: a closure-free `tnoise` (output identical, 4 % faster, kept). Not done (ideas ordered by value): move `envtex` generation to a Worker (OffscreenCanvas, transfer ImageData) or cache the PNGs in IndexedDB (repeat visits skip about 2 s of CPU); build FightView lazily on the first fight (game.js owns `init0`, it was off limits) and warm in idle time after the title is shown (the warm swaps `post.setScene` and the camera, so it must block the loop or the first fight must wait for it); defer `audio.ensure()` (170 ms) until the first gesture.
+
+## Recipes (rebuild the scripts from these)
+- Heap per frame: launch with `--js-flags=--expose-gc`, `gc()`, `HeapProfiler.startSampling({samplingInterval: 256, includeObjectsCollectedByMajorGC: true, includeObjectsCollectedByMinorGC: true})`, `advance(10)`, `stopSampling`, sum `selfSize` per `callFrame` / frames. For the steady figure run `startDemo({team: 3}); advance(30)` three or four times first, then `startDemo` again, `advance(5)`, then sample. `performance.memory` deltas under-count (allocation buffers are accounted late): use the sampler.
+- Draw calls: `renderer.info.render.calls` after `advance`; to see which meshes: set `onBeforeRender` and `onBeforeShadow` on every mesh, `renderer.info.reset(); post.render(...)`. To see what a mesh costs: set `visible=false` per mesh and compare `calls`.
+- Load: Playwright `page.route('**/ludus_maximus_3d/**', r => setTimeout(() => r.continue(), 80))` simulates latency; read `performance.getEntriesByType('resource')` for the last JS `responseEnd`.
