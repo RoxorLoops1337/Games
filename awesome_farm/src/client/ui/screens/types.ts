@@ -17,6 +17,8 @@ export interface ScreenCtx {
     tip: Tooltip;
     /** Offer a trade to the nearest friend in reach. */
     startTrade (): void;
+    /** The id of the nearest friend close enough to trade with or give to, or null. */
+    friendInReach (): string | null;
     /** Draw the world map into a graphics object (and optional labels container). */
     drawMap (g: Phaser.GameObjects.Graphics, x: number, y: number, cell: number, labels?: Phaser.GameObjects.Container, view?: { gx: number; gy: number; span: number }): void;
 }

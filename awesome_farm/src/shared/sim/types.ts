@@ -119,6 +119,7 @@ export interface MobE {
     t: number; hopT: number; knockT: number;
     lv?: number;             // the level this monster was tuned to (the party's average when it spawned)
     el?: 1;                  // elite: tougher, nastier, better loot
+    af?: 'swift' | 'armored' | 'volatile' | 'mending';   // an elite's trait (data/mobs.ts AFFIXES)
     guard?: 1;               // keeps its post: not swept away at dawn
     rift?: number;           // an expedition monster: the rift island it belongs to (never swept away at dawn)
     rb?: 1;                  // the guardian at the end of an expedition: fights with a boss's patterns
@@ -158,6 +159,7 @@ export interface CritE {
     x: number; y: number; vx: number; vy: number; t: number;
     lv: number;
     star?: number;           // awakening stars (companions and workers)
+    nm?: string;             // a companion's name, for the plate over its head
     shiny?: 1;               // a shiny one (see data/creatures.ts Pet.shiny)
     mode: 0 | 1 | 2;         // 0 wild, 1 companion, 2 den worker
     st?: number;             // 0 idle, 1 fleeing, 2 inside a pod, 3 working
@@ -173,6 +175,7 @@ export interface CritE {
     tx?: number; ty?: number; wk?: WorkKind; // where it is working, and at what
     w?: number;              // seconds of work animation left
     cat?: { by: string; ok: boolean; pod: string }; // a pod is shaking on it
+    sg?: number;             // a companion's strikes since its last signature move (sim/signature.ts)
     jt?: number;             // companion field work: the entity it is heading for or working on
     jp?: number;             // … seconds spent on it so far
     js?: number;             // … seconds until it looks for the next job
@@ -298,6 +301,10 @@ export interface PlayerS {
     comp?: string;           // id of the pet walking beside you
     /** An open trade with another farmer (sim/trade.ts): who, what you give, your coins, whether you accepted, and the time Accept unlocks. Public, never saved. */
     trade?: { w: string; o: [ItemId, number][]; c: number; ok: 0 | 1; lock: number };
+    /** The last few completed trades, newest first (sim/trade.ts): the day, who with, what you gave and what you got. Private, saved. */
+    tlog?: { d: number; w: string; gave: string; got: string }[];
+    left?: { t: number; d: number };   // when this farmer last left (world time and day): the welcome-back digest reads it (sim/digest.ts)
+    museum?: ItemId[];       // the kinds this farmer has put in the museum (sim/museum.ts)
     fav?: ItemId[];          // starred items: Quick stack, Put all and the like never move them (sim/stash.ts)
     ride?: number;           // while riding your companion: the speed multiplier (public; sim/bond.ts cmdRide)
     petSeq?: number;
@@ -346,6 +353,7 @@ export interface WorldState {
     prod?: Record<string, number>;   // items made by machines, ever ('coin': what the export chutes have paid out, ever)
     bosses?: Record<string, number>; // bosses defeated by this world, by boss id
     shop?: Shop;             // the trader's current stock
+    mkt?: { d: number; s: Record<string, number> };   // living prices: units sold per kind as of day d (data/market.ts)
     rifts?: Record<number, RiftRun>;   // expeditions in progress, by rift island
     dread?: Record<number, DreadState>;   // the Dread blocks, by the index of their middle plot
     mine?: MineState;                     // the caves under the world, once somebody has gone down
@@ -388,7 +396,7 @@ export type Cmd =
     | { t: 'demolish'; id: number }
     | { t: 'eat'; item?: ItemId }
     | { t: 'sell'; item: ItemId; n: number }
-    | { t: 'craft'; recipe: string; n: number }
+    | { t: 'craft'; recipe: string; n: number; chest?: boolean }       // `chest`: send what is made to a chest in reach that holds that kind
     | { t: 'equip'; item: ItemId; slot?: WornSlot }     // (`slot`: which ring finger, when it matters)
     | { t: 'hot'; slot: number; item: ItemId | null }
     | { t: 'look'; look: Look; color: number }     // the character creator: how the farmer looks
@@ -434,13 +442,15 @@ export type Cmd =
     | { t: 'trade'; op: 'ok' | 'cancel' }
     | { t: 'inv'; op: 'fav'; item: ItemId }
     | { t: 'inv'; op: 'stash' }
+    | { t: 'inv'; op: 'give'; who: string; item: ItemId; n: number }
+    | { t: 'inv'; op: 'undosale' }
     | { t: 'inv'; op: 'sellall'; items: ItemId[] }
     | { t: 'inv'; op: 'chest'; id: number; dir: 'put' | 'take' }
     /** Take the i-th upgrade a tower offers (sim/defense.ts `cmdPick`). */
     | { t: 'towerpick'; id: number; i: number }
     /** Mend a hurt wall, doorway or tower for materials (sim/defense.ts `cmdRepair`). */
     | { t: 'towerrepair'; id: number }
-    | { t: 'pet'; op: 'companion' | 'rest' | 'assign' | 'unassign' | 'feed' | 'release' | 'rename' | 'awaken' | 'task' | 'post' | 'order'; pet: string; den?: number; item?: ItemId; name?: string; task?: WorkKind | null; at?: { plot?: number; job?: WorkKind; bld?: number }; rcp?: string; n?: number }
+    | { t: 'pet'; op: 'companion' | 'rest' | 'assign' | 'unassign' | 'feed' | 'release' | 'rename' | 'awaken' | 'task' | 'post' | 'order' | 'shift'; pet: string; den?: number; item?: ItemId; name?: string; task?: WorkKind | null; at?: { plot?: number; job?: WorkKind; bld?: number }; rcp?: string; n?: number }
     | { t: 'rift'; op: 'launch'; id: number; tier: number; omens?: string[]; daily?: boolean }
     | { t: 'rift'; op: 'pick'; i: number }
     | { t: 'rift'; op: 'leave' }

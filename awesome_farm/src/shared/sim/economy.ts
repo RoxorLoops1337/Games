@@ -1,5 +1,7 @@
 // Player actions that move things around: building, crafting, gear, food, trade, skills.
 
+import { recordSold, worthOf } from '../data/market';
+import { recordSale, stashItem } from './stash';
 import { TILE, TUNING } from '../config';
 import { BIOME_DEFS, MODS } from '../data/biomes';
 import { BUILDINGS, BuildingKind, isBeltLike, SEED_IDS } from '../data/buildings';
@@ -14,6 +16,7 @@ import * as bed from './bed';
 import * as chronicle from './chronicle';
 import * as defense from './defense';
 import * as gather from './gather';
+import * as museum from './museum';
 import * as mail from './mail';
 import * as potluck from './potluck';
 import * as iridium from './iridium';
@@ -26,7 +29,7 @@ import type { Sim } from './sim';
 import { isUber } from './uber';
 import { ensureVeins } from './worldgen';
 import {
-    addItem, addRes, canAfford, canLearn, countOf, derived, hasUnlock, itemCap, learnSkill, MAX_LEVEL, pay, scaledCost, sellValue, takeItem, xpToNext,
+    addItem, addRes, canAfford, canLearn, countOf, derived, hasUnlock, itemCap, learnSkill, MAX_LEVEL, pay, scaledCost, takeItem, xpToNext,
 } from './stats';
 import type { BuildE, Cmd, PlayerS } from './types';
 
@@ -202,6 +205,7 @@ export function cmdUse (sim: Sim, p: PlayerS, id: number, seed?: ItemId) {
     if (b.kind === 'mineshaft') { mines.descend(sim, p, b); return; }
     if (b.kind === 'mineladder') { mines.ascend(sim, p, b); return; }
     if (b.kind === 'mailbox') { mail.open(sim, p, b); return; }
+    if (b.kind === 'museum') { museum.use(sim, p, b); return; }
     if (b.kind === 'den') { sim.events.push({ e: 'open', to: p.id, ui: 'den', id: b.id }); return; }
     if (b.kind === 'altar') { sim.events.push({ e: 'open', to: p.id, ui: 'altar', id: b.id }); return; }
     if (b.kind === 'hatchery') { sim.events.push({ e: 'open', to: p.id, ui: 'hatchery', id: b.id }); return; }
@@ -246,7 +250,7 @@ export function cmdUse (sim: Sim, p: PlayerS, id: number, seed?: ItemId) {
 // ── crafting ───────────────────────────────────────────────────────────────
 import { affordIn, chestsAround, payFrom } from './pool';
 
-export function cmdCraft (sim: Sim, p: PlayerS, recipeId: string, n: number) {
+export function cmdCraft (sim: Sim, p: PlayerS, recipeId: string, n: number, toChest = false) {
     const r = RECIPES[recipeId];
     if (!r || !STATIONS.has(r.station)) return;
     n = Math.max(1, Math.min(25, Math.floor(n) || 1));
@@ -274,6 +278,10 @@ export function cmdCraft (sim: Sim, p: PlayerS, recipeId: string, n: number) {
         autoEquip(sim, p, r.out);
     }
     if (!made) { sim.deny(p, 'Not enough materials'); return; }
+    if (toChest && !ITEMS[r.out].gear) {
+        const sent = stashItem(sim, p, r.out, made);
+        if (sent > 0) sim.float(p.x, p.y - 50, `${sent} sent to the chest`, PAL.lime, p.id, 'craft-sent');
+    }
     quests.count(p, `craft:${r.out}`, made);
     sim.fx('craft', p.x, p.y - 8, p.id);
     sim.float(p.x, p.y - 24, `+${made} ${ITEMS[r.out].name}`, PAL.cream, p.id, `craft-${r.out}`);
@@ -360,9 +368,11 @@ export function cmdSell (sim: Sim, p: PlayerS, item: ItemId, n: number) {
     if (!sim.stationNear(p, (b) => b.kind === 'market', TUNING.marketRange)) { sim.deny(p, 'Stand next to a market'); return; }
     n = Math.min(Math.floor(n), countOf(p, item));
     if (!(n >= 1)) return;                      // (a NaN from the wire fails this test, and so does an empty sale: `n <= 0` would let both through)
-    const coins = Math.max(1, Math.round(sellValue(p, item, n)));
+    const coins = Math.max(1, Math.round(worthOf(sim.s.mkt, sim.s.seed, item, n, sim.s.day) * derived(p).sellMul));
+    sim.s.mkt = recordSold(sim.s.mkt, item, n, sim.s.day);
     takeItem(p, item, n);
     p.coins += coins;
+    recordSale(sim, p, item, n, coins);
     quests.count(p, 'sell', coins);
     sim.fx('sell', p.x, p.y - 10, p.id);
     sim.float(p.x, p.y - 22, `+${coins} coins`, PAL.gold, p.id, 'sell');

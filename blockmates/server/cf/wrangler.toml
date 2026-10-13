@@ -1,0 +1,23 @@
+# Blockmates on Cloudflare (Workers Free plan works): see README.md. Deployed by hand, never by the Pages build.
+#   npx wrangler@4 deploy --config blockmates/server/cf/wrangler.toml
+name = "blockmates"
+main = "worker.js"
+compatibility_date = "2025-09-01"
+
+[vars]
+WORLD_NAME = "Blockmates World"
+SEED = "1337"
+GAME_URL = "https://games-71g.pages.dev/blockmates/"
+# Optional secrets: npx wrangler secret put PASSWORD / OPS (comma separated operator names)
+
+[[durable_objects.bindings]]
+name = "WORLD"
+class_name = "WorldDO"
+
+# SQLite-backed Durable Objects are the ones the free plan allows.
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["WorldDO"]
+
+[observability]
+enabled = true

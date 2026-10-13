@@ -5,15 +5,17 @@
 //   sellall .... at a market: sell every unstarred, unpinned kind in a list the client shows (one summary, one sound)
 //   chest ...... Put all / Take all at one open chest (put all respects the label and the stars)
 
+import { recordSold, worthOf } from '../data/market';
 import { TILE, TUNING } from '../config';
 import { BUILDINGS } from '../data/buildings';
 import { takes } from '../data/filters';
 import { ITEM_ORDER, ITEMS, type ItemId } from '../data/items';
 import { PAL } from '../palette';
 import { dist } from '../geom';
+import { TRADE_REACH } from './trade';
 import { invDrop, invHas, invPut, invSum } from './machines';
 import type { Sim } from './sim';
-import { addItem, countOf, sellValue, takeItem } from './stats';
+import { addItem, countOf, itemCap, takeItem } from './stats';
 import * as quests from './quests';
 import type { BuildE, Cmd, PlayerS } from './types';
 import { storageOf } from './uber';
@@ -26,6 +28,36 @@ export const MAX_FAVS = 40;
 export const BUSY_SECS = 20;
 /** The other farmer using this chest right now (by id), or null. */
 export const busyUser = (b: Pick<BuildE, 'use'>, now: number, me: string): string | null => (b.use && b.use.p !== me && now - b.use.t < BUSY_SECS ? b.use.p : null);
+
+// ── undoing a sale ──────────────────────────────────────────────────────────
+interface Sale { t: number; items: Map<ItemId, number>; coins: number }
+const sales = new WeakMap<Sim, Map<string, Sale>>();
+/** How long (s) after a sale it can still be taken back, and how close together sales are merged into one. */
+export const UNDO_SECS = 10;
+const MERGE_SECS = 2.5;
+
+/** Remember what was just sold (several quick clicks at the market count as one sale). */
+export function recordSale (sim: Sim, p: PlayerS, item: ItemId, n: number, coins: number) {
+    const all = sales.get(sim) ?? new Map<string, Sale>();
+    sales.set(sim, all);
+    let s = all.get(p.id);
+    if (!s || sim.s.time - s.t > MERGE_SECS) { s = { t: sim.s.time, items: new Map(), coins: 0 }; all.set(p.id, s); }
+    s.t = sim.s.time;
+    s.items.set(item, (s.items.get(item) ?? 0) + n);
+    s.coins += coins;
+}
+
+function undoSale (sim: Sim, p: PlayerS) {
+    const s = sales.get(sim)?.get(p.id);
+    if (!s || sim.s.time - s.t > UNDO_SECS) { sim.deny(p, 'Nothing to take back'); return; }
+    if (p.coins < s.coins) { sim.deny(p, 'You have already spent the coins'); return; }
+    for (const [item, n] of s.items) if (countOf(p, item) + n > itemCap(p, item)) { sim.deny(p, `No room to take back the ${ITEMS[item].name}`); return; }
+    for (const [item, n] of s.items) addItem(p, item, n);
+    p.coins -= s.coins;
+    sales.get(sim)!.delete(p.id);
+    sim.fx('equip', p.x, p.y - 10, p.id);
+    sim.float(p.x, p.y - 22, `Sale taken back: -${s.coins} coins`, PAL.cream, p.id, 'sell');
+}
 
 /** Things the bulk tools leave alone: starred, or pinned to your hotbar. */
 export function guarded (p: PlayerS): Set<ItemId> {
@@ -53,7 +85,9 @@ export function cmdInv (sim: Sim, p: PlayerS, c: Extract<Cmd, { t: 'inv' }>) {
     if (sim.s.paused || p.downed > 0) return;
     if (c.op === 'fav') return fav(sim, p, c.item);
     if (c.op === 'stash') return stash(sim, p);
+    if (c.op === 'give') return give(sim, p, c.who, c.item, c.n);
     if (c.op === 'sellall') return sellAll(sim, p, c.items);
+    if (c.op === 'undosale') return undoSale(sim, p);
     if (c.op === 'chest') return chestAll(sim, p, c.id, c.dir);
 }
 
@@ -67,8 +101,11 @@ function sellAll (sim: Sim, p: PlayerS, items: unknown) {
         if (!ITEMS[id] || ITEMS[id].sell <= 0 || keep.has(id)) continue;
         const have = countOf(p, id) - (worn.has(id) ? 1 : 0);
         if (have < 1) continue;
-        coins += Math.max(1, Math.round(sellValue(p, id, have)));
+        const c1 = Math.max(1, Math.round(worthOf(sim.s.mkt, sim.s.seed, id, have, sim.s.day) * sim.derivedOf(p).sellMul));
+        sim.s.mkt = recordSold(sim.s.mkt, id, have, sim.s.day);
+        coins += c1;
         takeItem(p, id, have);
+        recordSale(sim, p, id, have, c1);
         kinds++; units += have;
     }
     if (!kinds) { sim.deny(p, 'Nothing to sell: starred and pinned things stay'); return; }
@@ -79,6 +116,25 @@ function sellAll (sim: Sim, p: PlayerS, items: unknown) {
     sim.float(p.x, p.y - 36, `Sold ${units} (${kinds} kind${kinds === 1 ? '' : 's'})`, PAL.cream, p.id, 'aff');
 }
 
+/** Hand some of one kind to a friend standing close (no window, no accept: a gift). Their pack must have room. */
+function give (sim: Sim, p: PlayerS, who: string, item: ItemId, n: number) {
+    const q = sim.s.players[who];
+    if (!q || q.id === p.id || !q.online || q.downed > 0 || !ITEMS[item] || ITEMS[item].gear) return;
+    if (Math.hypot(q.x - p.x, q.y - p.y) > TRADE_REACH) { sim.deny(p, `${q.name} is too far away`); return; }
+    const want = Math.min(Math.floor(Number(n) || 0), countOf(p, item));
+    if (want < 1) return;
+    const room = itemCap(q, item) - countOf(q, item);
+    const sent = Math.min(want, room);
+    if (sent < 1) { sim.deny(p, `${q.name} cannot carry any more ${ITEMS[item].name}`); return; }
+    takeItem(p, item, sent);
+    addItem(q, item, sent);
+    sim.fx('collect', q.x, q.y - 6, q.id);
+    sim.float(p.x, p.y - 26, `Gave ${sent} ${ITEMS[item].name} to ${q.name}`, PAL.lime, p.id, 'aff');
+    sim.float(q.x, q.y - 26, `${p.name} gave you ${sent} ${ITEMS[item].name}`, PAL.lime, q.id, 'aff');
+    sim.events.push({ e: 'fly', to: q.id, item, x0: p.x, y0: p.y - 10, x1: q.x, y1: q.y - 10, d: 0 });
+    sim.events.push({ e: 'fly', to: p.id, item, x0: p.x, y0: p.y - 10, x1: q.x, y1: q.y - 10, d: 0 });
+}
+
 function fav (sim: Sim, p: PlayerS, item: ItemId) {
     if (!ITEMS[item]) return;
     const list = (p.fav ??= []);
@@ -86,6 +142,27 @@ function fav (sim: Sim, p: PlayerS, item: ItemId) {
     if (at >= 0) { list.splice(at, 1); if (!list.length) delete p.fav; }
     else if (list.length < MAX_FAVS) list.push(item);
     else sim.deny(p, 'Too many starred items');
+}
+
+/** Move up to `limit` of one kind from the pockets into the nearest chest within reach that holds it or is labelled for it. Returns how many went. */
+export function stashItem (sim: Sim, p: PlayerS, id: ItemId, limit: number): number {
+    let left = Math.min(limit, countOf(p, id)), moved = 0;
+    const near = sim.buildings().filter((b) => isChest(b) && dist(sim.center(b).x, sim.center(b).y, p.x, p.y) <= STASH_TILES * TILE)
+        .sort((a, b) => dist(sim.center(a).x, sim.center(a).y, p.x, p.y) - dist(sim.center(b).x, sim.center(b).y, p.x, p.y));
+    for (const b of near) {
+        if (left <= 0) break;
+        const named = !!b.fl?.length && takes(b.fl, id);
+        if (!takes(b.fl, id) || !(invHas(b.inv, id) > 0 || named)) continue;
+        const n = Math.min(left, storageOf(b) - invSum(b.inv));
+        if (n <= 0) continue;
+        takeItem(p, id, n);
+        invPut((b.inv ??= {}), id, n);
+        b.by = p.id; b.use = { p: p.id, t: sim.s.time };
+        sim.touch(b);
+        fly(sim, p, b, [id], 'put', { n: 0 });
+        left -= n; moved += n;
+    }
+    return moved;
 }
 
 function stash (sim: Sim, p: PlayerS) {

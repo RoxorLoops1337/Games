@@ -3,7 +3,7 @@
 // Bosses live in boss.ts; players hit things in combat.ts.
 
 import { RIFT_RADIUS, TILE, TUNING } from '../config';
-import { eliteChance, isBoss, MobDef, MobKind, MOBS, pickWild, PROJ, ProjKind, softHit } from '../data/mobs';
+import { AFFIX_BURST, AFFIX_HEAL, AFFIX_IDS, AFFIX_SPEED, AFFIXES, eliteChance, isBoss, MobDef, MobKind, MOBS, pickWild, PROJ, ProjKind, softHit } from '../data/mobs';
 import { dist } from '../geom';
 import { PAL } from '../palette';
 import * as fortune from './fortune';
@@ -93,7 +93,7 @@ function place (sim: Sim, kind: MobKind, x: number, y: number, o: SpawnOpts): Mo
     return sim.add<MobE>({
         k: 'mob', kind, x, y, hp, mhp: hp, vx: 0, vy: 0, t: sim.rng.next(), hopT: 0, knockT: 0, a: 1 + sim.rng.next() * 1.5,
         lv,
-        ...(elite ? { el: 1 as const } : {}),
+        ...(elite ? { el: 1 as const, af: sim.rng.pick(AFFIX_IDS) } : {}),
         ...(o.rift !== undefined ? { rift: o.rift, dm: o.dm } : soft < 1 ? { dm: soft } : {}),
         ...(o.sm ? { sm: o.sm } : {}),
     });
@@ -155,6 +155,7 @@ export function updateMobs (sim: Sim, dt: number) {
         const ux = dx / dist, uy = dy / dist;
         e.t += dt;
         e.a = Math.max(0, (e.a ?? 0) - dt);
+        if (e.af === 'mending' && e.hp < e.mhp) e.hp = Math.min(e.mhp, e.hp + e.mhp * AFFIX_HEAL * dt);
         if ((e.stun ?? 0) > 0) {
             e.stun = e.stun! - dt;
             e.vx *= Math.pow(0.02, dt); e.vy *= Math.pow(0.02, dt);
@@ -183,7 +184,7 @@ export function updateMobs (sim: Sim, dt: number) {
 }
 
 function move (sim: Sim, e: MobE, def: MobDef, dt: number) {
-    const sm = e.sm ?? 1;
+    const sm = (e.sm ?? 1) * (e.af === 'swift' ? AFFIX_SPEED : 1);
     const nx = e.x + e.vx * dt * sm, ny = e.y + e.vy * dt * sm;
     if (def.flies) {
         if (!sim.world.flyBlocked(nx, ny, e.x, e.y)) { e.x = nx; e.y = ny; }          // (walls, doorways and roofs stop even the ones with wings)
@@ -301,6 +302,10 @@ export function killMob (sim: Sim, e: MobE, by?: PlayerS, silent = false) {
     if (e.rift !== undefined) rift.onKill(sim, e);
     if (!silent) sim.fx('enemyDie', e.x, e.y - 5, by?.id);
     sim.remove(e.id);
+    if (e.af === 'volatile' && !silent) {
+        sim.fx('hitEarth', e.x, e.y - 4);
+        for (const p of sim.online) if (p.downed <= 0 && p.invuln <= 0 && Math.hypot(p.x - e.x, p.y - e.y) < AFFIX_BURST) sim.hurt(p, e, def.dmg * 1.25 * (e.dm ?? 1));
+    }
     if (silent || !by) return;
     by.stats.kills++;
     quests.count(by, `kill:${e.kind}`);
@@ -309,5 +314,5 @@ export function killMob (sim: Sim, e: MobE, by?: PlayerS, silent = false) {
     const vamp = derived(by).mods.vamp ?? 0;
     if (vamp > 0 && sim.rng.chance(vamp)) sim.heal(by, 0.5);
     sim.gainXp(by, def.xp * (e.el ? 1.8 : 1) * (sim.nightEv === 'bloodmoon' ? 1.5 : 1));
-    if (e.el) sim.float(e.x, e.y - 18, 'Elite slain!', PAL.gold, by.id);
+    if (e.el) sim.float(e.x, e.y - 18, e.af ? `${AFFIXES[e.af].name} elite slain!` : 'Elite slain!', PAL.gold, by.id);
 }

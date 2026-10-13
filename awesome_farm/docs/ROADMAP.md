@@ -10,36 +10,38 @@ split big ones into slices (rules, art, polish).
 - [x] S17 Hotbar auto-refill of a pinned stack (food, potions and seeds)
 - [x] S18 Recent recipes tab in Crafting
 - [x] S21 Item comparison tooltips with green/red deltas (always on when a different piece is worn)
-- [ ] S28 Quick-sell undo window
-- [ ] S30 Give item to a nearby friend (no full trade window)
-- [ ] S27 Auto-sort backpack setting
-- [ ] S29 Trade history (last few trades)
-- [ ] S25 Mailbox flag visible from afar
-- [ ] S26 Chest labels in the factory view / minimap
+- [x] S28 Quick-sell undo window (10 s, Undo sale button at the market)
+- [x] S30 Give item to a nearby friend (Give mode in the backpack)
+- [x] S27 Auto-sort backpack (already true: the list is always sorted by your saved order, which is remembered per window)
+- [x] S29 Trade history (last five trades, shown in the trade window)
+- [x] S25 Mailbox flag visible from afar (already built: the flag goes up on every mailbox when post waits, in 2D and 3D)
+- [x] S26 Chest labels in the factory view (already built: a labelled chest wears its icon in the world, which the Factory view keeps lit; the minimap stays free of item icons by design)
 
 ## Phase 2: rhythm and economy (medium + small)
-- [ ] M6 Welcome-back digest
-- [ ] M7 Living market prices + Hot Item of the day
-- [ ] S33 Weather-aware hints
-- [ ] S22 Rainbow's end
-- [ ] S32 Seasonal special nights
-- [ ] S24 Harvest chain chimes
-- [ ] S23 Roof rain
-- [ ] S19 Craft-to-chest toggle
-- [ ] S20 Hotbar drag reorder / swap with a backpack row
+- [x] M6 Welcome-back digest (toasts on return after 5 min or a new day: days passed, what needs you, who is here)
+- [x] M7 Living market prices + Hot Item of the day (1% a unit down to 60%, fades 30% a morning, hot item +50%)
+- [x] S33 Weather-aware hints (rain already existed; added Blood Moon and winter heads-ups)
+- [x] S22 Rainbow's end (pot of gold + crate on an owned island when the day's rain clears, announced with a ping)
+- [x] S32 Seasonal special nights (summer fireflies, autumn Harvest Moon, winter Aurora crystals)
+- [x] S24 Harvest chain chimes (your own pickups and harvests climb a pentatonic ladder)
+- [x] S23 Roof rain (rain streaks fade and the rain sound muffles under a roof)
+- [x] S19 Craft-to-chest toggle (a To chest switch in Crafting)
+- [x] S20 Hotbar drag reorder (drag a slot onto another swaps; pinning an item that sits elsewhere already swaps)
 
 ## Phase 3: new systems (medium)
-- [ ] M8 Fish pond
-- [ ] M9 Orchard and apiary
-- [ ] M14 Elite affixes
-- [ ] M10 Creature signature moves
-- [ ] M11 Day and night shifts for workers
-- [ ] M12 Cosy room score + dye vat
-- [ ] M13 Museum of odd things
-- [ ] S31 Pet nicknames in chat/plates, pet in photo mode
+- [x] M8 Fish pond (Fish Pond building: a fish and bait in, two fish out; art, 3D model, wiki, how-to)
+- [x] M9 Orchard and apiary (oaks drop apples, Beehive turns berries into honey, Honey Apple Tart at the Kitchen)
+- [x] M14 Elite affixes (swift, armored, volatile, mending; tinted, named on the kill)
+- [x] M10 Creature signature moves (every 4th companion strike, one move per element)
+- [x] M11 Day and night shifts for workers (Day/Night button on the creature card: day, night or round the clock; PROTOCOL 43)
+- [x] M12 Cosy room score (a furnished walled-in room gives the Cosy buff; score = furniture + variety)
+- [ ] M12b Dye vat (split off M12)
+- [x] M13 Museum of odd things (Museum Case: E donates one of each trophy, fish and gem; prizes at 5, 10, 20, 30 and all)
+- [x] S31 Pet nicknames on plates (a companion wears its name over its head, so photo mode shows who is who)
 
 ## Phase 4: polish and health (small + medium)
-- [ ] M15 Accessibility and phone pack
+- [x] M15 Accessibility pass 1 (the Shake switch now also turns off lightning flashes, slow motion and buzzing, and says so)
+- [ ] M15b Larger text option, colour-blind marks, phone pack leftovers
 - [ ] S35 Settings polish
 - [ ] S34 Playbot short run as a health check
 

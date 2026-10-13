@@ -76,3 +76,36 @@ test('walking away, going down or logging off cancels it; strangers and busy far
     busy.sim.leave('b'); busy.sim.step(0.05);
     assert.equal(busy.a.trade, undefined);
 });
+
+test('giving: a friend in reach gets the goods at once; too far, a full pack, gear or yourself are refused', () => {
+    const { sim, a, b } = pair();
+    sim.command('a', { t: 'inv', op: 'give', who: 'b', item: 'wood', n: 12 });
+    assert.equal(countOf(a, 'wood'), 18); assert.equal(countOf(b, 'wood'), 12);
+    sim.command('a', { t: 'inv', op: 'give', who: 'b', item: 'wood', n: 999 });
+    assert.equal(countOf(a, 'wood'), 0, 'gives all it has');
+    sim.command('a', { t: 'inv', op: 'give', who: 'a', item: 'iron', n: 1 });
+    assert.equal(countOf(a, 'iron'), 4, 'not to yourself');
+    b.inv.iron = itemCap(b, 'iron');
+    sim.command('a', { t: 'inv', op: 'give', who: 'b', item: 'iron', n: 4 });
+    assert.equal(countOf(a, 'iron'), 4, 'their pack is full');
+    b.inv.iron = 0; b.x += 30 * TILE;
+    sim.command('a', { t: 'inv', op: 'give', who: 'b', item: 'iron', n: 4 });
+    assert.equal(countOf(a, 'iron'), 4, 'too far');
+});
+
+test('a completed trade is written down for both, newest first, five at most', async () => {
+    const { offerText } = await import('../src/shared/sim/trade');
+    const { sim, a, b, wait } = pair();
+    for (let i = 0; i < 7; i++) {
+        b.coins = 5;
+        sim.command('a', { t: 'trade', op: 'open', who: 'b' });
+        sim.command('a', { t: 'trade', op: 'set', item: 'wood', n: 1 });
+        sim.command('b', { t: 'trade', op: 'coins', n: 1 });
+        wait();
+        sim.command('a', { t: 'trade', op: 'ok' }); sim.command('b', { t: 'trade', op: 'ok' });
+    }
+    assert.equal(a.tlog?.length, 5);
+    assert.deepEqual([a.tlog![0].w, a.tlog![0].gave, a.tlog![0].got], ['Bo', '1 Wood', '1 coins']);
+    assert.deepEqual([b.tlog![0].w, b.tlog![0].gave, b.tlog![0].got], ['Ann', '1 coins', '1 Wood']);
+    assert.equal(offerText({ o: [], c: 0 }), 'nothing');
+});

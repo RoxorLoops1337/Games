@@ -107,6 +107,7 @@ export class HudScene extends Phaser.Scene {
     private fishHud!: FishHud;
     private boonSeen = '';
     private tradeShown = '';
+    private shelter = 0;
     private chat!: ChatUI;
     private compCard!: CompanionCard;
     private party!: PartyList;
@@ -135,6 +136,7 @@ export class HudScene extends Phaser.Scene {
     private hints!: Hints;
     /** What the first-time hints look for in the world around you, looked at twice a second (not every frame: it walks the entities). */
     private hintScan = 0;
+    private calMemo: { k: string; v: { moon: 0 | 1 | 2 | null; winter: 0 | 1 | 2 | null } } = { k: '', v: { moon: null, winter: null } };
     private hintNear = { windup: false, titan: false, friendNear: false };
     private tutorial!: Tutorial;
     private fpsT!: Phaser.GameObjects.Text;
@@ -296,6 +298,7 @@ export class HudScene extends Phaser.Scene {
             close: () => this.closeScreen(),
             open: (name, arg) => this.openScreen(name, arg),
             startTrade: () => { this.closeScreen(); this.startTrade(); },
+            friendInReach: () => this.friendInReach(),
             drawMap: (g, x, y, cell, labels, view) => this.layer.drawMinimap(g, x, y, cell, labels, true, true, view),
         };
     }
@@ -361,6 +364,18 @@ export class HudScene extends Phaser.Scene {
 
     /** Rain still to come today (0) or tomorrow (1), for the first-time hint about it (worked out again only when the day or the hour changes). */
     private rainMemo = { k: '', v: null as 0 | 1 | null };
+    /** Blood Moon and winter, when they are within two days (read from the seed and the day, like the Weather Vane). */
+    private calendarSoon (): { moon: 0 | 1 | 2 | null; winter: 0 | 1 | 2 | null } {
+        const f = this.farm, c = f.clock, k = `${f.serverSeed()}|${c.day}|${c.night}`;
+        if (k === this.calMemo.k) return this.calMemo.v;
+        const fc = forecast(f.serverSeed(), c.day, 3);
+        const moon = fc.findIndex((d, i) => d.night === 'bloodmoon' && !(i === 0 && c.night));
+        const winter = fc.findIndex((d) => d.season === 'winter' && d.seasonStart);
+        const v = { moon: (moon >= 0 ? moon : null) as 0 | 1 | 2 | null, winter: (winter >= 0 ? winter : null) as 0 | 1 | 2 | null };
+        this.calMemo = { k, v };
+        return v;
+    }
+
     private rainSoon (): 0 | 1 | null {
         const f = this.farm, c = f.clock, k = `${f.serverSeed()}|${c.day}|${Math.floor(c.clock / 10)}`;
         if (k === this.rainMemo.k) return this.rainMemo.v;
@@ -446,7 +461,9 @@ export class HudScene extends Phaser.Scene {
         else if (!me.trade) this.tradeShown = '';
         if (!this.screen && this.queued.length && me.downed <= 0) { const [n, a] = this.queued.shift()!; this.openScreen(n, a); }
         this.night.update(dt, f.viewMode === '2d');
-        updateMusic({ night: f.nightAmount(), rain: this.night.rainLevel, boss: this.bossBar.cur ? 1 : me.rift?.ph === 1 ? 0.35 : this.night.event === 'bloodmoon' ? 0.3 : 0, phase: this.bossBar.cur?.phase ?? 0, under: f.undergroundAmount(), dread: f.dreadAmount() });
+        this.shelter += ((f.underRoof() ? 1 : 0) - this.shelter) * Math.min(1, dt * 2.5);
+        this.night.sheltered = this.shelter;
+        updateMusic({ night: f.nightAmount(), rain: this.night.rainLevel * (1 - this.shelter * 0.65), boss: this.bossBar.cur ? 1 : me.rift?.ph === 1 ? 0.35 : this.night.event === 'bloodmoon' ? 0.3 : 0, phase: this.bossBar.cur?.phase ?? 0, under: f.undergroundAmount(), dread: f.dreadAmount() });
         this.arrange(dt, me);
         this.layer.update(dt);
         this.tip.follow(this.input.activePointer);
@@ -472,7 +489,7 @@ export class HudScene extends Phaser.Scene {
         if (this.labPanel) this.labPanel.update(dt, this.party.bottom, !!this.screen || this.photo);         // (the Defense Lab: its panel has the quests' place)
         else this.tracker.update(this.party.bottom, !!coach && this.tutorial.active, this.touchMode ? 340 : 470);
         if ((this.hintScan -= dt) <= 0) { this.hintScan = 0.5; this.hintNear = { windup: f.windupNear(), titan: f.titanNear(), friendNear: this.friendInReach() != null }; }
-        this.hints.update(dt, { me, prompt: f.prompt, ...this.hintNear, petNear: !!f.petBeside(), rain: this.rainSoon() }, !!this.screen || me.downed > 0 || this.photo);
+        this.hints.update(dt, { me, prompt: f.prompt, ...this.hintNear, petNear: !!f.petBeside(), rain: this.rainSoon(), ...this.calendarSoon() }, !!this.screen || me.downed > 0 || this.photo);
         // The top slot (see ui/slots.ts): the coach card and the tip cards wait for a banner, a banner waits for the cards to fade
         // away, and all of them wait for a window. Toasts sit in their own lane and hide under windows.
         this.tutorial.update(dt, !!this.screen || me.downed > 0 || this.photo, this.banners.busy || this.fishHud.cardUp, this.bossBar.visible);

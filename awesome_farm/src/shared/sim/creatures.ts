@@ -2,6 +2,7 @@
 // you as a companion or live in a Den and work. Everything here is server-side state:
 // the roster lives on the player (`pets`), the visible animals are `crit` entities.
 
+import { fireflyBoost } from './specialnights';
 import { TILE, TUNING } from '../config';
 import { BUILDINGS, CROPS, SEED_IDS } from '../data/buildings';
 import {
@@ -22,6 +23,7 @@ import { ownerSite, taskOk } from './jobs-site';
 import { invDrop, invSum, invPut } from './machines';
 import { fetchAt, findPet, grantPetXp, isWorking, move, petsOf, rosterCap, STASH_RADIUS, stashAt, workSlots } from './petlib';
 import * as quests from './quests';
+import * as signature from './signature';
 import type { Sim } from './sim';
 import { countOf, derived, hasUnlock, takeItem } from './stats';
 import type { BuildE, Cmd, CritE, MobE, PlayerS, Plot } from './types';
@@ -61,7 +63,7 @@ function spawnWild (sim: Sim, p: PlayerS) {
         if (!sim.online.some((q) => dist(q.x, q.y, x, y) < TUNING.wildSpawnClear)) spot = s;
     }
     if (!plot || !spot) return;
-    const sp = pickSpecies(plot.biome, sim.s.night, () => rng.next(), hasUnlock(p, 'rarecatch') ? 0.7 : 0);
+    const sp = pickSpecies(plot.biome, sim.s.night, () => rng.next(), (hasUnlock(p, 'rarecatch') ? 0.7 : 0) + fireflyBoost(sim));
     const def = spOf(sp);
     const lv = 1 + rng.int(0, 2 + Math.floor(sim.s.day / 3)) + def.rarity * 2;
     sim.add<CritE>({ k: 'crit', sp, x, y, vx: 0, vy: 0, t: rng.next() * 3, lv, mode: 0, st: 0, hx: x, hy: y, life: 140 + rng.next() * 80, a: 0, ...(rng.chance(TUNING.shinyWild) ? { shiny: 1 as const } : {}) });
@@ -298,11 +300,11 @@ function syncCompanions (sim: Sim, crits: CritE[]) {
         if (p.ride && (!want || !ent || ent.pid !== want.id)) { p.ride = undefined; }                // (the mount is gone, sent to work, or you went down: you are on your own feet)
         if (ent && (!want || ent.pid !== want.id)) { sim.remove(ent.id); crits.splice(crits.indexOf(ent), 1); }
         else if (!ent && want) {
-            const e = sim.add<CritE>({ k: 'crit', sp: want.sp, x: p.x - 14, y: p.y, vx: 0, vy: 0, t: 0, lv: want.lv, ...(starsOf(want) ? { star: starsOf(want) } : {}), ...(want.shiny ? { shiny: 1 as const } : {}), mode: 1, st: 0, owner: p.id, pid: want.id, a: 0.8 });
+            const e = sim.add<CritE>({ k: 'crit', sp: want.sp, x: p.x - 14, y: p.y, vx: 0, vy: 0, t: 0, lv: want.lv, ...(starsOf(want) ? { star: starsOf(want) } : {}), ...(want.shiny ? { shiny: 1 as const } : {}), nm: want.name, mode: 1, st: 0, owner: p.id, pid: want.id, a: 0.8 });
             crits.push(e);
             sim.fx('summon', e.x, e.y - 6, p.id);
         } else if (ent && want) {
-            if (ent.lv !== want.lv || (ent.star ?? 0) !== starsOf(want)) { ent.lv = want.lv; ent.star = starsOf(want) || undefined; sim.touch(ent); }
+            if (ent.lv !== want.lv || (ent.star ?? 0) !== starsOf(want) || ent.nm !== want.name) { ent.nm = want.name; ent.lv = want.lv; ent.star = starsOf(want) || undefined; sim.touch(ent); }
         }
     }
 }
@@ -343,6 +345,7 @@ function companionStep (sim: Sim, c: CritE, dt: number) {
             sim.events.push({ e: 'work', id: c.id, kind: 'guard', x: best.x, y: best.y - 4 });
             const hpBefore = best.hp, bid = best.id;
             combat.damageMob(sim, best, atk, owner, { kx: best.x - c.x, ky: best.y - c.y, kb: 70, quiet: true });
+            if (sim.s.ents[bid]) signature.onStrike(sim, c, owner, best, atk);
             if (!sim.s.ents[bid]) grantPetXp(sim, owner, pet, 2 + MOBS[best.kind].tier * 2, c);
             else if (hpBefore > best.hp) grantPetXp(sim, owner, pet, 0.6);
         }
@@ -400,9 +403,16 @@ function syncWorkers (sim: Sim, crits: CritE[]) {
     for (const [key, c] of have) if (!wanted.has(key) && sim.s.ents[c.id]) { dropLoad(sim, c); sim.remove(c.id); crits.splice(crits.indexOf(c), 1); }
 }
 
+/** Is this worker's shift over (it only works by day or only by night)? */
+export const offShift = (sim: Sim, pet: Pet) => !!pet.sh && (sim.s.night ? 'night' : 'day') !== pet.sh;
+
 function workerStep (sim: Sim, c: CritE, dt: number) {
     const owner = c.owner ? sim.s.players[c.owner] : undefined;
     const pet = owner && c.pid ? findPet(owner, c.pid) : undefined;
+    if (owner && pet && offShift(sim, pet)) {                                          // off shift: resting where it stands
+        c.vx = 0; c.vy = 0; c.ac = 'idle'; if (pet.post) c.ws = 'idle'; sim.touch(c);
+        return;
+    }
     if (owner && pet?.post) { jobs.postStep(sim, c, owner, pet, dt); return; }       // a standing job at an island or a machine
     const den = c.den ? sim.s.ents[c.den] : undefined;
     if (!owner || !pet || !den || den.k !== 'bld') { sim.remove(c.id); return; }
@@ -681,6 +691,12 @@ export function cmdPet (sim: Sim, p: PlayerS, c: Extract<Cmd, { t: 'pet' }>) {
             if (p.comp === pet.id) p.comp = undefined;
             sim.give(p, 'coin', 3 * pet.lv);
             sim.float(p.x, p.y - 24, `${pet.name} went back to the wild`, PAL.cream, p.id);
+            return;
+        }
+        case 'shift': {
+            const next = pet.sh === undefined ? 'day' : pet.sh === 'day' ? 'night' : undefined;
+            pet.sh = next;
+            sim.float(p.x, p.y - 26, `${pet.name}: ${next ? `${next} shift only` : 'works round the clock'}`, PAL.cream, p.id);
             return;
         }
         case 'rename': {

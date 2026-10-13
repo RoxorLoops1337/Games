@@ -340,6 +340,27 @@ test('sawmill doubles planks; millstone grinds wheat; chests hold items for anyo
     assert.equal(chest.inv!.plank, 5);
 });
 
+test('a beehive turns berries into honey', () => {
+    const sim = Sim.create('TEST-11H', 'test');
+    const a = sim.join('a', 'A')!;
+    const hive = placeNear(sim, a, 'beehive', { inv: {}, out: {}, fuel: 0, prog: 0, by: 'a' });
+    give(sim, 'a', 'berry', 3);
+    sim.command('a', { t: 'xfer', id: hive.id, item: 'berry', n: 3, dir: 'put' });
+    run(sim, 45);
+    assert.equal(hive.out!.honey, 1);
+});
+
+test('a fish pond turns a carp and some bait into two carp', () => {
+    const sim = Sim.create('TEST-11P', 'test');
+    const a = sim.join('a', 'A')!;
+    const pond = placeNear(sim, a, 'fishpond', { inv: {}, out: {}, fuel: 0, prog: 0, by: 'a' });
+    give(sim, 'a', 'fish_carp', 1); give(sim, 'a', 'bait', 1);
+    sim.command('a', { t: 'xfer', id: pond.id, item: 'fish_carp', n: 1, dir: 'put' });
+    sim.command('a', { t: 'xfer', id: pond.id, item: 'bait', n: 1, dir: 'put' });
+    run(sim, 50);
+    assert.equal(pond.out!.fish_carp, 2);
+});
+
 test('food restores energy, potions heal and grant buffs that expire', () => {
     const sim = Sim.create('TEST-12', 'test');
     const a = sim.join('a', 'A')!;

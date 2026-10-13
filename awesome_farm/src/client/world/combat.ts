@@ -5,7 +5,7 @@
 import { ensureMobArt } from '../art/storybook-mobs';
 import * as Phaser from 'phaser';
 import type { WeaponType } from '../../shared/data/items';
-import { MobKind, MOBS, PROJ } from '../../shared/data/mobs';
+import { AFFIXES, MobKind, MOBS, PROJ } from '../../shared/data/mobs';
 import { PAL } from '../../shared/palette';
 import type { Ent, MobE, ProjE, SimEvent } from '../../shared/sim/types';
 import { overlay3d } from './view3d-bridge';
@@ -101,7 +101,8 @@ export function animateMob (scene: Phaser.Scene, v: MobViewLike, e: MobE, dt: nu
     } else if (st === 3 || (e.stun ?? 0) > 0) {   // stunned: dizzy
         rot = Math.sin(now / 55) * 0.16;
         if (spr.isTinted) spr.clearTint();
-    } else if (spr.isTinted && !(spr.tintMode === FILL)) spr.clearTint();
+    } else if (e.af) spr.setTint(AFFIXES[e.af].color).setTintMode(MULTIPLY);
+    else if (spr.isTinted && !(spr.tintMode === FILL)) spr.clearTint();
 
     if (def.boss && e.pat === 'leap' && (e.pt ?? 0) > 0.75 && (e.pt ?? 0) < 1.15) {
         const p = ((e.pt ?? 0) - 0.75) / 0.4;

@@ -71,6 +71,7 @@ const GAME_SUITES = {
   hocus_vocus: ['test:hocus_vocus'],
   beatbox_heroes: ['test:heroes'],
   LoopDoku: ['test:loopdoku'],
+  blockmates: ['test:blockmates'],
 };
 
 // Folders the site serves that have no test suite: a change there only needs

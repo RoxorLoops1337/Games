@@ -191,6 +191,41 @@ function millstone (p: Pix) {
     p.outline();
 }
 
+function fishpond (p: Pix) {
+    // a stone-rimmed pool of green water with a ripple, a lily pad and a gold fish
+    p.ellipse(16, 9, 15.5, 7, [0x6b6f8c, 0x8a8fae, 0xb0b5cc], { bias: 0.1 });
+    p.ellipse(16, 9, 13.5, 5.2, [0x2f6f8c, 0x3f8fae, 0x6cc0d8], { bias: 0.2 });
+    p.ellipse(11, 8, 3, 1.4, [0x9be0ee]);
+    p.ellipse(22, 11, 2.4, 1.3, [0x4caf50, 0x7ccf64]);
+    p.rect(19, 10, 3, 1, 0x2f6f8c);
+    p.poly([[13, 11], [17, 10], [20, 11], [17, 12]], 0xf0a030);
+    p.set(12, 11, 0xf0a030); p.set(20, 10, 0xffd060);
+    p.outline();
+}
+
+function beehive (p: Pix) {
+    // a stacked straw skep on a little stand, bees buzzing at the door
+    lit(p, 4, 16, 6, 3, W);
+    p.ellipse(7, 12, 5.5, 4.5, [0xb8862e, 0xf0b93a, 0xffd966], { bias: 0.1 });
+    p.ellipse(7, 8, 4.5, 3.4, [0xb8862e, 0xf0b93a, 0xffd966], { bias: 0.1 });
+    p.ellipse(7, 4, 3, 2.4, [0xb8862e, 0xf0b93a, 0xffd966], { bias: 0.1 });
+    p.ellipse(7, 13, 1.5, 1.4, [0x35305c]);
+    p.set(11, 9, 0x35305c); p.set(12, 8, 0xffd966); p.set(2, 6, 0x35305c); p.set(3, 5, 0xffd966);
+    p.outline();
+}
+
+function museum (p: Pix) {
+    // a wooden case with a glass top and a few treasures on blue velvet
+    lit(p, 1, 10, 30, 8, W); p.rect(2, 11, 28, 1, W[3]);
+    p.rect(3, 4, 26, 7, 0xcdf3fa);
+    p.rect(3, 4, 26, 1, 0xffffff);
+    p.rect(4, 8, 24, 3, 0x2f4f8c);
+    p.ellipse(9, 7, 2.2, 1.8, [0xc0392b, 0xff6b5c]);
+    p.ellipse(16, 7, 2.4, 1.6, [0xf0a030, 0xffd966]);
+    p.poly([[21, 9], [23, 5], [25, 9]], 0x6cc0d8);
+    p.outline();
+}
+
 function market (p: Pix, rnd: () => number) {
     // a striped awning over a counter loaded with produce
     for (const x of [2, 31]) lit(p, x, 6, 3, 19, W);
@@ -331,6 +366,9 @@ export function registerStorybookBuildings (scene: Phaser.Scene) {
     paint(scene, 'alchemy', 14, 11, alchemy, 2);
     paint(scene, 'sawmill', 32, 15, (p) => sawmill(p), 1);
     paint(scene, 'millstone', 14, 10, (p) => millstone(p), 1);
+    paint(scene, 'beehive', 14, 19, (p) => beehive(p), 1);
+    paint(scene, 'museum', 32, 19, (p) => museum(p), 1);
+    paint(scene, 'fishpond', 32, 15, (p) => fishpond(p), 1);
     paint(scene, 'market', 18, 13, market, 5);
     paint(scene, 'mill', 16, 17, (p) => mill(p), 1);
     paintFrames(scene, 'mill_blades', 25, 25, 1, (p) => millBlades(p, 0), 1);

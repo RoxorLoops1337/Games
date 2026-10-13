@@ -6,7 +6,7 @@
 // The state is `PlayerS.trade` on both farmers (public, never saved), so each client draws both sides from it.
 
 import { TILE } from '../config';
-import { ITEMS } from '../data/items';
+import { ITEMS, type ItemId } from '../data/items';
 import { PAL } from '../palette';
 import type { Sim } from './sim';
 import { addItem, countOf, itemCap, takeItem } from './stats';
@@ -88,10 +88,22 @@ function complete (sim: Sim, a: PlayerS, b: PlayerS) {
     for (const [i, n] of ta.o) addItem(b, i, n);
     for (const [i, n] of tb.o) addItem(a, i, n);
     a.coins += tb.c - ta.c; b.coins += ta.c - tb.c;
+    logTrade(sim, a, b, ta, tb);
     sim.fx('collect', a.x, a.y - 6, a.id); sim.fx('collect', b.x, b.y - 6, b.id);
     sim.float(a.x, a.y - 30, `Traded with ${b.name}`, PAL.lime, a.id, 'aff');
     sim.float(b.x, b.y - 30, `Traded with ${a.name}`, PAL.lime, b.id, 'aff');
     end(a, b);
+}
+
+/** What one side offered, in words: "10 Wood, 20 coins" (or "nothing"). */
+export const offerText = (t: { o: [ItemId, number][]; c: number }) => [...t.o.map(([i, n]) => `${n} ${ITEMS[i].name}`), ...(t.c ? [`${t.c} coins`] : [])].join(', ') || 'nothing';
+
+function logTrade (sim: Sim, a: PlayerS, b: PlayerS, ta: NonNullable<PlayerS['trade']>, tb: NonNullable<PlayerS['trade']>) {
+    const note = (p: PlayerS, who: PlayerS, gave: typeof ta, got: typeof ta) => {
+        p.tlog = [{ d: sim.s.day, w: who.name, gave: offerText(gave), got: offerText(got) }, ...(p.tlog ?? [])].slice(0, 5);
+    };
+    note(a, b, ta, tb);
+    note(b, a, tb, ta);
 }
 
 /** Every step: a trade whose other side left, went down, or wandered off is called off (nothing has moved). */

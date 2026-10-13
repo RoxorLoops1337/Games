@@ -2,7 +2,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { TILE, TUNING } from '../src/shared/config';
-import { BOSS_ORDER, BOSSES, MOBS, MobKind, pickWild, tierCap, WILD_KINDS } from '../src/shared/data/mobs';
+import { AFFIX_ARMOR, AFFIXES, BOSS_ORDER, BOSSES, MOBS, MobKind, pickWild, tierCap, WILD_KINDS } from '../src/shared/data/mobs';
+import * as combat from '../src/shared/sim/combat';
 import * as mobs from '../src/shared/sim/mobs';
 import { Sim } from '../src/shared/sim/sim';
 import { countOf } from '../src/shared/sim/stats';
@@ -150,6 +151,22 @@ test('elite monsters are tougher and drop better', () => {
     const a = mob(sim, 'skeleton', cx + 60, cy, { elite: false }), b = mob(sim, 'skeleton', cx + 80, cy, { elite: true });
     assert.ok(b.mhp > a.mhp && b.el === 1);
     assert.ok(mobs.scaledHp(MOBS.slime, 21, false) > mobs.scaledHp(MOBS.slime, 1, false), 'higher levels are harder');
+});
+
+test('elites carry a trait: armored takes less, volatile bursts, swift runs faster', () => {
+    const { sim, p, cx, cy } = arena('C-8A');
+    const plain = mob(sim, 'skeleton', cx + 60, cy, { elite: false });
+    assert.equal(plain.af, undefined, 'only elites have traits');
+    const el = mob(sim, 'skeleton', cx + 80, cy, { elite: true });
+    assert.ok(el.af && AFFIXES[el.af], 'an elite has a trait');
+    el.af = 'armored'; el.hp = el.mhp = 100;
+    combat.damageMob(sim, el, 10, p);
+    assert.equal(el.hp, 100 - 10 * AFFIX_ARMOR);
+    const v = mob(sim, 'skeleton', cx + 120, cy, { elite: true });
+    v.af = 'volatile'; v.x = p.x + 5; v.y = p.y; p.invuln = 0;
+    const before = p.hearts;
+    mobs.killMob(sim, v, p);
+    assert.ok(p.hearts < before, 'standing next to a volatile elite hurts');
 });
 
 test('dash needs the skill, grants i-frames, and has a cooldown', () => {

@@ -26,3 +26,6 @@ __pycache__/
 
 # wrangler scratch (Battle Call dev/dry-run)
 .wrangler/
+
+# Blockmates default save file when the server is run from the repo root
+blockmates-world.json
