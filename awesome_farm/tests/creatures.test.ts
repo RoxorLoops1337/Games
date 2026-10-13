@@ -417,3 +417,16 @@ test('a worker on the night shift rests by day, and the shift button cycles day,
     sim.s.night = false;
     assert.equal(offShift(sim, pt), false, 'no shift: always on');
 });
+
+test('a companion carries its name for the plate over its head, and a rename shows at once', () => {
+    const { sim, p } = yard('PLATE-1');
+    const pt = pet('hopper', { name: 'Biscuit' });
+    p.pets = [pt];
+    p.comp = pt.id;
+    run(sim, 1);
+    const comp = crits(sim).find((c) => c.mode === 1 && c.pid === pt.id);
+    assert.equal(comp?.nm, 'Biscuit');
+    cmdPet(sim, p, { t: 'pet', op: 'rename', pet: pt.id, name: 'Waffle' });
+    run(sim, 1);
+    assert.equal(comp?.nm, 'Waffle');
+});
