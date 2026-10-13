@@ -13,7 +13,7 @@ import { PAL } from '../palette';
 import { dist } from '../geom';
 import { invDrop, invHas, invPut, invSum } from './machines';
 import type { Sim } from './sim';
-import { addItem, countOf, sellValue, takeItem } from './stats';
+import { addItem, countOf, itemCap, sellValue, takeItem } from './stats';
 import * as quests from './quests';
 import type { BuildE, Cmd, PlayerS } from './types';
 import { storageOf } from './uber';
@@ -26,6 +26,36 @@ export const MAX_FAVS = 40;
 export const BUSY_SECS = 20;
 /** The other farmer using this chest right now (by id), or null. */
 export const busyUser = (b: Pick<BuildE, 'use'>, now: number, me: string): string | null => (b.use && b.use.p !== me && now - b.use.t < BUSY_SECS ? b.use.p : null);
+
+// ── undoing a sale ──────────────────────────────────────────────────────────
+interface Sale { t: number; items: Map<ItemId, number>; coins: number }
+const sales = new WeakMap<Sim, Map<string, Sale>>();
+/** How long (s) after a sale it can still be taken back, and how close together sales are merged into one. */
+export const UNDO_SECS = 10;
+const MERGE_SECS = 2.5;
+
+/** Remember what was just sold (several quick clicks at the market count as one sale). */
+export function recordSale (sim: Sim, p: PlayerS, item: ItemId, n: number, coins: number) {
+    const all = sales.get(sim) ?? new Map<string, Sale>();
+    sales.set(sim, all);
+    let s = all.get(p.id);
+    if (!s || sim.s.time - s.t > MERGE_SECS) { s = { t: sim.s.time, items: new Map(), coins: 0 }; all.set(p.id, s); }
+    s.t = sim.s.time;
+    s.items.set(item, (s.items.get(item) ?? 0) + n);
+    s.coins += coins;
+}
+
+function undoSale (sim: Sim, p: PlayerS) {
+    const s = sales.get(sim)?.get(p.id);
+    if (!s || sim.s.time - s.t > UNDO_SECS) { sim.deny(p, 'Nothing to take back'); return; }
+    if (p.coins < s.coins) { sim.deny(p, 'You have already spent the coins'); return; }
+    for (const [item, n] of s.items) if (countOf(p, item) + n > itemCap(p, item)) { sim.deny(p, `No room to take back the ${ITEMS[item].name}`); return; }
+    for (const [item, n] of s.items) addItem(p, item, n);
+    p.coins -= s.coins;
+    sales.get(sim)!.delete(p.id);
+    sim.fx('equip', p.x, p.y - 10, p.id);
+    sim.float(p.x, p.y - 22, `Sale taken back: -${s.coins} coins`, PAL.cream, p.id, 'sell');
+}
 
 /** Things the bulk tools leave alone: starred, or pinned to your hotbar. */
 export function guarded (p: PlayerS): Set<ItemId> {
@@ -54,6 +84,7 @@ export function cmdInv (sim: Sim, p: PlayerS, c: Extract<Cmd, { t: 'inv' }>) {
     if (c.op === 'fav') return fav(sim, p, c.item);
     if (c.op === 'stash') return stash(sim, p);
     if (c.op === 'sellall') return sellAll(sim, p, c.items);
+    if (c.op === 'undosale') return undoSale(sim, p);
     if (c.op === 'chest') return chestAll(sim, p, c.id, c.dir);
 }
 
@@ -67,8 +98,10 @@ function sellAll (sim: Sim, p: PlayerS, items: unknown) {
         if (!ITEMS[id] || ITEMS[id].sell <= 0 || keep.has(id)) continue;
         const have = countOf(p, id) - (worn.has(id) ? 1 : 0);
         if (have < 1) continue;
-        coins += Math.max(1, Math.round(sellValue(p, id, have)));
+        const c1 = Math.max(1, Math.round(sellValue(p, id, have)));
+        coins += c1;
         takeItem(p, id, have);
+        recordSale(sim, p, id, have, c1);
         kinds++; units += have;
     }
     if (!kinds) { sim.deny(p, 'Nothing to sell: starred and pinned things stay'); return; }

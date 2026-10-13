@@ -197,7 +197,7 @@ export class MarketScreen implements Screen {
         const s = ctx.scene;
         this.win = new Win(s, { size: 'medium', title: 'Market', icon: 'market', accent: PAL.gold, onClose: () => ctx.close() });
         const w = this.win;
-        this.foot = w.footer({ info: '', infoW: 130, hint: '', primary: { label: 'Sell all shown', onClick: () => this.sellShown() } });
+        this.foot = w.footer({ info: '', infoW: 130, hint: '', primary: { label: 'Sell all shown', onClick: () => this.sellShown() }, secondary: [{ label: 'Undo sale', onClick: () => this.ctx.send({ t: 'inv', op: 'undosale' }) }] });
         const body = w.body, cy = w.top + w.toolH / 2, sw = 150;
         this.tools = new ListTools(w, 'market', () => { this.key = ''; }, ['type', 'name', 'amount', 'value']);
         const sortW = 110 + 34;
