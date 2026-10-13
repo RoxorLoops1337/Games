@@ -6,6 +6,7 @@ import * as Phaser from 'phaser';
 import { PAL } from '../../shared/palette';
 import { isTouchUi } from '../input/layout';
 import { playSfx } from '../juice/sfx';
+import { settings } from '../settings';
 import { SS } from '../res';
 import { touchWords } from './gestures';
 import { face, hex, inset, panel, PanelStyle, rect, RARITY_COLORS, STYLES } from './px';
@@ -42,7 +43,7 @@ const hudScale = () => Math.max(0.2, hudScaleOf());
 /** Is the HUD drawn small enough that its 10–12 unit text turns hard to read? */
 export const smallScreen = () => hudScale() < 0.85;
 /** A text size raised on small screens (about 1.27× at a scale of 0.69): use it for the text people read most, where there is room. */
-export const fit = (size: number) => (smallScreen() ? Math.round(size * Math.min(1.6, 0.88 / hudScale())) : size);
+export const fit = (size: number) => (smallScreen() ? Math.round(size * Math.min(1.6, 0.88 / hudScale())) : settings.bigText ? Math.round(size * 1.18) : size);
 type Text = Phaser.GameObjects.Text;
 
 // ── the house style ────────────────────────────────────────────────────────
