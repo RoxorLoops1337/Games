@@ -1898,6 +1898,23 @@ function blendQ(a, b, t, mask, out) { // out = slerp(a,b,t) per joint with per-j
   SLT[0] = wf; slerpA(out.brot, 0, a.brot, 0, b.brot, 0);
   out.ground = a.ground + (b.ground - a.ground) * wf; out.lock = a.lock + (b.lock - a.lock) * wf; return out;
 }
+// PERF: every per-joint loop of Animator.update lives in a small function of its own. While V8 has not tiered the big update() up (after every deopt, and for the first seconds of a
+// session) its own frame runs in the interpreter, where EVERY double result is a heap number: a 22-joint loop of 28 flops was ~10 KB of garbage per call inside update itself. A tiny loop
+// function reaches the optimising tiers after a handful of calls and then runs unboxed.
+function mulQ(oq, aq) {   // oq *= aq per joint (Hamilton product, three's Quaternion.multiply)
+  for (let o = 0; o < NJ * 4; o += 4) {
+    const ax = oq[o], ay = oq[o + 1], az = oq[o + 2], aw = oq[o + 3], bx = aq[o], by = aq[o + 1], bz = aq[o + 2], bw = aq[o + 3];
+    oq[o] = ax * bw + aw * bx + ay * bz - az * by; oq[o + 1] = ay * bw + aw * by + az * bx - ax * bz; oq[o + 2] = az * bw + aw * bz + ax * by - ay * bx; oq[o + 3] = aw * bw - ax * bx - ay * by - az * bz;
+  }
+}
+function scaleAdd(r, amp, d, hi) {   // hurt flinch amplitude per joint: head / neck react to the height of the blow, hips and knees to its direction
+  for (let i = 0; i < NJ; i++) {
+    const hipJ = IS_HIP4[i], fk = ADD_FH[i], fh = fk === 1 ? 0.6 + 0.9 * hi : fk === 2 ? 1 + (0.5 - hi) * 1.2 : 1;
+    r[i * 3] *= amp * fh * (hipJ ? 1 : d); r[i * 3 + 1] *= amp; r[i * 3 + 2] *= amp;
+  }
+}
+function addLateral(r, pa, f, s) { for (let i = 0; i < NJ; i++) { r[i * 3] += pa[i * 3] * f; r[i * 3 + 1] += pa[i * 3 + 1] * f * s; r[i * 3 + 2] += pa[i * 3 + 2] * f * s; } }   // lateral twist / roll layer
+function writeJoints(JL, q4) { for (let i = 0, o = 0; i < JL.length; i++, o += 4) { const jq = JL[i].quaternion; jq._x = q4[o]; jq._y = q4[o + 1]; jq._z = q4[o + 2]; jq._w = q4[o + 3]; } }   // quiet writes: no change callback, matrices read the quaternion
 const MASKS = { full: null, upper: Object.assign(JOINTS.map((n) => UPPER_SET.has(n)), { noBody: true }) };
 
 export class Animator {
@@ -2013,23 +2030,16 @@ export class Animator {
       if (this.addT >= clip.dur) { this.add = null; this.add2 = null; } else {
         clip.sample(this.addT, this.PB);
         const amp = this.addAmp, d = this.addDir; // d>0: hit from front (recoil back); d<0 from behind (lurch forward)
-        for (let i = 0; i < JOINTS.length; i++) {
-          const hipJ = IS_HIP4[i], fk = ADD_FH[i], fh = fk === 1 ? 0.6 + 0.9 * hi : fk === 2 ? 1 + (0.5 - hi) * 1.2 : 1;
-          this.PB.r[i * 3] *= amp * fh * (hipJ ? 1 : d); this.PB.r[i * 3 + 1] *= amp; this.PB.r[i * 3 + 2] *= amp;
-        }
+        scaleAdd(this.PB.r, amp, d, hi);
         this.PB.hip[2] *= amp * d; this.PB.hip[1] *= amp;
         if (this.add2 && this.addSide) { // lateral layer: twist and roll away from the side the blow came from
           const c2 = this.add2, as = this.addSide, s = as > 0 ? 1 : as < 0 ? -1 : 0, aa = as < 0 ? -as : as, f = amp * (aa < 1 ? aa : 1); c2.sample(this.addT < c2.dur ? this.addT : c2.dur, this.PA);
-          for (let i = 0; i < JOINTS.length; i++) { this.PB.r[i * 3] += this.PA.r[i * 3] * f; this.PB.r[i * 3 + 1] += this.PA.r[i * 3 + 1] * f * s; this.PB.r[i * 3 + 2] += this.PA.r[i * 3 + 2] * f * s; }
+          addLateral(this.PB.r, this.PA.r, f, s);
           this.PB.hip[0] += this.PA.hip[0] * f * s;
         }
         eulerAll(this.PB.r, this.QAdd.q);
         if (out !== this.QB) { this.QB.copy(out); out = this.QB; }
-        { const oq = out.q, aq = this.QAdd.q;   // out *= add (Hamilton product, three's Quaternion.multiply)
-          for (let o = 0; o < NJ * 4; o += 4) {
-            const ax = oq[o], ay = oq[o + 1], az = oq[o + 2], aw = oq[o + 3], bx = aq[o], by = aq[o + 1], bz = aq[o + 2], bw = aq[o + 3];
-            oq[o] = ax * bw + aw * bx + ay * bz - az * by; oq[o + 1] = ay * bw + aw * by + az * bx - ax * bz; oq[o + 2] = az * bw + aw * bz + ax * by - ay * bx; oq[o + 3] = aw * bw - ax * bx - ay * by - az * bz;
-          } }
+        mulQ(out.q, this.QAdd.q);   // out *= add
         out.hip[0] += this.PB.hip[0]; out.hip[1] += this.PB.hip[1]; out.hip[2] += this.PB.hip[2];
       }
     }
@@ -2037,7 +2047,7 @@ export class Animator {
     // write to joints
     const J = this.rig.joints, JL = this._jl || (this._jl = JOINTS.map((n) => J[n]));
     // PERF: the joint quaternion is written without its change callback (which re-derives the unused joint Euler and allocated in three); matrices read the quaternion
-    { const q4 = out.q; for (let i = 0, o = 0; i < JL.length; i++, o += 4) { const jq = JL[i].quaternion; jq._x = q4[o]; jq._y = q4[o + 1]; jq._z = q4[o + 2]; jq._w = q4[o + 3]; } }
+    writeJoints(JL, out.q);
     // head look-at (additive yaw split neck/head)
     if (this.look.target && this.look.w > 0) {
       _w.copy(this.look.target); this.rig.body.worldToLocal(_w); let yaw = Math.atan2(_w.x, _w.z); yaw = clamp(yaw, -1.0, 1.0) * this.look.w;

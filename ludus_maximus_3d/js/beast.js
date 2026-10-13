@@ -490,6 +490,18 @@ export function createBeast(unitOrRec, opts = {}) {
 }
 
 // ------------------------------------------------------------------ animator: base layer (idle + gaits), action layer (clips), additive hurt spring, crossfade snapshot
+// PERF: the per-channel loops of BeastAnimator.update are small functions of their own: the big update() runs in the interpreter for its first seconds (and after a deopt), where every double
+// result is a heap number; a tiny loop function tiers up after a few calls and then runs unboxed.
+function composeOut(out, pb, pa, mask, w) { for (let i = 0; i < NCH; i++) out[i] = mask[i] ? pb[i] + (pa[i] - pb[i]) * w : pb[i]; }
+function fadeOut(out, snap, k) { for (let i = 0; i < NCH; i++) out[i] = snap[i] + (out[i] - snap[i]) * k; }
+/** joint quaternions straight from the XYZ euler channels (three's Euler.set + onChange boxed the arguments and re-derived the quaternion through a callback, per joint per frame);
+ *  the joint Euler angles are never read, matrices read the quaternion */
+function writeQuats(JQ, out) {
+  for (let k = 0; k < JQ.length; k++) {
+    const e = JQ[k], o = e.o, x = out[o], y = out[o + 1], z = out[o + 2], c1 = Math.cos(x / 2), c2 = Math.cos(y / 2), c3 = Math.cos(z / 2), s1 = Math.sin(x / 2), s2 = Math.sin(y / 2), s3 = Math.sin(z / 2), q = e.q;
+    q._x = s1 * c2 * c3 + c1 * s2 * s3; q._y = c1 * s2 * c3 - s1 * c2 * s3; q._z = c1 * c2 * s3 + s1 * s2 * c3; q._w = c1 * c2 * c3 - s1 * s2 * s3;
+  }
+}
 class BeastAnimator {
   constructor(rig, sp, J, rest, squash, flashState, bu, mats) {
     this.rig = rig; this.sp = sp; this.J = J; this.squash = squash; this.flashState = flashState; this.mats = mats;
@@ -576,21 +588,17 @@ class BeastAnimator {
       if (a.t >= c.dur && !c.loop && !a.ended) { a.ended = true; this.emit('end', c); if (!a.hold) this.action = null; }
     }
     // ---- compose: base, action over it where the clip names a channel
-    for (let i = 0; i < NCH; i++) out[i] = mask[i] ? pb[i] + (pa[i] - pb[i]) * w : pb[i];
+    composeOut(out, pb, pa, mask, w);
     // ---- additive hurt flinch (mirrors the chest twist)
     const h = this.hurtS.update(dt); if (Math.abs(h) > 1e-4) {
       out[JI.chest * 3] += -0.22 * h; out[JI.chest * 3 + 1] += 0.18 * h * this.hurtDir; out[JI.neck * 3] += -0.28 * h; out[JI.head * 3] += -0.2 * h; out[JI.jaw * 3] += 0.3 * (h > 0 ? h : 0); out[NB + 1] += -0.07 * h * S; out[JI.tail1 * 3] += -0.4 * h;
     }
     // ---- crossfade from the last pose when a state or clip began
-    if (this.snapT < 1) { { const sn = this.snapT + dt / this.snapDur; this.snapT = sn < 1 ? sn : 1; } const k = smooth(0, 1, this.snapT); for (let i = 0; i < NCH; i++) out[i] = this.snap[i] + (out[i] - this.snap[i]) * k; }
+    if (this.snapT < 1) { { const sn = this.snapT + dt / this.snapDur; this.snapT = sn < 1 ? sn : 1; } const k = smooth(0, 1, this.snapT); fadeOut(out, this.snap, k); }
     // ---- write
     // PERF: joint quaternions straight from the XYZ euler channels (three's Euler.set + onChange boxed the arguments and re-derived the quaternion through a callback, per joint per frame);
     // the joint Euler angles are never read, matrices read the quaternion
-    const JQ = this._jq || (this._jq = JN.filter((n) => J[n]).map((n) => ({ q: J[n].quaternion, o: JI[n] * 3 })));
-    for (let k = 0; k < JQ.length; k++) {
-      const e = JQ[k], o = e.o, x = out[o], y = out[o + 1], z = out[o + 2], c1 = Math.cos(x / 2), c2 = Math.cos(y / 2), c3 = Math.cos(z / 2), s1 = Math.sin(x / 2), s2 = Math.sin(y / 2), s3 = Math.sin(z / 2), q = e.q;
-      q._x = s1 * c2 * c3 + c1 * s2 * s3; q._y = c1 * s2 * c3 - s1 * c2 * s3; q._z = c1 * c2 * s3 + s1 * s2 * c3; q._w = c1 * c2 * c3 - s1 * s2 * s3;
-    }
+    writeQuats(this._jq || (this._jq = JN.filter((n) => J[n]).map((n) => ({ q: J[n].quaternion, o: JI[n] * 3 }))), out);
     // look: yaw the head toward a target if asked
     const body = rig.body, by = out[NB], bz = out[NB + 1], bp = out[NB + 2], br2 = out[NB + 3], bw = out[NB + 4];
     // ground contact: lowest paw sole decides how far the body hangs (unless the clip is airborne)

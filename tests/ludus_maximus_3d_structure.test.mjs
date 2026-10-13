@@ -303,6 +303,11 @@ for (const fn of ['newGame', 'makeGlad', 'mkUnits', 'createFight', 'step', 'useU
   ok(/setScene\(n\)/.test(ps) && /setVsync\(ms, certain/.test(ps) && /hardReset\(/.test(ps) && /ceil/.test(ps) && /locked30/.test(ps), 'post.js: governor with per-scene state, vsync awareness, failed-recovery ceiling and 30 Hz lock detection');
   ok(/sampleRefresh\(/.test(mn) && /PressureObserver/.test(mn) && /perfOverlay\(/.test(mn) && /q\.get\('perf'\)/.test(mn) && /lx-perfhud/.test(mn) && /pacing:/.test(mn), 'main.js: refresh-rate detection, thermal hint, ?perf=1 overlay, stats().pacing');
   ok(/prep: \(\) => \{[^}]*bInv/.test(rg) && !/a\.setXYZ\(i, _w\.x/.test(rg), 'rig.js: cloak collider reads the body matrices once per step, cloth write() avoids setXYZ');
+  const bs = rd('js/beast.js');
+  ok(/class Clip \{/.test(rg) && /Clip\.prototype|^  sample\(t, P\) \{/m.test(rg) && /return new Clip\(name, keys/.test(rg) && !/c\.sample = function/.test(rg), 'rig.js: every clip is an instance of one Clip class (one shape, one prototype sample)');
+  ok(/function eulerAll\(/.test(rg) && /function slerpA\(/.test(rg) && /function mulQ\(/.test(rg) && /function scaleAdd\(/.test(rg) && /function writeJoints\(/.test(rg) && /Float64Array\(NJ \* 4\)/.test(rg), 'rig.js: the pose mixer works on flat Float64Arrays with every per-joint loop in its own small function');
+  ok(/function evalClip\(/.test(bs) && /function writeQuats\(/.test(bs) && /function composeOut\(/.test(bs) && !/j\.rotation\.set\(out\[i\]/.test(bs), 'beast.js: clips sampled over typed key arrays, joint quaternions written without Euler.set');
+  ok(/async jitWarm\(/.test(gm) && /deferMusic\(\)/.test(gm) && /noJit/.test(mn), 'game.js: JIT warm-up of the kept warm rigs and the deferred music calls');
 }
 
 { // block 13: wave 3 (scars on bodies, fight hurt, keyboard hub, tutorial placement, trophies, bestiary art)

@@ -21,7 +21,7 @@ const CIRC = 2 * Math.PI * 20;
 
 const CSS = `
 .tac-cv{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
-.tac-danger{position:absolute;inset:0;pointer-events:none;opacity:0;background:radial-gradient(ellipse at 50% 50%,rgba(120,0,0,0) 46%,rgba(176,22,22,.62) 100%)}
+.tac-danger{position:absolute;inset:0;pointer-events:none;opacity:0;background:radial-gradient(ellipse at 50% 50%,rgba(120,0,0,0) 36%,rgba(190,18,18,.55) 70%,rgba(160,10,10,.92) 100%)}
 .tac-dock{position:absolute;left:max(10px,var(--lx-sal,0px));bottom:calc(var(--lx-sab,0px) + 10px);display:flex;flex-direction:column;gap:6px;pointer-events:none;z-index:6;max-width:calc(100% - 20px)}
 .tac-row{display:flex;gap:6px;align-items:flex-end;pointer-events:none}
 .tac-chips{display:flex;gap:5px;pointer-events:auto;flex-wrap:wrap}
@@ -77,7 +77,7 @@ export function createTactics(fv) {
   dock.append(chips, row); host.append(dock, orders, tip);
   orders.type = 'button'; orders.setAttribute('aria-label', 'Orders'); orders.title = 'Orders (long press the arena)';
   const hint = el('div', 'tac-hint'); host.append(hint);
-  const T = { sel: null, w: 0, h: 0, dpr: 1, btns: {}, wheel: null, links: true, teles: [], atk: new Map(), key: '', hintDone: false, F: null, active: false, wb: [] };
+  const T = { ph: false, sel: null, w: 0, h: 0, dpr: 1, btns: {}, wheel: null, links: true, teles: [], atk: new Map(), key: '', hintDone: false, F: null, active: false, wb: [] };
   const V = new THREE.Vector3(), V2 = new THREE.Vector3();
 
   // ------------------------------------------------------------------ dock buttons
@@ -111,7 +111,7 @@ export function createTactics(fv) {
   orders.innerHTML = '<span class="tac-disc" style="position:absolute;left:3px;top:3px;width:50px;height:50px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:radial-gradient(circle at 50% 35%,#4a3f6a,#241d3a);box-shadow:inset 0 0 0 2px #f2c14e,0 2px 0 rgba(0,0,0,.45)">' + svg('orders', 26) + '</span><span class="tac-n" style="position:absolute;left:-4px;right:-4px;bottom:0;text-align:center;font:800 10px/1 var(--lx-sans,system-ui);text-shadow:0 1px 2px #000">Orders</span>';
   orders.onclick = () => { if (T.wheel) closeWheel(); else openWheel(host.clientWidth / 2, host.clientHeight * 0.52, { tap: true }); };
 
-  const phone = () => host.clientWidth < 700 || host.clientHeight < 520;
+  const phone = () => T.ph;   // cached by resize(): no layout reads in the frame loop
   function layout() { const ph = phone(); dock.style.display = !T.active || ph ? 'none' : ''; orders.style.display = !T.active || !ph ? 'none' : ''; }
 
   // ------------------------------------------------------------------ state helpers
@@ -211,7 +211,7 @@ export function createTactics(fv) {
   // ------------------------------------------------------------------ overlay drawing
   function resize() {
     const w = host.clientWidth || 1, h = host.clientHeight || 1, dpr = Math.min(window.devicePixelRatio || 1, fv.tier === 'low' ? 1.25 : 2); if (w === T.w && h === T.h && dpr === T.dpr) return;
-    T.w = w; T.h = h; T.dpr = dpr; cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr); layout();
+    T.w = w; T.h = h; T.dpr = dpr; T.ph = w < 700 || h < 520; cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr); layout();
   }
   const P3 = { x: 0, y: 0, z: 0 };
   function ringPath(x, z, r, a0 = 0, a1 = Math.PI * 2, n = 26) { // projected ground circle (arc) as a canvas path; returns false when behind the camera
@@ -293,7 +293,7 @@ export function createTactics(fv) {
     else if (e.k === 'down') { const u = F.units.find((x) => x.id === e.dst); if (u && u.id === T.sel) { T.sel = null; T.key = ''; } }
   };
   T.frame = (realDt, F, t) => {
-    T.F = F; if (T.w !== host.clientWidth || T.h !== host.clientHeight) resize();
+    T.F = F;
     drawFrame(F, t); updateDanger(F, t);
     if (!T.active) return;
     const fight = fv.phase === 'fight' && !F.done; if (dock.style.visibility !== (fight ? 'visible' : 'hidden')) { dock.style.visibility = orders.style.visibility = fight ? 'visible' : 'hidden'; if (!fight) closeWheel(); }

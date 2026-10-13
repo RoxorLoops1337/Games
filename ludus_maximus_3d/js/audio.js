@@ -658,15 +658,17 @@ export function createAudio(opts = {}) {
       const lfos = [];
       const swell = (fr, dep, node) => { const l = ctx.createOscillator(), lg = G(dep); l.frequency.value = fr; l.connect(lg); lg.connect(node.gg.gain); l.start(t); lfos.push(l); };
       swell(0.23, 0.22, f1); swell(0.37, 0.18, f2); swell(0.11, 0.3, body); swell(0.6, 0.04, air); swell(1.9, 0.22, low); swell(0.43, 0.3, exc);   // 1.9 Hz = a slow stomp pulse
-      bed = { out, kick, body, f1, f2, air, low, exc, lfos, level: -1, nextShout: t + 2 };
+      bed = { out, kick, body, f1, f2, air, low, exc, lfos, level: -1, lastSet: -9, nextShout: t + 2 };
       out.gain.value = 0.0001;
     }
     const t = NOW(), first = bed.level < 0, tc = first ? 0.001 : 0.4, L = level;
-    const target = L <= 0.001 ? 0 : 0.03 + 0.32 * Math.pow(L, 1.3);
-    bed.out.gain.setTargetAtTime(Math.max(0.0001, target), t, tc);
-    bed.body.fl.frequency.setTargetAtTime(380 + 420 * L, t, tc); bed.f1.fl.frequency.setTargetAtTime(700 + 260 * L, t, tc); bed.f2.fl.frequency.setTargetAtTime(1100 + 400 * L, t, tc);
-    bed.air.gg.gain.setTargetAtTime(0.03 + 0.07 * L * L, t, tc); bed.low.gg.gain.setTargetAtTime(0.2 + 0.7 * L, t, tc); bed.exc.gg.gain.setTargetAtTime(0.28 * sstep(0.55, 1, L), t, tc);
-    bed.level = L;
+    if (first || Math.abs(L - bed.level) > 0.004 || t - bed.lastSet > 0.3 || L <= 0.001) {   // the fight view calls this every frame: do not pile automation events on the timeline
+      const target = L <= 0.001 ? 0 : 0.03 + 0.32 * Math.pow(L, 1.3);
+      bed.out.gain.setTargetAtTime(Math.max(0.0001, target), t, tc);
+      bed.body.fl.frequency.setTargetAtTime(380 + 420 * L, t, tc); bed.f1.fl.frequency.setTargetAtTime(700 + 260 * L, t, tc); bed.f2.fl.frequency.setTargetAtTime(1100 + 400 * L, t, tc);
+      bed.air.gg.gain.setTargetAtTime(0.03 + 0.07 * L * L, t, tc); bed.low.gg.gain.setTargetAtTime(0.2 + 0.7 * L, t, tc); bed.exc.gg.gain.setTargetAtTime(0.28 * sstep(0.55, 1, L), t, tc);
+      bed.level = L; bed.lastSet = t;
+    }
     if (L > 0.3 && t >= bed.nextShout && (OFFLINE ? true : ctx.state === 'running')) { // a lone voice from the stands now and then
       bed.nextShout = t + 0.9 + rng() * 2.2 / (0.3 + L);
       sfx('crowdShout', { when: t + 0.02, pan: (rng() * 2 - 1) * 0.9, gain: 0.4 + 0.6 * L, dist: 10 + rng() * 14, pitch: 0.8 + rng() * 0.6, vowel: rng() < 0.5 ? 'o' : 'a' });
@@ -1030,7 +1032,7 @@ export function createAudio(opts = {}) {
   for (const k of Object.keys(MODES)) MODES[k].id = k;
 
   // ---- player lifecycle ----
-  const STEMS = { perc: { pan: 0, send: 0.1, g: 0.78 }, low: { pan: 0, send: 0.06, g: 0.55 }, str: { pan: -0.22, send: 0.26, g: 1.1 }, brass: { pan: 0.18, send: 0.3, g: 1.1 }, pad: { pan: 0, send: 0.4, g: 1.1 }, lead: { pan: 0.3, send: 0.32, g: 1.15 }, lyre: { pan: -0.35, send: 0.28, g: 1.25 }, fx: { pan: 0, send: 0.45, g: 0.9 } };   // g = stem trim: the low stems are held down so the mix is not all sub
+  const STEMS = { perc: { pan: 0, send: 0.1, g: 0.62 }, low: { pan: 0, send: 0.06, g: 0.5 }, str: { pan: -0.22, send: 0.26, g: 1.3 }, brass: { pan: 0.18, send: 0.3, g: 1.25 }, pad: { pan: 0, send: 0.4, g: 1.2 }, lead: { pan: 0.3, send: 0.32, g: 1.15 }, lyre: { pan: -0.35, send: 0.28, g: 1.25 }, fx: { pan: 0, send: 0.45, g: 0.9 } };   // g = stem trim: the low stems are held down so the mix is not all sub
   function newPlayer(mode, t) {
     const M = MODES[mode], bus = G(0), rev = G(0); bus.connect(musicBus); rev.connect(revMusic);
     const p = { mode, M, bus, rev, st: {}, next: t, step: 0, bar: 0, startT: t, stopped: false, hr: mulberry(hash(seed, 'hum', mode)), r: mulberry(1), pb: 0 };

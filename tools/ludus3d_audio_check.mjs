@@ -167,6 +167,16 @@ await page.evaluate(() => {
       const buf = await e.off.startRendering(); const an = L.analyze(buf, { music: true });
       return { alive, unstopped, nodesCreated: c1.total - c0.total, sources: srcs.length, events: n, st, an };
     },
+    async vol(kind) { // setMaster / setMusic / setSfx must be honoured: 0 is silence, 0.5 is quieter than 1
+      const out = {};
+      for (const v of [1, 0.5, 0]) {
+        const e = await mk(4, 2); const a = e.a; e.clock.t = 0.5;
+        if (kind === 'master') a.setMaster(v); else if (kind === 'music') a.setMusic(v); else a.setSfx(v);
+        e.clock.t = 1.0; if (kind === 'music') { a.music.setMode('arena', { at: 1.0, fade: 0.05 }); a.music.setIntensity(0.8); for (let t = 1; t <= 4; t += 0.5) { e.clock.t = t; a.music.pump(t + 0.5); } } else { for (let i = 0; i < 6; i++) a.sfx('swordHit', { when: 1.2 + i * 0.4 }); a.crowd(0.6); }
+        const buf = await e.off.startRendering(), d = buf.getChannelData(0); let pk = 0; for (let i = Math.floor(buf.sampleRate * 1.2); i < d.length; i++) pk = Math.max(pk, Math.abs(d[i])); out[v] = L.db(pk);
+      }
+      return out;
+    },
     async gesture() { // iOS / autoplay contract in a fresh live AudioContext
       const a = window.__lab.createAudio({}), r = {}; r.supportedBeforeUnlock = a.supported; r.sfxBeforeUnlock = a.sfx('uiTap'); r.stateBefore = a.state;
       r.unlock = await a.unlock(); r.stateAfter = a.state; a.setMaster(0.5); a.setMusic(0.3); a.setSfx(0.2); r.masterApi = true;
@@ -178,33 +188,37 @@ await page.evaluate(() => {
 
 const f1 = (x) => (+x).toFixed(1), pct = (x) => Math.round(x * 100);
 const results = { sfx: {}, music: {}, crowd: {}, mix: {}, burst: null, meta: {} };
+// stages can be run in separate invocations and merged through a cache file: --stages sfx,music,mix,burst,misc --cache FILE
+const STAGES = ARGS.includes('--stages') ? new Set(ARGS[ARGS.indexOf('--stages') + 1].split(',')) : null, ST = (n) => !STAGES || STAGES.has(n);
+const CACHE = ARGS.includes('--cache') ? ARGS[ARGS.indexOf('--cache') + 1] : null;
+if (CACHE && existsSync(CACHE)) Object.assign(results, JSON.parse(readFileSync(CACHE, 'utf8')));
 async function maybeWav(name, r) { if (wavDir && r.wav) { const pcm = Buffer.from(r.wav, 'base64'), h = Buffer.alloc(44); h.write('RIFF', 0); h.writeUInt32LE(36 + pcm.length, 4); h.write('WAVEfmt ', 8); h.writeUInt32LE(16, 16); h.writeUInt16LE(1, 20); h.writeUInt16LE(2, 22); h.writeUInt32LE(44100, 24); h.writeUInt32LE(44100 * 4, 28); h.writeUInt16LE(4, 32); h.writeUInt16LE(16, 34); h.write('data', 36); h.writeUInt32LE(pcm.length, 40); writeFileSync(join(wavDir, name + '.wav'), Buffer.concat([h, pcm])); } delete r.wav; }
 if (wavDir) await page.evaluate(() => { window.__wavOn = true; });
 
 const info = await page.evaluate(() => ({ sfx: window.__lab.SFX_NAMES, modes: window.__lab.MUSIC_MODES }));
 const hasApi = await page.evaluate(() => { const a = window.__lab.createAudio({}); return { setScene: typeof a.setScene, listener: typeof a.setListener, stats: typeof a._stats }; });
-results.meta = { sfxCount: info.sfx.length, modes: info.modes, api: hasApi };
+Object.assign(results.meta, { sfxCount: info.sfx.length, modes: info.modes, api: hasApi });
 
 // ---- 1) sfx ----
 console.log('== SFX ==');
 const SFX_OPTS = { ult: { element: 'fire' } };
 const only = ARGS.includes('--sfx') ? ARGS[ARGS.indexOf('--sfx') + 1].split(',') : null;
 for (const n of info.sfx) {
-  if (ARGS.includes('--no-sfx') || (only && !only.includes(n))) continue;
+  if (!ST('sfx') || ARGS.includes('--no-sfx') || (only && !only.includes(n))) continue;
   const r = await page.evaluate(([n]) => window.__job.sfx(n, {}), [n]); await maybeWav('sfx_' + n, r);
   const gap = Math.max(1, Math.min(5, r.an.active + 0.4)), rr = await page.evaluate(([n, gap]) => window.__job.sfxRR(n, 6, n === 'beastRoar' ? { kind: 'lion' } : {}, gap), [n, gap]);
   const pk = rr.map((x) => x.pk), zc = rr.map((x) => x.zc), spread = Math.max(...pk) - Math.min(...pk), zcv = (Math.max(...zc) - Math.min(...zc)) / Math.max(1, Math.max(...zc));
   r.an.rrSpread = spread; r.an.rrTimbre = zcv; results.sfx[n] = r.an;
 }
 // ---- 2) crowd bed ----
-for (const lv of [0.2, 0.6, 1]) { const r = await page.evaluate(([lv]) => window.__job.crowd(lv, 8), [lv]); await maybeWav('crowd_' + lv, r); results.crowd[lv] = r.an; }
+if (ST('sfx')) for (const lv of [0.2, 0.6, 1]) { const r = await page.evaluate(([lv]) => window.__job.crowd(lv, 8), [lv]); await maybeWav('crowd_' + lv, r); results.crowd[lv] = r.an; }
 
 // ---- 3) music ----
 console.log('== MUSIC ==');
 const modes = info.modes;
 const onlyM = ARGS.includes('--modes') ? ARGS[ARGS.indexOf('--modes') + 1].split(',') : null;
 for (const m of modes) {
-  if (ARGS.includes('--no-music') || (onlyM && !onlyM.includes(m))) continue;
+  if (!ST('music') || ARGS.includes('--no-music') || (onlyM && !onlyM.includes(m))) continue;
   const ints = m === 'arena' || m === 'beast' || m === 'boss' ? [0, 0.5, 1] : [0.5];
   for (const I of ints) {
     const key = m + (ints.length > 1 ? '@' + I : '');
@@ -213,7 +227,7 @@ for (const m of modes) {
     await maybeWav('music_' + key.replace('@', '_'), r); results.music[key] = r.an;
   }
 }
-if (!QUICK) {
+if (!QUICK && ST('music')) {
   for (const [key, o] of [['ludus@night', { setup: { hour: 22, night: 1 }, int: 0.4 }], ['ludus@dawn', { setup: { hour: 6.8, night: 0 }, int: 0.4 }], ['arena@ramp', { int: 0, rampInt: 1, secs: 32 }], ['xfade ludus>arena', { switchTo: 'arena', switchAt: 10, fade: 2, secs: 24, int: 0.5 }], ['xfade arena>victory', { switchTo: 'victory', switchAt: 10, fade: 0.3, secs: 24, int: 0.7 }]]) {
     const m = key.startsWith('arena') ? 'arena' : key.startsWith('xfade arena') ? 'arena' : 'ludus';
     const r = await page.evaluate(([m, o]) => window.__job.music(m, o), [m, o]); await maybeWav('music_' + key.replace(/[ >@]/g, '_'), r); results.music[key] = r.an;
@@ -225,18 +239,24 @@ if (!QUICK) {
 }
 
 // ---- 4) mix + burst ----
-if (!QUICK) {
+if (!QUICK && (ST('mix') || ST('burst'))) {
   console.log('== MIX / BURST ==');
-  for (const [k, d, beast] of [['fight calm', 0.6, false], ['fight busy', 1.5, false], ['beast hunt', 1.0, true]]) { const r = await page.evaluate(([d, b]) => window.__job.mix(30, d, b), [d, beast]); await maybeWav('mix_' + k.replace(' ', '_'), r); results.mix[k] = r.an; }
-  results.burst = await page.evaluate(() => window.__job.burst(60, 2.5));
+  if (ST('mix')) for (const [k, d, beast] of [['fight calm', 0.6, false], ['fight busy', 1.5, false], ['beast hunt', 1.0, true]]) { const r = await page.evaluate(([d, b]) => window.__job.mix(30, d, b), [d, beast]); await maybeWav('mix_' + k.replace(' ', '_'), r); results.mix[k] = r.an; }
+  if (ST('burst')) results.burst = await page.evaluate(() => window.__job.burst(60, 2.5));
 }
-{
+if (ST('misc')) {
   const b2 = await chromium.launch({ executablePath: process.env.PW_CHROMIUM || '/opt/pw-browsers/chromium-1194/chrome-linux/chrome', args: [] });
   const p2 = await b2.newPage(); await p2.addInitScript(() => { window.__src = []; window.__cnt = { total: 0, byType: {} }; });
   await p2.goto(`http://127.0.0.1:${port}/ludus_maximus_3d/lab/audio_lab.html${engineFile ? '?engine=1' : ''}`); await p2.waitForFunction(() => window.__ready);
   await p2.evaluate(() => { window.__job = { async gesture() { const a = window.__lab.createAudio({}), r = {}; r.sfxBeforeUnlock = a.sfx('uiTap'); r.stateBefore = a.state; r.unlock = await a.unlock(); r.stateAfter = a.state; a.setMaster(0.5); a.setMusic(0.3); a.setSfx(0.2); a.suspend(); await new Promise((x) => setTimeout(x, 100)); r.suspended = a.state; a.resume(); await new Promise((x) => setTimeout(x, 200)); r.resumed = a.state; return r; } }; });
-  results.meta.gesture = await p2.evaluate(() => window.__job.gesture()); await b2.close();
+  results.meta.gesture = await p2.evaluate(() => window.__job.gesture());
+  results.meta.ensureMs = await p2.evaluate(() => { const a = window.__lab.createAudio({}); const t0 = performance.now(); a._ready(); return +(performance.now() - t0).toFixed(1); });
+  await b2.close();
 }
+
+if (ST('misc')) { results.meta.vol = {}; for (const k of ['master', 'music', 'sfx']) results.meta.vol[k] = await page.evaluate((k) => window.__job.vol(k), k); }
+if (CACHE) writeFileSync(CACHE, JSON.stringify(results));
+for (const [k, r] of Object.entries(results.meta.vol || {})) { if (!(r[0] < -70)) bad(`volume ${k}=0 is not silent (${f1(r[0])} dB)`); if (!(r[0.5] < r[1] - 3)) bad(`volume ${k}=0.5 is not quieter than 1 (${f1(r[0.5])} vs ${f1(r[1])})`); }
 
 // ---- evaluation ----
 const flags = {}; const flag = (n, w) => { (flags[n] = flags[n] || []).push(w); };
@@ -288,10 +308,11 @@ if (results.burst) {
   if (bu.unstopped > 8) bad('sources started without stop: ' + bu.unstopped);
   if (Math.max(...al) > 260) bad('alive source peak too high ' + Math.max(...al));
 }
-L.push('', '## Autoplay / unlock contract (live AudioContext in headless Chromium)', '', '`' + JSON.stringify(results.meta.gesture) + '`');
-if (results.meta.gesture.stateBefore !== 'running' && results.meta.gesture.sfxBeforeUnlock !== false) bad('sfx before unlock must drop silently (headless Chromium starts contexts running, so this only bites on real browsers)');
-if (results.meta.gesture.stateAfter !== 'running') bad('unlock did not reach running: ' + results.meta.gesture.stateAfter);
-if (results.meta.gesture.suspended !== 'suspended' || results.meta.gesture.resumed !== 'running') bad('suspend/resume cycle failed ' + JSON.stringify(results.meta.gesture));
+L.push('', '## Volume controls (post master chain peak dB at slider 1 / 0.5 / 0; 0 must be silence)', '', ...Object.entries(results.meta.vol || {}).map(([k, r]) => `- set${k[0].toUpperCase() + k.slice(1)}: ${f1(r[1])} / ${f1(r[0.5])} / ${f1(r[0])}`));
+L.push('', '## Autoplay / unlock contract (live AudioContext in headless Chromium)', '', '`' + JSON.stringify(results.meta.gesture) + '`', '', 'Graph build (first unlock) main-thread cost: ' + results.meta.ensureMs + ' ms.');
+if ((results.meta.gesture || (results.meta.gesture = { stateBefore: 'running', sfxBeforeUnlock: false, stateAfter: 'running', suspended: 'suspended', resumed: 'running', skipped: true })).stateBefore !== 'running' && (results.meta.gesture || (results.meta.gesture = { stateBefore: 'running', sfxBeforeUnlock: false, stateAfter: 'running', suspended: 'suspended', resumed: 'running', skipped: true })).sfxBeforeUnlock !== false) bad('sfx before unlock must drop silently (headless Chromium starts contexts running, so this only bites on real browsers)');
+if ((results.meta.gesture || (results.meta.gesture = { stateBefore: 'running', sfxBeforeUnlock: false, stateAfter: 'running', suspended: 'suspended', resumed: 'running', skipped: true })).stateAfter !== 'running') bad('unlock did not reach running: ' + (results.meta.gesture || (results.meta.gesture = { stateBefore: 'running', sfxBeforeUnlock: false, stateAfter: 'running', suspended: 'suspended', resumed: 'running', skipped: true })).stateAfter);
+if ((results.meta.gesture || (results.meta.gesture = { stateBefore: 'running', sfxBeforeUnlock: false, stateAfter: 'running', suspended: 'suspended', resumed: 'running', skipped: true })).suspended !== 'suspended' || (results.meta.gesture || (results.meta.gesture = { stateBefore: 'running', sfxBeforeUnlock: false, stateAfter: 'running', suspended: 'suspended', resumed: 'running', skipped: true })).resumed !== 'running') bad('suspend/resume cycle failed ' + JSON.stringify(results.meta.gesture));
 // hard budgets
 for (const [n, a] of Object.entries(results.sfx)) { if (a.nan || a.clip) bad(`sfx ${n}: NaN/clip`); }
 for (const [n, a] of Object.entries(results.music)) { if (a.nan || a.clip) bad(`music ${n}: NaN/clip`); }
