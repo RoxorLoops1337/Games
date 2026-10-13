@@ -125,7 +125,7 @@ const SPEC: Partial<Record<ItemId, IconSpec>> = {
     wire: { shape: 'coil', mat: MAT.copper },
     circuit: { shape: 'chip', mat: ['g', 'l', 'G'], accent: 'y' },
     flour: { shape: 'sack', mat: MAT.cloth, accent: 's' },
-    motor: { shape: 'motor', mat: MAT.iron, accent: 'o' }, module_speed: { shape: 'motor', mat: MAT.gold, accent: 'b' },
+    motor: { shape: 'motor', mat: MAT.iron, accent: 'o' }, module_speed: { shape: 'motor', mat: MAT.gold, accent: 'b' }, module_eff: { shape: 'motor', mat: MAT.iron, accent: 'g' },
     core: { shape: 'core', mat: MAT.gold },
     wheat: { shape: 'wheat', mat: ['y', 'w', 'o'], accent: 'b' },
     carrot: { shape: 'carrot', mat: ['o', 'y', 'b'] },

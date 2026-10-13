@@ -52,7 +52,8 @@ split big ones into slices (rules, art, polish).
   - [x] B5c Shared blueprint book (Blueprint Shelf: share your newest blueprint, others copy it into their book; PROTOCOL 46)
 - [ ] B4 Factory v2: modules, chest gauge, harvester arm + sprinkler
   - [x] B4a Chest fill gauge (a little bar at the foot of every chest with something in it: green, gold, red)
-  - [x] B4b Speed Module (assembler recipe; slot one into a machine for +25% speed with the Module button; PROTOCOL 47; efficiency module still to do)
+  - [x] B4b Speed Module (assembler recipe; slot one into a machine for +25% speed with the Module button; PROTOCOL 47)
+  - [x] B4e Efficiency Module (assembler recipe; fuel lasts 25% longer and 10% of batches come out doubled; the Module button slots a Speed Module first, else an Efficiency one; no protocol change)
   - [x] B4c Harvester Arm (harvests ripe beds within 2 tiles into a chest within 3, no power, no protocol change)
   - [x] B4d Sprinkler (beds within 3 tiles grow 30% faster, no power, no protocol change)
 - [ ] B1 Cottages: the folk move in

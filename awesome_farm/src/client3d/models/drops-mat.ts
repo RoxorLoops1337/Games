@@ -369,6 +369,7 @@ export const MATS: Record<string, DropSpec> = {
     flour: S(flour, { lean: 0.7, turn: 'sway' }),
     motor: S(motor, { lean: 0.3 }),
     module_speed: S(motor, { lean: 0.3 }),
+    module_eff: S(motor, { lean: 0.3 }),
     core: S(powerCore),
     slimegel: S(slimegel),
     bone: S(bone, { diag: 0.75, turn: 'sway' }),
