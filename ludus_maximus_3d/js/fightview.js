@@ -277,7 +277,7 @@ export class FightView {
         if (stunned && f.st !== 'stun') { an.setState('stun'); f.st = 'stun'; }
         else if (!stunned && f.st === 'stun') { an.setState('move'); f.st = ''; }
         if (guarding && !f.guarding) { an.play('block'); f.guarding = true; } else if (!guarding && f.guarding) { an.release(); f.guarding = false; }
-        if (u.s.air && !f.air) { an.play('knockdown'); f.air = true; } else if (!u.s.air && f.air) { an.play('getup'); f.air = false; }
+        if (u.s.air && !f.air) { if (an.knockdown) an.knockdown(1); else an.play('knockdown'); f.air = true; } else if (!u.s.air && f.air) { if (an.getUp) an.getUp(); else an.play('getup'); f.air = false; }
         if (spinning && !f.spin) { an.play('attack3', { speed: 2.4 }); f.spin = true; } else if (!spinning) f.spin = false;
       }
       rig.update(dt);
@@ -347,7 +347,10 @@ export class FightView {
         if (e.save) this.num(dst, e.save, 'block');
         feel.impact('hit', { dmgFrac: frac, crit: !!e.crit, mine: dst.side === 'A', dir, color: src ? this.col(src) : undefined });
         if (e.crit && frac > 0.2) this.caPulse(0.003);
-        if (fd) { this.flashHurt(fd, frac); if (!(dst.s && dst.s.guard)) fd.rig.animator.hurt(1, clamp(0.55 + frac * 3, 0.5, 1.6)); else fd.rig.animator.hurt(1, 0.8); }
+        if (fd) {
+          this.flashHurt(fd, frac); const an = fd.rig.animator, ld = fd.rig.localDir ? fd.rig.localDir(-dir.x, -dir.z) : 1; // direction from the victim toward the attacker, in the victim's frame
+          if (!(dst.s && dst.s.guard)) { an.hurt(ld, clamp(0.55 + frac * 3, 0.5, 1.6)); if (frac > 0.22 && an.stagger && !(dst.s && dst.s.air)) an.stagger(ld); } else an.hurt(ld, 0.8);
+        }
         if (fs && frac > 0.08) fs.rig.animator.hitStop(0.04);
         A.sfx(e.crit ? 'swordHitCrit' : (e.save || (dst.s && dst.s.guard)) ? 'shieldBlock' : 'swordHit', { pan: pan(dst) });
         if (Math.random() < 0.6) A.sfx('hurt', { voice: VOICE[dst.style] ?? 0, pan: pan(dst) });
@@ -394,7 +397,7 @@ export class FightView {
         const last = !F.units.some((u) => u.side === dst.side && !u.down && u !== dst);
         fx.hit(this.chest(dst), src ? this.dirOf(src, dst) : new THREE.Vector3(1, 0, 0), { dmgFrac: 0.4, crit: true, flesh: this.gore.on }); fx.dust(this.feet(dst), 14); fx.debris && fx.debris(this.feet(dst), 4); fx.groundDecal(this.feet(dst), 'scuff', { size: 1.6 });
         this.num(dst, 'DOWN', 'miss'); feel.impact(last ? 'finalKill' : 'kill', {}); if (last && this.post.zoomPunch) this.post.zoomPunch(0.028);
-        if (fd) { fd.rig.animator.play('death'); this.dropHandles(dst.id); fd.rig.flash(0.15, '#8a5530'); }
+        if (fd) { const an = fd.rig.animator, dd0 = src ? this.dirOf(src, dst) : null, ld = dd0 && fd.rig.localDir ? fd.rig.localDir(-dd0.x, -dd0.z) : 1; if (an.die) an.die(ld, { heavy: !!(fd.lastHit && (fd.lastHit.crit || fd.lastHit.frac > 0.3)) }); else an.play('death'); this.dropHandles(dst.id); fd.rig.flash(0.15, '#8a5530'); }
         A.sfx('deathCry', { voice: VOICE[dst.style] ?? 0, pan: pan(dst) }); setTimeout(() => A.sfx('deathThud', { pan: pan(dst) }), 350); A.sfx('crowdGasp'); this.bump = 0.4;
         if (this.gore.on) { const lh = fd && fd.lastHit, dd = src ? this.dirOf(src, dst) : new THREE.Vector3(1, 0, 0); this.gore.onDown(dst.id, { last, crit: !!(lh && lh.crit) && !!src, frac: lh ? lh.frac : 0.15, dx: lh ? lh.dx : dd.x, dz: lh ? lh.dz : dd.z, big: this.t - (this.bigAoeT ?? -9) < 0.7, mine: dst.side === 'A', noSrc: !src }); }
         if (!last) this.dir.cue('kill', { victim: dst.id, killer: src && src.id, extra: this.gore.framePoints(dst.id) });

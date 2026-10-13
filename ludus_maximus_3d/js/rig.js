@@ -184,7 +184,7 @@ export const DEFAULT_PALETTE = { skin: '#c98d62', hair: '#2b1b12', cloth: '#a845
 // sky/ground reflection so metals read without an environment map (the arena has none).
 const SHADE = {
   skin: { fill: 0.15, lift: 0.024, fs: '#c8c8ff', fg: '#d8a880', rim: 0.55, rc: '#a8c4ff', rp: 4.5, sss: 0.14, sc: '#ff7a50', env: 0.07, ew: 0.9, wrap: 0.4, wc: '#ff7f55', kick: 0.17, kc: '#8aa6ff' },
-  hair: { fill: 0.2, lift: 0.012, fs: '#b8b8f0', fg: '#8a6a50', rim: 0.5, rc: '#b0c8ff', rp: 4.0, sss: 0, sc: '#fff', env: 0.14, ew: 0.8, wrap: 0.2, wc: '#ffb070', kick: 0.18, kc: '#9ab4ff', shine: 0.5 },
+  hair: { fill: 0.15, lift: 0.008, fs: '#b8b8f0', fg: '#8a6a50', rim: 0.4, rc: '#b0c8ff', rp: 4.0, sss: 0, sc: '#fff', env: 0.1, ew: 0.8, wrap: 0.2, wc: '#ffb070', kick: 0.14, kc: '#9ab4ff', shine: 0.22 },
   cloth: { fill: 0.22, fs: '#c0c0f0', fg: '#d09870', rim: 0.40, rc: '#a8c0ff', rp: 4.5, sss: 0.10, sc: '#ff9060', env: 0, wrap: 0.3, wc: '#ff8a60', kick: 0.16, kc: '#98b0ff' },
   plume: { fill: 0.22, fs: '#c0c0f0', fg: '#d09870', rim: 0.32, rc: '#b0c8ff', rp: 3.0, sss: 0.15, sc: '#ff9060', env: 0, wrap: 0.4, wc: '#ff8a60', kick: 0.14, kc: '#98b0ff' },
   leather: { fill: 0.2, lift: 0.01, fs: '#b8b8e8', fg: '#c08860', rim: 0.35, rc: '#a8c0ff', rp: 4.5, sss: 0, sc: '#fff', env: 0.22, ew: 0.5, wrap: 0.12, wc: '#ffa070', kick: 0.16, kc: '#98b0ff' },
@@ -212,8 +212,8 @@ float bh(vec3 p){ p = fract(p * 0.3183099 + 0.1); p *= 17.0; return fract(p.x * 
 float bn(vec3 p){ vec3 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
   return mix(mix(mix(bh(i), bh(i + vec3(1,0,0)), f.x), mix(bh(i + vec3(0,1,0)), bh(i + vec3(1,1,0)), f.x), f.y), mix(mix(bh(i + vec3(0,0,1)), bh(i + vec3(1,0,1)), f.x), mix(bh(i + vec3(0,1,1)), bh(i + vec3(1,1,1)), f.x), f.y), f.z); }`;
 const sweatCode = `gSW = 0.0;
-if (uSweat > 0.01) { float sb = smoothstep(0.62 - 0.4 * uSweat, 0.82, bn(vBP * 64.0 + uBSeed)); float zone = 0.45 + 0.55 * smoothstep(0.55, 1.45, vBP.y);
-  gSW = clamp(uSweat * (0.4 + 0.6 * sb) * zone, 0.0, 1.0); diffuseColor.rgb *= 1.0 - 0.12 * gSW; }`;
+if (uSweat > 0.01) { float sb = smoothstep(0.5 - 0.3 * uSweat, 0.85, bn(vBP * 30.0 + uBSeed)); float zone = 0.4 + 0.6 * smoothstep(0.55, 1.45, vBP.y);
+  gSW = clamp(uSweat * (0.22 + 0.5 * sb) * zone, 0.0, 1.0); diffuseColor.rgb *= 1.0 - 0.1 * gSW; }`;
 const bloodCode = (gash) => `gBM = 0.0;
 if (uBOn > 0.5) {
   vec3 bp = vBP; float n1 = bn(bp * 13.0 + uBSeed), n2 = bn(bp * 41.0 + uBSeed * 1.7), st = bn(vec3(bp.x * 24.0, bp.y * 2.4, bp.z * 24.0) + uBSeed * 2.3);
@@ -259,7 +259,7 @@ export function shadePatch(mat, key, xo = {}) {
   ${k.shine ? `addC += albC * ${v3s('#fff0d8')} * exp(-pow((nWC.y - 0.42) * 3.0, 2.0)) * ${f(k.shine)} * (0.4 + 0.6 * ndvC);` : ''}
   ${envOn ? `{ vec3 rWC = inverseTransformDirection(reflect(-vdC, normal), viewMatrix); float hC = rWC.y;
     vec3 eC = mix(vec3(0.46,0.34,0.26), vec3(0.62,0.74,1.0), smoothstep(-0.35, 0.8, hC)); eC += vec3(1.0,0.78,0.5) * exp(-pow((hC - 0.14) * 3.6, 2.0)) * 0.9;
-    float frC = 0.4 + 0.6 * pow(1.0 - ndvC, 2.0); addC += mix(albC, vec3(1.0), ${f(k.ew || 0)}) * eC * ${f(k.env || 0)} * frC + eC * frC * (0.38 * gSW + 0.5 * gBM * uBFresh); } ` : ''}
+    float frC = 0.4 + 0.6 * pow(1.0 - ndvC, 2.0); addC += mix(albC, vec3(1.0), ${f(k.ew || 0)}) * eC * ${f(k.env || 0)} * frC + eC * frC * (0.2 * gSW + 0.5 * gBM * uBFresh); } ` : ''}
   outgoingLight *= 1.0 - ${f(ed)} * pow(1.0 - ndvC, 2.6);
   outgoingLight += addC;
 }
@@ -659,7 +659,9 @@ function buildStateClips(stance, style) {
 // finisher (attacker) + execKneel / execDie (victim), victory (per style), hurtSide (additive lateral layer used by hurt()).
 const ARMS_OUT = (k, sp = 0.95) => ({ shoulderL: [0.3 * k, 0, sp], shoulderR: [0.3 * k, 0, -sp], elbowL: [-0.5, 0, 0], elbowR: [-0.5, 0, 0] });
 const KNEEL = { hip: [0, -0.465, 0.02], hips: [0.0, 0, 0], hipL: [0, 0, 0.09], hipR: [0, 0, -0.09], kneeL: [1.62, 0, 0], kneeR: [1.7, 0, 0], ankleL: [-1.2, 0, 0], ankleR: [-1.2, 0, 0], spine: [0.1, 0, 0], chest: [0.16, 0, 0], neck: [0.15, 0, 0], head: [0.5, 0, 0], shoulderL: [0.55, 0, 0.2], shoulderR: [0.55, 0, -0.2], elbowL: [-0.35, 0, 0], elbowR: [-0.35, 0, 0], wristL: [0, 0, 0], wristR: [0, 0, 0], body: [0, 0, 0], brot: [0, 0, 0], ground: 0 };
-const LIE_BACK = { brot: [-1.5708, 0, 0], body: [0, 0.17, -0.62] }, LIE_FRONT = { brot: [1.5708, 0, 0], body: [0, 0.17, 0.6] };
+const LIE_BACK = { brot: [-1.5708, 0, 0], body: [0, 0.17, -0.4] }, LIE_FRONT = { brot: [1.5708, 0, 0], body: [0, 0.17, 0.4] };
+// lying on the side: the underneath arm / leg stay close to the body (no digging into the floor), the upper arm rests out
+const SIDE = (lie) => { const sg = lie.sg, zS = sg, dn = sg > 0 ? 'L' : 'R', up = sg > 0 ? 'R' : 'L'; return { brot: lie.brot, body: lie.body, chest: [0, 0, 0], head: [0.05, 0.25 * sg, 0], ['shoulder' + dn]: [-0.7, 0, 0.1 * zS], ['shoulder' + up]: [-0.4, 0, -1.1 * zS], ['hip' + dn]: [-0.3, 0, 0], ['hip' + up]: [0.2, 0, 0], ['knee' + dn]: [0.6, 0, 0], ['knee' + up]: [0.3, 0, 0], ground: 0 }; };
 function reactionClips(stance, style, K) {
   const C = {}, st = stance.weapon || 'sword', dual = !!stance.dual, spear = st === 'spear', adduct = spear ? 0.42 : 0;
   // ---- stagger: a few steps of lost balance, planted feet slide with the body offset, recovers to guard
@@ -699,30 +701,30 @@ function reactionClips(stance, style, K) {
     { t: 0, p: 'guard' },
     { t: 0.13, p: { chest: [0.4, 0, 0], head: [0.2, 0, 0], shoulderL: [0.6, 0, 0.9], shoulderR: [0.6, 0, -0.9], elbowL: [-0.4, 0, 0], elbowR: [-0.4, 0, 0], hip: [0, -0.04, 0.08], body: [0, 0, 0.12], kneeL: [0.4, 0, 0], kneeR: [0.5, 0, 0] }, e: 'outCubic' },
     { t: 0.4, p: { brot: [0.9, 0, 0], body: [0, 0.2, 0.3], chest: [0.4, 0, 0], head: [-0.4, 0, 0], shoulderL: [-2.2, 0, 0.5], shoulderR: [-2.2, 0, -0.5], elbowL: [-0.3, 0, 0], elbowR: [-0.3, 0, 0], hipL: [-0.3, 0, 0.1], kneeL: [0.5, 0, 0], hipR: [0.3, 0, -0.1], kneeR: [0.9, 0, 0], ground: 0 }, e: 'inQuad' },
-    { t: 0.54, p: { brot: [1.5708, 0, 0], body: [0, 0.17, 0.58], shoulderL: [-2.4, 0, 0.6], shoulderR: [-2.4, 0, -0.6], chest: [0, 0, 0], head: [-0.2, 0.3, 0], hipL: [0, 0, 0.2], hipR: [0, 0, -0.2], kneeL: [0.2, 0, 0], kneeR: [0.3, 0, 0] }, e: 'inQuad' },
-    { t: 0.7, p: { brot: [1.42, 0, 0], body: [0, 0.35, 0.58], head: [-0.4, 0.3, 0] }, e: 'outQuad' },
-    { t: 0.88, p: { brot: [1.5708, 0, 0], body: [0, 0.17, 0.58], head: [0, 0.4, 0] }, e: 'inQuad' },
+    { t: 0.54, p: { brot: [1.5708, 0, 0], body: [0, 0.17, 0.4], shoulderL: [0.5, 0, 0.45], shoulderR: [0.5, 0, -0.45], chest: [0, 0, 0], head: [-0.2, 0.3, 0], hipL: [0, 0, 0.2], hipR: [0, 0, -0.2], kneeL: [0.2, 0, 0], kneeR: [0.3, 0, 0] }, e: 'inQuad' },
+    { t: 0.7, p: { brot: [1.42, 0, 0], body: [0, 0.35, 0.4], head: [-0.4, 0.3, 0] }, e: 'outQuad' },
+    { t: 0.88, p: { brot: [1.5708, 0, 0], body: [0, 0.17, 0.4], head: [0, 0.4, 0] }, e: 'inQuad' },
     { t: 1.0, p: { head: [0.05, 0.45, 0] }, e: 'outCubic' },
   ], { hold: true, ground: 0 });
   C.getupFront = K('getupFront', [
-    { t: 0, p: { brot: [1.5708, 0, 0], body: [0, 0.17, 0.58], ground: 0, shoulderL: [-2.4, 0, 0.6], shoulderR: [-2.4, 0, -0.6], hipL: [0, 0, 0.2], hipR: [0, 0, -0.2], kneeL: [0.2, 0, 0], kneeR: [0.3, 0, 0], head: [0.05, 0.45, 0] } },
+    { t: 0, p: { brot: [1.5708, 0, 0], body: [0, 0.17, 0.4], ground: 0, shoulderL: [0.5, 0, 0.45], shoulderR: [0.5, 0, -0.45], hipL: [0, 0, 0.2], hipR: [0, 0, -0.2], kneeL: [0.2, 0, 0], kneeR: [0.3, 0, 0], head: [0.05, 0.45, 0] } },
     { t: 0.3, p: { brot: [1.2, 0, 0], body: [0, 0.25, 0.4], chest: [-0.3, 0, 0], shoulderL: [-1.6, 0, 0.4], shoulderR: [-1.6, 0, -0.4], elbowL: [-0.9, 0, 0], elbowR: [-0.9, 0, 0], hipL: [-0.9, 0, 0.1], kneeL: [1.9, 0, 0], hipR: [-0.9, 0, -0.1], kneeR: [2.0, 0, 0], head: [-0.5, 0, 0] }, e: 'inOutCubic' },
     { t: 0.62, p: { brot: [0.3, 0, 0], body: [0, 0.05, 0.1], chest: [0.4, 0, 0], hip: [0, -0.34, 0], hipL: [-1.1, 0, 0.1], kneeL: [1.5, 0, 0], hipR: [-0.5, 0, -0.1], kneeR: [1.4, 0, 0], shoulderL: [-0.6, 0, 0.3], shoulderR: [-0.6, 0, -0.3], ground: 1, head: [-0.2, 0, 0] }, e: 'inOutCubic' },
     { t: 0.95, p: 'guard', e: 'outBack' },
   ], { ground: 0 });
   for (const sg of [1, -1]) {
-    const L = sg > 0 ? 'L' : 'R', zS = sg > 0 ? 1 : -1, lie = { brot: [0, 0, -1.5708 * sg], body: [-0.35 * sg, 0.17, 0.0] };
+    const L = sg > 0 ? 'L' : 'R', zS = sg > 0 ? 1 : -1, lie = { brot: [0, 0, -1.5708 * sg], body: [-0.2 * sg, 0.17, 0.0], sg };
     C['knockdown' + L] = K('knockdown' + L, [
       { t: 0, p: 'guard' },
       { t: 0.13, p: { chest: [-0.1, 0, -0.35 * sg], head: [0, 0, -0.3 * sg], ['shoulder' + L]: [0.2, 0, 1.2 * zS], hip: [0.06 * sg, -0.04, 0], body: [0.1 * sg, 0, 0], ['hip' + L]: [0, 0, 0.45 * zS], kneeL: [0.4, 0, 0], kneeR: [0.5, 0, 0] }, e: 'outCubic' },
       { t: 0.42, p: { brot: [0.1, 0, -0.8 * sg], body: [0.0, 0.25, 0.0], chest: [0, 0, -0.2 * sg], shoulderL: [-1.2, 0, 0.9], shoulderR: [-1.2, 0, -0.9], hipL: [-0.3, 0, 0.3], hipR: [-0.3, 0, -0.3], kneeL: [0.7, 0, 0], kneeR: [0.9, 0, 0], ground: 0 }, e: 'inQuad' },
-      { t: 0.56, p: { brot: lie.brot, body: lie.body, chest: [0, 0, 0], head: [0, 0.2, 0], shoulderL: [-0.5, 0, 1.2], shoulderR: [-0.5, 0, -1.2], hipL: [0.1, 0, 0.3], hipR: [0.1, 0, -0.3], kneeL: [0.4, 0, 0.2], kneeR: [0.6, 0, 0] }, e: 'inQuad' },
+      { t: 0.56, p: SIDE(lie), e: 'inQuad' },
       { t: 0.7, p: { brot: [0, 0, -1.38 * sg], body: [lie.body[0], 0.33, 0] }, e: 'outQuad' },
       { t: 0.88, p: { brot: lie.brot, body: lie.body }, e: 'inQuad' },
       { t: 1.0, p: { head: [0.05, 0.25, 0] }, e: 'outCubic' },
     ], { hold: true, ground: 0 });
     C['getupSide' + L] = K('getupSide' + L, [
-      { t: 0, p: { brot: lie.brot, body: lie.body, ground: 0, shoulderL: [-0.5, 0, 1.2], shoulderR: [-0.5, 0, -1.2], hipL: [0.1, 0, 0.3], hipR: [0.1, 0, -0.3], kneeR: [0.6, 0, 0] } },
+      { t: 0, p: SIDE(lie) },
       { t: 0.38, p: { brot: [0.4, 0, -0.5 * sg], body: [-0.15 * sg, 0.2, 0.1], chest: [0.4, 0, 0], hipL: [-1.0, 0, 0.1], kneeL: [1.8, 0, 0], hipR: [-0.8, 0, -0.1], kneeR: [1.9, 0, 0], shoulderL: [-0.9, 0, 0.6], shoulderR: [-0.9, 0, -0.6] }, e: 'inOutCubic' },
       { t: 0.72, p: { brot: [0, 0, 0], body: [0, 0, 0], ground: 1, chest: [0.55, 0, 0], hip: [0, -0.34, 0], hipL: [-1.0, 0, 0.1], kneeL: [1.3, 0, 0], hipR: [-0.5, 0, -0.1], kneeR: [1.4, 0, 0] }, e: 'outCubic' },
       { t: 1.0, p: 'guard', e: 'outBack' },
@@ -735,7 +737,7 @@ function reactionClips(stance, style, K) {
     { t: 0.1, p: Object.assign({ chest: [-0.5, 0, 0], head: [-0.4, 0, 0], hip: [0, -0.05, -0.06], body: [0, 0, -0.1] }, ARMS_OUT(1)), e: 'outCubic' },
     { t: 0.32, p: { chest: [-0.35, 0, 0], head: [-0.3, 0, 0], kneeL: [0.9, 0, 0], kneeR: [1.2, 0, 0], hip: [0, -0.22, -0.1], body: [0, 0, -0.3], shoulderL: [0.3, 0, 1.1], shoulderR: [0.3, 0, -1.1] }, e: 'inOutQuad' },
     { t: 0.6, p: { brot: [-0.9, 0, 0], body: [0, 0.2, -0.45], hip: [0, -0.1, 0], shoulderL: [-1.2, 0, 1.0], shoulderR: [-1.2, 0, -1.0], hipL: [-0.4, 0, 0.1], kneeL: [0.8, 0, 0], kneeR: [0.4, 0, 0], ground: 0 }, e: 'inQuad' },
-    { t: 0.82, p: { brot: LIE_BACK.brot, body: LIE_BACK.body, shoulderL: [-0.3, 0, 1.2], shoulderR: [-0.4, 0, -1.1], chest: [0, 0, 0], head: [0.1, 0.35, 0], hipL: [0.05, 0, 0.25], hipR: [0.1, 0, -0.2], kneeL: [0.3, 0, 0], kneeR: [0.6, 0, 0] }, e: 'inQuad' },
+    { t: 0.82, p: { brot: LIE_BACK.brot, body: LIE_BACK.body, shoulderL: [-0.7, 0, 1.0], shoulderR: [-0.6, 0, -1.0], chest: [0, 0, 0], head: [0.1, 0.35, 0], hipL: [-0.05, 0, 0.2], hipR: [0.0, 0, -0.15], kneeL: [0.3, 0, 0], kneeR: [0.6, 0, 0] }, e: 'inQuad' },
     { t: 0.96, p: { brot: [-1.38, 0, 0], body: [0, 0.3, LIE_BACK.body[2]] }, e: 'outQuad' },
     ...settle(LIE_BACK),
   ], { hold: true, ground: 0 });
@@ -744,18 +746,18 @@ function reactionClips(stance, style, K) {
     { t: 0.1, p: { chest: [-0.45, 0, 0], head: [-0.5, 0, 0], shoulderL: [0.6, 0, 0.6], shoulderR: [0.6, 0, -0.6], elbowL: [-0.2, 0, 0], elbowR: [-0.2, 0, 0], hip: [0, -0.04, 0.06] }, e: 'outCubic' },
     { t: 0.36, p: { chest: [0.5, 0, 0], head: [0.4, 0, 0], kneeL: [0.8, 0, 0], kneeR: [1.0, 0, 0], hip: [0, -0.26, 0.1], body: [0, 0, 0.16], shoulderL: [-0.4, 0, 0.5], shoulderR: [-0.4, 0, -0.5] }, e: 'inOutQuad' },
     { t: 0.6, p: { brot: [0.8, 0, 0], body: [0, 0.2, 0.4], shoulderL: [-1.7, 0, 0.5], shoulderR: [-1.7, 0, -0.5], hip: [0, -0.1, 0], hipL: [-0.3, 0, 0.1], kneeL: [0.6, 0, 0], ground: 0 }, e: 'inQuad' },
-    { t: 0.82, p: { brot: LIE_FRONT.brot, body: LIE_FRONT.body, shoulderL: [-2.5, 0, 0.6], shoulderR: [-2.3, 0, -0.6], chest: [0, 0, 0], head: [-0.2, 0.5, 0] }, e: 'inQuad' },
+    { t: 0.82, p: { brot: LIE_FRONT.brot, body: LIE_FRONT.body, shoulderL: [0.5, 0, 0.5], shoulderR: [0.4, 0, -0.5], chest: [0, 0, 0], head: [-0.2, 0.5, 0] }, e: 'inQuad' },
     { t: 0.96, p: { brot: [1.42, 0, 0], body: [0, 0.3, LIE_FRONT.body[2]] }, e: 'outQuad' },
     ...settle(LIE_FRONT),
   ], { hold: true, ground: 0 });
   for (const sg of [1, -1]) {
-    const L = sg > 0 ? 'L' : 'R', zS = sg > 0 ? 1 : -1, lie = { brot: [0, 0, -1.5708 * sg], body: [-0.35 * sg, 0.17, 0] };
+    const L = sg > 0 ? 'L' : 'R', zS = sg > 0 ? 1 : -1, lie = { brot: [0, 0, -1.5708 * sg], body: [-0.2 * sg, 0.17, 0], sg };
     C['death' + L] = K('death' + L, [
       { t: 0, p: 'guard' },
       { t: 0.1, p: { chest: [-0.2, 0, -0.35 * sg], head: [-0.2, 0, -0.3 * sg], ['shoulder' + L]: [0.2, 0, 1.2 * zS], hip: [0.06 * sg, -0.05, 0], body: [0.1 * sg, 0, 0] }, e: 'outCubic' },
       { t: 0.34, p: { chest: [0.15, 0, -0.4 * sg], head: [0.2, 0, -0.3 * sg], kneeL: [0.9, 0, 0], kneeR: [1.1, 0, 0], hip: [0.1 * sg, -0.26, 0], body: [0.22 * sg, 0, 0], shoulderL: [0.1, 0, 0.9], shoulderR: [0.1, 0, -0.9] }, e: 'inOutQuad' },
       { t: 0.62, p: { brot: [0.05, 0, -0.9 * sg], body: [0.0, 0.2, 0.0], hip: [0, -0.1, 0], shoulderL: [-1.0, 0, 0.9], shoulderR: [-1.0, 0, -0.9], hipL: [-0.3, 0, 0.2], hipR: [-0.3, 0, -0.2], kneeL: [0.8, 0, 0], kneeR: [0.9, 0, 0], ground: 0 }, e: 'inQuad' },
-      { t: 0.84, p: { brot: lie.brot, body: lie.body, chest: [0, 0, 0], head: [0.1, 0.3, 0], shoulderL: [-0.4, 0, 1.2], shoulderR: [-0.4, 0, -1.2], hipL: [0.1, 0, 0.25], hipR: [0.1, 0, -0.25], kneeL: [0.3, 0, 0], kneeR: [0.6, 0, 0] }, e: 'inQuad' },
+      { t: 0.84, p: SIDE(lie), e: 'inQuad' },
       { t: 0.98, p: { brot: [0, 0, -1.38 * sg], body: [lie.body[0], 0.3, 0] }, e: 'outQuad' },
       ...settle(lie),
     ], { hold: true, ground: 0 });
@@ -764,9 +766,9 @@ function reactionClips(stance, style, K) {
     { t: 0, p: 'guard' },
     { t: 0.12, p: Object.assign({ chest: [-0.5, -0.3, 0], head: [-0.4, 0, 0], hip: [0, -0.04, 0], body: [0, 0, -0.1] }, ARMS_OUT(1.2)), e: 'outCubic' },
     { t: 0.5, p: { brot: [-0.35, 2.6, 0], body: [0, 0.16, 0.05], hip: [0, -0.1, 0], kneeL: [0.8, 0, 0], kneeR: [0.9, 0, 0], shoulderL: [-0.5, 0, 1.3], shoulderR: [-0.5, 0, -1.3], ground: 0 }, e: 'inOutQuad' },
-    { t: 0.85, p: { brot: [-1.5708, 5.0, 0], body: [0, 0.17, -0.5], chest: [0, 0, 0], head: [0.1, 0.4, 0], shoulderL: [-0.3, 0, 1.2], shoulderR: [-0.4, 0, -1.2], hipL: [0.05, 0, 0.25], hipR: [0.1, 0, -0.2], kneeL: [0.3, 0, 0], kneeR: [0.6, 0, 0] }, e: 'inQuad' },
-    { t: 1.0, p: { brot: [-1.38, 5.0, 0], body: [0, 0.3, -0.5] }, e: 'outQuad' },
-    { t: 1.2, p: { brot: [-1.5708, 5.0, 0], body: [0, 0.17, -0.5] }, e: 'inQuad' },
+    { t: 0.85, p: { brot: [-1.5708, 6.2832, 0], body: [0, 0.17, -0.4], chest: [0, 0, 0], head: [0.1, 0.4, 0], shoulderL: [-0.7, 0, 1.0], shoulderR: [-0.6, 0, -1.0], hipL: [-0.05, 0, 0.2], hipR: [0, 0, -0.15], kneeL: [0.3, 0, 0], kneeR: [0.6, 0, 0] }, e: 'inQuad' },
+    { t: 1.0, p: { brot: [-1.38, 6.2832, 0], body: [0, 0.3, -0.4] }, e: 'outQuad' },
+    { t: 1.2, p: { brot: [-1.5708, 6.2832, 0], body: [0, 0.17, -0.4] }, e: 'inQuad' },
   ], { hold: true, ground: 0 });
   // ---- execution: victim kneels (held), then dies when the finisher lands; attacker plays `finisher` (events swing, hit, end)
   C.execKneel = K('execKneel', [
@@ -778,9 +780,9 @@ function reactionClips(stance, style, K) {
     { t: 0, p: KNEEL },
     { t: 0.12, p: { chest: [-0.35, 0, 0], head: [-0.75, 0, 0], neck: [-0.2, 0, 0], shoulderL: [0.1, 0, 0.9], shoulderR: [0.1, 0, -0.9], elbowL: [-0.3, 0, 0], elbowR: [-0.3, 0, 0] }, e: 'outCubic' },
     { t: 0.48, p: { chest: [0.4, 0, 0], spine: [0.3, 0, 0], head: [0.4, 0, 0], hip: [0, -0.465, 0.12], body: [0, 0, 0.14], shoulderL: [-0.5, 0, 0.6], shoulderR: [-0.5, 0, -0.6] }, e: 'inQuad' },
-    { t: 0.88, p: { brot: LIE_FRONT.brot, body: [0, 0.17, 0.52], chest: [0, 0, 0], spine: [0, 0, 0], hip: [0, 0, 0], head: [-0.2, 0.5, 0], hipL: [0.1, 0, 0.2], hipR: [0.2, 0, -0.2], kneeL: [0.2, 0, 0], kneeR: [0.3, 0, 0], ankleL: [0, 0, 0], ankleR: [0, 0, 0], shoulderL: [-2.2, 0, 0.6], shoulderR: [-0.5, 0, -0.9] }, e: 'inQuad' },
-    { t: 1.02, p: { brot: [1.42, 0, 0], body: [0, 0.28, 0.52] }, e: 'outQuad' },
-    { t: 1.2, p: { brot: LIE_FRONT.brot, body: [0, 0.17, 0.52] }, e: 'inQuad' },
+    { t: 0.88, p: { brot: LIE_FRONT.brot, body: [0, 0.17, 0.4], chest: [0, 0, 0], spine: [0, 0, 0], hip: [0, 0, 0], head: [-0.2, 0.5, 0], hipL: [0.1, 0, 0.2], hipR: [0.2, 0, -0.2], kneeL: [0.2, 0, 0], kneeR: [0.3, 0, 0], ankleL: [0, 0, 0], ankleR: [0, 0, 0], shoulderL: [0.5, 0, 0.5], shoulderR: [0.4, 0, -0.5] }, e: 'inQuad' },
+    { t: 1.02, p: { brot: [1.42, 0, 0], body: [0, 0.28, 0.4] }, e: 'outQuad' },
+    { t: 1.2, p: { brot: LIE_FRONT.brot, body: [0, 0.17, 0.4] }, e: 'inQuad' },
   ], { hold: true, ground: 0 });
   // finisher: the killing blow on a kneeling opponent about 0.9 m in front, per weapon family
   const adj = (p) => { if (adduct && p.shoulderR) p.shoulderR = [p.shoulderR[0], p.shoulderR[1], p.shoulderR[2] + adduct]; return p; };

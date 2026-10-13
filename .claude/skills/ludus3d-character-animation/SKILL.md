@@ -130,3 +130,44 @@ Holder at the fist (`wristL` + (0,-0.07,0)); scutum = cylindrical section (R 0.4
 - New helm: `helmShell(rig, head, R, top, yBowl, yCap)` then visor masks (`mask`), `faceBars`, crest via `extrude(...)` rotated `[0,-PI/2,0]`.
 - New armour piece: author in the joint frame, `rig.add('metal'|'leather'|'trim'|'cloth', geo, rig.joints.chest)`, check `chestR/chestPt` for surface offsets, then run `lab/rig_test.html` and `char_lab.html?view=grid`.
 - Lab params: `view=grid|close|one|three|turn|heads`, `pal`, `style`, `rar`, `lvl`, `rot`, `spin=1`, `pose=<clip>&t=<s>`, `cam=x,y,z,tx,ty,tz`, `fov`, `sun`, `az`, `face`, `hair`, `beard`. Shot: `node tools/3d_shot.mjs "http://127.0.0.1:PORT/ludus_maximus_3d/lab/char_lab.html?view=grid" out.png --w 1500 --h 900 --secs 1`.
+
+---
+
+# Update: close-up pass (detail tiers, face / body maps, hair, reactions, finisher, detach)
+
+Source of truth stays `js/rig.js`, `js/gear.js`, `js/gladiator.js`. Labs: `lab/char_lab.html` (new params `detail=low|medium|high`, `bare=1` body only, `view=sheet&pose=<clip>&times=0,.2,.4&gap=2&yaw=90&dist=12` pose sheets) and `lab/rig_test.html` (889 checks, must say PASS).
+
+## Detail tiers (`detail` option, `buildGladiator({detail})`, `createGladiator(g, {detail})`)
+| tier | what | dressed worst case tris (all legendary) |
+|---|---|---|
+| low | exactly the old rig (6-sided capsules, decal face, 'eye' mesh). Never touch its cost. | 2439 (thraex), baseline map is asserted in rig_test |
+| medium | shaped 8-sided limbs, face + body maps in the skin, strand hair cards, tails | 2500 |
+| high (default) | 10-sided thighs, fists with finger bumps, sandal straps, dense face, 2 hair layers | 2967 (limit 3000), draw calls 10 to 13 (limit 14) |
+`gladiator.js` resolves the tier: `opts.detail`, `setCharacterTier(t)`, `globalThis.LM3D_TIER`, `__LM3D.tier` (main.js), `?tier=`, else high. `opts.seg >= 8` (portraits) forces high. FIGHT VIEW OWNER: nothing to do (fight view does not pass a tier, `__LM3D.tier` is read at `createGladiator`), or call `setCharacterTier(tier)` before building rigs.
+
+## Geometry kit additions
+- `gridGeo(R, C, fn, {seam, tipTop, tipBot, col})`: indexed ring grid, auto-outward winding, seamless normals (`seam` duplicates the first column so a texture can wrap). `limbG(len, ts, S, rad(t,a)->[x,z], shade(t,a), {tile, sg, tipTop, tipBot})` hangs a shaped limb: `a = 0` is the front, `sg*sin(a) > 0` is lateral. Muscle groups are `bump(t, centre, width)` terms (biceps, triceps, flexors, quad, hamstring, calf heads, shin crest, malleoli).
+- Skin atlas (1024 x 320 canvas, one texture per face variant, `faceTextureHD`): x 0..256 face (eyes with sclera / iris striations / catchlights / lashes, strand brows, nose, lips, wrinkles), x 256..640 torso map (`bodyCanvas`: pecs, sternum, clavicles, serratus, six-pack, obliques, spine, scapulae), x 640..1024 four limb tiles (`limbCanvas`: upper arm, forearm, thigh, shin, lateral side positive, right limbs mirror u). The skin shader samples it through `uv`: face region replaces colour, body / limb region multiplies (grey 128 = unchanged). Geometry that is not the skull / torso / limbs gets its uv deleted in `rig.add` unless `geo.userData.faceUV`. uv (0,0) is transparent. This also removed the separate eye decal mesh (one draw call fewer).
+- Hair: dark scalp cap + layered CARDS (3 rows, 4 tris) sampling a strand cutout texture (`strandTexture`, alphaTest) on the normal `hair` material; scalp / curls / beard sheet sample the solid root texel (uv deleted and replaced in `add`). Styles: `short crop long tied braid curls bald`. `lookFor()` lists include `curls` and `braid`. Secondary hair: `addHairTail` (ponytail / braid, `TubeChain`, verlet, one mesh named 'hair') and `addHairSheet` (long hair cloth). Free-moving cloth uses `mats.clothF / plumeF / hairF` whose blood pattern coordinates come from the uv (`free`), which fixed the swimming cloak stains.
+
+## Shading
+Per-kind `wrap / kick` terms patch `RE_Direct_Physical` (`lightChunk`): warm wrap-lit terminator (subsurface-ish) on skin / cloth and a cool back fill on the side facing away from each light (the shadow side keeps form). New uniform `uSweat` (in `makeBloodUniforms`): sweat beads on skin, darker, glossy, sky reflection. `rig.setExertion(0..1)` pushes it, `setExertion(null)` follows `animator.exert` (attacks, running, hits; decays 0.035 per s; breathing rate also follows). Blood: fresh wet sheen strengthened (roughness 0.16, reflection). Blood API untouched (`addBlood addWound setBlood clearBlood sever restoreParts partFrame jointRest bloodU`).
+
+## Animator additions (names for the fight view)
+Direction convention: `dir = {x, z}` unit vector FROM the victim TOWARD the attacker in the victim's LOCAL frame (x = character left, z = forward). `rig.localDir(worldDx, worldDz)` converts a world vector. A plain number still works (+1 front, -1 behind).
+- `animator.hurt(dir, amp, side?, high?)` directional additive flinch (twist and roll away from the side, `high` 0 low blow buckles knees .. 1 head snap). `stagger(dir)` returns clip name (`staggerBack staggerFwd staggerL staggerR`, 0.8 s, body slides then recovers). `knockdown(dir)` (`knockdown` back, `knockdownFront`, `knockdownL/R`, held) then `getUp()` (`getup getupFront getupSideL/R`). `die(dir, {heavy})` picks `deathBack`, `deathSpin` (heavy front blow), `deathFront`, `deathL`, `deathR` (old `death` stays). All death clips set `dead`.
+- Execution pair: attacker `finisher()` (clip `finisher`, events `swing`, `hit`, `end`; `clipInfo('finisher')` = dur 1.9, swingAt, hitAt about 0.6; sword, spear and dual variants), victim `executed()` (clip `execKneel`, held kneeling, head bowed) then `executeKill()` (clip `execDie`) when the attacker's `hit` event fires. Stand about 0.9 m apart facing each other; victim yaw toward attacker. Body offsets are visual only (the sim position does not move), corpses land 1 to 2 m from the feet origin like the old `knockdown`.
+- Victory is per style: `animator.style` is set by `equipStyle` (`setStyle(style)` rebuilds clips). murmillo sword overhead + shield punch, thraex sica high + parmula raised, dimachaerus V, retiarius trident overhead, hoplomachus spear straight up.
+- Attacks now have anticipation (guard to wind extrapolated backwards for 0.055 s), weight shift (pelvis `hip[0]` toward the rear foot in the coil, onto the lead foot in the strike), a rebound key in recovery and overlapping action (wrist 0.04 s, head 0.05 s trail the clip time). Timing, `swing` and `hit` events are unchanged.
+- `setWeapon('brawl')` is official: `WEAPON_POSES.brawl`, `ATTACK_TIMING.brawl` (attack1 jab, attack2 right hook, attack3 shove).
+
+## Detach / drop API (gore and fight view build props from it)
+`rig.detachable()` lists names: gear tags `helm shield weapon weaponL armor galerus greaveL greaveR manicaL manicaR` and cloth by mesh name `plume cloak flap net hair`. `rig.detachPart(name)` removes it from the merged body (one `rebuild`, about 3 ms) and returns `{name, bone, matrix (world matrix of its frame now), meshes: [{key, material, geometry}] (frame-local, grip / pivot at origin), center, size, radius, object()}`; `object()` builds a plain Group (cloned standard materials with vertex colours) with the matrix applied. Cloth parts return a snapshot of the current deformed mesh in root space. `rig.reattachAll()` restores everything (also called by `restoreParts`). `rig.dropWeapon('R'|'L')` = detach the held weapon, release the two-hand grip, returns the description plus `side type tip length`; null if nothing is held. `rig.sever(armL|forearmL|...)` now also hides the net, zeros the grip IK (losing the right hand drops the shaft the left hand held) and flags `rig.held`; `restoreParts()` undoes it.
+
+## Pitfalls found in this pass
+- Python-style `//` comments inserted in the middle of a one-line JS statement swallow the rest of the line (the skinned body vanished): use `/* */` mid-line.
+- Lathe seams duplicate vertices, so uv from a lathe wraps wrongly; the atlas torso uses lathe `p0 = -PI` so the seam sits at the back.
+- Euler `brot` order is XYZ: a spin about the character's own vertical axis must end at a multiple of 2 PI (supine) or PI (prone) or the corpse lies on its side.
+- Arms raised forward in a prone pose dig into the floor (body forward is down): lay them back along the sides (shoulder x +0.5) or straight overhead (-3.0).
+- Armour radii need a margin on the HD limbs (`hdk(rig)` in gear.js): biceps +20 percent, flexors +24 percent, calf +38 percent.
+- hub.js `bakeSkinned` maps every mesh under root to bone 0 (pre-existing since the skinned-body pass), so hub gladiators are frozen poses; not touched here.
