@@ -1462,6 +1462,22 @@ function deltoid(rig, A, c, s, sg) {
   A('skin', gridGeo(3, 8, (r, k) => { const a = (k / 8) * Math.PI * 2; return [Math.sin(a) * rs[r] * 1.04 + sg * 0.004, ys[r], Math.cos(a) * rs[r]]; }, { tipTop: [sg * 0.004, 0.072, 0], col: (r, k) => 1 - 0.08 * sm01(-0.03, -0.056, ys[r]) }), rig.joints['shoulder' + s]);
 }
 
+// merge geometries (position, normal, color, optional uv) into one indexed geometry, used for detached part descriptions
+function mergeGeos(list) {
+  let nv = 0, ni = 0; for (const g of list) { nv += g.attributes.position.count; ni += g.index ? g.index.count : g.attributes.position.count; }
+  const pos = new Float32Array(nv * 3), nor = new Float32Array(nv * 3), col = new Float32Array(nv * 3).fill(1), uv = new Float32Array(nv * 2), idx = new Uint32Array(ni); let hasUV = false, vo = 0, io = 0;
+  for (const g of list) {
+    const n = g.attributes.position.count; pos.set(g.attributes.position.array, vo * 3); if (g.attributes.normal) nor.set(g.attributes.normal.array, vo * 3); if (g.attributes.color) col.set(g.attributes.color.array, vo * 3); if (g.attributes.uv) { uv.set(g.attributes.uv.array, vo * 2); hasUV = true; }
+    if (g.index) for (let i = 0; i < g.index.count; i++) idx[io++] = g.index.getX(i) + vo; else for (let i = 0; i < n; i++) idx[io++] = vo + i; vo += n;
+  }
+  const o = new THREE.BufferGeometry(); o.setAttribute('position', new THREE.BufferAttribute(pos, 3)); o.setAttribute('normal', new THREE.BufferAttribute(nor, 3)); o.setAttribute('color', new THREE.BufferAttribute(col, 3)); if (hasUV) o.setAttribute('uv', new THREE.BufferAttribute(uv, 2)); o.setIndex(new THREE.BufferAttribute(idx, 1)); o.computeBoundingSphere(); o.computeBoundingBox(); return o;
+}
+// plain (non skinned, unpatched) mesh group for a detached-part description: gore / fight view can drop it straight into the scene as a prop
+function partObject(d) {
+  const grp = new THREE.Group(); grp.name = 'part_' + d.name;
+  for (const m of d.meshes) { const src = m.material, mat = new THREE.MeshStandardMaterial({ color: src.color, vertexColors: true, roughness: src.roughness, metalness: src.metalness, side: THREE.DoubleSide, map: src.map || null, alphaTest: src.alphaTest || 0 }); const me = new THREE.Mesh(m.geometry, mat); me.castShadow = true; me.name = m.key; grp.add(me); }
+  d.matrix.decompose(grp.position, grp.quaternion, grp.scale); return grp;
+}
 // ---------------------------------------------------------------- builder
 // opts: {palette, build:{bulk,height,shoulder,arm,waist,leg,head,seg}, look:{face,hair:'short|crop|long|tied|bald',beard:0|1|2}, torso, legsBare, boots, belt, name, weapon}
 /** detail: 'low' (today's cost: 6-sided limbs, decal face), 'medium' (8-sided shaped limbs, painted face map, hair cards), 'high' (10-sided thighs, fingers, sandal straps, full hair). Numbers 0..2 work too. Default high. */
@@ -1508,7 +1524,7 @@ export function buildGladiator(opts = {}) {
   };
   const rig = {
     root, body, joints: J, sockets: sk, mats, palette: pal, secondary: [], squash, flashState, build: bd, opts, look, glow, items, bones, rest,
-    parts: {}, gear: {}, skeleton: null, tag: '', sweat: 0, exertionOverride: null, removed: [], removedSec: [], detail: DL,
+    parts: {}, gear: {}, skeleton: null, tag: '', sweat: 0, exertionOverride: null, removed: [], removedSec: [], detached: {}, held: { R: true, L: true }, detail: DL,
     postUpdate: [], // fn(rig) run after IK each frame (e.g. shield stabilisers)
     setPalette(p) { Object.assign(pal, p); mats.skin.color.set(pal.skin); mats.hair.color.set(pal.hair); mats.cloth.color.set(pal.cloth); mats.plume.color.set(pal.plume); mats.metal.color.set(pal.metal); if (mats.clothF) { mats.clothF.color.set(pal.cloth); mats.plumeF.color.set(pal.plume); mats.hairF.color.set(pal.hair); } },
     flash(dur = 0.12, color) { flashState.t = dur; flashState.dur = dur; if (color) flashState.color.set(color); },
@@ -1591,7 +1607,11 @@ export function buildGladiator(opts = {}) {
       j.scale.setScalar(1e-4); rig.severed[part] = true; blood.cuts.push(part);
       const c = rig.jointRest(P.obj, P.off); bloodU.uCut.value[(blood.cuts.length - 1) % MAX_CUTS].set(c.x, c.y, c.z, P.r);
       if (part === 'head') for (const s of rig.secondary) if (s.mesh && s.mesh.name === 'plume') s.mesh.visible = false;
-      if ((part === 'armL' || part === 'forearmL') && rig.animator.ik.hand && rig.animator.ik.hand.side === 'L') { rig.animator.ik.hand._w = rig.animator.ik.hand.w; rig.animator.ik.hand.w = 0; }
+      if (/^(fore)?arm[LR]$/.test(part)) { // a hand is gone: the net / second grip go with the left one; losing the right hand drops the shaft the left hand was holding
+        const sd = part.endsWith('L') ? 'L' : 'R', h = rig.animator.ik.hand; rig.held[sd] = false;
+        if (sd === 'L') for (const sc of rig.secondary) if (sc.mesh && sc.mesh.name === 'net') { sc.mesh.visible = false; rig.severedHidden = (rig.severedHidden || []).concat(sc); }
+        if (h && h.w > 0 && h._w === undefined && (h.side === sd || sd === 'R')) { h._w = h.w; h.w = 0; }
+      }
       blood.fresh = 1; sync(); return f;
     },
     /** world-space cut frame of a part: {pos, axis (unit, pointing from the body toward where the part was), len, r, type} */
@@ -1600,8 +1620,46 @@ export function buildGladiator(opts = {}) {
       const pos = new V3(P.off[0], P.off[1], P.off[2]).applyMatrix4(o.matrixWorld), axis = new V3(P.axis[0], P.axis[1], P.axis[2]).transformDirection(ax.matrixWorld);
       return { pos, axis, anchor: ax, len: P.len, r: P.r, type: P.type, side: P.side || 0, scale: rig.root.scale.y * bd.height };
     },
-    restoreParts() { for (const part in rig.severed) { const P = PARTS[part]; J[P.joint].scale.setScalar(1); } rig.severed = {}; blood.cuts.length = 0; for (const v of bloodU.uCut.value) v.set(0, 0, 0, 0);
+    restoreParts() { rig.reattachAll(); if (rig.severedHidden) { for (const sc of rig.severedHidden) sc.mesh.visible = true; rig.severedHidden = null; } rig.held.R = rig.held.L = true; for (const part in rig.severed) { const P = PARTS[part]; J[P.joint].scale.setScalar(1); } rig.severed = {}; blood.cuts.length = 0; for (const v of bloodU.uCut.value) v.set(0, 0, 0, 0);
       for (const s of rig.secondary) if (s.mesh && s.mesh.name === 'plume') s.mesh.visible = true; const h = rig.animator.ik.hand; if (h && h._w !== undefined) { h.w = h._w; delete h._w; } },
+    /** names of parts that can be taken off with detachPart(): gear tags (helm, shield, weapon, weaponL, armor, galerus, greaveL/R, manicaL/R ...) and cloth by mesh name (plume, cloak, flap, net, hair) */
+    detachable() { const n = new Set(); for (const it of items) if (it.tag) n.add(it.tag); for (const sc of rig.secondary) { const m = sc.mesh || sc.group; if (m && m.name) n.add(m.name); } return [...n]; },
+    /** take a gear part off the body (it vanishes from the skinned meshes) and return a description of it so a prop can be spawned:
+     *  { name, bone, matrix (world matrix of its frame NOW), meshes: [{ key, material, geometry (in the frame's local space, grip / pivot at the origin) }], center, radius, size, object() -> THREE.Group (plain meshes, matrix applied) }.
+     *  Returns null when there is nothing by that name (or it is already off). reattachAll() puts everything back. */
+    detachPart(name) {
+      const ents = items.filter((i) => i.tag === name);
+      let desc = null;
+      if (ents.length) {
+        const ref = ents[0].obj; ref.updateWorldMatrix(true, false); const inv = restOf(ref).invert(), by = {};
+        for (const it of ents) (by[it.mat] = by[it.mat] || []).push(it.geo.clone().applyMatrix4(inv));
+        const meshes = Object.keys(by).map((k) => ({ key: k, material: mats[k], geometry: mergeGeos(by[k]) }));
+        for (let i = items.length - 1; i >= 0; i--) if (items[i].tag === name) items.splice(i, 1);
+        rig.removed.push(...ents); rig.rebuild(); desc = { name, bone: ref.name, matrix: ref.matrixWorld.clone(), meshes };
+      } else {
+        const secs = rig.secondary.filter((sc) => { const m = sc.mesh || sc.group; return m && m.name === name; });
+        if (!secs.length) return null;
+        const geos = [], mat = secs[0].mesh ? secs[0].mesh.material : null; root.updateWorldMatrix(true, true);
+        for (const sc of secs) { if (sc.mesh && sc.geo) { geos.push(sc.geo.clone()); sc.mesh.visible = false; root.remove(sc.mesh); } else if (sc.group) sc.group.visible = false; rig.secondary.splice(rig.secondary.indexOf(sc), 1); rig.removedSec.push(sc); }
+        if (!geos.length || !mat) return null; desc = { name, bone: 'root', matrix: root.matrixWorld.clone(), meshes: [{ key: name, material: mat, geometry: mergeGeos(geos) }] };
+      }
+      const bb = new THREE.Box3(); for (const m of desc.meshes) { m.geometry.computeBoundingBox(); bb.union(m.geometry.boundingBox); }
+      desc.center = bb.getCenter(new V3()); desc.size = bb.getSize(new V3()); desc.radius = desc.size.length() / 2; desc.object = () => partObject(desc); rig.detached[name] = true; return desc;
+    },
+    /** put every detached part (gear, cloth) back on the body */
+    reattachAll() {
+      for (const it of rig.removed) items.push(it); const had = rig.removed.length > 0; rig.removed.length = 0;
+      for (const sc of rig.removedSec) { if (sc.mesh) { sc.mesh.visible = true; root.add(sc.mesh); } else if (sc.group) sc.group.visible = true; rig.secondary.push(sc); } rig.removedSec.length = 0;
+      rig.detached = {}; if (had) rig.rebuild();
+    },
+    /** the held weapon comes off (hand stays a fist). side 'R' = main hand (also two-handed spears: the second hand lets go), 'L' = left sword of the dimachaerus.
+     *  Returns the detachPart description plus { side, type ('gladius' | 'sica' | 'spear' | 'trident'), tip (local Vector3), length }; null if no weapon is held there. */
+    dropWeapon(side = 'R') {
+      const d = rig.detachPart(side === 'L' ? 'weaponL' : 'weapon'); if (!d) return null;
+      const w = side === 'L' ? rig.gear.weaponL : rig.gear.weapon; d.side = side; d.type = w ? w.name : ''; d.tip = w && w.userData.tip ? w.userData.tip.position.clone() : null; d.length = d.tip ? d.tip.y : d.size.y;
+      const h = rig.animator.ik.hand; if (side === 'R' && h && h.w > 0 && h._w === undefined) { h._w = h.w; h.w = 0; }
+      rig.held[side] = false; return d;
+    },
     dispose() { root.traverse((o) => { if (o.geometry) o.geometry.dispose(); }); for (const k in mats) mats[k].dispose(); rig.skeleton && rig.skeleton.dispose(); },
   };
   const A = (m, g, o) => rig.add(m, g, o);
