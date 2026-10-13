@@ -91,16 +91,16 @@ function genGrain(N, seed, creases, cell) {
     gv[y * N + xx] = hv; wr2[y * N + xx] = mt;
   }
   const cr = [], rr = rng(seed + 33);
-  for (let k = 0; k < (creases || 0); k++) cr.push({ y0: rr() * N, amp: 4 + rr() * 9, f: 1 + Math.floor(rr() * 2), ph: rr() * TAU, f2: 2 + Math.floor(rr() * 3), a2: 1.5 + rr() * 3, w: 1.2 + rr() * 1.4, str: 0.5 + rr() * 0.5 });
+  for (let k = 0; k < (creases || 0); k++) cr.push({ y0: rr() * N, amp: 4 + rr() * 9, f: 1 + Math.floor(rr() * 2), ph: rr() * TAU, f2: 2 + Math.floor(rr() * 3), a2: 1.5 + rr() * 3, w: 1.2 + rr() * 1.4, str: 0.35 + rr() * 0.4 });
   const c = cv(N, N), x = c.getContext('2d'), img = x.createImageData(N, N), d = img.data;
   for (let y = 0; y < N; y++) for (let xx = 0; xx < N; xx++) {
     const hv = h[y * N + xx], hl = h[((y + 1) % N) * N + (xx + 1) % N];
-    let dark = Math.pow(clamp(1 - gv[y * N + xx]), 2) * 0.3, light = clamp((hv - hl) * 1.7) * 0.26;
+    let dark = Math.pow(clamp(1 - gv[y * N + xx]), 2) * 0.17, light = clamp((hv - hl) * 1.9) * 0.24;
     for (const k of cr) {
       const yc = k.y0 + k.amp * Math.sin(TAU * k.f * xx / N + k.ph) + k.a2 * Math.sin(TAU * k.f2 * xx / N + k.ph * 2);
       const dy = wrap(y - yc, N), ad = Math.abs(dy);
       if (ad > k.w * 12) continue;
-      dark += k.str * 0.34 * Math.exp(-(ad / k.w) * (ad / k.w)) + k.str * 0.1 * Math.exp(-(ad / (k.w * 5)) * (ad / (k.w * 5)));
+      dark += k.str * 0.26 * Math.exp(-(ad / k.w) * (ad / k.w)) + k.str * 0.1 * Math.exp(-(ad / (k.w * 5)) * (ad / (k.w * 5)));
       light += k.str * 0.2 * Math.exp(-((dy - k.w * 2.2) / (k.w * 1.1)) * ((dy - k.w * 2.2) / (k.w * 1.1)));
     }
     const wear = wr2[y * N + xx];
@@ -267,12 +267,12 @@ export default function init({ root, id }) {
   const lf = (tile, cols) => png(leatherFrame(tile, FT, cols, thr, { S: 30, k: 13, sp: 18, len: 11, th: 4.4 }));
   // generated in small slices so the main thread never stalls for long; the CSS has flat fallbacks until each lands
   const steps = [
-    () => { grain = tm('grain', () => genGrain(192, 11, 3, 9)); put('--lt-grain', png(grain)); },
+    () => { grain = tm('grain', () => genGrain(192, 11, 2, 7)); put('--lt-grain', png(grain)); },
     () => { put('--lt-wood', jpg(tm('wood', () => genWood(192, 5)))); },
     () => { put('--lt-leather', jpg(bakeLeather(grain, 192, '#d9a867', '#bd8445'), 0.86)); put('--lt-brass', jpg(tm('brass', () => genBrass(128, 31), 0.86))); },
     () => { put('--lt-parch', jpg(tm('parch', () => genParch(192, 21)), 0.84)); },
     () => {
-      const tile = tm('ftile', () => genGrain(FT, 61, 0, 6));
+      const tile = tm('ftile', () => genGrain(FT, 61, 0, 5));
       put('--lt-fr-tan', lf(tile, ['#dfae6e', '#c99350', '#a8733a']));
       put('--lt-fr-moss', lf(tile, ['#98b866', '#7a9c4a', '#587a34']));
       put('--lt-fr-slate', lf(tile, ['#b3a590', '#9a8b76', '#7b6d5a']));

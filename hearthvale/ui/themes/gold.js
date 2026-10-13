@@ -170,9 +170,9 @@ export default function init({ root, id }) {
     props['--g-c-tr'] = corner(true, false, 'sp');
     props['--g-c-bl'] = corner(false, true, 'sp');
     props['--g-c-br'] = corner(true, true);
-    const rc = ribbon(['#e23a54', '#a3122f', '#5e0a1d', '#3d0613']);
+    const rc = ribbon(['#c82a46', '#a3122f', '#5e0a1d', '#3d0613']);
     props['--g-rib'] = rc;
-    const re = ribbon(['#2cc17a', '#0f8a54', '#064a2d', '#03301e']);
+    const re = ribbon(['#1fa468', '#0f8a54', '#064a2d', '#03301e']);
     props['--g-ribe'] = re;
     props['--g-laurel-l'] = laurel(false); props['--g-laurel-r'] = laurel(true);
     props['--g-medal'] = medal(); props['--g-rule'] = rule();

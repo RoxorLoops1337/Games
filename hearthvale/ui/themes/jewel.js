@@ -57,7 +57,7 @@ export default function init({ root }) {
     host.style.cssText = 'position:absolute;width:0;height:0;overflow:hidden;pointer-events:none';
     const base = { kd: 1.0, ks: 1.35, ex: 34, ss: 3.4, caus: 0.34, dark: 0.34 };
     host.innerHTML = `<svg xmlns="${NS}" width="0" height="0" focusable="false">
-      ${gemFilter('hv-gem', { ...base, lx: 15, ly: 9, lz: 20, ks: 3.2, ex: 70 })}
+      ${gemFilter('hv-gem', { ...base, lx: 14, ly: 8, lz: 18, ks: 2.3, ex: 110 })}
       ${gemFilter('hv-gem-press', { ...base, lx: 22, ly: 6, lz: 14, k1: 0.7, ks: 1.5, ex: 16, caus: 0.18, dark: 0.55 })}
       ${gemFilter('hv-gem-live', { ...base, lx: 20, ly: 10, lz: 30, ks: 1.7, ex: 44 })}
       ${gemFilter('hv-gem-livep', { ...base, lx: 20, ly: 10, lz: 12, k1: 0.7, ks: 1.8, ex: 15, caus: 0.18, dark: 0.55 })}
