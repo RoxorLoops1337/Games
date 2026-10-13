@@ -422,5 +422,23 @@ for (const fn of ['newGame', 'makeGlad', 'mkUnits', 'createFight', 'step', 'useU
   ok(/BATTLE PLAN/.test(sk2) && /Showmanship/.test(sk2) && /priority target/i.test(sk2), 'a ludus3d skill documents roles, formations, the priority target and Showmanship');
 }
 
+{ // GORE-JUICE: juicier gore with the same budgets (lens splatter, heartbeat jets, chunks and bone, drips, new sfx, typed-array droplets)
+  const rd = (f) => readFileSync(join(root, f), 'utf8'), gore = rd('js/gore.js'), au = rd('js/audio.js'), fxs = rd('js/fx.js');
+  ok(/const LENS_MAX = 8/.test(gore) && /lensEnsure/.test(gore) && /function lens\(pos, n, size\)/.test(gore) && /gore-lens/.test(gore), 'gore: lens splatter overlay with 8 pooled drops');
+  ok(/if \(!G\.on \|\| typeof document === 'undefined'\) return;[^]{0,120}lensEnsure\(\)/.test(gore) && !/lensEnsure\(\);\s*\n\s*\/\/ never/.test(gore), 'gore: the lens canvas is created lazily and only behind G.on (Off never creates it)');
+  ok(/lim = G\.level === 'low' \? 4 : LENS_MAX/.test(gore), 'gore: Low keeps at most 4 lens drops');
+  ok(/beat: true/.test(gore) && /pulse\(ph, 0, 0\.2\)/.test(gore) && /pulse\(ph, 0\.27, 0\.43\)/.test(gore), 'gore: deep wounds and stumps spurt on a lub-dub heartbeat');
+  ok(/if \(jets\.length >= 20\) jets\.shift\(\)/.test(gore) && /new Float32Array\(ND\)/.test(gore) && !/const drops = \[\]/.test(gore), 'gore: jet cap 20, droplets are typed arrays (no per-droplet objects)');
+  ok(/G\.tier === 'low' \? 240 : G\.tier === 'medium' \? 420 : 620/.test(gore), 'gore: droplet pool 240 / 420 / 620 by tier');
+  ok(/ringCap = \(\) => \(G\.tier === 'low' \? 16 : G\.tier === 'medium' \? 30 : 44\)/.test(gore) && /MAXLH \+ ringCap\(\)/.test(gore), 'gore: the chunk ring is capped per tier (16 / 30 / 44) so the gib mesh stays inside the mobile triangle budget');
+  ok(/function fighterDrips/.test(gore) && /f\.wet/.test(gore) && /f\.leak/.test(gore) && /fArr\.length/.test(gore), 'gore: blades drip until the fight ends, wounded fighters leak and leave a trail (array loop, no iterator per frame)');
+  ok(/function chunk\(pos, bx, bz, kind = 0\)/.test(gore) && /G\.full && heavy/.test(gore), 'gore: flesh, bone shards and blood-soaked sand clumps fly off heavy hits at Full only');
+  ok(/ctx\.last/.test(gore) && /feel\.kick/.test(gore) && /sfx\('cleave'/.test(gore) && /sfx\('squelch'/.test(gore), 'gore: the finishing blow adds a mist cloud, flesh, a second spray, a camera shove and the cleave');
+  ok(/p\.rMax2|rMax2/.test(gore) && /stampPool\(p, 0\.55\)/.test(gore), 'gore: finished pools keep creeping out with a wet rim');
+  ok(/'squelch', 'cleave'/.test(au) && /def\('squelch'/.test(au) && /def\('cleave'/.test(au) && /squelch\|cleave/.test(au), 'audio: squelch and cleave exist and are in the gore voice category');
+  ok(/opts\.maxNorm \?\? 1300/.test(fxs), 'fx: the normal-blend particle pool holds the extra droplets (1300)');
+  ok((gore.match(/new THREE\.InstancedMesh/g) || []).length === 1 && !/Math\.random/.test(gore) && !/LM\./.test(gore) && !/—/.test(gore + au), 'gore: still one instanced draw call, no Math.random, no sim access, no em dash');
+}
+
 console.log(`ludus_maximus_3d structure: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
