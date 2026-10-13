@@ -124,3 +124,19 @@ test('a sale can be taken back for ten seconds, runs of clicks count as one, and
     sim.command('a', { t: 'inv', op: 'undosale' });
     assert.equal(countOf(p, 'wood'), 15, 'too late');
 });
+
+test('crafting to a chest sends the new goods to a chest that holds that kind, and keeps them otherwise', () => {
+    const { sim, p, chest } = yard();
+    p.inv = { wood: 20 };
+    const c = chest(7, 6, { plank: 1 });
+    sim.add<BuildE>({ k: 'bld', kind: 'workbench', tx: Math.floor(p.x / TILE) + 1, ty: Math.floor(p.y / TILE), rot: 0, by: 'a' });
+    sim.command('a', { t: 'craft', recipe: 'workbench:plank', n: 3, chest: true });
+    assert.equal(countOf(p, 'plank'), 0, 'all three went to the chest');
+    assert.equal(c.inv!.plank, 4);
+    sim.command('a', { t: 'craft', recipe: 'workbench:plank', n: 2 });
+    assert.equal(countOf(p, 'plank'), 2, 'without the toggle they stay in your pockets');
+    const lone = chest(9, 6, {});
+    p.inv.wood = 20; c.inv!.plank = 0;
+    sim.command('a', { t: 'craft', recipe: 'workbench:plank', n: 1, chest: true });
+    assert.ok(lone && countOf(p, 'plank') >= 2, 'a chest that holds none of it is not used');
+});

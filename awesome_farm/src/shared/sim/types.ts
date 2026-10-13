@@ -392,7 +392,7 @@ export type Cmd =
     | { t: 'demolish'; id: number }
     | { t: 'eat'; item?: ItemId }
     | { t: 'sell'; item: ItemId; n: number }
-    | { t: 'craft'; recipe: string; n: number }
+    | { t: 'craft'; recipe: string; n: number; chest?: boolean }       // `chest`: send what is made to a chest in reach that holds that kind
     | { t: 'equip'; item: ItemId; slot?: WornSlot }     // (`slot`: which ring finger, when it matters)
     | { t: 'hot'; slot: number; item: ItemId | null }
     | { t: 'look'; look: Look; color: number }     // the character creator: how the farmer looks

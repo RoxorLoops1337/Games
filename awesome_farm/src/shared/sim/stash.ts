@@ -144,6 +144,27 @@ function fav (sim: Sim, p: PlayerS, item: ItemId) {
     else sim.deny(p, 'Too many starred items');
 }
 
+/** Move up to `limit` of one kind from the pockets into the nearest chest within reach that holds it or is labelled for it. Returns how many went. */
+export function stashItem (sim: Sim, p: PlayerS, id: ItemId, limit: number): number {
+    let left = Math.min(limit, countOf(p, id)), moved = 0;
+    const near = sim.buildings().filter((b) => isChest(b) && dist(sim.center(b).x, sim.center(b).y, p.x, p.y) <= STASH_TILES * TILE)
+        .sort((a, b) => dist(sim.center(a).x, sim.center(a).y, p.x, p.y) - dist(sim.center(b).x, sim.center(b).y, p.x, p.y));
+    for (const b of near) {
+        if (left <= 0) break;
+        const named = !!b.fl?.length && takes(b.fl, id);
+        if (!takes(b.fl, id) || !(invHas(b.inv, id) > 0 || named)) continue;
+        const n = Math.min(left, storageOf(b) - invSum(b.inv));
+        if (n <= 0) continue;
+        takeItem(p, id, n);
+        invPut((b.inv ??= {}), id, n);
+        b.by = p.id; b.use = { p: p.id, t: sim.s.time };
+        sim.touch(b);
+        fly(sim, p, b, [id], 'put', { n: 0 });
+        left -= n; moved += n;
+    }
+    return moved;
+}
+
 function stash (sim: Sim, p: PlayerS) {
     const keep = guarded(p);
     const near = sim.buildings().filter((b) => isChest(b) && dist(sim.center(b).x, sim.center(b).y, p.x, p.y) <= STASH_TILES * TILE)
