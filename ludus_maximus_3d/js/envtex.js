@@ -138,8 +138,9 @@ export function makeRadialTexture(size = 128, stops = [[0, 'rgba(255,255,255,1)'
 }
 
 /** Courtyard floor: packed sand + flagstone paths + worn training ring. Returns CanvasTexture (rect mapped 1:1). */
-export function makeCourtyardFloor(w = 1536, h = 1250, sandTile, seed = 7) {
-  const c = canvas(w, h), x = c.getContext('2d');
+// k < 1 draws the same picture (logical w x h) onto a smaller canvas: low / medium tiers keep the look at a fraction of the GPU memory (1536x1250 + mips = 10 MB)
+export function makeCourtyardFloor(w = 1536, h = 1250, sandTile, seed = 7, k = 1) {
+  const c = canvas(Math.round(w * k), Math.round(h * k)), x = c.getContext('2d'); x.scale(k, k);
   const pat = x.createPattern(sandTile.mapCanvas, 'repeat');
   x.fillStyle = pat; x.fillRect(0, 0, w, h);
   let s = seed; const rnd = () => (s = (s * 16807) % 2147483647) / 2147483647;

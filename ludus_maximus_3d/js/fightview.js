@@ -44,7 +44,7 @@ export class FightView {
     this.scene = new THREE.Scene(); post.setScene && post.setScene(this.scene);
     this.sky = createSky(); this.scene.add(this.sky.mesh);
     this.light = createLightRig(this.scene, { shadowSize: tier === 'low' ? 1024 : tier === 'medium' ? 1536 : 2048, shadowRadius: 34, shadowCenter: new THREE.Vector3(0, 0, 0), far: 300 });
-    this.arena = createArena({ density: tier === 'low' ? 0.45 : tier === 'medium' ? 0.7 : 1, decalRes: tier === 'low' ? 1024 : 2048, lite: tier !== 'high' });
+    this.arena = createArena({ density: tier === 'low' ? 0.45 : tier === 'medium' ? 0.7 : 1, decalRes: tier === 'low' ? 1024 : tier === 'medium' ? 1536 : 2048, lite: tier !== 'high' });
     this.scene.add(this.arena.group);
     this.preset = Object.assign({}, TOD.golden, { sunElev: 46, sunAz: 205 });
     applyTOD(this.preset, { rig: this.light, scene: this.scene, sky: this.sky, renderer, nightUniforms: [{ set value(v) { this._a && this._a(v); } }] });

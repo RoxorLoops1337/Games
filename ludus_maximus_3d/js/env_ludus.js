@@ -25,8 +25,8 @@ const nz = (x, z, sc, oct = 3, seed = 0) => tfbm(x * sc, z * sc, 1024, oct, seed
 
 
 /** Colosseum facade (HUB-VISUAL): three arcade tiers with deep dark arches, half columns, cornice shadows, an attic with windows, travertine streaking. Wraps every `bays` bays. */
-function colosseumTexture(w = 2048, h = 768, bays = 8) {
-  const c = document.createElement('canvas'); c.width = w; c.height = h; const x = c.getContext('2d');
+function colosseumTexture(w = 2048, h = 768, bays = 8, k = 1) {
+  const c = document.createElement('canvas'); c.width = Math.round(w * k); c.height = Math.round(h * k); const x = c.getContext('2d'); x.scale(k, k);
   const g = x.createLinearGradient(0, 0, 0, h); g.addColorStop(0, '#efe0b9'); g.addColorStop(0.55, '#dcc79a'); g.addColorStop(1, '#a98d62'); x.fillStyle = g; x.fillRect(0, 0, w, h);
   let sd = 11; const r = () => (sd = (sd * 16807) % 2147483647) / 2147483647;
   for (let i = 0; i < 700; i++) { x.fillStyle = `rgba(${70 + r() * 40},${50 + r() * 30},30,${0.03 + r() * 0.05})`; x.fillRect(r() * w, r() * h, 3 + r() * 10, 20 + r() * 120); }
@@ -71,7 +71,7 @@ export function terrainHeight(x, z) {
 }
 const pathX = (z) => 8 * Math.sin(z * 0.022) + 4 * Math.sin(z * 0.053 + 1.0);   // winding road from the front gate down to the city
 
-export function createLudus({ density = 1, seed = 5, terrainSeg = 150, farShadows = true } = {}) {
+export function createLudus({ density = 1, seed = 5, terrainSeg = 150, farShadows = true, texK = 1 } = {}) {   // texK: scale of the two big textures (courtyard floor, Colosseum facade)
   let s = seed; const rnd = () => (s = (s * 16807) % 2147483647) / 2147483647;
   const group = new THREE.Group(); group.name = 'ludus';
   const U = { uTime: { value: 0 }, uWind: { value: 1 }, uNight: { value: 0 } };
@@ -121,7 +121,7 @@ export function createLudus({ density = 1, seed = 5, terrainSeg = 150, farShadow
 
   // ---------------- courtyard floor ----------------
   {
-    const t = makeCourtyardFloor(1536, 1250, sandTile);
+    const t = makeCourtyardFloor(1536, 1250, sandTile, 7, texK);
     const g = new THREE.PlaneGeometry(CW * 2 + 2, CD * 2 + 2); g.rotateX(-Math.PI / 2);
     const m = new THREE.MeshStandardMaterial({ map: t, roughness: 1, metalness: 0, bumpMap: sandTile.bump, bumpScale: 0.6 });
     m.bumpMap.repeat.set(10, 8); m.bumpMap.needsUpdate = true;
@@ -369,7 +369,7 @@ export function createLudus({ density = 1, seed = 5, terrainSeg = 150, farShadow
     // Colosseum landmark: elliptical arcade strip with ruined cut + inner bowl shadow cone
     {
       const A = 58, B = 47, H = 49, SEG = 144;
-      const ft = colosseumTexture(2048, 768, 8);
+      const ft = colosseumTexture(2048, 768, 8, texK);
       const pos = [], uv = [], idx = [], nor = [];
       for (let j = 0; j <= SEG; j++) {
         const th = (j / SEG) * TAU, cx = Math.cos(th), sz = Math.sin(th);
