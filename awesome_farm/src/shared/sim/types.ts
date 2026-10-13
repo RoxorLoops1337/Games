@@ -357,6 +357,7 @@ export interface WorldState {
     nextId: number;
     players: Record<string, PlayerS>;
     prod?: Record<string, number>;   // items made by machines, ever ('coin': what the export chutes have paid out, ever)
+    dusk?: number;                   // the Long Dusk is on (1) or off: monsters are tougher and richer (sim/dusk.ts)
     bosses?: Record<string, number>; // bosses defeated by this world, by boss id
     shop?: Shop;             // the trader's current stock
     mkt?: { d: number; s: Record<string, number> };   // living prices: units sold per kind as of day d (data/market.ts)

@@ -18,6 +18,7 @@ import * as defense from './defense';
 import * as gather from './gather';
 import { coverShortfall } from './coffer';
 import * as cottage from './cottage';
+import * as dusk from './dusk';
 import * as festival from './festival';
 import * as museum from './museum';
 import * as mail from './mail';
@@ -211,6 +212,7 @@ export function cmdUse (sim: Sim, p: PlayerS, id: number, seed?: ItemId) {
     if (b.kind === 'mailbox') { mail.open(sim, p, b); return; }
     if (b.kind === 'museum') { museum.use(sim, p, b); return; }
     if ((b.kind === 'lantern' || b.kind === 'lamppost') && festival.use(sim, p, b)) return;
+    if (b.kind === 'beacon') { dusk.use(sim, p, b); return; }
     if (b.kind === 'cottage') { cottage.use(sim, p, b); return; }
     if (b.kind === 'shelf') { sim.events.push({ e: 'open', to: p.id, ui: 'shelf', id: b.id }); return; }
     if (b.kind === 'board') { sim.events.push({ e: 'open', to: p.id, ui: 'board', id: b.id }); return; }
