@@ -144,10 +144,11 @@ export class Game {
     if (this.me.dead) { this.me.x = y.x; this.me.y = y.y; }
     const seen = new Set();
     for (const a of m.p) {
-      const [id, x, yy, vx, vy, dir, fl, held, hp, emote, h, c, f] = a;
+      const [id, x, yy, vx, vy, dir, fl, held, hp, emote, h, c, f, fx, fy] = a;
       seen.add(id);
       let p = this.players.get(id);
       if (!p) { p = this.mkPlayer({ id, name: 'Player', look: {} }); this.players.set(id, p); }
+      p.fish = fl & 32 ? { x: fx, y: fy } : null;
       if (id === this.myId) { p.held = held; p.armor = [h, c, f]; p.emote = emote; p.hp = hp; p.dead = !!(fl & 1); continue; }
       if (p.fresh) { p.x = x; p.y = yy; p.fresh = false; }
       p.tx = x; p.ty = yy; p.vx = vx; p.vy = vy; p.dir = dir; p.dead = !!(fl & 1); p.onGround = !!(fl & 2); p.climb = !!(fl & 16); p.wet = !!(fl & 8);

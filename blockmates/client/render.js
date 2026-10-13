@@ -269,6 +269,14 @@ export class Renderer {
         held: p.held, armor: p.armor, blink: p.blink > 0 ? 1 : 0, dead: p.dead, hurt: p.hurtT > 0,
       });
       g.globalAlpha = 1;
+      if (p.fish) {
+        const [bx, by] = this.toScreen(G, p.fish.x, p.fish.y - 0.35 + Math.sin(G.t * 3 + p.id) * 0.04);
+        const hx = sx + p.dir * ts * 0.55, hy = sy - ts * 0.95;
+        g.strokeStyle = 'rgba(255,255,255,0.8)'; g.lineWidth = Math.max(1, ts * 0.03);
+        g.beginPath(); g.moveTo(hx, hy); g.quadraticCurveTo((hx + bx) / 2, Math.min(hy, by) - ts * 1.2, bx, by); g.stroke();
+        g.fillStyle = '#fff'; g.beginPath(); g.arc(bx, by, ts * 0.11, 0, 7); g.fill(); g.fillStyle = '#e63950'; g.beginPath(); g.arc(bx, by - ts * 0.03, ts * 0.11, Math.PI, 0); g.fill();
+        g.strokeStyle = 'rgba(255,255,255,0.5)'; g.lineWidth = 1; g.beginPath(); g.ellipse(bx, by + ts * 0.1, ts * 0.25, ts * 0.06, 0, 0, 7); g.stroke();
+      }
       if (p.wet) { g.fillStyle = 'rgba(70,150,240,0.22)'; g.fillRect(sx - ts * 0.4, sy - ts * 1.0, ts * 0.8, ts * 0.9); }
     }
   }

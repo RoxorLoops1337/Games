@@ -79,6 +79,7 @@ blk('crystal', { hard: 3, need: 2, light: 9, color: '#9af0ff', solid: true, drop
 blk('trampoline', { hard: 0.8, tool: 'any', solid: true, bouncy: true, color: '#e8527a' });
 blk('door_top_closed', { hard: 0.8, tool: 'axe', solid: true, door: true, drop: null, color: '#9a6a36' });
 blk('door_top_open', { hard: 0.8, tool: 'axe', solid: false, door: true, drop: null, color: '#9a6a36', sky: true });
+blk('pine_leaves', { hard: 0.25, tool: 'axe', solid: false, drop: 'sapling', dropChance: 0.18, color: '#2f6e5a', leafy: true });
 
 export const L_NONE = 0, L_WATER = 1, L_LAVA = 2; // liquid type (high nibble), level 1..8 (low nibble)
 
@@ -130,7 +131,10 @@ for (const [m, a] of [['leather', 1], ['copper', 2], ['iron', 3], ['gold', 3], [
 }
 
 itm('buddy_bell', { stack: 16 }); // hires a Buddy helper (see server/npcs.js)
-itm('warden_sigil', { stack: 4 });  // wakes the Stone Warden deep underground
+itm('warden_sigil', { stack: 4 });
+itm('fishing_rod', { stack: 1, tool: 'rod', dur: 120 });
+itm('fish', { food: 2 });
+itm('cooked_fish', { food: 7, heal: 1 });  // wakes the Stone Warden deep underground
 
 export function itemDef(id) { return ITEMS[id] || null; }
 export function blockDef(id) { return BLOCKS[id] || BLOCKS[0]; }
@@ -182,6 +186,8 @@ rec('arrow', 4, [['stick', 1], ['flint', 1], ['feather', 1]], 'bench');
 rec('bow', 1, [['stick', 3], ['string', 3]], 'bench');
 rec('buddy_bell', 1, [['iron_ingot', 3], ['wool', 2], ['crystal_shard', 1]], 'anvil');
 rec('warden_sigil', 1, [['sunstone', 3], ['titanium_ingot', 2], ['crystal_shard', 2]], 'anvil');
+rec('fishing_rod', 1, [['stick', 3], ['string', 2]], 'bench');
+rec('cooked_fish', 1, [['fish', 1]], 'furnace');
 rec('leather_helmet', 1, [['leather', 5]], 'bench');
 rec('leather_chest', 1, [['leather', 8]], 'bench');
 rec('leather_boots', 1, [['leather', 4]], 'bench');
@@ -211,4 +217,4 @@ export const MOB_LIST = Object.keys(MOBS);
 
 // player constants
 export const PLAYER = { w: 0.7, h: 1.8, hp: 20, food: 20, inv: 40, hotbar: 10, armorSlots: ['head', 'body', 'feet'] };
-export const DEFAULT_LOOK = { skin: 0, hair: 0, hairStyle: 0, shirt: 4, pants: 2, eyes: 0 };
+export const DEFAULT_LOOK = { skin: 0, hair: 1, hairStyle: 1, shirt: 4, pants: 2, eyes: 0 };

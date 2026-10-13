@@ -32,6 +32,7 @@ export class World {
     this.npcs = new Map();           // hired Buddies
     this.trades = new Map();         // player id -> trade session (shared by both sides)
     this.conns = new Map();         // id -> send(obj)
+    this.rates = new Map();
     this.liqActive = new Set();
     this.tileQueue = [];
     this.metaQueue = [];
@@ -124,7 +125,7 @@ export class World {
   disconnect(id) {
     const p = this.players.get(id);
     if (p) { this.cancelTrade(p, 'left'); this.savePlayer(p); this.players.delete(id); this.sysChat(`${p.name} left`); this.broadcast({ t: 'leave', id }); }
-    this.conns.delete(id);
+    this.conns.delete(id); this.rates.delete(id);
   }
   send(id, obj) { const f = this.conns.get(id); if (f) f(obj); }
   broadcast(obj, except) { for (const id of this.players.keys()) if (id !== except) this.send(id, obj); }
@@ -133,11 +134,16 @@ export class World {
   message(id, m) {
     this.stats.msgs++;
     if (!m || typeof m !== 'object') return;
+    // flood guard: at most 300 messages a second per connection
+    const r = this.rates.get(id) || { t: 0, n: 0 };
+    if (r.t !== this.tick_n - (this.tick_n % TICK)) { r.t = this.tick_n - (this.tick_n % TICK); r.n = 0; }
+    this.rates.set(id, r);
+    if (++r.n > 300) return;
     if (m.t === 'join') return this.join(id, m);
     if (m.t === 'ping') return this.send(id, { t: 'pong', c: m.c });
     const p = this.players.get(id);
     if (!p) return;
-    const h = HANDLERS[m.t];
+    const h = Object.hasOwn(HANDLERS, m.t) ? HANDLERS[m.t] : null;
     if (h) h(this, p, m);
   }
 
@@ -450,6 +456,13 @@ export class World {
       s.n--; if (!s.n) p.inv[p.sel] = null;
       this.addItem(p, I.bucket, 1);
       p.invDirty = true; this.event('splash', x + 0.5, y + 0.5);
+      return;
+    }
+    if (def.tool === 'rod') {
+      if (p.fishing) { p.fishing = null; return; }
+      if ((this.liqAt(x, y) >> 4) !== L_WATER) return this.send(p.id, { t: 'toast', text: 'Cast the line into water.' });
+      p.fishing = { x, y, t: 3 + this.rng() * 5, px: p.x };
+      this.event('splash', x + 0.5, y + 0.5);
       return;
     }
     if (def.name === 'buddy_bell') {
@@ -853,6 +866,7 @@ export class World {
       else if (p.food <= 0) { p.hurtCd = 0; if (p.hp > 2) this.hurtPlayer(p, 1, 'hunger'); }
     }
     this.tickMining(p);
+    if (p.fishing) this.tickFishing(p);
     // collect drops
     for (const d of this.drops.values()) {
       if (d.age < d.delay) continue;
@@ -867,6 +881,21 @@ export class World {
         if (this.canHold(p, d.item)) { d.vx += (dx / l) * 40 * DT; d.vy += (dy / l) * 40 * DT - 46 * DT; }
       }
     }
+  }
+  tickFishing(p) {
+    const f = p.fishing, held = this.heldItem(p);
+    if (!held || ITEMS[held.id].tool !== 'rod' || Math.abs(p.x - f.px) > 3 || (this.liqAt(f.x, f.y) >> 4) !== L_WATER) { p.fishing = null; return; }
+    f.t -= DT;
+    if (f.t > 0) return;
+    f.t = 4 + this.rng() * 8;
+    this.event('splash', f.x + 0.5, f.y + 0.5);
+    const r = this.rng();
+    const item = r < 0.78 ? I.fish : r < 0.88 ? I.string : r < 0.94 ? I.stick : r < 0.98 ? I.clay_ball : I.crystal_shard;
+    const left = this.addItem(p, item, 1);
+    if (left) this.dropItem(p.x, p.y - 1, item, 1);
+    this.send(p.id, { t: 'toast', text: 'You caught ' + ITEMS[item].label + '!' });
+    this.wear(p, p.sel, 1);
+    this.event('pickup', p.x, p.y - 1, item);
   }
   canHold(p, id) {
     const st = ITEMS[id].stack || 99;
@@ -922,7 +951,7 @@ export class World {
         // grass creeps
         if (this.fgAt(x - 1, y) === B.grass || this.fgAt(x + 1, y) === B.grass || this.fgAt(x - 1, y - 1) === B.grass || this.fgAt(x + 1, y - 1) === B.grass) this.setTile(x, y, 0, B.grass);
       } else if (id === B.grass && this.solidAt(x, y - 1) && this.rng() < 0.4) this.setTile(x, y, 0, B.dirt);
-      else if (id === B.leaves && this.rng() < 0.25 && !this.nearLog(x, y)) { this.setTile(x, y, 0, 0); if (this.rng() < 0.1) this.dropItem(x + 0.5, y + 0.5, I.sapling, 1); }
+      else if ((id === B.leaves || id === B.pine_leaves) && this.rng() < 0.25 && !this.nearLog(x, y)) { this.setTile(x, y, 0, 0); if (this.rng() < 0.1) this.dropItem(x + 0.5, y + 0.5, I.sapling, 1); }
     }
   }
   nearLog(x, y) {
@@ -986,8 +1015,8 @@ export class World {
     const pl = [];
     for (const p of this.players.values()) {
       const held = p.inv[p.sel];
-      pl.push([p.id, r2(p.x), r2(p.y), r2(p.vx), r2(p.vy), p.dir, (p.dead ? 1 : 0) | (p.onGround ? 2 : 0) | (p.swing > 0 ? 4 : 0) | (p.flags && p.flags.wet ? 8 : 0) | (p.flags && p.flags.climb ? 16 : 0), held ? held.id : 0, p.hp, p.emote || 0,
-        p.armor[0] ? p.armor[0].id : 0, p.armor[1] ? p.armor[1].id : 0, p.armor[2] ? p.armor[2].id : 0]);
+      pl.push([p.id, r2(p.x), r2(p.y), r2(p.vx), r2(p.vy), p.dir, (p.dead ? 1 : 0) | (p.onGround ? 2 : 0) | (p.swing > 0 ? 4 : 0) | (p.flags && p.flags.wet ? 8 : 0) | (p.flags && p.flags.climb ? 16 : 0) | (p.fishing ? 32 : 0), held ? held.id : 0, p.hp, p.emote || 0,
+        p.armor[0] ? p.armor[0].id : 0, p.armor[1] ? p.armor[1].id : 0, p.armor[2] ? p.armor[2].id : 0, p.fishing ? p.fishing.x + 0.5 : 0, p.fishing ? p.fishing.y + 0.5 : 0]);
     }
     const mb = [...this.mobs.values()].map((m) => [m.id, m.type, r2(m.x), r2(m.y), r2(m.vx), m.dir, m.hp, m.hurtT > 0 ? 1 : 0]);
     const nc = [...this.npcs.values()].map((n) => [n.id, r2(n.x), r2(n.y), r2(n.vx), n.dir, JOBS.indexOf(n.job), (n.swing > 0 ? 4 : 0) | (n.onGround ? 2 : 0), n.owner, n.look]);

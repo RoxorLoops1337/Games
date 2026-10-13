@@ -198,6 +198,12 @@ export class Terrain {
       };
       for (let k = 1; k <= t.hgt; k++) put(t.x, t.s - k, B.log, false);
       const ty = t.s - t.hgt;
+      if (t.biome === 'tundra') { // pines: a cone of needles
+        const rows = [0, 1, 1, 2, 2, 3];
+        for (let r = 0; r < rows.length; r++) for (let dx = -rows[r]; dx <= rows[r]; dx++) { put(t.x + dx, ty - 2 + r + 1, B.pine_leaves, true); }
+        put(t.x, ty - 2, B.pine_leaves, true);
+        continue;
+      }
       const rad = t.big ? 3 : 2;
       for (let dy = -rad; dy <= 1; dy++) {
         for (let dx = -rad; dx <= rad; dx++) {

@@ -119,6 +119,14 @@ const PAINT = {
     g.fillStyle = 'rgba(190,255,150,0.28)'; for (let i = 0; i < 12; i++) g.fillRect(r() * 28 | 0, r() * 26 | 0, 3, 2);
     g.globalCompositeOperation = 'destination-out'; for (let i = 0; i < 5; i++) { g.beginPath(); g.arc(r() * S, r() * S, 1.4 + r() * 1.4, 0, 7); g.fill(); } g.globalCompositeOperation = 'source-over';
   },
+  pine_leaves(g, r) {
+    g.clearRect(0, 0, S, S);
+    for (let i = 0; i < 40; i++) {
+      const x = r() * S, y = r() * S;
+      g.fillStyle = shade('#2f6e5a', (r() - 0.5) * 50); g.beginPath(); g.moveTo(x, y - 4); g.lineTo(x + 4.5, y + 3); g.lineTo(x - 4.5, y + 3); g.closePath(); g.fill();
+    }
+    g.fillStyle = 'rgba(255,255,255,0.55)'; for (let i = 0; i < 14; i++) g.fillRect(r() * 28 | 0, r() * 28 | 0, 3, 2);
+  },
   cactus(g, r) {
     g.clearRect(0, 0, S, S);
     rr(g, 7, 0, 18, S, 7); g.fillStyle = '#3f8a4e'; g.fill();
@@ -343,7 +351,7 @@ export function itemIcon(id) {
   if (def.place && (def.kind === 'block' || def.place)) {
     const bid = def.place;
     const bd = BLOCKS[bid];
-    if (bd.plant || bd.station || bd.climb || bd.sign || bd.bed || bd.container || bd.waystone || bd.oneway || bd.door || id === I.torch || bid === B.leaves || bid === B.cactus || bid === B.glass) {
+    if (bd.plant || bd.station || bd.climb || bd.sign || bd.bed || bd.container || bd.waystone || bd.oneway || bd.door || id === I.torch || bid === B.leaves || bid === B.pine_leaves || bid === B.cactus || bid === B.glass) {
       g.drawImage(tileArt(bid === B.door_closed ? B.door_closed : bid), 0, 0);
     } else {
       g.fillStyle = 'rgba(0,0,0,0.25)'; rr(g, 3, 4, 27, 27, 5); g.fill();
@@ -419,6 +427,11 @@ function paintItem(g, name) {
     mob_gel() { outline(() => { g.fillStyle = '#7ad04a'; g.beginPath(); g.moveTo(5, 26); g.quadraticCurveTo(4, 8, 16, 8); g.quadraticCurveTo(28, 8, 27, 26); g.closePath(); g.fill(); g.fillStyle = 'rgba(255,255,255,0.5)'; g.fillRect(10, 12, 5, 3); }); },
     bow() { outline(() => { g.strokeStyle = '#8a5a2a'; g.lineWidth = 3; g.beginPath(); g.arc(6, 16, 16, -1.2, 1.2); g.stroke(); g.strokeStyle = '#f2f2f2'; g.lineWidth = 1; g.beginPath(); g.moveTo(11, 3); g.lineTo(11, 29); g.stroke(); }); },
     door() { g.drawImage(tileArt(B.door_closed), 0, 0); },
+    buddy_bell() { outline(() => { g.fillStyle = '#e8b030'; g.beginPath(); g.moveTo(6, 24); g.quadraticCurveTo(6, 6, 16, 6); g.quadraticCurveTo(26, 6, 26, 24); g.closePath(); g.fill(); g.fillStyle = 'rgba(255,255,255,0.5)'; g.fillRect(9, 10, 3, 9); g.fillStyle = '#8a5a1a'; g.fillRect(4, 24, 24, 3); g.beginPath(); g.arc(16, 28, 3, 0, 7); g.fill(); g.strokeStyle = '#4ad8ff'; g.lineWidth = 2; g.beginPath(); g.arc(16, 6, 3, 0, 7); g.stroke(); }); },
+    warden_sigil() { outline(() => { g.fillStyle = '#5a5d68'; rr(g, 4, 4, 24, 24, 5); g.fill(); g.strokeStyle = '#ff9a3d'; g.lineWidth = 2; g.shadowColor = '#ff9a3d'; g.shadowBlur = 6; g.beginPath(); g.arc(16, 16, 7, 0, 7); g.moveTo(16, 6); g.lineTo(16, 26); g.moveTo(6, 16); g.lineTo(26, 16); g.stroke(); }); },
+    fishing_rod() { outline(() => { g.strokeStyle = '#7a4e2a'; g.lineWidth = 3; g.lineCap = 'round'; g.beginPath(); g.moveTo(5, 28); g.lineTo(24, 6); g.stroke(); g.strokeStyle = '#fff'; g.lineWidth = 1; g.beginPath(); g.moveTo(24, 6); g.quadraticCurveTo(30, 14, 26, 24); g.stroke(); g.fillStyle = '#e63950'; g.beginPath(); g.arc(26, 25, 3, 0, 7); g.fill(); g.fillStyle = '#9aa0aa'; g.fillRect(9, 20, 5, 4); }); },
+    fish() { outline(() => { g.fillStyle = '#6aa8e0'; g.beginPath(); g.moveTo(5, 16); g.quadraticCurveTo(14, 5, 24, 16); g.quadraticCurveTo(14, 27, 5, 16); g.fill(); g.fillStyle = '#4a82c0'; g.beginPath(); g.moveTo(22, 16); g.lineTo(29, 9); g.lineTo(29, 23); g.closePath(); g.fill(); g.fillStyle = '#fff'; g.beginPath(); g.arc(10, 14, 2, 0, 7); g.fill(); g.fillStyle = '#222'; g.fillRect(10, 14, 1.5, 1.5); }); },
+    cooked_fish() { outline(() => { g.fillStyle = '#c98a4a'; g.beginPath(); g.moveTo(5, 16); g.quadraticCurveTo(14, 5, 24, 16); g.quadraticCurveTo(14, 27, 5, 16); g.fill(); g.fillStyle = '#9a5a28'; g.beginPath(); g.moveTo(22, 16); g.lineTo(29, 9); g.lineTo(29, 23); g.closePath(); g.fill(); g.strokeStyle = '#6a3a18'; g.lineWidth = 1.5; for (const x of [11, 15, 19]) { g.beginPath(); g.moveTo(x, 12); g.lineTo(x, 20); g.stroke(); } }); },
   };
   (f[name] || (() => { g.fillStyle = '#c0c0c0'; rr(g, 6, 6, 20, 20, 5); g.fill(); }))();
 }

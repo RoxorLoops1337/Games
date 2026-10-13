@@ -323,4 +323,24 @@ test('operators can teleport to a safe spot, summon creatures, and the sigil wak
   assert.equal([...w.mobs.values()].filter((m) => m.type === 'stonewarden').length >= 1, true);
 });
 
+test('fishing: cast into water, wait, catch; breaks off when you walk away', () => {
+  const w = new World({ seed: 5 });
+  const c = client(w, 'Fisher'); run(w, 10);
+  w.message(c.id, { t: 'chat', text: '/goto ocean' }); run(w, 60);
+  const p = c.p();
+  w.addItem(p, I.fishing_rod, 1);
+  const si = p.inv.findIndex((q) => q && q.id === I.fishing_rod); p.inv[9] = p.inv[si]; p.inv[si] = null; p.sel = 9;
+  let wx = 0, wy = 0;
+  for (let x = Math.floor(p.x) - 20; x < Math.floor(p.x) + 20 && !wy; x++) for (let y = 88; y < 100; y++) if ((w.liqAt(x, y) >> 4) === 1 && (w.liqAt(x, y - 1) >> 4) === 1) { wx = x; wy = y; break; }
+  assert.ok(wy, 'water found');
+  p.x = wx - 1.5; p.y = wy - 1; p.vx = p.vy = 0; run(w, 2);
+  w.message(c.id, { t: 'place', x: wx, y: wy, l: 0 });
+  assert.ok(p.fishing, 'line cast');
+  run(w, 30 * 40);
+  const got = w.countItem(p, I.fish) + w.countItem(p, I.string) + w.countItem(p, I.stick) + w.countItem(p, I.clay_ball) + w.countItem(p, I.crystal_shard);
+  assert.ok(got >= 1, 'caught something');
+  p.x += 8; run(w, 3);
+  assert.equal(p.fishing, null, 'line lost when walking off');
+});
+
 console.log(`\n${passed} passed`);

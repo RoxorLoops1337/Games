@@ -32,7 +32,9 @@ export class Tutorial {
     if (!this.el) return;
     if (this.i >= STEPS.length || this.hidden) { this.el.style.display = 'none'; return; }
     this.el.style.display = 'block';
-    this.el.innerHTML = `<small>Goal ${this.i + 1}/${STEPS.length}</small> ${STEPS[this.i].text} <i>(H hides)</i>`;
+    let t = STEPS[this.i].text;
+    if (document.body.classList.contains('touch')) t = t.replace('Hold the left mouse button on', 'Touch and hold').replace('Press E and', 'Tap Bag and').replace('right mouse button', 'Place mode').replace(' (right click)', '');
+    this.el.innerHTML = `<small>Goal ${this.i + 1}/${STEPS.length}</small> ${t} <i>(H hides)</i>`;
   }
 }
 void B;

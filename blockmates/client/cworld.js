@@ -177,14 +177,19 @@ export function computeLight(cw, x0, y0, w, h, outBuf, extras) {
   const blk = outBuf?.blk && outBuf.blk.length === n ? outBuf.blk.fill(0) : new Uint8Array(n);
   const cost = new Uint8Array(n);
   const qa = [], qb = [];
+  // light fades with the depth of water above a cell
+  const wdepth = new Float32Array(w);
+  for (let tx = 0; tx < w; tx++) { let d = 0; for (let y = y0 - 1; y > y0 - 40 && cw.liqAt(x0 + tx, y); y--) d++; wdepth[tx] = d; }
   for (let ty = 0; ty < h; ty++) {
     for (let tx = 0; tx < w; tx++) {
       const x = x0 + tx, y = y0 + ty, i = ty * w + tx;
       const id = cw.fgAt(x, y);
-      cost[i] = cw.opaque(id) ? 3 : (id === B.leaves ? 2 : 1);
+      cost[i] = cw.opaque(id) ? 3 : (id === B.leaves || id === B.pine_leaves ? 2 : 1);
       if (x < 0 || x >= W || y < 0 || y >= H) { cost[i] = 15; continue; }
       const top = cw.skyTop[x];
-      if (top >= 0 && y < top) { sky[i] = 15; qa.push(i); }
+      const lq0 = cw.liqAt(x, y);
+      if (lq0 && (lq0 >> 4) !== L_LAVA) wdepth[tx]++; else if (!lq0) wdepth[tx] = 0;
+      if (top >= 0 && y < top) { sky[i] = Math.max(1, 15 - Math.floor(wdepth[tx] * 0.9)); qa.push(i); }
       else if (top < 0 && y < 60) { sky[i] = 15; qa.push(i); }
       let L = id ? BLOCKS[id].light : 0;
       if (!L) { const lq = cw.liqAt(x, y); if (lq && (lq >> 4) === L_LAVA) L = 12; }
