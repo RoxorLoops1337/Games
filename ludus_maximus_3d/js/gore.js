@@ -36,6 +36,7 @@ const BRIGHT = { r: 0.66, g: 0.022, b: 0.03 }, DARK = { r: 0.2, g: 0.008, b: 0.0
 const CELL_STREAK = 3, CELL_PUFF = 4, CELL_DISC = 1;
 const GRAV = 11.5;
 
+const GJ = (typeof location !== 'undefined' && new URLSearchParams(location.search).get('gj')) || '';   // TEMP bisect flags
 export function createGore(fx, o = {}) {
   const scene = o.scene, audio = o.audio, feel = o.feel;
   const G = { level: 'off', tier: o.tier || 'high', on: false, full: false, time: 0, fighters: new Map(), lastSever: null, counts: { drops: 0, jets: 0, props: 0, pools: 0, splats: 0 } };
@@ -456,11 +457,11 @@ export function createGore(fx, o = {}) {
     const k = K(), heavy = fr > 0.12 || e.crit, deep = fr > 0.16 || e.crit, n = Math.round((11 + fr * 230 + (e.crit ? 52 : 0)) * k), sp = 4.2 + fr * 16 + (e.crit ? 3.5 : 0);
     const at = e.attacker && fighterOf(e.attacker), beastAt = !!(at && at.rig.beast), px = panOf(e.pos.x);
     f.dir.set(e.dx, 0, e.dz);
-    fan(e.pos, e.dx, e.dz, Math.round(n * 0.66), { speed: sp, cone: 0.5, elMin: 0.05, elMax: 0.95, size: 1.15 + fr * 1.0 });
-    fan(e.pos, -e.dx, -e.dz, Math.round(n * 0.34), { speed: 1.8 + fr * 3.8, cone: 1.0, elMin: 0.1, elMax: 1.25, size: 0.85 });
-    if (heavy) fan(e.pos, e.dx, e.dz, Math.round((3 + fr * 14 + (e.crit ? 4 : 0) + (beastAt ? 3 : 0)) * k), { speed: sp * 0.55, cone: 0.75, elMin: 0.25, elMax: 1.1, size: 2.4 });   // thick gouts
-    if (heavy) for (let i = 0, m = Math.round(RR(4, 6) * (G.tier === 'low' ? 0.6 : 1) * (G.level === 'low' ? 0.7 : 1)); i < m; i++) fx.addNormalParticle({ x: e.pos.x + e.dx * 0.3 + RR(-0.12, 0.12), y: e.pos.y + RR(-0.18, 0.18), z: e.pos.z + e.dz * 0.3 + RR(-0.12, 0.12), vx: e.dx * RR(1, 3.4) + RR(-0.7, 0.7), vy: RR(0.2, 1.4), vz: e.dz * RR(1, 3.4) + RR(-0.7, 0.7), life: RR(0.35, 0.65), s0: 0.18, s1: RR(0.7, 1.15), cell: CELL_PUFF, rot: R() * TAU, c0: { r: 0.5, g: 0.02, b: 0.03 }, c1: { r: 0.22, g: 0.01, b: 0.015 }, a: 0.42, drag: 3.2, fp: 1.3, att: 0.05 });   // blood mist
-    if (deep && G.full || e.crit) {
+    if (!GJ.includes('f')) fan(e.pos, e.dx, e.dz, Math.round(n * 0.66), { speed: sp, cone: 0.5, elMin: 0.05, elMax: 0.95, size: 1.15 + fr * 1.0 });
+    if (!GJ.includes('f')) fan(e.pos, -e.dx, -e.dz, Math.round(n * 0.34), { speed: 1.8 + fr * 3.8, cone: 1.0, elMin: 0.1, elMax: 1.25, size: 0.85 });
+    if (heavy && !GJ.includes('g')) fan(e.pos, e.dx, e.dz, Math.round((3 + fr * 14 + (e.crit ? 4 : 0) + (beastAt ? 3 : 0)) * k), { speed: sp * 0.55, cone: 0.75, elMin: 0.25, elMax: 1.1, size: 2.4 });   // thick gouts
+    if (heavy && !GJ.includes('m')) for (let i = 0, m = Math.round(RR(4, 6) * (G.tier === 'low' ? 0.6 : 1) * (G.level === 'low' ? 0.7 : 1)); i < m; i++) fx.addNormalParticle({ x: e.pos.x + e.dx * 0.3 + RR(-0.12, 0.12), y: e.pos.y + RR(-0.18, 0.18), z: e.pos.z + e.dz * 0.3 + RR(-0.12, 0.12), vx: e.dx * RR(1, 3.4) + RR(-0.7, 0.7), vy: RR(0.2, 1.4), vz: e.dz * RR(1, 3.4) + RR(-0.7, 0.7), life: RR(0.35, 0.65), s0: 0.18, s1: RR(0.7, 1.15), cell: CELL_PUFF, rot: R() * TAU, c0: { r: 0.5, g: 0.02, b: 0.03 }, c1: { r: 0.22, g: 0.01, b: 0.015 }, a: 0.42, drag: 3.2, fp: 1.3, att: 0.05 });   // blood mist
+    if ((deep && G.full || e.crit) && !GJ.includes('j')) {
       const nj = e.crit ? 2 : 1, obj = f.rig.joints.chest;
       for (let i = 0; i < nj + (fr > 0.3 ? 1 : 0); i++) { _d.set(e.dx + RR(-0.3, 0.3), RR(0.55, 1.0), e.dz + RR(-0.3, 0.3)).normalize(); addJet({ obj, pos: e.pos, dir: _d.clone(), speed: 6 + fr * 9 + (e.crit ? 2.5 : 0), rate: 90 + fr * 170, life: 0.8 + fr * 2.6 + (e.crit ? 0.8 : 0), period: 0.5 + R() * 0.16, duty: 0.6, size: 1.15, beat: true }); }   // heartbeat spurts
     }
@@ -470,16 +471,16 @@ export function createGore(fx, o = {}) {
     if (at && !beastAt && !e.blocked) at.wet = Math.min(1, at.wet + 0.3 + fr * 2.2);   // the blade drips until the fight ends
     f.leak = Math.min(1, f.leak + 0.12 + fr * 2.4 + (e.crit ? 0.3 : 0));
     // ground: an immediate splash fan on the sand near the victim
-    if (heavy) for (let i = 0, m = Math.round(RR(4, 7) * k); i < m; i++) stampSplat(e.pos.x + e.dx * RR(0.3, 2.2) + RR(-0.4, 0.4), e.pos.z + e.dz * RR(0.3, 2.2) + RR(-0.4, 0.4), RR(0.16, 0.36) * (0.7 + fr), Math.atan2(e.dz, e.dx), RR(1.5, 2.4), 0.9);
+    if (heavy && !GJ.includes('s')) for (let i = 0, m = Math.round(RR(4, 7) * k); i < m; i++) stampSplat(e.pos.x + e.dx * RR(0.3, 2.2) + RR(-0.4, 0.4), e.pos.z + e.dz * RR(0.3, 2.2) + RR(-0.4, 0.4), RR(0.16, 0.36) * (0.7 + fr), Math.atan2(e.dz, e.dx), RR(1.5, 2.4), 0.9);
     f.bleed = Math.max(f.bleed || 0, fr);
     // meat: chunks, a bone shard on crits, sand clumps soaked in blood (Full only: they are props)
-    if (G.full && heavy) { const nc = Math.round((e.crit ? 3 : fr > 0.22 ? 2 : 1) * (K() > 0.6 ? 1 : 0.6)); for (let i = 0; i < nc; i++) chunk(e.pos, e.dx * 2.5, e.dz * 2.5); if (e.crit) chunk(e.pos, e.dx * 2.5, e.dz * 2.5, 1); if (R() < 0.7) { _a.set(e.pos.x, 0.08, e.pos.z); chunk(_a, e.dx, e.dz, 2); } }
+    if (G.full && heavy && !GJ.includes('c')) { const nc = Math.round((e.crit ? 3 : fr > 0.22 ? 2 : 1) * (K() > 0.6 ? 1 : 0.6)); for (let i = 0; i < nc; i++) chunk(e.pos, e.dx * 2.5, e.dz * 2.5); if (e.crit) chunk(e.pos, e.dx * 2.5, e.dz * 2.5, 1); if (R() < 0.7) { _a.set(e.pos.x, 0.08, e.pos.z); chunk(_a, e.dx, e.dz, 2); } }
     sfx('slashWet', { pan: px, gain: clamp(0.5 + fr * 2, 0.5, 1) });
     if (heavy) { sfx('crunch', { pan: px, gain: clamp(0.5 + fr * 1.5, 0.5, 1), pitch: RR(0.9, 1.15) }); sfx('squelch', { pan: px, gain: clamp(0.5 + fr * 2, 0.5, 1), pitch: RR(0.85, 1.2) }); }
     if (e.crit || fr > 0.24) sfx('cleave', { pan: px, gain: clamp(0.55 + fr * 1.4, 0.6, 1), pitch: RR(0.9, 1.1) });
     if (e.crit || fr > 0.2) sfx('spurt', { pan: px, gain: 0.7 });
     if (feel) { if (e.crit) { feel.hitStop(120); feel.addTrauma(0.14); if (feel.kick) feel.kick(e.dx, 0.15, e.dz, 0.16); } else if (fr > 0.18) feel.hitStop(80); }
-    if (heavy) lens(e.pos, e.crit ? 2 : fr > 0.22 ? 1 : (R() < 0.4 ? 1 : 0), e.crit ? 0.22 : 0.17);
+    if (heavy && !GJ.includes('l')) lens(e.pos, e.crit ? 2 : fr > 0.22 ? 1 : (R() < 0.4 ? 1 : 0), e.crit ? 0.22 : 0.17);
     if (e.crit || fr > 0.2) G.pulse((e.mine ? 0.55 : 0.32) + Math.min(0.25, fr));
     // rare non-lethal heavy crit takes the off-hand forearm off a badly hurt fighter
     if (G.full && e.crit && !e.lethal && e.hpFrac < 0.45 && R() < 0.1) { const sd = R() < 0.62 ? 'R' : 'L', sv = f.rig.severed; if (!sv['forearm' + sd] && !sv['arm' + sd]) G.sever(id, 'forearm' + sd, e.dx, e.dz, 1); } // mostly the weapon hand
