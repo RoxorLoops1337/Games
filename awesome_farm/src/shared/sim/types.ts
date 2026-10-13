@@ -65,6 +65,7 @@ export interface BuildE {
     ask?: { rid: number; by: string; who: string; it: ItemId; n: number; got: number; ea: number }[];   // a Request Board: what is asked for, how much is in, the reward a unit pays (sim/board.ts)
     bps?: { sid: number; by: string; who: string; name: string; items: BlueprintItem[] }[];   // a Blueprint Shelf: layouts farmers shared (sim/shelf.ts)
     mod?: 'speed';           // a module slotted into a machine (sim/machines.ts: cmdModule)
+    res?: { n: string; t: string; v: number; g: number };   // a Cottage's resident: name, trade, visits so far, the day of the last gift (sim/cottage.ts)
     cof?: { c: number; by: Record<string, number> };   // a Farm Coffer: the coins in it and who put in how much (sim/coffer.ts)
     cap?: number;            // an Uber Chest: the room all of them give together (sim/uber.ts: storageOf)
     out?: Inv;               // processor outputs

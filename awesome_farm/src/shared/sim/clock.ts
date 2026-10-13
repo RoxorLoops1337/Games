@@ -11,6 +11,7 @@ import { seasonDay, seasonDef, seasonOf, SEASONS, yearOf } from '../season';
 import { nightEvent, NIGHT_EVENTS, type NightEvent } from '../weather';
 import * as blight from './blight';
 import * as chronicle from './chronicle';
+import * as cottage from './cottage';
 import * as defense from './defense';
 import * as dread from './dread';
 import * as fortune from './fortune';
@@ -175,6 +176,7 @@ export function dawn (sim: Sim) {
         if (p.downed <= 0 && p.hearts < max) p.hearts = Math.min(max, p.hearts + 1);
     }
     morning(sim);
+    cottage.onDawn(sim);                          // (the folk move in)
     scholar.onDawn(sim);
     for (const p of sim.online) tellLessons(sim, p, false);
     dread.ensure(sim);

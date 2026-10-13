@@ -491,5 +491,17 @@ export function harvester(_o: BOpts): Model<BuildE> {
     root.add(arm);
     return { obj: root, update(_dt: number, t: number) { arm.rotation.y = Math.sin(t * 0.8) * 1.2; } };
 }
+export function cottage(_o: BOpts): Model<BuildE> {
+    const root = new THREE.Group();
+    root.add(bake('work.cottage', (mb) => {
+        const b = mb.main;
+        b.box(1.7, 0.7, 1.5, sc(0.8), { y: 0.35, j: 0.015 });
+        b.cyl(0, 1.35, 0.55, 4, 0xb8962e, { y: 0.97, ry: Math.PI / 4, j: 0.02 });
+        b.box(0.28, 0.5, 0.05, wc(0.6), { y: 0.25, z: 0.76, j: 0.006 });
+        b.box(0.28, 0.28, 0.04, 0xcdf3fa, { x: -0.5, y: 0.45, z: 0.76, ao: false });
+        b.box(0.22, 0.5, 0.22, sc(0.6), { x: 0.5, y: 1.1, z: -0.2, j: 0.01 });
+    }));
+    return { obj: root };
+}
 export const SL1 = 0x7a7f9e;
-export const CRAFT = { workbench, anvil, kitchen, loom, alchemy, furnace, sawmill, millstone, fishpond, beehive, museum, coffer, board, shelf, sprinkler, harvester };
+export const CRAFT = { workbench, anvil, kitchen, loom, alchemy, furnace, sawmill, millstone, fishpond, beehive, museum, coffer, board, shelf, sprinkler, harvester, cottage };
