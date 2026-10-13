@@ -323,5 +323,23 @@ for (const fn of ['newGame', 'makeGlad', 'mkUnits', 'createFight', 'step', 'useU
   ok(/\.lx-bl-grid/.test(css) && /\.lx-bl-hubhint/.test(css) && /\.lx-bl-kills/.test(css), 'css/ui.css: lx-bl block present');
 }
 
+{ // block 14: UI pass (sheets, toasts, confetti, docked results, labels, empty states, unique names)
+  const rd = (f) => readFileSync(join(root, f), 'utf8'), kit = rd('js/ui_kit.js'), css = rd('css/ui.css'), gm = rd('js/game.js'), fl = rd('js/flow.js'), cer = rd('js/ceremonies.js'), rec = rd('js/screens/recruit.js'), ph = rd('js/photo.js'), sim = rd('core/sim.js');
+  ok(/closable = true/.test(kit) && /top\.closable === false/.test(kit) && /lx-nudge/.test(kit), 'ui_kit modal: closable option, Escape nudges a locked sheet instead of dying silently');
+  ok(/strip\(msg/.test(kit) && /top\.strip/.test(kit) && /lx-toast-strip/.test(css), 'toasts raised while a dialog is open land in a strip inside it, never over its title');
+  const z = (re) => { const m = re.exec(css); return m ? +m[1] : NaN; };
+  ok(z(/\.lx-toasts \{ position: fixed; z-index: (\d+)/) < z(/\.lx-scrim \{ position: fixed; inset: 0; z-index: (\d+)/), 'layering: toasts sit below modals');
+  ok(z(/\.lx-cer-layer \{ position: fixed; inset: 0; z-index: (\d+)/) < z(/\.lx-scrim \{ position: fixed; inset: 0; z-index: (\d+)/) && /lx-modal-open/.test(cer), 'layering: confetti sits below modals and is cleared when one opens');
+  ok(/dock/.test(kit) && /lx-peek/.test(kit) && /lx-dock-low/.test(css) && /dock: 'low'/.test(fl) && /tut: 'results'/.test(fl), 'results dialogs dock low with a See the finish peek');
+  ok(!/title: win \? 'Victory' : 'Defeat'/.test(fl) && !/title: 'Duel won'/.test(fl), 'results title names the fight, the banner names the result');
+  ok(/uniqueNames/.test(fl) && /LM\.uniqueNames/.test(sim), 'flow.js runs LM.uniqueNames before prep and before every fight');
+  ok(/export function fitLabels/.test(kit) && !/\.lx-btn-label \{[^}]*overflow-wrap: anywhere/.test(css), 'labels: no mid-word breaks, fitter shrinks instead');
+  ok(/closable/.test(rec) === false && /Decide later/.test(rec) && /_recruitLater/.test(rec) && /Hire your first fighter/.test(gm), 'first-run recruit: closable on purpose, says what happens, hub button becomes Hire your first fighter');
+  ok(/export function emptyState/.test(kit) && /emptyState/.test(rd('js/screens/armory.js')) && /Build a Market/.test(rd('js/screens/market.js')) && /Open the Arena/.test(rd('js/screens/venatio.js')) && /See the Calendar/.test(rd('js/screens/events.js')), 'empty states carry a guiding action');
+  ok(/lx-photo-on/.test(ph) && /lx-photo-on/.test(css), 'photo mode hides live combat callouts and moves its message off the top edge');
+  ok(/@media \(min-width: 900px\)[^}]*\.lx-hud \.lx-nav \{ width: min\(100% - 40px, 820px\)/.test(css), 'desktop nav is a wide dock');
+  for (const [n, t] of [['ui_kit.js', kit], ['css', css], ['flow.js', fl], ['recruit.js', rec], ['ceremonies.js', cer], ['sim.js', sim]]) ok(!t.includes('\u2014'), n + ': no em dashes');
+}
+
 console.log(`ludus_maximus_3d structure: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
