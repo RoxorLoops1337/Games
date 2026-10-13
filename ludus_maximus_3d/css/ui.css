@@ -760,8 +760,9 @@ body.lx-modal-open:not(.lx-dock-open) .lx-fv-hud, body.lx-modal-open:not(.lx-doc
 body.lx-hc .pl-root, body.lx-hc .pl-fold { color: #000; } body.lx-hc .pl-g { color: #005a1e; } body.lx-hc .pl-c { color: #8a0000; }
 
 /* ---------- FATE: decision panel over the fight view (kill / spare / ransom) ---------- */
-.lx-fate { position: absolute; left: 0; right: 0; bottom: 0; z-index: 33; display: flex; justify-content: center; padding: 0 var(--lx-gut) calc(var(--lx-sab, 0px) + 10px); pointer-events: none; animation: lx-fate-in .45s var(--lx-ease-out) both; }
-.lx-fate-out { opacity: 0; transform: translateY(14px); transition: opacity .25s, transform .25s; }
+.lx-fate { position: absolute; left: 0; right: 0; bottom: 0; z-index: 33; display: flex; justify-content: center; padding: 0 var(--lx-gut) calc(var(--lx-sab, 0px) + 10px); pointer-events: none; opacity: 0; transform: translateY(22px); transition: opacity .35s var(--lx-ease-out), transform .35s var(--lx-ease-out); }
+.lx-fate.lx-fate-on { opacity: 1; transform: none; }
+.lx-fate.lx-fate-out { opacity: 0; transform: translateY(14px); transition: opacity .25s, transform .25s; }
 .lx-fate-card { pointer-events: auto; width: 100%; max-width: 980px; padding: 8px 10px 10px; border-radius: var(--lx-r); background: linear-gradient(180deg, rgba(42, 37, 64, .93), rgba(29, 24, 48, .96)); border: 2px solid var(--lx-bronze); box-shadow: 0 10px 30px rgba(0, 0, 0, .6), inset 0 0 0 1px rgba(242, 193, 78, .3); color: var(--lx-text); backdrop-filter: blur(5px); }
 .lx-fate-title { text-align: center; font-size: var(--lx-fs-s); letter-spacing: .24em; color: var(--lx-gold); margin: 0 0 6px; text-shadow: 0 2px 4px #000; }
 .lx-fate-head { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; min-width: 0; }
@@ -799,6 +800,5 @@ body.lx-hc .pl-root, body.lx-hc .pl-fold { color: #000; } body.lx-hc .pl-g { col
 @media (max-height: 480px) { .lx-fate-card { padding: 5px 8px 7px; } .lx-fate-title { display: none; } .lx-fate-opt { padding: 5px 8px; } .lx-fate-lines i { font-size: 10.5px; } .lx-fate-head { margin-bottom: 4px; } }
 @media (hover: none) { .lx-fate-k { display: none; } }
 body.lx-hc .lx-fate-card { background: #000; border-color: #fff; } body.lx-hc .lx-fate-opt { background: #111; border-color: #fff; }
-@keyframes lx-fate-in { from { opacity: 0; transform: translateY(22px); } to { opacity: 1; transform: none; } }
-@media (prefers-reduced-motion: reduce) { .lx-fate { animation: none; } .lx-fate-out { transition: none; } }
-body.lx-reduce-motion .lx-fate { animation: none; }
+@media (prefers-reduced-motion: reduce) { .lx-fate, .lx-fate.lx-fate-out { transition: none; } }
+body.lx-reduce-motion .lx-fate, body.lx-reduce-motion .lx-fate.lx-fate-out { transition: none; }

@@ -377,6 +377,7 @@ export function fatePanel({ foe = {}, how = '', offers = [], onPick, title = 'Th
     count(n) { const d = btns.find((b) => b.dataset.def), t = d && d.querySelector('.lx-fate-tag'); if (t) t.textContent = n > 0 ? 'Default in ' + n : 'Default'; },
     close() { done = true; el.remove(); },
   };
+  const on = () => { if (!done) el.classList.add('lx-fate-on'); }; requestAnimationFrame(on); setTimeout(on, 60);   // the slide-in class lands on the next frame or after 60 ms (frames can stall under software GL)
   return el;
 }
 // Combat banner: stacked event lines that slide in at top-center and fade (max 3). kind: 'crit'|'ult'|'kill'|'info'
