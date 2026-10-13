@@ -1,6 +1,8 @@
 // The clock: the day, the dusk warnings, nightfall with its spawns and events, and the dawn that ends it all.
 // These are the Sim's own steps, moved out for room; they take the sim and reach its runtime fields directly.
 
+import { ITEMS } from '../data/items';
+import { HOT_MUL, hotItem } from '../data/market';
 import { TUNING } from '../config';
 import { isBoss, nightCount } from '../data/mobs';
 import { PAL } from '../palette';
@@ -177,4 +179,5 @@ export function dawn (sim: Sim) {
     defense.mend(sim);                            // (walls and doorways the raiders hurt are whole again)
     blight.onDawn(sim);                           // (nests grow a level, merge and spread)
     sim.banner(`Day ${s.day}`, `You made it through the night. +1 heart`, PAL.gold);
+    for (const p of sim.online) sim.toast(p.id, `Hot at the market today: ${ITEMS[hotItem(s.seed, s.day)].name} pays +${Math.round((HOT_MUL - 1) * 100)}%`, 'k_coin', PAL.gold);
 }

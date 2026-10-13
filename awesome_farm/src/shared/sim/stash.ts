@@ -5,6 +5,7 @@
 //   sellall .... at a market: sell every unstarred, unpinned kind in a list the client shows (one summary, one sound)
 //   chest ...... Put all / Take all at one open chest (put all respects the label and the stars)
 
+import { recordSold, worthOf } from '../data/market';
 import { TILE, TUNING } from '../config';
 import { BUILDINGS } from '../data/buildings';
 import { takes } from '../data/filters';
@@ -14,7 +15,7 @@ import { dist } from '../geom';
 import { TRADE_REACH } from './trade';
 import { invDrop, invHas, invPut, invSum } from './machines';
 import type { Sim } from './sim';
-import { addItem, countOf, itemCap, sellValue, takeItem } from './stats';
+import { addItem, countOf, itemCap, takeItem } from './stats';
 import * as quests from './quests';
 import type { BuildE, Cmd, PlayerS } from './types';
 import { storageOf } from './uber';
@@ -100,7 +101,8 @@ function sellAll (sim: Sim, p: PlayerS, items: unknown) {
         if (!ITEMS[id] || ITEMS[id].sell <= 0 || keep.has(id)) continue;
         const have = countOf(p, id) - (worn.has(id) ? 1 : 0);
         if (have < 1) continue;
-        const c1 = Math.max(1, Math.round(sellValue(p, id, have)));
+        const c1 = Math.max(1, Math.round(worthOf(sim.s.mkt, sim.s.seed, id, have, sim.s.day) * sim.derivedOf(p).sellMul));
+        sim.s.mkt = recordSold(sim.s.mkt, id, have, sim.s.day);
         coins += c1;
         takeItem(p, id, have);
         recordSale(sim, p, id, have, c1);
