@@ -1,7 +1,10 @@
 // Blockmates: the Node WebSocket server end to end with real sockets (Node 22 global WebSocket).
 import assert from 'node:assert/strict';
 import { startServer } from '../blockmates/server/node.js';
-import { MAX_PLAYERS } from '../blockmates/shared/data.js';
+import { MAX_PLAYERS, B } from '../blockmates/shared/data.js';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 
 let passed = 0;
 const srv = startServer({ port: 0, seed: 21 });
@@ -50,8 +53,20 @@ try {
   await sleep(300);
   assert.equal(srv.world.players.size, MAX_PLAYERS - 1); ok('disconnect frees a slot');
   for (const b of bots) b.ws.close();
+
+  // the save file round trip, with the file sitting inside the served folder
+  const file = path.join(os.tmpdir(), 'bm-net-test-' + process.pid + '.json');
+  const a = startServer({ port: 0, seed: 77, save: file });
+  await new Promise((r) => a.server.once('listening', r));
+  a.world.chunk(10); a.world.setTile(330, 100, 0, B.gold_block);
+  a.stop();
+  assert.ok(fs.existsSync(file)); ok('save file is written on stop');
+  const again = startServer({ port: 0, seed: 1, save: file });
+  await new Promise((r) => again.server.once('listening', r));
+  assert.equal(again.world.fgAt(330, 100), B.gold_block); ok('and loaded again by the next server');
+  again.stop(); fs.unlinkSync(file);
 } finally {
   srv.stop();
 }
 console.log(`\n${passed} passed`);
-process.exit(passed === 10 ? 0 : 1);
+process.exit(passed === 12 ? 0 : 1);

@@ -10,7 +10,7 @@ import { World } from './world.js';
 import { TICK } from '../shared/data.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css', '.json': 'application/json', '.png': 'image/png', '.svg': 'image/svg+xml' };
+const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css', '.png': 'image/png', '.svg': 'image/svg+xml' }; // nothing else is served, so a save file in this folder stays private
 const GUID = '258EAFA5-E914-47DA-95CA-C5AB0DC85B11';
 
 export function startServer(opts = {}) {
@@ -44,10 +44,10 @@ export function startServer(opts = {}) {
     let rel = decodeURIComponent(u.pathname);
     if (rel.endsWith('/')) rel += 'index.html';
     const file = path.join(ROOT, path.normalize(rel).replace(/^(\.\.[/\\])+/, ''));
-    if (!file.startsWith(ROOT) || file === path.join(ROOT, 'server', 'node.js') || file.startsWith(path.join(ROOT, 'server', 'cf'))) { res.writeHead(404); res.end('not found'); return; }
+    if (!file.startsWith(ROOT) || !MIME[path.extname(file)] || file === path.join(ROOT, 'server', 'node.js') || file.startsWith(path.join(ROOT, 'server', 'cf'))) { res.writeHead(404); res.end('not found'); return; }
     fs.readFile(file, (err, data) => {
       if (err) { res.writeHead(404, { 'content-type': 'text/plain' }); res.end('Blockmates server. Open / for the game.'); return; }
-      res.writeHead(200, { 'content-type': MIME[path.extname(file)] || 'application/octet-stream', 'cache-control': 'no-cache' });
+      res.writeHead(200, { 'content-type': MIME[path.extname(file)], 'cache-control': 'no-cache' });
       res.end(data);
     });
   });
@@ -125,5 +125,5 @@ if (process.argv[1] && process.argv[1].endsWith('node.js')) {
     password: get('password', ''), ops: get('ops', '').split(',').filter(Boolean), name: get('name', 'Blockmates World'),
   });
   console.log(`Blockmates server on :${s.port}  (world "${s.world.name}", seed ${s.world.seed})`);
-  process.on('SIGINT', () => { s.stop(); process.exit(0); });
+  for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, () => { s.stop(); process.exit(0); });
 }
