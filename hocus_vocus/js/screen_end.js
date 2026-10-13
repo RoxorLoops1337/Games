@@ -1262,7 +1262,7 @@
     copy.classList.add('vc-copy');
     const save = UI.btn('Save card', { kind: 'secondary', onclick: () => saveCard(S, canvas) });
     save.classList.add('vc-save');
-    const share = shareBtn({ kind: 'secondary' });
+    const share = shareBtn({ kind: 'secondary', onclick: () => shareCard(S, canvas) });
     share.classList.add('vc-share');
     const cardWrap = mk('div', { class: 'vc-cardwrap' }, canvas, mk('div', { class: 'vc-cardbtns' }, copy, save, share));
 
@@ -1367,6 +1367,25 @@
       a.remove();
       UI.toast('Card saved', 'good');
     } catch (e) { UI.toast('Could not save the card here. Copy the summary instead.', 'warn'); }
+  }
+
+  // Share on the victory screen sends the card picture itself where the device can share files (phones: straight into Instagram, WhatsApp, Messages),
+  // and falls back to the text share (UI.share: share sheet text or clipboard) everywhere else. A cancelled sheet is silent.
+  function shareCard(S, canvas) {
+    const text = summaryText(S.extra.sm, S.R, true);
+    const fallback = () => doShare();
+    try {
+      if (!navigator.share || !navigator.canShare || !isFn(canvas.toBlob) || typeof File !== 'function') return fallback();
+      canvas.toBlob((blob) => {
+        try {
+          if (!blob) return fallback();
+          const file = new File([blob], 'hocus-vocus-' + ((S.extra.sm.seed >>> 0) || 'tour') + '.png', { type: 'image/png' });
+          const data = { files: [file], title: 'HOCUS VOCUS', text: text + ' ' + (isFn(UI.shareUrl) ? UI.shareUrl() : '') };
+          if (!navigator.canShare(data)) return fallback();
+          navigator.share(data).catch((e) => { if (!e || e.name !== 'AbortError') fallback(); });
+        } catch (e) { fallback(); }
+      }, 'image/png');
+    } catch (e) { fallback(); }
   }
 
   const victory = {
