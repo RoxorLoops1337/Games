@@ -157,6 +157,7 @@ export interface CritE {
     x: number; y: number; vx: number; vy: number; t: number;
     lv: number;
     star?: number;           // awakening stars (companions and workers)
+    shiny?: 1;               // a shiny one (see data/creatures.ts Pet.shiny)
     mode: 0 | 1 | 2;         // 0 wild, 1 companion, 2 den worker
     st?: number;             // 0 idle, 1 fleeing, 2 inside a pod, 3 working
     /**
@@ -432,6 +433,7 @@ export type Cmd =
     | { t: 'trade'; op: 'ok' | 'cancel' }
     | { t: 'inv'; op: 'fav'; item: ItemId }
     | { t: 'inv'; op: 'stash' }
+    | { t: 'inv'; op: 'sellall'; items: ItemId[] }
     | { t: 'inv'; op: 'chest'; id: number; dir: 'put' | 'take' }
     /** Take the i-th upgrade a tower offers (sim/defense.ts `cmdPick`). */
     | { t: 'towerpick'; id: number; i: number }
@@ -487,6 +489,8 @@ export type SimEvent =
     | { e: 'pod'; by: string; id: number; px: number; py: number; x: number; y: number; ok: boolean; pod: string }
     /** A den worker does a bit of work at `x,y`. */
     | { e: 'work'; id: number; kind: WorkKind; x: number; y: number }
+    /** A thing flies from `x0,y0` to `x1,y1` (Quick stack, Put all, Take all): `d` seconds of delay so several leave one after another. Sent to `to` only. */
+    | { e: 'fly'; to: string; item: ItemId; x0: number; y0: number; x1: number; y1: number; d: number }
     /** A creature hops for joy (it was petted, or the fire it sits at was kindled). */
     | { e: 'hop'; id: number; x: number; y: number }
     /** A warning on the ground: red until it resolves after `t` seconds. */

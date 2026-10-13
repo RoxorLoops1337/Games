@@ -139,6 +139,10 @@ export const TUNING = {
     chuteCut: 0.85,              // the share of the market price a chute pays (selling by hand has to matter too)
     chuteFloatEvery: 1,          // s between the "+N" coin numbers over a chute while things flow into it
     // rain
+    shinyWild: 1 / 64,          // a wild creature is shiny (a colour-shifted collector's mark)
+    shinyEgg: 1 / 32,           // a hatched egg is shiny
+    giantCrate: 0.25,           // chance a giant crop (a 2 x 2 of one ripe crop) also drops a wooden crate
+    glasshouseGrow: 1.1,       // crops under a Glass Roof: never slower than a plain day, times this
     rainGrow: 0.5,               // garden beds grow up to this much faster while it rains (the forecast says so too)
 
     // potluck table (sim/potluck.ts)

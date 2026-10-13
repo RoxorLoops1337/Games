@@ -9,6 +9,7 @@ import { PAL } from '../../../shared/palette';
 import { countOf, derived, itemCap, xpToNextOf } from '../../../shared/sim/stats';
 import { HOT_SLOTS, hotbarOf, hotKind } from '../../../shared/sim/hotbar';
 import { ItemGrid, GridItem } from '../grid';
+import { adopt, isNew, markSeen } from '../../seen';
 import { deviceText, onTap, SearchBox, Section, Slot, StatList, tipOn, Win, type Footer } from '../kit';
 import { ListTools } from '../listtools';
 import { inset, rect } from '../px';
@@ -35,12 +36,14 @@ export class InventoryScreen implements Screen {
     private carrying: Section;
     /** The hotbar slot waiting for an item (click a slot, then click the item you want in it). */
     private armed = -1;
+    /** Phones: while on, a tap stars or unstars an item instead of using it. */
+    private starMode = false;
 
     constructor (private ctx: ScreenCtx) {
         const s = ctx.scene;
         this.win = new Win(s, { size: 'large', title: 'Backpack', icon: 'k_bag', accent: PAL.gold, onClose: () => ctx.close() });
         const w = this.win;
-        this.foot = w.footer({ info: '', infoW: 110, secondary: [{ label: 'Rings  (U)', onClick: () => ctx.open('gear'), icon: 'i_ring_copper' }, { label: deviceText('Quick stack  (Q)', 'Quick stack'), onClick: () => ctx.send({ t: 'inv', op: 'stash' }) }, { label: deviceText('Trade  (Y)', 'Trade'), onClick: () => ctx.startTrade() }], hint: deviceText('Click an item to equip, eat or open it.  F stars it so Quick stack leaves it alone.', 'Tap an item to equip, eat or open it.') });
+        this.foot = w.footer({ info: '', infoW: 110, secondary: [{ label: 'Rings  (U)', onClick: () => ctx.open('gear'), icon: 'i_ring_copper' }, { label: deviceText('Quick stack  (Q)', 'Quick stack'), onClick: () => ctx.send({ t: 'inv', op: 'stash' }) }, { label: deviceText('Trade  (Y)', 'Trade'), onClick: () => ctx.startTrade() }, { label: '★ Star', onClick: () => { this.starMode = !this.starMode; this.key = ''; this.foot.setHint(this.starMode ? 'Star mode: tap items to star or unstar them. Tap ★ Star again to finish.' : deviceText('Click an item to equip, eat or open it.  F stars it so Quick stack leaves it alone.', 'Tap an item to equip, eat or open it.')); } }], hint: deviceText('Click an item to equip, eat or open it.  F stars it so Quick stack leaves it alone.', 'Tap an item to equip, eat or open it.') });
         const body = w.body, lw = 300, gx = 8;
 
         // ── left: what you wear, and your stats ──
@@ -133,19 +136,22 @@ export class InventoryScreen implements Screen {
 
     update () {
         const me = this.ctx.me();
-        const k = JSON.stringify([me.inv, me.equip, me.hot, me.coins, me.level, me.xp | 0, me.skills, me.buffs.length, this.tools.prefs, me.points, this.armed, this.search.value, me.fav]);
+        const k = JSON.stringify([me.inv, me.equip, me.hot, me.coins, me.level, me.xp | 0, me.skills, me.buffs.length, this.tools.prefs, me.points, this.armed, this.search.value, me.fav, this.starMode]);
         if (k === this.key) return;
         this.key = k;
         const send = this.ctx.send;
+        adopt(ITEM_ORDER.filter((id) => countOf(me, id) > 0));
         const owned = ITEM_ORDER.filter((id) => countOf(me, id) > 0 && this.search.matches(ITEMS[id].name, id.replace(/_/g, ' ')));
         this.tools.present(owned);
         const shown = this.tools.apply(owned, (id) => countOf(me, id));
         this.grid.setEmptyText(this.tools.filtering || this.search.value ? 'Nothing of this kind.\nPick All to see everything.' : 'Nothing here yet.\nGo harvest something!');
         const items: GridItem[] = shown.map((id) => ({
-            data: { icon: `i_${id}`, count: countOf(me, id), rarity: ITEMS[id].rarity, ...(me.fav?.includes(id) ? { badge: '★' } : {}) },
+            data: { icon: `i_${id}`, count: countOf(me, id), rarity: ITEMS[id].rarity, ...(me.fav?.includes(id) ? { badge: '★' } : {}), ...(isNew(id) ? { dot: true } : {}) },
+            seen: () => { if (markSeen(id)) this.key = ''; },
             star: () => send({ t: 'inv', op: 'fav', item: id }),
             tip: () => itemTip(id, { count: countOf(me, id), sellMul: derived(me).sellMul, foot: this.armed >= 0 ? `Click to put it in hotbar slot ${this.armed + 1}` : ITEMS[id].open ? 'Click to open it' : hotbarOf(this.ctx.me()).includes(id) ? 'Right-click to unpin from the hotbar' : 'Right-click to pin to the hotbar' }),
             click: (shift) => {
+                if (this.starMode) { send({ t: 'inv', op: 'fav', item: id }); return; }
                 if (this.armed >= 0 || shift) { this.pin(id); return; }
                 const def = ITEMS[id];
                 if (def.gear) send({ t: 'equip', item: id });

@@ -14,6 +14,7 @@ import { isTouchUi } from '../../input/layout';
 import { countOf, derived, hasUnlock } from '../../../shared/sim/stats';
 import type { BuildE } from '../../../shared/sim/types';
 import { GridItem, ItemGrid } from '../grid';
+import { adopt, isNew, markSeen } from '../../seen';
 import { deviceText, Footer, GAP, onTap, QtyChips, rowBox, SearchBox, Section, Slot, TabBar, tipOn, ts, Win, type TipData } from '../kit';
 import { ListTools } from '../listtools';
 import { qtyAmount } from '../gestures';
@@ -123,6 +124,7 @@ export class ChestScreen implements Screen {
             this.strip.text.setText(filterLabel(b.fl));
         }
         const stored = (Object.entries(b.inv ?? {}) as [ItemId, number][]).filter(([id, n]) => n > 0 && this.search.matches(ITEMS[id].name));
+        adopt(ownedItems(me));
         const mineAll = ownedItems(me).filter((id) => this.search.matches(ITEMS[id].name));
         this.tools.present([...new Set([...stored.map(([id]) => id), ...mineAll])]);
         const inv = this.tools.apply(stored.map(([id]) => id), (id) => b.inv?.[id] ?? 0).map((id): [ItemId, number] => [id, b.inv?.[id] ?? 0]);
@@ -141,7 +143,8 @@ export class ChestScreen implements Screen {
         const mine = this.tools.apply(mineAll, (id) => countOf(me, id));
         this.bagSec.setRight(`${mine.length} kind${mine.length === 1 ? '' : 's'}`);
         this.right.setItems(mine.map((id): GridItem => ({
-            data: { icon: iconOf(id), count: countOf(me, id), rarity: ITEMS[id].rarity, dim: this.grave || !takes(b.fl, id), ...(me.fav?.includes(id) ? { badge: '★' } : {}) },
+            data: { icon: iconOf(id), count: countOf(me, id), rarity: ITEMS[id].rarity, dim: this.grave || !takes(b.fl, id), ...(me.fav?.includes(id) ? { badge: '★' } : {}), ...(isNew(id) ? { dot: true } : {}) },
+            seen: () => { if (markSeen(id)) this.key = ''; },
             star: () => send({ t: 'inv', op: 'fav', item: id }),
             tip: () => itemTip(id, { count: countOf(me, id), foot: this.grave ? 'A lost backpack only gives' : takes(b.fl, id) ? deviceText('Click: store all · Right-click: store one', 'Tap: store (x1, x10 or All below) · Hold: store one') : `This chest only takes ${filterLabel(b.fl).toLowerCase()}` }),
             click: (shift, q) => { if (!this.grave) send({ t: 'xfer', id: this.id, item: id, n: qtyAmount(q, countOf(me, id), shift, 'all'), dir: 'put', part: 'inv' }); },
@@ -192,7 +195,7 @@ export class MarketScreen implements Screen {
         const s = ctx.scene;
         this.win = new Win(s, { size: 'medium', title: 'Market', icon: 'market', accent: PAL.gold, onClose: () => ctx.close() });
         const w = this.win;
-        this.foot = w.footer({ info: '', infoW: 130, hint: '' });
+        this.foot = w.footer({ info: '', infoW: 130, hint: '', primary: { label: 'Sell all shown', onClick: () => this.sellShown() } });
         const body = w.body, cy = w.top + w.toolH / 2, sw = 150;
         this.tools = new ListTools(w, 'market', () => { this.key = ''; }, ['type', 'name', 'amount', 'value']);
         const sortW = 110 + 34;
@@ -232,9 +235,29 @@ export class MarketScreen implements Screen {
         this.grid.setItems(items);
     }
 
+    /** Everything the list shows, in one go (starred and pinned things stay): the first press says what it would earn, the second sells. */
+    private shown: ItemId[] = [];
+    private armedAt = -1;
+    private sellShown () {
+        const me = this.ctx.me(), mul = derived(me).sellMul;
+        const keep = new Set<ItemId>([...(me.fav ?? []), ...((me.hot ?? []).filter(Boolean) as ItemId[])]);
+        const ids = this.shown.filter((id) => !keep.has(id));
+        const total = ids.reduce((a, id) => a + Math.round(ITEMS[id].sell * countOf(me, id) * mul), 0);
+        if (!ids.length) { this.ctx.toast('Nothing to sell here: starred and pinned things stay with you', undefined, PAL.pebble); return; }
+        const now = this.ctx.scene.time.now;
+        if (now - this.armedAt > 3000) {
+            this.armedAt = now;
+            this.ctx.toast(`Sell ${ids.length} kind${ids.length === 1 ? '' : 's'} for ${total} coins? Press the button again to confirm`, 'i_coin', PAL.gold);
+            return;
+        }
+        this.armedAt = -1;
+        this.ctx.send({ t: 'inv', op: 'sellall', items: ids });
+    }
+
     private syncTabs () {
         const buying = this.tab === 'trader';
         this.sec.setTitle(buying ? 'Buy from the travelling trader' : 'Sell to the market');
+        this.foot.primary?.setEnabled(!buying);
         if (!this.sellQty || !this.buyQty) return;
         this.sellQty.setVisible(!buying);
         this.buyQty.setVisible(buying);
@@ -257,6 +280,7 @@ export class MarketScreen implements Screen {
         this.grid.setEmptyText(SELL_EMPTY);
         const list = this.tools.apply(ownedItems(me).filter((id) => ITEMS[id].sell > 0 && tab.match(id) && this.search.matches(ITEMS[id].name)), (id) => countOf(me, id));
         this.sec.setRight(list.length ? 'The gold number is the price each' : '');
+        this.shown = list;
         this.grid.setItems(list.map((id): GridItem => ({
             data: { icon: iconOf(id), count: countOf(me, id), rarity: ITEMS[id].rarity, badge: `${Math.round(ITEMS[id].sell * mul)}` },
             tip: () => itemTip(id, { count: countOf(me, id), sellMul: mul, foot: deviceText('Click: sell 1 · Shift: sell all · Right-click: sell 10', 'Tap: sell (x1, x10 or All below) · Hold: sell 10') }),

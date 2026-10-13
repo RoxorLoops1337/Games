@@ -100,6 +100,19 @@ function tiles (p: Pix, ramp: readonly number[]) {
     }
 }
 
+/** Glass panes in a lead frame (2 x 2 panes a tile), each with a pale glint across one corner. */
+function panes (p: Pix, ramp: readonly number[]) {
+    for (let y = 0; y < p.h; y++) for (let x = 0; x < p.w; x++) {
+        const lx = x % 8, ly = y % 8;
+        let c = ramp[2];
+        if (lx === 0 || ly === 0) c = ramp[0];                           // the frame
+        else if (lx === 7 || ly === 7) c = ramp[1];                      // its shaded far edge
+        else if (lx + ly >= 3 && lx + ly <= 4) c = ramp[3];              // a bright diagonal glint
+        else if (lx + ly === 9 || lx + ly === 10) c = ramp[3];
+        p.set(x, y, c);
+    }
+}
+
 const WALL_STYLES: Record<string, WallStyle> = {
     wall_wood: { ramp: RAMP.wood, pattern: 'wood' },
     wall_stone: { ramp: RAMP.stone, pattern: 'stone' },
@@ -116,5 +129,6 @@ export function registerStorybookHouse (scene: Phaser.Scene) {
     paint(scene, 'doorway', 16, 16, (p) => doorway(p), 1);
     paint(scene, 'roof_thatch', 16, 16, (p) => thatch(p), 1);
     paint(scene, 'roof_tile', 16, 16, (p) => tiles(p, [0x7a2f2a, 0xa84a3a, 0xd0684a, 0xf08a64]), 1);
+    paint(scene, 'roof_glass', 16, 16, (p) => panes(p, [0x4a7a94, 0x8fc6d8, 0xb8e6f0, 0xf0fcff]), 1);
     paint(scene, 'roof_slate', 16, 16, (p) => tiles(p, [0x3a3c52, 0x555878, 0x747aa0, 0x9ea4c8]), 1);
 }

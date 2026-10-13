@@ -2,7 +2,7 @@
 // commands that move items in and out of buildings. This is also where belts, inserters,
 // drills and power plug in later.
 
-import { TUNING } from '../config';
+import { TILE, TUNING } from '../config';
 import { seasonDef } from '../season';
 import { BUILDINGS, CROPS } from '../data/buildings';
 import { filterLabel, takes } from '../data/filters';
@@ -87,14 +87,43 @@ export function sowBed (sim: Sim, p: PlayerS, b: BuildE, seed: ItemId) {
     quests.count(p, 'plant');
 }
 
+const ripe = (b: BuildE | undefined, plant: string | undefined): b is BuildE => !!b && b.k === 'bld' && b.kind === 'bed' && b.crop === 2 && b.plant === plant;
+
+/** The four beds of a 2 x 2 block that include this one and all hold the same ripe crop (the first block found), or null. */
+export function giantBlock (sim: Sim, b: BuildE): BuildE[] | null {
+    if (!b.plant || b.crop !== 2) return null;
+    for (const [ox, oy] of [[0, 0], [-1, 0], [0, -1], [-1, -1]]) {
+        const four = [0, 1, 2, 3].map((i) => sim.world.softAt(b.tx + ox + (i & 1), b.ty + oy + (i >> 1))).map((id) => sim.s.ents[id] as BuildE | undefined);
+        if (four.every((q) => ripe(q, b.plant))) return four as BuildE[];
+    }
+    return null;
+}
+
+/** A 2 x 2 of one ripe crop comes up as a giant: all four beds at once, twice the usual total, and sometimes a crate. */
 export function harvestBed (sim: Sim, p: PlayerS, b: BuildE) {
+    const block = giantBlock(sim, b);
+    if (!block) { harvestOne(sim, p, b); return; }
+    const def = CROPS[b.plant!]!;
+    const c = sim.center(b);
+    let total = 0;
+    for (const q of block) total += harvestOne(sim, p, q);
+    for (let i = 0; i < total; i++) sim.spawnDrop(def.out, c.x + (i % 3) * 2 - 2, c.y);          // (twice the usual: the four beds gave `total`, the giant gives as much again)
+    if (sim.rng.chance(TUNING.giantCrate)) sim.spawnDrop('crate_wood', c.x, c.y);
+    sim.fx('golden', c.x + TILE / 2, c.y + TILE / 2, p.id);
+    sim.banner('A giant crop!', `${ITEMS[def.out].name}: twice the harvest`, PAL.gold, p.id);
+    quests.count(p, 'giant');
+}
+
+/** Harvest one ripe bed; returns how many crops dropped. */
+function harvestOne (sim: Sim, p: PlayerS, b: BuildE): number {
     const def = b.plant ? CROPS[b.plant] : undefined;
-    if (b.crop !== 2 || !def || !b.plant) return;
+    if (b.crop !== 2 || !def || !b.plant) return 0;
     const c = sim.center(b);
     const d = sim.derivedOf(p);
     const count = sim.rng.int(def.yield[0], def.yield[1]) + Math.floor(d.mods.cropYield ?? 0)
         + (sim.rng.chance((d.mods.cropYield ?? 0) % 1) ? 1 : 0) + (sim.rng.chance(seasonDef(sim.s.day).yield) ? 1 : 0);
     for (let i = 0; i < count; i++) sim.spawnDrop(def.out, c.x, c.y);
+    const dropped = count;
     if (sim.rng.chance(def.seedBack + (d.mods.seedChance ?? 0))) sim.spawnDrop(b.plant, c.x, c.y);
     b.crop = -1;
     b.plant = undefined;
@@ -104,6 +133,7 @@ export function harvestBed (sim: Sim, p: PlayerS, b: BuildE) {
     p.stats.harvested++;
     quests.count(p, 'crop');
     sim.gainXp(p, def.xp);
+    return dropped;
 }
 
 // ── processors ─────────────────────────────────────────────────────────────
@@ -122,6 +152,18 @@ function findRecipe (sim: Sim, b: BuildE) {
     return null;
 }
 
+/** Is this garden bed under a Glass Roof? */
+export function glassed (sim: Sim, b: BuildE): boolean {
+    const r = sim.s.ents[sim.world.roofAt(b.tx, b.ty)];
+    return r?.k === 'bld' && r.kind === 'roof_glass';
+}
+
+/** The season's growth speed for this bed: a greenhouse is never slower than a plain day, and a little faster. */
+export function seasonGrow (sim: Sim, b: BuildE): number {
+    const g = seasonDef(sim.s.day).grow;
+    return glassed(sim, b) ? Math.max(g, 1) * TUNING.glasshouseGrow : g;
+}
+
 export function step (sim: Sim, dt: number) {
     sim.machineT += dt;
     const rain = weatherAt(sim.s.seed, sim.s.day, sim.s.clock).rain;
@@ -134,7 +176,7 @@ export function step (sim: Sim, dt: number) {
                 const crop = b.plant ? CROPS[b.plant] : undefined;
                 const owner = b.by ? sim.s.players[b.by] : undefined;
                 if (!crop) { b.crop = -1; sim.touch(b); continue; }
-                b.growT = (b.growT ?? 0) + dt * (owner ? sim.derivedOf(owner).growMul : 1) * (1 + TUNING.rainGrow * rain) * seasonDef(sim.s.day).grow;
+                b.growT = (b.growT ?? 0) + dt * (owner ? sim.derivedOf(owner).growMul : 1) * (1 + TUNING.rainGrow * rain) * seasonGrow(sim, b);
                 if (b.growT >= crop.stageSecs) { b.growT = 0; b.crop++; sim.touch(b); }
             }
             continue;

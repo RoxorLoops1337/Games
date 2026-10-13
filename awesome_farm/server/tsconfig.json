@@ -15,6 +15,7 @@
     ],
     "exclude": [
         "../tests/art.test.ts",
+        "../tests/haptics.test.ts",
         "../tests/keyboard.test.ts",
         "../tests/client3d.test.ts",
         "../tests/view3d.test.ts",

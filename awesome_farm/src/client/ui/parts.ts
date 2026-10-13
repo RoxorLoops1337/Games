@@ -234,7 +234,7 @@ export function lighten (c: number, amt = 0.18) {
 }
 
 // ── item slot ──────────────────────────────────────────────────────────────
-export interface SlotData { icon: string; count?: number; rarity?: number; dim?: boolean; badge?: string; bad?: boolean; overlay?: string; scale?: number }
+export interface SlotData { icon: string; count?: number; rarity?: number; dim?: boolean; badge?: string; dot?: boolean; bad?: boolean; overlay?: string; scale?: number }
 
 export class Slot {
     readonly root: Phaser.GameObjects.Container;
@@ -270,8 +270,8 @@ export class Slot {
     set (d: SlotData | null) {
         const o = this.data;
         if (!d && !o) return;
-        if (d && o && d.icon === o.icon && d.count === o.count && d.rarity === o.rarity && d.dim === o.dim && d.badge === o.badge && d.bad === o.bad && d.overlay === o.overlay && d.scale === o.scale) return;
-        const boxChanged = !d !== !o || (d?.rarity ?? 0) !== (o?.rarity ?? 0);
+        if (d && o && d.icon === o.icon && d.count === o.count && d.rarity === o.rarity && d.dim === o.dim && d.badge === o.badge && d.dot === o.dot && d.bad === o.bad && d.overlay === o.overlay && d.scale === o.scale) return;
+        const boxChanged = !d !== !o || (d?.rarity ?? 0) !== (o?.rarity ?? 0) || !!d?.dot !== !!o?.dot;
         const gained = !!d && !!o && d.icon === o.icon && (d.count ?? 0) > (o.count ?? 0);       // (the same thing, more of it: the icon gives a little hop)
         this.data = d;
         if (d) {
@@ -304,6 +304,7 @@ export class Slot {
     private draw () {
         this.g.clear();
         slotBox(this.g, 0, 0, this.size, this.data?.rarity ?? 0, { hover: this.hover, empty: !this.data, selected: this.selected });
+        if (this.data?.dot) { this.g.fillStyle(PAL.ink, 1).fillCircle(this.size - 8, 8, 6); this.g.fillStyle(PAL.lime, 1).fillCircle(this.size - 8, 8, 4.5); }       // (new: not looked at yet)
     }
 }
 

@@ -330,6 +330,21 @@ export class GameScene extends Phaser.Scene {
     }
 
     emitEvent<K extends keyof GameEvents> (name: K, data?: GameEvents[K]) { this.events.emit(name, data); }
+    /** A thing arcs from one place to another (Quick stack and friends): a small icon that hops along and shrinks away. */
+    private flyItem (e: Extract<SimEvent, { e: 'fly' }>) {
+        const key = `i_${e.item}`;
+        if (!this.textures.exists(key)) return;
+        const im = this.add.image(e.x0, e.y0, key, 0).setDepth(9e4).setVisible(false).setScale(1);
+        const arc = Math.min(28, 10 + Math.hypot(e.x1 - e.x0, e.y1 - e.y0) * 0.15);
+        const st = { u: 0 };
+        this.tweens.add({
+            targets: st, u: 1, delay: e.d * 1000, duration: 260, ease: 'Sine.easeInOut',
+            onStart: () => im.setVisible(true),
+            onUpdate: () => { im.setPosition(e.x0 + (e.x1 - e.x0) * st.u, e.y0 + (e.y1 - e.y0) * st.u - Math.sin(st.u * Math.PI) * arc).setScale(1 - 0.35 * st.u).setAngle(st.u * 200); },
+            onComplete: () => im.destroy(),
+        });
+    }
+
     private float (x: number, y: number, text: string, color?: number, key?: string) { this.emitEvent('hud:float', { x, y, text, color, key }); }
     /** A big banner for the HUD. */
     banner (d: GameEvents['hud:banner']) { this.emitEvent('hud:banner', d); }
@@ -726,6 +741,7 @@ export class GameScene extends Phaser.Scene {
             case 'pod': this.crit.pod(e, this.views.get(e.id)); return;
             case 'work': this.crit.work(e, this.views.get(e.id)); return;
             case 'hop': this.crit.hop(this.views.get(e.id)); return;
+            case 'fly': if (this.viewMode === '2d' && e.to === this.me) this.flyItem(e); return;
             case 'float': this.emitEvent('hud:float', e); return;
             case 'banner': this.emitEvent('hud:banner', e); return;
             case 'toast': this.emitEvent('hud:toast', e); return;
@@ -858,6 +874,7 @@ export class GameScene extends Phaser.Scene {
         v.shadow?.setPosition(v.x, v.y);
         v.mark?.setVisible(false); v.bub?.setVisible(false); v.bubIcon?.setVisible(false); v.cargo?.setVisible(false); v.pod?.setVisible(false);
         v.stars?.forEach((im) => im.setVisible(false));
+        v.shine?.setVisible(false);
     }
 
     private updateViews (dt: number) {

@@ -17,6 +17,8 @@ export interface GridItem {
     holdIsShift?: boolean;
     /** Star or unstar it (the F key while the pointer is over it). */
     star?: () => void;
+    /** The pointer came over it (the "new" dot goes out). */
+    seen?: () => void;
 }
 
 export class ItemGrid {
@@ -46,6 +48,7 @@ export class ItemGrid {
                 const at = () => this.items[this.offset * cols + i];
                 onTap(slot.interactive, (shift) => at()?.click?.(shift, this.qty?.value), () => { const it = at(); if (it?.right) it.right(); else if (it?.holdIsShift) it.click?.(true, this.qty?.value); }, () => { const it = at(); return !!it && (!!it.right || !!it.holdIsShift); });
                 tipOn(slot.interactive, () => this.items[this.offset * cols + i]?.tip?.() ?? null);
+                slot.interactive.on('pointerover', () => at()?.seen?.());
                 this.slots.push(slot);
             }
         }

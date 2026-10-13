@@ -402,7 +402,7 @@ export function boot() {
             if (countOf(me, id) > 0) local.send({ t: 'equip', item: id });
         } else if (k === 'use' && use) local.send({ t: 'eat', item: id });
     }
-    const LINE = new Set(['fence', 'hedge', 'stonewall', 'path', 'planks', 'brickfloor', 'slatefloor', 'carpet', 'belt', 'wall_wood', 'wall_stone', 'wall_brick', 'wall_window', 'roof_thatch', 'roof_tile', 'roof_slate']);
+    const LINE = new Set(['fence', 'hedge', 'stonewall', 'path', 'planks', 'brickfloor', 'slatefloor', 'carpet', 'belt', 'wall_wood', 'wall_stone', 'wall_brick', 'wall_window', 'roof_thatch', 'roof_tile', 'roof_slate', 'roof_glass']);
     function refreshBuild() {
         if (!me) return;
         const cards: BuildCard[] = [];

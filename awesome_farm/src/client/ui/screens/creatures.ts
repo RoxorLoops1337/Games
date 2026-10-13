@@ -353,7 +353,7 @@ export class CreatureScreen implements Screen {
             rowBox(g, wi.x, y, wi.w, rh - 2, { bad: !!p.post && st.bad });
             r.face.setTexture(critTex(this.ctx.scene, p.sp), 0).setScale(fitScale(this.ctx.scene, critTex(this.ctx.scene, p.sp), rh - 6, 2));
             this.win.at(r.face, wi.x + 28, y + (rh - 2) / 2);
-            r.name.setText(`${p.name}  Lv ${p.lv}`).setColor(hex(ELEMENT_COLOR[sp.element]));
+            r.name.setText(`${p.shiny ? '★ ' : ''}${p.name}  Lv ${p.lv}`).setColor(hex(ELEMENT_COLOR[sp.element]));
             r.sub.setText(sp.name);
             r.job.setText(postText(f.world.plots, f.ents, p) || 'In a den');
             r.stat.setText(p.post ? st.text : 'Tending the den').setColor(hex(p.post ? st.color : PAL.lime));
@@ -393,8 +393,9 @@ export class CreatureScreen implements Screen {
         const sp = spOf(p.sp);
         inset(g, this.dx, this.dy, 112, 112, PAL.deepSea, PAL.slate); rect(g, this.dx + 2, this.dy + 2, 108, 2, ELEMENT_COLOR[sp.element], 0.8);
         this.face.setVisible(true).setTexture(critTex(this.ctx.scene, p.sp), 0).setScale(fitScale(this.ctx.scene, critTex(this.ctx.scene, p.sp), 84, 4)).clearTint();
+        if (p.shiny) this.face.setTint(0xffd2f2);
         this.win.at(this.face, this.dx + 56, this.dy + 56);
-        this.nameT.setText(p.name).setColor(hex(ELEMENT_COLOR[sp.element]));
+        this.nameT.setText(p.shiny ? `${p.name} ★` : p.name).setColor(hex(p.shiny ? PAL.gold : ELEMENT_COLOR[sp.element]));
         this.subT.setText(`${sp.name} · ${ELEMENT_NAME[sp.element]} · ${RARITY_NAMES[sp.rarity]}`).setColor(hex(RARITY_COLORS[sp.rarity]));
         const need = petXpNeed(p.lv);
         const stars = starsOf(p);

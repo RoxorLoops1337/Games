@@ -64,7 +64,7 @@ function spawnWild (sim: Sim, p: PlayerS) {
     const sp = pickSpecies(plot.biome, sim.s.night, () => rng.next(), hasUnlock(p, 'rarecatch') ? 0.7 : 0);
     const def = spOf(sp);
     const lv = 1 + rng.int(0, 2 + Math.floor(sim.s.day / 3)) + def.rarity * 2;
-    sim.add<CritE>({ k: 'crit', sp, x, y, vx: 0, vy: 0, t: rng.next() * 3, lv, mode: 0, st: 0, hx: x, hy: y, life: 140 + rng.next() * 80, a: 0 });
+    sim.add<CritE>({ k: 'crit', sp, x, y, vx: 0, vy: 0, t: rng.next() * 3, lv, mode: 0, st: 0, hx: x, hy: y, life: 140 + rng.next() * 80, a: 0, ...(rng.chance(TUNING.shinyWild) ? { shiny: 1 as const } : {}) });
 }
 
 // ── the update loop ─────────────────────────────────────────────────────────
@@ -159,6 +159,7 @@ function resolveCatch (sim: Sim, e: CritE) {
     if (!cat || !owner || petsOf(owner).length >= rosterCap(owner)) { e.st = 1; e.a = 2; e.cat = undefined; sim.touch(e); return; }
     if (cat.ok) {
         const pet = newPet(owner, e.sp, e.lv, sim.rng);
+        if (e.shiny) pet.shiny = 1;
         petsOf(owner).push(pet);
         quests.count(owner, `tame:${e.sp}`);
         if (def.rarity >= 2) quests.count(owner, 'rare');
@@ -168,7 +169,8 @@ function resolveCatch (sim: Sim, e: CritE) {
         sim.fx('catchOk', e.x, e.y - 6, owner.online ? owner.id : undefined);
         if (!chronicle.note(sim, 'tame:first', `${owner.name} befriended the farm's first creature, a ${def.name}.`, 'k_paw') && def.rarity >= 2) chronicle.note(sim, `tame:${e.sp}`, `${owner.name} befriended a ${def.name}.`, 'k_paw');
         if (owner.online) {
-            sim.banner(`You befriended ${def.name}!`, `${pet.name} joined your roster  (P)`, PAL.blossom, owner.id);
+            sim.banner(pet.shiny ? `A SHINY ${def.name}!` : `You befriended ${def.name}!`, `${pet.name} joined your roster  (P)`, pet.shiny ? PAL.gold : PAL.blossom, owner.id);
+            if (pet.shiny) chronicle.note(sim, `shiny:${owner.id}:${pet.id}`, `${owner.name} caught a shiny ${def.name}!`, 'k_star');
             sim.gainXp(owner, 10 + def.rarity * 18);
         }
         sim.remove(e.id);
@@ -221,6 +223,7 @@ export function cmdBreed (sim: Sim, p: PlayerS, c: Extract<Cmd, { t: 'breed' }>)
     if (!egg) return;
     if (petsOf(p).length >= rosterCap(p)) { sim.deny(p, 'Your roster is full'); return; }
     const pet = newPet(p, egg.sp, 1, sim.rng);
+    if (sim.rng.chance(TUNING.shinyEgg)) { pet.shiny = 1; sim.banner(`A SHINY ${spOf(egg.sp).name} hatched!`, undefined, PAL.gold, p.id); }
     pet.traits = [...egg.traits];
     petsOf(p).push(pet);
     h.egg = undefined; h.bo = undefined; h.bt = undefined;
@@ -295,7 +298,7 @@ function syncCompanions (sim: Sim, crits: CritE[]) {
         if (p.ride && (!want || !ent || ent.pid !== want.id)) { p.ride = undefined; }                // (the mount is gone, sent to work, or you went down: you are on your own feet)
         if (ent && (!want || ent.pid !== want.id)) { sim.remove(ent.id); crits.splice(crits.indexOf(ent), 1); }
         else if (!ent && want) {
-            const e = sim.add<CritE>({ k: 'crit', sp: want.sp, x: p.x - 14, y: p.y, vx: 0, vy: 0, t: 0, lv: want.lv, ...(starsOf(want) ? { star: starsOf(want) } : {}), mode: 1, st: 0, owner: p.id, pid: want.id, a: 0.8 });
+            const e = sim.add<CritE>({ k: 'crit', sp: want.sp, x: p.x - 14, y: p.y, vx: 0, vy: 0, t: 0, lv: want.lv, ...(starsOf(want) ? { star: starsOf(want) } : {}), ...(want.shiny ? { shiny: 1 as const } : {}), mode: 1, st: 0, owner: p.id, pid: want.id, a: 0.8 });
             crits.push(e);
             sim.fx('summon', e.x, e.y - 6, p.id);
         } else if (ent && want) {
@@ -371,7 +374,7 @@ function syncWorkers (sim: Sim, crits: CritE[]) {
                     wanted.add(key);
                     const ent = have.get(key);
                     if (!ent) {
-                        const e = sim.add<CritE>({ k: 'crit', sp: pet.sp, x: spot.x + (sim.rng.next() - 0.5) * 20, y: spot.y + sim.rng.next() * 6, vx: 0, vy: 0, t: sim.rng.next() * 3, lv: pet.lv, ...(starsOf(pet) ? { star: starsOf(pet) } : {}), mode: 2, st: 0, owner: p.id, pid: pet.id, hx: spot.x, hy: spot.y, a: 2 });
+                        const e = sim.add<CritE>({ k: 'crit', sp: pet.sp, x: spot.x + (sim.rng.next() - 0.5) * 20, y: spot.y + sim.rng.next() * 6, vx: 0, vy: 0, t: sim.rng.next() * 3, lv: pet.lv, ...(starsOf(pet) ? { star: starsOf(pet) } : {}), ...(pet.shiny ? { shiny: 1 as const } : {}), mode: 2, st: 0, owner: p.id, pid: pet.id, hx: spot.x, hy: spot.y, a: 2 });
                         crits.push(e);
                         sim.fx('summon', e.x, e.y - 6, p.online ? p.id : undefined);
                     } else {

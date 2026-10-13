@@ -147,6 +147,7 @@ export interface Pet {
     nest?: number;              // building id of the hatchery it is resting in
     hp?: number;                // current health as a companion (undefined = full)
     star?: number;              // awakening stars, 0..STAR_MAX
+    shiny?: 1;                  // a colour-shifted, sparkling one (1 in 64 wild creatures, 1 in 32 eggs): purely a collector's mark
     task?: WorkKind;            // what it does beside you as your companion (none: stays at heel)
     post?: Post;                // its standing job: an island to work or a machine to run (it needs no den)
     ps?: PostStatus;            // how that is going
