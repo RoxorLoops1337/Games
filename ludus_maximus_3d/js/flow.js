@@ -195,6 +195,7 @@ async function runEvent(ctx, ev, gl, en) {
   const res = await fightScreen(ctx, gl, ev.opps, stance, { ev, tricks: bet.tricks, augs: [aug] });
   const rep = lm.settle(S, ev, gl, res); settleBets(ctx, bet, res, rep.notes);
   await results(ctx, ev, gl, res, rep);
+  await mortalCheck(ctx, gl, res, { kind: 'event' }); // FALLEN: only deadly in Hardcore
 }
 
 async function runTourney(ctx, ev, g) {
@@ -217,6 +218,7 @@ async function runTourney(ctx, ev, g) {
   const place = lm.placeOf(T, champion), res = { win: champion, place, hype, hpf: { [g.id]: hpf }, odds };
   const rep = lm.settle(S, ev, [g], res); rep.notes.push(...notes);
   await results(ctx, ev, [g], res, rep);
+  if (!champion) await mortalCheck(ctx, [g], res, { kind: 'event' }); // FALLEN: only deadly in Hardcore
 }
 
 // ------------------------------------------------------------------ results
@@ -270,4 +272,51 @@ export async function results(ctx, ev, gl, res, rep) {
   if (rep.relic) await ctx.ask({ title: 'Relic found!', body: para(`${rep.relic.n}: ${rep.relic.d}. Relics boost every fighter. Equip them in the Armory.`), actions: ok('Nice'), dismiss: 'ok' });
   if (rep.rune) { const r = rep.rune.kind === 'k' ? d.KEYSTONES[rep.rune.id] : d.MINORS[rep.rune.id]; await ctx.ask({ title: 'Rune unlocked!', body: para(`${r.n} (${rep.rune.kind === 'k' ? 'Keystone' : 'Minor'}): ${r.d}. Set it on a fighter in their profile.`), actions: ok('Nice'), dismiss: 'ok' }); }
   await pickPends(ctx); await trophies(ctx);
+}
+
+// ------------------------------------------------------------------ THE FALLEN
+const WHERE = { pit: 'the Pit', horde: 'the Horde Trial', champ: 'a champion duel', bounty: 'a bounty hunt', event: 'the arena' };
+const slayer = (res) => { const u = res && res.F && res.F.units && res.F.units.find((x) => x.side === 'B' && !x.down) || (res && res.F && res.F.units && res.F.units.find((x) => x.side === 'B')); return u ? u.name : ''; };
+
+/** after a LOST fight: each fighter who went down rolls against LM.mortality (risk modes always, ordinary events only in Hardcore). Returns the fall reports. */
+export async function mortalCheck(ctx, gl, res, o) {
+  const S = ctx.S, lm = L(); if (!res || res.win || res.place === 1 || o.skip) return [];
+  const out = [], by = slayer(res);
+  for (const g of gl) {
+    if (!ctx.gOf(g.id)) continue;
+    const u = res.F && res.F.units && res.F.units.find((x) => x.g && x.g.id === g.id); if (u && !u.down && !o.force) continue;
+    if (lm.deathRoll(S, g, o).dies) out.push(lm.fall(S, g, Object.assign({ by }, o)));
+  }
+  if (!out.length) return out;
+  ctx.save(); ctx.refresh();
+  for (const rep of out) await fallenFlow(ctx, rep, o);
+  return out;
+}
+
+/** the farewell: eulogy ceremony, who grieves, what was inherited, then the heir offer */
+export async function fallenFlow(ctx, rep, o = {}) {
+  const S = ctx.S, e = rep.entry, lm = L(), d = D();
+  const lines = [para(`${e.name} died in ${WHERE[e.kind] || 'the arena'}${e.depth ? ` (${e.kind === 'horde' ? 'wave' : 'floor'} ${e.depth})` : ''}${e.by ? `, struck down by ${e.by}` : ''}. Their gear returns to the armory.`)];
+  if (rep.inherited) lines.push(para(`${rep.inherited.name} inherits their drills: +${rep.inherited.v} ${d.SN[rep.inherited.stat]}. They have sworn to carry on.`));
+  const grieving = rep.grief.filter((x) => x.drop >= 9).map((x) => x.name);
+  if (rep.grief.length) lines.push(para(grieving.length ? `${grieving.join(', ')} ${grieving.length > 1 ? 'are' : 'is'} shattered. The whole ludus is shaken (morale down).` : 'The ludus is shaken. Morale drops.'));
+  lines.push(h('div', '', [chip(`+${rep.fame} fame, the crowd honors them`, '#7b4fb8'), chip('Memorial wall', '#5a4a6a')]));
+  const body = h('div', '', lines); body.style.cssText = 'font:600 13px/18px system-ui,sans-serif;color:#d8ccb2;text-align:left'; // light text: the eulogy scrim is dark
+  const r = await Cer.eulogy(ctx, { kind: 'fallen', legend: e, body, actions: [{ label: 'Rest in peace', value: 'ok', variant: 'gold' }], dismiss: 'ok' });
+  if (r == null) await ctx.ask({ title: 'In memoriam', body, actions: ok('Rest in peace'), dismiss: 'ok' });
+  ctx.refresh();
+  if (S.heirPending) await heirOffer(ctx);
+}
+
+export async function heirOffer(ctx) {
+  const S = ctx.S, lm = L(), d = D(), p = S.heirPending; if (!p) return;
+  const full = S.glads.length >= lm.rosterCap(S);
+  const body = h('div', '', [para(`${p.of} left a pupil behind: a young ${d.STYLES[p.style].n} (level ${p.lvl}) with a rare gift for ${d.SN[p.best]}. They ask to take up the arms of the fallen.`), full ? para('Your barracks are full. Make room first, or raise a monument instead.') : para('Or raise a monument in their name: fame for the ludus.')]);
+  body.style.cssText = 'font:600 13px/18px system-ui,sans-serif;color:#33243a';
+  const acts = []; if (!full) acts.push({ label: 'Welcome the heir', sub: 'free recruit, perfect talent', value: 'heir', variant: 'gold' });
+  acts.push({ label: 'Raise a monument', sub: `+${15 + p.lvl * 4} fame`, value: 'mon', variant: full ? 'gold' : 'bronze' });
+  const v = await ctx.ask({ title: 'An heir steps forward', body, actions: acts, dismiss: 'mon' });
+  if (v === 'heir') { const r = lm.takeHeir(S); if (r && r.glad) { ctx.sfx('levelUp'); U.toast(`${r.glad.name} joins the ludus`, { kind: 'good', ico: 'check' }); } else U.toast(String(r), { kind: 'bad' }); }
+  else { const r = lm.monument(S); if (r && r.fame) U.toast(`A monument is raised: +${r.fame} fame`, { kind: 'good', ico: 'fame' }); }
+  ctx.save(); ctx.refresh();
 }

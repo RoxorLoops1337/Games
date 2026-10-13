@@ -64,7 +64,7 @@ export function open(ctx, arg) {
     const price = h('div', 'rc-price lm-num' + (short ? ' poor' : ''), [U.icon('coin', 22), fmt(g.cost)]);
     const btn = U.button({ label: 'Hire', icon: 'check', variant: 'gold', disabled: bad, onClick: () => hire(g, c) });
     btn.setAttribute('aria-label', `Hire ${g.name} for ${g.cost} gold`);
-    btn.classList.add('rc-hire'); buy.append(h('div', 'lm-row', [price, h('span', 'lm-grow'), btn])); if (bad) buy.append(h('div', 'lm-chips', [full ? chip('Barracks full', 'red') : chip(`Need ${fmt(g.cost - S.gold)} more gold`, 'red')])); c.append(buy);
+    btn.classList.add('rc-hire'); btn.dataset.tut = 'hire'; buy.append(h('div', 'lm-row', [price, h('span', 'lm-grow'), btn])); if (bad) buy.append(h('div', 'lm-chips', [full ? chip('Barracks full', 'red') : chip(`Need ${fmt(g.cost - S.gold)} more gold`, 'red')])); c.append(buy);
     return c;
   }
 

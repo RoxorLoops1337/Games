@@ -13,8 +13,9 @@ const live = (sel, root = document) => [...root.querySelectorAll(sel)].filter((e
 const scrims = () => [...document.querySelectorAll('.lx-scrim:not(.lx-out)')];
 const titleOf = (s) => ((s && s.querySelector('.lx-panel-head .lx-title')) || { textContent: '' }).textContent.trim();
 const topScrim = () => { const a = scrims(); return a[a.length - 1] || null; };
-const sheetWith = (name) => scrims().find((s) => titleOf(s) === name) || null;
-const byText = (root, sel, re) => live(sel, root).find((e) => re.test(e.textContent));
+// sheets and dialogs carry data-tut-sheet=<key> (set centrally in Game.sheet / Game.ask), buttons carry data-tut=<key>: no text lookups
+const sheetBy = (key) => scrims().find((s) => s.dataset.tutSheet === key) || null;
+const tutEl = (root, key) => live(`[data-tut="${key}"]`, root || document)[0] || null;
 
 export function createTutorial(game) {
   let root, card, ring, dim, raf = 0, curId = null, running = false, lastTarget = null, wasHidden = true, shownId = null, shownAt = 0;
@@ -22,7 +23,7 @@ export function createTutorial(game) {
   const S = () => game.S;
   const T = () => { const s = S(); if (!s) return null; s.flags = s.flags || {}; return s.flags.tut && typeof s.flags.tut === 'object' ? s.flags.tut : null; };
   const mark = (k) => { const t = T(); if (t && !t[k]) { t[k] = 1; game.save(); } };
-  const resultsOpen = () => /^(Victory|Defeat|Duel won)$/.test(titleOf(topScrim()));
+  const resultsOpen = () => { const t = topScrim(); return !!t && t.dataset.tutSheet === 'results'; };
   const fightOver = () => resultsOpen() || (game.scene === 'fight' && game.fightView && game.fightView.phase === 'outro');
 
   // ---------------------------------------------------------------- steps
@@ -31,29 +32,28 @@ export function createTutorial(game) {
     { id: 'welcome', title: 'Welcome, Lanista', text: 'You run a gladiator school. Hire a fighter, train him each week, then send him to the arena for gold and glory. I will show you the way.', manual: 'Show me', block: true,
       met: (t) => !!t.welcome, when: () => game.scene === 'hub' },
     { id: 'hire', title: 'Hire your first fighter', text: 'Three citizens wait at the gate. Compare their stats and talent pips, then tap Hire on the one you like.',
-      target: () => { const s = scrims().find((x) => /fighter|volunteers/i.test(titleOf(x))); return s ? byText(s, '.rc-hire, .lx-btn-gold', /Hire/) : null; },
+      target: () => { const s = sheetBy('recruit'); return s ? tutEl(s, 'hire') : null; },
       met: (t) => S().glads.length > 0, when: () => game.scene === 'hub', rescue: () => { if (!S().glads.length && !scrims().length) game.open('recruit', { first: true }); } },
     { id: 'roster', title: 'Open the Roster', text: 'Your fighters live here. Tap Roster to see their health, energy and what they will do this week.', hubOnly: true,
-      target: () => navItem(1), met: (t) => !!t.rosterOpened || !!t.trained },
+      target: () => tutEl(null, 'nav-roster'), met: (t) => !!t.rosterOpened || !!t.trained },
     { id: 'train', title: 'Plan their week', text: 'Each week a fighter follows a plan. Tap a stat to train it, or let Auto-plan choose for you. Tired fighters should rest.', manual: 'Got it', pos: 'below',
-      target: () => { const s = sheetWith('Roster'); if (!s) return null; return byText(s, '.lx-btn', /Auto-plan/) || live('.lm-act-w', s)[0] || null; },
-      met: (t) => !!t.trained || (!!t.rosterOpened && !sheetWith('Roster')), when: () => !!sheetWith('Roster') },
+      target: () => { const s = sheetBy('roster'); if (!s) return null; return tutEl(s, 'auto-plan') || tutEl(s, 'plan-grid'); },
+      met: (t) => !!t.trained || (!!t.rosterOpened && !sheetBy('roster')), when: () => !!sheetBy('roster') },
     { id: 'arena', title: 'Visit the Arena', text: 'Fights pay gold, fame and loot. Open the Arena to see the events on offer this week.', hubOnly: true,
-      target: () => navItem(2), met: (t) => !!t.arenaOpened || entries() > 0 },
+      target: () => tutEl(null, 'nav-arena'), met: (t) => !!t.arenaOpened || entries() > 0 },
     { id: 'enter', title: 'Enter a duel', text: 'Pick an event you can win and tap Enter, then choose your fighter. A duel is a safe first test: the crowd decides his fate.', pos: 'above',
-      target: () => { const s = sheetWith('The Arena'); if (!s || topScrim() !== s) return null; return byText(s, '.lx-btn-gold', /Enter/) || null; },
-      met: (t) => entries() > 0 || (!!t.arenaOpened && !scrims().length), when: () => !!sheetWith('The Arena') },
+      target: () => { const s = sheetBy('arena'); if (!s || topScrim() !== s) return null; return live('[data-tut="enter"][data-tut-kind="duel"]', s)[0] || tutEl(s, 'enter'); },
+      met: (t) => entries() > 0 || (!!t.arenaOpened && !scrims().length), when: () => !!sheetBy('arena') },
     { id: 'advance', title: 'Advance the week', text: 'Time to move on. Fighters train, then every fight you entered begins. Tap Advance week.', hubOnly: true,
-      target: () => game.advBtn, met: (t) => !!t.advanced },
+      target: () => tutEl(null, 'advance') || game.advBtn, met: (t) => !!t.advanced },
     { id: 'fight', title: 'Read the fight', text: 'The crowd rewards a bold hand. When Crowd\'s Favor glows, tap it for a surge of strength. Tap a ready ultimate ring, or leave Auto ult on.', manual: 'Got it', pos: 'top', passive: true,
-      target: () => { const f = live('.lx-btn-gold.lx-pulse', document.querySelector('.fv-hud') || document)[0]; return f || live('.lx-ult')[0] || null; },
+      target: () => { const fv = game.fightView, vis = (e) => e && e.isConnected && e.getBoundingClientRect().width > 4 ? e : null; return vis(fv && fv.favorBtn) || (fv && fv.ultBar && vis(fv.ultBar.firstElementChild)) || null; },
       met: (t) => !!t.fightSeen || fightOver() || (!!t.advanced && !game.busy), when: () => game.scene === 'fight' && game.fightView && game.fightView.phase === 'fight' },
     { id: 'results', title: 'The spoils', text: 'Gold, fame, experience and sometimes loot. Winning a duel lets you show mercy for fame, or showboat for gold. Hurt fighters need rest.', manual: 'Got it', pos: 'top', passive: true,
       met: (t) => !!t.resSeen || (!!t.advanced && !game.busy), when: () => resultsOpen() },
-    { id: 'week', title: 'The loop is yours', text: 'That is the whole cycle: plan, enter, advance. Spend gold on recruits and buildings, and chase the trophies. Tap Advance week whenever you are ready. Ave!', manual: 'Begin', hubOnly: true, last: true,
-      target: () => game.advBtn, met: (t) => !!t.done2, when: () => !game.busy && game.scene === 'hub' },
+    { id: 'week', title: 'The loop is yours', text: 'That is the whole cycle: plan, enter, advance. More holds the Calendar, the rival ludi, the barracks and the memorial wall: the Pit and other risky fights can cost a fighter his life. Tap Advance week whenever you are ready. Ave!', manual: 'Begin', hubOnly: true, last: true,
+      target: () => tutEl(null, 'advance') || game.advBtn, met: (t) => !!t.done2, when: () => !game.busy && game.scene === 'hub' },
   ];
-  function navItem(i) { const n = game.nav; return n ? n.children[i] : null; }
   function entries() { const e = S() && S().entries; return e ? Object.keys(e).length : 0; }
 
   // ---------------------------------------------------------------- overlay
@@ -126,8 +126,8 @@ export function createTutorial(game) {
     raf = requestAnimationFrame(tick);
     const t = T(); if (!t || t.done) return stop();
     // passive observers: record what the player has done
-    if (sheetWith('Roster')) { if (!t.rosterOpened) mark('rosterOpened'); }
-    if (sheetWith('The Arena')) { if (!t.arenaOpened) mark('arenaOpened'); }
+    if (sheetBy('roster')) { if (!t.rosterOpened) mark('rosterOpened'); }
+    if (sheetBy('arena')) { if (!t.arenaOpened) mark('arenaOpened'); }
     if (game.busy && !t.advanced) mark('advanced');
     if (game.scene === 'fight' && t.advanced && !t.fightSeen && curId === 'fight' && game.fightView && game.fightView.phase === 'outro') mark('fightSeen');
     const st = STEPS.find((s) => !s.met(t));
@@ -157,8 +157,21 @@ export function createTutorial(game) {
       if (T() && !T().done) start();
     },
     skip() { if (running) finish(true); },
+    /** a brand new ludus: always a fresh tutorial (called from Game.newGame, also over a non-empty save). Starts on the next hub entry. */
+    reset() { const s = S(); if (!s) return; s.flags = s.flags || {}; s.flags.tut = { v: 1 }; curId = null; shownId = null; lastTarget = null; if (running) stop(); },
+    /** TEST HOOK: mark every step before `id` as done so the overlay lands on it (hire and enter depend on real state: a fighter, an entry). Returns the derived step id. */
+    fastForward(id) {
+      const s = S(); if (!s) return null; s.flags = s.flags || {}; const t = s.flags.tut = s.flags.tut && typeof s.flags.tut === 'object' ? s.flags.tut : { v: 1 }; delete t.done; delete t.skipped;
+      const order = ['welcome', 'hire', 'roster', 'train', 'arena', 'enter', 'advance', 'fight', 'results', 'week'], k = order.indexOf(id), flags = { welcome: 'welcome', roster: 'rosterOpened', train: 'trained', arena: 'arenaOpened', advance: 'advanced', fight: 'fightSeen', results: 'resSeen', week: 'done2' };
+      for (const key of Object.values(flags)) delete t[key];
+      order.slice(0, Math.max(0, k)).forEach((x) => { const f = { welcome: 'welcome', roster: 'rosterOpened', train: 'trained', arena: 'arenaOpened', enter: null, advance: 'advanced', fight: 'fightSeen', results: 'resSeen' }[x]; if (f) t[f] = 1; });
+      if (k >= 0 && k <= order.indexOf('advance') && order.slice(0, k).includes('arena')) t.arenaOpened = 1;
+      game.save(); curId = null; shownId = null; if (!running) start();
+      const st = STEPS.find((x) => !x.met(t)); return st ? st.id : null;
+    },
+    steps: () => STEPS.map((x) => x.id),
     /** replay from the start (e.g. a button in More, Help) */
-    restart() { const s = S(); if (!s) return; s.flags = s.flags || {}; s.flags.tut = { v: 1 }; game.save(); running = false; curId = null; start(); },
+    restart() { const s = S(); if (!s) return; s.flags = s.flags || {}; s.flags.tut = { v: 1 }; game.save(); if (running) stop(); running = false; curId = null; shownId = null; lastTarget = null; start(); },
   };
   return api;
 }

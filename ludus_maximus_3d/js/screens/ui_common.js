@@ -81,7 +81,8 @@ export function activityGrid(g, onPick) {
     b.disabled = g.inj > 0; U.tooltip(b, actDesc(a), { title: a.n });
     b.addEventListener('click', () => onPick(a)); return b;
   };
-  return h('div', 'lm-act-w', [h('div', 'lm-act-g g5', d.ACTS.filter((a) => a.t === 'train').map(mk)), h('div', 'lm-act-g g4', d.ACTS.filter((a) => a.t !== 'train').map(mk))]);
+  const gridEl = h('div', 'lm-act-w', [h('div', 'lm-act-g g5', d.ACTS.filter((a) => a.t === 'train').map(mk)), h('div', 'lm-act-g g4', d.ACTS.filter((a) => a.t !== 'train').map(mk))]);
+  gridEl.dataset.tut = 'plan-grid'; return gridEl;
 }
 
 const CSS = `

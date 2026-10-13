@@ -2,7 +2,7 @@
 // Frame order (see .claude/skills/ludus3d-vfx-gamefeel): feel.update(real) -> sim.step(scaled) -> events -> actors -> fx.update -> camera -> render.
 import * as THREE from 'three';
 import { createSky, createLightRig, applyTOD, TOD } from './sky.js';
-import { createArena } from './env_arena.js';
+import { createArena, pickTheme, themeNight } from './env_arena.js'; // ARENA_THEME
 import { createDustMotes, createGodRays } from './envfx.js';
 import { createFx } from './fx.js';
 import { createGore } from './gore.js';
@@ -51,12 +51,13 @@ export class FightView {
   buildHud() {
     const root = this.hud = document.createElement('div'); root.className = 'fv-hud'; root.style.cssText = 'position:absolute;inset:0;pointer-events:none;display:none';
     this.plates = document.createElement('div'); this.plates.className = 'lx-plates';
-    this.banners = document.createElement('div'); this.banners.className = 'lx-banners'; this.banners.style.top = 'calc(var(--lx-sat) + 78px)';
+    this.banners = document.createElement('div'); this.banners.className = 'lx-banners'; this.banners.style.top = 'calc(var(--lx-sat) + 56px)';
     this.hudBox = document.createElement('div'); this.hudBox.className = 'lx-hud';
     const top = document.createElement('div'); top.className = 'lx-hud-top';
     this.speedBtn = U.button({ label: 'x1', variant: 'bronze', onClick: () => { this.userSpeed = this.userSpeed === 1 ? 2 : this.userSpeed === 2 ? 4 : 1; this.speedBtn.querySelector('span') ? 0 : 0; this.speedBtn.textContent = 'x' + this.userSpeed; this.feel.setUserScale && this.feel.setUserScale(1); } });
     this.skipBtn = U.button({ label: 'Skip', variant: 'ghost', onClick: () => { this.skip = true; } });
-    const row = this.topRow = document.createElement('div'); row.className = 'lx-row'; row.append(this.speedBtn, this.skipBtn);
+    const row = this.topRow = document.createElement('div'); row.className = 'lx-row lx-fv-top'; row.append(this.speedBtn, this.skipBtn);
+    this.speedBtn.classList.add('lx-fv-btn'); this.skipBtn.classList.add('lx-fv-btn'); this.hudBox.classList.add('lx-fv-hud'); this.avoid = { top: null, bottom: [], n: 0 };
     this.topInfo = document.createElement('div'); this.topInfo.className = 'lx-row';
     top.append(this.topInfo, row);
     this.ultBar = document.createElement('div'); this.ultBar.className = 'lx-hud-ults';
@@ -69,7 +70,7 @@ export class FightView {
   // ---------------------------------------------------------------- fight lifecycle
   /** F: fight from core/arena.js createFight. opts: {league, intro:true, quiet}. Resolves with {winner, F} after the outro. */
   start(F, opts = {}) {
-    this.dispose();
+    this.dispose(); this.clearEnd(); this.ultBar.style.visibility = ''; if (this.extras) this.extras.style.visibility = '';
     this.F = F; this.opts = opts; this.replaying = !!opts.replay; this.tapI = 0; this.done = false; this.phase = 'intro'; this.phaseT = 0; this.skip = false; this.acc = 0; this.evSeen = 0; this.lastHitT = -9; this.recent = 0; this.intensity = 0.2; this.intTimer = 0;
     if (this.replaying) L().setRandom(L().mulberry(opts.replay.seed));
     this.gore.setTier(this.tier); this.gore.reset(this.goreSeed(F, opts));
@@ -87,10 +88,11 @@ export class FightView {
     // ultimates (player side; none while replaying)
     const mine = this.replaying ? [] : F.units.filter((u) => u.side === 'A'); let hk = 0;
     mine.forEach((u) => u.ults.forEach((slot, k) => {
-      const col = D().ULTS[slot.id].c; const ring = U.cooldownRing({ ult: slot.id, color: col, size: innerWidth < 700 ? 72 : 84, hotkey: ['Q', 'W', 'E', 'R', 'T', 'Y'][hk++], onCast: () => this.cast(u, k) });
+      const col = D().ULTS[slot.id].c; const ring = U.cooldownRing({ ult: slot.id, color: col, size: Math.min(innerWidth, innerHeight) < 500 ? (innerHeight < 420 ? 54 : innerHeight < 480 ? 60 : 68) : 84, hotkey: ['Q', 'W', 'E', 'R', 'T', 'Y'][hk++], onCast: () => this.cast(u, k) });
       this.ultBar.append(ring); this.fm.get(u.id).ring.push({ ring, slot });
     }));
     this.applyWeather(F.meta ? F.meta.weather : 'clear');
+    { const m = F.meta || {}, id = pickTheme(m); this.theme = id; this.arena.setTheme(id, { rig: this.light, scene: this.scene, sky: this.sky, renderer: this.renderer, wx: m.weather, night: themeNight(id, m) }); } // ARENA_THEME: per-fight arena look (env_arena.js THEMES)
     if (!this.replaying) this.buildExtras(F); else if (this.extras) { this.extras.remove(); this.extras = null; if (this.autoBtnOld) { this.autoBtnOld.remove(); this.autoBtnOld = null; } }
     if (!opts.noSplash && !this.replaying) { const a = F.units.filter((u) => u.side === 'A'), b = F.units.filter((u) => u.side === 'B'); const side = (us) => ({ name: us.map((u) => u.name).join(' & '), sub: us.map((u) => D().STYLES[u.style].n).join(' / ') + ' \u00b7 Lv ' + Math.round(us.reduce((x, u) => x + u.g.lvl, 0) / us.length), stars: Math.min(5, Math.round(us.reduce((x, u) => x + (L().stars ? L().stars(u.g) : 0), 0) / us.length)) }); setTimeout(() => U.vsSplash({ a: side(a), b: side(b), league: opts.league != null && D().LEAGUES[opts.league] ? D().LEAGUES[opts.league].n : '', host: this.host, ms: 2300 }), 350); }
     this.dir.setAspect(this.camera.aspect);
@@ -128,7 +130,7 @@ export class FightView {
     box.append(this.favorBtn);
     if (F.duo) { this.duoBtn = U.button({ label: 'Duo: ' + D().DUOS[F.duo.kind].n, variant: 'bronze', icon: 'sword', onClick: () => { const r = this.tap('duo'); if (!r) this.audio.sfx('uiError'); } }); box.append(this.duoBtn); } else this.duoBtn = null;
     this.autoBtn = U.button({ label: F.auto.A ? 'Auto ult: on' : 'Auto ult: off', variant: 'ghost', onClick: () => { this.tap('auto', !F.auto.A); this.autoBtn.textContent = F.auto.A ? 'Auto ult: on' : 'Auto ult: off'; } });
-    if (this.autoBtnOld) this.autoBtnOld.remove(); this.autoBtnOld = this.autoBtn; this.topRow.prepend(this.autoBtn); this.ultBar.before(box);
+    if (this.autoBtnOld) this.autoBtnOld.remove(); this.autoBtnOld = this.autoBtn; this.autoBtn.classList.add('lx-fv-btn'); this.topRow.prepend(this.autoBtn); this.ultBar.before(box); box.classList.add('lx-fv-extras');
   }
   focusUnit(id) { const u = this.unitById(id); if (!u || u.side !== 'B' || u.down) return; this.tap('focus', id); this.audio.sfx('uiTap'); for (const f of this.fm.values()) if (f.u.side === 'B') f.plate.classList.toggle('fv-focus', this.F.foc.A === f.u.id); }
 
@@ -196,7 +198,7 @@ export class FightView {
       this.syncFighters(dt, true);
     } else { this.syncFighters(dt, false); }
     if (this.replaying && this.skip && !this.done) { this.done = true; L().setRandom(null); this.resolve && this.resolve({ replay: true }); }
-    if (this.phase === 'outro') { this.outroT += realDt; if ((this.replaying ? this.outroT > 3 : this.outroT > 4.5) && !this.done) { if (this.replaying) L().setRandom(null); this.done = true; this.resolve && this.resolve({ winner: F.winner, F }); } }
+    if (this.phase === 'outro') { this.outroT += realDt; if ((this.replaying ? this.outroT > 3 : this.outroT > 5.4) && !this.done) { if (this.replaying) L().setRandom(null); this.done = true; this.clearEnd(); this.resolve && this.resolve({ winner: F.winner, F }); } }
 
     this.gore.setTier(this.tier); this.fx.update(dt, this.camera); this.gore.postFrame(realDt);
     this.applyCamera(pose);
@@ -224,11 +226,17 @@ export class FightView {
     for (const f of this.fm.values()) { if (!f.u.down && f.u.side === win) f.rig.animator.setState('victory'); }
     const alive = F.units.filter((u) => u.side === win && !u.down)[0];
     const lastDown = F.units.filter((u) => u.down && u.side !== win).pop();
-    this.dir.cue('kill', { victim: lastDown && lastDown.id, killer: alive && alive.id, extra: lastDown && this.gore.framePoints(lastDown.id), next: { name: 'victory' } });
+    this.dir.cue('kill', { victim: lastDown && lastDown.id, killer: alive && alive.id, extra: lastDown && this.gore.framePoints(lastDown.id), next: { name: 'victory', p: { winner: alive && alive.id }, blend: 1.2 } });
     this.audio.music.setMode(win === 'A' ? 'victory' : 'defeat'); this.audio.sfx(win === 'A' ? 'levelUp' : 'deathThud'); this.audio.sfx(win === 'A' ? 'crowdRoar' : 'crowdBoo');
-    this.banner(win === 'A' ? 'VICTORY' : 'DEFEAT', win === 'A' ? 'kill' : 'crit');
-    setTimeout(() => this.dir.setShot('victory', { winner: alive && alive.id }, 1.2), 2400);
+    this.showEnd(win === 'A'); this.ultBar.style.visibility = 'hidden'; if (this.extras) this.extras.style.visibility = 'hidden';
   }
+
+  /** big VICTORY / DEFEAT title: arrives after the kill cam has shown the blow (CSS delay), stays until the results hand-off */
+  showEnd(win) {
+    this.clearEnd(); const el = this.endEl = document.createElement('div'); el.className = 'lx-fv-end ' + (win ? 'lx-fv-win' : 'lx-fv-lose');
+    const k = document.createElement('span'); k.textContent = win ? 'The crowd roars' : 'The crowd falls silent'; const b = document.createElement('b'); b.textContent = win ? 'VICTORY' : 'DEFEAT'; el.append(k, b); this.hud.append(el);
+  }
+  clearEnd() { if (this.endEl) { this.endEl.remove(); this.endEl = null; } }
 
   // Establishing flyover is authored here (the director frames fighters; this one frames the bowl): sweep in from above the gate to hero height.
   introPose(t) {
@@ -276,9 +284,32 @@ export class FightView {
       // plate
       f.hpShown += (u.hp - f.hpShown) * 0.2; f.plate.hp && f.plate.hp.set(u.hp, u.maxhp);
       const head = new THREE.Vector3(f.rx, 2.05 * (rig.root.scale.y || 1), f.ry);
-      f.plate.track(head, this.camera, this.renderer.domElement.clientWidth, this.renderer.domElement.clientHeight, 0.35);
-      f.plate.style.opacity = u.down || this.phase === 'intro' ? 0.0 : 1;
+      this.placePlate(f.plate, head, this.renderer.domElement.clientWidth, this.renderer.domElement.clientHeight);
+      f.plate.style.opacity = u.down || this.phase === 'intro' || this.phase === 'outro' ? 0.0 : 1;
     }
+  }
+
+  /** HUD rectangles nameplates must stay out of (top button row, Crowd's Favor / ult buttons). Refreshed a few times a second. */
+  measureHud() {
+    const R = (el) => { if (!el || !el.isConnected || !el.offsetParent && el.style.display === 'none') return null; const b = el.getBoundingClientRect(); return b.width > 0 && b.height > 0 ? b : null; };
+    const hb = this.host.getBoundingClientRect(), rel = (b) => b && { l: b.left - hb.left, r: b.right - hb.left, t: b.top - hb.top, b: b.bottom - hb.top };
+    const kids = [...this.topRow.children].map(R).filter(Boolean), bot = [];
+    let top = null; if (kids.length) top = { l: Math.min(...kids.map((b) => b.left)) - hb.left - 4, r: Math.max(...kids.map((b) => b.right)) - hb.left + 4, t: 0, b: Math.max(...kids.map((b) => b.bottom)) - hb.top + 4 };
+    for (const el of [this.extras && [...this.extras.children].filter((c) => c.style.display !== 'none')[0] && this.extras, ...this.ultBar.children]) { const r = rel(R(el)); if (r) bot.push(r); }
+    this.avoid.top = top; this.avoid.bottom = bot; this.avoid.sat = top ? Math.max(0, top.b - 40) : 0;
+  }
+  /** project the head, then slide the plate so it never covers the top button row or the bottom ult buttons, and never leaves the screen */
+  placePlate(plate, head, w, h) {
+    const cam = this.camera, p = head.clone(); p.y += 0.35; p.project(cam);
+    const vis = p.z > -1 && p.z < 1 && Math.abs(p.x) < 1.15 && Math.abs(p.y) < 1.15;
+    if ((this.avoid.n++ % 20) === 0) this.measureHud();
+    const PW = w < 420 ? 112 : 136, PH = 44, gx = 6; let x = (p.x * 0.5 + 0.5) * w, y = (-p.y * 0.5 + 0.5) * h; // y = bottom edge of the plate
+    x = clamp(x, PW / 2 + gx, w - PW / 2 - gx);
+    const T = this.avoid.top, sat = this.avoid.sat || 0;
+    if (T && x + PW / 2 > T.l && x - PW / 2 < T.r && y - PH < T.b) y = T.b + PH;
+    for (const B of this.avoid.bottom) if (x + PW / 2 > B.l && x - PW / 2 < B.r && y > B.t - 6) y = B.t - 6;
+    y = clamp(y, PH + 4 + sat, h - 6);
+    plate.place(x, y, vis); plate.style.setProperty('--lx-s', Math.max(0.7, Math.min(1.1, 1.15 - p.z * 0.6)).toFixed(2));
   }
 
   chest(u, y = 1.25) { const f = this.fm.get(u.id); return new THREE.Vector3(f ? (f.rx ?? u.x) : u.x, y, f ? (f.ry ?? u.y) : u.y); }
@@ -315,6 +346,7 @@ export class FightView {
         this.num(dst, e.crit ? 'CRIT ' + e.dmg : String(e.dmg), e.crit ? 'crit' : (e.tech && !e.basic ? 'tech' : 'dmg'));
         if (e.save) this.num(dst, e.save, 'block');
         feel.impact('hit', { dmgFrac: frac, crit: !!e.crit, mine: dst.side === 'A', dir, color: src ? this.col(src) : undefined });
+        if (e.crit && frac > 0.2) this.caPulse(0.003);
         if (fd) { this.flashHurt(fd, frac); if (!(dst.s && dst.s.guard)) fd.rig.animator.hurt(1, clamp(0.55 + frac * 3, 0.5, 1.6)); else fd.rig.animator.hurt(1, 0.8); }
         if (fs && frac > 0.08) fs.rig.animator.hitStop(0.04);
         A.sfx(e.crit ? 'swordHitCrit' : (e.save || (dst.s && dst.s.guard)) ? 'shieldBlock' : 'swordHit', { pan: pan(dst) });
@@ -329,18 +361,18 @@ export class FightView {
       case 'whiff': if (src) A.sfx('swish', { pan: pan(src), gain: 0.5 }); break;
       case 'tech': if (src) { this.num(src, (D().TECHS[e.tech] || {}).n + '!', 'tech'); fx.ring(this.feet(src), '#f5ead2', 1.8); A.sfx('uiConfirm', { gain: 0.5 }); if (fs) { const an = fs.rig.animator; an.play('attack3', { speed: 1.9 }); } } break;
       case 'dash': if (src) { fx.kickup(this.feet(src), new THREE.Vector3(src.face, 0, 0), 8); A.sfx('dust', { pan: pan(src) }); A.sfx('footstep', { pitch: 0.9 }); fx.trail && fx.trail(fs ? fs.rig.root : this.chest(src), this.col(src)); } break;
-      case 'proj': if (src && dst) { const from = this.chest(src), to = this.chest(dst); fx.shoot(from, e.long ? from.clone().add(to.clone().sub(from).normalize().multiplyScalar(26)) : to, e.c || this.col(src), { speed: e.long ? 40 : 22 }); A.sfx('swish', { pitch: 1.3, heavy: !!e.long, pan: pan(src) }); if (fs) fs.rig.animator.play('attack3', { speed: 1.8 }); } break;
+      case 'proj': if (src && dst) { const from = this.chest(src), to = this.chest(dst); fx.shoot(from, e.long ? from.clone().add(to.clone().sub(from).normalize().multiplyScalar(26)) : to, e.c || this.col(src), { speed: e.long ? 40 : 22, size: e.long ? 0.34 : 0.26 }); A.sfx('swish', { pitch: 1.3, heavy: !!e.long, pan: pan(src) }); if (fs) fs.rig.animator.play('attack3', { speed: 1.8 }); } break;
       case 'aoe': {
         const pos = new THREE.Vector3(e.x, 0.05, e.y), c = e.c || '#f5ead2';
         if (e.big) this.bigAoeT = this.t;
         if (e.big) { fx.shockwave(pos, e.r, c); fx.dust(pos, 18); fx.debris && fx.debris(pos, 10); fx.groundDecal(pos, e.meteor ? 'scorch' : 'crater', { size: e.r * 1.3 }); feel.impact('aoe', { big: true }); A.sfx('ultEarth', { gain: 0.8 }); }
         else { fx.ring(pos, c, e.r); fx.dust(pos, 8); A.sfx('drum', { gain: 0.5 }); }
-        if (e.meteor) { fx.ult.impact('fire', pos, e.r); feel.impact('meteor', {}); this.post.pulseCA && this.post.pulseCA(0.014); }
+        if (e.meteor) { fx.ult.impact('fire', pos, e.r); feel.impact('meteor', {}); this.caPulse(0.006); }
         break;
       }
-      case 'tele': { const h = fx.tele(new THREE.Vector3(e.x, 0.05, e.y), e.r, e.t, e.c || '#e8742a'); (this.teles = this.teles || []).push(h); if (e.haz) this.banner('Fire jets! Get out of the red circle', 'info'); break; }
+      case 'tele': { const h = fx.tele(new THREE.Vector3(e.x, 0.05, e.y), e.r, e.t, e.c || '#e8742a'); (this.teles = this.teles || []).push(h); if (e.haz) this.banner('Fire jets! Get out of the red circle', 'info'); else this.meteorFall(e); break; }
       case 'zap': if (src && dst) { fx.zap(this.chest(src), this.chest(dst), '#a8d8ff'); feel.addTrauma && feel.addTrauma(0.1); A.sfx('ultLightning', { gain: 0.4 }); } break;
-      case 'hook': if (src && dst) { fx.chain(this.chest(src), this.chest(dst), '#d9e4ee'); fx.hit(this.chest(dst), this.dirOf(src, dst), { dmgFrac: 0.1 }); A.sfx('netThrow', { pan: pan(src) }); } break;
+      case 'hook': if (src && dst) { fx.chain(this.chest(src), this.chest(dst), '#d9e4ee'); fx.shoot(this.chest(src), this.chest(dst), '#eef4fa', { speed: 70, size: 0.22 }); fx.hit(this.chest(dst), this.dirOf(src, dst), { dmgFrac: 0.1 }); A.sfx('netThrow', { pan: pan(src) }); } break;
       case 'bleed': if (dst && e.dmg >= 3) this.num(dst, '-' + e.dmg, e.fire ? 'fire' : 'thorn'); if (dst && !e.fire && this.gore.on) this.gore.onBleed(dst.id, e.dmg); break;
       case 'thorn': if (dst) this.num(dst, e.dmg + ' THORNS', 'thorn'); break;
       case 'status': this.onStatus(e, dst); break;
@@ -349,7 +381,7 @@ export class FightView {
       case 'rune': if (src) { this.num(src, (e.id || 'RUNE').toUpperCase(), 'status'); fx.ring(this.feet(src), '#f2c14e', 1.6); } break;
       case 'ult': {
         const el = ULT_EL[e.id] || COLOR_EL(e.c); const name = (D().ULTS[e.id] || (D().DUOS && D().DUOS[(e.id || '').slice(4)]) || { n: e.id }).n;
-        if (src) { fx.ult.cast(el, this.feet(src)); fx.ring(this.feet(src), e.c, 2.6); if (fs) { fs.rig.animator.play('attack3', { speed: 1.4 }); fs.rig.flash(0.2, e.c); } }
+        if (src) { fx.ult.cast(el, this.feet(src)); fx.ring(this.feet(src), e.c, 2.2); if (fs) { fs.rig.animator.play('attack3', { speed: 1.4 }); fs.rig.flash(0.2, e.c); } }
         feel.impact('ult', { color: e.c }); this.banner(name + '!', 'ult'); A.sfx('ult', { element: el }); setTimeout(() => A.sfx('crowdRoar', { gain: 0.8 }), 600);
         if (src && src.side === 'A' && F.manualFavor !== undefined) { const t = this.nearestFoe(src); t && this.dir.cue('ultimate', { unit: src.id, target: t.id }); }
         else if (src) { const t = this.nearestFoe(src); t && this.dir.cue('ultimate', { unit: src.id, target: t.id }); }
@@ -361,7 +393,7 @@ export class FightView {
       case 'down': if (dst) {
         const last = !F.units.some((u) => u.side === dst.side && !u.down && u !== dst);
         fx.hit(this.chest(dst), src ? this.dirOf(src, dst) : new THREE.Vector3(1, 0, 0), { dmgFrac: 0.4, crit: true, flesh: this.gore.on }); fx.dust(this.feet(dst), 14); fx.debris && fx.debris(this.feet(dst), 4); fx.groundDecal(this.feet(dst), 'scuff', { size: 1.6 });
-        this.num(dst, 'DOWN', 'miss'); feel.impact(last ? 'finalKill' : 'kill', {}); if (last && this.post.zoomPunch) this.post.zoomPunch(0.06);
+        this.num(dst, 'DOWN', 'miss'); feel.impact(last ? 'finalKill' : 'kill', {}); if (last && this.post.zoomPunch) this.post.zoomPunch(0.028);
         if (fd) { fd.rig.animator.play('death'); this.dropHandles(dst.id); fd.rig.flash(0.15, '#8a5530'); }
         A.sfx('deathCry', { voice: VOICE[dst.style] ?? 0, pan: pan(dst) }); setTimeout(() => A.sfx('deathThud', { pan: pan(dst) }), 350); A.sfx('crowdGasp'); this.bump = 0.4;
         if (this.gore.on) { const lh = fd && fd.lastHit, dd = src ? this.dirOf(src, dst) : new THREE.Vector3(1, 0, 0); this.gore.onDown(dst.id, { last, crit: !!(lh && lh.crit) && !!src, frac: lh ? lh.frac : 0.15, dx: lh ? lh.dx : dd.x, dz: lh ? lh.dz : dd.z, big: this.t - (this.bigAoeT ?? -9) < 0.7, mine: dst.side === 'A', noSrc: !src }); }
@@ -372,6 +404,14 @@ export class FightView {
       case 'favorready': this.banner("Crowd's Favor ready!", 'ult'); A.sfx('crowdCheer'); break;
       default: break;
     }
+  }
+
+  /** small chromatic-aberration pulse on the post pass (post.js decays it in ~0.15 s); capped so stills never show rainbow fringes */
+  caPulse(a) { if (this.post.pulseCA && !(this.post._caPulse > a)) this.post.pulseCA(Math.min(a, 0.006)); }
+  /** meteor: a rock streaks in from the sky and lands exactly when the telegraph disc fills (anticipation, travel, impact) */
+  meteorFall(e) {
+    const to = new THREE.Vector3(e.x, 0.4, e.y), from = to.clone().add(new THREE.Vector3(-9, 26, -6)), T = Math.max(0.3, (e.t || 1.2) - 0.04);
+    const h = this.fx.shoot(from, to, e.c || '#ff9a3a', { speed: from.distanceTo(to) / T, size: 0.62 }); this.audio.sfx('swish', { pitch: 0.5, gain: 0.6, heavy: true }); return h;
   }
 
   /** floating number with per-target stacking so simultaneous numbers fan out instead of overlapping */

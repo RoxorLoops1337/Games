@@ -23,6 +23,36 @@ const lin = (hex) => { const c = new THREE.Color(hex); return [c.r, c.g, c.b]; }
 const mixc = (a, b, t) => [lerp(a[0], b[0], t), lerp(a[1], b[1], t), lerp(a[2], b[2], t)];
 const nz = (x, z, sc, oct = 3, seed = 0) => tfbm(x * sc, z * sc, 1024, oct, seed);
 
+
+/** Colosseum facade (HUB-VISUAL): three arcade tiers with deep dark arches, half columns, cornice shadows, an attic with windows, travertine streaking. Wraps every `bays` bays. */
+function colosseumTexture(w = 2048, h = 768, bays = 8) {
+  const c = document.createElement('canvas'); c.width = w; c.height = h; const x = c.getContext('2d');
+  const g = x.createLinearGradient(0, 0, 0, h); g.addColorStop(0, '#efe0b9'); g.addColorStop(0.55, '#dcc79a'); g.addColorStop(1, '#a98d62'); x.fillStyle = g; x.fillRect(0, 0, w, h);
+  let sd = 11; const r = () => (sd = (sd * 16807) % 2147483647) / 2147483647;
+  for (let i = 0; i < 700; i++) { x.fillStyle = `rgba(${70 + r() * 40},${50 + r() * 30},30,${0.03 + r() * 0.05})`; x.fillRect(r() * w, r() * h, 3 + r() * 10, 20 + r() * 120); }
+  const bw = w / bays, tierH = h * 0.255, attic = h - tierH * 3;
+  for (let t = 0; t < 3; t++) {
+    const yTop = attic + t * tierH, yBot = yTop + tierH;
+    for (let b = 0; b < bays; b++) {
+      const x0 = b * bw, aw = bw * 0.54, ax = x0 + (bw - aw) / 2, ah = tierH * 0.74, ay = yBot - tierH * 0.08 - ah, rr = aw / 2;
+      // half column pair
+      for (const cx of [x0 + bw * 0.06, x0 + bw * 0.94]) { const cg = x.createLinearGradient(cx - bw * 0.06, 0, cx + bw * 0.06, 0); cg.addColorStop(0, '#f6ead0'); cg.addColorStop(1, '#a58b64'); x.fillStyle = cg; x.fillRect(cx - bw * 0.055, yTop + tierH * 0.1, bw * 0.11, tierH * 0.9); }
+      // arch hole: dark with a lit sill and a faint far wall
+      x.beginPath(); x.moveTo(ax, ay + ah); x.lineTo(ax, ay + rr); x.arc(ax + rr, ay + rr, rr, Math.PI, 0); x.lineTo(ax + aw, ay + ah); x.closePath();
+      const hg = x.createLinearGradient(0, ay, 0, ay + ah); hg.addColorStop(0, '#1e150f'); hg.addColorStop(0.7, '#3a2a1c'); hg.addColorStop(1, '#6a5238'); x.fillStyle = hg; x.fill();
+      x.lineWidth = 3; x.strokeStyle = '#f3e6c4'; x.stroke();
+      x.fillStyle = '#f6ecd0'; x.fillRect(ax + aw / 2 - 5, ay - 6, 10, 9);   // keystone
+      if (t > 0 && b % 2 === 0) { x.fillStyle = 'rgba(235,225,200,0.85)'; x.fillRect(ax + aw * 0.4, ay + ah * 0.52, aw * 0.2, ah * 0.48); x.fillRect(ax + aw * 0.44, ay + ah * 0.38, aw * 0.12, ah * 0.16); }   // statues in the upper tiers
+    }
+    const cg = x.createLinearGradient(0, yBot - tierH * 0.1, 0, yBot + 8); cg.addColorStop(0, '#f1e4c2'); cg.addColorStop(0.5, '#cdb98f'); cg.addColorStop(1, 'rgba(70,52,34,0.75)'); x.fillStyle = cg; x.fillRect(0, yBot - tierH * 0.07, w, tierH * 0.07 + 6);   // cornice with shadow under it
+  }
+  // attic: pilasters + small rectangular windows
+  x.fillStyle = '#d3bf92'; x.fillRect(0, 0, w, attic);
+  for (let b = 0; b < bays * 2; b++) { const bx = b * bw / 2; x.fillStyle = 'rgba(250,240,215,0.7)'; x.fillRect(bx + bw * 0.02, attic * 0.1, bw * 0.06, attic * 0.8); x.fillStyle = '#2b2016'; x.fillRect(bx + bw * 0.16, attic * 0.3, bw * 0.12, attic * 0.42); x.fillStyle = '#efe2bf'; x.fillRect(bx + bw * 0.15, attic * 0.26, bw * 0.14, attic * 0.05); }
+  const tg = x.createLinearGradient(0, 0, 0, attic); tg.addColorStop(0, 'rgba(255,248,225,0.9)'); tg.addColorStop(0.1, 'rgba(0,0,0,0)'); tg.addColorStop(0.9, 'rgba(0,0,0,0)'); tg.addColorStop(1, 'rgba(60,44,28,0.5)'); x.fillStyle = tg; x.fillRect(0, 0, w, attic);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.wrapS = THREE.RepeatWrapping; t.anisotropy = 4; return t;
+}
+
 /** Terrain height. Flat courtyard plateau, hill behind (-z), terraced slope down to a valley plain at y~-36 (+z). */
 export function terrainHeight(x, z) {
   const dx = Math.abs(x) - (CW + 5), dz = Math.abs(z) - (CD + 5);
@@ -287,7 +317,7 @@ export function createLudus({ density = 1, seed = 5, terrainSeg = 150, farShadow
       let wall = new THREE.BoxGeometry(1, 1, 1); wall.translate(0, 0.5, 0);
       wall = colorize(wall, (x, y, z, nx, ny) => { const k = ny > 0.5 ? 1 : 0.6 + 0.4 * (y + 0.5 > 0.5 ? (y) : y); const c = mixc(lin(0xd9c3a0), lin(0xf0e2c4), clamp(y)); return [c[0] * k, c[1] * k, c[2] * k]; });
       let roof = new THREE.CylinderGeometry(0.0, 0.8, 0.16, 4, 1); roof.rotateY(Math.PI / 4); roof.scale(1.0, 1, 1.0); roof.translate(0, 1.07, 0);
-      roof = colorize(roof, (x, y) => { const t = clamp((y - 1.0) / 0.16); return mixc(lin(0xb4502c), lin(0xe07a44), 1 - t); });
+      roof = colorize(roof, (x, y) => { const t = clamp((y - 1.0) / 0.16); return mixc(lin(0x8e4a30), lin(0xc4774a), 1 - t); });
       return mergeGeos([wall, roof]);
     })();
     const NH = Math.round(780 * density);
@@ -304,7 +334,7 @@ export function createLudus({ density = 1, seed = 5, terrainSeg = 150, farShadow
       const yaw = Math.round(rnd() * 3) * (Math.PI / 2) * 0 + (Math.floor(x / 40) * 0.07) + (rnd() - 0.5) * 0.25;
       const y = terrainHeight(x, z);
       q.setFromEuler(e.set(0, yaw, 0)); m.compose(new THREE.Vector3(x, y - 0.5, z), q, new THREE.Vector3(w, h, d)); hm.setMatrixAt(i, m);
-      col.setHSL(0.09 + rnd() * 0.03, 0.15 + rnd() * 0.2, 0.85 + rnd() * 0.12); hm.setColorAt(i, col);
+      { const v = rnd(); col.setHSL(0.085 + rnd() * 0.04, 0.12 + rnd() * 0.28, v < 0.15 ? 0.66 + rnd() * 0.1 : 0.82 + rnd() * 0.14); if (v > 0.9) col.multiply(new THREE.Color(1.0, 0.92, 0.82)); hm.setColorAt(i, col); }
       for (let k = 0; k < 2; k++) {
         const lx = (rnd() - 0.5) * 0.6 * w, ly = h * (0.35 + rnd() * 0.35), face = rnd() < 0.5 ? 1 : -1;
         const wp = new THREE.Vector3(lx, ly, face * d * 0.502).applyQuaternion(q).add(new THREE.Vector3(x, y - 0.5, z));
@@ -337,13 +367,14 @@ export function createLudus({ density = 1, seed = 5, terrainSeg = 150, farShadow
 
     // Colosseum landmark: elliptical arcade strip with ruined cut + inner bowl shadow cone
     {
-      const A = 58, B = 47, H = 49, SEG = 96;
-      const ft = makeColosseumFacade(1024, 512, 8); ft.wrapS = THREE.RepeatWrapping;
+      const A = 58, B = 47, H = 49, SEG = 144;
+      const ft = colosseumTexture(2048, 768, 8);
       const pos = [], uv = [], idx = [], nor = [];
       for (let j = 0; j <= SEG; j++) {
         const th = (j / SEG) * TAU, cx = Math.cos(th), sz = Math.sin(th);
         const broken = 1 - 0.62 * sstep(0.9, 1.7, Math.cos(th - 2.3) * 0.5 + 0.5 + 0.0) * sstep(0.2, 0.7, Math.cos(th - 2.3) * 0.5 + 0.5) ;
-        const hh = H * (th > 1.0 && th < 3.6 ? 1 - 0.55 * Math.sin(((th - 1.0) / 2.6) * Math.PI) * (0.6 + 0.4 * Math.sin(th * 7)) : 1);
+        const dth = Math.abs(((th - 5.35 + Math.PI * 3) % TAU) - Math.PI), cutK = dth < 1.5 ? Math.pow(1 - dth / 1.5, 0.7) : 0;   // the famous ruined side faces the courtyard (near side, right of centre)
+        const lv = cutK > 0.78 ? 0.46 : cutK > 0.5 ? 0.62 : cutK > 0.22 ? 0.8 : 1, hh = H * (lv + (lv < 1 ? 0.04 * Math.sin(th * 23) : 0));
         void broken;
         const nx = cx / A, nzz = sz / B, nl = Math.hypot(nx, nzz);
         pos.push(cx * A, 0, sz * B, cx * A, hh, sz * B); nor.push(nx / nl, 0, nzz / nl, nx / nl, 0, nzz / nl);
@@ -352,7 +383,7 @@ export function createLudus({ density = 1, seed = 5, terrainSeg = 150, farShadow
       for (let j = 0; j < SEG; j++) { const a = j * 2; idx.push(a, a + 2, a + 1, a + 1, a + 2, a + 3); }
       const g = new THREE.BufferGeometry(); g.setIndex(idx);
       g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); g.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
-      const cm = new THREE.Mesh(g, new THREE.MeshLambertMaterial({ map: ft, side: THREE.DoubleSide }));
+      const cm = new THREE.Mesh(g, new THREE.MeshLambertMaterial({ map: ft, side: THREE.DoubleSide, color: 0xfff0d8 }));
       cm.position.set(-40, terrainHeight(-40, 330) - 1.0, 330); cm.rotation.y = 0.3; cm.name = 'colosseum'; cm.frustumCulled = false; group.add(cm);
       // inner seating cone (dark, so broken sections show a bowl)
       const cg = new THREE.CylinderGeometry(A * 0.98, A * 0.55, H * 0.7, 48, 1, true); cg.scale(1, 1, B / A); cg.translate(0, H * 0.35, 0);
@@ -366,14 +397,15 @@ export function createLudus({ density = 1, seed = 5, terrainSeg = 150, farShadow
     const bg = new THREE.BufferGeometry();
     const v = new Float32Array([0, 0, 0, -1.2, 0.1, -0.3, -0.2, 0, 0.35, 0, 0, 0, 0.2, 0, 0.35, 1.2, 0.1, -0.3]);
     bg.setAttribute('position', new THREE.BufferAttribute(v, 3));
-    const NBd = 22, ph = new Float32Array(NBd * 3); for (let i = 0; i < NBd; i++) { ph[i * 3] = rnd() * TAU; ph[i * 3 + 1] = rnd(); ph[i * 3 + 2] = rnd(); }
+    const NBd = 30, ph = new Float32Array(NBd * 3); for (let i = 0; i < NBd; i++) { ph[i * 3] = rnd() * TAU; ph[i * 3 + 1] = rnd(); ph[i * 3 + 2] = rnd(); }
     bg.setAttribute('aB', new THREE.InstancedBufferAttribute(ph, 3));
     const bm = new THREE.ShaderMaterial({
-      uniforms: { uTime: U.uTime, uCol: { value: new THREE.Color(0x2a2230) } }, side: THREE.DoubleSide, fog: false,
-      vertexShader: `attribute vec3 aB; uniform float uTime; void main(){
-        vec3 p = position; p.y += abs(position.x) * 0.55 * sin(uTime * (7.0 + aB.y * 3.0) + aB.x * 5.0) ; p *= 0.9 + aB.z * 0.5;
-        float a = uTime * (0.08 + aB.y * 0.05) + aB.x; float R = 45.0 + aB.z * 55.0;
-        vec3 c = vec3(sin(a) * R + 10.0, 26.0 + aB.y * 22.0 + sin(a * 2.0 + aB.x) * 2.5, cos(a) * R * 0.7 + 60.0);
+      uniforms: { uTime: U.uTime, uNight: U.uNight, uCol: { value: new THREE.Color(0x2a2230) } }, side: THREE.DoubleSide, fog: false,
+      // aB.y > 0.72: small swallows that wheel low over the courtyard; the rest circle the hillside. All birds roost at night.
+      vertexShader: `attribute vec3 aB; uniform float uTime, uNight; void main(){
+        bool loc = aB.y > 0.72; vec3 p = position; p.y += abs(position.x) * 0.55 * sin(uTime * (loc ? 11.0 : 7.0 + aB.y * 3.0) + aB.x * 5.0); p *= (loc ? 0.55 : 0.9 + aB.z * 0.5) * (1.0 - smoothstep(0.35, 0.8, uNight));
+        float a = uTime * (loc ? 0.32 + aB.z * 0.12 : 0.08 + aB.y * 0.05) + aB.x; float R = loc ? 15.0 + aB.z * 24.0 : 45.0 + aB.z * 55.0;
+        vec3 c = loc ? vec3(sin(a) * R, 11.0 + aB.z * 9.0 + sin(a * 3.0 + aB.x) * 1.4, cos(a) * R * 0.7) : vec3(sin(a) * R + 10.0, 26.0 + aB.y * 22.0 + sin(a * 2.0 + aB.x) * 2.5, cos(a) * R * 0.7 + 60.0);
         float ca = cos(-a), sa = sin(-a); p.xz = mat2(ca, -sa, sa, ca) * p.xz;
         gl_Position = projectionMatrix * viewMatrix * vec4(c + p, 1.0); }`,
       fragmentShader: `uniform vec3 uCol;

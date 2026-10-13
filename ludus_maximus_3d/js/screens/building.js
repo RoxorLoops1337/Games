@@ -141,6 +141,7 @@ function detail(ctx, root, i, done, goto) {
   // specials
   const sp = [];
   if (p.b === 'kitchen') sp.push(U.button({ label: 'Change menu', icon: 'heart', variant: 'bronze', onClick: () => menuSheet(ctx, done) }));
+  if (p.b === 'shrine') sp.push(U.button({ label: `Memorial wall (${(S.fallen || []).length})`, icon: 'fame', variant: 'bronze', onClick: () => ctx.open('world', { tab: 'memorial' }) }));
   if (p.b === 'hall') sp.push(U.button({ label: 'View legends', icon: 'star', variant: 'bronze', onClick: () => legendsSheet(ctx) }));
   if (p.b === 'barracks' || p.b === 'palaestra' || p.b === 'sparring' || p.b === 'infirmary' || p.b === 'bath') sp.push(U.button({ label: 'Open roster', icon: 'roster', variant: 'bronze', onClick: () => ctx.open('roster') }));
   if (p.b === 'market') sp.push(U.button({ label: 'Visit market', icon: 'market', variant: 'bronze', onClick: () => ctx.open('market') }));

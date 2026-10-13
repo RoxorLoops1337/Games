@@ -595,47 +595,55 @@ export function createFx(scene, opts = {}) {
   const EL = { fire: '#e8742a', lightning: '#9fd0ff', earth: '#c98a52', wind: '#bfe8d8', holy: '#f6d46a' };
   fx.ult = {
     colorOf: (el) => EL[el] || el,
-    // charge-up burst at the caster (cast time, ~0.2 s)
+    // ANTICIPATION at the caster (~0.35 s): crisp converging streaks, a contracting core and one element-specific tell. No big glow discs.
     cast(el, pos, color) {
-      const c = rgb(color || EL[el] || '#ffffff'), hot = mixc(c, WHITE, 0.6); const y = pos.y ?? 1;
-      fx.ring({ x: pos.x, y: 0, z: pos.z }, c, 2.4, { dur: 0.55 });
-      const i = allocTimed(ringMesh); _v.set(pos.x, groundY + 0.04, pos.z); _m.compose(_v, _q.identity(), _s.set(3.2, 1, 3.2)); setTimed(ringMesh, i, _m, c, 1, uTime.value, 0.4, 5, 0); // converging ring
-      for (let k = 0; k < N(28); k++) { const a = rnd() * TAU, r = R_(1.6, 3), h = R_(0.1, 2.2); addL.add({ x: pos.x + Math.cos(a) * r, y: groundY + h, z: pos.z + Math.sin(a) * r, vx: -Math.cos(a) * r / 0.35, vz: -Math.sin(a) * r / 0.35, vy: (y - h) / 0.35, life: 0.35, s0: 0.2, s1: 0.04, cell: CELL.glow, c0: c, c1: hot, g: 2.4, fp: 0.4, att: 0.1, st: 0 }); }
-      addL.add({ x: pos.x, y: y + 0.4, z: pos.z, life: 0.5, s0: 1.2, s1: 3.6, cell: CELL.glow, c0: hot, c1: c, g: 1.6, a: 0.8, fp: 1.4 });
-      addL.add({ x: pos.x, y: y + 0.4, z: pos.z, life: 0.4, s0: 1.0, s1: 3.0, cell: CELL.star4, c0: hot, c1: c, g: 2.5, rot: rnd() * TAU, rv: 1.5, fp: 1.2 });
-      if (el === 'holy') beamUp(pos, c, 0.45);
+      const c = rgb(color || EL[el] || '#ffffff'), hot = mixc(c, WHITE, 0.6); const y = pos.y ?? 1; const gp = { x: pos.x, y: groundY, z: pos.z };
+      fx.ring({ x: pos.x, y: 0, z: pos.z }, c, 2.0, { dur: 0.5, alpha: 0.8 });
+      const i = allocTimed(ringMesh); _v.set(pos.x, groundY + 0.04, pos.z); _m.compose(_v, _q.identity(), _s.set(3.0, 1, 3.0)); setTimed(ringMesh, i, _m, c, 0.9, uTime.value, 0.38, 5, 0); // converging ring
+      for (let k = 0; k < N(20); k++) { const a = rnd() * TAU, r = R_(1.5, 2.6), h = R_(0.1, 2.0), T = 0.32, vx = -Math.cos(a) * r / T, vz = -Math.sin(a) * r / T, vy = (y - h) / T;
+        addL.add({ x: pos.x + Math.cos(a) * r, y: groundY + h, z: pos.z + Math.sin(a) * r, vx, vz, vy, life: T, s0: 0.16, s1: 0.05, st: 0.09, cell: CELL.streak, c0: c, c1: hot, g: 2.2, fp: 0.4, att: 0.1 }); }
+      addL.add({ x: pos.x, y: y + 0.2, z: pos.z, life: 0.34, s0: 0.7, s1: 0.12, cell: CELL.disc, c0: c, c1: WHITE, g: 2.0, a: 0.85, fp: 1.4 });  // contracting core
+      addL.add({ x: pos.x, y: y + 0.2, z: pos.z, life: 0.3, s0: 1.1, s1: 0.25, cell: CELL.star4, c0: hot, c1: WHITE, g: 2.4, rot: rnd() * TAU, rv: 3, a: 0.9, fp: 1.2 });
+      if (el === 'fire') { for (let k = 0; k < N(12); k++) { const a = rnd() * TAU, rr = R_(0.4, 1.0); addL.add({ x: pos.x + Math.cos(a) * rr, y: groundY + 0.1, z: pos.z + Math.sin(a) * rr, vx: -Math.sin(a) * 1.2, vz: Math.cos(a) * 1.2, vy: R_(2.4, 4.4), life: R_(0.3, 0.5), s0: 0.22, s1: 0.03, cell: CELL.ember, c0: hot, c1: c, g: 2.4, fp: 0.6, att: 0.05 }); } }
+      else if (el === 'lightning') { for (let k = 0; k < 3; k++) { const a = k / 3 * TAU + rnd(); fx.beam({ x: pos.x + Math.cos(a) * 1.6, y: y + R_(-0.3, 0.8), z: pos.z + Math.sin(a) * 1.6 }, { x: pos.x, y: y, z: pos.z }, c, { life: 0.2, width: 0.07, jag: 0.35, flicker: 0.035, pts: 10, glow: 1.6 }); } }
+      else if (el === 'earth') { fx.debris(gp, 6, { kind: 'stone', up: 0.7, speed: 0.5, size: 0.7 }); fx.dust(gp, 6, { size: 0.7, alpha: 0.5 }); }
+      else if (el === 'wind') { for (let k = 0; k < 2; k++) { const a = k * Math.PI; fx.slash({ x: pos.x, y: 0.9 + k * 0.5, z: pos.z }, { x: Math.cos(a), y: 0, z: Math.sin(a) }, '#d8fff0', 1.3, { tilt: 0.2, dur: 0.34, flip: !!k }); } }
+      else if (el === 'holy') beamUp(pos, c, 0.3, 0.2);
     },
-    // main hit (r = world radius)
+    // IMPACT (r = world radius): a white core, then element-shaped crisp forms (spikes, bolts, shards, crescents, rays), then residue on the sand.
     impact(el, pos, r = 3.2, color) {
       const c = rgb(color || EL[el] || '#ffffff'), hot = mixc(c, WHITE, 0.65), gp = { x: pos.x, y: groundY, z: pos.z };
+      const core = (y, k) => { addL.add({ x: pos.x, y, z: pos.z, life: 0.08, s0: k * 0.5, s1: k * 0.7, cell: CELL.disc, c0: WHITE, c1: hot, g: 2.6, a: 1, fp: 1.6, att: 0.01 }); fx.impactFlash({ x: pos.x, y, z: pos.z }, c, Math.min(k * 1.4, 2.0)); };
       switch (el) {
         case 'fire': {
-          fx.impactFlash({ x: pos.x, y: 0.9, z: pos.z }, c, 4); fx.shockwave(gp, r * 1.3, '#ffb060', { dur: 0.8 }); fx.ring(gp, '#ffe0a0', r * 0.9, { dur: 0.5 });
-          for (let i = 0; i < N(16); i++) { const a = rnd() * TAU, s = R_(0, r * 1.1); addL.add({ x: pos.x + Math.cos(a) * s * 0.4, y: R_(0.2, 1.2), z: pos.z + Math.sin(a) * s * 0.4, vx: Math.cos(a) * s * 1.1, vz: Math.sin(a) * s * 1.1, vy: R_(1, 3.5), life: R_(0.45, 0.8), s0: R_(0.8, 1.4), s1: R_(2.2, 3.4), cell: CELL.glow, c0: hot, c1: mixc(c, { r: 0.4, g: 0.05, b: 0 }, 0.6), g: 1.7, a: 0.9, drag: 3, fp: 1.1 }); }
-          for (let i = 0; i < N(12); i++) { const a = rnd() * TAU, s = R_(0.5, 2.2); norL.add({ x: pos.x + Math.cos(a) * s * 0.5, y: R_(0.5, 1.4), z: pos.z + Math.sin(a) * s * 0.5, vx: Math.cos(a) * s, vz: Math.sin(a) * s, vy: R_(1.2, 2.6), life: R_(1.1, 1.8), s0: 0.9, s1: R_(2.4, 3.4), cell: CELL.puffA, rot: rnd() * TAU, rv: R_(-0.6, 0.6), c0: { r: 0.32, g: 0.22, b: 0.18 }, c1: { r: 0.12, g: 0.1, b: 0.1 }, a: 0.55, drag: 1.6, grav: -0.5, fp: 1.1, att: 0.1, delay: 0.05 }); }
-          fx.spark({ x: pos.x, y: 0.8, z: pos.z }, { x: 0, y: 1, z: 0 }, 40, '#ff9a3a', { speed: 11, cone: 1.4, life: 1.5 }); fx.debris(gp, 14, { kind: 'fire', speed: 1.4, up: 1.3, size: 1.3 });
-          fx.decal(gp, 'scorch', { size: r * 0.9 }); fx.decal(gp, 'crater', { size: r * 0.55 }); break; }
+          core(0.7, 1.0); fx.shockwave(gp, r * 1.3, '#ffb060', { dur: 0.7, alpha: 0.85 }); fx.ring(gp, '#ffe0a0', r * 0.9, { dur: 0.45, alpha: 0.8 });
+          for (let i = 0; i < N(18); i++) { const a = i / 18 * TAU + rnd() * 0.25, s = r * R_(2.4, 3.6); addL.add({ x: pos.x, y: R_(0.15, 0.5), z: pos.z, vx: Math.cos(a) * s, vz: Math.sin(a) * s, vy: R_(0.4, 1.6), life: R_(0.26, 0.42), s0: 0.34, s1: 0.06, st: 0.16, cell: CELL.streak, c0: mixc(c, WHITE, 0.3), c1: { r: 0.85, g: 0.1, b: 0.01 }, g: 0.9, a: 0.95, drag: 2.2, fp: 1.1, att: 0.01 }); } // flame spikes
+          for (let i = 0; i < N(9); i++) { const a = rnd() * TAU, s = R_(0, r * 0.7); addL.add({ x: pos.x + Math.cos(a) * s, y: R_(0.1, 0.5), z: pos.z + Math.sin(a) * s, vx: Math.cos(a) * 0.6, vz: Math.sin(a) * 0.6, vy: R_(2.6, 4.6), life: R_(0.4, 0.65), s0: R_(0.45, 0.7), s1: 0.05, cell: CELL.glow, c0: mixc(c, WHITE, 0.35), c1: { r: 0.9, g: 0.12, b: 0.01 }, g: 0.9, a: 0.95, drag: 1.2, fp: 1.1, delay: R_(0, 0.08) }); }  // tongues
+          for (let i = 0; i < N(8); i++) { const a = rnd() * TAU, s = R_(0.5, 1.8); norL.add({ x: pos.x + Math.cos(a) * s * 0.5, y: R_(0.4, 1.1), z: pos.z + Math.sin(a) * s * 0.5, vx: Math.cos(a) * s, vz: Math.sin(a) * s, vy: R_(1.2, 2.4), life: R_(0.9, 1.4), s0: 0.5, s1: R_(1.4, 2.0), cell: CELL.puffA, rot: rnd() * TAU, rv: R_(-0.6, 0.6), c0: { r: 0.3, g: 0.2, b: 0.16 }, c1: { r: 0.12, g: 0.1, b: 0.1 }, a: 0.45, drag: 1.6, grav: -0.5, fp: 1.1, att: 0.1, delay: 0.1 }); } // smoke
+          fx.spark({ x: pos.x, y: 0.6, z: pos.z }, { x: 0, y: 1, z: 0 }, 30, '#ff9a3a', { speed: 10, cone: 1.4, life: 1.3 }); fx.debris(gp, 10, { kind: 'fire', speed: 1.4, up: 1.3, size: 1.1 });
+          fx.decal(gp, 'scorch', { size: r * 0.9 }); fx.decal(gp, 'crater', { size: r * 0.5 }); break; }
         case 'lightning': {
-          fx.impactFlash({ x: pos.x, y: 1, z: pos.z }, c, 3.4); fx.shockwave(gp, r * 1.1, '#cfe8ff', { dur: 0.5, dust: false });
+          core(1.0, 0.9); fx.shockwave(gp, r * 1.1, '#cfe8ff', { dur: 0.45, dust: false, alpha: 0.8 });
           for (let k = 0; k < 5; k++) { const a = rnd() * TAU, d = k === 0 ? 0 : R_(0.4, 1) * r * 0.8; const tx = pos.x + Math.cos(a) * d, tz = pos.z + Math.sin(a) * d; const top = new THREE.Vector3(tx + R_(-1.5, 1.5), 16, tz + R_(-1.5, 1.5)); const hitp = new THREE.Vector3(tx, groundY + 0.05, tz);
-            later(k * 0.05, () => { fx.beam(top, hitp, c, { life: 0.28, width: k === 0 ? 0.26 : 0.16, jag: 0.9, flicker: 0.035, pts: 19, glow: 1.0 }); fx.impactFlash(hitp, '#dff0ff', k === 0 ? 1.8 : 1.0); fx.spark(hitp, null, 10, '#bfe0ff', { speed: 8 }); }); }
+            later(k * 0.05, () => { fx.beam(top, hitp, c, { life: 0.26, width: k === 0 ? 0.2 : 0.12, jag: 0.9, flicker: 0.035, pts: 19, glow: 1.0 }); fx.impactFlash(hitp, '#dff0ff', k === 0 ? 1.4 : 0.8); fx.spark(hitp, null, 10, '#bfe0ff', { speed: 8 }); }); }
           for (let k = 0; k < 7; k++) { const a = k / 7 * TAU + rnd() * 0.4, d = r * R_(0.7, 1); later(0.08 + k * 0.02, () => fx.zap({ x: pos.x, y: 0.15, z: pos.z }, { x: pos.x + Math.cos(a) * d, y: 0.1, z: pos.z + Math.sin(a) * d }, '#bfe0ff', { branch: false, sparks: false })); }
-          fx.dust(gp, 6, { size: 0.8 }); fx.decal(gp, 'scorch', { size: r * 0.7 }); fx.decal(gp, 'crack', { size: r * 0.6, arms: 8 }); break; }
+          fx.dust(gp, 5, { size: 0.7, alpha: 0.5 }); fx.decal(gp, 'scorch', { size: r * 0.7 }); fx.decal(gp, 'crack', { size: r * 0.6, arms: 8 }); break; }
         case 'earth': {
-          fx.shockwave(gp, r * 1.4, '#ffe6b8', { dur: 0.75 }); fx.ring(gp, '#fff0d0', r * 0.8, { dur: 0.45 }); fx.impactFlash({ x: pos.x, y: 0.5, z: pos.z }, '#ffe6b8', 2.2);
-          fx.dust(gp, 26, { size: 1.5, speed: 1.7, alpha: 0.6 }); fx.debris(gp, 26, { kind: 'stone', up: 1.6, speed: 1.5, size: 1.5 }); fx.debris(gp, 12, { kind: 'sand', up: 1.2, size: 1.2 });
-          fx.spark({ x: pos.x, y: 0.4, z: pos.z }, { x: 0, y: 1, z: 0 }, 14, '#ffd9a0', { speed: 8, cone: 1.5 });
+          core(0.4, 0.8); fx.shockwave(gp, r * 1.4, '#ffe6b8', { dur: 0.7, alpha: 0.85, dust: false }); fx.ring(gp, '#fff0d0', r * 0.8, { dur: 0.4, alpha: 0.8 });
+          fx.dust(gp, 14, { size: 1.0, speed: 1.6, alpha: 0.55 }); fx.debris(gp, 20, { kind: 'stone', up: 1.7, speed: 1.5, size: 1.3 }); fx.debris(gp, 8, { kind: 'sand', up: 1.2, size: 1.0 });
+          for (let i = 0; i < N(14); i++) { const a = i / 14 * TAU + rnd() * 0.2, s = r * R_(1.6, 2.4); addL.add({ x: pos.x, y: 0.12, z: pos.z, vx: Math.cos(a) * s, vz: Math.sin(a) * s, vy: R_(0.3, 1.0), life: 0.3, s0: 0.22, s1: 0.05, st: 0.12, cell: CELL.streak, c0: { r: 1, g: 0.9, b: 0.7 }, c1: c, g: 1.4, a: 0.8, drag: 2.4, fp: 1.1 }); }
+          fx.spark({ x: pos.x, y: 0.4, z: pos.z }, { x: 0, y: 1, z: 0 }, 12, '#ffd9a0', { speed: 8, cone: 1.5 });
           fx.decal(gp, 'crater', { size: r * 0.8 }); fx.decal(gp, 'crack', { size: r * 0.95, arms: 9 }); break; }
         case 'wind': {
-          for (let k = 0; k < 3; k++) later(k * 0.1, () => fx.shockwave(gp, r * (0.9 + k * 0.35), '#d8fff0', { dur: 0.7, dust: false, distort: 0.8 }));
-          for (let k = 0; k < 6; k++) { const a = k / 6 * TAU; fx.slash({ x: pos.x + Math.cos(a) * r * 0.55, y: 0.9, z: pos.z + Math.sin(a) * r * 0.55 }, { x: -Math.sin(a), y: 0, z: Math.cos(a) }, '#d8fff0', 1.6, { tilt: 0.25, dur: 0.4 }); }
-          for (let i = 0; i < N(34); i++) { const a = rnd() * TAU, s = R_(r * 0.5, r * 1.5); norL.add({ x: pos.x, y: groundY + R_(0.05, 0.7), z: pos.z, vx: Math.cos(a) * s, vz: Math.sin(a) * s, vy: R_(0.2, 1.4), swirl: 3.5, life: R_(0.8, 1.4), s0: 0.4, s1: R_(1.4, 2.2), cell: rnd() < 0.5 ? CELL.puffA : CELL.puffB, rot: rnd() * TAU, c0: mixc(sand, WHITE, 0.6), c1: sand, a: 0.7, drag: 1.8, fp: 1.2 }); }
-          for (let i = 0; i < N(20); i++) { const a = rnd() * TAU, s = R_(2, 6); addL.add({ x: pos.x, y: 0.3, z: pos.z, vx: Math.cos(a) * s, vz: Math.sin(a) * s, vy: R_(0.5, 2), swirl: 4, life: R_(0.6, 1.1), s0: 0.1, s1: 0.04, cell: CELL.glow, c0: hot, c1: c, g: 2, drag: 1.2 }); }
+          for (let k = 0; k < 3; k++) later(k * 0.1, () => fx.shockwave(gp, r * (0.9 + k * 0.35), '#d8fff0', { dur: 0.6, dust: false, distort: 0.6, alpha: 0.8 }));
+          for (let k = 0; k < 6; k++) { const a = k / 6 * TAU; fx.slash({ x: pos.x + Math.cos(a) * r * 0.55, y: 0.9, z: pos.z + Math.sin(a) * r * 0.55 }, { x: -Math.sin(a), y: 0, z: Math.cos(a) }, '#d8fff0', 1.5, { tilt: 0.25, dur: 0.36 }); }
+          for (let i = 0; i < N(16); i++) { const a = rnd() * TAU, s = R_(r * 0.5, r * 1.4); norL.add({ x: pos.x, y: groundY + R_(0.05, 0.7), z: pos.z, vx: Math.cos(a) * s, vz: Math.sin(a) * s, vy: R_(0.2, 1.2), swirl: 3.5, life: R_(0.7, 1.2), s0: 0.35, s1: R_(1.0, 1.6), cell: rnd() < 0.5 ? CELL.puffA : CELL.puffB, rot: rnd() * TAU, c0: mixc(sand, WHITE, 0.6), c1: sand, a: 0.55, drag: 1.8, fp: 1.2 }); }
+          for (let i = 0; i < N(22); i++) { const a = rnd() * TAU, s = R_(3, 8); addL.add({ x: pos.x, y: R_(0.2, 0.9), z: pos.z, vx: Math.cos(a) * s, vz: Math.sin(a) * s, vy: R_(0.2, 1.2), swirl: 4, life: R_(0.35, 0.6), s0: 0.1, s1: 0.04, st: 0.12, cell: CELL.streak, c0: hot, c1: c, g: 1.8, drag: 1.2 }); }
           fx.decal(gp, 'scuff', { size: r * 0.8 }); break; }
         case 'holy': {
-          fx.impactFlash({ x: pos.x, y: 1.2, z: pos.z }, '#fff4c0', 3); fx.shockwave(gp, r * 1.1, '#ffe8a0', { dur: 0.7, dust: false, distort: 0.4 }); fx.ring(gp, '#fff4c0', r * 0.7, { dur: 0.6 }); beamUp(pos, c, 0.9);
-          for (let i = 0; i < N(30); i++) { const a = rnd() * TAU, d = R_(0.2, r * 0.8); addL.add({ x: pos.x + Math.cos(a) * d, y: R_(0.05, 0.6), z: pos.z + Math.sin(a) * d, vy: R_(1.5, 4), vx: 0, vz: 0, delay: rnd() * 0.3, life: R_(0.9, 1.5), s0: R_(0.12, 0.26), s1: 0.03, cell: i % 4 === 0 ? CELL.star5 : CELL.glow, c0: hot, c1: c, g: 2.2, fp: 1, rv: 2 }); }
-          addL.add({ x: pos.x, y: 2.4, z: pos.z, life: 0.8, s0: 0.5, s1: r * 1.8, cell: CELL.ring, c0: c, c1: c, g: 1.6, fp: 1.3, a: 0.8 });
+          core(1.2, 0.9); fx.shockwave(gp, r * 1.1, '#ffe8a0', { dur: 0.6, dust: false, distort: 0.3, alpha: 0.85 }); fx.ring(gp, '#fff4c0', r * 0.7, { dur: 0.5, alpha: 0.8 }); beamUp(pos, c, 0.65, 0.36);
+          for (let i = 0; i < N(14); i++) { const a = i / 14 * TAU; addL.add({ x: pos.x, y: 0.3, z: pos.z, vx: Math.cos(a) * r * 2.4, vz: Math.sin(a) * r * 2.4, vy: 0.2, life: 0.3, s0: 0.2, s1: 0.04, st: 0.14, cell: CELL.streak, c0: WHITE, c1: c, g: 2.2, drag: 2.4, fp: 1.2 }); }
+          for (let i = 0; i < N(22); i++) { const a = rnd() * TAU, d = R_(0.2, r * 0.8); addL.add({ x: pos.x + Math.cos(a) * d, y: R_(0.05, 0.6), z: pos.z + Math.sin(a) * d, vy: R_(1.5, 4), vx: 0, vz: 0, delay: rnd() * 0.3, life: R_(0.9, 1.5), s0: R_(0.12, 0.24), s1: 0.03, cell: i % 4 === 0 ? CELL.star5 : CELL.glow, c0: hot, c1: c, g: 2.2, fp: 1, rv: 2 }); }
           fx.decal(gp, 'scorch', { size: r * 0.5, angle: 0 }); break; }
         default: break;
       }
@@ -645,9 +653,9 @@ export function createFx(scene, opts = {}) {
       const h = { kind: 'sustain', el, a: target, c: rgb(o.color || EL[el] || '#ffffff'), t: 0, dur, on: true, acc: 0, radius: o.radius ?? 1.6 }; h.stop = () => { h.on = false; }; emitters.push(h); return h;
     },
   };
-  function beamUp(pos, c, life) { // vertical light pillar via 2 camera-facing ribbons
+  function beamUp(pos, c, life, w = 1.1) { // vertical light pillar via 2 camera-facing ribbons
     const bot = new THREE.Vector3(pos.x, groundY, pos.z), top = new THREE.Vector3(pos.x, 18, pos.z);
-    fx.beam(bot, top, c, { life, width: 1.1, pts: 2, glow: 1.1, fade: 0.6 }); fx.beam(bot, top, '#ffffff', { life: life * 0.7, width: 0.3, pts: 2, glow: 2.0, fade: 0.6 });
+    fx.beam(bot, top, c, { life, width: w, pts: 2, glow: 1.1, fade: 0.6 }); fx.beam(bot, top, '#ffffff', { life: life * 0.7, width: w * 0.27, pts: 2, glow: 2.0, fade: 0.6 });
   }
   // deferred calls on fx time
   const timers = [];

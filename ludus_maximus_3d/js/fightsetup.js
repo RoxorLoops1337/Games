@@ -25,7 +25,7 @@ export function buildFight(S, gl, opps, stance, o = {}) {
   // deterministic replay: reseed right after building, snapshot, then record taps (see FightView.tap and Game.watchReplay)
   const seed = (Math.random() * 4294967296) >>> 0; lm.setRandom(lm.mulberry(seed));
   F.replay = { seed, taps: [], snap: null };
-  F.meta = { weather: wxId, WX, odds, stB, league: ev.league || 0, season: S.season || 1, title: ev.title || '' };
+  F.meta = { weather: wxId, WX, odds, stB, league: ev.league || 0, season: S.season || 1, title: ev.title || '', kind: ev.kind || '', festival: lm.fest(S, ev.week || S.week) || '', theme: o.theme || '' }; // ARENA_THEME: kind + festival pick the arena look
   F.replay.snap = structuredClone(F);
   return F;
 }

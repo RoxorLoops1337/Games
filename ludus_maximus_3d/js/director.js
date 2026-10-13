@@ -222,19 +222,27 @@ export class FightDirector {
     r.timeScale = t < 0.45 ? 0.2 : lerp(0.2, 1, ease((t - 0.45) / (dur - 0.45)));
     this._endIf(dur, () => (p.back ? { name: p.back.name, p: p.back.p, blend: 0.45 } : { name: 'follow' })); this.pose.timeScale = r.timeScale; return r;
   }
+  // Kill cam: side-on to the blow axis so the strike and the fall both read. Starts tight on killer and victim, then widens to take in the
+  // flung limb and the fall spot (a point beyond the victim along the blow). Slow, short orbit (no whip), slow-mo through the fall.
   _kill({ L, t, p, tall }) {
-    const dur = p.dur ?? 2.8, v = this.units.find((x) => x.id === p.victim) || p.at, kl = this.units.find((x) => x.id === p.killer);
-    const vx = v?.x ?? 0, vy = v?.y ?? 0; if (p._yaw0 === undefined) p._yaw0 = (kl ? Math.atan2(vy - kl.y, vx - kl.x) : 0) + (p.side ?? 1) * Math.PI / 2;
-    const yaw = p._yaw0 + t * 0.5 * (p.side ?? 1), pitch = lerp(6, 16, easeOut(t / dur)) * D2R + tall * 8 * D2R;
-    const pts = [[vx, 0, vy], [vx, 1.9, vy]]; if (kl && Math.hypot(kl.x - vx, kl.y - vy) < 4.5) pts.push([kl.x, 0, kl.y], [kl.x, 2.2, kl.y]);
-    if (p.extra) for (const q of p.extra) pts.push(q); // gore: keep the flung limb / blood in frame
-    const r = this._frame({ pts, yaw, pitch, fov: this._fov(40), margin: lerp(0.8, 0.72, tall), minD: 3.4, padX: 0.9, st: { yaw: 0.05, pitch: 0.3, c: 0.25, d: 0.4, dUp: 0.2, fov: 0.3 } });
-    r.timeScale = lerp(0.25, 1, ease((t - 0.6) / (dur - 0.6))); this.pose.timeScale = r.timeScale;
+    const dur = p.dur ?? 2.9, v = this.units.find((x) => x.id === p.victim) || p.at, kl = this.units.find((x) => x.id === p.killer);
+    const vx = v?.x ?? 0, vy = v?.y ?? 0, near = !!(kl && Math.hypot(kl.x - vx, kl.y - vy) < 5);
+    let bx = near ? vx - kl.x : vx, by = near ? vy - kl.y : vy; { const l = Math.hypot(bx, by) || 1; bx /= l; by /= l; } // blow direction (killer to victim)
+    if (p._yaw0 === undefined) { // the shoulder whose camera spot lies deeper inside the bowl
+      const a0 = Math.atan2(by, bx), spot = (sd) => Math.hypot(vx - Math.cos(a0 + sd * Math.PI / 2) * 6, vy - Math.sin(a0 + sd * Math.PI / 2) * 6);
+      p.side = p.side ?? (spot(1) <= spot(-1) ? 1 : -1); p._yaw0 = a0 + p.side * Math.PI / 2; }
+    const k = easeOut(t / dur), yaw = p._yaw0 + p.side * 0.5 * k, pitch = lerp(7, 15, k) * D2R + tall * 8 * D2R;
+    const pts = [[vx, 0, vy], [vx, 1.9, vy], [vx + bx * 0.5, 1.3, vy + by * 0.5]];
+    if (near) pts.push([kl.x, 0.2, kl.y], [kl.x, 2.2, kl.y]);
+    const fall = ease((t - 0.25) / 0.9); pts.push([vx + bx * (0.6 + 1.5 * fall), 0.1, vy + by * (0.6 + 1.5 * fall)]); // the body going down
+    if (p.extra && t > 0.5) for (const q of p.extra) if (Math.hypot(q[0] - vx, q[2] - vy) < 5.5) pts.push(q); // gore: keep the flung limb in frame once it is in the air (never pull wide for a far one)
+    const r = this._frame({ pts, yaw, pitch, fov: this._fov(38) + 2 * k, margin: lerp(0.8, 0.72, tall), minD: lerp(3.0, 3.8, k), padX: 0.9, st: { yaw: 0.12, pitch: 0.3, c: 0.22, d: 0.35, dUp: 0.18, fov: 0.3 } });
+    r.timeScale = lerp(0.25, 1, ease((t - 0.7) / (dur - 0.7))); this.pose.timeScale = r.timeScale;
     this._endIf(dur, p.next ?? null); return r;
   }
   _victory({ L, t, p, tall }) {
     if (p.yaw0 === undefined) p.yaw0 = this.s.yaw; // latched once: a target of (current yaw + k*t) runs away from the camera and spins faster the longer the shot lasts
-    const pts = unitPts(L.length ? L : [{ x: 0, y: 0 }], 0, 2.4), yaw = p.yaw0 + Math.min(t, 40) * 0.38, pitch = lerp(9, 17, ease(t / 6)) * D2R + tall * 8 * D2R;
+    const pts = unitPts(L.length ? L : [{ x: 0, y: 0 }], 0, 2.4), yaw = p.yaw0 + Math.min(t, 40) * 0.1 * ease(t / 2.5), pitch = lerp(9, 17, ease(t / 6)) * D2R + tall * 8 * D2R;
     return this._frame({ pts, yaw, pitch, fov: this._fov(44), margin: lerp(0.8, 0.74, tall), minD: 4.8, padX: 0.9, st: { yaw: 0.05, pitch: 0.4, c: 0.35, d: 0.6, dUp: 0.2, fov: 0.5 } });
   }
 }

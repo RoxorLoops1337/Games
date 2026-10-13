@@ -10,9 +10,13 @@ import { styleBadge } from './uihelpers.js';
 import { createTitle, titleState } from './title.js'; // ONBOARDING
 import { createTutorial } from './tutorial.js'; // ONBOARDING
 import * as Cer from './ceremonies.js'; // ONBOARDING
+import { createPhoto } from './photo.js'; // PHOTO
 
 const D = () => globalThis.LM_D, L = () => globalThis.LM;
-const SCREENS = ['building', 'roster', 'profile', 'recruit', 'arena', 'market', 'armory', 'more'];
+const SCREENS = ['building', 'roster', 'profile', 'recruit', 'arena', 'market', 'armory', 'more', 'world']; // 'world' = calendar, rival ludi, barracks, memorial (screens/world.js)
+// TUT: every sheet and dialog carries data-tut-sheet=<key> so the tutorial never has to read titles
+const TUT_SHEETS = [[/^Roster$/, 'roster'], [/^The Arena$/, 'arena'], [/^(Choose your first fighter|Volunteers)$/, 'recruit'], [/^(Victory|Defeat|Duel won)$/, 'results'], [/^Week \d+ done$/, 'week-done'], [/^More$/, 'more'], [/^The World$/, 'world'], [/^Your Ludus$/, 'building'], [/^Market$/, 'market']];
+const tutKey = (title) => { const t = String(title || ''); const r = TUT_SHEETS.find(([re]) => re.test(t)); return r ? r[1] : ''; };
 
 export class Game {
   constructor({ renderer, camera, post, audio, ui, tier }) {
@@ -94,7 +98,7 @@ export class Game {
   save() { try { L().save(this.S); } catch (e) { /* storage blocked */ } }
   hasSave() { return !!L().load(); }
   loadSave() { const S = L().load(); if (!S) return false; this.S = S; return true; }
-  newGame(o) { this.S = L().newGame(o); this.save(); }
+  newGame(o) { this.S = L().newGame(o); this.save(); this.tutorial && this.tutorial.reset(); /* TUT: a new game always gets the tutorial, even over a non-empty save */ }
 
   // ---------------------------------------------------------------- scenes
   setScene(name) {
@@ -109,6 +113,7 @@ export class Game {
     if (this.scene === 'hub') this.hub.update(dt, t);
     else if (this.scene === 'title') { this.title && this.title.drive(dt, t); this.hub.update(dt, t); } // ONBOARDING
     else if (this.scene === 'fight') this.fightView.frame(dt, t);
+    this.photo && this.photo.frame(dt, t); // PHOTO: fab visibility + free camera override (after the scene moved the camera)
   }
   resize(w, h) { this.hub && this.hub.resize && this.hub.resize(w, h); this.fightView && this.fightView.resize(w, h); }
 
@@ -147,6 +152,9 @@ export class Game {
     this.nav = U.nav([{ icon: 'ludus', label: 'Ludus' }, { icon: 'roster', label: 'Roster' }, { icon: 'arena', label: 'Arena' }, { icon: 'market', label: 'Market' }, { icon: 'scroll', label: 'More' }], (it, i) => this.onNav(i), 0) /* ONBOARDING fix: kit nav calls onSelect(item, index) */;
     bottom.append(this.advBtn, this.nav);
     this.hud.append(top, mid, bottom);
+    try { this.photo = createPhoto(this); } catch (e) { console.warn('photo mode unavailable', e && e.message); } // PHOTO: camera button (bottom corner), fight outro button, share card
+    // TUT: stable hooks for the tutorial spotlight (never look up buttons by their text)
+    this.advBtn.dataset.tut = 'advance'; ['ludus', 'roster', 'arena', 'market', 'more'].forEach((k, i) => { const n = this.nav.children[i]; if (n) n.dataset.tut = 'nav-' + k; });
   }
   onNav(i) { const id = ['ludus', 'roster', 'arena', 'market', 'more'][i]; if (id === 'ludus') { this.closeAll(); this.hub.focusHome && this.hub.focusHome(); } else this.open(id); }
 
@@ -181,11 +189,11 @@ export class Game {
       const acts = (opts.actions || []).map((a) => U.button({ label: a.label, variant: a.variant || 'gold', icon: a.icon, sub: a.sub, block: true, onClick: () => { this.audio.sfx('uiTap'); fin(a.value); } }));
       const body = typeof opts.body === 'string' ? Object.assign(document.createElement('div'), { textContent: opts.body }) : opts.body;
       const m = U.modal({ title: opts.title, body, actions: acts, onClose: () => { if (!done) { done = true; resolve(opts.dismiss === undefined ? null : opts.dismiss); } } });
-      this.modals.push(m); this.audio.sfx('uiTap', { gain: 0.5 });
+      this.modals.push(m); this.audio.sfx('uiTap', { gain: 0.5 }); const tk = tutKey(opts.title); if (tk && m.el) m.el.dataset.tutSheet = tk; // TUT
     });
   }
   /** non-promise sheet for screens: returns {close, el}. */
-  sheet(o) { const m = U.modal(o); this.modals.push(m); return m; }
+  sheet(o) { const m = U.modal(o); this.modals.push(m); const tk = tutKey(o && o.title); if (tk && m.el) m.el.dataset.tutSheet = tk; /* TUT */ return m; }
   closeAll() { this.modals.splice(0).forEach((m) => { try { m.close(); } catch (e) { /* closed */ } }); }
 
   async open(id, arg) {

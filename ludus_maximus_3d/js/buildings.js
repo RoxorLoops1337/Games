@@ -73,6 +73,33 @@ export function makeGlowMaterial(glArr = buildingUniforms.uGl) {
   });
   return m;
 }
+
+/** Roof tiles: muted terracotta with per-patch variation (ochre, brown, dull replacement tiles), large-scale weathering, rain streaks and moss on shaded low slopes (HUB-VISUAL). */
+function roofWeather(mat) {
+  const inner = mat.onBeforeCompile;
+  mat.onBeforeCompile = (sh) => {
+    inner(sh);
+    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vRW; varying vec3 vRN;').replace('#include <begin_vertex>', '#include <begin_vertex>\nvRW = (modelMatrix * vec4(transformed, 1.0)).xyz; vRN = normalize(mat3(modelMatrix) * normal);');
+    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', `#include <common>
+      varying vec3 vRW; varying vec3 vRN;
+      float rfh(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+      float rfn(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f); return mix(mix(rfh(i), rfh(i + vec2(1.0, 0.0)), f.x), mix(rfh(i + vec2(0.0, 1.0)), rfh(i + vec2(1.0, 1.0)), f.x), f.y); }`)
+      .replace('#include <color_fragment>', `#include <color_fragment>
+      { vec3 wp = vRW; float up = clamp(vRN.y, 0.0, 1.0);
+        vec2 cell = floor(vec2(wp.x * 1.15 + wp.y * 0.8, wp.z * 1.15 + wp.y * 0.8));
+        float h1 = rfh(cell), h2 = rfh(cell + 17.3);
+        vec3 c = diffuseColor.rgb; float l = dot(c, vec3(0.3, 0.59, 0.11));
+        c = mix(vec3(l), c, 0.62) * vec3(1.04, 0.97, 0.9);
+        c *= 0.82 + 0.34 * h1;
+        c = mix(c, c * vec3(1.2, 1.05, 0.76), step(0.8, h2) * 0.85);
+        c = mix(c, vec3(l) * vec3(0.98, 0.92, 0.86) * 0.95, step(0.92, h1) * 0.75);
+        float w = rfn(wp.xz * 0.21 + wp.y * 0.1); c *= 0.86 + 0.26 * w;
+        float mo = smoothstep(0.56, 0.78, rfn(wp.xz * 0.5 + vec2(wp.y * 0.35, 3.7))) * (1.0 - up * 0.3);
+        c = mix(c, vec3(0.2, 0.25, 0.085) * (0.8 + 0.4 * h1), mo * 0.62);
+        float st = rfn(vec2((wp.x + wp.z) * 2.4, wp.y * 0.12)); c *= 0.93 + 0.12 * st;
+        diffuseColor.rgb = c; }`);
+  };
+}
 export function getLib() {
   if (LIB) return LIB;
   const stone = makeStoneTexture(512, { bx: 4, by: 6, base: 0xe3d3ad, tint: 0xb89a66, seed: 31 });
@@ -89,8 +116,9 @@ export function getLib() {
     }),
     glow: makeGlowMaterial(),
   };
-  LIB.roof.color.setRGB(0.74, 0.66, 0.63);
-  LIB.roof.emissive.setRGB(0.07, 0.035, 0.05); LIB.masonry.emissive.setRGB(0.05, 0.04, 0.06); LIB.wood.emissive.setRGB(0.05, 0.035, 0.04); LIB.cloth.emissive.setRGB(0.03, 0.02, 0.04); LIB.masonry.color.setRGB(1.12, 1.08, 1.02); LIB.wood.color.setRGB(1.08, 1.05, 1.0);
+  roofWeather(LIB.roof);
+  LIB.roof.color.setRGB(0.86, 0.66, 0.5);
+  LIB.roof.emissive.setRGB(0.06, 0.032, 0.026); LIB.masonry.emissive.setRGB(0.05, 0.04, 0.06); LIB.wood.emissive.setRGB(0.05, 0.035, 0.04); LIB.cloth.emissive.setRGB(0.03, 0.02, 0.04); LIB.masonry.color.setRGB(1.12, 1.08, 1.02); LIB.wood.color.setRGB(1.08, 1.05, 1.0);
   return LIB;
 }
 const MATS = ['masonry', 'roof', 'wood', 'metal', 'cloth', 'glow'];
@@ -767,6 +795,36 @@ DESIGN.hall = (k, lv) => {
   return { h: 5.6 };
 };
 
+
+// ---------------------------------------------------------------------------------------------
+// rear yards: every building gets some back-of-house life (woodpiles, laundry, stores, herb tubs...) so its back is never a blank wall (HUB-VISUAL)
+// ---------------------------------------------------------------------------------------------
+const REAR = { barracks: 'laundry', kitchen: 'stores', bath: 'wood', infirmary: 'herbs', forge: 'coal', market: 'crates', scout: 'ladder', sparring: 'racks', stands: 'barrels', shrine: 'vines', hall: 'garden', palaestra: 'racks' };
+function rearYard(k, id, lv) {
+  const r = rngOf(id.length * 977 + lv * 31 + 5), z = -2.93, kind = REAR[id] || 'stores', keep = k.H; k.H = 6;
+  const pile = (x, n) => { for (let j = 0; j < n; j++) for (let i = 0; i < n - j; i++) k.box('wood', 1.3, 0.2, 0.2, x - (n - j - 1) * 0.11 + i * 0.22, 0.02 + j * 0.2, z + (r() - 0.5) * 0.06, i % 2 ? C.wood : C.woodLt, { ao: 0.5 }); };
+  const tub = (x, zz, s = 1, hex = C.wood2) => { k.cyl('wood', 0.26 * s, 0.22 * s, 0.5 * s, x, 0, zz, hex, { seg: 6 }); k.cyl('metal', 0.27 * s, 0.27 * s, 0.04, x, 0.28 * s, zz, C.iron, { seg: 6 }); };
+  const jar = (x, zz, s = 1, hex = C.clay) => k.cone('masonry', 0.24 * s, 0.7 * s, x, 0, zz, hex, { seg: 6, ao: 0.5 });
+  const crate = (x, zz, s = 1, y = 0) => k.box('wood', 0.5 * s, 0.38 * s, 0.42 * s, x, y, zz, C.wood, { ry: (r() - 0.5) * 0.6 });
+  const tunic = [C.cream, C.red, 0xcaa05a, C.teal, 0xd8cfc0];
+  if (kind === 'laundry') {
+    const xa = -3.1, xb = 3.1, y = 2.3 + (lv >= 3 ? 0.3 : 0);
+    for (const x of [xa, xb]) k.cyl('wood', 0.04, 0.05, y + 0.25, x, 0, z - 0.05, C.wood2, { seg: 5 });
+    k.box('wood', xb - xa, 0.025, 0.025, 0, y + 0.2, z - 0.05, C.rope, { c: true });
+    for (let i = 0; i < 4; i++) { const x = xa + 0.55 + i * 1.45 + (r() - 0.5) * 0.2, w = 0.62 + r() * 0.2; k.sheet([x, y + 0.2, z - 0.05], [w, 0, 0], [0, -(0.7 + r() * 0.3), 0], 2, 3, tunic[(i + lv) % tunic.length], { ao: 0.35 }); }
+    pile(-2.4, 3); tub(2.4, z + 0.1, 1.0);
+  } else if (kind === 'stores') { jar(-3.3, z + 0.05, 1.1); jar(-2.8, z - 0.02, 0.9, 0xb9723f); jar(-2.35, z + 0.08, 1.0); crate(2.3, z, 1.0); crate(2.9, z + 0.04, 0.9); crate(2.6, z + 0.02, 0.8, 0.38); k.sack(1.6, z + 0.06, 0, C.rope); k.sack(1.35, z - 0.02, 0, C.cream); }
+  else if (kind === 'wood') { pile(-2.8, 4); pile(2.3, 3); k.box('wood', 1.7, 0.1, 0.5, 0.0, 0, z, C.wood2); tub(0.4, z + 0.05, 1.1); }
+  else if (kind === 'herbs') { for (let i = 0; i < 3; i++) { const x = -2.9 + i * 0.75; tub(x, z, 0.9, C.clay); for (let b = 0; b < 3; b++) k.cone('cloth', 0.1, 0.45 + r() * 0.2, x + (b - 1) * 0.1, 0.44, z + (r() - 0.5) * 0.1, b % 2 ? C.leaf : C.leaf2, { seg: 4, sway: 0.6, ao: 0.4 }); } jar(2.7, z, 1.0); jar(3.1, z + 0.05, 0.8); k.bench(1.6, z + 0.1, 1.3); }
+  else if (kind === 'coal') { k.cone('masonry', 0.7, 0.55, -2.8, 0, z + 0.05, C.coal, { seg: 6, ao: 0.4 }); k.cone('masonry', 0.5, 0.4, -2.2, 0, z, 0x3a2a22, { seg: 5, ao: 0.4 }); tub(2.2, z + 0.05, 1.2, 0x5a4a3a); k.box('metal', 1.2, 0.07, 0.07, 3.0, 0.85, z, C.iron); pile(0.2, 3); }
+  else if (kind === 'crates') { crate(-3.2, z); crate(-2.6, z + 0.03, 1.1); crate(-2.9, z + 0.02, 0.9, 0.4); jar(2.4, z + 0.04, 1.2); jar(2.9, z, 1.0); jar(3.3, z + 0.05, 0.8); k.sack(0.2, z + 0.05, 0, C.rope); k.sack(0.55, z, 0, C.cream); }
+  else if (kind === 'ladder') { for (const s of [-1, 1]) k.box('wood', 0.07, 3.0, 0.07, 1.6 + s * 0.26, 0, z + 0.05 - 0.3, C.wood2, { rx: -0.2 }); for (let i = 0; i < 5; i++) k.box('wood', 0.52, 0.05, 0.05, 1.6, 0.4 + i * 0.5, z - 0.18 - i * 0.05, C.woodLt); tub(-2.4, z, 1.0); jar(-3.0, z + 0.05, 1.0); }
+  else if (kind === 'racks') { for (let i = 0; i < 2; i++) { const x = -3.0 + i * 1.2; k.box('wood', 0.9, 0.06, 0.06, x, 0.9, z, C.wood2); k.box('wood', 0.9, 0.06, 0.06, x, 0.45, z, C.wood2); for (const s of [-1, 1]) k.box('wood', 0.07, 1.1, 0.07, x + s * 0.45, 0, z, C.wood2); for (let b = 0; b < 3; b++) k.box('wood', 0.05, 1.0, 0.05, x - 0.28 + b * 0.28, 0, z - 0.04, C.woodLt, { rz: 0.1 }); } tub(2.6, z + 0.05, 1.0); tub(3.1, z, 0.9); }
+  else if (kind === 'barrels') { tub(-3.2, z, 1.1); tub(-2.6, z + 0.04, 1.0); tub(-2.9, z + 0.02, 0.9); crate(2.7, z, 1.0); crate(3.2, z + 0.03, 0.9); }
+  else if (kind === 'vines') { for (let i = 0; i < 4; i++) { const x = -3.2 + i * 0.85; k.cone('cloth', 0.22, 1.0 + r() * 0.4, x, 0, z, i % 2 ? C.leaf : C.green, { seg: 5, sway: 0.5, ao: 0.4 }); } for (let i = 0; i < 3; i++) k.cone('cloth', 0.2, 0.9 + r() * 0.3, 1.9 + i * 0.6, 0, z + 0.02, C.leaf2, { seg: 5, sway: 0.5, ao: 0.4 }); jar(0.4, z + 0.06, 1.0); }
+  else { for (let i = 0; i < 4; i++) k.cone('cloth', 0.26, 0.8 + r() * 0.5, -3.2 + i * 0.9, 0, z, i % 2 ? C.leaf : C.leaf2, { seg: 5, sway: 0.5, ao: 0.4 }); k.bench(2.6, z + 0.1, 1.5); jar(1.5, z + 0.04, 0.9); }
+  k.H = keep;
+}
 // ---------------------------------------------------------------------------------------------
 // public API
 // ---------------------------------------------------------------------------------------------
@@ -783,6 +841,7 @@ export function buildParts(id, level, opts = {}) {
   const fn = DESIGN[id]; if (!fn) throw new Error('unknown building ' + id);
   const k = new Kit(id.length * 131 + level * 17 + 3, accent); k.H = 6;
   const info = fn(k, level) || {};
+  if (!opts.noRear) rearYard(k, id, level);
   const parts = {}; let tris = 0, calls = 0;
   for (const m of MATS) { if (k.P[m].length) { const g = mergeGeometries(k.P[m], false); g.computeBoundingSphere(); parts[m] = g; tris += g.attributes.position.count / 3; calls++; } }
   const res = { id, level, parts, fx: k.fx, tris: Math.round(tris), calls, footprint: { w: info.w || FOOT.w, d: info.d || FOOT.d, h: info.h || 5 } };

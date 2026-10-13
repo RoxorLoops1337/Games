@@ -3,6 +3,7 @@ import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 const D = require('../ludus_maximus_3d/core/data.js');
 const LM = require('../ludus_maximus_3d/core/sim.js');
+require('../ludus_maximus_3d/core/ext.js');
 require('../ludus_maximus_3d/core/arena.js');
 
 let pass = 0, fail = 0;
@@ -466,6 +467,87 @@ ok(strongWins >= 17, `level 10 beats level 1 (${strongWins}/20)`);
 { // round 39: sprint drill
   ok(LM.sprintAcc(0) === 0 && LM.sprintAcc(12) === 0.55 && LM.sprintAcc(30) === 1, 'sprint accuracy thresholds');
   }
+
+
+{ // round 40: THE FALLEN (mortality, memorial, grief, heirs, hardcore)
+  const mk = (o) => { const S = LM.newGame({ name: 'F' }); S.gold = 5000; S.week = 5; const a = LM.makeGlad({ id: S.nextId++, style: 'murmillo', lvl: 8 }), b = LM.makeGlad({ id: S.nextId++, style: 'thraex', lvl: 6 }), c = LM.makeGlad({ id: S.nextId++, style: 'retiarius', lvl: 4 }); S.glads.push(a, b, c); S.fame = 100; return { S, a, b, c }; };
+  { const { S, a } = mk();
+    ok(LM.mortality(S, a, { kind: 'event' }) === 0, 'ordinary defeats never kill without Hardcore');
+    const p1 = LM.mortality(S, a, { kind: 'pit', depth: 1 }), p5 = LM.mortality(S, a, { kind: 'pit', depth: 5 }), pb = LM.mortality(S, a, { kind: 'pit', depth: 5, boss: true });
+    ok(p1 > 0 && p5 > p1 && pb > p5 && pb <= 0.6, `pit risk grows with depth and bosses (${p1.toFixed(3)} < ${p5.toFixed(3)} < ${pb.toFixed(3)})`);
+    ok(LM.mortality(S, a, { kind: 'horde', depth: 4 }) > 0 && LM.mortality(S, a, { kind: 'champ' }) > 0 && LM.mortality(S, a, { kind: 'bounty' }) > 0, 'horde, champion and bounty are risk modes');
+    const greenhorn = LM.makeGlad({ id: 99, lvl: 1 }); ok(LM.mortality(S, greenhorn, { kind: 'pit', depth: 1 }) === 0, 'a level 1 fighter on pit floor 1 is spared');
+    S.plots[7] = { b: 'infirmary', l: 3 }; S.plots[8] = { b: 'shrine', l: 2 };
+    ok(LM.mortality(S, a, { kind: 'pit', depth: 5 }) < p5, 'the infirmary and the shrine lower the risk');
+    S.plots[7] = null; S.plots[8] = null; S.opts = { hardcore: true };
+    ok(LM.mortality(S, a, { kind: 'event' }) > 0 && LM.mortality(S, a, { kind: 'pit', depth: 5 }) > p5, 'Hardcore makes ordinary defeats lethal and raises the pit risk');
+    ok(LM.mortality(S, a, { kind: 'pit', depth: 60, boss: true }) <= 0.6, 'risk is capped at 60%');
+    const seq = []; LM.setRandom(() => 0.0001); seq.push(LM.deathRoll(S, a, { kind: 'pit', depth: 3 }).dies); LM.setRandom(() => 0.9999); seq.push(LM.deathRoll(S, a, { kind: 'pit', depth: 3 }).dies); LM.setRandom(seeded(42));
+    ok(seq[0] === true && seq[1] === false, 'deathRoll follows the sim RNG'); }
+  { const { S, a, b, c } = mk(); LM.addBond(S, a.id, b.id, 70); a.gear.weapon = LM.genItem(Math.random, { slot: 'weapon', rar: 1, ilvl: 3 }); const gear = a.gear.weapon, items0 = S.items.length, fame0 = S.fame; b.mo = 80; c.mo = 80;
+    S.entries['5:0:d0'] = { ids: [a.id], stance: 'bal', paid: 10 }; S.mentors = [{ m: a.id, p: c.id, since: 1, wk: 0 }];
+    const rep = LM.fall(S, a, { kind: 'pit', depth: 4 });
+    ok(!S.glads.includes(a) && S.glads.length === 2, 'the fallen leave the roster');
+    ok(S.fallen.length === 1 && S.fallen[0].name === a.name && S.fallen[0].lvl === 8 && S.fallen[0].kind === 'pit' && S.fallen[0].depth === 4, 'a memorial entry records the fall');
+    ok(S.items.length === items0 + 1 && S.items.includes(gear), 'their gear returns to the armory');
+    ok(!S.entries['5:0:d0'] && S.mentors.length === 0, 'entries are withdrawn and mentor pairs end');
+    ok(b.mo < 80 && c.mo < 80 && b.mo < c.mo && b.grief === 3, 'the team grieves, close friends the most');
+    ok(rep.inherited && rep.inherited.id === b.id && b.vow === a.name, 'the closest friend inherits a vow and a stat');
+    ok(S.fame > fame0 && rep.fame > 0, 'the crowd honors a brave death with fame');
+    ok(S.heirPending && S.heirPending.style === a.style && S.heirPending.lvl === 2, 'an heir waits for the fallen');
+    const heirName = S.heirPending.of; const r = LM.takeHeir(S); ok(r.glad && r.glad.heirOf === heirName && r.glad.style === 'murmillo' && r.glad.title.startsWith('Heir of') && S.glads.includes(r.glad) && !S.heirPending, 'the heir joins the ludus');
+    ok(r.glad.tal[S.fallen[0].best] === 3, 'the heir has a perfect talent in the stat the fallen was best at');
+    const S2 = mk().S; S2.glads.slice(0, 1).forEach((g) => LM.fall(S2, g, { kind: 'pit' })); S2.glads.length = LM.rosterCap(S2); while (S2.glads.length < LM.rosterCap(S2)) S2.glads.push(LM.makeGlad({ id: S2.nextId++ }));
+    ok(LM.takeHeir(S2) === 'Barracks full', 'a full barracks cannot take the heir'); const f1 = S2.fame; const mo = LM.monument(S2); ok(mo.fame > 0 && S2.fame === f1 + mo.fame && !S2.heirPending, 'a monument can be raised instead'); }
+  { const { S, a, b } = mk(); LM.weekFinish(S); S.glads.forEach((g) => { g.mo = 70; }); LM.addBond(S, a.id, b.id, 60); LM.fall(S, a, { kind: 'pit' }); const gr = b.grief; const f0 = S.fame; ok(gr === 3, 'a close friend grieves for three weeks');
+    const r2 = LM.weekFinish(S); ok(b.grief === 2, 'grief fades one week at a time'); ok(S.fame > f0, 'the memorial wall draws fame');
+    ok(LM.legacyFame(S) === 2, 'a level 8 fallen gives 2 legacy fame a week'); ok(r2.notes.some((n) => /memorial wall/.test(n)), 'the weekly report mentions the memorial wall'); }
+  { const { S, a } = mk(); LM.fall(S, a, { kind: 'pit' }); S.fame = 5000; const N = LM.ascend(S); ok(N.fallen && N.fallen.length === 1 && N.fallen[0].name === a.name, 'the memorial wall survives founding a new ludus'); }
+  { const { S, a } = mk(); const clone = JSON.parse(JSON.stringify(S)); ok(clone.glads.length === 3, 'save stays serialisable'); LM.fall(S, a, {}); ok(JSON.stringify(S).length > 10 && JSON.parse(JSON.stringify(S)).fallen.length === 1, 'fallen data round-trips through JSON'); }
+}
+
+{ // round 41: RIVAL LUDI (personalities, diplomacy, alliances, standings)
+  const S = LM.newGame({ name: 'Riv' }); S.gold = 3000; S.week = 3; const g = LM.makeGlad({ id: S.nextId++, style: 'thraex', lvl: 5 }); S.glads.push(g); const T = LM.ludiInit(S);
+  ok(T.list.length === 4 && new Set(T.list.map((l) => l.pers)).size === 4 && new Set(T.list.map((l) => l.name)).size === 4, 'four rival ludi, one of each personality, distinct names');
+  const S0 = LM.newGame({ name: 'Riv' }); S0.seed = S.seed; ok(JSON.stringify(LM.ludiInit(S0).list.map((l) => [l.name, l.pers])) === JSON.stringify(T.list.map((l) => [l.name, l.pers])), 'the rival ludi are deterministic per save seed');
+  const by = (p) => T.list.find((l) => l.pers === p);
+  const gr = by('greedy'), br = by('brutal'), ho = by('honorable'), cu = by('cunning');
+  let r = LM.ludiAct(S, gr.id, 'gift'); ok(typeof r === 'object' && gr.rel >= 24, 'a gift wins a greedy owner'); ok(LM.ludiAct(S, gr.id, 'gift') === 'Done this week', 'one gift per ludus per week');
+  LM.ludiAct(S, br.id, 'gift'); ok(br.rel < gr.rel, 'a brutal owner is hard to buy');
+  const xp0 = g.xp + g.lvl * 1000; r = LM.ludiAct(S, ho.id, 'spar', g); ok(typeof r === 'object' && ho.rel >= 20 && g.en < 100 && (g.xp + g.lvl * 1000) > xp0, 'joint training with the honorable one pays XP and regard');
+  ok(LM.ludiWhy(S, ho.id, 'ally') === 'Needs regard 60', 'alliances need regard'); ho.rel = 70; S.gold = 3000;
+  ok(LM.ludiWhy(S, ho.id, 'ally') === '' && typeof LM.ludiAct(S, ho.id, 'ally') === 'object' && ho.ally && T.allyId === ho.id, 'a friendly ludus can ally');
+  gr.rel = 90; ok(LM.ludiWhy(S, gr.id, 'ally') === 'You already have an ally', 'one alliance at a time');
+  const mo0 = g.mo; g.mo = 50; const rep = { notes: [], income: 0 }; LM.ludiWeek(S, rep); ok(g.mo >= 54 && rep.notes.some((n) => /bard and wine/.test(n)), 'the honorable ally cheers the barracks each week');
+  LM.ludiAct(S, ho.id, 'break'); ok(!ho.ally && !T.allyId && ho.rel < 70, 'breaking an alliance costs regard');
+  gr.act = {}; gr.rel = 70; LM.ludiAct(S, gr.id, 'ally'); const gold0 = S.gold; const rep2 = { notes: [], income: 0 }; LM.ludiWeek(S, rep2); ok(S.gold > gold0 && rep2.income > 0, 'the greedy ally pays gold');
+  LM.ludiAct(S, gr.id, 'break'); cu.rel = -80; S.gold = 1000; let stolen = false; LM.setRandom(() => 0.01); { const rp = { notes: [], income: 0 }; cu.raid = -9; LM.ludiWeek(S, rp); stolen = S.gold < 1000; } LM.setRandom(seeded(42)); ok(stolen, 'a hostile cunning ludus steals from the strongbox');
+  S.gold = 500; const sc0 = br.score = 20; LM.setRandom(() => 0.9); r = LM.ludiAct(S, br.id, 'rumor'); LM.setRandom(seeded(42)); ok(br.score === 16 && br.rel < 0, 'a rumor lowers their standing and their regard');
+  S.gold = 10; cu.act = {}; ok(/Needs/.test(LM.ludiWhy(S, cu.id, 'gift')), 'actions need gold');
+  const tab = LM.ludiTable(S); ok(tab.length === 5 && tab.filter((x) => x.you).length === 1 && tab.every((x, i) => i === 0 || tab[i - 1].score >= x.score), 'standings include you, sorted');
+  { const S3 = LM.newGame({ name: 'Season' }); S3.glads.push(LM.makeGlad({ id: S3.nextId++, lvl: 3 })); S3.week = 12; S3.stats.wins = 6; const T3 = LM.ludiInit(S3); T3.list.forEach((l) => { l.score = 2; }); const f0 = S3.fame; const fin = LM.weekFinish(S3);
+    ok(fin.recap && T3.hist.length === 1 && T3.hist[0].season === 1 && T3.hist[0].you === true && S3.fame > f0 && T3.list.every((l) => l.score === 0), 'a season end crowns the standings, pays the winner and resets scores'); }
+  { const S4 = LM.newGame({ name: 'Wk' }); S4.glads.push(LM.makeGlad({ id: S4.nextId++, lvl: 3 })); LM.ludiInit(S4); const s0 = S4.ludi.list.map((l) => l.score); LM.weekFinish(S4); ok(S4.ludi.list.every((l, i) => l.score > s0[i]), 'rival ludi earn standing points every week'); }
+}
+
+{ // round 42: CALENDAR and BARRACKS (mentors, feasts)
+  const S = LM.newGame({ name: 'Cal' }); S.week = 14; S.gold = 2000; S.entries['15:0:d1'] = { ids: [1], stance: 'bal', paid: 5 }; S.entries['16:0:t'] = { ids: [1], stance: 'bal', paid: 5 };
+  const C = LM.calendar(S);
+  ok(C.weeks.length === 12 && C.season === 2 && C.start === 13 && C.end === 24 && C.weeks[0].week === 13, 'calendar covers the 12 weeks of the current season');
+  ok(C.weeks.filter((w) => w.now).length === 1 && C.weeks.find((w) => w.now).week === 14 && C.weeks.filter((w) => w.past).length === 1, 'calendar marks past and current weeks');
+  ok(C.weeks.find((w) => w.week === 24).big === 'grand' && C.weeks.find((w) => w.week === 16).big === 'tourney' && C.weeks.find((w) => w.week === 14).team === true, 'calendar shows the grand games, tournaments and team clashes');
+  ok(C.weeks.find((w) => w.week === 15).entries[0].title === 'Duel' && C.weeks.find((w) => w.week === 16).entries[0].title === 'Tournament', 'calendar lists your entries');
+  ok(C.weeks.every((w) => !w.festival || w.festival.n), 'calendar lists festivals'); ok(JSON.stringify(LM.calendar(S)) === JSON.stringify(C), 'calendar is pure (same answer twice)');
+  const m = LM.makeGlad({ id: S.nextId++, lvl: 9 }), p = LM.makeGlad({ id: S.nextId++, lvl: 3 }), q = LM.makeGlad({ id: S.nextId++, lvl: 8 }); S.glads.push(m, p, q);
+  ok(/3 levels/.test(LM.mentorWhy(S, q.id, m.id)) && LM.mentorWhy(S, m.id, p.id) === '', 'a mentor must be 3 levels above the pupil');
+  ok(LM.mentorStart(S, m.id, p.id) === '' && LM.mentorWhy(S, q.id, p.id) === 'Already in a pair', 'a pupil has one mentor'); ok(LM.mentorWhy(S, q.id, p.id) !== '' && LM.mentorSlots(S) === 1, 'one slot without a sparring ring');
+  const b0 = LM.bond(S, m.id, p.id), xpBefore = p.xp + p.lvl * 10000; const rep = { notes: [] }; LM.mentorWeek(S, rep); ok(p.xp + p.lvl * 10000 > xpBefore && LM.bond(S, m.id, p.id) > b0 && rep.notes.length >= 1, 'mentoring pays XP to the pupil and builds the bond');
+  p.lvl = m.lvl - 1; const rep2 = { notes: [] }; LM.mentorWeek(S, rep2); ok(S.mentors.length === 0 && rep2.notes.some((n) => /graduated/.test(n)), 'the pupil graduates when nearly level with the mentor');
+  const S5 = LM.newGame({ name: 'Fe' }); S5.gold = 100; S5.glads.push(LM.makeGlad({ id: S5.nextId++ }), LM.makeGlad({ id: S5.nextId++ })); S5.glads.forEach((g) => { g.mo = 50; });
+  ok(LM.feastCost(S5, 'simple') === 16 && LM.feastCost(S5, 'banquet') === 40, 'feasts cost per fighter'); const fr = LM.feast(S5, 'banquet'); ok(fr.msg && S5.gold === 60 && S5.glads.every((g) => g.mo === 62), 'a banquet raises morale'); ok(LM.feast(S5, 'simple') === 'You already feasted this week', 'one feast per week');
+  S5.week++; S5.gold = 3; ok(/Needs/.test(LM.feast(S5, 'simple')), 'a feast needs gold');
+  { const S6 = LM.newGame({ name: 'Gr' }); const a = LM.makeGlad({ id: S6.nextId++ }), b = LM.makeGlad({ id: S6.nextId++ }); S6.glads.push(a, b); a.grief = 3; b.grief = 3; b.mo = 60; S6.gold = 500; LM.feast(S6, 'banquet'); ok(a.grief === 1, 'a banquet eases grief'); }
+}
 
 console.log(`ludus_maximus: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

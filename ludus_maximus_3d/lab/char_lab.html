@@ -11,9 +11,9 @@ canvas{display:block}#hud{position:fixed;left:8px;top:6px;text-shadow:0 1px 2px 
 // Params: view=grid|close|one|three|turn(n=6 copies at spaced yaw)|heads(hair/beard/face variants)  pal=0..2 (one palette row / the palette of a single view)  style=<id> (one)  rot=<deg yaw offset>  spin=1 (live turntable)
 //         rar=0..4 (rarity of every equipped item)  lvl=<n>  stars via lvl  pose=<clip>  t=<seconds into the pose>  face=0..2  hair=short|crop|long|tied|bald  beard=0..2  cam=<x,y,z,tx,ty,tz>  fov=<deg>
 import * as THREE from 'three';
-import { poseAt, triCount } from '../js/rig.js';
+import { poseAt, triCount, buildGladiator } from '../js/rig.js';
 import { STYLES } from '../js/gear.js';
-import { createGladiator } from '../js/gladiator.js';
+import { createGladiator, lookFor } from '../js/gladiator.js';
 import { createSky, createLightRig, applyTOD, TOD } from '../js/sky.js';
 
 const Q = new URLSearchParams(location.search), W = innerWidth, H = innerHeight, LM = window.LM, D = window.LM_D;
@@ -41,7 +41,11 @@ function spawn(style, pal, x, z, yaw, k, ov) {
   Object.assign(g, PALS[pal], { face: Q.get('face') != null ? +Q.get('face') : (k % 3) });
   for (const s of ['weapon', 'shield', 'armor', 'helm', 'charm']) g.gear[s] = { slot: s, rar: rarQ, name: s };
   const over = Object.assign({}, ov || {}); if (Q.get('hair')) over.hair = Q.get('hair'); if (Q.get('beard') != null) over.beard = +Q.get('beard');
-  const rig = createGladiator(g, { look: over });
+  let rig;
+  if (Q.get('bare')) { // no gear: body only (muscle / skin checks)
+    const lk = lookFor(g, style); rig = buildGladiator({ palette: { skin: g.skin, hair: g.hair, cloth: g.color, plume: g.plume, metal: '#b8803a' }, build: lk.build, look: Object.assign(lk.look, over), detail: Q.get('detail') || 'high', name: 'bare' });
+    rig.animator.armed = 0; rig.style = style; rig.setMetal = () => {};
+  } else rig = createGladiator(g, { look: over, detail: Q.get('detail') || undefined });
   rig.root.position.set(x, 0, z); rig.root.rotation.y = yaw; scene.add(rig.root); rig.animator.armed = 1;
   rig.update(0.016); rig.resetSecondary(); rigs.push(rig); return rig;
 }

@@ -246,7 +246,7 @@ function helmHoplo(rig, o, rr) {
   if (rr.r >= 4) for (const sg of [-1, 1]) A('trim', xf(extrude([[0, 0], [0.09, 0.03], [0.15, 0.1], [0.08, 0.08]], 0.008), [sg * 0.122, 0.12, -0.02], [0, sg * PI / 2, sg * 0.4]));
 }
 function headband(rig, o) {
-  const H = rig.joints.head; rig.add('cloth', lathe([[0.115, 0.15], [0.118, 0.184]], 10, 0.95, 1.06, 0, 1), H);
+  const H = rig.joints.head, hd = (rig.detail | 0) > 0, r0 = hd ? 0.128 : 0.115, r1 = hd ? 0.131 : 0.118; rig.add('cloth', lathe([[r0, 0.15], [r1, 0.184]], 10, 0.95, 1.06, 0, 1), H);
   rig.add('cloth', xf(quadG(0.045, 0.13), [0.03, 0.1, -0.12], [0.3, 0, -0.35]), H); rig.add('cloth', xf(quadG(0.045, 0.1), [-0.025, 0.1, -0.125], [0.4, 0, 0.3]), H);
   rig.add('trim', xf(sphereG(0.014, 4, 3), [0, 0.168, 0.126], [0, 0, 0], [1, 1, 0.5]), H);
 }
