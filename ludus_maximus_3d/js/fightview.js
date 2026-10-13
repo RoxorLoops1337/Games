@@ -300,7 +300,7 @@ export class FightView {
     F.units.forEach((u) => {
       const rig = u.beast ? BF.makeRig(this, u) : createGladiator(u, { tunic: u.side === 'B' ? (u.g.color || null) : (u.g.color || null) }); // BEAST: beasts get their own rig
       const gx = u.side === 'A' ? -22 : 22;
-      const f = { u, rig, vx: 0, vz: 0, yaw: u.side === 'A' ? Math.PI / 2 : -Math.PI / 2, lx: gx, ly: u.y, handles: {}, atkN: 0, st: '', hpShown: u.hp, plate: null, ring: [], intro: { x: gx, y: u.y, tx: u.x, ty: u.y }, pu: { x: 0, z: 0, vx: 0, vz: 0 }, px0: gx, pz0: u.y, skidT: 0, ov: null, kneel: false, faceTo: null };
+      const f = { u, rig, vx: 0, vz: 0, yaw: u.side === 'A' ? Math.PI / 2 : -Math.PI / 2, lx: gx, ly: u.y, handles: {}, atkN: 0, st: '', hpShown: u.hp, plate: null, ring: [], intro: { x: gx, y: u.y, tx: u.x, ty: u.y }, pu: { x: 0, z: 0, vx: 0, vz: 0 }, rx: u.x, ry: u.y, px0: gx, pz0: u.y, X: gx, Z: u.y, skidT: 0, ov: null, kneel: false, faceTo: null };
       trimShadowCasters(rig.root, this.post.tier || this.tier); rig.root.position.set(gx, 0, u.y); this.scene.add(rig.root); rig.resetSecondary && rig.resetSecondary();
       const plate = U.nameplate({ name: u.name, level: u.g.lvl, hp: u.hp, maxHp: u.maxhp, team: u.side === 'A' ? 'ally' : 'foe', rank: 0 });
       this.plates.append(plate); f.plate = plate; this.fm.set(u.id, f); this._fmL = null; this.gore.addFighter(u.id, rig, { maxhp: u.maxhp, side: u.side }); if (u.beast) BF.setup(this, f, u); // BEAST
@@ -627,22 +627,9 @@ export class FightView {
     for (let fi = 0; fi < FL.length; fi++) {
       const f = FL[fi];
       const u = f.u, rig = f.rig, an = rig.animator, dn = u.down && !f.kneel, pu = f.pu;   // dn: visually down (an executed fighter kneels first)
-      // base render position: the sim position (30 Hz) through a short low-pass, or a scripted blend (the executioner's walk-up)
-      if (f.ov) { const o = f.ov; o.t += dt; const e = smooth01(o.t / o.dur); f.rx = o.x0 + (o.x1 - o.x0) * e; f.ry = o.z0 + (o.z1 - o.z0) * e; }
-      else { const px = f.rx ?? u.x, py = f.ry ?? u.y; f.rx = px + (u.x - px) * k; f.ry = py + (u.y - py) * k; }
-      // weight: hits shove the fighter along the blow (visual spring on top of the sim position, the sim never moves), then it settles back
-      this.stepPush(f, dt);
-      let X = f.rx + pu.x, Z = f.ry + pu.z; { const r = Math.sqrt((X) * (X) + (Z) * (Z)), r0 = Math.sqrt((f.rx) * (f.rx) + (f.ry) * (f.ry)); if (r > 13 && r > r0) { const q = Math.max(13, r0) / r; X *= q; Z *= q; } }  // never shoved through the wall
-      let ivx = (X - f.px0) / Math.max(dt, 1e-4), ivz = (Z - f.pz0) / Math.max(dt, 1e-4); if (Math.sqrt((X - f.px0) * (X - f.px0) + (Z - f.pz0) * (Z - f.pz0)) > 2.5) ivx = ivz = 0; f.px0 = X; f.pz0 = Z;
-      f.vx += (ivx - f.vx) * 0.25; f.vz += (ivz - f.vz) * 0.25;   // visual velocity (shove included): the gait steps while a fighter is pushed or recovers, so feet are planted by stepping, not skating
-      // facing: toward target (scripted for the execution pair)
-      const tgt = u.tgt && this.fm.get(u.tgt); let want = f.yaw;
-      if (f.faceTo) want = Math.atan2(f.faceTo.x - f.rx, f.faceTo.z - f.ry);
-      else if (!dn && tgt && !tgt.u.down) want = Math.atan2(tgt.rx - f.rx, tgt.ry - f.ry); else if (!dn) want = Math.atan2(u.face, 0);
-      if (f.faceTo || (!dn && !u.s.stun)) { let d = want - f.yaw; d = Math.atan2(Math.sin(d), Math.cos(d)); f.yaw += d * (1 - Math.exp(-dt * (f.faceTo ? 9 : 12))); }
-      const fx_ = Math.sin(f.yaw), fz_ = Math.cos(f.yaw), lx_ = Math.cos(f.yaw), lz_ = -Math.sin(f.yaw);
-      const vf = f.vx * fx_ + f.vz * fz_, vl = f.vx * lx_ + f.vz * lz_;
-      if (!dn) an.setMove(Math.abs(vf) < 0.15 ? 0 : vf, Math.abs(vl) < 0.15 ? 0 : vl);
+      this.stepPos(f, dt, k);   // PERF: the double maths lives in small functions of their own (they tier up; in the big function every statement boxed its result)
+      this.stepFace(f, dt, dn);
+      const X = f.X, Z = f.Z;
       rig.root.position.set(X, 0, Z); rig.root.rotation.y = f.yaw;
       // persistent states from the sim
       if (!dn) {
@@ -657,7 +644,7 @@ export class FightView {
       rig.update(dt);
       // plate
       f.hpShown += (u.hp - f.hpShown) * 0.2; if (f.plate.hp && (f.hpSet !== u.hp || f.hpSetMax !== u.maxhp) && (u.hp <= 0 || this.t - (f.hpT ?? -9) > 0.1 || f.hpSetMax !== u.maxhp)) { f.hpSet = u.hp; f.hpSetMax = u.maxhp; f.hpT = this.t; f.plate.hp.set(u.hp, u.maxhp); }   // at most 10 bar writes a second per fighter (each damaged write forces a layout in the UI kit)   // PERF: DOM bar writes only when the value changed
-      const head = _head.set(X, (rig.nameH || 2.05) * (rig.root.scale.y || 1), Z); // BEAST: rig.nameH = beast height
+      const head = _head.set(X, this.headY(rig), Z); // BEAST: rig.nameH = beast height
       // PERF: clientWidth/Height force a layout flush after the previous plate's style writes (about 2 ms per frame in 3v3): measured once, refreshed on resize
       if (!this.cw) { const dom = this.renderer.domElement; this.cw = dom.clientWidth || 1; this.ch = dom.clientHeight || 1; }
       this.placePlate(f.plate, head, this.cw, this.ch, f);
@@ -665,9 +652,32 @@ export class FightView {
     }
   }
 
+  headY(rig) { return (rig.nameH || 2.05) * (rig.root.scale.y || 1); }
+  /** render position f.rx / f.ry (sim position through a short low-pass or a scripted blend), shove spring, wall clamp, visual velocity; leaves the final position in f.X / f.Z */
+  stepPos(f, dt, k) {
+    const pu = f.pu;
+    // base render position: the sim position (30 Hz) through a short low-pass, or a scripted blend (the executioner's walk-up)
+    if (f.ov) { const o = f.ov; o.t += dt; const e = smooth01(o.t / o.dur); f.rx = o.x0 + (o.x1 - o.x0) * e; f.ry = o.z0 + (o.z1 - o.z0) * e; }
+    else { const u = f.u, px = f.rx ?? u.x, py = f.ry ?? u.y; f.rx = px + (u.x - px) * k; f.ry = py + (u.y - py) * k; }
+    // weight: hits shove the fighter along the blow (visual spring on top of the sim position, the sim never moves), then it settles back
+    this.stepPush(f, dt);
+    let X = f.rx + pu.x, Z = f.ry + pu.z; { const r = Math.sqrt((X) * (X) + (Z) * (Z)), r0 = Math.sqrt((f.rx) * (f.rx) + (f.ry) * (f.ry)); if (r > 13 && r > r0) { const q = (r0 > 13 ? r0 : 13) / r; X *= q; Z *= q; } }  // never shoved through the wall
+    const idt = dt > 1e-4 ? dt : 1e-4; let ivx = (X - f.px0) / idt, ivz = (Z - f.pz0) / idt; if (Math.sqrt((X - f.px0) * (X - f.px0) + (Z - f.pz0) * (Z - f.pz0)) > 2.5) ivx = ivz = 0; f.px0 = X; f.pz0 = Z; f.X = X; f.Z = Z;
+    f.vx += (ivx - f.vx) * 0.25; f.vz += (ivz - f.vz) * 0.25;   // visual velocity (shove included): the gait steps while a fighter is pushed or recovers, so feet are planted by stepping, not skating
+  }
+  /** facing toward the target (scripted for the execution pair), then the move input for the gait from the velocity in the facing frame */
+  stepFace(f, dt, dn) {
+    const u = f.u, tgt = u.tgt && this.fm.get(u.tgt); let want = f.yaw;
+    if (f.faceTo) want = Math.atan2(f.faceTo.x - f.rx, f.faceTo.z - f.ry);
+    else if (!dn && tgt && !tgt.u.down) want = Math.atan2(tgt.rx - f.rx, tgt.ry - f.ry); else if (!dn) want = Math.atan2(u.face, 0);
+    if (f.faceTo || (!dn && !u.s.stun)) { let d = want - f.yaw; d = Math.atan2(Math.sin(d), Math.cos(d)); f.yaw += d * (1 - Math.exp(-dt * (f.faceTo ? 9 : 12))); }
+    if (dn) return;
+    const sn = Math.sin(f.yaw), cs = Math.cos(f.yaw), vf = f.vx * sn + f.vz * cs, vl = f.vx * cs + f.vz * -sn;
+    f.rig.animator.setMove(vf < 0.15 && vf > -0.15 ? 0 : vf, vl < 0.15 && vl > -0.15 ? 0 : vl);
+  }
   /** critically damped spring (w = 5 /s) on the visual shove offset; peak offset = v / (w e) metres for an impulse of v m/s (a heavy crit about 0.4 m) */
   stepPush(f, dt) {
-    const p = f.pu; if (!p.vx && !p.vz && !p.x && !p.z) return; const w = 5, n = Math.max(1, Math.ceil(dt / 0.02)), h = dt / n;
+    const p = f.pu; if (!p.vx && !p.vz && !p.x && !p.z) return; const w = 5, c = Math.ceil(dt / 0.02), n = c > 1 ? c : 1, h = dt / n;
     for (let i = 0; i < n; i++) { p.vx += (-w * w * p.x - 2 * w * p.vx) * h; p.vz += (-w * w * p.z - 2 * w * p.vz) * h; p.x += p.vx * h; p.z += p.vz * h; }
     const m = Math.sqrt((p.x) * (p.x) + (p.z) * (p.z)); if (m > 0.9) { p.x *= 0.9 / m; p.z *= 0.9 / m; }
     if (Math.abs(p.x) + Math.abs(p.z) + Math.abs(p.vx) + Math.abs(p.vz) < 0.003) { p.x = p.z = p.vx = p.vz = 0; return; }
@@ -698,13 +708,13 @@ export class FightView {
     x = clamp(x, PW / 2 + gx, w - PW / 2 - gx);
     const T = this.avoid.top, sat = this.avoid.sat || 0;
     if (T && x + PW / 2 > T.l && x - PW / 2 < T.r && y - PH < T.b) y = T.b + PH;
-    for (const B of this.avoid.bottom) if (x + PW / 2 > B.l && x - PW / 2 < B.r && y > B.t - 6) y = B.t - 6;
+    const AB = this.avoid.bottom; for (let bi = 0; bi < AB.length; bi++) { const B = AB[bi]; if (x + PW / 2 > B.l && x - PW / 2 < B.r && y > B.t - 6) y = B.t - 6; }
     y = clamp(y, PH + 4 + sat, h - 6);
-    const sc = Math.max(0.7, Math.min(1.1, 1.15 - p.z * 0.6)).toFixed(2);
+    let sv = 1.15 - p.z * 0.6; sv = sv < 0.7 ? 0.7 : sv > 1.1 ? 1.1 : sv; const sci = Math.round(sv * 100);
     if (f) {   // PERF: skip identical style writes (a still fighter costs nothing)
       const xr = Math.round(x * 10), yr = Math.round(y * 10); if (f.plX !== xr || f.plY !== yr || f.plV !== vis) { f.plX = xr; f.plY = yr; f.plV = vis; plate.place(x, y, vis); }
-      if (f.plS !== sc) { f.plS = sc; plate.style.setProperty('--lx-s', sc); }
-    } else { plate.place(x, y, vis); plate.style.setProperty('--lx-s', sc); }
+      if (f.plS !== sci) { f.plS = sci; plate.style.setProperty('--lx-s', (sci / 100).toFixed(2)); }
+    } else { plate.place(x, y, vis); plate.style.setProperty('--lx-s', (sci / 100).toFixed(2)); }
   }
 
   chest(u, y = 1.25) { const f = this.fm.get(u.id); return new THREE.Vector3(f ? (f.rx ?? u.x) : u.x, y, f ? (f.ry ?? u.y) : u.y); }

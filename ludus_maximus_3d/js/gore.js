@@ -187,14 +187,14 @@ export function createGore(fx, o = {}) {
     const pts = []; for (let i = 0; i < 12; i++) pts.push(0.74 + R() * 0.5); const p = { x, z, r: 0.07, rMax, rate, acc: 1, pts, rot: R() * TAU, done: false, delay }; pools.push(p); addCover(x, z, rMax * 0.85, 0.5); return p;
   }
   function stepPools(dt) {
-    for (const p of pools) {
-      if (p.delay > 0) { p.delay -= dt; continue; }
-      if (p.r < p.rMax) { p.r = Math.min(p.rMax, p.r + p.rate * dt * (1.15 - p.r / p.rMax * 0.5)); p.acc += dt; if (p.acc > 0.12) { p.acc = 0; stampPool(p); } }
+    for (let pi = 0; pi < pools.length; pi++) {
+      const p = pools[pi]; if (p.delay > 0) { p.delay -= dt; continue; }
+      if (p.r < p.rMax) { { const nr = p.r + p.rate * dt * (1.15 - p.r / p.rMax * 0.5); p.r = nr < p.rMax ? nr : p.rMax; } p.acc += dt; if (p.acc > 0.12) { p.acc = 0; stampPool(p); } }
       else if (!p.done) { p.done = true; stampPool(p); stampGloss(p); drySq.push({ t: G.time + 4.5, x: p.x, z: p.z, r: p.rMax * 1.05 }); }
     }
     for (let i = drySq.length - 1; i >= 0; i--) if (G.time >= drySq[i].t) { dryPass(drySq[i]); drySq[i] = drySq[drySq.length - 1]; drySq.pop(); }
   }
-  const inPool = (x, z) => { for (const p of pools) if (p.delay <= 0 && Math.hypot(x - p.x, z - p.z) < p.r * 0.8) return true; return false; };
+  const inPool = (x, z) => { for (let i = 0; i < pools.length; i++) { const p = pools[i], dx = x - p.x, dz = z - p.z; if (p.delay <= 0 && Math.sqrt(dx * dx + dz * dz) < p.r * 0.8) return true; } return false; };
 
   // ------------------------------------------------------------------ gib props: ONE InstancedMesh (shape selected per instance in the vertex shader)
   // types: 0 limb, 1 head, 2 chunk, 3 sword, 4 spear, 5 trident, 6 helmed head, 7 armour plate, 8 plume tuft. Weapons and limbs hang from y=0 toward -y.
@@ -315,11 +315,12 @@ export function createGore(fx, o = {}) {
   }
   function stepProps(dt) {
     let any = false;
-    for (const p of props) {
+    for (let pi = 0; pi < props.length; pi++) {
+      const p = props[pi];
       if (p.rest) { if (p.settle > 0) { p.settle -= dt; settleOrient(p, dt); writeProp(p); any = true; } continue; }
       any = true; p.age += dt;
       p.vy -= 17 * dt; p.x += p.vx * dt; p.y += p.vy * dt; p.z += p.vz * dt;
-      const w = Math.hypot(p.wx, p.wy, p.wz); if (w > 1e-3) { _ax.set(p.wx / w, p.wy / w, p.wz / w); _dq.setFromAxisAngle(_ax, w * dt); p.q.premultiply(_dq); }
+      const w = Math.sqrt(p.wx * p.wx + p.wy * p.wy + p.wz * p.wz); if (w > 1e-3) { _ax.set(p.wx / w, p.wy / w, p.wz / w); _dq.setFromAxisAngle(_ax, w * dt); p.q.premultiply(_dq); }
       // blood trail: airborne arcs of bleeding parts (first 1.6 s), cheap
       if (p.bleeds && p.type !== 2 && p.age < 1.6) { p.trail += dt; while (p.trail > 0.04) { p.trail -= 0.04; const n = G.full ? 1 + (K() > 0.6 ? 1 : 0) : 1; for (let k = 0; k < n; k++) drop(p.x + RR(-0.03, 0.03), p.y, p.z + RR(-0.03, 0.03), p.vx * 0.3 + RR(-0.8, 0.8), p.vy * 0.2 + RR(0, 1.2), p.vz * 0.3 + RR(-0.8, 0.8), RR(0.04, 0.075), R()); } }
       const low = lowest(p), gy = 0.012;
@@ -583,7 +584,8 @@ export function createGore(fx, o = {}) {
     G.counts.drops = drops.length; G.counts.jets = jets.length; G.counts.props = props.length; G.counts.pools = pools.length;
   });
   /** real-time part of the frame (vignette) */
-  G.postFrame = (realDt) => { if (!vigEl) return; vig = Math.max(0, vig - realDt * 1.7); const v = G.on ? vig : 0; vigEl.style.opacity = v < 0.01 ? '0' : v.toFixed(3); };
+  let vigQ = -1;   // PERF: the vignette opacity string is rebuilt only when the 1/1000 step changes (it is '0' almost always)
+  G.postFrame = (realDt) => { if (!vigEl) return; vig = vig - realDt * 1.7; if (vig < 0) vig = 0; const v = G.on ? vig : 0, q = v < 0.01 ? 0 : Math.round(v * 1000) + 1; if (q !== vigQ) { vigQ = q; vigEl.style.opacity = q ? ((q - 1) / 1000).toFixed(3) : '0'; } };
   G.debug = () => props.map((p) => ({ t: p.type, x: +p.x.toFixed(2), y: +p.y.toFixed(2), z: +p.z.toFixed(2), rest: p.rest }));
   G.stats = () => ({ level: G.level, drops: drops.length, jets: jets.length, props: props.length, pools: pools.length, splats: G.counts.splats, gibVisible: !!(gib && gib.visible) });
   G.refresh();

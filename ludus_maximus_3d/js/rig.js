@@ -2097,7 +2097,7 @@ export class Animator {
         _w.setFromMatrixPosition(ankle.matrixWorld).applyMatrix4(bi);
       }
       // foot flat on the floor while near it (yaw taken from FK), blend back to FK when lifted
-      ankle.getWorldQuaternion(kq); _u.set(0, 0, 1).applyQuaternion(kq); const yaw = Math.atan2(_u.x, _u.z);
+      const ame = ankle.matrixWorld.elements; const yaw = Math.atan2(ame[8], ame[10]);   // PERF: the world +Z of the ankle is the third matrix column: same angle without a decompose and the quaternion getters
       bq.setFromAxisAngle(_y.set(0, 1, 0), yaw);
       knee.getWorldQuaternion(kq); flatQ.copy(kq).invert().multiply(bq);
       const flatW = 1 - smooth(DIM.footH + 0.02, DIM.footH + 0.12, _w.y / sc);

@@ -185,7 +185,7 @@ function mountShieldInner(rig, kind, o, rr) {
   rig.postUpdate.push(() => {
     wrist.getWorldQuaternion(qw); rig.body.getWorldQuaternion(qb); qi.copy(qb).invert();
     f.set(0, -1, 0).applyQuaternion(qw).applyQuaternion(qi); // forearm axis in body space
-    const hl = Math.hypot(f.x, f.z); n.set(f.x, 0, f.z); w2.copy(bf).multiplyScalar(Math.max(0, 0.6 - hl)); n.add(w2).normalize();
+    const hl = Math.sqrt(f.x * f.x + f.z * f.z), hk = 0.6 - hl; n.set(f.x, 0, f.z); w2.copy(bf).multiplyScalar(hk > 0 ? hk : 0); n.add(w2).normalize();   // PERF: no Math.hypot / Math.max builtin (boxed results)
     up.set(0, 1, 0); x.crossVectors(up, n).normalize(); up.crossVectors(n, x);
     M.makeBasis(x, up, n); qn.setFromRotationMatrix(M); qb.multiply(qn);
     holder.quaternion.copy(qw.invert()).multiply(qb);
@@ -271,8 +271,9 @@ function loinFlap(rig, anchor, o = {}) {
     prep: () => {
       const hh = rig.build.height || 1;
       for (let t = 0; t < 2; t++) for (let s = 0; s < 2; s++) {
-        const k = (t * 2 + s) * 8; a.setFromMatrixPosition(J[thighs[t][s]].matrixWorld); b.setFromMatrixPosition(J[thighs[t][s + 1]].matrixWorld); ab.subVectors(b, a);
-        cap[k] = a.x; cap[k + 1] = a.y; cap[k + 2] = a.z; cap[k + 3] = ab.x; cap[k + 4] = ab.y; cap[k + 5] = ab.z; cap[k + 6] = ab.lengthSq(); cap[k + 7] = R * (s ? 0.8 : 1) * hh;
+        const k = (t * 2 + s) * 8, ma = J[thighs[t][s]].matrixWorld.elements, mb = J[thighs[t][s + 1]].matrixWorld.elements;   // PERF: matrix elements straight into the typed array
+        const abx = mb[12] - ma[12], aby = mb[13] - ma[13], abz = mb[14] - ma[14];
+        cap[k] = ma[12]; cap[k + 1] = ma[13]; cap[k + 2] = ma[14]; cap[k + 3] = abx; cap[k + 4] = aby; cap[k + 5] = abz; cap[k + 6] = abx * abx + aby * aby + abz * abz; cap[k + 7] = R * (s ? 0.8 : 1) * hh;
       }
     },
     collide: (p) => { // keep out of the thighs and shins

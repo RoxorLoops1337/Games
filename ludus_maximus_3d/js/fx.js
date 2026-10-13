@@ -280,12 +280,12 @@ class Layer {
   }
   write(p) {
     if (this.n >= this.max) return; const t = p.age / p.life, i = this.n++ * 4;
-    const e = 1 - (1 - t) * (1 - t); const size = lerp(p.s0, p.s1, e);
-    const fi0 = t / p.att, fadeIn = fi0 < 1 ? fi0 : 1, al = p.a * fadeIn * Math.pow(1 - t, p.fp);   // PERF: ternaries / sqrt instead of Math.min / hypot builtin calls (boxed results)
+    const e = 1 - (1 - t) * (1 - t); const size = p.s0 + (p.s1 - p.s0) * e;   // PERF: lerp written out (a call with computed double arguments boxes them)
+    const fi0 = t / p.att, fadeIn = fi0 < 1 ? fi0 : 1, al = p.a * fadeIn * (p.fp === 1 ? 1 - t : Math.pow(1 - t, p.fp));   // PERF: ternaries / sqrt instead of Math.min / hypot builtin calls (boxed results)
     const A = this.A, B = this.B, C = this.C, D = this.D;
     A[i] = p.x; A[i + 1] = p.y; A[i + 2] = p.z; A[i + 3] = size;
     if (p.st > 0) { const sp = Math.sqrt(p.vx * p.vx + p.vy * p.vy + p.vz * p.vz) || 1, ln = size * 1.2, ln2 = sp * p.st; B[i] = p.vx / sp; B[i + 1] = p.vy / sp; B[i + 2] = p.vz / sp; B[i + 3] = ln > ln2 ? ln : ln2; } else { B[i] = 0; B[i + 1] = 1; B[i + 2] = 0; B[i + 3] = 0; }
-    const c0 = p.c0, c1 = p.c1, g = p.g; C[i] = lerp(c0.r, c1.r, t) * g; C[i + 1] = lerp(c0.g, c1.g, t) * g; C[i + 2] = lerp(c0.b, c1.b, t) * g; C[i + 3] = al;
+    const c0 = p.c0, c1 = p.c1, g = p.g; C[i] = (c0.r + (c1.r - c0.r) * t) * g; C[i + 1] = (c0.g + (c1.g - c0.g) * t) * g; C[i + 2] = (c0.b + (c1.b - c0.b) * t) * g; C[i + 3] = al;
     D[i] = p.cell; D[i + 1] = p.rot; D[i + 2] = p.mirror; D[i + 3] = 0;
   }
   // immediate (one frame) instance for emitters: position, size, color, alpha, cell, rot
@@ -297,10 +297,18 @@ class Layer {
   // immediate stretched instance (blood streaks, gore): centred on x,y,z, aligned with (dx,dy,dz), `len` long and `size` wide
   putS(x, y, z, size, c, a, cell, dx, dy, dz, len, g = 1) {
     if (this.n >= this.max) return; const i = this.n++ * 4, A = this.A, B = this.B, C = this.C, D = this.D;
-    A[i] = x; A[i + 1] = y; A[i + 2] = z; A[i + 3] = size; B[i] = dx; B[i + 1] = dy; B[i + 2] = dz; B[i + 3] = Math.max(len, 1e-3);
+    A[i] = x; A[i + 1] = y; A[i + 2] = z; A[i + 3] = size; B[i] = dx; B[i + 1] = dy; B[i + 2] = dz; B[i + 3] = len > 1e-3 ? len : 1e-3;
     C[i] = c.r * g; C[i + 1] = c.g * g; C[i + 2] = c.b * g; C[i + 3] = a; D[i] = cell; D[i + 1] = 0; D[i + 2] = 0; D[i + 3] = 0;
   }
-  flush() { const n = WARM.on ? Math.max(1, this.n) : this.n; this.geo.instanceCount = n; for (const a of this.attrs) { a.clearUpdateRanges(); if (n) a.addUpdateRange(0, n * 4); a.needsUpdate = true; } this.mesh.visible = n > 0; }
+  flush() {
+    const n = WARM.on ? (this.n > 1 ? this.n : 1) : this.n; this.geo.instanceCount = n; const at = this.attrs;
+    for (let i = 0; i < at.length; i++) {   // PERF: the update range is rewritten in place (addUpdateRange pushes a new object every call)
+      const a = at[i], r = a.updateRanges;
+      if (n && r.length === 1) r[0].count = n * 4; else { a.clearUpdateRanges(); if (n) a.addUpdateRange(0, n * 4); }
+      a.needsUpdate = true;
+    }
+    this.mesh.visible = n > 0;
+  }
 }
 
 // ---------------- ribbons ----------------
@@ -705,6 +713,7 @@ export function createFx(scene, opts = {}) {
   const _C1 = { r: 0.3, g: 0.65, b: 1 };
   const _C2 = { r: 1, g: 0.32, b: 0.12 };
   const _C3 = { r: 1, g: 0.3, b: 0.1 };
+  const ikClamp = (v) => (v < 0.5 ? 0.5 : v > 1.05 ? 1.05 : v);
   function updateEmitters(dt) {
     for (let i = emitters.length - 1; i >= 0; i--) {
       const h = emitters[i];
@@ -736,7 +745,7 @@ export function createFx(scene, opts = {}) {
         } else if (el === 'earth') { h.acc += dt; if (h.acc > 0.3) { h.acc = 0; fx.dust({ x: _p.x, y: groundY, z: _p.z }, 3, { size: 0.9 }); fx.debris({ x: _p.x, y: groundY, z: _p.z }, 1, { kind: 'stone', size: 0.8 }); } }
         else if (el === 'holy') { addL.put(_p.x, _p.y + 1, _p.z, 3.0, c, 0.2 + 0.08 * Math.sin(tt * 6), CELL.glow, 0, 1.5); h.acc += dt * 18; while (h.acc >= 1) { h.acc--; const a = rnd() * TAU; addL.add({ x: _p.x + Math.cos(a) * 0.9, y: _p.y + 0.1, z: _p.z + Math.sin(a) * 0.9, vy: R_(1.5, 2.5), life: 0.9, s0: 0.16, s1: 0.03, cell: CELL.glow, c0: mixc(c, WHITE, 0.6), c1: c, g: 2.4 }); } }
       } else if (h.kind === 'status') {
-        const tt = h.t, y = _p.y + h.headY, ik = Math.max(0.5, Math.min(1.05, Math.hypot(camPos.x - _p.x, camPos.y - _p.y, camPos.z - _p.z) / 11)) * (h.o.iconK || 1); // READABILITY: icons shrink in close shots
+        const tt = h.t, y = _p.y + h.headY, ik = ikClamp(Math.sqrt((camPos.x - _p.x) * (camPos.x - _p.x) + (camPos.y - _p.y) * (camPos.y - _p.y) + (camPos.z - _p.z) * (camPos.z - _p.z)) / 11) * (h.o.iconK || 1); // READABILITY: icons shrink in close shots
         if (h.st === 'stun') { const w = tt * 5.2; for (let k = 0; k < 3; k++) { const a = w + k * TAU / 3; const sx = _p.x + Math.cos(a) * 0.42, sz = _p.z + Math.sin(a) * 0.42, sy = y + Math.sin(tt * 7 + k) * 0.05; const back = Math.sin(a) < 0 ? 0.7 : 1; norL.put(sx, sy, sz, 0.38 * back * ik, _C0, 1, CELL.star5, a * 0.5, 1.15); } }
         else if (h.st === 'slow') { for (let k = 0; k < 3; k++) { const ph = (tt * 1.1 + k / 3) % 1; norL.put(_p.x + (k - 1) * 0.34 * ik, y - ph * 0.7 * ik + 0.1, _p.z, 0.7 * ik, _C1, Math.sin(ph * Math.PI), CELL.chevron, Math.PI, 1.1); } h.acc += dt * 5; while (h.acc >= 1) { h.acc--; const a = rnd() * TAU; addL.add({ x: _p.x + Math.cos(a) * 0.7, y: _p.y + 0.15, z: _p.z + Math.sin(a) * 0.7, vy: R_(0.2, 0.7), life: 0.7, s0: 0.12, s1: 0.02, cell: CELL.glow, c0: { r: 0.6, g: 0.85, b: 1 }, c1: { r: 0.3, g: 0.6, b: 1 }, g: 2 }); } }
         else if (h.st === 'bleed') { h.acc += dt * 9; const dc = rgb(h.o.color || '#e0283a'); while (h.acc >= 1) { h.acc--; const a = rnd() * TAU; norL.add({ x: _p.x + Math.cos(a) * 0.5, y: _p.y + R_(0.9, 1.6), z: _p.z + Math.sin(a) * 0.5, vx: Math.cos(a) * 0.3, vy: R_(0, 0.5), vz: Math.sin(a) * 0.4, life: 0.7, s0: 0.32, s1: 0.24, cell: CELL.drop, c0: dc, c1: dc, a: 1, grav: 9, fp: 0.5, att: 0.02 }); } }
@@ -792,7 +801,9 @@ export function createFx(scene, opts = {}) {
   }
 
   // ---- debris stepping ----
+  let debIdle = false;   // PERF: all debris slots already zeroed and uploaded: nothing to do until a piece spawns (debris.on)
   function debrisStep(dt) {
+    if (debIdle && !WARM.on && !debMesh.visible) { let live = false; for (let i = 0; i < MAXD; i++) if (debris[i].on) { live = true; break; } if (!live) return; }
     let any = false, hi = 0;
     for (let i = 0; i < MAXD; i++) {
       const d = debris[i];
@@ -804,7 +815,7 @@ export function createFx(scene, opts = {}) {
       const t = d.age / d.life, sc = d.s * (t > 0.75 ? 1 - (t - 0.75) / 0.25 : 1);
       _v.set(d.x, d.y, d.z); _m.compose(_v, d.q, _s.set(sc, sc, sc)); debMesh.setMatrixAt(i, _m);
     }
-    debMesh.count = any ? MAXD : WARM.on ? 1 : 0; debMesh.instanceMatrix.needsUpdate = true; debMesh.visible = any || WARM.on;
+    debMesh.count = any ? MAXD : WARM.on ? 1 : 0; debMesh.instanceMatrix.needsUpdate = true; debMesh.visible = any || WARM.on; debIdle = !any;
   }
 
   fx.update = (dt, camera) => {

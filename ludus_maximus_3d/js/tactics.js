@@ -183,10 +183,19 @@ export function createTactics(fv) {
 
   // ------------------------------------------------------------------ canvas input: tap an enemy (focus), tap an ally (select), long press (wheel)
   const dom = fv.renderer.domElement; let press = null;
-  const screenOf = (x, y, z, out) => { V.set(x, y, z).project(fv.camera); out.x = (V.x * 0.5 + 0.5) * T.w; out.y = (-V.y * 0.5 + 0.5) * T.h; out.z = V.z; return V.z < 1; };
+  // PERF: Vector3.project written out on the matrix elements (same maths, no Vector3 call and no boxed doubles per point)
+  const screenOf = (x, y, z, out) => {
+    const cam = fv.camera, m = cam.matrixWorldInverse.elements, q = cam.projectionMatrix.elements;
+    let w = 1 / (m[3] * x + m[7] * y + m[11] * z + m[15]);
+    const vx = (m[0] * x + m[4] * y + m[8] * z + m[12]) * w, vy = (m[1] * x + m[5] * y + m[9] * z + m[13]) * w, vz = (m[2] * x + m[6] * y + m[10] * z + m[14]) * w;
+    w = 1 / (q[3] * vx + q[7] * vy + q[11] * vz + q[15]);
+    const px = (q[0] * vx + q[4] * vy + q[8] * vz + q[12]) * w, py = (q[1] * vx + q[5] * vy + q[9] * vz + q[13]) * w, pz = (q[2] * vx + q[6] * vy + q[10] * vz + q[14]) * w;
+    out.x = (px * 0.5 + 0.5) * T.w; out.y = (-py * 0.5 + 0.5) * T.h; out.z = pz; return pz < 1;
+  };
+  const fmList = () => fv._fmL || (fv._fmL = [...fv.fm.values()]);   // PERF: array walk instead of a Map iterator per frame
   function pickUnit(cx, cy) {
     const r = dom.getBoundingClientRect(), x = cx - r.left, y = cy - r.top; let best = null, bd = 1e9; const a = { x: 0, y: 0, z: 0 }, b = { x: 0, y: 0, z: 0 };
-    for (const f of fv.fm.values()) { const u = f.u; if (u.down) continue; const X = f.rx ?? u.x, Z = f.ry ?? u.y; if (!screenOf(X, 0.1, Z, a) || !screenOf(X, (f.rig.nameH || 2) * 0.9, Z, b)) continue;
+    const FL0 = fmList(); for (let fi = 0; fi < FL0.length; fi++) { const f = FL0[fi], u = f.u; if (u.down) continue; const X = f.rx ?? u.x, Z = f.ry ?? u.y; if (!screenOf(X, 0.1, Z, a) || !screenOf(X, (f.rig.nameH || 2) * 0.9, Z, b)) continue;
       const hgt = Math.max(30, Math.abs(a.y - b.y)), ex = Math.max(34, hgt * 0.34), vx = b.x - a.x, vy = b.y - a.y, l2 = vx * vx + vy * vy || 1, t = clamp(((x - a.x) * vx + (y - a.y) * vy) / l2, 0, 1), px = a.x + vx * t, py = a.y + vy * t, d = Math.hypot(x - px, y - py);
       if (d < ex && d < bd) { bd = d; best = u; } }
     return best;
@@ -214,14 +223,29 @@ export function createTactics(fv) {
     T.w = w; T.h = h; T.dpr = dpr; T.ph = w < 700 || h < 520; cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr); layout();
   }
   const P3 = { x: 0, y: 0, z: 0 };
+  // PERF: the circle is walked with a rotation (two trig calls per path instead of two per point) and projected inline
   function ringPath(x, z, r, a0 = 0, a1 = Math.PI * 2, n = 26) { // projected ground circle (arc) as a canvas path; returns false when behind the camera
-    g.beginPath(); let started = false;
-    for (let i = 0; i <= n; i++) { const a = a0 + (a1 - a0) * i / n; if (!screenOf(x + Math.cos(a) * r, 0.04, z + Math.sin(a) * r, P3)) return false; if (!started) { g.moveTo(P3.x, P3.y); started = true; } else g.lineTo(P3.x, P3.y); }
+    g.beginPath(); const st = (a1 - a0) / n, cs = Math.cos(st), sn = Math.sin(st), cam = fv.camera, m = cam.matrixWorldInverse.elements, q = cam.projectionMatrix.elements, W = T.w, H = T.h; let c = Math.cos(a0), s = Math.sin(a0);
+    for (let i = 0; i <= n; i++) {   // projection inlined (a call with three double arguments boxes them)
+      const X = x + c * r, Z = z + s * r; let w = 1 / (m[3] * X + m[7] * 0.04 + m[11] * Z + m[15]);
+      const vx = (m[0] * X + m[4] * 0.04 + m[8] * Z + m[12]) * w, vy = (m[1] * X + m[5] * 0.04 + m[9] * Z + m[13]) * w, vz = (m[2] * X + m[6] * 0.04 + m[10] * Z + m[14]) * w;
+      w = 1 / (q[3] * vx + q[7] * vy + q[11] * vz + q[15]);
+      if ((q[2] * vx + q[6] * vy + q[10] * vz + q[14]) * w >= 1) return false;
+      const sx = ((q[0] * vx + q[4] * vy + q[8] * vz + q[12]) * w * 0.5 + 0.5) * W, sy = (-(q[1] * vx + q[5] * vy + q[9] * vz + q[13]) * w * 0.5 + 0.5) * H;
+      if (i === 0) g.moveTo(sx, sy); else g.lineTo(sx, sy);
+      const nc = c * cs - s * sn; s = s * cs + c * sn; c = nc;
+    }
     return true;
   }
-  const camDist = (x, z) => Math.hypot(fv.camera.position.x - x, fv.camera.position.y, fv.camera.position.z - z);
-  function stroke(col, alpha, w, dash) { g.setLineDash(dash || []); g.lineWidth = w + 2.5; g.strokeStyle = 'rgba(20,12,24,' + (alpha * 0.45).toFixed(3) + ')'; g.stroke(); g.lineWidth = w; g.strokeStyle = 'rgba(' + col + ',' + alpha.toFixed(3) + ')'; g.stroke(); g.setLineDash([]); }
-  function pos(f) { return { x: f.rx ?? f.u.x, z: f.ry ?? f.u.y }; }
+  const camDist = (x, z) => { const p = fv.camera.position, dx = p.x - x, dz = p.z - z; return Math.sqrt(dx * dx + p.y * p.y + dz * dz); };
+  // PERF: the rgba strings are cached per colour and alpha step of 1/64 (a string concat + toFixed per stroke was ~3 KB per frame)
+  const STY = new Map(), NODASH = [], DASH_FOE = [7, 5], DASH_TELE_L = [9, 6], DASH_TELE = [8, 6], DASH_LINK = [3, 6];
+  function styles(col) { let o = STY.get(col); if (!o) { o = { fg: new Array(65), bg: new Array(65) }; for (let i = 0; i <= 64; i++) { o.fg[i] = 'rgba(' + col + ',' + (i / 64).toFixed(3) + ')'; o.bg[i] = 'rgba(20,12,24,' + (i / 64 * 0.45).toFixed(3) + ')'; } STY.set(col, o); } return o; }
+  function stroke(col, alpha, w, dash) { const o = STY.get(col) || styles(col), ai = alpha <= 0 ? 0 : alpha >= 1 ? 64 : (alpha * 64 + 0.5) | 0; g.setLineDash(dash || NODASH); g.lineWidth = w + 2.5; g.strokeStyle = o.bg[ai]; g.stroke(); g.lineWidth = w; g.strokeStyle = o.fg[ai]; g.stroke(); g.setLineDash(NODASH); }
+  const PQ = { x: 0, z: 0 }, PA = { x: 0, z: 0 }, PB = { x: 0, z: 0 };
+  const MARKS = []; let nmk = 0;
+  function addMark(id) { for (let i = 0; i < nmk; i++) if (MARKS[i] === id) return; if (nmk < MARKS.length) MARKS[nmk] = id; else MARKS.push(id); nmk++; }
+  function pos(f, o) { o = o || PQ; o.x = f.rx ?? f.u.x; o.z = f.ry ?? f.u.y; return o; }
   function drawFrame(F, t) {
     g.setTransform(T.dpr, 0, 0, T.dpr, 0, 0); g.clearRect(0, 0, T.w, T.h); g.lineCap = 'round'; g.lineJoin = 'round';
     const showAll = fv.phase === 'fight' || (fv.phase === 'outro' && fv.replaying); if (!showAll || fv.silent) return;
@@ -230,39 +254,41 @@ export function createTactics(fv) {
     for (let i = T.teles.length - 1; i >= 0; i--) {
       const q = T.teles[i], p = (F.t - q.t0) / q.dur; if (p > 1.15 || p < -0.05) { if (p > 1.15 || F.t < q.t0 - 0.2) T.teles.splice(i, 1); continue; }
       const pp = clamp(p, 0, 1), pulse = 0.55 + 0.45 * Math.sin(t * 14), col = q.own ? '242,193,78' : '255,96,40', a = (0.5 + 0.4 * pulse) * (p > 1 ? 1 - (p - 1) / 0.15 : 1);
-      if (q.line) { const ca = Math.cos(q.ang), sa = Math.sin(q.ang), hw = q.r, L2 = q.line, c = [[0, -hw], [L2, -hw], [L2, hw], [0, hw]].map(([ax, ay]) => [q.x + ca * ax - sa * ay, q.y + sa * ax + ca * ay]); g.beginPath(); let ok = true; c.forEach(([X, Z], k) => { if (!screenOf(X, 0.04, Z, P3)) ok = false; else if (k) g.lineTo(P3.x, P3.y); else g.moveTo(P3.x, P3.y); }); if (!ok) continue; g.closePath(); g.fillStyle = 'rgba(' + col + ',' + (0.1 + 0.28 * pp).toFixed(3) + ')'; g.fill(); stroke(col, a, 2.5, [9, 6]); }
-      else if (ringPath(q.x, q.y, q.r)) { g.fillStyle = 'rgba(' + col + ',' + (0.1 + 0.3 * pp).toFixed(3) + ')'; g.fill(); stroke(col, a, 2.8, [8, 6]); ringPath(q.x, q.y, q.r * pp); stroke(col, a * 0.8, 2); }
+      if (q.line) { const ca = Math.cos(q.ang), sa = Math.sin(q.ang), hw = q.r, L2 = q.line, c = [[0, -hw], [L2, -hw], [L2, hw], [0, hw]].map(([ax, ay]) => [q.x + ca * ax - sa * ay, q.y + sa * ax + ca * ay]); g.beginPath(); let ok = true; c.forEach(([X, Z], k) => { if (!screenOf(X, 0.04, Z, P3)) ok = false; else if (k) g.lineTo(P3.x, P3.y); else g.moveTo(P3.x, P3.y); }); if (!ok) continue; g.closePath(); g.fillStyle = 'rgba(' + col + ',' + (0.1 + 0.28 * pp).toFixed(3) + ')'; g.fill(); stroke(col, a, 2.5, DASH_TELE_L); }
+      else if (ringPath(q.x, q.y, q.r)) { g.fillStyle = 'rgba(' + col + ',' + (0.1 + 0.3 * pp).toFixed(3) + ')'; g.fill(); stroke(col, a, 2.8, DASH_TELE); ringPath(q.x, q.y, q.r * pp); stroke(col, a * 0.8, 2); }
       // anyone of ours standing in it gets a warning mark above the head
       for (const u of F.units) { if (u.down || u.side !== 'A') continue; const inside = q.line ? (() => { const dx = u.x - q.x, dy = u.y - q.y, ca = Math.cos(q.ang), sa = Math.sin(q.ang), lx = dx * ca + dy * sa, ly = -dx * sa + dy * ca; return lx > -0.5 && lx < q.line + 0.5 && Math.abs(ly) < q.r + 0.4; })() : Math.hypot(u.x - q.x, u.y - q.y) < q.r + 0.4; if (!inside) continue; const f = fv.fm.get(u.id), pq = pos(f); if (screenOf(pq.x, (f.rig.nameH || 2) + 0.9, pq.z, P3)) { g.fillStyle = 'rgba(255,200,40,' + (0.7 + 0.3 * pulse).toFixed(2) + ')'; g.strokeStyle = 'rgba(30,10,10,.9)'; g.lineWidth = 3; g.beginPath(); g.moveTo(P3.x, P3.y - 15); g.lineTo(P3.x + 13, P3.y + 9); g.lineTo(P3.x - 13, P3.y + 9); g.closePath(); g.stroke(); g.fill(); g.fillStyle = '#2a1008'; g.font = '900 13px system-ui,sans-serif'; g.textAlign = 'center'; g.fillText('!', P3.x, P3.y + 7); } }
     }
     // rings
-    for (const f of fv.fm.values()) {
-      const u = f.u; if (u.down) continue; const pq = pos(f), ally = u.side === 'A', col = ally ? ALLY : FOE, d = camDist(pq.x, pq.z), ws = clamp(15 / d, 0.6, 1.5), r = 0.62 * (u.sz || 1) * (f.rig.beastR ? clamp(f.rig.beastR / 0.6, 1, 2.2) : 1) + 0.22;
-      if (ringPath(pq.x, pq.z, r)) stroke(col, 0.8, 2.6 * ws, ally ? null : [7, 5]);
+    const FL = fmList();
+    for (let fi = 0; fi < FL.length; fi++) {
+      const f = FL[fi], u = f.u; if (u.down) continue; const pq = pos(f), ally = u.side === 'A', col = ally ? ALLY : FOE, d = camDist(pq.x, pq.z), ws = clamp(15 / d, 0.6, 1.5), r = 0.62 * (u.sz || 1) * (f.rig.beastR ? clamp(f.rig.beastR / 0.6, 1, 2.2) : 1) + 0.22;
+      if (ringPath(pq.x, pq.z, r)) stroke(col, 0.8, 2.6 * ws, ally ? null : DASH_FOE);
       if (sel && u === sel && ally) { if (ringPath(pq.x, pq.z, r + 0.2)) stroke(GOLD, 0.95, 2.6 * ws); }
     }
     // links: who targets whom (option). A faint dashed line to the current target, a bright one for a swing in the last 0.5 s
     if (T.links) {
-      for (const f of fv.fm.values()) {
-        const u = f.u; if (u.down || !u.tgt) continue; const tf = fv.fm.get(u.tgt); if (!tf || tf.u.down) continue; const a = pos(f), b = pos(tf), col = u.side === 'A' ? ALLY : FOE;
+      for (let fi = 0; fi < FL.length; fi++) {
+        const f = FL[fi], u = f.u; if (u.down || !u.tgt) continue; const tf = fv.fm.get(u.tgt); if (!tf || tf.u.down) continue; const a = pos(f, PA), b = pos(tf, PB), col = u.side === 'A' ? ALLY : FOE;
         if (!screenOf(a.x, 0.05, a.z, P3)) continue; const x0 = P3.x, y0 = P3.y; if (!screenOf(b.x, 0.05, b.z, P3)) continue; const x1 = P3.x, y1 = P3.y; const hit = T.atk.get(u.id), age = hit && hit.dst === u.tgt ? t - hit.t : 9, hot = age < 0.5;
         const dx = x1 - x0, dy = y1 - y0, len = Math.hypot(dx, dy) || 1, k = Math.min(1, 24 / len), sx = x0 + dx * k, sy = y0 + dy * k, ex = x1 - dx * k, ey = y1 - dy * k;
-        if (len < 30) continue; g.beginPath(); g.moveTo(sx, sy); g.lineTo(ex, ey); stroke(col, hot ? 0.8 * (1 - age / 0.5) + 0.15 : 0.17, hot ? 2.2 : 1.4, hot ? null : [3, 6]);
+        if (len < 30) continue; g.beginPath(); g.moveTo(sx, sy); g.lineTo(ex, ey); stroke(col, hot ? 0.8 * (1 - age / 0.5) + 0.15 : 0.17, hot ? 2.2 : 1.4, hot ? null : DASH_LINK);
         const ang = Math.atan2(dy, dx); g.fillStyle = 'rgba(' + col + ',' + (hot ? 0.9 : 0.28) + ')'; g.beginPath(); g.moveTo(ex, ey); g.lineTo(ex - Math.cos(ang - 0.45) * 8, ey - Math.sin(ang - 0.45) * 8); g.lineTo(ex - Math.cos(ang + 0.45) * 8, ey - Math.sin(ang + 0.45) * 8); g.closePath(); g.fill();
       }
     }
     // focus target: rotating brackets on the sand and a chevron over the head
-    const fu = foc && F.units.find((x) => x.id === foc && !x.down), swp = [];
-    for (const u of F.units) if (!u.down && u.side === 'A' && u.swap) swp.push(u.swap.id);
-    const marks = new Set(swp); if (fu) marks.add(fu.id);
-    for (const id of marks) {
-      const f = fv.fm.get(id); if (!f || f.u.down) continue; const pq = pos(f), d = camDist(pq.x, pq.z), ws = clamp(15 / d, 0.6, 1.5), r = 0.62 * (f.u.sz || 1) + 0.55, spin = t * 1.6, isFoc = fu && fu.id === id;
+    let fu = null; const UN = F.units; if (foc) for (let i = 0; i < UN.length; i++) if (UN[i].id === foc && !UN[i].down) { fu = UN[i]; break; }
+    nmk = 0; for (let i = 0; i < UN.length; i++) { const u = UN[i]; if (!u.down && u.side === 'A' && u.swap) addMark(u.swap.id); }
+    if (fu) addMark(fu.id);
+    const nm = nmk;
+    for (let mi = 0; mi < nm; mi++) {
+      const id = MARKS[mi], f = fv.fm.get(id); if (!f || f.u.down) continue; const pq = pos(f), d = camDist(pq.x, pq.z), ws = clamp(15 / d, 0.6, 1.5), r = 0.62 * (f.u.sz || 1) + 0.55, spin = t * 1.6, isFoc = fu && fu.id === id;
       for (let k = 0; k < 4; k++) { const a0 = spin + k * Math.PI / 2; if (ringPath(pq.x, pq.z, r, a0, a0 + 0.55, 8)) stroke(isFoc ? GOLD : '255,226,150', 0.95, 3.2 * ws); }
       if (screenOf(pq.x, (f.rig.nameH || 2.05) + 0.75, pq.z, P3)) { const bob = Math.sin(t * 6) * 3, s = 9 * clamp(15 / d, 0.8, 1.3); g.fillStyle = 'rgba(' + (isFoc ? GOLD : '255,226,150') + ',.98)'; g.strokeStyle = 'rgba(30,16,8,.9)'; g.lineWidth = 2.5; g.beginPath(); g.moveTo(P3.x, P3.y + bob); g.lineTo(P3.x + s, P3.y - s * 1.3 + bob); g.lineTo(P3.x - s, P3.y - s * 1.3 + bob); g.closePath(); g.stroke(); g.fill(); }
     }
     // off-screen arrows
-    for (const f of fv.fm.values()) {
-      const u = f.u; if (u.down) continue; const pq = pos(f); V.set(pq.x, 1.1, pq.z).project(cam); const behind = V.z > 1, sx = (V.x * 0.5 + 0.5) * w, sy = (-V.y * 0.5 + 0.5) * h;
+    for (let fi = 0; fi < FL.length; fi++) {
+      const f = FL[fi], u = f.u; if (u.down) continue; const pq = pos(f); screenOf(pq.x, 1.1, pq.z, P3); const behind = P3.z > 1, sx = P3.x, sy = P3.y;
       if (!behind && sx > 6 && sx < w - 6 && sy > 6 && sy < h - 6) continue;
       let dx = sx - w / 2, dy = sy - h / 2; if (behind) { dx = -dx; dy = -dy; } if (Math.abs(dx) + Math.abs(dy) < 1e-3) { dx = 0; dy = 1; }
       const mx = w / 2 - 28, my = h / 2 - 28, k = Math.min(mx / Math.max(1e-3, Math.abs(dx)), (my - 36) / Math.max(1e-3, Math.abs(dy))), x = w / 2 + dx * k, y = clamp(h / 2 + dy * k, 64, h - 120), ang = Math.atan2(dy, dx), col = u.side === 'A' ? ALLY : FOE;
@@ -272,13 +298,13 @@ export function createTactics(fv) {
     }
   }
   function updateDanger(F, t) {
-    let lo = 1; for (const u of F.units) if (u.side === 'A' && !u.down && !u.beast) lo = Math.min(lo, u.hp / u.maxhp); const live = fv.phase === 'fight' && !F.done, v = live && lo < 0.34 ? (0.34 - lo) / 0.34 : 0;
-    const o = v * (fv.feel && fv.feel.state && fv.feel.state.reducedMotion ? 0.6 : 0.55 + 0.25 * Math.sin(t * (3 + v * 3))); const s = (Math.round(o * 40) / 40).toFixed(3); if (T.dOp !== s) { T.dOp = s; danger.style.opacity = s; }
+    let lo = 1; const UN = F.units; for (let i = 0; i < UN.length; i++) { const u = UN[i]; if (u.side === 'A' && !u.down && !u.beast) { const r = u.hp / u.maxhp; if (r < lo) lo = r; } } const live = fv.phase === 'fight' && !F.done, v = live && lo < 0.34 ? (0.34 - lo) / 0.34 : 0;
+    const o = v * (fv.feel && fv.feel.state && fv.feel.state.reducedMotion ? 0.6 : 0.55 + 0.25 * Math.sin(t * (3 + v * 3))); const q = Math.round(o * 40); if (T.dQ !== q) { T.dQ = q; const s = (q / 40).toFixed(3); T.dOp = s; danger.style.opacity = s; }
   }
 
   // ------------------------------------------------------------------ lifecycle
   T.start = (F, replaying) => {
-    T.F = F; T.active = !replaying; T.teles.length = 0; T.atk.clear(); T.sel = null; T.key = ''; T.dOp = ''; closeWheel(); fv.tacSlow = 1; hideTip();
+    T.F = F; T.active = !replaying; T.teles.length = 0; T.atk.clear(); T.sel = null; T.key = ''; T.dOp = ''; T.dQ = -1; closeWheel(); fv.tacSlow = 1; hideTip();
     const p = fv.readPrefs(); T.links = p.links !== false; buildDock(); resize(); layout();
     hint.style.opacity = 0; T.hintDone = false;
   };
