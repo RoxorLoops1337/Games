@@ -36,7 +36,7 @@ split big ones into slices (rules, art, polish).
 - [x] M11 Day and night shifts for workers (Day/Night button on the creature card: day, night or round the clock; PROTOCOL 43)
 - [x] M12 Cosy room score (a furnished walled-in room gives the Cosy buff; score = furniture + variety)
 - [ ] M12b Dye vat (split off M12)
-- [ ] M13 Museum of odd things
+- [x] M13 Museum of odd things (Museum Case: E donates one of each trophy, fish and gem; prizes at 5, 10, 20, 30 and all)
 - [ ] S31 Pet nicknames in chat/plates, pet in photo mode
 
 ## Phase 4: polish and health (small + medium)

@@ -214,6 +214,18 @@ function beehive (p: Pix) {
     p.outline();
 }
 
+function museum (p: Pix) {
+    // a wooden case with a glass top and a few treasures on blue velvet
+    lit(p, 1, 10, 30, 8, W); p.rect(2, 11, 28, 1, W[3]);
+    p.rect(3, 4, 26, 7, 0xcdf3fa);
+    p.rect(3, 4, 26, 1, 0xffffff);
+    p.rect(4, 8, 24, 3, 0x2f4f8c);
+    p.ellipse(9, 7, 2.2, 1.8, [0xc0392b, 0xff6b5c]);
+    p.ellipse(16, 7, 2.4, 1.6, [0xf0a030, 0xffd966]);
+    p.poly([[21, 9], [23, 5], [25, 9]], 0x6cc0d8);
+    p.outline();
+}
+
 function market (p: Pix, rnd: () => number) {
     // a striped awning over a counter loaded with produce
     for (const x of [2, 31]) lit(p, x, 6, 3, 19, W);
@@ -355,6 +367,7 @@ export function registerStorybookBuildings (scene: Phaser.Scene) {
     paint(scene, 'sawmill', 32, 15, (p) => sawmill(p), 1);
     paint(scene, 'millstone', 14, 10, (p) => millstone(p), 1);
     paint(scene, 'beehive', 14, 19, (p) => beehive(p), 1);
+    paint(scene, 'museum', 32, 19, (p) => museum(p), 1);
     paint(scene, 'fishpond', 32, 15, (p) => fishpond(p), 1);
     paint(scene, 'market', 18, 13, market, 5);
     paint(scene, 'mill', 16, 17, (p) => mill(p), 1);

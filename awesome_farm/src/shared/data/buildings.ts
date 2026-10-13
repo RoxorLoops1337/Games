@@ -69,7 +69,7 @@ export type BuildingKind =
     | 'workbench' | 'bed' | 'campfire' | 'chest' | 'market' | 'furnace' | 'sawmill' | 'millstone' | 'fishpond' | 'beehive'
     | 'anvil' | 'kitchen' | 'loom' | 'alchemy' | 'lantern' | 'fence' | 'path' | 'planks' | 'bench' | 'mill'
     | 'belt' | 'splitter' | 'sorter' | 'tunnel' | 'tunnelx' | 'solar' | 'battery' | 'inserter' | 'drill' | 'pole' | 'windturbine' | 'coalgen' | 'assembler' | 'steelchest' | 'uberchest' | 'altar' | 'den' | 'waystone' | 'dock' | 'riftforge' | 'hatchery' | 'fortune'
-    | 'hedge' | 'flowerbed' | 'statue' | 'banner' | 'table' | 'signpost' | 'lamppost' | 'fountain' | 'stonewall' | 'barrel' | 'haybale' | 'scarecrow' | 'mailbox'
+    | 'hedge' | 'flowerbed' | 'statue' | 'banner' | 'table' | 'signpost' | 'lamppost' | 'fountain' | 'stonewall' | 'barrel' | 'haybale' | 'scarecrow' | 'mailbox' | 'museum'
     | 'brickfloor' | 'carpet' | 'slatefloor'
     | 'wall_wood' | 'wall_stone' | 'wall_brick' | 'wall_window' | 'doorway' | 'roof_thatch' | 'roof_tile' | 'roof_slate' | 'roof_glass'
     | 'lostpack' | 'mineshaft' | 'mineladder'
@@ -125,6 +125,7 @@ export const BUILDINGS: Record<BuildingKind, BuildingDef> = {
     barrel:    { name: 'Barrel',       tex: 'barrel',    size: [1, 1], cost: { plank: 3 }, cat: 'decor', desc: 'Nobody remembers what is in it.' },
     haybale:   { name: 'Hay Bale',     tex: 'haybale',   size: [1, 1], cost: { wheat: 3 }, cat: 'decor', desc: 'Farm-fresh and very sittable.' },
     table:     { name: 'Table',        tex: 'table',     size: [2, 1], cost: { plank: 4 }, cat: 'decor', desc: 'A potluck table: friends set out up to four dishes with a buff, and whoever uses it eats a portion of every one at once.' },
+    museum:    { name: 'Museum Case', tex: 'museum', size: [2, 1], cost: { plank: 8, glass: 4, brick: 4 }, cat: 'special', desc: 'Keeps one of every trophy, fish and gem. Press E to donate; prizes at milestones.' },
     mailbox:   { name: 'Mailbox',      tex: 'mailbox',   size: [1, 1], cost: { wood: 6, plank: 2 }, cat: 'storage', desc: 'Friends can leave you parcels and notes here, and the island folk send a postcard every morning. A raised flag means post is waiting.' },
     signpost:  { name: 'Signpost',     tex: 'signpost',  size: [1, 1], cost: { plank: 2 }, cat: 'decor', desc: 'Points somewhere. Probably.' },
     banner:    { name: 'Banner',       tex: 'banner',    size: [1, 1], cost: { plank: 2, cloth: 1 }, cat: 'decor', desc: 'Proudly flapping in the breeze.' },

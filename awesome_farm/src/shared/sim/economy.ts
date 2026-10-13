@@ -16,6 +16,7 @@ import * as bed from './bed';
 import * as chronicle from './chronicle';
 import * as defense from './defense';
 import * as gather from './gather';
+import * as museum from './museum';
 import * as mail from './mail';
 import * as potluck from './potluck';
 import * as iridium from './iridium';
@@ -204,6 +205,7 @@ export function cmdUse (sim: Sim, p: PlayerS, id: number, seed?: ItemId) {
     if (b.kind === 'mineshaft') { mines.descend(sim, p, b); return; }
     if (b.kind === 'mineladder') { mines.ascend(sim, p, b); return; }
     if (b.kind === 'mailbox') { mail.open(sim, p, b); return; }
+    if (b.kind === 'museum') { museum.use(sim, p, b); return; }
     if (b.kind === 'den') { sim.events.push({ e: 'open', to: p.id, ui: 'den', id: b.id }); return; }
     if (b.kind === 'altar') { sim.events.push({ e: 'open', to: p.id, ui: 'altar', id: b.id }); return; }
     if (b.kind === 'hatchery') { sim.events.push({ e: 'open', to: p.id, ui: 'hatchery', id: b.id }); return; }
