@@ -262,16 +262,25 @@ function headbandB(rig, o) {
 // ---------------------------------------------------------------- armour pieces
 function loinFlap(rig, anchor, o = {}) {
   const rows = o.rows || 4, cols = o.cols || 3, len = o.len || 0.3, rl = len / (rows - 1), back = !!o.back, w = o.w || 0.2;
-  const thighs = [['hipL', 'kneeL', 'ankleL'], ['hipR', 'kneeR', 'ankleR']], a = new V3(), b = new V3(), ab = new V3(), ap = new V3();
+  const thighs = [['hipL', 'kneeL', 'ankleL'], ['hipR', 'kneeR', 'ankleR']], a = new V3(), b = new V3(), ab = new V3(), cap = new Float64Array(32);
   const J = rig.joints, R = 0.108 * (rig.build.bulk || 1) * (rig.build.leg || 1) + 0.012;
   const g = new ClothGrid({
     anchor, rows, cols, rowLen: rl, stiff: 0.3, stiffFall: 0.55, damping: 0.9, gravity: -9, side: new V3(1, 0, 0),
     shape: (r) => new V3(o.x || 0, (o.y || 0) - r * rl * 0.97, (back ? -1 : 1) * ((o.z || 0.145) + r * 0.014)), widthFn: (r) => w * (1 + 0.15 * r / (rows - 1)), material: o.material || rig.mats.clothF || rig.mats.cloth, name: 'flap', tipShade: 0.62, fold: true,
-    collide: (p) => { // keep out of the thighs and shins (world space capsules)
-      for (const t of thighs) for (let s = 0; s < 2; s++) {
-        a.setFromMatrixPosition(J[t[s]].matrixWorld); b.setFromMatrixPosition(J[t[s + 1]].matrixWorld); ab.subVectors(b, a); ap.subVectors(p, a);
-        const k = clamp(ap.dot(ab) / ab.lengthSq(), 0, 1); ab.multiplyScalar(k).add(a); ap.subVectors(p, ab); const d = ap.length(); const rr = R * (s ? 0.8 : 1) * (rig.build.height || 1);
-        if (d < rr && d > 1e-5) p.copy(ab).addScaledVector(ap, rr / d);
+    // PERF: the four leg capsules (world space) are measured once per verlet step (prep), not once per vertex per iteration; the joints do not move inside a step
+    prep: () => {
+      const hh = rig.build.height || 1;
+      for (let t = 0; t < 2; t++) for (let s = 0; s < 2; s++) {
+        const k = (t * 2 + s) * 8; a.setFromMatrixPosition(J[thighs[t][s]].matrixWorld); b.setFromMatrixPosition(J[thighs[t][s + 1]].matrixWorld); ab.subVectors(b, a);
+        cap[k] = a.x; cap[k + 1] = a.y; cap[k + 2] = a.z; cap[k + 3] = ab.x; cap[k + 4] = ab.y; cap[k + 5] = ab.z; cap[k + 6] = ab.lengthSq(); cap[k + 7] = R * (s ? 0.8 : 1) * hh;
+      }
+    },
+    collide: (p) => { // keep out of the thighs and shins
+      for (let n = 0; n < 4; n++) {
+        const k = n * 8, ax = cap[k], ay = cap[k + 1], az = cap[k + 2], bx = cap[k + 3], by = cap[k + 4], bz = cap[k + 5];
+        const px = p.x - ax, py = p.y - ay, pz = p.z - az; let q = (px * bx + py * by + pz * bz) / cap[k + 6]; q = q < 0 ? 0 : q > 1 ? 1 : q;
+        const dx = px - bx * q, dy = py - by * q, dz = pz - bz * q, d = Math.sqrt(dx * dx + dy * dy + dz * dz), rr = cap[k + 7];
+        if (d < rr && d > 1e-5) { const m = rr / d; p.x = ax + bx * q + dx * m; p.y = ay + by * q + dy * m; p.z = az + bz * q + dz * m; }
       }
     },
   });

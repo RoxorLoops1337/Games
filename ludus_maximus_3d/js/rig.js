@@ -895,7 +895,7 @@ const _w = new V3(), _w2 = new V3(), _inv = new THREE.Matrix4(), _mm = new THREE
 class VerletGrid {
   constructor(o) {
     this.anchor = o.anchor; this.rows = o.rows; this.cols = o.cols || 1; this.rowLen = o.rowLen; this.stiff = o.stiff ?? 0.2; this.stiffFall = o.stiffFall ?? 0.7;
-    this.damping = o.damping ?? 0.94; this.gravity = o.gravity ?? -7; this.collide = o.collide || null; this.wind = o.wind || new V3();
+    this.damping = o.damping ?? 0.94; this.gravity = o.gravity ?? -7; this.collide = o.collide || null; this.prep = o.prep || null; this.wind = o.wind || new V3();
     this.shape = o.shape; this.widthFn = o.widthFn || (() => 0); this.side = o.side || new V3(1, 0, 0); this.acc = 0; this.parent = o.parent;
     this.p = []; this.pp = []; this.rest = []; this.inited = false;
     for (let r = 0; r < this.rows; r++) for (let c = 0; c < this.cols; c++) {
@@ -912,6 +912,7 @@ class VerletGrid {
     this.write();
   }
   step(h) {
+    if (this.prep) this.prep();
     const R = this.rows, C = this.cols, Pp = this.p, Rest = this.rest, aw = this.anchor.matrixWorld, WR = this.rowWs();
     for (let c = 0; c < C; c++) { const i = c; this.pp[i].copy(Pp[i]); Pp[i].copy(Rest[i]).applyMatrix4(aw); }
     for (let r = 1; r < R; r++) {

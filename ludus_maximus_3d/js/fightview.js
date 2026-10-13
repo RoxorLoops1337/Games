@@ -627,7 +627,7 @@ export class FightView {
       if ((this.lodTick & 7) === 0) { const cp = this.camera.position, dx = X - cp.x, dy = cp.y - 1, dz = Z - cp.z; rig.lod = dx * dx + dy * dy + dz * dz > 900 ? 1 : 0; }   // PERF: beyond 30 m the cloth steps every other frame
       rig.update(dt);
       // plate
-      f.hpShown += (u.hp - f.hpShown) * 0.2; if (f.plate.hp && (f.hpSet !== u.hp || f.hpSetMax !== u.maxhp)) { f.hpSet = u.hp; f.hpSetMax = u.maxhp; f.plate.hp.set(u.hp, u.maxhp); }   // PERF: DOM bar writes only when the value changed
+      f.hpShown += (u.hp - f.hpShown) * 0.2; if (f.plate.hp && (f.hpSet !== u.hp || f.hpSetMax !== u.maxhp) && (u.hp <= 0 || this.t - (f.hpT ?? -9) > 0.1 || f.hpSetMax !== u.maxhp)) { f.hpSet = u.hp; f.hpSetMax = u.maxhp; f.hpT = this.t; f.plate.hp.set(u.hp, u.maxhp); }   // at most 10 bar writes a second per fighter (each damaged write forces a layout in the UI kit)   // PERF: DOM bar writes only when the value changed
       const head = _head.set(X, (rig.nameH || 2.05) * (rig.root.scale.y || 1), Z); // BEAST: rig.nameH = beast height
       // PERF: clientWidth/Height force a layout flush after the previous plate's style writes (about 2 ms per frame in 3v3): measured once, refreshed on resize
       if (!this.cw) { const dom = this.renderer.domElement; this.cw = dom.clientWidth || 1; this.ch = dom.clientHeight || 1; }
