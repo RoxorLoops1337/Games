@@ -51,6 +51,7 @@ export class UI {
     this.toast = el('div', 'toast', r);
     this.players = el('div', 'playerlist', r);
     this.tip = el('div', 'tip', r);
+    this.hover = el('div', 'hovertip', r);
     this.panel = el('div', 'panel hidden', r);
     this.modal = el('div', 'modal hidden', r);
     this.death = el('div', 'death hidden', r); this.death.innerHTML = '<div><h1>You fell over</h1><p>Getting back up...</p></div>';
@@ -102,6 +103,11 @@ export class UI {
       this.players.innerHTML = `<h3>${G.worldName} <small>${G.players.size} online</small></h3>` + [...G.players.values()].map((p) => `<div class="pl"><canvas width="26" height="34" data-id="${p.id}"></canvas><b>${esc(p.name)}</b><span>${p.id === G.myId ? G.ping + ' ms' : ''}</span></div>`).join('');
       for (const cv of this.players.querySelectorAll('canvas')) drawChar(cv, G.players.get(+cv.dataset.id).look);
     }
+  }
+  hoverText(text, x, y) {
+    if (!text) { if (this._ht) { this.hover.style.display = 'none'; this._ht = ''; } return; }
+    if (text !== this._ht) { this.hover.textContent = text; this.hover.style.display = 'block'; this._ht = text; }
+    this.hover.style.left = x + 16 + 'px'; this.hover.style.top = y + 18 + 'px';
   }
   say(from, text, sys) {
     const d = el('div', 'msg' + (sys ? ' sys' : ''), this.chatLog); d._t = performance.now();

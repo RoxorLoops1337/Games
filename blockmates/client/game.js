@@ -346,12 +346,23 @@ export class Game {
   }
   actions(dt) {
     const me = this.me;
-    if (me.dead || this.ui.open || this.ui.modalOpen || this.ui.chatOpen) { this.cursor = null; this.ghost = 0; return; }
+    if (me.dead || this.ui.open || this.ui.modalOpen || this.ui.chatOpen) { this.cursor = null; this.ghost = 0; this.ui.hoverText('', 0, 0); return; }
     const c = this.cellAtMouse();
     const dx = c.x + 0.5 - me.x, dy = c.y + 0.5 - (me.y - 0.9);
     const reach = dx * dx + dy * dy <= REACH * REACH;
     this.cursor = { x: c.x, y: c.y, ok: c.y >= 0 && c.y < H, reach };
     const held = this.held, def = held && ITEMS[held.id];
+    // what is under the pointer
+    let hover = '';
+    for (const m of this.mobs.values()) { const md = MOBS[m.type]; if (Math.abs(c.wx - m.x) < md.w / 2 + 0.3 && c.wy > m.y - md.h - 0.3 && c.wy < m.y + 0.3) { hover = `${md.name}  ${Math.ceil(m.hp)}/${md.hp}`; break; } }
+    if (!hover) for (const n of this.npcs.values()) if (Math.abs(c.wx - n.x) < 0.8 && c.wy > n.y - 2.1 && c.wy < n.y + 0.3) { hover = `${n.owner}'s Buddy (right click)`; break; }
+    if (!hover) for (const o of this.players.values()) if (o.id !== this.myId && Math.abs(c.wx - o.x) < 0.8 && c.wy > o.y - 2.1 && c.wy < o.y + 0.3) { hover = `${o.name} (right click to trade)`; break; }
+    if (!hover && reach !== undefined) {
+      const fg = this.cw.fgAt(c.x, c.y);
+      if (fg) { const bd = BLOCKS[fg]; hover = ITEMS[I[bd.name]] ? ITEMS[I[bd.name]].label : bd.name; if (INTERACTIVE.has(bd.name)) hover += reach ? ' (right click)' : ''; }
+      else if (this.cw.liqAt(c.x, c.y)) hover = (this.cw.liqAt(c.x, c.y) >> 4) === 2 ? 'Lava' : 'Water';
+    }
+    this.ui.hoverText(hover, this.mouse.x, this.mouse.y);
     // placement ghost
     this.ghost = 0;
     if (def && def.place && reach) {
