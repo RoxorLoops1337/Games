@@ -50,6 +50,7 @@ const STATIC_PATHS = [
   'kingshot_endless',
   'encore_island',
   'encore_island_3d',
+  'hearthvale',
   'headliner',
   'horde_runner',
   'spijker_master',
@@ -186,6 +187,8 @@ const SKIP_IN_DIST = {
   hocus_vocus: new Set(['plan']),
   // Battle Call: the Worker and its config deploy by hand (wrangler), never with the Pages site
   battle_call: new Set(['server', 'package.json', '.assetsignore']),
+  // Hearthvale: the Node server and its saves run elsewhere, never with the Pages site
+  hearthvale: new Set(['server', 'package.json', 'data']),
 };
 
 const copyStatic = () => {

@@ -33,6 +33,7 @@ const GAME_SUITES = {
   kingshot_endless: ['test:kingshot'],
   encore_island: ['test:encore'],
   encore_island_3d: ['test:encore'],
+  hearthvale: ['test:hearthvale'],
   headliner: ['test:headliner'],
   horde_runner: ['test:horde'],
   spijker_master: ['test:spijker'],
