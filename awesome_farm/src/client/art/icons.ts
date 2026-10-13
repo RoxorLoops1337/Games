@@ -125,7 +125,7 @@ const SPEC: Partial<Record<ItemId, IconSpec>> = {
     wire: { shape: 'coil', mat: MAT.copper },
     circuit: { shape: 'chip', mat: ['g', 'l', 'G'], accent: 'y' },
     flour: { shape: 'sack', mat: MAT.cloth, accent: 's' },
-    motor: { shape: 'motor', mat: MAT.iron, accent: 'o' }, module_speed: { shape: 'motor', mat: MAT.gold, accent: 'b' },
+    motor: { shape: 'motor', mat: MAT.iron, accent: 'o' }, module_speed: { shape: 'motor', mat: MAT.gold, accent: 'b' }, module_eff: { shape: 'motor', mat: MAT.iron, accent: 'g' },
     core: { shape: 'core', mat: MAT.gold },
     wheat: { shape: 'wheat', mat: ['y', 'w', 'o'], accent: 'b' },
     carrot: { shape: 'carrot', mat: ['o', 'y', 'b'] },
@@ -221,6 +221,7 @@ const SPEC: Partial<Record<ItemId, IconSpec>> = {
     trophy_dune: { shape: 'trophy', mat: ['y', 'w', 'o'], accent: 'B' },
     trophy_frost: { shape: 'trophy', mat: ['F', 'w', 'W'], accent: 'D' },
     trophy_heart: { shape: 'trophy', mat: ['r', 'p', 'n'], accent: 'y' },
+    trophy_dusk: { shape: 'trophy', mat: ['v', 'u', 'p'], accent: 'F' },
     potion_might: bottle('o', 'y'), potion_guard: bottle('T', 'w'), potion_mend: bottle('l', 'w'),
     // weapons
     dagger_bone: { shape: 'dagger', mat: ['c', 'w', 's'] }, dagger_steel: { shape: 'dagger', mat: MAT.steel },

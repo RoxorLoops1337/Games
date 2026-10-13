@@ -233,18 +233,18 @@ export class MenuScreen implements Screen {
         label(Rx, IN_Y + 98, 'Tutorial', 'Walk through the starting steps again.');
         pane.button(Rx + colW - 70, IN_Y + 108, 140, ROW_H, 'Replay tutorial', () => { tutorialApi.replay(); this.ctx.close(); }, { style: STYLES.lime, size: 14 });
         toggle(Rx, IN_Y + 142, 'Larger text', 'Bigger letters in windows. Reopen a window to see it.', () => settings.bigText, (v) => { settings.bigText = v; });
-        this.heading(Rx, IN_Y + 188, colW, 'Keyboard');
-        const kbNote = pane.text('', Rx, IN_Y + 235, fit(11), PAL.pebble, { bold: false, wrap: colW - 160 });
+        toggle(Rx, IN_Y + 184, 'Shape marks', 'Notches on bars so colour is never the only clue.', () => settings.marks, (v) => { settings.marks = v; });
+        this.heading(Rx, IN_Y + 230, colW, 'Keyboard');
+        const kbNote = pane.text('', Rx, IN_Y + 277, fit(11), PAL.pebble, { bold: false, wrap: colW - 160 });
         const kbLabel = () => settings.keyboard === 'auto' ? 'Auto' : settings.keyboard.toUpperCase();
-        const showKb = () => kbNote.setText(`${settings.keyboard === 'auto' ? `Detected ${detectedName()}` : 'Set by you'}  ·  move with ${moveKeys(' ')}`);
-        pane.text('Key hints', Rx, IN_Y + 214, 14, PAL.cream);
+        const showKb = () => kbNote.setText(`${settings.keyboard === 'auto' ? `Detected ${detectedName()}` : 'Set by you'}  ·  move with ${moveKeys(' ')}  ·  only the hints change`);
+        pane.text('Key hints', Rx, IN_Y + 256, 14, PAL.cream);
         showKb();
-        const kb = pane.button(Rx + colW - 70, IN_Y + 224, 140, ROW_H, kbLabel(), () => {
+        const kb = pane.button(Rx + colW - 70, IN_Y + 266, 140, ROW_H, kbLabel(), () => {
             settings.keyboard = KEYBOARD_CHOICES[(KEYBOARD_CHOICES.indexOf(settings.keyboard) + 1) % KEYBOARD_CHOICES.length];
             kb.setLabel(kbLabel()); kb.setStyle(settings.keyboard === 'auto' ? STYLES.dark : STYLES.lime);
             showKb(); saveSettings();
         }, { style: settings.keyboard === 'auto' ? STYLES.dark : STYLES.lime, size: 14, ink: settings.keyboard !== 'auto' });
-        pane.text('Movement follows the key positions, so any layout plays the same. This only changes the hints.', Rx, IN_Y + 266, fit(11), PAL.pebble, { bold: false, wrap: colW });
         // where things are kept
         pane.rule(Rx, IN_Y + 316, colW);
         pane.text(`Your name and game data are saved in this browser.\nServer: ${this.ctx.farm.conn.mode === 'solo' ? 'solo (this browser)' : this.ctx.farm.conn.label}`, Rx, IN_Y + 326, fit(11), PAL.pebble, { bold: false, wrap: colW });

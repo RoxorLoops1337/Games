@@ -41,7 +41,7 @@ split big ones into slices (rules, art, polish).
 
 ## Phase 4: polish and health (small + medium)
 - [x] M15 Accessibility pass 1 (the Shake switch now also turns off lightning flashes, slow motion and buzzing, and says so)
-- [ ] M15b Colour-blind marks, phone pack leftovers (larger text shipped with S35)
+- [x] M15b Shape marks (a Settings switch: notches on monster health bars and chest gauges so colour is never the only clue; larger text shipped with S35; phone leftovers still to do)
 - [x] S35 Settings polish (Larger text switch, settings rows tidied; shown in the headless browser)
 - [x] S34 Playbot short run as a health check (already built: tests/playbot.test.ts plays the first 3 days inside npm test)
 
@@ -52,9 +52,19 @@ split big ones into slices (rules, art, polish).
   - [x] B5c Shared blueprint book (Blueprint Shelf: share your newest blueprint, others copy it into their book; PROTOCOL 46)
 - [ ] B4 Factory v2: modules, chest gauge, harvester arm + sprinkler
   - [x] B4a Chest fill gauge (a little bar at the foot of every chest with something in it: green, gold, red)
-  - [x] B4b Speed Module (assembler recipe; slot one into a machine for +25% speed with the Module button; PROTOCOL 47; efficiency module still to do)
-  - [ ] B4c Harvester arm
+  - [x] B4b Speed Module (assembler recipe; slot one into a machine for +25% speed with the Module button; PROTOCOL 47)
+  - [x] B4e Efficiency Module (assembler recipe; fuel lasts 25% longer and 10% of batches come out doubled; the Module button slots a Speed Module first, else an Efficiency one; no protocol change)
+  - [x] B4c Harvester Arm (harvests ripe beds within 2 tiles into a chest within 3, no power, no protocol change)
   - [x] B4d Sprinkler (beds within 3 tiles grow 30% faster, no power, no protocol change)
 - [ ] B1 Cottages: the folk move in
+  - [x] B1a Cottage building: a villager (name + trade) moves in at dawn, one trade gift a day with E, bigger gifts once a friend; no protocol change
+  - [x] B1b Villagers walk about (a folk entity with art), name plates
+  - [ ] B1c Friendship hearts and requests
 - [ ] B2 Festival eve + the Lantern Chain
+  - [x] B2a Festival eve (last day of each season): E on lanterns, longest chain of 4+ pays everyone at dawn; no protocol change
+  - [x] B2b Festival look: lanterns lit for the festival burn bigger and golder at night, in 2D and 3D (bunting and a festival song still to do)
+  - [ ] B2c Festival stalls and games
 - [ ] B3 The Long Dusk (new game plus)
+  - [x] B3a Dusk Beacon (sleeps until every boss has fallen; lit: wild monsters 8 levels tougher and 1.5x loot; all server-side, no protocol change)
+  - [x] B3b Dusk Crown (a boss that falls in the Long Dusk also drops a Dusk Crown trophy to everyone who fought; it joins the museum set; dusk-only bosses still to do)
+  - [x] B3c Dusk indicator (the season label on the HUD reads "Spring · Long Dusk" in violet while it is on; the tick now carries it; PROTOCOL 48)

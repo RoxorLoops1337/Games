@@ -428,6 +428,7 @@ export class SimHost {
             ...(sendProd && s.prod ? { prod: s.prod } : {}),
             ...(sendProd && s.shop ? { shop: s.shop } : {}),
             ...(sendProd && s.mkt ? { mkt: s.mkt } : {}),
+            ...(sendProd ? { dusk: s.dusk ?? 0 } : {}),
             t: 'tick' as const, time: s.time, clock: s.clock, day: s.day, night: s.night, nightLen: s.nightLen, paused: s.paused,
             plots: [...sim.dirtyPlots].map((i) => s.plots[i]),
             ...(sim.dirtyDug.length ? { dug: [...sim.dirtyDug] } : {}),

@@ -82,6 +82,7 @@ export const ITEMS = {
     gear:     it('Gear',        'material', 10, 'Toothed wheel. Every machine wants a few.', { rarity: 1 }),
     wire:     it('Copper Wire', 'material', 8, 'Thin and springy.', { rarity: 1 }),
     module_speed: it('Speed Module', 'material', 60, 'Slot it into a furnace, sawmill, millstone, pond, hive or assembler: it works a quarter faster.', { rarity: 2 }),
+    module_eff: it('Efficiency Module', 'material', 60, 'Slot it into a machine: fuel lasts a quarter longer and now and then a batch comes out doubled.', { rarity: 2 }),
     circuit:  it('Circuit',     'material', 30, 'A tiny brain for machines.', { rarity: 2 }),
     flour:    it('Flour',       'material', 4, 'Ground wheat.'),
     motor:    it('Motor',       'material', 40, 'Spins forever if you let it. Drills and generators need them.', { rarity: 2 }),
@@ -152,6 +153,7 @@ export const ITEMS = {
     trophy_bog:   it("Witch's Eye",   'misc', 250, 'Proof you beat the Bog Witch. It still watches you.', { rarity: 3 }),
     trophy_dune:  it("Pharaoh's Scarab", 'misc', 350, 'Proof you beat the Dune Pharaoh.', { rarity: 3 }),
     trophy_frost: it('Frozen Heart',  'misc', 350, 'Proof you beat the Frost Giant.', { rarity: 3 }),
+    trophy_dusk:  it('Dusk Crown',    'misc', 800, 'Only a boss that falls in the Long Dusk drops one. It hums with the dark.', { rarity: 4 }),
     trophy_heart: it('Heart Fragment', 'misc', 1000, 'A sliver of the Old Heart. It is still warm.', { rarity: 4 }),
     // ── brews from monster parts ──
     potion_might: it('Might Draught', 'potion', 16, 'Hit much harder for a couple of minutes.', { buff: { id: 'mighty', secs: 120 }, rarity: 1 }),

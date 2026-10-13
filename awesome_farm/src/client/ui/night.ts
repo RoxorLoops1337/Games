@@ -10,6 +10,7 @@ import { seasonOf, SEASONS, type SeasonId } from '../../shared/season';
 import { nightEvent, weatherAt } from '../../shared/weather';
 import type { GameScene } from '../scenes/Game';
 import { playSfx } from '../juice/sfx';
+import { festivalLit } from '../../shared/data/festival';
 import { settings } from '../settings';
 import { H, W } from './kit';
 
@@ -277,11 +278,12 @@ export class NightLayer {
         for (const e of f.lightSources()) {
             if (e.k === 'bld') {
                 const def = BUILDINGS[e.kind];
-                const glow = def.light ?? (e.kind === 'furnace' && (e.prog ?? 0) > 0 ? 36 : e.kind === 'coalgen' && (e.act ?? 0) > 0 ? 44 : 0);
+                const fest = festivalLit(e, f.clock.day);                      // (a lantern lit for the festival burns bigger and golder)
+                const glow = (def.light ?? (e.kind === 'furnace' && (e.prog ?? 0) > 0 ? 36 : e.kind === 'coalgen' && (e.act ?? 0) > 0 ? 44 : 0)) * (fest ? 1.9 : 1);
                 if (!glow) continue;
                 const s = f.worldToScreen((e.tx + def.size[0] / 2) * TILE, (e.ty + def.size[1] / 2) * TILE - 4);
                 const flicker = e.kind === 'campfire' ? 0.92 + Math.sin(this.t * 9 + e.id) * 0.08 : 1;
-                this.light(s.x, s.y, glow * 1.25 * flicker, 1, e.kind === 'campfire' || e.kind === 'furnace' ? 0xffd2a0 : e.kind === 'waystone' || e.kind === 'altar' ? 0xa8d8ff : e.kind === 'dock' || e.kind === 'riftforge' ? 0xb48cff : e.kind === 'hatchery' ? 0xffd6e4 : 0xffe9c8);
+                this.light(s.x, s.y, glow * 1.25 * flicker, 1, fest ? 0xffc040 : e.kind === 'campfire' || e.kind === 'furnace' ? 0xffd2a0 : e.kind === 'waystone' || e.kind === 'altar' ? 0xa8d8ff : e.kind === 'dock' || e.kind === 'riftforge' ? 0xb48cff : e.kind === 'hatchery' ? 0xffd6e4 : 0xffe9c8);
             } else if (e.k === 'proj') {
                 const s = f.worldToScreen(e.x, e.y - 5);
                 this.light(s.x, s.y, 18, 0.9, 0xc8e6ff);

@@ -42,6 +42,7 @@ import { Placer, type Placing } from '../world/placing';
 import { Interact, type Target } from '../world/interact';
 import { Hands } from '../world/hands';
 import { Ambience } from '../world/ambience';
+import { Villagers } from '../world/villagers';
 import { BuildViews } from '../world/buildviews';
 import { ProdHistory } from '../world/prodhist';
 import { destroyView, type EntView } from '../world/views';
@@ -139,6 +140,7 @@ export class GameScene extends Phaser.Scene {
     act!: Interact;
     hands!: Hands;
     amb!: Ambience;
+    villagers!: Villagers;
     private bviews!: BuildViews;
     private prodHist = new ProdHistory();
     private fx!: Fx;
@@ -153,6 +155,8 @@ export class GameScene extends Phaser.Scene {
     private gateFrame = -1;
     private shopState: Shop | null = null;
     private mktState: MarketState | undefined;
+    /** The Long Dusk is on (the HUD says so beside the season). */
+    dusk = 0;
     private chron: ChronEntry[] = [];
     private wishS: WishState | null = null;
     private combat!: CombatFx;
@@ -234,6 +238,7 @@ export class GameScene extends Phaser.Scene {
         this.placer = new Placer(this, this);
         this.act = new Interact(this, this);
         this.amb = new Ambience(this, this);
+        this.villagers = new Villagers(this);
         const self = this;
         this.bviews = new BuildViews(this, {
             get world () { return self.world; }, get ents () { return self.ents; }, get views () { return self.views; }, get roofs () { return self.amb.roofs; },
@@ -513,6 +518,7 @@ export class GameScene extends Phaser.Scene {
         this.fv.drawWorld();
         this.fv.update(dt);
         this.amb.updateWaves(wdt);
+        this.villagers.update(wdt, this.blds.values());
         const gf = Math.floor(this.time.now / 240) % 3;
         if (gf !== this.gateFrame) { this.gateFrame = gf; for (const gate of this.gates) gate.setFrame(gf); }
         this.placer.updateTouchAim();
@@ -579,6 +585,7 @@ export class GameScene extends Phaser.Scene {
         for (const v of this.views.values()) destroyView(v);
         this.views.clear();
         this.farmers.clear();
+        this.villagers.clear();
         this.amb.forgetRoofs();
         this.marks.clear(); this.lit.clear(); this.blds.clear(); this.bldVersion++;
         this.fv.clear();
@@ -612,6 +619,7 @@ export class GameScene extends Phaser.Scene {
         this.prodHist.reset(state.prod ?? {}, this.clock.time);
         this.shopState = state.shop ?? null;
         this.mktState = state.mkt;
+        this.dusk = state.dusk ?? 0;
         this.chron = (state.chron ?? []).slice();
         this.wishS = state.wish ?? null;
         this.players = {};
@@ -637,6 +645,7 @@ export class GameScene extends Phaser.Scene {
         if (m.prod) this.prodHist.set(m.prod, this.clock.time);
         if (m.shop) this.shopState = m.shop;
         if (m.mkt) this.mktState = m.mkt;
+        if (m.dusk !== undefined) this.dusk = m.dusk;
         if (m.plots.length) {
             const risen: Plot[] = [], changed: Plot[] = [];
             for (const p of m.plots) {

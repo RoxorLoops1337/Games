@@ -259,6 +259,34 @@ function sprinkler (p: Pix) {
     p.outline();
 }
 
+function harvester (p: Pix) {
+    // a jointed iron arm on a base, with a little grabber at the end
+    p.rect(4, 12, 8, 3, 0x56526a); p.rect(7, 7, 2, 6, 0x7a7f9e);
+    p.line(8, 7, 3, 3, 0x9ea4bf); p.line(9, 7, 4, 3, 0x7a7f9e);
+    p.rect(1, 2, 3, 3, 0xb0b5cc); p.set(1, 5, 0x7a7f9e); p.set(3, 5, 0x7a7f9e);
+    p.ellipse(8, 7, 1.6, 1.6, [0xb0b5cc, 0xd9dcea]);
+    p.outline();
+}
+
+function cottage (p: Pix) {
+    // a small stone-and-plank house with a thatched roof, a door and a window
+    lit(p, 2, 14, 28, 16, ST); p.rect(3, 15, 26, 2, ST[3]);
+    p.rect(13, 20, 6, 10, W[2]); p.rect(13, 20, 6, 1, W[4]); p.set(17, 26, 0xffd966);
+    p.rect(5, 19, 5, 5, 0xcdf3fa); p.rect(5, 21, 5, 1, W[3]); p.rect(7, 19, 1, 5, W[3]);
+    p.poly([[0, 15], [16, 2], [32, 15], [30, 16], [2, 16]], (u) => (u < 0.5 ? 0xd8b85a : 0xb8962e));
+    for (let x = 4; x < 30; x += 4) p.rect(x, 12, 2, 1, 0x8a6a1e);
+    p.rect(22, 3, 4, 8, ST[2]); p.rect(22, 3, 4, 1, ST[4]);
+    p.outline();
+}
+
+function beacon (p: Pix) {
+    // an iron brazier on a stone foot with a violet flame
+    lit(p, 3, 11, 10, 4, ST); p.rect(6, 6, 4, 6, 0x56526a);
+    p.ellipse(8, 6, 5, 2, [0x56526a, 0x7a7f9e, 0xb0b5cc]);
+    p.poly([[8, 0], [11, 5], [8, 6], [5, 5]], (u) => (u < 0.5 ? 0x9d6fdb : 0xc9a6f0)); p.rect(7, 3, 2, 3, 0xeedcff);
+    p.outline();
+}
+
 function market (p: Pix, rnd: () => number) {
     // a striped awning over a counter loaded with produce
     for (const x of [2, 31]) lit(p, x, 6, 3, 19, W);
@@ -400,6 +428,9 @@ export function registerStorybookBuildings (scene: Phaser.Scene) {
     paint(scene, 'sawmill', 32, 15, (p) => sawmill(p), 1);
     paint(scene, 'millstone', 14, 10, (p) => millstone(p), 1);
     paint(scene, 'beehive', 14, 19, (p) => beehive(p), 1);
+    paint(scene, 'beacon', 16, 16, (p) => beacon(p), 1);
+    paint(scene, 'cottage', 32, 32, (p) => cottage(p), 1);
+    paint(scene, 'harvester', 16, 16, (p) => harvester(p), 1);
     paint(scene, 'sprinkler', 16, 16, (p) => sprinkler(p), 1);
     paint(scene, 'shelf', 16, 16, (p) => shelf(p), 1);
     paint(scene, 'board', 16, 16, (p) => board(p), 1);

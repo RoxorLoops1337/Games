@@ -64,7 +64,9 @@ export interface BuildE {
     inv?: Inv;               // chest contents / processor inputs (an Uber Chest's is the world's shared store: sim/uber.ts)
     ask?: { rid: number; by: string; who: string; it: ItemId; n: number; got: number; ea: number }[];   // a Request Board: what is asked for, how much is in, the reward a unit pays (sim/board.ts)
     bps?: { sid: number; by: string; who: string; name: string; items: BlueprintItem[] }[];   // a Blueprint Shelf: layouts farmers shared (sim/shelf.ts)
-    mod?: 'speed';           // a module slotted into a machine (sim/machines.ts: cmdModule)
+    mod?: 'speed' | 'eff';           // a module slotted into a machine (sim/machines.ts: cmdModule)
+    res?: { n: string; t: string; v: number; g: number };   // a Cottage's resident: name, trade, visits so far, the day of the last gift (sim/cottage.ts)
+    kd?: number;             // a Lantern or Lamp Post lit for a festival night: the day it was lit (sim/festival.ts)
     cof?: { c: number; by: Record<string, number> };   // a Farm Coffer: the coins in it and who put in how much (sim/coffer.ts)
     cap?: number;            // an Uber Chest: the room all of them give together (sim/uber.ts: storageOf)
     out?: Inv;               // processor outputs
@@ -355,6 +357,7 @@ export interface WorldState {
     nextId: number;
     players: Record<string, PlayerS>;
     prod?: Record<string, number>;   // items made by machines, ever ('coin': what the export chutes have paid out, ever)
+    dusk?: number;                   // the Long Dusk is on (1) or off: monsters are tougher and richer (sim/dusk.ts)
     bosses?: Record<string, number>; // bosses defeated by this world, by boss id
     shop?: Shop;             // the trader's current stock
     mkt?: { d: number; s: Record<string, number> };   // living prices: units sold per kind as of day d (data/market.ts)

@@ -474,5 +474,48 @@ export function sprinkler(_o: BOpts): Model<BuildE> {
     root.add(head);
     return { obj: root, update(dt: number) { head.rotation.y += dt * 2.5; } };
 }
+export function harvester(_o: BOpts): Model<BuildE> {
+    const root = new THREE.Group();
+    root.add(bake('work.harvester', (mb) => {
+        const b = mb.main;
+        b.box(0.5, 0.14, 0.5, 0x56526a, { y: 0.07, j: 0.01 });
+        b.cyl(0.07, 0.07, 0.5, 6, 0x7a7f9e, { y: 0.4, j: 0.006 });
+    }));
+    const arm = new THREE.Group();
+    arm.position.y = 0.62;
+    arm.add(bake('work.harvester.arm', (mb) => {
+        const b = mb.main;
+        b.box(0.7, 0.07, 0.07, 0x9ea4bf, { x: 0.3, j: 0.006 });
+        b.box(0.1, 0.12, 0.14, 0xb0b5cc, { x: 0.66, y: -0.05, j: 0.006 });
+    }));
+    root.add(arm);
+    return { obj: root, update(_dt: number, t: number) { arm.rotation.y = Math.sin(t * 0.8) * 1.2; } };
+}
+export function cottage(_o: BOpts): Model<BuildE> {
+    const root = new THREE.Group();
+    root.add(bake('work.cottage', (mb) => {
+        const b = mb.main;
+        b.box(1.7, 0.7, 1.5, sc(0.8), { y: 0.35, j: 0.015 });
+        b.cyl(0, 1.35, 0.55, 4, 0xb8962e, { y: 0.97, ry: Math.PI / 4, j: 0.02 });
+        b.box(0.28, 0.5, 0.05, wc(0.6), { y: 0.25, z: 0.76, j: 0.006 });
+        b.box(0.28, 0.28, 0.04, 0xcdf3fa, { x: -0.5, y: 0.45, z: 0.76, ao: false });
+        b.box(0.22, 0.5, 0.22, sc(0.6), { x: 0.5, y: 1.1, z: -0.2, j: 0.01 });
+    }));
+    return { obj: root };
+}
+export function beacon(_o: BOpts): Model<BuildE> {
+    const root = new THREE.Group();
+    root.add(bake('work.beacon', (mb) => {
+        const b = mb.main;
+        b.cyl(0.3, 0.38, 0.3, 8, sc(0.7), { y: 0.15, j: 0.012 });
+        b.cyl(0.2, 0.26, 0.4, 8, 0x56526a, { y: 0.5, j: 0.01 });
+        b.cyl(0.36, 0.22, 0.14, 8, 0x7a7f9e, { y: 0.77, j: 0.008 });
+    }));
+    const flame = new THREE.Group();
+    flame.position.y = 0.95;
+    flame.add(bake('work.beacon.flame', (mb) => { mb.main.ico(0.16, 0, 0xc9a6f0, { sy: 1.8, j: 0.02 }); }));
+    root.add(flame);
+    return { obj: root, update(_dt: number, t: number) { flame.scale.setScalar(1 + Math.sin(t * 6) * 0.08); } };
+}
 export const SL1 = 0x7a7f9e;
-export const CRAFT = { workbench, anvil, kitchen, loom, alchemy, furnace, sawmill, millstone, fishpond, beehive, museum, coffer, board, shelf, sprinkler };
+export const CRAFT = { workbench, anvil, kitchen, loom, alchemy, furnace, sawmill, millstone, fishpond, beehive, museum, coffer, board, shelf, sprinkler, harvester, cottage, beacon };
