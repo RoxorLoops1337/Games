@@ -99,7 +99,8 @@ export class UI {
     this.boss.classList.toggle('on', !!boss);
     if (boss) { this.boss.firstChild.textContent = MOBS[boss.type].name; this.boss.querySelector('i').style.width = Math.max(0, boss.hp / MOBS[boss.type].hp * 100) + '%'; }
     this.players.classList.toggle('on', G.showPlayers);
-    if (G.showPlayers) {
+    if (G.showPlayers && now - (this._plT || 0) > 400) {
+      this._plT = now;
       this.players.innerHTML = `<h3>${G.worldName} <small>${G.players.size} online</small></h3>` + [...G.players.values()].map((p) => `<div class="pl"><canvas width="26" height="34" data-id="${p.id}"></canvas><b>${esc(p.name)}</b><span>${p.id === G.myId ? G.ping + ' ms' : ''}</span></div>`).join('');
       for (const cv of this.players.querySelectorAll('canvas')) drawChar(cv, G.players.get(+cv.dataset.id).look);
     }

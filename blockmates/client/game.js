@@ -157,14 +157,14 @@ export class Game {
       }
       case 'join': this.addPlayer(m.p); break;
       case 'leave': this.players.delete(m.id); break;
-      case 'look': { const p = this.players.get(m.id); if (p) p.look = m.look; break; }
+      case 'look': { const p = this.players.get(m.id); if (p) p.look = { ...p.look, ...m.look }; break; }
       case 'respawn': this.me.x = m.x; this.me.y = m.y; this.me.vx = this.me.vy = 0; this.cam.x = m.x; this.cam.y = m.y - 1; break;
       case 'pong': this.ping = Math.round(performance.now() - m.c); break;
       default:
     }
   }
   mkPlayer(p, mine) {
-    return { id: p.id, name: p.name, look: p.look, x: mine ? this.me.x : 0, y: 0, tx: 0, ty: 0, vx: 0, vy: 0, dir: 1, anim: 0, onGround: true, held: 0, armor: [0, 0, 0], emote: 0, swingT: 0, blink: 0, blinkT: 2 + Math.random() * 3, hurtT: 0, dead: false, say: '', sayT: 0, fresh: true, climb: false, wet: false };
+    return { id: p.id, name: p.name, look: { skin: 0, hair: 1, hairStyle: 1, shirt: 4, pants: 2, eyes: 0, ...(p.look || {}) }, x: mine ? this.me.x : 0, y: 0, tx: 0, ty: 0, vx: 0, vy: 0, dir: 1, anim: 0, onGround: true, held: 0, armor: [0, 0, 0], emote: 0, swingT: 0, blink: 0, blinkT: 2 + Math.random() * 3, hurtT: 0, dead: false, say: '', sayT: 0, fresh: true, climb: false, wet: false };
   }
   addPlayer(p) { if (p.id !== this.myId && !this.players.has(p.id)) this.players.set(p.id, this.mkPlayer(p)); }
 

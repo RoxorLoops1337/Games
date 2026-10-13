@@ -37,7 +37,7 @@ export function startServer(opts = {}) {
     const u = new URL(req.url, 'http://x');
     if (u.pathname === '/status') {
       res.writeHead(200, { 'content-type': 'application/json', 'access-control-allow-origin': '*' });
-      res.end(JSON.stringify({ name: world.name, players: world.players.size, max: world.maxPlayers, day: world.day, password: !!world.password, motd: world.motd }));
+      res.end(JSON.stringify({ name: world.name, players: world.players.size, max: world.maxPlayers, day: world.day, password: !!world.password, motd: world.motd, tickMs: +(world.stats.tickMs || 0).toFixed(2), tickMax: +(world.stats.tickMax || 0).toFixed(2), chunks: world.chunks.size, mobs: world.mobs.size }));
       return;
     }
     // the same process also serves the game page, so a LAN or VPS host needs nothing else
@@ -89,7 +89,12 @@ export function startServer(opts = {}) {
     socket.on('close', bye); socket.on('error', bye);
   });
 
-  const timer = setInterval(() => { try { world.tick(); } catch (e) { console.error('tick error', e); } }, 1000 / TICK);
+  const timer = setInterval(() => {
+    const t0 = process.hrtime.bigint();
+    try { world.tick(); } catch (e) { console.error('tick error', e); }
+    const ms = Number(process.hrtime.bigint() - t0) / 1e6;
+    world.stats.tickMs = (world.stats.tickMs || ms) * 0.98 + ms * 0.02; world.stats.tickMax = Math.max(ms, (world.stats.tickMax || 0) * 0.999);
+  }, 1000 / TICK);
   const saver = setInterval(doSave, 30000);
   const port = opts.port ?? 8787;
   server.listen(port, opts.host || '0.0.0.0');
