@@ -259,6 +259,15 @@ function sprinkler (p: Pix) {
     p.outline();
 }
 
+function harvester (p: Pix) {
+    // a jointed iron arm on a base, with a little grabber at the end
+    p.rect(4, 12, 8, 3, 0x56526a); p.rect(7, 7, 2, 6, 0x7a7f9e);
+    p.line(8, 7, 3, 3, 0x9ea4bf); p.line(9, 7, 4, 3, 0x7a7f9e);
+    p.rect(1, 2, 3, 3, 0xb0b5cc); p.set(1, 5, 0x7a7f9e); p.set(3, 5, 0x7a7f9e);
+    p.ellipse(8, 7, 1.6, 1.6, [0xb0b5cc, 0xd9dcea]);
+    p.outline();
+}
+
 function market (p: Pix, rnd: () => number) {
     // a striped awning over a counter loaded with produce
     for (const x of [2, 31]) lit(p, x, 6, 3, 19, W);
@@ -400,6 +409,7 @@ export function registerStorybookBuildings (scene: Phaser.Scene) {
     paint(scene, 'sawmill', 32, 15, (p) => sawmill(p), 1);
     paint(scene, 'millstone', 14, 10, (p) => millstone(p), 1);
     paint(scene, 'beehive', 14, 19, (p) => beehive(p), 1);
+    paint(scene, 'harvester', 16, 16, (p) => harvester(p), 1);
     paint(scene, 'sprinkler', 16, 16, (p) => sprinkler(p), 1);
     paint(scene, 'shelf', 16, 16, (p) => shelf(p), 1);
     paint(scene, 'board', 16, 16, (p) => board(p), 1);

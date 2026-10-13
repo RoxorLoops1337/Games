@@ -366,6 +366,22 @@ test('a Speed Module makes a machine a quarter faster, one per machine, and come
     assert.equal(countOf(a, 'module_speed'), 1);
 });
 
+test('a Harvester Arm harvests ripe beds in reach into a nearby chest, and leaves far ones and unripe ones', () => {
+    const sim = Sim.create('TEST-HAR', 'test');
+    const a = sim.join('a', 'A')!;
+    const o = sim.world.plotOrigin(sim.homePlot(a.slot));
+    const bed = (dx: number, crop: number) => sim.add<BuildE>({ k: 'bld', kind: 'bed', tx: o.tx + 4 + dx, ty: o.ty + 8, rot: 0, crop, plant: 'seed_wheat', growT: 0, by: 'a' });
+    const ripe = bed(0, 2), young = bed(1, 0), far = bed(10, 2);
+    sim.add<BuildE>({ k: 'bld', kind: 'harvester', tx: o.tx + 5, ty: o.ty + 9, rot: 0, by: 'a' });
+    const chest = sim.add<BuildE>({ k: 'bld', kind: 'chest', tx: o.tx + 6, ty: o.ty + 10, rot: 0, inv: {} });
+    run(sim, 5);
+    assert.equal(ripe.crop, -1, 'the ripe bed in reach was harvested');
+    assert.ok((chest.inv?.wheat ?? 0) >= 2, 'the wheat went into the chest');
+    assert.equal(young.crop, 0, 'a young bed is left alone');
+    assert.equal(far.crop, 2, 'a bed out of reach is left alone');
+    assert.ok(a.stats.harvested >= 1, 'it counts for its builder');
+});
+
 test('a Sprinkler makes the beds around it grow faster, and only those in reach', () => {
     const sim = Sim.create('TEST-SPR', 'test');
     const a = sim.join('a', 'A')!;
