@@ -281,6 +281,20 @@
     return out;
   };
   LM.rivalById = (S, id) => LM.rivals(S, parseInt(id, 10))[parseInt(id.split('-')[1], 10)];
+  /** a matchup never repeats a name ("Valeria vs Valeria"): any opponent whose name equals a fighter on your side, or an opponent already on the card, is renamed
+   *  from D.FIRST (deterministic: the pick starts at a hash of the old name). Mutates the opponent objects in place (they are per-event copies). Returns how many were renamed. */
+  LM.uniqueNames = (mine, opps) => {
+    const used = new Set((mine || []).filter(Boolean).map((g) => g.name)); let n = 0;
+    (opps || []).forEach((o) => {
+      if (!o) return;
+      if (used.has(o.name)) {
+        const taken = (x) => used.has(x) || (opps || []).some((p) => p && p !== o && p.name === x), N = D.FIRST.length, st = LM.hash(String(o.name)) % N;
+        for (let i = 0; i < N; i++) { const cand = D.FIRST[(st + i) % N]; if (!taken(cand)) { o.name = cand; n++; break; } }
+      }
+      used.add(o.name);
+    });
+    return n;
+  };
   LM.diffMul = (S) => [0.88, 1, 1.12][S && S.opts && S.opts.diff != null ? S.opts.diff : 1];
   LM.diffGold = (S) => [1.1, 1, 1.15][S && S.opts && S.opts.diff != null ? S.opts.diff : 1];
   function mkOpp(S, rv, lvl, power, r, league, rarShift) {

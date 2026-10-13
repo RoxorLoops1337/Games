@@ -6,8 +6,13 @@
 //   rearr.stop()                           leave it (also called by game.js before a week runs, a screen opens or the scene changes)
 //   rearr.active / rearr.state             test hooks;  rearr.tap(i) = what a tap on plot i does (used by the keyboard, the bot and tests)
 //   rearr.undoAll()                        undo every move that can still be undone this week
-import { U, h, D, L, fmt, injectCss, pill, goldPill, note, kv, card, row, col, medal } from './screens/sk.js';
-import { ICON } from './screens/building.js';
+import * as U from './ui_kit.js';
+const h = U.h;
+const D = new Proxy({}, { get: (_, k) => globalThis.LM_D[k] }), L = () => globalThis.LM;
+const fmt = (n) => Math.round(n).toLocaleString('en-US');
+// the screen kit (pills, cards) is only needed for the confirm card: loaded on the first start, not at boot
+let SK = null; const loadSK = () => (SK ? Promise.resolve(SK) : import('./screens/sk.js').then((m) => (SK = m)));
+const ICON = { barracks: 'roster', palaestra: 'sword', kitchen: 'heart', bath: 'duststorm', infirmary: 'unbreakable', forge: 'gear', market: 'market', scout: 'scroll', sparring: 'bladedance', stands: 'arena', shrine: 'fame', hall: 'star' };
 
 const ROWS = ['rear terrace', 'second terrace', 'third terrace', 'front terrace by the gate'];
 const COLS = 4;
@@ -66,12 +71,8 @@ export function createRearrange(game) {
 
   // ---------------------------------------------------------------- UI chrome
   function build() {
-    injectCss(); if (!document.getElementById('lx-rr-modecss')) { const t = document.createElement('style'); t.id = 'lx-rr-modecss'; t.textContent = CSS; document.head.appendChild(t); }
-    if (!fab) {
-      fab = document.createElement('button'); fab.type = 'button'; fab.className = 'lx-photo-fab lx-rr-fab'; fab.setAttribute('aria-label', 'Rearrange buildings'); fab.title = 'Rearrange buildings'; fab.setAttribute('aria-pressed', 'false'); fab.dataset.tut = 'rearrange'; fab.append(U.icon('hammer', 22));
-      fab.addEventListener('click', (e) => { e.stopPropagation(); if (st.active) api.stop(); else api.start(); });
-      try { game.hud.append(fab); } catch (e) { /* hud not built yet */ }
-    }
+    SK.injectCss(); ensureCss();
+    if (false) { const t = document.createElement('style'); t.id = 'lx-rr-modecss'; t.textContent = CSS; document.head.appendChild(t); }
     bar = document.createElement('div'); bar.className = 'lx-rr-modebar'; bar.setAttribute('role', 'group'); bar.setAttribute('aria-label', 'Rearrange mode'); bar.dataset.tutSheet = 'rearrange';
     msgEl = document.createElement('div'); msgEl.className = 'lx-rr-msg'; msgEl.setAttribute('aria-hidden', 'true');
     const ttl = document.createElement('b'); ttl.textContent = 'Rearrange';
@@ -79,6 +80,13 @@ export function createRearrange(game) {
     doneB = document.createElement('button'); doneB.type = 'button'; doneB.textContent = 'Done'; doneB.setAttribute('aria-label', 'Leave rearrange mode'); doneB.addEventListener('click', () => api.stop());
     bar.append(ttl, msgEl, undoB, doneB); (document.getElementById('ui') || document.body).append(bar);
     live = document.createElement('div'); live.className = 'lx-rr-sr'; live.setAttribute('role', 'status'); live.setAttribute('aria-live', 'polite'); document.body.append(live);
+  }
+  const ensureCss = () => { if (!document.getElementById('lx-rr-modecss')) { const t = document.createElement('style'); t.id = 'lx-rr-modecss'; t.textContent = CSS; document.head.appendChild(t); } };
+  function ensureFab() {
+    if (fab) return; ensureCss();
+    fab = document.createElement('button'); fab.type = 'button'; fab.className = 'lx-photo-fab lx-rr-fab'; fab.setAttribute('aria-label', 'Rearrange buildings'); fab.title = 'Rearrange buildings'; fab.setAttribute('aria-pressed', 'false'); fab.dataset.tut = 'rearrange'; fab.append(U.icon('hammer', 22)); fab.hidden = true;
+    fab.addEventListener('click', (e) => { e.stopPropagation(); if (st.active) api.stop(); else api.start(); });
+    try { game.hud.append(fab); } catch (e) { /* hud not built yet */ }
   }
   function unbuild() { if (bar) bar.remove(); if (live) live.remove(); bar = msgEl = undoB = doneB = live = null; }
 
@@ -105,7 +113,7 @@ export function createRearrange(game) {
     commit(from, to, q);
   }
   function confirmBody(from, to, q) {
-    const s = S(), A = s.plots[from], B = s.plots[to], lm = L(), kids = [];
+    const { pill, goldPill, note, kv, card, row, col, medal } = SK, s = S(), A = s.plots[from], B = s.plots[to], lm = L(), kids = [];
     const mk = (p, f, t, wk) => {
       const B0 = D.BUILD[p.b], fx = lm.bfx(s, p.b);
       return card([row([medal(ICON[p.b] || 'ludus', 'dark big'), col([h('div', 'ax-name', `${B0.n} level ${p.l}`), note(`${plotName(f)} to ${plotName(t)}`)], 'ax-grow')]),
@@ -181,11 +189,12 @@ export function createRearrange(game) {
   const api = {
     get active() { return st.active; }, get state() { return Object.assign({}, st, { items: cached.length }); }, tap, sync,
     get fab() { return fab; },
-    start(o = {}) {
+    async start(o = {}) {
       if (st.active || game.scene !== 'hub' || game.busy || !game.hub) return false;
       if (S().pendingEv) { U.toast('Answer the pending event first', { kind: 'bad' }); return false; }
+      await loadSK(); if (st.active || game.scene !== 'hub' || game.busy) return false;
       game.closeAll(); build(); st.active = true; st.sel = -1; st.cursor = -1; st.dest = -1; st.cine = false; st.asking = false;
-      fab.setAttribute('aria-pressed', 'true'); hub().rrBegin({ onTap: (r) => { if (!r || r.type !== 'plot') return tap(-1); tap(r.i); }, onHover: (r) => { if (r && r.type === 'plot' && !st.sel !== undefined && r.i !== st.cursor && !st.cine && !st.asking && r.i < S().rows * COLS) { st.cursor = r.i; hub().rrItems(cached, r.i); } } });
+      fab.setAttribute('aria-pressed', 'true'); hub().rrBegin({ onTap: (r) => { if (!r || r.type !== 'plot') return tap(-1); tap(r.i); }, onHover: (r) => { if (r && r.type === 'plot' && r.i !== st.cursor && !st.cine && !st.asking && r.i < S().rows * COLS) { st.cursor = r.i; hub().rrItems(cached, r.i); } } });
       document.addEventListener('keydown', onKey, true); unKey = () => document.removeEventListener('keydown', onKey, true);
       sync(); sfx('uiOpen');
       const movable = unlocked().filter((i) => S().plots[i] && !L().moveWhySource(S(), i)).length;
@@ -208,6 +217,7 @@ export function createRearrange(game) {
     },
   };
   // the button only makes sense on the hub, with nothing running
+  ensureFab();
   tick = setInterval(() => { if (!fab) return; const on = game.scene === 'hub' && !game.busy && !document.querySelector('.lx-photo:not([hidden])'); fab.hidden = !on && !st.active; if (st.active && game.scene !== 'hub') api.stop(true); }, 300);
   void tick;
   return api;
