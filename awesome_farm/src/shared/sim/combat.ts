@@ -5,7 +5,7 @@
 import * as gems from './gems';
 import { ART_TUNING } from '../data/arts';
 import type { WeaponType } from '../data/items';
-import { MOBS } from '../data/mobs';
+import { AFFIX_ARMOR, MOBS } from '../data/mobs';
 import { PAL } from '../palette';
 import * as mobs from './mobs';
 import type { Sim } from './sim';
@@ -64,6 +64,7 @@ function targetsFor (sim: Sim, p: PlayerS, primary: MobE): MobE[] {
 export function damageMob (sim: Sim, e: MobE, dmg: number, by: PlayerS | null, opts: { kx?: number; ky?: number; kb?: number; crit?: boolean; quiet?: boolean; nofloat?: boolean } = {}) {
     if (!sim.s.ents[e.id]) return;
     const def = MOBS[e.kind];
+    if (e.af === 'armored') dmg *= AFFIX_ARMOR;
     e.hp -= dmg;
     if (by) sim.credit(e, by, dmg);
     const kb = (opts.kb ?? 90) * (def.boss ? 0.05 : (e.kind === 'rockling' ? 0.45 : e.kind === 'knight' ? 0.6 : 1));
