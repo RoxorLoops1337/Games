@@ -300,11 +300,11 @@ function syncCompanions (sim: Sim, crits: CritE[]) {
         if (p.ride && (!want || !ent || ent.pid !== want.id)) { p.ride = undefined; }                // (the mount is gone, sent to work, or you went down: you are on your own feet)
         if (ent && (!want || ent.pid !== want.id)) { sim.remove(ent.id); crits.splice(crits.indexOf(ent), 1); }
         else if (!ent && want) {
-            const e = sim.add<CritE>({ k: 'crit', sp: want.sp, x: p.x - 14, y: p.y, vx: 0, vy: 0, t: 0, lv: want.lv, ...(starsOf(want) ? { star: starsOf(want) } : {}), ...(want.shiny ? { shiny: 1 as const } : {}), mode: 1, st: 0, owner: p.id, pid: want.id, a: 0.8 });
+            const e = sim.add<CritE>({ k: 'crit', sp: want.sp, x: p.x - 14, y: p.y, vx: 0, vy: 0, t: 0, lv: want.lv, ...(starsOf(want) ? { star: starsOf(want) } : {}), ...(want.shiny ? { shiny: 1 as const } : {}), nm: want.name, mode: 1, st: 0, owner: p.id, pid: want.id, a: 0.8 });
             crits.push(e);
             sim.fx('summon', e.x, e.y - 6, p.id);
         } else if (ent && want) {
-            if (ent.lv !== want.lv || (ent.star ?? 0) !== starsOf(want)) { ent.lv = want.lv; ent.star = starsOf(want) || undefined; sim.touch(ent); }
+            if (ent.lv !== want.lv || (ent.star ?? 0) !== starsOf(want) || ent.nm !== want.name) { ent.nm = want.name; ent.lv = want.lv; ent.star = starsOf(want) || undefined; sim.touch(ent); }
         }
     }
 }

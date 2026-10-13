@@ -159,6 +159,7 @@ export interface CritE {
     x: number; y: number; vx: number; vy: number; t: number;
     lv: number;
     star?: number;           // awakening stars (companions and workers)
+    nm?: string;             // a companion's name, for the plate over its head
     shiny?: 1;               // a shiny one (see data/creatures.ts Pet.shiny)
     mode: 0 | 1 | 2;         // 0 wild, 1 companion, 2 den worker
     st?: number;             // 0 idle, 1 fleeing, 2 inside a pod, 3 working

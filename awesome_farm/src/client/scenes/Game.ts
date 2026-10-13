@@ -880,6 +880,7 @@ export class GameScene extends Phaser.Scene {
         v.mark?.setVisible(false); v.bub?.setVisible(false); v.bubIcon?.setVisible(false); v.cargo?.setVisible(false); v.pod?.setVisible(false);
         v.stars?.forEach((im) => im.setVisible(false));
         v.shine?.setVisible(false);
+        v.plate?.setVisible(false);
     }
 
     private updateViews (dt: number) {
