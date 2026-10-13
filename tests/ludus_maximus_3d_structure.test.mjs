@@ -167,5 +167,22 @@ for (const fn of ['newGame', 'makeGlad', 'mkUnits', 'createFight', 'step', 'useU
   ok(/cast\(el, pos, color\)/.test(fxs) && /flame spikes/.test(fxs) && /function beamUp\(pos, c, life, w = 1\.1\)/.test(fxs) && !/s1: 3\.6, cell: CELL\.glow/.test(fxs), 'ultimates are crisp shapes (spikes, bolts, shards, crescents), no big glow discs');
 }
 
+// 10. hub polish, phone taps, hub audio, photo mode
+{
+  const rd = (f) => readFileSync(join(root, f), 'utf8');
+  const hub = rd('js/hub.js'), bld = rd('js/buildings.js'), au = rd('js/audio.js'), ph = rd('js/photo.js'), gm = rd('js/game.js'), css = rd('css/ui.css'), envl = rd('js/env_ludus.js');
+  ok(/function roofWeather/.test(bld) && /function rearYard/.test(bld), 'buildings: weathered roofs and rear yards');
+  ok(/godrays/.test(hub) && /RAY_VERT/.test(hub) && /function pickNear/.test(hub) && /pointerType/.test(hub) && /'preview'/.test(hub) && /lx-hubcard/.test(hub), 'hub: god rays, tap slop picking, preview card');
+  ok(/focusHome/.test(hub) && /audioTick/.test(hub) && /audio\.ambient/.test(hub), 'hub: focusHome and spatial audio feed');
+  ok(/aSway/.test(hub) && /bakePiece/.test(hub), 'hub: baked cloaks and skirts with shader sway');
+  ok(/colosseumTexture/.test(envl), 'env_ludus: Colosseum facade texture');
+  for (const n of ['uiHover', 'uiSelect', 'uiOpen', 'uiClose', 'bird', 'owl', 'hammer', 'clink', 'chop', 'sizzle', 'thock', 'thunder']) ok(new RegExp("def\\('" + n + "'").test(au), 'audio.js sfx ' + n);
+  ok(/const ambient = /.test(au) && /music\.setHubTime/.test(au) && /function attachUi/.test(au) && /'slashWet'/.test(au) && /def\('crowdGore'/.test(au), 'audio.js: ambient, hub time of day, ui hooks, gore sfx kept');
+  ok(/export function createPhoto/.test(ph) && /toBlob/.test(ph) && /navigator\.share/.test(ph) && /drawImage\(glCanvas/.test(ph) && /prefers-reduced-motion/.test(ph), 'photo.js: capture, toBlob, share, reduced motion');
+  ok(/createPhoto/.test(gm) && /PHOTO/.test(gm) && /photo\.frame/.test(gm), 'game.js PHOTO hooks');
+  ok(/\.lx-photo-fab/.test(css) && /#ui > \.lx-photo/.test(css), 'ui.css has .lx-photo rules');
+  ok(existsSync(join(here, '..', '.claude', 'skills', 'ludus3d-photo', 'SKILL.md')), 'photo skill exists');
+}
+
 console.log(`ludus_maximus_3d structure: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
