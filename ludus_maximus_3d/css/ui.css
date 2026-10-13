@@ -473,7 +473,7 @@ html, body { max-width: 100%; overflow-x: hidden; }
 .lx-photo-flash { position: absolute; inset: 0; background: #fff; opacity: 0; }
 .lx-photo-flash.on { animation: lx-photo-flash .35s ease-out; }
 @keyframes lx-photo-flash { from { opacity: .85; } to { opacity: 0; } }
-.lx-photo-msg { position: absolute; left: 50%; top: calc(var(--lx-sat) + 64px); transform: translateX(-50%); max-width: 86vw; padding: 8px 14px; border-radius: 999px; background: rgba(29, 24, 48, .92); border: 1px solid rgba(242, 193, 78, .6); font-size: 12px; opacity: 0; transition: opacity .2s; }
+.lx-photo-msg { position: absolute; left: 50%; bottom: 120px; top: auto; transform: translateX(-50%); max-width: 86vw; padding: 8px 14px; border-radius: 999px; background: rgba(29, 24, 48, .92); border: 1px solid rgba(242, 193, 78, .6); font-size: 12px; opacity: 0; transition: opacity .2s; }
 .lx-photo-msg.on { opacity: 1; }
 .lx-photo-res { position: absolute; inset: 0; z-index: 3; display: flex; align-items: center; justify-content: center; padding: calc(var(--lx-sat) + 12px) 12px calc(var(--lx-sab) + 12px); background: rgba(10, 6, 20, .82); }
 .lx-photo-rescard { display: flex; flex-direction: column; align-items: center; gap: 12px; max-width: min(560px, 100%); max-height: 100%; }
@@ -699,3 +699,4 @@ body.lx-modal-open .lx-hud-bottom, body.lx-modal-open:not(.lx-peeked) .lx-photo-
 .lx-es-how { margin: 0; font: 700 var(--lx-fs-s)/1.35 var(--lx-sans); padding: 5px 12px; border-radius: 999px; background: rgba(122, 82, 34, .16); box-shadow: inset 0 0 0 1px rgba(122, 82, 34, .35); }
 .ax-sheet .lx-es-how { background: rgba(242, 193, 78, .12); box-shadow: inset 0 0 0 1px rgba(242, 193, 78, .35); color: var(--lx-gold); }
 .lx-es .lx-btn { margin-top: 6px; min-width: 190px; }
+body.lx-photo-on .lx-banners, body.lx-photo-on .lx-fv-verdict { display: none !important; } /* photo mode: no live combat callouts over the title or the frame */

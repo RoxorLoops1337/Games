@@ -174,7 +174,7 @@ function menuSheet(ctx, done) {
 function rearrangeCard(ctx, i) {
   const S = ctx.S, lm = L(), p = i >= 0 ? S.plots[i] : null, why = i >= 0 ? lm.moveWhySource(S, i) : '';
   const go = () => { ctx.closeAll(); const r = ctx.game.rearr; if (!r) return U.toast('Rearranging is not available here', { kind: 'bad' }); r.start(i >= 0 ? { lift: i } : {}); };
-  const btn = U.button({ label: i >= 0 ? 'Move this building' : 'Rearrange buildings', sub: i >= 0 && !why ? `from ${fmt(lm.moveQuote(S, i, S.plots.findIndex((q, k) => !q && k < S.rows * lm.COLS) >= 0 ? S.plots.findIndex((q, k) => !q && k < S.rows * lm.COLS) : (i + 1) % (S.rows * lm.COLS)).gold)} gold, 1 to 3 weeks` : undefined, icon: 'hammer', variant: why ? 'ghost' : 'bronze', block: true, onClick: () => { if (why) { ctx.sfx('uiError'); return U.toast(why, { kind: 'bad' }); } go(); } });
+  const btn = U.button({ label: i >= 0 ? 'Move this building' : 'Rearrange buildings', icon: 'hammer', variant: why ? 'ghost' : 'bronze', block: true, onClick: () => { if (why) { ctx.sfx('uiError'); return U.toast(why, { kind: 'bad' }); } go(); } });
   btn.dataset.tut = 'rearrange-open';
   return card([row([medal('hammer', 'dark'), col([h('div', 'ax-b', i >= 0 ? 'Move or swap' : 'Rearrange your ludus'), note(why || (i >= 0 ? 'Lift this building and set it down on an empty plot, or swap it with another. The crew rebuilds it: you pay gold and its perks pause for 1 to 3 weeks.' : 'Move or swap buildings to build better neighborhoods. Each move costs gold and 1 to 3 weeks of construction. You can undo it in the same week.'))], 'ax-grow')]), btn]);
 }
