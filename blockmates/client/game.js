@@ -8,6 +8,8 @@ import { UI } from './ui.js';
 import { clamp, daylight } from '../shared/util.js';
 import { SKINS } from './art.js';
 import { JOBS } from '../server/npcs.js';
+import { Tutorial } from './tutorial.js';
+import { phaseOf } from '../shared/util.js';
 
 const INTERACTIVE = new Set(['door_closed', 'door_open', 'door_top_closed', 'door_top_open', 'chest', 'sign', 'bed', 'waystone']);
 const PARTICLE_CAP = 600;
@@ -19,6 +21,8 @@ export class Game {
     this.r = new Renderer(canvas);
     this.sound = new Sound();
     this.ui = new UI(this);
+    this.tut = new Tutorial(this);
+    this.weather = { kind: '', k: 0 };
     this.reset();
     this.zoom = clamp(window.innerHeight / (22 * 32), 0.7, 1.6);
     this.keys = new Set(); this.touchKeys = 0; this.touchMode = 'mine';
@@ -184,6 +188,7 @@ export class Game {
       case 'eat': if (vol) this.sound.play('eat'); break;
       case 'tp': if (vol) { this.sound.play('tp'); this.sparkle(x, y, '#7ad8ff', 22); } break;
       case 'swing': if (vol) this.sound.play('swing'); break;
+      case 'slam': if (vol) { this.sound.play('slam'); this.shake = Math.max(this.shake, 0.6); this.dust(x, y + 0.5, 14); } break;
       case 'shoot': if (vol) this.sound.play('shoot'); break;
       case 'thunk': if (vol) this.sound.play('thunk'); break;
       case 'toolbreak': if (vol) { this.sound.play('toolbreak'); this.burst(x, y, '#aaa', 8, 0.2); } break;
@@ -209,7 +214,7 @@ export class Game {
     addEventListener('mouseup', (e) => { if (e.button === 0) this.mouse.l = false; if (e.button === 2) this.mouse.r = false; });
     cv.addEventListener('mousemove', (e) => { this.mouse.x = e.offsetX; this.mouse.y = e.offsetY; });
     cv.addEventListener('contextmenu', (e) => e.preventDefault());
-    addEventListener('mousemove', (e) => { const t = this.ui.tip; if (t.classList.contains('on')) { t.style.left = e.clientX + 14 + 'px'; t.style.top = e.clientY + 14 + 'px'; } });
+    addEventListener('mousemove', (e) => { this.lastMouse = { x: e.clientX, y: e.clientY }; const t = this.ui.tip; if (t.classList.contains('on')) { t.style.left = e.clientX + 14 + 'px'; t.style.top = e.clientY + 14 + 'px'; } });
     cv.addEventListener('wheel', (e) => {
       e.preventDefault();
       if (e.ctrlKey) { this.zoom = clamp(this.zoom * (e.deltaY < 0 ? 1.1 : 0.9), 0.5, 2.2); return; }
@@ -240,6 +245,8 @@ export class Game {
       if (k === 'v' && !e.repeat) { this.emoteN = (this.emoteN || 0) % 9 + 1; this.send({ t: 'emote', e: this.emoteN }); return; }
       if (k === '+' || k === '=') { this.zoom = clamp(this.zoom * 1.1, 0.5, 2.2); return; }
       if (k === '-') { this.zoom = clamp(this.zoom / 1.1, 0.5, 2.2); return; }
+      if (k === 'h') { this.tut.toggle(); return; }
+      if (k === 'm') { this.ui.worldMap(); e.preventDefault(); return; }
       if (k === 'F2') { this.photo(); e.preventDefault(); return; }
       if (k === 'F3') { this.debug = !this.debug; e.preventDefault(); return; }
       if (k === ' ' || k.startsWith('Arrow')) e.preventDefault();
@@ -422,11 +429,27 @@ export class Game {
       this.stations = st;
       if (changed && this.ui.open === 'inv') this.ui.renderPanel();
     }
+    this.updateWeather(dt);
+    this.tut.update(dt, this.ui.root);
     this.mapT -= dt;
     if (this.mapT <= 0) { this.mapT = 0.35; this.ui.drawMap(); }
     // music mood
     const surf = me.y < 90;
     this.sound.setMode(this.under ? 'water' : !surf && me.y > 110 ? 'cave' : daylight(this.time) < 0.35 ? 'night' : 'day');
+  }
+  updateWeather(dt) {
+    const day = this.day, ph = phaseOf(this.time);
+    const h = (Math.sin(day * 12.9898 + 4.1) * 43758.5453) % 1, hh = Math.abs(h);
+    let target = 0;
+    if (hh < 0.34) { const start = 0.04 + ((hh * 37) % 1) * 0.5, dur = 0.22; const t = (ph - start) / dur; if (t > 0 && t < 1) target = Math.min(1, Math.sin(t * Math.PI) * 2.2); }
+    const b = this.biome;
+    let kind = b === 'tundra' ? 'snow' : b === 'desert' ? '' : 'rain';
+    if (b === 'mountains' && this.me.y < 70) kind = 'snow';
+    if (this.me.y > 100 || this.under) target = 0;
+    if (!kind) target = 0;
+    this.weather.k += (target - this.weather.k) * Math.min(1, dt * 0.6);
+    if (target > 0 || this.weather.k < 0.02) this.weather.kind = kind || this.weather.kind;
+    this.sound.setRain(this.weather.kind === 'rain' ? this.weather.k : 0);
   }
   biomeAt(x) {
     // cheap client-side biome guess from what is under the player: only used for the hill colours

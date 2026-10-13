@@ -1,5 +1,5 @@
 // DOM interface: hotbar, vitals, inventory + crafting, chests, chat, minimap, menus.
-import { ITEMS, BLOCKS, RECIPES, PLAYER, I } from '../shared/data.js';
+import { ITEMS, BLOCKS, RECIPES, PLAYER, I, MOBS, W, H } from '../shared/data.js';
 import { JOB_COL } from './render.js';
 import { itemIcon, drawChar, SKINS, HAIRS, SHIRTS, PANTS, HAIR_STYLES } from './art.js';
 
@@ -47,6 +47,7 @@ export class UI {
       if (e.key === 'Enter') { const t = this.chatIn.value.trim(); if (t) this.G.send({ t: 'chat', text: t }); this.closeChat(); }
       else if (e.key === 'Escape') this.closeChat();
     };
+    this.boss = el('div', 'bossbar', r); this.boss.innerHTML = '<b></b><div><i></i></div>';
     this.toast = el('div', 'toast', r);
     this.players = el('div', 'playerlist', r);
     this.tip = el('div', 'tip', r);
@@ -92,6 +93,10 @@ export class UI {
     // chat fade
     const now = performance.now();
     for (const c of this.chatLog.children) c.classList.toggle('old', !this.chatOpen && now - c._t > 9000);
+    let boss = null;
+    for (const m of G.mobs.values()) if (MOBS[m.type].boss) boss = m;
+    this.boss.classList.toggle('on', !!boss);
+    if (boss) { this.boss.firstChild.textContent = MOBS[boss.type].name; this.boss.querySelector('i').style.width = Math.max(0, boss.hp / MOBS[boss.type].hp * 100) + '%'; }
     this.players.classList.toggle('on', G.showPlayers);
     if (G.showPlayers) {
       this.players.innerHTML = `<h3>${G.worldName} <small>${G.players.size} online</small></h3>` + [...G.players.values()].map((p) => `<div class="pl"><canvas width="26" height="34" data-id="${p.id}"></canvas><b>${esc(p.name)}</b><span>${p.id === G.myId ? G.ping + ' ms' : ''}</span></div>`).join('');
@@ -214,6 +219,7 @@ export class UI {
   }
   showTip(st) {
     if (!st) { this.tip.classList.remove('on'); return; }
+    if (this.G.lastMouse) { this.tip.style.left = this.G.lastMouse.x + 14 + 'px'; this.tip.style.top = this.G.lastMouse.y + 14 + 'px'; }
     const def = ITEMS[st.id];
     let h = `<b>${def.label}</b>`;
     if (def.tool && def.tool !== 'sword' && def.tool !== 'bow') h += `<br>${def.tool} · power ${def.power.toFixed(1)} · tier ${def.tier}`;
@@ -307,6 +313,25 @@ export class UI {
       m.querySelector('#vz').oninput = (e) => { G.zoom = e.target.value / 100; };
       m.querySelector('#mok').onclick = () => this.hideModal();
       m.querySelector('#mleave').onclick = () => { this.hideModal(); G.leave(); };
+    });
+  }
+
+  worldMap() {
+    const G = this.G;
+    if (this.modalOpen && this.modal.querySelector('#bigmap')) { this.hideModal(); return; }
+    G.cw.paintMap();
+    this.showModal('<div class="card wide"><h2>World map</h2><canvas id="bigmap"></canvas><div class="btns"><button id="mno">Close</button></div></div>', (m) => {
+      const cv = m.querySelector('#bigmap'); cv.width = W; cv.height = H;
+      const g = cv.getContext('2d');
+      g.imageSmoothingEnabled = false; g.drawImage(G.cw.map, 0, 0);
+      g.strokeStyle = '#000'; g.lineWidth = 3;
+      for (const p of G.players.values()) {
+        g.fillStyle = p === G.me || p.id === G.myId ? '#ffffff' : '#ffe14a';
+        const x = p.x, y = p.y - 1; g.beginPath(); g.arc(x, y, 5, 0, 7); g.fill(); g.stroke();
+        g.font = 'bold 18px sans-serif'; g.fillStyle = '#fff'; g.strokeText(p.name, x + 8, y - 6); g.fillText(p.name, x + 8, y - 6);
+      }
+      for (const [k, mt] of G.cw.meta) if (mt.k === 'waystone') { const [x, y] = k.split(',').map(Number); g.fillStyle = '#7ad8ff'; g.fillRect(x - 3, y - 6, 6, 8); }
+      m.querySelector('#mno').onclick = () => this.hideModal();
     });
   }
 

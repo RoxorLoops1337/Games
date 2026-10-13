@@ -71,6 +71,9 @@ body.playing #menu{display:none}
 .craft .tools input{flex:1 1 100%;padding:6px 10px;border-radius:8px;border:2px solid #8a6a3a;background:#fff8e4;font:inherit;outline:none}
 .craft .tools button{border:2px solid #8a6a3a;background:#e9d3a3;border-radius:8px;padding:2px 9px;font:inherit;font-size:13px;cursor:pointer;color:var(--ink)}
 .craft .tools button.on{background:var(--pop)}
+.goal{position:absolute;left:50%;top:10px;transform:translateX(-50%);max-width:min(620px,70vw);background:rgba(20,14,30,.62);color:#fff;border-radius:14px;padding:6px 14px;font-size:14px;font-weight:500;pointer-events:none;text-align:center;text-shadow:0 1px 2px #000}.goal small{color:var(--pop);font-weight:700;margin-right:6px}.goal i{opacity:.55;font-size:11px}
+.bossbar{position:absolute;left:50%;top:56px;transform:translateX(-50%);width:min(420px,70vw);text-align:center;color:#fff;font-weight:700;text-shadow:0 2px 3px #000;display:none;pointer-events:none}.bossbar.on{display:block}.bossbar div{height:14px;border-radius:8px;background:rgba(0,0,0,.6);border:2px solid #fff;overflow:hidden}.bossbar i{display:block;height:100%;background:linear-gradient(#ff7a3a,#d0301a)}
+.card.wide{max-width:96vw}.card.wide canvas{width:min(1500px,88vw);image-rendering:pixelated;border:3px solid var(--wood-d);border-radius:10px;background:#000}
 .tradecols{display:flex;gap:18px}.tcol{padding:8px;border-radius:12px;background:rgba(255,255,255,.35);border:3px solid transparent}.tcol.ok{border-color:var(--good)}.panel .grid.three{grid-template-columns:repeat(3,48px)}.way.cur{border-color:var(--pop);background:#fff2c0}
 .recipes{overflow-y:auto;max-height:52vh;display:flex;flex-direction:column;gap:4px;padding-right:4px}
 .rec{display:flex;gap:8px;align-items:center;padding:4px 8px;border-radius:10px;background:rgba(255,255,255,.35);border:2px solid transparent;cursor:pointer;opacity:.62}

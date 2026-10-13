@@ -59,11 +59,21 @@ export class Sound {
       case 'hiss': this.noise(0.5, 0.25, 4000, 0.4, 'highpass'); break;
       case 'toolbreak': this.tone(400, 0.25, 'square', 0.15, 0.3); this.noise(0.2, 0.3, 1200, 1); break;
       case 'thunk': this.noise(0.05, 0.25, 400, 2); break;
+      case 'slam': this.tone(70, 0.6, 'sine', 0.5, 0.4); this.noise(0.5, 0.5, 200, 0.7); break;
       case 'step': this.noise(0.04, 0.07 * (a || 1), 350 * r(), 1.5); break;
       default:
     }
   }
   setMode(m) { this.mode = m; }
+  setRain(k) {
+    if (!this.ctx) return;
+    if (!this.rainSrc) {
+      const s = this.ctx.createBufferSource(), f = this.ctx.createBiquadFilter(), g = this.ctx.createGain();
+      s.buffer = this.noiseBuf; s.loop = true; f.type = 'bandpass'; f.frequency.value = 3200; f.Q.value = 0.5; g.gain.value = 0;
+      s.connect(f); f.connect(g); g.connect(this.sfx); s.start(); this.rainSrc = s; this.rainGain = g;
+    }
+    this.rainGain.gain.value = k * 0.22;
+  }
   musicTick() {
     if (!this.ctx || !this.musicOn || this.ctx.state !== 'running') return;
     const now = this.ctx.currentTime;

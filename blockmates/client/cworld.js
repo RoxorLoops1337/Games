@@ -13,6 +13,8 @@ export class CWorld {
     this.dirty = new Set();
     this.skyTop = new Int16Array(W).fill(-1); // first opaque row per column (-1 = unknown)
     this.ver = 0;
+    this.map = document.createElement('canvas'); this.map.width = W; this.map.height = H; // everything ever seen, one pixel per tile
+    this.mapDirty = new Set();
   }
   hasChunk(cx) { return this.chunks.has(cx); }
   fgAt(x, y) {
@@ -36,6 +38,7 @@ export class CWorld {
     this.chunks.set(cx, l);
     for (let lx = 0; lx < CHUNK; lx++) this.recomputeSky(cx * CHUNK + lx);
     for (const m of meta || []) this.meta.set(m[0] + ',' + m[1], m[2]);
+    this.mapDirty.add(cx);
     this.dirtyChunk(cx);
     for (const n of [cx - 1, cx + 1]) if (this.chunks.has(n)) this.dirtyChunk(n); // borders shade against neighbours
     this.ver++;
@@ -54,6 +57,7 @@ export class CWorld {
     const i = (x % CHUNK) * H + y;
     if (arr[i] === v) return;
     arr[i] = v;
+    this.mapDirty.add((x / CHUNK) | 0);
     if (l === 0) this.recomputeSky(x);
     if (l === 2) { this.dirtyLiq = true; this.ver++; return; }
     const sx = Math.floor(x / SEC), sy = Math.floor(y / SEC);
@@ -73,6 +77,30 @@ export class CWorld {
     let y = 0;
     for (; y < H; y++) { const id = c.fg[col + y]; if (id && BLOCKS[id].solid && id !== B.glass) break; }
     this.skyTop[x] = y;
+  }
+
+  // repaint the remembered map for chunks that changed since the last call
+  paintMap() {
+    if (!this.mapDirty.size) return;
+    const g = this.map.getContext('2d');
+    for (const cx of this.mapDirty) {
+      const c = this.chunks.get(cx);
+      if (!c) continue;
+      const img = g.createImageData(CHUNK, H), d = img.data;
+      for (let lx = 0; lx < CHUNK; lx++) for (let y = 0; y < H; y++) {
+        const i = lx * H + y, o = (y * CHUNK + lx) * 4;
+        const fg = c.fg[i], lq = c.liq[i];
+        let col;
+        if (fg) col = BLOCKS[fg].color;
+        else if (lq) col = (lq >> 4) === L_LAVA ? '#ff6a1a' : '#3a86e0';
+        else if (c.bg[i]) col = '#2a2840';
+        else col = y < 92 ? '#8fd0ff' : '#1a1a28';
+        const n = parseInt(col.slice(1), 16);
+        d[o] = (n >> 16) & 255; d[o + 1] = (n >> 8) & 255; d[o + 2] = n & 255; d[o + 3] = 255;
+      }
+      g.putImageData(img, cx * CHUNK, 0);
+    }
+    this.mapDirty.clear();
   }
 
   // -------------------------------------------------------------- section painting

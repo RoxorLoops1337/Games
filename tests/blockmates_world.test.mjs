@@ -290,4 +290,37 @@ test('chat commands and rate limit', () => {
   assert.ok(b.out.filter((o) => o.t === 'toast').length > 0, 'rate limited');
 });
 
+test('operators can teleport to a safe spot, summon creatures, and the sigil wakes a boss only deep down', () => {
+  const w = new World({ seed: 5 });
+  const c = client(w, 'Boss'); run(w, 30);
+  w.message(c.id, { t: 'chat', text: '/goto 700 160' });
+  const p = c.p();
+  assert.ok(!w.solidAt(Math.floor(p.x), Math.floor(p.y - 0.5)) && w.solidAt(Math.floor(p.x), Math.floor(p.y + 0.1)), 'standing on a floor in open air');
+  w.message(c.id, { t: 'chat', text: '/summon hoppit' });
+  assert.ok([...w.mobs.values()].some((m) => m.type === 'hoppit'));
+  // sigil on the surface does nothing
+  w.message(c.id, { t: 'chat', text: '/goto plains' });
+  w.addItem(p, I.warden_sigil, 1);
+  const si = p.inv.findIndex((q) => q && q.id === I.warden_sigil);
+  w.message(c.id, { t: 'use', i: si });
+  assert.ok(![...w.mobs.values()].some((m) => m.type === 'stonewarden'), 'not on the surface');
+  assert.equal(w.countItem(p, I.warden_sigil), 1);
+  // deep: carve a hall and use it
+  const hx = Math.floor(p.x) + 200, hy = 150;
+  for (let x = hx - 14; x <= hx + 14; x++) for (let y = hy - 8; y <= hy; y++) { w.setTile(x, y, 0, 0); w.setTile(x, y, 2, 0); }
+  for (let x = hx - 14; x <= hx + 14; x++) w.setTile(x, hy + 1, 0, B.stone);
+  p.x = hx + 0.5; p.y = hy + 1 - 0.01; p.vx = p.vy = 0; run(w, 5);
+  w.message(c.id, { t: 'use', i: si });
+  const boss = [...w.mobs.values()].find((m) => m.type === 'stonewarden');
+  assert.ok(boss, 'warden woke');
+  assert.equal(w.countItem(p, I.warden_sigil), 0, 'sigil used up');
+  // it walks toward the player and slams: the player loses health
+  const hp0 = p.hp;
+  boss.x = hx + 6.5; boss.y = hy + 1 - 0.01;
+  run(w, 30 * 8);
+  assert.ok(p.hp < hp0 || p.dead, 'the warden hurt the player');
+  w.message(c.id, { t: 'chat', text: '/summon stonewarden' });
+  assert.equal([...w.mobs.values()].filter((m) => m.type === 'stonewarden').length >= 1, true);
+});
+
 console.log(`\n${passed} passed`);

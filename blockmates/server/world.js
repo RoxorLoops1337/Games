@@ -9,7 +9,7 @@ import { stepBody, K_LEFT } from '../shared/physics.js';
 import { packLayers, unpackLayers } from '../shared/codec.js';
 import { daylight, clamp } from '../shared/util.js';
 import { stepLiquids, activateAround } from './liquid.js';
-import { spawnTick, updateMob, damageMob } from './mobs.js';
+import { spawnTick, updateMob, damageMob, spawnMob } from './mobs.js';
 import { spawnNpc, updateNpc, setJob, JOBS, MAX_BUDDIES } from './npcs.js';
 
 const NC = W / CHUNK;
@@ -175,7 +175,7 @@ export class World {
       keys: 0, seq: 0, hp: PLAYER.hp, food: PLAYER.food, breath: 10, sel: 0,
       inv: new Array(SLOTS).fill(null), armor: [null, null, null],
       spawnPt: { x: sp.x, y: sp.y }, dead: false, respawnAt: 0, mining: null, atkCd: 0, hurtCd: 0,
-      known: new Set(), openChest: null, chatBudget: 5, foodT: 0, regenT: 0, lastAct: this.tick_n, sleeping: false, kills: 0, deaths: 0,
+      known: new Set(), openChest: null, chatBudget: 8, foodT: 0, regenT: 0, lastAct: this.tick_n, sleeping: false, kills: 0, deaths: 0,
       swing: 0, emote: '', emoteT: 0, shootCd: 0, ping: 0,
     };
     if (acc && acc.inv) {
@@ -699,6 +699,34 @@ export class World {
     }
   }
 
+  // nearest cell to (x,y) where a person can stand (open air above a floor), searching up and down in the column and beside it
+  safeSpot(x, y) {
+    for (let r = 0; r < 40; r++) for (const dx of r ? [0, -r, r] : [0]) for (const dy of [0, -1, 1].map((v) => v * r)) {
+      const xx = x + dx, yy = y + dy;
+      if (xx < 2 || xx >= W - 2 || yy < 3 || yy >= H - 3) continue;
+      if (!this.solidAt(xx, yy) && !this.solidAt(xx, yy - 1) && this.solidAt(xx, yy + 1) && !this.liqAt(xx, yy)) return { x: xx + 0.5, y: yy + 1 - 0.01 };
+    }
+    return { x: x + 0.5, y };
+  }
+  summonBoss(p, slot) {
+    if (p.dead) return;
+    if (p.y < SEA + 40) return this.send(p.id, { t: 'toast', text: 'The sigil only stirs deep underground.' });
+    for (const m of this.mobs.values()) if (m.type === 'stonewarden') return this.send(p.id, { t: 'toast', text: 'A Warden already walks this world.' });
+    // find a roomy spot to one side
+    let sx = null;
+    for (const d of [8, -8, 10, -10, 6, -6, 12, -12]) {
+      const x = Math.floor(p.x + d), y = Math.floor(p.y - 0.01);
+      let free = this.solidAt(x, y + 1) || this.solidAt(x - 1, y + 1);
+      for (let dx = -1; dx <= 1 && free; dx++) for (let dy = 0; dy <= 3; dy++) if (this.solidAt(x + dx, y - dy)) { free = false; break; }
+      if (free) { sx = x + 0.5; break; }
+    }
+    if (sx === null) return this.send(p.id, { t: 'toast', text: 'No room for it here. Find a bigger cave.' });
+    const s = p.inv[slot]; s.n--; if (!s.n) p.inv[slot] = null; p.invDirty = true;
+    spawnMob(this, 'stonewarden', sx, p.y);
+    this.sysChat(`${p.name} woke the Stone Warden!`);
+    this.event('slam', sx, p.y - 1);
+  }
+
   // ------------------------------------------------------------ chat and commands
   chatMsg(p, text) {
     text = String(text || '').replace(/[\u0000-\u001f]/g, '').slice(0, 160).trim();
@@ -713,7 +741,7 @@ export class World {
     const op = this.ops.has(p.name.toLowerCase());
     const say = (text) => this.send(p.id, { t: 'chat', from: '', text, sys: true });
     switch (cmd.toLowerCase()) {
-      case 'help': return say('/who, /spawn, /me text, /home, /time (op), /tp name (op), /goto place|x y (op), /give item n (op), /pvp (op), /kick name (op)');
+      case 'help': return say('/who, /spawn, /me text, /home, /time (op), /tp name (op), /goto place|x y (op), /summon mob (op), /give item n (op), /pvp (op), /kick name (op)');
       case 'who': return say('Online: ' + [...this.players.values()].map((o) => o.name).join(', '));
       case 'me': return this.broadcast({ t: 'chat', from: '', text: `* ${p.name} ${a.join(' ')}`, sys: true });
       case 'spawn': case 'home': p.x = p.spawnPt.x; p.y = p.spawnPt.y; p.vx = p.vy = 0; return this.send(p.id, { t: 'respawn', x: p.x, y: p.y });
@@ -744,8 +772,15 @@ export class World {
           y = this.terrain.surface(x) - 3;
           if (want === 'ocean') y = SEA - 2;
         }
-        p.x = x + 0.5; p.y = y; p.vx = p.vy = 0; p.known.clear();
+        const sp = this.safeSpot(x, y);
+        p.x = sp.x; p.y = sp.y; p.vx = p.vy = 0; p.known.clear();
         return this.send(p.id, { t: 'respawn', x: p.x, y: p.y });
+      }
+      case 'summon': {
+        if (!op) return say('Only operators can do that.');
+        const t = (a[0] || '').toLowerCase();
+        if (!MOBS[t]) return say('Creatures: ' + Object.keys(MOBS).join(', '));
+        spawnMob(this, t, p.x + 5 * p.dir, p.y); return say('Summoned.');
       }
       case 'give': {
         if (!op) return say('Only operators can do that.');
@@ -779,7 +814,7 @@ export class World {
     if (this.tick_n % TICK === 0) this.tradeCheck();
     for (const a of [...this.arrows.values()]) this.tickArrow(a);
     if (this.tick_n % 3 === 0) stepLiquids(this, 600);
-    if (this.tick_n % TICK === 0) { spawnTick(this); this.randomTicks(); for (const p of this.players.values()) p.chatBudget = Math.min(5, p.chatBudget + 1); }
+    if (this.tick_n % TICK === 0) { spawnTick(this); this.randomTicks(); for (const p of this.players.values()) p.chatBudget = Math.min(8, p.chatBudget + 2); }
     if (this.tick_n % 2 === 0) this.snapshots();
     this.flushTiles();
     for (const p of this.players.values()) if (p.invDirty) this.sendInv(p);
@@ -1035,6 +1070,7 @@ const HANDLERS = {
     if (!int(m.i, 0, SLOTS - 1)) return;
     const s = p.inv[m.i]; if (!s) return;
     const def = ITEMS[s.id];
+    if (def.name === 'warden_sigil') { w.summonBoss(p, m.i); return; }
     if (def.food && p.food < 20) {
       p.food = Math.min(20, p.food + def.food); if (def.heal) p.hp = Math.min(PLAYER.hp, p.hp + def.heal);
       s.n--; if (!s.n) p.inv[m.i] = null; p.invDirty = true; w.event('eat', p.x, p.y - 1);

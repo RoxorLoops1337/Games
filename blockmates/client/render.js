@@ -188,7 +188,7 @@ export class Renderer {
     if (!L) return;
     if (this.lm.width !== vw || this.lm.height !== vh) { this.lm.width = this.gm.width = vw; this.lm.height = this.gm.height = vh; }
     const dl = daylight(G.time);
-    const skyF = 0.27 + 0.73 * dl;
+    const skyF = (0.27 + 0.73 * dl) * (1 - 0.25 * G.weather.k);
     const img = this.lg.createImageData(vw, vh), glow = this.gg.createImageData(vw, vh);
     const d = img.data, gd = glow.data;
     const stride = L.w;
@@ -363,6 +363,23 @@ export class Renderer {
     g.globalAlpha = 1;
   }
 
+  drawWeather(G) {
+    const k = G.weather.k;
+    if (k < 0.03) return;
+    const g = this.g, w = this.w, h = this.h, t = G.t;
+    if (G.cam.y > SEA + 12) return;
+    g.fillStyle = `rgba(30,44,80,${0.22 * k})`; g.fillRect(0, 0, w, h);
+    const n = Math.floor(k * 170);
+    if (G.weather.kind === 'snow') {
+      g.fillStyle = 'rgba(255,255,255,0.85)';
+      for (let i = 0; i < n; i++) { const x = ((i * 97.3 + t * 18 * ((i % 5) + 1) + Math.sin(t + i) * 22) % (w + 20) + w + 20) % (w + 20), y = ((i * 53.7 + t * (45 + (i % 7) * 9) * this.dpr) % h + h) % h; g.beginPath(); g.arc(x, y, (1.2 + (i % 3) * 0.7) * this.dpr, 0, 7); g.fill(); }
+    } else {
+      g.strokeStyle = 'rgba(190,215,255,0.55)'; g.lineWidth = this.dpr; g.beginPath();
+      for (let i = 0; i < n * 1.4; i++) { const x = ((i * 91.7 + t * 120) % (w + 60) + w + 60) % (w + 60) - 30, y = ((i * 47.9 + t * (700 + (i % 5) * 90) * this.dpr) % h + h) % h; g.moveTo(x, y); g.lineTo(x - 5 * this.dpr, y + 16 * this.dpr); }
+      g.stroke();
+    }
+  }
+
   // sunbeam tint and damage flash on top of everything
   drawScreenFx(G) {
     const g = this.g;
@@ -386,6 +403,7 @@ export class Renderer {
     this.drawOverlays(G);
     this.drawParticles(G);
     this.drawNames(G);
+    this.drawWeather(G);
     this.drawScreenFx(G);
   }
 }

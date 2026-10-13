@@ -98,7 +98,8 @@ export function updateMob(world, m) {
     const dd = (p.x - m.x) ** 2 + (p.y - m.y) ** 2;
     if (dd < td) { td = dd; tp = p; }
   }
-  if (!tp || td > 110 * 110) { if (td > 110 * 110 || !tp) { world.mobs.delete(m.id); return; } }
+  if (!tp) { if (!d.boss) world.mobs.delete(m.id); return; }
+  if (td > (d.boss ? 200 : 110) ** 2) { world.mobs.delete(m.id); return; }
   let keys = 0;
   const light = daylight(world.time);
   if (d.swim) {
@@ -115,7 +116,7 @@ export function updateMob(world, m) {
     return;
   }
   const hostile = d.hostile;
-  const near = tp && td < 18 * 18;
+  const near = tp && td < (d.boss ? 36 : 18) ** 2;
   if (a.fleeT > 0) { a.fleeT -= DT; keys |= a.fleeDir > 0 ? K_RIGHT : K_LEFT; if (!hostile && m.onGround && m.hitWall) keys |= K_JUMP; }
   else if (hostile && near && !(m.type === 'gloomling' && light > 0.6)) {
     keys |= tp.x > m.x ? K_RIGHT : K_LEFT;
@@ -144,6 +145,13 @@ export function updateMob(world, m) {
       a.cd = 1;
       world.hurtPlayer(tp, d.dmg, d.name, Math.sign(tp.x - m.x) || 1);
     }
+  }
+  // the Stone Warden slams the ground: everyone standing nearby is hurt and thrown
+  if (d.boss && a.cd2 !== undefined) a.cd2 -= DT; else if (d.boss) a.cd2 = 4;
+  if (d.boss && a.cd2 <= 0 && m.onGround && near) {
+    a.cd2 = 5;
+    world.event('slam', m.x, m.y - 0.5);
+    for (const p of world.players.values()) if (!p.dead && p.onGround && Math.abs(p.x - m.x) < 7 && Math.abs(p.y - m.y) < 3) world.hurtPlayer(p, d.dmg - 1, d.name, Math.sign(p.x - m.x) || 1);
   }
   // gloomlings burn in the sun
   if (m.type === 'gloomling' && light > 0.7 && world.tick_n % TICK === 0 && world.sky(Math.floor(m.x), Math.floor(m.y - 1))) {
