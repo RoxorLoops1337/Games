@@ -189,7 +189,7 @@ const SKIP_IN_DIST = {
   // Battle Call: the Worker and its config deploy by hand (wrangler), never with the Pages site
   battle_call: new Set(['server', 'package.json', '.assetsignore']),
   // Hearthvale: the Node server and its saves run elsewhere, never with the Pages site
-  hearthvale: new Set(['server', 'package.json', 'data']),
+  hearthvale: new Set(['server', 'package.json', 'data', 'lab', 'ART_BIBLE.md']),
 };
 
 const copyStatic = () => {

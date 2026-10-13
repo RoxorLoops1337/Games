@@ -1,0 +1,12 @@
+<!doctype html><meta charset="utf-8">
+<script type="importmap">{ "imports": { "three": "../vendor/three.module.min.js", "three/addons/": "../vendor/jsm/" } }</script>
+<script type="module">
+import * as K from '../art/artkit.js'; import { mountStage } from './stage.js'; import { P } from '../art/palette.js';
+const st = mountStage(); const items = [K.rbox(1.5, 1, 1.5, P.plasterWarm), K.group(K.cyl(0.6, 0.7, 1, P.stone), K.cone(0.9, 0.8, P.roofRed, 0, 1, 0, { seg: 8 })), K.blob(0.8, P.leaf, 0, 0.8, 0, { seed: 3 }), K.group(K.rbox(1.6, 0.8, 1.4, P.plaster), K.gable(1.8, 0.9, 1.7, P.roofBlue, 0, 0.8)), K.ball(0.6, P.gold, 0, 0.6, 0), K.lathe([[0, 0], [0.7, 0.05], [0.8, 0.6], [0.6, 0.9]], P.wood)];
+st.grid(items, 6, 3); st.look.dist = 10; st.ready();
+</script>
+<script type="module">
+import * as K from '../art/artkit.js';
+const g = K.group(K.rbox(1,1,1,'#fff'), K.cone(1,1,'#f00',0,1,0), K.ball(.3,'#0f0',0,0.5,1), Object.assign(K.cyl(.1,.1,1,'#00f'),{name:'spin'}));
+const m = K.mergeStatic(g); console.log('merged meshes', g.children.length, '->', m.children.length); window.__merge = m.children.length;
+</script>
