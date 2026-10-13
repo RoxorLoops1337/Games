@@ -7,7 +7,7 @@
 //   arena.setDensity(0..1) crowd LOD        arena.DIM  dimensions        arena.shadowHint {center, radius}
 // Draw calls: ~28 (+ shadow pass). Crowd = 1 InstancedMesh animated in the vertex shader (zero CPU per frame).
 import * as THREE from 'three';
-import { mergeGeos, prepGeo, colorize, boxGeo, patchMaterial, createFlames, createBlobShadows, createDustMotes } from './envfx.js';
+import { mergeGeos, prepGeo, colorize, boxGeo, patchMaterial, bakeInstances, createFlames, createBlobShadows, createDustMotes } from './envfx.js';
 import { makeSandTexture, makeStoneTexture, makeMarbleTexture, tfbm, tnoise } from './envtex.js';
 import { TOD, applyTOD } from './sky.js';
 
@@ -387,6 +387,10 @@ export function createArena({ crowd = 3700, density = 1, decalRes = 2048, seed =
   }
 
   // ---------------- void arches, archivolts, columns, windows, niches ----------------
+  // PERF: every static repeated piece is BAKED into the mesh that shares its material (stone, void/dark MeshBasic, bronze) instead of one InstancedMesh each:
+  // 14 fewer draw calls (the stone and its casters are drawn twice with the shadow pass). bakeIM(im) = the instances' geometry transformed by their matrices.
+  const bakeIM = bakeInstances;
+  const stoneParts = [], voidParts = [], bronzeParts = [], tunParts = [];
   const voidMat = new THREE.MeshBasicMaterial({ vertexColors: true, color: 0xffffff });
   const archBase = archShape(1.15, 2.9, 1.15), voidGeo = new THREE.ShapeGeometry(archBase, 6);
   { const p = voidGeo.attributes.position, c = []; for (let i = 0; i < p.count; i++) { const t = Math.min(1, p.getY(i) / 4); c.push(0.012 + 0.05 * t, 0.009 + 0.03 * t, 0.02 + 0.045 * t); } voidGeo.setAttribute('color', new THREE.Float32BufferAttribute(c, 3)); }
@@ -398,7 +402,7 @@ export function createArena({ crowd = 3700, density = 1, decalRes = 2048, seed =
   const inner = arcThetas(dIn, BAYS, 0.5);
   for (let i = 0; i < BAYS; i++) archM.push(ringMatrix(dIn, inner.thetas[i], 12.7, { inward: true, dOff: -0.04, scale: 0.98 }));
   const voidMesh = new THREE.InstancedMesh(voidGeo, voidMat, archM.length); archM.forEach((m, i) => voidMesh.setMatrixAt(i, m)); voidMesh.name = 'arch_voids';
-  group.add(voidMesh);
+  voidParts.push(...bakeIM(voidMesh));
   // archivolt (stone ring around each opening)
   const hole = new THREE.Path(); hole.moveTo(-1.15, 0); hole.lineTo(-1.15, 2.9); hole.absellipse(0, 2.9, 1.15, 1.15, Math.PI, 0, true); hole.lineTo(1.15, 0); hole.lineTo(-1.15, 0);
   const ringShape = new THREE.Shape(); ringShape.moveTo(-1.5, 0); ringShape.lineTo(1.5, 0); ringShape.lineTo(1.5, 2.9); ringShape.absellipse(0, 2.9, 1.5, 1.5, 0, Math.PI, false); ringShape.lineTo(-1.5, 0); ringShape.holes.push(hole);
@@ -406,24 +410,25 @@ export function createArena({ crowd = 3700, density = 1, decalRes = 2048, seed =
   { const c = ringGeo.attributes.color, p = ringGeo.attributes.position; for (let i = 0; i < p.count; i++) { const k = 0.8 + 0.2 * Math.min(1, p.getY(i) / 4); c.setXYZ(i, k, k, k); } }
   const ringMesh = new THREE.InstancedMesh(ringGeo, stoneMat, archM.length); ringMesh.castShadow = ringMesh.receiveShadow = true;
   archM.forEach((m, i) => { const mm = m.clone(); const p = new THREE.Vector3(), q = new THREE.Quaternion(), sc = new THREE.Vector3(); mm.decompose(p, q, sc); const fwd = new THREE.Vector3(0, 0, 1).applyQuaternion(q); p.addScaledVector(fwd, -0.05); ringMesh.setMatrixAt(i, new THREE.Matrix4().compose(p, q, sc)); });
-  group.add(ringMesh);
+  stoneParts.push(...bakeIM(ringMesh));
   // engaged half-columns between the arches (3 tiers) + attic windows
   const colGeo = prepGeo(new THREE.CylinderGeometry(0.34, 0.4, TIER - 0.5, 10, 1), { uvScale: 0.5 });
   { const c = colGeo.attributes.color, p = colGeo.attributes.position; for (let i = 0; i < p.count; i++) { const k = 0.72 + 0.28 * (p.getY(i) / (TIER - 0.5) + 0.5); c.setXYZ(i, k, k, k); } }
   const colMesh = new THREE.InstancedMesh(colGeo, stoneMat, BAYS * 3);
   for (let t = 0; t < 3; t++) for (let i = 0; i < BAYS; i++) { const m = ringMatrix(FD, pier.thetas[i], t * TIER + (TIER - 0.5) / 2 + 0.05, { inward: false, dOff: 0.12 }); colMesh.setMatrixAt(t * BAYS + i, m); }
-  colMesh.castShadow = colMesh.receiveShadow = true; group.add(colMesh);
+  stoneParts.push(...bakeIM(colMesh));
   const winGeo = (() => { const g = new THREE.PlaneGeometry(0.9, 1.5); g.translate(0, 0.75, 0); const c = []; const p = g.attributes.position; for (let i = 0; i < p.count; i++) { const t = p.getY(i) / 1.5; c.push(0.01 + 0.04 * t, 0.008 + 0.025 * t, 0.016 + 0.04 * t); } g.setAttribute('color', new THREE.Float32BufferAttribute(c, 3)); return g; })();
   const winMesh = new THREE.InstancedMesh(winGeo, voidMat, BAYS * 2);
   for (let i = 0; i < BAYS; i++) { winMesh.setMatrixAt(i, ringMatrix(FD, outer.thetas[i], 3 * TIER + 0.9, { inward: false, dOff: 0.06 })); winMesh.setMatrixAt(BAYS + i, ringMatrix(dIn, inner.thetas[i], 16.8, { inward: true, dOff: -0.04, scale: { x: 0.7, y: 0.6, z: 1 } })); }
-  group.add(winMesh);
+  voidParts.push(...bakeIM(winMesh));
   // podium niches with iron bars (ground-level wall detail)
   const nicheShape = archShape(0.5, 1.0, 0.5), nicheGeo = new THREE.ShapeGeometry(nicheShape, 8);
   { const p = nicheGeo.attributes.position, c = []; for (let i = 0; i < p.count; i++) { const t = Math.min(1, p.getY(i) / 1.6); c.push(0.006 + 0.03 * t, 0.005 + 0.02 * t, 0.01 + 0.03 * t); } nicheGeo.setAttribute('color', new THREE.Float32BufferAttribute(c, 3)); }
   const nich = arcThetas(0, 44, 0.5).thetas.filter((th) => !inGate(th) && angDist(th, Math.PI / 2) > 0.05);
   const nicheMesh = new THREE.InstancedMesh(nicheGeo, voidMat, nich.length);
   nich.forEach((th, i) => nicheMesh.setMatrixAt(i, ringMatrix(0, th, 0.35, { inward: true, dOff: -0.04 })));
-  group.add(nicheMesh);
+  voidParts.push(...bakeIM(nicheMesh));
+  { const vm = new THREE.Mesh(mergeGeos(voidParts), voidMat); vm.name = 'arch_voids'; group.add(vm); }
   const barParts = []; for (let k = -2; k <= 2; k++) { const b = new THREE.BoxGeometry(0.04, 1.55, 0.04); b.translate(k * 0.2, 0.9, 0); barParts.push(b); }
   { const b = new THREE.BoxGeometry(1.0, 0.04, 0.04); b.translate(0, 1.0, 0); barParts.push(b); const b2 = b.clone(); b2.translate(0, 0.45, 0); barParts.push(b2); }
   const ironMat = new THREE.MeshStandardMaterial({ color: 0x3c3d44, metalness: 0.6, roughness: 0.55 });
@@ -436,7 +441,7 @@ export function createArena({ crowd = 3700, density = 1, decalRes = 2048, seed =
   const clTh = arcThetas(0, 44, 0).thetas.filter((th) => !inGate(th) && angDist(th, Math.PI / 2) > 0.05 && angDist(th, -Math.PI / 2) > 0.05);
   const clMesh = new THREE.InstancedMesh(clGeo, bronzeMat, clTh.length);
   clTh.forEach((th, i) => clMesh.setMatrixAt(i, ringMatrix(0, th, 1.0, { inward: true, dOff: -0.05 })));
-  group.add(clMesh);
+  bronzeParts.push(...bakeIM(clMesh));
 
   // ---------------- gates: stone frame, tunnel, portcullis ----------------
   const hw = 1.7, gh = 1.75, rise = 0.9;
@@ -464,9 +469,12 @@ export function createArena({ crowd = 3700, density = 1, decalRes = 2048, seed =
     const tun = new THREE.Mesh(tunnelGeo, tunnelMat); tun.applyMatrix4(m);
     const port = new THREE.Mesh(portGeo, portMat); port.applyMatrix4(m); port.castShadow = true;
     const base = port.position.clone();
-    gateMeshes.add(frame, tun, port); gates.push({ port, base, dir: new THREE.Vector3(0, 1, 0) });
+    stoneParts.push(frame.geometry.clone().applyMatrix4(frame.matrix)); tunParts.push(tun.geometry.clone().applyMatrix4(tun.matrix));
+    gateMeshes.add(port); gates.push({ port, base, dir: new THREE.Vector3(0, 1, 0) });
   }
   group.add(gateMeshes);
+  { const tm = new THREE.Mesh(mergeGeos(tunParts), tunnelMat); tm.name = 'gate_tunnels'; group.add(tm); }
+  { const old = stoneMesh.geometry; stoneMesh.geometry = mergeGeos([old, ...stoneParts]); old.dispose(); }
   function setGate(open, side) { gates.forEach((g, i) => { if (side === undefined || side === i) g.port.position.copy(g.base).addScaledVector(g.dir, open * (gh + rise + 0.3)); }); }
   setGate(0);
 
@@ -476,13 +484,14 @@ export function createArena({ crowd = 3700, density = 1, decalRes = 2048, seed =
   const torchMesh = new THREE.InstancedMesh(torchGeo, bronzeMat, tTh.length);
   const flamePts = [];
   tTh.forEach((th, i) => { const m = ringMatrix(0, th, 1.55, { inward: true, dOff: -0.25 }); torchMesh.setMatrixAt(i, m); const p = new THREE.Vector3().setFromMatrixPosition(m); flamePts.push({ x: p.x, y: p.y + 1.05, z: p.z, s: 0.8 }); });
-  torchMesh.castShadow = !lite; group.add(torchMesh);
+  bronzeParts.push(...bakeIM(torchMesh));
   // brazier tripods flanking gates
   const brGeo = mergeGeos([(() => { const c = new THREE.CylinderGeometry(0.42, 0.2, 0.34, 10); c.translate(0, 1.15, 0); return c; })(), ...[0, 1, 2].map((k) => { const c = new THREE.CylinderGeometry(0.03, 0.04, 1.2, 5); c.translate(0.22, 0.6, 0); c.rotateY((k / 3) * TAU); return c; })]);
   const brPos = [[SA - 2.6, 2.7], [SA - 2.6, -2.7], [-SA + 2.6, 2.7], [-SA + 2.6, -2.7]];
   const brMesh = new THREE.InstancedMesh(brGeo, bronzeMat, 4);
   brPos.forEach(([x, z], i) => { brMesh.setMatrixAt(i, new THREE.Matrix4().makeTranslation(x, 0, z)); flamePts.push({ x, y: 1.3, z, s: 1.7 }); });
-  brMesh.castShadow = !lite; group.add(brMesh);
+  bronzeParts.push(...bakeIM(brMesh));
+  { const bm = new THREE.Mesh(mergeGeos(bronzeParts), bronzeMat); bm.name = 'bronze_fittings'; bm.castShadow = !lite; group.add(bm); }
   const flames = createFlames(flamePts, { glowScale: 3.4 }); group.add(flames.group);
 
   // ---------------- banners (vertex sway) + masts ----------------

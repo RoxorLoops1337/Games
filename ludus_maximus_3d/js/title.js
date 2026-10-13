@@ -67,10 +67,10 @@ export function createTitle(game) {
       b.addEventListener('click', () => { p[key] = !p[key]; paint(); writePrefs(p); apply(); audio.sfx('uiTap'); });
       return U.h('div', 'lx-ttl-row', [U.h('span', '', label), b]);
     };
-    const apply = () => { audio.setMaster(p.muted ? 0 : p.master); audio.setMusic(p.music); audio.setSfx(p.sfx); document.body.classList.toggle('lx-reduce-motion', !!p.rm); document.body.classList.toggle('lx-large-text', !!p.big); };
+    const apply = () => { audio.setMaster(p.muted ? 0 : p.master); audio.setMusic(p.music); audio.setSfx(p.sfx); document.body.classList.toggle('lx-reduce-motion', !!p.rm); document.body.classList.toggle('lx-large-text', !!p.big); document.body.classList.toggle('lx-hc', !!(p.hc || (typeof matchMedia !== 'undefined' && matchMedia('(prefers-contrast: more)').matches))); };
     body.append(
       slider('Master volume', 'master', (v) => audio.setMaster(p.muted ? 0 : v), 'uiTap'), slider('Music', 'music', (v) => audio.setMusic(v)), slider('Effects and crowd', 'sfx', (v) => audio.setSfx(v), 'swordHit'),
-      toggle('Mute everything', 'muted', apply), toggle('Reduced motion', 'rm', apply), toggle('Large text', 'big', apply));
+      toggle('Mute everything', 'muted', apply), toggle('Reduced motion', 'rm', apply), toggle('Large text', 'big', apply), toggle('High contrast', 'hc', apply));
     const m = U.modal({ title: 'Settings', body, actions: [U.button({ label: 'Done', variant: 'gold', block: true, onClick: () => m.close() })] });
   }
 

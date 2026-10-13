@@ -13,7 +13,8 @@ import * as Cer from './ceremonies.js'; // ONBOARDING
 import { createPhoto } from './photo.js'; // PHOTO
 
 const D = () => globalThis.LM_D, L = () => globalThis.LM;
-const SCREENS = ['building', 'roster', 'profile', 'recruit', 'arena', 'market', 'armory', 'more', 'world']; // 'world' = calendar, rival ludi, barracks, memorial (screens/world.js)
+const SCREENS = ['building', 'roster', 'profile', 'recruit', 'arena', 'market', 'armory', 'more', 'world', 'infirmary', 'sponsors', 'events']; // WAVE2 infirmary/sponsors/events (screens/*.js)
+// 'world' = calendar, rival ludi, barracks, memorial (screens/world.js)
 // TUT: every sheet and dialog carries data-tut-sheet=<key> so the tutorial never has to read titles
 const TUT_SHEETS = [[/^Roster$/, 'roster'], [/^The Arena$/, 'arena'], [/^(Choose your first fighter|Volunteers)$/, 'recruit'], [/^(Victory|Defeat|Duel won)$/, 'results'], [/^Week \d+ done$/, 'week-done'], [/^More$/, 'more'], [/^The World$/, 'world'], [/^Your Ludus$/, 'building'], [/^Market$/, 'market']];
 const tutKey = (title) => { const t = String(title || ''); const r = TUT_SHEETS.find(([re]) => re.test(t)); return r ? r[1] : ''; };
@@ -22,17 +23,20 @@ export class Game {
   constructor({ renderer, camera, post, audio, ui, tier }) {
     Object.assign(this, { renderer, camera, post, audio, ui, tier });
     this.S = null; this.busy = false; this.scene = 'none'; this.mods = {}; this.modals = [];
-    this.hud = document.createElement('div'); this.hud.className = 'lx-hud fv-main-hud'; this.hud.style.display = 'none';
+    this.hud = document.createElement('div'); this.hud.className = 'lx-hud fv-main-hud'; this.hud.style.display = 'none'; this.hud.setAttribute('role', 'region'); this.hud.setAttribute('aria-label', 'Ludus controls'); // QA
     ui.append(this.hud);
     this.ctx = this.makeCtx();
   }
 
   async init() {
+    try { await this.init0(); } catch (e) { this.fatal(e); throw e; } // QA: a failed start shows a way out instead of a frozen "Forging the arena" screen
+  }
+  async init0() {
     this.fightView = new FightView({ renderer: this.renderer, post: this.post, camera: this.camera, audio: this.audio, host: this.ui, tier: this.tier });
     try { const mod = await import('./hub.js'); this.hub = mod.createHub({ renderer: this.renderer, camera: this.camera, post: this.post, audio: this.audio, tier: this.tier }); }
     catch (e) { console.warn('hub.js unavailable, using stub', e && e.message); this.hub = createHubStub({ renderer: this.renderer, camera: this.camera, audio: this.audio, tier: this.tier }); }
     this.hub.onPick = (sel) => this.onPick(sel);
-    this.buildHud();
+    this.buildHud(); this.guardErrors();
     this.tutorial = createTutorial(this); // ONBOARDING
     import('./screens/more.js').then((m) => m.applyPrefs && m.applyPrefs(this.ctx)).catch(() => {});
   }
@@ -64,7 +68,8 @@ export class Game {
 
   // ---------------------------------------------------------------- title / new game
   async boot() {
-    if (!this.hub) await this.init(); // ONBOARDING fix: main.js already ran init(); a second run built a second hub, FightView and HUD
+    if (!this.hub) await this.init();
+    await this.checkSave(); // QA: a damaged save never white-screens the title; the player picks repair, backup or a fresh start // ONBOARDING fix: main.js already ran init(); a second run built a second hub, FightView and HUD
     this.post.setScene(this.hub.scene); this.hub.enter(this.S || titleState()); this.scene = 'title'; // ONBOARDING: save or showcase ludus behind the logo
     // ONBOARDING: cinematic title (js/title.js) replaces the old plain dialog
     this.title = createTitle(this);
@@ -81,6 +86,51 @@ export class Game {
     if (!this.S.glads.length) this.open('recruit', { first: true });
   }
 
+  /** QA: full screen recovery card for a start-up failure. Reload, keep the save safe, or reset it (the damaged copy is stashed, never lost). */
+  fatal(e) {
+    if (this._fatal) return; console.error('fatal', e);
+    const el = this._fatal = document.createElement('div'); el.className = 'lx-perf lx-perf-ctx'; el.setAttribute('role', 'alert');
+    const card = document.createElement('div'); card.className = 'lx-perf-card';
+    const t = document.createElement('b'); t.textContent = 'The arena could not open';
+    const p = document.createElement('p'); p.textContent = 'Something went wrong while starting the game. Your saved ludus has not been touched.';
+    const m = document.createElement('p'); m.textContent = String((e && e.message) || e || '').slice(0, 140); m.style.cssText = 'opacity:.7;font-size:12px;overflow-wrap:anywhere';
+    const mk = (label, fn) => { const b = document.createElement('button'); b.type = 'button'; b.className = 'lx-perf-btn'; b.textContent = label; b.style.cssText = 'display:block;width:100%'; b.onclick = fn; return b; };
+    card.append(t, p, m, mk('Reload the game', () => location.reload()));
+    if (L() && L().SAVE_KEY && localStorage.getItem(L().SAVE_KEY)) {
+      card.append(mk('Download my save file', () => { try { U.download('ludus_maximus_save.json', localStorage.getItem(L().SAVE_KEY) || ''); } catch (er) { /* blocked */ } }),
+        mk('Reset and start over', () => { if (confirm('Set the current save aside and start a new ludus? The old one is kept in this browser as a backup.')) { try { L().stashCorrupt(localStorage.getItem(L().SAVE_KEY)); } catch (er) { /* ignore */ } location.reload(); } }));
+    }
+    el.append(card); document.body.append(el); const b = document.getElementById('boot'); if (b) b.remove();
+    card.querySelector('button').focus();
+  }
+  /** QA: uncaught errors and rejections after start-up never leave the player guessing: one calm toast a minute, the game keeps running */
+  guardErrors() {
+    if (this._guard) return; this._guard = true; let last = 0;
+    const say = () => { if (Date.now() - last < 60000 || !this.S) return; last = Date.now(); U.toast('Something went wrong in the background. Your ludus is saved. Reload if anything looks stuck.', { kind: 'bad', ms: 6000 }); };
+    addEventListener('error', (ev) => { if (ev && ev.message && !/ResizeObserver/.test(ev.message)) say(); });
+    addEventListener('unhandledrejection', say);
+  }
+
+  /** QA: inspect the stored save before the title. Corrupt -> recovery dialog; newer -> a warning toast after load. */
+  async checkSave() {
+    const lm = L(); if (!lm.loadEx) return;
+    let st = lm.loadEx();
+    while (st.status === 'corrupt') {
+      const body = document.createElement('div'); body.style.cssText = 'color:#33243a;font:500 14px/20px system-ui,sans-serif;overflow-wrap:anywhere';
+      body.append(Object.assign(document.createElement('p'), { textContent: 'Your saved ludus could not be read. Nothing has been deleted yet.' }), Object.assign(document.createElement('p'), { textContent: st.err || '' }));
+      const acts = [{ label: 'Try to repair it', value: 'repair', variant: 'gold', icon: 'check' }];
+      if (lm.hasBackup()) acts.push({ label: 'Restore the backup', value: 'backup', variant: 'bronze', icon: 'scroll' });
+      acts.push({ label: 'Download the damaged file', value: 'download', variant: 'ghost', icon: 'scroll' }, { label: 'Start fresh', value: 'fresh', variant: 'danger', icon: 'skull', sub: 'The damaged copy is kept aside' });
+      const v = await this.ask({ title: 'Save damaged', body, actions: acts, dismiss: null });
+      if (v === 'download') { U.download('ludus_maximus_damaged_save.json', st.raw || ''); continue; }
+      if (v === 'repair') { const S = lm.salvage(st.raw); if (S) { this.S = S; this.save(); U.toast('Your ludus was repaired. Some recent progress may be missing.', { kind: 'good', ms: 5000 }); st = lm.loadEx(); continue; } U.toast('That save could not be repaired.', { kind: 'bad' }); continue; }
+      if (v === 'backup') { const S = lm.loadBackup(); if (S) { lm.stashCorrupt(st.raw); this.S = S; this.save(); U.toast('Backup restored.', { kind: 'good' }); st = lm.loadEx(); continue; } U.toast('No usable backup found.', { kind: 'bad' }); continue; }
+      if (v === 'fresh') { if (!lm.stashCorrupt(st.raw)) U.download('ludus_maximus_damaged_save.json', st.raw || ''); st = lm.loadEx(); }
+    }
+    this._saveStatus = st.status;
+    if (st.status === 'newer') U.toast('This save is from a newer version of the game. It may not behave correctly.', { kind: 'info', ms: 6000 });
+  }
+
   async newGameDialog() {
     const d = D(), body = document.createElement('div'); let color = 0, name = 'Ludus Aurelia';
     const inp = document.createElement('input'); inp.value = name; inp.maxLength = 24; inp.setAttribute('aria-label', 'School name');
@@ -95,7 +145,10 @@ export class Game {
   }
 
   // ---------------------------------------------------------------- state
-  save() { try { L().save(this.S); } catch (e) { /* storage blocked */ } }
+  save() {
+    let ok = true; try { ok = L().save(this.S) !== false; } catch (e) { ok = false; }
+    if (!ok && Date.now() - (this._saveWarn || 0) > 60000) { this._saveWarn = Date.now(); U.toast('Could not save: storage is full or blocked. Download your save file in More, Settings.', { kind: 'bad', ms: 7000 }); } // QA
+  }
   hasSave() { return !!L().load(); }
   loadSave() { const S = L().load(); if (!S) return false; this.S = S; return true; }
   newGame(o) { this.S = L().newGame(o); this.save(); this.tutorial && this.tutorial.reset(); /* TUT: a new game always gets the tutorial, even over a non-empty save */ }
@@ -144,7 +197,7 @@ export class Game {
     this.weekChip = document.createElement('div'); this.weekChip.className = 'fv-week';
     this.weekChip.style.cssText = 'font:800 12px/16px system-ui,sans-serif;letter-spacing:.06em;color:#f2c14e;text-shadow:0 1px 0 #1d1830;padding:6px 10px;border-radius:999px;background:rgba(29,24,48,.62);white-space:nowrap';
     const row = document.createElement('div'); row.className = 'lx-row'; row.append(this.goldC, this.fameC);
-    const right = document.createElement('div'); right.className = 'lx-row'; right.append(this.weekChip, U.iconButton('gear', 'More', () => this.open('more')));
+    const right = document.createElement('div'); right.className = 'lx-row'; right.append(this.weekChip, U.iconButton('gear', 'Settings and more', () => this.open('more', { tab: 'settings' })));
     top.append(row, right);
     const mid = document.createElement('div'); mid.style.cssText = 'flex:1;pointer-events:none';
     const bottom = document.createElement('div'); bottom.style.cssText = 'display:flex;flex-direction:column;align-items:center;gap:10px';
@@ -164,6 +217,10 @@ export class Game {
     const f = L().festival ? L().festival(S, S.week) : null;
     this.weekChip.textContent = `SEASON ${S.season} · WEEK ${((S.week - 1) % 12) + 1}${f && f.n ? ' · ' + String(f.n).toUpperCase() : ''}`;
     const due = L().dueKeys(S).length;
+    // QA: screen reader labels for the HUD
+    this.goldC.setAttribute('role', 'group'); this.goldC.setAttribute('aria-label', `Gold ${Math.round(S.gold)}`); this.fameC.setAttribute('role', 'group'); this.fameC.setAttribute('aria-label', `Fame ${Math.round(S.fame)}`);
+    this.weekChip.setAttribute('aria-label', `Season ${S.season}, week ${((S.week - 1) % 12) + 1}${f && f.n ? ', ' + f.n : ''}`);
+    this.advBtn.setAttribute('aria-label', `Advance week${due ? `, ${due} fight${due === 1 ? '' : 's'} due` : ''}`);
     this.advBtn.querySelector('span') ? 0 : 0;
     const lab = this.advBtn.querySelector('.lx-btn-label') || this.advBtn;
     if (!S.glads.length) this.advBtn.title = 'Recruit a gladiator first';
@@ -174,8 +231,10 @@ export class Game {
   async advance() {
     if (this.busy) return; const S = this.S;
     if (!S.glads.length) { U.toast('Recruit a gladiator first', { kind: 'bad' }); this.audio.sfx('uiError'); this.open('recruit'); return; }
+    // QA friction: new players press Advance without having entered anything, then wonder why nothing happens. Say so, only in the first weeks.
+    if (!L().dueKeys(S).length && (S.stats.weeks || 0) < 3) U.toast('No fight entered this week: your fighters will only train. Open the Arena to enter one.', { kind: 'info', ms: 4200 });
     this.busy = true; this.audio.sfx('uiConfirm'); this.closeAll();
-    try { await advanceWeek(this.ctx); } catch (e) { console.error(e); U.toast('Oops: ' + e.message, { kind: 'bad' }); }
+    try { await advanceWeek(this.ctx); } catch (e) { console.error(e); U.toast('Something went wrong: ' + e.message + '. Your ludus is saved.', { kind: 'bad' }); }
     finally { this.busy = false; this.save(); if (this.scene !== 'hub') this.returnToHub(); this.refresh(); }
   }
 
@@ -201,7 +260,7 @@ export class Game {
     try {
       const mod = this.mods[id] || (this.mods[id] = await import(`./screens/${id}.js`));
       this.closeAll(); this.audio.sfx('uiTap'); return mod.open(this.ctx, arg);
-    } catch (e) { console.error('screen', id, e); U.toast(`${id[0].toUpperCase() + id.slice(1)} is coming soon`, { kind: 'info' }); }
+    } catch (e) { console.error('screen', id, e); U.toast(`Could not open ${id}. Please try again.`, { kind: 'bad' }); }
   }
 
   onPick(sel) {

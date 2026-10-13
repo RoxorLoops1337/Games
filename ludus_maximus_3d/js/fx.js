@@ -236,7 +236,11 @@ const scaleC = (c, k) => ({ r: c.r * k, g: c.g * k, b: c.b * k });
 function mulberry(seed) { let a = seed >>> 0; return () => { a = (a + 0x6d2b79f5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
 
 // ---------------- particle layer (pooled sim + transient immediate writes) ----------------
+// PERF: xorshift32 for per-frame turbulence (Math.random is a builtin call that boxes its result); presentation only, not seeded
+let _xs = 2463534242;
+const fastRand = () => { _xs ^= _xs << 13; _xs ^= _xs >>> 17; _xs ^= _xs << 5; return (_xs >>> 0) / 4294967296; };
 const FLOOR = { value: 0.04 };
+const WARM = { on: false }; // shader warm-up: every pooled mesh draws one dead instance so its program compiles before the first real effect
 class Layer {
   constructor(max, additive, map, name) {
     this.max = max; this.n = 0; this.t = 0; this.alive = []; this.free = [];
@@ -265,7 +269,7 @@ class Layer {
       if (p.age < 0) continue;
       if (p.drag) { const k = Math.exp(-p.drag * dt); p.vx *= k; p.vy *= k; p.vz *= k; }
       p.vy -= p.grav * dt;
-      if (p.turb) { p.vx += (Math.random() - 0.5) * p.turb * dt; p.vz += (Math.random() - 0.5) * p.turb * dt; p.vy += (Math.random() - 0.3) * p.turb * 0.5 * dt; }
+      if (p.turb) { p.vx += (fastRand() - 0.5) * p.turb * dt; p.vz += (fastRand() - 0.5) * p.turb * dt; p.vy += (fastRand() - 0.3) * p.turb * 0.5 * dt; }
       if (p.swirl) { const vx = p.vx, vz = p.vz; const c = Math.cos(p.swirl * dt), s = Math.sin(p.swirl * dt); p.vx = vx * c - vz * s; p.vz = vx * s + vz * c; }
       p.x += p.vx * dt; p.y += p.vy * dt; p.z += p.vz * dt;
       if (p.bounce && p.y < p.floor) { p.y = p.floor; p.vy = Math.abs(p.vy) * p.bounce; p.vx *= 0.7; p.vz *= 0.7; }
@@ -277,10 +281,10 @@ class Layer {
   write(p) {
     if (this.n >= this.max) return; const t = p.age / p.life, i = this.n++ * 4;
     const e = 1 - (1 - t) * (1 - t); const size = lerp(p.s0, p.s1, e);
-    const fadeIn = Math.min(1, t / p.att), al = p.a * fadeIn * Math.pow(1 - t, p.fp);
+    const fi0 = t / p.att, fadeIn = fi0 < 1 ? fi0 : 1, al = p.a * fadeIn * Math.pow(1 - t, p.fp);   // PERF: ternaries / sqrt instead of Math.min / hypot builtin calls (boxed results)
     const A = this.A, B = this.B, C = this.C, D = this.D;
     A[i] = p.x; A[i + 1] = p.y; A[i + 2] = p.z; A[i + 3] = size;
-    if (p.st > 0) { const sp = Math.hypot(p.vx, p.vy, p.vz) || 1; B[i] = p.vx / sp; B[i + 1] = p.vy / sp; B[i + 2] = p.vz / sp; B[i + 3] = Math.max(size * 1.2, sp * p.st); } else { B[i] = 0; B[i + 1] = 1; B[i + 2] = 0; B[i + 3] = 0; }
+    if (p.st > 0) { const sp = Math.sqrt(p.vx * p.vx + p.vy * p.vy + p.vz * p.vz) || 1, ln = size * 1.2, ln2 = sp * p.st; B[i] = p.vx / sp; B[i + 1] = p.vy / sp; B[i + 2] = p.vz / sp; B[i + 3] = ln > ln2 ? ln : ln2; } else { B[i] = 0; B[i + 1] = 1; B[i + 2] = 0; B[i + 3] = 0; }
     const c0 = p.c0, c1 = p.c1, g = p.g; C[i] = lerp(c0.r, c1.r, t) * g; C[i + 1] = lerp(c0.g, c1.g, t) * g; C[i + 2] = lerp(c0.b, c1.b, t) * g; C[i + 3] = al;
     D[i] = p.cell; D[i + 1] = p.rot; D[i + 2] = p.mirror; D[i + 3] = 0;
   }
@@ -296,7 +300,7 @@ class Layer {
     A[i] = x; A[i + 1] = y; A[i + 2] = z; A[i + 3] = size; B[i] = dx; B[i + 1] = dy; B[i + 2] = dz; B[i + 3] = Math.max(len, 1e-3);
     C[i] = c.r * g; C[i + 1] = c.g * g; C[i + 2] = c.b * g; C[i + 3] = a; D[i] = cell; D[i + 1] = 0; D[i + 2] = 0; D[i + 3] = 0;
   }
-  flush() { this.geo.instanceCount = this.n; for (const a of this.attrs) { a.clearUpdateRanges(); if (this.n) a.addUpdateRange(0, this.n * 4); a.needsUpdate = true; } this.mesh.visible = this.n > 0; }
+  flush() { const n = WARM.on ? Math.max(1, this.n) : this.n; this.geo.instanceCount = n; for (const a of this.attrs) { a.clearUpdateRanges(); if (n) a.addUpdateRange(0, n * 4); a.needsUpdate = true; } this.mesh.visible = n > 0; }
 }
 
 // ---------------- ribbons ----------------
@@ -311,7 +315,7 @@ class Ribbons {
     this.aPos = new THREE.BufferAttribute(this.pos, 3).setUsage(THREE.DynamicDrawUsage); this.aCol = new THREE.BufferAttribute(this.col, 4).setUsage(THREE.DynamicDrawUsage);
     g.setAttribute('position', this.aPos); g.setAttribute('uv', new THREE.BufferAttribute(this.uv, 2)); g.setAttribute('aCol', this.aCol);
     this.mat = new THREE.ShaderMaterial({ vertexShader: RIB_VS, fragmentShader: RIB_FS, transparent: true, depthWrite: false, blending: THREE.CustomBlending, blendEquation: THREE.AddEquation, blendSrc: THREE.OneFactor, blendDst: THREE.OneMinusSrcAlphaFactor, side: THREE.DoubleSide });
-    this.mesh = new THREE.Mesh(g, this.mat); this.mesh.frustumCulled = false; this.mesh.renderOrder = 5; this.mesh.name = 'ribbons';
+    this.mesh = new THREE.Mesh(g, this.mat); this.mesh.frustumCulled = false; this.mesh.renderOrder = 5; this.mesh.name = 'ribbons'; this.mesh.visible = false;
     for (let s = 0; s < max; s++) { this.slots.push({ on: false, dirty: false, n: 0, P: new Float32Array(pts * 3), Q: new Float32Array(pts * 3), T: new Float32Array(pts) }); }
     // uv.x along, uv.y across
     for (let s = 0; s < max; s++) for (let i = 0; i < pts; i++) { const v = (s * pts + i) * 2; this.uv[v * 2] = i / (pts - 1); this.uv[v * 2 + 1] = 0; this.uv[v * 2 + 2] = i / (pts - 1); this.uv[v * 2 + 3] = 1; }
@@ -338,6 +342,31 @@ export function createFx(scene, opts = {}) {
   const decalMesh = new THREE.Mesh(new THREE.PlaneGeometry(decalExt * 2, decalExt * 2).rotateX(-Math.PI / 2), new THREE.MeshLambertMaterial({ map: decalTex, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }));
   decalMesh.position.y = groundY + 0.012; decalMesh.renderOrder = 1; decalMesh.name = 'decals'; decalMesh.receiveShadow = true; root.add(decalMesh);
   let decalDirty = false, lastDecalUp = -1; const decalGap = opts.decalGap ?? 0.1;
+  // Tiled decal upload: a full 2048 px canvas is 16 MB per upload (a visible hitch on phones), so blood and scuffs mark the tiles they touch and
+  // update() pushes at most DEC_BUDGET dirty tiles per step with texSubImage2D (round robin). Without a renderer (tests) it falls back to needsUpdate.
+  const DEC_T = opts.decalTiles ?? (DS >= 2048 ? 4 : 2), DEC_TS = DS / DEC_T, DEC_BUDGET = opts.decalBudget ?? 2, decTileDirty = new Uint8Array(DEC_T * DEC_T), decPainted = new Uint8Array(DEC_T * DEC_T); let decTileCur = 0, decPending = false; const decFull = !opts.renderer;
+  const decTileCv = mkCanvas(DEC_TS, DEC_TS), decTileCtx = decTileCv.getContext('2d');
+  const decStats = { tiles: 0, full: 0, ms: 0, last: 0 };
+  function markTiles(x, z, r) { // world metres -> dirty tiles
+    const k = DS / (decalExt * 2), px = (x / (decalExt * 2) + 0.5) * DS, pz = (z / (decalExt * 2) + 0.5) * DS, rp = r * k + 3;
+    const x0 = clamp(Math.floor((px - rp) / DEC_TS), 0, DEC_T - 1), x1 = clamp(Math.floor((px + rp) / DEC_TS), 0, DEC_T - 1), z0 = clamp(Math.floor((pz - rp) / DEC_TS), 0, DEC_T - 1), z1 = clamp(Math.floor((pz + rp) / DEC_TS), 0, DEC_T - 1);
+    for (let a = z0; a <= z1; a++) for (let b = x0; b <= x1; b++) decTileDirty[a * DEC_T + b] = decPainted[a * DEC_T + b] = 1;
+  }
+  function uploadDecals() {
+    const t0 = typeof performance !== 'undefined' ? performance.now() : 0, rd = opts.renderer; let props = null;
+    if (rd) { try { props = rd.properties.get(decalTex); } catch (e) { props = null; } }
+    if (decFull || decPending || !props || !props.__webglTexture || props.__version !== decalTex.version) { decalTex.needsUpdate = true; decTileDirty.fill(0); decPending = false; decalDirty = false; decStats.full++; return; }
+    const gl = rd.getContext(); let n = 0, left = 0;
+    for (let k = 0; k < decTileDirty.length; k++) {
+      const i = (decTileCur + k) % decTileDirty.length; if (!decTileDirty[i]) continue;
+      if (n >= DEC_BUDGET) { left++; continue; }
+      const tx = i % DEC_T, ty = (i / DEC_T) | 0; decTileCtx.clearRect(0, 0, DEC_TS, DEC_TS); decTileCtx.drawImage(dcv, tx * DEC_TS, ty * DEC_TS, DEC_TS, DEC_TS, 0, 0, DEC_TS, DEC_TS);
+      rd.state.bindTexture(gl.TEXTURE_2D, props.__webglTexture); gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true); gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false); gl.pixelStorei(gl.UNPACK_COLORSPACE_CONVERSION_WEBGL, gl.NONE);
+      gl.texSubImage2D(gl.TEXTURE_2D, 0, tx * DEC_TS, DS - (ty + 1) * DEC_TS, gl.RGBA, gl.UNSIGNED_BYTE, decTileCv); rd.state.unbindTexture();
+      decTileDirty[i] = 0; n++; decTileCur = (i + 1) % decTileDirty.length; decStats.tiles++;
+    }
+    decalDirty = left > 0; if (typeof performance !== 'undefined') { decStats.last = performance.now() - t0; decStats.ms += decStats.last; }
+  }
 
   // 2) particles
   const addL = new Layer(opts.maxAdd ?? 2600, true, atlasTex, 'particles_add'); const norL = new Layer(opts.maxNorm ?? 900, false, atlasTex, 'particles_norm');
@@ -357,7 +386,7 @@ export function createFx(scene, opts = {}) {
     const col = new THREE.InstancedBufferAttribute(new Float32Array(max * 4), 4), par = new THREE.InstancedBufferAttribute(new Float32Array(max * 4), 4); col.setUsage(THREE.DynamicDrawUsage); par.setUsage(THREE.DynamicDrawUsage);
     m.geometry.setAttribute('iCol', col); m.geometry.setAttribute('iP', par); par.array.fill(-1e6, 0); for (let i = 0; i < max; i++) { par.array[i * 4 + 1] = 1; } // dead by default (t0 far in the past => age>1)
     for (let i = 0; i < max; i++) { par.array[i * 4] = -1e6; }
-    m.userData = { col, par, cur: 0, max }; root.add(m); return m;
+    m.userData = { col, par, cur: 0, max }; m.visible = false; root.add(m); return m;
   }
   const MAXR = 64, MAXS = 40;
   const ringMesh = timedMesh(MAXR, RING_VS, RING_FS, new THREE.PlaneGeometry(2, 2).rotateX(-Math.PI / 2), 'rings', 3);
@@ -367,8 +396,11 @@ export function createFx(scene, opts = {}) {
   function allocTimed(mesh) { const u = mesh.userData; const i = u.cur; u.cur = (u.cur + 1) % u.max; return i; }
   function setTimed(mesh, i, mat, col, a, t0, dur, type, aux) {
     const u = mesh.userData; mesh.setMatrixAt(i, mat); mesh.instanceMatrix.needsUpdate = true;
-    u.col.setXYZW(i, col.r, col.g, col.b, a); u.col.needsUpdate = true; u.par.setXYZW(i, t0, dur, type, aux); u.par.needsUpdate = true;
+    u.col.setXYZW(i, col.r, col.g, col.b, a); u.col.needsUpdate = true; u.par.setXYZW(i, t0, dur, type, aux); u.par.needsUpdate = true; mesh.visible = true;
   }
+  // Draw calls: rings, slashes, ribbons and numbers only draw while something in them is alive (the scan mirrors the dead tests of the shaders).
+  const ringAlive = (T) => { const a = ringMesh.userData.par.array; for (let i = 0; i < MAXR; i++) { const t0 = a[i * 4], du = Math.max(a[i * 4 + 1], 1e-4), ty = a[i * 4 + 2], w = a[i * 4 + 3], age = (T - t0) / du; if (ty > 2.5 && ty < 3.5) { if (T >= t0 && T <= w + 0.4) return true; } else if (ty > 3.5 && ty < 4.5) { if (age >= 0 && age <= 1.2 && T <= w) return true; } else if (age >= 0 && age <= 1) return true; } return false; };
+  const slashAlive = (T) => { const a = slashMesh.userData.par.array; for (let i = 0; i < MAXS; i++) { const age = (T - a[i * 4]) / Math.max(a[i * 4 + 1], 1e-4); if (age >= 0 && age <= 1) return true; } return false; };
 
   // 6) ribbons
   const rib = new Ribbons(opts.maxRibbons ?? 36, 20); root.add(rib.mesh);
@@ -380,7 +412,7 @@ export function createFx(scene, opts = {}) {
   gGeo.instanceCount = MAXG;
   const glyphUni = { uTime, uMap: { value: glyphTex }, uEm: { value: opts.numberEm ?? 0.05 } };
   const glyphMesh = new THREE.Mesh(gGeo, new THREE.ShaderMaterial({ uniforms: glyphUni, vertexShader: GLY_VS, fragmentShader: GLY_FS, transparent: true, depthTest: false, depthWrite: false }));
-  glyphMesh.frustumCulled = false; glyphMesh.renderOrder = 100; glyphMesh.name = 'numbers'; root.add(glyphMesh); let gCur = 0;
+  glyphMesh.frustumCulled = false; glyphMesh.renderOrder = 100; glyphMesh.name = 'numbers'; glyphMesh.visible = false; root.add(glyphMesh); let gCur = 0, gEnd = -1;
 
   // ------------- position helpers -------------
   const P = (t, out, dy = 0) => {
@@ -485,7 +517,7 @@ export function createFx(scene, opts = {}) {
   const dIndex = (d) => debris.indexOf(d);
 
   // Beam / chain / lightning (ribbon). a,b: Vector3 or Object3D or fn.
-  function ribbonSlot() { const s = rib.alloc(); if (!s) return null; s.on = true; s.dirty = true; return s; }
+  function ribbonSlot() { const s = rib.alloc(); if (!s) return null; s.on = true; s.dirty = true; rib.mesh.visible = true; return s; }
   const setCol = (s, c, g = 1) => { s.c = rgb(c); s.g = g; };
   fx.beam = (a, b, color = '#ffffff', o = {}) => {
     const s = ribbonSlot(); if (!s) return null; s.kind = 'beam'; s.P0 = null; setCol(s, color, o.glow ?? 2); s.a = a; s.b = b; s.life = o.life ?? 0.25; s.age = 0; s.width = o.width ?? 0.12; s.n = o.pts ?? 14; s.jag = o.jag ?? 0; s.flick = o.flicker ?? 0; s.sag = o.sag ?? 0; s.rej = 0; s.fade = o.fade ?? 1; return s;
@@ -551,7 +583,7 @@ export function createFx(scene, opts = {}) {
     P(pos, _p, o.dy ?? 2.0);
     for (const ch of text) { const w = GLYPH_W(ch), gi = GLYPHS.indexOf(ch); if (gi >= 0 && ch !== ' ') { const i = gCur; gCur = (gCur + 1) % MAXG;
       gAttr[0].setXYZW(i, _p.x, _p.y, _p.z, t0); gAttr[1].setXYZW(i, (x + w / 2) * 1.0, gi, life, sc); gAttr[2].setXYZW(i, c.r, c.g, c.b, k[3]); gAttr[3].setXYZW(i, drift, rise, 0, 0); } x += w; }
-    gAttr.forEach((a) => { a.needsUpdate = true; });
+    gAttr.forEach((a) => { a.needsUpdate = true; }); gEnd = Math.max(gEnd, t0 + life + 0.05); glyphMesh.visible = true;
   };
 
   // Ground decals (sand scuffs). type: scuff | skid | crater | scorch | crack | footprint | scratch
@@ -567,12 +599,14 @@ export function createFx(scene, opts = {}) {
     else if (type === 'crack') { const arms = o.arms ?? 7; g.lineCap = 'round'; for (let i = 0; i < arms; i++) { let a = i / arms * TAU + (rnd() - 0.5) * 0.4, x = 0, y = 0; g.strokeStyle = BK.replace('A', 0.55); g.lineWidth = Math.max(1.5, 0.045 * s); g.beginPath(); g.moveTo(0, 0); const L = R_(0.9, 1.5) * s; for (let d = 0; d < L; d += 0.12 * s) { a += (rnd() - 0.5) * 0.7; x += Math.cos(a) * 0.12 * s; y += Math.sin(a) * 0.12 * s; g.lineTo(x, y); } g.stroke(); g.strokeStyle = LT.replace('A', 0.3); g.lineWidth = Math.max(1, 0.02 * s); g.stroke(); } blob(0.6 * s, 0.6 * s, DK, 0.25); }
     else if (type === 'footprint') { for (let f = 0; f < 2; f++) { g.save(); g.translate(f * 0.45 * s, (f ? 0.18 : -0.18) * s); g.scale(1, 0.55); g.fillStyle = DK.replace('A', 0.3); g.beginPath(); g.arc(0, 0, 0.17 * s, 0, TAU); g.fill(); g.restore(); } }
     else if (type === 'scratch') { g.strokeStyle = BK.replace('A', 0.4); g.lineWidth = Math.max(1, 0.035 * s); g.lineCap = 'round'; for (let i = 0; i < 3; i++) { g.beginPath(); g.moveTo(0, i * 0.12 * s); g.lineTo(R_(0.6, 1.1) * s, i * 0.12 * s + (rnd() - 0.5) * 0.1 * s); g.stroke(); } }
-    g.restore(); decalDirty = true;
+    g.restore(); markTiles(pos.x, pos.z, (s / k) * 1.7 + 0.3); decalDirty = true;
   };
-  fx.clearDecals = () => { dctx.clearRect(0, 0, DS, DS); decalDirty = true; };
+  fx.clearDecals = () => { dctx.clearRect(0, 0, DS, DS); decPainted.fill(0); decPending = true; decalDirty = true; };
   // raw access for gore.js: paint straight on the decal canvas (px per metre = k, origin at the arena centre). markDecals() schedules the throttled upload.
   fx.decalDraw = { ctx: dctx, canvas: dcv, size: DS, k: DS / (decalExt * 2), ext: decalExt, toPx: (x, z) => [(x / (decalExt * 2) + 0.5) * DS, (z / (decalExt * 2) + 0.5) * DS] };
-  fx.markDecals = () => { decalDirty = true; };
+  /** schedule a throttled upload. With (x, z, r) in metres only the touched tiles are uploaded, without arguments every tile that was ever painted. */
+  fx.markDecals = (x, z, r = 1) => { if (x === undefined) { for (let i = 0; i < decPainted.length; i++) if (decPainted[i]) decTileDirty[i] = 1; } else markTiles(x, z, r); decalDirty = true; };
+  fx.decalStats = decStats;
   fx.addNormalParticle = (o) => norL.add(o); fx.addGlowParticle = (o) => addL.add(o);
 
   // ====================================================================
@@ -666,6 +700,11 @@ export function createFx(scene, opts = {}) {
   // UPDATE
   // ====================================================================
   const camPos = new THREE.Vector3(0, 10, 12);
+  const SANDW = mixc(sand, WHITE, 0.55); // PERF: constants instead of per-frame colour objects
+  const _C0 = { r: 1, g: 0.78, b: 0.12 };
+  const _C1 = { r: 0.3, g: 0.65, b: 1 };
+  const _C2 = { r: 1, g: 0.32, b: 0.12 };
+  const _C3 = { r: 1, g: 0.3, b: 0.1 };
   function updateEmitters(dt) {
     for (let i = emitters.length - 1; i >= 0; i--) {
       const h = emitters[i];
@@ -675,7 +714,7 @@ export function createFx(scene, opts = {}) {
       P(h.a, _p);
       if (h.kind === 'proj') {
         const c = h.c, s = h.size, tt = fx.time; addL.put(_p.x, _p.y, _p.z, s * (1.7 + 0.2 * Math.sin(tt * 40)), c, 0.55, CELL.glow, 0, 1.6);
-        addL.put(_p.x, _p.y, _p.z, s * 0.85, mixc(c, WHITE, 0.8), 1, CELL.disc, 0, 2.2); addL.put(_p.x, _p.y, _p.z, s * 2.2, mixc(c, WHITE, 0.5), 0.8, CELL.star4, tt * 4, 1.5);
+        addL.put(_p.x, _p.y, _p.z, s * 0.85, (h.m8 || (h.m8 = mixc(c, WHITE, 0.8))), 1, CELL.disc, 0, 2.2); addL.put(_p.x, _p.y, _p.z, s * 2.2, (h.m5 || (h.m5 = mixc(c, WHITE, 0.5))), 0.8, CELL.star4, tt * 4, 1.5);
         h.acc += dt * 70; while (h.acc >= 1) { h.acc--; addL.add({ x: _p.x, y: _p.y, z: _p.z, vx: R_(-1, 1) * 1.2, vy: R_(-0.5, 1.2), vz: R_(-1, 1) * 1.2, life: R_(0.18, 0.4), s0: s * 0.3, s1: 0.02, cell: CELL.ember, c0: mixc(c, WHITE, 0.6), c1: c, g: 2, drag: 2, grav: 4, fp: 1 }); }
       } else if (h.kind === 'aura') {
         const c = h.c, st = h.style, rate = st === 'rage' ? 36 : st === 'frenzy' ? 26 : 16; const tt = h.t;
@@ -698,12 +737,12 @@ export function createFx(scene, opts = {}) {
         else if (el === 'holy') { addL.put(_p.x, _p.y + 1, _p.z, 3.0, c, 0.2 + 0.08 * Math.sin(tt * 6), CELL.glow, 0, 1.5); h.acc += dt * 18; while (h.acc >= 1) { h.acc--; const a = rnd() * TAU; addL.add({ x: _p.x + Math.cos(a) * 0.9, y: _p.y + 0.1, z: _p.z + Math.sin(a) * 0.9, vy: R_(1.5, 2.5), life: 0.9, s0: 0.16, s1: 0.03, cell: CELL.glow, c0: mixc(c, WHITE, 0.6), c1: c, g: 2.4 }); } }
       } else if (h.kind === 'status') {
         const tt = h.t, y = _p.y + h.headY;
-        if (h.st === 'stun') { const w = tt * 5.2; for (let k = 0; k < 3; k++) { const a = w + k * TAU / 3; const sx = _p.x + Math.cos(a) * 0.42, sz = _p.z + Math.sin(a) * 0.42, sy = y + Math.sin(tt * 7 + k) * 0.05; const back = Math.sin(a) < 0 ? 0.7 : 1; norL.put(sx, sy, sz, 0.38 * back, { r: 1, g: 0.78, b: 0.12 }, 1, CELL.star5, a * 0.5, 1.15); } }
-        else if (h.st === 'slow') { for (let k = 0; k < 3; k++) { const ph = (tt * 1.1 + k / 3) % 1; norL.put(_p.x + (k - 1) * 0.34, y - ph * 0.7 + 0.1, _p.z, 0.7, { r: 0.3, g: 0.65, b: 1 }, Math.sin(ph * Math.PI), CELL.chevron, Math.PI, 1.1); } h.acc += dt * 5; while (h.acc >= 1) { h.acc--; const a = rnd() * TAU; addL.add({ x: _p.x + Math.cos(a) * 0.7, y: _p.y + 0.15, z: _p.z + Math.sin(a) * 0.7, vy: R_(0.2, 0.7), life: 0.7, s0: 0.12, s1: 0.02, cell: CELL.glow, c0: { r: 0.6, g: 0.85, b: 1 }, c1: { r: 0.3, g: 0.6, b: 1 }, g: 2 }); } }
+        if (h.st === 'stun') { const w = tt * 5.2; for (let k = 0; k < 3; k++) { const a = w + k * TAU / 3; const sx = _p.x + Math.cos(a) * 0.42, sz = _p.z + Math.sin(a) * 0.42, sy = y + Math.sin(tt * 7 + k) * 0.05; const back = Math.sin(a) < 0 ? 0.7 : 1; norL.put(sx, sy, sz, 0.38 * back, _C0, 1, CELL.star5, a * 0.5, 1.15); } }
+        else if (h.st === 'slow') { for (let k = 0; k < 3; k++) { const ph = (tt * 1.1 + k / 3) % 1; norL.put(_p.x + (k - 1) * 0.34, y - ph * 0.7 + 0.1, _p.z, 0.7, _C1, Math.sin(ph * Math.PI), CELL.chevron, Math.PI, 1.1); } h.acc += dt * 5; while (h.acc >= 1) { h.acc--; const a = rnd() * TAU; addL.add({ x: _p.x + Math.cos(a) * 0.7, y: _p.y + 0.15, z: _p.z + Math.sin(a) * 0.7, vy: R_(0.2, 0.7), life: 0.7, s0: 0.12, s1: 0.02, cell: CELL.glow, c0: { r: 0.6, g: 0.85, b: 1 }, c1: { r: 0.3, g: 0.6, b: 1 }, g: 2 }); } }
         else if (h.st === 'bleed') { h.acc += dt * 9; const dc = rgb(h.o.color || '#e0283a'); while (h.acc >= 1) { h.acc--; const a = rnd() * TAU; norL.add({ x: _p.x + Math.cos(a) * 0.5, y: _p.y + R_(0.9, 1.6), z: _p.z + Math.sin(a) * 0.5, vx: Math.cos(a) * 0.3, vy: R_(0, 0.5), vz: Math.sin(a) * 0.4, life: 0.7, s0: 0.32, s1: 0.24, cell: CELL.drop, c0: dc, c1: dc, a: 1, grav: 9, fp: 0.5, att: 0.02 }); } }
-        else if (h.st === 'blind') { for (let k = 0; k < 4; k++) { const a = tt * 4 + k * TAU / 4; norL.put(_p.x + Math.cos(a) * 0.4, y - 0.15 + Math.sin(tt * 3 + k) * 0.05, _p.z + Math.sin(a) * 0.4, 0.6, mixc(sand, WHITE, 0.55), 0.9, CELL.puffA, a); } }
+        else if (h.st === 'blind') { for (let k = 0; k < 4; k++) { const a = tt * 4 + k * TAU / 4; norL.put(_p.x + Math.cos(a) * 0.4, y - 0.15 + Math.sin(tt * 3 + k) * 0.05, _p.z + Math.sin(a) * 0.4, 0.6, SANDW, 0.9, CELL.puffA, a); } }
         else if (h.st === 'root') { h.acc += dt * 6; if (h.acc > 1) { h.acc = 0; fx.dust({ x: _p.x, y: groundY, z: _p.z }, 1, { size: 0.5, alpha: 0.4 }); } }
-        else if (h.st === 'taunt') { const b = 1 + 0.15 * Math.sin(tt * 10); norL.put(_p.x, y + 0.15, _p.z, 0.95 * b, { r: 1, g: 0.32, b: 0.12 }, 1, CELL.exclaim, 0, 1.1); addL.put(_p.x, y + 0.15, _p.z, 1.2, { r: 1, g: 0.3, b: 0.1 }, 0.25, CELL.glow, 0, 1.0); }
+        else if (h.st === 'taunt') { const b = 1 + 0.15 * Math.sin(tt * 10); norL.put(_p.x, y + 0.15, _p.z, 0.95 * b, _C2, 1, CELL.exclaim, 0, 1.1); addL.put(_p.x, y + 0.15, _p.z, 1.2, _C3, 0.25, CELL.glow, 0, 1.0); }
         else if (h.st === 'burn') { h.acc += dt * 24; while (h.acc >= 1) { h.acc--; const a = rnd() * TAU; addL.add({ x: _p.x + Math.cos(a) * 0.3, y: _p.y + R_(0.2, 1.4), z: _p.z + Math.sin(a) * 0.3, vy: R_(1, 2), life: R_(0.4, 0.7), s0: 0.55, s1: 0.1, cell: CELL.glow, c0: { r: 1, g: 0.75, b: 0.3 }, c1: { r: 1, g: 0.2, b: 0.02 }, g: 2.6, turb: 2, a: 1 }); } }
       }
     }
@@ -723,13 +762,12 @@ export function createFx(scene, opts = {}) {
           s.P0 = s.P0 || new Float32Array(pts * 3); for (let i = 0; i < n; i++) { const u = i / (n - 1), env = Math.sin(Math.PI * u), j = s.jag * env * (i === 0 || i === n - 1 ? 0 : 1); const o1 = (rnd() - 0.5) * 2 * j * Math.min(1.5, len * 0.35 + 0.3), o2 = (rnd() - 0.5) * 2 * j * Math.min(1.5, len * 0.35 + 0.3); s.P0[i * 3] = _a.x + (_b.x - _a.x) * u + _s2.x * o1 + _tc.x * o2; s.P0[i * 3 + 1] = _a.y + (_b.y - _a.y) * u + _s2.y * o1 + _tc.y * o2 - s.sag * env * 1.0 * 0 + (s.sag ? -s.sag * env * len * 0.1 : 0); s.P0[i * 3 + 2] = _a.z + (_b.z - _a.z) * u + _s2.z * o1 + _tc.z * o2; } }
         for (let i = 0; i < n; i++) { s.P[i * 3] = s.P0[i * 3]; s.P[i * 3 + 1] = s.P0[i * 3 + 1]; s.P[i * 3 + 2] = s.P0[i * 3 + 2]; }
         // beam width profile
-        s.wf = (i) => s.width * (n === 2 ? 1 : 0.35 + 0.65 * Math.sin(Math.PI * i / (n - 1)));
       } else if (s.kind === 'trail') {
         s.t += dt; if (!s.stopped) { P(s.a, _a); const last = s.n ? _tc.set(s.P[0], s.P[1], s.P[2]) : null; if (!last || last.distanceTo(_a) > s.minD) { for (let i = Math.min(s.n, pts - 1); i > 0; i--) { s.P[i * 3] = s.P[(i - 1) * 3]; s.P[i * 3 + 1] = s.P[(i - 1) * 3 + 1]; s.P[i * 3 + 2] = s.P[(i - 1) * 3 + 2]; s.Q[i * 3] = s.Q[(i - 1) * 3]; s.Q[i * 3 + 1] = s.Q[(i - 1) * 3 + 1]; s.Q[i * 3 + 2] = s.Q[(i - 1) * 3 + 2]; s.T[i] = s.T[i - 1]; }
             s.P[0] = _a.x; s.P[1] = _a.y; s.P[2] = _a.z; if (s.base) { P(s.base, _b); s.Q[0] = _b.x; s.Q[1] = _b.y; s.Q[2] = _b.z; } s.T[0] = s.t; s.n = Math.min(s.n + 1, pts); } else { s.P[0] = _a.x; s.P[1] = _a.y; s.P[2] = _a.z; if (s.base) { P(s.base, _b); s.Q[0] = _b.x; s.Q[1] = _b.y; s.Q[2] = _b.z; } } }
         while (s.n > 0 && s.t - s.T[s.n - 1] > s.life) s.n--; // drop expired tail
         if (s.n === 0 && s.stopped) { s.on = false; s.dirty = true; continue; }
-        n = s.n; if (n < 2) { rib.clearSlot(s, si); continue; } s.wf = (i) => s.width * Math.pow(1 - clamp((s.t - s.T[i]) / s.life, 0, 1), 0.9);
+        n = s.n; if (n < 2) { rib.clearSlot(s, si); continue; }
       }
       if (n < 2) continue;
       const cr = s.c.r * s.g, cg = s.c.g * s.g, cb = s.c.b * s.g;
@@ -744,7 +782,7 @@ export function createFx(scene, opts = {}) {
         } else {
           _t.set(s.P[p1 * 3] - s.P[p0 * 3], s.P[p1 * 3 + 1] - s.P[p0 * 3 + 1], s.P[p1 * 3 + 2] - s.P[p0 * 3 + 2]); if (_t.lengthSq() < 1e-8) _t.set(0, 1, 0); _t.normalize();
           _s2.set(camPos.x - px, camPos.y - py, camPos.z - pz).normalize(); _s2.crossVectors(_t, _s2); if (_s2.lengthSq() < 1e-6) _s2.set(1, 0, 0); _s2.normalize();
-          const w = (i < n ? s.wf(ii) : 0) * 0.5; pos[v] = px + _s2.x * w; pos[v + 1] = py + _s2.y * w; pos[v + 2] = pz + _s2.z * w; pos[v + 3] = px - _s2.x * w; pos[v + 4] = py - _s2.y * w; pos[v + 5] = pz - _s2.z * w;
+          const w = (i < n ? (s.kind === 'trail' ? s.width * Math.pow(1 - clamp((s.t - s.T[ii]) / s.life, 0, 1), 0.9) : s.width * (n === 2 ? 1 : 0.35 + 0.65 * Math.sin(Math.PI * ii / (n - 1)))) : 0) * 0.5; pos[v] = px + _s2.x * w; pos[v + 1] = py + _s2.y * w; pos[v + 2] = pz + _s2.z * w; pos[v + 3] = px - _s2.x * w; pos[v + 4] = py - _s2.y * w; pos[v + 5] = pz - _s2.z * w;
           al = i < n ? (s.kind === 'trail' ? Math.pow(1 - clamp((s.t - s.T[ii]) / s.life, 0, 1), 1.2) * s.alpha : alphaK) : 0;
         }
         for (let k = 0; k < 2; k++) { col[c4 + k * 4] = cr; col[c4 + k * 4 + 1] = cg; col[c4 + k * 4 + 2] = cb; col[c4 + k * 4 + 3] = al; }
@@ -766,7 +804,7 @@ export function createFx(scene, opts = {}) {
       const t = d.age / d.life, sc = d.s * (t > 0.75 ? 1 - (t - 0.75) / 0.25 : 1);
       _v.set(d.x, d.y, d.z); _m.compose(_v, d.q, _s.set(sc, sc, sc)); debMesh.setMatrixAt(i, _m);
     }
-    debMesh.count = any ? MAXD : 0; debMesh.instanceMatrix.needsUpdate = true; debMesh.visible = any;
+    debMesh.count = any ? MAXD : WARM.on ? 1 : 0; debMesh.instanceMatrix.needsUpdate = true; debMesh.visible = any || WARM.on;
   }
 
   fx.update = (dt, camera) => {
@@ -778,14 +816,17 @@ export function createFx(scene, opts = {}) {
     updateEmitters(dt); ribbonStep(dt); debrisStep(dt);
     for (let i = 0; i < fx.hooks.length; i++) fx.hooks[i](dt, norL, addL); // gore etc: immediate-mode instances written after the pooled step
     addL.flush(); norL.flush();
+    if (!fx.warming) { const T = fx.time; ringMesh.visible = ringAlive(T); slashMesh.visible = slashAlive(T); glyphMesh.visible = T < gEnd; let rb = false; for (let i = 0; i < rib.slots.length; i++) if (rib.slots[i].on || rib.slots[i].dirty) { rb = true; break; } rib.mesh.visible = rb; }
     for (let i = shocks.length - 1; i >= 0; i--) if (fx.time - shocks[i].t0 > shocks[i].dur) shocks.splice(i, 1);
-    if (decalDirty && fx.time - lastDecalUp > decalGap) { decalTex.needsUpdate = true; decalDirty = false; lastDecalUp = fx.time; } // throttled: a 1024 canvas upload costs a few ms
+    if (decalDirty && !fx.hold && fx.time - lastDecalUp > decalGap) { uploadDecals(); lastDecalUp = fx.time; } // throttled + tiled (see uploadDecals); fx.hold = true defers it (replay seeking)
   };
-  fx.flushDecals = () => { if (decalDirty) { decalTex.needsUpdate = true; decalDirty = false; lastDecalUp = fx.time; } };
+  /** shader warm-up switch (FightView.warm): while on, all pooled meshes are drawn once with a dead instance. fx.update(0) afterwards (or setWarm(false)) restores the idle state. */
+  fx.setWarm = (on) => { WARM.on = !!on; fx.warming = !!on; if (on) { for (const m of [ringMesh, slashMesh, glyphMesh, rib.mesh]) m.visible = true; } else { ringMesh.visible = slashMesh.visible = glyphMesh.visible = rib.mesh.visible = false; fx.update(0, fx.cam); } };
+  fx.flushDecals = () => { if (decalDirty) { decPending = true; uploadDecals(); lastDecalUp = fx.time; } };
   fx.stats = () => ({ drawCalls: root.children.filter((m) => m.visible).length, particlesAdd: addL.alive.length, particlesNorm: norL.alive.length, instAdd: addL.n, instNorm: norL.n, emitters: emitters.length, ribbons: rib.slots.filter((s) => s.on).length });
   fx.group = root; fx.decalTexture = decalTex; fx.decalCanvas = dcv; fx.elements = EL; fx.CELL = CELL;
   fx.setGlyphEm = (v) => { glyphUni.uEm.value = v; };
   fx.dispose = () => { scene.remove(root); root.traverse((o) => { if (o.geometry) o.geometry.dispose(); if (o.material) o.material.dispose(); }); atlasTex.dispose(); glyphTex.dispose(); decalTex.dispose(); };
-  fx.reset = () => { addL.alive.splice(0).forEach((p) => addL.free.push(p)); norL.alive.splice(0).forEach((p) => norL.free.push(p)); emitters.length = 0; timers.length = 0; rings.length = 0; shocks.length = 0; rib.slots.forEach((s, i) => { s.on = false; s.dirty = true; }); for (const d of debris) d.on = false; ringMesh.userData.par.array.fill(-1e6); ringMesh.userData.par.needsUpdate = true; slashMesh.userData.par.array.fill(-1e6); slashMesh.userData.par.needsUpdate = true; gAttr[0].array.fill(-1e6); gAttr[0].needsUpdate = true; };
+  fx.reset = () => { addL.alive.splice(0).forEach((p) => addL.free.push(p)); norL.alive.splice(0).forEach((p) => norL.free.push(p)); emitters.length = 0; timers.length = 0; rings.length = 0; shocks.length = 0; rib.slots.forEach((s, i) => { s.on = false; s.dirty = true; }); for (const d of debris) d.on = false; ringMesh.userData.par.array.fill(-1e6); ringMesh.userData.par.needsUpdate = true; slashMesh.userData.par.array.fill(-1e6); slashMesh.userData.par.needsUpdate = true; gAttr[0].array.fill(-1e6); gAttr[0].needsUpdate = true; gEnd = -1; };
   return fx;
 }

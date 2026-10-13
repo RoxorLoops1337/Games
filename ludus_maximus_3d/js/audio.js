@@ -442,6 +442,57 @@ export function createAudio(opts = {}) {
   def('thock', 0.75, 0.25, 0, 0.1, 0, 3, (t, d, o) => { thump(t, 380, 160, 0.1, 0.5, d); burst(t, 0.05, d, { f0: 1700, f1: 900, q: 1.1, g: 0.5 }); });   // wooden practice blade on a post
   def('thunder', 0.9, 4.5, 2, 0.5, 0, 1, (t, d, o) => { burst(t, 0.15, d, { f0: 1200, f1: 200, q: 0.6, g: 0.4, kind: 'white' }); burst(t, 3.6, d, { type: 'lowpass', f0: 220, f1: 50, q: 0.7, g: 1.3, a: 0.35, kind: 'brown' }); burst(t + 0.9, 2.4, d, { type: 'lowpass', f0: 140, f1: 45, q: 0.7, g: 0.9, a: 0.5, kind: 'brown' }); });
 
+  // ---- BEAST (Venatio, js/beast_fx.js): procedural animal voices and body sounds. o.kind = lion | wolf | bear | boar | nemean | elephant. All synthesized, no files.
+  const bk = (o) => ({ lion: 1, wolf: 2, bear: 3, boar: 4, nemean: 5, elephant: 6 }[o.kind] || 1);
+  // a throat: sawtooth with a slow tremolo, shaped by a sweeping band-pass and layered breath noise (lion / bear / nemean growls and roars)
+  function growl(t, dur, d, f0, f1, g, o = {}) {
+    const out = G(0); envASR(out.gain, t, o.a || 0.04, g, dur * (o.hold || 0.5), dur * (1 - (o.hold || 0.5))); out.connect(d);
+    const s1 = ctx.createOscillator(); s1.type = 'sawtooth'; s1.frequency.setValueAtTime(f0, t); s1.frequency.exponentialRampToValueAtTime(Math.max(20, f1), t + dur);
+    const tr = ctx.createOscillator(), tg = ctx.createGain(); tr.frequency.value = o.trem || 24; tg.gain.value = f0 * (o.depth || 0.06); tr.connect(tg); tg.connect(s1.frequency);
+    const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.Q.value = o.q || 2.2; bp.frequency.setValueAtTime(o.cut0 || 600, t); bp.frequency.exponentialRampToValueAtTime(o.cut1 || 300, t + dur);
+    const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = o.lp || 1800; s1.connect(bp); bp.connect(lp); lp.connect(out);
+    s1.start(t); s1.stop(t + dur + 0.05); tr.start(t); tr.stop(t + dur + 0.05);
+    burst(t, dur, d, { f0: o.cut0 || 700, f1: o.cut1 || 350, q: 1.1, g: g * (o.breath || 0.5), a: 0.05, kind: 'pink' });
+  }
+  def('beastRoar', 1.0, 1.7, 4, 0.35, 0.2, 2, (t, d, o) => {
+    const k = bk(o), big = k === 5 || k === 6;
+    if (k === 6) { // trumpet: bright pulsing saw/square through a formant, vibrato, a noisy blast
+      const e = G(0); envASR(e.gain, t, 0.06, 0.8, 0.7, 0.5); e.connect(d); const s1 = ctx.createOscillator(); s1.type = 'sawtooth'; s1.frequency.setValueAtTime(380 * (o.pitch || 1), t); s1.frequency.exponentialRampToValueAtTime(640 * (o.pitch || 1), t + 0.35); s1.frequency.exponentialRampToValueAtTime(520 * (o.pitch || 1), t + 1.2);
+      const v = ctx.createOscillator(), vg = ctx.createGain(); v.frequency.value = 9; vg.gain.value = 22; v.connect(vg); vg.connect(s1.frequency); const f = ctx.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = 1100; f.Q.value = 1.6; s1.connect(f); f.connect(e); [s1, v].forEach((x) => { x.start(t); x.stop(t + 1.4); });
+      burst(t, 0.9, d, { f0: 900, f1: 1500, q: 1.2, g: 0.5, a: 0.05, kind: 'pink' }); thump(t, 70, 40, 0.4, 0.5, d);
+    } else if (k === 4) { growl(t, 0.7, d, 520, 380, 0.7, { trem: 40, depth: 0.12, cut0: 1500, cut1: 900, q: 3 }); }
+    else growl(t, big ? 1.6 : 1.2, d, (k === 3 ? 70 : big ? 62 : 85) * (o.pitch || 1), k === 3 ? 48 : 52, 0.95, { trem: k === 3 ? 18 : 24, depth: 0.07, cut0: big ? 520 : 700, cut1: 240, q: 2, hold: 0.55 });
+    if (big) thump(t + 0.1, 60, 35, 0.6, 0.45, d);
+  });
+  def('beastHowl', 0.8, 1.9, 3, 0.55, 0, 2, (t, d, o) => { // wolf: a sung glide with vibrato
+    const e = G(0); envASR(e.gain, t, 0.25, 0.55, 1.0, 0.65); e.connect(d); const s1 = ctx.createOscillator(); s1.type = 'triangle'; const b = 420 * (o.pitch || 1) * (0.92 + rng() * 0.2);
+    s1.frequency.setValueAtTime(b * 0.8, t); s1.frequency.exponentialRampToValueAtTime(b * 1.45, t + 0.7); s1.frequency.exponentialRampToValueAtTime(b * 1.2, t + 1.9);
+    const v = ctx.createOscillator(), vg = ctx.createGain(); v.frequency.value = 5.5; vg.gain.value = 9; v.connect(vg); vg.connect(s1.frequency); s1.connect(e); [s1, v].forEach((x) => { x.start(t); x.stop(t + 2.0); });
+    const h = G(0.25); const s2 = ctx.createOscillator(); s2.type = 'sine'; s2.frequency.setValueAtTime(b * 1.6, t); s2.frequency.exponentialRampToValueAtTime(b * 2.9, t + 0.7); s2.frequency.exponentialRampToValueAtTime(b * 2.4, t + 1.9); s2.connect(h); h.connect(e); s2.start(t); s2.stop(t + 2.0);
+    burst(t, 1.8, d, { f0: 1800, q: 1.4, g: 0.05, a: 0.4, kind: 'pink' });
+  });
+  def('beastGrowl', 0.8, 0.8, 2, 0.2, 0, 3, (t, d, o) => { const k = bk(o); growl(t, 0.55, d, (k === 2 ? 130 : k === 3 ? 75 : k === 6 ? 90 : 95) * (o.pitch || 1), 70, 0.8, { trem: 31, depth: 0.1, cut0: k === 2 ? 900 : 650, cut1: 300, q: 2.6, hold: 0.4 }); });
+  def('beastHurt', 0.9, 0.7, 3, 0.18, 0, 3, (t, d, o) => {
+    const k = bk(o);
+    if (k === 2) { const e = G(0); env(e.gain, t, 0.01, 0.6, 0.35); e.connect(d); osc('sawtooth', 900 * (o.pitch || 1), t, 0.4, e, { f1: 520 }); burst(t, 0.3, d, { f0: 1800, q: 2, g: 0.25, a: 0.01 }); } // yelp
+    else if (k === 4) { const e = G(0); env(e.gain, t, 0.01, 0.65, 0.4); e.connect(d); osc('sawtooth', 640 * (o.pitch || 1), t, 0.45, e, { f1: 340 }); burst(t, 0.35, d, { f0: 1300, q: 2, g: 0.3, a: 0.01 }); } // squeal
+    else if (k === 6) { const e = G(0); env(e.gain, t, 0.02, 0.6, 0.6); e.connect(d); const f = ctx.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = 900; f.Q.value = 1.3; f.connect(e); osc('sawtooth', 460 * (o.pitch || 1), t, 0.7, f, { f1: 300 }); }
+    else growl(t, 0.5, d, (k === 3 ? 100 : 130) * (o.pitch || 1), 78, 0.8, { trem: 20, depth: 0.1, cut0: 800, cut1: 400, q: 2, hold: 0.3 });
+  });
+  def('beastDeath', 0.95, 2.0, 4, 0.35, 0, 2, (t, d, o) => {
+    const k = bk(o);
+    if (k === 6) { const e = G(0); envASR(e.gain, t, 0.05, 0.7, 0.6, 1.1); e.connect(d); const f = ctx.createBiquadFilter(); f.type = 'bandpass'; f.frequency.setValueAtTime(1000, t); f.frequency.exponentialRampToValueAtTime(350, t + 1.7); f.Q.value = 1.2; f.connect(e); osc('sawtooth', 560 * (o.pitch || 1), t, 1.8, f, { f1: 140 }); }
+    else if (k === 2) { const e = G(0); envASR(e.gain, t, 0.03, 0.6, 0.3, 0.8); e.connect(d); osc('triangle', 800 * (o.pitch || 1), t, 1.1, e, { f1: 260 }); }
+    else growl(t, 1.5, d, (k === 4 ? 360 : k === 3 ? 90 : 105) * (o.pitch || 1), k === 4 ? 140 : 38, 0.9, { trem: 16, depth: 0.09, cut0: 800, cut1: 180, q: 1.8, hold: 0.25 });
+  });
+  def('beastBite', 0.95, 0.35, 3, 0.1, 0, 4, (t, d, o) => { burst(t, 0.05, d, { type: 'highpass', f0: 2800, g: 0.7, a: 0.001 }); thump(t, hz(o, 150), 70, 0.12, 0.8, d); for (let i = 0; i < 3; i++) burst(t + 0.02 + i * 0.03, 0.04, d, { f0: 600 + rng() * 700, q: 4, g: 0.25, a: 0.002, kind: 'pink' }); burst(t + 0.01, 0.2, d, { type: 'lowpass', f0: 900, f1: 200, g: 0.5, kind: 'pink' }); });
+  def('beastClaw', 0.9, 0.4, 3, 0.1, 0, 4, (t, d, o) => { for (let i = 0; i < 3; i++) burst(t + i * 0.025, 0.14, d, { f0: hz(o, 2400) - i * 300, f1: 700, q: 1.4, g: 0.45, a: 0.005 }); burst(t + 0.03, 0.2, d, { type: 'lowpass', f0: 1200, f1: 250, g: 0.5, kind: 'pink' }); thump(t + 0.04, hz(o, 110), 60, 0.1, 0.5, d); });
+  def('beastGore', 1.0, 0.4, 3, 0.1, 0, 3, (t, d, o) => { thump(t, hz(o, 90), 45, 0.2, 0.9, d); burst(t, 0.15, d, { f0: 500, f1: 150, q: 1, g: 0.7, kind: 'pink' }); burst(t + 0.02, 0.12, d, { f0: 1600, f1: 700, q: 1.2, g: 0.35 }); });
+  def('beastSlam', 1.0, 0.8, 3, 0.25, 0.1, 3, (t, d, o) => { thump(t, hz(o, 80), 34, 0.45, 1.0, d); burst(t, 0.4, d, { type: 'lowpass', f0: 500, f1: 90, g: 0.9, kind: 'brown', a: 0.003 }); burst(t, 0.12, d, { f0: 1800, q: 0.8, g: 0.25, kind: 'pink' }); });
+  def('pawThud', 0.6, 0.25, 1, 0.05, 0, 4, (t, d, o) => { thump(t, hz(o, 90), 45, 0.12, 0.7, d); burst(t, 0.08, d, { type: 'lowpass', f0: 700, f1: 150, g: 0.4, kind: 'brown', a: 0.002 }); });
+  def('beastSnort', 0.7, 0.5, 2, 0.1, 0, 2, (t, d, o) => { burst(t, 0.3, d, { f0: 500, f1: 220, q: 1.6, g: 0.9, a: 0.02, kind: 'pink' }); burst(t + 0.18, 0.2, d, { f0: 420, f1: 200, q: 1.4, g: 0.6, a: 0.01, kind: 'pink' }); });
+  def('beastCharge', 0.9, 1.2, 3, 0.25, 0.1, 2, (t, d, o) => { for (let i = 0; i < 6; i++) thump(t + i * 0.1, hz(o, 85) - i * 3, 40, 0.14, 0.7, d); burst(t, 1.0, d, { type: 'lowpass', f0: 400, f1: 700, g: 0.5, kind: 'brown', a: 0.3 }); });
+
   // ---------- sfx dispatch ----------
   function sfx(name, o = {}) {
     if (name === 'ult' && o.element) name = 'ult' + o.element[0].toUpperCase() + o.element.slice(1);

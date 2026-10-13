@@ -13,7 +13,7 @@ const FLAVOR = {
   market: 'Stalls leaning on your wall sell to the crowds. Coin flows in every week.',
   scout: 'A tower above the walls. Lookouts watch rival schools and bring back whispers.',
   sparring: 'A roped ring for friendly bouts. Fighters learn each other and grow bonds.',
-  stands: 'Wooden benches on the yard. Paying neighbours make every prize richer.',
+  stands: 'Wooden benches on the yard. Paying neighbors make every prize richer.',
   shrine: 'A small altar to Fortuna. Offerings tilt the dice towards better loot and quiet fame.',
   hall: 'Statues of retired champions. Their stories inspire the whole school.',
 };
@@ -52,7 +52,7 @@ function miniMap(ctx, cur, onPick) {
     b.setAttribute('aria-label', locked ? `Plot ${i + 1}, locked` : p ? `${D.BUILD[p.b].n}, level ${p.l}` : `Plot ${i + 1}, empty`);
     b.onclick = () => onPick(i); grid.append(b);
   }
-  return card([h('div', 'ax-row', [h('div', 'ax-name', 'The grounds'), h('span', 'ax-grow'), cur >= 0 ? pill('Green edge: neighbours', { tone: 'good', tip: PARTNER_TIP, tipTitle: 'Neighbours' }) : null]), grid]);
+  return card([h('div', 'ax-row', [h('div', 'ax-name', 'The grounds'), h('span', 'ax-grow'), cur >= 0 ? pill('Green edge: neighbors', { tone: 'good', tip: PARTNER_TIP, tipTitle: 'Neighbors' }) : null]), grid]);
 }
 
 function overview(ctx, root) {
@@ -63,7 +63,7 @@ function overview(ctx, root) {
 // ------------------------------------------------------------------ locked row: buy land
 function landView(ctx, root, i, done) {
   const S = ctx.S, lm = L(), cost = lm.landCost(S), fame = lm.landFame(S), okFame = S.fame >= fame, okGold = S.gold >= cost;
-  root.append(card([row([medal('lock', 'dark big'), col([h('div', 'ax-name', 'Unclaimed land'), note('Buy another row of plots to make room for more buildings and richer neighbourhoods.')], 'ax-grow')]),
+  root.append(card([row([medal('lock', 'dark big'), col([h('div', 'ax-name', 'Unclaimed land'), note('Buy another row of plots to make room for more buildings and richer neighborhoods.')], 'ax-grow')]),
     h('div', 'ax-row ax-wrap', [goldPill(cost, 'Price of the next row'), famePill(fame, 'Fame needed to buy'), okFame ? pill('Fame ok', { tone: 'good', ico: 'check' }) : pill(`Need ${fmt(fame - S.fame)} more fame`, { tone: 'bad' })]),
     U.button({ label: 'Buy land', icon: 'coin', variant: okFame && okGold ? 'gold' : 'ghost', block: true, onClick: () => {
       const e = lm.buyLand(S); if (e) { ctx.sfx('uiError'); return U.toast(e, { kind: 'bad' }); }
@@ -92,7 +92,7 @@ function buildMenu(ctx, root, i, done) {
       } })
       : h('div', 'ax-row', [pill(`Needs ${fmt(B.fame)} fame`, { ico: 'lock', tone: 'bad', tip: `You have ${fmt(S.fame)} fame. Win fights to earn more.` })]);
     list.append(card([row([medal(ICON[id], 'dark'), col([h('div', 'ax-name', B.n), h('div', 'ax-b', B.f(B.v[1], 1)), note(FLAVOR[id])], 'ax-grow')]), likes,
-      B.syn && near.length ? pill(`+${near.length * 10}% from neighbours here`, { tone: 'good', tip: PARTNER_TIP }) : null, btn], okFame ? '' : 'dim'));
+      B.syn && near.length ? pill(`+${near.length * 10}% from neighbors here`, { tone: 'good', tip: PARTNER_TIP }) : null, btn], okFame ? '' : 'dim'));
   });
   root.append(list);
 }
@@ -106,7 +106,7 @@ function detail(ctx, root, i, done, goto) {
     kv('Now', B.f(fx.v, p.l)), p.l < 5 ? kv('Next level', B.f(nextV, p.l + 1)) : note('Maximum level reached.')], 'gold'));
 
   // synergy
-  root.append(sec('Neighbours'));
+  root.append(sec('Neighbors'));
   const nbs = lm.neighbors(i), nbNames = nbs.map((n) => S.plots[n]).filter(Boolean);
   const partners = h('div', 'ax-row ax-wrap ax-gap4', B.like.map((x) => {
     const near = nbNames.some((q) => q.b === x), built = lm.plotOf(S, x) >= 0;

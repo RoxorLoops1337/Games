@@ -3,7 +3,7 @@ import { U, h, D, L, fmt, openScreen, sec, card, row, col, note, hint, kv, medal
 import { legendsSheet, perksSheet, ascendFlow } from './legacy.js';
 
 const PREF_KEY = 'ludus_maximus_3d_prefs';
-const DEF = { master: 0.9, music: 0.7, sfx: 0.9, muted: false, rm: false, big: false, gore: 'full' };
+const DEF = { master: 0.9, music: 0.7, sfx: 0.9, muted: false, rm: false, big: false, hc: false, gore: 'full' };
 let tab = 'ludus';
 
 // ------------------------------------------------------------------ preferences (localStorage, safe)
@@ -11,9 +11,11 @@ export function readPrefs() { try { return Object.assign({}, DEF, JSON.parse(loc
 function writePrefs(p) { try { localStorage.setItem(PREF_KEY, JSON.stringify(p)); } catch (e) { /* storage blocked */ } }
 /** apply stored preferences to audio and the document. Safe to call at boot (pass game.ctx or {audio}). */
 export function applyPrefs(ctx) {
-  const p = readPrefs(), a = ctx && ctx.audio;
+  const p = readPrefs(), a = ctx && ctx.audio, so = (ctx && ctx.S && ctx.S.opts) || {};
+  // QA: a save carries its own comfort choices (S.opts), so an imported save brings them along; either source switches the option on
+  p.rm = !!(p.rm || so.rm); p.big = !!(p.big || so.big); p.hc = !!(p.hc || so.hc);
   globalThis.LM3D_GORE = ['off', 'low', 'full'].includes(p.gore) ? p.gore : 'full'; // read by js/gore.js at the start of every fight
-  try { document.body.classList.toggle('lx-large-text', !!p.big); document.body.classList.toggle('lx-reduce-motion', !!p.rm); } catch (e) { /* no body yet */ }
+  try { document.body.classList.toggle('lx-large-text', !!p.big); document.body.classList.toggle('lx-reduce-motion', !!p.rm); document.body.classList.toggle('lx-hc', !!(p.hc || (typeof matchMedia !== 'undefined' && matchMedia('(prefers-contrast: more)').matches))); } catch (e) { /* no body yet */ }
   if (a) { try { a.setMaster(p.muted ? 0 : p.master); a.setMusic(p.music); a.setSfx(p.sfx); } catch (e) { /* audio not ready */ } }
   return p;
 }
@@ -34,8 +36,10 @@ function ludusTab(ctx, root, draw) {
   const S = ctx.S, lm = L();
   const v = lm.visitor(S);
   if (v) root.append(visitorCard(ctx, v, draw));
+  root.append(sec('Buildings'));
+  root.append(card([note('Build and upgrade the kitchen, barracks, forge and the rest of your ludus. You can also tap a plot in the ludus view.'), U.button({ label: 'Open buildings', icon: 'ludus', variant: 'bronze', block: true, onClick: () => ctx.open('building', {}) })])); // QA: the plot screen used to open only by tapping the 3D scene, which keyboard and screen reader players cannot do
   root.append(sec('The world'));
-  root.append(card([note('Plan the whole season, deal with the rival schools, look after the barracks, and honor the fallen.'), actions([U.button({ label: 'Calendar', icon: 'scroll', variant: 'bronze', onClick: () => ctx.open('world', { tab: 'calendar' }) }), U.button({ label: 'Rival ludi', icon: 'skull', variant: 'bronze', onClick: () => ctx.open('world', { tab: 'rivals' }) }), U.button({ label: 'Barracks', icon: 'roster', variant: 'bronze', onClick: () => ctx.open('world', { tab: 'barracks' }) }), U.button({ label: `Memorial (${(S.fallen || []).length})`, icon: 'fame', variant: 'bronze', onClick: () => ctx.open('world', { tab: 'memorial' }) })])]));
+  root.append(card([note('Plan the whole season, deal with the rival schools, look after the barracks, and honor the fallen.'), actions([U.button({ label: 'Calendar', icon: 'scroll', variant: 'bronze', onClick: () => ctx.open('world', { tab: 'calendar' }) }), U.button({ label: 'Rival ludi', icon: 'skull', variant: 'bronze', onClick: () => ctx.open('world', { tab: 'rivals' }) }), U.button({ label: 'Barracks', icon: 'roster', variant: 'bronze', onClick: () => ctx.open('world', { tab: 'barracks' }) }), U.button({ label: `Memorial (${(S.fallen || []).length})`, icon: 'fame', variant: 'bronze', onClick: () => ctx.open('world', { tab: 'memorial' }) }), U.button({ label: 'Infirmary', icon: 'heart', variant: 'bronze', onClick: () => ctx.open('world', { tab: 'infirmary' }) }), U.button({ label: 'Patrons', icon: 'coin', variant: 'bronze', onClick: () => ctx.open('world', { tab: 'patrons' }) }), U.button({ label: 'Chronicle', icon: 'scroll', variant: 'bronze', onClick: () => ctx.open('world', { tab: 'chronicle' }) })])]));
   root.append(sec('Sponsors'));
   root.append(note('Sponsors pay when you finish their contract. Progress counts wins and trophies as you play.'));
   const grid = h('div', 'ax-grid');
@@ -120,6 +124,7 @@ function settingsTab(ctx, root, draw) {
   root.append(card([
     toggle('Reduced motion', 'Calms menu animations and transitions, shakes less and turns gore off.', !!(S.opts.rm || p.rm), (v) => setOpt('rm', 'rm', v)),
     toggle('Large text', 'Bigger text in menus and dialogs.', !!(S.opts.big || p.big), (v) => setOpt('big', 'big', v)),
+    toggle('High contrast', 'Flat dark panels, white text and thick edges. Follows your device setting when it asks for more contrast.', !!(S.opts.hc || p.hc), (v) => setOpt('hc', 'hc', v)),
   ]));
   root.append(sec('Violence'));
   const gl = h('div', 'ax-grid s'), gnote = { off: 'No blood, no wounds, no dismemberment.', low: 'Blood splashes and wounds. No dismemberment.', full: 'Arterial sprays, pools, wounds and dismemberment.' };
@@ -138,6 +143,7 @@ function settingsTab(ctx, root, draw) {
   });
   root.append(card([h('div', 'ax-b', 'Difficulty'), dg, toggle('Auto ultimates', 'Fighters cast their ultimates on their own. Turn off to time them yourself.', !!S.flags.auto, (v) => { S.flags.auto = v; ctx.save(); ctx.sfx('uiTap'); }),
     toggle('Hardcore (permadeath)', 'Off by default. When on, ANY defeat can kill the fighter who went down. The Pit, Horde Trial, champion duels and bounties can already kill with Hardcore off.', !!S.opts.hardcore, (v) => { S.opts.hardcore = v; ctx.save(); ctx.sfx(v ? 'deathThud' : 'uiTap'); })]));
+  saveSection(ctx, root);
 }
 
 // ------------------------------------------------------------------ help: how to play, save tools, credits
@@ -148,19 +154,52 @@ function helpTab(ctx, root, draw) {
     ['Build your fighters', 'Gear with on-hit effects and sets, a Keystone rune plus two minors, masteries at levels 5, 10, 15 and 20, techniques that fire on their own, and ultimates you trigger.'],
     ['Scout the Arena', 'Matches are announced weeks ahead. A Scout Tower reveals more about rivals and shows more weeks. Style matchups give a small edge only.'],
     ['Fight live', 'Gladiators move, strike and cast on their own. Tap your ultimates at the right moment and tap an enemy to focus it. Before each fight pick an augment.'],
-    ['Grow', 'Win gold, fame, loot, runes and relics. Upgrade buildings (neighbours add synergy), merge gear, bet on mispriced fights, try the Pit of Trials, then found a new ludus for laurels.'],
-    ['Mind the world', 'More, Calendar shows the whole season. Rival ludi have natures: gift the greedy, train with the honorable. Mentors and feasts lift the barracks. The Pit, Horde, duels with champions and bounties can kill a fighter; honor them on the memorial wall.'],
+    ['Grow', 'Win gold, fame, loot, runes and relics. Upgrade buildings from More, Ludus, or by tapping a plot (neighbors add synergy), merge gear, bet on mispriced fights, try the Pit of Trials, then found a new ludus for laurels.'],
+    ['Wounds, patrons, events', 'Injuries hit a body part (arm, knee, head, eye, ribs) and some heal into permanent scars that cost something. In the Infirmary decide per wound: rest it for free or pay to treat it, each with its own risk. Patrons sign contracts with demands, pay weekly and bite when you fail. Weekly events can chain into later consequences; the Chronicle keeps the log. All three are tabs of The World.'],
+    ['Mind the world', 'In More, the Calendar shows the whole season. Rival ludi have natures: gift the greedy, train with the honorable. Mentors and feasts lift the barracks. The Pit, Horde, duels with champions and bounties can kill a fighter; honor them on the memorial wall.'],
   ];
   root.append(card(steps.map(([t, d], i) => row([h('span', 'ax-medal', String(i + 1)), col([h('div', 'ax-b', t), note(d)], 'ax-grow')]))));
   root.append(U.button({ label: 'Replay tutorial', icon: 'star', variant: 'gold', block: true, onClick: () => { ctx.closeAll(); ctx.sfx('uiConfirm'); ctx.game.tutorial && ctx.game.tutorial.restart(); } }));
   root.append(note('The tutorial shows you the loop again with a spotlight. Your ludus is not changed.'));
   root.append(sec('Save'));
-  const cant = pill('Saved in this browser', { tone: 'good', ico: 'check', tip: 'Your ludus saves automatically in this browser. Export a code to back it up or move devices.' });
-  root.append(card([cant, note('Export a save code to back up your ludus or move it to another device. Importing replaces the current ludus.'),
-    actions([U.button({ label: 'Export save', icon: 'scroll', variant: 'bronze', onClick: () => exportSheet(ctx) }), U.button({ label: 'Import save', icon: 'scroll', variant: 'bronze', onClick: () => importSheet(ctx) })]),
-    U.button({ label: 'Delete this ludus', icon: 'skull', variant: 'danger', block: true, onClick: () => wipe(ctx) })]));
+  root.append(card([note('Backup, restore and device transfer live in Settings, under Save and backup.'), U.button({ label: 'Open Settings', icon: 'gear', variant: 'bronze', block: true, onClick: () => { tab = 'settings'; draw(); } })]));
   root.append(sec('Credits'));
   root.append(card([h('div', 'ax-name', 'Ludus Maximus 3D'), note('A gladiator school management game. Every model, texture, sound and tune is generated in code and rendered with three.js. Inspired by the schools of ancient Rome and by the long tradition of games about running one.'), note('Thank you for playing.')]));
+}
+
+// ------------------------------------------------------------------ save and backup (QA): file export/import, code, delete
+function saveSection(ctx, root) {
+  const S = ctx.S, lm = L();
+  root.append(sec('Save and backup'));
+  const stored = !lm.saveError, kids = [pill(stored ? 'Saved in this browser' : 'Saving is blocked here', { tone: stored ? 'good' : 'bad', ico: stored ? 'check' : 'lock', tip: stored ? 'Your ludus saves automatically in this browser.' : 'Storage is full or blocked. Download a save file now so you do not lose progress.' }),
+    note(`Save format ${S.sv || 1}. ${S.lastBackup ? `Last backup in week ${S.lastBackup}.` : 'You have not made a backup yet.'} A save file is a small JSON file you can keep anywhere and load on any device.`),
+    actions([U.button({ label: 'Download save file', icon: 'scroll', variant: 'gold', onClick: () => downloadSave(ctx) }), U.button({ label: 'Load save file', icon: 'scroll', variant: 'bronze', onClick: () => pickSaveFile(ctx) })]),
+    actions([U.button({ label: 'Show save code', icon: 'scroll', variant: 'ghost', onClick: () => exportSheet(ctx) }), U.button({ label: 'Paste save code', icon: 'scroll', variant: 'ghost', onClick: () => importSheet(ctx) })])];
+  if (lm.hasBackup && lm.hasBackup()) kids.push(note('An automatic copy from before the last upgrade is also kept in this browser.'));
+  kids.push(U.button({ label: 'Delete this ludus', icon: 'skull', variant: 'danger', block: true, onClick: () => wipe(ctx) }));
+  root.append(card(kids));
+}
+
+export function saveFileName(S) { return `ludus_maximus_${String(S.name || 'ludus').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '').slice(0, 24) || 'ludus'}_s${S.season}_w${((S.week - 1) % 12) + 1}.json`; }
+function downloadSave(ctx) {
+  const S = ctx.S; S.lastBackup = S.week; ctx.save();
+  if (U.download(saveFileName(S), L().exportFile(S))) { ctx.sfx('uiConfirm'); U.toast('Save file downloaded', { kind: 'good', ico: 'check' }); }
+  else { ctx.sfx('uiError'); U.toast('Downloads are blocked here. Use Show save code instead.', { kind: 'bad' }); }
+}
+function pickSaveFile(ctx) {
+  const inp = document.createElement('input'); inp.type = 'file'; inp.accept = '.json,application/json,text/plain'; inp.setAttribute('aria-label', 'Choose a save file'); inp.style.display = 'none';
+  inp.addEventListener('change', async () => {
+    const f = inp.files && inp.files[0]; inp.remove(); if (!f) return;
+    let text = ''; try { text = await f.text(); } catch (e) { ctx.sfx('uiError'); return U.toast('That file could not be read', { kind: 'bad' }); }
+    const r = L().parseImport(text); if (!r.S) { ctx.sfx('uiError'); return U.toast(r.err || 'That file did not work', { kind: 'bad' }); }
+    await replaceWith(ctx, r.S, r);
+  });
+  document.body.append(inp); inp.click();
+}
+async function replaceWith(ctx, N, r = {}) {
+  const ok = await confirmDialog(ctx, { title: 'Replace your ludus?', text: `This loads "${N.name}" (season ${N.season}, week ${N.week}, ${fmt(N.gold)} gold) and overwrites the current save.${r.repaired ? ' The file was damaged and has been repaired; some recent progress may be missing.' : ''}${r.newer ? ' It comes from a newer version of the game and may not behave correctly.' : ''}`, yes: 'Replace', no: 'Cancel', danger: true });
+  if (!ok) return false;
+  ctx.game.S = N; ctx.save(); ctx.closeAll(); ctx.refresh(); ctx.sfx('levelUp'); applyPrefs(ctx); U.toast('Save loaded', { kind: 'good', ico: 'check' }); return true;
 }
 
 function exportSheet(ctx) {
@@ -183,10 +222,8 @@ function importSheet(ctx) {
     root.append(note('Paste a save code. This replaces your current ludus, so export first if you want to keep it.'), ta,
       U.button({ label: 'Load this ludus', icon: 'check', variant: 'danger', block: true, onClick: async () => {
         const t = ta.value.trim(); if (!t) { ctx.sfx('uiError'); return U.toast('Paste a code first', { kind: 'bad' }); }
-        const N = L().importCode(t); if (!N) { ctx.sfx('uiError'); return U.toast('That code did not work', { kind: 'bad' }); }
-        const ok = await confirmDialog(ctx, { title: 'Replace your ludus?', text: `This loads "${N.name}" (week ${N.week}, ${fmt(N.gold)} gold) and overwrites the current save.`, yes: 'Replace', no: 'Cancel', danger: true });
-        if (!ok) return;
-        ctx.game.S = N; ctx.save(); ctx.closeAll(); ctx.refresh(); ctx.sfx('levelUp'); applyPrefs(ctx); U.toast('Save loaded', { kind: 'good', ico: 'check' });
+        const r = L().parseImport(t); if (!r.S) { ctx.sfx('uiError'); return U.toast(r.err || 'That code did not work', { kind: 'bad' }); }
+        await replaceWith(ctx, r.S, r);
       } }));
   });
 }

@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#2a2540">
 <title>Ludus Maximus 3D</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='30' fill='%235a1f5e' stroke='%23f2c14e' stroke-width='4'/%3E%3Cpath d='M18 44l28-24M46 44L18 20' stroke='%23f2c14e' stroke-width='5' stroke-linecap='round'/%3E%3C/svg%3E">
@@ -19,6 +19,50 @@
 <script type="importmap">
 { "imports": { "three": "./vendor/three.module.min.js", "three/addons/": "./vendor/jsm/" } }
 </script>
+<link rel="modulepreload" href="vendor/three.module.min.js">
+<link rel="modulepreload" href="js/game.js">
+<link rel="modulepreload" href="js/fightview.js">
+<link rel="modulepreload" href="js/rig.js">
+<link rel="modulepreload" href="js/gear.js">
+<link rel="modulepreload" href="js/gladiator.js">
+<link rel="modulepreload" href="js/fx.js">
+<link rel="modulepreload" href="js/gore.js">
+<link rel="modulepreload" href="js/env_arena.js">
+<link rel="modulepreload" href="js/post.js">
+<link rel="modulepreload" href="js/audio.js">
+<link rel="modulepreload" href="js/hub.js">
+<!-- PERF: the rest of the static import graph (depth 2 to 5) and the hub's own imports, so the whole tree downloads in the first round trip instead of one level per round trip -->
+<link rel="modulepreload" href="js/ui_kit.js">
+<link rel="modulepreload" href="js/flow.js">
+<link rel="modulepreload" href="js/envtex.js">
+<link rel="modulepreload" href="js/envfx.js">
+<link rel="modulepreload" href="js/env_ludus.js">
+<link rel="modulepreload" href="js/buildings.js">
+<link rel="modulepreload" href="js/beast.js">
+<link rel="modulepreload" href="js/beast_fx.js">
+<link rel="modulepreload" href="js/director.js">
+<link rel="modulepreload" href="js/feel.js">
+<link rel="modulepreload" href="js/sky.js">
+<link rel="modulepreload" href="js/title.js">
+<link rel="modulepreload" href="js/tutorial.js">
+<link rel="modulepreload" href="js/ceremonies.js">
+<link rel="modulepreload" href="js/portrait.js">
+<link rel="modulepreload" href="js/photo.js">
+<link rel="modulepreload" href="js/uihelpers.js">
+<link rel="modulepreload" href="js/fightsetup.js">
+<link rel="modulepreload" href="js/hubstub.js">
+<link rel="modulepreload" href="vendor/jsm/postprocessing/EffectComposer.js">
+<link rel="modulepreload" href="vendor/jsm/postprocessing/RenderPass.js">
+<link rel="modulepreload" href="vendor/jsm/postprocessing/UnrealBloomPass.js">
+<link rel="modulepreload" href="vendor/jsm/postprocessing/OutputPass.js">
+<link rel="modulepreload" href="vendor/jsm/postprocessing/ShaderPass.js">
+<link rel="modulepreload" href="vendor/jsm/postprocessing/MaskPass.js">
+<link rel="modulepreload" href="vendor/jsm/postprocessing/Pass.js">
+<link rel="modulepreload" href="vendor/jsm/shaders/CopyShader.js">
+<link rel="modulepreload" href="vendor/jsm/shaders/LuminosityHighPassShader.js">
+<link rel="modulepreload" href="vendor/jsm/shaders/OutputShader.js">
+<link rel="modulepreload" href="vendor/jsm/utils/BufferGeometryUtils.js">
+<link rel="modulepreload" href="js/screens/more.js">
 </head>
 <body class="lx-root">
 <canvas id="gl"></canvas>

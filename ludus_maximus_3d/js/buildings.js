@@ -14,7 +14,7 @@ import { makeStoneTexture, makeRoofTexture, makeClothTexture, tfbm } from './env
 export const FOOT = { w: 8.0, d: 5.4 };
 export const MAXPLOT = 20;
 const TAU = Math.PI * 2;
-const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+const clamp = (x, a = 0, b = 1) => (x < a ? a : x > b ? b : x);
 const lerp = (a, b, t) => a + (b - a) * t;
 const colOf = (hex) => { if (Array.isArray(hex)) return hex; const c = new THREE.Color(hex); return [c.r, c.g, c.b]; };
 const rngOf = (seed) => { let s = (seed | 0) || 1; return () => (s = (s * 16807) % 2147483647) / 2147483647; };

@@ -93,7 +93,7 @@ export function iconButton(name, label, onClick) {
 
 // ---------- bar (hp / stamina / xp) with segment ticks and damage ghost ----------
 // kind: 'hp' | 'stam' | 'xp' | 'foe'. segments: tick every N units (e.g. 25 -> ticks per 25 hp).
-export function bar({ value = 1, max = 1, kind = 'hp', segments = 0, label = '', height = 14, cls = '' } = {}) {
+export function bar({ value = 1, max = 1, kind = 'hp', segments = 0, label = '', height = 14, cls = '', name = '' } = {}) {
   const el = h('div', `lx-bar lx-bar-${kind} ${cls}`);
   el.style.setProperty('--lx-bar-h', height + 'px');
   const ghost = h('i', 'lx-bar-ghost'), fill = h('i', 'lx-bar-fill'), ticks = h('i', 'lx-bar-ticks'), txt = h('span', 'lx-bar-txt');
@@ -111,7 +111,7 @@ export function bar({ value = 1, max = 1, kind = 'hp', segments = 0, label = '',
     el.setAttribute('aria-valuenow', Math.round(v));
   };
   if (segments) { el.style.setProperty('--lx-seg', (100 * segments / max) + '%'); el.classList.add('lx-seg'); }
-  el.setAttribute('role', 'progressbar'); el.setAttribute('aria-valuemax', Math.round(max)); el.set(value, max);
+  el.setAttribute('role', 'progressbar'); el.setAttribute('aria-valuemin', '0'); el.setAttribute('aria-valuemax', Math.round(max)); el.setAttribute('aria-label', name || { hp: 'Health', stam: 'Stamina', xp: 'Experience' }[kind] || 'Progress'); el.set(value, max);
   ghost.style.transitionDuration = '0s'; return el;
 }
 
@@ -140,8 +140,10 @@ export function rarityFrame(rarity = 'common', child, size = 56) {
 // plate.track(worldVec3, camera, w, h): works with any THREE.Vector3 (needs .clone().project(camera)); hides when behind camera / off-screen.
 export function nameplate({ name, level = 1, hp = 1, maxHp = 1, team = 'ally', rank = 0 } = {}) {
   const el = h('div', `lx-plate lx-team-${team}`);
-  const hb = bar({ value: hp, max: maxHp, kind: team === 'foe' ? 'foe' : 'hp', segments: Math.max(1, maxHp / 4), height: 8 });
-  el.append(h('div', 'lx-plate-top', [h('span', 'lx-lvl lx-num', level), h('span', 'lx-plate-name', name)]), hb);
+  const hb = bar({ value: hp, max: maxHp, kind: team === 'foe' ? 'foe' : 'hp', segments: Math.max(1, maxHp / 4), height: 8, name: team === 'foe' ? 'Enemy health' : 'Health' });
+  const tm = h('span', 'lx-plate-team', icon(team === 'foe' ? 'skull' : 'shield', 12)); tm.setAttribute('aria-hidden', 'true'); // QA: side is a shape and a dashed edge, not only a colour
+  el.setAttribute('role', 'group'); el.setAttribute('aria-label', `${name}, level ${level}, ${team === 'foe' ? 'enemy' : 'your fighter'}`);
+  el.append(h('div', 'lx-plate-top', [tm, h('span', 'lx-lvl lx-num', level), h('span', 'lx-plate-name', name)]), hb);
   if (rank) el.append(stars(rank, 5));
   el.hp = hb;
   el.place = (x, y, vis = true) => { el.style.transform = `translate3d(${x.toFixed(1)}px,${y.toFixed(1)}px,0) translate(-50%,-100%)`; el.style.visibility = vis ? '' : 'hidden'; };
@@ -155,21 +157,72 @@ export function nameplate({ name, level = 1, hp = 1, maxHp = 1, team = 'ally', r
 }
 
 // ---------- modal (bottom sheet on phones, centered dialog on desktop) ----------
+// QA: one document keydown handler drives the TOP modal only: Escape closes just that one, Tab is trapped inside it, and arrow keys
+// move focus spatially between its buttons (grids, tab rows, nav). Every dialog is labelled by its title.
+const modalStack = []; let modalUid = 0, kbOn = false;
+const FOCUSABLE = 'button:not(:disabled), a[href], input:not(:disabled):not([type=hidden]), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])';
+const shown = (e) => { if (!e.isConnected || e.closest('[hidden], [inert]')) return false; const r = e.getBoundingClientRect(); if (!r.width || !r.height) return false; const cs = getComputedStyle(e); return cs.visibility !== 'hidden' && cs.display !== 'none'; };
+export function focusables(root) { return [...root.querySelectorAll(FOCUSABLE)].filter(shown); }
+/** move focus from `cur` to the nearest focusable in a direction ('left'|'right'|'up'|'down'); returns the element or null */
+export function spatialFocus(root, cur, dir) {
+  const c = cur.getBoundingClientRect(), cx = c.left + c.width / 2, cy = c.top + c.height / 2; let best = null, bs = Infinity;
+  for (const e of focusables(root)) {
+    if (e === cur || cur.contains(e) || e.contains(cur)) continue;
+    const r = e.getBoundingClientRect(), x = r.left + r.width / 2, y = r.top + r.height / 2, dx = x - cx, dy = y - cy;
+    const along = dir === 'right' ? dx : dir === 'left' ? -dx : dir === 'down' ? dy : -dy, across = dir === 'left' || dir === 'right' ? Math.abs(dy) : Math.abs(dx);
+    if (along < 4) continue; const sc = along + across * 2.5; if (sc < bs) { bs = sc; best = e; }
+  }
+  if (best) best.focus({ preventScroll: false });
+  return best;
+}
+function onModalKey(e) {
+  const top = modalStack[modalStack.length - 1]; if (e.defaultPrevented) return;
+  if (!top) { // no dialog: arrow keys still walk the HUD buttons (top bar, advance button, bottom nav)
+    const dir0 = { ArrowLeft: 'left', ArrowRight: 'right', ArrowUp: 'up', ArrowDown: 'down' }[e.key], a0 = document.activeElement, hud = a0 && a0.closest && a0.closest('.lx-hud');
+    if (dir0 && hud && !e.altKey && !e.ctrlKey && !e.metaKey && spatialFocus(hud, a0, dir0)) e.preventDefault();
+    return;
+  }
+  const el = top.el;
+  if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); top.close(); return; }
+  if (e.key === 'Tab') {
+    const f = focusables(el); if (!f.length) { e.preventDefault(); return; }
+    const first = f[0], last = f[f.length - 1], a = document.activeElement;
+    if (!el.contains(a)) { e.preventDefault(); first.focus(); } else if (e.shiftKey && a === first) { e.preventDefault(); last.focus(); } else if (!e.shiftKey && a === last) { e.preventDefault(); first.focus(); }
+    return;
+  }
+  const dir = { ArrowLeft: 'left', ArrowRight: 'right', ArrowUp: 'up', ArrowDown: 'down' }[e.key];
+  if (dir && !e.altKey && !e.ctrlKey && !e.metaKey) {
+    const a = document.activeElement; if (!a || !el.contains(a)) return;
+    if (/^(textarea|select)$/i.test(a.tagName) || (a.tagName === 'INPUT' && a.type !== 'button' && a.type !== 'checkbox')) return; // text and sliders keep their own arrows
+    if (spatialFocus(el, a, dir)) e.preventDefault();
+  }
+}
 export function modal({ title, body, actions = [], onClose, host = document.body } = {}) {
   const scrim = h('div', 'lx-scrim'); const sheet = panel({ title, variant: 'marble', cls: 'lx-sheet' });
-  sheet.setAttribute('role', 'dialog'); sheet.setAttribute('aria-modal', 'true');
-  const grab = h('i', 'lx-grab'); sheet.prepend(grab);
+  sheet.setAttribute('role', 'dialog'); sheet.setAttribute('aria-modal', 'true'); sheet.tabIndex = -1;
+  const tt = sheet.querySelector('.lx-title'); if (tt) { tt.id = 'lx-mt-' + (++modalUid); sheet.setAttribute('aria-labelledby', tt.id); } else sheet.setAttribute('aria-label', 'Dialog');
+  const grab = h('i', 'lx-grab'); grab.setAttribute('aria-hidden', 'true'); sheet.prepend(grab);
   sheet.body.append(h('div', 'lx-sheet-scroll', body));
   if (actions.length) sheet.body.append(h('div', 'lx-actions', actions));
   const x = iconButton('close', 'Close', () => api.close()); x.classList.add('lx-sheet-x'); sheet.append(x);
   scrim.append(sheet); host.append(scrim);
-  const prevFocus = document.activeElement;
-  const api = { el: scrim, close() { scrim.classList.add('lx-out'); setTimeout(() => scrim.remove(), reduced() ? 0 : 220); document.removeEventListener('keydown', esc); prevFocus?.focus?.(); onClose?.(); } };
-  const esc = (e) => { if (e.key === 'Escape') api.close(); };
-  document.addEventListener('keydown', esc);
+  const prevFocus = document.activeElement; let closed = false;
+  const api = { el: scrim, close() {
+    if (closed) return; closed = true; const i = modalStack.indexOf(api); if (i >= 0) modalStack.splice(i, 1);
+    scrim.classList.add('lx-out'); setTimeout(() => scrim.remove(), reduced() ? 0 : 220);
+    const nextTop = modalStack[modalStack.length - 1]; if (nextTop) { if (!nextTop.el.contains(document.activeElement)) (focusables(nextTop.el)[0] || nextTop.el).focus?.({ preventScroll: true }); } else prevFocus?.focus?.({ preventScroll: true });
+    onClose?.();
+  } };
+  modalStack.push(api); if (!kbOn) { kbOn = true; document.addEventListener('keydown', onModalKey, true); }
   scrim.addEventListener('pointerdown', (e) => { if (e.target === scrim) api.close(); });
-  requestAnimationFrame(() => { scrim.classList.add('lx-in'); (sheet.querySelector('.lx-btn-gold') || x).focus?.({ preventScroll: true }); });
+  requestAnimationFrame(() => { scrim.classList.add('lx-in'); if (!scrim.contains(document.activeElement)) (sheet.querySelector('.lx-btn-gold') || x).focus?.({ preventScroll: true }); });
   return api;
+}
+
+// ---------- file download (save export, share) ----------
+export function download(filename, text, type = 'application/json') {
+  try { const url = URL.createObjectURL(new Blob([text], { type })), a = document.createElement('a'); a.href = url; a.download = filename; document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 4000); return true; }
+  catch (e) { return false; }
 }
 
 // ---------- toast ----------
@@ -212,8 +265,10 @@ export function cooldownRing({ ult = 'meteor', color = '#e8742a', size = 72, hot
   const prog = svg.querySelector('.lx-ult-prog'); let was = 0;
   b.set = (frac, remainingSec) => {
     frac = Math.max(0, Math.min(1, frac)); prog.style.strokeDashoffset = String(C * frac);
-    const ready = frac <= 0; b.classList.toggle('lx-ready', ready); b.disabled = !ready; b.setAttribute('aria-disabled', !ready);
-    secs.textContent = ready ? '' : Math.ceil(remainingSec ?? frac * 10);
+    const ready = frac <= 0; b.classList.toggle('lx-ready', ready); b.disabled = !ready; b.setAttribute('aria-disabled', String(!ready));
+    const left = Math.ceil(remainingSec ?? frac * 10);
+    secs.textContent = ready ? 'GO' : left; // QA: readiness is shown as text and a pattern, never by colour alone
+    b.setAttribute('aria-label', ready ? `Ultimate ${ult}, ready` : `Ultimate ${ult}, ready in ${left} seconds`);
     if (ready && was > 0) { b.classList.remove('lx-flash'); void b.offsetWidth; b.classList.add('lx-flash'); }
     was = frac;
   };
@@ -246,7 +301,8 @@ export function nav(items, onSelect, active = 0) {
   items.forEach((it, i) => {
     const b = h('button', 'lx-nav-i' + (i === active ? ' on' : ''), [icon(it.icon, 24), h('span', '', it.label)]); b.type = 'button';
     if (it.badge) b.append(h('i', 'lx-badge lx-num', it.badge));
-    b.addEventListener('click', () => { el.querySelectorAll('.on').forEach((n) => n.classList.remove('on')); b.classList.add('on'); onSelect?.(it, i); });
+    if (i === active) b.setAttribute('aria-current', 'page');
+    b.addEventListener('click', () => { el.querySelectorAll('.on').forEach((n) => { n.classList.remove('on'); n.removeAttribute('aria-current'); }); b.classList.add('on'); b.setAttribute('aria-current', 'page'); onSelect?.(it, i); });
     el.append(b);
   }); return el;
 }

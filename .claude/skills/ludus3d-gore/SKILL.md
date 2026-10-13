@@ -63,3 +63,7 @@ Tier scales counts (high 1, medium 0.75, low 0.5), droplet pool (460 / 320 / 200
 - Coverage: `measureCover` (every 1.5 s, 32 px downsample of the decal canvas, `G.cover` 0..1) feeds `capK()` (1 fresh .. 0 covered between 0.10 and 0.24): small splats are skipped, large ones shrink and fade, pools shrink and stamp fainter. `dryAll` every 5 s (max 7 times) darkens existing painted pixels (`source-atop` 5.5% dark brown), `clearUnderFeet` every 0.45 s lifts blood under living fighters (destination-out radial, so shadows and legs stay readable). A 3v3 reaches cover 0.3 to 0.45 at 36 s, 1v1 stays under 0.1 for the first 10 s.
 - Weaknesses: the head face is only visible when it lands face up; plates are spall, not real removed armour; with 6 fighters at low tier draw calls are 149 of 150.
 - Pitfall: `paint()` helpers must write colour components one by one (a 4 element array `set` at the last vertex overflows the typed array).
+
+# Update: execution gore, decal marking, coverage
+- `gore.onDown(id, {last: true, crit: true, dx, dz})` is now called from the finisher's `hit` event (fightview `execHit`), so the head goes with the blow. Other kills unchanged.
+- Every stamp calls `fx.markDecals(x, z, r)` (tile upload) and `addCover(x, z, r, a)` (analytic coverage grid); never read the decal canvas back. `gore.settle()` clears airborne drops / jets and lets props land (replay seeks); `gore.warm(on)` builds and draws the gib mesh once for shader warm-up.

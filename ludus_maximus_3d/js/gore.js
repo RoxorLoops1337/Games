@@ -83,11 +83,18 @@ export function createGore(fx, o = {}) {
   let splatBudget = 0;
   // long fights: measure how much of the sand is covered (downsampled alpha of the decal canvas) and thin new stains out as it fills,
   // dry old blood darker, and let the sand clear a little under standing fighters so silhouettes and shadows stay readable
-  const covC = mk(32, 32), covX = covC.getContext('2d', { willReadFrequently: true }); let covT = 0, dryT = 0, dryN = 0, fadeT = 0;
+  // long fights: estimate how much of the sand is covered and thin new stains out as it fills, dry old blood darker, and let the sand clear a little under standing
+  // fighters so silhouettes and shadows stay readable. Coverage is tracked analytically on a 32 x 32 grid (every stamp adds its area): reading the decal canvas back
+  // (a canvas readback) stalled the GPU pipeline for a visible hitch every 1.5 s.
+  const COV_N = 32, covGrid = new Float32Array(COV_N * COV_N), COV_CELL = (DD.ext * 2) / COV_N, COV_AREA = COV_CELL * COV_CELL; let covT = 0, dryT = 0, dryN = 0, fadeT = 0;
   G.cover = 0;
+  function addCover(x, z, r, a = 0.7) { // area of a stamp of radius r (m), spread over the cells it touches, saturating per cell
+    const cx = (x / (DD.ext * 2) + 0.5) * COV_N, cz = (z / (DD.ext * 2) + 0.5) * COV_N, rc = Math.max(0.5, r / COV_CELL), area = Math.PI * r * r * a / COV_AREA;
+    const x0 = Math.max(0, Math.floor(cx - rc)), x1 = Math.min(COV_N - 1, Math.floor(cx + rc)), z0 = Math.max(0, Math.floor(cz - rc)), z1 = Math.min(COV_N - 1, Math.floor(cz + rc)), n = (x1 - x0 + 1) * (z1 - z0 + 1);
+    for (let j = z0; j <= z1; j++) for (let i = x0; i <= x1; i++) covGrid[j * COV_N + i] = 1 - (1 - covGrid[j * COV_N + i]) * (1 - Math.min(1, area / n));   // union of overlapping stains
+  }
   function measureCover() {
-    try { covX.clearRect(0, 0, 32, 32); covX.drawImage(DD.canvas, 0, 0, 32, 32); const d = covX.getImageData(0, 0, 32, 32).data; let sum = 0, n = 0;
-      for (let y = 0; y < 32; y++) for (let x = 0; x < 32; x++) { if (Math.hypot(x - 15.5, y - 15.5) > 14) continue; sum += d[(y * 32 + x) * 4 + 3]; n++; } G.cover = sum / (n * 255); } catch (e) { /* canvas not readable: keep the old value */ }
+    let sum = 0, n = 0; for (let y = 0; y < COV_N; y++) for (let x = 0; x < COV_N; x++) { if (Math.hypot(x - 15.5, y - 15.5) > 14) continue; sum += covGrid[y * COV_N + x]; n++; } G.cover = Math.min(1, sum / n * 1.35);
   }
   const capK = () => 1 - sstep(0.1, 0.24, G.cover);   // 1 = fresh sand, 0 = already well covered
   function dryAll() { // old blood goes darker and browner (source-atop only touches painted pixels)
@@ -95,29 +102,29 @@ export function createGore(fx, o = {}) {
   }
   function clearUnderFeet() { // gently lift the stains right under living fighters
     dctx.save(); dctx.globalCompositeOperation = 'destination-out';
-    for (const f of G.fighters.values()) { if (f.down) continue; f.rig.root.getWorldPosition(_p); const [px, pz] = DD.toPx(_p.x, _p.z), r = 1.0 * DD.k, gr = dctx.createRadialGradient(px, pz, 0, px, pz, r); gr.addColorStop(0, 'rgba(0,0,0,0.16)'); gr.addColorStop(0.6, 'rgba(0,0,0,0.08)'); gr.addColorStop(1, 'rgba(0,0,0,0)'); dctx.fillStyle = gr; dctx.beginPath(); dctx.arc(px, pz, r, 0, TAU); dctx.fill(); }
-    dctx.restore(); fx.markDecals();
+    for (const f of G.fighters.values()) { if (f.down) continue; f.rig.root.getWorldPosition(_p); const [px, pz] = DD.toPx(_p.x, _p.z), r = 1.0 * DD.k, gr = dctx.createRadialGradient(px, pz, 0, px, pz, r); gr.addColorStop(0, 'rgba(0,0,0,0.16)'); gr.addColorStop(0.6, 'rgba(0,0,0,0.08)'); gr.addColorStop(1, 'rgba(0,0,0,0)'); dctx.fillStyle = gr; dctx.beginPath(); dctx.arc(px, pz, r, 0, TAU); dctx.fill(); fx.markDecals(_p.x, _p.z, 1.2); }
+    dctx.restore();
   }
   function stampSplat(x, z, size, ang, stretch = 1, a = 1) {
     const ck = capK(); if (splatBudget <= 0 && size < 0.3) return; if (G.counts.splats > 650 && size < 0.3 && R() < 0.7) return; if (ck < 1 && size < 0.35 && R() > 0.25 + 0.75 * ck) return; splatBudget--; G.counts.splats++;
     const [px, pz] = DD.toPx(x, z), s = size * DD.k * (128 / 58) * (0.78 + 0.22 * ck);
     dctx.save(); dctx.translate(px, pz); dctx.rotate(ang); dctx.scale(stretch, 1); dctx.globalAlpha = a * (0.6 + 0.4 * ck); dctx.drawImage(SPR[(R() * SPR.length) | 0], -s / 2, -s / 2, s, s); dctx.restore();
-    fx.markDecals();
+    fx.markDecals(x, z, size * 0.9); addCover(x, z, size * 0.62, 0.8);
   }
   function stampSmear(x0, z0, x1, z1, w, a = 0.8) {
     const [a0, b0] = DD.toPx(x0, z0), [a1, b1] = DD.toPx(x1, z1); dctx.save(); dctx.lineCap = 'round';
     dctx.strokeStyle = `rgba(86,7,9,${a * 0.85})`; dctx.lineWidth = w * DD.k; dctx.beginPath(); dctx.moveTo(a0, b0); dctx.lineTo(a1, b1); dctx.stroke();
-    dctx.strokeStyle = `rgba(150,14,16,${a * 0.5})`; dctx.lineWidth = w * DD.k * 0.45; dctx.stroke(); dctx.restore(); fx.markDecals();
+    dctx.strokeStyle = `rgba(150,14,16,${a * 0.5})`; dctx.lineWidth = w * DD.k * 0.45; dctx.stroke(); dctx.restore(); fx.markDecals((x0 + x1) / 2, (z0 + z1) / 2, Math.hypot(x1 - x0, z1 - z0) / 2 + w); addCover((x0 + x1) / 2, (z0 + z1) / 2, Math.hypot(x1 - x0, z1 - z0) / 2 * 0.5 + w * 0.5, 0.5);
   }
   function stampFoot(x, z, heading, side, a) {
     const [px, pz] = DD.toPx(x + Math.cos(heading + Math.PI / 2) * 0.09 * side, z + Math.sin(heading + Math.PI / 2) * 0.09 * side), L = 0.3 * DD.k, W = 0.11 * DD.k;
     dctx.save(); dctx.translate(px, pz); dctx.rotate(heading); dctx.fillStyle = `rgba(104,9,11,${a})`;
-    dctx.beginPath(); dctx.ellipse(-L * 0.12, 0, L * 0.3, W * 0.62, 0, 0, TAU); dctx.fill(); dctx.beginPath(); dctx.ellipse(L * 0.2, 0, L * 0.34, W * 0.7, 0, 0, TAU); dctx.fill(); dctx.restore(); fx.markDecals();
+    dctx.beginPath(); dctx.ellipse(-L * 0.12, 0, L * 0.3, W * 0.62, 0, 0, TAU); dctx.fill(); dctx.beginPath(); dctx.ellipse(L * 0.2, 0, L * 0.34, W * 0.7, 0, 0, TAU); dctx.fill(); dctx.restore(); fx.markDecals(x, z, 0.5);
   }
   function stampPool(p) {
     const [px, pz] = DD.toPx(p.x, p.z), r = p.r * DD.k, m = p.pts.length; dctx.save(); dctx.globalAlpha = 0.5 + 0.5 * capK(); dctx.translate(px, pz); dctx.rotate(p.rot += 0.35);
     dctx.beginPath(); for (let i = 0; i < m; i++) { const a0 = i / m * TAU, a1 = (i + 1) / m * TAU, r0 = r * p.pts[i], r1 = r * p.pts[(i + 1) % m]; const mx = (Math.cos(a0) * r0 + Math.cos(a1) * r1) / 2, my = (Math.sin(a0) * r0 + Math.sin(a1) * r1) / 2; if (i === 0) dctx.moveTo(mx, my); else dctx.quadraticCurveTo(Math.cos(a0) * r0, Math.sin(a0) * r0, mx, my); }
-    dctx.closePath(); const gr = dctx.createRadialGradient(0, 0, 0, 0, 0, r); gr.addColorStop(0, 'rgba(96,8,10,0.34)'); gr.addColorStop(0.7, 'rgba(112,9,12,0.3)'); gr.addColorStop(1, 'rgba(120,12,14,0.16)'); dctx.fillStyle = gr; dctx.fill(); dctx.restore(); fx.markDecals();
+    dctx.closePath(); const gr = dctx.createRadialGradient(0, 0, 0, 0, 0, r); gr.addColorStop(0, 'rgba(96,8,10,0.34)'); gr.addColorStop(0.7, 'rgba(112,9,12,0.3)'); gr.addColorStop(1, 'rgba(120,12,14,0.16)'); dctx.fillStyle = gr; dctx.fill(); dctx.restore(); fx.markDecals(p.x, p.z, p.r * 1.3);
   }
   function stampGloss(p) { // fresh wet highlights, covered by the dry pass
     const [px, pz] = DD.toPx(p.x, p.z), r = p.r * DD.k; dctx.save(); dctx.translate(px, pz);
@@ -126,7 +133,7 @@ export function createGore(fx, o = {}) {
   }
   function dryPass(d) {
     const [px, pz] = DD.toPx(d.x, d.z), r = Math.max(2, d.r * DD.k * 1.25); dctx.save(); dctx.globalCompositeOperation = 'source-atop';
-    const gr = dctx.createRadialGradient(px, pz, 0, px, pz, r); gr.addColorStop(0, 'rgba(46,6,6,0.34)'); gr.addColorStop(0.75, 'rgba(46,6,6,0.2)'); gr.addColorStop(1, 'rgba(46,6,6,0)'); dctx.fillStyle = gr; dctx.beginPath(); dctx.arc(px, pz, r, 0, TAU); dctx.fill(); dctx.restore(); fx.markDecals();
+    const gr = dctx.createRadialGradient(px, pz, 0, px, pz, r); gr.addColorStop(0, 'rgba(46,6,6,0.34)'); gr.addColorStop(0.75, 'rgba(46,6,6,0.2)'); gr.addColorStop(1, 'rgba(46,6,6,0)'); dctx.fillStyle = gr; dctx.beginPath(); dctx.arc(px, pz, r, 0, TAU); dctx.fill(); dctx.restore(); fx.markDecals(d.x, d.z, d.r * 1.3);
   }
 
   // ------------------------------------------------------------------ droplets (pooled, own gravity, splat on landing)
@@ -144,7 +151,7 @@ export function createGore(fx, o = {}) {
     }
   }
   function land(d) {
-    const sp = Math.hypot(d.vx, d.vz), size = clamp(d.s * RR(3.4, 5.2), 0.1, 0.5), st = 1 + Math.min(1.7, sp * 0.16);
+    const sp = Math.sqrt(d.vx * d.vx + d.vz * d.vz), size = clamp(d.s * RR(3.4, 5.2), 0.1, 0.5), st = 1 + Math.min(1.7, sp * 0.16);
     stampSplat(d.x, d.z, size, Math.atan2(d.vz, d.vx), st, 0.9);
     if (!d.child && d.s > 0.07 && R() < 0.5 && dfree.length > 40) { for (let i = 0; i < 2; i++) { const a = R() * TAU, s2 = RR(1.2, 3); drop(d.x, 0.05, d.z, Math.cos(a) * s2 + d.vx * 0.2, RR(1.5, 3.2), Math.sin(a) * s2 + d.vz * 0.2, d.s * 0.5, R(), true); } }
   }
@@ -177,7 +184,7 @@ export function createGore(fx, o = {}) {
   const pools = [];
   function addPool(x, z, rMax, rate = 0.14, delay = 0) {
     rMax *= POOLK() * (0.7 + 0.3 * capK()); if (pools.length >= 26) { const i = pools.findIndex((p) => p.done); pools.splice(i >= 0 ? i : 0, 1); }
-    const pts = []; for (let i = 0; i < 12; i++) pts.push(0.74 + R() * 0.5); const p = { x, z, r: 0.07, rMax, rate, acc: 1, pts, rot: R() * TAU, done: false, delay }; pools.push(p); return p;
+    const pts = []; for (let i = 0; i < 12; i++) pts.push(0.74 + R() * 0.5); const p = { x, z, r: 0.07, rMax, rate, acc: 1, pts, rot: R() * TAU, done: false, delay }; pools.push(p); addCover(x, z, rMax * 0.85, 0.5); return p;
   }
   function stepPools(dt) {
     for (const p of pools) {
@@ -494,6 +501,7 @@ export function createGore(fx, o = {}) {
   }
   /** heavy hits chip armour plates off the body (cosmetic spall props) and, on the worst blows, a hoplite's plume */
   function popArmor(f, e, fr) {
+    if (f.rig.beast) return; // BEAST: no plates or plumes on animals
     const rig = f.rig, st = rig.style, metal = rig.palette.metal || '#9a9a9a', leather = (st === 'retiarius' || st === 'dimachaerus'), n = e.crit ? 2 + ((R() * 2) | 0) : 1;
     for (let i = 0; i < n; i++) { const c = e.pos, a = Math.atan2(e.dx, e.dz) + RR(-0.9, 0.9), s = RR(2.5, 5.5), sz = RR(0.06, 0.11);
       spawnProp(7, { x: c.x + RR(-0.1, 0.1), y: c.y + RR(-0.2, 0.3), z: c.z + RR(-0.1, 0.1), vx: Math.sin(a) * s, vy: RR(2.5, 5), vz: Math.cos(a) * s, q: new Q().setFromAxisAngle(_a.set(R() - 0.5, R() - 0.5, R() - 0.5).normalize(), R() * TAU), wx: RR(-14, 14), wy: RR(-14, 14), wz: RR(-14, 14), sx: sz, sy: sz, sz: sz, color: leather ? '#6b4a2b' : '#ffffff', metal: leather ? '#6b4a2b' : metal, bleeds: false }); }
@@ -530,6 +538,16 @@ export function createGore(fx, o = {}) {
     return took ? part : null;
   };
 
+  /** replay seek: drop everything airborne (droplets, jets), grow the pools and let the flung props land, so skipped time leaves only what stays on the sand */
+  G.settle = (sec = 3) => {
+    if (!G.on) return; for (const d of drops.splice(0)) dfree.push(d); jets.length = 0;
+    for (const p of pools) { p.delay = 0; if (p.r < p.rMax) p.r = p.rMax * 0.92; }
+    if (gib) { for (let t = 0; t < sec; t += 0.1) stepProps(0.1); for (const d of drops.splice(0)) dfree.push(d); }
+  };
+
+  /** shader warm-up: the gib mesh is built and drawn once (a dead instance) so its program compiles before the first limb flies */
+  G.warm = (on) => { if (on) { if (!gib) buildGib(); gib.count = 1; gib.visible = true; } else if (gib) { gib.count = chunkHi ? MAXLH + chunkHi : lhCur; gib.visible = props.length > 0; } };
+
   /** world points the kill camera should keep in frame (flung limb landing) */
   G.framePoints = (id) => { const s = G.lastSever; if (!G.on || !s || s.id !== id || G.time - s.t > 6) return null; return [[s.x, 0.15, s.z]]; };
 
@@ -537,26 +555,30 @@ export function createGore(fx, o = {}) {
   G.refresh = () => { G.level = goreLevel(); G.on = G.level !== 'off'; G.full = G.level === 'full'; if (G.tier) G.tier = G.tier; return G.level; };
   G.setTier = (t) => { G.tier = t; };
   G.reset = (seed = 1) => {
-    G.refresh(); rs = mulberry((seed >>> 0) || 1); G.time = 0; G.counts.splats = 0; G.cover = 0; covT = dryT = fadeT = 0; dryN = 0; for (const d of drops.splice(0)) dfree.push(d); jets.length = 0; pools.length = 0; drySq.length = 0; props = []; chunkCur = MAXLH; lhCur = 0; chunkHi = 0; G.lastSever = null; vig = 0;
+    G.refresh(); rs = mulberry((seed >>> 0) || 1); G.time = 0; G.counts.splats = 0; G.cover = 0; covGrid.fill(0); covT = dryT = fadeT = 0; dryN = 0; for (const d of drops.splice(0)) dfree.push(d); jets.length = 0; pools.length = 0; drySq.length = 0; props = []; chunkCur = MAXLH; lhCur = 0; chunkHi = 0; G.lastSever = null; vig = 0;
     if (gib) { const z = new THREE.Matrix4().makeScale(0, 0, 0); for (let i = 0; i < MAXP; i++) gib.setMatrixAt(i, z); gib.instanceMatrix.needsUpdate = true; gib.count = 0; gib.visible = false; }
     for (const f of G.fighters.values()) { try { f.rig.onEvent = f.prevOnEvent; } catch (e) { /* ignore */ } } G.fighters.clear();
   };
   G.dispose = () => { G.reset(); if (vigEl && vigEl.parentNode) vigEl.parentNode.removeChild(vigEl); if (gib) { scene && scene.remove(gib); gib.geometry.dispose(); gib.material.dispose(); gib = null; } };
 
   // ------------------------------------------------------------------ per frame: simulation + immediate-mode instances (called from fx.update, after the pooled step)
-  const cA = { r: 0, g: 0, b: 0 };
   fx.hooks.push((dt, norL) => {
     if (!G.on) { if (drops.length) for (const d of drops.splice(0)) dfree.push(d); return; }
     G.time += dt; splatBudget = G.tier === 'low' ? 36 : 70; covT += dt; dryT += dt; fadeT += dt;
     if (covT > 1.5) { covT = 0; measureCover(); } if (dryT > 5) { dryT = 0; dryAll(); } if (fadeT > 0.45) { fadeT = 0; if (G.time > 6) clearUnderFeet(); }
     stepJets(dt); stepPools(dt); stepProps(dt);
+    // PERF: streaks are written straight into the fx layer's typed arrays (a call with ~12 double arguments boxes every one of them: that was ~14 KB per frame)
+    const nA = norL.A, nB = norL.B, nC = norL.C, nD = norL.D, nMax = norL.max;
     for (let i = drops.length - 1; i >= 0; i--) {
       const d = drops[i]; d.age += dt; d.vy -= GRAV * dt; d.x += d.vx * dt; d.y += d.vy * dt; d.z += d.vz * dt;
-      if (d.y <= 0.03 && d.vy < 0 || d.age > d.life || Math.abs(d.x) > 30 || Math.abs(d.z) > 30) { if (d.y <= 0.05) land(d); drops[i] = drops[drops.length - 1]; drops.pop(); dfree.push(d); continue; }
-      const sp = Math.hypot(d.vx, d.vy, d.vz) || 1, len = clamp(sp * 0.05, d.s * 1.3, 0.85), k = clamp(d.k * 0.7 + d.age * 0.18, 0, 1);
-      cA.r = lerp(BRIGHT.r, DARK.r, k); cA.g = lerp(BRIGHT.g, DARK.g, k); cA.b = lerp(BRIGHT.b, DARK.b, k);
-      if (sp < 2.4) norL.put(d.x, d.y, d.z, d.s * 1.7, cA, 0.96, CELL_DISC, 0, 1.25); // hanging / dripping: round blob
-      else norL.putS(d.x, d.y, d.z, d.s * 2.6, cA, 0.96, CELL_STREAK, d.vx / sp, d.vy / sp, d.vz / sp, len * 1.15, 1.25);
+      if (d.y <= 0.03 && d.vy < 0 || d.age > d.life || d.x > 30 || d.x < -30 || d.z > 30 || d.z < -30) { if (d.y <= 0.05) land(d); drops[i] = drops[drops.length - 1]; drops.pop(); dfree.push(d); continue; }
+      if (norL.n >= nMax) continue;
+      const vx = d.vx, vy = d.vy, vz = d.vz, sp2 = vx * vx + vy * vy + vz * vz, sp = sp2 > 0 ? Math.sqrt(sp2) : 1, o4 = norL.n++ * 4;
+      let k = d.k * 0.7 + d.age * 0.18; k = k < 0 ? 0 : k > 1 ? 1 : k;
+      nC[o4] = (BRIGHT.r + (DARK.r - BRIGHT.r) * k) * 1.25; nC[o4 + 1] = (BRIGHT.g + (DARK.g - BRIGHT.g) * k) * 1.25; nC[o4 + 2] = (BRIGHT.b + (DARK.b - BRIGHT.b) * k) * 1.25; nC[o4 + 3] = 0.96;
+      nA[o4] = d.x; nA[o4 + 1] = d.y; nA[o4 + 2] = d.z; nD[o4 + 1] = 0; nD[o4 + 2] = 0; nD[o4 + 3] = 0;
+      if (sp < 2.4) { nA[o4 + 3] = d.s * 1.7; nB[o4] = 0; nB[o4 + 1] = 1; nB[o4 + 2] = 0; nB[o4 + 3] = 0; nD[o4] = CELL_DISC; }   // hanging / dripping: round blob
+      else { let len = sp * 0.05; const lo = d.s * 1.3; len = len < lo ? lo : len > 0.85 ? 0.85 : len; nA[o4 + 3] = d.s * 2.6; nB[o4] = vx / sp; nB[o4 + 1] = vy / sp; nB[o4 + 2] = vz / sp; nB[o4 + 3] = Math.max(len * 1.15, 1e-3); nD[o4] = CELL_STREAK; }
     }
     G.counts.drops = drops.length; G.counts.jets = jets.length; G.counts.props = props.length; G.counts.pools = pools.length;
   });

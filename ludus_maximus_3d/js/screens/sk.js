@@ -2,6 +2,7 @@
 // fighter picker, trophy and report dialogs. Built on ui_kit.js. No em dashes in copy.
 import * as U from '../ui_kit.js';
 import { styleBadge, chip, itemCard } from '../uihelpers.js';
+import { woundBadges } from './wounds_ui.js'; // WAVE2: wounds, weakness and scars shown in every fighter picker
 
 export const D = new Proxy({}, { get: (_, k) => globalThis.LM_D[k] }), L = () => globalThis.LM;
 export const h = U.h;
@@ -90,10 +91,14 @@ const CSS = `
 .ax-bar i{display:block;height:100%;width:var(--w,0%);background:linear-gradient(180deg,rgba(255,255,255,.4),transparent 50%,rgba(0,0,0,.25)),var(--c,var(--lx-xp));transition:width .4s var(--lx-ease-out)}
 .ax-banner{display:flex;gap:12px;align-items:center;padding:10px 12px;border-radius:10px;color:#fff;text-shadow:0 1px 0 rgba(0,0,0,.5);background:linear-gradient(100deg,var(--k),rgba(29,24,48,.55));box-shadow:inset 0 0 0 1.5px rgba(255,255,255,.35),0 0 20px -4px var(--k)}
 .ax-empty{text-align:center;padding:20px 12px;opacity:.85;display:flex;flex-direction:column;align-items:center;gap:8px}
-.ax-switch{flex:none;position:relative;width:56px;height:32px;border-radius:16px;border:0;background:#140f22;box-shadow:inset 0 1px 3px #000,0 0 0 2px rgba(242,193,78,.45);cursor:pointer;transition:background .2s;touch-action:manipulation}
-.ax-switch::after{content:'';position:absolute;top:4px;left:4px;width:24px;height:24px;border-radius:50%;background:linear-gradient(180deg,#e8dcc0,#b79a64);transition:transform .2s var(--lx-ease-out);box-shadow:0 2px 4px rgba(0,0,0,.5)}
-.ax-switch[aria-checked=true]{background:linear-gradient(180deg,#c98e24,#f2c14e)}
+.ax-switch{flex:none;position:relative;width:56px;height:44px;border:0;background:transparent;cursor:pointer;touch-action:manipulation;padding:0}
+.ax-switch::before{content:'';position:absolute;left:0;top:6px;width:56px;height:32px;border-radius:16px;background:#140f22;box-shadow:inset 0 1px 3px #000,0 0 0 2px rgba(242,193,78,.45);transition:background .2s}
+.ax-switch::after{content:'';position:absolute;top:10px;left:4px;width:24px;height:24px;border-radius:50%;background:linear-gradient(180deg,#e8dcc0,#b79a64);transition:transform .2s var(--lx-ease-out);box-shadow:0 2px 4px rgba(0,0,0,.5)}
+.ax-switch[aria-checked=true]::before{background:linear-gradient(180deg,#c98e24,#f2c14e)}
 .ax-switch[aria-checked=true]::after{transform:translateX(24px)}
+.ax-switch[aria-checked=true] .ax-sw-t,.ax-switch .ax-sw-t{position:absolute;top:6px;height:32px;line-height:32px;font:800 10px/32px var(--lx-sans);letter-spacing:.06em;pointer-events:none}
+.ax-switch .ax-sw-t{right:8px;color:#e8dcc0}
+.ax-switch[aria-checked=true] .ax-sw-t{left:8px;right:auto;color:#2a1a08}
 .ax-tap{min-height:44px}
 .ax-sticky{position:sticky;bottom:-10px;margin:0 -2px -10px;padding:14px 2px 12px;background:linear-gradient(180deg,rgba(29,24,48,0),#1d1830 38%);z-index:2}
 .ax-range{width:100%;height:44px;accent-color:#f2c14e;background:transparent;cursor:pointer}
@@ -114,7 +119,6 @@ const CSS = `
 .ax-troph span{font:700 12px/1.2 var(--lx-sans)}
 .ax-big{font:900 clamp(26px,8vw,34px)/1.1 var(--lx-serif);letter-spacing:.12em;text-align:center;text-transform:uppercase}
 .ax-big.win{color:#9a6a10}.ax-big.lose{color:#7a2f30}
-body.lx-large-text{--lx-fs-s:14px;--lx-fs-m:16px;--lx-fs-l:20px}
 body.lx-reduce-motion *,body.lx-reduce-motion *::before,body.lx-reduce-motion *::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
 `;
 
@@ -180,11 +184,12 @@ export function chipRow(items, active, onSelect) {
   return el;
 }
 
-export function meter(v, max, color) { const b = h('div', 'ax-bar'); b.style.setProperty('--w', Math.max(0, Math.min(100, (v / Math.max(1, max)) * 100)) + '%'); if (color) b.style.setProperty('--c', color); b.setAttribute('role', 'progressbar'); b.setAttribute('aria-valuenow', Math.round(v)); b.setAttribute('aria-valuemax', Math.round(max)); b.append(h('i')); return b; }
+export function meter(v, max, color, label = 'Progress') { const b = h('div', 'ax-bar'); b.style.setProperty('--w', Math.max(0, Math.min(100, (v / Math.max(1, max)) * 100)) + '%'); if (color) b.style.setProperty('--c', color); b.setAttribute('role', 'progressbar'); b.setAttribute('aria-valuenow', Math.round(v)); b.setAttribute('aria-valuemin', '0'); b.setAttribute('aria-valuemax', Math.round(max)); b.setAttribute('aria-label', `${label}: ${Math.round(v)} of ${Math.round(max)}`); b.append(h('i')); return b; }
 
 export function toggle(label, sub, on, onChange) {
   const sw = h('button', 'ax-switch'); sw.type = 'button'; sw.setAttribute('role', 'switch'); sw.setAttribute('aria-checked', on ? 'true' : 'false'); sw.setAttribute('aria-label', label);
-  sw.onclick = () => { const v = sw.getAttribute('aria-checked') !== 'true'; sw.setAttribute('aria-checked', v ? 'true' : 'false'); onChange(v); };
+  const tx = h('span', 'ax-sw-t', on ? 'ON' : 'OFF'); tx.setAttribute('aria-hidden', 'true'); sw.append(tx); // QA: state is text as well as position and colour
+  sw.onclick = () => { const v = sw.getAttribute('aria-checked') !== 'true'; sw.setAttribute('aria-checked', v ? 'true' : 'false'); tx.textContent = v ? 'ON' : 'OFF'; onChange(v); };
   return h('div', 'ax-switchrow', [h('div', 'ax-grow', [h('div', 'ax-b', label), sub ? h('div', 'ax-sub', sub) : null]), sw]);
 }
 
@@ -230,7 +235,7 @@ export function pickFighters(ctx, o) {
         const en = h('div', 'ax-bar'); en.style.setProperty('--w', g.en + '%'); en.style.setProperty('--c', 'var(--lx-stam)'); en.append(h('i')); en.style.height = '6px'; en.title = `Energy ${Math.round(g.en)}`;
         b.append(h('span', 'ax-check', U.icon('check', 16)), styleBadge(g.style, 44),
           h('div', 'ax-grow ax-col ax-gap4', [h('div', 'ax-b', g.name + (g.nick ? ` "${g.nick}"` : '')), h('div', 'ax-sub', `${st.n} · Level ${g.lvl}`), en,
-            h('div', 'ax-row ax-wrap ax-gap4', [bad ? pill(inf.reason, { tone: 'bad' }) : null, ...(inf.badges || [])])]));
+            h('div', 'ax-row ax-wrap ax-gap4', [bad ? pill(inf.reason, { tone: 'bad' }) : null, ...(inf.badges || []), ...woundBadges(g)])]));
         if (inf.right) b.append(inf.right);
         const act = () => {
           if (bad) { ctx.sfx('uiError'); U.toast(inf.reason, { kind: 'bad' }); return; }

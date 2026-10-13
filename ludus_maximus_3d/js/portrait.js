@@ -8,6 +8,7 @@
 // Queue: at most ONE render per animation frame, never inside the caller's frame; ~10 to 25 ms each (rig build included).
 import * as THREE from 'three';
 import { createGladiator } from './gladiator.js';
+import { createBeast } from './beast.js'; // BEAST: bestiary portraits
 
 /** module level fallback: no renderer available, so callers keep the style badge */
 export const portraitSync = () => null;
@@ -17,6 +18,13 @@ const FRAMES = {
   three: { fov: 24, dist: 4.4, y: 1.25, tx: 0.0, yaw: 0.45 },
   full: { fov: 28, dist: 5.4, y: 0.98, tx: 0.0, yaw: 0.4 },
 };
+/** camera for a beast portrait: bust = the head and mane three-quarter, three / full = the whole animal (sizes follow rig.nameH) */
+function beastFrame(rig, style) {
+  const k = rig.nameH, hd = rig.joints.head; rig.root.updateMatrixWorld(true); const hp = new THREE.Vector3(); hd.getWorldPosition(hp);
+  if (style === 'full' || style === 'three') return { fov: 26, dist: k * 2.7 + 2.2, y: k * 0.42, tx: 0, yaw: 0.85 };
+  const s = rig.size || 1, yaw = 0.8, c = Math.cos(yaw), sn = Math.sin(yaw), x1 = hp.x * c + hp.z * sn, z1 = -hp.x * sn + hp.z * c;
+  return { fov: 24, dist: z1 + (rig.portraitD || 2.2), y: hp.y - 0.04 * s - (rig.beast === 'elephant' ? 0.5 : 0), tx: x1, yaw };
+}
 const POSES = { idle: null, guard: null, victory: 'victory', taunt: 'taunt', block: 'block' };
 const key = (g, o) => {
   const gear = g.gear || {}, gs = Object.keys(gear).sort().map((k) => { const it = gear[k]; return it ? k + ':' + (it.id || it.name || '') + ':' + (typeof it.rar === 'number' ? it.rar : it.r) : k + ':-'; }).join(',');
@@ -60,8 +68,9 @@ export function createPortraitRenderer({ renderer = null, tier = 'medium', maxCa
   }
 
   function draw(g, o) {
-    const fr = FRAMES[o.style] || FRAMES.bust, w = o.w, h = o.h, t0 = performance.now();
-    const rig = createGladiator(g, { seg: 8 });
+    let fr = FRAMES[o.style] || FRAMES.bust; const w = o.w, h = o.h, t0 = performance.now();
+    const rig = g.beast ? createBeast(g, { detail: 'high' }) : createGladiator(g, { seg: 8 });
+    if (rig.beast) fr = beastFrame(rig, o.style); // BEAST
     rig.root.rotation.y = fr.yaw; scene.add(rig.root);
     const clip = POSES[o.pose];
     // bust: arms relaxed so the weapon and shield hang below the frame instead of covering the face ('guard' keeps them raised)

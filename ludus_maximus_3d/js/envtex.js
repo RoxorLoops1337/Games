@@ -10,12 +10,12 @@ function hash(ix, iy, s) {
   return (h >>> 0) / 4294967295;
 }
 /** Tileable value noise. x,y in lattice units, `per` = lattice period (wraps). */
-export function tnoise(x, y, per, seed = 0) {
+export function tnoise(x, y, per, seed = 0) {   // PERF: no per-call closure, the four lattice corners hashed inline (same arithmetic, same output)
   const xi = Math.floor(x), yi = Math.floor(y), xf = x - xi, yf = y - yi;
   const u = xf * xf * (3 - 2 * xf), v = yf * yf * (3 - 2 * yf);
-  const m = (a) => ((a % per) + per) % per;
-  const a = hash(m(xi), m(yi), seed), b = hash(m(xi + 1), m(yi), seed);
-  const c = hash(m(xi), m(yi + 1), seed), d = hash(m(xi + 1), m(yi + 1), seed);
+  const x0 = ((xi % per) + per) % per, x1 = (((xi + 1) % per) + per) % per, y0 = ((yi % per) + per) % per, y1 = (((yi + 1) % per) + per) % per;
+  const a = hash(x0, y0, seed), b = hash(x1, y0, seed);
+  const c = hash(x0, y1, seed), d = hash(x1, y1, seed);
   return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v;
 }
 export function tfbm(x, y, per, oct = 4, seed = 0) {
@@ -72,9 +72,12 @@ export function makeSandTexture(size = 1024, seed = 3) {
 }
 
 /** Travertine ashlar blocks. Tile covers `bx` x `by` blocks. Mortar is dark + recessed. */
+// PERF: identical stone parameters (the hub buildings and the ludus walls ask for the same travertine) are generated once and shared (about 160 ms per 512 tile)
+const STONE_MEMO = new Map();
 export function makeStoneTexture(size = 512, { bx = 4, by = 6, base = 0xe8dcc0, tint = 0xb69a6a, seed = 11, mortar = 0x7a6a55 } = {}) {
+  const key = [size, bx, by, base, tint, seed, mortar].join(','), hit = STONE_MEMO.get(key); if (hit) return hit;
   const A = hex(base), T = hex(tint), M = hex(mortar);
-  return bake(size, (u, v, px, py, o) => {
+  const res = bake(size, (u, v, px, py, o) => {
     const row = Math.floor(v * by), off = (row % 2) * 0.5;
     const fu = ((u * bx + off) % 1 + 1) % 1, fv = (v * by) % 1;
     const col = Math.floor(u * bx + off);
@@ -91,6 +94,7 @@ export function makeStoneTexture(size = 512, { bx = 4, by = 6, base = 0xe8dcc0, 
     c = mix3(M, c, edge);
     o.c = c; o.h = edge * (0.55 + n1 * 0.25 + n2 * 0.1) - pit * 0.12;
   });
+  STONE_MEMO.set(key, res); return res;
 }
 
 /** Marble with warped veins. Tile = ~2 m. */
@@ -138,8 +142,9 @@ export function makeRadialTexture(size = 128, stops = [[0, 'rgba(255,255,255,1)'
 }
 
 /** Courtyard floor: packed sand + flagstone paths + worn training ring. Returns CanvasTexture (rect mapped 1:1). */
-export function makeCourtyardFloor(w = 1536, h = 1250, sandTile, seed = 7) {
-  const c = canvas(w, h), x = c.getContext('2d');
+// k < 1 draws the same picture (logical w x h) onto a smaller canvas: low / medium tiers keep the look at a fraction of the GPU memory (1536x1250 + mips = 10 MB)
+export function makeCourtyardFloor(w = 1536, h = 1250, sandTile, seed = 7, k = 1) {
+  const c = canvas(Math.round(w * k), Math.round(h * k)), x = c.getContext('2d'); x.scale(k, k);
   const pat = x.createPattern(sandTile.mapCanvas, 'repeat');
   x.fillStyle = pat; x.fillRect(0, 0, w, h);
   let s = seed; const rnd = () => (s = (s * 16807) % 2147483647) / 2147483647;

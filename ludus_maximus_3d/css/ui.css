@@ -149,7 +149,7 @@
 .lx-sheet-scroll { overflow: auto; overscroll-behavior: contain; padding: 4px 2px; -webkit-overflow-scrolling: touch; line-height: 1.45; }
 .lx-actions { display: flex; flex-wrap: wrap; gap: 10px; padding-top: 12px; } .lx-actions .lx-btn { flex: 1 1 140px; }
 .lx-grab { position: absolute; z-index: 2; left: 50%; top: 14px; width: 40px; height: 4px; margin-left: -20px; border-radius: 2px; background: rgba(90, 60, 30, .45); }
-.lx-sheet-x { position: absolute; z-index: 3; top: 6px; right: 6px; width: 40px; min-height: 40px; }
+.lx-sheet-x { position: absolute; z-index: 3; top: 4px; right: 4px; width: 44px; min-height: 44px; }
 .lx-sheet .lx-panel-head { padding-right: 52px; padding-left: 52px; padding-top: 20px; }
 @media (min-width: 700px) { .lx-scrim { align-items: center; } .lx-sheet { border-radius: var(--lx-r); transform: translateY(20px) scale(.97); opacity: 0; transition: transform .25s var(--lx-ease-out), opacity .2s; } .lx-in .lx-sheet { opacity: 1; transform: none; } .lx-out .lx-sheet { opacity: 0; transform: scale(.97); } }
 
@@ -482,3 +482,104 @@ html, body { max-width: 100%; overflow-x: hidden; }
 #ui > .lx-photo { pointer-events: none; }
 #ui > .lx-photo > * { pointer-events: auto; }
 #ui > .lx-photo > .lx-photo-vig, #ui > .lx-photo > .lx-photo-flash, #ui > .lx-photo > .lx-photo-msg { pointer-events: none; }
+
+/* =====================================================================================================================
+   .lx-qa : accessibility and QA layer (ludus3d-qa). Focus rings, tap targets, text size, high contrast, colour-blind cues.
+   ===================================================================================================================== */
+/* focus ring that reads on dark AND light panels: dark gap, gold ring */
+.lx-root :focus-visible { outline: 3px solid #ffd45c; outline-offset: 2px; box-shadow: 0 0 0 2px #1d1830; }
+.lx-root input[type=range]:focus-visible { outline-offset: 0; }
+.lx-qa-sr { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+/* tap targets: 44px minimum for every control that is not a pure tooltip */
+.lx-photo-chip { min-height: 44px; }
+.lx-photo input[type=range] { min-height: 44px; }
+.lx-photo-chips { gap: 6px; }
+@media (pointer: coarse) {
+  body .lx-fv-top .lx-fv-btn, body .lx-fv-top .lx-btn { min-height: 44px; min-width: 44px; padding-top: 4px; padding-bottom: 4px; }
+  body .lx-fv-rbar .lx-fv-chip, body .lx-fv-chip { min-width: 44px; min-height: 44px; }
+  body .lx-fv-scrub { height: 44px; }
+  body .lx-fv-rrow { gap: 4px; }
+}
+/* replay bar: the selected chip lost its gold fill to the bar's own chip rule (dark text on dark); restore it */
+body .lx-fv-rbar .lx-fv-chip[aria-pressed=true] { background: linear-gradient(180deg, #f2c14e, #c9922e); border-color: #7a5222; color: #2a1a30; box-shadow: 0 0 0 2px rgba(242, 193, 78, .35); }
+/* bottom nav: the HUD column centres its children, so the nav shrank to its content and squeezed 'Roster' and 'Market' into ellipses on phones */
+.lx-hud .lx-nav { width: min(100%, 520px); align-self: center; }
+/* phones: the nav now spans the screen, so the photo button rides above it instead of covering 'Ludus' */
+@media (max-width: 600px) and (min-height: 521px) { body .lx-photo-fab { bottom: calc(var(--lx-sab) + 86px); } }
+/* nameplates: enemy plates get a dashed edge and a skull, yours a shield (colour blind safe) */
+.lx-plate-team { display: inline-flex; margin-left: 4px; opacity: .9; } .lx-team-foe .lx-plate-top { border-style: dashed; border-width: 1.5px; }
+/* title settings: toggles and sliders were 40px */
+.lx-ttl-tog { min-height: 44px; }
+.lx-ttl-row input[type=range] { min-height: 44px; }
+/* ultimate ring: ready is a text word plus a double outline, cooling is a dashed ring, so colour is never the only cue */
+.lx-ult-sec { font-size: calc(var(--lx-us) * .3); }
+.lx-ult.lx-ready .lx-ult-sec { display: grid; background: transparent; font-size: calc(var(--lx-us) * .22); letter-spacing: .08em; align-content: end; padding-bottom: 3px; }
+.lx-ult.lx-ready .lx-ult-track { stroke: #fff; stroke-width: 9; opacity: .35; }
+.lx-ult:not(.lx-ready) .lx-ult-prog { stroke-dasharray: 10 6; }
+.lx-ult:disabled { outline: 2px dashed rgba(255, 255, 255, .5); outline-offset: 2px; }
+.lx-ult.lx-ready:not(:disabled) { outline: 2px solid #fff; outline-offset: 2px; }
+/* text size: zoom scales every px-based font in the screens, not only the var(--lx-fs-*) ones */
+body.lx-large-text .lx-sheet-scroll, body.lx-large-text .lx-sheet .lx-actions { zoom: 1.16; --lx-fs-s: 12px; --lx-fs-m: 14px; --lx-fs-l: 17px; --lx-fs-xl: 22px; }
+@media (min-width: 900px) { body.lx-large-text .lx-sheet-scroll, body.lx-large-text .lx-sheet .lx-actions { --lx-fs-s: 13px; --lx-fs-m: 15px; --lx-fs-l: 19px; } }
+body.lx-large-text .lx-hud .fv-week, body.lx-large-text .lx-nav-i span, body.lx-large-text .lx-counter { zoom: 1.12; }
+body.lx-large-text .lx-sheet .lx-title { font-size: calc(var(--lx-fs-l) * 1.1); }
+/* high contrast (More > Settings, or the OS asks for it): flat dark panels, white text, thick white edges, no translucency */
+body.lx-hc { --lx-text: #fff; --lx-travertine: #fff; --lx-gold: #ffe27a; --lx-text-d: #000; }
+body.lx-hc .lx-sheet, body.lx-hc .lx-sheet.ax-sheet { background: #0b0816; border: 3px solid #fff; color: #fff; }
+body.lx-hc .lx-sheet.lx-marble:not(.ax-sheet) { background: #fff; color: #000; }
+body.lx-hc .lx-sheet::after, body.lx-hc .lx-sheet::before { display: none; }
+body.lx-hc .lx-scrim.lx-in { background: rgba(0, 0, 0, .82); }
+body.lx-hc .ax-card, body.lx-hc .ax-pick, body.lx-hc .ax-opp, body.lx-hc .ax-troph, body.lx-hc .wd-wk, body.lx-hc .ax-plan, body.lx-hc .ax-tabs { background: #14102a; box-shadow: inset 0 0 0 2px #fff; }
+body.lx-hc .ax-card.parch { background: #fff; color: #000; box-shadow: inset 0 0 0 3px #000; }
+body.lx-hc .ax-pick.sel, body.lx-hc .wd-wk.now, body.lx-hc .ax-card.gold { box-shadow: inset 0 0 0 4px var(--lx-gold); }
+body.lx-hc .ax-sub, body.lx-hc .ax-sub * { opacity: 1; color: #f2f2f2; }
+body.lx-hc .ax-card.parch .ax-sub { color: #111; }
+body.lx-hc .ax-pill { background: #000; color: #fff; box-shadow: inset 0 0 0 2px #fff; }
+body.lx-hc .ax-tab { color: #fff; } body.lx-hc .ax-tab.on { background: #ffe27a; color: #000; }
+body.lx-hc .lx-btn { border: 3px solid #fff; text-shadow: none; }
+body.lx-hc .lx-btn-bronze { background: #5a3b1c; color: #fff; } body.lx-hc .lx-btn-ghost { background: #000; color: #ffe27a; }
+body.lx-hc .lx-btn-gold { color: #000; } body.lx-hc .lx-btn-danger { background: #8a1c12; color: #fff; }
+body.lx-hc .lx-btn:disabled { filter: none; opacity: .6; border-style: dashed; }
+body.lx-hc .lx-title, body.lx-hc .ax-name, body.lx-hc .ax-h { text-shadow: none; }
+body.lx-hc .lx-bar, body.lx-hc .ax-bar { box-shadow: 0 0 0 2px #fff; }
+body.lx-hc .lx-toast { background: #000; border: 2px solid #fff; color: #fff; }
+body.lx-hc .lx-hud .fv-week { background: #000 !important; color: #fff !important; box-shadow: inset 0 0 0 2px #fff; }
+body.lx-hc .lx-counter, body.lx-hc .lx-nav { background: #000; box-shadow: inset 0 0 0 2px #fff; color: #fff; }
+body.lx-hc .lx-tip { background: #000; color: #fff; border: 2px solid #fff; }
+/* Windows forced colours: keep borders so controls stay findable */
+@media (forced-colors: active) { .lx-btn, .ax-pick, .ax-card, .ax-tab, .ax-switch { border: 2px solid ButtonText; } .ax-switch[aria-checked=true] { background: Highlight; } }
+
+/* ======================================================================================================
+   Fight view QoL (fight team): pause button + menu, speed chips, replay controls, execution verdict.
+   ====================================================================================================== */
+.lx-fv-top .lx-fv-pause { min-width: 34px; padding-left: 8px; padding-right: 8px; }
+.lx-fv-top .lx-fv-pause svg { display: block; }
+.lx-fv-top .lx-fv-pause.lx-fv-on { background: linear-gradient(180deg, #f2c14e, #b8803a); color: #2a1a30; }
+.lx-fv-top .lx-fv-pause:disabled { opacity: .45; }
+.lx-fv-pm { display: flex; flex-direction: column; gap: 8px; padding: 2px 0; }
+.lx-fv-pmrow { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 40px; }
+.lx-fv-pml { font: 800 13px/1.2 var(--lx-sans); letter-spacing: .06em; text-transform: uppercase; color: var(--lx-text-d); }
+.lx-fv-seg { display: flex; gap: 6px; }
+.lx-fv-chip { font: 800 12px/1 var(--lx-sans); letter-spacing: .04em; min-width: 44px; min-height: 36px; padding: 6px 10px; border-radius: 8px; border: 2px solid var(--lx-bronze-d); background: rgba(58, 42, 24, .12); color: var(--lx-text-d); cursor: pointer; touch-action: manipulation; }
+.lx-fv-chip[aria-pressed=true] { background: linear-gradient(180deg, #f2c14e, #c9922e); border-color: #7a5222; color: #2a1a30; box-shadow: 0 0 0 2px rgba(242, 193, 78, .35); }
+.lx-fv-chip:focus-visible { outline: 3px solid var(--lx-gold); outline-offset: 2px; }
+.lx-fv-pause-scrim .lx-sheet-scroll { padding: 2px 4px; }
+/* replay bar: three rows (scrub, rate, camera) above the safe area; wraps on phones */
+.lx-fv-rbar { position: absolute; left: 8px; right: 8px; bottom: calc(var(--lx-sab, 0px) + 8px); z-index: 32; display: flex; flex-direction: column; gap: 6px; padding: 8px 10px; border-radius: 12px; background: rgba(29, 24, 48, .78); border: 2px solid var(--lx-bronze); max-width: 560px; margin: 0 auto; backdrop-filter: blur(4px); }
+.lx-fv-rrow { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; justify-content: center; }
+.lx-fv-rbar .lx-fv-chip { min-width: 40px; min-height: 34px; padding: 4px 9px; color: var(--lx-text); background: rgba(246, 234, 208, .08); border-color: var(--lx-bronze); }
+.lx-fv-rbar .lx-fv-chip[aria-pressed=true] { color: #2a1a30; }
+.lx-fv-scrub { flex: 1 1 120px; min-width: 90px; height: 28px; accent-color: var(--lx-gold); touch-action: none; }
+.lx-fv-rtime { font: 700 11px/1 var(--lx-sans); color: var(--lx-sand); min-width: 74px; text-align: right; white-space: nowrap; }
+@media (max-height: 480px) { .lx-fv-rbar { flex-direction: row; flex-wrap: wrap; right: auto; left: 50%; transform: translateX(-50%); width: min(96vw, 640px); } }
+/* execution verdict: the crowd's thumb rises, turns, and fades when the blow lands */
+.lx-fv-verdict { position: absolute; left: 0; right: 0; top: calc(var(--lx-sat, 0px) + 22%); z-index: 30; display: flex; flex-direction: column; align-items: center; gap: 8px; pointer-events: none; text-align: center; color: var(--lx-gold); transition: opacity .45s; }
+.lx-fv-verdict svg { filter: drop-shadow(0 3px 0 rgba(0, 0, 0, .6)) drop-shadow(0 0 14px rgba(242, 193, 78, .55)); animation: lx-fv-thumb 1.1s cubic-bezier(.3, 1.4, .4, 1) both; transform-origin: 50% 60%; }
+.lx-fv-v-down svg { transform: rotate(180deg); color: #e8a090; }
+.lx-fv-verdict span { font: 700 var(--lx-fs-s, 13px)/1.2 var(--lx-serif); letter-spacing: .26em; text-transform: uppercase; color: var(--lx-sand); text-shadow: 0 2px 4px #000; padding: 0 var(--lx-gut, 12px); animation: lx-fv-fade .8s .15s both; }
+.lx-fv-v-out { opacity: 0; }
+@keyframes lx-fv-thumb { from { opacity: 0; transform: translateY(28px) rotate(0deg) scale(.5); } 60% { opacity: 1; } to { opacity: 1; } }
+.lx-fv-v-down svg { animation-name: lx-fv-thumbdown; }
+@keyframes lx-fv-thumbdown { from { opacity: 0; transform: translateY(-20px) rotate(0deg) scale(.5); } 55% { opacity: 1; transform: translateY(0) rotate(0deg) scale(1.1); } to { opacity: 1; transform: translateY(0) rotate(180deg) scale(1); } }
+@keyframes lx-fv-fade { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .lx-fv-verdict svg, .lx-fv-verdict span { animation: none !important; } .lx-fv-v-down svg { transform: rotate(180deg); } }
