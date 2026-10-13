@@ -295,6 +295,7 @@ export const MISC: Record<string, DropSpec> = {
     trophy_bog: S(trophyBog, { turn: 'sway', spark: 0xd4f08a }),
     trophy_dune: S(trophyDune, { lean: 0.6, turn: 'sway', spark: 0xffe680 }),
     trophy_frost: S(trophyFrost, { lean: 0.8, turn: 'sway', pulse: true, spark: 0xcdf4ee }),
+    trophy_dusk: S(trophyHeart, { lean: 0.8, turn: 'sway', pulse: true, spark: 0xc9a6f0 }),
     trophy_heart: S(trophyHeart, { lean: 0.8, turn: 'sway', pulse: true, spark: 0xff8a7a }),
     crate_wood: S((mb: MB) => crate(mb, { wood: R.wood.slice(1), band: R.iron, lock: R.iron[1] }), { lean: 0.45 }),
     crate_silver: S((mb: MB) => crate(mb, { wood: [0x585c74, 0x8a90a8, 0xb8bed2, 0xd5d9e6], band: [0x2e3a5c, 0x4e6490, 0x7f98c4, 0xb4c8ec], lock: 0xe4e8f4, shiny: true }), { lean: 0.45 }),
