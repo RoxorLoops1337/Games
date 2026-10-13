@@ -114,7 +114,7 @@ const G = {
   disc: (seg = 14) => gc(`disc${seg}`, () => { const g = new THREE.CircleGeometry(1, seg); g.rotateX(-Math.PI / 2); return g; }),
   lathe: (profile, seg = 14) => gc(`lathe${JSON.stringify(profile)},${seg}`, () => new THREE.LatheGeometry(profile.map(([r, y]) => new THREE.Vector2(r, y)), seg)),
   /** log end / stump top with growth rings, facing up, unit radius, own colours */
-  rings: () => gc('rings', () => polarGeo([{ r: 0, y: 0, c: () => '#a8703f' }, { r: 0.28, y: 0, c: () => '#a8703f' }, { r: 0.36, y: 0, c: () => '#ecc88c' }, { r: 0.62, y: 0, c: () => '#e3b97c' }, { r: 0.7, y: 0, c: () => '#b9814a' }, { r: 0.9, y: 0, c: () => '#d9a766' }, { r: 1, y: 0, c: () => '#8a5a3a' }], 12)),
+  rings: () => gc('rings', () => polarGeo([{ r: 0, y: 0, c: () => '#e8a868' }, { r: 0.28, y: 0, c: () => '#e8a868' }, { r: 0.36, y: 0, c: () => '#fde0b0' }, { r: 0.62, y: 0, c: () => '#f8d49c' }, { r: 0.7, y: 0, c: () => '#e2a868' }, { r: 0.9, y: 0, c: () => '#f2c488' }, { r: 1, y: 0, c: () => '#d9a06a' }], 12)),
 };
 
 // ------------------------------------------------------------------ the Builder: collects parts into one coloured geometry per material
@@ -285,10 +285,10 @@ function cloverInto(b, x, y, z, s = 1) {
     if (i % 2 === 0) { b.add(G.cyl(0, 3, true), { p: [cx, y, cz], s: [0.01 * s, 0.12 * s, 0.01 * s], c: '#8fe06a', grad: 0, ao: 0, sw: 0.5 }); b.add(G.octa(), { p: [cx, y + 0.13 * s, cz], s: 0.04 * s, c: i ? '#ffd6e6' : '#ffffff', grad: 0, ao: 0, sw: 0.5 }); } }
 }
 /** a flat flower carpet: a soft green patch freckled with flat pastel blooms (cheap, reads from far away) */
-function carpetInto(b, v) {
+function carpetInto(b, v, nb = 10) {
   const r = krng(v * 29 + 3), pal = [['#ffb7d0', '#ffffff', '#ff9ec4'], ['#fff2a0', '#ffffff', '#ffd23a'], ['#d4c4ff', '#ffffff', '#b8a4ff'], ['#ffc8a8', '#fff2a0', '#ffffff']][v % 4];
   b.add(G.disc(8), { p: [0, 0.015, 0], s: [0.62, 1, 0.55], c: '#74dc54', grad: 0, ao: 0, sw: 0.1 });
-  for (let i = 0; i < 10; i++) { const a = r() * TAU, rr = Math.sqrt(r()) * 0.46, x = Math.cos(a) * rr, z = Math.sin(a) * rr * 0.9; b.add(G.disc(5), { p: [x, 0.03 + i * 0.002, z], s: [0.13, 1, 0.13], c: pal[i % 3], grad: 0, ao: 0, sw: 0.1 }); b.add(G.disc(4), { p: [x, 0.04 + i * 0.002, z], s: [0.05, 1, 0.05], c: '#ffd23a', grad: 0, ao: 0, sw: 0.1 }); }
+  for (let i = 0; i < nb; i++) { const a = r() * TAU, rr = Math.sqrt(r()) * 0.46, x = Math.cos(a) * rr, z = Math.sin(a) * rr * 0.9; b.add(G.disc(5), { p: [x, 0.03 + i * 0.002, z], s: [0.13, 1, 0.13], c: pal[i % 3], grad: 0, ao: 0, sw: 0.1 }); b.add(G.disc(4), { p: [x, 0.04 + i * 0.002, z], s: [0.05, 1, 0.05], c: '#ffd23a', grad: 0, ao: 0, sw: 0.1 }); }
 }
 /** three little pastel pebbles */
 function pebblesInto(b, x, y, z, s = 1, v = 0) {
@@ -614,10 +614,10 @@ function clayFieldStuff(b) {
 
 // ---- Granite Quarry
 function quarryColor(x, z) {
-  let c = paint(x, z, '#f0e6cc', '#e6d8bc', 0.9); c.lerp(col('#fbe2b4'), sstep(0.6, 0.75, fbm(x * 1.2 + 4, z * 1.2)) * 0.5); c.lerp(col('#d4f0a8'), sstep(0.45, 0.8, fbm(x * 0.8 + 9, z * 0.8 + 2)) * 0.35); c.lerp(col('#fdf3d4'), dirtPath(x, z) * 0.85); return c;
+  let c = paint(x, z, '#f8dfa8', '#f0d194', 0.9); c.lerp(col('#ffd7a8'), sstep(0.6, 0.75, fbm(x * 1.2 + 4, z * 1.2)) * 0.5); c.lerp(col('#b8ec86'), sstep(0.45, 0.8, fbm(x * 0.8 + 9, z * 0.8 + 2)) * 0.5); c.lerp(col('#fff0c4'), dirtPath(x, z) * 0.85); return c;
 }
 function ledgeInto(b, rIn, rOut, h, a0, a1, seed) {
-  const r = krng(seed), step = 0.24, n = Math.max(2, Math.round((a1 - a0) / step)), rings = [], cut = new Set(); const stone = ['#fbeccb', '#f1e0c0', '#fff4da', '#e8dcd8'];
+  const r = krng(seed), step = 0.24, n = Math.max(2, Math.round((a1 - a0) / step)), rings = [], cut = new Set(); const stone = ['#ffe2b0', '#ffd6a0', '#fff0cc', '#f6d0c8'];
   for (let j = 0; j < n; j++) {
     const aa = a0 + (a1 - a0) * j / n, bb = a0 + (a1 - a0) * (j + 1) / n, jr = (r() - 0.5) * 0.12, jh = (r() - 0.5) * 0.07, c0 = col(stone[Math.floor(r() * 4)]);
     for (const [a, k] of [[aa + 0.006, 0.84], [(aa + bb) / 2, 1], [bb - 0.006, 0.84]]) {
@@ -696,10 +696,10 @@ function wheatFieldStatic(b) {
 /** flower margin around the wheat (static; the wheat itself sways) */
 function meadowW(b) { const r = krng(81); for (let i = 0; i < 16; i++) { const a = i / 16 * TAU + r() * 0.3, rr = 3.15 + r() * 0.3, x = Math.cos(a) * rr, z = Math.sin(a) * rr; if (Math.abs(x) < 0.9 && z > 0.4) continue; for (let k = 0; k < 2; k++) flowerInto(b, x + (r() - 0.5) * 0.25, FY, z + (r() - 0.5) * 0.25, FLOWERS[(i + k * 2) % 6], 1.1, 0.18, k === 0, (i + k) % 4); if (i % 3 === 0) mushroomInto(b, x * 0.97, z * 0.97, 0.9, FY, MUSH[i % 4], true); } }
 function wheatTuft(b, x, z, v, ripe) {
-  const r = krng(Math.floor(x * 100 + z * 37) + v), n = 4, c0 = ripe ? '#f5c840' : '#8fdc50', c1 = ripe ? '#ffe680' : '#b4ec60', ph = hash(x * 0.7, z * 0.9) * TAU;
+  const r = krng(Math.floor(x * 100 + z * 37) + v), n = 4, c0 = ripe ? '#ffd24a' : '#8fdc50', c1 = ripe ? '#ffe680' : '#b4ec60', ph = hash(x * 0.7, z * 0.9) * TAU;
   for (let i = 0; i < n; i++) {
     const a = r() * TAU, lean = 0.06 + r() * 0.24, h = 0.6 + r() * 0.25, bx = x + Math.cos(a) * 0.08, bz = z + Math.sin(a) * 0.08, dx = Math.sin(lean) * Math.sin(a), dy = Math.cos(lean), dz = Math.sin(lean) * Math.cos(a);
-    b.add(G.cyl(0.3, 3, true), { p: [bx, FY, bz], s: [0.04, h, 0.04], r: [lean, a, 0], c: c0, grad: 0.7, ao: 0.25, aoH: 0.3, sw: 1.2, ph });
+    b.add(G.cyl(0.3, 3, true), { p: [bx, FY, bz], s: [0.04, h, 0.04], r: [lean, a, 0], c: c0, grad: 0.3, ao: 0.1, aoH: 0.3, sw: 1.2, ph });
     b.add(G.octa(), { p: [bx + dx * h, FY + dy * h - 0.02, bz + dz * h], s: [0.05, 0.14, 0.05], r: [lean, a, 0], c: c1, grad: 0.5, ao: 0, swc: 1.15, ph });
   }
 }
@@ -763,7 +763,7 @@ function lanternGroup(name, scale = 1) {
 
 // =================================================================== 3. NOTICE BOARD
 function boardStatic(b) {
-  const stone = '#f8eedb', wood = '#f2b574', woodD = '#d98f58', cork = '#ffe9bd';
+  const stone = '#f8eedb', wood = '#f2b574', woodD = '#d98f58', cork = '#fff6d8';
   b.box(3.5, 0.15, 1.25, 0, 0, 0, stone, { grad: 0.7, ao: 0.4 }); b.box(3.1, 0.14, 0.95, 0, 0.15, 0, '#fff6e4', { grad: 0.6, ao: 0.1 });
   const top = 0.29;
   for (const x of [-1.1, 1.1]) { b.box(0.34, 2.1, 0.34, x, top, 0, wood, { grad: 0.8, ao: 0.4, aoH: 0.5 }); b.box(0.42, 0.18, 0.42, x, top, 0, woodD, { grad: 0.5, ao: 0.1 }); b.box(0.42, 0.1, 0.42, x, top + 1.9, 0, woodD, { ao: 0 }); }
@@ -790,11 +790,11 @@ function boardStatic(b) {
   for (const x of [-1.1, 1.1]) b.box(0.08, 0.08, 0.7, x, 2.18, 0.45, woodD, { ao: 0, grad: 0.4 });
   b.lump(0.24, 1.5, 0.44, 0.2, '#fff0c4', { d: 1, s: [1, 1.1, 1], grad: 0.6, ao: 0.14 }); b.lump(0.07, 1.5, 0.7, 0.2, '#f0dca0', { d: 0, ao: 0 }); b.shadow(1.5, 0.2, 0.55, 0.3, 1, 1, 0.15);
   b.box(0.42, 0.34, 0.4, -1.45, 0.29, 0.25, '#ffc88a', { grad: 0.6, ao: 0.14 }); b.box(0.44, 0.04, 0.42, -1.45, 0.62, 0.25, '#e8a870', { ao: 0 });
-  b.add(G.lathe([[0.1, 0], [0.15, 0.1], [0.17, 0.2]], 8), { p: [-1.45, 0.66, 0.25], c: '#ff9a68', grad: 0.5 }); for (let i = 0; i < 6; i++) flowerInto(b, -1.45 + (i - 2.5) * 0.05, 0.84, 0.25 + (i % 2) * 0.05, FLOWERS[i], 1.3, 0.12);
+  b.add(G.lathe([[0.1, 0], [0.15, 0.1], [0.17, 0.2]], 8), { p: [-1.45, 0.66, 0.25], c: '#ff9a68', grad: 0.5 }); for (let i = 0; i < 6; i++) flowerInto(b, -1.45 + (i - 2.5) * 0.05, 0.84, 0.25 + (i % 2) * 0.05, FLOWERS[i], 0.8, 0.12);
   b.lump(0.12, -1.45, 0.85, 0.25, '#58b04a', { d: 0, s: [1.2, 0.6, 1], ao: 0 });
   // bunting across the front under the roof, between the pole posts, and a flower garden at the feet
   buntingInto(b, (t) => [-1.55 + t * 3.1, 2.25, 0.62], 11, 0.26, 0.28);
-  for (const sx of [-1, 1]) for (let i = 0; i < 7; i++) { const a = i * 0.9 + (sx > 0 ? 1 : 0), rr = 0.22 + (i % 3) * 0.1; flowerInto(b, sx * (1.15 + Math.cos(a) * rr * 1.4), 0.0, 0.8 + Math.sin(a) * rr * 0.6, FLOWERS[(i + (sx > 0 ? 3 : 0)) % 6], 1.35, 0.2 + (i % 3) * 0.05, i % 2 === 0); }
+  for (const sx of [-1, 1]) for (let i = 0; i < 7; i++) { const a = i * 0.9 + (sx > 0 ? 1 : 0), rr = 0.22 + (i % 3) * 0.1; flowerInto(b, sx * (1.15 + Math.cos(a) * rr * 1.4), 0.0, 0.8 + Math.sin(a) * rr * 0.6, FLOWERS[(i + (sx > 0 ? 3 : 0)) % 6], 0.9, 0.2 + (i % 3) * 0.05, i % 2 === 0); }
   for (const sx of [-1, 1]) b.lump(0.3, sx * 1.65, 0.1, 0.62, '#78dc5a', { d: 1, s: [1.4, 0.7, 1], grad: 0.8, ao: 0.05, sw: 0.3 });
   b.shadow(0, 0.1, 2.3, 0.2, 1.1, 0.55, 0.0);
 }
@@ -876,7 +876,7 @@ function plazaInto(b, R) {
   // flower beds at 225 and 315 (a small tree, and a big bloom mound)
   const bed = (ang, tree) => place(ang, 5.6 * k, 0, () => {
     b.add(G.lathe([[1.0, 0], [1.05, 0.1], [1.02, 0.28], [0.92, 0.3], [0.88, 0.18], [0.0, 0.2]], 18), { c: '#f6ecd6', grad: 0.8, ao: 0.3, aoH: 0.25, facet: 0.03 }); b.lump(0.9, 0, 0.19, 0, '#c08a5a', { d: 1, s: [1, 0.12, 1], jit: 0, ao: 0 });
-    const r = krng(ang * 100 | 0); for (let i = 0; i < 30; i++) { const a = r() * TAU, rr = (tree ? 0.38 : 0.1) + r() * 0.6; flowerInto(b, Math.cos(a) * rr, 0.2, Math.sin(a) * rr, FLOWERS[(i + (tree ? 0 : 2)) % 6], 1.25, 0.13 + r() * 0.1, i % 4 === 0); }
+    const r = krng(ang * 100 | 0); for (let i = 0; i < 30; i++) { const a = r() * TAU, rr = (tree ? 0.38 : 0.1) + r() * 0.6; flowerInto(b, Math.cos(a) * rr, 0.2, Math.sin(a) * rr, FLOWERS[(i + (tree ? 0 : 2)) % 6], 1.0, 0.13 + r() * 0.1, i % 4 === 0); }
     for (let i = 0; i < 6; i++) { const a = i * 1.05, rr = 0.55 + r() * 0.2; b.lump(0.2, Math.cos(a) * rr, 0.26, Math.sin(a) * rr, '#58b04a', { d: 0, s: [1.2, 0.6, 1.2], ao: 0, grad: 0.7, sw: 0.4 }); }
     if (tree) b.xf(0, 0.2, 0, 0.62, 1, () => treeInto(b, 'blossom', 1, 0)); else for (let i = 0; i < 8; i++) { const a = i * 0.8; b.lump(0.2, Math.cos(a) * 0.3, 0.36 + (i % 2) * 0.1, Math.sin(a) * 0.3, FLOWERS[(i * 2) % 6], { d: 1, grad: 0.7, ao: 0, s: [1, 0.8, 1] }); }
     b.shadow(0, 0, 1.6, 0.25, 1, 1, 0.0);
@@ -892,7 +892,7 @@ function plazaInto(b, R) {
   for (let m = 0; m < 4; m++) place(Math.PI * 3 / 8 + m * Math.PI / 2, 6.9 * k, 0, () => {
     b.add(G.lathe([[0.42, 0], [0.5, 0.12], [0.52, 0.34], [0.46, 0.42], [0.4, 0.38]], 12), { c: '#ff9a68', grad: 0.6, ao: 0.14, aoH: 0.2 }); b.lump(0.4, 0, 0.38, 0, '#c08a5a', { d: 0, s: [1, 0.2, 1], ao: 0, jit: 0 });
     for (let i = 0; i < 3; i++) b.lump(0.2, Math.cos(i * 2.1) * 0.17, 0.5, Math.sin(i * 2.1) * 0.17, '#58b04a', { d: 1, s: [1, 0.85, 1], ao: 0, grad: 0.9, sw: 0.3 });
-    for (let i = 0; i < 8; i++) { const a = i * 0.85 + m, rr = 0.1 + (i % 3) * 0.1; flowerInto(b, Math.cos(a) * rr, 0.62, Math.sin(a) * rr, FLOWERS[(i + m) % 6], 1.2, 0.1 + (i % 2) * 0.05, false, (i + m) % 4); }
+    for (let i = 0; i < 8; i++) { const a = i * 0.85 + m, rr = 0.1 + (i % 3) * 0.1; flowerInto(b, Math.cos(a) * rr, 0.62, Math.sin(a) * rr, FLOWERS[(i + m) % 6], 0.9, 0.1 + (i % 2) * 0.05, false, (i + m) % 4); }
     b.shadow(0, 0, 0.8, 0.28, 1, 1, 0.0);
   }, 1.35);
   // lamp posts flanking each path entrance
@@ -900,12 +900,12 @@ function plazaInto(b, R) {
     b.add(G.lathe([[0.17, 0], [0.12, 0.12], [0.07, 0.3], [0.06, 1.8]], 8), { c: '#7fd0c4', grad: 0.6, ao: 0.2 }); b.lump(0.09, 0, 1.85, 0, '#7fd0c4', { d: 0, ao: 0 });
     b.box(0.26, 0.34, 0.26, 0, 1.78, 0, '#ffe08a', { m: 'lantern', ao: 0 }); b.cyl(0.0, 0.26, 0.2, 0, 2.1, 0, '#7fd0c4', { seg: 6, ao: 0, grad: 0.5 }); b.lump(0.05, 0, 2.33, 0, '#ffd24a', { d: 0, ao: 0 });
     b.cyl(0.14, 0.14, 0.04, 0, 1.74, 0, '#7fd0c4', { seg: 6, ao: 0 }); b.shadow(0, 0, 0.5, 0.18, 1, 1, 0.0);
-    for (let i = 0; i < 5; i++) { const a2 = i * 1.3 + q; flowerInto(b, Math.cos(a2) * 0.32, 0, Math.sin(a2) * 0.32, FLOWERS[(i + q + (s > 0 ? 3 : 0)) % 6], 1.3, 0.14 + (i % 2) * 0.05, i % 2 === 0, (i + q) % 4); }
+    for (let i = 0; i < 5; i++) { const a2 = i * 1.3 + q; flowerInto(b, Math.cos(a2) * 0.32, 0, Math.sin(a2) * 0.32, FLOWERS[(i + q + (s > 0 ? 3 : 0)) % 6], 0.9, 0.14 + (i % 2) * 0.05, i % 2 === 0, (i + q) % 4); }
   }); }
   // bunting scallops hang between the lamp posts of neighbouring entrances (an arc just inside the lamps)
   for (let q = 0; q < 4; q++) { const a0 = q * Math.PI / 2 + 0.14, a1 = (q + 1) * Math.PI / 2 - 0.14, rr = (R - 0.95 * k) * 1.0; b.xf(0, FYP, 0, 1, 0, () => buntingInto(b, (t) => { const a = a0 + (a1 - a0) * t; return [Math.cos(a) * rr, 2.05, Math.sin(a) * rr]; }, Math.round(14 * k), 0.34, 0.45)); }
   // a few tufts and flowers in the cracks of the ring
-  const r = krng(7); for (let i = 0; i < 22; i++) { const a = r() * TAU; const rr = R + (r() < 0.5 ? 0.45 : -0.0) * k; if (rr < R + 0.3) continue; tuftInto(b, Math.cos(a) * (R + 0.35 * k), 0.0, Math.sin(a) * (R + 0.35 * k), 0.8, '#62d452', 3, 0.8); if (i % 2 === 0) flowerInto(b, Math.cos(a) * (R + 0.45 * k), 0.0, Math.sin(a) * (R + 0.45 * k), FLOWERS[i % 6], 1.2, 0.16); }
+  const r = krng(7); for (let i = 0; i < 22; i++) { const a = r() * TAU; const rr = R + (r() < 0.5 ? 0.45 : -0.0) * k; if (rr < R + 0.3) continue; tuftInto(b, Math.cos(a) * (R + 0.35 * k), 0.0, Math.sin(a) * (R + 0.35 * k), 0.8, '#62d452', 3, 0.8); if (i % 2 === 0) flowerInto(b, Math.cos(a) * (R + 0.45 * k), 0.0, Math.sin(a) * (R + 0.45 * k), FLOWERS[i % 6], 0.9, 0.16); }
 }
 /**
  * The central valley square. Round, top at y = 0.10 (island top at 0). The middle 3 units hold the board (a compass inlay shows around it).
@@ -952,8 +952,8 @@ function plotInto(b, hex) {
   // flower-covered hedges outside the border: puffy bushes sprinkled with pastel blossoms and the owner colour; none at the gate
   { const r = krng(hex.length * 7 + (own.getHex() % 997)); let n = 0; const pal = ['#ffb7d0', '#ffffff', '#fff2a0', '#d4c4ff', '#ffc8a8'];
     for (let s_ = 0; s_ < 4; s_++) for (let i = 0; i < 6; i++) { const t = -6.9 + i * 2.78 + (r() - 0.5) * 0.4, off = PH + 0.52 + (r() - 0.5) * 0.12; let x, z; if (s_ === 0) { x = t; z = off; if (Math.abs(x) < 2.2) continue; } else if (s_ === 1) { x = off; z = t; } else if (s_ === 2) { x = t; z = -off; } else { x = -off; z = t; }
-      const sc = 0.85 + r() * 0.5, hy0 = 0.14 + 0.2 * sc; b.lump(0.3 * sc, x, hy0, z, ['#62d652', '#70dc5a', '#58cf5a'][n++ % 3], { d: 0, s: [1.3, 0.9, 1.0], jit: 0.16, seed: n, grad: 0.95, ao: 0.1, aoH: 0.3, r: [0, r() * 3, 0], up: 0.4 });
-      for (let k = 0; k < 2; k++) { const a = r() * TAU, e = 0.2 + r() * 0.8, ce = Math.cos(e); b.add(G.octa(), { p: [x + Math.cos(a) * 0.36 * sc * ce, hy0 + Math.sin(e) * 0.27 * sc, z + Math.sin(a) * 0.3 * sc * ce], s: 0.1, c: k === 0 ? own : pal[(n + k) % 5], grad: 0.2, ao: 0 }); } } }
+      const sc = 0.95 + r() * 0.5, hy0 = 0.14 + 0.2 * sc; b.lump(0.36 * sc, x, hy0, z, ['#62d652', '#70dc5a', '#58cf5a'][n++ % 3], { d: 0, s: [1.3, 0.9, 1.0], jit: 0.16, seed: n, grad: 0.95, ao: 0.1, aoH: 0.3, r: [0, r() * 3, 0], up: 0.4 });
+      for (let k = 0; k < 2; k++) { const a = r() * TAU, e = 0.2 + r() * 0.8, ce = Math.cos(e); b.add(G.octa(), { p: [x + Math.cos(a) * 0.4 * sc * ce, hy0 + Math.sin(e) * 0.32 * sc, z + Math.sin(a) * 0.36 * sc * ce], s: 0.14, c: k === 0 ? own : pal[(n + k) % 5], grad: 0.2, ao: 0 }); } } }
   // gate arch on the +Z side, owner colour
   { const gx = 1.45, gz = PH + 0.02;
     for (const sx of [-1, 1]) { b.box(0.56, 0.55, 0.56, sx * gx, 0.0, gz, '#f6ecd6', { grad: 0.8, ao: 0.3, aoH: 0.3 }); b.box(0.34, 1.5, 0.34, sx * gx, 0.5, gz, own, { grad: 0.8, ao: 0.2 }); b.lump(0.2, sx * gx, 2.02, gz, ownL, { d: 0, grad: 0.7, ao: 0, s: [1, 0.9, 1] }); }
@@ -966,12 +966,10 @@ function plotInto(b, hex) {
   // gate lantern and the three static (wind-fluttering) pennants
   { b.cyl(0.012, 0.012, 0.2, 0, 2.18, gz0, '#7fd0c4', { seg: 4, ao: 0, grad: 0 }); b.box(0.18, 0.26, 0.18, 0, 1.9, gz0, '#ffe08a', { m: 'lantern', ao: 0 }); b.cyl(0.0, 0.13, 0.08, 0, 2.16, gz0, '#7fd0c4', { seg: 6, ao: 0 });
     for (const [sx, sz] of [[1, -1], [1, 1], [-1, 1]]) b.add(clothGeo(own.getStyle ? '#' + own.getHexString() : hex, '#fff2cf', 1.15, 0.66), { p: [sx * (PH + 0.12) + 0.04, 2.45, sz * (PH + 0.12)], swx: 1, ao: 0 }); }
-  // tiny flat daisies sprinkled over the lawn (flat, so they never poke through buildings)
-  { const r = krng(33); for (let i = 0; i < 30; i++) { const x = (r() - 0.5) * 15, z = (r() - 0.5) * 15, c = ['#ffffff', '#ffb7d0', '#fff2a0', '#d4c4ff'][i % 4]; b.add(G.disc(5), { p: [x, TOP + 0.012, z], s: [0.14, 1, 0.14], c, grad: 0, ao: 0 }); b.add(G.disc(4), { p: [x, TOP + 0.02, z], s: [0.055, 1, 0.055], c: '#ffd23a', grad: 0, ao: 0 }); } }
   // bunting between the corner posts on the four sides
   for (let sd = 0; sd < 4; sd++) { const A = [[-1, 1], [1, 1], [1, -1], [-1, -1]][sd], B2 = [[1, 1], [1, -1], [-1, -1], [-1, 1]][sd], q = PH + 0.12; buntingInto(b, (t) => [lerp(A[0], B2[0], t) * q, 2.2, lerp(A[1], B2[1], t) * q], 8, 0.5, 0.55, BUNT, 6); }
-  // a flower border just inside the curb (small, pastel, never under the buildings)
-  { const r = krng(97), q = PH - 0.7; for (let sd = 0; sd < 4; sd++) for (let i = 0; i < 3; i++) { const t = -5.6 + i * 5.2 + r() * 0.5, x = sd % 2 ? (sd === 1 ? q : -q) : t, z = sd % 2 ? t : (sd === 0 ? q : -q); if (sd === 0 && Math.abs(x) < 2.4) continue; flowerInto(b, x, TOP, z, FLOWERS[(i + sd * 2) % 6], 1.3, 0.16 + r() * 0.06, i % 3 === 0, (i + sd) % 4); } }
+  // flower carpets just inside the curb: flat, pastel and never under the buildings
+  { const r = krng(97), q = PH - 0.9; for (let sd = 0; sd < 4; sd++) for (let i = 0; i < 2; i++) { const t = -4.4 + i * 7.6 + r() * 0.8, x = sd % 2 ? (sd === 1 ? q : -q) : t, z = sd % 2 ? t : (sd === 0 ? q : -q); if (sd === 0 && Math.abs(x) < 2.6) continue; b.xf(x, TOP, z, 1.7, r() * 6, () => carpetInto(b, sd + i, 6)); } }
   // corner posts: stone foot, wooden pole, gold cap
   for (const [sx, sz] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) { const x = sx * (PH + 0.12), z = sz * (PH + 0.12); b.cyl(0.26, 0.32, 0.45, x, 0, z, '#f6ecd6', { seg: 8, grad: 0.8, ao: 0.3, aoH: 0.3 }); b.cyl(0.06, 0.09, 2.1, x, 0.4, z, '#ffd9a0', { seg: 6, grad: 0.5, ao: 0 }); b.lump(0.1, x, 2.5, z, '#ffd24a', { d: 0, grad: 0.7, ao: 0 }); }
 }
