@@ -21,6 +21,7 @@ Link: `https://games-71g.pages.dev/hearthvale/` (solo works at once). Server: se
 - `vendor/three.module.min.js` vendored three.js (no CDN, no build step).
 
 ## Rules
+- Hunger never deadlocks a village: a villager with no food keeps working at 40 percent speed (flagged `famished`, shown as 'hungry'), eats soup, then bread, apples or wheat, and the Hearth Hall shares a free bowl every 40 s when there is no food at all. The HUD shows a 'Cook soup' button (`cookSoup` in js/ui/hud.js) when soup runs low.
 - No image files: all art is procedural geometry, sound is synthesised.
 - Never rename the `hearthvale.*` localStorage keys (solo saves) or the folder.
 - Villages sit on a square ring (`slotOrigin` in sim.js, 17.5 apart, never overlapping); old circular saves are migrated in `deserialize`.

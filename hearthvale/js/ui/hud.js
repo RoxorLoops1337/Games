@@ -17,7 +17,7 @@ export const HINTS = {
   q_proj: 'Valley, Project tab: Give goods', q_pie: 'Queue pies in the Pantry', q_lvl10: 'Keep building and filling orders', q_charm2: 'More decor and upgrades', q_lvl15: 'You are a legend in the making',
 };
 const IDLE_ICON = { idle: 'sleep', hungry: 'hungry', blocked: 'clock', full: 'crate' };
-export const stateText = (v) => { const t = { idle: ['sleep', 'Idle'], walk: ['walk', 'Walking'], work: ['hammer', 'Working'], build: ['hammer', 'Building'], hungry: ['hungry', 'Hungry, no soup!'], blocked: ['clock', 'Waiting for goods'], full: ['crate', 'Storage full'] }[v.state]; return t ? icon(t[0], 18) + ' ' + t[1] : esc(v.state); };
+export const stateText = (v) => { const t = { idle: ['sleep', 'Idle'], walk: ['walk', 'Walking'], work: ['hammer', 'Working'], build: ['hammer', 'Building'], hungry: ['hungry', 'Hungry, working slowly'], blocked: ['clock', 'Waiting for goods'], full: ['crate', 'Storage full'] }[v.state]; return t ? icon(t[0], 18) + ' ' + t[1] : esc(v.state); };
 
 const C = {}; // cached DOM and last-written values, so a snapshot only touches what changed
 const STRIP_ORDER = ['wood', 'clay', 'stone', 'wheat', 'planks', 'bricks', 'flour', 'soup', 'bread', 'egg', 'milk', 'wool', 'apple', 'fish', 'cheese', 'jam', 'cloth', 'pie'];
@@ -26,7 +26,7 @@ const CORE = new Set(['wood', 'clay', 'stone', 'wheat', 'soup']);
 export function initHud() {
   for (const e of $$('[data-ic]')) e.innerHTML = icon(e.dataset.ic, +e.dataset.s || 20);
   C.card = $('#card'); C.pname = $('#pname'); C.ptitle = $('#ptitle'); C.plvl = $('#plvl'); C.xp = $('#xpbar'); C.arc = $('#xparc'); C.charm = $('#pcharm'); C.face = $('#pface');
-  C.coins = $('#pCoins'); C.scr = $('#pScrolls'); C.strip = $('#strip'); C.track = $('#track'); C.quick = $('#quick'); C.mini = $('#mini');
+  C.coins = $('#pCoins'); C.scr = $('#pScrolls'); C.strip = $('#strip'); C.track = $('#track'); C.quick = $('#quick'); C.soup = $('#soupAlert'); C.mini = $('#mini');
   C.strip.innerHTML = `<button class="gp more" id="stripMore" aria-label="All goods">${icon('crate', 24)}<span>All</span></button>` + STRIP_ORDER.map((g, i) => `${i === 4 || i === 7 || i === 9 ? '<i class="gsep"></i>' : ''}<button class="gp" data-g="${g}" data-snd="tap2" hidden aria-label="${GOOD[g].name}"><span class="gi">${icon(g, 26)}</span><b class="num">0</b><i class="cap"><u></u></i><em>MAX</em></button>`).join('');
   C.gp = {}; for (const b of $$('.gp[data-g]', C.strip)) C.gp[b.dataset.g] = { el: b, num: $('.num', b), cap: $('u', b), gsep: b.previousElementSibling && b.previousElementSibling.classList.contains('gsep') ? b.previousElementSibling : null, v: -1 };
   $('#pCoins .gi').innerHTML = icon('coins', 28); $('#pScrolls .gi').innerHTML = icon('scrolls', 26);
@@ -50,6 +50,7 @@ export function initHud() {
   $('#bShop').onclick = (e) => { S.unseen.merchant = false; open('valley', { tab: 'merchant', toggle: true }, e.currentTarget); };
   S.api.short = () => { shake(C.coins); };
   C.quick.innerHTML = `<span class="qi">${icon('bolt', 30)}</span><span class="ql">Work!</span><i class="pip"></i>`; C.quick.onclick = () => sendIdle();
+  C.soup.onclick = () => cookSoup();
   C.track.onclick = () => open('quests', { toggle: true }, C.track);
   // mini card for a tapped villager
   C.mini.addEventListener('pointerdown', () => { C.miniDown = true; }); addEventListener('pointerup', () => { C.miniDown = false; });
@@ -103,6 +104,11 @@ export function updateHud(s) {
   setPip($('#bVil'), idle || 0);
   const q = C.quick; const showQ = idle > 0 && !S.mode; if (q.hidden === showQ) { q.hidden = !showQ; if (showQ && !reduced()) try { q.animate([{ transform: 'scale(.3)' }, { transform: 'scale(1.15)', offset: 0.6 }, { transform: 'none' }], { duration: 420, easing: 'ease-out' }); } catch { /* ignore */ } }
   const qp = $('.pip', q); if (qp && qp.textContent !== String(idle)) qp.textContent = String(idle);
+  // food alert: soup is the village's fuel; with little left (and nothing else to eat) offer a one-tap fix
+  { const soup = you.res.soup | 0, fallback = (you.res.bread | 0) + (you.res.apple | 0) + (you.res.wheat | 0), tired = you.villagers.some((v) => v.state === 'hungry');
+    const low = !S.mode && (soup === 0 || (soup < 2 && fallback === 0) || tired) && soup < 3; const sa = C.soup;
+    if (sa.hidden === low) { sa.hidden = !low; if (low) { wobble(sa); snd('warn'); } }
+    if (low) { const html = `<span>${icon('soup', 26)}</span><span>${soup === 0 ? 'Out of soup!' : 'Low on soup'}<small>Tap to cook</small></span>`; if (sa.dataset.h !== html) { sa.dataset.h = html; sa.innerHTML = html; } } }
   // visitor
   const vis = you.visitor, tv = $('#tVisitor'); if (!!vis === tv.hidden) { tv.hidden = !vis; if (vis) { wobble(tv); } }
   if (vis) { tv.querySelector('circle').style.strokeDashoffset = String(132 * (1 - Math.max(0, Math.min(1, vis.expiresIn / 150)))); setPip(tv, S.unseen.visitor ? true : 0); }
@@ -164,6 +170,18 @@ export function bestJob(vid) {
   const raws = [['wood', 'tree', 'chop wood'], ['clay', 'clay', 'dig clay'], ['stone', 'rock', 'mine stone']].sort((a, b) => (you.res[a[0]] || 0) - (you.res[b[0]] || 0));
   for (const [g, nt, say] of raws) { const n = pub.n.find((n) => n[1] === nt && n[4]); if (n) return T({ k: 'node', id: n[0] }, `${name} goes to ${say}`); }
   const f = VALLEY_FIELDS.find((f) => f.res === raws[0][0]) || VALLEY_FIELDS[0]; return T({ k: 'valley', id: f.id }, `${name} heads to the ${f.name}`);
+}
+// One tap to get out of a food crisis: cook soup if there is a kitchen and wheat, otherwise go get wheat (hungry villagers work slowly but never stop).
+export function cookSoup() {
+  const you = S.you, pub = myPub(); if (!you || !pub) return;
+  const vs = you.villagers; if (!vs.length) return; const bs = pub.b;
+  const cook = vs.find((v) => v.state === 'idle') || vs.find((v) => !v.task) || vs[0];
+  const kit = bs.find((b) => b[1] === 'kitchen' && b[4] >= 1);
+  const T = (task, say, pre) => { if (pre) cmd(pre); const r = cmd({ op: 'assign', ...task, vid: cook.id }); if (r && r.ok === false) return; toast(say, { icon: 'soup', type: 'good', key: 'soup' }); const m = S.view.villagers.get(cook.id); if (m) S.view.celebrate('cheer', m.position.x, m.position.z); };
+  if (kit && (you.res.wheat | 0) >= 2) { T({ k: 'bld', id: kit[0] }, `${cook.name} is cooking soup!`, { op: 'queue', id: kit[0], recipe: 'soup', n: Math.min(5, Math.floor(you.res.wheat / 2)) }); return; }
+  const ripe = bs.find((b) => b[5] === 'ripe' && BUILDINGS[b[1]] && BUILDINGS[b[1]].field); if (ripe) { T({ k: 'bld', id: ripe[0] }, `${cook.name} goes to harvest wheat for soup`); return; }
+  const sow = bs.find((b) => b[5] === 'empty' && b[1] === 'farm' && b[4] >= 1); if (sow) { T({ k: 'bld', id: sow[0] }, `${cook.name} sows wheat for soup`); return; }
+  const meadow = VALLEY_FIELDS.find((f) => f.res === 'wheat'); if (meadow) { T({ k: 'valley', id: meadow.id }, `${cook.name} gathers wheat from the Golden Meadow`); if (!kit) toast('Build a Kitchen to turn wheat into soup!', { icon: 'house', type: 'info', key: 'kit' }); }
 }
 export function sendIdle(vid) {
   const j = bestJob(vid); if (!j) { toast('Everyone is busy. Lovely!', { icon: 'check', type: 'good' }); return; }

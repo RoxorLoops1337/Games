@@ -419,9 +419,16 @@ function targetPos(W, P, t) {
   if (t.k === 'valley') { const f = VALLEY_FIELDS.find(f => f.id === t.id); if (!f) return null; const p = valleyFieldPos(f); const d = Math.hypot(p.x - P.ox, p.z - P.oz) || 1; return { x: p.x + (P.ox - p.x) / d * 2.5, z: p.z + (P.oz - p.z) / d * 2.5 }; }
   return null;
 }
+// What a hungry villager will eat, best first. Soup is the proper meal; plain wheat, apples and bread are the emergency fallbacks,
+// so a village that runs out of soup can never get stuck (cooking needs a worker, and workers need food).
+const vstate = (v) => (v.famished && (v.state === 'work' || v.state === 'build') ? 'hungry' : v.state);   // working but weary: the client shows a tired face
+const MEALS = [['soup', 55], ['bread', 60], ['apple', 30], ['wheat', 24]];
+export const hasFood = (P) => MEALS.some(([g]) => P.res[g] > 0);
 function feed(P, v) {
   if (v.hunger > 30) return true;
-  if (P.res.soup > 0) { P.res.soup--; v.hunger = Math.min(HUNGER_MAX, v.hunger + Math.round((P.tech.hearty ? 100 : 55) * (P.pst >= 3 ? 1.25 : 1))); P.rev++; return true; }
+  for (const [g, n] of MEALS) {
+    if (P.res[g] > 0) { P.res[g]--; const gain = g === 'soup' ? Math.round((P.tech.hearty ? 100 : 55) * (P.pst >= 3 ? 1.25 : 1)) : n; v.hunger = Math.min(HUNGER_MAX, v.hunger + gain); P.rev++; return true; }
+  }
   return v.hunger > 0;
 }
 const FIELD_YIELD = (b, d, P) => d.crop ? 5 + 2 * lv(b) + (P.tech.keen ? 1 : 0) : 6 + 3 * lv(b) + (P.tech.keen ? 2 : 0);
@@ -439,7 +446,8 @@ function stepVillager(W, P, v, dt) {
   if (d > WORK_RANGE) {
     const s = Math.min(d, speed * dt); v.x += dx / d * s; v.z += dz / d * s; v.state = 'walk'; v.face = Math.atan2(dx, dz); return;
   }
-  if (!feed(P, v)) { v.state = 'hungry'; return; }
+  // A starving villager still works, just slowly (never a dead stop): that is how a village recovers from an empty larder.
+  v.famished = !feed(P, v); if (v.famished) { dt *= 0.4; v.hunger = Math.max(0, v.hunger); }
   const t = v.task;
   if (t.k === 'node' || t.k === 'valley') {
     v.state = 'work';
@@ -615,6 +623,11 @@ export function tick(W, dt) {
   for (const P of Object.values(W.players)) {
     P.pst = stage;
     for (const v of P.villagers) stepVillager(W, P, v, dt);
+    // the Hearth Hall never lets a village starve outright: with no food at all and hungry villagers, the hall cook shares a free bowl of stew every 40 s
+    if (!hasFood(P) && P.villagers.some(v => v.hunger < 35) && W.t >= (P.rationAt || 0)) {
+      P.rationAt = W.t + 40; P.res.soup = Math.min(capOf(P), P.res.soup + 1); P.rev++;
+      const hall = P.buildings[0], c = tileToWorld(P, hall.x + 1.5, hall.y + 3.5); popup(P, 'The hall cook shared a free bowl of stew!', c.x, c.z); W.events.push({ t: 'ration', pid: P.id });
+    }
     for (const b of P.buildings) {
       if (b.stage === 'grow') { b.crop += dt * rain / (BUILDINGS[b.type].grow || 30); if (b.crop >= 1) { b.crop = 1; b.stage = 'ripe'; P.rev++; } }
       else if (b.an && b.built) animalStep(W, P, b, dt);
@@ -671,7 +684,7 @@ export function snapshot(W, pid, ctx = null, parts = null) {
   const players = []; parts = ctx ? (parts || publicParts(W)) : null;
   for (const P of Object.values(W.players)) {
     const e = { id: P.id, name: P.name, color: P.color, slot: P.slot, ox: P.ox, oz: P.oz, ang: P.ang, level: P.level, online: P.online,
-      v: P.villagers.map(v => [v.id, r1(v.x), r1(v.z), v.state, v.hat, v.face ? r1(v.face) : 0, v.name, toolOf(P, v), v.cs || 0]), charm: P.charm || 0, title: titleText(P) };
+      v: P.villagers.map(v => [v.id, r1(v.x), r1(v.z), vstate(v), v.hat, v.face ? r1(v.face) : 0, v.name, toolOf(P, v), v.cs || 0]), charm: P.charm || 0, title: titleText(P) };
     if (!ctx) {
       const pp = publicParts1(P); e.b = pp.b; e.n = pp.n;
     } else {
@@ -688,7 +701,7 @@ export function snapshot(W, pid, ctx = null, parts = null) {
     const ach = {}; for (const a of ACHIEVEMENTS) ach[a.id] = [Math.min(a.n, Math.floor(me.stats[a.stat] || 0)), me.ach[a.id] ? 1 : 0];
     you = { id: me.id, res: me.res, coins: me.coins, xp: me.xp, level: me.level, cap: capOf(me), housing: housingOf(me), tech: me.tech, quests: me.questsDone, stats: me.stats,
       hire: hireCost(me), buildings: me.buildings.map(b => { const e = { id: b.id, type: b.type, lvl: b.lvl || 1, up: !!b.up, queue: b.queue, research: b.research || null, stage: b.stage, crop: b.crop }; if (b.an) { e.an = b.an; e.stock = b.stock; e.hungry = b.hungry; e.room = animalCap(b); e.feed = b.feed; } return e; }),
-      villagers: me.villagers.map(v => ({ id: v.id, name: v.name, state: v.state, hunger: Math.round(v.hunger), task: v.task, skills: v.skx.map(skillLevel), skx: v.skx.map(Math.floor), skill: v.cs || 0 })), popups: me.popups.splice(0),
+      villagers: me.villagers.map(v => ({ id: v.id, name: v.name, state: vstate(v), famished: !!v.famished, hunger: Math.round(v.hunger), task: v.task, skills: v.skx.map(skillLevel), skx: v.skx.map(Math.floor), skill: v.cs || 0 })), popups: me.popups.splice(0),
       charm: me.charm || 0, xpBonus: xpBonus(W, me), daily: dailyView(W, me), ach, title: me.title, cosmetics: me.cosmetics,
       visitor: me.visitor ? { who: me.visitor.who, want: me.visitor.want, n: me.visitor.n, price: me.visitor.price, expiresIn: Math.max(0, Math.ceil(me.visitor.until - W.t)) } : null,
       project: { pts: Math.floor(pr.contrib[me.id] || 0), total: Math.floor(pr.total[me.id] || 0) } };

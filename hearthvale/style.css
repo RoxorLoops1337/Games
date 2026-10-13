@@ -564,3 +564,8 @@ body.photo #banners,body.photo #confetti,body.photo #toasts{display:none}
   .th{width:64px;height:64px}.card{padding:6px 4px}
 }
 .foot .b{white-space:nowrap;padding:8px 12px;font-size:14px}
+
+/* running out of food: a pulsing one-tap way to fix it */
+#soupAlert{position:absolute;right:calc(12px + var(--sar));bottom:calc(188px + var(--sab));min-width:86px;height:50px;padding:0 14px;border-radius:26px;gap:6px;font-size:13px;line-height:1.05;animation:qb 1.4s ease-in-out infinite;z-index:3}
+#soupAlert small{display:block;font-size:10px;opacity:.9;font-weight:700}
+@media (min-width:700px){#soupAlert{bottom:calc(180px + var(--sab));right:calc(24px + var(--sar))}}

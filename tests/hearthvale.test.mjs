@@ -55,7 +55,7 @@ const run = (W, secs) => { for (let i = 0; i < secs * 10; i++) S.tick(W, 0.1); }
   const W = S.createWorld(13); const P = S.addPlayer(W, 'a', 'A');
   S.command(W, 'a', { op: 'assign', k: 'valley', id: 'vf_wood' }); const w0 = P.res.wood; run(W, 60); ok(P.res.wood > w0, 'valley field harvested');
   const W2 = S.deserialize(S.serialize(W)); ok(W2.players.a.res.wood === P.res.wood, 'save round trips'); S.tick(W2, 0.1); ok(true, 'restored world ticks');
-  P.res.soup = 0; for (const v of P.villagers) v.hunger = 0; run(W, 10); ok(P.villagers.some(v => v.state === 'hungry'), 'starving villagers stop');
+  P.res.soup = 0; P.res.wheat = 0; P.res.bread = 0; P.res.apple = 0; for (const v of P.villagers) v.hunger = 0; run(W, 10); ok(P.villagers.some(v => v.famished || v.state === 'hungry') || P.res.soup > 0, 'starving villagers are flagged hungry (and keep working slowly)');
 }
 // the square ring of villages: 16 plots that never overlap, and old circular saves are migrated
 {
@@ -66,6 +66,21 @@ const run = (W, secs) => { for (let i = 0; i < secs * 10; i++) S.tick(W, 0.1); }
   const q = ps[3], v0 = q.villagers[0]; const old = { x: v0.x - q.ox, z: v0.z - q.oz }; q.ox = 40; q.oz = 5; v0.x = q.ox + old.x; v0.z = q.oz + old.z;
   const W2 = S.deserialize(S.serialize(W)); const q2 = W2.players[q.id]; const o = S.slotOrigin(q.slot);
   ok(q2.ox === o.ox && q2.oz === o.oz, 'an old save is moved onto the square ring'); ok(Math.abs(q2.villagers[0].x - (o.ox + old.x)) < 1e-6, 'its villagers move with it');
+}
+// hunger never deadlocks a village: starving villagers still work (slowly), eat other food, and the hall shares a free bowl
+{
+  const W = S.createWorld(61); const P = S.addPlayer(W, 'a', 'Ann'); P.res.soup = 0; P.res.wheat = 0; P.res.bread = 0; P.res.apple = 0;
+  for (const v of P.villagers) v.hunger = 0;
+  const w0 = P.res.wood; const tree = P.nodes.find(n => n.type === 'tree'); S.command(W, 'a', { op: 'assign', k: 'node', id: tree.id });
+  run(W, 60); ok(P.res.wood > w0, 'a starving villager still gathers (slowly)'); ok(P.res.soup >= 1 || P.villagers.some(v => v.hunger > 0), 'the hall shared a free bowl or someone ate');
+  const vi = P.villagers.find(v => v.task); if (vi) ok(['hungry', 'work', 'walk', 'idle'].includes(S.snapshot(W, 'a').you.villagers.find(x => x.id === vi.id).state), 'snapshot state is valid');
+  // eating wheat when there is no soup
+  const W2 = S.createWorld(62); const Q = S.addPlayer(W2, 'a', 'Ann'); Q.res.soup = 0; Q.res.wheat = 5; Q.villagers[0].hunger = 5;
+  S.command(W2, 'a', { op: 'assign', k: 'node', id: Q.nodes.find(n => n.type === 'tree').id, vid: Q.villagers[0].id }); run(W2, 20); ok(Q.res.wheat < 5, 'a hungry villager eats wheat when there is no soup');
+  // the recovery path: a starving village can still cook soup
+  const W3 = S.createWorld(63); const R = S.addPlayer(W3, 'a', 'Ann'); R.res.soup = 0; R.res.wheat = 6; for (const v of R.villagers) v.hunger = 0; R.res.wood = 200; R.res.stone = 50;
+  const k = S.command(W3, 'a', { op: 'place', type: 'kitchen', ...spot(W3, 'a', 'kitchen') }); run(W3, 60); R.res.wheat = 6; S.command(W3, 'a', { op: 'queue', id: k.id, recipe: 'soup', n: 2 }); run(W3, 80);
+  ok(R.stats.c_soup >= 1 || R.res.soup >= 1, 'a starving village can still cook soup');
 }
 // gifting
 {
