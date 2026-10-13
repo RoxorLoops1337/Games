@@ -340,6 +340,32 @@ test('sawmill doubles planks; millstone grinds wheat; chests hold items for anyo
     assert.equal(chest.inv!.plank, 5);
 });
 
+test('a Speed Module makes a machine a quarter faster, one per machine, and comes back out', () => {
+    const run2 = (withModule: boolean) => {
+        const sim = Sim.create('TEST-MOD' + (withModule ? 'A' : 'B'), 'test');
+        const a = sim.join('a', 'A')!;
+        const mill = placeNear(sim, a, 'millstone', { inv: {}, out: {}, fuel: 0, prog: 0, by: 'a' });
+        give(sim, 'a', 'wheat', 2);
+        if (withModule) { give(sim, 'a', 'module_speed', 2); sim.command('a', { t: 'module', id: mill.id, op: 'put' }); sim.command('a', { t: 'module', id: mill.id, op: 'put' }); }
+        sim.command('a', { t: 'xfer', id: mill.id, item: 'wheat', n: 2, dir: 'put' });
+        run(sim, 2.5);
+        return { mill, a, done: (mill.out?.flour ?? 0) > 0 };
+    };
+    const slow = run2(false), fast = run2(true);
+    assert.equal(slow.done, false, 'three seconds a batch: not yet at 2.5');
+    assert.equal(fast.done, true, 'with a module 3 / 1.25 = 2.4 seconds');
+    assert.equal(fast.mill.mod, 'speed');
+    assert.equal(countOf(fast.a, 'module_speed'), 1, 'only one is slotted');
+    const sim = Sim.create('TEST-MODC', 'test');
+    const a = sim.join('a', 'A')!;
+    const mill = placeNear(sim, a, 'millstone', { inv: {}, out: {}, fuel: 0, prog: 0, by: 'a' });
+    give(sim, 'a', 'module_speed', 1);
+    sim.command('a', { t: 'module', id: mill.id, op: 'put' });
+    sim.command('a', { t: 'module', id: mill.id, op: 'take' });
+    assert.equal(mill.mod, undefined);
+    assert.equal(countOf(a, 'module_speed'), 1);
+});
+
 test('a beehive turns berries into honey', () => {
     const sim = Sim.create('TEST-11H', 'test');
     const a = sim.join('a', 'A')!;

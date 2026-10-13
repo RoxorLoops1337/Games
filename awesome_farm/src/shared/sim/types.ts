@@ -64,6 +64,7 @@ export interface BuildE {
     inv?: Inv;               // chest contents / processor inputs (an Uber Chest's is the world's shared store: sim/uber.ts)
     ask?: { rid: number; by: string; who: string; it: ItemId; n: number; got: number; ea: number }[];   // a Request Board: what is asked for, how much is in, the reward a unit pays (sim/board.ts)
     bps?: { sid: number; by: string; who: string; name: string; items: BlueprintItem[] }[];   // a Blueprint Shelf: layouts farmers shared (sim/shelf.ts)
+    mod?: 'speed';           // a module slotted into a machine (sim/machines.ts: cmdModule)
     cof?: { c: number; by: Record<string, number> };   // a Farm Coffer: the coins in it and who put in how much (sim/coffer.ts)
     cap?: number;            // an Uber Chest: the room all of them give together (sim/uber.ts: storageOf)
     out?: Inv;               // processor outputs
@@ -396,6 +397,7 @@ export type Cmd =
     | { t: 'fortune'; op: 'spin' | 'double' | 'take'; id: number }
     | { t: 'buy'; plot: number }
     | { t: 'board'; op: 'post' | 'fill' | 'cancel'; id: number; rid?: number; n?: number; text?: string }
+    | { t: 'module'; id: number; op: 'put' | 'take' }
     | { t: 'shelf'; op: 'publish' | 'remove'; id: number; sid?: number; name?: string; items?: BlueprintItem[] }
     | { t: 'coffer'; op: 'put' | 'take'; id: number; n: number }
     | { t: 'build'; kind: BuildingKind; tx: number; ty: number; rot?: number }

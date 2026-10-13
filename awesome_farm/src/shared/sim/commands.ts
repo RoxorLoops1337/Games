@@ -72,6 +72,7 @@ export function command (sim: Sim, pid: string, c: Cmd) {
         case 'crate': return fortune.cmdCrate(sim, p, c);
         case 'fortune': return fortune.cmdFortune(sim, p, c);
         case 'buy': return economy.cmdBuy(sim, p, c.plot);
+        case 'module': return machines.cmdModule(sim, p, c);
         case 'shelf': return shelf.cmdShelf(sim, p, c);
         case 'board': return board.cmdBoard(sim, p, c);
         case 'coffer': return coffer.cmdCoffer(sim, p, c);
