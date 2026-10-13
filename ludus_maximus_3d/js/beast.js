@@ -917,7 +917,7 @@ class BeastAnimator {
     this.pads = [F.pad, F.pad, H.pad, H.pad].map((v) => v * sp.size); this.stance = [1, 1, 1, 1];
     // expression layer (setMood) and stance paw locks
     this.mood = { snarl: 0, squint: 0, wide: 0, jaw: 0 }; this.moodT = { snarl: 0, squint: 0, wide: 0, jaw: 0 }; this.moodName = 'calm'; this.enraged = false; this.stride = 1;
-    this.lkOn = new Uint8Array(4); this.lkW = new Float32Array(4); this.lk = new Float64Array(12); this.ikD = new Float64Array(12); this.ikV = new Float64Array(3); this.stT = new Float32Array(4).fill(-1); this.stF = new Float64Array(8); this.drop = 0; this.dropN = 0; this.ld = new Float32Array(4).fill(1); this.land = new Float32Array(4); this.stCool = new Float32Array(4); this.lastRoot = { x: 0, z: 0, yaw: 0, ok: false };
+    this.lkOn = new Uint8Array(4); this.lkW = new Float32Array(4); this.lk = new Float64Array(12); this.ikD = new Float64Array(12); this.ikV = new Float64Array(3); this.stT = new Float32Array(4).fill(-1); this.stF = new Float64Array(8); this.drop = 0; this.dropN = 0; this.ld = new Float32Array(4).fill(1); this.land = new Float32Array(4); this.stCool = new Float32Array(4); this.lkY = new Float32Array(4); this.lastRoot = { x: 0, z: 0, yaw: 0, ok: false };
     const col = sp.id === 'elephant'; this.leash = (col ? 0.2 : 0.3) * this.legL[0]; this.stepAt = (col ? 0.08 : 0.17) * this.legL[0]; this.stepLift = (col ? 0.12 : 0.2) * this.legL[0]; this.slip = 0;
     this.lg = this.legJ.map((jr, i) => ({ par: jr[0].parent, s: jr[0].position, a: jr[1].position, b: jr[2].position, c: new V3(0, -this.pads[i] * 0.98, 0), Lmax: jr[1].position.length() + jr[2].position.length() + this.pads[i] * 0.98, q: new Float64Array(9), i0: LEG_I[i][0], i1: LEG_I[i][1], i2: LEG_I[i][2], lim: new Float64Array(6), front: i < 2 }));
   }
@@ -1112,13 +1112,13 @@ class BeastAnimator {
       const grounded = this.legW[i] > 0.05 && (idle || this.stance[i] === 1);
       let solve = false, tx = 0, ty = 0, tz = 0, w = 0; if (this.stCool[i] > 0) this.stCool[i] -= dt;
       if (grounded) {
-        if (!this.lkOn[i]) { this.lkOn[i] = 1; this.land[i] = 0.8; lk[o] = cx; lk[o + 1] = ground; lk[o + 2] = cz; this.lkW[i] = 0; this.stT[i] = -1; }
+        if (!this.lkOn[i]) { this.lkOn[i] = 1; this.land[i] = 0.8; this.lkY[i] = root.rotation.y; lk[o] = cx; lk[o + 1] = ground; lk[o + 2] = cz; this.lkW[i] = 0; this.stT[i] = -1; }
         let dx = lk[o] - cx, dz = lk[o + 2] - cz, d = Math.sqrt(dx * dx + dz * dz);
         if (d > this.leash) { const k = this.leash / d; lk[o] = cx + dx * k; lk[o + 2] = cz + dz * k; d = this.leash; }
         if (!idle) this.stT[i] = -1;
-        else if (this.stT[i] < 0 && d > this.stepAt && stepping < 2 && this.stT[i ^ 1] < 0 && this.stCool[i] <= 0) { this.stT[i] = 0; this.stF[i * 2] = lk[o]; this.stF[i * 2 + 1] = lk[o + 2]; stepping++; }
+        else if (this.stT[i] < 0 && d > this.stepAt && stepping < 2 && this.stT[i ^ 1] < 0 && this.stCool[i] <= 0 && Math.abs(Math.atan2(Math.sin(root.rotation.y - this.lkY[i]), Math.cos(root.rotation.y - this.lkY[i]))) > 0.1) { this.stT[i] = 0; this.stF[i * 2] = lk[o]; this.stF[i * 2 + 1] = lk[o + 2]; stepping++; }
         let lift = 0;
-        if (this.stT[i] >= 0) { const u = this.stT[i] + dt / 0.26, e = (u > 1 ? 1 : u) * (u > 1 ? 1 : u) * (3 - 2 * (u > 1 ? 1 : u)); lk[o] = this.stF[i * 2] + (cx - this.stF[i * 2]) * e; lk[o + 2] = this.stF[i * 2 + 1] + (cz - this.stF[i * 2 + 1]) * e; lift = Math.sin(Math.PI * (u > 1 ? 1 : u)) * this.stepLift; this.stT[i] = u >= 1 ? -1 : u; if (u >= 1) this.stCool[i] = 1.5; }
+        if (this.stT[i] >= 0) { const u = this.stT[i] + dt / 0.26, e = (u > 1 ? 1 : u) * (u > 1 ? 1 : u) * (3 - 2 * (u > 1 ? 1 : u)); lk[o] = this.stF[i * 2] + (cx - this.stF[i * 2]) * e; lk[o + 2] = this.stF[i * 2 + 1] + (cz - this.stF[i * 2 + 1]) * e; lift = Math.sin(Math.PI * (u > 1 ? 1 : u)) * this.stepLift; this.stT[i] = u >= 1 ? -1 : u; if (u >= 1) { this.stCool[i] = 1.5; this.lkY[i] = root.rotation.y; } }
         this.lkW[i] = Math.min(1, this.lkW[i] + dt / 0.025); w = this.lkW[i] * this.legW[i]; solve = true; tx = lk[o]; ty = ground + lift * sc; tz = lk[o + 2];
       } else {
         this.lkOn[i] = 0; this.stT[i] = -1; const k = Math.exp(-dt / 0.09); for (let q = 0; q < 3; q++) { ikD[o + q] *= k; ikR[o + q] *= k; }
