@@ -923,3 +923,154 @@
   const ascend1 = LM.ascend;
   LM.ascend = (S) => { const N = ascend1(S); N.freed = (S.freed || []).slice(); return N; };
 })(typeof globalThis !== 'undefined' ? globalThis : this);
+
+// ================================================================================================================================================
+// WAVE 3 (gladiator / achievements agent): FIGHT HURT and TROPHIES. Third wrapper block, loaded last so it wraps the wave 2 wrappers.
+//   Fight hurt: a wounded fighter may be sent anyway (LM.enter opts.hurt, the picker's "Fight hurt"). While g.hurtFight is set LM.derive subtracts LM.hurtMods
+//   (twice the weakness of every wound plus a general penalty per week of injury). After every fight LM.hurtAfter rolls whether the wound worsens (idempotent per result).
+//   Trophies: 9 Venatio trophies and 22 more are appended to D.TROPHIES; their rules live in LM.TCX, progress in LM.trophyProgress.
+// ================================================================================================================================================
+(function (G) {
+  const D = G.LM_D, LM = G.LM;
+  if (!LM || LM.hurtOk) return;
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const det = (S, ...p) => LM.mulberry(LM.hash(String(S.seed) + '|' + p.join('|')));
+  const lvlOf = (S, id) => { try { return LM.bfx(S, id).l; } catch (e) { return 0; } };
+
+  // ---------------------------------------------------------------- fight hurt
+  /** may this fighter be sent hurt? (any wounded human fighter) */
+  LM.hurtOk = (S, g) => !!g && !g.beast && (g.inj > 0 || (g.wounds || []).some((w) => w.w > 0));
+  const weeksOf = (g) => Math.max(g.inj || 0, (g.wounds || []).reduce((a, w) => Math.max(a, w.w), 0));
+  /** derived stat changes while fighting hurt: twice every wound's weakness plus a general penalty that grows with the weeks left (4% a week, 16% at most) */
+  LM.hurtMods = (g) => {
+    const wk = weeksOf(g), gen = clamp(0.04 * wk, 0.04, 0.16), m = { hp: -gen * 0.6, atk: -gen, def: -gen * 0.5, spd: -gen * 0.8 };
+    (g.wounds || []).forEach((wd) => { const P = D.WOUNDS[wd.part]; if (P) for (const k in P.weak) m[k] = (m[k] || 0) + P.weak[k] * 2; });
+    return m;
+  };
+  LM.hurtText = (g) => { const m = LM.hurtMods(g), out = []; for (const k of ['hp', 'atk', 'def', 'spd', 'crit', 'eva']) if (m[k]) out.push(`${m[k] > 0 ? '+' : ''}${Math.round(m[k] * 100)}% ${k === 'hp' ? 'health' : k === 'atk' ? 'damage' : k === 'def' ? 'armor' : k === 'spd' ? 'speed' : k === 'crit' ? 'crit' : 'dodge'}`); return out; };
+  /** the explicit trade-off: chance the worst wound gets worse if you win / lose, and by how many weeks */
+  LM.hurtRisk = (S, g) => {
+    const wk = weeksOf(g), mit = clamp(1 - 0.08 * lvlOf(S, 'infirmary') - (g.trait === 'lucky' ? 0.1 : 0), 0.4, 1), base = 0.1 + 0.05 * wk;
+    return { weeks: wk, win: clamp(base * mit, 0.05, 0.6), lose: clamp((base + 0.3) * mit, 0.15, 0.9), addWin: 1, addLose: 2, mods: LM.hurtMods(g), text: LM.hurtText(g) };
+  };
+  LM.hurtMark = (S, g, on = true) => { if (g) { if (on && LM.hurtOk(S, g)) g.hurtFight = 1; else delete g.hurtFight; } };
+  LM.hurtClear = (S) => { (S.glads || []).forEach((g) => { delete g.hurtFight; }); };
+  /** run a thunk with the hurt penalty applied (picker odds) */
+  LM.withHurt = (S, g, fn) => { const had = g.hurtFight, inj = g.inj; g.hurtFight = 1; try { return fn(); } finally { if (had) g.hurtFight = had; else delete g.hurtFight; g.inj = inj; } };
+  /** roll the worsening after a fight for a fighter marked hurt. Returns null when not hurt, else {worse, chance, add, id, name, part, w, newWound}. Does not clear the mark (a Pit run keeps fighting hurt). */
+  LM.hurtAfter = (S, g, o) => {
+    o = o || {}; if (!g || !g.hurtFight) return null; LM.syncWounds(S, g);
+    if (!(g.wounds || []).some((w) => w.w > 0)) { delete g.hurtFight; return null; }
+    const R = LM.hurtRisk(S, g), win = !!o.win, chance = win ? R.win : R.lose, rr = det(S, 'hurt', g.id, S.week, S.hseq = (S.hseq || 0) + 1);
+    const roll = rr(), worse = roll < chance, out = { id: g.id, name: g.name, worse, chance, win, add: 0, newWound: null, kind: o.kind || '' };
+    if (worse) {
+      const top = g.wounds.slice().sort((a, b) => b.w - a.w)[0], add = win ? R.addWin : R.addLose; out.add = add; top.w += add; top.w0 = Math.max(top.w0 || 0, top.w); top.worse = (top.worse || 0) + 1; top.tr = null; out.part = top.part; out.w = top.w;
+      if (!win && g.wounds.length < 3 && rr() < 0.4) { const wd = LM.woundGive(S, g, 2, null, 0.15); out.newWound = { part: wd.part, name: D.WOUNDS[wd.part].n, w: wd.w }; }
+      g.inj = g.wounds.reduce((a, b) => Math.max(a, b.w), 0); g.mo = clamp(g.mo - 4, 0, 100);
+      LM.diary && LM.diary(S, g, `Fought hurt and made it worse (+${add} week${add > 1 ? 's' : ''}).`);
+    } else LM.diary && LM.diary(S, g, 'Fought hurt and held together.');
+    S.stats = S.stats || {}; S.stats.hurtFights = (S.stats.hurtFights || 0) + 1; if (win) S.stats.hurtWins = (S.stats.hurtWins || 0) + 1;
+    return out;
+  };
+  /** roll for every marked fighter once per fight result (res.hurt is the cache, so UI and settle can both call it) */
+  LM.hurtResolve = (S, glads, res, kind) => {
+    if (!res) return []; res.hurt = res.hurt || []; const done = new Set(res.hurt.map((x) => x.id));
+    (glads || []).forEach((g) => { if (g && g.hurtFight && !done.has(g.id)) { const r = LM.hurtAfter(S, g, { win: !!res.win || res.place === 1, kind }); if (r) { res.hurt.push(r); done.add(g.id); } } });
+    return res.hurt;
+  };
+  LM.hurtLine = (r) => (r.worse ? `${r.name} fought hurt and the wound got worse: +${r.add} week${r.add > 1 ? 's' : ''}${r.newWound ? `, and a new ${r.newWound.name.toLowerCase()}` : ''}.` : `${r.name} fought hurt and the wound held.`);
+
+  const derive1 = LM.derive;
+  LM.derive = (g, ctx) => {
+    const d = derive1(g, ctx); if (!g.hurtFight || !(g.wounds || []).some((w) => w.w > 0)) return d;
+    const m = LM.hurtMods(g); for (const k of ['hp', 'atk', 'def', 'spd']) if (m[k]) d[k] *= 1 + m[k];
+    if (m.crit) d.crit = clamp(d.crit + m.crit, 0, 0.6); if (m.eva) d.eva = clamp(d.eva + m.eva, 0, 0.4); d.hurt = true; return d;
+  };
+  const enter1 = LM.enter;
+  /** opts.hurt = ids of wounded fighters sent anyway; the entry remembers them (entry.hurt) */
+  LM.enter = (S, ev, ids, stance, opts) => {
+    const want = (opts && opts.hurt) || [], saved = [];
+    want.forEach((id) => { const g = S.glads.find((x) => x.id === id); if (g && ids.includes(id) && g.inj > 0) { saved.push([g, g.inj]); g.inj = 0; } });
+    let r; try { r = enter1(S, ev, ids, stance); } finally { saved.forEach(([g, i]) => { g.inj = i; }); }
+    if (!r && saved.length && S.entries[ev.key]) S.entries[ev.key].hurt = saved.map(([g]) => g.id);
+    return r;
+  };
+  /** can this entry still run at its date? Hurt entries may keep their wounded fighters. */
+  LM.entryReady = (S, en) => en.ids.every((id) => { const g = S.glads.find((x) => x.id === id); return g && (g.inj <= 0 || (en.hurt || []).includes(id)); });
+  /** mark the fighters of an entry who are still wounded when the day comes */
+  LM.entryMarkHurt = (S, en) => { (en.hurt || []).forEach((id) => { const g = S.glads.find((x) => x.id === id); if (g) LM.hurtMark(S, g, true); }); };
+  const settle1 = LM.settle;
+  LM.settle = (S, ev, glads, res) => {
+    const rep = settle1(S, ev, glads, res), h = LM.hurtResolve(S, glads, res, ev && ev.kind);
+    if (h.length) { rep.hurt = h; h.forEach((r) => rep.notes.push(LM.hurtLine(r))); }
+    streak(S, !!(res && (res.win || res.place === 1)), glads, res); return rep;
+  };
+  const venSettle1 = LM.venatioSettle;
+  LM.venatioSettle = (S, h, glads, res) => {
+    const hr = LM.hurtResolve(S, glads, res, 'hunt'), rep = venSettle1(S, h, glads, res), V = LM.venatio(S), units = (res.F && res.F.units) || [];
+    if (hr.length) { rep.hurt = hr; hr.forEach((r) => rep.notes.push(LM.hurtLine(r))); }
+    if (res.win) {
+      V.cleared = V.cleared || {}; V.cleared[h.id] = (V.cleared[h.id] || 0) + 1; V.solo = V.solo || {};
+      if ((h.party || 1) === 1) units.filter((u) => u.beast && u.down).forEach((u) => { V.solo[u.beast] = (V.solo[u.beast] || 0) + 1; });
+    }
+    return rep;
+  };
+  const week3 = LM.extWeek;
+  LM.extWeek = (S, rep) => {
+    week3(S, rep); LM.hurtClear(S);
+    if (LM.hardcore(S)) { S.hcWeeks = (S.hcWeeks || 0) + 1; if (S.hcFallen0 == null) S.hcFallen0 = (S.stats && S.stats.fallen) || 0; } else { S.hcWeeks = 0; delete S.hcFallen0; }
+    if (rep && rep.recap && LM.hardcore(S)) { // a whole season survived in Hardcore
+      const f = (S.stats && S.stats.fallen) || 0;
+      if (S.hcFallen0 != null && f === S.hcFallen0 && (S.hcWeeks || 0) >= 10 && S.glads.length) { S.stats.hcSeasons = (S.stats.hcSeasons || 0) + 1; rep.notes.push('A whole Hardcore season and nobody died. The ludus breathes out.'); }
+      S.hcFallen0 = f; S.hcWeeks = 0;
+    }
+  };
+  function streak(S, win, glads, res) { S.stats = S.stats || {}; if (win) { S.stats.streak = (S.stats.streak || 0) + 1; S.stats.streakBest = Math.max(S.stats.streakBest || 0, S.stats.streak); } else S.stats.streak = 0; }
+
+  // ---------------------------------------------------------------- trophies
+  const V3 = (S) => LM.venatio(S), K = (S, k) => (V3(S).kills[k] || 0);
+  const BEAST_T = [['kill_wolf', 'wolf', 'Wolfsbane', 'Slay a wolf in the Venatio.', 'wolf'], ['kill_boar', 'boar', 'Boar Hunter', 'Slay a boar in the Venatio.', 'boar'], ['kill_lion', 'lion', 'Lion Slayer', 'Slay a lion in the Venatio.', 'lion'],
+    ['kill_bear', 'bear', 'Bearbaiter', 'Slay a bear in the Venatio.', 'bear'], ['kill_nemean', 'nemean', 'Heracles Reborn', 'Slay the Nemean lion.', 'nemean'], ['kill_elephant', 'elephant', 'Elephant Breaker', 'Bring down a war elephant.', 'elephant']];
+  const LUDUS_OLD = ['legendary', 'fullset', 'forge5', 'rich', 'lvl20', 'legend1', 'runes', 'relics6', 'faction', 'ascended']; D.TROPHIES.forEach((t) => { if (!t.cat) t.cat = LUDUS_OLD.includes(t.id) ? 'Ludus' : 'Glory'; });
+  const TCX = {};
+  const PG = {}; // id -> (S) => [value, max]
+  const add = (id, n, d, r, ic, cat, ok, pg) => { D.TROPHIES.push({ id, n, d, r, ic, cat }); TCX[id] = ok; if (pg) PG[id] = pg; };
+  BEAST_T.forEach(([id, kind, n, d, ic]) => add(id, n, d, { gold: kind === 'nemean' || kind === 'elephant' ? 400 : 100, fame: kind === 'nemean' || kind === 'elephant' ? 20 : 6 }, ic, 'Venatio', (S) => K(S, kind) >= 1, (S) => [Math.min(1, K(S, kind)), 1]));
+  add('solo_lion', 'Alone with the Lion', 'Slay a lion with a single fighter on the hunt.', { gold: 250, fame: 15 }, 'lion', 'Venatio', (S) => ((V3(S).solo || {}).lion || 0) >= 1, (S) => [Math.min(1, (V3(S).solo || {}).lion || 0), 1]);
+  add('menagerie', 'Master of the Menagerie', 'Win the Menagerie hunt.', { gold: 500, fame: 25, laurels: 1 }, 'cage', 'Venatio', (S) => ((V3(S).cleared || {}).menagerie || 0) >= 1, (S) => [Math.min(1, (V3(S).cleared || {}).menagerie || 0), 1]);
+  add('allpelts', 'Wall of Pelts', 'Own a pelt of every kind of beast (kept or sold).', { gold: 400, fame: 20, laurels: 1 }, 'pelt', 'Venatio', (S) => (D.BEAST_IDS || []).every((k) => K(S, k) >= 1), (S) => [(D.BEAST_IDS || []).filter((k) => K(S, k) >= 1).length, (D.BEAST_IDS || []).length]);
+  const st = (S, k) => (S.stats && S.stats[k]) || 0;
+  add('streak5', 'Hot Streak', 'Win 5 events in a row.', { gold: 80 }, 'flame', 'Glory', (S) => st(S, 'streakBest') >= 5, (S) => [Math.min(5, st(S, 'streakBest')), 5]);
+  add('streak10', 'Unbroken', 'Win 10 events in a row.', { gold: 300, fame: 15, laurels: 1 }, 'flame', 'Glory', (S) => st(S, 'streakBest') >= 10, (S) => [Math.min(10, st(S, 'streakBest')), 10]);
+  add('wins100', 'Hundred Victories', 'Win 100 fights.', { gold: 900, laurels: 2 }, 'laurel', 'Glory', (S) => st(S, 'wins') >= 100, (S) => [Math.min(100, st(S, 'wins')), 100]);
+  add('champ1', 'Duelist', 'Defeat the rival owner\'s champion.', { gold: 150, fame: 10 }, 'sword', 'Glory', (S) => st(S, 'champs') >= 1, (S) => [Math.min(1, st(S, 'champs')), 1]);
+  add('bounty3', 'Bounty Hunter', 'Claim 3 bounties.', { gold: 200, fame: 10 }, 'scroll', 'Glory', (S) => st(S, 'bounties') >= 3, (S) => [Math.min(3, st(S, 'bounties')), 3]);
+  add('pitperf', 'Flawless Descent', 'Clear 5 Pit floors in one descent without any fight ending below 40% health.', { gold: 300, fame: 15 }, 'skull', 'Glory', (S) => st(S, 'pitPerfect') >= 1, (S) => [Math.min(1, st(S, 'pitPerfect')), 1]);
+  add('hurtwin', 'Walk It Off', 'Win a fight with a wounded fighter.', { gold: 100, fame: 5 }, 'bandage', 'Glory', (S) => st(S, 'hurtWins') >= 1, (S) => [Math.min(1, st(S, 'hurtWins')), 1]);
+  add('hc1', 'Iron Season', 'Survive a whole season on Hardcore without a death.', { gold: 400, fame: 25, laurels: 2 }, 'shield', 'Survival', (S) => st(S, 'hcSeasons') >= 1, (S) => [Math.min(1, st(S, 'hcSeasons')), 1]);
+  add('freed1', 'Cap of Liberty', 'Set a gladiator free.', { gold: 100, fame: 20 }, 'cap', 'Survival', (S) => (S.freed || []).length >= 1, (S) => [Math.min(1, (S.freed || []).length), 1]);
+  add('scar2', 'Battle Scarred', 'Have a fighter carry 2 scars.', { gold: 80 }, 'scar', 'Survival', (S) => S.glads.some((g) => (g.scars || []).length >= 2), (S) => [Math.min(2, Math.max(0, ...S.glads.map((g) => (g.scars || []).length))), 2]);
+  add('scar4', 'A Map of Old Wars', 'Have a fighter carry 4 scars.', { gold: 250, fame: 12 }, 'scar', 'Survival', (S) => S.glads.some((g) => (g.scars || []).length >= 4), (S) => [Math.min(4, Math.max(0, ...S.glads.map((g) => (g.scars || []).length))), 4]);
+  add('memento', 'Memento Mori', 'Raise a name on the memorial wall.', { fame: 10 }, 'wreath', 'Survival', (S) => (S.fallen || []).length >= 1, (S) => [Math.min(1, (S.fallen || []).length), 1]);
+  add('legends3', 'Hall of Heroes', 'Have 3 legends in the Hall.', { gold: 300, fame: 20 }, 'laurel', 'Ludus', (S) => (S.legends || []).length >= 3, (S) => [Math.min(3, (S.legends || []).length), 3]);
+  add('lvl10', 'Seasoned', 'Raise a gladiator to level 10.', { gold: 150 }, 'star', 'Ludus', (S) => S.glads.some((g) => g.lvl >= 10), (S) => [Math.min(10, Math.max(0, ...S.glads.map((g) => g.lvl))), 10]);
+  add('patron1', 'Well Connected', 'Complete a patron contract in full.', { gold: 120, fame: 10 }, 'coin', 'Ludus', (S) => (((S.spons || {}).done) || []).length >= 1 || st(S, 'contracts') >= 1, (S) => [Math.min(1, (((S.spons || {}).done) || []).length || st(S, 'contracts')), 1]);
+  add('fame500', 'Famous', 'Reach 500 fame.', { gold: 200 }, 'fame', 'Ludus', (S) => S.fame >= 500, (S) => [Math.min(500, S.fame | 0), 500]);
+  add('year1', 'A Year in the Sand', 'Play 52 weeks.', { gold: 200, laurels: 1 }, 'calendar', 'Ludus', (S) => S.week >= 52, (S) => [Math.min(52, S.week), 52]);
+  add('events20', 'Storyteller', 'Meet 20 different events in the Chronicle.', { gold: 150, fame: 8 }, 'scroll', 'Ludus', (S) => Object.keys(S.evHist || {}).length >= 20, (S) => [Math.min(20, Object.keys(S.evHist || {}).length), 20]);
+  LM.TCX = TCX;
+  // progress for the old trophies, so every card can show a bar
+  const old = { wins10: (S) => [Math.min(10, st(S, 'wins')), 10], wins50: (S) => [Math.min(50, st(S, 'wins')), 50], champ5: (S) => [Math.min(5, st(S, 'tourneys')), 5], mercy5: (S) => [Math.min(5, st(S, 'spares')), 5], upset5: (S) => [Math.min(5, st(S, 'upsets')), 5],
+    pit5: (S) => [Math.min(5, S.pitBest || 0), 5], pit10: (S) => [Math.min(10, S.pitBest || 0), 10], forge5: (S) => [Math.min(5, st(S, 'merges')), 5], rich: (S) => [Math.min(5000, S.gold | 0), 5000], daily5: (S) => [Math.min(5, S.dailyBest || 0), 5] };
+  Object.assign(PG, old);
+  /** [value, max] for a trophy id, or null when it is a one-shot with no meaningful progress */
+  LM.trophyProgress = (S, id) => { const f = PG[id]; if (!f) return null; try { const r = f(S); return r && isFinite(r[0]) ? r : null; } catch (e) { return null; } };
+  const ct1 = LM.checkTrophies;
+  LM.checkTrophies = (S) => {
+    const out = ct1(S); S.trophies = S.trophies || {};
+    D.TROPHIES.forEach((t) => { if (TCX[t.id] && !S.trophies[t.id] && TCX[t.id](S)) { S.trophies[t.id] = S.week; S.gold += t.r.gold || 0; S.fame += t.r.fame || 0; S.laurels += t.r.laurels || 0; out.push(t); } });
+    return out;
+  };
+  const mig3 = LM.migrate;
+  LM.migrate = (S) => { const N = mig3(S); N.stats = N.stats || {}; (N.glads || []).forEach((g) => { delete g.hurtFight; }); return N; };
+})(typeof globalThis !== 'undefined' ? globalThis : this);

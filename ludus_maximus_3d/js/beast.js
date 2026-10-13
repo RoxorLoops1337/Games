@@ -152,7 +152,27 @@ function clip(name, dur, keys, o = {}) {
     else { if (!chans.has(base)) chans.set(base, []); chans.get(base).push([t, v, ez || 'io']); }
   }
   for (const a of chans.values()) a.sort((p, q) => p[0] - q[0]);
-  return Object.assign({ name, dur, chans, chI: [...chans.keys()], chK: [...chans.values()], fi: 0.08, fo: 0.16, hold: false, swing: 0, hit: 0, recover: dur * 0.7, add: false }, o);
+  // PERF: the same keys as flat typed arrays (times, values, ease ids) so a whole clip is sampled in one loop (evalClip) without a call, a boxed double or a polymorphic ease call per channel
+  const KE = { lin: 0, in: 1, out: 2, io: 3, cub: 4, back: 5 }, vals = [...chans.values()];
+  const chT = vals.map((a) => Float64Array.from(a, (k) => k[0])), chV = vals.map((a) => Float64Array.from(a, (k) => k[1])), chE = vals.map((a) => Uint8Array.from(a, (k) => KE[k[2]] ?? 3));
+  return Object.assign({ name, dur, chans, chI: Int32Array.from(chans.keys()), chK: vals, chT, chV, chE, fi: 0.08, fo: 0.16, hold: false, swing: 0, hit: 0, recover: dur * 0.7, add: false }, o);
+}
+/** write every channel of clip `c` at time tt into pa (and flag it in mask). Same keyframe maths as evalKeys + EASE, one loop, no calls. */
+function evalClip(c, tt, pa, mask) {
+  const T = c.chT, V = c.chV, E = c.chE, I = c.chI;
+  for (let ci = 0, cn = I.length; ci < cn; ci++) {
+    const ts = T[ci], vs = V[ci], es = E[ci], n = ts.length; let v;
+    if (tt <= ts[0]) v = vs[0];
+    else {
+      v = vs[n - 1];
+      for (let i = 1; i < n; i++) if (tt <= ts[i]) {
+        const t0 = ts[i - 1], dk = ts[i] - t0, k = (tt - t0) / (dk > 1e-5 ? dk : 1e-5); let e;
+        switch (es[i]) { case 0: e = k; break; case 1: e = k * k; break; case 2: e = 1 - (1 - k) * (1 - k); break; case 3: e = k < 0.5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2; break; case 4: e = k * k * k; break; default: { const cb = 1.7; e = 1 + (cb + 1) * Math.pow(k - 1, 3) + cb * Math.pow(k - 1, 2); } }
+        v = vs[i - 1] + (vs[i] - vs[i - 1]) * e; break;
+      }
+    }
+    const ch = I[ci]; pa[ch] = v; mask[ch] = 1;
+  }
 }
 function evalKeys(a, t) {
   if (t <= a[0][0]) return a[0][1]; const n = a.length;
@@ -545,8 +565,8 @@ class BeastAnimator {
     if (a) {
       const c = a.c; a.t += dt * a.speed * (this.hitStopT > 0 ? 1 : 1);
       if (a.t >= c.dur && c.loop && a.loop !== false) a.t -= c.dur;
-      const tt = Math.min(a.t, c.dur);
-      for (let ci = 0, cn = c.chI.length; ci < cn; ci++) { const ch = c.chI[ci]; pa[ch] = evalKeys(c.chK[ci], tt); mask[ch] = 1; }   // PERF: flat arrays (a Map iterator per frame allocated)
+      const tt = a.t < c.dur ? a.t : c.dur;
+      evalClip(c, tt, pa, mask);   // PERF: flat typed arrays, one loop (a Map iterator, a call per channel and its boxed doubles allocated)
       w = smooth(0, c.fi, a.t) * (a.hold || (c.loop && a.loop !== false) ? 1 : 1 - smooth(c.dur - c.fo, c.dur, a.t));
       if (c === this.clips.roar || c === this.clips.howl || c === this.clips.victory) { const tr = Math.sin(this.t * 38) * 0.05 * w * smooth(0.3, 0.45, a.t); pa[JI.jaw * 3] += tr; pa[JI.head * 3 + 2] = (pa[JI.head * 3 + 2] || 0) + tr * 0.5; mask[JI.jaw * 3] = 1; mask[JI.head * 3 + 2] = 1; }
       if (c === this.clips.pounce) w = Math.max(w, 0.0);
@@ -559,21 +579,29 @@ class BeastAnimator {
     for (let i = 0; i < NCH; i++) out[i] = mask[i] ? pb[i] + (pa[i] - pb[i]) * w : pb[i];
     // ---- additive hurt flinch (mirrors the chest twist)
     const h = this.hurtS.update(dt); if (Math.abs(h) > 1e-4) {
-      out[JI.chest * 3] += -0.22 * h; out[JI.chest * 3 + 1] += 0.18 * h * this.hurtDir; out[JI.neck * 3] += -0.28 * h; out[JI.head * 3] += -0.2 * h; out[JI.jaw * 3] += 0.3 * Math.max(0, h); out[NB + 1] += -0.07 * h * S; out[JI.tail1 * 3] += -0.4 * h;
+      out[JI.chest * 3] += -0.22 * h; out[JI.chest * 3 + 1] += 0.18 * h * this.hurtDir; out[JI.neck * 3] += -0.28 * h; out[JI.head * 3] += -0.2 * h; out[JI.jaw * 3] += 0.3 * (h > 0 ? h : 0); out[NB + 1] += -0.07 * h * S; out[JI.tail1 * 3] += -0.4 * h;
     }
     // ---- crossfade from the last pose when a state or clip began
-    if (this.snapT < 1) { this.snapT = Math.min(1, this.snapT + dt / this.snapDur); const k = smooth(0, 1, this.snapT); for (let i = 0; i < NCH; i++) out[i] = this.snap[i] + (out[i] - this.snap[i]) * k; }
+    if (this.snapT < 1) { { const sn = this.snapT + dt / this.snapDur; this.snapT = sn < 1 ? sn : 1; } const k = smooth(0, 1, this.snapT); for (let i = 0; i < NCH; i++) out[i] = this.snap[i] + (out[i] - this.snap[i]) * k; }
     // ---- write
-    for (const n of JN) { const j = J[n]; if (!j) continue; const i = JI[n] * 3; j.rotation.set(out[i], out[i + 1], out[i + 2], 'XYZ'); }
+    // PERF: joint quaternions straight from the XYZ euler channels (three's Euler.set + onChange boxed the arguments and re-derived the quaternion through a callback, per joint per frame);
+    // the joint Euler angles are never read, matrices read the quaternion
+    const JQ = this._jq || (this._jq = JN.filter((n) => J[n]).map((n) => ({ q: J[n].quaternion, o: JI[n] * 3 })));
+    for (let k = 0; k < JQ.length; k++) {
+      const e = JQ[k], o = e.o, x = out[o], y = out[o + 1], z = out[o + 2], c1 = Math.cos(x / 2), c2 = Math.cos(y / 2), c3 = Math.cos(z / 2), s1 = Math.sin(x / 2), s2 = Math.sin(y / 2), s3 = Math.sin(z / 2), q = e.q;
+      q._x = s1 * c2 * c3 + c1 * s2 * s3; q._y = c1 * s2 * c3 - s1 * c2 * s3; q._z = c1 * c2 * s3 + s1 * s2 * c3; q._w = c1 * c2 * c3 - s1 * s2 * s3;
+    }
     // look: yaw the head toward a target if asked
     const body = rig.body, by = out[NB], bz = out[NB + 1], bp = out[NB + 2], br2 = out[NB + 3], bw = out[NB + 4];
     // ground contact: lowest paw sole decides how far the body hangs (unless the clip is airborne)
     const air = a && a.c.ground !== undefined ? a.c.ground : 1;
-    body.rotation.set(bp, bw, br2, 'XYZ'); body.position.set(0, by + this.go, bz);
-    const sq = this.squash.update(dt); body.scale.set(1 / Math.sqrt(1 + sq), 1 + sq, 1 / Math.sqrt(1 + sq));
+    { const x = bp, y = bw, z = br2, c1 = Math.cos(x / 2), c2 = Math.cos(y / 2), c3 = Math.cos(z / 2), s1 = Math.sin(x / 2), s2 = Math.sin(y / 2), s3 = Math.sin(z / 2), q = body.quaternion;   // body.rotation.set(bp, bw, br2, 'XYZ') without the callback
+      q._x = s1 * c2 * c3 + c1 * s2 * s3; q._y = c1 * s2 * c3 - s1 * c2 * s3; q._z = c1 * c2 * s3 + s1 * s2 * c3; q._w = c1 * c2 * c3 - s1 * s2 * s3; }
+    const bpos = body.position; bpos.x = 0; bpos.y = by + this.go; bpos.z = bz;
+    const sq = this.squash.update(dt), sk = 1 / Math.sqrt(1 + sq), bsc = body.scale; bsc.x = sk; bsc.y = 1 + sq; bsc.z = sk;
     rig.root.updateMatrixWorld(true);
-    const fl = this.flashState; if (fl.t > 0) fl.t = Math.max(0, fl.t - dt); const f = fl.t > 0 ? fl.t / fl.dur : 0;
-    if (rig.blood.fresh > 0) { rig.blood.fresh = Math.max(0, rig.blood.fresh - dt / 9); rig.bloodU.uBFresh.value = rig.blood.fresh; }
+    const fl = this.flashState; if (fl.t > 0) { const ft = fl.t - dt; fl.t = ft > 0 ? ft : 0; } const f = fl.t > 0 ? fl.t / fl.dur : 0;
+    if (rig.blood.fresh > 0) { { const f9 = rig.blood.fresh - dt / 9; rig.blood.fresh = f9 > 0 ? f9 : 0; } rig.bloodU.uBFresh.value = rig.blood.fresh; }
     if (f > 0 || this._emD !== false) { for (const k in this.mats) { const m = this.mats[k]; if (!m.userData.base) m.userData.base = m.emissive.clone(); m.emissive.copy(m.userData.base); if (f > 0) m.emissive.lerp(fl.color, f); } this._emD = f > 0; }   // PERF: only while a flash runs (and once after)
     this.groundFix(dt, a && a.c.ground !== undefined ? 0 : 1, a ? a.c : null);
   }
@@ -584,7 +612,7 @@ class BeastAnimator {
     for (let i = 0; i < 4; i++) { _v.setFromMatrixPosition(pj[i].matrixWorld); const yy = _v.y - pp[i] * S * 0.98 * rig.root.scale.y; if (yy < low) low = yy; }   // matrices were just updated by update(): no per-joint parent walk
     const err = low - rig.root.position.y; // > 0: floating, < 0: sunk
     if (c && (c.ground === 0)) return;
-    if (err < 0) this.go += -err; else if (grounded || !c) this.go -= Math.min(err, dt * 1.6 * S);
+    if (err < 0) this.go += -err; else if (grounded || !c) { const mv = dt * 1.6 * S; this.go -= err < mv ? err : mv; }
     this.go = clamp(this.go, -0.6 * S, 0.8 * S);
     void sc;
   }

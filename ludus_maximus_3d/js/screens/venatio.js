@@ -1,6 +1,7 @@
 // VENATIO UI: the Beast hunt card (Arena > Challenges), the hunt flow (pick a hunt, pick hunters, fight, report, trophies) and the Bestiary tab (World).
 // Sim side lives in core/ext.js (section 5, LM.venatio*, D.BEASTS, D.HUNTS) and core/arena.js (beast AI). Fights run in the 3D arena through ctx.game.playFight.
 import { prep, fightScreen, pickPends, mortalCheck } from '../flow.js';
+import { emblem } from '../glyphs.js'; // WAVE3: procedural beast emblems
 import { U, h, D, L, fmt, pill, goldPill, famePill, note, hint, kv, medal, card, row, col, actions, meter, sec, empty, pickFighters, reportBody, fightStats, awardTrophies } from './sk.js';
 
 const MIN_EN = 30;
@@ -41,7 +42,7 @@ async function session(ctx, fn) {
   const game = ctx.game; if (game.busy) return; game.busy = true;
   try { ctx.closeAll(); await fn(); }
   catch (e) { console.error(e); U.toast('Oops: ' + e.message, { kind: 'bad' }); }
-  finally { game.busy = false; try { game.scene === 'fight' && game.returnToHub(); } catch (e) { console.error(e); } ctx.save(); ctx.refresh(); ctx.open('arena', { tab: 'modes' }); }
+  finally { try { L().hurtClear(ctx.S); } catch (e) { /* wave 3 */ } game.busy = false; try { game.scene === 'fight' && game.returnToHub(); } catch (e) { console.error(e); } ctx.save(); ctx.refresh(); ctx.open('arena', { tab: 'modes' }); }
 }
 export async function startHunt(ctx, huntId) {
   const S = ctx.S, lm = L(), st = lm.venatioState(S); if (!st.ok) return U.toast(st.why, { kind: 'bad' });
@@ -49,7 +50,7 @@ export async function startHunt(ctx, huntId) {
   const beasts = lm.huntBeasts(S, hunt), lv = lm.scoutLevel(S);
   const intro = col([h('div', 'ax-row ax-wrap', beasts.map((b) => h('div', 'ax-row ax-gap4', [dot(b.beast, 30), h('b', 'ax-num', `Lv ${b.lvl}`)]))), note(hunt.d), note(`Send ${hunt.party} fighter${hunt.party > 1 ? 's' : ''}. Costs ${MIN_EN} energy each. A fighter who falls may die: the deeper the risk, the likelier.`)]);
   const ids = await pickFighters(ctx, {
-    title: hunt.n, intro, n: hunt.party,
+    title: hunt.n, intro, n: hunt.party, hurtKind: 'hunt', // WAVE3
     info(g) {
       if (g.inj > 0) return { reason: `Injured ${g.inj}w` };
       if (g.en < MIN_EN) return { reason: `Needs ${MIN_EN} energy` };
@@ -67,6 +68,7 @@ export async function startHunt(ctx, huntId) {
     confirm() { return { label: `Hunt: ${hunt.n}` }; },
   });
   if (!ids) return;
+  (ids.hurt || []).forEach((id) => lm.hurtMark(S, ctx.gOf(id), true)); // WAVE3
   await session(ctx, () => runHunt(ctx, hunt, beasts, ids.map((id) => ctx.gOf(id))));
 }
 
@@ -99,18 +101,28 @@ export function bestiaryTab(ctx, root, draw) {
     h('div', 'ax-row ax-wrap ax-gap4', [pill(`${V.hunts} hunts`, { tone: 'blue' }), pill(`${V.wins} won`, { tone: 'good' }), pill(`${V.felled} beasts slain`, { tone: 'gold' }), pill(`Trophies ${V.trophies.length}/${nTroph}`, { tone: 'vio' }), pill(`+${lm.trophyFame(S)} fame/week`, { tone: 'vio', tip: 'Paid every week while the trophies hang.' })])], 'gold'));
   if (pelts > 0) root.append(U.button({ label: `Sell every pelt (${fmt(pelts)} gold)`, variant: 'bronze', icon: 'coin', block: true, onClick: () => { let g = 0; D.BEAST_IDS.forEach((k) => { g += lm.sellPelts(S, k); }); ctx.save(); ctx.refresh(); ctx.sfx('coin'); U.toast(`Pelts sold: +${fmt(g)} gold`, { kind: 'good', ico: 'coin' }); draw(); } }));
   const grid = h('div', 'ax-grid');
+  const met = list.filter((b) => b.known).length;
+  if (!met) { // empty state: six locked emblems and where to start
+    const strip = h('div', 'ax-row ax-wrap'); strip.style.justifyContent = 'center'; list.forEach((b) => { const e = h('span', 'lx-bl-unk'); e.style.lineHeight = 0; e.innerHTML = emblem(b.kind, { size: 48, locked: true }); strip.append(e); });
+    root.append(card([strip, h('div', 'ax-b', 'The bestiary is empty'), note('Nothing has been met in the arena yet. Each beast you face is recorded here with an emblem, notes and numbers, and the emblems light up one by one.'), hint('Build the Stands or reach the Provincial Games, then open Arena, Challenges and send hunters after wolves or boars.')]));
+  }
+  const huntOf = (kind) => { const hk = Object.values(D.HUNTS).find((x) => x.kinds.some((k) => k[0] === kind)); return hk ? hk.n : ''; };
   list.forEach((b) => {
     const portrait = beastPortrait(ctx, b.sample, 96, 'bust'); if (!b.known) { portrait.style.filter = 'brightness(0.12) saturate(0)'; portrait.title = 'Not yet met'; }
-    const head = row([portrait, col([h('div', 'ax-name', b.known ? b.n : '???'), h('div', 'ax-row ax-wrap ax-gap4', [pill(b.role, { tone: b.boss ? 'bad' : '' }), pill(`${b.kills} slain`, { tone: b.kills ? 'gold' : '' }), b.first != null ? pill(`First: week ${b.first}`, {}) : null]), note(b.d)], 'ax-grow')], 'ax-wrap');
+    const emb = h('span', 'lx-bl-emb'); emb.style.cssText = 'line-height:0;flex:none'; emb.innerHTML = emblem(b.kind, { size: 56, color: b.c, boss: b.boss, locked: !b.known });
+    const head = row([portrait, col([row([emb, h('div', 'ax-name', b.known ? b.n : '???')]), h('div', 'ax-row ax-wrap ax-gap4', [pill(b.known ? b.role : 'Unknown', { tone: b.boss ? 'bad' : '' }), pill(`${b.kills} slain`, { tone: b.kills ? 'gold' : '' }), b.first != null ? pill(`First: week ${b.first}`, {}) : null])], 'ax-grow')], 'ax-wrap');
     const c = card([head], b.boss ? 'gold' : '');
+    if (!b.known) { c.append(note('Not yet met in the arena.'), huntOf(b.kind) ? hint(`Look for it on the hunt: ${huntOf(b.kind)}.`) : null); grid.append(c); return; }
+    c.append(h('p', 'lx-bl-lore ax-sub', b.lore[0] || b.d));
+    c.append(note(b.d));
     if (b.stats) c.append(h('div', 'ax-row ax-wrap ax-gap4', [pill(`HP ${b.stats.hp}`, { tone: 'good', tip: 'At level 5.' }), pill(`ATK ${b.stats.atk}`, { tone: 'bad' }), pill(`DEF ${b.stats.def}`, {}), pill(`SPD ${b.stats.spd}`, { tone: 'blue' })]));
-    b.lore.forEach((l, i) => c.append(h('div', 'ax-row', [U.icon(i === 0 ? 'scroll' : 'check', 14), h('span', 'ax-sub', l)])));
-    if (b.known && b.tier < 3) c.append(note(`Slay ${[1, 3, 6][b.tier] - b.kills} more to learn more about it.`));
-    if (b.known) {
-      const tr = h('div', 'ax-row ax-wrap ax-gap4', b.trophies.map((t) => pill(t.n, { ico: t.own ? 'check' : 'lock', tone: t.own ? 'vio' : '', tip: t.own ? t.d : 'Not yet taken. A chance after a won hunt against this beast.' })));
-      c.append(tr);
-      if (b.pelts) c.append(actions([U.button({ label: `Sell ${b.pelts} ${b.peltName}${b.pelts > 1 ? 's' : ''} (${fmt(b.pelts * b.peltValue)}g)`, variant: 'bronze', icon: 'coin', onClick: () => { const g = lm.sellPelts(S, b.kind); ctx.save(); ctx.refresh(); ctx.sfx('coin'); U.toast(`+${fmt(g)} gold`, { kind: 'good', ico: 'coin' }); draw(); } })]));
-    }
+    const dots = h('div', 'lx-bl-kills'); dots.setAttribute('role', 'img'); dots.setAttribute('aria-label', `${b.kills} slain. Notes at 1, 3 and 6 kills.`);
+    for (let i = 1; i <= 6; i++) { const d = h('i', i <= b.kills ? 'on' : ''); if (i === 1 || i === 3 || i === 6) d.style.borderRadius = '3px'; dots.append(d); }
+    c.append(h('div', 'ax-row ax-wrap', [dots, h('span', 'ax-sub', b.tier >= 3 ? 'Every note learned.' : `Next note at ${[1, 3, 6][b.tier]} kills.`)]));
+    b.lore.slice(1).forEach((l) => c.append(h('div', 'ax-row', [U.icon('check', 14), h('span', 'ax-sub', l)])));
+    const tr = h('div', 'ax-row ax-wrap ax-gap4', b.trophies.map((t) => pill(t.n, { ico: t.own ? 'check' : 'lock', tone: t.own ? 'vio' : '', tip: t.own ? t.d : 'Not yet taken. A chance after a won hunt against this beast.' })));
+    c.append(tr);
+    if (b.pelts) c.append(actions([U.button({ label: `Sell ${b.pelts} ${b.peltName}${b.pelts > 1 ? 's' : ''} (${fmt(b.pelts * b.peltValue)}g)`, variant: 'bronze', icon: 'coin', onClick: () => { const g = lm.sellPelts(S, b.kind); ctx.save(); ctx.refresh(); ctx.sfx('coin'); U.toast(`+${fmt(g)} gold`, { kind: 'good', ico: 'coin' }); draw(); } })]));
     grid.append(c);
   });
   root.append(grid);

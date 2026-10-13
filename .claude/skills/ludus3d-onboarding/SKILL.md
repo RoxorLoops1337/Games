@@ -42,3 +42,7 @@ Files: `js/title.js`, `js/tutorial.js`, `js/ceremonies.js`; CSS appended to `css
 - `U.nav` calls `onSelect(item, index)`; game.js used `(i) => onNav(i)`, so the bottom nav never opened anything. Fixed to `(it, i)`.
 - Ring and card positions are read from `getBoundingClientRect` every frame (sheets slide in over 300 ms); never cache them.
 - A step whose target is not found hides the overlay instead of showing a floating card (except `hire` and `passive` steps).
+
+## Wave 3: tutorial placement and trophy ceremony
+- Steps may define `avoid: () => Element|null`. `placeCard` keeps the card off the target (or the `avoid` element when the step has no target): it tries top, bottom, above, below, left and right, then falls back to a compact card (`.lx-tut-compact`: no dots, two-line text) in the biggest free band. The `welcome` step avoids the first `.rc-card` of the recruit sheet, so at 390x800 the card docks at the top and at 800x390 it sits above the cards. Test: `localStorage.clear()`, click Begin your ludus, Open the gates, compare `.lx-tut-card` and `.rc-card` rects.
+- `Cer.trophy` shows a gold medallion with the trophy's SVG glyph (`glyphs.trophyIcon`) and "N of M trophies in your hall".

@@ -39,7 +39,7 @@
   L.mkUnits = (glads, side, ctx, hpFracs, grudge) => glads.map((g, i) => mkUnit(g, side, i, glads.length, ctx, hpFracs && hpFracs[i], grudge));
   L.createFight = (A, B, o) => {
     o = o || {};
-    return { t: 0, A, B, units: A.concat(B), ev: [], hype: 0, peak: 0, done: false, winner: null, auto: { A: !!o.autoA, B: true }, foc: { A: null, B: null }, quiet: !!o.quiet, sched: [], dtmax: 0.1, duo: o.duo ? { ids: o.duo.ids, kind: o.duo.kind, cd: 10, max: D.DUOS[o.duo.kind].cd } : null, manualFavor: !!o.manualFavor, favorReady: false, hazards: o.hazards || 0, hazT: 7 + rnd() * 3, zones: [] };
+    return { t: 0, A, B, units: A.concat(B), ev: [], hype: 0, peak: 0, done: false, winner: null, auto: { A: !!o.autoA, B: true }, foc: { A: null, B: null }, quiet: !!o.quiet, sched: [], dtmax: 0.1, duo: o.duo ? { ids: o.duo.ids, kind: o.duo.kind, cd: 10, max: D.DUOS[o.duo.kind].cd } : null, manualFavor: !!o.manualFavor, favorReady: false, hazards: o.hazards || 0, hazT: 7 + rnd() * 3, zones: [], cmd: { rally: 6, swap: 0 }, cmdAI: !!o.cmdAI };
   };
 
   // ---------- derived live stats ----------
@@ -51,6 +51,7 @@
     if (u.rm.has('celerity')) m += 0.04;
     if (s.rage) m += 0.6; if (s.rally) m += s.rally.spd; if (s.lastB) m += 0.4; if (s.phase) m += 0.4; if (s.roar) m += 0.15;
     if (s.slow) m *= s.slow.f;
+    if (s.gstance) m *= 0.5; // TACTICS: a guarding fighter does not swing
     if (u.enraged) m += u.bx.enrage.aps; // BEAST
     return u.aps * m;
   }
@@ -59,6 +60,7 @@
     if (u.rm.has('celerity')) m += 0.04; if (u.rk === 'lethal' && (u.stk.lt || 0) >= 6) m += 0.12;
     if (s.sprint) m += 0.12 * s.sprint.v; if (s.phase) m += 0.35; if (s.nimbus) m += 0.25; if (s.unb) m += 0.2; if (s.spin) m += 0.3; if (s.rage) m += 0.1;
     if (s.slow) m *= 0.4 + 0.6 * s.slow.f;
+    if (s.press) m += 0.12; if (s.retreat) m += 0.3; if (s.gstance) m *= 0.4; // TACTICS
     if (u.enraged) m += u.bx.enrage.ms; // BEAST
     return u.ms * m;
   }
@@ -82,6 +84,7 @@
     if (u.rm.has('gather')) m *= 1 + 0.01 * Math.min(6, Math.floor(F.t / 5));
     if (u.s.roar && u.fx.roarDmg) m *= 1 + u.fx.roarDmg;
     if (u.enraged) m *= 1 + u.bx.enrage.atk; // BEAST
+    if (u.s.press) m *= 1.12; // TACTICS: Press
     if (F.t > 40) m *= 1 + (F.t - 40) * 0.03;
     if (o.exec && tp < o.exec.th) m *= o.exec.m / (o.mult || 1);
     return m;
@@ -107,7 +110,7 @@
     o = o || {}; if (t.down || u.down) return 0;
     if (t.s.inv) { emit(F, { k: 'miss', src: u.id, dst: t.id, inv: 1 }); return 0; }
     const av = L.adv(u.style, t.style);
-    let hc = 0.94 - t.eva - (u.s.blind ? 0.4 : 0) + (t.s.netted ? 0.12 : 0); if (o.sure) hc = 1; hc = clamp(hc, 0.3, 1);
+    let hc = 0.94 - t.eva - (u.s.blind ? 0.4 : 0) + (t.s.netted ? 0.12 : 0) - (t.s.retreat ? 0.2 : 0); if (o.sure) hc = 1; hc = clamp(hc, 0.3, 1);
     if (rnd() > hc) { emit(F, { k: 'miss', src: u.id, dst: t.id }); return 0; }
     const df = t.def * (1 + (t.s.frenzy ? t.s.frenzy.def : 0)) * (1 - (o.ignore || 0)) * (1 - Math.min(0.6, 0.08 * (u.fx.pen || 0)));
     let dmg = DK * u.atk * (o.mult || 1) * (0.85 + rnd() * 0.3) * (60 / (60 + Math.max(0, df))) * dmgMul(F, u, t, o);
@@ -115,6 +118,7 @@
     if (u.rk === 'grasp' && u.graspReady && o.basic) { dmg += t.maxhp * 0.02; u.graspReady = false; u.graspT = 5; heal(F, u, u.maxhp * 0.015); const g = Math.round(u.maxhp * 0.003); u.maxhp += g; u.hp += g; emit(F, { k: 'rune', src: u.id, id: 'grasp' }); }
     const crit = rnd() < clamp(u.crit + (o.critB || 0), 0, 0.8); if (crit) dmg *= 1.6 + 0.15 * (u.fx.critdmg || 0);
     if (t.s.guard) dmg *= 1 - t.s.guard.f;
+    if (t.s.press) dmg *= 1.1; if (t.s.expo) dmg *= 1.1; if (t.s.hold) dmg *= 0.85; // TACTICS: the price of Press / Rally, the reward of Hold
     if (t.rm.has('bone') && t.noDmgT >= 3) { dmg *= 0.75; t.noDmgT = 0; }
     dmg = Math.max(1, Math.round(dmg)); const shown = dmg;
     if (t.shield > 0) { const ab = Math.min(t.shield, dmg); t.shield -= ab; dmg -= ab; }
@@ -256,6 +260,19 @@
     const U = D.ULTS[slot.id]; if (U.rng && dist(u, t) > U.rng) return 'range';
     castUlt(F, u, k, t); return true;
   };
+  // TACTICS: in live fights the foe's big area ultimates are announced by a short ground telegraph (circle or line) so the player can read them and answer
+  // with a stance or a stun of their own. The ultimate is paid for when the telegraph starts; a stun, knock-up or death during the wind-up cancels it.
+  const TELE_ULT = { pulverize: { t: 0.5, r: 3.6 }, skewer: { t: 0.5, r: 1, line: 12 } };
+  function aiCast(F, u, k, t) {
+    const sl = u.ults[k], T = TELE_ULT[sl.id]; if (!(F.cmdAI && u.side === 'B' && T)) { castUlt(F, u, k, t); return; }
+    const U = D.ULTS[sl.id], ang = Math.atan2(t.y - u.y, t.x - u.x), tid = t.id, len = Math.hypot(t.x - u.x, t.y - u.y);
+    sl.cd = U.cd; u.cast = T.t + 0.03;
+    emit(F, { k: 'tele', x: u.x, y: u.y, r: T.r, t: T.t, c: U.c, ult: sl.id, src: u.id, ang, len: T.line || 0 });
+    F.sched.push({ at: F.t + T.t, fn: () => {
+      if (F.done || u.down || u.s.stun || u.s.air) return; const tt = F.units.find((x) => x.id === tid && !x.down) || nearestFoe(F, u); if (!tt) return;
+      castUlt(F, u, k, T.line ? { id: tt.id, x: u.x + Math.cos(ang) * Math.max(3, len), y: u.y + Math.sin(ang) * Math.max(3, len) } : tt);
+    } });
+  }
   function aiUlt(F, u, foes, t, d, dt) {
     if (rnd() > dt * 2.5) return;
     for (let k = 0; k < u.ults.length; k++) {
@@ -272,13 +289,15 @@
         case 'duststorm': ok = foes.some((f) => dist(u, f) < 6) && hpf < 0.8; break;
         default: break;
       }
-      if (ok && !(U.rng && d > U.rng)) { castUlt(F, u, k, t); return; }
+      if (ok && !(U.rng && d > U.rng)) { aiCast(F, u, k, t); return; }
     }
   }
 
   // ---------- per-step logic ----------
   function chooseTarget(F, u, foes) {
     const tn = foes.find((f) => f.s.taunt); if (tn) return tn;
+    if (F.cmdAI && u.side === 'B') { const bt = foes.find((f) => f.s.press && !f.s.hold && dist(u, f) < 6.5); if (bt) return bt; } // TACTICS: whoever presses forward draws the foe's eye
+    if (u.swap) { const sw = foes.find((x) => x.id === u.swap.id); if (sw) return sw; }
     const fid = F.foc[u.side]; if (fid) { const f = foes.find((x) => x.id === fid); if (f) return f; }
     if (u.tgt) { const f = foes.find((x) => x.id === u.tgt); if (f) return f; }
     return foes.slice().sort((a, b) => dist(u, a) * (0.6 + 0.8 * (a.hp / a.maxhp)) - dist(u, b) * (0.6 + 0.8 * (b.hp / b.maxhp)))[0];
@@ -289,7 +308,7 @@
       if (key === 'dash' || key === 'pull') continue; const v = s[key];
       if (typeof v === 'number') { s[key] = v - dt; if (s[key] <= 0) delete s[key]; } else { v.t -= dt; if (v.t <= 0) delete s[key]; }
     }
-    u.atkT -= dt; u.noDmgT += dt;
+    u.atkT -= dt; u.noDmgT += dt; if (u.cmdCd > 0) u.cmdCd -= dt; if (u.swap && (u.swap.t -= dt) <= 0) u.swap = null;
     const hk = hasteK(u) * dt; u.skills.forEach((k) => { k.cd = Math.max(0, k.cd - hk); }); const uk = ultK(u) * dt; u.ults.forEach((k) => { k.cd = Math.max(0, k.cd - uk); });
     if (u.frT > 0 && (u.frT -= dt) <= 0) u.stk.fr = 0; if (u.ltT > 0 && (u.ltT -= dt) <= 0) u.stk.lt = 0; if (u.cqT > 0 && (u.cqT -= dt) <= 0) u.stk.cq = 0;
     if (u.graspT > 0 && (u.graspT -= dt) <= 0) u.graspReady = true;
@@ -311,13 +330,16 @@
     if (Math.abs(t.x - u.x) > 0.15) u.face = t.x > u.x ? 1 : -1;
     if (F.auto[u.side]) aiUlt(F, u, foes, t, d, dt);
     if (u.cast > 0) return;
+    if (F.cmdAI && u.side === 'B') aiCmd(F, u, foes, t, d);
+    if (s.retreat) { retreatMove(F, u, foes); return; } // TACTICS
+    if (s.gstance) { u.mvx = u.mvy = 0; return; }
     if (rnd() < dt * 3 && !s.silence) { for (const sk of u.skills) { if (sk.cd <= 0 && skillOk(F, u, sk, t, foes, d)) { castSkill(F, u, sk, t, foes); return; } } }
     if (d <= u.range + 0.1) {
       u.strafeT -= dt; if (u.strafeT <= 0) { u.strafeT = 1 + rnd() * 1.5; u.strafeDir = rnd() < 0.5 ? -1 : 1; }
       const nx = (t.x - u.x) / (d || 1), ny = (t.y - u.y) / (d || 1);
       if (u.style === 'retiarius' && d < u.range * 0.62) { u.mvx = -nx * 0.9; u.mvy = -ny * 0.9; } else { u.mvx = -ny * u.strafeDir * 0.3; u.mvy = nx * u.strafeDir * 0.3; }
       if (u.atkT <= 0 && !s.spin) { u.wt = t.id; u.wind = Math.min(0.22, 0.4 / apsOf(u)); u.atkT = 1 / apsOf(u); emit(F, { k: 'atk', src: u.id, dst: t.id }); }
-    } else { const nx = (t.x - u.x) / d, ny = (t.y - u.y) / d; u.mvx = nx; u.mvy = ny; }
+    } else if (s.hold) { u.mvx = u.mvy = 0; } else { const nx = (t.x - u.x) / d, ny = (t.y - u.y) / d; u.mvx = nx; u.mvy = ny; }
   }
   // ---------- BEAST AI (Venatio). No counters: every beast is a different tempo (pounce, pack flank, charge, trample, stomp) with its own stats and an enrage;
   // the player answers with stats, positioning and ultimates, never with a style rock-paper-scissors. Uses only rnd() (replay safe).
@@ -482,6 +504,7 @@
     if (F.done) return; F.t += dt;
     if (F.sched.length) { const due = F.sched.filter((e) => F.t >= e.at); if (due.length) { F.sched = F.sched.filter((e) => F.t < e.at); due.forEach((e) => e.fn()); } }
     if (F.duo && F.duo.cd > 0) F.duo.cd -= dt;
+    if (F.cmd) { if (F.cmd.rally > 0) F.cmd.rally -= dt; if (F.cmd.swap > 0) F.cmd.swap -= dt; }
     F.n = (F.n || 0) + 1; const us = F.n % 2 ? F.units : F.units.slice().reverse();
     for (let i = 0; i < us.length; i++) if (!us[i].down) upkeep(F, us[i], dt);
     if (F.done) return;
@@ -496,6 +519,68 @@
     F.peak = Math.max(F.peak, F.hype);
     if (!F.done && F.t > 95) { const hp = (s) => F.units.filter((u) => u.side === s).reduce((a, u) => a + u.hp / u.maxhp, 0); finish(F, hp('A') >= hp('B') ? 'A' : 'B'); }
   };
+
+  // ---------- TACTICS: player commands (stances per fighter, team Rally, partner Swap). Every command is a tap keyed by F.n (replay safe), uses no rnd(),
+  // and trades something for something: the data below is what the HUD shows (gain / cost) so nothing is hidden.
+  L.CMD = {
+    press:   { n: 'Press',     stance: 1, dur: 8, cd: 14, c: '#d2412b', gain: 'Hits +12%, speed +12%', cost: 'Takes +10% damage and the foe turns on you' },
+    hold:    { n: 'Hold',      stance: 1, dur: 8, cd: 12, c: '#4a8fd0', gain: 'Takes 15% less damage', cost: 'Will not chase: ranged foes get free hits' },
+    retreat: { n: 'Fall back', stance: 1, dur: 3, cd: 14, c: '#3f9a6a', gain: 'Speed +30%, +20% dodge', cost: 'Cannot attack while backing off' },
+    guard:   { n: 'Guard',     stance: 1, dur: 4, cd: 12, c: '#9a6ad8', gain: 'Blocks 40% of damage', cost: 'Slow and swings at half speed' },
+    swap:    { n: 'Swap',      team: 1,   dur: 6, cd: 8,  c: '#e0b04a', gain: 'Partners trade targets', cost: 'Both lose 0.7 s re-aiming' },
+    rally:   { n: 'Rally',     team: 1,   dur: 6, cd: 28, c: '#2fb0a0', gain: 'Allies swing 25% faster', cost: 'Everyone takes +10% damage' },
+  };
+  L.CMD_ORDER = ['press', 'hold', 'retreat', 'guard', 'swap', 'rally'];
+  const STANCE_KEYS = { press: 'press', hold: 'hold', retreat: 'retreat', guard: 'gstance' };
+  function setStance(F, u, id) {
+    const C = L.CMD[id]; for (const k in STANCE_KEYS) { delete u.s[STANCE_KEYS[k]]; } if (u.s.guard && u.s.guard.stance) delete u.s.guard;
+    u.s[STANCE_KEYS[id]] = { t: C.dur }; u.cmdCd = C.cd; u.cmdId = id;
+    if (id === 'guard') { u.s.guard = { f: 0.4, t: C.dur, stance: 1 }; emit(F, { k: 'status', dst: u.id, st: 'guard', t: C.dur }); }
+    emit(F, { k: 'cmd', a: id, src: u.id, side: u.side, t: C.dur });
+  }
+  // kind 'stance' (a = unit id, b = press|hold|retreat|guard|none), 'swap', 'rally' (a = side, default A). Returns true | 'cd' | false.
+  L.command = (F, kind, a, b) => {
+    if (!F || F.done) return false; if (!F.cmd) F.cmd = { rally: 0, swap: 0 };
+    if (kind === 'stance') {
+      const u = F.units.find((x) => x.id === a); if (!u || u.down || u.beast) return false;
+      if (b === 'none') { let had = false; for (const k in STANCE_KEYS) if (u.s[STANCE_KEYS[k]]) { delete u.s[STANCE_KEYS[k]]; had = true; } if (u.s.guard && u.s.guard.stance) delete u.s.guard; return had; }
+      if (!L.CMD[b] || !L.CMD[b].stance) return false;
+      if ((u.cmdCd || 0) > 0) return 'cd';
+      setStance(F, u, b); return true;
+    }
+    const side = a === 'B' ? 'B' : 'A', al = alive(F, side).filter((u) => !u.beast);
+    if (kind === 'rally') {
+      if (F.cmd.rally > 0) return 'cd'; if (!al.length) return false; const C = L.CMD.rally; F.cmd.rally = C.cd;
+      al.forEach((u) => { u.s.rally = { spd: 0.25, t: C.dur }; u.s.expo = { t: C.dur }; emit(F, { k: 'status', dst: u.id, st: 'rally', t: C.dur }); emit(F, { k: 'status', dst: u.id, st: 'expo', t: C.dur }); });
+      emit(F, { k: 'cmd', a: 'rally', side, src: al[0].id, t: C.dur }); return true;
+    }
+    if (kind === 'swap') {
+      const foes = alive(F, other(side)); if (F.cmd.swap > 0) return 'cd'; if (al.length < 2 || foes.length < 2) return false;
+      const cur = al.map((u) => foes.find((f) => f.id === u.tgt) || foes.slice().sort((p, q) => dist(u, p) - dist(u, q))[0]);
+      let next = cur.map((_, i) => cur[(i + 1) % al.length]);
+      if (next.every((t, i) => t === cur[i])) next = cur.map((t, i) => (i === 0 ? t : foes.filter((f) => f !== t).sort((p, q) => dist(al[i], p) - dist(al[i], q))[0]));
+      const C = L.CMD.swap; F.cmd.swap = C.cd;
+      al.forEach((u, i) => { u.swap = { id: next[i].id, t: C.dur }; u.atkT = Math.max(u.atkT, 0.7); });
+      emit(F, { k: 'cmd', a: 'swap', side, src: al[0].id, t: C.dur, pairs: al.map((u, i) => [u.id, next[i].id]) }); return true;
+    }
+    return false;
+  };
+  // the stance a fighter is in right now ('' = none), for the HUD
+  L.stanceOf = (u) => { for (const k in STANCE_KEYS) if (u.s[STANCE_KEYS[k]]) return k; return ''; };
+  function retreatMove(F, u, foes) {
+    let nf = foes[0], bd = 1e9; for (const f of foes) { const d = dist(u, f); if (d < bd) { bd = d; nf = f; } }
+    let ax = u.x - nf.x, ay = u.y - nf.y, l = Math.hypot(ax, ay) || 1; ax /= l; ay /= l;
+    const r = Math.hypot(u.x, u.y); if (r > R * 0.62) { const k = (r - R * 0.62) / (R * 0.38) * 1.6; ax -= u.x / r * k; ay -= u.y / r * k; l = Math.hypot(ax, ay) || 1; ax /= l; ay /= l; }
+    u.mvx = ax; u.mvy = ay; if (Math.abs(nf.x - u.x) > 0.15) u.face = nf.x > u.x ? 1 : -1;
+  }
+  // The foe's tactics (live fights only, F.cmdAI): deterministic, no rnd(), and each one is announced (cmd event) so the player sees it.
+  function aiCmd(F, u, foes, t, d) {
+    if (u.beast || (u.cmdCd || 0) > 0 || F.t < 4 || L.stanceOf(u)) return;
+    const hp = u.hp / u.maxhp, mates = alive(F, u.side), mine = sideHp(F, u.side), theirs = sideHp(F, other(u.side));
+    if (hp < 0.22 && !u.aiFell && foes.some((f) => dist(u, f) < 4)) { u.aiFell = 1; setStance(F, u, 'retreat'); return; }
+    if (mine > theirs + 0.25 && hp > 0.6 && d < 6 && !u.aiPressed) { u.aiPressed = 1; setStance(F, u, 'press'); return; }
+    if (hp < 0.45 && mates.length > 1 && d > u.range + 1 && !u.aiHeld) { u.aiHeld = 1; setStance(F, u, 'hold'); }
+  }
   L.focus = (F, side, id) => { F.foc[side] = F.foc[side] === id ? null : id; };
   L.quick = (A, B, o) => {
     const F = L.createFight(A, B, Object.assign({ autoA: true, quiet: true }, o)); let n = 0; while (!F.done && n++ < 1500) L.step(F, 0.1); return F;

@@ -5,6 +5,7 @@
 //   eulogy(ctx, o)              Promise, retirement / fallen farewell (o.body = the caller's own report node)
 // Every entry point is wrapped so a ceremony can never break the weekly flow. No em dashes. Styles: .lx-cer-* in css/ui.css.
 import * as U from './ui_kit.js';
+import { glyph, trophyIcon } from './glyphs.js'; // WAVE3
 
 const h = U.h;
 const fmt = (n) => Math.round(n).toLocaleString('en-US');
@@ -62,10 +63,11 @@ const CUP = '<svg viewBox="0 0 64 64" class="lx-cer-cupsvg" aria-hidden="true"><
 export const trophy = safe(async (ctx, list) => {
   const body = h('div', 'lx-cer-troph');
   list.forEach((x) => {
-    const cup = h('div', 'lx-cer-cup'); cup.innerHTML = CUP;
+    const cup = h('div', 'lx-cer-cup'); cup.innerHTML = x.ic || x.id ? `<div class="lx-bl-cmedal">${glyph(trophyIcon(x), { size: 54, sw: 1.7 })}</div>` : CUP; // WAVE3: per-trophy glyph
     const chips = h('div', 'lx-cer-chips', [x.r && x.r.gold ? h('span', 'lx-cer-chip gold', `+${x.r.gold} gold`) : null, x.r && x.r.fame ? h('span', 'lx-cer-chip fame', `+${x.r.fame} fame`) : null, x.r && x.r.laurels ? h('span', 'lx-cer-chip laurel', `+${x.r.laurels} laurels`) : null]);
     body.append(h('div', 'lx-cer-tr', [h('div', 'lx-cer-cupwrap', [h('i', 'lx-rays'), cup]), h('div', 'lx-cer-trname lx-engrave', x.n), h('div', 'lx-cer-trdesc', x.d), chips]));
   });
+  try { const D = globalThis.LM_D, S = ctx.S, got = Object.keys(S.trophies || {}).length; if (D && D.TROPHIES) body.append(h('div', 'lx-bl-tcount', `${got} of ${D.TROPHIES.length} trophies in your hall`)); } catch (e) { /* optional */ }
   const p = ctx.ask({ title: list.length > 1 ? 'Trophies earned' : 'Trophy earned', body, actions: [{ label: 'Magnificent', value: 'ok', variant: 'gold', icon: 'star' }], dismiss: 'ok' });
   tag('lx-cer-scrim');
   sfx(ctx, 'levelUp'); setTimeout(() => { sfx(ctx, 'crowdRoar', { gain: 0.8 }); confetti({ n: 70, y: 0.4 }); confetti({ n: 40, mode: 'rain' }); }, 380);

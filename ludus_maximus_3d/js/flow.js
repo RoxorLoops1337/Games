@@ -1,6 +1,7 @@
 // The weekly flow: training report -> level picks -> due fights (prep, augment, 3D fight, results) -> week summary -> events.
 // Ported from ludus_maximus/play.js on top of the same sim (core/sim.js), presented with the 3D arena and the Roman UI kit.
 import * as Cer from './ceremonies.js'; // ONBOARDING
+import * as Bracket from './bracket.js'; // BRACKET: marble bracket tablet
 import { U, h, fmt, fmtSt, chip, itemCard, gladRow, section, para, kv, grid, styleBadge, ordinal, RAR_KEY } from './uihelpers.js';
 
 const D = () => globalThis.LM_D, L = () => globalThis.LM;
@@ -14,8 +15,9 @@ export async function advanceWeek(ctx) {
   for (const key of lm.dueKeys(S)) {
     const ev = lm.eventByKey(S, key), en = S.entries[key];
     const gl = en.ids.map((id) => ctx.gOf(id)).filter(Boolean);
-    if (!ev || gl.length !== en.ids.length || gl.some((g) => g.inj > 0)) { lm.withdraw(S, key); U.toast('An entry was cancelled: fighter unavailable. Fee refunded.', { kind: 'bad' }); continue; }
-    await runEvent(ctx, ev, gl, en);
+    if (!ev || gl.length !== en.ids.length || !lm.entryReady(S, en)) { lm.withdraw(S, key); U.toast('An entry was cancelled: fighter unavailable. Fee refunded.', { kind: 'bad' }); continue; }
+    lm.entryMarkHurt(S, en); // WAVE3: fighters sent hurt
+    await runEvent(ctx, ev, gl, en); lm.hurtClear(S);
     ctx.save(); ctx.refresh();
   }
   ctx.game.scene === 'fight' && ctx.game.returnToHub();
@@ -191,7 +193,14 @@ function settleBets(ctx, bet, res, notes) {
 }
 
 // ------------------------------------------------------------------ fights
-export function fightScreen(ctx, gl, opps, stance, o) { return ctx.game.playFight(gl, opps, stance, o); }
+export async function fightScreen(ctx, gl, opps, stance, o) {
+  const res = await ctx.game.playFight(gl, opps, stance, o);
+  try { // WAVE3: fighters sent hurt roll whether the wound worsens (cached on res, settle reuses it)
+    const lm = L(), hr = lm.hurtResolve(ctx.S, gl.map((g) => ctx.gOf(g.id) || g), res, o && o.ev && o.ev.kind);
+    hr.forEach((r) => U.toast(lm.hurtLine(r), { kind: r.worse ? 'bad' : 'good' })); if (hr.length) ctx.save();
+  } catch (e) { console.warn('hurt roll', e && e.message); }
+  return res;
+}
 
 async function runEvent(ctx, ev, gl, en) {
   const S = ctx.S, lm = L();
@@ -209,16 +218,18 @@ async function runTourney(ctx, ev, g) {
   const names = ev.size === 8 ? ['Quarterfinal', 'Semifinal', 'Final'] : ['Semifinal', 'Final'];
   for (;;) {
     const opp = lm.tourneyOpp(T), name = names[T.round];
-    const { stance, bet } = await prep(ctx, ev, [g], [opp], { T, name, hpf: T.hpf });
+    await Bracket.showBracket(ctx, T, { mode: 'before', name, ev }); // BRACKET: the tablet before every round (odds, favourites, your bout lit)
+    const { stance, bet } = await prep(ctx, ev, [g], [opp], { name, hpf: T.hpf });
     augs.push(await pickAug(ctx, Math.min(3, ev.league + (T.round >= 1 ? 1 : 0)), augs, ev.kind === 'grand' && T.round === names.length - 1, `${name}: new augment`, null, g.style));
-    const res = await fightScreen(ctx, [g], [opp], stance, { ev, hpf: { [g.id]: T.hpf }, tricks: bet.tricks, augs: augs.slice() });
+    const res = await fightScreen(ctx, [g], [opp], stance, { ev: Object.assign({}, ev, { title: `${ev.title}: ${name}` }), hpf: { [g.id]: T.hpf }, tricks: bet.tricks, augs: augs.slice() }); // BRACKET: the round name rides in the title (VS intro)
     settleBets(ctx, bet, res, notes);
     hype = Math.max(hype, res.hype); hpf = res.hpf[g.id]; if (odds == null) odds = res.odds;
     const r = lm.tourneyAdvance(S, T, res.win);
+    const nextHpf = Math.min(1, hpf + 0.4 + (g.trait === 'hordearius' ? 0.1 : 0));
+    await Bracket.showBracket(ctx, T, { mode: 'after', name, ev, won: res.win, champion: r.champion, note: res.win && !r.champion ? `${g.name} advances. Wounds carry over: next round starts at ${Math.round(nextHpf * 100)}% HP.` : '' }); // BRACKET: winners advance on the tablet
     if (res.win) {
       if (r.champion) { champion = true; break; }
-      T.hpf = Math.min(1, hpf + 0.4 + (g.trait === 'hordearius' ? 0.1 : 0));
-      await ctx.ask({ title: `${name} won!`, body: para(`${g.name} advances. Wounds carry over: next round starts at ${Math.round(T.hpf * 100)}% HP.`), actions: ok('Next round'), dismiss: 'ok' });
+      T.hpf = nextHpf;
     } else break;
   }
   const place = lm.placeOf(T, champion), res = { win: champion, place, hype, hpf: { [g.id]: hpf }, odds };
@@ -258,16 +269,18 @@ export async function results(ctx, ev, gl, res, rep) {
   if (win && ev.kind === 'duel') {
     body.append(section('The crowd waits. Your call.'));
     actions = [{ label: 'Show mercy', sub: 'more fame, 30% they join you', value: 'mercy', variant: 'gold' }, { label: 'Showboat', sub: 'extra gold', value: 'show', variant: 'ghost' }];
-    const c = await ctx.ask({ title: 'Duel won', body, actions, dismiss: 'show' });
+    const hasMom = res.F && res.F.replay && res.F.replay.snap && res.F.replay.moments && res.F.replay.moments.length; // REEL: highlights before the verdict
+    let c; for (;;) { c = await ctx.ask({ title: 'Duel won', body, actions: hasMom ? [...actions, { label: 'Watch highlights', sub: 'the best moments, shareable', value: 'reel', variant: 'bronze', icon: 'arena' }] : actions, dismiss: 'show' }); if (c !== 'reel') break; await ctx.game.watchReplay(res, { reel: true }); }
     const m = lm.mercy(S, ev, rep, c);
     if (m.joined) await ctx.ask({ title: 'A new recruit!', body: para(`${m.joined.name} (${d.STYLES[m.joined.style].n}, Lv ${m.joined.lvl}) was moved by your mercy and joins your ludus!`), actions: ok('Welcome!'), dismiss: 'ok' });
     else if (c === 'mercy') U.toast(`The crowd loves it. +${m.f} fame.`, { kind: 'good' }); else U.toast(`+${m.gd} gold from the crowd.`, { kind: 'good' });
   } else {
     const hasReplay = res.F && res.F.replay && res.F.replay.snap;
     for (;;) {
-      const acts = hasReplay ? [...actions, { label: 'Watch replay', value: 'replay', variant: 'ghost', icon: 'arena' }] : actions;
+      const hasMom = hasReplay && res.F.replay.moments && res.F.replay.moments.length; // REEL
+      const acts = hasReplay ? [...actions, ...(hasMom ? [{ label: 'Highlight reel', sub: 'the 3 best moments, shareable', value: 'reel', variant: 'bronze', icon: 'arena' }] : []), { label: 'Watch replay', value: 'replay', variant: 'ghost', icon: 'arena' }] : actions;
       const v = await ctx.ask({ title: win ? 'Victory' : 'Defeat', body, actions: acts, dismiss: 'ok' });
-      if (v !== 'replay') break; await ctx.game.watchReplay(res);
+      if (v !== 'replay' && v !== 'reel') break; await ctx.game.watchReplay(res, { reel: v === 'reel' });
     }
   }
   if (rep.choice) {

@@ -3,7 +3,7 @@
 // skinned body (rig.add), so a fully dressed gladiator costs 9 to 13 draw calls. Only cloth (flaps, plume, cloak, net) is separate.
 // Weapon convention: authored along +Y with the grip at the origin; the hand sockets map +Y onto the forearm axis.
 import * as THREE from 'three';
-import { lathe, capsule, boxG, sphereG, cylG, coneG, torusG, quadG, xf, paint, ribbon, tabRing, extrude, sm01, addCloak, addPlume, ClothGrid, mergeCloths, shadePatch, clamp, lerp } from './rig.js';
+import { lathe, capsule, boxG, sphereG, cylG, coneG, torusG, quadG, xf, paint, ribbon, tabRing, extrude, sm01, addCloak, addPlume, ClothGrid, mergeCloths, shadePatch, clamp, lerp, HEAD_SX, HEAD_SZ, skullR, FACES } from './rig.js';
 
 const V3 = THREE.Vector3;
 const sq = (v) => v * v;
@@ -423,6 +423,103 @@ export function equipStyle(rig, style, o = {}) {
   // glow: strongest rarity among equipped items drives the emissive accent colour; legendary pulses
   const best = [rw, rs, ra, rh, rc].reduce((a, b) => (b.r > a.r ? b : a), { r: 0, col: '#fff' });
   if (best.r >= 3) rig.setGlow(best.col, best.r >= 4 ? 0.75 : 0.4, best.r >= 4 ? 0.4 : 0.0, 3.2);
+  if (o.g) { try { addMarks(rig, o.g); } catch (e) { /* marks are cosmetic */ } } // SCARS: scars and bandages
   rig.rebuild();
   return out;
+}
+
+// ---------------------------------------------------------------- SCARS and bandages (g.scars ids, g.wounds): painted on the skin as raised pale / dark patches, plus wraps
+// All geometry is merged into the rig like gear; nothing here moves. Call addMarks(rig, g) before rig.rebuild(). Marks sit on the 'skin' material (vertex colour multiplies the skin tone,
+// so a pale scar stays visible on every skin), bandages use a 'linen' material added to the rig. Parts: rig.detachPart('marks') is not needed (they are tiny).
+const SCAR_PALE = [1.45, 1.2, 1.15], SCAR_PINK = [1.2, 0.93, 0.9], SCAR_DARK = [0.6, 0.4, 0.37], STITCH = [0.2, 0.12, 0.1];
+const HSKULL = (j) => [[0, -0.022], [0.040 * j, -0.014], [0.068 * j, 0.012], [0.086 * j, 0.048], [0.097, 0.088], [0.105, 0.13], [0.104, 0.17], [0.092, 0.215], [0.058, 0.248], [0, 0.262]];
+function headSurface(rig) { // head-local surface point with the face sculpt (brow, cheek, chin) so marks do not sink into the bulges
+  const F = FACES[(((rig.look && rig.look.face) | 0) % 3 + 3) % 3], prof = HSKULL(F.j);
+  const base = (x, y) => { const R = skullR(prof, y), u = clamp(x / (R * HEAD_SX + 1e-5), -0.98, 0.98); return ps(x, y, HEAD_SZ * R * Math.sqrt(1 - u * u)); };
+  const blobs = []; for (const sg of [-1, 1]) blobs.push({ p: base(sg * 0.04, 0.142), r: 0.034, a: F.brow }, { p: base(sg * 0.037, 0.122), r: 0.021, a: -0.006 }, { p: base(sg * 0.068, 0.088), r: 0.034, a: F.cheek });
+  blobs.push({ p: base(0, 0.002), r: 0.028, a: F.chin }, { p: base(0, 0.19), r: 0.05, a: 0.004 });
+  return (x, y, off = 0.004) => {
+    const p = base(x, y), R = skullR(prof, y); let d = 0;
+    for (const b of blobs) d += b.a * Math.exp(-(sq(p.x - b.p.x) + sq(p.y - b.p.y) + sq(p.z - b.p.z)) / (b.r * b.r));
+    const n = ps(x / (HEAD_SX * HEAD_SX), (y - 0.1) * 0.12, p.z / (HEAD_SZ * HEAD_SZ)).normalize();
+    return { p: p.addScaledVector(n, d + off), n, R };
+  };
+}
+function scarLine(rig, obj, pts, nrm, wf, dark) { // a healed seam: darker red rim under a pale raised core
+  const W = typeof wf === 'function' ? wf : () => wf;
+  rig.add('skin', paint(ribbon(pts, (t) => W(t) * 2.1, (p, i) => nrm[i]), dark || [0.78, 0.42, 0.4]), obj);
+  rig.add('skin', paint(ribbon(pts.map((p, i) => p.clone().addScaledVector(nrm[i], 0.0016)), W, (p, i) => nrm[i]), SCAR_PALE), obj);
+}
+const faceTo = (geo, p, n) => { const q = new THREE.Quaternion().setFromUnitVectors(ps(0, 0, 1), n), m = new THREE.Matrix4().compose(p, q, ps(1, 1, 1)); geo.applyMatrix4(m); return geo; };
+function headStrap(rig, hs, mat, col, w = 0.011, off = 0.011) { // band around the head that starts at the left eye (+x) and runs over the brow and round the back
+  const n = 26, pts = [], nor = [], th0 = 0.42;
+  for (let i = 0; i <= n; i++) {
+    const t = i / n, th = th0 - t * Math.PI * 2, y = 0.122 + 0.034 * sm01(0, 0.18, t) * sm01(1, 0.82, t) - 0.012 * Math.sin(t * PI), R = skullR(HSKULL(1), y) + off;
+    const p = ps(Math.sin(th) * R * HEAD_SX, y, Math.cos(th) * R * HEAD_SZ); if (t < 0.12 || t > 0.88) { const h = hs(p.x, y, off + 0.002); p.copy(h.p); }
+    pts.push(p); nor.push(ps(p.x / (HEAD_SX * HEAD_SX), 0, p.z / (HEAD_SZ * HEAD_SZ)).normalize());
+  }
+  rig.add(mat, paint(ribbon(pts, w, (p, i) => nor[i]), col), rig.joints.head);
+}
+function eyeCover(rig, mat, col, linen) {
+  const hs = headSurface(rig), e = hs(0.037, 0.121, linen ? 0.014 : 0.012), r = linen ? 0.031 : 0.025;
+  rig.add(mat, paint(faceTo(xf(sphereG(r, 9, 5, 1, 0.92, 0.38), [0, 0, 0]), e.p, e.n), col), rig.joints.head);
+  headStrap(rig, hs, mat, col, linen ? 0.016 : 0.011, linen ? 0.014 : 0.011);
+}
+function bodyPt(B, sh, x, y, off, back) { const c = chestPt(x, y, B, sh, off); if (back) { c.p.z = -c.p.z + 2 * off * 0; c.n.z = -c.n.z; } return c; }
+
+export function addMarks(rig, g) {
+  const scars = g.scars || [], wounds = g.wounds || []; if (!scars.length && !wounds.length) return 0;
+  const J = rig.joints, B = rig.build.bulk || 1, sh = rig.build.shoulder || 1, AR = rig.build.arm || 1, LG = rig.build.leg || 1, hd = hdk(rig), has = (id) => scars.indexOf(id) >= 0;
+  let n = 0; const hs = headSurface(rig);
+  const linen = () => { if (!rig.mats.linen) rig.addMaterial('linen', new THREE.MeshStandardMaterial({ color: '#e6dcc2', roughness: 0.95, metalness: 0, vertexColors: true, side: THREE.DoubleSide }), 'cloth'); return 'linen'; };
+  const wrapLinen = (obj, r0, r1, y0, y1, bands = 3, sz = 1) => { const L = linen(); for (let i = 0; i < bands; i++) { const a = y0 + (y1 - y0) * (i / bands), b = y0 + (y1 - y0) * ((i + 1.15) / bands), t0 = i / bands, t1 = (i + 1.15) / bands; rig.add(L, paint(lathe([[lerp(r0, r1, t0), a], [lerp(r0, r1, t1) + 0.003, b]].sort((p, q) => p[1] - q[1]), 12, 1, sz, 0.15, 0.85), i % 2 ? 0.86 : 1), obj); } n++; };
+  const armR = (y) => lerp(0.054, 0.04, clamp(-y / 0.27, 0, 1)) * AR * B + 0.007 + 0.011 * hd;
+  // ---- scars
+  if (has('gash_scar')) { // slash down the left brow, across the eye socket, to the cheek, with stitch marks
+    const path = [[0.066, 0.17], [0.059, 0.14], [0.056, 0.118], [0.066, 0.092], [0.078, 0.066]], pts = path.map(([x, y]) => hs(x, y, 0.006)); 
+    scarLine(rig, J.head, pts.map((q) => q.p), pts.map((q) => q.n), (t) => 0.0078 * (0.55 + 0.9 * Math.sin(Math.PI * t) ** 0.6));
+    for (let i = 1; i < 4; i++) { const q = pts[i], tp = ps(1, 0, 0).cross(q.n).normalize(); const a = q.p.clone().addScaledVector(tp, 0.0), b = q.p.clone().addScaledVector(ps(1, 0, 0), 0.012); rig.add('skin', paint(ribbon([a.addScaledVector(ps(1, 0, 0), -0.012), b], 0.0022, () => q.n), STITCH), J.head); }
+    n++;
+  }
+  if (has('lost_eye') && !wounds.some((w) => (w.part || w.id) === 'eye')) { eyeCover(rig, 'leather', 0.5, false); n++; }
+  if (has('ringing')) { // a dented, bruised temple on the right side of the head
+    const q = hs(-0.09, 0.148, 0.003), g2 = faceTo(xf(sphereG(0.026, 8, 4, 1, 1.15, 0.22), [0, 0, 0]), q.p, q.n);
+    rig.add('skin', paint(g2, SCAR_DARK), J.head);
+    const pts = [[-0.092, 0.168], [-0.099, 0.15], [-0.094, 0.13]].map(([x, y]) => hs(x, y, 0.007)); scarLine(rig, J.head, pts.map((p) => p.p), pts.map((p) => p.n), 0.005); n++;
+  }
+  if (has('old_ribs')) { // raised welts across the left lower ribs
+    for (let k = 0; k < 3; k++) { const pts = []; for (let i = 0; i <= 5; i++) { const t = i / 5; pts.push(chestPt(0.04 + t * 0.15, 0.05 + k * 0.035 + t * 0.07, B, sh, 0.012 + 0.012 * hd)); }
+      scarLine(rig, J.chest, pts.map((p) => p.p), pts.map((p) => p.n), (t) => 0.007 * (0.5 + Math.sin(PI * t))); } n++;
+  }
+  if (has('whip')) { // four old lashes across the back
+    for (let k = 0; k < 4; k++) { const pts = []; for (let i = 0; i <= 6; i++) { const t = i / 6; pts.push(bodyPt(B, sh, -0.17 + t * 0.34 + (k % 2 ? 0.02 : -0.02), 0.07 + k * 0.045 + (k % 2 ? t : 1 - t) * 0.075, 0.012 + 0.012 * hd, true)); }
+      scarLine(rig, J.chest, pts.map((p) => p.p), pts.map((p) => p.n), (t) => 0.0055 * (0.4 + Math.sin(PI * t)), k % 2 ? [0.55, 0.3, 0.28] : null); } n++;
+  }
+  if (has('stiff_arm')) { // right arm bound in leather, held a little tight
+    for (const [y0, y1] of [[-0.03, -0.08], [-0.11, -0.16], [-0.18, -0.23]]) rig.add('leather', paint(lathe([[armR(y1), y1], [armR(y0) + 0.003, y0]], 8, 1, 1, 0.1, 0.8), 0.9), J.elbowR);
+    rig.add('leather', paint(lathe([[0.062 * B * AR + 0.012 + 0.012 * hd, -0.19], [0.064 * B * AR + 0.012 + 0.012 * hd, -0.12]], 8, 1, 1, 0.1, 0.8), 0.8), J.shoulderR); n++;
+  }
+  if (has('bad_knee')) { // left knee brace: two straps and a hinge plate
+    const r = 0.07 * B * LG * (1 + 0.1 * hd) + 0.016;
+    for (const [y0, y1, rr] of [[0.01, 0.06, r * 1.12], [-0.1, -0.05, r * 0.92]]) rig.add('leather', paint(lathe([[rr, y0], [rr + 0.004, y1]], 10, 1, 1, 0.1, 0.8), 0.85), J.kneeL);
+    rig.add('metal', xf(boxG(0.012, 0.15, 0.03), [r * 1.1, -0.02, 0.0], [0, 0, 0]), J.kneeL); rig.add('trim', xf(sphereG(0.012, 5, 3), [r * 1.1 + 0.008, -0.02, 0.0]), J.kneeL); n++;
+  }
+  if (has('burn')) { // blotchy tight shiny skin over the right forearm and elbow
+    const prof = []; for (let i = 0; i <= 9; i++) { const y = 0.03 - i * 0.032; prof.push([armR(Math.min(y, 0)) + 0.002, y]); } prof.reverse();
+    const nz = (a, y) => { const s = Math.sin(a * 3.1 + y * 41) + Math.sin(a * 5.3 - y * 23 + 1.7) * 0.7; return s; };
+    const burn = lathe(prof, 12, 1, 1, 0, 1, -PI * 0.5, PI * 1.6);
+    paint(burn, (x, y, z) => { const a = Math.atan2(x, z), v = nz(a, y); return v > 0.35 ? (v > 0.95 ? [0.5, 0.3, 0.28] : [0.72, 0.5, 0.46]) : [1, 1, 1]; });
+    rig.add('skin', burn, J.elbowR); n++;
+  }
+  // ---- bandages for current wounds
+  for (const wd of wounds) {
+    const id = wd.part || wd.id, L = linen(); if (!(wd.w > 0) && wd.w != null) continue;
+    if (id === 'ribs') { const y0 = 0.05, y1 = 0.17, o = 0.012 + 0.012 * hd; wrapLinen(J.chest, chestR(y0, B, sh) + o, chestR(y1, B, sh) + o, y0, y1, 4, 0.72); rig.add(L, paint(faceTo(xf(sphereG(0.02, 6, 3, 1, 1, 0.3), [0, 0, 0]), chestPt(0.09, 0.11, B, sh, 0.02).p, chestPt(0.09, 0.11, B, sh, 0).n), [1, 0.5, 0.48]), J.chest); }
+    else if (id === 'gash') { const pts = [], o = 0.016 + 0.012 * hd; for (let i = 0; i <= 8; i++) { const t = i / 8; pts.push(chestPt(0.2 - t * 0.31, 0.25 - t * 0.17, B, sh, o)); } rig.add(L, paint(ribbon(pts.map((p) => p.p), 0.052, (p, i) => pts[i].n), (x, y, z) => { const d = Math.exp(-(sq(x - 0.03) + sq(y - 0.17)) / 0.002); return [1, 1 - 0.75 * d, 1 - 0.8 * d]; }), J.chest); n++; }
+    else if (id === 'arm') { wrapLinen(J.elbowR, armR(-0.2) + 0.006, armR(-0.02) + 0.006, -0.2, -0.02, 5); wrapLinen(J.shoulderR, 0.056 * B * AR + 0.016 + 0.012 * hd, 0.064 * B * AR + 0.016 + 0.012 * hd, -0.19, -0.05, 3); n++; }
+    else if (id === 'knee') { const K = J.kneeR; const r = 0.07 * B * LG * (1 + 0.1 * hd) + 0.02; wrapLinen(J.kneeR, r, r * 1.04, -0.11, 0.07, 4); rig.add(L, paint(xf(sphereG(0.02, 5, 3, 1, 1, 0.4), [0, -0.02, r + 0.004]), [1, 0.5, 0.48]), K); n++; }
+    else if (id === 'head') { const R = skullR(HSKULL(1), 0.15); const prof = []; for (const [y, k] of [[0.115, 0], [0.135, 1], [0.16, 1], [0.178, 0]]) prof.push([skullR(HSKULL(1), y) + 0.026 * (k ? 1 : 0.5), y]); rig.add(L, paint(lathe(prof, 14, HEAD_SX, HEAD_SZ, 0.15, 0.85), (x, y, z) => { const d = Math.exp(-(sq(x - 0.045) + sq(z - 0.1)) / 0.0012); return [1, 1 - 0.8 * d, 1 - 0.85 * d]; }), J.head); n++; }
+    else if (id === 'eye') { eyeCover(rig, L, 1, true); n++; }
+  }
+  return n;
 }

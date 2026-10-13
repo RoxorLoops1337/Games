@@ -1,136 +1,232 @@
-// tex.js : procedural canvas textures (color + bump) for Ludus Maximus 3D. No image files.
-// All generators are seeded + tileable (lattice noise wraps), return { map, bump } CanvasTextures.
-// Budget: 512px tile ~40 ms, 1024px ~150 ms on desktop. Generate once at boot and share.
+// envtex.js : procedural textures (color + bump) for Ludus Maximus 3D. No image files.
+// All generators are seeded + tileable (lattice noise wraps) and return { map, bump } textures (DataTexture: sRGB RGBA color, single channel R8 bump).
+// The pixel loops live in envtex_gen.js (pure, no DOM) so they can run in a Worker (envtex_worker.js). Boot flow:
+//   prepare(PLAN.hub(...)) at the top of main.js -> IndexedDB hit (repeat visits) or worker bake -> READY -> the synchronous make*Texture calls inside
+//   createLudus / createArena / createBuildings find their bytes ready and only wrap them in a DataTexture. A miss (no worker, timeout, spec not in the plan)
+//   falls back to the same generator on the calling thread, so output is identical either way. stats() counts hits and misses.
 import * as THREE from 'three';
-
-function hash(ix, iy, s) {
-  let h = (Math.imul(ix, 374761393) + Math.imul(iy, 668265263) + Math.imul(s, 1442695041)) | 0;
-  h = Math.imul(h ^ (h >>> 13), 1274126177);
-  h ^= h >>> 16;
-  return (h >>> 0) / 4294967295;
-}
-/** Tileable value noise. x,y in lattice units, `per` = lattice period (wraps). */
-export function tnoise(x, y, per, seed = 0) {   // PERF: no per-call closure, the four lattice corners hashed inline (same arithmetic, same output)
-  const xi = Math.floor(x), yi = Math.floor(y), xf = x - xi, yf = y - yi;
-  const u = xf * xf * (3 - 2 * xf), v = yf * yf * (3 - 2 * yf);
-  const x0 = ((xi % per) + per) % per, x1 = (((xi + 1) % per) + per) % per, y0 = ((yi % per) + per) % per, y1 = (((yi + 1) % per) + per) % per;
-  const a = hash(x0, y0, seed), b = hash(x1, y0, seed);
-  const c = hash(x0, y1, seed), d = hash(x1, y1, seed);
-  return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v;
-}
-export function tfbm(x, y, per, oct = 4, seed = 0) {
-  let s = 0, a = 0.5, f = 1, n = 0;
-  for (let i = 0; i < oct; i++) { s += a * tnoise(x * f, y * f, per * f, seed + i * 17); n += a; a *= 0.5; f *= 2; }
-  return s / n;
-}
-const lerp = (a, b, t) => a + (b - a) * t;
-const clamp01 = (x) => Math.min(1, Math.max(0, x));
-const hex = (h) => [(h >> 16) & 255, (h >> 8) & 255, h & 255];
-const mix3 = (a, b, t) => [lerp(a[0], b[0], t), lerp(a[1], b[1], t), lerp(a[2], b[2], t)];
+import { GEN_VERSION, specKey, generate, tnoise, tfbm } from './envtex_gen.js';
+export { tnoise, tfbm };
 
 function canvas(w, h) { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; }
-function tex(c, srgb = true, repeat = true) {
+
+// ---------------------------------------------------------------- quality: texture size per tier and device memory
+// K scales the big tiles (>= 512 px): low phones 0.75 (a 1024 sand tile becomes 768: 3.8 MB instead of 6.7 MB on the GPU), <= 2 GB devices 0.56. Medium on <= 3 GB 0.75.
+// ?texq=1 forces full size (pixel-diff checks). High and desktop are untouched.
+const Q = { K: 1, tier: 'high', mem: 0 };
+export function configure({ tier = 'high', deviceMemory, force } = {}) {
+  const mem = deviceMemory === undefined ? (typeof navigator !== 'undefined' && navigator.deviceMemory) || 0 : deviceMemory;
+  let k = tier === 'low' ? 0.75 : 1;
+  if (tier === 'medium' && mem && mem <= 3) k = 0.75;
+  if (tier === 'low' && mem && mem <= 2) k = 0.56;
+  if (force) k = +force;
+  Q.K = k; Q.tier = tier; Q.mem = mem; return Q.K;
+}
+export const quality = () => ({ K: Q.K, tier: Q.tier, mem: Q.mem });
+const fit = (size) => (Q.K >= 1 || size < 512 ? size : Math.max(256, Math.round((size * Q.K) / 16) * 16));
+
+// ---------------------------------------------------------------- spec builders (the make* functions and the PLAN use the same ones, so keys always agree)
+const SP = {
+  sand: (size = 1024, seed = 3) => ({ k: 'sand', size: fit(size), seed }),
+  stone: (size = 512, { bx = 4, by = 6, base = 0xe8dcc0, tint = 0xb69a6a, seed = 11, mortar = 0x7a6a55 } = {}) => ({ k: 'stone', size: fit(size), bx, by, base, tint, seed, mortar }),
+  marble: (size = 512, seed = 21) => ({ k: 'marble', size: fit(size), seed }),
+  ground: (size = 512, seed = 33) => ({ k: 'ground', size: fit(size), seed }),
+  cloth: (size = 256) => ({ k: 'cloth', size: fit(size) }),
+  roof: (size = 256, seed = 5) => ({ k: 'roof', size: fit(size), seed }),
+};
+const HUB_STONE = { bx: 4, by: 6, base: 0xe3d3ad, tint: 0xb89a66, seed: 31 };
+/** What each scene asks for, in the order it is needed (KEEP IN SYNC with the make* calls in env_ludus.js, buildings.js, hub.js, env_arena.js). A call missing here still works (sync fallback) but shows up in stats().miss. */
+export const PLAN = {
+  hub: () => [SP.sand(512, 4), SP.stone(512, HUB_STONE), SP.marble(512), SP.ground(512), SP.sand(512, 6), SP.roof(256), SP.cloth(256)],
+  arena: () => [SP.sand(1024, 3), SP.stone(512, { bx: 4, by: 6, seed: 11 })],
+  themes: () => [
+    SP.stone(512, { bx: 2, by: 10, base: 0x9a6a3c, tint: 0x6a4222, mortar: 0x24120a, seed: 5 }), SP.marble(512, 21),
+    SP.stone(512, { bx: 3, by: 5, base: 0xe6c88c, tint: 0xc89a58, mortar: 0x8a6a40, seed: 9 }), SP.stone(512, { bx: 4, by: 6, base: 0xe8eef8, tint: 0xaebcd4, mortar: 0x6a7890, seed: 13 }),
+    SP.stone(512, { bx: 4, by: 6, base: 0x8a7870, tint: 0x4e3e3a, mortar: 0x2a1a18, seed: 17 })],
+};
+
+// ---------------------------------------------------------------- bytes ready for the synchronous make* calls
+const READY = new Map();        // key -> { w, h, color: Uint8ClampedArray, bump: Uint8ClampedArray }
+const PENDING = new Map();      // key -> Promise (in flight in the cache or a worker)
+const ST = { hit: 0, miss: 0, idb: 0, worker: 0, workerMs: 0, syncMs: 0, fromCache: 0, total: 0, done: 0, idbMs: 0, mode: 'none', missKeys: [] };
+export const stats = () => Object.assign({}, ST, { missKeys: ST.missKeys.slice() });
+/** { done, total } of everything prepare() was asked for so far (boot progress bar) */
+export const progress = () => ({ done: ST.done, total: ST.total });
+
+// IndexedDB: raw bytes per spec, keyed by generator version + spec key (the spec carries the tier-scaled size, so tiers never collide)
+let dbp = null;
+function openDB() {
+  if (dbp) return dbp;
+  dbp = new Promise((res) => {
+    try {
+      if (typeof indexedDB === 'undefined') return res(null);
+      const rq = indexedDB.open('lm3d_tex', 1);
+      rq.onupgradeneeded = () => { rq.result.createObjectStore('tex'); };
+      rq.onsuccess = () => res(rq.result); rq.onerror = rq.onblocked = () => res(null);
+    } catch (e) { res(null); }
+  });
+  return dbp;
+}
+const ckey = (key) => GEN_VERSION + '|' + key;
+async function idbGetMany(keys) {
+  const db = await openDB(); if (!db || !keys.length) return new Map();
+  return new Promise((res) => {
+    const out = new Map();
+    try {
+      const tx = db.transaction('tex', 'readonly'), os = tx.objectStore('tex');
+      for (const k of keys) { const rq = os.get(ckey(k)); rq.onsuccess = () => { const v = rq.result; if (v && v.color && v.bump && v.color.byteLength === v.w * v.h * 4 && v.bump.byteLength === v.w * v.h) out.set(k, v); }; }
+      tx.oncomplete = tx.onerror = tx.onabort = () => res(out);
+    } catch (e) { res(out); }
+  });
+}
+let swept = false;
+function idbPut(key, r) {
+  const later = typeof requestIdleCallback === 'function' ? (f) => requestIdleCallback(f, { timeout: 3000 }) : (f) => setTimeout(f, 200);
+  later(async () => {
+    try {
+      const db = await openDB(); if (!db) return;
+      const tx = db.transaction('tex', 'readwrite'), os = tx.objectStore('tex');
+      os.put({ w: r.w, h: r.h, color: r.color.buffer.slice(0), bump: r.bump.buffer.slice(0) }, ckey(key));
+      if (!swept) { swept = true; const cur = os.openKeyCursor(); cur.onsuccess = () => { const c = cur.result; if (!c) return; if (!String(c.key).startsWith(GEN_VERSION + '|')) os.delete(c.key); c.continue(); }; }   // old generator versions
+    } catch (e) { /* quota or blocked: the cache is optional */ }
+  });
+}
+
+// worker pool (module workers: Chrome 80, Safari 15, Firefox 114; anything else just takes the synchronous path)
+const COST = { sand: 1, stone: 1, marble: 0.7, ground: 0.65, roof: 0.7, cloth: 0.15 };   // rough relative bake cost per pixel
+const POOL = { workers: [], idle: [], q: [], jobs: new Map(), id: 0, dead: false, max: 0 };
+function poolStart() {
+  if (POOL.workers.length || POOL.dead) return !POOL.dead;
+  try {
+    if (typeof Worker === 'undefined') { POOL.dead = true; return false; }
+    const hc = (typeof navigator !== 'undefined' && navigator.hardwareConcurrency) || 2;
+    POOL.max = Math.max(1, Math.min(3, hc - 1));   // main thread + GPU process keep a core each
+    for (let i = 0; i < POOL.max; i++) {
+      const w = new Worker(new URL('./envtex_worker.js', import.meta.url), { type: 'module' });
+      w.onmessage = (e) => {
+        const m = e.data, j = POOL.jobs.get(m.id); POOL.jobs.delete(m.id); POOL.idle.push(w);
+        if (j) { if (m.err) j.res(null); else { ST.workerMs += m.ms || 0; j.res({ w: m.w, h: m.h, color: new Uint8ClampedArray(m.color), bump: new Uint8ClampedArray(m.bump) }); } }
+        poolPump();
+      };
+      w.onerror = () => { POOL.dead = true; for (const [, j] of POOL.jobs) j.res(null); POOL.jobs.clear(); for (const j of POOL.q.splice(0)) j.res(null); try { for (const x of POOL.workers) x.terminate(); } catch (er) { /* gone */ } POOL.workers.length = POOL.idle.length = 0; };
+      POOL.workers.push(w); POOL.idle.push(w);
+    }
+    return true;
+  } catch (e) { POOL.dead = true; return false; }
+}
+function poolPump() {
+  while (POOL.q.length && POOL.idle.length && !POOL.dead) {
+    const j = POOL.q.shift(); if (j.ctl && j.ctl.cancelled) { j.res(null); continue; }   // the cache answered first
+    const w = POOL.idle.pop(), id = ++POOL.id; POOL.jobs.set(id, j);
+    try { w.postMessage({ id, spec: j.spec }); } catch (e) { POOL.jobs.delete(id); POOL.idle.push(w); j.res(null); }
+  }
+}
+function bake(spec, ctl) {
+  return new Promise((res) => {
+    if (!poolStart()) return res(null);
+    const j = { spec, res, ctl }; const pr = spec._prio || 0; delete spec._prio;
+    // lower prio first; inside a prio the biggest job first (longest-processing-time-first keeps the workers' finish times close)
+    j.pr = pr; j.cost = spec.size * spec.size * (COST[spec.k] || 1);
+    let i = POOL.q.length; while (i > 0 && ((POOL.q[i - 1].pr || 0) > pr || ((POOL.q[i - 1].pr || 0) === pr && POOL.q[i - 1].cost < j.cost))) i--; POOL.q.splice(i, 0, j); poolPump();
+  });
+}
+
+/**
+ * Make sure the bytes for `specs` are in READY. Resolves when all are (or after `timeout` ms: whatever is missing is baked synchronously on demand).
+ * opts.prio orders the worker queue (lower first), opts.cache = false skips IndexedDB.
+ */
+export function prepare(specs, { prio = 0, cache = true, timeout = 15000 } = {}) {
+  const todo = []; const seen = new Set();
+  for (const s of specs) { const key = specKey(s); if (seen.has(key)) continue; seen.add(key); if (!READY.has(key)) todo.push([key, s]); }
+  ST.total += todo.filter(([k]) => !PENDING.has(k)).length;
+  const run = async () => {
+    const mine = todo.filter(([k]) => !PENDING.has(k));
+    if (!mine.length) return;
+    const t0 = performance.now(), jobs = [], live = new Map();
+    // the cache read and the worker start race: a repeat visit answers from IndexedDB within a few ms, a first visit (the DB does not even exist yet) must not wait for it
+    const cached = cache ? idbGetMany(mine.map(([k]) => k)).then((h) => { ST.idbMs += performance.now() - t0; return h; }) : Promise.resolve(new Map());
+    const first = await Promise.race([cached, new Promise((r) => setTimeout(() => r(null), 90))]);
+    const take0 = (h) => { for (const [key] of mine) { const v = h.get(key); if (v && !READY.has(key)) { READY.set(key, { w: v.w, h: v.h, color: new Uint8ClampedArray(v.color), bump: new Uint8ClampedArray(v.bump) }); ST.idb++; ST.done++; ST.mode = 'cache'; const j = live.get(key); if (j) j.cancelled = true; } } };
+    if (first) take0(first);
+    for (const [key, spec] of mine) {
+      if (READY.has(key)) continue;
+      const sp = Object.assign({}, spec, { _prio: prio }), job = { cancelled: false };
+      live.set(key, job);
+      jobs.push(bake(sp, job).then((r) => { if (!r) { if (!job.cancelled) ST.done++; return; } if (READY.has(key)) return; READY.set(key, r); ST.worker++; ST.done++; if (cache) idbPut(key, r); if (ST.mode === 'none') ST.mode = 'worker'; }));
+    }
+    if (!first) cached.then(take0);
+    await Promise.all(jobs);
+  };
+  const waits = todo.map(([k]) => PENDING.get(k)).filter(Boolean);
+  const mineP = run(); for (const [k] of todo) if (!PENDING.has(k)) PENDING.set(k, mineP);
+  const all = Promise.all([mineP, ...waits]).then(() => { for (const [k] of todo) PENDING.delete(k); });
+  return Promise.race([all, new Promise((r) => setTimeout(r, timeout))]);
+}
+
+/** take the bytes for a spec: from READY (hit) or baked right here (miss) */
+function take(spec) {
+  const key = specKey(spec), r = READY.get(key);
+  if (r) { ST.hit++; return r; }   // kept: two scenes may ask for the same spec (the textures share the one byte array), and a live texture holds it anyway
+  const t0 = performance.now(); const g = generate(spec); ST.miss++; ST.syncMs += performance.now() - t0; if (ST.missKeys.length < 12) ST.missKeys.push(key);
+  return g;
+}
+
+// ---------------------------------------------------------------- textures
+const TEXSET = new Set();   // every texture made here (WeakRef-free: they are few and live for the session)
+function dtex(data, w, h, srgb) {
+  const rgba = srgb, u8 = new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
+  const t = new THREE.DataTexture(u8, w, h, rgba ? THREE.RGBAFormat : THREE.RedFormat, THREE.UnsignedByteType);
+  if (srgb) t.colorSpace = THREE.SRGBColorSpace;
+  t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 4;
+  t.generateMipmaps = true; t.minFilter = THREE.LinearMipmapLinearFilter; t.magFilter = THREE.LinearFilter;
+  t.flipY = false; t.unpackAlignment = rgba ? 4 : 1; t.needsUpdate = true;
+  t.userData.lmTex = true; t.userData.lmBytes = Math.round(w * h * (rgba ? 4 : 1) * 1.34); TEXSET.add(t);
+  return t;
+}
+function tex(c, srgb = true, repeat = true) {   // canvas textures (courtyard floor, facade, radial blobs)
   const t = new THREE.CanvasTexture(c);
   if (srgb) t.colorSpace = THREE.SRGBColorSpace;
   if (repeat) t.wrapS = t.wrapT = THREE.RepeatWrapping;
   t.anisotropy = 4;
   t.generateMipmaps = true; t.minFilter = THREE.LinearMipmapLinearFilter;
+  t.userData.lmTex = true; t.userData.lmBytes = Math.round(c.width * c.height * 4 * 1.34); TEXSET.add(t);
   return t;
 }
-/** Build color+bump canvases per pixel. fn(u,v,px,py) -> {h:0..1, c:[r,g,b]} written into both images. */
-function bake(size, fn, w = size, h = size) {
-  const cc = canvas(w, h), bc = canvas(w, h);
-  const cx = cc.getContext('2d'), bx = bc.getContext('2d');
-  const ci = cx.createImageData(w, h), bi = bx.createImageData(w, h);
-  const res = {};
-  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
-    fn(x / w, y / h, x, y, res);
-    const i = (y * w + x) * 4;
-    ci.data[i] = res.c[0]; ci.data[i + 1] = res.c[1]; ci.data[i + 2] = res.c[2]; ci.data[i + 3] = 255;
-    const hv = Math.max(0, Math.min(255, res.h * 255));
-    bi.data[i] = bi.data[i + 1] = bi.data[i + 2] = hv; bi.data[i + 3] = 255;
-  }
-  cx.putImageData(ci, 0, 0); bx.putImageData(bi, 0, 0);
-  return { map: tex(cc, true), bump: tex(bc, false), mapCanvas: cc, bumpCanvas: bc };
+/** spec -> { map, bump, mapCanvas (lazy, only the courtyard floor pattern asks for it) } */
+function build(spec) {
+  const g = take(spec), res = { map: dtex(g.color, g.w, g.h, true), bump: dtex(g.bump, g.w, g.h, false) };
+  let cv = null;
+  Object.defineProperty(res, 'mapCanvas', { get() {
+    if (cv) return cv; cv = canvas(g.w, g.h);
+    const id = new ImageData(g.w, g.h), s = g.color, d = id.data;
+    for (let y = 0; y < g.h; y++) d.set(s.subarray((g.h - 1 - y) * g.w * 4, (g.h - y) * g.w * 4), y * g.w * 4);   // rows were stored bottom-up
+    cv.getContext('2d').putImageData(id, 0, 0); return cv;
+  } });
+  return res;
 }
 
 /** Sun-baked raked sand: blotches, wind ripples, grain speckle. Tile = ~4 m. */
-export function makeSandTexture(size = 1024, seed = 3) {
-  const A = hex(0xe6cfa2), B = hex(0xcdae7e), C = hex(0xf6e6c4), D = hex(0xa98a60);   // warm pale golden sand, low saturation
-  return bake(size, (u, v, px, py, o) => {
-    const big = tfbm(u * 4, v * 4, 4, 4, seed);
-    const warp = tfbm(u * 8, v * 8, 8, 3, seed + 5);
-    const rip = Math.sin((v * 22 + warp * 3.2) * Math.PI * 2 * 0.5 * 2) * 0.5 + 0.5; // 22 ripples, integer -> tiles
-    const grain = hash(px, py, seed + 9);
-    const fine = tfbm(u * 64, v * 64, 64, 2, seed + 2);
-    let t = clamp01(big * 1.4 - 0.2);
-    let c = mix3(A, B, t * 0.8);
-    c = mix3(c, C, clamp01(rip * 0.16 + fine * 0.28 - 0.1));
-    if (grain > 0.93) c = mix3(c, C, 0.5); else if (grain < 0.06) c = mix3(c, D, 0.45);
-    o.c = c; o.h = 0.45 + rip * 0.07 + fine * 0.25 + (grain - 0.5) * 0.18;
-  });
-}
+export function makeSandTexture(size = 1024, seed = 3) { return build(SP.sand(size, seed)); }
 
 /** Travertine ashlar blocks. Tile covers `bx` x `by` blocks. Mortar is dark + recessed. */
-// PERF: identical stone parameters (the hub buildings and the ludus walls ask for the same travertine) are generated once and shared (about 160 ms per 512 tile)
+// PERF: identical stone parameters (the hub buildings and the ludus walls ask for the same travertine) are generated once and shared
 const STONE_MEMO = new Map();
-export function makeStoneTexture(size = 512, { bx = 4, by = 6, base = 0xe8dcc0, tint = 0xb69a6a, seed = 11, mortar = 0x7a6a55 } = {}) {
-  const key = [size, bx, by, base, tint, seed, mortar].join(','), hit = STONE_MEMO.get(key); if (hit) return hit;
-  const A = hex(base), T = hex(tint), M = hex(mortar);
-  const res = bake(size, (u, v, px, py, o) => {
-    const row = Math.floor(v * by), off = (row % 2) * 0.5;
-    const fu = ((u * bx + off) % 1 + 1) % 1, fv = (v * by) % 1;
-    const col = Math.floor(u * bx + off);
-    const id = hash(((col % bx) + bx) % bx, row, seed);
-    const ex = Math.min(fu, 1 - fu) * (size / bx), ey = Math.min(fv, 1 - fv) * (size / by);
-    const e = Math.min(ex, ey);
-    const edge = clamp01(e / 3.2);                                      // 0 mortar -> 1 face
-    const n1 = tfbm(u * 16, v * 16, 16, 4, seed);
-    const n2 = tfbm(u * 64, v * 64, 64, 2, seed + 3);
-    const pit = tnoise(u * 90, v * 90, 90, seed + 6) > 0.8 ? 1 : 0;
-    let c = mix3(A, T, clamp01(id * 0.55 + n1 * 0.6 - 0.25));
-    const sh = 0.86 + n2 * 0.22 - pit * 0.12 + (id - 0.5) * 0.08;
-    c = [c[0] * sh, c[1] * sh, c[2] * sh];
-    c = mix3(M, c, edge);
-    o.c = c; o.h = edge * (0.55 + n1 * 0.25 + n2 * 0.1) - pit * 0.12;
-  });
-  STONE_MEMO.set(key, res); return res;
+export function makeStoneTexture(size = 512, o = {}) {
+  const spec = SP.stone(size, o), key = specKey(spec), hit = STONE_MEMO.get(key); if (hit) return hit;
+  const res = build(spec); STONE_MEMO.set(key, res); return res;
 }
 
 /** Marble with warped veins. Tile = ~2 m. */
-export function makeMarbleTexture(size = 512, seed = 21) {
-  const W = hex(0xf2ede2), G = hex(0x9a96a0), Wm = hex(0xe3d8c3);
-  return bake(size, (u, v, px, py, o) => {
-    const w1 = tfbm(u * 4, v * 4, 4, 4, seed), w2 = tfbm(u * 8 + 3, v * 8, 8, 3, seed + 4);
-    const vein = Math.abs(Math.sin((u * 6 + w1 * 4.5 + w2 * 1.2) * Math.PI));
-    const line = Math.pow(1 - vein, 14);
-    let c = mix3(W, Wm, clamp01(w2 * 1.2 - 0.3));
-    c = mix3(c, G, line * 0.55);
-    o.c = c; o.h = 0.7 + w2 * 0.1 - line * 0.05;
-  });
-}
+export function makeMarbleTexture(size = 512, seed = 21) { return build(SP.marble(size, seed)); }
 
 /** Terrain/grass detail (grayscale-ish, multiplies vertex colors). Tile ~6 m. */
-export function makeGroundDetail(size = 512, seed = 33) {
-  return bake(size, (u, v, px, py, o) => {
-    const a = tfbm(u * 12, v * 12, 12, 4, seed), b = tfbm(u * 96, v * 96, 96, 2, seed + 1);
-    const blades = hash(px, py, seed) > 0.9 ? 0.08 : 0;
-    const k = clamp01(0.72 + (a - 0.5) * 0.5 + (b - 0.5) * 0.28 + blades) * 255;
-    o.c = [k, k * 0.99, k * 0.96]; o.h = 0.4 + a * 0.4 + b * 0.2;
-  });
-}
+export function makeGroundDetail(size = 512, seed = 33) { return build(SP.ground(size, seed)); }
 
 /** Woven cloth (grayscale). Tile covers 24 threads. */
-export function makeClothTexture(size = 256) {
-  return bake(size, (u, v, px, py, o) => {
-    const n = 32, a = Math.floor(u * n), b = Math.floor(v * n);
-    const over = (a + b) % 2 === 0;
-    const fu = (u * n) % 1, fv = (v * n) % 1;
-    const thread = over ? Math.sin(fu * Math.PI) : Math.sin(fv * Math.PI);
-    const k = (0.78 + thread * 0.22 + (hash(a, b, 5) - 0.5) * 0.06) * 255;
-    o.c = [k, k, k]; o.h = 0.4 + thread * 0.4;
-  });
-}
+export function makeClothTexture(size = 256) { return build(SP.cloth(size)); }
+
+/** Terracotta roof tiles (curved rows). Tile = 2 m x 2 m (8 columns x 8 rows). */
+export function makeRoofTexture(size = 256, seed = 5) { return build(SP.roof(size, seed)); }
 
 /** Soft radial gradient texture (blob shadows, glows). */
 export function makeRadialTexture(size = 128, stops = [[0, 'rgba(255,255,255,1)'], [1, 'rgba(255,255,255,0)']]) {
@@ -146,6 +242,7 @@ export function makeRadialTexture(size = 128, stops = [[0, 'rgba(255,255,255,1)'
 export function makeCourtyardFloor(w = 1536, h = 1250, sandTile, seed = 7, k = 1) {
   const c = canvas(Math.round(w * k), Math.round(h * k)), x = c.getContext('2d'); x.scale(k, k);
   const pat = x.createPattern(sandTile.mapCanvas, 'repeat');
+  const ps = 512 / sandTile.mapCanvas.width; if (ps !== 1 && pat.setTransform && typeof DOMMatrix !== 'undefined') pat.setTransform(new DOMMatrix([ps, 0, 0, ps, 0, 0]));   // a downscaled sand tile keeps the 512 px repeat period
   x.fillStyle = pat; x.fillRect(0, 0, w, h);
   let s = seed; const rnd = () => (s = (s * 16807) % 2147483647) / 2147483647;
   // dirt wear patches
@@ -185,23 +282,6 @@ export function makeCourtyardFloor(w = 1536, h = 1250, sandTile, seed = 7, k = 1
   return tex(c, true, false);
 }
 
-/** Terracotta roof tiles (curved rows). Tile = 2 m x 2 m (8 columns x 8 rows). */
-export function makeRoofTexture(size = 256, seed = 5) {
-  return bake(size, (u, v, px, py, o) => {
-    const cols = 8, rows = 8;
-    const row = Math.floor(v * rows), off = (row % 2) * 0.5;
-    const fu = ((u * cols + off) % 1 + 1) % 1, fv = (v * rows) % 1;
-    const id = hash(Math.floor(u * cols + off) % cols, row, seed);
-    const curve = Math.sin(fu * Math.PI);                       // convex tile profile
-    const lap = Math.min(1, fv * 3);                            // shaded overlap at the tile top edge
-    const n = tfbm(u * 24, v * 24, 24, 3, seed);
-    const k = 0.55 + curve * 0.4 + lap * 0.12 + (id - 0.5) * 0.18 + (n - 0.5) * 0.2;
-    const c = mix3(hex(0x8f3d22), hex(0xcf7a48), clamp01(k - 0.35));
-    o.c = [c[0] * (0.7 + k * 0.45), c[1] * (0.7 + k * 0.45), c[2] * (0.7 + k * 0.45)];
-    o.h = 0.3 + curve * 0.5 - (1 - lap) * 0.15;
-  });
-}
-
 /** Distant Colosseum facade strip (3 arch tiers + attic). Wraps horizontally every `bays` bays. Color only. */
 export function makeColosseumFacade(w = 1024, h = 512, bays = 8) {
   const c = canvas(w, h), x = c.getContext('2d');
@@ -223,3 +303,20 @@ export function makeColosseumFacade(w = 1024, h = 512, bays = 8) {
   for (let b = 0; b < bays; b++) { x.fillStyle = '#4a3a3a'; x.fillRect(b * bw + bw * 0.4, attic * 0.35, bw * 0.2, attic * 0.35); }
   const t = tex(c, true); t.wrapT = THREE.ClampToEdgeWrapping; return t;
 }
+
+// ---------------------------------------------------------------- memory: release / re-warm GPU copies of the procedural textures (low tier, memory pressure)
+/** every procedural texture the materials of `root` use */
+export function sceneTextures(root) {
+  const out = new Set();
+  root.traverse((o) => {
+    const ms = o.material ? (Array.isArray(o.material) ? o.material : [o.material]) : [];
+    for (const m of ms) for (const k of ['map', 'bumpMap', 'emissiveMap', 'normalMap', 'roughnessMap', 'alphaMap']) { const t = m[k]; if (t && t.userData && t.userData.lmTex) out.add(t); }
+  });
+  return out;
+}
+/** MB of procedural textures currently resident on the GPU */
+export function residentMB(renderer) { let b = 0; for (const t of TEXSET) if (renderer.properties.has(t)) b += t.userData.lmBytes; return b / 1048576; }
+/** free the GPU copy (the CPU bytes stay: three re-uploads on the next use). Returns MB freed. */
+export function releaseTextures(renderer, set) { let b = 0; for (const t of set) if (renderer.properties.has(t)) { b += t.userData.lmBytes; t.dispose(); } return b / 1048576; }
+/** upload now (before the scene is shown) so the first frame has no upload hitch. Returns the count. */
+export function warmTextures(renderer, set) { let n = 0; for (const t of set) if (!renderer.properties.has(t)) { renderer.initTexture(t); n++; } return n; }

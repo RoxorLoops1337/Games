@@ -7,7 +7,9 @@ import { createPost, createDynamicRes, TIERS, detectTier, saveTierCap } from './
 import { createAudio } from './audio.js';
 import { Game } from './game.js';
 import { demoHunt } from './beast_fx.js'; // BEAST: ?demo=1&hunt=...
+import * as ET from './envtex.js'; // PERF: procedural textures are baked in a worker / read from IndexedDB while the rest of the game loads
 
+const BT = window.__bootT = { t0: performance.now() }; const mark = (k) => { BT[k] = Math.round(performance.now() - BT.t0); };   // boot phase timings (ms since this module ran), see stats().boot
 const q = new URLSearchParams(location.search);
 const canvas = document.getElementById('gl'), ui = document.getElementById('ui');
 const fail = (m) => { const e = document.getElementById('err'); e.textContent = m || e.textContent; e.style.display = 'flex'; };
@@ -16,13 +18,17 @@ const fail = (m) => { const e = document.getElementById('err'); e.textContent = 
 const bootFail = (e) => { if (!window.__LM3D) fail('The arena could not start: ' + ((e && (e.message || e.reason && e.reason.message)) || 'unknown error') + '. Reload to try again.'); };
 addEventListener('error', bootFail); addEventListener('unhandledrejection', bootFail);
 
+const forcedTier = TIERS[q.get('tier')] ? q.get('tier') : null;
+const tier = forcedTier || detectTier();
+// PERF: start baking the hub textures NOW (the hub is what the player sees first); the arena set queues behind it for the idle build. ?texq=1 forces full-size textures.
+ET.configure({ tier, force: q.get('texq') });
+const tex = { hub: ET.prepare(ET.PLAN.hub(), { prio: 0, cache: q.get('texcache') !== '0' }), arena: ET.prepare(ET.PLAN.arena().concat(tier === 'high' ? ET.PLAN.themes() : []), { prio: 5, cache: q.get('texcache') !== '0' }) };
+mark('tex0');
 let renderer;
 try { renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance' }); } catch (e) { fail('WebGL is not available on this device. Try another browser, or enable hardware acceleration.'); throw e; }
 renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 0.9;
 renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap; renderer.localClippingEnabled = true; renderer.info.autoReset = false;
 
-const forcedTier = TIERS[q.get('tier')] ? q.get('tier') : null;
-const tier = forcedTier || detectTier();
 const camera = new THREE.PerspectiveCamera(42, innerWidth / innerHeight, 0.3, 1500);
 const audio = createAudio({ seed: 1337 });
 const dummy = new THREE.Scene();
@@ -37,17 +43,38 @@ function applyTier(name) {
   if (name === 'low') PWR.demoted = true;
   if (!forcedTier) saveTierCap(name);   // remembered 14 days, so the next load starts at the tier this device can hold
 }
-// ---------------------------------------------------------------- battery / thermal: frame-rate cap
-// 30 fps when (a) the governor had to demote to the low tier (the device cannot hold 60 anyway: steadier frames, less heat), (b) the battery is under 20% and not charging,
-// (c) the hub has had no input for 5 s (ambient life only), (d) ?fps=30 (tests). Fights on a capable device stay uncapped.
-const PWR = { demoted: false, saver: false, lastInput: performance.now(), cap: 0 };
+// ---------------------------------------------------------------- frame pacing: display refresh, battery / thermal frame-rate cap
+// The loop never trusts 60: the display refresh (vsync) is estimated from the raw rAF gaps (lower quartile of 120, so a slow frame never inflates it).
+//  - >= 100 Hz panels (120 / 144 / 165 / 240) render every round(Hz/60)th vsync: ~60 fps, half the GPU work and heat of a 120 fps loop that the sim does not need.
+//  - 30 fps cap when (a) the governor had to demote to the low tier (steadier frames, less heat), (b) battery under 20% and not charging, (c) the OS reports CPU pressure
+//    serious / critical (Compute Pressure API, Chrome; held 20 s after it clears), (d) the hub has had no input for 5 s (ambient life only), (e) ?fps=N (tests).
+//  - A display locked to 30 Hz (iOS low power mode, battery savers) is detected too: the governor then judges frames against 33 ms, not 16.7 (see post.js lock30).
+// Fights on a capable 60 Hz device stay uncapped. stats().pacing shows the live numbers; ?perf=1 draws them.
+const PWR = { demoted: false, saver: false, hot: false, hotUntil: 0, pressure: '', lastInput: performance.now(), cap: 0, minGap: 0 };
+const RG = { ring: new Float32Array(120), i: 0, n: 0, vsync: 16.7, hz: 60, prev: 0, tight30: 0, capRun: 0 };
 for (const ev of ['pointerdown', 'pointermove', 'keydown', 'wheel', 'touchstart']) addEventListener(ev, () => { PWR.lastInput = performance.now(); }, { passive: true, capture: true });
 try { navigator.getBattery && navigator.getBattery().then((b) => { const f = () => { PWR.saver = !b.charging && b.level < 0.2; }; f(); b.addEventListener('levelchange', f); b.addEventListener('chargingchange', f); }).catch(() => {}); } catch (e) { /* no battery API */ }
-const fpsCap = (now) => (q.get('fps') ? +q.get('fps') : (PWR.demoted && post.tier === 'low') || PWR.saver || (game.scene === 'hub' && now - PWR.lastInput > 5000 && !document.querySelector('.lx-scrim')) ? 30 : 0);
+try { if (typeof PressureObserver !== 'undefined') { const po = new PressureObserver((recs) => { const st = recs[recs.length - 1].state; PWR.pressure = st; if (st === 'serious' || st === 'critical') { PWR.hot = true; PWR.hotUntil = 0; } else if (PWR.hot && !PWR.hotUntil) PWR.hotUntil = performance.now() + 20000; }); po.observe('cpu', { sampleInterval: 2000 }).catch(() => {}); } } catch (e) { /* no Compute Pressure API */ }
+function sampleRefresh(gap) {
+  RG.capRun = PWR.cap ? RG.capRun + 1 : 0;   // a capped loop alternates work / skip frames, so a slow frame cannot hide the vsync: that window is "certain"
+  RG.ring[RG.i++ % 120] = gap; if (++RG.n % 120 !== 0) return;
+  const a = Array.from(RG.ring).sort((x, y) => x - y), q1 = a[30];
+  if (q1 > 3.5 && q1 < 60) { RG.vsync = q1; RG.hz = 1000 / q1; dyn.setVsync(q1, RG.capRun >= 120); }
+}
+const fpsCap = (now) => {
+  PWR.cap = 0; PWR.minGap = 0;
+  if (PWR.hot && PWR.hotUntil && now > PWR.hotUntil) PWR.hot = false;
+  if (q.get('fps')) PWR.cap = +q.get('fps');
+  else if ((PWR.demoted && post.tier === 'low') || PWR.saver || PWR.hot || (game.scene === 'hub' && now - PWR.lastInput > 5000 && !document.querySelector('.lx-scrim'))) PWR.cap = 30;
+  if (PWR.cap) PWR.minGap = 1000 / PWR.cap - 3;
+  if (RG.hz >= 100 && (!PWR.cap || PWR.cap > 60)) { const d = Math.round(RG.hz / 60); PWR.minGap = Math.max(PWR.minGap, (d - 0.35) * RG.vsync); if (!PWR.cap) PWR.cap = 60; }
+  return PWR.cap;
+};
 const dyn = createDynamicRes(post, { onTierDemote() { const order = ['high', 'medium', 'low']; const i = order.indexOf(post.tier); if (i < order.length - 1) applyTier(order[i + 1]); } });
 post.setScene = (s) => { post.composer.passes[0].scene = s; };
 
-const game = new Game({ renderer, camera, post, audio, ui, tier });
+const game = new Game({ renderer, camera, post, audio, ui, tier, tex }); game.noWarm = !!q.get('nowarm');
+mark('game');
 
 // ---------------------------------------------------------------- resize / orientation (coalesced into one rAF; iOS reports stale sizes right after rotation)
 let rw = 0, rh = 0, rzQueued = false;
@@ -78,6 +105,7 @@ function syncMotion() {
   const orb = game.hub && game.hub.orbit; if (orb) { if (driftBase === null) driftBase = orb.drift; orb.drift = r ? false : driftBase; }
 }
 if (mqRM.addEventListener) mqRM.addEventListener('change', () => { rmApplied = null; syncMotion(); });
+game.onFightView = () => { rmApplied = null; syncMotion(); };   // the FightView is built lazily: hand it the current reduced-motion state
 
 // ---------------------------------------------------------------- frame-time recorder: spikes show up in __LM3D.stats().spikes
 // work = CPU ms of game.frame + render submit (GPU time is async and not measured), gap = time since the previous rAF. A spike is work > spikeMs (25) or gap > 3x the median.
@@ -106,17 +134,20 @@ const halt = () => { if (rafId) cancelAnimationFrame(rafId); rafId = 0; };
 function loop(now) {
   rafId = 0; schedule();   // re-arm FIRST: an exception below must not stop the game
   if (q.get('manual')) { last = now; return; }
-  PWR.cap = fpsCap(now); if (PWR.cap && now - last < 1000 / PWR.cap - 3) return;   // frame-rate cap (see PWR)
+  const raw = now - RG.prev; RG.prev = now; if (raw > 2 && raw < 100) sampleRefresh(raw);
+  if (game.warming) { last = now; return; }   // the idle shader warm-up owns the camera and the composer scene for a moment
+  fpsCap(now); if (PWR.minGap && now - last < PWR.minGap) return;   // frame-rate cap (see PWR)
   const gap = now - last, dt = Math.min(0.1, gap / 1000); last = now;
   const w0 = performance.now();
   try {
     clock += dt; frames++;
     if ((frames & 15) === 0) syncMotion();
-    if (!PWR.cap) dyn.tick(dt * 1000); else dyn.reset(20);   // a capped 30 fps loop must not look slow to the governor
+    dyn.setScene(game.scene === 'fight' ? 'fight' : 'hub');
+    if (!PWR.cap || PWR.cap > 45) dyn.tick(dt * 1000); else dyn.reset(20);   // a capped 30 fps loop must not look slow to the governor (a 60 fps cap on a 120 Hz panel is judged normally)
     game.frame(dt, clock);
     renderer.info.reset(); post.render(dt, clock);
   } catch (e) { if (frameErrs++ < 5) console.error('frame', e); }
-  recordFrame(performance.now() - w0, gap);
+  recordFrame(performance.now() - w0, gap); if (perfEl) perfDraw(now);
 }
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) { paused = true; halt(); }
@@ -135,7 +166,7 @@ canvas.addEventListener('webglcontextlost', (e) => {
 }, false);
 canvas.addEventListener('webglcontextrestored', () => {
   clearTimeout(ctxTimer); lost = false; ctxBox.hidden = true; last = performance.now(); FT.ignore = 45;
-  rzQueued = false; resize(true); dyn.reset(90); schedule();
+  rzQueued = false; resize(true); dyn.hardReset(90); schedule();
 }, false);
 
 // ---------------------------------------------------------------- demo / slice
@@ -152,13 +183,35 @@ function makeDemoFight(o = {}) {
   return LM.createFight(ua, ub, { autoA: o.auto !== false, hazards: o.haz ? 1 : 0 });
 }
 
+// ---------------------------------------------------------------- hidden performance overlay: ?perf=1 (or __LM3D.perf(true)); one <pre>, refreshed 4x per second
+let perfEl = null, perfT = 0;
+function perfOverlay(on) {
+  if (!on) { if (perfEl) { perfEl.remove(); perfEl = null; } return !!perfEl; }
+  if (perfEl) return true;
+  perfEl = document.createElement('pre'); perfEl.className = 'lx-perfhud'; perfEl.setAttribute('aria-hidden', 'true');
+  perfEl.style.cssText = 'position:fixed;left:4px;top:calc(env(safe-area-inset-top,0px) + 4px);margin:0;padding:4px 6px;z-index:98;pointer-events:none;font:10px/1.25 ui-monospace,Menlo,Consolas,monospace;color:#9fffb0;background:rgba(10,8,20,.72);border-radius:4px;white-space:pre;max-width:96vw;overflow:hidden';
+  document.body.append(perfEl); return true;
+}
+function perfDraw(now) {
+  if (!perfEl || now - perfT < 250) return; perfT = now;
+  const i = renderer.info, k = Math.min(FT.n, 120), g = dyn.state ? dyn.state() : {}, mem = performance.memory, fr = FT.ring;
+  let mx = 0, sm = 0; for (let j = 0; j < k; j++) { const v = fr[j]; sm += v; if (v > mx) mx = v; }
+  const fps = Math.round(1000 / Math.max(1, FT.gapMed || 16.7));
+  perfEl.textContent =
+    `${game.scene}${game.scene === 'fight' && game.fightView ? ' ' + game.fightView.phase : ''} | tier ${post.tier} | scale ${post.scale.toFixed(2)}${g.ceil < 1 ? ' (cap ' + g.ceil + ')' : ''}${g.locked30 ? ' | 30Hz lock' : ''}\n` +
+    `frame ${(FT.gapMed || 0).toFixed(1)} ms (~${fps} fps) | work ${(sm / Math.max(1, k)).toFixed(1)} avg ${mx.toFixed(1)} max\n` +
+    `display ${RG.hz.toFixed(0)} Hz | fps cap ${PWR.cap || 'off'}${PWR.hot ? ' | HOT' : ''}${PWR.saver ? ' | battery saver' : ''}\n` +
+    `gov ema ${g.ema} / target ${g.target} | best ${g.best} | up in ${Math.max(0, (g.wait || 0) - (g.fast || 0))}\n` +
+    `draw ${i.render.calls} | tris ${(i.render.triangles / 1000).toFixed(0)}k | geo ${i.memory.geometries} tex ${i.memory.textures} prog ${i.programs ? i.programs.length : 0}\n` +
+    `heap ${mem ? (mem.usedJSHeapSize / 1048576).toFixed(1) + ' MB' : 'n/a'} | proc tex ${ET.residentMB(renderer).toFixed(1)} MB (K ${ET.quality().K}) | spikes ${FT.spikeCount}`;
+}
 let loseExt = null;
 const api = {
   THREE, renderer, camera, post, game, audio, dyn, get tier() { return post.tier; }, forcedTier,
-  get view() { return game.fightView; },
-  stats() { const i = renderer.info; return { calls: i.render.calls, triangles: i.render.triangles, geometries: i.memory.geometries, textures: i.memory.textures, programs: i.programs ? i.programs.length : 0, tier: post.tier, scale: post.scale, frames, spikes: frameStats(), decal: game.fightView && game.fightView.fx && game.fightView.fx.decalStats ? Object.assign({}, game.fightView.fx.decalStats) : null, warmMs: api.warmMs, fpsCap: PWR.cap, saver: PWR.saver, cam: [camera.position.x, camera.position.y, camera.position.z].map((v) => +v.toFixed(1)), fov: +camera.fov.toFixed(1), scene: game.scene, phase: game.fightView && game.fightView.phase, shot: game.fightView && game.fightView.dir.pose.shot, lost, paused, reduced: rmApplied }; },
+  get view() { return game.fightView || game.ensureFightView(); },
+  stats() { const i = renderer.info; return { calls: i.render.calls, triangles: i.render.triangles, geometries: i.memory.geometries, textures: i.memory.textures, programs: i.programs ? i.programs.length : 0, tier: post.tier, scale: post.scale, frames, spikes: frameStats(), decal: game.fightView && game.fightView.fx && game.fightView.fx.decalStats ? Object.assign({}, game.fightView.fx.decalStats) : null, warmMs: game.warmMs !== undefined ? game.warmMs : api.warmMs, fpsCap: PWR.cap, saver: PWR.saver, pacing: { hz: +RG.hz.toFixed(1), vsync: +RG.vsync.toFixed(2), cap: PWR.cap, hot: PWR.hot, pressure: PWR.pressure, gov: dyn.state && dyn.state() }, boot: Object.assign({}, BT), tex: ET.stats(), texQ: ET.quality(), mem: { texMB: +ET.residentMB(renderer).toFixed(1), log: game.memLog, fvBuildMs: game.fvBuildMs }, fv: !!game.fightView, cam: [camera.position.x, camera.position.y, camera.position.z].map((v) => +v.toFixed(1)), fov: +camera.fov.toFixed(1), scene: game.scene, phase: game.fightView && game.fightView.phase, shot: game.fightView && game.fightView.dir.pose.shot, lost, paused, reduced: rmApplied }; },
   makeDemoFight,
-  startDemo(o = {}) { const F = makeDemoFight(o); api.F = F; game.setScene('fight'); return game.fightView.start(F, o); },
+  startDemo(o = {}) { const F = makeDemoFight(o); api.F = F; game.setScene('fight'); return game.fightView.start(F, o); },   // setScene builds the FightView on demand
   // deterministic stepping for screenshots (headless software GL is slow): advance N frames of dt
   advance(seconds, dt = 1 / 30) { const n = Math.round(seconds / dt); for (let i = 0; i < n; i++) { clock += dt; frames++; const w0 = performance.now(); game.frame(dt, clock); recordFrame(performance.now() - w0, 0, 'advance'); } renderer.info.reset(); post.render(dt, clock); return api.stats(); },
   resetSpikes() { FT.spikes.length = 0; FT.spikeCount = 0; FT.worst = 0; FT.max = 0; FT.n = 0; FT.sum = 0; FT.ignore = 0; FT.ring.fill(0); FT.ri = 0; },
@@ -167,24 +220,36 @@ const api = {
   loseContext() { const x = loseExt || (loseExt = renderer.getContext().getExtension('WEBGL_lose_context')); if (x) x.loseContext(); return !!x; },   // the extension must be fetched BEFORE the loss (getExtension returns null on a lost context)
   restoreContext() { if (loseExt) loseExt.restoreContext(); return !!loseExt; },
   applyTier,
+  perf(on) { return perfOverlay(on !== false); },
 };
-const hideBoot = () => { const b = document.getElementById('boot'); if (!b) return; b.style.opacity = 0; b.style.pointerEvents = 'none'; setTimeout(() => b.remove(), 700); };
-// Shader warm-up while the boot overlay still covers the canvas: the fight scene (rigs of every style, every pooled fx mesh, the gib mesh) is compiled
-// and drawn once, then the first scene (title, hub or demo fight) renders two frames before the overlay lifts. First gib, first ultimate, first hit
-// and the first hub entry then find their programs ready (compare stats().programs before and after a fight: no new programs).
+if (q.get('perf')) perfOverlay(true);
+const hideBoot = () => { const b = document.getElementById('boot'); if (!b) return; setBoot(1); b.style.opacity = 0; b.style.pointerEvents = 'none'; setTimeout(() => b.remove(), 700); };
+// ---------------------------------------------------------------- boot overlay: message + progress bar (modules, textures, hub, first frames)
+let bootFrac = 0;
+function setBoot(f, msg) {
+  if (f > bootFrac) bootFrac = f; const el = document.getElementById('bootfill'); if (el) el.style.transform = 'scaleX(' + bootFrac.toFixed(3) + ')';
+  if (msg) { const e = document.getElementById('bootmsg'); if (e) e.textContent = msg; }
+}
+const bootMsg = (m, f) => setBoot(f || 0, m);
+const bootTick = setInterval(() => { const p = ET.progress(); if (p.total) setBoot(0.08 + 0.4 * (p.done / p.total)); }, 120);   // textures own 8 to 48 % of the bar
+// Shader warm-up: the FightView (arena, crowd, fx, gore) is no longer part of the boot. It is built and its shaders compiled in idle time AFTER the hub is interactive
+// (game.prewarm). Only a boot straight into a fight (?demo=1) waits for it, exactly like before, so the first gib / ultimate / hit finds its programs ready.
 async function warmUp() {
   const t0 = performance.now();
-  try { if (!q.get('nowarm') && game.fightView && game.fightView.warm) await game.fightView.warm(); } catch (e) { console.warn('warm', e && e.message); }
+  try { if (!q.get('nowarm')) { await game.prewarm({ immediate: true }); } else game.ensureFightView(); } catch (e) { console.warn('warm', e && e.message); }
   api.warmMs = Math.round(performance.now() - t0);
 }
-const bootMsg = (m) => { const e = document.getElementById('bootmsg'); if (e) e.textContent = m; };
 const nextFrames = (n) => new Promise((res) => { const f = () => (--n <= 0 ? res() : requestAnimationFrame(f)); requestAnimationFrame(f); });
-// window.__LM3D is published once the game is ready (init + warm-up + first scene), so test tools that wait for it never race the boot.
+// window.__LM3D is published once the game is ready (init + first scene), so test tools that wait for it never race the boot.
+// api.idle resolves when the background build + warm-up is done (tools that measure programs or draw calls await it).
+let idleDone; api.idle = new Promise((r) => { idleDone = r; }); game.onWarmed = () => { mark('warmed'); idleDone(true); };
 (async () => {
-  const reveal = async () => { await nextFrames(q.get('manual') ? 1 : 3); FT.ignore = 45; hideBoot(); };
+  const reveal = async () => { await nextFrames(q.get('manual') ? 1 : 3); FT.ignore = 45; mark('reveal'); clearInterval(bootTick); hideBoot(); if (!q.get('demo')) game.markInteractive({ prewarm: !q.get('nowarm') && (!q.get('manual') || q.get('warm') === '1') }); };
   try {
-    bootMsg('Raising the walls...'); await game.init(); resize(true); syncMotion(); bootMsg('Lighting the torches...'); await warmUp(); bootMsg('The gates open...'); window.__LM3D = api; schedule();
-    if (q.get('demo')) { const o = { a: q.get('a') || undefined, b: q.get('b') || undefined, lvl: +(q.get('lvl') || 5), team: +(q.get('team') || 0), auto: q.get('auto') !== '0', haz: q.get('haz') === '1', hunt: q.get('hunt') || undefined }; api.startDemo(o); await reveal(); return; }
+    bootMsg('Raising the walls...', 0.06); await game.init(); mark('init'); resize(true); syncMotion(); setBoot(0.85);
+    if (q.get('demo')) { bootMsg('Lighting the torches...', 0.88); await warmUp(); mark('warmed'); idleDone(true); }
+    bootMsg('The gates open...', 0.95); window.__LM3D = api; schedule();
+    if (q.get('demo')) { game.markInteractive({ prewarm: false }); const o = { a: q.get('a') || undefined, b: q.get('b') || undefined, lvl: +(q.get('lvl') || 5), team: +(q.get('team') || 0), auto: q.get('auto') !== '0', haz: q.get('haz') === '1', hunt: q.get('hunt') || undefined }; api.startDemo(o); await reveal(); return; }
     if (q.get('new')) { game.newGame({ name: 'Ludus Aurelia', color: 1 }); if (q.get('rich')) { game.S.gold += 5000; game.S.fame += 300; } game.setScene('hub'); game.refresh(); if (!game.S.glads.length && !q.get('empty')) game.open('recruit', { first: true }); await reveal(); return; }
     const booted = game.boot(); await reveal(); await booted;
   } finally { window.__LM3D = api; }

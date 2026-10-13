@@ -45,3 +45,10 @@ Audio (additive block in audio.js, all synthesized): `beastRoar` (kind: lion, be
 
 ## Weaknesses (honest list)
 Rigid skinning (overlapping tubes, small seams at extreme poses), faceted low-poly fur (no fur cards), elephant torso is boxy and its legs are columns, the boar and wolf are small on screen at the fight camera, beasts only use a single pose per attack (no directional variants), blood soak turns light fur uniformly red quickly, no allied beasts (side A) AI tuning, portraits take 1.5 to 3 s on software GL for the first beast (shader compile).
+
+## Round 3 note
+Beasts ignore player orders (`LM.command` refuses beast units) and foe tactics (`aiCmd` returns for `u.beast`); their telegraph lanes stay in beast_fx.js. The tactics overlay draws team rings around beasts scaled by `rig.beastR`.
+
+## Wave 3: bestiary art and Venatio trophies
+- `js/glyphs.js` `emblem(kind, {size, color, boss, locked})` returns an SVG medallion (radial colour, dotted ring, cream line head from the glyph table, rays for bosses, a "?" silhouette when locked). The Bestiary tab shows portrait plus emblem, an italic lore quote, stats, six kill dots (squares mark the notes at 1, 3 and 6 kills), trophy pills, an empty state with six locked emblems and a hint, and for unmet beasts the hunt where they appear.
+- Nine Venatio trophies are in `D.TROPHIES` (kill each beast, solo lion, menagerie, all pelts); they use `V.kills`, `V.solo` and `V.cleared` and pay gold, fame and laurels once. The older `D.BEAST_TROPHIES` (pelt drops that pay weekly fame) are unchanged.

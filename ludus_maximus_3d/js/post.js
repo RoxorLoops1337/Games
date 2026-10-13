@@ -178,31 +178,66 @@ export function createPost(renderer, scene, camera, { tier = detectTier() } = {}
 }
 
 /**
- * Dynamic resolution scaler. Call tick(frameMs) every frame. Steps scale in 0.1 increments between min..1.
- * Drops fast (20 slow frames), then demotes the tier after 150 more slow frames (2.5 s) at the floor.
- * Recovery: a 60 Hz display never produces frames under 16.7 ms, so "fast" is judged against the best frame time
- * seen recently (vsync) instead of an absolute 14 ms that could never be met. A recovery that fails (drop again within
- * 600 frames) doubles the wait before the next attempt (240 -> 480 -> ... 3840 frames), so a borderline device stops oscillating.
- * reset() ignores the next `warm` frames (scene switch, shader compile, tab resume) so one-off hitches never cost resolution.
+ * Dynamic resolution governor. Call tick(frameMs) every frame. Steps the scale in 0.1 increments between min..1.
+ *
+ * Rules (all in one place, simulated in the performance skill):
+ *  - SCENES: the hub and the fight keep SEPARATE state (scale, EMA, recovery wait, ceiling). A heavy 3v3 never leaves the hub soft, and the hub's idle frames never
+ *    inflate the fight's scale. setScene('hub' | 'fight') swaps the state and ignores 45 frames (no judgement across a scene change or shader compile).
+ *  - TARGET follows the display: target = max(18.2 ms, 1.09 x vsync) so a 120 Hz panel is not judged against 18 ms and a 30 Hz-locked display (proven by a capped loop,
+ *    see setVsync) against 36 ms, not 18. Slow = EMA over 1.25 x target.
+ *  - DROP fast (20 slow frames: -0.1, floor `min`), 150 more slow frames at the floor demote the tier, unless the frames are locked to a 30 Hz vsync (lock30: the cost is not the
+ *    GPU, so the scale goes back to 1 and the tier stays).
+ *  - RECOVER slowly and only when clearly fast: EMA under max(0.8 x target, 1.12 x best frame time seen) for `wait` frames (240 = 4 s at 60 fps). The neutral band between
+ *    "fast" and "slow" (about 4 ms at 60 Hz) is the hysteresis: nothing changes inside it.
+ *  - NEVER OSCILLATE: a drop within 600 frames of a recovery doubles `wait` (max 3840 = 64 s); the second failed recovery to the same level pins a ceiling there
+ *    (no more retries for 36000 ticks, about 10 minutes) so a borderline device settles instead of pulsing every minute.
+ * reset() ignores the next `warm` frames (shader compile, tab resume, capped loop). hardReset() also forgets ceilings (resize, context restore, tier change).
  */
 export function createDynamicRes(post, { target = 1000 / 55, min = 0.55, warm = 45, onTierDemote } = {}) {
-  let ema = target, slow = 0, fast = 0, cool = 0, skip = warm, best = 1000, sinceUp = 1e9, wait = 240, bestAge = 0;
+  const mk = () => ({ scale: 1, ema: target, slow: 0, fast: 0, cool: 0, best: 1000, sinceUp: 1e9, wait: 240, bestAge: 0, ceil: 1, ceilAge: 0, fails: 0, failLvl: 0, chain: 0, chainAge: 0, chainEma: 0, chainScale: 1 });
+  const SC = { hub: mk(), fight: mk() };
+  let name = 'fight', st = SC.fight, skip = warm, vsync = 16.7, T = target, locked = false, known = null, chainLocked = false;   // known: null | 'normal' | 'slow' (display refresh proven by a capped loop)
+  const apply = () => { if (post.scale !== st.scale) { post.scale = st.scale; post.setSize(post.cssW, post.cssH); } };
   const api = {
-    get ms() { return ema; },
-    get recoverWait() { return wait; },
-    reset(frames = warm) { skip = frames; slow = fast = 0; ema = Math.min(ema, target); bestAge = 0; },
+    get ms() { return st.ema; },
+    get recoverWait() { return st.wait; },
+    get scene() { return name; },
+    get locked30() { return locked; },
+    state() { return { scene: name, scale: st.scale, ceil: st.ceil, ema: +st.ema.toFixed(1), best: +st.best.toFixed(1), target: +T.toFixed(1), wait: st.wait, fast: st.fast, slow: st.slow, vsync: +vsync.toFixed(1), locked30: locked, hub: SC.hub.scale, fight: SC.fight.scale }; },
+    setScene(n) { if (n !== 'hub' && n !== 'fight') n = 'fight'; if (n === name) return; name = n; st = SC[n]; skip = warm; st.slow = st.fast = 0; apply(); },
+    /** display refresh as estimated by main.js (lower quartile of the 120 latest raw rAF gaps). `certain` = measured while the loop skipped every other frame (frame cap),
+     *  so a slow frame cannot hide the vsync: ~33 ms then really is a 30 Hz-locked display (iOS Low Power Mode) and ~16.7 proves a normal one. Uncertain ~33 ms gaps may also be a
+     *  GPU that misses every vsync, so they only move the target for a fast panel; the "lower the resolution, nothing improves" test (lock30) is the fallback. */
+    setVsync(ms, certain = false) {
+      vsync = ms; if (certain) { known = ms > 25 ? 'slow' : 'normal'; if (known === 'normal') chainLocked = false; }
+      locked = known === 'slow' || (known === null && chainLocked);
+      T = locked ? Math.max(target, 33.3 * 1.09) : Math.max(target, ms < 24 ? ms * 1.09 : 0);
+    },
+    reset(frames = warm) { skip = frames; st.slow = st.fast = 0; st.ema = Math.min(st.ema, T); st.bestAge = 0; },
+    hardReset(frames = warm) { for (const k of ['hub', 'fight']) { const v = SC[k]; v.ceil = 1; v.fails = 0; v.wait = 240; v.best = 1000; v.chain = 0; } locked = false; chainLocked = false; known = null; T = target; api.reset(frames); },
     tick(ms) {
       if (skip > 0) { skip--; return post.scale; }
-      ms = Math.min(ms, 100); ema += (ms - ema) * 0.1; sinceUp++;
-      if (ms >= 4) { if (ms < best) { best = ms; bestAge = 0; } else if (++bestAge > 600) { best = Math.min(best * 1.05, ema); bestAge = 0; } }   // vsync estimate drifts up when never re-hit
-      if (cool > 0) { cool--; return post.scale; }
-      const fastLim = Math.max(target * 0.8, best * 1.12);
-      if (ema > target * 1.25) { slow++; fast = 0; } else if (ema < fastLim) { fast++; slow = 0; } else { slow = fast = 0; }
-      if (slow > 20 && post.scale > min) {
-        if (sinceUp < 600) wait = Math.min(3840, wait * 2);
-        post.scale = Math.max(min, +(post.scale - 0.1).toFixed(2)); post.setSize(post.cssW, post.cssH); slow = 0; cool = 20;
-      } else if (slow > 150 && post.scale <= min && onTierDemote) { onTierDemote(); slow = 0; cool = 90; best = 1000; }
-      else if (fast > wait && post.scale < 1) { post.scale = Math.min(1, +(post.scale + 0.1).toFixed(2)); post.setSize(post.cssW, post.cssH); fast = 0; cool = 90; sinceUp = 0; }
+      ms = Math.min(ms, 100); st.ema += (ms - st.ema) * 0.1; st.sinceUp++;
+      if (st.ceil < 1 && ++st.ceilAge > 36000) { st.ceil = 1; st.ceilAge = 0; st.fails = 0; }
+      if (st.chain && ++st.chainAge > 400) st.chain = 0;
+      if (ms >= 4) { if (ms < st.best) { st.best = ms; st.bestAge = 0; } else if (++st.bestAge > 600) { st.best = Math.min(st.best * 1.05, st.ema); st.bestAge = 0; } }   // vsync estimate drifts up when never re-hit
+      if (st.cool > 0) { st.cool--; return post.scale; }
+      const fastLim = Math.max(T * 0.8, Math.min(st.best, vsync) * 1.12);   // judged against the display's vsync, never against a best time that already includes the load
+      if (st.ema > T * 1.25) { st.slow++; st.fast = 0; } else if (st.ema < fastLim) { st.fast++; st.slow = 0; } else { st.slow = st.fast = 0; }
+      if (st.slow > 20 && st.scale > min) {
+        if (st.chain === 0) { st.chainEma = st.ema; st.chainScale = st.scale; }
+        if (++st.chain >= 3 && !locked && known === null && vsync > 25 && vsync < 40 && st.ema > st.chainEma * 0.93) {   // two drops changed nothing and the frames sit on a 30 Hz vsync: never the GPU, give the pixels back
+          locked = chainLocked = true; T = Math.max(target, 33.3 * 1.09); st.scale = st.chainScale; apply(); st.slow = st.chain = 0; st.cool = 90; st.best = 1000; st.ceil = 1; st.wait = 240; return post.scale;
+        }
+        st.chainAge = 0;
+        if (st.sinceUp < 600) {                        // the last recovery did not hold
+          st.wait = Math.min(3840, st.wait * 2);
+          const lvl = +(st.scale - 0.1).toFixed(2); st.fails = lvl === st.failLvl ? st.fails + 1 : 1; st.failLvl = lvl;
+          if (st.fails >= 2) { st.ceil = lvl; st.ceilAge = 0; }   // twice failed to hold the level above `lvl`: stay here
+        }
+        st.scale = Math.max(min, +(st.scale - 0.1).toFixed(2)); apply(); st.slow = 0; st.cool = 20;
+      } else if (st.slow > 150 && st.scale <= min && onTierDemote) { onTierDemote(); st.slow = 0; st.cool = 90; st.best = 1000; }
+      else if (st.fast > st.wait && st.scale < Math.min(1, st.ceil)) { st.scale = Math.min(1, +(st.scale + 0.1).toFixed(2)); apply(); st.fast = 0; st.cool = 90; st.sinceUp = 0; st.chain = 0; }
       return post.scale;
     },
   };
