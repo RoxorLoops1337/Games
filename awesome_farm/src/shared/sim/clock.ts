@@ -14,6 +14,7 @@ import * as chronicle from './chronicle';
 import * as cottage from './cottage';
 import * as defense from './defense';
 import * as dread from './dread';
+import * as festival from './festival';
 import * as fortune from './fortune';
 import * as gather from './gather';
 import * as hearth from './hearth';
@@ -109,6 +110,7 @@ export function startNight (sim: Sim) {
         startEvent(sim, sim.nightEv);
     } else sim.banner(`Night ${n}`, 'Monsters wander the farm — stay near a campfire', PAL.plum);
     hearth.onNight(sim);                          // (a circle sitting at a fire as night falls kindles it)
+    festival.onNight(sim);                        // (the last night of a season is a festival)
     for (const [p, plan] of raids) raid.announce(sim, p, plan);
 }
 
@@ -151,6 +153,7 @@ export function dawn (sim: Sim) {
     sim.duskWarned = 0;
     s.clock -= TUNING.dayLength + s.nightLen;
     s.night = false;
+    const ended = s.day;
     s.day++;
     sim.nightSpawns = [];
     iridium.onDawn(sim);
@@ -176,6 +179,7 @@ export function dawn (sim: Sim) {
         if (p.downed <= 0 && p.hearts < max) p.hearts = Math.min(max, p.hearts + 1);
     }
     morning(sim);
+    festival.onDawn(sim, ended);                  // (the Lantern Chain pays out)
     cottage.onDawn(sim);                          // (the folk move in)
     scholar.onDawn(sim);
     for (const p of sim.online) tellLessons(sim, p, false);
