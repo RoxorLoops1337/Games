@@ -20,6 +20,7 @@ export const SFX_NAMES = ['swordHit', 'swordHitCrit', 'shieldBlock', 'metalClang
 export const MUSIC_MODES = ['ludus', 'prep', 'arena', 'victory', 'defeat', 'title', 'results', 'season', 'elegy', 'beast', 'boss'];
 
 const MUSIC_TRIM = 0.4;       // music bus trim; music sits about 6 dB under the combat sfx at equal slider positions
+const SFX_GAIN = 1.4;         // sfx, crowd and their reverb sends sit about 3 dB hotter than the slider value so fights read 4 to 8 dB above the music bed (limiter keeps peaks under -3 dBFS)
 const MAKEUP = 1.0;           // loudness calibration before the glue compressor (tools/ludus3d_audio_check.mjs prints the fight LUFS)
 const NOTE = (midi) => 440 * Math.pow(2, (midi - 69) / 12);
 const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
@@ -95,10 +96,10 @@ export function createAudio(opts = {}) {
       musicBus.connect(musicDuck); musicDuck.connect(master);
       // gentle stereo width for music: two quiet, panned, slightly delayed copies (Haas) keep mono compatibility
       for (const [dly, pn] of [[0.019, -0.75], [0.027, 0.75]]) { const d = ctx.createDelay(0.1); d.delayTime.value = dly; const g = G(0.17); musicDuck.connect(d); d.connect(g); if (ctx.createStereoPanner) { const p = ctx.createStereoPanner(); p.pan.value = pn; g.connect(p); p.connect(master); } else g.connect(master); }
-      sfxBus = ctx.createGain(); sfxBus.gain.value = vol.sfx; sfxBus.connect(master);
-      crowdBus = ctx.createGain(); crowdBus.gain.value = vol.sfx; crowdBus.connect(master);
+      sfxBus = ctx.createGain(); sfxBus.gain.value = vol.sfx * SFX_GAIN; sfxBus.connect(master);
+      crowdBus = ctx.createGain(); crowdBus.gain.value = vol.sfx * SFX_GAIN; crowdBus.connect(master);
       // two spaces: stone hall (arena) and open air with building slap (hub). Scenes crossfade between them.
-      revIn = G(1); revSendG = revIn; sfxRev = G(vol.sfx); sfxRev.connect(revIn);   // sfx reverb sends follow the sfx slider (a 0 slider must be silent, tails included)
+      revIn = G(1); revSendG = revIn; sfxRev = G(vol.sfx * SFX_GAIN); sfxRev.connect(revIn);   // sfx reverb sends follow the sfx slider (a 0 slider must be silent, tails included)
       hallConv = ctx.createConvolver(); hallConv.buffer = makeIR(2.3, 'hall'); hallG = G(0.8); revIn.connect(hallConv); hallConv.connect(hallG); hallG.connect(master);
       openConv = ctx.createConvolver(); openConv.buffer = makeIR(1.1, 'open'); openG = G(0); revIn.connect(openConv); openConv.connect(openG); openG.connect(master);
       revMusic = G(vol.music * MUSIC_TRIM); revMusic.connect(revIn);   // music reverb: stems send into it, so it follows the music slider
@@ -1237,7 +1238,7 @@ export function createAudio(opts = {}) {
     },
     setMaster(v) { vol.master = clamp(v, 0, 1); if (ready) master.gain.setTargetAtTime(vol.master, NOW(), 0.02); },
     setMusic(v) { vol.music = clamp(v, 0, 1); if (ready) { musicBus.gain.setTargetAtTime(vol.music * MUSIC_TRIM, NOW(), 0.02); revMusic.gain.setTargetAtTime(vol.music * MUSIC_TRIM, NOW(), 0.02); } },
-    setSfx(v) { vol.sfx = clamp(v, 0, 1); if (ready) { sfxBus.gain.setTargetAtTime(vol.sfx, NOW(), 0.02); crowdBus.gain.setTargetAtTime(vol.sfx, NOW(), 0.02); sfxRev.gain.setTargetAtTime(vol.sfx, NOW(), 0.02); } },
+    setSfx(v) { vol.sfx = clamp(v, 0, 1); if (ready) { sfxBus.gain.setTargetAtTime(vol.sfx * SFX_GAIN, NOW(), 0.02); crowdBus.gain.setTargetAtTime(vol.sfx * SFX_GAIN, NOW(), 0.02); sfxRev.gain.setTargetAtTime(vol.sfx * SFX_GAIN, NOW(), 0.02); } },
     // reverb scene: 'arena' stone hall, 'hub' open air with building slap, 'indoor'. music.setMode picks one automatically; call this to override (lock it with {lock:true}, release with setScene(null)).
     setScene(name, o = {}) { if (!name) { sceneLock = false; return scene; } sceneLock = !!o.lock; applyScene(name, o.fade == null ? 0.8 : o.fade); return scene; },
     get scene() { return scene; },

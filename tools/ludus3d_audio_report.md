@@ -22,37 +22,36 @@ None.
 
 | render | peak dB | LUFS int. | 1s-RMS sd dB | centroid | <300 / 300-2.5k / >2.5k % | stereo side dB | gap s | bar click | before LUFS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| ludus | -5.2 | -19.5 | 1.1 | 366 | 62 / 38 / 0 | -12.4 | 0 | 2.3 | -28.1 |
-| prep | -5.0 | -18.9 | 2.1 | 328 | 72 / 28 / 0 | -12.1 | 0 | 2.2 | -24.9 |
-| arena@0 | -6.2 | -22.5 | 1.5 | 348 | 66 / 34 / 0 | -11.4 | 0 | 1.9 | -29.3 |
-| arena@0.5 | -5.8 | -20.0 | 1.2 | 392 | 58 / 42 / 0 | -13.0 | 0 | 1.9 | -22.7 |
-| arena@1 | -4.1 | -18.3 | 1.0 | 423 | 57 / 43 / 0 | -13.4 | 0 | 3.1 | -19.4 |
-| victory | -5.7 | -19.2 | 1.9 | 1057 | 7 / 87 / 7 | -12.2 | 0 | 2.4 | -22.7 |
-| defeat | -6.5 | -20.1 | 1.9 | 371 | 64 / 35 / 0 | -11.8 | 0 | 1.9 | -26.4 |
-| title | -6.6 | -19.1 | 4.4 | 497 | 71 / 25 / 4 | -12.3 | 0 | 2.1 |  |
-| results | -8.3 | -19.5 | 0.8 | 661 | 28 / 70 / 3 | -12.5 | 0 | 2.2 |  |
-| season | -6.6 | -19.1 | 2.0 | 955 | 8 / 86 / 6 | -12.0 | 0 | 2.7 |  |
-| elegy | -5.3 | -20.9 | 2.2 | 415 | 49 / 50 / 0 | -12.7 | 0 | 3.8 |  |
-| beast@0 | -5.8 | -22.1 | 2.0 | 312 | 62 / 38 / 0 | -10.7 | 0 | 1.7 |  |
-| beast@0.5 | -6.1 | -19.1 | 1.2 | 500 | 40 / 60 / 0 | -11.3 | 0 | 1.8 |  |
-| beast@1 | -4.9 | -18.0 | 0.9 | 443 | 55 / 45 / 0 | -12.3 | 0 | 2.3 |  |
-| boss@0 | -5.4 | -22.6 | 1.4 | 380 | 54 / 46 / 0 | -11.3 | 0 | 1.4 |  |
-| boss@0.5 | -5.8 | -20.4 | 1.5 | 471 | 51 / 49 / 0 | -12.3 | 0 | 2.3 |  |
-| boss@1 | -4.6 | -18.3 | 1.0 | 280 | 73 / 27 / 0 | -12.5 | 0 | 2.7 |  |
-| ludus@night | -4.9 | -16.7 | 1.9 | 524 | 53 / 44 / 3 | -13.8 | 0 | 1.8 | -25.9 |
-| ludus@dawn | -6.2 | -19.5 | 1.1 | 366 | 62 / 38 / 0 | -12.4 | 0 | 2.3 | -28.0 |
-| arena@ramp | -4.0 | -19.2 | 3.0 | 348 | 66 / 34 / 0 | -12.7 | 0 | 2.7 | -21.1 |
-| xfade ludus>arena | -6.2 | -20.0 | 0.7 | 363 | 61 / 39 / 0 | -12.7 | 0 | 3.7 | -22.8 |
-| xfade arena>victory | -5.0 | -18.3 | 2.3 | 588 | 45 / 54 / 2 | -12.8 | 0 | 2.2 | -22.8 |
+
+## Fight mix (30 s, arena music + crowd bed + scripted sfx), loudness target about -16 LUFS
+
+| scenario | LUFS int. | momentary max | peak dB | clip | music only LUFS | sfx+crowd only LUFS | sfx over music dB | before LUFS / peak |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| fight calm | -15.0 | -11.3 | -3.1 | 0 | -18.4 | -16.6 | 1.8 | -18.0 / -1.2 |
+| fight busy | -14.6 | -10.7 | -3.1 | 0 | -18.4 | -15.8 | 2.6 | -17.0 / -0.9 |
+| beast hunt | -14.6 | -12.3 | -3.1 | 0 | -17.8 | -16.1 | 1.7 | -19.5 / -1.2 |
+
+## 60 s simulated fight burst (CPU / leak)
+
+| metric | now | before |
+| --- | --- | --- |
+| events scheduled | 413 | 413 |
+| sources created | 5216 | 4311 |
+| nodes created (all types) | 14185 | 13258 |
+| sources alive, max | 101 | 103 |
+| sources alive, mean of first / last third | 75.8 / 58.5 | 54.6 / 53.5 |
+| sources never stopped (leak) | 31 | 27 |
+| peak dB / LUFS | -2.9 / -15.0 | -0.9 / -15.6 |
+
+Engine stats at end: `{"strips":11,"free":2,"reused":429,"voices":9,"players":1,"scene":"arena","bed":true,"errors":0,"lastError":""}`
+
+Alive sources per second: 43 45 56 30 53 58 62 56 84 77 84 91 91 75 76 86 98 75 69 54 79 60 69 77 95 101 93 88 101 87 84 94 57 71 50 63 56 46 60 55 49 50 44 58 73 73 61 57 48 49 42 56 61 88 73 49 60 64 52 63
 
 ## Volume controls (RMS dB after the master chain at slider 1 / 0.5 / 0; 0 must be silence)
 
-- setMaster: -20.7 / -24.9 / -180.0
-- setMusic: -18.0 / -23.1 / -180.0
-- setSfx: -20.7 / -24.9 / -180.0
 
 ## Autoplay / unlock contract (live AudioContext in headless Chromium)
 
-`{"sfxBeforeUnlock":true,"stateBefore":"running","unlock":true,"stateAfter":"running","suspended":"suspended","resumed":"running"}`
+`undefined`
 
-Graph build (first unlock) main-thread cost: 231.5 ms.
+Graph build (first unlock) main-thread cost: undefined ms.
