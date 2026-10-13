@@ -3,7 +3,7 @@
 // skinned body (rig.add), so a fully dressed gladiator costs 9 to 13 draw calls. Only cloth (flaps, plume, cloak, net) is separate.
 // Weapon convention: authored along +Y with the grip at the origin; the hand sockets map +Y onto the forearm axis.
 import * as THREE from 'three';
-import { lathe, capsule, boxG, sphereG, cylG, coneG, torusG, quadG, xf, paint, ribbon, tabRing, extrude, sm01, addCloak, addPlume, ClothGrid, shadePatch, clamp, lerp } from './rig.js';
+import { lathe, capsule, boxG, sphereG, cylG, coneG, torusG, quadG, xf, paint, ribbon, tabRing, extrude, sm01, addCloak, addPlume, ClothGrid, mergeCloths, shadePatch, clamp, lerp } from './rig.js';
 
 const V3 = THREE.Vector3;
 const sq = (v) => v * v;
@@ -275,7 +275,10 @@ function loinFlap(rig, anchor, o = {}) {
       }
     },
   });
-  return rig.addSecondary(g);
+  rig.addSecondary(g);
+  // PERF: front + back flaps share the cloth material: one mesh (one draw call, one shadow draw) instead of two
+  const fl = rig._flaps || (rig._flaps = []); if (!fl.length || fl[0].mesh.material === g.mesh.material) { fl.push(g); if (fl.length > 1) mergeCloths(rig, fl); }
+  return g;
 }
 function pteruges(rig, obj, n, r, y, len, w, mat = 'leather', o = {}) { rig.add(mat, tabRing(n, r, y, len, w, Object.assign({ sz: 0.82, flare: 0.045 }, o)), obj); }
 function ring(rig, obj, r0, r1, y0, y1, seg = 12, sz = 0.76, mat = 'leather', k = 1) { rig.add(mat, paint(lathe([[r0, y0], [r1, y1]], seg, 1, sz, 0, 1), k), obj); }

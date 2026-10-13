@@ -13,14 +13,14 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { createLudus } from './env_ludus.js';
 import { createSky, createLightRig, applyTOD, TOD, lerpTOD, todFromHour } from './sky.js';
 import { TIERS } from './post.js';
-import { createFlames, prepGeo, patchMaterial } from './envfx.js';
+import { createFlames, createBlobShadows, prepGeo, patchMaterial } from './envfx.js';
 import { makeSandTexture, tfbm } from './envtex.js';
 import { Kit, buildParts, getLib, buildingUniforms, MATS, PALETTE as C, MAXPLOT, BUILDING_IDS } from './buildings.js';
 import { createGladiator } from './gladiator.js';
 import { JOINTS } from './rig.js';
 
 const V3 = THREE.Vector3;
-const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+const clamp = (x, a = 0, b = 1) => (x < a ? a : x > b ? b : x);
 const lerp = (a, b, t) => a + (b - a) * t;
 const ease = (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
 const TAU = Math.PI * 2;
@@ -431,10 +431,10 @@ export function createHub({ renderer, camera, audio, tier = 'high', post = null 
     const sm = buildFx.smoke, np = tier === 'low' ? 10 : 18, r = rngOf(3);
     { const pos = new Float32Array(sm.length * np * 3), seed = new Float32Array(sm.length * np * 4), org = new Float32Array(sm.length * np * 4);
       sm.forEach((e, i) => { for (let j = 0; j < np; j++) { const q = i * np + j; pos[q * 3] = e.x + (r() - 0.5) * 0.15; pos[q * 3 + 1] = e.y; pos[q * 3 + 2] = e.z + (r() - 0.5) * 0.15; seed[q * 4] = j / np + r() * 0.03; seed[q * 4 + 1] = r(); seed[q * 4 + 2] = r(); seed[q * 4 + 3] = e.tint || 0; org[q * 4] = 0; org[q * 4 + 1] = 0; org[q * 4 + 2] = e.r || 0.3; org[q * 4 + 3] = e.rate || 1; } });
-      const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.setAttribute('aSeed', new THREE.BufferAttribute(seed, 4)); g.setAttribute('aOrg', new THREE.BufferAttribute(org, 4)); smoke.geometry.dispose(); smoke.geometry = g; }
+      const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.setAttribute('aSeed', new THREE.BufferAttribute(seed, 4)); g.setAttribute('aOrg', new THREE.BufferAttribute(org, 4)); smoke.geometry.dispose(); smoke.geometry = g; smoke.visible = sm.length > 0; }   // PERF: an empty Points is still a draw call
     { const sp = buildFx.sparks, per = 10, pos = new Float32Array(sp.length * per * 3), seed = new Float32Array(sp.length * per * 4);
       sp.forEach((e, i) => { for (let j = 0; j < per; j++) { const q = i * per + j; pos[q * 3] = e.x; pos[q * 3 + 1] = e.y; pos[q * 3 + 2] = e.z; for (let a = 0; a < 4; a++) seed[q * 4 + a] = r(); seed[q * 4] = j / per + r() * 0.05; } });
-      const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.setAttribute('aSeed', new THREE.BufferAttribute(seed, 4)); sparks.geometry.dispose(); sparks.geometry = g; }
+      const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.setAttribute('aSeed', new THREE.BufferAttribute(seed, 4)); sparks.geometry.dispose(); sparks.geometry = g; sparks.visible = sp.length > 0; }
   }
   // ---- synergy links
   const hlTarget = new Float32Array(MAXPLOT), hlCur = new Float32Array(MAXPLOT);
@@ -471,9 +471,15 @@ export function createHub({ renderer, camera, audio, tier = 'high', post = null 
 
   // ---------------------------------------------------------------------------------------- gladiators (ambient life)
   const actors = new Map();   // id -> actor
+  // PERF (low tier): the gladiators stop casting real shadows (one skinned draw each in the shadow pass) and get a soft blob each, appended to the env's blob-shadow
+  // instanced mesh (the same draw call that already holds the tree blobs)
+  let gBlob = null, gBase = 0;
+  { const eb = env.group.getObjectByName('blobshadows');
+    if (eb) { gBase = eb.count; gBlob = new THREE.InstancedMesh(eb.geometry, eb.material, gBase + 12); const mm = new THREE.Matrix4(); for (let i = 0; i < gBase; i++) { eb.getMatrixAt(i, mm); gBlob.setMatrixAt(i, mm); } gBlob.renderOrder = eb.renderOrder; gBlob.name = 'blobshadows'; gBlob.frustumCulled = false; gBlob.count = gBase; env.group.remove(eb); env.group.add(gBlob); } }
+  const _gm = new THREE.Matrix4();
   class Actor {
     constructor(g, i) {
-      this.g = g; this.id = g.id; this.rig = bakeSkinned(createGladiator(g)); this.rig.root.name = 'glad_' + g.id; group.add(this.rig.root);
+      this.g = g; this.id = g.id; this.rig = bakeSkinned(createGladiator(g)); this.rig.root.name = 'glad_' + g.id; group.add(this.rig.root); if (this.rig.skin) this.rig.skin.castShadow = tier !== 'low';
       this.pos = new V3(); this.yaw = 0; this.goalYaw = 0; this.speed = 0; this.kind = 'idle'; this.timer = 1 + (i % 5) * 0.4; this.q = []; this.seed = hashStr(String(g.id)) % 1000; this.rnd = rngOf(this.seed + 11);
       this.home = new V3(); this.p2 = new V3(); this.dir = 1; this.partner = null; this.role = 0; this.sig = ''; this.lg = 0; this.lgT = 0; this.phase = 0; this.hits = 0;
     }
@@ -890,6 +896,7 @@ export function createHub({ renderer, camera, audio, tier = 'high', post = null 
       if (lightning > 0 || bolted) { lightning = Math.max(0, lightning - dt * 2.8); const fl = lightning * lightning * (0.6 + 0.4 * Math.sin(hubT * 60)); rig.hemi.intensity = hemiBase + 2.6 * fl; rig.sun.intensity = (tod.cur ? tod.cur.sunInt : rig.sun.intensity) + 3 * fl; bolted = lightning > 0; }
       // ambient life: update only characters near the camera
       for (const a of actors.values()) { const d = a.pos.distanceTo(camera.position); a.rig.root.visible = d < 190; if (d < 95) updateActor(a, dt, hubT); }
+      if (gBlob && tier === 'low') { let n = 0; for (const a of actors.values()) { if (!a.rig.root.visible || n >= 12) continue; const rp = a.rig.root.position; _gm.makeScale(0.66, 1, 0.66).setPosition(rp.x, rp.y + 0.04, rp.z); gBlob.setMatrixAt(gBase + n++, _gm); } gBlob.count = gBase + n; gBlob.instanceMatrix.needsUpdate = true; } else if (gBlob && gBlob.count !== gBase) gBlob.count = gBase;
     },
     resize(w, h) {
       orb.aspect = w / Math.max(1, h); camera.aspect = orb.aspect; camera.updateProjectionMatrix();
@@ -901,7 +908,7 @@ export function createHub({ renderer, camera, audio, tier = 'high', post = null 
     plotCenter, groundAt,
     setHour(h) { hourOverride = h; if (S) refreshSky(S, false); },
     setWeather(w) { weatherOverride = w; if (S) refreshSky(S, false); },
-    setTier(name) { tier = name; trimCasters(); rig.setShadowSize(T().shadow); env.setDensity(Math.max(0.5, T().crowd)); maxGlads = tier === 'low' ? 5 : tier === 'medium' ? 8 : 12; if (S) syncGlads(S); },
+    setTier(name) { tier = name; trimCasters(); rig.setShadowSize(T().shadow); env.setDensity(Math.max(0.5, T().crowd)); maxGlads = tier === 'low' ? 5 : tier === 'medium' ? 8 : 12; for (const a of actors.values()) if (a.rig.skin) a.rig.skin.castShadow = tier !== 'low'; if (S) syncGlads(S); },
     actors,
     stats() {
       let tris = 0; for (const a of actors.values()) tris += a.rig.tris || 0;

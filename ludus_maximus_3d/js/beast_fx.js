@@ -4,7 +4,7 @@
 import * as THREE from 'three';
 import { createBeast } from './beast.js';
 
-const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 /** heavier beasts shrug off shoves (fightview MASS table is extended with these) */
 export const MASS = { wolf: 1.3, lion: 1.8, bear: 3.2, boar: 2.4, nemean: 5, elephant: 9 };
 const ATK_CLIP = { bite: 'bite', claw: 'claw', pounce: 'pounce', maul: 'maul', swipe: 'swipe', swat: 'swat', gore: 'gore' };

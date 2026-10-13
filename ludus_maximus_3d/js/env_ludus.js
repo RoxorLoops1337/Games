@@ -9,14 +9,14 @@
 // Coordinates: +z is DOWNHILL toward the city (front gate), -z is the hill behind, y=0 courtyard floor.
 // Draw calls ~26. Triangles ~170k (terrain 50k, trees 60k, city 25k, rest).
 import * as THREE from 'three';
-import { mergeGeos, prepGeo, colorize, boxGeo, patchMaterial, createFlames, createDustMotes, createBlobShadows, createWater } from './envfx.js';
+import { mergeGeos, prepGeo, colorize, boxGeo, patchMaterial, bakeInstances, createFlames, createDustMotes, createBlobShadows, createWater } from './envfx.js';
 import { makeStoneTexture, makeMarbleTexture, makeGroundDetail, makeCourtyardFloor, makeSandTexture, makeRoofTexture, makeColosseumFacade, tfbm } from './envtex.js';
 
 const TAU = Math.PI * 2;
 export const COURT = { hw: 24, hd: 19 };
 const { hw: CW, hd: CD } = COURT;
 const lerp = (a, b, t) => a + (b - a) * t;
-const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+const clamp = (x, a = 0, b = 1) => (x < a ? a : x > b ? b : x);
 const sstep = (a, b, x) => { const t = clamp((x - a) / (b - a)); return t * t * (3 - 2 * t); };
 const smax = (a, b, k) => { const h = clamp(0.5 + 0.5 * (a - b) / k); return lerp(b, a, h) + k * h * (1 - h) * 0.5; };
 const lin = (hex) => { const c = new THREE.Color(hex); return [c.r, c.g, c.b]; };
@@ -351,7 +351,7 @@ export function createLudus({ density = 1, seed = 5, terrainSeg = 150, farShadow
     bayGeo.translate(0, 0, -1.6);
     const NB = 70, aq = new THREE.InstancedMesh(bayGeo, new THREE.MeshLambertMaterial({ vertexColors: true }), NB); aq.name = 'aqueduct'; aq.frustumCulled = false;
     for (let i = 0; i < NB; i++) { const x = -310 + i * 5.8, z = 185 + Math.sin(x * 0.01) * 6; const y = terrainHeight(x, z) - 0.4; q.setFromEuler(e.set(0, Math.sin(x * 0.01) * 0.06, 0)); aq.setMatrixAt(i, m.compose(new THREE.Vector3(x, y, z), q, new THREE.Vector3(1, 1 + Math.max(0, (Math.abs(x - 40) - 150) * 0.0), 1))); }
-    group.add(aq);
+    const cityParts = [...bakeInstances(aq)];   // PERF: aqueduct, temple and forum columns are one baked mesh (3 draw calls became 1)
 
     // Pantheon-like temple: drum + dome + portico
     const tp = new THREE.Group(); const tm = new THREE.MeshLambertMaterial({ vertexColors: true });
@@ -360,10 +360,11 @@ export function createLudus({ density = 1, seed = 5, terrainSeg = 150, farShadow
     const port = colorize(new THREE.BoxGeometry(22, 12, 10), (x, y) => { const c = lin(0xe3d3b0); const k = 0.65 + 0.35 * clamp((y + 6) / 12); return [c[0] * k, c[1] * k, c[2] * k]; }); port.translate(0, 6, 16);
     const ped = colorize(new THREE.CylinderGeometry(0.0, 12.5, 4, 3, 1), () => { const c = lin(0xd9c49a); return c; }); ped.rotateY(Math.PI / 2 + Math.PI); ped.scale(1, 1, 0.85); ped.rotateX(Math.PI / 2); ped.translate(0, 13.5, 21.3);
     void ped;
-    const tg = mergeGeos([drum, dome, port]); const tmesh = new THREE.Mesh(tg, tm); tmesh.position.set(-135, terrainHeight(-135, 255) - 0.5, 255); tmesh.rotation.y = 0.35; tp.add(tmesh); group.add(tp);
+    const tg = mergeGeos([drum, dome, port]); const tmesh = new THREE.Mesh(tg, tm); tmesh.position.set(-135, terrainHeight(-135, 255) - 0.5, 255); tmesh.rotation.y = 0.35; tmesh.updateMatrix(); cityParts.push(prepGeo(tg.clone()).applyMatrix4(tmesh.matrix));
     // forum columns
     const fcol = colorize(new THREE.CylinderGeometry(0.9, 1.1, 14, 8), (x, y) => { const k = 0.6 + 0.4 * clamp((y + 7) / 14); const c = lin(0xe9ddc0); return [c[0] * k, c[1] * k, c[2] * k]; }); fcol.translate(0, 7, 0);
-    const fm = new THREE.InstancedMesh(fcol, tm, 9); for (let i = 0; i < 9; i++) { const x = 90 + i * 6, z = 215; m.makeTranslation(x, terrainHeight(x, z) - 0.4, z); fm.setMatrixAt(i, m); } fm.frustumCulled = false; group.add(fm);
+    const fm = new THREE.InstancedMesh(fcol, tm, 9); for (let i = 0; i < 9; i++) { const x = 90 + i * 6, z = 215; m.makeTranslation(x, terrainHeight(x, z) - 0.4, z); fm.setMatrixAt(i, m); } fm.frustumCulled = false; cityParts.push(...bakeInstances(fm));
+
 
     // Colosseum landmark: elliptical arcade strip with ruined cut + inner bowl shadow cone
     {
@@ -387,9 +388,13 @@ export function createLudus({ density = 1, seed = 5, terrainSeg = 150, farShadow
       cm.position.set(-40, terrainHeight(-40, 330) - 1.0, 330); cm.rotation.y = 0.3; cm.name = 'colosseum'; cm.frustumCulled = false; group.add(cm);
       // inner seating cone (dark, so broken sections show a bowl)
       const cg = new THREE.CylinderGeometry(A * 0.98, A * 0.55, H * 0.7, 48, 1, true); cg.scale(1, 1, B / A); cg.translate(0, H * 0.35, 0);
-      const cc = new THREE.Mesh(cg, new THREE.MeshLambertMaterial({ color: 0x8f7658, side: THREE.BackSide })); cc.position.copy(cm.position); cc.rotation.y = cm.rotation.y; group.add(cc);
+      // PERF: the seating cone was a BackSide mesh of its own; flipped (reversed winding, negated normals) it renders identically as a FrontSide part of the baked city mesh
+      cm.updateMatrix(); const cp = prepGeo(cg); { const ix = cp.attributes.position.count; const pa = cp.attributes.position.array, na = cp.attributes.normal.array; for (let i = 0; i < ix; i += 3) { /* swap vertex 1 and 2 of every triangle */ const a = (i + 1) * 3, b = (i + 2) * 3; for (let k = 0; k < 3; k++) { let t = pa[a + k]; pa[a + k] = pa[b + k]; pa[b + k] = t; t = na[a + k]; na[a + k] = na[b + k]; na[b + k] = t; } } for (let i = 0; i < na.length; i++) na[i] = -na[i]; }
+      { const cc3 = new THREE.Color(0x8f7658), col = cp.attributes.color, n = col.count; for (let i = 0; i < n; i++) col.setXYZ(i, cc3.r, cc3.g, cc3.b); }
+      cityParts.push(cp.applyMatrix4(cm.matrix));
       cityObjs.colosseum = cm;
     }
+    { const cs = new THREE.Mesh(mergeGeos(cityParts), tm); cs.name = 'city_static'; cs.frustumCulled = false; group.add(cs); }
   }
 
   // ---------------- birds: instanced flock circling above the hillside, flap in vertex shader ----------------

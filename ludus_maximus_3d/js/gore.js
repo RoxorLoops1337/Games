@@ -151,7 +151,7 @@ export function createGore(fx, o = {}) {
     }
   }
   function land(d) {
-    const sp = Math.hypot(d.vx, d.vz), size = clamp(d.s * RR(3.4, 5.2), 0.1, 0.5), st = 1 + Math.min(1.7, sp * 0.16);
+    const sp = Math.sqrt(d.vx * d.vx + d.vz * d.vz), size = clamp(d.s * RR(3.4, 5.2), 0.1, 0.5), st = 1 + Math.min(1.7, sp * 0.16);
     stampSplat(d.x, d.z, size, Math.atan2(d.vz, d.vx), st, 0.9);
     if (!d.child && d.s > 0.07 && R() < 0.5 && dfree.length > 40) { for (let i = 0; i < 2; i++) { const a = R() * TAU, s2 = RR(1.2, 3); drop(d.x, 0.05, d.z, Math.cos(a) * s2 + d.vx * 0.2, RR(1.5, 3.2), Math.sin(a) * s2 + d.vz * 0.2, d.s * 0.5, R(), true); } }
   }
@@ -562,19 +562,23 @@ export function createGore(fx, o = {}) {
   G.dispose = () => { G.reset(); if (vigEl && vigEl.parentNode) vigEl.parentNode.removeChild(vigEl); if (gib) { scene && scene.remove(gib); gib.geometry.dispose(); gib.material.dispose(); gib = null; } };
 
   // ------------------------------------------------------------------ per frame: simulation + immediate-mode instances (called from fx.update, after the pooled step)
-  const cA = { r: 0, g: 0, b: 0 };
   fx.hooks.push((dt, norL) => {
     if (!G.on) { if (drops.length) for (const d of drops.splice(0)) dfree.push(d); return; }
     G.time += dt; splatBudget = G.tier === 'low' ? 36 : 70; covT += dt; dryT += dt; fadeT += dt;
     if (covT > 1.5) { covT = 0; measureCover(); } if (dryT > 5) { dryT = 0; dryAll(); } if (fadeT > 0.45) { fadeT = 0; if (G.time > 6) clearUnderFeet(); }
     stepJets(dt); stepPools(dt); stepProps(dt);
+    // PERF: streaks are written straight into the fx layer's typed arrays (a call with ~12 double arguments boxes every one of them: that was ~14 KB per frame)
+    const nA = norL.A, nB = norL.B, nC = norL.C, nD = norL.D, nMax = norL.max;
     for (let i = drops.length - 1; i >= 0; i--) {
       const d = drops[i]; d.age += dt; d.vy -= GRAV * dt; d.x += d.vx * dt; d.y += d.vy * dt; d.z += d.vz * dt;
-      if (d.y <= 0.03 && d.vy < 0 || d.age > d.life || Math.abs(d.x) > 30 || Math.abs(d.z) > 30) { if (d.y <= 0.05) land(d); drops[i] = drops[drops.length - 1]; drops.pop(); dfree.push(d); continue; }
-      const sp = Math.hypot(d.vx, d.vy, d.vz) || 1, len = clamp(sp * 0.05, d.s * 1.3, 0.85), k = clamp(d.k * 0.7 + d.age * 0.18, 0, 1);
-      cA.r = lerp(BRIGHT.r, DARK.r, k); cA.g = lerp(BRIGHT.g, DARK.g, k); cA.b = lerp(BRIGHT.b, DARK.b, k);
-      if (sp < 2.4) norL.put(d.x, d.y, d.z, d.s * 1.7, cA, 0.96, CELL_DISC, 0, 1.25); // hanging / dripping: round blob
-      else norL.putS(d.x, d.y, d.z, d.s * 2.6, cA, 0.96, CELL_STREAK, d.vx / sp, d.vy / sp, d.vz / sp, len * 1.15, 1.25);
+      if (d.y <= 0.03 && d.vy < 0 || d.age > d.life || d.x > 30 || d.x < -30 || d.z > 30 || d.z < -30) { if (d.y <= 0.05) land(d); drops[i] = drops[drops.length - 1]; drops.pop(); dfree.push(d); continue; }
+      if (norL.n >= nMax) continue;
+      const vx = d.vx, vy = d.vy, vz = d.vz, sp2 = vx * vx + vy * vy + vz * vz, sp = sp2 > 0 ? Math.sqrt(sp2) : 1, o4 = norL.n++ * 4;
+      let k = d.k * 0.7 + d.age * 0.18; k = k < 0 ? 0 : k > 1 ? 1 : k;
+      nC[o4] = (BRIGHT.r + (DARK.r - BRIGHT.r) * k) * 1.25; nC[o4 + 1] = (BRIGHT.g + (DARK.g - BRIGHT.g) * k) * 1.25; nC[o4 + 2] = (BRIGHT.b + (DARK.b - BRIGHT.b) * k) * 1.25; nC[o4 + 3] = 0.96;
+      nA[o4] = d.x; nA[o4 + 1] = d.y; nA[o4 + 2] = d.z; nD[o4 + 1] = 0; nD[o4 + 2] = 0; nD[o4 + 3] = 0;
+      if (sp < 2.4) { nA[o4 + 3] = d.s * 1.7; nB[o4] = 0; nB[o4 + 1] = 1; nB[o4 + 2] = 0; nB[o4 + 3] = 0; nD[o4] = CELL_DISC; }   // hanging / dripping: round blob
+      else { let len = sp * 0.05; const lo = d.s * 1.3; len = len < lo ? lo : len > 0.85 ? 0.85 : len; nA[o4 + 3] = d.s * 2.6; nB[o4] = vx / sp; nB[o4 + 1] = vy / sp; nB[o4 + 2] = vz / sp; nB[o4 + 3] = Math.max(len * 1.15, 1e-3); nD[o4] = CELL_STREAK; }
     }
     G.counts.drops = drops.length; G.counts.jets = jets.length; G.counts.props = props.length; G.counts.pools = pools.length;
   });

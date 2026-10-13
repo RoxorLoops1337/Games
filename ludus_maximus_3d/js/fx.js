@@ -236,6 +236,9 @@ const scaleC = (c, k) => ({ r: c.r * k, g: c.g * k, b: c.b * k });
 function mulberry(seed) { let a = seed >>> 0; return () => { a = (a + 0x6d2b79f5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
 
 // ---------------- particle layer (pooled sim + transient immediate writes) ----------------
+// PERF: xorshift32 for per-frame turbulence (Math.random is a builtin call that boxes its result); presentation only, not seeded
+let _xs = 2463534242;
+const fastRand = () => { _xs ^= _xs << 13; _xs ^= _xs >>> 17; _xs ^= _xs << 5; return (_xs >>> 0) / 4294967296; };
 const FLOOR = { value: 0.04 };
 const WARM = { on: false }; // shader warm-up: every pooled mesh draws one dead instance so its program compiles before the first real effect
 class Layer {
@@ -266,7 +269,7 @@ class Layer {
       if (p.age < 0) continue;
       if (p.drag) { const k = Math.exp(-p.drag * dt); p.vx *= k; p.vy *= k; p.vz *= k; }
       p.vy -= p.grav * dt;
-      if (p.turb) { p.vx += (Math.random() - 0.5) * p.turb * dt; p.vz += (Math.random() - 0.5) * p.turb * dt; p.vy += (Math.random() - 0.3) * p.turb * 0.5 * dt; }
+      if (p.turb) { p.vx += (fastRand() - 0.5) * p.turb * dt; p.vz += (fastRand() - 0.5) * p.turb * dt; p.vy += (fastRand() - 0.3) * p.turb * 0.5 * dt; }
       if (p.swirl) { const vx = p.vx, vz = p.vz; const c = Math.cos(p.swirl * dt), s = Math.sin(p.swirl * dt); p.vx = vx * c - vz * s; p.vz = vx * s + vz * c; }
       p.x += p.vx * dt; p.y += p.vy * dt; p.z += p.vz * dt;
       if (p.bounce && p.y < p.floor) { p.y = p.floor; p.vy = Math.abs(p.vy) * p.bounce; p.vx *= 0.7; p.vz *= 0.7; }
@@ -278,10 +281,10 @@ class Layer {
   write(p) {
     if (this.n >= this.max) return; const t = p.age / p.life, i = this.n++ * 4;
     const e = 1 - (1 - t) * (1 - t); const size = lerp(p.s0, p.s1, e);
-    const fadeIn = Math.min(1, t / p.att), al = p.a * fadeIn * Math.pow(1 - t, p.fp);
+    const fi0 = t / p.att, fadeIn = fi0 < 1 ? fi0 : 1, al = p.a * fadeIn * Math.pow(1 - t, p.fp);   // PERF: ternaries / sqrt instead of Math.min / hypot builtin calls (boxed results)
     const A = this.A, B = this.B, C = this.C, D = this.D;
     A[i] = p.x; A[i + 1] = p.y; A[i + 2] = p.z; A[i + 3] = size;
-    if (p.st > 0) { const sp = Math.hypot(p.vx, p.vy, p.vz) || 1; B[i] = p.vx / sp; B[i + 1] = p.vy / sp; B[i + 2] = p.vz / sp; B[i + 3] = Math.max(size * 1.2, sp * p.st); } else { B[i] = 0; B[i + 1] = 1; B[i + 2] = 0; B[i + 3] = 0; }
+    if (p.st > 0) { const sp = Math.sqrt(p.vx * p.vx + p.vy * p.vy + p.vz * p.vz) || 1, ln = size * 1.2, ln2 = sp * p.st; B[i] = p.vx / sp; B[i + 1] = p.vy / sp; B[i + 2] = p.vz / sp; B[i + 3] = ln > ln2 ? ln : ln2; } else { B[i] = 0; B[i + 1] = 1; B[i + 2] = 0; B[i + 3] = 0; }
     const c0 = p.c0, c1 = p.c1, g = p.g; C[i] = lerp(c0.r, c1.r, t) * g; C[i + 1] = lerp(c0.g, c1.g, t) * g; C[i + 2] = lerp(c0.b, c1.b, t) * g; C[i + 3] = al;
     D[i] = p.cell; D[i + 1] = p.rot; D[i + 2] = p.mirror; D[i + 3] = 0;
   }
@@ -697,6 +700,11 @@ export function createFx(scene, opts = {}) {
   // UPDATE
   // ====================================================================
   const camPos = new THREE.Vector3(0, 10, 12);
+  const SANDW = mixc(sand, WHITE, 0.55); // PERF: constants instead of per-frame colour objects
+  const _C0 = { r: 1, g: 0.78, b: 0.12 };
+  const _C1 = { r: 0.3, g: 0.65, b: 1 };
+  const _C2 = { r: 1, g: 0.32, b: 0.12 };
+  const _C3 = { r: 1, g: 0.3, b: 0.1 };
   function updateEmitters(dt) {
     for (let i = emitters.length - 1; i >= 0; i--) {
       const h = emitters[i];
@@ -706,7 +714,7 @@ export function createFx(scene, opts = {}) {
       P(h.a, _p);
       if (h.kind === 'proj') {
         const c = h.c, s = h.size, tt = fx.time; addL.put(_p.x, _p.y, _p.z, s * (1.7 + 0.2 * Math.sin(tt * 40)), c, 0.55, CELL.glow, 0, 1.6);
-        addL.put(_p.x, _p.y, _p.z, s * 0.85, mixc(c, WHITE, 0.8), 1, CELL.disc, 0, 2.2); addL.put(_p.x, _p.y, _p.z, s * 2.2, mixc(c, WHITE, 0.5), 0.8, CELL.star4, tt * 4, 1.5);
+        addL.put(_p.x, _p.y, _p.z, s * 0.85, (h.m8 || (h.m8 = mixc(c, WHITE, 0.8))), 1, CELL.disc, 0, 2.2); addL.put(_p.x, _p.y, _p.z, s * 2.2, (h.m5 || (h.m5 = mixc(c, WHITE, 0.5))), 0.8, CELL.star4, tt * 4, 1.5);
         h.acc += dt * 70; while (h.acc >= 1) { h.acc--; addL.add({ x: _p.x, y: _p.y, z: _p.z, vx: R_(-1, 1) * 1.2, vy: R_(-0.5, 1.2), vz: R_(-1, 1) * 1.2, life: R_(0.18, 0.4), s0: s * 0.3, s1: 0.02, cell: CELL.ember, c0: mixc(c, WHITE, 0.6), c1: c, g: 2, drag: 2, grav: 4, fp: 1 }); }
       } else if (h.kind === 'aura') {
         const c = h.c, st = h.style, rate = st === 'rage' ? 36 : st === 'frenzy' ? 26 : 16; const tt = h.t;
@@ -729,12 +737,12 @@ export function createFx(scene, opts = {}) {
         else if (el === 'holy') { addL.put(_p.x, _p.y + 1, _p.z, 3.0, c, 0.2 + 0.08 * Math.sin(tt * 6), CELL.glow, 0, 1.5); h.acc += dt * 18; while (h.acc >= 1) { h.acc--; const a = rnd() * TAU; addL.add({ x: _p.x + Math.cos(a) * 0.9, y: _p.y + 0.1, z: _p.z + Math.sin(a) * 0.9, vy: R_(1.5, 2.5), life: 0.9, s0: 0.16, s1: 0.03, cell: CELL.glow, c0: mixc(c, WHITE, 0.6), c1: c, g: 2.4 }); } }
       } else if (h.kind === 'status') {
         const tt = h.t, y = _p.y + h.headY;
-        if (h.st === 'stun') { const w = tt * 5.2; for (let k = 0; k < 3; k++) { const a = w + k * TAU / 3; const sx = _p.x + Math.cos(a) * 0.42, sz = _p.z + Math.sin(a) * 0.42, sy = y + Math.sin(tt * 7 + k) * 0.05; const back = Math.sin(a) < 0 ? 0.7 : 1; norL.put(sx, sy, sz, 0.38 * back, { r: 1, g: 0.78, b: 0.12 }, 1, CELL.star5, a * 0.5, 1.15); } }
-        else if (h.st === 'slow') { for (let k = 0; k < 3; k++) { const ph = (tt * 1.1 + k / 3) % 1; norL.put(_p.x + (k - 1) * 0.34, y - ph * 0.7 + 0.1, _p.z, 0.7, { r: 0.3, g: 0.65, b: 1 }, Math.sin(ph * Math.PI), CELL.chevron, Math.PI, 1.1); } h.acc += dt * 5; while (h.acc >= 1) { h.acc--; const a = rnd() * TAU; addL.add({ x: _p.x + Math.cos(a) * 0.7, y: _p.y + 0.15, z: _p.z + Math.sin(a) * 0.7, vy: R_(0.2, 0.7), life: 0.7, s0: 0.12, s1: 0.02, cell: CELL.glow, c0: { r: 0.6, g: 0.85, b: 1 }, c1: { r: 0.3, g: 0.6, b: 1 }, g: 2 }); } }
+        if (h.st === 'stun') { const w = tt * 5.2; for (let k = 0; k < 3; k++) { const a = w + k * TAU / 3; const sx = _p.x + Math.cos(a) * 0.42, sz = _p.z + Math.sin(a) * 0.42, sy = y + Math.sin(tt * 7 + k) * 0.05; const back = Math.sin(a) < 0 ? 0.7 : 1; norL.put(sx, sy, sz, 0.38 * back, _C0, 1, CELL.star5, a * 0.5, 1.15); } }
+        else if (h.st === 'slow') { for (let k = 0; k < 3; k++) { const ph = (tt * 1.1 + k / 3) % 1; norL.put(_p.x + (k - 1) * 0.34, y - ph * 0.7 + 0.1, _p.z, 0.7, _C1, Math.sin(ph * Math.PI), CELL.chevron, Math.PI, 1.1); } h.acc += dt * 5; while (h.acc >= 1) { h.acc--; const a = rnd() * TAU; addL.add({ x: _p.x + Math.cos(a) * 0.7, y: _p.y + 0.15, z: _p.z + Math.sin(a) * 0.7, vy: R_(0.2, 0.7), life: 0.7, s0: 0.12, s1: 0.02, cell: CELL.glow, c0: { r: 0.6, g: 0.85, b: 1 }, c1: { r: 0.3, g: 0.6, b: 1 }, g: 2 }); } }
         else if (h.st === 'bleed') { h.acc += dt * 9; const dc = rgb(h.o.color || '#e0283a'); while (h.acc >= 1) { h.acc--; const a = rnd() * TAU; norL.add({ x: _p.x + Math.cos(a) * 0.5, y: _p.y + R_(0.9, 1.6), z: _p.z + Math.sin(a) * 0.5, vx: Math.cos(a) * 0.3, vy: R_(0, 0.5), vz: Math.sin(a) * 0.4, life: 0.7, s0: 0.32, s1: 0.24, cell: CELL.drop, c0: dc, c1: dc, a: 1, grav: 9, fp: 0.5, att: 0.02 }); } }
-        else if (h.st === 'blind') { for (let k = 0; k < 4; k++) { const a = tt * 4 + k * TAU / 4; norL.put(_p.x + Math.cos(a) * 0.4, y - 0.15 + Math.sin(tt * 3 + k) * 0.05, _p.z + Math.sin(a) * 0.4, 0.6, mixc(sand, WHITE, 0.55), 0.9, CELL.puffA, a); } }
+        else if (h.st === 'blind') { for (let k = 0; k < 4; k++) { const a = tt * 4 + k * TAU / 4; norL.put(_p.x + Math.cos(a) * 0.4, y - 0.15 + Math.sin(tt * 3 + k) * 0.05, _p.z + Math.sin(a) * 0.4, 0.6, SANDW, 0.9, CELL.puffA, a); } }
         else if (h.st === 'root') { h.acc += dt * 6; if (h.acc > 1) { h.acc = 0; fx.dust({ x: _p.x, y: groundY, z: _p.z }, 1, { size: 0.5, alpha: 0.4 }); } }
-        else if (h.st === 'taunt') { const b = 1 + 0.15 * Math.sin(tt * 10); norL.put(_p.x, y + 0.15, _p.z, 0.95 * b, { r: 1, g: 0.32, b: 0.12 }, 1, CELL.exclaim, 0, 1.1); addL.put(_p.x, y + 0.15, _p.z, 1.2, { r: 1, g: 0.3, b: 0.1 }, 0.25, CELL.glow, 0, 1.0); }
+        else if (h.st === 'taunt') { const b = 1 + 0.15 * Math.sin(tt * 10); norL.put(_p.x, y + 0.15, _p.z, 0.95 * b, _C2, 1, CELL.exclaim, 0, 1.1); addL.put(_p.x, y + 0.15, _p.z, 1.2, _C3, 0.25, CELL.glow, 0, 1.0); }
         else if (h.st === 'burn') { h.acc += dt * 24; while (h.acc >= 1) { h.acc--; const a = rnd() * TAU; addL.add({ x: _p.x + Math.cos(a) * 0.3, y: _p.y + R_(0.2, 1.4), z: _p.z + Math.sin(a) * 0.3, vy: R_(1, 2), life: R_(0.4, 0.7), s0: 0.55, s1: 0.1, cell: CELL.glow, c0: { r: 1, g: 0.75, b: 0.3 }, c1: { r: 1, g: 0.2, b: 0.02 }, g: 2.6, turb: 2, a: 1 }); } }
       }
     }
@@ -754,13 +762,12 @@ export function createFx(scene, opts = {}) {
           s.P0 = s.P0 || new Float32Array(pts * 3); for (let i = 0; i < n; i++) { const u = i / (n - 1), env = Math.sin(Math.PI * u), j = s.jag * env * (i === 0 || i === n - 1 ? 0 : 1); const o1 = (rnd() - 0.5) * 2 * j * Math.min(1.5, len * 0.35 + 0.3), o2 = (rnd() - 0.5) * 2 * j * Math.min(1.5, len * 0.35 + 0.3); s.P0[i * 3] = _a.x + (_b.x - _a.x) * u + _s2.x * o1 + _tc.x * o2; s.P0[i * 3 + 1] = _a.y + (_b.y - _a.y) * u + _s2.y * o1 + _tc.y * o2 - s.sag * env * 1.0 * 0 + (s.sag ? -s.sag * env * len * 0.1 : 0); s.P0[i * 3 + 2] = _a.z + (_b.z - _a.z) * u + _s2.z * o1 + _tc.z * o2; } }
         for (let i = 0; i < n; i++) { s.P[i * 3] = s.P0[i * 3]; s.P[i * 3 + 1] = s.P0[i * 3 + 1]; s.P[i * 3 + 2] = s.P0[i * 3 + 2]; }
         // beam width profile
-        s.wf = (i) => s.width * (n === 2 ? 1 : 0.35 + 0.65 * Math.sin(Math.PI * i / (n - 1)));
       } else if (s.kind === 'trail') {
         s.t += dt; if (!s.stopped) { P(s.a, _a); const last = s.n ? _tc.set(s.P[0], s.P[1], s.P[2]) : null; if (!last || last.distanceTo(_a) > s.minD) { for (let i = Math.min(s.n, pts - 1); i > 0; i--) { s.P[i * 3] = s.P[(i - 1) * 3]; s.P[i * 3 + 1] = s.P[(i - 1) * 3 + 1]; s.P[i * 3 + 2] = s.P[(i - 1) * 3 + 2]; s.Q[i * 3] = s.Q[(i - 1) * 3]; s.Q[i * 3 + 1] = s.Q[(i - 1) * 3 + 1]; s.Q[i * 3 + 2] = s.Q[(i - 1) * 3 + 2]; s.T[i] = s.T[i - 1]; }
             s.P[0] = _a.x; s.P[1] = _a.y; s.P[2] = _a.z; if (s.base) { P(s.base, _b); s.Q[0] = _b.x; s.Q[1] = _b.y; s.Q[2] = _b.z; } s.T[0] = s.t; s.n = Math.min(s.n + 1, pts); } else { s.P[0] = _a.x; s.P[1] = _a.y; s.P[2] = _a.z; if (s.base) { P(s.base, _b); s.Q[0] = _b.x; s.Q[1] = _b.y; s.Q[2] = _b.z; } } }
         while (s.n > 0 && s.t - s.T[s.n - 1] > s.life) s.n--; // drop expired tail
         if (s.n === 0 && s.stopped) { s.on = false; s.dirty = true; continue; }
-        n = s.n; if (n < 2) { rib.clearSlot(s, si); continue; } s.wf = (i) => s.width * Math.pow(1 - clamp((s.t - s.T[i]) / s.life, 0, 1), 0.9);
+        n = s.n; if (n < 2) { rib.clearSlot(s, si); continue; }
       }
       if (n < 2) continue;
       const cr = s.c.r * s.g, cg = s.c.g * s.g, cb = s.c.b * s.g;
@@ -775,7 +782,7 @@ export function createFx(scene, opts = {}) {
         } else {
           _t.set(s.P[p1 * 3] - s.P[p0 * 3], s.P[p1 * 3 + 1] - s.P[p0 * 3 + 1], s.P[p1 * 3 + 2] - s.P[p0 * 3 + 2]); if (_t.lengthSq() < 1e-8) _t.set(0, 1, 0); _t.normalize();
           _s2.set(camPos.x - px, camPos.y - py, camPos.z - pz).normalize(); _s2.crossVectors(_t, _s2); if (_s2.lengthSq() < 1e-6) _s2.set(1, 0, 0); _s2.normalize();
-          const w = (i < n ? s.wf(ii) : 0) * 0.5; pos[v] = px + _s2.x * w; pos[v + 1] = py + _s2.y * w; pos[v + 2] = pz + _s2.z * w; pos[v + 3] = px - _s2.x * w; pos[v + 4] = py - _s2.y * w; pos[v + 5] = pz - _s2.z * w;
+          const w = (i < n ? (s.kind === 'trail' ? s.width * Math.pow(1 - clamp((s.t - s.T[ii]) / s.life, 0, 1), 0.9) : s.width * (n === 2 ? 1 : 0.35 + 0.65 * Math.sin(Math.PI * ii / (n - 1)))) : 0) * 0.5; pos[v] = px + _s2.x * w; pos[v + 1] = py + _s2.y * w; pos[v + 2] = pz + _s2.z * w; pos[v + 3] = px - _s2.x * w; pos[v + 4] = py - _s2.y * w; pos[v + 5] = pz - _s2.z * w;
           al = i < n ? (s.kind === 'trail' ? Math.pow(1 - clamp((s.t - s.T[ii]) / s.life, 0, 1), 1.2) * s.alpha : alphaK) : 0;
         }
         for (let k = 0; k < 2; k++) { col[c4 + k * 4] = cr; col[c4 + k * 4 + 1] = cg; col[c4 + k * 4 + 2] = cb; col[c4 + k * 4 + 3] = al; }

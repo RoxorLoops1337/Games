@@ -24,7 +24,7 @@ export const DIM = {
 };
 
 // ---------------------------------------------------------------- math helpers
-export const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+export const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);   // PERF: ternary, no Math.min/max builtin calls (boxed results)
 export const lerp = (a, b, t) => a + (b - a) * t;
 export const smooth = (a, b, v) => { const t = clamp((v - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
 const c1 = 1.70158;
@@ -318,7 +318,11 @@ export class Pose {
   add(j, x, y, z) { const i = JI[j] * 3; this.r[i] += x; this.r[i + 1] += y; this.r[i + 2] += z; return this; }
   get(j, k) { return this.r[JI[j] * 3 + k]; }
   copy(o) { this.r.set(o.r); for (let k = 0; k < 3; k++) { this.hip[k] = o.hip[k]; this.body[k] = o.body[k]; this.brot[k] = o.brot[k]; } this.ground = o.ground; this.lock = o.lock; return this; }
-  mix(a, b, t) { for (let i = 0; i < this.r.length; i++) this.r[i] = lerp(a.r[i], b.r[i], t); for (let k = 0; k < 3; k++) { this.hip[k] = lerp(a.hip[k], b.hip[k], t); this.body[k] = lerp(a.body[k], b.body[k], t); this.brot[k] = lerp(a.brot[k], b.brot[k], t); } this.ground = lerp(a.ground, b.ground, t); this.lock = lerp(a.lock, b.lock, t); return this; }
+  mix(a, b, t) {   // PERF: arithmetic inline (a lerp() call per element boxed its result whenever it was not inlined)
+    const r = this.r, ar = a.r, br = b.r; for (let i = 0, n = r.length; i < n; i++) { const x = ar[i]; r[i] = x + (br[i] - x) * t; }
+    for (let k = 0; k < 3; k++) { let x = a.hip[k]; this.hip[k] = x + (b.hip[k] - x) * t; x = a.body[k]; this.body[k] = x + (b.body[k] - x) * t; x = a.brot[k]; this.brot[k] = x + (b.brot[k] - x) * t; }
+    this.ground = a.ground + (b.ground - a.ground) * t; this.lock = a.lock + (b.lock - a.lock) * t; return this;
+  }
   apply(sparse, w = 1) { // write a sparse pose {joint:[x,y,z], hip, body, brot, ground, lock}; w scales (0..1) toward it from current
     for (const k in sparse) {
       const v = sparse[k];
@@ -349,7 +353,7 @@ export function keyClip(name, keys, o = {}, stance = null) {
     const src = k.p === 'guard' ? (stance ? stance.guard : {}) : k.p;
     prev = Object.assign({}, prev, src); full.push({ t: k.t, p: prev, e: ease[k.e || 'inOutCubic'] });
   }
-  const A = new Pose(), B = new Pose(), base = new Pose();
+  const base = new Pose();
   const clip = Object.assign({
     name, dur: keys[keys.length - 1].t, loop: false, hold: false, mask: 'full', additive: false, events: [], fadeIn: 0.07, fadeOut: 0.12,
     sample(t, P) {
@@ -357,8 +361,10 @@ export function keyClip(name, keys, o = {}, stance = null) {
       let i = 0; while (i < full.length - 2 && t > full[i + 1].t) i++;
       const a = full[i], b = full[Math.min(i + 1, full.length - 1)];
       const u = b.t > a.t ? clamp((t - a.t) / (b.t - a.t), 0, 1) : 1, k = b.e(u);
+      // PERF: keys are densified once (lazily), so sampling is one mix of two flat poses instead of two sparse applies with for-in
+      const A = a.d || (a.d = new Pose().clear().apply(a.p)), B = b.d || (b.d = new Pose().clear().apply(b.p));
       P.clear(); if (o.ground !== undefined) P.ground = o.ground;
-      A.clear().apply(a.p); B.clear().apply(b.p); P.mix(A, B, k);
+      P.mix(A, B, k);
       if (o.ground !== undefined) P.ground = o.ground;
       return P;
     },
@@ -380,6 +386,7 @@ export function attackInfo(weapon, name) { const T = ATTACK_TIMING[weapon][name]
 // Pose -> sparse object (every joint), used to author derived keys (extrapolated anticipation, rebound) from other keys
 function sparseOf(P) { const o = {}; for (const j of JOINTS) { const i = JI[j] * 3; o[j] = [P.r[i], P.r[i + 1], P.r[i + 2]]; } o.hip = P.hip.slice(); o.body = P.body.slice(); o.brot = P.brot.slice(); o.ground = P.ground; o.lock = P.lock; return o; }
 const LAG = { wristR: 0.04, wristL: 0.04, elbowR: 0.02, elbowL: 0.02, head: 0.05, neck: 0.03 }; // overlapping action: distal joints trail the clip time a little (whip / follow-through)
+const LAG_N = Object.keys(LAG), LAG_I = LAG_N.map((j) => JI[j] * 3), LAG_W = LAG_N.map((j) => LAG[j] / 0.04);   // PERF: flat arrays instead of for-in per sample
 function attackClip(weapon, name, stance, poses) {
   const T = ATTACK_TIMING[weapon][name], t1 = T.wind, t2 = t1 + T.strike, t3 = t2 + T.over, t4 = t3 + T.rec;
   // weight shift: pelvis slides toward the rear foot while coiling, onto the lead foot through the strike and follow-through (sign follows the strike yaw: mirrored clips mirror it)
@@ -400,7 +407,7 @@ function attackClip(weapon, name, stance, poses) {
   ];
   keys[3].t = Math.min(keys[3].t, t2 - 0.01);
   const c = keyClip(name, keys, { mask: 'full', events: [{ t: t1, name: 'swing' }, { t: t1 + T.strike * 0.85, name: 'hit' }], weapon }, stance);
-  const base = c.sample, P2 = new Pose(); c.sample = function (t, P) { base.call(this, t, P); base.call(this, Math.max(0, t - 0.04), P2); for (const j in LAG) { const i = JI[j] * 3, w = LAG[j] / 0.04; for (let k = 0; k < 3; k++) P.r[i + k] = lerp(P.r[i + k], P2.r[i + k], w); } return P; };
+  const base = c.sample, P2 = new Pose(); c.sample = function (t, P) { base.call(this, t, P); base.call(this, Math.max(0, t - 0.04), P2); for (let n = 0; n < LAG_I.length; n++) { const i = LAG_I[n], w = LAG_W[n]; for (let k = 0; k < 3; k++) { const x = P.r[i + k]; P.r[i + k] = x + (P2.r[i + k] - x) * w; } } return P; };
   c.info = attackInfo(weapon, name); return c;
 }
 
@@ -529,26 +536,37 @@ export const WEAPON_POSES = {
 
 // ---------------------------------------------------------------- state clips (full body, procedural)
 // Each sampler fills Pose P at time t. c = ctx {armed, alert, stance}.
+// PERF: the per-frame samplers write the flat pose array directly (offsets resolved once). Pose.set / add with three double arguments boxed every argument
+// when the call was not inlined (about 1 KB per rig per frame); the numbers are identical.
+const O = {}; for (const n of JOINTS) O[n] = JI[n] * 3;
+const O_sL = O.shoulderL, O_sR = O.shoulderR, O_eL = O.elbowL, O_eR = O.elbowR, O_hL = O.hipL, O_hR = O.hipR, O_kL = O.kneeL, O_kR = O.kneeR, O_aL = O.ankleL, O_aR = O.ankleR;
+const O_hips = O.hips, O_spine = O.spine, O_chest = O.chest, O_neck = O.neck, O_head = O.head;
 function relaxedArms(P, t, c, swing = 0) {
-  P.set('shoulderL', swing, 0, 0.09).set('shoulderR', -swing, 0, -0.09).set('elbowL', -0.18 - Math.abs(swing) * 0.3, 0, 0).set('elbowR', -0.18 - Math.abs(swing) * 0.3, 0, 0);
+  const r = P.r, e = -0.18 - Math.abs(swing) * 0.3;
+  r[O_sL] = swing; r[O_sL + 1] = 0; r[O_sL + 2] = 0.09; r[O_sR] = -swing; r[O_sR + 1] = 0; r[O_sR + 2] = -0.09;
+  r[O_eL] = e; r[O_eL + 1] = 0; r[O_eL + 2] = 0; r[O_eR] = e; r[O_eR + 1] = 0; r[O_eR + 2] = 0;
 }
+const ARM_J = ['shoulderL', 'elbowL', 'wristL', 'shoulderR', 'elbowR', 'wristR'], TORSO_J = ['hips', 'spine', 'chest', 'head', 'neck'];   // PERF: hoisted (were literal arrays per call)
 function applyArmed(P, c, amt) { // blend arms (and a touch of torso yaw) toward weapon guard
   const g = c.stance.guard; if (!amt) return;
-  for (const j of ['shoulderL', 'elbowL', 'wristL', 'shoulderR', 'elbowR', 'wristR']) if (g[j]) for (let a = 0; a < 3; a++) P.r[JI[j] * 3 + a] = lerp(P.r[JI[j] * 3 + a], g[j][a], amt);
-  for (const j of ['hips', 'spine', 'chest', 'head', 'neck']) if (g[j]) P.r[JI[j] * 3 + 1] = lerp(P.r[JI[j] * 3 + 1], g[j][1], amt * 0.8);
+  const r = P.r;   // PERF: lerp inline (boxed args/result when not inlined)
+  for (let n = 0; n < ARM_J.length; n++) { const j = ARM_J[n], gj = g[j]; if (gj) { const o = JI[j] * 3; for (let a = 0; a < 3; a++) { const x = r[o + a]; r[o + a] = x + (gj[a] - x) * amt; } } }
+  const am8 = amt * 0.8; for (let n = 0; n < TORSO_J.length; n++) { const j = TORSO_J[n], gj = g[j]; if (gj) { const o = JI[j] * 3 + 1, x = r[o]; r[o] = x + (gj[1] - x) * am8; } }
 }
 function idleSample(t, P, c) {
-  P.clear(); const al = c.alert, br = Math.sin(c.breath !== undefined ? c.breath : t * Math.PI * 2 / 3.4) * (1 + 1.4 * (c.exert || 0)), sh = Math.sin(t * Math.PI * 2 / 7.3);
+  P.clear(); const r = P.r, al = c.alert, br = Math.sin(c.breath !== undefined ? c.breath : t * Math.PI * 2 / 3.4) * (1 + 1.4 * (c.exert || 0)), sh = Math.sin(t * Math.PI * 2 / 7.3);
   P.hip[1] = -0.012 + 0.006 * br - 0.075 * al; P.hip[0] = 0.018 * sh;
-  P.set('spine', 0.02 * br + 0.04 * al, 0, 0.02 * sh).set('chest', 0.025 * br + 0.05 * al, 0.04 * Math.sin(t * 0.55), -0.02 * sh)
-    .set('neck', -0.02 * br, 0, 0).set('head', -0.015 * br - 0.04 * al, 0.06 * Math.sin(t * 0.4 + 1), 0.01 * sh);
-  relaxedArms(P, t, c, 0.02 * br); P.add('shoulderL', 0, 0, 0.012 * br).add('shoulderR', 0, 0, -0.012 * br);
+  r[O_spine] = 0.02 * br + 0.04 * al; r[O_spine + 1] = 0; r[O_spine + 2] = 0.02 * sh;
+  r[O_chest] = 0.025 * br + 0.05 * al; r[O_chest + 1] = 0.04 * Math.sin(t * 0.55); r[O_chest + 2] = -0.02 * sh;
+  r[O_neck] = -0.02 * br; r[O_neck + 1] = 0; r[O_neck + 2] = 0;
+  r[O_head] = -0.015 * br - 0.04 * al; r[O_head + 1] = 0.06 * Math.sin(t * 0.4 + 1); r[O_head + 2] = 0.01 * sh;
+  relaxedArms(P, t, c, 0.02 * br); r[O_sL + 2] += 0.012 * br; r[O_sR + 2] += -0.012 * br;
   const wl = Math.max(0, sh), wr = Math.max(0, -sh); // unweighted leg flexes a little
-  P.set('hipL', -0.03 - 0.16 * al, 0.1, 0.07 + 0.03 * wl).set('hipR', -0.02 - 0.12 * al, -0.1, -0.07 - 0.03 * wr)
-    .set('kneeL', 0.05 + 0.06 * wr + 0.35 * al, 0, 0).set('kneeR', 0.05 + 0.06 * wl + 0.3 * al, 0, 0);
+  r[O_hL] = -0.03 - 0.16 * al; r[O_hL + 1] = 0.1; r[O_hL + 2] = 0.07 + 0.03 * wl; r[O_hR] = -0.02 - 0.12 * al; r[O_hR + 1] = -0.1; r[O_hR + 2] = -0.07 - 0.03 * wr;
+  r[O_kL] = 0.05 + 0.06 * wr + 0.35 * al; r[O_kL + 1] = 0; r[O_kL + 2] = 0; r[O_kR] = 0.05 + 0.06 * wl + 0.3 * al; r[O_kR + 1] = 0; r[O_kR + 2] = 0;
   applyArmed(P, c, c.armed);
   if (al > 0.01) { // alert bounce on the balls of the feet
-    const b = Math.sin(t * Math.PI * 2 * 1.3); P.hip[1] += 0.012 * b * al; P.add('shoulderR', 0.02 * b * al, 0, 0).add('shoulderL', 0.02 * b * al, 0, 0);
+    const b = Math.sin(t * Math.PI * 2 * 1.3); P.hip[1] += 0.012 * b * al; r[O_sR] += 0.02 * b * al; r[O_sL] += 0.02 * b * al;
   }
   return P;
 }
@@ -557,24 +575,25 @@ const GAITS = {
   run: { A: 0.85, K: 1.75, kBase: 0.25, arm: 0.95, elbow: 1.35, lean: 0.27, bob: 0.085, hipYaw: 0.22, chestYaw: 0.3, lock: 0.35 },
 };
 function gaitSample(P, p, g, c, backwards = false) {
-  P.clear(); const s = Math.sin(p), co = Math.cos(p), sR = Math.sin(p + Math.PI), cR = Math.cos(p + Math.PI);
-  const sw = (ph) => 0.5 + 0.5 * Math.cos(ph + 0.6);
+  P.clear(); const r = P.r, s = Math.sin(p), co = Math.cos(p), sR = Math.sin(p + Math.PI);
   const A = g.A * (backwards ? 0.75 : 1);
-  P.set('hipL', -A * s, 0.08, 0.05).set('hipR', -A * sR, -0.08, -0.05);
-  P.set('kneeL', g.kBase + g.K * Math.pow(sw(p), 2), 0, 0).set('kneeR', g.kBase + g.K * Math.pow(sw(p + Math.PI), 2), 0, 0);
-  P.set('ankleL', -0.3 * s, 0, 0).set('ankleR', -0.3 * sR, 0, 0);
-  P.set('hips', 0.02, g.hipYaw * s, 0.04 * co).set('spine', g.lean * 0.4, -g.chestYaw * 0.5 * s, -0.03 * co)
-    .set('chest', g.lean * 0.6, -g.chestYaw * s, 0).set('neck', -g.lean * 0.3, 0, 0).set('head', -g.lean * 0.5, g.chestYaw * 0.6 * s, 0);
-  P.set('shoulderL', g.arm * s, 0, 0.09).set('shoulderR', g.arm * sR, 0, -0.09)
-    .set('elbowL', -g.elbow - 0.25 * g.arm * Math.max(0, -s), 0, 0).set('elbowR', -g.elbow - 0.25 * g.arm * Math.max(0, -sR), 0, 0);
+  r[O_hL] = -A * s; r[O_hL + 1] = 0.08; r[O_hL + 2] = 0.05; r[O_hR] = -A * sR; r[O_hR + 1] = -0.08; r[O_hR + 2] = -0.05;
+  const sw1 = 0.5 + 0.5 * Math.cos(p + 0.6), sw2 = 0.5 + 0.5 * Math.cos(p + Math.PI + 0.6);
+  r[O_kL] = g.kBase + g.K * sw1 * sw1; r[O_kL + 1] = 0; r[O_kL + 2] = 0; r[O_kR] = g.kBase + g.K * sw2 * sw2; r[O_kR + 1] = 0; r[O_kR + 2] = 0;
+  r[O_aL] = -0.3 * s; r[O_aL + 1] = 0; r[O_aL + 2] = 0; r[O_aR] = -0.3 * sR; r[O_aR + 1] = 0; r[O_aR + 2] = 0;
+  r[O_hips] = 0.02; r[O_hips + 1] = g.hipYaw * s; r[O_hips + 2] = 0.04 * co;
+  r[O_spine] = g.lean * 0.4; r[O_spine + 1] = -g.chestYaw * 0.5 * s; r[O_spine + 2] = -0.03 * co;
+  r[O_chest] = g.lean * 0.6; r[O_chest + 1] = -g.chestYaw * s; r[O_chest + 2] = 0;
+  r[O_neck] = -g.lean * 0.3; r[O_neck + 1] = 0; r[O_neck + 2] = 0; r[O_head] = -g.lean * 0.5; r[O_head + 1] = g.chestYaw * 0.6 * s; r[O_head + 2] = 0;
+  r[O_sL] = g.arm * s; r[O_sL + 1] = 0; r[O_sL + 2] = 0.09; r[O_sR] = g.arm * sR; r[O_sR + 1] = 0; r[O_sR + 2] = -0.09;
+  r[O_eL] = -g.elbow - 0.25 * g.arm * Math.max(0, -s); r[O_eL + 1] = 0; r[O_eL + 2] = 0; r[O_eR] = -g.elbow - 0.25 * g.arm * Math.max(0, -sR); r[O_eR + 1] = 0; r[O_eR + 2] = 0;
   P.hip[1] = g.bob * (0.5 - 0.5 * Math.cos(2 * p + 0.3)) - (g.bob ? 0.03 : 0); P.hip[0] = 0.015 * s; P.lock = g.lock; return P;
 }
 function strafeSample(P, p, sx, c) { // sx: +1 moving to character left
-  P.clear(); const s = Math.sin(p), sR = Math.sin(p + Math.PI);
-  const lift = (ph) => Math.max(0, Math.cos(ph));
-  P.set('hipL', -0.08, 0, 0.1 + sx * 0.38 * s).set('hipR', -0.08, 0, -0.1 + sx * 0.38 * sR);
-  P.set('kneeL', 0.2 + 0.7 * lift(p), 0, 0).set('kneeR', 0.2 + 0.7 * lift(p + Math.PI), 0, 0);
-  P.set('hips', 0.02, 0, -0.05 * sx * s).set('chest', 0.1, 0, 0.03 * sx * s).set('head', -0.04, 0, 0);
+  P.clear(); const r = P.r, s = Math.sin(p), sR = Math.sin(p + Math.PI);
+  r[O_hL] = -0.08; r[O_hL + 1] = 0; r[O_hL + 2] = 0.1 + sx * 0.38 * s; r[O_hR] = -0.08; r[O_hR + 1] = 0; r[O_hR + 2] = -0.1 + sx * 0.38 * sR;
+  r[O_kL] = 0.2 + 0.7 * Math.max(0, Math.cos(p)); r[O_kL + 1] = 0; r[O_kL + 2] = 0; r[O_kR] = 0.2 + 0.7 * Math.max(0, Math.cos(p + Math.PI)); r[O_kR + 1] = 0; r[O_kR + 2] = 0;
+  r[O_hips] = 0.02; r[O_hips + 1] = 0; r[O_hips + 2] = -0.05 * sx * s; r[O_chest] = 0.1; r[O_chest + 1] = 0; r[O_chest + 2] = 0.03 * sx * s; r[O_head] = -0.04; r[O_head + 1] = 0; r[O_head + 2] = 0;
   relaxedArms(P, p, c, 0); P.hip[1] = -0.05; P.lock = 1; return P;
 }
 
@@ -838,6 +857,10 @@ const _t = new V3(), _p = new V3(), _u = new V3(), _pp = new V3(), _du = new V3(
 const _m = new THREE.Matrix4(), _q = new Q(), _q2 = new Q();
 // Solve upper->mid->end so end reaches targetWorld. bendSign: +1 knee (flexes with +x), -1 elbow. poleWorld picks the bend side.
 // w blends from the current (FK) rotation to the IK solution. Pivots must have no rest rotation. Returns reach distance error.
+// PERF: quiet quaternion writes for joints (three's change callback re-derives the Euler angles nobody reads, and boxes doubles on the way)
+const NOOP = () => {};
+const qCopy = (d, q) => { d._x = q._x; d._y = q._y; d._z = q._z; d._w = q._w; };
+function qSlerp(d, q, t) { const cb = d._onChangeCallback; d._onChangeCallback = NOOP; d.slerp(q, t); d._onChangeCallback = cb; }
 export function solveTwoBone(upper, mid, end, targetWorld, poleWorld, bendSign = 1, w = 1, endOffset = 0) {
   const parent = upper.parent; _m.copy(parent.matrixWorld).invert();
   _t.copy(targetWorld).applyMatrix4(_m).sub(upper.position); _p.copy(poleWorld).applyMatrix4(_m).sub(upper.position);
@@ -853,7 +876,7 @@ export function solveTwoBone(upper, mid, end, targetWorld, poleWorld, bendSign =
   _y.copy(_du).multiplyScalar(-1); _x.copy(_hx).addScaledVector(_y, -_hx.dot(_y)).normalize(); _z.crossVectors(_x, _y);
   _m.makeBasis(_x, _y, _z); _q.setFromRotationMatrix(_m);
   _q2.setFromAxisAngle(_hx.set(1, 0, 0), bendSign * ang);
-  if (w >= 1) { upper.quaternion.copy(_q); mid.quaternion.copy(_q2); } else { upper.quaternion.slerp(_q, w); mid.quaternion.slerp(_q2, w); }
+  if (w >= 1) { qCopy(upper.quaternion, _q); qCopy(mid.quaternion, _q2); } else { qSlerp(upper.quaternion, _q, w); qSlerp(mid.quaternion, _q2, w); }
   return Math.max(0, d - (L1 + L2));
 }
 
@@ -876,11 +899,12 @@ class VerletGrid {
     this.shape = o.shape; this.widthFn = o.widthFn || (() => 0); this.side = o.side || new V3(1, 0, 0); this.acc = 0; this.parent = o.parent;
     this.p = []; this.pp = []; this.rest = []; this.inited = false;
     for (let r = 0; r < this.rows; r++) for (let c = 0; c < this.cols; c++) {
-      const ctr = this.shape(r), off = this.cols > 1 ? (c / (this.cols - 1) - 0.5) * this.widthFn(r) : 0;
+      const ctr = this.shape(r), off = this.cols > 1 ? (c / (this.cols - 1) - 0.5) * this.widthFn(r) : 0;   // widthFn is a pure function of the row: wRow caches it (hot in step)
       this.rest.push(ctr.clone().addScaledVector(this.side, off)); this.p.push(new V3()); this.pp.push(new V3());
     }
   }
   idx(r, c) { return r * this.cols + c; }
+  rowWs() { return this.wRow || (this.wRow = Float64Array.from({ length: this.rows }, (_, i) => this.widthFn(i))); }
   reset() { for (let i = 0; i < this.p.length; i++) { this.p[i].copy(this.rest[i]).applyMatrix4(this.anchor.matrixWorld); this.pp[i].copy(this.p[i]); } this.inited = true; }
   update(dt) {
     if (!this.inited) this.reset(); this.acc += Math.min(dt, 0.05); const h = 1 / 60;
@@ -888,23 +912,23 @@ class VerletGrid {
     this.write();
   }
   step(h) {
-    const R = this.rows, C = this.cols;
-    for (let c = 0; c < C; c++) { const i = this.idx(0, c); this.pp[i].copy(this.p[i]); this.p[i].copy(this.rest[i]).applyMatrix4(this.anchor.matrixWorld); }
+    const R = this.rows, C = this.cols, Pp = this.p, Rest = this.rest, aw = this.anchor.matrixWorld, WR = this.rowWs();
+    for (let c = 0; c < C; c++) { const i = c; this.pp[i].copy(Pp[i]); Pp[i].copy(Rest[i]).applyMatrix4(aw); }
     for (let r = 1; r < R; r++) {
       const ks = this.stiff * (1 - this.stiffFall * (r / (R - 1))) + 0.0;
       for (let c = 0; c < C; c++) {
-        const i = this.idx(r, c), p = this.p[i], pp = this.pp[i];
+        const i = r * C + c, p = Pp[i], pp = this.pp[i];
         _w.copy(p).sub(pp).multiplyScalar(this.damping); pp.copy(p); p.add(_w); p.y += this.gravity * h * h; p.addScaledVector(this.wind, h * h);
-        _w2.copy(this.rest[i]).applyMatrix4(this.anchor.matrixWorld); p.lerp(_w2, ks);
+        _w2.copy(Rest[i]).applyMatrix4(aw); p.lerp(_w2, ks);
       }
     }
     for (let it = 0; it < 3; it++) {
       for (let r = 1; r < R; r++) for (let c = 0; c < C; c++) {
-        const A = this.p[this.idx(r - 1, c)], B = this.p[this.idx(r, c)]; _w.copy(B).sub(A); const l = _w.length() || 1e-6, k = (l - this.rowLen) / l;
+        const A = Pp[(r - 1) * C + c], B = Pp[r * C + c]; _w.copy(B).sub(A); const l = _w.length() || 1e-6, k = (l - this.rowLen) / l;
         if (r === 1) B.addScaledVector(_w, -k); else { A.addScaledVector(_w, k * 0.5); B.addScaledVector(_w, -k * 0.5); }
       }
       if (C > 1) for (let r = 1; r < R; r++) for (let c = 0; c < C - 1; c++) {
-        const A = this.p[this.idx(r, c)], B = this.p[this.idx(r, c + 1)], want = this.widthFn(r) / (C - 1); _w.copy(B).sub(A); const l = _w.length() || 1e-6, k = (l - want) / l * 0.25;
+        const A = Pp[r * C + c], B = Pp[r * C + c + 1], want = WR[r] / (C - 1); _w.copy(B).sub(A); const l = _w.length() || 1e-6, k = (l - want) / l * 0.25;
         A.addScaledVector(_w, k); B.addScaledVector(_w, -k);
       }
       if (this.collide) for (let i = this.cols; i < this.p.length; i++) this.collide(this.p[i]);
@@ -927,8 +951,43 @@ export class ClothGrid extends VerletGrid {
   write() {
     const par = this.mesh.parent; if (!par) return; _inv.copy(par.matrixWorld).invert(); const a = this.geo.attributes.position;
     for (let i = 0; i < this.p.length; i++) { _w.copy(this.p[i]).applyMatrix4(_inv); a.setXYZ(i, _w.x, _w.y, _w.z); }
-    a.needsUpdate = true; this.geo.computeVertexNormals();
+    a.needsUpdate = true; this.gridNormals(); if (this.hostAttrs) { this.hostAttrs[0].needsUpdate = true; this.hostAttrs[1].needsUpdate = true; }
   }
+  /** PERF: BufferGeometry.computeVertexNormals allocates six Vector3 per call (about 480 B x 3 cloths x 6 rigs per frame); same area weighted result, scratch free */
+  gridNormals() {
+    const g = this.geo, pos = g.attributes.position.array, idx = g.index.array; let na = g.attributes.normal;
+    if (!na) { na = new THREE.BufferAttribute(new Float32Array(pos.length), 3); na.setUsage(THREE.DynamicDrawUsage); g.setAttribute('normal', na); }
+    const nr = na.array; nr.fill(0);
+    for (let t = 0; t < idx.length; t += 3) {
+      const ia = idx[t] * 3, ib = idx[t + 1] * 3, ic = idx[t + 2] * 3;
+      const cx = pos[ic] - pos[ib], cy = pos[ic + 1] - pos[ib + 1], cz = pos[ic + 2] - pos[ib + 2], ax = pos[ia] - pos[ib], ay = pos[ia + 1] - pos[ib + 1], az = pos[ia + 2] - pos[ib + 2];
+      const nx = cy * az - cz * ay, ny = cz * ax - cx * az, nz = cx * ay - cy * ax;
+      nr[ia] += nx; nr[ia + 1] += ny; nr[ia + 2] += nz; nr[ib] += nx; nr[ib + 1] += ny; nr[ib + 2] += nz; nr[ic] += nx; nr[ic + 1] += ny; nr[ic + 2] += nz;
+    }
+    for (let i = 0; i < nr.length; i += 3) { const l = Math.sqrt(nr[i] * nr[i] + nr[i + 1] * nr[i + 1] + nr[i + 2] * nr[i + 2]) || 1; nr[i] /= l; nr[i + 1] /= l; nr[i + 2] /= l; }
+    na.needsUpdate = true;
+  }
+}
+/** PERF: draw several ClothGrids that share one material (the front and back loin flaps) as ONE mesh. Each grid keeps its own geometry object (the hub bake and
+ *  detachPart read it) but its position / normal arrays become views into one shared buffer, so write() lands directly in the merged mesh. Calling it again with a
+ *  longer list re-merges. Returns the shared mesh (named after the first grid). */
+export function mergeCloths(rig, list) {
+  const first = list[0]; let nv = 0; for (const g of list) nv += g.p.length;
+  const pos = new Float32Array(nv * 3), nor = new Float32Array(nv * 3), col = new Float32Array(nv * 3), uv = new Float32Array(nv * 2); let ni = 0; for (const g of list) ni += g.geo.index.count;
+  const idx = new Uint16Array(ni); let vo = 0, io = 0;
+  const hostPos = new THREE.BufferAttribute(pos, 3).setUsage(THREE.DynamicDrawUsage), hostNor = new THREE.BufferAttribute(nor, 3).setUsage(THREE.DynamicDrawUsage);
+  for (const g of list) {
+    const n = g.p.length, at = g.geo.attributes, ia = g.geo.index.array;
+    col.set(at.color.array, vo * 3); uv.set(at.uv.array, vo * 2); for (let i = 0; i < ia.length; i++) idx[io++] = ia[i] + vo;
+    const pv = pos.subarray(vo * 3, (vo + n) * 3), nv_ = nor.subarray(vo * 3, (vo + n) * 3); pv.set(at.position.array);
+    g.geo.setAttribute('position', new THREE.BufferAttribute(pv, 3).setUsage(THREE.DynamicDrawUsage)); g.geo.setAttribute('normal', new THREE.BufferAttribute(nv_, 3).setUsage(THREE.DynamicDrawUsage));
+    g.hostAttrs = [hostPos, hostNor]; vo += n;
+  }
+  const geo = new THREE.BufferGeometry(); geo.setAttribute('position', hostPos); geo.setAttribute('normal', hostNor); geo.setAttribute('color', new THREE.BufferAttribute(col, 3)); geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2)); geo.setIndex(new THREE.BufferAttribute(idx, 1));
+  const mesh = new THREE.Mesh(geo, first.mesh.material); mesh.frustumCulled = false; mesh.castShadow = true; mesh.name = first.mesh.name;
+  for (const g of list) { const old = g.mesh; if (old.parent) old.parent.remove(old); if (old !== first.mesh || g !== first) { /* standalone meshes are dropped */ } g.mesh = mesh; }
+  rig.root.add(mesh); for (const g of list) if (g.geo.attributes.normal) g.geo.attributes.normal.needsUpdate = true;
+  hostPos.needsUpdate = hostNor.needsUpdate = true; return mesh;
 }
 // Plume / tail / tassel: chain of tapered flattened capsule segments following the verlet points.
 export class ChainMesh extends VerletGrid {
@@ -1581,14 +1640,17 @@ export function buildGladiator(opts = {}) {
       rig.animator.postIK();
       root.updateMatrixWorld(true);
       for (const f of rig.postUpdate) f(rig);
-      for (const s of rig.secondary) s.update(dt);
+      // PERF LOD: a far / tiny fighter (rig.lod = 1, set by the scene) steps its cloth every other frame with the summed dt
+      if (rig.lod) { rig._sd = (rig._sd || 0) + dt; if ((rig._sk = (rig._sk | 0) + 1) % (rig.lod + 1) === 0) { const d2 = rig._sd; rig._sd = 0; for (let i = 0; i < rig.secondary.length; i++) rig.secondary[i].update(d2); } }
+      else { rig._sd = 0; for (let i = 0; i < rig.secondary.length; i++) rig.secondary[i].update(dt); }
       const sq = squash.update(dt); body.scale.set(bd.height / Math.sqrt(1 + sq), bd.height * (1 + sq), bd.height / Math.sqrt(1 + sq));
       { const tgt = rig.exertionOverride !== null ? rig.exertionOverride : rig.animator.exert; rig.sweat += (tgt - rig.sweat) * Math.min(1, dt * (tgt > rig.sweat ? 0.7 : 0.12)); bloodU.uSweat.value = rig.sweat; }
       if (blood.fresh > 0) { blood.fresh = Math.max(0, blood.fresh - dt / 9); bloodU.uBFresh.value = blood.fresh; }
       if (flashState.t > 0) { flashState.t = Math.max(0, flashState.t - dt); }
       const f = flashState.t > 0 ? flashState.t / flashState.dur : 0;
       glow.t += dt; const gi = glow.on ? glow.base + glow.amp * Math.sin(glow.t * glow.speed) : 0; mats.gem.userData.base.copy(glow.color).multiplyScalar(gi);
-      for (const k in mats) { const m = mats[k]; if (!m.userData.base) continue; m.emissive.copy(m.userData.base); if (f > 0) m.emissive.lerp(flashState.color, f); m.emissiveIntensity = 1; }
+      // PERF: emissive only needs a write while a flash / glow runs (and once after it ends); an idle rig skipped ~13 material copies per frame
+      if (f > 0 || glow.on || rig._emDirty !== false) { for (const k in mats) { const m = mats[k]; if (!m.userData.base) continue; m.emissive.copy(m.userData.base); if (f > 0) m.emissive.lerp(flashState.color, f); m.emissiveIntensity = 1; } rig._emDirty = f > 0 || glow.on; }
     },
     // ---- gore API (see js/gore.js). Rest space = the un-skinned space the geometry is authored in (root space with body scale baked).
     bloodU, blood, severed: {},
@@ -1760,14 +1822,16 @@ export function addTassel(rig, socketName, o = {}) {
 // ---------------------------------------------------------------- Animator
 class QPose { constructor() { this.q = JOINTS.map(() => new Q()); this.hip = new V3(); this.body = new V3(); this.brot = new Q(); this.ground = 1; this.lock = 1; }
   copy(o) { for (let i = 0; i < this.q.length; i++) this.q[i].copy(o.q[i]); this.hip.copy(o.hip); this.body.copy(o.body); this.brot.copy(o.brot); this.ground = o.ground; this.lock = o.lock; return this; } }
-const _e = new E();
+const _e = new E(), _fq = new Q(), _kq = new Q(), _bq = new Q();
+const ORD = JOINTS.map((n) => ORDER[n] || 'XYZ');   // PERF: per-joint euler order and flags resolved once (no string work per frame)
+const IS_HIP4 = JOINTS.map((n) => n.startsWith('hip') && n.length === 4), ADD_FH = JOINTS.map((n) => (n === 'head' || n === 'neck') ? 1 : (n.startsWith('knee') || (n.startsWith('hip') && n.length === 4)) ? 2 : 0);
 function toQ(P, out) {
-  for (let i = 0; i < JOINTS.length; i++) { _e.set(P.r[i * 3], P.r[i * 3 + 1], P.r[i * 3 + 2], ORDER[JOINTS[i]] || 'XYZ'); out.q[i].setFromEuler(_e); }
+  for (let i = 0; i < JOINTS.length; i++) { _e.set(P.r[i * 3], P.r[i * 3 + 1], P.r[i * 3 + 2], ORD[i]); out.q[i].setFromEuler(_e); }
   out.hip.fromArray(P.hip); out.body.fromArray(P.body); _e.set(P.brot[0], P.brot[1], P.brot[2], 'XYZ'); out.brot.setFromEuler(_e); out.ground = P.ground; out.lock = P.lock; return out;
 }
 function blendQ(a, b, t, mask, out) { // out = slerp(a,b,t) per joint with per-joint mask (null = full)
-  for (let i = 0; i < JOINTS.length; i++) { const w = mask ? (mask[i] ? t : 0) : t; out.q[i].copy(a.q[i]); if (w > 0) out.q[i].slerp(b.q[i], w); }
-  const wf = mask && mask.noBody ? 0 : t; out.hip.lerpVectors(a.hip, b.hip, wf); out.body.lerpVectors(a.body, b.body, wf); out.brot.copy(a.brot).slerp(b.brot, wf); out.ground = lerp(a.ground, b.ground, wf); out.lock = lerp(a.lock, b.lock, wf); return out;
+  for (let i = 0; i < JOINTS.length; i++) { const w = mask ? (mask[i] ? t : 0) : t; out.q[i].copy(a.q[i]); if (w > 0) out.q[i].slerp(b.q[i], w); }   // (slerp is three's)
+  const wf = mask && mask.noBody ? 0 : t; out.hip.lerpVectors(a.hip, b.hip, wf); out.body.lerpVectors(a.body, b.body, wf); out.brot.copy(a.brot).slerp(b.brot, wf); out.ground = a.ground + (b.ground - a.ground) * wf; out.lock = a.lock + (b.lock - a.lock) * wf; return out;
 }
 const MASKS = { full: null, upper: Object.assign(JOINTS.map((n) => UPPER_SET.has(n)), { noBody: true }) };
 
@@ -1830,12 +1894,12 @@ export class Animator {
   clipInfo(name) { const c = this.clips[name]; return c ? { dur: c.dur, loop: c.loop, hold: c.hold, ...(c.info || {}) } : null; }
   fire(n, clip) { if (this.onEvent) this.onEvent(n, clip); if (this.rig.onEvent) this.rig.onEvent(n, clip); }
 
-  ctx() { return { armed: this.armed, alert: this.alert, stance: this.stance, exert: this.exert, breath: this.breath }; }
+  ctx() { const c = this._ctx || (this._ctx = {}); c.armed = this.armed; c.alert = this.alert; c.stance = this.stance; c.exert = this.exert; c.breath = this.breath; return c; }   // PERF: one reused context object
   sampleBase(P) {
-    const c = this.ctx(), mv = this.mv, s = Math.hypot(mv.vx, mv.vz), t = this.t;
+    const c = this.ctx(), mv = this.mv, s = Math.sqrt(mv.vx * mv.vx + mv.vz * mv.vz), t = this.t;
     if (this.state !== 'move') { const clip = this.clips[this.state]; if (clip) return clip.sample(this.stateT, P); }
     if (s < 0.05 && Math.abs(this.mv.phase) < 1e9) { return idleSample(t, P, c); }
-    const walkW = smooth(0.15, 1.1, s) * (1 - smooth(2.6, 4.4, s)), runW = smooth(2.6, 4.4, s), idleW = 1 - smooth(0.15, 1.1, s);
+    const sw1 = smooth(0.15, 1.1, s), runW = smooth(2.6, 4.4, s), walkW = sw1 * (1 - runW), idleW = 1 - sw1;
     const side = Math.abs(mv.vx) / (s + 1e-4), back = mv.vz < -0.05;
     const ph = this.mv.phase;
     idleSample(t, this.PA, c);
@@ -1853,10 +1917,10 @@ export class Animator {
   update(dt) {
     if (this.hitStopT > 0) { this.hitStopT -= dt; dt *= 0.04; }
     dt *= this.timeScale; this.t += dt; this.stateT += dt;
-    { const sp = Math.hypot(this.mv.vx, this.mv.vz); this.exert = clamp(this.exert + (sp > 2.6 ? 0.03 : sp > 0.4 ? 0.006 : 0) * dt * 10 - 0.035 * dt, 0, 1); this.breath += dt * Math.PI * 2 / 3.4 * (1 + 1.6 * this.exert) * (this.dead ? 0 : 1); }
+    { const sp = Math.sqrt(this.mv.vx * this.mv.vx + this.mv.vz * this.mv.vz); this.exert = clamp(this.exert + (sp > 2.6 ? 0.03 : sp > 0.4 ? 0.006 : 0) * dt * 10 - 0.035 * dt, 0, 1); this.breath += dt * Math.PI * 2 / 3.4 * (1 + 1.6 * this.exert) * (this.dead ? 0 : 1); }
     this.armed += (this.armedTarget - this.armed) * Math.min(1, dt * 6); this.alert += ((this.alertTarget || this.armedTarget * 0.0) - this.alert) * Math.min(1, dt * 5);
     // advance gait phase by distance travelled: foot speed matches ground speed (no skating)
-    const s = Math.hypot(this.mv.vx, this.mv.vz), runW = smooth(2.6, 4.4, s), stride = lerp(1.55, 2.9, runW), dirSign = this.mv.vz < -0.05 && Math.abs(this.mv.vz) > Math.abs(this.mv.vx) ? -1 : 1;
+    const s = Math.sqrt(this.mv.vx * this.mv.vx + this.mv.vz * this.mv.vz), runW = smooth(2.6, 4.4, s), stride = lerp(1.55, 2.9, runW), dirSign = this.mv.vz < -0.05 && Math.abs(this.mv.vz) > Math.abs(this.mv.vx) ? -1 : 1;
     const prev = this.mv.phase; this.mv.phase += dirSign * (s / stride) * Math.PI * 2 * dt;
     if (s > 0.3) { const a = Math.floor(prev / Math.PI + 0.5), b = Math.floor(this.mv.phase / Math.PI + 0.5); if (a !== b) this.fire('step', { side: ((b % 2) + 2) % 2 ? 'L' : 'R' }); }
     // base
@@ -1885,7 +1949,7 @@ export class Animator {
         clip.sample(this.addT, this.PB);
         const amp = this.addAmp, d = this.addDir; // d>0: hit from front (recoil back); d<0 from behind (lurch forward)
         for (let i = 0; i < JOINTS.length; i++) {
-          const jn = JOINTS[i], hipJ = jn.startsWith('hip') && jn.length === 4, fh = (jn === 'head' || jn === 'neck') ? 0.6 + 0.9 * hi : (jn.startsWith('knee') || hipJ) ? 1 + (0.5 - hi) * 1.2 : 1;
+          const hipJ = IS_HIP4[i], fk = ADD_FH[i], fh = fk === 1 ? 0.6 + 0.9 * hi : fk === 2 ? 1 + (0.5 - hi) * 1.2 : 1;
           this.PB.r[i * 3] *= amp * fh * (hipJ ? 1 : d); this.PB.r[i * 3 + 1] *= amp; this.PB.r[i * 3 + 2] *= amp;
         }
         this.PB.hip[2] *= amp * d; this.PB.hip[1] *= amp;
@@ -1894,7 +1958,7 @@ export class Animator {
           for (let i = 0; i < JOINTS.length; i++) { this.PB.r[i * 3] += this.PA.r[i * 3] * f; this.PB.r[i * 3 + 1] += this.PA.r[i * 3 + 1] * f * s; this.PB.r[i * 3 + 2] += this.PA.r[i * 3 + 2] * f * s; }
           this.PB.hip[0] += this.PA.hip[0] * f * s;
         }
-        for (let i = 0; i < JOINTS.length; i++) { _e.set(this.PB.r[i * 3], this.PB.r[i * 3 + 1], this.PB.r[i * 3 + 2], ORDER[JOINTS[i]] || 'XYZ'); this.QAdd.q[i].setFromEuler(_e); }
+        for (let i = 0; i < JOINTS.length; i++) { _e.set(this.PB.r[i * 3], this.PB.r[i * 3 + 1], this.PB.r[i * 3 + 2], ORD[i]); this.QAdd.q[i].setFromEuler(_e); }
         if (out !== this.QB) { this.QB.copy(out); out = this.QB; }
         for (let i = 0; i < JOINTS.length; i++) out.q[i].multiply(this.QAdd.q[i]);
         out.hip.x += this.PB.hip[0]; out.hip.y += this.PB.hip[1]; out.hip.z += this.PB.hip[2];
@@ -1902,15 +1966,16 @@ export class Animator {
     }
     this.last.copy(out); this.hasLast = true;
     // write to joints
-    const J = this.rig.joints;
-    for (let i = 0; i < JOINTS.length; i++) J[JOINTS[i]].quaternion.copy(out.q[i]);
+    const J = this.rig.joints, JL = this._jl || (this._jl = JOINTS.map((n) => J[n]));
+    // PERF: the joint quaternion is written without its change callback (which re-derives the unused joint Euler and allocated in three); matrices read the quaternion
+    for (let i = 0; i < JL.length; i++) { const jq = JL[i].quaternion, oq = out.q[i]; jq._x = oq._x; jq._y = oq._y; jq._z = oq._z; jq._w = oq._w; }
     // head look-at (additive yaw split neck/head)
     if (this.look.target && this.look.w > 0) {
       _w.copy(this.look.target); this.rig.body.worldToLocal(_w); let yaw = Math.atan2(_w.x, _w.z); yaw = clamp(yaw, -1.0, 1.0) * this.look.w;
       _q.setFromAxisAngle(_u.set(0, 1, 0), yaw * 0.4); J.neck.quaternion.premultiply(_q); _q.setFromAxisAngle(_u.set(0, 1, 0), yaw * 0.5); J.head.quaternion.premultiply(_q);
     }
     J.hips.position.set(this.restPos.x + out.hip.x, this.restPos.y + out.hip.y, this.restPos.z + out.hip.z);
-    this.rig.body.position.copy(out.body); this.rig.body.quaternion.copy(out.brot);
+    this.rig.body.position.copy(out.body); qCopy(this.rig.body.quaternion, out.brot);
     this.finalGround = out.ground; this.finalLock = out.lock;
     this.groundSmooth = this.groundSmooth ?? 0;
     this._dt = dt;
@@ -1937,19 +2002,19 @@ export class Animator {
     if (this.finalGround < 0.5) { this.groundFix = 0; return; }
     // lowest ankle in body space
     let minY = 1e9; const bi = _inv.copy(body.matrixWorld).invert(); const sc = rig.build.height;
-    const feet = ['L', 'R'];
-    for (const s of feet) { _w.setFromMatrixPosition(J['ankle' + s].matrixWorld).applyMatrix4(bi); minY = Math.min(minY, _w.y / sc); }
+    const fj = this._fj || (this._fj = [{ s: 'L', ankle: J.ankleL, knee: J.kneeL, hip: J.hipL }, { s: 'R', ankle: J.ankleR, knee: J.kneeR, hip: J.hipR }]);   // PERF: cached joint lookups, no string concat / array literals per frame
+    for (let n = 0; n < 2; n++) { _w.setFromMatrixPosition(fj[n].ankle.matrixWorld).applyMatrix4(bi); const yy = _w.y / sc; if (yy < minY) minY = yy; }
     const want = (DIM.footH - minY) * this.finalLock; const k = Math.min(1, (this._dt || 0.016) * 22);
     this.groundFix += (clamp(want, -0.18, 0.12) - this.groundFix) * k;
     J.hips.position.y += this.groundFix; J.hips.updateMatrixWorld(true);
-    const flatQ = new Q(), kq = new Q(), bq = new Q();
-    for (const s of feet) {
-      const ankle = J['ankle' + s], knee = J['knee' + s];
+    const flatQ = _fq, kq = _kq, bq = _bq;
+    for (let n = 0; n < 2; n++) {
+      const s = fj[n].s, ankle = fj[n].ankle, knee = fj[n].knee, hipJ = fj[n].hip;
       _w.setFromMatrixPosition(ankle.matrixWorld).applyMatrix4(bi); const y = _w.y / sc;
       if (y < DIM.footH - 0.003) { // foot below floor: IK it up
         _w.y = DIM.footH * sc; _w.applyMatrix4(body.matrixWorld);
-        _pp.set(0, -0.2, 1.0); J['hip' + s].localToWorld(_pp); // knee points forward
-        solveTwoBone(J['hip' + s], knee, ankle, _w, _pp, 1, 1); J['hip' + s].updateMatrixWorld(true);
+        _pp.set(0, -0.2, 1.0); hipJ.localToWorld(_pp); // knee points forward
+        solveTwoBone(hipJ, knee, ankle, _w, _pp, 1, 1); hipJ.updateMatrixWorld(true);
         _w.setFromMatrixPosition(ankle.matrixWorld).applyMatrix4(bi);
       }
       // foot flat on the floor while near it (yaw taken from FK), blend back to FK when lifted
@@ -1957,7 +2022,7 @@ export class Animator {
       bq.setFromAxisAngle(_y.set(0, 1, 0), yaw);
       knee.getWorldQuaternion(kq); flatQ.copy(kq).invert().multiply(bq);
       const flatW = 1 - smooth(DIM.footH + 0.02, DIM.footH + 0.12, _w.y / sc);
-      ankle.quaternion.slerp(flatQ, flatW * this.finalGround);
+      qSlerp(ankle.quaternion, flatQ, flatW * this.finalGround);
     }
   }
 }

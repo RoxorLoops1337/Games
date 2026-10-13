@@ -15,7 +15,7 @@ import { trimShadowCasters } from './post.js';
 
 const D = () => globalThis.LM_D, L = () => globalThis.LM;
 const STEP = 1 / 30;
-const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 const VOICE = { murmillo: 0, hoplomachus: 1, retiarius: 2, dimachaerus: 1, thraex: 3 };
 const ULT_EL = { pulverize: 'earth', hookshot: 'earth', bladedance: 'wind', skewer: 'wind', tornado: 'wind', unbreakable: 'holy', bloodrage: 'fire', meteor: 'fire', duststorm: 'wind' };
 const COLOR_EL = (c) => { c = (c || '').toLowerCase(); if (/e8742a|d2412b|e0742a|f6b82d/.test(c)) return 'fire'; if (/3f7fd6|2f78c4|a8d8ff/.test(c)) return 'lightning'; if (/c98a52|b8892a/.test(c)) return 'earth'; return 'holy'; };
@@ -280,7 +280,7 @@ export class FightView {
       const f = { u, rig, vx: 0, vz: 0, yaw: u.side === 'A' ? Math.PI / 2 : -Math.PI / 2, lx: gx, ly: u.y, handles: {}, atkN: 0, st: '', hpShown: u.hp, plate: null, ring: [], intro: { x: gx, y: u.y, tx: u.x, ty: u.y }, pu: { x: 0, z: 0, vx: 0, vz: 0 }, px0: gx, pz0: u.y, skidT: 0, ov: null, kneel: false, faceTo: null };
       trimShadowCasters(rig.root, this.post.tier || this.tier); rig.root.position.set(gx, 0, u.y); this.scene.add(rig.root); rig.resetSecondary && rig.resetSecondary();
       const plate = U.nameplate({ name: u.name, level: u.g.lvl, hp: u.hp, maxHp: u.maxhp, team: u.side === 'A' ? 'ally' : 'foe', rank: 0 });
-      this.plates.append(plate); f.plate = plate; this.fm.set(u.id, f); this.gore.addFighter(u.id, rig, { maxhp: u.maxhp, side: u.side }); if (u.beast) BF.setup(this, f, u); // BEAST
+      this.plates.append(plate); f.plate = plate; this.fm.set(u.id, f); this._fmL = null; this.gore.addFighter(u.id, rig, { maxhp: u.maxhp, side: u.side }); if (u.beast) BF.setup(this, f, u); // BEAST
       if (u.side === 'B') { plate.style.pointerEvents = 'auto'; plate.style.cursor = 'pointer'; plate.addEventListener('pointerdown', () => this.focusUnit(u.id)); }
     });
     // ultimates (player side; none while replaying)
@@ -371,7 +371,7 @@ export class FightView {
   dispose() {
     this.resetPresentation();
     for (const f of this.fm.values()) { this.scene.remove(f.rig.root); f.rig.dispose && f.rig.dispose(); f.plate && f.plate.remove(); f.ring.forEach((r) => r.ring.remove()); }
-    this.fm.clear(); if (this.ultBar) this.ultBar.innerHTML = '';
+    this.fm.clear(); this._fmL = null; if (this.ultBar) this.ultBar.innerHTML = '';
     if (this.fx && this.fx.clearDecals) this.fx.clearDecals();
     if (this.gore) this.gore.reset(1);
   }
@@ -593,16 +593,18 @@ export class FightView {
 
   // ---------------------------------------------------------------- actors
   syncFighters(dt, simulating) {
-    const k = 1 - Math.exp(-dt * 14);
-    for (const f of this.fm.values()) {
+    const k = 1 - Math.exp(-dt * 14); this.lodTick = (this.lodTick | 0) + 1;
+    const FL = this._fmL || (this._fmL = [...this.fm.values()]);   // PERF: array walk instead of a Map iterator per frame
+    for (let fi = 0; fi < FL.length; fi++) {
+      const f = FL[fi];
       const u = f.u, rig = f.rig, an = rig.animator, dn = u.down && !f.kneel, pu = f.pu;   // dn: visually down (an executed fighter kneels first)
       // base render position: the sim position (30 Hz) through a short low-pass, or a scripted blend (the executioner's walk-up)
       if (f.ov) { const o = f.ov; o.t += dt; const e = smooth01(o.t / o.dur); f.rx = o.x0 + (o.x1 - o.x0) * e; f.ry = o.z0 + (o.z1 - o.z0) * e; }
       else { const px = f.rx ?? u.x, py = f.ry ?? u.y; f.rx = px + (u.x - px) * k; f.ry = py + (u.y - py) * k; }
       // weight: hits shove the fighter along the blow (visual spring on top of the sim position, the sim never moves), then it settles back
       this.stepPush(f, dt);
-      let X = f.rx + pu.x, Z = f.ry + pu.z; { const r = Math.hypot(X, Z), r0 = Math.hypot(f.rx, f.ry); if (r > 13 && r > r0) { const q = Math.max(13, r0) / r; X *= q; Z *= q; } }  // never shoved through the wall
-      let ivx = (X - f.px0) / Math.max(dt, 1e-4), ivz = (Z - f.pz0) / Math.max(dt, 1e-4); if (Math.hypot(X - f.px0, Z - f.pz0) > 2.5) ivx = ivz = 0; f.px0 = X; f.pz0 = Z;
+      let X = f.rx + pu.x, Z = f.ry + pu.z; { const r = Math.sqrt((X) * (X) + (Z) * (Z)), r0 = Math.sqrt((f.rx) * (f.rx) + (f.ry) * (f.ry)); if (r > 13 && r > r0) { const q = Math.max(13, r0) / r; X *= q; Z *= q; } }  // never shoved through the wall
+      let ivx = (X - f.px0) / Math.max(dt, 1e-4), ivz = (Z - f.pz0) / Math.max(dt, 1e-4); if (Math.sqrt((X - f.px0) * (X - f.px0) + (Z - f.pz0) * (Z - f.pz0)) > 2.5) ivx = ivz = 0; f.px0 = X; f.pz0 = Z;
       f.vx += (ivx - f.vx) * 0.25; f.vz += (ivz - f.vz) * 0.25;   // visual velocity (shove included): the gait steps while a fighter is pushed or recovers, so feet are planted by stepping, not skating
       // facing: toward target (scripted for the execution pair)
       const tgt = u.tgt && this.fm.get(u.tgt); let want = f.yaw;
@@ -622,6 +624,7 @@ export class FightView {
         if (u.s.air && !f.air) { if (an.knockdown) an.knockdown(1); else an.play('knockdown'); f.air = true; } else if (!u.s.air && f.air) { if (an.getUp) an.getUp(); else an.play('getup'); f.air = false; }
         if (spinning && !f.spin) { an.play('attack3', { speed: 2.4 }); f.spin = true; } else if (!spinning) f.spin = false;
       }
+      if ((this.lodTick & 7) === 0) { const cp = this.camera.position, dx = X - cp.x, dy = cp.y - 1, dz = Z - cp.z; rig.lod = dx * dx + dy * dy + dz * dz > 900 ? 1 : 0; }   // PERF: beyond 30 m the cloth steps every other frame
       rig.update(dt);
       // plate
       f.hpShown += (u.hp - f.hpShown) * 0.2; if (f.plate.hp && (f.hpSet !== u.hp || f.hpSetMax !== u.maxhp)) { f.hpSet = u.hp; f.hpSetMax = u.maxhp; f.plate.hp.set(u.hp, u.maxhp); }   // PERF: DOM bar writes only when the value changed
@@ -637,9 +640,9 @@ export class FightView {
   stepPush(f, dt) {
     const p = f.pu; if (!p.vx && !p.vz && !p.x && !p.z) return; const w = 5, n = Math.max(1, Math.ceil(dt / 0.02)), h = dt / n;
     for (let i = 0; i < n; i++) { p.vx += (-w * w * p.x - 2 * w * p.vx) * h; p.vz += (-w * w * p.z - 2 * w * p.vz) * h; p.x += p.vx * h; p.z += p.vz * h; }
-    const m = Math.hypot(p.x, p.z); if (m > 0.9) { p.x *= 0.9 / m; p.z *= 0.9 / m; }
+    const m = Math.sqrt((p.x) * (p.x) + (p.z) * (p.z)); if (m > 0.9) { p.x *= 0.9 / m; p.z *= 0.9 / m; }
     if (Math.abs(p.x) + Math.abs(p.z) + Math.abs(p.vx) + Math.abs(p.vz) < 0.003) { p.x = p.z = p.vx = p.vz = 0; return; }
-    const sp = Math.hypot(p.vx, p.vz); f.skidT -= dt;
+    const sp = Math.sqrt((p.vx) * (p.vx) + (p.vz) * (p.vz)); f.skidT -= dt;
     if (sp > 1.4 && f.skidT <= 0 && !this.silent) { f.skidT = 0.09; this.fx.kickup(_kp.set(f.rx + p.x, 0.05, f.ry + p.z), _kd.set(p.vx / sp, 0, p.vz / sp), 2, KICK); }  // heel dust while the shove is fast
   }
   /** shove fighter f along (dir.x, dir.z) with an impulse of v m/s (presentation only). Big shoves also drag a short skid mark through the sand. */
@@ -815,7 +818,8 @@ export class FightView {
     this.syncPauseBtn(); if ((this.hudN = (this.hudN | 0) + 1) % 6 === 0) this.updateReplayBar();
     if (this.favorBtn) this.favorBtn.style.display = F.favorReady && !F.done ? '' : 'none';
     if (this.duoBtn && F.duo) { const cd = Math.max(0, F.duo.cd); this.duoBtn.disabled = cd > 0; this.duoBtn.style.opacity = cd > 0 ? 0.55 : 1; }
-    for (const f of this.fm.values()) for (const r of f.ring) { const slot = r.slot, frac = slot.max ? clamp(slot.cd / slot.max, 0, 1) : 0, fr = f.u.down ? 1 : frac, key = Math.round(fr * 200) * 1000 + Math.ceil(Math.max(0, slot.cd)); if (r.key !== key) { r.key = key; r.ring.set(fr, Math.max(0, slot.cd)); } }   // PERF: DOM writes only when the ring visibly changed
+    const FL = this._fmL || (this._fmL = [...this.fm.values()]);
+    for (let fi = 0; fi < FL.length; fi++) for (const r of FL[fi].ring) { const f = FL[fi]; const slot = r.slot, frac = slot.max ? clamp(slot.cd / slot.max, 0, 1) : 0, fr = f.u.down ? 1 : frac, key = Math.round(fr * 200) * 1000 + Math.ceil(Math.max(0, slot.cd)); if (r.key !== key) { r.key = key; r.ring.set(fr, Math.max(0, slot.cd)); } }   // PERF: DOM writes only when the ring visibly changed
   }
 
   updateAudio(dt, F) {

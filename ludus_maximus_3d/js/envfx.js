@@ -41,6 +41,9 @@ export function prepGeo(g, { color = 1, uvScale = 1 } = {}) {
   }
   return g;
 }
+/** PERF: the geometry of every instance of an InstancedMesh, transformed by its matrix (baked, non-indexed, mergeable). Lets static repeated pieces that share a
+ *  material become one plain Mesh (one draw call instead of one per instanced set). Costs memory (no instancing), so only for modest counts. */
+export function bakeInstances(im) { const g0 = prepGeo(im.geometry.clone()), m = new THREE.Matrix4(), out = []; for (let i = 0; i < im.count; i++) { im.getMatrixAt(i, m); out.push(g0.clone().applyMatrix4(m)); } return out; }
 export function mergeGeos(list) { return mergeGeometries(list.map((g) => prepGeo(g)), false); }
 /** Bake per-vertex color: fn(x,y,z,nx,ny,nz) -> [r,g,b] or number (grey). Cheap fake AO / gradients / dirt. */
 export function colorize(g, fn) {
@@ -70,25 +73,35 @@ float vn(vec2 p){ vec2 i = floor(p), f = fract(p); f = f*f*(3.-2.*f);
   return mix(mix(h21(i), h21(i+vec2(1,0)), f.x), mix(h21(i+vec2(0,1)), h21(i+vec2(1,1)), f.x), f.y); }
 float fbm(vec2 p){ float s = 0., a = .5; for(int i=0;i<4;i++){ s += a*vn(p); p = p*2.02 + 3.7; a *= .5; } return s; }
 `;
+// PERF: flame body and glow halo share ONE instanced mesh (2n instances, aKind 1 = flame, 0 = halo) and one shader: 1 draw call instead of 2 per torch set.
 const FLAME_VERT = /* glsl */`
-attribute float aPhase;
-varying vec2 vUv; varying float vPh;
+attribute float aPhase; attribute float aKind;
+varying vec2 vUv; varying float vPh; varying float vKind;
 uniform float uTime;
 void main(){
-  vUv = uv; vPh = aPhase;
+  vUv = uv; vPh = aPhase; vKind = aKind;
   vec3 c = instanceMatrix[3].xyz;
   float s = length(instanceMatrix[0].xyz);
   vec4 mv = modelViewMatrix * vec4(c, 1.0);
-  float fl = 1.0 + 0.12*sin(uTime*13.0 + aPhase*6.28) + 0.08*sin(uTime*23.0 + aPhase*11.0);
-  mv.xy += vec2(position.x * s * 0.62, position.y * s * fl);
-  mv.x += sin(uTime*7.0 + aPhase*6.28 + position.y*3.0) * 0.035 * s * position.y;
+  if (aKind > 0.5) {
+    float fl = 1.0 + 0.12*sin(uTime*13.0 + aPhase*6.28) + 0.08*sin(uTime*23.0 + aPhase*11.0);
+    mv.xy += vec2(position.x * s * 0.62, position.y * s * fl);
+    mv.x += sin(uTime*7.0 + aPhase*6.28 + position.y*3.0) * 0.035 * s * position.y;
+  } else {
+    float fl = 1.0 + 0.06*sin(uTime*11.0 + aPhase*6.28);
+    mv.xy += (position.xy - vec2(0.0, 0.5)) * s * fl;
+  }
   gl_Position = projectionMatrix * mv;
 }`;
 const FLAME_FRAG = /* glsl */`
-varying vec2 vUv; varying float vPh;
-uniform float uTime, uInt;
+varying vec2 vUv; varying float vPh; varying float vKind;
+uniform float uTime, uInt, uGlow; uniform vec3 uColor;
 ${NOISE_GLSL}
 void main(){
+  if (vKind < 0.5) {
+    float r = length(vUv - 0.5) * 2.0; float a = pow(max(1.0 - r, 0.0), 2.6) * uGlow;
+    gl_FragColor = vec4(uColor * 2.0, a);
+  } else {
   vec2 p = vec2(vUv.x - 0.5, vUv.y);
   float t = uTime * 1.6 + vPh * 10.0;
   float n  = fbm(vec2(p.x * 3.5, p.y * 2.2 - t * 1.5));
@@ -103,44 +116,28 @@ void main(){
   vec3 col = mix(vec3(1.3, 0.28, 0.04), vec3(2.8, 1.25, 0.25), smoothstep(0.0, 0.7, 1.0 - p.y - d * 0.4));
   col = mix(col, vec3(4.2, 3.2, 1.7), core);
   gl_FragColor = vec4(col * uInt, a);
-  #include <tonemapping_fragment>
-  #include <colorspace_fragment>
-}`;
-const GLOW_VERT = /* glsl */`
-varying vec2 vUv; attribute float aPhase; uniform float uTime;
-void main(){ vUv = uv; vec3 c = instanceMatrix[3].xyz; float s = length(instanceMatrix[0].xyz);
-  vec4 mv = modelViewMatrix * vec4(c, 1.0);
-  float fl = 1.0 + 0.06*sin(uTime*11.0 + aPhase*6.28);
-  mv.xy += (position.xy - vec2(0.0, 0.5)) * s * fl; gl_Position = projectionMatrix * mv; }`;
-const GLOW_FRAG = /* glsl */`
-varying vec2 vUv; uniform float uGlow; uniform vec3 uColor;
-void main(){ float r = length(vUv - 0.5) * 2.0; float a = pow(max(1.0 - r, 0.0), 2.6) * uGlow;
-  gl_FragColor = vec4(uColor * 2.0, a);
+  }
   #include <tonemapping_fragment>
   #include <colorspace_fragment>
 }`;
 
-/** points: [{x,y,z,s}] (flame base position, s = flame height in meters). 2 draw calls total. */
+/** points: [{x,y,z,s}] (flame base position, s = flame height in meters). ONE draw call (flame bodies + glow halos in one instanced mesh). */
 export function createFlames(points, { glowScale = 5 } = {}) {
   const n = points.length, g = new THREE.Group(); g.name = 'flames';
   const quad = new THREE.PlaneGeometry(1, 1); quad.translate(0, 0.5, 0);
-  const ph = new Float32Array(n); for (let i = 0; i < n; i++) ph[i] = (i * 0.618034) % 1;
-  const phA = () => new THREE.InstancedBufferAttribute(ph, 1);
+  const ph = new Float32Array(n * 2), kind = new Float32Array(n * 2); for (let i = 0; i < n; i++) { ph[i] = ph[n + i] = (i * 0.618034) % 1; kind[i] = 0; kind[n + i] = 1; }
   const uTime = { value: 0 }, uInt = { value: 1 }, uGlow = { value: 0.5 };
-  const fg = quad.clone(); fg.setAttribute('aPhase', phA());
-  const fm = new THREE.ShaderMaterial({ uniforms: { uTime, uInt }, vertexShader: FLAME_VERT, fragmentShader: FLAME_FRAG, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, fog: false });
-  const flame = new THREE.InstancedMesh(fg, fm, n); flame.frustumCulled = false; flame.renderOrder = 5;
-  const gg = quad.clone(); gg.setAttribute('aPhase', phA());
-  const gm = new THREE.ShaderMaterial({ uniforms: { uTime, uGlow, uColor: { value: new THREE.Color(0xff8a30) } }, vertexShader: GLOW_VERT, fragmentShader: GLOW_FRAG, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false });
-  const glow = new THREE.InstancedMesh(gg, gm, n); glow.frustumCulled = false; glow.renderOrder = 4;
+  const fg = quad.clone(); fg.setAttribute('aPhase', new THREE.InstancedBufferAttribute(ph, 1)); fg.setAttribute('aKind', new THREE.InstancedBufferAttribute(kind, 1));
+  const fm = new THREE.ShaderMaterial({ uniforms: { uTime, uInt, uGlow, uColor: { value: new THREE.Color(0xff8a30) } }, vertexShader: FLAME_VERT, fragmentShader: FLAME_FRAG, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, fog: false });
+  const flame = new THREE.InstancedMesh(fg, fm, n * 2); flame.frustumCulled = false; flame.renderOrder = 5; flame.name = 'flames_all';
   const m = new THREE.Matrix4();
   points.forEach((p, i) => {
-    m.makeScale(p.s, p.s, p.s).setPosition(p.x, p.y, p.z); flame.setMatrixAt(i, m);
-    const gs = p.s * glowScale; m.makeScale(gs, gs, gs).setPosition(p.x, p.y + p.s * 0.45, p.z); glow.setMatrixAt(i, m);
+    const gs = p.s * glowScale; m.makeScale(gs, gs, gs).setPosition(p.x, p.y + p.s * 0.45, p.z); flame.setMatrixAt(i, m);
+    m.makeScale(p.s, p.s, p.s).setPosition(p.x, p.y, p.z); flame.setMatrixAt(n + i, m);
   });
-  g.add(glow, flame);
+  g.add(flame);
   return {
-    group: g, flame, glow,
+    group: g, flame, glow: flame,
     /** night 0..1 raises halo brightness (torches matter most at dusk/night) */
     update(t, night = 0) { uTime.value = t; uGlow.value = 0.14 + 0.26 * night; uInt.value = 1.0 + 0.35 * night; },
   };
