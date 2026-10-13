@@ -935,5 +935,21 @@ const LEGACY_IDS = ['patron', 'brawl', 'trainer', 'spoiled', 'spy', 'sponsor', '
   LM.moveBuilding(E, 2, 3); const rep = LM.weekFinish ? LM.weekFinish(E) : null; ok(!rep || (Array.isArray(rep.notes) && E.plots[3].mv === undefined), 'weekFinish completes a 1-week move and reports it');
 }
 
+{ // UI pass: a matchup never repeats a name
+  ok(typeof LM.uniqueNames === 'function', 'LM.uniqueNames exists');
+  const mine = [{ name: 'Valeria' }, { name: 'Marcus' }];
+  const opps = [{ name: 'Valeria' }, { name: 'Valeria' }, { name: 'Marcus' }, { name: 'Zeno' }];
+  const n = LM.uniqueNames(mine, opps), names = [...mine, ...opps].map((x) => x.name);
+  ok(n === 3 && new Set(names).size === names.length, 'uniqueNames: no name repeats across both sides: ' + names.join(','));
+  ok(opps[3].name === 'Zeno', 'uniqueNames keeps names that were already unique');
+  const again = LM.uniqueNames(mine, opps); ok(again === 0, 'uniqueNames is idempotent');
+  const solo = [{ name: 'Valeria' }]; LM.uniqueNames([{ name: 'Valeria' }], solo); const solo2 = [{ name: 'Valeria' }]; LM.uniqueNames([{ name: 'Valeria' }], solo2);
+  ok(solo[0].name === solo2[0].name && solo[0].name !== 'Valeria', 'uniqueNames is deterministic');
+  // every generated duel in a season: the opponent never shares the fighter name, once the helper has run
+  const T = LM.newGame({ name: 'Names', color: 0 }); const ga = LM.makeGlad({ id: T.nextId++, style: 'murmillo', lvl: 1, name: 'Valeria' }); T.glads.push(ga);
+  let clash = 0; for (let wk = 1; wk <= 24; wk++) for (const ev of LM.events(T, wk, 0)) { LM.uniqueNames([ga], ev.opps); if (ev.opps.some((o) => o.name === ga.name)) clash++; if (new Set(ev.opps.map((o) => o.name)).size !== ev.opps.length) clash++; }
+  ok(clash === 0, 'no event over 24 weeks pairs the fighter with a same-named opponent');
+}
+
 console.log(`ludus_maximus: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
