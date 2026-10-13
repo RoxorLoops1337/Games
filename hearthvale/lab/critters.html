@@ -15,8 +15,8 @@ import * as PR from '../art/props.js';
 import { Fx } from '../art/fx.js';
 
 const q = new URLSearchParams(location.search), st = mountStage(), L = st.look;
-const sec = q.get('sec') || 'critters', night = +(q.get('night') || 0), animMode = q.get('anim') || 'cycle';
-const PRESET = { critters: { x: 0, z: 1.0, dist: 17, pitch: 0.75, yaw: 0.0 }, props: { x: 0, z: 31, dist: 19, pitch: 0.75, yaw: 0.0 }, fx: { x: 0, z: -31, dist: 15, pitch: 0.6, yaw: 0.0 }, meadow: { x: 60, z: 0, dist: 30, pitch: 0.9, yaw: 0.5 }, sky: { x: 0, z: 0, y: 4, dist: 14, pitch: 0.3, yaw: 0.0 } }[sec] || {};
+const zoom = q.get('zoom'), sec = q.get('sec') || 'critters', night = +(q.get('night') || 0), animMode = q.get('anim') || 'cycle';
+const PRESET = { critters: { x: 0, z: 1.0, dist: zoom ? 6.5 : 22, pitch: zoom ? 0.4 : 0.8, yaw: 0.0 }, props: { x: 0, z: 31, dist: 26, pitch: 0.8, yaw: 0.0 }, fx: { x: 0, z: -31, dist: 15, pitch: 0.6, yaw: 0.0 }, meadow: { x: 60, z: 0, dist: 30, pitch: 0.9, yaw: 0.5 }, sky: { x: 0, z: 0, y: 4, dist: 14, pitch: 0.3, yaw: 0.0 } }[sec] || {};
 for (const k of ['x', 'z', 'y', 'dist', 'pitch', 'yaw']) if (!q.has(k) && PRESET[k] !== undefined) L[k] = PRESET[k];
 const hud = document.getElementById('hud'), ui = document.getElementById('ui'); if (q.get('ui') === '0') { ui.style.display = 'none'; }
 if (q.get('hud') === '0') hud.style.display = 'none';
@@ -28,34 +28,38 @@ const fx = new Fx(st.scene); if (night) fx.setLight(0.4);
 /* ------------------------------------------------------------ critters */
 const crit = []; // {g, air}
 const critGroup = new THREE.Group(); st.scene.add(critGroup);
-const rows = [
-  [['sheep', 0], ['sheep', 5], ['sheep', 6], ['sheep', 7], ['sheep', 8], ['sheep', 1], ['chicken', 0], ['chicken', 1], ['chicken', 2], ['chicken', 3]],
-  [['cow', 0], ['cow', 1], ['cow', 2], ['dog', 0], ['dog', 1], ['dog', 2], ['dog', 3], ['duck', 0], ['duck', 1], ['duck', 2]],
-  [['cat', 0], ['cat', 1], ['cat', 2], ['cat', 3], ['bunny', 0], ['bunny', 1], ['bunny', 2], ['bunny', 3], ['sheep', 3], ['sheep', 4]],
-  [['bird', 0], ['bird', 1], ['bird', 2], ['butterfly', '#ff8fb3'], ['butterfly', '#ffd24a'], ['butterfly', '#7fb8ff'], ['fish', '#ff9a3c'], ['fish', '#5ec3ff'], ['bee', 0], ['bee', 1]],
-];
-const mk = (k, a) => k === 'butterfly' || k === 'fish' ? C.CRITTERS[k](a) : C.CRITTERS[k](a);
+const ALL = [['sheep', 9], ['chicken', 4], ['cow', 3], ['dog', 4], ['puppy', 4], ['cat', 4], ['kitten', 4], ['bunny', 4], ['duck', 3], ['duckling', 4], ['snail', 4], ['froggy', 3]];
+const AIR = ['bird', 'butterfly', 'fish', 'bee'];
+let rows = [];
+if (zoom) { const n = q.has('n') ? +q.get('n') : 4; rows = zoom.split(',').map((k) => Array.from({ length: n }, (_, i) => [k, i])); }
+else {
+  const flat = []; for (const [k, n] of ALL) for (let i = 0; i < n; i++) flat.push([k, i]);
+  for (let i = 0; i < flat.length; i += 10) rows.push(flat.slice(i, i + 10));
+  rows.push([['bird', 0], ['bird', 1], ['bird', 2], ['butterfly', 0], ['butterfly', 1], ['butterfly', 2], ['fish', 0], ['fish', 1], ['bee', 0], ['bee', 1]]);
+}
+const mk = (k, a) => C.CRITTERS[k](a);
+const sp = zoom ? 2.4 : 2.1, sc = 1;
 rows.forEach((row, ri) => row.forEach(([k, a], ci) => {
-  const g = mk(k, a), air = ['bird', 'butterfly', 'fish', 'bee'].includes(k);
-  g.position.set((ci - 4.5) * 2.1, air ? 0.9 : 0, (ri - 1.5) * 2.4); g.rotation.y = 0.4; if (g.userData._a) g.userData._a.ph = (ri * 10 + ci) * 0.7;
+  const g = mk(k, a), air = AIR.includes(k);
+  g.position.set((ci - (row.length - 1) / 2) * sp * sc, air ? 0.9 : 0, (ri - (rows.length - 1) / 2) * 2.2 * sc); g.rotation.y = +(q.get('ry') || 0.4); g.scale.multiplyScalar(zoom ? 1.7 : 1); if (g.userData._a) g.userData._a.ph = (ri * 10 + ci) * 0.7;
   critGroup.add(g); crit.push({ g, air, k });
 }));
 // clouds (sky)
 const clouds = [];
-for (let i = 0; i < 5; i++) { const c = C.cloudModel(i); c.position.set((i - 2) * 6, 7 + (i % 2) * 1.2, -4 + (i % 3) * 3); c.scale.setScalar(1 + (i % 3) * 0.3); st.scene.add(c); clouds.push(c); }
+if (q.get('clouds') !== '0' && (sec === 'sky' || q.get('clouds'))) for (let i = 0; i < 5; i++) { const c = C.cloudModel(i); c.position.set((i - 2) * 6, 7 + (i % 2) * 1.2, -4 + (i % 3) * 3); c.scale.setScalar(1 + (i % 3) * 0.3); st.scene.add(c); clouds.push(c); }
 
 /* ------------------------------------------------------------ props */
 const props = []; const propGroup = new THREE.Group(); st.scene.add(propGroup);
-const names = Object.keys(PR.PROPS), cols = 7;
+const only = q.get('only'), names = only ? only.split(',') : Object.keys(PR.PROPS), cols = only ? Math.min(names.length, +(q.get('cols') || 5)) : 8, gap = only ? +(q.get('gap') || 2.6) : 3.0;
 names.forEach((n, i) => {
   const g = n === 'bannerPole' ? PR.bannerPoleModel('#d9503d') : n === 'fence' ? PR.fenceModel(3) : n === 'lanternString' ? PR.lanternStringModel(3.2) : PR.PROPS[n]();
-  g.position.set((i % cols - (cols - 1) / 2) * 2.7, 0, 31 + (Math.floor(i / cols) - 1.5) * 2.7); g.userData.phase = i; propGroup.add(g); props.push({ g, n });
+  g.position.set((i % cols - (cols - 1) / 2) * gap, 0, 31 + (Math.floor(i / cols) - (only ? (Math.ceil(names.length / cols) - 1) / 2 : 2)) * (only ? gap : 3.2)); g.userData.phase = i; propGroup.add(g); props.push({ g, n });
 });
 
 /* ------------------------------------------------------------ fx stations */
-const FX = ['smoke', 'dust', 'sparkle', 'confetti', 'coinPop', 'leaf', 'splash', 'ring', 'hearts'];
+const FX = ['smoke', 'dust', 'sparkle', 'confetti', 'coinPop', 'leaf', 'splash', 'ring', 'hearts', 'heartsBurst', 'note', 'petal', 'star', 'mote'];
 const stations = FX.map((n, i) => ({ n, x: (i % 5 - 2) * 3.4, z: -31 + (Math.floor(i / 5) - 0.4) * 4.5 }));
-const fire = (n, x, z) => { const y = n === 'smoke' ? 1.2 : n === 'dust' || n === 'splash' || n === 'ring' ? 0 : 0.6; if (n === 'sparkle') fx.sparkle(x, y, z, '#ffe27a'); else if (n === 'ring') fx.ring(x, y, z, '#7fe0ff'); else fx[n](x, y, z); };
+const fire = (n, x, z) => { const y = n === 'smoke' ? 1.2 : n === 'dust' || n === 'splash' || n === 'ring' ? 0 : n === 'petal' ? 1.8 : n === 'star' ? 1.3 : 0.6; if (n === 'sparkle') fx.sparkle(x, y, z); else if (n === 'star') fx.star(x, y, z, '#ffd84a'); else if (n === 'ring') fx.ring(x, y, z, '#7fe0ff'); else fx[n](x, y, z); };
 let sel = 'confetti';
 FX.forEach((n) => { const b = document.createElement('button'); b.textContent = n; b.onclick = (e) => { sel = n; [...ui.children].forEach((c) => c.classList.toggle('on', c === b)); e.stopPropagation(); }; if (n === sel) b.className = 'on'; ui.appendChild(b); });
 // station platforms + labels via little pedestals
@@ -96,7 +100,7 @@ st.onTick((dt, t) => {
   for (const c of crit) C.animateCritter(c.g, mode, t, 1);
   for (const c of clouds) { C.animateCritter(c, 'idle', t, 1); }
   for (const p of props) PR.animateProp(p.g, t, { open: 0.5 + 0.5 * Math.sin(t * 1.2) });
-  for (const p of props) { if (p.n === 'cart') { p.g.getObjectByName('wheelL').rotation.x = p.g.getObjectByName('wheelR').rotation.x = t * 2; } }
+  for (const p of props) { if (p.n === 'cart' || p.n === 'flowerCart') { p.g.getObjectByName('wheelL').rotation.x = p.g.getObjectByName('wheelR').rotation.x = t * 2; } }
   // meadow wander
   for (const m of meadow) {
     const w = m.userData.w, f = m.userData.fly;
@@ -116,7 +120,7 @@ st.onTick((dt, t) => {
   fx.update(stepT === null ? dt : 0);
   if (!hudDone || ((t * 2) | 0) % 2 === 0) { hud.textContent = `mode ${mode}  fx particles ${fx.count}  click: ${sel}`; hudDone = true; }
 });
-function n2(n) { if (q.get('fx') === 'sync') return 2; return n === 'smoke' ? 1.1 : n === 'sparkle' ? 1.3 : 2.2; }
+function n2(n) { if (q.get('fx') === 'sync') return 2; return n === 'smoke' ? 1.1 : n === 'sparkle' ? 1.3 : n === 'mote' ? 1.5 : n === 'note' ? 1.0 : 2.2; }
 window.__fx = fx; window.__tris = Object.fromEntries([...crit.map((c) => [c.k + '_' + c.g.userData.critter, tri(c.g)]), ...props.map((p) => [p.n, tri(p.g)])]);
 st.ready();
 </script>

@@ -25,9 +25,9 @@ if (view === 'island') {
   for (let i = 0; i < 16; i++) { const a = i / 16 * Math.PI * 2 - Math.PI / 2; T('plot' + i, () => E.plotModel(cols[i % 8], { x: -Math.cos(a), z: -Math.sin(a) }), Math.cos(a) * 40, Math.sin(a) * 40); }
   st.look.dist = +(q.get('dist') || 120); st.look.pitch = +(q.get('pitch') || 0.55);
 } else {
-  const sp = ['oak', 'pine', 'birch', 'apple'];
-  for (let i = 0; i < 8; i++) T('tree ' + sp[i % 4], () => E.treeModel(i * 3, { species: sp[i % 4] }), -7 + i * 2, 0);
-  for (let i = 0; i < 8; i++) T('tree seed ' + i, () => E.treeModel(i), -7 + i * 2, 3);
+  const sp = E.TREE_SPECIES;
+  for (let i = 0; i < 14; i++) T('tree ' + sp[i % 7], () => E.treeModel(i * 3, { species: sp[i % 7] }), -7 + i * 1.6, 0);
+  for (let i = 0; i < 10; i++) T('tree seed ' + i, () => E.treeModel(i), -7 + i * 1.6, 3);
   for (let i = 0; i < 4; i++) T('rock', () => E.rockModel(i), -7 + i * 2, 6);
   for (let i = 0; i < 3; i++) T('clay', () => E.clayModel(i), 2 + i * 2, 6);
   T('stump', () => E.stumpModel(), 8.5, 6);

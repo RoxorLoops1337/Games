@@ -9,7 +9,21 @@ const q = new URLSearchParams(location.search); const st = mountStage();
 const anims = []; let maxTri = 0, sumTri = 0, n = 0;
 function put(g, x, z, pose = 'idle', ph = 0) { st.add(g, x, z); anims.push({ g, pose, ph }); const t = triangles(g); maxTri = Math.max(maxTri, t); sumTri += t; n++; return g; }
 const TOOLS = ['none', 'axe', 'pick', 'hoe', 'hammer', 'ladle', 'scroll', 'basket'];
-if (q.get('game')) {
+if (q.get('gears')) {
+  // every hair / headwear style once (skins cycle), to judge each silhouette
+  const GL = ['short', 'messy', 'bun', 'twinbuns', 'topknot', 'pigtails', 'long', 'bob', 'afro', 'afroPuffs', 'curly', 'braids', 'baldcap', 'turban', 'headscarf', 'straw', 'cap', 'hood', 'bandana', 'chef', 'flowers', 'crown', 'beanie', 'elf', 'hard'];
+  GL.forEach((gr, i) => put(villagerModel('#e8564a', 3 + i * 4, { gear: gr, skin: i % 5, seed: i, age: 'adult', tool: 'none', build: 'normal' }), ((i % 9) - 4) * 1.4, Math.floor(i / 9) * 1.7 - 1.7, 'idle', i));
+  if (!q.has('dist')) st.look.dist = 11; if (!q.has('pitch')) st.look.pitch = 0.5;
+} else if (q.get('skins')) {
+  // 5 skin tones x 3 hair/hat looks, same face grammar: judge warmth and brightness of every tone
+  for (let r = 0; r < 3; r++) for (let k = 0; k < 5; k++) put(villagerModel('#e8564a', 5 + r * 13, { skin: k, seed: 5 + r * 13, tool: 'none', gear: ['short', 'afro', 'turban'][r], age: 'adult', build: 'normal' }), (k - 2) * 1.5, r * 1.6 - 1.6, 'idle', k + r);
+  if (!q.has('dist')) st.look.dist = 9; if (!q.has('pitch')) st.look.pitch = 0.5;
+} else if (q.get('div')) {
+  // diversity: 40 villagers of ONE village (single owner colour, like the game), 2 rows of 20. Camera: ?pitch=0.9&dist=26 = game; ?pitch=1.5 = top-down.
+  const cnt = +(q.get('n') || 40), per = Math.ceil(cnt / 2), poses = ['idle', 'walk', 'work', 'idle', 'cheer'], off = +(q.get('off') || 0);
+  for (let i = 0; i < cnt; i++) { const id = i + off, tl = TOOLS[(id * 5) % 8]; const g = villagerModel('#e8564a', (id * 37 + 11) % 100, { tool: tl, seed: (id * 37 + 11) % 100 }); put(g, ((i % per) - (per - 1) / 2) * 1.35, Math.floor(i / per) * 1.8 - 0.9, poses[id % 5], id * 0.7); }
+  if (!q.has('dist')) st.look.dist = 15; if (!q.has('pitch')) st.look.pitch = 0.35;
+} else if (q.get('game')) {
   // game-camera test: a little plaza with houses and 40 busy villagers
   for (const [x, z, c] of [[-6, -5, P.roofRed], [0, -6, P.roofBlue], [6, -5, P.roofOrange], [-7, 4, P.roofTeal], [7, 5, P.roofPurple]]) st.add(K.group(K.rbox(2.4, 1.2, 2.4, P.plasterWarm), K.gable(2.8, 1.1, 2.7, c, 0, 1.2)), x, z);
   const poses = ['walk', 'work', 'idle', 'carry', 'cheer', 'walk'];
