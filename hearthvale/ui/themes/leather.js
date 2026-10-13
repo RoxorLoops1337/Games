@@ -137,7 +137,7 @@ function genParch(N, seed) {
     copies(() => { x.beginPath(); x.moveTo(px, py); x.quadraticCurveTo(mx, my, px + Math.cos(ang) * len, py + Math.sin(ang) * len); x.stroke(); });
   }
   for (let i = 0; i < 90; i++) { // foxing and specks
-    const px = r() * N, py = r() * N, rad = 0.4 + r() * (r() < 0.1 ? 2.4 : 0.9);
+    const px = r() * N, py = r() * N, rad = 0.4 + r() * (r() < 0.05 ? 1.3 : 0.8);
     x.fillStyle = r() < 0.25 ? 'rgba(150,90,30,.22)' : 'rgba(90,55,20,.28)';
     copies(() => { x.beginPath(); x.arc(px, py, rad, 0, TAU); x.fill(); });
   }

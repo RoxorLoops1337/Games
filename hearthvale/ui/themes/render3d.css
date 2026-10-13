@@ -46,7 +46,7 @@ html[data-ui="render3d"] .gp.full,html[data-ui="render3d"] .gp.more,html[data-ui
 html[data-ui="render3d"] .b:is(.b-cream,:not([class*="b-"])){-webkit-text-stroke:3.4px #fff;text-shadow:0 1px 0 rgba(255,255,255,.9)}
 html[data-ui="render3d"] .rb{-webkit-text-stroke-width:0}
 html[data-ui="render3d"] #card #ptitle{-webkit-text-stroke:2.5px #fff;text-shadow:none;color:var(--lilac2)}
-html[data-ui="render3d"] .gp.more{--r3-sw:2.6px}
+html[data-ui="render3d"] .gp.more{--r3-sw:2px}
 html[data-ui="render3d"] .gp small,html[data-ui="render3d"] .b small,html[data-ui="render3d"] .pill small{-webkit-text-stroke-width:2.6px}
 html[data-ui="render3d"] :is(.b,.rb,.pill,.gp,.mini-b) .ic{filter:drop-shadow(0 1.5px 0 rgba(60,30,10,.42)) drop-shadow(0 0 1px rgba(255,255,255,.4))}
 html[data-ui="render3d"] .b.off,html[data-ui="render3d"] .rb.off{opacity:.72;filter:saturate(.4) brightness(1.05)}
@@ -122,7 +122,7 @@ html[data-ui="render3d"] :is(.pip,.badge-new,.av .lv,.label .lv,.qitem .qn,.tb .
 html[data-ui="render3d"] :is(.pip,.av .lv,.label .lv,.qitem .qn){--r3-sw:3px}
 
 /* ---------- rings and medallions ---------- */
-html[data-ui="render3d"][data-r3~="ring"] .th::after,html[data-ui="render3d"][data-r3~="ring"] .av .face::after{content:"";position:absolute;inset:-3px;pointer-events:none;border-radius:50%;border:1px solid transparent;border-image:var(--r3-ring-cream) 50% / 50% stretch;z-index:3}
+html[data-ui="render3d"][data-r3~="ring"] .th::after,html[data-ui="render3d"][data-r3~="ring"] .av .face::after{content:"";position:absolute;inset:-3px;pointer-events:none;border-radius:50%;border:1px solid transparent;border-image:var(--r3-ring-gold) 50% / 50% stretch;z-index:3}
 html[data-ui="render3d"][data-r3~="ring"] :is(.bic,.ov-ic,.qitem,.skill .si,.slot.full,.sh-ic img){box-shadow:0 4px 8px rgba(60,40,20,.28);border:1px solid transparent;border-image:var(--r3-ring-gold) 50% / 50% stretch}
 html[data-ui="render3d"] .th{box-shadow:none}
 html[data-ui="render3d"] .th.sm{box-shadow:none}
@@ -132,7 +132,7 @@ html[data-ui="render3d"] .av .face{box-shadow:none}
 html[data-ui="render3d"][data-r3~="seal"] .lvlbadge{background:var(--r3-seal-green) center/100% 100% no-repeat;filter:drop-shadow(0 8px 6px rgba(30,70,20,.4))}
 html[data-ui="render3d"][data-r3~="seal"] .lvlbadge .ic{opacity:0}
 html[data-ui="render3d"] .lvlnum{-webkit-text-stroke:8px #2b6a1d;text-shadow:0 5px 0 #2b6a1d}
-html[data-ui="render3d"] .jelly{-webkit-text-stroke-width:9px}
+html[data-ui="render3d"] .jelly{-webkit-text-stroke-width:7px}
 
 /* ---------- switches and sliders ---------- */
 html[data-ui="render3d"] .sw{background:linear-gradient(#bfa77a,#d9c5a0);border:3px solid #fff;box-shadow:inset 0 3px 5px rgba(90,60,20,.5),0 2px 0 #e4c98a}

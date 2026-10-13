@@ -46,9 +46,7 @@ html[data-ui="keycap"] :is(.b,.rb,.pill,.gp,.mini-b),html[data-ui="keycap"] #car
   text-shadow:0 1px 0 rgba(255,255,255,.7),0 -1px 0 rgba(var(--kc-shadow),.16);
   letter-spacing:.2px;
   transform-style:preserve-3d;
-  transform-origin:50% 50% calc(var(--d)*-1);
   transform:perspective(560px) rotateX(var(--ty)) rotateY(var(--tx)) translate3d(0,var(--yy),calc(var(--zz)*-1));
-  backface-visibility:hidden;-webkit-backface-visibility:hidden;
   transition:transform .55s var(--kc-spring);
   filter:none;will-change:transform;
 }
@@ -61,7 +59,6 @@ html[data-ui="keycap"] :is(.b,.rb,.pill,.gp,.mini-b)::before,html[data-ui="keyca
   left:calc(var(--bw)*-1 - var(--f));
   border-radius:inherit;
   transform:translateZ(calc(var(--zz) - var(--d))) scale(var(--ps));
-  backface-visibility:hidden;-webkit-backface-visibility:hidden;
   background:
     linear-gradient(180deg,rgba(0,0,0,0) 40%,rgba(30,15,0,.22)),
     linear-gradient(98deg,var(--w1) 0%,color-mix(in srgb,var(--w1) 50%,var(--w2)) 46%,var(--w2) 100%);

@@ -1,0 +1,6 @@
+Tavern Leather (id leather)
+Technique: textures drawn at runtime on Canvas 2D (periodic fbm and Worley noise, wood grain isolines, leather creases, fibres, brushed brass, woven cloth, wax) published as data-URL custom properties (--lt-*) plus 9-slice stitched-leather and nailed-plank frames, and a torn-edge SVG mask for parchment.
+Touchable: every button is a slab with a 4px dark under-edge, carved wood sign / stitched dyed leather strap / brass plate with corner rivets, embossed label, brass-bezel round buttons, and a press that sinks 4px, collapses the edge and darkens the leather.
+Performance: first textures land in about 100 ms, the rest in small timeouts (about 350 ms total on a loaded machine, about 450 KB of data URLs); no backdrop-filter, only 3 torn-parchment surfaces use filters, body.lowfx drops thread shadows, masks and glints.
+Weakness: large data-URL custom properties (inherited strings) and border-image frames make panels slightly heavier than flat CSS, and the nested stitched frames look busy on deeply nested panels. the leather pebble reads best at 2x density; on 1x it is a fine mottled grain, and dyed leather is mid-toned (not bright candy) to keep cream text at 4.5:1.
+No em dashes, no external assets, everything is disposed (properties and listeners) when another style is chosen.
