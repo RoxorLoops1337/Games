@@ -20,6 +20,8 @@ export function ball(r, c, x = 0, y = 0, z = 0, o) {
   const m = new THREE.Mesh(geo('s', () => new THREE.IcosahedronGeometry(1, 1)), mat(c, o)); m.scale.setScalar(r); m.position.set(x, y, z); m.castShadow = m.receiveShadow = true; return m;
 }
 const G = (...kids) => { const g = new THREE.Group(); for (const k of kids) g.add(k); return g; };
+export const WIN_OPTS = { emissive: '#ffb347', emissiveIntensity: 0 };
+export const LANT = { emissive: '#ffb830', emissiveIntensity: 0.4 };
 const ROOFS = ['#c8553d', '#d9823b', '#b94a6a', '#4f7fb8', '#8a6bb0', '#c4a23c'];
 const roofOf = (id) => ROOFS[id % ROOFS.length];
 // gable roof: a triangular prism along X
@@ -31,25 +33,25 @@ export function gable(w, h, d, c, x = 0, y = 0, z = 0) {
 
 export const BUILD = {
   hall(o) {
-    return G(box(2.8, 0.7, 2.8, '#9a9288', 0, 0, 0), box(2.5, 1.0, 2.5, '#e9d9b4', 0, 0.7, 0), cone(2.2, 1.5, '#b5473a', 0, 1.7, 0), box(0.4, 1.0, 0.4, '#8a8279', 0.8, 1.9, 0.5),
-      box(0.7, 0.9, 0.08, '#6b4a2c', 0, 0.7, 1.27), cyl(0.04, 0.04, 2.0, '#5a4630', -1.0, 1.0, -1.0, 6), box(0.7, 0.45, 0.05, o.color, -0.65, 2.55, -1.0));
+    return G(box(2.8, 0.7, 2.8, '#9a9288', 0, 0, 0), box(2.5, 1.0, 2.5, '#e9d9b4', 0, 0.7, 0), cone(2.2, 1.9, '#b5473a', 0, 1.7, 0), box(0.4, 1.0, 0.4, '#8a8279', 0.8, 1.9, 0.5),
+      box(0.7, 0.9, 0.08, '#6b4a2c', 0, 0.7, 1.27), box(0.4, 0.4, 0.08, '#8fc7e8', -0.9, 1.0, 1.27, WIN_OPTS), box(0.4, 0.4, 0.08, '#8fc7e8', 0.9, 1.0, 1.27, WIN_OPTS), cyl(0.04, 0.04, 2.0, '#5a4630', -1.0, 1.0, -1.0, 6), box(0.7, 0.45, 0.05, o.color, -0.65, 2.55, -1.0));
   },
   house(o) {
-    return G(box(1.7, 0.2, 1.7, '#a39a8f'), box(1.5, 0.9, 1.5, '#f2e6c9', 0, 0.2, 0), cone(1.35, 0.9, roofOf(o.id), 0, 1.1, 0), box(0.3, 0.55, 0.06, '#6b4a2c', 0, 0.2, 0.76), box(0.28, 0.28, 0.06, '#8fc7e8', 0.5, 0.65, 0.76), box(0.25, 0.7, 0.25, '#8a8279', -0.45, 1.2, -0.3));
+    return G(box(1.7, 0.2, 1.7, '#a39a8f'), box(1.5, 0.9, 1.5, '#f2e6c9', 0, 0.2, 0), cone(1.35, 1.15, roofOf(o.id), 0, 1.1, 0), box(0.3, 0.55, 0.06, '#6b4a2c', 0, 0.2, 0.76), box(0.28, 0.28, 0.06, '#8fc7e8', 0.5, 0.65, 0.76, WIN_OPTS), box(0.28, 0.28, 0.06, '#8fc7e8', -0.5, 0.65, 0.76, WIN_OPTS), box(0.25, 0.7, 0.25, '#8a8279', -0.45, 1.2, -0.3));
   },
   kitchen(o) {
-    return G(box(1.8, 0.15, 1.8, '#a39a8f'), box(1.6, 0.8, 1.4, '#f0d8a8', 0, 0.15, 0), gable(1.8, 0.7, 1.7, '#c8553d', 0, 0.95, 0), box(0.3, 0.9, 0.3, '#8a8279', 0.5, 1.0, -0.3), box(0.4, 0.4, 0.06, '#6b4a2c', -0.3, 0.15, 0.72), ball(0.22, '#d9d4cc', 0.55, 0.28, 0.9));
+    return G(box(1.8, 0.15, 1.8, '#a39a8f'), box(1.6, 0.8, 1.4, '#f0d8a8', 0, 0.15, 0), gable(1.8, 0.95, 1.7, '#c8553d', 0, 0.95, 0), box(0.3, 0.9, 0.3, '#8a8279', 0.5, 1.0, -0.3), box(0.4, 0.4, 0.06, '#6b4a2c', -0.3, 0.15, 0.72), box(0.3, 0.3, 0.06, '#8fc7e8', 0.4, 0.5, 0.72, WIN_OPTS), ball(0.22, '#d9d4cc', 0.55, 0.28, 0.9));
   },
   sawmill(o) {
     const blade = cyl(0.5, 0.5, 0.04, '#c9ced4', 0.5, 0.55, 0.0, 14); blade.rotation.z = Math.PI / 2; blade.name = 'spin';
     return G(box(1.9, 0.12, 1.9, '#8a6b45'), box(0.12, 1.2, 0.12, '#6b4a2c', -0.8, 0.1, -0.8), box(0.12, 1.2, 0.12, '#6b4a2c', 0.8, 0.1, -0.8), box(0.12, 1.2, 0.12, '#6b4a2c', -0.8, 0.1, 0.8), box(0.12, 1.2, 0.12, '#6b4a2c', 0.8, 0.1, 0.8),
-      gable(1.9, 0.6, 1.9, '#9a6b3f', 0, 1.3, 0), blade, cyl(0.15, 0.15, 0.9, '#b58a56', -0.4, 0.1, 0.4, 8), cyl(0.15, 0.15, 0.9, '#c49a62', -0.4, 0.4, 0.4, 8));
+      gable(1.9, 0.85, 1.9, '#9a6b3f', 0, 1.3, 0), blade, cyl(0.15, 0.15, 0.9, '#b58a56', -0.4, 0.1, 0.4, 8), cyl(0.15, 0.15, 0.9, '#c49a62', -0.4, 0.4, 0.4, 8));
   },
   kiln(o) {
     return G(box(1.8, 0.15, 1.8, '#a39a8f'), cyl(0.7, 0.85, 0.9, '#c4693f', 0, 0.15, 0, 10), cone(0.8, 0.5, '#a9532f', 0, 1.05, 0, 10, 0), cyl(0.18, 0.2, 0.7, '#6f5a4a', 0.4, 1.0, -0.3, 8), box(0.5, 0.4, 0.2, '#2e2420', 0, 0.2, 0.8));
   },
   storehouse(o) {
-    return G(box(1.9, 0.12, 1.9, '#a39a8f'), box(1.7, 1.0, 1.6, '#b88c5a', 0, 0.12, 0), gable(1.9, 0.8, 1.9, '#7a5a3a', 0, 1.1, 0), box(0.8, 0.8, 0.06, '#6b4a2c', 0, 0.12, 0.82), box(0.8, 0.06, 0.07, '#e9d9b4', 0, 0.5, 0.84));
+    return G(box(1.9, 0.12, 1.9, '#a39a8f'), box(1.7, 1.0, 1.6, '#b88c5a', 0, 0.12, 0), gable(1.9, 1.05, 1.9, '#7a5a3a', 0, 1.1, 0), box(0.8, 0.8, 0.06, '#6b4a2c', 0, 0.12, 0.82), box(0.8, 0.06, 0.07, '#e9d9b4', 0, 0.5, 0.84));
   },
   study(o) {
     return G(box(1.8, 0.15, 1.8, '#a39a8f'), cyl(0.7, 0.8, 1.3, '#d9d0e8', 0, 0.15, 0, 8), cone(0.95, 0.9, '#4f5fb8', 0, 1.45, 0, 8, 0), ball(0.12, '#f2d36b', 0, 2.4, 0), box(0.35, 0.5, 0.06, '#6b4a2c', 0, 0.15, 0.78), box(0.3, 0.3, 0.06, '#f2d36b', 0.3, 0.9, 0.7));
@@ -60,7 +62,7 @@ export const BUILD = {
     return G(box(1.8, 0.12, 1.8, '#a39a8f'), cyl(0.5, 0.75, 1.5, '#f0e4c8', 0, 0.12, 0, 8), cone(0.7, 0.6, '#8a5a3a', 0, 1.62, 0, 8, 0), blades);
   },
   bakery(o) {
-    return G(box(1.8, 0.15, 1.8, '#a39a8f'), box(1.6, 0.9, 1.4, '#f5d9b0', 0, 0.15, 0), gable(1.8, 0.65, 1.7, '#b0603a', 0, 1.05, 0), cyl(0.2, 0.22, 0.8, '#8a8279', 0.5, 1.0, -0.3, 8), box(0.9, 0.12, 0.45, '#e86a8a', 0, 0.75, 0.9), box(0.4, 0.4, 0.06, '#6b4a2c', 0, 0.15, 0.72), ball(0.15, '#d9a45c', -0.5, 0.25, 0.95));
+    return G(box(1.8, 0.15, 1.8, '#a39a8f'), box(1.6, 0.9, 1.4, '#f5d9b0', 0, 0.15, 0), gable(1.8, 0.9, 1.7, '#b0603a', 0, 1.05, 0), cyl(0.2, 0.22, 0.8, '#8a8279', 0.5, 1.0, -0.3, 8), box(0.9, 0.12, 0.45, '#e86a8a', 0, 0.75, 0.9), box(0.4, 0.4, 0.06, '#6b4a2c', 0, 0.15, 0.72), ball(0.15, '#d9a45c', -0.5, 0.25, 0.95));
   },
   market(o) {
     const stripes = []; for (let i = 0; i < 5; i++) stripes.push(box(0.36, 0.1, 1.2, i % 2 ? '#f2efe6' : '#d9534f', -0.72 + i * 0.36, 1.0, 0.2));
@@ -73,7 +75,7 @@ export const BUILD = {
     for (let i = 0; i < 7; i++) g.add(ball(0.09, cs[(o.id + i) % 4], -0.28 + (i % 3) * 0.28, 0.18, -0.25 + Math.floor(i / 3) * 0.28));
     return g;
   },
-  lantern(o) { return G(cyl(0.05, 0.05, 1.0, '#4a4036', 0, 0, 0, 6), ball(0.18, '#ffe08a', 0, 1.1, 0, { emissive: '#ffb830', emissiveIntensity: 0.8 })); },
+  lantern(o) { return G(cyl(0.05, 0.05, 1.0, '#4a4036', 0, 0, 0, 6), ball(0.18, '#ffe08a', 0, 1.1, 0, LANT)); },
   fountain(o) { return G(cyl(0.9, 0.95, 0.35, '#b9b4ac', 0, 0, 0, 14), cyl(0.75, 0.75, 0.2, '#6fc3ea', 0, 0.2, 0, 14, { transparent: true, opacity: 0.85 }), cyl(0.12, 0.15, 0.8, '#b9b4ac', 0, 0.3, 0, 8), ball(0.2, '#9fdcf5', 0, 1.1, 0)); },
   banner(o) { return G(cyl(0.04, 0.04, 1.6, '#5a4630', 0, 0, 0, 6), box(0.5, 0.7, 0.04, o.color, 0.27, 0.8, 0)); },
 };
@@ -120,4 +122,20 @@ export function boardModel() {
   const g = G(box(0.2, 2.0, 0.2, '#6b4a2c', -0.9, 0, 0), box(0.2, 2.0, 0.2, '#6b4a2c', 0.9, 0, 0), box(2.2, 1.3, 0.12, '#c9a36b', 0, 0.9, 0), gable(2.4, 0.4, 0.5, '#8a5a3a', 0, 2.2, 0));
   for (let i = 0; i < 5; i++) g.add(box(0.35, 0.45, 0.02, ['#fff', '#f9e79f', '#d6eaf8'][i % 3], -0.8 + i * 0.4, 1.0 + (i % 2) * 0.3, 0.08));
   return g;
+}
+
+export function sheepModel() {
+  const g = new THREE.Group(); const body = new THREE.Group(); body.name = 'body'; g.add(body);
+  const wool = ball(0.32, '#f7f4ee', 0, 0.42, 0); wool.scale.set(1, 0.85, 1.25); body.add(wool);
+  body.add(ball(0.17, '#3a3430', 0, 0.5, 0.42), cyl(0.04, 0.04, 0.22, '#3a3430', -0.15, 0, 0.15, 5), cyl(0.04, 0.04, 0.22, '#3a3430', 0.15, 0, 0.15, 5), cyl(0.04, 0.04, 0.22, '#3a3430', -0.15, 0, -0.15, 5), cyl(0.04, 0.04, 0.22, '#3a3430', 0.15, 0, -0.15, 5));
+  return g;
+}
+export function cloudModel(seed = 0) {
+  const g = new THREE.Group(); const m = mat('#ffffff', { transparent: true, opacity: 0.92, flatShading: true });
+  for (let i = 0; i < 5; i++) { const b = new THREE.Mesh(geo('s', () => new THREE.IcosahedronGeometry(1, 1)), m); b.scale.set(3 + (i % 3), 1.6 + (i % 2) * 0.6, 2.4); b.position.set((i - 2) * 3.2, (i % 2) * 0.8, (i % 3) - 1); g.add(b); }
+  return g;
+}
+export function butterflyModel(color) {
+  const g = new THREE.Group(); const m = new THREE.MeshBasicMaterial({ color, side: THREE.DoubleSide });
+  const w = new THREE.PlaneGeometry(0.22, 0.18); const l = new THREE.Mesh(w, m), r = new THREE.Mesh(w, m); l.position.x = -0.11; r.position.x = 0.11; l.name = 'wl'; r.name = 'wr'; g.add(l, r); return g;
 }

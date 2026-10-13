@@ -1,6 +1,6 @@
 // Three.js view of the valley: terrain, villages, villagers, camera and picking.
 import * as THREE from 'three';
-import { BUILD, farmModel, setFarmStage, treeModel, rockModel, clayModel, stumpModel, villagerModel, boardModel, box, cyl, cone, ball, mat } from './models.js';
+import { LANT, WIN_OPTS, sheepModel, cloudModel, butterflyModel, BUILD, farmModel, setFarmStage, treeModel, rockModel, clayModel, stumpModel, villagerModel, boardModel, box, cyl, cone, ball, mat } from './models.js';
 import { PLOT, VALLEY_FIELDS, VALLEY_FIELD_RADIUS, BUILDINGS, NODE_TYPES } from '../shared/data.js';
 
 export class View {
@@ -12,12 +12,12 @@ export class View {
     const s = this.scene = new THREE.Scene(); s.background = new THREE.Color('#a9dcf3'); s.fog = new THREE.Fog('#bfe6f7', 70, 190);
     this.cam = new THREE.PerspectiveCamera(42, 1, 0.5, 400);
     this.look = { x: 0, z: 0, dist: 34, yaw: 0.0, pitch: 0.95 }; this.goal = { ...this.look };
-    s.add(new THREE.HemisphereLight('#dff3ff', '#7da05a', 1.05));
+    const hemi = this.hemi = new THREE.HemisphereLight('#dff3ff', '#7da05a', 1.05); s.add(hemi);
     const sun = this.sun = new THREE.DirectionalLight('#fff1d0', 2.4); sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048);
     const sc = sun.shadow.camera; sc.left = -34; sc.right = 34; sc.top = 34; sc.bottom = -34; sc.near = 1; sc.far = 140; sun.shadow.bias = -0.0008; sun.shadow.normalBias = 0.06;
     s.add(sun, sun.target);
     this.pickables = []; this.fieldMeshes = {};
-    this.buildTerrain();
+    this.buildTerrain(); this.buildLife();
     this.villages = new Map(); this.villagers = new Map(); this.mixers = [];
     this.ground = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0); this.ray = new THREE.Raycaster();
     this.fx = []; this.t = 0; this.ghost = null; this.sel = null;
@@ -59,6 +59,26 @@ export class View {
       g.traverse(o => { if (o.isMesh) o.userData.pick = { k: 'valley', id: f.id }; }); this.pickables.push(g);
       s.add(g); this.fieldMeshes[f.id] = g;
     }
+  }
+
+  buildLife() {
+    const s = this.scene; this.clouds = []; this.flies = []; this.sheep = [];
+    for (let i = 0; i < 12; i++) { const c = cloudModel(i); c.position.set((i * 37) % 240 - 120, 38 + (i % 4) * 5, ((i * 53) % 200) - 100); c.scale.setScalar(1.2 + (i % 3) * 0.5); c.traverse(o => { if (o.isMesh) { o.castShadow = false; o.receiveShadow = false; } }); s.add(c); this.clouds.push(c); }
+    const cols = ['#ffd84a', '#ff9ec7', '#ffffff', '#9ad0ff'];
+    for (let i = 0; i < 28; i++) { const b = butterflyModel(cols[i % 4]); const a = (i / 28) * Math.PI * 2, r = 12 + (i % 7) * 6; b.userData = { cx: Math.cos(a) * r, cz: Math.sin(a) * r, ph: i, sp: 0.4 + (i % 5) * 0.12, rad: 1.5 + (i % 3) }; s.add(b); this.flies.push(b); }
+    for (let i = 0; i < 9; i++) { const m = sheepModel(); const a = i * 0.7, r = 6 + (i % 3) * 3.5; m.position.set(Math.cos(a) * r, 0, Math.sin(a) * r); m.userData = { tx: m.position.x, tz: m.position.z, wait: Math.random() * 3 }; s.add(m); this.sheep.push(m); }
+    this.winMat = mat('#8fc7e8', WIN_OPTS); this.lanternMat = mat('#ffe08a', LANT);
+  }
+  // t = shared world seconds, so every player sees the same sun
+  setTime(t) {
+    const ph = ((t / 360) % 1 + 1) % 1, a = (ph - 0.25) * Math.PI * 2, sn = Math.sin(a);
+    const day = Math.max(0, Math.min(1, sn * 1.5 + 0.25)), dusk = Math.max(0, 1 - Math.abs(sn) * 3.2);
+    const C = THREE.Color, sky = new C('#3a5496').lerp(new C('#a9dcf3'), day).lerp(new C('#ff9d6c'), dusk * 0.55);
+    this.scene.background.copy(sky); this.scene.fog.color.copy(sky).lerp(new C('#ffffff'), 0.15 * day);
+    this.sun.intensity = 0.9 + 1.7 * day; this.sun.color.set('#ffe9c4').lerp(new C('#ff9a5a'), dusk * 0.7).lerp(new C('#9db4ff'), 1 - day);
+    this.sun.position.set(Math.cos(a) * 42, Math.max(6, Math.abs(sn) * 52 + 6), 22); this.hemi.intensity = 0.85 + 0.4 * day; this.hemi.color.set('#8aa0e0').lerp(new C('#dff3ff'), day);
+    this.winMat.emissiveIntensity = (1 - day) * 1.6; this.night = 1 - day; this.lanternMat && (this.lanternMat.emissiveIntensity = 0.4 + (1 - day) * 2.5);
+    this.r.toneMappingExposure = 0.95 + 0.1 * day;
   }
 
   // ----- village sync -----
@@ -198,6 +218,13 @@ export class View {
     for (let i = this.fx.length - 1; i >= 0; i--) {
       const f = this.fx[i]; f.life -= dt; f.m.position.x += f.vx * dt; f.m.position.y += f.vy * dt; f.m.position.z += f.vz * dt; if (f.g) f.vy -= f.g * dt; f.m.material.opacity = Math.max(0, f.life);
       f.m.material.transparent = true; if (f.life <= 0) { this.scene.remove(f.m); this.fx.splice(i, 1); }
+    }
+    for (const c of this.clouds) { c.position.x += dt * 0.8; if (c.position.x > 130) c.position.x = -130; }
+    for (const b of this.flies) { const u = b.userData, a = this.t * u.sp + u.ph; b.position.set(u.cx + Math.cos(a) * u.rad, 0.9 + Math.sin(a * 1.7) * 0.4, u.cz + Math.sin(a) * u.rad); b.rotation.y = -a; const f = Math.sin(this.t * 22 + u.ph) * 0.9; b.getObjectByName('wl').rotation.y = f; b.getObjectByName('wr').rotation.y = -f; b.visible = (this.night || 0) < 0.6; }
+    for (const m of this.sheep) {
+      const u = m.userData; u.wait -= dt; const dx = u.tx - m.position.x, dz = u.tz - m.position.z, d = Math.hypot(dx, dz);
+      if (d > 0.1) { m.position.x += dx / d * dt * 0.9; m.position.z += dz / d * dt * 0.9; m.rotation.y = Math.atan2(dx, dz); m.getObjectByName('body').position.y = Math.abs(Math.sin(this.t * 8)) * 0.05; }
+      else if (u.wait <= 0) { u.wait = 2 + Math.random() * 5; const a = Math.random() * 6.28, r = 5 + Math.random() * 6; u.tx = Math.cos(a) * r; u.tz = Math.sin(a) * r; }
     }
     if (this.board) this.board.rotation.y = Math.sin(this.t * 0.5) * 0.03;
     this.r.render(this.scene, this.cam);

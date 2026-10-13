@@ -52,7 +52,7 @@ function begin(l) {
   l.onSnap = (s) => {
     snap = s; myId = l.id; you = s.you;
     if (!you) return;
-    view.sync(s, myId);
+    view.sync(s, myId); view.setTime(s.t + 60);
     if (first) { first = false; $('#title').hidden = true; $('#hud').hidden = false; view.focusVillage(myId, 26); setupHud(); }
     onSnap(s);
   };
@@ -99,7 +99,17 @@ function updateLabels() {
   }
   for (const [id, l] of labels) if (!snap.players.some(p => p.id === id)) { l.remove(); labels.delete(id); }
 }
+const vlabels = new Map();
 function placeLabels() {
+  for (const [id, m] of view.villagers) {
+    if (m.userData.pid !== myId) continue;
+    const ic = { idle: '💤', hungry: '😫', blocked: '⏳', full: '📦' }[m.userData.state];
+    let l = vlabels.get(id);
+    if (!ic) { if (l) l.style.display = 'none'; continue; }
+    if (!l) { l = document.createElement('div'); l.className = 'label'; l.style.fontSize = '16px'; $('#popups').appendChild(l); vlabels.set(id, l); }
+    const sp = view.project(m.position.x, 1.5, m.position.z); l.textContent = ic; l.style.display = sp.vis && view.look.dist < 40 ? '' : 'none'; l.style.left = sp.x + 'px'; l.style.top = sp.y + 'px';
+  }
+  for (const [id, l] of vlabels) if (!view.villagers.has(id)) { l.remove(); vlabels.delete(id); }
   for (const [id, l] of labels) { const V = view.villages.get(id); if (!V) { l.style.display = 'none'; continue; } const s = view.project(V.group.position.x, 3.4, V.group.position.z - 5); l.style.display = s.vis && view.look.dist < 70 ? '' : 'none'; l.style.left = s.x + 'px'; l.style.top = s.y + 'px'; }
 }
 
