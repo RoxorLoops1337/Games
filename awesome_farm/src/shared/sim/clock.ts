@@ -1,6 +1,7 @@
 // The clock: the day, the dusk warnings, nightfall with its spawns and events, and the dawn that ends it all.
 // These are the Sim's own steps, moved out for room; they take the sim and reach its runtime fields directly.
 
+import * as specialnights from './specialnights';
 import { ITEMS } from '../data/items';
 import { HOT_MUL, hotItem } from '../data/market';
 import { TUNING } from '../config';
@@ -81,6 +82,7 @@ export function startNight (sim: Sim) {
     s.night = true;
     const n = s.day;
     sim.nightEv = nightEvent(s.seed, n);
+    specialnights.onNightfall(sim);
     const spawns: typeof sim.nightSpawns = [];
     const raids: [typeof sim.online[number], raid.RaidPlan][] = [];
     for (const p of sim.online) {

@@ -2,6 +2,7 @@
 // commands that move items in and out of buildings. This is also where belts, inserters,
 // drills and power plug in later.
 
+import { harvestMoon } from './specialnights';
 import { TILE, TUNING } from '../config';
 import { seasonDef } from '../season';
 import { BUILDINGS, CROPS } from '../data/buildings';
@@ -176,7 +177,7 @@ export function step (sim: Sim, dt: number) {
                 const crop = b.plant ? CROPS[b.plant] : undefined;
                 const owner = b.by ? sim.s.players[b.by] : undefined;
                 if (!crop) { b.crop = -1; sim.touch(b); continue; }
-                b.growT = (b.growT ?? 0) + dt * (owner ? sim.derivedOf(owner).growMul : 1) * (1 + TUNING.rainGrow * rain) * seasonGrow(sim, b);
+                b.growT = (b.growT ?? 0) + dt * (owner ? sim.derivedOf(owner).growMul : 1) * (1 + TUNING.rainGrow * rain) * seasonGrow(sim, b) * harvestMoon(sim);
                 if (b.growT >= crop.stageSecs) { b.growT = 0; b.crop++; sim.touch(b); }
             }
             continue;
