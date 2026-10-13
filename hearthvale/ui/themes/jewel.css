@@ -1,0 +1,339 @@
+/* Hearthvale style "jewel": Glass Jewel. SVG lighting filters (see jewel.js) + conic-gradient gem facets.
+ * What I learned (research notes):
+ * - Specular lighting on a BLURRED alpha channel is the standard "bevel from a flat shape" trick: the blur is the height map, surfaceScale the bevel depth,
+ *   specularExponent (1-128) the tightness of the glint; keep the exponent high (30-60) for pinpoints, low (6-10) for the broad flare of a pressed gem.
+ * - fePointLight x/y/z live in the user space of the filtered element (CSS px), so a script can move one shared light per active button; z is the
+ *   light height: low z = harsh raking glints, high z = flat diffuse look.
+ * - feDiffuseLighting returns an opaque lit grey map: multiply it onto the source (feComposite arithmetic k1) to shade the body, never draw it directly.
+ * - Caustics and refraction come cheap from feTurbulence: threshold two feColorMatrix copies and intersect them to get thin bright ridges,
+ *   and feDisplacementMap with the same noise wobbles the colour body like light bent through glass.
+ * - Mobile games (Royal Match, Clash Royale, Brawl Stars) sell gems with 4 things: dark rim, saturated mid body, bright glow at the lower edge
+ *   (light that entered from above and pooled), and a hard white gloss band on top. All four are plain gradients in the lowfx fallback.
+ * - SVG filters are fine on small elements only and must not be animated per frame: cache by keeping them static, move only transforms/opacity.
+ */html[data-ui="jewel"]{--ink:#fff;--ink2:#e0daff;--ink3:#b6abe8;--tan:#7a69d6;--tan2:#4a3b9c;--cream:#f3eeff;--paper:#2a1f6b;--paper2:#40338f;
+  --leaf2:#86ffc8;--leafd:#9affd2;--lilac2:#dccaff;--red:#ff8a98;--sky2:#8fd8ff;
+  --slab:linear-gradient(126deg,rgba(255,255,255,.17) 0 13%,transparent 13.3%),linear-gradient(-58deg,rgba(255,255,255,.07) 0 19%,transparent 19.3%),linear-gradient(160deg,rgba(150,128,240,.30),rgba(66,48,148,.62) 52%,rgba(36,25,92,.78));
+  --slab-edge:rgba(206,192,255,.55);
+  --slab-sh:inset 0 1px 0 rgba(255,255,255,.55),inset 0 0 14px rgba(160,130,255,.22),0 3px 0 rgba(18,8,58,.6),0 7px 10px rgba(10,4,44,.32);
+  --glow-text:0 0 7px rgba(190,170,255,.55),0 1px 1px rgba(10,4,44,.55);}
+html[data-ui="jewel"] body{color:#fff}
+html[data-ui="jewel"] .b,html[data-ui="jewel"] .rb,html[data-ui="jewel"] .pill,html[data-ui="jewel"] .gp,html[data-ui="jewel"] #card,html[data-ui="jewel"] .mini-b{--g1:#cfd2ff;--g2:#6c6bbc;--g3:#33326f;--g4:#17163f;--glow:rgba(160,160,255,.6);--rimc:#100f33;--tx:#fff;}
+html[data-ui="jewel"] .b-green{--g1:#7dffc0;--g2:#12a561;--g3:#055c3b;--g4:#022f20;--glow:rgba(70,255,170,.6);--rimc:#01261a;--tx:#fff;text-shadow:none}
+html[data-ui="jewel"] .b-gold{--g1:#ffe27a;--g2:#cf8508;--g3:#7c4200;--g4:#442300;--glow:rgba(255,200,60,.65);--rimc:#2f1700;--tx:#fff;text-shadow:none}
+html[data-ui="jewel"] .b-blue{--g1:#8fd8ff;--g2:#2275dd;--g3:#13318a;--g4:#0a1a4e;--glow:rgba(90,190,255,.62);--rimc:#07133a;--tx:#fff;text-shadow:none}
+html[data-ui="jewel"] .b-pink{--g1:#ffc4de;--g2:#d8548c;--g3:#85204f;--g4:#4a0d30;--glow:rgba(255,130,190,.62);--rimc:#33071f;--tx:#fff;text-shadow:none}
+html[data-ui="jewel"] .b-red{--g1:#ff9aae;--g2:#c9244f;--g3:#6e0a2c;--g4:#3d0217;--glow:rgba(255,70,110,.62);--rimc:#27010f;--tx:#fff;text-shadow:none}
+html[data-ui="jewel"] .b-lilac{--g1:#e4b0ff;--g2:#8f42d6;--g3:#431b8a;--g4:#230a52;--glow:rgba(200,120,255,.62);--rimc:#18052f;--tx:#fff;text-shadow:none}
+html[data-ui="jewel"] .b-cream{}
+html[data-ui="jewel"] .pill.coin{--g1:#ffe27a;--g2:#cf8508;--g3:#7c4200;--g4:#442300;--glow:rgba(255,200,60,.65);--rimc:#2f1700}
+html[data-ui="jewel"] .pill.scr{--g1:#8fd8ff;--g2:#2275dd;--g3:#13318a;--g4:#0a1a4e;--glow:rgba(90,190,255,.62);--rimc:#07133a}
+html[data-ui="jewel"] #card{--g1:#e4b0ff;--g2:#8f42d6;--g3:#431b8a;--g4:#230a52;--glow:rgba(200,120,255,.62);--rimc:#18052f}
+html[data-ui="jewel"] .gp{--g1:#9fdcff;--g2:#2c6fc4;--g3:#172f7a;--g4:#0b1a49;--glow:rgba(110,190,255,.5);--rimc:#07133a}
+html[data-ui="jewel"] .gp.full{--g1:#ff9aae;--g2:#c9244f;--g3:#6e0a2c;--g4:#3d0217;--glow:rgba(255,70,110,.62);--rimc:#27010f;color:#fff}
+html[data-ui="jewel"] .gp.more{--g1:#bfb8ff;--g2:#5a58b5;--g3:#2b2a6c;--g4:#15143c;--rimc:#0e0d2d}
+html[data-ui="jewel"] #tools .rb:nth-child(2){--g1:#7dffc0;--g2:#12a561;--g3:#055c3b;--g4:#022f20;--glow:rgba(70,255,170,.6);--rimc:#01261a}
+html[data-ui="jewel"] #tools .rb:nth-child(3){--g1:#ffe27a;--g2:#cf8508;--g3:#7c4200;--g4:#442300;--glow:rgba(255,200,60,.65);--rimc:#2f1700}
+html[data-ui="jewel"] #tools .rb:nth-child(4){--g1:#ffd0a0;--g2:#e0701a;--g3:#8a3300;--g4:#4a1b00;--glow:rgba(255,140,50,.6);--rimc:#301000}
+html[data-ui="jewel"] #tools .rb:nth-child(5){--g1:#8fd8ff;--g2:#2275dd;--g3:#13318a;--g4:#0a1a4e;--glow:rgba(90,190,255,.62);--rimc:#07133a}
+html[data-ui="jewel"] #tools .rb:nth-child(6){--g1:#ffc4de;--g2:#d8548c;--g3:#85204f;--g4:#4a0d30;--glow:rgba(255,130,190,.62);--rimc:#33071f}
+html[data-ui="jewel"] #tools .rb.visitor{--g1:#7dffc0;--g2:#12a561;--g3:#055c3b;--g4:#022f20;--glow:rgba(70,255,170,.6);--rimc:#01261a}
+html[data-ui="jewel"] #dock .rb:nth-child(1){--g1:#8fd8ff;--g2:#2275dd;--g3:#13318a;--g4:#0a1a4e;--glow:rgba(90,190,255,.62);--rimc:#07133a}
+html[data-ui="jewel"] #dock .rb:nth-child(3){--g1:#ffc4de;--g2:#d8548c;--g3:#85204f;--g4:#4a0d30;--glow:rgba(255,130,190,.62);--rimc:#33071f}
+html[data-ui="jewel"] #dock .rb:nth-child(4){--g1:#e4b0ff;--g2:#8f42d6;--g3:#431b8a;--g4:#230a52;--glow:rgba(200,120,255,.62);--rimc:#18052f}
+html[data-ui="jewel"] #dock .rb:nth-child(5){--g1:#ffe27a;--g2:#cf8508;--g3:#7c4200;--g4:#442300;--glow:rgba(255,200,60,.65);--rimc:#2f1700}
+html[data-ui="jewel"] .b,html[data-ui="jewel"] .rb,html[data-ui="jewel"] .pill,html[data-ui="jewel"] .gp,html[data-ui="jewel"] #card,html[data-ui="jewel"] .mini-b{isolation:isolate;border:2px solid var(--rimc);background:var(--g3);color:var(--tx);
+  text-shadow:0 0 8px var(--glow),0 1px 1px rgba(0,0,0,.55);
+  box-shadow:0 4px 0 var(--g4),0 5px 0 var(--rimc),0 10px 14px rgba(14,6,52,.42),0 0 16px -5px var(--glow);
+  transition:transform .35s var(--spring),box-shadow .12s,filter .15s,opacity .2s}
+html[data-ui="jewel"] .b::before,html[data-ui="jewel"] .rb::before,html[data-ui="jewel"] .pill::before,html[data-ui="jewel"] .gp::before,html[data-ui="jewel"] #card::before,html[data-ui="jewel"] .mini-b::before,html[data-ui="jewel"] .b::after,html[data-ui="jewel"] .rb::after,html[data-ui="jewel"] .pill::after,html[data-ui="jewel"] .gp::after,html[data-ui="jewel"] #card::after,html[data-ui="jewel"] .mini-b::after{content:"";position:absolute;inset:0;border-radius:inherit;z-index:-1;pointer-events:none}
+html[data-ui="jewel"] .b::before,html[data-ui="jewel"] .rb::before,html[data-ui="jewel"] .pill::before,html[data-ui="jewel"] .gp::before,html[data-ui="jewel"] #card::before,html[data-ui="jewel"] .mini-b::before{background:linear-gradient(rgba(255,255,255,.42),rgba(255,255,255,.06) 62%,rgba(255,255,255,0)) 50% 3px/calc(100% - 14px) 42% no-repeat,
+    conic-gradient(from 0deg at 50% 54%,rgba(255,255,255,.2) 0 12.5%,transparent 0 25%,rgba(0,0,0,.2) 0 37.5%,transparent 0 50%,rgba(255,255,255,.12) 0 62.5%,transparent 0 75%,rgba(0,0,0,.22) 0 87.5%,transparent 0),
+    radial-gradient(88% 78% at 50% 128%,var(--g1) 0,transparent 66%),radial-gradient(70% 50% at 22% -8%,rgba(255,255,255,.3),transparent 70%),linear-gradient(172deg,var(--g2) 0,var(--g3) 92%)}
+html[data-ui="jewel"] .rb::before{background:linear-gradient(rgba(255,255,255,.45),rgba(255,255,255,.06) 62%,rgba(255,255,255,0)) 50% 3px/calc(100% - 16px) 40% no-repeat,
+    conic-gradient(from 20deg at 50% 50%,rgba(255,255,255,.2) 0 16.6%,transparent 0 33.3%,rgba(0,0,0,.2) 0 50%,transparent 0 66.6%,rgba(255,255,255,.12) 0 83.3%,transparent 0),
+    radial-gradient(88% 78% at 50% 128%,var(--g1) 0,transparent 66%),radial-gradient(70% 50% at 22% -8%,rgba(255,255,255,.3),transparent 70%),linear-gradient(172deg,var(--g2) 0,var(--g3) 92%)}
+html[data-ui="jewel"] .b::after,html[data-ui="jewel"] .rb::after,html[data-ui="jewel"] .pill::after,html[data-ui="jewel"] .gp::after,html[data-ui="jewel"] #card::after,html[data-ui="jewel"] .mini-b::after{box-shadow:inset 0 2px 0 rgba(255,255,255,.55),inset 0 0 0 1px rgba(255,255,255,.2),inset 0 -5px 9px -3px var(--g1)}
+html[data-ui="jewel"].jl-on body:not(.lowfx) .b::before,html[data-ui="jewel"].jl-on body:not(.lowfx) .rb::before,html[data-ui="jewel"].jl-on body:not(.lowfx) .pill::before,html[data-ui="jewel"].jl-on body:not(.lowfx) .gp::before,html[data-ui="jewel"].jl-on body:not(.lowfx) #card::before,html[data-ui="jewel"].jl-on body:not(.lowfx) .mini-b::before{filter:url(#hv-gem)}
+html[data-ui="jewel"].jl-on body:not(.lowfx) .jl-live::before{filter:url(#hv-gem-live)}
+html[data-ui="jewel"].jl-on body:not(.lowfx) .b:active::before,html[data-ui="jewel"].jl-on body:not(.lowfx) .rb:active::before,html[data-ui="jewel"].jl-on body:not(.lowfx) .pill:active::before,html[data-ui="jewel"].jl-on body:not(.lowfx) .gp:active::before,html[data-ui="jewel"].jl-on body:not(.lowfx) #card:active::before,html[data-ui="jewel"].jl-on body:not(.lowfx) .mini-b:active::before,html[data-ui="jewel"].jl-on body:not(.lowfx) .jl-down::before{filter:url(#hv-gem-press)}
+html[data-ui="jewel"].jl-on body:not(.lowfx) .jl-live:active::before,html[data-ui="jewel"].jl-on body:not(.lowfx) .jl-live.jl-down::before{filter:url(#hv-gem-livep)}
+html[data-ui="jewel"] .b>*,html[data-ui="jewel"] .rb>*,html[data-ui="jewel"] .pill>*,html[data-ui="jewel"] .gp>*,html[data-ui="jewel"] #card>*,html[data-ui="jewel"] .mini-b>*{position:relative}
+html[data-ui="jewel"] .b>.rw,html[data-ui="jewel"] .rb>.rw,html[data-ui="jewel"] .pill>.rw,html[data-ui="jewel"] .gp>.rw,html[data-ui="jewel"] #card>.rw,html[data-ui="jewel"] .mini-b>.rw{position:absolute}
+html[data-ui="jewel"] .pip,html[data-ui="jewel"] .gp em,html[data-ui="jewel"] .vring{position:absolute!important}
+html[data-ui="jewel"] .ic{filter:drop-shadow(0 1px 1px rgba(0,0,0,.45)) drop-shadow(0 0 3px var(--glow,rgba(180,170,255,.5)))}
+html[data-ui="jewel"] .b:active,html[data-ui="jewel"] .rb:active,html[data-ui="jewel"] .pill:active,html[data-ui="jewel"] .gp:active,html[data-ui="jewel"] #card:active,html[data-ui="jewel"] .mini-b:active,html[data-ui="jewel"] .tap:active,html[data-ui="jewel"] .jl-down{transform:translateY(3px) scale(.985);transition-duration:.05s;
+  box-shadow:0 1px 0 var(--g4),0 2px 0 var(--rimc),0 3px 5px rgba(14,6,52,.5),0 0 22px -2px var(--glow)}
+html[data-ui="jewel"] .b:active::before,html[data-ui="jewel"] .rb:active::before,html[data-ui="jewel"] .pill:active::before,html[data-ui="jewel"] .gp:active::before,html[data-ui="jewel"] #card:active::before,html[data-ui="jewel"] .mini-b:active::before,html[data-ui="jewel"] .jl-down::before{filter:brightness(.78) saturate(1.1)}
+html[data-ui="jewel"] .b:active::after,html[data-ui="jewel"] .rb:active::after,html[data-ui="jewel"] .pill:active::after,html[data-ui="jewel"] .gp:active::after,html[data-ui="jewel"] #card:active::after,html[data-ui="jewel"] .mini-b:active::after,html[data-ui="jewel"] .jl-down::after{box-shadow:inset 0 3px 6px rgba(0,0,0,.45),inset 0 0 0 1px rgba(255,255,255,.25),inset 0 -2px 10px 0 var(--g1)}
+html[data-ui="jewel"] .b.off:active,html[data-ui="jewel"] .rb.off:active{transform:none}
+html[data-ui="jewel"] .b.off,html[data-ui="jewel"] .rb.off{opacity:.7;filter:saturate(.35) brightness(.85);box-shadow:0 2px 0 var(--g4),0 3px 0 var(--rimc),0 6px 8px rgba(14,6,52,.3)}
+@media (hover:hover){
+html[data-ui="jewel"] .b:hover,html[data-ui="jewel"] .rb:hover,html[data-ui="jewel"] .pill:hover,html[data-ui="jewel"] .gp:hover{filter:brightness(1.08) saturate(1.1)}
+}
+html[data-ui="jewel"] .b:focus-visible,html[data-ui="jewel"] .rb:focus-visible,html[data-ui="jewel"] .tab:focus-visible,html[data-ui="jewel"] .gp:focus-visible,html[data-ui="jewel"] input:focus-visible{outline:3px solid #fff;outline-offset:2px;box-shadow:0 0 0 6px rgba(143,216,255,.55)}
+html[data-ui="jewel"] .hot{box-shadow:0 0 0 3px rgba(255,110,130,.9),0 4px 0 var(--g4)!important}
+html[data-ui="jewel"] .pill,html[data-ui="jewel"] .gp{text-shadow:0 0 8px var(--glow),0 1px 1px rgba(0,0,0,.55)}
+html[data-ui="jewel"] .pill .gi,html[data-ui="jewel"] .gp .gi{filter:drop-shadow(0 1px 1px rgba(0,0,0,.45))}
+html[data-ui="jewel"] .gp .cap{background:rgba(8,3,40,.55);box-shadow:inset 0 1px 2px rgba(0,0,0,.6);bottom:4px}
+html[data-ui="jewel"] .gp .cap u{background:linear-gradient(90deg,#7dffc0,#12d37c)}
+html[data-ui="jewel"] .gp.full .cap u{background:linear-gradient(90deg,#ffb0c0,#ff4f78)}
+html[data-ui="jewel"] .gp em{background:#ff4f78;border:1.5px solid #fff;box-shadow:0 0 8px rgba(255,79,120,.9)}
+html[data-ui="jewel"] .gp.dim{opacity:.7}
+html[data-ui="jewel"] .gsep{background:linear-gradient(rgba(255,255,255,.7),rgba(190,170,255,.3));box-shadow:0 0 6px rgba(190,170,255,.7)}
+html[data-ui="jewel"] .shine::after,html[data-ui="jewel"] #bBuild::after,html[data-ui="jewel"] #quick::after,html[data-ui="jewel"] #soupAlert::after{background:radial-gradient(circle,#fff 0 8%,rgba(255,255,255,0) 40%) 12% 28%/0 0 no-repeat,
+    conic-gradient(from 0deg,#fff 0 2.5deg,transparent 2.5deg 87.5deg,#fff 87.5deg 92.5deg,transparent 92.5deg 177.5deg,#fff 177.5deg 182.5deg,transparent 182.5deg 267.5deg,#fff 267.5deg 272.5deg,transparent 272.5deg) 12% 28%/0 0 no-repeat;
+  animation:jl-glint 4.6s ease-in-out infinite}
+@keyframes jl-glint{
+  0%,100%{background-position:14% 30%,14% 30%;background-size:0 0,0 0}
+  5%{background-size:19px 19px,19px 19px}
+  11%{background-position:14% 30%,14% 30%;background-size:0 0,0 0}
+  12%{background-position:84% 64%,84% 64%}
+  55%{background-size:0 0,0 0}
+  60%{background-position:84% 64%,84% 64%;background-size:16px 16px,16px 16px}
+  66%{background-position:84% 64%,84% 64%;background-size:0 0,0 0}}
+html[data-ui="jewel"] #bBuild::after{animation-delay:-1.2s}
+html[data-ui="jewel"] #quick::after{animation-delay:-2.6s}
+html[data-ui="jewel"] #soupAlert::after{animation-delay:-3.4s}
+html[data-ui="jewel"] .shine::after{inset:0;background-repeat:no-repeat;transition:none}
+html[data-ui="jewel"] #bBuild{border-width:3px;--g1:#7dffc0;--g2:#16b56a;--g3:#06603f;--g4:#032f21;--glow:rgba(70,255,170,.65);--rimc:#01261a}
+html[data-ui="jewel"] #bBuild .bi{filter:drop-shadow(0 2px 2px rgba(0,30,20,.6)) drop-shadow(0 0 6px rgba(120,255,200,.8))}
+html[data-ui="jewel"] #quick{--g1:#ffe27a;--g2:#e08a0a;--g3:#8a4300;--g4:#4a2300;--glow:rgba(255,200,60,.7);--rimc:#301500;border-width:3px}
+html[data-ui="jewel"] #soupAlert{--g1:#ff9aae;--g2:#c9244f;--g3:#6e0a2c;--g4:#3d0217;--glow:rgba(255,70,110,.7);--rimc:#27010f}
+html[data-ui="jewel"] .pip{background:radial-gradient(circle at 35% 28%,#ffd0da,#ff4f78 45%,#a50e3a);border:2px solid #fff;box-shadow:0 0 0 1px #5a0020,0 0 10px rgba(255,79,120,.9);text-shadow:0 1px 1px rgba(60,0,20,.7)}
+html[data-ui="jewel"] .badge-new{background:radial-gradient(circle at 35% 28%,#ffd0da,#ff4f78 50%,#a50e3a);border:2px solid #fff;box-shadow:0 0 10px rgba(255,79,120,.9)}
+html[data-ui="jewel"] .badge-new.sale{background:radial-gradient(circle at 35% 28%,#ffe0ef,#ff7fb8 50%,#b8326f);box-shadow:0 0 10px rgba(255,130,190,.9)}
+html[data-ui="jewel"] .ribbon{background:linear-gradient(#ff9bc2,#d8548c);border:2px solid #fff;box-shadow:0 0 8px rgba(255,130,190,.8)}
+html[data-ui="jewel"] .ringhint::before{border-color:rgba(255,236,140,.95);box-shadow:0 0 16px rgba(255,214,60,.9),inset 0 0 12px rgba(255,214,60,.5);z-index:2;filter:none!important;background:none!important}
+html[data-ui="jewel"] .hand{filter:drop-shadow(0 0 6px rgba(190,170,255,.9)) drop-shadow(0 3px 2px rgba(0,0,0,.4))}
+html[data-ui="jewel"] .bar,html[data-ui="jewel"] .xpb,html[data-ui="jewel"] #track .qp,html[data-ui="jewel"] .mbar,html[data-ui="jewel"] #mini .hb,html[data-ui="jewel"] .mbar{background:linear-gradient(rgba(6,2,36,.78),rgba(40,28,100,.55));border:2px solid rgba(206,192,255,.5);box-shadow:inset 0 3px 5px rgba(0,0,0,.6),0 1px 0 rgba(255,255,255,.18),0 0 8px -2px rgba(160,130,255,.5)}
+html[data-ui="jewel"] .xpb,html[data-ui="jewel"] #track .qp,html[data-ui="jewel"] .mbar,html[data-ui="jewel"] #mini .hb{border-width:1.5px}
+html[data-ui="jewel"] .bar i,html[data-ui="jewel"] .xpb i,html[data-ui="jewel"] #track .qp i{background:linear-gradient(180deg,#ffe98a 0,#ffbb2a 50%,#c97e08 100%);box-shadow:inset 0 -3px 5px rgba(255,235,150,.55),0 0 10px rgba(255,200,60,.65)}
+html[data-ui="jewel"] .bar.g i,html[data-ui="jewel"] .xpb i,html[data-ui="jewel"] #track .qp i{background:linear-gradient(180deg,#9bffd0 0,#19d683 52%,#07814c 100%);box-shadow:inset 0 -3px 5px rgba(160,255,215,.6),0 0 10px rgba(70,255,170,.7)}
+html[data-ui="jewel"] .bar.bb i{background:linear-gradient(180deg,#a8e3ff 0,#2e8ce8 52%,#1546a6 100%);box-shadow:inset 0 -3px 5px rgba(170,225,255,.6),0 0 10px rgba(90,190,255,.7)}
+html[data-ui="jewel"] .bar.p i{background:linear-gradient(180deg,#ffd0e4 0,#e8629a 52%,#9a2a62 100%);box-shadow:inset 0 -3px 5px rgba(255,200,225,.6),0 0 10px rgba(255,130,190,.7)}
+html[data-ui="jewel"] .bar.l i{background:linear-gradient(180deg,#eccaff 0,#9a4ee0 52%,#4d219a 100%);box-shadow:inset 0 -3px 5px rgba(235,200,255,.6),0 0 10px rgba(200,120,255,.7)}
+html[data-ui="jewel"] .bar.r i{background:linear-gradient(180deg,#ffb0c0 0,#e03060 52%,#8a0f36 100%);box-shadow:inset 0 -3px 5px rgba(255,180,195,.6),0 0 10px rgba(255,70,110,.7)}
+html[data-ui="jewel"] .bar i::after{left:4px;right:4px;top:1.5px;height:3px;background:linear-gradient(90deg,rgba(255,255,255,0),rgba(255,255,255,.9) 20%,rgba(255,255,255,.55) 80%,rgba(255,255,255,0))}
+html[data-ui="jewel"] .bar i::before{content:"";position:absolute;top:0;bottom:0;left:-50%;width:200%;border-radius:inherit;pointer-events:none;
+  background:radial-gradient(ellipse 14px 5px at 20% 70%,rgba(255,255,255,.55),transparent 70%),radial-gradient(ellipse 18px 6px at 60% 36%,rgba(255,255,255,.4),transparent 70%),radial-gradient(ellipse 10px 4px at 88% 76%,rgba(255,255,255,.5),transparent 70%);
+  background-size:50% 100%;animation:jl-drift 5.5s linear infinite}
+@keyframes jl-drift{to{transform:translateX(25%)}}
+html[data-ui="jewel"] .bar.sh i::before{animation:jl-drift 3s linear infinite}
+html[data-ui="jewel"] .xpb i{box-shadow:inset 0 -2px 3px rgba(160,255,215,.6),0 0 8px rgba(70,255,170,.7)}
+html[data-ui="jewel"] .xpb::after{background:linear-gradient(100deg,transparent 35%,rgba(255,255,255,.75) 50%,transparent 65%) 0 0/260% 100% no-repeat;background-position:220% 0}
+html[data-ui="jewel"] .mbar i,html[data-ui="jewel"] #mini .hb i{background:linear-gradient(#ffd0e4,#e8629a 60%,#9a2a62)}
+html[data-ui="jewel"] .mbar.low i{background:linear-gradient(#ffb0c0,#e03060 60%,#8a0f36)}
+html[data-ui="jewel"] .ringp .t{stroke:rgba(10,4,50,.6)}
+html[data-ui="jewel"] .ringp .a{stroke:#4dffa8;filter:drop-shadow(0 0 3px rgba(70,255,170,.9))}
+html[data-ui="jewel"] .ringp.gold .a{stroke:#ffd54a}
+html[data-ui="jewel"] .ringp.blue .a{stroke:#6cc8ff}
+html[data-ui="jewel"] .ringp.pink .a{stroke:#ff8cc0}
+html[data-ui="jewel"] .av .trk{stroke:rgba(10,4,50,.65)}
+html[data-ui="jewel"] .av .arc{stroke:#4dffa8;filter:drop-shadow(0 0 4px rgba(70,255,170,.95))}
+html[data-ui="jewel"] .av .face{box-shadow:inset 0 -3px 0 rgba(0,0,0,.2),0 0 0 2px rgba(255,255,255,.85),0 0 10px rgba(200,160,255,.7)}
+html[data-ui="jewel"] .av .lv{background:radial-gradient(circle at 35% 28%,#b8ffe0,#12b569 55%,#066b43);border:2px solid #fff;box-shadow:0 0 8px rgba(70,255,170,.8);text-shadow:0 1px 1px rgba(0,40,20,.7)}
+html[data-ui="jewel"] #ptitle{color:#e0ccff}
+html[data-ui="jewel"] .charm{color:#ffb0d0}
+html[data-ui="jewel"] #dock{background:linear-gradient(126deg,rgba(255,255,255,.2) 0 11%,transparent 11.3%),linear-gradient(rgba(120,100,220,.5),rgba(40,28,104,.72)) padding-box,conic-gradient(from 30deg,#efe8ff,#7e6be2,#2f2278,#b8a8ff,#5a46c0,#efe8ff,#9b8af0,#2a1d6e,#efe8ff) border-box;
+  border:3px solid transparent;box-shadow:0 10px 22px rgba(12,5,50,.5),0 0 18px -4px rgba(150,120,255,.7)}
+html[data-ui="jewel"] body:not(.lowfx) #dock{-webkit-backdrop-filter:blur(8px) saturate(1.3);backdrop-filter:blur(8px) saturate(1.3)}
+html[data-ui="jewel"] #track,html[data-ui="jewel"] #festival,html[data-ui="jewel"] #place,html[data-ui="jewel"] #mini,html[data-ui="jewel"] .tcard2,html[data-ui="jewel"] .banner,html[data-ui="jewel"] .tb{background:var(--slab),rgba(30,20,84,.55);border:2px solid var(--slab-edge);color:#fff;box-shadow:inset 0 1px 0 rgba(255,255,255,.55),inset 0 0 16px rgba(160,130,255,.25),0 5px 0 rgba(18,8,58,.6),0 12px 18px rgba(10,4,44,.4)}
+html[data-ui="jewel"] body:not(.lowfx) #track,html[data-ui="jewel"] body:not(.lowfx) .banner{-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px)}
+html[data-ui="jewel"] #track{border-radius:18px;transform:rotate(-1deg)}
+html[data-ui="jewel"] #track::before{border:1.5px dashed rgba(200,184,255,.5);inset:4px}
+html[data-ui="jewel"] #track .qn,html[data-ui="jewel"] #track .hint{color:#dccaff}
+html[data-ui="jewel"] #track .pin{filter:drop-shadow(0 0 6px rgba(255,120,150,.9))}
+html[data-ui="jewel"] #festival{background:linear-gradient(160deg,rgba(255,150,200,.45),rgba(120,36,100,.8));color:#fff;border-color:rgba(255,190,225,.7)}
+html[data-ui="jewel"] #festival small{color:#ffd2e6}
+html[data-ui="jewel"] #place,html[data-ui="jewel"] #mini{background:var(--slab),rgba(30,20,84,.82)}
+html[data-ui="jewel"] #mini::after{background:#2b2074;border-right:2px solid var(--slab-edge);border-bottom:2px solid var(--slab-edge)}
+html[data-ui="jewel"] #mini .ms{color:#dccaff}
+html[data-ui="jewel"] .tcard2 .dots i{background:rgba(255,255,255,.3)}
+html[data-ui="jewel"] .tcard2 .dots i.on{background:#7dffc0;box-shadow:0 0 8px #7dffc0}
+html[data-ui="jewel"] .tcard2 .dots i.past{background:#4aa98a}
+html[data-ui="jewel"] .tb{background:var(--slab),rgba(30,20,84,.84);border-radius:20px}
+html[data-ui="jewel"] .tb::after{background:#2b2074;border-right:2px solid var(--slab-edge);border-bottom:2px solid var(--slab-edge);box-shadow:none}
+html[data-ui="jewel"] .tb .ti{background:rgba(255,255,255,.18);box-shadow:inset 0 0 0 1px rgba(255,255,255,.35)}
+html[data-ui="jewel"] .tb .tc{background:#ff4f78;border:2px solid #fff}
+html[data-ui="jewel"] .t-good{border-color:rgba(125,255,192,.8);box-shadow:inset 0 0 18px rgba(70,255,170,.3),0 5px 0 rgba(2,47,32,.7),0 12px 18px rgba(10,4,44,.4),0 0 14px -2px rgba(70,255,170,.6)}
+html[data-ui="jewel"] .t-good::after{border-color:rgba(125,255,192,.8)}
+html[data-ui="jewel"] .t-good .ti{background:rgba(70,255,170,.3)}
+html[data-ui="jewel"] .t-warn{border-color:rgba(255,210,110,.85);box-shadow:inset 0 0 18px rgba(255,190,60,.3),0 5px 0 rgba(68,35,0,.7),0 12px 18px rgba(10,4,44,.4),0 0 14px -2px rgba(255,200,60,.6)}
+html[data-ui="jewel"] .t-warn::after{border-color:rgba(255,210,110,.85)}
+html[data-ui="jewel"] .t-warn .ti{background:rgba(255,190,60,.3)}
+html[data-ui="jewel"] .t-bad{border-color:rgba(255,130,150,.85);box-shadow:inset 0 0 18px rgba(255,70,110,.3),0 5px 0 rgba(61,2,23,.7),0 12px 18px rgba(10,4,44,.4),0 0 14px -2px rgba(255,70,110,.6)}
+html[data-ui="jewel"] .t-bad::after{border-color:rgba(255,130,150,.85)}
+html[data-ui="jewel"] .t-bad .ti{background:rgba(255,70,110,.3)}
+html[data-ui="jewel"] .t-gold{border-color:rgba(255,226,122,.9);box-shadow:inset 0 0 18px rgba(255,200,60,.35),0 5px 0 rgba(68,35,0,.7),0 12px 18px rgba(10,4,44,.4),0 0 14px -2px rgba(255,200,60,.7)}
+html[data-ui="jewel"] .t-gold::after{border-color:rgba(255,226,122,.9)}
+html[data-ui="jewel"] .t-gold .ti{background:rgba(255,200,60,.3)}
+html[data-ui="jewel"] .t-pink{border-color:rgba(255,170,215,.85);box-shadow:inset 0 0 18px rgba(255,130,190,.3),0 5px 0 rgba(74,13,48,.7),0 12px 18px rgba(10,4,44,.4),0 0 14px -2px rgba(255,130,190,.6)}
+html[data-ui="jewel"] .t-pink::after{border-color:rgba(255,170,215,.85)}
+html[data-ui="jewel"] .t-pink .ti{background:rgba(255,130,190,.3)}
+html[data-ui="jewel"] .banner{border-radius:99px}
+html[data-ui="jewel"] .banner.gold{background:linear-gradient(126deg,rgba(255,255,255,.22) 0 13%,transparent 13.3%),linear-gradient(160deg,rgba(255,214,90,.55),rgba(120,64,0,.82));border-color:rgba(255,226,122,.9);box-shadow:inset 0 0 18px rgba(255,200,60,.35),0 6px 0 rgba(68,35,0,.7),0 14px 24px rgba(10,4,44,.45),0 0 16px -2px rgba(255,200,60,.7)}
+html[data-ui="jewel"] .banner.green{background:linear-gradient(126deg,rgba(255,255,255,.22) 0 13%,transparent 13.3%),linear-gradient(160deg,rgba(70,230,160,.5),rgba(4,84,56,.85));border-color:rgba(125,255,192,.85);box-shadow:inset 0 0 18px rgba(70,255,170,.3),0 6px 0 rgba(2,47,32,.7),0 14px 24px rgba(10,4,44,.45),0 0 16px -2px rgba(70,255,170,.6)}
+html[data-ui="jewel"] .banner .bt small,html[data-ui="jewel"] .banner.gold .bt small{color:#fff0b0;text-shadow:0 0 6px rgba(255,220,100,.7)}
+html[data-ui="jewel"] .banner.green .bt small{color:#c8ffe4}
+html[data-ui="jewel"] .banner .bic{background:radial-gradient(circle at 35% 28%,#fff,#cdbfff);box-shadow:0 0 0 3px rgba(255,255,255,.5),0 0 14px rgba(200,170,255,.8)}
+html[data-ui="jewel"] .label{background:linear-gradient(rgba(70,52,160,.9),rgba(30,20,88,.92));color:#fff;border:1.5px solid var(--slab-edge);box-shadow:inset 0 1px 0 rgba(255,255,255,.5),0 3px 0 rgba(18,8,58,.55),0 0 8px rgba(130,100,240,.6);text-shadow:0 0 6px rgba(190,170,255,.6)}
+html[data-ui="jewel"] .label small{color:#dccaff}
+html[data-ui="jewel"] .label .lv{background:#12a561;text-shadow:none}
+html[data-ui="jewel"] .label .ch{color:#ffb0d0}
+html[data-ui="jewel"] .label.vbub::after{background:#2b2074;border-color:var(--slab-edge)}
+html[data-ui="jewel"] .fl,html[data-ui="jewel"] .pop{-webkit-text-stroke-color:#2b1a75;text-shadow:0 0 10px rgba(190,160,255,.8)}
+html[data-ui="jewel"] .fl-gold{-webkit-text-stroke-color:#6a3a00}
+html[data-ui="jewel"] .fl-good{-webkit-text-stroke-color:#06583a}
+html[data-ui="jewel"] .fl-scroll{-webkit-text-stroke-color:#133f8a}
+html[data-ui="jewel"] .sheet,html[data-ui="jewel"] .ov-card{border:4px solid transparent;border-radius:0;color:#fff;
+  background:var(--jl-tile,linear-gradient(transparent,transparent)) padding-box,
+    linear-gradient(126deg,rgba(255,255,255,.16) 0 9%,transparent 9.2%) padding-box,
+    linear-gradient(165deg,#4b3aa6,#2a1d78 46%,#1b1252) padding-box,
+    conic-gradient(from 20deg at 50% 50%,#f1eaff,#7f6be0,#3a2b92,#c3b4ff,#5d49c4,#f1eaff,#a392f2,#2d2070,#f1eaff) border-box;
+  box-shadow:none;
+  clip-path:polygon(24px 0,calc(100% - 24px) 0,100% 24px,100% calc(100% - 16px),calc(100% - 16px) 100%,16px 100%,0 calc(100% - 16px),0 24px)}
+html[data-ui="jewel"] .ov-card{clip-path:polygon(26px 0,calc(100% - 26px) 0,100% 26px,100% calc(100% - 26px),calc(100% - 26px) 100%,26px 100%,0 calc(100% - 26px),0 26px)}
+html[data-ui="jewel"] .sheet::before,html[data-ui="jewel"] .sheet::after,html[data-ui="jewel"] .ov-card::before,html[data-ui="jewel"] .ov-card::after,html[data-ui="jewel"] #dock::before,html[data-ui="jewel"] #dock::after{content:"";position:absolute;width:15px;height:15px;pointer-events:none;z-index:6;background:radial-gradient(circle,#fff 0 30%,#d7c8ff 60%,#fff 100%);
+  clip-path:polygon(50% 0,59% 38%,100% 50%,59% 62%,50% 100%,41% 62%,0 50%,41% 38%);animation:jl-tw 3.6s ease-in-out infinite}
+html[data-ui="jewel"] .sheet::before{right:64px;top:7px}
+html[data-ui="jewel"] .sheet::after{left:20px;bottom:12px;width:11px;height:11px;animation-delay:-1.8s}
+html[data-ui="jewel"] .ov-card::before{right:34px;top:34px}
+html[data-ui="jewel"] .ov-card::after{left:30px;bottom:40px;width:11px;height:11px;animation-delay:-1.6s}
+html[data-ui="jewel"] #dock::before{left:30px;top:3px;width:12px;height:12px}
+html[data-ui="jewel"] #dock::after{right:26px;bottom:6px;width:10px;height:10px;animation-delay:-2s}
+@keyframes jl-tw{0%,100%{transform:scale(.2) rotate(0);opacity:0}45%{transform:scale(1) rotate(45deg);opacity:1}60%{transform:scale(.7) rotate(60deg);opacity:.85}80%{transform:scale(.2) rotate(90deg);opacity:0}}
+html[data-ui="jewel"] .ov-card>*{position:relative}
+html[data-ui="jewel"] .ov-bg{background:rgba(20,10,60,.55)}
+html[data-ui="jewel"] .ov-card h2,html[data-ui="jewel"] .ov-card h3{text-shadow:0 0 10px rgba(190,170,255,.7)}
+html[data-ui="jewel"] .ov-card p{color:#e0daff}
+html[data-ui="jewel"] .ov-ic{background:radial-gradient(circle at 35% 30%,#fff,#cdbfff);box-shadow:0 0 0 4px rgba(255,255,255,.5),0 0 18px rgba(190,160,255,.8)}
+html[data-ui="jewel"] #scrim{background:rgba(24,12,70,.5)}
+html[data-ui="jewel"] .grab::before{background:linear-gradient(90deg,transparent,#d9ccff,transparent);opacity:.9;height:4px}
+html[data-ui="jewel"] .sh-head{border:2px solid rgba(255,255,255,.55);background:linear-gradient(126deg,rgba(255,255,255,.28) 0 14%,transparent 14.3%),radial-gradient(90% 120% at 50% 150%,#5ee8a8 0,transparent 62%),linear-gradient(172deg,#11a463,#065c3b);box-shadow:0 4px 0 #022f20,0 8px 12px rgba(0,0,0,.35),inset 0 2px 0 rgba(255,255,255,.5);color:#fff}
+html[data-ui="jewel"] .sh-title{text-shadow:0 0 10px rgba(125,255,192,.8),0 1px 1px rgba(0,30,15,.7)}
+html[data-ui="jewel"] .sh-sub{text-shadow:0 1px 1px rgba(0,30,15,.7)}
+html[data-ui="jewel"] .sh-ic img{background:radial-gradient(circle at 35% 30%,#fff,#d9f3ff);border:2px solid #fff}
+html[data-ui="jewel"] .sheet .x{--g1:#ff9aae;--g2:#c9244f;--g3:#6e0a2c;--g4:#3d0217;--glow:rgba(255,70,110,.62);--rimc:#27010f}
+html[data-ui="jewel"] .sh-tabs{background:linear-gradient(rgba(6,2,36,.7),rgba(30,20,84,.5));border:1.5px solid rgba(206,192,255,.4);box-shadow:inset 0 3px 6px rgba(0,0,0,.6)}
+html[data-ui="jewel"] .sh-tabs .ind{background:linear-gradient(126deg,rgba(255,255,255,.3) 0 16%,transparent 16.3%),radial-gradient(90% 100% at 50% 150%,#9fdcff 0,transparent 62%),linear-gradient(172deg,#2a7ee6,#152f88);border:2px solid #07133a;box-shadow:0 3px 0 #0a1a4e,0 0 14px rgba(90,190,255,.7),inset 0 2px 0 rgba(255,255,255,.55)}
+html[data-ui="jewel"] button.tab{color:#cfc4ff;background:none;border:0;box-shadow:none;text-shadow:0 1px 1px rgba(0,0,0,.5)}
+html[data-ui="jewel"] button.tab.on{color:#fff;text-shadow:0 0 8px rgba(143,216,255,.95),0 1px 1px rgba(0,0,40,.6)}
+html[data-ui="jewel"] button.tab::before,html[data-ui="jewel"] button.tab::after{content:none}
+html[data-ui="jewel"] button.tab:active{box-shadow:none;transform:scale(.94)}
+html[data-ui="jewel"] .sh-body{scrollbar-color:#7a69d6 transparent}
+html[data-ui="jewel"] .sec,html[data-ui="jewel"] .card,html[data-ui="jewel"] .rowi,html[data-ui="jewel"] .tech,html[data-ui="jewel"] .stat,html[data-ui="jewel"] .wcard,html[data-ui="jewel"] .fieldchip,html[data-ui="jewel"] .qitem,html[data-ui="jewel"] .vrow,html[data-ui="jewel"] .lbrow.me,html[data-ui="jewel"] .evcard,html[data-ui="jewel"] .phero,html[data-ui="jewel"] .pr,html[data-ui="jewel"] .sellrow,html[data-ui="jewel"] .day,html[data-ui="jewel"] .stage,html[data-ui="jewel"] .unl,html[data-ui="jewel"] .skill,html[data-ui="jewel"] .good,html[data-ui="jewel"] .ach,html[data-ui="jewel"] .recipe,html[data-ui="jewel"] .offer,html[data-ui="jewel"] .order,html[data-ui="jewel"] .buy,html[data-ui="jewel"] .nextup,html[data-ui="jewel"] .hintline,html[data-ui="jewel"] .perk,html[data-ui="jewel"] .alert,html[data-ui="jewel"] .chatlog,html[data-ui="jewel"] .bub,html[data-ui="jewel"] .speech,html[data-ui="jewel"] .chipb,html[data-ui="jewel"] .gg,html[data-ui="jewel"] .seg,html[data-ui="jewel"] .slot.full,html[data-ui="jewel"] .uis{color:#fff;background:var(--slab);border:2px solid var(--slab-edge);box-shadow:var(--slab-sh)}
+html[data-ui="jewel"] .rowi,html[data-ui="jewel"] .fieldchip,html[data-ui="jewel"] .qitem,html[data-ui="jewel"] .chipb,html[data-ui="jewel"] .wcard,html[data-ui="jewel"] .stat,html[data-ui="jewel"] .tech{background:var(--slab)}
+html[data-ui="jewel"] .sec.done,html[data-ui="jewel"] .card.done,html[data-ui="jewel"] .tech.done,html[data-ui="jewel"] .sec.up,html[data-ui="jewel"] .nextup,html[data-ui="jewel"] .quest.done,html[data-ui="jewel"] .stage.built,html[data-ui="jewel"] .day.done,html[data-ui="jewel"] .pr.me{background:linear-gradient(126deg,rgba(255,255,255,.17) 0 13%,transparent 13.3%),linear-gradient(160deg,rgba(70,230,160,.32),rgba(4,84,56,.7));border-color:rgba(125,255,192,.65);box-shadow:inset 0 1px 0 rgba(255,255,255,.5),inset 0 0 14px rgba(70,255,170,.22),0 3px 0 rgba(2,47,32,.7),0 7px 10px rgba(10,4,44,.32)}
+html[data-ui="jewel"] .sec.lock,html[data-ui="jewel"] .card.lock{background:linear-gradient(160deg,rgba(150,150,170,.25),rgba(40,36,70,.75));border-color:rgba(190,185,215,.35);color:#c2bbdd;box-shadow:inset 0 1px 0 rgba(255,255,255,.3),0 3px 0 rgba(18,8,58,.6)}
+html[data-ui="jewel"] .lockline{color:#c2bbdd}
+html[data-ui="jewel"] .card:active,html[data-ui="jewel"] .chipb:active,html[data-ui="jewel"] .fieldchip:active{transform:translateY(3px) scale(.98)}
+html[data-ui="jewel"] .card:active{box-shadow:inset 0 3px 8px rgba(0,0,0,.4),0 1px 0 rgba(18,8,58,.6)}
+html[data-ui="jewel"] .card .nm{text-shadow:0 0 6px rgba(190,170,255,.5)}
+html[data-ui="jewel"] .small,html[data-ui="jewel"] p.small,html[data-ui="jewel"] .label2,html[data-ui="jewel"] .fine,html[data-ui="jewel"] .skill .si{color:#e0daff}
+html[data-ui="jewel"] .muted{color:#b6abe8}
+html[data-ui="jewel"] .bad,html[data-ui="jewel"] .cc.bad{color:#ff8a98}
+html[data-ui="jewel"] .okk{color:#8dffc9}
+html[data-ui="jewel"] .lab{color:#8dffc9}
+html[data-ui="jewel"] .chap{color:#9affd2;border-bottom:2px dotted rgba(200,184,255,.4)}
+html[data-ui="jewel"] .sec h4{text-shadow:0 0 8px rgba(190,170,255,.5)}
+html[data-ui="jewel"] .th{background:radial-gradient(circle at 35% 28%,#fff,var(--b1,#d9f3ff) 75%);box-shadow:inset 0 -5px 8px rgba(60,40,140,.22),0 0 0 3px rgba(255,255,255,.65),0 0 14px rgba(170,140,255,.6),0 3px 0 3px rgba(18,8,58,.5)}
+html[data-ui="jewel"] .th::after{content:"";position:absolute;left:14%;top:5%;width:48%;height:26%;border-radius:50%;background:linear-gradient(rgba(255,255,255,.75),rgba(255,255,255,0));pointer-events:none}
+html[data-ui="jewel"] .th .lk{background:#2b2074;color:#fff;box-shadow:0 0 0 1.5px var(--slab-edge)}
+html[data-ui="jewel"] .sh-ic .th.sm{box-shadow:0 0 0 2px #fff,0 3px 0 3px rgba(2,47,32,.6)}
+html[data-ui="jewel"] .seg{background:linear-gradient(rgba(6,2,36,.7),rgba(30,20,84,.5));box-shadow:inset 0 3px 6px rgba(0,0,0,.6);border:1.5px solid rgba(206,192,255,.4)}
+html[data-ui="jewel"] .seg button{color:#cfc4ff;text-shadow:0 1px 1px rgba(0,0,0,.5)}
+html[data-ui="jewel"] .seg button.on{color:#fff;background:linear-gradient(126deg,rgba(255,255,255,.3) 0 16%,transparent 16.3%),radial-gradient(90% 100% at 50% 150%,#9fdcff 0,transparent 62%),linear-gradient(172deg,#2a7ee6,#152f88);border:2px solid #07133a;box-shadow:0 3px 0 #0a1a4e,0 0 12px rgba(90,190,255,.65),inset 0 2px 0 rgba(255,255,255,.55);text-shadow:0 0 8px rgba(143,216,255,.9),0 1px 1px rgba(0,0,40,.6)}
+html[data-ui="jewel"] .chipb{color:#fff;text-shadow:0 1px 1px rgba(0,0,0,.5)}
+html[data-ui="jewel"] .chipb.on{background:linear-gradient(126deg,rgba(255,255,255,.3) 0 16%,transparent 16.3%),radial-gradient(90% 100% at 50% 150%,#7dffc0 0,transparent 62%),linear-gradient(172deg,#14b36a,#065c3b);border-color:#01261a;box-shadow:0 3px 0 #022f20,0 0 12px rgba(70,255,170,.6),inset 0 2px 0 rgba(255,255,255,.55);text-shadow:0 0 8px rgba(125,255,192,.9)}
+html[data-ui="jewel"] .stepper .v{color:#fff;text-shadow:0 0 8px rgba(190,170,255,.7)}
+html[data-ui="jewel"] .sellrow .stepper .v{background:rgba(6,2,36,.55);box-shadow:inset 0 2px 5px rgba(0,0,0,.55)}
+html[data-ui="jewel"] .dot,html[data-ui="jewel"] .dot2{box-shadow:0 0 0 2px rgba(255,255,255,.8),0 0 8px currentColor}
+html[data-ui="jewel"] .ring{border-color:rgba(206,192,255,.7);background:rgba(6,2,36,.5)}
+html[data-ui="jewel"] input[type=text],html[data-ui="jewel"] input:not([type]),html[data-ui="jewel"] textarea,html[data-ui="jewel"] #title input{background:linear-gradient(rgba(6,2,36,.7),rgba(30,20,84,.55));color:#fff;border:2px solid rgba(206,192,255,.5);box-shadow:inset 0 3px 6px rgba(0,0,0,.55)}
+html[data-ui="jewel"] input::placeholder,html[data-ui="jewel"] #title input::placeholder{color:#a79cde}
+html[data-ui="jewel"] input:focus,html[data-ui="jewel"] #title input:focus{border-color:#8fd8ff;box-shadow:inset 0 3px 6px rgba(0,0,0,.55),0 0 0 4px rgba(143,216,255,.45)}
+html[data-ui="jewel"] input[type=range]::-webkit-slider-runnable-track{background:linear-gradient(90deg,#19d683 var(--p,50%),rgba(6,2,36,.75) var(--p,50%));border:2px solid rgba(206,192,255,.5);box-shadow:inset 0 3px 5px rgba(0,0,0,.6),0 0 8px -2px rgba(70,255,170,.5)}
+html[data-ui="jewel"] input[type=range]::-moz-range-track{background:linear-gradient(90deg,#19d683 var(--p,50%),rgba(6,2,36,.75) var(--p,50%));border:2px solid rgba(206,192,255,.5)}
+html[data-ui="jewel"] input[type=range]::-webkit-slider-thumb{width:30px;height:30px;margin-top:-10px;background:radial-gradient(circle at 34% 26%,#fff 0 12%,#cfeaff 30%,#3f8fe8 62%,#17358f);border:2px solid #07133a;box-shadow:0 3px 0 #0a1a4e,0 0 12px rgba(90,190,255,.8),inset 0 -3px 5px rgba(143,216,255,.7)}
+html[data-ui="jewel"] input[type=range]::-moz-range-thumb{background:radial-gradient(circle at 34% 26%,#fff 0 12%,#cfeaff 30%,#3f8fe8 62%,#17358f);border:2px solid #07133a;box-shadow:0 3px 0 #0a1a4e}
+html[data-ui="jewel"] .sw{background:linear-gradient(rgba(6,2,36,.8),rgba(40,28,100,.6));border:2px solid rgba(206,192,255,.5);box-shadow:inset 0 3px 5px rgba(0,0,0,.6)}
+html[data-ui="jewel"] .sw::after{top:2px;left:2px;width:26px;height:26px;background:radial-gradient(circle at 34% 26%,#fff 0 12%,#d9dcff 34%,#7a78d0 70%,#3b3a8c);box-shadow:0 2px 0 #17163f,inset 0 -3px 4px rgba(200,200,255,.6)}
+html[data-ui="jewel"] .sw.on{background:linear-gradient(rgba(2,40,26,.8),rgba(10,110,70,.7));box-shadow:inset 0 3px 5px rgba(0,0,0,.5),0 0 12px rgba(70,255,170,.7)}
+html[data-ui="jewel"] .sw.on::after{background:radial-gradient(circle at 34% 26%,#fff 0 12%,#c8ffe4 34%,#2ed68a 70%,#08794a);box-shadow:0 2px 0 #022f20,inset 0 -3px 4px rgba(160,255,215,.7),0 0 10px rgba(70,255,170,.9)}
+html[data-ui="jewel"] .slot{border:2px dashed rgba(206,192,255,.5);background:rgba(6,2,36,.35);color:#cfc4ff}
+html[data-ui="jewel"] .uis{border-width:2px}
+html[data-ui="jewel"] .uis.on{border-color:#7dffc0;background:var(--slab);box-shadow:var(--slab-sh),0 0 14px rgba(70,255,170,.55)}
+html[data-ui="jewel"] .uis small{opacity:.85}
+html[data-ui="jewel"] .lbrow:nth-child(odd){background:rgba(255,255,255,.08)}
+html[data-ui="jewel"] .lbrow.me{background:linear-gradient(160deg,rgba(70,230,160,.32),rgba(4,84,56,.7))}
+html[data-ui="jewel"] .stage .sn{background:rgba(6,2,36,.6);color:#fff}
+html[data-ui="jewel"] .stage.built .sn{background:#12a561}
+html[data-ui="jewel"] .stage.now{background:linear-gradient(160deg,rgba(255,214,90,.45),rgba(120,64,0,.75));box-shadow:0 0 0 2px #ffe27a,0 0 14px rgba(255,200,60,.6)}
+html[data-ui="jewel"] .skill.cur{background:rgba(70,230,160,.22);box-shadow:inset 0 0 0 2px rgba(125,255,192,.55)}
+html[data-ui="jewel"] .skill .si{background:rgba(255,255,255,.14);box-shadow:0 0 0 2px var(--slab-edge)}
+html[data-ui="jewel"] .day.today{background:linear-gradient(160deg,rgba(255,214,90,.5),rgba(120,64,0,.8));box-shadow:0 0 0 3px #ffe27a,0 0 16px rgba(255,200,60,.75)}
+html[data-ui="jewel"] .day small,html[data-ui="jewel"] .day .dr{color:#e0daff}
+html[data-ui="jewel"] .day.big{background:linear-gradient(160deg,rgba(200,150,255,.4),rgba(67,27,138,.75))}
+html[data-ui="jewel"] .evcard{background:linear-gradient(160deg,rgba(110,190,255,.35),rgba(19,49,138,.75));border-color:rgba(143,216,255,.6)}
+html[data-ui="jewel"] .evcard.on{background:linear-gradient(160deg,rgba(255,150,200,.45),rgba(120,36,100,.8));border-color:rgba(255,190,225,.7)}
+html[data-ui="jewel"] .phero{background:radial-gradient(circle at 20% 20%,rgba(255,255,255,.2),transparent 60%),linear-gradient(160deg,rgba(110,190,255,.35),rgba(19,49,138,.75));border-color:rgba(143,216,255,.6)}
+html[data-ui="jewel"] .phero small{color:#bfe6ff}
+html[data-ui="jewel"] .perk{background:rgba(255,214,90,.2);border-color:rgba(255,226,122,.6)}
+html[data-ui="jewel"] .alert{background:linear-gradient(160deg,rgba(255,110,140,.4),rgba(110,10,44,.8));border-color:rgba(255,130,150,.7);color:#fff}
+html[data-ui="jewel"] .good.full{background:linear-gradient(160deg,rgba(255,110,140,.4),rgba(110,10,44,.75))}
+html[data-ui="jewel"] .good.zero{opacity:.6}
+html[data-ui="jewel"] .good{background:rgba(255,255,255,.08);border:1.5px solid rgba(206,192,255,.35);box-shadow:none}
+html[data-ui="jewel"] .hintline{background:rgba(255,255,255,.1);box-shadow:none;color:#e0daff}
+html[data-ui="jewel"] .chatlog{background:rgba(6,2,36,.55);box-shadow:inset 0 3px 6px rgba(0,0,0,.5)}
+html[data-ui="jewel"] .bub{background:rgba(255,255,255,.14);box-shadow:none;border-width:1.5px}
+html[data-ui="jewel"] .bub.me{background:rgba(90,190,255,.28)}
+html[data-ui="jewel"] .speech{background:rgba(255,255,255,.14);border:2px solid var(--slab-edge);box-shadow:none}
+html[data-ui="jewel"] .speech::before{background:#37298a;border-color:var(--slab-edge)}
+html[data-ui="jewel"] .ttag{background:linear-gradient(#b17aea,#6a2fb8);text-shadow:none;box-shadow:0 0 8px rgba(200,120,255,.7)}
+html[data-ui="jewel"] .ach .medal{background:rgba(6,2,36,.6)}
+html[data-ui="jewel"] .ach .medal.on{background:radial-gradient(circle at 35% 30%,#fff7c8,#ffd54a);box-shadow:0 0 0 3px rgba(255,255,255,.7),0 0 16px rgba(255,200,40,.9)}
+html[data-ui="jewel"] .ach.got{background:linear-gradient(160deg,rgba(255,214,90,.4),rgba(120,64,0,.75))}
+html[data-ui="jewel"] .gg{background:var(--slab)}
+html[data-ui="jewel"] .gg.on{background:linear-gradient(160deg,rgba(255,150,200,.5),rgba(120,36,100,.8));box-shadow:0 0 0 2px #ff8cc0,0 0 12px rgba(255,130,190,.7)}
+html[data-ui="jewel"] .qitem .qn{background:#12a561;border:2px solid #fff;text-shadow:none}
+html[data-ui="jewel"] .qitem .qx{background:#ff4f78}
+html[data-ui="jewel"] .quest.cur{box-shadow:0 0 0 2px #7dffc0,0 0 14px rgba(70,255,170,.6),0 3px 0 rgba(2,47,32,.7)}
+html[data-ui="jewel"] .unl{background:rgba(255,255,255,.08)}
+html[data-ui="jewel"] .unl small{color:#9affd2}
+html[data-ui="jewel"] .shutter{background:radial-gradient(90% 90% at 50% 130%,#ffc4de,transparent 62%),linear-gradient(#e8629a,#85204f);border:4px solid #fff;box-shadow:0 0 0 3px rgba(0,0,0,.2),0 6px 0 #4a0d30,0 12px 18px rgba(0,0,0,.35),0 0 18px rgba(255,130,190,.7)}
+html[data-ui="jewel"] .polaroid{color:#5a3f2c}
+html[data-ui="jewel"] .polaroid small{color:#8a6a52}
+html[data-ui="jewel"] .cc{color:#fff}
+html[data-ui="jewel"] .cc.bad{color:#ff8a98}
+html[data-ui="jewel"] .reward .cc{color:#fff}
+html[data-ui="jewel"] .reward .you{color:#9affd2}
+html[data-ui="jewel"] .reward{color:#e0daff}
+html[data-ui="jewel"] .credits{color:#e0daff}
+html[data-ui="jewel"] .jelly{-webkit-text-stroke:8px #0b6b45;text-shadow:0 5px 0 #054a30,0 0 22px rgba(70,255,170,.8);color:#eafff4}
+html[data-ui="jewel"] .lvlup .jelly{color:#fff7c0;-webkit-text-stroke-color:#a85c00;text-shadow:0 5px 0 #6d3a00,0 0 22px rgba(255,200,60,.9)}
+html[data-ui="jewel"] .lvlbadge .ic{filter:drop-shadow(0 6px 0 rgba(2,47,32,.6)) drop-shadow(0 0 16px rgba(70,255,170,.8))}
+html[data-ui="jewel"] .lvlnum{-webkit-text-stroke:7px #054a30;text-shadow:0 4px 0 #054a30,0 0 16px rgba(125,255,192,.8)}
+html[data-ui="jewel"] .unlit .th{animation:chestpop .7s var(--bounce) both}
+html[data-ui="jewel"] .sheet.soft{backdrop-filter:none}
+html[data-ui="jewel"] .tform{background:var(--jl-tile,linear-gradient(transparent,transparent)),linear-gradient(165deg,#4b3aa6,#2a1d78 46%,#1b1252);border:4px solid #b9a8ff;box-shadow:0 0 22px rgba(150,120,255,.6),0 18px 30px rgba(10,5,50,.4);color:#fff}
+html[data-ui="jewel"] #saveCard{background:linear-gradient(160deg,rgba(70,230,160,.32),rgba(4,84,56,.7));border-color:rgba(125,255,192,.65);color:#fff;box-shadow:inset 0 1px 0 rgba(255,255,255,.5),0 3px 0 rgba(2,47,32,.7)}
+html[data-ui="jewel"] #saveCard small{color:#c8ffe4}
+html[data-ui="jewel"] .tag{color:#fff;background:rgba(30,20,84,.7);border-color:rgba(206,192,255,.6)}
+html[data-ui="jewel"] #titleMsg{color:#ff9aae}
+html[data-ui="jewel"] body.lowfx .b::before,html[data-ui="jewel"] body.lowfx .rb::before,html[data-ui="jewel"] body.lowfx .pill::before,html[data-ui="jewel"] body.lowfx .gp::before,html[data-ui="jewel"] body.lowfx #card::before,html[data-ui="jewel"] body.lowfx .mini-b::before{filter:none}
+html[data-ui="jewel"] body.lowfx #dock,html[data-ui="jewel"] body.lowfx #track,html[data-ui="jewel"] body.lowfx .banner{-webkit-backdrop-filter:none;backdrop-filter:none}
+html[data-ui="jewel"] body.lowfx #dock,html[data-ui="jewel"] body.lowfx #track,html[data-ui="jewel"] body.lowfx .banner{background-color:#2a1f6b}
+html[data-ui="jewel"] body.lowfx .shine::after,html[data-ui="jewel"] body.lowfx #bBuild::after,html[data-ui="jewel"] body.lowfx #quick::after,html[data-ui="jewel"] body.lowfx #soupAlert::after,html[data-ui="jewel"] body.lowfx .sheet::before,html[data-ui="jewel"] body.lowfx .sheet::after,html[data-ui="jewel"] body.lowfx .ov-card::before,html[data-ui="jewel"] body.lowfx .ov-card::after,html[data-ui="jewel"] body.lowfx #dock::before,html[data-ui="jewel"] body.lowfx #dock::after{animation:none}
+html[data-ui="jewel"] body.lowfx .sheet::before,html[data-ui="jewel"] body.lowfx .sheet::after,html[data-ui="jewel"] body.lowfx .ov-card::before,html[data-ui="jewel"] body.lowfx .ov-card::after,html[data-ui="jewel"] body.lowfx #dock::before,html[data-ui="jewel"] body.lowfx #dock::after{opacity:.8;transform:none}
+html[data-ui="jewel"] body.lowfx .bar i::before{animation:none}
+html[data-ui="jewel"] body.lowfx .sheet,html[data-ui="jewel"] body.lowfx .ov-card{background:linear-gradient(165deg,#4b3aa6,#2a1d78 46%,#1b1252) padding-box,linear-gradient(135deg,#f1eaff,#7f6be0,#3a2b92,#c3b4ff,#5d49c4) border-box}
+html[data-ui="jewel"] body.lowfx .ic{filter:none}
+html[data-ui="jewel"] body.lowfx .b,html[data-ui="jewel"] body.lowfx .rb,html[data-ui="jewel"] body.lowfx .pill,html[data-ui="jewel"] body.lowfx .gp,html[data-ui="jewel"] body.lowfx #card{box-shadow:0 4px 0 var(--g4),0 5px 0 var(--rimc),0 6px 8px rgba(14,6,52,.4)}
+@media (prefers-reduced-motion:reduce){
+html[data-ui="jewel"] .shine::after,html[data-ui="jewel"] #bBuild::after,html[data-ui="jewel"] #quick::after,html[data-ui="jewel"] #soupAlert::after,html[data-ui="jewel"] .sheet::before,html[data-ui="jewel"] .sheet::after,html[data-ui="jewel"] .ov-card::before,html[data-ui="jewel"] .ov-card::after,html[data-ui="jewel"] #dock::before,html[data-ui="jewel"] #dock::after,html[data-ui="jewel"] .bar i::before{animation:none!important}
+}
+html[data-ui="jewel"][data-reduce="1"] .shine::after,html[data-ui="jewel"][data-reduce="1"] #bBuild::after,html[data-ui="jewel"][data-reduce="1"] #quick::after,html[data-ui="jewel"][data-reduce="1"] #soupAlert::after,html[data-ui="jewel"][data-reduce="1"] .sheet::before,html[data-ui="jewel"][data-reduce="1"] .sheet::after,html[data-ui="jewel"][data-reduce="1"] .ov-card::before,html[data-ui="jewel"][data-reduce="1"] .ov-card::after,html[data-ui="jewel"][data-reduce="1"] #dock::before,html[data-ui="jewel"][data-reduce="1"] #dock::after,html[data-ui="jewel"][data-reduce="1"] .bar i::before{animation:none!important}
+html[data-ui="jewel"] .rays.big{background:repeating-conic-gradient(from 0deg,rgba(190,160,255,0) 0 12deg,rgba(214,196,255,.42) 12deg 24deg)}
+html[data-ui="jewel"] .rays.pink{background:repeating-conic-gradient(from 0deg,rgba(255,150,200,0) 0 12deg,rgba(255,170,215,.45) 12deg 24deg)}
+html[data-ui="jewel"] .chestbox .rays{background:repeating-conic-gradient(from 0deg,rgba(255,224,110,0) 0 14deg,rgba(255,236,150,.5) 14deg 28deg)}
+
