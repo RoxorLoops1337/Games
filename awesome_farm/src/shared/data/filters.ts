@@ -23,7 +23,7 @@ export const FILTER_CATS: FilterCat[] = [
     { id: 'gems', name: 'Gems', icon: 'gem_ruby_1', desc: 'Rough, cut and flawless gems for the sockets.', has: (i) => i.startsWith('gem_') },
     { id: 'stone', name: 'Stone & earth', icon: 'stone', desc: 'Stone, sand, clay, peat, bricks and glass.', has: IS('stone', 'sand', 'clay', 'peat', 'brick', 'glass') },
     { id: 'bars', name: 'Bars', icon: 'ironbar', desc: 'Iron, copper and gold bars, and steel.', has: IS('ironbar', 'copperbar', 'goldbar', 'steel', 'iridium_bar') },
-    { id: 'wood', name: 'Wood & fibre', icon: 'wood', desc: 'Logs, planks, plant fibre, rope, cotton and cloth.', has: IS('wood', 'plank', 'fiber', 'rope', 'cotton', 'cloth', 'flax') },
+    { id: 'wood', name: 'Wood & fibre', icon: 'wood', desc: 'Logs, planks, plant fibre, rope, cotton and cloth.', has: IS('wood', 'plank', 'fiber', 'rope', 'cotton', 'cloth', 'dyed_cloth', 'flax') },
     { id: 'parts', name: 'Machine parts', icon: 'gear', desc: 'Gears, wire, circuits, motors, modules and cores.', has: IS('gear', 'wire', 'circuit', 'motor', 'core', 'module_speed', 'module_eff') },
     { id: 'seeds', name: 'Seeds', icon: 'seed_wheat', desc: 'Every kind of seed.', has: (i) => kindOf(i) === 'seed' },
     { id: 'crops', name: 'Crops', icon: 'wheat', desc: 'Wheat and flour, vegetables, fruit, berries, mushrooms and herbs.', has: IS('wheat', 'flour', 'berry', 'mushroom', 'carrot', 'pumpkin', 'beet', 'corn', 'melon', 'pepper', 'herb') },

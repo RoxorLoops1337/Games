@@ -179,6 +179,8 @@ const ROWS: Row[] = [
     ['millstone', 'flour', 1, { wheat: 2 }, 1, { time: 3 }],
     // the beehive: berries in, honey out
     ['hive', 'honey', 1, { berry: 3 }, 2, { time: 40 }],
+    // the dye vat: cloth and berries in, dyed cloth out
+    ['vat', 'dyed_cloth', 1, { cloth: 1, berry: 2 }, 3, { time: 25 }],
     // the fish pond: a fish and bait in, two fish out (the dearer the fish, the slower it breeds)
     ['pond', 'fish_minnow', 2, { fish_minnow: 1 }, 0, { time: 20 }],
     ['pond', 'fish_carp', 2, { fish_carp: 1, bait: 1 }, 1, { time: 45 }],

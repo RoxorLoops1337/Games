@@ -410,6 +410,17 @@ export function beehive(_o: BOpts): Model<BuildE> {
         update(_dt: number, t: number) { bees.update(t, on); },
     };
 }
+export function dyevat(_o: BOpts): Model<BuildE> {
+    const root = new THREE.Group();
+    root.add(bake('work.dyevat', (mb) => {
+        const b = mb.main;
+        b.cyl(0.42, 0.46, 0.5, 12, wc(0.65), { y: 0.25, j: 0.01 });
+        b.cyl(0.36, 0.36, 0.04, 12, 0xb8487e, { y: 0.5, ao: false });
+        b.box(0.06, 0.8, 0.06, wc(0.5), { x: 0.2, y: 0.55, z: 0.1, j: 0.006 });
+        b.box(0.2, 0.18, 0.04, 0xe88cb8, { x: -0.1, y: 0.52, z: 0.3, j: 0.004 });
+    }));
+    return { obj: root, apply() {} };
+}
 export function museum(_o: BOpts): Model<BuildE> {
     const root = new THREE.Group();
     root.add(bake('work.museum', (mb) => {
@@ -518,4 +529,4 @@ export function beacon(_o: BOpts): Model<BuildE> {
     return { obj: root, update(_dt: number, t: number) { flame.scale.setScalar(1 + Math.sin(t * 6) * 0.08); } };
 }
 export const SL1 = 0x7a7f9e;
-export const CRAFT = { workbench, anvil, kitchen, loom, alchemy, furnace, sawmill, millstone, fishpond, beehive, museum, coffer, board, shelf, sprinkler, harvester, cottage, beacon };
+export const CRAFT = { workbench, anvil, kitchen, loom, alchemy, furnace, sawmill, millstone, fishpond, beehive, dyevat, museum, coffer, board, shelf, sprinkler, harvester, cottage, beacon };
