@@ -9,6 +9,7 @@ import * as blight from './blight';
 import * as board from './board';
 import * as bond from './bond';
 import * as coffer from './coffer';
+import * as shelf from './shelf';
 import * as stash from './stash';
 import * as trade from './trade';
 import * as boss from './boss';
@@ -71,6 +72,7 @@ export function command (sim: Sim, pid: string, c: Cmd) {
         case 'crate': return fortune.cmdCrate(sim, p, c);
         case 'fortune': return fortune.cmdFortune(sim, p, c);
         case 'buy': return economy.cmdBuy(sim, p, c.plot);
+        case 'shelf': return shelf.cmdShelf(sim, p, c);
         case 'board': return board.cmdBoard(sim, p, c);
         case 'coffer': return coffer.cmdCoffer(sim, p, c);
         case 'build': return economy.cmdBuild(sim, p, c.kind, c.tx, c.ty, c.rot ?? 0);

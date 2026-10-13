@@ -244,6 +244,13 @@ function board (p: Pix) {
     p.outline();
 }
 
+function shelf (p: Pix) {
+    // a small bookcase with rolled blueprints
+    lit(p, 1, 2, 14, 13, W); p.rect(2, 3, 12, 5, W[1]); p.rect(2, 9, 12, 5, W[1]);
+    for (const [x, y, c] of [[3, 4, 0xcdf3fa], [6, 4, 0xe8d8a8], [9, 5, 0xcdf3fa], [3, 10, 0xe8d8a8], [7, 10, 0xcdf3fa], [11, 10, 0xe8d8a8]] as const) p.rect(x, y, 3, 4, c);
+    p.outline();
+}
+
 function market (p: Pix, rnd: () => number) {
     // a striped awning over a counter loaded with produce
     for (const x of [2, 31]) lit(p, x, 6, 3, 19, W);
@@ -385,6 +392,7 @@ export function registerStorybookBuildings (scene: Phaser.Scene) {
     paint(scene, 'sawmill', 32, 15, (p) => sawmill(p), 1);
     paint(scene, 'millstone', 14, 10, (p) => millstone(p), 1);
     paint(scene, 'beehive', 14, 19, (p) => beehive(p), 1);
+    paint(scene, 'shelf', 16, 16, (p) => shelf(p), 1);
     paint(scene, 'board', 16, 16, (p) => board(p), 1);
     paint(scene, 'coffer', 16, 15, (p) => coffer(p), 1);
     paint(scene, 'museum', 32, 19, (p) => museum(p), 1);
