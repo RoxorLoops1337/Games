@@ -310,7 +310,7 @@ export class Game {
     const right = document.createElement('div'); right.className = 'lx-row'; right.append(this.weekChip, U.iconButton('gear', 'Settings and more', () => this.open('more', { tab: 'settings' })));
     top.append(row, right);
     const mid = document.createElement('div'); mid.style.cssText = 'flex:1;pointer-events:none';
-    const bottom = document.createElement('div'); bottom.style.cssText = 'display:flex;flex-direction:column;align-items:center;gap:10px';
+    const bottom = document.createElement('div'); bottom.className = 'lx-hud-bottom'; bottom.style.cssText = 'display:flex;flex-direction:column;align-items:center;gap:10px';
     this.advBtn = U.button({ label: 'Advance week', variant: 'gold', icon: 'arena', onClick: () => this.advance() });
     this.nav = U.nav([{ icon: 'ludus', label: 'Ludus' }, { icon: 'roster', label: 'Roster' }, { icon: 'arena', label: 'Arena' }, { icon: 'market', label: 'Market' }, { icon: 'scroll', label: 'More' }], (it, i) => this.onNav(i), 0) /* ONBOARDING fix: kit nav calls onSelect(item, index) */;
     bottom.append(this.advBtn, this.nav);
@@ -357,12 +357,12 @@ export class Game {
       let done = false; const fin = (v) => { if (done) return; done = true; m.close(); resolve(v); };
       const acts = (opts.actions || []).map((a) => U.button({ label: a.label, variant: a.variant || 'gold', icon: a.icon, sub: a.sub, block: true, onClick: () => { this.audio.sfx('uiTap'); fin(a.value); } }));
       const body = typeof opts.body === 'string' ? Object.assign(document.createElement('div'), { textContent: opts.body }) : opts.body;
-      const m = U.modal({ title: opts.title, body, actions: acts, onClose: () => { if (!done) { done = true; resolve(opts.dismiss === undefined ? null : opts.dismiss); } } });
-      this.modals.push(m); this.audio.sfx('uiTap', { gain: 0.5 }); const tk = tutKey(opts.title); if (tk && m.el) m.el.dataset.tutSheet = tk; // TUT
+      const m = U.modal({ title: opts.title, body, actions: acts, cls: opts.cls, dock: opts.dock, closable: opts.closable, why: opts.why, peekLabel: opts.peekLabel, onClose: () => { if (!done) { done = true; resolve(opts.dismiss === undefined ? null : opts.dismiss); } } });
+      this.modals.push(m); this.audio.sfx('uiTap', { gain: 0.5 }); const tk = opts.tut || tutKey(opts.title); if (tk && m.el) m.el.dataset.tutSheet = tk; // TUT
     });
   }
   /** non-promise sheet for screens: returns {close, el}. */
-  sheet(o) { const m = U.modal(o); this.modals.push(m); const tk = tutKey(o && o.title); if (tk && m.el) m.el.dataset.tutSheet = tk; /* TUT */ return m; }
+  sheet(o) { const m = U.modal(o); this.modals.push(m); const tk = (o && o.tut) || tutKey(o && o.title); if (tk && m.el) m.el.dataset.tutSheet = tk; /* TUT */ return m; }
   closeAll() { this.modals.splice(0).forEach((m) => { try { m.close(); } catch (e) { /* closed */ } }); }
 
   async open(id, arg) {

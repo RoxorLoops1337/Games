@@ -212,7 +212,7 @@ export function modal({ title, body, actions = [], onClose, host = document.body
   let peeked = false, pk = null;
   if (dock) { // docked result dialogs: the scene (finisher, winner pose) stays visible; one tap folds the sheet down to its title bar
     pk = h('button', 'lx-peek'); pk.type = 'button'; pk.setAttribute('aria-expanded', 'true'); pk.append(icon('arena', 16), h('span', '', peekLabel));
-    pk.addEventListener('click', () => { peeked = !peeked; scrim.classList.toggle('lx-peeked', peeked); pk.setAttribute('aria-expanded', String(!peeked)); pk.lastChild.textContent = peeked ? 'Back to results' : peekLabel; });
+    pk.addEventListener('click', () => { peeked = !peeked; scrim.classList.toggle('lx-peeked', peeked); document.body.classList.toggle('lx-peeked', peeked); pk.setAttribute('aria-expanded', String(!peeked)); pk.lastChild.textContent = peeked ? 'Back to results' : peekLabel; });
     sheet.append(pk);
   }
   scrim.append(sheet); host.append(scrim);
@@ -229,17 +229,28 @@ export function modal({ title, body, actions = [], onClose, host = document.body
     },
     close() {
     if (closed) return; closed = true; const i = modalStack.indexOf(api); if (i >= 0) modalStack.splice(i, 1);
-    document.body.classList.toggle('lx-modal-open', modalStack.length > 0);
+    document.body.classList.toggle('lx-modal-open', modalStack.length > 0); if (peeked) document.body.classList.remove('lx-peeked');
     for (const r of strips.splice(0)) { clearTimeout(r.timer); const left = r.end - performance.now(); if (left > 400) toast(r.msg, { kind: r.kind, ico: r.ico, ms: left }); } // a toast raised just before the sheet closed ("X joined your ludus") still gets seen
     scrim.classList.add('lx-out'); setTimeout(() => scrim.remove(), reduced() ? 0 : 220);
     const nextTop = modalStack[modalStack.length - 1]; if (nextTop) { if (!nextTop.el.contains(document.activeElement)) (focusables(nextTop.el)[0] || nextTop.el).focus?.({ preventScroll: true }); } else prevFocus?.focus?.({ preventScroll: true });
     onClose?.();
   } };
+  { const sc = sheet.querySelector('.lx-sheet-scroll'); // soft fade at the bottom edge while there is more to scroll
+    const upd = () => { if (!sc.isConnected) return; sc.classList.toggle('lx-more', sc.scrollHeight - sc.scrollTop - sc.clientHeight > 6); };
+    sc.addEventListener('scroll', upd, { passive: true }); try { new ResizeObserver(upd).observe(sc); new MutationObserver(upd).observe(sc, { childList: true, subtree: true }); } catch (e) { /* no observers */ } setTimeout(upd, 60); }
   modalStack.push(api); document.body.classList.add('lx-modal-open'); try { document.dispatchEvent(new CustomEvent('lx-modal-open')); } catch (e) { /* old engine */ }
   if (!kbOn) { kbOn = true; document.addEventListener('keydown', onModalKey, true); }
   scrim.addEventListener('pointerdown', (e) => { if (e.target === scrim && closable && !dock) api.close(); });
   requestAnimationFrame(() => { scrim.classList.add('lx-in'); if (!scrim.contains(document.activeElement)) (sheet.querySelector('.lx-btn-gold') || x).focus?.({ preventScroll: true }); });
   return api;
+}
+
+// ---------- empty state ----------
+/** guiding empty state: {icon, title, text, how (how to unlock), action: {label, onClick, variant}} -> element. Works on parchment and on night sheets. */
+export function emptyState({ icon: ic = 'scroll', title, text, how, action } = {}) {
+  const el = h('div', 'lx-es', [h('div', 'lx-es-ico', icon(ic, 28)), h('h4', 'lx-es-t', title), text ? h('p', 'lx-es-d', text) : null, how ? h('p', 'lx-es-how', how) : null]);
+  if (action) el.append(button({ label: action.label, variant: action.variant || 'gold', icon: action.icon, onClick: action.onClick }));
+  return el;
 }
 
 // ---------- file download (save export, share) ----------
