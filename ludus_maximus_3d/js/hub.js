@@ -67,20 +67,20 @@ export function presetFor(hour, weather = 'clear') {
 const hourOf = (S) => 7 + (((S.week || 1) - 1) % 12) * 1.0;
 
 // ------------------------------------------------------------------------------------------ small shaders (rings, links, smoke, sparks, rain)
-function ringMaterial({ color = [2.0, 1.4, 0.5], width = 0.14, alpha = 1, speed = 1.2 } = {}) {
+function ringMaterial({ color = [2.0, 1.4, 0.5], width = 0.14, alpha = 1, speed = 1.2, fill = 0 } = {}) {
   return new THREE.ShaderMaterial({
-    uniforms: { uTime: { value: 0 }, uColor: { value: new THREE.Color(...color) }, uW: { value: width }, uA: { value: alpha }, uSpeed: { value: speed } },
+    uniforms: { uTime: { value: 0 }, uColor: { value: new THREE.Color(...color) }, uW: { value: width }, uA: { value: alpha }, uSpeed: { value: speed }, uFill: { value: fill } },
     transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false,
     vertexShader: `varying vec2 vP; varying vec2 vS; varying vec3 vIC; void main(){ vec3 c = instanceMatrix[3].xyz; vS = vec2(length(instanceMatrix[0].xyz), length(instanceMatrix[2].xyz)); vP = position.xz * vS; vIC = vec3(1.0);
       #ifdef USE_INSTANCING_COLOR
       vIC = instanceColor;
       #endif
       gl_Position = projectionMatrix * modelViewMatrix * instanceMatrix * vec4(position, 1.0); }`,
-    fragmentShader: `varying vec2 vP; varying vec2 vS; varying vec3 vIC; uniform float uTime, uW, uA, uSpeed; uniform vec3 uColor;
+    fragmentShader: `varying vec2 vP; varying vec2 vS; varying vec3 vIC; uniform float uTime, uW, uA, uSpeed, uFill; uniform vec3 uColor;
       void main(){ float r = min(1.2, min(vS.x, vS.y) * 0.5); vec2 q = abs(vP) - (vS * 0.5 - r); float d = length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - r;
         float ring = 1.0 - smoothstep(0.0, uW, abs(d + uW * 0.5)); float glow = exp(-abs(d + uW) * 2.6) * 0.35;
         float ang = atan(vP.y, vP.x); float dash = 0.55 + 0.45 * sin(ang * 8.0 - uTime * uSpeed * 2.0);
-        float a = (ring * (0.65 + 0.35 * dash) + glow * (0.6 + 0.4 * sin(uTime * 2.2))) * uA;
+        float a = (ring * (0.65 + 0.35 * dash) + glow * (0.6 + 0.4 * sin(uTime * 2.2))) * uA + (1.0 - smoothstep(-0.5, 0.0, d)) * uFill * (0.8 + 0.2 * sin(uTime * 2.0));
         gl_FragColor = vec4(uColor * vIC * a, a);
         #include <tonemapping_fragment>
         #include <colorspace_fragment>
@@ -944,7 +944,7 @@ export function createHub({ renderer, camera, audio, tier = 'high', post = null 
     if (tagBox) return tagBox;
     if (!document.getElementById('lx-rr-css')) {
       const st = document.createElement('style'); st.id = 'lx-rr-css';
-      st.textContent = '.lx-rr-tags{position:fixed;inset:0;z-index:28;pointer-events:none;overflow:hidden}.lx-rr-tag{position:absolute;left:0;top:0;display:flex;align-items:center;gap:6px;padding:4px 9px;border-radius:999px;font:800 12px/1 system-ui,sans-serif;letter-spacing:.03em;white-space:nowrap;color:#f6ecd0;background:rgba(29,24,48,.86);border:2px solid #b8803a;box-shadow:0 3px 10px rgba(0,0,0,.45);will-change:transform;opacity:0;transition:opacity .15s}.lx-rr-tag.on{opacity:1}.lx-rr-tag b{font-weight:800}.lx-rr-tag small{font-size:11px;opacity:.85;font-weight:700}.lx-rr-tag.ok{border-color:#4fbf6f;color:#d9ffe0;background:rgba(18,52,32,.88)}.lx-rr-tag.swap{border-color:#43b9c4;color:#dcfbff;background:rgba(14,48,54,.88)}.lx-rr-tag.src{border-color:#f2c14e;color:#ffe7a8}.lx-rr-tag.bad{border-color:#6d6a78;color:#b9b6c4;background:rgba(40,38,52,.78)}.lx-rr-tag.cur{outline:3px solid #fff;outline-offset:2px}.lx-rr-tag.site{border-color:#e0a23a}.lx-rr-bar{display:block;width:44px;height:6px;border-radius:3px;background:rgba(255,255,255,.18);overflow:hidden}.lx-rr-bar i{display:block;height:100%;background:linear-gradient(90deg,#f2c14e,#e0782a)}@media (prefers-reduced-motion:reduce){.lx-rr-tag{transition:none}}';
+      st.textContent = '.lx-rr-tags{position:fixed;inset:0;z-index:28;pointer-events:none;overflow:hidden}.lx-rr-tag{position:absolute;left:0;top:0;display:flex;align-items:center;gap:6px;padding:4px 9px;border-radius:999px;font:800 12px/1 system-ui,sans-serif;letter-spacing:.03em;white-space:nowrap;color:#f6ecd0;background:rgba(29,24,48,.86);border:2px solid #b8803a;box-shadow:0 3px 10px rgba(0,0,0,.45);will-change:transform;opacity:0}.lx-rr-tag.on{opacity:1}.lx-rr-tag b{font-weight:800}.lx-rr-tag small{font-size:11px;opacity:.85;font-weight:700}.lx-rr-tag.ok{border-color:#4fbf6f;color:#d9ffe0;background:rgba(18,52,32,.88)}.lx-rr-tag.swap{border-color:#43b9c4;color:#dcfbff;background:rgba(14,48,54,.88)}.lx-rr-tag.src{border-color:#f2c14e;color:#ffe7a8}.lx-rr-tag.bad{border-color:#6d6a78;color:#b9b6c4;background:rgba(40,38,52,.78)}.lx-rr-tag.cur{outline:3px solid #fff;outline-offset:2px}.lx-rr-tag.site{border-color:#e0a23a}.lx-rr-bar{display:block;width:44px;height:6px;border-radius:3px;background:rgba(255,255,255,.18);overflow:hidden}.lx-rr-bar i{display:block;height:100%;background:linear-gradient(90deg,#f2c14e,#e0782a)}';
       document.head.appendChild(st);
     }
     tagBox = document.createElement('div'); tagBox.className = 'lx-rr-tags'; tagBox.setAttribute('aria-hidden', 'true'); (document.getElementById('ui') || document.body).appendChild(tagBox); return tagBox;
@@ -974,7 +974,7 @@ export function createHub({ renderer, camera, audio, tier = 'high', post = null 
     let m = 0;
     if (rr.on && !hideAll && !(cine && !cine.applied)) for (const it of rr.items) {
       const el = tagAt(rrTags, m++, it.kind); const sig = it.kind + '|' + it.text + '|' + (it.sub || '') + (it.i === rr.cursor ? '|c' : '');
-      if (el.dataset.sig !== sig) { el.dataset.sig = sig; el.innerHTML = it.kind === 'bad' ? `<span>${it.icon || '✕'}</span>` : `<b>${it.text}</b>${it.sub ? `<small>${it.sub}</small>` : ''}`; }
+      if (el.dataset.sig !== sig) { el.dataset.sig = sig; el.innerHTML = it.kind === 'bad' ? `<span>${it.icon || '\u2715'}</span>${it.text ? `<b>${it.text}</b>` : ''}` : `<b>${it.text}</b>${it.sub ? `<small>${it.sub}</small>` : ''}`; }
       const c = plotCenter(it.i); placeTag(el, c.x, c.y + (rr.lift === it.i ? 4.0 : plotTop(S, it.i) + 0.9), c.z, it.kind + (it.i === rr.cursor ? ' cur' : ''));
     }
     for (let k = m; k < rrTags.length; k++) rrTags[k].classList.remove('on');
@@ -982,9 +982,9 @@ export function createHub({ renderer, camera, audio, tier = 'high', post = null 
   }
   // ---- rearrange mode (the controller is js/rearrange.js)
   const rr = { on: false, items: [], cursor: -1, lift: -1, onTap: null, onHover: null, ghosts: [], ghostSpec: null, ringDirty: true };
-  const rrMat = ringMaterial({ color: [1.0, 1.0, 1.0], width: 0.16, alpha: 0.95, speed: 0.8 });
+  const rrMat = ringMaterial({ color: [1.0, 1.0, 1.0], width: 0.2, alpha: 0.9, speed: 0.8, fill: 0.2 });
   const rrRings = ringMesh(rrMat, 16); rrRings.visible = false; rrRings.name = 'move_markers'; group.add(rrRings);
-  const RRCOL = { ok: [0.35, 1.6, 0.5], swap: [0.3, 1.45, 1.6], src: [2.2, 1.6, 0.5], bad: [0.5, 0.5, 0.58] };
+  const RRCOL = { ok: [0.12, 0.95, 0.28], swap: [0.08, 0.8, 0.95], src: [1.5, 0.95, 0.12], bad: [0.28, 0.28, 0.34] };
   const _col = new THREE.Color();
   function rrDraw() {
     const items = rr.items.filter((it) => it.ring !== false); rrRings.count = items.length; rrRings.visible = rr.on && items.length > 0;

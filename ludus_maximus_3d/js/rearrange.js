@@ -29,6 +29,16 @@ const CSS = `
 .lx-rr-modebar button.alt{background:rgba(255,255,255,.08);color:#f6ecd0;border-color:#8a7aa8}
 .lx-rr-modebar button[hidden]{display:none}
 .lx-rr-modebar button:focus-visible{outline:3px solid #fff;outline-offset:2px}
+.lx-rr-confirm{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(var(--lx-sab) + 10px);z-index:41;width:min(96vw,520px);box-sizing:border-box;padding:12px 14px 12px;border-radius:14px;background:linear-gradient(180deg,rgba(54,36,66,.97),rgba(29,24,48,.97));border:2px solid #4fbf6f;box-shadow:0 10px 28px rgba(0,0,0,.6);color:#f6ecd0;font:600 13px/1.35 system-ui,sans-serif}
+.lx-rr-confirm h3{margin:0 0 6px;font:800 16px/1.2 Georgia,serif;letter-spacing:.04em;color:#f2c14e}
+.lx-rr-confirm .pl{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0}
+.lx-rr-confirm .pl span{display:inline-flex;align-items:center;gap:5px;padding:4px 9px;border-radius:999px;background:rgba(255,255,255,.1);font:800 12px system-ui,sans-serif}
+.lx-rr-confirm .pl span.g{background:rgba(242,193,78,.18);color:#ffe7a8}.lx-rr-confirm .pl span.w{background:rgba(224,162,58,.2);color:#ffd9a0}
+.lx-rr-confirm p{margin:4px 0;opacity:.92}
+.lx-rr-confirm .bt{display:flex;gap:8px;margin-top:10px}
+.lx-rr-confirm button{flex:1;min-height:48px;border-radius:10px;cursor:pointer;font:800 14px system-ui,sans-serif;letter-spacing:.06em;text-transform:uppercase;border:2px solid #7a4e1c;background:linear-gradient(180deg,#f2c14e,#c58a2a);color:#2a1a30;touch-action:manipulation}
+.lx-rr-confirm button.alt{background:rgba(255,255,255,.08);color:#f6ecd0;border-color:#8a7aa8}
+.lx-rr-confirm button:focus-visible{outline:3px solid #fff;outline-offset:2px}
 .lx-rr-sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 `;
 
@@ -106,25 +116,38 @@ export function createRearrange(game) {
     const A = s.plots[from], B = s.plots[to]; st.dest = to; st.asking = true;
     hub().rrGhost({ from, to, a: { b: A.b, l: A.l }, bb: B ? { b: B.b, l: B.l } : null }); hub().frameTwo(from, to, { dur: 0.8 }); sfx('uiOpen', { gain: 0.5 });
     say(`${q.kind === 'swap' ? 'Swap' : 'Move'} ${D.BUILD[A.b].n}${B ? ' with ' + D.BUILD[B.b].n : ''}: ${fmt(q.gold)} gold, ${q.weeks.filter(Boolean).join(' and ')} week${Math.max(...q.weeks) > 1 ? 's' : ''}. Confirm or cancel.`);
-    const ok = await game.ask({ title: `${q.kind === 'swap' ? 'Swap' : 'Move'} the ${D.BUILD[A.b].n}?`, body: confirmBody(from, to, q), actions: [{ label: `Confirm ${fmt(q.gold)}`, value: true, icon: 'coin', variant: 'gold' }, { label: 'Cancel', value: false, variant: 'bronze' }], dismiss: false });
+    const ok = await askConfirm(from, to, q);
     st.asking = false; if (!st.active) return;
     if (!ok) { st.dest = -1; hub().rrGhost(null); sfx('uiClose', { gain: 0.6 }); say('Cancelled. The building is still lifted: choose another plot, or tap it to put it back.'); sync(); return; }
     commit(from, to, q);
   }
-  function confirmBody(from, to, q) {
-    const { pill, goldPill, note, kv, card, row, col, medal } = SK, s = S(), A = s.plots[from], B = s.plots[to], lm = L(), kids = [];
-    const mk = (p, f, t, wk) => {
-      const B0 = D.BUILD[p.b], fx = lm.bfx(s, p.b);
-      return card([row([medal(ICON[p.b] || 'ludus', 'dark big'), col([h('div', 'ax-name', `${B0.n} level ${p.l}`), note(`${plotName(f)} to ${plotName(t)}`)], 'ax-grow')]),
-        h('div', 'ax-row ax-wrap', [pill(`${wk} week${wk > 1 ? 's' : ''} under construction`, { ico: 'hammer', tone: 'warn', tip: 'The building keeps its level but gives no perks until the crew is done.' })]),
-        note(`Paused meanwhile: ${B0.f(fx.v, p.l)}.${p.b === 'barracks' ? ' The barracks keep 3 beds in tents.' : ''}`)]);
-    };
-    kids.push(h('div', 'ax-row ax-wrap', [goldPill(q.gold, 'Price'), pill(`You will have ${fmt(s.gold - q.gold)} left`, { tone: s.gold - q.gold < 60 ? 'warn' : '' })]));
-    kids.push(mk(A, from, to, q.weeks[0])); if (B) kids.push(mk(B, to, from, q.weeks[1]));
-    const eff = q.fx.filter((e) => e.pct);
-    if (eff.length) kids.push(card([h('div', 'ax-b', 'Neighbor bonuses'), ...eff.map((e) => kv(D.BUILD[e.b].n, `${e.pct > 0 ? '+' : ''}${e.pct}% once rebuilt`))])); else kids.push(note('No neighbor bonus changes.'));
-    kids.push(note(`Changed your mind? Undo it this week for ${fmt(Math.floor(q.gold * D.MOVE.undoRefund))} gold back.`));
-    return h('div', 'ax-col', kids);
+  let cardEl = null, cardRes = null;
+  /** the confirm card: a compact sheet at the bottom so the ghost and the line stay visible above it */
+  function askConfirm(from, to, q) {
+    const s = S(), A = s.plots[from], B = s.plots[to], lm = L(), swap = q.kind === 'swap';
+    const clo = () => { if (cardEl) cardEl.remove(); cardEl = null; };
+    clo();
+    const el = cardEl = document.createElement('div'); el.className = 'lx-rr-confirm'; el.setAttribute('role', 'dialog'); el.setAttribute('aria-label', `${swap ? 'Swap' : 'Move'} the ${D.BUILD[A.b].n}`); el.dataset.rr = 'confirm';
+    const t = document.createElement('h3'); t.textContent = swap ? `Swap ${D.BUILD[A.b].n} and ${D.BUILD[B.b].n}?` : `Move the ${D.BUILD[A.b].n} to plot ${to + 1}?`;
+    const pl = document.createElement('div'); pl.className = 'pl';
+    const mk = (cls, txt) => { const x = document.createElement('span'); x.className = cls; x.textContent = txt; return x; };
+    pl.append(mk('g', `${fmt(q.gold)} gold`), mk('w', swap ? `${q.weeks[0]} and ${q.weeks[1]} weeks of construction` : `${q.weeks[0]} week${q.weeks[0] > 1 ? 's' : ''} of construction`), mk('', `${fmt(s.gold - q.gold)} gold left`));
+    const lines = [];
+    const pause = (p) => { const fx = lm.bfx(s, p.b); return `${D.BUILD[p.b].n}: ${D.BUILD[p.b].f(fx.v, p.l)}`; };
+    lines.push(`Perks paused meanwhile. ${pause(A)}.${B ? ' ' + pause(B) + '.' : ''}${A.b === 'barracks' || (B && B.b === 'barracks') ? ' The barracks keep 3 beds in tents.' : ''}`);
+    const eff = q.fx.filter((e) => e.pct); lines.push(eff.length ? 'Neighbors once rebuilt: ' + eff.map((e) => `${D.BUILD[e.b].n} ${e.pct > 0 ? '+' : ''}${e.pct}%`).join(', ') + '.' : 'No neighbor bonus changes.');
+    lines.push(`Undo it this week for ${fmt(Math.floor(q.gold * D.MOVE.undoRefund))} gold back.`);
+    el.append(t, pl); for (const l of lines) { const p = document.createElement('p'); p.textContent = l; el.append(p); }
+    const bt = document.createElement('div'); bt.className = 'bt';
+    const ok = document.createElement('button'); ok.type = 'button'; ok.textContent = `Confirm ${fmt(q.gold)}`; ok.dataset.rr = 'ok'; ok.setAttribute('aria-label', `Confirm, ${fmt(q.gold)} gold`);
+    const no = document.createElement('button'); no.type = 'button'; no.className = 'alt'; no.textContent = 'Cancel'; no.dataset.rr = 'cancel';
+    bt.append(ok, no); el.append(bt); (document.getElementById('ui') || document.body).append(el);
+    return new Promise((resolve) => {
+      let done = false; const fin = (v) => { if (done) return; done = true; cardRes = null; clo(); resolve(v); };
+      cardRes = fin; ok.addEventListener('click', () => fin(true)); no.addEventListener('click', () => fin(false));
+      el.addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); fin(false); } else if (e.key === 'Tab') { const f = [ok, no], i = f.indexOf(document.activeElement); e.preventDefault(); f[(i + (e.shiftKey ? f.length - 1 : 1)) % f.length].focus(); } });
+      setTimeout(() => { try { ok.focus(); } catch (e) { /* hidden */ } }, 30);
+    });
   }
   function commit(from, to, q) {
     const lm = L(), s = S(), A = s.plots[from], B = s.plots[to], a = { b: A.b, l: A.l }, bb = B ? { b: B.b, l: B.l } : null, n = D.BUILD[A.b].n;
@@ -174,7 +197,7 @@ export function createRearrange(game) {
   }
   function onKey(e) {
     if (!st.active || e.ctrlKey || e.metaKey || e.altKey) return;
-    if (document.querySelector('.lx-scrim:not(.lx-out)')) return;   // a dialog owns the keys
+    if (document.querySelector('.lx-scrim:not(.lx-out)') || st.asking) return;   // a dialog or the confirm card owns the keys
     const t = e.target; if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT')) return;
     const k = e.key, onBtn = t && t.tagName === 'BUTTON' && (k === 'Enter' || k === ' ');
     if (k === 'Escape') { e.preventDefault(); e.stopPropagation(); if (st.cine) return hub().skipMove(); if (st.sel >= 0) return drop(); return api.stop(); }
@@ -203,7 +226,7 @@ export function createRearrange(game) {
     },
     stop(silent) {
       if (!st.active) return false;
-      if (st.cine) { try { hub().skipMove(); } catch (e) { /* done */ } }
+      if (cardRes) cardRes(false); if (st.cine) { try { hub().skipMove(); } catch (e) { /* done */ } }
       st.active = false; st.sel = -1; st.cursor = -1; try { hub().rrEnd(); } catch (e) { /* hub optional */ }
       if (unKey) { unKey(); unKey = null; } if (fab) fab.setAttribute('aria-pressed', 'false'); const m = silent ? '' : 'Rearrange mode off.'; unbuild(); if (m) { try { hub().say(m); } catch (e) { /* none */ } }
       return true;
