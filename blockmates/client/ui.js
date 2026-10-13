@@ -105,6 +105,14 @@ export class UI {
       for (const cv of this.players.querySelectorAll('canvas')) drawChar(cv, G.players.get(+cv.dataset.id).look);
     }
   }
+  emoteBar() {
+    if (this.modalOpen && this.modal.querySelector('.emotes')) { this.hideModal(); return; }
+    const E = ['♥', '!', '?', '♪', '☺', '✦', 'zZ', '☀', '☠'];
+    this.showModal(`<div class="card"><h2>Emote</h2><div class="emotes">${E.map((e, i) => `<button data-e="${i + 1}">${e}</button>`).join('')}</div></div>`, (m) => {
+      m.querySelectorAll('.emotes button').forEach((b) => { b.onclick = () => { this.G.send({ t: 'emote', e: +b.dataset.e }); this.hideModal(); }; });
+      m.onclick = (ev) => { if (ev.target === m) this.hideModal(); };
+    });
+  }
   hoverText(text, x, y) {
     if (!text) { if (this._ht) { this.hover.style.display = 'none'; this._ht = ''; } return; }
     if (text !== this._ht) { this.hover.textContent = text; this.hover.style.display = 'block'; this._ht = text; }
@@ -312,11 +320,13 @@ export class UI {
     this.showModal(`<div class="card"><h2>Paused</h2>
       <label>Sound <input id="vs" type="range" min="0" max="100" value="${Math.round(G.sound.vol * 100)}"></label>
       <label>Music <input id="vm" type="range" min="0" max="100" value="${Math.round(G.sound.musicVol * 100)}"></label>
+      <label>Graphics <select id="vg"><option value="1">Light</option><option value="1.5">Medium</option><option value="2">Sharp</option></select></label>
       <label>Zoom <input id="vz" type="range" min="60" max="180" value="${Math.round(G.zoom * 100)}"></label>
-      <div class="keys"><b>WASD / arrows</b> move, <b>Space</b> jump, <b>Shift</b> run, <b>Left mouse</b> mine and attack, <b>Right mouse</b> place or use, <b>Shift + click</b> back wall, <b>1-0 / wheel</b> hotbar, <b>E</b> backpack, <b>Q</b> drop, <b>T</b> chat, <b>Tab</b> players, <b>F</b> eat, <b>V</b> emote, <b>+/-</b> zoom, <b>F2</b> photo</div>
+      <div class="keys"><b>WASD / arrows</b> move, <b>Space</b> jump, <b>Shift</b> run, <b>Left mouse</b> mine and attack, <b>Right mouse</b> place or use, <b>Shift + click</b> back wall, <b>1-0 / wheel</b> hotbar, <b>E</b> backpack, <b>Q</b> drop, <b>T</b> chat, <b>Tab</b> players, <b>F</b> eat, <b>V</b> emotes, <b>+/-</b> zoom, <b>F2</b> photo</div>
       <div class="btns"><button id="mok">Resume</button><button id="mleave">Leave world</button></div></div>`, (m) => {
       m.querySelector('#vs').oninput = (e) => G.sound.setVol(e.target.value / 100, G.sound.musicVol);
       m.querySelector('#vm').oninput = (e) => G.sound.setVol(G.sound.vol, e.target.value / 100);
+      const vg = m.querySelector('#vg'); vg.value = String(G.r.maxDpr); vg.onchange = () => { G.r.maxDpr = +vg.value; try { localStorage.setItem('blockmates.gfx', vg.value); } catch { /* private mode */ } };
       m.querySelector('#vz').oninput = (e) => { G.zoom = e.target.value / 100; };
       m.querySelector('#mok').onclick = () => this.hideModal();
       m.querySelector('#mleave').onclick = () => { this.hideModal(); G.leave(); };
@@ -328,8 +338,11 @@ export class UI {
     if (this.modalOpen && this.modal.querySelector('#bigmap')) { this.hideModal(); return; }
     G.cw.paintMap();
     this.showModal('<div class="card wide"><h2>World map</h2><canvas id="bigmap"></canvas><div class="btns"><button id="mno">Close</button></div></div>', (m) => {
-      const cv = m.querySelector('#bigmap'); cv.width = W; cv.height = H;
+      const cv = m.querySelector('#bigmap');
+      const x0 = Math.max(0, (G.cw.mapMin ?? 0) * 32 - 24), x1 = Math.min(W, ((G.cw.mapMax ?? 47) + 1) * 32 + 24);
+      cv.width = x1 - x0; cv.height = H;
       const g = cv.getContext('2d');
+      g.translate(-x0, 0);
       g.imageSmoothingEnabled = false; g.drawImage(G.cw.map, 0, 0);
       g.strokeStyle = '#000'; g.lineWidth = 3;
       for (const p of G.players.values()) {

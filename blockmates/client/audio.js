@@ -65,6 +65,14 @@ export class Sound {
     }
   }
   setMode(m) { this.mode = m; }
+  // little background details: crickets at night, birds by day, drips in caves (called a few times a second)
+  ambience(mode, surface) {
+    if (!this.ctx || !this.on || this.ctx.state !== 'running') return;
+    const r = Math.random();
+    if (mode === 'night' && surface && r < 0.35) for (let i = 0; i < 3; i++) this.tone(4300 + Math.random() * 300, 0.05, 'sine', 0.025, 1, i * 0.07);
+    else if (mode === 'day' && surface && r < 0.12) { const f = 2300 + Math.random() * 1200; this.tone(f, 0.12, 'sine', 0.035, 1.5); this.tone(f * 1.2, 0.1, 'sine', 0.03, 0.8, 0.14); }
+    else if (mode === 'cave' && r < 0.06) this.tone(900 + Math.random() * 500, 0.18, 'sine', 0.05, 0.4);
+  }
   setRain(k) {
     if (!this.ctx) return;
     if (!this.rainSrc) {

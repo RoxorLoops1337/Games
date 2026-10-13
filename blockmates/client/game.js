@@ -267,7 +267,7 @@ export class Game {
     if (tag === 'INPUT' || tag === 'TEXTAREA') return;
     const k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
     if (down) {
-      if (this.ui.modalOpen) { if (k === 'Escape') this.ui.hideModal(); return; }
+      if (this.ui.modalOpen) { if (k === 'Escape' || (k === 'v' && this.ui.modal.querySelector('.emotes'))) this.ui.hideModal(); else if (/^[1-9]$/.test(k) && this.ui.modal.querySelector('.emotes')) { this.send({ t: 'emote', e: +k }); this.ui.hideModal(); } return; }
       if (k === 'Escape') { if (this.ui.open) this.ui.closePanel(); else this.ui.pause(); e.preventDefault(); return; }
       if (k === 'e' || k === 'i') { this.ui.toggleInv(); e.preventDefault(); return; }
       if (k === 't' || k === 'Enter') { this.ui.openChat(); e.preventDefault(); return; }
@@ -276,7 +276,7 @@ export class Game {
       if (/^[0-9]$/.test(k) && !e.repeat) { this.selectSlot((+k + 9) % 10); return; }
       if (k === 'q' && !e.repeat) { const i = this.sel; if (this.inv[i]) this.send({ t: 'drop', i, n: e.shiftKey ? this.inv[i].n : 1 }); return; }
       if (k === 'f' && !e.repeat) { this.send({ t: 'use', i: this.sel }); return; }
-      if (k === 'v' && !e.repeat) { this.emoteN = (this.emoteN || 0) % 9 + 1; this.send({ t: 'emote', e: this.emoteN }); return; }
+      if (k === 'v' && !e.repeat) { this.ui.emoteBar(); return; }
       if (k === '+' || k === '=') { this.zoom = clamp(this.zoom * 1.1, 0.5, 2.2); return; }
       if (k === '-') { this.zoom = clamp(this.zoom / 1.1, 0.5, 2.2); return; }
       if (k === 'h') { this.tut.toggle(); return; }
@@ -481,6 +481,7 @@ export class Game {
     if (this.mapT <= 0) { this.mapT = 0.35; this.ui.drawMap(); }
     // music mood
     const surf = me.y < 90;
+    this.ambT = (this.ambT || 0) - dt; if (this.ambT <= 0 && this.weather.k < 0.3) { this.ambT = 0.5; this.sound.ambience(this.sound.mode, me.y < 92); }
     this.sound.setMode(this.under ? 'water' : !surf && me.y > 110 ? 'cave' : daylight(this.time) < 0.35 ? 'night' : 'day');
   }
   // little ambient life: fireflies at night, butterflies by day, bats in caves. Purely visual, never sent anywhere.

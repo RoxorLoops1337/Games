@@ -35,10 +35,12 @@ export class Renderer {
     this.stars = Array.from({ length: 140 }, (_, i) => ({ x: ((i * 7919) % 1000) / 1000, y: ((i * 104729) % 1000) / 1000 * 0.7, r: 0.6 + ((i * 31) % 10) / 10 * 1.2, p: i }));
     this.clouds = Array.from({ length: 9 }, (_, i) => ({ x: i * 340 + ((i * 97) % 120), y: 0.06 + ((i * 53) % 30) / 100, s: 0.8 + ((i * 29) % 10) / 12, sp: 6 + (i % 4) * 2 }));
     this.dpr = 1; this.w = 0; this.h = 0;
+    let q = 0; try { q = +localStorage.getItem('blockmates.gfx') || 0; } catch { /* private mode */ }
+    this.maxDpr = q || ((navigator.maxTouchPoints > 0) ? 1.5 : 2);
     this.paints = 0;
   }
   resize() {
-    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    const dpr = Math.min(this.maxDpr, window.devicePixelRatio || 1);
     this.dpr = dpr;
     this.w = this.cv.clientWidth * dpr | 0; this.h = this.cv.clientHeight * dpr | 0;
     if (this.cv.width !== this.w || this.cv.height !== this.h) { this.cv.width = this.w; this.cv.height = this.h; }

@@ -99,6 +99,7 @@ export class CWorld {
         d[o] = (n >> 16) & 255; d[o + 1] = (n >> 8) & 255; d[o + 2] = n & 255; d[o + 3] = 255;
       }
       g.putImageData(img, cx * CHUNK, 0);
+      this.mapMin = Math.min(this.mapMin ?? cx, cx); this.mapMax = Math.max(this.mapMax ?? cx, cx);
     }
     this.mapDirty.clear();
   }

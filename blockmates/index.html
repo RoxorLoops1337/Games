@@ -74,8 +74,9 @@ body.playing #menu{display:none}
 .craft .tools button.on{background:var(--pop)}
 .goal{position:absolute;left:50%;top:10px;transform:translateX(-50%);max-width:min(620px,70vw);background:rgba(20,14,30,.62);color:#fff;border-radius:14px;padding:6px 14px;font-size:14px;font-weight:500;pointer-events:none;text-align:center;text-shadow:0 1px 2px #000}.goal small{color:var(--pop);font-weight:700;margin-right:6px}.goal i{opacity:.55;font-size:11px}
 .bossbar{position:absolute;left:50%;top:56px;transform:translateX(-50%);width:min(420px,70vw);text-align:center;color:#fff;font-weight:700;text-shadow:0 2px 3px #000;display:none;pointer-events:none}.bossbar.on{display:block}.bossbar div{height:14px;border-radius:8px;background:rgba(0,0,0,.6);border:2px solid #fff;overflow:hidden}.bossbar i{display:block;height:100%;background:linear-gradient(#ff7a3a,#d0301a)}
-.card.wide{max-width:96vw}.card.wide canvas{width:min(1500px,88vw);image-rendering:pixelated;border:3px solid var(--wood-d);border-radius:10px;background:#000}
-.tradecols{display:flex;gap:18px}.tcol{padding:8px;border-radius:12px;background:rgba(255,255,255,.35);border:3px solid transparent}.tcol.ok{border-color:var(--good)}.panel .grid.three{grid-template-columns:repeat(3,48px)}.way.cur{border-color:var(--pop);background:#fff2c0}
+.card.wide{max-width:96vw}.card.wide canvas{width:min(1500px,88vw);min-width:min(600px,88vw);image-rendering:pixelated;border:3px solid var(--wood-d);border-radius:10px;background:#000}
+.tradecols{display:flex;gap:18px}.tcol{padding:8px;border-radius:12px;background:rgba(255,255,255,.35);border:3px solid transparent}.tcol.ok{border-color:var(--good)}.panel .grid.three{grid-template-columns:repeat(3,48px)}.emotes{display:flex;gap:8px;flex-wrap:wrap;max-width:360px}.emotes button{width:56px;height:56px;border-radius:14px;border:3px solid var(--wood-d);background:linear-gradient(#fff8e4,#f0dca8);font:inherit;font-size:24px;cursor:pointer}.emotes button:hover{background:var(--pop)}
+.way.cur{border-color:var(--pop);background:#fff2c0}
 .recipes{overflow-y:auto;max-height:52vh;display:flex;flex-direction:column;gap:4px;padding-right:4px}
 .rec{display:flex;gap:8px;align-items:center;padding:4px 8px;border-radius:10px;background:rgba(255,255,255,.35);border:2px solid transparent;cursor:pointer;opacity:.62}
 .rec.can{opacity:1;background:rgba(255,255,255,.7);border-color:#7ab85a}
@@ -85,6 +86,7 @@ body.playing #menu{display:none}
 .modal{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(10,8,20,.5)}
 .card{background:linear-gradient(#f6e6bf,#e5c98c);border:4px solid var(--wood-d);border-radius:20px;padding:20px 26px;min-width:300px;max-width:min(520px,92vw);box-shadow:0 12px 40px rgba(0,0,0,.6)}
 .card h2{margin:0 0 10px}.card label{display:flex;justify-content:space-between;gap:12px;margin:6px 0;font-weight:500}.card input[type=text],.card input:not([type]){width:100%;padding:8px 12px;border-radius:10px;border:2px solid #8a6a3a;background:#fff8e4;font:inherit;outline:none;margin-bottom:8px}
+.card select{font:inherit;padding:3px 8px;border-radius:8px;border:2px solid #8a6a3a;background:#fff8e4}
 .card .keys{font-size:12px;line-height:1.7;margin:10px 0;opacity:.85}.card .hint{font-size:12px;opacity:.7}
 .card .inl{width:16px;height:16px;vertical-align:middle}
 .btns{display:flex;gap:10px;justify-content:flex-end;margin-top:12px}
