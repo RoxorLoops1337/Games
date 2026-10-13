@@ -2,9 +2,10 @@
 //   fav ........ star an item: the bulk tools below never touch it (it can still be moved by hand or sold)
 //   stash ...... Quick stack: put what you carry into the chests within a few tiles that already hold that kind of thing
 //               (or are labelled to take it), nearest chest first; stars and pinned hotbar items stay with you
+//   sellall .... at a market: sell every unstarred, unpinned kind in a list the client shows (one summary, one sound)
 //   chest ...... Put all / Take all at one open chest (put all respects the label and the stars)
 
-import { TILE } from '../config';
+import { TILE, TUNING } from '../config';
 import { BUILDINGS } from '../data/buildings';
 import { takes } from '../data/filters';
 import { ITEM_ORDER, ITEMS, type ItemId } from '../data/items';
@@ -12,7 +13,8 @@ import { PAL } from '../palette';
 import { dist } from '../geom';
 import { invDrop, invHas, invPut, invSum } from './machines';
 import type { Sim } from './sim';
-import { addItem, countOf, takeItem } from './stats';
+import { addItem, countOf, sellValue, takeItem } from './stats';
+import * as quests from './quests';
 import type { BuildE, Cmd, PlayerS } from './types';
 import { storageOf } from './uber';
 
@@ -46,7 +48,30 @@ export function cmdInv (sim: Sim, p: PlayerS, c: Extract<Cmd, { t: 'inv' }>) {
     if (sim.s.paused || p.downed > 0) return;
     if (c.op === 'fav') return fav(sim, p, c.item);
     if (c.op === 'stash') return stash(sim, p);
+    if (c.op === 'sellall') return sellAll(sim, p, c.items);
     if (c.op === 'chest') return chestAll(sim, p, c.id, c.dir);
+}
+
+/** Sell a whole list at the market: never the starred or pinned kinds, never gear you wear, one banner for the lot. */
+function sellAll (sim: Sim, p: PlayerS, items: unknown) {
+    if (!Array.isArray(items)) return;
+    if (!sim.stationNear(p, (b) => b.kind === 'market', TUNING.marketRange)) { sim.deny(p, 'Stand next to a market'); return; }
+    const keep = guarded(p), worn = new Set<string>(Object.values(p.equip));
+    let coins = 0, kinds = 0, units = 0;
+    for (const id of new Set(items.slice(0, 80) as ItemId[])) {
+        if (!ITEMS[id] || ITEMS[id].sell <= 0 || keep.has(id)) continue;
+        const have = countOf(p, id) - (worn.has(id) ? 1 : 0);
+        if (have < 1) continue;
+        coins += Math.max(1, Math.round(sellValue(p, id, have)));
+        takeItem(p, id, have);
+        kinds++; units += have;
+    }
+    if (!kinds) { sim.deny(p, 'Nothing to sell: starred and pinned things stay'); return; }
+    p.coins += coins;
+    quests.count(p, 'sell', coins);
+    sim.fx('sell', p.x, p.y - 10, p.id);
+    sim.float(p.x, p.y - 22, `+${coins} coins`, PAL.gold, p.id, 'sell');
+    sim.float(p.x, p.y - 36, `Sold ${units} (${kinds} kind${kinds === 1 ? '' : 's'})`, PAL.cream, p.id, 'aff');
 }
 
 function fav (sim: Sim, p: PlayerS, item: ItemId) {

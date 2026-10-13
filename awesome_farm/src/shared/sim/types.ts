@@ -432,6 +432,7 @@ export type Cmd =
     | { t: 'trade'; op: 'ok' | 'cancel' }
     | { t: 'inv'; op: 'fav'; item: ItemId }
     | { t: 'inv'; op: 'stash' }
+    | { t: 'inv'; op: 'sellall'; items: ItemId[] }
     | { t: 'inv'; op: 'chest'; id: number; dir: 'put' | 'take' }
     /** Take the i-th upgrade a tower offers (sim/defense.ts `cmdPick`). */
     | { t: 'towerpick'; id: number; i: number }

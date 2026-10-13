@@ -76,3 +76,18 @@ test('Quick stack and Take all send a few flying items to the one who did it', (
     assert.ok(back.length >= 2);
     assert.ok(countOf(p, 'wood') > 0);
 });
+
+test('Sell all shown sells every kind you list, but never starred or pinned ones, and only at a market', () => {
+    const { sim, p, o } = (() => { const y = yard(); const o = y.sim.world.plotOrigin(y.sim.homePlot(y.p.slot)); return { ...y, o }; })();
+    p.inv = { wood: 20, stone: 10, iron: 5 };
+    sim.command('a', { t: 'inv', op: 'sellall', items: ['wood', 'stone', 'iron'] });
+    assert.equal(countOf(p, 'wood'), 20, 'no market near: nothing sold');
+    sim.add<BuildE>({ k: 'bld', kind: 'market', tx: o.tx + 7, ty: o.ty + 6, rot: 0, by: 'a' });
+    sim.command('a', { t: 'inv', op: 'fav', item: 'iron' });
+    const before = p.coins;
+    sim.command('a', { t: 'inv', op: 'sellall', items: ['wood', 'stone', 'iron', 'wood'] });
+    assert.equal(countOf(p, 'wood'), 0);
+    assert.equal(countOf(p, 'stone'), 0);
+    assert.equal(countOf(p, 'iron'), 5, 'starred stays');
+    assert.ok(p.coins > before);
+});
