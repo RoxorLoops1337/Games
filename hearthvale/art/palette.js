@@ -12,8 +12,8 @@ export const P = {
   thatch: '#e3b857', slate: '#5d6a8c',
   // accents
   gold: '#ffd24a', goldDeep: '#e8a317', cream: '#fff8e6', white: '#ffffff', red: '#e8564a', blue: '#4a90e0', sky: '#a9dcf3', water: '#59bfe8', waterDeep: '#3a9fd0',
-  skin: ['#f6d3b0', '#e9b98f', '#c98f63', '#9a6642', '#6e452b'],
-  hair: ['#3b2a20', '#6a4228', '#a4682f', '#d8a64a', '#e8e0d0', '#b8452e', '#2d3350'],
+  skin: ['#ffe3cc', '#f8d5b5', '#eebf94', '#d39a6d', '#a8744c'],   // peach, light, tan, golden brown, deep brown (weighted toward the lighter four in characters.js)
+  hair: ['#6a4a35', '#8a5a36', '#b8783c', '#e8b85a', '#f4e4c0', '#d9603a', '#6a5aa8', '#e07aa0', '#4aa8a0'],   // warm browns first, then happy fantasy colours: no near-black blobs from above
   outfit: ['#e8564a', '#4a90e0', '#f2b632', '#52b56a', '#a65bd6', '#ef7fb0', '#31b5b0', '#f08a3a'],
   ink: '#4a3526',
 };

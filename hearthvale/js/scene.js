@@ -70,16 +70,29 @@ export class View {
   // t = shared world seconds, so every player sees the same sun
   // shared weather: a hash of the world's 4-minute block decides if it rains (about one block in four)
   weatherAt(t) { const k = Math.floor(t / 240); const h = Math.sin(k * 12.9898 + 4.1414) * 43758.5453; const r = h - Math.floor(h); return r < 0.26 ? 1 : 0; }
+  // Lighting is a PURE function of (world time, rain) evaluated every frame: nothing accumulates, so nothing can flicker.
   setTime(t) {
+    // the render clock follows the server clock smoothly (never jumps), so light changes are gentle even on a laggy phone
+    if (this.worldT === undefined || Math.abs(t - this.worldT) > 30) this.worldT = t; else this.worldT += Math.max(-0.5, Math.min(0.5, t - this.worldT)) * 0.25;
     this.rainGoal = this.weatherAt(t);
+  }
+  applyLight(dt) {
+    const t = (this.worldT = (this.worldT || 0) + dt);
+    this.rainAmt += ((this.rainGoal || 0) - this.rainAmt) * Math.min(1, dt * 0.5); const ra = this.rainAmt;
     const ph = ((t / 360) % 1 + 1) % 1, a = (ph - 0.25) * Math.PI * 2, sn = Math.sin(a);
-    const day = Math.max(0, Math.min(1, sn * 1.5 + 0.25)), dusk = Math.max(0, 1 - Math.abs(sn) * 3.2);
-    const C = THREE.Color, sky = new C('#3a5496').lerp(new C('#a9dcf3'), day).lerp(new C('#ff9d6c'), dusk * 0.55);
-    this.scene.background.copy(sky); this.scene.fog.color.copy(sky).lerp(new C('#ffffff'), 0.15 * day);
-    this.sun.intensity = 0.9 + 1.7 * day; this.sun.color.set('#ffe9c4').lerp(new C('#ff9a5a'), dusk * 0.7).lerp(new C('#9db4ff'), 1 - day);
-    this.sun.position.set(Math.cos(a) * 42, Math.max(6, Math.abs(sn) * 52 + 6), 22); this.hemi.intensity = 0.85 + 0.4 * day; this.hemi.color.set('#8aa0e0').lerp(new C('#dff3ff'), day);
-    this.winMat.emissiveIntensity = (1 - day) * 1.6; this.night = 1 - day; this.lanternMat.emissiveIntensity = (1 - day) * 2.4; envLantern.emissiveIntensity = (1 - day) * 2.4; cloudMat.color.set('#ffffff').lerp(new C('#6f7fb0'), (1 - day) * 0.8); this.fx.setLight && this.fx.setLight(0.35 + 0.65 * day);
-    this.r.toneMappingExposure = 0.95 + 0.1 * day;
+    const day = Math.max(0, Math.min(1, sn * 1.5 + 0.3)), dusk = Math.max(0, 1 - Math.abs(sn) * 3.2);
+    const C = this._C || (this._C = { sky: new THREE.Color(), tmp: new THREE.Color(), night: new THREE.Color('#4a62a8'), dayC: new THREE.Color('#bfe9ff'), dusk: new THREE.Color('#ffb48a'), grey: new THREE.Color('#a9b9c8'), white: new THREE.Color('#ffffff') });
+    // sky: bright candy blue by day, soft indigo at night, peach at dawn and dusk, pearly grey in rain
+    C.sky.copy(C.night).lerp(C.dayC, day).lerp(C.dusk, dusk * 0.5).lerp(C.grey, ra * 0.55);
+    this.scene.background.copy(C.sky); this.scene.fog.color.copy(C.sky).lerp(C.white, 0.2 * day);
+    this.scene.fog.near = 90 - 45 * ra; this.scene.fog.far = 230 - 110 * ra;
+    // high-key light: strong soft fill from the hemisphere so shadows stay bright and friendly
+    this.sun.intensity = (0.8 + 1.8 * day) * (1 - 0.4 * ra); this.sun.color.set('#fff6e0').lerp(C.tmp.set('#ffb070'), dusk * 0.6).lerp(C.tmp.set('#a9bcff'), 1 - day);
+    this.hemi.intensity = 0.95 + 0.4 * day + 0.2 * ra; this.hemi.color.set('#9fb4f0').lerp(C.tmp.set('#ffffff'), day); this.hemi.groundColor.set('#8fbf6a').lerp(C.tmp.set('#a8e07a'), day);
+    this.night = 1 - day;
+    this.winMat.emissiveIntensity = (1 - day) * 1.6; this.lanternMat.emissiveIntensity = (1 - day) * 2.4; envLantern.emissiveIntensity = (1 - day) * 2.4;
+    cloudMat.color.set('#ffffff').lerp(C.tmp.set('#8d9cc8'), (1 - day) * 0.8); this.fx.setLight && this.fx.setLight(0.4 + 0.6 * day);
+    this.r.toneMappingExposure = 1.02 + 0.06 * day;
   }
 
   // ----- village sync -----
@@ -233,10 +246,9 @@ export class View {
     }
     if (this.selRing.visible && this.sel) { const w = new THREE.Vector3(); this.sel.getWorldPosition(w); this.selRing.position.set(w.x, 0.25, w.z); this.selRing.rotation.z += dt; }
     this.fx.update(dt);
-    this.rainAmt += ((this.rainGoal || 0) - this.rainAmt) * Math.min(1, dt * 0.5); const ra = this.rainAmt;
+    this.applyLight(dt); const ra = this.rainAmt;
     this.rain.visible = ra > 0.05; this.rain.material.opacity = 0.55 * ra;
     if (this.rain.visible) { const p = this.rainPos; for (let i = 0; i < this.rainN; i++) { const o = i * 6; p[o + 1] -= dt * 28; p[o + 4] -= dt * 28; if (p[o + 1] < 0) { const y = 28 + Math.random() * 4; p[o + 1] = y; p[o + 4] = y - 0.9; } } this.rain.geometry.attributes.position.needsUpdate = true; this.rain.position.set(this.look.x, 0, this.look.z); }
-    this.scene.fog.near = 70 - 40 * ra; this.scene.fog.far = 190 - 90 * ra; if (ra > 0.05) { this.scene.background.lerp(new THREE.Color('#8a9aa8'), ra * 0.6); this.scene.fog.color.copy(this.scene.background); this.sun.intensity *= 1 - 0.45 * ra; }
     for (const c of this.clouds) { c.position.x += dt * 0.8; if (c.position.x > 130) c.position.x = -130; }
     for (const b of this.flies) { const u = b.userData, a = this.t * u.sp + u.ph; b.position.set(u.cx + Math.cos(a) * u.rad, 0.9 + Math.sin(a * 1.7) * 0.4, u.cz + Math.sin(a) * u.rad); b.rotation.y = -a + Math.PI / 2; animateCritter(b, 'fly', this.t, 1, u.ph); b.visible = (this.night || 0) < 0.6; }
     for (const b of this.birds) { const u = b.userData, a = this.t * u.sp + u.ph; b.position.set(u.cx + Math.cos(a) * u.rad, u.h + Math.sin(a * 2) * 0.6, u.cz + Math.sin(a) * u.rad); b.rotation.y = -a; animateCritter(b, 'fly', this.t, 1, u.ph); b.visible = (this.night || 0) < 0.7 && this.rainAmt < 0.5; }
