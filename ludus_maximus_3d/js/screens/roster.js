@@ -118,7 +118,9 @@ export function open(ctx) {
     ]));
 
     const chips = h('div', 'lm-chips');
-    if (g.inj > 0) chips.append(chip(`Injured ${g.inj}w`, 'red', 'Injured fighters rest until healed. Treat them from their profile.'));
+    if (g.inj > 0) chips.append(chip(`${lm.woundOf && lm.woundOf(g) ? d.WOUNDS[lm.woundOf(g).part].n : 'Injured'} ${g.inj}w`, 'red', 'Injured fighters rest until healed. Treat or rest them from their profile or the Infirmary.')); // WAVE2: body part
+    else if (g.weak && g.weak.w > 0) chips.append(chip(`Weak ${g.weak.w}w`, 'gold', 'Still recovering: ' + lm.modText(g.weak.mods).join(', ')));
+    if (g.scars && g.scars.length) chips.append(chip(`${g.scars.length} scar${g.scars.length > 1 ? 's' : ''}`, 'purple', g.scars.map((id) => d.SCARS[id].n).join(', ')));
     const entered = lm.busy(S, g, S.week) ? 'this week' : lm.busy(S, g, S.week + 1) ? 'next week' : '';
     if (entered) chips.append(chip(`Fights ${entered}`, 'blue', 'Entered in a match. Let them rest to arrive fresh.'));
     if ((g.fav || 0) >= 50) chips.append(chip('Fan favorite', 'gold', 'The crowd loves them: purses are bigger.'));

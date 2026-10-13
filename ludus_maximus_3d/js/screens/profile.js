@@ -85,16 +85,29 @@ export function open(ctx, arg) {
       const c = h('div', 'lm-card lm-gold lm-row', [h('div', 'lm-grow', [h('div', 'lm-name', 'Level-up pick waiting'), h('div', 'lm-sub', `${g.pend.length} choice${g.pend.length > 1 ? 's' : ''} to make. Picks are permanent.`)]), U.button({ label: 'Choose', variant: 'gold', onClick: async () => { const f = await import('../flow.js'); await f.pickPends(ctx); commit(); redraw(); } })]);
       out.push(c);
     }
+    // WAVE2: body-part wounds, scars and the Treat or Rest decision (core/ext.js; full screen in screens/infirmary.js)
+    if (lm.syncWounds) lm.syncWounds(S, g);
     if (g.inj > 0) {
       const c = h('div', 'lm-card lm-warn');
-      c.append(h('div', 'lm-name', `Injured: ${g.inj} week${g.inj > 1 ? 's' : ''} to heal`), h('div', 'lm-sub', 'An injured fighter rests and cannot enter games. Poultice: 60% chance to save 1 week. Physician: always saves 2 weeks.'));
+      c.append(h('div', 'lm-name', `Injured: ${g.inj} week${g.inj > 1 ? 's' : ''} to heal`), h('div', 'lm-sub', 'An injured fighter rests and cannot enter games. Each wound is a body part; some heal into a scar. Treat it for gold, or rest it for free.'));
+      (g.wounds || []).slice().sort((a, b) => b.w - a.w).forEach((wd) => {
+        const P = d.WOUNDS[wd.part], sc = Math.round(lm.scarChance(S, g, wd) * 100);
+        const r = h('div', 'lm-chips', [chip(`${P.n} ${wd.w}w`, 'red', P.d), chip(`Scar risk ${sc}%`, sc >= 25 ? 'gold' : 'grey', `If it scars: ${d.SCARS[P.scar].n} (${lm.modText(d.SCARS[P.scar].mods).join(', ')}).`), wd.rest ? chip('Bed rest', 'green', 'Heals a week faster each week. -3 morale a week.') : null].filter(Boolean)); r.style.marginTop = '6px'; c.append(r);
+      });
       if (owned) {
         const row = h('div', 'lm-btnrow'); row.style.marginTop = '8px';
         row.append(
           U.button({ label: `Poultice ${lm.treatCost(S, 'pou')}g`, variant: 'bronze', onClick: () => treat('pou') }),
-          U.button({ label: `Physician ${lm.treatCost(S, 'doc')}g`, variant: 'gold', onClick: () => treat('doc') }));
+          U.button({ label: `Physician ${lm.treatCost(S, 'doc')}g`, variant: 'gold', onClick: () => treat('doc') }),
+          U.button({ label: 'Treat or rest', icon: 'heart', variant: 'bronze', onClick: () => ctx.open('infirmary', { id: g.id }) }));
         c.append(row);
       }
+      out.push(c);
+    }
+    if ((g.scars && g.scars.length) || (g.weak && g.weak.w > 0 && g.inj <= 0)) {
+      const c = h('div', 'lm-card'); c.append(h('div', 'lm-name', g.scars && g.scars.length ? 'Scars and old wounds' : 'Still recovering'));
+      if (g.weak && g.weak.w > 0 && g.inj <= 0) c.append(h('div', 'lm-sub', `Weak for ${g.weak.w} more week${g.weak.w > 1 ? 's' : ''}: ${lm.modText(g.weak.mods).join(', ')}.`));
+      if (g.scars && g.scars.length) { const r = h('div', 'lm-chips', g.scars.map((id) => chip(d.SCARS[id].n, 'purple', `${d.SCARS[id].d} ${lm.modText(d.SCARS[id].mods).join(', ')}${d.SCARS[id].fame ? ', +' + Math.round(d.SCARS[id].fame * 100) + '% fame from fights' : ''}.`))); r.style.marginTop = '6px'; c.append(r, h('div', 'lm-sub', 'Scars are permanent. Each costs something and some give something back.')); }
       out.push(c);
     }
     return out;

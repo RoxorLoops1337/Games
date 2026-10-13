@@ -49,7 +49,7 @@ export function open(ctx, g, onDone) {
   const HELP = {
     timing: `${g.name} drills ${stat}. Stop the marker in the green zone. The gold center is perfect. A better Palaestra slows the marker and adds a little bonus.`,
     sprint: `${g.name} drills ${stat}. Tap as fast as you can for 3 seconds after the first tap. 22 taps is perfect.`,
-    combo: `${g.name} drills ${stat}. Memorise the three moves, then repeat them in order.`,
+    combo: `${g.name} drills ${stat}. Memorize the three moves, then repeat them in order.`,
     react: `${g.name} drills ${stat}. Wait for the pad to turn green, then tap as fast as you can. Too early counts as a miss.`,
   };
   let dead = false, done = false; const timers = []; let raf = 0;

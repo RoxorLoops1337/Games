@@ -184,5 +184,50 @@ for (const fn of ['newGame', 'makeGlad', 'mkUnits', 'createFight', 'step', 'useU
   ok(existsSync(join(here, '..', '.claude', 'skills', 'ludus3d-photo', 'SKILL.md')), 'photo skill exists');
 }
 
+// 12. wounds, scars, patrons and the event deck: screens, hooks, copy and docs
+{
+  const rd = (f) => readFileSync(join(root, f), 'utf8');
+  const gm = rd('js/game.js'), flow = rd('js/flow.js'), world = rd('js/screens/world.js'), sk = rd('js/screens/sk.js'), prof = rd('js/screens/profile.js'), ros = rd('js/screens/roster.js'), more = rd('js/screens/more.js');
+  const inf = rd('js/screens/infirmary.js'), spo = rd('js/screens/sponsors.js'), evs = rd('js/screens/events.js'), wu = rd('js/screens/wounds_ui.js'), ext = rd('core/ext.js'), data = rd('core/data.js');
+  ok(/'infirmary', 'sponsors', 'events'/.test(gm), 'game.js registers the infirmary, sponsors and events screens');
+  for (const [f, src] of [['infirmary', inf], ['sponsors', spo], ['events', evs]]) ok(/export function open\(ctx, arg\)/.test(src) && /export function render\(ctx, root/.test(src) && /lx-dep/.test(src), `${f}.js exports open and render and scopes to .lx-dep`);
+  ok(/id: 'infirmary'/.test(world) && /id: 'patrons'/.test(world) && /id: 'chronicle'/.test(world) && /Inf\.render/.test(world) && /Pat\.render/.test(world) && /Chr\.render/.test(world), 'the World has Infirmary, Patrons and Chronicle tabs');
+  ok(/woundCall\(ctx\)/.test(flow) && /patronFlow\(ctx\)/.test(flow) && /lm\.evView/.test(flow) && /S\.evLast/.test(flow), 'flow.js runs the wound decision, patron beats, and shows named events with effect chips');
+  ok(/woundBadges/.test(sk) && /woundBadges/.test(wu) && !/from '\.\/sk\.js'/.test(wu), 'every fighter picker shows wounds, weakness and scars (wounds_ui.js has no import cycle)');
+  ok(/lm\.scarChance/.test(prof) && /Treat or rest/.test(prof) && /d\.WOUNDS\[/.test(ros), 'profile and roster show body parts, scar risk and scars');
+  ok(/Wounds, patrons, events/.test(more) && /tab: 'patrons'/.test(more), 'help and the More menu mention wounds, patrons and events');
+  ok(/LM\.addWound/.test(ext) && /LM\.sponsorAccept/.test(ext) && /LM\.runChoice/.test(ext) && /LM\.weekTrain = /.test(ext) && /LM\.settle = /.test(ext), 'ext.js wraps settle and weekTrain and adds wounds, patrons and the event runner');
+  ok(!/Math\.random/.test(ext.slice(ext.indexOf('WAVE 2: body-part'))), 'the wave 2 sim never touches Math.random (hash rolls and the sim RNG only)');
+  for (const [n, src] of [['infirmary.js', inf], ['sponsors.js', spo], ['events.js', evs], ['wounds_ui.js', wu]]) ok(!/\u2014/.test(src), n + ' has no em dashes');
+  ok(!/\u2014/.test(data), 'data.js has no em dashes'); ok(!/\u2014/.test(ext), 'ext.js has no em dashes');
+  ok(existsSync(join(here, '..', 'tools', 'ludus3d_balance.mjs')), 'the headless balance harness exists');
+  const skill = readFileSync(join(here, '..', '.claude', 'skills', 'ludus3d-content', 'SKILL.md'), 'utf8');
+  ok(/g\.scars/.test(skill) && /lost_eye/.test(skill) && /ludus3d_balance/.test(skill) && /Patrons/.test(skill) && /Chronicle/.test(skill), 'the content skill documents scar ids, patrons, the chronicle and the balance harness');
+  const req = createRequire(import.meta.url); const D = req('../ludus_maximus_3d/core/data.js');
+  ok(Object.keys(D.SCARS).every((id) => skill.includes(id)), 'every scar id is documented for the rig and gladiator agents');
+}
+
+// 12. VENATIO: procedural beasts, hunts, bestiary (js/beast.js, js/beast_fx.js, js/screens/venatio.js, core/arena.js beast AI, core/ext.js section 5)
+{
+  const rd = (f) => readFileSync(join(root, f), 'utf8');
+  const beast = rd('js/beast.js'), bfx = rd('js/beast_fx.js'), ven = rd('js/screens/venatio.js'), fv = rd('js/fightview.js'), arena = rd('core/arena.js'), ext = rd('core/ext.js'), au = rd('js/audio.js'), portrait = rd('js/portrait.js'), gore = rd('js/gore.js'), dir = rd('js/director.js'), world = rd('js/screens/world.js'), arenaScr = rd('js/screens/arena.js'), main = rd('js/main.js');
+  ok(/export function createBeast/.test(beast) && /class BeastAnimator/.test(beast) && /THREE\.SkinnedMesh/.test(beast) && !/Math\.random/.test(beast) && !/localStorage/.test(beast), 'beast.js: skinned procedural rigs, no Math.random, no storage');
+  ok(['lion', 'wolf', 'bear', 'boar', 'nemean', 'elephant'].every((k) => new RegExp(k + ':').test(beast)) && /rider/.test(beast) && /trunk/.test(beast), 'beast.js: six species, the elephant has a trunk and a handler');
+  ok(/makeBloodUniforms/.test(beast) && /shadePatch/.test(beast) && /addWound/.test(beast) && /addBlood/.test(beast) && /sever\(\) \{ return null/.test(beast), 'beast.js: blood, wounds and the gore hooks (no dismemberment)');
+  for (const c of ['idle', 'bite', 'claw', 'pounce', 'roar', 'hurt', 'death', 'stomp', 'swipe', 'gore']) ok(new RegExp('C\\.' + c + ' = clip\\(').test(beast) || c === 'idle', 'beast clip ' + c);
+  ok(/BEAST/.test(fv) && /BF\.makeRig/.test(fv) && /BF\.atk/.test(fv) && /BF\.hitFx/.test(fv) && /BF\.down/.test(fv) && /BF\.event/.test(fv) && /rig\.nameH/.test(fv), 'fightview.js: tagged BEAST hooks (rig, atk, hit, down, event, plate height)');
+  ok((fv.match(/BEAST/g) || []).length <= 14, 'fightview.js keeps its BEAST edits tiny');
+  ok(/u\.h \|\| h/.test(dir) && /u\.r/.test(dir), 'director.js frames big beasts (u.h / u.r)');
+  ok(/rig\.beast\) return/.test(gore) && /beastFrame/.test(portrait) && /createBeast/.test(portrait), 'gore skips plate armour on animals; portrait.js renders beasts');
+  ok(/function beastThink/.test(arena) && /function bCharge/.test(arena) && /function bPounce/.test(arena) && /function beastHit/.test(arena) && /enraged/.test(arena) && !/Math\.random/.test(arena), 'arena.js: beast AI (pounce, pack flank, charge, trample, enrage) and no Math.random');
+  ok(/D\.BEASTS = /.test(ext) && /D\.HUNTS = /.test(ext) && /LM\.venatioSettle/.test(ext) && /LM\.bestiary/.test(ext) && /enumerable: false/.test(ext) && /hunt: 0\.07/.test(ext), 'ext.js: beast data, hunts, settlement, bestiary, hidden beast styles, hunt mortality');
+  for (const n of ['beastRoar', 'beastHowl', 'beastGrowl', 'beastHurt', 'beastDeath', 'beastBite', 'beastClaw', 'beastGore', 'beastSlam', 'pawThud', 'beastSnort', 'beastCharge']) ok(new RegExp("def\\('" + n + "'").test(au), 'audio.js sfx ' + n);
+  ok(/export function venatioCard/.test(ven) && /export async function startHunt/.test(ven) && /export function bestiaryTab/.test(ven) && /venatioCard/.test(arenaScr) && /bestiaryTab/.test(world) && /id: 'bestiary'/.test(world), 'Venatio UI: Arena challenge card, hunt flow, World Bestiary tab');
+  ok(/demoHunt/.test(main) && /export function demoHunt/.test(bfx), 'main.js: ?demo=1&hunt= for beast fights');
+  ok(existsSync(join(root, 'lab', 'beast_lab.html')) && /test=1/.test(rd('lab/beast_lab.html')) && /window\.__testResult/.test(rd('lab/beast_lab.html')), 'beast lab with a headless check page');
+  ok(existsSync(join(here, '..', '.claude', 'skills', 'ludus3d-beasts', 'SKILL.md')), 'beasts skill exists');
+  ok(!/—/.test(beast + bfx + ven), 'no em dashes in the beast files');
+}
+
 console.log(`ludus_maximus_3d structure: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

@@ -29,7 +29,7 @@ export function createTutorial(game) {
   // ---------------------------------------------------------------- steps
   // target(): Element | null. met(t): step finished. when(): optional gate (return false to stay silent). pos: card placement hint.
   const STEPS = [
-    { id: 'welcome', title: 'Welcome, Lanista', text: 'You run a gladiator school. Hire a fighter, train him each week, then send him to the arena for gold and glory. I will show you the way.', manual: 'Show me', block: true,
+    { id: 'welcome', title: 'Welcome, Lanista', text: 'You run a gladiator school. Hire a fighter, train them each week, then send him to the arena for gold and glory. I will show you the way.', manual: 'Show me', block: true,
       met: (t) => !!t.welcome, when: () => game.scene === 'hub' },
     { id: 'hire', title: 'Hire your first fighter', text: 'Three citizens wait at the gate. Compare their stats and talent pips, then tap Hire on the one you like.',
       target: () => { const s = sheetBy('recruit'); return s ? tutEl(s, 'hire') : null; },
@@ -41,7 +41,7 @@ export function createTutorial(game) {
       met: (t) => !!t.trained || (!!t.rosterOpened && !sheetBy('roster')), when: () => !!sheetBy('roster') },
     { id: 'arena', title: 'Visit the Arena', text: 'Fights pay gold, fame and loot. Open the Arena to see the events on offer this week.', hubOnly: true,
       target: () => tutEl(null, 'nav-arena'), met: (t) => !!t.arenaOpened || entries() > 0 },
-    { id: 'enter', title: 'Enter a duel', text: 'Pick an event you can win and tap Enter, then choose your fighter. A duel is a safe first test: the crowd decides his fate.', pos: 'above',
+    { id: 'enter', title: 'Enter a duel', text: 'Pick an event you can win and tap Enter, then choose your fighter. A duel is a safe first test: the crowd decides their fate.', pos: 'above',
       target: () => { const s = sheetBy('arena'); if (!s || topScrim() !== s) return null; return live('[data-tut="enter"][data-tut-kind="duel"]', s)[0] || tutEl(s, 'enter'); },
       met: (t) => entries() > 0 || (!!t.arenaOpened && !scrims().length), when: () => !!sheetBy('arena') },
     { id: 'advance', title: 'Advance the week', text: 'Time to move on. Fighters train, then every fight you entered begins. Tap Advance week.', hubOnly: true,
@@ -51,7 +51,7 @@ export function createTutorial(game) {
       met: (t) => !!t.fightSeen || fightOver() || (!!t.advanced && !game.busy), when: () => game.scene === 'fight' && game.fightView && game.fightView.phase === 'fight' },
     { id: 'results', title: 'The spoils', text: 'Gold, fame, experience and sometimes loot. Winning a duel lets you show mercy for fame, or showboat for gold. Hurt fighters need rest.', manual: 'Got it', pos: 'top', passive: true,
       met: (t) => !!t.resSeen || (!!t.advanced && !game.busy), when: () => resultsOpen() },
-    { id: 'week', title: 'The loop is yours', text: 'That is the whole cycle: plan, enter, advance. More holds the Calendar, the rival ludi, the barracks and the memorial wall: the Pit and other risky fights can cost a fighter his life. Tap Advance week whenever you are ready. Ave!', manual: 'Begin', hubOnly: true, last: true,
+    { id: 'week', title: 'The loop is yours', text: 'That is the whole cycle: plan, enter, advance. More holds the Calendar, the rival ludi, the barracks and the memorial wall: the Pit and other risky fights can cost a fighter their life. Tap Advance week whenever you are ready. Ave!', manual: 'Begin', hubOnly: true, last: true,
       target: () => tutEl(null, 'advance') || game.advBtn, met: (t) => !!t.done2, when: () => !game.busy && game.scene === 'hub' },
   ];
   function entries() { const e = S() && S().entries; return e ? Object.keys(e).length : 0; }

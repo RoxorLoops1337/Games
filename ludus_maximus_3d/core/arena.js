@@ -11,7 +11,7 @@
   L.ARENA_R = R;
   const DK = 0.3; // global damage scale: keeps fights readable (~20s)
 
-  function mkUnit(g, side, i, n, ctx, hpFrac, grudge) {
+  function mkUnitG(g, side, i, n, ctx, hpFrac, grudge) {
     const d = L.derive(g, ctx); const fx = d.fx; const maxhp = Math.round(d.hp);
     return {
       id: side + i, side, i, g, name: g.name, style: g.style, tr: D.TRAITS[g.trait] || {},
@@ -25,6 +25,16 @@
       s: {}, stk: {}, hits: [], down: false, gritUsed: false, stal: false, revived: false, lbUsed: false,
       dmg: 0, taken: 0, crits: 0, grudge: !!grudge, bacc: 0, racc: 0, srT: 0.5, noDmgT: 9, graspReady: true, graspT: 0, elecAt: 0, phaseAt: 0, thCnt: 0, fs: null, airT: 1,
     };
+  }
+  // BEAST (Venatio): a beast record (core/ext.js LM.makeBeast) becomes an ordinary unit with its own range, speed, size and AI state (beastThink below)
+  function mkUnit(g, side, i, n, ctx, hpFrac, grudge) {
+    const u = mkUnitG(g, side, i, n, ctx, hpFrac, grudge); if (!g.beast) return u;
+    const B = D.BEASTS[g.beast], d = L.derive(g, ctx);
+    u.beast = g.beast; u.bx = B; u.ai = B.ai; u.range = B.range; u.ms = (2.7 + d.spd * 0.026) * B.ms; u.aps = (0.5 + d.spd * 0.0095) * B.aps; u.sz = B.sz; u.boss = !!B.boss; u.enraged = false;
+    if (g.pw && g.pw !== 1) { u.maxhp = Math.round(u.maxhp * g.pw); u.hp = Math.max(1, Math.round(u.hp * g.pw)); u.atk *= Math.sqrt(g.pw); } // hunt tuning (D.HUNTS pw)
+    u.skills = []; u.ults = []; u.wa = null; u.atkT = 0.6 + rnd() * 0.8;
+    u.bs = { pounce: 0.4 + rnd() * 0.6, charge: 0.4 + rnd() * 0.8, back: 0, stomp: 4 + rnd(), roar: 0, jab: 3 + rnd() * 2, t: rnd() * 2, mode: 'circle', combo: 0, howl: false, dir: rnd() < 0.5 ? 1 : -1, n: 0 };
+    return u;
   }
   L.mkUnits = (glads, side, ctx, hpFracs, grudge) => glads.map((g, i) => mkUnit(g, side, i, glads.length, ctx, hpFracs && hpFracs[i], grudge));
   L.createFight = (A, B, o) => {
@@ -41,6 +51,7 @@
     if (u.rm.has('celerity')) m += 0.04;
     if (s.rage) m += 0.6; if (s.rally) m += s.rally.spd; if (s.lastB) m += 0.4; if (s.phase) m += 0.4; if (s.roar) m += 0.15;
     if (s.slow) m *= s.slow.f;
+    if (u.enraged) m += u.bx.enrage.aps; // BEAST
     return u.aps * m;
   }
   function msOf(u) {
@@ -48,6 +59,7 @@
     if (u.rm.has('celerity')) m += 0.04; if (u.rk === 'lethal' && (u.stk.lt || 0) >= 6) m += 0.12;
     if (s.sprint) m += 0.12 * s.sprint.v; if (s.phase) m += 0.35; if (s.nimbus) m += 0.25; if (s.unb) m += 0.2; if (s.spin) m += 0.3; if (s.rage) m += 0.1;
     if (s.slow) m *= 0.4 + 0.6 * s.slow.f;
+    if (u.enraged) m += u.bx.enrage.ms; // BEAST
     return u.ms * m;
   }
   L.apsOf = apsOf; L.msOf = msOf;
@@ -69,6 +81,7 @@
     if (u.fx.ramp) m *= 1 + 0.03 * u.fx.ramp * Math.min(5, Math.floor(F.t / 5));
     if (u.rm.has('gather')) m *= 1 + 0.01 * Math.min(6, Math.floor(F.t / 5));
     if (u.s.roar && u.fx.roarDmg) m *= 1 + u.fx.roarDmg;
+    if (u.enraged) m *= 1 + u.bx.enrage.atk; // BEAST
     if (F.t > 40) m *= 1 + (F.t - 40) * 0.03;
     if (o.exec && tp < o.exec.th) m *= o.exec.m / (o.mult || 1);
     return m;
@@ -292,6 +305,7 @@
     if (u.cast > 0) { u.cast -= dt; u.mvx = u.mvy = 0; return; }
     if (u.wind > 0) { u.wind -= dt; u.mvx = u.mvy = 0; if (u.wind <= 0) resolveAttack(F, u); return; }
     if (F.zones.length) { const z = F.zones.find((q) => Math.hypot(u.x - q.x, u.y - q.y) < q.r + 0.6); if (z) { const dx = u.x - z.x, dy = u.y - z.y, l = Math.hypot(dx, dy) || 1; u.mvx = dx / l; u.mvy = dy / l; return; } }
+    if (u.beast) return beastThink(F, u, dt); // BEAST
     const foes = alive(F, other(u.side)); if (!foes.length) return;
     const t = chooseTarget(F, u, foes); u.tgt = t.id; const d = dist(u, t);
     if (Math.abs(t.x - u.x) > 0.15) u.face = t.x > u.x ? 1 : -1;
@@ -305,16 +319,118 @@
       if (u.atkT <= 0 && !s.spin) { u.wt = t.id; u.wind = Math.min(0.22, 0.4 / apsOf(u)); u.atkT = 1 / apsOf(u); emit(F, { k: 'atk', src: u.id, dst: t.id }); }
     } else { const nx = (t.x - u.x) / d, ny = (t.y - u.y) / d; u.mvx = nx; u.mvy = ny; }
   }
+  // ---------- BEAST AI (Venatio). No counters: every beast is a different tempo (pounce, pack flank, charge, trample, stomp) with its own stats and an enrage;
+  // the player answers with stats, positioning and ultimates, never with a style rock-paper-scissors. Uses only rnd() (replay safe).
+  const bAng = (a, b) => Math.atan2(b.y - a.y, b.x - a.x);
+  const bGo = (u, tx, ty, k) => { const dx = tx - u.x, dy = ty - u.y, l = Math.hypot(dx, dy) || 1; u.mvx = dx / l * k; u.mvy = dy / l * k; };
+  const bTan = (u, t, dir, k, close) => { const dx = t.x - u.x, dy = t.y - u.y, l = Math.hypot(dx, dy) || 1, nx = dx / l, ny = dy / l; u.mvx = -ny * dir * k + nx * close; u.mvy = nx * dir * k + ny * close; };
+  function bAtk(F, u, t, kind, o) { // start an attack with its own windup; the damage lands in beastHit (called from resolveAttack)
+    u.wt = t.id; u.wa = Object.assign({ kind, mult: 1, bleed: 0, cleave: 0, kb: 0, hits: 1 }, o); u.wind = o.wind || 0.22; u.atkT = (o.rec || 1) / apsOf(u);
+    emit(F, { k: 'atk', src: u.id, dst: t.id, beast: kind, w: u.wind });
+  }
+  function beastHit(F, u, t) {
+    const wa = u.wa; u.wa = null; const reach = u.range + 0.9;
+    if (dist(u, t) > reach) { emit(F, { k: 'whiff', src: u.id }); return; }
+    let mult = wa.mult;
+    if (u.ai === 'pack') { const pk = F.units.filter((x) => x !== u && x.beast === u.beast && !x.down && x.side === u.side && dist(x, t) < 5).length; mult *= 1 + 0.1 * Math.min(3, pk); } // the pack bites harder together
+    const hit = (f, m) => {
+      const dmg = strike(F, u, f, { mult: m, basic: true, tag: wa.kind }); if (!dmg || f.down) return;
+      if (wa.bleed && rnd() < wa.bleed) { f.s.bleed = { dps: u.atk * 0.1 * DK * (u.boss ? 1.4 : 1), t: 4 }; emit(F, { k: 'status', dst: f.id, st: 'bleed', t: 4 }); }
+      if (wa.kb) { const a = bAng(u, f); f.kx += Math.cos(a) * wa.kb; f.ky += Math.sin(a) * wa.kb; }
+    };
+    hit(t, mult);
+    if (wa.cleave) alive(F, other(u.side)).forEach((f) => { if (f !== t && dist(u, f) <= reach) hit(f, mult * wa.cleave); });
+    for (let h = 1; h < wa.hits; h++) F.sched.push({ at: F.t + 0.2 * h, fn: () => { if (u.down || t.down || u.s.stun || dist(u, t) > reach + 0.4) return; emit(F, { k: 'atk', src: u.id, dst: t.id, beast: wa.kind === 'maul' ? 'claw' : wa.kind }); hit(t, mult * 0.8); } });
+  }
+  function bEnrage(F, u) { u.enraged = true; u.cast = 0.9; emit(F, { k: 'beast', a: 'enrage', src: u.id }); emit(F, { k: 'status', dst: u.id, st: 'rage', t: 6 }); F.hype += 12; }
+  function bRoar(F, u, r, slow, dur, a) { // r = 0: a pure show-off roar
+    u.cast = 0.85; emit(F, { k: 'beast', a: a || 'roar', src: u.id, r }); F.hype += 8;
+    if (r > 0) F.sched.push({ at: F.t + 0.45, fn: () => { if (u.down) return; alive(F, other(u.side)).forEach((f) => { if (dist(u, f) <= r) cc(F, f, 'slow', { f: slow, t: dur }, dur); }); } });
+  }
+  // a straight run through everything in the way: telegraph, dash, each foe hit once, knocked up, then the beast is winded
+  function bCharge(F, u, t, o) {
+    u.cast = o.tele; emit(F, { k: 'beast', a: 'telegraph', src: u.id, x: t.x, y: t.y, r: o.r, ang: bAng(u, t) }); const gx = t.x, gy = t.y;
+    F.sched.push({ at: F.t + o.tele, fn: () => {
+      if (u.down || u.s.stun || F.done) return;
+      const a = bAng(u, { x: gx, y: gy }), len = clamp(Math.hypot(gx - u.x, gy - u.y) + 3.5, 7, 15), seen = new Set();
+      u.s.dash = { tx: u.x + Math.cos(a) * len, ty: u.y + Math.sin(a) * len, t: len / o.sp + 0.25, sp: o.sp,
+        tick: () => { alive(F, other(u.side)).forEach((f) => { if (seen.has(f.id) || dist(u, f) > o.r) return; seen.add(f.id); const dmg = strike(F, u, f, { mult: o.mult, basic: true, tag: o.tag }); if (dmg && !f.down) { const k = bAng(u, f); f.kx += Math.cos(k) * o.kb; f.ky += Math.sin(k) * o.kb; cc(F, f, 'air', o.air, o.air); } }); },
+        fn: () => { u.cast = o.rec; emit(F, { k: 'beast', a: 'winded', src: u.id }); } };
+      emit(F, { k: 'dash', src: u.id }); emit(F, { k: 'beast', a: 'charge', src: u.id }); F.hype += 6;
+    } });
+  }
+  function bPounce(F, u, t, o) {
+    u.cast = 0.38; emit(F, { k: 'atk', src: u.id, dst: t.id, beast: 'pounce' });
+    F.sched.push({ at: F.t + 0.38, fn: () => {
+      if (u.down || u.s.stun || t.down || F.done) return; const a = bAng(t, u);
+      u.s.dash = { tx: t.x + Math.cos(a) * 1.1, ty: t.y + Math.sin(a) * 1.1, t: 0.6, sp: 21, fn: () => {
+        const dmg = strike(F, u, t, { mult: o.mult, basic: true, tag: 'pounce' }); u.atkT = 0.45; emit(F, { k: 'beast', a: 'land', src: u.id }); F.hype += 6;
+        if (dmg && !t.down) { f_bleed(F, u, t, o.bleed); cc(F, t, 'slow', { f: 0.6, t: 1.3 }, 1.3); }
+      } };
+    } });
+  }
+  function f_bleed(F, u, f, ch) { if (ch && rnd() < ch) { f.s.bleed = { dps: u.atk * 0.1 * DK * (u.boss ? 1.4 : 1), t: 4 }; emit(F, { k: 'status', dst: f.id, st: 'bleed', t: 4 }); } }
+  function beastThink(F, u, dt) {
+    const foes = alive(F, other(u.side)); if (!foes.length) { u.mvx = u.mvy = 0; return; }
+    const t = chooseTarget(F, u, foes); u.tgt = t.id; const d = dist(u, t), b = u.bs, B = u.bx, ai = u.ai, swing = u.atkT <= 0;
+    if (Math.abs(t.x - u.x) > 0.15) u.face = t.x > u.x ? 1 : -1;
+    b.pounce -= dt; b.charge -= dt; b.stomp -= dt; b.jab -= dt; b.t -= dt;
+    if (!u.enraged && B.enrage && u.hp < u.maxhp * B.enrage.at) { bEnrage(F, u); return; }
+    if (!b.howl) { b.howl = true; if (u.i === 0 && (B.boss || ai === 'pack' || ai === 'pounce')) { bRoar(F, u, 0, 1, 0, ai === 'pack' ? 'howl' : 'roar'); return; } }
+    const inR = d <= u.range + 0.1;
+    if (ai === 'pack') {
+      const mates = F.units.filter((x) => x.beast === u.beast && x.side === u.side && !x.down), idx = Math.max(0, mates.indexOf(u)), n = mates.length;
+      if (b.mode === 'circle') {
+        const rushing = mates.some((x) => x !== u && x.bs.mode === 'rush');
+        if (b.t <= 0 || (rushing && b.t < 1.5) || t.hp < t.maxhp * 0.3 || t.s.stun) { b.mode = 'rush'; b.t = 3.5; }
+        else { const a = idx / n * 6.2832 + F.t * 0.42 * b.dir, R0 = 3.5; bGo(u, t.x + Math.cos(a) * R0, t.y + Math.sin(a) * R0, d > R0 + 1.5 ? 1 : 0.85); return; }
+      }
+      if (b.mode === 'fade') { if (b.t <= 0) { b.mode = 'circle'; b.t = 1.5 + rnd() * 1.8; } else { bGo(u, u.x * 2 - t.x, u.y * 2 - t.y, 1.1); return; } }
+      if (b.mode === 'rush') {
+        if (inR) { if (swing) { bAtk(F, u, t, 'bite', { mult: 1, bleed: 0.3, wind: 0.18, rec: 0.9 }); b.mode = 'fade'; b.t = 0.7 + rnd() * 0.4; } else { u.mvx = u.mvy = 0; } }
+        else if (b.t <= 0) { b.mode = 'circle'; b.t = 1.2 + rnd() * 1.2; } else bGo(u, t.x, t.y, 1.1);
+        return;
+      }
+    } else if (ai === 'pounce') {
+      if (b.pounce <= 0 && d <= 2.0 && b.back < 0.6 && !t.s.air) { b.back += dt; bGo(u, u.x * 2 - t.x, u.y * 2 - t.y, 1.2); return; } // spring clear of a clinch to leap again
+      if (b.pounce <= 0 && d > 1.9 && d < 8.5 && !t.s.air) { bPounce(F, u, t, { mult: B.boss ? 1.5 : 1.7, bleed: 0.55 }); b.pounce = (u.enraged ? 4.5 : 7) + rnd() * 2; b.back = 0; return; }
+      if (B.boss && b.roar === 0 && u.hp < u.maxhp * 0.75) { b.roar = 1; bRoar(F, u, 5, 0.75, 3, 'roar'); return; }
+      if (inR) {
+        bTan(u, t, b.dir, 0.25, 0);
+        if (swing) { b.n++; if (B.boss && b.n % 4 === 0) bAtk(F, u, t, 'maul', { mult: 0.62, hits: 3, bleed: 0.3, wind: 0.22, rec: 1.3 }); else if (b.n % 3 === 0) bAtk(F, u, t, 'bite', { mult: 1.15, bleed: 0.4, wind: 0.24, rec: 1.1 }); else bAtk(F, u, t, 'claw', { mult: 0.78, bleed: 0.12, wind: 0.14, rec: 0.75 }); }
+      } else if (b.pounce > 1 && d < 7 && !B.boss) bTan(u, t, b.dir, 0.95, d > 5 ? 0.5 : -0.05); // stalk: circle at a distance until the leap is ready
+      else bGo(u, t.x, t.y, 1);
+    } else if (ai === 'bear') {
+      if (!b.roar && u.hp < u.maxhp * 0.65) { b.roar = 1; bRoar(F, u, 4.2, 0.75, 3, 'roar'); return; }
+      if (inR) { bTan(u, t, b.dir, 0.15, 0); if (swing) { b.n++; if (b.n % 3 === 0) bAtk(F, u, t, 'maul', { mult: 1.45, bleed: 0.35, wind: 0.42, rec: 1.3 }); else bAtk(F, u, t, 'swipe', { mult: 0.95, cleave: 0.6, kb: 3.2, wind: 0.3, rec: 1 }); } }
+      else bGo(u, t.x, t.y, 0.95);
+    } else if (ai === 'boar') {
+      if (b.charge <= 0 && d > 2.6 && d < 10.5) { bCharge(F, u, t, { tele: 0.55, sp: 13.5, r: 1.2, mult: 1.3, kb: 5.5, air: 0.7, rec: 0.9, tag: 'charge' }); b.charge = (u.enraged ? 5.5 : 8.5) + rnd() * 2; return; }
+      if (inR) { bTan(u, t, b.dir, 0.3, 0); if (swing) bAtk(F, u, t, 'gore', { mult: 1, bleed: 0.3, kb: 2, wind: 0.2, rec: 1 }); }
+      else bGo(u, t.x, t.y, 1);
+    } else if (ai === 'trample') { // war elephant: stomp, trample charge, trunk swat, and the handler's javelins from the howdah
+      if (b.jab <= 0) { const far = foes.filter((f) => dist(u, f) > 2.6 && dist(u, f) < 9.5); if (far.length) { const f = far[(rnd() * far.length) | 0]; b.jab = 3.4 + rnd() * 1.4; emit(F, { k: 'beast', a: 'javelin', src: u.id, dst: f.id }); emit(F, { k: 'proj', src: u.id, dst: f.id, c: '#f5ead2' }); strike(F, u, f, { mult: 0.5, sure: true, noProc: true, tag: 'javelin' }); } else b.jab = 1; }
+      if (b.stomp <= 0 && foes.some((f) => dist(u, f) < 3.2)) {
+        b.stomp = (u.enraged ? 5 : 7.5) + rnd(); u.cast = 0.75; emit(F, { k: 'beast', a: 'stomp', src: u.id, x: u.x, y: u.y, r: 3.5 });
+        F.sched.push({ at: F.t + 0.55, fn: () => { if (u.down || u.s.stun || F.done) return; emit(F, { k: 'aoe', x: u.x, y: u.y, r: 3.5, c: '#c9b79c', big: 1 }); F.hype += 8; alive(F, other(u.side)).forEach((f) => { if (dist(u, f) <= 3.5) { strike(F, u, f, { mult: 0.95, sure: true, noProc: true, tag: 'stomp' }); if (!f.down) cc(F, f, 'slow', { f: 0.55, t: 3 }, 3); } }); } });
+        return;
+      }
+      if (b.charge <= 0 && d > 3.4 && d < 11) { bCharge(F, u, t, { tele: 0.85, sp: 12.5, r: 1.7, mult: 1.55, kb: 8, air: 0.9, rec: 1.2, tag: 'trample' }); b.charge = (u.enraged ? 6.5 : 10) + rnd() * 2; return; }
+      if (inR) { bTan(u, t, b.dir, 0.12, 0); if (swing) bAtk(F, u, t, 'swat', { mult: 1.15, cleave: 0.6, kb: 5, wind: 0.4, rec: 1.2 }); }
+      else bGo(u, t.x, t.y, 0.95);
+    }
+  }
   function resolveAttack(F, u) {
-    const t = F.units.find((x) => x.id === u.wt); if (!t || t.down || u.s.stun) return;
+    const t = F.units.find((x) => x.id === u.wt); if (!t || t.down || u.s.stun) { u.wa = null; return; }
+    if (u.wa) { beastHit(F, u, t); return; } // BEAST
     if (dist(u, t) <= u.range + 0.9) strike(F, u, t, { mult: 1, basic: true }); else emit(F, { k: 'whiff', src: u.id });
   }
   function motion(F, u, dt) {
     if (u.down) return; const s = u.s; const x0 = u.x, y0 = u.y;
     if (s.air) { const p = clamp(1 - s.air / u.airT, 0, 1); u.z = 3.2 * 4 * p * (1 - p); } else u.z = 0;
     if (s.dash) {
-      const d = s.dash; d.t -= dt; const dx = d.tx - u.x, dy = d.ty - u.y, len = Math.hypot(dx, dy), step = 24 * dt;
-      if (len <= step || d.t <= 0) { u.x = d.tx; u.y = d.ty; const fn = d.fn; delete s.dash; if (fn) fn(); } else { u.x += (dx / len) * step; u.y += (dy / len) * step; }
+      const d = s.dash; d.t -= dt; const dx = d.tx - u.x, dy = d.ty - u.y, len = Math.hypot(dx, dy), step = (d.sp || 24) * dt; // BEAST: d.sp = own speed, d.tick = per-step hook (trample)
+      if (len <= step || d.t <= 0) { u.x = d.tx; u.y = d.ty; const fn = d.fn; delete s.dash; if (d.tick) d.tick(); if (fn) fn(); } else { u.x += (dx / len) * step; u.y += (dy / len) * step; if (d.tick) d.tick(); }
     } else if (s.pull) {
       const d = s.pull; d.t -= dt; const dx = d.tx - u.x, dy = d.ty - u.y, len = Math.hypot(dx, dy), step = 18 * dt;
       if (len <= step || d.t <= 0) { u.x = d.tx; u.y = d.ty; delete s.pull; } else { u.x += (dx / len) * step; u.y += (dy / len) * step; }
@@ -328,7 +444,7 @@
   function separate(F) {
     const us = F.units.filter((u) => !u.down && !u.s.air);
     for (let i = 0; i < us.length; i++) for (let j = i + 1; j < us.length; j++) {
-      const a = us[i], b = us[j]; let dx = b.x - a.x, dy = b.y - a.y; let d = Math.hypot(dx, dy); const min = 1.05;
+      const a = us[i], b = us[j]; let dx = b.x - a.x, dy = b.y - a.y; let d = Math.hypot(dx, dy); const min = 1.05 * 0.5 * ((a.sz || 1) + (b.sz || 1)); // BEAST: bigger bodies keep more room
       if (d < min) { if (d < 0.001) { dx = rnd() - 0.5; dy = rnd() - 0.5; d = Math.hypot(dx, dy) || 1; } const p = (min - d) / 2; const nx = dx / d, ny = dy / d; if (!a.s.dash) { a.x -= nx * p; a.y -= ny * p; } if (!b.s.dash) { b.x += nx * p; b.y += ny * p; } }
     }
   }

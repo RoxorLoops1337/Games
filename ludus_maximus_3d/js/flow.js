@@ -26,6 +26,7 @@ export async function advanceWeek(ctx) {
   await trophies(ctx);
   await rivalryEvent(ctx);
   await pendingEvent(ctx);
+  await (await import('./screens/infirmary.js')).woundCall(ctx); await (await import('./screens/sponsors.js')).patronFlow(ctx); // WAVE2: wounds decision, patron beats and offers
 }
 
 // ------------------------------------------------------------------ small dialogs
@@ -101,11 +102,16 @@ async function rivalryEvent(ctx) {
   await ctx.ask({ title: 'Rivalry', body: h('div', '', out.lines.map((x) => para(x))), actions: ok('Okay'), dismiss: 'ok' }); await pickPends(ctx); await trophies(ctx);
 }
 
-async function pendingEvent(ctx) {
-  const S = ctx.S; if (!S.pendingEv) return; const E = L().EVENTS[S.pendingEv]; if (!E) { S.pendingEv = null; return; }
-  const i = await ctx.ask({ title: 'Event', body: para(E.t), actions: E.c.map((c, k) => ({ label: c.l, value: k, variant: k ? 'ghost' : 'gold' })), dismiss: E.c.length - 1 });
-  const msg = L().runEvent(S, +i); ctx.save(); ctx.refresh();
-  await ctx.ask({ title: 'Result', body: para(msg), actions: ok('Okay'), dismiss: 'ok' });
+async function pendingEvent(ctx) { // WAVE2: named events, risk hints, costs, consequence chips (core/ext.js LM.evView)
+  const S = ctx.S; if (!S.pendingEv) return; const lm = L(), E = lm.EVENTS[S.pendingEv]; if (!E) { S.pendingEv = null; return; }
+  const V = lm.evView ? lm.evView(S) : null;
+  const body = h('div', '', [V && V.follow ? para('Word of an earlier matter comes back to you.') : null, para(V ? V.text : E.t)]);
+  const acts = V ? V.choices.map((c) => ({ label: c.l + (c.cost ? ` (${c.cost}g)` : ''), sub: c.h || (c.short ? 'You cannot afford this' : undefined), value: c.i, variant: c.i ? 'ghost' : 'gold' })) : E.c.map((c, k) => ({ label: c.l, value: k, variant: k ? 'ghost' : 'gold' }));
+  const i = await ctx.ask({ title: V ? V.n : 'Event', body, actions: acts, dismiss: E.c.length - 1 });
+  const msg = lm.runEvent(S, +i); ctx.save(); ctx.refresh();
+  const res = h('div', '', [para(msg)]); const fx = (S.evLast && S.evLast.fx) || []; if (fx.length) res.append(h('div', '', fx.map((f) => chip(f, /-\d|hurt|Strained|ickness|gone|\dw$|Barracks full/.test(f) ? '#b5532f' : '#2b9348'))));
+  if (res.lastChild && fx.length) res.lastChild.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;margin-top:8px';
+  await ctx.ask({ title: 'Result', body: res, actions: ok('Okay'), dismiss: 'ok' });
 }
 
 // ------------------------------------------------------------------ prep + augments
@@ -275,7 +281,7 @@ export async function results(ctx, ev, gl, res, rep) {
 }
 
 // ------------------------------------------------------------------ THE FALLEN
-const WHERE = { pit: 'the Pit', horde: 'the Horde Trial', champ: 'a champion duel', bounty: 'a bounty hunt', event: 'the arena' };
+const WHERE = { pit: 'the Pit', horde: 'the Horde Trial', champ: 'a champion duel', bounty: 'a bounty hunt', hunt: 'the Venatio', event: 'the arena' };
 const slayer = (res) => { const u = res && res.F && res.F.units && res.F.units.find((x) => x.side === 'B' && !x.down) || (res && res.F && res.F.units && res.F.units.find((x) => x.side === 'B')); return u ? u.name : ''; };
 
 /** after a LOST fight: each fighter who went down rolls against LM.mortality (risk modes always, ordinary events only in Hardcore). Returns the fall reports. */
@@ -296,7 +302,7 @@ export async function mortalCheck(ctx, gl, res, o) {
 /** the farewell: eulogy ceremony, who grieves, what was inherited, then the heir offer */
 export async function fallenFlow(ctx, rep, o = {}) {
   const S = ctx.S, e = rep.entry, lm = L(), d = D();
-  const lines = [para(`${e.name} died in ${WHERE[e.kind] || 'the arena'}${e.depth ? ` (${e.kind === 'horde' ? 'wave' : 'floor'} ${e.depth})` : ''}${e.by ? `, struck down by ${e.by}` : ''}. Their gear returns to the armory.`)];
+  const lines = [para(`${e.name} died in ${WHERE[e.kind] || 'the arena'}${e.depth && e.kind !== 'hunt' ? ` (${e.kind === 'horde' ? 'wave' : 'floor'} ${e.depth})` : ''}${e.by ? `, struck down by ${e.by}` : ''}. Their gear returns to the armory.`)];
   if (rep.inherited) lines.push(para(`${rep.inherited.name} inherits their drills: +${rep.inherited.v} ${d.SN[rep.inherited.stat]}. They have sworn to carry on.`));
   const grieving = rep.grief.filter((x) => x.drop >= 9).map((x) => x.name);
   if (rep.grief.length) lines.push(para(grieving.length ? `${grieving.join(', ')} ${grieving.length > 1 ? 'are' : 'is'} shattered. The whole ludus is shaken (morale down).` : 'The ludus is shaken. Morale drops.'));

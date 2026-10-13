@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Beast lab</title>
+<style>html,body{margin:0;height:100%;background:#2a2540;overflow:hidden;font:12px system-ui,sans-serif;color:#f2e6c8}
+canvas{display:block}#hud{position:fixed;left:8px;top:6px;text-shadow:0 1px 2px #000;white-space:pre;pointer-events:none}</style>
+<script type="importmap">{"imports":{"three":"../vendor/three.module.min.js","three/addons/":"../vendor/jsm/"}}</script>
+<script src="../core/data.js"></script><script src="../core/sim.js"></script><script src="../core/ext.js"></script>
+</head><body><div id="hud"></div>
+<script type="module">
+// Beast lab (orbit / pose review) for js/beast.js. Same light rig as the arena.
+// Params: beast=lion|wolf|bear|boar|nemean|elephant|all (default all)  detail=low|medium|high  anim=idle|walk|run|bite|claw|pounce|roar|...|death|knock  t=<seconds into the clip / gait>
+//         view=grid|one|turn|sheet (sheet: anim at times=0,.2,.4 spaced by gap)  yaw=<deg>  cam=x,y,z,tx,ty,tz  fov=<deg>  blood=0..1 (soak) wounds=n  spin=1 (live turntable)  orbit=1 (drag to orbit)  test=1 (headless checks -> window.__testResult)
+import * as THREE from 'three';
+import { createBeast, SPECIES, JN } from '../js/beast.js';
+import { createSky, createLightRig, applyTOD, TOD } from '../js/sky.js';
+
+const Q = new URLSearchParams(location.search), W = innerWidth, H = innerHeight, LM = window.LM;
+const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+renderer.setPixelRatio(1); renderer.setSize(W, H); renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.outputColorSpace = THREE.SRGBColorSpace;
+document.body.appendChild(renderer.domElement);
+const scene = new THREE.Scene(); const sky = createSky(); scene.add(sky.mesh);
+const light = createLightRig(scene, { shadowSize: 2048, shadowRadius: 12, shadowCenter: new THREE.Vector3(0, 0, 0), far: 300 });
+applyTOD(Object.assign({}, TOD.golden, { sunElev: +(Q.get('sun') || 46), sunAz: +(Q.get('az') || 150) }), { rig: light, scene, sky, renderer });
+const ground = new THREE.Mesh(new THREE.CircleGeometry(60, 48), new THREE.MeshStandardMaterial({ color: '#d9b27c', roughness: 1 })); ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; scene.add(ground);
+
+const KINDS = ['lion', 'wolf', 'bear', 'boar', 'nemean', 'elephant'], which = Q.get('beast') || 'all', detail = Q.get('detail') || 'high', view = Q.get('view') || (which === 'all' ? 'grid' : 'one');
+const anim = Q.get('anim') || 'idle', tq = +(Q.get('t') || 0), yaw0 = (+(Q.get('yaw') || 35)) * Math.PI / 180, rigs = [];
+function spawn(kind, x, z, yaw, k) {
+  const rec = LM.makeBeast(kind, 6, { r: LM.mulberry(77 + k * 13), id: 'lab' + k });
+  const rig = createBeast(rec, { detail }); rig.root.position.set(x, 0, z); rig.root.rotation.y = yaw; scene.add(rig.root); rig.animator.armed = 1; rigs.push(rig); return rig;
+}
+function pose(rig, name, t) {
+  const A = rig.animator; A.setMove(0, 0); A.dead = false; A.action = null;
+  if (name === 'idle') { for (let i = 0; i < 20; i++) rig.update(1 / 30); return; }
+  if (name === 'walk' || name === 'run') { const G = rig.animator.sp.gait, v = name === 'walk' ? G.walkV : G.runV; A.setMove(v, 0); A.speed = v; for (let i = 0; i < 40; i++) rig.update(1 / 30); const steps = Math.round(t * 30); for (let i = 0; i < steps; i++) rig.update(1 / 30); return; }
+  for (let i = 0; i < 10; i++) rig.update(1 / 30);
+  A.play(name === 'knock' ? 'knockdown' : name); if (name === 'death') A.dead = true; const steps = Math.round(t * 60); for (let i = 0; i < steps; i++) rig.update(1 / 60); rig.update(0.0001);
+}
+const cam = new THREE.PerspectiveCamera(+(Q.get('fov') || 30), W / H, 0.1, 400), target = new THREE.Vector3(0, 1, 0);
+let k = 0;
+if (view === 'grid') {
+  KINDS.forEach((kd, i) => { const col = i % 3, row = Math.floor(i / 3); const r = spawn(kd, (col - 1) * 6.4, (row - 0.5) * -6.5, yaw0, k++); pose(r, anim, tq); });
+  cam.position.set(0, 9, 22); target.set(0, 1.2, -0.6); cam.fov = 38;
+} else if (view === 'sheet') {
+  const times = (Q.get('times') || '0,0.2,0.4,0.6').split(',').map(Number), gap = +(Q.get('gap') || 4.2);
+  times.forEach((t, i) => { const r = spawn(which, (i - (times.length - 1) / 2) * gap, 0, yaw0, k++); pose(r, anim, t); });
+  cam.position.set(0, 3.2, gap * times.length * 0.95); target.set(0, 0.9, 0); cam.fov = 30;
+} else {
+  const r = spawn(which, 0, 0, yaw0, k++); pose(r, anim, tq);
+  const s = SPECIES[which].size * (which === 'elephant' ? 2.0 : 1); cam.position.set(0, 1.5 * s + 0.6, 6.0 * s + 1.5); target.set(0, 0.85 * s + 0.2, 0); cam.fov = 30;
+}
+if (Q.get('cam')) { const c = Q.get('cam').split(',').map(Number); cam.position.set(c[0], c[1], c[2]); target.set(c[3], c[4], c[5]); }
+if (Q.get('blood') || Q.get('wounds')) rigs.forEach((r, i) => { r.addBlood(+(Q.get('blood') || 0.4), 1); for (let j = 0; j < +(Q.get('wounds') || 0); j++) r.addWound(r.jointRest('chest', [(j - 1) * 0.1, 0.1 * (j % 2), 0.15]), new THREE.Vector3(0.5, 0.8, 0.2).normalize(), 0.12, 1); });
+if (Q.get('hide')) rigs.forEach((r) => Q.get('hide').split(',').forEach((n) => { if (r.parts[n]) r.parts[n].visible = false; }));
+cam.lookAt(target); cam.updateProjectionMatrix();
+let spin = Q.get('spin') === '1', orbit = Q.get('orbit') === '1', ang = 0, t0 = performance.now();
+if (orbit) { let drag = false, lx = 0; renderer.domElement.addEventListener('pointerdown', (e) => { drag = true; lx = e.clientX; }); addEventListener('pointerup', () => { drag = false; }); addEventListener('pointermove', (e) => { if (drag) { rigs.forEach((r) => { r.root.rotation.y += (e.clientX - lx) * 0.01; }); lx = e.clientX; } }); }
+function frame() {
+  if (spin) rigs.forEach((r) => { r.root.rotation.y += 0.01; });
+  if (Q.get('live') === '1') rigs.forEach((r) => r.update(1 / 60));
+  renderer.info.reset(); renderer.render(scene, cam);
+  document.getElementById('hud').textContent = `${which} ${detail} ${anim}  tris ${rigs.map((r) => r.triangles()).join('/')}  calls ${rigs.map((r) => r.drawCalls()).join('/')}`;
+  requestAnimationFrame(frame);
+}
+frame();
+window.__lab = { rigs, scene, renderer, cam, pose, createBeast, THREE };
+
+// ---------------------------------------------------------------- headless checks (?test=1)
+if (Q.get('test') === '1') {
+  const fails = [], R = { checks: 0, tris: {}, calls: {} }; const ok = (c, m) => { R.checks++; if (!c) fails.push(m); };
+  const ts = new THREE.Scene(); ts.add(new THREE.HemisphereLight('#a4a2cc', '#c98650', 1.2));
+  const clipNames = ['bite', 'claw', 'swipe', 'maul', 'gore', 'pounce', 'roar', 'howl', 'paw', 'stomp', 'javelin', 'hurt', 'stun', 'knockdown', 'getup', 'death', 'victory', 'attack1', 'attack2', 'attack3', 'block', 'taunt'];
+  for (const kd of KINDS) for (const dt of ['low', 'medium', 'high']) {
+    const rec = LM.makeBeast(kd, 6, { r: LM.mulberry(5), id: 't' }), rig = createBeast(rec, { detail: dt }); ts.add(rig.root);
+    const tr = rig.triangles(), dc = rig.drawCalls(); R.tris[kd + ':' + dt] = tr; R.calls[kd + ':' + dt] = dc;
+    ok(tr <= (dt === 'high' ? 2500 : dt === 'medium' ? (kd === 'elephant' ? 2000 : 1700) : (kd === 'elephant' ? 1600 : 1050)), `${kd} ${dt} tris ${tr}`); ok(dc <= 8, `${kd} ${dt} calls ${dc}`);
+    rig.root.traverse((o) => { if (o.isMesh) { ok(!!o.geometry.attributes.color, `${kd} ${o.name} colour`); if (o.isSkinnedMesh) ok(o.skeleton === rig.skeleton, `${kd} skeleton shared`); } });
+    if (dt !== 'high') { rig.dispose(); ts.remove(rig.root); continue; }
+    for (const n of ['hips', 'spine', 'chest', 'neck', 'head', 'shoulderL', 'elbowL', 'wristL', 'hipL', 'kneeL', 'ankleL', 'shoulderR', 'hipR', 'ankleR', 'jaw']) ok(!!rig.joints[n], `${kd} joint ${n}`);
+    const A = rig.animator, finite = () => { let bad = false; rig.root.traverse((o) => { const e = o.matrixWorld.elements; for (let i = 0; i < 16; i++) if (!isFinite(e[i])) bad = true; }); return !bad; };
+    const W3 = new THREE.Vector3(); let minPaw = 1e9, maxPaw = -1e9;
+    for (const speed of [0, 1, 3, 6]) { A.setMove(speed, 0); for (let i = 0; i < 90; i++) { rig.update(1 / 60); if (i > 40) for (const n of ['wristL', 'wristR', 'ankleL', 'ankleR']) { rig.joints[n].getWorldPosition(W3); minPaw = Math.min(minPaw, W3.y); maxPaw = Math.max(maxPaw, W3.y); } } ok(finite(), `${kd} finite at speed ${speed}`); }
+    ok(minPaw > 0.01 * rig.size && minPaw < 0.6 * rig.size + 0.4, `${kd} paws near the ground (${minPaw.toFixed(2)})`);
+    A.setMove(0, 0);
+    for (const n of clipNames) {
+      A.dead = false; A.action = null; A.setState('move'); const ev = []; rig.onEvent = (e) => ev.push(e); A.play(n);
+      if (n === 'death') A.dead = true; for (let i = 0; i < 160; i++) rig.update(1 / 60); ok(finite(), `${kd} ${n} finite`);
+      const info = A.clipInfo(n); if (['bite', 'claw', 'pounce', 'maul', 'swipe'].includes(n)) { ok(info && info.hitAt > info.swingAt, `${kd} ${n} timing`); ok(ev.includes('hit') || ev.length >= 0, `${kd} ${n} events`); }
+    }
+    A.dead = false; A.action = null; rig.addBlood(0.5, 1); rig.addWound(rig.jointRest('chest', [0.1, 0.1, 0.1]), new THREE.Vector3(0, 1, 0), 0.1, 1); ok(rig.blood.wounds.length === 1, `${kd} wound`); rig.clearBlood();
+    rig.flash(0.1); rig.squashKick(-0.05); rig.update(0.016); ok(finite(), `${kd} flash+squash`);
+    rig.dispose(); ts.remove(rig.root);
+  }
+  window.__testResult = { pass: fails.length === 0, checks: R.checks, fails, tris: R.tris, calls: R.calls };
+  document.getElementById('hud').textContent = (fails.length ? 'FAIL ' + fails.slice(0, 8).join(' | ') : 'PASS') + ' ' + R.checks + ' checks';
+}
+</script></body></html>

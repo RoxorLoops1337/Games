@@ -95,29 +95,29 @@ export function createGore(fx, o = {}) {
   }
   function clearUnderFeet() { // gently lift the stains right under living fighters
     dctx.save(); dctx.globalCompositeOperation = 'destination-out';
-    for (const f of G.fighters.values()) { if (f.down) continue; f.rig.root.getWorldPosition(_p); const [px, pz] = DD.toPx(_p.x, _p.z), r = 1.0 * DD.k, gr = dctx.createRadialGradient(px, pz, 0, px, pz, r); gr.addColorStop(0, 'rgba(0,0,0,0.16)'); gr.addColorStop(0.6, 'rgba(0,0,0,0.08)'); gr.addColorStop(1, 'rgba(0,0,0,0)'); dctx.fillStyle = gr; dctx.beginPath(); dctx.arc(px, pz, r, 0, TAU); dctx.fill(); }
-    dctx.restore(); fx.markDecals();
+    for (const f of G.fighters.values()) { if (f.down) continue; f.rig.root.getWorldPosition(_p); const [px, pz] = DD.toPx(_p.x, _p.z), r = 1.0 * DD.k, gr = dctx.createRadialGradient(px, pz, 0, px, pz, r); gr.addColorStop(0, 'rgba(0,0,0,0.16)'); gr.addColorStop(0.6, 'rgba(0,0,0,0.08)'); gr.addColorStop(1, 'rgba(0,0,0,0)'); dctx.fillStyle = gr; dctx.beginPath(); dctx.arc(px, pz, r, 0, TAU); dctx.fill(); fx.markDecals(_p.x, _p.z, 1.2); }
+    dctx.restore();
   }
   function stampSplat(x, z, size, ang, stretch = 1, a = 1) {
     const ck = capK(); if (splatBudget <= 0 && size < 0.3) return; if (G.counts.splats > 650 && size < 0.3 && R() < 0.7) return; if (ck < 1 && size < 0.35 && R() > 0.25 + 0.75 * ck) return; splatBudget--; G.counts.splats++;
     const [px, pz] = DD.toPx(x, z), s = size * DD.k * (128 / 58) * (0.78 + 0.22 * ck);
     dctx.save(); dctx.translate(px, pz); dctx.rotate(ang); dctx.scale(stretch, 1); dctx.globalAlpha = a * (0.6 + 0.4 * ck); dctx.drawImage(SPR[(R() * SPR.length) | 0], -s / 2, -s / 2, s, s); dctx.restore();
-    fx.markDecals();
+    fx.markDecals(x, z, size * 0.9);
   }
   function stampSmear(x0, z0, x1, z1, w, a = 0.8) {
     const [a0, b0] = DD.toPx(x0, z0), [a1, b1] = DD.toPx(x1, z1); dctx.save(); dctx.lineCap = 'round';
     dctx.strokeStyle = `rgba(86,7,9,${a * 0.85})`; dctx.lineWidth = w * DD.k; dctx.beginPath(); dctx.moveTo(a0, b0); dctx.lineTo(a1, b1); dctx.stroke();
-    dctx.strokeStyle = `rgba(150,14,16,${a * 0.5})`; dctx.lineWidth = w * DD.k * 0.45; dctx.stroke(); dctx.restore(); fx.markDecals();
+    dctx.strokeStyle = `rgba(150,14,16,${a * 0.5})`; dctx.lineWidth = w * DD.k * 0.45; dctx.stroke(); dctx.restore(); fx.markDecals((x0 + x1) / 2, (z0 + z1) / 2, Math.hypot(x1 - x0, z1 - z0) / 2 + w);
   }
   function stampFoot(x, z, heading, side, a) {
     const [px, pz] = DD.toPx(x + Math.cos(heading + Math.PI / 2) * 0.09 * side, z + Math.sin(heading + Math.PI / 2) * 0.09 * side), L = 0.3 * DD.k, W = 0.11 * DD.k;
     dctx.save(); dctx.translate(px, pz); dctx.rotate(heading); dctx.fillStyle = `rgba(104,9,11,${a})`;
-    dctx.beginPath(); dctx.ellipse(-L * 0.12, 0, L * 0.3, W * 0.62, 0, 0, TAU); dctx.fill(); dctx.beginPath(); dctx.ellipse(L * 0.2, 0, L * 0.34, W * 0.7, 0, 0, TAU); dctx.fill(); dctx.restore(); fx.markDecals();
+    dctx.beginPath(); dctx.ellipse(-L * 0.12, 0, L * 0.3, W * 0.62, 0, 0, TAU); dctx.fill(); dctx.beginPath(); dctx.ellipse(L * 0.2, 0, L * 0.34, W * 0.7, 0, 0, TAU); dctx.fill(); dctx.restore(); fx.markDecals(x, z, 0.5);
   }
   function stampPool(p) {
     const [px, pz] = DD.toPx(p.x, p.z), r = p.r * DD.k, m = p.pts.length; dctx.save(); dctx.globalAlpha = 0.5 + 0.5 * capK(); dctx.translate(px, pz); dctx.rotate(p.rot += 0.35);
     dctx.beginPath(); for (let i = 0; i < m; i++) { const a0 = i / m * TAU, a1 = (i + 1) / m * TAU, r0 = r * p.pts[i], r1 = r * p.pts[(i + 1) % m]; const mx = (Math.cos(a0) * r0 + Math.cos(a1) * r1) / 2, my = (Math.sin(a0) * r0 + Math.sin(a1) * r1) / 2; if (i === 0) dctx.moveTo(mx, my); else dctx.quadraticCurveTo(Math.cos(a0) * r0, Math.sin(a0) * r0, mx, my); }
-    dctx.closePath(); const gr = dctx.createRadialGradient(0, 0, 0, 0, 0, r); gr.addColorStop(0, 'rgba(96,8,10,0.34)'); gr.addColorStop(0.7, 'rgba(112,9,12,0.3)'); gr.addColorStop(1, 'rgba(120,12,14,0.16)'); dctx.fillStyle = gr; dctx.fill(); dctx.restore(); fx.markDecals();
+    dctx.closePath(); const gr = dctx.createRadialGradient(0, 0, 0, 0, 0, r); gr.addColorStop(0, 'rgba(96,8,10,0.34)'); gr.addColorStop(0.7, 'rgba(112,9,12,0.3)'); gr.addColorStop(1, 'rgba(120,12,14,0.16)'); dctx.fillStyle = gr; dctx.fill(); dctx.restore(); fx.markDecals(p.x, p.z, p.r * 1.3);
   }
   function stampGloss(p) { // fresh wet highlights, covered by the dry pass
     const [px, pz] = DD.toPx(p.x, p.z), r = p.r * DD.k; dctx.save(); dctx.translate(px, pz);
@@ -126,7 +126,7 @@ export function createGore(fx, o = {}) {
   }
   function dryPass(d) {
     const [px, pz] = DD.toPx(d.x, d.z), r = Math.max(2, d.r * DD.k * 1.25); dctx.save(); dctx.globalCompositeOperation = 'source-atop';
-    const gr = dctx.createRadialGradient(px, pz, 0, px, pz, r); gr.addColorStop(0, 'rgba(46,6,6,0.34)'); gr.addColorStop(0.75, 'rgba(46,6,6,0.2)'); gr.addColorStop(1, 'rgba(46,6,6,0)'); dctx.fillStyle = gr; dctx.beginPath(); dctx.arc(px, pz, r, 0, TAU); dctx.fill(); dctx.restore(); fx.markDecals();
+    const gr = dctx.createRadialGradient(px, pz, 0, px, pz, r); gr.addColorStop(0, 'rgba(46,6,6,0.34)'); gr.addColorStop(0.75, 'rgba(46,6,6,0.2)'); gr.addColorStop(1, 'rgba(46,6,6,0)'); dctx.fillStyle = gr; dctx.beginPath(); dctx.arc(px, pz, r, 0, TAU); dctx.fill(); dctx.restore(); fx.markDecals(d.x, d.z, d.r * 1.3);
   }
 
   // ------------------------------------------------------------------ droplets (pooled, own gravity, splat on landing)
@@ -494,6 +494,7 @@ export function createGore(fx, o = {}) {
   }
   /** heavy hits chip armour plates off the body (cosmetic spall props) and, on the worst blows, a hoplite's plume */
   function popArmor(f, e, fr) {
+    if (f.rig.beast) return; // BEAST: no plates or plumes on animals
     const rig = f.rig, st = rig.style, metal = rig.palette.metal || '#9a9a9a', leather = (st === 'retiarius' || st === 'dimachaerus'), n = e.crit ? 2 + ((R() * 2) | 0) : 1;
     for (let i = 0; i < n; i++) { const c = e.pos, a = Math.atan2(e.dx, e.dz) + RR(-0.9, 0.9), s = RR(2.5, 5.5), sz = RR(0.06, 0.11);
       spawnProp(7, { x: c.x + RR(-0.1, 0.1), y: c.y + RR(-0.2, 0.3), z: c.z + RR(-0.1, 0.1), vx: Math.sin(a) * s, vy: RR(2.5, 5), vz: Math.cos(a) * s, q: new Q().setFromAxisAngle(_a.set(R() - 0.5, R() - 0.5, R() - 0.5).normalize(), R() * TAU), wx: RR(-14, 14), wy: RR(-14, 14), wz: RR(-14, 14), sx: sz, sy: sz, sz: sz, color: leather ? '#6b4a2b' : '#ffffff', metal: leather ? '#6b4a2b' : metal, bleeds: false }); }
@@ -529,6 +530,9 @@ export function createGore(fx, o = {}) {
     if (ctx.big && G.full) { const ex = ['armL', 'forearmR', 'shinL', 'shinR'].find((p) => !f.rig.severed[p] && p !== part); if (ex) G.sever(id, ex, dx + RR(-0.8, 0.8), dz + RR(-0.8, 0.8), 1.4); chestPos(f, _a, 1.1); for (let i = 0, m = Math.round(26 * K()); i < m; i++) chunk(_a, dx, dz); fan(_a, 0, 1, Math.round(70 * K()), { speed: 9, cone: Math.PI, elMin: 0.2, elMax: 1.4, size: 1.3 }); addPool(x, z, 1.9, 0.3); sfx('crowdGore', { gain: 1 }); }
     return took ? part : null;
   };
+
+  /** shader warm-up: the gib mesh is built and drawn once (a dead instance) so its program compiles before the first limb flies */
+  G.warm = (on) => { if (on) { if (!gib) buildGib(); gib.count = 1; gib.visible = true; } else if (gib) { gib.count = chunkHi ? MAXLH + chunkHi : lhCur; gib.visible = props.length > 0; } };
 
   /** world points the kill camera should keep in frame (flung limb landing) */
   G.framePoints = (id) => { const s = G.lastSever; if (!G.on || !s || s.id !== id || G.time - s.t > 6) return null; return [[s.x, 0.15, s.z]]; };

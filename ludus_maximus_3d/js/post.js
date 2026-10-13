@@ -10,9 +10,9 @@ import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 
 /** Tier table. Consumers read: shadow (map size, 0 = off), crowd (density 0..1), dprCap, msaa, bloom (strength mult, 0 = pass off), bloomScale. */
 export const TIERS = {
-  high:   { dprCap: 2.0, msaa: 4, bloom: 1.0, bloomScale: 0.5,  shadow: 2048, crowd: 1.0, grain: 1, ca: 1, dust: 1.0 },
-  medium: { dprCap: 1.5, msaa: 0, bloom: 0.8, bloomScale: 0.35, shadow: 1024, crowd: 0.8, grain: 1, ca: 1, dust: 0.6 },
-  low:    { dprCap: 1.0, msaa: 0, bloom: 0.0, bloomScale: 0.25, shadow: 1024, crowd: 0.55, grain: 0, ca: 0, dust: 0.3 },
+  high:   { dprCap: 2.0, msaa: 4, bloom: 1.0, bloomScale: 0.5,  shadow: 2048, crowd: 1.0, grain: 1, ca: 1, dust: 1.0, mips: 5 },
+  medium: { dprCap: 1.5, msaa: 0, bloom: 0.8, bloomScale: 0.35, shadow: 1024, crowd: 0.8, grain: 1, ca: 1, dust: 0.6, mips: 3 },   // 3 mips = 4 fewer full-screen passes (draw calls) than the stock 5; the two widest haze levels are the ones nobody sees
+  low:    { dprCap: 1.0, msaa: 0, bloom: 0.0, bloomScale: 0.25, shadow: 1024, crowd: 0.55, grain: 0, ca: 0, dust: 0.3, mips: 5 },
 };
 const TIER_ORDER = ['low', 'medium', 'high'];
 const TIER_KEY = 'ludus3d_tier_cap';
@@ -51,9 +51,9 @@ export function isSoftwareGL(renderer) {
 }
 /**
  * Shadow-pass cost trim for gladiator rigs: every caster is one extra draw call per mesh, and a rig has ~11 tiny meshes.
- * Eyes and cloth flaps never cast; medium also drops hair/trim/plume, low also drops steel (weapon blades) and nets.
+ * Eyes and cloth flaps never cast; medium also drops hair/trim/plume and the thin leather + blade meshes (belts, straps, 5 cm blades vanish in a 1024 map: -11 calls in the 3v3 shadow pass), low also drops nets.
  */
-const NO_CAST = { high: /^(eye|flap)$/, medium: /^(eye|flap|hair|trim|plume)$/, low: /^(eye|flap|hair|trim|plume|steel|net)$/ };
+const NO_CAST = { high: /^(eye|flap)$/, medium: /^(eye|flap|hair|trim|plume|leather|steel)$/, low: /^(eye|flap|hair|trim|plume|leather|steel|net)$/ };
 export function trimShadowCasters(root, tier = 'high') {
   const re = NO_CAST[tier] || NO_CAST.high; let n = 0;
   root.traverse((o) => { if (o.isMesh && o.castShadow && re.test(o.name || '')) { o.castShadow = false; n++; } });
@@ -135,13 +135,14 @@ export function createPost(renderer, scene, camera, { tier = detectTier() } = {}
   const output = new OutputPass();
   composer.addPass(renderPass); composer.addPass(new ShaderPass(SanitizeShader)); composer.addPass(bloom); composer.addPass(grade); composer.addPass(output);
   const u = grade.uniforms;
+  const bloomMips = (n) => { bloom.nMips = n; bloom.compositeMaterial.uniforms.bloomFactors.value = n >= 5 ? [1.0, 0.8, 0.6, 0.4, 0.2] : [1.0, 0.85, 0.7, 0, 0]; };
   const api = {
     composer, bloom, grade, uniforms: u, tier, scale: 1, cssW: size.x, cssH: size.y,
     bloomBase: { strength: 0.55, radius: 0.65, threshold: 1.02 },
     setTier(name) {
       const t = TIERS[name]; if (!t) return; api.tier = name;
       for (const r of [composer.renderTarget1, composer.renderTarget2]) { r.samples = t.msaa; r.dispose(); }
-      bloom.enabled = t.bloom > 0; bloom.strength = api.bloomBase.strength * t.bloom;
+      bloom.enabled = t.bloom > 0; bloom.strength = api.bloomBase.strength * t.bloom; bloomMips(t.mips || 5);
       u.uGrain.value = 0.028 * t.grain; api._ca = t.ca;
       api.setSize(api.cssW, api.cssH);
       return t;
@@ -171,7 +172,7 @@ export function createPost(renderer, scene, camera, { tier = detectTier() } = {}
     dispose() { bloom.dispose && bloom.dispose(); composer.dispose(); rt.dispose(); },
   };
   api._ca = T.ca;
-  bloom.enabled = T.bloom > 0; bloom.strength = api.bloomBase.strength * T.bloom;
+  bloom.enabled = T.bloom > 0; bloom.strength = api.bloomBase.strength * T.bloom; bloomMips(T.mips || 5);
   u.uGrain.value = 0.028 * T.grain;
   return api;
 }

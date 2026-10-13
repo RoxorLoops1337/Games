@@ -2,6 +2,7 @@
 import { U, h, D, L, fmt, openScreen, sec, card, row, col, note, hint, kv, medal, pill, goldPill, famePill, tabs, chipRow, meter, empty, actions, styleTag, styleBadge, pickFighters, confirmDialog } from './sk.js';
 import { startPit, startHorde, startChamp, startBounty, pitState, hordeState, champState, bountyState } from './modes.js';
 import { legendsSheet } from './legacy.js';
+import { venatioCard } from './venatio.js'; // BEAST: Venatio, the beast hunts
 
 const KIND = {
   duel: { ico: 'sword', k: '#7a5222', label: 'Duel' },
@@ -170,7 +171,7 @@ async function enter(ctx, ev, lv, draw) {
       if (ev.kind === 'duel') {
         const p = lm.odds(S, [g], ev.opps, 'bal'), stale = lm.weeksAhead(S, ev.week) > 0 && lv < 3, pp = stale ? Math.round(p * 10) / 10 : p;
         const txt = lv >= 2 ? (pp !== p ? '~' : '') + Math.round(pp * 100) + '%' : lv === 1 ? (p > 0.6 ? 'Fav' : p < 0.4 ? 'Dog' : 'Even') : '?';
-        right = h('div', 'ax-odds', [txt, h('small', '', 'win')]); U.tooltip(right, lv >= 2 ? 'Estimated win chance with the balanced plan.' : lv === 1 ? 'Favoured or underdog. Scouting level 2 shows the percentage.' : 'Build a Scout Tower to see odds.', { title: 'Win odds' });
+        right = h('div', 'ax-odds', [txt, h('small', '', 'win')]); U.tooltip(right, lv >= 2 ? 'Estimated win chance with the balanced plan.' : lv === 1 ? 'Favored or underdog. Scouting level 2 shows the percentage.' : 'Build a Scout Tower to see odds.', { title: 'Win odds' });
       }
       return { badges, right };
     },
@@ -199,6 +200,7 @@ function modes(ctx, root, draw) {
   const S = ctx.S, lm = L(), pit = pitState(ctx), hd = hordeState(ctx), ch = champState(ctx), bo = bountyState(ctx);
   const mutW = lm.mutator('w' + S.week), mutD = lm.mutator('d' + lm.dayKey());
   root.append(hint('Challenges are single-fighter runs. Each costs 30 energy and counts towards your weekly goals.'));
+  root.append(venatioCard(ctx, draw)); // BEAST
   root.append(modeCard({
     ico: 'skull', title: 'Pit of Trials', tone: 'red', text: 'One fighter descends. Wounds carry over and you pick an augment before every floor. Cash out or push deeper; a boss waits on every 5th floor.',
     chips: [pill(`Best floor ${S.pitBest || 0}`, { tone: 'gold' }), pill(`Daily best ${S.dailyBest || 0}`, { tone: 'vio', tip: 'Daily Descent: the same opponents and augment offers for everyone today. Resets at midnight UTC.', tipTitle: 'Daily Descent' }),
