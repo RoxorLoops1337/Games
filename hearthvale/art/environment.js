@@ -84,7 +84,7 @@ function makeDetail() {
     const u = i / N, v = j / N, k = (j * N + i) * 4;
     d[k] = 255 * st(pvn(u, v, 4, 4, 1) * 0.55 + pvn(u, v, 8, 8, 2) * 0.3 + pvn(u, v, 16, 16, 3) * 0.15);
     d[k + 1] = 255 * st(pvn(u, v, 5, 5, 4) * 0.55 + pvn(u, v, 10, 10, 5) * 0.3 + pvn(u, v, 20, 20, 6) * 0.15);
-    d[k + 2] = 255 * clamp(pvn(u, v, 16, 16, 7) * 0.5 + pvn(u, v, 32, 32, 8) * 0.3 + pvn(u, v, 64, 64, 9) * 0.2);
+    d[k + 2] = 255 * st(pvn(u, v, 12, 12, 7) * 0.5 + pvn(u, v, 24, 24, 8) * 0.3 + pvn(u, v, 48, 48, 9) * 0.2);
     d[k + 3] = 255 * st(pvn(u, v, 48, 6, 10) * 0.6 + pvn(u, v, 96, 12, 11) * 0.4);
   }
   const t = new THREE.DataTexture(d, N, N, THREE.RGBAFormat); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.magFilter = THREE.LinearFilter; t.minFilter = THREE.LinearMipmapLinearFilter; t.generateMipmaps = true; t.needsUpdate = true; return t;
@@ -97,11 +97,10 @@ if ( vGk > 0.5 && uGq > -0.5 ) {
   vec4 t1 = uGq > 0.5 ? texture2D( uDet, q * 0.71 ) : vec4( 0.5 ); vec4 t2 = texture2D( uDet, q * 0.173 + vec2( 0.31, 0.77 ) ); vec4 t3 = texture2D( uDet, q * 0.043 + vec2( 0.63, 0.12 ) );
   vec3 c = diffuseColor.rgb;
   if ( world ) { c = mix( c, ${glv('#d4f56e')}, 0.5 * smoothstep( 0.4, 0.85, t3.r ) ); c = mix( c, ${glv('#3fc982')}, 0.3 * smoothstep( 0.5, 0.05, t3.g ) ); c = mix( c, ${glv('#6fe3a2')}, 0.3 * smoothstep( 0.45, 0.95, t2.g ) * smoothstep( 0.6, 0.3, t3.r ) ); }
-  c *= 0.9 + 0.2 * t2.b; c *= 0.93 + 0.14 * t1.b;
+  c *= 0.92 + 0.16 * t2.b; c *= 0.95 + 0.1 * t1.b;
   c = mix( c, c * 1.16 + vec3( 0.012, 0.03, 0.0 ), 0.7 * fd * smoothstep( 0.64, 0.95, t1.a ) ); c *= 1.0 - 0.09 * fd * smoothstep( 0.34, 0.04, t1.a );
   float fd2 = 1.0 - smoothstep( 22.0, 62.0, dcam );
-  if ( fd2 > 0.01 && uGq > 1.5 ) { vec2 tc = q / 0.3; vec2 ti = floor( tc ); vec2 tf = fract( tc ) - 0.5; vec2 off = ( vec2( hv_h( ti + 3.0 ), hv_h( ti + 8.0 ) ) - 0.5 ) * 0.3; float on = step( hv_h( ti + 12.0 ), 0.62 ); float tu = hv_tuft( tf - off ) * on * fd2;
-    c = mix( c, c * vec3( 1.12, 1.2, 0.92 ) + vec3( 0.01, 0.03, 0.0 ), tu * 0.6 ); }
+  if ( fd2 > 0.01 && uGq > 1.5 ) { vec2 tc = q / 0.3; vec2 ti = floor( tc ); vec2 tf = fract( tc ) - 0.5; vec2 off = ( vec2( hv_h( ti + 3.0 ), hv_h( ti + 8.0 ) ) - 0.5 ) * 0.3; float on = step( hv_h( ti + 12.0 ), 0.62 ); if ( on > 0.5 ) { float tu = hv_tuft( tf - off ) * fd2; c = mix( c, c * vec3( 1.12, 1.2, 0.92 ) + vec3( 0.01, 0.03, 0.0 ), tu * 0.6 ); } }
   if ( world ) {
     vec4 mk = texture2D( uMask, ( vWP.xz + 80.0 ) / 160.0 ); float nz = ( t1.r - 0.5 ) * 0.34 + ( t2.g - 0.5 ) * 0.3;
     float dirt = smoothstep( 0.45, 0.55, mk.r + nz ), cob = smoothstep( 0.48, 0.56, mk.g + nz * 0.5 ), wet = smoothstep( 0.12, 0.62, mk.b + nz * 0.5 ), pet = mk.a;
@@ -110,19 +109,18 @@ if ( vGk > 0.5 && uGq > -0.5 ) {
     float clear = max( dirt, cob );
     if ( clear < 0.98 && fd > 0.01 && uGq > 1.5 ) {
       // wildflower drifts: cell dots whose colour follows a slow swath field
-      float sw = texture2D( uDet, q * 0.031 + vec2( 0.2, 0.55 ) ).b; float dens = smoothstep( 0.5, 0.74, sw + ( t2.b - 0.5 ) * 0.3 ) * 0.92;
+      float dens = smoothstep( 0.5, 0.74, t3.g + ( t2.b - 0.5 ) * 0.25 ) * 0.92;
       if ( dens > 0.02 ) { vec2 fc = q / 0.36; vec2 fi = floor( fc ); vec2 ff = fract( fc ) - 0.5; vec2 off = ( vec2( hv_h( fi ), hv_h( fi + 17.3 ) ) - 0.5 ) * 0.5; float rr = length( ff - off ); float on = step( hv_h( fi + 4.1 ), dens );
         float band = floor( t3.r * 4.99 ); vec3 fcol = band < 0.5 ? ${glv('#ff9ec4')} : band < 1.5 ? ${glv('#ffffff')} : band < 2.5 ? ${glv('#ffe066')} : band < 3.5 ? ${glv('#c3b0ff')} : ${glv('#ffab8a')};
         float pe = smoothstep( 0.19, 0.12, rr ) * on * fd * ( 1.0 - clear ) * ( 1.0 - wet ); c = mix( c, fcol, pe ); c = mix( c, ${glv('#ffd23a')}, smoothstep( 0.065, 0.03, rr ) * on * fd * ( 1.0 - clear ) ); }
       // clover patches: lighter three-dot leaves on a darker mat
-      float cln = texture2D( uDet, q * 0.05 + vec2( 0.77, 0.3 ) ).g;
-      if ( cln > 0.6 ) { float cl = smoothstep( 0.6, 0.82, cln ) * ( 1.0 - clear ); vec2 cc = q / 0.21; vec2 ci = floor( cc ); vec2 cf = fract( cc ) - 0.5; float ch = hv_h( ci + 9.0 );
+      if ( t2.g > 0.64 ) { float cl = smoothstep( 0.64, 0.86, t2.g ) * ( 1.0 - clear ); vec2 cc = q / 0.21; vec2 ci = floor( cc ); vec2 cf = fract( cc ) - 0.5; float ch = hv_h( ci + 9.0 );
         c = mix( c, c * vec3( 0.86, 0.98, 0.84 ), cl * 0.5 ); c = mix( c, ${glv('#a6f37a')}, cl * fd * step( ch, 0.5 ) * smoothstep( 0.16, 0.08, length( cf ) ) * 0.8 ); }
       // fallen petals under the blossom trees
       if ( pet > 0.02 ) { vec2 pc = q / 0.2; vec2 pi = floor( pc ); vec2 pf = fract( pc ) - 0.5; float ph = hv_h( pi + 33.0 ); c = mix( c, ph < 0.5 ? ${glv('#ffc2d9')} : ${glv('#fff0f6')}, step( ph * 1.9, pet ) * smoothstep( 0.2, 0.09, length( pf ) ) * fd * ( 1.0 - clear ) ); }
     }
     // worn dirt
-    if ( dirt > 0.002 ) { vec3 dc = mix( ${glv('#eccf98')}, ${glv('#dcb77c')}, smoothstep( 0.3, 0.7, t2.r ) ); dc *= 0.94 + 0.12 * t1.b; dc = mix( dc, dc * 0.8, smoothstep( 0.8, 0.5, mk.r + nz ) * 0.55 );
+    if ( dirt > 0.002 ) { vec3 dc = mix( ${glv('#eccf98')}, ${glv('#dcb77c')}, smoothstep( 0.3, 0.7, t2.r ) ); dc *= 0.95 + 0.1 * t1.b; dc = mix( dc, dc * 0.8, smoothstep( 0.8, 0.5, mk.r + nz ) * 0.55 );
       if ( fd > 0.01 && uGq > 1.5 ) { vec2 pc2 = q / 0.17; vec2 pi2 = floor( pc2 ); float h2 = hv_h( pi2 + 71.0 ); dc = mix( dc, ${glv('#fff3d6')}, step( 0.92, h2 ) * smoothstep( 0.17, 0.08, length( fract( pc2 ) - 0.5 ) ) * fd ); }
       c = mix( c, dc, dirt ); }
     // cobbles: offset rows, a grout line and a lit top edge per stone
@@ -138,26 +136,26 @@ if ( vGk > 0.5 && uGq > -0.5 ) {
   }
   diffuseColor.rgb = c;
 }`;
-function windify(m) {
+function windify(m, ground = false) {
   m.onBeforeCompile = (sh) => {
-    sh.uniforms.uWindT = WIND; sh.uniforms.uDet = GU.uDet; sh.uniforms.uMask = GU.uMask; sh.uniforms.uGq = GU.uGq;
-    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nuniform float uWindT; attribute float aG; varying float vGk; varying vec3 vWP; varying vec2 vLP;').replace('#include <begin_vertex>',
+    sh.uniforms.uWindT = WIND;
+    if (ground) { sh.uniforms.uDet = GU.uDet; sh.uniforms.uMask = GU.uMask; sh.uniforms.uGq = GU.uGq; }
+    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nuniform float uWindT;' + (ground ? ' attribute float aG; varying float vGk; varying vec3 vWP; varying vec2 vLP;' : '')).replace('#include <begin_vertex>',
       `vec3 transformed = vec3( position );
        float wW = uv.x; if ( wW < 0.0 ) { wW = -wW; transformed.z += ( sin( uWindT * 5.0 + position.x * 5.5 + uv.y ) * 0.11 + sin( uWindT * 8.0 + position.x * 9.0 ) * 0.03 ) * wW; transformed.y += sin( uWindT * 5.0 + position.x * 5.5 + uv.y + 1.2 ) * 0.02 * wW; } else if ( wW > 0.0 ) { float ph = uv.y;
          transformed.x += ( sin( uWindT * 1.7 + ph + position.x * 0.5 + position.z * 0.35 ) + 0.35 * sin( uWindT * 3.3 + ph * 2.0 ) ) * 0.05 * wW;
-         transformed.z += cos( uWindT * 1.45 + ph * 1.3 + position.z * 0.45 ) * 0.032 * wW; }
+         transformed.z += cos( uWindT * 1.45 + ph * 1.3 + position.z * 0.45 ) * 0.032 * wW; }` + (ground ? `
        vGk = aG; vLP = position.xz; vec4 hvW = vec4( transformed, 1.0 );
-       #ifdef USE_INSTANCING
-       hvW = instanceMatrix * hvW;
-       #endif
-       vWP = ( modelMatrix * hvW ).xyz;`);
-    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nuniform float uGq; uniform sampler2D uDet; uniform sampler2D uMask; varying float vGk; varying vec3 vWP; varying vec2 vLP; float hv_h( vec2 p ) { return fract( sin( dot( p, vec2( 127.1, 311.7 ) ) ) * 43758.5453 ); }\nfloat hv_tuft( vec2 p ) { float cov = 0.0; for ( int i = 0; i < 3; i++ ) { float fi = float( i ) - 1.0; float h = 0.34 + 0.1 * ( 1.0 - abs( fi ) ); float y = ( p.y + 0.3 ) / h; float w = 0.075 * ( 1.0 - y ) + 0.01; cov = max( cov, step( 0.0, y ) * step( y, 1.0 ) * smoothstep( w, w * 0.4, abs( p.x - fi * 0.13 - fi * y * 0.06 ) ) ); } return cov; }').replace('#include <color_fragment>', '#include <color_fragment>\n' + GROUND_FRAG);
+       vWP = ( modelMatrix * hvW ).xyz;` : ''));
+    if (ground) sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nuniform float uGq; uniform sampler2D uDet; uniform sampler2D uMask; varying float vGk; varying vec3 vWP; varying vec2 vLP; float hv_h( vec2 p ) { vec3 q = fract( vec3( p.xyx ) * 0.1031 ); q += dot( q, q.yzx + 33.33 ); return fract( ( q.x + q.y ) * q.z ); }\nfloat hv_tuft( vec2 p ) { float cov = 0.0; for ( int i = 0; i < 3; i++ ) { float fi = float( i ) - 1.0; float h = 0.34 + 0.1 * ( 1.0 - abs( fi ) ); float y = ( p.y + 0.3 ) / h; float w = 0.075 * ( 1.0 - y ) + 0.01; cov = max( cov, step( 0.0, y ) * step( y, 1.0 ) * smoothstep( w, w * 0.4, abs( p.x - fi * 0.13 - fi * y * 0.06 ) ) ); } return cov; }').replace('#include <color_fragment>', '#include <color_fragment>\n' + GROUND_FRAG);
   };
-  m.defaultAttributeValues = { aG: [0] };
-  m.customProgramCacheKey = () => 'hv-wind2';
+  if (ground) m.defaultAttributeValues = { aG: [0] };
+  m.customProgramCacheKey = () => (ground ? 'hv-ground' : 'hv-wind3');
   return m;
 }
 export const envMat = windify(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.88, metalness: 0 }));
+/** the same matte look plus the painted ground (island top, plot lawns, field floors): only meshes that carry the aG attribute use it */
+const groundMat = windify(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.88, metalness: 0 }), true);
 const glossMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.22, metalness: 0.05 });
 const waterMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.1, metalness: 0.1, transparent: true, opacity: 0.9 });
 // ponds, brooks, basins: drifting sun sparkles and slow lighter swells in world space (no textures)
@@ -300,7 +298,7 @@ function instantiate(e, { shadows = true } = {}) {
   const g = new THREE.Group();
   for (const k of ['matte', 'gloss', 'water', 'lantern', 'shadow']) {
     if (!e[k]) continue; if (k === 'shadow' && !shadows) continue;
-    const m = new THREE.Mesh(e[k], MATS[k]); if (k === 'shadow') { m.renderOrder = 1; } else { m.castShadow = k !== 'water' && k !== 'lantern'; m.receiveShadow = true; }
+    const m = new THREE.Mesh(e[k], k === 'matte' && e[k].attributes.aG ? groundMat : MATS[k]); if (k === 'shadow') { m.renderOrder = 1; } else { m.castShadow = k !== 'water' && k !== 'lantern'; m.receiveShadow = true; }
     if (k === 'matte') m.onBeforeRender = windTick; m.name = ''; g.add(m);
   }
   return g;
@@ -1141,12 +1139,12 @@ export function scatter(group, rng, o = {}) {
     while (made < n.trees && guard++ < 9000) { const th = rng() * TAU, s = shore(th), d = 1.8 + 12.5 * Math.pow(rng(), 1.5), r = s - d, x = Math.cos(th) * r, z = Math.sin(th) * r;
       if (!free(x, z, 1.0) || vn(th * 5.3 + 2, d * 0.13) < 0.3 || taken(x, z, 1.9)) continue; const q = rng(), sp = q < 0.24 ? 'oak' : q < 0.4 ? 'blossom' : q < 0.5 ? 'pine' : q < 0.6 ? 'birch' : q < 0.72 ? 'apple' : q < 0.83 ? 'orange' : q < 0.92 ? 'peach' : 'oak', v = rng() < 0.5 ? 0 : 1;
       const aut = (sp === 'oak' || sp === 'birch' || sp === 'apple') && rng() < 0.2, sc = 1.15 + rng() * 0.7;
-      (buckets[sp + v + (aut ? 'a' : '')] ||= { sp, v, aut, items: [] }).items.push({ x, y: hy(x, z) - 0.05, z, s: sc, yaw: rng() * TAU, tint: aut ? (rng() < 0.5 ? AUT : AUT2) : null }); made++;
+      (buckets[sp + v] ||= { sp, v, aut, items: [] }).items.push({ x, y: hy(x, z) - 0.05, z, s: sc, yaw: rng() * TAU, tint: aut ? (rng() < 0.5 ? AUT : AUT2) : null }); made++;
       if (sp === 'blossom' || sp === 'peach') L.stamp(x, z, 1.1 * sc, 1.5, 3, 255); }
     // groves on the hills of the outer lobes (the first four hills keep a clearing for their set piece)
     HILLS.forEach(([cx, cz, rad], hi) => { const mix = [['pine', 'oak', 'birch'], ['blossom', 'peach', 'oak'], ['apple', 'orange', 'oak'], ['oak', 'birch', 'pine'], ['pine', 'birch', 'oak'], ['apple', 'blossom', 'peach']][hi]; let gm = 0, gg = 0;
       while (gm < 6 && gg++ < 200) { const a = rng() * TAU, rr = (hi < 4 ? 4.6 : 2.5) + rng() * rad * 0.8, x = cx + Math.cos(a) * rr, z = cz + Math.sin(a) * rr; if (!free(x, z, 1.0) || taken(x, z, 2.2)) continue;
-        const sp = mix[Math.floor(rng() * 3)], v = rng() < 0.5 ? 0 : 1, sc = 1.15 + rng() * 0.6, aut = (sp === 'oak' || sp === 'birch' || sp === 'apple') && rng() < 0.3; (buckets[sp + v + (aut ? 'a' : '')] ||= { sp, v, aut, items: [] }).items.push({ x, y: hy(x, z) - 0.05, z, s: sc, yaw: rng() * TAU, tint: aut ? (rng() < 0.5 ? AUT : AUT2) : null }); gm++; } });
+        const sp = mix[Math.floor(rng() * 3)], v = rng() < 0.5 ? 0 : 1, sc = 1.15 + rng() * 0.6, aut = (sp === 'oak' || sp === 'birch' || sp === 'apple') && rng() < 0.3; (buckets[sp + v] ||= { sp, v, aut, items: [] }).items.push({ x, y: hy(x, z) - 0.05, z, s: sc, yaw: rng() * TAU, tint: aut ? (rng() < 0.5 ? AUT : AUT2) : null }); gm++; } });
     // shade trees in clumps round the ponds and picnic spots of the valley meadow
     made = 0; guard = 0; while (made < n.shade && guard++ < 6000) { const th = rng() * TAU, r = 15.0 + rng() * 7.0, x = Math.cos(th) * r, z = Math.sin(th) * r;
       if (!free(x, z, 1.6) || vn(x * 0.09 + 4, z * 0.09 + 9) < 0.56 || taken(x, z, 3.2)) continue; const q = rng(), sp = q < 0.3 ? 'blossom' : q < 0.55 ? 'apple' : q < 0.75 ? 'oak' : q < 0.9 ? 'peach' : 'birch', v = rng() < 0.5 ? 0 : 1, sc = 1.0 + rng() * 0.45;
@@ -1162,15 +1160,15 @@ export function scatter(group, rng, o = {}) {
       if (ok && free(x, z, -0.2)) out.push({ x, y: hy(x, z), z, yaw: rng() * TAU, s: 0.85 + rng() * 0.5 }); } return out; };
   const split = (arr, k) => Array.from({ length: k }, (_, i) => arr.filter((_, j) => j % k === i));
   { const sp = [...annulus(Math.round(n.bushes * 0.35), 11, 27, 0.9), ...spots(Math.round(n.bushes * 0.65), 2, 48, 0.8)], by = split(sp, 3); add('bushes', by.map((it, v) => [baked(`bush:${v}:1`, (b) => bushInto(b, v, 1)), it, { seed: v }])); }
-  { const sp = [...annulus(Math.round(n.ferns * 0.3), 11, 27, 0.5), ...spots(Math.round(n.ferns * 0.7), 1, 40, 0.6)].map((q) => ({ ...q, s: 0.9 + rng() * 0.7 })), by = split(sp, 3); add('ferns', by.map((it, v) => [baked(`fern:${v}`, (b) => fernInto(b, v)), it, { cast: false, seed: v, tint: 0.08 }])); }
+  { const sp = [...annulus(Math.round(n.ferns * 0.3), 11, 27, 0.5), ...spots(Math.round(n.ferns * 0.7), 1, 40, 0.6)].map((q) => ({ ...q, s: 0.9 + rng() * 0.7 })), by = split(sp, 2); add('ferns', by.map((it, v) => [baked(`fern:${v}`, (b) => fernInto(b, v)), it, { cast: false, seed: v, tint: 0.08 }])); }
   { const sp = [...annulus(Math.round(n.tufts * 0.55), 11, 27, 0.2), ...meadowSpots(Math.round(n.tufts * 0.15)), ...spots(Math.round(n.tufts * 0.3), 0.5, 60, 0.3, 0)].map((p) => ({ ...p, s: 0.7 + rng() * 0.8 })), by = split(sp, 2); add('tufts', by.map((it, v) => [baked(`tuftL:${v}`, (b) => lean1(b, v)), it, { cast: false, seed: v, tint: 0.12 }])); }
-  { const sp = [...meadowSpots(Math.round(n.flowers * 0.6)), ...annulus(Math.round(n.flowers * 0.2), 11, 27, 0.8), ...spots(Math.round(n.flowers * 0.2), 2, 56, 0.9)], by = split(sp.map((q) => ({ ...q, s: q.s * 1.5 })), 4); add('flowers', by.map((it, v) => [baked(`flowers:${v}`, (b) => flowerPatchInto(b, v)), it, { cast: false, seed: v, tint: 0.03 }])); }
-  { const sp = [...meadowSpots(Math.round(n.mushrooms * 0.4)), ...spots(Math.round(n.mushrooms * 0.6), 2, 15, 0.8)], by = split(sp.map((q) => ({ ...q, s: q.s * 1.4 })), 2); add('mushrooms', by.map((it, v) => [baked(`mushL:${v}`, (b) => mushroomClump(b, v, false)), it, { seed: v, tint: 0.03 }])); }
-  { const sp = [...annulus(Math.round(n.rings * 0.45), 12, 26, 1.0), ...spots(Math.round(n.rings * 0.55), 3, 40, 1.0)].map((q) => ({ ...q, s: 1.0 + rng() * 0.5 })), by = split(sp, 2); add('rings', by.map((it, v) => [baked(`mring:${v}`, (b) => mushRingInto(b, v)), it, { seed: v, tint: 0.03 }])); }
+  { const sp = [...meadowSpots(Math.round(n.flowers * 0.6)), ...annulus(Math.round(n.flowers * 0.2), 11, 27, 0.8), ...spots(Math.round(n.flowers * 0.2), 2, 56, 0.9)], by = split(sp.map((q) => ({ ...q, s: q.s * 1.5 })), 3); add('flowers', by.map((it, v) => [baked(`flowers:${v}`, (b) => flowerPatchInto(b, v)), it, { cast: false, seed: v, tint: 0.03 }])); }
+  { const sp = [...meadowSpots(Math.round(n.mushrooms * 0.4)), ...spots(Math.round(n.mushrooms * 0.6), 2, 15, 0.8)], by = split(sp.map((q) => ({ ...q, s: q.s * 1.4 })), 1); add('mushrooms', by.map((it, v) => [baked(`mushL:${v}`, (b) => mushroomClump(b, v, false)), it, { seed: v, tint: 0.03 }])); }
+  { const sp = [...annulus(Math.round(n.rings * 0.45), 12, 26, 1.0), ...spots(Math.round(n.rings * 0.55), 3, 40, 1.0)].map((q) => ({ ...q, s: 1.0 + rng() * 0.5 })), by = split(sp, 1); add('rings', by.map((it, v) => [baked(`mring:${v}`, (b) => mushRingInto(b, v)), it, { seed: v, tint: 0.03 }])); }
   { const sp = [...meadowSpots(Math.round(n.carpets * 0.6)), ...spots(Math.round(n.carpets * 0.4), 1.5, 56, 0.9)].map((q) => ({ ...q, s: 1.7 + rng() * 1.0 })); add('carpets', [[baked('carpet:0', (b) => carpetInto(b, 0)), sp, { cast: false, seed: 1, tint: 0.04 }]]); }
-  { const sp = [...annulus(Math.round(n.stones * 0.4), 11, 27, 0.8), ...spots(Math.round(n.stones * 0.6), 1, 56, 0.8)], by = split(sp, 4); add('stones', by.map((it, v) => [baked(`stoneL:${v}`, (b) => stoneInto(b, v, true)), it, { seed: v }])); }
+  { const sp = [...annulus(Math.round(n.stones * 0.4), 11, 27, 0.8), ...spots(Math.round(n.stones * 0.6), 1, 56, 0.8)], by = split(sp, 2); add('stones', by.map((it, v) => [baked(`stoneL:${v}`, (b) => stoneInto(b, v, true)), it, { seed: v }])); }
   { const sp = spots(n.clover, 1, 56, 0.6).map((q) => ({ ...q, s: q.s * 1.4 })); add('clover', [[baked('clover:0', (b) => { cloverInto(b, 0, 0, 0, 1.4); tuftInto(b, 0.1, 0, 0.1, 0.5, '#8fe864', 2, 0.6); }), sp, { cast: false, seed: 1, tint: 0.05 }]]); }
-  { const sp = [...annulus(Math.round(n.pebbles * 0.4), 11, 27, 0.6), ...spots(Math.round(n.pebbles * 0.6), 1, 56, 0.6)], by = split(sp, 4); add('pebbles', by.map((it, v) => [baked(`pebbles:${v}`, (b) => pebblesInto(b, 0, 0, 0, 1.3, v)), it, { cast: false, seed: v }])); }
+  { const sp = [...annulus(Math.round(n.pebbles * 0.4), 11, 27, 0.6), ...spots(Math.round(n.pebbles * 0.6), 1, 56, 0.6)], by = split(sp, 2); add('pebbles', by.map((it, v) => [baked(`pebbles:${v}`, (b) => pebblesInto(b, 0, 0, 0, 1.3, v)), it, { cast: false, seed: v }])); }
   // shore: pale beach grass on the grass lip and a few bleached logs
   { const sp = []; let g = 0; while (sp.length < n.beach && g++ < 2000) { const th = rng() * TAU, d = 0.5 + rng() * 2.2, r = shore(th) - d, x = Math.cos(th) * r, z = Math.sin(th) * r; if (pathCover(x, z) > 0.1) continue; sp.push({ x, y: hy(x, z), z, yaw: rng() * TAU, s: 1.1 + rng() * 0.8 }); }
     add('beachgrass', [[baked('beachgrass', (b) => { tuftInto(b, 0, 0, 0, 1.5, '#cdeb7e', 4, 1.2); tuftInto(b, 0.05, 0, 0.03, 1.0, '#e6f59a', 2, 1.2); }), sp, { cast: false, seed: 5, tint: 0.1 }]]); }
@@ -1261,8 +1259,8 @@ function reedInto(b, x, z, s = 1, y = 0, n = 6, sw = 1) {
 }
 function lampInto(b, x, z, s = 1, y = 0, c = '#7fd0c4') {
   b.cyl(0.03 * s, 0.065 * s, 1.5 * s, x, y, z, c, { seg: 5, grad: 0.5, ao: 0.12, open: true }); b.cyl(0.1 * s, 0.1 * s, 0.035 * s, x, y + 1.44 * s, z, c, { seg: 5, ao: 0, grad: 0, open: true });
-  b.plain(0.17 * s, 0.24 * s, 0.17 * s, x, y + 1.48 * s, z, '#ffe08a', { m: 'lantern', ao: 0 }); b.cyl(0, 0.15 * s, 0.13 * s, x, y + 1.72 * s, z, c, { seg: 5, ao: 0, grad: 0.4, open: true });
-  b.add(G.octa(), { p: [x, y + 1.87 * s, z], s: 0.04 * s, c: '#ffd24a', grad: 0, ao: 0 });
+  b.plain(0.21 * s, 0.3 * s, 0.21 * s, x, y + 1.46 * s, z, '#ffe08a', { m: 'lantern', ao: 0 }); b.cyl(0, 0.19 * s, 0.15 * s, x, y + 1.76 * s, z, c, { seg: 5, ao: 0, grad: 0.4, open: true });
+  b.add(G.octa(), { p: [x, y + 1.95 * s, z], s: 0.045 * s, c: '#ffd24a', grad: 0, ao: 0 });
   flowerInto(b, x + 0.14 * s, y, z + 0.06 * s, FLOWERS[(Math.floor(Math.abs(x * 3 + z))) % 6], 0.7, 0.12, false, Math.floor(Math.abs(x)) % 4);
 }
 function signInto(b, x, z, yaw, boards = 2, y = 0) {
@@ -1358,7 +1356,7 @@ function buildDressing(hy) {
   bridgeInto(b, -20.55, 0.0, 0, 2.7, 1.4);
   firePitInto(b, 5.5, -18.3);
   for (const [a, rr, c] of [[1.25, 4.1, '#ffd9a0'], [2.65, 4.3, '#ffc2d6']]) benchInto(b, PONDS[0].x + Math.cos(a) * rr, PONDS[0].z + Math.sin(a) * rr, Math.atan2(-Math.cos(a), -Math.sin(a)), c);
-  const e = b.bake(); L.dressTris = e.tris; const gr = instantiate(e, { shadows: false }); gr.name = 'dressing'; gr.children.forEach((m, i) => { m.name = 'dressing_' + (m.material === envMat ? 'matte' : m.material === waterMat ? 'water' : 'lantern'); if (m.material === envMat) m.castShadow = false; }); return gr;
+  const e = b.bake(); L.dressTris = e.tris; const gr = instantiate(e, { shadows: false }); gr.name = 'dressing'; gr.children.forEach((m, i) => { m.name = 'dressing_' + (m.material === waterMat ? 'water' : m.material === lanternMat ? 'lantern' : 'matte'); if (m.material !== waterMat && m.material !== lanternMat) m.castShadow = false; }); return gr;
 }
 
 // =================================================================== HORIZON AND SEA LIFE: distant islets, lighthouse, windmill hill, rope bridge, sandbar, boats, buoys
@@ -1431,9 +1429,9 @@ function buildHorizon(seaY) {
 function buildSeaLife(seaY, contact, SEG) {
   const g = new THREE.Group(); g.name = 'sealife'; const r = krng(3131);
   const defs = [['a', '#ffffff', '#ff8fb5', '#ff6f8f'], ['b', '#ffe08a', '#ffffff', '#4fd8cc'], ['c', '#8fd0ff', '#fff3b8', '#ffab8a'], ['d', '#ffb7d0', '#ffffff', '#6f9ff0']];
-  const spots = [[0.35, 20], [1.4, 14], [2.1, 28], [3.2, 18], [4.0, 34], [5.2, 22], [5.8, 60], [2.7, 70]];
+  const spots = [[0.35, 20], [1.4, 14], [3.2, 18], [4.0, 34], [5.2, 22], [2.7, 70]];
   spots.forEach(([th, off], i) => { const j = Math.floor(th / TAU * SEG) % SEG, rr = contact[j] + off, d = defs[i % 4], boat = new THREE.Group(); boat.name = 'sail'; const m = new THREE.Mesh(boatBake(d[0], d[1], d[2], d[3]).matte, envMat); m.castShadow = false; m.receiveShadow = true; boat.add(m);
-    boat.position.set(Math.cos(th) * rr, seaY + 0.12, Math.sin(th) * rr); boat.rotation.y = r() * TAU; boat.scale.setScalar(i > 5 ? 1.8 : 1.05); boat.userData = { ph: i * 1.7, home: boat.position.clone() };
+    boat.position.set(Math.cos(th) * rr, seaY + 0.12, Math.sin(th) * rr); boat.rotation.y = r() * TAU; boat.scale.setScalar(off > 50 ? 1.8 : 1.05); boat.userData = { ph: i * 1.7, home: boat.position.clone() };
     const ph = i * 1.7, sp = 0.18 + (i % 3) * 0.05; selfMotion(m, (a, t) => { a.makeTranslation(Math.sin(t * sp + ph) * 1.4, Math.sin(t * 1.1 + ph) * 0.06, Math.cos(t * sp * 0.8 + ph) * 1.1); a.multiply(_ar.makeRotationFromEuler(_ae.set(Math.sin(t * 0.9 + ph) * 0.04, Math.sin(t * sp + ph) * 0.25, Math.sin(t * 1.3 + ph) * 0.06))); }); g.add(boat); });
   // buoys with a tiny lamp
   const b = new Builder(0); for (let i = 0; i < 12; i++) { const j = Math.floor((i + r() * 0.8) / 12 * SEG) % SEG, th = j / SEG * TAU, rr = contact[j] + 9 + r() * 9, x = Math.cos(th) * rr, z = Math.sin(th) * rr;
@@ -1503,7 +1501,7 @@ export function islandModel(R = 66, opts = {}) {
     c.lerp(col('#78cf4c'), sstep(16, 5, d) * (0.3 + 0.3 * vn(x * 0.35, z * 0.35))); c.lerp(col('#c4f784'), sstep(2.2, 0.2, d) * 0.5); if (d < 0.5) c.lerp(col('#78cf4c'), sstep(0.5, 0, d)); if (lit > 0) c.lerp(col('#e6ff9a'), lit * 1.4); else c.lerp(col('#2fb88a'), -lit * 1.2); return c; };
   const rows = radii.map((f) => ({ r: f * R, y: (x, z) => hy(x, z), c: topColor }));
   const topGeo = polarGeo(rows, 192, { wob: (th, i) => (i === 0 ? 1 : shore(th) / R), nUp: 0.2 }); topGeo.setAttribute('aG', new THREE.Float32BufferAttribute(new Float32Array(topGeo.attributes.position.count).fill(2), 1));
-  g.add(Object.assign(new THREE.Mesh(topGeo, envMat), { receiveShadow: true, name: 'top' }));
+  g.add(Object.assign(new THREE.Mesh(topGeo, groundMat), { receiveShadow: true, name: 'top' }));
   g.add(buildDressing(hy));
   // ---- cliff with strata bands (flat shaded, chunky), boulders, hanging ivy with flowers, grassy ledges
   const ringsR = [], contact = new Float32Array(SEG);
