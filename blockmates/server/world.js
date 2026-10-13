@@ -50,7 +50,9 @@ export class World {
     this.tick_n = 0;
     this.time = DAY_SECONDS * 0.1;
     this.day = 1;
-    this.ops = new Set((opts.ops || []).map((s) => s.toLowerCase()));
+    this.cfgOps = (opts.ops || []).map((s) => s.toLowerCase());
+    this.cfgName = opts.name || '';
+    this.ops = new Set(this.cfgOps);
     this.name = opts.name || 'Blockmates World';
     this.motd = opts.motd || 'Welcome! Chop a tree, build a workbench, and explore.';
     this.password = opts.password || '';
@@ -237,8 +239,10 @@ export class World {
     if (this.players.size >= this.maxPlayers) return this.send(id, { t: 'deny', why: `The world is full (${this.maxPlayers} players).` });
     for (const o of this.players.values()) if (o.name.toLowerCase() === name.toLowerCase()) return this.send(id, { t: 'deny', why: 'That name is online right now.' });
     const token = String(m.token || '').slice(0, 64);
+    if (token.length < 1) return this.send(id, { t: 'deny', why: 'Missing player key. Reload the page.' });
     const acc = this.accounts.get(name.toLowerCase());
     if (acc && acc.token && acc.token !== token) return this.send(id, { t: 'deny', why: 'That name belongs to someone else. Pick another one.' });
+    if (!this._spawnOk) { this.fixSpawn(); this._spawnOk = true; }
     const p = this.newPlayer(id, name, token, m.look, acc);
     this.players.set(id, p);
     if (!this.ops.size && !this.accounts.size) this.ops.add(name.toLowerCase());
@@ -290,7 +294,18 @@ export class World {
       kills: p.kills, deaths: p.deaths, last: Date.now(),
     };
   }
-  savePlayer(p) { this.accounts.set(p.name.toLowerCase(), JSON.parse(JSON.stringify(this.snapshotPlayer(p)))); this.dirtyState = true; }
+  savePlayer(p) {
+    const snap = JSON.parse(JSON.stringify(this.snapshotPlayer(p)));
+    // items offered in a running trade live outside the backpack: put them back in the saved copy
+    const t = this.trades.get(p.id);
+    if (t) for (const st of t.off[this.tradeSide(t, p)]) {
+      let left = st.n;
+      const def = ITEMS[st.id], cap = def.stack || 99;
+      if (cap > 1) for (const q of snap.inv) if (left && q && q.id === st.id && q.n < cap) { const m = Math.min(left, cap - q.n); q.n += m; left -= m; }
+      for (let i = 0; left && i < snap.inv.length; i++) if (!snap.inv[i]) { const m = Math.min(left, cap); snap.inv[i] = { id: st.id, n: m, ...(st.d ? { d: st.d } : {}) }; left -= m; }
+    }
+    this.accounts.set(p.name.toLowerCase(), snap); this.dirtyState = true;
+  }
   selfState(p) {
     return { x: r2(p.x), y: r2(p.y), hp: p.hp, food: p.food, breath: p.breath, sel: p.sel, spawn: p.spawnPt, look: p.look };
   }
@@ -525,7 +540,7 @@ export class World {
       if (lq && (lq & 15) === 8) {
         this.setTile(x, y, 2, 0); activateAround(this, x, y);
         s.n--; if (!s.n) p.inv[p.sel] = null;
-        this.addItem(p, (lq >> 4) === L_LAVA ? I.lava_bucket : I.water_bucket, 1);
+        { const wb = (lq >> 4) === L_LAVA ? I.lava_bucket : I.water_bucket; if (this.addItem(p, wb, 1)) this.dropItem(p.x, p.y - 1, wb, 1, { delay: 0.5 }); }
         p.invDirty = true; this.event('splash', x + 0.5, y + 0.5);
       }
       return;
@@ -535,7 +550,7 @@ export class World {
       this.setTile(x, y, 2, ((def.name === 'water_bucket' ? L_WATER : L_LAVA) << 4) | 8);
       activateAround(this, x, y);
       s.n--; if (!s.n) p.inv[p.sel] = null;
-      this.addItem(p, I.bucket, 1);
+      if (this.addItem(p, I.bucket, 1)) this.dropItem(p.x, p.y - 1, I.bucket, 1, { delay: 0.5 });
       p.invDirty = true; this.event('splash', x + 0.5, y + 0.5);
       return;
     }
@@ -793,6 +808,13 @@ export class World {
     }
   }
 
+  // trees and shrines are placed after the raw spawn point is picked: nudge it to a free standing cell
+  fixSpawn() {
+    const raw = this.spawn;
+    this.chunk(Math.floor(raw.x / CHUNK));
+    const sp = this.safeSpot(Math.floor(raw.x), Math.floor(raw.y));
+    this.spawn = sp;
+  }
   // nearest cell to (x,y) where a person can stand (open air above a floor), searching up and down in the column and beside it
   safeSpot(x, y) {
     for (let r = 0; r < 40; r++) for (const dx of r ? [0, -r, r] : [0]) for (const dy of [0, -1, 1].map((v) => v * r)) {
@@ -854,7 +876,7 @@ export class World {
       case 'goto': {
         if (!op) return say('Only operators can do that.');
         let x, y;
-        if (a.length >= 2 && !isNaN(a[0])) { x = clamp(parseInt(a[0], 10), 2, W - 3); y = clamp(parseInt(a[1], 10), 2, H - 3); }
+        if (a.length >= 2 && Number.isFinite(parseInt(a[0], 10)) && Number.isFinite(parseInt(a[1], 10))) { x = clamp(parseInt(a[0], 10), 2, W - 3); y = clamp(parseInt(a[1], 10), 2, H - 3); }
         else {
           const want = (a[0] || '').toLowerCase();
           const start = Math.floor(p.x);
@@ -873,7 +895,7 @@ export class World {
       case 'summon': {
         if (!op) return say('Only operators can do that.');
         const t = (a[0] || '').toLowerCase();
-        if (!MOBS[t]) return say('Creatures: ' + Object.keys(MOBS).join(', '));
+        if (!Object.hasOwn(MOBS, t)) return say('Creatures: ' + Object.keys(MOBS).join(', '));
         spawnMob(this, t, p.x + 5 * p.dir, p.y); return say('Summoned.');
       }
       case 'give': {
@@ -1121,7 +1143,7 @@ export class World {
 
   // ------------------------------------------------------------ persistence
   exportState() {
-    const accounts = {};
+    const accounts = Object.create(null);
     for (const p of this.players.values()) this.savePlayer(p);
     for (const [k, v] of this.accounts) accounts[k] = v;
     const meta = [...this.meta.entries()];
@@ -1134,9 +1156,10 @@ export class World {
     this.terrain = new Terrain(this.seed);
     this.spawn = spawnPoint(this.terrain);
     this.chunks.clear();
+    this._spawnOk = false;
     this.time = s.time || 0; this.day = s.day || 1;
-    if (s.name) this.name = s.name;
-    this.ops = new Set(s.ops || []);
+    this.name = this.cfgName || s.name || this.name;
+    this.ops = new Set([...(s.ops || []), ...this.cfgOps]); // the config can add operators; saved ones stay
     this.accounts = new Map(Object.entries(s.accounts || {}));
     this.meta = new Map(s.meta || []);
     this.npcs.clear();
@@ -1210,11 +1233,12 @@ const HANDLERS = {
     if (meta && meta.k === 'sign') { meta.text = String(m.text || '').replace(/[\u0000-\u001f]/g, '').slice(0, 60); w.metaSet(m.x, m.y, meta); }
   },
   wname(w, p, m) {
+    if (!int(m.x, 0, W - 1) || !int(m.y, 0, H - 1)) return;
     const meta = w.metaGet(m.x, m.y);
     if (meta && meta.k === 'waystone' && w.inReach(p, m.x, m.y)) { meta.name = cleanName(m.name) || meta.name; w.metaSet(m.x, m.y, meta); }
   },
   way(w, p, m) { // teleport between waystones for one glowshard
-    if (p.dead) return;
+    if (p.dead || !int(m.x, 0, W - 1) || !int(m.y, 0, H - 1)) return;
     const from = [Math.floor(p.x), Math.floor(p.y - 1)];
     let near = false;
     for (let x = from[0] - 6; x <= from[0] + 6 && !near; x++) for (let y = from[1] - 5; y <= from[1] + 5; y++) if (w.fgAt(x, y) === B.waystone) { near = true; break; }
@@ -1238,7 +1262,7 @@ const HANDLERS = {
     if (!n || dist2(p.x, p.y, n.x, n.y) > 10 * 10) return;
     if (n.owner.toLowerCase() !== p.name.toLowerCase() && !w.ops.has(p.name.toLowerCase())) return w.send(p.id, { t: 'toast', text: 'This Buddy works for ' + n.owner + '.' });
     if (m.act === 'job' && JOBS.includes(m.job)) { setJob(n, m.job); w.send(p.id, { t: 'toast', text: `Buddy: ${m.job}` }); }
-    else if (m.act === 'dismiss') { w.npcs.delete(n.id); w.addItem(p, I.buddy_bell, 1); p.invDirty = true; w.event('tp', n.x, n.y - 1); }
+    else if (m.act === 'dismiss') { w.npcs.delete(n.id); if (w.addItem(p, I.buddy_bell, 1)) w.dropItem(p.x, p.y - 1, I.buddy_bell, 1, { delay: 0.5 }); p.invDirty = true; w.event('tp', n.x, n.y - 1); }
   },
   look(w, p, m) { p.look = w.cleanLook(m.look); w.broadcast({ t: 'look', id: p.id, look: p.look }); },
 };

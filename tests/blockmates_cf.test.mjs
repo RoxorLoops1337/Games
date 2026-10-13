@@ -51,6 +51,12 @@ const doo2 = new WorldDO(mkState(st), env);
 await st.ready;
 assert.equal(doo2.world.fgAt(777, 100), 49); ok('a fresh object loads the edits back');
 assert.ok(doo2.world.accounts.has('ann')); ok('and the players');
+// a save that fails keeps the work for the next try
+st.put = async () => { throw new Error('disk'); };
+doo2.world.setTile(5, 5, 0, 3); doo2.world.chunk(0);
+const before = doo2.world.chunks.get(0); before.dirty = true;
+await doo2.save();
+assert.ok(before.dirty && doo2.world.dirtyState); ok('a failed save is retried later');
 clearInterval(doo.timer); clearInterval(doo2.timer);
 
 const redirect = await worker.fetch({ url: 'https://blockmates.me.workers.dev/', method: 'GET', headers: { get: () => null } }, { GAME_URL: 'https://games.example/blockmates/', WORLD: { idFromName: () => 1, get: () => ({ fetch: () => 'forwarded' }) } });

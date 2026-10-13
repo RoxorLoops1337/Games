@@ -26,6 +26,7 @@ const ok = (n) => { passed++; console.log('ok  ' + n); };
 try {
   const r = await fetch(`http://127.0.0.1:${port}/status`).then((x) => x.json());
   assert.equal(r.max, MAX_PLAYERS); ok('status endpoint');
+  const bad = await fetch(`http://127.0.0.1:${port}/%`); assert.equal(bad.status, 400); ok('a malformed URL gets a 400 and the server lives');
   const html = await fetch(`http://127.0.0.1:${port}/`).then((x) => x.text());
   assert.ok(html.includes('Blockmates')); ok('serves the game page');
   assert.equal((await fetch(`http://127.0.0.1:${port}/server/node.js`)).status, 404); ok('does not serve server code');
@@ -72,4 +73,4 @@ try {
   srv.stop();
 }
 console.log(`\n${passed} passed`);
-process.exit(passed === 13 ? 0 : 1);
+process.exit(passed === 14 ? 0 : 1);

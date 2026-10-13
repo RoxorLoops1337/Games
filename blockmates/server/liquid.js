@@ -32,6 +32,8 @@ function react(world, x, y, a, b) {
   // water met lava: lava turns to obsidian (source) or cobble (flowing)
   const lavaAt = typeOf(a) === L_LAVA ? a : b;
   world.setTile(x, y, 2, 0);
+  const here = world.fgAt(x, y);
+  if (here && !BLOCKS[here].plant) { world.event('hiss', x + 0.5, y + 0.5); return; } // furniture and chests are left alone: the lava just goes out
   world.setTile(x, y, 0, lvlOf(lavaAt) >= 8 ? B.obsidian : B.stone);
   world.event('hiss', x + 0.5, y + 0.5);
   activateAround(world, x, y);

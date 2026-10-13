@@ -27,12 +27,20 @@ export class WorldDO {
     const w = this.world;
     const dirty = w.exportDirtyChunks();
     const keys = Object.keys(dirty);
-    for (let i = 0; i < keys.length; i += 100) {
-      const batch = {};
-      for (const k of keys.slice(i, i + 100)) batch['c:' + k] = dirty[k];
-      await this.state.storage.put(batch);
+    const hadState = w.dirtyState;
+    w.dirtyState = false; // cleared before the writes, so a change made meanwhile is kept for the next save
+    try {
+      for (let i = 0; i < keys.length; i += 100) {
+        const batch = {};
+        for (const k of keys.slice(i, i + 100)) batch['c:' + k] = dirty[k];
+        await this.state.storage.put(batch);
+      }
+      if (hadState || keys.length) await this.state.storage.put('state', w.exportState());
+    } catch (e) {
+      console.error('save failed', e);
+      for (const k of keys) { const c = w.chunks.get(Number(k)); if (c) c.dirty = true; }
+      w.dirtyState = true;
     }
-    if (w.dirtyState || keys.length) { await this.state.storage.put('state', w.exportState()); w.dirtyState = false; }
   }
   ensureTimer() {
     if (this.timer) return;
@@ -58,7 +66,7 @@ export class WorldDO {
     const send = (o) => { try { server.send(JSON.stringify(o)); } catch { /* socket closing */ } };
     send.close = () => { try { server.close(1000, 'bye'); } catch { /* closed */ } };
     const id = w.connect(send);
-    server.addEventListener('message', (e) => { try { w.message(id, JSON.parse(e.data)); } catch { /* ignore garbage */ } });
+    server.addEventListener('message', (e) => { this.ensureTimer(); try { w.message(id, JSON.parse(e.data)); } catch { /* ignore garbage */ } });
     const bye = () => { try { w.disconnect(id); } catch { /* already gone */ } if (w.players.size === 0) this.save(); };
     server.addEventListener('close', bye); server.addEventListener('error', bye);
     this.ensureTimer();

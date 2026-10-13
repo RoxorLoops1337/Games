@@ -381,5 +381,41 @@ test('idle players are dropped after the idle limit, active ones are not', () =>
   assert.ok(a.last('deny'));
 });
 
+test('review fixes: ops and name from config survive a load, trade escrow survives a save, spawn is never inside a block', () => {
+  const a = new World({ seed: 5, ops: ['alice'], name: 'A' }); client(a, 'Alice');
+  const st = JSON.parse(JSON.stringify(a.exportState()));
+  const b = new World({ seed: 5, ops: ['bob'], name: 'B' }); b.importState(st);
+  assert.ok(b.ops.has('bob') && b.ops.has('alice')); assert.equal(b.name, 'B');
+  // escrow
+  const w = new World({ seed: 5 });
+  const c1 = client(w, 'Eve'), c2 = client(w, 'Fox'); run(w, 30);
+  w.addItem(c1.p(), I.gold_ingot, 10);
+  w.message(c1.id, { t: 'trade', to: c2.id }); w.message(c2.id, { t: 'tradeacc', from: c1.id });
+  w.message(c1.id, { t: 'tradeadd', slot: c1.p().inv.findIndex((q) => q && q.id === I.gold_ingot), n: 10 });
+  const saved = JSON.parse(JSON.stringify(w.exportState()));
+  const gold = saved.accounts.eve.inv.reduce((n, q) => n + (q && q.id === I.gold_ingot ? q.n : 0), 0);
+  assert.equal(gold, 10, 'offered items are in the saved account');
+  // spawn on many seeds
+  for (let seed = 1; seed <= 120; seed++) {
+    const x = new World({ seed }); const cc = client(x, 'Sp');
+    const p = cc.p();
+    assert.ok(!x.solidAt(Math.floor(p.x), Math.floor(p.y - 0.5)) && !x.solidAt(Math.floor(p.x), Math.floor(p.y - 1.5)), 'free spawn on seed ' + seed);
+  }
+  // malformed input
+  const m = client(w, 'Mal'); run(w, 5); if (!m.p()) console.log('deny', JSON.stringify(m.out.slice(0, 2)));
+  for (const bad of [{ t: 'way', x: '886', y: 84 }, { t: 'wname', x: 'a', y: null }, { t: '__proto__' }, { t: 'constructor' }, { t: 'join', name: { toString: 1 } }]) w.message(m.id, bad);
+  w.message(m.id, { t: 'chat', text: '/summon constructor' }); w.message(m.id, { t: 'chat', text: '/goto Infinity 5' });
+  assert.ok(Number.isFinite(m.p().x));
+  assert.equal([...w.mobs.values()].filter((q) => q.type === 'constructor').length, 0);
+  // lava meeting a chest leaves the chest alone
+  const px = 600, py = 60;
+  for (let x = px - 3; x <= px + 3; x++) { for (let y = py - 4; y < py; y++) { w.setTile(x, y, 0, 0); w.setTile(x, y, 2, 0); } w.setTile(x, py, 0, B.stone); }
+  w.setTile(px, py - 1, 0, B.chest); w.metaSet(px, py - 1, { k: 'chest', inv: new Array(24).fill(null) });
+  w.setTile(px - 1, py - 1, 2, (2 << 4) | 8); w.setTile(px + 1, py - 1, 2, (1 << 4) | 8);
+  w.liqActive.add((py - 1) * W + px - 1); w.liqActive.add((py - 1) * W + px + 1);
+  for (let i = 0; i < 90; i++) w.tick();
+  assert.equal(w.fgAt(px, py - 1), B.chest);
+});
+
 console.log(`\n${passed} passed`);
 

@@ -26,10 +26,12 @@ export function startServer(opts = {}) {
   }
   const doSave = () => {
     if (!save) return;
+    try {
     const chunks = { ...(world._savedChunks || {}), ...world.exportDirtyChunks() };
     world._savedChunks = chunks;
     fs.writeFileSync(save + '.tmp', JSON.stringify({ state: world.exportState(), chunks }));
     fs.renameSync(save + '.tmp', save);
+    } catch (e) { console.error('save failed:', e.message); } // a full disk must not take the server down
   };
   if (save && fs.existsSync(save)) { try { world._savedChunks = JSON.parse(fs.readFileSync(save, 'utf8')).chunks || {}; } catch { world._savedChunks = {}; } }
 
@@ -41,7 +43,8 @@ export function startServer(opts = {}) {
       return;
     }
     // the same process also serves the game page, so a LAN or VPS host needs nothing else
-    let rel = decodeURIComponent(u.pathname);
+    let rel;
+    try { rel = decodeURIComponent(u.pathname); } catch { res.writeHead(400); res.end('bad request'); return; }
     if (rel.endsWith('/')) rel += 'index.html';
     const file = path.join(ROOT, path.normalize(rel).replace(/^(\.\.[/\\])+/, ''));
     if (!file.startsWith(ROOT) || !MIME[path.extname(file)] || file === path.join(ROOT, 'server', 'node.js') || file.startsWith(path.join(ROOT, 'server', 'cf'))) { res.writeHead(404); res.end('not found'); return; }
@@ -78,6 +81,7 @@ export function startServer(opts = {}) {
         if (f.op === 0x9) { socket.write(frame(f.data, 0xa)); continue; }
         if (f.op === 0x1 || f.op === 0x0) {
           frag = f.op === 0x1 ? [f.data] : (frag || []).concat([f.data]);
+          if (frag.reduce((n, b) => n + b.length, 0) > 1 << 20) { socket.destroy(); return; }
           if (f.fin) {
             const text = Buffer.concat(frag).toString('utf8'); frag = null;
             try { world.message(id, JSON.parse(text)); } catch (e) { /* bad json: ignore */ }
