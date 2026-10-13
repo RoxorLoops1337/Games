@@ -63,7 +63,7 @@ export function createAudio(opts = {}) {
   let seed = opts.seed == null ? 1337 : opts.seed >>> 0;
   let rng = mulberry(seed);
   const vol = { master: 0.9, music: 0.7, sfx: 0.9 };
-  let analyser, master, makeup, comp, limiter, clip, musicBus, musicDuck, sfxBus, crowdBus, revIn, hallConv, openConv, hallG, openG, revMusic, revCrowd, revSendG;
+  let analyser, sfxRev, master, makeup, comp, limiter, clip, musicBus, musicDuck, sfxBus, crowdBus, revIn, hallConv, openConv, hallG, openG, revMusic, revCrowd, revSendG;
   const noiseBuf = {};     // white/pink/brown 3s buffers
   const ksCache = new Map();
   const lastHit = {};
@@ -97,7 +97,7 @@ export function createAudio(opts = {}) {
       sfxBus = ctx.createGain(); sfxBus.gain.value = vol.sfx; sfxBus.connect(master);
       crowdBus = ctx.createGain(); crowdBus.gain.value = vol.sfx; crowdBus.connect(master);
       // two spaces: stone hall (arena) and open air with building slap (hub). Scenes crossfade between them.
-      revIn = G(1); revSendG = revIn;
+      revIn = G(1); revSendG = revIn; sfxRev = G(vol.sfx); sfxRev.connect(revIn);   // sfx reverb sends follow the sfx slider (a 0 slider must be silent, tails included)
       hallConv = ctx.createConvolver(); hallConv.buffer = makeIR(2.3, 'hall'); hallG = G(0.8); revIn.connect(hallConv); hallConv.connect(hallG); hallG.connect(master);
       openConv = ctx.createConvolver(); openConv.buffer = makeIR(1.1, 'open'); openG = G(0); revIn.connect(openConv); openConv.connect(openG); openG.connect(master);
       revMusic = G(vol.music * MUSIC_TRIM); revMusic.connect(revIn);   // music reverb: stems send into it, so it follows the music slider
@@ -571,7 +571,7 @@ export function createAudio(opts = {}) {
       const d = ctx.createDelay(0.01), lp = ctx.createBiquadFilter(), g = G(1); lp.type = 'lowpass'; lp.Q.value = 0.5; lp.frequency.value = 20000;
       inp.connect(d); d.connect(lp); lp.connect(g); g.connect(mg, 0, ch); st['d' + side] = d; st['lp' + side] = lp; st['g' + side] = g;
     }
-    mg.connect(outG); inp.connect(wet); wet.connect(revIn); strips.made++; return st;
+    mg.connect(outG); inp.connect(wet); wet.connect(sfxRev); strips.made++; return st;
   }
   function acquire(bus) {
     const s = strips.free.pop() || makeStrip(); if (strips.free.length || s.bus) strips.reused++;
@@ -1184,7 +1184,7 @@ export function createAudio(opts = {}) {
     },
     setMaster(v) { vol.master = clamp(v, 0, 1); if (ready) master.gain.setTargetAtTime(vol.master, NOW(), 0.02); },
     setMusic(v) { vol.music = clamp(v, 0, 1); if (ready) { musicBus.gain.setTargetAtTime(vol.music * MUSIC_TRIM, NOW(), 0.02); revMusic.gain.setTargetAtTime(vol.music * MUSIC_TRIM, NOW(), 0.02); } },
-    setSfx(v) { vol.sfx = clamp(v, 0, 1); if (ready) { sfxBus.gain.setTargetAtTime(vol.sfx, NOW(), 0.02); crowdBus.gain.setTargetAtTime(vol.sfx, NOW(), 0.02); } },
+    setSfx(v) { vol.sfx = clamp(v, 0, 1); if (ready) { sfxBus.gain.setTargetAtTime(vol.sfx, NOW(), 0.02); crowdBus.gain.setTargetAtTime(vol.sfx, NOW(), 0.02); sfxRev.gain.setTargetAtTime(vol.sfx, NOW(), 0.02); } },
     // reverb scene: 'arena' stone hall, 'hub' open air with building slap, 'indoor'. music.setMode picks one automatically; call this to override (lock it with {lock:true}, release with setScene(null)).
     setScene(name, o = {}) { if (!name) { sceneLock = false; return scene; } sceneLock = !!o.lock; applyScene(name, o.fade == null ? 0.8 : o.fade); return scene; },
     get scene() { return scene; },

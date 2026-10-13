@@ -151,7 +151,7 @@ await page.evaluate(() => {
       const seen = new Set(), log = a.music.log ? a.music.log.filter((x) => { if (x.step % 16 !== 0) return false; const k = x.mode + x.bar; if (seen.has(k)) return false; seen.add(k); return true; }) : [];
       const buf = await e.off.startRendering();
       const bounds = log.map((x) => x.t).filter((x) => x > 0.3 && x < secs - 0.3);
-      const an = L.analyze(buf, { music: true, bounds }); an.bars = log.length; an.sum = Array.from(buf.getChannelData(0).filter((_, i) => i % 997 === 0)).map((v) => +v.toFixed(4)).join(',');
+      const an = L.analyze(buf, { music: true, bounds }); an.bars = log.length; if (o.sum) an.sum = Array.from(buf.getChannelData(0).filter((_, i) => i % 997 === 0)).map((v) => +v.toFixed(4));
       return { an, wav: window.__wavOn ? L.wav(buf) : null };
     },
     async crowd(level, secs) { const e = await mk(secs || 6, 1); e.a.crowd(level); const buf = await e.off.startRendering(); return { an: L.analyze(buf), wav: window.__wavOn ? L.wav(buf) : null }; },
@@ -173,7 +173,7 @@ await page.evaluate(() => {
         const e = await mk(4, 2); const a = e.a; e.clock.t = 0.5;
         if (kind === 'master') a.setMaster(v); else if (kind === 'music') a.setMusic(v); else a.setSfx(v);
         e.clock.t = 1.0; if (kind === 'music') { a.music.setMode('arena', { at: 1.0, fade: 0.05 }); a.music.setIntensity(0.8); for (let t = 1; t <= 4; t += 0.5) { e.clock.t = t; a.music.pump(t + 0.5); } } else { for (let i = 0; i < 6; i++) a.sfx('swordHit', { when: 1.2 + i * 0.4 }); a.crowd(0.6); }
-        const buf = await e.off.startRendering(), d = buf.getChannelData(0); let pk = 0; for (let i = Math.floor(buf.sampleRate * 1.2); i < d.length; i++) pk = Math.max(pk, Math.abs(d[i])); out[v] = L.db(pk);
+        const buf = await e.off.startRendering(), d = buf.getChannelData(0); let ss = 0, n = 0; for (let i = Math.floor(buf.sampleRate * 1.2); i < d.length; i++) { ss += d[i] * d[i]; n++; } out[v] = L.db(Math.sqrt(ss / n));
       }
       return out;
     },
@@ -233,8 +233,8 @@ if (!QUICK && ST('music')) {
     const r = await page.evaluate(([m, o]) => window.__job.music(m, o), [m, o]); await maybeWav('music_' + key.replace(/[ >@]/g, '_'), r); results.music[key] = r.an;
   }
   // determinism and variation
-  const a1 = await page.evaluate(() => window.__job.music('ludus', { seed: 5, int: 0.3, secs: 20 })), a2 = await page.evaluate(() => window.__job.music('ludus', { seed: 5, int: 0.3, secs: 20 })), a3 = await page.evaluate(() => window.__job.music('ludus', { seed: 6, int: 0.3, secs: 20 }));
-  results.meta.deterministic = a1.an.sum === a2.an.sum; results.meta.seedVaries = a1.an.sum !== a3.an.sum;
+  const a1 = await page.evaluate(() => window.__job.music('ludus', { sum: true, seed: 5, int: 0.3, secs: 20 })), a2 = await page.evaluate(() => window.__job.music('ludus', { sum: true, seed: 5, int: 0.3, secs: 20 })), a3 = await page.evaluate(() => window.__job.music('ludus', { sum: true, seed: 6, int: 0.3, secs: 20 }));
+  const dmax = (x, y) => Math.max(...x.map((v, i) => Math.abs(v - y[i]))); results.meta.deterministic = dmax(a1.an.sum, a2.an.sum) < 0.002; results.meta.seedVaries = dmax(a1.an.sum, a3.an.sum) > 0.01;   // convolver/compressor float noise is about 1e-5
   if (!results.meta.deterministic) bad('same seed must render identically'); if (!results.meta.seedVaries) bad('different seed must differ');
 }
 
@@ -308,7 +308,7 @@ if (results.burst) {
   if (bu.unstopped > 8) bad('sources started without stop: ' + bu.unstopped);
   if (Math.max(...al) > 260) bad('alive source peak too high ' + Math.max(...al));
 }
-L.push('', '## Volume controls (post master chain peak dB at slider 1 / 0.5 / 0; 0 must be silence)', '', ...Object.entries(results.meta.vol || {}).map(([k, r]) => `- set${k[0].toUpperCase() + k.slice(1)}: ${f1(r[1])} / ${f1(r[0.5])} / ${f1(r[0])}`));
+L.push('', '## Volume controls (RMS dB after the master chain at slider 1 / 0.5 / 0; 0 must be silence)', '', ...Object.entries(results.meta.vol || {}).map(([k, r]) => `- set${k[0].toUpperCase() + k.slice(1)}: ${f1(r[1])} / ${f1(r[0.5])} / ${f1(r[0])}`));
 L.push('', '## Autoplay / unlock contract (live AudioContext in headless Chromium)', '', '`' + JSON.stringify(results.meta.gesture) + '`', '', 'Graph build (first unlock) main-thread cost: ' + results.meta.ensureMs + ' ms.');
 if ((results.meta.gesture || (results.meta.gesture = { stateBefore: 'running', sfxBeforeUnlock: false, stateAfter: 'running', suspended: 'suspended', resumed: 'running', skipped: true })).stateBefore !== 'running' && (results.meta.gesture || (results.meta.gesture = { stateBefore: 'running', sfxBeforeUnlock: false, stateAfter: 'running', suspended: 'suspended', resumed: 'running', skipped: true })).sfxBeforeUnlock !== false) bad('sfx before unlock must drop silently (headless Chromium starts contexts running, so this only bites on real browsers)');
 if ((results.meta.gesture || (results.meta.gesture = { stateBefore: 'running', sfxBeforeUnlock: false, stateAfter: 'running', suspended: 'suspended', resumed: 'running', skipped: true })).stateAfter !== 'running') bad('unlock did not reach running: ' + (results.meta.gesture || (results.meta.gesture = { stateBefore: 'running', sfxBeforeUnlock: false, stateAfter: 'running', suspended: 'suspended', resumed: 'running', skipped: true })).stateAfter);
