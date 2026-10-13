@@ -12,6 +12,7 @@ Reply formatting:
 
 - One folder per game, served as-is at `/<folder>/`. Game-specific notes live in that game's own `CLAUDE.md` (`no_room_for_heroes/CLAUDE.md`, `awesome_farm/CLAUDE.md`), which load only when you work in that folder.
 - `build.js`: copies static folders into `dist/` (Pages deploys `dist/`). New top-level folders must be added to `STATIC_PATHS`.
+- `blockmates/`: original 2D block sandbox for up to 16 players (plain ES modules, no build; the same `World` simulation runs in the browser for solo play, in `server/node.js` and in a Cloudflare Durable Object). Its own `CLAUDE.md` has the rules (append-only ids, no art files); tests `npm run test:blockmates`.
 - `functions/api/*.js`: Cloudflare Pages Functions (leaderboards + cloud saves, KV binding `BOARD`).
 - `tests/<game>_*.test.mjs`: headless suites, one `test:<name>` npm script per game. Write new tests there; never create throwaway harnesses outside `tests/`.
 - `awesome_farm/`: Awesome Farm, a Vite + TypeScript game with its own `package.json`, `CLAUDE.md` and `npm run check` (run them inside that folder). The site serves the repo as it is (no build on Pages), so its build is committed in `awesome_farm/play/` (served at `/awesome_farm/play/`; `/awesome_farm/` forwards there): after changing the game run `npm run build:pages` in that folder (or `FARM=1 node build.js`) and commit `play/`. Its tests are not in the root `check` (`npm run test:farm` runs them). Its always-on world is a separate Cloudflare Worker (`awesome_farm/server/cf/`, deployed by hand, never by Pages).
