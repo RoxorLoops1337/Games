@@ -149,7 +149,7 @@ export function createTutorial(game) {
     state: () => (T() ? Object.assign({}, T(), { step: curId }) : null),
     /** call whenever the hub scene is entered: starts a fresh tutorial only on a brand new ludus */
     maybeStart() {
-      if (QS.get('notut') || running) return; const s = S(); if (!s) return; s.flags = s.flags || {};
+      if ((QS.get('notut') && QS.get('notut') !== '0') || running) return; /* ?notut=0 means tutorial on */ const s = S(); if (!s) return; s.flags = s.flags || {};
       if (s.flags.tut === undefined) {
         const fresh = s.week <= 1 && !(s.stats && s.stats.fights) && !s.flags.tutor && !(s.legends && s.legends.length);
         s.flags.tut = fresh ? { v: 1 } : { v: 1, done: 1, auto: 1 }; game.save();
