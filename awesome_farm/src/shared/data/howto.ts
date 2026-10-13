@@ -76,6 +76,10 @@ export const HOWTO: Partial<Record<BuildingKind, HowTo>> = {
         role: 'Grinds wheat into flour', how: 'Feed it wheat by hand (E) or with an inserter; flour comes out. It needs no fuel and no power.',
         example: lineOf('millstone'),
     },
+    beehive: {
+        role: 'Makes honey', how: 'Feed it berries by hand (E) or with an inserter; honey comes out. It needs no fuel and no power.',
+        example: lineOf('beehive'),
+    },
     fishpond: {
         role: 'Breeds fish', how: 'Feed it a fish and some bait by hand (E) or with an inserter; two fish come out. It needs no fuel and no power.',
         example: { items: [P('chest', 0, 0), P('inserter', 1, 0), P('fishpond', 2, 0), P('inserter', 4, 0), P('chest', 5, 0)], marks: [{ i: 0, t: 'fish' }, { i: 4, t: 'fish' }] },
