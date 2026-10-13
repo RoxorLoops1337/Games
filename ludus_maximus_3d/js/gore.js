@@ -83,11 +83,18 @@ export function createGore(fx, o = {}) {
   let splatBudget = 0;
   // long fights: measure how much of the sand is covered (downsampled alpha of the decal canvas) and thin new stains out as it fills,
   // dry old blood darker, and let the sand clear a little under standing fighters so silhouettes and shadows stay readable
-  const covC = mk(32, 32), covX = covC.getContext('2d', { willReadFrequently: true }); let covT = 0, dryT = 0, dryN = 0, fadeT = 0;
+  // long fights: estimate how much of the sand is covered and thin new stains out as it fills, dry old blood darker, and let the sand clear a little under standing
+  // fighters so silhouettes and shadows stay readable. Coverage is tracked analytically on a 32 x 32 grid (every stamp adds its area): reading the decal canvas back
+  // (drawImage + getImageData on a GPU canvas) stalled the GPU pipeline for a visible hitch every 1.5 s.
+  const COV_N = 32, covGrid = new Float32Array(COV_N * COV_N), COV_CELL = (DD.ext * 2) / COV_N, COV_AREA = COV_CELL * COV_CELL; let covT = 0, dryT = 0, dryN = 0, fadeT = 0;
   G.cover = 0;
+  function addCover(x, z, r, a = 0.7) { // area of a stamp of radius r (m), spread over the cells it touches, saturating per cell
+    const cx = (x / (DD.ext * 2) + 0.5) * COV_N, cz = (z / (DD.ext * 2) + 0.5) * COV_N, rc = Math.max(0.5, r / COV_CELL), area = Math.PI * r * r * a / COV_AREA;
+    const x0 = Math.max(0, Math.floor(cx - rc)), x1 = Math.min(COV_N - 1, Math.floor(cx + rc)), z0 = Math.max(0, Math.floor(cz - rc)), z1 = Math.min(COV_N - 1, Math.floor(cz + rc)), n = (x1 - x0 + 1) * (z1 - z0 + 1);
+    for (let j = z0; j <= z1; j++) for (let i = x0; i <= x1; i++) covGrid[j * COV_N + i] = 1 - (1 - covGrid[j * COV_N + i]) * (1 - Math.min(1, area / n));   // union of overlapping stains
+  }
   function measureCover() {
-    try { covX.clearRect(0, 0, 32, 32); covX.drawImage(DD.canvas, 0, 0, 32, 32); const d = covX.getImageData(0, 0, 32, 32).data; let sum = 0, n = 0;
-      for (let y = 0; y < 32; y++) for (let x = 0; x < 32; x++) { if (Math.hypot(x - 15.5, y - 15.5) > 14) continue; sum += d[(y * 32 + x) * 4 + 3]; n++; } G.cover = sum / (n * 255); } catch (e) { /* canvas not readable: keep the old value */ }
+    let sum = 0, n = 0; for (let y = 0; y < COV_N; y++) for (let x = 0; x < COV_N; x++) { if (Math.hypot(x - 15.5, y - 15.5) > 14) continue; sum += covGrid[y * COV_N + x]; n++; } G.cover = Math.min(1, sum / n * 1.35);
   }
   const capK = () => 1 - sstep(0.1, 0.24, G.cover);   // 1 = fresh sand, 0 = already well covered
   function dryAll() { // old blood goes darker and browner (source-atop only touches painted pixels)
@@ -102,12 +109,12 @@ export function createGore(fx, o = {}) {
     const ck = capK(); if (splatBudget <= 0 && size < 0.3) return; if (G.counts.splats > 650 && size < 0.3 && R() < 0.7) return; if (ck < 1 && size < 0.35 && R() > 0.25 + 0.75 * ck) return; splatBudget--; G.counts.splats++;
     const [px, pz] = DD.toPx(x, z), s = size * DD.k * (128 / 58) * (0.78 + 0.22 * ck);
     dctx.save(); dctx.translate(px, pz); dctx.rotate(ang); dctx.scale(stretch, 1); dctx.globalAlpha = a * (0.6 + 0.4 * ck); dctx.drawImage(SPR[(R() * SPR.length) | 0], -s / 2, -s / 2, s, s); dctx.restore();
-    fx.markDecals(x, z, size * 0.9);
+    fx.markDecals(x, z, size * 0.9); addCover(x, z, size * 0.62, 0.8);
   }
   function stampSmear(x0, z0, x1, z1, w, a = 0.8) {
     const [a0, b0] = DD.toPx(x0, z0), [a1, b1] = DD.toPx(x1, z1); dctx.save(); dctx.lineCap = 'round';
     dctx.strokeStyle = `rgba(86,7,9,${a * 0.85})`; dctx.lineWidth = w * DD.k; dctx.beginPath(); dctx.moveTo(a0, b0); dctx.lineTo(a1, b1); dctx.stroke();
-    dctx.strokeStyle = `rgba(150,14,16,${a * 0.5})`; dctx.lineWidth = w * DD.k * 0.45; dctx.stroke(); dctx.restore(); fx.markDecals((x0 + x1) / 2, (z0 + z1) / 2, Math.hypot(x1 - x0, z1 - z0) / 2 + w);
+    dctx.strokeStyle = `rgba(150,14,16,${a * 0.5})`; dctx.lineWidth = w * DD.k * 0.45; dctx.stroke(); dctx.restore(); fx.markDecals((x0 + x1) / 2, (z0 + z1) / 2, Math.hypot(x1 - x0, z1 - z0) / 2 + w); addCover((x0 + x1) / 2, (z0 + z1) / 2, Math.hypot(x1 - x0, z1 - z0) / 2 * 0.5 + w * 0.5, 0.5);
   }
   function stampFoot(x, z, heading, side, a) {
     const [px, pz] = DD.toPx(x + Math.cos(heading + Math.PI / 2) * 0.09 * side, z + Math.sin(heading + Math.PI / 2) * 0.09 * side), L = 0.3 * DD.k, W = 0.11 * DD.k;
@@ -177,7 +184,7 @@ export function createGore(fx, o = {}) {
   const pools = [];
   function addPool(x, z, rMax, rate = 0.14, delay = 0) {
     rMax *= POOLK() * (0.7 + 0.3 * capK()); if (pools.length >= 26) { const i = pools.findIndex((p) => p.done); pools.splice(i >= 0 ? i : 0, 1); }
-    const pts = []; for (let i = 0; i < 12; i++) pts.push(0.74 + R() * 0.5); const p = { x, z, r: 0.07, rMax, rate, acc: 1, pts, rot: R() * TAU, done: false, delay }; pools.push(p); return p;
+    const pts = []; for (let i = 0; i < 12; i++) pts.push(0.74 + R() * 0.5); const p = { x, z, r: 0.07, rMax, rate, acc: 1, pts, rot: R() * TAU, done: false, delay }; pools.push(p); addCover(x, z, rMax * 0.85, 0.5); return p;
   }
   function stepPools(dt) {
     for (const p of pools) {
@@ -548,7 +555,7 @@ export function createGore(fx, o = {}) {
   G.refresh = () => { G.level = goreLevel(); G.on = G.level !== 'off'; G.full = G.level === 'full'; if (G.tier) G.tier = G.tier; return G.level; };
   G.setTier = (t) => { G.tier = t; };
   G.reset = (seed = 1) => {
-    G.refresh(); rs = mulberry((seed >>> 0) || 1); G.time = 0; G.counts.splats = 0; G.cover = 0; covT = dryT = fadeT = 0; dryN = 0; for (const d of drops.splice(0)) dfree.push(d); jets.length = 0; pools.length = 0; drySq.length = 0; props = []; chunkCur = MAXLH; lhCur = 0; chunkHi = 0; G.lastSever = null; vig = 0;
+    G.refresh(); rs = mulberry((seed >>> 0) || 1); G.time = 0; G.counts.splats = 0; G.cover = 0; covGrid.fill(0); covT = dryT = fadeT = 0; dryN = 0; for (const d of drops.splice(0)) dfree.push(d); jets.length = 0; pools.length = 0; drySq.length = 0; props = []; chunkCur = MAXLH; lhCur = 0; chunkHi = 0; G.lastSever = null; vig = 0;
     if (gib) { const z = new THREE.Matrix4().makeScale(0, 0, 0); for (let i = 0; i < MAXP; i++) gib.setMatrixAt(i, z); gib.instanceMatrix.needsUpdate = true; gib.count = 0; gib.visible = false; }
     for (const f of G.fighters.values()) { try { f.rig.onEvent = f.prevOnEvent; } catch (e) { /* ignore */ } } G.fighters.clear();
   };

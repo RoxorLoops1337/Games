@@ -23,7 +23,7 @@ export class Game {
   constructor({ renderer, camera, post, audio, ui, tier }) {
     Object.assign(this, { renderer, camera, post, audio, ui, tier });
     this.S = null; this.busy = false; this.scene = 'none'; this.mods = {}; this.modals = [];
-    this.hud = document.createElement('div'); this.hud.className = 'lx-hud fv-main-hud'; this.hud.style.display = 'none';
+    this.hud = document.createElement('div'); this.hud.className = 'lx-hud fv-main-hud'; this.hud.style.display = 'none'; this.hud.setAttribute('role', 'region'); this.hud.setAttribute('aria-label', 'Ludus controls'); // QA
     ui.append(this.hud);
     this.ctx = this.makeCtx();
   }
@@ -169,7 +169,7 @@ export class Game {
     this.weekChip = document.createElement('div'); this.weekChip.className = 'fv-week';
     this.weekChip.style.cssText = 'font:800 12px/16px system-ui,sans-serif;letter-spacing:.06em;color:#f2c14e;text-shadow:0 1px 0 #1d1830;padding:6px 10px;border-radius:999px;background:rgba(29,24,48,.62);white-space:nowrap';
     const row = document.createElement('div'); row.className = 'lx-row'; row.append(this.goldC, this.fameC);
-    const right = document.createElement('div'); right.className = 'lx-row'; right.append(this.weekChip, U.iconButton('gear', 'More', () => this.open('more')));
+    const right = document.createElement('div'); right.className = 'lx-row'; right.append(this.weekChip, U.iconButton('gear', 'Settings and more', () => this.open('more', { tab: 'settings' })));
     top.append(row, right);
     const mid = document.createElement('div'); mid.style.cssText = 'flex:1;pointer-events:none';
     const bottom = document.createElement('div'); bottom.style.cssText = 'display:flex;flex-direction:column;align-items:center;gap:10px';
@@ -203,6 +203,8 @@ export class Game {
   async advance() {
     if (this.busy) return; const S = this.S;
     if (!S.glads.length) { U.toast('Recruit a gladiator first', { kind: 'bad' }); this.audio.sfx('uiError'); this.open('recruit'); return; }
+    // QA friction: new players press Advance without having entered anything, then wonder why nothing happens. Say so, only in the first weeks.
+    if (!L().dueKeys(S).length && (S.stats.weeks || 0) < 3) U.toast('No fight entered this week: your fighters will only train. Open the Arena to enter one.', { kind: 'info', ms: 4200 });
     this.busy = true; this.audio.sfx('uiConfirm'); this.closeAll();
     try { await advanceWeek(this.ctx); } catch (e) { console.error(e); U.toast('Something went wrong: ' + e.message + '. Your ludus is saved.', { kind: 'bad' }); }
     finally { this.busy = false; this.save(); if (this.scene !== 'hub') this.returnToHub(); this.refresh(); }

@@ -3,11 +3,10 @@
 // Findings: {kind, sev, where, msg, vp}. kinds: console, pageerror, rejection, overflow, clipped, tap, unreachable, noopen, stuck, slow, contrast, a11y.
 import http from 'node:http';
 import { readFile } from 'node:fs/promises';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join, normalize, extname, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-export const SCREENS = ['building', 'roster', 'profile', 'recruit', 'arena', 'market', 'armory', 'more', 'world'];
 export const VIEWPORTS = {
   desktop: { width: 1280, height: 720, hasTouch: false },
   phone: { width: 390, height: 800, hasTouch: true, isMobile: true },
@@ -15,6 +14,8 @@ export const VIEWPORTS = {
 };
 const EXE = process.env.PW_CHROMIUM || '/opt/pw-browsers/chromium-1194/chrome-linux/chrome';
 const REPO = join(dirname(fileURLToPath(import.meta.url)), '..');
+/** the screen ids game.js can open, read from its SCREENS list so new screens are swept automatically */
+export const SCREENS = (() => { try { const t = readFileSync(join(REPO, 'ludus_maximus_3d', 'js', 'game.js'), 'utf8'); return (t.match(/const SCREENS = \[([^\]]+)\]/)[1].match(/'(\w+)'/g) || []).map((x) => x.replace(/'/g, '')); } catch (e) { return ['building', 'roster', 'profile', 'recruit', 'arena', 'market', 'armory', 'more', 'world']; } })();
 let pw = null;
 /** playwright + Chromium present? Browser suites skip (exit 0) when not, like the other headless suites in tests/ */
 export async function browserAvailable() {
@@ -61,6 +62,18 @@ export function auditFn(opts) {
       let clipped = false;
       for (const p of chain(e)) { const cs = getComputedStyle(p); if (/(hidden|auto|scroll|clip)/.test(cs.overflowX)) { const pr = p.getBoundingClientRect(); if (pr.right <= vw + 1.5 && pr.left >= -1.5) { clipped = true; break; } } }
       if (!clipped && !e.closest('.lx-scrim.lx-out')) out.push({ kind: 'overflow', sev: 'high', msg: `${sel(e)} spans ${Math.round(r.left)}..${Math.round(r.right)} of ${vw}px` });
+    }
+    // content cut off by a non-scrolling ancestor (overflow hidden/clip): text or controls that extend past it are partly invisible
+    if ((tag === 'button' || tag === 'input' || tag === 'a' || [...e.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim())) && !e.closest('svg')) {
+      for (const p of chain(e)) {
+        const pc = getComputedStyle(p); if (!/(hidden|clip|auto|scroll)/.test(pc.overflowX + pc.overflowY)) continue;
+        const hid = /(hidden|clip)/.test(pc.overflowX) || /(hidden|clip)/.test(pc.overflowY);
+        if (hid && !p.matches('.lx-bar, .ax-bar, .lx-ult, .lx-ult-core, .lx-sheet, .lx-scrim, .lx-panel-body') && p.clientWidth > 0) {
+          const pr = p.getBoundingClientRect(), cut = (/(hidden|clip)/.test(pc.overflowX) && (r.right > pr.right + 2 || r.left < pr.left - 2)) || (/(hidden|clip)/.test(pc.overflowY) && (r.bottom > pr.bottom + 2 || r.top < pr.top - 2));
+          if (cut && !e.closest('.lx-tip')) out.push({ kind: 'clipped', sev: 'med', msg: `${sel(e)} is cut off by ${sel(p)} (${Math.round(r.left)}..${Math.round(r.right)} x ${Math.round(r.top)}..${Math.round(r.bottom)} vs ${Math.round(pr.left)}..${Math.round(pr.right)} x ${Math.round(pr.top)}..${Math.round(pr.bottom)})` });
+        }
+        break; // only the nearest clipping ancestor matters
+      }
     }
     // text clipped inside its own box
     const cs = getComputedStyle(e);

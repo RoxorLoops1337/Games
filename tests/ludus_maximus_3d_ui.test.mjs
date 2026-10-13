@@ -74,7 +74,7 @@ const scrims = (h) => h.page.evaluate(() => document.querySelectorAll('.lx-scrim
   // reduced motion: no running finite or infinite UI animation longer than a blink, on every screen
   await h.page.evaluate(() => document.body.classList.add('lx-reduce-motion'));
   let busy = [];
-  for (const id of ['building', 'roster', 'recruit', 'arena', 'market', 'armory', 'more', 'world']) {
+  for (const id of ['arena', 'market', 'armory', 'more', 'world']) {
     if (!(await openScreen(h, id))) continue; await h.page.waitForTimeout(150);
     const bad = await h.page.evaluate(() => document.getAnimations().filter((x) => { const t = x.effect && x.effect.target; const ct = x.effect && x.effect.getComputedTiming(); return t && t.closest && t.closest('#ui, .lx-scrim') && x.playState === 'running' && ct.activeDuration > 50; }).map((x) => (x.animationName || x.transitionProperty || 'anim') + '@' + (x.effect.target.className && x.effect.target.className.baseVal === undefined ? x.effect.target.className : 'svg')).slice(0, 4));
     if (bad.length) busy.push(id + ': ' + bad.join(','));

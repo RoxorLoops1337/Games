@@ -443,7 +443,7 @@
   /** try to rescue a damaged save text: parse as is, then close a truncated document. Returns a migrated save or null. */
   LM.salvage = (raw) => {
     if (typeof raw !== 'string' || raw.length < 20) return null;
-    const take = (o) => { try { if (o && isObj(o.save) && !o.plots) o = o.save; /* file envelope */ return o && o.v === 1 && Array.isArray(o.plots) ? LM.migrate(o) : null; } catch (e) { return null; } };
+    const take = (o) => { try { if (o && isObj(o.save) && !o.plots) o = o.save; /* file envelope */ return o && o.v === 1 && Array.isArray(o.plots) && Array.isArray(o.glads) && fin(o.week) && fin(o.gold) ? LM.migrate(o) : null; /* a rescue must contain real progress, not just brackets */ } catch (e) { return null; } };
     try { const r = take(JSON.parse(raw)); if (r) return r; } catch (e) { /* fall through to truncation repair */ }
     // walk the text, remember open brackets, then cut back to a clean boundary and close them
     let stack = [], inStr = false, esc = false, cuts = [];

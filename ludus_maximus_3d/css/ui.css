@@ -502,6 +502,9 @@ html, body { max-width: 100%; overflow-x: hidden; }
 }
 /* replay bar: the selected chip lost its gold fill to the bar's own chip rule (dark text on dark); restore it */
 body .lx-fv-rbar .lx-fv-chip[aria-pressed=true] { background: linear-gradient(180deg, #f2c14e, #c9922e); border-color: #7a5222; color: #2a1a30; box-shadow: 0 0 0 2px rgba(242, 193, 78, .35); }
+/* title settings: toggles and sliders were 40px */
+.lx-ttl-tog { min-height: 44px; }
+.lx-ttl-row input[type=range] { min-height: 44px; }
 /* ultimate ring: ready is a text word plus a double outline, cooling is a dashed ring, so colour is never the only cue */
 .lx-ult-sec { font-size: calc(var(--lx-us) * .3); }
 .lx-ult.lx-ready .lx-ult-sec { display: grid; background: transparent; font-size: calc(var(--lx-us) * .22); letter-spacing: .08em; align-content: end; padding-bottom: 3px; }
