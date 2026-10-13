@@ -47,7 +47,7 @@ export class Game {
     this.hurtFlash = 0; this.under = false; this.showPlayers = false; this.shake = 0;
     this.actT = 0; this.atkT = 0; this.stepT = 0; this.prevGround = false; this.prevVy = 0; this.mapT = 0;
     this.cursor = null; this.ghost = 0; this.t = 0; this.time0 = 0;
-    if (this.ui) this.ui.build();
+    if (this.ui) { this.ui.build(); this.ui._counts = null; }
     this.me.dir = 1;
   }
 
@@ -137,6 +137,7 @@ export class Game {
       }
       case 's': this.onSnapshot(m); break;
       case 'inv': {
+        this.ui.pickupFeed(m.inv);
         this.inv = m.inv; this.armor = m.armor; if (m.sel !== undefined && m.sel !== this.sel) this.sel = m.sel;
         this.ui.refreshPanel();
         break;

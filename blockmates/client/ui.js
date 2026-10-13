@@ -48,6 +48,7 @@ export class UI {
       else if (e.key === 'Escape') this.closeChat();
     };
     this.boss = el('div', 'bossbar', r); this.boss.innerHTML = '<b></b><div><i></i></div>';
+    this.feed = el('div', 'feed', r);
     this.toast = el('div', 'toast', r);
     this.players = el('div', 'playerlist', r);
     this.tip = el('div', 'tip', r);
@@ -112,6 +113,20 @@ export class UI {
       m.querySelectorAll('.emotes button').forEach((b) => { b.onclick = () => { this.G.send({ t: 'emote', e: +b.dataset.e }); this.hideModal(); }; });
       m.onclick = (ev) => { if (ev.target === m) this.hideModal(); };
     });
+  }
+  // "+3 Logs" lines when the backpack grows
+  pickupFeed(inv) {
+    const now = new Map();
+    for (const st of inv) if (st) now.set(st.id, (now.get(st.id) || 0) + st.n);
+    if (this._counts) for (const [id, n] of now) {
+      const d = n - (this._counts.get(id) || 0);
+      if (d > 0 && ITEMS[id]) {
+        const row = el('div', 'feedrow', this.feed); row.innerHTML = `<img src="${iconURL(id)}"><b>+${d}</b> ${esc(ITEMS[id].label)}`;
+        setTimeout(() => row.classList.add('gone'), 2200); setTimeout(() => row.remove(), 2800);
+        while (this.feed.children.length > 6) this.feed.firstChild.remove();
+      }
+    }
+    this._counts = now;
   }
   hoverText(text, x, y) {
     if (!text) { if (this._ht) { this.hover.style.display = 'none'; this._ht = ''; } return; }
