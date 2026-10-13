@@ -147,7 +147,7 @@ export function createTactics(fv) {
     const al = T.F ? T.F.units.filter((u) => u.side === 'A' && !u.beast) : []; const key = al.map((u) => u.id + (u.down ? 'd' : '') + (L().stanceOf(u) || '') + (T.sel === u.id ? 's' : '')).join('|');
     if (key === T.key) return; T.key = key; chips.innerHTML = '';
     if (al.length < 2) return;
-    al.forEach((u) => { const b = el('button', 'tac-chip'); b.type = 'button'; b.setAttribute('aria-pressed', T.sel === u.id ? 'true' : 'false'); b.dataset.down = u.down ? '1' : '0'; b.textContent = u.name; const st = L().stanceOf(u); if (st) b.append(el('small', '', CMD()[st].n)); b.setAttribute('aria-label', 'Give orders to ' + u.name); b.onclick = () => { if (!u.down) { T.sel = u.id; fv.audio.sfx('uiTap', { gain: 0.4 }); T.key = ''; } }; chips.append(b); });
+    al.forEach((u) => { const b = el('button', 'tac-chip'); b.type = 'button'; b.setAttribute('aria-pressed', T.sel === u.id ? 'true' : 'false'); b.dataset.down = u.down ? '1' : '0'; b.textContent = u.name; const st = L().stanceOf(u); if (st) b.append(el('small', '', CMD()[st].n)); else if (u.role && L().ROLES[u.role]) b.append(el('small', '', L().ROLES[u.role].n)); /* PLAN: the role the fighter was given */ b.setAttribute('aria-label', 'Give orders to ' + u.name); b.onclick = () => { if (!u.down) { T.sel = u.id; fv.audio.sfx('uiTap', { gain: 0.4 }); T.key = ''; } }; chips.append(b); });
   }
 
   // ------------------------------------------------------------------ running an order
@@ -184,7 +184,7 @@ export function createTactics(fv) {
   }
   function wheelCard(i) {
     const W = T.wheel; if (!W) return; const u = selUnit(); W.card.innerHTML = '';
-    if (i < 0) { W.card.append(el('b', '', u ? u.name : 'Orders'), el('i', '', 'Drag to an order and release'), el('i', '', 'Time slows while you decide')); return; }
+    if (i < 0) { const R0 = u && u.role && L().ROLES[u.role]; W.card.append(el('b', '', u ? u.name + (R0 ? ' (' + R0.n + ')' : '') : 'Quick orders'), el('i', '', 'Quick orders for the moment. The plan was set before the fight.'), el('i', '', 'Drag to an order and release. Time slows while you decide.')); return; }
     const k = KEYS[i], C = cmdText(k), C0 = CMD()[k] || {}; W.card.append(el('b', '', C.n + (C0.stance && u ? ' - ' + u.name : '')), el('i', 'g', '+ ' + C.gain), el('i', 'c', '- ' + C.cost));
   }
   function hot(i) { const W = T.wheel; if (!W || W.hot === i) return; W.hot = i; W.items.forEach((o, j) => { o.b.dataset.hot = j === i ? '1' : '0'; }); wheelCard(i); if (i >= 0) fv.audio.sfx('uiTap', { gain: 0.25, pitch: 1.3 }); }
@@ -336,7 +336,7 @@ export function createTactics(fv) {
     if (!T.active) return;
     const fight = fv.phase === 'fight' && !F.done; if (dock.style.visibility !== (fight ? 'visible' : 'hidden')) { dock.style.visibility = orders.style.visibility = fight ? 'visible' : 'hidden'; if (!fight) closeWheel(); }
     if (!fight) return;
-    if (!T.hintDone && fv.phaseT > 1.2) { T.hintDone = true; hint.textContent = phone() ? 'Tap an enemy to focus. Hold the arena for orders.' : 'Orders: keys 1 to 6. Click an enemy to focus. Tab picks a fighter.'; hint.style.opacity = 1; setTimeout(() => { hint.style.opacity = 0; }, 5200); }
+    if (!T.hintDone && fv.phaseT > 1.2) { T.hintDone = true; hint.textContent = phone() ? 'Your plan is set. Tap an enemy to re-mark it. Hold the arena for quick orders.' : 'Your plan is set. Quick orders: keys 1 to 6. Click an enemy to re-mark it.'; hint.style.opacity = 1; setTimeout(() => { hint.style.opacity = 0; }, 5200); }
     selUnit(); chipsRefresh();
     if (!phone() || T.wheel) { for (const k of KEYS) paintBtn(T.btns[k], stateOf(k)); }
     if (T.wheel) refreshWheel();

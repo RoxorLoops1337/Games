@@ -748,7 +748,7 @@ export class FightView {
         if (src && src.beast) { BF.atk(this, e, src, dst, fs); break; } // BEAST
         if (!fs || !dst) break; const an = fs.rig.animator; const rig = fs.rig;
         const name = fs.atkN++ % 5 === 4 && (src.style === 'murmillo' || src.style === 'hoplomachus' || src.style === 'dimachaerus') ? 'attack3' : (fs.atkN % 2 ? 'attack1' : 'attack2');
-        const info = an.clipInfo(name) || { hitAt: 0.27 }; const wind = Math.min(0.22, 0.4 / L().apsOf(src));
+        const info = an.clipInfo(name) || { hitAt: 0.27 }; const wind = L().windOf ? L().windOf(src) : Math.min(0.22, 0.4 / L().apsOf(src)); // PLAN: a showman's wind-up is longer
         an.play(name, { speed: clamp(info.hitAt / wind, 0.8, 3.2) }); rig.squashKick && rig.squashKick(-0.04);
         const dir = this.dirOf(src, dst), c = this.col(src);
         fx.later(wind * 0.5, () => { if (!F.done) { fx.slash(this.chest(src, 1.3), dir, c, src.style === 'hoplomachus' || src.style === 'retiarius' ? 2.6 : 2.1); A.sfx('swish', { pan: pan(src), heavy: src.style === 'murmillo' }); } });
@@ -780,6 +780,9 @@ export class FightView {
         break;
       }
       case 'miss': if (dst) { this.num(dst, e.inv ? 'IMMUNE' : 'DODGE', 'miss'); fx.kickup(this.feet(dst), src ? this.dirOf(src, dst) : new THREE.Vector3(1, 0, 0), 4); A.sfx(e.inv ? 'parry' : 'miss', { pan: pan(dst) }); } break;
+      case 'flourish': // PLAN: Showmanship. The fighter plays to the stands with the existing taunt clip; the crowd answers louder at higher levels
+        if (src) { if (fs) fs.rig.animator.play('taunt', { speed: 1.5 }); fx.ring(this.feet(src), '#f2c14e', 1.5 + 0.2 * (e.lv || 1)); A.sfx('crowdCheer', { gain: 0.25 + 0.12 * (e.lv || 1), pan: pan(src) }); this.num(src, 'Flourish!', 'tech'); }
+        break;
       case 'whiff': if (src) A.sfx('swish', { pan: pan(src), gain: 0.5 }); break;
       case 'tech': if (src) { this.num(src, (D().TECHS[e.tech] || {}).n + '!', 'tech'); fx.ring(this.feet(src), '#f5ead2', 1.8); A.sfx('uiConfirm', { gain: 0.5 }); if (fs) { const an = fs.rig.animator; an.play('attack3', { speed: 1.9 }); } } break;
       case 'dash': if (src) { fx.kickup(this.feet(src), new THREE.Vector3(src.face, 0, 0), 8); A.sfx('dust', { pan: pan(src) }); A.sfx('footstep', { pitch: 0.9 }); fx.trail && fx.trail(fs ? fs.rig.root : this.chest(src), this.col(src)); } break;

@@ -2,7 +2,7 @@
 // cast skills automatically and fire player-triggered ultimates. No DOM; the renderer reads unit state.
 (function (G) {
   const D = G.LM_D, L = G.LM;
-  const R = 8.6; // arena radius in meters
+  const R = 8.6, R0 = R; // arena radius in meters
   const clamp = L.clamp; const rnd = () => L.rand();
   const alive = (F, side) => F.units.filter((u) => u.side === side && !u.down);
   // allocation-free variants for the per-step hot paths (think / beastThink / separate). The buffers are module scratch: think is never re-entered,
@@ -13,6 +13,7 @@
   const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
   const emit = (F, e) => { if (!F.quiet) F.ev.push(e); };
   L.ARENA_R = R;
+  const SHOWT = L.SHOW, PRIO = L.PRIO; // PLAN: Showmanship table (core/sim.js)
   const DK = 0.3; // global damage scale: keeps fights readable (~20s)
 
   // the unit's effect table: derive() returns a sparse object whose keys depend on the gear (31 hidden classes in 112 units); the unit gets ONE fixed shape with
@@ -34,6 +35,7 @@
       s: null, stk: null, hits: null, down: false, gritUsed: false, stal: false, revived: false, lbUsed: false,
       dmg: 0, taken: 0, crits: 0, grudge: false, bacc: 0, racc: 0, srT: 0.5, noDmgT: 9, graspReady: true, graspT: 0, elecAt: 0, phaseAt: 0, thCnt: 0, fs: null, airT: 1,
       frT: 0, ltT: 0, cqT: 0, swap: null, cmdCd: 0, cmdId: null, aiFell: 0, aiPressed: 0, aiHeld: 0,
+      role: '', show: 0, flT: 0, // PLAN: battle-plan role ('' = none) and Showmanship level 0..3 (declared here, only ever assigned), next flourish time
       beast: null, bx: null, ai: null, sz: 0, boss: false, enraged: false, wa: null, bs: null,
     };
   }
@@ -50,7 +52,20 @@
     u.skills = (g.techs || []).map((id) => ({ id, cd: 2 + rnd() * 4 }));
     u.ults = L.ultsOf(g).map((id) => ({ id, cd: 5 + rnd() * 2, max: D.ULTS[id].cd }));
     u.s = mkSt(); u.stk = { fr: 0, lt: 0, cq: 0, gr: 0 }; u.hits = []; u.grudge = !!grudge;
+    if (ctx && ctx.plan && !g.beast) applyPlan(u, g, side, i, n, ctx.plan);
     return u;
+  }
+  // PLAN: roles and formations move the start position and trade a little stat for a job; Showmanship trades damage and armor for fame. No rnd().
+  function applyPlan(u, g, side, i, n, pl) {
+    if (n > 1) {
+      const F0 = L.FORMS[pl.form] || L.FORMS.line, pre = F0.roles(n), rid = (pl.roles && L.ROLES[pl.roles[g.id]] && pl.roles[g.id]) || pre[i] || 'free', R = L.ROLES[rid], m = R.mods;
+      let p = F0.pos(i, n), x = p.x + R.dx, y = p.y * R.ky; const r = Math.hypot(x, y); if (r > R0 * 0.92) { x *= R0 * 0.92 / r; y *= R0 * 0.92 / r; }
+      u.x = side === 'A' ? x : -x; u.y = y; u.role = rid === 'free' ? '' : rid;
+      if (m.hp) { const f = 1 + m.hp, mx = Math.max(1, Math.round(u.maxhp * f)); u.hp = Math.max(1, Math.round(u.hp * mx / u.maxhp)); u.maxhp = mx; }
+      if (m.atk) u.atk *= 1 + m.atk; if (m.def) u.def *= 1 + m.def; if (m.ms) u.ms *= 1 + m.ms; if (m.eva) u.eva = clamp(u.eva + m.eva, 0, 0.4); if (m.crit) u.crit = clamp(u.crit + m.crit, 0, 0.8);
+    } else if (pl.show > 0) {
+      const sh = L.SHOW[Math.min(3, pl.show | 0)]; u.show = Math.min(3, pl.show | 0); u.atk *= 1 - sh.atk; u.def *= 1 - sh.def; u.flT = 2.5 + 0.8 * i;
+    }
   }
   // BEAST (Venatio): a beast record (core/ext.js LM.makeBeast) becomes an ordinary unit with its own range, speed, size and AI state (beastThink below)
   function mkUnit(g, side, i, n, ctx, hpFrac, grudge) {
@@ -67,7 +82,8 @@
     o = o || {};
     return { t: 0, A, B, units: A.concat(B), ev: [], hype: 0, peak: 0, done: false, winner: null, auto: { A: !!o.autoA, B: true }, foc: { A: null, B: null }, quiet: !!o.quiet, sched: [], dtmax: 0.1, duo: o.duo ? { ids: o.duo.ids, kind: o.duo.kind, cd: 10, max: D.DUOS[o.duo.kind].cd } : null, manualFavor: !!o.manualFavor, favorReady: false, hazards: o.hazards || 0, hazT: 7 + rnd() * 3, zones: [], cmd: { rally: 6, swap: 0 }, cmdAI: !!o.cmdAI,
       // declared up front so the fight keeps one hidden class (js/fightsetup.js fills hypeK / meta / replay, L.step counts n)
-      n: 0, hypeK: 0, meta: null, replay: null };
+      n: 0, hypeK: 0, meta: null, replay: null,
+      pri: { A: false, B: false } }; // PLAN: a side whose focus came from its battle plan: when that target falls the side picks the weakest left
   };
 
   // ---------- derived live stats ----------
@@ -93,6 +109,7 @@
     return u.ms * m;
   }
   L.apsOf = apsOf; L.msOf = msOf;
+  L.windOf = (u) => Math.min(0.22, 0.4 / apsOf(u)) * (u.show ? SHOWT[u.show].wd : 1); // PLAN: a showman winds up longer (the view uses the same number)
 
   // ---------- damage ----------
   function dmgMul(F, u, t, o) {
@@ -122,9 +139,12 @@
     if (t.hp <= 0 && !t.down) {
       if (t.fx.revive && !t.revived) { t.revived = true; t.hp = Math.round(t.maxhp * 0.2 * Math.min(1, t.fx.revive)); t.s.inv = 0.6; emit(F, { k: 'revive', dst: t.id }); return; }
       t.hp = 0; t.down = true; t.s = mkSt(); emit(F, { k: 'down', dst: t.id, src: src && src.id }); F.hype += 10;
+      if (F.pri && F.pri[other(t.side)] && F.foc[other(t.side)] === t.id) F.foc[other(t.side)] = refocus(F, t.side); // PLAN: the priority target fell
       if (!alive(F, t.side).length) finish(F, other(t.side));
     }
   }
+  // the weakest fighter left on `side` (lowest hp, first on a tie), or null: where a battle plan's focus goes when its target falls
+  function refocus(F, side) { const us = F.units; let b = null; for (let i = 0; i < us.length; i++) { const u = us[i]; if (u.side === side && !u.down && (!b || u.hp < b.hp)) b = u; } return b ? b.id : null; }
   function finish(F, w) { if (F.done) return; F.done = true; F.winner = w; emit(F, { k: 'end', winner: w }); }
   function heal(F, u, amt) { amt = Math.min(u.maxhp - u.hp, Math.round(amt)); if (amt <= 0 || u.down) return; u.hp += amt; emit(F, { k: 'heal', dst: u.id, amt }); }
   function cc(F, t, key, val, dur) {
@@ -146,6 +166,7 @@
     if (u.rk === 'grasp' && u.graspReady && o.basic) { dmg += t.maxhp * 0.02; u.graspReady = false; u.graspT = 5; heal(F, u, u.maxhp * 0.015); const g = Math.round(u.maxhp * 0.003); u.maxhp += g; u.hp += g; emit(F, { k: 'rune', src: u.id, id: 'grasp' }); }
     const crit = rnd() < clamp(u.crit + (o.critB || 0), 0, 0.8); if (crit) dmg *= 1.6 + 0.15 * (u.fx.critdmg || 0);
     if (t.s.guard) dmg *= 1 - t.s.guard.f;
+    if (F.pri[other(t.side)] && F.foc[other(t.side)] === t.id) dmg *= PRIO.guard; // PLAN: a marked foe is expected: its side closes ranks around it
     if (t.s.press) dmg *= 1.1; if (t.s.expo) dmg *= 1.1; if (t.s.hold) dmg *= 0.85; // TACTICS: the price of Press / Rally, the reward of Hold
     if (t.rm.has('bone') && t.noDmgT >= 3) { dmg *= 0.75; t.noDmgT = 0; }
     dmg = Math.max(1, Math.round(dmg)); const shown = dmg;
@@ -157,7 +178,7 @@
     }
     u.dmg += shown; if (crit) u.crits++; t.noDmgT = 0;
     emit(F, { k: 'hit', src: u.id, dst: t.id, dmg: shown, crit, adv: av, tech: o.tag, save, basic: !!o.basic });
-    F.hype += 2 + (shown / t.maxhp) * 50 + (crit ? 5 : 0);
+    F.hype += (2 + (shown / t.maxhp) * 50 + (crit ? 5 : 0)) * (u.show ? SHOWT[u.show].hy : 1);
     if (dmg > 0) damage(F, t, dmg, u);
     if (!o.noProc) procs(F, u, t, shown, crit, o);
     return shown;
@@ -323,15 +344,30 @@
 
   // ---------- per-step logic ----------
   function chooseTarget(F, u, foes) {
-    const n = foes.length; let i;
+    const n = foes.length, rl = u.role; let i;
     for (i = 0; i < n; i++) if (foes[i].s.taunt) return foes[i];
     if (F.cmdAI && u.side === 'B') { for (i = 0; i < n; i++) { const f = foes[i]; if (f.s.press && !f.s.hold && dist(u, f) < 6.5) return f; } } // TACTICS: whoever presses forward draws the foe's eye
     if (u.swap) { const sid = u.swap.id; for (i = 0; i < n; i++) if (foes[i].id === sid) return foes[i]; }
-    const fid = F.foc[u.side]; if (fid) { for (i = 0; i < n; i++) if (foes[i].id === fid) return foes[i]; }
+    const fid = F.foc[u.side];
+    if (fid) {
+      for (i = 0; i < n; i++) if (foes[i].id === fid) {
+        const f = foes[i];
+        if (rl === 'hunter') { const d0 = dist(u, f); if (d0 > 3.5) for (let j = 0; j < n; j++) { const a = foes[j]; if (a !== f && a.tgt === u.id && dist(u, a) < 2.2) return a; } return f; } // PLAN: a Hunter drops the mark only for someone on top of them
+        if (!rl || (rl === 'vanguard' ? dist(u, f) < 6.5 : rl === 'anchor' ? dist(u, f) < u.range + 3.2 : true)) return f; // PLAN: the front line and the anchors fight what is within reach
+        break;
+      }
+    }
     if (u.tgt) { const tid = u.tgt; for (i = 0; i < n; i++) if (foes[i].id === tid) return foes[i]; }
     // lowest (distance x hp weight): same pick as the old stable sort()[0] (ties keep the first)
-    let best = foes[0], bk = dist(u, best) * (0.6 + 0.8 * (best.hp / best.maxhp));
-    for (i = 1; i < n; i++) { const f = foes[i], k = dist(u, f) * (0.6 + 0.8 * (f.hp / f.maxhp)); if (k < bk) { best = f; bk = k; } }
+    let avg = 0; if (rl === 'flanker') { for (i = 0; i < n; i++) avg += foes[i].maxhp; avg /= n; }
+    let best = null, bk = 0;
+    for (i = 0; i < n; i++) {
+      const f = foes[i]; let k = dist(u, f) * (0.6 + 0.8 * (f.hp / f.maxhp));
+      if (f.role === 'vanguard') k *= 0.8; // PLAN: the Vanguard draws the foe
+      if (rl === 'flanker') k *= (0.75 + 0.5 * f.maxhp / avg) * (f.range > 2.4 ? 0.85 : 1); // PLAN: the Flanker goes for the weak and the back line
+      else if (rl === 'anchor' && f.tgt && f.tgt !== u.id && f.tgt.charCodeAt(0) === u.id.charCodeAt(0)) k *= 0.78; // PLAN: the Anchor covers an ally who is being hit
+      if (!best || k < bk) { best = f; bk = k; }
+    }
     return best;
   }
   const CLEAR_CC = ['stun', 'slow', 'blind', 'root', 'air', 'silence', 'bleed', 'pull'];
@@ -363,6 +399,9 @@
     if (Math.abs(t.x - u.x) > 0.15) u.face = t.x > u.x ? 1 : -1;
     if (F.auto[u.side]) aiUlt(F, u, foes, t, d, dt);
     if (u.cast > 0) return;
+    if (u.show && F.t >= u.flT && d <= u.range + 3 && u.hp > u.maxhp * 0.35) { // PLAN: a flourish: the fighter stops and plays to the stands (the cost is the time), the crowd pays for it
+      const sh = SHOWT[u.show]; u.flT = F.t + sh.gap; u.cast = sh.cast; u.mvx = u.mvy = 0; F.hype += 5 * u.show; emit(F, { k: 'flourish', src: u.id, lv: u.show }); return;
+    }
     if (F.cmdAI && u.side === 'B') aiCmd(F, u, foes, t, d);
     if (s.retreat) { retreatMove(F, u, foes); return; } // TACTICS
     if (s.gstance) { u.mvx = u.mvy = 0; return; }
@@ -370,9 +409,25 @@
     if (d <= u.range + 0.1) {
       u.strafeT -= dt; if (u.strafeT <= 0) { u.strafeT = 1 + rnd() * 1.5; u.strafeDir = rnd() < 0.5 ? -1 : 1; }
       const nx = (t.x - u.x) / (d || 1), ny = (t.y - u.y) / (d || 1);
-      if (u.style === 'retiarius' && d < u.range * 0.62) { u.mvx = -nx * 0.9; u.mvy = -ny * 0.9; } else { u.mvx = -ny * u.strafeDir * 0.3; u.mvy = nx * u.strafeDir * 0.3; }
-      if (u.atkT <= 0 && !s.spin) { u.wt = t.id; u.wind = Math.min(0.22, 0.4 / apsOf(u)); u.atkT = 1 / apsOf(u); emit(F, { k: 'atk', src: u.id, dst: t.id }); }
-    } else if (s.hold) { u.mvx = u.mvy = 0; } else { const nx = (t.x - u.x) / d, ny = (t.y - u.y) / d; u.mvx = nx; u.mvy = ny; }
+      if (u.style === 'retiarius' && d < u.range * 0.62) { u.mvx = -nx * 0.9; u.mvy = -ny * 0.9; }
+      else if (u.role === 'skirmisher' && d < u.range * 0.7 && u.atkT > 0.15 && Math.hypot(u.x, u.y) < R * 0.8) { u.mvx = -nx * 0.9 - ny * u.strafeDir * 0.25; u.mvy = -ny * 0.9 + nx * u.strafeDir * 0.25; } // PLAN: the Skirmisher gives ground while the blow recovers
+      else { u.mvx = -ny * u.strafeDir * 0.3; u.mvy = nx * u.strafeDir * 0.3; }
+      if (u.atkT <= 0 && !s.spin) { u.wt = t.id; u.wind = L.windOf(u); u.atkT = 1 / apsOf(u); emit(F, { k: 'atk', src: u.id, dst: t.id }); }
+    } else if (s.hold) { u.mvx = u.mvy = 0; } else { const nx = (t.x - u.x) / d, ny = (t.y - u.y) / d; u.mvx = nx; u.mvy = ny; if (u.role) roleChase(F, u, t, d, nx, ny); }
+  }
+  // PLAN: how a role walks toward its target. Anchors stay near the team while someone else carries the fight, Flankers swing wide before they close.
+  const AC = { x: 0, y: 0, free: 0 };
+  function allyCenter(F, u) { const us = F.units; let n = 0, x = 0, y = 0, fr = 0; for (let i = 0; i < us.length; i++) { const a = us[i]; if (a === u || a.side !== u.side || a.down || a.beast) continue; n++; x += a.x; y += a.y; if (a.role !== 'anchor') fr++; } if (n) { AC.x = x / n; AC.y = y / n; } AC.free = fr; return n; }
+  function roleChase(F, u, t, d, nx, ny) {
+    if (u.role === 'anchor') {
+      if (allyCenter(F, u) && AC.free > 0 && Math.hypot(t.x - AC.x, t.y - AC.y) > 6) { // the foe is far from the team and a partner is free to meet it: stay home
+        const hx = AC.x - u.x, hy = AC.y - u.y, hd = Math.hypot(hx, hy); if (hd > 3) { u.mvx = hx / hd * 0.8; u.mvy = hy / hd * 0.8; } else { u.mvx = u.mvy = 0; }
+      }
+    } else if (u.role === 'flanker') {
+      const k = d > 5 ? 0.55 : d > u.range + 1.5 ? 0.3 : 0; if (!k) return;
+      const wy = Math.abs(u.y) > 0.8 ? (u.y > 0 ? 1 : -1) : ((u.i & 1) ? 1 : -1), dir = wy * (nx >= 0 ? 1 : -1), tx = -ny * dir * k, ty = nx * dir * k, l = Math.hypot(nx + tx, ny + ty) || 1;
+      u.mvx = (nx + tx) / l; u.mvy = (ny + ty) / l;
+    }
   }
   // ---------- BEAST AI (Venatio). No counters: every beast is a different tempo (pounce, pack flank, charge, trample, stomp) with its own stats and an enrage;
   // the player answers with stats, positioning and ultimates, never with a style rock-paper-scissors. Uses only rnd() (replay safe).
@@ -616,16 +671,22 @@
     if (hp > 0.6 && d < 6 && !u.aiPressed && sideHp(F, u.side) > sideHp(F, other(u.side)) + 0.25) { u.aiPressed = 1; setStance(F, u, 'press'); return; }
     if (hp < 0.45 && d > u.range + 1 && !u.aiHeld && aliveCount(F, u.side) > 1) { u.aiHeld = 1; setStance(F, u, 'hold'); }
   }
+  // PLAN: start a fight with the battle plans of both sides: the priority target becomes the side's focus (the same F.foc a tap on an enemy sets)
+  L.planFight = (F, pa, pb) => {
+    if (pa && pa.prio != null && F.units.some((u) => u.id === 'B' + pa.prio)) { F.foc.A = 'B' + pa.prio; F.pri.A = true; }
+    if (pb && pb.prio != null && F.units.some((u) => u.id === 'A' + pb.prio)) { F.foc.B = 'A' + pb.prio; F.pri.B = true; }
+  };
   L.focus = (F, side, id) => { F.foc[side] = F.foc[side] === id ? null : id; };
   L.quick = (A, B, o) => {
-    const F = L.createFight(A, B, Object.assign({ autoA: true, quiet: true }, o)); let n = 0; while (!F.done && n++ < 1500) L.step(F, 0.1); return F;
+    const F = L.createFight(A, B, Object.assign({ autoA: true, quiet: true }, o)); if (o && o.plans) L.planFight(F, o.plans.pa, o.plans.pb); let n = 0; while (!F.done && n++ < 1500) L.step(F, 0.1); return F;
   };
   // win chance of team A glads vs team B glads. Seeded, so the number is stable between renders.
   L.odds = (S, gA, gB, stanceA, n) => {
     n = n || 30; let w = 0;
-    L.withRandom(L.mulberry(L.hash(gA.map((g) => g.id + ':' + g.lvl).join() + '|' + gB.map((g) => g.name + g.lvl).join() + (stanceA || ''))), () => {
-      const ca = L.teamCtx(S, gA, stanceA || 'bal'); const cb = L.teamCtx(null, gB, 'bal');
-      for (let i = 0; i < n; i++) { const F = L.quick(L.mkUnits(gA, 'A', ca), L.mkUnits(gB, 'B', cb)); if (F.winner === 'A') w++; }
+    const pls = stanceA && typeof stanceA === 'object' ? L.fightPlans(S, gA, gB, stanceA) : null; // PLAN: a battle plan changes the odds (both sides' plans, same as the real fight)
+    L.withRandom(L.mulberry(L.hash(gA.map((g) => g.id + ':' + g.lvl).join() + '|' + gB.map((g) => g.name + g.lvl).join() + (pls ? L.planKey(pls.pa) : stanceA || ''))), () => {
+      const ca = L.teamCtx(S, gA, pls ? pls.pa : stanceA || 'bal'); const cb = L.teamCtx(null, gB, 'bal'); if (pls && pls.pb) cb.plan = pls.pb;
+      for (let i = 0; i < n; i++) { const F = L.quick(L.mkUnits(gA, 'A', ca), L.mkUnits(gB, 'B', cb), pls ? { plans: pls } : undefined); if (F.winner === 'A') w++; }
     });
     return w / n;
   };
@@ -638,6 +699,6 @@
     for (const k of Object.keys(u)) { const v = u[k]; if (typeof v === 'number') u[k] = 0.5; }
     const r0 = L.rand; L.rand = () => 0.5; // createFight draws one rnd() (hazT): keep the real random stream untouched while priming the fight literal
     try { const F = L.createFight([], [], {}); for (const k of ['t', 'hype', 'peak', 'hazT', 'hypeK']) F[k] = 0.5; F.meta = {}; F.replay = {}; F.winner = 'A'; } finally { L.rand = r0; }
-    u.tgt = 'A0'; u.wt = 'A0'; u.swap = { id: 'A0', t: 1 }; u.cmdId = 'press'; u.beast = 'lion'; u.ai = 'pounce'; u.bx = {}; u.wa = {}; u.bs = {}; u.fs = {};
+    u.role = 'vanguard'; u.tgt = 'A0'; u.wt = 'A0'; u.swap = { id: 'A0', t: 1 }; u.cmdId = 'press'; u.beast = 'lion'; u.ai = 'pounce'; u.bx = {}; u.wa = {}; u.bs = {}; u.fs = {};
   })();
 })(typeof globalThis !== 'undefined' ? globalThis : this);

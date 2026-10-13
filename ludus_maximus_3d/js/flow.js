@@ -117,9 +117,8 @@ async function pendingEvent(ctx) { // WAVE2: named events, risk hints, costs, co
 }
 
 // ------------------------------------------------------------------ prep + augments
-const STANCES = [['bal', 'gold'], ['agg', 'danger'], ['grd', 'bronze'], ['cun', 'bronze']];
-
-/** pre-fight dialog: returns {stance, bet:{wager, mult, tricks}} (gold for bet and tricks is paid by the caller via commit) */
+/** pre-fight sheet: the battle plan (roles, formation, priority target for teams; Showmanship for a solo fighter), then the optional bookmaker and tricks.
+ *  Returns {stance: plan, plan, bet:{wager, mult, tricks}}. `stance` carries the plan object so every old call site (fightScreen, playFight) keeps working. */
 export async function prep(ctx, ev, gl, opps, o = {}) {
   lm0().uniqueNames && lm0().uniqueNames(gl, opps); // never "Valeria vs Valeria"
   const S = ctx.S, lm = L(), d = D(), lv = lm.scoutLevel(S), ctxA = lm.teamCtx(S, gl, 'bal');
@@ -138,23 +137,33 @@ export async function prep(ctx, ev, gl, opps, o = {}) {
   if (ev.mut) body.append(para(`Mutator: ${ev.mut.n}. ${ev.mut.d}`));
   if (o.T) body.append(section('Bracket'), bracketEl(o.T));
   if (gl.length === 1) { const g = gl[0]; body.append(para(`${d.KEYSTONES[g.rune.k].n} rune. Ultimates: ${lm.ultsOf(g).map((x) => d.ULTS[x].n).join(', ')}${(S.relicOn || []).length ? ` · ${S.relicOn.length} relic(s)` : ''}`)); }
+  // PLAN: the main strategic choice. Pre-filled (a stored entry's plan, an old stance mapped, or the suggestion), so one tap on Fight! starts.
+  const showDial = gl.length === 1 && !o.pit; // Showmanship pays in fame and fans: only fights that settle through LM.settle offer it
+  let panel = null;
+  if (gl.length > 1 || showDial) {
+    const start = o.entry ? lm.entryPlan(S, o.entry, gl, opps) : null;
+    panel = (await import('./screens/plan.js')).planPanel(ctx, { gl, opps, start, solo: showDial });
+    body.append(section(gl.length > 1 ? 'Battle plan' : 'Showmanship'), panel.el);
+  }
   const spend = para(''); spend.style.fontWeight = '800';
   const paint = () => { spend.textContent = cost() ? `Pre-fight spend: ${fmt(cost())} gold` : ''; };
   if (!o.pit) {
-    body.append(section('The bookmaker'), para(`The crowd only knows level and style, not stats. Spot a mispriced fight and back yourself. Pays x${mult.toFixed(1)} on a win.`));
+    const fold = h('details', 'pl-fold'), sum = h('summary', '', 'Bookmaker and dirty tricks (optional)'); fold.append(sum);
+    fold.append(section('The bookmaker'), para(`The crowd only knows level and style, not stats. Spot a mispriced fight and back yourself. Pays x${mult.toFixed(1)} on a win.`));
     const wr = h('div', '', [0, ...lm.wagerOptions(S)].map((v) => { const b = U.button({ label: v ? String(v) : 'No bet', variant: v === st.wager ? 'gold' : 'ghost', onClick: () => { if (v && cost() - st.wager + v > S.gold) return U.toast('Not enough gold', { kind: 'bad' }); st.wager = v; wr.childNodes.forEach((n, i) => n.classList.toggle('lx-btn-gold', [0, ...lm.wagerOptions(S)][i] === v)); paint(); } }); b.dataset.v = v; return b; }));
-    wr.style.cssText = 'display:flex;gap:6px;flex-wrap:wrap'; body.append(wr);
-    body.append(section('Dirty tricks'));
+    wr.style.cssText = 'display:flex;gap:6px;flex-wrap:wrap'; fold.append(wr);
+    fold.append(section('Dirty tricks'));
     d.TRICKS.forEach((t) => {
       const b = U.button({ label: `${t.n}  (${fmt(t.cost(lvl))}g)`, variant: 'ghost', block: true, onClick: () => { if (!st.tricks[t.id] && cost() + t.cost(lvl) > S.gold) return U.toast('Not enough gold', { kind: 'bad' }); st.tricks[t.id] = !st.tricks[t.id]; b.classList.toggle('lx-btn-gold', !!st.tricks[t.id]); paint(); } });
-      body.append(b, para(`${t.d}${t.risk ? ` ${Math.round(t.risk * 100)}% risk of being caught.` : ''}`));
+      fold.append(b, para(`${t.d}${t.risk ? ` ${Math.round(t.risk * 100)}% risk of being caught.` : ''}`));
     });
+    body.append(fold);
   }
-  body.append(spend, section('Choose a battle plan'), para('A plan reshapes your stats for this fight. It is a build choice, not a counter.'));
-  const actions = STANCES.map(([id, v]) => { let odds = ''; if (lv >= 2 && gl.length * opps.length <= 6) odds = ` (${Math.round(lm.odds(S, gl, opps, id, 24) * 100)}%)`; return { label: lm.STANCES[id] + odds, sub: lm.STANCE_D[id], value: id, variant: v }; });
-  const stance = await ctx.ask({ title: `${o.name ? o.name + ': ' : ''}${ev.title}`, body, actions, dismiss: 'bal' });
+  body.append(spend);
+  await ctx.ask({ title: `${o.name ? o.name + ': ' : ''}${ev.title}`, body, actions: [{ label: 'Fight!', sub: panel ? (gl.length > 1 ? 'with this plan' : 'with this style') : undefined, value: 'go', variant: 'gold', icon: 'arena' }], dismiss: 'go' });
   const tricks = Object.keys(st.tricks).filter((k) => st.tricks[k]), spent = cost(); S.gold = Math.max(0, S.gold - spent);
-  return { stance, bet: { wager: st.wager, mult, tricks } };
+  const plan = panel ? panel.get() : 'bal';
+  return { stance: plan, plan, bet: { wager: st.wager, mult, tricks } };
 }
 
 function bracketEl(T) {
@@ -207,7 +216,7 @@ export async function fightScreen(ctx, gl, opps, stance, o) {
 async function runEvent(ctx, ev, gl, en) {
   const S = ctx.S, lm = L();
   if (ev.kind === 'tourney' || ev.kind === 'grand') return runTourney(ctx, ev, gl[0]);
-  const { stance, bet } = await prep(ctx, ev, gl, ev.opps, {});
+  const { stance, bet } = await prep(ctx, ev, gl, ev.opps, { entry: en && (en.plan || (en.stance && en.stance !== 'bal')) ? ev.key : null });
   const aug = await pickAug(ctx, ev.league, [], ev.kind === 'grand', null, null, gl[0] && gl[0].style);
   const res = await fightScreen(ctx, gl, ev.opps, stance, { ev, tricks: bet.tricks, augs: [aug] });
   const rep = lm.settle(S, ev, gl, res); settleBets(ctx, bet, res, rep.notes);
@@ -216,7 +225,7 @@ async function runEvent(ctx, ev, gl, en) {
 }
 
 async function runTourney(ctx, ev, g) {
-  const S = ctx.S, lm = L(), T = lm.tourneyInit(S, ev, g); let champion = false, hype = 0, hpf = 1, odds = null; const notes = [], augs = [];
+  const S = ctx.S, lm = L(), T = lm.tourneyInit(S, ev, g); let champion = false, hype = 0, hpf = 1, odds = null; const notes = [], augs = [], shows = [];
   const names = ev.size === 8 ? ['Quarterfinal', 'Semifinal', 'Final'] : ['Semifinal', 'Final'];
   for (;;) {
     const opp = lm.tourneyOpp(T), name = names[T.round];
@@ -224,7 +233,7 @@ async function runTourney(ctx, ev, g) {
     const { stance, bet } = await prep(ctx, ev, [g], [opp], { name, hpf: T.hpf });
     augs.push(await pickAug(ctx, Math.min(3, ev.league + (T.round >= 1 ? 1 : 0)), augs, ev.kind === 'grand' && T.round === names.length - 1, `${name}: new augment`, null, g.style));
     const res = await fightScreen(ctx, [g], [opp], stance, { ev: Object.assign({}, ev, { title: `${ev.title}: ${name}` }), hpf: { [g.id]: T.hpf }, tricks: bet.tricks, augs: augs.slice() }); // BRACKET: the round name rides in the title (VS intro)
-    settleBets(ctx, bet, res, notes);
+    settleBets(ctx, bet, res, notes); shows.push(res.show | 0); // PLAN: the Showmanship level of each round
     hype = Math.max(hype, res.hype); hpf = res.hpf[g.id]; if (odds == null) odds = res.odds;
     const r = lm.tourneyAdvance(S, T, res.win);
     const nextHpf = Math.min(1, hpf + 0.4 + (g.trait === 'hordearius' ? 0.1 : 0));
@@ -234,7 +243,7 @@ async function runTourney(ctx, ev, g) {
       T.hpf = nextHpf;
     } else break;
   }
-  const place = lm.placeOf(T, champion), res = { win: champion, place, hype, hpf: { [g.id]: hpf }, odds };
+  const place = lm.placeOf(T, champion), res = { win: champion, place, hype, hpf: { [g.id]: hpf }, odds, show: shows.length ? Math.round(shows.reduce((x, y) => x + y, 0) / shows.length) : 0 };
   const rep = lm.settle(S, ev, [g], res); rep.notes.push(...notes);
   await results(ctx, ev, [g], res, rep);
   if (!champion) await mortalCheck(ctx, [g], res, { kind: 'event' }); // FALLEN: only deadly in Hardcore

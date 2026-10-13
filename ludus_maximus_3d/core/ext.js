@@ -410,6 +410,9 @@
     S.name = S.name.slice(0, 40);
     if (!fin(S.color) || S.color < 0 || S.color >= (D.COLORS || []).length) { note('color'); S.color = 0; }
     for (const k of ['fac', 'sl', 'perks', 'entries', 'rivals', 'bonds', 'trophies', 'stats', 'flags', 'opts']) if (!isObj(S[k])) { if (S[k] !== undefined) note(k + ' was not an object'); S[k] = {}; }
+    for (const k of Object.keys(S.entries)) { const e = S.entries[k]; // PLAN: an entry keeps its old stance string and may carry an optional battle plan (no schema bump: both are read defensively)
+      if (!isObj(e) || !Array.isArray(e.ids)) { note('entry ' + k + ' was unreadable'); delete S.entries[k]; continue; }
+      if (!LM.STANCE[e.stance]) e.stance = 'bal'; if (e.plan !== undefined && !(isObj(e.plan) && LM.FORMS[e.plan.form] && isObj(e.plan.roles))) delete e.plan; }
     for (const k of ['glads', 'items', 'relics', 'relicOn', 'contracts', 'legends']) if (!Array.isArray(S[k])) { if (S[k] !== undefined) note(k + ' was not a list'); S[k] = []; }
     if (!Array.isArray(S.plots)) { note('plots'); S.plots = []; }
     while (S.plots.length < 16) S.plots.push(null); S.plots = S.plots.slice(0, 16).map((p) => (p && typeof p === 'object' && D.BUILD[p.b] && fin(p.l) ? p : null));
