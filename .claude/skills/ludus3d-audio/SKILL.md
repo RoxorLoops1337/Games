@@ -112,3 +112,8 @@ UI -24 to -12 (tap and hover quietest), footstep/swish/miss/dust -20 to -10, mai
 - sfx `uiHover uiSelect uiOpen uiClose` (ui), `bird owl hammer clink chop sizzle thock thunder` (ambience). `audio.ambient.update(state)` every 0.25 s from the hub: beds (wind, distant crowd, rain hiss, crickets) and workshops near the camera focus panned to their side. Its oscillators and sources are now stopped on `ambient.stop()`.
 - `music.setHubTime(hour, night)` drives ludus: tempo 92 down to 78 at night, percussion x(1 - 0.65 night), string pad swells at dusk/night, dawn adds a high aulos, deep night adds sparse bell plucks.
 - `audio.attachUi(root, {hover, tap})` adds a throttled hover tick (mouse only); taps off by default because `game.open/ask` already play `uiTap`.
+
+## Tool usage notes (added at the end of the audio pass)
+- The machine is often loaded by other agents: run stages separately and merge through a cache: `node tools/ludus3d_audio_check.mjs --stages sfx --cache C.json`, then `--stages music`, `--stages mix`, `--stages burst`, `--stages misc` with the same `--cache`; the report is rebuilt from the merged cache each time. A full single run can exceed 30 minutes under load.
+- OfflineAudioContext caveat: `disconnect()` is not time-scheduled, so `disposePlayer` skips it when offline (otherwise a faded-out player is erased from the whole render). Determinism check compares samples with a 0.002 tolerance (convolver/compressor float noise is about 1e-5).
+- Open items: fight mix loudness calibration to -16 LUFS (MUSIC_TRIM 0.4, MAKEUP 1.0 are not yet tuned from a measured mix), 60 s burst node-flatness run of the new engine, and the sfx table of the new engine were not completed (see the pass report).
