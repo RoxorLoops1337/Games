@@ -372,6 +372,7 @@ export function keyClip(name, keys, o = {}, stance = null) {
 export const ATTACK_TIMING = {
   sword: { attack1: { wind: .18, strike: .09, over: .05, rec: .30 }, attack2: { wind: .20, strike: .10, over: .05, rec: .32 }, attack3: { wind: .40, strike: .13, over: .07, rec: .55 } },
   spear: { attack1: { wind: .16, strike: .08, over: .04, rec: .30 }, attack2: { wind: .20, strike: .09, over: .05, rec: .32 }, attack3: { wind: .38, strike: .12, over: .06, rec: .55 } },
+  brawl: { attack1: { wind: .12, strike: .07, over: .04, rec: .22 }, attack2: { wind: .17, strike: .09, over: .05, rec: .28 }, attack3: { wind: .28, strike: .11, over: .06, rec: .42 } },
   dual: { attack1: { wind: .14, strike: .08, over: .04, rec: .26 }, attack2: { wind: .14, strike: .08, over: .04, rec: .26 }, attack3: { wind: .34, strike: .12, over: .06, rec: .50 } },
 };
 export function attackInfo(weapon, name) { const T = ATTACK_TIMING[weapon][name]; return { dur: T.wind + T.strike + T.over + T.rec, swingAt: T.wind, hitAt: T.wind + T.strike * 0.85, recoverAt: T.wind + T.strike + T.over }; }
@@ -493,6 +494,34 @@ export const WEAPON_POSES = {
         windHold: { chest: [0.2, 0, 0], shoulderR: [-1.6, 0, 0.95], shoulderL: [-1.6, 0, -0.95] },
         strike: { chest: [0.3, 0.0, 0], shoulderR: [-1.25, 0, -1.2], elbowR: [-0.15, 0, 0], shoulderL: [-1.25, 0, 1.2], elbowL: [-0.15, 0, 0], hip: [0, -0.2, 0], body: [0, 0, 0.32], kneeL: [1.0, 0, 0], hipL: [-0.9, 0, 0.1], kneeR: [0.2, 0, 0], hipR: [0.5, 0, -0.1] },
         follow: { chest: [0.36, 0, 0], shoulderR: [-1.15, 0, -1.35], shoulderL: [-1.15, 0, 1.35], body: [0, 0, 0.38] },
+      },
+    },
+  };
+})();
+
+// brawl: official unarmed / one-handed stance (fists up, lead left). attack1 jab, attack2 right hook, attack3 two-handed shove. setWeapon('brawl') is a supported weapon name.
+(function buildBrawl() {
+  const guard = { hips: [0.03, -0.2, 0], spine: [0.06, -0.05, 0], chest: [0.1, -0.1, 0], neck: [0, 0.1, 0], head: [0, 0.2, 0], shoulderR: [-0.8, 0.15, -0.3], elbowR: [-1.95, 0, 0], wristR: [0, 0, 0], shoulderL: [-1.0, 0.1, 0.25], elbowL: [-1.85, 0, 0], wristL: [0, 0, 0], hipL: [-0.3, 0, 0.12], kneeL: [0.45, 0, 0], hipR: [0.2, 0, -0.1], kneeR: [0.42, 0, 0], hip: [0, -0.08, 0] };
+  WEAPON_POSES.brawl = {
+    name: 'brawl', weapon: 'brawl', twoHand: false, guard,
+    attacks: {
+      attack1: { // jab with the lead (left) hand
+        wind: { chest: [0.1, -0.35, 0], hips: [0, -0.3, 0], shoulderL: [-0.7, 0.1, 0.35], elbowL: [-2.1, 0, 0], hip: [0, -0.1, -0.03], body: [0, 0, -0.04], kneeL: [0.55, 0, 0], hipL: [-0.25, 0, 0.1] },
+        windHold: { chest: [0.1, -0.4, 0] },
+        strike: { chest: [0.18, 0.3, 0], hips: [0, 0.2, 0], shoulderL: [-1.5, 0, 0.08], elbowL: [-0.08, 0, 0], shoulderR: [-0.7, 0.1, -0.25], hip: [0, -0.12, 0.04], body: [0, 0, 0.2], kneeL: [0.75, 0, 0], hipL: [-0.65, 0, 0.1], kneeR: [0.15, 0, 0], hipR: [0.45, 0, -0.1] },
+        follow: { chest: [0.22, 0.35, 0], shoulderL: [-1.58, 0, 0.08], body: [0, 0, 0.25] },
+      },
+      attack2: { // right hook
+        wind: { chest: [0.05, -0.7, 0], hips: [0, -0.5, 0], head: [0, 0.5, 0], shoulderR: [-1.15, 0.2, -1.35], elbowR: [-1.75, 0, 0], shoulderL: [-1.0, 0.1, 0.25], hip: [0, -0.12, -0.04], body: [0, 0, -0.04], kneeL: [0.6, 0, 0], kneeR: [0.55, 0, 0] },
+        windHold: { chest: [0.05, -0.76, 0] },
+        strike: { chest: [0.2, 0.8, 0], hips: [0, 0.45, 0], head: [0, -0.3, 0], shoulderR: [-1.4, -0.2, -0.2], elbowR: [-1.2, 0, 0], hip: [0, -0.14, 0.03], body: [0, 0, 0.22], kneeL: [0.9, 0, 0], hipL: [-0.7, 0, 0.1], kneeR: [0.2, 0, 0], hipR: [0.5, 0, -0.1] },
+        follow: { chest: [0.25, 0.95, 0], hips: [0, 0.55, 0], shoulderR: [-1.4, -0.4, 0.3], elbowR: [-1.0, 0, 0], body: [0, 0, 0.28] },
+      },
+      attack3: { // two-handed shove
+        wind: { chest: [-0.3, 0, 0], spine: [-0.1, 0, 0], shoulderR: [-0.8, 0, -0.4], elbowR: [-2.2, 0, 0], shoulderL: [-0.8, 0, 0.4], elbowL: [-2.2, 0, 0], hip: [0, -0.16, -0.1], body: [0, 0, -0.1], kneeL: [0.7, 0, 0], kneeR: [0.8, 0, 0] },
+        windHold: { chest: [-0.38, 0, 0] },
+        strike: { chest: [0.7, 0, 0], spine: [0.15, 0, 0], shoulderR: [-1.5, 0, -0.12], elbowR: [-0.12, 0, 0], shoulderL: [-1.5, 0, 0.12], elbowL: [-0.12, 0, 0], hip: [0, -0.26, 0.05], body: [0, 0, 0.4], kneeL: [1.1, 0, 0], hipL: [-0.95, 0, 0.1], kneeR: [0.2, 0, 0], hipR: [0.55, 0, -0.1] },
+        follow: { chest: [0.82, 0, 0], body: [0, 0, 0.46], hip: [0, -0.3, 0.05] },
       },
     },
   };
@@ -1688,8 +1717,9 @@ export class Animator {
     this.P = new Pose(); this.PA = new Pose(); this.PB = new Pose(); this.PC = new Pose(); this.QA = new QPose(); this.QB = new QPose(); this.QC = new QPose(); this.QAdd = new QPose();
     this.look = { target: null, w: 0 }; this.timeScale = 1; this.hitStopT = 0; this.onEvent = null; this.dead = false;
     this.groundFix = 0; this.ik = { hand: null }; this.finalGround = 1; this.finalLock = 1;
-    this.restPos = new V3(0, DIM.hipY, 0);
+    this.restPos = new V3(0, DIM.hipY, 0); this.style = null; this.exert = 0; this.breath = 0; this.addSide = 0; this.addHigh = 0.5; this.add2 = null; this.add2T = 0; this.downKind = 'back';
   }
+  setStyle(style) { this.style = style; this.setWeapon(this.weaponName); } // per-style victory pose; gear.js equipStyle calls it
   setWeapon(name) {
     this.weaponName = name; const st = WEAPON_POSES[name] || WEAPON_POSES.unarmed; this.stance = st; this.clips = buildStateClips(st, this.style);
     if (st.attacks) for (const n of ['attack1', 'attack2', 'attack3']) { const a = st.attacks[n]; this.clips[n] = attackClip(st.weapon, n, st, a); this.clips[n].weaponTwoHand = !!st.twoHand; }
@@ -1704,19 +1734,38 @@ export class Animator {
   // one-shot or held action. opts: speed, mask('full'|'upper'|null=auto)
   play(name, o = {}) {
     const clip = this.clips[name]; if (!clip) throw new Error('no clip ' + name);
-    if (clip.additive) { this.add = clip; this.addT = 0; this.addAmp = o.amp ?? 1; this.addDir = o.dir ?? 1; return clip; }
+    if (clip.additive) { this.add = clip; this.addT = 0; this.addAmp = o.amp ?? 1; this.addDir = o.dir ?? 1; this.addSide = o.side ?? 0; this.addHigh = o.high ?? 0.5; this.add2 = this.addSide ? this.clips.hurtSide : null; this.add2T = 0; this.exert = Math.min(1, this.exert + 0.05 * this.addAmp); return clip; }
     this.snapshot(o.fade ?? (this.action ? 0.07 : 0.06)); this.action = clip; this.actionT = 0; this.actionSpeed = o.speed ?? 1; this.actionReleasing = false; this.actionW = 0; this.actionFired = 0;
     const moving = Math.hypot(this.mv.vx, this.mv.vz) > 0.6;
     this.actionMask = o.mask || (clip.name.startsWith('attack') || clip.name === 'taunt' ? (moving ? 'upper' : 'full') : clip.mask);
-    if (name === 'death') this.dead = true; return clip;
+    if (clip.name.startsWith('attack') || clip.name === 'finisher') this.exert = Math.min(1, this.exert + (name === 'attack3' ? 0.16 : 0.09)); else if (/^(knockdown|stagger)/.test(name)) this.exert = Math.min(1, this.exert + 0.12);
+    if (name.startsWith('death') || name === 'execDie') this.dead = true; return clip;
   }
+  // ---- direction-aware helpers. dir = {x, z}: unit vector from the victim TOWARD the attacker in the victim's LOCAL frame (x = character left, z = forward);
+  // rig.localDir(worldDx, worldDz) converts a world vector. A plain number keeps the old meaning (+1 hit from the front, -1 from behind).
+  _dir(d) { if (d && typeof d === 'object') { const l = Math.hypot(d.x || 0, d.z || 0) || 1; return { x: (d.x || 0) / l, z: (d.z === undefined ? 1 : d.z) / l }; } return { x: 0, z: d === undefined ? 1 : (d < 0 ? -1 : 1) }; }
+  /** additive flinch from a direction; high 0 = low blow (knees buckle), 1 = head blow (head snaps). */
+  hurt(dir = 1, amp = 1, side, high) {
+    const d = this._dir(dir); if (this.action && this.action.name === 'block') return this.play('blockHit', { dir: d.z < 0 ? -1 : 1, amp });
+    return this.play('hurt', { dir: Math.abs(d.z) < 0.2 ? (d.z < 0 ? -1 : 1) * 0.35 : d.z, amp, side: side ?? (Math.abs(d.x) > 0.25 ? d.x : 0), high: high ?? (dir && dir.high !== undefined ? dir.high : 0.5) });
+  }
+  /** full-body stagger away from the blow (a few steps of lost balance, about 0.8 s). */
+  stagger(dir = 1, amp = 1) { const d = this._dir(dir), n = Math.abs(d.z) >= Math.abs(d.x) ? (d.z >= 0 ? 'staggerBack' : 'staggerFwd') : (d.x > 0 ? 'staggerR' : 'staggerL'); this.play(n, { speed: 1 / Math.max(0.7, amp * 0.5 + 0.5) }); return n; }
+  /** knocked down away from the blow (held); getUp() plays the matching rise. */
+  knockdown(dir = 1) { const d = this._dir(dir), n = Math.abs(d.z) >= Math.abs(d.x) ? (d.z >= 0 ? 'knockdown' : 'knockdownFront') : (d.x > 0 ? 'knockdownR' : 'knockdownL'); this.downKind = n === 'knockdown' ? 'back' : n === 'knockdownFront' ? 'front' : n.slice(-1); this.play(n); return n; }
+  getUp() { const k = this.downKind, n = k === 'back' ? 'getup' : k === 'front' ? 'getupFront' : 'getupSide' + k; this.play(n); return n; }
+  /** death fall chosen by the blow: front blow = back fall (heavy: spin), rear blow = forward fall, side blow = side fall. */
+  die(dir = 1, o = {}) { const d = this._dir(dir), n = Math.abs(d.z) >= Math.abs(d.x) * 0.8 ? (d.z >= 0 ? (o.heavy ? 'deathSpin' : 'deathBack') : 'deathFront') : (d.x > 0 ? 'deathR' : 'deathL'); this.play(n); return n; }
+  /** finisher pair: attacker plays finisher() (events swing / hit / end, hit at clipInfo('finisher').hitAt), victim plays executed() (kneels, held) then executeKill() on the hit event. Stand 0.9 m apart facing each other. */
+  finisher(o = {}) { return this.play('finisher', o); }
+  executed() { return this.play('execKneel'); }
+  executeKill() { return this.play('execDie'); }
   release(fade = 0.18) { if (this.action && this.action.hold && !this.dead) { this.snapshot(fade); this.action = null; } }
-  hurt(dir = 1, amp = 1) { this.play(this.action && this.action.name === 'block' ? 'blockHit' : 'hurt', { dir, amp }); }
   hitStop(dur = 0.06) { this.hitStopT = dur; }
   clipInfo(name) { const c = this.clips[name]; return c ? { dur: c.dur, loop: c.loop, hold: c.hold, ...(c.info || {}) } : null; }
   fire(n, clip) { if (this.onEvent) this.onEvent(n, clip); if (this.rig.onEvent) this.rig.onEvent(n, clip); }
 
-  ctx() { return { armed: this.armed, alert: this.alert, stance: this.stance }; }
+  ctx() { return { armed: this.armed, alert: this.alert, stance: this.stance, exert: this.exert, breath: this.breath }; }
   sampleBase(P) {
     const c = this.ctx(), mv = this.mv, s = Math.hypot(mv.vx, mv.vz), t = this.t;
     if (this.state !== 'move') { const clip = this.clips[this.state]; if (clip) return clip.sample(this.stateT, P); }
