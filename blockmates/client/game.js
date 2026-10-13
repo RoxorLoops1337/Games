@@ -37,7 +37,7 @@ export class Game {
     this.cw = new CWorld();
     this.joined = false; this.myId = 0; this.worldName = ''; this.status = '';
     this.players = new Map(); this.mobs = new Map(); this.npcs = new Map(); this.drops = new Map(); this.arrows = new Map();
-    this.parts = [];
+    this.parts = []; this.amb = [];
     this.inv = new Array(PLAYER.inv).fill(null); this.armor = [null, null, null]; this.sel = 0;
     this.hp = 20; this.food = 20; this.breath = 10; this.time = 60; this.day = 1;
     this.me = { x: 0, y: 0, vx: 0, vy: 0, w: PLAYER.w, h: PLAYER.h, onGround: false, dir: 1, dead: false, look: {}, name: '', anim: 0, id: 0 };
@@ -464,12 +464,36 @@ export class Game {
       if (changed && this.ui.open === 'inv') this.ui.renderPanel();
     }
     this.updateWeather(dt);
+    this.updateAmbient(dt);
     this.tut.update(dt, this.ui.root);
     this.mapT -= dt;
     if (this.mapT <= 0) { this.mapT = 0.35; this.ui.drawMap(); }
     // music mood
     const surf = me.y < 90;
     this.sound.setMode(this.under ? 'water' : !surf && me.y > 110 ? 'cave' : daylight(this.time) < 0.35 ? 'night' : 'day');
+  }
+  // little ambient life: fireflies at night, butterflies by day, bats in caves. Purely visual, never sent anywhere.
+  updateAmbient(dt) {
+    const me = this.me, dl = daylight(this.time), amb = this.amb;
+    const surface = me.y < 92 && !this.under;
+    const biome = this.biome;
+    const want = { firefly: surface && dl < 0.35 && (biome === 'forest' || biome === 'plains') && this.weather.k < 0.3 ? 16 : 0, butterfly: surface && dl > 0.55 && (biome === 'forest' || biome === 'plains') && this.weather.k < 0.2 ? 7 : 0, bat: me.y > 112 ? 5 : 0 };
+    const have = { firefly: 0, butterfly: 0, bat: 0 };
+    for (const a of amb) have[a.k]++;
+    for (const k of Object.keys(want)) {
+      if (have[k] < want[k] && Math.random() < dt * 3) {
+        const x = me.x + (Math.random() - 0.5) * 44, y = k === 'bat' ? me.y + (Math.random() - 0.5) * 14 : (this.cw.skyTop[Math.floor(x)] || me.y) - 1 - Math.random() * 4;
+        if (k === 'bat' && this.cw.fgAt(Math.floor(x), Math.floor(y))) continue;
+        amb.push({ k, x, y, vx: 0, vy: 0, ph: Math.random() * 6.28, life: 20 + Math.random() * 20 });
+      }
+    }
+    for (const a of amb) {
+      a.life -= dt * (want[a.k] ? 1 : 6); a.ph += dt * (a.k === 'firefly' ? 1.4 : a.k === 'bat' ? 9 : 7);
+      if (a.k === 'firefly') { a.x += Math.cos(a.ph * 0.7 + a.y) * 0.5 * dt; a.y += Math.sin(a.ph * 0.9) * 0.45 * dt; }
+      else if (a.k === 'butterfly') { a.x += (Math.cos(a.ph * 0.25) * 1.4) * dt; a.y += Math.sin(a.ph * 0.31 + 1) * 0.9 * dt; }
+      else { a.x += Math.cos(a.ph * 0.17 + a.y) * 3.2 * dt; a.y += Math.sin(a.ph * 0.13) * 1.6 * dt; if (this.cw.fgAt(Math.floor(a.x), Math.floor(a.y))) a.life = 0; }
+    }
+    this.amb = amb.filter((a) => a.life > 0 && Math.abs(a.x - me.x) < 40 && Math.abs(a.y - me.y) < 24);
   }
   updateWeather(dt) {
     const day = this.day, ph = phaseOf(this.time);

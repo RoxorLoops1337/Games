@@ -85,6 +85,15 @@ export class Renderer {
       g.fill();
     }
     g.globalAlpha = 1;
+    // a few birds crossing the sky by day
+    if (dl > 0.5) {
+      g.strokeStyle = 'rgba(30,40,60,0.7)'; g.lineWidth = 1.6 * this.dpr; g.lineCap = 'round';
+      for (let i = 0; i < 4; i++) {
+        const bx = ((G.t * (26 + i * 5) + i * 430 - G.cam.x * ts * 0.04) % (w + 240) + w + 240) % (w + 240) - 120;
+        const by = horizon - h * (0.34 + 0.05 * i) + Math.sin(G.t * 0.7 + i * 2) * 14 * this.dpr, fl = Math.sin(G.t * 7 + i * 1.7), sz = (7 + i) * this.dpr;
+        g.beginPath(); g.moveTo(bx - sz, by - fl * sz * 0.5); g.quadraticCurveTo(bx - sz * 0.4, by - sz * 0.5 - fl * sz * 0.3, bx, by); g.quadraticCurveTo(bx + sz * 0.4, by - sz * 0.5 - fl * sz * 0.3, bx + sz, by - fl * sz * 0.5); g.stroke();
+      }
+    }
     // hills (three layers of parallax silhouettes, tinted into the sky)
     const biome = G.biome || 'plains';
     const tint = { tundra: [200, 220, 240], forest: [58, 130, 70], plains: [110, 176, 80], desert: [214, 186, 120], mountains: [128, 134, 150] }[biome] || [90, 160, 80];
@@ -371,6 +380,31 @@ export class Renderer {
     g.globalAlpha = 1;
   }
 
+  drawAmbient(G) {
+    const g = this.g, ts = G.ts;
+    for (const a of G.amb) {
+      const [sx, sy] = this.toScreen(G, a.x, a.y);
+      if (a.k === 'firefly') {
+        const pulse = 0.5 + 0.5 * Math.sin(a.ph * 2.3);
+        const rg = g.createRadialGradient(sx, sy, 0, sx, sy, ts * 0.55); rg.addColorStop(0, `rgba(255,240,120,${0.85 * pulse})`); rg.addColorStop(1, 'rgba(255,220,60,0)');
+        g.save(); g.globalCompositeOperation = 'lighter'; g.fillStyle = rg; g.fillRect(sx - ts, sy - ts, ts * 2, ts * 2); g.restore();
+        g.fillStyle = `rgba(255,255,200,${0.5 + 0.5 * pulse})`; g.fillRect(sx - 1, sy - 1, 2.5, 2.5);
+      } else if (a.k === 'butterfly') {
+        const flap = Math.abs(Math.sin(a.ph)), w = ts * 0.2 * (0.35 + flap);
+        g.fillStyle = ['#ff8ab0', '#ffd24a', '#7ad8ff', '#c89aff'][Math.floor(a.x * 3) & 3];
+        g.beginPath(); g.ellipse(sx - w * 0.6, sy, w, ts * 0.16, -0.4, 0, 7); g.ellipse(sx + w * 0.6, sy, w, ts * 0.16, 0.4, 0, 7); g.fill();
+        g.fillStyle = '#3a2a30'; g.fillRect(sx - 1, sy - ts * 0.1, 2, ts * 0.2);
+      } else {
+        const flap = Math.sin(a.ph);
+        g.fillStyle = '#17121f';
+        g.beginPath(); g.ellipse(sx, sy, ts * 0.1, ts * 0.12, 0, 0, 7); g.fill();
+        g.beginPath(); g.moveTo(sx, sy); g.quadraticCurveTo(sx - ts * 0.3, sy - ts * 0.22 * flap, sx - ts * 0.42, sy + ts * 0.05 * flap); g.quadraticCurveTo(sx - ts * 0.2, sy + ts * 0.08, sx, sy + ts * 0.06); g.fill();
+        g.beginPath(); g.moveTo(sx, sy); g.quadraticCurveTo(sx + ts * 0.3, sy - ts * 0.22 * flap, sx + ts * 0.42, sy + ts * 0.05 * flap); g.quadraticCurveTo(sx + ts * 0.2, sy + ts * 0.08, sx, sy + ts * 0.06); g.fill();
+        g.fillStyle = '#ff4a6a'; g.fillRect(sx - 2.5, sy - 1, 1.5, 1.5); g.fillRect(sx + 1, sy - 1, 1.5, 1.5);
+      }
+    }
+  }
+
   drawWeather(G) {
     const k = G.weather.k;
     if (k < 0.03) return;
@@ -408,6 +442,7 @@ export class Renderer {
     this.drawEntities(G);
     this.drawLiquids(G);
     this.drawLight(G);
+    this.drawAmbient(G);
     this.drawOverlays(G);
     this.drawParticles(G);
     this.drawNames(G);
