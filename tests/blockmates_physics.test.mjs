@@ -1,6 +1,8 @@
 // Blockmates: body physics on hand built maps (ladders, one way platforms, water, steps, ice-free walking).
 import assert from 'node:assert/strict';
 import { B, L_WATER } from '../blockmates/shared/data.js';
+import { planDig, blockers } from '../blockmates/client/dig.js';
+import { I, ITEMS } from '../blockmates/shared/data.js';
 import { stepBody, K_LEFT, K_RIGHT, K_UP, K_DOWN, K_JUMP } from '../blockmates/shared/physics.js';
 
 let passed = 0;
@@ -67,6 +69,21 @@ test('trampolines bounce hard falls', () => {
   const w = map(); w.set(10, 20, B.trampoline);
   const b = body(10.5, 5); let min = 99; for (let i = 0; i < 120; i++) { stepBody(w, b, 0); if (i > 40) min = Math.min(min, b.y); }
   assert.ok(min < 17, 'bounced up to ' + min);
+});
+
+test('dig planner tunnels through stone, refuses what the tools cannot break', () => {
+  const w = map();
+  for (let x = 60; x < 140; x++) { w.set(x, 20, B.stone); for (let y = 21; y < 40; y++) w.set(x, y, B.stone); }
+  w.solidAt = (x, y) => !!w.fgAt(x, y) && w.fgAt(x, y) !== B.ladder;
+  const inv = new Array(40).fill(null); inv[0] = { id: I.wood_pickaxe, n: 1, d: 100 };
+  const path = planDig(w, inv, 105, 19, 97, 25);
+  assert.ok(path && path[0][0] === 105 && path[path.length - 1][0] === 97 && path[path.length - 1][1] === 25, 'a route exists');
+  assert.ok(path.some((n, i) => i && blockers(w, path[i - 1], n).length > 0), 'it has to dig somewhere');
+  for (let x = 60; x < 140; x++) w.set(x, 23, B.iron_ore);
+  assert.equal(planDig(w, inv, 105, 19, 105, 30), null, 'a wall of iron ore cannot be dug with a wood pick');
+  inv[1] = { id: I.iron_pickaxe, n: 1, d: 100 };
+  assert.ok(planDig(w, inv, 105, 19, 105, 30), 'but can with an iron pick');
+  void ITEMS;
 });
 
 console.log(`\n${passed} passed`);

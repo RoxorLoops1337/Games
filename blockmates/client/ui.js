@@ -362,8 +362,8 @@ export class UI {
       <label>Sound <input id="vs" type="range" min="0" max="100" value="${Math.round(G.sound.vol * 100)}"></label>
       <label>Music <input id="vm" type="range" min="0" max="100" value="${Math.round(G.sound.musicVol * 100)}"></label>
       <label>Graphics <select id="vg"><option value="1">Light</option><option value="1.5">Medium</option><option value="2">Sharp</option></select></label>
-      <label>Zoom <input id="vz" type="range" min="60" max="180" value="${Math.round(G.zoom * 100)}"></label>
-      <div class="keys"><b>WASD / arrows</b> move, <b>Space</b> jump, <b>Shift</b> run, <b>Click</b> a block to walk over and mine it, click open ground to walk there, <b>hold</b> to keep mining, <b>Right mouse</b> place or use, <b>Shift + click</b> back wall, <b>1-0 / wheel</b> hotbar, <b>E</b> backpack, <b>Q</b> drop, <b>T</b> chat, <b>Tab</b> players, <b>F</b> eat, <b>V</b> emotes, <b>+/-</b> zoom, <b>F2</b> photo</div>
+      <label>Zoom <input id="vz" type="range" min="30" max="180" value="${Math.round(G.zoom * 100)}"></label>
+      <div class="keys"><b>WASD / arrows</b> move, <b>Space</b> jump, <b>Shift</b> run, <b>Click</b> a block to walk over and mine it, click open ground to walk there, <b>double click</b> any square to dig your way to it, <b>hold</b> to keep mining, <b>Right mouse</b> place or use, <b>Shift + click</b> back wall, <b>1-0 / wheel</b> hotbar, <b>E</b> backpack, <b>Q</b> drop, <b>T</b> chat, <b>Tab</b> players, <b>F</b> eat, <b>V</b> emotes, <b>+/-</b> zoom, <b>F2</b> photo</div>
       <div class="btns"><button id="mok">Resume</button><button id="mleave">Leave world</button></div></div>`, (m) => {
       m.querySelector('#vs').oninput = (e) => G.sound.setVol(e.target.value / 100, G.sound.musicVol);
       m.querySelector('#vm').oninput = (e) => G.sound.setVol(G.sound.vol, e.target.value / 100);

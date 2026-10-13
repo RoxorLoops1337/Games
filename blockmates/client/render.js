@@ -362,7 +362,7 @@ export class Renderer {
     }
     if (G.order && G.mark) {
       const [sx, sy] = this.toScreen(G, G.mark.x, G.mark.y), pulse = 0.5 + 0.5 * Math.sin(G.t * 8);
-      g.strokeStyle = G.mark.kind === 'mine' ? `rgba(255,220,90,${0.6 + 0.4 * pulse})` : `rgba(120,230,255,${0.6 + 0.4 * pulse})`; g.lineWidth = 2.5;
+      g.strokeStyle = G.mark.kind === 'dig' ? `rgba(255,140,60,${0.6 + 0.4 * pulse})` : G.mark.kind === 'mine' ? `rgba(255,220,90,${0.6 + 0.4 * pulse})` : `rgba(120,230,255,${0.6 + 0.4 * pulse})`; g.lineWidth = 2.5;
       if (G.mark.kind === 'walk') { g.beginPath(); g.ellipse(sx + ts / 2, sy + ts * 0.95, ts * (0.28 + 0.1 * pulse), ts * 0.1, 0, 0, 7); g.stroke(); }
       else { rr(g, sx + 2, sy + 2, ts - 4, ts - 4, 6); g.stroke(); }
     }
