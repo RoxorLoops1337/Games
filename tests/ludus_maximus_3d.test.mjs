@@ -1134,5 +1134,29 @@ const LEGACY_IDS = ['patron', 'brawl', 'trainer', 'spoiled', 'spy', 'sponsor', '
   ok(LM.mercy(mkS('m1'), ev0, null, 'mercy').f > 0, 'the old LM.mercy API still works');
 }
 
+{ // round 50: BEAST faces, hair cards, foot locks (js/beast.js headless)
+  const had = { window: typeof globalThis.window, document: typeof globalThis.document };
+  if (!globalThis.window) globalThis.window = globalThis; if (!globalThis.document) globalThis.document = { createElement: () => ({ getContext: () => null }) };
+  const { createBeast, JN } = await import('../ludus_maximus_3d/js/beast.js'), THREE = await import('three');
+  const W = new THREE.Vector3();
+  for (const kind of ['lion', 'wolf', 'bear', 'boar', 'nemean', 'elephant']) {
+    const rig = createBeast(LM.makeBeast(kind, 6, { r: LM.mulberry(5), id: 't' }), { detail: 'high' }), A = rig.animator, big = kind === 'elephant';
+    ok(!!rig.joints.browL && !!rig.joints.browR && (big || (!!rig.joints.lipL && !!rig.joints.lipR)), `${kind}: brow bones${big ? '' : ' and lip bones'} exist`);
+    ok(typeof A.setMood === 'function', `${kind}: animator.setMood exists`);
+    if (!big) { A.setMood('snarl'); for (let i = 0; i < 40; i++) rig.update(1 / 30); ok(rig.joints.lipL.scale.y < 0.7 && A.out[JN.indexOf('browL') * 3] > 0.3, `${kind}: a snarl pulls the lips up and frowns`); A.setMood('calm'); for (let i = 0; i < 60; i++) rig.update(1 / 30); ok(rig.joints.lipL.scale.y > 0.95, `${kind}: calm relaxes the lips`); }
+    A.setMood('enraged'); for (let i = 0; i < 40; i++) rig.update(1 / 30); ok(A.mood.wide > 0.9 && A.enraged, `${kind}: enraged opens the eyes wide`); A.setMood('calm');
+    const m = rig.parts.mane; if (m) { ok(!!m.geometry.attributes.aHair && m.geometry.attributes.aHair.itemSize === 4, `${kind}: hair cards carry the aHair attribute`); ok(m.material.userData.hairU && 'uT' in m.material.userData.hairU, `${kind}: hair sway uniforms`); }
+    if (big) { ok(!!rig.parts.fur.geometry.attributes.aSp && !!rig.mats.fur.userData.splayU, 'elephant: foot splay attribute and uniform'); }
+    // stance paws pinned in world space while the root really travels
+    A.setMove(A.sp.gait.trotV, 0); rig.root.position.set(0, 0, 0); for (let i = 0; i < 60; i++) { rig.root.position.z += A.sp.gait.trotV / 60; rig.update(1 / 60); }
+    let pin = null, worst = 0, sink = 0; for (let i = 0; i < 240; i++) { rig.root.position.z += A.sp.gait.trotV / 60; rig.update(1 / 60); rig.root.updateMatrixWorld(true); const on = A.lkOn[0] && A.lkW[0] > 0.99; W.set(0, -A.pads[0] * 0.98, 0).applyMatrix4(rig.joints.wristL.matrixWorld); if (on) { sink = Math.min(sink, W.y); if (!pin) pin = [W.x, W.z]; worst = Math.max(worst, Math.hypot(W.x - pin[0], W.z - pin[1])); } else pin = null; }
+    ok(worst < 0.3 * A.stride && sink > -0.1 * Math.max(1, rig.size), `${kind}: a trotting stance paw slides ${worst.toFixed(3)} m of a ${A.stride.toFixed(2)} m stride, sinks ${sink.toFixed(3)} m`);
+    ok(A.stride * 0.5 * 0.7 <= Math.min(A.legL[0], A.legL[2]) * 0.9, `${kind}: the stride is limited by the leg reach`);
+    A.setMove(0, 0); rig.dispose();
+  }
+  { const r = createBeast(LM.makeBeast('lion', 6, { r: LM.mulberry(5), id: 'p' }), { detail: 'high', noShells: true }); ok(!r.parts.shell && r.drawCalls() === 4, 'noShells (portraits) drops the fur shells'); r.dispose(); }
+  if (had.window === 'undefined') delete globalThis.window; if (had.document === 'undefined') delete globalThis.document;
+}
+
 console.log(`ludus_maximus: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
