@@ -60,4 +60,7 @@ split big ones into slices (rules, art, polish).
   - [ ] B1b Villagers walk about (a folk entity with art), name plates
   - [ ] B1c Friendship hearts and requests
 - [ ] B2 Festival eve + the Lantern Chain
+  - [x] B2a Festival eve (last day of each season): E on lanterns, longest chain of 4+ pays everyone at dawn; no protocol change
+  - [ ] B2b Festival look: lit lanterns glow, bunting, a festival song
+  - [ ] B2c Festival stalls and games
 - [ ] B3 The Long Dusk (new game plus)
