@@ -17,7 +17,7 @@ const TOPY = [2.9, 3.0, 6.9, 7.4, 9.2, 9.6];
 /** height (in units) where the game puts the upgrade star for a stage */
 export const monumentTopY = (stage) => TOPY[Math.max(0, Math.min(MONUMENT_STAGES - 1, stage | 0))];
 
-const PINK = '#ffd2e2', PINKD = '#ffb0cb', SKY = '#8fd0ff', ROOFC = '#7fc4f5', HONEY = '#f0c694', LEAF = '#8fe06a';
+const PINK = '#ffd2e2', PINKD = '#ffb0cb', SKY = '#8fd0ff', ROOFC = '#7fc4f5', HONEY = '#e2aa76', LEAF = '#8fe06a';
 const TAU = Math.PI * 2;
 const rng = K.rng;
 /** place n items around a circle: fn(x, z, angle, i) */
@@ -201,7 +201,7 @@ function lighthouse(g, st, top) {
   for (const s of [1, -1]) { const o = pos.length / 3; pos.push(0, 0, 0); colr.push(1, 0.95, 0.7); for (let i = 0; i <= N; i++) { const t = (i / N - 0.5) * 2 * wide; pos.push(s * L * Math.cos(t), (i / N - 0.5) * 0.2, L * Math.sin(t)); colr.push(0, 0, 0); } for (let i = 0; i < N; i++) idx.push(o, o + 1 + i, o + 2 + i); }
   const bg = new THREE.BufferGeometry(); bg.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); bg.setAttribute('color', new THREE.Float32BufferAttribute(colr, 3)); bg.setIndex(idx);
   // fade along the length: vertex colour 0 at the far edge, 1 at the lantern; additive blending keeps it a soft glow
-  const bm = new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.4, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }); bm.userData.special = true;
+  const bm = new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.3, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }); bm.userData.special = true;
   const bmesh = new THREE.Mesh(bg, bm); bmesh.renderOrder = 3; bmesh.castShadow = false; beam.add(bmesh); g.add(beam);
   return ly + 2.0;
 }
