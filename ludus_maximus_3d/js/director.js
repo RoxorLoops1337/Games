@@ -276,6 +276,7 @@ export class FightDirector {
     if (p.extra && t > 0.5) for (const q of p.extra) if (Math.hypot(q[0] - vx, q[2] - vy) < 5.5) pts.push(q); // gore: keep the flung limb in frame once it is in the air (never pull wide for a far one)
     // tight (execution): the pair only, close and low, so a phone still sees the kneel, the blade and the blood (padX 0.9 would pull the camera back to 8 m on a 9:16 screen)
     const tt = p.tight ? 1 : 0, fallIdx = near ? 5 : 3, r = this._frame({ pts: tt ? pts.filter((_, i) => i !== fallIdx) : pts, yaw, pitch: tt ? pitch * 0.8 : pitch, fov: this._fov(38) + 2 * k, margin: tt ? 0.88 : lerp(0.8, 0.72, tall), minD: tt ? 2.6 : lerp(3.0, 3.8, k), padX: tt ? 0.4 : 0.9, padY: tt ? 0.25 : 0.3, st: { yaw: 0.12, pitch: 0.3, c: 0.22, d: 0.35, dUp: 0.18, fov: 0.3 } });
+    if (p.lift) { const tv = Math.tan(r.fov * D2R / 2), u = basis(r.yaw, r.pitch).u, dl = p.lift * r.d * tv; r.c[0] += u[0] * dl; r.c[1] += u[1] * dl; r.c[2] += u[2] * dl; r.margin = (r.margin || 0) + p.lift; }   // FATE: raise the subjects out from behind the decision panel (same trick as the victory shot)
     r.timeScale = lerp(0.25, 1, ease((t - 0.7) / (dur - 0.7))); this.pose.timeScale = r.timeScale;
     this._endIf(dur, p.next ?? null); return r;
   }

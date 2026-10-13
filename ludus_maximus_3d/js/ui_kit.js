@@ -355,6 +355,30 @@ export function vsSplash({ a, b, league = '', host = document.body, ms = 2200 } 
   host.append(el);
   return new Promise((res) => setTimeout(() => { el.classList.add('lx-out'); setTimeout(() => { el.remove(); res(); }, reduced() ? 0 : 400); }, reduced() ? Math.min(ms, 1200) : ms));
 }
+// FATE: the decision panel over the fight view when the last foe is beaten. {foe:{name,sub,bust}, how, offers:[{id,label,icon,gain[],cost[],why,def}], onPick(id)}.
+// Each option is one big button (1/2/3 on the keyboard, 44px+ tall on touch) with its exact gain and cost lines; the default option is highlighted.
+// Returns the panel element with .fate = {pick(id), focus(), count(n), close()}.
+export function fatePanel({ foe = {}, how = '', offers = [], onPick, title = 'The crowd waits for your word' } = {}) {
+  const el = h('section', 'lx-fate'); el.setAttribute('role', 'group'); el.setAttribute('aria-label', 'Decide the fate of ' + (foe.name || 'the foe'));
+  const head = h('div', 'lx-fate-head', [foe.bust ? h('span', 'lx-fate-bust', foe.bust) : null, h('div', 'lx-fate-who', [h('b', 'lx-engrave', foe.name || ''), h('span', 'lx-fate-sub', foe.sub || ''), h('span', 'lx-fate-how', how)])]);
+  const opts = h('div', 'lx-fate-opts'); let done = false; const btns = [];
+  offers.forEach((o, i) => {
+    const b = h('button', 'lx-fate-opt lx-fate-' + o.id + (o.def ? ' lx-fate-def' : '')); b.type = 'button'; b.dataset.id = o.id; if (o.def) b.dataset.def = '1';
+    const lines = h('span', 'lx-fate-lines', [...(o.gain || []).map((t) => h('i', 'g', t)), ...(o.cost || []).map((t) => h('i', 'c', t))]);
+    b.append(h('span', 'lx-fate-top', [h('kbd', 'lx-fate-k', String(i + 1)), icon(o.icon || 'sword', 20), h('b', 'lx-fate-l', o.label), o.def ? h('em', 'lx-fate-tag', 'Default') : null]), lines);
+    if (o.why) b.append(h('small', 'lx-fate-why', o.why));
+    b.setAttribute('aria-label', [o.label, (o.gain || []).join(', '), (o.cost || []).length ? 'Costs: ' + o.cost.join(', ') : ''].filter(Boolean).join('. '));
+    b.addEventListener('click', () => api.pick(o.id)); btns.push(b); opts.append(b);
+  });
+  el.append(h('div', 'lx-fate-card', [h('div', 'lx-fate-title lx-engrave', title), head, opts]));
+  const api = el.fate = {
+    pick(id) { if (done) return; done = true; el.classList.add('lx-fate-out'); btns.forEach((b) => { b.disabled = true; }); onPick?.(id); },
+    focus() { const d = btns.find((b) => b.dataset.def) || btns[0]; d?.focus?.({ preventScroll: true }); },
+    count(n) { const d = btns.find((b) => b.dataset.def), t = d && d.querySelector('.lx-fate-tag'); if (t) t.textContent = n > 0 ? 'Default in ' + n : 'Default'; },
+    close() { done = true; el.remove(); },
+  };
+  return el;
+}
 // Combat banner: stacked event lines that slide in at top-center and fade (max 3). kind: 'crit'|'ult'|'kill'|'info'
 export function banner(text, kind = 'info', host, ms = 2200) {
   host = host || document.querySelector('.lx-banners') || document.body.appendChild(h('div', 'lx-banners'));

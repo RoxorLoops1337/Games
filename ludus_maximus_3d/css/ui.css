@@ -758,3 +758,47 @@ body.lx-modal-open:not(.lx-dock-open) .lx-fv-hud, body.lx-modal-open:not(.lx-doc
 .pl-fold summary { cursor: pointer; min-height: 44px; display: flex; align-items: center; font: 800 12.5px/16px var(--lx-serif); letter-spacing: .1em; text-transform: uppercase; color: #7a2f30; }
 @media (max-width: 420px) { .pl-fn { font-size: 11px; letter-spacing: .03em; } .pl-sel { max-width: 50%; font-size: 13px; } }
 body.lx-hc .pl-root, body.lx-hc .pl-fold { color: #000; } body.lx-hc .pl-g { color: #005a1e; } body.lx-hc .pl-c { color: #8a0000; }
+
+/* ---------- FATE: decision panel over the fight view (kill / spare / ransom) ---------- */
+.lx-fate { position: absolute; left: 0; right: 0; bottom: 0; z-index: 33; display: flex; justify-content: center; padding: 0 var(--lx-gut) calc(var(--lx-sab, 0px) + 10px); pointer-events: none; animation: lx-fate-in .45s var(--lx-ease-out) both; }
+.lx-fate-out { opacity: 0; transform: translateY(14px); transition: opacity .25s, transform .25s; }
+.lx-fate-card { pointer-events: auto; width: 100%; max-width: 980px; padding: 8px 10px 10px; border-radius: var(--lx-r); background: linear-gradient(180deg, rgba(42, 37, 64, .93), rgba(29, 24, 48, .96)); border: 2px solid var(--lx-bronze); box-shadow: 0 10px 30px rgba(0, 0, 0, .6), inset 0 0 0 1px rgba(242, 193, 78, .3); color: var(--lx-text); backdrop-filter: blur(5px); }
+.lx-fate-title { text-align: center; font-size: var(--lx-fs-s); letter-spacing: .24em; color: var(--lx-gold); margin: 0 0 6px; text-shadow: 0 2px 4px #000; }
+.lx-fate-head { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; min-width: 0; }
+.lx-fate-bust { flex: none; width: 44px; height: 50px; border-radius: 4px; overflow: hidden; border: 1px solid var(--lx-bronze); background: #2a2540; display: block; }
+.lx-fate-bust canvas { width: 100%; height: 100%; display: block; object-fit: cover; }
+.lx-fate-who { display: flex; flex-direction: column; min-width: 0; line-height: 1.25; }
+.lx-fate-who b { font-size: var(--lx-fs-l); color: #fff2d0; overflow-wrap: anywhere; }
+.lx-fate-sub { font-size: var(--lx-fs-s); color: var(--lx-sand); }
+.lx-fate-how { font-size: var(--lx-fs-s); color: #cdbb99; }
+.lx-fate-opts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.lx-fate-opt { all: unset; box-sizing: border-box; cursor: pointer; display: flex; flex-direction: column; gap: 6px; min-height: var(--lx-tap); padding: 8px 10px; border-radius: var(--lx-r); background: linear-gradient(180deg, #4a3320, #33220f); border: 2px solid #8a6a3a; color: var(--lx-text); text-align: left; -webkit-tap-highlight-color: transparent; transition: transform .12s, border-color .12s; }
+.lx-fate-opt:hover { border-color: var(--lx-gold); } .lx-fate-opt:active { transform: translateY(1px) scale(.99); }
+.lx-fate-opt:focus-visible { outline: 3px solid var(--lx-gold); outline-offset: 2px; }
+.lx-fate-opt:disabled { opacity: .6; cursor: default; }
+.lx-fate-def { border-color: var(--lx-gold); box-shadow: 0 0 0 1px rgba(242, 193, 78, .5), 0 0 16px rgba(242, 193, 78, .25); }
+.lx-fate-kill { background: linear-gradient(180deg, #5a2220, #3a1313); border-color: #b5532f; } .lx-fate-kill:hover { border-color: #ff8a5a; }
+.lx-fate-top { display: flex; align-items: center; gap: 7px; min-width: 0; }
+.lx-fate-k { flex: none; min-width: 20px; height: 20px; border-radius: 4px; display: inline-flex; align-items: center; justify-content: center; font: 800 12px/1 var(--lx-sans); background: rgba(0, 0, 0, .4); border: 1px solid rgba(242, 193, 78, .5); color: var(--lx-gold); }
+.lx-fate-l { font: 800 var(--lx-fs-m)/1.15 var(--lx-serif); letter-spacing: .04em; text-transform: uppercase; flex: 1 1 auto; min-width: 0; }
+.lx-fate-tag { font: 700 10px/1 var(--lx-sans); letter-spacing: .08em; text-transform: uppercase; font-style: normal; padding: 3px 5px; border-radius: 3px; background: var(--lx-gold); color: #3a2a18; flex: none; }
+.lx-fate-lines { display: flex; flex-wrap: wrap; gap: 4px; }
+.lx-fate-lines i { font: 700 11.5px/1.2 var(--lx-sans); font-style: normal; padding: 2px 6px; border-radius: 999px; white-space: normal; }
+.lx-fate-lines .g { background: rgba(91, 122, 58, .35); color: #c9f0a4; border: 1px solid rgba(140, 200, 90, .5); }
+.lx-fate-lines .c { background: rgba(181, 83, 47, .3); color: #ffc6a8; border: 1px solid rgba(240, 130, 90, .5); }
+.lx-fate-why { font: 600 11px/1.25 var(--lx-sans); color: #cdbb99; }
+@media (max-width: 700px) {
+  .lx-fate-opts { grid-template-columns: 1fr; gap: 6px; }
+  .lx-fate-opt { flex-direction: row; align-items: center; gap: 8px; padding: 6px 8px; min-height: 52px; }
+  .lx-fate-top { flex: 0 0 40%; flex-direction: column; align-items: flex-start; gap: 3px; }
+  .lx-fate-top .lx-ico { display: none; }
+  .lx-fate-lines { flex: 1 1 auto; gap: 3px; } .lx-fate-lines i { font-size: 10.5px; padding: 1px 5px; }
+  .lx-fate-title { letter-spacing: .14em; margin-bottom: 3px; }
+  .lx-fate-head { margin-bottom: 5px; } .lx-fate-bust { width: 36px; height: 40px; }
+}
+@media (max-height: 480px) { .lx-fate-card { padding: 5px 8px 7px; } .lx-fate-title { display: none; } .lx-fate-opt { padding: 5px 8px; } .lx-fate-lines i { font-size: 10.5px; } .lx-fate-head { margin-bottom: 4px; } }
+@media (hover: none) { .lx-fate-k { display: none; } }
+body.lx-hc .lx-fate-card { background: #000; border-color: #fff; } body.lx-hc .lx-fate-opt { background: #111; border-color: #fff; }
+@keyframes lx-fate-in { from { opacity: 0; transform: translateY(22px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .lx-fate { animation: none; } .lx-fate-out { transition: none; } }
+body.lx-reduce-motion .lx-fate { animation: none; }
