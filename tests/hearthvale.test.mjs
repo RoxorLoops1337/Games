@@ -1,6 +1,7 @@
 // Hearthvale simulation suite: headless, drives the shared sim like the server does.
 import assert from 'node:assert/strict';
 import * as S from '../hearthvale/shared/sim.js';
+import { addBots, botStep } from '../hearthvale/shared/bots.js';
 import { BUILDINGS, MAX_PLAYERS } from '../hearthvale/shared/data.js';
 
 let n = 0; const ok = (c, m) => { assert.ok(c, m); n++; };
@@ -55,5 +56,22 @@ const run = (W, secs) => { for (let i = 0; i < secs * 10; i++) S.tick(W, 0.1); }
   S.command(W, 'a', { op: 'assign', k: 'valley', id: 'vf_wood' }); const w0 = P.res.wood; run(W, 60); ok(P.res.wood > w0, 'valley field harvested');
   const W2 = S.deserialize(S.serialize(W)); ok(W2.players.a.res.wood === P.res.wood, 'save round trips'); S.tick(W2, 0.1); ok(true, 'restored world ticks');
   P.res.soup = 0; for (const v of P.villagers) v.hunger = 0; run(W, 10); ok(P.villagers.some(v => v.state === 'hungry'), 'starving villagers stop');
+}
+// neighbour bots build a working economy and help the valley
+{
+  const W = S.createWorld(21); S.addPlayer(W, 'me', 'Me'); addBots(W, 5);
+  for (let i = 0; i < 9000; i++) { S.tick(W, 0.1); botStep(W, 0.1); }
+  const bots = Object.values(W.players).filter(p => p.bot);
+  ok(bots.every(b => b.buildings.length >= 4), 'every bot built something (' + bots.map(b => b.buildings.length).join(',') + ')');
+  ok(bots.some(b => b.level >= 3), 'bots level up (' + bots.map(b => b.level).join(',') + ')');
+  ok(W.valley.xp > 0, 'bots finish valley orders');
+  ok(bots.every(b => b.villagers.length >= 3), 'bots keep their villagers');
+}
+// client files all exist and the import map is wired
+{
+  const { readFileSync, existsSync } = await import('node:fs');
+  const html = readFileSync(new URL('../hearthvale/index.html', import.meta.url), 'utf8');
+  ok(/"three": "\.\/vendor\/three\.module\.min\.js"/.test(html), 'import map points at vendored three');
+  for (const f of ['vendor/three.module.min.js', 'js/main.js', 'js/scene.js', 'js/models.js', 'js/net.js', 'style.css']) ok(existsSync(new URL('../hearthvale/' + f, import.meta.url)), f + ' exists');
 }
 console.log('hearthvale: ' + n + ' checks passed');
