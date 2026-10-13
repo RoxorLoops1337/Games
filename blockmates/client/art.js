@@ -245,6 +245,7 @@ const PAINT = {
     noiseFill(g, r, '#f3eee6', 12, 40, 2); g.strokeStyle = 'rgba(190,180,170,0.4)'; g.lineWidth = 1;
     for (let y = 4; y < S; y += 6) { g.beginPath(); for (let x = 0; x <= S; x += 4) g.lineTo(x, y + ((x / 4) % 2 ? 1.5 : 0)); g.stroke(); }
   },
+  wool_red: dyedWool('#d9434b'), wool_yellow: dyedWool('#f2cf3c'), wool_blue: dyedWool('#3a78e0'), wool_green: dyedWool('#4aa84a'), wool_black: dyedWool('#2f2f36'), wool_pink: dyedWool('#f08ab8'),
   door_closed(g) { doorPart(g, false, true); }, door_top_closed(g) { doorPart(g, true, true); },
   door_open(g) { doorPart(g, false, false); }, door_top_open(g) { doorPart(g, true, false); },
   flower_red(g) { flower(g, '#e04a5a', '#ffd0d6'); }, flower_yellow(g) { flower(g, '#f2d33c', '#fff2a0'); },
@@ -282,6 +283,13 @@ const PAINT = {
     g.strokeStyle = '#8a1f3c'; g.lineWidth = 2; g.beginPath(); for (let x = 0; x <= S; x += 4) g.lineTo(x, 16 + (x / 4 % 2 ? 4 : -4)); g.stroke();
   },
 };
+function dyedWool(col) {
+  return (g, r) => {
+    noiseFill(g, r, col, 14, 40, 2); g.strokeStyle = 'rgba(0,0,0,0.18)'; g.lineWidth = 1;
+    for (let y = 4; y < S; y += 6) { g.beginPath(); for (let x = 0; x <= S; x += 4) g.lineTo(x, y + ((x / 4) % 2 ? 1.5 : 0)); g.stroke(); }
+    g.fillStyle = 'rgba(255,255,255,0.18)'; g.fillRect(2, 2, S - 4, 3);
+  };
+}
 function metalBlock(col) {
   return (g, r) => {
     gradFill(g, shade(col, 30), shade(col, -30)); g.strokeStyle = shade(col, -70); g.lineWidth = 2; g.strokeRect(1, 1, S - 2, S - 2);
@@ -427,6 +435,7 @@ function paintItem(g, name) {
     mob_gel() { outline(() => { g.fillStyle = '#7ad04a'; g.beginPath(); g.moveTo(5, 26); g.quadraticCurveTo(4, 8, 16, 8); g.quadraticCurveTo(28, 8, 27, 26); g.closePath(); g.fill(); g.fillStyle = 'rgba(255,255,255,0.5)'; g.fillRect(10, 12, 5, 3); }); },
     bow() { outline(() => { g.strokeStyle = '#8a5a2a'; g.lineWidth = 3; g.beginPath(); g.arc(6, 16, 16, -1.2, 1.2); g.stroke(); g.strokeStyle = '#f2f2f2'; g.lineWidth = 1; g.beginPath(); g.moveTo(11, 3); g.lineTo(11, 29); g.stroke(); }); },
     door() { g.drawImage(tileArt(B.door_closed), 0, 0); },
+    dye_red() { dye(g, '#d9434b'); }, dye_yellow() { dye(g, '#f2cf3c'); }, dye_blue() { dye(g, '#3a78e0'); }, dye_green() { dye(g, '#4aa84a'); }, dye_black() { dye(g, '#2f2f36'); }, dye_pink() { dye(g, '#f08ab8'); },
     buddy_bell() { outline(() => { g.fillStyle = '#e8b030'; g.beginPath(); g.moveTo(6, 24); g.quadraticCurveTo(6, 6, 16, 6); g.quadraticCurveTo(26, 6, 26, 24); g.closePath(); g.fill(); g.fillStyle = 'rgba(255,255,255,0.5)'; g.fillRect(9, 10, 3, 9); g.fillStyle = '#8a5a1a'; g.fillRect(4, 24, 24, 3); g.beginPath(); g.arc(16, 28, 3, 0, 7); g.fill(); g.strokeStyle = '#4ad8ff'; g.lineWidth = 2; g.beginPath(); g.arc(16, 6, 3, 0, 7); g.stroke(); }); },
     warden_sigil() { outline(() => { g.fillStyle = '#5a5d68'; rr(g, 4, 4, 24, 24, 5); g.fill(); g.strokeStyle = '#ff9a3d'; g.lineWidth = 2; g.shadowColor = '#ff9a3d'; g.shadowBlur = 6; g.beginPath(); g.arc(16, 16, 7, 0, 7); g.moveTo(16, 6); g.lineTo(16, 26); g.moveTo(6, 16); g.lineTo(26, 16); g.stroke(); }); },
     fishing_rod() { outline(() => { g.strokeStyle = '#7a4e2a'; g.lineWidth = 3; g.lineCap = 'round'; g.beginPath(); g.moveTo(5, 28); g.lineTo(24, 6); g.stroke(); g.strokeStyle = '#fff'; g.lineWidth = 1; g.beginPath(); g.moveTo(24, 6); g.quadraticCurveTo(30, 14, 26, 24); g.stroke(); g.fillStyle = '#e63950'; g.beginPath(); g.arc(26, 25, 3, 0, 7); g.fill(); g.fillStyle = '#9aa0aa'; g.fillRect(9, 20, 5, 4); }); },
@@ -434,6 +443,12 @@ function paintItem(g, name) {
     cooked_fish() { outline(() => { g.fillStyle = '#c98a4a'; g.beginPath(); g.moveTo(5, 16); g.quadraticCurveTo(14, 5, 24, 16); g.quadraticCurveTo(14, 27, 5, 16); g.fill(); g.fillStyle = '#9a5a28'; g.beginPath(); g.moveTo(22, 16); g.lineTo(29, 9); g.lineTo(29, 23); g.closePath(); g.fill(); g.strokeStyle = '#6a3a18'; g.lineWidth = 1.5; for (const x of [11, 15, 19]) { g.beginPath(); g.moveTo(x, 12); g.lineTo(x, 20); g.stroke(); } }); },
   };
   (f[name] || (() => { g.fillStyle = '#c0c0c0'; rr(g, 6, 6, 20, 20, 5); g.fill(); }))();
+}
+
+function dye(g, col) {
+  g.save(); g.shadowColor = 'rgba(0,0,0,0.5)'; g.shadowBlur = 2; g.shadowOffsetY = 1;
+  g.fillStyle = '#e8d8b0'; rr(g, 9, 14, 14, 14, 4); g.fill(); g.fillStyle = '#9a7a4a'; g.fillRect(12, 10, 8, 5);
+  g.fillStyle = col; g.beginPath(); g.ellipse(16, 18, 5.5, 3.5, 0, 0, 7); g.fill(); g.fillStyle = 'rgba(255,255,255,0.5)'; g.fillRect(13, 17, 3, 1.5); g.restore();
 }
 
 // ---------------------------------------------------------------- characters

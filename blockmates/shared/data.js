@@ -80,6 +80,7 @@ blk('trampoline', { hard: 0.8, tool: 'any', solid: true, bouncy: true, color: '#
 blk('door_top_closed', { hard: 0.8, tool: 'axe', solid: true, door: true, drop: null, color: '#9a6a36' });
 blk('door_top_open', { hard: 0.8, tool: 'axe', solid: false, door: true, drop: null, color: '#9a6a36', sky: true });
 blk('pine_leaves', { hard: 0.25, tool: 'axe', solid: false, drop: 'sapling', dropChance: 0.18, color: '#2f6e5a', leafy: true });
+for (const [n, col] of [['red', '#d9434b'], ['yellow', '#f2cf3c'], ['blue', '#3a78e0'], ['green', '#4aa84a'], ['black', '#2a2a30'], ['pink', '#f08ab8']]) blk('wool_' + n, { hard: 0.4, tool: 'any', color: col });
 
 export const L_NONE = 0, L_WATER = 1, L_LAVA = 2; // liquid type (high nibble), level 1..8 (low nibble)
 
@@ -132,6 +133,7 @@ for (const [m, a] of [['leather', 1], ['copper', 2], ['iron', 3], ['gold', 3], [
 
 itm('buddy_bell', { stack: 16 }); // hires a Buddy helper (see server/npcs.js)
 itm('warden_sigil', { stack: 4 });
+for (const n of ['red', 'yellow', 'blue', 'green', 'black', 'pink']) itm('dye_' + n);
 itm('fishing_rod', { stack: 1, tool: 'rod', dur: 120 });
 itm('fish', { food: 2 });
 itm('cooked_fish', { food: 7, heal: 1 });  // wakes the Stone Warden deep underground
@@ -188,6 +190,9 @@ rec('buddy_bell', 1, [['iron_ingot', 3], ['wool', 2], ['crystal_shard', 1]], 'an
 rec('warden_sigil', 1, [['sunstone', 3], ['titanium_ingot', 2], ['crystal_shard', 2]], 'anvil');
 rec('fishing_rod', 1, [['stick', 3], ['string', 2]], 'bench');
 rec('cooked_fish', 1, [['fish', 1]], 'furnace');
+for (const [n, from, c] of [['red', 'flower_red', 1], ['yellow', 'flower_yellow', 1], ['blue', 'crystal_shard', 1], ['green', 'cactus', 1], ['black', 'coal', 1]]) { rec('dye_' + n, 2, [[from, c]], 'hand'); rec('wool_' + n, 1, [['wool', 1], ['dye_' + n, 1]], 'hand'); }
+rec('dye_pink', 2, [['flower_red', 1], ['wool', 1]], 'hand');
+rec('wool_pink', 1, [['wool', 1], ['dye_pink', 1]], 'hand');
 rec('leather_helmet', 1, [['leather', 5]], 'bench');
 rec('leather_chest', 1, [['leather', 8]], 'bench');
 rec('leather_boots', 1, [['leather', 4]], 'bench');
