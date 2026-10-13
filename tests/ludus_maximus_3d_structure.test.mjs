@@ -378,5 +378,14 @@ for (const fn of ['newGame', 'makeGlad', 'mkUnits', 'createFight', 'step', 'useU
   ok(/for \(let k = 0; k < 2; k\+\+\) \{ const m = new THREE\.Mesh\(new THREE\.BufferGeometry\(\), k \? ghostMatB : ghostMat\)/.test(hub) && (hub.match(/name = 'move_line'/g) || []).length === 1, 'hub.js: two ghost meshes and one line mesh at most (draw call budget while previewing)');
 }
 
+{ // block 15: hub night + heat haze (HUB-NIGHT, HUB-HEAT)
+  const rd = (f) => readFileSync(join(root, f), 'utf8'), hub = rd('js/hub.js'), post = rd('js/post.js'), bld = rd('js/buildings.js');
+  ok(/const NIGHT = \{/.test(hub) && /night_pools/.test(hub) && /uNightRim/.test(hub + bld) && /uToe/.test(hub + post), 'hub: night preset, light pools, moon rim and the grade toe exist');
+  ok(/function heatStep\(/.test(hub) && /uHeatAsp/.test(post) && /uHeatBand/.test(hub) && /tier === 'low' \? 0/.test(hub) && /prefersReduced\(\)/.test(hub.slice(hub.indexOf('function heatStep'), hub.indexOf('function heatStep') + 700)), 'hub: heat haze is a horizon band shimmer, off on low tier and reduced motion');
+  ok(!/heatTarget \* 0\.6/.test(hub), 'hub: the old 0.6 heat amplitude is gone');
+  ok(/uToe = 0|uToe\.value = 0/.test(hub), 'hub.exit resets the shared grade uniforms');
+  for (const f of ['tools/ludus3d_hub_light.mjs']) ok(!readFileSync(join(here, '..', f), 'utf8').includes('\u2014'), f + ': no em dashes');
+}
+
 console.log(`ludus_maximus_3d structure: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

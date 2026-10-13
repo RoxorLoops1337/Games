@@ -30,7 +30,7 @@ const WIN = [2.9, 1.5, 0.55];       // lit window HDR (blooms when glow=1)
 // ---------------------------------------------------------------------------------------------
 // shared materials + uniforms
 // ---------------------------------------------------------------------------------------------
-export const buildingUniforms = { uTime: { value: 0 }, uWind: { value: 1 }, uHL: { value: new Float32Array(MAXPLOT) }, uGl: { value: new Float32Array(MAXPLOT) }, uOff: { value: Array.from({ length: MAXPLOT }, () => new THREE.Vector3()) } };   // MOVE: uOff[plot+1] lifts / shifts a whole plot (rearrange mode and cinematic), index 0 stays zero
+export const buildingUniforms = { uNightRim: { value: 0 }, uTime: { value: 0 }, uWind: { value: 1 }, uHL: { value: new Float32Array(MAXPLOT) }, uGl: { value: new Float32Array(MAXPLOT) }, uOff: { value: Array.from({ length: MAXPLOT }, () => new THREE.Vector3()) } };   // MOVE: uOff[plot+1] lifts / shifts a whole plot (rearrange mode and cinematic), index 0 stays zero
 
 function woodTexture() {
   const c = document.createElement('canvas'); c.width = c.height = 256; const x = c.getContext('2d');
@@ -49,16 +49,16 @@ let LIB = null;
 /** Extra fragment hook (rim highlight) on top of patchMaterial. */
 function litPatch(mat, key, { vBody = '', vPars = '' } = {}) {
   patchMaterial(mat, {
-    key, uniforms: { uHL: buildingUniforms.uHL, uTime: buildingUniforms.uTime, uWind: buildingUniforms.uWind, uOff: buildingUniforms.uOff },
+    key, uniforms: { uHL: buildingUniforms.uHL, uTime: buildingUniforms.uTime, uWind: buildingUniforms.uWind, uOff: buildingUniforms.uOff, uNR: buildingUniforms.uNightRim },
     vPars: `attribute float aPlot; varying float vHL; uniform float uHL[${MAXPLOT}]; uniform vec3 uOff[${MAXPLOT}]; uniform float uTime, uWind;\n${vPars}`,
     vBody: `vHL = uHL[int(aPlot + 0.5)];\n${vBody}\ntransformed += uOff[int(aPlot + 0.5)];`,
-    fPars: 'varying float vHL;',
+    fPars: 'varying float vHL; uniform float uNR;',
   });
   const inner = mat.onBeforeCompile;
   mat.onBeforeCompile = (sh) => {
     inner(sh);
     sh.fragmentShader = sh.fragmentShader.replace('#include <opaque_fragment>',
-      `{ float rim = pow(1.0 - clamp(dot(normalize(vViewPosition), normal), 0.0, 1.0), 2.0); outgoingLight += vec3(1.0, 0.70, 0.28) * vHL * (0.07 + 0.55 * rim); }\n#include <opaque_fragment>`);
+      `{ float rim = pow(1.0 - clamp(dot(normalize(vViewPosition), normal), 0.0, 1.0), 2.0); outgoingLight += vec3(1.0, 0.70, 0.28) * vHL * (0.07 + 0.55 * rim); outgoingLight += vec3(0.26, 0.40, 0.92) * uNR * (0.05 + 0.85 * pow(rim, 1.6)); }   // night: cool moon rim keeps silhouettes\n#include <opaque_fragment>`);
   };
   return mat;
 }

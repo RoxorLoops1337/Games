@@ -221,10 +221,10 @@ function furMaterial(id, bu, shadeKind = 'cloth', o = {}) {
 `;
   m.onBeforeCompile = (sh) => {
     orig(sh);
-    sh.fragmentShader = sh.fragmentShader.replace('if (uBOn > 0.5) {', 'if (false) {').replace('outgoingLight += addC * (1.0 - gBM * 0.65);', 'outgoingLight += addC * (1.0 - gBM * 0.65) * ' + (o.ds ? '0.32' : '0.85') + ';').replace('#include <color_fragment>', '#include <color_fragment>\n' + col).replace('#include <normal_fragment_maps>', '#include <normal_fragment_maps>\n' + bump).replace('#include <opaque_fragment>', rim + '#include <opaque_fragment>');
+    sh.fragmentShader = sh.fragmentShader.replace('if (uBOn > 0.5) {', 'if (false) {').replace('outgoingLight += addC * (1.0 - gBM * 0.65);', 'outgoingLight += addC * (1.0 - gBM * 0.65) * ' + (o.ds ? '0.32' : '0.85') + ';').replace('#include <color_fragment>', '#include <color_fragment>\n' + col).replace('#include <normal_fragment_maps>', '#include <normal_fragment_maps>\n' + (o.low ? '' : bump)).replace('#include <opaque_fragment>', rim + '#include <opaque_fragment>');
     if (shell) { sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute float aLayer; varying float vLayer;').replace('#include <begin_vertex>', '#include <begin_vertex>\nvLayer = aLayer;'); sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying float vLayer;'); }
   };
-  m.customProgramCacheKey = () => key0() + '-bf2' + id + (shell ? 's' : '') + (o.ds ? 'd' : '');
+  m.customProgramCacheKey = () => key0() + '-bf2' + id + (shell ? 's' : '') + (o.ds ? 'd' : '') + (o.low ? 'l' : '');
   return m;
 }
 function plainMat(color, kind, rough, metal, bu, blood = true, o = {}) {
@@ -428,9 +428,9 @@ export function createBeast(unitOrRec, opts = {}) {
 
   // --- materials (per rig so flash / blood never leak)
   const bu = makeBloodUniforms(), mats = {};
-  mats.fur = furMaterial(kind, bu, big ? 'leather' : 'cloth'); mats.fur.name = 'fur';
+  mats.fur = furMaterial(kind, bu, big ? 'leather' : 'cloth', { low: LOW }); mats.fur.name = 'fur';
   if (DT.shells && !big) { mats.shell = furMaterial(kind, bu, 'cloth', { shell: true }); mats.shell.name = 'shell'; }
-  if (!big) { mats.mane = furMaterial(kind, bu, 'cloth', { ds: true }); mats.mane.name = 'mane'; }
+  if (!big) { mats.mane = furMaterial(kind, bu, 'cloth', { ds: true, low: LOW }); mats.mane.name = 'mane'; }
   mats.bone = plainMat(0xffffff, 'trim', 0.5, 0.04, bu, true); mats.bone.name = 'bone';
   mats.eye = plainMat(0xffffff, 'eye', 0.18, 0, bu, false, { glow: sp.gold ? 0x6a3a00 : kind === 'lion' ? 0x1a0e00 : 0x000000 }); mats.eye.name = 'eye';
   if (sp.rider) {

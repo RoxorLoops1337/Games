@@ -50,11 +50,17 @@ const WEATHER = {
   heat: { sunElev: 36, sunAz: 330, sunColor: 0xffd08a, sunInt: 4.2, hemiSky: 0xb4b2d8, hemiGround: 0xd29a5a, hemiInt: 1.25, fog: 0xf0cfa0, fogDensity: 0.0020, skyTop: 0x4a7cc8, skyMid: 0xeccaa0, skyHor: 0xffe4b8, glow: 0xffc070, cloudLit: 0xfff0d0, cloudShade: 0xb8a0a0, cloudAmt: 0.25, stars: 0, exposure: 1.0, night: 0, sunSize: 0.04 },
 };
 /** hour (0..24) + weather -> preset. Sun swings front-right (morning) to front-left (evening) so facades are always modelled by 3/4 light. */
+/** [HUB-NIGHT] hub moonlight: cool directional key (soft shadows), generous cool fill and fog tint so buildings and plots stay readable, warm light comes from windows and torch pools. */
+const NIGHT = { sunElev: 40, sunAz: 238, sunColor: 0xa6bcff, sunInt: 3.1, hemiSky: 0x5a74c8, hemiGround: 0x3a3558, hemiInt: 1.6, fog: 0x16225a, fogDensity: 0.0029,
+  skyTop: 0x0a1640, skyMid: 0x1c2e6e, skyHor: 0x41589a, glow: 0x6078c8, cloudLit: 0x8092ca, cloudShade: 0x242e5c, cloudAmt: 0.3, stars: 1.0, exposure: 1.32, night: 1.0, sunSize: 0.03 };
 export function presetFor(hour, weather = 'clear') {
   const hh = ((hour % 24) + 24) % 24, nightW = weather === 'night';
-  let base = nightW ? Object.assign({}, TOD.night) : todFromHour(hh);
+  let base = nightW ? Object.assign({}, NIGHT) : todFromHour(hh);
+  const nK = nightW ? 1 : clamp((base.night - 0.5) / 0.5);   // 0 by day and at dusk, 1 once the moon is up
   if (WEATHER[weather]) base = lerpTOD(base, WEATHER[weather], weather === 'rain' ? 0.85 : weather === 'dust' ? 0.7 : 0.55);
-  base.hemiInt *= nightW ? 1.0 : 1.2;
+  if (!nightW && nK > 0) { const n0 = base.night; base = lerpTOD(base, NIGHT, nK * (weather === 'rain' ? 0.82 : 0.94)); base.night = Math.max(n0, nK); }   // night wins over day weather; rain keeps a little grey so streaks read
+  else if (!nightW && weather !== 'clear' && WEATHER[weather]) base.night = Math.max(base.night, WEATHER[weather].night);
+  base.hemiInt *= nightW ? 1.0 : 1 + 0.2 * (1 - nK);
   const dayK = nightW ? 0 : 1 - clamp((base.night - 0.25) / 0.45);   // 1 by day, 0 once the moon is up
   if (!nightW) { const m = new THREE.Color(base.hemiGround).lerp(new THREE.Color(0x9c8090), 0.5 * dayK); base.hemiGround = m.getHex(); }
   if (dayK > 0) {
@@ -248,6 +254,21 @@ export function createHub({ renderer, camera, audio, tier = 'high', post = null 
   const selMat = ringMaterial({ color: [2.2, 1.55, 0.5], width: 0.2 }), hovMat = ringMaterial({ color: [1.6, 1.2, 0.6], width: 0.12, alpha: 0.7 }), padMat = ringMaterial({ color: [1.5, 1.15, 0.5], width: 0.1, alpha: 0.45, speed: 0.5 });
   const selRing = ringMesh(selMat, 1), hovRing = ringMesh(hovMat, 1), padRings = ringMesh(padMat, 16);
   group.add(selRing, hovRing, padRings);
+  // [HUB-NIGHT] warm light pools: one additive instanced quad mesh on the ground under every torch / brazier / lantern (visible only at night, one draw call)
+  const poolU = { uTime: { value: 0 }, uAmt: { value: 0 } }; let nightK = 0;
+  const poolMesh = (() => {
+    const g = new THREE.PlaneGeometry(1, 1); g.rotateX(-Math.PI / 2);
+    const m = new THREE.InstancedMesh(g, new THREE.ShaderMaterial({ uniforms: poolU, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false,
+      vertexShader: `varying vec2 vP; varying float vS; uniform float uTime; void main(){ vec3 c = instanceMatrix[3].xyz; vP = position.xz * 2.0; vS = fract(sin(dot(c.xz, vec2(12.9, 78.2))) * 43758.5);
+        gl_Position = projectionMatrix * viewMatrix * modelMatrix * instanceMatrix * vec4(position, 1.0); }`,
+      fragmentShader: `varying vec2 vP; varying float vS; uniform float uTime, uAmt; void main(){ float r = length(vP); float f = 0.82 + 0.18 * sin(uTime * (7.0 + vS * 4.0) + vS * 40.0) * sin(uTime * 3.1 + vS * 9.0);
+        float a = pow(max(1.0 - r, 0.0), 2.2) * uAmt * f; gl_FragColor = vec4(vec3(1.5, 0.82, 0.36) * a * 0.62, a);
+        #include <tonemapping_fragment>
+        #include <colorspace_fragment>
+      }` }), 160);
+    m.count = 0; m.frustumCulled = false; m.renderOrder = 2; m.name = 'night_pools'; m.visible = false; return m;
+  })();
+  group.add(poolMesh);
   const linkU = { uTime: { value: 0 }, uW: { value: 0.06 }, uColor: { value: new THREE.Color(1.0, 0.75, 0.28) } };
   const linkMesh = new THREE.Mesh(new THREE.BufferGeometry(), new THREE.ShaderMaterial({ uniforms: linkU, vertexShader: LINK_VERT, fragmentShader: LINK_FRAG, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, fog: false }));
   linkMesh.frustumCulled = false; linkMesh.renderOrder = 8; group.add(linkMesh);
@@ -332,6 +353,9 @@ export function createHub({ renderer, camera, audio, tier = 'high', post = null 
     }
     // central flagged path from the gate to the first terrace
     k.box('masonry', 3.4, 0.05, CD - FRONT_EDGE + 0.3, 0, 0.0, (CD + FRONT_EDGE) / 2, 0xc9b48c);
+    // [HUB-NIGHT] lantern braziers: the central aisle at every terrace front and along the forecourt path (the flames feed the night light pools)
+    for (let r = 0; r < 4; r++) for (const sx of [-2.5, 2.5]) k.brazier(sx, Z0 + r * PZ + PZ / 2 - 0.5, terraceH(r), 0.62);
+    for (const z of [FRONT_EDGE + 3.2, FRONT_EDGE + 8]) for (const sx of [-2.6, 2.6]) if (z < CD - 1) k.brazier(sx, z, 0, 0.62);
     staticParts = k.P; staticFx = k.fx;
     // cypress + olive in the forecourt
     const lg = []; const r = rngOf(5);
@@ -438,6 +462,8 @@ export function createHub({ renderer, camera, audio, tier = 'high', post = null 
   }
   function rebuildFx() {
     flameGroup.clear(); if (flames) flames = null;
+    { const mm = new THREE.Matrix4(); let n = 0; for (const f of buildFx.flames) { if (n >= 160) break; const gy = Math.max(groundAt(f.x, f.z), 0) + 0.05, rad = (3.2 + 2.2 * (f.s || 1)); mm.makeScale(rad, 1, rad).setPosition(f.x, f.y > 3.5 ? gy + 1.2 : gy, f.z); poolMesh.setMatrixAt(n++, mm); }
+      poolMesh.count = n; poolMesh.instanceMatrix.needsUpdate = true; }
     if (buildFx.flames.length) { flames = createFlames(buildFx.flames, { glowScale: 3.2 }); flameGroup.add(flames.group); }
     // smoke: 18 puffs per emitter
     const sm = buildFx.smoke, np = tier === 'low' ? 10 : 18, r = rngOf(3);
@@ -852,8 +878,11 @@ export function createHub({ renderer, camera, audio, tier = 'high', post = null 
   function applyPreset(p) {
     applyTOD(p, { rig, scene, sky, renderer, nightUniforms: [nightU] });
     for (let i = 0; i < MAXPLOT; i++) buildingUniforms.uGl.value[i] = clamp(p.night * 1.2);
-    const ei = 1 - 0.9 * clamp(p.night * 1.3); lib.roof.emissiveIntensity = lib.masonry.emissiveIntensity = lib.wood.emissiveIntensity = lib.cloth.emissiveIntensity = ei; lib.metal.emissiveIntensity = 0.3 + 0.5 * ei;
+    const ei = 1 - 0.6 * clamp(p.night * 1.3);   // [HUB-NIGHT] keep a cool lift in the shadow emissive so silhouettes survive lib.roof.emissiveIntensity = lib.masonry.emissiveIntensity = lib.wood.emissiveIntensity = lib.cloth.emissiveIntensity = ei; lib.metal.emissiveIntensity = 0.3 + 0.5 * ei;
     flames && flames.update(hubT, p.night);
+    { const nk = clamp((p.night - 0.3) / 0.55); poolU.uAmt.value = nk * (1 - 0.35 * rainAmt); buildingUniforms.uNightRim.value = nk; nightK = nk;   // [HUB-NIGHT]
+      if (post && post.uniforms && post.uniforms.uToe) post.uniforms.uToe.value = clamp(p.night * 1.3);
+      padMat.uniforms.uA.value = 0.45 + 0.4 * nk; ghostMat.opacity = ghostMatB.opacity = 0.4 + 0.22 * nk; rrMat.uniforms.uFill.value = 0.2 + 0.12 * nk; }
     smokeU.uLight.value.set(p.sunColor).lerp(new THREE.Color(0xd8d0e0), 0.45); smokeU.uDark.value.set(p.hemiGround).multiplyScalar(0.25);
     dust.setSunColor(p.sunColor);
     rayU.uSun.value.copy(rig.sunDir); rayU.uColor.value.set(p.sunColor).multiplyScalar(0.9);
@@ -862,6 +891,20 @@ export function createHub({ renderer, camera, audio, tier = 'high', post = null 
   }
   const dust = env.dust;
   function weatherState(St) { return weatherOverride || (LMg() ? LMg().weather(St, 'w' + St.week) : 'clear'); }
+  // [HUB-HEAT] heat haze = a thin shimmer around the distant horizon only. Amplitude is in pixels (about 1.1 px phone, 1.8 px desktop) divided by the width,
+  // scaled by tier (off on low, soft on medium), 0 on reduced motion. The band follows the horizon line of the orbit camera and fades out when it leaves the frame.
+  const _hd = new V3(), _hv = new V3(); let heatAmt = 0;
+  function heatStep(dt) {
+    const u = post.uniforms, k = tier === 'low' ? 0 : tier === 'medium' ? 0.7 : 1, tgt = heatTarget && k && !prefersReduced() ? 1 : 0;
+    heatAmt += (tgt - heatAmt) * Math.min(1, dt * 1.5);
+    if (heatAmt < 0.01) { u.uHeat.value = 0; return; }
+    const w = Math.max(1, orb.vw || 390), h = Math.max(1, orb.vh || 800);
+    camera.getWorldDirection(_hd); _hd.y = 0; if (_hd.lengthSq() < 1e-4) { u.uHeat.value = 0; return; }
+    _hv.copy(camera.position).addScaledVector(_hd.normalize(), 4000).setY(camera.position.y); _hv.project(camera);
+    const hy = _hv.y * 0.5 + 0.5, vis = clamp(1 - Math.abs(hy - 0.62) / 0.5);     // horizon far off screen: fade
+    u.uHeatBand.value.set(hy - 0.06, hy + 0.02); u.uHeatAsp.value = w / h;
+    u.uHeat.value = (1.15 + 0.7 * clamp((h - 500) / 400)) * clamp(h / 800, 0.6, 1.3) / w * k * heatAmt * vis;
+  }
   let rainAmt = 0, rainTarget = 0, heatTarget = 0, todKey = '', lastWeek = -1, liveT0 = 0, liveOff = 0, liveChk = 0;
   function refreshSky(St, instant) {
     if (St.week !== lastWeek) { lastWeek = St.week; liveT0 = hubT; liveOff = 0; }
@@ -1160,11 +1203,12 @@ export function createHub({ renderer, camera, audio, tier = 'high', post = null 
       dom.tabIndex = 0; dom.classList.add('lx-bl-focus'); dom.setAttribute('role', 'application'); dom.setAttribute('aria-label', 'Your ludus. Arrow keys or WASD pan the camera, Q and E rotate, plus and minus zoom.');
       dom.addEventListener('keydown', onKeyDown); dom.addEventListener('keyup', onKeyUp); dom.addEventListener('focus', onFocus); dom.addEventListener('blur', onBlurKb);
       try { audio && audio.attachUi && audio.attachUi(document.getElementById('ui'), { hover: true }); } catch (err) { /* audio optional */ }
-      orb.enabled = true; entered = true; orb.aspect = (dom.clientWidth || 1100) / (dom.clientHeight || 650); camera.aspect = orb.aspect; camera.updateProjectionMatrix();
+      orb.enabled = true; entered = true; orb.vw = dom.clientWidth || 1100; orb.vh = dom.clientHeight || 650; orb.aspect = orb.vw / orb.vh; camera.aspect = orb.aspect; camera.updateProjectionMatrix();
       hub.refresh(St, true); overview(true);
       return hub;
     },
     exit() {
+      if (post && post.uniforms) { if (post.uniforms.uToe) post.uniforms.uToe.value = 0; if (post.uniforms.uHeat) post.uniforms.uHeat.value = 0; }   // [HUB-NIGHT] leave the shared grade pass clean for the arena
       orb.enabled = false; entered = false; ptrs.clear(); try { audio && audio.ambient && audio.ambient.stop(); } catch (err) { /* audio optional */ }
       dom.removeEventListener('pointerdown', onDown); dom.removeEventListener('pointermove', onMove); dom.removeEventListener('pointerup', onUp); dom.removeEventListener('pointercancel', onUp);
       dom.removeEventListener('wheel', onWheel); dom.removeEventListener('contextmenu', onCtx); dom.removeEventListener('pointerleave', onLeave);
@@ -1184,6 +1228,7 @@ export function createHub({ renderer, camera, audio, tier = 'high', post = null 
       if (tod.k < 1) { tod.k = Math.min(1, tod.k + dt / 1.8); tod.cur = lerpTOD(tod.from, tod.to, ease(tod.k)); applyPreset(tod.cur); }
       const night = tod.cur ? tod.cur.night : 0;
       sky.update(camera, hubT); env.update(hubT, dt); if (flames) flames.update(hubT, night);
+      poolU.uTime.value = hubT; poolMesh.visible = poolU.uAmt.value > 0.02 && poolMesh.count > 0;
       rig.sun.target.position.copy(rig.shadowCenter);
       liveChk -= dt; if (liveChk <= 0 && S) { liveChk = 4; const off = hourOverride == null && !orb.follow ? clamp((hubT - liveT0) / 360, 0, 0.9) : liveOff; if (Math.abs(off - liveOff) > 0.035) { liveOff = off; refreshSky(S, false); } }   // the sun creeps toward sunset over a few minutes of one week
       placeCard(); audioTick(dt); moveFrame(dt, hubT);
@@ -1192,7 +1237,7 @@ export function createHub({ renderer, camera, audio, tier = 'high', post = null 
       if (sel && sel.type === 'glad') ringFor(selRing, sel); if (hover && hover.type === 'glad') ringFor(hovRing, hover);
       // rain / heat
       rainAmt += (rainTarget - rainAmt) * Math.min(1, dt * 1.2); rain.visible = rainAmt > 0.02; rainU.uAmt.value = rainAmt; rainU.uTime.value = hubT; rainU.uCenter.value.copy(orb.target);
-      if (post && post.uniforms && post.uniforms.uHeat) post.uniforms.uHeat.value += ((heatTarget * 0.6) - post.uniforms.uHeat.value) * Math.min(1, dt * 1.5);
+      if (post && post.uniforms && post.uniforms.uHeat) heatStep(dt);   // [HUB-HEAT] subtle horizon shimmer
       // god rays, wet stone and lightning (reduced motion: no flashes)
       rayAmt += (rayTarget - rayAmt) * Math.min(1, dt * 1.5); rayU.uInt.value = rayAmt * 0.75; rayU.uTime.value = hubT; rays.visible = rayAmt > 0.02 && !(rr.on || cine);   // MOVE: rearranging / the cinematic frees 3 draw calls (rays, links, pad rings) for its own meshes
       if (Math.abs(wetAmt - rainAmt) > 0.004) { wetAmt += (rainAmt - wetAmt) * Math.min(1, dt * 0.8); wet(wetAmt); }
@@ -1203,7 +1248,7 @@ export function createHub({ renderer, camera, audio, tier = 'high', post = null 
       if (gBlob && tier === 'low') { let n = 0; for (const a of actors.values()) { if (!a.rig.root.visible || n >= 12) continue; const rp = a.rig.root.position; _gm.makeScale(0.66, 1, 0.66).setPosition(rp.x, rp.y + 0.04, rp.z); gBlob.setMatrixAt(gBase + n++, _gm); } gBlob.count = gBase + n; gBlob.instanceMatrix.needsUpdate = true; } else if (gBlob && gBlob.count !== gBase) gBlob.count = gBase;
     },
     resize(w, h) {
-      orb.aspect = w / Math.max(1, h); camera.aspect = orb.aspect; camera.updateProjectionMatrix();
+      orb.vw = w; orb.vh = h; orb.aspect = w / Math.max(1, h); camera.aspect = orb.aspect; camera.updateProjectionMatrix();
       if (!orb.touched && entered && !orb.anim) overview(true);
     },
     pick: (cx, cy, e) => (e ? pickSlop({ clientX: cx, clientY: cy, pointerType: e.pointerType }) : pick(cx, cy)), focusPlot, focusGlad, setSelection, setHover, overview, focusHome() { preview = -1; hideCard(); setSelection(null); overview(); },
