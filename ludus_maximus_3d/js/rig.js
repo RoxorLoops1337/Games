@@ -1508,17 +1508,21 @@ export function buildGladiator(opts = {}) {
   };
   const rig = {
     root, body, joints: J, sockets: sk, mats, palette: pal, secondary: [], squash, flashState, build: bd, opts, look, glow, items, bones, rest,
-    parts: {}, gear: {}, skeleton: null, tag: '',
+    parts: {}, gear: {}, skeleton: null, tag: '', sweat: 0, exertionOverride: null, removed: [], removedSec: [], detail: DL,
     postUpdate: [], // fn(rig) run after IK each frame (e.g. shield stabilisers)
     setPalette(p) { Object.assign(pal, p); mats.skin.color.set(pal.skin); mats.hair.color.set(pal.hair); mats.cloth.color.set(pal.cloth); mats.plume.color.set(pal.plume); mats.metal.color.set(pal.metal); if (mats.clothF) { mats.clothF.color.set(pal.cloth); mats.plumeF.color.set(pal.plume); mats.hairF.color.set(pal.hair); } },
     flash(dur = 0.12, color) { flashState.t = dur; flashState.dur = dur; if (color) flashState.color.set(color); },
     squashKick(a) { squash.kick(a); },
+    /** 0..1 sweat sheen target (fight view may push stamina here); null = follow the animator's own exertion (attacks, running, hits, decays slowly) */
+    setExertion(v) { rig.exertionOverride = v === null || v === undefined ? null : clamp(v, 0, 1); },
+    /** world vector pointing from this fighter toward the attacker -> the local {x (left), z (forward)} direction the Animator reaction helpers expect */
+    localDir(wx, wz) { const y = rig.root.rotation.y, c = Math.cos(y), sn = Math.sin(y), l = Math.hypot(wx, wz) || 1; return { x: (wx * c - wz * sn) / l, z: (wx * sn + wz * c) / l }; },
     // attach a cloth/chain secondary effect; returns it
     addSecondary(sec) { rig.secondary.push(sec); const m = sec.mesh || sec.group; root.add(m); return sec; },
     // queue geometry (authored in `obj` local space; obj is a joint, socket or bone-like holder) into the merged skinned body
     add(mat, geo, obj) {
       let b = obj; while (b && !boneSet.has(b)) b = b.parent; if (!b) throw new Error('rig.add: object is not under a bone');
-      const g = geo.clone(); col1(g); if (!g.attributes.normal) g.computeVertexNormals(); if (mat === 'skin' && g.attributes.uv && !(g.userData && g.userData.faceUV)) g.deleteAttribute('uv'); /* only the skull, torso and limbs sample the atlas */ if (mat === 'hair' && DL > 0 && !(g.userData && g.userData.cards)) { const n = g.attributes.position.count, u = new Float32Array(n * 2); for (let i = 0; i < n; i++) { u[i * 2] = 0.5; u[i * 2 + 1] = 0.985; } g.setAttribute('uv', new THREE.BufferAttribute(u, 2)); } /* scalp, curls, beard: opaque root texel */ g.applyMatrix4(restOf(obj)); items.push({ mat, geo: g, bone: bones.indexOf(b), tag: rig.tag || '' }); return g;
+      const g = geo.clone(); col1(g); if (!g.attributes.normal) g.computeVertexNormals(); if (mat === 'skin' && g.attributes.uv && !(g.userData && g.userData.faceUV)) g.deleteAttribute('uv'); /* only the skull, torso and limbs sample the atlas */ if (mat === 'hair' && DL > 0 && !(g.userData && g.userData.cards)) { const n = g.attributes.position.count, u = new Float32Array(n * 2); for (let i = 0; i < n; i++) { u[i * 2] = 0.5; u[i * 2 + 1] = 0.985; } g.setAttribute('uv', new THREE.BufferAttribute(u, 2)); } /* scalp, curls, beard: opaque root texel */ g.applyMatrix4(restOf(obj)); items.push({ mat, geo: g, bone: bones.indexOf(b), tag: rig.tag || '', obj }); return g;
     },
     addMaterial(key, mat, shade, xo) { mats[key] = mat; shadePatch(mat, shade || 'cloth', Object.assign({ blood: bloodU, gash: false }, xo)); if (!mat.userData.base) mat.userData.base = mat.emissive.clone(); return mat; },
     addBone(obj) { bones.push(obj); boneSet.add(obj); return bones.length - 1; },
@@ -1561,6 +1565,7 @@ export function buildGladiator(opts = {}) {
       for (const f of rig.postUpdate) f(rig);
       for (const s of rig.secondary) s.update(dt);
       const sq = squash.update(dt); body.scale.set(bd.height / Math.sqrt(1 + sq), bd.height * (1 + sq), bd.height / Math.sqrt(1 + sq));
+      { const tgt = rig.exertionOverride !== null ? rig.exertionOverride : rig.animator.exert; rig.sweat += (tgt - rig.sweat) * Math.min(1, dt * (tgt > rig.sweat ? 0.7 : 0.12)); bloodU.uSweat.value = rig.sweat; }
       if (blood.fresh > 0) { blood.fresh = Math.max(0, blood.fresh - dt / 9); bloodU.uBFresh.value = blood.fresh; }
       if (flashState.t > 0) { flashState.t = Math.max(0, flashState.t - dt); }
       const f = flashState.t > 0 ? flashState.t / flashState.dur : 0;
