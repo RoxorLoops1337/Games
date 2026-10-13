@@ -12,10 +12,11 @@ import { initScreens, startPlace, ghostTo, cancelPlace, confirmPlace, selectWorl
 import { handleEvents, initEvents, ambientSounds, preEvents } from './ui/events.js';
 import { initTour, tourTick } from './ui/tour.js';
 import { checkDaily } from './ui/celebrate.js';
+import { initTheme } from './ui/theme.js';
 
 const qs = new URLSearchParams(location.search);
 const view = new View($('#gl')); S.view = view;
-initReduce(); installPress();
+initReduce(); installPress(); initTheme();
 document.querySelectorAll('[data-ic]').forEach((e) => { e.innerHTML = icon(e.dataset.ic, +e.dataset.s || 20); });
 if (view.tier === 'low') document.body.classList.add('lowfx');
 S.haptics = store.get('haptics', true);

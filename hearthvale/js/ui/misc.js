@@ -1,4 +1,5 @@
 // Chat, settings, daily gift calendar with the chest, the visitor card and the village profile.
+import { THEMES, currentTheme, setTheme } from './theme.js';
 import { Audio } from '../audio.js';
 import { icon } from '../icons.js';
 import { S, $, esc, fmt, store, cmd, coinFrom, have, goodName, GOOD, mmss, hms } from './state.js';
@@ -39,6 +40,7 @@ register({
     const q = S.view.quality, muted = Audio.isMuted(), solo = S.link.kind === 'solo';
     let h = `<div class="sec"><h4>${icon('sound', 22)} Sound</h4>${VOL.map(([ch, l]) => `<label class="slide"><span>${l}</span><input type="range" min="0" max="100" value="${Math.round((Audio.getVolume(ch) ?? 0.7) * 100)}" data-ch="${ch}" aria-label="${l}"></label>`).join('')}
       <div class="set"><span>${icon(muted ? 'mute' : 'sound', 22)} Mute everything</span><button class="sw ${muted ? 'on' : ''}" data-a="mute" aria-label="Mute" data-snd="toggle"></button></div></div>`;
+    h += `<div class="sec"><h4>${icon('sparkle', 22)} Interface style</h4><p class="small">Pick the look of every button and panel.</p><div class="uistyles">${THEMES.map((t) => `<button class="uis ${currentTheme() === t.id ? 'on' : ''}" data-a="uistyle" data-id="${t.id}" data-snd="tap2" aria-label="${esc(t.name)}"><span class="sw3">${t.swatch.map((c) => `<i style="background:${c}"></i>`).join('')}</span><b>${esc(t.name)}</b><small>${esc(t.tech)}</small></button>`).join('')}</div></div>`;
     h += `<div class="sec"><h4>${icon('camera', 22)} Looks and feel</h4><div class="label2">Picture quality</div><div class="seg">${['auto', 'low', 'medium', 'high'].map((t) => `<button class="${q === t ? 'on' : ''}" data-a="quality" data-q="${t}" data-snd="tab">${t[0].toUpperCase() + t.slice(1)}</button>`).join('')}</div><p class="small">Auto adapts to your device (now: ${esc(S.view.tier)}).</p>
       <div class="set"><span>${icon('sparkle', 22)} Reduce motion</span><button class="sw ${reduced() ? 'on' : ''}" data-a="reduce" aria-label="Reduce motion" data-snd="toggle"></button></div>
       <div class="set"><span>${icon('bolt', 22)} Vibration</span><button class="sw ${S.haptics !== false ? 'on' : ''}" data-a="haptics" aria-label="Vibration" data-snd="toggle"></button></div></div>`;
@@ -56,7 +58,8 @@ register({
     }
   },
   act(a, el, S0, p, api) {
-    if (a === 'mute') { Audio.toggleMute(); api.rerender(); }
+    if (a === 'uistyle') { setTheme(el.dataset.id).then(() => api.rerender()); }
+    else if (a === 'mute') { Audio.toggleMute(); api.rerender(); }
     else if (a === 'quality') { S.view.setQuality(el.dataset.q); document.body.classList.toggle('lowfx', el.dataset.q === 'low'); api.rerender(); }
     else if (a === 'reduce') { setReduced(!reduced()); api.rerender(); }
     else if (a === 'haptics') { S.haptics = !(S.haptics !== false); store.set('haptics', S.haptics); if (S.haptics) haptic(30); api.rerender(); }

@@ -1,0 +1,159 @@
+/* Rendered 3D: WebGL-rendered PBR button sprites (see render3d.js and render3d.md). Every rule is scoped under html[data-ui="render3d"].
+   What I learned (research notes):
+   - Mobile-game buttons read as objects because of THICKNESS (a visible, darker, more saturated under-edge), a glossy highlight band in the top third, bounce light in the lower lip and a tight contact shadow that shrinks when the button is pressed.
+   - three.js ExtrudeGeometry bevels come out flat shaded; a smoother plate comes from concentric inset contours with a bevel-then-dome height profile, vertex-colour gradients (light top, saturated low) and MeshPhysicalMaterial clearcoat over a PMREM studio environment.
+   - An orthographic camera with an oblique (sheared) projection keeps the face undistorted and shows only the bottom wall; with directional lights every column in the middle of a sprite is identical, which is what makes CSS 9-slice stretching exact.
+   - CSS border-image with slice ... fill, border-image-width (css px) and border-image-outset lets the soft shadow and the wall live in the transparent margin of the sprite while the element box stays the face, so layout is untouched.
+   - canvas.toBlob() snapshots the WebGL canvas synchronously (preserveDrawingBuffer), so sprites encode off-thread while the next one renders, then reach CSS as blob: URLs in custom properties on :root.
+   - Pressed state = a second render (thinner wall, darker, no glint) plus a translate equal to the wall that was lost: the face goes down and the base stays put. Text keeps a stroked outline (paint-order: stroke fill) so it reads on any colour. */
+
+html[data-ui="render3d"]{
+  --r3-ink:#5a3f2c;--r3-tx:#5a3f2c;--r3-st:#fff;--r3-sw:3.5px;
+  --r3-up:var(--r3-pill-cream-up);--r3-dn:var(--r3-pill-cream-dn);--r3-ru:var(--r3-round-cream-up);--r3-rd:var(--r3-round-cream-dn);
+  --r3-ease:cubic-bezier(.3,1.7,.55,1);
+}
+/* defaults for the plates sit in :where() (zero specificity) so the colour variants below always win, even for nested cards */
+:where(html[data-ui="render3d"]) :where(.card,.sec,.stat,.tech,.wcard,.fieldchip,#track,.evcard,.phero,.rowi,.sellrow,.pr,.quest,.ach,.day,.tb,#mini,.tcard2,#dock,#place,#festival,.banner,.uis,.stage,.alert,.good,#saveCard,.unl){--r3-cu:var(--r3-card-cCream-up);--r3-cd:var(--r3-card-cCream-dn)}
+:where(html[data-ui="render3d"]) :where(.bar i,.xpb i,#track .qp i,.mbar i,.cap u){--r3-bar:var(--r3-bar-gold)}
+
+/* ---------- colour variants (custom properties only) ---------- */
+html[data-ui="render3d"] .b-green{--r3-up:var(--r3-pill-green-up);--r3-dn:var(--r3-pill-green-dn);--r3-ru:var(--r3-round-green-up);--r3-rd:var(--r3-round-green-dn);--r3-tx:#fff;--r3-st:#2b6a1d;--c1:#9be877;--c2:#48ad34;--ed:#2f7d22;--sh:rgba(40,90,30,.34)}
+html[data-ui="render3d"] .b-gold{--r3-up:var(--r3-pill-gold-up);--r3-dn:var(--r3-pill-gold-dn);--r3-ru:var(--r3-round-gold-up);--r3-rd:var(--r3-round-gold-dn);--r3-tx:#fff;--r3-st:#94540a;--c1:#ffe88a;--c2:#ffbb33;--ed:#c98a14;--sh:rgba(150,100,10,.34)}
+html[data-ui="render3d"] .b-blue{--r3-up:var(--r3-pill-blue-up);--r3-dn:var(--r3-pill-blue-dn);--r3-ru:var(--r3-round-blue-up);--r3-rd:var(--r3-round-blue-dn);--r3-tx:#fff;--r3-st:#1f5b8c;--c1:#b4e6fb;--c2:#45a9e0;--ed:#2a78ab;--sh:rgba(30,100,160,.32)}
+html[data-ui="render3d"] .b-pink{--r3-up:var(--r3-pill-pink-up);--r3-dn:var(--r3-pill-pink-dn);--r3-ru:var(--r3-round-pink-up);--r3-rd:var(--r3-round-pink-dn);--r3-tx:#fff;--r3-st:#a02a58;--c1:#ffc9da;--c2:#ee6b97;--ed:#b83c68;--sh:rgba(170,40,90,.3)}
+html[data-ui="render3d"] .b-red{--r3-up:var(--r3-pill-red-up);--r3-dn:var(--r3-pill-red-dn);--r3-ru:var(--r3-round-red-up);--r3-rd:var(--r3-round-red-dn);--r3-tx:#fff;--r3-st:#9a2822;--c1:#ffa9a4;--c2:#ea645c;--ed:#b53c36;--sh:rgba(130,40,30,.3)}
+html[data-ui="render3d"] .b-lilac{--r3-up:var(--r3-pill-lilac-up);--r3-dn:var(--r3-pill-lilac-dn);--r3-ru:var(--r3-round-lilac-up);--r3-rd:var(--r3-round-lilac-dn);--r3-tx:#fff;--r3-st:#4d379a;--c1:#ddd0ff;--c2:#9c84e6;--ed:#6a52b8;--sh:rgba(90,60,170,.3)}
+html[data-ui="render3d"] .pill.coin{--r3-up:var(--r3-pill-gold-up);--r3-dn:var(--r3-pill-gold-dn);--r3-tx:#fff;--r3-st:#94540a;--c1:#ffe88a;--c2:#ffbb33;--ed:#c98a14}
+html[data-ui="render3d"] .pill.scr{--r3-up:var(--r3-pill-blue-up);--r3-dn:var(--r3-pill-blue-dn);--r3-tx:#fff;--r3-st:#1f5b8c;--c1:#b4e6fb;--c2:#45a9e0;--ed:#2a78ab}
+html[data-ui="render3d"] .gp.full{--r3-up:var(--r3-pill-pink-up);--r3-dn:var(--r3-pill-pink-dn);--r3-tx:#fff;--r3-st:#a02a58;--c1:#ffc9da;--c2:#ee6b97;--ed:#b83c68}
+html[data-ui="render3d"] .gp.more{--r3-up:var(--r3-pill-blue-up);--r3-dn:var(--r3-pill-blue-dn);--r3-tx:#fff;--r3-st:#1f5b8c;--c1:#b4e6fb;--c2:#45a9e0;--ed:#2a78ab}
+html[data-ui="render3d"] .sh-head{--r3-up:var(--r3-pill-green-up);--r3-dn:var(--r3-pill-green-up);--r3-tx:#fff;--r3-st:#2b6a1d;--r3-sw:5px}
+html[data-ui="render3d"] .chipb.on,html[data-ui="render3d"] .seg button.on{--r3-up:var(--r3-pill-green-up);--r3-dn:var(--r3-pill-green-dn);--r3-tx:#fff;--r3-st:#2b6a1d;--c1:#9be877;--c2:#48ad34;--ed:#2f7d22}
+html[data-ui="render3d"] #tools .rb:nth-child(2),html[data-ui="render3d"] #tools .rb.visitor{--r3-ru:var(--r3-round-mint-up);--r3-rd:var(--r3-round-mint-dn);--c1:#e9ffd8;--c2:#bdeba0;--ed:#8cc86d}
+html[data-ui="render3d"] #tools .rb:nth-child(3),html[data-ui="render3d"] .rb.alt{--r3-ru:var(--r3-round-butter-up);--r3-rd:var(--r3-round-butter-dn);--c1:#fff6cf;--c2:#ffe28a;--ed:#d9a921}
+html[data-ui="render3d"] #tools .rb:nth-child(4){--r3-ru:var(--r3-round-gold-up);--r3-rd:var(--r3-round-gold-dn);--c1:#fff0b8;--c2:#ffd35a;--ed:#d19a14}
+html[data-ui="render3d"] #tools .rb:nth-child(5){--r3-ru:var(--r3-round-sky-up);--r3-rd:var(--r3-round-sky-dn);--c1:#e6f7ff;--c2:#b9e3fa;--ed:#82b9d8}
+html[data-ui="render3d"] #tools .rb:nth-child(6){--r3-ru:var(--r3-round-rose-up);--r3-rd:var(--r3-round-rose-dn);--c1:#ffeaf1;--c2:#ffc4d6;--ed:#e29bb0}
+html[data-ui="render3d"] .b.big{--r3-sw:5px}
+html[data-ui="render3d"] :is(.badge-new,.ribbon){--r3-sw:2.2px}
+html[data-ui="render3d"] .tb .tc{--r3-sw:2.4px}
+html[data-ui="render3d"] .b.small-b,html[data-ui="render3d"] .mini-b{--r3-sw:3.4px}
+
+/* ---------- text: a strong outline on every control ---------- */
+html[data-ui="render3d"] :is(.b,.pill,.mini-b,.sh-head,.pip,.badge-new,.av .lv,.label .lv,.tb .tc,.qitem .qn,.ribbon){color:var(--r3-tx);-webkit-text-stroke:var(--r3-sw) var(--r3-st);paint-order:stroke fill;text-shadow:0 2px 0 var(--r3-st);letter-spacing:.2px}
+html[data-ui="render3d"] :is(.gp,.chipb,.rb),html[data-ui="render3d"] #card{color:var(--r3-tx);-webkit-text-stroke:3px #fff;paint-order:stroke fill;text-shadow:none;letter-spacing:.1px}
+html[data-ui="render3d"] .gp.full,html[data-ui="render3d"] .gp.more,html[data-ui="render3d"] .chipb.on{-webkit-text-stroke:var(--r3-sw) var(--r3-st);text-shadow:0 2px 0 var(--r3-st)}
+html[data-ui="render3d"] .b:is(.b-cream,:not([class*="b-"])){-webkit-text-stroke:3.4px #fff;text-shadow:0 1px 0 rgba(255,255,255,.9)}
+html[data-ui="render3d"] .rb{-webkit-text-stroke-width:0}
+html[data-ui="render3d"] #card #ptitle{-webkit-text-stroke:2.5px #fff;text-shadow:none;color:var(--lilac2)}
+html[data-ui="render3d"] .gp.more{--r3-sw:2px}
+html[data-ui="render3d"] .gp small,html[data-ui="render3d"] .b small,html[data-ui="render3d"] .pill small{-webkit-text-stroke-width:2.6px}
+html[data-ui="render3d"] :is(.b,.rb,.pill,.gp,.mini-b) .ic{filter:drop-shadow(0 1.5px 0 rgba(60,30,10,.42)) drop-shadow(0 0 1px rgba(255,255,255,.4))}
+html[data-ui="render3d"] .b.off,html[data-ui="render3d"] .rb.off{opacity:.72;filter:saturate(.4) brightness(1.05)}
+
+/* ---------- fallback look: until the sprites exist, or when WebGL is unavailable ---------- */
+html[data-ui="render3d"]:not([data-r3~="pill"]) :is(.b,.pill,.gp,#card,.mini-b,.chipb):not(.round):not(#quick):not(.stepper .b){background:linear-gradient(rgba(255,255,255,.55),rgba(255,255,255,0) 46%),linear-gradient(var(--c1,#fffefa),var(--c2,#ffeec9) 70%);border:2px solid rgba(255,255,255,.5);box-shadow:inset 0 2px 0 rgba(255,255,255,.75),inset 0 -4px 0 rgba(0,0,0,.14),0 0 0 2px var(--ed,#dcbb78),0 5px 0 2px var(--ed,#dcbb78),0 10px 12px var(--sh,rgba(90,63,44,.24))}
+html[data-ui="render3d"]:not([data-r3~="round"]) :is(.b.round,.rb,#quick,.stepper .b,.emotes .b){background:radial-gradient(ellipse 60% 34% at 50% 24%,rgba(255,255,255,.7),rgba(255,255,255,0)),linear-gradient(var(--c1,#fffefa),var(--c2,#ffeec9) 70%);border:2px solid rgba(255,255,255,.5);box-shadow:inset 0 2px 0 rgba(255,255,255,.75),inset 0 -4px 0 rgba(0,0,0,.14),0 0 0 2px var(--ed,#dcbb78),0 5px 0 2px var(--ed,#dcbb78),0 10px 12px var(--sh,rgba(90,63,44,.24))}
+html[data-ui="render3d"]:not([data-r3~="pill"]) :is(.b,.pill,.gp,.mini-b):not(.round):active,html[data-ui="render3d"]:not([data-r3~="round"]) :is(.b.round,.rb,#quick):active{transform:translateY(4px) scale(.985);box-shadow:inset 0 2px 0 rgba(255,255,255,.4),inset 0 -2px 0 rgba(0,0,0,.18),0 0 0 2px var(--ed,#dcbb78),0 1px 0 2px var(--ed,#dcbb78),0 3px 5px var(--sh,rgba(90,63,44,.24))}
+
+/* ---------- sprites: pill family (9-slice border-image) ---------- */
+html[data-ui="render3d"][data-r3~="pill"] :is(.b,.pill,.gp,#card,.mini-b,.chipb,.sh-head,.sh-tabs .ind){background:none;box-shadow:none;border:3px solid transparent;border-image-source:var(--r3-up);border-image-slice:var(--r3-pill-slice) fill;border-image-width:var(--r3-pill-width);border-image-outset:var(--r3-pill-outset);border-image-repeat:stretch;transition:transform .45s var(--r3-ease),filter .15s,opacity .2s}
+html[data-ui="render3d"][data-r3~="pill"] :is(.b,.pill,.gp,#card,.mini-b,.chipb):not(.round):active{border-image-source:var(--r3-dn);transform:translateY(3px) perspective(260px) rotateX(var(--r3-rx,0deg)) rotateY(var(--r3-ry,0deg)) scale(.985);transition-duration:.05s}
+html[data-ui="render3d"][data-r3~="pill"] .sh-tabs .ind{border-image-outset:0;transition:transform .35s var(--r3-ease),width .3s}
+html[data-ui="render3d"][data-r3~="pill"] .b.off:active{border-image-source:var(--r3-up);transform:none}
+html[data-ui="render3d"] #bBuild{border-width:3px}
+
+/* ---------- sprites: round family ---------- */
+html[data-ui="render3d"][data-r3~="round"] :is(.b.round,.rb,#quick,.stepper .b,.emotes .b,.mini-b.x,.mini-b[data-m=stop],.pinb){background:none;box-shadow:none;border:3px solid transparent;border-radius:50%;border-image-source:var(--r3-ru);border-image-slice:var(--r3-round-slice) fill;border-image-width:var(--r3-round-width);border-image-outset:var(--r3-round-outset);border-image-repeat:stretch;transition:transform .45s var(--r3-ease),filter .15s,opacity .2s}
+html[data-ui="render3d"][data-r3~="round"] :is(.b.round,.rb,#quick,.stepper .b,.emotes .b,.mini-b.x,.mini-b[data-m=stop],.pinb):active{border-image-source:var(--r3-rd);transform:translateY(3px) perspective(260px) rotateX(var(--r3-rx,0deg)) rotateY(var(--r3-ry,0deg)) scale(.985);transition-duration:.05s}
+html[data-ui="render3d"][data-r3~="round"] .b.off:active{border-image-source:var(--r3-ru);transform:none}
+html[data-ui="render3d"] #quick{animation:r3bob 2s ease-in-out infinite}
+html[data-ui="render3d"][data-r3~="roundL"] #quick{border-image-source:var(--r3-roundL-gold-up);border-image-slice:var(--r3-roundL-slice) fill;border-image-width:var(--r3-roundL-width);border-image-outset:var(--r3-roundL-outset)}
+html[data-ui="render3d"][data-r3~="roundL"] #quick:active{border-image-source:var(--r3-roundL-gold-dn)}
+@keyframes r3bob{50%{translate:0 -3px}}
+
+/* ---------- sprites: card family (plates) ---------- */
+html[data-ui="render3d"][data-r3~="card"] :is(.card,.sec,.stat,.tech,.wcard,.fieldchip,#track,.evcard,.phero,.rowi,.sellrow,.pr,.quest,.ach,.day,.tb,#mini,.tcard2,#dock,#place,#festival,.banner,.uis,.stage,.alert,.good,#saveCard,.unl){background:none;box-shadow:none;border:3px solid transparent;border-image-source:var(--r3-cu);border-image-slice:var(--r3-card-slice) fill;border-image-width:var(--r3-card-width);border-image-outset:var(--r3-card-outset);border-image-repeat:stretch;transition:transform .4s var(--r3-ease),filter .15s}
+html[data-ui="render3d"][data-r3~="card"] :is(.card,.fieldchip,.rowi,.stat):active{border-image-source:var(--r3-cd);transform:translateY(3px) scale(.985)}
+html[data-ui="render3d"] :is(.card.lock,.sec.lock,.rowi.lock,.stage.lock){--r3-cu:var(--r3-card-cGrey-up);--r3-cd:var(--r3-card-cGrey-up)}
+html[data-ui="render3d"] :is(.card.done,.sec.done,.sec.up,.tech.done,.nextup,.pr.me,.quest.done,.stage.built,.day.done,.t-good,.banner.green,#saveCard,.ach.got,.uis.on){--r3-cu:var(--r3-card-cGreen-up);--r3-cd:var(--r3-card-cGreen-dn)}
+html[data-ui="render3d"] :is(.evcard,.phero){--r3-cu:var(--r3-card-cBlue-up)}
+html[data-ui="render3d"] :is(.evcard.on,.t-pink,.t-bad,#festival,.alert,.good.full){--r3-cu:var(--r3-card-cPink-up)}
+html[data-ui="render3d"] :is(.stage.now,.day.today,.t-gold,.t-warn,.banner.gold){--r3-cu:var(--r3-card-cGold-up)}
+html[data-ui="render3d"] .day.big{--r3-cu:var(--r3-card-cLilac-up)}
+html[data-ui="render3d"] :is(.t-good,.t-warn,.t-bad,.t-gold,.t-pink,.tb)::after{background:#fff0cc;border:0;box-shadow:2px 2px 0 #e0bd78;border-radius:0 0 5px 0}
+html[data-ui="render3d"] #track{transform:rotate(-1.2deg)}
+html[data-ui="render3d"] #track::before{border-color:rgba(190,150,80,.5)}
+
+/* ---------- the sheet and the level-up card: a rendered frame around the paper ---------- */
+html[data-ui="render3d"][data-r3~="frame"] :is(.sheet,.ov-card){border:4px solid transparent;border-image-source:var(--r3-frame-cream);border-image-slice:var(--r3-frame-slice);border-image-width:var(--r3-frame-width);border-image-outset:var(--r3-frame-outset);border-image-repeat:stretch}
+html[data-ui="render3d"] .sheet{box-shadow:0 14px 34px rgba(60,40,20,.38)}
+html[data-ui="render3d"] .ov-card{box-shadow:0 18px 40px rgba(40,20,60,.5)}
+html[data-ui="render3d"] .photo-ov .ov-card{box-shadow:none}
+html[data-ui="render3d"] .sh-tabs,html[data-ui="render3d"] .seg{background:linear-gradient(#e6cf9c,#f1dfb2);box-shadow:inset 0 3px 4px rgba(120,80,20,.4),inset 0 -1px 0 rgba(255,255,255,.7),0 1px 0 #fff}
+html[data-ui="render3d"] button.tab{-webkit-text-stroke:3px #fff;paint-order:stroke fill}
+html[data-ui="render3d"] .seg button{-webkit-text-stroke:3px #fff;paint-order:stroke fill}
+
+/* ---------- tubes: rendered fills in a deep glass trough ---------- */
+html[data-ui="render3d"] .bar,html[data-ui="render3d"] .xpb,html[data-ui="render3d"] #track .qp,html[data-ui="render3d"] .mbar{background:linear-gradient(#cdb27a,#e9d6a6);box-shadow:inset 0 3px 4px rgba(110,70,20,.5),inset 0 -1px 0 rgba(255,255,255,.75),0 1px 0 #fff}
+html[data-ui="render3d"][data-r3~="bar"] :is(.bar i,.xpb i,#track .qp i,.mbar i){background:none;box-shadow:none;border:0 solid transparent;border-image-source:var(--r3-bar);border-image-slice:var(--r3-bar-slice) fill;border-image-width:var(--r3-bar-width);border-image-repeat:stretch}
+html[data-ui="render3d"][data-r3~="bar"] .bar i::after{display:none}
+html[data-ui="render3d"] .bar.g i,html[data-ui="render3d"] .xpb i,html[data-ui="render3d"] #track .qp i,html[data-ui="render3d"] .cap u{--r3-bar:var(--r3-bar-green)}
+html[data-ui="render3d"] .bar.bb i{--r3-bar:var(--r3-bar-blue)}
+html[data-ui="render3d"] .bar.p i,html[data-ui="render3d"] .mbar i{--r3-bar:var(--r3-bar-pink)}
+html[data-ui="render3d"] .bar.l i{--r3-bar:var(--r3-bar-lilac)}
+html[data-ui="render3d"] .bar.r i,html[data-ui="render3d"] .mbar.low i{--r3-bar:var(--r3-bar-red)}
+
+/* ---------- small round things: pips, new badges, level chips ---------- */
+html[data-ui="render3d"][data-r3~="dot"] :is(.pip,.badge-new,.av .lv,.label .lv,.qitem .qn,.tb .tc,.ribbon){border:0;box-shadow:none;background:var(--r3-dot) 0 0/100% 100% no-repeat;--r3-dot:var(--r3-dot-red);overflow:visible}
+html[data-ui="render3d"][data-r3~="dot"] .pip{min-width:25px;height:25px;top:-9px;right:-8px;line-height:21px;font-size:12.5px}
+html[data-ui="render3d"][data-r3~="dot"] button.tab .pip{top:0;right:2px;min-width:21px;height:21px;line-height:17px;font-size:11px;--r3-sw:2.6px}
+html[data-ui="render3d"][data-r3~="dot"] .pip.dot{min-width:19px;width:19px;height:19px;top:-6px;right:-5px}
+html[data-ui="render3d"][data-r3~="dot"] .av .lv{--r3-dot:var(--r3-dot-green);min-width:28px;height:28px;right:-8px;bottom:-9px;line-height:24px}
+html[data-ui="render3d"][data-r3~="dot"] .label .lv{--r3-dot:var(--r3-dot-green);padding:0 7px}
+html[data-ui="render3d"][data-r3~="dot"] .qitem .qn{--r3-dot:var(--r3-dot-green)}
+html[data-ui="render3d"][data-r3~="dot"] .tb .tc{--r3-dot:var(--r3-dot-pink);padding:0 9px}
+html[data-ui="render3d"][data-r3~="dot"] .badge-new{--r3-dot:var(--r3-dot-red);padding:2px 10px 4px;line-height:14px}
+html[data-ui="render3d"][data-r3~="dot"] .badge-new.sale,html[data-ui="render3d"][data-r3~="dot"] .ribbon{--r3-dot:var(--r3-dot-pink)}
+html[data-ui="render3d"] .av .lv,html[data-ui="render3d"] .label .lv,html[data-ui="render3d"] .qitem .qn,html[data-ui="render3d"] .pip{--r3-st:#7a1f1a}
+html[data-ui="render3d"] .av .lv,html[data-ui="render3d"] .label .lv,html[data-ui="render3d"] .qitem .qn{--r3-st:#2b6a1d}
+html[data-ui="render3d"] .tb .tc,html[data-ui="render3d"] .ribbon,html[data-ui="render3d"] .badge-new.sale{--r3-st:#a02a58}
+html[data-ui="render3d"] .badge-new{--r3-st:#8a1f1a}
+html[data-ui="render3d"] .badge-new.sale{--r3-st:#a02a58}
+html[data-ui="render3d"] :is(.pip,.badge-new,.av .lv,.label .lv,.qitem .qn,.tb .tc,.ribbon){--r3-tx:#fff;border-color:transparent}
+html[data-ui="render3d"] :is(.pip,.av .lv,.label .lv,.qitem .qn){--r3-sw:3px}
+
+/* ---------- rings and medallions ---------- */
+html[data-ui="render3d"][data-r3~="ring"] .th::after,html[data-ui="render3d"][data-r3~="ring"] .av .face::after{content:"";position:absolute;inset:-3px;pointer-events:none;border-radius:50%;border:1px solid transparent;border-image:var(--r3-ring-gold) 50% / 50% stretch;z-index:3}
+html[data-ui="render3d"][data-r3~="ring"] :is(.bic,.ov-ic,.qitem,.skill .si,.slot.full,.sh-ic img){box-shadow:0 4px 8px rgba(60,40,20,.28);border:1px solid transparent;border-image:var(--r3-ring-gold) 50% / 50% stretch}
+html[data-ui="render3d"] .th{box-shadow:none}
+html[data-ui="render3d"] .th.sm{box-shadow:none}
+html[data-ui="render3d"] .av .face{box-shadow:none}
+
+/* ---------- level badge ---------- */
+html[data-ui="render3d"][data-r3~="seal"] .lvlbadge{background:var(--r3-seal-green) center/100% 100% no-repeat;filter:drop-shadow(0 8px 6px rgba(30,70,20,.4))}
+html[data-ui="render3d"][data-r3~="seal"] .lvlbadge .ic{opacity:0}
+html[data-ui="render3d"] .lvlnum{-webkit-text-stroke:8px #2b6a1d;text-shadow:0 5px 0 #2b6a1d}
+html[data-ui="render3d"] .jelly{-webkit-text-stroke-width:7px}
+
+/* ---------- switches and sliders ---------- */
+html[data-ui="render3d"] .sw{background:linear-gradient(#bfa77a,#d9c5a0);border:3px solid #fff;box-shadow:inset 0 3px 5px rgba(90,60,20,.5),0 2px 0 #e4c98a}
+html[data-ui="render3d"] .sw.on{background:linear-gradient(#3f9f28,#76d24e)}
+html[data-ui="render3d"][data-r3~="dot"] .sw::after{top:-3px;left:-3px;width:34px;height:34px;box-shadow:none;background:var(--r3-dot-cream) 0 0/100% 100% no-repeat;transition:transform .35s var(--r3-ease)}
+html[data-ui="render3d"][data-r3~="dot"] .sw.on::after{transform:translateX(24px)}
+html[data-ui="render3d"][data-r3~="dot"] input[type=range]::-webkit-slider-thumb{width:38px;height:38px;margin-top:-14px;border:0;border-radius:0;box-shadow:none;background:var(--r3-dot-cream) 0 0/100% 100% no-repeat}
+html[data-ui="render3d"] input[type=range]::-webkit-slider-runnable-track{background:linear-gradient(90deg,#5fc43a var(--p,50%),#dcc693 var(--p,50%));box-shadow:inset 0 3px 4px rgba(110,70,20,.5),0 1px 0 #fff}
+
+/* ---------- strip and clipping containers need room for the rendered shadows ---------- */
+html[data-ui="render3d"] #strip{padding:10px 22px 15px 6px}
+html[data-ui="render3d"] .catrow{padding:4px 6px 14px}
+html[data-ui="render3d"] .quick{padding:3px 4px 14px}
+
+/* ---------- life: shine sweep on hero buttons, soft idle breathing on the dock hero ---------- */
+html[data-ui="render3d"] .shine::after{background:linear-gradient(100deg,transparent 40%,rgba(255,255,255,.55) 50%,transparent 60%) 0 0/260% 100% no-repeat;background-position:220% 0;mix-blend-mode:soft-light}
+html[data-ui="render3d"] #bBuild{animation:r3breath 3.4s ease-in-out infinite}
+@keyframes r3breath{50%{translate:0 -2px}}
+html[data-ui="render3d"] body.lowfx #bBuild,html[data-ui="render3d"] body.lowfx #quick,html[data-ui="render3d"] body.lowfx .shine::after{animation:none}
+html[data-ui="render3d"][data-reduce="1"] :is(.b,.rb,.pill,.gp,.card):active{transform:translateY(3px)}
+html[data-ui="render3d"][data-reduce="1"] :is(#bBuild,#quick){animation:none}
+@media (prefers-reduced-motion:reduce){html[data-ui="render3d"]:not([data-reduce="0"]) :is(#bBuild,#quick){animation:none}}

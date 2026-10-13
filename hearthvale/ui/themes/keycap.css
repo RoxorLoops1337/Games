@@ -1,0 +1,297 @@
+/* Keycap 3D: CSS 3D extruded blocks with tilt (matte ABS plastic: cream, mint, coral, butter). Every rule is scoped under html[data-ui="keycap"].
+ What I learned (research notes):
+ 1. Real CSS depth = perspective() plus rotateX/rotateY/translateZ on the element itself. `transform-style: preserve-3d` with a child plate at translateZ(-depth)
+    works, but I measured that Chrome then rasterizes the whole key (legend included) at a low fixed scale once it tilts (blurry text, worse with will-change),
+    so the key body stays a flat layer under a true perspective transform and the depth faces are derived from the same angles.
+ 2. Walls: a keycap is a tapered block, so the base is wider than the top (the flare) and the visible wall is the base seen under the top face. Here the stacked
+    layers of the face's shadow are the wall slices; each slice is offset by depth * sin(tilt), which is exactly the parallax a rotated rigid block shows.
+ 3. Mechanical keycaps are read through five cues: a dished (concave) top with the lit slope opposite the light, a darker wall on the shadow side,
+    a legend that is printed or debossed (never glowing), a matte grain, and a contact shadow that tightens as the key bottoms out.
+ 4. Press = travel along Z until the walls vanish: the face translates down (translate3d with a negative Z), the taper and wall height shrink to nearly zero,
+    the shadow collapses. Release overshoots: a CSS linear() spring easing (with a cubic-bezier fallback when linear() is unsupported).
+ 5. Hit testing follows the transformed box, so tilt is capped at 10 degrees and the faces are pseudo-elements with pointer-events: none. Anything that is
+    not a plain transform (filter, opacity < 1) is avoided on the keys: .off and .dim use colours, never opacity or filter.
+ 6. Cost control: only the active button is written per frame (rAF), idle buttons carry no animation, panels use stacked box-shadows (cheap slabs)
+    instead of 3D, and body.lowfx swaps the perspective transform for a flat two-shadow extrude.
+*/
+
+/* ---------- tokens ---------- */
+html[data-ui="keycap"]{
+  --kc-ink:#4a3624;--kc-ink2:#7a6249;--kc-edge:#cdb487;
+  --kc-spring:cubic-bezier(.3,1.55,.55,1);
+  --kc-shadow:70,42,12;
+  --font:"Nunito","Baloo 2","Fredoka","Quicksand",ui-rounded,"SF Pro Rounded","Trebuchet MS",system-ui,sans-serif;
+}
+@supports (transition-timing-function:linear(0,1)){
+  html[data-ui="keycap"]{--kc-spring:linear(0,.07 2%,.26 5%,.55 8.5%,.82 12.5%,1.01 17%,1.1 21%,1.12 25%,1.08 30%,1.02 37%,.99 44%,.985 52%,1.003 66%,1)}
+}
+
+/* ---------- the 3D blocks: .b .rb .pill .gp #card .mini-b ----------
+   The element itself is the keycap: it carries the real 3D transform (perspective + rotateX/rotateY + translateZ travel), so its legend stays crisp.
+   Its ::before is the top face (dished), the stacked layers of that face's shadow are the extruded walls (slanted by the tilt through sin()),
+   and the last layers are the contact shadow. The faces are painted behind the legend with z-index:-1 inside the key's own stacking context. */
+html[data-ui="keycap"] :is(.b,.rb,.pill,.gp,.mini-b),html[data-ui="keycap"] #card{
+  --d:9px;--f:3px;--w:5px;--yy:0px;--zz:0px;--bw:3px;--tx:0deg;--ty:0deg;--dx:0px;--dy:var(--w);
+  --k1:color-mix(in srgb,var(--c1) 84%,#fff6e2);
+  --k2:color-mix(in srgb,var(--c2) 88%,#f3e4c6);
+  --k3:color-mix(in srgb,var(--ed) 52%,var(--c2));
+  --rim1:color-mix(in srgb,var(--k1) 55%,#fff);
+  --rim2:color-mix(in srgb,var(--ed) 55%,var(--k2));
+  --w1:color-mix(in srgb,var(--ed) 80%,#fff);
+  --w2:color-mix(in srgb,var(--ed) 72%,#2b1a08);
+  color:var(--kc-ink);
+  border-style:solid;border-width:var(--bw);border-color:transparent;
+  background:none;box-shadow:none;filter:none;
+  text-shadow:0 1px 0 rgba(255,255,255,.7),0 -1px 0 rgba(var(--kc-shadow),.16);
+  letter-spacing:.2px;
+  transform:perspective(560px) rotateX(var(--ty)) rotateY(var(--tx)) translate3d(0,var(--yy),calc(var(--zz)*-1));
+  transition:transform .55s var(--kc-spring);
+}
+@supports (width:calc(sin(1deg)*1px)){
+  html[data-ui="keycap"] :is(.b,.rb,.pill,.gp,.mini-b),html[data-ui="keycap"] #card{
+    --dx:calc(var(--d)*sin(var(--tx))*-1);--dy:calc(var(--w) + var(--d)*sin(var(--ty)))}
+}
+html[data-ui="keycap"] :is(.b,.rb,.pill,.gp,.mini-b)::before,html[data-ui="keycap"] #card::before{
+  content:"";position:absolute;z-index:-1;pointer-events:none;animation:none;
+  inset:calc(var(--bw)*-1);box-sizing:border-box;border-radius:inherit;
+  border:var(--bw) solid;border-color:var(--rim1) var(--rim2) var(--rim2) var(--rim1);
+  background:
+    radial-gradient(55% 80% at calc(66% - var(--gx,0)*18% - var(--kc-ox,0)*7%) calc(76% - var(--gy,0)*14% - var(--kc-oy,0)*5%),rgba(255,255,255,.42),rgba(255,255,255,0) 72%),
+    var(--kc-noise,linear-gradient(transparent,transparent)),
+    radial-gradient(ellipse 98% 125% at 62% 72%,var(--k1) 0%,var(--k2) 54%,var(--k3) 100%);
+  box-shadow:
+    inset 2px 3px 4px -2px rgba(var(--kc-shadow),.42),inset -1px -2px 2px -1px rgba(255,255,255,.7),inset 0 0 0 1px rgba(255,255,255,.18),
+    calc(var(--dx)*.17) calc(var(--dy)*.17) 0 calc(var(--f)*.17) color-mix(in srgb,var(--w1) 100%,var(--w2)),
+    calc(var(--dx)*.33) calc(var(--dy)*.33) 0 calc(var(--f)*.33) color-mix(in srgb,var(--w1) 80%,var(--w2)),
+    calc(var(--dx)*.5) calc(var(--dy)*.5) 0 calc(var(--f)*.5) color-mix(in srgb,var(--w1) 60%,var(--w2)),
+    calc(var(--dx)*.67) calc(var(--dy)*.67) 0 calc(var(--f)*.67) color-mix(in srgb,var(--w1) 40%,var(--w2)),
+    calc(var(--dx)*.83) calc(var(--dy)*.83) 0 calc(var(--f)*.83) color-mix(in srgb,var(--w1) 20%,var(--w2)),
+    var(--dx) var(--dy) 0 var(--f) var(--w2),
+    calc(var(--dx) - var(--kc-ox,0)*1.6px) calc(var(--dy) + 3px) 5px var(--f) rgba(var(--kc-shadow),.34),
+    calc(var(--dx) - var(--kc-ox,0)*3px) calc(var(--dy) + 8px) 12px calc(var(--f) - 4px) rgba(var(--kc-shadow),.24);
+  transition:box-shadow .5s var(--kc-spring);
+}
+/* sizes */
+html[data-ui="keycap"] :is(.rb,.pill,.gp,.mini-b,.b.small-b){--d:7px;--w:4px;--f:2.5px}
+html[data-ui="keycap"] :is(.b.big,#bBuild,#quick){--d:12px;--w:7px;--f:4px}
+html[data-ui="keycap"] #card{--d:8px;--w:5px;--f:3px}
+/* hover and tilt (JS toggles .kc-live while the pointer is over the key and .kc-down while pressed) */
+html[data-ui="keycap"] :is(.b,.rb,.pill,.gp,#card,.mini-b).kc-live{transition:transform .1s ease-out}
+/* pressed: the key travels down along Z, the walls nearly vanish, the contact shadow tightens */
+html[data-ui="keycap"] :is(.b,.rb,.pill,.gp,#card,.mini-b):is(:active,.kc-down):not(.off){
+  --f:.8px;--w:1.2px;--yy:3.4px;--zz:5px;transition:transform .07s ease-out}
+html[data-ui="keycap"] :is(.b,.rb,.pill,.gp,#card,.mini-b):is(:active,.kc-down):not(.off)::before{
+  transition:box-shadow .07s ease-out;
+  box-shadow:inset 3px 4px 6px -2px rgba(var(--kc-shadow),.5),inset -1px -1px 2px -1px rgba(255,255,255,.5),inset 0 0 0 1px rgba(255,255,255,.12),
+    calc(var(--dx)*.5) calc(var(--dy)*.5) 0 calc(var(--f)*.5) var(--w1),
+    var(--dx) var(--dy) 0 var(--f) var(--w2),
+    0 2px 3px rgba(var(--kc-shadow),.5)}
+@media (hover:hover){html[data-ui="keycap"] :is(.b,.rb,.pill,.gp):hover{filter:none}}
+html[data-ui="keycap"] :is(.b,.rb,.pill,.gp,#card,.mini-b) .ic{filter:drop-shadow(0 1px 0 rgba(255,255,255,.6))}
+html[data-ui="keycap"] .b .rw,html[data-ui="keycap"] .rb .rw{border-radius:inherit}
+html[data-ui="keycap"] .rip{background:radial-gradient(circle,rgba(255,255,255,.55),rgba(255,255,255,0) 70%)}
+html[data-ui="keycap"] .shine::after{background:linear-gradient(100deg,transparent 40%,rgba(255,255,255,.4) 50%,transparent 60%) 0 0/260% 100% no-repeat;background-position:220% 0;animation:kc-shine 4.2s ease-in-out infinite}
+@keyframes kc-shine{0%,60%{background-position:220% 0}100%{background-position:-120% 0}}
+
+/* hint rings, hot, bobbing: re-expressed with individual transform properties so they never fight the 3D transform */
+html[data-ui="keycap"] .ringhint::after{content:"";position:absolute;inset:-8px;border-radius:inherit;border:4px solid rgba(255,214,60,.95);box-shadow:0 0 12px rgba(255,214,60,.7);pointer-events:none;z-index:2;animation:ringp 1.4s ease-out infinite}
+html[data-ui="keycap"] .hot{box-shadow:none!important}
+html[data-ui="keycap"] .hot::before{border-color:rgba(232,86,74,.9)!important}
+html[data-ui="keycap"] #quick{animation:kc-bob 1.8s ease-in-out infinite}
+html[data-ui="keycap"] #soupAlert{animation:kc-bob 1.4s ease-in-out infinite}
+html[data-ui="keycap"] #tools .rb.visitor{animation:kc-bob2 2.2s ease-in-out infinite}
+@keyframes kc-bob{50%{translate:0 -4px}}
+@keyframes kc-bob2{50%{translate:0 -3px;rotate:-3deg}}
+
+/* ---------- colour ways (the base variables feed the colour-mix above) ---------- */
+html[data-ui="keycap"] :where(.b,.rb,.pill,.gp,#card,.mini-b){--c1:#fffaf0;--c2:#f6e9cc;--ed:#cdb487}
+html[data-ui="keycap"] .b-green,html[data-ui="keycap"] #tools .rb:nth-child(2),html[data-ui="keycap"] #tools .rb.visitor{--c1:#c9f7dc;--c2:#8fe3b5;--ed:#3f9a6c;--kc-ink:#10392a}
+html[data-ui="keycap"] .b-gold,html[data-ui="keycap"] .pill.coin,html[data-ui="keycap"] #tools .rb:nth-child(3),html[data-ui="keycap"] #tools .rb:nth-child(4){--c1:#fff2ae;--c2:#ffd966;--ed:#c9951f;--kc-ink:#553605}
+html[data-ui="keycap"] .b-red,html[data-ui="keycap"] .gp.full{--c1:#ffc7b4;--c2:#ff9877;--ed:#c4492d;--kc-ink:#4d1409}
+html[data-ui="keycap"] .b-pink,html[data-ui="keycap"] #tools .rb:nth-child(6){--c1:#ffd0dc;--c2:#ffa1b8;--ed:#bf4d6b;--kc-ink:#521328}
+html[data-ui="keycap"] .b-blue,html[data-ui="keycap"] .pill.scr,html[data-ui="keycap"] .gp.more,html[data-ui="keycap"] #tools .rb:nth-child(5){--c1:#d3f1fa;--c2:#9bdaee;--ed:#3f90ae;--kc-ink:#0e3a4e}
+html[data-ui="keycap"] .b-lilac{--c1:#e6deff;--c2:#c4b5f3;--ed:#7360b5;--kc-ink:#2b1f5e}
+html[data-ui="keycap"] .b-cream,html[data-ui="keycap"] #tools .rb:nth-child(7),html[data-ui="keycap"] #card{--c1:#fffaf0;--c2:#f6e9cc;--ed:#cdb487;--kc-ink:#4a3624}
+html[data-ui="keycap"] .b.off,html[data-ui="keycap"] .rb.off,html[data-ui="keycap"] .gp.dim{--c1:#efe8d8!important;--c2:#ddd3be!important;--ed:#b5aa90!important;--kc-ink:#5f5444!important;opacity:1;filter:none}
+html[data-ui="keycap"] .b.off .ic,html[data-ui="keycap"] .rb.off .ic{filter:grayscale(.6) drop-shadow(0 1px 0 rgba(255,255,255,.6))}
+html[data-ui="keycap"] .b.off{text-shadow:0 1px 0 rgba(255,255,255,.7)}
+html[data-ui="keycap"] .gp.full em{background:#c9402a;border-color:#fff}
+html[data-ui="keycap"] .gp .cap{background:rgba(70,42,12,.22);box-shadow:inset 0 1px 2px rgba(70,42,12,.35);bottom:4px}
+html[data-ui="keycap"] .gp .cap u{background:linear-gradient(#8fe3b5,#3f9a6c)}
+html[data-ui="keycap"] #strip{padding-bottom:16px}
+html[data-ui="keycap"] #card .charm{color:#a8324f}
+html[data-ui="keycap"] body.festive #card{box-shadow:inset 2px 3px 4px -2px rgba(var(--kc-shadow),.42),inset 0 0 0 2px #ffb3c9}
+
+/* hero Build key and the dock */
+html[data-ui="keycap"] #bBuild{--bw:3px;border-width:3px;letter-spacing:.4px}
+html[data-ui="keycap"] #bBuild .bi{filter:drop-shadow(0 1px 0 rgba(255,255,255,.55))}
+html[data-ui="keycap"] #dock{
+  background:var(--kc-noise,linear-gradient(transparent,transparent)),linear-gradient(#f7eed9,#e9dab8);
+  border:3px solid #fffdf5;border-color:#fffdf5 #eadcb8 #e1cf9f #fffdf5;
+  box-shadow:inset 0 2px 3px rgba(255,255,255,.8),inset 0 -3px 6px rgba(120,85,30,.18),0 1px 0 #d7c293,0 2px 0 #d2bc8c,0 3px 0 #ccb685,0 4px 0 #c5af7e,0 5px 0 #bea877,0 6px 0 #b7a170,0 7px 0 #b09a6a,0 16px 22px -6px rgba(var(--kc-shadow),.45)}
+
+/* pips and badges: little coral blocks */
+html[data-ui="keycap"] .pip,html[data-ui="keycap"] .badge-new,html[data-ui="keycap"] .ribbon{
+  background:linear-gradient(#f2705a,#cf4a34);color:#fff;border:2px solid #fff3e6;text-shadow:0 1px 0 rgba(90,20,10,.5);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.35),0 1px 0 #a53722,0 2px 0 #96301d,0 3px 3px rgba(var(--kc-shadow),.4)}
+html[data-ui="keycap"] .badge-new.sale{background:linear-gradient(#ff9bb5,#d9567a);box-shadow:inset 0 1px 0 rgba(255,255,255,.35),0 1px 0 #a93658,0 2px 0 #8f2a49,0 3px 3px rgba(var(--kc-shadow),.4)}
+html[data-ui="keycap"] .av .lv{background:linear-gradient(#8fe3b5,#4fb184);color:#10392a;border:2px solid #fffaf0;box-shadow:0 1px 0 #2f7d58,0 2px 0 #266a49,0 3px 3px rgba(var(--kc-shadow),.35);text-shadow:0 1px 0 rgba(255,255,255,.5)}
+html[data-ui="keycap"] .av .arc{stroke:#4fb184;filter:none}
+html[data-ui="keycap"] .av .trk{stroke:#d9c9a2}
+html[data-ui="keycap"] .av .face{box-shadow:inset 0 3px 4px rgba(var(--kc-shadow),.35),0 0 0 2px #fffaf0,0 2px 0 2px #cdb487}
+
+/* ---------- slabs: panels with real thickness (stacked shadows, no 3D context) ---------- */
+html[data-ui="keycap"] :is(.sec,.card,.rowi,.stat,.tech,.wcard,.fieldchip,.day,.evcard,.phero,.qitem,.chipb,.quest,.good,.slot.full,.tcard2,.tb,.banner,.uis),
+html[data-ui="keycap"] #saveCard,html[data-ui="keycap"] #track,html[data-ui="keycap"] #place,html[data-ui="keycap"] #mini{
+  --sb1:#fffaf0;--sb2:#f4e8cc;--sedge:#cbb284;
+  --sl:color-mix(in srgb,var(--sedge) 72%,#fff);--sm:var(--sedge);--sd:color-mix(in srgb,var(--sedge) 82%,#2b1a08);
+  background:var(--kc-noise,linear-gradient(transparent,transparent)),radial-gradient(ellipse 120% 110% at 60% 80%,var(--sb1),var(--sb2));
+  border:3px solid;border-color:color-mix(in srgb,var(--sb1) 40%,#fff) color-mix(in srgb,var(--sb2) 70%,var(--sedge)) color-mix(in srgb,var(--sb2) 70%,var(--sedge)) color-mix(in srgb,var(--sb1) 40%,#fff);
+  box-shadow:inset 2px 3px 3px -2px rgba(255,255,255,.9),inset -1px -2px 3px -1px rgba(var(--kc-shadow),.12),0 1px 0 var(--sl),0 2px 0 var(--sl),0 3px 0 var(--sm),0 4px 0 var(--sm),0 5px 0 var(--sd),0 11px 12px -5px rgba(var(--kc-shadow),.38);
+}
+html[data-ui="keycap"] :is(.sec,.card,.stat,.wcard,.phero,.tcard2),html[data-ui="keycap"] #track{--sedge:#c4aa78}
+html[data-ui="keycap"] :is(.sec.done,.card.done,.tech.done,.sec.up,.nextup,.pr.me,.stage.built,.quest.done,.day.done,.ach.got){--sb1:#ecfcf2;--sb2:#c6efd7;--sedge:#6cb592}
+html[data-ui="keycap"] :is(.sec.lock,.card.lock){--sb1:#f1ebe0;--sb2:#e2d9c6;--sedge:#bdb197;color:#8a7a66}
+html[data-ui="keycap"] :is(.tb.t-good){--sb1:#ecfcf2;--sb2:#c2edd3;--sedge:#6cb592}
+html[data-ui="keycap"] :is(.tb.t-warn,.banner.gold,.tb.t-gold,.day.today){--sb1:#fff6c9;--sb2:#ffe08a;--sedge:#c9a02c}
+html[data-ui="keycap"] :is(.tb.t-bad){--sb1:#ffe9e1;--sb2:#ffc5b2;--sedge:#c9654a}
+html[data-ui="keycap"] :is(.tb.t-pink,.evcard.on){--sb1:#ffeaf0;--sb2:#ffc9d8;--sedge:#c9738d}
+html[data-ui="keycap"] .banner.green{--sb1:#ecfcf2;--sb2:#bfeccf;--sedge:#6cb592}
+html[data-ui="keycap"] .evcard{--sb1:#eaf8fc;--sb2:#c9ebf5;--sedge:#6fa9bf}
+html[data-ui="keycap"] .phero{--sb1:#e9f7fb;--sb2:#c8e8f2;--sedge:#6fa9bf}
+html[data-ui="keycap"] .rowi{--sedge:#c9b080}
+html[data-ui="keycap"] .rowi.tap,html[data-ui="keycap"] .card,html[data-ui="keycap"] .fieldchip,html[data-ui="keycap"] .chipb{transition:transform .5s var(--kc-spring),box-shadow .4s var(--kc-spring)}
+html[data-ui="keycap"] :is(.rowi.tap,.card,.fieldchip,.chipb,.qitem,.tb,.banner):active{
+  transform:translateY(4px);transition-duration:.07s;
+  box-shadow:inset 2px 3px 4px -2px rgba(var(--kc-shadow),.35),0 1px 0 var(--sl),0 2px 0 var(--sm),0 3px 3px -1px rgba(var(--kc-shadow),.4)}
+html[data-ui="keycap"] .card:active{transform:translateY(4px)}
+html[data-ui="keycap"] .chipb.on{--sb1:#c9f7dc;--sb2:#8fe3b5;--sedge:#3f9a6c;color:#10392a;text-shadow:0 1px 0 rgba(255,255,255,.5)}
+html[data-ui="keycap"] .uis{--sedge:#c9b080;border-width:3px}
+html[data-ui="keycap"] .uis.on{--sb1:#ecfcf2;--sb2:#c2edd3;--sedge:#4fa47e}
+html[data-ui="keycap"] .uis:active{transform:translateY(3px);transition-duration:.07s}
+html[data-ui="keycap"] #track{transform:rotate(-1deg)}
+html[data-ui="keycap"] #track::before{border:2px dashed rgba(190,160,100,.55)}
+html[data-ui="keycap"] .tb::after{background:var(--sb2);border-right:3px solid var(--sb1);border-bottom:3px solid var(--sb1);box-shadow:3px 3px 0 -1px var(--sedge)}
+html[data-ui="keycap"] .tb .ti,html[data-ui="keycap"] .banner .bic{background:radial-gradient(circle at 40% 35%,#fffefa,#efe2c3);box-shadow:inset 0 2px 3px rgba(var(--kc-shadow),.25),0 1px 0 #fff}
+html[data-ui="keycap"] .tb .tc{background:#cf4a34;box-shadow:0 2px 0 #96301d}
+html[data-ui="keycap"] #festival{border:3px solid;border-color:#fff4f7 #e9b3c5 #e0a3b8 #fff4f7;animation:none}
+html[data-ui="keycap"] .banner .bt small{color:#5a7a66}html[data-ui="keycap"] .banner.gold .bt small{color:#8a5f0d}
+
+/* the sheet */
+html[data-ui="keycap"] .sheet,html[data-ui="keycap"] .ov-card{
+  background:var(--kc-noise,linear-gradient(transparent,transparent)),radial-gradient(rgba(140,105,55,.09) 1px,transparent 1.5px) 0 0/7px 7px,radial-gradient(120% 60% at 20% 0,#fffdf6,transparent 70%),linear-gradient(#f9f0dc,#eadcba);
+  border:4px solid;border-color:#fffdf6 #eadcb8 #dccb9d #fffdf6;
+  box-shadow:inset 0 2px 4px rgba(255,255,255,.8),0 1px 0 #d9c598,0 2px 0 #d4be8f,0 3px 0 #cfb887,0 4px 0 #c9b180,0 5px 0 #c3aa78,0 6px 0 #bda371,0 7px 0 #b79d6a,0 8px 0 #b09663,0 20px 34px -6px rgba(var(--kc-shadow),.5)}
+html[data-ui="keycap"] .sh-head{
+  background:var(--kc-noise,linear-gradient(transparent,transparent)),radial-gradient(ellipse 100% 140% at 62% 80%,#c9f7dc,#8fe3b5 60%,#6fd0a0);
+  border:3px solid;border-color:#e9fff3 #5fbb8d #4fa47e #e9fff3;color:#10392a;
+  box-shadow:inset 2px 3px 3px -2px rgba(255,255,255,.8),0 1px 0 #5fb68b,0 2px 0 #52a47c,0 3px 0 #46926f,0 4px 0 #3b8162,0 5px 0 #327055,0 12px 12px -5px rgba(var(--kc-shadow),.4)}
+html[data-ui="keycap"] .sh-title{text-shadow:0 1px 0 rgba(255,255,255,.55);color:#10392a}
+html[data-ui="keycap"] .sh-sub{text-shadow:0 1px 0 rgba(255,255,255,.5);color:#1d5239;opacity:1}
+html[data-ui="keycap"] .sh-ic{filter:drop-shadow(0 1px 0 rgba(255,255,255,.5))}
+html[data-ui="keycap"] .sh-sub .stars .ic{filter:drop-shadow(0 1px 0 rgba(255,255,255,.5))}
+html[data-ui="keycap"] .grab::before{background:#bba474;box-shadow:0 1px 0 #fffdf6;opacity:1}
+html[data-ui="keycap"] .sh-body{scrollbar-color:#bba474 transparent}
+html[data-ui="keycap"] .sec h4,html[data-ui="keycap"] .lab{text-shadow:0 1px 0 rgba(255,255,255,.7)}
+html[data-ui="keycap"] .th{background:radial-gradient(circle at 50% 40%,#fffefa,var(--b1,#e3f3f8));box-shadow:inset 0 3px 5px rgba(var(--kc-shadow),.3),inset 0 -2px 0 rgba(255,255,255,.7),0 0 0 3px #fffaf0,0 1px 0 3px #d7c293,0 3px 0 3px #c4aa78,0 6px 6px 1px rgba(var(--kc-shadow),.25)}
+html[data-ui="keycap"] .sh-ic .th.sm{box-shadow:inset 0 2px 4px rgba(var(--kc-shadow),.3),0 0 0 3px #fffaf0,0 2px 0 3px #3f9a6c}
+html[data-ui="keycap"] .ov-card .lvlbadge .ic{filter:drop-shadow(0 6px 0 rgba(63,154,108,.5))}
+html[data-ui="keycap"] .lvlnum{color:#fffaf0;-webkit-text-stroke:7px #3f9a6c;text-shadow:0 5px 0 #2c7452}
+html[data-ui="keycap"] .jelly{color:#fffaf0;-webkit-text-stroke:8px #3f9a6c;text-shadow:0 5px 0 #2c7452}
+html[data-ui="keycap"] .lvlup .jelly{color:#fff2ae;-webkit-text-stroke-color:#b88416;text-shadow:0 5px 0 #8f650c}
+html[data-ui="keycap"] .ov-ic{box-shadow:inset 0 3px 5px rgba(var(--kc-shadow),.25),0 0 0 4px #fffaf0,0 4px 0 4px #c4aa78}
+
+/* tabs: a physical slider. The track is a milled slot, the indicator is the slider cap */
+html[data-ui="keycap"] .sh-tabs{
+  background:linear-gradient(#d8c79c,#e4d6b0);border-radius:16px;padding:4px;
+  box-shadow:inset 0 3px 5px rgba(var(--kc-shadow),.45),inset 0 -1px 0 rgba(255,255,255,.7),0 1px 0 #fffdf6}
+html[data-ui="keycap"] .sh-tabs .ind{
+  border-radius:12px;top:4px;bottom:5px;
+  background:var(--kc-noise,linear-gradient(transparent,transparent)),radial-gradient(ellipse 100% 130% at 60% 78%,#fffefa,#f6ead0 60%,#e7d4aa);
+  box-shadow:inset 1px 2px 2px rgba(255,255,255,.9),inset 0 0 0 1px rgba(255,255,255,.4),0 1px 0 #cdb487,0 2px 0 #c4aa78,0 3px 0 #b99f6d,0 5px 6px rgba(var(--kc-shadow),.4)}
+html[data-ui="keycap"] .sh-tabs .ind::after{content:"";position:absolute;left:50%;top:6px;bottom:8px;width:12px;margin-left:-6px;background:repeating-linear-gradient(90deg,rgba(var(--kc-shadow),.25) 0 2px,rgba(255,255,255,.8) 2px 4px);opacity:.55;border-radius:2px}
+html[data-ui="keycap"] button.tab{color:var(--kc-ink2);text-shadow:0 1px 0 rgba(255,255,255,.6);font-weight:900}
+html[data-ui="keycap"] button.tab.on{color:var(--kc-ink)}
+html[data-ui="keycap"] button.tab .pip{box-shadow:inset 0 1px 0 rgba(255,255,255,.35),0 1px 0 #96301d,0 2px 2px rgba(var(--kc-shadow),.4)}
+html[data-ui="keycap"] .seg{background:linear-gradient(#d8c79c,#e4d6b0);border-radius:16px;box-shadow:inset 0 3px 5px rgba(var(--kc-shadow),.45),0 1px 0 #fffdf6}
+html[data-ui="keycap"] .seg button{border-radius:12px;color:var(--kc-ink2);text-shadow:0 1px 0 rgba(255,255,255,.6)}
+html[data-ui="keycap"] .seg button.on{
+  background:radial-gradient(ellipse 100% 130% at 60% 78%,#fffefa,#f6ead0 60%,#e7d4aa);color:var(--kc-ink);
+  box-shadow:inset 1px 2px 2px rgba(255,255,255,.9),0 1px 0 #cdb487,0 2px 0 #c4aa78,0 3px 0 #b99f6d,0 5px 6px rgba(var(--kc-shadow),.4)}
+
+/* ---------- progress channels with a sliding block ---------- */
+html[data-ui="keycap"] .bar,html[data-ui="keycap"] .xpb,html[data-ui="keycap"] #track .qp,html[data-ui="keycap"] .mbar,html[data-ui="keycap"] #mini .hb{
+  background:linear-gradient(#cdbb8e,#e0d1aa);border:0;border-radius:8px;
+  box-shadow:inset 0 3px 4px rgba(var(--kc-shadow),.5),inset 0 -1px 0 rgba(255,255,255,.6),0 1px 0 #fffdf6;overflow:hidden}
+html[data-ui="keycap"] .bar{height:16px}
+html[data-ui="keycap"] .bar.thin{height:12px}
+html[data-ui="keycap"] .xpb{height:11px}
+html[data-ui="keycap"] .xpb::after{display:none}
+html[data-ui="keycap"] .bar i,html[data-ui="keycap"] .xpb i,html[data-ui="keycap"] #track .qp i,html[data-ui="keycap"] .mbar i,html[data-ui="keycap"] #mini .hb i{
+  border-radius:6px;margin:1px 0;height:calc(100% - 3px);
+  background:linear-gradient(90deg,rgba(0,0,0,0) 0,rgba(0,0,0,0) calc(100% - 3px),rgba(30,15,0,.22) 100%),repeating-linear-gradient(90deg,rgba(255,255,255,0) 0 9px,rgba(255,255,255,.22) 9px 10px),linear-gradient(#ffe98a,#f0b93a);
+  box-shadow:inset 0 2px 0 rgba(255,255,255,.65),inset 0 -2px 0 rgba(120,70,0,.3),0 1px 0 rgba(120,70,0,.4)}
+html[data-ui="keycap"] .bar.g i,html[data-ui="keycap"] .xpb i,html[data-ui="keycap"] #track .qp i{background:linear-gradient(90deg,rgba(0,0,0,0) calc(100% - 3px),rgba(15,60,35,.25) 100%),repeating-linear-gradient(90deg,rgba(255,255,255,0) 0 9px,rgba(255,255,255,.22) 9px 10px),linear-gradient(#b5f3cf,#5fc896);box-shadow:inset 0 2px 0 rgba(255,255,255,.65),inset 0 -2px 0 rgba(20,90,55,.3),0 1px 0 rgba(20,90,55,.45)}
+html[data-ui="keycap"] .bar.bb i{background:linear-gradient(90deg,rgba(0,0,0,0) calc(100% - 3px),rgba(10,50,70,.25) 100%),repeating-linear-gradient(90deg,rgba(255,255,255,0) 0 9px,rgba(255,255,255,.22) 9px 10px),linear-gradient(#c6ecf8,#6bc0dc);box-shadow:inset 0 2px 0 rgba(255,255,255,.65),inset 0 -2px 0 rgba(20,80,110,.3),0 1px 0 rgba(20,80,110,.45)}
+html[data-ui="keycap"] .bar.p i,html[data-ui="keycap"] .mbar i,html[data-ui="keycap"] #mini .hb i{background:linear-gradient(90deg,rgba(0,0,0,0) calc(100% - 3px),rgba(80,15,35,.25) 100%),repeating-linear-gradient(90deg,rgba(255,255,255,0) 0 9px,rgba(255,255,255,.22) 9px 10px),linear-gradient(#ffcbd8,#f0829f);box-shadow:inset 0 2px 0 rgba(255,255,255,.65),inset 0 -2px 0 rgba(150,40,75,.3),0 1px 0 rgba(150,40,75,.45)}
+html[data-ui="keycap"] .bar.l i{background:linear-gradient(90deg,rgba(0,0,0,0) calc(100% - 3px),rgba(40,20,90,.25) 100%),repeating-linear-gradient(90deg,rgba(255,255,255,0) 0 9px,rgba(255,255,255,.22) 9px 10px),linear-gradient(#e6deff,#a996e6);box-shadow:inset 0 2px 0 rgba(255,255,255,.65),inset 0 -2px 0 rgba(80,60,150,.3),0 1px 0 rgba(80,60,150,.45)}
+html[data-ui="keycap"] .bar.r i,html[data-ui="keycap"] .mbar.low i{background:linear-gradient(90deg,rgba(0,0,0,0) calc(100% - 3px),rgba(90,15,10,.25) 100%),repeating-linear-gradient(90deg,rgba(255,255,255,0) 0 9px,rgba(255,255,255,.22) 9px 10px),linear-gradient(#ffb7a3,#e8664a);box-shadow:inset 0 2px 0 rgba(255,255,255,.6),inset 0 -2px 0 rgba(140,35,20,.3),0 1px 0 rgba(140,35,20,.45)}
+html[data-ui="keycap"] .bar i::after{left:auto;right:3px;top:3px;bottom:3px;width:5px;height:auto;border-radius:2px;background:repeating-linear-gradient(90deg,rgba(255,255,255,.85) 0 1px,rgba(0,0,0,.18) 1px 2px)}
+html[data-ui="keycap"] .bar.sh i::before{display:none}
+html[data-ui="keycap"] .xpb{margin-top:3px}
+html[data-ui="keycap"] #mini .hb{height:9px}
+html[data-ui="keycap"] .mbar{height:9px}
+
+/* ---------- switches: rocker ---------- */
+html[data-ui="keycap"] .sw{
+  width:58px;height:34px;border-radius:9px;border:3px solid;border-color:#b9a577 #fffdf6 #fffdf6 #b9a577;
+  background:linear-gradient(90deg,#d6c59a 0 50%,#c3b183 50% 100%);
+  box-shadow:inset 0 3px 5px rgba(var(--kc-shadow),.5),0 1px 0 #fffdf6;transition:background .25s}
+html[data-ui="keycap"] .sw.on{background:linear-gradient(90deg,#4fb184,#3f9a6c)}
+html[data-ui="keycap"] .sw::after{
+  top:1px;left:1px;width:28px;height:26px;border-radius:6px;
+  background:var(--kc-noise,linear-gradient(transparent,transparent)),linear-gradient(105deg,#fffefa,#f2e4c4 60%,#dcc891);
+  box-shadow:inset 1px 1px 1px rgba(255,255,255,.9),0 1px 0 #bfa56f,0 2px 0 #b09660,0 3px 0 #a38a58,2px 4px 5px rgba(var(--kc-shadow),.45);
+  transform:perspective(90px) rotateY(18deg);transform-origin:50% 50%;transition:transform .45s var(--kc-spring)}
+html[data-ui="keycap"] .sw.on::after{transform:translateX(24px) perspective(90px) rotateY(-18deg);
+  background:linear-gradient(255deg,#fffefa,#f2e4c4 60%,#dcc891);box-shadow:inset -1px 1px 1px rgba(255,255,255,.9),0 1px 0 #bfa56f,0 2px 0 #b09660,0 3px 0 #a38a58,-2px 4px 5px rgba(var(--kc-shadow),.45)}
+
+/* ---------- range sliders: slot and keycap thumb ---------- */
+html[data-ui="keycap"] input[type=range]::-webkit-slider-runnable-track{height:14px;border-radius:7px;border:0;background:linear-gradient(90deg,#5fc896 var(--p,50%),#d8c89f var(--p,50%));box-shadow:inset 0 3px 4px rgba(var(--kc-shadow),.5),0 1px 0 #fffdf6}
+html[data-ui="keycap"] input[type=range]::-moz-range-track{height:12px;border-radius:7px;border:0;background:linear-gradient(90deg,#5fc896 var(--p,50%),#d8c89f var(--p,50%));box-shadow:inset 0 3px 4px rgba(var(--kc-shadow),.5)}
+html[data-ui="keycap"] input[type=range]::-webkit-slider-thumb{width:26px;height:30px;margin-top:-9px;border-radius:7px;border:0;background:repeating-linear-gradient(90deg,rgba(var(--kc-shadow),.0) 0 3px,rgba(var(--kc-shadow),.0) 3px 4px),linear-gradient(105deg,#fffefa,#f2e4c4 60%,#dcc891);box-shadow:inset 1px 2px 1px rgba(255,255,255,.9),inset 0 -2px 0 rgba(var(--kc-shadow),.12),0 2px 0 #bfa56f,0 4px 0 #a38a58,0 7px 7px rgba(var(--kc-shadow),.4)}
+html[data-ui="keycap"] input[type=range]::-moz-range-thumb{width:24px;height:28px;border-radius:7px;border:0;background:linear-gradient(105deg,#fffefa,#f2e4c4 60%,#dcc891);box-shadow:0 2px 0 #bfa56f,0 4px 0 #a38a58}
+html[data-ui="keycap"] input[type=text],html[data-ui="keycap"] input:not([type]),html[data-ui="keycap"] textarea{border-radius:14px;border:3px solid;border-color:#b9a577 #fffdf6 #fffdf6 #b9a577;background:#fffdf6;box-shadow:inset 0 3px 5px rgba(var(--kc-shadow),.3)}
+
+/* ---------- small details ---------- */
+html[data-ui="keycap"] .stepper .v{text-shadow:0 1px 0 rgba(255,255,255,.7)}
+html[data-ui="keycap"] .cc,html[data-ui="keycap"] .cost{text-shadow:0 1px 0 rgba(255,255,255,.6)}
+html[data-ui="keycap"] .cc.bad{color:#b83a22}
+html[data-ui="keycap"] .sheet .x{--d:7px}
+html[data-ui="keycap"] .label{box-shadow:0 0 0 1.5px rgba(205,180,135,.9),0 2px 0 #cdb487,0 4px 0 #b99f6d,0 5px 4px rgba(var(--kc-shadow),.3)}
+html[data-ui="keycap"] .shutter{background:radial-gradient(ellipse 100% 120% at 60% 70%,#ffc7b4,#ff9877);border:4px solid #fff3e6;box-shadow:inset 2px 3px 4px -2px rgba(var(--kc-shadow),.4),0 2px 0 #d3573a,0 4px 0 #c4492d,0 6px 0 #a83a22,0 10px 12px rgba(var(--kc-shadow),.4)}
+html[data-ui="keycap"] .shutter:active{transform:translateY(5px);box-shadow:inset 2px 3px 4px -2px rgba(var(--kc-shadow),.4),0 1px 0 #a83a22,0 3px 3px rgba(var(--kc-shadow),.4)}
+
+/* ---------- reduced motion: keep the static 3D look, no tilt, no spring, no bobbing ---------- */
+html[data-ui="keycap"][data-reduce="1"] :is(.b,.rb,.pill,.gp,#card,.mini-b),
+html[data-ui="keycap"][data-reduce="1"] :is(.b,.rb,.pill,.gp,#card,.mini-b)::before{transition-duration:.01s!important}
+html[data-ui="keycap"][data-reduce="1"] :is(#quick,#soupAlert,#tools .rb.visitor,.shine::after,.ringhint::after){animation:none!important}
+@media (prefers-reduced-motion:reduce){
+  html[data-ui="keycap"]:not([data-reduce="0"]) :is(.b,.rb,.pill,.gp,#card,.mini-b),
+  html[data-ui="keycap"]:not([data-reduce="0"]) :is(.b,.rb,.pill,.gp,#card,.mini-b)::before{transition-duration:.01ms!important}
+  html[data-ui="keycap"]:not([data-reduce="0"]) :is(#quick,#soupAlert,#tools .rb.visitor,.shine::after,.ringhint::after){animation:none!important}
+}
+
+/* ---------- low quality: no 3D context, a flat extrude made of two shadows, no noise ---------- */
+html[data-ui="keycap"] body.lowfx :is(.b,.rb,.pill,.gp,#card,.mini-b){transform:none;isolation:isolate;transition:transform .12s ease-out}
+html[data-ui="keycap"] body.lowfx :is(.b,.rb,.pill,.gp,#card,.mini-b)::before{
+  background:radial-gradient(ellipse 98% 125% at 62% 72%,var(--k1) 0%,var(--k2) 54%,var(--k3) 100%);transition:none;
+  box-shadow:inset 1px 2px 2px -1px rgba(255,255,255,.8),0 var(--w) 0 var(--f) var(--w2),0 calc(var(--w) + 3px) 5px var(--f) rgba(var(--kc-shadow),.32)}
+html[data-ui="keycap"] body.lowfx :is(.b,.rb,.pill,.gp,#card,.mini-b):is(:active,.kc-down):not(.off){transform:translateY(3px)}
+html[data-ui="keycap"] body.lowfx :is(.b,.rb,.pill,.gp,#card,.mini-b):is(:active,.kc-down):not(.off)::before{box-shadow:inset 1px 2px 3px -1px rgba(var(--kc-shadow),.4),0 1px 0 var(--f) var(--w2)}
+html[data-ui="keycap"] body.lowfx :is(.sheet,.ov-card,#dock,.sh-head,.sh-tabs .ind,.sec,.card,.rowi,.tb,.banner,#track,#place,#mini){
+  box-shadow:0 3px 0 var(--sedge,#c4aa78),0 7px 8px -3px rgba(var(--kc-shadow),.35)}
+html[data-ui="keycap"] body.lowfx .sheet,html[data-ui="keycap"] body.lowfx .ov-card{background:linear-gradient(#f9f0dc,#eadcba)}
+html[data-ui="keycap"] body.lowfx .sh-head{background:linear-gradient(#c9f7dc,#8fe3b5);box-shadow:0 3px 0 #3f9a6c}
+html[data-ui="keycap"] body.lowfx .sh-tabs .ind{background:#fff8e8;box-shadow:0 2px 0 #c4aa78}
+html[data-ui="keycap"] body.lowfx .shine::after,html[data-ui="keycap"] body.lowfx .ringhint::after{animation:none}
