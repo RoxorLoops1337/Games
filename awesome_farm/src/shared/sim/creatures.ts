@@ -23,6 +23,7 @@ import { ownerSite, taskOk } from './jobs-site';
 import { invDrop, invSum, invPut } from './machines';
 import { fetchAt, findPet, grantPetXp, isWorking, move, petsOf, rosterCap, STASH_RADIUS, stashAt, workSlots } from './petlib';
 import * as quests from './quests';
+import * as signature from './signature';
 import type { Sim } from './sim';
 import { countOf, derived, hasUnlock, takeItem } from './stats';
 import type { BuildE, Cmd, CritE, MobE, PlayerS, Plot } from './types';
@@ -344,6 +345,7 @@ function companionStep (sim: Sim, c: CritE, dt: number) {
             sim.events.push({ e: 'work', id: c.id, kind: 'guard', x: best.x, y: best.y - 4 });
             const hpBefore = best.hp, bid = best.id;
             combat.damageMob(sim, best, atk, owner, { kx: best.x - c.x, ky: best.y - c.y, kb: 70, quiet: true });
+            if (sim.s.ents[bid]) signature.onStrike(sim, c, owner, best, atk);
             if (!sim.s.ents[bid]) grantPetXp(sim, owner, pet, 2 + MOBS[best.kind].tier * 2, c);
             else if (hpBefore > best.hp) grantPetXp(sim, owner, pet, 0.6);
         }

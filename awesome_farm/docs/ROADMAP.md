@@ -32,7 +32,7 @@ split big ones into slices (rules, art, polish).
 - [x] M8 Fish pond (Fish Pond building: a fish and bait in, two fish out; art, 3D model, wiki, how-to)
 - [x] M9 Orchard and apiary (oaks drop apples, Beehive turns berries into honey, Honey Apple Tart at the Kitchen)
 - [x] M14 Elite affixes (swift, armored, volatile, mending; tinted, named on the kill)
-- [ ] M10 Creature signature moves
+- [x] M10 Creature signature moves (every 4th companion strike, one move per element)
 - [ ] M11 Day and night shifts for workers
 - [ ] M12 Cosy room score + dye vat
 - [ ] M13 Museum of odd things

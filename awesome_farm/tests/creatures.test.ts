@@ -2,7 +2,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { TILE } from '../src/shared/config';
-import { AWAKENINGS, BREED_SECS, breedOffspring, catchChance, PET_NAMES, Pet, petAtk, petMaxHp, pickSpecies, SPECIES, SPECIES_LIST, spOf, starsOf, workCycle } from '../src/shared/data/creatures';
+import { onStrike } from '../src/shared/sim/signature';
+import { AWAKENINGS, SIGNATURE_EVERY, BREED_SECS, breedOffspring, catchChance, PET_NAMES, Pet, petAtk, petMaxHp, pickSpecies, SPECIES, SPECIES_LIST, spOf, starsOf, workCycle } from '../src/shared/data/creatures';
 import { SPROUTS } from '../src/shared/data/look';
 import { GIVERS } from '../src/shared/data/sidequests';
 import { Rng } from '../src/shared/rng';
@@ -387,4 +388,14 @@ test('awakening: levels and late-game goods buy stars, stars make a creature str
     cmdPet(sim, p, { t: 'pet', op: 'awaken', pet: b.id });
     assert.equal(starsOf(b), 0);
     assert.equal(countOf(p, 'treat'), 6);
+});
+
+test('a companion fires its signature move on every fourth strike', () => {
+    const { sim, p } = yard('SIG-1');
+    const c = sim.add<CritE>({ k: 'crit', sp: 'frostpup', x: p.x, y: p.y, vx: 0, vy: 0, t: 0, lv: 3, mode: 1, owner: p.id });
+    const m = sim.add<MobE>({ k: 'mob', kind: 'skeleton', x: p.x + 20, y: p.y, hp: 999, mhp: 999, vx: 0, vy: 0, t: 0, hopT: 0, knockT: 0 });
+    for (let i = 0; i < SIGNATURE_EVERY - 1; i++) assert.equal(onStrike(sim, c, p, m, 1), false);
+    assert.equal(onStrike(sim, c, p, m, 1), true);
+    assert.ok((m.stun ?? 0) > 1, 'frost freezes the target');
+    assert.equal(c.sg, 0, 'the count starts over');
 });

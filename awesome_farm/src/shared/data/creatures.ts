@@ -77,6 +77,17 @@ type Element = 'leaf' | 'earth' | 'fire' | 'frost' | 'spark' | 'shadow' | 'light
 export const ELEMENT_COLOR: Record<Element, number> = {
     leaf: PAL.leaf, earth: PAL.dirt, fire: PAL.pumpkin, frost: PAL.foam, spark: PAL.gold, shadow: PAL.plum, light: PAL.cream,
 };
+/** The signature move: every few strikes a companion does something only its element can. */
+export const SIGNATURE_EVERY = 4;
+export const SIGNATURE: Record<Element, { name: string; desc: string }> = {
+    fire:   { name: 'Ember burst',   desc: 'Sets the ground alight: monsters beside the target take half damage too.' },
+    frost:  { name: 'Deep chill',    desc: 'Freezes the target in place for a moment.' },
+    spark:  { name: 'Chain lightning', desc: 'The bolt jumps to two more monsters nearby.' },
+    earth:  { name: 'Tremor',        desc: 'Slams the ground: a big knock back and a short stun around the target.' },
+    leaf:   { name: 'Mending breeze', desc: 'Heals its farmer by half a heart.' },
+    light:  { name: 'Flash',         desc: 'Dazzles everything near the target for a moment.' },
+    shadow: { name: 'Shadow bite',   desc: 'A bite from the dark that hits for two and a half times.' },
+};
 export const ELEMENT_NAME: Record<Element, string> = { leaf: 'Leaf', earth: 'Earth', fire: 'Fire', frost: 'Frost', spark: 'Spark', shadow: 'Shadow', light: 'Light' };
 
 export type TraitId = 'diligent' | 'fierce' | 'hardy' | 'lucky' | 'swift' | 'bright' | 'tireless' | 'bold';
