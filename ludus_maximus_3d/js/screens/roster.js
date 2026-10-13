@@ -74,7 +74,7 @@ export function open(ctx) {
     const wrap = h('div', 'lm-presets');
     const P = [['Boot camp', 'boot', 'Everyone with energy trains their weakest stat; tired fighters rest.'], ['Rest week', 'rest', 'Everyone rests.'], ['Odd jobs', 'work', 'Fighters with energy take odd jobs for gold.'], ['Sparring', 'spar', 'Fighters with energy spar for XP.']];
     P.forEach(([label, kind, tip]) => { const b = U.button({ label, variant: 'bronze', onClick: () => { const n = lm.preset(S, kind); sw('uiTap'); commit(); render(); ctx.toast(n ? `Plans set for ${n} fighter${n > 1 ? 's' : ''}.` : 'Nothing to change.', { kind: n ? 'good' : 'info', ico: 'check' }); } }); U.tooltip(b, tip, { title: label }); wrap.append(b); });
-    const auto = U.button({ label: 'Auto-plan', variant: 'gold', onClick: autoplan }); U.tooltip(auto, 'Picks each fighter\'s weakest trainable stat; rests the tired and injured; works when gold is low.', { title: 'Auto-plan' });
+    const auto = U.button({ label: 'Auto-plan', variant: 'gold', onClick: autoplan }); auto.dataset.tut = 'auto-plan'; U.tooltip(auto, 'Picks each fighter\'s weakest trainable stat; rests the tired and injured; works when gold is low.', { title: 'Auto-plan' });
     wrap.append(auto, U.button({ label: 'Drill board', variant: 'bronze', onClick: drillBoard }));
     return wrap;
   }

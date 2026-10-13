@@ -51,14 +51,20 @@ const WEATHER = {
 };
 /** hour (0..24) + weather -> preset. Sun swings front-right (morning) to front-left (evening) so facades are always modelled by 3/4 light. */
 export function presetFor(hour, weather = 'clear') {
-  let base = weather === 'night' ? Object.assign({}, TOD.night) : todFromHour(clamp(hour, 6.2, 19.2));
+  const hh = ((hour % 24) + 24) % 24, nightW = weather === 'night';
+  let base = nightW ? Object.assign({}, TOD.night) : todFromHour(hh);
   if (WEATHER[weather]) base = lerpTOD(base, WEATHER[weather], weather === 'rain' ? 0.85 : weather === 'dust' ? 0.7 : 0.55);
-  base.hemiInt *= weather === 'night' ? 1.0 : 1.2;
-  if (weather !== 'night') { const m = new THREE.Color(base.hemiGround).lerp(new THREE.Color(0x9c8090), 0.5); base.hemiGround = m.getHex(); }
-  if (weather !== 'night') { const f = clamp((hour - 7) / 12); base.sunAz = 205 + 55 * f; base.sunElev = (weather === 'rain' ? 24 : 24 + 10 * Math.sin(Math.PI * f)) * (hour < 7 || hour > 18.4 ? 0.7 : 1); }
+  base.hemiInt *= nightW ? 1.0 : 1.2;
+  const dayK = nightW ? 0 : 1 - clamp((base.night - 0.25) / 0.45);   // 1 by day, 0 once the moon is up
+  if (!nightW) { const m = new THREE.Color(base.hemiGround).lerp(new THREE.Color(0x9c8090), 0.5 * dayK); base.hemiGround = m.getHex(); }
+  if (dayK > 0) {
+    const f = clamp((hh - 7) / 12), az = 205 + 55 * f, el = (weather === 'rain' ? 24 : 24 + 10 * Math.sin(Math.PI * f)) * (hh < 7 || hh > 18.4 ? 0.7 : 1);
+    base.sunAz = lerp(base.sunAz, az, dayK); base.sunElev = lerp(base.sunElev, el, dayK);
+  }
   return base;
 }
-const hourOf = (S) => 9 + (((S.week || 1) - 1) % 12) * 0.8;
+/** In-game week -> hour of day: week 1 is early morning, week 12 is sunset, then a new season starts at dawn (the visible day cycle). */
+const hourOf = (S) => 7 + (((S.week || 1) - 1) % 12) * 1.0;
 
 // ------------------------------------------------------------------------------------------ small shaders (rings, links, smoke, sparks, rain)
 function ringMaterial({ color = [2.0, 1.4, 0.5], width = 0.14, alpha = 1, speed = 1.2 } = {}) {
@@ -111,9 +117,37 @@ const SPARK_FRAG = `varying float vA; void main(){ float r = length(gl_PointCoor
   #include <colorspace_fragment>
 }`;
 
+// light shafts: camera-facing ribbons running along the sun direction from high above to the ground (one draw call, additive)
+const RAY_VERT = `attribute float aSide; attribute vec4 aRay; uniform vec3 uSun; uniform float uTime; varying vec2 vR; varying float vV;
+  void main(){ float t = aRay.x, len = aRay.y, wid = aRay.z; vec3 p = position + uSun * (t * len); vec3 view = normalize(cameraPosition - p);
+    vec3 side = normalize(cross(uSun, view)); p += side * aSide * wid * (0.55 + 0.9 * t); vR = vec2(aSide, t); vV = pow(abs(dot(view, uSun)), 0.7) * 0.7 + 0.3;
+    vR.x = aSide * (0.6 + 0.4 * sin(uTime * 0.2 + aRay.w * 40.0)); gl_Position = projectionMatrix * viewMatrix * vec4(p, 1.0); }`;
+const RAY_FRAG = `varying vec2 vR; varying float vV; uniform vec3 uColor; uniform float uInt, uTime;
+  void main(){ float e = pow(1.0 - abs(vR.x), 1.6); float tt = vR.y; float fade = smoothstep(0.0, 0.18, tt) * (1.0 - smoothstep(0.62, 1.0, tt));
+    float pulse = 0.75 + 0.25 * sin(uTime * 0.6 + tt * 6.0 + vR.x * 3.0); float a = e * fade * pulse * uInt * vV; gl_FragColor = vec4(uColor * a * 4.5, a);
+    #include <tonemapping_fragment>
+    #include <colorspace_fragment>
+  }`;
+
 // ------------------------------------------------------------------------------------------ gladiator baking (1 SkinnedMesh per character)
 const _tm = new THREE.Matrix4(), _inv = new THREE.Matrix4();
 let SKIN_MAT = null;
+/** Bake one geometry (root-local after `matrix`) into the skinned mesh list: vertex color = material color x vertex color, rigid to bone `bi`, `sway(i)` = hem flutter weight. */
+function bakePiece(geos, g, matrix, mat, bi, sway) {
+  g = g.index ? g.toNonIndexed() : g.clone();
+  for (const k of Object.keys(g.attributes)) if (k !== 'position' && k !== 'normal' && k !== 'color' && k !== 'uv') g.deleteAttribute(k);
+  if (!g.attributes.normal) g.computeVertexNormals();
+  if (matrix) g.applyMatrix4(matrix);
+  const base = mat && mat.color ? mat.color : new THREE.Color(1, 1, 1), n = g.attributes.position.count, vc = g.attributes.color, uv = g.attributes.uv;
+  const col = new Float32Array(n * 3), sw = new Float32Array(n), si = new Uint16Array(n * 4), skw = new Float32Array(n * 4);
+  for (let i = 0; i < n; i++) {
+    col[i * 3] = (vc ? vc.getX(i) : 1) * base.r; col[i * 3 + 1] = (vc ? vc.getY(i) : 1) * base.g; col[i * 3 + 2] = (vc ? vc.getZ(i) : 1) * base.b;
+    sw[i] = sway ? sway(i, uv) : 0; si[i * 4] = bi; skw[i * 4] = 1;
+  }
+  g.deleteAttribute('uv'); g.setAttribute('color', new THREE.BufferAttribute(col, 3)); g.setAttribute('aSway', new THREE.BufferAttribute(sw, 1));
+  g.setAttribute('skinIndex', new THREE.BufferAttribute(si, 4)); g.setAttribute('skinWeight', new THREE.BufferAttribute(skw, 4));
+  geos.push(g);
+}
 function bakeSkinned(rig) {
   const bones = JOINTS.map((n) => rig.joints[n]), idx = new Map(bones.map((b, i) => [b, i]));
   rig.root.position.set(0, 0, 0); rig.root.rotation.set(0, 0, 0); rig.root.updateMatrixWorld(true);
@@ -124,20 +158,28 @@ function bakeSkinned(rig) {
     if (!o.isMesh || !o.geometry || sec.has(o)) return;
     let b = o.parent; while (b && !idx.has(b)) b = b.parent;
     const bi = b ? idx.get(b) : 0;
-    let g = o.geometry; g = g.index ? g.toNonIndexed() : g.clone();
-    for (const k of Object.keys(g.attributes)) if (k !== 'position' && k !== 'normal' && k !== 'color') g.deleteAttribute(k);
-    if (!g.attributes.normal) g.computeVertexNormals();
-    _tm.multiplyMatrices(_inv, o.matrixWorld); g.applyMatrix4(_tm);
-    const mat = Array.isArray(o.material) ? o.material[0] : o.material, base = mat && mat.color ? mat.color : new THREE.Color(1, 1, 1), n = g.attributes.position.count;
-    const col = new Float32Array(n * 3), vc = g.attributes.color;
-    for (let i = 0; i < n; i++) { const k = vc ? 1 : 1; col[i * 3] = (vc ? vc.getX(i) : 1) * base.r * k; col[i * 3 + 1] = (vc ? vc.getY(i) : 1) * base.g * k; col[i * 3 + 2] = (vc ? vc.getZ(i) : 1) * base.b * k; }
-    g.setAttribute('color', new THREE.BufferAttribute(col, 3));
-    const si = new Uint16Array(n * 4), sw = new Float32Array(n * 4); for (let i = 0; i < n; i++) { si[i * 4] = bi; sw[i * 4] = 1; }
-    g.setAttribute('skinIndex', new THREE.BufferAttribute(si, 4)); g.setAttribute('skinWeight', new THREE.BufferAttribute(sw, 4));
-    geos.push(g); hide.push(o);
+    _tm.multiplyMatrices(_inv, o.matrixWorld);
+    bakePiece(geos, o.geometry, _tm, Array.isArray(o.material) ? o.material[0] : o.material, bi, null);
+    hide.push(o);
   });
+  // cloak, skirt strips, plume: the verlet secondaries are replaced by their rest shape glued to the anchor bone; the shader sways the hem
+  for (const sc of rig.secondary) {
+    const nm = (sc.mesh && sc.mesh.name) || (sc.group && sc.group.name) || ''; if (/net/.test(nm)) continue;
+    try { if (sc.reset) sc.reset(); if (sc.write) sc.write(); } catch (e) { continue; }
+    let b = sc.anchor; while (b && !idx.has(b)) b = b.parent; const bi = b ? idx.get(b) : 0;
+    try {
+      if (sc.mesh && sc.geo) bakePiece(geos, sc.geo, null, sc.mesh.material, bi, (i, uv) => (uv ? Math.pow(1 - uv.getY(i), 1.3) : 0.5));
+      else if (sc.group) sc.group.children.forEach((m, k, arr) => { if (m.isMesh && m.geometry) bakePiece(geos, m.geometry, m.matrix, Array.isArray(m.material) ? m.material[0] : m.material, bi, () => 0.35 + 0.65 * (k / Math.max(1, arr.length - 1))); });
+    } catch (e) { /* a secondary that cannot be baked is simply left out */ }
+  }
   const geo = mergeGeometries(geos, false);
-  SKIN_MAT = SKIN_MAT || new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.72, metalness: 0.08 });
+  if (!SKIN_MAT) {
+    SKIN_MAT = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.72, metalness: 0.08, side: THREE.DoubleSide });
+    patchMaterial(SKIN_MAT, {
+      key: 'hub_skin', uniforms: { uTime: buildingUniforms.uTime, uWind: buildingUniforms.uWind }, vPars: 'attribute float aSway; uniform float uTime, uWind;',
+      vBody: 'transformed += vec3(sin(uTime * 2.6 + transformed.y * 3.0 + transformed.x * 2.0), 0.0, cos(uTime * 2.1 + transformed.y * 2.5)) * aSway * 0.07 * (0.6 + 0.4 * uWind);',
+    });
+  }
   const sm = new THREE.SkinnedMesh(geo, SKIN_MAT); sm.frustumCulled = false; sm.castShadow = true; sm.receiveShadow = false; sm.name = 'glad_skin';
   rig.root.add(sm); sm.updateMatrixWorld(true);
   sm.bind(new THREE.Skeleton(bones));
@@ -160,7 +202,7 @@ export function createHub({ renderer, camera, audio, tier = 'high', post = null 
   // ---- sky, light, environment
   const sky = createSky(); scene.add(sky.mesh);
   const rig = createLightRig(scene, { shadowSize: T().shadow, shadowRadius: 36, shadowCenter: new V3(0, 1, 1), near: 1, far: 260 });
-  const env = createLudus({ density: Math.max(0.5, T().crowd * 0.8), terrainSeg: tier === 'low' ? 112 : 150, farShadows: tier === 'high' }); group.add(env.group);
+  const env = createLudus({ density: Math.max(0.5, T().crowd * 0.8), terrainSeg: tier === 'low' ? 96 : 150, farShadows: tier === 'high' }); group.add(env.group);
   { // strip the env's own walls/portico/pool/torches: the hub builds its own lower wall and terraces
     const keep = new Set(['terrain', 'courtyard_floor', 'dust', 'birds', 'blobshadows']);
     const bb = new THREE.Box3(), kill = [];
@@ -173,9 +215,11 @@ export function createHub({ renderer, camera, audio, tier = 'high', post = null 
     for (const ch of kill) env.group.remove(ch);
   }
 
+  const trimCasters = () => { const low = tier === 'low'; for (const n of ['cypress', 'pine']) { const m = env.group.getObjectByName(n); if (m) m.castShadow = !low; } if (layers.metal) layers.metal.castShadow = !low; };
   // ---- merged world meshes (one per shared building material)
   const layers = {};
   for (const m of MATS) { const mesh = new THREE.Mesh(new THREE.BufferGeometry(), lib[m]); mesh.frustumCulled = false; mesh.castShadow = m !== 'glow' && m !== 'cloth'; mesh.receiveShadow = m !== 'glow'; mesh.name = 'hub_' + m; group.add(mesh); layers[m] = mesh; }
+  trimCasters();
   const sandTex = makeSandTexture(512, 6); sandTex.map.repeat.set(1, 1); sandTex.map.needsUpdate = true;
   const sandMat = new THREE.MeshStandardMaterial({ map: sandTex.map, bumpMap: sandTex.bump, bumpScale: 0.8, vertexColors: true, roughness: 1 });
   const sandMesh = new THREE.Mesh(new THREE.BufferGeometry(), sandMat); sandMesh.receiveShadow = true; sandMesh.frustumCulled = false; sandMesh.name = 'hub_terrace_top'; group.add(sandMesh);
@@ -216,6 +260,24 @@ export function createHub({ renderer, camera, audio, tier = 'high', post = null 
         #include <colorspace_fragment>
       }` }));
     rain.frustumCulled = false; rain.visible = false; rain.renderOrder = 9; group.add(rain); }
+
+  // ---- god rays (golden hour light shafts)
+  const rayU = { uSun: { value: new V3(0, 1, 0) }, uTime: { value: 0 }, uColor: { value: new THREE.Color(1.0, 0.72, 0.38) }, uInt: { value: 0 } };
+  const rays = (() => {
+    const N = tier === 'low' ? 6 : 10, r = rngOf(31), pos = [], side = [], ray = [], idx = []; let v = 0;
+    for (let i = 0; i < N; i++) {
+      const x = (r() - 0.5) * 50, z = (r() - 0.5) * 34, len = 40 + r() * 20, wid = 2.0 + r() * 3.4, sd = r();
+      for (let k = 0; k < 2; k++) for (const sg of [-1, 1]) { pos.push(x, 0.5, z); side.push(sg); ray.push(k, len, wid, sd); v++; }
+      const b = v - 4; idx.push(b, b + 1, b + 2, b + 1, b + 3, b + 2);
+    }
+    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('aSide', new THREE.Float32BufferAttribute(side, 1)); g.setAttribute('aRay', new THREE.Float32BufferAttribute(ray, 4)); g.setIndex(idx);
+    const m = new THREE.Mesh(g, new THREE.ShaderMaterial({ uniforms: rayU, vertexShader: RAY_VERT, fragmentShader: RAY_FRAG, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, fog: false }));
+    m.frustumCulled = false; m.renderOrder = 5; m.name = 'godrays'; m.visible = false; group.add(m); return m;
+  })();
+  let rayTarget = 0, rayAmt = 0, lightning = 0, nextBolt = 6, bolted = false;
+  const prefersReduced = () => { try { return matchMedia('(prefers-reduced-motion: reduce)').matches || document.body.classList.contains('lx-reduce-motion'); } catch (e) { return false; } };
+  const WET0 = { m: lib.masonry.color.clone(), r: lib.roof.color.clone(), mr: lib.masonry.roughness, rr: lib.roof.roughness };
+  function wet(k) { lib.masonry.color.copy(WET0.m).multiplyScalar(1 - 0.2 * k); lib.roof.color.copy(WET0.r).multiplyScalar(1 - 0.22 * k); lib.masonry.roughness = lerp(WET0.mr, 0.5, k); lib.roof.roughness = lerp(WET0.rr, 0.4, k); }
 
   // ---------------------------------------------------------------------------------------- static shell (walls, towers, gate, terraces, trees)
   let staticParts = null, staticFx = null, staticLeaf = null;
@@ -270,6 +332,16 @@ export function createHub({ renderer, camera, audio, tier = 'high', post = null 
     for (const x of [-19, -13.5, -8, 8, 13.5, 19]) cypress(x, 16.6 + (Math.abs(x) % 3) * 0.2, 0.6 + (Math.abs(x * 7) % 5) * 0.05);
     olive(-21.4, 16.2, 0.9); olive(21.4, 16.0, 1.0); olive(-5.8, 17.0, 0.7); olive(5.9, 17.2, 0.75);
     for (let rr = 0; rr < 4; rr++) for (const sx of [-1, 1]) olive(sx * 22.2, Z0 + rr * PZ + (rr % 2 ? 1.2 : -1.2), 0.5 + 0.06 * ((rr + (sx > 0 ? 1 : 0)) % 3), terraceH(rr));
+    // flowering shrubs (oleander, rose, lavender, rosemary) hugging the walls and the forecourt path: colour accents in the greenery
+    const bush = (x, z, y, sc, fl) => {
+      const g = new THREE.IcosahedronGeometry(0.62 * sc, 0); g.scale(1.25, 0.8, 1); g.translate(x, y + 0.42 * sc, z); lg.push(leafCol(g, [0.07, 0.15, 0.05], [0.17, 0.3, 0.09], 1.1 * sc, 0.35, y));
+      for (let i = 0; i < 4; i++) { const f = new THREE.OctahedronGeometry(0.1 * sc, 0); f.translate(x + (r() - 0.5) * 0.9 * sc, y + (0.6 + r() * 0.3) * sc, z + (r() - 0.5) * 0.6 * sc); lg.push(leafCol(f, fl, fl, 1, 0.5, y)); }
+    };
+    const lav = (x, z, y, n) => { for (let i = 0; i < n; i++) { const g = new THREE.ConeGeometry(0.07, 0.42, 4); g.translate(x + i * 0.2 + (r() - 0.5) * 0.08, y + 0.21, z + (r() - 0.5) * 0.25); lg.push(leafCol(g, [0.22, 0.12, 0.42], [0.36, 0.2, 0.62], 0.42, 0.6, y)); } };
+    const PINK = [0.62, 0.1, 0.2], WHITE = [0.8, 0.74, 0.62], YEL = [0.8, 0.52, 0.06], RED = [0.55, 0.06, 0.05];
+    [[-11.5, PINK], [-7.5, WHITE], [7.3, YEL], [11.8, PINK], [16.5, RED], [-16.8, WHITE], [20.5, YEL], [-21, PINK]].forEach(([x, f]) => bush(x, 17.6, 0, 0.9 + r() * 0.3, f));
+    for (let rr = 0; rr < 4; rr++) for (const sx of [-1, 1]) { if (rr % 2) bush(sx * 22.6, Z0 + rr * PZ + 2.0, terraceH(rr), 0.8, rr === 2 ? WHITE : PINK); lav(sx * 21.2, Z0 + rr * PZ - 2.4, terraceH(rr), 6); }
+    lav(-3.6, 15.3, 0.0, 7); lav(2.4, 15.3, 0.0, 7); lav(-3.6, 12.6, 0.0, 5); lav(2.4, 12.6, 0.0, 5);
     staticLeaf = lg;
   }
   function leafCol(g, lo, hi, H, sway, y0 = 0) {
@@ -403,7 +475,7 @@ export function createHub({ renderer, camera, audio, tier = 'high', post = null 
     constructor(g, i) {
       this.g = g; this.id = g.id; this.rig = bakeSkinned(createGladiator(g)); this.rig.root.name = 'glad_' + g.id; group.add(this.rig.root);
       this.pos = new V3(); this.yaw = 0; this.goalYaw = 0; this.speed = 0; this.kind = 'idle'; this.timer = 1 + (i % 5) * 0.4; this.q = []; this.seed = hashStr(String(g.id)) % 1000; this.rnd = rngOf(this.seed + 11);
-      this.home = new V3(); this.p2 = new V3(); this.dir = 1; this.partner = null; this.role = 0; this.sig = '';
+      this.home = new V3(); this.p2 = new V3(); this.dir = 1; this.partner = null; this.role = 0; this.sig = ''; this.lg = 0; this.lgT = 0; this.phase = 0; this.hits = 0;
     }
     dispose() { group.remove(this.rig.root); this.rig.root.traverse((o) => { if (o.geometry) o.geometry.dispose(); }); }
   }
@@ -427,7 +499,7 @@ export function createHub({ renderer, camera, audio, tier = 'high', post = null 
         } else { const s = nextSlot('yard'); x = -6 + s * 2.2; z = 15.6; mode = kind === 'agi' ? 'jog' : 'drill'; if (mode === 'jog') a.p2.set(x + 6, 0, z); face = Math.PI; armed = mode === 'drill' ? 1 : 0; }
       } else if (kind === 'spar') {
         const pi = pS >= 0 ? pS : pP; const s = nextSlot('spar'); const pair = Math.floor(s / 2), side = s % 2 ? 1 : -1;
-        if (pi >= 0) at(pi, side * 1.0, -0.1 + (pair % 2) * 0.0); else { x = side * 1.0; z = 15.8; }
+        if (pi >= 0) at(pi, side * 0.95, -0.1 + (pair % 2) * 0.0); else { x = side * 0.95; z = 15.8; }
         mode = 'duel'; armed = 1; face = side > 0 ? -Math.PI / 2 : Math.PI / 2; a.role = s % 2; a.pair = pair; (sparPairs[pair] = sparPairs[pair] || []).push(a);
       } else if (kind === 'work') {
         const pi = pM >= 0 ? pM : pB; const s = nextSlot('work'); if (pi >= 0) at(pi, -2.4 + s * 1.2, 2.45); else { x = 4 + s * 1.3; z = 15.8; } mode = 'walk'; a.p2.set(x - 2.4, 0, z); face = 0; armed = 0;
@@ -456,11 +528,24 @@ export function createHub({ renderer, camera, audio, tier = 'high', post = null 
         if (a.timer <= 0) { const nm = ATT[Math.floor(a.rnd() * 3)]; try { an.play(nm, { speed: 0.75 + a.rnd() * 0.3 }); } catch (e) { /* clip missing */ } a.timer = 1.7 + a.rnd() * 1.8; if (a.rnd() < 0.12) { try { an.play('taunt'); } catch (e) { /* */ } a.timer += 1.4; } }
         break;
       case 'duel': {
+        // a readable exchange: the attacker steps in and strikes (a 1 to 3 hit combo), the defender blocks or takes it and gives ground, then they reset and swap roles
         const p = a.partner; if (p) { const dx = p.pos.x - a.pos.x, dz = p.pos.z - a.pos.z; want = Math.atan2(dx, dz); }
-        if (a.timer <= 0 && p) {
-          if (a.q.length === 0 && a.role === (Math.floor(t / 1.9) % 2)) { try { an.play(ATT[Math.floor(a.rnd() * 3)], { speed: 0.95 }); } catch (e) { /* */ } p.q.push({ t: 0.42, fn: () => { try { if (p.rnd() < 0.6) { p.rig.animator.play('block'); p.q.push({ t: 0.35, fn: () => p.rig.animator.release() }); } else p.rig.animator.hurt(1, 0.7); } catch (e) { /* */ } } }); a.timer = 1.5 + a.rnd() * 0.6; }
-          else a.timer = 0.25;
+        if (p && a.role === 0) {   // the pair is driven by its first member so both stay in sync
+          a.timer -= 0; if (a.timer <= 0) {
+            const att = a.phase % 2 === 0 ? a : p, def = att === a ? p : a, n = 1 + Math.floor(a.rnd() * 3); a.phase++;
+            for (let k = 0; k < n; k++) {
+              const t0 = k * 0.95;
+              att.q.push({ t: t0, fn: () => { try { att.rig.animator.play(ATT[Math.floor(att.rnd() * 3)], { speed: 1.0 }); } catch (e) { /* clip */ } att.lgT = 0.42; } });
+              att.q.push({ t: t0 + 0.55, fn: () => { att.lgT = 0.12; } });
+              def.q.push({ t: t0 + 0.38, fn: () => { try { if (def.rnd() < 0.62) { def.rig.animator.play('block'); def.q.push({ t: 0.3, fn: () => { try { def.rig.animator.release(); } catch (e) { /* */ } } }); def.lgT = -0.08; } else { def.rig.animator.hurt(1, 0.7); def.lgT = -0.32; } } catch (e) { /* */ } if (audio && audio.sfx && att.pos.distanceToSquared(orb.target) < 400) audio.sfx(def.lgT < -0.2 ? 'swordHit' : 'shieldBlock', { gain: 0.28, pan: panOf(def.pos) }); } });
+              def.q.push({ t: t0 + 0.85, fn: () => { def.lgT = 0; } });
+            }
+            att.q.push({ t: n * 0.95 + 0.4, fn: () => { att.lgT = 0; if (att.rnd() < 0.25) { try { att.rig.animator.play('taunt'); } catch (e) { /* */ } } } });
+            a.timer = n * 0.95 + 1.5 + a.rnd() * 0.9;
+          }
         }
+        // lunge / recoil along the line between the two (smoothed), legs step while the gap changes
+        if (p) { const dx = p.home.x - a.home.x, dz = p.home.z - a.home.z, d = Math.hypot(dx, dz) || 1, lg0 = a.lg; a.lg += (a.lgT - a.lg) * Math.min(1, dt * 8); const ux = dx / d, uz = dz / d; a.pos.set(a.home.x + ux * a.lg, a.home.y, a.home.z + uz * a.lg); move = clamp(Math.abs(a.lg - lg0) / Math.max(dt, 0.001), 0, 2.2); }
         break;
       }
       case 'jog': case 'walk': {
@@ -570,7 +655,7 @@ export function createHub({ renderer, camera, audio, tier = 'high', post = null 
   }
   function onUp(e) {
     const p = ptrs.get(e.pointerId); if (!p) return; ptrs.delete(e.pointerId); try { dom.releasePointerCapture(e.pointerId); } catch (err) { /* */ }
-    if (tap && tap.id === e.pointerId && tap.moved < 9 && performance.now() - tap.t < 450) { const r = pick(e.clientX, e.clientY); emit('pick', r, e); if (hub.onPick) hub.onPick(r, e); orb.vAz = orb.vPitch = 0; }
+    if (tap && tap.id === e.pointerId && tap.moved < 9 && performance.now() - tap.t < 450) { orb.vAz = orb.vPitch = 0; handleTap(e); }
     if (ptrs.size < 2) pinch = null; if (ptrs.size === 0) tap = null;
   }
   function onWheel(e) { if (!orb.enabled) return; e.preventDefault(); touchedNow(); const k = Math.exp(clamp(e.deltaY * (e.deltaMode === 1 ? 16 : 1), -300, 300) * 0.0011); orb.dist *= k; orb.vZoom = Math.log(k) * 2; clampOrbit(); }
@@ -611,6 +696,81 @@ export function createHub({ renderer, camera, audio, tier = 'high', post = null 
     return null;
   }
 
+  // ---------------------------------------------------------------------------------------- phone-friendly picking, auto-zoom preview and the floating label card
+  const _sp = new V3(), _corner = new V3();
+  /** nearest building (distance to its projected box) or gladiator (distance to its centre) within `slop` CSS px of the tap. Direct ray hits are handled by pick(). */
+  function pickNear(clientX, clientY, slop) {
+    const r = dom.getBoundingClientRect(), px = clientX - r.left, py = clientY - r.top, W = r.width, H = r.height; let best = null, bd = slop;
+    camera.updateMatrixWorld();
+    const rows = S.rows || 2;
+    for (let i = 0; i < 16; i++) {
+      const [rr] = plotRC(i); if (rr >= rows) continue; const pl = S.plots[i]; if (!pl) continue;
+      const c = plotCenter(i), fp = buildParts(pl.b, pl.l).footprint, hh = Math.min(fp.h, 7);
+      let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9, behind = false;
+      for (let k = 0; k < 8; k++) { _corner.set(c.x + (k & 1 ? 1 : -1) * fp.w / 2, c.y + (k & 2 ? hh : 0), c.z + (k & 4 ? 1 : -1) * fp.d / 2).project(camera); if (_corner.z > 1) { behind = true; break; } const sx = (_corner.x * 0.5 + 0.5) * W, sy = (-_corner.y * 0.5 + 0.5) * H; x0 = Math.min(x0, sx); x1 = Math.max(x1, sx); y0 = Math.min(y0, sy); y1 = Math.max(y1, sy); }
+      if (behind) continue;
+      const d = Math.hypot(Math.max(x0 - px, 0, px - x1), Math.max(y0 - py, 0, py - y1)) + 0.001 * camera.position.distanceTo(c);
+      if (d < bd) { bd = d; best = { type: 'plot', i, empty: false, locked: false }; }
+    }
+    for (const a of actors.values()) {
+      _sp.set(a.pos.x, a.pos.y + 0.9, a.pos.z).project(camera); if (_sp.z > 1) continue;
+      const d = Math.hypot((_sp.x * 0.5 + 0.5) * W - px, (-_sp.y * 0.5 + 0.5) * H - py) * 1.15;
+      if (d < bd && d < slop * 0.8) { bd = d; best = { type: 'glad', id: a.id }; }
+    }
+    return best;
+  }
+  const slopFor = (e) => { const r = dom.getBoundingClientRect(), m = Math.min(r.width, r.height); return e && e.pointerType && e.pointerType !== 'mouse' ? clamp(m * 0.09, 30, 64) : 9; };
+  function pickSlop(e) {
+    const r = pick(e.clientX, e.clientY);
+    if (r && (r.type === 'glad' || (r.type === 'plot' && !r.empty && !r.locked))) return r;
+    const near = pickNear(e.clientX, e.clientY, slopFor(e));
+    if (near && (!r || near.type === 'plot')) return near;
+    return near || r;
+  }
+  // label card (DOM, one element): hover label on desktop, tap-to-zoom card with an Open button on touch
+  const card = { el: null, t: null, s: null, b: null, i: -1, open: false, shown: false };
+  function ensureCard() {
+    if (card.el) return card;
+    if (!document.getElementById('lx-hubcard-css')) { const st = document.createElement('style'); st.id = 'lx-hubcard-css'; st.textContent = `.lx-hubcard{position:fixed;left:0;top:0;z-index:30;pointer-events:none;min-width:150px;max-width:230px;padding:9px 12px 10px;border-radius:12px;border:2px solid #b8803a;background:linear-gradient(180deg,rgba(54,36,66,.96),rgba(29,24,48,.96));color:#f6ecd0;font:600 13px/1.25 system-ui,sans-serif;box-shadow:0 6px 18px rgba(0,0,0,.45),inset 0 0 0 1px rgba(255,226,150,.18);opacity:0;transition:opacity .16s;text-align:center;will-change:transform}.lx-hubcard.on{opacity:1}.lx-hubcard.open{pointer-events:auto}.lx-hubcard-t{font:800 15px/1.2 Georgia,serif;letter-spacing:.05em;color:#f2c14e;text-transform:uppercase}.lx-hubcard-s{opacity:.82;margin-top:2px;font-size:12px}.lx-hubcard-b{display:none;margin:8px auto 0;min-width:96px;min-height:40px;padding:8px 18px;border-radius:10px;border:2px solid #7a4e1c;background:linear-gradient(180deg,#f2c14e,#c58a2a);color:#2a1a30;font:800 13px system-ui,sans-serif;letter-spacing:.06em;cursor:pointer}.lx-hubcard.open .lx-hubcard-b{display:block}.lx-hubcard:after{content:"";position:absolute;left:50%;bottom:-9px;width:14px;height:14px;margin-left:-7px;transform:rotate(45deg);background:#1d1830;border-right:2px solid #b8803a;border-bottom:2px solid #b8803a}@media (prefers-reduced-motion:reduce){.lx-hubcard{transition:none}}`; document.head.appendChild(st); }
+    const el = document.createElement('div'); el.className = 'lx-hubcard'; el.setAttribute('role', 'status');
+    el.innerHTML = '<div class="lx-hubcard-t"></div><div class="lx-hubcard-s"></div><button type="button" class="lx-hubcard-b">Open</button>';
+    (document.getElementById('ui') || document.body).appendChild(el);
+    card.el = el; card.t = el.firstChild; card.s = el.children[1]; card.b = el.children[2];
+    card.b.addEventListener('click', (ev) => { ev.stopPropagation(); if (card.i >= 0) openPlot(card.i, ev); });
+    card.el.addEventListener('pointerdown', (ev) => ev.stopPropagation());
+    return card;
+  }
+  const plotLabel = (i) => { const p = S && S.plots[i], D = Dg(); return p ? { n: (D.BUILD[p.b] && D.BUILD[p.b].n) || p.b, s: 'Level ' + p.l } : null; };
+  function showCard(i, interactive) {
+    const lab = plotLabel(i); if (!lab) return hideCard(); ensureCard();
+    card.i = i; card.open = !!interactive; card.shown = true; card.t.textContent = lab.n; card.s.textContent = interactive ? lab.s + ' \u00b7 tap again to open' : lab.s;
+    card.el.classList.toggle('open', !!interactive); card.el.classList.add('on'); placeCard();
+  }
+  function hideCard() { if (!card.el) return; card.shown = false; card.open = false; card.i = -1; card.el.classList.remove('on', 'open'); }
+  function placeCard() {
+    if (!card.shown || !card.el || card.i < 0) return; const p = S && S.plots[card.i]; if (!p) return hideCard();
+    const c = plotCenter(card.i), fp = buildParts(p.b, p.l).footprint, r = dom.getBoundingClientRect();
+    _sp.set(c.x, c.y + Math.min(fp.h, 7) * 0.95, c.z).project(camera); if (_sp.z > 1) { card.el.classList.remove('on'); return; } card.el.classList.add('on');
+    const w = card.el.offsetWidth || 160, h = card.el.offsetHeight || 50;
+    let x = (_sp.x * 0.5 + 0.5) * r.width + r.left, y = (-_sp.y * 0.5 + 0.5) * r.height + r.top - 16;
+    x = clamp(x, r.left + w / 2 + 8, r.right - w / 2 - 8); y = clamp(y, r.top + h + 70, r.bottom - 150);
+    card.el.style.transform = `translate(${(x - w / 2).toFixed(1)}px,${(y - h).toFixed(1)}px)`;
+  }
+  let preview = -1;
+  function openPlot(i, ev) { const r = { type: 'plot', i, empty: false, locked: false }; preview = -1; hideCard(); emit('pick', r, ev); if (hub.onPick) hub.onPick(r, ev); }
+  function playUi(n, o) { try { audio && audio.sfx && audio.sfx(n, o); } catch (err) { /* audio optional */ } }
+  /** a tap: touch + far camera + a building = zoom in and show the card first; a second tap on it (or the card button) opens it */
+  function handleTap(e) {
+    const touch = e.pointerType && e.pointerType !== 'mouse';
+    const r = touch ? pickSlop(e) : pick(e.clientX, e.clientY);
+    if (touch && r && r.type === 'plot' && !r.empty && !r.locked && preview !== r.i && orb.dist > 44) {
+      preview = r.i; focusPlot(r.i, { dist: Math.min(orb.dist, (orb.aspect < 0.95 ? 30 : 24) + 5), dur: 0.8 }); showCard(r.i, true); setSelection({ type: 'plot', i: r.i });
+      playUi('uiSelect'); emit('preview', r, e); return;
+    }
+    if (!r && preview >= 0) { preview = -1; hideCard(); setSelection(null); overview(); return; }
+    preview = -1; hideCard(); emit('pick', r, e); if (hub.onPick) hub.onPick(r, e);
+  }
+
   // ---------------------------------------------------------------------------------------- selection / hover
   let sel = null, hover = null;
   const mm4 = new THREE.Matrix4();
@@ -622,7 +782,7 @@ export function createHub({ renderer, camera, audio, tier = 'high', post = null 
     m.setMatrixAt(0, mm4); m.instanceMatrix.needsUpdate = true;
   }
   function setSelection(s) { sel = s && (s.type === 'plot' || s.type === 'glad') ? s : null; updateHL(); ringFor(selRing, sel); updateLinkStrength(); emit('select', sel); }
-  function setHover(s) { const same = (hover === s) || (hover && s && hover.type === s.type && hover.i === s.i && hover.id === s.id); if (same) return; hover = s; updateHL(); updateLinkStrength(); if (dom && orb.enabled) dom.style.cursor = s ? 'pointer' : 'grab'; ringFor(hovRing, hover && !(sel && sel.type === hover.type && sel.i === hover.i && sel.id === hover.id) && (hover.type === 'glad' || (hover.type === 'plot' && (hover.empty || hover.locked))) ? hover : null); }
+  function setHover(s) { if (s && s.type === 'plot' && !s.empty && !s.locked && preview < 0) { showCard(s.i, false); } else if (!card.open) hideCard(); const same = (hover === s) || (hover && s && hover.type === s.type && hover.i === s.i && hover.id === s.id); if (same) return; hover = s; if (s) playUi('uiHover', { gain: 0.6 }); updateHL(); updateLinkStrength(); if (dom && orb.enabled) dom.style.cursor = s ? 'pointer' : 'grab'; ringFor(hovRing, hover && !(sel && sel.type === hover.type && sel.i === hover.i && sel.id === hover.id) && (hover.type === 'glad' || (hover.type === 'plot' && (hover.empty || hover.locked))) ? hover : null); }
   function updateHL() {
     hlTarget.fill(0);
     if (hover && hover.type === 'plot' && !hover.empty) hlTarget[hover.i + 1] = 0.38;
@@ -630,7 +790,7 @@ export function createHub({ renderer, camera, audio, tier = 'high', post = null 
   }
 
   // ---------------------------------------------------------------------------------------- time of day + weather
-  let tod = { from: null, to: null, k: 1, cur: null }, hourOverride = null, weatherNow = 'clear', weatherOverride = null;
+  let tod = { from: null, to: null, k: 1, cur: null }, hourOverride = null, weatherNow = 'clear', weatherOverride = null, hemiBase = 1, wetAmt = 0;
   const nightU = { set value(v) { env.setNight(v); } };
   function setTarget(preset, instant) {
     if (instant || !tod.cur) { tod.cur = preset; tod.from = tod.to = preset; tod.k = 1; applyPreset(preset); }
@@ -643,16 +803,37 @@ export function createHub({ renderer, camera, audio, tier = 'high', post = null 
     flames && flames.update(hubT, p.night);
     smokeU.uLight.value.set(p.sunColor).lerp(new THREE.Color(0xd8d0e0), 0.45); smokeU.uDark.value.set(p.hemiGround).multiplyScalar(0.25);
     dust.setSunColor(p.sunColor);
+    rayU.uSun.value.copy(rig.sunDir); rayU.uColor.value.set(p.sunColor).multiplyScalar(0.9);
+    const low = clamp(1 - (p.sunElev - 6) / 28, 0.2, 1), wk = weatherNow === 'rain' ? 0.08 : weatherNow === 'dust' ? 0.7 : weatherNow === 'heat' ? 0.35 : 1;
+    rayTarget = (1 - clamp(p.night * 1.7)) * (0.3 + 0.7 * low) * wk; hemiBase = p.hemiInt;
   }
   const dust = env.dust;
   function weatherState(St) { return weatherOverride || (LMg() ? LMg().weather(St, 'w' + St.week) : 'clear'); }
-  let rainAmt = 0, rainTarget = 0, heatTarget = 0, todKey = '';
+  let rainAmt = 0, rainTarget = 0, heatTarget = 0, todKey = '', lastWeek = -1, liveT0 = 0, liveOff = 0, liveChk = 0;
   function refreshSky(St, instant) {
-    weatherNow = weatherState(St); const h = hourOverride ?? hourOf(St), key = h.toFixed(2) + weatherNow;
+    if (St.week !== lastWeek) { lastWeek = St.week; liveT0 = hubT; liveOff = 0; }
+    weatherNow = weatherState(St); const h = hourOverride ?? (hourOf(St) + liveOff), key = h.toFixed(2) + weatherNow;
     if (key !== todKey || instant) { todKey = key; setTarget(presetFor(h, weatherNow), instant); }
     rainTarget = weatherNow === 'rain' ? 1 : 0; heatTarget = weatherNow === 'heat' ? 1 : 0;
     dust.uniforms.uInt.value = weatherNow === 'dust' ? 3.2 : 1.5; dust.uniforms.uWind.value.set(weatherNow === 'dust' ? 3.2 : 0.5, 0.04, weatherNow === 'dust' ? 1.0 : 0.2);
     buildingUniforms.uWind.value = weatherNow === 'dust' ? 2.4 : weatherNow === 'rain' ? 1.8 : 1.0; smokeU.uWind.value = buildingUniforms.uWind.value;
+  }
+
+  // ---------------------------------------------------------------------------------------- spatial ambience (audio.ambient, see audio.js)
+  const _cr = new V3();
+  function panOf(pos) { const dx = pos.x - camera.position.x, dz = pos.z - camera.position.z, d = Math.hypot(dx, dz) || 1; return clamp((dx * Math.cos(orb.az) - dz * Math.sin(orb.az)) / d, -1, 1) * 0.8; }
+  const SPOT = { forge: 'forge', kitchen: 'kitchen', palaestra: 'yard', sparring: 'yard', stands: 'yard', bath: 'bath', market: 'market', infirmary: 'herbs', scout: 'wind', shrine: 'shrine' };
+  let audT = 0, ambOn = false;
+  function audioTick(dt) {
+    if (!audio || !audio.ambient || !S || !entered) return; audT -= dt; if (audT > 0) return; audT = 0.25;
+    const zoom = clamp(1.3 - orb.dist / 75, 0, 1), focus = [], ref = orb.target, rows = S.rows || 2;
+    for (let i = 0; i < 16; i++) {
+      const pl = S.plots[i]; if (!pl || plotRC(i)[0] >= rows || !SPOT[pl.b]) continue; const c = plotCenter(i), d = Math.hypot(c.x - ref.x, c.z - ref.z), w = zoom / (1 + Math.pow(d / (7 + orb.dist * 0.1), 2));
+      if (w > 0.05) focus.push({ kind: SPOT[pl.b], w, pan: panOf(c) });
+    }
+    let spar = 0, drill = 0; for (const a of actors.values()) { if (a.kind === 'duel') spar++; else if (a.kind === 'drill') drill++; }
+    audio.ambient.update({ hour: tod.cur ? (hourOverride ?? (S ? hourOf(S) + liveOff : 12)) : 12, night: tod.cur ? tod.cur.night : 0, weather: weatherNow, rain: rainAmt, wind: buildingUniforms.uWind.value, zoom, focus, glads: actors.size, spar, drill, fest: !!(LMg() && LMg().fest(S, S.week)) });
+    ambOn = true;
   }
 
   // ---------------------------------------------------------------------------------------- public API
@@ -665,15 +846,16 @@ export function createHub({ renderer, camera, audio, tier = 'high', post = null 
       dom.style.touchAction = 'none'; dom.style.cursor = 'grab';
       dom.addEventListener('pointerdown', onDown); dom.addEventListener('pointermove', onMove); dom.addEventListener('pointerup', onUp); dom.addEventListener('pointercancel', onUp);
       dom.addEventListener('wheel', onWheel, { passive: false }); dom.addEventListener('contextmenu', onCtx); dom.addEventListener('pointerleave', onLeave);
+      try { audio && audio.attachUi && audio.attachUi(document.getElementById('ui'), { hover: true }); } catch (err) { /* audio optional */ }
       orb.enabled = true; entered = true; orb.aspect = (dom.clientWidth || 1100) / (dom.clientHeight || 650); camera.aspect = orb.aspect; camera.updateProjectionMatrix();
       hub.refresh(St, true); overview(true);
       return hub;
     },
     exit() {
-      orb.enabled = false; entered = false; ptrs.clear();
+      orb.enabled = false; entered = false; ptrs.clear(); try { audio && audio.ambient && audio.ambient.stop(); } catch (err) { /* audio optional */ }
       dom.removeEventListener('pointerdown', onDown); dom.removeEventListener('pointermove', onMove); dom.removeEventListener('pointerup', onUp); dom.removeEventListener('pointercancel', onUp);
       dom.removeEventListener('wheel', onWheel); dom.removeEventListener('contextmenu', onCtx); dom.removeEventListener('pointerleave', onLeave);
-      setHover(null);
+      preview = -1; hideCard(); setHover(null);
     },
     refresh(St, instant = false) {
       S = St; if (!staticParts) buildStatic();
@@ -693,12 +875,19 @@ export function createHub({ renderer, camera, audio, tier = 'high', post = null 
       const night = tod.cur ? tod.cur.night : 0;
       sky.update(camera, hubT); env.update(hubT, dt); if (flames) flames.update(hubT, night);
       rig.sun.target.position.copy(rig.shadowCenter);
+      liveChk -= dt; if (liveChk <= 0 && S) { liveChk = 4; const off = hourOverride == null && !orb.follow ? clamp((hubT - liveT0) / 360, 0, 0.9) : liveOff; if (Math.abs(off - liveOff) > 0.035) { liveOff = off; refreshSky(S, false); } }   // the sun creeps toward sunset over a few minutes of one week
+      placeCard(); audioTick(dt);
       // highlight easing + selection pulse
       for (let i = 0; i < MAXPLOT; i++) { const tg = hlTarget[i] * (i > 0 && sel && sel.type === 'plot' && sel.i + 1 === i ? 0.82 + 0.18 * Math.sin(hubT * 3.2) : 1); hlCur[i] += (tg - hlCur[i]) * Math.min(1, dt * 10); buildingUniforms.uHL.value[i] = hlCur[i]; }
       if (sel && sel.type === 'glad') ringFor(selRing, sel); if (hover && hover.type === 'glad') ringFor(hovRing, hover);
       // rain / heat
       rainAmt += (rainTarget - rainAmt) * Math.min(1, dt * 1.2); rain.visible = rainAmt > 0.02; rainU.uAmt.value = rainAmt; rainU.uTime.value = hubT; rainU.uCenter.value.copy(orb.target);
       if (post && post.uniforms && post.uniforms.uHeat) post.uniforms.uHeat.value += ((heatTarget * 0.6) - post.uniforms.uHeat.value) * Math.min(1, dt * 1.5);
+      // god rays, wet stone and lightning (reduced motion: no flashes)
+      rayAmt += (rayTarget - rayAmt) * Math.min(1, dt * 1.5); rayU.uInt.value = rayAmt * 0.75; rayU.uTime.value = hubT; rays.visible = rayAmt > 0.02;
+      if (Math.abs(wetAmt - rainAmt) > 0.004) { wetAmt += (rainAmt - wetAmt) * Math.min(1, dt * 0.8); wet(wetAmt); }
+      if (weatherNow === 'rain' && !prefersReduced()) { nextBolt -= dt; if (nextBolt <= 0) { lightning = 1; nextBolt = 7 + Math.random() * 14; if (audio && audio.ambient && audio.ambient.thunder) audio.ambient.thunder(0.4 + Math.random() * 1.8); } }
+      if (lightning > 0 || bolted) { lightning = Math.max(0, lightning - dt * 2.8); const fl = lightning * lightning * (0.6 + 0.4 * Math.sin(hubT * 60)); rig.hemi.intensity = hemiBase + 2.6 * fl; rig.sun.intensity = (tod.cur ? tod.cur.sunInt : rig.sun.intensity) + 3 * fl; bolted = lightning > 0; }
       // ambient life: update only characters near the camera
       for (const a of actors.values()) { const d = a.pos.distanceTo(camera.position); a.rig.root.visible = d < 190; if (d < 95) updateActor(a, dt, hubT); }
     },
@@ -706,12 +895,13 @@ export function createHub({ renderer, camera, audio, tier = 'high', post = null 
       orb.aspect = w / Math.max(1, h); camera.aspect = orb.aspect; camera.updateProjectionMatrix();
       if (!orb.touched && entered && !orb.anim) overview(true);
     },
-    pick, focusPlot, focusGlad, setSelection, setHover, overview,
+    pick: (cx, cy, e) => (e ? pickSlop({ clientX: cx, clientY: cy, pointerType: e.pointerType }) : pick(cx, cy)), focusPlot, focusGlad, setSelection, setHover, overview, focusHome() { preview = -1; hideCard(); setSelection(null); overview(); },
+    closeCard() { preview = -1; hideCard(); },
     getSelection: () => sel,
     plotCenter, groundAt,
     setHour(h) { hourOverride = h; if (S) refreshSky(S, false); },
     setWeather(w) { weatherOverride = w; if (S) refreshSky(S, false); },
-    setTier(name) { tier = name; rig.setShadowSize(T().shadow); env.setDensity(Math.max(0.5, T().crowd)); maxGlads = tier === 'low' ? 5 : tier === 'medium' ? 8 : 12; if (S) syncGlads(S); },
+    setTier(name) { tier = name; trimCasters(); rig.setShadowSize(T().shadow); env.setDensity(Math.max(0.5, T().crowd)); maxGlads = tier === 'low' ? 5 : tier === 'medium' ? 8 : 12; if (S) syncGlads(S); },
     actors,
     stats() {
       let tris = 0; for (const a of actors.values()) tris += a.rig.tris || 0;

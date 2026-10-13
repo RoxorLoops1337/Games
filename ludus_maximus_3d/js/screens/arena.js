@@ -15,6 +15,7 @@ const GRADE_TIP = 'Letter grades compare a stat to the level average. Scouting l
 export function open(ctx, arg) {
   const S = ctx.S, lm = L(); arg = arg || {};
   if (arg.tab) st.tab = arg.tab;
+  if (arg.wk != null) st.wk = arg.wk; // the calendar opens the week you tapped
   if (st.league == null || arg.league != null) st.league = arg.league != null ? arg.league : lm.maxLeague(S);
   st.league = Math.min(st.league, D.LEAGUES.length - 1);
   const scr = openScreen(ctx, { title: 'The Arena', wide: true });
@@ -31,6 +32,7 @@ function schedule(ctx, scr, root, draw) {
   const S = ctx.S, lm = L(), ml = lm.maxLeague(S), lv = lm.scoutLevel(S), look = lm.lookahead(S);
   if (st.wk >= look) st.wk = 0;
   entriesCard(ctx, root, draw);
+  root.append(actions([U.button({ label: 'Season calendar', icon: 'scroll', variant: 'ghost', onClick: () => ctx.open('world', { tab: 'calendar' }) }), U.button({ label: 'Rival ludi', icon: 'skull', variant: 'ghost', onClick: () => ctx.open('world', { tab: 'rivals' }) })]));
   root.append(chipRow(D.LEAGUES.map((Lg) => ({ id: Lg.id, label: Lg.n, lock: Lg.id > ml, tip: Lg.id > ml ? `Reach ${Lg.fame} fame to enter.` : Lg.d })), st.league, (id) => { st.league = id; ctx.sfx('uiTap'); draw(); }));
   if (look > 1) root.append(chipRow(Array.from({ length: look }, (_, i) => ({ id: i, label: i === 0 ? 'This week' : 'Week ' + (S.week + i), sub: lm.festival(S, S.week + i) ? '★' : '' })), st.wk, (id) => { st.wk = id; ctx.sfx('uiTap'); draw(); }));
   // scouting
@@ -87,7 +89,7 @@ function eventCard(ctx, ev, lv, draw) {
   if (en) {
     foot.append(col([h('div', 'ax-b', 'ENTERED'), h('div', 'ax-sub', en.ids.map((id) => (ctx.gOf(id) || { name: '?' }).name).join(', '))], 'ax-grow'), U.button({ label: 'Withdraw', variant: 'ghost', onClick: () => withdraw(ctx, ev, draw) }));
   } else {
-    foot.append(U.button({ label: 'Scout', variant: 'ghost', icon: 'scroll', onClick: () => dossier(ctx, ev, 0) }), h('span', 'ax-grow'), U.button({ label: 'Enter', variant: 'gold', icon: 'sword', onClick: () => enter(ctx, ev, lv, draw) }));
+    foot.append(U.button({ label: 'Scout', variant: 'ghost', icon: 'scroll', onClick: () => dossier(ctx, ev, 0) }), h('span', 'ax-grow'), (() => { const eb = U.button({ label: 'Enter', variant: 'gold', icon: 'sword', onClick: () => enter(ctx, ev, lv, draw) }); eb.dataset.tut = 'enter'; if (ev.kind === 'duel') eb.dataset.tutKind = 'duel'; return eb; })());
   }
   return card([head, tags, opps, rew, foot], en ? 'gold' : ev.kind === 'grand' ? 'gold' : ev.kind === 'tourney' ? 'purple' : '');
 }

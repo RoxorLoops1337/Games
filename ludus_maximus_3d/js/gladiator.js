@@ -3,18 +3,30 @@
 // hair / beard (deterministic from the record), tunic colour (shield, flaps, cloak), plume colour, rarity accents per equipped item,
 // laurel pips (stars + level) on the chest.
 import * as THREE from 'three';
-import { buildGladiator } from './rig.js';
+import { buildGladiator, detailLevel } from './rig.js';
 import { equipStyle } from './gear.js';
 
 const D = () => globalThis.LM_D, LMg = () => globalThis.LM;
 
+// Character detail follows the render tier: low = the cheap rig (6-sided limbs, decal face), medium = shaped 8-sided limbs and painted face map, high = full close-up
+// detail. Resolution order: opts.detail, setCharacterTier(), globalThis.LM3D_TIER, __LM3D.tier (main.js), ?tier=, high. Callers that pass a segment count of 8+
+// (portraits) get high detail whatever the tier: one rig on an offscreen canvas can afford it.
+let _tier = null;
+export function setCharacterTier(t) { _tier = t || null; }
+function currentTier() {
+  if (_tier) return _tier; const g = globalThis; if (g.LM3D_TIER) return g.LM3D_TIER; if (g.__LM3D && g.__LM3D.tier) return g.__LM3D.tier;
+  try { const q = new URLSearchParams(g.location && g.location.search).get('tier'); if (q) return q; } catch (e) { /* no location (node) */ }
+  return 'high';
+}
+export function detailFor(opts = {}) { if (opts.detail !== undefined && opts.detail !== null) return opts.detail; if (opts.seg >= 8) return 'high'; const t = currentTier(); return t === 'low' ? 'low' : t === 'medium' ? 'medium' : 'high'; }
+
 // Per-style silhouette (read at 20 m): murmillo is a wall, retiarius tall and lean, thraex compact, hoplomachus tall with plume, dimachaerus wide shoulders / narrow waist.
 const BUILD = {
-  murmillo: { build: { bulk: 1.16, height: 0.99, shoulder: 1.12, arm: 1.14, waist: 1.08, leg: 1.1 }, hair: ['bald', 'bald', 'crop'], beard: [0, 1, 2] },
-  retiarius: { build: { bulk: 0.9, height: 1.06, shoulder: 0.97, arm: 0.92, waist: 0.88, leg: 0.95 }, hair: ['long', 'tied', 'short', 'tied'], beard: [0, 1, 0] },
-  thraex: { build: { bulk: 1.0, height: 0.96, shoulder: 1.02, arm: 1.0, waist: 1.0, leg: 1.04 }, hair: ['bald', 'crop'], beard: [1, 2, 0] },
-  hoplomachus: { build: { bulk: 1.06, height: 1.04, shoulder: 1.04, arm: 1.04, waist: 1.0, leg: 1.0 }, hair: ['crop', 'short'], beard: [2, 1, 0] },
-  dimachaerus: { build: { bulk: 1.05, height: 1.0, shoulder: 1.1, arm: 1.08, waist: 0.88, leg: 1.0 }, hair: ['short', 'tied', 'crop', 'bald', 'long'], beard: [0, 1, 2, 0] },
+  murmillo: { build: { bulk: 1.16, height: 0.99, shoulder: 1.12, arm: 1.14, waist: 1.08, leg: 1.1 }, hair: ['bald', 'bald', 'crop', 'curls'], beard: [0, 1, 2] },
+  retiarius: { build: { bulk: 0.9, height: 1.06, shoulder: 0.97, arm: 0.92, waist: 0.88, leg: 0.95 }, hair: ['long', 'tied', 'short', 'braid', 'tied'], beard: [0, 1, 0] },
+  thraex: { build: { bulk: 1.0, height: 0.96, shoulder: 1.02, arm: 1.0, waist: 1.0, leg: 1.04 }, hair: ['bald', 'crop', 'curls'], beard: [1, 2, 0] },
+  hoplomachus: { build: { bulk: 1.06, height: 1.04, shoulder: 1.04, arm: 1.04, waist: 1.0, leg: 1.0 }, hair: ['crop', 'short', 'curls'], beard: [2, 1, 0] },
+  dimachaerus: { build: { bulk: 1.05, height: 1.0, shoulder: 1.1, arm: 1.08, waist: 0.88, leg: 1.0 }, hair: ['short', 'tied', 'crop', 'bald', 'long', 'braid', 'curls'], beard: [0, 1, 2, 0] },
 };
 
 // Most precious equipped item decides the metal tint, so a loadout reads at a glance.
@@ -41,7 +53,7 @@ export function lookFor(g, style) {
   };
 }
 
-/** unitOrGlad: an arena unit ({g, style}) or a glad record. opts: {scale, flip, tunic, seg, look, build} */
+/** unitOrGlad: an arena unit ({g, style}) or a glad record. opts: {scale, flip, tunic, seg, look, build, detail: 'low'|'medium'|'high'} */
 export function createGladiator(unitOrGlad, opts = {}) {
   const g = unitOrGlad.g || unitOrGlad;
   const style = g.style || unitOrGlad.style || 'murmillo';
@@ -50,7 +62,7 @@ export function createGladiator(unitOrGlad, opts = {}) {
   const lk = lookFor(g, style);
   const rig = buildGladiator({
     palette: { skin: g.skin, hair: g.hair, cloth, plume: g.plume, metal: metalFor(g) },
-    build: Object.assign({ seg: opts.seg || 6 }, lk.build, opts.build || {}), look: Object.assign(lk.look, opts.look || {}),
+    build: Object.assign({ seg: opts.seg || 6 }, lk.build, opts.build || {}), look: Object.assign(lk.look, opts.look || {}), detail: detailFor(opts),
     name: g.name || 'gladiator', sculpt: !(style === 'thraex' || style === 'hoplomachus'),
   });
   const rar = {}, gear = g.gear || {};

@@ -104,3 +104,10 @@ Hub UI: uiTap on every button, uiConfirm on accept, uiError on invalid, coin on 
 - Do not trust peak before the limiter: judge levels after it (the verifier does). A hot music bus will make the limiter pump the sfx.
 - No Math.random in music: seeded RNG only, so tests are deterministic.
 - Offer a mute toggle persisted in localStorage (wrap in try/catch) and pause on `visibilitychange`.
+
+## Hub ambience, time of day and ui hooks (HUB-AUDIO, additive)
+- New sfx (all in SFX_NAMES): `uiHover uiSelect uiOpen uiClose` (ui), `bird owl hammer clink chop sizzle thock thunder` (ambience). Use `audio.ui.hover/tap/select/open/close()` or `sfx(name)`.
+- `audio.ambient` ({start, stop, update(state), thunder(delay)}): beds (wind, distant crowd murmur that grows with gladiators and festivals, rain hiss, crickets at night), birds by day (more at dawn and dusk, few in rain), owl at night, far clinks, and workshops near the camera focus panned to their side: forge (4 strikes then a breath, queued 0.35 s ahead), kitchen (chop runs, sizzle, pot clinks), training yard (thocks, grunts, footsteps scaled by drill/spar counts), market (coins), bath (drips). `update` starts the beds lazily once the context runs; the hub feeds it every 0.25 s.
+- `music.setHubTime(hour, night)` drives the `ludus` mode (kept as one mode, adapts smoothly): tempo 92 down to 78 at night, percussion x(1 - 0.65 night), a string pad swells at dusk/night, dawn adds a high flute, deep night adds sparse bell plucks, no flute lead at night. `music.hubTod` exposes the state.
+- `audio.attachUi(root, {hover, tap})` adds a throttled hover tick for buttons (mouse only); taps are off by default because `game.open/ask` already play `uiTap`.
+- Offline check: `createAudio({ctx: new OfflineAudioContext(...)})`, call `ambient.update` 24 times, render: day rms 0.17 peak 0.88 with every new sfx spammed, no exceptions.

@@ -56,3 +56,9 @@ Guarantees (tested, 270k checks): in follow/victory/duel/kill/ultimate every liv
 - `backdrop-filter` is costly on phones: only on `.lx-dark` and keep it off during fights.
 - Modals appended to body must sit outside the canvas stacking context; set `touch-action:none` on the canvas, `manipulation` on buttons.
 - Do not rename localStorage keys; UI state must read from the sim, never duplicate rules.
+
+## Round 2 (fight team): phone fight HUD, kill cam, outro
+- Fight HUD classes (css/ui.css, prefix `.lx-fv`): `.lx-fv-top` (nowrap button row, 34 / 32 / 30 px buttons by width and height), `.lx-fv-extras`, `.lx-fv-hud`. Ult ring size: 84 desktop, 68 phones, 60 under 480 px tall, 54 under 420 px tall; landscape right-aligns the ult row.
+- Nameplates: `FightView.placePlate` projects the head and slides the plate out of the measured rectangles (`measureHud`: top button row, Crowd's Favor box, each ult ring), clamps to the screen with a 112 px plate under 420 px wide, bottom anchored. Checked at 390x800, 360x640, 800x390 for 1v1, 2v2, 3v3.
+- Kill cam: side-on to the killer to victim blow axis, picks the shoulder deeper in the bowl, orbit 0.5 rad total, points = victim, killer, a fall point sliding 0.6 to 2.1 m beyond the victim, flung limb points only after 0.5 s and only if within 5.5 m (a far head must not pull the shot wide). Slow-mo 0.25x until 0.7 s. Victory orbit is 0.1 rad/s eased in.
+- Outro: `endFight` cues the kill shot with `next: victory` (no wall-clock timer), `showEnd` adds the big `.lx-fv-end` title (CSS delay 1.5 s, win gold / defeat grey and red), hides plates, ult bar and Crowd's Favor box; the result resolves after 5.4 s.

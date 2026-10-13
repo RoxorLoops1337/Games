@@ -10,7 +10,7 @@
 // ground, attack events, hand IK) plus the character budget (tris, draw calls), skinning sanity, shield / weapon attachment and shader compile.
 // Open with ?test=1 (default) ; result in window.__testResult and the page text.
 import * as THREE from 'three';
-import { buildGladiator, poseAt, triCount, attackInfo, DIM } from '../js/rig.js';
+import { buildGladiator, poseAt, triCount, attackInfo, DIM, WEAPON_POSES } from '../js/rig.js';
 import { equipStyle, STYLES } from '../js/gear.js';
 import { createGladiator } from '../js/gladiator.js';
 
@@ -22,12 +22,13 @@ const PALETTES = {
   dimachaerus: { skin: '#7a4f34', hair: '#120c08', cloth: '#5b7a3a', plume: '#b8803a', metal: '#aab0b8' },
 };
 const BUILDS = { murmillo: { bulk: 1.14 }, retiarius: { bulk: 0.92, height: 1.04 }, thraex: { bulk: 1.0 }, hoplomachus: { bulk: 1.05, height: 1.02 }, dimachaerus: { bulk: 1.0, shoulder: 1.05 } };
-const TRI_MAX = 2500, CALL_MAX = 14;
+// budgets: low = today's cost (baseline per style, same build / look as below), medium <= 2700, high <= 3000 tris; <= 14 draw calls everywhere
+const TRI_MAX = 3000, TRI_MED = 2700, CALL_MAX = 14, LOW_BASE = { murmillo: 2343, retiarius: 2127, thraex: 2439, hoplomachus: 2285, dimachaerus: 1939 };
 
 function runTests() {
   const fails = [], R = { checks: 0, tris: {}, calls: {}, trisMax: 0, callsMax: 0 }; const ok = (c, m) => { R.checks++; if (!c) fails.push(m); };
   const finite = (r) => { let bad = false; r.root.traverse((o) => { const e = o.matrixWorld.elements; for (let i = 0; i < 16; i++) if (!isFinite(e[i])) bad = true; }); return !bad; };
-  const names = ['idle', 'walk', 'run', 'strafe', 'attack1', 'attack2', 'attack3', 'block', 'hurt', 'knockdown', 'getup', 'death', 'stun', 'victory', 'taunt', 'cheer'];
+  const names = ['idle', 'walk', 'run', 'strafe', 'attack1', 'attack2', 'attack3', 'block', 'hurt', 'knockdown', 'getup', 'death', 'stun', 'victory', 'taunt', 'cheer', 'staggerBack', 'staggerFwd', 'staggerL', 'staggerR', 'knockdownBack', 'knockdownFront', 'knockdownL', 'knockdownR', 'getupFront', 'getupSideL', 'getupSideR', 'deathBack', 'deathFront', 'deathL', 'deathR', 'deathSpin', 'finisher', 'execKneel', 'execDie'];
   const scene = new THREE.Scene(), W = new THREE.Vector3(), W2 = new THREE.Vector3();
   const renderer = new THREE.WebGLRenderer({ antialias: false }); renderer.setSize(64, 64);
   scene.add(new THREE.HemisphereLight('#a4a2cc', '#c98650', 1.2), new THREE.DirectionalLight('#ffb25e', 3));
@@ -62,6 +63,80 @@ function runTests() {
     const cam = new THREE.PerspectiveCamera(40, 1, 0.1, 50); cam.position.set(0, 1.5, 5); cam.lookAt(0, 1, 0);
     renderer.render(scene, cam); ok(renderer.info.render.calls >= 1, style + ' rendered');
     scene.remove(rig.root);
+  }
+  // ---- detail tiers: low keeps today's cost, medium / high add shaped limbs, hands, face map, hair cards
+  for (const style of STYLES) for (const det of ['low', 'medium', 'high']) {
+    const rig = buildGladiator({ palette: PALETTES[style], build: BUILDS[style], look: { face: 1, hair: 'tied', beard: 1 }, detail: det }); equipStyle(rig, style, { stars: 3, lvl: 9, rar: { weapon: 4, shield: 4, armor: 4, helm: 4, charm: 4 }, rarCol: ['#b9b2a3', '#58c765', '#4aa3f0', '#b06cf0', '#f6b82d'], hasCharm: true });
+    const t = triCount(rig.root), c = rig.drawCalls(); R['tier_' + style + '_' + det] = t;
+    ok(c <= CALL_MAX, style + ' ' + det + ' calls ' + c);
+    if (det === 'low') ok(t <= LOW_BASE[style], style + ' low tris ' + t + ' > baseline ' + LOW_BASE[style]); else if (det === 'medium') ok(t <= TRI_MED, style + ' medium tris ' + t); else ok(t <= TRI_MAX, style + ' high tris ' + t);
+    ok(det === 'low' ? !!rig.mats.eye && !rig.mats.hairF : !rig.parts.eye, style + ' ' + det + ' face path');
+    // moving cloth: hd tiers use the rest-space (free) cloth materials so blood patterns stick
+    if (det !== 'low') for (const sc of rig.secondary) { const m = sc.mesh; if (m && /flap|cloak|plume/.test(m.name)) ok(m.material === rig.mats.clothF || m.material === rig.mats.plumeF, style + ' ' + m.name + ' free cloth material'); }
+    for (let i = 0; i < 20; i++) rig.update(1 / 60); ok(finite(rig), style + ' ' + det + ' finite');
+    scene.add(rig.root); renderer.render(scene, new THREE.PerspectiveCamera(40, 1, 0.1, 50)); scene.remove(rig.root); rig.dispose();
+  }
+  // ---- gear detach, weapon drop, sever side effects, sweat
+  for (const style of STYLES) {
+    const rig = buildGladiator({ palette: PALETTES[style], build: BUILDS[style], look: { face: 1, hair: 'short', beard: 1 } }); equipStyle(rig, style, { stars: 2, lvl: 5, rar: { weapon: 2, shield: 2, armor: 2, helm: 2, charm: 2 }, rarCol: ['#b9b2a3', '#58c765', '#4aa3f0', '#b06cf0', '#f6b82d'] });
+    scene.add(rig.root); for (let i = 0; i < 10; i++) rig.update(1 / 60);
+    const det = rig.detachable(); R.detachable = R.detachable || {}; R.detachable[style] = det;
+    ok(det.includes('weapon') && (style === 'retiarius' || det.includes('helm')), style + ' detachable ' + det.join(','));
+    const t0 = triCount(rig.root); let removed = 0;
+    for (const n of det) {
+      const d = rig.detachPart(n); ok(d && d.meshes.length > 0 && d.matrix && d.radius > 0.01 && typeof d.object === 'function', style + ' detach ' + n);
+      if (d) { const o = d.object(); ok(o.children.length === d.meshes.length && isFinite(o.position.x), style + ' detach object ' + n); for (const m of d.meshes) m.geometry.dispose(); }
+      removed++;
+    }
+    ok(triCount(rig.root) < t0 - 40, style + ' tris drop after detach ' + t0 + ' -> ' + triCount(rig.root)); for (let i = 0; i < 5; i++) rig.update(1 / 60); ok(finite(rig), style + ' finite after detach');
+    rig.reattachAll(); ok(Math.abs(triCount(rig.root) - t0) < 2, style + ' reattach restores ' + t0 + ' vs ' + triCount(rig.root)); ok(rig.detachPart('nothing') === null, 'detach unknown is null');
+    // dropWeapon
+    const dw = rig.dropWeapon('R'); ok(dw && dw.side === 'R' && dw.length > 0.3 && dw.tip, style + ' dropWeapon'); ok(rig.dropWeapon('R') === null, style + ' second drop is null');
+    if (style === 'dimachaerus') { const dl = rig.dropWeapon('L'); ok(dl && dl.side === 'L', 'dimachaerus drops left blade'); }
+    if (rig.animator.ik.hand) ok(rig.animator.ik.hand.w === 0, style + ' two-hand grip released');
+    rig.reattachAll(); rig.restoreParts();
+    // sever the off hand: net / grip go, stump painted; restore brings everything back
+    rig.root.updateMatrixWorld(true); const f = rig.sever('forearmL'); ok(!!f, style + ' sever forearmL');
+    const net = rig.secondary.find((sc) => sc.mesh && sc.mesh.name === 'net'); if (net) ok(net.mesh.visible === false, 'net hidden when the off hand is lost');
+    if (rig.animator.ik.hand) ok(rig.animator.ik.hand.w === 0, style + ' grip off after losing the off hand');
+    for (let i = 0; i < 10; i++) rig.update(1 / 60); ok(finite(rig), style + ' finite after sever');
+    rig.restoreParts(); if (net) ok(net.mesh.visible === true, 'net back after restore'); if (rig.animator.ik.hand) ok(rig.animator.ik.hand.w > 0, style + ' grip back after restore');
+    // sweat follows exertion
+    rig.setExertion(1); for (let i = 0; i < 400; i++) rig.update(1 / 60); ok(rig.bloodU.uSweat.value > 0.5, style + ' sweat rises ' + rig.bloodU.uSweat.value.toFixed(2)); rig.setExertion(null);
+    // blood API untouched
+    rig.addBlood(0.3, 1); rig.addWound(new THREE.Vector3(0, 1.2, 0.2), new THREE.Vector3(1, 0, 0), 0.1, 1); ok(rig.bloodU.uBOn.value === 1 && rig.blood.wounds.length === 1, style + ' blood api'); rig.clearBlood();
+    scene.remove(rig.root); rig.dispose();
+  }
+  // ---- reactions: directional hurt, stagger, knockdown + get-up, deaths by blow direction, execution pair, brawl stance
+  {
+    const rig = buildGladiator({ palette: PALETTES.murmillo, build: BUILDS.murmillo }); equipStyle(rig, 'murmillo', {}); const A = rig.animator; scene.add(rig.root);
+    const settle = (n, secs = 200) => { for (let i = 0; i < secs; i++) rig.update(1 / 60); };
+    const minY = () => { let m = 1e9; rig.root.updateMatrixWorld(true); for (const j of ['head', 'chest', 'hips', 'wristL', 'wristR', 'ankleL', 'ankleR']) m = Math.min(m, rig.joints[j].getWorldPosition(W).y); return m; };
+    const headY = () => rig.joints.head.getWorldPosition(W).y;
+    const fresh = () => { A.dead = false; A.action = null; A.add = null; A.add2 = null; A.setState('move', 0); A.setMove(0, 0); rig.root.rotation.y = 0; for (let i = 0; i < 6; i++) rig.update(1 / 60); };
+    // localDir: world vector -> local
+    rig.root.rotation.y = Math.PI / 2; const ld = rig.localDir(1, 0); ok(Math.abs(ld.z - 1) < 1e-6 && Math.abs(ld.x) < 1e-6, 'localDir turns with yaw (' + ld.x.toFixed(2) + ',' + ld.z.toFixed(2) + ')'); rig.root.rotation.y = 0;
+    ok(Math.abs(rig.localDir(0, 1).z - 1) < 1e-6, 'localDir identity');
+    const pick = { staggerBack: [0, 1], staggerFwd: [0, -1], staggerR: [1, 0], staggerL: [-1, 0] };
+    for (const k in pick) { fresh(); ok(A.stagger({ x: pick[k][0], z: pick[k][1] }) === k, 'stagger picks ' + k); settle(20); ok(finite(rig), k + ' finite'); settle(60); }
+    const kd = { knockdown: [0, 1], knockdownFront: [0, -1], knockdownR: [1, 0], knockdownL: [-1, 0] };
+    for (const k in kd) { fresh(); ok(A.knockdown({ x: kd[k][0], z: kd[k][1] }) === k, 'knockdown picks ' + k); settle(90); ok(finite(rig) && minY() > -0.4 && headY() < 0.5, k + ' lies near the ground (head ' + headY().toFixed(2) + ' min ' + minY().toFixed(2) + ')'); const g = A.getUp(); settle(120); A.release(); settle(30); ok(finite(rig) && headY() > 1.3, k + ' ' + g + ' stands again (head ' + headY().toFixed(2) + ')'); }
+    const dd = { deathBack: [[0, 1], {}], deathSpin: [[0, 1], { heavy: true }], deathFront: [[0, -1], {}], deathR: [[1, 0], {}], deathL: [[-1, 0], {}] };
+    for (const k in dd) { fresh(); ok(A.die({ x: dd[k][0][0], z: dd[k][0][1] }, dd[k][1]) === k, 'die picks ' + k); settle(140); ok(A.dead && finite(rig) && headY() < 0.5 && minY() > -0.4, k + ' ends lying (head ' + headY().toFixed(2) + ' min ' + minY().toFixed(2) + ')'); }
+    // per-direction hurt changes the pose differently
+    const hurtSig = (dir) => { fresh(); A.hurt(dir, 1); for (let i = 0; i < 6; i++) rig.update(1 / 60); const q = rig.joints.chest.quaternion; return [q.x, q.y, q.z]; };
+    const hf = hurtSig({ x: 0, z: 1 }), hl = hurtSig({ x: 1, z: 0.2 }), hr = hurtSig({ x: -1, z: 0.2 });
+    ok(Math.abs(hl[2] - hr[2]) > 0.02 || Math.abs(hl[1] - hr[1]) > 0.02, 'hurt left differs from hurt right'); ok(Math.hypot(hf[0] - hl[0], hf[1] - hl[1], hf[2] - hl[2]) > 0.01, 'hurt front differs from side');
+    // execution pair
+    fresh(); A.executed(); settle(60); ok(headY() < 1.5 && headY() > 0.7 && finite(rig), 'execKneel kneels (head ' + headY().toFixed(2) + ')'); const fi = A.clipInfo('finisher'); ok(fi && fi.hitAt > 0.3 && fi.dur > fi.hitAt, 'finisher info'); A.executeKill(); settle(120); ok(A.dead && headY() < 0.6, 'execDie ends prone (head ' + headY().toFixed(2) + ')');
+    fresh(); let ev = []; rig.onEvent = (e) => ev.push(e); A.finisher(); settle(140); ok(ev.includes('swing') && ev.includes('hit') && ev.includes('end'), 'finisher events ' + ev.join(',')); rig.onEvent = null;
+    // victory per style differs
+    const sig = {}; for (const style of STYLES) { const r2 = buildGladiator({ palette: PALETTES[style], build: BUILDS[style] }); equipStyle(r2, style, {}); r2.animator.setState('victory', 0); for (let i = 0; i < 120; i++) r2.update(1 / 60); const q = r2.joints.shoulderR.quaternion, q2 = r2.joints.shoulderL.quaternion; sig[style] = [q.x, q.z, q2.x, q2.z].map((v) => v.toFixed(2)).join(','); ok(finite(r2), style + ' victory finite'); r2.dispose(); }
+    ok(new Set(Object.values(sig)).size >= 4, 'victory poses differ per style ' + JSON.stringify(sig));
+    // brawl stance: official pose set
+    const rb = buildGladiator({ palette: PALETTES.murmillo }); rb.animator.setWeapon('brawl'); ok(!!WEAPON_POSES.brawl, 'WEAPON_POSES.brawl exists');
+    for (const n of ['attack1', 'attack2', 'attack3']) { const evs = []; rb.onEvent = (e) => evs.push(e); rb.animator.play(n); for (let i = 0; i < 120; i++) rb.update(1 / 60); ok(evs.includes('swing') && evs.includes('hit') && evs.includes('end') && finite(rb), 'brawl ' + n + ' ' + evs.join(',')); const inf = rb.animator.clipInfo(n); ok(inf && inf.hitAt > inf.swingAt, 'brawl ' + n + ' info'); }
+    rb.dispose(); scene.remove(rig.root); rig.dispose();
   }
   // sim records through the real factory: budgets across rarity and recruit variance
   if (window.LM) {

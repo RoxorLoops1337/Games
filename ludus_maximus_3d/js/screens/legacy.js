@@ -5,6 +5,7 @@ export function legendsSheet(ctx) {
   const S = ctx.S, lm = L(), slots = Math.round(lm.bfx(S, 'hall').v), list = S.legends || [];
   const scr = openScreen(ctx, { title: 'Hall of Legends', mid: true });
   scr.render((root) => {
+    root.append(U.button({ label: `Memorial wall (${(S.fallen || []).length} fallen)`, icon: 'fame', variant: 'bronze', block: true, onClick: () => ctx.open('world', { tab: 'memorial' }) }));
     root.append(note(`${list.length} legend${list.length === 1 ? '' : 's'} and ${slots} statue slot${slots === 1 ? '' : 's'}. Each active legend gives +1.5% training to everyone and +3% to their best stat. Upgrade the Hall for more slots.`));
     if (!list.length) { root.append(empty('fame', 'No legends yet', 'Retire a level 8+ gladiator from their profile to carve their statue.')); return; }
     list.forEach((l, i) => {

@@ -111,5 +111,78 @@ for (const fn of ['newGame', 'makeGlad', 'mkUnits', 'createFight', 'step', 'useU
   ok(/gore_gibs/.test(gore) && (gore.match(/new THREE\.InstancedMesh/g) || []).length === 1, 'gore adds a single instanced draw call');
 }
 
+
+// 10. arena themes, the fallen, tutorial robustness, the world screen (content team round)
+{
+  const rd = (f) => readFileSync(join(root, f), 'utf8'), env = rd('js/env_arena.js'), fv = rd('js/fightview.js'), fs = rd('js/fightsetup.js'), game = rd('js/game.js'), tut = rd('js/tutorial.js'), more = rd('js/screens/more.js'), modes = rd('js/screens/modes.js'), flow = rd('js/flow.js'), world = rd('js/screens/world.js'), idx = rd('index.html'), sim = rd('core/sim.js'), ext = rd('core/ext.js'), cer = rd('js/ceremonies.js');
+  // arena themes
+  const th = eval('(' + env.slice(env.indexOf('export const THEMES = ') + 22, env.indexOf('export const THEME_IDS')).trim().replace(/;$/, '') + ')');
+  ok(['sandpit', 'capua', 'colosseum', 'desert', 'gaul', 'etna'].every((k) => th[k] && th[k].name && th[k].stone && th[k].sand && th[k].crowd && th[k].sky && th[k].base), 'THEMES has the six arena looks with stone, sand, crowd and sky data');
+  ok(Object.values(th).every((t) => t.crowd.density > 0 && t.crowd.density <= 1 && t.banners.count <= 56 && t.dress.length <= 2), 'every theme stays inside the crowd, banner and dressing budgets');
+  const pick = new Function('THEMES', env.slice(env.indexOf('export function pickTheme'), env.indexOf('/** true when this theme should be lit')).replace('export function', 'function') + '; return pickTheme;')(th);
+  ok(pick({ league: 0 }) === 'sandpit' && pick({ league: 1 }) === 'capua' && pick({ league: 3 }) === 'colosseum' && pick({ league: 2, kind: 'grand' }) === 'colosseum', 'pickTheme: league and grand games choose sandpit, capua, colosseum');
+  ok(pick({ league: 1, weather: 'dust' }) === 'desert' && pick({ league: 1, weather: 'rain' }) === 'gaul' && pick({ league: 0, kind: 'pit' }) === 'etna' && pick({ league: 1, festival: 'mars' }) === 'etna' && pick({ league: 0, kind: 'horde' }) === 'desert', 'pickTheme: weather, pit, horde and festivals choose desert, gaul and etna');
+  ok(new Set([0, 1, 2].map((s) => pick({ league: 2, season: s + 1 }))).size === 3, 'pickTheme: league 2 rotates by season');
+  ok(/setTheme\(id, ctx = \{\}\)/.test(env) && /api = \{[\s\S]*setTheme/.test(env) && /applyTOD\(p/.test(env) && /nightLights/.test(env), 'arena exposes setTheme, which also drives the sky and torch lights');
+  ok((fv.match(/ARENA_THEME/g) || []).length === 2 && /pickTheme\(m\)/.test(fv) && /arena\.setTheme\(/.test(fv), 'fightview carries exactly the two ARENA_THEME hook lines');
+  ok(/kind: ev\.kind \|\| ''/.test(fs) && /festival: lm\.fest/.test(fs), 'fight meta carries event kind and festival for the theme picker');
+  // the fallen
+  ok(/<script src="core\/ext\.js"><\/script>/.test(idx) && idx.indexOf('core/sim.js') < idx.indexOf('core/ext.js') && /LM\.extWeek\)/.test(sim), 'ext.js loads after sim.js and the weekly hook is wired');
+  for (const f of ['mortality', 'deathRoll', 'fall', 'takeHeir', 'monument', 'legacyFame', 'ludiAct', 'ludiTable', 'calendar', 'mentorStart', 'feast']) ok(new RegExp('LM\\.' + f + ' = ').test(ext), 'ext.js defines LM.' + f);
+  ok(/export async function fallenFlow/.test(flow) && /export async function mortalCheck/.test(flow) && /export async function heirOffer/.test(flow) && /Cer\.eulogy\(ctx, \{ kind: 'fallen'/.test(flow), 'flow.js wires the fallen eulogy, the mortal check and the heir offer');
+  ok(/deathRoll\(S, g, \{ kind: 'pit'/.test(modes) && /kind: 'horde'/.test(modes) && /mortalCheck\(ctx, \[g\], res, \{ kind: 'champ' \}\)/.test(modes) && /mortalCheck\(ctx, \[g\], res, \{ kind: 'bounty' \}\)/.test(modes), 'the Pit, Horde, champion duels and bounties can kill');
+  ok(/runEvent[\s\S]*mortalCheck\(ctx, gl, res, \{ kind: 'event' \}\)/.test(flow), 'ordinary events roll mortality too (it is zero unless Hardcore)');
+  ok(/Hardcore \(permadeath\)/.test(more) && /S\.opts\.hardcore = v/.test(more) && /hardcore/.test(ext) && !/hardcore: true/.test(sim), 'Hardcore is a setting in More, default off');
+  ok(/kind === 'fallen'/.test(cer) && /In memoriam/.test(cer), 'the fallen eulogy variant exists');
+  ok(/Memorial wall/.test(world) && /wd-wall/.test(world) && /Memorial wall/.test(rd('js/screens/legacy.js')) && /Memorial wall/.test(rd('js/screens/building.js')), 'memorial wall screen is reachable from the Hall, the Shrine and More');
+  // tutorial robustness
+  ok(!/byText|sheetWith|navItem|titleOf\(x\)\)/.test(tut) && /sheetBy\('roster'\)/.test(tut) && /sheetBy\('arena'\)/.test(tut) && /tutEl\(null, 'nav-roster'\)/.test(tut), 'tutorial finds sheets and buttons by data attributes, not by text');
+  ok(/dataset\.tutSheet = tk/.test(game) && /nav-' \+ k/.test(game) && /advBtn\.dataset\.tut = 'advance'/.test(game) && /TUT_SHEETS/.test(game), 'game.js tags sheets, nav buttons and the Advance button');
+  ok(/dataset\.tut = 'hire'/.test(rd('js/screens/recruit.js')) && /dataset\.tut = 'auto-plan'/.test(rd('js/screens/roster.js')) && /dataset\.tut = 'enter'/.test(rd('js/screens/arena.js')) && /dataset\.tut = 'plan-grid'/.test(rd('js/screens/ui_common.js')), 'screens carry data-tut on the buttons the tutorial points at');
+  ok(/reset\(\)/.test(tut) && /fastForward\(id\)/.test(tut) && /this\.tutorial && this\.tutorial\.reset\(\)/.test(game), 'a new game resets the tutorial; fastForward test hook exists');
+  ok(/Replay tutorial/.test(more) && /tutorial\.restart\(\)/.test(more), 'More, Help has a Replay tutorial button');
+  ok(/'results'/.test(tut) && /'week'/.test(tut) && /sheetBy|tutSheet/.test(tut) && /resultsOpen/.test(tut) && /done2/.test(tut), 'tutorial still covers the results and week steps');
+  ok(/SCREENS = \[[^\]]*'world'/.test(game) && /export function open\(ctx, arg\)/.test(world) && ['calendar', 'rivals', 'barracks', 'memorial'].every((t) => new RegExp("id: '" + t + "'").test(world)), 'world screen registered with calendar, rivals, barracks and memorial tabs');
+  const mine = ['core/ext.js', 'js/screens/world.js', 'js/env_arena.js', 'js/flow.js', 'js/tutorial.js', 'js/screens/modes.js', 'js/screens/more.js'];
+  ok(mine.every((f) => !/—/.test(rd(f))), 'no em dashes in the files of this round');
+  ok(/ludus_maximus_3d_v1/.test(sim) && /ludus_maximus_3d_prefs/.test(more), 'save key and prefs key are unchanged');
+  ok(/Math\.random|LM\.rand/.test(ext) === true && !/Math\.random/.test(ext), 'ext.js draws only from the sim RNG');
+}
+
+// 10. fight team: phone HUD, gore props and coverage cap, hit-feel pulses, ultimates, kill cam and the outro
+{
+  const rd = (f) => readFileSync(join(root, f), 'utf8');
+  const fv = rd('js/fightview.js'), gore = rd('js/gore.js'), fxs = rd('js/fx.js'), dir = rd('js/director.js'), css = rd('css/ui.css');
+  ok(/placePlate\(/.test(fv) && /measureHud\(/.test(fv) && /lx-fv-top/.test(fv) && /\.lx-fv-top/.test(css) && /@media \(max-height: 480px\)[^}]*\.lx-fv-hud/.test(css.replace(/\n/g, ' ')), 'fight HUD: compact top row, nameplates avoid the button rows (phones and landscape)');
+  ok(/caPulse\(a\)/.test(fv) && /Math\.min\(a, 0\.006\)/.test(fv) && !/pulseCA\(0\.01/.test(fv) && /zoomPunch\(0\.028\)/.test(fv), 'chromatic aberration and zoom pulses are small (capped at 0.006)');
+  ok(/meteorFall\(/.test(fv) && /fx\.shoot\(from, to/.test(fv), 'meteor has a travel streak that lands when the telegraph fills');
+  ok(/showEnd\(/.test(fv) && /clearEnd\(/.test(fv) && /lx-fv-end/.test(css) && /phase === 'outro' \? 0\.0/.test(fv), 'outro: big VICTORY / DEFEAT title, plates and ult buttons hidden');
+  ok(!/setTimeout\(\(\) => this\.dir\.setShot\('victory'/.test(fv) && /next: \{ name: 'victory'/.test(fv), 'victory shot is chained from the kill cam (no wall clock timer)');
+  ok(/vx \+ bx \* \(0\.6 \+ 1\.5 \* fall\)/.test(dir) && /p\.side \* 0\.5 \* k/.test(dir) && /\* 0\.1 \* ease\(t \/ 2\.5\)/.test(dir), 'kill cam frames the blow axis and the fall; victory orbit is slow (no spin)');
+  ok(/function dropWeapon/.test(gore) && /ensureBrawl/.test(gore) && /WEAPON_POSES/.test(gore) && /setWeapon\(BRAWL\)/.test(gore), 'a severed weapon hand drops the weapon prop and switches to a one-handed brawl stance');
+  ok(/function popArmor/.test(gore) && /spawnProp\(7,/.test(gore) && /spawnProp\(8,/.test(gore), 'armour plates and the plume pop off on heavy hits');
+  ok(/aMask/.test(gore) && /iHair/.test(gore) && /ragged|neckStump/.test(gore) && /helmed/.test(gore), 'head prop: skin tone, hair or helm, ragged neck stump');
+  ok(/function measureCover/.test(gore) && /function dryAll/.test(gore) && /function clearUnderFeet/.test(gore) && /capK\(\)/.test(gore), 'gore caps sand coverage, dries old blood darker and lifts it under fighters');
+  ok((gore.match(/new THREE\.InstancedMesh/g) || []).length === 1 && !/Math\.random/.test(gore) && !/LM\./.test(gore), 'gore still one instanced draw call, no Math.random');
+  ok(/cast\(el, pos, color\)/.test(fxs) && /flame spikes/.test(fxs) && /function beamUp\(pos, c, life, w = 1\.1\)/.test(fxs) && !/s1: 3\.6, cell: CELL\.glow/.test(fxs), 'ultimates are crisp shapes (spikes, bolts, shards, crescents), no big glow discs');
+}
+
+// 10. hub polish, phone taps, hub audio, photo mode
+{
+  const rd = (f) => readFileSync(join(root, f), 'utf8');
+  const hub = rd('js/hub.js'), bld = rd('js/buildings.js'), au = rd('js/audio.js'), ph = rd('js/photo.js'), gm = rd('js/game.js'), css = rd('css/ui.css'), envl = rd('js/env_ludus.js');
+  ok(/function roofWeather/.test(bld) && /function rearYard/.test(bld), 'buildings: weathered roofs and rear yards');
+  ok(/godrays/.test(hub) && /RAY_VERT/.test(hub) && /function pickNear/.test(hub) && /pointerType/.test(hub) && /'preview'/.test(hub) && /lx-hubcard/.test(hub), 'hub: god rays, tap slop picking, preview card');
+  ok(/focusHome/.test(hub) && /audioTick/.test(hub) && /audio\.ambient/.test(hub), 'hub: focusHome and spatial audio feed');
+  ok(/aSway/.test(hub) && /bakePiece/.test(hub), 'hub: baked cloaks and skirts with shader sway');
+  ok(/colosseumTexture/.test(envl), 'env_ludus: Colosseum facade texture');
+  for (const n of ['uiHover', 'uiSelect', 'uiOpen', 'uiClose', 'bird', 'owl', 'hammer', 'clink', 'chop', 'sizzle', 'thock', 'thunder']) ok(new RegExp("def\\('" + n + "'").test(au), 'audio.js sfx ' + n);
+  ok(/const ambient = /.test(au) && /music\.setHubTime/.test(au) && /function attachUi/.test(au) && /'slashWet'/.test(au) && /def\('crowdGore'/.test(au), 'audio.js: ambient, hub time of day, ui hooks, gore sfx kept');
+  ok(/export function createPhoto/.test(ph) && /toBlob/.test(ph) && /navigator\.share/.test(ph) && /drawImage\(glCanvas/.test(ph) && /prefers-reduced-motion/.test(ph), 'photo.js: capture, toBlob, share, reduced motion');
+  ok(/createPhoto/.test(gm) && /PHOTO/.test(gm) && /photo\.frame/.test(gm), 'game.js PHOTO hooks');
+  ok(/\.lx-photo-fab/.test(css) && /#ui > \.lx-photo/.test(css), 'ui.css has .lx-photo rules');
+  ok(existsSync(join(here, '..', '.claude', 'skills', 'ludus3d-photo', 'SKILL.md')), 'photo skill exists');
+}
+
 console.log(`ludus_maximus_3d structure: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

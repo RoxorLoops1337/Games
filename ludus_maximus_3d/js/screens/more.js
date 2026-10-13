@@ -34,6 +34,8 @@ function ludusTab(ctx, root, draw) {
   const S = ctx.S, lm = L();
   const v = lm.visitor(S);
   if (v) root.append(visitorCard(ctx, v, draw));
+  root.append(sec('The world'));
+  root.append(card([note('Plan the whole season, deal with the rival schools, look after the barracks, and honor the fallen.'), actions([U.button({ label: 'Calendar', icon: 'scroll', variant: 'bronze', onClick: () => ctx.open('world', { tab: 'calendar' }) }), U.button({ label: 'Rival ludi', icon: 'skull', variant: 'bronze', onClick: () => ctx.open('world', { tab: 'rivals' }) }), U.button({ label: 'Barracks', icon: 'roster', variant: 'bronze', onClick: () => ctx.open('world', { tab: 'barracks' }) }), U.button({ label: `Memorial (${(S.fallen || []).length})`, icon: 'fame', variant: 'bronze', onClick: () => ctx.open('world', { tab: 'memorial' }) })])]));
   root.append(sec('Sponsors'));
   root.append(note('Sponsors pay when you finish their contract. Progress counts wins and trophies as you play.'));
   const grid = h('div', 'ax-grid');
@@ -89,7 +91,7 @@ function honorsTab(ctx, root, draw) {
   const st = S.stats || {};
   root.append(sec('Records'));
   root.append(card([kv('Fights', fmt(st.fights || 0)), kv('Wins / Losses', `${st.wins || 0} / ${st.losses || 0}`), kv('Tournaments won', fmt(st.tourneys || 0)), kv('Mercies shown', fmt(st.spares || 0)), kv('Weeks run', fmt(st.weeks || 0)),
-    kv('Best Pit floor', fmt(S.pitBest || 0)), kv('Best Daily floor', fmt(S.dailyBest || 0)), kv('Best Horde wave', fmt(S.hordeBest || 0)), kv('Bounties claimed', fmt(st.bounties || 0)), kv('Champions beaten', fmt(st.champs || 0)), kv('Contracts done', fmt(st.contracts || 0))]));
+    kv('Fallen fighters', fmt(st.fallen || 0)), kv('Best Pit floor', fmt(S.pitBest || 0)), kv('Best Daily floor', fmt(S.dailyBest || 0)), kv('Best Horde wave', fmt(S.hordeBest || 0)), kv('Bounties claimed', fmt(st.bounties || 0)), kv('Champions beaten', fmt(st.champs || 0)), kv('Contracts done', fmt(st.contracts || 0))]));
   if ((S.awards || []).length) {
     root.append(sec('Season awards'));
     root.append(card(S.awards.slice().reverse().map((a) => h('div', '', [h('b', '', `Season ${a.season}`), `: ${a.wins} wins${a.mvp ? ', MVP ' + a.mvp : ''}${a.rival ? ', rivals ' + a.rival : ''}`]))));
@@ -134,7 +136,8 @@ function settingsTab(ctx, root, draw) {
     const b = h('button', 'ax-pick' + (i === cur ? ' sel' : '')); b.type = 'button'; b.style.cssText = 'flex-direction:column;align-items:flex-start;text-align:left'; b.setAttribute('aria-pressed', i === cur ? 'true' : 'false');
     b.append(h('div', 'ax-b', nme), h('div', 'ax-sub', effects[i])); b.onclick = () => { S.opts.diff = i; ctx.save(); ctx.sfx('uiConfirm'); draw(); }; dg.append(b);
   });
-  root.append(card([h('div', 'ax-b', 'Difficulty'), dg, toggle('Auto ultimates', 'Fighters cast their ultimates on their own. Turn off to time them yourself.', !!S.flags.auto, (v) => { S.flags.auto = v; ctx.save(); ctx.sfx('uiTap'); })]));
+  root.append(card([h('div', 'ax-b', 'Difficulty'), dg, toggle('Auto ultimates', 'Fighters cast their ultimates on their own. Turn off to time them yourself.', !!S.flags.auto, (v) => { S.flags.auto = v; ctx.save(); ctx.sfx('uiTap'); }),
+    toggle('Hardcore (permadeath)', 'Off by default. When on, ANY defeat can kill the fighter who went down. The Pit, Horde Trial, champion duels and bounties can already kill with Hardcore off.', !!S.opts.hardcore, (v) => { S.opts.hardcore = v; ctx.save(); ctx.sfx(v ? 'deathThud' : 'uiTap'); })]));
 }
 
 // ------------------------------------------------------------------ help: how to play, save tools, credits
@@ -146,8 +149,11 @@ function helpTab(ctx, root, draw) {
     ['Scout the Arena', 'Matches are announced weeks ahead. A Scout Tower reveals more about rivals and shows more weeks. Style matchups give a small edge only.'],
     ['Fight live', 'Gladiators move, strike and cast on their own. Tap your ultimates at the right moment and tap an enemy to focus it. Before each fight pick an augment.'],
     ['Grow', 'Win gold, fame, loot, runes and relics. Upgrade buildings (neighbours add synergy), merge gear, bet on mispriced fights, try the Pit of Trials, then found a new ludus for laurels.'],
+    ['Mind the world', 'More, Calendar shows the whole season. Rival ludi have natures: gift the greedy, train with the honorable. Mentors and feasts lift the barracks. The Pit, Horde, duels with champions and bounties can kill a fighter; honor them on the memorial wall.'],
   ];
   root.append(card(steps.map(([t, d], i) => row([h('span', 'ax-medal', String(i + 1)), col([h('div', 'ax-b', t), note(d)], 'ax-grow')]))));
+  root.append(U.button({ label: 'Replay tutorial', icon: 'star', variant: 'gold', block: true, onClick: () => { ctx.closeAll(); ctx.sfx('uiConfirm'); ctx.game.tutorial && ctx.game.tutorial.restart(); } }));
+  root.append(note('The tutorial shows you the loop again with a spotlight. Your ludus is not changed.'));
   root.append(sec('Save'));
   const cant = pill('Saved in this browser', { tone: 'good', ico: 'check', tip: 'Your ludus saves automatically in this browser. Export a code to back it up or move devices.' });
   root.append(card([cant, note('Export a save code to back up your ludus or move it to another device. Importing replaces the current ludus.'),

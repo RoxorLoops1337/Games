@@ -9,7 +9,8 @@
 export const SFX_NAMES = ['swordHit', 'swordHitCrit', 'shieldBlock', 'metalClang', 'swish', 'swishHeavy', 'miss', 'grunt', 'hurt', 'deathCry', 'deathThud',
   'footstep', 'dust', 'netThrow', 'spearThrust', 'bash', 'stunChime', 'healSparkle', 'levelUp', 'coin', 'uiTap', 'uiConfirm', 'uiError', 'gate', 'horn',
   'ultFire', 'ultLightning', 'ultEarth', 'ultWind', 'ultHoly', 'crowdGasp', 'crowdCheer', 'crowdRoar', 'crowdBoo', 'crowdChant', 'drum',
-  'slashWet', 'crunch', 'boneSnap', 'spurt', 'splat', 'gibThud', 'crowdGore'];
+  'slashWet', 'crunch', 'boneSnap', 'spurt', 'splat', 'gibThud', 'crowdGore',
+  'uiHover', 'uiSelect', 'uiOpen', 'uiClose', 'bird', 'owl', 'hammer', 'clink', 'chop', 'sizzle', 'thock', 'thunder'];   // HUB-AUDIO: ui hooks and ludus ambience one-shots
 export const MUSIC_MODES = ['ludus', 'prep', 'arena', 'victory', 'defeat'];
 
 const MUSIC_TRIM = 0.32;      // music sits about 6 dB under the sfx at equal slider positions
@@ -416,6 +417,31 @@ export function createAudio(opts = {}) {
     burst(t + 0.45, 2.2, d, { f0: 450, f1: 1000, q: 0.7, g: 1, a: 0.7, kind: 'pink' }); crowdVoices(t + 0.45, 2.0, d, 14, { vowel: 'o', pitch: 0.9, p0: 0.95, p1: 1.25, vg: 0.11 });
   });
 
+  // ---- hub ui hooks and ludus ambience one-shots (HUB-AUDIO). All quiet: they live under the music and the crowd.
+  def('uiHover', 0.5, 0.08, 0, 0.0, 0, 2, (t, d, o) => { const g = G(0); env(g.gain, t, 0.001, 0.22, 0.05); g.connect(d); osc('sine', hz(o, 1180), t, 0.07, g, { f1: 1500 }); });
+  def('uiSelect', 0.7, 0.3, 1, 0.12, 0, 2, (t, d, o) => {   // marble tick + a rising wooden chime: a building was picked
+    thump(t, 330, 190, 0.1, 0.3, d); [[0, 660], [0.06, 990]].forEach(([dt, f]) => { const g = G(0); env(g.gain, t + dt, 0.002, 0.3, 0.2); g.connect(d); osc('triangle', hz(o, f), t + dt, 0.22, g); });
+  });
+  def('uiOpen', 0.6, 0.45, 1, 0.15, 0, 2, (t, d, o) => { burst(t, 0.3, d, { f0: 700, f1: 2600, q: 0.8, g: 0.35, a: 0.12, kind: 'pink' }); const g = G(0); env(g.gain, t + 0.1, 0.01, 0.25, 0.25); g.connect(d); osc('sine', hz(o, 880), t + 0.1, 0.3, g, { f1: 1320 }); });   // parchment unrolling
+  def('uiClose', 0.55, 0.35, 1, 0.1, 0, 2, (t, d, o) => { burst(t, 0.22, d, { f0: 2400, f1: 600, q: 0.8, g: 0.3, a: 0.05, kind: 'pink' }); thump(t + 0.12, 220, 120, 0.1, 0.25, d); });
+  def('bird', 0.34, 1.3, 0, 0.3, 0, 3, (t, d, o) => {   // o.kind 0 tweet-tweet, 1 rising trill, 2 warble, 3 falling whistle
+    const k = (o.kind == null ? Math.floor(rng() * 4) : o.kind) | 0, base = hz(o, 2800 + rng() * 1500);
+    const note = (dt, f0, f1, du, g) => { const e = G(0); env(e.gain, t + dt, 0.006, g, du); e.connect(d); osc('sine', f0, t + dt, du, e, { f1 }); osc('sine', f0 * 2.01, t + dt, du * 0.6, (() => { const x = G(0.1); x.connect(e); return x; })(), { f1: f1 * 2 }); };
+    if (k === 0) { note(0, base, base * 1.18, 0.09, 0.5); note(0.14, base * 1.05, base * 1.25, 0.1, 0.45); if (rng() < 0.6) note(0.3, base * 0.95, base * 1.1, 0.12, 0.4); }
+    else if (k === 1) for (let i = 0; i < 6; i++) note(i * 0.07, base * (1 + i * 0.05), base * (1.08 + i * 0.05), 0.06, 0.42);
+    else if (k === 2) for (let i = 0; i < 5; i++) note(i * 0.11, base * (i % 2 ? 1.2 : 0.9), base * (i % 2 ? 0.95 : 1.15), 0.1, 0.4);
+    else note(0, base * 1.3, base * 0.8, 0.45, 0.45);
+  });
+  def('owl', 0.4, 1.6, 0, 0.45, 0, 1, (t, d, o) => { [[0, 0.5], [0.55, 0.62]].forEach(([dt, du]) => { const e = G(0); env(e.gain, t + dt, 0.08, 0.5, du); e.connect(d); osc('sine', hz(o, 400), t + dt, du + 0.1, e, { f1: 340 }); osc('sine', hz(o, 800), t + dt, du, (() => { const x = G(0.12); x.connect(e); return x; })()); }); });
+  def('hammer', 0.85, 0.7, 0, 0.18, 0, 3, (t, d, o) => {   // hammer on an anvil: bright ring over a dull thud
+    partials(t, hz(o, 1180), [1, 2.76, 5.4, 8.9], [0.3, 0.22, 0.12, 0.06], 0.5, d, 'triangle'); thump(t, 260, 90, 0.12, 0.4, d); burst(t, 0.03, d, { f0: 3800, q: 0.9, g: 0.5 });
+  });
+  def('clink', 0.55, 0.4, 0, 0.2, 0, 3, (t, d, o) => { partials(t, hz(o, 2400 + rng() * 900), [1, 2.32, 4.1], [0.22, 0.14, 0.07], 0.22, d, 'sine'); burst(t, 0.02, d, { f0: 5200, q: 1, g: 0.25 }); });   // cups, plates, a chain
+  def('chop', 0.7, 0.14, 0, 0.05, 0, 4, (t, d, o) => { burst(t, 0.04, d, { f0: 1500, f1: 700, q: 1.2, g: 0.6 }); thump(t, 320, 150, 0.06, 0.4, d); });
+  def('sizzle', 0.28, 1.4, 0, 0.1, 0, 2, (t, d, o) => { burst(t, 1.2, d, { type: 'highpass', f0: 4800, q: 0.4, g: 0.5, a: 0.12, kind: 'white' }); burst(t, 0.9, d, { f0: 2400, q: 0.7, g: 0.25, a: 0.2, kind: 'pink' }); });
+  def('thock', 0.75, 0.25, 0, 0.1, 0, 3, (t, d, o) => { thump(t, 380, 160, 0.1, 0.5, d); burst(t, 0.05, d, { f0: 1700, f1: 900, q: 1.1, g: 0.5 }); });   // wooden practice blade on a post
+  def('thunder', 0.9, 4.5, 2, 0.5, 0, 1, (t, d, o) => { burst(t, 0.15, d, { f0: 1200, f1: 200, q: 0.6, g: 0.4, kind: 'white' }); burst(t, 3.6, d, { type: 'lowpass', f0: 220, f1: 50, q: 0.7, g: 1.3, a: 0.35, kind: 'brown' }); burst(t + 0.9, 2.4, d, { type: 'lowpass', f0: 140, f1: 45, q: 0.7, g: 0.9, a: 0.5, kind: 'brown' }); });
+
   // ---------- sfx dispatch ----------
   function sfx(name, o = {}) {
     if (name === 'ult' && o.element) name = 'ult' + o.element[0].toUpperCase() + o.element.slice(1);
@@ -483,21 +509,30 @@ export function createAudio(opts = {}) {
   const music = { log: opts.log ? [] : null };
   const L = (p, t, what, extra) => { if (music.log) music.log.push({ mode: p.mode, bar: p.bar, step: p.step, t, what, ...extra }); };
 
+  // HUB-AUDIO: time-of-day mix for the 'ludus' hub music (n night, d dusk, dawn); smoothed per step, set by music.setHubTime(hour, night)
+  const hubTod = { n: 0, d: 0, dawn: 0, tn: 0, td: 0, tdawn: 0 };
+  const tickHubTod = () => { for (const k of ['n', 'd', 'dawn']) hubTod[k] += (hubTod['t' + k] - hubTod[k]) * 0.06; };
   // each mode: bpm(p), init(p), step(p, s, t) with s = step within bar (0..15)
   const MODES = {
     ludus: {
-      bpm: () => 92, tonic: NOTE(50), // D3
+      bpm: () => 92 - 14 * hubTod.n, tonic: NOTE(50), // D3 (slower at night)
       init(p) { p.drone = makeDrone(p, NOTE(38), 0.14); },
-      bar(p, bar, t) { const ph = Math.floor(bar / 4); p.r = mulberry(hash(seed, 'ludus', ph)); const progs = [[0, -1, 2, -1], [0, 3, -1, 0], [0, 2, 3, -1], [0, 4, 3, -1]]; p.prog = progs[Math.floor(p.r() * progs.length)]; p.rhythm = [[0, 4, 8, 12], [0, 3, 6, 10], [0, 6, 8, 12, 14], [2, 6, 10]][Math.floor(p.r() * 4)]; p.motif = Array.from({ length: 6 }, () => Math.floor(p.r() * 3) - 1); p.lead = p.r() < 0.78; },
+      bar(p, bar, t) { const ph = Math.floor(bar / 4); p.r = mulberry(hash(seed, 'ludus', ph)); const progs = [[0, -1, 2, -1], [0, 3, -1, 0], [0, 2, 3, -1], [0, 4, 3, -1]]; p.prog = progs[Math.floor(p.r() * progs.length)]; p.rhythm = [[0, 4, 8, 12], [0, 3, 6, 10], [0, 6, 8, 12, 14], [2, 6, 10]][Math.floor(p.r() * 4)]; p.motif = Array.from({ length: 6 }, () => Math.floor(p.r() * 3) - 1); p.lead = p.r() < 0.78 && hubTod.n < 0.6; },
       step(p, s, t, sp) {
         const bar = p.bar, deg = p.prog[bar % 4], pd = bar % 8 === 7 || bar % 8 === 3 && p.r() < 0.3, sc = pd ? SCALES.phrygDom : SCALES.dorian, tonic = MODES.ludus.tonic;
+        tickHubTod(); const pk = 1 - 0.65 * hubTod.n;   // HUB-AUDIO: soft percussion at night
         const ch = [deg, deg + 2, deg + 4, deg + 7];
         if (s % 2 === 0) { const i = (s / 2) % 8, idx = [0, 1, 2, 3, 2, 1, 2, 3][i]; if (p.r() > 0.12) pluck(p.bus, t + (s % 4 === 2 ? sp * 0.18 : 0), degFreq(tonic * 2, sc, ch[idx]), 0.22 + (s === 0 ? 0.08 : 0), { bright: 0.45 }), L(p, t, 'lyre'); }
         if (s === 0) { setDrone(p, degFreq(tonic / 2, SCALES.dorian, deg), t); pluck(p.bus, t, degFreq(tonic, sc, deg), 0.25, { dur: 2.2 }); }
         if (p.lead && p.rhythm.includes(s) && bar % 2 === 1) { const k = p.rhythm.indexOf(s); const dg = ch[0] + 7 + p.motif[k % 6] * 2 + (k === p.rhythm.length - 1 ? 2 : 0); flute(p.bus, t, degFreq(tonic * 2, sc, dg), sp * (k === p.rhythm.length - 1 ? 5 : 2.4), 0.14); L(p, t, 'flute'); }
-        if (s === 0 || s === 8) drumHit(p.bus, t, 100, 0.22, { skin: 1, dec: 0.25 });
-        if (s % 4 === 2) shaker(p.bus, t, 0.05 + 0.04 * curInt);
-        if (s === 10 && p.r() < 0.4) drumHit(p.bus, t, 130, 0.1, { dec: 0.15, skin: 1 });
+        if (s === 0 || s === 8) drumHit(p.bus, t, 100, 0.22 * pk, { skin: 1, dec: 0.25 });
+        if (s % 4 === 2) shaker(p.bus, t, (0.05 + 0.04 * curInt) * pk);
+        if (s === 10 && p.r() < 0.4) drumHit(p.bus, t, 130, 0.1 * pk, { dec: 0.15, skin: 1 });
+        // HUB-AUDIO time of day: a string pad swells in at dusk and night, dawn adds a high bird-like flute, deep night adds sparse bell plucks
+        if (s === 0 && bar % 2 === 0) { const gp = 0.02 + 0.07 * clamp(hubTod.n + 0.7 * hubTod.d, 0, 1); if (gp > 0.03) [0, 2, 4].forEach((k) => strings(p.bus, t, degFreq(tonic, SCALES.dorian, deg + k), sp * 30, gp * (k ? 0.7 : 1), { a: 1.4, rel: 1.5, cut: 650 + 700 * (1 - hubTod.n) })); }
+        if (s === 0 && p.drone) p.drone.g.gain.setTargetAtTime(0.14 + 0.1 * hubTod.n + 0.05 * hubTod.d, t, 0.6);
+        if (hubTod.dawn > 0.25 && s === 8 && bar % 2 === 1) flute(p.bus, t, degFreq(tonic * 4, SCALES.dorian, [4, 2, 5, 3][(bar >> 1) % 4]), sp * 3, 0.07 * hubTod.dawn, { breath: 0.12 });
+        if (hubTod.n > 0.55 && s === 6 && bar % 4 === 1) pluck(p.bus, t, degFreq(tonic * 4, SCALES.dorian, [0, 4, 2, 6][(bar >> 2) % 4]), 0.06 * hubTod.n, { bright: 0.15, dur: 2.4 });
       },
     },
     prep: {
@@ -627,15 +662,87 @@ export function createAudio(opts = {}) {
     for (const p of players) { const g = p.bus.gain; g.cancelScheduledValues(t); g.setValueAtTime(g.value, t); g.linearRampToValueAtTime(0, t + fade); p.endT = t + fade + 0.3; if (p.drone) p.drone.os.forEach(({ o }) => { try { o.stop(t + fade + 0.1); } catch (e) { /* ignore */ } }); p.next = Infinity; }
     curMode = null;
   };
+  music.setHubTime = (hour, night) => { const h = +hour || 12; hubTod.tn = clamp(+night || 0, 0, 1); hubTod.td = clamp(Math.min(1, (h - 16.5) / 2) * (1 - hubTod.tn), 0, 1); hubTod.tdawn = clamp(1 - Math.abs(h - 6.8) / 1.6, 0, 1) * (1 - hubTod.tn * 0.5); };
+  music.hubTod = hubTod;
   music.setIntensity = (x) => { intensityTarget = clamp(+x || 0, 0, 1); };
   music.getIntensity = () => intensityTarget;
   music.mode = () => curMode;
   music.pump = pump;
   music.seed = (s) => { seed = s >>> 0; rng = mulberry(seed ^ 0x9e3779b9); };
 
+  // ---------- ludus ambience (HUB-AUDIO): beds (wind, distant crowd, crickets, rain), birds, owls, and spatial workshops near the camera focus ----------
+  // audio.ambient.update({hour, night, weather, rain, wind, zoom, focus:[{kind,w,pan}], glads, spar, drill, fest}) every ~0.25 s from the hub. Silent no-op until the context runs.
+  const ambient = (() => {
+    let bedN = null, on = false, last = 0, sched = {}, st = null;
+    const mkBed = () => {
+      const t = ctx.currentTime, out = ctx.createGain(); out.gain.value = 0.0001; out.connect(crowdBus);
+      const mk = (kind, type, f, q) => { const sr = ctx.createBufferSource(); sr.buffer = noiseBuf[kind]; sr.loop = true; const fl = ctx.createBiquadFilter(); fl.type = type; fl.frequency.value = f; fl.Q.value = q; const gg = G(0); sr.connect(fl); fl.connect(gg); gg.connect(out); sr.start(t, rng() * 2); return { sr, fl, gg }; };
+      const wind = mk('pink', 'bandpass', 380, 0.6), crowdB = mk('pink', 'bandpass', 620, 0.8), rainB = mk('white', 'bandpass', 6200, 0.5), hiss = mk('white', 'highpass', 7000, 0.4);
+      const sw = ctx.createOscillator(), swg = G(0.35); sw.frequency.value = 0.09; sw.connect(swg); swg.connect(wind.gg.gain); sw.start(t);
+      const sw2 = ctx.createOscillator(), swg2 = G(0.3); sw2.frequency.value = 0.17; sw2.connect(swg2); swg2.connect(crowdB.gg.gain); sw2.start(t);
+      // crickets: a 4.7 kHz tone chopped at 15 Hz with a slow 2 s pulse
+      const cr = ctx.createOscillator(); cr.type = 'sine'; cr.frequency.value = 4700; const am = ctx.createGain(); am.gain.value = 0; const lfo = ctx.createOscillator(); lfo.frequency.value = 15; const lg = G(0.5); lfo.connect(lg); lg.connect(am.gain);
+      const pulse = ctx.createOscillator(), pg = G(0.35); pulse.frequency.value = 0.5; pulse.connect(pg); pg.connect(am.gain); const cg = G(0); cr.connect(am); am.connect(cg); cg.connect(out); [cr, lfo, pulse].forEach((o) => o.start(t));
+      return { out, wind, crowdB, rainB, hiss, cg };
+    };
+    const tc = (p, v, t, k = 0.8) => p.setTargetAtTime(v, t, k);
+    const rate = (key, perSec, dt) => { const k = (sched[key] = (sched[key] || 0) + perSec * dt); if (k >= 1) { sched[key] = k - 1 - rng() * 0.5; return true; } return false; };
+    return {
+      get on() { return on; },
+      start() { if (on || !ensure()) return false; if (!OFFLINE && ctx.state !== 'running') return false; bedN = mkBed(); on = true; last = ctx.currentTime; return true; },
+      stop() { if (!on) return; const b = bedN, t = ctx.currentTime; on = false; bedN = null; try { tc(b.out.gain, 0.0001, t, 0.3); setTimeout(() => { try { b.out.disconnect(); } catch (e) { /* ignore */ } }, 2500); } catch (e) { /* ignore */ } },
+      thunder(delay = 1) { if (on) sfx('thunder', { when: ctx.currentTime + delay, gain: 0.8 }); },
+      update(state) {
+        st = state || st || {}; if (!on && !this.start()) return; const t = ctx.currentTime, dt = Math.min(1, Math.max(0.05, t - last)); last = t;
+        const n = clamp(st.night || 0, 0, 1), day = 1 - n, rain = clamp(st.rain || 0, 0, 1), wx = st.weather, zoom = clamp(st.zoom || 0, 0, 1), fest = st.fest ? 1 : 0;
+        music.setHubTime(st.hour, n);
+        const windK = clamp(((st.wind || 1) - 0.8) / 1.8, 0, 1) * 0.6 + (wx === 'dust' ? 0.5 : 0);
+        tc(bedN.out.gain, 0.5 + 0.5 * (1 - zoom * 0.3), t);
+        tc(bedN.wind.gg.gain, 0.05 + 0.18 * windK + 0.04 * rain, t); tc(bedN.wind.fl.frequency, 300 + 500 * windK, t);
+        tc(bedN.crowdB.gg.gain, (0.016 + 0.012 * Math.min(8, st.glads || 0) / 8 + 0.04 * fest) * (0.4 + 0.6 * day), t);
+        tc(bedN.rainB.gg.gain, 0.2 * rain, t); tc(bedN.hiss.gg.gain, 0.05 * rain, t);
+        tc(bedN.cg.gain, n > 0.5 && rain < 0.4 ? 0.014 * n : 0, t, 1.5);
+        // birds by day (more at dawn and dusk), an owl at night
+        const birdy = day * (wx === 'rain' ? 0.1 : 1) * (0.5 + 0.5 * Math.max(clamp(1 - Math.abs((st.hour || 12) - 7) / 2), clamp(1 - Math.abs((st.hour || 12) - 18) / 2)));
+        if (rate('bird', 0.55 * birdy, dt)) sfx('bird', { kind: Math.floor(rng() * 4), pan: (rng() - 0.5) * 1.4, gain: 0.5 + rng() * 0.6, pitch: 0.9 + rng() * 0.3 });
+        if (rate('owl', 0.05 * n, dt) && wx !== 'rain') sfx('owl', { pan: (rng() - 0.5) * 1.2, gain: 0.6 });
+        if (rate('clinkfar', 0.16 * day, dt)) sfx('clink', { pan: (rng() - 0.5) * 1.5, gain: 0.18 + 0.1 * rng(), pitch: 0.8 + rng() * 0.5 });
+        // workshops: only the ones near the camera focus, panned to where they are
+        for (const f of st.focus || []) {
+          const w = clamp(f.w, 0, 1); if (w < 0.08) continue; const o = { pan: f.pan || 0 };
+          if (f.kind === 'forge') {   // 4 strikes, a breath, again; events are queued up to 0.35 s ahead
+            if (!(sched.forgeAt > t - 0.5)) sched.forgeAt = t + 0.05;
+            while (sched.forgeAt < t + 0.35) { const wh = Math.max(sched.forgeAt, t + 0.02); sfx('hammer', Object.assign({ gain: 0.45 + 0.7 * w, pitch: 0.92 + rng() * 0.2, when: wh }, o)); sched.forgeN = ((sched.forgeN || 0) + 1) % 4; if (sched.forgeN === 2 && rng() < 0.4) sfx('sizzle', Object.assign({ gain: 0.35 * w, when: wh + 0.3 }, o)); sched.forgeAt = wh + (sched.forgeN === 0 ? 1.4 + rng() * 0.9 : 0.58); }
+          } else if (f.kind === 'kitchen') {
+            if (rate('chop', 0.5 * w, dt)) for (let i = 0; i < 4; i++) sfx('chop', Object.assign({ gain: 0.4 + 0.6 * w, pitch: 0.95 + rng() * 0.15, when: t + 0.3 + i * 0.17 }, o));
+            if (rate('sizz', 0.12 * w, dt)) sfx('sizzle', Object.assign({ gain: 0.6 * w }, o));
+            if (rate('pot', 0.2 * w, dt)) sfx('clink', Object.assign({ gain: 0.5 * w, pitch: 0.6 + rng() * 0.3 }, o));
+          } else if (f.kind === 'yard') {
+            const act = (st.drill || 0) + 2 * (st.spar || 0);
+            if (rate('thock', (0.25 + 0.2 * Math.min(4, act)) * w, dt)) sfx('thock', Object.assign({ gain: 0.5 + 0.7 * w, pitch: 0.85 + rng() * 0.3 }, o));
+            if (rate('grunt', 0.12 * w * Math.min(3, act), dt)) sfx('grunt', Object.assign({ gain: 0.3 * w, voice: Math.floor(rng() * 4) }, o));
+            if (rate('foot', 0.5 * w, dt)) sfx('footstep', Object.assign({ gain: 0.3 * w }, o));
+          } else if (f.kind === 'market') {
+            if (rate('coin', 0.15 * w * day, dt)) sfx('coin', Object.assign({ gain: 0.25 * w }, o));
+            if (rate('mclink', 0.3 * w * day, dt)) sfx('clink', Object.assign({ gain: 0.4 * w }, o));
+          } else if (f.kind === 'bath') { if (rate('drip', 0.9 * w, dt)) sfx('clink', Object.assign({ gain: 0.18 * w, pitch: 1.6 + rng() * 0.8 }, o)); }
+        }
+      },
+    };
+  })();
+  // ui hooks: hover tick and tap for buttons under `root` (idempotent). Taps are off by default because game.open/ask already play uiTap.
+  function attachUi(root, o = {}) {
+    if (!root || root.__lxAudioUi || typeof root.addEventListener !== 'function') return false; root.__lxAudioUi = true; let lastH = 0;
+    const SEL = 'button, .lx-btn, [role="button"], .lx-nav-item';
+    if (o.hover !== false) root.addEventListener('pointerover', (e) => { if (e.pointerType && e.pointerType !== 'mouse') return; const el = e.target && e.target.closest && e.target.closest(SEL); if (!el || el.disabled || (e.relatedTarget && el.contains(e.relatedTarget))) return; const now = performance.now(); if (now - lastH < 90) return; lastH = now; sfx('uiHover'); }, true);
+    if (o.tap) root.addEventListener('pointerdown', (e) => { const el = e.target && e.target.closest && e.target.closest(SEL); if (el && !el.disabled) sfx('uiTap'); }, true);
+    return true;
+  }
+
   // ---------- public ----------
   const api = {
-    sfxNames: SFX_NAMES.slice(), musicModes: MUSIC_MODES.slice(), music, sfx, crowd, duck,
+    sfxNames: SFX_NAMES.slice(), musicModes: MUSIC_MODES.slice(), music, sfx, crowd, duck, ambient, attachUi,
+    ui: { hover: () => sfx('uiHover'), tap: () => sfx('uiTap'), select: () => sfx('uiSelect'), open: () => sfx('uiOpen'), close: () => sfx('uiClose') },
     unlock() { if (!ensure()) return Promise.resolve(false); try { const p = ctx.resume(); return Promise.resolve(p).then(() => ctx.state === 'running').catch(() => false); } catch (e) { return Promise.resolve(false); } },
     setMaster(v) { vol.master = clamp(v, 0, 1); if (ready) master.gain.setTargetAtTime(vol.master, ctx.currentTime, 0.02); },
     setMusic(v) { vol.music = clamp(v, 0, 1); if (ready) musicBus.gain.setTargetAtTime(vol.music * MUSIC_TRIM, ctx.currentTime, 0.02); },
