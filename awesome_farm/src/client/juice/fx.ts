@@ -5,6 +5,7 @@
 // playSfx/shake/explode by hand for game actions.
 
 import { buzz } from './haptics';
+import { Chain } from './chain';
 import type { Action } from '../../shared/actions';
 import { PAL } from '../../shared/palette';
 import { settings } from '../settings';
@@ -148,15 +149,21 @@ const FX = {
 
 
 /** One per scene. `unit` scales particles for the scene's camera (world = 1, HUD = ZOOM). */
+/** The actions whose sound climbs the ladder when you chain them. */
+const CHIMES = new Set<Action>(['pickup', 'harvestCrop']);
+
 export class Fx {
     private emitters = new Map<Action, Phaser.GameObjects.Particles.ParticleEmitter>();
+    private readonly chain = new Chain();
 
     constructor (private scene: Phaser.Scene, private unit = 1, private depth = 1e6) {}
 
     /** `quiet` skips the sound (an action far away from this player). */
     play (action: Action, x: number, y: number, opts: { pitch?: number; quiet?: boolean; noShake?: boolean } = {}) {
         const spec: FxSpec = FX[action];
-        if (!opts.quiet) playSfx(spec.sfx, opts.pitch);
+        // your own pickups and harvests in a row climb a pentatonic ladder
+        const pitch = opts.pitch ?? (!opts.noShake && CHIMES.has(action) ? this.chain.next(performance.now()) : undefined);
+        if (!opts.quiet) playSfx(spec.sfx, pitch);
         this.emitter(action, spec.burst).explode(spec.burst.count, x, y);
         if (!opts.noShake) { this.shake(spec.shake.px, spec.shake.ms); buzz(action); }
     }

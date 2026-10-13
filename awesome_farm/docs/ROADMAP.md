@@ -23,7 +23,7 @@ split big ones into slices (rules, art, polish).
 - [x] S33 Weather-aware hints (rain already existed; added Blood Moon and winter heads-ups)
 - [x] S22 Rainbow's end (pot of gold + crate on an owned island when the day's rain clears, announced with a ping)
 - [x] S32 Seasonal special nights (summer fireflies, autumn Harvest Moon, winter Aurora crystals)
-- [ ] S24 Harvest chain chimes
+- [x] S24 Harvest chain chimes (your own pickups and harvests climb a pentatonic ladder)
 - [ ] S23 Roof rain
 - [ ] S19 Craft-to-chest toggle
 - [ ] S20 Hotbar drag reorder / swap with a backpack row
