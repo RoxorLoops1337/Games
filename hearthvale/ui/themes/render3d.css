@@ -41,7 +41,7 @@ html[data-ui="render3d"] .b.small-b,html[data-ui="render3d"] .mini-b{--r3-sw:3.4
 
 /* ---------- text: a strong outline on every control ---------- */
 html[data-ui="render3d"] :is(.b,.pill,.mini-b,.sh-head,.pip,.badge-new,.av .lv,.label .lv,.tb .tc,.qitem .qn,.ribbon){color:var(--r3-tx);-webkit-text-stroke:var(--r3-sw) var(--r3-st);paint-order:stroke fill;text-shadow:0 2px 0 var(--r3-st);letter-spacing:.2px}
-html[data-ui="render3d"] :is(.gp,#card,.chipb,.rb){color:var(--r3-tx);-webkit-text-stroke:3px #fff;paint-order:stroke fill;text-shadow:none;letter-spacing:.1px}
+html[data-ui="render3d"] :is(.gp,.chipb,.rb),html[data-ui="render3d"] #card{color:var(--r3-tx);-webkit-text-stroke:3px #fff;paint-order:stroke fill;text-shadow:none;letter-spacing:.1px}
 html[data-ui="render3d"] .gp.full,html[data-ui="render3d"] .gp.more,html[data-ui="render3d"] .chipb.on{-webkit-text-stroke:var(--r3-sw) var(--r3-st);text-shadow:0 2px 0 var(--r3-st)}
 html[data-ui="render3d"] .b:is(.b-cream,:not([class*="b-"])){-webkit-text-stroke:3.4px #fff;text-shadow:0 1px 0 rgba(255,255,255,.9)}
 html[data-ui="render3d"] .rb{-webkit-text-stroke-width:0}
@@ -117,7 +117,9 @@ html[data-ui="render3d"][data-r3~="dot"] .badge-new{--r3-dot:var(--r3-dot-red);p
 html[data-ui="render3d"][data-r3~="dot"] .badge-new.sale,html[data-ui="render3d"][data-r3~="dot"] .ribbon{--r3-dot:var(--r3-dot-pink)}
 html[data-ui="render3d"] .av .lv,html[data-ui="render3d"] .label .lv,html[data-ui="render3d"] .qitem .qn,html[data-ui="render3d"] .pip{--r3-st:#7a1f1a}
 html[data-ui="render3d"] .av .lv,html[data-ui="render3d"] .label .lv,html[data-ui="render3d"] .qitem .qn{--r3-st:#2b6a1d}
-html[data-ui="render3d"] .tb .tc,html[data-ui="render3d"] .ribbon{--r3-st:#a02a58}
+html[data-ui="render3d"] .tb .tc,html[data-ui="render3d"] .ribbon,html[data-ui="render3d"] .badge-new.sale{--r3-st:#a02a58}
+html[data-ui="render3d"] .badge-new{--r3-st:#8a1f1a}
+html[data-ui="render3d"] .badge-new.sale{--r3-st:#a02a58}
 html[data-ui="render3d"] :is(.pip,.badge-new,.av .lv,.label .lv,.qitem .qn,.tb .tc,.ribbon){--r3-tx:#fff;border-color:transparent}
 html[data-ui="render3d"] :is(.pip,.av .lv,.label .lv,.qitem .qn){--r3-sw:3px}
 

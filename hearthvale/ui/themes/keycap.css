@@ -1,18 +1,18 @@
-/* Keycap 3D: true CSS 3D extruded blocks (matte ABS plastic: cream, mint, coral, butter). Every rule is scoped under html[data-ui="keycap"].
+/* Keycap 3D: CSS 3D extruded blocks with tilt (matte ABS plastic: cream, mint, coral, butter). Every rule is scoped under html[data-ui="keycap"].
  What I learned (research notes):
- 1. Real CSS depth needs a 3D rendering context: `transform-style: preserve-3d` plus a perspective. Using perspective() inside the element's own
-    transform keeps it self contained, so no wrapper is needed (the markup is fixed). Anything that flattens the context (filter, opacity < 1,
-    overflow other than visible, clip-path, mix-blend-mode) must be removed from the 3D element, so .off and .dim use colours instead of filter/opacity.
- 2. Child faces are placed with translateZ and viewed through the vanishing point at the element centre; a base plate that is slightly larger than the
-    top face (a keycap taper) is what makes the walls visible even head on. Rotation pivots at the base (transform-origin z = -depth) so the key leans like a real one.
+ 1. Real CSS depth = perspective() plus rotateX/rotateY/translateZ on the element itself. `transform-style: preserve-3d` with a child plate at translateZ(-depth)
+    works, but I measured that Chrome then rasterizes the whole key (legend included) at a low fixed scale once it tilts (blurry text, worse with will-change),
+    so the key body stays a flat layer under a true perspective transform and the depth faces are derived from the same angles.
+ 2. Walls: a keycap is a tapered block, so the base is wider than the top (the flare) and the visible wall is the base seen under the top face. Here the stacked
+    layers of the face's shadow are the wall slices; each slice is offset by depth * sin(tilt), which is exactly the parallax a rotated rigid block shows.
  3. Mechanical keycaps are read through five cues: a dished (concave) top with the lit slope opposite the light, a darker wall on the shadow side,
     a legend that is printed or debossed (never glowing), a matte grain, and a contact shadow that tightens as the key bottoms out.
- 4. Press = travel along Z until the walls vanish: the top face translates down while the base plate is counter translated so the ground stays put,
-    the taper (flare) and wall height shrink to nearly zero, and the shadow collapses. Release overshoots: a CSS linear() spring easing (with a cubic-bezier fallback).
- 5. Hit testing follows the transformed box, so tilt is capped at 10 degrees, the plate has pointer-events: none, and backface-visibility: hidden stops
-    a rotated face from showing its back. Text stays crisp because the rest transform has no scale and the plate is the only thing offset in depth.
+ 4. Press = travel along Z until the walls vanish: the face translates down (translate3d with a negative Z), the taper and wall height shrink to nearly zero,
+    the shadow collapses. Release overshoots: a CSS linear() spring easing (with a cubic-bezier fallback when linear() is unsupported).
+ 5. Hit testing follows the transformed box, so tilt is capped at 10 degrees and the faces are pseudo-elements with pointer-events: none. Anything that is
+    not a plain transform (filter, opacity < 1) is avoided on the keys: .off and .dim use colours, never opacity or filter.
  6. Cost control: only the active button is written per frame (rAF), idle buttons carry no animation, panels use stacked box-shadows (cheap slabs)
-    instead of real 3D, and body.lowfx swaps the whole 3D context for a flat extrude made of two box-shadows.
+    instead of 3D, and body.lowfx swaps the perspective transform for a flat two-shadow extrude.
 */
 
 /* ---------- tokens ---------- */
@@ -26,64 +26,66 @@ html[data-ui="keycap"]{
   html[data-ui="keycap"]{--kc-spring:linear(0,.07 2%,.26 5%,.55 8.5%,.82 12.5%,1.01 17%,1.1 21%,1.12 25%,1.08 30%,1.02 37%,.99 44%,.985 52%,1.003 66%,1)}
 }
 
-/* ---------- the 3D blocks: .b .rb .pill .gp #card .mini-b ---------- */
+/* ---------- the 3D blocks: .b .rb .pill .gp #card .mini-b ----------
+   The element itself is the keycap: it carries the real 3D transform (perspective + rotateX/rotateY + translateZ travel), so its legend stays crisp.
+   Its ::before is the top face (dished), the stacked layers of that face's shadow are the extruded walls (slanted by the tilt through sin()),
+   and the last layers are the contact shadow. The faces are painted behind the legend with z-index:-1 inside the key's own stacking context. */
 html[data-ui="keycap"] :is(.b,.rb,.pill,.gp,.mini-b),html[data-ui="keycap"] #card{
-  --d:9px;--ps:1.016;--f:3px;--w:5px;--yy:0px;--zz:0px;--bw:3px;--tx:0deg;--ty:0deg;
+  --d:9px;--f:3px;--w:5px;--yy:0px;--zz:0px;--bw:3px;--tx:0deg;--ty:0deg;--dx:0px;--dy:var(--w);
   --k1:color-mix(in srgb,var(--c1) 84%,#fff6e2);
   --k2:color-mix(in srgb,var(--c2) 88%,#f3e4c6);
   --k3:color-mix(in srgb,var(--ed) 52%,var(--c2));
   --rim1:color-mix(in srgb,var(--k1) 55%,#fff);
   --rim2:color-mix(in srgb,var(--ed) 55%,var(--k2));
-  --w1:color-mix(in srgb,var(--ed) 78%,#fff);
-  --w2:color-mix(in srgb,var(--ed) 70%,#2b1a08);
+  --w1:color-mix(in srgb,var(--ed) 80%,#fff);
+  --w2:color-mix(in srgb,var(--ed) 72%,#2b1a08);
   color:var(--kc-ink);
-  border-style:solid;border-width:var(--bw);border-color:var(--rim1) var(--rim2) var(--rim2) var(--rim1);
+  border-style:solid;border-width:var(--bw);border-color:transparent;
+  background:none;box-shadow:none;filter:none;
+  text-shadow:0 1px 0 rgba(255,255,255,.7),0 -1px 0 rgba(var(--kc-shadow),.16);
+  letter-spacing:.2px;
+  transform:perspective(560px) rotateX(var(--ty)) rotateY(var(--tx)) translate3d(0,var(--yy),calc(var(--zz)*-1));
+  transition:transform .55s var(--kc-spring);
+}
+@supports (width:calc(sin(1deg)*1px)){
+  html[data-ui="keycap"] :is(.b,.rb,.pill,.gp,.mini-b),html[data-ui="keycap"] #card{
+    --dx:calc(var(--d)*sin(var(--tx))*-1);--dy:calc(var(--w) + var(--d)*sin(var(--ty)))}
+}
+html[data-ui="keycap"] :is(.b,.rb,.pill,.gp,.mini-b)::before,html[data-ui="keycap"] #card::before{
+  content:"";position:absolute;z-index:-1;pointer-events:none;animation:none;
+  inset:calc(var(--bw)*-1);box-sizing:border-box;border-radius:inherit;
+  border:var(--bw) solid;border-color:var(--rim1) var(--rim2) var(--rim2) var(--rim1);
   background:
     radial-gradient(55% 80% at calc(66% - var(--gx,0)*18% - var(--kc-ox,0)*7%) calc(76% - var(--gy,0)*14% - var(--kc-oy,0)*5%),rgba(255,255,255,.42),rgba(255,255,255,0) 72%),
     var(--kc-noise,linear-gradient(transparent,transparent)),
     radial-gradient(ellipse 98% 125% at 62% 72%,var(--k1) 0%,var(--k2) 54%,var(--k3) 100%);
-  box-shadow:inset 2px 3px 4px -2px rgba(var(--kc-shadow),.42),inset -1px -2px 2px -1px rgba(255,255,255,.7),inset 0 0 0 1px rgba(255,255,255,.18);
-  text-shadow:0 1px 0 rgba(255,255,255,.7),0 -1px 0 rgba(var(--kc-shadow),.16);
-  letter-spacing:.2px;
-  transform-style:preserve-3d;
-  transform:perspective(560px) rotateX(var(--ty)) rotateY(var(--tx)) translate3d(0,var(--yy),calc(var(--zz)*-1));
-  transition:transform .55s var(--kc-spring);
-  filter:none;will-change:transform;
-}
-/* the base plate: ground footprint, walls (shaded from a top-left light) and the contact shadow plane */
-html[data-ui="keycap"] :is(.b,.rb,.pill,.gp,.mini-b)::before,html[data-ui="keycap"] #card::before{
-  content:"";position:absolute;z-index:0;pointer-events:none;border:0;animation:none;
-  top:calc(var(--w) - var(--f) - var(--yy) - var(--bw));
-  right:calc(var(--bw)*-1 - var(--f));
-  bottom:calc(var(--yy) - var(--f) - var(--w) - var(--bw));
-  left:calc(var(--bw)*-1 - var(--f));
-  border-radius:inherit;
-  transform:translateZ(calc(var(--zz) - var(--d))) scale(var(--ps));
-  background:
-    linear-gradient(180deg,rgba(0,0,0,0) 40%,rgba(30,15,0,.22)),
-    linear-gradient(98deg,var(--w1) 0%,color-mix(in srgb,var(--w1) 50%,var(--w2)) 46%,var(--w2) 100%);
   box-shadow:
-    inset 0 1px 0 rgba(255,255,255,.3),inset 0 -2px 0 rgba(20,10,0,.22),
-    calc(var(--kc-ox,0)*-1.6px) 3px 4px -1px rgba(var(--kc-shadow),.42),
-    calc(var(--kc-ox,0)*-3px) 9px 14px -5px rgba(var(--kc-shadow),.3);
-  transition:top .5s var(--kc-spring),right .5s var(--kc-spring),bottom .5s var(--kc-spring),left .5s var(--kc-spring),transform .5s var(--kc-spring),box-shadow .35s ease-out;
+    inset 2px 3px 4px -2px rgba(var(--kc-shadow),.42),inset -1px -2px 2px -1px rgba(255,255,255,.7),inset 0 0 0 1px rgba(255,255,255,.18),
+    calc(var(--dx)*.17) calc(var(--dy)*.17) 0 calc(var(--f)*.17) color-mix(in srgb,var(--w1) 100%,var(--w2)),
+    calc(var(--dx)*.33) calc(var(--dy)*.33) 0 calc(var(--f)*.33) color-mix(in srgb,var(--w1) 80%,var(--w2)),
+    calc(var(--dx)*.5) calc(var(--dy)*.5) 0 calc(var(--f)*.5) color-mix(in srgb,var(--w1) 60%,var(--w2)),
+    calc(var(--dx)*.67) calc(var(--dy)*.67) 0 calc(var(--f)*.67) color-mix(in srgb,var(--w1) 40%,var(--w2)),
+    calc(var(--dx)*.83) calc(var(--dy)*.83) 0 calc(var(--f)*.83) color-mix(in srgb,var(--w1) 20%,var(--w2)),
+    var(--dx) var(--dy) 0 var(--f) var(--w2),
+    calc(var(--dx) - var(--kc-ox,0)*1.6px) calc(var(--dy) + 3px) 5px var(--f) rgba(var(--kc-shadow),.34),
+    calc(var(--dx) - var(--kc-ox,0)*3px) calc(var(--dy) + 8px) 12px calc(var(--f) - 4px) rgba(var(--kc-shadow),.24);
+  transition:box-shadow .5s var(--kc-spring);
 }
 /* sizes */
-html[data-ui="keycap"] :is(.rb,.pill,.gp,.mini-b,.b.small-b){--d:7px;--ps:1.0125;--w:4px;--f:2.5px}
-html[data-ui="keycap"] :is(.b.big,#bBuild,#quick){--d:12px;--ps:1.0215;--w:7px;--f:4px}
-html[data-ui="keycap"] #card{--d:8px;--ps:1.0145;--w:5px;--f:3px}
+html[data-ui="keycap"] :is(.rb,.pill,.gp,.mini-b,.b.small-b){--d:7px;--w:4px;--f:2.5px}
+html[data-ui="keycap"] :is(.b.big,#bBuild,#quick){--d:12px;--w:7px;--f:4px}
+html[data-ui="keycap"] #card{--d:8px;--w:5px;--f:3px}
 /* hover and tilt (JS toggles .kc-live while the pointer is over the key and .kc-down while pressed) */
 html[data-ui="keycap"] :is(.b,.rb,.pill,.gp,#card,.mini-b).kc-live{transition:transform .1s ease-out}
+/* pressed: the key travels down along Z, the walls nearly vanish, the contact shadow tightens */
 html[data-ui="keycap"] :is(.b,.rb,.pill,.gp,#card,.mini-b):is(:active,.kc-down):not(.off){
-  --f:1px;--w:1.5px;--yy:3px;--zz:6px;transition:transform .07s ease-out;
-}
+  --f:.8px;--w:1.2px;--yy:3.4px;--zz:5px;transition:transform .07s ease-out}
 html[data-ui="keycap"] :is(.b,.rb,.pill,.gp,#card,.mini-b):is(:active,.kc-down):not(.off)::before{
-  transition:top .07s ease-out,right .07s ease-out,bottom .07s ease-out,left .07s ease-out,transform .07s ease-out,box-shadow .07s ease-out;
-  box-shadow:inset 0 1px 0 rgba(255,255,255,.2),inset 0 -1px 0 rgba(20,10,0,.3),0 1px 2px rgba(var(--kc-shadow),.5);
-}
-html[data-ui="keycap"] :is(.b,.rb,.pill,.gp,#card,.mini-b):is(:active,.kc-down):not(.off){
-  box-shadow:inset 3px 4px 6px -2px rgba(var(--kc-shadow),.5),inset -1px -1px 2px -1px rgba(255,255,255,.5),inset 0 0 0 1px rgba(255,255,255,.12);
-}
+  transition:box-shadow .07s ease-out;
+  box-shadow:inset 3px 4px 6px -2px rgba(var(--kc-shadow),.5),inset -1px -1px 2px -1px rgba(255,255,255,.5),inset 0 0 0 1px rgba(255,255,255,.12),
+    calc(var(--dx)*.5) calc(var(--dy)*.5) 0 calc(var(--f)*.5) var(--w1),
+    var(--dx) var(--dy) 0 var(--f) var(--w2),
+    0 2px 3px rgba(var(--kc-shadow),.5)}
 @media (hover:hover){html[data-ui="keycap"] :is(.b,.rb,.pill,.gp):hover{filter:none}}
 html[data-ui="keycap"] :is(.b,.rb,.pill,.gp,#card,.mini-b) .ic{filter:drop-shadow(0 1px 0 rgba(255,255,255,.6))}
 html[data-ui="keycap"] .b .rw,html[data-ui="keycap"] .rb .rw{border-radius:inherit}
@@ -91,10 +93,10 @@ html[data-ui="keycap"] .rip{background:radial-gradient(circle,rgba(255,255,255,.
 html[data-ui="keycap"] .shine::after{background:linear-gradient(100deg,transparent 40%,rgba(255,255,255,.4) 50%,transparent 60%) 0 0/260% 100% no-repeat;background-position:220% 0;animation:kc-shine 4.2s ease-in-out infinite}
 @keyframes kc-shine{0%,60%{background-position:220% 0}100%{background-position:-120% 0}}
 
-/* hint rings, hot, bobbing: re-expressed on the plate and with individual transform properties so they never fight the 3D transform */
-html[data-ui="keycap"] .ringhint::before{animation:kc-hint 1.4s ease-out infinite}
-@keyframes kc-hint{0%{box-shadow:0 0 0 0 rgba(255,214,60,.95),0 3px 4px -1px rgba(var(--kc-shadow),.4)}100%{box-shadow:0 0 0 14px rgba(255,214,60,0),0 3px 4px -1px rgba(var(--kc-shadow),.4)}}
-html[data-ui="keycap"] .hot{box-shadow:inset 2px 3px 4px -2px rgba(var(--kc-shadow),.42),inset 0 0 0 2px rgba(232,86,74,.8)!important}
+/* hint rings, hot, bobbing: re-expressed with individual transform properties so they never fight the 3D transform */
+html[data-ui="keycap"] .ringhint::after{content:"";position:absolute;inset:-8px;border-radius:inherit;border:4px solid rgba(255,214,60,.95);box-shadow:0 0 12px rgba(255,214,60,.7);pointer-events:none;z-index:2;animation:ringp 1.4s ease-out infinite}
+html[data-ui="keycap"] .hot{box-shadow:none!important}
+html[data-ui="keycap"] .hot::before{border-color:rgba(232,86,74,.9)!important}
 html[data-ui="keycap"] #quick{animation:kc-bob 1.8s ease-in-out infinite}
 html[data-ui="keycap"] #soupAlert{animation:kc-bob 1.4s ease-in-out infinite}
 html[data-ui="keycap"] #tools .rb.visitor{animation:kc-bob2 2.2s ease-in-out infinite}
@@ -111,7 +113,6 @@ html[data-ui="keycap"] .b-blue,html[data-ui="keycap"] .pill.scr,html[data-ui="ke
 html[data-ui="keycap"] .b-lilac{--c1:#e6deff;--c2:#c4b5f3;--ed:#7360b5;--kc-ink:#2b1f5e}
 html[data-ui="keycap"] .b-cream,html[data-ui="keycap"] #tools .rb:nth-child(7),html[data-ui="keycap"] #card{--c1:#fffaf0;--c2:#f6e9cc;--ed:#cdb487;--kc-ink:#4a3624}
 html[data-ui="keycap"] .b.off,html[data-ui="keycap"] .rb.off,html[data-ui="keycap"] .gp.dim{--c1:#efe8d8!important;--c2:#ddd3be!important;--ed:#b5aa90!important;--kc-ink:#5f5444!important;opacity:1;filter:none}
-html[data-ui="keycap"] .b.off,html[data-ui="keycap"] .rb.off{box-shadow:inset 2px 3px 4px -2px rgba(var(--kc-shadow),.3),inset 0 0 0 1px rgba(255,255,255,.2)}
 html[data-ui="keycap"] .b.off .ic,html[data-ui="keycap"] .rb.off .ic{filter:grayscale(.6) drop-shadow(0 1px 0 rgba(255,255,255,.6))}
 html[data-ui="keycap"] .b.off{text-shadow:0 1px 0 rgba(255,255,255,.7)}
 html[data-ui="keycap"] .gp.full em{background:#c9402a;border-color:#fff}
@@ -274,26 +275,23 @@ html[data-ui="keycap"] .shutter:active{transform:translateY(5px);box-shadow:inse
 /* ---------- reduced motion: keep the static 3D look, no tilt, no spring, no bobbing ---------- */
 html[data-ui="keycap"][data-reduce="1"] :is(.b,.rb,.pill,.gp,#card,.mini-b),
 html[data-ui="keycap"][data-reduce="1"] :is(.b,.rb,.pill,.gp,#card,.mini-b)::before{transition-duration:.01s!important}
-html[data-ui="keycap"][data-reduce="1"] :is(#quick,#soupAlert,#tools .rb.visitor,.shine::after,.ringhint::before){animation:none!important}
+html[data-ui="keycap"][data-reduce="1"] :is(#quick,#soupAlert,#tools .rb.visitor,.shine::after,.ringhint::after){animation:none!important}
 @media (prefers-reduced-motion:reduce){
   html[data-ui="keycap"]:not([data-reduce="0"]) :is(.b,.rb,.pill,.gp,#card,.mini-b),
   html[data-ui="keycap"]:not([data-reduce="0"]) :is(.b,.rb,.pill,.gp,#card,.mini-b)::before{transition-duration:.01ms!important}
-  html[data-ui="keycap"]:not([data-reduce="0"]) :is(#quick,#soupAlert,#tools .rb.visitor,.shine::after,.ringhint::before){animation:none!important}
+  html[data-ui="keycap"]:not([data-reduce="0"]) :is(#quick,#soupAlert,#tools .rb.visitor,.shine::after,.ringhint::after){animation:none!important}
 }
 
 /* ---------- low quality: no 3D context, a flat extrude made of two shadows, no noise ---------- */
-html[data-ui="keycap"] body.lowfx :is(.b,.rb,.pill,.gp,#card,.mini-b){
-  transform-style:flat;transform:none;will-change:auto;--yy:0px;
-  background:radial-gradient(ellipse 98% 125% at 62% 72%,var(--k1) 0%,var(--k2) 54%,var(--k3) 100%);
-  box-shadow:inset 1px 2px 2px -1px rgba(255,255,255,.8),0 4px 0 var(--w2),0 7px 6px -2px rgba(var(--kc-shadow),.4);
-  transition:transform .12s ease-out,box-shadow .12s ease-out}
-html[data-ui="keycap"] body.lowfx :is(.b,.rb,.pill,.gp,#card,.mini-b)::before{display:none}
-html[data-ui="keycap"] body.lowfx :is(.b,.rb,.pill,.gp,#card,.mini-b):is(:active,.kc-down):not(.off){
-  transform:translateY(3px);box-shadow:inset 1px 2px 3px -1px rgba(var(--kc-shadow),.4),0 1px 0 var(--w2),0 2px 3px rgba(var(--kc-shadow),.4)}
-html[data-ui="keycap"] body.lowfx :is(.b,.rb).off{box-shadow:0 3px 0 #b5aa90}
+html[data-ui="keycap"] body.lowfx :is(.b,.rb,.pill,.gp,#card,.mini-b){transform:none;isolation:isolate;transition:transform .12s ease-out}
+html[data-ui="keycap"] body.lowfx :is(.b,.rb,.pill,.gp,#card,.mini-b)::before{
+  background:radial-gradient(ellipse 98% 125% at 62% 72%,var(--k1) 0%,var(--k2) 54%,var(--k3) 100%);transition:none;
+  box-shadow:inset 1px 2px 2px -1px rgba(255,255,255,.8),0 var(--w) 0 var(--f) var(--w2),0 calc(var(--w) + 3px) 5px var(--f) rgba(var(--kc-shadow),.32)}
+html[data-ui="keycap"] body.lowfx :is(.b,.rb,.pill,.gp,#card,.mini-b):is(:active,.kc-down):not(.off){transform:translateY(3px)}
+html[data-ui="keycap"] body.lowfx :is(.b,.rb,.pill,.gp,#card,.mini-b):is(:active,.kc-down):not(.off)::before{box-shadow:inset 1px 2px 3px -1px rgba(var(--kc-shadow),.4),0 1px 0 var(--f) var(--w2)}
 html[data-ui="keycap"] body.lowfx :is(.sheet,.ov-card,#dock,.sh-head,.sh-tabs .ind,.sec,.card,.rowi,.tb,.banner,#track,#place,#mini){
   box-shadow:0 3px 0 var(--sedge,#c4aa78),0 7px 8px -3px rgba(var(--kc-shadow),.35)}
 html[data-ui="keycap"] body.lowfx .sheet,html[data-ui="keycap"] body.lowfx .ov-card{background:linear-gradient(#f9f0dc,#eadcba)}
 html[data-ui="keycap"] body.lowfx .sh-head{background:linear-gradient(#c9f7dc,#8fe3b5);box-shadow:0 3px 0 #3f9a6c}
 html[data-ui="keycap"] body.lowfx .sh-tabs .ind{background:#fff8e8;box-shadow:0 2px 0 #c4aa78}
-html[data-ui="keycap"] body.lowfx .shine::after,html[data-ui="keycap"] body.lowfx .ringhint::before{animation:none}
+html[data-ui="keycap"] body.lowfx .shine::after,html[data-ui="keycap"] body.lowfx .ringhint::after{animation:none}

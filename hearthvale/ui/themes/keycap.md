@@ -1,0 +1,6 @@
+Keycap 3D: chunky matte ABS keys in cream, mint, coral and butter, with debossed or printed legends.
+Technique: each key is a real perspective + rotateX/rotateY/translateZ element; a dished ::before is the top face and its stacked shadow slices are the tapered walls, slanted by depth * sin(tilt).
+Touchable because: keys tilt up to 10 degrees toward the pointer or finger (JS writes --tx/--ty per frame for the active key), travel down along Z until the walls vanish and the shadow tightens, then spring back with an overshoot (CSS linear()).
+Panels are slabs (stacked shadows), bars are milled channels with a sliding block, tabs and segments are slider caps in a slot, switches are rockers, range thumbs are keycaps; a runtime canvas grain gives the matte plastic.
+Performance: one rAF write for the active key only, no animated blur, no backdrop-filter; .lowfx drops to a flat two-shadow extrude, reduced motion keeps the static look without tilt or spring.
+Weaknesses: faces are one pseudo-element (wall slices are shadow layers, not separate rotated planes, because preserve-3d made Chrome blur the legend); needs color-mix and sin() (older browsers fall back to flat walls); tilt is a pointer effect, so on a phone it only shows while a finger is down.

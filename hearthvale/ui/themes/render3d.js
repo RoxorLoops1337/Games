@@ -332,7 +332,7 @@ export default function init({ root }) {
       urls = await renderAll({
         isDead: () => dead,
         onSprite: (k, v) => { if (!dead) set(k, v); },
-        onFamily: (id) => { if (dead) return; done.add(id); root.setAttribute('data-r3', [...done].join(' ')); root.style.setProperty('--r3-ms', String(Math.round(performance.now() - t0))); },
+        onFamily: (id) => { if (dead) return; done.add(id); root.setAttribute('data-r3', [...done].join(' ')); set('--r3-ms', String(Math.round(performance.now() - t0))); },
       });
     } catch (e) { try { console.warn('[render3d] WebGL render failed, using the CSS fallback look', e); } catch { /* ignore */ } }
     if (dead) cleanup();
