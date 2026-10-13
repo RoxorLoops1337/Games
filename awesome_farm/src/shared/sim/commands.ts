@@ -74,7 +74,7 @@ export function command (sim: Sim, pid: string, c: Cmd) {
         case 'demolish': return economy.cmdDemolish(sim, p, c.id);
         case 'eat': return economy.cmdEat(sim, p, c.item);
         case 'sell': return economy.cmdSell(sim, p, c.item, c.n);
-        case 'craft': return economy.cmdCraft(sim, p, c.recipe, c.n);
+        case 'craft': return economy.cmdCraft(sim, p, c.recipe, c.n, !!c.chest);
         case 'equip': return economy.cmdEquip(sim, p, c.item, false, c.slot);
         case 'hot': return hotbar.cmdHot(sim, p, c);
         case 'respawn': return cmdRespawn(sim, p);

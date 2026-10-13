@@ -11,7 +11,7 @@ import { affordIn, chestsAround, haveIn, timesIn } from '../../../shared/sim/poo
 import { countOf, hasUnlock } from '../../../shared/sim/stats';
 import { GridItem, ItemGrid } from '../grid';
 import { CostList, deviceText, Footer, GAP, Section, SearchBox, ts, TabBar, Win } from '../kit';
-import { hex, inset, RARITY_TEXT } from '../px';
+import { hex, inset, RARITY_TEXT, STYLES } from '../px';
 import { recipeTip } from '../tips';
 import { canStaff, stripH, WorkerStrip } from '../workercard';
 import type { Screen, ScreenCtx } from './types';
@@ -26,6 +26,9 @@ const RECENT_MAX = 12;
 const readRecent = (): string[] => { try { const v = JSON.parse(localStorage.getItem(RECENT_KEY) ?? '[]'); return Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string' && x in RECIPES).slice(0, RECENT_MAX) : []; } catch { return []; } };
 const writeRecent = (l: string[]) => { try { localStorage.setItem(RECENT_KEY, JSON.stringify(l)); } catch { /* private mode */ } };
 const RECENT = 'recent' as StationId;
+const CHEST_KEY = 'awesome_farm_craftchest_v1';
+const readChest = () => { try { return localStorage.getItem(CHEST_KEY) === '1'; } catch { return false; } };
+const writeChest = (on: boolean) => { try { localStorage.setItem(CHEST_KEY, on ? '1' : '0'); } catch { /* private mode */ } };
 
 export class CraftScreen implements Screen {
     private win: Win;
@@ -44,6 +47,8 @@ export class CraftScreen implements Screen {
     private bandNote: Phaser.GameObjects.Text;
     private key = '';
     private recent = readRecent();
+    /** Send what is crafted to a chest in reach that holds that kind (remembered in this browser). */
+    private toChest = readChest();
     private search: SearchBox;
     private strip: WorkerStrip;
 
@@ -56,8 +61,10 @@ export class CraftScreen implements Screen {
         this.foot = w.footer({
             primary: { label: 'Craft', onClick: () => this.craft(1) },
             extras: [{ label: '×5', onClick: () => this.craft(5), w: 56 }, { label: 'Max', onClick: () => this.craft(999), w: 64 }],
+            secondary: [{ label: readChest() ? 'To chest: on' : 'To chest: off', w: 130, onClick: () => { this.toChest = !this.toChest; writeChest(this.toChest); this.foot.secondary[0].setLabel(this.toChest ? 'To chest: on' : 'To chest: off'); this.foot.secondary[0].setStyle(this.toChest ? STYLES.lime : STYLES.dark); } }],
             hint: deviceText('Pick a recipe, then Craft. Hover a recipe to see what it needs.', 'Pick a recipe, then Craft.'),
         });
+        if (this.toChest) this.foot.secondary[0].setStyle(STYLES.lime);
         const body = w.body, cy = w.top + w.toolH / 2;
         // the toolbar: which workshop, and a search through every recipe
         const sw = 190;
@@ -103,7 +110,7 @@ export class CraftScreen implements Screen {
             max = Math.min(25, timesIn(me, chestsAround(Object.values(this.ctx.farm.ents), me.x, me.y), r.in));
             if (max <= 0) max = 1;
         }
-        this.ctx.send({ t: 'craft', recipe: r.id, n: max });
+        this.ctx.send({ t: 'craft', recipe: r.id, n: max, ...(this.toChest ? { chest: true } : {}) });
         this.recent = [r.id, ...this.recent.filter((x) => x !== r.id)].slice(0, RECENT_MAX);
         writeRecent(this.recent);
     }

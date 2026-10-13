@@ -25,7 +25,7 @@ split big ones into slices (rules, art, polish).
 - [x] S32 Seasonal special nights (summer fireflies, autumn Harvest Moon, winter Aurora crystals)
 - [x] S24 Harvest chain chimes (your own pickups and harvests climb a pentatonic ladder)
 - [x] S23 Roof rain (rain streaks fade and the rain sound muffles under a roof)
-- [ ] S19 Craft-to-chest toggle
+- [x] S19 Craft-to-chest toggle (a To chest switch in Crafting)
 - [ ] S20 Hotbar drag reorder / swap with a backpack row
 
 ## Phase 3: new systems (medium)
