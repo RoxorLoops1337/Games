@@ -4,8 +4,13 @@
 //   prepare(PLAN.hub(...)) at the top of main.js -> IndexedDB hit (repeat visits) or worker bake -> READY -> the synchronous make*Texture calls inside
 //   createLudus / createArena / createBuildings find their bytes ready and only wrap them in a DataTexture. A miss (no worker, timeout, spec not in the plan)
 //   falls back to the same generator on the calling thread, so output is identical either way. stats() counts hits and misses.
+// Robustness (the "green and black arena" reports): (1) every IndexedDB record carries version + key + checksum and must also have a plausible mean colour, a stale or
+//   corrupt record is rejected and deleted (stats().rejected); (2) worker output goes through the same plausibility test, a failed or garbage bake falls back to the main
+//   thread; (3) a make* call whose bake is still in flight gets a FLAT texture in the spec's average colour (sand / stone / wood hue, lit, never an unlit default or a debug
+//   colour) and the real bytes are swapped in the moment they land, or after 20 s from the main thread (stats().placeholder / swapped). The grade-pass sign flip that
+//   actually made the arena green is a shader bug (see post.js [GREEN-FIX]); none of this was its cause, all of it is cheap insurance.
 import * as THREE from 'three';
-import { GEN_VERSION, specKey, generate, tnoise, tfbm } from './envtex_gen.js';
+import { GEN_VERSION, specKey, generate, tnoise, tfbm, fallbackColor, plausible, bakeHash, cacheRecordOk } from './envtex_gen.js';
 export { tnoise, tfbm };
 
 function canvas(w, h) { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; }
@@ -48,7 +53,8 @@ export const PLAN = {
 // ---------------------------------------------------------------- bytes ready for the synchronous make* calls
 const READY = new Map();        // key -> { w, h, color: Uint8ClampedArray, bump: Uint8ClampedArray }
 const PENDING = new Map();      // key -> Promise (in flight in the cache or a worker)
-const ST = { hit: 0, miss: 0, idb: 0, worker: 0, workerMs: 0, syncMs: 0, fromCache: 0, total: 0, done: 0, idbMs: 0, mode: 'none', missKeys: [] };
+const ST = { hit: 0, miss: 0, idb: 0, worker: 0, workerMs: 0, syncMs: 0, fromCache: 0, total: 0, done: 0, idbMs: 0, mode: 'none', missKeys: [], rejected: 0, badBake: 0, placeholder: 0, swapped: 0 };
+const WAIT = new Map();         // key -> [fn(bytes)] swap-in callbacks of placeholder textures
 export const stats = () => Object.assign({}, ST, { missKeys: ST.missKeys.slice() });
 /** { done, total } of everything prepare() was asked for so far (boot progress bar) */
 export const progress = () => ({ done: ST.done, total: ST.total });
@@ -68,16 +74,27 @@ function openDB() {
   return dbp;
 }
 const ckey = (key) => GEN_VERSION + '|' + key;
-async function idbGetMany(keys) {
-  const db = await openDB(); if (!db || !keys.length) return new Map();
+async function idbGetMany(items) {   // items: [[key, spec]]
+  const db = await openDB(); if (!db || !items.length) return new Map();
   return new Promise((res) => {
-    const out = new Map();
+    const out = new Map(), bad = [];
     try {
       const tx = db.transaction('tex', 'readonly'), os = tx.objectStore('tex');
-      for (const k of keys) { const rq = os.get(ckey(k)); rq.onsuccess = () => { const v = rq.result; if (v && v.color && v.bump && v.color.byteLength === v.w * v.h * 4 && v.bump.byteLength === v.w * v.h) out.set(k, v); }; }
-      tx.oncomplete = tx.onerror = tx.onabort = () => res(out);
+      for (const [k, spec] of items) {
+        const rq = os.get(ckey(k));
+        rq.onsuccess = () => {
+          const v = rq.result; if (!v) return;
+          let good = false;
+          try { good = cacheRecordOk({ v: v.v, key: v.key, w: v.w, h: v.h, hash: v.hash, color: v.color && new Uint8ClampedArray(v.color), bump: v.bump && new Uint8ClampedArray(v.bump) }, k, GEN_VERSION, spec); } catch (e) { good = false; }
+          if (good) out.set(k, v); else { bad.push(k); ST.rejected++; }
+        };
+      }
+      tx.oncomplete = tx.onerror = tx.onabort = () => { if (bad.length) idbDrop(bad); res(out); };
     } catch (e) { res(out); }
   });
+}
+function idbDrop(keys) {   // a rejected record is deleted so the next visit bakes and stores a good one
+  openDB().then((db) => { if (!db) return; try { const os = db.transaction('tex', 'readwrite').objectStore('tex'); for (const k of keys) os.delete(ckey(k)); } catch (e) { /* the cache is optional */ } });
 }
 let swept = false;
 function idbPut(key, r) {
@@ -86,7 +103,7 @@ function idbPut(key, r) {
     try {
       const db = await openDB(); if (!db) return;
       const tx = db.transaction('tex', 'readwrite'), os = tx.objectStore('tex');
-      os.put({ w: r.w, h: r.h, color: r.color.buffer.slice(0), bump: r.bump.buffer.slice(0) }, ckey(key));
+      os.put({ v: GEN_VERSION, key, w: r.w, h: r.h, hash: bakeHash(r), color: r.color.buffer.slice(0), bump: r.bump.buffer.slice(0) }, ckey(key));
       if (!swept) { swept = true; const cur = os.openKeyCursor(); cur.onsuccess = () => { const c = cur.result; if (!c) return; if (!String(c.key).startsWith(GEN_VERSION + '|')) os.delete(c.key); c.continue(); }; }   // old generator versions
     } catch (e) { /* quota or blocked: the cache is optional */ }
   });
@@ -105,7 +122,14 @@ function poolStart() {
       const w = new Worker(new URL('./envtex_worker.js', import.meta.url), { type: 'module' });
       w.onmessage = (e) => {
         const m = e.data, j = POOL.jobs.get(m.id); POOL.jobs.delete(m.id); POOL.idle.push(w);
-        if (j) { if (m.err) j.res(null); else { ST.workerMs += m.ms || 0; j.res({ w: m.w, h: m.h, color: new Uint8ClampedArray(m.color), bump: new Uint8ClampedArray(m.bump) }); } }
+        if (j) {
+          if (m.err) j.res(null);
+          else {
+            ST.workerMs += m.ms || 0; const r = { w: m.w, h: m.h, color: new Uint8ClampedArray(m.color), bump: new Uint8ClampedArray(m.bump) };
+            let good = false; try { good = plausible(j.spec, r); } catch (e) { good = false; }
+            if (good) j.res(r); else { ST.badBake++; j.res(null); }   // garbage from a worker: the main thread bakes it instead
+          }
+        }
         poolPump();
       };
       w.onerror = () => { POOL.dead = true; for (const [, j] of POOL.jobs) j.res(null); POOL.jobs.clear(); for (const j of POOL.q.splice(0)) j.res(null); try { for (const x of POOL.workers) x.terminate(); } catch (er) { /* gone */ } POOL.workers.length = POOL.idle.length = 0; };
@@ -144,15 +168,15 @@ export function prepare(specs, { prio = 0, cache = true, timeout = 15000 } = {})
     if (!mine.length) return;
     const t0 = performance.now(), jobs = [], live = new Map();
     // the cache read and the worker start race: a repeat visit answers from IndexedDB within a few ms, a first visit (the DB does not even exist yet) must not wait for it
-    const cached = cache ? idbGetMany(mine.map(([k]) => k)).then((h) => { ST.idbMs += performance.now() - t0; return h; }) : Promise.resolve(new Map());
+    const cached = cache ? idbGetMany(mine).then((h) => { ST.idbMs += performance.now() - t0; return h; }) : Promise.resolve(new Map());
     const first = await Promise.race([cached, new Promise((r) => setTimeout(() => r(null), 90))]);
-    const take0 = (h) => { for (const [key] of mine) { const v = h.get(key); if (v && !READY.has(key)) { READY.set(key, { w: v.w, h: v.h, color: new Uint8ClampedArray(v.color), bump: new Uint8ClampedArray(v.bump) }); ST.idb++; ST.done++; ST.mode = 'cache'; const j = live.get(key); if (j) j.cancelled = true; } } };
+    const take0 = (h) => { for (const [key] of mine) { const v = h.get(key); if (v && !READY.has(key)) { READY.set(key, { w: v.w, h: v.h, color: new Uint8ClampedArray(v.color), bump: new Uint8ClampedArray(v.bump) }); ST.idb++; ST.done++; ST.mode = 'cache'; const j = live.get(key); if (j) j.cancelled = true; notify(key); } } };
     if (first) take0(first);
     for (const [key, spec] of mine) {
       if (READY.has(key)) continue;
       const sp = Object.assign({}, spec, { _prio: prio }), job = { cancelled: false };
       live.set(key, job);
-      jobs.push(bake(sp, job).then((r) => { if (!r) { if (!job.cancelled) ST.done++; return; } if (READY.has(key)) return; READY.set(key, r); ST.worker++; ST.done++; if (cache) idbPut(key, r); if (ST.mode === 'none') ST.mode = 'worker'; }));
+      jobs.push(bake(sp, job).then((r) => { if (!r) { if (!job.cancelled) { ST.done++; settleLater(key, spec); } return; } if (READY.has(key)) return; READY.set(key, r); ST.worker++; ST.done++; if (cache) idbPut(key, r); if (ST.mode === 'none') ST.mode = 'worker'; notify(key); }));
     }
     if (!first) cached.then(take0);
     await Promise.all(jobs);
@@ -168,7 +192,19 @@ function take(spec) {
   const key = specKey(spec), r = READY.get(key);
   if (r) { ST.hit++; return r; }   // kept: two scenes may ask for the same spec (the textures share the one byte array), and a live texture holds it anyway
   const t0 = performance.now(); const g = generate(spec); ST.miss++; ST.syncMs += performance.now() - t0; if (ST.missKeys.length < 12) ST.missKeys.push(key);
+  READY.set(key, g); notify(key);   // a later worker answer for this key is dropped (READY.has), and any placeholder waiting on it is swapped now
   return g;
+}
+/** a key just became READY (cache, worker or main thread): swap every placeholder texture waiting on it */
+function notify(key) {
+  const ws = WAIT.get(key); if (!ws) return; WAIT.delete(key);
+  const g = READY.get(key); if (!g) return;
+  for (const f of ws) { try { f(g); ST.swapped++; } catch (e) { /* a placeholder that cannot swap keeps its flat colour */ } }
+}
+/** the bake for `key` failed (worker died, garbage output): generate on the main thread, off the current call stack, and swap */
+function settleLater(key, spec) {
+  if (!WAIT.has(key) || READY.has(key)) return;
+  setTimeout(() => { if (READY.has(key) || !WAIT.has(key)) return; try { const g = generate(spec); READY.set(key, g); ST.miss++; notify(key); } catch (e) { WAIT.delete(key); } }, 0);
 }
 
 // ---------------------------------------------------------------- textures
@@ -183,6 +219,12 @@ function dtex(data, w, h, srgb) {
   t.userData.lmTex = true; t.userData.lmBytes = Math.round(w * h * (rgba ? 4 : 1) * 1.34); TEXSET.add(t);
   return t;
 }
+/** put real bytes into an existing texture (a placeholder): the GPU copy is dropped first because the size changes, three allocates and uploads again on the next use */
+function swapBytes(t, data, w, h) {
+  const rgba = t.format === THREE.RGBAFormat;
+  t.dispose(); t.image = { data: new Uint8Array(data.buffer, data.byteOffset, data.byteLength), width: w, height: h };
+  t.unpackAlignment = rgba ? 4 : 1; t.needsUpdate = true; t.userData.lmBytes = Math.round(w * h * (rgba ? 4 : 1) * 1.34); t.userData.lmPlaceholder = false;
+}
 function tex(c, srgb = true, repeat = true) {   // canvas textures (courtyard floor, facade, radial blobs)
   const t = new THREE.CanvasTexture(c);
   if (srgb) t.colorSpace = THREE.SRGBColorSpace;
@@ -192,12 +234,24 @@ function tex(c, srgb = true, repeat = true) {   // canvas textures (courtyard fl
   t.userData.lmTex = true; t.userData.lmBytes = Math.round(c.width * c.height * 4 * 1.34); TEXSET.add(t);
   return t;
 }
-/** spec -> { map, bump, mapCanvas (lazy, only the courtyard floor pattern asks for it) } */
+/** spec -> { map, bump, mapCanvas (lazy, only the courtyard floor pattern asks for it) }. While the bake of this spec is still in flight the textures are flat placeholders. */
 function build(spec) {
-  const g = take(spec), res = { map: dtex(g.color, g.w, g.h, true), bump: dtex(g.bump, g.w, g.h, false) };
+  const key = specKey(spec);
+  let g = READY.get(key), ph = null;
+  if (!g && PENDING.has(key)) {   // in flight in a worker or the cache: do not stall the main thread, show the average colour until it lands
+    const c = fallbackColor(spec);
+    ph = { map: dtex(new Uint8Array([c[0], c[1], c[2], 255]), 1, 1, true), bump: dtex(new Uint8Array([140]), 1, 1, false) };
+    ph.map.userData.lmPlaceholder = ph.bump.userData.lmPlaceholder = true;
+    const list = WAIT.get(key) || []; WAIT.set(key, list);
+    list.push((r) => { swapBytes(ph.map, r.color, r.w, r.h); swapBytes(ph.bump, r.bump, r.w, r.h); });
+    ST.placeholder++; if (list.length === 1) setTimeout(() => settleLater(key, spec), 20000);   // watchdog: a stuck worker costs one main-thread bake, never a flat surface for good
+  } else g = take(spec);
+  const res = ph || { map: dtex(g.color, g.w, g.h, true), bump: dtex(g.bump, g.w, g.h, false) };
   let cv = null;
   Object.defineProperty(res, 'mapCanvas', { get() {
-    if (cv) return cv; cv = canvas(g.w, g.h);
+    if (cv) return cv;
+    if (!g) g = take(spec);   // the courtyard floor pattern needs the pixels now: bake here (take() also swaps the placeholder)
+    cv = canvas(g.w, g.h);
     const id = new ImageData(g.w, g.h), s = g.color, d = id.data;
     for (let y = 0; y < g.h; y++) d.set(s.subarray((g.h - 1 - y) * g.w * 4, (g.h - y) * g.w * 4), y * g.w * 4);   // rows were stored bottom-up
     cv.getContext('2d').putImageData(id, 0, 0); return cv;

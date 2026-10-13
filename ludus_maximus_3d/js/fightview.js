@@ -623,7 +623,7 @@ export class FightView {
     if (big) { fx.shockwave && fx.shockwave(this.feet(dst), 2.4, '#f5ead2'); this.feel.impact('aoe', { big: true }); }
     this.num(dst, 'DOWN', 'miss'); this.feel.impact('finalKill', {}); if (this.post.zoomPunch && !rm) this.post.zoomPunch(big ? 0.045 : 0.028); if (big && !rm) this.caPulse(0.005);
     A.sfx('swordHitCrit', { pan }); A.sfx('deathCry', { voice: VOICE[dst.style] ?? 0, pan }); this.after(350, () => A.sfx('deathThud', { pan })); A.sfx('crowdGasp'); if (big) this.after(500, () => { A.sfx('crowdRoar', { gain: 1 }); A.sfx('crowdGore', { gain: 0.8 }); });
-    if (this.gore.on) { const lh = fd.lastHit; this.gore.onDown(dst.id, { last: true, crit: true, frac: lh ? Math.max(0.25, lh.frac) : 0.3, dx: dir.x, dz: dir.z, big: false, mine: dst.side === 'A', noSrc: false, part: ex.fate ? v.part : undefined });
+    if (this.gore.on) { const lh = fd.lastHit; this.gore.onDown(dst.id, { last: true, crit: true, frac: lh ? Math.max(0.25, lh.frac) : 0.3, dx: dir.x, dz: dir.z, big: false, mine: dst.side === 'A', noSrc: false, part: ex.fate ? v.part : undefined });   // null = keep every limb (the impale)
       if (ex.fate) this.gore.finisher(dst.id, v.gore, dir.x, dir.z);
       if (this.dir.shot && this.dir.shot.name === 'kill') this.dir.shot.p.extra = this.gore.framePoints(dst.id); }   // keep a flung head in the kill shot
     if (v.twist && !rm) ex.twT = 0;   // thrust and twist: the killer wrings the blade

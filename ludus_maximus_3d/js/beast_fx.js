@@ -33,7 +33,7 @@ function prefetchBusts(view) {
 /** after fightview has created the fighter record: paw thuds on the big ones, per-fighter state */
 export function setup(view, f, u) {
   const rig = f.rig, size = bigOf(rig), prev = rig.onEvent;
-  f.beast = true;
+  f.beast = true; if (rig.animator && rig.animator.setMood) rig.animator.setMood(u && u.boss ? 'angry' : 'wary');   // a hostile face between the blows (brows down, lids narrowed); bosses scowl
   if (size >= 1.3) rig.onEvent = (n, c) => { if (prev) prev(n, c); if (n === 'step' && !view.silent && view.phase === 'fight') { const d = view.camera.position.distanceTo(rig.root.position); if (d < 26) { view.audio.sfx('pawThud', { pitch: 1.1 / Math.sqrt(size), gain: clamp(0.5 + size * 0.14, 0.4, 1) * (1 - d / 30), pan: clamp(rig.root.position.x / 12, -1, 1) }); if (size >= 2 && d < 20) { view.feel.addTrauma && view.feel.addTrauma(0.03 * size); const j = rig.joints[(c && c.front ? 'wrist' : 'ankle') + ((c && c.side) || 'L')]; if (j && view.fx.dust) { j.getWorldPosition(_pw); _pw.y = 0.05; view.fx.dust(_pw, 2, { size: 0.5, alpha: 0.3 }); } } } } };
 }
 
@@ -79,16 +79,16 @@ export function event(view, e, src, dst, fs, fd) {
       if (e.r > 0) { fx.ring(view.feet(src), '#e8d9b0', e.r * 0.8); fx.dust(view.feet(src), 10); }
       view.recent += 0.3; break;
     case 'enrage':
-      if (an) { an.release(); an.play('roar', { speed: 1.25 }); }
+      if (an) { an.release(); an.setMood('enraged'); an.play('roar', { speed: 1.25 }); }   // wide eyes, brows up, lips back, panting jaw from now on
       A.sfx('beastRoar', { kind, pitch: VOICE_PITCH[kind] * 1.05, pan, gain: 1.15 }); feel.impact && feel.impact('roar', {}); feel.addTrauma && feel.addTrauma(0.25);
       view.banner(`${NAME[kind] || src.name} goes wild!`, 'ult'); fx.ring(view.feet(src), '#d2412b', 2.6); fx.shockwave && fx.shockwave(view.feet(src), 2.6 * size, '#d2412b');
       A.sfx('crowdRoar', { gain: 0.8 }); view.arena.setWave && view.arena.setWave(1); view.after(3000, () => view.arena.setWave && view.arena.setWave(0)); view.recent += 0.6; break;
     case 'telegraph': { // the charge: paw the ground, a red lane on the sand
-      if (an) { an.release(); an.play('paw'); }
+      if (an) { an.release(); if (!an.enraged) an.setMood('angry'); an.play('paw'); }
       const tgt = new THREE.Vector3(e.x, 0.05, e.y); const h = fx.tele(tgt, Math.max(1.4, e.r * 1.4), 0.75, '#d2412b'); (view.teles = view.teles || []).push(h);
       A.sfx('beastSnort', { pan, pitch: size >= 1.5 ? 0.7 : 1 }); if (size >= 2) A.sfx(kind === 'elephant' ? 'beastRoar' : 'beastGrowl', { kind, pan, pitch: 1.1 }); break; }
     case 'charge': if (an) { an.release(); an.mode = 'charge'; } A.sfx('beastCharge', { pan, pitch: size >= 1.5 ? 0.7 : 1 }); feel.addTrauma && feel.addTrauma(0.08); break;
-    case 'winded': if (an) an.mode = ''; fx.dust(view.feet(src), 12); break;
+    case 'winded': if (an) { an.mode = ''; if (!an.enraged) an.setMood(src.boss ? 'angry' : 'wary'); } fx.dust(view.feet(src), 12); break;
     case 'land': fx.dust(view.feet(src), 14); fx.ring(view.feet(src), '#c9b79c', 2); A.sfx('beastSlam', { pan, gain: 0.8 }); feel.addTrauma && feel.addTrauma(0.12); break;
     case 'stomp': if (an) { an.release(); an.play('stomp'); } A.sfx('beastRoar', { kind, pitch: 1.2, pan, gain: 0.7 }); view.after(550, () => A.sfx('beastSlam', { pan, pitch: 0.6, gain: 1 })); break;
     case 'javelin': if (an) an.play('javelin'); A.sfx('swish', { pan, heavy: true, pitch: 1.2 }); if (dst) view.after(300, () => A.sfx('spearThrust', { pan: clamp(dst.x / 12, -1, 1), gain: 0.7 })); break;

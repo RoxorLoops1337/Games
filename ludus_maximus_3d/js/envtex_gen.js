@@ -3,7 +3,7 @@
 //   color : w*h*4 RGBA (alpha 255), bump : w*h single channel. Rows are written BOTTOM-UP (row 0 = the last image row) so a DataTexture with flipY=false
 //   shows exactly what a CanvasTexture (flipY=true) of the old canvas bake showed. Uint8ClampedArray on purpose: same rounding as ImageData.
 // Bump version GEN_VERSION when ANY generator below changes its output: the IndexedDB cache in envtex.js is keyed by it.
-export const GEN_VERSION = 2;
+export const GEN_VERSION = 3;   // 3: cache records carry a checksum and the spec key (integrity check); the generators themselves are unchanged since 2
 
 function hash(ix, iy, s) {
   let h = (Math.imul(ix, 374761393) + Math.imul(iy, 668265263) + Math.imul(s, 1442695041)) | 0;
@@ -138,3 +138,57 @@ const GEN = {
 export function specKey(s) { return s.k + ':' + Object.keys(s).filter((p) => p !== 'k').sort().map((p) => p + '=' + s[p]).join(','); }
 /** spec -> { w, h, color, bump } (buffers are fresh and transferable) */
 export function generate(spec) { const g = GEN[spec.k]; if (!g) throw new Error('envtex: unknown texture kind ' + spec.k); return g(spec); }
+
+// ---------------------------------------------------------------- fallback colour + integrity (pure: unit-tested in tests/ludus_maximus_3d_structure.test.mjs)
+const mixc = (a, b, t) => [lerp(a[0], b[0], t), lerp(a[1], b[1], t), lerp(a[2], b[2], t)];
+/**
+ * Average sRGB colour [r,g,b] (0..255) of the texture a spec bakes. Used (1) as the neutral stand-in while the real bytes are still being baked (the surface shows
+ * sand / stone / wood of the right hue instead of an unlit default), and (2) as the plausibility reference for cached or worker-made bytes: a cache entry whose
+ * mean colour is far from this is corrupt or stale and is thrown away. Measured against the generators: every kind is within 12 per channel.
+ */
+export function fallbackColor(spec) {
+  let c;
+  switch (spec.k) {
+    case 'sand': c = mixc(hex(0xe6cfa2), hex(0xcdae7e), 0.35); break;
+    case 'stone': { const face = mixc(hex(spec.base), hex(spec.tint), 0.38).map((x) => x * 0.96); c = mixc(face, hex(spec.mortar), 0.02); break; }
+    case 'marble': c = mixc(hex(0xf2ede2), hex(0xe3d8c3), 0.4); break;
+    case 'ground': c = [187, 185, 180]; break;
+    case 'cloth': c = [232, 232, 232]; break;
+    case 'roof': c = [197, 105, 61]; break;
+    default: c = [190, 175, 150];
+  }
+  return c.map((x) => Math.max(0, Math.min(255, Math.round(x))));
+}
+/** mean [r,g,b] of an RGBA byte array from up to `n` evenly strided pixels */
+export function meanColor(color, n = 2048) {
+  const px = color.length >> 2; if (!px) return [0, 0, 0];
+  const step = Math.max(1, Math.floor(px / n)); let r = 0, g = 0, b = 0, k = 0;
+  for (let i = 0; i < px; i += step) { r += color[i * 4]; g += color[i * 4 + 1]; b += color[i * 4 + 2]; k++; }
+  return [r / k, g / k, b / k];
+}
+/** 32-bit FNV-style hash over every byte (read as 32-bit words when aligned: ~2 ms for a 1024 px RGBA tile) */
+export function bytesHash(u8) {
+  let h = (0x811c9dc5 ^ u8.length) | 0, i = 0;
+  if ((u8.byteOffset & 3) === 0) { const w = new Uint32Array(u8.buffer, u8.byteOffset, u8.length >> 2); for (; i < w.length; i++) h = Math.imul(h ^ w[i], 16777619) ^ (h >>> 15); i = w.length << 2; }
+  for (; i < u8.length; i++) h = Math.imul(h ^ u8[i], 16777619);
+  return h >>> 0;
+}
+/** one number for a bake result (color + bump) */
+export const bakeHash = (r) => (bytesHash(r.color) ^ Math.imul(bytesHash(r.bump), 31)) >>> 0;
+/** sane size, sane mean colour and not a flat fill: false for anything a generator can not have produced (all zero, all green, truncated, wrong tile size) */
+export function plausible(spec, r, tol = 48) {
+  if (!r || !r.color || !r.bump || !(r.w > 0) || r.w !== spec.size || r.h !== spec.size) return false;
+  if (r.color.length !== r.w * r.h * 4 || r.bump.length !== r.w * r.h) return false;
+  const m = meanColor(r.color), f = fallbackColor(spec);
+  if (!(Math.abs(m[0] - f[0]) <= tol && Math.abs(m[1] - f[1]) <= tol && Math.abs(m[2] - f[2]) <= tol)) return false;
+  let lo = 255, hi = 0; const st = Math.max(1, r.bump.length >> 10);
+  for (let i = 0; i < r.bump.length; i += st) { const v = r.bump[i]; if (v < lo) lo = v; if (v > hi) hi = v; }
+  return hi - lo >= 4;   // every generator has relief (cloth is the flattest: 0.4..0.8 of 255)
+}
+/** is a cache record usable for `key` at generator version `ver`? (record = { v, key, w, h, hash, color, bump } with color / bump as typed arrays) */
+export function cacheRecordOk(rec, key, ver, spec) {
+  if (!rec || rec.v !== ver || rec.key !== key || !rec.color || !rec.bump) return false;
+  if (rec.color.byteLength !== rec.w * rec.h * 4 || rec.bump.byteLength !== rec.w * rec.h) return false;
+  if (bakeHash(rec) !== rec.hash) return false;
+  return spec ? plausible(spec, rec) : true;
+}

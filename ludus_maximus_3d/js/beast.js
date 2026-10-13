@@ -89,26 +89,34 @@ function skinKnots(geo, knots, bz = 0.6) {
 }
 /** thin tapered strand cards (mane, ruff, tufts, whiskers, bristles): a batch of blades merged into one skinned piece */
 class Blades {
-  constructor() { this.P = []; this.N = []; this.C = []; this.I = []; this.SI = []; this.SW = []; this.tris = 0; }
-  /** a: root [x,y,z]; dir: V3 (unit); len, w (half width at root), n segments, bend: V3 added quadratically (droop), c0 root colour, c1 tip colour, bones: [[boneIndex, weight], ...] */
-  add(a, dir, len, w, n, bend, c0, c1, bones, ref) {
+  constructor() { this.P = []; this.N = []; this.C = []; this.I = []; this.SI = []; this.SW = []; this.H = []; this.tris = 0; this.cnt = 0; }
+  /** a: root [x,y,z]; dir: V3 (unit); len, w (half width at the widest), n segments, bend: V3 added quadratically (droop), c0 root colour, c1 tip colour, bones: [[boneIndex, weight], ...], ref: side hint,
+   *  lay (0 inner .. 1 outer layer) and rnd (0..1 per strand) feed the hair shader (aHair = across, along, layer, random): root darkening, layer depth, ragged split tips, streaks, sway.
+   *  The strand is a lock of hair: leaf shaped (widest near the root, a pointed tip), curved (S bend plus the droop) and twisted a little about its axis so cards are not coplanar sheets,
+   *  with normals bent across the width so it shades like a round lock, not a flat strip. */
+  add(a, dir, len, w, n, bend, c0, c1, bones, ref, lay = 0.5, rnd) {
+    if (rnd === undefined) rnd = h01(this.cnt * 1.618 + 0.37); this.cnt++;
     const side = new V3().crossVectors(dir, ref || new V3(0, 1, 0)); if (side.lengthSq() < 1e-6) side.set(1, 0, 0); side.normalize();
-    const base = this.P.length / 3, pts = [], tmp = new V3();
-    for (let k = 0; k <= n; k++) { const t = k / n; pts.push(new V3(a[0] + dir.x * len * t + bend.x * t * t, a[1] + dir.y * len * t + bend.y * t * t, a[2] + dir.z * len * t + bend.z * t * t)); }
-    const push = (p, nv, c) => { this.P.push(p.x, p.y, p.z); this.N.push(nv.x, nv.y, nv.z); this.C.push(c.r, c.g, c.b); for (let q = 0; q < 4; q++) { const b = bones[q]; this.SI.push(b ? b[0] : 0); this.SW.push(b ? b[1] : 0); } };
+    const nrm0 = new V3().crossVectors(side, dir).normalize(), base = this.P.length / 3, pts = [], tmp = new V3(), sw = len * 0.07 * (rnd - 0.5) * 2, twist = (rnd - 0.5) * 1.3, s2 = new V3(), n2 = new V3();
+    for (let k = 0; k <= n; k++) { const t = k / n, sv = sw * Math.sin(t * Math.PI * 1.6 + rnd * 6); pts.push(new V3(a[0] + dir.x * len * t + bend.x * t * t + side.x * sv, a[1] + dir.y * len * t + bend.y * t * t + side.y * sv, a[2] + dir.z * len * t + bend.z * t * t + side.z * sv)); }
+    const push = (p, nv, c, u, v) => { this.P.push(p.x, p.y, p.z); this.N.push(nv.x, nv.y, nv.z); this.C.push(c.r, c.g, c.b); this.H.push(u, v, lay, rnd); for (let q = 0; q < 4; q++) { const b = bones[q]; this.SI.push(b ? b[0] : 0); this.SW.push(b ? b[1] : 0); } };
     for (let k = 0; k <= n; k++) {
-      const t = k / n, tg = tmp.copy(pts[Math.min(n, k + 1)]).sub(pts[Math.max(0, k - 1)]).normalize(), nv = new V3().crossVectors(side, tg).normalize(), ww = k === n ? 0 : w * (1 - 0.8 * t), c = c0.clone().lerp(c1, t);
-      if (k === n) push(pts[k], nv, c); else { push(pts[k].clone().addScaledVector(side, ww), nv, c); push(pts[k].clone().addScaledVector(side, -ww), nv, c); }
+      const t = k / n, tg = tmp.copy(pts[Math.min(n, k + 1)]).sub(pts[Math.max(0, k - 1)]).normalize(), ang = twist * t, ca = Math.cos(ang), sa = Math.sin(ang);
+      s2.copy(side).multiplyScalar(ca).addScaledVector(nrm0, sa); n2.crossVectors(s2, tg).normalize();
+      const ww = k === n ? 0 : w * (0.45 + 0.9 * Math.sin(Math.PI * Math.min(1, t + 0.12))) * (1 - 0.82 * t), c = c0.clone().lerp(c1, t);
+      if (k === n) push(pts[k], n2.clone(), c, 0, 1);
+      else for (const sg of [1, -1]) { const nv = n2.clone().multiplyScalar(0.7).addScaledVector(s2, sg * 0.72).normalize(); push(pts[k].clone().addScaledVector(s2, sg * ww), nv, c, sg, t); }
     }
     for (let k = 0; k < n; k++) { const i0 = base + k * 2; if (k === n - 1) { this.I.push(i0, i0 + 1, i0 + 2); this.tris++; } else { this.I.push(i0, i0 + 1, i0 + 2, i0 + 1, i0 + 3, i0 + 2); this.tris += 2; } }
   }
   build() {
     if (!this.I.length) return null;
-    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(this.P, 3)); g.setAttribute('normal', new THREE.Float32BufferAttribute(this.N, 3)); g.setAttribute('color', new THREE.Float32BufferAttribute(this.C, 3)); g.setIndex(this.I);
+    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(this.P, 3)); g.setAttribute('normal', new THREE.Float32BufferAttribute(this.N, 3)); g.setAttribute('color', new THREE.Float32BufferAttribute(this.C, 3)); g.setAttribute('aHair', new THREE.Float32BufferAttribute(this.H, 4)); g.setIndex(this.I);
     g.userData.skin = { i: Uint16Array.from(this.SI), w: Float32Array.from(this.SW) }; return g;
   }
 }
 
+globalThis.__legIK = { legFK, legSolve };
 // ------------------------------------------------------------------ species definitions (metres at unit size; +Z forward). The skeleton and gait numbers drive the animator; the rest drives the lofts.
 // front/hind chains: offsets are relative to the parent joint, so the rest pose is a real bent leg. hipsY / chestY are derived so the paws stand on y=0.
 const LION = {
@@ -152,7 +160,7 @@ const ELEPHANT = {
   front: { dx: 0.42, sy: -0.35, sz: 0.0, up: [-0.55, 0.0], lo: [-0.6, 0.0], pad: 0.12, r: [0.33, 0.27, 0.23], paw: [0.23, 0.09, 0.25] },
   hind: { dx: 0.42, hy: -0.32, hz: 0, up: [-0.5, 0.1], lo: [-0.55, -0.1], pad: 0.12, r: [0.36, 0.27, 0.22], paw: [0.23, 0.09, 0.25] },
   tail: { n: 2, len: 0.45, r: 0.045, at: [0.0, 0.1, -0.5], tuft: 0.07 }, eye: '#2a1a10', fur: '#7b746f', belly: '#948b82', dark: '#4a423e', mane: '#5f5c58', nose: '#6a6560', muz: '#b79088',
-  gait: { walkV: 1.6, trotV: 3.4, runV: 6.5, strideW: 2.2, strideT: 3.0, strideR: 4.8, pace: true, rf: 0.6 }, size: 1, h: 4.4, r: 2.2, nameH: 4.9, trunk: true, rider: true,
+  gait: { walkV: 1.6, trotV: 3.4, runV: 6.5, strideW: 2.2, strideT: 3.0, strideR: 4.8, pace: true }, size: 1, h: 4.4, r: 2.2, nameH: 4.9, trunk: true, rider: true,
 };
 SPECIES.elephant = ELEPHANT;
 
@@ -169,12 +177,26 @@ function furMaterial(id, bu, shadeKind = 'cloth', o = {}) {
   const F = FURK[id] || FURK.lion, f = (n) => (+n).toFixed(3), big = id === 'elephant', shell = !!o.shell, H = f(SPECIES[id] ? SPECIES[id].h * 0.55 * (SPECIES[id].size || 1) : 1);
   const m = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: o.ds ? 1 : big ? 0.88 : 0.82, metalness: 0, vertexColors: true, side: o.ds ? THREE.DoubleSide : THREE.FrontSide });
   shadePatch(m, shadeKind, { blood: bu, gash: true });
-  const orig = m.onBeforeCompile, key0 = m.customProgramCacheKey;
+  const orig = m.onBeforeCompile, key0 = m.customProgramCacheKey, HU = o.ds ? { uT: { value: 0 }, uSw: { value: 1 } } : null, SPU = o.splay ? { uLd: { value: new Float32Array([1, 1, 1, 1]) } } : null; if (HU) m.userData.hairU = HU; if (SPU) m.userData.splayU = SPU;
+  // hair cards (mane, ruff, tufts): ragged split tips cut by noise, roots darkened, inner layers deeper, streaks along the lock, edges rounded, backlit translucency, and a wind sway that grows toward the tips
+  const hairDiscard = `{ float hu = abs(vHair.x), hv = vHair.y, hr = vHair.w; float nzh = bn(vec3(hr * 41.0, hv * 9.0, 3.7)); float cutH = 1.0 - 0.38 * nzh * smoothstep(0.3, 0.95, hv);
+  if (hu > cutH) discard;
+  if (hv > 0.6 && abs(vHair.x * 2.0 + sin(hr * 40.0) * 0.6) < 0.6 * (hv - 0.55)) discard;
+  if (hv > 0.3 && abs(sin(vHair.x * (2.6 + hr * 2.4) * 3.14159 + hr * 11.0)) < 0.13 * smoothstep(0.4, 0.8, hv) * (0.4 + nzh)) discard; }   // slits that open toward the tip split a card into locks
+`;
+  const hairShade = `diffuseColor.rgb *= mix(0.4, 1.0, smoothstep(0.0, 0.55, vHair.y)) * mix(0.64, 1.0, vHair.z) * (0.78 + 0.4 * bn(vec3(vHair.x * 9.0 + vHair.w * 91.0, vHair.y * 1.6, 0.5))) * (1.0 - 0.28 * pow(abs(vHair.x), 3.0));
+`;
+  const hairBack = `
+#if NUM_DIR_LIGHTS > 0
+  { vec3 vdT = normalize(vViewPosition); vec3 lT = directionalLights[0].direction; float bk = pow(clamp(-dot(vdT, lT), 0.0, 1.0), 2.0) * (0.3 + 0.7 * smoothstep(0.1, 0.9, vHair.y)); outgoingLight += diffuseColor.rgb * vec3(1.0, 0.74, 0.42) * directionalLights[0].color * bk * 0.3 * (0.45 + 0.55 * vHair.z); }
+#endif
+`;
   const col = `{ vec3 fp = vBP;
   float f1 = bn(fp * ${f(F.sc)} + 3.1), f2 = bn(fp * ${f(F.sc * 2.2)} + 9.7);
   float grain = 1.0 - ${f(F.grain)} * 0.5 + ${f(F.grain)} * (0.62 * f1 + 0.38 * f2);
   diffuseColor.rgb *= grain;
   ${F.salt ? `diffuseColor.rgb *= 1.0 - ${f(F.salt)} * smoothstep(0.62, 0.9, f2);` : ''}
+  ${o.face ? `{ vec3 fe = vec3(abs(fp.x) - ${f(o.face.x)}, fp.y - ${f(o.face.y)}, fp.z - ${f(o.face.z)}); float de = length(fe) / ${f(o.face.r)}; diffuseColor.rgb *= 1.0 - 0.55 * smoothstep(3.2, 1.2, de); }` : ''}
   float pv = bn(fp * ${big ? '2.4' : '4.2'} + 17.0); diffuseColor.rgb *= 1.0 + ${f(F.pv)} * (pv - 0.5) * 2.0;
   ${F.bristle ? `float bs = smoothstep(0.55, 0.85, sin(fp.z * 26.0 + bn(fp * 6.0) * 3.0) * 0.5 + 0.5) * smoothstep(0.55, 0.9, fp.y) * smoothstep(0.25, 0.0, abs(fp.x)); diffuseColor.rgb *= 1.0 - 0.45 * bs;` : ''}
   ${F.wrinkle ? `float wr = sin(fp.y * 52.0 + bn(fp * 7.0) * 6.0) * 0.5 + 0.5; float wr2 = sin((fp.z + fp.x * 0.6) * 40.0 + bn(fp * 11.0) * 5.0) * 0.5 + 0.5; diffuseColor.rgb *= 0.8 + 0.12 * wr + 0.08 * wr2; float dust = smoothstep(0.35, 0.0, fp.y) * 0.3 + 0.04; diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.62, 0.5, 0.36), dust * (0.4 + 0.6 * bn(fp * 9.0)));` : ''}
@@ -201,9 +223,12 @@ function furMaterial(id, bu, shadeKind = 'cloth', o = {}) {
     } }
     vec3 dried = vec3(0.26, 0.12, 0.09), wet = vec3(0.5, 0.07, 0.06), tintc = mix(dried, wet, uBFresh);
     vec3 base = diffuseColor.rgb;
-    vec3 dark = base * mix(vec3(0.5, 0.34, 0.3), vec3(0.34, 0.1, 0.08), uBFresh) + tintc * 0.1;
-    diffuseColor.rgb = mix(base, dark, clamp(edge, 0.0, 1.0) * 0.92);
-    diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.24, 0.014, 0.018) * (0.6 + 0.8 * cl3) + dried * 0.05, core * (0.4 + 0.5 * uBFresh));
+    // dark coats: multiplying a dark fur by a dark red only gives black, so the blood is blended toward a saturated red in proportion to how dark the coat is (a light coat just darkens and reddens)
+    float lumB = dot(base, vec3(0.3, 0.59, 0.11)), darkC = smoothstep(0.34, 0.07, lumB);
+    vec3 bloodR = mix(vec3(0.34, 0.075, 0.05), vec3(0.66, 0.04, 0.03), uBFresh) * (0.78 + 0.5 * cl3);
+    vec3 dark = mix(base * mix(vec3(0.5, 0.34, 0.3), vec3(0.4, 0.12, 0.1), uBFresh) + tintc * 0.1, bloodR * (0.62 + 0.38 * grain), 0.18 + 0.7 * darkC);
+    diffuseColor.rgb = mix(base, dark, clamp(edge, 0.0, 1.0) * 0.94);
+    diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.3, 0.016, 0.02) * (0.6 + 0.8 * cl3) + dried * 0.05, core * (0.45 + 0.5 * uBFresh));
     diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.04, 0.0, 0.004), gsh * 0.85);
     gBM = clamp(max(edge * 0.8, max(core, gsh)), 0.0, 1.0);
   }
@@ -217,14 +242,19 @@ function furMaterial(id, bu, shadeKind = 'cloth', o = {}) {
   outgoingLight += diffuseColor.rgb * vec3(1.0, 0.84, 0.6) * rimF * ${f(F.rim)} * (0.35 + 0.65 * upR) * (0.7 + 0.6 * hr);
   outgoingLight *= 1.0 - ${f(F.edge)} * pow(1.0 - ndR, 3.0) * (1.15 - 0.7 * upR);
   outgoingLight += diffuseColor.rgb * vec3(1.0, 0.72, 0.5) * 0.2 * (1.0 - upR) * (0.5 + 0.5 * ndR);
-  outgoingLight *= mix(0.9, 1.0, smoothstep(0.02, ${f(big ? 0.9 : 0.28)}, vBP.y)); }
+  outgoingLight *= mix(0.9, 1.0, smoothstep(0.02, ${f(big ? 0.9 : 0.28)}, vBP.y));
+  // wet blood: a bright fresh-red rim on the grazing edge (reads on dark coats) and a sheen that catches the sky
+  { float wetB = gBM * (0.35 + 0.65 * uBFresh); float rimB = pow(1.0 - ndR, 2.0); outgoingLight += vec3(0.95, 0.06, 0.04) * wetB * (0.1 + 0.55 * rimB) * (0.5 + 0.5 * upR) + vec3(1.0, 0.62, 0.52) * wetB * 0.2 * pow(1.0 - ndR, 4.0); } }
 `;
   m.onBeforeCompile = (sh) => {
     orig(sh);
-    sh.fragmentShader = sh.fragmentShader.replace('if (uBOn > 0.5) {', 'if (false) {').replace('outgoingLight += addC * (1.0 - gBM * 0.65);', 'outgoingLight += addC * (1.0 - gBM * 0.65) * ' + (o.ds ? '0.32' : '0.85') + ';').replace('#include <color_fragment>', '#include <color_fragment>\n' + col).replace('#include <normal_fragment_maps>', '#include <normal_fragment_maps>\n' + (o.low ? '' : bump)).replace('#include <opaque_fragment>', rim + '#include <opaque_fragment>');
+    if (HU) Object.assign(sh.uniforms, HU);
+    sh.fragmentShader = sh.fragmentShader.replace('if (uBOn > 0.5) {', 'if (false) {').replace('outgoingLight += addC * (1.0 - gBM * 0.65);', 'outgoingLight += addC * (1.0 - gBM * 0.65) * ' + (o.ds ? '0.32' : '0.85') + ';').replace('#include <color_fragment>', '#include <color_fragment>\n' + (HU ? hairDiscard : '') + col + (HU ? hairShade : '')).replace('#include <normal_fragment_maps>', '#include <normal_fragment_maps>\n' + (o.low ? '' : bump)).replace('#include <opaque_fragment>', rim + (HU ? hairBack : '') + '#include <opaque_fragment>');
+    if (SPU) { Object.assign(sh.uniforms, SPU); sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute vec4 aSp; uniform float uLd[4];').replace('#include <begin_vertex>', '#include <begin_vertex>\n{ float ldS = uLd[int(aSp.w + 0.5)]; transformed.xz += aSp.xy * aSp.z * ldS * 0.045; transformed.y -= aSp.z * ldS * 0.006; }'); }
+    if (HU) { sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute vec4 aHair; varying vec4 vHair; uniform float uT, uSw;').replace('#include <begin_vertex>', '#include <begin_vertex>\nvHair = aHair; { float phS = dot(position, vec3(9.1, 5.3, 7.7)) + aHair.w * 6.0; float wvS = aHair.y * aHair.y; transformed += vec3(sin(uT * 1.9 + phS) * 0.9 + sin(uT * 4.1 + phS * 1.7) * 0.25, sin(uT * 2.7 + phS * 1.3) * 0.35, cos(uT * 1.5 + phS * 0.8) * 0.8) * 0.014 * wvS * uSw; }'); sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec4 vHair;'); }
     if (shell) { sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute float aLayer; varying float vLayer;').replace('#include <begin_vertex>', '#include <begin_vertex>\nvLayer = aLayer;'); sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying float vLayer;'); }
   };
-  m.customProgramCacheKey = () => key0() + '-bf2' + id + (shell ? 's' : '') + (o.ds ? 'd' : '') + (o.low ? 'l' : '');
+  m.customProgramCacheKey = () => key0() + '-bf5' + id + (o.face ? 'F' : '') + (o.splay ? 'P' : '') + (shell ? 's' : '') + (o.ds ? 'd' : '') + (o.low ? 'l' : '');
   return m;
 }
 function plainMat(color, kind, rough, metal, bu, blood = true, o = {}) {
@@ -244,7 +274,7 @@ const BX = NB, BY = NB + 1, BZ = NB + 2, BP = NB + 3, BR = NB + 4, BW = NB + 5;
 const NCH = NB + BODY.length;
 const EASE = { lin: (t) => t, in: (t) => t * t, out: (t) => 1 - (1 - t) * (1 - t), io: (t) => (t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2), cub: (t) => t * t * t, back: (t) => { const c = 1.7; return 1 + (c + 1) * Math.pow(t - 1, 3) + c * Math.pow(t - 1, 2); } };
 // pose shorthands: ears -> both ears pitch, lids -> both lids (0 open, 1.3 shut), mane -> both mane joints, sh / hp / el / kn -> both shoulders / hips / elbows / knees (x), eyes -> both eyes [yaw, pitch]
-const SHORT = { ears: (v) => ({ earL: [v, 0, 0], earR: [v, 0, 0] }), lids: (v) => ({ lidL: [v, 0, 0], lidR: [v, 0, 0] }), mane: (v) => ({ mane1: [v, 0, 0], mane2: [v * 0.6, 0, 0] }), snarl: (v) => ({ lipL: [-0.25 * v, 0, 1.0 * v], lipR: [-0.25 * v, 0, -1.0 * v], browL: [0.5 * v, 0, 0.3 * v], browR: [0.5 * v, 0, -0.3 * v] }), sh: (v) => ({ shoulderL: [v, 0, 0], shoulderR: [v, 0, 0] }), hp: (v) => ({ hipL: [v, 0, 0], hipR: [v, 0, 0] }), el: (v) => ({ elbowL: [v, 0, 0], elbowR: [v, 0, 0] }), kn: (v) => ({ kneeL: [v, 0, 0], kneeR: [v, 0, 0] }) };
+const SHORT = { ears: (v) => ({ earL: [v, 0, 0], earR: [v, 0, 0] }), lids: (v) => ({ lidL: [v, 0, 0], lidR: [v, 0, 0] }), mane: (v) => ({ mane1: [v, 0, 0], mane2: [v * 0.6, 0, 0] }), snarl: (v) => ({ lipL: [-0.12 * v, 0, 0.4 * v], lipR: [-0.12 * v, 0, -0.4 * v], browL: [0.5 * v, 0, 0.3 * v], browR: [0.5 * v, 0, -0.3 * v] }), sh: (v) => ({ shoulderL: [v, 0, 0], shoulderR: [v, 0, 0] }), hp: (v) => ({ hipL: [v, 0, 0], hipR: [v, 0, 0] }), el: (v) => ({ elbowL: [v, 0, 0], elbowR: [v, 0, 0] }), kn: (v) => ({ kneeL: [v, 0, 0], kneeR: [v, 0, 0] }) };
 /** keys: [[t, {chan: value | [x,y,z]}, ease?], ...]; ease applies to the segment ARRIVING at that key. info: {swing, hit, recover} seconds. A channel that ends before the clip does returns to 0 at the end. */
 function clip(name, dur, keys, o = {}) {
   const chans = new Map();
@@ -389,8 +419,8 @@ function clipsFor(sp) {
 // low keeps the old budget (about 1000 triangles per animal), medium and high spend the headroom on anatomy, strand cards and fur shells.
 const DETAIL = {
   low: { seg: 4, sub: 1, cap: 1, sw: 5, sh: 3, mane: 24, mseg: 2, shells: 0, claws: 0, teeth: 0, whisk: 0, tufts: 0, lids: 0, detailEye: 0, ruff: 0, face: 0 },
-  medium: { seg: 7, sub: 2, cap: 1, sw: 8, sh: 5, mane: 90, mseg: 3, shells: 0, claws: 2, teeth: 4, whisk: 3, tufts: 8, lids: 1, detailEye: 1, ruff: 1, face: 1 },
-  high: { seg: 10, sub: 2, cap: 2, sw: 12, sh: 8, mane: 300, mseg: 4, shells: 3, claws: 3, teeth: 4, whisk: 5, tufts: 16, lids: 1, detailEye: 1, ruff: 2, face: 2 },
+  medium: { seg: 7, sub: 2, cap: 1, sw: 8, sh: 5, mane: 80, mseg: 3, shells: 0, claws: 2, teeth: 4, whisk: 3, tufts: 8, lids: 1, detailEye: 1, ruff: 1, face: 1 },
+  high: { seg: 10, sub: 2, cap: 2, sw: 12, sh: 8, mane: 260, mseg: 4, shells: 3, claws: 3, teeth: 4, whisk: 5, tufts: 16, lids: 1, detailEye: 1, ruff: 2, face: 2 },
 };
 
 const GEO_CACHE = new Map();
@@ -399,7 +429,7 @@ export function beastKindOf(x) { const g = x && (x.g || x); return (g && (g.beas
 /** unitOrRecord: arena unit ({g}) or a beast record from LM.makeBeast. opts: {detail, scale, kind, look} */
 export function createBeast(unitOrRec, opts = {}) {
   const g = (unitOrRec && unitOrRec.g) || unitOrRec || {}, kind = opts.kind || g.beast || (unitOrRec && unitOrRec.beast) || 'lion', sp0 = SPECIES[kind] || LION;
-  const dname0 = opts.detail !== undefined && opts.detail !== null ? opts.detail : detailFor({}), dname = dname0 === 'low' || dname0 === 0 ? 'low' : dname0 === 'medium' || dname0 === 1 ? 'medium' : 'high', DT = DETAIL[dname];
+  const dname0 = opts.detail !== undefined && opts.detail !== null ? opts.detail : detailFor({}), dname = dname0 === 'low' || dname0 === 0 ? 'low' : dname0 === 'medium' || dname0 === 1 ? 'medium' : 'high', DT = opts.noShells ? Object.assign({}, DETAIL[dname], { shells: 0 }) : DETAIL[dname];
   const look = Object.assign({ coat: 0.5, mane: 0.5, scar: 0.5 }, g.look || {}, opts.look || {});
   const S = sp0.size, sp = sp0, SS = (v) => v * S, big = kind === 'elephant', LOW = dname === 'low';
   const seedId = String((g && (g.id !== undefined ? g.id : g.name)) || kind); let seed = 0; for (let i = 0; i < seedId.length; i++) seed = (seed * 31 + seedId.charCodeAt(i)) % 9973;
@@ -415,7 +445,7 @@ export function createBeast(unitOrRec, opts = {}) {
   mk('jaw', J.head, 0, SS(sp.jawAt[0]), SS(sp.jawAt[1]));
   const E = sp.earAt; mk('earL', J.head, SS(E[0]), SS(E[1]), SS(E[2])); mk('earR', J.head, -SS(E[0]), SS(E[1]), SS(E[2]));
   const eyeP = big ? [0.29, 0.07, 0.2] : [HS.sk[0] * 0.58, HS.sk[1] * 0.4, HS.sk[2] * 0.92];
-  const cat = kind === 'lion' || kind === 'nemean', ER = kind === 'bear' || kind === 'boar' ? 0.02 : kind === 'wolf' ? 0.021 : 0.026, FDROP = kind === 'boar' ? 0.5 : kind === 'wolf' ? 0.3 : 0.24, tipY = -HS.sk[1] * FDROP, tipZ = HS.sk[2] + HS.sn[2], FWIDE = kind === 'wolf' ? 1.2 : kind === 'boar' ? 1.1 : 1.32;
+  const cat = kind === 'lion' || kind === 'nemean', ER = kind === 'bear' ? 0.022 : kind === 'boar' ? 0.021 : kind === 'wolf' ? 0.023 : 0.03, FDROP = kind === 'boar' ? 0.5 : kind === 'wolf' ? 0.3 : 0.24, tipY = -HS.sk[1] * FDROP, tipZ = HS.sk[2] + HS.sn[2], FWIDE = kind === 'wolf' ? 1.2 : kind === 'boar' ? 1.1 : 1.32;
   for (const [s, sg] of [['L', 1], ['R', -1]]) { mk('eye' + s, J.head, sg * SS(eyeP[0]), SS(eyeP[1]), SS(eyeP[2])); mk('lid' + s, J.head, sg * SS(eyeP[0]), SS(eyeP[1]), SS(eyeP[2])); }
   for (const [s, sg] of [['L', 1], ['R', -1]]) {   // brow bones (frown) and, on the animals, lip bones (snarl); the brow pivots just above the eye
     if (big) mk('brow' + s, J.head, sg * SS(eyeP[0] * 0.95), SS(eyeP[1] + 0.07), SS(eyeP[2] - 0.004)); else { mk('brow' + s, J.head, sg * SS(eyeP[0] * 0.95), SS(eyeP[1] + ER * 1.6), SS(eyeP[2] - 0.004)); mk('lip' + s, J.head, sg * SS(HS.sn[0] * FWIDE * 0.74), SS(tipY * 0.7 + HS.sn[1] * 0.1), SS(HS.sk[2] + HS.sn[2] * 0.5)); }
@@ -433,7 +463,7 @@ export function createBeast(unitOrRec, opts = {}) {
 
   // --- materials (per rig so flash / blood never leak)
   const bu = makeBloodUniforms(), mats = {};
-  mats.fur = furMaterial(kind, bu, big ? 'leather' : 'cloth', { low: LOW }); mats.fur.name = 'fur';
+  mats.fur = furMaterial(kind, bu, big ? 'leather' : 'cloth', { low: LOW, splay: big, face: big ? null : { x: rest.get(J.eyeL).x, y: rest.get(J.eyeL).y, z: rest.get(J.eyeL).z, r: ER * 1.05 } }); mats.fur.name = 'fur';
   if (DT.shells && !big) { mats.shell = furMaterial(kind, bu, 'cloth', { shell: true }); mats.shell.name = 'shell'; }
   if (!big) { mats.mane = furMaterial(kind, bu, 'cloth', { ds: true, low: LOW }); mats.mane.name = 'mane'; }
   mats.bone = plainMat(0xffffff, 'trim', 0.5, 0.04, bu, true); mats.bone.name = 'bone';
@@ -463,7 +493,7 @@ export function createBeast(unitOrRec, opts = {}) {
   const limbCol = (sockY, amt, dark = DK, belly = 0.12) => (x, y, z, nx, ny) => { const c = mix(FUR, BEL, sm(0.1, -0.85, ny) * belly); return mix(c, dark, sm(sockY, sockY * 0.35, y) * amt).multiplyScalar(1 - 0.12 * sm(0.2, 0.9, -ny)); };
   const WL = Math.max(1, S), dir = new V3();
   // geometry cache: the merged skinned geometry of a (species, tier, coat) is built once and shared by every rig of it (3 wolves, 2 boars, the same lion in the next hunt)
-  const ckey = kind + '|' + dname + '|' + look.coat.toFixed(2) + '|' + look.mane.toFixed(2), cached = GEO_CACHE.get(ckey);
+  const ckey = kind + '|' + dname + (opts.noShells ? 'n' : '') + '|' + look.coat.toFixed(2) + '|' + look.mane.toFixed(2), cached = GEO_CACHE.get(ckey);
   if (cached) { GEO_CACHE.delete(ckey); GEO_CACHE.set(ckey, cached); }
   if (!cached) {
   // ---- torso: one continuous skin from the rump to the chest, blended over the three spine bones
@@ -510,8 +540,8 @@ export function createBeast(unitOrRec, opts = {}) {
     for (const sg of [1, -1]) {
       const s = sg > 0 ? 'L' : 'R', eyeW = jp('eye' + s);
       // brow ridge: a heavy tapered tube arched over the eye, lying on the skull surface (slopes down toward the temple, which reads as a scowl)
-      { const rb = ER * (kind === 'boar' ? 0.85 : 1.15), sf = (x, z) => { const r = ringAt(z); return r.y + r.ry * Math.sqrt(1 - Math.pow(clamp(x / r.rx, 0, 0.985), 2)); }, zi = hj.z + SS(ez + ER * 1.3), zm = hj.z + SS(ez + ER * 0.1), zo = hj.z + SS(ez - ER * 1.7), xi = SS(ex * 0.3), xm = SS(ex * 1.0), xo = SS(ex * 1.32);
-        const bpts = [{ p: [hj.x + sg * xi, sf(xi, zi) + SS(ER * 0.15), zi], r: SS(rb * 0.7) }, { p: [hj.x + sg * xm, Math.max(sf(xm, zm), hj.y + SS(ey)) + SS(ER * 1.25), zm], r: SS(rb) }, { p: [hj.x + sg * xo, sf(xo, zo) + SS(ER * 0.5), zo], r: SS(rb * 0.55) }];
+      { const rb = ER * (kind === 'boar' ? 0.7 : 0.9), sf = (x, z) => { const r = ringAt(z); return r.y + r.ry * Math.sqrt(1 - Math.pow(clamp(x / r.rx, 0, 0.985), 2)); }, zi = hj.z + SS(ez + ER * 1.3), zm = hj.z + SS(ez + ER * 0.1), zo = hj.z + SS(ez - ER * 1.7), xi = SS(ex * 0.3), xm = SS(ex * 1.0), xo = SS(ex * 1.32);
+        const bpts = [{ p: [hj.x + sg * xi, sf(xi, zi) + SS(ER * 0.15), zi], r: SS(rb * 0.7) }, { p: [hj.x + sg * xm, Math.max(sf(xm, zm), hj.y + SS(ey)) + SS(ER * 1.05), zm], r: SS(rb) }, { p: [hj.x + sg * xo, sf(xo, zo) + SS(ER * 0.5), zo], r: SS(rb * 0.55) }];
         if (FC) { const br = loft(bpts, { seg: FC > 1 ? 7 : 5, sub: FC > 1 ? 2 : 1, cap: 1 }); setColor(br, (x, y, z, nx, ny) => mix(mix(FUR, DK, 0.5), FUR, 0.3 * sm(0.3, 1, ny))); addRigid('fur', br, 'brow' + s); }
         else { const br = blob(SS(ER * 2.2), SS(ER * 0.95), SS(ER * 1.6), 5, 3); setColor(br, (x, y, z, nx, ny) => mix(FUR, DK, 0.5)); place(br, [bpts[1].p[0], bpts[1].p[1], bpts[1].p[2]], [0, 0, sg * -0.3]); addRigid('fur', br, 'brow' + s); } }
       // eye socket: a dark hollow that rims the eyeball, set a little behind it
@@ -521,7 +551,7 @@ export function createBeast(unitOrRec, opts = {}) {
       // upper lip: a flap on the lip bone that wraps the lower side of the muzzle, and a dark lip edge along the muzzle's lower margin (a snarl rolls the flap outward and up)
       if (FC && kind !== 'boar') {
         const lp = jp('lip' + s), zf = hj.z + SS(sk[2] + sn[2] * 0.48), rF = ringAt(zf), qx = 0.72 * rF.rx, flap = blob(SS(sn[0] * 0.24), SS(sn[1] * 0.46), SS(sn[2] * 0.48), 7, 4);
-        setColor(flap, (x, y, z, nx, ny) => mix(mix(MUZ, BEL, 0.25), mix(FUR, DK, 0.3), 0.3 * sm(0.4, 1, ny)).multiplyScalar(0.92 + 0.12 * sm(-1, 0.5, ny))); place(flap, [hj.x + sg * qx, gumAt(qx, zf) + SS(sn[1] * 0.2), zf], [0, 0, sg * 0.45]); addRigid('fur', flap, 'lip' + s);
+        setColor(flap, (x, y, z, nx, ny) => mix(mix(MUZ, BEL, 0.25), mix(FUR, DK, 0.3), 0.3 * sm(0.4, 1, ny)).multiplyScalar(0.92 + 0.12 * sm(-1, 0.5, ny))); place(flap, [hj.x + sg * qx, gumAt(qx, zf) + SS(sn[1] * 0.22), zf], [0, 0, sg * 0.35]); addRigid('fur', flap, 'lip' + s);
         const lpts = [[0.86, sk[2] + sn[2] * 0.04], [0.84, sk[2] + sn[2] * 0.4], [0.62, tipZ - 0.05], [0.2, tipZ - 0.008]].map(([q, zz]) => { const z = hj.z + SS(zz), r = ringAt(z), x = q * r.rx; return { p: [hj.x + sg * x, r.y - r.ry * Math.sqrt(1 - q * q) + SS(0.002), z], r: SS(0.0048) }; });
         const le = loft(lpts, { seg: 4, sub: 1, cap: 1 }); setColor(le, flat('#241412')); addRigid('eye', le, 'lip' + s);
       }
@@ -544,8 +574,8 @@ export function createBeast(unitOrRec, opts = {}) {
     if (FC) { const tops = [2, 3, 4, 5].map((i) => headCtrl[i]), nb = loft(tops.map((rg, k) => ({ p: [rg.p[0], rg.p[1] + rg.r[1] * (k === 3 ? 0.78 : 0.93), rg.p[2]], r: [SS(sn[0] * (0.34 - 0.04 * k)), SS(sn[1] * (0.22 - 0.03 * k))] })), { seg: 5, sub: 1, cap: 1 });
       setColor(nb, (x, y, z, nx, ny) => (kind === 'wolf' ? mix(FUR, DK, 0.55) : kind === 'bear' ? mix(FUR, DK, 0.12) : kind === 'boar' ? mix(FUR, DK, 0.2) : mix(FUR, DK, 0.18))); addRigid('fur', nb, 'head'); }
     // nose leather with two nostrils (and flaring wings at the high tier) and a philtrum line down to the lip
-    { const bw = kind === 'boar' ? 1.1 : 0.82, nzh = kind === 'boar' ? 0.95 : 0.6, nz = blob(SS(sn[0] * bw), SS(sn[1] * nzh), SS(kind === 'boar' ? 0.045 : 0.034), LOW ? 5 : 8, LOW ? 3 : 5), padC = kind === 'wolf' ? '#171414' : kind === 'boar' ? '#a8756a' : cat ? '#4a2c26' : '#1c1412';
-      setColor(nz, (x, y, z, nx, ny, nzz) => hexC(padC).multiplyScalar(0.8 + 0.3 * sm(-0.5, 0.8, ny))); const nzY = tipY + (kind === 'boar' ? 0.0 : sn[1] * 0.4); abs(nz, 'head', [0, SS(nzY), SS(tipZ + 0.014)]); addRigid('eye', nz, 'head');
+    { const bw = kind === 'boar' ? 1.1 : 0.62, nzh = kind === 'boar' ? 0.95 : 0.46, nz = blob(SS(sn[0] * bw), SS(sn[1] * nzh), SS(kind === 'boar' ? 0.045 : 0.034), LOW ? 5 : 8, LOW ? 3 : 5), padC = kind === 'wolf' ? '#171414' : kind === 'boar' ? '#a8756a' : cat ? '#4a2c26' : '#1c1412';
+      setColor(nz, (x, y, z, nx, ny, nzz) => hexC(padC).multiplyScalar(0.8 + 0.3 * sm(-0.5, 0.8, ny))); const nzY = tipY + (kind === 'boar' ? 0.0 : sn[1] * 0.5); abs(nz, 'head', [0, SS(nzY), SS(tipZ + 0.014)]); addRigid('eye', nz, 'head');
       if (FC) for (const sg of [1, -1]) {
         const nr = blob(SS(sn[0] * (kind === 'boar' ? 0.2 : 0.17)), SS(sn[1] * (kind === 'boar' ? 0.26 : 0.16)), SS(0.011), 6, 3); setColor(nr, flat(kind === 'boar' ? '#3a1812' : '#070404')); abs(nr, 'head', [sg * SS(sn[0] * (kind === 'boar' ? 0.45 : 0.36)), SS(nzY - sn[1] * (kind === 'boar' ? 0.0 : 0.05)), SS(tipZ + 0.014 + (kind === 'boar' ? 0.036 : 0.026))], [0, sg * 0.3, sg * -0.25]); addRigid('eye', nr, 'head');
         if (FC > 1 && kind !== 'boar') { const wn = blob(SS(sn[0] * 0.15), SS(sn[1] * 0.2), SS(0.016), 6, 3); setColor(wn, flat(padC)); abs(wn, 'head', [sg * SS(sn[0] * 0.7), SS(nzY - sn[1] * 0.06), SS(tipZ + 0.008)], [0, sg * 0.6, 0]); addRigid('eye', wn, 'head'); }
@@ -585,16 +615,34 @@ export function createBeast(unitOrRec, opts = {}) {
       { p: [m2[0], m2[1], m2[2] + fz], r: [(r[1] + r[2]) / 2 * 1.08, (r[1] + r[2]) / 2 * (fr ? 1.08 : 1.12)] }, { p: [j2.x, j2.y, j2.z], r: [r[2] * 1.08, r[2] * 1.02] },
       { p: [j2.x, j2.y - pad * 0.45, j2.z + 0.01 * S], r: [r[2] * 0.98, r[2] * 0.92] }, { p: [j2.x, soleY + rH * 1.1, j2.z + pw[2] * 0.28], r: [pw[0] * 0.98, rH * 1.1] }, { p: [j2.x, soleY + rH * 0.55, j2.z + pw[2] * 0.78], r: [pw[0] * 0.82, rH * 0.58] },
     ];
-    addLoft('fur', ctrl, { up: [0, 0, 1], caps: [true, true] }, [[fr ? 'chest' : 'hips', 0], [jn[0], 1], [jn[1], 3], [jn[2], 5]], 0.75, limbCol(0.3 * S * (big ? 3 : 1), kind === 'wolf' || kind === 'bear' || kind === 'boar' ? 0.5 : 0.18, DK, 0.15), 0.01 * S);
+    let legGeo, footRing = 8;
+    if (big && !LOW) {   // elephant leg: thick thigh, a knee with real volume (front-back bulge), wrinkle ridges, a narrower ankle, a flared cuff and a round foot
+      const wr = (i) => (DT.sub > 1 ? 1 + 0.05 * (i % 2 ? 1 : -1) : 1), rk = r[1], at = (a, b, t) => md(a, b, t), pn = (a, b, t, ex = 0) => { const q = at(a, b, t); return [q[0], q[1], q[2] + ex]; };
+      const rings = [
+        { p: [j0.x, j0.y + r[0] * 0.55, j0.z - SS(0.02)], r: [r[0] * 1.06, r[0] * 1.12] }, { p: [j0.x, j0.y, j0.z], r: [r[0], r[0] * 1.08] }, { p: pn(j0, j1, 0.5, fz), r: [r[0] * 0.88 * wr(0), r[0] * 0.9 * wr(0)] }, { p: pn(j0, j1, 0.8, fz), r: [rk * 1.02 * wr(1), rk * 1.06 * wr(1)] },
+        { p: [j1.x, j1.y, j1.z + (fr ? 0.015 * S : 0.03 * S)], r: [rk * 1.08, rk * 1.22] }, { p: pn(j1, j2, 0.3, fz), r: [rk * 0.93 * wr(2), rk * 0.96 * wr(2)] }, { p: pn(j1, j2, 0.64, fz), r: [(rk + r[2]) / 2 * 0.98 * wr(3), (rk + r[2]) / 2 * wr(3)] }, { p: [j2.x, j2.y, j2.z], r: [r[2] * 0.94, r[2] * 0.98] },
+        { p: [j2.x, j2.y - pad * 0.42, j2.z + 0.01 * S], r: [r[2] * 1.1, r[2] * 1.1] }, { p: [j2.x, soleY + rH * 1.15, j2.z + pw[2] * 0.28], r: [pw[0] * 1.0, rH * 1.15] }, { p: [j2.x, soleY + rH * 0.55, j2.z + pw[2] * 0.78], r: [pw[0] * 0.84, rH * 0.6] },
+      ];
+      footRing = 8; legGeo = addLoft('fur', rings, { up: [0, 0, 1], caps: [true, true] }, [[fr ? 'chest' : 'hips', 0], [jn[0], 1], [jn[1], 4], [jn[2], 7]], 0.75, limbCol(0.3 * S * 3, 0.18, DK, 0.15), 0.01 * S);
+    } else {
+      legGeo = addLoft('fur', ctrl, { up: [0, 0, 1], caps: [true, true] }, [[fr ? 'chest' : 'hips', 0], [jn[0], 1], [jn[1], 3], [jn[2], 5]], 0.75, limbCol(0.3 * S * (big ? 3 : 1), kind === 'wolf' || kind === 'bear' || kind === 'boar' ? 0.5 : 0.18, DK, 0.15), 0.01 * S);
+    }
+    const legIx = fr ? (sg > 0 ? 0 : 1) : (sg > 0 ? 2 : 3), fcx = j2.x, fcz = j2.z + pw[2] * 0.4;
+    /** elephant foot splay: the foot rings and the nails get (dir x, dir z, weight, leg index); the vertex shader spreads them by the leg's load */
+    const splay = (geo, wfn) => { const P = geo.attributes.position, A = new Float32Array(P.count * 4); for (let i = 0; i < P.count; i++) { const dx = P.getX(i) - fcx, dz = P.getZ(i) - fcz, l = Math.hypot(dx, dz) || 1; A[i * 4] = dx / l; A[i * 4 + 1] = dz / l; A[i * 4 + 2] = wfn(i, P.getY(i)); A[i * 4 + 3] = legIx; } geo.setAttribute('aSp', new THREE.BufferAttribute(A, 4)); };
+    if (big) { const rsA = legGeo.attributes.rs; splay(legGeo, (i) => (LOW ? sm(4.8, 6.6, rsA.getX(i)) : sm(7.0, 9.4, rsA.getX(i)))); }
     if (kind === 'wolf' && fr) { const st = blob(SS(0.012), SS(0.12), SS(0.01), 5, 4); setColor(st, flat('#2a2c30')); abs(st, jn[1], [0, SS(-0.05), SS(0.045)]); addRigid('fur', st, jn[1]); }
     // claws / hooves / toenails
-    const nc = kind === 'boar' ? (DT.claws ? 2 : 0) : big ? (DT.claws ? 3 : 0) : DT.claws;
+    const nc = kind === 'boar' ? (DT.claws ? 2 : 0) : big ? (DT.claws ? (dname === 'high' ? 4 : 3) : 0) : DT.claws;
     for (let c = 0; c < nc; c++) {
       const k = (c - (nc - 1) / 2) * pw[0] * (kind === 'boar' ? 0.7 : 0.62);
       if (kind === 'boar') { const hv = blob(pw[0] * 0.36, rH * 0.9, pw[2] * 0.3, 6, 4); setColor(hv, flat('#1d1814')); place(hv, [j2.x + k, soleY + rH * 0.6, j2.z + pw[2] * 0.95]); addRigid('bone', hv, jn[2]); continue; }
-      if (big) { const nl = blob(SS(0.06), SS(0.05), SS(0.035), 6, 4); setColor(nl, flat('#d8cfba')); place(nl, [j2.x + k * 2.2, soleY + SS(0.05), j2.z + pw[2] * 1.0]); addRigid('bone', nl, jn[2]); continue; }
+      if (big) {   // toenails on the front arc of the foot: flat, pale, tilted down; they spread with the foot (splay attribute)
+        const th = (c - (nc - 1) / 2) * (nc > 3 ? 0.44 : 0.52), nl = blob(SS(0.048), SS(0.034), SS(0.03), dname === 'high' ? 6 : 5, 3); setColor(nl, (x, y, z, nx, ny) => mix(hexC('#cfc3a8'), hexC('#efe6d0'), sm(-0.3, 0.8, ny)));
+        place(nl, [j2.x + Math.sin(th) * pw[0] * 0.8, soleY + rH * 0.75, j2.z + pw[2] * (0.72 + 0.2 * Math.cos(th)) + SS(0.02)], [0.25, th, 0]); splay(nl, () => 1); addRigid('fur', nl, jn[2]); continue; }
       const cl = cone(Math.max(0.006, pw[0] * (bear ? 0.17 : 0.13)), pw[2] * (bear ? 0.7 : 0.5), 4); setColor(cl, flat(bear ? '#d9cdb0' : '#ece4d0')); cl.rotateX(Math.PI / 2 + 0.5); place(cl, [j2.x + k, soleY + rH * 0.5, j2.z + pw[2] * 1.15]); addRigid('bone', cl, jn[2]);
     }
+    if (big && dname === 'high') { const pd = blob(pw[0] * 0.9, SS(0.022), pw[2] * 0.8, 8, 3); setColor(pd, flat('#7d6e66')); place(pd, [j2.x, soleY + SS(0.01), fcz]); splay(pd, () => 1); addRigid('fur', pd, jn[2]); }   // the sole pad
     // elbow / hock tuft and dewclaw hair on the cats and the wolf
     if (DT.tufts && (kind === 'lion' || kind === 'nemean' || kind === 'wolf' || kind === 'bear') && DT.ruff) { const bl = new Blades(); for (let i = 0; i < (fr ? 5 : 4); i++) { const a2 = (i - 2) * 0.35; dir.set(Math.sin(a2) * 0.3 + (i % 2 ? 0.05 : -0.05), -0.55, fr ? -0.55 : -0.7).normalize(); bl.add([j1.x, j1.y + SS(0.01), j1.z - r[1] * 0.7], dir, SS(0.07 + (i % 3) * 0.015), SS(0.012), 2, new V3(0, -SS(0.02), -SS(0.02)), mix(FUR, DK, 0.3), mix(DK, MANE, 0.5), [[bIdx[jn[1]], 1]], new V3(1, 0, 0)); } bladesTo(CARD, bl); }
   };
@@ -611,27 +659,27 @@ export function createBeast(unitOrRec, opts = {}) {
   const mj = (u, l) => { const w = sm(0.3, 1.0, u), m = clamp(0.3 + 0.15 * l, 0, 0.75); return [[bIdx.neck, (1 - w) * (1 - m)], [bIdx.mane1, (1 - w) * m], [bIdx.chest, w * (1 - m)], [bIdx.mane2, w * m]]; };
   if (sp.hasMane) { // lion / Nemean mane: a dark core, then layered tapered strand cards (volumetric, swaying on the mane joints)
     const hN = jp('head'), cN = jp('chest'), ax = new V3(cN.x - hN.x, cN.y - hN.y, cN.z - hN.z), axl = ax.length(), axn = ax.clone().normalize(), e1 = new V3(1, 0, 0), e2 = new V3().crossVectors(axn, e1).normalize();
-    const core = blob(SS(0.34), SS(0.35), SS(0.3), DT.sw, DT.sh); setColor(core, (x, y, z, nx, ny) => mix(mix(MANE, hexC('#8a5a2a'), 0.3), DK, 0.15 * sm(0.5, -0.5, ny))); abs(core, 'neck', [0, SS(-0.01), SS(-0.1)]); addSkin2('fur', core, 'neck', 'chest', (x, y, z) => sm(jp('neck').z - SS(0.28), jp('neck').z + SS(0.12), z));
+    const core = blob(SS(0.27), SS(0.28), SS(0.27), DT.sw, DT.sh); setColor(core, (x, y, z, nx, ny) => mix(mix(MANE, hexC('#5a3a1c'), 0.4), DK, 0.3 + 0.2 * sm(0.5, -0.5, ny)).multiplyScalar(0.8)); abs(core, 'neck', [0, SS(-0.01), SS(-0.1)]); addSkin2('fur', core, 'neck', 'chest', (x, y, z) => sm(jp('neck').z - SS(0.28), jp('neck').z + SS(0.12), z));
     const bm = blob(SS(0.2), SS(0.14), SS(0.3), DT.sw, DT.sh); setColor(bm, (x, y) => mix(MANE, FUR, sm(0.0, -0.14, y - jp('chest').y) * 0.5)); abs(bm, 'chest', [0, SS(-0.12), SS(0.0)]); addRigid('fur', bm, 'chest');
     const bl = new Blades(), L = DT.mane >= 100 ? 4 : DT.mane >= 50 ? 3 : 2, ms = DT.mseg, tipC = sp.gold ? hexC('#e8c050') : mix(MANE, hexC('#c08a38'), 0.75);
     for (let l = 0; l < L; l++) {
-      const cnt = Math.round(DT.mane / L * (l === 0 ? 0.7 : l === L - 1 ? 1.25 : 1)), rad = SS(0.19 + 0.06 * l), len = SS(0.17 + 0.06 * l);
+      const cnt = Math.round(DT.mane / L * (l === 0 ? 0.7 : l === L - 1 ? 1.25 : 1)), rad = SS(0.19 + 0.05 * l), len = SS(0.13 + 0.05 * l);
       for (let k = 0; k < cnt; k++) {
         const hh = h01(k * 7.3 + l * 3.1 + seed), a2 = (k + 0.5 * (l % 2) + hh * 0.5) / cnt * TAU, u = 0.04 + 1.0 * h01(k * 2.7 + l * 5.9 + 0.3 + seed) * (1 - 0.25 * l / L);
         const cx = Math.cos(a2), sy = Math.sin(a2), rd = rad * (0.85 + 0.35 * u) * (sy < -0.3 ? 0.9 : 1);
         const o = [hN.x + axn.x * axl * u + (e1.x * cx + e2.x * sy) * rd, hN.y + axn.y * axl * u + (e1.y * cx + e2.y * sy) * rd * 1.05, hN.z + axn.z * axl * u + (e1.z * cx + e2.z * sy) * rd - SS(0.04)];
-        dir.set(e1.x * cx + e2.x * sy, e1.y * cx + e2.y * sy, e1.z * cx + e2.z * sy).multiplyScalar(0.5).addScaledVector(axn, 0.95).add(new V3(0, -0.03 - 0.1 * (1 - sy) * 0.5, -0.05)).normalize();
+        dir.set(e1.x * cx + e2.x * sy, e1.y * cx + e2.y * sy, e1.z * cx + e2.z * sy).multiplyScalar(0.62).addScaledVector(axn, 0.8).add(new V3(0, -0.06 - 0.12 * (1 - sy) * 0.5, -0.05)).normalize();
         const ln = len * (0.8 + 0.55 * hh) * (1 + 0.5 * u);
         dir.x += (h01(k * 1.7 + l) - 0.5) * 0.45; dir.y += (h01(k * 2.9 + l * 3) - 0.5) * 0.3; dir.normalize();
-        bl.add(o, dir, ln, SS(0.026 + 0.008 * l), ms, new V3(0, -ln * (0.16 + 0.06 * l), 0), mix(DK, MANE, 0.5 + 0.1 * l).multiplyScalar(0.8 + 0.4 * hh), mix(MANE, tipC, 0.2 + 0.25 * l + (sp.gold ? 0.2 * h01(k) : 0)).multiplyScalar(0.85 + 0.35 * hh), mj(u, l), new V3(e1.x * cx + e2.x * sy, e1.y * cx + e2.y * sy, e1.z * cx + e2.z * sy));
+        bl.add(o, dir, ln, SS(0.034 + 0.01 * l), ms, new V3(0, -ln * (0.3 + 0.1 * l), -ln * 0.05), mix(DK, MANE, 0.5 + 0.1 * l).multiplyScalar(0.8 + 0.4 * hh), mix(MANE, tipC, 0.2 + 0.25 * l + (sp.gold ? 0.2 * h01(k) : 0)).multiplyScalar(0.85 + 0.35 * hh), mj(u, l), new V3(e1.x * cx + e2.x * sy, e1.y * cx + e2.y * sy, e1.z * cx + e2.z * sy), l / Math.max(1, L - 1));
       }
     }
     // crown: cards around the back of the head that sweep over the neck and shoulders
-    for (let k = 0, n = Math.round(DT.mane * 0.26); k < n; k++) {
+    for (let k = 0, n = Math.round(DT.mane * 0.34); k < n; k++) {
       const hh = h01(k * 6.1 + seed + 40), a2 = (k + hh) / n * Math.PI * 1.3 - 0.15 * Math.PI, cx = Math.cos(a2), sy = Math.sin(a2), rd = SS(0.17 + 0.05 * hh), u = 0.0 + 0.12 * h01(k * 3.9 + 7);
       const o = [hN.x + axn.x * axl * u + (e1.x * cx + e2.x * sy) * rd, hN.y + axn.y * axl * u + (e1.y * cx + e2.y * sy) * rd, hN.z + axn.z * axl * u + (e1.z * cx + e2.z * sy) * rd - SS(0.05)];
       dir.set(e1.x * cx + e2.x * sy, e1.y * cx + e2.y * sy, e1.z * cx + e2.z * sy).multiplyScalar(0.7).addScaledVector(axn, 0.75).add(new V3((hh - 0.5) * 0.3, 0.12, 0)).normalize(); const ln = SS(0.18 + 0.12 * hh);
-      bl.add(o, dir, ln, SS(0.028), ms, new V3(0, -ln * 0.28, 0), mix(DK, MANE, 0.6).multiplyScalar(0.8 + 0.4 * hh), mix(MANE, tipC, 0.4 + 0.3 * hh), mj(0.12 + u, 3), new V3(e1.x * cx + e2.x * sy, e1.y * cx + e2.y * sy, e1.z * cx + e2.z * sy));
+      bl.add(o, dir, ln, SS(0.028), ms, new V3(0, -ln * 0.28, 0), mix(DK, MANE, 0.6).multiplyScalar(0.8 + 0.4 * hh), mix(MANE, tipC, 0.4 + 0.3 * hh), mj(0.12 + u, 3), new V3(e1.x * cx + e2.x * sy, e1.y * cx + e2.y * sy, e1.z * cx + e2.z * sy), 0.85);
     }
     // chest and belly fringe, cheek ruff
     for (let k = 0; k < Math.round(DT.mane * 0.14); k++) { const hh = h01(k * 3.3 + seed), t = k / Math.max(1, Math.round(DT.mane * 0.14) - 1); dir.set((hh - 0.5) * 0.4, -1, -0.15).normalize(); bl.add([(hh - 0.5) * SS(0.3), axY(0.55 + 0.4 * t) - SS(T.chest[1]) * 0.9, axZ(0.55 + 0.45 * t) + SS(0.05)], dir, SS(0.1 + 0.08 * hh), SS(0.02), ms, new V3(0, -SS(0.03), -SS(0.03)), mix(FUR, MANE, 0.3), mix(MANE, tipC, 0.4), [[bIdx.chest, 1]], new V3(1, 0, 0)); }
@@ -706,8 +754,20 @@ export function createBeast(unitOrRec, opts = {}) {
       const tr = loft(rings, { seg: DT.seg > 8 ? 10 : 6, sub: 1, cap: 1, up: [0, 0, 1], caps: [true, true] }); setColor(tr, (x, y, z, nx, ny) => mix(hexC('#9aa2ae'), hexC('#c8ced8'), 0.5 + 0.5 * Math.sin((y - rj.y) / k * 110) * 0.5)); addRigid('metal', tr, 'rider');
       const sk2 = loft([{ p: RP(0, -0.17, 0), r: [0.2 * k, 0.15 * k] }, { p: RP(0, -0.3, 0.01), r: [0.25 * k, 0.2 * k] }], { seg: DT.seg > 8 ? 10 : 6, sub: 1, cap: 0, caps: [false, false], up: [0, 0, 1] }); setColor(sk2, (x, y) => (y < rj.y - 0.28 * k ? hexC('#d4a63c') : hexC('#a01e1e'))); addRigid('cloth', sk2, 'rider');
       const hd = blob(0.095 * k, 0.105 * k, 0.1 * k, LOW ? 6 : 9, LOW ? 4 : 6); setColor(hd, flat('#c4875a')); abs(hd, 'rider', [0, 0.41 * k, 0.01 * k]); addRigid('skin', hd, 'rider');
+      // the handler's face: eyes with a dark iris, heavy brows, a nose, a moustache and beard, a mouth line (medium and up; the low tier only gets the eyes)
+      for (const sg of [1, -1]) {
+        const ey = blob(0.014 * k, 0.012 * k, 0.012 * k, LOW ? 4 : 6, 3); setColor(ey, (x, y, z, nx, ny, nzz) => (nzz > 0.55 ? hexC('#120c08') : hexC('#e8e0d0'))); abs(ey, 'rider', [sg * 0.038 * k, 0.425 * k, 0.098 * k]); addRigid('eye', ey, 'rider');
+        if (!LOW) { const bw = blob(0.026 * k, 0.008 * k, 0.014 * k, 5, 3); setColor(bw, flat('#2e1c10')); abs(bw, 'rider', [sg * 0.04 * k, 0.446 * k, 0.1 * k], [0, 0, sg * -0.22]); addRigid('leather', bw, 'rider'); }
+        if (!LOW) { const cp = blob(0.016 * k, 0.07 * k, 0.062 * k, 6, 4); setColor(cp, (x, y, z, nx, ny) => mix(hexC('#9aa2ae'), hexC('#f0d070'), sm(rj.y + 0.34 * k, rj.y + 0.31 * k, y) * 0.5)); abs(cp, 'rider', [sg * 0.092 * k, 0.385 * k, 0.04 * k], [0, sg * 0.15, 0]); addRigid('metal', cp, 'rider'); }   // cheek guard
+      }
+      if (!LOW) {
+        const nz = blob(0.015 * k, 0.022 * k, 0.02 * k, 5, 3); setColor(nz, flat('#b87a52')); abs(nz, 'rider', [0, 0.402 * k, 0.108 * k]); addRigid('skin', nz, 'rider');
+        const mu = blob(0.04 * k, 0.011 * k, 0.016 * k, 6, 3); setColor(mu, flat('#2e1c10')); abs(mu, 'rider', [0, 0.376 * k, 0.108 * k]); addRigid('leather', mu, 'rider');
+        const bd = blob(0.056 * k, 0.05 * k, 0.04 * k, 7, 4); setColor(bd, (x, y) => mix(hexC('#2e1c10'), hexC('#4a3020'), sm(rj.y + 0.31 * k, rj.y + 0.37 * k, y))); abs(bd, 'rider', [0, 0.335 * k, 0.082 * k]); addRigid('leather', bd, 'rider');
+        const mo = blob(0.022 * k, 0.004 * k, 0.01 * k, 5, 3); setColor(mo, flat('#5a2a22')); abs(mo, 'rider', [0, 0.36 * k, 0.11 * k]); addRigid('eye', mo, 'rider');
+        const ng = new THREE.BoxGeometry(0.012 * k, 0.07 * k, 0.012 * k); setColor(ng, flat('#b0b8c4')); abs(ng, 'rider', [0, 0.42 * k, 0.118 * k]); addRigid('metal', ng, 'rider');   // nasal guard
+      }
       const hm = new THREE.SphereGeometry(1, LOW ? 6 : 10, LOW ? 3 : 6, 0, TAU, 0, Math.PI * 0.62); hm.scale(0.112 * k, 0.115 * k, 0.12 * k); setColor(hm, (x, y) => mix(hexC('#aab2bc'), hexC('#f0d070'), sm(rj.y + 0.42 * k, rj.y + 0.37 * k, y) * 0.6)); abs(hm, 'rider', [0, 0.44 * k, 0], [0, 0, 0]); addRigid('metal', hm, 'rider');
-      if (!LOW) for (const sg of [1, -1]) { const cg = blob(0.02 * k, 0.07 * k, 0.07 * k, 5, 4); setColor(cg, flat('#aab2bc')); abs(cg, 'rider', [sg * 0.1 * k, 0.4 * k, 0.02 * k]); addRigid('metal', cg, 'rider'); }
       if (DT.tufts) { const cb = new Blades(), n = DT.tufts > 10 ? 12 : 7; for (let i = 0; i < n; i++) { const t = i / (n - 1); dir.set(0, 0.7 - 0.9 * t, -0.2 - 0.9 * t).normalize(); cb.add(RP(0, 0.55 * k / k - 0.0 + 0.0, 0.1 - 0.2 * t), dir, 0.2 * k, 0.03 * k, 3, new V3(0, -0.08 * k, -0.04 * k), hexC('#8a1c1c'), hexC('#c02a24'), [[bIdx.rider, 1]], new V3(1, 0, 0)); } const g2 = cb.build(); if (g2) { const sk = g2.userData.skin; delete g2.userData.skin; addSkin('cloth', g2, sk); } }
       if (!LOW) for (const sg of [1, -1]) { const lg = loft([{ p: RP(sg * 0.1, -0.2, 0), r: 0.065 * k }, { p: RP(sg * 0.2, -0.17, 0.2), r: 0.055 * k }, { p: RP(sg * 0.18, -0.34, 0.34), r: 0.048 * k }], { seg: 6, sub: 1, cap: 1 }); setColor(lg, (x, y, z) => mix(hexC('#c4875a'), hexC('#7a4a2a'), sm(rj.z + 0.2 * k, rj.z + 0.34 * k, z))); addRigid('skin', lg, 'rider'); }
       if (!LOW) { const la = loft([{ p: RP(0.18, 0.18, 0), r: 0.045 * k }, { p: RP(0.26, 0.04, 0.08), r: 0.04 * k }, { p: RP(0.2, 0.0, 0.26), r: 0.035 * k }], { seg: 6, sub: 1, cap: 1 }); setColor(la, flat('#c4875a')); addRigid('skin', la, 'rider'); }
@@ -739,16 +799,16 @@ export function createBeast(unitOrRec, opts = {}) {
     const built = cached || {};
     if (!cached) for (const k in by) {
       const list = by[k]; let nv = 0, ni = 0; for (const it of list) { nv += it.geo.attributes.position.count; ni += it.geo.index ? it.geo.index.count : it.geo.attributes.position.count; }
-      const hasLayer = k === 'shell', pos = new Float32Array(nv * 3), nor = new Float32Array(nv * 3), clr = new Float32Array(nv * 3), si = new Uint16Array(nv * 4), sw = new Float32Array(nv * 4), lay = hasLayer ? new Float32Array(nv) : null, idx = new Uint32Array(ni); let vo = 0, io = 0;
+      const hasLayer = k === 'shell', pos = new Float32Array(nv * 3), nor = new Float32Array(nv * 3), clr = new Float32Array(nv * 3), si = new Uint16Array(nv * 4), sw = new Float32Array(nv * 4), lay = hasLayer ? new Float32Array(nv) : null, hair = k === 'mane' ? new Float32Array(nv * 4) : null, spl = k === 'fur' && big ? new Float32Array(nv * 4) : null, idx = new Uint32Array(ni); let vo = 0, io = 0;
       for (const it of list) {
         const gg = it.geo, n = gg.attributes.position.count; if (!gg.attributes.normal) gg.computeVertexNormals();
-        pos.set(gg.attributes.position.array, vo * 3); nor.set(gg.attributes.normal.array, vo * 3); clr.set(gg.attributes.color.array, vo * 3); if (lay && gg.attributes.aLayer) lay.set(gg.attributes.aLayer.array, vo);
+        pos.set(gg.attributes.position.array, vo * 3); nor.set(gg.attributes.normal.array, vo * 3); clr.set(gg.attributes.color.array, vo * 3); if (lay && gg.attributes.aLayer) lay.set(gg.attributes.aLayer.array, vo); if (hair && gg.attributes.aHair) hair.set(gg.attributes.aHair.array, vo * 4); if (spl && gg.attributes.aSp) spl.set(gg.attributes.aSp.array, vo * 4);
         if (it.skin) { si.set(it.skin.i, vo * 4); sw.set(it.skin.w, vo * 4); } else for (let i = 0; i < n; i++) { si[(vo + i) * 4] = it.bone; sw[(vo + i) * 4] = 1; }
         if (gg.index) for (let i = 0; i < gg.index.count; i++) idx[io++] = gg.index.getX(i) + vo; else for (let i = 0; i < n; i++) idx[io++] = vo + i;
         vo += n;
       }
       const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(pos, 3)); geo.setAttribute('normal', new THREE.BufferAttribute(nor, 3)); geo.setAttribute('color', new THREE.BufferAttribute(clr, 3));
-      geo.setAttribute('skinIndex', new THREE.BufferAttribute(si, 4)); geo.setAttribute('skinWeight', new THREE.BufferAttribute(sw, 4)); if (lay) geo.setAttribute('aLayer', new THREE.BufferAttribute(lay, 1)); geo.setIndex(new THREE.BufferAttribute(idx, 1));
+      geo.setAttribute('skinIndex', new THREE.BufferAttribute(si, 4)); geo.setAttribute('skinWeight', new THREE.BufferAttribute(sw, 4)); if (lay) geo.setAttribute('aLayer', new THREE.BufferAttribute(lay, 1)); if (hair) geo.setAttribute('aHair', new THREE.BufferAttribute(hair, 4)); if (spl) geo.setAttribute('aSp', new THREE.BufferAttribute(spl, 4)); geo.setIndex(new THREE.BufferAttribute(idx, 1));
       geo.boundingSphere = new THREE.Sphere(new V3(0, 1, 0), 8); geo.boundingBox = new THREE.Box3(new V3(-8, -1, -8), new V3(8, 8, 8)); geo.userData.shared = true; built[k] = geo;
     }
     if (!cached) { GEO_CACHE.set(ckey, built); while (GEO_CACHE.size > 9) { const old = GEO_CACHE.keys().next().value; for (const g2 of Object.values(GEO_CACHE.get(old))) g2.dispose(); GEO_CACHE.delete(old); } }
@@ -766,7 +826,7 @@ export function createBeast(unitOrRec, opts = {}) {
   const setSoak = (i) => { const w = blood.wounds[i]; if (!w) return; w.soak = clamp(w.soak, 0, 2.2); bu.uWoundD.value[i].w = Math.max(0.05, w.soak); };
   const rig = {
     root, body, joints: J, sockets: {}, mats, palette: { skin: sp.fur, hair: sp.mane, plume: sp.belly, cloth: '#7a1f1f', metal: '#b8b2a0' }, secondary: [], postUpdate: [], build: { height: 1 }, look,
-    beast: kind, style: kind, portraitD: { lion: 3.7, wolf: 2.35, bear: 3.7, boar: 3.05, nemean: 6.4, elephant: 8.4 }[kind] || 2.6, nameH: SS(sp.nameH / S) * (opts.scale || 1), beastR: sp.r * (opts.scale || 1), bodyH: sp.h, parts, severed: {}, held: { R: true, L: true }, detail: dname, g, size: S, seed,
+    beast: kind, style: kind, portraitD: { lion: 2.7, wolf: 1.75, bear: 2.7, boar: 2.4, nemean: 4.7, elephant: 4.9 }[kind] || 2.6, nameH: SS(sp.nameH / S) * (opts.scale || 1), beastR: sp.r * (opts.scale || 1), bodyH: sp.h, parts, severed: {}, held: { R: true, L: true }, detail: dname, g, size: S, seed,
     setPalette(p) { Object.assign(rig.palette, p); },
     flash(dur = 0.12, color) { flashState.t = dur; flashState.dur = dur; if (color) flashState.color.set(color); },
     squashKick(a) { squash.kick(a * (sp.size > 1.4 ? 0.4 : 1)); },
@@ -828,17 +888,19 @@ function legFK(lg, v, out) {
   _L4.makeRotationFromEuler(_E.set(q[6] - v[0] - v[2], q[7], q[8], 'XYZ')).setPosition(lg.b); _M2.multiplyMatrices(_M1, _L4);
   out.copy(lg.c).applyMatrix4(_M2);
 }
-/** damped least squares: move v so the sole reaches tg (3 iterations from the current offsets in v) */
+/** damped least squares: move v so the sole reaches tg (4 iterations from the better of the previous solution and the plain pose). Height errors count three times as much as sideways ones: a paw never sinks into the sand. */
 function legSolve(lg, tg, v, lim) {
-  for (let it = 0; it < 3; it++) {
-    legFK(lg, v, _fA); const ex = tg.x - _fA.x, ey = tg.y - _fA.y, ez = tg.z - _fA.z; if (ex * ex + ey * ey + ez * ez < 1e-6) break;
-    for (let k = 0; k < 3; k++) { const o = v[k]; v[k] = o + 0.01; legFK(lg, v, _fB); v[k] = o; _Jm[k] = (_fB.x - _fA.x) / 0.01; _Jm[3 + k] = (_fB.y - _fA.y) / 0.01; _Jm[6 + k] = (_fB.z - _fA.z) / 0.01; }   // J[row][col]
-    for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++) _Am[r * 3 + c] = _Jm[r] * _Jm[c] + _Jm[3 + r] * _Jm[3 + c] + _Jm[6 + r] * _Jm[6 + c] + (r === c ? 0.02 : 0);   // JtJ + damping
+  legFK(lg, v, _fA); let e0 = (tg.x - _fA.x) * (tg.x - _fA.x) + 9 * (tg.y - _fA.y) * (tg.y - _fA.y) + (tg.z - _fA.z) * (tg.z - _fA.z);
+  if (v[0] !== 0 || v[1] !== 0 || v[2] !== 0) { const a = v[0], b = v[1], c = v[2]; v[0] = v[1] = v[2] = 0; legFK(lg, v, _fA); const e1 = (tg.x - _fA.x) * (tg.x - _fA.x) + 9 * (tg.y - _fA.y) * (tg.y - _fA.y) + (tg.z - _fA.z) * (tg.z - _fA.z); if (e1 > e0) { v[0] = a; v[1] = b; v[2] = c; } }
+  for (let it = 0; it < (globalThis.__IKIT || 4); it++) {
+    legFK(lg, v, _fA); const ex = tg.x - _fA.x, ey = 3 * (tg.y - _fA.y), ez = tg.z - _fA.z; if (ex * ex + ey * ey + ez * ez < 4e-6) break;
+    for (let k = 0; k < 3; k++) { const o = v[k]; v[k] = o + 0.01; legFK(lg, v, _fB); v[k] = o; _Jm[k] = (_fB.x - _fA.x) / 0.01; _Jm[3 + k] = 3 * (_fB.y - _fA.y) / 0.01; _Jm[6 + k] = (_fB.z - _fA.z) / 0.01; }   // J[row][col]
+    for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++) _Am[r * 3 + c] = _Jm[r] * _Jm[c] + _Jm[3 + r] * _Jm[3 + c] + _Jm[6 + r] * _Jm[6 + c] + (r === c ? (r === 2 ? 0.08 : r === 1 ? 0.05 : 0.02) : 0);   // JtJ + damping (the elbow is the stiffest variable: the leg swings from the shoulder and bends as much as the reach needs)
     _bv[0] = _Jm[0] * ex + _Jm[3] * ey + _Jm[6] * ez; _bv[1] = _Jm[1] * ex + _Jm[4] * ey + _Jm[7] * ez; _bv[2] = _Jm[2] * ex + _Jm[5] * ey + _Jm[8] * ez;
     const a = _Am[0], b = _Am[1], c = _Am[2], d = _Am[3], e = _Am[4], f = _Am[5], g = _Am[6], h = _Am[7], i = _Am[8];
     const A = e * i - f * h, B = -(d * i - f * g), C = d * h - e * g, det = a * A + b * B + c * C; if (Math.abs(det) < 1e-9) break;
     const idt = 1 / det; _dl[0] = (A * _bv[0] + (-(b * i - c * h)) * _bv[1] + (b * f - c * e) * _bv[2]) * idt; _dl[1] = (B * _bv[0] + (a * i - c * g) * _bv[1] + (-(a * f - c * d)) * _bv[2]) * idt; _dl[2] = (C * _bv[0] + (-(a * h - b * g)) * _bv[1] + (a * e - b * d) * _bv[2]) * idt;
-    for (let k = 0; k < 3; k++) { const st = _dl[k] > 0.5 ? 0.5 : _dl[k] < -0.5 ? -0.5 : _dl[k]; let nv = v[k] + st; nv = nv < lim[k * 2] ? lim[k * 2] : nv > lim[k * 2 + 1] ? lim[k * 2 + 1] : nv; v[k] = nv; }
+    for (let k = 0; k < 3; k++) { const st = _dl[k] > 0.6 ? 0.6 : _dl[k] < -0.6 ? -0.6 : _dl[k]; let nv = v[k] + st; nv = nv < lim[k * 2] ? lim[k * 2] : nv > lim[k * 2 + 1] ? lim[k * 2 + 1] : nv; v[k] = nv; }
   }
 }
 class BeastAnimator {
@@ -856,8 +918,8 @@ class BeastAnimator {
     this.pads = [F.pad, F.pad, H.pad, H.pad].map((v) => v * sp.size); this.stance = [1, 1, 1, 1];
     // expression layer (setMood) and stance paw locks
     this.mood = { snarl: 0, squint: 0, wide: 0, jaw: 0 }; this.moodT = { snarl: 0, squint: 0, wide: 0, jaw: 0 }; this.moodName = 'calm'; this.enraged = false; this.stride = 1;
-    this.lkOn = new Uint8Array(4); this.lkW = new Float32Array(4); this.lk = new Float64Array(12); this.ikD = new Float64Array(12); this.ikV = new Float64Array(3); this.stT = new Float32Array(4).fill(-1); this.stF = new Float64Array(8); this.drop = 0; this.dropN = 0; this.lastRoot = { x: 0, z: 0, yaw: 0, ok: false };
-    const col = sp.id === 'elephant'; this.leash = (col ? 0.09 : 0.2) * this.legL[0]; this.stepAt = (col ? 0.07 : 0.14) * this.legL[0]; this.stepLift = (col ? 0.12 : 0.2) * this.legL[0]; this.slip = 0;
+    this.lkOn = new Uint8Array(4); this.lkW = new Float32Array(4); this.lk = new Float64Array(12); this.ikD = new Float64Array(12); this.ikV = new Float64Array(3); this.stT = new Float32Array(4).fill(-1); this.stF = new Float64Array(8); this.drop = 0; this.dropN = 0; this.ld = new Float32Array(4).fill(1); this.land = new Float32Array(4); this.lastRoot = { x: 0, z: 0, yaw: 0, ok: false };
+    const col = sp.id === 'elephant'; this.leash = (col ? 0.2 : 0.3) * this.legL[0]; this.stepAt = (col ? 0.07 : 0.14) * this.legL[0]; this.stepLift = (col ? 0.12 : 0.2) * this.legL[0]; this.slip = 0;
     this.lg = this.legJ.map((jr, i) => ({ par: jr[0].parent, s: jr[0].position, a: jr[1].position, b: jr[2].position, c: new V3(0, -this.pads[i] * 0.98, 0), Lmax: jr[1].position.length() + jr[2].position.length() + this.pads[i] * 0.98, q: new Float64Array(9), i0: LEG_I[i][0], i1: LEG_I[i][1], i2: LEG_I[i][2], lim: new Float64Array(6), front: i < 2 }));
   }
   reset() { this.pb.fill(0); this.pa.fill(0); this.out.fill(0); this.snap.fill(0); this.phase = 0; this.action = null; this.dead = false; this.state = 'move'; this.snapT = 1; this.groundOff = 0; this.hurtS.x = 0; this.hurtS.v = 0; this.go = 0; this.rig.body.position.set(0, 0, 0); this.rig.body.rotation.set(0, 0, 0); this.lastYaw = null; for (const k in this.sec) { this.sec[k].x = 0; this.sec[k].v = 0; } this.fid.slot = -1; this.lkOn.fill(0); this.lkW.fill(0); this.ikD.fill(0); this.stT.fill(-1); this.lastRoot.ok = false; this.drop = 0; this.dropN = 0; }
@@ -897,7 +959,7 @@ class BeastAnimator {
     for (let i = 0; i < 4; i++) {   // 0 LF, 1 RF, 2 LH, 3 RH
       const o = lerp(lerp(W.o[i], T.o[i], gm.s1), R.o[i], gm.s2), front = i < 2, jn = LEG_I[i], Lg = this.legL[front ? 0 : 2], c = (ph + o + 1) % 1;
       let fz, lift = 0, st = 1;   // fz: how far forward of the neutral paw position (metres); lift: 0..1 swing arc
-      if (c < duty) { const u = c / duty; fz = half * (1 - 2 * u); } else { const u = (c - duty) / (1 - duty), e = u * u * (3 - 2 * u); fz = -half + 2 * half * e; lift = Math.sin(Math.PI * u); st = 0; }
+      if (c < duty) { const u = c / duty; fz = half * (1 - 2 * u); } else { const u = (c - duty) / (1 - duty), u2 = u * u, u3 = u2 * u, dd = (-2 * half * (1 - duty)) / duty; fz = half * (1 - 2 * (2 * u3 - 3 * u2 + 1)) + dd * (u3 - 2 * u2 + u + u3 - u2); lift = Math.sin(Math.PI * u); st = 0; }   // Hermite swing: the paw leaves AND lands moving backward at the stance speed (a paw that stopped dead at touchdown would be dragged), so it overshoots a little and sweeps back
       const ang = -Math.asin(clamp(fz / Lg, -0.95, 0.95)) * am, lf = lift * am, comp = (1 - lift) * Math.sin(Math.PI * clamp(c / duty, 0, 1)) * am * (c < duty ? 1 : 0);
       if (front) { pb[jn[0]] = ang * 0.92 - lf * 0.2; pb[jn[1]] = (0.1 + 1.25 * lf * lf + 0.12 * comp) * (big ? 0.55 : 1) - 0.04; pb[jn[2]] = -pb[jn[0]] * 0.5 - pb[jn[1]] * 0.5 + 0.05 + lf * 0.35; }
       else { pb[jn[0]] = ang * 1.0 + 0.06 + lf * 0.12; pb[jn[1]] = (0.1 + 1.1 * lf * lf + 0.1 * comp) * (big ? 0.55 : 1) + 0.1 + 0.1 * clamp(-ang, 0, 1); pb[jn[2]] = -pb[jn[0]] * 0.45 - pb[jn[1]] * 0.55 + 0.06 + lf * 0.45; }
@@ -956,7 +1018,7 @@ class BeastAnimator {
     const lid = base + (1.35 - base) * blink * alive + fight + sq * 0.5 - wd * (base + 0.34);
     pb[LID_I[0]] += lid; pb[LID_I[1]] += lid;
     { const bx = sn * 0.5 + sq * 0.22 - wd * 0.2, bz = sn * 0.3 + sq * 0.1; pb[BROW_I[0]] += bx; pb[BROW_I[1]] += bx; pb[BROW_I[0] + 2] += bz; pb[BROW_I[1] + 2] -= bz;
-      pb[LIP_I[0]] += -0.25 * sn; pb[LIP_I[1]] += -0.25 * sn; pb[LIP_I[0] + 2] += sn; pb[LIP_I[1] + 2] -= sn;
+      pb[LIP_I[0]] += -0.12 * sn; pb[LIP_I[1]] += -0.12 * sn; pb[LIP_I[0] + 2] += 0.4 * sn; pb[LIP_I[1] + 2] -= 0.4 * sn;
       pb[JI.jaw * 3] += (mo.jaw + sn * 0.06) * alive + Math.sin(this.t * 9.5) * 0.035 * wd; pb[JI.head * 3] += 0.05 * sn;
       if (!big) { const ep = -(sn * 0.55 + sq * 0.25); pb[EAR_I[0]] += ep; pb[EAR_I[1]] += ep; } else { pb[EAR_I[0] + 1] += wd * 0.35 + sn * 0.15; pb[EAR_I[1] + 1] -= wd * 0.35 + sn * 0.15; } }
     // ---- secondary motion: tail, ears, mane and banners lag behind the body (springs driven by the turn rate and the speed changes)
@@ -974,6 +1036,7 @@ class BeastAnimator {
       pb[JI.rider * 3] += Math.sin(this.phase * TAU * 2 + 1) * 0.03 * this.gw.walk - br * 0.01; pb[JI.rider * 3 + 2] += Math.sin(this.phase * TAU) * 0.04 * this.gw.walk; pb[JI.riderArm * 3] += -0.25 + br * 0.02; pb[JI.rider * 3 + 1] += Math.sin(t * 0.3) * 0.08 * idle;
       for (let i = 0; i < 2; i++) { const c = FLAG_I[i]; pb[c + 1] += Math.sin(t * 2.6 + i * 1.3) * 0.22 + fl * 0.6 + (0.2 + this.speed * 0.12) * Math.sin(t * 7 + i); pb[c + 2] += Math.sin(t * 3.1 + i) * 0.1; pb[c] += Math.sin(t * 2.1 + i * 2) * 0.06; }
     }
+    { const hu = this.mats.mane && this.mats.mane.userData.hairU; if (hu) { hu.uT.value = this.t + this.seed; hu.uSw.value = S * (0.65 + Math.min(1.4, this.speed * 0.16) + Math.min(0.8, Math.abs(mS) * 0.6)); } }
     // legs at rest: a slight bend so the rest pose is not a statue
     for (let si = 0; si < 2; si++) { const r = LEG_I[si], h = LEG_I[si + 2]; pb[r[1]] += -0.0; }
   }
@@ -1013,6 +1076,7 @@ class BeastAnimator {
     // ---- write
     const jq = this._jq || (this._jq = JN.filter((n) => J[n]).map((n) => ({ q: J[n].quaternion, o: JI[n] * 3 })));
     writeQuats(jq, out);
+    if (J.lipL) { const kl = out[LIP_I[0] + 2] * 2.5, kr = -out[LIP_I[1] + 2] * 2.5, ss = J.lipL.scale, sr = J.lipR.scale; ss.set(1 + 0.2 * kl, Math.max(0.3, 1 - 0.62 * kl), 1); sr.set(1 + 0.2 * kr, Math.max(0.3, 1 - 0.62 * kr), 1); }   // the lip flap is pulled up and bunched against the muzzle (a scale on the lip bone), so the gums and fangs show
     const body = rig.body, bx = out[BX], by = out[BY], bz = out[BZ], bp = out[BP], br2 = out[BR], bw = out[BW];
     { const x = bp, y = bw, z = br2, c1 = Math.cos(x / 2), c2 = Math.cos(y / 2), c3 = Math.cos(z / 2), s1 = Math.sin(x / 2), s2 = Math.sin(y / 2), s3 = Math.sin(z / 2), q = body.quaternion;   // body.rotation.set(bp, bw, br2, 'XYZ') without the callback
       q._x = s1 * c2 * c3 + c1 * s2 * s3; q._y = c1 * s2 * c3 - s1 * c2 * s3; q._z = c1 * c2 * s3 + s1 * s2 * c3; q._w = c1 * c2 * c3 - s1 * s2 * s3; }
@@ -1021,6 +1085,7 @@ class BeastAnimator {
     rig.root.updateMatrixWorld(true);
     const air = a && a.c.ground !== undefined;
     if (!air) this.lockFeet(out, dt); else { this.lkOn.fill(0); this.stT.fill(-1); this.ikD.fill(0); this.drop *= 0.8; if (this.ikR) this.ikR.fill(0); }
+    { const su = this.mats.fur && this.mats.fur.userData.splayU; if (su) { const L = su.uLd.value; for (let i = 0; i < 4; i++) { const tg = this.lkOn[i] ? 1 : 0; this.ld[i] += (tg - this.ld[i]) * Math.min(1, dt * (tg > this.ld[i] ? 18 : 9)); this.land[i] *= Math.exp(-dt * 7); L[i] = this.ld[i] * 0.8 + this.land[i]; } } }   // elephant feet spread with the load (and a little more on touchdown)
     const fl = this.flashState; if (fl.t > 0) { const ft = fl.t - dt; fl.t = ft > 0 ? ft : 0; } const f = fl.t > 0 ? fl.t / fl.dur : 0;
     if (rig.blood.fresh > 0) { { const f9 = rig.blood.fresh - dt / 9; rig.blood.fresh = f9 > 0 ? f9 : 0; } rig.bloodU.uBFresh.value = rig.blood.fresh; }
     if (f > 0 || this._emD !== false) { for (const k in this.mats) { const m = this.mats[k]; if (!m.userData.base) m.userData.base = m.emissive.clone(); m.emissive.copy(m.userData.base); if (f > 0) m.emissive.lerp(fl.color, f); } this._emD = f > 0; }   // PERF: only while a flash runs (and once after)
@@ -1032,6 +1097,7 @@ class BeastAnimator {
    *  when the body outruns it, and at idle a paw whose pin drifted from its neutral spot under the body (the beast turned) takes a real step (0.26 s arc), never both paws of a pair at once.
    *  Paws a clip moves (legW 0) are left alone. A teleport (root jumps) forgets the pins. */
   lockFeet(out, dt) {
+    if (this.noLock) return;   // (lab / tests: the same gait without the world pin, to measure what the pin buys)
     const rig = this.rig, root = rig.root, ground = root.position.y, sc = root.scale.y, idle = this.gw.move < 0.05, lk = this.lk, ikD = this.ikD, lr = this.lastRoot, v = this.ikV;
     { const rx = root.position.x, rz = root.position.z, ry = root.rotation.y; if (lr.ok) { const dx = rx - lr.x, dz = rz - lr.z; let dy = ry - lr.yaw; dy = Math.atan2(Math.sin(dy), Math.cos(dy)); if (dx * dx + dz * dz > 1.0 || Math.abs(dy) > 1.2) { this.lkOn.fill(0); ikD.fill(0); this.ikR = null; this.stT.fill(-1); } } lr.x = rx; lr.z = rz; lr.yaw = ry; lr.ok = true; }
     const ikR = this.ikR || (this.ikR = new Float64Array(12)); let stepping = 0; for (let i = 0; i < 4; i++) if (this.stT[i] >= 0) stepping++;
@@ -1041,7 +1107,7 @@ class BeastAnimator {
       const grounded = this.legW[i] > 0.05 && (idle || this.stance[i] === 1);
       let solve = false, tx = 0, ty = 0, tz = 0, w = 0; if (i === 0) this.dropN = 0;
       if (grounded) {
-        if (!this.lkOn[i]) { this.lkOn[i] = 1; lk[o] = cx; lk[o + 1] = ground; lk[o + 2] = cz; this.lkW[i] = 0; this.stT[i] = -1; }
+        if (!this.lkOn[i]) { this.lkOn[i] = 1; this.land[i] = 0.8; lk[o] = cx; lk[o + 1] = ground; lk[o + 2] = cz; this.lkW[i] = 0; this.stT[i] = -1; }
         let dx = lk[o] - cx, dz = lk[o + 2] - cz, d = Math.sqrt(dx * dx + dz * dz);
         if (d > this.leash) { const k = this.leash / d; lk[o] = cx + dx * k; lk[o + 2] = cz + dz * k; d = this.leash; }
         if (!idle) this.stT[i] = -1;
@@ -1061,6 +1127,8 @@ class BeastAnimator {
         const lim = lg.lim, lo = lg.front ? -0.15 : -0.45; lim[0] = -1.1; lim[1] = 1.1; lim[2] = -0.45; lim[3] = 0.45; lim[4] = lo - q[3]; lim[5] = 2.3 - q[3];
         v[0] = ikR[o]; v[1] = ikR[o + 1]; v[2] = ikR[o + 2]; _tg.set(tx, ty, tz); legSolve(lg, _tg, v, lim);
         ikR[o] = v[0]; ikR[o + 1] = v[1]; ikR[o + 2] = v[2]; ikD[o] = v[0] * w; ikD[o + 1] = v[1] * w; ikD[o + 2] = v[2] * w;
+        if (globalThis.__BDBG) { legFK(lg, v, _fA); globalThis.__BDBG.push([i, cx, cy, cz, tx, ty, tz, _fA.x, _fA.y, _fA.z, w, v[0], v[1], v[2]]); }
+        if (grounded && this.stT[i] < 0) { legFK(lg, v, _fA); const ex = _fA.x - tx, ez = _fA.z - tz, em = Math.sqrt(ex * ex + ez * ez); if (em > 0.012 * sc) { const k = 1 - 0.012 * sc / em; lk[o] += ex * k; lk[o + 2] += ez * k; } }   // out of reach: the pin is dragged by the foot, nothing more
       }
       if (Math.abs(ikD[o]) + Math.abs(ikD[o + 1]) + Math.abs(ikD[o + 2]) > 1e-4) {
         out[jn[0]] += ikD[o]; out[jn[0] + 2] += ikD[o + 1]; out[jn[1]] += ikD[o + 2]; out[jn[2]] -= ikD[o] + ikD[o + 2];

@@ -646,7 +646,7 @@
       if (o.temple) (o.temple > 0 ? o.gain : o.cost).push(`Temple of Mars regard ${sg(o.temple)}`);
       if (o.ludus) (o.ludus > 0 ? o.gain : o.cost).push(`${own.name} regard ${sg(o.ludus)}`);
       if (o.join) o.gain.push(`${Math.round(o.join * 100)}% he joins your ludus`);
-      if (o.id === 'kill') { o.cost.push('No recruit, no ransom'); if (o.vend) o.cost.push('Vendetta: his comrades fight you with +8% damage'); }
+      if (o.id === 'kill') { o.cost.push('No recruit, no ransom'); if (o.vend) o.cost.push('Vendetta: his school hits 8% harder'); }
       if (o.id === 'spare') { o.cost.push('Less fame than a kill'); if (!o.join) o.cost.push(S.glads.length >= LM.rosterCap(S) ? 'Barracks full: he cannot join' : 'No recruit chance'); }
       if (o.id === 'ransom') o.cost.push('He goes home: no recruit chance');
       if (o.id === 'show') o.cost.push('No fame bonus, no recruit chance');

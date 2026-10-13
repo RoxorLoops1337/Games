@@ -594,7 +594,7 @@ export function createArena({ crowd = 3700, density = 1, decalRes = 2048, seed =
       varying float vPart; varying float vSkin; varying float vHair; varying float vLy; varying vec3 vR2; varying float vFlag; varying vec3 vLp; varying float vHy;`,
     vBody: `
       vec3 ip = instanceMatrix[3].xyz;
-      float ang = atan(ip.z * uAxisR, ip.x);
+      float ang = atan(ip.z * uAxisR + 1e-5, ip.x + 1e-5);   // [NAN-GUARD] hidden seats have a collapsed matrix (ip = 0,0,0) and atan(0,0) is undefined: a NaN here puts NaN into transformed
       float wv = sin(ang * uWaveK - uTime * uWaveSpeed);
       float pulse = uWave * smoothstep(0.3, 0.95, wv);
       float ph = aRand.x * 6.2831;

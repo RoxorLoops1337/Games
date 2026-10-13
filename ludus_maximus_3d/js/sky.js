@@ -78,7 +78,7 @@ void main(){
   float sd = max(dot(d, uSunDir), 0.0);
   float horizonBand = exp(-abs(e) * 5.0);
   col += uGlow * (pow(sd, 5.0) * 0.28 + pow(sd, 40.0) * 0.55) * (0.35 + horizonBand);
-  col += uGlow * 0.16 * horizonBand * pow(max(dot(normalize(vec3(d.x,0.,d.z)), normalize(vec3(uSunDir.x,0.,uSunDir.z))),0.), 3.0);
+  col += uGlow * 0.16 * horizonBand * pow(max(dot(normalize(vec3(d.x,0.,d.z) + vec3(1e-4,0.,0.)), normalize(vec3(uSunDir.x,0.,uSunDir.z) + vec3(1e-4,0.,0.))),0.), 3.0);
   // clouds: project onto a plane above the viewer, drifting
   if (e > 0.015) {
     vec2 p = d.xz / (e + 0.18) * 1.15 + vec2(uTime * 0.006, uTime * 0.002);

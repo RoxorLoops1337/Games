@@ -49,7 +49,7 @@ if (view === 'grid') {
   const box = document.createElement('div'); box.style.cssText = 'position:fixed;inset:0;z-index:5;background:#1d1830;display:flex;flex-wrap:wrap;gap:6px;padding:6px;align-content:flex-start;overflow:auto'; document.body.append(box);
   import('../js/portrait.js').then(({ createPortraitRenderer }) => {
     const P = createPortraitRenderer({ tier: Q.get('tier') || 'medium' }), t0 = performance.now(); window.__P = P;
-    KINDS.forEach((kd, i) => { const rec = LM.makeBeast(kd, 6, { r: LM.mulberry(40 + i), id: 'pt' + i }); for (const st of ['bust', 'three']) { const cv = P.portrait(rec, st === 'bust' ? { w: 192, h: 232, style: 'bust' } : { w: 232, h: 192, style: 'three' }); cv.style.cssText = 'border:2px solid #f2c14e;display:block;width:' + (st === 'bust' ? 192 : 232) + 'px'; box.append(cv); } });
+    KINDS.forEach((kd, i) => { const rec = LM.makeBeast(kd, 6, { r: LM.mulberry(40 + i), id: 'pt' + i }); for (const st of ['bust', 'three']) { const PW = +(Q.get('pw') || 1), cv = P.portrait(rec, st === 'bust' ? { w: Math.round(192 * PW), h: Math.round(232 * PW), style: 'bust' } : { w: Math.round(232 * PW), h: Math.round(192 * PW), style: 'three' }); cv.style.cssText = 'border:2px solid #f2c14e;display:block;width:' + Math.round((st === 'bust' ? 192 : 232) * PW) + 'px'; box.append(cv); } });
     const wait = () => { if (P.pending) return requestAnimationFrame(wait); window.__portraitDone = true; document.getElementById('hud').textContent = JSON.stringify(P.stats) + ' ' + ((performance.now() - t0) | 0) + ' ms'; }; requestAnimationFrame(wait);
   });
   cam.position.set(0, 3, 9); target.set(0, 1, 0);

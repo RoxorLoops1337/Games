@@ -615,7 +615,7 @@ export function createGore(fx, o = {}) {
       if (G.full) for (let i = 0, m = Math.round(6 * (K() > 0.6 ? 1 : 0.6)); i < m; i++) chunk(_a, dx * 3, dz * 3, i % 3 === 2 ? 1 : 0);
       sfx('cleave', { pan: panOf(x), gain: 1, pitch: 0.85 }); sfx('crowdGore', { gain: 0.8 });
     }
-    let part = ctx.part ? (f.rig.severed[ctx.part] ? null : ctx.part) : pickPart(f, ctx), took = false;   // FATE: a finishing move names the part it takes (head for a beheading); everything else rolls as before
+    let part = ctx.part === null ? null : ctx.part ? (f.rig.severed[ctx.part] ? null : ctx.part) : pickPart(f, ctx), took = false;   // FATE: a finishing move names the part it takes (head for a beheading); everything else rolls as before
     if (part && G.sever(id, part, dx, dz, ctx.big ? 1.3 : 1)) took = true;
     if (ctx.big && G.full) { const ex = ['armL', 'forearmR', 'shinL', 'shinR'].find((p) => !f.rig.severed[p] && p !== part); if (ex) G.sever(id, ex, dx + RR(-0.8, 0.8), dz + RR(-0.8, 0.8), 1.4); chestPos(f, _a, 1.1); for (let i = 0, m = Math.round(26 * K()); i < m; i++) chunk(_a, dx, dz); fan(_a, 0, 1, Math.round(70 * K()), { speed: 9, cone: Math.PI, elMin: 0.2, elMax: 1.4, size: 1.3 }); addPool(x, z, 1.9, 0.3); sfx('crowdGore', { gain: 1 }); }
     return took ? part : null;

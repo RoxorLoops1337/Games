@@ -114,8 +114,9 @@ export const GradeShader = {
       l = dot(col, vec3(0.2126, 0.7152, 0.0722));
       col = mix(vec3(l), col, uSat + 0.1 * smoothstep(0.35, 1.2, l));   // chroma hold: lit skin / cloth keep their hue instead of washing toward white
       col = (col - 0.18) * uContrast + 0.18; if (uToe > 0.0) col = max(col, vec3(0.0)) * (1.0 - uToe) + max(col, orig * 0.8) * uToe;   // [HUB-NIGHT] uToe floor (0 elsewhere = unchanged)
-      { float lk = dot(col, vec3(0.2126, 0.7152, 0.0722)), ov = max(lk - 1.0, 0.0); col *= (lk - ov + ov / (1.0 + ov * 0.4)) / max(lk, 1e-4); }   // highlight shoulder before ACES: lit fighters roll off instead of clipping pink-white
-      float v = smoothstep(0.85, uVigSoft * 0.35, length(dc * vec2(1.0, 1.05)) );
+      col = max(col, vec3(0.0));   // [GREEN-FIX] contrast / saturation push dark saturated channels below 0; a negative luminance in the shoulder below flipped the sign of the whole pixel (garish green in shadowed violet / blue, black elsewhere)
+      { float lk = dot(col, vec3(0.2126, 0.7152, 0.0722)); if (lk > 1.0) { float ov = lk - 1.0; col *= (1.0 + ov / (1.0 + ov * 0.4)) / lk; } }   // highlight shoulder before ACES: lit fighters roll off instead of clipping pink-white (only above 1.0, so it can never divide by a tiny or negative luminance)
+      float v = 1.0 - smoothstep(uVigSoft * 0.35, 0.85, length(dc * vec2(1.0, 1.05)) );   // [GREEN-FIX] same curve as the old reversed-edge smoothstep (undefined in GLSL), now well defined
       col *= mix(1.0 - uVignette, 1.0, v);
       float g = h21(gl_FragCoord.xy + fract(uTime) * 91.7) - 0.5;
       col *= 1.0 + g * uGrain * 2.0;                                       // multiplicative: grain scales with brightness, safe in HDR

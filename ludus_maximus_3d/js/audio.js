@@ -840,7 +840,11 @@ export function createAudio(opts = {}) {
       if (s === 8) drumHit(p.st.perc, t, 88, vv(p, 0.55 + 0.2 * tens), { tymp: 1, dec: 0.6 });
       if (s === 10 && tens > 0.4) drumHit(p.st.perc, t, 82, 0.35, { tymp: 1, dec: 0.4 });
       if (s % 4 === 0) { const g = G(0); env(g.gain, t, 0.001, 0.07 + 0.09 * tens, 0.04); g.connect(p.st.perc); osc('sine', 1250, t, 0.05, g); }
-      if (s % 2 === 0 && tens > 0.1) { const tn = p.ch.tones; ens(p.st.str, t + hum(p, 'str'), [tn[0], tn[0], tn[0] * Math.pow(2, 1 / 12), tn[0], tn[2], tn[0], tn[0] * Math.pow(2, 1 / 12), tn[0]][(s / 2) % 8], sp * 1.6, vv(p, 0.05 + 0.1 * tens), { cut: 900 + 1500 * tens, a: 0.02 }); }
+      if (s % 2 === 0) { // ostinato; the octave double above carries it on small speakers (the unison alone sits under 300 Hz)
+        const tn = p.ch.tones, f = [tn[0], tn[0], tn[0] * Math.pow(2, 1 / 12), tn[0], tn[2], tn[0], tn[0] * Math.pow(2, 1 / 12), tn[0]][(s / 2) % 8];
+        if (tens > 0.1) ens(p.st.str, t + hum(p, 'str'), f, sp * 1.6, vv(p, 0.05 + 0.1 * tens), { cut: 900 + 1500 * tens, a: 0.02 });
+        ens(p.st.str, t + hum(p, 'str'), f * 2, sp * 1.5, vv(p, 0.07 + 0.08 * tens), { cut: 1700 + 1800 * tens, a: 0.015, rel: 0.06 });
+      }
       if (s === 0 && (pb === 2 || pb === 6)) brass(p.st.brass, t, p.ch.rootF * 2, sp * 14, 0.2, { a: 1.0, rel: 0.6, bright: 0.45 });
       if (s === 0 && pb % 4 === 0) padChord(p, t, sp, 4, 0.03 + 0.04 * tens, { cut: 700 + 800 * tens, choir: tens > 0.45 ? 0.05 * tens : 0 });
       if (s === 0 && pb === 0 && bar > 0) taiko(p.st.perc, t, 0.5, { f: 55 });
@@ -1048,17 +1052,19 @@ export function createAudio(opts = {}) {
   const STEMS = { perc: { pan: 0, send: 0.1, g: 0.62 }, low: { pan: 0, send: 0.06, g: 0.5 }, str: { pan: -0.22, send: 0.26, g: 1.3 }, brass: { pan: 0.18, send: 0.3, g: 1.25 }, pad: { pan: 0, send: 0.4, g: 1.2 }, lead: { pan: 0.3, send: 0.32, g: 1.15 }, lyre: { pan: -0.35, send: 0.28, g: 1.25 }, fx: { pan: 0, send: 0.45, g: 0.9 } };   // g = stem trim: the low stems are held down so the mix is not all sub
   // Loudness calibration per mode (dB added on top of MUSIC_TRIM, measured with tools/ludus3d_audio_check.mjs, integrated K-weighted LUFS).
   // [calm, mid, combat] at intensity 0, 0.5, 1 (interpolated with curInt), or a single number for modes without an intensity axis. Targets: -18 to -20 LUFS at the normal intensity, swing calm to combat at most 6 dB.
-  const MODE_DB = { ludus: 11, prep: 6.5, arena: [6.2, 4, 2.2], beast: [7.3, 3.1, 1.2], boss: [6.4, 3.9, 2.1], victory: 1, defeat: 4.6, title: 3.2, results: 9.3, season: -0.3, elegy: 7.4 };
+  const MODE_DB = { ludus: 12.7, prep: 4.5, arena: [8.5, 4, 2.2], beast: [9.5, 3.1, 1.2], boss: [10, 3.9, 2.1], victory: 1, defeat: 4.6, title: 2.0, results: 11.1, season: -0.3, elegy: 7.4 };
   // Bass management for small speakers: the low stem (drone) and the percussion stem lose some weight and feed a harmonic exciter (low-passed, saturated, high-passed copy) so the fundamentals stay felt on big speakers while the harmonics carry the line on a phone.
   // low: dB cut on the low stem at intensity 0 (fades out by intensity 1), perc: same for the perc stem, ex: exciter send, hp: high-pass on the low stem in Hz
-  const MODE_SHAPE = { def: { low: -3, perc: -1, ex: 0.3, hp: 40 }, prep: { low: -7, perc: -4, ex: 0.7, hp: 55 }, arena: { low: -7, perc: -4, ex: 0.7, hp: 55 }, beast: { low: -7, perc: -5, ex: 0.7, hp: 55 }, boss: { low: -6, perc: -4, ex: 0.6, hp: 55 } };
+  // mid: dB lift of the string, brass, lead, lyre and pad stems when calm, shelf: dB of a 1 kHz high shelf on the mode bus when calm (both fade out as the intensity rises)
+  const MODE_SHAPE = { def: { low: -3, perc: -1, ex: 0.3, mid: 0, shelf: 0, hp: 40 }, prep: { low: -12, perc: -9, ex: 1.3, mid: 5, shelf: 7, sf: 600, hp: 60 }, arena: { low: -10, perc: -6, ex: 1, mid: 4, shelf: 3, hp: 60 }, beast: { low: -10, perc: -6, ex: 1, mid: 4, shelf: 3, hp: 60 }, boss: { low: -6, perc: -4, ex: 0.6, mid: 2, shelf: 2, hp: 55 }, defeat: { low: -4, perc: -2, ex: 0.4, mid: 2, shelf: 2, hp: 45 }, title: { low: -5, perc: -3, ex: 0.5, mid: 2, shelf: 2, hp: 45 }, elegy: { low: -5, perc: -3, ex: 0.5, mid: 3, shelf: 3, hp: 45 } };
   const dbG = (d) => Math.pow(10, d / 20);
   function modeDb(mode, I) { const d = MODE_DB[mode]; if (typeof d === 'number') return d; return I < 0.5 ? d[0] + (d[1] - d[0]) * (I / 0.5) : d[1] + (d[2] - d[1]) * ((I - 0.5) / 0.5); }
   function exciterCurve() { const n = 1024, c = new Float32Array(n), o = Math.tanh(0.35); for (let i = 0; i < n; i++) { const x = (i / (n - 1)) * 2 - 1; c[i] = Math.tanh(x * 6 + 0.35) - o; } return c; }
   let excCurve = null;
   function newPlayer(mode, t) {
-    const M = MODES[mode], bus = G(0), rev = G(0); bus.connect(musicBus); rev.connect(revMusic);
-    const p = { mode, M, bus, rev, st: {}, base: {}, next: t, step: 0, bar: 0, startT: t, stopped: false, hr: mulberry(hash(seed, 'hum', mode)), r: mulberry(1), pb: 0 };
+    const M = MODES[mode], bus = G(0), rev = G(0), sh0 = MODE_SHAPE[mode] || MODE_SHAPE.def; rev.connect(revMusic);
+    const shelf = ctx.createBiquadFilter(); shelf.type = 'highshelf'; shelf.frequency.value = sh0.sf || 1000; shelf.gain.value = sh0.shelf; bus.connect(shelf); shelf.connect(musicBus);
+    const p = { shelf, mode, M, bus, rev, st: {}, base: {}, next: t, step: 0, bar: 0, startT: t, stopped: false, hr: mulberry(hash(seed, 'hum', mode)), r: mulberry(1), pb: 0 };
     const sh = MODE_SHAPE[mode] || MODE_SHAPE.def; p.shape = sh;
     for (const [k, c] of Object.entries(STEMS)) {
       const g = G(c.g); let tail = g;
@@ -1077,9 +1083,10 @@ export function createAudio(opts = {}) {
   }
   // per bar: mode loudness (follows the smoothed intensity) and bass management (strongest when calm)
   function applyLevels(p, t, tc) {
-    const I = curInt, lv = dbG(modeDb(p.mode, I)), sh = p.shape, calm = 1 - I, tcv = tc || 0.5;
+    const I = curInt, lv = dbG(modeDb(p.mode, I)), sh = p.shape, calm = typeof MODE_DB[p.mode] === 'number' ? 1 : 1 - I, tcv = tc || 0.5;
+    try { p.shelf.gain.setTargetAtTime(sh.shelf * calm, Math.max(t, 0), tcv); } catch (e) { /* ignore */ }
     for (const k of Object.keys(p.st)) {
-      let m = lv; if (k === 'low') m *= dbG(sh.low * calm); else if (k === 'perc') m *= dbG(sh.perc * calm);
+      let m = lv; if (k === 'low') m *= dbG(sh.low * calm); else if (k === 'perc') m *= dbG(sh.perc * calm); else if (k !== 'fx') m *= dbG(sh.mid * calm);
       try { p.st[k].gain.setTargetAtTime(p.base[k] * m, Math.max(t, 0), tcv); } catch (e) { /* ignore */ }
     }
     if (p.ex_low) { try { p.ex_low.gain.setTargetAtTime(0.09 * sh.ex * lv * (0.5 + 0.5 * calm), Math.max(t, 0), tcv); } catch (e) { /* ignore */ } }
@@ -1108,7 +1115,7 @@ export function createAudio(opts = {}) {
   function sweepNodes() { if (ready) sweep(NOW()); }
   function disposePlayer(p) {
     p.stopped = true; const i = players.indexOf(p); if (i >= 0) players.splice(i, 1);
-    try { if (p.drone) p.drone.os.forEach(({ o }) => o.stop(NOW() + 0.01)); if (!OFFLINE) { p.bus.disconnect(); p.rev.disconnect(); for (const g of Object.values(p.st)) g.disconnect(); } } catch (e) { /* ignore */ }
+    try { if (p.drone) p.drone.os.forEach(({ o }) => o.stop(NOW() + 0.01)); if (!OFFLINE) { p.bus.disconnect(); p.shelf.disconnect(); p.rev.disconnect(); for (const g of Object.values(p.st)) g.disconnect(); } } catch (e) { /* ignore */ }
   }
   function startPump() { if (pumpTimer || OFFLINE) return; pumpTimer = setInterval(() => { if (ctx && ctx.state === 'running') pump(ctx.currentTime + 0.3); }, 45); }
   const xfade = (n, up) => { const a = new Float32Array(n); for (let i = 0; i < n; i++) { const x = i / (n - 1); a[i] = up ? Math.sin(x * Math.PI / 2) : Math.cos(x * Math.PI / 2); } return a; };

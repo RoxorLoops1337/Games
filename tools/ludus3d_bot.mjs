@@ -59,7 +59,7 @@ for (let wk = 0; wk < weeks; wk++) {
     if (st.done) { if (st.err) { console.log('flow error', st.err); errs++; } break; }
     if (st.clicked !== undefined) { if (st.clicked !== last) console.log('  dialog:', String(st.clicked).slice(0, 60)); last = st.clicked; await page.waitForTimeout(250); continue; }
     await page.evaluate(() => window.__LM3D.advance(1.5));
-    if (shots && shotN < 6 && guard % 12 === 0) { await page.screenshot({ path: `${shots}/bot_${shotN++}.png` }); }
+    if (shots && shotN < 6 && guard % 12 === 0) { await page.screenshot({ path: `${shots}/bot_${shotN++}.png`, timeout: 240000 }); }
   }
   console.log('  week finished after', guard, 'steps');
 }
