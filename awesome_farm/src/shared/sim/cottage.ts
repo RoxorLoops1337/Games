@@ -2,6 +2,7 @@
 // so the same world gets the same neighbours). Press E at the door: once a day they give you something of their trade, and after
 // FRIEND_AT such days they give more. The resident lives on the building (`BuildE.res`), so it saves and syncs like any machine.
 
+import { isEve } from '../data/festival';
 import { FOLK_NAMES, FRIEND_AT, hearts, REQUEST_COINS, REQUEST_FRIEND, TRADES, WISHES } from '../data/folk';
 import { ITEMS } from '../data/items';
 import { PAL } from '../palette';
@@ -32,10 +33,26 @@ export function onDawn (sim: Sim) {
     }
 }
 
+/** Festival night: the villager runs a ring-toss stall at their door. STALL_COST coins a throw; a hit pays STALL_PRIZE (a friend's aim is a little better). */
+export const STALL_COST = 5;
+export const STALL_PRIZE = 15;
+export const STALL_HIT = 0.4;
+function stall (sim: Sim, p: PlayerS, b: BuildE, r: NonNullable<BuildE['res']>) {
+    const c = sim.center(b);
+    if (p.coins < STALL_COST) { sim.float(c.x, c.y - 18, `${r.n}: "A throw costs ${STALL_COST} coins"`, PAL.pebble, p.id); return; }
+    p.coins -= STALL_COST;
+    if (sim.rng.chance(STALL_HIT + (r.v >= FRIEND_AT ? 0.1 : 0))) {
+        p.coins += STALL_PRIZE;
+        sim.fx('golden', c.x, c.y - 6, p.id);
+        sim.float(c.x, c.y - 18, `${r.n}: "Ring! +${STALL_PRIZE} coins"`, PAL.gold, p.id);
+    } else sim.float(c.x, c.y - 18, `${r.n}: "So close! Try again?"`, PAL.cream, p.id);
+}
+
 export function use (sim: Sim, p: PlayerS, b: BuildE) {
     const c = sim.center(b);
     const r = b.res;
     if (!r) { sim.float(c.x, c.y - 18, 'Empty: someone moves in at dawn', PAL.pebble, p.id); return; }
+    if (sim.s.night && isEve(sim.s.day)) { stall(sim, p, b, r); return; }
     const trade = TRADES.find((t) => t.id === r.t)!;
     if (r.q && (p.inv[r.q as keyof typeof p.inv] ?? 0) >= (r.qn ?? 1)) {          // you came with what they asked for
         const item = r.q as keyof typeof ITEMS, n = r.qn ?? 1, before = hearts(r.v);
