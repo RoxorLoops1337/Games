@@ -3,7 +3,7 @@
 import { readFileSync, existsSync, readdirSync, statSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { join, dirname, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createRequire } from 'node:module';
 
 const here = dirname(fileURLToPath(import.meta.url)), root = join(here, '..', 'ludus_maximus_3d');
@@ -471,6 +471,30 @@ for (const fn of ['newGame', 'makeGlad', 'mkUnits', 'createFight', 'step', 'useU
   const nums = (db.slice(0, db.indexOf('};')).match(/-?\d+(\.\d+)?/g) || []).map(Number);
   ok(nums.length >= 15 && nums.every((n) => n > -3 && n < 14), 'audio: per-mode level boosts stay within -3..14 dB');
   ok(/MODE_SHAPE/.test(au) && /createWaveShaper\(\)/.test(au) && /highshelf/.test(au) && !new RegExp('\u2014').test(au), 'audio: harmonic exciter and shelf for small speakers, no em dash');
+}
+
+
+// 13. GREEN-FIX: grade shoulder sign flip, texture fallback colour and cache integrity (appended by the environment team)
+{
+  const rd = (f) => readFileSync(join(root, f), 'utf8');
+  const ps = rd('js/post.js'), et = rd('js/envtex.js');
+  const G = await import(pathToFileURL(join(root, 'js/envtex_gen.js')).href);
+  ok(/\[GREEN-FIX\]/.test(ps) && /if \(lk > 1\.0\)/.test(ps) && !/max\(lk, 1e-4\)/.test(ps) && !/smoothstep\(0\.85, uVigSoft/.test(ps), 'post: the grade shoulder never divides by a tiny or negative luminance and the vignette has no reversed smoothstep');
+  const specs = [{ k: 'sand', size: 64, seed: 3 }, { k: 'stone', size: 64, bx: 4, by: 6, base: 0xe8dcc0, tint: 0xb69a6a, seed: 11, mortar: 0x7a6a55 }, { k: 'stone', size: 64, bx: 2, by: 10, base: 0x9a6a3c, tint: 0x6a4222, mortar: 0x24120a, seed: 5 }, { k: 'marble', size: 64, seed: 21 }, { k: 'ground', size: 64, seed: 33 }, { k: 'cloth', size: 64 }, { k: 'roof', size: 64, seed: 5 }];
+  let allOk = true, ctx = '';
+  for (const sp of specs) {
+    const g = G.generate(sp), f = G.fallbackColor(sp), m = G.meanColor(g.color, 4096);
+    if (!(f.every((x, i) => Math.abs(x - m[i]) < 20) && G.plausible(sp, g))) { allOk = false; ctx += sp.k + ' '; }
+  }
+  ok(allOk, 'texture fallback colour is within 20 per channel of every generator mean and real bakes are plausible ' + ctx);
+  const sp = specs[0], g = G.generate(sp), key = G.specKey(sp), rec = { v: G.GEN_VERSION, key, w: g.w, h: g.h, color: g.color, bump: g.bump, hash: G.bakeHash(g) };
+  ok(G.cacheRecordOk(rec, key, G.GEN_VERSION, sp), 'cache: a good record is accepted');
+  ok(!G.cacheRecordOk(Object.assign({}, rec, { v: G.GEN_VERSION - 1 }), key, G.GEN_VERSION, sp) && !G.cacheRecordOk(rec, key + 'x', G.GEN_VERSION, sp), 'cache: a stale version or a wrong key is rejected');
+  const green = new Uint8ClampedArray(g.color.length); for (let i = 0; i < green.length; i += 4) { green[i + 1] = 255; green[i + 3] = 255; }
+  ok(!G.cacheRecordOk(Object.assign({}, rec, { color: green }), key, G.GEN_VERSION, sp), 'cache: a corrupt (all green) record fails the checksum');
+  ok(!G.plausible(sp, { w: g.w, h: g.h, color: green, bump: g.bump }) && !G.plausible(sp, { w: g.w, h: g.h, color: new Uint8ClampedArray(g.color.length), bump: g.bump }) && !G.plausible(sp, { w: g.w, h: g.h, color: g.color.slice(0, 100), bump: g.bump }), 'plausible: green, all-black and truncated bakes are refused even with a matching checksum');
+  ok(/rejected\+\+/.test(et) && /idbDrop\(/.test(et) && /plausible\(j\.spec, r\)/.test(et) && /WAIT\.set\(key/.test(et) && /swapBytes\(/.test(et) && /settleLater\(key, spec\)/.test(et) && /fallbackColor\(spec\)/.test(et), 'envtex: cache integrity, worker output check, placeholder with swap-in and main-thread fallback are wired');
+  ok(!/\u2014/.test(G.fallbackColor.toString() + et + ps), 'no em dashes in the new code');
 }
 
 console.log(`ludus_maximus_3d structure: ${pass} passed, ${fail} failed`);
