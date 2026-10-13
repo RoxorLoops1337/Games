@@ -3,12 +3,15 @@
 <script type="module">
 // Environment lab. Default = gallery (everything laid out). ?view=island = the whole island like the game.
 // ?view=nodes|fields|board|plaza|plots|bits jumps the camera; x,z,dist,yaw,pitch,night as usual (see stage.js).
+// ?view=island&preset=valley|village|close|vista|top&plots=0,1,2 (occupied slots) shows the game's valley; add &night=1 for the lamp-lit night.
+// &gq=0|1|2 forces the ground detail level (the game follows its quality tier by itself); the page exposes __st, __E and __stats for measuring.
 import * as THREE from 'three';
 import * as E from '../art/environment.js';
 import { mountStage } from './stage.js';
+import { slotOrigin } from '../shared/sim.js';
 const q = new URLSearchParams(location.search), view = q.get('view') || 'gallery', night = +(q.get('night') || 0);
-const st = mountStage(); const stats = [];
-st.scene.fog = new THREE.Fog(night ? '#3a5496' : '#bfe6f7', 70, 190);
+const st = mountStage(); const stats = []; if (q.has('gq')) E.setGroundQuality(+q.get('gq'));
+const fd = +(q.get('dist') || 12); st.scene.fog = new THREE.Fog(night ? '#3a5496' : '#bfe6f7', view === 'island' ? 100 + fd * 1.3 : 70, view === 'island' ? 260 + fd * 1.3 : 190);
 if (night) E.lanternMat.emissiveIntensity = 3;
 if (q.get('sunset')) { // warm low-sun grade for the review shots
   st.sun.color.set('#ff9a5a'); st.sun.intensity = 2.1; st.scene.background.set('#ff9d6c'); st.scene.fog.color.set('#ffb892'); E.lanternMat.emissiveIntensity = 2;
@@ -19,11 +22,14 @@ const anim = [];
 if (view === 'island') {
   const g = st.scene.children.find((o) => o.geometry && o.geometry.type === 'CircleGeometry'); if (g) st.scene.remove(g);
   const sc = st.sun.shadow.camera; sc.left = -34; sc.right = 34; sc.top = 34; sc.bottom = -34; sc.updateProjectionMatrix();
-  T('island', () => E.islandModel(66), 0, 0); T('plaza', () => E.plazaModel(9), 0, 0); T('board', () => E.boardModel(), 0, 0);
+  T('island', () => E.islandModel(72), 0, 0); T('plaza', () => E.plazaModel(9), 0, 0); T('board', () => E.boardModel(), 0, 0);
   [['tree', 0], ['clay', Math.PI / 2], ['rock', Math.PI], ['wheat', Math.PI * 1.5]].forEach(([t, a]) => T('field ' + t, () => E.fieldModel(t, a), Math.cos(a) * 13, Math.sin(a) * 13));
-  const cols = ['#e8564a', '#4a90e0', '#f2b632', '#52b56a', '#a65bd6', '#ef7fb0', '#31b5b0', '#f08a3a'];
-  for (let i = 0; i < 16; i++) { const a = i / 16 * Math.PI * 2 - Math.PI / 2; T('plot' + i, () => E.plotModel(cols[i % 8], { x: -Math.cos(a), z: -Math.sin(a) }), Math.cos(a) * 40, Math.sin(a) * 40); }
-  st.look.dist = +(q.get('dist') || 120); st.look.pitch = +(q.get('pitch') || 0.55);
+  const cols = ['#e8564a', '#4a90e0', '#f2b632', '#52b56a', '#a65bd6', '#ef7fb0', '#31b5b0', '#f08a3a'], occupied = (q.get('plots') || '0,1,2,3,4,5').split(',').map(Number);
+  for (let i = 0; i < 16; i++) { if (!occupied.includes(i)) continue; const o = slotOrigin(i); T('plot' + i, () => E.plotModel(cols[i % 8], Math.atan2(-o.oz, -o.ox)), o.ox, o.oz); }
+  // camera presets like the game: valley (whole valley), village (own plot), close, vista (low, out over the sea), top (high overview)
+  const PRE = { valley: { dist: 70, pitch: 0.95 }, village: { dist: 26, pitch: 0.95, x: -35, z: -35 }, close: { dist: 14, pitch: 0.9, x: -14, z: 6 }, vista: { dist: 90, pitch: 0.22, z: -50 }, top: { dist: 150, pitch: 0.8 } }[q.get('preset')] || {};
+  st.look.dist = +(q.get('dist') || PRE.dist || 120); st.look.pitch = +(q.get('pitch') || PRE.pitch || 0.55); st.look.x = +(q.get('x') || PRE.x || 0); st.look.z = +(q.get('z') || PRE.z || 0);
+  st.scene.fog.near = 100 + st.look.dist * 1.3; st.scene.fog.far = 260 + st.look.dist * 1.3;
 } else {
   const sp = E.TREE_SPECIES;
   for (let i = 0; i < 14; i++) T('tree ' + sp[i % 7], () => E.treeModel(i * 3, { species: sp[i % 7] }), -7 + i * 1.6, 0);
@@ -40,7 +46,7 @@ if (view === 'island') {
   const V = { gallery: [0, 0, 22], nodes: [0, 3, 12], fields: [-5, -16, 36], board: [-14, 12, 10], plaza: [0, -42, 30], plots: [0, 40, 60], bits: [16, 12, 12] }[view] || [0, 0, 22];
   st.look.x = +(q.get('x') ?? V[0]); st.look.z = +(q.get('z') ?? V[1]); st.look.dist = +(q.get('dist') ?? V[2]);
 }
-window.__st = st; window.__stats = stats; st.scene.traverse((o) => { if (o.name === 'island') window.__scatter = o.userData.scatter; });
+window.__st = st; window.__E = E; window.__stats = stats; st.scene.traverse((o) => { if (o.name === 'island') window.__scatter = o.userData.scatter; });
 // animations: the game drives named children; the lab does the same
 st.onTick((dt, t) => st.scene.traverse((o) => {
   if (o.name === 'flag') o.rotation.y = Math.sin(t * 3) * 0.25; else if (o.name === 'flag2') o.rotation.y = Math.sin(t * 3 + 1) * 0.25;

@@ -3,43 +3,153 @@ import * as THREE from 'three';
 import { box, cyl, cone, ball, mat } from './models.js';
 import { treeModel, rockModel, clayModel, stumpModel, boardModel, fieldModel, plazaModel, plotModel, islandModel, lanternMat as envLantern } from '../art/environment.js';
 import { BUILD, farmModel, setFarmStage, constructionSite, windowMat, lanternMat } from '../art/buildings.js';
-import { villagerModel, setPose, setMood } from '../art/characters.js';
+import { villagerModel, setPose, setMood, setEmote, setVillagerLight } from '../art/characters.js';
+import { monumentModel, MONUMENT_STAGES } from '../art/monument.js';
 import { sheepModel, cowModel, chickenModel, bunnyModel, puppyModel, kittenModel, snailModel, froggyModel, ducklingModel, birdModel, cloudModel, butterflyModel, animateCritter, cloudMat } from '../art/critters.js';
 import { Fx } from '../art/fx.js';
-import { picnicModel, flowerCartModel, swingModel, hammockModel, birdBathModel, pumpkinPatchModel, beeSkepModel, animateProp, lampPostModel, mailboxModel, lampMat, lanternMat as propLantern, flameMat } from '../art/props.js';
+import { cartModel, tentModel, picnicModel, flowerCartModel, swingModel, hammockModel, birdBathModel, pumpkinPatchModel, beeSkepModel, animateProp, lampPostModel, mailboxModel, lampMat, lanternMat as propLantern, flameMat } from '../art/props.js';
+import { Post } from './post.js';
+import { TIERS, ORDER, detectTier, startPixelRatio, Adaptive, loadChoice, saveChoice, loadCap, saveCap, isSoftwareRenderer } from './quality.js';
 import { PLOT, VALLEY_FIELDS, VALLEY_FIELD_RADIUS, BUILDINGS, NODE_TYPES } from '../shared/data.js';
 
 export class View {
   constructor(canvas) {
     this.canvas = canvas;
-    const r = this.r = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
-    this.prMax = Math.min(devicePixelRatio || 1, 2); this.pr = this.prMax; this.frameMs = 16; this.frames = 0; r.setPixelRatio(this.pr); r.shadowMap.enabled = true; r.shadowMap.type = THREE.PCFSoftShadowMap;
+    // MSAA lives in the post render target (the canvas itself only receives one full-screen grade pass), so no antialias on the canvas
+    const r = this.r = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance' });
+    this.frameMs = 16; this.frames = 0; r.shadowMap.enabled = true; r.shadowMap.type = THREE.PCFSoftShadowMap;
+    this.skyMask = { value: 0 };   // 0 = sky pixels write alpha 0 into the post target (grade pass skips tone mapping for them), 1 = direct rendering
+    this.initQuality();
     r.toneMapping = THREE.ACESFilmicToneMapping; r.toneMappingExposure = 1.05;
     const s = this.scene = new THREE.Scene(); s.background = new THREE.Color('#a9dcf3'); s.fog = new THREE.Fog('#bfe6f7', 70, 190);
     this.cam = new THREE.PerspectiveCamera(42, 1, 0.5, 600);
     // sky dome: vivid gradient from a bright horizon to a deep-blue zenith, plus a glowing sun that crosses the sky
-    this.skyU = { top: { value: new THREE.Color('#6ec6ff') }, mid: { value: new THREE.Color('#bfeaff') }, hor: { value: new THREE.Color('#f4fbff') } };
+    this.skyU = { uMask: this.skyMask, top: { value: new THREE.Color('#6ec6ff') }, mid: { value: new THREE.Color('#bfeaff') }, hor: { value: new THREE.Color('#f4fbff') } };
     this.dome = new THREE.Mesh(new THREE.SphereGeometry(450, 32, 16), new THREE.ShaderMaterial({ uniforms: this.skyU, side: THREE.BackSide, depthWrite: false, fog: false, toneMapped: false,
       vertexShader: 'varying vec3 vP; void main(){ vP = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }',
-      fragmentShader: 'uniform vec3 top; uniform vec3 mid; uniform vec3 hor; varying vec3 vP; void main(){ float h = clamp(vP.y, 0.0, 1.0); vec3 c = mix(hor, mid, smoothstep(0.0, 0.25, h)); c = mix(c, top, smoothstep(0.2, 0.9, h)); gl_FragColor = vec4(c, 1.0); }' }));
+      fragmentShader: 'uniform float uMask; uniform vec3 top; uniform vec3 mid; uniform vec3 hor; varying vec3 vP; void main(){ float h = clamp(vP.y, 0.0, 1.0); vec3 c = mix(hor, mid, smoothstep(0.0, 0.25, h)); c = mix(c, top, smoothstep(0.2, 0.9, h)); gl_FragColor = vec4(c, uMask); }' }));
     this.dome.renderOrder = -10; this.dome.frustumCulled = false; s.add(this.dome);
     { const cv = document.createElement('canvas'); cv.width = cv.height = 128; const g = cv.getContext('2d'), gr = g.createRadialGradient(64, 64, 0, 64, 64, 64); gr.addColorStop(0, 'rgba(255,255,240,1)'); gr.addColorStop(0.18, 'rgba(255,240,180,0.95)'); gr.addColorStop(0.45, 'rgba(255,214,140,0.35)'); gr.addColorStop(1, 'rgba(255,200,120,0)'); g.fillStyle = gr; g.fillRect(0, 0, 128, 128);
       this.sunGlow = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(cv), transparent: true, depthWrite: false, depthTest: false, fog: false, toneMapped: false, blending: THREE.AdditiveBlending })); this.sunGlow.scale.set(150, 150, 1); this.sunGlow.renderOrder = -9; s.add(this.sunGlow); }
     this.look = { x: 0, z: 0, dist: 34, yaw: 0.0, pitch: 0.95 }; this.goal = { ...this.look };
     const hemi = this.hemi = new THREE.HemisphereLight('#dff3ff', '#7da05a', 1.05); s.add(hemi);
     const sun = this.sun = new THREE.DirectionalLight('#fff1d0', 2.4); sun.castShadow = true; sun.shadow.mapSize.set(1536, 1536);
-    const sc = sun.shadow.camera; sc.left = -34; sc.right = 34; sc.top = 34; sc.bottom = -34; sc.near = 1; sc.far = 140; sun.shadow.bias = -0.0008; sun.shadow.normalBias = 0.06;
+    const sc = sun.shadow.camera; sc.left = -34; sc.right = 34; sc.top = 34; sc.bottom = -34; sc.near = 1; sc.far = 140; sun.shadow.bias = -0.0008; sun.shadow.normalBias = 0.06; sun.shadow.radius = 2.5;
     s.add(sun, sun.target);
+    // warm rim light from behind the scene (intensity is a pure function of time and tier; the light always exists so no shader recompiles)
+    const rim = this.rim = new THREE.DirectionalLight('#ffd6b0', 0); rim.castShadow = false; s.add(rim, rim.target);
     this.pickables = []; this.fieldMeshes = {};
-    this.buildTerrain(); this.buildLife();
+    this.buildTerrain(); this.buildLife(); this.buildAtmosphere();
     this.villages = new Map(); this.villagers = new Map(); this.mixers = [];
     this.ground = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0); this.ray = new THREE.Raycaster();
-    this.fx = new Fx(this.scene); this.t = 0; this.ghost = null; this.sel = null;
+    this.fx = new Fx(this.scene); this.patchFx(); this.t = 0; this.ghost = null; this.sel = null;
     this.selRing = new THREE.Mesh(new THREE.RingGeometry(0.55, 0.7, 24), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.9, side: THREE.DoubleSide, depthTest: false }));
     this.selRing.rotation.x = -Math.PI / 2; this.selRing.visible = false; this.selRing.renderOrder = 10; s.add(this.selRing);
-    this.resize(); addEventListener('resize', () => this.resize());
+    this.initJuice(); this.startQuality(); addEventListener('resize', () => this.resize());
   }
-  resize() { const w = this.canvas.clientWidth || innerWidth, h = this.canvas.clientHeight || innerHeight; this.r.setSize(w, h, false); this.cam.aspect = w / h; this.cam.updateProjectionMatrix(); }
+  resize() {
+    const w = this.canvas.clientWidth || innerWidth, h = this.canvas.clientHeight || innerHeight; this.r.setPixelRatio(this.pr); this.r.setSize(w, h, false); this.cam.aspect = w / h; this.cam.updateProjectionMatrix();
+    if (this.post && this.tc) { const v = this.r.getDrawingBufferSize(this._sz || (this._sz = new THREE.Vector2())); this.post.configure(this.tc, v.x, v.y); }
+  }
+
+  // ================= quality system (tiers live in quality.js, passes in post.js) =================
+  initQuality() {
+    const r = this.r, gl = r.getContext(); let rs = '';
+    try { const e = gl.getExtension('WEBGL_debug_renderer_info'); rs = e ? String(gl.getParameter(e.UNMASKED_RENDERER_WEBGL)) : ''; } catch { /* hidden */ }
+    this.gpu = rs; const soft = isSoftwareRenderer(rs), wd = !!navigator.webdriver;
+    let mode = loadChoice(); try { const q = new URLSearchParams(location.search).get('q'); if (q === 'auto' || TIERS[q]) mode = q; } catch { /* no url */ }
+    this._mode = mode; this.dpr = Math.min(devicePixelRatio || 1, 3);
+    const ua = navigator.userAgent || '', mobile = /Android|iPhone|iPad|iPod|Mobi/i.test(ua) || ((navigator.maxTouchPoints || 0) > 1 && innerWidth < 1100);
+    // automation (screenshots) runs on a software rasteriser: show the best look there instead of the phone-safe one
+    this._env = { renderer: rs, dpr: this.dpr, mem: navigator.deviceMemory || 0, cores: navigator.hardwareConcurrency || 0, mobile, width: innerWidth, height: innerHeight, software: soft && !wd, cap: loadCap() };
+    const tier = mode === 'auto' ? (wd && soft ? 'high' : detectTier(this._env)) : mode;
+    this._tier = tier; this.pr = startPixelRatio(tier, this.dpr); this.prMax = this.pr;
+    this.ctl = new Adaptive({ tier, pr: this.pr, prMax: this.pr, prMin: 0.75, enabled: mode === 'auto' && !wd });
+    this.postOK = Post.supported(r); this.cssFilter = '';
+  }
+  startQuality() {
+    if (this.postOK) { this.post = new Post(this.r, this.scene, this.cam); this.r.info.autoReset = false; }
+    this.applyTier(this._tier, true);
+  }
+  /** 'auto' | 'low' | 'medium' | 'high' (persisted in localStorage 'hearthvale.quality') */
+  setQuality(q) {
+    if (q !== 'auto' && !TIERS[q]) return; this._mode = q; saveChoice(q);
+    if (q === 'auto') { const t = navigator.webdriver ? this._tier : detectTier(this._env); this.pr = startPixelRatio(t, this.dpr); this.prMax = this.pr; this.ctl.prMax = this.pr; this.ctl.pr = this.pr; this.ctl.setTier(t); this.ctl.enabled = !navigator.webdriver; this.applyTier(t); }
+    else { this.ctl.enabled = false; this.pr = startPixelRatio(q, this.dpr); this.applyTier(q); }
+  }
+  get quality() { return this._mode; }
+  get tier() { return this._tier; }
+  applyTier(t, now) {
+    const c = TIERS[t]; this._tier = t; this._want = t;
+    const go = () => { if (this._want !== t) return; this.tc = c; this.applyScene(c); this.resize(); this.canvas.dataset.tier = t; };
+    if (this.post && !now) this.post.prepare(c).then(go); else go();
+  }
+  applyScene(c) {
+    const post = !!this.post; this.skyMask.value = post ? 0 : 1; this.cssFilter = post ? 'none' : ''; this.canvas.style.filter = post ? 'none' : '';
+    const sh = this.sun.shadow; if (c.shadow && sh.mapSize.x !== c.shadow) { sh.mapSize.set(c.shadow, c.shadow); if (sh.map) { sh.map.dispose(); sh.map = null; } }
+    this.fxBoost.value = post && c.bloom ? 2.2 : 1;
+  }
+
+  // ================= atmosphere: cloud shadows, water glints, sparkle boost =================
+  buildAtmosphere() {
+    const N = 128, d = new Uint8Array(N * N * 4), rnd = (() => { let a = 1337; return () => ((a = (a * 1664525 + 1013904223) >>> 0) / 4294967296); })();
+    const oct = [[4, 0.55], [8, 0.3], [16, 0.15]], grids = oct.map(([g]) => Array.from({ length: g * g }, rnd));
+    const sm = (x) => x * x * (3 - 2 * x);
+    for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+      let v = 0; for (let o = 0; o < 3; o++) { const g = oct[o][0], gx = (x / N) * g, gy = (y / N) * g, x0 = Math.floor(gx), y0 = Math.floor(gy), fx = sm(gx - x0), fy = sm(gy - y0), G = grids[o], i = (a, b) => G[((b % g) * g) + (a % g)];
+        v += oct[o][1] * ((i(x0, y0) * (1 - fx) + i(x0 + 1, y0) * fx) * (1 - fy) + (i(x0, y0 + 1) * (1 - fx) + i(x0 + 1, y0 + 1) * fx) * fy); }
+      const k = (y * N + x) * 4; d[k] = d[k + 1] = d[k + 2] = Math.min(255, v * 255 * 1.1); d[k + 3] = 255;
+    }
+    const tex = new THREE.DataTexture(d, N, N, THREE.RGBAFormat); tex.wrapS = tex.wrapT = THREE.RepeatWrapping; tex.magFilter = tex.minFilter = THREE.LinearFilter; tex.generateMipmaps = false; tex.needsUpdate = true;
+    this.cloudU = { uTex: { value: tex }, uT: { value: 0 }, uAmt: { value: 0.2 }, uCol: { value: new THREE.Color('#7e74d0') } };
+    const cs = this.cloudShadow = new THREE.Mesh(new THREE.PlaneGeometry(170, 170), new THREE.ShaderMaterial({ uniforms: this.cloudU, transparent: true, depthWrite: false,
+      vertexShader: 'varying vec2 vW; void main(){ vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xz; gl_Position = projectionMatrix * viewMatrix * w; }',
+      fragmentShader: 'uniform sampler2D uTex; uniform float uT; uniform float uAmt; uniform vec3 uCol; varying vec2 vW; void main(){ vec2 p = vW * 0.0065 + vec2(uT * 0.0042, uT * 0.002); float n = texture2D(uTex, p).r * 0.7 + texture2D(uTex, p * 3.1 + 0.37).r * 0.3; float sh = smoothstep(0.54, 0.86, n); float e = 1.0 - smoothstep(56.0, 74.0, length(vW)); float a = sh * uAmt * e; if (a < 0.003) discard; gl_FragColor = vec4(uCol, a); }' }));
+    cs.rotation.x = -Math.PI / 2; cs.position.y = 0.32; cs.renderOrder = 3; cs.frustumCulled = false; cs.raycast = () => {}; this.scene.add(cs);
+    // sea: sun glints that follow the sun, tiny caustic net (high), on top of the art module's own shader
+    this.waterU = { uSunW: { value: new THREE.Vector3(0.4, 0.8, 0.4) }, uSunC: { value: new THREE.Color('#fff2d0') }, uGlint: { value: 1 } };
+    const ocean = this.island.getObjectByName('ocean');
+    if (ocean && ocean.material.onBeforeCompile) {
+      const om = ocean.material, prev = om.onBeforeCompile, U = this.waterU;
+      om.onBeforeCompile = (sh, rr) => { prev(sh, rr); Object.assign(sh.uniforms, U);
+        sh.fragmentShader = sh.fragmentShader.replace('uniform float uWindT;', 'uniform float uWindT; uniform vec3 uSunW; uniform vec3 uSunC; uniform float uGlint;').replace('#include <opaque_fragment>',
+          `{ vec3 wp = vec3( vSea.x, -4.2, vSea.y ); vec3 V = normalize( cameraPosition - wp );
+            float rx = cos( vSea.x * 1.7 + uWindT * 1.3 + sin( vSea.y * 0.9 ) * 1.4 ) * 0.55 + cos( vSea.x * 4.1 - uWindT * 2.1 + vSea.y * 2.3 ) * 0.3;
+            float rz = cos( vSea.y * 1.5 - uWindT * 1.1 + sin( vSea.x * 0.8 ) * 1.2 ) * 0.55 + cos( vSea.y * 3.7 + uWindT * 1.9 - vSea.x * 2.7 ) * 0.3;
+            vec3 N = normalize( vec3( rx * 0.2, 1.0, rz * 0.2 ) ); vec3 H = normalize( normalize( uSunW ) + V ); float nh = max( dot( N, H ), 0.0 );
+            outgoingLight += uSunC * ( pow( nh, 110.0 ) * 0.85 + pow( nh, 16.0 ) * 0.1 ) ;
+            float cau = pow( 1.0 - abs( sin( vSea.x * 0.7 + sin( vSea.y * 0.55 + uWindT * 0.6 ) * 1.6 ) * sin( vSea.y * 0.8 + sin( vSea.x * 0.5 - uWindT * 0.5 ) * 1.4 ) ), 6.0 );
+            outgoingLight += vec3( 0.5, 0.75, 0.7 ) * cau * 0.1 * uGlint; }
+          #include <opaque_fragment>`); };
+      om.customProgramCacheKey = () => 'hvsea2'; om.needsUpdate = true;
+    }
+    // clouds sit in the sky: they write the sky mask too
+    this.cloudsPatched = true; const prevC = cloudMat.onBeforeCompile; cloudMat.onBeforeCompile = (sh, rr) => { prevC && prevC.call(cloudMat, sh, rr); sh.uniforms.uSkyMask = this.skyMask; sh.fragmentShader = sh.fragmentShader.replace('void main() {', 'uniform float uSkyMask;\nvoid main() {').replace('#include <dithering_fragment>', '#include <dithering_fragment>\ngl_FragColor.a = uSkyMask;'); };
+    cloudMat.customProgramCacheKey = () => 'hvcloud'; cloudMat.needsUpdate = true;
+  }
+  /** sparkles and other additive particles get an HDR boost so bloom can pick them up (value 1 when bloom is off) */
+  patchFx() {
+    this.fxBoost = { value: 1 };
+    this.scene.traverse((o) => { const m = o.material; if (m && m.isShaderMaterial && m.uniforms && m.uniforms.uLight && m.blending === THREE.AdditiveBlending && m.fragmentShader.includes('* uLight, a)')) {
+      m.uniforms.uBoost = this.fxBoost; m.fragmentShader = 'uniform float uBoost;\n' + m.fragmentShader.replace('* uLight, a)', '* uLight * uBoost, a)'); m.needsUpdate = true; } });
+  }
+
+  // ================= camera juice =================
+  initJuice() { this._shk = { amt: 0, t: 0, dur: 0 }; this._pt = 0; this._pv = 0; this._flash = { r: 1, g: 1, b: 1, a: 0, rate: 3 }; this._photo = false; this._intro = null; this._introSeen = false;
+    this.flashMesh = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0, depthTest: false, depthWrite: false, toneMapped: false, fog: false })); this.flashMesh.renderOrder = 1000; this.flashMesh.frustumCulled = false; this.flashMesh.visible = false; this.flashMesh.raycast = () => {}; this.scene.add(this.flashMesh); }
+  /** screen shake: amount in world units (0.1 gentle .. 0.6 strong) fading out over `seconds` */
+  shake(amount = 0.3, seconds = 0.4) { const s = this._shk, left = Math.max(0, 1 - s.t / (s.dur || 1)) * s.amt; if (amount >= left) { s.amt = amount; s.t = 0; s.dur = Math.max(0.05, seconds); } }
+  /** quick zoom pulse: amount 0..0.3 (fraction of the camera distance) */
+  punch(amount = 0.06) { this._pt = Math.max(this._pt, Math.min(0.35, amount)); }
+  /** full-screen colour flash that fades out: flash('#fff', 0.5) */
+  flash(color = '#ffffff', alpha = 0.5, seconds = 0.35) { const c = new THREE.Color(color); this._flash = { r: c.r, g: c.g, b: c.b, a: Math.min(1, alpha), rate: Math.min(1, alpha) / Math.max(0.05, seconds) }; }
+  /** cinematic fly-in from a high, wide, slightly turned view down to wherever the camera goal is */
+  intro(seconds = 3.6) { const L = this.look; this._intro = { t: 0, dur: seconds, d: L.dist * 2.1, yaw: L.yaw + 0.85, pitch: Math.max(0.5, L.pitch - 0.35) };
+    if (!this._introHook) { this._introHook = () => this.cancelIntro(); this.canvas.addEventListener('pointerdown', this._introHook); this.canvas.addEventListener('wheel', this._introHook, { passive: true }); } }
+  cancelIntro() { this._intro = null; }
+  /** slow orbit photo mode: the camera drifts around the target, tilt-shift and vignette are a touch stronger */
+  photo(on) { this._photo = on === undefined ? !this._photo : !!on; return this._photo; }
+  get photoMode() { return this._photo; }
 
   // shadows are the expensive pass: only buildings, trees and the board cast them; everything small has a soft ground blob instead
   noCast(root, keep = null) { root.traverse(o => { if (o.isMesh && !(keep && keep(o))) o.castShadow = false; }); return root; }
@@ -65,6 +175,10 @@ export class View {
     put(flowerCartModel(), 3 * q, 16.5, -0.5); put(pumpkinPatchModel(), 3 * q - 0.3, 20, 0);
     put(swingModel(), 5 * q, 17.5, 0.4); put(birdBathModel(), 5 * q + 0.3, 14.5, 0);
     put(hammockModel(), 7 * q, 17.5, -0.4);
+    // the Great Project monument (grows through 6 stages) stands north of the notice board
+    this.monStage = -1; this.monHolder = new THREE.Group(); this.monHolder.position.set(0, 0.1, -5.4); s.add(this.monHolder); this.pickables.push(this.monHolder);
+    // the travelling merchant's stall appears by the plaza while the merchant is in the valley
+    this.merchant = new THREE.Group(); const mc = cartModel(), mt = tentModel(); mt.position.set(-2.6, 0, 0); mc.position.set(0.4, 0, 0.6); this.noCast(mc); this.noCast(mt); this.merchant.add(mt, mc); this.merchant.position.set(5.6, 0.1, 6.6); this.merchant.rotation.y = -0.7; this.merchant.visible = false; s.add(this.merchant);
   }
 
   buildLife() {
@@ -116,18 +230,60 @@ export class View {
     U.mid.value.copy(C.midN).lerp(C.midD, day).lerp(C.midS, dusk * 0.75).lerp(C.grey, ra * 0.6);
     U.hor.value.copy(C.horN).lerp(C.horD, day).lerp(C.horS, dusk * 0.85).lerp(C.grey, ra * 0.65);
     this.scene.background.copy(U.mid.value); this.scene.fog.color.copy(U.hor.value);
-    this.scene.fog.near = 100 - 50 * ra; this.scene.fog.far = 260 - 120 * ra;
+    this.scene.fog.near = 100 + this.look.dist * 1.3 - 50 * ra; this.scene.fog.far = 260 + this.look.dist * 1.3 - 120 * ra;
     this.dome.position.copy(this.cam.position);
     // the sun glow crosses the sky (west to east over the valley) and warms at the horizon
     this.sunGlow.position.set(this.cam.position.x + Math.cos(a) * 280, this.cam.position.y + Math.max(0.04, sn) * 260 - 10, this.cam.position.z - 120);
     this.sunGlow.visible = sn > -0.05 && ra < 0.7; this.sunGlow.material.opacity = Math.min(1, (sn + 0.05) * 5) * (1 - ra); this.sunGlow.material.color.set('#ffffff').lerp(C.tmp.set('#ffb070'), dusk * 0.6);
     // high-key light: strong soft fill from the hemisphere so shadows stay bright, a golden sun, a lavender moon
-    this.sun.intensity = (1.55 + 1.0 * day) * (1 - 0.3 * ra); this.sun.color.set('#c9d2ff').lerp(C.tmp.set('#fff1cf'), day).lerp(C.tmp.set('#ffb070'), dusk * 0.5);
-    this.hemi.intensity = 1.25 + 0.3 * day + 0.2 * ra; this.hemi.color.set('#b5c2ff').lerp(C.tmp.set('#ffffff'), day); this.hemi.groundColor.set('#9ccc78').lerp(C.tmp.set('#b4ea84'), day);
-    this.night = 1 - day;
+    this.sun.intensity = (1.15 + 0.7 * day) * (1 - 0.3 * ra); this.sun.color.set('#c9d2ff').lerp(C.tmp.set('#fff1cf'), day).lerp(C.tmp.set('#ffb070'), dusk * 0.5);
+    this.hemi.intensity = 1.2 + 1.0 * day + 0.2 * ra; this.hemi.color.set('#b5c2ff').lerp(C.tmp.set('#ecefff'), day); this.hemi.groundColor.set('#9ccc78').lerp(C.tmp.set('#b4ea84'), day);
+    this.night = 1 - day; setVillagerLight(Math.max(0.15, day));
     this.winMat.emissiveIntensity = Math.max(0, 1 - day * 1.6) * 1.6; this.lanternMat.emissiveIntensity = (1 - day) * 2.4; envLantern.emissiveIntensity = (1 - day) * 2.4; lampMat.emissiveIntensity = 0.25 + (1 - day) * 2.2; propLantern.emissiveIntensity = 0.25 + (1 - day) * 2.2;
     cloudMat.color.set('#ffffff').lerp(C.tmp.set('#8d9cc8'), (1 - day) * 0.8); this.fx.setLight && this.fx.setLight(0.4 + 0.6 * day);
-    this.r.toneMappingExposure = 1.1 + 0.04 * day;
+    this.r.toneMappingExposure = 1.02 + 0.04 * day;
+    // everything below is also a pure function of (time, rain, tier)
+    this._sn = sn; this._dusk = dusk; this._day = day; const tc = this.tc || TIERS.medium, sunUp = sm(sn, -0.02, 0.14) * (1 - ra);
+    // tier-driven strengths ease toward their targets, so a live tier change never pops
+    const tb = this._tb || (this._tb = { rim: tc.rim, cs: tc.cloudShadow, bk: tc.bloomK, w: tc.water ? 1 : 0, wc: tc.water > 1 ? 1 : 0 }), tk = Math.min(1, dt * 2.5);
+    tb.rim += (tc.rim - tb.rim) * tk; tb.cs += (tc.cloudShadow - tb.cs) * tk; tb.bk += (tc.bloomK - tb.bk) * tk; tb.w += ((tc.water ? 1 : 0) - tb.w) * tk; tb.wc += ((tc.water > 1 ? 1 : 0) - tb.wc) * tk;
+    this.rim.intensity = tb.rim * 0.6 * day * (1 - 0.6 * ra); this.rim.color.set('#ffd6b0').lerp(C.tmp.set('#ffb98a'), dusk * 0.6);
+    this.cloudU.uAmt.value = tb.cs * 0.2 * day * (1 - ra); this.cloudU.uT.value = this.t; this.cloudShadow.visible = this.cloudU.uAmt.value > 0.004;
+    const W = this.waterU; W.uSunW.value.set(Math.cos(a) * 280, Math.max(0.04, sn) * 260 - 10, -120).normalize();
+    W.uSunC.value.set('#fff2d0').lerp(C.tmp.set('#ffb070'), dusk * 0.6).multiplyScalar(tb.w * (0.25 + 0.75 * sunUp) * 1.1); W.uGlint.value = tb.wc;
+  }
+  // shadow camera: tight around the look target, in quantised steps and snapped to shadow texels so panning never shimmers
+  shadowFollow(L) {
+    const sun = this.sun, sc = sun.shadow.camera, e = Math.ceil(Math.max(22, Math.min(40, L.dist * 1.1)) / 2) * 2, size = sun.shadow.mapSize.x || 1536;
+    if (Math.abs(sc.right - e) > 0.5) { sc.left = -e; sc.right = e; sc.top = e; sc.bottom = -e; sc.updateProjectionMatrix(); }
+    const off = this._soff || (this._soff = new THREE.Vector3(30, 50, 20)), z = this._lz || (this._lz = off.clone().normalize()), xa = this._lx || (this._lx = new THREE.Vector3(0, 1, 0).cross(z).normalize()), ya = this._ly || (this._ly = z.clone().cross(xa));
+    const texel = (2 * e) / size, rx = L.x * xa.x + L.z * xa.z, ry = L.x * ya.x + L.z * ya.z, sx = Math.round(rx / texel) * texel - rx, sy = Math.round(ry / texel) * texel - ry;
+    const tx = L.x + xa.x * sx + ya.x * sy, ty = xa.y * sx + ya.y * sy, tz = L.z + xa.z * sx + ya.z * sy;
+    sun.target.position.set(tx, ty, tz); sun.position.set(tx + off.x, ty + off.y, tz + off.z);
+    this.rim.position.set(L.x - 26, 14, L.z - 34); this.rim.target.position.set(L.x, 0, L.z);
+  }
+  // push this frame's look to the post uniforms (all derived from time, rain, camera and tier: nothing accumulates)
+  updatePost(dt) {
+    const P = this.post, U = P.U, L = this.look, c = this.tc, night = this._day === undefined ? 0 : 1 - this._day, ra = this.rainAmt, F = this._flash;
+    const sm = (x, a, b) => { const k = Math.max(0, Math.min(1, (x - a) / (b - a))); return k * k * (3 - 2 * k); };
+    U.uTilt.value = c.dof ? Math.max(this._photo ? 0.55 : 0, sm(L.dist, 14, 60) * (0.5 + 0.5 * sm(L.pitch, 0.35, 0.95))) : 0;
+    U.uExposure.value = this.r.toneMappingExposure * (1 - 0.08 * night); U.uTintS.value.set(0.97 - 0.05 * night, 0.95 - 0.02 * night, 1.05 + 0.05 * night); U.uTime.value = this.t; U.uVig.value = this._photo ? 0.8 : 0.55;
+    U.uBloom.value = 0.55 * (this._tb ? this._tb.bk : c.bloomK) * (c.bloom ? 1 : 0) * (1 + 0.6 * night); P.thr = 1.55 - 0.55 * night + 0.2 * ra;
+    U.uSat.value = 1.2 - 0.05 * night + 0.03 * this._dusk - 0.1 * ra; U.uExposure.value *= 1 - 0.05 * ra; U.uTintH.value.set(1.04 + 0.03 * this._dusk, 1.01, 0.95 - 0.04 * this._dusk);
+    U.uGrain.value = c.grain ? 0.02 : 0;
+    // sun on screen (for flare and rays); fades out when behind the camera, below the horizon or raining
+    const sp = this.sunGlow.position, v = this._sv || (this._sv = new THREE.Vector3()), cp = this.cam.position;
+    v.set(sp.x - cp.x, sp.y - cp.y, sp.z - cp.z).normalize().multiplyScalar(200).add(cp); const view = v.clone().applyMatrix4(this.cam.matrixWorldInverse); v.project(this.cam);
+    const up = sm(this._sn, -0.02, 0.14) * (1 - ra), vis = view.z < 0 ? Math.max(0, Math.min(1, 1.9 - Math.max(Math.abs(v.x), Math.abs(v.y)))) : 0;
+    U.uSun.value.set(v.x * 0.5 + 0.5, v.y * 0.5 + 0.5, up * vis, 0); U.uSunCol.value.set(1.0, 0.86, 0.62).lerp(this._sc || (this._sc = new THREE.Vector3(1.0, 0.62, 0.38)), this._dusk * 0.7);
+    U.uRays.value = 0.1; U.uFlash.value.set(F.r, F.g, F.b, F.a);
+  }
+  finishFrame(dt) {
+    const F = this._flash; if (F.a > 0) F.a = Math.max(0, F.a - F.rate * dt);
+    if (this.post && this.tc && this.post.rt.scene) { this.updatePost(dt); this.post.render(); this.passes = this.post.passCount; this.flashMesh.visible = false; return; }
+    const fm = this.flashMesh, cam = this.cam; fm.visible = F.a > 0.004;
+    if (fm.visible) { const h = 2 * Math.tan(cam.fov * Math.PI / 360) * 1.0; fm.scale.set(h * cam.aspect * 1.05, h * 1.05, 1); fm.position.set(0, 0, -1).applyMatrix4(cam.matrixWorld); fm.quaternion.copy(cam.quaternion); fm.material.color.setRGB(F.r, F.g, F.b); fm.material.opacity = F.a; }
+    this.r.info.reset(); this.r.render(this.scene, this.cam);
   }
 
   // ----- village sync -----
@@ -173,14 +329,14 @@ export class View {
           const info = { id, color: p.color, lvl };
           const mod = type === 'farm' ? farmModel(info) : BUILD[type] ? BUILD[type](info) : BUILD.house(info);
           mod.traverse(o => { if (o.isMesh) o.userData.pick = { k: 'bld', id, pid: p.id }; }); m.add(mod);
-          u.model = mod; u.lvl = lvl; u.spin = mod.getObjectByName('spin'); u.spinz = mod.getObjectByName('spinz'); u.flag = mod.getObjectByName('flag');
+          u.model = mod; u.lvl = lvl; u.spin = mod.getObjectByName('spin'); u.spinz = mod.getObjectByName('spinz'); u.flag = mod.getObjectByName('flag'); u.boat = mod.getObjectByName('boat'); u.door = mod.getObjectByName('door');
           u.chimneys = []; mod.traverse(o => { if (o.name === 'chimney') u.chimneys.push(o); });
           if (u.pop === undefined) { u.pop = 0; m.scale.setScalar(0.01); } else { this.fx.sparkle(V.group.position.x + m.position.x, 1.5, V.group.position.z + m.position.z, '#ffd84a'); }
         }
         const d = BUILDINGS[type] || { w: 3, h: 3 };
         const pos = this.local(V, x, y, d.w, d.h); m.position.set(pos.x, 0.14, pos.z); m.userData.x = x; m.userData.y = y;
         m.userData.prog = prog; m.userData.stage = stage; m.userData.crop = crop; m.userData.busy = stage === 'busy';
-        if (type === 'farm') setFarmStage(m, stage, crop);
+        if (type === 'farm' || type === 'orchard') setFarmStage(m.userData.model, stage, crop);
       }
       for (const [id, m] of V.b) if (!bs.has(id)) { V.group.remove(m); this.unpick(m); V.b.delete(id); this.fx.dust(V.group.position.x + m.position.x, 0.5, V.group.position.z + m.position.z); }
       // nodes
@@ -213,7 +369,35 @@ export class View {
     for (const [pid, V] of this.villages) if (!seen.has(pid)) { this.scene.remove(V.group); this.villages.delete(pid); }
     const alive = new Set(); for (const p of snap.players) for (const v of p.v) alive.add(v[0]);
     for (const [id, m] of this.villagers) if (!alive.has(id)) { this.scene.remove(m); this.unpick(m); this.villagers.delete(id); }
+    this.syncValley(snap);
     for (const f of snap.valley.fields) { const g = this.fieldMeshes[f.id]; if (g) { const d = VALLEY_FIELDS.find(x => x.id === f.id); const k = Math.max(0.15, f.stock / d.max); g.userData.stuff.scale.setScalar(0.5 + 0.5 * k); g.userData.stuff.position.y = (k < 0.2 ? -0.15 : 0); } }
+  }
+  // valley-wide state: the monument stage, festival lights and fireworks, the travelling merchant
+  syncValley(snap) {
+    const V = snap.valley, st = Math.max(0, Math.min(MONUMENT_STAGES - 1, (V.project && V.project.stage) | 0));
+    if (st !== this.monStage) {
+      const first = this.monStage < 0; this.monStage = st;
+      while (this.monHolder.children.length) this.monHolder.remove(this.monHolder.children[0]);
+      const mod = monumentModel(st); this.noCast(mod, o => st >= 2); this.monHolder.add(mod); this.monModel = mod;
+      mod.traverse(o => { if (o.isMesh) o.userData.pick = { k: 'project' }; });
+      this.mon = { flag: mod.getObjectByName('flag'), spinz: mod.getObjectByName('spinz'), beam: mod.getObjectByName('beam'), bell: mod.getObjectByName('bell'), lanterns: mod.getObjectByName('lanterns') };
+      if (!first) this.celebrate('project', 0, -5.4);
+    }
+    this.festivalUntil = V.event && V.event.kind === 'festival' ? V.event.until : 0; this.simT = snap.t;
+    const mer = !!(V.merchant && V.merchant.until > snap.t); if (mer !== this.merchant.visible) { this.merchant.visible = mer; if (mer) this.fx.confetti(5.6, 2, 6.6); }
+  }
+  // one call for every celebration the HUD wants: kind = levelup | built | harvest | project | festival | daily | ach | cheer | craft
+  celebrate(kind, x = 0, z = 0, a = {}) {
+    const f = this.fx;
+    if (kind === 'levelup') { f.levelUp(x, 0.3, z); this.shake(0.25, 0.4); this.flash('#fff6b0', 0.18, 0.5); }
+    else if (kind === 'built') { f.build(x, 0.2, z, a.w || 2, a.h || 2); this.punch(0.03); }
+    else if (kind === 'harvest') f.harvest(x, 1, z, a.color || '#ffd84a');
+    else if (kind === 'project') { for (let i = 0; i < 5; i++) setTimeout(() => f.fireworks(x + (Math.random() - 0.5) * 10, 9 + Math.random() * 5, z + (Math.random() - 0.5) * 8), i * 380); f.levelUp(x, 0.3, z); f.confetti(x, 6, z); this.shake(0.3, 0.6); this.punch(0.06); this.flash('#ffe6f2', 0.22, 0.7); }
+    else if (kind === 'daily') f.coinBurst(x, 1.5, z, 14);
+    else if (kind === 'ach') { f.star(x, 2.2, z, '#ffd84a'); f.sparkle(x, 2, z, '#ffd84a'); f.cheer(x, 2.2, z); }
+    else if (kind === 'cheer') f.cheer(x, 2.2, z);
+    else if (kind === 'craft') f.craft(x, 1.6, z);
+    else if (kind === 'festival') f.fireworks(x, 10, z);
   }
   unpick(m) { const i = this.pickables.indexOf(m); if (i >= 0) this.pickables.splice(i, 1); }
 
@@ -260,10 +444,23 @@ export class View {
 
   frame(dt) {
     this.t += dt; const L = this.look, Gl = this.goal, k = 1 - Math.pow(0.0005, dt);
-    for (const key of ['x', 'z', 'dist', 'yaw', 'pitch']) L[key] += (Gl[key] - L[key]) * k;
-    const cp = Math.cos(L.pitch), sp = Math.sin(L.pitch);
-    this.cam.position.set(L.x + Math.sin(L.yaw) * cp * L.dist, sp * L.dist, L.z + Math.cos(L.yaw) * cp * L.dist); this.cam.lookAt(L.x, 0, L.z);
-    this.sun.position.set(L.x + 30, 50, L.z + 20); this.sun.target.position.set(L.x, 0, L.z);
+    if (this._photo) Gl.yaw += dt * 0.06;
+    if (!this._introSeen && !navigator.webdriver && this.myId && this.villages.has(this.myId) && !/nointro/.test(location.search)) { this._introSeen = true; this.intro(); }
+    const I = this._intro;
+    if (I) {
+      I.t += dt; const u = Math.min(1, I.t / I.dur), e = 1 - Math.pow(1 - u, 3);
+      L.x += (Gl.x - L.x) * k; L.z += (Gl.z - L.z) * k;
+      L.dist = I.d + (Gl.dist - I.d) * e; L.yaw = I.yaw + (Gl.yaw - I.yaw) * e; L.pitch = I.pitch + (Gl.pitch - I.pitch) * e;
+      if (u >= 1) this._intro = null;
+    } else for (const key of ['x', 'z', 'dist', 'yaw', 'pitch']) L[key] += (Gl[key] - L[key]) * k;
+    // punch: fast attack, slower release; shake: decaying smooth noise; breathing: an almost imperceptible sway
+    this._pv += (this._pt - this._pv) * Math.min(1, dt * 26); this._pt *= Math.exp(-dt * 6.5);
+    const cd = L.dist * (1 - this._pv), cp = Math.cos(L.pitch), sp = Math.sin(L.pitch);
+    this.cam.position.set(L.x + Math.sin(L.yaw) * cp * cd, sp * cd, L.z + Math.cos(L.yaw) * cp * cd); this.cam.lookAt(L.x, 0, L.z);
+    { const t = this.t, sw = L.dist * 0.0012; this.cam.translateX(Math.sin(t * 0.37) * sw + Math.sin(t * 0.91) * sw * 0.3); this.cam.translateY(Math.sin(t * 0.29 + 1.0) * sw * 0.7); this.cam.rotateZ(Math.sin(t * 0.23) * 0.0012);
+      const S = this._shk; if (S.dur > 0) { S.t += dt; const f = Math.max(0, 1 - S.t / S.dur), a = S.amt * f * f; if (f <= 0) S.dur = 0; else { this.cam.translateX(a * (Math.sin(S.t * 53.1) + 0.6 * Math.sin(S.t * 31.7 + 1.3))); this.cam.translateY(a * (Math.sin(S.t * 47.9 + 2.0) + 0.6 * Math.sin(S.t * 27.3))); this.cam.rotateZ(a * 0.012 * Math.sin(S.t * 39.0)); } } }
+    this.cam.updateMatrixWorld();
+    this.shadowFollow(L);
     // ---- level of detail: only what is near the camera is drawn (phones have a few hundred draw calls to spare)
     {
       const near = L.dist < 46, R = Math.max(30, L.dist * 1.15), R2 = R * R, tx = L.x, tz = L.z;
@@ -275,15 +472,10 @@ export class View {
       for (const [, m] of this.villagers) m.visible = L.dist < 62 && (m.userData.pid === this.myId ? true : within(m, 0.9));
       const wantShadow = this._shadowOn === undefined ? true : (this._shadowOn ? L.dist < 52 : L.dist < 46);
       if (wantShadow !== this._shadowOn) { this._shadowOn = wantShadow; this.sun.castShadow = wantShadow; }
-      // shadow box follows the zoom: tighter at close range = sharper shadows and fewer casters
-      const e = Math.max(22, Math.min(40, L.dist * 1.1)); const sc = this.sun.shadow.camera; if (Math.abs(sc.right - e) > 1) { sc.left = -e; sc.right = e; sc.top = e; sc.bottom = -e; sc.updateProjectionMatrix(); }
     }
-    // ---- adaptive resolution (real devices only): hold ~50 fps by trading pixels
+    // ---- live quality: tier and pixel ratio follow the frame time (only in 'auto', never under automation)
     this.frameMs += (dt * 1000 - this.frameMs) * 0.05; this.frames++;
-    if (!navigator.webdriver && this.frames % 60 === 0) {
-      const pr = this.frameMs > 24 ? Math.max(0.7, this.pr - 0.15) : this.frameMs < 15 ? Math.min(this.prMax, this.pr + 0.1) : this.pr;
-      if (Math.abs(pr - this.pr) > 0.01) { this.pr = pr; this.r.setPixelRatio(pr); this.resize(); }
-    }
+    { const a = this.ctl.step(dt); if (a) { if (a.tier !== this._tier) { this.applyTier(a.tier); if (a.reason === 'slow') saveCap(a.tier); } if (Math.abs(a.pr - this.pr) > 0.01) { this.pr = a.pr; this.resize(); } } }
     for (const [, m] of this.villagers) {
       const u = m.userData, p = m.position;
       const dx = u.tx - p.x, dz = u.tz - p.z, d = Math.hypot(dx, dz);
@@ -292,6 +484,8 @@ export class View {
       const walking = d > 0.03;
       const pose = walking ? 'walk' : (u.state === 'work' || u.state === 'build') ? 'work' : 'idle';
       setPose(m, pose, this.t, u.phase);
+      const wantEmote = u.state === 'hungry' ? 'sweat' : u.state === 'blocked' ? 'question' : u.state === 'full' ? 'exclamation' : null;
+      if (u.emote !== wantEmote) { u.emote = wantEmote; setEmote(m, wantEmote, 0); }
       const mood = u.state === 'hungry' ? 'hungry' : u.state === 'blocked' || u.state === 'full' ? 'tired' : (u.state === 'work' || u.state === 'build') ? 'busy' : 'happy';
       if (u.mood !== mood) { u.mood = mood; setMood(m, mood); }
       m.position.y = 0.14;
@@ -303,6 +497,8 @@ export class View {
         else m.scale.set(1, 1, 1);
         if (u.model) { u.model.scale.y = u.prog < 1 ? 0.2 + u.prog * 0.8 : 1; if (u.site) u.site.visible = u.prog < 1; }
         if (u.flag) u.flag.rotation.y = Math.sin(this.t * 2.2 + u.id) * 0.18;
+        if (u.boat) u.boat.position.y = (u.boat.userData.baseY || 0.2) + Math.sin(this.t * 1.7 + u.id) * 0.05;
+        if (u.door) { const open = u.stage === 'ready' ? 0.42 : 0; u.door.userData.x0 = u.door.userData.x0 ?? u.door.position.x; u.door.position.x += (u.door.userData.x0 + open - u.door.position.x) * Math.min(1, dt * 4); }
         if (u.spin) u.spin.rotation.x += dt * (u.busy ? 14 : 1);
         if (u.spinz) u.spinz.rotation.z += dt * 0.8;
         if (u.busy && u.prog >= 1 && u.chimneys && u.chimneys.length && Math.random() < dt * 3) { const c = u.chimneys[(Math.random() * u.chimneys.length) | 0]; c.getWorldPosition(this._v || (this._v = new THREE.Vector3())); this.fx.smoke(this._v.x, this._v.y, this._v.z); }
@@ -327,8 +523,15 @@ export class View {
       animateCritter(m, u.mode, this.t, 1, u.seed);
     }
     for (const V of this.villages.values()) if (V.flag) V.flag.rotation.y = Math.sin(this.t * 2 + V.p.slot) * 0.15;
+    if (this.mon) {
+      const M = this.mon; if (M.flag) M.flag.rotation.y = Math.sin(this.t * 2.1) * 0.2; if (M.spinz) M.spinz.rotation.z += dt * 0.7; if (M.beam) M.beam.rotation.y += dt * 1.1;
+      if (M.bell) M.bell.rotation.z = Math.sin(this.t * 1.3) * 0.06; if (M.lanterns) M.lanterns.rotation.y += dt * 0.15;
+    }
+    if (this.festivalUntil && this.simT !== undefined && (this.worldSimT = (this.worldSimT || 0)) !== undefined) {
+      this._fw = (this._fw || 0) - dt; if (this._fw <= 0 && (this.night || 0) > 0.3) { this._fw = 1.1 + Math.random() * 1.4; this.fx.fireworks((Math.random() - 0.5) * 30, 11 + Math.random() * 6, (Math.random() - 0.5) * 30); }
+    }
     if (this.board) this.board.rotation.y = Math.sin(this.t * 0.5) * 0.03;
-    this.r.render(this.scene, this.cam);
+    this.finishFrame(dt);
   }
   project(x, y, z) { const v = new THREE.Vector3(x, y, z).project(this.cam); const r = this.canvas.getBoundingClientRect(); return { x: (v.x * 0.5 + 0.5) * r.width + r.left, y: (-v.y * 0.5 + 0.5) * r.height + r.top, vis: v.z < 1 }; }
 }

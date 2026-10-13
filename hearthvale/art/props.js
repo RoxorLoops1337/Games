@@ -547,12 +547,151 @@ export function beeSkepModel() {
   return finalize(g);
 }
 
+
+/* ------------------------------------------------------------------ ROUND 3: village goods (coins, eggs, milk, fish, yarn, apples, cheese, jam, pie, gift, trophy, firework). Each <= 400 tris. */
+/** closed lathe (profile = [[radius, y], ...] bottom to top on the outside, then back down on the inside) merged into builder b */
+function lat(b, prof, seg, col, o = {}) { return b.put(new THREE.LatheGeometry(prof.map(([r, y]) => new THREE.Vector2(r, y)), seg), col, o.x || 0, o.y || 0, o.z || 0, o.s || 1, o.sy || o.s || 1, o.s || 1, { sh: o.sh ?? 0.14, fn: o.fn, facet: o.facet, r: o.r }); }
+/** stacks of gold coins: banded sides, bright tops, one coin leaning on the tallest stack */
+export function coinStackModel() {
+  const g = make(0.5, 1.2, 0.9), b = new B();
+  const stack = (x, z, h, r, n) => b.put(GEO.cyl(7, 1, false, n), '#ffd24a', x, h / 2, z, r, h, r, { sh: 0.12, facet: true, fn: (lx, ly, lz, t) => (Math.floor(t * n) % 2 ? '#e8a82a' : '#ffd84a') });
+  stack(-0.02, 0.0, 0.34, 0.13, 6); stack(0.22, 0.12, 0.21, 0.12, 4); stack(-0.22, 0.14, 0.14, 0.11, 2);
+  b.put(GEO.cyl(7, 1, false), '#fff0a0', -0.02, 0.352, 0.0, 0.118, 0.012, 0.118, { sh: 0 });
+  b.put(GEO.cyl(7, 1, false), '#ffd84a', 0.17, 0.17, -0.21, 0.12, 0.035, 0.12, { r: [1.15, 0.3, 0.2], fn: (lx, ly, lz, t, nx, ny) => (Math.abs(ny) > 0.8 ? '#fff0a0' : null), sh: 0.05 });
+  b.sph('#ff93b8', 0.34, 0.07, -0.08, 0.06, 0.07, 0.06, { w: 5, h: 4 }); b.sph('#fff4b0', -0.3, 0.025, -0.1, 0.045, 0.02, 0.045, { w: 5, h: 3, sh: 0 });
+  return finalize(addParts(g, b));
+}
+/** wicker basket of eggs with a bow-tied handle */
+export function eggBasketModel() {
+  const g = make(0.42), b = new B();
+  const weave = (lx, ly, lz, t) => (Math.floor(t * 6) % 2 ? '#f0c27a' : null);
+  lat(b, [[0.01, 0], [0.2, 0.01], [0.27, 0.12], [0.31, 0.24], [0.29, 0.25], [0.25, 0.2], [0.01, 0.12]], 10, '#e8b070', { fn: weave, facet: true });
+  b.put(new THREE.TorusGeometry(1, 0.08, 3, 9, PI), '#c9944a', 0, 0.24, 0, 0.3, 0.34, 0.3, { r: [0, PI / 2, 0], sh: 0.05 });
+  const eggs = [[-0.1, 0.3, 0.05, '#fffaf0'], [0.1, 0.3, 0.08, '#ffe9d4'], [0.0, 0.31, -0.1, '#fff4dc'], [-0.12, 0.3, -0.08, '#dff3ff']];
+  for (const [x, y, z, c] of eggs) b.sph(c, x, y, z, 0.07, 0.09, 0.07, { w: 6, h: 4, sh: 0.1 });
+  b.sph('#ff8fb5', 0.0, 0.55, 0.0, 0.05, 0.035, 0.035, { w: 4, h: 3, r: [0, 0, 0.5], sh: 0 }); b.sph('#ff8fb5', 0.0, 0.55, 0.0, 0.05, 0.035, 0.035, { w: 4, h: 3, r: [0, 0, -0.5], sh: 0 });
+  return finalize(addParts(g, b));
+}
+/** a milk churn: tapered can with bands, a lid and a little label with a heart */
+export function milkChurnModel() {
+  const g = make(0.4), b = new B();
+  lat(b, [[0.01, 0], [0.2, 0.01], [0.23, 0.12], [0.2, 0.3], [0.17, 0.42], [0.13, 0.5], [0.12, 0.52], [0.01, 0.52]], 10, '#f4f7ff', { fn: (lx, ly, lz, t) => (t < 0.08 || (t > 0.4 && t < 0.46) ? '#9fd0ff' : null), facet: true });
+  b.cyl('#9fd0ff', 0, 0.5, 0, 0.14, 0.04, { n: 10, rt: 1.05 });
+  b.sph('#cfe6ff', 0, 0.56, 0, 0.14, 0.07, 0.14, { w: 8, h: 3, sh: 0.1 }); b.sph('#ffffff', 0, 0.63, 0, 0.04, 0.035, 0.04, { w: 6, h: 3, sh: 0 });
+  for (const s of [-1, 1]) b.sph('#9fd0ff', s * 0.225, 0.42, 0, 0.05, 0.075, 0.035, { w: 5, h: 4, r: [0, 0, -s * 0.5], sh: 0.08 });
+  const hb = new THREE.Shape(); hb.moveTo(0, -0.5); hb.bezierCurveTo(-0.62, -0.02, -0.5, 0.5, 0, 0.22); hb.bezierCurveTo(0.5, 0.5, 0.62, -0.02, 0, -0.5);
+  b.put(new THREE.ShapeGeometry(hb, 3), '#ff8fb5', 0, 0.28, 0.2, 0.09, 0.09, 1, { sh: 0, r: [0, 0, 0] });
+  return finalize(addParts(g, b));
+}
+/** a wooden bucket of silvery fish (three smiling fish heads peek out) */
+export function fishBucketModel() {
+  const g = make(0.45), b = new B();
+  lat(b, [[0.01, 0], [0.22, 0.01], [0.27, 0.2], [0.3, 0.34], [0.275, 0.345], [0.25, 0.3], [0.2, 0.05], [0.01, 0.04]], 10, W.mid, { fn: (lx, ly, lz) => (Math.floor((Math.atan2(lx, lz) + PI) / (PI / 6)) % 2 ? W.light : null), facet: true });
+  b.cyl(PA.skyD, 0, 0.12, 0, 0.255, 0.04, { n: 10, rt: 1.12, open: true, sh: 0.08 });
+  b.put(GEO.disc(10), '#7fd8f2', 0, 0.3, 0, 0.26, 0.26, 1, { r: [-PI / 2, 0, 0], sh: 0 });
+  const fish = (x, z, yaw, col, belly) => { b.sph(col, x, 0.33, z, 0.075, 0.06, 0.12, { w: 5, h: 4, r: [-0.4, yaw, 0], fn: (lx, ly) => (ly < -0.2 ? belly : null) }); b.cone(col, x - Math.sin(yaw) * 0.12, 0.38, z - Math.cos(yaw) * 0.12, 0.05, 0.09, { n: 3, r: [-1.1, yaw, 0], sh: 0 }); b.sph('#2b2036', x + Math.sin(yaw) * 0.07 + Math.cos(yaw) * 0.045, 0.372, z + Math.cos(yaw) * 0.07 - Math.sin(yaw) * 0.045, 0.018, 0.018, 0.018, { w: 4, h: 3, sh: 0 }); };
+  fish(-0.08, 0.04, 0.5, '#ff9a5c', '#fff4e0'); fish(0.09, -0.02, 2.4, '#5ec8ff', '#eaf8ff'); fish(0.02, 0.1, -0.7, '#ffd24a', '#fff8d8');
+  b.put(new THREE.TorusGeometry(1, 0.07, 3, 8, PI), '#c9944a', 0, 0.34, 0, 0.29, 0.28, 0.29, { r: [0, 0.4, 0], sh: 0.05 });
+  return finalize(addParts(g, b));
+}
+/** a basket of pastel yarn balls with two knitting needles and a loose thread */
+export function yarnBasketModel() {
+  const g = make(0.45), b = new B();
+  lat(b, [[0.01, 0], [0.24, 0.01], [0.3, 0.13], [0.33, 0.22], [0.31, 0.225], [0.27, 0.18], [0.01, 0.12]], 10, '#f2c27a', { fn: (lx, ly, lz, t) => (Math.floor(t * 5) % 2 ? '#e4a85a' : null), facet: true });
+  const ball = (x, y, z, r, c, c2) => { b.sph(c, x, y, z, r, r, r, { w: 6, h: 4, sh: 0.1, fn: (lx, ly, lz) => (Math.sin(lx * 9 + lz * 4) > 0.5 ? c2 : null), facet: true }); };
+  ball(-0.1, 0.27, 0.05, 0.12, '#ff9ec4', '#ffc4dc'); ball(0.12, 0.27, 0.0, 0.11, '#9fd0ff', '#cfe6ff'); ball(0.0, 0.3, -0.12, 0.1, '#ffe27a', '#fff2b0'); ball(0.02, 0.36, 0.05, 0.09, '#b79cff', '#d8c9ff');
+  for (const s of [-1, 1]) { b.cyl('#e8b070', s * 0.06, 0.45, 0.0, 0.012, 0.42, { n: 4, r: [0, 0, s * 0.35], sh: 0 }); b.sph('#ff8fb5', s * 0.13, 0.62, 0.0, 0.022, 0.022, 0.022, { w: 4, h: 3, sh: 0 }); }
+  b.put(new THREE.TorusGeometry(1, 0.2, 3, 6, PI * 1.4), '#ff9ec4', 0.26, 0.02, 0.2, 0.07, 0.07, 0.07, { r: [-PI / 2, 0, 0.4], sh: 0 });
+  return finalize(addParts(g, b));
+}
+/** a crate stacked with shiny apples */
+export function appleCrateModel() {
+  const g = make(0.52), b = new B();
+  b.pbox(W.light, 0, 0.17, 0, 0.58, 0.34, 0.46, 0.06);
+  for (const x of [-0.26, 0.26]) b.box(PA.mint, x, 0.17, 0, 0.06, 0.34, 0.47, { sh: 0.08 });
+  b.box(W.dark, 0, 0.1, 0.236, 0.46, 0.05, 0.02); b.box(W.dark, 0, 0.24, 0.236, 0.46, 0.05, 0.02);
+  const ap = (x, y, z, c, l = c) => { b.sph(c, x, y, z, 0.1, 0.09, 0.1, { w: 6, h: 4, sh: 0.1, fn: (lx, ly, lz, t, nx, ny, nz) => (nz > 0.5 && ny > 0.1 ? l : null) }); b.cyl('#7a5a3a', x, y + 0.09, z, 0.008, 0.05, { n: 3, sh: 0 }); };
+  const cs = ['#ff6f6f', '#ff8f6f', '#9be86a', '#ff6f6f', '#ffb04a'];
+  [[-0.17, 0.4, 0.08], [0.0, 0.4, 0.1], [0.17, 0.4, 0.08], [-0.09, 0.4, -0.1], [0.0, 0.5, 0.0]].forEach(([x, y, z], i) => ap(x, y, z, cs[i % 5], '#ffc2b0'));
+  b.sph('#7fdc6a', 0.04, 0.6, 0.0, 0.05, 0.015, 0.03, { w: 4, h: 3, r: [0, 0.6, 0.4], sh: 0 });
+  return finalize(addParts(g, b));
+}
+/** a big wheel of cheese with a wedge cut out and a mouse-hole or two */
+export function cheeseWheelModel() {
+  const g = make(0.45, 1.1, 0.9), b = new B();
+  b.put(GEO.cyl(14, 1, false), '#ffd24a', 0, 0.12, 0, 0.3, 0.24, 0.3, { sh: 0.14, fn: (lx, ly, lz, t, nx, ny) => (ny > 0.8 ? '#ffe680' : null) });
+  b.put(new THREE.CylinderGeometry(1, 1, 1, 5, 1, false, 0.0, 1.0), '#ffc938', 0.33, 0.12, 0.26, 0.3, 0.24, 0.3, { r: [0, 0.9, 0], sh: 0.1, fn: (lx, ly, lz, t, nx, ny) => (ny > 0.8 ? '#ffe680' : null) });
+  for (const [x, z, r] of [[-0.1, 0.1, 0.045], [0.12, -0.12, 0.035], [-0.14, -0.1, 0.03]]) b.put(GEO.disc(6), '#e8a82a', x, 0.245, z, r, r, 1, { r: [-PI / 2, 0, 0], sh: 0 });
+  b.sph('#e8a82a', 0.3, 0.1, 0.18, 0.035, 0.04, 0.02, { w: 5, h: 3, sh: 0 });
+  b.sph('#ffffff', 0.38, 0.03, -0.3, 0.05, 0.045, 0.06, { w: 6, h: 4, sh: 0.1 }); b.sph('#ffbfd0', 0.4, 0.04, -0.36, 0.014, 0.014, 0.014, { w: 4, h: 3, sh: 0 }); b.sph('#ffffff', 0.43, 0.09, -0.25, 0.025, 0.025, 0.025, { w: 4, h: 3, sh: 0 });
+  return finalize(addParts(g, b));
+}
+/** two jam jars: glass, a bright fruit colour, a gingham cloth lid tied with string */
+export function jamJarModel() {
+  const g = make(0.4, 1.25, 0.9), b = new B();
+  const jar = (x, z, jam, cloth, s) => {
+    lat(b, [[0.01, 0], [0.12, 0.01], [0.14, 0.04], [0.14, 0.2], [0.11, 0.25], [0.1, 0.27]], 8, jam, { x, z, s, sh: 0.1, fn: (lx, ly, lz, t) => (t > 0.78 ? '#e8f6ff' : t < 0.06 ? mix(jam, '#ffffff', 0.4) : null) });
+    b.sph(cloth, x, 0.29 * s, z, 0.14 * s, 0.07 * s, 0.14 * s, { w: 7, h: 3, sh: 0.1 }); b.cyl('#fff3d6', x, 0.265 * s, z, 0.108 * s, 0.025 * s, { n: 7, open: true, sh: 0 });
+    b.box('#fff8e6', x, 0.14 * s, z + 0.126 * s, 0.12 * s, 0.1 * s, 0.01, { sh: 0 });
+  };
+  jar(-0.16, 0.02, '#ff6f8f', '#ffc2d4', 1.1); jar(0.17, -0.06, '#b0e86a', '#fff2a8', 0.95);
+  return finalize(addParts(g, b));
+}
+/** a fruit pie with a lattice crust and a name flag; steam wisps are the named child `steam` (animateProp) */
+export function pieModel() {
+  const g = make(0.45, 1.1, 1.1), b = new B();
+  lat(b, [[0.01, 0], [0.26, 0.02], [0.3, 0.1], [0.32, 0.12], [0.3, 0.14], [0.01, 0.14]], 12, '#f5c88c', { fn: (lx, ly, lz, t) => (t > 0.7 ? '#ffd9a0' : null) });
+  b.put(GEO.cyl(12, 1, false), '#ff6f8f', 0, 0.13, 0, 0.26, 0.04, 0.26, { sh: 0.08, fn: (lx, ly, lz, t, nx, ny) => (ny > 0.8 ? '#ff8fa8' : null) });
+  for (let i = -1; i <= 1; i++) { b.box('#f5c88c', i * 0.11, 0.165, 0, 0.05, 0.03, 0.5, { sh: 0.05 }); b.box('#f5c88c', 0, 0.172, i * 0.11, 0.5, 0.03, 0.05, { sh: 0.05 }); }
+  for (let i = 0; i < 6; i++) { const a = i / 6 * PI * 2; b.sph('#e8b070', Math.cos(a) * 0.3, 0.12, Math.sin(a) * 0.3, 0.04, 0.035, 0.04, { w: 4, h: 3, sh: 0.05 }); }
+  addParts(g, b);
+  const st = new THREE.Group(); st.name = 'steam'; const sb = new B(); for (let i = 0; i < 2; i++) sb.sph('#ffffff', (i - 0.5) * 0.14, 0.3 + i * 0.1, 0.02 * i, 0.05, 0.05, 0.05, { w: 5, h: 3, sh: 0, free: true }); addParts(st, sb); g.add(st);
+  return finalize(g);
+}
+/** a wrapped gift: pastel box, cross ribbon and a bouncy bow (named `bow`) */
+export function giftBoxModel() {
+  const g = make(0.42), b = new B();
+  b.pbox(PA.pink, 0, 0.0, 0, 0.44, 0.34, 0.44, 0.06); b.pbox(PA.pinkD, 0, 0.34, 0, 0.48, 0.09, 0.48, 0.04);
+  b.box('#fff4b0', 0, 0.17, 0, 0.1, 0.35, 0.45, { sh: 0.05 }); b.box('#fff4b0', 0, 0.17, 0, 0.45, 0.35, 0.1, { sh: 0.05 }); b.box('#fff4b0', 0, 0.38, 0, 0.1, 0.1, 0.49, { sh: 0.05 }); b.box('#fff4b0', 0, 0.38, 0, 0.49, 0.1, 0.1, { sh: 0.05 });
+  for (const [x, z] of [[-0.12, 0.225], [0.12, 0.225]]) b.sph('#ffffff', x, 0.2, z, 0.02, 0.02, 0.008, { w: 4, h: 3, sh: 0 });
+  addParts(g, b);
+  part(g, 'bow', 0, 0.43, 0, (bb) => { bb.sph('#fff4b0', 0.1, 0.5, 0, 0.1, 0.07, 0.06, { w: 6, h: 4, r: [0, 0, 0.5], sh: 0.05 }); bb.sph('#fff4b0', -0.1, 0.5, 0, 0.1, 0.07, 0.06, { w: 6, h: 4, r: [0, 0, -0.5], sh: 0.05 }); bb.sph('#ffe27a', 0, 0.47, 0, 0.04, 0.04, 0.04, { w: 5, h: 4, sh: 0 }); bb.cone('#fff4b0', 0.05, 0.43, 0.04, 0.03, 0.12, { n: 3, r: [PI, 0.3, 0.4], sh: 0 }); });
+  return finalize(g);
+}
+/** a golden trophy cup on a pastel plinth; the star on top is the named child `star` (spins and bobs) */
+export function trophyModel() {
+  const g = make(0.42), b = new B();
+  b.pbox(PA.lilac, 0, 0.0, 0, 0.5, 0.12, 0.5, 0.05); b.box(PA.mint, 0, 0.12, 0, 0.36, 0.09, 0.36, { sh: 0.08 });
+  lat(b, [[0.01, 0.21], [0.1, 0.21], [0.12, 0.25], [0.05, 0.3], [0.05, 0.42], [0.2, 0.52], [0.25, 0.7], [0.18, 0.66], [0.1, 0.52], [0.01, 0.5]], 10, '#ffd24a', { fn: (lx, ly, lz, t, nx, ny, nz) => (nz > 0.5 && ny > 0 && t > 0.5 ? '#fff0a0' : null) });
+  for (const s of [-1, 1]) b.put(new THREE.TorusGeometry(1, 0.2, 3, 6, PI * 1.2), '#ffc02a', s * 0.24, 0.6, 0, 0.1, 0.12, 0.1, { r: [0, 0, s > 0 ? -PI / 2 - 0.6 : PI / 2 - 0.6], sh: 0.05 });
+  b.box('#fff4d6', 0, 0.075, 0.2, 0.2, 0.06, 0.012, { sh: 0 }); b.sph('#ff93b8', 0, 0.075, 0.21, 0.02, 0.014, 0.01, { w: 4, h: 3, sh: 0 });
+  addParts(g, b);
+  const star = new THREE.Group(); star.name = 'star'; star.position.y = 0.88;
+  const sh = new THREE.Shape(); for (let i = 0; i < 10; i++) { const a = i * PI / 5 + PI / 2, r = i % 2 ? 0.06 : 0.14; sh[i ? 'lineTo' : 'moveTo'](Math.cos(a) * r, Math.sin(a) * r); } sh.closePath();
+  const sm = new THREE.Mesh(new THREE.ExtrudeGeometry(sh, { depth: 0.05, bevelEnabled: false }), new THREE.MeshStandardMaterial({ color: '#ffe27a', emissive: '#ffc94a', emissiveIntensity: 0.35, roughness: 0.35, metalness: 0.2 })); sm.position.z = -0.025; sm.castShadow = true; star.add(sm); g.add(star);
+  return finalize(g);
+}
+/** a festival rocket on a stick; the fuse spark is the named child `flame` (flickers) */
+export function fireworkModel() {
+  const g = make(0.3, 0.8, 0.8), b = new B();
+  b.cyl('#c58a52', 0, 0.0, 0, 0.012, 0.55, { n: 4, sh: 0.05 }); b.put(GEO.cyl(8, 1, false), '#ff8fb5', 0, 0.38, 0, 0.065, 0.3, 0.065, { sh: 0.1, facet: true, fn: (lx, ly, lz, t) => (t > 0.4 && t < 0.62 ? '#fff4b0' : t > 0.62 ? '#8fd0ff' : null) });
+  b.cone('#ffd24a', 0, 0.68, 0, 0.07, 0.14, { n: 8, sh: 0.1 });
+  for (let i = 0; i < 3; i++) { const a = i / 3 * PI * 2; b.put(TRI(), '#ff6f9e', Math.cos(a) * 0.075, 0.4, Math.sin(a) * 0.075, 0.07, 0.12, 1, { r: [0, -a + PI / 2, 0], mat: TWO, sh: 0.05 }); }
+  b.cyl('#fff3d6', 0, 0.22, 0, 0.012, 0.06, { n: 3, sh: 0 });
+  b.put(GEO.cyl(8, 1, false), '#e0a96b', 0, 0.0, 0.0, 0.14, 0.04, 0.14, { sh: 0.1 });
+  addParts(g, b);
+  const fl = new THREE.Group(); fl.name = 'flame'; fl.position.y = 0.21; const fb = new B(); fb.sph('#ffd24a', 0, 0.0, 0, 0.04, 0.06, 0.04, { w: 5, h: 4, sh: 0, mat: flameMat }); fb.sph('#fff4b0', 0, 0.04, 0, 0.022, 0.035, 0.022, { w: 4, h: 3, sh: 0, mat: flameMat }); addParts(fl, fb); g.add(fl);
+  return finalize(g);
+}
+const mix = (a, b, t) => '#' + new THREE.Color(a).lerp(new THREE.Color(b), t).getHexString();
+
 export const PROPS = { crate: crateModel, barrel: barrelModel, sack: sackModel, hayBale: hayBaleModel, logPile: logPileModel, plankStack: plankStackModel, stonePile: stonePileModel, brickStack: brickStackModel, cart: cartModel, well: wellModel, bench: benchModel, signpost: signpostModel, scarecrow: scarecrowModel, lampPost: lampPostModel, tent: tentModel, campfire: campfireModel, beehive: beehiveModel, fence: fenceModel, bannerPole: bannerPoleModel, mailbox: mailboxModel, chest: chestModel, coinPile: coinPileModel, scroll: scrollModel, lanternString: lanternStringModel, flowerPot: flowerPotModel,
-  buntingLine: buntingLineModel, kite: kiteModel, windchime: windchimeModel, hammock: hammockModel, picnic: picnicModel, swing: swingModel, flowerCart: flowerCartModel, birdBath: birdBathModel, signBoard: signBoardModel, pumpkinPatch: pumpkinPatchModel, beeSkep: beeSkepModel };
+  buntingLine: buntingLineModel, kite: kiteModel, windchime: windchimeModel, hammock: hammockModel, picnic: picnicModel, swing: swingModel, flowerCart: flowerCartModel, birdBath: birdBathModel, signBoard: signBoardModel, pumpkinPatch: pumpkinPatchModel, beeSkep: beeSkepModel,
+  coinStack: coinStackModel, eggBasket: eggBasketModel, milkChurn: milkChurnModel, fishBucket: fishBucketModel, yarnBasket: yarnBasketModel, appleCrate: appleCrateModel, cheeseWheel: cheeseWheelModel, jamJar: jamJarModel, pie: pieModel, giftBox: giftBoxModel, trophy: trophyModel, firework: fireworkModel };
 
 /** Optional helper: drive the standard animated parts (flag wave, flame flicker, wheel roll, chest lid, lantern glow, bunting flutter, chimes, swing seat, kite, hammock sway, bees, bird bath bird). Zero allocation after first call per object. */
 export function animateProp(g, t, o) {
-  const u = g.userData; if (u._ap === undefined) { u._ap = { flag: g.getObjectByName('flag'), flame: g.getObjectByName('flame'), lid: g.getObjectByName('lid'), bucket: g.getObjectByName('bucket'), lanterns: g.getObjectByName('lanterns'), flags: g.getObjectByName('flags'), chimes: g.getObjectByName('chimes'), seat: g.getObjectByName('seat'), kite: g.getObjectByName('kite'), sway: g.getObjectByName('sway'), bees: g.getObjectByName('bees'), bird: g.getObjectByName('bird') }; }
+  const u = g.userData; if (u._ap === undefined) { u._ap = { flag: g.getObjectByName('flag'), flame: g.getObjectByName('flame'), lid: g.getObjectByName('lid'), bucket: g.getObjectByName('bucket'), lanterns: g.getObjectByName('lanterns'), flags: g.getObjectByName('flags'), chimes: g.getObjectByName('chimes'), seat: g.getObjectByName('seat'), kite: g.getObjectByName('kite'), sway: g.getObjectByName('sway'), bees: g.getObjectByName('bees'), bird: g.getObjectByName('bird'), bow: g.getObjectByName('bow'), star: g.getObjectByName('star'), steam: g.getObjectByName('steam') }; }
   const a = u._ap, ph = u.phase || 0;
   if (a.flag) { a.flag.rotation.y = Math.sin(t * 2.2 + ph) * 0.18; a.flag.rotation.z = Math.sin(t * 3.1 + ph) * 0.04; }
   if (a.flame) { const f = 1 + Math.sin(t * 17 + ph) * 0.08 + Math.sin(t * 29) * 0.06; a.flame.scale.set(1 / Math.sqrt(f), f, 1 / Math.sqrt(f)); a.flame.rotation.y = t * 1.5; }
@@ -564,5 +703,8 @@ export function animateProp(g, t, o) {
   if (a.kite) { a.kite.rotation.z = Math.sin(t * 1.4 + ph) * 0.1; a.kite.rotation.x = Math.sin(t * 1.1 + ph) * 0.06; if (a.ky === undefined) a.ky = a.kite.position.y; a.kite.position.y = a.ky + Math.sin(t * 1.8 + ph) * 0.05; }
   if (a.sway) { a.sway.rotation.x = Math.sin(t * 0.9 + ph) * 0.06; }
   if (a.bees) { a.bees.rotation.y = t * 1.2 + ph; a.bees.position.y = Math.sin(t * 5 + ph) * 0.02; }
+  if (a.bow) { const k = Math.max(0, Math.sin(t * 1.6 + ph)); a.bow.rotation.z = Math.sin(t * 3 + ph) * 0.06 * k; a.bow.scale.set(1 + k * 0.05, 1 - k * 0.06, 1 + k * 0.05); }
+  if (a.star) { if (a.sy0 === undefined) a.sy0 = a.star.position.y; a.star.rotation.y = t * 1.4 + ph; a.star.position.y = a.sy0 + Math.sin(t * 2 + ph) * 0.03; const k = 1 + Math.sin(t * 4 + ph) * 0.05; a.star.scale.set(k, k, k); }
+  if (a.steam) { const c = a.steam.children; for (let i = 0; i < c.length; i++) { const k = (t * 0.35 + i / c.length + ph * 0.1) % 1, m = c[i]; m.position.y = 0.0 + k * 0.45; m.position.x = Math.sin(k * 6 + i) * 0.05; m.scale.setScalar(0.7 + k * 0.9); } }
   if (a.bird) { if (a.by === undefined) a.by = a.bird.position.y; const h = Math.max(0, Math.sin(t * 2.2 + ph)); a.bird.position.y = a.by + h * h * 0.04; a.bird.rotation.y = Math.sin(t * 0.7 + ph) * 0.4; }
 }

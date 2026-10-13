@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hearthvale audio lab</title>
+<style>
+  :root { --bg: #1d2230; --panel: #272e42; --ink: #eef2ff; --dim: #9aa6c4; --acc: #ffb454; --ok: #7bd88f; --bad: #ff7a7a; }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 16px; background: var(--bg); color: var(--ink); font: 14px/1.4 system-ui, sans-serif; }
+  h1 { font-size: 20px; margin: 0 0 4px; } h2 { font-size: 15px; margin: 18px 0 6px; color: var(--acc); text-transform: uppercase; letter-spacing: .06em; }
+  p.s { color: var(--dim); margin: 0 0 10px; }
+  .panel { background: var(--panel); border-radius: 12px; padding: 12px; margin-bottom: 12px; }
+  button { background: #3a4466; color: var(--ink); border: 0; border-radius: 8px; padding: 8px 12px; margin: 3px; font: inherit; cursor: pointer; }
+  button:hover { background: #4a5686; } button.on { background: var(--acc); color: #1d2230; } button.big { background: var(--acc); color: #1d2230; font-weight: 700; padding: 10px 18px; }
+  label { display: inline-flex; align-items: center; gap: 6px; margin: 4px 14px 4px 0; color: var(--dim); } input[type=range] { width: 130px; }
+  #meter { height: 10px; background: #111626; border-radius: 5px; overflow: hidden; margin-top: 8px; } #meter i { display: block; height: 100%; width: 0; background: var(--ok); transition: width .05s; }
+  table { border-collapse: collapse; width: 100%; font-size: 12px; } th, td { padding: 3px 6px; text-align: right; border-bottom: 1px solid #353e5a; } th:first-child, td:first-child, th:nth-child(2), td:nth-child(2) { text-align: left; }
+  .bad { color: var(--bad); font-weight: 700; } .ok { color: var(--ok); } .warn { color: var(--acc); } pre { white-space: pre-wrap; color: var(--dim); }
+  .scroll { overflow-x: auto; }
+</style>
+</head>
+<body>
+<h1>Hearthvale audio lab</h1>
+<p class="s">Dev only. Press Start (browsers need a gesture), then click sounds. The report renders every sound offline through the real engine and measures it.</p>
+
+<div class="panel">
+  <button class="big" id="start">Start audio</button>
+  <label>master <input type="range" id="v-master" min="0" max="1" step="0.01"></label>
+  <label>sfx <input type="range" id="v-sfx" min="0" max="1" step="0.01"></label>
+  <label>music <input type="range" id="v-music" min="0" max="1" step="0.01"></label>
+  <label>ambience <input type="range" id="v-ambience" min="0" max="1" step="0.01"></label>
+  <button id="mute">Mute</button>
+  <div id="meter"><i></i></div>
+</div>
+
+<div class="panel">
+  <h2 style="margin-top:0">Options for sound buttons</h2>
+  <label>pan <input type="range" id="o-pan" min="-1" max="1" step="0.05" value="0"></label>
+  <label>vol <input type="range" id="o-vol" min="0" max="1.5" step="0.05" value="1"></label>
+  <label>pitch <input type="range" id="o-pitch" min="0.5" max="2" step="0.01" value="1"></label>
+  <label>delay <input type="range" id="o-delay" min="0" max="1" step="0.05" value="0"></label>
+</div>
+
+<div id="sounds"></div>
+
+<div class="panel">
+  <h2 style="margin-top:0">Music</h2>
+  <div id="music"></div>
+  <p class="s" id="musicinfo"></p>
+  <h2>Ambience</h2>
+  <label>night <input type="range" class="amb" data-k="night" min="0" max="1" step="0.01" value="0"></label>
+  <label>rain <input type="range" class="amb" data-k="rain" min="0" max="1" step="0.01" value="0"></label>
+  <label>wind <input type="range" class="amb" data-k="wind" min="0" max="1" step="0.01" value="0.25"></label>
+  <label>water <input type="range" class="amb" data-k="water" min="0" max="1" step="0.01" value="0.2"></label>
+</div>
+
+<div class="panel">
+  <h2 style="margin-top:0">Measurement</h2>
+  <button class="big" id="report">Run loudness report</button> <button id="stress">Stress test (200 sounds / second)</button>
+  <p class="s">Loudness is LUFS-M: K-weighted (ITU-R BS.1770) mean power of the loudest 400 ms, with all volumes at 1. Targets are per category. Tail = time from the loudest 10 ms to the last 10 ms above -60 dBFS.</p>
+  <pre id="status"></pre>
+  <div class="scroll" id="cats"></div>
+  <div class="scroll" id="table"></div>
+  <div class="scroll" id="long"></div>
+</div>
+
+<script type="module">
+import { Audio, MUSIC_MODES } from '../js/audio.js';
+import { CATALOGUE, CATEGORIES, TARGETS } from '../js/sfx.js';
+
+const $ = (s) => document.querySelector(s);
+const opt = () => ({ pan: +$('#o-pan').value, vol: +$('#o-vol').value, pitch: +$('#o-pitch').value, delay: +$('#o-delay').value });
+
+// ---- buttons
+const names = Audio.catalogue(), byCat = {};
+for (const n of names) (byCat[n.cat] = byCat[n.cat] || []).push(n.name);
+let html = '';
+for (const c of CATEGORIES) if (byCat[c]) html += `<div class="panel"><h2 style="margin-top:0">${c} (${byCat[c].length}, target ${TARGETS[c]} LUFS-M)</h2>${byCat[c].map((n) => `<button data-s="${n}">${n}</button>`).join('')}</div>`;
+$('#sounds').innerHTML = html;
+$('#sounds').addEventListener('click', (e) => { const b = e.target.closest('button[data-s]'); if (!b) return; Audio.unlock(); Audio.sfx(b.dataset.s, opt()); });
+$('#music').innerHTML = MUSIC_MODES.map((m) => `<button data-m="${m}">${m}</button>`).join('') + '<button data-m="">off</button>';
+$('#music').addEventListener('click', (e) => { const b = e.target.closest('button[data-m]'); if (!b) return; Audio.unlock(); Audio.setMusic(b.dataset.m || null); for (const x of document.querySelectorAll('#music button')) x.classList.toggle('on', x === b); });
+for (const el of document.querySelectorAll('.amb')) el.oninput = () => { Audio.unlock(); Audio.setAmbience({ [el.dataset.k]: +el.value }); };
+$('#start').onclick = () => { Audio.unlock(); $('#start').textContent = Audio.running ? 'Audio running' : 'Starting...'; };
+for (const c of ['master', 'sfx', 'music', 'ambience']) { const el = $('#v-' + c); el.value = Audio.getVolume(c); el.oninput = () => Audio.setVolume(c, +el.value); }
+$('#mute').onclick = () => { Audio.unlock(); $('#mute').classList.toggle('on', Audio.toggleMute()); };
+$('#mute').classList.toggle('on', Audio.isMuted());
+
+// ---- live meter
+const buf = new Float32Array(1024);
+setInterval(() => {
+  const an = Audio.engine && Audio.engine.getAnalyser(); if (!an) return; an.getFloatTimeDomainData(buf);
+  let p = 0; for (let i = 0; i < buf.length; i++) p = Math.max(p, Math.abs(buf[i]));
+  const m = $('#meter i'); m.style.width = Math.min(100, p * 100) + '%'; m.style.background = p > 0.98 ? 'var(--bad)' : p > 0.8 ? 'var(--acc)' : 'var(--ok)';
+  const mi = Audio.engine.musicInfo(); $('#musicinfo').textContent = (mi ? `${mi.mode} | ${mi.bpm} bpm | bar ${mi.bar} | chord degree ${mi.chordDeg} | ` : '') + JSON.stringify(Audio.stats());
+}, 80);
+
+// ---- analysis
+const SR = 44100;
+function biquad(x, b0, b1, b2, a1, a2) { const y = new Float32Array(x.length); let x1 = 0, x2 = 0, y1 = 0, y2 = 0; for (let i = 0; i < x.length; i++) { const v = b0 * x[i] + b1 * x1 + b2 * x2 - a1 * y1 - a2 * y2; y[i] = v; x2 = x1; x1 = x[i]; y2 = y1; y1 = v; } return y; }
+function kWeight(x, fs) {
+  let f0 = 1681.974450955533, G = 3.999843853973347, Q = 0.7071752369554196, K = Math.tan(Math.PI * f0 / fs), Vh = Math.pow(10, G / 20), Vb = Math.pow(Vh, 0.4996667741545416), a0 = 1 + K / Q + K * K;
+  let y = biquad(x, (Vh + Vb * K / Q + K * K) / a0, 2 * (K * K - Vh) / a0, (Vh - Vb * K / Q + K * K) / a0, 2 * (K * K - 1) / a0, (1 - K / Q + K * K) / a0);
+  f0 = 38.13547087602444; Q = 0.5003270373238773; K = Math.tan(Math.PI * f0 / fs); a0 = 1 + K / Q + K * K;
+  return biquad(y, 1, -2, 1, 2 * (K * K - 1) / a0, (1 - K / Q + K * K) / a0);
+}
+const db = (p) => 10 * Math.log10(Math.max(p, 1e-12));
+function analyse(ab, from = 0) {
+  const fs = ab.sampleRate, chs = [ab.getChannelData(0), ab.getChannelData(1)], n = ab.length, hop = Math.round(fs * 0.01), nh = Math.floor((n - from) / hop);
+  let peak = 0, dc = 0, cnt = 0;
+  for (const c of chs) for (let i = from; i < n; i++) { const a = Math.abs(c[i]); if (a > peak) peak = a; dc += c[i]; cnt++; }
+  dc /= cnt;
+  const kw = chs.map((c) => kWeight(c.subarray(from), fs)), pk = new Float64Array(nh), pr = new Float64Array(nh);
+  for (let h = 0; h < nh; h++) { let sk = 0, sr = 0; for (let ch = 0; ch < 2; ch++) for (let i = h * hop; i < (h + 1) * hop; i++) { sk += kw[ch][i] * kw[ch][i]; sr += chs[ch][from + i] * chs[ch][from + i]; } pk[h] = sk / hop; pr[h] = sr / (2 * hop); }
+  // momentary: 400 ms sliding mean of K-weighted power (sum over channels)
+  const W = 40; let run = 0, best = 0, bestAt = 0; for (let h = 0; h < nh; h++) { run += pk[h]; if (h >= W) run -= pk[h - W]; const m = run / W; if (m > best) { best = m; bestAt = h; } }
+  let maxP = 0; for (let h = 0; h < nh; h++) if (pk[h] > maxP) maxP = pk[h];
+  let sum = 0, c2 = 0; for (let h = 0; h < nh; h++) if (pk[h] >= maxP / 100) { sum += pk[h]; c2++; }
+  let pkH = 0, pkP = 0, last = 0, lastN = 0; for (let h = 0; h < nh; h++) { if (pr[h] > pkP) { pkP = pr[h]; pkH = h; } if (pr[h] > 1e-6) last = h; if (pk[h] > 1e-6) lastN = h; }
+  return {
+    peak, peakDb: 20 * Math.log10(Math.max(peak, 1e-9)), rmsDb: db(pkP) , lufsM: -0.691 + db(best), lufsA: -0.691 + db(c2 ? sum / c2 : 0),
+    dc, tail: (last - pkH) * 0.01, end: last * 0.01 + 0.01, secs: nh * 0.01,
+  };
+}
+async function renderSound(name, secs = 8) {
+  const oc = new OfflineAudioContext(2, SR * secs, SR), eng = Audio.createEngine(oc, { seed: 1234, settings: { master: 1, music: 1, sfx: 1, amb: 1, muted: false }, offline: true });
+  const ok = eng.sfx(name, { delay: 0.02 }); const ab = await oc.startRendering(); eng.dispose(); return { ab, ok };
+}
+async function renderMusic(mode, secs = 36) {
+  const oc = new OfflineAudioContext(2, SR * secs, SR), eng = Audio.createEngine(oc, { seed: 99, settings: { master: 1, music: 1, sfx: 1, amb: 1, muted: false }, offline: true });
+  eng.setMusic(mode, { seed: 4242 }); eng.pump(secs); const ab = await oc.startRendering(); eng.dispose(); return ab;
+}
+async function renderAmb(state, secs = 14, oneShots = false) {
+  const oc = new OfflineAudioContext(2, SR * secs, SR), eng = Audio.createEngine(oc, { seed: 5, settings: { master: 1, music: 1, sfx: 1, amb: 1, muted: false }, offline: true });
+  eng.setAmbience(state, { immediate: true }); if (oneShots) eng.pump(secs); const ab = await oc.startRendering(); eng.dispose(); return ab;
+}
+function flag(r, target) {
+  const f = []; if (r.peak > 0.98) f.push('CLIP'); if (Math.abs(r.dc) > 0.002) f.push('DC'); if (r.lufsM < target - 8 || r.peak < 0.02) f.push('QUIET'); if (r.end >= r.secs - 0.1) f.push('CUT');
+  if (r.lufsM > target + 8) f.push('LOUD'); return f;
+}
+const fmt = (v, d = 1) => (Number.isFinite(v) ? v.toFixed(d) : '-');
+
+async function runReport() {
+  const out = { sounds: [], cats: {}, music: [], ambience: [], errors: [] }, st = $('#status');
+  for (const n of names) {
+    st.textContent = 'rendering ' + n.name; let r;
+    try { const { ab, ok } = await renderSound(n.name); r = analyse(ab); r.ok = ok; } catch (e) { out.errors.push(n.name + ': ' + e.message); continue; }
+    r.name = n.name; r.cat = n.cat; r.flags = flag(r, TARGETS[n.cat]); if (!r.ok) r.flags.push('NOTPLAYED'); out.sounds.push(r);
+  }
+  for (const c of CATEGORIES) {
+    const l = out.sounds.filter((s) => s.cat === c); if (!l.length) continue; const v = l.map((s) => s.lufsM);
+    out.cats[c] = { n: l.length, target: TARGETS[c], mean: v.reduce((a, b) => a + b, 0) / v.length, min: Math.min(...v), max: Math.max(...v), spread: Math.max(...v) - Math.min(...v), peakMax: Math.max(...l.map((s) => s.peak)) };
+  }
+  for (const m of MUSIC_MODES) { st.textContent = 'music ' + m; const ab = await renderMusic(m), r = analyse(ab, SR * 6); r.name = m; r.integrated = r.lufsA; out.music.push(r); }
+  for (const [name, state] of [['wind', { wind: 1 }], ['water', { water: 1 }], ['rain', { rain: 1 }], ['insects (day)', {}], ['crickets (night)', { night: 1 }], ['all night+wind+water', { night: 1, wind: 0.5, water: 0.5 }]]) {
+    st.textContent = 'ambience ' + name; const ab = await renderAmb(state), r = analyse(ab, SR * 4); r.name = name; out.ambience.push(r);
+  }
+  window.__report = out; draw(out); st.textContent = 'done: ' + out.sounds.length + ' sounds'; return out;
+}
+function draw(o) {
+  $('#cats').innerHTML = '<table><tr><th>category</th><th>n</th><th>target</th><th>mean</th><th>min</th><th>max</th><th>spread dB</th><th>max peak</th></tr>' +
+    Object.entries(o.cats).map(([c, v]) => `<tr><td>${c}</td><td>${v.n}</td><td>${v.target}</td><td>${fmt(v.mean)}</td><td>${fmt(v.min)}</td><td>${fmt(v.max)}</td><td class="${v.spread > 3 ? 'bad' : 'ok'}">${fmt(v.spread)}</td><td class="${v.peakMax > 0.98 ? 'bad' : 'ok'}">${fmt(v.peakMax, 3)}</td></tr>`).join('') + '</table>';
+  $('#table').innerHTML = '<table><tr><th>sound</th><th>cat</th><th>peak</th><th>peak dBFS</th><th>RMS dBFS (10ms max)</th><th>LUFS-M</th><th>LUFS active</th><th>DC</th><th>tail s</th><th>end s</th><th>flags</th></tr>' +
+    o.sounds.map((s) => `<tr><td>${s.name}</td><td>${s.cat}</td><td>${fmt(s.peak, 3)}</td><td>${fmt(s.peakDb)}</td><td>${fmt(s.rmsDb)}</td><td>${fmt(s.lufsM)}</td><td>${fmt(s.lufsA)}</td><td>${s.dc.toExponential(1)}</td><td>${fmt(s.tail, 2)}</td><td>${fmt(s.end, 2)}</td><td class="${s.flags.length ? 'bad' : 'ok'}">${s.flags.join(' ') || 'ok'}</td></tr>`).join('') + '</table>';
+  $('#long').innerHTML = '<h2>music (36 s offline, after 6 s) and ambience beds (full level)</h2><table><tr><th>name</th><th></th><th>peak</th><th>LUFS-M max</th><th>LUFS active</th><th>DC</th></tr>' +
+    [...o.music, ...o.ambience].map((s) => `<tr><td>${s.name}</td><td></td><td class="${s.peak > 0.98 ? 'bad' : ''}">${fmt(s.peak, 3)}</td><td>${fmt(s.lufsM)}</td><td>${fmt(s.lufsA)}</td><td>${s.dc.toExponential(1)}</td></tr>`).join('') + '</table>';
+}
+$('#report').onclick = () => runReport();
+window.runReport = runReport;
+
+// ---- stress: 200 sounds in a second, then check that nodes are released
+async function stress() {
+  const errs = [], t0 = performance.now(); Audio.unlock(); const eng = Audio.engine; if (!eng) return { error: 'no engine' };
+  const list = names.map((n) => n.name); let started = 0, n = 0;
+  await new Promise((res) => { const iv = setInterval(() => { try { for (let i = 0; i < 10; i++) { if (Audio.sfx(list[(Math.random() * list.length) | 0], { pan: Math.random() * 2 - 1, vol: Math.random() })) started++; n++; } } catch (e) { errs.push(e.message); } if (n >= 200) { clearInterval(iv); res(); } }, 50); });
+  const during = Audio.stats(); await new Promise((r) => setTimeout(r, 9000)); eng.tick(); const after = Audio.stats();
+  const res = { calls: n, started, during, after, errs, ms: Math.round(performance.now() - t0) }; window.__stress = res; $('#status').textContent = JSON.stringify(res, null, 1); return res;
+}
+$('#stress').onclick = stress; window.runStress = stress;
+window.__ready = true;
+</script>
+</body>
+</html>

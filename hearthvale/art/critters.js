@@ -70,6 +70,13 @@ export const CMAT = new THREE.MeshStandardMaterial({ color: '#ffffff', vertexCol
 export function highKey(m, k = 0.36) { m.onBeforeCompile = (sh) => { sh.fragmentShader = sh.fragmentShader.replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n totalEmissiveRadiance += diffuseColor.rgb * ' + k.toFixed(2) + ';'); }; m.customProgramCacheKey = () => 'hv-highkey' + k; return m; }
 highKey(CMAT);
 
+/** geometry detail multiplier while a model is being built (set by lodWrap): 0.7 low, 1 default, 1.7 high */
+let CQ = 1;
+const LODQ = { low: 0.72, mid: 1, default: 1, high: 1.75 };
+/** wrap a model builder so it takes (arg, lod): lod = 'low' | 'mid' (default, <= 520 tris) | 'high' (smoother, for close-ups) */
+function lodWrap(fn, name) { return (a, lod) => { const prev = CQ; CQ = LODQ[lod] ?? 1; try { const g = fn(a); g.userData.lod = lod || 'mid'; return g; } finally { CQ = prev; } }; }
+const cw = (v, min = 3) => (CQ === 1 ? v : Math.max(min, Math.round(v * CQ)));
+
 export class B {
   constructor(ox = 0, oy = 0, oz = 0, defMat = CMAT) { this.o = [ox, oy, oz]; this.defMat = defMat; this.map = new Map(); }
   /** generic: unit geometry g, colour, centre x,y,z, scale sx,sy,sz. o: r=[rx,ry,rz] rotation, sh=AO strength, fn(lx,ly,lz,t,nx,ny,nz)=>colour|null, facet, mat */
@@ -98,11 +105,11 @@ export class B {
     const r = o.r || [0, 0, 0]; _e.set(r[0], r[1], r[2]); _q.setFromEuler(_e); _p.set(x + this.o[0], y + this.o[1], z + this.o[2]); _s.set(sx, sy, sz); _m.compose(_p, _q, _s); geom.applyMatrix4(_m);
     const mat = o.mat || this.defMat; let l = this.map.get(mat); if (!l) { l = []; this.map.set(mat, l); } l.push(geom); return this;
   }
-  sph(col, x, y, z, rx, ry = rx, rz = rx, o = {}) { return this.put(GEO.sph(o.w || 7, o.h || 5), col, x, y, z, rx, ry, rz, o); }
-  dome(col, x, y, z, rx, ry = rx, rz = rx, o = {}) { return this.put(GEO.dome(o.w || 8, o.h || 3), col, x, y, z, rx, ry, rz, o); }
+  sph(col, x, y, z, rx, ry = rx, rz = rx, o = {}) { return this.put(GEO.sph(cw(o.w || 7, 4), cw(o.h || 5, 3)), col, x, y, z, rx, ry, rz, o); }
+  dome(col, x, y, z, rx, ry = rx, rz = rx, o = {}) { return this.put(GEO.dome(cw(o.w || 8, 5), cw(o.h || 3, 2)), col, x, y, z, rx, ry, rz, o); }
   /** cylinder centred at y: radius r (bottom), height h, o.rt = top radius ratio, o.n sides, o.open */
-  cyl(col, x, y, z, r, h, o = {}) { return this.put(GEO.cyl(o.n || 6, o.rt ?? 1, !!o.open, o.hs || 1), col, x, y, z, r, h, o.rz ?? r, o); }
-  cone(col, x, y, z, r, h, o = {}) { return this.put(GEO.cone(o.n || 5), col, x, y, z, r, h, o.rz ?? r, o); }
+  cyl(col, x, y, z, r, h, o = {}) { return this.put(GEO.cyl(cw(o.n || 6, 3), o.rt ?? 1, !!o.open, o.hs || 1), col, x, y, z, r, h, o.rz ?? r, o); }
+  cone(col, x, y, z, r, h, o = {}) { return this.put(GEO.cone(cw(o.n || 5, 3)), col, x, y, z, r, h, o.rz ?? r, o); }
   box(col, x, y, z, w, h, d, o = {}) { return this.put(GEO.box(), col, x, y, z, w, h, d, o); }
   pbox(col, x, y, z, w, h, d, r, o = {}) { return this.put(pboxGeo(w, h, d, r), col, x, y, z, 1, 1, 1, o); }
   ico(col, x, y, z, rx, ry = rx, rz = rx, o = {}) { return this.put(GEO.ico(o.seed || 1, o.d || 0, o.amt ?? 0.14), col, x, y, z, rx, ry, rz, o); }
@@ -153,7 +160,7 @@ export function decal(b, g, col, c, rad, az, el, sx, sy, lift, dx = 0, dy = 0) {
 export const lift = (r, rad) => 0.5 * r * r / Math.min(rad[0], rad[1], rad[2]) + 0.006;
 /** One big glossy dot eye with two highlights (16 tris). */
 export function eyeAt(b, c, rad, az, el, r) {
-  const l = lift(r, rad); decal(b, GEO.disc(9), EYE, c, rad, az, el, r, r * 1.15, l);
+  const l = lift(r, rad); decal(b, GEO.disc(cw(9, 6)), EYE, c, rad, az, el, r, r * 1.15, l);
   decal(b, GEO.disc(6), WHITE, c, rad, az, el, r * 0.36, r * 0.36, l + 0.004, r * 0.3, r * 0.4); decal(b, GEO.disc(4), WHITE, c, rad, az, el, r * 0.17, r * 0.17, l + 0.004, -r * 0.3, -r * 0.42);
 }
 /** The named 'eyes' part (child of the head): a pair of shiny dot eyes, blinks by scale.y. */
@@ -181,13 +188,16 @@ function finish(root, kind, type, seed = 0, air = false) {
   a.by = a.body ? a.body.position.y : 0; a.hz = a.head ? a.head.position.z : 0; a.hy = a.head ? a.head.position.y : 0;
   a.elz = a.earL ? a.earL.rotation.z : 0; a.erz = a.earR ? a.earR.rotation.z : 0; a.wlz = a.wingL ? a.wingL.rotation.z : 0; a.wrz = a.wingR ? a.wingR.rotation.z : 0;
   a.ph = (seed * 2.399) % 6.2832; if (a.shadow) { a.sx = a.shadow.scale.x; a.sy = a.shadow.scale.y; }
+  a.P = GA[kind] ? Object.assign({}, GA[kind]) : null; a.wE = a.wS = a.wH = a.wFo = 0; a.hipY = a.legs.length ? a.legs[0].position.y : 0.2;
+  a.sp = new Float32Array(12); a.spOn = 0; a.pby = a.by; a.pbv = 0;
+  a.spCh = type === 0 ? [0, 1, 2, 3] : type === 1 ? [2, 3] : type === 2 ? [0, 1, 3, 4, 5] : [];
   root.userData.critter = kind; root.userData._a = a; root.userData.phase = a.ph; return root;
 }
 const FLOWERS = ['#ff8fb5', '#ffd84a', '#9fd8ff', '#ffffff', '#c9a8ff'];
 
 /* ------------------------------------------------------------------ SHEEP */
 // variants: 0 white, 1 cream, 2 white + flower crown, 3 lilac, 4 white + pink bow, 5 pink, 6 lilac + crown, 7 sheared lamb, 8 cream + bow
-export function sheepModel(seed = 0) {
+function _sheepModel(seed = 0) {
   const R = rng(seed * 131 + 7), v = ((seed % 9) + 9) % 9;
   const wool = ['#ffffff', '#fff0d0', '#ffffff', '#e7deff', '#fffdf2', '#ffcfe1', '#e2d6ff', '#fff3e6', '#fff0d0'][v];
   const sheared = v === 7, crown = v === 2 || v === 6, bow = v === 4 || v === 8;
@@ -218,7 +228,7 @@ export function sheepModel(seed = 0) {
 
 /* ------------------------------------------------------------------ CHICKEN */
 // variants: 0 snow white, 1 ginger, 2 sunny yellow, 3 lilac (all with candy tail feathers)
-export function chickenModel(seed = 0) {
+function _chickenModel(seed = 0) {
   const v = ((seed % 4) + 4) % 4, C = ['#fffdf6', '#ffb468', '#ffe266', '#dccbff'][v], W = ['#f2ead8', '#f09a48', '#ffcf45', '#bda2fb'][v], comb = ['#ff6b7a', '#ff5a6e', '#ff7a8a', '#ff8fc0'][v];
   const T = [['#7fe0d0', '#ff9ec7', '#ffd84a'], ['#ffe08a', '#ff8a5a', '#fff3c0'], ['#ffb347', '#ff9ec7', '#ffffff'], ['#ff9ec7', '#8fd8ff', '#ffffff']][v];
   const root = new THREE.Group(); shadowOf(root, 0.3, 0.2, 1, 1.1);
@@ -241,7 +251,7 @@ export function chickenModel(seed = 0) {
 
 /* ------------------------------------------------------------------ COW */
 // variants: 0 cream with caramel patches, 1 caramel with cream patches, 2 strawberry (cream with pink patches); all wear a flower garland
-export function cowModel(seed = 0) {
+function _cowModel(seed = 0) {
   const V = [{ c: '#fffaf0', p: '#d29461' }, { c: '#e0a870', p: '#fff0d4' }, { c: '#fff6ea', p: '#ffb3c9' }][((seed % 3) + 3) % 3];
   const root = new THREE.Group(); shadowOf(root, 0.62, 0.2, 0.8, 1.45);
   part(root, 'body', 0, 0, 0, (b) => {
@@ -296,8 +306,7 @@ function canine(seed, pup) {
   body.position.y = pup ? -0.055 : -0.03; // sit lower: short, chunky legs
   return finish(root, pup ? 'puppy' : 'dog', 0, seed);
 }
-export const dogModel = (seed = 0) => canine(seed, false);
-export const puppyModel = (seed = 0) => canine(seed, true);
+const _dogModel = (seed = 0) => canine(seed, false), _puppyModel = (seed = 0) => canine(seed, true);
 
 /* ------------------------------------------------------------------ CAT and KITTEN */
 function feline(seed, kit) {
@@ -325,11 +334,10 @@ function feline(seed, kit) {
   body.position.y = kit ? -0.05 : -0.035;
   return finish(root, kit ? 'kitten' : 'cat', 0, seed);
 }
-export const catModel = (seed = 0) => feline(seed, false);
-export const kittenModel = (seed = 0) => feline(seed, true);
+const _catModel = (seed = 0) => feline(seed, false), _kittenModel = (seed = 0) => feline(seed, true);
 
 /* ------------------------------------------------------------------ DUCK and DUCKLING */
-export function duckModel(seed = 0) {
+function _duckModel(seed = 0) {
   const V = [{ c: '#ffffff', h: '#ffffff', w: '#eeeaff' }, { c: '#ffe45e', h: '#ffe45e', w: '#ffcf3a' }, { c: '#e8c9a0', h: '#3cc59a', w: '#d3a97a' }][((seed % 3) + 3) % 3];
   const root = new THREE.Group(); shadowOf(root, 0.28, 0.2, 1, 1.2);
   part(root, 'body', 0, 0, 0, (b) => { b.sph(V.c, 0, 0.2, -0.02, 0.155, 0.13, 0.2, { w: 8, h: 5 }); });
@@ -345,7 +353,7 @@ export function duckModel(seed = 0) {
   legGroup(root, 0.09, [[0.05, 0], [-0.05, 0]], (b, x) => { b.cyl('#ffa93a', x, 0.05, 0, 0.014, 0.09, { n: 4, open: true }); b.sph('#ffb347', x, 0.012, 0.04, 0.045, 0.012, 0.06, { w: 5, h: 3, sh: 0.05 }); });
   return finish(root, 'duck', 1, seed);
 }
-export function ducklingModel(seed = 0) {
+function _ducklingModel(seed = 0) {
   const V = [{ c: '#ffe55f', w: '#ffd23c' }, { c: '#fff4c4', w: '#ffe79a' }, { c: '#ffd0a4', w: '#ffb683' }, { c: '#c4f0dc', w: '#97e2c2' }][((seed % 4) + 4) % 4];
   const root = new THREE.Group(); shadowOf(root, 0.2, 0.2, 1, 1.1);
   part(root, 'body', 0, 0, 0, (b) => { b.sph(V.c, 0, 0.14, -0.01, 0.12, 0.105, 0.14, { w: 8, h: 5 }); });
@@ -364,7 +372,7 @@ export function ducklingModel(seed = 0) {
 }
 
 /* ------------------------------------------------------------------ BUNNY (pastel) */
-export function bunnyModel(seed = 0) {
+function _bunnyModel(seed = 0) {
   const V = [{ c: '#fbf6ef', i: '#ffbfd0', l: '#ffffff' }, { c: '#e3b384', i: '#ffbcae', l: '#f9e6cc' }, { c: '#d6d0ec', i: '#ffbfd6', l: '#f3f0fb' }, { c: '#ffe6d0', i: '#ffb0b8', l: '#fff7ee' }][((seed % 4) + 4) % 4];
   const root = new THREE.Group(); shadowOf(root, 0.24, 0.2, 1, 1.2);
   part(root, 'body', 0, 0, 0, (b) => b.sph(V.c, 0, 0.19, -0.02, 0.145, 0.15, 0.185, { w: 8, h: 5 }));
@@ -385,7 +393,7 @@ export function bunnyModel(seed = 0) {
 }
 
 /* ------------------------------------------------------------------ BIRD (flying, origin = body centre): bluebird, pink finch, yellow canary */
-export function birdModel(seed = 0) {
+function _birdModel(seed = 0) {
   const vi = ((seed % 3) + 3) % 3, V = [{ c: '#62b8ff', b: '#fff6e0', w: '#3f98f0', t: '#8fd2ff' }, { c: '#ff9bc0', b: '#fff1f6', w: '#ff72a6', t: '#ffc0d8' }, { c: '#ffe04a', b: '#fff8b8', w: '#ffc42a', t: '#fff08a' }][vi];
   const root = new THREE.Group(); const sh = shadowOf(root, 0.14, 0.2, 1, 1); sh.position.y = -0.25;
   part(root, 'body', 0, 0, 0, (b) => { b.sph(V.c, 0, 0, 0, 0.11, 0.1, 0.13, { w: 8, h: 5 }); b.sph(V.b, 0, -0.04, 0.04, 0.08, 0.065, 0.09, { w: 5, h: 4, sh: 0.08 }); });
@@ -405,7 +413,7 @@ export function birdModel(seed = 0) {
 /* ------------------------------------------------------------------ BUTTERFLY */
 const WINGMAT = highKey(new THREE.MeshStandardMaterial({ color: '#ffffff', vertexColors: true, side: THREE.DoubleSide, roughness: 0.85 }), 0.3);
 const BUTTER = ['#ff8fb3', '#ffd24a', '#7fc8ff', '#c59bff', '#7fe3b0', '#ffa86a'];
-export function butterflyModel(color = '#ff8fb3') {
+function _butterflyModel(color = '#ff8fb3') {
   if (typeof color !== 'string') color = BUTTER[(((color | 0) % BUTTER.length) + BUTTER.length) % BUTTER.length];
   const root = new THREE.Group(); const sh = shadowOf(root, 0.1, 0.2, 1, 1); sh.position.y = -0.5;
   const base = new THREE.Color(color), rim = base.clone().lerp(new THREE.Color('#ffffff'), 0.45), dot = base.clone().offsetHSL(0.03, 0.1, -0.12);
@@ -424,7 +432,7 @@ export function butterflyModel(color = '#ff8fb3') {
 
 /* ------------------------------------------------------------------ FISH (origin = body centre, swims toward +z) */
 const FISHES = ['#ff9a5c', '#5ec8ff', '#ff8fb3', '#ffd24a'];
-export function fishModel(color = '#ff9a5c') {
+function _fishModel(color = '#ff9a5c') {
   if (typeof color !== 'string') color = FISHES[(((color | 0) % FISHES.length) + FISHES.length) % FISHES.length];
   const base = new THREE.Color(color), belly = base.clone().lerp(new THREE.Color('#fff4e0'), 0.65), fin = base.clone().lerp(new THREE.Color('#ffffff'), 0.25);
   const root = new THREE.Group(); const sh = shadowOf(root, 0.2, 0.16, 0.6, 1.2); sh.position.y = -0.2;
@@ -443,7 +451,7 @@ export function fishModel(color = '#ff9a5c') {
 /* ------------------------------------------------------------------ CLOUD */
 /** Unlit (so low-poly facets never show as lighting steps): colour gradient only. The game dims it at night with cloudMat.color. */
 export const cloudMat = new THREE.MeshBasicMaterial({ color: '#ffffff', vertexColors: true, toneMapped: false });
-export function cloudModel(seed = 0) {
+function _cloudModel(seed = 0) {
   const R = rng(seed * 53 + 11), n = 3 + ((R() * 2) | 0); const root = new THREE.Group();
   const sh = blobShadow(1, 0.07, 3.6, 1.8); sh.name = 'shadow'; root.add(sh);
   part(root, 'body', 0, 0, 0, (b) => {
@@ -456,7 +464,7 @@ export function cloudModel(seed = 0) {
 }
 
 /* ------------------------------------------------------------------ BEE (chubby and smiling) */
-export function beeModel() {
+function _beeModel() {
   const root = new THREE.Group(); const sh = shadowOf(root, 0.08, 0.2, 1, 1); sh.position.y = -0.4;
   part(root, 'body', 0, 0, 0, (b) => {
     b.sph('#ffe35a', 0, 0, 0, 0.075, 0.07, 0.1, { w: 8, h: 6, facet: true, fn: (x, y, z) => (Math.floor((z + 1) * 2.4) % 2 === 1 ? '#9a6a4a' : null) });
@@ -473,7 +481,7 @@ export function beeModel() {
 
 /* ------------------------------------------------------------------ SNAIL (tiny, shiny shell) */
 // variants: shell colour 0 pink, 1 mint, 2 butter, 3 lilac
-export function snailModel(seed = 0) {
+function _snailModel(seed = 0) {
   const vi = ((seed % 4) + 4) % 4, S = [{ a: '#ffd5e5', b: '#ff8fba', c: '#ff5f9c' }, { a: '#c9f7e3', b: '#6fe0b0', c: '#3cc890' }, { a: '#fff1a8', b: '#ffd24a', c: '#f5a81a' }, { a: '#e8dcff', b: '#b898ff', c: '#8f6ae8' }][vi], skin = '#ffe0bd';
   const root = new THREE.Group(); shadowOf(root, 0.2, 0.2, 0.8, 1.5);
   part(root, 'body', 0, 0, 0, (b) => { b.sph(skin, 0, 0.065, -0.02, 0.1, 0.065, 0.2, { w: 7, h: 4 }); });
@@ -494,7 +502,7 @@ export function snailModel(seed = 0) {
 }
 
 /* ------------------------------------------------------------------ FROGGY on a lily pad */
-export function froggyModel(seed = 0) {
+function _froggyModel(seed = 0) {
   const vi = ((seed % 3) + 3) % 3, G = [{ c: '#8fe86e', b: '#f4ffcf' }, { c: '#6fdcc0', b: '#eafff4' }, { c: '#b8ec6a', b: '#fffbd0' }][vi];
   const root = new THREE.Group(); shadowOf(root, 0.4, 0.18, 1, 1);
   const pad = cached('pad', () => new THREE.CircleGeometry(1, 12, 0.35, PI * 2 - 0.6).rotateX(-PI / 2));
@@ -517,7 +525,136 @@ export function froggyModel(seed = 0) {
   return finish(root, 'froggy', 7, seed);
 }
 
-export const CRITTERS = { sheep: sheepModel, chicken: chickenModel, cow: cowModel, dog: dogModel, cat: catModel, duck: duckModel, bunny: bunnyModel, bird: birdModel, butterfly: butterflyModel, fish: fishModel, cloud: cloudModel, bee: beeModel, puppy: puppyModel, kitten: kittenModel, snail: snailModel, froggy: froggyModel, duckling: ducklingModel };
+export const sheepModel = lodWrap(_sheepModel);
+export const chickenModel = lodWrap(_chickenModel);
+export const cowModel = lodWrap(_cowModel);
+export const duckModel = lodWrap(_duckModel);
+export const ducklingModel = lodWrap(_ducklingModel);
+export const bunnyModel = lodWrap(_bunnyModel);
+export const birdModel = lodWrap(_birdModel);
+export const butterflyModel = lodWrap(_butterflyModel);
+export const fishModel = lodWrap(_fishModel);
+export const cloudModel = lodWrap(_cloudModel);
+export const beeModel = lodWrap(_beeModel);
+export const snailModel = lodWrap(_snailModel);
+export const froggyModel = lodWrap(_froggyModel);
+export const dogModel = lodWrap(_dogModel);
+export const puppyModel = lodWrap(_puppyModel);
+export const catModel = lodWrap(_catModel);
+export const kittenModel = lodWrap(_kittenModel);
+
+
+/* ------------------------------------------------------------------ ROUND 3 newcomers: LAMB, CALF, GOAT KID, PIGLET, PONY */
+// lamb variants: 0 white, 1 cream, 2 blush pink, 3 lilac. A tiny fluffy sheep with a huge head and floppy ears.
+function _lambModel(seed = 0) {
+  const R = rng(seed * 71 + 5), v = ((seed % 4) + 4) % 4, wool = ['#ffffff', '#fff0d0', '#ffe2ee', '#ece4ff'][v], fc = ['#ffd9c4', '#f6cfa8', '#ffd2d6', '#f2d4ea'][v], leg = mix(fc, '#e39c88', 0.4);
+  const root = new THREE.Group(); shadowOf(root, 0.34, 0.2, 0.9, 1.25);
+  part(root, 'body', 0, 0, 0, (b) => {
+    b.sph(wool, 0, 0.29, -0.01, 0.2, 0.18, 0.24, { w: 7, h: 5 });
+    for (const [x, y, z, r] of [[-0.12, 0.35, 0.07, 0.14], [0.12, 0.35, 0.07, 0.14], [0, 0.42, -0.08, 0.15], [-0.1, 0.3, -0.2, 0.12], [0.1, 0.3, -0.2, 0.12]].slice(0, v === 2 ? 4 : 5)) b.sph(wool, x * (0.95 + R() * 0.1), y, z, r, r * 0.92, r, { w: 5, h: 4 });
+  });
+  const body = root.getObjectByName('body'), hc = [0, 0.42, 0.26], hr = [0.18, 0.165, 0.16];
+  const head = part(body, 'head', 0, 0.34, 0.19, (b) => {
+    b.sph(fc, hc[0], hc[1], hc[2], hr[0], hr[1], hr[2], { w: 8, h: 5 }); b.sph(wool, 0, 0.55, 0.25, 0.12, 0.08, 0.1, { w: 6, h: 4 }); b.sph('#ff9db0', 0, 0.39, 0.415, 0.032, 0.024, 0.02, { w: 4, h: 3, sh: 0 });
+    face(b, hc, hr, { r: 0.058, az: 0.5, el: 0.1, sel: -0.5, sw: 0.05, bc: '#ffa0b8' });
+    if (v === 2) for (let i = 0; i < 3; i++) { const a = (i / 3) * PI * 2 + 0.9; b.sph(FLOWERS[i + 1], Math.cos(a) * 0.08, 0.575, 0.25 + Math.sin(a) * 0.07, 0.04, 0.034, 0.04, { w: 4, h: 3, sh: 0.05 }); }
+  });
+  eyes(head, hc, hr, 0.5, 0.1, 0.058);
+  part(head, 'earL', 0.13, 0.5, 0.26, (b) => b.sph('#ffb9bf', 0.22, 0.45, 0.26, 0.08, 0.03, 0.05, { w: 5, h: 3, r: [0, 0, -0.45] }));
+  part(head, 'earR', -0.13, 0.5, 0.26, (b) => b.sph('#ffb9bf', -0.22, 0.45, 0.26, 0.08, 0.03, 0.05, { w: 5, h: 3, r: [0, 0, 0.45] }));
+  part(body, 'tail', 0, 0.36, -0.23, (b) => b.sph(wool, 0, 0.36, -0.28, 0.07, 0.07, 0.07, { w: 5, h: 3 }));
+  legGroup(root, 0.17, [[0.1, 0.12], [-0.1, 0.12], [0.1, -0.15], [-0.1, -0.15]], (b, x, z) => b.cyl(leg, x, 0.085, z, 0.05, 0.17, { n: 4, rt: 0.85, open: true }));
+  return finish(root, 'lamb', 0, seed);
+}
+// calf variants: 0 cream + caramel patches, 1 caramel + cream, 2 strawberry. Round little cow with a big head, tiny horn nubs and a flower.
+function _calfModel(seed = 0) {
+  const V = [{ c: '#fffaf0', p: '#d29461' }, { c: '#e0a870', p: '#fff0d4' }, { c: '#fff6ea', p: '#ffb3c9' }][((seed % 3) + 3) % 3];
+  const root = new THREE.Group(); shadowOf(root, 0.42, 0.2, 0.8, 1.35);
+  part(root, 'body', 0, 0, 0, (b) => {
+    b.sph(V.c, 0, 0.36, 0, 0.25, 0.23, 0.35, { w: 8, h: 5 }); b.sph(V.p, 0.1, 0.52, -0.08, 0.14, 0.09, 0.14, { w: 5, h: 3 }); b.sph(V.p, -0.18, 0.4, 0.1, 0.09, 0.12, 0.13, { w: 5, h: 3 });
+  });
+  const body = root.getObjectByName('body'), hc = [0, 0.5, 0.45], hr = [0.2, 0.18, 0.17], sc = [0, 0.43, 0.61], sr = [0.115, 0.08, 0.08];
+  const head = part(body, 'head', 0, 0.44, 0.33, (b) => {
+    b.sph(V.c, hc[0], hc[1], hc[2], hr[0], hr[1], hr[2], { w: 8, h: 5 }); b.sph('#ffc4bb', sc[0], sc[1], sc[2], sr[0], sr[1], sr[2], { w: 6, h: 3 });
+    for (const s of [1, -1]) decal(b, GEO.disc(4), '#e58a92', sc, sr, s * 0.4, 0.3, 0.015, 0.018, 0.01);
+    face(b, hc, hr, { r: 0.058, az: 0.62, el: 0.15, baz: 0.45, bel: 0.34, sc, sr, sel: -0.38, sw: 0.045 });
+    b.cone('#fff0cf', 0.1, 0.66, 0.45, 0.032, 0.08, { n: 4, r: [0, 0, -0.5] }); b.cone('#fff0cf', -0.1, 0.66, 0.45, 0.032, 0.08, { n: 4, r: [0, 0, 0.5] }); b.sph(V.p, 0, 0.68, 0.48, 0.07, 0.04, 0.06, { w: 5, h: 3 });
+    b.sph('#ff8fb5', 0.13, 0.665, 0.42, 0.045, 0.04, 0.045, { w: 4, h: 3, sh: 0.05 });
+  });
+  eyes(head, hc, hr, 0.62, 0.15, 0.058);
+  part(head, 'earL', 0.15, 0.58, 0.45, (b) => b.sph(V.c, 0.26, 0.57, 0.45, 0.1, 0.04, 0.065, { w: 5, h: 3, r: [0, 0, -0.3] }));
+  part(head, 'earR', -0.15, 0.58, 0.45, (b) => b.sph(V.c, -0.26, 0.57, 0.45, 0.1, 0.04, 0.065, { w: 5, h: 3, r: [0, 0, 0.3] }));
+  part(body, 'tail', 0, 0.55, -0.34, (b) => { b.cyl(V.c, 0, 0.44, -0.39, 0.018, 0.22, { n: 4, open: true }); b.sph(V.p, 0, 0.31, -0.39, 0.045, 0.06, 0.045, { w: 5, h: 3 }); });
+  legGroup(root, 0.22, [[0.14, 0.24], [-0.14, 0.24], [0.14, -0.22], [-0.14, -0.22]], (b, x, z) => b.cyl(V.c, x, 0.11, z, 0.08, 0.22, { n: 5, rt: 0.85, open: true, fn: (lx, ly, lz, t) => (t < 0.2 ? '#f6c9a6' : null) }));
+  body.position.y = -0.03;
+  return finish(root, 'calf', 0, seed);
+}
+// goat kid variants: 0 white, 1 caramel, 2 lilac-grey. Little horns, a beard, side-flap ears and neat hooves.
+function _goatModel(seed = 0) {
+  const vi = ((seed % 3) + 3) % 3, V = [{ c: '#fffaf2', l: '#ffffff', d: '#ffd8c8' }, { c: '#e7b07a', l: '#fff0d4', d: '#c98a58' }, { c: '#cbc8e6', l: '#f4f2ff', d: '#a8a4d0' }][vi];
+  const root = new THREE.Group(); shadowOf(root, 0.3, 0.2, 0.8, 1.5);
+  part(root, 'body', 0, 0, 0, (b) => { b.sph(V.c, 0, 0.34, 0, 0.16, 0.16, 0.25, { w: 8, h: 5 }); if (vi === 1) b.sph(V.l, 0, 0.26, 0.05, 0.12, 0.08, 0.16, { w: 5, h: 3, sh: 0.05 }); });
+  const body = root.getObjectByName('body'), hc = [0, 0.52, 0.3], hr = [0.14, 0.13, 0.14], mc = [0, 0.47, 0.41], mr = [0.075, 0.06, 0.07];
+  const head = part(body, 'head', 0, 0.42, 0.2, (b) => {
+    b.sph(V.c, hc[0], hc[1], hc[2], hr[0], hr[1], hr[2], { w: 7, h: 5 }); b.sph(V.l, mc[0], mc[1], mc[2], mr[0], mr[1], mr[2], { w: 6, h: 4 });
+    b.sph('#ff9db0', 0, 0.485, 0.475, 0.026, 0.018, 0.02, { w: 4, h: 3, sh: 0 });
+    b.cone(V.d, 0, 0.36, 0.42, 0.03, 0.09, { n: 4, r: [PI, 0, 0], sh: 0.05 }); // beard
+    b.cone('#fff4dc', 0.06, 0.66, 0.29, 0.025, 0.1, { n: 4, r: [-0.3, 0, -0.3] }); b.cone('#fff4dc', -0.06, 0.66, 0.29, 0.025, 0.1, { n: 4, r: [-0.3, 0, 0.3] });
+    face(b, hc, hr, { r: 0.05, az: 0.58, el: 0.16, baz: 0.4, bel: 0.2, sc: mc, sr: mr, sel: -0.32, sw: 0.04 });
+  });
+  eyes(head, hc, hr, 0.58, 0.16, 0.05);
+  part(head, 'earL', 0.12, 0.55, 0.3, (b) => b.sph(V.d, 0.22, 0.54, 0.3, 0.085, 0.025, 0.045, { w: 5, h: 3, r: [0, 0, -0.1] }));
+  part(head, 'earR', -0.12, 0.55, 0.3, (b) => b.sph(V.d, -0.22, 0.54, 0.3, 0.085, 0.025, 0.045, { w: 5, h: 3, r: [0, 0, 0.1] }));
+  part(body, 'tail', 0, 0.42, -0.24, (b) => b.cone(V.c, 0, 0.47, -0.28, 0.035, 0.1, { n: 4, r: [-0.7, 0, 0] }));
+  legGroup(root, 0.2, [[0.08, 0.15], [-0.08, 0.15], [0.08, -0.15], [-0.08, -0.15]], (b, x, z) => b.cyl(V.c, x, 0.1, z, 0.04, 0.2, { n: 5, rt: 0.8, open: true, fn: (lx, ly, lz, t) => (t < 0.18 ? '#c9a8a0' : null) }));
+  body.position.y = -0.02;
+  return finish(root, 'goat', 0, seed);
+}
+// piglet variants: 0 pink, 1 peach, 2 lavender-pink. Round, pink, a big snout, floppy ears and a curly tail.
+function _pigletModel(seed = 0) {
+  const vi = ((seed % 3) + 3) % 3, V = [{ c: '#ffb8cc', s: '#ff97b4', d: '#ff8aa8' }, { c: '#ffc9a8', s: '#ffab88', d: '#ff9a78' }, { c: '#ecc0ee', s: '#d99ed8', d: '#cf8ccc' }][vi];
+  const root = new THREE.Group(); shadowOf(root, 0.32, 0.2, 0.95, 1.2);
+  part(root, 'body', 0, 0, 0, (b) => { b.sph(V.c, 0, 0.27, -0.01, 0.2, 0.19, 0.25, { w: 8, h: 5 }); });
+  const body = root.getObjectByName('body'), hc = [0, 0.34, 0.24], hr = [0.18, 0.16, 0.15], sc = [0, 0.31, 0.375], sr = [0.085, 0.07, 0.045];
+  const head = part(body, 'head', 0, 0.3, 0.16, (b) => {
+    b.sph(V.c, hc[0], hc[1], hc[2], hr[0], hr[1], hr[2], { w: 8, h: 5 }); b.sph(V.s, sc[0], sc[1], sc[2], sr[0], sr[1], sr[2], { w: 7, h: 4, sh: 0.1 });
+    for (const s of [1, -1]) decal(b, GEO.disc(5), '#a8506a', sc, sr, s * 0.35, 0.05, 0.017, 0.024, 0.006);
+    face(b, hc, hr, { r: 0.055, az: 0.62, el: 0.2, baz: 0.4, bel: 0.2, sc: [0, 0.3, 0.35], sr: [0.12, 0.08, 0.1], sel: -0.55, sw: 0.04, bc: '#ff7fa0' });
+  });
+  eyes(head, hc, hr, 0.62, 0.2, 0.055);
+  part(head, 'earL', 0.1, 0.45, 0.24, (b) => b.cone(V.d, 0.15, 0.47, 0.25, 0.065, 0.11, { n: 4, r: [0.7, 0, -0.5] }));
+  part(head, 'earR', -0.1, 0.45, 0.24, (b) => b.cone(V.d, -0.15, 0.47, 0.25, 0.065, 0.11, { n: 4, r: [0.7, 0, 0.5] }));
+  part(body, 'tail', 0, 0.33, -0.26, (b) => { for (let i = 0; i < 4; i++) { const a = i * 1.5; b.sph(V.s, Math.cos(a) * 0.028, 0.33 + i * 0.026 + Math.sin(a) * 0.03, -0.29 - Math.sin(a) * 0.03 - i * 0.012, 0.024, 0.024, 0.024, { w: 4, h: 3, sh: 0.05 }); } });
+  legGroup(root, 0.14, [[0.1, 0.13], [-0.1, 0.13], [0.1, -0.15], [-0.1, -0.15]], (b, x, z) => b.cyl(V.c, x, 0.07, z, 0.055, 0.14, { n: 5, rt: 0.9, open: true, fn: (lx, ly, lz, t) => (t < 0.2 ? V.d : null) }));
+  body.position.y = -0.02;
+  return finish(root, 'piglet', 0, seed);
+}
+// pony variants: 0 cream + pink mane, 1 caramel + white mane, 2 lilac + mint mane. Long legs, a candy mane and a ribbon, kind round eyes.
+function _horseModel(seed = 0) {
+  const vi = ((seed % 3) + 3) % 3, V = [{ c: '#fff0dc', m: '#ff9ec4', m2: '#ffc4dc' }, { c: '#e2a870', m: '#fff6e8', m2: '#ffffff' }, { c: '#d9ccf8', m: '#8fe6c4', m2: '#c4f4e2' }][vi];
+  const root = new THREE.Group(); shadowOf(root, 0.5, 0.2, 0.7, 1.7);
+  part(root, 'body', 0, 0, 0, (b) => { b.sph(V.c, 0, 0.5, 0, 0.2, 0.2, 0.36, { w: 8, h: 5 }); b.sph(V.c, 0, 0.67, 0.27, 0.13, 0.19, 0.13, { w: 6, h: 4, r: [0.5, 0, 0] }); });
+  const body = root.getObjectByName('body'), hc = [0, 0.84, 0.41], hr = [0.115, 0.14, 0.15], mc = [0, 0.78, 0.53], mr = [0.075, 0.075, 0.075];
+  const head = part(body, 'head', 0, 0.68, 0.27, (b) => {
+    b.sph(V.c, hc[0], hc[1], hc[2], hr[0], hr[1], hr[2], { w: 8, h: 5, r: [0.15, 0, 0] }); b.sph(mix(V.c, '#ffd0c4', 0.5), mc[0], mc[1], mc[2], mr[0], mr[1], mr[2], { w: 6, h: 4 });
+    for (const s of [1, -1]) decal(b, GEO.disc(4), '#c4707c', mc, mr, s * 0.45, 0.05, 0.013, 0.017, 0.006);
+    face(b, hc, hr, { r: 0.05, az: 0.72, el: 0.1, baz: 0.4, bel: 0.3, sc: mc, sr: mr, sel: -0.4, sw: 0.04 });
+    for (let i = 0; i < 3; i++) b.sph(i % 2 ? V.m2 : V.m, 0, 0.96 - i * 0.03, 0.31 - i * 0.08, 0.055, 0.065, 0.075, { w: 5, h: 3, sh: 0.05 }); // forelock and mane along the neck
+    b.sph(V.m, 0, 0.98, 0.45, 0.06, 0.05, 0.06, { w: 5, h: 3, sh: 0.05 });
+    b.sph('#ff8fb5', 0.1, 0.96, 0.38, 0.04, 0.036, 0.04, { w: 4, h: 3, sh: 0.05 });
+  });
+  eyes(head, hc, hr, 0.72, 0.1, 0.05);
+  part(head, 'earL', 0.07, 0.96, 0.36, (b) => b.cone(V.c, 0.075, 1.0, 0.36, 0.035, 0.1, { n: 4, r: [0, 0, -0.15] }));
+  part(head, 'earR', -0.07, 0.96, 0.36, (b) => b.cone(V.c, -0.075, 1.0, 0.36, 0.035, 0.1, { n: 4, r: [0, 0, 0.15] }));
+  part(body, 'tail', 0, 0.6, -0.34, (b) => { for (let i = 0; i < 3; i++) b.sph(i % 2 ? V.m2 : V.m, 0, 0.56 - i * 0.1, -0.4 - i * 0.03, 0.065 - i * 0.008, 0.08, 0.065 - i * 0.008, { w: 5, h: 3, sh: 0.05 }); });
+  legGroup(root, 0.34, [[0.12, 0.25], [-0.12, 0.25], [0.12, -0.25], [-0.12, -0.25]], (b, x, z) => b.cyl(V.c, x, 0.17, z, 0.05, 0.34, { n: 5, rt: 0.85, open: true, fn: (lx, ly, lz, t) => (t < 0.16 ? '#ffe2ea' : null) }));
+  body.position.y = -0.0;
+  return finish(root, 'horse', 0, seed);
+}
+
+export const lambModel = lodWrap(_lambModel), calfModel = lodWrap(_calfModel), goatModel = lodWrap(_goatModel), pigletModel = lodWrap(_pigletModel), horseModel = lodWrap(_horseModel);
+
+export const CRITTERS = { sheep: sheepModel, chicken: chickenModel, cow: cowModel, dog: dogModel, cat: catModel, duck: duckModel, bunny: bunnyModel, bird: birdModel, butterfly: butterflyModel, fish: fishModel, cloud: cloudModel, bee: beeModel, puppy: puppyModel, kitten: kittenModel, snail: snailModel, froggy: froggyModel, duckling: ducklingModel, lamb: lambModel, calf: calfModel, goat: goatModel, piglet: pigletModel, horse: horseModel };
 
 /* ------------------------------------------------------------------ ANIMATION (no allocation per call) */
 // f stride speed, bob, leg swing, sway, pitch, tf/ta tail wag freq/amp, er ear flop; hop = happy-hop height, hr = hops per second, hd = share of the cycle spent hopping, hs = squash amount
@@ -533,6 +670,11 @@ const GA = {
   duckling: { f: 9, bob: 0.025, leg: 0.9, sway: 0.2, nod: 0.015, hop: 0.09, hr: 0.35, hd: 0.09 },
   bunny: { f: 5.4, hop: 0.12, hr: 0.28, hd: 0.1 },
   froggy: { f: 3.2, hop: 0.1, hr: 0.22, hd: 0.14 },
+  lamb: { f: 8, bob: 0.04, leg: 0.7, sway: 0.06, pitch: 0.04, tf: 8, ta: 0.4, er: 0.2, hop: 0.09, hr: 0.3, hd: 0.1 },
+  calf: { f: 5.5, bob: 0.03, leg: 0.5, sway: 0.05, pitch: 0.035, tf: 3, ta: 0.5, er: 0.15, hop: 0.06, hr: 0.2, hd: 0.12 },
+  goat: { f: 7, bob: 0.04, leg: 0.7, sway: 0.05, pitch: 0.05, tf: 6, ta: 0.5, er: 0.15, hop: 0.1, hr: 0.3, hd: 0.1 },
+  piglet: { f: 10, bob: 0.04, leg: 0.9, sway: 0.08, pitch: 0.05, tf: 10, ta: 0.3, er: 0.22, hop: 0.1, hr: 0.3, hd: 0.09 },
+  horse: { f: 6.5, bob: 0.03, leg: 0.55, sway: 0.03, pitch: 0.04, tf: 3.2, ta: 0.3, er: 0.12, hop: 0.05, hr: 0.12, hd: 0.16 },
   snail: {},
   bird: { fidle: 3, ffly: 15, amp: 0.8 }, bee: { fidle: 30, ffly: 44, amp: 0.55 }, butterfly: { fidle: 3.5, ffly: 11, amp: 0.8 },
 };
@@ -618,32 +760,73 @@ const frogA = (a, t, sp, ph, P) => {
   const L = a.legs; L[0].rotation.x = L[1].rotation.x = W * (hop * 0.6 - cr * 0.2) + hy * 0.6; L[2].rotation.x = L[3].rotation.x = W * (-hop * 0.9 + cr * 0.4) - hy * 0.8;
 };
 
+// ---- secondary motion: damped springs follow the ear and tail targets that the animation writes, and are kicked by the body's vertical acceleration.
+// channels: 0 earL.z, 1 earR.z, 2 tail.y, 3 tail.x, 4 earL.x, 5 earR.x. No allocation.
+const SPK = [130, 130, 190, 150, 120, 120], SPC = [6.5, 6.5, 9, 8, 6, 6], SPKICK = [-1, 1, 0.4, -0.6, -0.5, -0.5];
+function chObj(a, c) { return c === 0 || c === 4 ? a.earL : c === 1 || c === 5 ? a.earR : a.tail; }
+function chGet(o, c) { const r = o.rotation; return c === 0 || c === 1 ? r.z : c === 2 ? r.y : r.x; }
+function chSet(o, c, v) { const r = o.rotation; if (c === 0 || c === 1) r.z = v; else if (c === 2) r.y = v; else r.x = v; }
+function springs(a, dt) {
+  const L = a.spCh, S = a.sp; if (!L.length || !a.body) return;
+  const by = a.body.position.y, bv = (by - a.pby) / dt, ba = (bv - a.pbv) / dt; a.pby = by; a.pbv = bv;
+  const kick = Math.max(-40, Math.min(40, ba)) * 0.05 * (a.spOn ? 1 : 0);
+  for (let i = 0; i < L.length; i++) {
+    const c = L[i], o = chObj(a, c); if (!o) continue; const tgt = chGet(o, c);
+    if (!a.spOn) { S[c * 2] = tgt; S[c * 2 + 1] = 0; continue; }
+    let x = S[c * 2], v = S[c * 2 + 1];
+    const n = dt > 0.03 ? 3 : 1, h = dt / n; for (let k = 0; k < n; k++) { v += (SPK[c] * (tgt - x) - SPC[c] * v + kick * SPKICK[c] * 20) * h; x += v * h; }
+    if (x > tgt + 1.2) x = tgt + 1.2; else if (x < tgt - 1.2) x = tgt - 1.2; S[c * 2] = x; S[c * 2 + 1] = v; chSet(o, c, x);
+  }
+  a.spOn = 1;
+}
+
 /**
- * Drive a critter. anim = 'idle' | 'walk' | 'graze' | 'fly' (fly = swim/hover/flap/hop-flutter for animals that can).
+ * Drive a critter. anim = 'idle' | 'walk' | 'graze' | 'fly' | 'eat' | 'sleep' | 'happy' | 'follow'
+ *   fly = swim/hover/flap/hop-flutter for animals that can. eat = head down and chewing (faster than graze). sleep = lie down, legs tucked, head drooped, eyes shut, slow breathing.
+ *   happy = repeated big squash-and-stretch jumps with ears up, tail wagging and happy closed eyes. follow = eager trot, head up, ears perked, tail wagging.
  * t = seconds (monotonic), speed = playback speed multiplier (1 = normal), state = optional phase offset (number) or {phase}.
  * Poses blend with eased weights, so switching anim never snaps. Call every frame. Zero allocation.
- * Idle is lively: breathing squash, happy hops with squash and stretch every few seconds, head tilts, ear wiggles, tail wags, blinks.
+ * Idle is lively: breathing squash, happy hops with squash and stretch every few seconds, head tilts, ear wiggles, tail wags, blinks. Ears and tail have spring physics (overshoot, follow-through).
  */
 export function animateCritter(g, anim, t, speed = 1, state) {
   const a = g.userData._a; if (!a) return;
-  const tw = anim === 'walk' ? 1 : 0, tg = anim === 'graze' ? 1 : 0, tf = anim === 'fly' ? 1 : 0;
-  if (a.lt < 0) { a.wW = tw; a.wG = tg; a.wF = tf; a.lt = t; }
-  let dt = t - a.lt; if (dt < 0 || dt > 0.3) dt = 0.016; a.lt = t; const k = 1 - Math.exp(-dt * 9);
-  a.wW += (tw - a.wW) * k; a.wG += (tg - a.wG) * k; a.wF += (tf - a.wF) * k;
-  const ph = (typeof state === 'number' ? state : state && state.phase) || a.ph, sp = speed || 1, K = a.kind;
+  const fol = anim === 'follow', tw = anim === 'walk' || fol ? 1 : 0, te = anim === 'eat' ? 1 : 0, tg = anim === 'graze' || te ? 1 : 0, tf = anim === 'fly' ? 1 : 0, ts = anim === 'sleep' ? 1 : 0, th = anim === 'happy' ? 1 : 0;
+  if (a.lt < 0) { a.wW = tw; a.wG = tg; a.wF = tf; a.wE = te; a.wS = ts; a.wH = th; a.wFo = fol ? 1 : 0; a.lt = t; }
+  let dt = t - a.lt; if (dt < 0 || dt > 0.3) dt = 0.016; a.lt = t; const k = 1 - Math.exp(-dt * 9), k2 = 1 - Math.exp(-dt * 5);
+  a.wW += (tw - a.wW) * k; a.wG += (tg - a.wG) * k; a.wF += (tf - a.wF) * k; a.wE += (te - a.wE) * k; a.wS += (ts - a.wS) * k2; a.wH += (th - a.wH) * k; a.wFo += ((fol ? 1 : 0) - a.wFo) * k;
+  const ph = (typeof state === 'number' ? state : state && state.phase) || a.ph, sp = speed || 1, K = a.kind, P = a.P, P0 = GA[K], wS = a.wS < 0.002 ? 0 : a.wS, wH = a.wH < 0.002 ? 0 : a.wH, wE = a.wE, wFo = a.wFo;
+  if (P && P0 && P0.hr !== undefined) { P.hr = P0.hr + (2.1 - P0.hr) * wH; P.hd = P0.hd + (0.62 - P0.hd) * wH; P.hop = P0.hop * (1 + 1.5 * wH); }
+  HY = 0;
+  // sleep and the bounce of 'happy' override the other weights
+  if (wS > 0) { a.wW *= 1 - wS; a.wG *= 1 - wS; }
   switch (a.type) {
-    case 0: quad(a, t, sp, ph, GA[K]); break;
-    case 1: biped(a, t, sp, ph, GA[K]); break;
-    case 2: hopper(a, t, sp, ph, GA[K]); break;
-    case 3: flyer(a, t, sp, ph, GA[K], K !== 'bird'); break;
+    case 0: quad(a, t, sp, ph, P); break;
+    case 1: biped(a, t, sp, ph, P); break;
+    case 2: hopper(a, t, sp, ph, P); break;
+    case 3: flyer(a, t, sp, ph, P, K !== 'bird'); break;
     case 4: swim(a, t, sp, ph); break;
     case 5: { const s = 1 + Math.sin(t * 0.7 * sp + ph) * 0.025; a.body.scale.set(s, 1 + Math.sin(t * 0.9 * sp + ph * 2) * 0.04, s); a.body.position.y = a.by + Math.sin(t * 0.4 * sp + ph) * 0.06; break; }
     case 6: snailA(a, t, sp, ph); break;
-    case 7: frogA(a, t, sp, ph, GA[K]); break;
+    case 7: frogA(a, t, sp, ph, P); break;
   }
-  if (a.eyes) { // blink every ~4 s (some critters double-blink); content closed eyes while grazing
+  const hopHY = HY;
+  if (a.type <= 2 || a.type === 7) {
+    const h = a.head, tl = a.tail;
+    if (wE > 0.01 && h) { h.rotation.x += wE * Math.sin(t * 13 * sp + ph) * 0.07; h.rotation.y += wE * Math.sin(t * 6.5 * sp + ph) * 0.06; if (tl && a.type !== 7) tl.rotation.y += Math.sin(t * 9 * sp + ph) * 0.22 * wE; }
+    if (wH > 0.01) { if (a.earL) { a.earL.rotation.z += wH * 0.28; a.earR.rotation.z -= wH * 0.28; } if (tl && a.type !== 7) tl.rotation.y += Math.sin(t * 22 + ph) * 0.55 * wH; if (h) h.rotation.x -= wH * 0.12; }
+    if (wFo > 0.01) { if (h) h.rotation.x -= wFo * 0.14; if (a.earL) { a.earL.rotation.z -= wFo * 0.1; a.earR.rotation.z += wFo * 0.1; } if (tl && a.type !== 7) tl.rotation.y += Math.sin(t * 16 + ph) * 0.35 * wFo; a.body.position.y += wFo * Math.abs(Math.sin(t * sp * (P ? P.f : 6) + ph)) * 0.012; }
+    if (wS > 0) { // lie down: legs tuck (the leg group scales toward the ground), body drops, head droops and tilts, slow deep breathing
+      const bd = a.hipY * 0.72 * wS; a.body.position.y -= bd; if (a.legG) a.legG.scale.y = 1 - 0.78 * wS;
+      a.body.scale.y *= 1 + Math.sin(t * 1.3 + ph) * 0.03 * wS; a.body.rotation.z += 0.05 * wS; a.body.rotation.x *= 1 - wS * 0.8;
+      if (h) { h.rotation.x += 0.55 * wS; h.rotation.z += 0.3 * wS; h.rotation.y *= 1 - wS; }
+      if (a.earL) { a.earL.rotation.z -= 0.25 * wS; a.earR.rotation.z += 0.25 * wS; }
+      if (tl && a.type !== 7) tl.rotation.y *= 1 - wS * 0.9;
+    } else if (a.legG && a.legG.scale.y !== 1) a.legG.scale.y = 1;
+  }
+  springs(a, dt);
+  if (a.eyes) { // blink every ~4 s (some critters double-blink); content closed eyes while grazing, shut when asleep, happy ^^ at the top of a jump
     const bt = (t * sp + ph * 1.3) % 4.1; let s = 1; if (bt < 0.16) s = 1 - 0.93 * Math.sin((bt / 0.16) * PI); else if (bt > 0.34 && bt < 0.48 && ((ph * 7) | 0) % 2 === 0) s = 1 - 0.93 * Math.sin(((bt - 0.34) / 0.14) * PI);
-    s = Math.min(s, 1 - 0.78 * a.wG); a.eyes.scale.y = s < 0.07 ? 0.07 : s;
+    s = Math.min(s, 1 - 0.78 * a.wG, 1 - 0.95 * wS, 1 - 0.7 * wH * (hopHY > 0.1 ? 1 : 0.2)); a.eyes.scale.y = s < 0.07 ? 0.07 : s;
   }
   const sh = a.shadow;
   if (sh) {

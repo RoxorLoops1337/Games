@@ -12,24 +12,48 @@
 <body>
 <canvas id="gl"></canvas>
 <div id="popups"></div>
+<canvas id="confetti"></canvas>
 <div id="hud" hidden>
+  <div id="bunting" hidden></div>
   <div id="top">
-    <div id="card"><div class="badge"><span data-ic="badge" data-s="46"></span><b id="plvl">1</b></div><div class="cinfo"><b id="pname">Villager</b><div class="bar"><i id="xpbar"></i></div></div></div>
-    <div id="res"></div>
-    <div id="tools"><button data-p="quests" title="Quests" aria-label="Quests"><span data-ic="quests" data-s="28"></span></button><button data-p="valley" title="Valley board" aria-label="Valley board"><span data-ic="scrolls" data-s="28"></span></button><button data-p="players" title="Villages" aria-label="Villages"><span data-ic="players" data-s="28"></span></button><button data-p="chat" title="Chat" aria-label="Chat"><span data-ic="chat" data-s="28"></span></button><button data-p="menu" title="Menu" aria-label="Menu"><span data-ic="menu" data-s="28"></span></button></div>
-    <div id="track" hidden></div>
-    <div id="toast"></div>
+    <button id="card" aria-label="Your village">
+      <span class="av"><svg viewBox="0 0 52 52" aria-hidden="true"><circle class="trk" cx="26" cy="26" r="22"/><circle class="arc" id="xparc" cx="26" cy="26" r="22" transform="rotate(-90 26 26)"/></svg><span class="face" id="pface"></span><b class="lv" id="plvl">1</b></span>
+      <span class="cinfo"><b id="pname">Villager</b><small id="ptitle" hidden></small><span class="xpb"><i id="xpbar"></i></span></span>
+      <span class="charm" id="pcharm"></span>
+    </button>
+    <div id="wallet">
+      <button class="pill coin" id="pCoins" aria-label="Coins"><span class="gi"></span><b class="num">0</b></button>
+      <button class="pill scr" id="pScrolls" aria-label="Scrolls"><span class="gi"></span><b class="num">0</b></button>
+    </div>
   </div>
-  <div id="bottom">
-    <button id="bBuild" class="big"><span data-ic="hammer" data-s="30"></span><span>Build</span></button>
-    <button id="bHome" class="big alt round" title="Home" aria-label="Home"><span data-ic="house" data-s="32"></span></button>
-    <button id="bValley" class="big alt round" title="Valley" aria-label="Valley"><span data-ic="valley" data-s="32"></span></button>
-    <div id="conn"></div>
-  </div>
-  <div id="place" hidden><span id="placeName"></span><button id="placeOk" class="ok"><span data-ic="tick" data-s="20"></span> Place</button><button id="placeNo" class="no round" aria-label="Cancel"><span data-ic="close" data-s="20"></span></button></div>
-  <div id="sheet" class="panel" hidden></div>
-  <div id="panel" class="panel" hidden></div>
+  <div id="strip"></div>
+  <div id="tools"></div>
+  <div id="left"><div id="festival" hidden></div><div id="track" hidden></div></div>
+  <div id="toasts"></div>
+  <div id="mini" hidden></div>
+  <button id="quick" class="b b-gold" hidden aria-label="Send an idle villager to work"></button>
+  <nav id="dock">
+    <button id="bHome" class="rb alt" aria-label="Home" title="Home"></button>
+    <button id="bVil" class="rb alt" aria-label="Villagers" title="Villagers"></button>
+    <button id="bBuild" class="b b-green shine" aria-label="Build"></button>
+    <button id="bValley" class="rb alt" aria-label="Valley" title="Valley"></button>
+    <button id="bShop" class="rb alt" hidden aria-label="Travelling merchant" title="Merchant"></button>
+  </nav>
+  <div id="place" hidden><span id="placeName"></span><button id="placeOk" class="b b-green" data-snd="confirm"><span data-ic="tick" data-s="20"></span> Place</button><button id="placeNo" class="b b-red round" aria-label="Cancel" data-snd="back"><span data-ic="close" data-s="20"></span></button></div>
+  <div id="photoBar" hidden><button id="phExit" class="rb alt" aria-label="Leave photo mode"></button><button id="phShot" class="shutter" aria-label="Take photo"></button><span id="phHint">Drag to look around</span></div>
+  <div id="connb"></div>
 </div>
+<div id="scrim" hidden></div>
+<section id="sheet" class="sheet" hidden role="dialog" aria-modal="true">
+  <div class="grab" data-drag></div>
+  <header class="sh-head" data-drag><span class="sh-ic"></span><span class="sh-tt"><b class="sh-title"></b><span class="sh-sub"></span></span><button class="x b b-red round" aria-label="Close" data-snd="none"></button></header>
+  <nav class="sh-tabs" hidden></nav>
+  <div class="sh-body"></div>
+</section>
+<div id="banners"></div>
+<div id="over"></div>
+<div id="tour" hidden></div>
+<div id="fxl"></div>
 <div id="title">
   <div class="sun"></div>
   <div class="cloud c1"></div><div class="cloud c2"></div><div class="cloud c3"></div><div class="cloud c4"></div>
@@ -39,11 +63,13 @@
     <div class="logo"><span class="lf" data-ic="leaf" data-s="44"></span><span class="w1">Hearth</span><span class="w2">vale</span></div>
     <div class="tag">Build a cozy village. Share a valley with up to 15 friends.</div>
     <div class="tform">
-    <input id="nameIn" maxlength="16" placeholder="Your village name" autocomplete="off">
-    <div class="row"><button id="goSolo" class="big"><span data-ic="sprout" data-s="30"></span><span>Play solo</span></button><button id="goServer" class="big alt"><span data-ic="players" data-s="30"></span><span>Join a server</span></button></div>
-    <input id="srvIn" placeholder="Server address, e.g. ws://192.168.1.5:7788" autocomplete="off" spellcheck="false">
-    <div id="titleMsg"></div>
-    <div class="fine">Original game inspired by cozy village builders. Solo play saves in your browser.</div>
+      <div id="saveCard" hidden></div>
+      <input id="nameIn" maxlength="16" placeholder="Your village name" autocomplete="off">
+      <div class="row"><button id="goSolo" class="b b-green big shine"><span data-ic="sprout" data-s="30"></span><span id="goSoloT">Play solo</span></button><button id="goServer" class="b b-gold big"><span data-ic="players" data-s="30"></span><span>Join a server</span></button></div>
+      <button id="goNew" class="b b-cream small-b" hidden>Start a new game</button>
+      <input id="srvIn" placeholder="Server address, e.g. ws://192.168.1.5:7788" autocomplete="off" spellcheck="false">
+      <div id="titleMsg"></div>
+      <div class="fine">Original game inspired by cozy village builders. Solo play saves in your browser.</div>
     </div>
   </div>
 </div>

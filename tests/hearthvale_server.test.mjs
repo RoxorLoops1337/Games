@@ -27,6 +27,11 @@ const health = await (await fetch('http://127.0.0.1:' + port + '/health')).json(
 const page = await fetch('http://127.0.0.1:' + port + '/'); ok(page.status === 404 || page.status === 200, 'static route answers');
 ok(cs[0].last.players.some(p => !p.n && !p.b), 'unchanged villages are not resent (delta snapshots)');
 ok(cs[0].bytes / cs[0].snaps < 20000, 'average snapshot is small: ' + Math.round(cs[0].bytes / cs[0].snaps) + ' bytes with 16 villages');
+// the new systems travel over the wire: project, daily reward (the host supplies the clock), public charm and title
+ok(A.last.valley.project && A.last.valley.project.stage === 0 && 'rain' in A.last.valley && A.last.valley.next.festival > 0, 'valley project, weather and schedule in the snapshot');
+ok(A.last.you.daily.clock === true && A.last.you.daily.available === true, 'the host clock makes the daily reward available'); const coins0 = A.last.you.coins;
+A.ws.send(JSON.stringify({ t: 'cmd', c: { op: 'daily' } })); await wait(500); ok(A.last.you.coins > coins0 && A.last.you.daily.available === false, 'daily reward claimed over the wire');
+ok(typeof A.last.players[0].charm === 'number' && typeof A.last.players[0].title === 'string' && A.last.players.every(p => p.v.every(v => v.length === 9)), 'public charm and title');
 // reconnect keeps the village
 const idA = A.id; A.ws.close(); await wait(300); const A2 = await connect(0); ok(A2.id === idA, 'same token returns the same village');
 for (const c of cs) try { c.ws.close(); } catch {} 
