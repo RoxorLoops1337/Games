@@ -1669,8 +1669,8 @@ const SCENE = (() => {
         else a.enter = { t0: 150 + a.lane * 55, dur: 420, dx: rm ? 0 : 70, dy: 0 };
       });
     }
-    const A = AR();
-    if (A && A.hero && typeof A.hero.warm === 'function') heroes.forEach((u) => { try { A.hero.warm(u.id, u.row === 'back' ? LAYOUT.back.s : LAYOUT.front.s); } catch (e) { warnOnce('warm', e); } });
+    // No hero pre-bake here: the live figures draw through ART.hero.draw's slots, and the baked key poses and walk frames (about 13M px, 54 MB at phone
+    // resolution) were only paid for by the low quality path, which bakes the ones it needs on demand.
     S.actors.forEach((a) => { a.z = zOf(a); });
     S.order.sort(cmpZ);
   }

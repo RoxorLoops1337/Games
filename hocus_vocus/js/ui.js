@@ -248,7 +248,7 @@ const UI = (() => {
       S.px = pxNew;
       [S.view, S.over].forEach((c) => { c.width = Math.round(W * pxNew); c.height = Math.round(H * pxNew); });
       const ar = AR();
-      if (ar) { ar.res = pxNew; if (isFn(ar.sprite, 'clear')) safe(() => ar.sprite.clear()); }
+      if (ar) { ar.res = pxNew; if (isFn(ar.sprite, 'clear')) safe(() => ar.sprite.clear()); if (ar.sprite) ar.sprite.maxPixels = touchDev ? 32e6 : 48e6; }   // a phone tab dies well before 190 MB of canvas
       iconCache.clear();
     }
     api.scale = S.scale; api.px = S.px; api.ox = S.ox; api.oy = S.oy;
