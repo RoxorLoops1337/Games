@@ -101,7 +101,7 @@ export class CWorld {
         const px = tx * S, py = ty * S;
         if (bg && !(fg && BLOCKS[fg].solid && !BLOCKS[fg].oneway)) {
           gb.drawImage(tileArt(bg, v), px, py);
-          gb.fillStyle = 'rgba(14,12,30,0.5)'; gb.fillRect(px, py, S, S);
+          gb.fillStyle = 'rgba(16,12,38,0.62)'; gb.fillRect(px, py, S, S);
           // soft shadow cast by solid neighbours
           if (this.solidFg(x, y - 1)) { gb.fillStyle = 'rgba(0,0,0,0.25)'; gb.fillRect(px, py, S, 5); }
           if (this.solidFg(x - 1, y)) { gb.fillStyle = 'rgba(0,0,0,0.18)'; gb.fillRect(px, py, 4, S); }
@@ -126,7 +126,7 @@ export class CWorld {
     if (l) { g.fillStyle = 'rgba(255,255,255,0.1)'; g.fillRect(px, py, 3, S); g.fillStyle = 'rgba(0,0,0,0.45)'; g.fillRect(px, py, 1, S); }
     if (r) { g.fillStyle = 'rgba(0,0,0,0.2)'; g.fillRect(px + S - 3, py, 3, S); g.fillStyle = 'rgba(0,0,0,0.45)'; g.fillRect(px + S - 1, py, 1, S); }
     // rounded outer corners
-    const R = 8;
+    const R = 11;
     g.save(); g.globalCompositeOperation = 'destination-out'; g.fillStyle = '#000';
     if (t && l) { g.beginPath(); g.moveTo(px, py); g.lineTo(px + R, py); g.quadraticCurveTo(px, py, px, py + R); g.fill(); }
     if (t && r) { g.beginPath(); g.moveTo(px + S, py); g.lineTo(px + S - R, py); g.quadraticCurveTo(px + S, py, px + S, py + R); g.fill(); }
@@ -143,7 +143,7 @@ export class CWorld {
 
 // ------------------------------------------------------------------ light
 // Returns {sky, blk, x0, y0, w, h}: two 0..15 light levels per cell of the given rectangle.
-export function computeLight(cw, x0, y0, w, h, outBuf) {
+export function computeLight(cw, x0, y0, w, h, outBuf, extras) {
   const n = w * h;
   const sky = outBuf?.sky && outBuf.sky.length === n ? outBuf.sky.fill(0) : new Uint8Array(n);
   const blk = outBuf?.blk && outBuf.blk.length === n ? outBuf.blk.fill(0) : new Uint8Array(n);
@@ -153,8 +153,8 @@ export function computeLight(cw, x0, y0, w, h, outBuf) {
     for (let tx = 0; tx < w; tx++) {
       const x = x0 + tx, y = y0 + ty, i = ty * w + tx;
       const id = cw.fgAt(x, y);
-      cost[i] = cw.opaque(id) ? 5 : (id === B.leaves ? 2 : 1);
-      if (x < 0 || x >= W || y < 0 || y >= H) { cost[i] = 5; continue; }
+      cost[i] = cw.opaque(id) ? 3 : (id === B.leaves ? 2 : 1);
+      if (x < 0 || x >= W || y < 0 || y >= H) { cost[i] = 15; continue; }
       const top = cw.skyTop[x];
       if (top >= 0 && y < top) { sky[i] = 15; qa.push(i); }
       else if (top < 0 && y < 60) { sky[i] = 15; qa.push(i); }
@@ -162,6 +162,10 @@ export function computeLight(cw, x0, y0, w, h, outBuf) {
       if (!L) { const lq = cw.liqAt(x, y); if (lq && (lq >> 4) === L_LAVA) L = 12; }
       if (L) { blk[i] = L; qb.push(i); }
     }
+  }
+  if (extras) for (const [ex, ey, el] of extras) {
+    const tx = Math.floor(ex) - x0, ty = Math.floor(ey) - y0;
+    if (tx >= 0 && tx < w && ty >= 0 && ty < h) { const i = ty * w + tx; if (blk[i] < el) { blk[i] = el; qb.push(i); } }
   }
   const flood = (arr, q) => {
     for (let qi = 0; qi < q.length; qi++) {

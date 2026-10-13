@@ -1,5 +1,6 @@
 // DOM interface: hotbar, vitals, inventory + crafting, chests, chat, minimap, menus.
 import { ITEMS, BLOCKS, RECIPES, PLAYER, I } from '../shared/data.js';
+import { JOB_COL } from './render.js';
 import { itemIcon, drawChar, SKINS, HAIRS, SHIRTS, PANTS, HAIR_STYLES } from './art.js';
 
 const el = (tag, cls, parent) => { const e = document.createElement(tag); if (cls) e.className = cls; if (parent) parent.appendChild(e); return e; };
@@ -109,10 +110,12 @@ export class UI {
 
   // ------------------------------------------------------------ inventory panel
   toggleInv(force) {
+    if (this.open === 'trade') { this.closePanel(); return; }
     if (this.open === 'inv' && force !== 'keep') { this.closePanel(); return; }
     this.open = 'inv'; this.pick = null; this.renderPanel();
   }
   closePanel() {
+    if (this.open === 'trade') { this.G.send({ t: 'tradecancel' }); this.trade = null; }
     if (this.open === 'chest' || this.G.chest) this.G.send({ t: 'chestclose' });
     this.G.chest = null; this.open = null; this.pick = null; this.panel.classList.add('hidden'); this.tip.classList.remove('on');
   }
@@ -220,6 +223,50 @@ export class UI {
     if (st.d && def.dur) h += `<br>durability ${st.d}/${def.dur}`;
     if (def.place && BLOCKS[def.place].station) h += `<br>crafting station`;
     this.tip.innerHTML = h; this.tip.classList.add('on');
+  }
+
+  // ------------------------------------------------------------ trading
+  tradeRequest(from, name) {
+    this.G.sound.play('chat');
+    this.showModal(`<div class="card"><h2>Trade?</h2><p><b>${esc(name)}</b> would like to trade with you.</p><div class="btns"><button id="mok">Accept</button><button id="mno">No thanks</button></div></div>`, (m) => {
+      m.querySelector('#mok').onclick = () => { this.G.send({ t: 'tradeacc', from }); this.hideModal(); };
+      m.querySelector('#mno').onclick = () => this.hideModal();
+    });
+  }
+  openTrade(st) { this.trade = st; this.hideModal(); this.open = 'trade'; this.pick = null; this.renderTrade(); }
+  closeTrade() { this.trade = null; if (this.open === 'trade') { this.open = null; this.panel.classList.add('hidden'); this.tip.classList.remove('on'); } }
+  renderTrade() {
+    const G = this.G, st = this.trade, p = this.panel;
+    p.classList.remove('hidden'); p.innerHTML = '';
+    const col = el('div', 'col', p);
+    el('h3', '', col).textContent = `Trading with ${st.with}`;
+    const row = el('div', 'tradecols', col);
+    for (const [title, offer, mine] of [['You offer', st.mine, true], [st.with + ' offers', st.theirs, false]]) {
+      const c = el('div', 'tcol' + ((mine ? st.okMine : st.okTheirs) ? ' ok' : ''), row);
+      el('b', '', c).textContent = title + ((mine ? st.okMine : st.okTheirs) ? '  (ready)' : '');
+      const g = el('div', 'grid three', c);
+      for (let i = 0; i < 6; i++) {
+        const s = this.slotEl(g); this.fill(s, offer[i]);
+        s.onmouseenter = () => this.showTip(offer[i]); s.onmouseleave = () => this.tip.classList.remove('on');
+        if (mine) s.onmousedown = (e) => { e.preventDefault(); if (offer[i]) G.send({ t: 'traderem', i }); };
+      }
+    }
+    el('h3', '', col).textContent = 'Backpack (click to offer, right click offers one)';
+    const grid = el('div', 'grid', col);
+    for (let i = 0; i < PLAYER.inv; i++) { const s = this.slotEl(grid); this.fill(s, G.inv[i]); if (i < 10) s.classList.add('hot'); s.onmouseenter = () => this.showTip(G.inv[i]); s.onmouseleave = () => this.tip.classList.remove('on'); s.onmousedown = (e) => { e.preventDefault(); if (G.inv[i]) G.send({ t: 'tradeadd', slot: i, n: e.button === 2 ? 1 : G.inv[i].n }); }; }
+    const btns = el('div', 'btns', col);
+    const ok = el('button', '', btns); ok.textContent = st.okMine ? 'Waiting...' : 'Confirm trade'; ok.onclick = () => G.send({ t: 'tradeok' });
+    const no = el('button', '', btns); no.textContent = 'Cancel'; no.onclick = () => G.send({ t: 'tradecancel' });
+  }
+  // ------------------------------------------------------------ buddies
+  npcMenu(n) {
+    const G = this.G;
+    const jobs = [['follow', 'Follow me'], ['chop', 'Chop trees'], ['mine', 'Mine ore'], ['farm', 'Farm wheat'], ['guard', 'Guard'], ['stay', 'Stay here']];
+    this.showModal(`<div class="card"><h2>${esc(n.owner)}'s Buddy</h2><p class="hint">Chop and Mine work near you. Farm needs seeds in your backpack to replant.</p><div class="ways">${jobs.map(([j, l]) => `<button class="way${n.job === j ? ' cur' : ''}" data-j="${j}"><b style="color:${JOB_COL[j]}">●</b> ${l}</button>`).join('')}</div><div class="btns"><button id="mdis">Dismiss</button><button id="mno">Close</button></div></div>`, (m) => {
+      m.querySelectorAll('.way').forEach((b) => { b.onclick = () => { G.send({ t: 'npc', id: n.id, act: 'job', job: b.dataset.j }); this.hideModal(); }; });
+      m.querySelector('#mdis').onclick = () => { G.send({ t: 'npc', id: n.id, act: 'dismiss' }); this.hideModal(); };
+      m.querySelector('#mno').onclick = () => this.hideModal();
+    });
   }
 
   // ------------------------------------------------------------ modals

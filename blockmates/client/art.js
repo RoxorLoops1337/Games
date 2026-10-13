@@ -495,6 +495,7 @@ export function drawBlockhead(g, x, y, s, look, st) {
   g.strokeStyle = '#7a2a2a'; g.lineWidth = 1.4; g.beginPath();
   if (st.hurt) { g.arc(6, -3, 2, Math.PI, 0); } else g.arc(6, -5.5, 3, 0.2, Math.PI - 0.2);
   g.stroke();
+  if (st.band) { g.fillStyle = st.band; g.fillRect(-11, -17, 22, 4); g.fillStyle = 'rgba(255,255,255,0.35)'; g.fillRect(-11, -17, 22, 1); g.fillStyle = st.band; g.fillRect(-14, -16, 4, 3); g.fillRect(-16, -13, 4, 3); }
   // helmet
   const hel = armorColor(st.armor && st.armor[0]);
   if (hel) { g.fillStyle = hel; g.beginPath(); g.moveTo(-12, -12); g.quadraticCurveTo(-12, -26, 0, -26); g.quadraticCurveTo(12, -26, 12, -12); g.lineTo(12, -16); g.lineTo(-12, -16); g.closePath(); g.fill(); g.lineWidth = 1.4; g.strokeStyle = outline; g.stroke(); g.fillStyle = 'rgba(255,255,255,0.4)'; g.fillRect(-8, -24, 8, 2); g.fillStyle = shade(hel, -50); g.fillRect(-12, -17, 24, 2); }

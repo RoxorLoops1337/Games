@@ -7,6 +7,7 @@ import { Sound } from './audio.js';
 import { UI } from './ui.js';
 import { clamp, daylight } from '../shared/util.js';
 import { SKINS } from './art.js';
+import { JOBS } from '../server/npcs.js';
 
 const INTERACTIVE = new Set(['door_closed', 'door_open', 'door_top_closed', 'door_top_open', 'chest', 'sign', 'bed', 'waystone']);
 const PARTICLE_CAP = 600;
@@ -31,7 +32,7 @@ export class Game {
   reset() {
     this.cw = new CWorld();
     this.joined = false; this.myId = 0; this.worldName = ''; this.status = '';
-    this.players = new Map(); this.mobs = new Map(); this.drops = new Map(); this.arrows = new Map();
+    this.players = new Map(); this.mobs = new Map(); this.npcs = new Map(); this.drops = new Map(); this.arrows = new Map();
     this.parts = [];
     this.inv = new Array(PLAYER.inv).fill(null); this.armor = [null, null, null]; this.sel = 0;
     this.hp = 20; this.food = 20; this.breath = 10; this.time = 60; this.day = 1;
@@ -110,6 +111,8 @@ export class Game {
       case 'sign': this.ui.signEdit(m.x, m.y, m.text); break;
       case 'ways': this.ui.waystones(m.from, m.list); break;
       case 'toast': this.ui.showToast(m.text); break;
+      case 'tradereq': this.ui.tradeRequest(m.from, m.name); break;
+      case 'trade': if (m.done) this.ui.closeTrade(); else this.ui.openTrade(m); break;
       case 'chat': {
         this.ui.say(m.from, m.text, m.sys);
         if (!m.sys) { this.sound.play('chat'); const p = this.players.get(m.id); if (p) { p.say = m.text; p.sayT = 5; } }
@@ -155,6 +158,8 @@ export class Game {
       for (const k of map.keys()) if (!ids.has(k)) map.delete(k);
     };
     keep(this.mobs, m.m, (e) => ({ id: e[0], type: e[1], x: e[2], y: e[3], tx: e[2], ty: e[3], anim: 0, dir: e[5], hp: e[6], hurt: 0, vx: 0, onGround: true }), (o, e) => { o.tx = e[2]; o.ty = e[3]; o.vx = e[4]; o.dir = e[5]; if (e[6] < o.hp) o.hurt = 0.25; o.hp = e[6]; });
+    keep(this.npcs, m.n || [], (e) => ({ id: e[0], x: e[1], y: e[2], tx: e[1], ty: e[2], vx: 0, dir: 1, anim: 0, job: 'follow', swingT: 0, owner: e[7], look: e[8], onGround: true }),
+      (o, e) => { o.tx = e[1]; o.ty = e[2]; o.vx = e[3]; o.dir = e[4]; o.job = JOBS[e[5]] || 'follow'; o.onGround = !!(e[6] & 2); if ((e[6] & 4) && o.swingT <= 0) o.swingT = 0.25; o.owner = e[7]; });
     keep(this.drops, m.d, (e) => ({ id: e[0], item: e[1], x: e[2], y: e[3], tx: e[2], ty: e[3], n: e[4] }), (o, e) => { o.tx = e[2]; o.ty = e[3]; o.n = e[4]; });
     keep(this.arrows, m.a, (e) => ({ id: e[0], x: e[1], y: e[2], vx: e[3], vy: e[4] }), (o, e) => { o.x = e[1]; o.y = e[2]; o.vx = e[3]; o.vy = e[4]; });
     for (const e of m.e) this.onEvent(e);
@@ -340,6 +345,12 @@ export class Game {
         this.rClick = false; this.rHeld = true;
         const fg = this.cw.fgAt(c.x, c.y);
         if (fg && reach && INTERACTIVE.has(BLOCKS[fg].name) && !this.keys.has('Shift')) { this.send({ t: 'use2', x: c.x, y: c.y }); this.actT = 0.3; return; }
+        // another player or a Buddy under the cursor: trade / give orders
+        const near = (o, rx) => Math.abs(c.wx - o.x) < 0.8 && c.wy > o.y - 2.1 && c.wy < o.y + 0.3 && Math.hypot(o.x - me.x, o.y - me.y) < rx;
+        let hit = null;
+        for (const n of this.npcs.values()) if (near(n, 10)) { hit = n; this.ui.npcMenu(n); break; }
+        if (!hit) for (const o of this.players.values()) if (o.id !== this.myId && !o.dead && near(o, 16)) { this.send({ t: 'trade', to: o.id }); hit = o; break; }
+        if (hit) { this.actT = 0.4; return; }
         if (def && def.food && !def.place) { this.send({ t: 'use', i: this.sel }); this.actT = 0.4; return; }
       }
       if (reach && this.actT <= 0 && def && (def.place || def.name.endsWith('bucket'))) {
@@ -387,6 +398,7 @@ export class Game {
       m.x += (m.tx - m.x) * k; m.y += (m.ty - m.y) * k; m.anim += Math.abs(m.vx) * dt * 1.8; m.hurt = Math.max(0, m.hurt - dt);
       m.onGround = Math.abs(m.ty - m.y) < 0.05;
     }
+    for (const n of this.npcs.values()) { n.x += (n.tx - n.x) * k; n.y += (n.ty - n.y) * k; n.anim += Math.abs(n.vx) * dt * 1.7; n.swingT = Math.max(0, n.swingT - dt); }
     for (const d of this.drops.values()) { d.x += (d.tx - d.x) * Math.min(1, dt * 20); d.y += (d.ty - d.y) * Math.min(1, dt * 20); }
     // particles
     for (const p of this.parts) { p.life -= dt; p.vy += p.g * dt; p.x += p.vx * dt; p.y += p.vy * dt; }

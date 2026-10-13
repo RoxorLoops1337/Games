@@ -1,5 +1,7 @@
 // Drawing: sky, parallax hills, painted sections, liquids, creatures, smooth light map, particles.
-import { W, H, SEA, BLOCKS, B, ITEMS, L_LAVA, MOBS, DAY_SECONDS } from '../shared/data.js';
+import { W, H, SEA, BLOCKS, B, I, ITEMS, L_LAVA, MOBS, DAY_SECONDS } from '../shared/data.js';
+
+export const JOB_COL = { follow: '#4ad8ff', chop: '#7ac84a', mine: '#ff9a3d', farm: '#f2d33c', guard: '#e2574c', stay: '#bbbbbb' };
 import { computeLight, SEC } from './cworld.js';
 import { S, drawBlockhead, drawMob, itemIcon, tileArt, rr } from './art.js';
 import { daylight, phaseOf, clamp } from '../shared/util.js';
@@ -132,41 +134,53 @@ export class Renderer {
   }
 
   drawLiquids(G) {
-    const g = this.g, cw = G.cw, ts = G.ts, w = this.w, h = this.h, { vx0, vx1, vy0, vy1 } = G.view;
+    const g0 = this.g, cw = G.cw, ts = G.ts, w = this.w, h = this.h, { vx0, vx1, vy0, vy1 } = G.view;
+    if (!this.wc) { this.wc = document.createElement('canvas'); this.wg = this.wc.getContext('2d'); }
+    if (this.wc.width !== w || this.wc.height !== h) { this.wc.width = w; this.wc.height = h; }
+    const g = this.wg; g.clearRect(0, 0, w, h);
     const t = G.t;
+    let any = false;
     for (let y = Math.max(0, vy0); y <= Math.min(H - 1, vy1); y++) {
       for (let x = vx0; x <= vx1; x++) {
         const v = cw.liqAt(x, y);
         if (!v) continue;
+        any = true;
         const lvl = v & 15, type = v >> 4;
         const above = cw.liqAt(x, y - 1);
         const full = above && (above >> 4) === type;
         const hgt = full ? 1 : Math.max(0.12, lvl / 8);
-        const dx = (x - G.cam.x) * ts + w / 2, dy = (y + 1 - hgt - G.cam.y) * ts + h / 2;
+        const dx = Math.floor((x - G.cam.x) * ts + w / 2), dy = (y + 1 - hgt - G.cam.y) * ts + h / 2;
         const wave = full ? 0 : Math.sin(x * 0.9 + t * 2.2) * 0.04 * ts;
+        const cwid = Math.ceil(ts) + 1;
         if (type === L_LAVA) {
-          const gr = g.createLinearGradient(0, dy, 0, dy + hgt * ts); gr.addColorStop(0, '#ffcf4a'); gr.addColorStop(0.25, '#ff7a1a'); gr.addColorStop(1, '#c4300c');
-          g.fillStyle = gr; g.fillRect(Math.floor(dx), dy + wave, Math.ceil(ts) + 1, hgt * ts + 1);
-          if (!full) { g.fillStyle = 'rgba(255,240,150,0.8)'; g.fillRect(Math.floor(dx), dy + wave, Math.ceil(ts) + 1, 3 * this.dpr); }
-          g.fillStyle = 'rgba(255,220,100,0.35)'; const bx = ((x * 37 + y * 11) % 7) / 7; g.fillRect(dx + bx * ts, dy + ((t * 12 + x * 5) % 1) * ts * hgt, ts * 0.18, ts * 0.12);
+          const gr = g0.createLinearGradient(0, dy, 0, dy + hgt * ts); gr.addColorStop(0, '#ffcf4a'); gr.addColorStop(0.25, '#ff7a1a'); gr.addColorStop(1, '#c4300c');
+          g0.fillStyle = gr; g0.fillRect(dx, dy + wave, cwid, hgt * ts + 1);
+          if (!full) { g0.fillStyle = '#fff2a0'; g0.fillRect(dx, dy + wave, cwid, 3 * this.dpr); }
+          g0.fillStyle = 'rgba(255,220,100,0.5)'; const bx = ((x * 37 + y * 11) % 7) / 7; g0.fillRect(dx + bx * ts, dy + ((t * 0.7 + x * 0.37 + y * 0.19) % 1) * ts * hgt, ts * 0.18, ts * 0.12);
         } else {
-          g.fillStyle = full ? 'rgba(46,128,230,0.52)' : 'rgba(70,150,240,0.58)';
-          g.fillRect(Math.floor(dx), dy + wave, Math.ceil(ts) + 1, hgt * ts + 1);
-          if (!full) { g.fillStyle = 'rgba(210,240,255,0.8)'; g.fillRect(Math.floor(dx), dy + wave, Math.ceil(ts) + 1, 2.5 * this.dpr); }
-          else if (((x + y * 3) & 7) === 0) { g.fillStyle = 'rgba(255,255,255,0.12)'; g.fillRect(dx + ts * 0.2, dy + ts * ((t * 0.4 + x) % 1), ts * 0.1, ts * 0.3); }
+          g.fillStyle = full ? '#2f7fe0' : '#4a98ee';
+          g.fillRect(dx, dy + wave, cwid, hgt * ts + 1);
+          if (!full) { g.fillStyle = '#d8f2ff'; g.fillRect(dx, dy + wave, cwid, 2.5 * this.dpr); }
+          else if (((x + y * 3) & 7) === 0) { g.fillStyle = 'rgba(255,255,255,0.18)'; g.fillRect(dx + ts * 0.2, dy + ts * ((t * 0.4 + x) % 1), ts * 0.1, ts * 0.3); }
         }
       }
     }
+    if (any) { g0.globalAlpha = 0.62; g0.drawImage(this.wc, 0, 0); g0.globalAlpha = 1; }
   }
 
   // ---------------------------------------------------------------- light
   drawLight(G) {
     const g = this.g, cw = G.cw, ts = G.ts, w = this.w, h = this.h, { vx0, vx1, vy0, vy1 } = G.view;
     const vw = vx1 - vx0 + 3, vh = vy1 - vy0 + 3; // light map cells
-    const key = `${vx0}|${vy0}|${vw}|${vh}|${cw.ver}`;
-    if (key !== this.lightKey && (!this.light || performance.now() - (this.lightAt || 0) > 90 || this.light.vw !== vw || this.light.vh !== vh || this.light.vx0 !== vx0 || this.light.vy0 !== vy0)) {
+    const extras = [];
+    for (const p of G.players.values()) {
+      const lv = p.held && ITEMS[p.held] && ITEMS[p.held].place ? BLOCKS[ITEMS[p.held].place].light : 0;
+      if (lv) extras.push([p.x, p.y - 1.1, Math.min(14, lv)]);
+    }
+    const key = `${vx0}|${vy0}|${vw}|${vh}|${cw.ver}|${extras.map((e) => Math.floor(e[0]) + ',' + Math.floor(e[1])).join(';')}`;
+    if (key !== this.lightKey && (!this.light || performance.now() - (this.lightAt || 0) > 45 || this.light.vw !== vw || this.light.vh !== vh || this.light.vx0 !== vx0 || this.light.vy0 !== vy0)) {
       const M = 15;
-      const L = computeLight(cw, vx0 - 1 - M, vy0 - 1 - M, vw + 2 * M, vh + 2 * M, this.light);
+      const L = computeLight(cw, vx0 - 1 - M, vy0 - 1 - M, vw + 2 * M, vh + 2 * M, this.light, extras);
       L.vx0 = vx0; L.vy0 = vy0; L.vw = vw; L.vh = vh; L.M = M;
       this.light = L; this.lightKey = key; this.lightAt = performance.now();
     }
@@ -174,7 +188,7 @@ export class Renderer {
     if (!L) return;
     if (this.lm.width !== vw || this.lm.height !== vh) { this.lm.width = this.gm.width = vw; this.lm.height = this.gm.height = vh; }
     const dl = daylight(G.time);
-    const skyF = 0.2 + 0.8 * dl;
+    const skyF = 0.27 + 0.73 * dl;
     const img = this.lg.createImageData(vw, vh), glow = this.gg.createImageData(vw, vh);
     const d = img.data, gd = glow.data;
     const stride = L.w;
@@ -235,6 +249,14 @@ export class Renderer {
         g.fillStyle = 'rgba(0,0,0,0.6)'; g.fillRect(sx - bw / 2, top, bw, 5); g.fillStyle = '#e24a4a'; g.fillRect(sx - bw / 2, top, bw * clamp(m.hp / MOBS[m.type].hp, 0, 1), 5);
       }
     }
+    // buddies
+    for (const n of G.npcs.values()) {
+      const [sx, sy] = this.toScreen(G, n.x, n.y);
+      if (sx < -100 || sx > this.w + 100 || sy < -140 || sy > this.h + 140) continue;
+      g.fillStyle = 'rgba(0,0,0,0.22)'; g.beginPath(); g.ellipse(sx, sy, ts * 0.35, ts * 0.09, 0, 0, 7); g.fill();
+      const tool = { chop: I.stone_axe, mine: I.iron_pickaxe, farm: I.wood_shovel, guard: I.iron_sword }[n.job] || 0;
+      drawBlockhead(g, sx, sy, ts, n.look, { dir: n.dir, t: n.anim, speed: Math.min(1, Math.abs(n.vx) / 6), air: !n.onGround, swing: n.swingT > 0 ? n.swingT / 0.25 : 0, held: tool, armor: [0, 0, 0], blink: 0, band: JOB_COL[n.job] || '#ddd' });
+    }
     // players
     const list = [...G.players.values()].sort((a, b) => (a === G.me ? 1 : 0) - (b === G.me ? 1 : 0));
     for (const p of list) {
@@ -254,6 +276,15 @@ export class Renderer {
   drawNames(G) {
     const g = this.g, ts = G.ts;
     g.textAlign = 'center';
+    for (const n of G.npcs.values()) {
+      const [sx, sy] = this.toScreen(G, n.x, n.y);
+      if (sx < -100 || sx > this.w + 100 || sy < -100 || sy > this.h + 160) continue;
+      const label = `${n.owner}'s Buddy · ${n.job}`;
+      g.font = `600 ${Math.round(Math.max(10, ts * 0.32))}px ${FONT}`;
+      const tw = g.measureText(label).width, y = sy - ts * 2.0;
+      g.fillStyle = 'rgba(10,14,30,0.55)'; rr(g, sx - tw / 2 - 6, y - ts * 0.34, tw + 12, ts * 0.46, 7); g.fill();
+      g.fillStyle = JOB_COL[n.job] || '#fff'; g.fillText(label, sx, y);
+    }
     for (const p of G.players.values()) {
       const [sx, sy] = this.toScreen(G, p.x, p.y);
       if (sx < -100 || sx > this.w + 100 || sy < -100 || sy > this.h + 160) continue;

@@ -10,6 +10,7 @@ import { packLayers, unpackLayers } from '../shared/codec.js';
 import { daylight, clamp } from '../shared/util.js';
 import { stepLiquids, activateAround } from './liquid.js';
 import { spawnTick, updateMob, damageMob } from './mobs.js';
+import { spawnNpc, updateNpc, setJob, JOBS, MAX_BUDDIES } from './npcs.js';
 
 const NC = W / CHUNK;
 const SLOTS = PLAYER.inv;
@@ -28,6 +29,8 @@ export class World {
     this.mobs = new Map();
     this.drops = new Map();
     this.arrows = new Map();
+    this.npcs = new Map();           // hired Buddies
+    this.trades = new Map();         // player id -> trade session (shared by both sides)
     this.conns = new Map();         // id -> send(obj)
     this.liqActive = new Set();
     this.tileQueue = [];
@@ -120,7 +123,7 @@ export class World {
   }
   disconnect(id) {
     const p = this.players.get(id);
-    if (p) { this.savePlayer(p); this.players.delete(id); this.sysChat(`${p.name} left`); this.broadcast({ t: 'leave', id }); }
+    if (p) { this.cancelTrade(p, 'left'); this.savePlayer(p); this.players.delete(id); this.sysChat(`${p.name} left`); this.broadcast({ t: 'leave', id }); }
     this.conns.delete(id);
   }
   send(id, obj) { const f = this.conns.get(id); if (f) f(obj); }
@@ -335,6 +338,7 @@ export class World {
       if (id === B.gravel && this.rng() < 0.25) item = I.flint;
       if (item) this.dropItem(x + 0.5, y + 0.5, item, id === B.wheat2 ? 1 + (this.rng() < 0.4 ? 1 : 0) : 1);
     }
+    if (id === B.log) { const n = this.fellAbove(x, y); if (n) this.dropItem(x + 0.5, y - 0.5, I.log, n); }
     this.event('break', x + 0.5, y + 0.5, id);
     // tool wear
     const s = this.heldItem(p);
@@ -350,6 +354,13 @@ export class World {
     p.invDirty = true;
   }
 
+  // the trunk above a chopped log comes down with it: returns how many logs fell
+  fellAbove(x, y) {
+    let n = 0, yy = y - 1;
+    while (this.fgAt(x, yy) === B.log && n < 14) { this.setTile(x, yy, 0, 0); n++; yy--; }
+    if (n) this.event('break', x + 0.5, y - 0.5, B.log);
+    return n;
+  }
   // after a tile in the foreground changed: fix whatever depended on it
   afterRemove(x, y) {
     activateAround(this, x, y);
@@ -373,6 +384,7 @@ export class World {
       this.settle(x, y - 1, depth + 1);
       return;
     }
+    if (id === B.log && !this.fgAt(x, y + 1)) { this.breakBlock(DUMMY, x, y, 0, true); return; } // a felled trunk comes down in one go
     const belowSolid = this.solidAt(x, y + 1);
     const needsFloor = (bd.plant && !bd.light) || bd.station || bd.container || bd.bed || bd.sign || bd.waystone;
     if (needsFloor && !belowSolid && !(this.bgAt(x, y) && !bd.plant)) this.breakBlock(DUMMY, x, y, 0, true);
@@ -438,6 +450,16 @@ export class World {
       s.n--; if (!s.n) p.inv[p.sel] = null;
       this.addItem(p, I.bucket, 1);
       p.invDirty = true; this.event('splash', x + 0.5, y + 0.5);
+      return;
+    }
+    if (def.name === 'buddy_bell') {
+      if (this.solidAt(x, y) || this.solidAt(x, y - 1)) return;
+      const mine = [...this.npcs.values()].filter((n) => n.owner.toLowerCase() === p.name.toLowerCase()).length;
+      if (mine >= MAX_BUDDIES || this.npcs.size >= 24) return this.send(p.id, { t: 'toast', text: `You can have ${MAX_BUDDIES} Buddies.` });
+      spawnNpc(this, p.name, x + 0.5, y + 1 - 0.01, 'follow');
+      s.n--; if (s.n <= 0) p.inv[p.sel] = null; p.invDirty = true;
+      this.event('tp', x + 0.5, y);
+      this.send(p.id, { t: 'toast', text: 'A Buddy joins you! Right click them to give orders.' });
       return;
     }
     if (!def.place) return;
@@ -595,6 +617,88 @@ export class World {
     this.event('shoot', ox, oy);
   }
 
+  // ------------------------------------------------------------ trading (items are held in escrow while offered)
+  tradeSide(t, p) { return t.a === p.id ? 'a' : 'b'; }
+  tradeState(t, p) {
+    const me = this.tradeSide(t, p), other = me === 'a' ? 'b' : 'a';
+    const op = this.players.get(t[other]);
+    return { t: 'trade', with: op ? op.name : '?', mine: t.off[me], theirs: t.off[other], okMine: t.ok[me], okTheirs: t.ok[other] };
+  }
+  tradePush(t) { for (const id of [t.a, t.b]) { const q = this.players.get(id); if (q) this.send(id, this.tradeState(t, q)); } }
+  tradeRequest(p, toId) {
+    const o = this.players.get(toId);
+    if (!o || o === p || o.dead || p.dead || this.trades.has(p.id) || this.trades.has(o.id)) return;
+    if (dist2(p.x, p.y, o.x, o.y) > 16 * 16) return this.send(p.id, { t: 'toast', text: 'Too far away to trade.' });
+    o.tradeFrom = p.id;
+    this.send(o.id, { t: 'tradereq', from: p.id, name: p.name });
+    this.send(p.id, { t: 'toast', text: `Trade request sent to ${o.name}.` });
+  }
+  tradeAccept(p, fromId) {
+    const o = this.players.get(fromId);
+    if (!o || p.tradeFrom !== fromId || this.trades.has(p.id) || this.trades.has(o.id)) return;
+    p.tradeFrom = 0;
+    const t = { a: o.id, b: p.id, off: { a: [], b: [] }, ok: { a: false, b: false } };
+    this.trades.set(o.id, t); this.trades.set(p.id, t);
+    this.tradePush(t);
+  }
+  tradeAdd(p, slot, n) {
+    const t = this.trades.get(p.id); const s = p.inv[slot];
+    if (!t || !s) return;
+    const side = this.tradeSide(t, p);
+    n = clamp(n | 0 || s.n, 1, s.n);
+    if (t.off[side].length >= 6 && !t.off[side].some((q) => q.id === s.id && !q.d)) return;
+    const ex = !s.d && t.off[side].find((q) => q.id === s.id);
+    if (ex) ex.n += n; else t.off[side].push({ ...s, n });
+    s.n -= n; if (!s.n) p.inv[slot] = null;
+    t.ok.a = t.ok.b = false; p.invDirty = true; this.tradePush(t);
+  }
+  tradeRemove(p, i) {
+    const t = this.trades.get(p.id);
+    if (!t) return;
+    const side = this.tradeSide(t, p), st = t.off[side][i];
+    if (!st) return;
+    t.off[side].splice(i, 1);
+    this.returnStack(p, st);
+    t.ok.a = t.ok.b = false; this.tradePush(t);
+  }
+  returnStack(p, st) {
+    const left = this.addItem(p, st.id, st.n, st.d);
+    if (left) this.dropItem(p.x, p.y - 1, st.id, left, { delay: 1, dur: st.d });
+    p.invDirty = true;
+  }
+  tradeOk(p) {
+    const t = this.trades.get(p.id);
+    if (!t) return;
+    t.ok[this.tradeSide(t, p)] = true;
+    if (t.ok.a && t.ok.b) {
+      const A = this.players.get(t.a), Bp = this.players.get(t.b);
+      for (const st of t.off.a) this.returnStack(Bp, st);
+      for (const st of t.off.b) this.returnStack(A, st);
+      this.trades.delete(t.a); this.trades.delete(t.b);
+      for (const q of [A, Bp]) { this.send(q.id, { t: 'trade', done: true }); this.send(q.id, { t: 'toast', text: 'Trade complete!' }); }
+      this.event('craft', A.x, A.y - 1); this.event('craft', Bp.x, Bp.y - 1);
+    } else this.tradePush(t);
+  }
+  cancelTrade(p, why) {
+    const t = this.trades.get(p.id);
+    p.tradeFrom = 0;
+    if (!t) return;
+    this.trades.delete(t.a); this.trades.delete(t.b);
+    for (const id of [t.a, t.b]) {
+      const q = this.players.get(id);
+      if (!q) continue;
+      for (const st of t.off[id === t.a ? 'a' : 'b']) this.returnStack(q, st);
+      if (id !== p.id || why !== 'left') this.send(id, { t: 'trade', done: true });
+      if (id !== p.id) this.send(id, { t: 'toast', text: 'The trade was cancelled.' });
+    }
+  }
+  tradeCheck() {
+    for (const t of new Set(this.trades.values())) {
+      const A = this.players.get(t.a), Bp = this.players.get(t.b);
+      if (!A || !Bp || A.dead || Bp.dead || dist2(A.x, A.y, Bp.x, Bp.y) > 24 * 24) this.cancelTrade(A || Bp, 'far');
+    }
+  }
+
   // ------------------------------------------------------------ chat and commands
   chatMsg(p, text) {
     text = String(text || '').replace(/[\u0000-\u001f]/g, '').slice(0, 160).trim();
@@ -609,7 +713,7 @@ export class World {
     const op = this.ops.has(p.name.toLowerCase());
     const say = (text) => this.send(p.id, { t: 'chat', from: '', text, sys: true });
     switch (cmd.toLowerCase()) {
-      case 'help': return say('/who, /spawn, /me text, /home, /time (op), /tp name (op), /give item n (op), /pvp (op), /kick name (op)');
+      case 'help': return say('/who, /spawn, /me text, /home, /time (op), /tp name (op), /goto place|x y (op), /give item n (op), /pvp (op), /kick name (op)');
       case 'who': return say('Online: ' + [...this.players.values()].map((o) => o.name).join(', '));
       case 'me': return this.broadcast({ t: 'chat', from: '', text: `* ${p.name} ${a.join(' ')}`, sys: true });
       case 'spawn': case 'home': p.x = p.spawnPt.x; p.y = p.spawnPt.y; p.vx = p.vy = 0; return this.send(p.id, { t: 'respawn', x: p.x, y: p.y });
@@ -624,6 +728,24 @@ export class World {
         const t = [...this.players.values()].find((o) => o.name.toLowerCase() === (a[0] || '').toLowerCase());
         if (!t) return say('No such player.');
         p.x = t.x; p.y = t.y; p.vx = p.vy = 0; return this.send(p.id, { t: 'respawn', x: p.x, y: p.y });
+      }
+      case 'goto': {
+        if (!op) return say('Only operators can do that.');
+        let x, y;
+        if (a.length >= 2 && !isNaN(a[0])) { x = clamp(parseInt(a[0], 10), 2, W - 3); y = clamp(parseInt(a[1], 10), 2, H - 3); }
+        else {
+          const want = (a[0] || '').toLowerCase();
+          const start = Math.floor(p.x);
+          for (let d = 0; d < W && x === undefined; d += 4) for (const sx of [start + d, start - d]) {
+            if (sx < 20 || sx > W - 20) continue;
+            if (want === 'ocean' ? this.terrain.surface(sx) > SEA + 6 : this.terrain.biomeAt(sx) === want && this.terrain.surface(sx) < SEA - 2) { x = sx; break; }
+          }
+          if (x === undefined) return say('No such place. Try: plains forest desert tundra mountains ocean, or /goto x y');
+          y = this.terrain.surface(x) - 3;
+          if (want === 'ocean') y = SEA - 2;
+        }
+        p.x = x + 0.5; p.y = y; p.vx = p.vy = 0; p.known.clear();
+        return this.send(p.id, { t: 'respawn', x: p.x, y: p.y });
       }
       case 'give': {
         if (!op) return say('Only operators can do that.');
@@ -653,6 +775,8 @@ export class World {
     for (const p of this.players.values()) this.tickPlayer(p);
     for (const d of this.drops.values()) this.tickDrop(d);
     for (const m of [...this.mobs.values()]) updateMob(this, m);
+    for (const n of [...this.npcs.values()]) updateNpc(this, n);
+    if (this.tick_n % TICK === 0) this.tradeCheck();
     for (const a of [...this.arrows.values()]) this.tickArrow(a);
     if (this.tick_n % 3 === 0) stepLiquids(this, 600);
     if (this.tick_n % TICK === 0) { spawnTick(this); this.randomTicks(); for (const p of this.players.values()) p.chatBudget = Math.min(5, p.chatBudget + 1); }
@@ -831,6 +955,7 @@ export class World {
         p.armor[0] ? p.armor[0].id : 0, p.armor[1] ? p.armor[1].id : 0, p.armor[2] ? p.armor[2].id : 0]);
     }
     const mb = [...this.mobs.values()].map((m) => [m.id, m.type, r2(m.x), r2(m.y), r2(m.vx), m.dir, m.hp, m.hurtT > 0 ? 1 : 0]);
+    const nc = [...this.npcs.values()].map((n) => [n.id, r2(n.x), r2(n.y), r2(n.vx), n.dir, JOBS.indexOf(n.job), (n.swing > 0 ? 4 : 0) | (n.onGround ? 2 : 0), n.owner, n.look]);
     const dr = [...this.drops.values()].map((d) => [d.id, d.item, r2(d.x), r2(d.y), d.n]);
     const ar = [...this.arrows.values()].map((a) => [a.id, r2(a.x), r2(a.y), r2(a.vx), r2(a.vy)]);
     for (const p of this.players.values()) {
@@ -841,6 +966,7 @@ export class World {
         t: 's', n: this.tick_n, time: r2(this.time), day: this.day, seq: p.seq,
         you: { x: r2(p.x), y: r2(p.y), vx: r2(p.vx), vy: r2(p.vy), hp: p.hp, food: p.food, breath: r2(p.breath), mining: p.mining ? [p.mining.x, p.mining.y, p.mining.l, r2(p.mining.prog)] : null, dead: p.dead },
         p: pl.filter((o) => near(o[1], o[2])),
+        n: nc.filter((o) => near(o[1], o[2])),
         m: mb.filter((o) => near(o[2], o[3])), d: dr.filter((o) => near(o[2], o[3])), a: ar.filter((o) => near(o[1], o[2])),
         e: this.events.filter((e) => near(e[1], e[2])),
       });
@@ -853,7 +979,8 @@ export class World {
     for (const p of this.players.values()) this.savePlayer(p);
     for (const [k, v] of this.accounts) accounts[k] = v;
     const meta = [...this.meta.entries()];
-    return { v: 1, seed: this.seed, time: this.time, day: this.day, name: this.name, ops: [...this.ops], accounts, meta };
+    const npcs = [...this.npcs.values()].map((n) => ({ owner: n.owner, x: n.x, y: n.y, job: n.job }));
+    return { v: 1, seed: this.seed, time: this.time, day: this.day, name: this.name, ops: [...this.ops], accounts, meta, npcs };
   }
   importState(s) {
     if (!s || s.v !== 1) return;
@@ -866,6 +993,8 @@ export class World {
     this.ops = new Set(s.ops || []);
     this.accounts = new Map(Object.entries(s.accounts || {}));
     this.meta = new Map(s.meta || []);
+    this.npcs.clear();
+    for (const n of s.npcs || []) spawnNpc(this, n.owner, n.x, n.y, n.job);
   }
   // chunks changed since the last call, packed
   exportDirtyChunks() {
@@ -951,6 +1080,19 @@ const HANDLERS = {
     w.event('tp', p.x, p.y - 1);
   },
   chestclose(w, p) { p.openChest = null; },
+  trade(w, p, m) { if (int(m.to, 1, 1e9)) w.tradeRequest(p, m.to); },
+  tradeacc(w, p, m) { if (int(m.from, 1, 1e9)) w.tradeAccept(p, m.from); },
+  tradeadd(w, p, m) { if (int(m.slot, 0, SLOTS - 1)) w.tradeAdd(p, m.slot, m.n); },
+  traderem(w, p, m) { if (int(m.i, 0, 5)) w.tradeRemove(p, m.i); },
+  tradeok(w, p) { w.tradeOk(p); },
+  tradecancel(w, p) { w.cancelTrade(p, 'me'); },
+  npc(w, p, m) {
+    const n = w.npcs.get(m.id);
+    if (!n || dist2(p.x, p.y, n.x, n.y) > 10 * 10) return;
+    if (n.owner.toLowerCase() !== p.name.toLowerCase() && !w.ops.has(p.name.toLowerCase())) return w.send(p.id, { t: 'toast', text: 'This Buddy works for ' + n.owner + '.' });
+    if (m.act === 'job' && JOBS.includes(m.job)) { setJob(n, m.job); w.send(p.id, { t: 'toast', text: `Buddy: ${m.job}` }); }
+    else if (m.act === 'dismiss') { w.npcs.delete(n.id); w.addItem(p, I.buddy_bell, 1); p.invDirty = true; w.event('tp', n.x, n.y - 1); }
+  },
   look(w, p, m) { p.look = w.cleanLook(m.look); w.broadcast({ t: 'look', id: p.id, look: p.look }); },
 };
 

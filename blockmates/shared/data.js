@@ -129,6 +129,8 @@ for (const [m, a] of [['leather', 1], ['copper', 2], ['iron', 3], ['gold', 3], [
   itm(m + '_boots', { stack: 1, armor: a, slot: 'feet' });
 }
 
+itm('buddy_bell', { stack: 16 }); // hires a Buddy helper (see server/npcs.js)
+
 export function itemDef(id) { return ITEMS[id] || null; }
 export function blockDef(id) { return BLOCKS[id] || BLOCKS[0]; }
 export function dropFor(blockId) {
@@ -177,6 +179,7 @@ rec('trampoline', 1, [['wool', 4], ['iron_ingot', 1]], 'anvil');
 rec('bucket', 1, [['iron_ingot', 3]], 'anvil');
 rec('arrow', 4, [['stick', 1], ['flint', 1], ['feather', 1]], 'bench');
 rec('bow', 1, [['stick', 3], ['string', 3]], 'bench');
+rec('buddy_bell', 1, [['iron_ingot', 3], ['wool', 2], ['crystal_shard', 1]], 'anvil');
 rec('leather_helmet', 1, [['leather', 5]], 'bench');
 rec('leather_chest', 1, [['leather', 8]], 'bench');
 rec('leather_boots', 1, [['leather', 4]], 'bench');

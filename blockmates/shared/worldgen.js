@@ -57,7 +57,7 @@ export class Terrain {
     const { n1 } = this.noise;
     const bv = this.biomeValue(x);
     const mount = Math.max(0, bv - 0.68) * 5.5; // 0..1+
-    let h = SEA - 3 + (n1(x / 64 + 11) - 0.5) * 12 + (n1(x / 19 + 5) - 0.5) * 4.5;
+    let h = SEA - 3 + (n1(x / 90 + 11) - 0.5) * 16 + (n1(x / 37 + 5) - 0.5) * 9 + (n1(x / 13.7 + 2) - 0.5) * 4.4 + (n1(x / 5.3 + 7) - 0.5) * 1.6;
     h -= mount * (18 + n1(x / 31 + 9) * 26);
     if (bv < 0.30) h -= 2;
     const edge = smooth(Math.min(1, Math.min(x, W - 1 - x) / 90));
@@ -87,13 +87,13 @@ export class Terrain {
     const { n2 } = this.noise;
     const d = y - SEA;
     const v = (salt, f) => n2(x / f, y / f, salt);
-    if (d > 4 && v(10, 4.5) > 0.78) return B.coal_ore;
-    if (d > 14 && v(11, 4) > 0.82) return B.copper_ore;
-    if (d > 16 && v(12, 4) > 0.84) return B.tin_ore;
-    if (d > 36 && v(13, 3.6) > 0.85) return B.iron_ore;
-    if (d > 62 && v(14, 3.4) > 0.88) return B.gold_ore;
-    if (d > 92 && v(15, 3.2) > 0.9) return B.titanium_ore;
-    if (d > 100 && v(16, 3) > 0.93) return B.sunstone_ore;
+    if (d > 4 && v(10, 4.5) > 0.84) return B.coal_ore;
+    if (d > 14 && v(11, 4) > 0.87) return B.copper_ore;
+    if (d > 16 && v(12, 4) > 0.88) return B.tin_ore;
+    if (d > 36 && v(13, 3.6) > 0.89) return B.iron_ore;
+    if (d > 62 && v(14, 3.4) > 0.915) return B.gold_ore;
+    if (d > 92 && v(15, 3.2) > 0.935) return B.titanium_ore;
+    if (d > 100 && v(16, 3) > 0.955) return B.sunstone_ore;
     if (d > 18 && v(17, 6) > 0.86) return B.clay;
     if (d > 6 && v(18, 6) > 0.84) return B.gravel;
     return 0;
@@ -215,11 +215,19 @@ export class Terrain {
 
 export function spawnPoint(terrain) {
   const x = Math.floor(W / 2);
-  for (let dx = 0; dx < 400; dx++) {
-    for (const sx of [x + dx, x - dx]) {
-      const s = terrain.surface(sx);
-      if (s < SEA - 2) return { x: sx + 0.5, y: s - 2 };
+  // prefer a friendly biome on dry land, then anything on dry land
+  for (const pass of [0, 1]) {
+    for (let dx = 0; dx < 500; dx++) {
+      for (const sx of [x + dx, x - dx]) {
+        const s = terrain.surface(sx);
+        if (s >= SEA - 3) continue;
+        const b = terrain.biomeAt(sx);
+        if (pass === 0 && b !== 'plains' && b !== 'forest') continue;
+        // a few flat tiles wide so nobody spawns on a spike
+        if (Math.abs(terrain.surface(sx - 2) - s) > 1 || Math.abs(terrain.surface(sx + 2) - s) > 1) continue;
+        return { x: sx + 0.5, y: s - 0.01 };
+      }
     }
   }
-  return { x: x + 0.5, y: terrain.surface(x) - 2 };
+  return { x: x + 0.5, y: terrain.surface(x) - 0.01 };
 }
