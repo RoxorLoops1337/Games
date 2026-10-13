@@ -235,6 +235,15 @@ function coffer (p: Pix) {
     p.outline();
 }
 
+function board (p: Pix) {
+    // a notice board on two posts, with three pinned notes
+    lit(p, 2, 8, 2, 8, W); lit(p, 12, 8, 2, 8, W);
+    lit(p, 0, 1, 16, 9, W); p.rect(1, 2, 14, 7, 0xe8d8a8);
+    p.rect(2, 3, 4, 4, 0xffffff); p.rect(7, 3, 3, 3, 0xffd966); p.rect(11, 4, 3, 4, 0xcdf3fa);
+    p.set(3, 3, 0xc0392b); p.set(8, 3, 0xc0392b); p.set(12, 4, 0xc0392b);
+    p.outline();
+}
+
 function market (p: Pix, rnd: () => number) {
     // a striped awning over a counter loaded with produce
     for (const x of [2, 31]) lit(p, x, 6, 3, 19, W);
@@ -376,6 +385,7 @@ export function registerStorybookBuildings (scene: Phaser.Scene) {
     paint(scene, 'sawmill', 32, 15, (p) => sawmill(p), 1);
     paint(scene, 'millstone', 14, 10, (p) => millstone(p), 1);
     paint(scene, 'beehive', 14, 19, (p) => beehive(p), 1);
+    paint(scene, 'board', 16, 16, (p) => board(p), 1);
     paint(scene, 'coffer', 16, 15, (p) => coffer(p), 1);
     paint(scene, 'museum', 32, 19, (p) => museum(p), 1);
     paint(scene, 'fishpond', 32, 15, (p) => fishpond(p), 1);
