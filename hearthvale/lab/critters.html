@@ -71,6 +71,7 @@ if (night) { const pl = new THREE.PointLight('#ffb84a', 8, 9); pl.position.set(0
 
 /* ------------------------------------------------------------ meadow (game-camera scene) */
 const MX = 60, meadow = [];
+if (sec === 'meadow') { const gp = new THREE.Mesh(new THREE.PlaneGeometry(400, 400), new THREE.MeshStandardMaterial({ color: '#9ad464', roughness: 1 })); gp.rotation.x = -Math.PI / 2; gp.position.set(MX, -0.01, 0); gp.receiveShadow = true; st.scene.add(gp); }
 if (sec === 'meadow' || q.get('meadow')) {
   const fenceN = [[-7, -6, 0], [0, -6, 0], [7, -6, 0], [-7, 6, 0], [0, 6, 0], [7, 6, 0]]; for (const [x, z] of fenceN) { const f = PR.fenceModel(7); f.position.set(MX + x, 0, z); st.scene.add(f); }
   for (const s of [-1, 1]) for (const z of [-3, 0, 3]) { const f = PR.fenceModel(3); f.rotation.y = Math.PI / 2; f.position.set(MX + s * 10.5, 0, z); st.scene.add(f); }

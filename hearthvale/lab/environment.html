@@ -36,7 +36,7 @@ if (view === 'island') {
   const V = { gallery: [0, 0, 22], nodes: [0, 3, 12], fields: [-5, -16, 36], board: [-14, 12, 10], plaza: [0, -42, 30], plots: [0, 40, 60], bits: [16, 12, 12] }[view] || [0, 0, 22];
   st.look.x = +(q.get('x') ?? V[0]); st.look.z = +(q.get('z') ?? V[1]); st.look.dist = +(q.get('dist') ?? V[2]);
 }
-console.log(JSON.stringify(stats)); window.__stats = stats;
+window.__stats = stats; st.scene.traverse((o) => { if (o.name === 'island') window.__scatter = o.userData.scatter; });
 // animations: the game drives named children; the lab does the same
 st.onTick((dt, t) => st.scene.traverse((o) => {
   if (o.name === 'flag') o.rotation.y = Math.sin(t * 3) * 0.25; else if (o.name === 'flag2') o.rotation.y = Math.sin(t * 3 + 1) * 0.25;

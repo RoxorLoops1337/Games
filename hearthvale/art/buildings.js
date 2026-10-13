@@ -465,7 +465,7 @@ BUILD.study = (info) => {
 BUILD.mill = (info) => {
   const L = lv(info), g = G(), wall = '#f3e6c8', wall2 = '#e6d3a8';
   add(g, rb(1.7, 0.16, 1.7, STONE, 0, 0, 0, 0.06));
-  add(g, K.lathe([[0.001, 0.12], [0.74, 0.12], [0.76, 0.3], [0.7, 0.45]], STONED, 0, 0, -0.1, { seg: 12 }));
+  add(g, K.lathe([[0.001, 0.12], [0.74, 0.12], [0.76, 0.3], [0.7, 0.45]], STONE, 0, 0, -0.1, { seg: 12 }));
   add(g, K.lathe([[0.7, 0.45], [0.62, 1.0], [0.54, 1.5], [0.5, 1.75]], wall, 0, 0, -0.1, { seg: 12 }));
   add(g, cyl(0.66, 0.66, 0.05, TIM, 0, 0.98, -0.1, 12), cyl(0.57, 0.57, 0.05, TIM, 0, 1.45, -0.1, 12));
   for (let i = 0; i < 8; i++) { const a = i * Math.PI / 4 + 0.4; add(g, bar(Math.sin(a) * 0.62, 0.5, -0.1 + Math.cos(a) * 0.62, Math.sin(a) * 0.51, 1.72, -0.1 + Math.cos(a) * 0.51, 0.03, wall2)); }
@@ -577,11 +577,11 @@ BUILD.hall = (info) => {
   if (L >= 2) for (const s of [-1, 1]) add(g, bar(s * 0.95 - 0.12, 1.05, fz + 0.04, s * 0.95 + 0.12, 1.05, fz + 0.04, 0.03, GOLDD), rb(0.2, 0.62, 0.03, own, s * 0.95, 0.44, fz + 0.04, 0.012), bx(0.2, 0.03, 0.035, GOLD, s * 0.95, 0.83, fz + 0.04), bx(0.2, 0.03, 0.035, GOLD, s * 0.95, 0.47, fz + 0.04));
   // props on the plaza
   barrel(g, -1.15, 1.0, WOOD, 1.0, 0.14); crate(g, 1.1, 1.05, 0.14, 0.26);
-  pot(g, -0.86, 0.2, 1.2, 1, P.roofPink); pot(g, 0.86, 0.2, 1.2, 1, P.gold);
+  add(g, bl(0.1, P.leaf, -0.9, 0.22, 1.18, 0.8), bl(0.045, P.roofPink, -0.9, 0.3, 1.2), bl(0.1, P.leaf, 0.9, 0.22, 1.18, 0.8), bl(0.045, P.gold, 0.9, 0.3, 1.2));
   if (L >= 2) for (const s of [-1, 1]) { add(g, cyl(0.04, 0.05, 0.9, IRON, s * 1.25, 0.14, 1.2, 6)); lantern(g, s * 1.25, 1.03, 1.2, 1.1, L === 3); }
   if (L === 3) {
-    bunting(g, [-0.9, top - 0.06, fz + 0.32], [0.9, top - 0.06, fz + 0.32], 7, 0.14, 0.08, 0);
-    for (const s of [-1, 1]) add(g, cyl(0.15, 0.17, 0.95, '#f4e4c1', s * 0.9, 0.28, mz - 0.62, 9), cone(0.21, 0.34, GOLDD, s * 0.9, 1.22, mz - 0.62, 9, 0));
+    bunting(g, [-0.9, top - 0.06, fz + 0.32], [0.9, top - 0.06, fz + 0.32], 5, 0.14, 0.08, 0);
+    for (const s of [-1, 1]) add(g, cyl(0.15, 0.17, 0.95, '#f4e4c1', s * 0.9, 0.28, mz - 0.62, 7), cone(0.21, 0.34, GOLDD, s * 0.9, 1.22, mz - 0.62, 7, 0));
   }
   const out = finish(g, pt + 0.95, [3.2, 3.2, 0.95]); out.add(flag); return out;
 };
@@ -590,13 +590,12 @@ BUILD.hall = (info) => {
 BUILD.flowers = (info) => {
   const L = lv(info), id = info.id | 0, g = G();
   const sets = [[P.roofPink, P.gold, P.white], [P.roofPurple, P.roofPink, P.gold], [P.red, P.gold, P.white], [P.blue, P.white, P.roofPink]], cs = sets[id % sets.length];
-  add(g, rb(0.86, 0.16, 0.86, TIM2, 0, 0, 0, 0.05), rb(0.74, 0.12, 0.74, P.soil, 0, 0.08, 0, 0.04));
-  const r = K.rng(id + 7);
-  const n = [9, 12, 15][L - 1];
-  for (let i = 0; i < n; i++) { const a = r() * 6.28, d = 0.08 + r() * 0.26, x = Math.cos(a) * d, z = Math.sin(a) * d, h = 0.26 + r() * 0.14 + (L - 1) * 0.04; add(g, bar(x, 0.18, z, x, h + 0.1, z, 0.018, P.leaf), bl(0.065 + r() * 0.02, cs[i % cs.length], x, h + 0.14, z, 0.85, i), bl(0.04, P.leafLight, x, 0.26, z + 0.04, 0.5, i)); }
-  for (let i = 0; i < 4; i++) add(g, bl(0.1, P.leaf, -0.28 + (i % 2) * 0.56, 0.22, -0.28 + (i >> 1) * 0.56, 0.7, i));
-  if (L >= 2) { add(g, bl(0.025, P.gold, 0.2, 0.55, 0.2), bl(0.025, P.white, -0.15, 0.5, -0.1)); }
-  if (L === 3) { for (const s of [-1, 1]) add(g, rb(0.05, 0.62, 0.05, TIM2, s * 0.4, 0.14, -0.38, 0.015)); add(g, lcyl('x', 0.05, 0.84, GOLD, 0, 0.78, -0.38, 6), sp(0.07, GOLD, 0, 0.84, -0.38, { lo: true })); for (let i = 0; i < 4; i++) add(g, bl(0.06, P.roofPink, -0.3 + i * 0.2, 0.74, -0.38)); }
+  add(g, rb(0.88, 0.17, 0.88, TIM2, 0, 0, 0, 0.05), bx(0.74, 0.1, 0.74, P.soil, 0, 0.1, 0));
+  const r = K.rng(id + 7), n = [9, 13, 17][L - 1];
+  for (const [x, z, k] of [[-0.2, -0.2, 0.17], [0.22, -0.18, 0.15], [-0.18, 0.22, 0.15], [0.2, 0.2, 0.17]]) add(g, bl(k, P.leaf, x, 0.24, z, 0.75, x * 9));
+  for (let i = 0; i < n; i++) { const a = i * 2.4 + r() * 0.5, d = 0.05 + r() * 0.3, h = 0.34 + r() * 0.12 + (L - 1) * 0.03; add(g, bl(0.07 + r() * 0.02, cs[i % cs.length], Math.cos(a) * d, h, Math.sin(a) * d, 0.85, i)); }
+  if (L >= 2) add(g, bl(0.1, P.leafLight, 0, 0.36, 0, 0.7), bl(0.05, P.gold, 0, 0.46, 0));
+  if (L === 3) { for (const s of [-1, 1]) add(g, bx(0.05, 0.7, 0.05, TIM2, s * 0.38, 0.14, -0.36)); add(g, bx(0.9, 0.05, 0.06, GOLDD, 0, 0.84, -0.36), sp(0.06, GOLD, 0, 0.9, -0.36)); for (let i = 0; i < 4; i++) add(g, bl(0.055, P.roofPink, -0.3 + i * 0.2, 0.78, -0.34)); }
   return finish(g, 0.9 + (L === 3 ? 0.1 : 0), [1.15, 1.15, 0.8]);
 };
 BUILD.lantern = (info) => {
@@ -628,18 +627,17 @@ BUILD.fountain = (info) => {
   return finish(g, L === 3 ? 1.65 : 1.35, [2.2, 2.2, 0.8]);
 };
 BUILD.banner = (info) => {
-  const L = lv(info), own = info.color || P.red, g = G(), ph = [1.45, 1.6, 1.78][L - 1];
-  add(g, rb(0.5, 0.14, 0.5, STONE, 0, 0, 0, 0.05), cyl(0.12, 0.16, 0.2, STONEL, 0, 0.1, 0, 8), cyl(0.04, 0.05, ph, L === 3 ? GOLDD : TIM2, 0, 0.2, 0, 7), sp(0.07, GOLD, 0, ph + 0.24, 0, { lo: true }));
-  add(g, lcyl('x', 0.025, 0.66, L === 3 ? GOLDD : TIM, 0, ph - 0.05 + 0.08, 0, 6));
-  const bannerH = [0.7, 0.78, 0.9][L - 1];
-  const flag = G(rb(0.4, bannerH, 0.03, own, 0, -bannerH, 0, 0.015), bx(0.4, 0.05, 0.035, GOLD, 0, -0.08, 0), cone(0.2, 0.2, own, 0, -bannerH - 0.2, 0, 3, 0), star(0.1, GOLD, 0, -bannerH * 0.55, 0.025));
-  flag.children[2].rotation.set(0, Math.PI / 2, Math.PI); flag.children[2].position.y = -bannerH; flag.children[2].scale.set(1, 1, 0.25);
-  flag.children[2].rotation.set(Math.PI, 0, 0); flag.children[2].position.set(0, -bannerH - 0.01 + 0.0, 0); flag.children[2].scale.set(1, 1, 0.2); flag.children[2].position.y = -bannerH - 0.18 + 0.2 - 0.2 + 0.0;
-  flag.name = 'flag'; flag.position.set(0, ph + 0.03, 0.0);
-  for (const s of [-1, 1]) add(g, sp(0.035, GOLD, s * 0.33, ph + 0.03, 0, { lo: true }));
-  if (L >= 2) { const f2 = rb(0.2, 0.3, 0.025, own, 0.27, ph - 0.9, 0.0, 0.01); add(g, f2, bar(0.04, ph - 0.58, 0, 0.27, ph - 0.58, 0, 0.02, TIM2)); }
-  if (L === 3) { for (const s of [-1, 1]) add(g, bar(s * 0.18, ph + 0.03, 0.0, s * 0.18, ph - 0.05, 0.0, 0.0001, GOLD), sp(0.045, GOLD, s * 0.18, ph - 0.7, 0.03, { lo: true })); lantern(g, 0.3, 0.9, 0.0, 0.8, true); add(g, bar(0.0, 0.98, 0.0, 0.3, 0.98, 0.0, 0.02, GOLDD)); }
-  const out = finish(g, ph + 0.4, [1.0, 1.0, 0.8]); out.add(flag); return out;
+  const L = lv(info), own = info.color || P.red, g = G(), ph = [1.45, 1.55, 1.7][L - 1], bw = [0.4, 0.44, 0.5][L - 1], bh = [0.7, 0.8, 0.92][L - 1];
+  const metal = L === 3 ? GOLDD : TIM2;
+  add(g, rb(0.5, 0.14, 0.5, STONE, 0, 0, 0, 0.05), cyl(0.12, 0.16, 0.2, STONEL, 0, 0.1, 0, 8), cyl(0.04, 0.05, ph, metal, 0, 0.2, 0, 6), sp(0.07, GOLD, 0, ph + 0.26, 0));
+  add(g, lcyl('x', 0.025, bw + 0.24, L >= 2 ? GOLDD : TIM, 0, ph + 0.13, 0.0, 5), sp(0.035, GOLD, -(bw + 0.24) / 2, ph + 0.13, 0), sp(0.035, GOLD, (bw + 0.24) / 2, ph + 0.13, 0));
+  const fl = G(), z = 0.05;
+  fl.add(rb(bw, bh, 0.03, own, 0, -bh, z, 0.012), bx(bw, 0.05, 0.035, GOLD, 0, -0.07, z), star(bw * 0.28, GOLD, 0, -bh * 0.55, z + 0.02));
+  const tail = cone(bw / 2, 0.2, own, 0, -bh - 0.2, z, 3, 0); tail.rotation.set(Math.PI, 0, 0); tail.scale.set(1, 1, 0.12); fl.add(tail);
+  if (L >= 2) { fl.add(bx(bw, 0.035, 0.04, GOLD, 0, -bh + 0.04, z)); fl.add(sp(0.04, GOLD, -bw / 2, -bh - 0.05, z), sp(0.04, GOLD, bw / 2, -bh - 0.05, z)); }
+  fl.name = 'flag'; fl.position.set(0, ph + 0.1, 0);
+  if (L === 3) { lantern(g, 0.28, ph - 0.62, 0.0, 0.8, true); add(g, bar(0.0, ph - 0.28, 0, 0.28, ph - 0.28, 0, 0.03, GOLDD), bar(0.28, ph - 0.28, 0, 0.28, ph - 0.46, 0, 0.012, GOLDD)); }
+  const out = finish(g, ph + 0.45, [1.0, 1.0, 0.8]); out.add(fl); return out;
 };
 
 // ================================================================ FARM

@@ -296,11 +296,12 @@ export function chestModel() {
 }
 export function coinPileModel() {
   const g = make(0.45, 1, 1), b = new B(), R = rng(6);
-  const coin = (x, y, z, r, rot) => b.put(GEO.cyl(8, 1, false), '#ffd24a', x, y, z, r, 0.035, r, { r: rot, fn: (lx, ly, lz, t, nx, ny) => (Math.abs(ny) > 0.8 && Math.hypot(lx, lz) < 0.7 ? '#ffe680' : null), sh: 0.12 });
-  [[0, 0.03, 0, 0.3], [0.04, 0.07, -0.02, 0.26], [0, 0.11, 0.02, 0.22], [-0.02, 0.15, 0, 0.17], [0.01, 0.19, 0, 0.12]].forEach(([x, y, z, r], i) => coin(x, y, z, r, [0, i * 0.7, (R() - 0.5) * 0.1]));
-  coin(0.32, 0.03, 0.2, 0.1, [0, 0.4, 0]); coin(-0.3, 0.03, 0.18, 0.1, [0, 1, 0]); coin(0.22, 0.03, -0.3, 0.09, [0, 2, 0]);
-  coin(0.0, 0.2, 0.22, 0.12, [-1.0, 0, 0]);
-  b.ico('#f27a9a', -0.12, 0.28, -0.04, 0.06, 0.07, 0.06, { d: 0, seed: 4, amt: 0.05 }); b.ico('#6fc3ea', 0.12, 0.22, 0.06, 0.05, 0.06, 0.05, { d: 0, seed: 8, amt: 0.05 });
+  b.sph('#e8b53a', 0, 0.09, 0, 0.3, 0.17, 0.3, { w: 8, h: 4, sh: 0.3 });
+  const coin = (x, y, z, r, rot) => b.put(GEO.cyl(8, 1, false), '#ffd24a', x, y, z, r, 0.04, r, { r: rot, fn: (lx, ly, lz, t, nx, ny) => (Math.abs(ny) > 0.8 && Math.hypot(lx, lz) < 0.72 ? '#ffe98a' : null), sh: 0.12 });
+  for (let i = 0; i < 6; i++) { const a = i * 1.05 + 0.3, rad = 0.12 + (i % 2) * 0.1; coin(Math.cos(a) * rad, 0.14 + (i % 2 ? 0 : 0.06), Math.sin(a) * rad, 0.1, [0.5 + R() * 0.6, a, (R() - 0.5) * 0.8]); }
+  coin(0.0, 0.2, 0.0, 0.11, [0.15, 0.4, 0.1]);
+  coin(0.34, 0.03, 0.22, 0.1, [0, 0.4, 0]); coin(-0.34, 0.03, 0.12, 0.1, [0, 1, 0]);
+  b.ico('#f27a9a', -0.1, 0.27, -0.04, 0.06, 0.07, 0.06, { d: 0, seed: 4, amt: 0.05 }); b.ico('#6fc3ea', 0.1, 0.25, 0.07, 0.05, 0.06, 0.05, { d: 0, seed: 8, amt: 0.05 });
   return finalize(addParts(g, b));
 }
 export function scrollModel() {

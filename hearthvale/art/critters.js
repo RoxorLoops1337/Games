@@ -208,7 +208,7 @@ export function cowModel(seed = 0) {
   const V = [{ c: '#fdf8ee', p: '#3d3430' }, { c: '#b97b4a', p: '#f6ead4' }, { c: '#f3e4c9', p: '#a86a3c' }][((seed % 3) + 3) % 3];
   const root = new THREE.Group(); shadowOf(root, 0.62, 0.3, 0.8, 1.45);
   part(root, 'body', 0, 0, 0, (b) => {
-    b.sph(V.c, 0, 0.62, 0, 0.35, 0.33, 0.58, { w: 8, h: 5 });
+    b.sph(V.c, 0, 0.58, 0, 0.37, 0.34, 0.58, { w: 8, h: 5 });
     b.sph(V.p, 0.17, 0.78, -0.05, 0.17, 0.12, 0.17, { w: 5, h: 3 }); b.sph(V.p, -0.2, 0.62, 0.22, 0.13, 0.15, 0.17, { w: 5, h: 3 }); b.sph(V.p, -0.1, 0.64, -0.38, 0.15, 0.14, 0.13, { w: 5, h: 3 });
     b.sph('#f6b4ae', 0, 0.37, -0.2, 0.1, 0.07, 0.1, { w: 5, h: 3 });
   });
@@ -226,7 +226,7 @@ export function cowModel(seed = 0) {
   part(head, 'earL', 0.19, 0.8, 0.7, (b) => b.sph(V.c, 0.28, 0.79, 0.7, 0.1, 0.035, 0.065, { w: 5, h: 3, r: [0, 0, -0.3] }));
   part(head, 'earR', -0.19, 0.8, 0.7, (b) => b.sph(V.c, -0.28, 0.79, 0.7, 0.1, 0.035, 0.065, { w: 5, h: 3, r: [0, 0, 0.3] }));
   part(body, 'tail', 0, 0.85, -0.57, (b) => { b.cyl(V.c, 0, 0.65, -0.62, 0.02, 0.4, { n: 4, open: true }); b.sph(V.p, 0, 0.43, -0.62, 0.05, 0.07, 0.05, { w: 5, h: 3 }); });
-  legGroup(root, 0.38, [[0.2, 0.38], [-0.2, 0.38], [0.2, -0.36], [-0.2, -0.36]], (b, x, z) => b.cyl(V.c, x, 0.19, z, 0.085, 0.38, { n: 5, rt: 0.85, open: true }));
+  legGroup(root, 0.34, [[0.2, 0.38], [-0.2, 0.38], [0.2, -0.36], [-0.2, -0.36]], (b, x, z) => b.cyl(V.c, x, 0.17, z, 0.1, 0.34, { n: 5, rt: 0.85, open: true }));
   return finish(root, 'cow', 0, seed);
 }
 
@@ -339,6 +339,7 @@ export function butterflyModel(color = '#ff8fb3') {
   };
   const body = root.getObjectByName('body');
   part(body, 'wingL', 0, 0, 0, wing(1), WINGMAT); part(body, 'wingR', 0, 0, 0, wing(-1), WINGMAT);
+  root.scale.setScalar(1.6);
   return finish(root, 'butterfly', 3, 0, true);
 }
 
@@ -359,14 +360,15 @@ export function fishModel(color = '#ff9a3c') {
 }
 
 /* ------------------------------------------------------------------ CLOUD */
-export const cloudMat = new THREE.MeshStandardMaterial({ color: '#ffffff', vertexColors: true, roughness: 1, metalness: 0, emissive: '#e3ecff', emissiveIntensity: 0.5 });
+/** Unlit (so low-poly facets never show as lighting steps): colour gradient only. The game dims it at night with cloudMat.color. */
+export const cloudMat = new THREE.MeshBasicMaterial({ color: '#ffffff', vertexColors: true, toneMapped: false });
 export function cloudModel(seed = 0) {
-  const R = rng(seed * 53 + 11), n = 4 + ((R() * 2) | 0); const root = new THREE.Group();
-  const sh = groundShadow(1, 0.13, 3.6, 1.8); sh.name = 'shadow'; root.add(sh);
+  const R = rng(seed * 53 + 11), n = 3 + ((R() * 2) | 0); const root = new THREE.Group();
+  const sh = groundShadow(1, 0.08, 3.6, 1.8); sh.name = 'shadow'; root.add(sh);
   part(root, 'body', 0, 0, 0, (b) => {
-    for (let i = 0; i < n; i++) { const u = n === 1 ? 0 : i / (n - 1) - 0.5, r = 0.95 - Math.abs(u) * 0.55 + R() * 0.15; b.dome('#ffffff', u * 3.6, 0, (R() - 0.5) * 0.5, r, r * 0.72, r * 0.85, { w: 8, h: 3, sh: 0.24 }); }
+    for (let i = 0; i < n; i++) { const u = n === 1 ? 0 : i / (n - 1) - 0.5, r = 0.95 - Math.abs(u) * 0.55 + R() * 0.15; b.dome('#ffffff', u * 3.4, 0, (R() - 0.5) * 0.5, r, r * 0.72, r * 0.85, { w: 12, h: 3, sh: 0.3 }); }
     const tops = 2 + ((R() * 2) | 0);
-    for (let i = 0; i < tops; i++) { const u = tops === 1 ? 0 : i / (tops - 1) - 0.5, r = 0.85 - Math.abs(u) * 0.4 + R() * 0.15; b.sph('#ffffff', u * 2.0 + (R() - 0.5) * 0.3, r * 0.5, (R() - 0.5) * 0.3, r, r * 0.8, r * 0.85, { w: 7, h: 4, sh: 0.28 }); }
+    for (let i = 0; i < tops; i++) { const u = tops === 1 ? 0 : i / (tops - 1) - 0.5, r = 0.85 - Math.abs(u) * 0.4 + R() * 0.15; b.sph('#ffffff', u * 2.0 + (R() - 0.5) * 0.3, r * 0.5, (R() - 0.5) * 0.3, r, r * 0.8, r * 0.85, { w: 8, h: 4, sh: 0.26 }); }
   }, cloudMat);
   root.traverse((o) => { if (o.isMesh) { o.castShadow = false; o.receiveShadow = false; } });
   return finish(root, 'cloud', 5, seed, true);

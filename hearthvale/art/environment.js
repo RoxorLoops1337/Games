@@ -227,8 +227,8 @@ function sweepGeo(rings, { cut, flip, orient } = {}) {
   g.computeBoundingBox(); g.userData.y0 = g.boundingBox.min.y; g.userData.y1 = g.boundingBox.max.y; return g;
 }
 /** flat triangles list [[x,y,z,colour]*3...] -> geometry (up-facing if wound CCW seen from above) */
-function triGeo(tris) {
-  const pos = [], colr = []; for (const t of tris) for (const v of t) { pos.push(v[0], v[1], v[2]); const c = col(v[3]); colr.push(c.r, c.g, c.b); }
+function triGeo(tris, up = true) {
+  const pos = [], colr = []; for (let t of tris) { if (up) { const ux = t[1][0] - t[0][0], uz = t[1][2] - t[0][2], vx = t[2][0] - t[0][0], vz = t[2][2] - t[0][2]; if (uz * vx - ux * vz < 0) t = [t[0], t[2], t[1]]; } for (const v of t) { pos.push(v[0], v[1], v[2]); const c = col(v[3]); colr.push(c.r, c.g, c.b); } }
   const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('color', new THREE.Float32BufferAttribute(colr, 3)); g.computeVertexNormals();
   g.computeBoundingBox(); g.userData.y0 = g.boundingBox.min.y; g.userData.y1 = g.boundingBox.max.y; return g;
 }
@@ -678,13 +678,14 @@ function boardStatic(b) {
     b.lump(0.026, x - rot * 0.1, y - 0.03, 0.15, ['#e8564a', '#4a90e0', '#f2b632'][i % 3], { d: 0, grad: 0.4, ao: 0 });
   });
   b.lump(0.07, 0.6, 1.18, 0.15, '#ffd24a', { d: 1, s: [1, 1, 0.25], grad: 0.5, ao: 0 });   // a coin note
-  // roof: two shingled slabs, ridge, bargeboards and a scalloped front eave
-  const roof = P.roofRed, slope = 0.6;
-  for (const sgn of [-1, 1]) { b.box(3.3, 0.13, 0.82, 0, 2.58 - 0.0, sgn * 0.33, roof, { r: [-sgn * slope, 0, 0], grad: 0.9, ao: 0, facet: 0.0 });
-    for (let k = 0; k < 4; k++) { const f = 0.12 + k * 0.2; b.plain(3.2, 0.03, 0.05, 0, 2.58 + 0.08 - sgn * 0 + Math.sin(slope) * (0), sgn * 0.33 * (1.0), '#b8402f', { ao: 0, grad: 0, r: [-sgn * slope, 0, 0], p: undefined }); break; } }
-  b.cyl(0.1, 0.1, 3.4, -1.7, 2.99, 0, '#a83f2f', { seg: 6, r: [0, 0, Math.PI / 2], ao: 0, grad: 0.6 });
-  for (const sgn of [-1, 1]) for (let k = 0; k < 11; k++) b.lump(0.1, -1.5 + k * 0.3, 2.3 + (sgn > 0 ? 0 : 0) - 0.0, sgn * 0.68 - sgn * 0.0, k % 2 ? '#e0644f' : '#d9503d', { d: 0, s: [1.1, 0.55, 0.9], grad: 0.7, ao: 0 });
-  b.box(0.1, 0.7, 0.9, -1.67, 2.35, 0, woodD, { ao: 0, grad: 0.4 }); b.box(0.1, 0.7, 0.9, 1.67, 2.35, 0, woodD, { ao: 0, grad: 0.4 });
+  // roof: two shingled slabs, ridge, scalloped front eave
+  const roof = P.roofRed, th = 0.66, cs = Math.cos(th), sn = Math.sin(th), slabP = (sgn, t, u) => [0, 2.52 + t * cs - u * sn * 1, sgn * 0.36 + (t * sn * 1 + u * cs) * sgn * 1];
+  for (const sgn of [-1, 1]) {
+    b.box(3.4, 0.14, 0.98, 0, 2.52, sgn * 0.36, roof, { r: [sgn * th, 0, 0], grad: 0.95, ao: 0 });
+    for (const u of [-0.3, 0.02, 0.34]) { const q = [0, 2.52 + 0.145 * cs - u * sn, sgn * (0.36 + 0.145 * sn + u * cs)]; b.plain(3.3, 0.03, 0.045, q[0], q[1], q[2], '#b8402f', { r: [sgn * th, 0, 0], ao: 0, grad: 0 }); }
+  }
+  for (let k = 0; k < 11; k++) { const q = [-1.5 + k * 0.3, 2.52 - 0.49 * sn + 0.02, 0.36 + 0.49 * cs + 0.0]; b.lump(0.11, q[0], q[1], q[2], k % 2 ? '#e0644f' : '#d9503d', { d: 0, s: [1.15, 0.6, 0.9], grad: 0.7, ao: 0 }); }
+  b.add(G.cyl(1, 8), { p: [1.72, 2.96, 0], s: [0.1, 3.44, 0.1], r: [0, 0, Math.PI / 2], c: '#a83f2f', grad: 0.6, ao: 0 });
   // arms for the bell and the lantern, hanging crate and sack, flower pot
   for (const x of [-1.1, 1.1]) b.box(0.08, 0.08, 0.7, x, 2.18, 0.45, woodD, { ao: 0, grad: 0.4 });
   b.lump(0.24, 1.5, 0.44, 0.2, '#e6d3a3', { d: 1, s: [1, 1.1, 1], grad: 0.7, ao: 0.25 }); b.lump(0.07, 1.5, 0.7, 0.2, '#d4bf8c', { d: 0, ao: 0 }); b.shadow(1.5, 0.2, 0.55, 0.3, 1, 1, 0.15);
@@ -709,4 +710,285 @@ export function boardModel() {
   const lan = lanternGroup('lantern', 1.1); lan.position.set(-1.1, 2.2, 0.72); g.add(lan);
   const bell = instantiate(baked('bell', (b) => { b.add(G.lathe(BELL_PROFILE, 10), { m: 'gloss', c: '#ffd24a', grad: 0.8, ao: 0, p: [0, -0.3, 0] }); b.lump(0.045, 0, -0.32, 0, '#8a5a3a', { m: 'gloss', d: 0, ao: 0 }); b.cyl(0.01, 0.01, 0.05, 0, -0.05, 0, '#4a4036', { seg: 4, ao: 0 }); })); bell.name = 'bell'; bell.position.set(1.1, 2.17, 0.72); g.add(bell);
   g.userData.topY = 3.7; return g;
+}
+
+// =================================================================== 4. PLAZA
+function plazaInto(b, R) {
+  const k = R / 9, FYP = 0.1; b.floor = FYP;
+  const mortar = col('#b99d6c');
+  b.geo(polarGeo([{ r: 0, y: FYP - 0.012, c: () => mortar }, { r: R, y: FYP - 0.012, c: () => mortar }, { r: R + 0.12, y: 0, c: () => '#8a6e48' }], 48), 'matte', { ao: 0 });
+  // cobbles: brick-pattern polar cells in 3 sand tones, paler lanes along the four axes where the paths come in
+  const tones = ['#ecd9a0', '#e2cb8c', '#d6bc7c', '#f0e0b0'], lane = col('#f5ead0'), tris = [];
+  const r0 = 2.75 * k, r1 = R - 0.4 * k, rowW = 0.8 * k; const rowsN = Math.max(3, Math.round((r1 - r0) / rowW)), rw = (r1 - r0) / rowsN;
+  for (let i = 0; i < rowsN; i++) {
+    const ra = r0 + i * rw, rb = ra + rw, rm = (ra + rb) / 2, n = Math.max(6, Math.round(TAU * rm / (0.95 * k))), off = (i % 2) * 0.5, g = 0.05 * k;
+    for (let j = 0; j < n; j++) {
+      const t0 = (j + off) / n * TAU, t1 = (j + 1 + off) / n * TAU, tm = (t0 + t1) / 2, dt = g / rm, h = hash(i * 13.1, j * 7.7);
+      let base = col(tones[Math.floor(hash(i + 3.3, j * 1.7) * 3)]).clone();
+      const axD = Math.abs(Math.sin(tm * 2)) * rm * 0.5; /* distance-ish to the nearest axis */ const toAxis = Math.min(...[0, 1, 2, 3].map((q) => Math.abs(Math.sin(tm - q * Math.PI / 2)) * rm));
+      if (toAxis < 1.05 * k) base = col('#f6ecd2').clone().multiplyScalar(0.96 + h * 0.06); else base.multiplyScalar(0.97 + h * 0.06);
+      if (i === rowsN - 1) base.lerp(col('#c9b27c'), 0.35);
+      const P_ = (r, t, y, m) => [Math.cos(t) * r, y, Math.sin(t) * r, base.clone().multiplyScalar(m)];
+      const A = P_(ra + g, t0 + dt, FYP + 0.004, 0.88), B = P_(ra + g, t1 - dt, FYP + 0.004, 0.88), C = P_(rb - g, t1 - dt, FYP + 0.004, 0.88), D = P_(rb - g, t0 + dt, FYP + 0.004, 0.88), Cc = P_(rm, tm, FYP + 0.026 + h * 0.008, 1.08);
+      tris.push([A, B, Cc], [B, C, Cc], [C, D, Cc], [D, A, Cc]);
+    }
+  }
+  b.geo(triGeo(tris), 'matte', { ao: 0 });
+  // compass inlay under the board
+  { const t = [], R1 = 2.6 * k, y = FYP + 0.012; const pt = (r, a, yy, c) => [Math.cos(a) * r, yy, Math.sin(a) * r, c];
+    for (let i = 0; i < 40; i++) { const a0 = i / 40 * TAU, a1 = (i + 1) / 40 * TAU; t.push([pt(0, 0, y, '#f4e6c0'), pt(R1, a0, y, '#f4e6c0'), pt(R1, a1, y, '#f4e6c0')]);
+      t.push([pt(R1 * 0.86, a0, y + 0.004, '#5aa9a5'), pt(R1, a0, y + 0.004, '#4a97a0'), pt(R1, a1, y + 0.004, '#4a97a0')], [pt(R1 * 0.86, a0, y + 0.004, '#5aa9a5'), pt(R1, a1, y + 0.004, '#4a97a0'), pt(R1 * 0.86, a1, y + 0.004, '#5aa9a5')]); }
+    for (let i = 0; i < 8; i++) { const a = i / 8 * TAU, al = a - 0.2, ar = a + 0.2, rr = i % 2 ? R1 * 0.55 : R1 * 0.8; t.push([pt(0, 0, y + 0.008, '#e8b53a'), pt(rr, a, y + 0.008, '#e8b53a'), pt(R1 * 0.2, al, y + 0.008, '#c9822f')], [pt(0, 0, y + 0.008, '#e8b53a'), pt(R1 * 0.2, ar, y + 0.008, '#c9822f'), pt(rr, a, y + 0.008, '#e8b53a')]); }
+    const g = triGeo(t);
+    b.geo(g, 'matte', { ao: 0 }); }
+  // stone ring (curb): blocks with slits, two stone tones, a few mossy tops
+  { const nB = Math.round(TAU * R / 1.3), rings = [], cut = new Set(); const sc = ['#c4bcae', '#b2aa9c', '#bdb5a6', '#aaa294'];
+    for (let j = 0; j < nB; j++) { const a0 = j / nB * TAU + 0.004, a1 = (j + 1) / nB * TAU - 0.004, c0 = col(sc[j % 4]).clone().multiplyScalar(0.96 + hash(j, 4) * 0.08), mossy = hash(j, 9) > 0.8;
+      for (const a of [a0, (a0 + a1) / 2, a1]) { const pr = [[R + 0.26 * k, 0.0, c0.clone().multiplyScalar(0.7)], [R + 0.26 * k, 0.2, c0.clone().multiplyScalar(0.92)], [R + 0.17 * k, 0.29, mossy ? col('#7fae4e') : c0.clone().multiplyScalar(1.18)], [R - 0.14 * k, 0.29, mossy ? col('#8fbd58') : c0.clone().multiplyScalar(1.18)], [R - 0.22 * k, 0.2, c0.clone().multiplyScalar(1.0)], [R - 0.22 * k, FYP, c0.clone().multiplyScalar(0.8)]];
+        rings.push(pr.map(([rad, y, c]) => ({ x: Math.cos(a) * rad, y, z: Math.sin(a) * rad, c }))); }
+      if (j < nB - 1) cut.add(rings.length - 1); }
+    b.geo(sweepGeo(rings, { cut, orient: 'out' }), 'matte', { ao: 0.2, aoH: 0.3 }); }
+  b.shadow(0, 0, R + 1.6, 0.0, 1, 1, 0.0);
+  const place = (ang, rad, yawF, fn) => { const x = Math.cos(ang) * rad, z = Math.sin(ang) * rad, yaw = yawF === 'in' ? Math.atan2(-Math.cos(ang), -Math.sin(ang)) : yawF || 0; b.xf(x, FYP, z, k, yaw, () => fn(x, z)); };
+  const D45 = Math.PI / 4;
+  // fountain at 45 deg
+  place(D45, 5.6 * k, 0, () => {
+    b.add(G.lathe([[1.15, 0], [1.2, 0.14], [1.17, 0.46], [1.05, 0.5], [1.0, 0.4], [0.0, 0.38]], 20), { c: '#c4bcae', grad: 0.8, ao: 0.3, aoH: 0.25, facet: 0.03 }); b.lump(0.98, 0, 0.36, 0, '#56c3ea', { m: 'water', d: 2, s: [1, 0.04, 1], jit: 0.0, grad: 0.4, ao: 0 });
+    b.cyl(0.13, 0.19, 0.62, 0, 0.3, 0, '#c4bcae', { seg: 8, grad: 0.7 }); b.add(G.lathe([[0.55, 0.9], [0.58, 1.0], [0.5, 1.06], [0.35, 0.98], [0.0, 0.95]], 14), { c: '#cfc8ba', grad: 0.8, ao: 0 }); b.lump(0.42, 0, 0.97, 0, '#56c3ea', { m: 'water', d: 1, s: [1, 0.05, 1], jit: 0, ao: 0 });
+    b.cyl(0.07, 0.1, 0.4, 0, 0.95, 0, '#c4bcae', { seg: 8, ao: 0 }); b.lump(0.14, 0, 1.43, 0, '#8fe0f4', { m: 'water', d: 1, grad: 0.5, ao: 0 });
+    for (let i = 0; i < 6; i++) { const a = i / 6 * TAU; b.lump(0.045, Math.cos(a) * 0.62, 0.72, Math.sin(a) * 0.62, '#9fe6f6', { m: 'water', d: 0, s: [1, 1.6, 1], ao: 0 }); b.lump(0.04, Math.cos(a) * 0.3, 1.25, Math.sin(a) * 0.3, '#9fe6f6', { m: 'water', d: 0, s: [1, 1.5, 1], ao: 0 }); }
+    b.shadow(0, 0, 1.9, 0.28, 1, 1, 0.0);
+  });
+  // well at 135 deg
+  place(Math.PI - D45, 5.6 * k, 0, () => {
+    b.add(G.lathe([[0.78, 0], [0.8, 0.12], [0.78, 0.55], [0.66, 0.62], [0.52, 0.6], [0.5, 0.4]], 12), { c: '#c4bcae', grad: 0.8, ao: 0.3, aoH: 0.25, facet: 0.05 }); b.lump(0.5, 0, 0.36, 0, '#2f8fc0', { m: 'water', d: 1, s: [1, 0.04, 1], ao: 0, jit: 0 });
+    for (const x of [-0.68, 0.68]) b.box(0.13, 1.5, 0.13, x, 0.5, 0, '#b47a45', { grad: 0.8, ao: 0.3 });
+    b.add(G.cyl(1, 8), { p: [0.78, 1.55, 0], s: [0.07, 1.56, 0.07], r: [0, 0, Math.PI / 2], c: '#8a5a3a', grad: 0.6, ao: 0 }); b.box(0.04, 0.04, 0.3, 0.52, 1.5, 0.0, '#8a5a3a', { ao: 0 }); b.box(0.04, 0.04, 0.3, -0.52, 1.5, 0.0, '#8a5a3a', { ao: 0 });
+    for (const sgn of [-1, 1]) { b.box(1.8, 0.1, 0.62, 0, 1.78, sgn * 0.22, '#4f86c6', { r: [sgn * 0.62, 0, 0], grad: 0.9, ao: 0 }); b.plain(1.7, 0.03, 0.04, 0, 1.98, sgn * 0.3, '#3c6ca6', { r: [sgn * 0.62, 0, 0], ao: 0, grad: 0 }); }
+    b.add(G.cyl(1, 8), { p: [0.92, 2.04, 0], s: [0.06, 1.84, 0.06], r: [0, 0, Math.PI / 2], c: '#3c6ca6', grad: 0.5, ao: 0 });
+    b.cyl(0.012, 0.012, 0.5, 0, 0.95, 0, '#d8c8a0', { seg: 4, ao: 0 }); b.cyl(0.13, 0.1, 0.18, 0, 0.78, 0, '#a8723f', { seg: 8, ao: 0 });
+    b.shadow(0, 0, 1.4, 0.3, 1, 1, 0.0);
+  });
+  // flower beds at 225 and 315 (a small tree, and a big bloom mound)
+  const bed = (ang, tree) => place(ang, 5.6 * k, 0, () => {
+    b.add(G.lathe([[1.0, 0], [1.05, 0.1], [1.02, 0.28], [0.92, 0.3], [0.88, 0.18], [0.0, 0.2]], 18), { c: '#c4bcae', grad: 0.8, ao: 0.3, aoH: 0.25, facet: 0.03 }); b.lump(0.9, 0, 0.19, 0, '#6b4a30', { d: 1, s: [1, 0.12, 1], jit: 0, ao: 0 });
+    const r = krng(ang * 100 | 0); for (let i = 0; i < 22; i++) { const a = r() * TAU, rr = (tree ? 0.35 : 0.1) + r() * 0.62; flowerInto(b, Math.cos(a) * rr, 0.2, Math.sin(a) * rr, FLOWERS[(i + (tree ? 0 : 2)) % 6], 1.15, 0.13 + r() * 0.1); }
+    for (let i = 0; i < 6; i++) { const a = i * 1.05, rr = 0.55 + r() * 0.2; b.lump(0.2, Math.cos(a) * rr, 0.26, Math.sin(a) * rr, '#58b04a', { d: 0, s: [1.2, 0.6, 1.2], ao: 0, grad: 0.7, sw: 0.4 }); }
+    if (tree) b.xf(0, 0.2, 0, 0.62, 1, () => treeInto(b, 'apple', 1, 0)); else for (let i = 0; i < 8; i++) { const a = i * 0.8; b.lump(0.2, Math.cos(a) * 0.3, 0.36 + (i % 2) * 0.1, Math.sin(a) * 0.3, FLOWERS[(i * 2) % 6], { d: 1, grad: 0.7, ao: 0, s: [1, 0.8, 1] }); }
+    b.shadow(0, 0, 1.6, 0.25, 1, 1, 0.0);
+  });
+  bed(Math.PI + D45, true); bed(Math.PI * 1.75, false);
+  // benches facing the middle at 22.5 + 90m
+  for (let m = 0; m < 4; m++) place(Math.PI / 8 + m * Math.PI / 2, 6.5 * k, 'in', () => {
+    b.box(1.35, 0.1, 0.44, 0, 0.34, 0, '#c58a52', { grad: 0.8, ao: 0.2 }); b.box(1.35, 0.3, 0.07, 0, 0.44, -0.2, '#b47a45', { grad: 0.8, ao: 0, r: [-0.12, 0, 0] });
+    for (const x of [-0.52, 0.52]) { b.box(0.12, 0.34, 0.4, x, 0, 0, '#bdb5a6', { grad: 0.8, ao: 0.4 }); b.box(0.09, 0.5, 0.09, x, 0.34, -0.2, '#8a5a3a', { ao: 0, grad: 0.4 }); }
+    b.shadow(0, -0.05, 1.0, 0.3, 1.2, 0.6, 0.0);
+  });
+  // planters at 67.5 + 90m
+  for (let m = 0; m < 4; m++) place(Math.PI * 3 / 8 + m * Math.PI / 2, 6.9 * k, 0, () => {
+    b.add(G.lathe([[0.42, 0], [0.5, 0.12], [0.52, 0.34], [0.46, 0.42], [0.4, 0.38]], 12), { c: '#c96f3e', grad: 0.8, ao: 0.3, aoH: 0.2 }); b.lump(0.4, 0, 0.38, 0, '#6b4a30', { d: 0, s: [1, 0.2, 1], ao: 0, jit: 0 });
+    for (let i = 0; i < 3; i++) b.lump(0.2, Math.cos(i * 2.1) * 0.17, 0.5, Math.sin(i * 2.1) * 0.17, '#58b04a', { d: 1, s: [1, 0.85, 1], ao: 0, grad: 0.9, sw: 0.3 });
+    for (let i = 0; i < 8; i++) { const a = i * 0.85 + m, rr = 0.1 + (i % 3) * 0.1; b.lump(0.07, Math.cos(a) * rr, 0.68 + (i % 2) * 0.05, Math.sin(a) * rr, FLOWERS[(i + m) % 6], { d: 0, ao: 0, grad: 0.6 }); }
+    b.shadow(0, 0, 0.8, 0.28, 1, 1, 0.0);
+  });
+  // lamp posts flanking each path entrance
+  for (let q = 0; q < 4; q++) for (const s of [-1, 1]) { const a = q * Math.PI / 2 + s * 0.14; place(a, R - 0.95 * k, 0, () => {
+    b.add(G.lathe([[0.17, 0], [0.12, 0.12], [0.07, 0.3], [0.06, 1.8]], 8), { c: '#4a4036', grad: 0.6, ao: 0.2 }); b.lump(0.09, 0, 1.85, 0, '#4a4036', { d: 0, ao: 0 });
+    b.box(0.26, 0.34, 0.26, 0, 1.78, 0, '#ffe08a', { m: 'lantern', ao: 0 }); b.cyl(0.0, 0.26, 0.2, 0, 2.1, 0, '#4a4036', { seg: 6, ao: 0, grad: 0.5 }); b.lump(0.05, 0, 2.33, 0, '#ffd24a', { d: 0, ao: 0 });
+    b.cyl(0.14, 0.14, 0.04, 0, 1.74, 0, '#4a4036', { seg: 6, ao: 0 }); b.shadow(0, 0, 0.5, 0.25, 1, 1, 0.0);
+  }); }
+  // a few tufts and flowers in the cracks of the ring
+  const r = krng(7); for (let i = 0; i < 22; i++) { const a = r() * TAU; const rr = R + (r() < 0.5 ? 0.45 : -0.0) * k; if (rr < R + 0.3) continue; tuftInto(b, Math.cos(a) * (R + 0.35 * k), 0.0, Math.sin(a) * (R + 0.35 * k), 0.8, P.grassDark, 3, 0.8); }
+}
+/**
+ * The central valley square. Round, top at y = 0.10 (island top at 0). The middle 3 units hold the board (a compass inlay shows around it).
+ * Cobbles, stone ring, fountain (45deg), well (135deg), two flower beds, 4 benches, 4 planters, 8 lamp posts at the 4 path entrances.
+ * Lamp lanterns use the exported lanternMat.
+ */
+export function plazaModel(radius = 9) { const g = instantiate(baked(`plaza:${radius}`, (b) => plazaInto(b, radius)), { shadows: false }); g.name = 'plaza'; g.userData.radius = radius; return g; }
+
+// =================================================================== 5. VILLAGE PLOT
+const PLOT_N = 16, PH = 8.15;   // tiles per side; centre line of the border
+function plotInto(b, hex) {
+  const own = col(hex), ownL = own.clone().lerp(col('#ffffff'), 0.28), ownD = own.clone().multiplyScalar(0.72), TOP = 0.14; b.floor = TOP;
+  // 16x16 grass tiles: gentle checker + painterly patches, darker near the border (cheap AO)
+  { const tris = [], gA = col(P.grass), gB = col('#a6dc6c'), gD = col('#86c455');
+    for (let i = 0; i < PLOT_N; i++) for (let j = 0; j < PLOT_N; j++) {
+      const base = ((i + j) % 2 ? gA : gB).clone().lerp(gD, sstep(0.45, 0.8, fbm(i * 0.35 + 3, j * 0.35 + 8)) * 0.55).multiplyScalar(0.975 + hash(i, j) * 0.05);
+      const corner = (x, z) => { const d = Math.min(8 - Math.abs(x), 8 - Math.abs(z)); return base.clone().multiplyScalar(0.84 + 0.16 * sstep(0, 1.6, d)); };
+      const x0 = i - 8, z0 = j - 8, A = [x0, TOP, z0, corner(x0, z0)], B = [x0 + 1, TOP, z0, corner(x0 + 1, z0)], C = [x0 + 1, TOP, z0 + 1, corner(x0 + 1, z0 + 1)], D = [x0, TOP, z0 + 1, corner(x0, z0 + 1)];
+      tris.push([A, D, C], [A, C, B]);
+    }
+    b.geo(triGeo(tris), 'matte', { ao: 0 }); }
+  // border curb: stone blocks with slits; owner colour on top and outer lip, soil below
+  { const rings = [], cut = new Set(), rad = 0.9, S = PH, seg = 5;
+    // blocks (each a list of points) walk the rounded square; the gate on +Z, |x| < 1.3, is left open
+    const side = (x0, z0, x1, z1) => { const L = Math.hypot(x1 - x0, z1 - z0), n = Math.max(1, Math.round(L / 1.45)); const out = []; for (let i = 0; i < n; i++) out.push([[x0 + (x1 - x0) * i / n, z0 + (z1 - z0) * i / n], [x0 + (x1 - x0) * (i + 1) / n, z0 + (z1 - z0) * (i + 1) / n]]); return out; };
+    const R2 = S - rad, order = [];
+    order.push(...side(1.3, S, R2, S), arcDec(R2, R2, Math.PI / 2, 0, rad, seg), ...side(S, R2, S, -R2), arcDec(R2, -R2, 0, -Math.PI / 2, rad, seg), ...side(R2, -S, -R2, -S), arcDec(-R2, -R2, -Math.PI / 2, -Math.PI, rad, seg), ...side(-S, -R2, -S, R2), arcDec(-R2, R2, Math.PI, Math.PI / 2, rad, seg), ...side(-R2, S, -1.3, S));
+    const stones = ['#c4bcae', '#b8b0a2', '#cbc3b5'];
+    order.forEach((blk, bi) => {
+      const sc = col(stones[bi % 3]).clone().multiplyScalar(0.96 + hash(bi, 2) * 0.08);
+      const pts2 = blk.length === 2 ? [blk[0], [(blk[0][0] + blk[1][0]) / 2, (blk[0][1] + blk[1][1]) / 2], blk[1]] : blk;
+      pts2.forEach((p, pi) => {
+        const nx0 = p[0], nz0 = p[1]; // outward normal = direction from the nearest point of the inner rounded square
+        const cx = clamp(nx0, -R2, R2), cz = clamp(nz0, -R2, R2); let ux = nx0 - cx, uz = nz0 - cz; const ul = Math.hypot(ux, uz) || 1; if (ul < 1e-6) { ux = 0; uz = 1; } else { ux /= ul; uz /= ul; }
+        const pr = [[0.2, -0.15, '#7a5638'], [0.2, 0.07, '#7a5638'], [0.2, 0.1, ownD], [0.2, 0.22, own], [0.13, 0.31, ownL], [-0.12, 0.31, ownL], [-0.2, 0.17, sc]];
+        const edgeK = pi === 0 || pi === pts2.length - 1 ? 0.86 : 1;
+        rings.push(pr.map(([u, y, c]) => { const cc = col(c).clone().multiplyScalar(edgeK); return { x: nx0 + ux * u, y, z: nz0 + uz * u, c: cc }; }));
+      });
+      cut.add(rings.length - 1);
+    });
+    b.geo(sweepGeo(rings, { cut, orient: 'out' }), 'matte', { ao: 0.0 });
+  }
+  // hedge bushes outside the border, owner-colour blossoms on some; none at the gate
+  { const r = krng(hex.length * 7 + (own.getHex() % 997)); let n = 0;
+    for (let s = 0; s < 4; s++) for (let i = 0; i < 6; i++) { const t = -6.9 + i * 2.78 + (r() - 0.5) * 0.4, off = PH + 0.52 + (r() - 0.5) * 0.12; let x, z; if (s === 0) { x = t; z = off; if (Math.abs(x) < 2.2) continue; } else if (s === 1) { x = off; z = t; } else if (s === 2) { x = t; z = -off; } else { x = -off; z = t; }
+      const sc = 0.85 + r() * 0.5; b.lump(0.3 * sc, x, 0.14 + 0.2 * sc, z, ['#4fa845', '#5cb44a', '#46a04c'][n++ % 3], { d: 0, s: [1.3, 0.9, 1.0], jit: 0.12, seed: n, grad: 0.95, ao: 0.2, aoH: 0.3, r: [0, r() * 3, 0] });
+      if (n % 2 === 0) b.lump(0.07, x + 0.12, 0.14 + 0.43 * sc, z + 0.05, own, { d: 0, grad: 0.4, ao: 0 }); } }
+  // gate arch on the +Z side, owner colour
+  { const gx = 1.45, gz = PH + 0.02;
+    for (const sx of [-1, 1]) { b.box(0.56, 0.55, 0.56, sx * gx, 0.0, gz, '#c4bcae', { grad: 0.8, ao: 0.3, aoH: 0.3 }); b.box(0.34, 1.5, 0.34, sx * gx, 0.5, gz, own, { grad: 0.8, ao: 0.2 }); b.lump(0.2, sx * gx, 2.02, gz, ownL, { d: 1, grad: 0.7, ao: 0, s: [1, 0.9, 1] }); }
+    const rings = []; for (let i = 0; i <= 10; i++) { const t = Math.PI - i / 10 * Math.PI, x = Math.cos(t) * gx, y = 1.78 + Math.sin(t) * 0.7, nl = Math.hypot(Math.cos(t) / gx, Math.sin(t) / 0.7), nx = Math.cos(t) / gx / nl, ny = Math.sin(t) / 0.7 / nl; rings.push([[-0.11, -0.11], [0.11, -0.11], [0.11, 0.11], [-0.11, 0.11], [-0.11, -0.11]].map(([a, zo]) => ({ x: x + nx * a, y: y + ny * a, z: gz + zo, c: a > 0 ? ownL : own }))); }
+    b.geo(sweepGeo(rings, { orient: 'out' }), 'matte', { ao: 0 });
+    b.lump(0.13, 0, 2.72, gz, '#ffd24a', { d: 1, grad: 0.7, ao: 0 });
+    for (let i = 0; i < 4; i++) b.rock(0.19, 0.0 + (i % 2) * 0.1 - 0.05, 0.14 + 0.02, 6.9 - i * 0.85, '#d8d0be', { d: 0, s: [1.2, 0.2, 1], seed: i, grad: 0.5, ao: 0, facet: 0.03 }); }
+  // corner posts: stone foot, wooden pole, gold cap (pennants are separate named children)
+  for (const [sx, sz] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) { const x = sx * (PH + 0.12), z = sz * (PH + 0.12); b.cyl(0.26, 0.32, 0.45, x, 0, z, '#c4bcae', { seg: 8, grad: 0.8, ao: 0.3, aoH: 0.3 }); b.cyl(0.06, 0.09, 2.1, x, 0.4, z, '#a8723f', { seg: 6, grad: 0.7, ao: 0 }); b.lump(0.1, x, 2.5, z, '#ffd24a', { d: 1, grad: 0.7, ao: 0 }); }
+}
+function arcDec(cx, cz, a0, a1, rad, seg) { const o = []; for (let i = 0; i <= seg; i++) { const a = a0 + (a1 - a0) * i / seg; o.push([cx + Math.cos(a) * rad, cz + Math.sin(a) * rad]); } return o; }
+/**
+ * A village's plot base, replacing the plain slab. Footprint exactly 16 x 16 tiles (tile (0,0) at -8,-8), top at y = 0.14, border out to +-8.33.
+ * colorHex = owner colour (number or '#rrggbb'). toCentre (optional) = direction from the village toward the valley centre as {x,z} or an angle
+ * (atan2(dz,dx)); the gate arch turns to the nearest quarter turn to face it (default +Z).
+ * Children: `flag` (+ `flag2`, `flag3`, `flag4`): the pennants on the four corner posts, pivot at the pole, rotate.y to wave.
+ */
+export function plotModel(colorHex = '#e8564a', toCentre) {
+  const hex = col(colorHex).getHexString(), g = instantiate(baked(`plot:${hex}`, (b) => plotInto(b, '#' + hex)), { shadows: false }); g.name = 'plot';
+  const own = '#' + hex;
+  [[-1, -1], [1, -1], [1, 1], [-1, 1]].forEach(([sx, sz], i) => { const f = flagGroup(i ? `flag${i + 1}` : 'flag', own, '#fff2cf', 1.15, 0.66); f.position.set(sx * (PH + 0.12), 2.45, sz * (PH + 0.12)); g.add(f); });
+  const lan = lanternGroup('gatelantern', 0.8); lan.position.set(0, 2.38, PH + 0.02); g.add(lan);
+  if (toCentre != null) { const d = typeof toCentre === 'number' ? { x: Math.cos(toCentre), z: Math.sin(toCentre) } : toCentre; g.rotation.y = Math.round(Math.atan2(d.x, d.z) / (Math.PI / 2)) * (Math.PI / 2); }
+  g.userData.top = TOP_Y; return g;
+}
+const TOP_Y = 0.14;
+
+// =================================================================== 6. SCATTER (instanced) + ISLAND
+/**
+ * Decorate a group with instanced life: forest rim of mixed trees, bushes, flower patches, mushrooms, grass tufts, stones.
+ * rng = () => [0,1) (use rng(seed) from artkit). opts: R, shore(theta) outline radius, heightAt(x,z), isFree(x,z,pad), counts {trees,bushes,tufts,flowers,mushrooms,stones}.
+ * USES InstancedMesh: one per species/variant (trees: 8, bushes 3, tufts 4, flowers 5, mushrooms 2, stones 3 = about 25 draw calls). Returns { name: triangles }.
+ */
+export function scatter(group, rng, o = {}) {
+  const R = o.R || 66, shore = o.shore || (() => R), hy = o.heightAt || (() => 0), free = o.isFree || isFree, n = { trees: 100, bushes: 58, tufts: 420, flowers: 34, mushrooms: 14, stones: 40, ...(o.counts || {}) };
+  const stats = {}, add = (name, entries) => { let t = 0; for (const [e, items, opt] of entries) { const im = instancedFrom(e, items, opt); if (!im) continue; im.name = name; group.add(im); t += (e.tris || 0) * items.length; } stats[name] = Math.round(t); };
+  const grid = new Map(), taken = (x, z, rr) => { const cx = Math.floor(x / rr), cz = Math.floor(z / rr); for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) { const l = grid.get((cx + i) + ',' + (cz + j)); if (l) for (const p of l) if (Math.hypot(p[0] - x, p[1] - z) < rr) return true; } const k = cx + ',' + cz; (grid.get(k) || grid.set(k, []).get(k)).push([x, z]); return false; };
+  const pick = (cond, tries = 4000) => { for (let i = 0; i < tries; i++) { const th = rng() * TAU, s = shore(th), c = cond(th, s); if (c) return c; } return null; };
+  // forest rim (instanced low-poly trees, 8 meshes)
+  { const buckets = {}; let made = 0, guard = 0;
+    while (made < n.trees && guard++ < 8000) { const th = rng() * TAU, s = shore(th), d = 1.8 + 12.5 * Math.pow(rng(), 1.5), r = s - d, x = Math.cos(th) * r, z = Math.sin(th) * r;
+      if (!free(x, z, 1.0) || vn(th * 5.3 + 2, d * 0.13) < 0.3 || taken(x, z, 1.9)) continue; const q = rng(), sp = q < 0.36 ? 'oak' : q < 0.62 ? 'pine' : q < 0.76 ? 'birch' : 'apple', v = rng() < 0.5 ? 0 : 1; (buckets[sp + v] ||= { sp, v, items: [] }).items.push({ x, y: hy(x, z) - 0.05, z, s: 1.15 + rng() * 0.7, yaw: rng() * TAU }); made++; }
+    add('forest', Object.values(buckets).map((bk) => [bakedTree(bk.sp, bk.v, 1), bk.items, { seed: bk.v + 3, tint: 0.09 }])); }
+  const spots = (count, minD, dMax, pad = 0.6) => { const out = []; let g = 0; while (out.length < count && g++ < count * 60) { const th = rng() * TAU, s = shore(th), d = minD + rng() * dMax, r = s - d, x = Math.cos(th) * r, z = Math.sin(th) * r; if (!free(x, z, pad) || vn(x * 0.11 + 7, z * 0.11) < 0.38) continue; out.push({ x, y: hy(x, z), z, yaw: rng() * TAU, s: 0.8 + rng() * 0.5 }); } return out; };
+  const split = (arr, k) => Array.from({ length: k }, (_, i) => arr.filter((_, j) => j % k === i));
+  { const sp = spots(n.bushes, 2, 48, 0.8), by = split(sp, 3); add('bushes', by.map((it, v) => [baked(`bush:${v}:1`, (b) => bushInto(b, v, 1)), it, { seed: v }])); }
+  { const sp = spots(n.tufts, 0.5, 60, 0.3).map((p) => ({ ...p, s: 0.8 + rng() * 0.9 })), by = split(sp, 4); add('tufts', by.map((it, v) => [baked(`tuft:${v}`, (b) => tuftClump(b, v)), it, { cast: false, seed: v, tint: 0.1 }])); }
+  { const sp = spots(n.flowers, 2, 56, 0.9), by = split(sp, 5); add('flowers', by.map((it, v) => [baked(`flowers:${v}`, (b) => flowerPatchInto(b, v)), it, { cast: false, seed: v, tint: 0.03 }])); }
+  { const sp = spots(n.mushrooms, 2, 15, 0.8), by = split(sp, 2); add('mushrooms', by.map((it, v) => [baked(`mush:${v}`, (b) => { mushroomInto(b, 0, 0, 1, 0, v ? '#e8564a' : '#e8923a'); mushroomInto(b, 0.14, 0.08, 0.65, 0, v ? '#e8564a' : '#e8923a'); mushroomInto(b, -0.1, 0.12, 0.5, 0, '#f6d27a'); }), it, { seed: v }])); }
+  { const sp = spots(n.stones, 1, 56, 0.8), by = split(sp, 3); add('stones', by.map((it, v) => [baked(`stone:${v}`, (b) => stoneInto(b, v)), it, { seed: v }])); }
+  stats.total = Object.values(stats).reduce((a, b) => a + b, 0); return stats;
+}
+
+// ---- island
+const shoreOf = (R, th) => R * (1 + 0.035 * Math.sin(3 * th + 0.7) + 0.025 * Math.sin(5 * th + 2.1) + 0.02 * Math.sin(9 * th + 0.3) + 0.01 * Math.sin(17 * th + 1.3));
+const ridgeAmp = (th) => 0.5 * (0.6 + 0.8 * vn(th * 6 + 3, 1.7));
+const heightOf = (R) => (x, z) => { const r = Math.hypot(x, z), th = Math.atan2(z, x), d = shoreOf(R, th) - r; if (d > 12) return 0; return ridgeAmp(th) * sstep(12, 6, d) - 0.85 * sstep(2.5, 0, d); };
+const STRATA = [ // y, radius factor, colour, noise group
+  [0.0, 1.0, '#8fcb55', 0], [-0.28, 0.997, '#6aa042', 0], [-0.31, 0.996, '#6b4426', 1], [-1.2, 0.99, '#7d5230', 1], [-1.23, 0.99, '#c28a52', 2], [-2.3, 0.984, '#b97c48', 2],
+  [-2.33, 0.978, '#d6ad72', 3], [-3.3, 0.972, '#c99f66', 3], [-3.33, 0.965, '#9a948c', 4], [-4.5, 0.955, '#8a847c', 4], [-4.53, 0.945, '#cfa874', 5], [-5.6, 0.93, '#bf9760', 5],
+  [-5.63, 0.915, '#7d7770', 6], [-7.5, 0.86, '#6b6560', 6], [-9.5, 0.7, '#5b5651', 7],
+];
+const SEA_ROWS = [[-4, '#8fe3dc'], [0, '#8fe3dc'], [1.6, '#74d8e4'], [4, '#58c6ec'], [8, '#44b3e4'], [15, '#38a4dc'], [28, '#2f98d4'], [50, '#2a8ccb'], [90, '#2680c0'], [160, '#2478b8'], [300, '#2474b2'], [420, '#2474b2']];
+function addFx(m, fragment, extraUniforms) {
+  m.onBeforeCompile = (sh) => {
+    sh.uniforms.uWindT = WIND; sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec2 vF;').replace('#include <begin_vertex>', '#include <begin_vertex>\nvF = uv;');
+    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec2 vF; uniform float uWindT;').replace('#include <color_fragment>', '#include <color_fragment>\n' + fragment);
+  };
+  m.customProgramCacheKey = () => 'hvfx' + fragment.length; return m;
+}
+let _foamMat, _fallMat, _seaMat;
+const foamMat = () => _foamMat ||= addFx(new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, depthWrite: false, fog: true }), 'diffuseColor.a *= 0.72 + 0.28 * sin( vF.x * 5.0 - uWindT * 1.5 + vF.y * 9.0 );');
+const fallMat = () => _fallMat ||= addFx(new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.88, side: THREE.DoubleSide, fog: true }), 'float sf = sin( vF.x * 38.0 ) * sin( vF.y * 1.7 - uWindT * 4.5 ); diffuseColor.rgb = mix( diffuseColor.rgb, vec3( 1.0 ), 0.4 * smoothstep( 0.15, 1.0, sf ) );');
+const seaMaterial = () => _seaMat ||= (() => { const m = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.3, metalness: 0.1 });
+  m.onBeforeCompile = (sh) => { sh.uniforms.uWindT = WIND; sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec2 vSea;').replace('#include <begin_vertex>', '#include <begin_vertex>\nvSea = (modelMatrix * vec4( position, 1.0 )).xz;');
+    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec2 vSea; uniform float uWindT;').replace('#include <color_fragment>', '#include <color_fragment>\nfloat w1 = sin( vSea.x * 0.33 + uWindT * 0.7 ) * sin( vSea.y * 0.29 - uWindT * 0.5 ); float w2 = sin( vSea.x * 0.9 - uWindT * 1.1 + vSea.y * 0.4 ) * sin( vSea.y * 0.8 + uWindT * 0.9 );\ndiffuseColor.rgb += vec3( 0.05, 0.07, 0.06 ) * smoothstep( 0.55, 1.0, w1 ) + vec3( 0.04, 0.05, 0.05 ) * smoothstep( 0.7, 1.0, w2 );'); };
+  m.customProgramCacheKey = () => 'hvsea'; return m; })();
+const rgba = (c, a) => { const k = col(c); return [k.r, k.g, k.b, a]; };
+/** indexed strip geometry with RGBA vertex colours: rings[j] = [ [x,y,z,[r,g,b,a],u,v], ... ] along j, profile k */
+function stripAlpha(rings) {
+  const pos = [], colr = [], uv = [], idx = [], K = rings[0].length;
+  for (const ring of rings) for (const q of ring) { pos.push(q[0], q[1], q[2]); colr.push(...q[3]); uv.push(q[4] || 0, q[5] || 0); }
+  for (let j = 0; j < rings.length - 1; j++) for (let k = 0; k < K - 1; k++) { const a = j * K + k, b = a + 1, c = a + K, d = c + 1; idx.push(a, b, c, b, d, c); }
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('color', new THREE.Float32BufferAttribute(colr, 4)); g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); g.setIndex(idx);
+  const n = new Float32Array(pos.length); for (let i = 1; i < n.length; i += 3) n[i] = 1; g.setAttribute('normal', new THREE.BufferAttribute(n, 3)); return g;
+}
+/**
+ * The floating island (replaces the game's cylinder terrain + sea). Radius R (default 66; the outline wobbles about 6 percent), top surface at y = 0,
+ * flat inside (villages, plaza, fields sit on it), a rim ridge and rounded grass lip at the edge, strata cliffs down to the sea at y = seaY.
+ * Contains: grass top, cliffs with strata bands and boulders, ocean (`ocean`), animated foam ring + stack foam (`foam`), 3 waterfalls with streams (`falls`),
+ * and the scatter (instanced forest rim, bushes, flowers, mushrooms, tufts, stones). Remove the game's own sea / cliff / top / plaza / rim trees.
+ * opts: { seaY (-4.2), seed (7), scatter (true), counts }.   userData: heightAt(x,z), shore(theta), seaY, scatter (tri stats).
+ */
+export function islandModel(R = 66, opts = {}) {
+  const seaY = opts.seaY ?? -4.2, g = new THREE.Group(); g.name = 'island'; const SEG = 128, hy = heightOf(R), shore = (th) => shoreOf(R, th), r = krng(opts.seed || 7);
+  // ---- grass top
+  const fr = [0, 0.09, 0.18, 0.27, 0.36, 0.45, 0.55, 0.64, 0.73, 0.8, 0.85, 0.89, 0.92, 0.945, 0.965, 0.98, 0.99, 1.0];
+  const topColor = (x, z) => { const rr = Math.hypot(x, z), th = Math.atan2(z, x), d = shore(th) - rr; let c = paint(x, z, '#9ad464', '#a9e072', 0.09, 0.4, 0.6); c.lerp(col('#86c455'), sstep(0.5, 0.75, fbm(x * 0.07 + 20, z * 0.07 + 5)) * 0.6);
+    c.lerp(col('#6fb250'), sstep(18, 5, d) * (0.55 + 0.45 * vn(x * 0.35, z * 0.35))); c.lerp(col('#b9e47c'), sstep(2.2, 0.2, d) * 0.5); if (d < 0.5) c.lerp(col('#6aa042'), sstep(0.5, 0, d)); return c; };
+  const rows = fr.map((f, i) => ({ r: f * R, y: (x, z) => hy(x, z), c: topColor }));
+  g.add(Object.assign(new THREE.Mesh(polarGeo(rows, SEG, { wob: (th, i) => (i === 0 ? 1 : shore(th) / R), nUp: 0.25 }), envMat), { receiveShadow: true, name: 'top' }));
+  // ---- cliff with strata bands (flat shaded, chunky) + boulders
+  const ringsR = [], contact = new Float32Array(SEG);
+  for (let j = 0; j <= SEG; j++) {
+    const th = (j % SEG) / SEG * TAU, s = shore(th), ring = [];
+    STRATA.forEach(([y, f, c, grp], k) => { const nz = (vn(th * 7 + grp * 5.3, grp * 1.7) - 0.5) * 2 * (0.5 + grp * 0.22) + (vn(th * 23 + grp, 3.1) - 0.5) * 0.7, rad = s * f + nz * (k === 0 ? 0.2 : 1), yy = k === 0 ? ridgeAmp(th) - 0.85 : y; const cc = col(c).clone().multiplyScalar(0.9 + 0.2 * hash(j, grp)); ring.push({ x: Math.cos(th) * rad, y: yy, z: Math.sin(th) * rad, c: cc, rad }); });
+    if (j < SEG) { for (let k = 0; k < ring.length - 1; k++) if (ring[k].y >= seaY && ring[k + 1].y < seaY) { const t = (ring[k].y - seaY) / (ring[k].y - ring[k + 1].y); contact[j] = ring[k].rad + (ring[k + 1].rad - ring[k].rad) * t; } }
+    ringsR.push(ring);
+  }
+  { let cg = sweepGeo(ringsR, { orient: 'out' }).toNonIndexed(); cg.computeVertexNormals(); cg.userData.y0 = -9.5; cg.userData.y1 = 0; const b = new Builder(0); b.geo(cg, 'matte', { ao: 0 });
+    // rocks along the lip and boulders at the waterline
+    for (let i = 0; i < 44; i++) { const th = r() * TAU, d = r() * 1.6 - 0.2, rr = shore(th) - d, x = Math.cos(th) * rr, z = Math.sin(th) * rr, sc = 0.5 + r() * 1.0; b.rock(sc, x, hy(x, z) + sc * 0.2, z, ['#a8a49a', '#b4b0a8', '#98948c'][i % 3], { d: 1, seed: i, s: [1.2, 0.8, 1], r: [0, r() * 6, 0], moss: { c: '#6fb04a', amt: 1 }, ao: 0 }); }
+    for (let i = 0; i < 26; i++) { const j = Math.floor(r() * SEG), th = j / SEG * TAU, rr = contact[j] + 0.4 + r() * 1.3, sc = 0.7 + r() * 1.3, x = Math.cos(th) * rr, z = Math.sin(th) * rr; b.rock(sc, x, seaY + sc * 0.1, z, ['#8a847c', '#9a948c', '#75706a'][i % 3], { d: 1, seed: i + 50, s: [1.1, 0.9, 1], r: [0, r() * 6, 0], ao: 0 }); }
+    const cl = instantiate(b.bake(), { shadows: false }); cl.name = 'cliff'; cl.children.forEach((m) => { m.receiveShadow = true; }); g.add(cl); }
+  // ---- ocean following the cliff contact
+  { const rowsO = []; for (let j = 0; j <= SEG; j++) { const jj = j % SEG, th = jj / SEG * TAU; rowsO.push(SEA_ROWS.map(([d, c]) => { const rad = contact[jj] + d; return { x: Math.cos(th) * rad, y: seaY, z: Math.sin(th) * rad, c }; })); }
+    const og = sweepGeo(rowsO, { orient: 'up' }); const mesh = new THREE.Mesh(og, seaMaterial()); mesh.name = 'ocean'; mesh.receiveShadow = true; mesh.onBeforeRender = windTick; g.add(mesh); }
+  // ---- foam: ring at the waterline + rings around the sea stacks + waterfall splashes
+  const foam = new THREE.Group(); foam.name = 'foam';
+  { const rowsF = []; const D = [[-0.6, 0], [0.0, 0.95], [0.5, 0.7], [1.1, 0.4], [1.8, 0.16], [2.6, 0]]; for (let j = 0; j <= SEG; j++) { const jj = j % SEG, th = jj / SEG * TAU, wv = 1 + 0.55 * (vn(th * 14 + 1, 2) - 0.5) * 2; rowsF.push(D.map(([d, a]) => { const dd = d > 0 ? d * wv : d, rad = contact[jj] + dd; return [Math.cos(th) * rad, seaY + 0.04, Math.sin(th) * rad, rgba('#ffffff', a), dd, th]; })); }
+    const m = new THREE.Mesh(stripAlpha(rowsF), foamMat()); m.renderOrder = 2; m.onBeforeRender = windTick; foam.add(m); }
+  // sea stacks with their own foam
+  { const b = new Builder(0), rowsAll = []; for (let i = 0; i < 9; i++) { const j = Math.floor((i + r() * 0.8) / 9 * SEG), th = j / SEG * TAU, rr = contact[j % SEG] + 3.5 + r() * 7, x = Math.cos(th) * rr, z = Math.sin(th) * rr, sc = 1.1 + r() * 1.6;
+      b.rock(sc, x, seaY + sc * 0.45, z, '#8f8a82', { d: 1, seed: i + 90, s: [1.1, 1.2, 1], moss: { c: '#6fb04a', amt: 0.7 }, ao: 0 }); b.rock(sc * 0.5, x + sc * 0.8, seaY + sc * 0.15, z + sc * 0.3, '#7d7870', { d: 0, seed: i + 7, ao: 0 });
+      const ring = []; for (let q = 0; q <= 24; q++) { const a = q / 24 * TAU; ring.push([[x, seaY + 0.05, z, rgba('#fff', 0), 0, a], [x + Math.cos(a) * sc * 1.0, seaY + 0.05, z + Math.sin(a) * sc * 1.0, rgba('#fff', 0.9), 0.5, a], [x + Math.cos(a) * sc * 1.8, seaY + 0.05, z + Math.sin(a) * sc * 1.8, rgba('#fff', 0), 1.4, a]]); } rowsAll.push(ring); }
+    const sk = instantiate(b.bake(), { shadows: false }); sk.name = 'stacks'; g.add(sk);
+    for (const ringSet of rowsAll) { const m = new THREE.Mesh(stripAlpha(ringSet), foamMat()); m.renderOrder = 2; m.onBeforeRender = windTick; foam.add(m); } }
+  g.add(foam);
+  // ---- waterfalls: stream on the top surface, falling sheet down the cliff, splash foam
+  const falls = new THREE.Group(); falls.name = 'falls';
+  for (const th of [1.05, 3.0, 4.75]) {
+    const s = shore(th), cth = Math.cos(th), sth = Math.sin(th), tx = -sth, tz = cth;
+    const stream = []; for (let i = 0; i <= 14; i++) { const d = 17 - i * 1.15, rr = s - d, off = 0.9 * Math.sin(d * 0.45 + th * 3), w = 0.75 * (0.7 + 0.3 * Math.min(1, i / 6)) * (i === 0 ? 0.3 : 1); const cx = cth * rr + tx * off, cz = sth * rr + tz * off, y = hy(cx, cz) + 0.06; stream.push([[-1, '#7fd6ea'], [0, '#3fa9d9'], [1, '#7fd6ea']].map(([u, c]) => ({ x: cx + tx * u * w, y: y - (u === 0 ? 0.015 : 0), z: cz + tz * u * w, c }))); }
+    const sb = new Builder(0); sb.geo(sweepGeo(stream, { orient: 'up' }), 'water', { ao: 0 }); const sm = instantiate(sb.bake(), { shadows: false }); falls.add(sm);
+    const j0 = Math.round(th / TAU * SEG) % SEG, lipY = ridgeAmp(th) - 0.85, rows2 = []; const off0 = 0.9 * Math.sin(0.0 * 0.45 + th * 3);
+    for (let i = 0; i <= 9; i++) { const y = lipY + 0.05 + (seaY + 0.1 - lipY) * i / 9; const ring = ringsR[j0]; let rad = ring[0].rad; for (let k = 0; k < ring.length - 1; k++) if (y <= ring[k].y && y >= ring[k + 1].y) { const t = (ring[k].y - y) / (ring[k].y - ring[k + 1].y); rad = ring[k].rad + (ring[k + 1].rad - ring[k].rad) * t; } rad += 0.28;
+      const w = 1.05 + i * 0.05; rows2.push([-1, -0.5, 0, 0.5, 1].map((u, q) => [cth * rad + tx * (off0 + u * w), y, sth * rad + tz * (off0 + u * w), rgba(q % 2 ? '#ffffff' : '#bfeaf5', 1), (u + 1) / 2, i * 0.6])); }
+    const fm = new THREE.Mesh(stripAlpha(rows2.map((rw) => rw)), fallMat()); fm.onBeforeRender = windTick; falls.add(fm);
+    const sx = cth * (contact[j0] + 0.6) + tx * off0, sz = sth * (contact[j0] + 0.6) + tz * off0, ringS = []; for (let q = 0; q <= 20; q++) { const a = q / 20 * TAU; ringS.push([[sx, seaY + 0.06, sz, rgba('#fff', 0.9), 0.3, a], [sx + Math.cos(a) * 1.8, seaY + 0.06, sz + Math.sin(a) * 1.8, rgba('#fff', 0.5), 1.0, a], [sx + Math.cos(a) * 3.4, seaY + 0.06, sz + Math.sin(a) * 3.4, rgba('#fff', 0), 2.0, a]]); }
+    const sp = new THREE.Mesh(stripAlpha(ringS), foamMat()); sp.renderOrder = 2; sp.onBeforeRender = windTick; foam.add(sp);
+  }
+  g.add(falls);
+  g.userData = { heightAt: hy, shore, seaY, R };
+  if (opts.scatter !== false) g.userData.scatter = scatter(g, krng(opts.seed || 7), { R, shore, heightAt: hy, counts: opts.counts });
+  return g;
 }
