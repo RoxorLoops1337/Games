@@ -505,6 +505,105 @@ export class FightView {
     if (k >= 1) { this.phase = 'fight'; this.phaseT = 0; this.dir.setShot('follow', {}, 1.0); this.banner('FIGHT!', 'ult'); this.audio.sfx('drum'); this.feel.impact && this.feel.impact('roar', {}); for (const f of this.fm.values()) { f.rx = f.u.x; f.ry = f.u.y; } }
   }
 
+  endFight() {
+    const F = this.F; this.phase = 'outro'; this.outroT = 0; if (!this.replaying) this.reel.finish(F);   // REEL: the best moments are stored on the replay record
+    const win = F.winner;
+    if (F.replay) F.replay.total = F.n || 0;                       // the replay scrubber needs the length of the fight
+    this.ultBar.style.visibility = 'hidden'; if (this.extras) this.extras.style.visibility = 'hidden';
+    for (const f of this.fm.values()) { if (!f.u.down && f.u.side === win) f.rig.animator.setState('victory'); }
+    if (this.execPending && !this.forfeited && !this.skip && this.startExec()) return;   // the sim's last blow is staged as an execution (see startExec)
+    this.execPending = null;
+    const alive = F.units.filter((u) => u.side === win && !u.down)[0];
+    const lastDown = F.units.filter((u) => u.down && u.side !== win).pop();
+    if (this.forfeited) this.dir.setShot('victory', { winner: alive && alive.id }, 1.0);
+    else this.dir.cue('kill', { victim: lastDown && lastDown.id, killer: alive && alive.id, extra: lastDown && this.gore.framePoints(lastDown.id), next: { name: 'victory', p: { winner: alive && alive.id }, blend: 1.2 } });
+    this.audio.music.setMode(win === 'A' ? 'victory' : 'defeat'); this.audio.sfx(win === 'A' ? 'levelUp' : 'deathThud'); this.audio.sfx(win === 'A' ? 'crowdRoar' : 'crowdBoo');
+    this.showEnd(win === 'A');
+  }
+
+  // ---------------------------------------------------------------- finisher: the sim's last blow staged as an execution
+  // Presentation only. The sim has already ended (F.done) when its final 'down' event arrives, so nothing is held or changed: the victim kneels, the
+  // killer walks up (visual position blend), the crowd hushes, the finisher clip lands and its 'hit' event triggers the death, the gore and the roar.
+  // Duels won by the player are not struck (mercy is decided in the results dialog): the victim kneels and the winner stands over them.
+  canExec(src, dst) {
+    if (!src || !dst || this.forfeited || this.skip) return false;
+    const m = this.F.meta; if (m && NO_EXEC.has(m.kind)) return false;
+    const fs = this.fm.get(src.id), fd = this.fm.get(dst.id); if (!fs || !fd) return false;
+    const as = fs.rig.animator, ds = fd.rig.animator; if (!as.clips || !as.clips.finisher || !ds.clips || !ds.clips.execKneel) return false;   // beast rigs have no finisher clips
+    if (src.down || (src.s && (src.s.stun || src.s.spin || src.s.air)) || fs.air || fd.air || fd.spin) return false;
+    if (this.t - (this.bigAoeT ?? -9) < 0.8) return false;         // an ultimate that gibs is its own finale
+    return Math.hypot(src.x - dst.x, src.y - dst.y) <= 6;           // ranged kills keep the plain fall
+  }
+  startExec() {
+    const P = this.execPending; this.execPending = null; if (!P) return false;
+    const F = this.F, src = P.src, dst = P.dst, fs = this.fm.get(src.id), fd = this.fm.get(dst.id), win = F.winner;
+    let dx = fs.rx - fd.rx, dz = fs.ry - fd.ry; const dist = Math.hypot(dx, dz) || 1; dx /= dist; dz /= dist;
+    const tx = fd.rx + dx * 1.1, tz = fd.ry + dz * 1.1, mercy = !!(F.meta && F.meta.kind === 'duel' && win === 'A');
+    const ex = this.ex = { src, dst, fs, fd, stage: 'approach', t: 0, scale: 0.8, hit: false, ended: false, done: false, mercy, win, sT: 0, dx, dz, back: false };
+    // victim: kneels in place, facing the executioner (no stale sim states may fire on it)
+    fd.kneel = true; fd.guarding = false; fd.st = ''; fd.air = false; fd.spin = false; fd.faceTo = { x: tx, z: tz }; this.dropHandles(dst.id);
+    fd.rig.animator.executed();
+    // killer: walks to 1.1 m in front of the victim and faces it
+    fs.faceTo = { x: fd.rx, z: fd.ry }; fs.ov = { x0: fs.rx, z0: fs.ry, x1: tx, z1: tz, t: 0, dur: Math.max(0.4, Math.min(1.7, (dist - 1.1) / 2.4)) }; fs.rig.animator.setState('move');
+    const an = fs.rig.animator, prev = an.onEvent;
+    an.onEvent = (n, clip) => { if (prev) prev(n, clip); if (clip && clip.name === 'finisher') { if (n === 'hit') this.execHit(); else if (n === 'end') ex.ended = true; } };
+    ex.restoreEv = () => { if (an.onEvent !== prev) an.onEvent = prev; };
+    // crowd hush, music drops, kill camera frames the pair side-on for the whole sequence
+    this.audio.crowd(0.08); this.audio.music.setIntensity(0.1); this.audio.duck && this.audio.duck(0.55, 2.2);
+    this.dir.cue('kill', { victim: dst.id, killer: src.id, dur: 5.5, next: null, tight: true });
+    this.bump = 0;
+    return true;
+  }
+  execStep(dt, realDt) {
+    const ex = this.ex; if (!ex || ex.done) return; ex.t += realDt; const fs = ex.fs, an = fs.rig.animator;
+    if (ex.t > 9) { this.execDone(); return; }   // safety net: never strand the outro
+    if (ex.stage === 'approach') {
+      ex.scale = 0.75 + 0.25 * smooth01(ex.t / 0.9);
+      if (!fs.ov || fs.ov.t >= fs.ov.dur) this.execStrike();
+    } else if (ex.mercy) { ex.scale = 1; ex.sT += realDt; if (ex.sT > 2.1) this.execDone(); }
+    else {
+      const a = an.action && an.action.name === 'finisher' ? an.actionT : -1;   // clip time of the finisher (swing at 0.5, hit at 0.62)
+      ex.scale = ex.hit ? 1 : a < 0.3 ? 0.8 : a < 0.52 ? 0.28 : 0.5;          // the raised blade hangs in slow motion, the swing follows at half speed
+      if (ex.hit && !ex.back && a >= 0.98) { ex.back = true; fs.ov = { x0: fs.rx, z0: fs.ry, x1: fs.rx + ex.dx * 0.95, z1: fs.ry + ex.dz * 0.95, t: 0, dur: 1.1 }; }   // step back off the corpse (the body falls toward the killer)
+      if (ex.ended || (ex.hit && a < 0 && ex.t > ex.hitAt + 0.5)) this.execDone();
+    }
+  }
+  execStrike() {
+    const ex = this.ex, an = ex.fs.rig.animator; ex.stage = 'strike';
+    if (ex.mercy) { an.setState('victory'); this.showVerdict('wait'); this.audio.sfx('horn', { gain: 0.6 }); return; }
+    an.finisher({ fade: 0.25 }); this.showVerdict('down');
+  }
+  /** the finisher's 'hit' event: the victim dies, the blood flies, the crowd roars */
+  execHit() {
+    const ex = this.ex; if (!ex || ex.hit) return; ex.hit = true; ex.hitAt = ex.t;
+    const { src, dst, fs, fd } = ex, F = this.F, fx = this.fx, A = this.audio, dir = this.dirOf(src, dst), pan = clamp(dst.x / 12, -1, 1);
+    fd.kneel = false; fd.rig.animator.executeKill(); fd.rig.flash(0.15, '#8a5530'); fs.rig.animator.hitStop(0.07);
+    fx.hit(this.chest(dst), dir, { dmgFrac: 0.4, crit: true, flesh: this.gore.on }); fx.dust(this.feet(dst), 14); fx.debris && fx.debris(this.feet(dst), 4); fx.groundDecal(this.feet(dst), 'scuff', { size: 1.6 });
+    this.num(dst, 'DOWN', 'miss'); this.feel.impact('finalKill', {}); if (this.post.zoomPunch) this.post.zoomPunch(0.028);
+    A.sfx('swordHitCrit', { pan }); A.sfx('deathCry', { voice: VOICE[dst.style] ?? 0, pan }); this.after(350, () => A.sfx('deathThud', { pan })); A.sfx('crowdGasp');
+    if (this.gore.on) { const lh = fd.lastHit; this.gore.onDown(dst.id, { last: true, crit: true, frac: lh ? Math.max(0.25, lh.frac) : 0.3, dx: dir.x, dz: dir.z, big: false, mine: dst.side === 'A', noSrc: false });
+      if (this.dir.shot && this.dir.shot.name === 'kill') this.dir.shot.p.extra = this.gore.framePoints(dst.id); }   // keep a flung head in the kill shot
+    this.hideVerdict(); this.execFinale(ex.win);
+  }
+  /** crowd: hush (set at the start), then the roar (or the boos) and the result music */
+  execFinale(win) {
+    this.after(650, () => { this.audio.crowd(0.95); this.audio.music.setMode(win === 'A' ? 'victory' : 'defeat'); this.audio.sfx(win === 'A' ? 'levelUp' : 'deathThud', { gain: 0.8 }); this.audio.sfx(win === 'A' ? 'crowdRoar' : 'crowdBoo'); });
+  }
+  execDone() {
+    const ex = this.ex; if (!ex || ex.done) return; ex.done = true; ex.restoreEv && ex.restoreEv(); this.hideVerdict();
+    if (ex.mercy) this.execFinale(ex.win);
+    for (const f of this.fm.values()) if (!f.u.down && f.u.side === ex.win) f.rig.animator.setState('victory');
+    this.dir.setShot('victory', { winner: ex.src.id }, 1.2); this.showEnd(ex.win === 'A');
+  }
+  showVerdict(kind) {
+    this.hideVerdict(); const win = this.F.winner === 'A', el = this.verdictEl = document.createElement('div'); el.className = 'lx-fv-verdict lx-fv-v-' + kind;
+    el.innerHTML = '<svg viewBox="0 0 64 64" width="64" height="64" aria-hidden="true"><path fill="currentColor" d="M10 28h10v26H10zM24 28l9-18c3-1 6 1 6 5v10h14c3 0 5 3 4 6l-5 19c-1 3-3 4-6 4H24z"/></svg><span></span>';
+    el.lastChild.textContent = kind === 'wait' ? 'The crowd waits for your word' : win ? 'The crowd demands blood' : 'The crowd turns its thumbs down'; this.hud.append(el);
+  }
+  hideVerdict() { const el = this.verdictEl; if (!el) return; this.verdictEl = null; el.classList.add('lx-fv-v-out'); setTimeout(() => el.remove(), 500); }
+  /** deferred call that dies with the fight (and is skipped while seeking a replay) */
+  after(ms, fn) { const ep = this.epoch; setTimeout(() => { if (ep === this.epoch && !this.paused) fn(); }, ms); }
+
   /** big VICTORY / DEFEAT title: arrives after the kill cam has shown the blow (CSS delay), stays until the results hand-off */
   showEnd(win) {
     if (this.reel && this.reel.on) return;   // REEL: the reel has its own end card
