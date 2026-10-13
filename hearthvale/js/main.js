@@ -2,13 +2,14 @@
 import { View } from './scene.js';
 import { soloLink, wsLink } from './net.js';
 import { findSpot as _fs } from '../shared/sim.js';
-import { BUILDINGS, RECIPES, TECH, ICON, GOODS, SELL, QUESTS, LEVEL_XP, VALLEY_LEVEL_XP, PLOT, VALLEY_FIELDS, NODE_TYPES } from '../shared/data.js';
+import { BUILDINGS, RECIPES, TECH, MAX_BLD_LEVEL, upgradeCost, upgradeNeedsLevel, UPGRADE_NOTE, ICON, GOODS, SELL, QUESTS, LEVEL_XP, VALLEY_LEVEL_XP, PLOT, VALLEY_FIELDS, NODE_TYPES } from '../shared/data.js';
 
 const $ = (s) => document.querySelector(s);
 const qs = new URLSearchParams(location.search);
 const view = new View($('#gl'));
 let link = null, snap = null, you = null, myId = null, mode = null, selected = null, panel = null, prevSnapT = 0;
 const labels = new Map();
+const HINTS = { q_wood: 'Tap a tree to send a villager', q_house: 'Build > Cottage, tap the grass, Place', q_farm: 'Build > Wheat Field, then tap it to sow', q_wheat: 'Tap the field when it is golden', q_kitch: 'Build > Kitchen', q_soup: 'Tap the Kitchen, cook soup', q_hire: 'Tap the Hearth Hall', q_lvl2: 'Keep gathering and building to earn XP', q_order: 'Open the Valley board 📜 and tap Give', q_saw: 'Needs level 2', q_plank: 'Tap the Sawmill, saw planks', q_study: 'Needs level 3', q_lvl5: 'Fill Valley orders for big XP' };
 
 // ---------- tiny synth sfx ----------
 let ac = null;
@@ -74,6 +75,8 @@ function onSnap(s) {
   const shown = GOODS.filter(g => you.res[g] > 0 || ['wood', 'clay', 'stone', 'wheat', 'soup'].includes(g));
   $('#res').innerHTML = `<span class="chip">🪙 ${you.coins}</span>` + shown.map(g => `<span class="chip ${you.res[g] >= you.cap ? 'full' : you.res[g] === 0 ? 'dim' : ''}" title="${g}">${ICON[g]} ${you.res[g]}</span>`).join('');
   setConn(link.state || 'online');
+  const q = QUESTS.find(q => !you.quests[q.id]); const tr = $('#track');
+  if (q) { const v = Math.min(q.n, you.stats[q.stat] || 0); tr.hidden = false; tr.innerHTML = `<b>📋 ${q.text}</b><div class="bar"><i style="width:${v / q.n * 100}%"></i></div><div class="hint">${HINTS[q.id] || ''}</div>`; tr.onclick = () => openPanel('quests'); } else tr.hidden = true;
   for (const p of you.popups || []) popup(p);
   for (const e of s.events || []) {
     if (e.t === 'levelup' && e.pid === myId) { toast('🎉 Village level ' + e.level + '!'); sfx('level'); const V = view.villages.get(myId); if (V) view.burst(V.group.position.x, V.group.position.z); }
@@ -228,6 +231,12 @@ function showSelection(sel, silent) {
     } else if (d.market) {
       h += '<div class="small">Sell goods for coins</div><div class="grid">' + GOODS.filter(g => you.res[g] > 0).map(g => `<div class="card" data-s="${g}">${ICON[g]} ${you.res[g]}<div class="small">${SELL[g]}🪙 each</div></div>`).join('') + '</div><div class="row" style="margin-top:8px">';
     } else { h += `<div class="small">${d.decor ? 'A lovely decoration (+charm).' : ''}</div><div class="row">`; }
+    {
+      const lvl = (st && st.lvl) || 1; const need = upgradeNeedsLevel(type, lvl);
+      if (st && st.up) h += `<div class="small" style="width:100%">⬆ Upgrading... ${Math.round((b[8] || 0) * 10) * 10}%</div>`;
+      else if (lvl < MAX_BLD_LEVEL) { const cost = upgradeCost(type, lvl); h += `<button id="aUp" ${you.level >= need && canAfford(cost) ? '' : 'disabled'}>⬆ Level ${lvl + 1} <span class="small">${you.level < need ? '(village Lv ' + need + ')' : costStr(cost)}</span></button>`; }
+      h = h.replace(/<h3>([^<]*)</, `<h3>$1 <span class="small">★${lvl} · ${UPGRADE_NOTE[type] || ''}</span><`);
+    }
     h += `<button id="aSend">👷 Send villager</button><button id="aMove">✋ Move</button><button id="aDem">🗑 Demolish</button></div>`;
     const s = sheet(h);
     const go = $('#aGo'); if (go) go.onclick = () => cmd({ op: 'assign', k: 'bld', id: sel.id });
@@ -236,6 +245,7 @@ function showSelection(sel, silent) {
     s.querySelectorAll('[data-dq]').forEach(b => b.onclick = () => cmd({ op: 'dequeue', id: sel.id, i: +b.dataset.dq }));
     s.querySelectorAll('[data-t]').forEach(b => b.onclick = () => cmd({ op: 'research', id: sel.id, tech: b.dataset.t }));
     s.querySelectorAll('[data-s]').forEach(b => b.onclick = () => { cmd({ op: 'sell', res: b.dataset.s, n: 10 }); sfx('coin'); });
+    const up = $('#aUp'); if (up) up.onclick = () => cmd({ op: 'upgrade', id: sel.id });
     $('#aSend').onclick = () => cmd({ op: 'assign', k: 'bld', id: sel.id });
     $('#aMove').onclick = () => startPlace(type, sel.id);
     $('#aDem').onclick = () => { if (confirm('Demolish ' + d.name + '? You get part of the cost back.')) { cmd({ op: 'demolish', id: sel.id }); closeSheet(); } };

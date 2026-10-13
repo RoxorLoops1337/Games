@@ -57,6 +57,15 @@ const run = (W, secs) => { for (let i = 0; i < secs * 10; i++) S.tick(W, 0.1); }
   const W2 = S.deserialize(S.serialize(W)); ok(W2.players.a.res.wood === P.res.wood, 'save round trips'); S.tick(W2, 0.1); ok(true, 'restored world ticks');
   P.res.soup = 0; for (const v of P.villagers) v.hunger = 0; run(W, 10); ok(P.villagers.some(v => v.state === 'hungry'), 'starving villagers stop');
 }
+// upgrades
+{
+  const W = S.createWorld(31); const P = S.addPlayer(W, 'a', 'Ann'); P.level = 6; P.xp = 760; Object.keys(P.res).forEach(k => P.res[k] = 90);
+  const h = S.command(W, 'a', { op: 'place', type: 'house', ...spot(W, 'a', 'house') }); run(W, 30); const house = P.buildings.find(b => b.id === h.id);
+  const cap0 = S.housingOf(P); ok(S.command(W, 'a', { op: 'upgrade', id: house.id }).ok, 'upgrade starts'); ok(S.command(W, 'a', { op: 'upgrade', id: house.id }).ok === false, 'cannot upgrade twice at once');
+  run(W, 60); ok(house.lvl === 2, 'cottage reached level 2'); ok(S.housingOf(P) === cap0 + 1, 'level 2 cottage houses one more');
+  const hall = P.buildings[0]; const c0 = S.capOf(P); P.level = 3; ok(S.command(W, 'a', { op: 'upgrade', id: hall.id }).ok, 'hall upgrade'); run(W, 40); ok(S.capOf(P) === c0 + 50, 'hall level 2 stores more');
+  ok(S.command(W, 'a', { op: 'upgrade', id: 'x' }).ok === false, 'bad id refused');
+}
 // neighbour bots build a working economy and help the valley
 {
   const W = S.createWorld(21); S.addPlayer(W, 'me', 'Me'); addBots(W, 5);

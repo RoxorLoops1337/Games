@@ -7,7 +7,7 @@ import { BUILDINGS, TECH, RECIPES, GOODS, VALLEY_FIELDS } from '../hearthvale/sh
 const W = S.createWorld(99); const r = S.rng(4242); const pick = (a) => a[Math.floor(r() * a.length)];
 for (let i = 0; i < 16; i++) S.addPlayer(W, 'p' + i, 'P' + i);
 const junk = [null, undefined, NaN, Infinity, -1, 1e9, 'x', {}, [], '__proto__', 0.5];
-const ops = ['place', 'move', 'demolish', 'assign', 'recall', 'queue', 'dequeue', 'research', 'hire', 'sell', 'contribute', 'chat', 'emote', 'rename', 'bogus'];
+const ops = ['upgrade', 'place', 'move', 'demolish', 'assign', 'recall', 'queue', 'dequeue', 'research', 'hire', 'sell', 'contribute', 'chat', 'emote', 'rename', 'bogus'];
 let cmds = 0;
 for (let step = 0; step < 18000; step++) {
   if (step % 3 === 0) {

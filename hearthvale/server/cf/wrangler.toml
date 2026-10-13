@@ -1,0 +1,21 @@
+# Hearthvale on Cloudflare (Workers Free plan). Deployed by hand, never by the Pages build:
+#   cd hearthvale && npx wrangler deploy --config server/cf/wrangler.toml
+name = "hearthvale"
+main = "worker.js"
+compatibility_date = "2025-09-01"
+
+[vars]
+GAME_URL = "https://games-71g.pages.dev/hearthvale/"
+VALLEY_NAME = "main"
+
+[[durable_objects.bindings]]
+name = "VALLEY"
+class_name = "Valley"
+
+# SQLite-backed Durable Objects are the ones the Workers Free plan allows
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Valley"]
+
+[observability]
+enabled = true

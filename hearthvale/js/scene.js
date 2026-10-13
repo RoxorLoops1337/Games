@@ -105,7 +105,7 @@ export class View {
       seen.add(p.id); const V = this.ensureVillage(p); V.p = p;
       // buildings
       const bs = new Set();
-      for (const [id, type, x, y, prog, stage, crop] of p.b) {
+      for (const [id, type, x, y, prog, stage, crop, lvl = 1] of p.b) {
         bs.add(id); let m = V.b.get(id);
         if (!m || m.userData.type !== type) {
           if (m) { V.group.remove(m); this.unpick(m); }
@@ -120,6 +120,10 @@ export class View {
         const pos = this.local(V, x, y, d.w, d.h); m.position.set(pos.x, 0.14, pos.z); m.userData.x = x; m.userData.y = y;
         m.userData.prog = prog; m.userData.stage = stage; m.userData.crop = crop; m.userData.busy = stage === 'busy';
         if (type === 'farm') setFarmStage(m, stage, crop);
+        if (m.userData.lvl !== lvl) {
+          m.userData.lvl = lvl; const old = m.getObjectByName('lvl'); if (old) m.remove(old);
+          if (lvl > 1) { const g = new THREE.Group(); g.name = 'lvl'; const top = (BUILDINGS[type] || {}).decor ? 1.4 : 2.7; for (let i = 0; i < lvl - 1; i++) g.add(ball(0.11, '#ffd84a', (i - (lvl - 2) / 2) * 0.3, top, 0, { emissive: '#ffb400', emissiveIntensity: 0.6 })); m.add(g); }
+        }
       }
       for (const [id, m] of V.b) if (!bs.has(id)) { V.group.remove(m); this.unpick(m); V.b.delete(id); this.puff(V.group.position.x + m.position.x, 0.8, V.group.position.z + m.position.z); }
       // nodes

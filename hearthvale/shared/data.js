@@ -10,7 +10,7 @@ export const MAX_LEVEL = LEVEL_XP.length;
 
 // size w x h in tiles, build = worker-seconds, lvl = village level needed, tech = research needed
 export const BUILDINGS = {
-  hall:       { name: 'Hearth Hall', w: 3, h: 3, cost: {}, build: 1, lvl: 99, xp: 0, hidden: true },
+  hall:       { name: 'Hearth Hall', w: 3, h: 3, cost: { planks: 20, bricks: 10 }, build: 1, lvl: 99, xp: 0, hidden: true },
   house:      { name: 'Cottage',    w: 2, h: 2, cost: { wood: 15, clay: 5 },            build: 8,  lvl: 1, xp: 8,  housing: 2 },
   farm:       { name: 'Wheat Field', w: 3, h: 2, cost: { wood: 10 },                   build: 5,  lvl: 1, xp: 5,  field: true },
   kitchen:    { name: 'Kitchen',    w: 2, h: 2, cost: { wood: 20, stone: 5 },           build: 9,  lvl: 1, xp: 10, craft: ['soup'] },
@@ -37,6 +37,11 @@ export const RECIPES = {
   scrolls: { in: { planks: 1, clay: 1 },    out: 1, time: 10, xp: 4 },
 };
 
+export const MAX_BLD_LEVEL = 3;
+// Upgrading building at level L costs the base cost x (1 + 0.8 L), needs village level lvl + 2L (hall: 3L), and a builder
+export const upgradeCost = (type, lvl) => Object.fromEntries(Object.entries(BUILDINGS[type].cost).map(([k, n]) => [k, Math.round(n * (1 + 0.8 * lvl))]));
+export const upgradeNeedsLevel = (type, lvl) => type === 'hall' ? 3 * lvl : BUILDINGS[type].lvl + 2 * lvl;
+export const UPGRADE_NOTE = { hall: '+1 housing, +50 storage', house: '+1 housing', storehouse: '+50 storage', farm: '+3 wheat per harvest', kitchen: 'cooks 25% faster', sawmill: 'saws 25% faster', kiln: 'bakes 25% faster', mill: 'grinds 25% faster', bakery: 'bakes 25% faster', study: 'works 25% faster', market: 'better prices (+10%)', fountain: 'more charm', flowers: 'more charm', lantern: 'more charm', banner: 'more charm' };
 export const TECH = {
   milling: { name: 'Milling',      scrolls: 3,  time: 20, desc: 'Unlocks Windmill and Bakery' },
   trade:   { name: 'Trade',        scrolls: 4,  time: 24, desc: 'Unlocks the Market' },
@@ -74,5 +79,6 @@ export const QUESTS = [
   { id: 'q_saw',    text: 'Build a Sawmill',         stat: 'b_sawmill', n: 1, reward: { coins: 30 } },
   { id: 'q_plank',  text: 'Saw 10 planks',           stat: 'c_planks', n: 10, reward: { stone: 20 } },
   { id: 'q_study',  text: 'Build a Study',           stat: 'b_study', n: 1,  reward: { scrolls: 5 } },
+  { id: 'q_up',     text: 'Upgrade a building',      stat: 'upgrades', n: 1, reward: { planks: 10 } },
   { id: 'q_lvl5',   text: 'Reach village level 5',   stat: 'level',   n: 5,  reward: { coins: 200 } },
 ];

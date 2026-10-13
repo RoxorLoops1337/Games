@@ -2,7 +2,7 @@
 // solo client both drive it with tick(W, dt) and command(W, pid, cmd).
 import {
   GOODS, PLOT, MAX_PLAYERS, VILLAGE_RING, LEVEL_XP, MAX_LEVEL, BUILDINGS, RECIPES, TECH,
-  NODE_TYPES, VALLEY_FIELDS, VALLEY_FIELD_RADIUS, VALLEY_LEVEL_XP, QUESTS, SELL,
+  NODE_TYPES, MAX_BLD_LEVEL, upgradeCost, upgradeNeedsLevel, VALLEY_FIELDS, VALLEY_FIELD_RADIUS, VALLEY_LEVEL_XP, QUESTS, SELL,
 } from './data.js';
 
 export const COLORS = ['#e8564a', '#3d8bd8', '#f2b632', '#52b56a', '#a65bd6', '#ef7fb0', '#31b5b0', '#f08a3a',
@@ -104,8 +104,10 @@ export function findSpot(P, w, h, margin = 0) {
   return null;
 }
 // ---------- helpers ----------
-export const capOf = (P) => 100 + P.buildings.filter(b => b.type === 'storehouse' && b.built).length * 100 + (P.tech.sturdy ? 60 : 0);
-export const housingOf = (P) => 3 + P.buildings.filter(b => b.type === 'house' && b.built).length * 2;
+const lv = (b) => (b.lvl || 1) - 1;
+export const capOf = (P) => 100 + P.buildings.reduce((s, b) => s + (b.built && b.type === 'storehouse' ? 100 + 50 * lv(b) : 0) + (b.type === 'hall' ? 50 * lv(b) : 0), 0) + (P.tech.sturdy ? 60 : 0);
+export const housingOf = (P) => 3 + P.buildings.reduce((s, b) => s + (b.built && b.type === 'house' ? 2 + lv(b) : 0) + (b.type === 'hall' ? lv(b) : 0), 0);
+const speedOf = (b) => 1 + 0.25 * lv(b);
 export const hireCost = (P) => ({ soup: 3 + Math.max(0, P.villagers.length - 3) * 3 });
 export const hasTech = (P, t) => !t || !!P.tech[t];
 function popup(P, text, x, z) { P.popups.push({ text, x, z }); if (P.popups.length > 20) P.popups.shift(); }
@@ -196,6 +198,15 @@ const OPS = {
     if (q.started) { for (const [k, n] of Object.entries(RECIPES[q.recipe].in)) give(P, k, n); }
     b.queue.splice(c.i, 1);
   },
+  upgrade(W, P, c) {
+    const b = building(P, c.id); if (!b || !b.built) return { ok: false, err: 'not ready' };
+    if (b.up) return { ok: false, err: 'already upgrading' };
+    if ((b.lvl || 1) >= MAX_BLD_LEVEL) return { ok: false, err: 'max level' };
+    const need = upgradeNeedsLevel(b.type, b.lvl || 1); if (P.level < need) return { ok: false, err: 'village level ' + need + ' needed' };
+    const cost = upgradeCost(b.type, b.lvl || 1); if (!canPay(P, cost)) return { ok: false, err: 'not enough resources' };
+    pay(P, cost); b.up = { p: 0 };
+    const v = nearestIdle(P, b); if (v) setTask(v, { k: 'bld', id: b.id });
+  },
   research(W, P, c) {
     const t = own(TECH, c.tech) ? TECH[c.tech] : null, b = building(P, c.id);
     if (!t || P.tech[c.tech] || !b || b.type !== 'study' || !b.built) return { ok: false, err: 'cannot research' };
@@ -213,7 +224,7 @@ const OPS = {
     if (!P.buildings.some(b => b.type === 'market' && b.built)) return { ok: false, err: 'build a Market' };
     if (!GOODS.includes(c.res)) return { ok: false };
     const n = Math.min(num(c.n) || 0, P.res[c.res]); if (!(n > 0)) return { ok: false };
-    P.res[c.res] -= n; P.coins += n * SELL[c.res]; bump(P, 'sold', n);
+    P.res[c.res] -= n; P.coins += Math.round(n * SELL[c.res] * (1 + 0.1 * lv(P.buildings.find(b => b.type === 'market' && b.built)))); bump(P, 'sold', n);
   },
   contribute(W, P, c) {
     const o = W.valley.orders.find(o => o.id === c.id); if (!o || o.done || !own(o.need, c.res)) return { ok: false, err: 'not needed' };
@@ -315,13 +326,18 @@ function stepVillager(W, P, v, dt) {
       if (b.progress >= 1) { b.progress = 1; b.built = true; bump(P, 'b_' + b.type); addXp(W, P, d.xp || 5); popup(P, d.name + ' ready!', v.x, v.z); W.events.push({ t: 'built', pid: P.id, id: b.id }); P.rev++; clearTask(v); }
       return;
     }
+    if (b.up) {
+      v.state = 'build'; b.up.p += dt / (d.build * 1.5 * (b.lvl || 1));
+      if (b.up.p >= 1) { b.up = null; b.lvl = (b.lvl || 1) + 1; bump(P, 'upgrades'); addXp(W, P, (d.xp || 5) * 2); popup(P, (d.name || 'Building') + ' upgraded to ' + b.lvl + '!', v.x, v.z); W.events.push({ t: 'built', pid: P.id, id: b.id }); P.rev++; clearTask(v); }
+      return;
+    }
     if (d.field) {
       if (b.stage === 'empty') { v.state = 'work'; v.work += dt; if (v.work >= 4) { v.work = 0; b.stage = 'grow'; b.crop = 0; P.rev++; } return; }
       if (b.stage === 'grow') { clearTask(v); return; }
-      if (b.stage === 'ripe') { v.state = 'work'; v.work += dt; if (v.work >= 4) { v.work = 0; const g = give(P, 'wheat', 6 + (P.tech.keen ? 2 : 0)); bump(P, 'wheat', g); addXp(W, P, 3); popup(P, '+' + g + '🌾', v.x, v.z); b.stage = 'empty'; b.crop = 0; P.rev++; if (g === 0) popup(P, 'Storage full', v.x, v.z); clearTask(v); } return; }
+      if (b.stage === 'ripe') { v.state = 'work'; v.work += dt; if (v.work >= 4) { v.work = 0; const g = give(P, 'wheat', 6 + 3 * lv(b) + (P.tech.keen ? 2 : 0)); bump(P, 'wheat', g); addXp(W, P, 3); popup(P, '+' + g + '🌾', v.x, v.z); b.stage = 'empty'; b.crop = 0; P.rev++; if (g === 0) popup(P, 'Storage full', v.x, v.z); clearTask(v); } return; }
     }
     if (b.type === 'study' && b.research) {
-      v.state = 'work'; b.research.left -= dt;
+      v.state = 'work'; b.research.left -= dt * speedOf(b);
       if (b.research.left <= 0) { P.tech[b.research.tech] = true; popup(P, TECH[b.research.tech].name + ' learned!', v.x, v.z); addXp(W, P, 15); b.research = null; P.rev++; if (!b.queue.length) clearTask(v); }
       return;
     }
@@ -331,7 +347,7 @@ function stepVillager(W, P, v, dt) {
         if (!canPay(P, r.in)) { v.state = 'blocked'; v.idleFor = (v.idleFor || 0) + dt; if (v.idleFor > 8) { popup(P, 'Missing ingredients', v.x, v.z); clearTask(v); } return; }
         pay(P, r.in); q.started = true; q.left = r.time;
       }
-      v.idleFor = 0; v.state = 'work'; q.left -= dt;
+      v.idleFor = 0; v.state = 'work'; q.left -= dt * speedOf(b);
       if (q.left <= 0) {
         const g = give(P, q.recipe, r.out); bump(P, 'c_' + q.recipe, g); addXp(W, P, r.xp); popup(P, '+' + g + ICONS[q.recipe], v.x, v.z);
         q.n--; q.started = false; if (q.n <= 0) b.queue.shift(); P.rev++;
@@ -376,14 +392,14 @@ export function snapshot(W, pid) {
   const players = [];
   for (const P of Object.values(W.players)) {
     players.push({ id: P.id, name: P.name, color: P.color, slot: P.slot, ox: P.ox, oz: P.oz, ang: P.ang, level: P.level, online: P.online,
-      b: P.buildings.map(b => [b.id, b.type, b.x, b.y, b.built ? 1 : r1(b.progress), b.stage || (b.queue && b.queue.length ? 'busy' : ''), b.stage === 'grow' ? r1(b.crop) : 0]),
+      b: P.buildings.map(b => [b.id, b.type, b.x, b.y, b.built ? 1 : r1(b.progress), b.stage || ((b.queue && b.queue.length) || b.research || b.up ? 'busy' : ''), b.stage === 'grow' ? r1(b.crop) : 0, b.lvl || 1, b.up ? r1(b.up.p) : 0]),
       n: P.nodes.map(n => [n.id, n.type, n.x, n.y, n.amount > 0 ? 1 : 0]),
       v: P.villagers.map(v => [v.id, r1(v.x), r1(v.z), v.state, v.hat, v.face ? r1(v.face) : 0, v.name]) });
   }
   const me = W.players[pid]; let you = null;
   if (me) {
     you = { id: me.id, res: me.res, coins: me.coins, xp: me.xp, level: me.level, cap: capOf(me), housing: housingOf(me), tech: me.tech, quests: me.questsDone, stats: me.stats,
-      hire: hireCost(me), buildings: me.buildings.map(b => ({ id: b.id, type: b.type, queue: b.queue, research: b.research || null, stage: b.stage, crop: b.crop })),
+      hire: hireCost(me), buildings: me.buildings.map(b => ({ id: b.id, type: b.type, lvl: b.lvl || 1, up: !!b.up, queue: b.queue, research: b.research || null, stage: b.stage, crop: b.crop })),
       villagers: me.villagers.map(v => ({ id: v.id, name: v.name, state: v.state, hunger: Math.round(v.hunger), task: v.task })), popups: me.popups.splice(0) };
   }
   return { t: r1(W.t), you, players, valley: { xp: W.valley.xp, level: W.valley.level, orders: W.valley.orders, fields: W.valley.fields.map(f => ({ id: f.id, stock: Math.floor(f.stock) })) }, chat: W.chat.slice(-30), events: W.events };
