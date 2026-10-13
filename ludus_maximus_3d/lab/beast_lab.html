@@ -59,7 +59,7 @@ if (view === 'grid') {
   const s = SPECIES[which].size * (which === 'elephant' ? 2.0 : 1); cam.position.set(0, 1.5 * s + 0.6, 6.0 * s + 1.5); target.set(0, 0.85 * s + 0.2, 0); cam.fov = 30;
 }
 if (Q.get('cam')) { const c = Q.get('cam').split(',').map(Number); cam.position.set(c[0], c[1], c[2]); target.set(c[3], c[4], c[5]); }
-if (Q.get('blood') || Q.get('wounds')) rigs.forEach((r, i) => { r.addBlood(+(Q.get('blood') || 0.4), 1); for (let j = 0; j < +(Q.get('wounds') || 0); j++) r.addWound(r.jointRest('chest', [(j - 1) * 0.1, 0.1 * (j % 2), 0.15]), new THREE.Vector3(0.5, 0.8, 0.2).normalize(), 0.12, 1); });
+if (Q.get('blood') || Q.get('wounds')) rigs.forEach((r, i) => { const k = Math.max(1, r.size); for (let j = 0; j < +(Q.get('wounds') || 0); j++) r.addWound(r.jointRest(j % 3 === 2 ? 'hipL' : 'chest', [(j % 2 ? 1 : -1) * 0.24 / k, (0.05 + 0.05 * j) / k, 0.04 * j / k]), new THREE.Vector3(0.5, 0.8, 0.2).normalize(), 0.1, 1); r.addBlood(+(Q.get('blood') || 0.4), 1); });   // wounds sit on the flank surface, then the blood lands on the last one
 if (Q.get('hide')) rigs.forEach((r) => Q.get('hide').split(',').forEach((n) => { if (r.parts[n]) r.parts[n].visible = false; }));
 cam.lookAt(target); cam.updateProjectionMatrix();
 let spin = Q.get('spin') === '1', orbit = Q.get('orbit') === '1', ang = 0, t0 = performance.now();

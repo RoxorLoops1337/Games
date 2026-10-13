@@ -201,9 +201,9 @@ function furMaterial(id, bu, shadeKind = 'cloth', o = {}) {
     } }
     vec3 dried = vec3(0.26, 0.12, 0.09), wet = vec3(0.5, 0.07, 0.06), tintc = mix(dried, wet, uBFresh);
     vec3 base = diffuseColor.rgb;
-    vec3 dark = base * mix(vec3(0.5, 0.36, 0.33), vec3(0.34, 0.12, 0.1), uBFresh) + tintc * 0.07;
+    vec3 dark = base * mix(vec3(0.5, 0.34, 0.3), vec3(0.34, 0.1, 0.08), uBFresh) + tintc * 0.1;
     diffuseColor.rgb = mix(base, dark, clamp(edge, 0.0, 1.0) * 0.92);
-    diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.2, 0.012, 0.016) * (0.6 + 0.8 * cl3) + dried * 0.05, core * (0.3 + 0.55 * uBFresh));
+    diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.24, 0.014, 0.018) * (0.6 + 0.8 * cl3) + dried * 0.05, core * (0.4 + 0.5 * uBFresh));
     diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.04, 0.0, 0.004), gsh * 0.85);
     gBM = clamp(max(edge * 0.8, max(core, gsh)), 0.0, 1.0);
   }
@@ -390,7 +390,7 @@ function clipsFor(sp) {
 const DETAIL = {
   low: { seg: 4, sub: 1, cap: 1, sw: 5, sh: 3, mane: 22, mseg: 2, shells: 0, claws: 0, teeth: 0, whisk: 0, tufts: 0, lids: 0, detailEye: 0, ruff: 0 },
   medium: { seg: 7, sub: 2, cap: 1, sw: 8, sh: 5, mane: 70, mseg: 3, shells: 0, claws: 2, teeth: 2, whisk: 3, tufts: 8, lids: 1, detailEye: 1, ruff: 1 },
-  high: { seg: 10, sub: 2, cap: 2, sw: 12, sh: 8, mane: 170, mseg: 4, shells: 3, claws: 3, teeth: 4, whisk: 5, tufts: 16, lids: 1, detailEye: 1, ruff: 2 },
+  high: { seg: 10, sub: 2, cap: 2, sw: 12, sh: 8, mane: 230, mseg: 4, shells: 3, claws: 3, teeth: 4, whisk: 5, tufts: 16, lids: 1, detailEye: 1, ruff: 2 },
 };
 
 export function beastKindOf(x) { const g = x && (x.g || x); return (g && (g.beast || (x.beast))) || (x && x.style) || 'lion'; }
@@ -493,11 +493,12 @@ export function createBeast(unitOrRec, opts = {}) {
       if (kind === 'lion' || kind === 'nemean' || kind === 'wolf') { const wp = blob(SS(sn[0] * 0.45), SS(sn[1] * 0.45), SS(sn[2] * 0.3), 7, 4); setColor(wp, (x, y, z, nx, ny) => mix(MUZ, BEL, 0.3)); abs(wp, 'head', [sg * SS(sn[0] * 0.78), SS(tipY * 0.9 - 0.012), SS(sk[2] + sn[2] * 0.52)]); addRigid('fur', wp, 'head'); }
     }
     // nose pad (and nostrils)
-    { const bw = kind === 'boar' ? 1.1 : 0.82, nz = blob(SS(sn[0] * bw), SS(sn[1] * (kind === 'boar' ? 0.95 : 0.62)), SS(kind === 'boar' ? 0.04 : 0.032), LOW ? 5 : 8, LOW ? 3 : 5); setColor(nz, (x, y, z, nx, ny, nzz) => { const c = hexC(kind === 'boar' ? '#a86f66' : '#2a1a18'); const ns = Math.abs(Math.abs(x) / (SS(sn[0]) * bw) - 0.42) < 0.2 && nzz > 0.4 && y < 0 ? 0.35 : 1; return c.clone().multiplyScalar(ns); }); abs(nz, 'head', [0, SS(tipY + (kind === 'boar' ? 0.0 : 0.005)), SS(tipZ + 0.012)]); addRigid('eye', nz, 'head'); }
+    { const bw = kind === 'boar' ? 1.1 : 0.82, nz = blob(SS(sn[0] * bw), SS(sn[1] * (kind === 'boar' ? 0.95 : 0.62)), SS(kind === 'boar' ? 0.04 : 0.032), LOW ? 5 : 8, LOW ? 3 : 5); setColor(nz, (x, y, z, nx, ny, nzz) => { const c = hexC(kind === 'boar' ? '#a86f66' : '#2a1a18'); const ns = Math.abs(Math.abs(x) / (SS(sn[0]) * bw) - 0.42) < 0.2 && nzz > 0.4 && y < 0 ? 0.35 : 1; return c.clone().multiplyScalar(ns); }); abs(nz, 'head', [0, SS(tipY + (kind === 'boar' ? 0.0 : sn[1] * 0.42)), SS(tipZ + 0.014)]); addRigid('eye', nz, 'head');
+      if (!LOW) for (const sg of [1, -1]) { const lp = blob(SS(0.004), SS(0.005), SS(sn[2] * 0.62), 5, 3); setColor(lp, flat(kind === 'boar' ? '#3a2018' : '#2a1a18')); abs(lp, 'head', [sg * SS(sn[0] * 0.9), SS(tipY - sn[1] * 0.5), SS(sk[2] + sn[2] * 0.52)], [0, sg * 0.1, 0]); addRigid('eye', lp, 'head'); } }
     // lower jaw (follows the jaw bone), mouth interior and tongue
-    const jw = HS.jaw, jy = -sn[1] * 0.55;
+    const jw = HS.jaw, jy = -sn[1] * 0.38;
     addLoft('fur', [{ p: P3('jaw', 0, SS(jy * 0.7), SS(-0.02)), r: [SS(sn[0] * 1.15), SS(sn[1] * 0.7)] }, { p: P3('jaw', 0, SS(jy), SS(jw * 0.45)), r: [SS(sn[0] * 0.98), SS(sn[1] * 0.55)] }, { p: P3('jaw', 0, SS(jy * 1.05), SS(jw * 0.95)), r: [SS(sn[0] * 0.64), SS(sn[1] * 0.42)] }], { caps: [false, true] }, [['jaw', 0]], 0.5, (x, y, z, nx, ny) => mix(mix(BEL, MUZ, 0.5), FUR, sm(0, 0.9, ny) * 0.35), 0);
-    if (!LOW) { const mo = blob(SS(sn[0] * 0.82), SS(sn[1] * 0.4), SS(jw * 0.52), 8, 4); setColor(mo, flat('#3a0c12')); abs(mo, 'jaw', [0, SS(jy * 0.85 + sn[1] * 0.45), SS(jw * 0.46)]); addRigid('eye', mo, 'jaw');
+    if (!LOW) { const mo = blob(SS(sn[0] * 0.82), SS(sn[1] * 0.4), SS(jw * 0.52), 8, 4); setColor(mo, flat('#4a1218')); abs(mo, 'jaw', [0, SS(jy * 0.85 + sn[1] * 0.45), SS(jw * 0.46)]); addRigid('eye', mo, 'jaw');
       const tg = blob(SS(sn[0] * 0.46), SS(sn[1] * 0.26), SS(jw * 0.46), 8, 4); setColor(tg, flat('#c4606c')); abs(tg, 'jaw', [0, SS(jy * 0.85 + sn[1] * 0.72), SS(jw * 0.46)]); addRigid('eye', tg, 'jaw'); }
     // teeth
     const fang = kind === 'wolf' ? 0.034 : kind === 'bear' ? 0.04 : kind === 'boar' ? 0.02 : 0.052;
@@ -572,7 +573,8 @@ export function createBeast(unitOrRec, opts = {}) {
         const o = [hN.x + axn.x * axl * u + (e1.x * cx + e2.x * sy) * rd, hN.y + axn.y * axl * u + (e1.y * cx + e2.y * sy) * rd * 1.05, hN.z + axn.z * axl * u + (e1.z * cx + e2.z * sy) * rd - SS(0.04)];
         dir.set(e1.x * cx + e2.x * sy, e1.y * cx + e2.y * sy, e1.z * cx + e2.z * sy).multiplyScalar(0.5).addScaledVector(axn, 0.95).add(new V3(0, -0.1 - 0.25 * (1 - sy) * 0.5, -0.05)).normalize();
         const ln = len * (0.8 + 0.55 * hh) * (1 + 0.5 * u);
-        bl.add(o, dir, ln, SS(0.05 + 0.015 * l), ms, new V3(0, -ln * (0.3 + 0.1 * l), 0), mix(DK, MANE, 0.5 + 0.1 * l).multiplyScalar(0.8 + 0.4 * hh), mix(MANE, tipC, 0.2 + 0.25 * l + (sp.gold ? 0.2 * h01(k) : 0)).multiplyScalar(0.85 + 0.35 * hh), mj(u, l), new V3(e1.x * cx + e2.x * sy, e1.y * cx + e2.y * sy, e1.z * cx + e2.z * sy));
+        dir.x += (h01(k * 1.7 + l) - 0.5) * 0.45; dir.y += (h01(k * 2.9 + l * 3) - 0.5) * 0.3; dir.normalize();
+        bl.add(o, dir, ln, SS(0.032 + 0.01 * l), ms, new V3(0, -ln * (0.3 + 0.1 * l), 0), mix(DK, MANE, 0.5 + 0.1 * l).multiplyScalar(0.8 + 0.4 * hh), mix(MANE, tipC, 0.2 + 0.25 * l + (sp.gold ? 0.2 * h01(k) : 0)).multiplyScalar(0.85 + 0.35 * hh), mj(u, l), new V3(e1.x * cx + e2.x * sy, e1.y * cx + e2.y * sy, e1.z * cx + e2.z * sy));
       }
     }
     // chest and belly fringe, cheek ruff

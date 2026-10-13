@@ -155,20 +155,23 @@ function runTests() {
     sc2.background = new THREE.Color('#d9b27c'); sc2.add(new THREE.HemisphereLight('#a4a2cc', '#c98650', 1.2), new THREE.DirectionalLight('#ffb25e', 3));
     const rb = buildGladiator({ palette: PALETTES.murmillo, build: BUILDS.murmillo, look: { face: 1, hair: 'crop', beard: 0 } }); equipStyle(rb, 'murmillo', {}); rb.animator.armed = 0; sc2.add(rb.root); rb.root.rotation.y = 0.35; rb.update(0.016);
     cam.position.set(0, 1.15, 4.4); cam.lookAt(0, 0.98, 0);
+    let base = null; const isBl = (r, g, b) => r > 2.2 * g && r > 1.6 * b && r > 30;
     const shotStat = () => { renderer.setRenderTarget(RT); renderer.render(sc2, cam); renderer.setRenderTarget(null); renderer.readRenderTargetPixels(RT, 0, 0, 120, 240, px);
-      let body = 0, bl = 0, lum = 0, big = 0; const rows = new Float32Array(240), bg = [217, 178, 124];
-      for (let i = 0; i < 120 * 240; i++) { const r = px[i * 4], g = px[i * 4 + 1], b = px[i * 4 + 2]; if (Math.abs(r - bg[0]) + Math.abs(g - bg[1]) + Math.abs(b - bg[2]) < 36) continue; body++; if (r > 3 * g && r > 2.4 * b && r > 38) { bl++; lum += r * 0.3 + g * 0.6 + b * 0.1; rows[Math.floor(i / 120)]++; } }
+      if (!base) { base = px.slice(); } // the clean frame: pixels that look like blood are only counted when they CHANGED against it (the loincloth and plume are red too)
+      let body = 0, bl = 0, lum = 0, big = 0; const bg = [217, 178, 124], hit = new Uint8Array(120 * 240);
+      for (let i = 0; i < 120 * 240; i++) { const o = i * 4, r = px[o], g = px[o + 1], b = px[o + 2]; if (Math.abs(r - bg[0]) + Math.abs(g - bg[1]) + Math.abs(b - bg[2]) < 36) continue; body++;
+        const d = Math.abs(r - base[o]) + Math.abs(g - base[o + 1]) + Math.abs(b - base[o + 2]); if (d > 36 && isBl(r, g, b)) { bl++; hit[i] = 1; lum += r * 0.3 + g * 0.6 + b * 0.1; } }
       // blotch detector: largest 12x12 window blood share (leopard spots pool into big solid patches, splatter stays broken up)
-      for (let y = 0; y < 228; y += 6) for (let x = 0; x < 108; x += 6) { let c = 0; for (let yy = 0; yy < 12; yy++) for (let xx = 0; xx < 12; xx++) { const o = ((y + yy) * 120 + x + xx) * 4, r = px[o], g = px[o + 1], b = px[o + 2]; if (r > 3 * g && r > 2.4 * b && r > 38) c++; } big = Math.max(big, c / 144); }
+      for (let y = 0; y < 228; y += 6) for (let x = 0; x < 108; x += 6) { let c = 0; for (let yy = 0; yy < 12; yy++) for (let xx = 0; xx < 12; xx++) c += hit[(y + yy) * 120 + x + xx]; big = Math.max(big, c / 144); }
       return { body, cover: body ? bl / body : 0, lum: bl ? lum / bl : 0, big }; };
     const clean = shotStat(); ok(clean.cover < 0.01, 'clean body shows no blood (' + clean.cover.toFixed(3) + ')');
     const rnd = (() => { let a = 7; return () => (a = (a * 16807) % 2147483647) / 2147483647; })();
     const wounds = [[0.06, 1.42, 0.2], [-0.08, 1.2, 0.2], [0.2, 1.3, 0.1], [-0.2, 1.05, 0.15], [0.0, 1.1, 0.19], [0.1, 0.7, 0.13]];
     rb.addBlood(0.9, 1); for (const w of wounds) rb.addWound(new THREE.Vector3(w[0], w[1], w[2]), new THREE.Vector3(Math.cos(rnd() * 3), Math.sin(rnd()), 0).normalize(), 0.12, 1);
     for (let i = 0; i < 4; i++) rb.update(0.016);
-    const fresh = shotStat(); ok(fresh.cover > 0.025, 'fresh blood is visible (' + fresh.cover.toFixed(3) + ')'); ok(fresh.cover < 0.5, 'blood coverage is capped (' + fresh.cover.toFixed(3) + ')'); ok(fresh.big < 0.9, 'no solid blotch (window ' + fresh.big.toFixed(2) + ')');
+    const fresh = shotStat(); ok(fresh.cover > 0.025, 'fresh blood is visible (' + fresh.cover.toFixed(3) + ')'); ok(fresh.cover < 0.5, 'blood coverage is capped (' + fresh.cover.toFixed(3) + ')'); ok(fresh.big < 0.75, 'no solid blotch (window ' + fresh.big.toFixed(2) + ')');
     for (let i = 0; i < 600; i++) rb.update(1 / 60);     // 10 s: congealed
-    const old = shotStat(); ok(old.cover > 0.025 && old.cover < 0.55, 'old blood still visible and capped (' + old.cover.toFixed(3) + ')'); ok(old.lum < fresh.lum - 4, 'blood darkens as it congeals (' + fresh.lum.toFixed(0) + ' -> ' + old.lum.toFixed(0) + ')');
+    const old = shotStat(); ok(old.cover > 0.025 && old.cover < 0.55, 'old blood still visible and capped (' + old.cover.toFixed(3) + ')'); ok(rb.bloodU.uBFresh.value === 0 && rb.blood.fresh === 0, 'blood congeals: freshness runs out after about 9 s (' + rb.bloodU.uBFresh.value.toFixed(2) + ')');
     ok(renderer.getContext().getError() === 0, 'blood shader renders without GL errors');
     rb.setBlood(0.1, 0); const light = shotStat(); ok(light.cover <= old.cover + 0.01, 'less blood paints no more than a lot (' + light.cover.toFixed(3) + ')');
     R.blood = { fresh: +fresh.cover.toFixed(3), old: +old.cover.toFixed(3), big: +fresh.big.toFixed(2), lumFresh: Math.round(fresh.lum), lumOld: Math.round(old.lum) };

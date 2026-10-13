@@ -213,7 +213,7 @@ export function createRearrange(game) {
     get active() { return st.active; }, get state() { return Object.assign({}, st, { items: cached.length }); }, tap, sync,
     get fab() { return fab; },
     async start(o = {}) {
-      if (st.active || game.scene !== 'hub' || game.busy || !game.hub) return false;
+      if (st.active || game.scene !== 'hub' || game.busy || !game.hub || typeof game.hub.rrBegin !== 'function') return false;   // the hub stub has no rearrange support
       if (S().pendingEv) { U.toast('Answer the pending event first', { kind: 'bad' }); return false; }
       await loadSK(); if (st.active || game.scene !== 'hub' || game.busy) return false;
       game.closeAll(); build(); st.active = true; st.sel = -1; st.cursor = -1; st.dest = -1; st.cine = false; st.asking = false;

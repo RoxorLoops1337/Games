@@ -1,0 +1,9 @@
+setup {"glads":3}
+week {"week":1,"events":3,"entered":3,"gold":5234}
+  dialog: Week 1 training
+  dialog: Easy Duel
+  dialog: Choose an augment
+  dialog: Easy Duel
+  dialog: Trophies earned
+  dialog: Even Duel
+  dialog: Choose an augment

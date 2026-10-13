@@ -633,9 +633,9 @@ canvas.lx-bl-focus:focus-visible, .lx-bl-focus:focus-visible { outline: 3px soli
 .lx-sheet { max-height: calc(100vh - var(--lx-sat) - 8px); max-height: calc(100dvh - var(--lx-sat) - 8px); }
 @media (min-width: 700px) { .lx-sheet { max-height: calc(100vh - 28px); max-height: calc(100dvh - 28px); } }
 .lx-sheet.lx-marble { border-color: var(--lx-bronze); }
-.lx-sheet.lx-keyed { padding-top: 0; overflow: hidden; }
-.lx-sheet.lx-keyed::before { left: 0; right: 0; top: 0; height: 12px; background-color: #2a1d40; background-image: var(--lx-key); background-position: left center; opacity: 1; z-index: 2; }
-.lx-sheet .lx-panel-head { position: relative; z-index: 1; margin: 0; padding: 16px 52px 8px; background: linear-gradient(180deg, #2a1d40 0%, #3b2552 100%); border-bottom: 2px solid var(--lx-bronze); box-shadow: 0 3px 8px rgba(20, 10, 30, .28); flex: none; }
+.lx-sheet.lx-keyed { padding-top: 0; } /* no overflow:hidden here: the docked 'See the finish' pill rides above the sheet edge */
+.lx-sheet.lx-keyed::before { left: 0; right: 0; top: 0; height: 12px; border-radius: 4px 4px 0 0; background-color: #2a1d40; background-image: var(--lx-key); background-position: left center; opacity: 1; z-index: 2; }
+.lx-sheet .lx-panel-head { position: relative; z-index: 1; margin: 0; border-radius: 4px 4px 0 0; padding: 16px 52px 8px; background: linear-gradient(180deg, #2a1d40 0%, #3b2552 100%); border-bottom: 2px solid var(--lx-bronze); box-shadow: 0 3px 8px rgba(20, 10, 30, .28); flex: none; }
 .lx-sheet .lx-title { color: var(--lx-gold); text-shadow: 0 2px 0 rgba(0, 0, 0, .6); font-size: var(--lx-fs-l); }
 .lx-sheet .lx-rule { background: linear-gradient(90deg, transparent, var(--lx-gold) 50%, transparent); opacity: .5; }
 .lx-sheet .lx-panel-body { padding: 10px 12px 10px; }
@@ -707,3 +707,6 @@ body.lx-photo-on .lx-banners, body.lx-photo-on .lx-fv-verdict { display: none !i
 @media (max-width: 520px) { .am-hero { flex-wrap: wrap; } .am-hero .lx-btn { flex: 1 1 100%; } }
 .lx-sheet:focus { outline: none; }
 .lx-toast { color: var(--lx-text); } /* inside a parchment sheet the strip would inherit dark text on a dark pill */
+
+@media (max-width: 699px) { .lx-sheet .lx-panel-head { border-radius: 12px 12px 0 0; } }
+.lx-dock-low .lx-sheet .lx-panel-head { border-radius: 12px 12px 0 0; }
