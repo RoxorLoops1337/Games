@@ -20,7 +20,7 @@ export const SFX_NAMES = ['swordHit', 'swordHitCrit', 'shieldBlock', 'metalClang
 export const MUSIC_MODES = ['ludus', 'prep', 'arena', 'victory', 'defeat', 'title', 'results', 'season', 'elegy', 'beast', 'boss'];
 
 const MUSIC_TRIM = 0.4;       // music bus trim; music sits about 6 dB under the combat sfx at equal slider positions
-const SFX_GAIN = 1.4;         // sfx, crowd and their reverb sends sit about 3 dB hotter than the slider value so fights read 4 to 8 dB above the music bed (limiter keeps peaks under -3 dBFS)
+const SFX_GAIN = 1.0;         // sfx, crowd and reverb send trim vs the slider. 1.4 (+3 dB) would lift sfx over the music bed but was NOT verified against the limiter, so it stays 1.0
 const MAKEUP = 1.0;           // loudness calibration before the glue compressor (tools/ludus3d_audio_check.mjs prints the fight LUFS)
 const NOTE = (midi) => 440 * Math.pow(2, (midi - 69) / 12);
 const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
