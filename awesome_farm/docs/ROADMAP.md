@@ -54,7 +54,7 @@ split big ones into slices (rules, art, polish).
   - [x] B4a Chest fill gauge (a little bar at the foot of every chest with something in it: green, gold, red)
   - [x] B4b Speed Module (assembler recipe; slot one into a machine for +25% speed with the Module button; PROTOCOL 47; efficiency module still to do)
   - [ ] B4c Harvester arm
-  - [ ] B4d Sprinkler
+  - [x] B4d Sprinkler (beds within 3 tiles grow 30% faster, no power, no protocol change)
 - [ ] B1 Cottages: the folk move in
 - [ ] B2 Festival eve + the Lantern Chain
 - [ ] B3 The Long Dusk (new game plus)
