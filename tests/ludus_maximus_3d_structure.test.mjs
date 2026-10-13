@@ -156,7 +156,7 @@ for (const fn of ['newGame', 'makeGlad', 'mkUnits', 'createFight', 'step', 'useU
   ok(/placePlate\(/.test(fv) && /measureHud\(/.test(fv) && /lx-fv-top/.test(fv) && /\.lx-fv-top/.test(css) && /@media \(max-height: 480px\)[^}]*\.lx-fv-hud/.test(css.replace(/\n/g, ' ')), 'fight HUD: compact top row, nameplates avoid the button rows (phones and landscape)');
   ok(/caPulse\(a\)/.test(fv) && /Math\.min\(a, 0\.006\)/.test(fv) && !/pulseCA\(0\.01/.test(fv) && /zoomPunch\(0\.028\)/.test(fv), 'chromatic aberration and zoom pulses are small (capped at 0.006)');
   ok(/meteorFall\(/.test(fv) && /fx\.shoot\(from, to/.test(fv), 'meteor has a travel streak that lands when the telegraph fills');
-  ok(/showEnd\(/.test(fv) && /clearEnd\(/.test(fv) && /lx-fv-end/.test(css) && /phase === 'outro' \? 0\.0/.test(fv), 'outro: big VICTORY / DEFEAT title, plates and ult buttons hidden');
+  ok(/showEnd\(/.test(fv) && /clearEnd\(/.test(fv) && /lx-fv-end/.test(css) && /phase === 'outro' \? 0(\.0)? : 1/.test(fv), 'outro: big VICTORY / DEFEAT title, plates and ult buttons hidden');
   ok(!/setTimeout\(\(\) => this\.dir\.setShot\('victory'/.test(fv) && /next: \{ name: 'victory'/.test(fv), 'victory shot is chained from the kill cam (no wall clock timer)');
   ok(/vx \+ bx \* \(0\.6 \+ 1\.5 \* fall\)/.test(dir) && /p\.side \* 0\.5 \* k/.test(dir) && /\* 0\.1 \* ease\(t \/ 2\.5\)/.test(dir), 'kill cam frames the blow axis and the fall; victory orbit is slow (no spin)');
   ok(/function dropWeapon/.test(gore) && /ensureBrawl/.test(gore) && /WEAPON_POSES/.test(gore) && /setWeapon\(BRAWL\)/.test(gore), 'a severed weapon hand drops the weapon prop and switches to a one-handed brawl stance');

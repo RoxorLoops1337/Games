@@ -619,7 +619,7 @@
       c: [{ l: 'Call it good fortune', h: 'Even odds the men believe you.', o: [{ p: 0.5, r: 'The yard decides it is good fortune and acts accordingly. Spirits soar.', fx: [['fame', 8, 6], ['mo', 4]] }, { r: 'The yard decides it is bad fortune and does not much care what you say.', fx: [['mo', -4]] }] },
         { l: 'Consult a seer', h: 'Costs gold. Reliable comfort.', cost: [30, 25], o: [{ r: 'The seer reads the snake\'s entrails and finds that something good will happen soon. He says this every time.', fx: [['mo', 5], ['fame', 3, 2]] }] },
         { l: 'Ignore it', o: [{ r: 'A hawk is a hawk. The snake is removed by the cook, who finds a use for it.', fx: [] }] }] }),
-    E({ id: 'armourer_offer', n: 'Seconds from Pompeii', tag: 'coin', cd: 12, w: 1.0, t: 'An armourer from Pompeii has a crate of seconds and a face that says he knows it. He has an oath for every dent.',
+    E({ id: 'armourer_offer', n: 'Seconds from Pompeii', tag: 'coin', cd: 12, w: 1.0, t: 'An armorer from Pompeii has a crate of seconds and a face that says he knows it. He has an oath for every dent.',
       c: [{ l: 'Buy the crate', h: 'Costs gold. A good chance of a decent piece.', cost: [60, 90], o: [{ r: 'There is a good piece under the rest. He does not mention it, and neither do you.', fx: [['item', 0]] }] },
         { l: 'Haggle', h: 'Free. Even odds of half price.', cost: [30, 45], o: [{ p: 0.5, r: 'He sighs, swears by three gods and halves the price. The piece is real.', fx: [['item', 0]] }, { r: 'He is wounded by the offer and leaves with his crate.', fx: [['gold', 30, 45]] }] },
         { l: 'Pass', o: [{ r: 'He wraps the crate and moves on with his dignity almost intact.', fx: [] }] }] }),

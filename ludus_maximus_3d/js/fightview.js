@@ -35,6 +35,9 @@ const readSpeed = () => { try { const v = +localStorage.getItem(SPEED_KEY); retu
 const STATUS_FX = new Set(['stun', 'slow', 'bleed', 'blind', 'taunt', 'root', 'burn']);
 const STATUS_LABEL = { stun: 'STUNNED', slow: 'SLOWED', bleed: 'BLEEDING', blind: 'BLINDED', taunt: 'TAUNT', netted: 'NETTED', guard: 'GUARD', frenzy: 'FRENZY', rage: 'RAGE', rally: 'RALLY', root: 'ROOTED', air: 'KNOCKED UP', spin: 'WHIRLING' };
 
+// keeps the kit button's label span (aria / styling) when the text changes
+function setBtnLabel(b, text) { const l = b.querySelector && b.querySelector('.lx-btn-label'); if (l) l.textContent = text; else b.textContent = text; }
+
 export class FightView {
   constructor({ renderer, post, camera, audio, host, tier = 'high' }) {
     this.renderer = renderer; this.post = post; this.camera = camera; this.audio = audio; this.host = host; this.tier = tier;
@@ -140,7 +143,7 @@ export class FightView {
   }
 
   setSpeed(n) {
-    if (!SPEEDS.includes(n)) n = 1; this.userSpeed = n; this.speedBtn.textContent = 'x' + n;
+    if (!SPEEDS.includes(n)) n = 1; this.userSpeed = n; setBtnLabel(this.speedBtn, 'x' + n);
     try { localStorage.setItem(SPEED_KEY, String(n)); } catch (e) { /* storage blocked */ }
     if (this.pmSpeed) this.pmSpeed.forEach((b, i) => b.setAttribute('aria-pressed', SPEEDS[i] === n ? 'true' : 'false'));
     this.audio.sfx('uiTap', { gain: 0.4 });
@@ -325,7 +328,7 @@ export class FightView {
     this.favorBtn = U.button({ label: "Crowd's Favor!", variant: 'gold', icon: 'fame', onClick: () => { if (this.tap('favor')) this.audio.sfx('crowdCheer'); } }); this.favorBtn.style.display = 'none'; this.favorBtn.classList.add('lx-pulse');
     box.append(this.favorBtn);
     if (F.duo) { this.duoBtn = U.button({ label: 'Duo: ' + D().DUOS[F.duo.kind].n, variant: 'bronze', icon: 'sword', onClick: () => { const r = this.tap('duo'); if (!r) this.audio.sfx('uiError'); } }); box.append(this.duoBtn); } else this.duoBtn = null;
-    this.autoBtn = U.button({ label: F.auto.A ? 'Auto ult: on' : 'Auto ult: off', variant: 'ghost', onClick: () => { this.tap('auto', !F.auto.A); this.autoBtn.textContent = F.auto.A ? 'Auto ult: on' : 'Auto ult: off'; } });
+    this.autoBtn = U.button({ label: F.auto.A ? 'Auto ult: on' : 'Auto ult: off', variant: 'ghost', onClick: () => { this.tap('auto', !F.auto.A); setBtnLabel(this.autoBtn, F.auto.A ? 'Auto ult: on' : 'Auto ult: off'); } });
     if (this.autoBtnOld) this.autoBtnOld.remove(); this.autoBtnOld = this.autoBtn; this.autoBtn.classList.add('lx-fv-btn'); this.topRow.prepend(this.autoBtn); this.ultBar.before(box); box.classList.add('lx-fv-extras');
   }
   focusUnit(id) { const u = this.unitById(id); if (!u || u.side !== 'B' || u.down) return; this.tap('focus', id); this.audio.sfx('uiTap'); for (const f of this.fm.values()) if (f.u.side === 'B') f.plate.classList.toggle('fv-focus', this.F.foc.A === f.u.id); }
@@ -363,7 +366,7 @@ export class FightView {
     if (this.verdictEl) { this.verdictEl.remove(); this.verdictEl = null; }
     if (this.rbar) { this.rbar.remove(); this.rbar = null; }
   }
-  updateSpeedLabel() { this.speedBtn.textContent = 'x' + this.userSpeed; }
+  updateSpeedLabel() { setBtnLabel(this.speedBtn, 'x' + this.userSpeed); }
 
   dispose() {
     this.resetPresentation();
@@ -380,7 +383,7 @@ export class FightView {
     return h >>> 0;
   }
 
-  resize(w, h) { this.dir.setAspect(w / h); }
+  resize(w, h) { this.cw = 0; this.dir.setAspect(w / h); }
 
   // ---------------------------------------------------------------- per frame
   frame(realDt, t) {
@@ -621,10 +624,12 @@ export class FightView {
       }
       rig.update(dt);
       // plate
-      f.hpShown += (u.hp - f.hpShown) * 0.2; f.plate.hp && f.plate.hp.set(u.hp, u.maxhp);
+      f.hpShown += (u.hp - f.hpShown) * 0.2; if (f.plate.hp && (f.hpSet !== u.hp || f.hpSetMax !== u.maxhp)) { f.hpSet = u.hp; f.hpSetMax = u.maxhp; f.plate.hp.set(u.hp, u.maxhp); }   // PERF: DOM bar writes only when the value changed
       const head = _head.set(X, (rig.nameH || 2.05) * (rig.root.scale.y || 1), Z); // BEAST: rig.nameH = beast height
-      this.placePlate(f.plate, head, this.renderer.domElement.clientWidth, this.renderer.domElement.clientHeight);
-      f.plate.style.opacity = dn || this.phase === 'intro' || this.phase === 'outro' ? 0.0 : 1;
+      // PERF: clientWidth/Height force a layout flush after the previous plate's style writes (about 2 ms per frame in 3v3): measured once, refreshed on resize
+      if (!this.cw) { const dom = this.renderer.domElement; this.cw = dom.clientWidth || 1; this.ch = dom.clientHeight || 1; }
+      this.placePlate(f.plate, head, this.cw, this.ch, f);
+      const op = dn || this.phase === 'intro' || this.phase === 'outro' ? 0 : 1; if (f.plOp !== op) { f.plOp = op; f.plate.style.opacity = op; }
     }
   }
 
@@ -653,17 +658,21 @@ export class FightView {
     this.avoid.top = top; this.avoid.bottom = bot; this.avoid.sat = top ? Math.max(0, top.b - 40) : 0;
   }
   /** project the head, then slide the plate so it never covers the top button row or the bottom ult buttons, and never leaves the screen */
-  placePlate(plate, head, w, h) {
+  placePlate(plate, head, w, h, f) {
     const cam = this.camera, p = _hp.copy(head); p.y += 0.35; p.project(cam);
     const vis = p.z > -1 && p.z < 1 && Math.abs(p.x) < 1.15 && Math.abs(p.y) < 1.15;
-    if ((this.avoid.n++ % 20) === 0) this.measureHud();
+    const nowMs = performance.now(); if ((this.avoid.n++ % 120) === 0 || nowMs - (this.avoid.at || 0) > 350) { this.avoid.at = nowMs; this.measureHud(); }   // PERF: time based (was every 20th plate = a forced layout every few frames)
     const PW = w < 420 ? 112 : 136, PH = 44, gx = 6; let x = (p.x * 0.5 + 0.5) * w, y = (-p.y * 0.5 + 0.5) * h; // y = bottom edge of the plate
     x = clamp(x, PW / 2 + gx, w - PW / 2 - gx);
     const T = this.avoid.top, sat = this.avoid.sat || 0;
     if (T && x + PW / 2 > T.l && x - PW / 2 < T.r && y - PH < T.b) y = T.b + PH;
     for (const B of this.avoid.bottom) if (x + PW / 2 > B.l && x - PW / 2 < B.r && y > B.t - 6) y = B.t - 6;
     y = clamp(y, PH + 4 + sat, h - 6);
-    plate.place(x, y, vis); plate.style.setProperty('--lx-s', Math.max(0.7, Math.min(1.1, 1.15 - p.z * 0.6)).toFixed(2));
+    const sc = Math.max(0.7, Math.min(1.1, 1.15 - p.z * 0.6)).toFixed(2);
+    if (f) {   // PERF: skip identical style writes (a still fighter costs nothing)
+      const xr = Math.round(x * 10), yr = Math.round(y * 10); if (f.plX !== xr || f.plY !== yr || f.plV !== vis) { f.plX = xr; f.plY = yr; f.plV = vis; plate.place(x, y, vis); }
+      if (f.plS !== sc) { f.plS = sc; plate.style.setProperty('--lx-s', sc); }
+    } else { plate.place(x, y, vis); plate.style.setProperty('--lx-s', sc); }
   }
 
   chest(u, y = 1.25) { const f = this.fm.get(u.id); return new THREE.Vector3(f ? (f.rx ?? u.x) : u.x, y, f ? (f.ry ?? u.y) : u.y); }
@@ -806,7 +815,7 @@ export class FightView {
     this.syncPauseBtn(); if ((this.hudN = (this.hudN | 0) + 1) % 6 === 0) this.updateReplayBar();
     if (this.favorBtn) this.favorBtn.style.display = F.favorReady && !F.done ? '' : 'none';
     if (this.duoBtn && F.duo) { const cd = Math.max(0, F.duo.cd); this.duoBtn.disabled = cd > 0; this.duoBtn.style.opacity = cd > 0 ? 0.55 : 1; }
-    for (const f of this.fm.values()) for (const { ring, slot } of f.ring) { const frac = slot.max ? clamp(slot.cd / slot.max, 0, 1) : 0; ring.set(f.u.down ? 1 : frac, Math.max(0, slot.cd)); }
+    for (const f of this.fm.values()) for (const r of f.ring) { const slot = r.slot, frac = slot.max ? clamp(slot.cd / slot.max, 0, 1) : 0, fr = f.u.down ? 1 : frac, key = Math.round(fr * 200) * 1000 + Math.ceil(Math.max(0, slot.cd)); if (r.key !== key) { r.key = key; r.ring.set(fr, Math.max(0, slot.cd)); } }   // PERF: DOM writes only when the ring visibly changed
   }
 
   updateAudio(dt, F) {
