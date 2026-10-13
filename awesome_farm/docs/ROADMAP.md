@@ -41,7 +41,7 @@ split big ones into slices (rules, art, polish).
 
 ## Phase 4: polish and health (small + medium)
 - [x] M15 Accessibility pass 1 (the Shake switch now also turns off lightning flashes, slow motion and buzzing, and says so)
-- [ ] M15b Colour-blind marks, phone pack leftovers (larger text shipped with S35)
+- [x] M15b Shape marks (a Settings switch: notches on monster health bars and chest gauges so colour is never the only clue; larger text shipped with S35; phone leftovers still to do)
 - [x] S35 Settings polish (Larger text switch, settings rows tidied; shown in the headless browser)
 - [x] S34 Playbot short run as a health check (already built: tests/playbot.test.ts plays the first 3 days inside npm test)
 

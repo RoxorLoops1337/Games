@@ -3,6 +3,7 @@
 // health bars and the boss arena ring. Game.ts creates one of these and feeds it events.
 
 import { ensureMobArt } from '../art/storybook-mobs';
+import { settings } from '../settings';
 import * as Phaser from 'phaser';
 import type { WeaponType } from '../../shared/data/items';
 import { AFFIXES, MobKind, MOBS, PROJ } from '../../shared/data/mobs';
@@ -250,6 +251,7 @@ export class CombatFx {
             g.fillStyle(PAL.night, 1).fillRect(x, y, w, 2);
             g.fillStyle(f > 0.5 ? PAL.lime : f > 0.25 ? PAL.gold : PAL.berry, 1).fillRect(x, y, Math.max(1, Math.round(w * f)), 2);
             g.fillStyle(0xffffff, 0.25).fillRect(x, y, Math.max(1, Math.round(w * f)), 1);
+            if (settings.marks) for (const r of [0.25, 0.5]) g.fillStyle(PAL.ink, 0.9).fillRect(x + Math.round(w * r), y, 1, 2);       // (notches at a quarter and a half: the bar's state is not only its colour)
         }
         // warnings
         for (let i = this.teles.length - 1; i >= 0; i--) {
