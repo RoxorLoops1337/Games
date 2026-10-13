@@ -42,6 +42,7 @@ import { Placer, type Placing } from '../world/placing';
 import { Interact, type Target } from '../world/interact';
 import { Hands } from '../world/hands';
 import { Ambience } from '../world/ambience';
+import { Villagers } from '../world/villagers';
 import { BuildViews } from '../world/buildviews';
 import { ProdHistory } from '../world/prodhist';
 import { destroyView, type EntView } from '../world/views';
@@ -139,6 +140,7 @@ export class GameScene extends Phaser.Scene {
     act!: Interact;
     hands!: Hands;
     amb!: Ambience;
+    villagers!: Villagers;
     private bviews!: BuildViews;
     private prodHist = new ProdHistory();
     private fx!: Fx;
@@ -236,6 +238,7 @@ export class GameScene extends Phaser.Scene {
         this.placer = new Placer(this, this);
         this.act = new Interact(this, this);
         this.amb = new Ambience(this, this);
+        this.villagers = new Villagers(this);
         const self = this;
         this.bviews = new BuildViews(this, {
             get world () { return self.world; }, get ents () { return self.ents; }, get views () { return self.views; }, get roofs () { return self.amb.roofs; },
@@ -515,6 +518,7 @@ export class GameScene extends Phaser.Scene {
         this.fv.drawWorld();
         this.fv.update(dt);
         this.amb.updateWaves(wdt);
+        this.villagers.update(wdt, this.blds.values());
         const gf = Math.floor(this.time.now / 240) % 3;
         if (gf !== this.gateFrame) { this.gateFrame = gf; for (const gate of this.gates) gate.setFrame(gf); }
         this.placer.updateTouchAim();
@@ -581,6 +585,7 @@ export class GameScene extends Phaser.Scene {
         for (const v of this.views.values()) destroyView(v);
         this.views.clear();
         this.farmers.clear();
+        this.villagers.clear();
         this.amb.forgetRoofs();
         this.marks.clear(); this.lit.clear(); this.blds.clear(); this.bldVersion++;
         this.fv.clear();
