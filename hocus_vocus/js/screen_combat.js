@@ -993,6 +993,8 @@
       const w = Math.max(a.w, 96), h = Math.max(a.h, 96);
       en.hit.style.left = px(a.x + a.w / 2 - w / 2); en.hit.style.top = px(a.y + a.h / 2 - h / 2);
       en.hit.style.width = px(w); en.hit.style.height = px(h);
+      // smaller units stack above bigger ones: a boss's hit box spans its whole picture and, from a higher lane, would otherwise sit on top of the minion beside it
+      en.el.style.zIndex = String(Math.max(1, 5000 - Math.round(w * h / 20)));
     });
   }
 
