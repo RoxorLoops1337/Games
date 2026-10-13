@@ -1100,12 +1100,18 @@ class BeastAnimator {
     if (this.noLock) return;   // (lab / tests: the same gait without the world pin, to measure what the pin buys)
     const rig = this.rig, root = rig.root, ground = root.position.y, sc = root.scale.y, idle = this.gw.move < 0.05, lk = this.lk, ikD = this.ikD, lr = this.lastRoot, v = this.ikV;
     { const rx = root.position.x, rz = root.position.z, ry = root.rotation.y; if (lr.ok) { const dx = rx - lr.x, dz = rz - lr.z; let dy = ry - lr.yaw; dy = Math.atan2(Math.sin(dy), Math.cos(dy)); if (dx * dx + dz * dz > 1.0 || Math.abs(dy) > 1.2) { this.lkOn.fill(0); ikD.fill(0); this.ikR = null; this.stT.fill(-1); } } lr.x = rx; lr.z = rz; lr.yaw = ry; lr.ok = true; }
+    // pass 1: how far must the body sink so every pinned paw is within reach of a (slightly bent) leg? (applied at once, eased back up slowly), then the paws are solved on the lowered body
+    { let dN = 0; for (let i = 0; i < 4; i++) { const lg = this.lg[i]; if (!lg.par || !(this.legW[i] > 0.05 && (idle || this.stance[i] === 1))) continue; let tx, tz;
+        if (this.lkOn[i]) { tx = lk[i * 3]; tz = lk[i * 3 + 2]; } else { _fA.copy(lg.c).applyMatrix4(this.legJ[i][2].matrixWorld); tx = _fA.x; tz = _fA.z; }
+        _fB.setFromMatrixPosition(this.legJ[i][0].matrixWorld); const rx = _fB.x - tx, rz = _fB.z - tz, hy = _fB.y + this.drop - this.go - ground, L = lg.Lmax * sc * 0.985, need = hy - Math.sqrt(Math.max(0.0004, L * L - rx * rx - rz * rz)); if (need > dN) dN = need; }
+      const cap = 0.16 * this.legL[0] * sc; if (dN > cap) dN = cap; const nd = dN > this.drop ? dN : this.drop + (dN - this.drop) * Math.min(1, dt * 7);
+      if (Math.abs(nd - this.drop) > 1e-5) { rig.body.position.y -= nd - this.drop; this.drop = nd; root.updateMatrixWorld(true); } }
     const ikR = this.ikR || (this.ikR = new Float64Array(12)); let stepping = 0; for (let i = 0; i < 4; i++) if (this.stT[i] >= 0) stepping++;
     for (let i = 0; i < 4; i++) {
       const lg = this.lg[i], o = i * 3, j2 = this.legJ[i][2]; if (!lg.par || !j2) continue;
       _fA.copy(lg.c).applyMatrix4(j2.matrixWorld); const cx = _fA.x, cy = _fA.y, cz = _fA.z;   // where the animation puts the sole
       const grounded = this.legW[i] > 0.05 && (idle || this.stance[i] === 1);
-      let solve = false, tx = 0, ty = 0, tz = 0, w = 0; if (i === 0) this.dropN = 0;
+      let solve = false, tx = 0, ty = 0, tz = 0, w = 0;
       if (grounded) {
         if (!this.lkOn[i]) { this.lkOn[i] = 1; this.land[i] = 0.8; lk[o] = cx; lk[o + 1] = ground; lk[o + 2] = cz; this.lkW[i] = 0; this.stT[i] = -1; }
         let dx = lk[o] - cx, dz = lk[o + 2] - cz, d = Math.sqrt(dx * dx + dz * dz);
@@ -1115,8 +1121,6 @@ class BeastAnimator {
         let lift = 0;
         if (this.stT[i] >= 0) { const u = this.stT[i] + dt / 0.26, e = (u > 1 ? 1 : u) * (u > 1 ? 1 : u) * (3 - 2 * (u > 1 ? 1 : u)); lk[o] = this.stF[i * 2] + (cx - this.stF[i * 2]) * e; lk[o + 2] = this.stF[i * 2 + 1] + (cz - this.stF[i * 2 + 1]) * e; lift = Math.sin(Math.PI * (u > 1 ? 1 : u)) * this.stepLift; this.stT[i] = u >= 1 ? -1 : u; }
         this.lkW[i] = Math.min(1, this.lkW[i] + dt / 0.025); w = this.lkW[i] * this.legW[i]; solve = true; tx = lk[o]; ty = ground + lift * sc; tz = lk[o + 2];
-        // the body sinks when a pinned paw is further than a (slightly bent) leg reaches: hip height over the pin vs sqrt(L^2 - run^2), smoothed after the loop
-        _fB.setFromMatrixPosition(this.legJ[i][0].matrixWorld); { const rx = _fB.x - tx, rz = _fB.z - tz, hy = _fB.y + this.drop - this.go - ty, L = lg.Lmax * sc * 0.985, need = hy - Math.sqrt(Math.max(0.0004, L * L - rx * rx - rz * rz)); if (need > this.dropN) this.dropN = need; }
       } else {
         this.lkOn[i] = 0; this.stT[i] = -1; const k = Math.exp(-dt / 0.09); for (let q = 0; q < 3; q++) { ikD[o + q] *= k; ikR[o + q] *= k; }
         if (cy < ground - 0.004 * sc && this.legW[i] > 0.05) { solve = true; tx = cx; ty = ground; tz = cz; w = 1; }   // a swinging paw never dips under the sand
@@ -1135,7 +1139,6 @@ class BeastAnimator {
         const J0 = this.legJ[i][0]; writeQuat(J0.quaternion, out, jn[0]); writeQuat(this.legJ[i][1].quaternion, out, jn[1]); writeQuat(j2.quaternion, out, jn[2]); J0.updateMatrixWorld(true);
       }
     }
-    { const tgt = this.dropN > 0 ? Math.min(this.dropN, 0.16 * this.legL[0]) : 0, k = tgt > this.drop ? Math.min(1, dt * 22) : Math.min(1, dt * 7); this.drop += (tgt - this.drop) * k; }
   }
   groundFix(dt, grounded, c) {
     const J = this.J, rig = this.rig, sp = this.sp, S = sp.size, _v = this._gv || (this._gv = new V3()); let low = 1e9;
