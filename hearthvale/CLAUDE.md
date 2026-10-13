@@ -27,6 +27,17 @@ Link: `https://games-71g.pages.dev/hearthvale/` (solo works at once). Server: se
 - Panels re-render only when their HTML changes and pause while a pointer is down, so taps never hit a rebuilt button.
 - Tests: `npm run test:hearthvale` (sim, fuzz, host, live 16-socket server). Add new behaviour to `tests/hearthvale*.test.mjs`.
 
+## Gameplay systems (details: `docs/FEATURES.md`, read it before touching sim.js)
+- Goods/buildings are append-only; new buildings: coop, barn, dairy, orchard, dock, pantry, weavery + 9 decor (art contract = ids and sizes in data.js).
+- Animals live in `b.an` (coop/barn), produce into `b.stock` (cap 8), eat wheat from storage; collect = `assign` a villager to the pen. Dock = repeat fishing.
+- Villagers have `skx` (8 skill work-seconds); `swork()` is the only place that advances a skill and scales work speed.
+- Great Project in `W.valley.project` (5 stages, perks mirrored as `P.pst`); Festival and Merchant are derived from `W.t` in `worldEvents()`; rain = `weatherAt(t)` (same formula as scene.js).
+- Once-a-second `bookkeeping()` per village: charm, derived stats, quests, achievements, visitors. Charm gives xp (`xpBonus`).
+- The host supplies the clock with `setNow(W, ms)` (daily reward only); the solo link must call it before each tick. The sim never reads `Date`.
+- New commands: buyAnimal, renameVillager, projectGive, daily, setTitle, visitorServe, merchantTrade (all validated, all in the fuzz op list).
+- Snapshot tuples only grow at the END (villager tuple has skill at index 8; player entry has `charm`, `title`); `deserialize` migrates old saves.
+- Bots (`shared/bots.js`) use every new system; keep their pace below a perfect player (see balance notes in the docs).
+
 ## Verify in a browser
 Serve the folder (`python3 -m http.server`) and open `index.html?solo` (autostarts solo). `window.__hv` exposes view, snap, link, cmd.
 Playwright with `--use-gl=swiftshader` works headless.

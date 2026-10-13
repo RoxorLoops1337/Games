@@ -25,8 +25,83 @@ for (const m of [windowMat, lanternMat, fireMat, waterMat]) m.userData.special =
 const vcMat = soft('#ffffff', { vertexColors: true, side: THREE.DoubleSide });
 // soft fill: a little of the vertex colour, scaled by the scene's hemisphere light (so it follows day and night), is added as emissive.
 // Faces turned away from the sun stay pastel instead of going grey-green.
-vcMat.onBeforeCompile = (sh_) => { sh_.fragmentShader = sh_.fragmentShader.replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n#if defined( USE_COLOR ) && NUM_HEMI_LIGHTS > 0\n totalEmissiveRadiance += vColor * vec3( 1.0, 0.94, 0.88 ) * hemisphereLights[ 0 ].skyColor.g * 0.27;\n#endif'); };
-vcMat.customProgramCacheKey = () => 'hvfill2';
+// ROUND 3: the material also paints procedural SURFACE DETAIL for zero triangles. bake() stores a surface kind in uv.x and an axis in uv.y:
+//  1 plaster (soft mottling + brush streaks), 2 roof shingles (scalloped rows, ridge along uv.y axis), 4 stone blocks with mortar, 5 wood grain,
+//  6 planks with gaps, 7 straw / hay, 8 foliage dapple, 9 brick (small), 10 cloth weave stripes.
+const HV_NOISE = `
+varying vec3 vHvP; varying vec3 vHvN; varying vec2 vHvK;
+float hvh(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+float hvn(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f); return mix(mix(hvh(i), hvh(i + vec2(1.0, 0.0)), f.x), mix(hvh(i + vec2(0.0, 1.0)), hvh(i + vec2(1.0, 1.0)), f.x), f.y); }
+`;
+const HV_PATTERN = `
+float hvF = 1.0; vec3 hvT = vec3(1.0); float hvA = 0.0;
+{
+  float kd = vHvK.x; vec3 a = abs(vHvN); vec3 P = vHvP;
+  vec2 q = a.y > 0.7 ? P.xz : (a.z > a.x ? P.xy : P.zy);
+  if (kd > 0.5 && kd < 1.5) {                                   // plaster
+    float n1 = hvn(q * 6.0 + 3.1), n2 = hvn(q * vec2(24.0, 3.0)), n3 = hvn(q * 34.0);
+    hvF = 1.0 + (n1 - 0.5) * 0.085 + (n2 - 0.5) * 0.05 + (n3 - 0.5) * 0.028;
+    hvT = vec3(1.0 + (n1 - 0.5) * 0.04, 1.0, 1.0 - (n1 - 0.5) * 0.05);
+  } else if (kd > 1.5 && kd < 2.5) {                            // roof shingles, ridge along x (axis 0) or z (axis 2)
+    float u = vHvK.y < 1.0 ? P.x : P.z; float rh = 0.115, sw = 0.21;
+    float rv = P.y / rh; float row = floor(rv); float fv = fract(rv);
+    float uu = u / sw + mod(row, 2.0) * 0.5; float cell = floor(uu); float fu = fract(uu);
+    float edge = 0.46 * sqrt(max(0.0, 1.0 - pow(2.0 * fu - 1.0, 2.0)));
+    float h = hvh(vec2(cell, row)); float d = fv - edge;
+    hvF = 1.0 + (h - 0.5) * 0.11 + (hvn(q * 9.0) - 0.5) * 0.04;
+    hvF *= d < 0.0 ? 0.9 : 1.0 + 0.05 * smoothstep(0.0, 0.5, d);
+    hvF *= 1.0 - 0.1 * smoothstep(0.06, 0.0, abs(d)) - 0.05 * smoothstep(0.16, 0.0, d) * step(0.0, d);
+    hvT = vec3(1.0, 1.0 - 0.02 * h, 1.0 + 0.03 * h);
+    float topw = smoothstep(0.1, 0.35, vHvN.y); hvF = mix(1.0, hvF, topw); hvT = mix(vec3(1.0), hvT, topw);
+  } else if (kd > 3.5 && kd < 4.5) {                            // stone blocks
+    float u = a.z > a.x ? P.x : P.z; if (a.y > 0.7) u = P.x; float rh = 0.12, bw = 0.34;
+    float v = a.y > 0.7 ? P.z : P.y; float row = floor(v / rh); float fv = fract(v / rh);
+    float uu = u / bw + mod(row, 2.0) * 0.5; float cell = floor(uu); float fu = fract(uu); float h = hvh(vec2(cell, row));
+    float m = max(smoothstep(0.1, 0.0, fv), smoothstep(0.045, 0.0, fu));
+    hvF = (1.0 + (h - 0.5) * 0.1 + (hvn(q * 30.0) - 0.5) * 0.04) * (1.0 - 0.12 * m);
+    hvT = vec3(1.0 - 0.02 * m, 1.0 - 0.01 * m, 1.0 + 0.02 * m);
+  } else if (kd > 4.5 && kd < 5.5) {                            // wood grain along the long axis
+    float L = vHvK.y < 0.5 ? P.x : (vHvK.y < 1.5 ? P.y : P.z); vec2 c = vHvK.y < 0.5 ? P.yz : (vHvK.y < 1.5 ? P.xz : P.xy);
+    float g1 = hvn(vec2(L * 2.5, (c.x + c.y * 1.7) * 38.0)), g2 = hvn(vec2(L * 9.0, (c.x * 1.3 - c.y) * 120.0));
+    hvF = 1.0 + (g1 - 0.5) * 0.16 + (g2 - 0.5) * 0.07; hvT = vec3(1.0 + (g1 - 0.5) * 0.05, 1.0, 1.0 - (g1 - 0.5) * 0.08);
+  } else if (kd > 5.5 && kd < 6.5) {                            // planks with gaps
+    float L = vHvK.y < 0.5 ? P.x : (vHvK.y < 1.5 ? P.y : P.z); float c = vHvK.y < 0.5 ? (a.y > 0.7 ? P.z : P.y) : (vHvK.y < 1.5 ? (a.z > a.x ? P.x : P.z) : (a.y > 0.7 ? P.x : P.x));
+    float pw = 0.17; float pc = floor(c / pw + 0.5); float fc = fract(c / pw + 0.5);
+    float h = hvh(vec2(pc, 3.7)); float gap = smoothstep(0.07, 0.0, fc) + smoothstep(0.93, 1.0, fc);
+    float g1 = hvn(vec2(L * 2.2 + h * 9.0, c * 42.0));
+    hvF = (1.0 + (h - 0.5) * 0.1 + (g1 - 0.5) * 0.1) * (1.0 - 0.24 * min(1.0, gap));
+    hvT = vec3(1.0 + (h - 0.5) * 0.03, 1.0, 1.0 - (h - 0.5) * 0.05);
+  } else if (kd > 6.5 && kd < 7.5) {                            // straw
+    float n1 = hvn(vec2(q.x * 60.0, q.y * 6.0)), n2 = hvn(q * 14.0);
+    hvF = 1.0 + (n1 - 0.5) * 0.2 + (n2 - 0.5) * 0.1; hvT = vec3(1.0, 1.0 + (n1 - 0.5) * 0.04, 1.0 - (n1 - 0.5) * 0.1);
+  } else if (kd > 7.5 && kd < 8.5) {                            // foliage dapple
+    float n1 = hvn(P.xy * 7.0 + P.z * 5.3), n2 = hvn(P.zy * 15.0 + P.x * 4.0);
+    hvF = 1.0 + (n1 - 0.5) * 0.15 + (n2 - 0.5) * 0.08; hvT = vec3(1.0 - (n1 - 0.5) * 0.05, 1.0 + (n1 - 0.5) * 0.03, 1.0);
+  } else if (kd > 8.5 && kd < 9.5) {                            // small bricks
+    float u = a.z > a.x ? P.x : P.z; float rh = 0.07, bw = 0.16; float row = floor(P.y / rh); float fv = fract(P.y / rh);
+    float uu = u / bw + mod(row, 2.0) * 0.5; float cell = floor(uu); float fu = fract(uu); float h = hvh(vec2(cell, row));
+    float m = max(smoothstep(0.14, 0.0, fv), smoothstep(0.07, 0.0, fu));
+    hvF = (1.0 + (h - 0.5) * 0.14) * (1.0 - 0.16 * m); hvT = vec3(1.0 + (h - 0.5) * 0.04, 1.0 - (h - 0.5) * 0.02, 1.0 - 0.02 * m);
+  } else if (kd > 9.5 && kd < 10.5) {                           // cloth weave
+    float w = 0.5 + 0.5 * sin(q.x * 90.0) * sin(q.y * 90.0);
+    hvF = 1.0 + (w - 0.5) * 0.07 + (hvn(q * 5.0) - 0.5) * 0.04;
+  } else if (kd > 10.5 && kd < 11.5) {                          // gingham
+    float s1 = step(0.5, fract(q.x / 0.13)), s2 = step(0.5, fract(q.y / 0.13));
+    hvA = 0.8 * (1.0 - s1) * (1.0 - s2) + 0.38 * (s1 + s2 - 2.0 * s1 * s2);
+  } else if (kd > 11.5 && kd < 12.5) {                          // fishing net: diamond mesh, holes are discarded
+    vec2 w = vec2(q.x + q.y, q.x - q.y) / 0.075; vec2 fw = fract(w);
+    float m = min(min(fw.x, 1.0 - fw.x), min(fw.y, 1.0 - fw.y)); if (m > 0.13) discard;
+  }
+}
+diffuseColor.rgb = mix(diffuseColor.rgb * hvT * hvF, vec3(1.0), hvA);
+`;
+vcMat.onBeforeCompile = (sh_) => {
+  sh_.vertexShader = sh_.vertexShader.replace('#include <common>', '#include <common>\n' + HV_NOISE).replace('#include <begin_vertex>', '#include <begin_vertex>\n vHvP = position; vHvN = normal; vHvK = uv;');
+  sh_.fragmentShader = sh_.fragmentShader.replace('#include <common>', '#include <common>\n' + HV_NOISE)
+    .replace('#include <color_fragment>', '#include <color_fragment>\n' + HV_PATTERN)
+    .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n#if defined( USE_COLOR ) && NUM_HEMI_LIGHTS > 0\n totalEmissiveRadiance += vColor * hvT * hvF * (1.0 - hvA) * vec3( 1.0, 0.94, 0.88 ) * hemisphereLights[ 0 ].skyColor.g * 0.27;\n#endif');
+};
+vcMat.customProgramCacheKey = () => 'hvfill3';
 
 // ---------------------------------------------------------------- palette shorthands (all light, warm and happy)
 const TIM = '#f2cd90', TIM2 = '#eab97a', WOODL = '#ffe0a8', WOOD = '#f3bd7c', PLANK = '#f8d49a';   // honey woods
@@ -52,19 +127,30 @@ const place = (o, x, y, z, ry = 0) => { o.position.set(x, y, z); o.rotation.y = 
 // ---------------------------------------------------------------- primitives (low tri count)
 const BOXG = new THREE.BoxGeometry(1, 1, 1);
 const BOXN = (() => { const g = new THREE.BoxGeometry(1, 1, 1).toNonIndexed(); const p = g.attributes.position, n = g.attributes.normal, u = g.attributes.uv, keep = []; for (let i = 0; i < p.count; i += 3) if (n.getY(i) > -0.5) keep.push(i, i + 1, i + 2); const mk = (a, sz) => { const o = new Float32Array(keep.length * sz); keep.forEach((k, j) => { for (let c = 0; c < sz; c++) o[j * sz + c] = a.array[k * sz + c]; }); return new THREE.BufferAttribute(o, sz); }; const r = new THREE.BufferGeometry(); r.setAttribute('position', mk(p, 3)); r.setAttribute('normal', mk(n, 3)); r.setAttribute('uv', mk(u, 2)); return r; })();
-const SPH = new THREE.SphereGeometry(1, 10, 7), SPL = new THREE.SphereGeometry(1, 7, 5), ICO = new THREE.IcosahedronGeometry(1, 0), OCT = new THREE.OctahedronGeometry(1, 0);
+const mkSph = (w, h) => new THREE.SphereGeometry(1, w, h);
+const SPT = mkSph(6, 2), SPS = mkSph(7, 3), SPM = mkSph(10, 5), SPH = mkSph(14, 8), SPL = SPS;
+// BUN: a smooth dome that dips a little below its equator (leaves, blossoms, bushes, loaves, sacks): round shading instead of facets
+const BUN = new THREE.SphereGeometry(1, 7, 2, 0, Math.PI * 2, 0, Math.PI * 0.62), BUNL = new THREE.SphereGeometry(1, 10, 4, 0, Math.PI * 2, 0, Math.PI * 0.62);
+// FLOWER: a flat five-petal fan with a lifted heart (10 tris)
+const FLOWER = (() => { const pts = [0, 0.4, 0], idx = [], N = 10; for (let i = 0; i < N; i++) { const a = i / N * Math.PI * 2, r = i % 2 ? 0.55 : 1; pts.push(Math.cos(a) * r, 0, Math.sin(a) * r); } for (let i = 0; i < N; i++) idx.push(0, 1 + (i + 1) % N, 1 + i); const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3)); g.setIndex(idx); g.computeVertexNormals(); g.setAttribute('uv', new THREE.BufferAttribute(new Float32Array((N + 1) * 2), 2)); return g; })();
 /** plain box, bottom at y */
 function bx(w, h, d, c, x = 0, y = 0, z = 0) { const m = new THREE.Mesh(BOXN, col(c)); m.scale.set(w, h, d); m.position.set(x, y + h / 2, z); return sh(m); }
 /** rounded box (1 bevel segment), bottom at y */
-function rb(w, h, d, c, x = 0, y = 0, z = 0, r) {
+function rb(w, h, d, c, x = 0, y = 0, z = 0, r, seg = 1) {
   if (Math.min(w, h, d) < 0.2) return bx(w, h, d, c, x, y, z);
   r = r ?? Math.min(0.08, w / 3.2, h / 3.2, d / 3.2); const f = (v) => +v.toFixed(3);
-  const m = new THREE.Mesh(K.roundedBoxGeo(f(w), f(h), f(d), r, 1), col(c)); m.position.set(x, y + h / 2, z); return sh(m);
+  const m = new THREE.Mesh(K.roundedBoxGeo(f(w), f(h), f(d), r, seg), col(c)); m.position.set(x, y + h / 2, z); return sh(m);
 }
-const cyl = (rt, rb_, h, c, x = 0, y = 0, z = 0, seg = 8) => K.cyl(rt, rb_, h, typeof c === 'string' ? c : null, x, y, z, typeof c === 'string' ? { seg } : { seg, mat: c });
+const cyl = (rt, rb_, h, c, x = 0, y = 0, z = 0, seg = 8) => (seg = Math.max(seg, Math.max(rt, rb_) > 0.4 ? 20 : Math.max(rt, rb_) > 0.2 ? 14 : seg), K.cyl)(rt, rb_, h, typeof c === 'string' ? c : null, x, y, z, typeof c === 'string' ? { seg } : { seg, mat: c });
 const cone = (r, h, c, x = 0, y = 0, z = 0, seg = 4, rot) => K.cone(r, h, typeof c === 'string' ? c : null, x, y, z, typeof c === 'string' ? { seg, rot } : { seg, rot, mat: c });
-function sp(r, c, x = 0, y = 0, z = 0, o = {}) { const m = new THREE.Mesh(r < 0.06 ? OCT : r < 0.09 ? ICO : (o.lo || r < 0.2) ? SPL : SPH, col(c)); m.scale.set(r * (o.sx || 1), r * (o.sy || 1), r * (o.sz || 1)); m.position.set(x, y, z); return sh(m); }
-function bl(r, c, x = 0, y = 0, z = 0, sy = 1, ry = 0) { const m = new THREE.Mesh(r <= 0.09 ? OCT : ICO, col(c)); m.scale.set(r, r * sy, r); m.position.set(x, y, z); m.rotation.y = ry; return sh(m); }
+function sp(r, c, x = 0, y = 0, z = 0, o = {}) { const q = o.q ?? (r < 0.05 ? 0 : r < 0.1 ? 1 : (o.lo || r < 0.22) ? 2 : 3), m = new THREE.Mesh([SPT, SPS, SPM, SPH][q], col(c)); m.scale.set(r * (o.sx || 1), r * (o.sy || 1), r * (o.sz || 1)); m.position.set(x, y, z); return sh(m); }
+const LEAFC = new Set([P.leaf, P.leafLight].map((c) => new THREE.Color(c).getHexString()));
+/** soft blob: smooth dome (leaf, bush, loaf, pile); tiny blobs in a flower colour become flat petal fans with a gold heart */
+function bl(r, c, x = 0, y = 0, z = 0, sy = 1, ry = 0) {
+  const isLeaf = typeof c === 'string' && LEAFC.has(new THREE.Color(c).getHexString());
+  if (r <= 0.07 && !isLeaf && typeof c === 'string') { const m = new THREE.Mesh(FLOWER, col(c)); m.scale.set(r * 1.4, r * 1.4, r * 1.4); m.rotation.set(Math.sin(ry * 2.3) * 0.3, ry * 1.7, Math.cos(ry * 1.9) * 0.3); m.position.set(x, y, z); return sh(m); }
+  const m = new THREE.Mesh(r > 0.12 ? BUNL : BUN, col(c)); m.scale.set(r, r * sy, r); m.position.set(x, y, z); m.rotation.y = ry; if (isLeaf) m.userData.kind = 8; return sh(m);
+}
 const lcg = new Map();
 /** cylinder lying along axis 'x' or 'z', centred */
 function lcyl(axis, r, len, c, x, y, z, seg = 8, r2) {
@@ -79,10 +165,10 @@ function fdisc(r, c, x, y, z, ry = 0, half = false, seg = 8) { const k = `${seg}
 const discG = new Map();
 /** flat disc facing up, at y */
 function disc(r, c, x, y, z, seg = 7) { const k = `${r},${seg}`; let g = discG.get(k); if (!g) { g = new THREE.CircleGeometry(r, seg); g.rotateX(-Math.PI / 2); discG.set(k, g); } const m = new THREE.Mesh(g, col(c)); m.position.set(x, y, z); m.castShadow = false; m.receiveShadow = true; return m; }
-const _up = new THREE.Vector3(0, 1, 0);
+const _up = new THREE.Vector3(0, 1, 0), TUBE = new THREE.CylinderGeometry(0.7071, 0.7071, 1, 4, 1, true).rotateY(Math.PI / 4);
 function bar(ax, ay, az, bx_, by, bz, t, c) {
   const a = new THREE.Vector3(ax, ay, az), b = new THREE.Vector3(bx_, by, bz), d = b.clone().sub(a), len = d.length();
-  const m = new THREE.Mesh(BOXG, col(c)); m.scale.set(t, len, t); m.position.copy(a).addScaledVector(d, 0.5); m.quaternion.setFromUnitVectors(_up, d.normalize()); return sh(m);
+  const m = new THREE.Mesh(t <= 0.04 ? TUBE : BOXG, col(c)); m.scale.set(t, len, t); m.position.copy(a).addScaledVector(d, 0.5); m.quaternion.setFromUnitVectors(_up, d.normalize()); return sh(m);
 }
 const prismCache = new Map();
 function poly(pts, depth, c, x = 0, y = 0, z = 0, ry = 0) {
@@ -96,6 +182,17 @@ function fuse(meshes, mat) {
   const gs = meshes.map((m) => { m.updateMatrix(); const g = m.geometry.clone(); g.applyMatrix4(m.matrix); return g; });
   return sh(new THREE.Mesh(mergeGeometries(gs, false), col(mat)));
 }
+
+// ---------------------------------------------------------------- flat shapes (2 to 14 tris): the cheap way to get crisp trim
+const archG = new Map(), QG = new THREE.PlaneGeometry(1, 1);
+/** flat arched plate facing +z, bottom at y, centred on x. top = semicircle of radius w/2 */
+function arch(w, h, c, x, y, z, ry = 0, seg = 12) {
+  const k = `${w.toFixed(3)},${h.toFixed(3)},${seg}`; let g = archG.get(k);
+  if (!g) { const r = w / 2, s_ = new THREE.Shape(); s_.moveTo(-r, 0); s_.lineTo(r, 0); s_.lineTo(r, Math.max(0, h - r)); s_.absarc(0, Math.max(0, h - r), r, 0, Math.PI, false); s_.closePath(); g = new THREE.ShapeGeometry(s_, seg / 2); archG.set(k, g); }
+  const m = new THREE.Mesh(g, col(c)); m.position.set(x, y, z); m.rotation.y = ry; m.castShadow = false; m.receiveShadow = true; return m;
+}
+/** flat quad facing +z (centre x,y,z), rotated about y by ry, about z by rz */
+function qd(w, h, c, x, y, z, ry = 0, rz = 0) { const m = new THREE.Mesh(QG, col(c)); m.scale.set(w, h, 1); m.position.set(x, y, z); m.rotation.set(0, ry, rz); m.castShadow = false; m.receiveShadow = true; return m; }
 
 // ---------------------------------------------------------------- shared set pieces
 let _shadowMat = null, _shadowGeo = null;
@@ -112,15 +209,13 @@ function contact(w, d, o = 1) {
 function window3(w = 0.26, h = 0.3, o = {}) {
   const g = new THREE.Group(), r = w / 2, fr = o.frame || CREAM, rect = h - r;
   if (o.round) {
-    add(g, fdisc(r + 0.05, fr, 0, 0, 0.026, 0, false, 10), fdisc(r, windowMat, 0, 0, 0.03, 0, false, 10), bx(0.025, w, 0.03, fr, 0, -r, 0.05), bx(w, 0.025, 0.03, fr, 0, -0.0125, 0.05));
-    if (o.curt) add(g, bx(w * 0.22, w * 0.7, 0.03, o.curt, -r * 0.66, -r * 0.35, 0.05), bx(w * 0.22, w * 0.7, 0.03, o.curt, r * 0.66, -r * 0.35, 0.05));
+    add(g, fdisc(r + 0.05, fr, 0, 0, 0.026, 0, false, 14), fdisc(r, windowMat, 0, 0, 0.03, 0, false, 14), qd(0.022, w, fr, 0, 0, 0.04), qd(w, 0.022, fr, 0, 0, 0.04));
+    if (o.curt) add(g, qd(w * 0.22, w * 0.7, o.curt, -r * 0.66, -r * 0.35, 0.05), qd(w * 0.22, w * 0.7, o.curt, r * 0.66, -r * 0.35, 0.05));
     return g;
   }
-  add(g, bx(w + 0.1, rect + 0.05, 0.05, fr, 0, -h / 2 - 0.05, 0), fdisc(r + 0.05, fr, 0, h / 2 - r, 0.026, 0, true, 8),
-    bx(w, rect, 0.05, windowMat, 0, -h / 2, 0.02), fdisc(r, windowMat, 0, h / 2 - r, 0.046, 0, true, 8),
-    bx(0.025, h, 0.03, fr, 0, -h / 2, 0.05), bx(w, 0.025, 0.03, fr, 0, -0.0125, 0.05), bx(w + 0.16, 0.06, 0.11, fr, 0, -h / 2 - 0.1, 0.04));
-  if (o.curt) for (const s of [-1, 1]) add(g, bx(w * 0.3, rect * 0.95, 0.03, o.curt, s * (w / 2 - w * 0.15), -h / 2 + 0.02, 0.055));
-  if (o.shut) for (const s of [-1, 1]) add(g, bx(0.1, h + 0.04, 0.04, o.shut, s * (w / 2 + 0.12), -h / 2 - 0.04, 0.03));
+  add(g, arch(w + 0.1, h + 0.05, fr, 0, -h / 2 - 0.05, 0.016), arch(w, h, windowMat, 0, -h / 2, 0.034), qd(0.024, h, fr, 0, -h / 2, 0.046), qd(w, 0.024, fr, 0, h / 2 - r - 0.02, 0.046), qd(w, 0.02, fr, 0, -h * 0.1, 0.046), bx(w + 0.16, 0.055, 0.11, fr, 0, -h / 2 - 0.1, 0.04));
+  if (o.curt) for (const s of [-1, 1]) add(g, qd(w * 0.3, rect * 0.95, o.curt, s * (w / 2 - w * 0.15), -h / 2 + rect * 0.5, 0.058), qd(w * 0.34, 0.03, shade(o.curt, -0.1), s * (w / 2 - w * 0.17), -h / 2 + rect * 0.3, 0.06));
+  if (o.shut) for (const s of [-1, 1]) add(g, rb(0.1, h + 0.04, 0.04, o.shut, s * (w / 2 + 0.12), -h / 2 - 0.04, 0.03), qd(0.06, 0.012, shade(o.shut, -0.12), s * (w / 2 + 0.12), -h * 0.35, 0.056), qd(0.06, 0.012, shade(o.shut, -0.12), s * (w / 2 + 0.12), -h * 0.62, 0.056));
   if (o.box) {
     const cs = o.flowers || [P.blossomDeep, P.butter, P.white, '#c9a8ff'], bc = o.boxC || '#fff3d6';
     add(g, bx(w + 0.14, 0.1, 0.12, bc, 0, -h / 2 - 0.22, 0.08), bl(0.09, P.leafLight, 0, -h / 2 - 0.1, 0.09, 0.7, 0.3));
@@ -130,12 +225,13 @@ function window3(w = 0.26, h = 0.3, o = {}) {
 }
 /** arched door, origin = bottom centre, faces +z. o: gold, mat (welcome mat colour), stones */
 function door3(w = 0.32, h = 0.52, c = TIM2, o = {}) {
-  const g = new THREE.Group(), r = w / 2, kc = o.gold ? GOLD : GOLDD;
-  add(g, bx(w + 0.14, h - r + 0.02, 0.05, CREAM, 0, 0, -0.01), fdisc(r + 0.07, CREAM, 0, h - r, 0.016, 0, true, 8),
-    bx(w, h - r, 0.05, c, 0, 0, 0.02), fdisc(r, c, 0, h - r, 0.046, 0, true, 8),
-    fdisc(r * 0.42, windowMat, 0, h - r - 0.03, 0.056, 0, false, 8), fdisc(r * 0.42 + 0.025, CREAM, 0, h - r - 0.03, 0.052, 0, false, 8),
-    bx(0.02, h * 0.5, 0.012, shade(c, 0.35), 0, 0, 0.05), sp(0.028, kc, w * 0.3, h * 0.38, 0.065), rb(w + 0.34, 0.07, 0.24, STONEL, 0, -0.03, 0.1, 0.03));
-  if (o.mat) add(g, rb(w * 0.9, 0.025, 0.2, o.mat, 0, 0.0, 0.34, 0.012), bx(w * 0.7, 0.012, 0.03, CREAM, 0, 0.025, 0.34));
+  const g = new THREE.Group(), r = w / 2, kc = o.gold ? GOLD : GOLDD, pl = shade(c, 0.28);
+  add(g, arch(w + 0.14, h + 0.07, CREAM, 0, 0, 0.012), arch(w, h, c, 0, 0, 0.034),
+    qd(0.02, h - r, pl, -w * 0.22, (h - r) / 2, 0.046), qd(0.02, h - r, pl, w * 0.22, (h - r) / 2, 0.046), qd(0.02, h * 0.5, pl, 0, h * 0.25, 0.046),
+    qd(w * 0.4, 0.028, o.gold ? GOLDD : IRON, -w * 0.28, h * 0.22, 0.05), qd(w * 0.4, 0.028, o.gold ? GOLDD : IRON, -w * 0.28, h * 0.62, 0.05),
+    fdisc(r * 0.42 + 0.025, CREAM, 0, h - r - 0.03, 0.048, 0, false, 10), fdisc(r * 0.42, windowMat, 0, h - r - 0.03, 0.054, 0, false, 10),
+    sp(0.026, kc, w * 0.3, h * 0.4, 0.06), sp(0.016, kc, 0, h * 0.5, 0.06), bx(w + 0.34, 0.07, 0.24, STONEL, 0, -0.03, 0.1));
+  if (o.mat) add(g, bx(w * 0.9, 0.025, 0.2, o.mat, 0, 0.0, 0.34), qd(w * 0.7, 0.03, CREAM, 0, 0.026, 0.34, 0, 0));
   return g;
 }
 function chimney(g, x, z, y0, y1, w = 0.24, c = CHIM, cap = CREAM) {
@@ -225,15 +321,13 @@ function roof(g, o) {
   const hd = span / 2, a = Math.atan2(rise, hd), Ls = Math.hypot(hd, rise) + 0.06, lt = shade(rc, 0.1), lt2 = shade(rc, 0.17), roll = shade(rc, 0.1);
   for (const s of [1, -1]) {
     const pv = new THREE.Group(); pv.position.set(0, rise / 2, s * hd / 2); pv.rotation.x = s * a;
-    pv.add(rb(len, t, Ls, rc, 0, -t, 0, 0.06), lcyl('x', t * 0.62, len, roll, 0, -t * 0.45, s * (Ls / 2), 6));
-    if (scal) {
-      const n = Math.max(3, Math.round(len / 0.25)), rs = len / (2 * n);
-      for (let k = 0; k < rows; k++) { const m = k % 2 ? n - 1 : n, off = k % 2 ? rs : 0; for (let i = 0; i < m; i++) pv.add(disc(rs * 0.98, k % 2 ? lt2 : lt, -len / 2 + off + rs * (2 * i + 1), 0.006 + (rows - k) * 0.008, s * (Ls / 2 - 0.02 - rs * 0.9 - k * rs * 1.05), 6)); }
-    }
+    const slab = rb(len, t, Ls, rc, 0, -t, 0, 0.06); slab.userData.kind = 2; slab.userData.axis = along === 'x' ? 0 : 2;
+    pv.add(slab, lcyl('x', t * 0.62, len, roll, 0, -t * 0.45, s * (Ls / 2), 8));
+    if (o.gutter !== false && scal) pv.add(lcyl('x', 0.026, len - 0.06, CREAM, 0, -t * 0.96, s * (Ls / 2 + 0.02), 6));
     R.add(pv);
   }
   const rcol = ridgeCol || shade(rc, 0.22);
-  R.add(lcyl('x', 0.072, len + 0.02, rcol, 0, rise + 0.01, 0, 6), bl(0.11, rcol, len / 2 + 0.01, rise + 0.01, 0), bl(0.11, rcol, -len / 2 - 0.01, rise + 0.01, 0));
+  R.add(lcyl('x', 0.072, len + 0.02, rcol, 0, rise + 0.01, 0, 6), sp(0.085, rcol, len / 2 + 0.01, rise + 0.01, 0, { q: 1 }), sp(0.085, rcol, -len / 2 - 0.01, rise + 0.01, 0, { q: 1 }));
   if (fill) {
     const { wd, base, ovg = 0.14 } = fill, dx = len - 2 * ovg, yb = rise * (1 - wd / (2 * hd)) - t * 0.6;
     R.add(poly([[-wd / 2, base], [wd / 2, base], [wd / 2, yb], [0, rise - 0.1], [-wd / 2, yb]], dx, fill.col, 0, 0, 0, Math.PI / 2));
@@ -254,21 +348,33 @@ function lean(g, x, y, z, w, len, rise, c, dir = 1) {
 
 // ---------------------------------------------------------------- finishing: vertex colours, soft lavender AO, merge
 const LAV = new THREE.Color('#bfaef0');
+// surface kind by colour (explicit mesh.userData.kind wins): honey wood gets grain, light stone gets blocks, chimney pink gets bricks
+const KIND_BY_COLOR = new Map();
+const kindOf = (o) => {
+  if (o.userData.kind !== undefined) return o.userData.kind;
+  if (!KIND_BY_COLOR.size) for (const [c, k] of [[TIM, 5], [TIM2, 5], [WOODL, 5], [WOOD, 5], [PLANK, 5], [STONE, 4], [STONEL, 4], [CHIM, 9], [CHIMD, 9]]) KIND_BY_COLOR.set(new THREE.Color(c).getHexString(), k);
+  return KIND_BY_COLOR.get(o.material.color.getHexString()) || 0;
+};
+const _bb = new THREE.Box3();
 function bake(root) {
   root.updateMatrixWorld(true);
   const v = new THREE.Vector3(), n = new THREE.Vector3(), nm = new THREE.Matrix3();
   root.traverse((o) => {
     if (!o.isMesh || o.material.userData.special || o.material.isMeshBasicMaterial) return;
-    const g = o.geometry.clone(), pos = g.attributes.position, nor = g.attributes.normal, c = o.material.color, mw = o.matrixWorld, buf = new Float32Array(pos.count * 3);
+    const g = o.geometry.clone(), pos = g.attributes.position, nor = g.attributes.normal, c = o.material.color, mw = o.matrixWorld, buf = new Float32Array(pos.count * 3), uv = new Float32Array(pos.count * 2);
     nm.getNormalMatrix(mw);
+    const kind = kindOf(o); let axis = o.userData.axis ?? 0;
+    if (kind === 5 || kind === 6) { if (o.userData.axis === undefined) { g.computeBoundingBox(); const sz = g.boundingBox.getSize(v).multiply(new THREE.Vector3().setFromMatrixScale(mw)); axis = sz.x >= sz.y && sz.x >= sz.z ? 0 : sz.y >= sz.z ? 1 : 2; } }
+    const tint = o.userData.tint ? new THREE.Color(o.userData.tint) : null;
     for (let i = 0; i < pos.count; i++) {
       v.fromBufferAttribute(pos, i).applyMatrix4(mw); n.fromBufferAttribute(nor, i).applyMatrix3(nm).normalize();
       let s = 0.14 * Math.max(0, 1 - v.y / 0.45);          // wall bases: a whisper of lavender shade (fake AO strength <= 0.18)
       if (n.y < -0.35) s += 0.1;                           // undersides (eaves, awnings)
       const up = n.y > 0.5 ? 1.16 : 1.1;   // high-key lift: pastels stay light even on shaded faces
       buf[i * 3] = c.r * up * (1 - s + s * LAV.r); buf[i * 3 + 1] = c.g * up * (1 - s + s * LAV.g); buf[i * 3 + 2] = c.b * up * (1 - s + s * LAV.b);
+      uv[i * 2] = kind; uv[i * 2 + 1] = axis;
     }
-    g.setAttribute('color', new THREE.BufferAttribute(buf, 3)); o.geometry = g; o.material = vcMat;
+    g.setAttribute('color', new THREE.BufferAttribute(buf, 3)); g.setAttribute('uv', new THREE.BufferAttribute(uv, 2)); o.geometry = g; o.material = vcMat;
   });
 }
 function finish(root, topY, foot) {
@@ -285,7 +391,8 @@ function finish(root, topY, foot) {
 /** cottage shell: light stone foundation, chubby pastel walls, cream corner posts and plates. returns wall top y */
 function shell(g, W, D, H, wallC, o = {}) {
   const f = o.found ?? 0.16, z0 = o.z ?? 0, x0 = o.x ?? 0, tc = o.trim || CREAM;
-  add(g, rb(W + 0.14, f + 0.06, D + 0.14, o.foundC || STONE, x0, 0, z0, 0.07), rb(W, H, D, wallC, x0, f - 0.02, z0, 0.13));
+  const wall = rb(W, H, D, wallC, x0, f - 0.02, z0, 0.13, o.seg || 1); wall.userData.kind = o.kind ?? 1; if (o.axis !== undefined) wall.userData.axis = o.axis;
+  add(g, rb(W + 0.14, f + 0.06, D + 0.14, o.foundC || STONE, x0, 0, z0, 0.07), wall);
   const top = f - 0.02 + H;
   for (const sx of [-1, 1]) for (const sz of [-1, 1]) add(g, cyl(0.055, 0.055, H - 0.02, tc, x0 + sx * (W / 2 - 0.01), f - 0.02, z0 + sz * (D / 2 - 0.01), 5));
   return top;
@@ -367,7 +474,7 @@ BUILD.bakery = (info) => {
   add(g, bar(0.72, 1.0, D / 2 - 0.02, 0.72, 1.0, D / 2 + 0.3, 0.035, TIM2), bx(0.04, 0.2, 0.04, TIM2, 0.72, 0.82, D / 2 + 0.3), sp(0.12, '#f4b567', 0.72, 0.74, D / 2 + 0.3, { sx: 1.3, sy: 0.8, sz: 0.8 }), bx(0.22, 0.03, 0.03, '#ffe9b8', 0.72, 0.74, D / 2 + 0.3));
   for (const k of [-1, 0, 1]) add(g, bx(0.02, 0.05, 0.1, '#e0963f', 0.72 + k * 0.07, 0.78, D / 2 + 0.3));
   chimney(g, 0.2, -0.3, surf(0.2) - 0.3, surf(0.2) + [0.3, 0.38, 0.46][L - 1], 0.3, CHIM);
-  add(g, K.lathe([[0.001, 0], [0.34, 0], [0.38, 0.12], [0.35, 0.3], [0.26, 0.45], [0.12, 0.54], [0.001, 0.57]], '#ffc5a0', 0.78, 0, -0.2, { seg: 12 }));
+  add(g, K.lathe([[0.001, 0], [0.34, 0], [0.38, 0.12], [0.35, 0.3], [0.26, 0.45], [0.12, 0.54], [0.001, 0.57]], '#ffc5a0', 0.78, 0, -0.2, { seg: 20 }));
   add(g, rb(0.24, 0.2, 0.06, '#8a6076', 0.78, 0.1, 0.12, 0.03), K.cyl(0.07, 0.07, 0.04, null, 0.78, 0.13, 0.14, { seg: 6, mat: fireMat }));
   sack(g, -0.72, D / 2 + 0.2, P.cream, 1.2, 0.0, 1); sack(g, -0.9, D / 2 + 0.05, P.cream, 1.1); sack(g, -0.8, D / 2 + 0.08, '#fff0c8', 1.0, 0.2);
   stones(g, 0.43, D / 2 + 0.26, 2, 0.14); butterfly(g, 0.0, 1.0, D / 2 + 0.3, '#ffd24a'); snail(g, -0.62, 0.2, D / 2 + 0.45, 0.5);
@@ -439,9 +546,9 @@ BUILD.kiln = (info) => {
   const L = lv(info), g = G(), b1 = '#ffa98a', b2 = '#ffe08a', b3 = '#ff93ac';
   add(g, rb(1.8, 0.2, 1.7, STONE, 0, 0, 0, 0.08));
   const R = [0.74, 0.8, 0.86][L - 1];
-  add(g, K.lathe([[0.001, 0.2], [R, 0.2], [R + 0.05, 0.3], [R + 0.03, 0.55]], b3, 0, 0, 0, { seg: 14 }));
-  add(g, K.lathe([[R + 0.03, 0.55], [R, 0.72], [R - 0.1, 0.9], [R - 0.2, 1.02]], b1, 0, 0, 0, { seg: 14 }));
-  add(g, K.lathe([[R - 0.2, 1.02], [R - 0.34, 1.12], [R - 0.5, 1.2], [R - 0.58, 1.26], [0.001, 1.32]], b2, 0, 0, 0, { seg: 14 }));
+  add(g, K.lathe([[0.001, 0.2], [R, 0.2], [R + 0.05, 0.3], [R + 0.03, 0.55]], b3, 0, 0, 0, { seg: 20 }));
+  add(g, K.lathe([[R + 0.03, 0.55], [R, 0.72], [R - 0.1, 0.9], [R - 0.2, 1.02]], b1, 0, 0, 0, { seg: 20 }));
+  add(g, K.lathe([[R - 0.2, 1.02], [R - 0.34, 1.12], [R - 0.5, 1.2], [R - 0.58, 1.26], [0.001, 1.32]], b2, 0, 0, 0, { seg: 20 }));
   for (const [y, r] of [[0.52, R + 0.045], [0.93, R - 0.12]]) add(g, cyl(r, r, 0.045, L >= 3 ? GOLDD : CREAM, 0, y, 0, 14));
   add(g, rb(0.66, 0.42, 0.24, STONEL, 0, 0.2, R - 0.0, 0.09), lcyl('z', 0.33, 0.24, STONEL, 0, 0.62, R, 12));
   add(g, bx(0.46, 0.38, 0.1, '#8a6076', 0, 0.2, R + 0.09), lcyl('z', 0.23, 0.1, '#8a6076', 0, 0.58, R + 0.09, 10));
@@ -463,8 +570,8 @@ BUILD.kiln = (info) => {
 BUILD.study = (info) => {
   const L = lv(info), g = G(), tw = G(), plaster = '#dcc8ff', band = '#fff3b0';
   add(g, rb(1.8, 0.16, 1.7, STONE, 0, 0, 0, 0.08));
-  add(tw, K.lathe([[0.001, 0.1], [0.7, 0.1], [0.72, 0.25], [0.66, 0.5]], STONEL, 0, 0, 0, { seg: 12 }));
-  add(tw, K.lathe([[0.66, 0.5], [0.6, 1.0], [0.52, 1.5], [0.46, 1.62]], plaster, 0, 0, 0, { seg: 12 }));
+  add(tw, K.lathe([[0.001, 0.1], [0.7, 0.1], [0.72, 0.25], [0.66, 0.5]], STONEL, 0, 0, 0, { seg: 20 }));
+  add(tw, K.lathe([[0.66, 0.5], [0.6, 1.0], [0.52, 1.5], [0.46, 1.62]], plaster, 0, 0, 0, { seg: 20 }));
   add(tw, cyl(0.64, 0.64, 0.07, band, 0, 1.0, 0, 12), cyl(0.56, 0.56, 0.06, band, 0, 1.45, 0, 12));
   const top1 = 1.62;
   add(tw, cyl(0.62, 0.55, 0.13, band, 0, top1 - 0.08, 0, 12), cyl(0.5, 0.5, 0.3, '#f3eaff', 0, top1 + 0.04, 0, 12));
@@ -493,12 +600,12 @@ BUILD.study = (info) => {
 BUILD.mill = (info) => {
   const L = lv(info), g = G(), wall = '#c4e6ff', wall2 = '#fff6e0';
   add(g, rb(1.7, 0.16, 1.7, STONE, 0, 0, 0, 0.08));
-  add(g, K.lathe([[0.001, 0.12], [0.74, 0.12], [0.76, 0.3], [0.7, 0.45]], STONEL, 0, 0, -0.1, { seg: 12 }));
-  add(g, K.lathe([[0.7, 0.45], [0.62, 1.0], [0.54, 1.5], [0.5, 1.75]], wall, 0, 0, -0.1, { seg: 12 }));
+  add(g, K.lathe([[0.001, 0.12], [0.74, 0.12], [0.76, 0.3], [0.7, 0.45]], STONEL, 0, 0, -0.1, { seg: 20 }));
+  add(g, K.lathe([[0.7, 0.45], [0.62, 1.0], [0.54, 1.5], [0.5, 1.75]], wall, 0, 0, -0.1, { seg: 20 }));
   add(g, cyl(0.66, 0.66, 0.05, CREAM, 0, 0.98, -0.1, 12), cyl(0.57, 0.57, 0.05, CREAM, 0, 1.45, -0.1, 12));
   for (let i = 0; i < 8; i++) { const a = i * Math.PI / 4 + 0.4; add(g, bar(Math.sin(a) * 0.62, 0.5, -0.1 + Math.cos(a) * 0.62, Math.sin(a) * 0.51, 1.72, -0.1 + Math.cos(a) * 0.51, 0.03, wall2)); }
   const cy = 1.75;
-  add(g, cyl(0.56, 0.52, 0.12, CREAM, 0, cy - 0.02, -0.1, 12), K.lathe([[0.6, cy + 0.08], [0.58, cy + 0.2], [0.47, cy + 0.38], [0.26, cy + 0.52], [0.001, cy + 0.58]], L === 3 ? GOLD : '#ff8fb0', 0, 0, -0.1, { seg: 12 }));
+  add(g, cyl(0.56, 0.52, 0.12, CREAM, 0, cy - 0.02, -0.1, 12), K.lathe([[0.6, cy + 0.08], [0.58, cy + 0.2], [0.47, cy + 0.38], [0.26, cy + 0.52], [0.001, cy + 0.58]], L === 3 ? GOLD : '#ff8fb0', 0, 0, -0.1, { seg: 20 }));
   add(g, bx(0.04, 0.2, 0.04, CREAM, 0, cy + 0.55, -0.1), sp(0.07, GOLD, 0, cy + 0.78, -0.1, { lo: true }));
   add(g, place(door3(0.3, 0.5, '#ffd24a', { gold: L === 3, mat: '#ff9fbd' }), 0, 0.22, 0.6 - 0.1 + 0.0, 0)); g.children[g.children.length - 1].position.z = 0.57;
   add(g, rb(0.36, 0.05, 0.12, TIM2, 0, 0.98, 0.5, 0.02));
@@ -620,10 +727,10 @@ BUILD.lantern = (info) => {
 };
 BUILD.fountain = (info) => {
   const L = lv(info), g = G();
-  add(g, K.lathe([[0.001, 0], [0.84, 0], [0.9, 0.1], [0.9, 0.34], [0.78, 0.38], [0.78, 0.3]], STONEL, 0, 0, 0, { seg: 16 }));
-  add(g, K.lathe([[0.74, 0.3], [0.74, 0.4], [0.88, 0.42], [0.95, 0.36], [0.93, 0.3]], '#fff6e8', 0, 0, 0, { seg: 16 }));
+  add(g, K.lathe([[0.001, 0], [0.84, 0], [0.9, 0.1], [0.9, 0.34], [0.78, 0.38], [0.78, 0.3]], STONEL, 0, 0, 0, { seg: 24 }));
+  add(g, K.lathe([[0.74, 0.3], [0.74, 0.4], [0.88, 0.42], [0.95, 0.36], [0.93, 0.3]], '#fff6e8', 0, 0, 0, { seg: 24 }));
   add(g, cyl(0.78, 0.78, 0.03, waterMat, 0, 0.3, 0, 16));
-  add(g, cyl(0.16, 0.22, 0.36, STONEL, 0, 0.3, 0, 8), K.lathe([[0.001, 0.62], [0.32, 0.7], [0.4, 0.82], [0.3, 0.8], [0.001, 0.7]], STONEL, 0, 0, 0, { seg: 12 }), cyl(0.09, 0.12, 0.3, STONEL, 0, 0.68, 0, 8));
+  add(g, cyl(0.16, 0.22, 0.36, STONEL, 0, 0.3, 0, 8), K.lathe([[0.001, 0.62], [0.32, 0.7], [0.4, 0.82], [0.3, 0.8], [0.001, 0.7]], STONEL, 0, 0, 0, { seg: 20 }), cyl(0.09, 0.12, 0.3, STONEL, 0, 0.68, 0, 8));
   add(g, K.lathe([[0.001, 1.0], [0.2, 1.04], [0.26, 1.12], [0.19, 1.1], [0.001, 1.04]], STONEL, 0, 0, 0, { seg: 10 }), cyl(0.2, 0.2, 0.02, waterMat, 0, 0.76, 0, 12));
   add(g, sp(0.12, waterMat, 0, 1.16, 0, { sy: 1.3, lo: true }));
   for (let i = 0; i < 8; i++) { const a = i * Math.PI / 4; for (const [d, h, r] of [[0.28, 0.9, 0.04], [0.5, 0.82, 0.04], [0.68, 0.5, 0.035]]) add(g, sp(r, waterMat, Math.sin(a) * d * 0.9, h - 0.08 * (d > 0.6 ? 1 : 0), Math.cos(a) * d * 0.9, { lo: true })); }
@@ -729,5 +836,156 @@ export function constructionSite(w = 2, h = 2) {
   return finish(g, ph + 0.5, [w + 0.2, h + 0.2, 0.9]);
 }
 
+//@@NEW
+// ================================================================ ROUND 3 helpers (farm life, shops, waterside)
+const pkG = new Map();
+/** flat pointed picket facing +z (centre x, bottom y) */
+function pk(w, h, c, x, y, z, ry = 0) {
+  const k = w.toFixed(3) + ',' + h.toFixed(3); let g = pkG.get(k);
+  if (!g) { const s_ = new THREE.Shape([[-w / 2, 0], [w / 2, 0], [w / 2, h * 0.78], [0, h], [-w / 2, h * 0.78]].map(([a, b]) => new THREE.Vector2(a, b))); g = new THREE.ShapeGeometry(s_); pkG.set(k, g); }
+  const m = new THREE.Mesh(g, col(c)); m.position.set(x, y, z); m.rotation.y = ry; m.castShadow = false; m.receiveShadow = true; return m;
+}
+/** picket fence from a to b (any direction): round posts, flat pointed pickets, two rails. gaps = [[t0,t1]] fractions left open (gates) */
+function fence(g, ax, az, bx_, bz, o = {}) {
+  const { h = 0.3, c = CREAM, gap = 0.2, gaps = [], posts = 0.7 } = o, dx = bx_ - ax, dz = bz - az, len = Math.hypot(dx, dz), ry = Math.atan2(-dz, dx);
+  const open = (t) => gaps.some(([a, b]) => t > a - 1e-6 && t < b + 1e-6), pt = (t) => [ax + dx * t, az + dz * t];
+  const n = Math.max(2, Math.round(len / gap)); let run = null; const runs = [];
+  for (let i = 0; i <= n; i++) { const t = i / n; if (open(t)) { run = null; continue; } const [x, z] = pt(t); add(g, pk(gap * 0.72, h, c, x, 0.04, z, ry)); if (!run) { run = [t, t]; runs.push(run); } run[1] = t; }
+  for (const [t0, t1] of runs) { const [x0, z0] = pt(t0), [x1, z1] = pt(t1); if (t1 - t0 > 0.02) for (const y of [0.12, 0.23]) add(g, bar(x0, y, z0, x1, y, z1, 0.03, shade(c, -0.04))); }
+  const np = Math.max(1, Math.round(len / posts));
+  for (let i = 0; i <= np; i++) { const t = i / np; if (open(t)) continue; const [x, z] = pt(t); add(g, rb(0.07, h + 0.05, 0.07, c, x, 0, z, 0.03), cone(0.05, 0.06, shade(c, 0.08), x, h + 0.05, z, 4)); }
+}
+function hen(g, x, z, c = '#fffaf0', ry = 0, s = 1, y = 0) {
+  const k = new THREE.Group(), q = (o) => ({ q: 0, ...o });
+  add(k, sp(0.095, c, 0, 0.1, 0, { sy: 0.88, sz: 1.2, q: 1 }), sp(0.06, c, 0, 0.21, 0.085, q()), sp(0.04, '#ff6b6b', 0, 0.27, 0.09, q({ sx: 0.5 })), cone(0.024, 0.06, '#ffb23c', 0, 0.2, 0.15, 4, 0), sp(0.045, c, 0, 0.17, -0.13, q({ sy: 1.4 })), fdisc(0.012, DEEP, -0.05, 0.225, 0.135, -1.2, false, 5), fdisc(0.012, DEEP, 0.05, 0.225, 0.135, 1.2, false, 5), sp(0.04, shade(c, -0.08), -0.09, 0.11, 0.0, q({ sx: 0.5, sz: 1.2 })), sp(0.04, shade(c, -0.08), 0.09, 0.11, 0.0, q({ sx: 0.5, sz: 1.2 })));
+  k.scale.setScalar(s); return add(g, place(k, x, y, z, ry));
+}
+function egg(g, x, y, z, c = '#fffdf4', s = 1) { return add(g, sp(0.036 * s, c, x, y + 0.04 * s, z, { sy: 1.3 })); }
+/** round hay bale lying on its side (axis x or z), straw texture and two bands */
+function hayBale(g, x, y, z, r = 0.2, len = 0.34, axis = 'x') {
+  const m = lcyl(axis, r, len, '#ffe27a', x, y + r, z, 12); m.userData.kind = 7; add(g, m);
+  for (const d of [-0.28, 0.28]) { const b = lcyl(axis, r * 1.012, 0.025, '#e8b24a', axis === 'x' ? x + d * len : x, y + r, axis === 'z' ? z + d * len : z, 12); add(g, b); }
+}
+function churn(g, x, z, c = '#d6e8ff', y = 0, s = 1) {
+  add(g, K.lathe([[0.001, 0], [0.085, 0], [0.1, 0.05], [0.082, 0.2], [0.062, 0.3], [0.07, 0.34]].map(([r, h]) => [r * s, h * s]), c, x, y, z, { seg: 10 }), cyl(0.082 * s, 0.082 * s, 0.03 * s, shade(c, -0.12), x, y + 0.3 * s, z, 10), sp(0.03 * s, '#fff', x, y + 0.36 * s, z), rb(0.06 * s, 0.02 * s, 0.04 * s, shade(c, -0.2), x + 0.1 * s, y + 0.2 * s, z, 0.01), ring(0.102 * s, 0.025 * s, shade(c, -0.18), x, y + 0.1 * s, z, 10), ring(0.07 * s, 0.025 * s, shade(c, -0.18), x, y + 0.26 * s, z, 10));
+}
+function bucket(g, x, z, c = '#ffd24a', y = 0, s = 1, fill = null) {
+  add(g, K.lathe([[0.001, 0], [0.07 * s, 0], [0.095 * s, 0.17 * s], [0.085 * s, 0.17 * s], [0.06 * s, 0.02 * s]], c, x, y, z, { seg: 10 }), ring(0.096 * s, 0.02 * s, shade(c, -0.15), x, y + 0.12 * s, z, 10));
+  if (fill) add(g, sp(0.08 * s, fill, x, y + 0.15 * s, z, { sy: 0.45 }));
+}
+function fish(g, x, y, z, ry = 0, c = '#8fd0ff', s = 1) {
+  const k = new THREE.Group(), t = cone(0.04, 0.08, shade(c, -0.12), 0, 0, -0.13, 3, 0); t.rotation.x = Math.PI / 2; t.position.set(0, 0, -0.13);
+  add(k, sp(0.07, c, 0, 0, 0, { sx: 0.5, sy: 0.6, sz: 1.5 }), t, fdisc(0.012, DEEP, 0.036, 0.014, 0.07, Math.PI / 2, false, 5), fdisc(0.012, DEEP, -0.036, 0.014, 0.07, -Math.PI / 2, false, 5)); k.scale.setScalar(s);
+  return add(g, place(k, x, y, z, ry));
+}
+function jar(g, x, y, z, c = '#ff6b8a', s = 1) { add(g, cyl(0.045 * s, 0.045 * s, 0.1 * s, c, x, y, z, 8), cyl(0.047 * s, 0.047 * s, 0.025 * s, '#fffaf0', x, y + 0.1 * s, z, 8), disc(0.04 * s, '#fff6dc', x, y + 0.126 * s, z, 8)); }
+function cheese(g, x, y, z, r = 0.2, h = 0.12, ry = 0, wedge = true) {
+  const k = new THREE.Group();
+  add(k, cyl(r, r, h, '#ffd85a', 0, 0, 0, 16), ring(r * 1.005, h * 0.14, '#ffc23a', 0, h * 0.04, 0, 16), ring(r * 1.005, h * 0.14, '#ffc23a', 0, h * 0.82, 0, 16));
+  for (let i = 0; i < 3; i++) { const a = i * 2.2 + 0.4, d = r * (0.3 + 0.18 * (i % 2)); add(k, fdisc(r * 0.12, '#f2b23a', Math.cos(a) * d, h + 0.003, Math.sin(a) * d, 0, false, 6)); k.children[k.children.length - 1].rotation.set(-Math.PI / 2, 0, 0); }
+  return add(g, place(k, x, y, z, ry));
+}
+/** striped sloped awning over a front, from (x0..x1) at height hy hanging out to z1; stripes alternate c1/c2; scalloped valance */
+function awning(g, x0, x1, hy, zWall, out, drop, c1, c2, n = 8, o = {}) {
+  const w = x1 - x0, sw = w / n, a = Math.atan2(drop, out), Ls = Math.hypot(out, drop) + 0.02;
+  for (let i = 0; i < n; i++) {
+    const c = i % 2 ? c2 : c1, pv = G(rb(sw - 0.004, 0.1, Ls, c, 0, -0.1, 0, 0.04)); pv.children[0].userData.kind = o.kind ?? 0; pv.position.set(x0 + sw * (i + 0.5), hy, zWall + out / 2); pv.rotation.x = a; g.add(pv);
+    const d = cyl(sw / 2 * 0.99, sw / 2 * 0.99, 0.06, c, 0, 0, 0, 10); d.rotation.x = Math.PI / 2; d.position.set(x0 + sw * (i + 0.5), hy - drop - 0.07, zWall + out + 0.0); add(g, d);
+  }
+  add(g, lcyl('x', 0.028, w + 0.02, shade(c1, -0.1), (x0 + x1) / 2, hy - drop - 0.01, zWall + out, 6), bar(x0 + 0.02, hy, zWall, x0 + 0.02, hy - drop - 0.1, zWall + out, 0.03, IRON), bar(x1 - 0.02, hy, zWall, x1 - 0.02, hy - drop - 0.1, zWall + out, 0.03, IRON));
+}
+/** round pie, lying (y = base), with lattice crust; r radius */
+function pie(g, x, y, z, r = 0.3, tilt = 0, c = '#f2b266', fillc = '#ff5f7f') {
+  const k = new THREE.Group();
+  add(k, K.lathe([[0.001, 0], [r * 0.82, 0], [r, r * 0.34], [r * 0.9, r * 0.38], [r * 0.001, r * 0.2]], c, 0, 0, 0, { seg: 18 }), disc(r * 0.86, fillc, 0, r * 0.26, 0, 14));
+  for (const a of [0.0, 0.7, 1.4, 2.1, -0.7]) { const m = bx(r * 1.7, 0.02, r * 0.13, '#f9d08a', 0, r * 0.27, 0); m.rotation.y = a; add(k, m); }
+  add(k, ring(r * 0.99, r * 0.07, shade(c, 0.18), 0, r * 0.3, 0, 18));
+  k.rotation.x = tilt; return add(g, place(k, x, y, z, 0));
+}
+/** gambrel roof: ridge along z (gable faces +z). hw = half span at the eaves, (kz, kh) = the knee, rise = ridge height; wd = wall width across for the gable fill */
+function gambrel(g, o) {
+  const { x = 0, y = 0, z = 0, hw, kz, kh, rise, len, t = 0.12, col: rc, ridgeCol, wd, base, fillCol } = o, R = new THREE.Group(); R.position.set(x, y, z); R.rotation.y = Math.PI / 2;
+  const roll = shade(rc, 0.1), rcol = ridgeCol || shade(rc, 0.22);
+  for (const s of [1, -1]) for (const [z1, y1, z2, y2] of [[hw, 0, kz, kh], [kz, kh, 0, rise]]) {
+    const dz = (z2 - z1) * s, dy = y2 - y1, L2 = Math.hypot(dz, dy) + 0.05, pv = new THREE.Group(); pv.position.set(0, (y1 + y2) / 2, s * (z1 + z2) / 2); pv.rotation.x = -Math.atan2(dy, dz);
+    const slab = rb(len, t, L2, rc, 0, -t, 0, 0.05); slab.userData.kind = 2; slab.userData.axis = 2; pv.add(slab); R.add(pv);
+  }
+  for (const s of [1, -1]) R.add(lcyl('x', t * 0.6, len, roll, 0, -t * 0.4, s * hw, 8), lcyl('x', 0.045, len - 0.04, shade(rc, 0.16), 0, kh - 0.03, s * kz, 6));
+  R.add(lcyl('x', 0.065, len + 0.02, rcol, 0, rise + 0.01, 0, 8), sp(0.08, rcol, len / 2 + 0.01, rise + 0.01, 0, { q: 1 }), sp(0.08, rcol, -len / 2 - 0.01, rise + 0.01, 0, { q: 1 }));
+  if (wd) { const y1 = (hw - wd / 2) * kh / (hw - kz) - t * 0.9, hh = wd / 2, dx = len - 0.3, f = poly([[-hh, base], [hh, base], [hh, y1], [kz, kh - t * 0.9], [0, rise - t * 1.2], [-kz, kh - t * 0.9], [-hh, y1]], dx, fillCol, 0, 0, 0, Math.PI / 2); f.userData.kind = 6; f.userData.axis = 1; R.add(f); }
+  g.add(R); return R;
+}
+
+// ---------------------------------------------------------------- HENHOUSE (2x2): raised coop, ramp, nest box, fenced run, two hens
+BUILD.coop = (info) => {
+  const L = lv(info), id = info.id | 0, g = G(), own = info.color || P.red, wallC = '#ffe98a', rc = '#ff9a8a', hx = -0.4, hz = -0.42, W = 1.0, D = 0.84, H = 0.58, y0 = 0.22;
+  const flr = bx(1.9, 0.04, 1.0, '#f7e4aa', 0, 0, 0.5); flr.userData.kind = 7; add(g, flr);
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) add(g, cyl(0.05, 0.06, y0 + 0.02, TIM2, hx + sx * (W / 2 - 0.08), 0, hz + sz * (D / 2 - 0.08), 8));
+  const wall = rb(W, H, D, wallC, hx, y0, hz, 0.1, 2); wall.userData.kind = 1; add(g, wall, rb(W + 0.08, 0.05, D + 0.08, TIM, hx, y0 - 0.03, hz, 0.02));
+  const ry0 = y0 + H + 0.05, rise = [0.46, 0.52, 0.6][L - 1];
+  roof(g, { x: hx, y: ry0, z: hz, span: W + 0.36, len: D + 0.3, rise, col: rc, along: 'z', ridgeCol: L === 3 ? GOLD : null, fill: { col: wallC, wd: W, base: -0.07, ovg: 0.15 } });
+  const fz = hz + D / 2;
+  add(g, place(door3(0.2, 0.34, own, { gold: L === 3 }), hx + 0.24, y0 + 0.03, fz + 0.005));
+  const rp = G(); add(rp, bx(0.24, 0.04, 0.74, WOODL, 0, 0, 0)); for (let i = 0; i < 5; i++) add(rp, bx(0.22, 0.03, 0.035, TIM2, 0, 0.04, -0.3 + i * 0.15)); rp.position.set(hx + 0.24, y0 - 0.17, fz + 0.62); rp.rotation.x = 0.255; g.add(rp);
+  add(g, place(window3(0.17, 0.22, { curt: CURT[id % 5], box: true, flowers: [P.blossomDeep, P.butter, P.white] }), hx - 0.26, y0 + 0.4, fz + 0.015));
+  const nb = hx + W / 2 + 0.19;
+  add(g, rb(0.36, 0.3, 0.5, '#fff1b8', nb, y0 + 0.02, hz - 0.02, 0.06), fdisc(0.06, DEEP, nb, y0 + 0.17, hz + 0.235, 0, false, 10), fdisc(0.075, CREAM, nb, y0 + 0.17, hz + 0.232, 0, false, 10), fdisc(0.06, DEEP, nb + 0.185, y0 + 0.17, hz - 0.02, Math.PI / 2, false, 10), fdisc(0.075, CREAM, nb + 0.183, y0 + 0.17, hz - 0.02, Math.PI / 2, false, 10));
+  const lid = G(rb(0.46, 0.05, 0.6, rc, 0, -0.02, 0, 0.02), lcyl('z', 0.03, 0.6, shade(rc, 0.12), 0.23, -0.01, 0, 6)); lid.position.set(nb - 0.02, y0 + 0.38, hz - 0.02); lid.rotation.z = -0.22; g.add(lid);
+  bl(0.06, '#ffe27a', 0, 0, 0); add(g, bl(0.08, '#ffe27a', nb, y0 + 0.2, hz + 0.19, 0.6)); egg(g, nb + 0.06, y0 + 0.2, hz + 0.2);
+  for (const sx of [-1, 1]) add(g, cyl(0.04, 0.05, 0.22, TIM2, nb + sx * 0.14, 0, hz + 0.18, 6));
+  fence(g, -0.95, 0.02, -0.95, 0.96, { h: 0.28 }); fence(g, -0.95, 0.96, 0.95, 0.96, { h: 0.28, gaps: [[0.42, 0.58]] }); fence(g, 0.95, 0.96, 0.95, -0.12, { h: 0.28 });
+  for (const sx of [-1, 1]) add(g, rb(0.08, 0.42, 0.08, TIM2, sx * 0.17, 0, 0.96, 0.03), sp(0.06, GOLD, sx * 0.17, 0.46, 0.96));
+  hen(g, -0.5, 0.58, '#fffaf0', 0.5, 1.0, 0.03); hen(g, 0.4, 0.7, '#ffcf8a', -0.9, 0.95, 0.03);
+  add(g, K.lathe([[0.001, 0], [0.07, 0], [0.095, 0.06], [0.08, 0.06], [0.001, 0.02]], '#ff9fbd', 0.1, 0.03, 0.42, { seg: 10 }), sp(0.05, '#ffe9a8', 0.1, 0.06, 0.42, { sy: 0.4 }));
+  add(g, K.lathe([[0.001, 0], [0.06, 0], [0.085, 0.045], [0.07, 0.045], [0.001, 0.015]], '#8fd0ff', 0.62, 0.03, 0.5, { seg: 10 }), disc(0.06, waterMat, 0.62, 0.065, 0.5, 8));
+  add(g, K.lathe([[0.001, 0], [0.09, 0], [0.12, 0.09], [0.1, 0.1]], '#e8c07a', -0.12, 0.03, 0.78, { seg: 10 })); egg(g, -0.14, 0.1, 0.78); egg(g, -0.08, 0.1, 0.8, '#ffe4c8'); egg(g, -0.1, 0.1, 0.74);
+  bed(g, -0.78, 0.86, 2, 0.2, id); bed(g, 0.8, 0.86, 2, 0.2, id + 2); butterfly(g, 0.1, 0.7, 0.3, '#ffa6c9', 0.4);
+  if (L >= 2) { hayBale(g, 0.72, 0.03, 0.22, 0.14, 0.22, 'x'); add(g, rb(0.07, 0.5, 0.07, TIM2, -1.0, 0, 0.99, 0.03), sp(0.1, '#fff6d0', -1.0, 0.6, 0.99, { sy: 1.25, sx: 0.8 })); bunting(g, [-0.95, 0.5, 0.97], [0.95, 0.5, 0.97], 8, 0.1, 0.06, id); pot(g, hx + 0.52, 0.0, fz + 0.2, 0.9, P.butter); }
+  if (L >= 3) { hen(g, 0.1, 0.84, '#ffe0ea', 0.2, 0.85, 0.03); vane(g, hx, ry0 + rise + 0.03, hz, 0.75); lantern(g, 0.17, 0.46, 0.96, 0.8, true); }
+  return finish(g, ry0 + rise + (L === 3 ? 0.55 : 0.15), [2.2, 2.2, 0.9]);
+};
+
+// ---------------------------------------------------------------- BARN (3x2): gambrel roof, hay loft, sliding `door`, paddock, cow sign
+function cowHead(g, x, y, z, s = 1, ry = 0) {
+  const k = new THREE.Group(), W_ = '#fffaf0', SP = '#9a8bd0';
+  add(k, sp(0.15, W_, 0, 0, 0, { sy: 0.9, sz: 0.8 }), sp(0.085, '#ffb6c8', 0, -0.07, 0.1, { sy: 0.7, sz: 0.7 }), sp(0.055, W_, -0.18, 0.05, 0, { sx: 0.5, sy: 0.6, sz: 0.6 }), sp(0.055, W_, 0.18, 0.05, 0, { sx: 0.5, sy: 0.6, sz: 0.6 }), sp(0.058, SP, -0.07, 0.1, 0.07, { sy: 0.7, sz: 0.5 }),
+    sp(0.04, '#fff0b0', -0.07, 0.17, 0.0, { sx: 0.5, sy: 1.2, sz: 0.5 }), sp(0.04, '#fff0b0', 0.07, 0.17, 0.0, { sx: 0.5, sy: 1.2, sz: 0.5 }), fdisc(0.02, DEEP, -0.06, 0.02, 0.118, 0, false, 6), fdisc(0.02, DEEP, 0.06, 0.02, 0.118, 0, false, 6), fdisc(0.012, DEEP, -0.03, -0.08, 0.172, 0, false, 5), fdisc(0.012, DEEP, 0.03, -0.08, 0.172, 0, false, 5));
+  k.scale.setScalar(s); return add(g, place(k, x, y, z, ry));
+}
+BUILD.barn = (info) => {
+  const L = lv(info), id = info.id | 0, g = G(), own = info.color || P.red, RED = '#ff8f86', RC = '#8fa6f5', W = 1.3, D = 1.7, H = 0.74, bx0 = -0.78, bz = -0.1, FOUND = 0.12;
+  const top = shell(g, W, D, H, RED, { x: bx0, z: bz, found: FOUND, kind: 6, axis: 1, trim: L === 3 ? '#fff0b0' : CREAM });
+  const ry0 = top + 0.05, rise = [0.74, 0.8, 0.88][L - 1], fz = bz + D / 2;
+  gambrel(g, { x: bx0, y: ry0, z: bz, hw: W / 2 + 0.16, kz: 0.34, kh: 0.4, rise, len: D + 0.34, col: RC, ridgeCol: L === 3 ? GOLD : null, wd: W, base: -0.07, fillCol: RED });
+  const gz = fz + 0.025;
+  // main doors: static leaf + sliding `door`
+  add(g, bx(0.9, 0.62, 0.05, CREAM, bx0, FOUND, gz - 0.01), rb(0.4, 0.55, 0.05, '#ff7d73', bx0 - 0.21, FOUND + 0.02, gz + 0.03, 0.02));
+  const xb = (u, x0, y0_, w, h) => { add(u, bar(x0 - w / 2 + 0.03, y0_ + 0.03, 0.04, x0 + w / 2 - 0.03, y0_ + h - 0.03, 0.04, 0.03, CREAM), bar(x0 + w / 2 - 0.03, y0_ + 0.03, 0.04, x0 - w / 2 + 0.03, y0_ + h - 0.03, 0.04, 0.03, CREAM), bx(w - 0.04, 0.03, 0.04, CREAM, x0, y0_ + 0.02, 0.04), bx(w - 0.04, 0.03, 0.04, CREAM, x0, y0_ + h - 0.05, 0.04), bx(0.03, h - 0.04, 0.04, CREAM, x0 - w / 2 + 0.03, y0_ + 0.02, 0.04), bx(0.03, h - 0.04, 0.04, CREAM, x0 + w / 2 - 0.03, y0_ + 0.02, 0.04)); };
+  const sl = G(); sl.name = 'door'; const dl = rb(0.4, 0.55, 0.05, '#ff7d73', 0, 0.275, 0, 0.02); add(sl, dl); xb(sl, 0, 0, 0.4, 0.55); sl.position.set(bx0 + 0.21, FOUND + 0.02, gz + 0.075);
+  const lf = G(); xb(lf, bx0 - 0.21, FOUND + 0.02, 0.4, 0.55); lf.position.z = gz + 0.06; g.add(lf);
+  add(g, bx(0.96, 0.04, 0.045, IRON, bx0, FOUND + 0.66, gz + 0.1), cyl(0.035, 0.035, 0.04, GOLDD, bx0 - 0.4, FOUND + 0.645, gz + 0.1, 8));
+  // hay loft in the gable
+  const ly = top + 0.04;
+  add(g, bx(0.4, 0.3, 0.05, CREAM, bx0, ly, gz - 0.005)); const hy = bx(0.32, 0.22, 0.05, '#ffe27a', bx0, ly + 0.04, gz + 0.02); hy.userData.kind = 7; add(g, hy);
+  for (const s of [-1, 1]) { const lp = G(rb(0.15, 0.22, 0.03, '#ff7d73', 0, 0.11, 0, 0.012), bx(0.13, 0.025, 0.03, CREAM, 0, 0.1, 0.02)); lp.position.set(bx0 + s * 0.26, ly + 0.04, gz + 0.04); lp.rotation.y = s * 1.1; g.add(lp); }
+  const by = ly + 0.5; add(g, bar(bx0, by, gz - 0.06, bx0, by + 0.02, gz + 0.42, 0.045, TIM2), sp(0.035, IRON, bx0, by - 0.03, gz + 0.38, { q: 0 }), bar(bx0, by - 0.03, gz + 0.38, bx0, by - 0.2, gz + 0.38, 0.012, CREAM)); hayBale(g, bx0, by - 0.4, gz + 0.38, 0.09, 0.15, 'x');
+  add(g, place(window3(0.2, 0.2, { round: true, curt: CURT[id % 5] }), bx0, by + 0.07, gz + 0.01));
+  for (const s of [-1, 1]) add(g, place(window3(0.18, 0.18, { round: true, curt: CURT[(id + 1) % 5] }), bx0 + W / 2 + 0.005, FOUND + 0.42, bz + s * 0.4, Math.PI / 2));
+  // cupola + weathervane on the ridge
+  const cy = ry0 + rise, cz = bz - 0.2;
+  add(g, rb(0.24, 0.2, 0.24, '#fff3e0', bx0, cy - 0.02, cz, 0.06), cone(0.22, 0.2, L === 3 ? GOLD : RC, bx0, cy + 0.18, cz, 8, 0), fdisc(0.055, windowMat, bx0, cy + 0.08, cz + 0.123, 0, false, 8)); vane(g, bx0, cy + 0.36, cz, 0.9);
+  // paddock
+  const fc = '#fff4de'; fence(g, 0.05, 0.96, 1.45, 0.96, { h: 0.3, gaps: [[0.4, 0.6]], c: fc }); fence(g, 1.45, 0.96, 1.45, -0.92, { h: 0.3, c: fc }); fence(g, 1.45, -0.92, 0.05, -0.92, { h: 0.3, c: fc });
+  const dirt = bx(1.4, 0.03, 1.84, '#f3dfa8', 0.75, 0, 0.02); dirt.userData.kind = 7; add(g, dirt);
+  hayBale(g, 0.38, 0.03, -0.45, 0.2, 0.34, 'z'); hayBale(g, 0.38, 0.03, -0.0, 0.17, 0.3, 'z');
+  add(g, rb(0.2, 0.15, 0.62, TIM, 1.1, 0.0, -0.2, 0.05), disc(0.1, waterMat, 1.1, 0.145, -0.2, 8)); g.children[g.children.length - 1].scale.set(0.9, 1, 2.6);
+  add(g, rb(0.07, 0.62, 0.07, TIM2, 0.95, 0, 0.62, 0.03)); cowHead(g, 0.95, 0.74, 0.64, 1.15, -0.1);
+  bed(g, 0.5, 1.0, 3, 0.35, id); bed(g, 1.15, 1.0, 2, 0.2, id + 1); butterfly(g, 0.8, 0.9, 0.4, '#ffa6c9'); pot(g, bx0 + 0.55, FOUND, fz + 0.12, 1, P.butter); pot(g, bx0 - 0.55, FOUND, fz + 0.12, 1, P.blossomDeep);
+  if (L >= 2) { bunting(g, [bx0 - W / 2 + 0.05, top - 0.04, fz + 0.1], [bx0 + W / 2 - 0.05, top - 0.04, fz + 0.1], 7, 0.12, 0.07, id); ivy(g, bx0 - W / 2, fz, 0.7, id, 0.1); hayBale(g, 0.38, 0.38, -0.2, 0.15, 0.28, 'z'); }
+  if (L >= 3) { for (const sx of [-1, 1]) { add(g, cyl(0.04, 0.05, 0.5, CREAM, 0.75 + sx * 0.17, 0, 0.98, 6)); lantern(g, 0.75 + sx * 0.17, 0.5, 0.98, 1, true); } const f = G(); add(f, bar(0, 0, 0, 0, 0.5, 0, 0.025, GOLDD), rb(0.3, 0.18, 0.02, own, 0.16, 0.3, 0, 0.02)); f.position.set(bx0 - 0.5, ry0 + 0.45, fz - 0.1); g.add(f); }
+  return finish(g, cy + 0.36 + 0.6, [3.2, 2.3, 0.9]);
+};
+
+//@@END
 // ================================================================ export
 export const BUILD_TYPES = Object.keys(BUILD);

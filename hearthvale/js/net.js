@@ -6,6 +6,7 @@ const SAVE_KEY = 'hearthvale.solo.v1';
 export function soloLink(name, token) {
   let W = null;
   try { const raw = localStorage.getItem(SAVE_KEY); if (raw) W = S.deserialize(raw); } catch {}
+  const stamp = () => { if (W && S.setNow) S.setNow(W, Date.now()); };
   if (!W) W = S.createWorld((Math.random() * 1e9) | 0);
   const id = 'me'; const P = S.addPlayer(W, id, name); if (name) P.name = name;
   addBots(W, 5);
@@ -14,7 +15,7 @@ export function soloLink(name, token) {
   const loop = setInterval(() => {
     const now = performance.now(); const dt = (now - last) / 1000; last = now;
     // catch up after a hidden tab: a minute of offline progress, never more
-    let left = Math.min(dt, 60); while (left > 0) { const step = Math.min(left, 0.25); S.tick(W, step); botStep(W, step); left -= step; }
+    stamp(); let left = Math.min(dt, 60); while (left > 0) { const step = Math.min(left, 0.25); S.tick(W, step); botStep(W, step); left -= step; }
     n++;
     if (n % 2 === 0 && link.onSnap) { link.onSnap(S.snapshot(W, id)); S.flushEvents(W); }
     if (n % 100 === 0) save();

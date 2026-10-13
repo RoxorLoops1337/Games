@@ -13,7 +13,7 @@ const sha = async (s) => {
 export class Host {
   constructor({ world = null, seed = 1, now = () => Date.now() } = {}) {
     this.now = now; this.conns = new Set(); this.tickN = 0; this.dirty = false;
-    this.W = world || S.createWorld(seed); this.last = now();
+    this.W = world || S.createWorld(seed); this.last = now(); S.setNow(this.W, this.last);
     if (world && world.savedAt) this.catchUp(now() - world.savedAt);
   }
   get online() { return this.conns.size; }
@@ -51,7 +51,7 @@ export class Host {
     return conn;
   }
   step() {
-    const now = this.now(); const dt = (now - this.last) / 1000; this.last = now;
+    const now = this.now(); const dt = (now - this.last) / 1000; this.last = now; S.setNow(this.W, now);
     S.tick(this.W, dt); this.tickN++;
     if (this.tickN % SNAP_EVERY === 0) {
       const parts = S.publicParts(this.W);
