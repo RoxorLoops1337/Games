@@ -2044,7 +2044,7 @@ const SCENE = (() => {
   function paintSprite(ctx, a, s, al, glw, t, noShadow) {
     const A = AR(), pt = poseTime(a), tt = t + a.phaseOff;
     try {
-      if (a.kind === 'hero') A.hero.draw(ctx, a.id, { x: 0, y: 0, s, pose: a.pose, t: tt, pt, alpha: al, glow: glw || 0, shadow: noShadow ? false : undefined, gloss: glossAmount() });
+      if (a.kind === 'hero') A.hero.draw(ctx, a.id, { x: 0, y: 0, s, pose: a.pose, t: tt, pt, alpha: al, glow: glw || 0, shadow: noShadow ? false : undefined, gloss: glossAmount(), reuse: true });
       else A.enemy.draw(ctx, a.def, { x: 0, y: 0, s, pose: a.pose, t: tt, pt, hpPct: a.maxHp > 0 ? clamp(a.hp / a.maxHp, 0, 1) : 1, phase: a.phase, alpha: al, glow: glw || 0 });
     } catch (e) {
       warnOnce('actor:' + a.def, e);
