@@ -12,8 +12,8 @@ split big ones into slices (rules, art, polish).
 - [x] S21 Item comparison tooltips with green/red deltas (always on when a different piece is worn)
 - [x] S28 Quick-sell undo window (10 s, Undo sale button at the market)
 - [x] S30 Give item to a nearby friend (Give mode in the backpack)
-- [ ] S27 Auto-sort backpack setting
-- [ ] S29 Trade history (last few trades)
+- [x] S27 Auto-sort backpack (already true: the list is always sorted by your saved order, which is remembered per window)
+- [x] S29 Trade history (last five trades, shown in the trade window)
 - [ ] S25 Mailbox flag visible from afar
 - [ ] S26 Chest labels in the factory view / minimap
 

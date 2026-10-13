@@ -92,3 +92,20 @@ test('giving: a friend in reach gets the goods at once; too far, a full pack, ge
     sim.command('a', { t: 'inv', op: 'give', who: 'b', item: 'iron', n: 4 });
     assert.equal(countOf(a, 'iron'), 4, 'too far');
 });
+
+test('a completed trade is written down for both, newest first, five at most', async () => {
+    const { offerText } = await import('../src/shared/sim/trade');
+    const { sim, a, b, wait } = pair();
+    for (let i = 0; i < 7; i++) {
+        b.coins = 5;
+        sim.command('a', { t: 'trade', op: 'open', who: 'b' });
+        sim.command('a', { t: 'trade', op: 'set', item: 'wood', n: 1 });
+        sim.command('b', { t: 'trade', op: 'coins', n: 1 });
+        wait();
+        sim.command('a', { t: 'trade', op: 'ok' }); sim.command('b', { t: 'trade', op: 'ok' });
+    }
+    assert.equal(a.tlog?.length, 5);
+    assert.deepEqual([a.tlog![0].w, a.tlog![0].gave, a.tlog![0].got], ['Bo', '1 Wood', '1 coins']);
+    assert.deepEqual([b.tlog![0].w, b.tlog![0].gave, b.tlog![0].got], ['Ann', '1 coins', '1 Wood']);
+    assert.equal(offerText({ o: [], c: 0 }), 'nothing');
+});

@@ -298,6 +298,8 @@ export interface PlayerS {
     comp?: string;           // id of the pet walking beside you
     /** An open trade with another farmer (sim/trade.ts): who, what you give, your coins, whether you accepted, and the time Accept unlocks. Public, never saved. */
     trade?: { w: string; o: [ItemId, number][]; c: number; ok: 0 | 1; lock: number };
+    /** The last few completed trades, newest first (sim/trade.ts): the day, who with, what you gave and what you got. Private, saved. */
+    tlog?: { d: number; w: string; gave: string; got: string }[];
     fav?: ItemId[];          // starred items: Quick stack, Put all and the like never move them (sim/stash.ts)
     ride?: number;           // while riding your companion: the speed multiplier (public; sim/bond.ts cmdRide)
     petSeq?: number;

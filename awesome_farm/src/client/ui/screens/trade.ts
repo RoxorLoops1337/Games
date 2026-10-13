@@ -41,7 +41,7 @@ export class TradeScreen implements Screen {
         this.foot = w.footer({
             primary: { label: 'Accept', onClick: () => ctx.send({ t: 'trade', op: 'ok' }) },
             secondary: [{ label: 'Cancel trade', onClick: () => ctx.close() }],
-            hint: deviceText('Click a thing in your backpack to offer it. Click it in the middle to take it back.', 'Tap a thing to offer it (x1, x10 or All below). Tap it in the middle to take it back.'),
+            hint: ((l) => (l ? `Last trade (day ${l.d}, ${l.w}): you gave ${l.gave}, got ${l.got}.` : ''))(ctx.me().tlog?.[0]) || deviceText('Click a thing in your backpack to offer it. Click it in the middle to take it back.', 'Tap a thing to offer it (x1, x10 or All below). Tap it in the middle to take it back.'),
         });
         const body = w.body, cw = Math.floor((body.w - 2 * GAP) / 3);
         this.bagSec = w.section(body.x, body.y, cw, body.h, 'Your backpack', { right: '' });
