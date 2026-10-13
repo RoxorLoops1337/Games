@@ -208,6 +208,7 @@ export function cmdUse (sim: Sim, p: PlayerS, id: number, seed?: ItemId) {
     if (b.kind === 'mineladder') { mines.ascend(sim, p, b); return; }
     if (b.kind === 'mailbox') { mail.open(sim, p, b); return; }
     if (b.kind === 'museum') { museum.use(sim, p, b); return; }
+    if (b.kind === 'board') { sim.events.push({ e: 'open', to: p.id, ui: 'board', id: b.id }); return; }
     if (b.kind === 'coffer') { sim.events.push({ e: 'open', to: p.id, ui: 'coffer', id: b.id }); return; }
     if (b.kind === 'den') { sim.events.push({ e: 'open', to: p.id, ui: 'den', id: b.id }); return; }
     if (b.kind === 'altar') { sim.events.push({ e: 'open', to: p.id, ui: 'altar', id: b.id }); return; }

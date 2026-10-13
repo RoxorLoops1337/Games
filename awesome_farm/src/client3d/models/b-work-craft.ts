@@ -435,5 +435,17 @@ export function coffer(_o: BOpts): Model<BuildE> {
     }));
     return { obj: root };
 }
+export function board(_o: BOpts): Model<BuildE> {
+    const root = new THREE.Group();
+    root.add(bake('work.board', (mb) => {
+        const b = mb.main;
+        for (const x of [-0.35, 0.35]) b.box(0.07, 0.8, 0.07, wc(0.55), { x, y: 0.4, z: 0, j: 0.006 });
+        b.box(0.9, 0.5, 0.05, wc(0.8), { y: 0.65, z: 0.04, j: 0.008 });
+        b.box(0.22, 0.2, 0.01, 0xffffff, { x: -0.25, y: 0.7, z: 0.08, ao: false });
+        b.box(0.18, 0.16, 0.01, 0xffd966, { x: 0.05, y: 0.62, z: 0.08, ao: false });
+        b.box(0.18, 0.22, 0.01, 0xcdf3fa, { x: 0.3, y: 0.7, z: 0.08, ao: false });
+    }));
+    return { obj: root };
+}
 export const SL1 = 0x7a7f9e;
-export const CRAFT = { workbench, anvil, kitchen, loom, alchemy, furnace, sawmill, millstone, fishpond, beehive, museum, coffer };
+export const CRAFT = { workbench, anvil, kitchen, loom, alchemy, furnace, sawmill, millstone, fishpond, beehive, museum, coffer, board };
