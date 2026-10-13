@@ -55,6 +55,54 @@ export function createGore(fx, o = {}) {
   }
   G.pulse = (v) => { if (G.on) vig = Math.max(vig, v); };
 
+  // ------------------------------------------------------------------ GORE-JUICE: lens splatter (screen space, real time, wipe fade)
+  // A lazy 2D canvas (never created while gore is Off): thick drops stick to the lens, slide down a little (stretching), then fade as if wiped. Pooled slots, prebaked sprites,
+  // redrawn only while a drop is alive, so an idle frame pays nothing. Max 8 drops (4 on Low).
+  const LENS_MAX = 8, lensS = [], lensSpr = []; let lensC = null, lensX = null, lensN = 0, lensW = 0, lensH = 0, lensKey = 0;
+  for (let i = 0; i < LENS_MAX; i++) lensS.push({ on: false, x: 0, y: 0, s: 0, a: 0, age: 0, life: 1, vy: 0, spr: 0, grow: 0 });
+  const _pr = new V3();
+  function lensSprites() {
+    if (lensSpr.length) return; const rnd = mulberry(917);
+    for (let v = 0; v < 4; v++) {
+      const c = mk(128, 128), g = c.getContext('2d'); try { g.filter = 'blur(1.6px)'; } catch (e) { /* no canvas filters: sharp edges */ } g.translate(64, 58); const r0 = 17 + rnd() * 7, n = 40;
+      g.beginPath(); for (let i = 0; i <= n; i++) { const a = i / n * TAU, m = 1 + 0.2 * Math.sin(a * 3 + v) + 0.12 * Math.sin(a * 5 + v * 2.1) + 0.07 * Math.sin(a * 8 + v * 3.7), x = Math.cos(a) * r0 * m, y = Math.sin(a) * r0 * m * 0.9; i ? g.lineTo(x, y) : g.moveTo(x, y); } g.closePath();
+      const gr = g.createRadialGradient(-5, -6, 2, 0, 0, r0 * 1.35); gr.addColorStop(0, 'rgba(150,14,18,0.82)'); gr.addColorStop(0.6, 'rgba(104,8,12,0.9)'); gr.addColorStop(1, 'rgba(60,3,6,0.92)'); g.fillStyle = gr; g.fill();
+      for (let i = 0; i < 7; i++) { const a = rnd() * TAU, d = r0 * (1.25 + rnd() * 1.5), rr = 1.6 + rnd() * 4.5; g.fillStyle = 'rgba(96,6,10,0.85)'; g.beginPath(); g.ellipse(Math.cos(a) * d, Math.sin(a) * d * 0.9, rr, rr * 0.85, a, 0, TAU); g.fill(); }
+      g.fillStyle = 'rgba(80,4,8,0.88)'; g.beginPath(); g.moveTo(-5, r0 * 0.6); g.lineTo(5, r0 * 0.6); g.lineTo(2.5, r0 * 1.7 + rnd() * 10); g.lineTo(-2.5, r0 * 1.7 + rnd() * 10); g.closePath(); g.fill();   // the run
+      g.fillStyle = 'rgba(255,190,185,0.4)'; g.beginPath(); g.ellipse(-r0 * 0.3, -r0 * 0.38, r0 * 0.3, r0 * 0.13, -0.6, 0, TAU); g.fill();   // wet glint
+      lensSpr.push(c);
+    }
+  }
+  function lensEnsure() {
+    if (lensC || typeof document === 'undefined') return !!lensC; lensSprites();
+    lensC = document.createElement('canvas'); lensC.className = 'gore-lens'; lensC.style.cssText = 'position:fixed;left:0;top:0;width:100%;height:100%;pointer-events:none;z-index:43'; lensX = lensC.getContext('2d'); (o.host || document.body).appendChild(lensC); lensC.width = 2; lensC.height = 2; return !!lensX;
+  }
+  function lensAdd(nx, ny, size, life) {
+    let s = null, old = null; const lim = G.level === 'low' ? 4 : LENS_MAX; for (let i = 0; i < lim; i++) { const l = lensS[i]; if (!l.on) { s = l; break; } if (!old || l.age > old.age) old = l; }
+    if (!s) { s = old; lensN--; } s.on = true; lensN++; s.x = nx; s.y = ny; s.s = size; s.a = RR(0.6, 0.8); s.age = 0; s.life = life; s.vy = RR(0.004, 0.016); s.spr = (R() * 4) | 0; s.grow = RR(1.2, 2.2);
+  }
+  /** n drops around the screen position of world point pos; size is a fraction of sqrt(w*h) */
+  function lens(pos, n, size) {
+    if (!G.on || typeof document === 'undefined') return; n = Math.round(n * (G.level === 'low' ? 0.5 : 1)); if (n <= 0 || !lensEnsure()) return; const cam = fx.cam;
+    for (let i = 0; i < n; i++) {
+      let nx = RR(0.12, 0.88), ny = RR(0.1, 0.8);
+      if (cam) { _pr.set(pos.x, pos.y, pos.z).project(cam); if (_pr.z < 1 && Math.abs(_pr.x) < 1.2 && Math.abs(_pr.y) < 1.2) { nx = clamp(0.5 + _pr.x * 0.75 + RR(-0.3, 0.3), 0.06, 0.94); ny = clamp(0.5 - _pr.y * 0.75 + RR(-0.26, 0.2), 0.06, 0.9); } } // pushed outward so the drops sit around the action, not on the fighters }
+      lensAdd(nx, ny, size * RR(0.8, 1.35), RR(1.8, 3.2));
+    }
+  }
+  function lensClear() { for (let i = 0; i < LENS_MAX; i++) lensS[i].on = false; lensN = 0; if (lensC && lensKey) { lensKey = 0; lensX.clearRect(0, 0, lensW, lensH); } }
+  function lensFrame(rd) {
+    if (!lensC) return; if (!lensN) { if (lensKey) { lensKey = 0; lensX.clearRect(0, 0, lensW, lensH); } return; }
+    const w = Math.min(640, Math.max(2, (window.innerWidth * 0.5) | 0)), h = Math.max(2, (window.innerHeight * w / Math.max(1, window.innerWidth)) | 0); if (w !== lensW || h !== lensH) { lensW = lensC.width = w; lensH = lensC.height = h; }
+    lensKey = 1; lensX.clearRect(0, 0, lensW, lensH); const base = Math.sqrt(lensW * lensH);
+    for (let i = 0; i < LENS_MAX; i++) {
+      const l = lensS[i]; if (!l.on) continue; l.age += rd; const t = l.age / l.life; if (t >= 1) { l.on = false; lensN--; continue; }
+      l.y += l.vy * rd * (0.4 + t * 2.2); const fade = t < 0.5 ? 1 : 1 - sstep(0.5, 1, t), sz = l.s * base * (1 + (t < 0.2 ? t * 0.8 : 0.16 + (t - 0.2) * 0.1)), stretch = 1 + t * l.grow * 0.6;
+      lensX.globalAlpha = l.a * fade; lensX.drawImage(lensSpr[l.spr], l.x * lensW - sz / 2, l.y * lensH - sz * 0.45, sz, sz * stretch);
+    }
+    lensX.globalAlpha = 1;
+  }
+
   // ------------------------------------------------------------------ decal painting on fx's canvas
   const DD = fx.decalDraw, dctx = DD.ctx;
   // splat sprites (128 px, +x = travel direction): noise-eroded organic blobs (low alpha rim, no radial spikes), teardrops with a tail and satellite droplets
@@ -108,15 +156,16 @@ export function createGore(fx, o = {}) {
     for (const f of G.fighters.values()) { if (f.down) continue; f.rig.root.getWorldPosition(_p); const [px, pz] = DD.toPx(_p.x, _p.z), r = 1.0 * DD.k, gr = dctx.createRadialGradient(px, pz, 0, px, pz, r); gr.addColorStop(0, 'rgba(0,0,0,0.16)'); gr.addColorStop(0.6, 'rgba(0,0,0,0.08)'); gr.addColorStop(1, 'rgba(0,0,0,0)'); dctx.fillStyle = gr; dctx.beginPath(); dctx.arc(px, pz, r, 0, TAU); dctx.fill(); fx.markDecals(_p.x, _p.z, 1.2); }
     dctx.restore();
   }
+  const PXK = 1 / (DD.ext * 2);
   function stampSplat(x, z, size, ang, stretch = 1, a = 1) {
-    const ck = capK(); if (splatBudget <= 0 && size < 0.3) return; if (G.counts.splats > 650 && size < 0.3 && R() < 0.7) return; if (ck < 1 && size < 0.35 && R() > 0.25 + 0.75 * ck) return; splatBudget--; G.counts.splats++;
+    const ck = capK(); if (splatBudget <= 0 && size < 0.3) return; if (G.counts.splats > 900 && size < 0.3 && R() < 0.7) return; if (ck < 1 && size < 0.35 && R() > 0.25 + 0.75 * ck) return; splatBudget--; G.counts.splats++;
     const sp = size < 0.14 ? SPR_S : stretch > 1.35 ? SPR_T : SPR_R, img = sp[(R() * sp.length) | 0];
-    const [px, pz] = DD.toPx(x, z), s = size * DD.k * (128 / 58) * (0.78 + 0.22 * ck);
+    const px = (x * PXK + 0.5) * DD.size, pz = (z * PXK + 0.5) * DD.size, s = size * DD.k * (128 / 58) * (0.78 + 0.22 * ck);   // PERF: no toPx array
     dctx.save(); dctx.translate(px, pz); dctx.rotate(ang + (R() - 0.5) * 0.25); dctx.scale(stretch > 1.35 ? 1 + (stretch - 1.35) * 0.25 : stretch, 1); dctx.globalAlpha = a * (0.55 + 0.45 * ck) * (0.82 + 0.18 * R()); dctx.drawImage(img, -s / 2, -s / 2, s, s); dctx.restore();
     fx.markDecals(x, z, size * 0.9); addCover(x, z, size * 0.5, 0.7);
   }
   function stampSmear(x0, z0, x1, z1, w, a = 0.8) {
-    const [a0, b0] = DD.toPx(x0, z0), [a1, b1] = DD.toPx(x1, z1); dctx.save(); dctx.lineCap = 'round';
+    const a0 = (x0 * PXK + 0.5) * DD.size, b0 = (z0 * PXK + 0.5) * DD.size, a1 = (x1 * PXK + 0.5) * DD.size, b1 = (z1 * PXK + 0.5) * DD.size; dctx.save(); dctx.lineCap = 'round';
     dctx.strokeStyle = `rgba(86,7,9,${a * 0.85})`; dctx.lineWidth = w * DD.k; dctx.beginPath(); dctx.moveTo(a0, b0); dctx.lineTo(a1, b1); dctx.stroke();
     dctx.strokeStyle = `rgba(150,14,16,${a * 0.5})`; dctx.lineWidth = w * DD.k * 0.45; dctx.stroke(); dctx.restore(); fx.markDecals((x0 + x1) / 2, (z0 + z1) / 2, Math.hypot(x1 - x0, z1 - z0) / 2 + w); addCover((x0 + x1) / 2, (z0 + z1) / 2, Math.hypot(x1 - x0, z1 - z0) / 2 * 0.5 + w * 0.5, 0.5);
   }
@@ -125,13 +174,14 @@ export function createGore(fx, o = {}) {
     dctx.save(); dctx.translate(px, pz); dctx.rotate(heading); dctx.fillStyle = `rgba(104,9,11,${a})`;
     dctx.beginPath(); dctx.ellipse(-L * 0.12, 0, L * 0.3, W * 0.62, 0, 0, TAU); dctx.fill(); dctx.beginPath(); dctx.ellipse(L * 0.2, 0, L * 0.34, W * 0.7, 0, 0, TAU); dctx.fill(); dctx.restore(); fx.markDecals(x, z, 0.5);
   }
-  function stampPool(p) {
-    const [px, pz] = DD.toPx(p.x, p.z), r = p.r * DD.k, m = p.pts.length; dctx.save(); dctx.globalAlpha = 0.5 + 0.5 * capK(); dctx.translate(px, pz); dctx.rotate(p.rot += 0.35);
+  function stampPool(p, ga = 1) {
+    const [px, pz] = DD.toPx(p.x, p.z), r = p.r * DD.k, m = p.pts.length; dctx.save(); dctx.globalAlpha = (0.5 + 0.5 * capK()) * ga; dctx.translate(px, pz); dctx.rotate(p.rot += 0.35);
     dctx.beginPath(); for (let i = 0; i < m; i++) { const a0 = i / m * TAU, a1 = (i + 1) / m * TAU, r0 = r * p.pts[i], r1 = r * p.pts[(i + 1) % m]; const mx = (Math.cos(a0) * r0 + Math.cos(a1) * r1) / 2, my = (Math.sin(a0) * r0 + Math.sin(a1) * r1) / 2; if (i === 0) dctx.moveTo(mx, my); else dctx.quadraticCurveTo(Math.cos(a0) * r0, Math.sin(a0) * r0, mx, my); }
     dctx.closePath(); const gr = dctx.createRadialGradient(0, 0, 0, 0, 0, r); gr.addColorStop(0, 'rgba(96,8,10,0.34)'); gr.addColorStop(0.7, 'rgba(112,9,12,0.3)'); gr.addColorStop(1, 'rgba(120,12,14,0.16)'); dctx.fillStyle = gr; dctx.fill(); dctx.restore(); fx.markDecals(p.x, p.z, p.r * 1.3);
   }
   function stampGloss(p) { // fresh wet highlights, covered by the dry pass
     const [px, pz] = DD.toPx(p.x, p.z), r = p.r * DD.k; dctx.save(); dctx.translate(px, pz);
+    dctx.fillStyle = 'rgba(58,4,6,0.24)'; dctx.beginPath(); dctx.arc(0, 0, r * 0.55, 0, TAU); dctx.fill();   // GORE-JUICE: the pool thickens in the middle (darker, near black red)
     dctx.fillStyle = 'rgba(206,44,48,0.38)'; dctx.beginPath(); dctx.ellipse(-r * 0.2, -r * 0.24, r * 0.34, r * 0.13, -0.5, 0, TAU); dctx.fill();
     dctx.fillStyle = 'rgba(255,215,210,0.34)'; dctx.beginPath(); dctx.ellipse(-r * 0.27, -r * 0.3, r * 0.1, r * 0.04, -0.5, 0, TAU); dctx.fill(); dctx.restore();
   }
@@ -141,43 +191,49 @@ export function createGore(fx, o = {}) {
   }
 
   // ------------------------------------------------------------------ droplets (pooled, own gravity, splat on landing)
-  const ND = G.tier === 'low' ? 200 : G.tier === 'medium' ? 320 : 460;
-  const drops = [], dfree = []; for (let i = 0; i < ND; i++) dfree.push({ x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, s: 0.05, age: 0, life: 1.5, k: 0, child: false });
+  const ND = G.tier === 'low' ? 240 : G.tier === 'medium' ? 420 : 620;
+  // PERF: struct of arrays (typed arrays), not objects: a double field of a pooled object is a heap number (garbage on every store), a Float32Array slot is not
+  const dX = new Float32Array(ND), dY = new Float32Array(ND), dZ = new Float32Array(ND), dVX = new Float32Array(ND), dVY = new Float32Array(ND), dVZ = new Float32Array(ND), dS = new Float32Array(ND), dAge = new Float32Array(ND), dK = new Float32Array(ND), dChild = new Uint8Array(ND);
+  const act = new Int32Array(ND), freeI = new Int32Array(ND); let nAct = 0, nFree = ND; for (let i = 0; i < ND; i++) freeI[i] = i;
+  const DROP_LIFE = 2.4;
+  function dropClear() { nAct = 0; nFree = ND; for (let i = 0; i < ND; i++) freeI[i] = i; }
   function drop(x, y, z, vx, vy, vz, s, k = R(), child = false) {
-    const d = dfree.pop(); if (!d) return; d.x = x; d.y = y; d.z = z; d.vx = vx; d.vy = vy; d.vz = vz; d.s = s; d.age = 0; d.life = 2.4; d.k = k; d.child = child; drops.push(d);
+    if (nFree <= 0) return; const i = freeI[--nFree]; dX[i] = x; dY[i] = y; dZ[i] = z; dVX[i] = vx; dVY[i] = vy; dVZ[i] = vz; dS[i] = s; dAge[i] = 0; dK[i] = k; dChild[i] = child ? 1 : 0; act[nAct++] = i;
   }
   /** fan of droplets around horizontal direction (dx,dz). o: speed, cone (rad), elMin/elMax (rad), size */
   function fan(p, dx, dz, n, o) {
     const h0 = Math.atan2(dx, dz), cone = o.cone ?? 0.5, e0 = o.elMin ?? 0.1, e1 = o.elMax ?? 0.9;
     for (let i = 0; i < n; i++) {
       const h = h0 + RR(-cone, cone), e = RR(e0, e1), sp = (o.speed ?? 6) * (0.3 + 0.85 * Math.pow(R(), 0.65)), ce = Math.cos(e);
-      drop(p.x + RR(-0.05, 0.05), p.y + RR(-0.05, 0.05), p.z + RR(-0.05, 0.05), Math.sin(h) * ce * sp, Math.sin(e) * sp, Math.cos(h) * ce * sp, RR(0.06, 0.14) * (o.size ?? 1) * (0.7 + 0.3 * (1 - sp / ((o.speed ?? 6) * 1.15))), R());
+      drop(p.x + RR(-0.05, 0.05), p.y + RR(-0.05, 0.05), p.z + RR(-0.05, 0.05), Math.sin(h) * ce * sp, Math.sin(e) * sp, Math.cos(h) * ce * sp, RR(0.07, 0.17) * (o.size ?? 1) * (0.7 + 0.3 * (1 - sp / ((o.speed ?? 6) * 1.15))), R());
     }
   }
-  function land(d) {
-    const sp = Math.sqrt(d.vx * d.vx + d.vz * d.vz), size = clamp(d.s * (1.6 + 2.8 * R() * R()), 0.07, 0.42), st = 1 + Math.min(1.7, sp * 0.16);
-    stampSplat(d.x, d.z, size, Math.atan2(d.vz, d.vx), st, 0.9);
-    if (!d.child && d.s > 0.07 && R() < 0.5 && dfree.length > 40) { for (let i = 0; i < 2; i++) { const a = R() * TAU, s2 = RR(1.2, 3); drop(d.x, 0.05, d.z, Math.cos(a) * s2 + d.vx * 0.2, RR(1.5, 3.2), Math.sin(a) * s2 + d.vz * 0.2, d.s * 0.5, R(), true); } }
+  function land(i) {
+    const vx = dVX[i], vz = dVZ[i], x = dX[i], z = dZ[i], ds = dS[i], sp = Math.sqrt(vx * vx + vz * vz), size = clamp(ds * (1.8 + 3.2 * R() * R()), 0.07, 0.5), st = 1 + Math.min(1.7, sp * 0.16);
+    stampSplat(x, z, size, Math.atan2(vz, vx), st, 0.9);
+    if (!dChild[i] && ds > 0.07 && R() < 0.5 && nFree > 40) { for (let j = 0; j < 2; j++) { const a = R() * TAU, s2 = RR(1.2, 3); drop(x, 0.05, z, Math.cos(a) * s2 + vx * 0.2, RR(1.5, 3.2), Math.sin(a) * s2 + vz * 0.2, ds * 0.5, R(), true); } }
   }
 
   // ------------------------------------------------------------------ jets (pulsing arterial sprays, stick to a joint so they ride the body)
   const jets = [], _inv = new THREE.Matrix4(), _p = new V3(), _d = new V3(), _a = new V3(), _b = new V3(), _q = new Q(), _q2 = new Q();
   function addJet(j) {
-    if (jets.length >= 16) jets.shift();
-    const J = { speed: 7, rate: 110, life: 1.2, period: 0.62, duty: 0.55, cone: 0.09, size: 1, elev: 0, t: 0, acc: 0, obj: null, lp: null, ld: null, p: null, d: null, ...j };
+    if (jets.length >= 20) jets.shift();
+    const J = { speed: 7, rate: 110, life: 1.2, period: 0.62, duty: 0.55, cone: 0.09, size: 1, elev: 0, beat: false, t: 0, acc: 0, obj: null, lp: null, ld: null, p: null, d: null, ...j };
     if (j.obj) { j.obj.updateWorldMatrix(true, false); _inv.copy(j.obj.matrixWorld).invert(); J.lp = j.pos.clone().applyMatrix4(_inv); J.ld = j.dir.clone().transformDirection(_inv); }
     else { J.p = j.pos.clone(); J.d = j.dir.clone().normalize(); }
     J.t = -(j.delay || 0); jets.push(J); return J;
   }
+  function pulse(ph, a, b) { return ph > a && ph < b ? Math.sin(Math.PI * (ph - a) / (b - a)) : 0; }
   function stepJets(dt) {
     for (let i = jets.length - 1; i >= 0; i--) {
       const j = jets[i]; j.t += dt; if (j.t < 0) continue; if (j.t >= j.life) { jets[i] = jets[jets.length - 1]; jets.pop(); continue; }
       if (j.obj) { _p.copy(j.lp).applyMatrix4(j.obj.matrixWorld); _d.copy(j.ld).transformDirection(j.obj.matrixWorld); } else { _p.copy(j.p); _d.copy(j.d); }
       const life = 1 - j.t / j.life, ph = (j.t % j.period) / j.period;
-      const env = (ph < j.duty ? Math.pow(Math.sin(Math.PI * ph / j.duty), 1.1) : 0) * Math.pow(life, 0.55) + 0.1 * life;
+      // GORE-JUICE: beat jets (deep wounds, stumps) pulse like a heart, a strong beat then a weaker one ("lub-dub"), and slow as the life drains
+      const env = j.beat ? (pulse(ph, 0, 0.2) + 0.55 * pulse(ph, 0.27, 0.43)) * Math.pow(life, 0.45) + 0.06 * life : (ph < j.duty ? Math.pow(Math.sin(Math.PI * ph / j.duty), 1.1) : 0) * Math.pow(life, 0.55) + 0.1 * life;
       j.acc += dt * j.rate * env * K(); if (j.acc > 60) j.acc = 60;
       while (j.acc >= 1) {
-        j.acc--; const sp = j.speed * RR(0.82, 1.14) * (0.5 + 0.5 * env);
+        j.acc--; const sp = j.speed * RR(0.82, 1.14) * (j.beat ? 0.3 + 0.8 * env : 0.5 + 0.5 * env);
         _a.set(_d.x + RR(-j.cone, j.cone), _d.y + RR(-j.cone, j.cone) + j.elev, _d.z + RR(-j.cone, j.cone)).normalize();
         drop(_p.x, _p.y, _p.z, _a.x * sp, _a.y * sp, _a.z * sp, RR(0.07, 0.13) * j.size, R() * 0.6);
       }
@@ -188,13 +244,14 @@ export function createGore(fx, o = {}) {
   const pools = [];
   function addPool(x, z, rMax, rate = 0.14, delay = 0) {
     rMax *= POOLK() * (0.7 + 0.3 * capK()); if (pools.length >= 26) { const i = pools.findIndex((p) => p.done); pools.splice(i >= 0 ? i : 0, 1); }
-    const pts = []; for (let i = 0; i < 12; i++) pts.push(0.74 + R() * 0.5); const p = { x, z, r: 0.07, rMax, rate, acc: 1, pts, rot: R() * TAU, done: false, delay }; pools.push(p); addCover(x, z, rMax * 0.85, 0.5); return p;
+    const pts = []; for (let i = 0; i < 12; i++) pts.push(0.74 + R() * 0.5); const p = { x, z, r: 0.07, rMax, rMax2: rMax * 1.16, rate, acc: 1, pts, rot: R() * TAU, done: false, delay, spread: 0 }; pools.push(p); addCover(x, z, rMax * 0.85, 0.5); return p;
   }
   function stepPools(dt) {
     for (let pi = 0; pi < pools.length; pi++) {
       const p = pools[pi]; if (p.delay > 0) { p.delay -= dt; continue; }
       if (p.r < p.rMax) { { const nr = p.r + p.rate * dt * (1.15 - p.r / p.rMax * 0.5); p.r = nr < p.rMax ? nr : p.rMax; } p.acc += dt; if (p.acc > 0.12) { p.acc = 0; stampPool(p); } }
-      else if (!p.done) { p.done = true; stampPool(p); stampGloss(p); drySq.push({ t: G.time + 4.5, x: p.x, z: p.z, r: p.rMax * 1.05 }); }
+      else if (!p.done) { p.done = true; stampPool(p); stampGloss(p); drySq.push({ t: G.time + 4.5, x: p.x, z: p.z, r: p.rMax * 1.05 }); addCover(p.x, p.z, p.rMax * 0.9, 0.3); }
+      else if (p.r < p.rMax2 && p.spread < 16) { p.spread += dt; p.r += 0.014 * dt; p.acc += dt; if (p.acc > 1.2) { p.acc = 0; stampPool(p, 0.55); } }   // GORE-JUICE: a finished pool keeps creeping out for 16 s with a fresh wet rim
     }
     for (let i = drySq.length - 1; i >= 0; i--) if (G.time >= drySq[i].t) { dryPass(drySq[i]); drySq[i] = drySq[drySq.length - 1]; drySq.pop(); }
   }
@@ -204,6 +261,9 @@ export function createGore(fx, o = {}) {
   // types: 0 limb, 1 head, 2 chunk, 3 sword, 4 spear, 5 trident, 6 helmed head, 7 armour plate, 8 plume tuft. Weapons and limbs hang from y=0 toward -y.
   // vertex mask (aMask): 0 = vertex shade x instance colour (skin / wood), 1 = shade x iHair (hair, plume), 2 = shade x iMetal (helm, plates), 3 = absolute colour (flesh, steel, blood)
   const MAXP = 56, MAXLH = 12; let gib = null, gibType = null, gibHair = null, gibMetal = null, props = [], chunkCur = MAXLH, lhCur = 0, chunkHi = 0;
+  // GORE-JUICE: every instance of the gib mesh costs the triangles of ALL shapes (the vertex shader collapses the rest), so the ring of chunk / plate slots is capped per tier
+  // (high 44, medium 30, low 16): a Full-gore fight on a phone adds at most about 45k triangles at the worst moment.
+  const ringCap = () => (G.tier === 'low' ? 16 : G.tier === 'medium' ? 30 : 44);
   const isRing = (t) => t === 2 || t >= 7;          // chunk-ring slots: chunks, plates, plumes
   const isLimb = (t) => t === 0 || t === 3 || t === 4 || t === 5; // long props that hang from y=0 and roll flat
   const hash3 = (x, y, z) => { const v = Math.sin(x * 127.1 + y * 311.7 + z * 74.7) * 43758.5453; return v - Math.floor(v); };
@@ -303,7 +363,7 @@ export function createGore(fx, o = {}) {
   const _m4 = new THREE.Matrix4(), _s = new V3(), _col = new THREE.Color();
   function spawnProp(type, o) {
     if (!gib) buildGib(); let i;
-    if (isRing(type)) { i = chunkCur; chunkCur = chunkCur + 1 >= MAXP ? MAXLH : chunkCur + 1; chunkHi = Math.max(chunkHi, i - MAXLH + 1); } else { if (lhCur >= MAXLH) return null; i = lhCur++; }
+    if (isRing(type)) { i = chunkCur; chunkCur = chunkCur + 1 >= MAXLH + ringCap() ? MAXLH : chunkCur + 1; chunkHi = Math.max(chunkHi, i - MAXLH + 1); } else { if (lhCur >= MAXLH) return null; i = lhCur++; }
     const rm = props.findIndex((p) => p.i === i); if (rm >= 0) props.splice(rm, 1);
     const p = { type, i, x: o.x, y: o.y, z: o.z, vx: o.vx, vy: o.vy, vz: o.vz, q: o.q.clone(), wx: o.wx, wy: o.wy, wz: o.wz, sx: o.sx, sy: o.sy, sz: o.sz, len: o.len || 0, rad: o.rad || o.sx, rest: false, settle: 0, trail: 0, age: 0, drip: 0, bounces: 0, smx: o.x, smz: o.z, leak: o.leak ?? 0, bleeds: o.bleeds !== false };
     props.push(p); gibType.array[i] = type; gibType.needsUpdate = true; _col.set(o.color); gib.setColorAt(i, _col); gib.instanceColor.needsUpdate = true;
@@ -355,11 +415,12 @@ export function createGore(fx, o = {}) {
   }
 
   // ------------------------------------------------------------------ fighters
+  const fArr = [];   // GORE-JUICE: the fighters as an array (the per-frame loop must not allocate a Map iterator)
   function fighterOf(id) { return G.fighters.get(id); }
   G.addFighter = (id, rig, info = {}) => {
-    const f = { id, rig, maxhp: info.maxhp || 100, side: info.side || 'A', blood: 0, bleeding: 0, bleedAcc: 0, down: false, foot: 0, stepSide: 1, sev: [], dir: new V3(1, 0, 0), pool: null, tmp: new V3(), prevOnEvent: rig.onEvent };
+    const f = { id, rig, wet: 0, leak: 0, dripAcc: 0, trailT: 0, tx: 1e9, tz: 0, maxhp: info.maxhp || 100, side: info.side || 'A', blood: 0, bleeding: 0, bleedAcc: 0, down: false, foot: 0, stepSide: 1, sev: [], dir: new V3(1, 0, 0), pool: null, tmp: new V3(), prevOnEvent: rig.onEvent };
     rig.onEvent = (n, clip) => { if (f.prevOnEvent) f.prevOnEvent(n, clip); if (n === 'step') onStep(f, clip && clip.side); };
-    G.fighters.set(id, f); return f;
+    G.fighters.set(id, f); fArr.push(f); return f;
   };
   function onStep(f, side) {
     if (!G.on || f.down) return; const a = f.rig.joints['ankle' + (side || 'L')]; if (!a) return; a.getWorldPosition(_p);
@@ -391,26 +452,33 @@ export function createGore(fx, o = {}) {
   G.onHit = (id, e) => {
     if (!G.on) return; const f = fighterOf(id); if (!f) return; const fr = clamp(e.frac, 0, 1.2);
     if (e.blocked && fr < 0.22) return;
-    const k = K(), heavy = fr > 0.12 || e.crit, n = Math.round((7 + fr * 150 + (e.crit ? 32 : 0)) * k), sp = 3.8 + fr * 15 + (e.crit ? 3 : 0);
+    const k = K(), heavy = fr > 0.1 || e.crit, deep = fr > 0.16 || e.crit, n = Math.round((11 + fr * 230 + (e.crit ? 52 : 0)) * k), sp = 4.2 + fr * 16 + (e.crit ? 3.5 : 0);
+    const at = e.attacker && fighterOf(e.attacker), beastAt = !!(at && at.rig.beast), px = panOf(e.pos.x);
     f.dir.set(e.dx, 0, e.dz);
-    fan(e.pos, e.dx, e.dz, Math.round(n * 0.68), { speed: sp, cone: 0.5, elMin: 0.05, elMax: 0.95, size: 1 + fr * 0.9 });
-    fan(e.pos, -e.dx, -e.dz, Math.round(n * 0.32), { speed: 1.6 + fr * 3.5, cone: 1.0, elMin: 0.1, elMax: 1.25, size: 0.75 });
-    if (heavy) for (let i = 0, m = Math.round(RR(3, 5) * (G.tier === 'low' ? 0.6 : 1)); i < m; i++) fx.addNormalParticle({ x: e.pos.x + RR(-0.1, 0.1), y: e.pos.y + RR(-0.15, 0.15), z: e.pos.z + RR(-0.1, 0.1), vx: e.dx * RR(1, 3) + RR(-0.6, 0.6), vy: RR(0.2, 1.2), vz: e.dz * RR(1, 3) + RR(-0.6, 0.6), life: RR(0.35, 0.6), s0: 0.18, s1: RR(0.7, 1.1), cell: CELL_PUFF, rot: R() * TAU, c0: { r: 0.5, g: 0.02, b: 0.03 }, c1: { r: 0.22, g: 0.01, b: 0.015 }, a: 0.5, drag: 3.4, fp: 1.3, att: 0.05 });
-    if (heavy && G.full || e.crit) {
+    fan(e.pos, e.dx, e.dz, Math.round(n * 0.66), { speed: sp, cone: 0.5, elMin: 0.05, elMax: 0.95, size: 1.15 + fr * 1.0 });
+    fan(e.pos, -e.dx, -e.dz, Math.round(n * 0.34), { speed: 1.8 + fr * 3.8, cone: 1.0, elMin: 0.1, elMax: 1.25, size: 0.85 });
+    if (heavy) fan(e.pos, e.dx, e.dz, Math.round((3 + fr * 14 + (e.crit ? 4 : 0) + (beastAt ? 3 : 0)) * k), { speed: sp * 0.55, cone: 0.75, elMin: 0.25, elMax: 1.1, size: 2.4 });   // thick gouts
+    if (heavy) for (let i = 0, m = Math.round(RR(6, 9) * (G.tier === 'low' ? 0.6 : 1) * (G.level === 'low' ? 0.7 : 1)); i < m; i++) fx.addNormalParticle({ x: e.pos.x + RR(-0.12, 0.12), y: e.pos.y + RR(-0.18, 0.18), z: e.pos.z + RR(-0.12, 0.12), vx: e.dx * RR(1, 3.4) + RR(-0.7, 0.7), vy: RR(0.2, 1.4), vz: e.dz * RR(1, 3.4) + RR(-0.7, 0.7), life: RR(0.4, 0.75), s0: 0.2, s1: RR(0.8, 1.5), cell: CELL_PUFF, rot: R() * TAU, c0: { r: 0.5, g: 0.02, b: 0.03 }, c1: { r: 0.22, g: 0.01, b: 0.015 }, a: 0.55, drag: 3.2, fp: 1.3, att: 0.05 });   // blood mist
+    if (deep && G.full || e.crit) {
       const nj = e.crit ? 2 : 1, obj = f.rig.joints.chest;
-      for (let i = 0; i < nj; i++) { _d.set(e.dx + RR(-0.3, 0.3), RR(0.55, 1.0), e.dz + RR(-0.3, 0.3)).normalize(); addJet({ obj, pos: e.pos, dir: _d.clone(), speed: 5.5 + fr * 8 + (e.crit ? 2 : 0), rate: 70 + fr * 150, life: 0.55 + fr * 2.4 + (e.crit ? 0.6 : 0), period: 0.3 + R() * 0.12, duty: 0.6, size: 1 }); }
+      for (let i = 0; i < nj + (fr > 0.3 ? 1 : 0); i++) { _d.set(e.dx + RR(-0.3, 0.3), RR(0.55, 1.0), e.dz + RR(-0.3, 0.3)).normalize(); addJet({ obj, pos: e.pos, dir: _d.clone(), speed: 6 + fr * 9 + (e.crit ? 2.5 : 0), rate: 90 + fr * 170, life: 0.8 + fr * 2.6 + (e.crit ? 0.8 : 0), period: 0.5 + R() * 0.16, duty: 0.6, size: 1.15, beat: true }); }   // heartbeat spurts
     }
     if (fr > 0.03 || e.crit) placeWound(f, e.dx, e.dz, fr);
     f.rig.addBlood(fr * 0.8 + (e.crit ? 0.07 : 0) + 0.012, 1);
-    const at = e.attacker && fighterOf(e.attacker); if (at && heavy) at.rig.addBlood(fr * 0.3 + 0.02, 1);
+    if (at && heavy) at.rig.addBlood(fr * 0.3 + 0.02, 1);
+    if (at && !beastAt && !e.blocked) at.wet = Math.min(1, at.wet + 0.3 + fr * 2.2);   // the blade drips until the fight ends
+    f.leak = Math.min(1, f.leak + 0.12 + fr * 2.4 + (e.crit ? 0.3 : 0));
     // ground: an immediate splash fan on the sand near the victim
-    if (heavy) for (let i = 0, m = Math.round(RR(2, 4) * k); i < m; i++) stampSplat(e.pos.x + e.dx * RR(0.3, 1.8) + RR(-0.3, 0.3), e.pos.z + e.dz * RR(0.3, 1.8) + RR(-0.3, 0.3), RR(0.14, 0.3) * (0.7 + fr), Math.atan2(e.dz, e.dx), RR(1.5, 2.3), 0.9);
+    if (heavy) for (let i = 0, m = Math.round(RR(4, 7) * k); i < m; i++) stampSplat(e.pos.x + e.dx * RR(0.3, 2.2) + RR(-0.4, 0.4), e.pos.z + e.dz * RR(0.3, 2.2) + RR(-0.4, 0.4), RR(0.16, 0.36) * (0.7 + fr), Math.atan2(e.dz, e.dx), RR(1.5, 2.4), 0.9);
     f.bleed = Math.max(f.bleed || 0, fr);
-    const px = panOf(e.pos.x);
+    // meat: chunks, a bone shard on crits, sand clumps soaked in blood (Full only: they are props)
+    if (G.full && heavy) { const nc = Math.round((e.crit ? 3 : fr > 0.22 ? 2 : 1) * (K() > 0.6 ? 1 : 0.6)); for (let i = 0; i < nc; i++) chunk(e.pos, e.dx * 2.5, e.dz * 2.5); if (e.crit) chunk(e.pos, e.dx * 2.5, e.dz * 2.5, 1); if (R() < 0.7) { _a.set(e.pos.x, 0.08, e.pos.z); chunk(_a, e.dx, e.dz, 2); } }
     sfx('slashWet', { pan: px, gain: clamp(0.5 + fr * 2, 0.5, 1) });
-    if (heavy) sfx('crunch', { pan: px, gain: clamp(0.5 + fr * 1.5, 0.5, 1), pitch: RR(0.9, 1.15) });
+    if (heavy) { sfx('crunch', { pan: px, gain: clamp(0.5 + fr * 1.5, 0.5, 1), pitch: RR(0.9, 1.15) }); sfx('squelch', { pan: px, gain: clamp(0.5 + fr * 2, 0.5, 1), pitch: RR(0.85, 1.2) }); }
+    if (e.crit || fr > 0.24) sfx('cleave', { pan: px, gain: clamp(0.55 + fr * 1.4, 0.6, 1), pitch: RR(0.9, 1.1) });
     if (e.crit || fr > 0.2) sfx('spurt', { pan: px, gain: 0.7 });
-    if (feel) { if (e.crit) { feel.hitStop(105); feel.addTrauma(0.12); } else if (fr > 0.18) feel.hitStop(80); }
+    if (feel) { if (e.crit) { feel.hitStop(120); feel.addTrauma(0.14); if (feel.kick) feel.kick(e.dx, 0.15, e.dz, 0.16); } else if (fr > 0.18) feel.hitStop(80); }
+    if (heavy) lens(e.pos, e.crit ? 2 : fr > 0.22 ? 1 : (R() < 0.4 ? 1 : 0), e.crit ? 0.22 : 0.17);
     if (e.crit || fr > 0.2) G.pulse((e.mine ? 0.55 : 0.32) + Math.min(0.25, fr));
     // rare non-lethal heavy crit takes the off-hand forearm off a badly hurt fighter
     if (G.full && e.crit && !e.lethal && e.hpFrac < 0.45 && R() < 0.1) { const sd = R() < 0.62 ? 'R' : 'L', sv = f.rig.severed; if (!sv['forearm' + sd] && !sv['arm' + sd]) G.sever(id, 'forearm' + sd, e.dx, e.dz, 1); } // mostly the weapon hand
@@ -420,7 +488,7 @@ export function createGore(fx, o = {}) {
   /** status bleed tick (arena 'bleed' event) */
   G.onBleed = (id, dmg) => {
     if (!G.on) return; const f = fighterOf(id); if (!f || f.down) return; jointPos(f, R() < 0.5 ? 'chest' : (R() < 0.5 ? 'elbowL' : 'kneeR'), _p);
-    const n = Math.round((5 + Math.min(10, dmg)) * K()); fan(_p, f.dir.x || RR(-1, 1), f.dir.z || RR(-1, 1), n, { speed: 2.6, cone: 1.4, elMin: 0.4, elMax: 1.3, size: 0.8 });
+    const n = Math.round((8 + Math.min(12, dmg) * 1.4) * K()); f.leak = Math.min(1, f.leak + 0.08); fan(_p, f.dir.x || RR(-1, 1), f.dir.z || RR(-1, 1), n, { speed: 2.6, cone: 1.4, elMin: 0.4, elMax: 1.3, size: 0.8 });
     addJet({ obj: f.rig.joints.chest, pos: _p, dir: _d.set(RR(-0.5, 0.5), 0.9, RR(-0.5, 0.5)).normalize().clone(), speed: 3.4, rate: 55, life: 0.55, period: 0.28, duty: 0.7, size: 0.8, cone: 0.2 });
     f.rig.addBlood(0.015, 1); jointPos(f, 'ankleL', _a); stampSplat(_a.x + RR(-0.4, 0.4), _a.z + RR(-0.4, 0.4), RR(0.12, 0.24), R() * TAU, 1.3, 0.9); sfx('spurt', { pan: panOf(_p.x), gain: 0.35 });
     if (R() < 0.5) { const pl = f.pool; if (!pl) f.pool = addPool(_a.x, _a.z, 0.5, 0.05); }
@@ -457,18 +525,19 @@ export function createGore(fx, o = {}) {
     // predicted landing for the kill cam
     const g = 17, t = (vy + Math.sqrt(vy * vy + 2 * g * Math.max(0.2, fr.pos.y))) / g; G.lastSever = { id, part, x: fr.pos.x + vx * t * 0.8, z: fr.pos.z + vz * t * 0.8, t: G.time };
     // stump spray: arterial fountain riding the parent joint
-    addJet({ obj: jo, pos: fr.pos, dir: fr.axis.clone(), speed: head ? 8.2 : 6.2, rate: head ? 190 : 130, life: head ? 4.8 : 3.4, period: head ? 0.66 : 0.58, duty: 0.6, cone: head ? 0.13 : 0.1, size: head ? 1.25 : 1.05, elev: head ? 0.05 : 0.25 });
-    addJet({ obj: jo, pos: fr.pos, dir: fr.axis.clone(), speed: 4.2, rate: 80, life: 2.0, period: 0.4, duty: 0.7, cone: 0.5, size: 0.9, elev: 0.35, delay: 0.1 });
+    addJet({ obj: jo, pos: fr.pos, dir: fr.axis.clone(), speed: head ? 10 : 8, rate: head ? 230 : 160, life: head ? 5.4 : 3.9, period: head ? 0.74 : 0.66, duty: 0.6, cone: head ? 0.12 : 0.1, size: head ? 1.4 : 1.2, elev: head ? 0.12 : 0.3, beat: true });
+    addJet({ obj: jo, pos: fr.pos, dir: fr.axis.clone(), speed: 4.6, rate: 95, life: 2.4, period: 0.4, duty: 0.7, cone: 0.5, size: 1.0, elev: 0.35, delay: 0.1 });
     // splash burst at the cut
-    fan(fr.pos, fr.axis.x, fr.axis.z, Math.round(46 * K()), { speed: 8, cone: 1.2, elMin: 0.0, elMax: 1.35, size: 1.3 });
-    for (let i = 0, m = Math.round(8 * (G.tier === 'low' ? 0.6 : 1)); i < m; i++) fx.addNormalParticle({ x: fr.pos.x + RR(-0.08, 0.08), y: fr.pos.y + RR(-0.08, 0.1), z: fr.pos.z + RR(-0.08, 0.08), vx: RR(-1.5, 1.5) + fr.axis.x * 2, vy: RR(0.2, 1.8), vz: RR(-1.5, 1.5) + fr.axis.z * 2, life: RR(0.4, 0.75), s0: 0.22, s1: RR(0.9, 1.5), cell: CELL_PUFF, rot: R() * TAU, c0: { r: 0.5, g: 0.02, b: 0.03 }, c1: { r: 0.2, g: 0.01, b: 0.015 }, a: 0.55, drag: 2.8, fp: 1.2, att: 0.05 });
+    fan(fr.pos, fr.axis.x, fr.axis.z, Math.round(70 * K()), { speed: 9, cone: 1.2, elMin: 0.0, elMax: 1.35, size: 1.5 }); fan(fr.pos, dx, dz, Math.round(8 * K()), { speed: 5, cone: 0.9, elMin: 0.3, elMax: 1.2, size: 2.5 });
+    for (let i = 0, m = Math.round(13 * (G.tier === 'low' ? 0.6 : 1)); i < m; i++) fx.addNormalParticle({ x: fr.pos.x + RR(-0.08, 0.08), y: fr.pos.y + RR(-0.08, 0.1), z: fr.pos.z + RR(-0.08, 0.08), vx: RR(-1.5, 1.5) + fr.axis.x * 2, vy: RR(0.2, 1.8), vz: RR(-1.5, 1.5) + fr.axis.z * 2, life: RR(0.4, 0.75), s0: 0.22, s1: RR(0.9, 1.5), cell: CELL_PUFF, rot: R() * TAU, c0: { r: 0.5, g: 0.02, b: 0.03 }, c1: { r: 0.2, g: 0.01, b: 0.015 }, a: 0.55, drag: 2.8, fp: 1.2, att: 0.05 });
     rig.addBlood(head ? 0.3 : 0.2, 1);
     // chunks off the cut
-    for (let i = 0, m = Math.round((head ? 5 : 3) * K()); i < m; i++) chunk(fr.pos, fr.axis.x * 2 + dx * 2, fr.axis.z * 2 + dz * 2);
-    addPool(fr.pos.x + dx * 0.2, fr.pos.z + dz * 0.2, head ? 1.25 : 1.0, 0.2);
+    for (let i = 0, m = Math.round((head ? 8 : 5) * K()); i < m; i++) chunk(fr.pos, fr.axis.x * 2 + dx * 2, fr.axis.z * 2 + dz * 2, i % 3 === 2 ? 1 : 0);
+    f.leak = 1; lens(fr.pos, head ? 4 : 3, 0.26);
+    addPool(fr.pos.x + dx * 0.2, fr.pos.z + dz * 0.2, head ? 1.5 : 1.2, 0.22);
     // audio + feel: bone snap, wet rip, hiss, crowd gasp + roar
-    const px = panOf(fr.pos.x); sfx('boneSnap', { pan: px }); sfx('slashWet', { pan: px, gain: 1 }); setTimeout(() => sfx('spurt', { pan: px, gain: 1 }), 120); sfx('crowdGore', { gain: 0.9 });
-    if (feel) { feel.hitStop(150); feel.addTrauma(0.38); try { feel.flash(0.7, 0, 0.02, 0.16, 6); } catch (e) { /* ignore */ } }
+    const px = panOf(fr.pos.x); sfx('boneSnap', { pan: px }); sfx('slashWet', { pan: px, gain: 1 }); sfx('cleave', { pan: px, gain: 1, pitch: 0.9 }); sfx('squelch', { pan: px, gain: 1, pitch: 0.8 }); setTimeout(() => sfx('spurt', { pan: px, gain: 1 }), 120); sfx('crowdGore', { gain: 0.9 });
+    if (feel) { feel.hitStop(150); feel.addTrauma(0.38); if (feel.kick) feel.kick(dx, 0.25, dz, 0.28); try { feel.flash(0.7, 0, 0.02, 0.16, 6); } catch (e) { /* ignore */ } }
     G.pulse(0.95);
     return true;
   };
@@ -520,9 +589,10 @@ export function createGore(fx, o = {}) {
   }
   const c0x = (e) => (e.pos ? e.pos.x : 0);
 
-  function chunk(pos, bx, bz) {
-    const a = R() * TAU, s = RR(2, 7), r = R(), col = r < 0.5 ? '#6e0d12' : r < 0.8 ? '#b0383a' : '#d8cfc0', sz = RR(0.035, 0.1);
-    spawnProp(2, { x: pos.x, y: Math.max(0.1, pos.y), z: pos.z, vx: Math.cos(a) * s + bx * 0.3, vy: RR(2.5, 7), vz: Math.sin(a) * s + bz * 0.3, q: new Q().setFromAxisAngle(_a.set(R() - 0.5, R() - 0.5, R() - 0.5).normalize(), R() * TAU), wx: RR(-12, 12), wy: RR(-12, 12), wz: RR(-12, 12), sx: sz * RR(0.8, 1.4), sy: sz * RR(0.6, 1), sz: sz * RR(0.8, 1.3), color: col });
+  /** kind 0 flesh, 1 bone shard (pale, thin), 2 sand clump soaked in blood (dark brown, flung up from the floor) */
+  function chunk(pos, bx, bz, kind = 0) {
+    const a = R() * TAU, s = kind === 2 ? RR(1.5, 4) : RR(2, 7), r = R(), col = kind === 1 ? '#b9ae96' : kind === 2 ? '#5a2a1c' : r < 0.55 ? '#6e0d12' : r < 0.85 ? '#a02f33' : '#b5ac9c', sz = kind === 1 ? RR(0.03, 0.05) : kind === 2 ? RR(0.05, 0.11) : RR(0.035, 0.1);
+    spawnProp(2, { x: pos.x, y: Math.max(0.1, pos.y), z: pos.z, vx: Math.cos(a) * s + bx * 0.3, vy: kind === 2 ? RR(2.5, 4.5) : RR(2.5, 7), vz: Math.sin(a) * s + bz * 0.3, q: new Q().setFromAxisAngle(_a.set(R() - 0.5, R() - 0.5, R() - 0.5).normalize(), R() * TAU), wx: RR(-12, 12), wy: RR(-12, 12), wz: RR(-12, 12), sx: sz * (kind === 1 ? 0.5 : RR(0.8, 1.4)), sy: sz * (kind === 1 ? RR(2, 3) : RR(0.6, 1)), sz: sz * (kind === 1 ? 0.5 : RR(0.8, 1.3)), color: col });
   }
 
   /** a fighter went down. ctx: {last, crit, frac (of the lethal blow), dx, dz, big (ultimate gibbing), mine} */
@@ -531,12 +601,19 @@ export function createGore(fx, o = {}) {
     const dx = ctx.dx ?? f.dir.x, dz = ctx.dz ?? f.dir.z; f.rig.root.getWorldPosition(_p); const x = _p.x, z = _p.z;
     f.rig.addBlood(0.3, 1);
     // pool under the torso, spreading in the fall direction, plus a smear dragged back along the blow
-    f.pool = addPool(x + dx * 0.45, z + dz * 0.45, 1.05 + Math.min(0.9, (ctx.frac || 0) * 2.5), 0.17); addPool(x + dx * 0.9 + RR(-0.2, 0.2), z + dz * 0.9 + RR(-0.2, 0.2), 0.6, 0.12, 0.5);
+    f.pool = addPool(x + dx * 0.45, z + dz * 0.45, 1.3 + Math.min(1.0, (ctx.frac || 0) * 2.5), 0.19); addPool(x + dx * 0.9 + RR(-0.2, 0.2), z + dz * 0.9 + RR(-0.2, 0.2), 0.75, 0.13, 0.5); f.leak = 1;
     stampSmear(x - dx * 0.1, z - dz * 0.1, x + dx * RR(1.0, 1.7), z + dz * RR(1.0, 1.7), 0.32, 0.9);
     // killing blow: a big pulsing fountain from the wound, falling with the body
-    if (G.full || ctx.crit) addJet({ obj: f.rig.joints.chest, pos: chestPos(f, _a, 1.3), dir: _d.set(dx * 0.6, 1, dz * 0.6).normalize().clone(), speed: 6.8, rate: 120, life: 3.4, period: 0.62, duty: 0.58, cone: 0.16, size: 1.2 });
-    fan(chestPos(f, _a, 1.2), dx, dz, Math.round(40 * K()), { speed: 8.5, cone: 0.7, elMin: 0.1, elMax: 1.1, size: 1.25 });
-    sfx('splat', { pan: panOf(x), gain: 0.9 }); G.pulse(0.7);
+    if (G.full || ctx.crit) { addJet({ obj: f.rig.joints.chest, pos: chestPos(f, _a, 1.3), dir: _d.set(dx * 0.6, 1, dz * 0.6).normalize().clone(), speed: 8, rate: 150, life: 3.8, period: 0.66, duty: 0.58, cone: 0.16, size: 1.35, beat: true }); if (ctx.last || ctx.crit) addJet({ obj: f.rig.joints.chest, pos: chestPos(f, _a, 1.1), dir: _d.set(-dx * 0.3 + RR(-0.4, 0.4), 0.8, -dz * 0.3 + RR(-0.4, 0.4)).normalize().clone(), speed: 6, rate: 110, life: 3, period: 0.72, duty: 0.6, cone: 0.2, size: 1.2, beat: true, delay: 0.12 }); }
+    fan(chestPos(f, _a, 1.2), dx, dz, Math.round(64 * K()), { speed: 9, cone: 0.7, elMin: 0.1, elMax: 1.1, size: 1.4 }); fan(_a, dx, dz, Math.round(8 * K()), { speed: 5.5, cone: 0.8, elMin: 0.3, elMax: 1.1, size: 2.5 });
+    sfx('splat', { pan: panOf(x), gain: 0.9 }); sfx('squelch', { pan: panOf(x), gain: 0.9, pitch: 0.8 }); G.pulse(0.7); lens(_a, ctx.last ? 3 : 1, ctx.last ? 0.28 : 0.2);
+    if (feel) { feel.hitStop(ctx.last ? 130 : 110); if (feel.kick) feel.kick(dx, 0.2, dz, ctx.last ? 0.3 : 0.2); }
+    if (ctx.last) { // GORE-JUICE: the finishing blow is messier, a cinematic burst timed to the strike: a mist cloud, flesh and bone, a second spray, the cleave
+      for (let i = 0, m = Math.round(16 * (G.tier === 'low' ? 0.6 : 1) * (G.level === 'low' ? 0.6 : 1)); i < m; i++) fx.addNormalParticle({ x: _a.x + RR(-0.2, 0.2), y: _a.y + RR(-0.3, 0.3), z: _a.z + RR(-0.2, 0.2), vx: dx * RR(1, 4) + RR(-1.2, 1.2), vy: RR(0.2, 1.8), vz: dz * RR(1, 4) + RR(-1.2, 1.2), life: RR(0.5, 0.95), s0: 0.25, s1: RR(1.0, 1.9), cell: CELL_PUFF, rot: R() * TAU, c0: { r: 0.5, g: 0.02, b: 0.03 }, c1: { r: 0.2, g: 0.01, b: 0.015 }, a: 0.6, drag: 2.6, fp: 1.2, att: 0.05 });
+      fan(_a, dx, dz, Math.round(50 * K()), { speed: 11, cone: 0.9, elMin: 0.05, elMax: 1.0, size: 1.5 });
+      if (G.full) for (let i = 0, m = Math.round(6 * (K() > 0.6 ? 1 : 0.6)); i < m; i++) chunk(_a, dx * 3, dz * 3, i % 3 === 2 ? 1 : 0);
+      sfx('cleave', { pan: panOf(x), gain: 1, pitch: 0.85 }); sfx('crowdGore', { gain: 0.8 });
+    }
     let part = pickPart(f, ctx), took = false;
     if (part && G.sever(id, part, dx, dz, ctx.big ? 1.3 : 1)) took = true;
     if (ctx.big && G.full) { const ex = ['armL', 'forearmR', 'shinL', 'shinR'].find((p) => !f.rig.severed[p] && p !== part); if (ex) G.sever(id, ex, dx + RR(-0.8, 0.8), dz + RR(-0.8, 0.8), 1.4); chestPos(f, _a, 1.1); for (let i = 0, m = Math.round(26 * K()); i < m; i++) chunk(_a, dx, dz); fan(_a, 0, 1, Math.round(70 * K()), { speed: 9, cone: Math.PI, elMin: 0.2, elMax: 1.4, size: 1.3 }); addPool(x, z, 1.9, 0.3); sfx('crowdGore', { gain: 1 }); }
@@ -545,9 +622,9 @@ export function createGore(fx, o = {}) {
 
   /** replay seek: drop everything airborne (droplets, jets), grow the pools and let the flung props land, so skipped time leaves only what stays on the sand */
   G.settle = (sec = 3) => {
-    if (!G.on) return; for (const d of drops.splice(0)) dfree.push(d); jets.length = 0;
+    if (!G.on) return; dropClear(); jets.length = 0;
     for (const p of pools) { p.delay = 0; if (p.r < p.rMax) p.r = p.rMax * 0.92; }
-    if (gib) { for (let t = 0; t < sec; t += 0.1) stepProps(0.1); for (const d of drops.splice(0)) dfree.push(d); }
+    if (gib) { for (let t = 0; t < sec; t += 0.1) stepProps(0.1); dropClear(); }
   };
 
   /** shader warm-up: the gib mesh is built and drawn once (a dead instance) so its program compiles before the first limb flies */
@@ -557,41 +634,55 @@ export function createGore(fx, o = {}) {
   G.framePoints = (id) => { const s = G.lastSever; if (!G.on || !s || s.id !== id || G.time - s.t > 6) return null; return [[s.x, 0.15, s.z]]; };
 
   // ------------------------------------------------------------------ lifecycle
-  G.refresh = () => { G.level = goreLevel(); G.on = G.level !== 'off'; G.full = G.level === 'full'; if (G.tier) G.tier = G.tier; return G.level; };
+  G.refresh = () => { G.level = goreLevel(); G.on = G.level !== 'off'; G.full = G.level === 'full'; if (!G.on) lensClear(); return G.level; };
   G.setTier = (t) => { G.tier = t; };
   G.reset = (seed = 1) => {
-    G.refresh(); rs = mulberry((seed >>> 0) || 1); G.time = 0; G.counts.splats = 0; G.cover = 0; covGrid.fill(0); covT = dryT = fadeT = 0; dryN = 0; for (const d of drops.splice(0)) dfree.push(d); jets.length = 0; pools.length = 0; drySq.length = 0; props = []; chunkCur = MAXLH; lhCur = 0; chunkHi = 0; G.lastSever = null; vig = 0;
+    G.refresh(); rs = mulberry((seed >>> 0) || 1); G.time = 0; G.counts.splats = 0; G.cover = 0; lensClear(); fArr.length = 0; covGrid.fill(0); covT = dryT = fadeT = 0; dryN = 0; dropClear(); jets.length = 0; pools.length = 0; drySq.length = 0; props = []; chunkCur = MAXLH; lhCur = 0; chunkHi = 0; G.lastSever = null; vig = 0;
     if (gib) { const z = new THREE.Matrix4().makeScale(0, 0, 0); for (let i = 0; i < MAXP; i++) gib.setMatrixAt(i, z); gib.instanceMatrix.needsUpdate = true; gib.count = 0; gib.visible = false; }
     for (const f of G.fighters.values()) { try { f.rig.onEvent = f.prevOnEvent; } catch (e) { /* ignore */ } } G.fighters.clear();
   };
-  G.dispose = () => { G.reset(); if (vigEl && vigEl.parentNode) vigEl.parentNode.removeChild(vigEl); if (gib) { scene && scene.remove(gib); gib.geometry.dispose(); gib.material.dispose(); gib = null; } };
+  G.dispose = () => { G.reset(); if (vigEl && vigEl.parentNode) vigEl.parentNode.removeChild(vigEl); if (lensC && lensC.parentNode) lensC.parentNode.removeChild(lensC); lensC = null; if (gib) { scene && scene.remove(gib); gib.geometry.dispose(); gib.material.dispose(); gib = null; } };
+
+  // GORE-JUICE: blood on the blade drips until the fight ends (slow decay), a wounded fighter leaks and leaves a bloody trail while it moves or is shoved
+  function fighterDrips(f, dt) {
+    const rig = f.rig; f.wet = f.wet > dt * 0.03 ? f.wet - dt * 0.03 : 0; f.leak = f.leak > dt * (f.down ? 0.07 : 0.05) ? f.leak - dt * (f.down ? 0.07 : 0.05) : 0;
+    f.dripAcc += dt * (f.wet * 2.6 + f.leak * (f.down ? 1.6 : 4)) * K(); if (f.dripAcc > 3) f.dripAcc = 3;
+    if (f.dripAcc >= 1) {
+      f.dripAcc--; const weapon = f.wet > 0 && !f.down && R() * (f.wet + f.leak) < f.wet, hand = rig.joints[rig.beast ? 'head' : 'handR'];
+      if (weapon && hand && !(f.hands && f.hands.R === false)) { hand.getWorldPosition(_p); if (!rig.beast) { const m = hand.matrixWorld.elements; _p.x += m[4] * 0.75; _p.y += m[5] * 0.75; _p.z += m[6] * 0.75; } drop(_p.x, _p.y, _p.z, RR(-0.25, 0.25), RR(-0.3, 0.1), RR(-0.25, 0.25), RR(0.055, 0.09), R() * 0.5); }
+      else { const j = rig.joints.chest; if (j) { j.getWorldPosition(_p); drop(_p.x + RR(-0.12, 0.12), Math.max(0.1, _p.y - 0.25), _p.z + RR(-0.12, 0.12), RR(-0.3, 0.3), RR(-0.3, 0.2), RR(-0.3, 0.3), RR(0.055, 0.1), R() * 0.5); } }
+    }
+    if (f.leak > 0.25) { f.trailT += dt; if (f.trailT > 0.3) { f.trailT = 0; rig.root.getWorldPosition(_p); if (f.tx < 1e8) { const mv = Math.hypot(_p.x - f.tx, _p.z - f.tz); if (mv > 0.35 && mv < 6) { stampSmear(f.tx, f.tz, _p.x, _p.z, f.down ? 0.34 : 0.13, Math.min(0.8, 0.25 + f.leak * 0.6)); } } f.tx = _p.x; f.tz = _p.z; } }
+  }
 
   // ------------------------------------------------------------------ per frame: simulation + immediate-mode instances (called from fx.update, after the pooled step)
   fx.hooks.push((dt, norL) => {
-    if (!G.on) { if (drops.length) for (const d of drops.splice(0)) dfree.push(d); return; }
-    G.time += dt; splatBudget = G.tier === 'low' ? 36 : 70; covT += dt; dryT += dt; fadeT += dt;
+    if (!G.on) { if (nAct) dropClear(); return; }
+    G.time += dt; splatBudget = G.tier === 'low' ? 40 : 90; covT += dt; dryT += dt; fadeT += dt;
     if (covT > 1.5) { covT = 0; measureCover(); } if (dryT > 5) { dryT = 0; dryAll(); } if (fadeT > 0.45) { fadeT = 0; if (G.time > 6) clearUnderFeet(); }
     stepJets(dt); stepPools(dt); stepProps(dt);
+    for (let i = 0; i < fArr.length; i++) { const f = fArr[i]; if (f.wet > 0.02 || f.leak > 0.02) fighterDrips(f, dt); }
     // PERF: streaks are written straight into the fx layer's typed arrays (a call with ~12 double arguments boxes every one of them: that was ~14 KB per frame)
-    const nA = norL.A, nB = norL.B, nC = norL.C, nD = norL.D, nMax = norL.max;
-    for (let i = drops.length - 1; i >= 0; i--) {
-      const d = drops[i]; d.age += dt; d.vy -= GRAV * dt; d.x += d.vx * dt; d.y += d.vy * dt; d.z += d.vz * dt;
-      if (d.y <= 0.03 && d.vy < 0 || d.age > d.life || d.x > 30 || d.x < -30 || d.z > 30 || d.z < -30) { if (d.y <= 0.05) land(d); drops[i] = drops[drops.length - 1]; drops.pop(); dfree.push(d); continue; }
+    const nA = norL.A, nB = norL.B, nC = norL.C, nD = norL.D, nMax = norL.max, cam = fx.cam, cx = cam ? cam.position.x : 0, cy = cam ? cam.position.y : 99, cz = cam ? cam.position.z : 0;
+    for (let a = nAct - 1; a >= 0; a--) {
+      const i = act[a]; let x = dX[i], y = dY[i], z = dZ[i], vy = dVY[i]; const vx = dVX[i], vz = dVZ[i], age = dAge[i] + dt; vy -= GRAV * dt; x += vx * dt; y += vy * dt; z += vz * dt; dAge[i] = age; dVY[i] = vy; dX[i] = x; dY[i] = y; dZ[i] = z;
+      if (y <= 0.03 && vy < 0 || age > DROP_LIFE || x > 30 || x < -30 || z > 30 || z < -30) { if (y <= 0.05) land(i); act[a] = act[--nAct]; freeI[nFree++] = i; continue; }
       if (norL.n >= nMax) continue;
-      const vx = d.vx, vy = d.vy, vz = d.vz, sp2 = vx * vx + vy * vy + vz * vz, sp = sp2 > 0 ? Math.sqrt(sp2) : 1, o4 = norL.n++ * 4;
-      let k = d.k * 0.7 + d.age * 0.18; k = k < 0 ? 0 : k > 1 ? 1 : k;
+      const sp2 = vx * vx + vy * vy + vz * vz, sp = sp2 > 0 ? Math.sqrt(sp2) : 1, o4 = norL.n++ * 4, ds = dS[i];
+      const ex = x - cx, ey = y - cy, ez = z - cz, dc2 = ex * ex + ey * ey + ez * ez, nk = dc2 < 49 ? (dc2 < 4 ? 0.3 : 0.3 + 0.7 * (Math.sqrt(dc2) - 2) / 5) : 1;   // drops that pass right by the lens shrink (a kill cam close-up must not drown in red)
+      let k = dK[i] * 0.7 + age * 0.18; k = k < 0 ? 0 : k > 1 ? 1 : k;
       nC[o4] = (BRIGHT.r + (DARK.r - BRIGHT.r) * k) * 1.25; nC[o4 + 1] = (BRIGHT.g + (DARK.g - BRIGHT.g) * k) * 1.25; nC[o4 + 2] = (BRIGHT.b + (DARK.b - BRIGHT.b) * k) * 1.25; nC[o4 + 3] = 0.96;
-      nA[o4] = d.x; nA[o4 + 1] = d.y; nA[o4 + 2] = d.z; nD[o4 + 1] = 0; nD[o4 + 2] = 0; nD[o4 + 3] = 0;
-      if (sp < 2.4) { nA[o4 + 3] = d.s * 1.7; nB[o4] = 0; nB[o4 + 1] = 1; nB[o4 + 2] = 0; nB[o4 + 3] = 0; nD[o4] = CELL_DISC; }   // hanging / dripping: round blob
-      else { let len = sp * 0.05; const lo = d.s * 1.3; len = len < lo ? lo : len > 0.85 ? 0.85 : len; nA[o4 + 3] = d.s * 2.6; nB[o4] = vx / sp; nB[o4 + 1] = vy / sp; nB[o4 + 2] = vz / sp; nB[o4 + 3] = Math.max(len * 1.15, 1e-3); nD[o4] = CELL_STREAK; }
+      nA[o4] = x; nA[o4 + 1] = y; nA[o4 + 2] = z; nD[o4 + 1] = 0; nD[o4 + 2] = 0; nD[o4 + 3] = 0;
+      if (sp < 2.4) { nA[o4 + 3] = ds * 1.7 * nk; nB[o4] = 0; nB[o4 + 1] = 1; nB[o4 + 2] = 0; nB[o4 + 3] = 0; nD[o4] = CELL_DISC; }   // hanging / dripping: round blob
+      else { let len = sp * 0.05; const lo = ds * 1.3; len = len < lo ? lo : len > 0.85 ? 0.85 : len; nA[o4 + 3] = ds * 2.6 * nk; nB[o4] = vx / sp; nB[o4 + 1] = vy / sp; nB[o4 + 2] = vz / sp; nB[o4 + 3] = Math.max(len * 1.15 * nk, 1e-3); nD[o4] = CELL_STREAK; }
     }
-    G.counts.drops = drops.length; G.counts.jets = jets.length; G.counts.props = props.length; G.counts.pools = pools.length;
+    G.counts.drops = nAct; G.counts.jets = jets.length; G.counts.props = props.length; G.counts.pools = pools.length;
   });
   /** real-time part of the frame (vignette) */
   let vigQ = -1;   // PERF: the vignette opacity string is rebuilt only when the 1/1000 step changes (it is '0' almost always)
-  G.postFrame = (realDt) => { if (!vigEl) return; vig = vig - realDt * 1.7; if (vig < 0) vig = 0; const v = G.on ? vig : 0, q = v < 0.01 ? 0 : Math.round(v * 1000) + 1; if (q !== vigQ) { vigQ = q; vigEl.style.opacity = q ? ((q - 1) / 1000).toFixed(3) : '0'; } };
+  G.postFrame = (realDt) => { lensFrame(realDt); if (!vigEl) return; vig = vig - realDt * 1.7; if (vig < 0) vig = 0; const v = G.on ? vig : 0, q = v < 0.01 ? 0 : Math.round(v * 1000) + 1; if (q !== vigQ) { vigQ = q; vigEl.style.opacity = q ? ((q - 1) / 1000).toFixed(3) : '0'; } };
   G.debug = () => props.map((p) => ({ t: p.type, x: +p.x.toFixed(2), y: +p.y.toFixed(2), z: +p.z.toFixed(2), rest: p.rest }));
-  G.stats = () => ({ level: G.level, drops: drops.length, jets: jets.length, props: props.length, pools: pools.length, splats: G.counts.splats, gibVisible: !!(gib && gib.visible) });
+  G.stats = () => ({ level: G.level, lens: lensN, drops: nAct, jets: jets.length, props: props.length, pools: pools.length, splats: G.counts.splats, gibVisible: !!(gib && gib.visible) });
   G.refresh();
   return G;
 }

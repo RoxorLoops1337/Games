@@ -377,7 +377,7 @@ export function createFx(scene, opts = {}) {
   }
 
   // 2) particles
-  const addL = new Layer(opts.maxAdd ?? 2600, true, atlasTex, 'particles_add'); const norL = new Layer(opts.maxNorm ?? 900, false, atlasTex, 'particles_norm');
+  const addL = new Layer(opts.maxAdd ?? 2600, true, atlasTex, 'particles_add'); const norL = new Layer(opts.maxNorm ?? 1300, false, atlasTex, 'particles_norm');
   root.add(norL.mesh, addL.mesh);
 
   // 3) debris

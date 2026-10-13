@@ -397,5 +397,30 @@ for (const fn of ['newGame', 'makeGlad', 'mkUnits', 'createFight', 'step', 'useU
   ok(/view === 'portrait'/.test(lab) && /uWoundD/.test(lab) && /idle paws planted/.test(lab) && !/\u2014/.test(beast + bfx + lab + br), 'beast lab: portrait view and the extended checks, no em dashes');
 }
 
+{ // PLAN: the pre-fight battle plan (roles, formations, priority target, Showmanship): wiring, copy, budgets
+  const rd = (f) => readFileSync(join(root, f), 'utf8'), plan = rd('js/screens/plan.js'), fl = rd('js/flow.js'), fs0 = rd('js/fightsetup.js'), ar = rd('core/arena.js'), sim = rd('core/sim.js'), ext = rd('core/ext.js'), fv = rd('js/fightview.js'), tac = rd('js/tactics.js'), css = rd('css/ui.css');
+  ok(existsSync(join(root, 'js/screens/plan.js')) && /export function planPanel\(/.test(plan), 'js/screens/plan.js exists and exports planPanel');
+  ok(/import\('\.\/screens\/plan\.js'\)/.test(fl) && /planPanel\(ctx, \{ gl, opps, start, solo: showDial \}\)/.test(fl) && /label: 'Fight!'/.test(fl), 'flow.js: the prep sheet builds the plan panel and ends with one Fight! button (defaults pre-filled)');
+  ok(!/const STANCES = \[\['bal'/.test(fl) && !/Choose a battle plan/.test(fl) && /Bookmaker and dirty tricks \(optional\)/.test(fl), 'flow.js: the bal / agg / grd / cun buttons are gone from the prep sheet; the bookmaker and tricks fold away');
+  ok(/stance: plan, plan, bet/.test(fl) && /shows\.push\(res\.show/.test(fl) && /show: shows\.length/.test(fl), 'flow.js: the plan travels as the stance argument and tournament rounds average their Showmanship');
+  ok(/lm\.fightPlans\(S, gl, opps, plan\)/.test(fs0) && /lm\.planFight\(F, pa, pb\)/.test(fs0) && /plan: pa, planB: pb, show: pa \? pa\.show : 0/.test(fs0) && /show: F\.meta\.show \| 0/.test(fs0), 'fightsetup.js: plans for both sides, focus set at the bell, show on the result');
+  ok(/role: '', show: 0, flT: 0,/.test(ar) && /pri: \{ A: false, B: false \}/.test(ar) && /u\.role = 'vanguard'/.test(ar), 'arena.js: role, show and flT are declared in blankUnit, the fight declares pri, and primeShapes covers the role');
+  ok(/function applyPlan\(/.test(ar) && /function roleChase\(/.test(ar) && /L\.planFight = /.test(ar) && /L\.windOf = /.test(ar) && /refocus\(F, t\.side\)/.test(ar) && /PRIO\.guard/.test(ar), 'arena.js: positions, role movement and target weights, the focus fallback and the priority price');
+  const ST = ar.match(/const ST_KEYS = \[([^\]]+)\]/)[1]; ok(!/role|show|prio/i.test(ST), 'no new status key was added for the plan (ST_KEYS untouched)');
+  ok(!/rnd\(\)/.test(ar.slice(ar.indexOf('function applyPlan('), ar.indexOf('// BEAST (Venatio): a beast record'))) && !/rnd\(\)/.test(ar.slice(ar.indexOf('const AC = '), ar.indexOf('// ---------- BEAST AI'))) && !/rnd\(\)/.test(ar.slice(ar.indexOf('function chooseTarget('), ar.indexOf('const CLEAR_CC'))) && !/L\.rand|Math\.random/.test(sim.slice(sim.indexOf('BATTLE PLAN'), sim.indexOf('the bookmaker'))), 'the plan code draws no random numbers');
+  ok(/LM\.ROLES = /.test(sim) && /LM\.FORMS = /.test(sim) && /LM\.SHOW = \[/.test(sim) && /LM\.oppPlan = /.test(sim) && /LM\.planFromStance = /.test(sim) && /LM\.entryPlan = /.test(sim) && /LM\.SAVE_VER = 2/.test(ext) && /plan !== undefined/.test(ext), 'sim: data and helpers exist; the save keeps schema 2 and mends entries defensively');
+  ok(/case 'flourish':/.test(fv) && /play\('taunt', \{ speed: 1\.5 \}\)/.test(fv) && /windOf/.test(fv) && !/new THREE\.\w*Mesh|class \w+Animator/.test(plan), 'fightview: Showmanship plays the existing taunt clip; no new animation or mesh');
+  ok(/Your plan is set/.test(tac) && /ROLES\[u\.role\]/.test(tac) && /KEYS = \['press', 'hold', 'retreat', 'guard', 'swap', 'rally'\]/.test(tac), 'tactics: the hint and wheel say the plan was set before the fight, chips show the role, keys 1 to 6 are unchanged');
+  ok(/\/\* PLAN:/.test(css) && /\.pl-forms/.test(css) && /\.pl-show/.test(css) && /\.pl-foe\b/.test(css) && /@media \(max-width: 420px\) \{ \.pl-fn/.test(css), 'ui.css: tagged PLAN block with the formation, role, priority and showmanship classes and a phone rule');
+  const cssBlock = css.slice(css.indexOf('/* PLAN:')); ok(cssBlock.length < 9000 && plan.length < 12000, `budgets: plan.js ${plan.length} B (limit 12000), PLAN css ${cssBlock.length} B (limit 9000)`);
+  ok(/aria-label', 'Formation'/.test(plan) && /role', 'radiogroup'/.test(plan) && /aria-checked/.test(plan) && /aria-label', `Role for/.test(plan) && /pl-sel/.test(plan) && !/pointer-events/.test(plan), 'plan.js: radio groups and a labelled role select (keyboard and screen reader friendly), native controls');
+  ok(/Gain: /.test(plan) && /Cost: /.test(plan) && /lm\.SHOW\.forEach/.test(plan) && /LM\.PRIO|lm\.PRIO/.test(plan), 'plan.js: every choice prints its gain and its cost, and the priority names its price');
+  for (const [n, src] of [['plan.js', plan], ['arena core', ar], ['sim core', sim], ['ui.css', css], ['tactics', tac], ['flow', fl], ['fightsetup', fs0], ['ext', ext]]) ok(!/—/.test(src), n + ' has no em dash');
+  const sec = sim.slice(sim.indexOf('BATTLE PLAN'), sim.indexOf('the bookmaker')); ok(!/—/.test(sec) && !/–/.test(sec), 'the plan section of sim.js has no dashes of the long kind');
+  ok(existsSync(join(here, '..', 'tools/ludus3d_plan_balance.mjs')) && !readFileSync(join(here, '..', 'tools/ludus3d_plan_balance.mjs'), 'utf8').includes('—'), 'the balance table script exists');
+  const sk = readFileSync(join(here, '..', '.claude/skills/ludus3d-qa/SKILL.md'), 'utf8'), sk2 = readdirSync(join(here, '..', '.claude/skills')).filter((d) => d.startsWith('ludus3d-')).map((d) => readFileSync(join(here, '..', '.claude/skills', d, 'SKILL.md'), 'utf8')).join('\n'); void sk;
+  ok(/BATTLE PLAN/.test(sk2) && /Showmanship/.test(sk2) && /priority target/i.test(sk2), 'a ludus3d skill documents roles, formations, the priority target and Showmanship');
+}
+
 console.log(`ludus_maximus_3d structure: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

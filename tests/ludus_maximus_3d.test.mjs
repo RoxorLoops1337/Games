@@ -978,5 +978,105 @@ const LEGACY_IDS = ['patron', 'brawl', 'trainer', 'spoiled', 'spy', 'sponsor', '
   if (had.window === 'undefined') delete globalThis.window; if (had.document === 'undefined') delete globalThis.document;
 }
 
+{ // round 49: BATTLE PLAN (roles, formations, priority target, Showmanship): pre-fight choices that reshape the fight, replay safe, no counters
+  const mk = (st, id, lvl = 6, trait) => LM.makeGlad({ style: st, lvl, id, name: 'P' + id, r: LM.mulberry(id * 31 + lvl), trait });
+  const team = (styles, base) => styles.map((st, i) => mk(st, base + i));
+  const A3 = team(['murmillo', 'thraex', 'hoplomachus'], 300), B3 = team(['thraex', 'murmillo', 'retiarius'], 400);
+  const build = (A, B, planA, planB, o) => { const ca = LM.teamCtx(null, A, planA || 'bal'), cb = LM.teamCtx(null, B, 'bal'); if (planB) cb.plan = LM.normPlan(planB, B); const F = LM.createFight(LM.mkUnits(A, 'A', ca), LM.mkUnits(B, 'B', cb), Object.assign({ autoA: true, quiet: true }, o || {})); if (planA || planB) LM.planFight(F, planA && LM.normPlan(planA, A), planB && LM.normPlan(planB, B)); return F; };
+  const run = (F, n, dt = 1 / 30) => { const ev = []; for (let i = 0; i < n && !F.done; i++) { LM.step(F, dt); ev.push(...F.ev.splice(0)); } return ev; };
+  const hash = (F) => F.units.map((u) => `${u.id}:${u.hp}:${u.x.toFixed(3)}:${u.y.toFixed(3)}`).join('|') + `|${F.n}|${F.winner}|${F.foc.A}|${F.foc.B}`;
+  // ---- data: every role, formation and Showmanship level prints its exact numbers; no em dashes; the spots stay inside the sand
+  const pctOf = (v) => `${Math.round(Math.abs(v) * 100)}%`;
+  ok(LM.ROLE_IDS.length === 6 && LM.ROLES.free.mods && Object.keys(LM.ROLES.free.mods).length === 0, 'six roles: Fighter plus five jobs');
+  for (const id of LM.ROLE_IDS) { const R = LM.ROLES[id]; ok(R.n && R.d && R.gain && R.cost && !/—/.test(R.n + R.d + R.gain + R.cost), `role ${id} has a name, a description and gain / cost lines without em dashes`); for (const k of Object.keys(R.mods)) ok((R.mods[k] > 0 ? R.gain : R.cost).includes(pctOf(R.mods[k])), `role ${id}: the ${k} number is printed in its ${R.mods[k] > 0 ? 'gain' : 'cost'} line`); if (id !== 'free') ok(R.cost !== 'No change' || R.d, `role ${id} has a price`); }
+  ok(LM.ROLE_IDS.filter((id) => id !== 'free').every((id) => { const m = LM.ROLES[id].mods, v = Object.values(m); return v.some((x) => x > 0) && (v.some((x) => x < 0) || LM.ROLES[id].costTxt); }), 'every job trades something (a gain and a cost): no free lunch');
+  for (const f of LM.FORM_IDS) for (const n of [2, 3, 4]) { ok(LM.FORMS[f].roles(n).length === n && LM.FORMS[f].roles(n).every((r) => LM.ROLES[r]), `${f} ${n}: default roles are known`);
+    for (const r of LM.ROLE_IDS) { const T = Array.from({ length: n }, (_, i) => mk('thraex', 800 + i)), ro = {}; T.forEach((g, i) => { ro[g.id] = i === 0 ? r : 'free'; }); const us = LM.mkUnits(T, 'A', LM.teamCtx(null, T, { form: f, roles: ro }));
+      ok(us.every((u) => Math.hypot(u.x, u.y) <= 8.6 + 1e-9), `${f} ${n} with ${r} up front: everyone starts on the sand`); let close = 9; for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) close = Math.min(close, Math.hypot(us[i].x - us[j].x, us[i].y - us[j].y)); ok(close >= 1.3, `${f} ${n} with ${r}: nobody starts inside a partner (${close.toFixed(2)} m)`); } }
+  for (const f of LM.FORM_IDS) { const F0 = LM.FORMS[f]; for (const k of Object.keys(F0.mods)) ok((F0.mods[k] > 0 ? F0.gain : F0.cost).includes(pctOf(F0.mods[k])), `formation ${f}: the team-wide ${k} number is printed`); }
+  { const l = LM.mkUnits(A3, 'A', LM.teamCtx(null, A3, { form: 'line', roles: {} })), w = LM.mkUnits(A3, 'A', LM.teamCtx(null, A3, { form: 'wedge', roles: { 300: 'free', 301: 'free', 302: 'free' } })), b0 = LM.mkUnits(A3, 'A', LM.teamCtx(null, A3, 'bal')); ok(l[0].atk > b0[0].atk * 1.02 && l[0].def > b0[0].def * 1.02 && w[0].def < b0[0].def * 0.97 && w[0].atk === b0[0].atk, 'a formation applies its printed team-wide trade to every unit'); }
+  ok(LM.SHOW.length === 4 && LM.SHOW[0].gain === 'No change' && LM.SHOW[0].cost === 'No change', 'four Showmanship levels, the first is the plain default');
+  for (let i = 1; i < 4; i++) { const a = LM.SHOW[i - 1], b = LM.SHOW[i]; ok(b.fame > a.fame && b.hy > a.hy && b.fan > a.fan && b.atk > a.atk && b.wound > a.wound && b.wd > a.wd, `Showmanship ${b.n}: more gain AND more cost than ${a.n}`); ok(b.gain.includes(`+${Math.round(b.fame * 100)}% fame`) && b.cost.includes(`-${Math.round(b.atk * 100)}% damage`) && b.cost.includes(`+${Math.round(b.wound * 100)}% wound risk`) && !/—/.test(b.gain + b.cost + b.d), `Showmanship ${b.n}: the exact numbers are printed`); }
+  ok(LM.PRIO.guard < 1 && LM.PRIO.cost.includes('6%') && !/—/.test(LM.PRIO.gain + LM.PRIO.cost), 'the priority target has a printed price (the marked foe is guarded)');
+  // ---- plans: normalised, deterministic, derived for the AI
+  const np = LM.normPlan({ form: 'bogus', roles: { 300: 'nonsense' }, prio: -3, show: 9 }, A3);
+  ok(np.form === 'line' && A3.every((g) => LM.ROLES[np.roles[g.id]]) && np.prio === null && np.show === 0, 'a damaged plan is repaired: known form, a role for everyone, no show in a team');
+  const solo = LM.normPlan({ show: 9, roles: { 300: 'vanguard' } }, [A3[0]]); ok(solo.show === 3 && solo.roles[300] === 'free' && solo.form === 'line', 'a solo plan keeps only Showmanship (clamped), no roles');
+  const sg1 = LM.defaultPlan(null, A3, B3), sg2 = LM.defaultPlan(null, A3, B3); ok(JSON.stringify(sg1) === JSON.stringify(sg2) && sg1.prio === LM.suggestFoc(B3) && LM.FORMS[sg1.form], 'the suggested plan is deterministic and pre-fills a priority target');
+  const op1 = LM.oppPlan(null, B3, A3), op2 = LM.oppPlan(null, B3, A3); ok(JSON.stringify(op1) === JSON.stringify(op2) && op1.prio !== null && B3.every((g) => LM.ROLES[op1.roles[g.id]]), 'the AI team plan is deterministic, has a role per fighter and a priority target');
+  ok(LM.oppPlan(null, [LM.makeBeast('lion', 4)], A3) === null, 'beasts get no plan');
+  const sh = mk('thraex', 450, 5, 'showman'), op = LM.oppPlan(null, [sh], [A3[0]]); ok(op.show === 1 && op.prio === null && LM.oppPlan(null, [mk('thraex', 451, 5, 'hothead')], [A3[0]]).show === 0, 'a showman foe shows off a little, everyone else fights plain');
+  ok(LM.oppPlan(null, [mk('murmillo', 1, 5, 'ironjaw'), mk('murmillo', 2, 5), mk('thraex', 3, 5)], A3).roles[1] === 'vanguard', 'the AI reads its traits: an Iron Jaw takes the front');
+  ok(LM.fightPlans(null, A3, B3, 'agg').pa === null && LM.fightPlans(null, A3, B3, sg1).pa.form === sg1.form && LM.fightPlans(null, A3, B3, { form: 'wedge', prio: 7 }).pa.prio === null, 'a plain stance gives no plans; a priority past the last foe is dropped');
+  // ---- one fight shape, random stream untouched
+  const draws = (planA) => { let n = 0; LM.setRandom(() => { n++; return 0.37; }); const ca = LM.teamCtx(null, A3, planA || 'bal'); LM.mkUnits(A3, 'A', ca); return n; };
+  ok(draws(null) === draws(sg1) && draws(null) === draws({ form: 'pincer' }), 'a plan draws no random numbers: the seeded stream of a fight is the same with and without it');
+  LM.setRandom(LM.mulberry(5));
+  const FP = build(A3, B3, sg1, op1), F0 = build(A3, B3, null, null), FS = build([mk('thraex', 500)], [mk('murmillo', 501)], { show: 2 }), FH = LM.createFight(LM.mkUnits(A3, 'A', {}), LM.mkUnits([LM.makeBeast('wolf', 4, { r: LM.mulberry(2), id: 'w1' })], 'B', {}));
+  const keysOf = (u) => Object.keys(u).join(','), sk = (u) => Object.keys(u.s).join(',');
+  ok(FP.units.every((u) => keysOf(u) === keysOf(F0.units[0]) && sk(u) === sk(F0.units[0])) && FS.units.every((u) => keysOf(u) === keysOf(F0.units[0])) && FH.units.every((u) => keysOf(u) === keysOf(F0.units[0])), 'every unit (planned, solo with show, plain, beast) has the identical key list (one hidden class)');
+  ok(Object.keys(FP).join() === Object.keys(F0).join() && Object.keys(FP.pri).join() === 'A,B' && keysOf(F0.units[0]).includes('role,show,flT'), 'the fight object keeps its shape too, and the new unit fields are declared');
+  ok(F0.units.every((u) => u.role === '' && u.show === 0) && FP.units.every((u) => LM.ROLES[u.role || 'free']), 'plain fights carry no role and no show');
+  for (let i = 0; i < 6; i++) run(FP, 2 * 30); ok(FP.units.every((u) => keysOf(u) === keysOf(F0.units[0]) && sk(u) === sk(F0.units[0])), 'the unit shape stays identical after 12 s of fighting with roles, focus and statuses');
+  // ---- formations and roles are real
+  const at = (form, roles) => build(A3, B3, { form, roles: roles || {}, prio: null }, null).units.slice(0, 3);
+  const line = at('line'), wedge = at('wedge'), pincer = at('pincer'), turtle = at('turtle');
+  ok(line.every((u) => u.x === -6.4) && Math.max(...wedge.map((u) => u.x)) > -5 && wedge[1].x > wedge[0].x + 1, 'Wedge: the tip stands ahead of the wings, a Line is flat');
+  ok(Math.max(...pincer.map((u) => Math.abs(u.y))) > Math.max(...line.map((u) => Math.abs(u.y))) + 0.8, 'Pincer: the flanks start wider than the Line');
+  ok(Math.max(...turtle.map((u) => Math.abs(u.y))) < Math.max(...line.map((u) => Math.abs(u.y))) - 1.5, 'Turtle: the team starts tight');
+  const free0 = at('line', { 300: 'free', 301: 'free', 302: 'free' }), van0 = at('line', { 300: 'vanguard', 301: 'free', 302: 'free' });
+  ok(van0[0].maxhp > free0[0].maxhp * 1.08 && van0[0].def > free0[0].def * 1.07 && van0[0].atk < free0[0].atk * 0.95 && van0[0].x > free0[0].x + 1, 'Vanguard: more HP and armor, less damage, and stands forward');
+  const fl0 = at('line', { 300: 'flanker', 301: 'free', 302: 'free' }), sk0 = at('line', { 300: 'skirmisher' }), hu0 = at('line', { 300: 'hunter' }), an0 = at('line', { 300: 'anchor' });
+  ok(fl0[0].ms > free0[0].ms * 1.08 && fl0[0].maxhp < free0[0].maxhp * 0.95 && Math.abs(fl0[0].y) > Math.abs(free0[0].y) * 1.1, 'Flanker: faster and wider, but frailer');
+  ok(hu0[0].atk > free0[0].atk * 1.05 && hu0[0].def < free0[0].def * 0.95 && an0[0].def > free0[0].def * 1.1 && an0[0].atk < free0[0].atk && sk0[0].eva > free0[0].eva && sk0[0].x < free0[0].x - 0.8, 'Hunter hits harder and guards less; Anchor guards more and hits less; Skirmisher dodges more and starts back');
+  // target weights: foes draw to the Vanguard; the Flanker picks the soft one; the Anchor covers an ally
+  { const A = team(['thraex'], 600), B = team(['murmillo', 'murmillo'], 610); const F = build(A, B, null, { form: 'line', roles: { 610: 'vanguard', 611: 'free' } }); F.units[1].x = 2; F.units[2].x = 2; F.units[1].y = -2; F.units[2].y = 2; F.units[0].x = -2; F.units[0].y = 0; run(F, 3);
+    ok(F.units[0].tgt === 'B0', 'a free fighter picks the Vanguard over an equal foe (it draws the eye)'); }
+  { const A = [mk('thraex', 620)], B = [mk('murmillo', 630), mk('retiarius', 631)]; B[0].lvl = 12; const F = build(A, B, { form: 'line', roles: {} }, null); F.units[0].s.dash = 0; F.units[0].role = 'flanker'; F.units[1].x = F.units[2].x = 3; F.units[1].y = -1.5; F.units[2].y = 1.5; F.units[0].x = -2; F.units[0].y = 0; run(F, 2);
+    ok(F.units[0].tgt === 'B1', 'a Flanker goes for the soft, ranged foe instead of the sturdy one at the same distance'); }
+  { const A = team(['murmillo', 'thraex'], 640), B = team(['thraex'], 650); const F = build(A, B, { form: 'line', roles: { 640: 'anchor', 641: 'free' } }, null), an = F.units[0], fr = F.units[1]; F.units[2].x = 8; F.units[2].y = 0; F.units[2].s.root = 99; an.x = -3; fr.x = -3.5; an.y = 1; fr.y = -1; const x0 = an.x, xf = fr.x;
+    run(F, 45); ok((an.x - x0) < (fr.x - xf) - 2 && Math.hypot(an.x - fr.x, an.y - fr.y) < 7, 'an Anchor trails its partner and stays near the team while the partner goes out to meet a distant foe'); }
+  { const A = [mk('retiarius', 660)], B = [mk('murmillo', 670)]; const F = build(A, B, null, null); F.units[0].role = 'skirmisher'; F.units[0].x = 0; F.units[1].x = 0.9; F.units[0].y = F.units[1].y = 0; F.units[0].atkT = 1; const d0 = 0.9; run(F, 15);
+    ok(Math.hypot(F.units[0].x - F.units[1].x, F.units[0].y - F.units[1].y) > d0 + 0.3, 'a Skirmisher steps back when pressed while its blow recovers'); }
+  // ---- priority target: honoured, then a fallback; replay safe
+  { const F = build(A3, B3, { form: 'line', roles: { 300: 'free', 301: 'free', 302: 'free' }, prio: 1 }, null); ok(F.foc.A === 'B1' && F.pri.A === true && F.pri.B === false, 'the plan sets the focus and the side flag at the first bell');
+    run(F, 4 * 30); ok(F.units.slice(0, 3).filter((u) => !u.down).every((u) => u.tgt === 'B1' || F.units[4].down), 'everyone free goes for the priority target while it lives');
+    let fell = -1; for (let i = 0; i < 4000 && !F.done && fell < 0; i++) { run(F, 1); if (F.units[4].down) fell = F.t; }
+    if (fell > 0) { const alive = F.units.slice(3).filter((u) => !u.down); ok(!F.done ? F.foc.A !== 'B1' && alive.some((u) => u.id === F.foc.A) && alive.every((u) => alive.find((x) => x.id === F.foc.A).hp <= u.hp) : true, 'when the priority target falls the team picks the weakest foe left'); } else ok(true, 'the fight ended before the priority target fell');
+  }
+  { const F = build(A3, B3, { form: 'line', roles: {}, prio: 0 }, null), tm = F.units[3]; F.units[0].atk = 1000; let marked = 0, plain = 0; const dmg = (F2) => { const u = F2.units[0], t = F2.units[3]; u.x = -0.5; t.x = 0.5; u.y = t.y = 0; t.hp = t.maxhp = 100000; u.atkT = 0; for (const x of F2.units) if (x !== u && x !== t) x.down = true; const h0 = t.hp; LM.setRandom(LM.mulberry(4)); run(F2, 30); return h0 - t.hp; };
+    marked = dmg(F); const G = build(A3, B3, null, null); G.units[0].atk = 1000; LM.focus(G, 'A', 'B0'); plain = dmg(G); ok(marked > 0 && plain > 0 && marked < plain, `the marked foe takes less damage (${marked} vs ${plain}), the price of the priority`); }
+  { const play = (seed) => { LM.setRandom(LM.mulberry(seed)); const F = build(A3, B3, sg1, op1, { cmdAI: true }); const taps = [[40, 'stance', 'A0', 'press'], [70, 'swap'], [120, 'rally'], [150, 'stance', 'A1', 'guard']]; let ti = 0; while (!F.done && F.n < 4000) { while (ti < taps.length && taps[ti][0] <= F.n) { const t = taps[ti++]; LM.command(F, t[1], t[2], t[3]); } LM.step(F, 1 / 30); F.ev.length = 0; } return F; };
+    const r1 = play(21), r2 = play(21); ok(r1.done && hash(r1) === hash(r2), 'a fight with roles, formation, priority, AI plan and taps replays identically');
+    LM.setRandom(LM.mulberry(21)); const F = build(A3, B3, sg1, op1, { cmdAI: true }); const snap = structuredClone(F); ok(snap.pri.A === F.pri.A && snap.foc.A === F.foc.A && snap.units[0].role === F.units[0].role, 'roles, focus and the plan flag survive the replay snapshot');
+    LM.setRandom(LM.mulberry(21)); const G = structuredClone(snap); while (!G.done && G.n < 4000) { LM.step(G, 1 / 30); G.ev.length = 0; } ok(G.done && (G.winner === 'A' || G.winner === 'B'), 'the cloned snapshot plays on to a winner'); }
+  { const a = LM.odds(null, A3, B3, sg1, 20), b = LM.odds(null, A3, B3, sg1, 20), c = LM.odds(null, A3, B3, { form: 'turtle', roles: {}, prio: null }, 20); ok(a === b && a >= 0 && a <= 1 && c >= 0 && c <= 1, 'odds accept a plan: stable and in range'); }
+  // ---- Showmanship: fame and hype up, damage down, real flourishes
+  { const S = LM.newGame({ name: 'Show', seed: 'show49' }), g = LM.makeGlad({ id: S.nextId++, style: 'thraex', lvl: 4 }); S.glads.push(g); const ev = Object.assign({}, LM.events(S, 2, 0).find((e) => e.kind === 'duel'), { fame: 100 });
+    const fameAt = (lv) => { const S2 = JSON.parse(JSON.stringify(S)), g2 = S2.glads[0]; LM.setRandom(LM.mulberry(9)); const r = LM.settle(S2, ev, [g2], { win: true, hype: 100, hpf: { [g2.id]: 0.7 }, odds: 0.5, show: lv }); return { fame: r.fame, fav: g2.fav || 0 }; };
+    const f = [0, 1, 2, 3].map(fameAt); ok(f[1].fame > f[0].fame && f[2].fame > f[1].fame && f[3].fame > f[2].fame, `fame rises with every Showmanship level (${f.map((x) => x.fame).join(', ')})`);
+    ok(f[3].fame >= Math.round(f[0].fame * 1.45) && f[1].fame <= Math.round(f[0].fame * 1.15), 'the fame bonus is the printed one (about +12% to +50%)'); ok(f[1].fav > f[0].fav && f[3].fav >= f[0].fav + 5, `fans rise too (${f.map((x) => x.fav).join(', ')})`);
+    const lose = (lv) => { const S2 = JSON.parse(JSON.stringify(S)), g2 = S2.glads[0]; g2.fav = 50; LM.setRandom(LM.mulberry(9)); LM.settle(S2, ev, [g2], { win: false, hype: 60, hpf: { [g2.id]: 0.3 }, odds: 0.5, show: lv }); return g2.fav; }; ok(lose(3) > lose(0), 'in defeat a showman still keeps more of the crowd');
+    const inj = (lv) => { let n = 0; for (let i = 0; i < 400; i++) { const S2 = JSON.parse(JSON.stringify(S)), g2 = S2.glads[0]; LM.setRandom(LM.mulberry(1000 + i)); const r = LM.settle(S2, ev, [g2], { win: true, hype: 50, hpf: { [g2.id]: 0.5 }, odds: 0.5, show: lv }); if (r.inj.length) n++; } return n; };
+    const i0 = inj(0), i3 = inj(3); ok(i3 > i0 && i3 < i0 * 3, `wounds follow the show (${i0} to ${i3} of 400)`);
+    ok(LM.settle(JSON.parse(JSON.stringify(S)), ev, [JSON.parse(JSON.stringify(S.glads[0]))], { win: true, hype: 50, odds: 0.5, hpf: {}, show: 3 }).notes.some((n) => /Showmanship/.test(n) && /fame/.test(n)), 'the results note names the Showmanship bonus'); }
+  { const duel = (lv, seed, quiet) => { LM.setRandom(LM.mulberry(seed)); const a = mk('thraex', 700), b = mk('murmillo', 701); const ca = LM.teamCtx(null, [a], LM.normPlan({ show: lv }, [a])); const F = LM.createFight(LM.mkUnits([a], 'A', ca), LM.mkUnits([b], 'B', LM.teamCtx(null, [b], 'bal')), { autoA: true, quiet }); return F; };
+    const u0 = duel(0, 1, true).units[0], u3 = duel(3, 1, true).units[0]; ok(u3.show === 3 && u0.show === 0 && u3.atk < u0.atk * (1 - LM.SHOW[3].atk + 0.001) && u3.def < u0.def && u3.flT > 0, 'a showman has less damage and armor at the first bell (the printed cost)');
+    ok(LM.windOf(u3) > LM.windOf(u0) * 1.4 && LM.windOf(u0) <= 0.22, 'a showman winds up longer (the animator uses the same number)');
+    let fl0 = 0, fl3 = 0, h0 = 0, h3 = 0, d0 = 0, d3 = 0, roars0 = 0, roars3 = 0, t0 = 0, t3 = 0; const N = 24;
+    for (let i = 0; i < N; i++) { for (const lv of [0, 3]) { const F = duel(lv, 50 + i, false); let fl = 0, roars = 0, hype = 0; while (!F.done && F.n < 6000) { LM.step(F, 1 / 30); for (const e of F.ev.splice(0)) { if (e.k === 'flourish') fl++; if (e.k === 'roar') roars++; } hype = Math.max(hype, F.hype); } const dmg = F.units[0].dmg; if (lv === 0) { fl0 += fl; roars0 += roars; d0 += dmg; t0 += F.t; } else { fl3 += fl; roars3 += roars; d3 += dmg; t3 += F.t; } } }
+    ok(fl0 === 0 && fl3 > N * 1.5, `flourishes happen only in a showman's fight (${fl0} vs ${fl3} in ${N})`); ok(d3 < d0 * 0.97, `a showman deals less damage over the same duels (${Math.round(d3 / N)} vs ${Math.round(d0 / N)})`); ok(roars3 >= roars0, `the crowd roars at least as often for a showman (${roars3} vs ${roars0})`); ok(t3 >= t0 * 0.95, 'and the fights do not get shorter'); }
+  // ---- old stances and saves
+  { const gl = A3; for (const st of ['bal', 'agg', 'grd', 'cun', 'weird', undefined]) { const p = LM.planFromStance(st, gl, B3); ok(LM.FORMS[p.form] && gl.every((g) => LM.ROLES[p.roles[g.id]]) && p.show === 0, `old stance ${st} maps to a valid plan`); }
+    ok(LM.planFromStance('agg', gl, B3).form === 'wedge' && LM.planFromStance('grd', gl, B3).form === 'turtle' && LM.planFromStance('cun', gl, B3).form === 'pincer', 'Aggressive, Guarded and Cunning open as Wedge, Turtle and Pincer');
+    ok(LM.planFromStance('agg', [gl[0]], [B3[0]]).show === 0, 'a solo fighter with an old stance opens as Efficient');
+    const S = LM.newGame({ name: 'Old', seed: 'old49' }); S.gold = 9999; S.glads.push(...A3.map((g) => Object.assign({}, g, { id: S.nextId++ })));
+    S.entries['5:0:m'] = { ids: [S.glads[0].id], stance: 'agg', paid: 5 }; S.entries['6:0:m'] = { ids: [S.glads[1].id], stance: 'zzz', paid: 5, plan: { form: 'nope', roles: 3 } }; S.entries['7:0:m'] = { ids: [S.glads[2].id], stance: 'bal', paid: 5, plan: { v: 1, form: 'wedge', roles: {}, prio: 1, show: 0 } }; S.entries['8:0:m'] = 'garbage';
+    const M = LM.migrate(JSON.parse(JSON.stringify(S))); ok(M.entries['5:0:m'].stance === 'agg' && M.entries['6:0:m'].stance === 'bal' && !('plan' in M.entries['6:0:m']) && M.entries['7:0:m'].plan.form === 'wedge' && !M.entries['8:0:m'], 'migrate keeps old stances, mends unknown ones, drops broken plans and junk entries');
+    const gg = M.glads.slice(-3); ok(LM.entryPlan(M, '5:0:m', gg, B3).form === 'wedge' && LM.entryPlan(M, '7:0:m', gg, B3).prio === 1 && LM.entryPlan(M, 'none', gg, B3).form, 'an entry opens on its plan, or on the old stance mapped, or on the suggestion');
+    const ev2 = LM.events(M, 2, 0).find((e) => e.kind === 'duel'); M.week = 2; M.gold = 999; const fighter = M.glads[0]; fighter.inj = 0; ok(LM.enter(M, ev2, [fighter.id], { v: 1, form: 'line', roles: {}, prio: null, show: 2 }) === '' && M.entries[ev2.key].stance === 'bal' && M.entries[ev2.key].plan.show === 2, 'LM.enter stores a plan next to the old stance string');
+    ok(LM.SAVE_KEY === 'ludus_maximus_3d_v1', 'the save key is untouched'); }
+}
+
 console.log(`ludus_maximus: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

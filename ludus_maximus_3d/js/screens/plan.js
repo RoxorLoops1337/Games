@@ -38,7 +38,7 @@ export function planPanel(ctx, o) {
   if (team) {
     // ---- formation
     const forms = h('div', 'pl-forms'); forms.setAttribute('role', 'radiogroup'); forms.setAttribute('aria-label', 'Formation');
-    const fdesc = h('p', 'pl-desc'), rows = h('div', 'pl-roles');
+    const fdesc = h('div', 'pl-desc'), rows = h('div', 'pl-roles');
     const drawForms = () => {
       forms.innerHTML = '';
       for (const id of lm.FORM_IDS) {
@@ -47,7 +47,8 @@ export function planPanel(ctx, o) {
         b.addEventListener('click', () => { ctx.sfx('uiTap'); st.plan = lm.normPlan({ form: id, roles: {}, prio: st.plan.prio }, gl); drawForms(); drawRoles(); changed(); });
         forms.append(b);
       }
-      fdesc.textContent = lm.FORMS[st.plan.form].d;
+      const F = lm.FORMS[st.plan.form]; fdesc.textContent = ''; fdesc.append(F.d);
+      if (F.gain || F.cost) fdesc.append(gainCost(F.gain ? F.gain + ', for everyone' : 'none', F.cost ? F.cost + ', for everyone' : 'none'));
     };
     // ---- roles
     const drawRoles = () => {

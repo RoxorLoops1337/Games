@@ -13,6 +13,7 @@ export const SFX_NAMES = ['swordHit', 'swordHitCrit', 'shieldBlock', 'metalClang
   'footstep', 'dust', 'netThrow', 'spearThrust', 'bash', 'stunChime', 'healSparkle', 'levelUp', 'coin', 'uiTap', 'uiConfirm', 'uiError', 'gate', 'horn',
   'ultFire', 'ultLightning', 'ultEarth', 'ultWind', 'ultHoly', 'crowdGasp', 'crowdCheer', 'crowdRoar', 'crowdBoo', 'crowdChant', 'drum',
   'slashWet', 'crunch', 'boneSnap', 'spurt', 'splat', 'gibThud', 'crowdGore',
+  'squelch', 'cleave',   // GORE-JUICE: wet slap layer and a heavy meaty cleave
   'uiHover', 'uiSelect', 'uiOpen', 'uiClose', 'bird', 'owl', 'hammer', 'clink', 'chop', 'sizzle', 'thock', 'thunder',   // HUB-AUDIO: ui hooks and ludus ambience one-shots
   'beastRoar', 'beastHowl', 'beastGrowl', 'beastHurt', 'beastDeath', 'beastBite', 'beastClaw', 'beastGore', 'beastSlam', 'pawThud', 'beastSnort', 'beastCharge',
   'parry'];
@@ -50,7 +51,7 @@ const pick = (r, a) => a[Math.floor(r() * a.length) % a.length];
 // sfx categories: voice caps keep the CPU flat in a long brawl
 const CAP = { combat: 12, voice: 6, crowd: 3, ui: 5, amb: 8, big: 4, beast: 5, gore: 6 };
 const catOf = (n) => /^ui/.test(n) ? 'ui' : /^crowd(?!Gore)/.test(n) ? 'crowd' : /^beast|^pawThud/.test(n) ? 'beast' : /^(bird|owl|hammer|clink|chop|sizzle|thock|thunder)$/.test(n) ? 'amb'
-  : /^(grunt|hurt|deathCry)$/.test(n) ? 'voice' : /^ult|^gate$|^horn$|^levelUp$/.test(n) ? 'big' : /^(slashWet|crunch|boneSnap|spurt|splat|gibThud|crowdGore)$/.test(n) ? 'gore' : 'combat';
+  : /^(grunt|hurt|deathCry)$/.test(n) ? 'voice' : /^ult|^gate$|^horn$|^levelUp$/.test(n) ? 'big' : /^(slashWet|crunch|boneSnap|spurt|splat|gibThud|crowdGore|squelch|cleave)$/.test(n) ? 'gore' : 'combat';
 // the crowd bed swells with these (amount 0..1 of a kick)
 const CROWD_KICK = { swordHitCrit: 0.35, deathThud: 0.5, deathCry: 0.2, ultFire: 0.4, ultLightning: 0.4, ultEarth: 0.45, ultWind: 0.3, ultHoly: 0.3, bash: 0.15, boneSnap: 0.25, crowdGore: 0.4, beastRoar: 0.3, beastSlam: 0.2, beastDeath: 0.4, spurt: 0.1, levelUp: 0.2 };
 
@@ -464,6 +465,18 @@ export function createAudio(opts = {}) {
   });
   def('spurt', 0.7, 0.9, 1, 0.1, 0, 2, (t, d, o) => {
     for (let i = 0; i < 3; i++) { burst(t + i * 0.26, 0.24, d, { f0: 2300, f1: 1100, q: 1.0, g: 0.34 - i * 0.07, a: 0.05 }); burst(t + i * 0.26, 0.2, d, { type: 'lowpass', f0: 700, f1: 300, g: 0.5 - i * 0.1, kind: 'pink', a: 0.04 }); }
+  });
+  // GORE-JUICE: squelch = a short wet slap of flesh (layered under slashWet on heavy hits), cleave = a heavy chop through meat and bone with a low thud
+  def('squelch', 0.8, 0.3, 2, 0.08, 0, 3, (t, d, o) => {
+    burst(t, 0.1, d, { type: 'lowpass', f0: hz(o, 1100), f1: 220, g: 0.9, kind: 'pink', a: 0.002 });
+    for (let i = 0; i < 4; i++) burst(t + 0.015 + i * 0.03 * (0.6 + rng()), 0.04, d, { f0: 300 + rng() * 700, f1: 160, q: 5, g: 0.3, a: 0.002, kind: 'pink' });
+    thump(t, hz(o, 85), 48, 0.14, 0.55, d);
+  });
+  def('cleave', 1.0, 0.55, 4, 0.14, 0.15, 2, (t, d, o) => {
+    burst(t, 0.07, d, { f0: hz(o, 2400), f1: 500, q: 0.7, g: 0.8, a: 0.001 });
+    burst(t + 0.005, 0.3, d, { type: 'lowpass', f0: 800, f1: 120, g: 0.95, kind: 'brown', a: 0.004 });
+    partials(t + 0.02, hz(o, 190), [1, 1.7, 2.9], [0.3, 0.18, 0.1], 0.16, d, 'triangle');
+    thump(t, hz(o, 70), 36, 0.3, 1.0, d);
   });
   def('splat', 1.0, 0.5, 3, 0.12, 0.1, 3, (t, d, o) => {
     burst(t, 0.2, d, { type: 'lowpass', f0: 1300, f1: 160, g: 1, kind: 'pink', a: 0.003 });

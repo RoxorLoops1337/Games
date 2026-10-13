@@ -357,25 +357,26 @@
   const modLine = (mods, sign) => Object.keys(mods).filter((k) => (mods[k] > 0) === (sign > 0) && mods[k] !== 0).map((k) => `${pct(mods[k])} ${MODS_LAB[k]}`).join(', ');
   LM.ROLES = {
     free: { n: 'Fighter', d: 'Fights as the moment asks. No job, no trade.', mods: {}, dx: 0, ky: 1, gainTxt: '', costTxt: '' },
-    vanguard: { n: 'Vanguard', d: 'Stands in front and draws the foe. Fights what is in front of them.', mods: { hp: 0.12, def: 0.08, atk: -0.06 }, dx: 1.4, ky: 1, gainTxt: 'foes aim at them first', costTxt: '' },
-    flanker: { n: 'Flanker', d: 'Circles wide to the weak or the back line. Fragile.', mods: { ms: 0.1, crit: 0.05, hp: -0.08, def: -0.05 }, dx: -0.4, ky: 1.35, gainTxt: 'hunts the weak and the back line', costTxt: '' },
+    vanguard: { n: 'Vanguard', d: 'Stands in front and draws the foe. Fights what is in front of them.', mods: { hp: 0.1, def: 0.08, atk: -0.06 }, dx: 1.4, ky: 1, gainTxt: 'foes aim at them first', costTxt: '' },
+    flanker: { n: 'Flanker', d: 'Circles wide to the weak or the back line. Fragile.', mods: { ms: 0.12, crit: 0.05, hp: -0.06, def: -0.04 }, dx: -0.4, ky: 1.35, gainTxt: 'hunts the weak and the back line', costTxt: '' },
     anchor: { n: 'Anchor', d: 'Holds near the team and covers an ally who is being hit.', mods: { def: 0.15, hp: 0.07, atk: -0.07 }, dx: -0.8, ky: 1, gainTxt: 'covers allies under attack', costTxt: 'will not chase far from the team' },
     hunter: { n: 'Hunter', d: 'Goes for the priority target and ignores the rest unless they get close.', mods: { atk: 0.08, def: -0.08 }, dx: 0, ky: 1, gainTxt: 'never loses the priority target', costTxt: 'ignores other foes until they are close' },
-    skirmisher: { n: 'Skirmisher', d: 'Keeps its range and steps back when pressed.', mods: { eva: 0.06, hp: -0.06, atk: -0.04 }, dx: -1.6, ky: 1, gainTxt: 'keeps distance while the blow recovers', costTxt: '' },
+    skirmisher: { n: 'Skirmisher', d: 'Keeps its range and steps back when pressed.', mods: { eva: 0.08, hp: -0.04, atk: -0.03 }, dx: -1.6, ky: 1, gainTxt: 'keeps distance while the blow recovers', costTxt: '' },
   };
   LM.ROLE_IDS = Object.keys(LM.ROLES);
   for (const id of LM.ROLE_IDS) { const R = LM.ROLES[id]; R.gain = [modLine(R.mods, 1), R.gainTxt].filter(Boolean).join(', ') || 'No change'; R.cost = [modLine(R.mods, -1), R.costTxt].filter(Boolean).join(', ') || 'No change'; }
   // formations: pos(i, n) is the starting spot of slot i for side A (x is mirrored for side B); roles(n) are the default roles per slot
   const fsp = (n) => (n > 2 ? 4.3 : 3.6);
   LM.FORMS = {
-    line: { n: 'Line', d: 'An even front and no jobs. Plain, steady, nothing to go wrong.', pos: (i, n) => ({ x: -6.4, y: (i - (n - 1) / 2) * fsp(n) }), roles: (n) => Array(n).fill('free') },
-    wedge: { n: 'Wedge', d: 'One fighter leads and the others follow behind. Hits the front hard.', pos: (i, n) => { const tip = Math.floor((n - 1) / 2); return { x: -5.2 - Math.abs(i - tip) * 1.6, y: (i - (n - 1) / 2) * fsp(n) * 0.75 }; }, roles: (n) => Array.from({ length: n }, (_, i) => (i === Math.floor((n - 1) / 2) ? 'vanguard' : 'hunter')) },
-    pincer: { n: 'Pincer', d: 'Spread wide to catch the foe from two sides. Risky if the flanks are caught alone.', pos: (i, n) => ({ x: i === (n - 1) / 2 ? -7.4 : -6.8, y: n === 2 ? (i ? 5.2 : -5.2) : (i - (n - 1) / 2) * 5.4 }), roles: (n) => Array.from({ length: n }, (_, i) => (n > 2 && i === (n - 1) / 2 ? 'hunter' : 'flanker')) },
-    turtle: { n: 'Turtle', d: 'Tight together behind one shield. Slow to hurt, slow to win.', pos: (i, n) => ({ x: -7.4, y: (i - (n - 1) / 2) * 2.4 }), roles: (n) => Array.from({ length: n }, (_, i) => (i === Math.floor((n - 1) / 2) ? 'vanguard' : 'anchor')) },
+    line: { n: 'Line', d: 'An even front and no jobs. Plain and steady: everyone fights in step.', mods: { atk: 0.03, def: 0.03 }, pos: (i, n) => ({ x: -6.4, y: (i - (n - 1) / 2) * fsp(n) }), roles: (n) => Array(n).fill('free') },
+    wedge: { n: 'Wedge', d: 'One fighter leads and the others follow behind. Hits the front hard.', mods: { def: -0.04 }, pos: (i, n) => { const tip = Math.floor((n - 1) / 2); return { x: -5.2 - Math.abs(i - tip) * 1.6, y: (i - (n - 1) / 2) * fsp(n) * 0.75 }; }, roles: (n) => Array.from({ length: n }, (_, i) => (i === Math.floor((n - 1) / 2) ? 'vanguard' : n > 2 && i % 2 ? 'flanker' : 'hunter')) },
+    pincer: { n: 'Pincer', d: 'Spread wide to catch the foe from two sides. Risky if the flanks are caught alone.', mods: { atk: 0.04 }, pos: (i, n) => ({ x: i === (n - 1) / 2 ? -7.4 : -6.8, y: n === 2 ? (i ? 4.2 : -4.2) : (i - (n - 1) / 2) * 5.4 }), roles: (n) => Array.from({ length: n }, (_, i) => (n === 2 ? (i ? 'hunter' : 'flanker') : i === (n - 1) / 2 ? 'hunter' : 'flanker')) },
+    turtle: { n: 'Turtle', d: 'Tight together behind one shield. Slow to hurt, slow to win.', mods: { def: 0.02 }, pos: (i, n) => ({ x: -7.4, y: (i - (n - 1) / 2) * 2.4 }), roles: (n) => Array.from({ length: n }, (_, i) => (i === Math.floor((n - 1) / 2) ? 'vanguard' : 'anchor')) },
   };
   LM.FORM_IDS = Object.keys(LM.FORMS);
+  for (const id of LM.FORM_IDS) { const F0 = LM.FORMS[id]; F0.gain = modLine(F0.mods, 1); F0.cost = modLine(F0.mods, -1); } // the team-wide trade of a formation, printed under its description
   // the priority target: the whole side goes for it first (it becomes F.foc). The price: the marked fighter's side closes ranks, so it takes `guard` of the damage while it is the mark.
-  LM.PRIO = { guard: 0.88, gain: 'Everyone goes for it first; when it falls the team picks the weakest left', cost: 'The marked foe takes 12% less damage (its side closes ranks)' };
+  LM.PRIO = { guard: 0.94, gain: 'Everyone goes for it first; when it falls the team picks the weakest left', cost: 'The marked foe takes 6% less damage (its side closes ranks)' };
   // Showmanship (solo fights). Every number is printed on the plan sheet; hy = hit hype multiplier, wd = wind-up multiplier, gap/cast = a flourish every gap seconds that costs cast seconds
   LM.SHOW = [
     { id: 'eff', n: 'Efficient', d: 'Straight to the point. No flourish, no risk.', fame: 0, hy: 1, fan: 0, atk: 0, def: 0, wd: 1, gap: 0, cast: 0, wound: 0 },
@@ -401,11 +402,8 @@
     glads.forEach((g, i) => { const r = p.roles && p.roles[g.id]; roles[g.id] = n > 1 && LM.ROLES[r] ? r : n > 1 ? pre[i] : 'free'; });
     return { v: 1, form: n > 1 ? form : 'line', roles, prio: Number.isInteger(p.prio) && p.prio >= 0 ? p.prio : null, show: n === 1 ? Math.max(0, Math.min(3, p.show | 0)) : 0 };
   };
-  /** the suggested plan the sheet pre-fills: a formation and roles from the styles on the field */
-  LM.defaultPlan = (S, gl, opps) => {
-    const roles = {}; gl.forEach((g) => { roles[g.id] = gl.length > 1 ? STYLE_ROLE[g.style] || 'free' : 'free'; });
-    return LM.normPlan({ form: pickForm(gl.map((g) => g.style)), roles, prio: gl.length > 1 && opps && opps.length > 1 ? LM.suggestFoc(opps) : null, show: 0 }, gl);
-  };
+  /** the suggested plan the sheet pre-fills: the formation that fits the styles on the field (with that formation's own roles) and the softest foe as the mark */
+  LM.defaultPlan = (S, gl, opps) => LM.normPlan({ form: pickForm(gl.map((g) => g.style)), roles: {}, prio: gl.length > 1 && opps && opps.length > 1 ? LM.suggestFoc(opps) : null, show: 0 }, gl);
   /** the foe a team should go for first, from what the crowd can see (style and level): the one who will fall fastest */
   LM.suggestFoc = (foes) => { const soft = (g) => D.STYLES[g.style].mul.hp * (50 + 6 * g.lvl); return foes.reduce((b, g, i) => (soft(g) < soft(foes[b]) ? i : b), 0); };
   /** a plan for the AI side, from its styles and traits (deterministic, no random draws). A team always picks a priority target (softest, or the hardest hitter for a hot head). */

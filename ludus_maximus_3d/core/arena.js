@@ -55,12 +55,13 @@
     if (ctx && ctx.plan && !g.beast) applyPlan(u, g, side, i, n, ctx.plan);
     return u;
   }
-  // PLAN: roles and formations move the start position and trade a little stat for a job; Showmanship trades damage and armor for fame. No rnd().
+  // PLAN: roles and formations move the start position and trade a little stat for a job; Showmanship trades damage and armor for fame. No random draws.
   function applyPlan(u, g, side, i, n, pl) {
     if (n > 1) {
       const F0 = L.FORMS[pl.form] || L.FORMS.line, pre = F0.roles(n), rid = (pl.roles && L.ROLES[pl.roles[g.id]] && pl.roles[g.id]) || pre[i] || 'free', R = L.ROLES[rid], m = R.mods;
-      let p = F0.pos(i, n), x = p.x + R.dx, y = p.y * R.ky; const r = Math.hypot(x, y); if (r > R0 * 0.92) { x *= R0 * 0.92 / r; y *= R0 * 0.92 / r; }
+      let p = F0.pos(i, n), x = p.x + R.dx, y = p.y * R.ky; const r = Math.hypot(x, y); if (r > R0 * 0.97) { x *= R0 * 0.97 / r; y *= R0 * 0.97 / r; }
       u.x = side === 'A' ? x : -x; u.y = y; u.role = rid === 'free' ? '' : rid;
+      if (F0.mods && (F0.mods.atk || F0.mods.def)) { u.atk *= 1 + (F0.mods.atk || 0); u.def *= 1 + (F0.mods.def || 0); } // the formation's own team-wide trade (the Line's discipline)
       if (m.hp) { const f = 1 + m.hp, mx = Math.max(1, Math.round(u.maxhp * f)); u.hp = Math.max(1, Math.round(u.hp * mx / u.maxhp)); u.maxhp = mx; }
       if (m.atk) u.atk *= 1 + m.atk; if (m.def) u.def *= 1 + m.def; if (m.ms) u.ms *= 1 + m.ms; if (m.eva) u.eva = clamp(u.eva + m.eva, 0, 0.4); if (m.crit) u.crit = clamp(u.crit + m.crit, 0, 0.8);
     } else if (pl.show > 0) {
