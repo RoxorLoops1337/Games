@@ -31,7 +31,7 @@
 import { CATALOGUE, ALIASES, TRIM, mulberry32, midiToFreq, scaleNote, foldMidi, pickWeighted, VoiceLimiter, softClipCurve, clamp, mal, tone, nz } from './sfx.js';
 
 export const KEYS = { master: 'hearthvale.vol.master', music: 'hearthvale.vol.music', sfx: 'hearthvale.vol.sfx', amb: 'hearthvale.vol.amb', muted: 'hearthvale.muted' };
-export const DEFAULTS = { master: 0.9, music: 0.6, sfx: 0.9, amb: 0.7 };
+export const DEFAULTS = { master: 0.9, music: 0.7, sfx: 0.9, amb: 0.7 };
 export const MUSIC_MODES = ['day', 'dusk', 'night', 'rain', 'festival', 'title'];
 const chan = (c) => (c === 'ambience' || c === 'ambient' ? 'amb' : c);
 const amp = (v) => v * v;                          // perceptual-ish slider curve
@@ -256,7 +256,7 @@ export function createEngine(ctx, opts = {}) {
       }
     }
     if (c.spark > 0 && r() < c.spark * 0.7) {
-      k.out = s.mel; const d = clamp(s.safe[Math.floor(r() * s.safe.length)] + 5, 3, 12); mal(k, 'glock', midiToFreq(scaleNote(s.root + 12, MEL_SCALE[c.flavor], d)), 0.14, T + Math.floor(r() * 8) * s.eighth, 0.9);
+      k.out = s.mel; const d = clamp((s.safe[Math.floor(r() * s.safe.length)] || 0) + 5, 3, 12); mal(k, 'glock', midiToFreq(scaleNote(s.root + 12, MEL_SCALE[c.flavor], d)), 0.14, T + Math.floor(r() * 8) * s.eighth, 0.9);
     }
   }
   function schedBar(s) {
@@ -267,7 +267,7 @@ export function createEngine(ctx, opts = {}) {
   }
   const MUSIC_TRIM = { title: 1, day: 1, dusk: 1, night: 1, rain: 1, festival: 1 };
   // @@MUSIC-TRIM-BEGIN
-  Object.assign(MUSIC_TRIM, {});
+  Object.assign(MUSIC_TRIM, {"day":0.748,"dusk":0.543,"night":0.632,"rain":0.623,"festival":0.562,"title":0.652});
   // @@MUSIC-TRIM-END
   function pumpMusic(until, now) {
     for (let i = sessions.length - 1; i >= 0; i--) {
@@ -283,7 +283,7 @@ export function createEngine(ctx, opts = {}) {
   const A = { night: 0, rain: 0, wind: 0, water: 0 };
   const AMB_TRIM = { wind: 1, water: 1, rain: 1, insects: 1, crickets: 1 };
   // @@AMB-TRIM-BEGIN
-  Object.assign(AMB_TRIM, {});
+  Object.assign(AMB_TRIM, {"wind":0.63,"water":0.294,"rain":0.34,"insects":0.636,"crickets":0.671});
   // @@AMB-TRIM-END
   const loopSrc = (color) => { const b = E.noise[color], s = ctx.createBufferSource(); s.buffer = b; s.loop = true; s.start(0, rng() * b.duration * 0.9); return s; };
   const BEDS = {

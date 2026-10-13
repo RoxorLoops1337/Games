@@ -36,8 +36,8 @@ const ease = { inOut: (x) => 0.5 - 0.5 * Math.cos(Math.PI * Math.max(0, Math.min
 // ---------------------------------------------------------------- level of detail
 const LOD_ID = { low: 0, mid: 1, default: 1, high: 2 };
 /** triangle budgets per lod (counted over EVERY mesh, hidden mood swaps included) */
-export const LOD_BUDGET = { low: 880, mid: 2040, high: 3150 };
-const BUDGETS = [880, 2040, 3150];
+export const LOD_BUDGET = { low: 850, mid: 2000, high: 3080 };
+const BUDGETS = [850, 2000, 3080];
 let Q = 1; // geometry quality of the villager being built (0 low, 1 mid, 2 high)
 
 // ---------------------------------------------------------------- geometry library (cached per quality, coloured by vertex colour)
@@ -46,6 +46,7 @@ const cap = (w, h, k) => () => new THREE.SphereGeometry(1, w, h, 0, Math.PI * 2,
 const hemi = (w, h) => () => new THREE.SphereGeometry(1, w, h, 0, Math.PI * 2, 0, Math.PI / 2).rotateX(Math.PI / 2); // flat back, dome towards +Z (for face decals)
 const HEAD_W = [8, 16, 20], HEAD_H = [6, 11, 14]; // the head sphere's segments; hair caps copy its tessellation so they never poke through it
 const capQ = (q, f) => { const r = Math.max(2, Math.round(HEAD_H[q] * f)); return () => new THREE.SphereGeometry(1, HEAD_W[q], r, 0, Math.PI * 2, 0, Math.PI * r / HEAD_H[q]); };
+const shl = (w, r, k) => () => new THREE.SphereGeometry(1, w, r, 0, Math.PI * 2, 0, Math.PI * k).rotateX(Math.PI / 2); // front shell (pole towards +Z): clothing layered OVER the torso, never intersecting it
 const cn = (n) => () => new THREE.ConeGeometry(1, 1, n).translate(0, 0.5, 0), cy = (n) => () => new THREE.CylinderGeometry(1, 1, 1, n), tr = (r, a, b, arc) => () => new THREE.TorusGeometry(1, r, a, b, arc);
 const SEG = { // [low, mid, high]
   dot: [sp(4, 2), sp(5, 3), sp(6, 4)],
@@ -54,15 +55,17 @@ const SEG = { // [low, mid, high]
   sphT: [sp(5, 3), sp(8, 5), sp(10, 7)],
   sphM: [sp(6, 4), sp(10, 7), sp(11, 8)],
   head: [sp(HEAD_W[0], HEAD_H[0]), sp(HEAD_W[1], HEAD_H[1]), sp(HEAD_W[2], HEAD_H[2])],
-  hemiT: [hemi(4, 2), hemi(5, 2), hemi(6, 2)], hemi: [hemi(5, 2), hemi(8, 3), hemi(10, 3)], hemiS: [hemi(5, 2), hemi(6, 2), hemi(7, 3)], hemiE: [hemi(6, 2), hemi(8, 3), hemi(11, 4)],
+  hemiB: [hemi(8, 2), hemi(12, 2), hemi(18, 2)], sphB: [sp(4, 3), sp(8, 5), sp(9, 5)], hemiT: [hemi(4, 2), hemi(5, 2), hemi(6, 2)], hemi: [hemi(5, 2), hemi(8, 3), hemi(10, 3)], hemiS: [hemi(5, 2), hemi(7, 2), hemi(12, 2)], hemiE: [hemi(7, 2), hemi(10, 2), hemi(18, 2)],
   capA: [capQ(0, 0.3), capQ(1, 0.3), capQ(2, 0.3)], capB: [capQ(0, 0.4), capQ(1, 0.4), capQ(2, 0.4)], capC: [capQ(0, 0.5), capQ(1, 0.5), capQ(2, 0.5)],
+  shellA: [shl(7, 2, 0.3), shl(10, 3, 0.3), shl(14, 4, 0.3)], shellB: [shl(7, 3, 0.56), shl(10, 4, 0.56), shl(14, 6, 0.56)],
   cone6: [cn(4), cn(5), cn(8)], cone8: [cn(5), cn(7), cn(12)],
   cyl8: [cy(4), cy(5), cy(8)], cyl12: [cy(6), cy(9), cy(12)],
   box: [() => roundedBoxGeo(1, 1, 1, 0.22, 1).clone(), () => roundedBoxGeo(1, 1, 1, 0.22, 1).clone(), () => roundedBoxGeo(1, 1, 1, 0.22, 1).clone()],
   bx: [() => new THREE.BoxGeometry(1, 1, 1), () => new THREE.BoxGeometry(1, 1, 1), () => new THREE.BoxGeometry(1, 1, 1)],
   tor: [tr(0.26, 3, 5), tr(0.26, 3, 9), tr(0.26, 5, 14)],
   torS: [tr(0.2, 3, 6), tr(0.2, 3, 8), tr(0.2, 4, 12)],
-  torT: [tr(0.2, 3, 5), tr(0.2, 3, 7), tr(0.2, 3, 8)],
+  torT: [tr(0.05, 3, 6), tr(0.05, 3, 10), tr(0.05, 3, 14)],
+  arcM: [tr(0.11, 3, 5, Math.PI * 0.72), tr(0.11, 3, 6, Math.PI * 0.72), tr(0.11, 3, 8, Math.PI * 0.72)],
   torH: [tr(0.2, 3, 6), tr(0.2, 3, 12), tr(0.2, 3, 16)],
   arcT: [tr(0.2, 3, 4, Math.PI), tr(0.2, 3, 5, Math.PI), tr(0.2, 4, 9, Math.PI)],
   arcB: [tr(0.3, 3, 5, Math.PI), tr(0.3, 3, 6, Math.PI), tr(0.28, 3, 8, Math.PI)],
@@ -161,8 +164,8 @@ const wpick = (rnd, list, wi = 1) => { let s = 0; for (const e of list) s += Arr
 const capOn = (kind, col, s = 1.04, tilt = -0.3, dy = 0, dz = 0, sy = 1) => mk(kind, col, 0, dy, dz, HX * s, HY * s * sy, HZ * s, tilt);
 const hairCap = (c, o, s = 1.045, tilt = -0.34) => c.push(capOn('capB', o.hairG, s, tilt));
 function fringe(c, o) {
-  for (const [x, y, r] of [[-0.17, 0.165, 0.078], [0, 0.195, 0.08], [0.17, 0.165, 0.078]]) { const f = fm('dot', o.hairG, x, y, -0.01, r * 1.1, r * 0.8, r * 0.55); f.userData.opt = 1; c.push(f); }
-  if (Q >= 1) for (const [x, y, r] of [[-0.09, 0.19, 0.06], [0.09, 0.19, 0.06], [-0.255, 0.1, 0.06], [0.255, 0.1, 0.06]]) { const f = fm('sphS', o.hairG, x, y, -0.012, r * 1.1, r * 0.8, r * 0.5); f.userData.opt = 1; c.push(f); }
+  for (const [x, y, r] of [[-0.17, 0.165, 0.078], [0, 0.195, 0.08], [0.17, 0.165, 0.078]]) { const f = fm('sphB', o.hairG, x, y, -0.01, r * 1.1, r * 0.8, r * 0.55); f.userData.opt = 1; c.push(f); }
+  if (Q >= 1) for (const [x, y, r] of [[-0.09, 0.19, 0.06], [0.09, 0.19, 0.06], [-0.255, 0.1, 0.06], [0.255, 0.1, 0.06]]) { const f = fm('sphB', o.hairG, x, y, -0.012, r * 1.1, r * 0.8, r * 0.5); f.userData.opt = 1; c.push(f); }
 }
 /** a hair parting: a thin darker ridge across the crown (high lod) */
 function parting(c, o) { if (Q < 2) return; for (const [x, y, z] of [[-0.07, 0.3, -0.03], [-0.085, 0.265, 0.07], [-0.09, 0.225, 0.16]]) { const m = mk('dot', o.hairD, x, y, z, 0.022, 0.013, 0.028); m.userData.opt = 1; c.push(m); } }
@@ -348,19 +351,19 @@ function buildVillager(color, hat, opts) {
   const belt = (col) => { if (!hi) return; pushO(mk('cyl12', col, 0, 0.245, 0, 0.268 * wm, 0.04, 0.24 * wm), mk('bx', '#ffd24a', 0, 0.245, 0.24 * wm, 0.06, 0.05, 0.02), mk('bx', '#fff0a0', 0, 0.247, 0.252 * wm, 0.032, 0.026, 0.01)); };
   const pocket = (x, y, col) => { if (!hi) return; pushO(mk('sph', col, x, y, 0.2 * wm, 0.05, 0.045, 0.02, 0, x < 0 ? 0.25 : -0.25, 0), mk('sphS', stitch, x, y + 0.036, 0.215 * wm, 0.045, 0.006, 0.01)); };
   if (style === 'apron') {
-    t.push(mk('sph', G(accent, light(accent, 0.2)), 0, 0.26, 0.11 * wm, 0.2 * wm, 0.18, 0.15), mk('sph', accent, 0, 0.42, 0.15, 0.11, 0.08, 0.07),
+    t.push(mk('shellA', G(accent, light(accent, 0.2), 'f'), 0, 0.3, 0, 0.255 * wm * 1.07, 0.215 * 1.07, 0.24 * wm * 1.07, 0.62), mk('sph', accent, 0, 0.43, 0.15, 0.11, 0.08, 0.07),
       mk('bx', light(accent, 0.3), 0, 0.19, 0.225 * wm, 0.11, 0.065, 0.02), mk('cyl8', accent, -0.1, 0.46, 0.04, 0.02, 0.1, 0.02, 0.0, 0, -0.5), mk('cyl8', accent, 0.1, 0.46, 0.04, 0.02, 0.1, 0.02, 0.0, 0, 0.5),
       mk('sph', dark(accent, 0.15), 0.235 * wm, 0.27, -0.02, 0.045, 0.055, 0.055));
-    pocket(-0.0, 0.17, dark(accent, 0.1)); if (hi) pushO(mk('torT', stitch, 0, 0.118, 0.115 * wm, 0.19 * wm, 0.19 * wm, 0.05, Math.PI / 2 - 0.12));
+    pocket(-0.0, 0.17, dark(accent, 0.1)); if (hi) pushO(mk('torT', stitch, 0, 0.118, 0.115 * wm, 0.19 * wm, 0.19 * wm, 0.16, Math.PI / 2 - 0.12));
     belt('#b88652');
   } else if (style === 'overalls') {
-    t.push(mk('sph', G(outfit, light(outfit, 0.15), 'f'), 0, 0.25, 0.04, 0.265 * wm, 0.165, 0.215 * wm), mk('sph', outfit, 0, 0.4, 0.15, 0.12, 0.085, 0.07), mk('bx', outfit, -0.105, 0.46, 0.06, 0.045, 0.13, 0.055, 0, 0, 0.12), mk('bx', outfit, 0.105, 0.46, 0.06, 0.045, 0.13, 0.055, 0, 0, -0.12),
+    t.push(mk('shellB', G(outfit, light(outfit, 0.15), 'f'), 0, 0.3, 0, 0.255 * wm * 1.06, 0.215 * 1.06, 0.24 * wm * 1.06, 0.62), mk('sph', outfit, 0, 0.4, 0.15, 0.12, 0.085, 0.07), mk('bx', outfit, -0.105, 0.46, 0.06, 0.045, 0.13, 0.055, 0, 0, 0.12), mk('bx', outfit, 0.105, 0.46, 0.06, 0.045, 0.13, 0.055, 0, 0, -0.12),
       mk('sph', '#ffd24a', -0.105, 0.42, 0.2, 0.026), mk('sph', '#ffd24a', 0.105, 0.42, 0.2, 0.026), mk('bx', accent, 0.0, 0.24, 0.215 * wm, 0.13, 0.085, 0.025));
     pocket(0, 0.38, dark(outfit, 0.1));
   } else if (style === 'tunic') {
     t.push(mk('cyl12', accent, 0, 0.245, 0, 0.268 * wm, 0.045, 0.24 * wm), mk('bx', '#ffd24a', 0, 0.245, 0.24 * wm, 0.065, 0.055, 0.02), mk('cyl12', G(light(shirt, 0.12), shirt, 'f'), 0, 0.16, 0, 0.268 * wm, 0.08, 0.238 * wm),
       mk('sph', '#ffd24a', 0, 0.385, 0.215, 0.025), mk('sph', '#ffd24a', 0, 0.345, 0.228, 0.025));
-    if (hi) pushO(mk('torT', stitch, 0, 0.088, 0, 0.262 * wm, 0.235 * wm, 0.04, Math.PI / 2));
+    if (hi) pushO(mk('torT', stitch, 0, 0.088, 0, 0.262 * wm, 0.235 * wm, 0.2, Math.PI / 2));
     pocket(-0.13 * wm, 0.15, dark(shirt, 0.12));
   } else { // cloak
     t.push(mk('sphS', dark(outfit, 0.1), 0, 0.27, -0.1, 0.28 * wm, 0.24, 0.11), mk('cone8', G(dark(outfit, 0.06), outfit, 'f'), 0, 0.02, -0.12, 0.27 * wm, 0.3, 0.12, Math.PI, 0, 0), mk('capA', G(outfit, light(outfit, 0.25), 'f'), 0, 0.405, 0.0, 0.3 * wm, 0.2, 0.26, 0.04), mk('sph', accent, 0, 0.25, 0.23, 0.11, 0.045, 0.025),
@@ -379,7 +382,7 @@ function buildVillager(color, hat, opts) {
   function makeArm(side) {
     const a = new THREE.Group(); a.position.set(side * 0.255 * wm, 0.44, 0); a.rotation.z = side * 0.14;
     const parts = [mk('sphS', G(shirt, light(shirt, 0.12), 'f'), 0, -0.08, 0, 0.076, 0.105, 0.076), mk('sphS', G(skin, skinTop, 'w'), 0, -0.195, 0, 0.07, 0.068, 0.068)];
-    if (mid) parts.push(mk('dot', G(skin, skinTop, 'w'), -side * 0.052, -0.2, 0.034, 0.03, 0.034, 0.03)); if (hi) parts.push(mk('torT', light(shirt, 0.35), 0, -0.145, 0, 0.066, 0.066, 0.05, Math.PI / 2));
+    if (mid) parts.push(mk('dot', G(skin, skinTop, 'w'), -side * 0.052, -0.2, 0.034, 0.03, 0.034, 0.03)); if (hi) parts.push(mk('torT', light(shirt, 0.35), 0, -0.145, 0, 0.068, 0.068, 0.06, Math.PI / 2));
     for (const m of bake(parts).children) a.add(m);
     return a;
   }
@@ -403,11 +406,11 @@ function buildVillager(color, hat, opts) {
   // ----- head
   const head = new THREE.Group(); head.name = 'head'; head.position.y = HEAD_Y; body.add(head);
   const hs = [];
-  hs.push(mk('head', G(skin, skinTop, 'w'), 0, 0, 0, HX, HY, HZ));
+  { const k = Q === 0 ? 0.955 : 1; hs.push(mk('head', G(skin, skinTop, 'w'), 0, 0, 0, HX * k, HY * k, HZ * k)); }
   hs.push(fm('hemiS', G(skin, skinTop, 'w'), -0.335, -0.02, -0.02, 0.055, 0.075, 0.055), fm('hemiS', G(skin, skinTop, 'w'), 0.335, -0.02, -0.02, 0.055, 0.075, 0.055));
   if (hi) hs.push(fm('hemiS', blush, -0.337, -0.02, -0.004, 0.028, 0.045, 0.03), fm('hemiS', blush, 0.337, -0.02, -0.004, 0.028, 0.045, 0.03));
-  if (nose) hs.push(fm('hemi', G(noseC, light(noseC, 0.25), 'z'), 0, -0.075, -0.006, 0.03, 0.024, 0.028));
-  const ch = child ? 1.15 : 1, bl = (s) => fm('hemiS', G(skin, blush, 'z'), s * 0.23, -0.12, -0.012, 0.105 * ch, 0.066 * ch, 0.024);
+  if (nose) hs.push(fm('hemi', G(noseC, light(noseC, 0.25), 'z'), 0, -0.075, -0.006, 0.026, 0.02, 0.024));
+  const ch = child ? 1.15 : 1, bl = (s) => fm('hemiB', G(skin, blush, 'z'), s * 0.23, -0.12, -0.012, 0.105 * ch, 0.066 * ch, 0.016);
   hs.push(bl(-1), bl(1));
   const g0 = hs.length; (GEAR[gear] || GEAR.short)(hs, gearO);
   for (let i = g0; i < hs.length; i++) { const m = hs[i]; if (Math.max(m.scale.x, m.scale.y, m.scale.z) <= 0.09) m.userData.opt = 1; } // tiny trinkets may be dropped if the model is over budget
@@ -427,7 +430,7 @@ function buildVillager(color, hat, opts) {
     add(ep, fm('hemiE', '#2a1c2a', X, EY, -0.016, erx, ery, 0.036, 0, eyeMat));
     if (mid) add(ep, fm('hemiS', G(irisC, irisL, 'i'), X, EY - 0.03, -0.004, erx * (hi ? 0.78 : 0.7), ery * (hi ? 0.6 : 0.5), 0.022, 0, eyeMat));
     if (hi) add(ep, fm('hemiT', '#1c1220', X, EY - 0.022, 0.004, erx * 0.34, ery * 0.3, 0.02, 0, eyeMat));
-    if (hi) add(ep, fm('arcL', mixHex(skinD, '#3a2230', 0.8), X, EY + ery * 0.2, 0.002, erx * 1.12, ery * 1.12, 0.03, 0, eyeMat));
+    if (hi) add(ep, fm('arcM', mixHex(skinD, '#3a2230', 0.8), X, EY + ery * 0.12, 0.002, erx * 1.06, ery * 1.06, 0.03, Math.PI * 0.14, eyeMat));
     add(hp, fm('hemiS', '#ffffff', X - erx * 0.3, EY + ery * 0.38, 0.014, erx * 0.38, erx * 0.42, 0.014, 0, hiMat));
     add(hp, fm('hemiS', '#ffffff', X + erx * 0.36, EY - ery * 0.38, 0.012, erx * 0.17, erx * 0.17, 0.012, 0, hiMat));
   }

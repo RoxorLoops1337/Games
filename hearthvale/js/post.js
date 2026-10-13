@@ -100,9 +100,9 @@ void main(){
   #ifdef DOF
   float m = smoothstep(uTiltW, 1.0, abs(uv.y - uFocusY) * 2.0); m = m * m * uTilt;
   if (m > 0.004) {
-    vec4 b = vec4(0.0); float R = 0.024 * m;
+    vec4 b = vec4(0.0); float R = 0.016 * m;
     for (int i = 0; i < 10; i++) { float a = float(i) * 2.39996; float r = sqrt((float(i) + 0.5) / 10.0); b += texture2D(tBlur, uv + vec2(cos(a) / asp, sin(a)) * r * R); }
-    s = mix(s, b * 0.1, clamp(m * 1.6, 0.0, 1.0));
+    s = mix(s, b * 0.1, clamp(m * 1.25, 0.0, 1.0));
   }
   #endif
   #ifdef AO
@@ -170,11 +170,11 @@ export class Post {
     // tunable look (defaults reproduce the old CSS filter, then add a little richness)
     this.U = {
       tScene: { value: null }, tBlur: { value: null }, tBloom: { value: null }, tRay: { value: null }, tDepth: { value: null }, uRes: { value: new THREE.Vector2(2, 2) },
-      uExposure: { value: 1.1 }, uBloom: { value: 0.5 }, uTilt: { value: 0 }, uTiltW: { value: 0.34 }, uFocusY: { value: 0.5 },
+      uExposure: { value: 1.1 }, uBloom: { value: 0.5 }, uTilt: { value: 0 }, uTiltW: { value: 0.52 }, uFocusY: { value: 0.5 },
       uSat: { value: 1.2 }, uVib: { value: 0.22 }, uContrast: { value: 1.05 }, uLift: { value: new THREE.Vector3(0.006, 0.004, 0.016) }, uGamma: { value: new THREE.Vector3(1.03, 1.02, 1.03) }, uGain: { value: new THREE.Vector3(1.0, 1.0, 1.0) },
       uTintS: { value: new THREE.Vector3(0.97, 0.95, 1.05) }, uTintH: { value: new THREE.Vector3(1.04, 1.01, 0.95) }, uSplit: { value: 1 },
       uVig: { value: 0.55 }, uVigCol: { value: new THREE.Vector3(0.9, 0.88, 0.98) }, uGrain: { value: 0 }, uTime: { value: 0 }, uFlash: { value: new THREE.Vector4(1, 1, 1, 0) },
-      uSun: { value: new THREE.Vector4(0.5, 0.5, 0, 0) }, uSunCol: { value: new THREE.Vector3(1, 0.85, 0.6) }, uRays: { value: 0.22 },
+      uSun: { value: new THREE.Vector4(0.5, 0.5, 0, 0) }, uSunCol: { value: new THREE.Vector3(1, 0.85, 0.6) }, uRays: { value: 0.1 },
       uAO: { value: 0.9 }, uCam: { value: new THREE.Vector2(0.5, 600) }, uFocal: { value: 1 }, uAoR: { value: 0.8 }, uSkyRaw: { value: 1 }, uHaze: { value: new THREE.Vector3() },
     };
     this.matCache = new Map(); this.mats = null; this.rt = {}; this.down = []; this.up = [];

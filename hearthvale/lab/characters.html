@@ -41,7 +41,8 @@ if (q.get('gears')) {
   if (!q.has('dist')) st.look.dist = 30; if (!q.has('pitch')) st.look.pitch = 0.9;
 } else if (q.get('lods')) {
   // the same villagers at low / mid / high, side by side (rows = 3 looks)
-  for (let r = 0; r < 3; r++) ['low', 'mid', 'high'].forEach((l, k) => { const g = villagerModel('#e8564a', 7 + r * 19, { lod: l, seed: 7 + r * 19, tool: TOOLS[(r * 3 + 1) % 8], age: 'adult', build: 'normal' }); put(g, (k - 1) * 1.7, r * 1.9 - 1.9, 'idle', r + k); });
+  const only = q.has('r') ? +q.get('r') : -1;
+  for (let r = 0; r < 3; r++) if (only < 0 || only === r) ['low', 'mid', 'high'].forEach((l, k) => { const g = villagerModel('#e8564a', +(q.get('hat') || 7) + r * 19, { lod: l, seed: +(q.get('hat') || 7) + r * 19, tool: TOOLS[(r * 3 + 1) % 8], age: 'adult', build: 'normal' }); put(g, (k - 1) * 1.7, only < 0 ? r * 1.9 - 1.9 : 0, q.get('pose') || 'idle', r + k); });
   if (!q.has('dist')) st.look.dist = 8; if (!q.has('pitch')) st.look.pitch = 0.4;
 } else {
   const sec = q.get('sec'); const on = (k) => !sec || sec === k; const Z = (k, z) => (sec ? 0 : z);
@@ -64,6 +65,7 @@ if (q.get('gears')) {
   if (on('carry')) CARRY_KINDS.forEach((k, i) => { const g = V(P.outfit[i], 70 + i * 5, {}); setCarry(g, k); put(g, (i - 2) * 1.6, Z('carry', 24), 'carry', i); });
   if (!q.has('dist')) st.look.dist = 20;
 }
+if (q.has('focus') && anims[+q.get('focus')]) { const f = anims[+q.get('focus')].g.position; st.look.x = f.x; st.look.z = f.z; st.look.y = +(q.get('fy') || 0.7); }
 const ui = document.getElementById('ui');
 function row(label, items, cur, on) {
   const r = document.createElement('div'); r.className = 'row'; const b = document.createElement('b'); b.textContent = label; r.appendChild(b);

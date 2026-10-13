@@ -225,14 +225,14 @@ export class View {
     U.mid.value.copy(C.midN).lerp(C.midD, day).lerp(C.midS, dusk * 0.75).lerp(C.grey, ra * 0.6);
     U.hor.value.copy(C.horN).lerp(C.horD, day).lerp(C.horS, dusk * 0.85).lerp(C.grey, ra * 0.65);
     this.scene.background.copy(U.mid.value); this.scene.fog.color.copy(U.hor.value);
-    this.scene.fog.near = 100 - 50 * ra; this.scene.fog.far = 260 - 120 * ra;
+    this.scene.fog.near = 100 + this.look.dist * 1.3 - 50 * ra; this.scene.fog.far = 260 + this.look.dist * 1.3 - 120 * ra;
     this.dome.position.copy(this.cam.position);
     // the sun glow crosses the sky (west to east over the valley) and warms at the horizon
     this.sunGlow.position.set(this.cam.position.x + Math.cos(a) * 280, this.cam.position.y + Math.max(0.04, sn) * 260 - 10, this.cam.position.z - 120);
     this.sunGlow.visible = sn > -0.05 && ra < 0.7; this.sunGlow.material.opacity = Math.min(1, (sn + 0.05) * 5) * (1 - ra); this.sunGlow.material.color.set('#ffffff').lerp(C.tmp.set('#ffb070'), dusk * 0.6);
     // high-key light: strong soft fill from the hemisphere so shadows stay bright, a golden sun, a lavender moon
-    this.sun.intensity = (1.55 + 1.0 * day) * (1 - 0.3 * ra); this.sun.color.set('#c9d2ff').lerp(C.tmp.set('#fff1cf'), day).lerp(C.tmp.set('#ffb070'), dusk * 0.5);
-    this.hemi.intensity = 1.25 + 0.3 * day + 0.2 * ra; this.hemi.color.set('#b5c2ff').lerp(C.tmp.set('#ecefff'), day); this.hemi.groundColor.set('#9ccc78').lerp(C.tmp.set('#b4ea84'), day);
+    this.sun.intensity = (1.5 + 0.62 * day) * (1 - 0.3 * ra); this.sun.color.set('#c9d2ff').lerp(C.tmp.set('#fff1cf'), day).lerp(C.tmp.set('#ffb070'), dusk * 0.5);
+    this.hemi.intensity = 1.3 + 0.62 * day + 0.2 * ra; this.hemi.color.set('#b5c2ff').lerp(C.tmp.set('#ecefff'), day); this.hemi.groundColor.set('#9ccc78').lerp(C.tmp.set('#b4ea84'), day);
     this.night = 1 - day;
     this.winMat.emissiveIntensity = Math.max(0, 1 - day * 1.6) * 1.6; this.lanternMat.emissiveIntensity = (1 - day) * 2.4; envLantern.emissiveIntensity = (1 - day) * 2.4; lampMat.emissiveIntensity = 0.25 + (1 - day) * 2.2; propLantern.emissiveIntensity = 0.25 + (1 - day) * 2.2;
     cloudMat.color.set('#ffffff').lerp(C.tmp.set('#8d9cc8'), (1 - day) * 0.8); this.fx.setLight && this.fx.setLight(0.4 + 0.6 * day);
@@ -248,7 +248,7 @@ export class View {
   shadowFollow(L) {
     const sun = this.sun, sc = sun.shadow.camera, e = Math.ceil(Math.max(22, Math.min(40, L.dist * 1.1)) / 2) * 2, size = sun.shadow.mapSize.x || 1536;
     if (Math.abs(sc.right - e) > 0.5) { sc.left = -e; sc.right = e; sc.top = e; sc.bottom = -e; sc.updateProjectionMatrix(); }
-    const off = this._soff || (this._soff = new THREE.Vector3(30, 50, 20)), z = this._sz || (this._sz = off.clone().normalize()), xa = this._sx || (this._sx = new THREE.Vector3(0, 1, 0).cross(z).normalize()), ya = this._sy || (this._sy = z.clone().cross(xa));
+    const off = this._soff || (this._soff = new THREE.Vector3(30, 50, 20)), z = this._lz || (this._lz = off.clone().normalize()), xa = this._lx || (this._lx = new THREE.Vector3(0, 1, 0).cross(z).normalize()), ya = this._ly || (this._ly = z.clone().cross(xa));
     const texel = (2 * e) / size, rx = L.x * xa.x + L.z * xa.z, ry = L.x * ya.x + L.z * ya.z, sx = Math.round(rx / texel) * texel - rx, sy = Math.round(ry / texel) * texel - ry;
     const tx = L.x + xa.x * sx + ya.x * sy, ty = xa.y * sx + ya.y * sy, tz = L.z + xa.z * sx + ya.z * sy;
     sun.target.position.set(tx, ty, tz); sun.position.set(tx + off.x, ty + off.y, tz + off.z);
@@ -268,7 +268,7 @@ export class View {
     v.set(sp.x - cp.x, sp.y - cp.y, sp.z - cp.z).normalize().multiplyScalar(200).add(cp); const view = v.clone().applyMatrix4(this.cam.matrixWorldInverse); v.project(this.cam);
     const up = sm(this._sn, -0.02, 0.14) * (1 - ra), vis = view.z < 0 ? Math.max(0, Math.min(1, 1.9 - Math.max(Math.abs(v.x), Math.abs(v.y)))) : 0;
     U.uSun.value.set(v.x * 0.5 + 0.5, v.y * 0.5 + 0.5, up * vis, 0); U.uSunCol.value.set(1.0, 0.86, 0.62).lerp(this._sc || (this._sc = new THREE.Vector3(1.0, 0.62, 0.38)), this._dusk * 0.7);
-    U.uRays.value = 0.2; U.uFlash.value.set(F.r, F.g, F.b, F.a);
+    U.uRays.value = 0.1; U.uFlash.value.set(F.r, F.g, F.b, F.a);
   }
   finishFrame(dt) {
     const F = this._flash; if (F.a > 0) F.a = Math.max(0, F.a - F.rate * dt);

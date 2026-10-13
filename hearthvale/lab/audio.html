@@ -123,7 +123,7 @@ function analyse(ab, from = 0) {
     dc, tail: (last - pkH) * 0.01, end: last * 0.01 + 0.01, secs: nh * 0.01,
   };
 }
-async function renderSound(name, secs = 6) {
+async function renderSound(name, secs = 8) {
   const oc = new OfflineAudioContext(2, SR * secs, SR), eng = Audio.createEngine(oc, { seed: 1234, settings: { master: 1, music: 1, sfx: 1, amb: 1, muted: false }, offline: true });
   const ok = eng.sfx(name, { delay: 0.02 }); const ab = await oc.startRendering(); eng.dispose(); return { ab, ok };
 }
