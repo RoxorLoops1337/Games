@@ -325,6 +325,8 @@ body.low .en-petal { animation-duration: calc(var(--d) * 1.5), 3s; }
 .tut-in { position: relative; display: flex; gap: 10px; padding: 11px 14px 9px 12px; color: var(--ink); border: 3px solid transparent; border-radius: 16px 20px 16px 22px / 18px 14px 20px 14px;
   background: linear-gradient(180deg, #fff8ec, #fff4e6) padding-box, linear-gradient(135deg, #ff7eb6, #ffc9de 45%, #3fcf6a) border-box;
   box-shadow: 0 5px 0 var(--ink), 0 14px 26px rgba(0, 0, 0, .55), 0 0 26px rgba(255, 201, 222, .5); }
+.tut.see { opacity: .16; }
+.tut.see .tut-ok, .tut.see .tut-off { pointer-events: auto; }
 .tut-seal { flex: none; margin-top: 2px; } .tut-seal .hanko { font-size: 13px; }
 .tut-main { flex: 1; min-width: 0; }
 .tut-title { display: block; font: 800 calc(17px * var(--ts)) / 1.15 var(--font-display); letter-spacing: .03em; color: var(--hv-pink-d, #c93f78); }

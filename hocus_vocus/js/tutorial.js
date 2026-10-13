@@ -245,6 +245,16 @@
     safe(() => UI.announce(def.title + '. ' + def.text));
     safe(() => { if (typeof AUDIO !== 'undefined' && AUDIO && isFn(AUDIO.sfx)) AUDIO.sfx('reveal_landmark'); });
     if (!headless()) {
+      // see-through: the bubble parks over the stage (the Breath tip sits where a boss fight keeps its minions), so while the pointer is over it, other than over its two
+      // buttons, it fades to a ghost and the player can read and aim at whatever is underneath
+      const see = (e) => {
+        if (S.cur !== h || h.closing) { window.removeEventListener('pointermove', see); return; }
+        const r = parts.node.getBoundingClientRect();
+        const over = e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom;
+        const onBtn = !!(e.target && e.target.closest && e.target.closest('.tut-ok, .tut-off'));
+        parts.node.classList.toggle('see', over && !onBtn);
+      };
+      window.addEventListener('pointermove', see);
       // the frame-clock upkeep: re-aim at a moving anchor, and expire after the time to live. UI.after dies with the screen, which is what we want.
       const tick = () => { if (S.cur !== h || h.closing) return; place(h); UI.after(250, tick); };
       UI.after(250, tick);

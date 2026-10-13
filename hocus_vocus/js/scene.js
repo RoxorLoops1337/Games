@@ -2101,6 +2101,38 @@ const SCENE = (() => {
     ctx.restore();
   }
 
+  // A small unit standing behind a big one (a Mic Squeal beside Kraki) is mostly painted over. A dashed cream outline on top, in the unit's own rect, keeps it findable and
+  // tappable-looking. Only drawn when more than 45% of the small unit's rect lies under a bigger enemy that is drawn after it.
+  function drawHiddenMarks(ctx, t) {
+    const foes = [];
+    for (let i = 0; i < S.actors.length; i++) {
+      const a = S.actors[i];
+      if (a.kind !== 'enemy' || a.gone || a.dying || a.fled || a.down) continue;
+      foes.push({ a, r: anchorOf(a), z: zOf(a) });
+    }
+    if (foes.length < 2) return;
+    for (let i = 0; i < foes.length; i++) {
+      const s = foes[i], sa = s.r.w * s.r.h;
+      let covered = 0;
+      for (let j = 0; j < foes.length; j++) {
+        if (i === j) continue;
+        const b = foes[j];
+        if (b.z <= s.z || b.r.w * b.r.h < sa * 1.8) continue;
+        const ox = max(0, min(s.r.x + s.r.w, b.r.x + b.r.w) - max(s.r.x, b.r.x)), oy = max(0, min(s.r.y + s.r.h, b.r.y + b.r.h) - max(s.r.y, b.r.y));
+        covered = max(covered, ox * oy / sa);
+      }
+      if (covered < 0.45) continue;
+      const hv = S.hover && S.hover.id === s.a.id, al = (hv ? 0.95 : 0.6) * s.a.alpha;
+      ctx.save();
+      ctx.globalAlpha = al; ctx.lineJoin = 'round'; ctx.setLineDash([9, 7]); ctx.lineDashOffset = -t * 14;
+      const x = s.r.x + 4, y = s.r.y + 4, w = s.r.w - 8, h = s.r.h - 8, rad = 16;
+      ctx.beginPath(); ctx.moveTo(x + rad, y); ctx.arcTo(x + w, y, x + w, y + h, rad); ctx.arcTo(x + w, y + h, x, y + h, rad); ctx.arcTo(x, y + h, x, y, rad); ctx.arcTo(x, y, x + w, y, rad); ctx.closePath();
+      ctx.lineWidth = 6; ctx.strokeStyle = HV.line; ctx.stroke();
+      ctx.lineWidth = 3; ctx.strokeStyle = hv ? HV.lime : HV.cream; ctx.stroke();
+      ctx.restore();
+    }
+  }
+
   // ---- fx, particles, numbers ---------------------------------------------------------------------------------------
   function drawFxLayer(ctx, layer) {
     for (let i = 0; i < S.fx.length; i++) {
@@ -2446,6 +2478,7 @@ const SCENE = (() => {
     });
     guard(ctx, 'back-particles', () => drawParticles(ctx, false));
     for (let i = 0; i < S.order.length; i++) { const a = S.order[i]; if (!a.gone) guard(ctx, 'actor', () => drawActor(ctx, a, t)); }
+    guard(ctx, 'hidden-marks', () => drawHiddenMarks(ctx, t));
     guard(ctx, 'fx1', () => drawFxLayer(ctx, 1));
     guard(ctx, 'front-particles', () => drawParticles(ctx, true));
     guard(ctx, 'ambient-front', () => drawAmbient(ctx, true));
