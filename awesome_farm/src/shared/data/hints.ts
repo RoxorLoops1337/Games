@@ -27,6 +27,10 @@ interface HintCtx {
     friendNear?: boolean;
     /** Rain still to come: 0 later today, 1 tomorrow, null (or left out) none in sight. */
     rain?: 0 | 1 | null;
+    /** Days until the next Blood Moon night when it is within two days (0: tonight), else null or left out. */
+    moon?: 0 | 1 | 2 | null;
+    /** Days until winter begins when it is within two days (0: today), else null or left out. */
+    winter?: 0 | 1 | 2 | null;
     /** The dusk countdown is on (or it is night): only a hint about what is happening right now may speak. Optional. */
     alarm?: boolean;
 }
@@ -131,6 +135,16 @@ export const HINTS: Hint[] = [
         id: 'needs', icon: 'k_flag', color: PAL.pumpkin,
         when: (c) => c.me.stats.built >= 12,
         text: () => 'Your farm is getting big: press T to see what needs you (ripe crops, machines out of fuel, full chests) and ping the nearest one.',
+    },
+    {
+        id: 'moon', icon: 'k_skull', color: PAL.berry,
+        when: (c) => c.moon != null && c.me.level >= 3,
+        text: (c) => `A Blood Moon ${c.moon === 0 ? 'rises tonight' : c.moon === 1 ? 'rises tomorrow night' : 'rises in two nights'}: monsters hit harder and come in more waves. Fill your hotbar with food, mend your walls, and gather your friends.`,
+    },
+    {
+        id: 'winter', icon: 'k_rain', color: PAL.foam,
+        when: (c) => c.winter != null && (c.me.cnt?.['build:bed'] ?? 0) > 0,
+        text: (c) => `Winter ${c.winter === 0 ? 'begins today' : c.winter === 1 ? 'begins tomorrow' : 'begins in two days'}: crops barely grow and the nights are long. Build Glass Roofs over your beds to keep them growing, and keep a fire lit.`,
     },
     {
         id: 'stash', icon: 'k_bag', color: PAL.sand,
