@@ -4,6 +4,7 @@
 // Environment lab. Default = gallery (everything laid out). ?view=island = the whole island like the game.
 // ?view=nodes|fields|board|plaza|plots|bits jumps the camera; x,z,dist,yaw,pitch,night as usual (see stage.js).
 // ?view=island&preset=valley|village|close|vista|top&plots=0,1,2 (occupied slots) shows the game's valley; add &night=1 for the lamp-lit night.
+// &gq=0|1|2 forces the ground detail level (the game follows its quality tier by itself); the page exposes __st, __E and __stats for measuring.
 import * as THREE from 'three';
 import * as E from '../art/environment.js';
 import { mountStage } from './stage.js';

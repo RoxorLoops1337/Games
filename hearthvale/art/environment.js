@@ -94,13 +94,16 @@ const GROUND_FRAG = `
 if ( vGk > 0.5 && uGq > -0.5 ) {
   bool world = vGk > 1.5 && vGk < 2.5; vec2 q = world ? vWP.xz : vLP; float dcam = length( vWP - cameraPosition );
   float fd = 1.0 - smoothstep( 40.0, 105.0, dcam );
-  vec4 t1 = uGq > 0.5 ? texture2D( uDet, q * 0.71 ) : vec4( 0.5 ); vec4 t2 = texture2D( uDet, q * 0.173 + vec2( 0.31, 0.77 ) ); vec4 t3 = texture2D( uDet, q * 0.043 + vec2( 0.63, 0.12 ) );
+  vec4 t1 = vec4( 0.5 ); vec4 t2 = vec4( 0.5 ); vec4 t3 = vec4( 0.5 );
+  if ( uGq > 0.5 ) { t2 = texture2D( uDet, q * 0.173 + vec2( 0.31, 0.77 ) ); t3 = texture2D( uDet, q * 0.043 + vec2( 0.63, 0.12 ) ); if ( uGq > 1.5 ) t1 = texture2D( uDet, q * 0.71 ); }
   vec3 c = diffuseColor.rgb;
-  if ( world ) { c = mix( c, ${glv('#d4f56e')}, 0.5 * smoothstep( 0.4, 0.85, t3.r ) ); c = mix( c, ${glv('#3fc982')}, 0.3 * smoothstep( 0.5, 0.05, t3.g ) ); c = mix( c, ${glv('#6fe3a2')}, 0.3 * smoothstep( 0.45, 0.95, t2.g ) * smoothstep( 0.6, 0.3, t3.r ) ); }
-  c *= 0.92 + 0.16 * t2.b; c *= 0.95 + 0.1 * t1.b;
-  c = mix( c, c * 1.16 + vec3( 0.012, 0.03, 0.0 ), 0.7 * fd * smoothstep( 0.64, 0.95, t1.a ) ); c *= 1.0 - 0.09 * fd * smoothstep( 0.34, 0.04, t1.a );
+  if ( uGq > 0.5 ) {
+    if ( world ) { c = mix( c, ${glv('#d4f56e')}, 0.5 * smoothstep( 0.4, 0.85, t3.r ) ); c = mix( c, ${glv('#3fc982')}, 0.3 * smoothstep( 0.5, 0.05, t3.g ) ); c = mix( c, ${glv('#6fe3a2')}, 0.3 * smoothstep( 0.45, 0.95, t2.g ) * smoothstep( 0.6, 0.3, t3.r ) ); }
+    c *= 0.92 + 0.16 * t2.b; c *= 0.95 + 0.1 * t1.b;
+    c = mix( c, c * 1.16 + vec3( 0.012, 0.03, 0.0 ), 0.7 * fd * smoothstep( 0.64, 0.95, t1.a ) ); c *= 1.0 - 0.09 * fd * smoothstep( 0.34, 0.04, t1.a );
+  }
   float fd2 = 1.0 - smoothstep( 22.0, 62.0, dcam );
-  if ( fd2 > 0.01 && uGq > 1.5 ) { vec2 tc = q / 0.3; vec2 ti = floor( tc ); vec2 tf = fract( tc ) - 0.5; vec2 off = ( vec2( hv_h( ti + 3.0 ), hv_h( ti + 8.0 ) ) - 0.5 ) * 0.3; float on = step( hv_h( ti + 12.0 ), 0.62 ); if ( on > 0.5 ) { float tu = hv_tuft( tf - off ) * fd2; c = mix( c, c * vec3( 1.12, 1.2, 0.92 ) + vec3( 0.01, 0.03, 0.0 ), tu * 0.6 ); } }
+  if ( fd2 > 0.01 && uGq > 1.5 ) { vec2 tc = q / 0.3; vec2 ti = floor( tc ); vec2 tf = fract( tc ) - 0.5; vec2 off = ( vec2( hv_h( ti + 3.0 ), hv_h( ti + 8.0 ) ) - 0.5 ) * 0.3; float on = step( hv_h( ti + 12.0 ), 0.62 ); if ( on > 0.5 ) { float tu = hv_tuft( tf - off ) * fd2, ts = world ? 0.6 : 0.95; float sh = hv_tuft( tf - off - vec2( 0.035, 0.03 ) ) * fd2 * ( 1.0 - tu ); c = mix( c, c * vec3( 0.8, 0.92, 0.78 ), sh * ts * 0.5 ); c = mix( c, c * vec3( 1.16, 1.24, 0.9 ) + vec3( 0.015, 0.04, 0.0 ), tu * ts ); } }
   if ( world ) {
     vec4 mk = texture2D( uMask, ( vWP.xz + 80.0 ) / 160.0 ); float nz = ( t1.r - 0.5 ) * 0.34 + ( t2.g - 0.5 ) * 0.3;
     float dirt = smoothstep( 0.45, 0.55, mk.r + nz ), cob = smoothstep( 0.48, 0.56, mk.g + nz * 0.5 ), wet = smoothstep( 0.12, 0.62, mk.b + nz * 0.5 ), pet = mk.a;
@@ -124,14 +127,14 @@ if ( vGk > 0.5 && uGq > -0.5 ) {
       if ( fd > 0.01 && uGq > 1.5 ) { vec2 pc2 = q / 0.17; vec2 pi2 = floor( pc2 ); float h2 = hv_h( pi2 + 71.0 ); dc = mix( dc, ${glv('#fff3d6')}, step( 0.92, h2 ) * smoothstep( 0.17, 0.08, length( fract( pc2 ) - 0.5 ) ) * fd ); }
       c = mix( c, dc, dirt ); }
     // cobbles: offset rows, a grout line and a lit top edge per stone
-    if ( cob > 0.002 ) { vec2 cp = q * 2.6; float row = floor( cp.y ); cp.x += row * 0.5 + hv_h( vec2( row, 3.0 ) ) * 0.3; vec2 cf = fract( cp ); vec2 id = vec2( floor( cp.x ), row );
+    if ( cob > 0.002 ) { if ( uGq > 0.5 ) { vec2 cp = q * 2.6; float row = floor( cp.y ); cp.x += row * 0.5 + hv_h( vec2( row, 3.0 ) ) * 0.3; vec2 cf = fract( cp ); vec2 id = vec2( floor( cp.x ), row );
       float hh = hv_h( id ); vec3 sc = hh < 0.3 ? ${glv('#fbe7b4')} : hh < 0.6 ? ${glv('#f3d9a0')} : hh < 0.85 ? ${glv('#fff3d4')} : ${glv('#f6dcd2')};
       float ex = min( min( cf.x, 1.0 - cf.x ) * 1.15, min( cf.y, 1.0 - cf.y ) ); float stone = smoothstep( 0.04, 0.17, ex ); sc *= 0.9 + 0.1 * stone + 0.06 * hh; sc = mix( ${glv('#cdb27a')}, sc, mix( 1.0, stone, fd ) );
-      c = mix( c, sc, cob ); }
+      c = mix( c, sc, cob ); } else c = mix( c, ${glv('#f6dfa8')}, cob ); }
   } else if ( vGk < 1.5 ) {   // plot lawn: subtle checker, soft seams, darker toward the curb, a few daisy freckles
     vec2 tp = vLP + 8.0; vec2 ti = floor( tp ); float chk = mod( ti.x + ti.y, 2.0 ); c *= mix( 0.935, 1.045, chk ); vec2 tf = fract( tp ); float seam = min( min( tf.x, 1.0 - tf.x ), min( tf.y, 1.0 - tf.y ) ); c *= 0.965 + 0.035 * smoothstep( 0.0, 0.07, seam );
-    float ed = 8.0 - max( abs( vLP.x ), abs( vLP.y ) ); c *= 0.9 + 0.1 * smoothstep( 0.0, 1.8, ed ); c = mix( c, ${glv('#c8f58a')}, 0.35 * smoothstep( 0.6, 0.9, t3.r ) * smoothstep( 0.2, 1.0, ed ) );
-    if ( fd > 0.01 && uGq > 1.5 ) { vec2 fc = vLP / 0.45; vec2 fi = floor( fc ); vec2 ff = fract( fc ) - 0.5; vec2 off = ( vec2( hv_h( fi + 3.0 ), hv_h( fi + 8.0 ) ) - 0.5 ) * 0.4; float on = step( hv_h( fi + 5.5 ), 0.06 + 0.12 * smoothstep( 0.55, 0.85, t3.g ) );
+    float ed = 8.0 - max( abs( vLP.x ), abs( vLP.y ) ); c *= 0.9 + 0.1 * smoothstep( 0.0, 1.8, ed ); c = mix( c, ${glv('#c8f58a')}, 0.5 * smoothstep( 0.55, 0.9, t3.r ) * smoothstep( 0.2, 1.0, ed ) ); c = mix( c, c * vec3( 0.86, 0.97, 0.84 ), 0.5 * smoothstep( 0.5, 0.1, t3.g ) );
+    if ( fd > 0.01 && uGq > 1.5 ) { vec2 fc = vLP / 0.45; vec2 fi = floor( fc ); vec2 ff = fract( fc ) - 0.5; vec2 off = ( vec2( hv_h( fi + 3.0 ), hv_h( fi + 8.0 ) ) - 0.5 ) * 0.4; float on = step( hv_h( fi + 5.5 ), 0.08 + 0.14 * smoothstep( 0.55, 0.85, t3.g ) );
       c = mix( c, hv_h( fi ) < 0.5 ? ${glv('#ffffff')} : ${glv('#ffe9a0')}, on * fd * smoothstep( 0.1, 0.06, length( ff - off ) ) ); }
   }
   diffuseColor.rgb = c;
@@ -1130,7 +1133,7 @@ const lean1 = (b, v) => { tuftInto(b, 0, 0, 0, 0.95 + v * 0.15, v ? '#74d95e' : 
  * USES InstancedMesh: one per species/variant (about 40 draw calls). Returns { name: triangles }. Blossom trees also drop pink petals into the ground mask.
  */
 export function scatter(group, rng, o = {}) {
-  const R = o.R || 66, shore = o.shore || (() => R), hy = o.heightAt || (() => 0), free = o.isFree || isFree, n = { trees: 40, shade: 10, bushes: 30, tufts: 520, flowers: 28, carpets: 14, mushrooms: 10, rings: 7, stones: 32, clover: 10, pebbles: 22, ferns: 34, beach: 64, logs: 7, ...(o.counts || {}) };
+  const R = o.R || 66, shore = o.shore || (() => R), hy = o.heightAt || (() => 0), free = o.isFree || isFree, n = { trees: 36, shade: 10, bushes: 30, tufts: 480, flowers: 28, carpets: 14, mushrooms: 10, rings: 7, stones: 32, clover: 10, pebbles: 22, ferns: 34, beach: 64, logs: 7, ...(o.counts || {}) };
   const stats = {}, add = (name, entries) => { let t = 0; for (const [e, items, opt] of entries) { const im = instancedFrom(e, items, opt); if (!im) continue; im.name = name; group.add(im); t += (e.tris || 0) * items.length; } stats[name] = Math.round(t); };
   const grid = new Map(), taken = (x, z, rr) => { const cx = Math.floor(x / rr), cz = Math.floor(z / rr); for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) { const l = grid.get((cx + i) + ',' + (cz + j)); if (l) for (const p of l) if (Math.hypot(p[0] - x, p[1] - z) < rr) return true; } const k = cx + ',' + cz; (grid.get(k) || grid.set(k, []).get(k)).push([x, z]); return false; };
   const L = layout(), AUT = [4.0, 0.3, 0.22], AUT2 = [3.2, 0.62, 0.25];
@@ -1143,7 +1146,7 @@ export function scatter(group, rng, o = {}) {
       if (sp === 'blossom' || sp === 'peach') L.stamp(x, z, 1.1 * sc, 1.5, 3, 255); }
     // groves on the hills of the outer lobes (the first four hills keep a clearing for their set piece)
     HILLS.forEach(([cx, cz, rad], hi) => { const mix = [['pine', 'oak', 'birch'], ['blossom', 'peach', 'oak'], ['apple', 'orange', 'oak'], ['oak', 'birch', 'pine'], ['pine', 'birch', 'oak'], ['apple', 'blossom', 'peach']][hi]; let gm = 0, gg = 0;
-      while (gm < 6 && gg++ < 200) { const a = rng() * TAU, rr = (hi < 4 ? 4.6 : 2.5) + rng() * rad * 0.8, x = cx + Math.cos(a) * rr, z = cz + Math.sin(a) * rr; if (!free(x, z, 1.0) || taken(x, z, 2.2)) continue;
+      while (gm < 5 && gg++ < 200) { const a = rng() * TAU, rr = (hi < 4 ? 4.6 : 2.5) + rng() * rad * 0.8, x = cx + Math.cos(a) * rr, z = cz + Math.sin(a) * rr; if (!free(x, z, 1.0) || taken(x, z, 2.2)) continue;
         const sp = mix[Math.floor(rng() * 3)], v = rng() < 0.5 ? 0 : 1, sc = 1.15 + rng() * 0.6, aut = (sp === 'oak' || sp === 'birch' || sp === 'apple') && rng() < 0.3; (buckets[sp + v] ||= { sp, v, aut, items: [] }).items.push({ x, y: hy(x, z) - 0.05, z, s: sc, yaw: rng() * TAU, tint: aut ? (rng() < 0.5 ? AUT : AUT2) : null }); gm++; } });
     // shade trees in clumps round the ponds and picnic spots of the valley meadow
     made = 0; guard = 0; while (made < n.shade && guard++ < 6000) { const th = rng() * TAU, r = 15.0 + rng() * 7.0, x = Math.cos(th) * r, z = Math.sin(th) * r;
@@ -1364,7 +1367,7 @@ function buildDressing(hy) {
 // the windmill sails turn by themselves, and every boat is a group named `sail` (drifting on its own: the scene may drive it too).
 const _am = new THREE.Matrix4(), _ar = new THREE.Matrix4(), _ae = new THREE.Euler();
 /** rotate a mesh about its own origin each frame with no game code: the world matrix is recomputed right before it is drawn */
-function selfMotion(mesh, fn) { mesh.onBeforeRender = () => { windTick(); mesh.matrixWorld.multiplyMatrices(mesh.parent.matrixWorld, mesh.matrix); fn(_am.identity(), WIND.value); mesh.matrixWorld.multiply(_am); }; mesh.frustumCulled = false; return mesh; }
+function selfMotion(mesh, fn) { mesh.onBeforeRender = () => { windTick(); mesh.matrixWorld.multiplyMatrices(mesh.parent.matrixWorld, mesh.matrix); fn(_am.identity(), WIND.value); mesh.matrixWorld.multiply(_am); }; return mesh; }
 function farTree(b, x, y, z, s, kind) {
   b.cyl(0.07 * s, 0.11 * s, 0.7 * s, x, y, z, TRUNK, { seg: 4, ao: 0, open: true, grad: 0.4 });
   if (kind === 1) { for (let i = 0; i < 3; i++) b.lump((0.5 - i * 0.12) * s, x, y + (0.7 + i * 0.5) * s, z, i % 2 ? '#3cc47a' : '#44cc84', { d: 0, s: [1, 1.2, 1], seed: i, grad: 0.9, ao: 0, jit: 0.1 }); }
@@ -1401,36 +1404,36 @@ function boatBake(key, hull, sail, trim) {
     b.add(G.flag(), { p: [0.05, 2.0, 0], s: [0.24, 0.3, 1], r: [0, 0, 0], c: trim, grad: 0.2, ao: 0, swc: 0.9 });
   });
 }
-/** distant scenery. Returns a group; also fills opts.foam with the islet foam rings. */
+/** distant scenery, built as a handful of separate meshes (lighthouse, windmill, bridge, sandbar, west and east islets) so the ones off screen are culled. */
 function buildHorizon(seaY) {
-  const g = new THREE.Group(); g.name = 'horizon'; const b = new Builder(0), foamList = [], r = krng(2024);
+  const g = new THREE.Group(); g.name = 'horizon'; const r = krng(2024), parts = {}, part = (k) => (parts[k] ||= { b: new Builder(0), foam: [] });
   const islets = [[-92, -118, 8, -1.2, 1], [128, -96, 11, 0.9, 2], [-142, 24, 10, -1.4, 3], [152, 42, 8.5, -1.3, 4], [-76, 104, 5, -2.8, 5], [34, 138, 6.5, -2.6, 6], [-165, -80, 6, -2.7, 7], [90, 120, 5, -2.9, 8], [175, -20, 7, -2.4, 9]];
-  islets.forEach(([x, z, rad, top, sd], i) => { isletInto(b, x, z, rad, top, sd, seaY, foamList);
+  islets.forEach(([x, z, rad, top, sd], i) => { const P = part(i === 0 ? 'light' : i === 1 ? 'mill' : x < 0 ? 'west' : 'east'), b = P.b; isletInto(b, x, z, rad, top, sd, seaY, P.foam);
     const nt = i === 0 || i === 1 ? 3 : 2 + (i % 3); for (let k = 0; k < nt; k++) { const a = r() * TAU, rr = r() * rad * 0.62; if (i === 0 && rr < 2.2 && Math.abs(a - 1) < 0.9) continue; farTree(b, x + Math.cos(a) * rr, top + 0.1, z + Math.sin(a) * rr, 1.0 + r() * 0.8, [0, 2, 1, 3, 0, 2][(i + k) % 6]); }
     { const a = r() * TAU, rr = rad * 0.55; flowerInto(b, x + Math.cos(a) * rr, top, z + Math.sin(a) * rr, FLOWERS[i % 6], 1.8, 0.18, true, 0); } });
-  lighthouseInto(b, -92 + 2.2, -1.2 + 0.05, -118 - 1.0, 1.25);
-  windmillInto(b, 128 - 1.5, 0.9, -96 + 1.0, Math.atan2(128 - 1.5, -96 + 1.0) + Math.PI, 1.5);
+  lighthouseInto(part('light').b, -92 + 2.2, -1.2 + 0.05, -118 - 1.0, 1.25);
+  windmillInto(part('mill').b, 128 - 1.5, 0.9, -96 + 1.0, Math.atan2(128 - 1.5, -96 + 1.0) + Math.PI, 1.5);
   // sea stacks with a rope bridge between two of them
-  { const A = [38, -126], B = [48, -124]; for (const [q, hh] of [[A, 6.2], [B, 5.4]]) { b.rock(2.4, q[0], seaY + hh * 0.35, q[1], '#f6ead4', { d: 1, seed: 12, s: [1, 1.6, 1], moss: { c: MOSS, amt: 1 }, ao: 0 }); b.rock(1.2, q[0] + 2.0, seaY + 0.7, q[1] + 1.0, '#e6d8c8', { d: 0, seed: 14, ao: 0 }); tuftInto(b, q[0], seaY + hh * 0.35 * 2 + 1.0, q[1], 1.6, '#7fe05c', 5, 0.9); }
+  { const P = part('bridge'), b = P.b, A = [38, -126], B = [48, -124]; for (const [q, hh] of [[A, 6.2], [B, 5.4]]) { b.rock(2.4, q[0], seaY + hh * 0.35, q[1], '#f6ead4', { d: 1, seed: 12, s: [1, 1.6, 1], moss: { c: MOSS, amt: 1 }, ao: 0 }); b.rock(1.2, q[0] + 2.0, seaY + 0.7, q[1] + 1.0, '#e6d8c8', { d: 0, seed: 14, ao: 0 }); tuftInto(b, q[0], seaY + hh * 0.35 * 2 + 1.0, q[1], 1.6, '#7fe05c', 5, 0.9); }
     ropeBridgeInto(b, A[0] + 1.6, A[1], B[0] - 1.6, B[1], seaY + 4.8, seaY + 4.3, seaY);
     for (const [x, z, s] of [[A[0] - 3, A[1] + 2, 1], [B[0] + 3, B[1] - 2, 0.8], [43, -118, 0.6]]) b.rock(1.0 * s, x, seaY + 0.5, z, '#f6ead4', { d: 1, seed: 17, s: [1, 1.2, 1], ao: 0 });
-    for (const q of [A, B]) { const ring = []; for (let k = 0; k <= 22; k++) { const a = k / 22 * TAU; ring.push([[q[0], seaY + 0.05, q[1], rgba('#fff', 0), 0, a], [q[0] + Math.cos(a) * 2.8, seaY + 0.05, q[1] + Math.sin(a) * 2.8, rgba('#fff', 0.9), 0.5, a], [q[0] + Math.cos(a) * 5, seaY + 0.05, q[1] + Math.sin(a) * 5, rgba('#fff', 0), 1.4, a]]); } foamList.push(stripAlpha(ring)); } }
-  // sandbar with beach grass, a little tree and shells, some stack clusters
-  { for (let k = 0; k < 6; k++) { const x = 96 + k * 3.1 - 8 + r(), z = 62 + Math.sin(k * 0.8) * 1.4; b.lump(2.1 - Math.abs(k - 2.5) * 0.25, x, seaY + 0.02, z, '#fff1c4', { d: 1, s: [1.5, 0.12, 0.8], jit: 0.05, grad: 0.3, ao: 0 }); if (k % 2 === 0) tuftInto(b, x, seaY + 0.1, z, 1.6, '#cdeb7e', 4, 1); }
+    for (const q of [A, B]) { const ring = []; for (let k = 0; k <= 22; k++) { const a = k / 22 * TAU; ring.push([[q[0], seaY + 0.05, q[1], rgba('#fff', 0), 0, a], [q[0] + Math.cos(a) * 2.8, seaY + 0.05, q[1] + Math.sin(a) * 2.8, rgba('#fff', 0.9), 0.5, a], [q[0] + Math.cos(a) * 5, seaY + 0.05, q[1] + Math.sin(a) * 5, rgba('#fff', 0), 1.4, a]]); } P.foam.push(stripAlpha(ring)); } }
+  // sandbar with beach grass, a little tree and shells
+  { const P = part('sandbar'), b = P.b; for (let k = 0; k < 6; k++) { const x = 96 + k * 3.1 - 8 + r(), z = 62 + Math.sin(k * 0.8) * 1.4; b.lump(2.1 - Math.abs(k - 2.5) * 0.25, x, seaY + 0.02, z, '#fff1c4', { d: 1, s: [1.5, 0.12, 0.8], jit: 0.05, grad: 0.3, ao: 0 }); if (k % 2 === 0) tuftInto(b, x, seaY + 0.1, z, 1.6, '#cdeb7e', 4, 1); }
     farTree(b, 99, seaY + 0.1, 62.5, 0.9, 0); for (let k = 0; k < 4; k++) b.lump(0.08, 94 + k * 2, seaY + 0.14, 62 + (k % 2) * 0.5, ['#ffffff', '#ffd9e6', '#fff0cf', '#e8dcff'][k], { d: 0, s: [1.2, 0.6, 1], ao: 0, grad: 0.3 });
-    const ring = []; for (let k = 0; k <= 22; k++) { const a = k / 22 * TAU; ring.push([[96, seaY + 0.05, 62, rgba('#fff', 0), 0, a], [96 + Math.cos(a) * 9, seaY + 0.05, 62 + Math.sin(a) * 3.6, rgba('#fff', 0.5), 0.5, a], [96 + Math.cos(a) * 12, seaY + 0.05, 62 + Math.sin(a) * 5.2, rgba('#fff', 0), 1.4, a]]); } foamList.push(stripAlpha(ring));
-    for (const [x, z, n] of [[-120, -62, 3], [112, -36, 3], [20, -150, 4], [-60, 140, 3]]) for (let k = 0; k < n; k++) { const a = k * 2.1 + x, sc = 0.9 + r() * 1.3; b.rock(sc, x + Math.cos(a) * 2.2, seaY + sc * 0.5, z + Math.sin(a) * 2.2, '#f6ead4', { d: 1, seed: k + 30, s: [1, 1.4, 1], moss: { c: MOSS, amt: 0.7 }, ao: 0 }); } }
-  const e = b.bake(); const hm = instantiate(e, { shadows: false }); hm.children.forEach((m) => { m.castShadow = false; m.receiveShadow = false; }); g.add(hm);
-  const fm = new THREE.Mesh(mergeGeometries(foamList), foamMat()); fm.renderOrder = 2; fm.onBeforeRender = windTick; g.add(fm);
+    const ring = []; for (let k = 0; k <= 22; k++) { const a = k / 22 * TAU; ring.push([[96, seaY + 0.05, 62, rgba('#fff', 0), 0, a], [96 + Math.cos(a) * 9, seaY + 0.05, 62 + Math.sin(a) * 3.6, rgba('#fff', 0.5), 0.5, a], [96 + Math.cos(a) * 12, seaY + 0.05, 62 + Math.sin(a) * 5.2, rgba('#fff', 0), 1.4, a]]); } P.foam.push(stripAlpha(ring)); }
+  for (const [x, z, n] of [[-120, -62, 3], [112, -36, 3], [20, -150, 4], [-60, 140, 3]]) { const b = part(x < 0 ? 'west' : 'east').b; for (let k = 0; k < n; k++) { const a = k * 2.1 + x, sc = 0.9 + r() * 1.3; b.rock(sc, x + Math.cos(a) * 2.2, seaY + sc * 0.5, z + Math.sin(a) * 2.2, '#f6ead4', { d: 1, seed: 30 + k % 3, s: [1, 1.4, 1], moss: { c: MOSS, amt: 0.7 }, ao: 0 }); } }
+  let tris = 0; for (const [k, P] of Object.entries(parts)) { const e = P.b.bake(); tris += e.tris; const hm = instantiate(e, { shadows: false }); hm.name = 'horizon_' + k; hm.children.forEach((m) => { m.castShadow = false; m.receiveShadow = false; }); g.add(hm);
+    if (P.foam.length) { const fm = new THREE.Mesh(mergeGeometries(P.foam), foamMat()); fm.renderOrder = 2; fm.onBeforeRender = windTick; g.add(fm); } }
   const sg = sailsGeo(), sails = new THREE.Mesh(sg, envMat); sails.name = 'sails'; const wy = Math.atan2(128 - 1.5, -96 + 1.0) + Math.PI, hx = 128 - 1.5 + Math.sin(wy) * 1.5 * 1.28, hz = -96 + 1.0 + Math.cos(wy) * 1.5 * 1.28; sails.position.set(hx, 0.9 + 1.5 * 2.4, hz); sails.rotation.y = wy; sails.scale.setScalar(1.5); sails.castShadow = false;
   selfMotion(sails, (m, t) => { m.multiply(_ar.makeRotationZ(t * 0.45)); }); g.add(sails);
-  g.userData.tris = e.tris; return g;
+  g.userData.tris = tris; return g;
 }
 function buildSeaLife(seaY, contact, SEG) {
   const g = new THREE.Group(); g.name = 'sealife'; const r = krng(3131);
   const defs = [['a', '#ffffff', '#ff8fb5', '#ff6f8f'], ['b', '#ffe08a', '#ffffff', '#4fd8cc'], ['c', '#8fd0ff', '#fff3b8', '#ffab8a'], ['d', '#ffb7d0', '#ffffff', '#6f9ff0']];
   const spots = [[0.35, 20], [1.4, 14], [3.2, 18], [4.0, 34], [5.2, 22], [2.7, 70]];
-  spots.forEach(([th, off], i) => { const j = Math.floor(th / TAU * SEG) % SEG, rr = contact[j] + off, d = defs[i % 4], boat = new THREE.Group(); boat.name = 'sail'; const m = new THREE.Mesh(boatBake(d[0], d[1], d[2], d[3]).matte, envMat); m.castShadow = false; m.receiveShadow = true; boat.add(m);
+  spots.forEach(([th, off], i) => { const j = Math.floor(th / TAU * SEG) % SEG, rr = contact[j] + off, d = defs[i % 4], boat = new THREE.Group(); boat.name = 'sail'; const bg = boatBake(d[0], d[1], d[2], d[3]).matte; if (!bg.userData.padded) { bg.computeBoundingSphere(); bg.boundingSphere.radius += 2.6; bg.userData.padded = true; } const m = new THREE.Mesh(bg, envMat); m.castShadow = false; m.receiveShadow = true; boat.add(m);
     boat.position.set(Math.cos(th) * rr, seaY + 0.12, Math.sin(th) * rr); boat.rotation.y = r() * TAU; boat.scale.setScalar(off > 50 ? 1.8 : 1.05); boat.userData = { ph: i * 1.7, home: boat.position.clone() };
     const ph = i * 1.7, sp = 0.18 + (i % 3) * 0.05; selfMotion(m, (a, t) => { a.makeTranslation(Math.sin(t * sp + ph) * 1.4, Math.sin(t * 1.1 + ph) * 0.06, Math.cos(t * sp * 0.8 + ph) * 1.1); a.multiply(_ar.makeRotationFromEuler(_ae.set(Math.sin(t * 0.9 + ph) * 0.04, Math.sin(t * sp + ph) * 0.25, Math.sin(t * 1.3 + ph) * 0.06))); }); g.add(boat); });
   // buoys with a tiny lamp
@@ -1501,7 +1504,7 @@ export function islandModel(R = 66, opts = {}) {
     c.lerp(col('#78cf4c'), sstep(16, 5, d) * (0.3 + 0.3 * vn(x * 0.35, z * 0.35))); c.lerp(col('#c4f784'), sstep(2.2, 0.2, d) * 0.5); if (d < 0.5) c.lerp(col('#78cf4c'), sstep(0.5, 0, d)); if (lit > 0) c.lerp(col('#e6ff9a'), lit * 1.4); else c.lerp(col('#2fb88a'), -lit * 1.2); return c; };
   const rows = radii.map((f) => ({ r: f * R, y: (x, z) => hy(x, z), c: topColor }));
   const topGeo = polarGeo(rows, 192, { wob: (th, i) => (i === 0 ? 1 : shore(th) / R), nUp: 0.2 }); topGeo.setAttribute('aG', new THREE.Float32BufferAttribute(new Float32Array(topGeo.attributes.position.count).fill(2), 1));
-  g.add(Object.assign(new THREE.Mesh(topGeo, groundMat), { receiveShadow: true, name: 'top' }));
+  g.add(Object.assign(new THREE.Mesh(topGeo, groundMat), { receiveShadow: true, name: 'top', renderOrder: 1 }));   // drawn after the other opaque things: the costly ground shader then only runs on pixels nothing hides
   g.add(buildDressing(hy));
   // ---- cliff with strata bands (flat shaded, chunky), boulders, hanging ivy with flowers, grassy ledges
   const ringsR = [], contact = new Float32Array(SEG);
