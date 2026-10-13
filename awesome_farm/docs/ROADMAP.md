@@ -22,7 +22,7 @@ split big ones into slices (rules, art, polish).
 - [x] M7 Living market prices + Hot Item of the day (1% a unit down to 60%, fades 30% a morning, hot item +50%)
 - [x] S33 Weather-aware hints (rain already existed; added Blood Moon and winter heads-ups)
 - [x] S22 Rainbow's end (pot of gold + crate on an owned island when the day's rain clears, announced with a ping)
-- [ ] S32 Seasonal special nights
+- [x] S32 Seasonal special nights (summer fireflies, autumn Harvest Moon, winter Aurora crystals)
 - [ ] S24 Harvest chain chimes
 - [ ] S23 Roof rain
 - [ ] S19 Craft-to-chest toggle

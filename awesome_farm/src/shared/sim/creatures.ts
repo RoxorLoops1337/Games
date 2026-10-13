@@ -2,6 +2,7 @@
 // you as a companion or live in a Den and work. Everything here is server-side state:
 // the roster lives on the player (`pets`), the visible animals are `crit` entities.
 
+import { fireflyBoost } from './specialnights';
 import { TILE, TUNING } from '../config';
 import { BUILDINGS, CROPS, SEED_IDS } from '../data/buildings';
 import {
@@ -61,7 +62,7 @@ function spawnWild (sim: Sim, p: PlayerS) {
         if (!sim.online.some((q) => dist(q.x, q.y, x, y) < TUNING.wildSpawnClear)) spot = s;
     }
     if (!plot || !spot) return;
-    const sp = pickSpecies(plot.biome, sim.s.night, () => rng.next(), hasUnlock(p, 'rarecatch') ? 0.7 : 0);
+    const sp = pickSpecies(plot.biome, sim.s.night, () => rng.next(), (hasUnlock(p, 'rarecatch') ? 0.7 : 0) + fireflyBoost(sim));
     const def = spOf(sp);
     const lv = 1 + rng.int(0, 2 + Math.floor(sim.s.day / 3)) + def.rarity * 2;
     sim.add<CritE>({ k: 'crit', sp, x, y, vx: 0, vy: 0, t: rng.next() * 3, lv, mode: 0, st: 0, hx: x, hy: y, life: 140 + rng.next() * 80, a: 0, ...(rng.chance(TUNING.shinyWild) ? { shiny: 1 as const } : {}) });
