@@ -1,0 +1,24 @@
+{
+ "scenes": [
+  "banner",
+  "hud",
+  "build",
+  "building",
+  "valley",
+  "villagers",
+  "inventory",
+  "settings",
+  "levelup"
+ ],
+ "sizes": {
+  "banner": 69760,
+  "hud": 68112,
+  "build": 154087,
+  "building": 162348,
+  "valley": 143358,
+  "villagers": 221529,
+  "inventory": 146189,
+  "settings": 99148,
+  "levelup": 100444
+ }
+}

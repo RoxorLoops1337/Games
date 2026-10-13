@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<title>Hearthvale UI sheet</title>
+<script type="importmap">{ "imports": { "three": "../vendor/three.module.min.js", "three/addons/": "../vendor/jsm/" } }</script>
+<link rel="stylesheet" href="../style.css">
+<style>
+#bgimg{position:fixed;inset:0;background:#a9dcf3 url(ui_scenes/bg.jpg) center/cover no-repeat;z-index:0}
+html,body{overflow:hidden}
+</style></head>
+<body>
+<div id="bgimg"></div>
+<div id="stage"></div>
+<script type="module">
+// Static scene of the REAL interface (markup snapshotted from the running game by lab/ui_snap.mjs) under any interface style.
+//   ui_sheet.html?ui=<style id>&scene=hud|build|building|valley|villagers|inventory|settings|levelup
+import { setTheme } from '../js/ui/theme.js';
+import { installPress, initReduce } from '../js/ui/fx.js';
+const q = new URLSearchParams(location.search), scene = q.get('scene') || 'hud', ui = q.get('ui') || 'classic';
+const html = await (await fetch('ui_scenes/' + scene + '.html')).text();
+const stage = document.getElementById('stage');
+// the snapshot is the old <body>: re-create it inside the stage (ids are kept so every style rule that targets them applies)
+stage.innerHTML = html;
+for (const s of ['#title']) { const e = document.querySelector(s); if (e) e.remove(); }
+initReduce(); installPress();
+await setTheme(ui, { persist: false });
+// let the styles that animate or measure know the scene is ready; keep the layout of the real game
+document.body.classList.add('sheet-scene'); window.__ready = true;
+</script></body></html>

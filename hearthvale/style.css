@@ -569,3 +569,10 @@ body.photo #banners,body.photo #confetti,body.photo #toasts{display:none}
 #soupAlert{position:absolute;right:calc(12px + var(--sar));bottom:calc(188px + var(--sab));min-width:86px;height:50px;padding:0 14px;border-radius:26px;gap:6px;font-size:13px;line-height:1.05;animation:qb 1.4s ease-in-out infinite;z-index:3}
 #soupAlert small{display:block;font-size:10px;opacity:.9;font-weight:700}
 @media (min-width:700px){#soupAlert{bottom:calc(180px + var(--sab));right:calc(24px + var(--sar))}}
+
+/* interface style picker (Settings) */
+.uistyles{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.uis{display:flex;flex-direction:column;align-items:flex-start;gap:3px;text-align:left;padding:9px 11px;border-radius:16px;background:rgba(255,255,255,.55);border:3px solid transparent;box-shadow:0 2px 0 var(--tan),inset 0 2px 0 #fff;min-height:70px}
+.uis.on{border-color:var(--leaf);background:#fff}
+.uis b{font-size:13.5px;line-height:1.1}.uis small{font-size:10.5px;opacity:.7;line-height:1.15;font-weight:700}
+.uis .sw3{display:flex;gap:3px}.uis .sw3 i{width:18px;height:18px;border-radius:50%;box-shadow:inset 0 -2px 0 rgba(0,0,0,.18),0 1px 0 rgba(0,0,0,.15)}
