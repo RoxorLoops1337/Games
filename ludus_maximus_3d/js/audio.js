@@ -1067,7 +1067,7 @@ export function createAudio(opts = {}) {
   function startPump() { if (pumpTimer || OFFLINE) return; pumpTimer = setInterval(() => { if (ctx && ctx.state === 'running') pump(ctx.currentTime + 0.3); }, 45); }
   const xfade = (n, up) => { const a = new Float32Array(n); for (let i = 0; i < n; i++) { const x = i / (n - 1); a[i] = up ? Math.sin(x * Math.PI / 2) : Math.cos(x * Math.PI / 2); } return a; };
   const XUP = xfade(32, true), XDN = xfade(32, false);
-  function fadeBus(p, t, dur, up) { for (const g of [p.bus.gain, p.rev.gain]) { try { g.cancelScheduledValues(t); g.setValueAtTime(up ? 0 : Math.max(0.0001, g.value), t); g.setValueCurveAtTime(up ? XUP : XDN, t, Math.max(0.02, dur)); } catch (e) { /* ignore */ } } }
+  function fadeBus(p, t, dur, up) { for (const g of [p.bus.gain, p.rev.gain]) { try { g.cancelScheduledValues(t); g.setValueAtTime(up ? 0 : 1, t); g.setValueCurveAtTime(up ? XUP : XDN, t, Math.max(0.02, dur)); } catch (e) { /* ignore */ } } }
 
   music.setMode = (mode, o = {}) => {
     if (mode === 'off' || mode == null) return music.stop(o.fade);
