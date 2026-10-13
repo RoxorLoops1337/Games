@@ -277,6 +277,6 @@ const instant = (W, id, type, at) => { const P = W.players[id], d = BUILDINGS[ty
   const { readFileSync, existsSync } = await import('node:fs');
   const html = readFileSync(new URL('../hearthvale/index.html', import.meta.url), 'utf8');
   ok(/"three": "\.\/vendor\/three\.module\.min\.js"/.test(html), 'import map points at vendored three');
-  for (const f of ['vendor/three.module.min.js', 'js/main.js', 'js/scene.js', 'js/models.js', 'js/net.js', 'style.css', 'art/buildings.js', 'art/characters.js', 'art/environment.js', 'art/critters.js', 'art/props.js', 'art/fx.js', 'vendor/jsm/utils/BufferGeometryUtils.js']) ok(existsSync(new URL('../hearthvale/' + f, import.meta.url)), f + ' exists');
+  for (const f of ['vendor/three.module.min.js', 'js/main.js', 'js/scene.js', 'js/models.js', 'js/net.js', 'style.css', 'art/buildings.js', 'art/characters.js', 'art/environment.js', 'art/critters.js', 'art/props.js', 'art/fx.js', 'js/thumbs.js', 'js/icons.js', 'js/ui/state.js', 'js/ui/fx.js', 'js/ui/frame.js', 'js/ui/hud.js', 'js/ui/build.js', 'js/ui/building.js', 'js/ui/valley.js', 'js/ui/misc.js', 'js/ui/events.js', 'js/ui/tour.js', 'vendor/jsm/utils/BufferGeometryUtils.js']) ok(existsSync(new URL('../hearthvale/' + f, import.meta.url)), f + ' exists');
 }
 console.log('hearthvale: ' + n + ' checks passed');

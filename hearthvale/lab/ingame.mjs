@@ -23,6 +23,6 @@ await p.evaluate(async (preset) => {
   v.goal.dist = preset === 'close' ? 14 : preset === 'valley' ? 70 : 26; if (preset === 'valley') { v.goal.x = 0; v.goal.z = 0; v.goal.pitch = 0.95; }
 }, preset);
 const click = async (sel) => { try { await p.evaluate((s) => document.querySelector(s).click(), sel); } catch {} };
-if (preset === 'build') await click('#bBuild'); if (preset === 'board') await click('#bValley'); if (preset === 'quests') await click('[data-p=quests]'); if (preset === 'players') await click('[data-p=players]');
+if (preset === 'build') await click('#bBuild'); if (preset === 'board') await click('#bValley'); if (preset === 'quests') await click('#tQuests'); if (preset === 'players') await p.evaluate(() => __hv.ui.open('valley', { tab: 'players' }));
 if (preset === 'sheet') await p.evaluate(() => { const v = __hv.view, V = v.villages.get('me'), s = v.project(V.group.position.x, 1.2, V.group.position.z); const e = new PointerEvent('pointerdown', { clientX: s.x, clientY: s.y, pointerId: 9, bubbles: true }); const c = document.querySelector('#gl'); c.dispatchEvent(e); c.dispatchEvent(new PointerEvent('pointerup', { clientX: s.x, clientY: s.y, pointerId: 9, bubbles: true })); });
 await p.waitForTimeout(3500); await p.screenshot({ path: out }); console.log(errs.join('\n') || 'ok'); await b.close();
