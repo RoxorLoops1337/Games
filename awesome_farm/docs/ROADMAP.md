@@ -56,5 +56,8 @@ split big ones into slices (rules, art, polish).
   - [x] B4c Harvester Arm (harvests ripe beds within 2 tiles into a chest within 3, no power, no protocol change)
   - [x] B4d Sprinkler (beds within 3 tiles grow 30% faster, no power, no protocol change)
 - [ ] B1 Cottages: the folk move in
+  - [x] B1a Cottage building: a villager (name + trade) moves in at dawn, one trade gift a day with E, bigger gifts once a friend; no protocol change
+  - [ ] B1b Villagers walk about (a folk entity with art), name plates
+  - [ ] B1c Friendship hearts and requests
 - [ ] B2 Festival eve + the Lantern Chain
 - [ ] B3 The Long Dusk (new game plus)
