@@ -33,8 +33,8 @@ export function createTutorial(game) {
       met: (t) => !!t.welcome, when: () => game.scene === 'hub',
       avoid: () => { const s = sheetBy('recruit'); return s ? (live('.rc-card', s)[0] || tutEl(s, 'hire')) : null; } }, // the card must never sit on the first recruit card
     { id: 'hire', title: 'Hire your first fighter', text: 'Three citizens wait at the gate. Compare their stats and talent pips, then tap Hire on the one you like.',
-      target: () => { const s = sheetBy('recruit'); return s ? tutEl(s, 'hire') : null; },
-      met: (t) => S().glads.length > 0, when: () => game.scene === 'hub', rescue: () => { if (!S().glads.length && !scrims().length) game.open('recruit', { first: true }); } },
+      target: () => { const s = sheetBy('recruit'); return s ? tutEl(s, 'hire') : (game._recruitLater ? game.advBtn : null); }, // the sheet was closed on purpose: point at the hub button that reopens it
+      met: (t) => S().glads.length > 0, when: () => game.scene === 'hub', rescue: () => { if (!S().glads.length && !scrims().length && !game._recruitLater) game.open('recruit', { first: true }); } }, // never fight a player who closed the sheet
     { id: 'roster', title: 'Open the Roster', text: 'Your fighters live here. Tap Roster to see their health, energy and what they will do this week.', hubOnly: true,
       target: () => tutEl(null, 'nav-roster'), met: (t) => !!t.rosterOpened || !!t.trained },
     { id: 'train', title: 'Plan their week', text: 'Each week a fighter follows a plan. Tap a stat to train it, or let Auto-plan choose for you. Tired fighters should rest.', manual: 'Got it', pos: 'below',
@@ -50,9 +50,9 @@ export function createTutorial(game) {
     { id: 'fight', title: 'Read the fight', text: 'The crowd rewards a bold hand. When Crowd\'s Favor glows, tap it for a surge of strength. Tap a ready ultimate ring, or leave Auto ult on. Tap an enemy to focus it; hold the arena (or press 1 to 6) for orders like Press, Hold and Guard, each with a cost.' /* TACTICS: orders */, manual: 'Got it', pos: 'top', passive: true,
       target: () => { const fv = game.fightView, vis = (e) => e && e.isConnected && e.getBoundingClientRect().width > 4 ? e : null; return vis(fv && fv.favorBtn) || (fv && fv.ultBar && vis(fv.ultBar.firstElementChild)) || null; },
       met: (t) => !!t.fightSeen || fightOver() || (!!t.advanced && !game.busy), when: () => game.scene === 'fight' && game.fightView && game.fightView.phase === 'fight' },
-    { id: 'results', title: 'The spoils', text: 'Gold, fame, experience and sometimes loot. Winning a duel lets you show mercy for fame, or showboat for gold. Hurt fighters need rest.', manual: 'Got it', pos: 'top', passive: true,
+    { id: 'results', title: 'The spoils', text: 'Gold, fame, experience and sometimes loot. After a win the beaten foe is at your mercy: kill him for the most fame, spare him for fame and a chance he joins you, or take a ransom for gold. Hurt fighters need rest.', manual: 'Got it', pos: 'top', passive: true,
       met: (t) => !!t.resSeen || (!!t.advanced && !game.busy), when: () => resultsOpen() },
-    { id: 'week', title: 'The loop is yours', text: 'That is the whole cycle: plan, enter, advance. More holds the Calendar, the rival ludi, the barracks and the memorial wall: the Pit and other risky fights can cost a fighter their life. Tap Advance week whenever you are ready. Ave!', manual: 'Begin', hubOnly: true, last: true,
+    { id: 'week', title: 'The loop is yours', text: 'That is the whole cycle: plan, enter, advance. More holds the Calendar, the rival ludi, the barracks and the memorial wall: the Pit and other risky fights can cost a fighter their life. The hammer button (bottom right) rearranges your buildings for a price. Tap Advance week whenever you are ready. Ave!', manual: 'Begin', hubOnly: true, last: true,
       target: () => tutEl(null, 'advance') || game.advBtn, met: (t) => !!t.done2, when: () => !game.busy && game.scene === 'hub' },
   ];
   function entries() { const e = S() && S().entries; return e ? Object.keys(e).length : 0; }

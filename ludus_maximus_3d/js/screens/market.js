@@ -39,8 +39,10 @@ export function open(ctx, arg) {
   function viewShop() {
     const out = h('div'); const mk = lm.bfx(S, 'market'), pct = discountPct(), fest = lm.fest(S, S.week) === 'saturn';
     const info = card('dark', [h('div', 'am-name', [tip('Market', 'Each Market level gives 3% off all prices and weekly income. Stock is renewed every week.', 'Market level'), document.createTextNode(mk.l ? `  level ${mk.l}` : '  not built')]),
-      h('div', 'am-small', pct ? `Prices reduced by ${pct}%${fest ? ' (Saturnalia sale)' : ''}.` : 'Build a Market for discounts and weekly income.'), h('div', 'am-small', 'Stock changes every week.')]);
-    info.querySelector('.am-name').style.color = '#f2c14e'; info.querySelectorAll('.am-small').forEach((e) => { e.style.color = '#d8c9a0'; }); out.append(info);
+      h('div', 'am-small', (pct ? `Prices reduced by ${pct}%${fest ? ' (Saturnalia sale)' : ''}.` : 'Build a Market for discounts and weekly income.') + ' Stock changes every week.')]);
+    info.querySelector('.am-name').style.color = '#f2c14e'; info.querySelectorAll('.am-small').forEach((e) => { e.style.color = '#d8c9a0'; });
+    if (!mk.l) { const free = S.plots.findIndex((p, k) => !p && k < S.rows * lm.COLS); const bb = U.button({ label: free >= 0 ? 'Build a Market' : 'Open your buildings', icon: 'ludus', variant: 'gold', onClick: () => ctx.open('building', free >= 0 ? { type: 'plot', i: free, empty: true } : {}) }); const kids = [...info.childNodes]; info.replaceChildren(h('div', 'am-hero', [h('div', 'am-hi', kids), bb])); }
+    out.append(info);
     if (S.raidWeek === S.week) { const w = card('warn', [h('b', '', 'Raided!'), h('div', 'am-p', `${S.rowner ? S.rowner.name : 'A rival'}'s agents bought the best item before you.`)]); w.style.marginTop = '8px'; out.append(w); }
     if (full()) { const w = card('warn', [h('b', '', 'Armory full'), h('div', 'am-p', `Buying will sell your weakest item (${weakest().name}) automatically. Sell spare gear first, or upgrade the Forge for more room.`)]); w.style.marginTop = '8px'; out.append(w); }
     const vis = lm.visitor(S);
@@ -130,7 +132,7 @@ export function open(ctx, arg) {
   function viewSell() {
     const out = h('div'), list = items().slice().sort((a, b) => lm.sellVal(b) - lm.sellVal(a));
     out.append(card('', [h('div', 'am-p', 'Sell spare gear for gold. Upgraded and better items fetch more. Fighters\' worn gear is safe here.')]));
-    if (!list.length) { out.append(emptyState('shield', 'No spare items to sell.')); return out; }
+    if (!list.length) { out.append(U.emptyState({ icon: 'coin', title: 'Nothing to sell', text: 'Only spare gear can be sold here. Worn gear stays with its fighter.', how: 'Win loot in the arena, then come back.', action: { label: 'Browse the stalls', variant: 'bronze', icon: 'market', onClick: () => { st.tab = 'shop'; st.view = null; render(); } } })); return out; }
     const bulk = (label, key, fn) => {
       const sel = list.filter(fn), total = sel.reduce((a, i) => a + lm.sellVal(i), 0), armed = st.confirm === key;
       const b = btn(ctx, { label: armed ? 'Tap again to sell' : label, icon: 'coin', variant: armed ? 'danger' : 'bronze', off: sel.length ? '' : 'Nothing matches', onClick: () => {

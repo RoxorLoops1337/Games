@@ -30,7 +30,7 @@ const BUILD = {
 };
 
 // Most precious equipped item decides the metal tint, so a loadout reads at a glance.
-const RAR_METAL = ['#8f8a82', '#b8803a', '#c9d6e6', '#b78cf0', '#f2c14e'];
+const RAR_METAL = ['#8f8a82', '#a98a52', '#c9d6e6', '#b78cf0', '#f2c14e'];
 const rarOf = (it) => (it ? (typeof it.rar === 'number' ? it.rar : typeof it.r === 'number' ? it.r : 0) : -1);
 function metalFor(g) {
   let best = 1; const gear = g.gear || {};
@@ -39,6 +39,28 @@ function metalFor(g) {
 }
 function hash(str) { let h = 2166136261; for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; }
 function mul(a) { return () => { a = (a + 0x6d2b79f5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+
+// READABILITY (round 3). The sim hands out six skin hexes, two of them nearly white (#f6d3b0, #f0c9a0): lit by the golden key they clip to pink-white and every
+// fighter converges on one hue. gradeSkin() keeps the sim's index (light to dark) but maps it into a believable Mediterranean / Gaulish / Thracian / North African /
+// Nubian range with lower albedo and an olive-leaning hue, with a deterministic per fighter variation so a squad is not six clones.
+const SKIN_SET = [['#c8966f', '#c08e68', '#cc9c7a'], ['#c08a63', '#b98260', '#c4906c'], ['#b17a4c', '#a9744a', '#b4804f'], ['#8f5a38', '#87543a', '#946040'], ['#6a4228', '#5e3a24', '#70472c'], ['#c0956a', '#b78c62', '#c49a72']];
+const SKIN_SRC = ['#f6d3b0', '#e8b583', '#c98a52', '#9a6234', '#6b4224', '#f0c9a0'];
+export function gradeSkin(hex, seed = 0) {
+  const h = String(hex || '').toLowerCase(), i = SKIN_SRC.indexOf(h);
+  if (i >= 0) return SKIN_SET[i][(seed >>> 3) % 3];
+  const SR = THREE.SRGBColorSpace, c = new THREE.Color(h || '#c08a63'), hsl = {}; c.getHSL(hsl, SR); c.setHSL(hsl.h, Math.min(hsl.s, 0.5), Math.min(hsl.l, 0.62), SR); return '#' + c.getHexString(); // unknown custom skin: just cap the brightness
+}
+// TEAM TINTS. Sand is hue ~20-50 deg, so tunics in that band melt into the floor, and two teams that both drew Crimson are the same blob. The arena passes opts.team
+// ('A' | 'B'): team A tunics live in the teal-blue-indigo band, team B in the rose-crimson band. A colour already inside its band is kept (the ludus colour survives);
+// anything else keeps its lightness and saturation but is rotated into the band. Plume = the team accent on top of that, so the head always reads as a side.
+const TEAM = { A: { lo: 150, hi: 262, mid: 214, acc: '#2f86e8' }, B: { lo: 335, hi: 372, mid: 356, acc: '#d02a3e' } };
+export function teamTint(hex, team, seed = 0) {
+  const T = TEAM[team]; if (!T) return hex; const SR = THREE.SRGBColorSpace, c = new THREE.Color(hex), hsl = {}; c.getHSL(hsl, SR); let hd = hsl.h * 360; if (team === 'B' && hd < 20) hd += 360;
+  let s = hsl.s, l = hsl.l; if (s < 0.2) { /* onyx / ivory style neutrals keep their value but pick up a hint of team colour */ s = 0.34; }
+  if (hd < T.lo || hd > T.hi) hd = T.mid + (((seed >>> 5) % 13) - 6);
+  c.setHSL(((hd % 360) + 360) % 360 / 360, Math.max(s, 0.5), Math.min(0.5, Math.max(0.3, l)), SR); return '#' + c.getHexString();
+}
+export const TEAM_ACCENT = { A: TEAM.A.acc, B: TEAM.B.acc };
 
 /** Deterministic look + build for a record: same gladiator always gets the same face, hair and body. */
 export function lookFor(g, style) {
@@ -58,10 +80,10 @@ export function createGladiator(unitOrGlad, opts = {}) {
   const g = unitOrGlad.g || unitOrGlad;
   const style = g.style || unitOrGlad.style || 'murmillo';
   const S = D().STYLES[style];
-  const cloth = opts.tunic || g.color || unitOrGlad.color || S.c;
-  const lk = lookFor(g, style);
+  const lk = lookFor(g, style), hs = hash(String(g.name || '') + '#' + (g.id || 0));
+  const cloth0 = opts.tunic || g.color || unitOrGlad.color || S.c, cloth = opts.team ? teamTint(cloth0, opts.team, hs) : cloth0;
   const rig = buildGladiator({
-    palette: { skin: g.skin, hair: g.hair, cloth, plume: g.plume, metal: metalFor(g) },
+    palette: { skin: gradeSkin(g.skin, hs), hair: g.hair, cloth, plume: opts.team ? TEAM_ACCENT[opts.team] || g.plume : g.plume, metal: metalFor(g) },
     build: Object.assign({ seg: opts.seg || 6 }, lk.build, opts.build || {}), look: Object.assign(lk.look, opts.look || {}), detail: detailFor(opts),
     name: g.name || 'gladiator', sculpt: !(style === 'thraex' || style === 'hoplomachus'),
   });

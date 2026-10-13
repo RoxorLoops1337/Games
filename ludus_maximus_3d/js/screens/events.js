@@ -23,7 +23,7 @@ export function render(ctx, root, draw) {
   const tags = ['all'].concat(Object.keys(TAGS).filter((t) => log.some((e) => e.tag === t)));
   root.append(chipRow(tags.map((t) => ({ id: t, label: t === 'all' ? 'All' : TAGS[t][0] })), st.tag, (id) => { st.tag = id; ctx.sfx('uiTap'); draw(); }));
   const shown = log.filter((e) => st.tag === 'all' || e.tag === st.tag);
-  if (!shown.length) root.append(card([empty('scroll', 'Nothing yet', 'Events begin around the third week. About four weeks in ten bring one.')]));
+  if (!shown.length) root.append(card([empty('scroll', st.tag === 'all' ? 'Nothing has happened yet' : 'Nothing under this tag yet', st.tag === 'all' ? 'The Chronicle records rumours, visitors, plots and favours. Events begin around the third week; about four weeks in ten bring one.' : 'Pick All to see every story so far.', st.tag === 'all' ? { label: 'See the Calendar', icon: 'scroll', onClick: () => ctx.open('world', { tab: 'calendar' }) } : { label: 'Show all stories', icon: 'scroll', onClick: () => { st.tag = 'all'; draw(); } })]));
   shown.slice(0, 40).forEach((e) => root.append(h('div', 'dp-log', [
     h('div', 'ax-row ax-wrap', [h('span', 't', e.n), pill(`Week ${e.wk}`, {}), e.tag && TAGS[e.tag] ? pill(TAGS[e.tag][0], { ico: TAGS[e.tag][1], tone: 'vio' }) : null, e.follow ? pill('Consequence', { tone: 'warn' }) : null]),
     h('div', 'c', `You chose: ${e.choice}`), h('div', 'r', e.r), e.fx && e.fx.length ? h('div', 'dp-fx', e.fx.map((f) => pill(f, { tone: /-\d|hurt|Strained|sickness|gone|\dw$|Barracks full/i.test(f) ? 'bad' : 'good' }))) : null])));

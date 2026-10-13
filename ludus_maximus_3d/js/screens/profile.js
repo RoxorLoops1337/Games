@@ -11,7 +11,7 @@ const CSS = `
 @media(min-width:700px){.pf-hero{grid-template-columns:auto minmax(0,1.2fr) minmax(0,1fr)}.pf-meters{grid-column:auto}}
 .pf-ph{position:relative;flex:none;border-radius:50%;padding:4px;background:radial-gradient(circle at 35% 30%,#ffe08a,#b8803a);box-shadow:0 4px 10px rgba(60,40,10,.4)}
 .pf-xp{display:grid;grid-template-columns:auto 1fr;gap:8px;align-items:center;font:700 12px var(--lx-sans);color:#5a4560}
-.pf-style{font:600 13px/18px var(--lx-sans);color:#4a3550;overflow-wrap:anywhere}
+.pf-style{font:600 13px/18px var(--lx-sans);color:#4a3550;overflow-wrap:break-word}
 .pf-stat{display:grid;grid-template-columns:minmax(78px,104px) 1fr 52px 44px;gap:8px;align-items:center;margin:8px 0;min-height:30px}
 .pf-stat-n{display:flex;align-items:center;gap:6px;font:800 12px var(--lx-serif);letter-spacing:.06em;text-transform:uppercase;color:#2a1a30;min-width:0}
 .pf-stat-n i{flex:none;width:10px;height:10px;border-radius:50%;background:var(--sc);box-shadow:0 0 0 2px rgba(0,0,0,.2)}
@@ -34,7 +34,7 @@ const CSS = `
 .pf-ult-i{flex:none;width:44px;height:44px;border-radius:50%;display:grid;place-items:center;color:#fff;background:radial-gradient(circle at 35% 30%,var(--uc),#1d1830);box-shadow:0 0 0 2px #b8803a,0 3px 6px rgba(0,0,0,.35)}
 .pf-list{display:grid;gap:8px}
 .pf-kv{display:flex;justify-content:space-between;align-items:center;gap:10px;min-height:32px;font:600 14px var(--lx-sans);color:#33243a;border-bottom:1px dotted rgba(122,82,34,.35)}
-.pf-kv b{text-align:right;min-width:0;overflow-wrap:anywhere}
+.pf-kv b{text-align:right;min-width:0;overflow-wrap:break-word}
 .pf-diary{display:grid;gap:4px;font:500 13px/18px var(--lx-sans);color:#33243a}
 .pf-diary b{color:#7a2f30}
 .pf-style-opt{display:flex;gap:12px;align-items:center;width:100%;text-align:left;min-height:60px;cursor:pointer;font-family:inherit;color:inherit;margin-bottom:8px}

@@ -15,7 +15,7 @@ import { createSky, createLightRig, applyTOD, TOD, lerpTOD, todFromHour } from '
 import { TIERS } from './post.js';
 import { createFlames, createBlobShadows, prepGeo, patchMaterial } from './envfx.js';
 import { makeSandTexture, tfbm } from './envtex.js';
-import { Kit, buildParts, getLib, buildingUniforms, MATS, PALETTE as C, MAXPLOT, BUILDING_IDS } from './buildings.js';
+import { Kit, buildParts, buildSite, siteStage, makeWorkerMesh, makeCrane, getLib, buildingUniforms, MATS, PALETTE as C, MAXPLOT, BUILDING_IDS } from './buildings.js';
 import { createGladiator } from './gladiator.js';
 import { JOINTS } from './rig.js';
 
@@ -50,11 +50,17 @@ const WEATHER = {
   heat: { sunElev: 36, sunAz: 330, sunColor: 0xffd08a, sunInt: 4.2, hemiSky: 0xb4b2d8, hemiGround: 0xd29a5a, hemiInt: 1.25, fog: 0xf0cfa0, fogDensity: 0.0020, skyTop: 0x4a7cc8, skyMid: 0xeccaa0, skyHor: 0xffe4b8, glow: 0xffc070, cloudLit: 0xfff0d0, cloudShade: 0xb8a0a0, cloudAmt: 0.25, stars: 0, exposure: 1.0, night: 0, sunSize: 0.04 },
 };
 /** hour (0..24) + weather -> preset. Sun swings front-right (morning) to front-left (evening) so facades are always modelled by 3/4 light. */
+/** [HUB-NIGHT] hub moonlight: cool directional key (soft shadows), generous cool fill and fog tint so buildings and plots stay readable, warm light comes from windows and torch pools. */
+const NIGHT = { sunElev: 40, sunAz: 238, sunColor: 0xa6bcff, sunInt: 2.9, hemiSky: 0x5a74c8, hemiGround: 0x3a3558, hemiInt: 1.3, fog: 0x16225a, fogDensity: 0.0029,
+  skyTop: 0x0a1640, skyMid: 0x1c2e6e, skyHor: 0x41589a, glow: 0x6078c8, cloudLit: 0x8092ca, cloudShade: 0x242e5c, cloudAmt: 0.3, stars: 1.0, exposure: 1.24, night: 1.0, sunSize: 0.03 };
 export function presetFor(hour, weather = 'clear') {
   const hh = ((hour % 24) + 24) % 24, nightW = weather === 'night';
-  let base = nightW ? Object.assign({}, TOD.night) : todFromHour(hh);
+  let base = nightW ? Object.assign({}, NIGHT) : todFromHour(hh);
+  const nK = nightW ? 1 : clamp((base.night - 0.5) / 0.5);   // 0 by day and at dusk, 1 once the moon is up
   if (WEATHER[weather]) base = lerpTOD(base, WEATHER[weather], weather === 'rain' ? 0.85 : weather === 'dust' ? 0.7 : 0.55);
-  base.hemiInt *= nightW ? 1.0 : 1.2;
+  if (!nightW && nK > 0) { const n0 = base.night; base = lerpTOD(base, NIGHT, nK * (weather === 'rain' ? 0.82 : 0.94)); base.night = Math.max(n0, nK); }   // night wins over day weather; rain keeps a little grey so streaks read
+  else if (!nightW && weather !== 'clear' && WEATHER[weather]) base.night = Math.max(base.night, WEATHER[weather].night);
+  base.hemiInt *= nightW ? 1.0 : (1 + 0.2 * (1 - nK)) * (1 + 0.3 * clamp(base.night / 0.55) * (1 - nK));   // dusk and dawn get a little more sky fill
   const dayK = nightW ? 0 : 1 - clamp((base.night - 0.25) / 0.45);   // 1 by day, 0 once the moon is up
   if (!nightW) { const m = new THREE.Color(base.hemiGround).lerp(new THREE.Color(0x9c8090), 0.5 * dayK); base.hemiGround = m.getHex(); }
   if (dayK > 0) {
@@ -67,18 +73,21 @@ export function presetFor(hour, weather = 'clear') {
 const hourOf = (S) => 7 + (((S.week || 1) - 1) % 12) * 1.0;
 
 // ------------------------------------------------------------------------------------------ small shaders (rings, links, smoke, sparks, rain)
-function ringMaterial({ color = [2.0, 1.4, 0.5], width = 0.14, alpha = 1, speed = 1.2 } = {}) {
+function ringMaterial({ color = [2.0, 1.4, 0.5], width = 0.14, alpha = 1, speed = 1.2, fill = 0 } = {}) {
   return new THREE.ShaderMaterial({
-    uniforms: { uTime: { value: 0 }, uColor: { value: new THREE.Color(...color) }, uW: { value: width }, uA: { value: alpha }, uSpeed: { value: speed } },
+    uniforms: { uTime: { value: 0 }, uColor: { value: new THREE.Color(...color) }, uW: { value: width }, uA: { value: alpha }, uSpeed: { value: speed }, uFill: { value: fill } },
     transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false,
-    vertexShader: `varying vec2 vP; varying vec2 vS; void main(){ vec3 c = instanceMatrix[3].xyz; vS = vec2(length(instanceMatrix[0].xyz), length(instanceMatrix[2].xyz)); vP = position.xz * vS;
+    vertexShader: `varying vec2 vP; varying vec2 vS; varying vec3 vIC; void main(){ vec3 c = instanceMatrix[3].xyz; vS = vec2(length(instanceMatrix[0].xyz), length(instanceMatrix[2].xyz)); vP = position.xz * vS; vIC = vec3(1.0);
+      #ifdef USE_INSTANCING_COLOR
+      vIC = instanceColor;
+      #endif
       gl_Position = projectionMatrix * modelViewMatrix * instanceMatrix * vec4(position, 1.0); }`,
-    fragmentShader: `varying vec2 vP; varying vec2 vS; uniform float uTime, uW, uA, uSpeed; uniform vec3 uColor;
+    fragmentShader: `varying vec2 vP; varying vec2 vS; varying vec3 vIC; uniform float uTime, uW, uA, uSpeed, uFill; uniform vec3 uColor;
       void main(){ float r = min(1.2, min(vS.x, vS.y) * 0.5); vec2 q = abs(vP) - (vS * 0.5 - r); float d = length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - r;
         float ring = 1.0 - smoothstep(0.0, uW, abs(d + uW * 0.5)); float glow = exp(-abs(d + uW) * 2.6) * 0.35;
         float ang = atan(vP.y, vP.x); float dash = 0.55 + 0.45 * sin(ang * 8.0 - uTime * uSpeed * 2.0);
-        float a = (ring * (0.65 + 0.35 * dash) + glow * (0.6 + 0.4 * sin(uTime * 2.2))) * uA;
-        gl_FragColor = vec4(uColor * a, a);
+        float a = (ring * (0.65 + 0.35 * dash) + glow * (0.6 + 0.4 * sin(uTime * 2.2))) * uA + (1.0 - smoothstep(-0.5, 0.0, d)) * uFill * (0.8 + 0.2 * sin(uTime * 2.0));
+        gl_FragColor = vec4(uColor * vIC * a, a);
         #include <tonemapping_fragment>
         #include <colorspace_fragment>
       }`,
@@ -219,6 +228,11 @@ export function createHub({ renderer, camera, audio, tier = 'high', post = null 
   // ---- merged world meshes (one per shared building material)
   const layers = {};
   for (const m of MATS) { const mesh = new THREE.Mesh(new THREE.BufferGeometry(), lib[m]); mesh.frustumCulled = false; mesh.castShadow = m !== 'glow' && m !== 'cloth'; mesh.receiveShadow = m !== 'glow'; mesh.name = 'hub_' + m; group.add(mesh); layers[m] = mesh; }
+  { // MOVE: shadows follow the per-plot offsets (lift, sink, rise): the depth pass applies the same uOff as the colour pass
+    const depthFor = () => patchMaterial(new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking }), { key: 'hub_depth_off', uniforms: { uOff: buildingUniforms.uOff },
+      vPars: `attribute float aPlot; uniform vec3 uOff[${MAXPLOT}];`, vBody: 'transformed += uOff[int(aPlot + 0.5)];' });
+    for (const m of ['masonry', 'roof', 'wood', 'metal']) layers[m].customDepthMaterial = depthFor();
+  }
   trimCasters();
   const sandTex = makeSandTexture(512, 6); sandTex.map.repeat.set(1, 1); sandTex.map.needsUpdate = true;
   const sandMat = new THREE.MeshStandardMaterial({ map: sandTex.map, bumpMap: sandTex.bump, bumpScale: 0.8, vertexColors: true, roughness: 1 });
@@ -240,6 +254,21 @@ export function createHub({ renderer, camera, audio, tier = 'high', post = null 
   const selMat = ringMaterial({ color: [2.2, 1.55, 0.5], width: 0.2 }), hovMat = ringMaterial({ color: [1.6, 1.2, 0.6], width: 0.12, alpha: 0.7 }), padMat = ringMaterial({ color: [1.5, 1.15, 0.5], width: 0.1, alpha: 0.45, speed: 0.5 });
   const selRing = ringMesh(selMat, 1), hovRing = ringMesh(hovMat, 1), padRings = ringMesh(padMat, 16);
   group.add(selRing, hovRing, padRings);
+  // [HUB-NIGHT] warm light pools: one additive instanced quad mesh on the ground under every torch / brazier / lantern (visible only at night, one draw call)
+  const poolU = { uTime: { value: 0 }, uAmt: { value: 0 } }; let nightK = 0;
+  const poolMesh = (() => {
+    const g = new THREE.PlaneGeometry(1, 1); g.rotateX(-Math.PI / 2);
+    const m = new THREE.InstancedMesh(g, new THREE.ShaderMaterial({ uniforms: poolU, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false,
+      vertexShader: `varying vec2 vP; varying float vS; uniform float uTime; void main(){ vec3 c = instanceMatrix[3].xyz; vP = position.xz * 2.0; vS = fract(sin(dot(c.xz, vec2(12.9, 78.2))) * 43758.5);
+        gl_Position = projectionMatrix * viewMatrix * modelMatrix * instanceMatrix * vec4(position, 1.0); }`,
+      fragmentShader: `varying vec2 vP; varying float vS; uniform float uTime, uAmt; void main(){ float r = length(vP); float f = 0.82 + 0.18 * sin(uTime * (7.0 + vS * 4.0) + vS * 40.0) * sin(uTime * 3.1 + vS * 9.0);
+        float a = pow(max(1.0 - r, 0.0), 2.2) * uAmt * f; gl_FragColor = vec4(vec3(1.5, 0.82, 0.36) * a * 0.9, a);
+        #include <tonemapping_fragment>
+        #include <colorspace_fragment>
+      }` }), 160);
+    m.count = 0; m.frustumCulled = false; m.renderOrder = 2; m.name = 'night_pools'; m.visible = false; return m;
+  })();
+  group.add(poolMesh);
   const linkU = { uTime: { value: 0 }, uW: { value: 0.06 }, uColor: { value: new THREE.Color(1.0, 0.75, 0.28) } };
   const linkMesh = new THREE.Mesh(new THREE.BufferGeometry(), new THREE.ShaderMaterial({ uniforms: linkU, vertexShader: LINK_VERT, fragmentShader: LINK_FRAG, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, fog: false }));
   linkMesh.frustumCulled = false; linkMesh.renderOrder = 8; group.add(linkMesh);
@@ -324,6 +353,9 @@ export function createHub({ renderer, camera, audio, tier = 'high', post = null 
     }
     // central flagged path from the gate to the first terrace
     k.box('masonry', 3.4, 0.05, CD - FRONT_EDGE + 0.3, 0, 0.0, (CD + FRONT_EDGE) / 2, 0xc9b48c);
+    // [HUB-NIGHT] lantern braziers: the central aisle at every terrace front and along the forecourt path (the flames feed the night light pools)
+    for (let r = 0; r < 4; r++) for (const sx of [-2.5, 2.5]) k.brazier(sx, Z0 + r * PZ + PZ / 2 - 0.5, terraceH(r), 0.62);
+    for (const z of [FRONT_EDGE + 3.2, FRONT_EDGE + 8]) for (const sx of [-2.6, 2.6]) if (z < CD - 1) k.brazier(sx, z, 0, 0.62);
     staticParts = k.P; staticFx = k.fx;
     // cypress + olive in the forecourt
     const lg = []; const r = rngOf(5);
@@ -353,7 +385,9 @@ export function createHub({ renderer, camera, audio, tier = 'high', post = null 
   // ---------------------------------------------------------------------------------------- per-state dressing + building merge
   const plotSig = new Array(16).fill('');
   let builtRows = -1, sigAll = '', buildFx = { flames: [], smoke: [], sparks: [] };
+  let sites = [];   // MOVE: plots that are being rebuilt {i, R (buildSite result), mv, c}
   function rebuildWorld(St) {
+    sites = [];
     const lists = {}; for (const m of MATS) lists[m] = [];
     const push = (m, g) => { lists[m].push(addPlotAttr(g, 0)); };
     for (const m of MATS) for (const g of staticParts[m]) push(m, g);
@@ -396,7 +430,9 @@ export function createHub({ renderer, camera, audio, tier = 'high', post = null 
         k.sheet([px + 0.2, base + 1.7, pz + 0.06], [0.2, 0, 0], [0, -0.55, 0], 1, 2, 0xb5352a);
       }
       if (pl && !locked) {
-        const R = buildParts(pl.b, pl.l, { accent });
+        const mvr = LMg().moving ? LMg().moving(St, i) : null;
+        const R = mvr ? buildSite(pl.b, pl.l, siteStage((St.week - mvr.s) / Math.max(1, mvr.w)), { accent }) : buildParts(pl.b, pl.l, { accent });
+        if (mvr) sites.push({ i, R, mv: mvr, c });
         const T4 = new THREE.Matrix4().makeTranslation(c.x, c.y, c.z).multiply(new THREE.Matrix4().makeRotationY(Math.PI));   // fronts face -z (the hill side, the default camera)
         for (const m of MATS) if (R.parts[m]) { const g = R.parts[m].clone(); g.applyMatrix4(T4); addPlotAttr(g, i + 1).attributes.aPlot.array.fill(i + 1); lists[m].push(g); }
         for (const f of R.fx.flames) fx.flames.push({ x: c.x - f.x, y: f.y + c.y, z: c.z - f.z, s: f.s });
@@ -426,6 +462,8 @@ export function createHub({ renderer, camera, audio, tier = 'high', post = null 
   }
   function rebuildFx() {
     flameGroup.clear(); if (flames) flames = null;
+    { const mm = new THREE.Matrix4(); let n = 0; for (const f of buildFx.flames) { if (n >= 160) break; const gy = Math.max(groundAt(f.x, f.z), 0) + 0.05, rad = (3.8 + 2.4 * (f.s || 1)); mm.makeScale(rad, 1, rad).setPosition(f.x, f.y > 3.5 ? gy + 1.2 : gy, f.z); poolMesh.setMatrixAt(n++, mm); }
+      poolMesh.count = n; poolMesh.instanceMatrix.needsUpdate = true; }
     if (buildFx.flames.length) { flames = createFlames(buildFx.flames, { glowScale: 3.2 }); flameGroup.add(flames.group); }
     // smoke: 18 puffs per emitter
     const sm = buildFx.smoke, np = tier === 'low' ? 10 : 18, r = rngOf(3);
@@ -442,9 +480,9 @@ export function createHub({ renderer, camera, audio, tier = 'high', post = null 
     const LM = LMg(), D = Dg(); links = [];
     const seen = new Set();
     for (let i = 0; i < 16; i++) {
-      const p = St.plots[i]; if (!p) continue;
+      const p = St.plots[i]; if (!p || (LM.moving && LM.moving(St, i))) continue;
       for (const n of LM.neighbors(i)) {
-        const q = St.plots[n]; if (!q) continue;
+        const q = St.plots[n]; if (!q || (LM.moving && LM.moving(St, n))) continue;
         const a = D.BUILD[p.b].like.includes(q.b), b = D.BUILD[q.b].like.includes(p.b); if (!a && !b) continue;
         const key = Math.min(i, n) + '_' + Math.max(i, n); if (seen.has(key)) continue; seen.add(key);
         links.push({ a: Math.min(i, n), b: Math.max(i, n), mutual: a && b });
@@ -636,7 +674,7 @@ export function createHub({ renderer, camera, audio, tier = 'high', post = null 
     hintEl = document.createElement('div'); hintEl.className = 'lx-bl-hubhint'; hintEl.setAttribute('aria-hidden', 'true'); hintEl.textContent = HINT;
     srEl = document.createElement('div'); srEl.className = 'lx-bl-sr'; srEl.setAttribute('role', 'status'); srEl.setAttribute('aria-live', 'polite'); document.body.append(hintEl, srEl);
   }
-  const say = (txt) => { if (!srEl) return; clearTimeout(srT); srT = setTimeout(() => { srEl.textContent = ''; srEl.textContent = txt; }, 350); };
+  const say = (txt) => { ensureHint(); if (!srEl) return; clearTimeout(srT); srT = setTimeout(() => { srEl.textContent = ''; srEl.textContent = txt; }, 350); };
   const showHint = (on) => { ensureHint(); if (!hintEl) return; hintEl.classList.toggle('on', !!on); clearTimeout(hintT); if (on) hintT = setTimeout(() => hintEl && hintEl.classList.remove('on'), 7000); };
   function onKeyDown(e) {
     if (!orb.enabled || e.ctrlKey || e.metaKey || e.altKey) return; const k = (e.key || '').toLowerCase();
@@ -648,7 +686,7 @@ export function createHub({ renderer, camera, audio, tier = 'high', post = null 
     const a = KEYMAP[(e.key || '').toLowerCase()]; if (!a) return; keysHeld.delete(a);
     if (!keysHeld.size) say(`Camera: zoom ${Math.round(((DIST[1] - orb.dist) / (DIST[1] - DIST[0])) * 100)} percent, turned ${Math.round((((orb.az - (Math.PI + 0.4)) * 180 / Math.PI) % 360 + 360) % 360)} degrees from the default view}.`);
   }
-  const onFocus = () => { if (orb.enabled) showHint(true); }, onBlurKb = () => { keysHeld.clear(); showHint(false); };
+  const onFocus = () => { if (orb.enabled && !rr.on) showHint(true); }, onBlurKb = () => { keysHeld.clear(); showHint(false); };
   function stepKeys(dt) {
     if (!keysHeld.size) return; touchedNow(); orb.follow = null;
     const f = (keysHeld.has('f') ? 1 : 0) - (keysHeld.has('b') ? 1 : 0), r = (keysHeld.has('r') ? 1 : 0) - (keysHeld.has('l') ? 1 : 0), sp = orb.dist * 0.7 * dt;
@@ -677,7 +715,7 @@ export function createHub({ renderer, camera, audio, tier = 'high', post = null 
   function onMove(e) {
     if (!orb.enabled) return;
     const p = ptrs.get(e.pointerId);
-    if (!p) { if (e.pointerType === 'mouse' && performance.now() - lastHoverT > 40) { lastHoverT = performance.now(); const h = pick(e.clientX, e.clientY); setHover(h); emit('hover', h, e); } return; }
+    if (!p) { if (e.pointerType === 'mouse' && performance.now() - lastHoverT > 40) { lastHoverT = performance.now(); if (rr.on) { const h = pick(e.clientX, e.clientY, true); if (rr.onHover) rr.onHover(h, e); return; } const h = pick(e.clientX, e.clientY); setHover(h); emit('hover', h, e); } return; }
     const dx = e.clientX - p.x, dy = e.clientY - p.y; p.x = e.clientX; p.y = e.clientY; touchedNow();
     if (tap) { tap.moved += Math.abs(dx) + Math.abs(dy); }
     if (ptrs.size === 1) {
@@ -702,13 +740,13 @@ export function createHub({ renderer, camera, audio, tier = 'high', post = null 
 
   // ---------------------------------------------------------------------------------------- picking
   const _box = new THREE.Box3(), _hit = new V3(), _hit2 = new V3(), _ray = new THREE.Ray(), _far = new THREE.Ray();
-  function pick(clientX, clientY) {
+  function pick(clientX, clientY, noGlad) {
     if (!S) return null; const r = dom.getBoundingClientRect();
     ndc.set(((clientX - r.left) / r.width) * 2 - 1, -((clientY - r.top) / r.height) * 2 + 1); camera.updateMatrixWorld();
     raycaster.setFromCamera(ndc, camera); _ray.copy(raycaster.ray);
     let gBest = null, gt = 1e9, pBest = null, pt = 1e9, pExit = 0;
     // gladiators: sphere chain proxy along the body
-    for (const a of actors.values()) {
+    if (!noGlad) for (const a of actors.values()) {
       for (const yy of [0.35, 0.9, 1.45]) { const c = new V3(a.pos.x, a.pos.y + yy, a.pos.z), d = _ray.distanceSqToPoint(c); if (d < 0.5 * 0.5) { const t = c.clone().sub(_ray.origin).dot(_ray.direction); if (t > 0 && t < gt) { gt = t; gBest = { type: 'glad', id: a.id }; } } }
     }
     // plot buildings: footprint boxes (remember the exit distance so gladiators standing inside an open court win)
@@ -737,7 +775,7 @@ export function createHub({ renderer, camera, audio, tier = 'high', post = null 
   // ---------------------------------------------------------------------------------------- phone-friendly picking, auto-zoom preview and the floating label card
   const _sp = new V3(), _corner = new V3();
   /** nearest building (distance to its projected box) or gladiator (distance to its centre) within `slop` CSS px of the tap. Direct ray hits are handled by pick(). */
-  function pickNear(clientX, clientY, slop) {
+  function pickNear(clientX, clientY, slop, noGlad) {
     const r = dom.getBoundingClientRect(), px = clientX - r.left, py = clientY - r.top, W = r.width, H = r.height; let best = null, bd = slop;
     camera.updateMatrixWorld();
     const rows = S.rows || 2;
@@ -750,7 +788,7 @@ export function createHub({ renderer, camera, audio, tier = 'high', post = null 
       const d = Math.hypot(Math.max(x0 - px, 0, px - x1), Math.max(y0 - py, 0, py - y1)) + 0.001 * camera.position.distanceTo(c);
       if (d < bd) { bd = d; best = { type: 'plot', i, empty: false, locked: false }; }
     }
-    for (const a of actors.values()) {
+    if (!noGlad) for (const a of actors.values()) {
       _sp.set(a.pos.x, a.pos.y + 0.9, a.pos.z).project(camera); if (_sp.z > 1) continue;
       const d = Math.hypot((_sp.x * 0.5 + 0.5) * W - px, (-_sp.y * 0.5 + 0.5) * H - py) * 1.15;
       if (d < bd && d < slop * 0.8) { bd = d; best = { type: 'glad', id: a.id }; }
@@ -778,7 +816,7 @@ export function createHub({ renderer, camera, audio, tier = 'high', post = null 
     card.el.addEventListener('pointerdown', (ev) => ev.stopPropagation());
     return card;
   }
-  const plotLabel = (i) => { const p = S && S.plots[i], D = Dg(); return p ? { n: (D.BUILD[p.b] && D.BUILD[p.b].n) || p.b, s: 'Level ' + p.l } : null; };
+  const plotLabel = (i) => { const p = S && S.plots[i], D = Dg(); return p ? { n: (D.BUILD[p.b] && D.BUILD[p.b].n) || p.b, s: 'Level ' + p.l + (LMg().moving && LMg().moving(S, i) ? ', under construction' : '') } : null; };
   function showCard(i, interactive) {
     const lab = plotLabel(i); if (!lab) return hideCard(); ensureCard();
     card.i = i; card.open = !!interactive; card.shown = true; card.t.textContent = lab.n; card.s.textContent = interactive ? lab.s + ' \u00b7 tap again to open' : lab.s;
@@ -800,6 +838,8 @@ export function createHub({ renderer, camera, audio, tier = 'high', post = null 
   /** a tap: touch + far camera + a building = zoom in and show the card first; a second tap on it (or the card button) opens it */
   function handleTap(e) {
     const touch = e.pointerType && e.pointerType !== 'mouse';
+    if (rr.on) { if (cine) { skipMove(); return; } let r = pick(e.clientX, e.clientY, true); if (!r && touch) r = pickNear(e.clientX, e.clientY, slopFor(e), true); if (rr.onTap) rr.onTap(r, e); return; }   // MOVE: rearrange mode owns taps
+    if (cine) { skipMove(); return; }
     const r = touch ? pickSlop(e) : pick(e.clientX, e.clientY);
     if (touch && r && r.type === 'plot' && !r.empty && !r.locked && preview !== r.i && orb.dist > 44) {
       preview = r.i; focusPlot(r.i, { dist: Math.min(orb.dist, (orb.aspect < 0.95 ? 30 : 24) + 5), dur: 0.8 }); showCard(r.i, true); setSelection({ type: 'plot', i: r.i });
@@ -820,11 +860,12 @@ export function createHub({ renderer, camera, audio, tier = 'high', post = null 
     m.setMatrixAt(0, mm4); m.instanceMatrix.needsUpdate = true;
   }
   function setSelection(s) { sel = s && (s.type === 'plot' || s.type === 'glad') ? s : null; updateHL(); ringFor(selRing, sel); updateLinkStrength(); emit('select', sel); }
-  function setHover(s) { if (s && s.type === 'plot' && !s.empty && !s.locked && preview < 0) { showCard(s.i, false); } else if (!card.open) hideCard(); const same = (hover === s) || (hover && s && hover.type === s.type && hover.i === s.i && hover.id === s.id); if (same) return; hover = s; if (s) playUi('uiHover', { gain: 0.6 }); updateHL(); updateLinkStrength(); if (dom && orb.enabled) dom.style.cursor = s ? 'pointer' : 'grab'; ringFor(hovRing, hover && !(sel && sel.type === hover.type && sel.i === hover.i && sel.id === hover.id) && (hover.type === 'glad' || (hover.type === 'plot' && (hover.empty || hover.locked))) ? hover : null); }
+  function setHover(s) { if (rr.on) return; if (s && s.type === 'plot' && !s.empty && !s.locked && preview < 0) { showCard(s.i, false); } else if (!card.open) hideCard(); const same = (hover === s) || (hover && s && hover.type === s.type && hover.i === s.i && hover.id === s.id); if (same) return; hover = s; if (s) playUi('uiHover', { gain: 0.6 }); updateHL(); updateLinkStrength(); if (dom && orb.enabled) dom.style.cursor = s ? 'pointer' : 'grab'; ringFor(hovRing, hover && !(sel && sel.type === hover.type && sel.i === hover.i && sel.id === hover.id) && (hover.type === 'glad' || (hover.type === 'plot' && (hover.empty || hover.locked))) ? hover : null); }
   function updateHL() {
     hlTarget.fill(0);
     if (hover && hover.type === 'plot' && !hover.empty) hlTarget[hover.i + 1] = 0.38;
     if (sel && sel.type === 'plot' && !sel.empty) hlTarget[sel.i + 1] = 1.0;
+    if (rr.on && rr.lift >= 0) hlTarget[rr.lift + 1] = 1.35;   // MOVE: the lifted building glows
   }
 
   // ---------------------------------------------------------------------------------------- time of day + weather
@@ -837,8 +878,11 @@ export function createHub({ renderer, camera, audio, tier = 'high', post = null 
   function applyPreset(p) {
     applyTOD(p, { rig, scene, sky, renderer, nightUniforms: [nightU] });
     for (let i = 0; i < MAXPLOT; i++) buildingUniforms.uGl.value[i] = clamp(p.night * 1.2);
-    const ei = 1 - 0.9 * clamp(p.night * 1.3); lib.roof.emissiveIntensity = lib.masonry.emissiveIntensity = lib.wood.emissiveIntensity = lib.cloth.emissiveIntensity = ei; lib.metal.emissiveIntensity = 0.3 + 0.5 * ei;
+    const ei = 1 - 0.6 * clamp(p.night * 1.3);   // [HUB-NIGHT] keep a cool lift in the shadow emissive so silhouettes survive lib.roof.emissiveIntensity = lib.masonry.emissiveIntensity = lib.wood.emissiveIntensity = lib.cloth.emissiveIntensity = ei; lib.metal.emissiveIntensity = 0.3 + 0.5 * ei;
     flames && flames.update(hubT, p.night);
+    { const nk = clamp((p.night - 0.3) / 0.55); poolU.uAmt.value = nk * (1 - 0.35 * rainAmt); buildingUniforms.uNightRim.value = nk; nightK = nk;   // [HUB-NIGHT]
+      if (post && post.uniforms && post.uniforms.uToe) post.uniforms.uToe.value = clamp(p.night * 1.3);
+      padMat.uniforms.uA.value = 0.45 + 0.4 * nk; ghostMat.opacity = ghostMatB.opacity = 0.4 + 0.22 * nk; rrMat.uniforms.uFill.value = 0.2 + 0.12 * nk; }
     smokeU.uLight.value.set(p.sunColor).lerp(new THREE.Color(0xd8d0e0), 0.45); smokeU.uDark.value.set(p.hemiGround).multiplyScalar(0.25);
     dust.setSunColor(p.sunColor);
     rayU.uSun.value.copy(rig.sunDir); rayU.uColor.value.set(p.sunColor).multiplyScalar(0.9);
@@ -847,6 +891,20 @@ export function createHub({ renderer, camera, audio, tier = 'high', post = null 
   }
   const dust = env.dust;
   function weatherState(St) { return weatherOverride || (LMg() ? LMg().weather(St, 'w' + St.week) : 'clear'); }
+  // [HUB-HEAT] heat haze = a thin shimmer around the distant horizon only. Amplitude is in pixels (about 1.1 px phone, 1.8 px desktop) divided by the width,
+  // scaled by tier (off on low, soft on medium), 0 on reduced motion. The band follows the horizon line of the orbit camera and fades out when it leaves the frame.
+  const _hd = new V3(), _hv = new V3(); let heatAmt = 0;
+  function heatStep(dt) {
+    const u = post.uniforms, k = tier === 'low' ? 0 : tier === 'medium' ? 0.7 : 1, tgt = heatTarget && k && !prefersReduced() ? 1 : 0;
+    heatAmt += (tgt - heatAmt) * Math.min(1, dt * 1.5);
+    if (heatAmt < 0.01) { u.uHeat.value = 0; return; }
+    const w = Math.max(1, orb.vw || 390), h = Math.max(1, orb.vh || 800);
+    camera.getWorldDirection(_hd); _hd.y = 0; if (_hd.lengthSq() < 1e-4) { u.uHeat.value = 0; return; }
+    _hv.copy(camera.position).addScaledVector(_hd.normalize(), 4000).setY(camera.position.y); _hv.project(camera);
+    const hy = _hv.y * 0.5 + 0.5, vis = clamp(1 - Math.abs(hy - 0.62) / 0.5);     // horizon far off screen: fade
+    u.uHeatBand.value.set(hy - 0.06, hy + 0.02); u.uHeatAsp.value = w / h;
+    u.uHeat.value = (1.15 + 0.7 * clamp((h - 500) / 400)) * clamp(h / 800, 0.6, 1.3) / w * k * heatAmt * vis;
+  }
   let rainAmt = 0, rainTarget = 0, heatTarget = 0, todKey = '', lastWeek = -1, liveT0 = 0, liveOff = 0, liveChk = 0;
   function refreshSky(St, instant) {
     if (St.week !== lastWeek) { lastWeek = St.week; liveT0 = hubT; liveOff = 0; }
@@ -866,7 +924,7 @@ export function createHub({ renderer, camera, audio, tier = 'high', post = null 
     if (!audio || !audio.ambient || !S || !entered) return; audT -= dt; if (audT > 0) return; audT = 0.25;
     const zoom = clamp(1.3 - orb.dist / 75, 0, 1), focus = [], ref = orb.target, rows = S.rows || 2;
     for (let i = 0; i < 16; i++) {
-      const pl = S.plots[i]; if (!pl || plotRC(i)[0] >= rows || !SPOT[pl.b]) continue; const c = plotCenter(i), d = Math.hypot(c.x - ref.x, c.z - ref.z), w = zoom / (1 + Math.pow(d / (7 + orb.dist * 0.1), 2));
+      const pl = S.plots[i]; if (!pl || plotRC(i)[0] >= rows || !SPOT[pl.b] || (LMg().moving && LMg().moving(S, i))) continue; const c = plotCenter(i), d = Math.hypot(c.x - ref.x, c.z - ref.z), w = zoom / (1 + Math.pow(d / (7 + orb.dist * 0.1), 2));
       if (w > 0.05) focus.push({ kind: SPOT[pl.b], w, pan: panOf(c) });
     }
     let spar = 0, drill = 0; for (const a of actors.values()) { if (a.kind === 'duel') spar++; else if (a.kind === 'drill') drill++; }
@@ -874,6 +932,264 @@ export function createHub({ renderer, camera, audio, tier = 'high', post = null 
     ambOn = true;
   }
 
+  // ---------------------------------------------------------------------------------------- MOVE: building sites, crew, dust, crane, rearrange mode and the cinematic
+  // Everything below is idle (hidden, no draw calls) unless a building is being rebuilt or the player is rearranging. Per-plot offsets (lift, sink, rise) use the
+  // `uOff` uniform of the shared building materials, so no geometry is rebuilt for them.
+  const HAMMER_SVG = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4l6 6-2 2-1-1-3 3-4-4 3-3-1-1z"/><path d="M11 11L4 18l2 2 7-7"/></svg>';
+  const easeOut = (t) => 1 - Math.pow(1 - clamp(t), 3);
+  const offs = Array.from({ length: 16 }, () => ({ x: 0, y: 0, z: 0, snap: false }));
+  const setOff = (i, x, y, z, snap = false) => { const o = offs[i]; if (o) { o.x = x; o.y = y; o.z = z; o.snap = snap; } };
+  function stepOffsets(dt) {
+    const U = buildingUniforms.uOff.value, k = Math.min(1, dt * 9);
+    for (let i = 0; i < 16; i++) { const o = offs[i], u = U[i + 1]; if (o.snap) u.set(o.x, o.y, o.z); else { u.x += (o.x - u.x) * k; u.y += (o.y - u.y) * k; u.z += (o.z - u.z) * k; if (Math.abs(u.x) + Math.abs(u.y) + Math.abs(u.z) < 0.002 && !o.x && !o.y && !o.z) u.set(0, 0, 0); } }
+  }
+  // ---- crew (one InstancedMesh, matrices written each frame)
+  const crewMesh = makeWorkerMesh(40); crewMesh.visible = false; crewMesh.castShadow = tier !== 'low'; group.add(crewMesh);   // low tier: no shadow pass draw for the crew
+  let siteCrew = [], cineCrew = [];
+  const _cm = new THREE.Matrix4(), _cq = new THREE.Quaternion(), _cp = new V3(), _cs = new V3(1, 1, 1), _cy = new V3(0, 1, 0);
+  function layoutSiteCrew() {
+    siteCrew = [];
+    for (const s of sites) for (const w of s.R.workers || []) siteCrew.push({ x: s.c.x - w.x, y: s.c.y + w.y, z: s.c.z - w.z, yaw: Math.PI + w.ry, ph: (s.i * 7 + siteCrew.length * 3) % 11, site: s.i });
+  }
+  function updateCrew(t) {
+    const list = siteCrew.concat(cineCrew), n = Math.min(40, list.length); crewMesh.visible = n > 0; crewMesh.count = n; if (!n) return;
+    for (let k = 0; k < n; k++) { const w = list[k], bob = Math.abs(Math.sin(t * 7.5 + w.ph)) * 0.035; _cq.setFromAxisAngle(_cy, w.yaw + Math.sin(t * 1.3 + w.ph) * 0.12); _cp.set(w.x, w.y + bob, w.z); _cm.compose(_cp, _cq, _cs); crewMesh.setMatrixAt(k, _cm); }
+    crewMesh.instanceMatrix.needsUpdate = true;
+  }
+  // ---- dust puffs (Points, CPU stepped, 90 particles)
+  const NP = 90, pPos = new Float32Array(NP * 3), pA = new Float32Array(NP), pS = new Float32Array(NP), pV = new Float32Array(NP * 3), pL = new Float32Array(NP).fill(0), pM = new Float32Array(NP).fill(1), pS0 = new Float32Array(NP);
+  const puffGeo = new THREE.BufferGeometry(); puffGeo.setAttribute('position', new THREE.BufferAttribute(pPos, 3)); puffGeo.setAttribute('aA', new THREE.BufferAttribute(pA, 1)); puffGeo.setAttribute('aS', new THREE.BufferAttribute(pS, 1));
+  const puffU = { uPR: { value: 1 }, uColor: { value: new THREE.Color(0xcdb58c) } };
+  const puffs = new THREE.Points(puffGeo, new THREE.ShaderMaterial({ uniforms: puffU, transparent: true, depthWrite: false, fog: false,
+    vertexShader: 'attribute float aA; attribute float aS; uniform float uPR; varying float vA; void main(){ vec4 mv = modelViewMatrix * vec4(position, 1.0); gl_PointSize = clamp(aS * 640.0 * uPR / -mv.z, 1.0, 240.0 * uPR); vA = aA; gl_Position = projectionMatrix * mv; }',
+    fragmentShader: 'varying float vA; uniform vec3 uColor; void main(){ vec2 c = gl_PointCoord - 0.5; float r = length(c) * 2.0; float a = pow(max(1.0 - r, 0.0), 1.5) * vA; gl_FragColor = vec4(uColor, a);\n#include <tonemapping_fragment>\n#include <colorspace_fragment>\n}' }));
+  puffs.frustumCulled = false; puffs.renderOrder = 10; puffs.visible = false; puffs.name = 'move_dust'; group.add(puffs);
+  let puffHead = 0, puffLive = 0;
+  function spawnPuffs(x, y, z, n, spread = 1.5, up = 1.2, size = 1) {
+    for (let k = 0; k < n; k++) {
+      const i = puffHead; puffHead = (puffHead + 1) % NP; const a = Math.random() * TAU, r = Math.random() * spread;
+      pPos[i * 3] = x + Math.cos(a) * r; pPos[i * 3 + 1] = y + Math.random() * 0.4; pPos[i * 3 + 2] = z + Math.sin(a) * r;
+      pV[i * 3] = Math.cos(a) * (0.3 + Math.random() * 0.7); pV[i * 3 + 1] = up * (0.4 + Math.random() * 0.8); pV[i * 3 + 2] = Math.sin(a) * (0.3 + Math.random() * 0.7);
+      pM[i] = 1.1 + Math.random() * 1.1; pL[i] = pM[i]; pS0[i] = (0.7 + Math.random() * 0.9) * size;
+    }
+  }
+  function stepPuffs(dt) {
+    let live = 0;
+    for (let i = 0; i < NP; i++) {
+      if (pL[i] <= 0) { pA[i] = 0; continue; } pL[i] -= dt; live++;
+      const u = 1 - clamp(pL[i] / pM[i]); pPos[i * 3] += pV[i * 3] * dt; pPos[i * 3 + 1] += pV[i * 3 + 1] * dt; pPos[i * 3 + 2] += pV[i * 3 + 2] * dt; pV[i * 3] *= 0.97; pV[i * 3 + 2] *= 0.97; pV[i * 3 + 1] *= 0.985;
+      pA[i] = Math.sin(Math.PI * Math.min(1, u * 1.15)) * 0.55; pS[i] = pS0[i] * (0.6 + u * 1.9);
+    }
+    puffs.visible = live > 0 || puffLive > 0; puffLive = live; puffGeo.attributes.position.needsUpdate = true; puffGeo.attributes.aA.needsUpdate = true; puffGeo.attributes.aS.needsUpdate = true;
+    puffU.uColor.value.set(tod.cur ? tod.cur.sunColor : 0xffffff).multiplyScalar(0.55).lerp(new THREE.Color(0xcdb58c), 0.55);
+  }
+  // ---- crane
+  let crane = null;
+  const ensureCrane = () => { if (!crane) { crane = makeCrane(); crane.setShadows(tier !== 'low'); crane.group.visible = false; group.add(crane.group); } return crane; };
+  // ---- DOM tags: a hammer + progress pill above every site (always), and price / reason pills in rearrange mode
+  let tagBox = null; const siteTags = [], rrTags = [];
+  function ensureTags() {
+    if (tagBox) return tagBox;
+    if (!document.getElementById('lx-rr-css')) {
+      const st = document.createElement('style'); st.id = 'lx-rr-css';
+      st.textContent = '.lx-rr-tags,.lx-rr-tags *{pointer-events:none !important}.lx-rr-tags{position:fixed;inset:0;z-index:28;overflow:hidden}.lx-rr-tag{position:absolute;left:0;top:0;display:flex;align-items:center;gap:6px;padding:4px 9px;border-radius:999px;font:800 12px/1 system-ui,sans-serif;letter-spacing:.03em;white-space:nowrap;color:#f6ecd0;background:rgba(29,24,48,.86);border:2px solid #b8803a;box-shadow:0 3px 10px rgba(0,0,0,.45);will-change:transform;opacity:0}.lx-rr-tag.on{opacity:1}.lx-rr-tag b{font-weight:800}.lx-rr-tag small{font-size:11px;opacity:.85;font-weight:700}.lx-rr-tag.ok{border-color:#4fbf6f;color:#d9ffe0;background:rgba(18,52,32,.88)}.lx-rr-tag.swap{border-color:#43b9c4;color:#dcfbff;background:rgba(14,48,54,.88)}.lx-rr-tag.src{border-color:#f2c14e;color:#ffe7a8}.lx-rr-tag.bad{border-color:#6d6a78;color:#b9b6c4;background:rgba(40,38,52,.78)}.lx-rr-tag.cur{outline:3px solid #fff;outline-offset:2px}.lx-rr-tag.site{border-color:#e0a23a}.lx-rr-bar{display:block;width:44px;height:6px;border-radius:3px;background:rgba(255,255,255,.18);overflow:hidden}.lx-rr-bar i{display:block;height:100%;background:linear-gradient(90deg,#f2c14e,#e0782a)}';
+      document.head.appendChild(st);
+    }
+    tagBox = document.createElement('div'); tagBox.className = 'lx-rr-tags'; tagBox.setAttribute('aria-hidden', 'true'); (document.getElementById('ui') || document.body).appendChild(tagBox); return tagBox;
+  }
+  function tagAt(list, k, cls) { ensureTags(); let t = list[k]; if (!t) { t = document.createElement('div'); t.className = 'lx-rr-tag'; tagBox.appendChild(t); list[k] = t; } t.dataset.k = cls; return t; }
+  const _tp = new V3();
+  function placeTag(el, x, y, z, cls) {
+    _tp.set(x, y, z).project(camera); const r = dom.getBoundingClientRect();
+    if (_tp.z > 1 || _tp.z < -1) { el.classList.remove('on'); return; }
+    const px = (_tp.x * 0.5 + 0.5) * r.width + r.left, py = (-_tp.y * 0.5 + 0.5) * r.height + r.top, w = el.offsetWidth || 70, h = el.offsetHeight || 24;
+    el.style.transform = `translate(${clamp(px - w / 2, r.left + 4, r.right - w - 4).toFixed(1)}px,${clamp(py - h / 2, r.top + 60, r.bottom - 120).toFixed(1)}px)`; el.className = 'lx-rr-tag on ' + cls;
+  }
+  const plotTop = (St, i) => { const p = St && St.plots[i]; const h = p ? buildParts(p.b, p.l).footprint.h : 1.5; return Math.min(h, 6.5); };
+  let tagT = 0, photoHide = false, photoChk = 0;
+  function updateTags(dt) {
+    photoChk -= dt; if (photoChk <= 0) { photoChk = 0.3; photoHide = !!document.querySelector('.lx-photo:not([hidden])'); }
+    const hideAll = !entered || photoHide;
+    // site pills
+    let n = 0;
+    if (S && !hideAll && !(cine && !cine.applied)) for (const s of sites) {
+      const el = tagAt(siteTags, n++, 'site'), left = Math.max(1, s.mv.u - S.week), frac = clamp((S.week - s.mv.s) / Math.max(1, s.mv.w));
+      const txt = `${left} wk`; if (el.dataset.txt !== txt + '|' + Math.round(frac * 10) + s.i) { el.dataset.txt = txt + '|' + Math.round(frac * 10) + s.i; el.innerHTML = `${HAMMER_SVG}<b>${txt}</b><span class="lx-rr-bar"><i style="width:${Math.round(8 + frac * 92)}%"></i></span>`; el.setAttribute('aria-hidden', 'true'); }
+      placeTag(el, s.c.x, s.c.y + plotTop(S, s.i) + 1.6, s.c.z, 'site');
+    }
+    for (let k = n; k < siteTags.length; k++) siteTags[k].classList.remove('on');
+    // rearrange pills
+    let m = 0;
+    if (rr.on && !hideAll && !(cine && !cine.applied)) for (const it of rr.items) {
+      const el = tagAt(rrTags, m++, it.kind); const sig = it.kind + '|' + it.text + '|' + (it.sub || '') + (it.i === rr.cursor ? '|c' : '');
+      if (el.dataset.sig !== sig) { el.dataset.sig = sig; el.innerHTML = it.kind === 'bad' ? `<span>${it.icon || '\u2715'}</span>${it.text ? `<b>${it.text}</b>` : ''}` : `<b>${it.text}</b>${it.sub ? `<small>${it.sub}</small>` : ''}`; }
+      const c = plotCenter(it.i); placeTag(el, c.x, c.y + (rr.lift === it.i ? 4.0 : plotTop(S, it.i) + 0.9), c.z, it.kind + (it.i === rr.cursor ? ' cur' : ''));
+    }
+    for (let k = m; k < rrTags.length; k++) rrTags[k].classList.remove('on');
+    void tagT;
+  }
+  // ---- rearrange mode (the controller is js/rearrange.js)
+  const rr = { on: false, items: [], cursor: -1, lift: -1, onTap: null, onHover: null, ghosts: [], ghostSpec: null, ringDirty: true };
+  const rrMat = ringMaterial({ color: [1.0, 1.0, 1.0], width: 0.2, alpha: 0.9, speed: 0.8, fill: 0.2 });
+  const rrRings = ringMesh(rrMat, 16); rrRings.visible = false; rrRings.name = 'move_markers'; group.add(rrRings);
+  const RRCOL = { ok: [0.12, 0.95, 0.28], swap: [0.08, 0.8, 0.95], src: [1.5, 0.95, 0.12], bad: [0.28, 0.28, 0.34] };
+  const _col = new THREE.Color();
+  function rrDraw() {
+    const items = rr.items.filter((it) => it.ring !== false); rrRings.count = items.length; rrRings.visible = rr.on && items.length > 0;
+    items.forEach((it, k) => { const c = plotCenter(it.i); mm4.makeScale(9.6, 1, 6.8).setPosition(c.x, c.y + 0.045, c.z); rrRings.setMatrixAt(k, mm4); const col = RRCOL[it.kind] || RRCOL.bad; rrRings.setColorAt(k, _col.setRGB(col[0], col[1], col[2])); });
+    rrRings.instanceMatrix.needsUpdate = true; if (rrRings.instanceColor) rrRings.instanceColor.needsUpdate = true;
+  }
+  const ghostGeoCache = new Map();
+  function ghostGeo(b, l) {
+    const key = b + '|' + l; if (ghostGeoCache.has(key)) return ghostGeoCache.get(key);
+    const R = buildParts(b, l), list = []; for (const m of MATS) if (R.parts[m] && m !== 'cloth') { const g = R.parts[m].clone(); for (const nm of Object.keys(g.attributes)) if (nm !== 'position' && nm !== 'normal') g.deleteAttribute(nm); list.push(g); }
+    const g = mergeGeometries(list, false); ghostGeoCache.set(key, g); return g;
+  }
+  const ghostMat = new THREE.MeshBasicMaterial({ color: 0x7be08a, transparent: true, opacity: 0.4, depthWrite: false, fog: false });
+  const ghostMatB = new THREE.MeshBasicMaterial({ color: 0x6fd6e0, transparent: true, opacity: 0.4, depthWrite: false, fog: false });
+  for (let k = 0; k < 2; k++) { const m = new THREE.Mesh(new THREE.BufferGeometry(), k ? ghostMatB : ghostMat); m.visible = false; m.renderOrder = 8; m.name = 'move_ghost' + k; m.frustumCulled = false; group.add(m); rr.ghosts.push(m); }
+  const lineU = { uTime: { value: 0 }, uW: { value: 0.16 }, uColor: { value: new THREE.Color(0.45, 1.6, 0.6) } };
+  const moveLine = new THREE.Mesh(new THREE.BufferGeometry(), new THREE.ShaderMaterial({ uniforms: lineU, vertexShader: LINK_VERT, fragmentShader: LINK_FRAG, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, fog: false }));
+  moveLine.frustumCulled = false; moveLine.renderOrder = 9; moveLine.visible = false; moveLine.name = 'move_line'; group.add(moveLine);
+  function lineGeo(a, b) {
+    const A = plotCenter(a), B = plotCenter(b), pa = new V3(A.x, A.y + 2.6, A.z), pb = new V3(B.x, B.y + 2.6, B.z), pm = pa.clone().add(pb).multiplyScalar(0.5); pm.y = Math.max(pa.y, pb.y) + 2.6 + pa.distanceTo(pb) * 0.12;
+    const curve = new THREE.QuadraticBezierCurve3(pa, pm, pb), SEG = 24, pos = [], tan = [], side = [], uvs = [], str = [], idx = [];
+    for (let s = 0; s <= SEG; s++) { const t = s / SEG, p = curve.getPoint(t), tg = curve.getTangent(t); for (const sd of [-1, 1]) { pos.push(p.x, p.y, p.z); tan.push(tg.x, tg.y, tg.z); side.push(sd); uvs.push(t, sd * 0.5 + 0.5); str.push(1); } }
+    for (let s = 0; s < SEG; s++) { const q = s * 2; idx.push(q, q + 1, q + 2, q + 1, q + 3, q + 2); }
+    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('aTan', new THREE.Float32BufferAttribute(tan, 3)); g.setAttribute('aSide', new THREE.Float32BufferAttribute(side, 1)); g.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2)); g.setAttribute('aStr', new THREE.Float32BufferAttribute(str, 1)); g.setIndex(idx); return g;
+  }
+  function rrGhost(spec) {   // spec: {from, to, a:{b,l}, bb:{b,l}|null}  | null
+    rr.ghostSpec = spec; const [g0, g1] = rr.ghosts;
+    if (!spec) { g0.visible = g1.visible = false; moveLine.visible = false; return; }
+    const place = (m, plot, b, l) => { const c = plotCenter(plot); m.geometry = ghostGeo(b, l); m.position.set(c.x, c.y + 0.02, c.z); m.rotation.y = Math.PI; m.visible = true; };
+    place(g0, spec.to, spec.a.b, spec.a.l); if (spec.bb) place(g1, spec.from, spec.bb.b, spec.bb.l); else g1.visible = false;
+    moveLine.geometry.dispose(); moveLine.geometry = lineGeo(spec.from, spec.to); moveLine.visible = true; lineU.uColor.value.setRGB(...(spec.bb ? [0.3, 1.45, 1.6] : [0.45, 1.6, 0.6]));
+  }
+  const _fc = new THREE.PerspectiveCamera(); const _fp = new V3();
+  /** frame two plots: the smallest distance at which both footprints (and the buildings on them) fit inside the band the HUD leaves free. opt.bottom = lowest allowed ndc y. */
+  function frameTwo(a, b, opt = {}) {
+    const A = plotCenter(a), B = b == null || b < 0 ? A : plotCenter(b), mid = new V3((A.x + B.x) / 2, (A.y + B.y) / 2 + 1.6, (A.z + B.z) / 2);
+    orb.follow = null; let az = orb.az; const d = angDiff(Math.PI, az); if (Math.abs(d) > 0.7) az = Math.PI + Math.sign(d) * 0.7;
+    const pitch = opt.pitch ?? clamp(Math.max(orb.pitch, 0.7), 0.55, 1.0), top = opt.top ?? 0.6, bot = opt.bottom ?? -0.42, side = 0.84;
+    _fc.fov = camera.fov; _fc.aspect = orb.aspect; _fc.near = camera.near; _fc.far = camera.far; _fc.updateProjectionMatrix();
+    const pts = []; for (const C of b == null || b < 0 ? [A] : [A, B]) for (const dx of [-4.8, 4.8]) for (const dz of [-3.4, 3.4]) for (const y of [0, 5.5]) pts.push([C.x + dx, C.y + y, C.z + dz]);
+    let dist = orb.aspect < 0.95 ? 36 : 28; const cp = Math.cos(pitch);
+    for (let it = 0; it < 14; it++) {
+      _fc.position.set(mid.x + Math.sin(az) * cp * dist, mid.y + Math.sin(pitch) * dist, mid.z + Math.cos(az) * cp * dist); _fc.lookAt(mid); _fc.updateMatrixWorld(true); _fc.matrixWorldInverse.copy(_fc.matrixWorld).invert();
+      let ok = true; for (const q of pts) { _fp.set(q[0], q[1], q[2]).project(_fc); if (Math.abs(_fp.x) > side || _fp.y > top || _fp.y < bot) { ok = false; break; } }
+      if (ok) break; dist *= 1.1;
+    }
+    animateTo({ az, pitch, dist: clamp(dist, DIST[0], DIST[1]), target: mid }, opt.dur ?? 0.9);
+  }
+  function rrBegin(o = {}) { rr.on = true; rr.onTap = o.onTap || null; rr.onHover = o.onHover || null; rr.items = []; rr.cursor = -1; rr.lift = -1; preview = -1; hideCard(); setSelection(null); ensureTags(); rrDraw(); }
+  function rrEnd() {
+    rr.on = false; rr.items = []; rr.cursor = -1; rr.lift = -1; rr.onTap = rr.onHover = null; rrDraw(); rrGhost(null); for (let i = 0; i < 16; i++) setOff(i, 0, 0, 0); for (const t of rrTags) t.classList.remove('on'); ringFor(hovRing, null); updateHL();
+  }
+  function rrItems(items, cursor) { rr.items = items; rr.cursor = cursor == null ? -1 : cursor; rrDraw(); ringFor(hovRing, rr.cursor >= 0 ? { type: 'plot', i: rr.cursor, empty: true } : null); }
+  function rrLift(i) { if (rr.lift >= 0 && rr.lift !== i) setOff(rr.lift, 0, 0, 0); rr.lift = i; if (i < 0) updateHL(); else { setOff(i, 0, 1.9, 0); updateHL(); } }
+  // ---- the cinematic: crew breaks the old building down (it sinks in a cloud of dust), the new site rises with scaffolding, workers and a crane
+  let cine = null, risers = [], pendingS = null;
+  const CT = { shake: 1.3, sink: 1.3, rise: 2.7, tail: 0.6 };
+  function cineEnds(c) { const t2 = CT.shake + CT.sink; return { t2, t3: t2 + CT.rise, tEnd: t2 + CT.rise + CT.tail }; }
+  function playMove(info, done) {
+    if (cine) finishMove(true);
+    const plots = [info.from, info.to], red = prefersReduced();
+    const mover = (p, o) => ({ i: p, h: o ? Math.min(buildParts(o.b, o.l).footprint.h, 8) : 0, fp: o ? buildParts(o.b, o.l).footprint : null });
+    const oldAt = { [info.from]: info.a, [info.to]: info.bb || null }, newAt = { [info.to]: info.a, [info.from]: info.bb || null };
+    cine = { t: 0, info, done, applied: false, red, plots: plots.map((p) => ({ ...mover(p, oldAt[p]), had: !!oldAt[p], has: !!newAt[p] })), nextHit: 0, nextDust: 0, craneOn: false };
+    cineCrew = [];
+    if (!red) {
+      cine.plots.forEach((pl, pi) => {
+        if (!pl.had) return; const c = plotCenter(pl.i), fp = pl.fp;
+        for (let k = 0; k < 4; k++) { const a = (k / 4) * TAU + 0.4 + pi, rx = fp.w / 2 + 1.0, rz = fp.d / 2 + 1.0; const wx = Math.cos(a) * rx, wz = Math.sin(a) * rz; cineCrew.push({ x: c.x + wx, y: c.y, z: c.z + wz, yaw: Math.atan2(-wx, -wz), ph: k * 2 + pi * 5, cine: pl.i }); }
+      });
+      frameTwo(info.from, info.to, { dur: 1.1, bottom: -0.72 });
+      playUi('uiOpen', { gain: 0.5 });
+    }
+    emit('moveStart', info);
+    if (red) { applyPending(); }
+  }
+  function applyPending() { if (!cine || cine.applied) return; cine.applied = true; hubRefreshNow(pendingS || S, true); pendingS = null; }
+  function finishMove(silent) {
+    const c = cine; if (!c) return; if (!c.applied) applyPending();
+    cine = null; cineCrew = []; for (const pl of c.plots) setOff(pl.i, 0, 0, 0, true); if (crane) crane.group.visible = false;
+    if (!silent) { emit('moveDone', c.info); } if (c.done) { try { c.done(); } catch (e) { /* UI callback */ } }
+  }
+  const hitSfx = ['hammer', 'thock', 'chop', 'clink', 'hammer'];
+  function cineStep(dt) {
+    const c = cine; if (!c) return; c.t += dt; const t = c.t, E = cineEnds(c);
+    if (c.red) { if (t > 1.0) finishMove(); return; }
+    const near = (pl) => { const cc = plotCenter(pl); return clamp(1.2 - cc.distanceTo(camera.position) / 90, 0.15, 1); };
+    // phase 1 and 2: the crew strikes the old buildings, then they sink into the ground
+    if (!c.applied) {
+      for (const pl of c.plots) {
+        if (!pl.had) continue; const c0 = plotCenter(pl.i);
+        if (t < CT.shake) { const k = t / CT.shake; setOff(pl.i, Math.sin(t * 47 + pl.i) * 0.05 * k, Math.abs(Math.sin(t * 31)) * 0.06 * k, Math.cos(t * 53 + pl.i) * 0.05 * k, true); c.nextDust -= dt; if (c.nextDust <= 0) { c.nextDust = 0.11; spawnPuffs(c0.x + (Math.random() - 0.5) * pl.fp.w, c0.y, c0.z + (Math.random() - 0.5) * pl.fp.d, 2, 1.0, 0.8, 0.8); } }
+        else { const u = (t - CT.shake) / CT.sink; setOff(pl.i, Math.sin(t * 40 + pl.i) * 0.07 * (1 - u), -u * u * (pl.h + 1.2), Math.cos(t * 44) * 0.07 * (1 - u), true); c.nextDust -= dt; if (c.nextDust <= 0) { c.nextDust = 0.06; spawnPuffs(c0.x + (Math.random() - 0.5) * pl.fp.w, c0.y, c0.z + (Math.random() - 0.5) * pl.fp.d, 3, 1.6, 1.4, 1.4); } }
+      }
+      c.nextHit -= dt; if (c.nextHit <= 0) { c.nextHit = t < CT.shake ? 0.26 : 0.4; const p0 = c.plots.find((q) => q.had); if (p0) playUi(t < CT.shake ? hitSfx[Math.floor(t * 4) % hitSfx.length] : 'thock', { gain: 0.42 * near(p0.i), pan: panOf(plotCenter(p0.i)) }); }
+      if (t >= E.t2) { playUi('dust', { gain: 0.6 }); for (const pl of c.plots) if (pl.had) { const c0 = plotCenter(pl.i); spawnPuffs(c0.x, c0.y, c0.z, 14, 3.4, 2.0, 2.2); } applyPending(); cineCrew = []; const cr = ensureCrane(); cr.group.visible = true; }
+    }
+    // phase 3: the new sites rise out of the ground; the crane swings timber and stone over the first one
+    if (c.applied) {
+      const u = clamp((t - E.t2) / CT.rise);
+      for (const pl of c.plots) {
+        if (!pl.has) { setOff(pl.i, 0, 0, 0, true); continue; }
+        const c0 = plotCenter(pl.i); setOff(pl.i, 0, -(1 - easeOut(u * 1.15)) * 3.4, 0, true);
+        c.nextDust -= dt; if (u < 0.85 && c.nextDust <= 0) { c.nextDust = 0.14; spawnPuffs(c0.x + (Math.random() - 0.5) * 8, c0.y, c0.z + (Math.random() - 0.5) * 5, 2, 1.0, 0.7, 0.9); }
+      }
+      const tp = c.plots.find((q) => q.has && q.i === c.info.to) || c.plots.find((q) => q.has);
+      if (tp && crane) {
+        const c0 = plotCenter(tp.i), cx = c0.x + 5.4, cz = c0.z + 1.4; crane.group.position.set(cx, c0.y - 0.05, cz);
+        const cyc = (t - E.t2) / 1.9, ph = cyc - Math.floor(cyc), azP = Math.PI, azB = Math.atan2(c0.x - cx, c0.z - cz), dz = angDiff(azP, azB), ez = (x) => easeOut(clamp(x));
+        const kA = ph / 0.25, kB = (ph - 0.25) / 0.35, kC = (ph - 0.6) / 0.25, kD = (ph - 0.85) / 0.15;
+        const az = ph < 0.25 ? azP : ph < 0.6 ? azP + dz * ez(kB) : ph < 0.85 ? azB : azB - dz * ez(kD);
+        const drop = ph < 0.25 ? 8 - 3 * ez(kA) : ph < 0.6 ? 5 - ez(kB) : ph < 0.85 ? 4 - 0.6 * ez(kC) : 3.4 + 4.6 * ez(kD);
+        crane.setPose({ az, reach: 0.72, drop, show: ph < 0.85 && u < 0.95 }); crane.group.visible = true;
+      }
+      c.nextHit -= dt; if (c.nextHit <= 0 && t < E.t3) { c.nextHit = 0.22 + Math.random() * 0.12; const p0 = c.plots.find((q) => q.has); if (p0) playUi(hitSfx[Math.floor(Math.random() * hitSfx.length)], { gain: 0.4 * near(p0.i), pan: panOf(plotCenter(p0.i)) }); }
+      if (t >= E.t3 && !c.landed) { c.landed = true; playUi('gate', { gain: 0.5 }); for (const pl of c.plots) if (pl.has) { const c0 = plotCenter(pl.i); spawnPuffs(c0.x, c0.y, c0.z, 12, 3.6, 1.2, 1.8); } if (crane) crane.group.visible = false; }
+      if (t >= E.tEnd) finishMove();
+    }
+  }
+  // buildings that just finished their downtime rise out of the scaffolding with a puff of dust
+  function riseStep(dt) {
+    for (let k = risers.length - 1; k >= 0; k--) {
+      const r = risers[k]; r.t += dt; const u = clamp(r.t / 1.3);
+      if (r.t - dt <= 0) { const c0 = plotCenter(r.i); spawnPuffs(c0.x, c0.y, c0.z, 16, 3.8, 1.6, 2.0); playUi('clink', { gain: 0.5, pan: panOf(c0) }); playUi('gate', { gain: 0.3, pan: panOf(c0) }); }
+      if (u >= 1) { setOff(r.i, 0, 0, 0, true); risers.splice(k, 1); } else setOff(r.i, 0, -(1 - easeOut(u)) * 2.2, 0, true);
+    }
+  }
+  let siteHit = 0;
+  function siteSounds(dt) {
+    siteHit -= dt; if (siteHit > 0 || !sites.length || !audio || cine) return; siteHit = 0.9 + Math.random() * 0.9;
+    const s = sites[Math.floor(Math.random() * sites.length)], d = s.c.distanceTo(camera.position); if (d > 55) return;
+    playUi(hitSfx[Math.floor(Math.random() * hitSfx.length)], { gain: 0.3 * clamp(1.1 - d / 55, 0.1, 1), pan: panOf(s.c) });
+  }
+  function moveFrame(dt, t) {
+    if (!S) return;
+    lineU.uTime.value = t; rrMat.uniforms.uTime.value = t;
+    { const calm = rr.on || !!cine; linkMesh.visible = !calm && links.length > 0; padRings.visible = !calm; }
+    if (cine) cineStep(dt);
+    riseStep(dt);
+    if (rr.lift >= 0 && rr.on && !cine) setOff(rr.lift, 0, 1.9 + Math.sin(t * 2.4) * 0.16, 0);
+    stepOffsets(dt); stepPuffs(dt); puffU.uPR.value = renderer.getPixelRatio();
+    updateCrew(t); siteSounds(dt); updateTags(dt);
+  }
+
+  function hubRefreshNow(St, instant = false) {
+    S = St; if (!staticParts) buildStatic();
+    const sigs = St.plots.map((p, i) => { if (!p) return '-'; const m = LMg().moving ? LMg().moving(St, i) : null; return p.b + ':' + p.l + (m ? ':c' + siteStage((St.week - m.s) / Math.max(1, m.w)) + '/' + m.u : ''); }).join(',') + '|' + St.rows + '|' + (St.color || 0) + '|' + (LMg().fest(St, St.week) || '') + '|' + (St.seed || '');
+    if (sigs !== sigAll) {
+      const prev = new Set(sites.map((x) => x.i)); sigAll = sigs; rebuildWorld(St); rebuildLinks(St); layoutSiteCrew();
+      if (entered && !instant && !cine) for (const i of prev) if (!sites.some((x) => x.i === i) && St.plots[i]) risers.push({ i, t: 0 });   // finished: rises out of its scaffolding
+    }
+    syncGlads(St); refreshSky(St, instant || !tod.cur);
+    if (sel && sel.type === 'plot') ringFor(selRing, sel);
+    if (rr.on) rrDraw();
+    return hub;
+  }
+  function skipMove() { if (cine) finishMove(); }
   // ---------------------------------------------------------------------------------------- public API
   const hub = {
     scene, group, orbit: orb, camera, audio, sky, rig, env, layout: LAYOUT,
@@ -887,24 +1203,21 @@ export function createHub({ renderer, camera, audio, tier = 'high', post = null 
       dom.tabIndex = 0; dom.classList.add('lx-bl-focus'); dom.setAttribute('role', 'application'); dom.setAttribute('aria-label', 'Your ludus. Arrow keys or WASD pan the camera, Q and E rotate, plus and minus zoom.');
       dom.addEventListener('keydown', onKeyDown); dom.addEventListener('keyup', onKeyUp); dom.addEventListener('focus', onFocus); dom.addEventListener('blur', onBlurKb);
       try { audio && audio.attachUi && audio.attachUi(document.getElementById('ui'), { hover: true }); } catch (err) { /* audio optional */ }
-      orb.enabled = true; entered = true; orb.aspect = (dom.clientWidth || 1100) / (dom.clientHeight || 650); camera.aspect = orb.aspect; camera.updateProjectionMatrix();
+      orb.enabled = true; entered = true; orb.vw = dom.clientWidth || 1100; orb.vh = dom.clientHeight || 650; orb.aspect = orb.vw / orb.vh; camera.aspect = orb.aspect; camera.updateProjectionMatrix();
       hub.refresh(St, true); overview(true);
       return hub;
     },
     exit() {
+      if (post && post.uniforms) { if (post.uniforms.uToe) post.uniforms.uToe.value = 0; if (post.uniforms.uHeat) post.uniforms.uHeat.value = 0; }   // [HUB-NIGHT] leave the shared grade pass clean for the arena
       orb.enabled = false; entered = false; ptrs.clear(); try { audio && audio.ambient && audio.ambient.stop(); } catch (err) { /* audio optional */ }
       dom.removeEventListener('pointerdown', onDown); dom.removeEventListener('pointermove', onMove); dom.removeEventListener('pointerup', onUp); dom.removeEventListener('pointercancel', onUp);
       dom.removeEventListener('wheel', onWheel); dom.removeEventListener('contextmenu', onCtx); dom.removeEventListener('pointerleave', onLeave);
       dom.removeEventListener('keydown', onKeyDown); dom.removeEventListener('keyup', onKeyUp); dom.removeEventListener('focus', onFocus); dom.removeEventListener('blur', onBlurKb); keysHeld.clear(); showHint(false); dom.removeAttribute('tabindex');
-      preview = -1; hideCard(); setHover(null);
+      preview = -1; hideCard(); if (cine) finishMove(true); rrEnd(); setHover(null);
     },
     refresh(St, instant = false) {
-      S = St; if (!staticParts) buildStatic();
-      const sigs = St.plots.map((p) => (p ? p.b + ':' + p.l : '-')).join(',') + '|' + St.rows + '|' + (St.color || 0) + '|' + (LMg().fest(St, St.week) || '') + '|' + (St.seed || '');
-      if (sigs !== sigAll) { sigAll = sigs; rebuildWorld(St); rebuildLinks(St); }
-      syncGlads(St); refreshSky(St, instant || !tod.cur);
-      if (sel && sel.type === 'plot') ringFor(selRing, sel);
-      return hub;
+      if (cine && !cine.applied && !instant) { pendingS = St; return hub; }   // MOVE: the cinematic applies the new layout at the right moment
+      return hubRefreshNow(St, instant);
     },
     update(realDt, t) {
       const dt = Math.min(realDt, 0.1); hubT = t != null ? t : hubT + dt;
@@ -915,17 +1228,18 @@ export function createHub({ renderer, camera, audio, tier = 'high', post = null 
       if (tod.k < 1) { tod.k = Math.min(1, tod.k + dt / 1.8); tod.cur = lerpTOD(tod.from, tod.to, ease(tod.k)); applyPreset(tod.cur); }
       const night = tod.cur ? tod.cur.night : 0;
       sky.update(camera, hubT); env.update(hubT, dt); if (flames) flames.update(hubT, night);
+      poolU.uTime.value = hubT; poolMesh.visible = poolU.uAmt.value > 0.02 && poolMesh.count > 0;
       rig.sun.target.position.copy(rig.shadowCenter);
       liveChk -= dt; if (liveChk <= 0 && S) { liveChk = 4; const off = hourOverride == null && !orb.follow ? clamp((hubT - liveT0) / 360, 0, 0.9) : liveOff; if (Math.abs(off - liveOff) > 0.035) { liveOff = off; refreshSky(S, false); } }   // the sun creeps toward sunset over a few minutes of one week
-      placeCard(); audioTick(dt);
+      placeCard(); audioTick(dt); moveFrame(dt, hubT);
       // highlight easing + selection pulse
       for (let i = 0; i < MAXPLOT; i++) { const tg = hlTarget[i] * (i > 0 && sel && sel.type === 'plot' && sel.i + 1 === i ? 0.82 + 0.18 * Math.sin(hubT * 3.2) : 1); hlCur[i] += (tg - hlCur[i]) * Math.min(1, dt * 10); buildingUniforms.uHL.value[i] = hlCur[i]; }
       if (sel && sel.type === 'glad') ringFor(selRing, sel); if (hover && hover.type === 'glad') ringFor(hovRing, hover);
       // rain / heat
       rainAmt += (rainTarget - rainAmt) * Math.min(1, dt * 1.2); rain.visible = rainAmt > 0.02; rainU.uAmt.value = rainAmt; rainU.uTime.value = hubT; rainU.uCenter.value.copy(orb.target);
-      if (post && post.uniforms && post.uniforms.uHeat) post.uniforms.uHeat.value += ((heatTarget * 0.6) - post.uniforms.uHeat.value) * Math.min(1, dt * 1.5);
+      if (post && post.uniforms && post.uniforms.uHeat) heatStep(dt);   // [HUB-HEAT] subtle horizon shimmer
       // god rays, wet stone and lightning (reduced motion: no flashes)
-      rayAmt += (rayTarget - rayAmt) * Math.min(1, dt * 1.5); rayU.uInt.value = rayAmt * 0.75; rayU.uTime.value = hubT; rays.visible = rayAmt > 0.02;
+      rayAmt += (rayTarget - rayAmt) * Math.min(1, dt * 1.5); rayU.uInt.value = rayAmt * 0.75; rayU.uTime.value = hubT; rays.visible = rayAmt > 0.02 && !(rr.on || cine);   // MOVE: rearranging / the cinematic frees 3 draw calls (rays, links, pad rings) for its own meshes
       if (Math.abs(wetAmt - rainAmt) > 0.004) { wetAmt += (rainAmt - wetAmt) * Math.min(1, dt * 0.8); wet(wetAmt); }
       if (weatherNow === 'rain' && !prefersReduced()) { nextBolt -= dt; if (nextBolt <= 0) { lightning = 1; nextBolt = 7 + Math.random() * 14; if (audio && audio.ambient && audio.ambient.thunder) audio.ambient.thunder(0.4 + Math.random() * 1.8); } }
       if (lightning > 0 || bolted) { lightning = Math.max(0, lightning - dt * 2.8); const fl = lightning * lightning * (0.6 + 0.4 * Math.sin(hubT * 60)); rig.hemi.intensity = hemiBase + 2.6 * fl; rig.sun.intensity = (tod.cur ? tod.cur.sunInt : rig.sun.intensity) + 3 * fl; bolted = lightning > 0; }
@@ -934,7 +1248,7 @@ export function createHub({ renderer, camera, audio, tier = 'high', post = null 
       if (gBlob && tier === 'low') { let n = 0; for (const a of actors.values()) { if (!a.rig.root.visible || n >= 12) continue; const rp = a.rig.root.position; _gm.makeScale(0.66, 1, 0.66).setPosition(rp.x, rp.y + 0.04, rp.z); gBlob.setMatrixAt(gBase + n++, _gm); } gBlob.count = gBase + n; gBlob.instanceMatrix.needsUpdate = true; } else if (gBlob && gBlob.count !== gBase) gBlob.count = gBase;
     },
     resize(w, h) {
-      orb.aspect = w / Math.max(1, h); camera.aspect = orb.aspect; camera.updateProjectionMatrix();
+      orb.vw = w; orb.vh = h; orb.aspect = w / Math.max(1, h); camera.aspect = orb.aspect; camera.updateProjectionMatrix();
       if (!orb.touched && entered && !orb.anim) overview(true);
     },
     pick: (cx, cy, e) => (e ? pickSlop({ clientX: cx, clientY: cy, pointerType: e.pointerType }) : pick(cx, cy)), focusPlot, focusGlad, setSelection, setHover, overview, focusHome() { preview = -1; hideCard(); setSelection(null); overview(); },
@@ -943,11 +1257,15 @@ export function createHub({ renderer, camera, audio, tier = 'high', post = null 
     plotCenter, groundAt,
     setHour(h) { hourOverride = h; if (S) refreshSky(S, false); },
     setWeather(w) { weatherOverride = w; if (S) refreshSky(S, false); },
-    setTier(name) { tier = name; trimCasters(); rig.setShadowSize(T().shadow); env.setDensity(Math.max(0.5, T().crowd)); maxGlads = tier === 'low' ? 5 : tier === 'medium' ? 8 : 12; for (const a of actors.values()) if (a.rig.skin) a.rig.skin.castShadow = tier !== 'low'; if (S) syncGlads(S); },
+    setTier(name) { tier = name; trimCasters(); crewMesh.castShadow = tier !== 'low'; if (crane) crane.setShadows(tier !== 'low'); rig.setShadowSize(T().shadow); env.setDensity(Math.max(0.5, T().crowd)); maxGlads = tier === 'low' ? 5 : tier === 'medium' ? 8 : 12; for (const a of actors.values()) if (a.rig.skin) a.rig.skin.castShadow = tier !== 'low'; if (S) syncGlads(S); },
+    // MOVE (rearrange mode, see js/rearrange.js)
+    rrBegin, rrEnd, rrItems, rrLift, rrGhost, frameTwo, playMove, skipMove, say,
+    get rearranging() { return rr.on; }, get moving() { return !!cine; }, get sites() { return sites.map((x) => x.i); },
+    plotScreen(i) { const c = plotCenter(i); _sp.set(c.x, c.y + 1.5, c.z).project(camera); const r = dom.getBoundingClientRect(); return { x: (_sp.x * 0.5 + 0.5) * r.width + r.left, y: (-_sp.y * 0.5 + 0.5) * r.height + r.top, behind: _sp.z > 1 }; },
     actors,
     stats() {
       let tris = 0; for (const a of actors.values()) tris += a.rig.tris || 0;
-      return { glads: actors.size, gladTris: Math.round(tris), links: links.length, flames: buildFx.flames.length, smoke: buildFx.smoke.length, sparks: buildFx.sparks.length, weather: weatherNow, hour: tod.cur ? +(hourOverride ?? (S ? hourOf(S) : 0)).toFixed(1) : 0 };
+      return { sites: sites.length, glads: actors.size, gladTris: Math.round(tris), links: links.length, flames: buildFx.flames.length, smoke: buildFx.smoke.length, sparks: buildFx.sparks.length, weather: weatherNow, hour: tod.cur ? +(hourOverride ?? (S ? hourOf(S) : 0)).toFixed(1) : 0 };
     },
     dispose() { hub.exit(); for (const a of actors.values()) a.dispose(); actors.clear(); scene.traverse((o) => { if (o.geometry) o.geometry.dispose(); }); },
   };

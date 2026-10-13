@@ -67,17 +67,19 @@ export const GradeShader = {
     uVignette: { value: 0.42 }, uVigSoft: { value: 0.55 },
     uGrain: { value: 0.028 },
     uShadowTint: { value: new THREE.Color(0.95, 0.93, 1.06) },   // cool violet-blue multiplier in shadows
-    uHighTint: { value: new THREE.Color(1.12, 1.03, 0.88) },    // warm gold multiplier in highlights
+    uHighTint: { value: new THREE.Color(1.08, 1.02, 0.92) },    // warm gold multiplier in highlights
     uSplit: { value: 1.0 },
     uSat: { value: 0.98 }, uContrast: { value: 1.12 }, uLift: { value: new THREE.Color(0.012, 0.008, 0.02) },
     uCA: { value: 0.0 },                                        // chromatic aberration amount (pulse 0..~0.012)
     uZoom: { value: 0.0 }, uZoomCenter: { value: new THREE.Vector2(0.5, 0.5) }, // radial zoom blur (0..~0.06)
     uHeat: { value: 0.0 },                                      // heat haze strength (0..~0.004)
-    uHeatBand: { value: new THREE.Vector2(0.3, 0.55) },         // screen-y band (bottom,top) where haze acts
+    uHeatBand: { value: new THREE.Vector2(0.3, 0.55) },
+    uToe: { value: 0.0 },                                       // [HUB-NIGHT] 0..1: keep dark channels from clipping to 0 in the contrast curve (night hub: no neon saturation)
+    uHeatAsp: { value: 1.0 },                                   // [HUB-HEAT] viewport aspect w/h (keeps ripples isotropic)         // screen-y band (bottom,top) where haze acts
   },
   vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }`,
   fragmentShader: /* glsl */`
-    uniform sampler2D tDiffuse; uniform float uTime, uVignette, uVigSoft, uGrain, uSplit, uSat, uContrast, uCA, uZoom, uHeat;
+    uniform sampler2D tDiffuse; uniform float uTime, uVignette, uVigSoft, uGrain, uSplit, uSat, uContrast, uCA, uZoom, uHeat, uHeatAsp, uToe;
     uniform vec3 uShadowTint, uHighTint, uLift; uniform vec2 uZoomCenter, uHeatBand;
     varying vec2 vUv;
     float h21(vec2 p){ p = fract(p*vec2(123.34, 456.21)); p += dot(p, p+45.32); return fract(p.x*p.y); }
@@ -85,10 +87,12 @@ export const GradeShader = {
       return mix(mix(h21(i), h21(i+vec2(1,0)), f.x), mix(h21(i+vec2(0,1)), h21(i+vec2(1,1)), f.x), f.y); }
     void main(){
       vec2 uv = vUv;
-      if (uHeat > 0.0) {                       // heat haze: wobble inside a horizontal band, strongest in its middle
-        float band = smoothstep(uHeatBand.x, uHeatBand.x + 0.1, uv.y) * smoothstep(uHeatBand.y + 0.1, uHeatBand.y, uv.y);
-        uv.x += (vn(vec2(uv.x * 40.0, uv.y * 14.0 - uTime * 1.6)) - 0.5) * uHeat * band;
-        uv.y += (vn(vec2(uv.x * 30.0 + 9.0, uv.y * 10.0 - uTime * 1.1)) - 0.5) * uHeat * 0.5 * band;
+      if (uHeat > 0.0) {                       // [HUB-HEAT] shimmer: thin horizontal ripples (x wide, y fine, no vertical streaks), masked to a band around the horizon; uHeat = amplitude in uv.x
+        float band = smoothstep(uHeatBand.x - 0.05, uHeatBand.x + 0.03, uv.y) * (1.0 - smoothstep(uHeatBand.y - 0.03, uHeatBand.y + 0.05, uv.y));
+        float n1 = vn(vec2(uv.x * uHeatAsp * 6.0 + uTime * 0.12, uv.y * 42.0 - uTime * 1.3));
+        float n2 = vn(vec2(uv.x * uHeatAsp * 9.0 - uTime * 0.1 + 7.0, uv.y * 31.0 - uTime * 0.9));
+        uv.x += (n1 - 0.5) * uHeat * band;
+        uv.y += (n2 - 0.5) * uHeat * 0.12 * uHeatAsp * band;
       }
       vec2 dc = uv - 0.5;
       vec3 col;
@@ -102,14 +106,17 @@ export const GradeShader = {
       } else col = texture2D(tDiffuse, uv).rgb;
       if (uZoom > 0.0 && uCA > 0.0) { vec2 off = dc * uCA; col.r = mix(col.r, texture2D(tDiffuse, uv + off).r, 0.6); col.b = mix(col.b, texture2D(tDiffuse, uv - off).b, 0.6); }
       // split tone (linear HDR, before tonemap): luminance picks shadow vs highlight tint
+      vec3 orig = col;
       float l = dot(col, vec3(0.2126, 0.7152, 0.0722));
       vec3 tint = mix(uShadowTint, uHighTint, smoothstep(0.02, 0.9, l));
       col *= mix(vec3(1.0), tint, uSplit);
       col += uLift * (1.0 - smoothstep(0.0, 0.25, l));                     // lifted violet blacks, never pure black
       l = dot(col, vec3(0.2126, 0.7152, 0.0722));
-      col = mix(vec3(l), col, uSat);
-      col = (col - 0.18) * uContrast + 0.18;
-      float v = smoothstep(0.85, uVigSoft * 0.35, length(dc * vec2(1.0, 1.05)) );
+      col = mix(vec3(l), col, uSat + 0.1 * smoothstep(0.35, 1.2, l));   // chroma hold: lit skin / cloth keep their hue instead of washing toward white
+      col = (col - 0.18) * uContrast + 0.18; if (uToe > 0.0) col = max(col, vec3(0.0)) * (1.0 - uToe) + max(col, orig * 0.8) * uToe;   // [HUB-NIGHT] uToe floor (0 elsewhere = unchanged)
+      col = max(col, vec3(0.0));   // [GREEN-FIX] contrast / saturation push dark saturated channels below 0; a negative luminance in the shoulder below flipped the sign of the whole pixel (garish green in shadowed violet / blue, black elsewhere)
+      { float lk = dot(col, vec3(0.2126, 0.7152, 0.0722)); if (lk > 1.0) { float ov = lk - 1.0; col *= (1.0 + ov / (1.0 + ov * 0.4)) / lk; } }   // highlight shoulder before ACES: lit fighters roll off instead of clipping pink-white (only above 1.0, so it can never divide by a tiny or negative luminance)
+      float v = 1.0 - smoothstep(uVigSoft * 0.35, 0.85, length(dc * vec2(1.0, 1.05)) );   // [GREEN-FIX] same curve as the old reversed-edge smoothstep (undefined in GLSL), now well defined
       col *= mix(1.0 - uVignette, 1.0, v);
       float g = h21(gl_FragCoord.xy + fract(uTime) * 91.7) - 0.5;
       col *= 1.0 + g * uGrain * 2.0;                                       // multiplicative: grain scales with brightness, safe in HDR

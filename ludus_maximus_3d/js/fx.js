@@ -237,8 +237,8 @@ function mulberry(seed) { let a = seed >>> 0; return () => { a = (a + 0x6d2b79f5
 
 // ---------------- particle layer (pooled sim + transient immediate writes) ----------------
 // PERF: xorshift32 for per-frame turbulence (Math.random is a builtin call that boxes its result); presentation only, not seeded
-let _xs = 2463534242;
-const fastRand = () => { _xs ^= _xs << 13; _xs ^= _xs >>> 17; _xs ^= _xs << 5; return (_xs >>> 0) / 4294967296; };
+const _xs = new Int32Array([-1831433054]);   // state in a typed array: a module `let` holding an int32 above 2^30 is a heap number (one allocation per store)
+const fastRand = () => { let x = _xs[0]; x ^= x << 13; x ^= x >>> 17; x ^= x << 5; _xs[0] = x; return (x >>> 0) / 4294967296; };
 const FLOOR = { value: 0.04 };
 const WARM = { on: false }; // shader warm-up: every pooled mesh draws one dead instance so its program compiles before the first real effect
 class Layer {
@@ -280,12 +280,12 @@ class Layer {
   }
   write(p) {
     if (this.n >= this.max) return; const t = p.age / p.life, i = this.n++ * 4;
-    const e = 1 - (1 - t) * (1 - t); const size = lerp(p.s0, p.s1, e);
-    const fi0 = t / p.att, fadeIn = fi0 < 1 ? fi0 : 1, al = p.a * fadeIn * Math.pow(1 - t, p.fp);   // PERF: ternaries / sqrt instead of Math.min / hypot builtin calls (boxed results)
+    const e = 1 - (1 - t) * (1 - t); const size = p.s0 + (p.s1 - p.s0) * e;   // PERF: lerp written out (a call with computed double arguments boxes them)
+    const fi0 = t / p.att, fadeIn = fi0 < 1 ? fi0 : 1, al = p.a * fadeIn * (p.fp === 1 ? 1 - t : Math.pow(1 - t, p.fp));   // PERF: ternaries / sqrt instead of Math.min / hypot builtin calls (boxed results)
     const A = this.A, B = this.B, C = this.C, D = this.D;
     A[i] = p.x; A[i + 1] = p.y; A[i + 2] = p.z; A[i + 3] = size;
     if (p.st > 0) { const sp = Math.sqrt(p.vx * p.vx + p.vy * p.vy + p.vz * p.vz) || 1, ln = size * 1.2, ln2 = sp * p.st; B[i] = p.vx / sp; B[i + 1] = p.vy / sp; B[i + 2] = p.vz / sp; B[i + 3] = ln > ln2 ? ln : ln2; } else { B[i] = 0; B[i + 1] = 1; B[i + 2] = 0; B[i + 3] = 0; }
-    const c0 = p.c0, c1 = p.c1, g = p.g; C[i] = lerp(c0.r, c1.r, t) * g; C[i + 1] = lerp(c0.g, c1.g, t) * g; C[i + 2] = lerp(c0.b, c1.b, t) * g; C[i + 3] = al;
+    const c0 = p.c0, c1 = p.c1, g = p.g; C[i] = (c0.r + (c1.r - c0.r) * t) * g; C[i + 1] = (c0.g + (c1.g - c0.g) * t) * g; C[i + 2] = (c0.b + (c1.b - c0.b) * t) * g; C[i + 3] = al;
     D[i] = p.cell; D[i + 1] = p.rot; D[i + 2] = p.mirror; D[i + 3] = 0;
   }
   // immediate (one frame) instance for emitters: position, size, color, alpha, cell, rot
@@ -297,10 +297,18 @@ class Layer {
   // immediate stretched instance (blood streaks, gore): centred on x,y,z, aligned with (dx,dy,dz), `len` long and `size` wide
   putS(x, y, z, size, c, a, cell, dx, dy, dz, len, g = 1) {
     if (this.n >= this.max) return; const i = this.n++ * 4, A = this.A, B = this.B, C = this.C, D = this.D;
-    A[i] = x; A[i + 1] = y; A[i + 2] = z; A[i + 3] = size; B[i] = dx; B[i + 1] = dy; B[i + 2] = dz; B[i + 3] = Math.max(len, 1e-3);
+    A[i] = x; A[i + 1] = y; A[i + 2] = z; A[i + 3] = size; B[i] = dx; B[i + 1] = dy; B[i + 2] = dz; B[i + 3] = len > 1e-3 ? len : 1e-3;
     C[i] = c.r * g; C[i + 1] = c.g * g; C[i + 2] = c.b * g; C[i + 3] = a; D[i] = cell; D[i + 1] = 0; D[i + 2] = 0; D[i + 3] = 0;
   }
-  flush() { const n = WARM.on ? Math.max(1, this.n) : this.n; this.geo.instanceCount = n; for (const a of this.attrs) { a.clearUpdateRanges(); if (n) a.addUpdateRange(0, n * 4); a.needsUpdate = true; } this.mesh.visible = n > 0; }
+  flush() {
+    const n = WARM.on ? (this.n > 1 ? this.n : 1) : this.n; this.geo.instanceCount = n; const at = this.attrs;
+    for (let i = 0; i < at.length; i++) {   // PERF: the update range is rewritten in place (addUpdateRange pushes a new object every call)
+      const a = at[i], r = a.updateRanges;
+      if (n && r.length === 1) r[0].count = n * 4; else { a.clearUpdateRanges(); if (n) a.addUpdateRange(0, n * 4); }
+      a.needsUpdate = true;
+    }
+    this.mesh.visible = n > 0;
+  }
 }
 
 // ---------------- ribbons ----------------
@@ -369,7 +377,7 @@ export function createFx(scene, opts = {}) {
   }
 
   // 2) particles
-  const addL = new Layer(opts.maxAdd ?? 2600, true, atlasTex, 'particles_add'); const norL = new Layer(opts.maxNorm ?? 900, false, atlasTex, 'particles_norm');
+  const addL = new Layer(opts.maxAdd ?? 2600, true, atlasTex, 'particles_add'); const norL = new Layer(opts.maxNorm ?? 1300, false, atlasTex, 'particles_norm');
   root.add(norL.mesh, addL.mesh);
 
   // 3) debris
@@ -442,14 +450,17 @@ export function createFx(scene, opts = {}) {
   };
 
   // Dust: sand-colored soft puffs kicked outward, normal blending (reads on bright sand).
+  // DUST (soft warm sand, never opaque cotton): low alpha, small, short lived, tinted sand instead of white. A token bucket caps simultaneous puffs
+  // (team fights fire dozens of hits a second): it refills with time (fx.update), a big burst takes what is left and the rest is dropped. Low tier: half.
+  let dustTok = 28; const dustWarm = mixc(sand, { r: 1, g: 0.86, b: 0.62 }, 0.35), dustDark = mixc(sand, { r: 0.3, g: 0.2, b: 0.12 }, 0.45);
   fx.dust = (pos, n = 8, o = {}) => {
-    const k = o.size ?? 1, up = o.up ?? 1, base = o.color ? rgb(o.color) : sand, lite = mixc(base, WHITE, 0.6), dark = mixc(base, { r: 0.3, g: 0.2, b: 0.12 }, 0.2);
-    const dir = o.dir ? dirOf(o.dir) : null; n = N(n);
+    const k = (o.size ?? 1) * 0.8, up = o.up ?? 1, lite = o.color ? mixc(rgb(o.color), WHITE, 0.2) : dustWarm, dark = o.color ? mixc(rgb(o.color), { r: 0.3, g: 0.2, b: 0.12 }, 0.4) : dustDark;
+    const dir = o.dir ? dirOf(o.dir) : null; n = N(n); const cap = fx.quality < 0.7 ? 0.5 : 1; n = Math.min(Math.ceil(n * cap), Math.floor(dustTok)); if (n <= 0) return; dustTok -= n;
     for (let i = 0; i < n; i++) {
       const a = rnd() * TAU, s = R_(0.6, 2.4) * (o.speed ?? 1);
       let vx = Math.cos(a) * s, vz = Math.sin(a) * s; if (dir) { vx = vx * 0.5 + dir.x * s; vz = vz * 0.5 + dir.z * s; }
-      norL.add({ x: pos.x + vx * 0.05, y: Math.max(pos.y, groundY) + 0.06, z: pos.z + vz * 0.05, vx, vy: R_(0.3, 1.1) * up, vz, life: R_(0.55, 1.1), s0: R_(0.3, 0.5) * k, s1: R_(1.2, 2.0) * k, cell: rnd() < 0.5 ? CELL.puffA : CELL.puffB, rot: rnd() * TAU, rv: (rnd() - 0.5) * 1.2,
-        c0: lite, c1: dark, a: o.alpha ?? 0.75, drag: 2.4, grav: -0.15, fp: 1.4, att: 0.08, turb: 1.2 });
+      norL.add({ x: pos.x + vx * 0.05, y: Math.max(pos.y, groundY) + 0.06, z: pos.z + vz * 0.05, vx, vy: R_(0.3, 1.0) * up, vz, life: R_(0.4, 0.75), s0: R_(0.18, 0.3) * k, s1: R_(0.75, 1.25) * k, cell: rnd() < 0.5 ? CELL.puffA : CELL.puffB, rot: rnd() * TAU, rv: (rnd() - 0.5) * 1.2,
+        c0: lite, c1: dark, a: Math.min(0.4, (o.alpha ?? 0.75) * 0.5), drag: 2.6, grav: -0.15, fp: 1.1, att: 0.1, turb: 1.0 });
     }
   };
   // Directional dust trail for dashes / skids.
@@ -474,16 +485,16 @@ export function createFx(scene, opts = {}) {
     _v.set(pos.x, groundY + 0.03, pos.z); _m.compose(_v, _q.identity(), _s.set(r, 1, r));
     setTimed(ringMesh, allocTimed(ringMesh), _m, rgb(color), o.alpha ?? 1, uTime.value, o.dur ?? 0.65, 1, 0);
     if (o.dust !== false) { const n = N(Math.round(8 + r * 3)); for (let i = 0; i < n; i++) { const a = i / n * TAU + rnd() * 0.3, s = r * R_(1.0, 1.7);
-      norL.add({ x: pos.x + Math.cos(a) * r * 0.15, y: groundY + 0.1, z: pos.z + Math.sin(a) * r * 0.15, vx: Math.cos(a) * s, vz: Math.sin(a) * s, vy: R_(0.2, 0.7), life: R_(0.7, 1.2), s0: 0.45, s1: R_(1.6, 2.6), cell: rnd() < 0.5 ? CELL.puffA : CELL.puffB, rot: rnd() * TAU, c0: mixc(sand, WHITE, 0.6), c1: mixc(sand, { r: 0.3, g: 0.2, b: 0.12 }, 0.2), a: 0.8, drag: 3.2, fp: 1.3, att: 0.05 }); } }
+      norL.add({ x: pos.x + Math.cos(a) * r * 0.15, y: groundY + 0.1, z: pos.z + Math.sin(a) * r * 0.15, vx: Math.cos(a) * s, vz: Math.sin(a) * s, vy: R_(0.2, 0.7), life: R_(0.7, 1.2), s0: 0.45, s1: R_(1.6, 2.6), cell: rnd() < 0.5 ? CELL.puffA : CELL.puffB, rot: rnd() * TAU, c0: mixc(sand, WHITE, 0.25), c1: mixc(sand, { r: 0.3, g: 0.2, b: 0.12 }, 0.35), a: 0.42, drag: 3.2, fp: 1.3, att: 0.05 }); } }
     shocks.push({ x: pos.x, y: groundY, z: pos.z, t0: uTime.value, dur: o.dur ?? 0.65, r, str: o.distort ?? 1 });
   };
   const shocks = [];
   // Active shockwaves projected for the post pass (up to 4). out: array of Vector4(uv.x, uv.y, radiusUV, strength)
   fx.getShockwaves = (camera, out, aspect = 1) => {
-    let k = 0; for (const s of shocks) { if (k >= 4) break; const age = (uTime.value - s.t0) / s.dur; if (age < 0 || age > 1) continue;
+    let k = 0; for (let si = 0; si < shocks.length; si++) { const s = shocks[si]; if (k >= 4) break; const age = (uTime.value - s.t0) / s.dur; if (age < 0 || age > 1) continue;
       _v.set(s.x, s.y, s.z).project(camera); const e = 1 - Math.pow(1 - age, 4);
       _p.set(s.x + s.r * e, s.y, s.z).project(camera); const ru = Math.hypot((_p.x - _v.x) * 0.5 * aspect, (_p.y - _v.y) * 0.5);
-      out[k++].set(_v.x * 0.5 + 0.5, _v.y * 0.5 + 0.5, Math.max(ru, 0.01), (1 - age) * s.str); }
+      out[k++].set(_v.x * 0.5 + 0.5, _v.y * 0.5 + 0.5, ru > 0.01 ? ru : 0.01, (1 - age) * s.str); }
     for (; k < 4; k++) out[k].set(0, 0, 0, 0);
   };
 
@@ -577,6 +588,7 @@ export function createFx(scene, opts = {}) {
   // Floating numbers / words. kind: 'dmg' | 'crit' | 'heal' | 'miss' | 'tech' | 'status' | 'thorn' | 'fire'
   const NK = { dmg: ['#fff3d6', 1.0, 1.35, 0], crit: ['#ffc83a', 1.75, 1.9, 1], heal: ['#7dffb4', 1.05, 1.1, 0], miss: ['#b8b8c4', 0.75, 0.9, 0], tech: ['#ffb061', 0.95, 1.2, 0], status: ['#c9a6ff', 0.8, 1.0, 0], thorn: ['#e88a8a', 0.8, 1.0, 0], fire: ['#ff8a3a', 0.9, 1.2, 0], block: ['#9fd0ff', 0.9, 1.0, 0] };
   fx.number = (pos, text, kind = 'dmg', o = {}) => {
+    if (typeof document !== 'undefined' && document.body && document.body.classList.contains('lx-photo-on')) return;   // photo mode: no new combat text over the shot
     const k = NK[kind] || NK.dmg; text = String(text).toUpperCase(); const c = rgb(o.color || k[0]), sc = (o.scale ?? 1) * k[1];
     let total = 0; for (const ch of text) total += GLYPH_W(ch); let x = -total / 2; const life = o.life ?? (kind === 'crit' ? 1.15 : 0.95); const t0 = uTime.value;
     const drift = (o.drift ?? (rnd() - 0.5) * 1.2) * sc, rise = k[2] * (o.rise ?? 1) * sc * 1.15;
@@ -705,6 +717,7 @@ export function createFx(scene, opts = {}) {
   const _C1 = { r: 0.3, g: 0.65, b: 1 };
   const _C2 = { r: 1, g: 0.32, b: 0.12 };
   const _C3 = { r: 1, g: 0.3, b: 0.1 };
+  const ikClamp = (v) => (v < 0.5 ? 0.5 : v > 1.05 ? 1.05 : v);
   function updateEmitters(dt) {
     for (let i = emitters.length - 1; i >= 0; i--) {
       const h = emitters[i];
@@ -736,7 +749,7 @@ export function createFx(scene, opts = {}) {
         } else if (el === 'earth') { h.acc += dt; if (h.acc > 0.3) { h.acc = 0; fx.dust({ x: _p.x, y: groundY, z: _p.z }, 3, { size: 0.9 }); fx.debris({ x: _p.x, y: groundY, z: _p.z }, 1, { kind: 'stone', size: 0.8 }); } }
         else if (el === 'holy') { addL.put(_p.x, _p.y + 1, _p.z, 3.0, c, 0.2 + 0.08 * Math.sin(tt * 6), CELL.glow, 0, 1.5); h.acc += dt * 18; while (h.acc >= 1) { h.acc--; const a = rnd() * TAU; addL.add({ x: _p.x + Math.cos(a) * 0.9, y: _p.y + 0.1, z: _p.z + Math.sin(a) * 0.9, vy: R_(1.5, 2.5), life: 0.9, s0: 0.16, s1: 0.03, cell: CELL.glow, c0: mixc(c, WHITE, 0.6), c1: c, g: 2.4 }); } }
       } else if (h.kind === 'status') {
-        const tt = h.t, y = _p.y + h.headY, ik = Math.max(0.5, Math.min(1.05, Math.hypot(camPos.x - _p.x, camPos.y - _p.y, camPos.z - _p.z) / 11)) * (h.o.iconK || 1); // READABILITY: icons shrink in close shots
+        const tt = h.t, y = _p.y + h.headY, ik = Math.max(0.5, ikClamp(Math.sqrt((camPos.x - _p.x) * (camPos.x - _p.x) + (camPos.y - _p.y) * (camPos.y - _p.y) + (camPos.z - _p.z) * (camPos.z - _p.z)) / 11)) * (h.o.iconK || 1); // READABILITY: icons shrink in close shots
         if (h.st === 'stun') { const w = tt * 5.2; for (let k = 0; k < 3; k++) { const a = w + k * TAU / 3; const sx = _p.x + Math.cos(a) * 0.42, sz = _p.z + Math.sin(a) * 0.42, sy = y + Math.sin(tt * 7 + k) * 0.05; const back = Math.sin(a) < 0 ? 0.7 : 1; norL.put(sx, sy, sz, 0.38 * back * ik, _C0, 1, CELL.star5, a * 0.5, 1.15); } }
         else if (h.st === 'slow') { for (let k = 0; k < 3; k++) { const ph = (tt * 1.1 + k / 3) % 1; norL.put(_p.x + (k - 1) * 0.34 * ik, y - ph * 0.7 * ik + 0.1, _p.z, 0.7 * ik, _C1, Math.sin(ph * Math.PI), CELL.chevron, Math.PI, 1.1); } h.acc += dt * 5; while (h.acc >= 1) { h.acc--; const a = rnd() * TAU; addL.add({ x: _p.x + Math.cos(a) * 0.7, y: _p.y + 0.15, z: _p.z + Math.sin(a) * 0.7, vy: R_(0.2, 0.7), life: 0.7, s0: 0.12, s1: 0.02, cell: CELL.glow, c0: { r: 0.6, g: 0.85, b: 1 }, c1: { r: 0.3, g: 0.6, b: 1 }, g: 2 }); } }
         else if (h.st === 'bleed') { h.acc += dt * 9; const dc = rgb(h.o.color || '#e0283a'); while (h.acc >= 1) { h.acc--; const a = rnd() * TAU; norL.add({ x: _p.x + Math.cos(a) * 0.5, y: _p.y + R_(0.9, 1.6), z: _p.z + Math.sin(a) * 0.5, vx: Math.cos(a) * 0.3, vy: R_(0, 0.5), vz: Math.sin(a) * 0.4, life: 0.7, s0: 0.32, s1: 0.24, cell: CELL.drop, c0: dc, c1: dc, a: 1, grav: 9, fp: 0.5, att: 0.02 }); } }
@@ -792,7 +805,9 @@ export function createFx(scene, opts = {}) {
   }
 
   // ---- debris stepping ----
+  let debIdle = false;   // PERF: all debris slots already zeroed and uploaded: nothing to do until a piece spawns (debris.on)
   function debrisStep(dt) {
+    if (debIdle && !WARM.on && !debMesh.visible) { let live = false; for (let i = 0; i < MAXD; i++) if (debris[i].on) { live = true; break; } if (!live) return; }
     let any = false, hi = 0;
     for (let i = 0; i < MAXD; i++) {
       const d = debris[i];
@@ -804,13 +819,13 @@ export function createFx(scene, opts = {}) {
       const t = d.age / d.life, sc = d.s * (t > 0.75 ? 1 - (t - 0.75) / 0.25 : 1);
       _v.set(d.x, d.y, d.z); _m.compose(_v, d.q, _s.set(sc, sc, sc)); debMesh.setMatrixAt(i, _m);
     }
-    debMesh.count = any ? MAXD : WARM.on ? 1 : 0; debMesh.instanceMatrix.needsUpdate = true; debMesh.visible = any || WARM.on;
+    debMesh.count = any ? MAXD : WARM.on ? 1 : 0; debMesh.instanceMatrix.needsUpdate = true; debMesh.visible = any || WARM.on; debIdle = !any;
   }
 
   fx.update = (dt, camera) => {
     dt = Math.min(dt, 0.1);
     if (camera) { fx.cam = camera; camera.getWorldPosition(camPos); }
-    fx.time += dt; uTime.value = fx.time;
+    fx.time += dt; uTime.value = fx.time; dustTok = dustTok + dt * (fx.quality < 0.7 ? 16 : 30); if (dustTok > 28) dustTok = 28;
     for (let i = timers.length - 1; i >= 0; i--) if (fx.time >= timers[i].t) { const f = timers[i].fn; timers.splice(i, 1); f(); }
     addL.step(dt); norL.step(dt);
     updateEmitters(dt); ribbonStep(dt); debrisStep(dt);

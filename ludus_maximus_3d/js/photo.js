@@ -65,7 +65,8 @@ export function createPhoto(game) {
   const msg = el('div', 'lx-photo-msg'); msg.setAttribute('role', 'status'); root.append(msg);
   const host = () => document.getElementById('ui') || document.body;
   host().append(root);
-  const say = (t) => { msg.textContent = t; msg.classList.add('on'); clearTimeout(say.t); say.t = setTimeout(() => msg.classList.remove('on'), 2400); };
+  const say = (t) => { msg.textContent = t; msg.style.bottom = (root.classList.contains('lx-photo-hidebar') ? 24 : Math.round(bar.offsetHeight + 14)) + 'px'; msg.classList.add('on'); // sits just above the control bar: never on the top edge where combat callouts and the title live
+ clearTimeout(say.t); say.t = setTimeout(() => msg.classList.remove('on'), 2400); };
 
   function applyLook() {
     const f = FILTERS[st.filter] || FILTERS.none; glCanvas.style.filter = st.active ? f.css : '';
@@ -125,13 +126,14 @@ export function createPhoto(game) {
       if (hubOn) { try { st.hour = game.hub.stats().hour || 17; } catch (e) { st.hour = 17; } timeRow.input.value = clamp(st.hour, 5, 22); st.hourTouched = false; }
       fovRow.input.value = Math.round(st.fov); fovRow.upd(); timeRow.upd(); focRow.upd();
       title.textContent = hubOn ? 'PHOTO MODE' : 'PHOTO MODE · ARENA';
+      document.body.classList.add('lx-photo-on'); // CSS hides the live combat callouts while photo mode is open
       root.hidden = false; root.classList.toggle('lx-photo-calm', reduced()); root.classList.remove('lx-photo-hidebar'); res.hidden = true; applyLook();
       glCanvas.addEventListener('pointerdown', onDown, true); glCanvas.addEventListener('pointermove', onMove, true); glCanvas.addEventListener('pointerup', onUp, true); glCanvas.addEventListener('pointercancel', onUp, true);
       glCanvas.addEventListener('wheel', onWheel, { capture: true, passive: false }); glCanvas.addEventListener('contextmenu', onCtx, true); addEventListener('keydown', onKey, true); addEventListener('keyup', onKeyUp, true);
       sfx('uiOpen'); try { closeB.focus({ preventScroll: true }); } catch (e) { /* */ }
     },
     close() {
-      if (!st.active) return; st.active = false; ptrs.clear(); pinch = null; res.hidden = true; root.hidden = true; glCanvas.style.filter = st.saved ? st.saved.filter : '';
+      if (!st.active) return; st.active = false; document.body.classList.remove('lx-photo-on'); ptrs.clear(); pinch = null; res.hidden = true; root.hidden = true; glCanvas.style.filter = st.saved ? st.saved.filter : '';
       glCanvas.removeEventListener('pointerdown', onDown, true); glCanvas.removeEventListener('pointermove', onMove, true); glCanvas.removeEventListener('pointerup', onUp, true); glCanvas.removeEventListener('pointercancel', onUp, true);
       glCanvas.removeEventListener('wheel', onWheel, true); glCanvas.removeEventListener('contextmenu', onCtx, true); removeEventListener('keydown', onKey, true); removeEventListener('keyup', onKeyUp, true);
       if (st.saved) { if (st.mode === 'hub' || game.scene === 'hub') game.hud.style.display = st.saved.hud || 'flex'; if (game.fightView && game.fightView.hud && st.saved.fv != null) game.fightView.hud.style.display = st.saved.fv; if (game.hub && game.hub.orbit && st.saved.orb != null) game.hub.orbit.enabled = st.saved.orb; }

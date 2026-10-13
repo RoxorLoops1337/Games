@@ -16,7 +16,7 @@ const CSS = `
 .ax-sheet .lx-title{color:var(--lx-gold);text-shadow:0 2px 0 rgba(0,0,0,.55);font-size:var(--lx-fs-l)}
 .ax-sheet .lx-sheet-scroll{padding:6px 2px 10px;scrollbar-width:thin;scrollbar-color:rgba(242,193,78,.5) transparent}
 @media (min-width:700px){.lx-sheet.ax-sheet.ax-wide{max-width:820px}.lx-sheet.ax-sheet.ax-mid{max-width:660px}}
-.ax{display:flex;flex-direction:column;gap:12px;min-width:0;font-size:var(--lx-fs-m);line-height:1.4;overflow-wrap:anywhere}
+.ax{display:flex;flex-direction:column;gap:12px;min-width:0;font-size:var(--lx-fs-m);line-height:1.4;overflow-wrap:break-word}
 .ax *{min-width:0;box-sizing:border-box}
 .ax p{margin:0}
 .ax-tabs{display:flex;gap:4px;padding:4px;border-radius:10px;background:rgba(10,6,24,.5);box-shadow:inset 0 0 0 1px rgba(242,193,78,.25)}
@@ -203,7 +203,8 @@ export function slider(label, value, onInput, onChange) {
   return h('div', 'ax-col', [h('div', 'ax-row', [h('span', 'ax-grow ax-b', label), out]), r]);
 }
 
-export function empty(ico, text, sub) { return h('div', 'ax-empty', [medal(ico, 'big dark'), h('div', 'ax-b', text), sub ? h('div', 'ax-sub', sub) : null]); }
+/** empty state: medallion, what it is, how it unlocks (sub), and optionally ONE button that takes you there: action {label, onClick, icon} */
+export function empty(ico, text, sub, action) { const e = h('div', 'ax-empty', [medal(ico, 'big dark'), h('div', 'ax-b', text), sub ? h('div', 'ax-sub', sub) : null]); if (action) e.append(U.button({ label: action.label, icon: action.icon, variant: action.variant || 'gold', onClick: action.onClick })); return e; }
 
 export function actions(btns) { return h('div', 'ax-actions', btns); }
 
@@ -293,7 +294,7 @@ export function reportBody({ title, tone = 'win', pills = [], lines = [], items 
   lines.forEach((l) => body.append(h('p', '', l)));
   items.forEach((it) => body.append(itemCard(it, { tag: 'Loot!' })));
   kids.forEach((k) => body.append(k));
-  body.style.cssText = 'color:#33243a;font:500 14px/20px system-ui,sans-serif;overflow-wrap:anywhere';
+  body.style.cssText = 'color:#33243a;font:500 14px/20px system-ui,sans-serif;overflow-wrap:break-word';
   return body;
 }
 
@@ -321,7 +322,7 @@ export async function awardTrophies(ctx) {
 
 /** simple confirm dialog (Promise<boolean>) */
 export async function confirmDialog(ctx, { title, text, yes = 'Confirm', no = 'Cancel', danger = false }) {
-  const body = h('p', '', text); body.style.cssText = 'color:#33243a;font:500 14px/20px system-ui,sans-serif;overflow-wrap:anywhere';
+  const body = h('p', '', text); body.style.cssText = 'color:#33243a;font:500 14px/20px system-ui,sans-serif;overflow-wrap:break-word';
   const v = await ctx.ask({ title, body, actions: [{ label: yes, value: 'y', variant: danger ? 'danger' : 'gold' }, { label: no, value: 'n', variant: 'ghost' }], dismiss: 'n' });
   return v === 'y';
 }

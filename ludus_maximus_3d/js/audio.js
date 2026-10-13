@@ -13,12 +13,14 @@ export const SFX_NAMES = ['swordHit', 'swordHitCrit', 'shieldBlock', 'metalClang
   'footstep', 'dust', 'netThrow', 'spearThrust', 'bash', 'stunChime', 'healSparkle', 'levelUp', 'coin', 'uiTap', 'uiConfirm', 'uiError', 'gate', 'horn',
   'ultFire', 'ultLightning', 'ultEarth', 'ultWind', 'ultHoly', 'crowdGasp', 'crowdCheer', 'crowdRoar', 'crowdBoo', 'crowdChant', 'drum',
   'slashWet', 'crunch', 'boneSnap', 'spurt', 'splat', 'gibThud', 'crowdGore',
+  'squelch', 'cleave',   // GORE-JUICE: wet slap layer and a heavy meaty cleave
   'uiHover', 'uiSelect', 'uiOpen', 'uiClose', 'bird', 'owl', 'hammer', 'clink', 'chop', 'sizzle', 'thock', 'thunder',   // HUB-AUDIO: ui hooks and ludus ambience one-shots
   'beastRoar', 'beastHowl', 'beastGrowl', 'beastHurt', 'beastDeath', 'beastBite', 'beastClaw', 'beastGore', 'beastSlam', 'pawThud', 'beastSnort', 'beastCharge',
   'parry'];
 export const MUSIC_MODES = ['ludus', 'prep', 'arena', 'victory', 'defeat', 'title', 'results', 'season', 'elegy', 'beast', 'boss'];
 
 const MUSIC_TRIM = 0.4;       // music bus trim; music sits about 6 dB under the combat sfx at equal slider positions
+const SFX_GAIN = 1.0;         // sfx, crowd and reverb send trim vs the slider. 1.4 (+3 dB) would lift sfx over the music bed but was NOT verified against the limiter, so it stays 1.0
 const MAKEUP = 1.0;           // loudness calibration before the glue compressor (tools/ludus3d_audio_check.mjs prints the fight LUFS)
 const NOTE = (midi) => 440 * Math.pow(2, (midi - 69) / 12);
 const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
@@ -50,7 +52,7 @@ const pick = (r, a) => a[Math.floor(r() * a.length) % a.length];
 // sfx categories: voice caps keep the CPU flat in a long brawl
 const CAP = { combat: 12, voice: 6, crowd: 3, ui: 5, amb: 8, big: 4, beast: 5, gore: 6 };
 const catOf = (n) => /^ui/.test(n) ? 'ui' : /^crowd(?!Gore)/.test(n) ? 'crowd' : /^beast|^pawThud/.test(n) ? 'beast' : /^(bird|owl|hammer|clink|chop|sizzle|thock|thunder)$/.test(n) ? 'amb'
-  : /^(grunt|hurt|deathCry)$/.test(n) ? 'voice' : /^ult|^gate$|^horn$|^levelUp$/.test(n) ? 'big' : /^(slashWet|crunch|boneSnap|spurt|splat|gibThud|crowdGore)$/.test(n) ? 'gore' : 'combat';
+  : /^(grunt|hurt|deathCry)$/.test(n) ? 'voice' : /^ult|^gate$|^horn$|^levelUp$/.test(n) ? 'big' : /^(slashWet|crunch|boneSnap|spurt|splat|gibThud|crowdGore|squelch|cleave)$/.test(n) ? 'gore' : 'combat';
 // the crowd bed swells with these (amount 0..1 of a kick)
 const CROWD_KICK = { swordHitCrit: 0.35, deathThud: 0.5, deathCry: 0.2, ultFire: 0.4, ultLightning: 0.4, ultEarth: 0.45, ultWind: 0.3, ultHoly: 0.3, bash: 0.15, boneSnap: 0.25, crowdGore: 0.4, beastRoar: 0.3, beastSlam: 0.2, beastDeath: 0.4, spurt: 0.1, levelUp: 0.2 };
 
@@ -94,10 +96,10 @@ export function createAudio(opts = {}) {
       musicBus.connect(musicDuck); musicDuck.connect(master);
       // gentle stereo width for music: two quiet, panned, slightly delayed copies (Haas) keep mono compatibility
       for (const [dly, pn] of [[0.019, -0.75], [0.027, 0.75]]) { const d = ctx.createDelay(0.1); d.delayTime.value = dly; const g = G(0.17); musicDuck.connect(d); d.connect(g); if (ctx.createStereoPanner) { const p = ctx.createStereoPanner(); p.pan.value = pn; g.connect(p); p.connect(master); } else g.connect(master); }
-      sfxBus = ctx.createGain(); sfxBus.gain.value = vol.sfx; sfxBus.connect(master);
-      crowdBus = ctx.createGain(); crowdBus.gain.value = vol.sfx; crowdBus.connect(master);
+      sfxBus = ctx.createGain(); sfxBus.gain.value = vol.sfx * SFX_GAIN; sfxBus.connect(master);
+      crowdBus = ctx.createGain(); crowdBus.gain.value = vol.sfx * SFX_GAIN; crowdBus.connect(master);
       // two spaces: stone hall (arena) and open air with building slap (hub). Scenes crossfade between them.
-      revIn = G(1); revSendG = revIn; sfxRev = G(vol.sfx); sfxRev.connect(revIn);   // sfx reverb sends follow the sfx slider (a 0 slider must be silent, tails included)
+      revIn = G(1); revSendG = revIn; sfxRev = G(vol.sfx * SFX_GAIN); sfxRev.connect(revIn);   // sfx reverb sends follow the sfx slider (a 0 slider must be silent, tails included)
       hallConv = ctx.createConvolver(); hallConv.buffer = makeIR(2.3, 'hall'); hallG = G(0.8); revIn.connect(hallConv); hallConv.connect(hallG); hallG.connect(master);
       openConv = ctx.createConvolver(); openConv.buffer = makeIR(1.1, 'open'); openG = G(0); revIn.connect(openConv); openConv.connect(openG); openG.connect(master);
       revMusic = G(vol.music * MUSIC_TRIM); revMusic.connect(revIn);   // music reverb: stems send into it, so it follows the music slider
@@ -465,6 +467,18 @@ export function createAudio(opts = {}) {
   def('spurt', 0.7, 0.9, 1, 0.1, 0, 2, (t, d, o) => {
     for (let i = 0; i < 3; i++) { burst(t + i * 0.26, 0.24, d, { f0: 2300, f1: 1100, q: 1.0, g: 0.34 - i * 0.07, a: 0.05 }); burst(t + i * 0.26, 0.2, d, { type: 'lowpass', f0: 700, f1: 300, g: 0.5 - i * 0.1, kind: 'pink', a: 0.04 }); }
   });
+  // GORE-JUICE: squelch = a short wet slap of flesh (layered under slashWet on heavy hits), cleave = a heavy chop through meat and bone with a low thud
+  def('squelch', 0.8, 0.3, 2, 0.08, 0, 3, (t, d, o) => {
+    burst(t, 0.1, d, { type: 'lowpass', f0: hz(o, 1100), f1: 220, g: 0.9, kind: 'pink', a: 0.002 });
+    for (let i = 0; i < 4; i++) burst(t + 0.015 + i * 0.03 * (0.6 + rng()), 0.04, d, { f0: 300 + rng() * 700, f1: 160, q: 5, g: 0.3, a: 0.002, kind: 'pink' });
+    thump(t, hz(o, 85), 48, 0.14, 0.55, d);
+  });
+  def('cleave', 1.0, 0.55, 4, 0.14, 0.15, 2, (t, d, o) => {
+    burst(t, 0.07, d, { f0: hz(o, 2400), f1: 500, q: 0.7, g: 0.8, a: 0.001 });
+    burst(t + 0.005, 0.3, d, { type: 'lowpass', f0: 800, f1: 120, g: 0.95, kind: 'brown', a: 0.004 });
+    partials(t + 0.02, hz(o, 190), [1, 1.7, 2.9], [0.3, 0.18, 0.1], 0.16, d, 'triangle');
+    thump(t, hz(o, 70), 36, 0.3, 1.0, d);
+  });
   def('splat', 1.0, 0.5, 3, 0.12, 0.1, 3, (t, d, o) => {
     burst(t, 0.2, d, { type: 'lowpass', f0: 1300, f1: 160, g: 1, kind: 'pink', a: 0.003 });
     thump(t, hz(o, 150), 60, 0.2, 0.9, d);
@@ -827,7 +841,11 @@ export function createAudio(opts = {}) {
       if (s === 8) drumHit(p.st.perc, t, 88, vv(p, 0.55 + 0.2 * tens), { tymp: 1, dec: 0.6 });
       if (s === 10 && tens > 0.4) drumHit(p.st.perc, t, 82, 0.35, { tymp: 1, dec: 0.4 });
       if (s % 4 === 0) { const g = G(0); env(g.gain, t, 0.001, 0.07 + 0.09 * tens, 0.04); g.connect(p.st.perc); osc('sine', 1250, t, 0.05, g); }
-      if (s % 2 === 0 && tens > 0.1) { const tn = p.ch.tones; ens(p.st.str, t + hum(p, 'str'), [tn[0], tn[0], tn[0] * Math.pow(2, 1 / 12), tn[0], tn[2], tn[0], tn[0] * Math.pow(2, 1 / 12), tn[0]][(s / 2) % 8], sp * 1.6, vv(p, 0.05 + 0.1 * tens), { cut: 900 + 1500 * tens, a: 0.02 }); }
+      if (s % 2 === 0) { // ostinato; the octave double above carries it on small speakers (the unison alone sits under 300 Hz)
+        const tn = p.ch.tones, f = [tn[0], tn[0], tn[0] * Math.pow(2, 1 / 12), tn[0], tn[2], tn[0], tn[0] * Math.pow(2, 1 / 12), tn[0]][(s / 2) % 8];
+        if (tens > 0.1) ens(p.st.str, t + hum(p, 'str'), f, sp * 1.6, vv(p, 0.05 + 0.1 * tens), { cut: 900 + 1500 * tens, a: 0.02 });
+        ens(p.st.str, t + hum(p, 'str'), f * 2, sp * 1.5, vv(p, 0.07 + 0.08 * tens), { cut: 1700 + 1800 * tens, a: 0.015, rel: 0.06 });
+      }
       if (s === 0 && (pb === 2 || pb === 6)) brass(p.st.brass, t, p.ch.rootF * 2, sp * 14, 0.2, { a: 1.0, rel: 0.6, bright: 0.45 });
       if (s === 0 && pb % 4 === 0) padChord(p, t, sp, 4, 0.03 + 0.04 * tens, { cut: 700 + 800 * tens, choir: tens > 0.45 ? 0.05 * tens : 0 });
       if (s === 0 && pb === 0 && bar > 0) taiko(p.st.perc, t, 0.5, { f: 55 });
@@ -1033,11 +1051,47 @@ export function createAudio(opts = {}) {
 
   // ---- player lifecycle ----
   const STEMS = { perc: { pan: 0, send: 0.1, g: 0.62 }, low: { pan: 0, send: 0.06, g: 0.5 }, str: { pan: -0.22, send: 0.26, g: 1.3 }, brass: { pan: 0.18, send: 0.3, g: 1.25 }, pad: { pan: 0, send: 0.4, g: 1.2 }, lead: { pan: 0.3, send: 0.32, g: 1.15 }, lyre: { pan: -0.35, send: 0.28, g: 1.25 }, fx: { pan: 0, send: 0.45, g: 0.9 } };   // g = stem trim: the low stems are held down so the mix is not all sub
+  // Loudness calibration per mode (dB added on top of MUSIC_TRIM, measured with tools/ludus3d_audio_check.mjs, integrated K-weighted LUFS).
+  // [calm, mid, combat] at intensity 0, 0.5, 1 (interpolated with curInt), or a single number for modes without an intensity axis. Targets: -18 to -20 LUFS at the normal intensity, swing calm to combat at most 6 dB.
+  const MODE_DB = { ludus: 12.7, prep: 4.5, arena: [8.5, 4, 2.2], beast: [9.5, 3.1, 1.2], boss: [10, 3.9, 2.1], victory: 1, defeat: 4.6, title: 2.0, results: 11.1, season: -0.3, elegy: 7.4 };
+  // Bass management for small speakers: the low stem (drone) and the percussion stem lose some weight and feed a harmonic exciter (low-passed, saturated, high-passed copy) so the fundamentals stay felt on big speakers while the harmonics carry the line on a phone.
+  // low: dB cut on the low stem at intensity 0 (fades out by intensity 1), perc: same for the perc stem, ex: exciter send, hp: high-pass on the low stem in Hz
+  // mid: dB lift of the string, brass, lead, lyre and pad stems when calm, shelf: dB of a 1 kHz high shelf on the mode bus when calm (both fade out as the intensity rises)
+  const MODE_SHAPE = { def: { low: -3, perc: -1, ex: 0.3, mid: 0, shelf: 0, hp: 40 }, prep: { low: -12, perc: -9, ex: 1.3, mid: 5, shelf: 7, sf: 600, hp: 60 }, arena: { low: -10, perc: -6, ex: 1, mid: 4, shelf: 3, hp: 60 }, beast: { low: -10, perc: -6, ex: 1, mid: 4, shelf: 3, hp: 60 }, boss: { low: -6, perc: -4, ex: 0.6, mid: 2, shelf: 2, hp: 55 }, defeat: { low: -4, perc: -2, ex: 0.4, mid: 2, shelf: 2, hp: 45 }, title: { low: -5, perc: -3, ex: 0.5, mid: 2, shelf: 2, hp: 45 }, elegy: { low: -5, perc: -3, ex: 0.5, mid: 3, shelf: 3, hp: 45 } };
+  const dbG = (d) => Math.pow(10, d / 20);
+  function modeDb(mode, I) { const d = MODE_DB[mode]; if (typeof d === 'number') return d; return I < 0.5 ? d[0] + (d[1] - d[0]) * (I / 0.5) : d[1] + (d[2] - d[1]) * ((I - 0.5) / 0.5); }
+  function exciterCurve() { const n = 1024, c = new Float32Array(n), o = Math.tanh(0.35); for (let i = 0; i < n; i++) { const x = (i / (n - 1)) * 2 - 1; c[i] = Math.tanh(x * 6 + 0.35) - o; } return c; }
+  let excCurve = null;
   function newPlayer(mode, t) {
-    const M = MODES[mode], bus = G(0), rev = G(0); bus.connect(musicBus); rev.connect(revMusic);
-    const p = { mode, M, bus, rev, st: {}, next: t, step: 0, bar: 0, startT: t, stopped: false, hr: mulberry(hash(seed, 'hum', mode)), r: mulberry(1), pb: 0 };
-    for (const [k, c] of Object.entries(STEMS)) { const g = G(c.g); let tail = g; if (ctx.createStereoPanner && c.pan) { const pn = ctx.createStereoPanner(); pn.pan.value = c.pan; g.connect(pn); tail = pn; } tail.connect(bus); const sd = G(c.send); g.connect(sd); sd.connect(rev); p.st[k] = g; }
-    M.init(p); return p;
+    const M = MODES[mode], bus = G(0), rev = G(0), sh0 = MODE_SHAPE[mode] || MODE_SHAPE.def; rev.connect(revMusic);
+    const shelf = ctx.createBiquadFilter(); shelf.type = 'highshelf'; shelf.frequency.value = sh0.sf || 1000; shelf.gain.value = sh0.shelf; bus.connect(shelf); shelf.connect(musicBus);
+    const p = { shelf, mode, M, bus, rev, st: {}, base: {}, next: t, step: 0, bar: 0, startT: t, stopped: false, hr: mulberry(hash(seed, 'hum', mode)), r: mulberry(1), pb: 0 };
+    const sh = MODE_SHAPE[mode] || MODE_SHAPE.def; p.shape = sh;
+    for (const [k, c] of Object.entries(STEMS)) {
+      const g = G(c.g); let tail = g;
+      if (k === 'low') { const hp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = sh.hp; hp.Q.value = 0.7; g.connect(hp); tail = hp; }
+      if (ctx.createStereoPanner && c.pan) { const pn = ctx.createStereoPanner(); pn.pan.value = c.pan; tail.connect(pn); tail = pn; }
+      tail.connect(bus); const sd = G(c.send); g.connect(sd); sd.connect(rev); p.st[k] = g; p.base[k] = c.g;
+      if ((k === 'low' || k === 'perc') && sh.ex > 0) { // harmonic exciter, parallel
+        if (!excCurve) excCurve = exciterCurve();
+        const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 230; lp.Q.value = 0.6;
+        const pre = G(k === 'low' ? 5 : 3), ws = ctx.createWaveShaper(); ws.curve = excCurve;
+        const hp2 = ctx.createBiquadFilter(); hp2.type = 'highpass'; hp2.frequency.value = 240; hp2.Q.value = 0.6;
+        const ex = G(0); g.connect(lp); lp.connect(pre); pre.connect(ws); ws.connect(hp2); hp2.connect(ex); ex.connect(bus); (p.ex || (p.ex = [])).push(ex); p['ex_' + k] = ex;
+      }
+    }
+    M.init(p); applyLevels(p, t, 0.001); return p;
+  }
+  // per bar: mode loudness (follows the smoothed intensity) and bass management (strongest when calm)
+  function applyLevels(p, t, tc) {
+    const I = curInt, lv = dbG(modeDb(p.mode, I)), sh = p.shape, calm = typeof MODE_DB[p.mode] === 'number' ? 1 : 1 - I, tcv = tc || 0.5;
+    try { p.shelf.gain.setTargetAtTime(sh.shelf * calm, Math.max(t, 0), tcv); } catch (e) { /* ignore */ }
+    for (const k of Object.keys(p.st)) {
+      let m = lv; if (k === 'low') m *= dbG(sh.low * calm); else if (k === 'perc') m *= dbG(sh.perc * calm); else if (k !== 'fx') m *= dbG(sh.mid * calm);
+      try { p.st[k].gain.setTargetAtTime(p.base[k] * m, Math.max(t, 0), tcv); } catch (e) { /* ignore */ }
+    }
+    if (p.ex_low) { try { p.ex_low.gain.setTargetAtTime(0.09 * sh.ex * lv * (0.5 + 0.5 * calm), Math.max(t, 0), tcv); } catch (e) { /* ignore */ } }
+    if (p.ex_perc) { try { p.ex_perc.gain.setTargetAtTime(0.09 * sh.ex * lv * (0.5 + 0.5 * calm), Math.max(t, 0), tcv); } catch (e) { /* ignore */ } }
   }
   function pump(until) {
     if (!ready) return;
@@ -1046,7 +1100,7 @@ export function createAudio(opts = {}) {
       while (p.next < until && !p.stopped && guard++ < 400) {
         const s = p.step % 16, sp = 60 / p.M.bpm(p) / 4;
         curInt += (intensityTarget - curInt) * 0.12;
-        if (s === 0) { p.bar = Math.floor(p.step / 16); try { p.M.bar(p, p.bar, p.next); } catch (e) { errs.n++; errs.last = p.mode + ' bar: ' + (e && e.stack || e); } }
+        if (s === 0) { p.bar = Math.floor(p.step / 16); applyLevels(p, p.next, 0.4); try { p.M.bar(p, p.bar, p.next); } catch (e) { errs.n++; errs.last = p.mode + ' bar: ' + (e && e.stack || e); } }
         const swing = (p.mode === 'ludus' && s % 2 === 1) ? sp * 0.12 : 0;
         if (p.acc && p.acc.length && s % 2 === 0) accentNow(p, p.acc.shift(), p.next);
         try { p.M.step(p, s, p.next + swing, sp); } catch (e) { errs.n++; errs.last = p.mode + ': ' + (e && e.stack || e); }   // keep scheduling; tools read audio._stats().errors
@@ -1062,7 +1116,7 @@ export function createAudio(opts = {}) {
   function sweepNodes() { if (ready) sweep(NOW()); }
   function disposePlayer(p) {
     p.stopped = true; const i = players.indexOf(p); if (i >= 0) players.splice(i, 1);
-    try { if (p.drone) p.drone.os.forEach(({ o }) => o.stop(NOW() + 0.01)); if (!OFFLINE) { p.bus.disconnect(); p.rev.disconnect(); for (const g of Object.values(p.st)) g.disconnect(); } } catch (e) { /* ignore */ }
+    try { if (p.drone) p.drone.os.forEach(({ o }) => o.stop(NOW() + 0.01)); if (!OFFLINE) { p.bus.disconnect(); p.shelf.disconnect(); p.rev.disconnect(); for (const g of Object.values(p.st)) g.disconnect(); } } catch (e) { /* ignore */ }
   }
   function startPump() { if (pumpTimer || OFFLINE) return; pumpTimer = setInterval(() => { if (ctx && ctx.state === 'running') pump(ctx.currentTime + 0.3); }, 45); }
   const xfade = (n, up) => { const a = new Float32Array(n); for (let i = 0; i < n; i++) { const x = i / (n - 1); a[i] = up ? Math.sin(x * Math.PI / 2) : Math.cos(x * Math.PI / 2); } return a; };
@@ -1184,7 +1238,7 @@ export function createAudio(opts = {}) {
     },
     setMaster(v) { vol.master = clamp(v, 0, 1); if (ready) master.gain.setTargetAtTime(vol.master, NOW(), 0.02); },
     setMusic(v) { vol.music = clamp(v, 0, 1); if (ready) { musicBus.gain.setTargetAtTime(vol.music * MUSIC_TRIM, NOW(), 0.02); revMusic.gain.setTargetAtTime(vol.music * MUSIC_TRIM, NOW(), 0.02); } },
-    setSfx(v) { vol.sfx = clamp(v, 0, 1); if (ready) { sfxBus.gain.setTargetAtTime(vol.sfx, NOW(), 0.02); crowdBus.gain.setTargetAtTime(vol.sfx, NOW(), 0.02); sfxRev.gain.setTargetAtTime(vol.sfx, NOW(), 0.02); } },
+    setSfx(v) { vol.sfx = clamp(v, 0, 1); if (ready) { sfxBus.gain.setTargetAtTime(vol.sfx * SFX_GAIN, NOW(), 0.02); crowdBus.gain.setTargetAtTime(vol.sfx * SFX_GAIN, NOW(), 0.02); sfxRev.gain.setTargetAtTime(vol.sfx * SFX_GAIN, NOW(), 0.02); } },
     // reverb scene: 'arena' stone hall, 'hub' open air with building slap, 'indoor'. music.setMode picks one automatically; call this to override (lock it with {lock:true}, release with setScene(null)).
     setScene(name, o = {}) { if (!name) { sceneLock = false; return scene; } sceneLock = !!o.lock; applyScene(name, o.fade == null ? 0.8 : o.fade); return scene; },
     get scene() { return scene; },

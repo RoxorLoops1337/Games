@@ -105,7 +105,7 @@ function honorsTab(ctx, root, draw) {
   root.append(g);
   const st = S.stats || {};
   root.append(sec('Records'));
-  root.append(card([kv('Fights', fmt(st.fights || 0)), kv('Wins / Losses', `${st.wins || 0} / ${st.losses || 0}`), kv('Tournaments won', fmt(st.tourneys || 0)), kv('Mercies shown', fmt(st.spares || 0)), kv('Weeks run', fmt(st.weeks || 0)),
+  root.append(card([kv('Fights', fmt(st.fights || 0)), kv('Wins / Losses', `${st.wins || 0} / ${st.losses || 0}`), kv('Tournaments won', fmt(st.tourneys || 0)), kv('Mercies shown', fmt(st.spares || 0)), kv('Foes killed / ransomed', `${fmt(st.kills || 0)} / ${fmt(st.ransoms || 0)}`), kv('Weeks run', fmt(st.weeks || 0)),
     kv('Fallen fighters', fmt(st.fallen || 0)), kv('Best Pit floor', fmt(S.pitBest || 0)), kv('Best Daily floor', fmt(S.dailyBest || 0)), kv('Best Horde wave', fmt(S.hordeBest || 0)), kv('Bounties claimed', fmt(st.bounties || 0)), kv('Champions beaten', fmt(st.champs || 0)), kv('Contracts done', fmt(st.contracts || 0))]));
   if ((S.awards || []).length) {
     root.append(sec('Season awards'));
@@ -166,6 +166,7 @@ function helpTab(ctx, root, draw) {
     ['Scout the Arena', 'Matches are announced weeks ahead. A Scout Tower reveals more about rivals and shows more weeks. Style matchups give a small edge only.'],
     ['Fight live', 'Gladiators move, strike and cast on their own. Tap your ultimates at the right moment and tap an enemy to focus it. Before each fight pick an augment.'],
     ['Grow', 'Win gold, fame, loot, runes and relics. Upgrade buildings from More, Ludus, or by tapping a plot (neighbors add synergy), merge gear, bet on mispriced fights, try the Pit of Trials, then found a new ludus for laurels.'],
+    ['Rearrange the ludus', 'Tap the hammer button at the bottom right of the ludus, or Move this building on a plot. Lift a building, tap an empty plot to move it or another building to swap, check the price and confirm. The crew rebuilds it in 1 to 3 weeks: its perks pause meanwhile, its level stays. Undo in the same week for most of the gold back. The Hall of Legends cannot be moved. Arrow keys and Enter work too, Escape steps back.'],
     ['Wounds, patrons, events', 'Injuries hit a body part (arm, knee, head, eye, ribs) and some heal into permanent scars that cost something. In the Infirmary decide per wound: rest it for free or pay to treat it, each with its own risk. Patrons sign contracts with demands, pay weekly and bite when you fail. Weekly events can chain into later consequences; the Chronicle keeps the log. All three are tabs of The World.'],
     ['Mind the world', 'In More, the Calendar shows the whole season. Rival ludi have natures: gift the greedy, train with the honorable. Mentors and feasts lift the barracks. The Pit, Horde, duels with champions and bounties can kill a fighter; honor them on the memorial wall.'],
   ];

@@ -2,29 +2,71 @@
 // cast skills automatically and fire player-triggered ultimates. No DOM; the renderer reads unit state.
 (function (G) {
   const D = G.LM_D, L = G.LM;
-  const R = 8.6; // arena radius in meters
+  const R = 8.6, R0 = R; // arena radius in meters
   const clamp = L.clamp; const rnd = () => L.rand();
   const alive = (F, side) => F.units.filter((u) => u.side === side && !u.down);
+  // allocation-free variants for the per-step hot paths (think / beastThink / separate). The buffers are module scratch: think is never re-entered,
+  // and nothing keeps `foes` past the call (every callee that needs it later builds its own array with alive / filter)
+  const foesBuf = [], sepBuf = [];
+  function aliveInto(F, side, out) { const us = F.units; let n = 0; for (let i = 0; i < us.length; i++) { const u = us[i]; if (u.side === side && !u.down) out[n++] = u; } out.length = n; return out; }
   const other = (s) => (s === 'A' ? 'B' : 'A');
   const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
   const emit = (F, e) => { if (!F.quiet) F.ev.push(e); };
   L.ARENA_R = R;
+  const SHOWT = L.SHOW, PRIO = L.PRIO; // PLAN: Showmanship table (core/sim.js)
   const DK = 0.3; // global damage scale: keeps fights readable (~20s)
 
-  function mkUnitG(g, side, i, n, ctx, hpFrac, grudge) {
-    const d = L.derive(g, ctx); const fx = d.fx; const maxhp = Math.round(d.hp);
+  // the unit's effect table: derive() returns a sparse object whose keys depend on the gear (31 hidden classes in 112 units); the unit gets ONE fixed shape with
+  // every key the arena reads (0 = absent, identical for every `fx.k ?` / `fx.k || 0` test). roarDmg is filled by js/fightsetup.js.
+  const mkFx = (f) => ({ vamp: f.vamp || 0, thunder: f.thunder || 0, thorns: f.thorns || 0, sprint: f.sprint || 0, shield: f.shield || 0, sear: f.sear || 0, roarDmg: f.roarDmg || 0, riposte: f.riposte || 0, revive: f.revive || 0, regen: f.regen || 0, ramp: f.ramp || 0, grow: f.grow || 0, giant: f.giant || 0, fury: f.fury || 0, frenzy: f.frenzy || 0, exec: f.exec || 0, bleed: f.bleed || 0, ultcd: f.ultcd || 0, stalwart: f.stalwart || 0, pen: f.pen || 0, lastbreath: f.lastbreath || 0, haste: f.haste || 0, critdmg: f.critdmg || 0 });
+  // u.s (timed statuses): ONE shape for every unit. 0 = absent (a status is a number of seconds or an object with .t), never delete, never add a key that is not here.
+  const ST_KEYS = ['stun', 'slow', 'blind', 'root', 'air', 'silence', 'bleed', 'pull', 'dash', 'guard', 'ccimm', 'inv', 'spin', 'frenzy', 'taunt', 'rage', 'press', 'hold', 'retreat', 'gstance', 'roar', 'rally', 'netted', 'expo', 'unb', 'sprint', 'phase', 'nimbus', 'lastB'];
+  const ST_TIMED = ST_KEYS.filter((k) => k !== 'dash' && k !== 'pull'); // upkeep counts these down; dash / pull are driven by motion()
+  const mkSt = () => ({ stun: 0, slow: 0, blind: 0, root: 0, air: 0, silence: 0, bleed: 0, pull: 0, dash: 0, guard: 0, ccimm: 0, inv: 0, spin: 0, frenzy: 0, taunt: 0, rage: 0, press: 0, hold: 0, retreat: 0, gstance: 0, roar: 0, rally: 0, netted: 0, expo: 0, unb: 0, sprint: 0, phase: 0, nimbus: 0, lastB: 0 });
+  // THE unit shape. Every unit (gladiator or beast) is made from this one literal, so there is exactly one hidden class; the optional fields (beast block, command / AI
+  // flags, stance timers) are declared here with a placeholder and only ever ASSIGNED later. Never add or delete a unit field anywhere else: it makes the hot functions
+  // deopt on 'wrong map'. Keep the order stable (structuredClone snapshots and the replay rely on nothing but the values, the shape is for the JIT).
+  function blankUnit() {
     return {
-      id: side + i, side, i, g, name: g.name, style: g.style, tr: D.TRAITS[g.trait] || {},
-      x: side === 'A' ? -6.4 : 6.4, y: (i - (n - 1) / 2) * (n > 2 ? 4.3 : 3.6), z: 0, face: side === 'A' ? 1 : -1, mvx: 0, mvy: 0, kx: 0, ky: 0, spdNow: 0,
-      maxhp, hp: Math.max(1, Math.round(maxhp * (hpFrac == null ? 1 : hpFrac))), shield: fx.shield ? maxhp * 0.08 * fx.shield : 0,
-      atk: d.atk, def: d.def, ms: 2.7 + d.spd * 0.026, aps: 0.5 + d.spd * 0.0095, range: D.RANGE[g.style],
-      crit: d.crit, eva: d.eva, fx, wil: g.st.wil, rk: g.rune ? g.rune.k : null, rm: new Set(g.rune ? g.rune.m : []),
-      atkT: 0.3 + rnd() * 0.5, wind: 0, wt: null, cast: 0, tgt: null, strafeT: 0, strafeDir: 1,
-      skills: (g.techs || []).map((id) => ({ id, cd: 2 + rnd() * 4 })),
-      ults: L.ultsOf(g).map((id) => ({ id, cd: 5 + rnd() * 2, max: D.ULTS[id].cd })),
-      s: {}, stk: {}, hits: [], down: false, gritUsed: false, stal: false, revived: false, lbUsed: false,
-      dmg: 0, taken: 0, crits: 0, grudge: !!grudge, bacc: 0, racc: 0, srT: 0.5, noDmgT: 9, graspReady: true, graspT: 0, elecAt: 0, phaseAt: 0, thCnt: 0, fs: null, airT: 1,
+      id: '', side: 'A', i: 0, g: null, name: '', style: '', tr: null,
+      x: 0, y: 0, z: 0, face: 1, mvx: 0, mvy: 0, kx: 0, ky: 0, spdNow: 0,
+      maxhp: 0, hp: 0, shield: 0, atk: 0, def: 0, ms: 0, aps: 0, range: 0, crit: 0, eva: 0, fx: null, wil: 0, rk: null, rm: null,
+      atkT: 0, wind: 0, wt: null, cast: 0, tgt: null, strafeT: 0, strafeDir: 1, skills: null, ults: null,
+      s: null, stk: null, hits: null, down: false, gritUsed: false, stal: false, revived: false, lbUsed: false,
+      dmg: 0, taken: 0, crits: 0, grudge: false, bacc: 0, racc: 0, srT: 0.5, noDmgT: 9, graspReady: true, graspT: 0, elecAt: 0, phaseAt: 0, thCnt: 0, fs: null, airT: 1,
+      frT: 0, ltT: 0, cqT: 0, swap: null, cmdCd: 0, cmdId: null, aiFell: 0, aiPressed: 0, aiHeld: 0,
+      role: '', show: 0, flT: 0, // PLAN: battle-plan role ('' = none) and Showmanship level 0..3 (declared here, only ever assigned), next flourish time
+      beast: null, bx: null, ai: null, sz: 0, boss: false, enraged: false, wa: null, bs: null,
     };
+  }
+  function mkUnitG(g, side, i, n, ctx, hpFrac, grudge) {
+    const d = L.derive(g, ctx); const fx = mkFx(d.fx); const maxhp = Math.round(d.hp);
+    const u = blankUnit();
+    u.id = side + i; u.side = side; u.i = i; u.g = g; u.name = g.name; u.style = g.style; u.tr = D.TRAITS[g.trait] || {};
+    u.x = side === 'A' ? -6.4 : 6.4; u.y = (i - (n - 1) / 2) * (n > 2 ? 4.3 : 3.6); u.face = side === 'A' ? 1 : -1;
+    u.maxhp = maxhp; u.hp = Math.max(1, Math.round(maxhp * (hpFrac == null ? 1 : hpFrac))); u.shield = fx.shield ? maxhp * 0.08 * fx.shield : 0;
+    u.atk = d.atk; u.def = d.def; u.ms = 2.7 + d.spd * 0.026; u.aps = 0.5 + d.spd * 0.0095; u.range = D.RANGE[g.style];
+    u.crit = d.crit; u.eva = d.eva; u.fx = fx; u.wil = g.st.wil; u.rk = g.rune ? g.rune.k : null; u.rm = new Set(g.rune ? g.rune.m : []);
+    // the random draws keep their original order: atkT, one per skill, one per ult
+    u.atkT = 0.3 + rnd() * 0.5;
+    u.skills = (g.techs || []).map((id) => ({ id, cd: 2 + rnd() * 4 }));
+    u.ults = L.ultsOf(g).map((id) => ({ id, cd: 5 + rnd() * 2, max: D.ULTS[id].cd }));
+    u.s = mkSt(); u.stk = { fr: 0, lt: 0, cq: 0, gr: 0 }; u.hits = []; u.grudge = !!grudge;
+    if (ctx && ctx.plan && !g.beast) applyPlan(u, g, side, i, n, ctx.plan);
+    return u;
+  }
+  // PLAN: roles and formations move the start position and trade a little stat for a job; Showmanship trades damage and armor for fame. No random draws.
+  function applyPlan(u, g, side, i, n, pl) {
+    if (n > 1) {
+      const F0 = L.FORMS[pl.form] || L.FORMS.line, pre = F0.roles(n), rid = (pl.roles && L.ROLES[pl.roles[g.id]] && pl.roles[g.id]) || pre[i] || 'free', R = L.ROLES[rid], m = R.mods;
+      let p = F0.pos(i, n), x = p.x + R.dx, y = p.y * R.ky; const r = Math.hypot(x, y); if (r > R0 * 0.97) { x *= R0 * 0.97 / r; y *= R0 * 0.97 / r; }
+      u.x = side === 'A' ? x : -x; u.y = y; u.role = rid === 'free' ? '' : rid;
+      if (F0.mods && (F0.mods.atk || F0.mods.def)) { u.atk *= 1 + (F0.mods.atk || 0); u.def *= 1 + (F0.mods.def || 0); } // the formation's own team-wide trade (the Line's discipline)
+      if (m.hp) { const f = 1 + m.hp, mx = Math.max(1, Math.round(u.maxhp * f)); u.hp = Math.max(1, Math.round(u.hp * mx / u.maxhp)); u.maxhp = mx; }
+      if (m.atk) u.atk *= 1 + m.atk; if (m.def) u.def *= 1 + m.def; if (m.ms) u.ms *= 1 + m.ms; if (m.eva) u.eva = clamp(u.eva + m.eva, 0, 0.4); if (m.crit) u.crit = clamp(u.crit + m.crit, 0, 0.8);
+    } else if (pl.show > 0) {
+      const sh = L.SHOW[Math.min(3, pl.show | 0)]; u.show = Math.min(3, pl.show | 0); u.atk *= 1 - sh.atk; u.def *= 1 - sh.def; u.flT = 2.5 + 0.8 * i;
+    }
   }
   // BEAST (Venatio): a beast record (core/ext.js LM.makeBeast) becomes an ordinary unit with its own range, speed, size and AI state (beastThink below)
   function mkUnit(g, side, i, n, ctx, hpFrac, grudge) {
@@ -32,14 +74,17 @@
     const B = D.BEASTS[g.beast], d = L.derive(g, ctx);
     u.beast = g.beast; u.bx = B; u.ai = B.ai; u.range = B.range; u.ms = (2.7 + d.spd * 0.026) * B.ms; u.aps = (0.5 + d.spd * 0.0095) * B.aps; u.sz = B.sz; u.boss = !!B.boss; u.enraged = false;
     if (g.pw && g.pw !== 1) { u.maxhp = Math.round(u.maxhp * g.pw); u.hp = Math.max(1, Math.round(u.hp * g.pw)); u.atk *= Math.sqrt(g.pw); } // hunt tuning (D.HUNTS pw)
-    u.skills = []; u.ults = []; u.wa = null; u.atkT = 0.6 + rnd() * 0.8;
+    u.skills = []; u.ults = []; u.atkT = 0.6 + rnd() * 0.8;
     u.bs = { pounce: 0.4 + rnd() * 0.6, charge: 0.4 + rnd() * 0.8, back: 0, stomp: 4 + rnd(), roar: 0, jab: 3 + rnd() * 2, t: rnd() * 2, mode: 'circle', combo: 0, howl: false, dir: rnd() < 0.5 ? 1 : -1, n: 0 };
     return u;
   }
   L.mkUnits = (glads, side, ctx, hpFracs, grudge) => glads.map((g, i) => mkUnit(g, side, i, glads.length, ctx, hpFracs && hpFracs[i], grudge));
   L.createFight = (A, B, o) => {
     o = o || {};
-    return { t: 0, A, B, units: A.concat(B), ev: [], hype: 0, peak: 0, done: false, winner: null, auto: { A: !!o.autoA, B: true }, foc: { A: null, B: null }, quiet: !!o.quiet, sched: [], dtmax: 0.1, duo: o.duo ? { ids: o.duo.ids, kind: o.duo.kind, cd: 10, max: D.DUOS[o.duo.kind].cd } : null, manualFavor: !!o.manualFavor, favorReady: false, hazards: o.hazards || 0, hazT: 7 + rnd() * 3, zones: [], cmd: { rally: 6, swap: 0 }, cmdAI: !!o.cmdAI };
+    return { t: 0, A, B, units: A.concat(B), ev: [], hype: 0, peak: 0, done: false, winner: null, auto: { A: !!o.autoA, B: true }, foc: { A: null, B: null }, quiet: !!o.quiet, sched: [], dtmax: 0.1, duo: o.duo ? { ids: o.duo.ids, kind: o.duo.kind, cd: 10, max: D.DUOS[o.duo.kind].cd } : null, manualFavor: !!o.manualFavor, favorReady: false, hazards: o.hazards || 0, hazT: 7 + rnd() * 3, zones: [], cmd: { rally: 6, swap: 0 }, cmdAI: !!o.cmdAI,
+      // declared up front so the fight keeps one hidden class (js/fightsetup.js fills hypeK / meta / replay, L.step counts n)
+      n: 0, hypeK: 0, meta: null, replay: null,
+      pri: { A: false, B: false } }; // PLAN: a side whose focus came from its battle plan: when that target falls the side picks the weakest left
   };
 
   // ---------- derived live stats ----------
@@ -65,12 +110,14 @@
     return u.ms * m;
   }
   L.apsOf = apsOf; L.msOf = msOf;
+  L.windOf = (u) => Math.min(0.22, 0.4 / apsOf(u)) * (u.show ? SHOWT[u.show].wd : 1); // PLAN: a showman winds up longer (the view uses the same number)
 
   // ---------- damage ----------
   function dmgMul(F, u, t, o) {
     let m = 1; const av = L.adv(u.style, t.style); m *= av > 0 ? 1.1 : av < 0 ? 0.92 : 1;
     if (av < 0 && u.tr.underdog) m *= 1 + u.tr.underdog;
     if (u.grudge && u.tr.grudge) m *= 1 + u.tr.grudge;
+    else if (u.grudge && u.side === 'B') m *= 1.08;   // FATE: a vendetta (you killed one of his school) makes the foe hit harder; player revenge stays trait-only
     if (u.s.frenzy) m *= 1 + u.s.frenzy.atk;
     if (u.fx.fury) m *= 1 + u.fx.fury * 0.1 * (1 - u.hp / u.maxhp);
     if (u.rm.has('laststand')) m *= 1 + 0.12 * (1 - u.hp / u.maxhp);
@@ -93,17 +140,20 @@
     t.hp -= amt; t.taken += amt;
     if (t.hp <= 0 && !t.down) {
       if (t.fx.revive && !t.revived) { t.revived = true; t.hp = Math.round(t.maxhp * 0.2 * Math.min(1, t.fx.revive)); t.s.inv = 0.6; emit(F, { k: 'revive', dst: t.id }); return; }
-      t.hp = 0; t.down = true; t.s = {}; emit(F, { k: 'down', dst: t.id, src: src && src.id }); F.hype += 10;
+      t.hp = 0; t.down = true; t.s = mkSt(); emit(F, { k: 'down', dst: t.id, src: src && src.id }); F.hype += 10;
+      if (F.pri && F.pri[other(t.side)] && F.foc[other(t.side)] === t.id) F.foc[other(t.side)] = refocus(F, t.side); // PLAN: the priority target fell
       if (!alive(F, t.side).length) finish(F, other(t.side));
     }
   }
+  // the weakest fighter left on `side` (lowest hp, first on a tie), or null: where a battle plan's focus goes when its target falls
+  function refocus(F, side) { const us = F.units; let b = null; for (let i = 0; i < us.length; i++) { const u = us[i]; if (u.side === side && !u.down && (!b || u.hp < b.hp)) b = u; } return b ? b.id : null; }
   function finish(F, w) { if (F.done) return; F.done = true; F.winner = w; emit(F, { k: 'end', winner: w }); }
   function heal(F, u, amt) { amt = Math.min(u.maxhp - u.hp, Math.round(amt)); if (amt <= 0 || u.down) return; u.hp += amt; emit(F, { k: 'heal', dst: u.id, amt }); }
   function cc(F, t, key, val, dur) {
     if (t.down) return false;
     if (t.s.ccimm || t.s.spin || t.s.inv) { emit(F, { k: 'resist', dst: t.id }); return false; }
     if (key === 'stun' && rnd() < t.wil * 0.003) { emit(F, { k: 'resist', dst: t.id }); return false; }
-    t.s[key] = val; if (key === 'stun' || key === 'air') { t.wind = 0; t.cast = 0; delete t.s.dash; }
+    t.s[key] = val; if (key === 'stun' || key === 'air') { t.wind = 0; t.cast = 0; t.s.dash = 0; }
     if (key === 'air') t.airT = dur; emit(F, { k: 'status', dst: t.id, st: key, t: dur }); return true;
   }
   function strike(F, u, t, o) {
@@ -118,6 +168,7 @@
     if (u.rk === 'grasp' && u.graspReady && o.basic) { dmg += t.maxhp * 0.02; u.graspReady = false; u.graspT = 5; heal(F, u, u.maxhp * 0.015); const g = Math.round(u.maxhp * 0.003); u.maxhp += g; u.hp += g; emit(F, { k: 'rune', src: u.id, id: 'grasp' }); }
     const crit = rnd() < clamp(u.crit + (o.critB || 0), 0, 0.8); if (crit) dmg *= 1.6 + 0.15 * (u.fx.critdmg || 0);
     if (t.s.guard) dmg *= 1 - t.s.guard.f;
+    if (F.pri[other(t.side)] && F.foc[other(t.side)] === t.id) dmg *= PRIO.guard; // PLAN: a marked foe is expected: its side closes ranks around it
     if (t.s.press) dmg *= 1.1; if (t.s.expo) dmg *= 1.1; if (t.s.hold) dmg *= 0.85; // TACTICS: the price of Press / Rally, the reward of Hold
     if (t.rm.has('bone') && t.noDmgT >= 3) { dmg *= 0.75; t.noDmgT = 0; }
     dmg = Math.max(1, Math.round(dmg)); const shown = dmg;
@@ -129,7 +180,7 @@
     }
     u.dmg += shown; if (crit) u.crits++; t.noDmgT = 0;
     emit(F, { k: 'hit', src: u.id, dst: t.id, dmg: shown, crit, adv: av, tech: o.tag, save, basic: !!o.basic });
-    F.hype += 2 + (shown / t.maxhp) * 50 + (crit ? 5 : 0);
+    F.hype += (2 + (shown / t.maxhp) * 50 + (crit ? 5 : 0)) * (u.show ? SHOWT[u.show].hy : 1);
     if (dmg > 0) damage(F, t, dmg, u);
     if (!o.noProc) procs(F, u, t, shown, crit, o);
     return shown;
@@ -147,7 +198,7 @@
       if (u.rk === 'conq') { u.stk.cq = Math.min(8, (u.stk.cq || 0) + 1); u.cqT = 5; }
       if (fx.grow) u.stk.gr = (u.stk.gr || 0) + 1;
       if (fx.sprint) u.s.sprint = { v: fx.sprint, t: 1.5 };
-      u.hits.push(F.t); u.hits = u.hits.filter((x) => F.t - x <= 3);
+      const hs = u.hits; hs.push(F.t); let hn = 0; for (let i = 0; i < hs.length; i++) if (F.t - hs[i] <= 3) hs[hn++] = hs[i]; hs.length = hn; // keep the last 3 s, in place
       if (u.rk === 'electro' && u.hits.length >= 3 && F.t >= u.elecAt) { u.elecAt = F.t + 7; u.hits.length = 0; emit(F, { k: 'rune', src: u.id, id: 'electro' }); zap(F, u, t, 1.2, 'electro'); }
       if (u.rk === 'phase' && u.hits.length >= 3 && F.t >= u.phaseAt) { u.phaseAt = F.t + 4; u.hits.length = 0; u.s.phase = 3; emit(F, { k: 'rune', src: u.id, id: 'phase' }); }
       if (fx.thunder) { u.thCnt++; if (u.thCnt >= 3) { u.thCnt = 0; zap(F, u, t, 0.3 * fx.thunder, 'thunder'); } }
@@ -231,7 +282,7 @@
       }
       case 'tornado': u.s.spin = { t: 3, tick: 0 }; u.s.ccimm = 3; emit(F, { k: 'status', dst: u.id, st: 'spin' }); break;
       case 'unbreakable':
-        ['stun', 'slow', 'blind', 'root', 'air', 'silence', 'bleed', 'pull'].forEach((x) => { delete u.s[x]; }); u.z = 0;
+        for (const x of CLEAR_CC) u.s[x] = 0; u.z = 0;
         u.s.guard = { f: 0.7, t: 6 }; u.s.ccimm = 6; u.s.unb = 6; emit(F, { k: 'aoe', x: u.x, y: u.y, r: 2, c: U.c }); break;
       case 'bloodrage': u.s.rage = 6; u.s.ccimm = 6; emit(F, { k: 'aoe', x: u.x, y: u.y, r: 2, c: U.c }); break;
       case 'meteor': {
@@ -278,15 +329,15 @@
     for (let k = 0; k < u.ults.length; k++) {
       const sl = u.ults[k]; if (sl.cd > 0) continue; const U = D.ULTS[sl.id]; const hpf = u.hp / u.maxhp; let ok = false;
       switch (sl.id) {
-        case 'pulverize': ok = foes.some((f) => dist(u, f) < 3.2); break;
+        case 'pulverize': ok = anyWithin(u, foes, 3.2); break;
         case 'hookshot': ok = d > 3.5 && d < 9.5; break;
         case 'bladedance': ok = d > 3 && d < 7.5; break;
         case 'skewer': ok = d > 3.5 && d < 10.5; break;
-        case 'tornado': ok = foes.some((f) => dist(u, f) < 2.2); break;
+        case 'tornado': ok = anyWithin(u, foes, 2.2); break;
         case 'unbreakable': ok = hpf < 0.55 || !!(u.s.stun || u.s.air); break;
         case 'bloodrage': ok = d < 3 && hpf > 0.3; break;
         case 'meteor': ok = d < 11; break;
-        case 'duststorm': ok = foes.some((f) => dist(u, f) < 6) && hpf < 0.8; break;
+        case 'duststorm': ok = anyWithin(u, foes, 6) && hpf < 0.8; break;
         default: break;
       }
       if (ok && !(U.rng && d > U.rng)) { aiCast(F, u, k, t); return; }
@@ -295,21 +346,41 @@
 
   // ---------- per-step logic ----------
   function chooseTarget(F, u, foes) {
-    const tn = foes.find((f) => f.s.taunt); if (tn) return tn;
-    if (F.cmdAI && u.side === 'B') { const bt = foes.find((f) => f.s.press && !f.s.hold && dist(u, f) < 6.5); if (bt) return bt; } // TACTICS: whoever presses forward draws the foe's eye
-    if (u.swap) { const sw = foes.find((x) => x.id === u.swap.id); if (sw) return sw; }
-    const fid = F.foc[u.side]; if (fid) { const f = foes.find((x) => x.id === fid); if (f) return f; }
-    if (u.tgt) { const f = foes.find((x) => x.id === u.tgt); if (f) return f; }
-    return foes.slice().sort((a, b) => dist(u, a) * (0.6 + 0.8 * (a.hp / a.maxhp)) - dist(u, b) * (0.6 + 0.8 * (b.hp / b.maxhp)))[0];
+    const n = foes.length, rl = u.role; let i;
+    for (i = 0; i < n; i++) if (foes[i].s.taunt) return foes[i];
+    if (F.cmdAI && u.side === 'B') { for (i = 0; i < n; i++) { const f = foes[i]; if (f.s.press && !f.s.hold && dist(u, f) < 6.5) return f; } } // TACTICS: whoever presses forward draws the foe's eye
+    if (u.swap) { const sid = u.swap.id; for (i = 0; i < n; i++) if (foes[i].id === sid) return foes[i]; }
+    const fid = F.foc[u.side];
+    if (fid) {
+      for (i = 0; i < n; i++) if (foes[i].id === fid) {
+        const f = foes[i];
+        if (rl === 'hunter') { const d0 = dist(u, f); if (d0 > 3.5) for (let j = 0; j < n; j++) { const a = foes[j]; if (a !== f && a.tgt === u.id && dist(u, a) < 2.2) return a; } return f; } // PLAN: a Hunter drops the mark only for someone on top of them
+        if (!rl || (rl === 'vanguard' ? dist(u, f) < 6.5 : rl === 'anchor' ? dist(u, f) < u.range + 3.2 : true)) return f; // PLAN: the front line and the anchors fight what is within reach
+        break;
+      }
+    }
+    if (u.tgt) { const tid = u.tgt; for (i = 0; i < n; i++) if (foes[i].id === tid) return foes[i]; }
+    // lowest (distance x hp weight): same pick as the old stable sort()[0] (ties keep the first)
+    let avg = 0; if (rl === 'flanker') { for (i = 0; i < n; i++) avg += foes[i].maxhp; avg /= n; }
+    let best = null, bk = 0;
+    for (i = 0; i < n; i++) {
+      const f = foes[i]; let k = dist(u, f) * (0.6 + 0.8 * (f.hp / f.maxhp));
+      if (f.role === 'vanguard') k *= 0.8; // PLAN: the Vanguard draws the foe
+      if (rl === 'flanker') k *= (0.75 + 0.5 * f.maxhp / avg) * (f.range > 2.4 ? 0.85 : 1); // PLAN: the Flanker goes for the weak and the back line
+      else if (rl === 'anchor' && f.tgt && f.tgt !== u.id && f.tgt.charCodeAt(0) === u.id.charCodeAt(0)) k *= 0.78; // PLAN: the Anchor covers an ally who is being hit
+      if (!best || k < bk) { best = f; bk = k; }
+    }
+    return best;
   }
+  const CLEAR_CC = ['stun', 'slow', 'blind', 'root', 'air', 'silence', 'bleed', 'pull'];
   function upkeep(F, u, dt) {
     const s = u.s;
-    for (const key in s) {
-      if (key === 'dash' || key === 'pull') continue; const v = s[key];
-      if (typeof v === 'number') { s[key] = v - dt; if (s[key] <= 0) delete s[key]; } else { v.t -= dt; if (v.t <= 0) delete s[key]; }
+    for (let i = 0; i < ST_TIMED.length; i++) {
+      const key = ST_TIMED[i], v = s[key]; if (!v) continue;
+      if (typeof v === 'number') { s[key] = v - dt; if (s[key] <= 0) s[key] = 0; } else { v.t -= dt; if (v.t <= 0) s[key] = 0; }
     }
     u.atkT -= dt; u.noDmgT += dt; if (u.cmdCd > 0) u.cmdCd -= dt; if (u.swap && (u.swap.t -= dt) <= 0) u.swap = null;
-    const hk = hasteK(u) * dt; u.skills.forEach((k) => { k.cd = Math.max(0, k.cd - hk); }); const uk = ultK(u) * dt; u.ults.forEach((k) => { k.cd = Math.max(0, k.cd - uk); });
+    const hk = hasteK(u) * dt, sks = u.skills; for (let i = 0; i < sks.length; i++) sks[i].cd = Math.max(0, sks[i].cd - hk); const uk = ultK(u) * dt, uls = u.ults; for (let i = 0; i < uls.length; i++) uls[i].cd = Math.max(0, uls[i].cd - uk);
     if (u.frT > 0 && (u.frT -= dt) <= 0) u.stk.fr = 0; if (u.ltT > 0 && (u.ltT -= dt) <= 0) u.stk.lt = 0; if (u.cqT > 0 && (u.cqT -= dt) <= 0) u.stk.cq = 0;
     if (u.graspT > 0 && (u.graspT -= dt) <= 0) u.graspReady = true;
     if (u.fx.regen) { u.racc += u.maxhp * 0.0025 * u.fx.regen * dt; if (u.racc >= 1) { const h = Math.floor(u.racc); u.racc -= h; heal(F, u, h); } }
@@ -323,13 +394,16 @@
     if (s.stun || s.air || s.dash || s.pull) { u.mvx = u.mvy = 0; return; }
     if (u.cast > 0) { u.cast -= dt; u.mvx = u.mvy = 0; return; }
     if (u.wind > 0) { u.wind -= dt; u.mvx = u.mvy = 0; if (u.wind <= 0) resolveAttack(F, u); return; }
-    if (F.zones.length) { const z = F.zones.find((q) => Math.hypot(u.x - q.x, u.y - q.y) < q.r + 0.6); if (z) { const dx = u.x - z.x, dy = u.y - z.y, l = Math.hypot(dx, dy) || 1; u.mvx = dx / l; u.mvy = dy / l; return; } }
+    if (F.zones.length) { let z = null; for (let i = 0; i < F.zones.length; i++) { const q = F.zones[i]; if (Math.hypot(u.x - q.x, u.y - q.y) < q.r + 0.6) { z = q; break; } } if (z) { const dx = u.x - z.x, dy = u.y - z.y, l = Math.hypot(dx, dy) || 1; u.mvx = dx / l; u.mvy = dy / l; return; } }
     if (u.beast) return beastThink(F, u, dt); // BEAST
-    const foes = alive(F, other(u.side)); if (!foes.length) return;
+    const foes = aliveInto(F, other(u.side), foesBuf); if (!foes.length) return;
     const t = chooseTarget(F, u, foes); u.tgt = t.id; const d = dist(u, t);
     if (Math.abs(t.x - u.x) > 0.15) u.face = t.x > u.x ? 1 : -1;
     if (F.auto[u.side]) aiUlt(F, u, foes, t, d, dt);
     if (u.cast > 0) return;
+    if (u.show && F.t >= u.flT && d <= u.range + 3 && u.hp > u.maxhp * 0.35) { // PLAN: a flourish: the fighter stops and plays to the stands (the cost is the time), the crowd pays for it
+      const sh = SHOWT[u.show]; u.flT = F.t + sh.gap; u.cast = sh.cast; u.mvx = u.mvy = 0; F.hype += 5 * u.show; emit(F, { k: 'flourish', src: u.id, lv: u.show }); return;
+    }
     if (F.cmdAI && u.side === 'B') aiCmd(F, u, foes, t, d);
     if (s.retreat) { retreatMove(F, u, foes); return; } // TACTICS
     if (s.gstance) { u.mvx = u.mvy = 0; return; }
@@ -337,9 +411,25 @@
     if (d <= u.range + 0.1) {
       u.strafeT -= dt; if (u.strafeT <= 0) { u.strafeT = 1 + rnd() * 1.5; u.strafeDir = rnd() < 0.5 ? -1 : 1; }
       const nx = (t.x - u.x) / (d || 1), ny = (t.y - u.y) / (d || 1);
-      if (u.style === 'retiarius' && d < u.range * 0.62) { u.mvx = -nx * 0.9; u.mvy = -ny * 0.9; } else { u.mvx = -ny * u.strafeDir * 0.3; u.mvy = nx * u.strafeDir * 0.3; }
-      if (u.atkT <= 0 && !s.spin) { u.wt = t.id; u.wind = Math.min(0.22, 0.4 / apsOf(u)); u.atkT = 1 / apsOf(u); emit(F, { k: 'atk', src: u.id, dst: t.id }); }
-    } else if (s.hold) { u.mvx = u.mvy = 0; } else { const nx = (t.x - u.x) / d, ny = (t.y - u.y) / d; u.mvx = nx; u.mvy = ny; }
+      if (u.style === 'retiarius' && d < u.range * 0.62) { u.mvx = -nx * 0.9; u.mvy = -ny * 0.9; }
+      else if (u.role === 'skirmisher' && d < u.range * 0.7 && u.atkT > 0.15 && Math.hypot(u.x, u.y) < R * 0.8) { u.mvx = -nx * 0.9 - ny * u.strafeDir * 0.25; u.mvy = -ny * 0.9 + nx * u.strafeDir * 0.25; } // PLAN: the Skirmisher gives ground while the blow recovers
+      else { u.mvx = -ny * u.strafeDir * 0.3; u.mvy = nx * u.strafeDir * 0.3; }
+      if (u.atkT <= 0 && !s.spin) { u.wt = t.id; u.wind = L.windOf(u); u.atkT = 1 / apsOf(u); emit(F, { k: 'atk', src: u.id, dst: t.id }); }
+    } else if (s.hold) { u.mvx = u.mvy = 0; } else { const nx = (t.x - u.x) / d, ny = (t.y - u.y) / d; u.mvx = nx; u.mvy = ny; if (u.role) roleChase(F, u, t, d, nx, ny); }
+  }
+  // PLAN: how a role walks toward its target. Anchors stay near the team while someone else carries the fight, Flankers swing wide before they close.
+  const AC = { x: 0, y: 0, free: 0 };
+  function allyCenter(F, u) { const us = F.units; let n = 0, x = 0, y = 0, fr = 0; for (let i = 0; i < us.length; i++) { const a = us[i]; if (a === u || a.side !== u.side || a.down || a.beast) continue; n++; x += a.x; y += a.y; if (a.role !== 'anchor') fr++; } if (n) { AC.x = x / n; AC.y = y / n; } AC.free = fr; return n; }
+  function roleChase(F, u, t, d, nx, ny) {
+    if (u.role === 'anchor') {
+      if (allyCenter(F, u) && AC.free > 0 && Math.hypot(t.x - AC.x, t.y - AC.y) > 6) { // the foe is far from the team and a partner is free to meet it: stay home
+        const hx = AC.x - u.x, hy = AC.y - u.y, hd = Math.hypot(hx, hy); if (hd > 3) { u.mvx = hx / hd * 0.8; u.mvy = hy / hd * 0.8; } else { u.mvx = u.mvy = 0; }
+      }
+    } else if (u.role === 'flanker') {
+      const k = d > 5 ? 0.55 : d > u.range + 1.5 ? 0.3 : 0; if (!k) return;
+      const wy = Math.abs(u.y) > 0.8 ? (u.y > 0 ? 1 : -1) : ((u.i & 1) ? 1 : -1), dir = wy * (nx >= 0 ? 1 : -1), tx = -ny * dir * k, ty = nx * dir * k, l = Math.hypot(nx + tx, ny + ty) || 1;
+      u.mvx = (nx + tx) / l; u.mvy = (ny + ty) / l;
+    }
   }
   // ---------- BEAST AI (Venatio). No counters: every beast is a different tempo (pounce, pack flank, charge, trample, stomp) with its own stats and an enrage;
   // the player answers with stats, positioning and ultimates, never with a style rock-paper-scissors. Uses only rnd() (replay safe).
@@ -347,7 +437,7 @@
   const bGo = (u, tx, ty, k) => { const dx = tx - u.x, dy = ty - u.y, l = Math.hypot(dx, dy) || 1; u.mvx = dx / l * k; u.mvy = dy / l * k; };
   const bTan = (u, t, dir, k, close) => { const dx = t.x - u.x, dy = t.y - u.y, l = Math.hypot(dx, dy) || 1, nx = dx / l, ny = dy / l; u.mvx = -ny * dir * k + nx * close; u.mvy = nx * dir * k + ny * close; };
   function bAtk(F, u, t, kind, o) { // start an attack with its own windup; the damage lands in beastHit (called from resolveAttack)
-    u.wt = t.id; u.wa = Object.assign({ kind, mult: 1, bleed: 0, cleave: 0, kb: 0, hits: 1 }, o); u.wind = o.wind || 0.22; u.atkT = (o.rec || 1) / apsOf(u);
+    u.wt = t.id; u.wa = { kind, mult: o.mult !== undefined ? o.mult : 1, bleed: o.bleed !== undefined ? o.bleed : 0, cleave: o.cleave !== undefined ? o.cleave : 0, kb: o.kb !== undefined ? o.kb : 0, hits: o.hits !== undefined ? o.hits : 1 }; u.wind = o.wind || 0.22; u.atkT = (o.rec || 1) / apsOf(u);
     emit(F, { k: 'atk', src: u.id, dst: t.id, beast: kind, w: u.wind });
   }
   function beastHit(F, u, t) {
@@ -393,7 +483,7 @@
   }
   function f_bleed(F, u, f, ch) { if (ch && rnd() < ch) { f.s.bleed = { dps: u.atk * 0.1 * DK * (u.boss ? 1.4 : 1), t: 4 }; emit(F, { k: 'status', dst: f.id, st: 'bleed', t: 4 }); } }
   function beastThink(F, u, dt) {
-    const foes = alive(F, other(u.side)); if (!foes.length) { u.mvx = u.mvy = 0; return; }
+    const foes = aliveInto(F, other(u.side), foesBuf); if (!foes.length) { u.mvx = u.mvy = 0; return; }
     const t = chooseTarget(F, u, foes); u.tgt = t.id; const d = dist(u, t), b = u.bs, B = u.bx, ai = u.ai, swing = u.atkT <= 0;
     if (Math.abs(t.x - u.x) > 0.15) u.face = t.x > u.x ? 1 : -1;
     b.pounce -= dt; b.charge -= dt; b.stomp -= dt; b.jab -= dt; b.t -= dt;
@@ -452,10 +542,10 @@
     if (s.air) { const p = clamp(1 - s.air / u.airT, 0, 1); u.z = 3.2 * 4 * p * (1 - p); } else u.z = 0;
     if (s.dash) {
       const d = s.dash; d.t -= dt; const dx = d.tx - u.x, dy = d.ty - u.y, len = Math.hypot(dx, dy), step = (d.sp || 24) * dt; // BEAST: d.sp = own speed, d.tick = per-step hook (trample)
-      if (len <= step || d.t <= 0) { u.x = d.tx; u.y = d.ty; const fn = d.fn; delete s.dash; if (d.tick) d.tick(); if (fn) fn(); } else { u.x += (dx / len) * step; u.y += (dy / len) * step; if (d.tick) d.tick(); }
+      if (len <= step || d.t <= 0) { u.x = d.tx; u.y = d.ty; const fn = d.fn; s.dash = 0; if (d.tick) d.tick(); if (fn) fn(); } else { u.x += (dx / len) * step; u.y += (dy / len) * step; if (d.tick) d.tick(); }
     } else if (s.pull) {
       const d = s.pull; d.t -= dt; const dx = d.tx - u.x, dy = d.ty - u.y, len = Math.hypot(dx, dy), step = 18 * dt;
-      if (len <= step || d.t <= 0) { u.x = d.tx; u.y = d.ty; delete s.pull; } else { u.x += (dx / len) * step; u.y += (dy / len) * step; }
+      if (len <= step || d.t <= 0) { u.x = d.tx; u.y = d.ty; s.pull = 0; } else { u.x += (dx / len) * step; u.y += (dy / len) * step; }
     } else if (!s.stun && !s.air && !s.root && u.cast <= 0 && u.wind <= 0) {
       const sp = msOf(u); u.x += u.mvx * sp * dt; u.y += u.mvy * sp * dt;
     }
@@ -464,13 +554,15 @@
     u.spdNow = Math.hypot(u.x - x0, u.y - y0) / dt;
   }
   function separate(F) {
-    const us = F.units.filter((u) => !u.down && !u.s.air);
+    const all = F.units, us = sepBuf; let m = 0; for (let i = 0; i < all.length; i++) { const u = all[i]; if (!u.down && !u.s.air) us[m++] = u; } us.length = m;
     for (let i = 0; i < us.length; i++) for (let j = i + 1; j < us.length; j++) {
       const a = us[i], b = us[j]; let dx = b.x - a.x, dy = b.y - a.y; let d = Math.hypot(dx, dy); const min = 1.05 * 0.5 * ((a.sz || 1) + (b.sz || 1)); // BEAST: bigger bodies keep more room
       if (d < min) { if (d < 0.001) { dx = rnd() - 0.5; dy = rnd() - 0.5; d = Math.hypot(dx, dy) || 1; } const p = (min - d) / 2; const nx = dx / d, ny = dy / d; if (!a.s.dash) { a.x -= nx * p; a.y -= ny * p; } if (!b.s.dash) { b.x += nx * p; b.y += ny * p; } }
     }
   }
-  const sideHp = (F, s) => { const us = F.units.filter((u) => u.side === s); return us.reduce((a, u) => a + u.hp, 0) / us.reduce((a, u) => a + u.maxhp, 0); };
+  const sideHp = (F, s) => { const us = F.units; let h = 0, m = 0; for (let i = 0; i < us.length; i++) { const u = us[i]; if (u.side === s) { h += u.hp; m += u.maxhp; } } return h / m; };
+  const aliveCount = (F, side) => { const us = F.units; let n = 0; for (let i = 0; i < us.length; i++) if (us[i].side === side && !us[i].down) n++; return n; };
+  const anyWithin = (u, foes, r) => { for (let i = 0; i < foes.length; i++) if (dist(u, foes[i]) < r) return true; return false; };
   function roar(F, forced) {
     F.peak = Math.max(F.peak, F.hype); F.hype = 0;
     const side = forced || (sideHp(F, 'A') <= sideHp(F, 'B') ? 'A' : 'B'); const fav = !!forced;
@@ -505,11 +597,11 @@
     if (F.sched.length) { const due = F.sched.filter((e) => F.t >= e.at); if (due.length) { F.sched = F.sched.filter((e) => F.t < e.at); due.forEach((e) => e.fn()); } }
     if (F.duo && F.duo.cd > 0) F.duo.cd -= dt;
     if (F.cmd) { if (F.cmd.rally > 0) F.cmd.rally -= dt; if (F.cmd.swap > 0) F.cmd.swap -= dt; }
-    F.n = (F.n || 0) + 1; const us = F.n % 2 ? F.units : F.units.slice().reverse();
-    for (let i = 0; i < us.length; i++) if (!us[i].down) upkeep(F, us[i], dt);
+    F.n = (F.n || 0) + 1; const us = F.units, nU = us.length, rv = F.n % 2 === 0; // even steps walk the units back to front (no reversed copy)
+    for (let i = 0; i < nU; i++) { const u = us[rv ? nU - 1 - i : i]; if (!u.down) upkeep(F, u, dt); }
     if (F.done) return;
-    for (let i = 0; i < us.length; i++) think(F, us[i], dt);
-    for (let i = 0; i < us.length; i++) motion(F, us[i], dt);
+    for (let i = 0; i < nU; i++) think(F, us[rv ? nU - 1 - i : i], dt);
+    for (let i = 0; i < nU; i++) motion(F, us[rv ? nU - 1 - i : i], dt);
     separate(F);
     if (F.hype >= 100 / (F.hypeK || 1) && !F.done) {
       const behind = sideHp(F, 'A') <= sideHp(F, 'B');
@@ -533,7 +625,7 @@
   L.CMD_ORDER = ['press', 'hold', 'retreat', 'guard', 'swap', 'rally'];
   const STANCE_KEYS = { press: 'press', hold: 'hold', retreat: 'retreat', guard: 'gstance' };
   function setStance(F, u, id) {
-    const C = L.CMD[id]; for (const k in STANCE_KEYS) { delete u.s[STANCE_KEYS[k]]; } if (u.s.guard && u.s.guard.stance) delete u.s.guard;
+    const C = L.CMD[id]; for (const k in STANCE_KEYS) { u.s[STANCE_KEYS[k]] = 0; } if (u.s.guard && u.s.guard.stance) u.s.guard = 0;
     u.s[STANCE_KEYS[id]] = { t: C.dur }; u.cmdCd = C.cd; u.cmdId = id;
     if (id === 'guard') { u.s.guard = { f: 0.4, t: C.dur, stance: 1 }; emit(F, { k: 'status', dst: u.id, st: 'guard', t: C.dur }); }
     emit(F, { k: 'cmd', a: id, src: u.id, side: u.side, t: C.dur });
@@ -543,7 +635,7 @@
     if (!F || F.done) return false; if (!F.cmd) F.cmd = { rally: 0, swap: 0 };
     if (kind === 'stance') {
       const u = F.units.find((x) => x.id === a); if (!u || u.down || u.beast) return false;
-      if (b === 'none') { let had = false; for (const k in STANCE_KEYS) if (u.s[STANCE_KEYS[k]]) { delete u.s[STANCE_KEYS[k]]; had = true; } if (u.s.guard && u.s.guard.stance) delete u.s.guard; return had; }
+      if (b === 'none') { let had = false; for (const k in STANCE_KEYS) if (u.s[STANCE_KEYS[k]]) { u.s[STANCE_KEYS[k]] = 0; had = true; } if (u.s.guard && u.s.guard.stance) u.s.guard = 0; return had; }
       if (!L.CMD[b] || !L.CMD[b].stance) return false;
       if ((u.cmdCd || 0) > 0) return 'cd';
       setStance(F, u, b); return true;
@@ -576,22 +668,39 @@
   // The foe's tactics (live fights only, F.cmdAI): deterministic, no rnd(), and each one is announced (cmd event) so the player sees it.
   function aiCmd(F, u, foes, t, d) {
     if (u.beast || (u.cmdCd || 0) > 0 || F.t < 4 || L.stanceOf(u)) return;
-    const hp = u.hp / u.maxhp, mates = alive(F, u.side), mine = sideHp(F, u.side), theirs = sideHp(F, other(u.side));
-    if (hp < 0.22 && !u.aiFell && foes.some((f) => dist(u, f) < 4)) { u.aiFell = 1; setStance(F, u, 'retreat'); return; }
-    if (mine > theirs + 0.25 && hp > 0.6 && d < 6 && !u.aiPressed) { u.aiPressed = 1; setStance(F, u, 'press'); return; }
-    if (hp < 0.45 && mates.length > 1 && d > u.range + 1 && !u.aiHeld) { u.aiHeld = 1; setStance(F, u, 'hold'); }
+    const hp = u.hp / u.maxhp; // every test below is pure, so the cheap ones run first and the side sums only when a branch can fire
+    if (hp < 0.22 && !u.aiFell && anyWithin(u, foes, 4)) { u.aiFell = 1; setStance(F, u, 'retreat'); return; }
+    if (hp > 0.6 && d < 6 && !u.aiPressed && sideHp(F, u.side) > sideHp(F, other(u.side)) + 0.25) { u.aiPressed = 1; setStance(F, u, 'press'); return; }
+    if (hp < 0.45 && d > u.range + 1 && !u.aiHeld && aliveCount(F, u.side) > 1) { u.aiHeld = 1; setStance(F, u, 'hold'); }
   }
+  // PLAN: start a fight with the battle plans of both sides: the priority target becomes the side's focus (the same F.foc a tap on an enemy sets)
+  L.planFight = (F, pa, pb) => {
+    if (pa && pa.prio != null && F.units.some((u) => u.id === 'B' + pa.prio)) { F.foc.A = 'B' + pa.prio; F.pri.A = true; }
+    if (pb && pb.prio != null && F.units.some((u) => u.id === 'A' + pb.prio)) { F.foc.B = 'A' + pb.prio; F.pri.B = true; }
+  };
   L.focus = (F, side, id) => { F.foc[side] = F.foc[side] === id ? null : id; };
   L.quick = (A, B, o) => {
-    const F = L.createFight(A, B, Object.assign({ autoA: true, quiet: true }, o)); let n = 0; while (!F.done && n++ < 1500) L.step(F, 0.1); return F;
+    const F = L.createFight(A, B, Object.assign({ autoA: true, quiet: true }, o)); if (o && o.plans) L.planFight(F, o.plans.pa, o.plans.pb); let n = 0; while (!F.done && n++ < 1500) L.step(F, 0.1); return F;
   };
   // win chance of team A glads vs team B glads. Seeded, so the number is stable between renders.
   L.odds = (S, gA, gB, stanceA, n) => {
     n = n || 30; let w = 0;
-    L.withRandom(L.mulberry(L.hash(gA.map((g) => g.id + ':' + g.lvl).join() + '|' + gB.map((g) => g.name + g.lvl).join() + (stanceA || ''))), () => {
-      const ca = L.teamCtx(S, gA, stanceA || 'bal'); const cb = L.teamCtx(null, gB, 'bal');
-      for (let i = 0; i < n; i++) { const F = L.quick(L.mkUnits(gA, 'A', ca), L.mkUnits(gB, 'B', cb)); if (F.winner === 'A') w++; }
+    const pls = stanceA && typeof stanceA === 'object' ? L.fightPlans(S, gA, gB, stanceA) : null; // PLAN: a battle plan changes the odds (both sides' plans, same as the real fight)
+    L.withRandom(L.mulberry(L.hash(gA.map((g) => g.id + ':' + g.lvl).join() + '|' + gB.map((g) => g.name + g.lvl).join() + (pls ? L.planKey(pls.pa) : stanceA || ''))), () => {
+      const ca = L.teamCtx(S, gA, pls ? pls.pa : stanceA || 'bal'); const cb = L.teamCtx(null, gB, 'bal'); if (pls && pls.pb) cb.plan = pls.pb;
+      for (let i = 0; i < n; i++) { const F = L.quick(L.mkUnits(gA, 'A', ca), L.mkUnits(gB, 'B', cb), pls ? { plans: pls } : undefined); if (F.winner === 'A') w++; }
     });
     return w / n;
   };
+  // generalise the field representations of the literals above once at load (Smi -> double -> object), so the first fights do not deprecate their maps under optimised code
+  (function primeShapes() {
+    const st = mkSt(), fx = mkFx({}), stk = { fr: 0, lt: 0, cq: 0, gr: 0 }, u = blankUnit();
+    const NUM = ['stun', 'blind', 'root', 'air', 'silence', 'ccimm', 'inv', 'taunt', 'rage', 'roar', 'netted', 'unb', 'phase', 'nimbus', 'lastB']; // timers that are plain seconds; the rest hold {t, ...} objects
+    for (const k of Object.keys(st)) { if (NUM.includes(k)) st[k] = 0.5; else st[k] = { t: 1 }; st[k] = 0; }
+    for (const k of Object.keys(fx)) fx[k] = 0.5; for (const k of Object.keys(stk)) stk[k] = 0.5;
+    for (const k of Object.keys(u)) { const v = u[k]; if (typeof v === 'number') u[k] = 0.5; }
+    const r0 = L.rand; L.rand = () => 0.5; // createFight draws one rnd() (hazT): keep the real random stream untouched while priming the fight literal
+    try { const F = L.createFight([], [], {}); for (const k of ['t', 'hype', 'peak', 'hazT', 'hypeK']) F[k] = 0.5; F.meta = {}; F.replay = {}; F.winner = 'A'; } finally { L.rand = r0; }
+    u.role = 'vanguard'; u.tgt = 'A0'; u.wt = 'A0'; u.swap = { id: 'A0', t: 1 }; u.cmdId = 'press'; u.beast = 'lion'; u.ai = 'pounce'; u.bx = {}; u.wa = {}; u.bs = {}; u.fs = {};
+  })();
 })(typeof globalThis !== 'undefined' ? globalThis : this);

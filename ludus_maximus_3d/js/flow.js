@@ -4,7 +4,7 @@ import * as Cer from './ceremonies.js'; // ONBOARDING
 import * as Bracket from './bracket.js'; // BRACKET: marble bracket tablet
 import { U, h, fmt, fmtSt, chip, itemCard, gladRow, section, para, kv, grid, styleBadge, ordinal, RAR_KEY } from './uihelpers.js';
 
-const D = () => globalThis.LM_D, L = () => globalThis.LM;
+const D = () => globalThis.LM_D, L = () => globalThis.LM, lm0 = L;
 const ok = (label = 'Continue', variant = 'gold') => [{ label, value: 'ok', variant }];
 
 export async function advanceWeek(ctx) {
@@ -117,10 +117,10 @@ async function pendingEvent(ctx) { // WAVE2: named events, risk hints, costs, co
 }
 
 // ------------------------------------------------------------------ prep + augments
-const STANCES = [['bal', 'gold'], ['agg', 'danger'], ['grd', 'bronze'], ['cun', 'bronze']];
-
-/** pre-fight dialog: returns {stance, bet:{wager, mult, tricks}} (gold for bet and tricks is paid by the caller via commit) */
+/** pre-fight sheet: the battle plan (roles, formation, priority target for teams; Showmanship for a solo fighter), then the optional bookmaker and tricks.
+ *  Returns {stance: plan, plan, bet:{wager, mult, tricks}}. `stance` carries the plan object so every old call site (fightScreen, playFight) keeps working. */
 export async function prep(ctx, ev, gl, opps, o = {}) {
+  lm0().uniqueNames && lm0().uniqueNames(gl, opps); // never "Valeria vs Valeria"
   const S = ctx.S, lm = L(), d = D(), lv = lm.scoutLevel(S), ctxA = lm.teamCtx(S, gl, 'bal');
   const st = { wager: 0, tricks: {} }, lvl = Math.round(opps.reduce((x, y) => x + y.lvl, 0) / opps.length), mult = lm.wagerMult(gl, opps, S);
   const cost = () => Object.keys(st.tricks).filter((k) => st.tricks[k]).reduce((a, k) => a + d.TRICKS.find((t) => t.id === k).cost(lvl), 0) + st.wager;
@@ -132,28 +132,39 @@ export async function prep(ctx, ev, gl, opps, o = {}) {
   tags.style.cssText = 'display:flex;gap:8px;justify-content:center;align-items:center;margin:6px 0'; body.append(tags);
   if (o.hpf != null && o.hpf < 1) body.append(para(`Wounded: starting at ${Math.round(o.hpf * 100)}% HP`));
   if (ctxA.list && ctxA.list.length && gl.length > 1) body.append(para('Synergy: ' + ctxA.list.map((s) => `${s.n} (${s.d})`).join(', ')));
+  const vd = opps.find((x) => x.rv && lm.vendetta && lm.vendetta(S, x.rv)); if (vd) body.append(para(`Vendetta: ${vd.name}'s school remembers the comrade you killed. They hit 8% harder.`)); // FATE
   const low = gl.filter((g) => g.en < 60); if (low.length) body.append(para(`${low.map((g) => g.name).join(', ')} ${low.length > 1 ? 'are' : 'is'} tired (energy under 60). Stats reduced.`));
   const wx = ev.key ? lm.weather(S, ev.key) : 'clear'; if (wx !== 'clear') body.append(para(`Weather: ${d.WEATHER[wx].n}. ${d.WEATHER[wx].d}`));
   if (ev.mut) body.append(para(`Mutator: ${ev.mut.n}. ${ev.mut.d}`));
   if (o.T) body.append(section('Bracket'), bracketEl(o.T));
   if (gl.length === 1) { const g = gl[0]; body.append(para(`${d.KEYSTONES[g.rune.k].n} rune. Ultimates: ${lm.ultsOf(g).map((x) => d.ULTS[x].n).join(', ')}${(S.relicOn || []).length ? ` · ${S.relicOn.length} relic(s)` : ''}`)); }
+  // PLAN: the main strategic choice. Pre-filled (a stored entry's plan, an old stance mapped, or the suggestion), so one tap on Fight! starts.
+  const showDial = gl.length === 1 && !o.pit; // Showmanship pays in fame and fans: only fights that settle through LM.settle offer it
+  let panel = null;
+  if (gl.length > 1 || showDial) {
+    const start = o.entry ? lm.entryPlan(S, o.entry, gl, opps) : null;
+    panel = (await import('./screens/plan.js')).planPanel(ctx, { gl, opps, start, solo: showDial });
+    body.append(section(gl.length > 1 ? 'Battle plan' : 'Showmanship'), panel.el);
+  }
   const spend = para(''); spend.style.fontWeight = '800';
   const paint = () => { spend.textContent = cost() ? `Pre-fight spend: ${fmt(cost())} gold` : ''; };
   if (!o.pit) {
-    body.append(section('The bookmaker'), para(`The crowd only knows level and style, not stats. Spot a mispriced fight and back yourself. Pays x${mult.toFixed(1)} on a win.`));
+    const fold = h('details', 'pl-fold'), sum = h('summary', '', 'Bookmaker and dirty tricks (optional)'); fold.append(sum);
+    fold.append(section('The bookmaker'), para(`The crowd only knows level and style, not stats. Spot a mispriced fight and back yourself. Pays x${mult.toFixed(1)} on a win.`));
     const wr = h('div', '', [0, ...lm.wagerOptions(S)].map((v) => { const b = U.button({ label: v ? String(v) : 'No bet', variant: v === st.wager ? 'gold' : 'ghost', onClick: () => { if (v && cost() - st.wager + v > S.gold) return U.toast('Not enough gold', { kind: 'bad' }); st.wager = v; wr.childNodes.forEach((n, i) => n.classList.toggle('lx-btn-gold', [0, ...lm.wagerOptions(S)][i] === v)); paint(); } }); b.dataset.v = v; return b; }));
-    wr.style.cssText = 'display:flex;gap:6px;flex-wrap:wrap'; body.append(wr);
-    body.append(section('Dirty tricks'));
+    wr.style.cssText = 'display:flex;gap:6px;flex-wrap:wrap'; fold.append(wr);
+    fold.append(section('Dirty tricks'));
     d.TRICKS.forEach((t) => {
       const b = U.button({ label: `${t.n}  (${fmt(t.cost(lvl))}g)`, variant: 'ghost', block: true, onClick: () => { if (!st.tricks[t.id] && cost() + t.cost(lvl) > S.gold) return U.toast('Not enough gold', { kind: 'bad' }); st.tricks[t.id] = !st.tricks[t.id]; b.classList.toggle('lx-btn-gold', !!st.tricks[t.id]); paint(); } });
-      body.append(b, para(`${t.d}${t.risk ? ` ${Math.round(t.risk * 100)}% risk of being caught.` : ''}`));
+      fold.append(b, para(`${t.d}${t.risk ? ` ${Math.round(t.risk * 100)}% risk of being caught.` : ''}`));
     });
+    body.append(fold);
   }
-  body.append(spend, section('Choose a battle plan'), para('A plan reshapes your stats for this fight. It is a build choice, not a counter.'));
-  const actions = STANCES.map(([id, v]) => { let odds = ''; if (lv >= 2 && gl.length * opps.length <= 6) odds = ` (${Math.round(lm.odds(S, gl, opps, id, 24) * 100)}%)`; return { label: lm.STANCES[id] + odds, sub: lm.STANCE_D[id], value: id, variant: v }; });
-  const stance = await ctx.ask({ title: `${o.name ? o.name + ': ' : ''}${ev.title}`, body, actions, dismiss: 'bal' });
+  body.append(spend);
+  await ctx.ask({ title: `${o.name ? o.name + ': ' : ''}${ev.title}`, body, actions: [{ label: 'Fight!', sub: panel ? (gl.length > 1 ? 'with this plan' : 'with this style') : undefined, value: 'go', variant: 'gold', icon: 'arena' }], dismiss: 'go' });
   const tricks = Object.keys(st.tricks).filter((k) => st.tricks[k]), spent = cost(); S.gold = Math.max(0, S.gold - spent);
-  return { stance, bet: { wager: st.wager, mult, tricks } };
+  const plan = panel ? panel.get() : 'bal';
+  return { stance: plan, plan, bet: { wager: st.wager, mult, tricks } };
 }
 
 function bracketEl(T) {
@@ -194,6 +205,7 @@ function settleBets(ctx, bet, res, notes) {
 
 // ------------------------------------------------------------------ fights
 export async function fightScreen(ctx, gl, opps, stance, o) {
+  L().uniqueNames && L().uniqueNames(gl, opps); // idempotent: also covers fights that skip the prep dialog (rivalry bouts, replays of pit floors)
   const res = await ctx.game.playFight(gl, opps, stance, o);
   try { // WAVE3: fighters sent hurt roll whether the wound worsens (cached on res, settle reuses it)
     const lm = L(), hr = lm.hurtResolve(ctx.S, gl.map((g) => ctx.gOf(g.id) || g), res, o && o.ev && o.ev.kind);
@@ -205,7 +217,7 @@ export async function fightScreen(ctx, gl, opps, stance, o) {
 async function runEvent(ctx, ev, gl, en) {
   const S = ctx.S, lm = L();
   if (ev.kind === 'tourney' || ev.kind === 'grand') return runTourney(ctx, ev, gl[0]);
-  const { stance, bet } = await prep(ctx, ev, gl, ev.opps, {});
+  const { stance, bet } = await prep(ctx, ev, gl, ev.opps, { entry: en && (en.plan || (en.stance && en.stance !== 'bal')) ? ev.key : null });
   const aug = await pickAug(ctx, ev.league, [], ev.kind === 'grand', null, null, gl[0] && gl[0].style);
   const res = await fightScreen(ctx, gl, ev.opps, stance, { ev, tricks: bet.tricks, augs: [aug] });
   const rep = lm.settle(S, ev, gl, res); settleBets(ctx, bet, res, rep.notes);
@@ -214,7 +226,7 @@ async function runEvent(ctx, ev, gl, en) {
 }
 
 async function runTourney(ctx, ev, g) {
-  const S = ctx.S, lm = L(), T = lm.tourneyInit(S, ev, g); let champion = false, hype = 0, hpf = 1, odds = null; const notes = [], augs = [];
+  const S = ctx.S, lm = L(), T = lm.tourneyInit(S, ev, g); let champion = false, hype = 0, hpf = 1, odds = null; const notes = [], augs = [], shows = [], fates = [];
   const names = ev.size === 8 ? ['Quarterfinal', 'Semifinal', 'Final'] : ['Semifinal', 'Final'];
   for (;;) {
     const opp = lm.tourneyOpp(T), name = names[T.round];
@@ -222,7 +234,8 @@ async function runTourney(ctx, ev, g) {
     const { stance, bet } = await prep(ctx, ev, [g], [opp], { name, hpf: T.hpf });
     augs.push(await pickAug(ctx, Math.min(3, ev.league + (T.round >= 1 ? 1 : 0)), augs, ev.kind === 'grand' && T.round === names.length - 1, `${name}: new augment`, null, g.style));
     const res = await fightScreen(ctx, [g], [opp], stance, { ev: Object.assign({}, ev, { title: `${ev.title}: ${name}` }), hpf: { [g.id]: T.hpf }, tricks: bet.tricks, augs: augs.slice() }); // BRACKET: the round name rides in the title (VS intro)
-    settleBets(ctx, bet, res, notes);
+    settleBets(ctx, bet, res, notes); shows.push(res.show | 0); // PLAN: the Showmanship level of each round
+    if (res.win) { const fr = await fateStep(ctx, ev, res, null); if (fr) { fates.push(fr); await joinDialog(ctx, fr); } } // FATE: spare, ransom or kill the beaten finalist of this round
     hype = Math.max(hype, res.hype); hpf = res.hpf[g.id]; if (odds == null) odds = res.odds;
     const r = lm.tourneyAdvance(S, T, res.win);
     const nextHpf = Math.min(1, hpf + 0.4 + (g.trait === 'hordearius' ? 0.1 : 0));
@@ -232,8 +245,9 @@ async function runTourney(ctx, ev, g) {
       T.hpf = nextHpf;
     } else break;
   }
-  const place = lm.placeOf(T, champion), res = { win: champion, place, hype, hpf: { [g.id]: hpf }, odds };
+  const place = lm.placeOf(T, champion), res = { win: champion, place, hype, hpf: { [g.id]: hpf }, odds, show: shows.length ? Math.round(shows.reduce((x, y) => x + y, 0) / shows.length) : 0 };
   const rep = lm.settle(S, ev, [g], res); rep.notes.push(...notes);
+  if (fates.length) { rep.fates = fates; rep.fame += fates.reduce((a, x) => a + x.fame, 0); rep.gold += fates.reduce((a, x) => a + x.gold, 0); } // FATE: already paid out round by round, shown in the totals
   await results(ctx, ev, [g], res, rep);
   if (!champion) await mortalCheck(ctx, [g], res, { kind: 'event' }); // FALLEN: only deadly in Hardcore
 }
@@ -247,15 +261,50 @@ function statsEl(ctx, res) {
   return box;
 }
 
+/** the foe the decision is about: the one recorded by the fight view (last down), else the strongest enemy fighter */
+function fateFoe(res) {
+  const us = res && res.F && res.F.units; if (!us) return null;
+  let u = res.fate && res.fate.foe ? us.find((x) => x.id === res.fate.foe) : null;
+  if (!u) u = us.filter((x) => x.side === 'B' && !x.beast).reduce((b, x) => (!b || x.g.lvl >= b.g.lvl ? x : b), null);
+  return u ? u.g : null;
+}
+/** fallback decision when the arena did not ask (skipped fight, ranged kill, fast-forward): the same options as the fight view, in the docked sheet */
+async function fateDock(ctx, ev, res, foe) {
+  const lm = L(), d = D(), off = lm.fateOffers(ctx.S, ev, foe); if (!off) return 'spare';
+  const body = h('div', '', [para(`${foe.name} (${d.STYLES[foe.style].n}, level ${foe.lvl}${off.foe.ludus ? ', ' + off.foe.ludus : ''}) lies beaten. The crowd waits for your word.`)]);
+  const actions = off.opts.map((o) => ({ label: o.label, sub: [...o.gain, ...o.cost].join(' · '), value: o.id, variant: o.id === 'kill' ? 'danger' : o.id === off.def ? 'gold' : 'bronze', icon: o.id === 'kill' ? 'sword' : o.id === 'spare' ? 'heart' : 'coin' }));
+  const hasMom = res.F && res.F.replay && res.F.replay.snap && res.F.replay.moments && res.F.replay.moments.length;
+  let c; for (;;) { c = await ctx.ask({ title: 'Decide his fate', tut: 'results', dock: 'low', body, actions: hasMom ? [...actions, { label: 'Watch highlights', sub: 'the best moments, shareable', value: 'reel', variant: 'ghost', icon: 'arena' }] : actions, dismiss: off.def }); if (c !== 'reel') break; await ctx.game.watchReplay(res, { reel: true }); }
+  return c;
+}
+/** decide (in the arena, else in the dock) and apply the fate of the beaten foe. Returns the applied result (see LM.fate) or null when this fight has no decision. */
+async function fateStep(ctx, ev, res, rep) {
+  const lm = L(), foe = res && res.win ? fateFoe(res) : null; if (!foe || !lm.fateOk(ev, foe)) return null;
+  const id = (res.fate && res.fate.choice) || await fateDock(ctx, ev, res, foe);
+  const r = lm.fate(ctx.S, ev, rep, id, foe); ctx.save(); return r;
+}
+async function joinDialog(ctx, r) {
+  if (!r || !r.joined) return; ctx.sfx('levelUp'); ctx.refresh();
+  await ctx.ask({ title: 'A new recruit!', body: para(`${r.joined.name} (${D().STYLES[r.joined.style].n}, Lv ${r.joined.lvl}) was moved by your mercy and joins your ludus!`), actions: ok('Welcome!'), dismiss: 'ok' });
+}
+function fateEl(fates) {
+  const box = h('div');
+  fates.forEach((r) => { box.append(para(r.head), h('div', '', [...r.gain.map((t) => chip(t, '#2b9348')), ...r.cost.filter((t) => /Senate|Plebs|Merchants|regard|Vendetta|Temple/.test(t)).map((t) => chip(t, '#b5532f'))])); box.lastChild.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;margin:4px 0 8px'; });
+  return box;
+}
+
 export async function results(ctx, ev, gl, res, rep) {
   const S = ctx.S, lm = L(), d = D(), win = res.win, isT = ev.kind === 'tourney' || ev.kind === 'grand', place = res.place;
   const ord = (n) => (n === 1 ? '1st' : n === 2 ? '2nd' : n === 3 || n === 4 ? 'Semifinalist' : 'Out early');
+  let fates = rep.fates || [];
+  if (win && !isT) { const fr = await fateStep(ctx, ev, res, rep); if (fr) { fates = [fr]; rep.fates = fates; } }   // FATE: duels and team clashes decide here (tournaments decided round by round)
   const body = h('div');
   const big = h('div', '', isT ? (win ? 'CHAMPION' : ord(place)) : (win ? 'VICTORY' : 'DEFEAT'));
   big.style.cssText = `text-align:center;font:900 30px/36px 'Trajan Pro','Cinzel',Georgia,serif;letter-spacing:.12em;color:${win ? '#9a6a10' : '#7a2f30'}`;
   const gold = h('div', '', [chip('+' + fmt(rep.gold) + ' gold', '#b8803a'), chip('+' + fmt(rep.fame) + ' fame', '#7b4fb8'), res.odds != null && res.odds < 0.4 && win ? chip('Underdog win!', '#2b9348') : '']);
   gold.style.cssText = 'text-align:center;margin:8px 0';
   body.append(big, gold);
+  if (fates.length) body.append(section("The crowd's verdict"), fateEl(fates));
   (rep.notes || []).forEach((n) => body.append(para(n)));
   (rep.fac || []).forEach((x) => body.append(para(`${x.text}${x.up ? ' New perk: ' + x.up : ''}`)));
   body.append(section('Experience'));
@@ -265,24 +314,17 @@ export async function results(ctx, ev, gl, res, rep) {
   rep.lvl.forEach((l) => Cer.levelUp(ctx, ctx.gOf(l.id), l.to)); // ONBOARDING
   rep.inj.forEach((i) => body.append(para(`${ctx.gOf(i.id).name} is injured for ${i.w} week${i.w > 1 ? 's' : ''}.`)));
   rep.loot.forEach((it) => body.append(itemCard(it, { tag: 'Loot!' })));
-  let actions = ok('Continue', win ? 'gold' : 'bronze');
-  if (win && ev.kind === 'duel') {
-    body.append(section('The crowd waits. Your call.'));
-    actions = [{ label: 'Show mercy', sub: 'more fame, 30% they join you', value: 'mercy', variant: 'gold' }, { label: 'Showboat', sub: 'extra gold', value: 'show', variant: 'ghost' }];
-    const hasMom = res.F && res.F.replay && res.F.replay.snap && res.F.replay.moments && res.F.replay.moments.length; // REEL: highlights before the verdict
-    let c; for (;;) { c = await ctx.ask({ title: 'Duel won', body, actions: hasMom ? [...actions, { label: 'Watch highlights', sub: 'the best moments, shareable', value: 'reel', variant: 'bronze', icon: 'arena' }] : actions, dismiss: 'show' }); if (c !== 'reel') break; await ctx.game.watchReplay(res, { reel: true }); }
-    const m = lm.mercy(S, ev, rep, c);
-    if (m.joined) await ctx.ask({ title: 'A new recruit!', body: para(`${m.joined.name} (${d.STYLES[m.joined.style].n}, Lv ${m.joined.lvl}) was moved by your mercy and joins your ludus!`), actions: ok('Welcome!'), dismiss: 'ok' });
-    else if (c === 'mercy') U.toast(`The crowd loves it. +${m.f} fame.`, { kind: 'good' }); else U.toast(`+${m.gd} gold from the crowd.`, { kind: 'good' });
-  } else {
+  const actions = ok('Continue', win ? 'gold' : 'bronze');
+  {
     const hasReplay = res.F && res.F.replay && res.F.replay.snap;
     for (;;) {
       const hasMom = hasReplay && res.F.replay.moments && res.F.replay.moments.length; // REEL
       const acts = hasReplay ? [...actions, ...(hasMom ? [{ label: 'Highlight reel', sub: 'the 3 best moments, shareable', value: 'reel', variant: 'bronze', icon: 'arena' }] : []), { label: 'Watch replay', value: 'replay', variant: 'ghost', icon: 'arena' }] : actions;
-      const v = await ctx.ask({ title: win ? 'Victory' : 'Defeat', body, actions: acts, dismiss: 'ok' });
+      const v = await ctx.ask({ title: ev.title || (win ? 'Victory' : 'Defeat'), tut: 'results', dock: 'low', body, actions: acts, dismiss: 'ok' }); // the dialog title names the fight, the banner inside names the result: no more "DUEL WON / VICTORY"
       if (v !== 'replay' && v !== 'reel') break; await ctx.game.watchReplay(res, { reel: v === 'reel' });
     }
   }
+  if (!isT && fates.length) await joinDialog(ctx, fates[0]);   // FATE: "X joins your ludus" after the results sheet
   if (rep.choice) {
     const wrap = h('div'), body2 = h('div', '', [para("Choose one prize from the Emperor's gift table."), wrap]);
     const id = await new Promise((resolve) => { const m = ctx.sheet({ title: "Champion's loot", body: body2, onClose: () => resolve(rep.choice[0].id) }); rep.choice.forEach((it) => wrap.append(itemCard(it, { onClick: () => { resolve(it.id); m.close(); } }))); });

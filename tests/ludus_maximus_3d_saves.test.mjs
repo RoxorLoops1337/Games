@@ -115,5 +115,15 @@ ok(Number.isInteger(LM.SAVE_VER) && LM.SAVE_VER >= 2, 'a schema version exists')
   ok(typeof LM.checkTrophies(back) === 'object', 'trophies run on a migrated save');
 }
 
+// MOVE: a save in the middle of a rearrangement (optional plot.mv) round-trips through storage and export, an old save without it is untouched
+{
+  const S = fresh(); S.gold = 5000; S.rows = 3; S.plots[6].l = 3; ok(LM.moveBuilding(S, 6, 10) === '', 'a move can be made'); LM.save(S);
+  const raw = JSON.parse(mem.get(KEY)); ok(raw.sv === LM.SAVE_VER && raw.plots[10].mv && raw.plots[10].mv.f === 6, 'the construction record is stored on the plot, schema version unchanged');
+  const r = LM.loadEx(); ok(r.status === 'ok' && LM.moving(r.S, 10) && LM.bfx(r.S, 'kitchen').l === 0 && LM.moveUndoInfo(r.S, 10).ok, 'it loads, perks are still paused and undo still works');
+  const exp = LM.parseImport(LM.exportFile(S)); ok(exp.S && exp.S.plots[10].mv && exp.S.plots[10].mv.u === S.week + 2, 'the file export keeps the record');
+  mem.set(KEY, JSON.stringify(Object.assign(JSON.parse(mem.get(KEY)), { week: 40 }))); ok(LM.loadEx().S.plots[10].mv === undefined, 'a record whose week has passed is dropped on load');
+  LM.moveBuilding(Object.assign(fresh(), { gold: 999 }), 6, 7); const o = fresh(); o.plots.forEach((p) => p && delete p.mv); LM.save(o); const ro = LM.loadEx(); ok(ro.status === 'ok' && LM.bfx(ro.S, 'kitchen').l === 1, 'a save without any mv is unchanged');
+}
+
 console.log(`ludus_maximus_3d_saves: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

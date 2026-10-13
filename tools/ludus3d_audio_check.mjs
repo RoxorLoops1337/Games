@@ -123,8 +123,8 @@ await page.evaluate(() => {
     for (let tt = 0; tt <= secs; tt += 0.1) {
       clock.t = tt;
       const I = Math.max(0, Math.min(1, 0.45 + 0.4 * Math.sin(tt / 9) + 0.15 * Math.sin(tt / 3.1)));
-      if (Math.floor(tt * 4) !== last) { last = Math.floor(tt * 4); a.music.setIntensity(I); a.crowd(0.25 + 0.75 * I); }
-      while (ei < ev.length && ev[ei][0] <= tt + 0.1) { const [et, n, o] = ev[ei++]; clock.t = Math.max(clock.t, et - 0.05); a.sfx(n, Object.assign({ when: et }, o)); }
+      if (Math.floor(tt * 4) !== last) { last = Math.floor(tt * 4); a.music.setIntensity(I); if (!(opts && opts.noSfx)) a.crowd(0.25 + 0.75 * I); }
+      while (ei < ev.length && ev[ei][0] <= tt + 0.1) { const [et, n, o] = ev[ei++]; if (opts && opts.noSfx) continue; clock.t = Math.max(clock.t, et - 0.05); a.sfx(n, Object.assign({ when: et }, o)); }
       clock.t = tt; a.music.pump(tt + 0.5);
     }
     return ev.length;
@@ -155,8 +155,8 @@ await page.evaluate(() => {
       return { an, wav: window.__wavOn ? L.wav(buf) : null };
     },
     async crowd(level, secs) { const e = await mk(secs || 6, 1); e.a.crowd(level); const buf = await e.off.startRendering(); return { an: L.analyze(buf), wav: window.__wavOn ? L.wav(buf) : null }; },
-    async mix(secs, density, beast) { // fight mix: arena music + crowd + sfx burst
-      const e = await mk(secs, 4), c0 = L.counters(), t0 = performance.now(); e.a.music.setMode(beast ? 'beast' : 'arena', { at: 0, fade: 0.05 }); const n = fight(e, secs, density || 1, 11, { beast }); const buf = await e.off.startRendering();
+    async mix(secs, density, beast, part) { // fight mix: arena music + crowd + sfx burst; part 'music' = music only, 'sfx' = crowd + sfx only (music slider 0), to compare their loudness
+      const e = await mk(secs, 4), c0 = L.counters(), t0 = performance.now(); e.a.music.setMode(beast ? 'beast' : 'arena', { at: 0, fade: 0.05 }); if (part === 'sfx') e.a.setMusic(0); const n = fight(e, secs, density || 1, 11, { beast, noSfx: part === 'music' }); const buf = await e.off.startRendering();
       const an = L.analyze(buf, { music: true }); an.events = n; an.msBuild = performance.now() - t0; return { an, wav: window.__wavOn ? L.wav(buf) : null };
     },
     async burst(secs, density) { // CPU / leak test: 60 s dense fight; count sources alive per second and never-stopped sources
@@ -241,7 +241,8 @@ if (!QUICK && ST('music')) {
 // ---- 4) mix + burst ----
 if (!QUICK && (ST('mix') || ST('burst'))) {
   console.log('== MIX / BURST ==');
-  if (ST('mix')) for (const [k, d, beast] of [['fight calm', 0.6, false], ['fight busy', 1.5, false], ['beast hunt', 1.0, true]]) { const r = await page.evaluate(([d, b]) => window.__job.mix(30, d, b), [d, beast]); await maybeWav('mix_' + k.replace(' ', '_'), r); results.mix[k] = r.an; }
+  if (ST('mix')) for (const [k, d, beast] of [['fight calm', 0.6, false], ['fight busy', 1.5, false], ['beast hunt', 1.0, true]]) { const r = await page.evaluate(([d, b]) => window.__job.mix(30, d, b), [d, beast]); await maybeWav('mix_' + k.replace(' ', '_'), r); results.mix[k] = r.an;
+    for (const part of ['music', 'sfx']) { const q = await page.evaluate(([d, b, part]) => window.__job.mix(30, d, b, part), [d, beast, part]); results.mix[k][part + 'Lufs'] = q.an.lufs; results.mix[k][part + 'Peak'] = q.an.peakDb; } }
   if (ST('burst')) results.burst = await page.evaluate(() => window.__job.burst(60, 2.5));
 }
 if (ST('misc')) {
@@ -294,8 +295,8 @@ for (const [k, a] of Object.entries(results.crowd)) L.push(row(k, f1(a.peakDb), 
 L.push('', '## Music', '', row('render', 'peak dB', 'LUFS int.', '1s-RMS sd dB', 'centroid', '<300 / 300-2.5k / >2.5k %', 'stereo side dB', 'gap s', 'bar click', 'before LUFS'), row(...Array(10).fill('---')));
 for (const [k, a] of Object.entries(results.music)) { const b = base && base.music && base.music[k]; L.push(row(k, f1(a.peakDb), f1(a.lufs), f1(a.wrSd), Math.round(a.centroid), pct(a.bands[0] + a.bands[1]) + ' / ' + pct(a.bands[2] + a.bands[3]) + ' / ' + pct(a.bands[4] + a.bands[5] + a.bands[6]), f1(a.width), a.gap, f1(a.click), b ? f1(b.lufs) : '')); }
 if (Object.keys(results.mix).length) {
-  L.push('', '## Fight mix (30 s, arena music + crowd bed + scripted sfx), loudness target about -16 LUFS', '', row('scenario', 'LUFS int.', 'momentary max', 'peak dB', 'clip', 'before LUFS / peak'), row(...Array(6).fill('---')));
-  for (const [k, a] of Object.entries(results.mix)) { const b = base && base.mix && base.mix[k]; L.push(row(k, f1(a.lufs), f1(a.momMax), f1(a.peakDb), a.clip, b ? f1(b.lufs) + ' / ' + f1(b.peakDb) : '')); }
+  L.push('', '## Fight mix (30 s, arena music + crowd bed + scripted sfx), loudness target about -16 LUFS', '', row('scenario', 'LUFS int.', 'momentary max', 'peak dB', 'clip', 'music only LUFS', 'sfx+crowd only LUFS', 'sfx over music dB', 'before LUFS / peak'), row(...Array(9).fill('---')));
+  for (const [k, a] of Object.entries(results.mix)) { const b = base && base.mix && base.mix[k]; L.push(row(k, f1(a.lufs), f1(a.momMax), f1(a.peakDb), a.clip, a.musicLufs == null ? '' : f1(a.musicLufs), a.sfxLufs == null ? '' : f1(a.sfxLufs), a.musicLufs == null ? '' : f1(a.sfxLufs - a.musicLufs), b ? f1(b.lufs) + ' / ' + f1(b.peakDb) : '')); }
 }
 if (results.burst) {
   const bu = results.burst, al = bu.alive, h = Math.floor(al.length / 3), m1 = al.slice(5, 5 + h).reduce((a, b) => a + b, 0) / h, m2 = al.slice(-h).reduce((a, b) => a + b, 0) / h, bb = base && base.burst;
@@ -315,8 +316,12 @@ if ((results.meta.gesture || (results.meta.gesture = { stateBefore: 'running', s
 if ((results.meta.gesture || (results.meta.gesture = { stateBefore: 'running', sfxBeforeUnlock: false, stateAfter: 'running', suspended: 'suspended', resumed: 'running', skipped: true })).suspended !== 'suspended' || (results.meta.gesture || (results.meta.gesture = { stateBefore: 'running', sfxBeforeUnlock: false, stateAfter: 'running', suspended: 'suspended', resumed: 'running', skipped: true })).resumed !== 'running') bad('suspend/resume cycle failed ' + JSON.stringify(results.meta.gesture));
 // hard budgets
 for (const [n, a] of Object.entries(results.sfx)) { if (a.nan || a.clip) bad(`sfx ${n}: NaN/clip`); }
-for (const [n, a] of Object.entries(results.music)) { if (a.nan || a.clip) bad(`music ${n}: NaN/clip`); }
-for (const [k, a] of Object.entries(results.mix)) { if (a.clip) bad(`mix ${k} clips`); if (a.lufs < -22 || a.lufs > -12) bad(`mix ${k} loudness ${f1(a.lufs)} LUFS outside -22..-12`); }
+for (const [n, a] of Object.entries(results.music)) { if (a.nan || a.clip) bad(`music ${n}: NaN/clip`); if (a.peakDb > -1) bad(`music ${n}: peak ${f1(a.peakDb)} dBFS above -1`); }
+// music loudness calibration: every mode about -18 to -20 LUFS at its normal intensity (budget -22..-17), calm vs combat swing of the intensity modes at most 6.5 dB, bass share and centroid when calm
+for (const [n, a] of Object.entries(results.music)) { if (/[@ ]/.test(n) && !/@(0|0\.5|1)$/.test(n)) continue; const calm = /@0$/.test(n), combat = /@1$/.test(n); if (a.lufs < (calm ? -26 : -22.5) || a.lufs > -17) bad(`music ${n}: ${f1(a.lufs)} LUFS outside the calibrated window`); if (calm || n === 'prep') { const lo = a.bands[0] + a.bands[1]; if (lo > 0.78) bad(`music ${n}: ${pct(lo)}% below 300 Hz (want at most about 75)`); if (a.centroid < 240) bad(`music ${n}: centroid ${Math.round(a.centroid)} Hz (want 250 or more)`); } }
+for (const m of ['arena', 'beast', 'boss']) { const c = results.music[m + '@0'], h = results.music[m + '@1']; if (c && h && h.lufs - c.lufs > 6.5) bad(`music ${m}: swing calm to combat ${f1(h.lufs - c.lufs)} dB (want at most 6)`); }
+{ const same = ['arena', 'beast', 'boss'].map((m) => results.music[m + '@0.5']).filter(Boolean).map((a) => a.lufs); if (same.length > 1 && Math.max(...same) - Math.min(...same) > 3) bad('music modes differ by more than 3 dB at intensity 0.5'); }
+for (const [k, a] of Object.entries(results.mix)) { if (a.musicLufs != null && (a.sfxLufs - a.musicLufs < 4 || a.sfxLufs - a.musicLufs > 12)) bad(`mix ${k}: sfx+crowd is ${f1(a.sfxLufs - a.musicLufs)} dB over the music bed (want 4..12)`); if (a.peakDb > -1) bad(`mix ${k} peak ${f1(a.peakDb)} dBFS above -1`); if (a.clip) bad(`mix ${k} clips`); if (a.lufs < -22 || a.lufs > -12) bad(`mix ${k} loudness ${f1(a.lufs)} LUFS outside -22..-12`); }
 writeFileSync(REPORT, L.join('\n') + '\n');
 if (SAVE_BASE) { writeFileSync(BASE_FILE, JSON.stringify({ sfx: results.sfx, music: results.music, mix: results.mix, burst: results.burst && { alive: results.burst.alive, unstopped: results.burst.unstopped, nodesCreated: results.burst.nodesCreated, sources: results.burst.sources, events: results.burst.events, summary: results.burst.summary, an: { peakDb: results.burst.an.peakDb, lufs: results.burst.an.lufs } } }) + '\n'); console.log('baseline saved'); }
 // console summary

@@ -261,12 +261,14 @@
   const bkey = (a, b) => (a < b ? a + '-' + b : b + '-' + a);
   LM.bond = (S, a, b) => (S.bonds && S.bonds[bkey(a, b)]) || 0;
   LM.addBond = (S, a, b, n) => { S.bonds = S.bonds || {}; const k = bkey(a, b); S.bonds[k] = clamp((S.bonds[k] || 0) + n, 0, 100); };
-  LM.teamCtx = (S, glads, stance) => {
+  LM.teamCtx = (S, glads, stance, plan) => {
+    if (stance && typeof stance === 'object') { plan = stance; stance = 'bal'; } // a battle plan in place of the old stance string
     const sy = LM.synergy(glads.map((g) => g.style)); const fx = Object.assign({}, sy.fx);
     if (S && glads.length > 1) { let tot = 0, n = 0; for (let i = 0; i < glads.length; i++) for (let j = i + 1; j < glads.length; j++) { tot += LM.bond(S, glads[i].id, glads[j].id); n++; } const b = (tot / n / 100) * 0.06; fx.atk = (fx.atk || 0) + b; fx.def = (fx.def || 0) + b; }
     const xfx = {};
     if (S) (S.relicOn || []).forEach((id) => { const r = D.RELICS.find((x) => x.id === id); if (r) { if (r.syn) add(fx, r.syn); if (r.xfx) add(xfx, r.xfx); } });
-    return { syn: fx, xfx, stance: stance || 'bal', list: sy.list };
+    const ctx = { syn: fx, xfx, stance: stance || 'bal', list: sy.list }; if (plan) ctx.plan = LM.normPlan(plan, glads);
+    return ctx;
   };
 
   // ---------- rivals, opponents, fixtures ----------
@@ -281,6 +283,20 @@
     return out;
   };
   LM.rivalById = (S, id) => LM.rivals(S, parseInt(id, 10))[parseInt(id.split('-')[1], 10)];
+  /** a matchup never repeats a name ("Valeria vs Valeria"): any opponent whose name equals a fighter on your side, or an opponent already on the card, is renamed
+   *  from D.FIRST (deterministic: the pick starts at a hash of the old name). Mutates the opponent objects in place (they are per-event copies). Returns how many were renamed. */
+  LM.uniqueNames = (mine, opps) => {
+    const used = new Set((mine || []).filter(Boolean).map((g) => g.name)); let n = 0;
+    (opps || []).forEach((o) => {
+      if (!o) return;
+      if (used.has(o.name)) {
+        const taken = (x) => used.has(x) || (opps || []).some((p) => p && p !== o && p.name === x), N = D.FIRST.length, st = (LM.hash(String(o.name)) >>> 0) % N;
+        for (let i = 0; i < N; i++) { const cand = D.FIRST[(st + i) % N]; if (!taken(cand)) { o.name = cand; n++; break; } }
+      }
+      used.add(o.name);
+    });
+    return n;
+  };
   LM.diffMul = (S) => [0.88, 1, 1.12][S && S.opts && S.opts.diff != null ? S.opts.diff : 1];
   LM.diffGold = (S) => [1.1, 1, 1.15][S && S.opts && S.opts.diff != null ? S.opts.diff : 1];
   function mkOpp(S, rv, lvl, power, r, league, rarShift) {
@@ -330,6 +346,94 @@
 
 
   LM.oppStance = (S, o) => ({ hothead: 'agg', ironjaw: 'grd', coolhead: 'cun' }[o.trait] || 'bal');
+
+  // ---------- BATTLE PLAN (chosen before the fight; replaces the old bal/agg/grd/cun pick) ----------
+  // plan = { v: 1, form, roles: { [gladId]: roleId }, prio: index into the foes | null, show: 0..3 }.
+  // Team fights use form + roles + prio (positions, target weights, small stat trades); solo fights use show (Showmanship dial).
+  // Nothing here draws a random number, and a fight started with a plain stance string (hordes, hunts, old calls) never sees any of it.
+  // No role or formation counters another: every role trades a little of one thing for another, and the numbers are printed in the UI.
+  const MODS_LAB = { hp: 'HP', atk: 'damage', def: 'armor', ms: 'speed', eva: 'dodge', crit: 'crit chance' };
+  const pct = (v) => `${v > 0 ? '+' : '-'}${Math.round(Math.abs(v) * 100)}%`;
+  const modLine = (mods, sign) => Object.keys(mods).filter((k) => (mods[k] > 0) === (sign > 0) && mods[k] !== 0).map((k) => `${pct(mods[k])} ${MODS_LAB[k]}`).join(', ');
+  LM.ROLES = {
+    free: { n: 'Fighter', d: 'Fights as the moment asks. No job, no trade.', mods: {}, dx: 0, ky: 1, gainTxt: '', costTxt: '' },
+    vanguard: { n: 'Vanguard', d: 'Stands in front and draws the foe. Fights what is in front of them.', mods: { hp: 0.1, def: 0.08, atk: -0.06 }, dx: 1.4, ky: 1, gainTxt: 'foes aim at them first', costTxt: '' },
+    flanker: { n: 'Flanker', d: 'Circles wide to the weak or the back line. Fragile.', mods: { ms: 0.12, crit: 0.05, hp: -0.06, def: -0.04 }, dx: -0.4, ky: 1.35, gainTxt: 'hunts the weak and the back line', costTxt: '' },
+    anchor: { n: 'Anchor', d: 'Holds near the team and covers an ally who is being hit.', mods: { def: 0.15, hp: 0.07, atk: -0.07 }, dx: -0.8, ky: 1, gainTxt: 'covers allies under attack', costTxt: 'will not chase far from the team' },
+    hunter: { n: 'Hunter', d: 'Goes for the priority target and ignores the rest unless they get close.', mods: { atk: 0.08, def: -0.08 }, dx: 0, ky: 1, gainTxt: 'never loses the priority target', costTxt: 'ignores other foes until they are close' },
+    skirmisher: { n: 'Skirmisher', d: 'Keeps its range and steps back when pressed.', mods: { eva: 0.08, hp: -0.04, atk: -0.03 }, dx: -1.6, ky: 1, gainTxt: 'keeps distance while the blow recovers', costTxt: '' },
+  };
+  LM.ROLE_IDS = Object.keys(LM.ROLES);
+  for (const id of LM.ROLE_IDS) { const R = LM.ROLES[id]; R.gain = [modLine(R.mods, 1), R.gainTxt].filter(Boolean).join(', ') || 'No change'; R.cost = [modLine(R.mods, -1), R.costTxt].filter(Boolean).join(', ') || 'No change'; }
+  // formations: pos(i, n) is the starting spot of slot i for side A (x is mirrored for side B); roles(n) are the default roles per slot
+  const fsp = (n) => (n > 2 ? 4.3 : 3.6);
+  LM.FORMS = {
+    line: { n: 'Line', d: 'An even front and no jobs. Plain and steady: everyone fights in step.', mods: { atk: 0.03, def: 0.03 }, pos: (i, n) => ({ x: -6.4, y: (i - (n - 1) / 2) * fsp(n) }), roles: (n) => Array(n).fill('free') },
+    wedge: { n: 'Wedge', d: 'One fighter leads and the others follow behind. Hits the front hard.', mods: { def: -0.04 }, pos: (i, n) => { const tip = Math.floor((n - 1) / 2); return { x: -5.2 - Math.abs(i - tip) * 1.6, y: (i - (n - 1) / 2) * fsp(n) * 0.75 }; }, roles: (n) => Array.from({ length: n }, (_, i) => (i === Math.floor((n - 1) / 2) ? 'vanguard' : n > 2 && i % 2 ? 'flanker' : 'hunter')) },
+    pincer: { n: 'Pincer', d: 'Spread wide to catch the foe from two sides. Risky if the flanks are caught alone.', mods: { atk: 0.04 }, pos: (i, n) => ({ x: i === (n - 1) / 2 ? -7.4 : -6.8, y: n === 2 ? (i ? 4.2 : -4.2) : (i - (n - 1) / 2) * 5.4 }), roles: (n) => Array.from({ length: n }, (_, i) => (n === 2 ? (i ? 'hunter' : 'flanker') : i === (n - 1) / 2 ? 'hunter' : 'flanker')) },
+    turtle: { n: 'Turtle', d: 'Tight together behind one shield. Slow to hurt, slow to win.', mods: { def: 0.02 }, pos: (i, n) => ({ x: -7.4, y: (i - (n - 1) / 2) * 2.4 }), roles: (n) => Array.from({ length: n }, (_, i) => (i === Math.floor((n - 1) / 2) ? 'vanguard' : 'anchor')) },
+  };
+  LM.FORM_IDS = Object.keys(LM.FORMS);
+  for (const id of LM.FORM_IDS) { const F0 = LM.FORMS[id]; F0.gain = modLine(F0.mods, 1); F0.cost = modLine(F0.mods, -1); } // the team-wide trade of a formation, printed under its description
+  // the priority target: the whole side goes for it first (it becomes F.foc). The price: the marked fighter's side closes ranks, so it takes `guard` of the damage while it is the mark.
+  LM.PRIO = { guard: 0.94, gain: 'Everyone goes for it first; when it falls the team picks the weakest left', cost: 'The marked foe takes 6% less damage (its side closes ranks)' };
+  // Showmanship (solo fights). Every number is printed on the plan sheet; hy = hit hype multiplier, wd = wind-up multiplier, gap/cast = a flourish every gap seconds that costs cast seconds
+  LM.SHOW = [
+    { id: 'eff', n: 'Efficient', d: 'Straight to the point. No flourish, no risk.', fame: 0, hy: 1, fan: 0, atk: 0, def: 0, wd: 1, gap: 0, cast: 0, wound: 0 },
+    { id: 'showman', n: 'Showman', d: 'A salute here, a twirl there. The crowd likes you for it.', fame: 0.12, hy: 1.25, fan: 2, atk: 0.01, def: 0, wd: 1.1, gap: 8, cast: 0.3, wound: 0.15 },
+    { id: 'pleaser', n: 'Crowd-pleaser', d: 'Long wind-ups, big gestures, the stands on their feet.', fame: 0.28, hy: 1.5, fan: 4, atk: 0.03, def: 0.01, wd: 1.3, gap: 7.5, cast: 0.4, wound: 0.3 },
+    { id: 'flourish', n: 'Flourish', d: 'Everything for the show. A great story if it works.', fame: 0.5, hy: 1.8, fan: 7, atk: 0.06, def: 0.03, wd: 1.5, gap: 6.5, cast: 0.5, wound: 0.5 },
+  ];
+  for (const S0 of LM.SHOW) {
+    S0.gain = S0.fame ? `+${Math.round(S0.fame * 100)}% fame, crowd hype x${S0.hy}, +${S0.fan} fans on a fight` : 'No change';
+    S0.cost = S0.atk ? `-${Math.round(S0.atk * 100)}% damage${S0.def ? `, -${Math.round(S0.def * 100)}% armor` : ''}, ${S0.cast} s pose every ${S0.gap} s, blows land ${Math.round((S0.wd - 1) * 100)}% later, +${Math.round(S0.wound * 100)}% wound risk` : 'No change';
+  }
+  /** fixed-width text of a plan for hashing */
+  LM.planKey = (p) => (!p ? '' : typeof p === 'string' ? p : `${p.form}|${Object.keys(p.roles || {}).sort().map((k) => k + ':' + p.roles[k]).join(',')}|${p.prio == null ? '-' : p.prio}|${p.show | 0}`);
+  const STYLE_ROLE = { murmillo: 'vanguard', hoplomachus: 'anchor', retiarius: 'skirmisher', thraex: 'flanker', dimachaerus: 'hunter' };
+  const TRAIT_ROLE = { hothead: 'hunter', ironjaw: 'vanguard', coolhead: 'skirmisher', underdog: 'flanker', grudge: 'hunter', bloodlust: 'hunter' };
+  const pickForm = (styles) => {
+    const c = (a) => styles.filter((s) => a.includes(s)).length;
+    if (styles.length < 2) return 'line'; if (c(['murmillo', 'hoplomachus']) >= 2) return 'turtle'; if (c(['thraex', 'dimachaerus']) >= 2) return 'pincer'; if (styles.includes('murmillo')) return 'wedge'; return 'line';
+  };
+  /** make any plan-like value a complete, valid plan for these fighters (roles for everyone, form known, show only for a solo fighter) */
+  LM.normPlan = (plan, glads) => {
+    const p = plan && typeof plan === 'object' ? plan : {}, n = glads.length, form = LM.FORMS[p.form] ? p.form : 'line', pre = LM.FORMS[form].roles(n), roles = {};
+    glads.forEach((g, i) => { const r = p.roles && p.roles[g.id]; roles[g.id] = n > 1 && LM.ROLES[r] ? r : n > 1 ? pre[i] : 'free'; });
+    return { v: 1, form: n > 1 ? form : 'line', roles, prio: Number.isInteger(p.prio) && p.prio >= 0 ? p.prio : null, show: n === 1 ? Math.max(0, Math.min(3, p.show | 0)) : 0 };
+  };
+  /** the suggested plan the sheet pre-fills: the formation that fits the styles on the field (with that formation's own roles) and the softest foe as the mark */
+  LM.defaultPlan = (S, gl, opps) => LM.normPlan({ form: pickForm(gl.map((g) => g.style)), roles: {}, prio: gl.length > 1 && opps && opps.length > 1 ? LM.suggestFoc(opps) : null, show: 0 }, gl);
+  /** the foe a team should go for first, from what the crowd can see (style and level): the one who will fall fastest */
+  LM.suggestFoc = (foes) => { const soft = (g) => D.STYLES[g.style].mul.hp * (50 + 6 * g.lvl); return foes.reduce((b, g, i) => (soft(g) < soft(foes[b]) ? i : b), 0); };
+  /** a plan for the AI side, from its styles and traits (deterministic, no random draws). A team always picks a priority target (softest, or the hardest hitter for a hot head). */
+  LM.oppPlan = (S, opps, gl) => {
+    if (!opps.length || opps.some((o) => o.beast)) return null;
+    const n = opps.length, form = pickForm(opps.map((o) => o.style)), pre = LM.FORMS[form].roles(n), roles = {};
+    opps.forEach((o, i) => { roles[o.id] = n > 1 ? TRAIT_ROLE[o.trait] || (form === 'line' ? STYLE_ROLE[o.style] : pre[i]) || 'free' : 'free'; });
+    let prio = null;
+    if (n > 1 && gl && gl.length > 1) {
+      const lead = opps[0].trait, hp = gl.map((g) => LM.derive(g, { noperf: true })); // the AI reads real stats: hot heads go for the hardest hitter, everyone else for the softest
+      prio = lead === 'hothead' || lead === 'grudge' ? hp.reduce((b, d, i) => (d.atk > hp[b].atk ? i : b), 0) : hp.reduce((b, d, i) => (d.hp < hp[b].hp ? i : b), 0);
+    }
+    return { v: 1, form: n > 1 ? form : 'line', roles, prio, show: n === 1 && opps[0].trait === 'showman' ? 1 : 0 };
+  };
+  /** old pre-fight stances (bal / agg / grd / cun) as a plan, so an old entry or save opens on something sensible */
+  LM.planFromStance = (stance, glads, opps) => {
+    const base = LM.defaultPlan(null, glads, opps || []); if (glads.length < 2 || stance === 'bal' || !LM.STANCE[stance]) return base;
+    return LM.normPlan({ form: { agg: 'wedge', grd: 'turtle', cun: 'pincer' }[stance] || 'line', roles: {}, prio: null }, glads);
+  };
+  /** the plan of a stored entry: a saved plan first, else the old stance mapped */
+  LM.entryPlan = (S, key, glads, opps) => { const e = S.entries[key]; if (!e) return LM.defaultPlan(S, glads, opps); return e.plan ? LM.normPlan(e.plan, glads) : LM.planFromStance(e.stance, glads, opps); };
+  /** both sides' plans for one fight: pa (yours, with a valid priority) and pb (the AI's). Plain stance strings give no plans. */
+  LM.fightPlans = (S, gl, opps, stance) => {
+    if (!stance || typeof stance !== 'object') return { pa: null, pb: null };
+    const pa = LM.normPlan(stance, gl); if (!(pa.prio < opps.length)) pa.prio = null;
+    const pb = LM.oppPlan(S, opps, gl); if (pb && !(pb.prio < gl.length)) pb.prio = null;
+    return { pa, pb };
+  };
+  /** a short threat grade for an opponent card: 0 low, 1 mid, 2 high, compared with the rest of the field */
+  LM.threatOf = (g, field) => { const t = (x) => { const d = LM.derive(x, { noperf: true }); return d.atk * (1 + d.crit) * Math.sqrt(d.hp); }, v = t(g), all = field.map(t), mx = Math.max(...all), mn = Math.min(...all); return mx === mn ? 1 : v >= mn + (mx - mn) * 0.66 ? 2 : v <= mn + (mx - mn) * 0.33 ? 0 : 1; };
 
   // ---------- the bookmaker: public odds know level and style only ----------
   LM.publicOdds = (gl, opps) => {
@@ -428,7 +532,8 @@
     if (ids.length !== LM.teamSize(ev) && ev.kind !== 'tourney' && ev.kind !== 'grand') return 'Wrong team size';
     if (S.gold < ev.fee) return 'Not enough gold for the entry fee';
     for (const id of ids) { const g = S.glads.find((x) => x.id === id); if (!g || g.inj > 0) return 'A fighter is injured'; if (LM.busy(S, g, ev.week)) return 'A fighter is already entered that week'; }
-    S.gold -= ev.fee; S.entries[ev.key] = { ids, stance: stance || 'bal', paid: ev.fee }; return '';
+    const pl = stance && typeof stance === 'object' ? stance : null; // a battle plan may ride on the entry (the old stance string still works)
+    S.gold -= ev.fee; S.entries[ev.key] = { ids, stance: pl ? 'bal' : (stance || 'bal'), paid: ev.fee }; if (pl) S.entries[ev.key].plan = pl; return '';
   };
   LM.withdraw = (S, key) => { const e = S.entries[key]; if (!e) return; S.gold += e.paid; delete S.entries[key]; };
 
@@ -461,6 +566,7 @@
     } else if (res.win) { gold = ev.purse; fame = ev.fame; } else { gold = ev.purse * 0.1; fame = ev.fame * 0.2; }
     if (ev.kind === 'duel' && res.win && LM.isRevenge(S, ev)) { gold *= 1.25; fame *= 1.25; rep.notes.push('Revenge bonus +25%'); }
     fame *= 0.85 + Math.min(res.hype || 0, 100) / 300;
+    const sh = LM.SHOW[Math.max(0, Math.min(3, res.show | 0))]; if (sh.fame) { fame *= 1 + sh.fame; rep.notes.push(`Showmanship (${sh.n}): +${Math.round(sh.fame * 100)}% fame, +${sh.fan} fans${res.win ? '' : ' (half in defeat)'}`); }
     let ft = 0; glads.forEach((g) => { ft += (D.TRAITS[g.trait].fame || 0); ['weapon', 'shield', 'armor', 'helm', 'charm'].forEach((s) => { const it = g.gear[s]; if (it) it.af.forEach((a) => { if (a.id === 'showy') ft += 0.1 * a.v; }); }); });
     fame *= 1 + ft / glads.length + LM.facPerks(S).fame + (LM.fest(S, ev.week) === 'mars' ? 0.25 : 0);
     const perks = S.perks || {}; gold *= LM.diffGold(S); gold *= 1 + 0.1 * (perks.gold || 0) + (LM.fest(S, ev.week) === 'jupiter' ? 0.3 : 0) + LM.facPerks(S).gold + LM.relicGold(S) + (glads.some((g) => g.rune && g.rune.k === 'first') ? 0.1 : 0) + (res.win || res.place ? LM.bfx(S, 'stands').v : 0); fame *= 1 + (res.win ? LM.bfx(S, 'stands').v * 0.5 : 0);
@@ -468,13 +574,13 @@
     const oppLvl = Math.max(...ev.opps.map((o) => o.lvl));
     const big = ev.kind === 'tourney' || ev.kind === 'grand' ? 1.6 : 1;
     glads.forEach((g) => {
-      const win = res.win; LM.favGain(g, win, res.hype || 0); const xp = Math.round((win ? 24 + oppLvl * 5 : 12 + oppLvl * 2) * big);
+      const win = res.win; LM.favGain(g, win, res.hype || 0, sh.fan); const xp = Math.round((win ? 24 + oppLvl * 5 : 12 + oppLvl * 2) * big);
       const up = LM.addXp(g, xp); rep.xp.push({ id: g.id, xp, up }); if (up.length) { rep.lvl.push({ id: g.id, to: up[up.length - 1] }); LM.diary(S, g, `Reached level ${up[up.length - 1]}.`); }
       LM.diary(S, g, `${win ? 'Won' : 'Lost'}: ${ev.title || ev.kind}.`);
       if (win) { g.rec.w++; g.sw = (g.sw || 0) + 1; g.mo = clamp(g.mo + 10, 0, 100); } else { g.rec.l++; g.mo = clamp(g.mo - 8, 0, 100); }
       g.fame += Math.round(fame / glads.length); g.en = clamp(g.en - 25, 0, 100);
       const hpf = res.hpf && res.hpf[g.id] != null ? res.hpf[g.id] : win ? 0.6 : 0.2;
-      let ic = (win ? 0.05 : 0.18) + (hpf < 0.25 ? 0.12 : 0); ic *= 1 - 0.12 * LM.bfx(S, 'infirmary').l;
+      let ic = (win ? 0.05 : 0.18) + (hpf < 0.25 ? 0.12 : 0); ic *= 1 - 0.12 * LM.bfx(S, 'infirmary').l; ic *= 1 + sh.wound; // showing off leaves you open
       if (rnd() < ic) { g.inj = 1 + Math.floor(rnd() * 3); rep.inj.push({ id: g.id, w: g.inj }); }
     });
     for (let i = 0; i < glads.length; i++) for (let j = i + 1; j < glads.length; j++) LM.addBond(S, glads[i].id, glads[j].id, 4);
@@ -498,16 +604,84 @@
     if (wonAny) { LM.note(S, 'win', { styles: glads.map((g) => g.style), kind: ev.kind }); if (ev.kind === 'tourney' || ev.kind === 'grand') { S.stats.tourneys++; LM.note(S, 'tourney'); if (ev.kind === 'grand' && ev.league === 3) S.flags.imperial = true; } if (ev.kind === 'team') LM.note(S, 'team'); if (res.odds != null && res.odds < 0.4) LM.note(S, 'upset'); }
     return rep;
   };
-  LM.mercy = (S, ev, rep, choice) => {
-    if (choice === 'mercy') {
-      const f = Math.round(rep.fame * 0.2) + 2; S.fame += f; rep.fame += f; S.stats.spares++; LM.note(S, 'mercy'); LM.facGain(S, 'sen', 6); LM.facGain(S, 'ple', 2);
-      const o = ev.opps[0]; const cap = LM.rosterCap(S);
-      if (ev.kind === 'duel' && S.glads.length < cap && rnd() < 0.3) {
-        const g = JSON.parse(JSON.stringify(o)); g.id = S.nextId++; g.act = 'rest'; g.en = 100; g.mo = 80; g.inj = 0; g.rv = null; g.color = null; g.rec = { w: 0, l: 0 }; g.fame = 0; delete g.story; LM.assignStory(g); S.glads.push(g); return { f, joined: g };
-      }
-      return { f };
+  // ---------- FATE: what becomes of the beaten foe (kill / spare / ransom / showboat) ----------
+  // The sim never kills the last foe by itself: the fight ends with him DOWN and the choice resolves him. The numbers below are exact: the decision
+  // panel in the fight view shows them (LM.fateOffers) and LM.fate applies the very same ones, so the results sheet always matches.
+  LM.FATE_KINDS = { duel: 1, tourney: 1, grand: 1, team: 1 };   // hunts, pit floors, horde waves, bounties, champions and sparring keep their own endings
+  LM.fateOk = (ev, foe) => !!(ev && LM.FATE_KINDS[ev.kind] && foe && !foe.beast);
+  /** base fame and purse of ONE bout of this event (a tournament or team purse is for the whole event, so those use the league's single-bout numbers) */
+  LM.fateBase = (ev) => { const L = D.LEAGUES[Math.max(0, Math.min(3, ev.league | 0))]; return { fame: ev.kind === 'duel' && ev.fame ? ev.fame : L.fameWin, purse: ev.kind === 'duel' && ev.purse ? ev.purse : L.purse }; };
+  /** who would pay for him: the rival ludus he fights for (matched by name to one of the four rival schools when it is one of them) */
+  LM.fateOwner = (S, foe) => {
+    const name = foe && !foe.gh && (foe.lud || foe.ludus); if (!name) return null;
+    const sch = LM.ludiOf && S ? LM.ludiInit(S).list.find((l) => l.name === name) : null;
+    return { name, school: sch || null, wealth: sch ? clamp(sch.str, 0.85, 1.2) : 1 };
+  };
+  LM.vendetta = (S, rv) => { const r = rv && S && S.rivals && S.rivals[rv]; return !!(r && r.vend && S.week - r.vend <= 12); };
+  /** chance (0..1) that a spared foe asks to join you: 30% base, Barracks +2% per level, a humble foe more, a proud one less, a showman in the ludus helps; 0 when the barracks are full */
+  LM.fateJoin = (S, foe) => {
+    if (!foe || foe.beast || S.glads.length >= LM.rosterCap(S)) return 0;
+    let p = 0.3 + 0.02 * LM.bfx(S, 'barracks').l; const top = S.glads.reduce((a, g) => Math.max(a, g.lvl), 1);
+    p += foe.lvl <= top ? 0.06 : foe.lvl > top + 2 ? -0.06 : 0;
+    const T = foe.trait; if (T === 'hothead' || T === 'grudge' || T === 'bloodlust') p -= 0.08; else if (T === 'frugal' || T === 'underdog' || T === 'coolhead') p += 0.05;
+    if (S.glads.some((g) => g.trait === 'showman')) p += 0.04;
+    return Math.round(clamp(p, 0.08, 0.6) * 100) / 100;
+  };
+  const sg = (n) => (n > 0 ? '+' : '') + n;
+  /** the choices for a beaten foe, with exact numbers. ids: kill, spare, ransom (when someone would pay) or show (the crowd tips instead). def = 'spare' */
+  LM.fateOffers = (S, ev, foe) => {
+    if (!LM.fateOk(ev, foe)) return null;
+    const B = LM.fateBase(ev), own = LM.fateOwner(S, foe), sch = own && own.school, tmp = LM.sponsorHas && LM.sponsorHas(S, 'temple') ? 1 : 0, vend = !!(foe.rv && !foe.gh);
+    const kill = { id: 'kill', label: 'Kill him', fame: Math.round(B.fame * 0.4) + 4, gold: 0, hype: 15, fac: { sen: -5, ple: 4 }, temple: tmp ? -8 : 0, ludus: sch ? -10 : 0, vend, join: 0 };
+    const spare = { id: 'spare', label: 'Spare him', fame: Math.round(B.fame * 0.2) + 2, gold: 0, hype: 6, fac: { sen: 6, ple: 2 }, temple: tmp ? 3 : 0, ludus: sch ? 3 : 0, vend: false, join: LM.fateJoin(S, foe) };
+    const third = own
+      ? { id: 'ransom', label: 'Take the ransom', fame: Math.round(B.fame * 0.05) + 1, gold: Math.max(20, Math.round((B.purse * 0.45 + foe.lvl * 8) * own.wealth)), hype: 0, fac: { mer: 4, ple: -1 }, temple: 0, ludus: sch ? 6 : 0, vend: false, join: 0 }
+      : { id: 'show', label: 'Showboat', fame: 0, gold: Math.round(B.purse * 0.2) + 5, hype: 4, fac: { mer: 5 }, temple: 0, ludus: 0, vend: false, join: 0 };
+    const opts = [kill, spare, third];
+    for (const o of opts) {
+      o.gain = []; o.cost = [];
+      if (o.fame) o.gain.push(`${sg(o.fame)} fame`); if (o.gold) o.gain.push(`${sg(o.gold)} gold`); if (o.hype) o.gain.push(`Crowd hype ${sg(o.hype)}`);
+      const fl = [['sen', 'Senate'], ['ple', 'Plebs'], ['mer', 'Merchants']];
+      for (const [k, nm] of fl) { const v = o.fac[k]; if (v) (v > 0 ? o.gain : o.cost).push(`${nm} ${sg(v)}`); }
+      if (o.temple) (o.temple > 0 ? o.gain : o.cost).push(`Temple of Mars regard ${sg(o.temple)}`);
+      if (o.ludus) (o.ludus > 0 ? o.gain : o.cost).push(`${own.name} regard ${sg(o.ludus)}`);
+      if (o.join) o.gain.push(`${Math.round(o.join * 100)}% he joins your ludus`);
+      if (o.id === 'kill') { o.cost.push('No recruit, no ransom'); if (o.vend) o.cost.push('Vendetta: his school hits 8% harder'); }
+      if (o.id === 'spare') { o.cost.push('Less fame than a kill'); if (!o.join) o.cost.push(S.glads.length >= LM.rosterCap(S) ? 'Barracks full: he cannot join' : 'No recruit chance'); }
+      if (o.id === 'ransom') o.cost.push('He goes home: no recruit chance');
+      if (o.id === 'show') o.cost.push('No fame bonus, no recruit chance');
     }
-    const gd = Math.round(rep.gold * 0.2) + 5; S.gold += gd; rep.gold += gd; LM.facGain(S, 'mer', 5); return { gd };
+    third.why = own ? '' : 'Nobody would pay for him, so the crowd tips you instead';
+    return { foe: { name: foe.name, style: foe.style, lvl: foe.lvl, ludus: own ? own.name : '' }, opts, def: 'spare', owner: own };
+  };
+  /** apply a decision. rep (optional) is the settle report: its fame / gold totals and notes are updated. No choice or an unknown one means spare. Returns the applied result. */
+  LM.fate = (S, ev, rep, choice, foe) => {
+    const off = LM.fateOffers(S, ev, foe); if (!off) return null;
+    const o = off.opts.find((x) => x.id === choice) || off.opts[1], own = off.owner, lines = [];
+    S.fame += o.fame; S.gold += o.gold; if (rep) { rep.fame = (rep.fame || 0) + o.fame; rep.gold = (rep.gold || 0) + o.gold; }
+    for (const k in o.fac) LM.facGain(S, k, o.fac[k]);
+    if (o.temple && LM.sponsorRel) LM.sponsorRel(S, 'temple', o.temple);
+    if (o.ludus && own && own.school) own.school.rel = clamp(own.school.rel + o.ludus, -100, 100);
+    S.stats = S.stats || {};
+    if (o.id === 'kill') {
+      S.stats.kills = (S.stats.kills || 0) + 1;
+      if (o.vend) { S.rivals = S.rivals || {}; const r0 = S.rivals[foe.rv] || { w: 0, l: 0, last: '' }; r0.vend = S.week; S.rivals[foe.rv] = r0; }
+    } else if (o.id === 'spare') { S.stats.spares++; LM.note(S, 'mercy'); }
+    else if (o.id === 'ransom') S.stats.ransoms = (S.stats.ransoms || 0) + 1;
+    let joined = null;
+    if (o.id === 'spare' && o.join && rnd() < o.join) {
+      const g = JSON.parse(JSON.stringify(foe)); g.id = S.nextId++; g.act = 'rest'; g.en = 100; g.mo = 80; g.inj = 0; g.rv = null; delete g.lud; delete g.ludus; delete g.gh; g.color = null; g.rec = { w: 0, l: 0 }; g.fame = 0; delete g.story; LM.assignStory(g); S.glads.push(g); joined = g;
+    }
+    const head = o.id === 'kill' ? `You killed ${foe.name}.` : o.id === 'spare' ? `You spared ${foe.name}.` : o.id === 'ransom' ? `${own.name} paid ${o.gold} gold to keep ${foe.name} alive.` : `You played to the crowd over ${foe.name}.`;
+    lines.push(head, ...o.gain.filter((x) => !/he joins/.test(x)), ...o.cost.filter((x) => /Senate|Plebs|Merchants|regard|Vendetta/.test(x)));
+    if (rep && rep.notes) rep.notes.push(head);
+    return { id: o.id, fame: o.fame, gold: o.gold, hype: o.hype, joined, lines, head, name: foe.name, gain: o.gain.filter((x) => !/he joins/.test(x)), cost: o.cost };
+  };
+  LM.fateHype = (choice) => ({ kill: 15, spare: 6, show: 4, ransom: 0 }[choice] || 0);   // the same numbers as in the offers (hype shown on the buttons)
+  /** old two-button API (kept for old callers and tests): 'mercy' spares, anything else showboats */
+  LM.mercy = (S, ev, rep, choice) => {
+    const o = ev.opps[0], r = LM.fate(S, ev, rep, choice === 'mercy' ? 'spare' : 'show', o); if (!r) return choice === 'mercy' ? { f: 0 } : { gd: 0 };
+    return choice === 'mercy' ? { f: r.fame, joined: r.joined } : { gd: r.gold };
   };
 
   // ---------- weekly economy ----------
@@ -725,7 +899,7 @@
   };
   LM.treatCost = (S, kind) => (kind === 'doc' ? 60 + 25 * LM.maxLeague(S) : 20 + 10 * LM.maxLeague(S));
   LM.favMul = (glads) => 1 + 0.2 * (glads.reduce((a, g) => a + (g.fav || 0), 0) / Math.max(1, glads.length)) / 100;
-  LM.favGain = (g, win, hype) => { g.fav = clamp((g.fav || 0) + (win ? (hype >= 100 ? 10 : 6) : -4), 0, 100); };
+  LM.favGain = (g, win, hype, show) => { g.fav = clamp((g.fav || 0) + (win ? (hype >= 100 ? 10 : 6) + (show || 0) : -4 + (show || 0) / 2), 0, 100); };
   LM.bountyReady = (S) => S.week >= 2 && S.bountyWeek !== S.week;
   LM.bountyOpp = (S, g) => { const o = LM.champOpp(S, g); o.nick = 'Outlaw'; o.ludus = 'Wanted'; o.id = 'bounty'; return o; };
   LM.bountyResult = (S, win) => {
@@ -974,7 +1148,7 @@
       v: 1, name: o.name || 'Ludus Maximus', color: o.color || 0, seed: Math.floor(rnd() * 1e9).toString(36), week: 1, season: 1,
       gold: 250 + 150 * (perks.start || 0), fame: 0, laurels: o.laurels || 0, perks, rows: 2, plots: new Array(16).fill(null), glads: [], nextId: 1, items: [],
       fac: { sen: 0, mer: 0, ple: 0 }, sl: { fame: 0, wins: 0, losses: 0, tour: 0 }, runes: { k: D.RUNE_START.k.slice(), m: D.RUNE_START.m.slice() }, relics: [], relicOn: [], entries: {}, menu: 'barley', rivals: {}, contracts: [], legends: o.legends || [], bonds: {}, market: null, recruits: null, pendingEv: null,
-      stats: { fights: 0, wins: 0, losses: 0, tourneys: 0, spares: 0, weeks: 0, contracts: 0 }, flags: o.flags || {}, ascensions: o.ascensions || 0, sound: o.sound !== false,
+      stats: { fights: 0, wins: 0, losses: 0, tourneys: 0, spares: 0, kills: 0, ransoms: 0, weeks: 0, contracts: 0 }, flags: o.flags || {}, ascensions: o.ascensions || 0, sound: o.sound !== false,
     };
     S.plots[6] = { b: 'kitchen', l: 1 }; S.plots[5] = { b: 'barracks', l: 1 + Math.min(1, perks.start || 0) }; S.plots[2] = { b: 'palaestra', l: 1 };
     LM.fillContracts(S); LM.ensureShops(S); return S;

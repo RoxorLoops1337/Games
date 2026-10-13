@@ -1,8 +1,8 @@
 // Building screen: build menu for an empty plot, level table / synergy / upgrade for a built plot, buy land for locked rows.
-import { U, h, D, L, fmt, openScreen, sec, card, row, col, note, hint, kv, medal, pill, goldPill, famePill, empty, actions } from './sk.js';
+import { U, h, D, L, fmt, openScreen, sec, card, row, col, note, hint, kv, medal, pill, goldPill, famePill, empty, actions, meter } from './sk.js';
 import { legendsSheet } from './legacy.js';
 
-const ICON = { barracks: 'roster', palaestra: 'sword', kitchen: 'heart', bath: 'duststorm', infirmary: 'unbreakable', forge: 'gear', market: 'market', scout: 'scroll', sparring: 'bladedance', stands: 'arena', shrine: 'fame', hall: 'star' };
+export const ICON = { barracks: 'roster', palaestra: 'sword', kitchen: 'heart', bath: 'duststorm', infirmary: 'unbreakable', forge: 'gear', market: 'market', scout: 'scroll', sparring: 'bladedance', stands: 'arena', shrine: 'fame', hall: 'star' };
 const FLAVOR = {
   barracks: 'Narrow cots and iron-barred doors. More beds mean a bigger family of fighters.',
   palaestra: 'The sand yard where every dawn begins with sweat. Better equipment makes every drill count.',
@@ -45,11 +45,11 @@ function miniMap(ctx, cur, onPick) {
     const p = S.plots[i], locked = i >= S.rows * lm.COLS, b = h('button', 'ax-pick' + (i === cur ? ' sel' : ''));
     b.type = 'button'; b.style.cssText = 'flex-direction:column;justify-content:center;gap:2px;min-height:52px;padding:4px 4px;text-align:center';
     if (nb.includes(i)) b.style.boxShadow = 'inset 0 0 0 2px rgba(91,122,58,.9)';
-    const ic = h('span', '', U.icon(locked ? 'lock' : p ? ICON[p.b] || 'ludus' : 'star', 22));
+    const ic = h('span', '', U.icon(locked ? 'lock' : p ? (lm.moving(S, i) ? 'hammer' : ICON[p.b] || 'ludus') : 'star', 22));
     if (!p) ic.style.opacity = '.45';
     const lab = h('span', 'ax-sub', locked ? 'Locked' : p ? `${D.BUILD[p.b].n}` : 'Empty'); lab.style.cssText = 'font-size:11px;line-height:1.15;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap';
     b.append(ic, lab); if (p) b.append(h('small', 'ax-num', 'L' + p.l)); b.style.opacity = locked ? '.6' : '';
-    b.setAttribute('aria-label', locked ? `Plot ${i + 1}, locked` : p ? `${D.BUILD[p.b].n}, level ${p.l}` : `Plot ${i + 1}, empty`);
+    b.setAttribute('aria-label', locked ? `Plot ${i + 1}, locked` : p ? `${D.BUILD[p.b].n}, level ${p.l}${lm.moving(S, i) ? ', under construction' : ''}` : `Plot ${i + 1}, empty`);
     b.onclick = () => onPick(i); grid.append(b);
   }
   return card([h('div', 'ax-row', [h('div', 'ax-name', 'The grounds'), h('span', 'ax-grow'), cur >= 0 ? pill('Green edge: neighbors', { tone: 'good', tip: PARTNER_TIP, tipTitle: 'Neighbors' }) : null]), grid]);
@@ -58,6 +58,7 @@ function miniMap(ctx, cur, onPick) {
 function overview(ctx, root) {
   const S = ctx.S, built = S.plots.filter(Boolean).length;
   root.append(card([row([medal('ludus', 'dark big'), col([h('div', 'ax-name', S.name || 'Your ludus'), note(`${built} building${built === 1 ? '' : 's'} of ${D.BUILD_IDS.length}. Tap a plot above to build or upgrade. Buildings that sit next to their partners work better.`)], 'ax-grow')])]));
+  if (built) root.append(rearrangeCard(ctx, -1));   // MOVE
 }
 
 // ------------------------------------------------------------------ locked row: buy land
@@ -101,16 +102,18 @@ function buildMenu(ctx, root, i, done) {
 function detail(ctx, root, i, done, goto) {
   const S = ctx.S, lm = L(), p = S.plots[i], B = D.BUILD[p.b], fx = lm.bfx(S, p.b), syn = lm.synAt(S, i), cap = lm.levelCap(S);
   const nextV = p.l < 5 ? B.v[p.l + 1] * (1 + 0.1 * (B.syn ? syn : 0)) : 0, cost = p.l < 5 ? lm.buildCost(p.b, p.l + 1) : 0;
+  const mv = lm.moving(S, i);   // MOVE
   const pips = h('div', 'ax-lvl', [1, 2, 3, 4, 5].map((l) => h('i', l <= p.l ? 'on' : l > cap ? 'cap' : '')));
   root.append(card([row([medal(ICON[p.b], 'big'), col([h('div', 'ax-name', B.n), pips, note(FLAVOR[p.b])], 'ax-grow'), pill(`Level ${p.l}/5`, { tone: 'gold' })]),
-    kv('Now', B.f(fx.v, p.l)), p.l < 5 ? kv('Next level', B.f(nextV, p.l + 1)) : note('Maximum level reached.')], 'gold'));
+    kv('Now', mv ? 'Paused: under construction' : B.f(fx.v, p.l)), p.l < 5 ? kv('Next level', B.f(nextV, p.l + 1)) : note('Maximum level reached.')], 'gold'));
+  if (mv) root.append(constructionCard(ctx, i, mv, done)); else root.append(rearrangeCard(ctx, i));   // MOVE
 
   // synergy
   root.append(sec('Neighbors'));
   const nbs = lm.neighbors(i), nbNames = nbs.map((n) => S.plots[n]).filter(Boolean);
   const partners = h('div', 'ax-row ax-wrap ax-gap4', B.like.map((x) => {
     const near = nbNames.some((q) => q.b === x), built = lm.plotOf(S, x) >= 0;
-    const el = pill(D.BUILD[x].n, { tone: near ? 'good' : built ? 'warn' : '', ico: near ? 'check' : undefined, tip: near ? 'Next to this building: bonus active.' : built ? 'Built elsewhere. Moving is not possible, but new rows may help.' : 'Not built yet. Build it on a plot touching this one.', tipTitle: D.BUILD[x].n });
+    const el = pill(D.BUILD[x].n, { tone: near ? 'good' : built ? 'warn' : '', ico: near ? 'check' : undefined, tip: near ? 'Next to this building: bonus active.' : built ? 'Built elsewhere. Use the Move button to bring one next to the other.' : 'Not built yet. Build it on a plot touching this one.', tipTitle: D.BUILD[x].n });
     if (!built) { el.style.cursor = 'pointer'; }
     return el;
   }));
@@ -129,7 +132,7 @@ function detail(ctx, root, i, done, goto) {
   root.append(tbl);
 
   // upgrade
-  if (p.l < 5) {
+  if (p.l < 5 && !mv) {
     const blocked = p.l >= cap, short = S.gold < cost;
     const up = U.button({ label: blocked ? `Need more fame for level ${p.l + 1}` : `Upgrade to level ${p.l + 1}`, sub: blocked ? undefined : `${fmt(cost)} gold${short ? ` (need ${fmt(cost - S.gold)} more)` : ''}`, icon: blocked ? 'lock' : 'coin', variant: blocked || short ? 'ghost' : 'gold', block: true, onClick: () => {
       const e = lm.upgrade(S, i); if (e) { ctx.sfx('uiError'); return U.toast(e, { kind: 'bad' }); }
@@ -147,7 +150,7 @@ function detail(ctx, root, i, done, goto) {
   if (p.b === 'market') sp.push(U.button({ label: 'Visit market', icon: 'market', variant: 'bronze', onClick: () => ctx.open('market') }));
   if (p.b === 'forge') sp.push(U.button({ label: 'Open armory', icon: 'sword', variant: 'bronze', onClick: () => ctx.open('armory') }));
   if (p.b === 'scout' || p.b === 'stands') sp.push(U.button({ label: 'Open arena', icon: 'arena', variant: 'bronze', onClick: () => ctx.open('arena') }));
-  if (sp.length) root.append(actions(sp));
+  if (sp.length && !mv) root.append(actions(sp));
 }
 
 function menuSheet(ctx, done) {
@@ -165,4 +168,20 @@ function menuSheet(ctx, done) {
     });
   });
   draw(); return scr;
+}
+
+// ------------------------------------------------------------------ MOVE: rearrange entry points and the construction card
+function rearrangeCard(ctx, i) {
+  const S = ctx.S, lm = L(), p = i >= 0 ? S.plots[i] : null, why = i >= 0 ? lm.moveWhySource(S, i) : '';
+  const go = () => { ctx.closeAll(); const r = ctx.game.rearr; if (!r) return U.toast('Rearranging is not available here', { kind: 'bad' }); r.start(i >= 0 ? { lift: i } : {}); };
+  const btn = U.button({ label: i >= 0 ? 'Move this building' : 'Rearrange buildings', icon: 'hammer', variant: why ? 'ghost' : 'bronze', block: true, onClick: () => { if (why) { ctx.sfx('uiError'); return U.toast(why, { kind: 'bad' }); } go(); } });
+  btn.dataset.tut = 'rearrange-open';
+  return card([row([medal('hammer', 'dark'), col([h('div', 'ax-b', i >= 0 ? 'Move or swap' : 'Rearrange your ludus'), note(why || (i >= 0 ? 'Lift this building and set it down on an empty plot, or swap it with another. The crew rebuilds it: you pay gold and its perks pause for 1 to 3 weeks.' : 'Move or swap buildings to build better neighborhoods. Each move costs gold and 1 to 3 weeks of construction. You can undo it in the same week.'))], 'ax-grow')]), btn]);
+}
+function constructionCard(ctx, i, mv, done) {
+  const S = ctx.S, lm = L(), p = S.plots[i], left = Math.max(1, mv.u - S.week), total = Math.max(1, mv.w), un = lm.moveUndoInfo(S, i);
+  const kids = [row([medal('hammer', 'dark'), col([h('div', 'ax-b', 'Under construction'), note(`The crew is rebuilding the ${D.BUILD[p.b].n}. Ready in ${left} week${left > 1 ? 's' : ''}. Its perks are paused and it cannot be upgraded or moved meanwhile.`)], 'ax-grow'), pill(`${left} wk`, { ico: 'hammer', tone: 'warn', tip: 'Weeks until the building is ready.' })]),
+    meter(Math.max(0, S.week - mv.s) + 0.001, total, undefined, 'Construction progress')];
+  if (un.ok) kids.push(U.button({ label: 'Undo the move', sub: `${fmt(un.refund)} gold back, this week only`, icon: 'close', variant: 'ghost', block: true, onClick: () => { const e = lm.moveUndo(S, i); if (e) { ctx.sfx('uiError'); return U.toast(e, { kind: 'bad' }); } ctx.sfx('coin'); U.toast('Move undone', { kind: 'good', ico: 'check' }); done(); } }));
+  return card(kids, 'warn');
 }

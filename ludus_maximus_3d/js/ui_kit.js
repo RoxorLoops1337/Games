@@ -27,6 +27,7 @@ const P = {
   fame: '<path d="M12 21c-5-2-7-6-7-11M12 21c5-2 7-6 7-11M12 21V8"/><path d="M7 8c0-2 1-3 2-3 0 2-1 3-2 3zM17 8c0-2-1-3-2-3 0 2 1 3 2 3zM12 8c-1-1-1-3 0-4 1 1 1 3 0 4z"/>',
   star: '<path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z"/>',
   heart: '<path d="M12 20S4 15 4 9.5A4.2 4.2 0 0 1 12 8a4.2 4.2 0 0 1 8 1.5C20 15 12 20 12 20z"/>',
+  play: '<path d="M7 4.5l12 7.5-12 7.5z" fill="currentColor"/>', // PAUSE MENU: Resume icon (was the sword)
   sword: '<path d="M5 19L17 7l3-3 0 3-3 3L7 21zM4 20l2 2M13 11l3 3"/>',
   shield: '<path d="M12 3l7 3v5c0 5-3 8-7 10-4-2-7-5-7-10V6z"/>',
   ludus: '<path d="M3 21h18M5 21V10l7-5 7 5v11M9 21v-6h6v6"/>',
@@ -36,6 +37,8 @@ const P = {
   scroll: '<path d="M7 4h11a2 2 0 0 1 2 2v1H9v11a2 2 0 0 1-4 0V6a2 2 0 0 1 2-2zM9 10h8M9 14h6"/>',
   skull: '<path d="M5 11a7 7 0 0 1 14 0c0 2-1 3-2 4v3H7v-3c-1-1-2-2-2-4zM9.500 11h.01M14.500 11h.01M10 18v-2M14 18v-2"/>',
   close: '<path d="M6 6l12 12M18 6L6 18"/>',
+  play: '<path d="M8 5l11 7-11 7z"/>',
+  hammer: '<path d="M14 4l6 6-2 2-1-1-3 3-4-4 3-3-1-1z"/><path d="M11 11L4 18l2 2 7-7"/>', // MOVE
   gear: '<circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.600 5.600l2.100 2.100M16.300 16.300l2.100 2.100M5.600 18.400l2.100-2.100M16.300 7.700l2.100-2.100"/>',
   check: '<path d="M5 12l5 5 9-10"/>',
   lock: '<rect x="6" y="11" width="12" height="9" rx="1.500"/><path d="M8.500 11V8a3.500 3.500 0 0 1 7 0v3"/>',
@@ -183,7 +186,7 @@ function onModalKey(e) {
     return;
   }
   const el = top.el;
-  if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); top.close(); return; }
+  if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); if (top.closable === false) { top.sheet.classList.remove('lx-nudge'); void top.sheet.offsetWidth; top.sheet.classList.add('lx-nudge'); return; } top.close(); return; }
   if (e.key === 'Tab') {
     const f = focusables(el); if (!f.length) { e.preventDefault(); return; }
     const first = f[0], last = f[f.length - 1], a = document.activeElement;
@@ -197,26 +200,61 @@ function onModalKey(e) {
     if (spatialFocus(el, a, dir)) e.preventDefault();
   }
 }
-export function modal({ title, body, actions = [], onClose, host = document.body } = {}) {
-  const scrim = h('div', 'lx-scrim'); const sheet = panel({ title, variant: 'marble', cls: 'lx-sheet' });
+// opts: closable (default true; false hides the X and ignores Escape / scrim taps, the sheet says why via `why`), cls (extra sheet classes),
+// dock 'low' (result dialogs: docked to the bottom, light dim, a 'See the finish' peek button collapses it so the scene shows).
+export function modal({ title, body, actions = [], onClose, host = document.body, closable = true, why = '', cls = '', dock = '', peekLabel = 'See the finish' } = {}) {
+  const scrim = h('div', 'lx-scrim' + (dock ? ' lx-dock-' + dock : '')); const sheet = panel({ title, variant: 'marble', cls: 'lx-sheet' + (cls ? ' ' + cls : '') });
   sheet.setAttribute('role', 'dialog'); sheet.setAttribute('aria-modal', 'true'); sheet.tabIndex = -1;
   const tt = sheet.querySelector('.lx-title'); if (tt) { tt.id = 'lx-mt-' + (++modalUid); sheet.setAttribute('aria-labelledby', tt.id); } else sheet.setAttribute('aria-label', 'Dialog');
   const grab = h('i', 'lx-grab'); grab.setAttribute('aria-hidden', 'true'); sheet.prepend(grab);
   sheet.body.append(h('div', 'lx-sheet-scroll', body));
   if (actions.length) sheet.body.append(h('div', 'lx-actions', actions));
-  const x = iconButton('close', 'Close', () => api.close()); x.classList.add('lx-sheet-x'); sheet.append(x);
+  const x = iconButton('close', 'Close', () => api.close()); x.classList.add('lx-sheet-x'); if (closable) sheet.append(x);
+  if (!closable && why) sheet.body.insertBefore(h('p', 'lx-why', why), sheet.body.firstChild);
+  let peeked = false, pk = null;
+  if (dock) { // docked result dialogs: the scene (finisher, winner pose) stays visible; one tap folds the sheet down to its title bar
+    pk = h('button', 'lx-peek'); pk.type = 'button'; pk.setAttribute('aria-expanded', 'true'); pk.append(icon('arena', 16), h('span', '', peekLabel));
+    pk.addEventListener('click', () => { peeked = !peeked; scrim.classList.toggle('lx-peeked', peeked); document.body.classList.toggle('lx-peeked', peeked); pk.setAttribute('aria-expanded', String(!peeked)); pk.lastChild.textContent = peeked ? 'Back to results' : peekLabel; });
+    sheet.append(pk);
+  }
   scrim.append(sheet); host.append(scrim);
   const prevFocus = document.activeElement; let closed = false;
-  const api = { el: scrim, close() {
+  const strips = [];
+  const api = { el: scrim, closable, sheet, dock,
+    /** toast shown INSIDE this sheet (between the body and the action row): it can never cover the title or the text */
+    strip(msg, { kind = 'info', ms = 2600, ico } = {}) {
+      const t = h('div', `lx-toast lx-toast-${kind} lx-toast-strip`, [ico ? icon(ico, 18) : null, h('span', '', msg)]); t.setAttribute('role', 'status');
+      const act = sheet.body.querySelector(':scope > .lx-actions'); sheet.body.insertBefore(t, act || null);
+      while (sheet.body.querySelectorAll(':scope > .lx-toast-strip').length > 2) sheet.body.querySelector(':scope > .lx-toast-strip').remove();
+      const rec = { t, msg, kind, ico, end: performance.now() + ms };
+      rec.timer = setTimeout(() => { t.classList.add('lx-out'); setTimeout(() => { t.remove(); const i = strips.indexOf(rec); if (i >= 0) strips.splice(i, 1); }, reduced() ? 0 : 260); }, ms); strips.push(rec); return t;
+    },
+    close() {
     if (closed) return; closed = true; const i = modalStack.indexOf(api); if (i >= 0) modalStack.splice(i, 1);
+    document.body.classList.toggle('lx-modal-open', modalStack.length > 0); document.body.classList.toggle('lx-dock-open', modalStack.some((m) => m.dock)); if (peeked) document.body.classList.remove('lx-peeked');
+    for (const r of strips.splice(0)) { clearTimeout(r.timer); const left = r.end - performance.now(); if (left > 400) toast(r.msg, { kind: r.kind, ico: r.ico, ms: left }); } // a toast raised just before the sheet closed ("X joined your ludus") still gets seen
     scrim.classList.add('lx-out'); setTimeout(() => scrim.remove(), reduced() ? 0 : 220);
     const nextTop = modalStack[modalStack.length - 1]; if (nextTop) { if (!nextTop.el.contains(document.activeElement)) (focusables(nextTop.el)[0] || nextTop.el).focus?.({ preventScroll: true }); } else prevFocus?.focus?.({ preventScroll: true });
     onClose?.();
   } };
-  modalStack.push(api); if (!kbOn) { kbOn = true; document.addEventListener('keydown', onModalKey, true); }
-  scrim.addEventListener('pointerdown', (e) => { if (e.target === scrim) api.close(); });
-  requestAnimationFrame(() => { scrim.classList.add('lx-in'); if (!scrim.contains(document.activeElement)) (sheet.querySelector('.lx-btn-gold') || x).focus?.({ preventScroll: true }); });
+  { const sc = sheet.querySelector('.lx-sheet-scroll'); // soft fade at the bottom edge while there is more to scroll
+    const upd = () => { if (!sc.isConnected) return; sc.classList.toggle('lx-more', sc.scrollHeight - sc.scrollTop - sc.clientHeight > 6); };
+    sc.addEventListener('scroll', upd, { passive: true }); try { new ResizeObserver(upd).observe(sc); new MutationObserver(upd).observe(sc, { childList: true, subtree: true }); } catch (e) { /* no observers */ } setTimeout(upd, 60); }
+  modalStack.push(api); document.body.classList.add('lx-modal-open'); document.body.classList.toggle('lx-dock-open', modalStack.some((m) => m.dock)); try { document.dispatchEvent(new CustomEvent('lx-modal-open')); } catch (e) { /* old engine */ }
+  if (!kbOn) { kbOn = true; document.addEventListener('keydown', onModalKey, true); }
+  scrim.addEventListener('pointerdown', (e) => { if (e.target === scrim && closable && !dock) api.close(); });
+  // the slide-in class lands on the next frame, or after 70 ms when frames are slow (software GL, a busy device): a sheet must never wait offscreen behind its own dim
+  let shownIn = false; const showIn = () => { if (shownIn) return; shownIn = true; scrim.classList.add('lx-in'); if (!scrim.contains(document.activeElement)) (sheet.querySelector('.lx-btn-gold') || sheet).focus?.({ preventScroll: true }); };
+  requestAnimationFrame(showIn); setTimeout(showIn, 70);
   return api;
+}
+
+// ---------- empty state ----------
+/** guiding empty state: {icon, title, text, how (how to unlock), action: {label, onClick, variant}} -> element. Works on parchment and on night sheets. */
+export function emptyState({ icon: ic = 'scroll', title, text, how, action } = {}) {
+  const el = h('div', 'lx-es', [h('div', 'lx-es-ico', icon(ic, 28)), h('h4', 'lx-es-t', title), text ? h('p', 'lx-es-d', text) : null, how ? h('p', 'lx-es-how', how) : null]);
+  if (action) el.append(button({ label: action.label, variant: action.variant || 'gold', icon: action.icon, onClick: action.onClick }));
+  return el;
 }
 
 // ---------- file download (save export, share) ----------
@@ -228,6 +266,8 @@ export function download(filename, text, type = 'application/json') {
 // ---------- toast ----------
 let toastHost;
 export function toast(msg, { kind = 'info', ms = 2600, ico, host = document.body } = {}) {
+  // layering rule: toasts sit above the HUD and below every modal. While a modal is open the toast moves INTO its sheet (a strip above the buttons), so it never covers a title.
+  const top = modalStack[modalStack.length - 1]; if (top && top.strip && host === document.body && top.el.isConnected) return top.strip(msg, { kind, ms, ico });
   if (!toastHost || !toastHost.isConnected) { toastHost = h('div', 'lx-toasts'); toastHost.setAttribute('role', 'status'); toastHost.setAttribute('aria-live', 'polite'); host.append(toastHost); }
   const t = h('div', `lx-toast lx-toast-${kind}`, [ico ? icon(ico, 20) : null, h('span', '', msg)]);
   toastHost.append(t); while (toastHost.children.length > 3) toastHost.firstChild.remove();
@@ -315,6 +355,31 @@ export function vsSplash({ a, b, league = '', host = document.body, ms = 2200 } 
   host.append(el);
   return new Promise((res) => setTimeout(() => { el.classList.add('lx-out'); setTimeout(() => { el.remove(); res(); }, reduced() ? 0 : 400); }, reduced() ? Math.min(ms, 1200) : ms));
 }
+// FATE: the decision panel over the fight view when the last foe is beaten. {foe:{name,sub,bust}, how, offers:[{id,label,icon,gain[],cost[],why,def}], onPick(id)}.
+// Each option is one big button (1/2/3 on the keyboard, 44px+ tall on touch) with its exact gain and cost lines; the default option is highlighted.
+// Returns the panel element with .fate = {pick(id), focus(), count(n), close()}.
+export function fatePanel({ foe = {}, how = '', offers = [], onPick, title = 'The crowd waits for your word' } = {}) {
+  const el = h('section', 'lx-fate'); el.setAttribute('role', 'group'); el.setAttribute('aria-label', 'Decide the fate of ' + (foe.name || 'the foe'));
+  const head = h('div', 'lx-fate-head', [foe.bust ? h('span', 'lx-fate-bust', foe.bust) : null, h('div', 'lx-fate-who', [h('b', 'lx-engrave', foe.name || ''), h('span', 'lx-fate-sub', foe.sub || ''), h('span', 'lx-fate-how', how)])]);
+  const opts = h('div', 'lx-fate-opts'); let done = false; const btns = [];
+  offers.forEach((o, i) => {
+    const b = h('button', 'lx-fate-opt lx-fate-' + o.id + (o.def ? ' lx-fate-def' : '')); b.type = 'button'; b.dataset.id = o.id; if (o.def) b.dataset.def = '1';
+    const lines = h('span', 'lx-fate-lines', [...(o.gain || []).map((t) => h('i', 'g', t)), ...(o.cost || []).map((t) => h('i', 'c', t))]);
+    b.append(h('span', 'lx-fate-top', [h('kbd', 'lx-fate-k', String(i + 1)), icon(o.icon || 'sword', 20), h('b', 'lx-fate-l', o.label), o.def ? h('em', 'lx-fate-tag', 'Default') : null]), lines);
+    if (o.why) b.append(h('small', 'lx-fate-why', o.why));
+    b.setAttribute('aria-label', [o.label, (o.gain || []).join(', '), (o.cost || []).length ? 'Costs: ' + o.cost.join(', ') : ''].filter(Boolean).join('. '));
+    b.addEventListener('click', () => api.pick(o.id)); btns.push(b); opts.append(b);
+  });
+  el.append(h('div', 'lx-fate-card', [h('div', 'lx-fate-title lx-engrave', title), head, opts]));
+  const api = el.fate = {
+    pick(id) { if (done) return; done = true; el.classList.add('lx-fate-out'); btns.forEach((b) => { b.disabled = true; }); onPick?.(id); },
+    focus() { const d = btns.find((b) => b.dataset.def) || btns[0]; d?.focus?.({ preventScroll: true }); },
+    count(n) { const d = btns.find((b) => b.dataset.def), t = d && d.querySelector('.lx-fate-tag'); if (t) t.textContent = n > 0 ? 'Default in ' + n : 'Default'; },
+    close() { done = true; el.remove(); },
+  };
+  const on = () => { if (!done) el.classList.add('lx-fate-on'); }; requestAnimationFrame(on); setTimeout(on, 60);   // the slide-in class lands on the next frame or after 60 ms (frames can stall under software GL)
+  return el;
+}
 // Combat banner: stacked event lines that slide in at top-center and fade (max 3). kind: 'crit'|'ult'|'kill'|'info'
 export function banner(text, kind = 'info', host, ms = 2200) {
   host = host || document.querySelector('.lx-banners') || document.body.appendChild(h('div', 'lx-banners'));
@@ -328,4 +393,34 @@ export function levelUp({ name, level, host = document.body, ms = 2600 } = {}) {
     h('div', 'lx-lvlup-n lx-num', level), h('div', 'lx-lvlup-name lx-engrave', name)]);
   for (let i = 0; i < 14; i++) { const s = h('i', 'lx-spark'); s.style.setProperty('--a', (i * 360 / 14) + 'deg'); s.style.setProperty('--d', (90 + (i % 3) * 40) + 'px'); el.append(s); }
   host.append(el); setTimeout(() => { el.classList.add('lx-out'); setTimeout(() => el.remove(), 400); }, reduced() ? 1400 : ms); return el;
+}
+
+// ---------- label fitter (no mid-word breaks) ----------
+// Buttons, tabs, chips and nav labels never break inside a word (CSS: overflow-wrap normal). When a single word is wider than its box the font shrinks in
+// half-pixel steps down to 9px, then the tracking tightens; it never breaks. Runs on every sheet that opens, on DOM changes inside sheets and the HUD, on resize.
+const FIT_SEL = '.lx-btn-label, .lx-nav-i span, .ax-tab span, .ax-tab, .lm-tab span, .lm-tab, .am-tab span, .am-tab, .lm-act, .ax-chipbtn span, .lx-ttl-tog, .lx-chip, .lm-chip, .lx-btn-sub, .lx-title';
+export function fitLabels(root = document) {
+  const els = root.querySelectorAll ? root.querySelectorAll(FIT_SEL) : [];
+  for (const e of els) {
+    if (!e.isConnected || !e.clientWidth) continue;
+    const base = e.dataset.fit0 ? +e.dataset.fit0 : 0;
+    if (base && e.dataset.fitW === String(e.clientWidth) && e.dataset.fitT === e.textContent) continue; // unchanged since the last fit
+    if (base) { e.style.fontSize = ''; e.style.letterSpacing = ''; }
+    if (e.scrollWidth <= e.clientWidth + 1) { delete e.dataset.fit0; continue; }
+    const f0 = parseFloat(getComputedStyle(e).fontSize) || 14; let f = f0, n = 0;
+    while (e.scrollWidth > e.clientWidth + 1 && f > 9 && n++ < 24) { f -= 0.5; e.style.fontSize = f + 'px'; }
+    if (e.scrollWidth > e.clientWidth + 1) e.style.letterSpacing = '0';
+    e.dataset.fit0 = String(f0); e.dataset.fitW = String(e.clientWidth); e.dataset.fitT = e.textContent;
+  }
+}
+if (typeof document !== 'undefined' && typeof MutationObserver !== 'undefined') {
+  // only sheets and the hub HUD are watched (never the fight HUD, whose text changes every frame); one pass per 150 ms at most
+  let ft = 0; const roots = new Set();
+  const run = () => { ft = 0; const rs = [...roots]; roots.clear(); for (const r of rs) { try { if (r.isConnected) fitLabels(r); } catch (e) { /* layout not ready */ } } };
+  const kick = (list) => {
+    for (const m of list || []) { const t = m.target && (m.target.nodeType === 1 ? m.target : m.target.parentElement); const r = t && t.closest && t.closest('.lx-scrim, .lx-hud'); if (r && !r.classList.contains('lx-fv-hud') && !(t.closest('.lx-fv-hud'))) roots.add(r); }
+    if (roots.size && !ft) ft = setTimeout(run, 150);
+  };
+  const start = () => { try { new MutationObserver(kick).observe(document.body, { childList: true, subtree: true }); addEventListener('resize', () => { document.querySelectorAll('.lx-scrim, .lx-hud').forEach((r) => roots.add(r)); if (!ft) ft = setTimeout(run, 150); }); document.querySelectorAll('.lx-scrim, .lx-hud').forEach((r) => roots.add(r)); if (roots.size) ft = setTimeout(run, 150); } catch (e) { /* ignore */ } };
+  if (document.body) start(); else document.addEventListener('DOMContentLoaded', start);
 }

@@ -11,6 +11,7 @@ import { createTitle, titleState } from './title.js'; // ONBOARDING
 import { createTutorial } from './tutorial.js'; // ONBOARDING
 import * as Cer from './ceremonies.js'; // ONBOARDING
 import { createPhoto } from './photo.js'; // PHOTO
+import { createRearrange } from './rearrange.js'; // MOVE
 import * as ET from './envtex.js'; // PERF: texture release / re-warm between scenes
 
 const bm = (k) => { const b = window.__bootT; if (b) b[k] = Math.round(performance.now() - b.t0); };   // boot phase marks (main.js stats().boot)
@@ -310,12 +311,13 @@ export class Game {
     const right = document.createElement('div'); right.className = 'lx-row'; right.append(this.weekChip, U.iconButton('gear', 'Settings and more', () => this.open('more', { tab: 'settings' })));
     top.append(row, right);
     const mid = document.createElement('div'); mid.style.cssText = 'flex:1;pointer-events:none';
-    const bottom = document.createElement('div'); bottom.style.cssText = 'display:flex;flex-direction:column;align-items:center;gap:10px';
+    const bottom = document.createElement('div'); bottom.className = 'lx-hud-bottom'; bottom.style.cssText = 'display:flex;flex-direction:column;align-items:center;gap:10px';
     this.advBtn = U.button({ label: 'Advance week', variant: 'gold', icon: 'arena', onClick: () => this.advance() });
     this.nav = U.nav([{ icon: 'ludus', label: 'Ludus' }, { icon: 'roster', label: 'Roster' }, { icon: 'arena', label: 'Arena' }, { icon: 'market', label: 'Market' }, { icon: 'scroll', label: 'More' }], (it, i) => this.onNav(i), 0) /* ONBOARDING fix: kit nav calls onSelect(item, index) */;
     bottom.append(this.advBtn, this.nav);
     this.hud.append(top, mid, bottom);
     try { this.photo = createPhoto(this); } catch (e) { console.warn('photo mode unavailable', e && e.message); } // PHOTO: camera button (bottom corner), fight outro button, share card
+    try { this.rearr = createRearrange(this); } catch (e) { console.warn('rearrange mode unavailable', e && e.message); } // MOVE: hammer button (bottom right), mode in js/rearrange.js
     // TUT: stable hooks for the tutorial spotlight (never look up buttons by their text)
     this.advBtn.dataset.tut = 'advance'; ['ludus', 'roster', 'arena', 'market', 'more'].forEach((k, i) => { const n = this.nav.children[i]; if (n) n.dataset.tut = 'nav-' + k; });
   }
@@ -325,22 +327,25 @@ export class Game {
     const S = this.S; if (!S) return;
     this.goldC.set(S.gold); this.fameC.set(S.fame);
     const f = L().festival ? L().festival(S, S.week) : null;
-    this.weekChip.textContent = `SEASON ${S.season} · WEEK ${((S.week - 1) % 12) + 1}${f && f.n ? ' · ' + String(f.n).toUpperCase() : ''}`;
+    const wk = ((S.week - 1) % 12) + 1, narrow = typeof innerWidth === 'number' && innerWidth <= 430; // phones: 'S1 · W3' so the chip, the counters and the gear fit one row
+    this.weekChip.textContent = `${narrow ? 'S' + S.season : 'SEASON ' + S.season} · ${narrow ? 'W' : 'WEEK '}${wk}${f && f.n && !narrow ? ' · ' + String(f.n).toUpperCase() : ''}`;
+    if (!this._wkResize) { this._wkResize = true; let wasNarrow = narrow; addEventListener('resize', () => { const n = innerWidth <= 430; if (n !== wasNarrow) { wasNarrow = n; this.refresh(); } }); }
     const due = L().dueKeys(S).length;
     // QA: screen reader labels for the HUD
     this.goldC.setAttribute('role', 'group'); this.goldC.setAttribute('aria-label', `Gold ${Math.round(S.gold)}`); this.fameC.setAttribute('role', 'group'); this.fameC.setAttribute('aria-label', `Fame ${Math.round(S.fame)}`);
     this.weekChip.setAttribute('aria-label', `Season ${S.season}, week ${((S.week - 1) % 12) + 1}${f && f.n ? ', ' + f.n : ''}`);
-    this.advBtn.setAttribute('aria-label', `Advance week${due ? `, ${due} fight${due === 1 ? '' : 's'} due` : ''}`);
+    this.advBtn.setAttribute('aria-label', !S.glads.length ? 'Hire your first fighter' : `Advance week${due ? `, ${due} fight${due === 1 ? '' : 's'} due` : ''}`);
     this.advBtn.querySelector('span') ? 0 : 0;
     const lab = this.advBtn.querySelector('.lx-btn-label') || this.advBtn;
-    if (!S.glads.length) this.advBtn.title = 'Recruit a gladiator first';
-    this.advBtn.dataset.due = due; this.advBtn.classList.toggle('lx-pulse', !!due);
+    const none = !S.glads.length; if (lab) lab.textContent = none ? 'Hire your first fighter' : 'Advance week'; this.advBtn.title = none ? 'Choose the first fighter for your ludus' : ''; this.advBtn.classList.toggle('lx-pulse', none || !!due);
+    this.advBtn.dataset.due = due;
     this.hub && this.hub.refresh && this.hub.refresh(S);
   }
 
   async advance() {
     if (this.busy) return; const S = this.S;
-    if (!S.glads.length) { U.toast('Recruit a gladiator first', { kind: 'bad' }); this.audio.sfx('uiError'); this.open('recruit'); return; }
+    this.rearr && this.rearr.stop(true); // MOVE: leave rearrange mode before a week runs
+    if (!S.glads.length) { this.audio.sfx('uiTap'); this.open('recruit', { first: true }); return; } // the button reads "Hire your first fighter" until someone is hired
     // QA friction: new players press Advance without having entered anything, then wonder why nothing happens. Say so, only in the first weeks.
     if (!L().dueKeys(S).length && (S.stats.weeks || 0) < 3) U.toast('No fight entered this week: your fighters will only train. Open the Arena to enter one.', { kind: 'info', ms: 4200 });
     this.busy = true; this.audio.sfx('uiConfirm'); this.closeAll();
@@ -357,16 +362,17 @@ export class Game {
       let done = false; const fin = (v) => { if (done) return; done = true; m.close(); resolve(v); };
       const acts = (opts.actions || []).map((a) => U.button({ label: a.label, variant: a.variant || 'gold', icon: a.icon, sub: a.sub, block: true, onClick: () => { this.audio.sfx('uiTap'); fin(a.value); } }));
       const body = typeof opts.body === 'string' ? Object.assign(document.createElement('div'), { textContent: opts.body }) : opts.body;
-      const m = U.modal({ title: opts.title, body, actions: acts, onClose: () => { if (!done) { done = true; resolve(opts.dismiss === undefined ? null : opts.dismiss); } } });
-      this.modals.push(m); this.audio.sfx('uiTap', { gain: 0.5 }); const tk = tutKey(opts.title); if (tk && m.el) m.el.dataset.tutSheet = tk; // TUT
+      const m = U.modal({ title: opts.title, body, actions: acts, cls: opts.cls, dock: opts.dock, closable: opts.closable, why: opts.why, peekLabel: opts.peekLabel, onClose: () => { if (!done) { done = true; resolve(opts.dismiss === undefined ? null : opts.dismiss); } } });
+      this.modals.push(m); this.audio.sfx('uiTap', { gain: 0.5 }); const tk = opts.tut || tutKey(opts.title); if (tk && m.el) m.el.dataset.tutSheet = tk; // TUT
     });
   }
   /** non-promise sheet for screens: returns {close, el}. */
-  sheet(o) { const m = U.modal(o); this.modals.push(m); const tk = tutKey(o && o.title); if (tk && m.el) m.el.dataset.tutSheet = tk; /* TUT */ return m; }
+  sheet(o) { const m = U.modal(o); this.modals.push(m); const tk = (o && o.tut) || tutKey(o && o.title); if (tk && m.el) m.el.dataset.tutSheet = tk; /* TUT */ return m; }
   closeAll() { this.modals.splice(0).forEach((m) => { try { m.close(); } catch (e) { /* closed */ } }); }
 
   async open(id, arg) {
     if (!SCREENS.includes(id)) return;
+    this.rearr && this.rearr.stop(true); // MOVE
     try {
       const mod = this.mods[id] || (this.mods[id] = await import(`./screens/${id}.js`));
       this.closeAll(); this.audio.sfx('uiTap'); return mod.open(this.ctx, arg);

@@ -61,3 +61,12 @@ Findings are de-duplicated by kind plus message, so one repeated bug is one line
 ## Wave 3 notes
 - New interactive controls: the hub canvas (keyboard camera), the "Fight hurt" button in fighter pickers (44px, aria-pressed, aria-label with the numbers) and the trophy cards (`.lx-bl-card`, aria-label with progress). The monkey's first run at 390x800 and 800x390 after wave 3 is clean for these.
 - A fresh profile always opens the recruit sheet first, which traps keys; test keyboard camera with `empty=1` plus `rich=1` URLs.
+## UI pass 2 checks
+- Sheets must show at least 5 list rows at 1100x650 (Roster, Market, World); `.lx-hud-bottom` hides under any sheet. `drv`-style captures: in `?manual=1` requestAnimationFrame only ticks inside `__LM3D.advance()`, so call advance twice after opening a sheet or its `lx-in` class never lands and the screenshot shows an empty hub.
+- A label with a computed `overflow-wrap` of `anywhere` or `break-word` on a button, tab or chip is a bug (mid-word break). Closable-on-purpose sheets must say what happens when closed.
+
+## MOVE notes
+- The monkey has a `rearr` step (`rearrWalk` in `tools/ludus3d_qa_lib.mjs`): a real click on the hammer button (`.lx-rr-fab`, hidden outside the hub), audit, `rearr.tap()` to lift a random building and preview a random plot, a real click on Confirm or Cancel (`[data-rr=ok]`, `[data-rr=cancel]` in `.lx-rr-confirm`), the cinematic stepped with `__LM3D.advance(0.5)`, the Undo button, Escape until the mode is left (a stuck mode is a high finding).
+- The bot has `--move` (scripted move before week 1, then the normal weeks): `node tools/ludus3d_bot.mjs "<url>?new=1&rich=1&empty=1&tier=low&manual=1&notut=1" --weeks 2 --move`.
+- Rearrange mode controls: hammer fab (bottom right, `aria-pressed`), a mode bar (Undo, Done, 44 px), tags are aria-hidden, announcements go to an `aria-live` region (`.lx-rr-sr`) and the hub's hint region. Keys: arrows move the cursor between plots (screen direction), Enter or Space lifts, previews or puts back, Escape steps back (cancel card, drop, leave). The confirm card traps Tab between Confirm and Cancel. `game.advance()` and `game.open()` call `rearr.stop(true)`.
+- `rearr.start()` is async (it loads the screen kit once); tests and the bot await it or click the button and wait.

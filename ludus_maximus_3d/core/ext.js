@@ -410,11 +410,14 @@
     S.name = S.name.slice(0, 40);
     if (!fin(S.color) || S.color < 0 || S.color >= (D.COLORS || []).length) { note('color'); S.color = 0; }
     for (const k of ['fac', 'sl', 'perks', 'entries', 'rivals', 'bonds', 'trophies', 'stats', 'flags', 'opts']) if (!isObj(S[k])) { if (S[k] !== undefined) note(k + ' was not an object'); S[k] = {}; }
+    for (const k of Object.keys(S.entries)) { const e = S.entries[k]; // PLAN: an entry keeps its old stance string and may carry an optional battle plan (no schema bump: both are read defensively)
+      if (!isObj(e) || !Array.isArray(e.ids)) { note('entry ' + k + ' was unreadable'); delete S.entries[k]; continue; }
+      if (!LM.STANCE[e.stance]) e.stance = 'bal'; if (e.plan !== undefined && !(isObj(e.plan) && LM.FORMS[e.plan.form] && isObj(e.plan.roles))) delete e.plan; }
     for (const k of ['glads', 'items', 'relics', 'relicOn', 'contracts', 'legends']) if (!Array.isArray(S[k])) { if (S[k] !== undefined) note(k + ' was not a list'); S[k] = []; }
     if (!Array.isArray(S.plots)) { note('plots'); S.plots = []; }
     while (S.plots.length < 16) S.plots.push(null); S.plots = S.plots.slice(0, 16).map((p) => (p && typeof p === 'object' && D.BUILD[p.b] && fin(p.l) ? p : null));
     for (const k of ['sen', 'mer', 'ple']) if (!fin(S.fac[k])) S.fac[k] = 0;
-    for (const k of ['fights', 'wins', 'losses', 'tourneys', 'spares', 'weeks', 'contracts']) if (!fin(S.stats[k])) S.stats[k] = 0;
+    for (const k of ['fights', 'wins', 'losses', 'tourneys', 'spares', 'kills', 'ransoms', 'weeks', 'contracts']) if (!fin(S.stats[k])) S.stats[k] = 0;   // FATE: kills and ransoms are new, old saves get 0
     const seen = new Set(), keep = [];
     for (const g of S.glads) {
       if (!isObj(g) || !D.STYLES[g.style] || !isObj(g.st) || !fin(g.id) || seen.has(g.id)) { note('dropped an unreadable gladiator'); continue; }
@@ -1044,6 +1047,8 @@
   add('streak10', 'Unbroken', 'Win 10 events in a row.', { gold: 300, fame: 15, laurels: 1 }, 'flame', 'Glory', (S) => st(S, 'streakBest') >= 10, (S) => [Math.min(10, st(S, 'streakBest')), 10]);
   add('wins100', 'Hundred Victories', 'Win 100 fights.', { gold: 900, laurels: 2 }, 'laurel', 'Glory', (S) => st(S, 'wins') >= 100, (S) => [Math.min(100, st(S, 'wins')), 100]);
   add('champ1', 'Duelist', 'Defeat the rival owner\'s champion.', { gold: 150, fame: 10 }, 'sword', 'Glory', (S) => st(S, 'champs') >= 1, (S) => [Math.min(1, st(S, 'champs')), 1]);
+  add('blood5', 'Blood Sport', 'Kill 5 beaten foes when the crowd asks for blood.', { gold: 80, fame: 8 }, 'skull', 'Glory', (S) => st(S, 'kills') >= 5, (S) => [Math.min(5, st(S, 'kills')), 5]);
+  add('ransom3', 'Ransomer', 'Take a ransom for 3 beaten foes.', { gold: 150, fame: 5 }, 'coin', 'Glory', (S) => st(S, 'ransoms') >= 3, (S) => [Math.min(3, st(S, 'ransoms')), 3]);
   add('bounty3', 'Bounty Hunter', 'Claim 3 bounties.', { gold: 200, fame: 10 }, 'scroll', 'Glory', (S) => st(S, 'bounties') >= 3, (S) => [Math.min(3, st(S, 'bounties')), 3]);
   add('pitperf', 'Flawless Descent', 'Clear 5 Pit floors in one descent without any fight ending below 40% health.', { gold: 300, fame: 15 }, 'skull', 'Glory', (S) => st(S, 'pitPerfect') >= 1, (S) => [Math.min(1, st(S, 'pitPerfect')), 1]);
   add('hurtwin', 'Walk It Off', 'Win a fight with a wounded fighter.', { gold: 100, fame: 5 }, 'bandage', 'Glory', (S) => st(S, 'hurtWins') >= 1, (S) => [Math.min(1, st(S, 'hurtWins')), 1]);
@@ -1073,4 +1078,121 @@
   };
   const mig3 = LM.migrate;
   LM.migrate = (S) => { const N = mig3(S); N.stats = N.stats || {}; (N.glads || []).forEach((g) => { delete g.hurtFight; }); return N; };
+})(typeof globalThis !== 'undefined' ? globalThis : this);
+
+// ================================================================================================================================================
+// MOVE (rearrange the ludus): fourth wrapper block, loaded last. Owner request: "move your buildings, even if it costs something".
+//   LM.moveQuote(S, from, to)      what a move or swap would cost: {kind:'move'|'swap', gold, weeks:[a,b], d, fx[], ok, why}
+//   LM.moveBuilding(S, from, to, {busy})   '' on success, else the reason. `to` empty = move, `to` built = swap.
+//   LM.moveUndo(S, plot)           same week only, returns D.MOVE.undoRefund of the price
+//   LM.moving(S, i)                the construction record {f,s,u,w,c,x} of plot i while it is still being rebuilt, else null
+//   LM.moveWhySource / LM.moveWhyDest   reasons shown on the markers (pinned, under construction, locked land, ...)
+//   LM.moveEffects(S, from, to)    neighbour synergy changes the move would cause (adjacency is read from position, so it is always live)
+// Save: the ONLY new data is an optional `mv` object on a plot {f: other plot, s: start week, u: ready week, w: weeks, c: gold paid, x: 1 if swap}. Old saves have none;
+// no schema bump is needed (readers treat a missing mv as "finished"). A building under construction has level 0 perks (LM.bfx), gives no neighbour synergy,
+// cannot be upgraded or moved again, and keeps its level. Barracks keep 3 beds in tents (level 1 capacity) so the roster is never evicted.
+// ================================================================================================================================================
+(function (G) {
+  const D = G.LM_D, LM = G.LM;
+  if (!LM || LM.moveBuilding) return;
+  const M = D.MOVE, clamp = (v, a, b) => Math.max(a, Math.min(b, v)), fin = (v) => typeof v === 'number' && isFinite(v);
+  const rc = (i) => [Math.floor(i / LM.COLS), i % LM.COLS];
+  const r5 = (v) => Math.round(v / 5) * 5;
+  LM.moveDist = (a, b) => { const [ra, ca] = rc(a), [rb, cb] = rc(b); return Math.abs(ra - rb) + Math.abs(ca - cb); };
+  LM.moving = (S, i) => { const p = S.plots[i]; return p && p.mv && fin(p.mv.u) && S.week < p.mv.u ? p.mv : null; };
+  /** gold put into a building over all its levels (what a move re-lays) */
+  LM.moveValue = (p) => { let v = 0; for (let l = 1; l <= p.l; l++) v += D.BUILD[p.b].c0 * D.BMULT[l]; return v; };
+  const rawGold = (p, d) => LM.moveValue(p) * M.rate * (0.65 + 0.35 * d) * (M.big.includes(p.b) ? M.bigMult : 1) * (p.l >= 5 ? M.lv5Mult : 1);
+  const weeksFor = (p, d) => clamp(1 + (p.l >= 3 ? 1 : 0) + (p.l >= 5 ? 1 : 0) + (d >= 4 ? 1 : 0), 1, 3);
+  const slotOk = (S, i) => Number.isInteger(i) && i >= 0 && i < 16 && i < S.rows * LM.COLS;
+
+  LM.moveWhySource = (S, i) => {
+    if (!Number.isInteger(i) || i < 0 || i >= 16) return 'No such plot';
+    const p = S.plots[i]; if (!p) return 'Nothing to move here';
+    if (M.pinned[p.b]) return M.pinned[p.b];
+    if (LM.moving(S, i)) return 'Still under construction';
+    return '';
+  };
+  LM.moveWhyDest = (S, from, to) => {
+    if (!slotOk(S, to)) return 'Unclaimed land. Buy the row first.';
+    if (to === from) return 'It is already here';
+    const q = S.plots[to]; if (!q) return '';
+    if (M.pinned[q.b]) return `${D.BUILD[q.b].n} cannot be moved, so it cannot swap`;
+    if (LM.moving(S, to)) return `${D.BUILD[q.b].n} is still under construction`;
+    return '';
+  };
+  /** the busy rules every move has to pass: a fight or event in progress (opts.busy from the UI, S.pendingEv from the sim) */
+  const busyWhy = (S, opts) => (opts && opts.busy ? 'Not while a fight or event is in progress' : S.pendingEv ? 'Answer the pending event first' : '');
+
+  LM.moveEffects = (S, from, to) => {
+    const sim = { plots: S.plots.map((p) => (p ? { b: p.b, l: p.l } : null)), week: S.week };
+    const before = {}; D.BUILD_IDS.forEach((id) => { const i = LM.plotOf(sim, id); before[id] = i < 0 ? 0 : LM.synAt(sim, i); });
+    const a = sim.plots[from], b = sim.plots[to]; sim.plots[to] = a; sim.plots[from] = b || null;
+    const out = [];
+    D.BUILD_IDS.forEach((id) => { const i = LM.plotOf(sim, id); const n = i < 0 ? 0 : LM.synAt(sim, i); const was = before[id]; if (n !== was && D.BUILD[id].syn) out.push({ b: id, was, now: n, pct: (n - was) * 10 }); else if (n !== was) out.push({ b: id, was, now: n, pct: 0 }); });
+    return out;
+  };
+
+  LM.moveQuote = (S, from, to) => {
+    const bad = LM.moveWhySource(S, from) || LM.moveWhyDest(S, from, to);
+    if (bad) return { ok: false, why: bad, gold: 0, weeks: [0, 0], d: 0, kind: S.plots[to] ? 'swap' : 'move', fx: [] };
+    const A = S.plots[from], B = S.plots[to], d = LM.moveDist(from, to);
+    if (!B) { const gold = Math.max(M.minGold, r5(rawGold(A, d))); return { ok: true, why: '', kind: 'move', gold, weeks: [weeksFor(A, d), 0], d, fx: LM.moveEffects(S, from, to), big: M.big.includes(A.b) || A.l >= 5 }; }
+    const gold = Math.max(M.minGold, r5((rawGold(A, d) + rawGold(B, d)) * M.swapRate));
+    return { ok: true, why: '', kind: 'swap', gold, weeks: [Math.max(1, weeksFor(A, d) - 1), Math.max(1, weeksFor(B, d) - 1)], d, fx: LM.moveEffects(S, from, to), big: M.big.includes(A.b) || M.big.includes(B.b) || A.l >= 5 || B.l >= 5 };
+  };
+
+  LM.moveBuilding = (S, from, to, opts) => {
+    const why = busyWhy(S, opts); if (why) return why;
+    const q = LM.moveQuote(S, from, to); if (!q.ok) return q.why;
+    if (S.gold < q.gold) return `Not enough gold (need ${q.gold})`;
+    S.gold -= q.gold;
+    const A = S.plots[from], B = S.plots[to];
+    if (q.kind === 'move') { S.plots[to] = A; S.plots[from] = null; A.mv = { f: from, s: S.week, u: S.week + q.weeks[0], w: q.weeks[0], c: q.gold }; }
+    else { S.plots[to] = A; S.plots[from] = B; A.mv = { f: from, s: S.week, u: S.week + q.weeks[0], w: q.weeks[0], c: q.gold, x: 1 }; B.mv = { f: to, s: S.week, u: S.week + q.weeks[1], w: q.weeks[1], c: 0, x: 1 }; }
+    S.stats = S.stats || {}; S.stats.moves = (S.stats.moves || 0) + 1; S.stats.moveGold = (S.stats.moveGold || 0) + q.gold;
+    return '';
+  };
+
+  /** can plot i's move still be undone? -> {ok, refund, why} (same week only, never after the work is done) */
+  LM.moveUndoInfo = (S, i) => {
+    const p = S.plots[i], m = p && p.mv; if (!m || !LM.moving(S, i)) return { ok: false, refund: 0, why: 'Nothing to undo' };
+    if (m.s !== S.week) return { ok: false, refund: 0, why: 'The crew has already started: undo is only possible in the week of the move' };
+    if (!Number.isInteger(m.f) || m.f < 0 || m.f > 15) return { ok: false, refund: 0, why: 'Nothing to undo' };
+    const other = S.plots[m.f]; const paid = m.x ? (m.c || (other && other.mv ? other.mv.c : 0) || 0) : m.c;
+    return { ok: true, refund: Math.floor(paid * M.undoRefund), why: '' };
+  };
+  LM.moveUndo = (S, i) => {
+    const info = LM.moveUndoInfo(S, i); if (!info.ok) return info.why;
+    const p = S.plots[i], m = p.mv, f = m.f;
+    if (m.x) { const o = S.plots[f]; if (!o || !o.mv) return 'Nothing to undo'; delete p.mv; delete o.mv; S.plots[i] = o; S.plots[f] = p; }
+    else { if (S.plots[f]) return 'The old plot is taken'; delete p.mv; S.plots[f] = p; S.plots[i] = null; }
+    S.gold += info.refund; S.stats = S.stats || {}; S.stats.moves = Math.max(0, (S.stats.moves || 0) - 1); S.stats.moveGold = Math.max(0, (S.stats.moveGold || 0) - info.refund);
+    return '';
+  };
+
+  // ---- perks pause while a building is under construction
+  const bfx0 = LM.bfx;
+  LM.bfx = (S, id) => { const i = LM.plotOf(S, id); if (i >= 0 && LM.moving(S, i)) { const B = D.BUILD[id]; return { l: 0, syn: 0, v: B.v[0], i, building: true }; } return bfx0(S, id); };
+  const syn0 = LM.synAt;
+  LM.synAt = (S, i) => { const p = S.plots[i]; if (!p || LM.moving(S, i)) return 0; const like = D.BUILD[p.b].like; return LM.neighbors(i).filter((n) => S.plots[n] && !LM.moving(S, n) && like.includes(S.plots[n].b)).length; };
+  void syn0;
+  const cap0 = LM.rosterCap;
+  LM.rosterCap = (S) => { const i = LM.plotOf(S, 'barracks'); return i >= 0 && LM.moving(S, i) ? D.BUILD.barracks.v[1] : cap0(S); };
+  const up0 = LM.upgrade;
+  LM.upgrade = (S, i) => (LM.moving(S, i) ? 'Under construction' : up0(S, i));
+
+  // ---- weekly: finished work is reported and the record dropped
+  const wk0 = LM.extWeek;
+  LM.extWeek = (S, rep) => {
+    if (wk0) wk0(S, rep);
+    S.plots.forEach((p) => { if (p && p.mv && S.week >= p.mv.u) { if (rep && rep.notes) rep.notes.push(`The crew has finished the ${D.BUILD[p.b].n} in its new place. Its perks are back.`); delete p.mv; } });
+  };
+  // ---- save: an optional field, validated on load (old saves simply have none)
+  const mig4 = LM.migrate;
+  LM.migrate = (S) => {
+    const N = mig4(S);
+    (N.plots || []).forEach((p) => { if (!p || !p.mv) return; const m = p.mv; if (typeof m !== 'object' || !fin(m.u) || !fin(m.s) || N.week >= m.u) delete p.mv; else { m.f = Number.isInteger(m.f) && m.f >= 0 && m.f < 16 ? m.f : -1; m.c = fin(m.c) ? m.c : 0; m.w = fin(m.w) ? m.w : Math.max(1, m.u - m.s); } });
+    return N;
+  };
 })(typeof globalThis !== 'undefined' ? globalThis : this);

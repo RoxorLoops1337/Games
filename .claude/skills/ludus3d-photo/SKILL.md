@@ -24,3 +24,5 @@ Reduced motion (OS, `lx-reduce-motion` body class or the `rm` pref): no shutter 
 2. The card uses system serif fonts only (no network fonts); `ctx.letterSpacing` is avoided on purpose (Safari), text is spaced by hand.
 3. Capture resolution = drawing buffer (tier dpr cap x dynamic scale). Low tier phones give about 390x800 and the card upscales it; a high-res capture would need a temporary `post.setSize` bump.
 4. The fight camera is overwritten after `fightView.frame`, so anything that reads the camera in the same frame sees the photo camera.
+## UI pass 2
+- Photo mode adds `body.lx-photo-on` (CSS hides `.lx-banners` and `.lx-fv-verdict`, the live combat callouts). The `.lx-photo-msg` toast now sits just above the control bar (`say()` measures the bar), not on the top edge where the title and combat text live. Damage numbers are canvas sprites in fx.js: pausing them is an fx.js job.

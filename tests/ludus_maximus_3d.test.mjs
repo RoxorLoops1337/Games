@@ -854,5 +854,309 @@ const LEGACY_IDS = ['patron', 'brawl', 'trainer', 'spoiled', 'spy', 'sponsor', '
   const old = LM.migrate(JSON.parse(JSON.stringify(S))); ok(old.trophies.kill_lion, 'trophies survive migrate');
 }
 
+{ // round 49: MOVE, rearranging the ludus (core/ext.js MOVE block, D.MOVE)
+  const mk = (seed) => { const S = LM.newGame({ name: 'Mv', seed }); S.gold = 20000; S.fame = 900; S.rows = 4; return S; };
+  const S = mk('mv1'), kit = S.plots[6], bar = S.plots[5], pal = S.plots[2];
+  ok(kit.b === 'kitchen' && bar.b === 'barracks' && pal.b === 'palaestra', 'start layout: kitchen 6, barracks 5, palaestra 2');
+  // data: pinned and big lists exist, prices scale with level and distance
+  ok(D.MOVE.pinned.hall && D.MOVE.big.includes('stands') && D.MOVE.undoRefund > 0 && D.MOVE.undoRefund < 1, 'D.MOVE has pinned, big and the undo refund');
+  const q1 = LM.moveQuote(S, 6, 10), q3 = LM.moveQuote(S, 6, 14);
+  ok(q1.ok && q1.kind === 'move' && q1.d === 1 && q3.d === 2 && q3.gold >= q1.gold, 'a longer move never costs less');
+  const mkL = (id, l, at) => { const T = mk('mvl'); T.plots = new Array(16).fill(null); T.plots[at] = { b: id, l }; return T; };
+  const c = (id, l, to) => LM.moveQuote(mkL(id, l, 0), 0, to).gold;
+  ok(c('forge', 1, 1) < c('forge', 3, 1) && c('forge', 3, 1) < c('forge', 5, 1), 'price rises with building level');
+  ok(c('forge', 3, 1) < c('forge', 3, 5) && c('forge', 3, 5) < c('forge', 3, 15), 'price rises with distance');
+  ok(c('stands', 3, 1) > c('forge', 3, 1) * 1.2 && c('stands', 3, 1) > 0, 'the crowd-facing Stands cost more than a forge of the same level');
+  ok(c('forge', 5, 1) >= c('forge', 4, 1) * 1.5, 'level 5 carries the marble surcharge');
+  const wk = (id, l, to) => LM.moveQuote(mkL(id, l, 0), 0, to).weeks[0];
+  ok(wk('forge', 1, 1) === 1 && wk('forge', 3, 1) === 2 && wk('forge', 5, 1) === 3 && wk('forge', 1, 15) === 2 && wk('forge', 5, 15) === 3, 'downtime is 1 to 3 weeks by level and distance');
+  ok(c('forge', 1, 1) >= D.MOVE.minGold, 'there is a minimum price');
+  // refusals
+  const T0 = mk('mv2'); T0.plots[9] = { b: 'hall', l: 1 };
+  ok(/consecrated/.test(LM.moveBuilding(T0, 9, 10)) && T0.plots[9].b === 'hall' && T0.gold === 20000, 'a pinned building (Hall of Legends) refuses with its reason and costs nothing');
+  ok(/cannot be moved/.test(LM.moveBuilding(T0, 6, 9)), 'nothing can swap with a pinned building');
+  ok(LM.moveBuilding(T0, 6, 6) !== '' && LM.moveBuilding(T0, 3, 7) === 'Nothing to move here', 'same plot and empty source are refused');
+  const T1 = mk('mv3'); T1.rows = 2;
+  ok(/Unclaimed/.test(LM.moveBuilding(T1, 6, 12)), 'locked land is refused');
+  const T2 = mk('mv4'); T2.gold = 3; ok(/Not enough gold/.test(LM.moveBuilding(T2, 6, 7)) && T2.gold === 3 && T2.plots[6].b === 'kitchen', 'short gold refuses and changes nothing');
+  const T3 = mk('mv5'); ok(/fight or event/.test(LM.moveBuilding(T3, 6, 7, { busy: true })) && T3.gold === 20000, 'refused while a fight or event is in progress (opts.busy)');
+  T3.pendingEv = 'plague'; ok(/pending event/.test(LM.moveBuilding(T3, 6, 7)), 'refused with an event waiting');
+  // a move: gold, record, perks pause
+  const U = mk('mv6'); const g1 = LM.makeGlad({ id: U.nextId++, style: 'murmillo', lvl: 3 }); U.glads.push(g1);
+  const lvl0 = LM.bfx(U, 'palaestra').v, price = LM.moveQuote(U, 2, 3).gold;
+  ok(LM.moveBuilding(U, 2, 3) === '' && U.gold === 20000 - price && !U.plots[2] && U.plots[3].b === 'palaestra', 'moving into an empty plot pays the quote and relocates it');
+  const mv = LM.moving(U, 3); ok(mv && mv.f === 2 && mv.s === U.week && mv.u === U.week + 1 && U.plots[3].l === 1, 'the plot carries the construction record and keeps its level');
+  ok(LM.bfx(U, 'palaestra').l === 0 && LM.bfx(U, 'palaestra').v === 0 && lvl0 > 0, 'perks pause while the building is under construction');
+  ok(/Under construction/.test(LM.upgrade(U, 3)) && /Still under construction/.test(LM.moveBuilding(U, 3, 4)), 'cannot upgrade or move again while rebuilding');
+  const capB = LM.rosterCap(U); LM.moveBuilding(U, 5, 4); ok(LM.rosterCap(U) === D.BUILD.barracks.v[1] && capB >= 3, 'barracks keep tent beds while moving, nobody is evicted');
+  // week passes: the building is back
+  const notes = []; U.week++; LM.extWeek(U, { notes }); ok(U.plots[3].mv === undefined && U.plots[4].mv === undefined && LM.bfx(U, 'palaestra').l === 1 && LM.rosterCap(U) === cap0(), 'after the downtime perks are restored and the record is dropped');
+  function cap0() { return D.BUILD.barracks.v[1]; }
+  ok(notes.length === 2 && /new place/.test(notes[0]), 'finishing reports a line in the week summary');
+  // longer downtime counts down
+  const V = mk('mv7'); V.plots[6].l = 3; LM.moveBuilding(V, 6, 15); const w3 = LM.moving(V, 15).w; ok(w3 >= 2, 'a level 3 building across the yard takes 2 or more weeks');
+  V.week++; LM.extWeek(V, { notes: [] }); ok(LM.moving(V, 15) && LM.bfx(V, 'kitchen').l === 0, 'still rebuilding after 1 of the weeks');
+  for (let i = 1; i < w3; i++) { V.week++; LM.extWeek(V, { notes: [] }); } ok(!LM.moving(V, 15) && LM.bfx(V, 'kitchen').l === 3, 'ready after the full downtime, level kept');
+  // adjacency is recomputed after a move
+  const W = mk('mv8'); W.plots = new Array(16).fill(null); W.plots[0] = { b: 'palaestra', l: 2 }; W.plots[1] = { b: 'infirmary', l: 1 }; W.plots[3] = { b: 'kitchen', l: 1 };
+  ok(LM.synAt(W, 0) === 1, 'palaestra next to the infirmary has synergy 1');
+  const eff = LM.moveEffects(W, 1, 5); ok(LM.synAt(W, 0) === 1, 'moveEffects is a preview and changes nothing');
+  ok(eff.some((e) => e.b === 'palaestra' && e.now === 0 && e.pct === -10), 'the preview names the palaestra losing its +10%');
+  const v0 = LM.bfx(W, 'palaestra').v; LM.moveBuilding(W, 1, 5); W.week++; LM.extWeek(W, { notes: [] });
+  ok(LM.synAt(W, 0) === 0 && LM.bfx(W, 'palaestra').v < v0 && LM.bfx(W, 'palaestra').syn === 0, 'after moving away the neighbour bonus is gone');
+  const v1 = LM.bfx(W, 'palaestra').v; LM.moveBuilding(W, 5, 1); ok(LM.synAt(W, 0) === 0, 'a neighbour under construction gives no synergy yet'); W.week++; LM.extWeek(W, { notes: [] });
+  ok(LM.synAt(W, 0) === 1 && LM.bfx(W, 'palaestra').v > v1, 'moving back next to the partner restores the bonus once the work is done');
+  // swap: cheaper than two moves, shorter, both go under construction
+  const X = mk('mv9'); X.plots[6].l = 2; X.plots[2].l = 2; const qs = LM.moveQuote(X, 6, 2), qa = LM.moveQuote(mkL('kitchen', 2, 0), 0, 4);
+  ok(qs.kind === 'swap' && qs.weeks[0] >= 1 && qs.weeks[1] >= 1, 'a built destination quotes a swap');
+  const twoMoves = LM.moveQuote(Object.assign(mk('x'), { plots: (() => { const a = new Array(16).fill(null); a[6] = { b: 'kitchen', l: 2 }; return a; })() }), 6, 2).gold + LM.moveQuote(Object.assign(mk('y'), { plots: (() => { const a = new Array(16).fill(null); a[2] = { b: 'palaestra', l: 2 }; return a; })() }), 2, 6).gold;
+  ok(qs.gold < twoMoves, `a swap (${qs.gold}) costs less than two moves (${twoMoves})`);
+  ok(qs.weeks[0] <= LM.moveQuote(mkL('kitchen', 2, 0), 0, 4).weeks[0], 'a swap is never slower than a move'); void qa;
+  const g0 = X.gold; ok(LM.moveBuilding(X, 6, 2) === '' && X.gold === g0 - qs.gold && X.plots[6].b === 'palaestra' && X.plots[2].b === 'kitchen' && LM.moving(X, 6) && LM.moving(X, 2), 'a swap exchanges both and pauses both');
+  ok(LM.bfx(X, 'kitchen').l === 0 && LM.bfx(X, 'palaestra').l === 0, 'both swapped buildings give no perks while rebuilding');
+  // undo
+  const Y = mk('mv10'); const yg = Y.gold; LM.moveBuilding(Y, 6, 10); const paid = yg - Y.gold, ui = LM.moveUndoInfo(Y, 10);
+  ok(ui.ok && ui.refund === Math.floor(paid * D.MOVE.undoRefund) && ui.refund < paid, 'undo returns a part of the price, not all of it');
+  ok(LM.moveUndo(Y, 10) === '' && Y.plots[6].b === 'kitchen' && !Y.plots[10] && Y.plots[6].mv === undefined && Y.gold === yg - paid + ui.refund && LM.bfx(Y, 'kitchen').l === 1, 'undo puts the building back, drops the record and refunds');
+  ok(LM.moveUndo(Y, 10) === 'Nothing to undo', 'there is nothing to undo twice');
+  const Z = mk('mv11'); LM.moveBuilding(Z, 6, 2); const zi = Z.gold; ok(LM.moveUndo(Z, 6) === '' && Z.plots[6].b === 'kitchen' && Z.plots[2].b === 'palaestra' && Z.gold > zi && !Z.plots[6].mv && !Z.plots[2].mv, 'undo of a swap restores both');
+  const Q = mk('mv12'); Q.plots[6].l = 3; LM.moveBuilding(Q, 6, 10); Q.week++; ok(!LM.moveUndoInfo(Q, 10).ok && /already started/.test(LM.moveUndo(Q, 10)), 'undo only works in the week of the move');
+  // save round trip, old saves, damaged records
+  const R = mk('mv13'); LM.moveBuilding(R, 6, 14); const raw = JSON.stringify(R), back = LM.migrate(JSON.parse(raw));
+  ok(back.plots[14].b === 'kitchen' && LM.moving(back, 14) && LM.moving(back, 14).f === 6 && LM.bfx(back, 'kitchen').l === 0, 'a save in the middle of a move round-trips with the record');
+  ok(LM.moveUndo(back, 14) === '' && back.plots[6].b === 'kitchen', 'undo works after a reload');
+  const old = JSON.parse(JSON.stringify(mk('mv14'))); old.plots.forEach((p) => p && delete p.mv); delete old.sv; delete old.stats.moves;
+  const oldM = LM.migrate(old); ok(oldM.plots[6].b === 'kitchen' && LM.bfx(oldM, 'kitchen').l === 1 && LM.moveBuilding(oldM, 6, 7) === '', 'an old save without mv loads and can move');
+  const bad = JSON.parse(JSON.stringify(mk('mv15'))); bad.plots[6].mv = 'junk'; bad.plots[5].mv = { u: 'x' }; bad.plots[2].mv = { s: 1, u: 2 }; bad.week = 9;
+  const badM = LM.migrate(bad); ok(!badM.plots[6].mv && !badM.plots[5].mv && !badM.plots[2].mv && LM.bfx(badM, 'kitchen').l === 1, 'garbage and expired records are dropped on load');
+  const fut = JSON.parse(JSON.stringify(mk('mv16'))); fut.plots[6].mv = { f: 99, s: 1, u: 99 }; const futM = LM.migrate(fut); ok(futM.plots[6].mv && futM.plots[6].mv.f === -1 && LM.moveUndoInfo(futM, 6).ok === false, 'a broken origin index is neutralised (no undo)');
+  // a whole week with a building under construction runs through the normal weekly flow
+  const E = mk('mv17'); const eg = LM.makeGlad({ id: E.nextId++, style: 'thraex', lvl: 2 }); eg.act = 'str'; E.glads.push(eg);
+  LM.moveBuilding(E, 2, 3); const rep = LM.weekFinish ? LM.weekFinish(E) : null; ok(!rep || (Array.isArray(rep.notes) && E.plots[3].mv === undefined), 'weekFinish completes a 1-week move and reports it');
+}
+
+{ // UI pass: a matchup never repeats a name
+  ok(typeof LM.uniqueNames === 'function', 'LM.uniqueNames exists');
+  const mine = [{ name: 'Valeria' }, { name: 'Marcus' }];
+  const opps = [{ name: 'Valeria' }, { name: 'Valeria' }, { name: 'Marcus' }, { name: 'Zeno' }];
+  const n = LM.uniqueNames(mine, opps), names = [...mine, ...opps].map((x) => x.name);
+  ok(n === 3 && new Set(names).size === names.length, 'uniqueNames: no name repeats across both sides: ' + names.join(','));
+  ok(opps[3].name === 'Zeno', 'uniqueNames keeps names that were already unique');
+  const again = LM.uniqueNames(mine, opps); ok(again === 0, 'uniqueNames is idempotent');
+  const solo = [{ name: 'Valeria' }]; LM.uniqueNames([{ name: 'Valeria' }], solo); const solo2 = [{ name: 'Valeria' }]; LM.uniqueNames([{ name: 'Valeria' }], solo2);
+  ok(solo[0].name === solo2[0].name && solo[0].name !== 'Valeria', 'uniqueNames is deterministic');
+  // every generated duel in a season: the opponent never shares the fighter name, once the helper has run
+  const T = LM.newGame({ name: 'Names', color: 0 }); const ga = LM.makeGlad({ id: T.nextId++, style: 'murmillo', lvl: 1, name: 'Valeria' }); T.glads.push(ga);
+  let clash = 0; for (let wk = 1; wk <= 24; wk++) for (const ev of LM.events(T, wk, 0)) { LM.uniqueNames([ga], ev.opps); if (ev.opps.some((o) => o.name === ga.name)) clash++; if (new Set(ev.opps.map((o) => o.name)).size !== ev.opps.length) clash++; }
+  ok(clash === 0, 'no event over 24 weeks pairs the fighter with a same-named opponent');
+}
+
+{ // round 48: BEAST real animals (js/beast.js headless: budgets per tier, smooth skin weights, paw planting, idle life, blood that stays on the wound)
+  const had = { window: typeof globalThis.window, document: typeof globalThis.document };
+  if (!globalThis.window) globalThis.window = globalThis; if (!globalThis.document) globalThis.document = { createElement: () => ({ getContext: () => null }) };
+  const { createBeast, JN } = await import('../ludus_maximus_3d/js/beast.js'), V = { low: { a: 1050, e: 1600 }, medium: { a: 4200, e: 5200 }, high: { a: 11000, e: 11000 } };
+  for (const kind of ['lion', 'wolf', 'bear', 'boar', 'nemean', 'elephant']) for (const dt of ['low', 'medium', 'high']) {
+    const rec = LM.makeBeast(kind, 6, { r: LM.mulberry(5), id: 't' }), rig = createBeast(rec, { detail: dt }), lim = V[dt][kind === 'elephant' ? 'e' : 'a'];
+    ok(rig.triangles() <= lim && rig.drawCalls() <= 8, `${kind} ${dt}: ${rig.triangles()} tris (limit ${lim}) and ${rig.drawCalls()} calls (limit 8)`);
+    let bad = 0, multi = 0, total = 0; const nb = rig.skeleton.bones.length;
+    rig.root.traverse((o) => { if (!o.isSkinnedMesh) return; const si = o.geometry.attributes.skinIndex, sw = o.geometry.attributes.skinWeight; for (let v = 0; v < sw.count; v++) { let t = 0, n = 0; for (let q = 0; q < 4; q++) { const w = sw.getComponent(v, q); t += w; if (w > 0.02) { n++; if (si.getComponent(v, q) >= nb) bad++; } } if (Math.abs(t - 1) > 0.02) bad++; if (n > 1) multi++; total++; } });
+    ok(bad === 0, `${kind} ${dt}: every vertex has valid bones and weights summing to one`); if (dt !== 'low') ok(multi / total > 0.12, `${kind} ${dt}: smooth skinning blends bones on ${(100 * multi / total).toFixed(0)}% of the vertices`);
+    if (dt !== 'high') continue;
+    const A = rig.animator, P = [['wristL', 0], ['wristR', 1], ['ankleL', 2], ['ankleR', 3]], v3 = (n) => { const e = rig.joints[n].matrixWorld.elements; return e[13]; }; // (the standing check below uses the sole point, which turns with the paw)
+    for (let i = 0; i < 150; i++) rig.update(1 / 60);
+    let worst = 0; for (const [n, i] of P) { const e = rig.joints[n].matrixWorld.elements, sy = e[13] - A.pads[i] * 0.98 * e[5]; worst = Math.max(worst, Math.abs(sy)); } ok(worst < 0.03 * Math.max(1, rig.size), `${kind}: standing paws are planted on the sand (worst ${worst.toFixed(3)} m)`);
+    let fin = true, steps = 0; rig.onEvent = (e) => { if (e === 'step') steps++; };
+    for (const sp of [1, 3, 6]) { A.setMove(sp, 0); for (let i = 0; i < 150; i++) { rig.update(1 / 60); for (const k of rig.root.children[0].children) { const e = k.matrixWorld.elements; for (let j = 0; j < 16; j++) if (!isFinite(e[j])) fin = false; } } }
+    ok(fin && steps >= 6, `${kind}: walk, trot and gallop stay finite and emit steps (${steps})`); A.setMove(0, 0);
+    let blinks = 0, was = false, y0 = 9, y1 = -9; for (let i = 0; i < 40 * 30; i++) { rig.update(1 / 30); if (i < 20 * 30) continue; const l = A.out[JN.indexOf('lidL') * 3] > 1.0; if (l && !was) blinks++; was = l; const hy = A.out[JN.indexOf('head') * 3 + 1]; y0 = Math.min(y0, hy); y1 = Math.max(y1, hy); }
+    ok(blinks >= 2 && y1 - y0 > 0.08, `${kind}: idle life (blinks ${blinks}, head wander ${(y1 - y0).toFixed(2)} rad)`);
+    rig.clearBlood(); rig.addWound(rig.jointRest('chest', [0.1, 0.1, 0.1]), { x: 0, y: 1, z: 0 }, 0.1, 1); const s0 = rig.bloodU.uWoundD.value[0].w; rig.addBlood(0.2, 1); rig.addBlood(0.2, 1);
+    ok(rig.bloodU.uWoundD.value[0].w > s0 + 0.5 && rig.bloodU.uBlood.value < 0.3, `${kind}: blood soaks the wound, not the whole coat`);
+    for (const n of ['bite', 'claw', 'pounce', 'roar', 'death', 'hurt']) { A.dead = false; A.action = null; A.play(n); if (n === 'death') A.dead = true; for (let i = 0; i < 120; i++) rig.update(1 / 60); const e = rig.joints.head.matrixWorld.elements; ok(isFinite(e[12]) && isFinite(e[13]) && isFinite(e[14]), `${kind}: clip ${n} stays finite`); }
+    rig.dispose();
+  }
+  if (had.window === 'undefined') delete globalThis.window; if (had.document === 'undefined') delete globalThis.document;
+}
+
+{ // round 49: BATTLE PLAN (roles, formations, priority target, Showmanship): pre-fight choices that reshape the fight, replay safe, no counters
+  const mk = (st, id, lvl = 6, trait) => LM.makeGlad({ style: st, lvl, id, name: 'P' + id, r: LM.mulberry(id * 31 + lvl), trait });
+  const team = (styles, base) => styles.map((st, i) => mk(st, base + i));
+  const A3 = team(['murmillo', 'thraex', 'hoplomachus'], 300), B3 = team(['thraex', 'murmillo', 'retiarius'], 400);
+  const build = (A, B, planA, planB, o) => { const ca = LM.teamCtx(null, A, planA || 'bal'), cb = LM.teamCtx(null, B, 'bal'); if (planB) cb.plan = LM.normPlan(planB, B); const F = LM.createFight(LM.mkUnits(A, 'A', ca), LM.mkUnits(B, 'B', cb), Object.assign({ autoA: true, quiet: true }, o || {})); if (planA || planB) LM.planFight(F, planA && LM.normPlan(planA, A), planB && LM.normPlan(planB, B)); return F; };
+  const run = (F, n, dt = 1 / 30) => { const ev = []; for (let i = 0; i < n && !F.done; i++) { LM.step(F, dt); ev.push(...F.ev.splice(0)); } return ev; };
+  const hash = (F) => F.units.map((u) => `${u.id}:${u.hp}:${u.x.toFixed(3)}:${u.y.toFixed(3)}`).join('|') + `|${F.n}|${F.winner}|${F.foc.A}|${F.foc.B}`;
+  // ---- data: every role, formation and Showmanship level prints its exact numbers; no em dashes; the spots stay inside the sand
+  const pctOf = (v) => `${Math.round(Math.abs(v) * 100)}%`;
+  ok(LM.ROLE_IDS.length === 6 && LM.ROLES.free.mods && Object.keys(LM.ROLES.free.mods).length === 0, 'six roles: Fighter plus five jobs');
+  for (const id of LM.ROLE_IDS) { const R = LM.ROLES[id]; ok(R.n && R.d && R.gain && R.cost && !/—/.test(R.n + R.d + R.gain + R.cost), `role ${id} has a name, a description and gain / cost lines without em dashes`); for (const k of Object.keys(R.mods)) ok((R.mods[k] > 0 ? R.gain : R.cost).includes(pctOf(R.mods[k])), `role ${id}: the ${k} number is printed in its ${R.mods[k] > 0 ? 'gain' : 'cost'} line`); if (id !== 'free') ok(R.cost !== 'No change' || R.d, `role ${id} has a price`); }
+  ok(LM.ROLE_IDS.filter((id) => id !== 'free').every((id) => { const m = LM.ROLES[id].mods, v = Object.values(m); return v.some((x) => x > 0) && (v.some((x) => x < 0) || LM.ROLES[id].costTxt); }), 'every job trades something (a gain and a cost): no free lunch');
+  for (const f of LM.FORM_IDS) for (const n of [2, 3, 4]) { ok(LM.FORMS[f].roles(n).length === n && LM.FORMS[f].roles(n).every((r) => LM.ROLES[r]), `${f} ${n}: default roles are known`);
+    for (const r of LM.ROLE_IDS) { const T = Array.from({ length: n }, (_, i) => mk('thraex', 800 + i)), ro = {}; T.forEach((g, i) => { ro[g.id] = i === 0 ? r : 'free'; }); const us = LM.mkUnits(T, 'A', LM.teamCtx(null, T, { form: f, roles: ro }));
+      ok(us.every((u) => Math.hypot(u.x, u.y) <= 8.6 + 1e-9), `${f} ${n} with ${r} up front: everyone starts on the sand`); let close = 9; for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) close = Math.min(close, Math.hypot(us[i].x - us[j].x, us[i].y - us[j].y)); ok(close >= 1.3, `${f} ${n} with ${r}: nobody starts inside a partner (${close.toFixed(2)} m)`); } }
+  for (const f of LM.FORM_IDS) { const F0 = LM.FORMS[f]; for (const k of Object.keys(F0.mods)) ok((F0.mods[k] > 0 ? F0.gain : F0.cost).includes(pctOf(F0.mods[k])), `formation ${f}: the team-wide ${k} number is printed`); }
+  { const l = LM.mkUnits(A3, 'A', LM.teamCtx(null, A3, { form: 'line', roles: {} })), w = LM.mkUnits(A3, 'A', LM.teamCtx(null, A3, { form: 'wedge', roles: { 300: 'free', 301: 'free', 302: 'free' } })), b0 = LM.mkUnits(A3, 'A', LM.teamCtx(null, A3, 'bal')); ok(l[0].atk > b0[0].atk * 1.02 && l[0].def > b0[0].def * 1.02 && w[0].def < b0[0].def * 0.97 && w[0].atk === b0[0].atk, 'a formation applies its printed team-wide trade to every unit'); }
+  ok(LM.SHOW.length === 4 && LM.SHOW[0].gain === 'No change' && LM.SHOW[0].cost === 'No change', 'four Showmanship levels, the first is the plain default');
+  for (let i = 1; i < 4; i++) { const a = LM.SHOW[i - 1], b = LM.SHOW[i]; ok(b.fame > a.fame && b.hy > a.hy && b.fan > a.fan && b.atk > a.atk && b.wound > a.wound && b.wd > a.wd, `Showmanship ${b.n}: more gain AND more cost than ${a.n}`); ok(b.gain.includes(`+${Math.round(b.fame * 100)}% fame`) && b.cost.includes(`-${Math.round(b.atk * 100)}% damage`) && b.cost.includes(`+${Math.round(b.wound * 100)}% wound risk`) && !/—/.test(b.gain + b.cost + b.d), `Showmanship ${b.n}: the exact numbers are printed`); }
+  ok(LM.PRIO.guard < 1 && LM.PRIO.cost.includes('6%') && !/—/.test(LM.PRIO.gain + LM.PRIO.cost), 'the priority target has a printed price (the marked foe is guarded)');
+  // ---- plans: normalised, deterministic, derived for the AI
+  const np = LM.normPlan({ form: 'bogus', roles: { 300: 'nonsense' }, prio: -3, show: 9 }, A3);
+  ok(np.form === 'line' && A3.every((g) => LM.ROLES[np.roles[g.id]]) && np.prio === null && np.show === 0, 'a damaged plan is repaired: known form, a role for everyone, no show in a team');
+  const solo = LM.normPlan({ show: 9, roles: { 300: 'vanguard' } }, [A3[0]]); ok(solo.show === 3 && solo.roles[300] === 'free' && solo.form === 'line', 'a solo plan keeps only Showmanship (clamped), no roles');
+  const sg1 = LM.defaultPlan(null, A3, B3), sg2 = LM.defaultPlan(null, A3, B3); ok(JSON.stringify(sg1) === JSON.stringify(sg2) && sg1.prio === LM.suggestFoc(B3) && LM.FORMS[sg1.form], 'the suggested plan is deterministic and pre-fills a priority target');
+  const op1 = LM.oppPlan(null, B3, A3), op2 = LM.oppPlan(null, B3, A3); ok(JSON.stringify(op1) === JSON.stringify(op2) && op1.prio !== null && B3.every((g) => LM.ROLES[op1.roles[g.id]]), 'the AI team plan is deterministic, has a role per fighter and a priority target');
+  ok(LM.oppPlan(null, [LM.makeBeast('lion', 4)], A3) === null, 'beasts get no plan');
+  const sh = mk('thraex', 450, 5, 'showman'), op = LM.oppPlan(null, [sh], [A3[0]]); ok(op.show === 1 && op.prio === null && LM.oppPlan(null, [mk('thraex', 451, 5, 'hothead')], [A3[0]]).show === 0, 'a showman foe shows off a little, everyone else fights plain');
+  ok(LM.oppPlan(null, [mk('murmillo', 1, 5, 'ironjaw'), mk('murmillo', 2, 5), mk('thraex', 3, 5)], A3).roles[1] === 'vanguard', 'the AI reads its traits: an Iron Jaw takes the front');
+  ok(LM.fightPlans(null, A3, B3, 'agg').pa === null && LM.fightPlans(null, A3, B3, sg1).pa.form === sg1.form && LM.fightPlans(null, A3, B3, { form: 'wedge', prio: 7 }).pa.prio === null, 'a plain stance gives no plans; a priority past the last foe is dropped');
+  // ---- one fight shape, random stream untouched
+  const draws = (planA) => { let n = 0; LM.setRandom(() => { n++; return 0.37; }); const ca = LM.teamCtx(null, A3, planA || 'bal'); LM.mkUnits(A3, 'A', ca); return n; };
+  ok(draws(null) === draws(sg1) && draws(null) === draws({ form: 'pincer' }), 'a plan draws no random numbers: the seeded stream of a fight is the same with and without it');
+  LM.setRandom(LM.mulberry(5));
+  const FP = build(A3, B3, sg1, op1), F0 = build(A3, B3, null, null), FS = build([mk('thraex', 500)], [mk('murmillo', 501)], { show: 2 }), FH = LM.createFight(LM.mkUnits(A3, 'A', {}), LM.mkUnits([LM.makeBeast('wolf', 4, { r: LM.mulberry(2), id: 'w1' })], 'B', {}));
+  const keysOf = (u) => Object.keys(u).join(','), sk = (u) => Object.keys(u.s).join(',');
+  ok(FP.units.every((u) => keysOf(u) === keysOf(F0.units[0]) && sk(u) === sk(F0.units[0])) && FS.units.every((u) => keysOf(u) === keysOf(F0.units[0])) && FH.units.every((u) => keysOf(u) === keysOf(F0.units[0])), 'every unit (planned, solo with show, plain, beast) has the identical key list (one hidden class)');
+  ok(Object.keys(FP).join() === Object.keys(F0).join() && Object.keys(FP.pri).join() === 'A,B' && keysOf(F0.units[0]).includes('role,show,flT'), 'the fight object keeps its shape too, and the new unit fields are declared');
+  ok(F0.units.every((u) => u.role === '' && u.show === 0) && FP.units.every((u) => LM.ROLES[u.role || 'free']), 'plain fights carry no role and no show');
+  for (let i = 0; i < 6; i++) run(FP, 2 * 30); ok(FP.units.every((u) => keysOf(u) === keysOf(F0.units[0]) && sk(u) === sk(F0.units[0])), 'the unit shape stays identical after 12 s of fighting with roles, focus and statuses');
+  // ---- formations and roles are real
+  const at = (form, roles) => build(A3, B3, { form, roles: roles || {}, prio: null }, null).units.slice(0, 3);
+  const line = at('line'), wedge = at('wedge'), pincer = at('pincer'), turtle = at('turtle');
+  ok(line.every((u) => u.x === -6.4) && Math.max(...wedge.map((u) => u.x)) > -5 && wedge[1].x > wedge[0].x + 1, 'Wedge: the tip stands ahead of the wings, a Line is flat');
+  ok(Math.max(...pincer.map((u) => Math.abs(u.y))) > Math.max(...line.map((u) => Math.abs(u.y))) + 0.8, 'Pincer: the flanks start wider than the Line');
+  ok(Math.max(...turtle.map((u) => Math.abs(u.y))) < Math.max(...line.map((u) => Math.abs(u.y))) - 1.5, 'Turtle: the team starts tight');
+  const free0 = at('line', { 300: 'free', 301: 'free', 302: 'free' }), van0 = at('line', { 300: 'vanguard', 301: 'free', 302: 'free' });
+  ok(van0[0].maxhp > free0[0].maxhp * 1.08 && van0[0].def > free0[0].def * 1.07 && van0[0].atk < free0[0].atk * 0.95 && van0[0].x > free0[0].x + 1, 'Vanguard: more HP and armor, less damage, and stands forward');
+  const fl0 = at('line', { 300: 'flanker', 301: 'free', 302: 'free' }), sk0 = at('line', { 300: 'skirmisher' }), hu0 = at('line', { 300: 'hunter' }), an0 = at('line', { 300: 'anchor' });
+  ok(fl0[0].ms > free0[0].ms * 1.08 && fl0[0].maxhp < free0[0].maxhp * 0.95 && Math.abs(fl0[0].y) > Math.abs(free0[0].y) * 1.1, 'Flanker: faster and wider, but frailer');
+  ok(hu0[0].atk > free0[0].atk * 1.05 && hu0[0].def < free0[0].def * 0.95 && an0[0].def > free0[0].def * 1.1 && an0[0].atk < free0[0].atk && sk0[0].eva > free0[0].eva && sk0[0].x < free0[0].x - 0.8, 'Hunter hits harder and guards less; Anchor guards more and hits less; Skirmisher dodges more and starts back');
+  // target weights: foes draw to the Vanguard; the Flanker picks the soft one; the Anchor covers an ally
+  { const A = team(['thraex'], 600), B = team(['murmillo', 'murmillo'], 610); const F = build(A, B, null, { form: 'line', roles: { 610: 'vanguard', 611: 'free' } }); F.units[1].x = 2; F.units[2].x = 2; F.units[1].y = -2; F.units[2].y = 2; F.units[0].x = -2; F.units[0].y = 0; run(F, 3);
+    ok(F.units[0].tgt === 'B0', 'a free fighter picks the Vanguard over an equal foe (it draws the eye)'); }
+  { const A = [mk('thraex', 620)], B = [mk('murmillo', 630), mk('retiarius', 631)]; B[0].lvl = 12; const F = build(A, B, { form: 'line', roles: {} }, null); F.units[0].s.dash = 0; F.units[0].role = 'flanker'; F.units[1].x = F.units[2].x = 3; F.units[1].y = -1.5; F.units[2].y = 1.5; F.units[0].x = -2; F.units[0].y = 0; run(F, 2);
+    ok(F.units[0].tgt === 'B1', 'a Flanker goes for the soft, ranged foe instead of the sturdy one at the same distance'); }
+  { const A = team(['murmillo', 'thraex'], 640), B = team(['thraex'], 650); const F = build(A, B, { form: 'line', roles: { 640: 'anchor', 641: 'free' } }, null), an = F.units[0], fr = F.units[1]; F.units[2].x = 8; F.units[2].y = 0; F.units[2].s.root = 99; an.x = -3; fr.x = -3.5; an.y = 1; fr.y = -1; const x0 = an.x, xf = fr.x;
+    run(F, 45); ok((an.x - x0) < (fr.x - xf) - 2 && Math.hypot(an.x - fr.x, an.y - fr.y) < 7, 'an Anchor trails its partner and stays near the team while the partner goes out to meet a distant foe'); }
+  { const A = [mk('retiarius', 660)], B = [mk('murmillo', 670)]; const F = build(A, B, null, null); F.units[0].role = 'skirmisher'; F.units[0].x = 0; F.units[1].x = 0.9; F.units[0].y = F.units[1].y = 0; F.units[0].atkT = 1; const d0 = 0.9; run(F, 15);
+    ok(Math.hypot(F.units[0].x - F.units[1].x, F.units[0].y - F.units[1].y) > d0 + 0.3, 'a Skirmisher steps back when pressed while its blow recovers'); }
+  // ---- priority target: honoured, then a fallback; replay safe
+  { const F = build(A3, B3, { form: 'line', roles: { 300: 'free', 301: 'free', 302: 'free' }, prio: 1 }, null); ok(F.foc.A === 'B1' && F.pri.A === true && F.pri.B === false, 'the plan sets the focus and the side flag at the first bell');
+    run(F, 4 * 30); ok(F.units.slice(0, 3).filter((u) => !u.down).every((u) => u.tgt === 'B1' || F.units[4].down), 'everyone free goes for the priority target while it lives');
+    let fell = -1; for (let i = 0; i < 4000 && !F.done && fell < 0; i++) { run(F, 1); if (F.units[4].down) fell = F.t; }
+    if (fell > 0) { const alive = F.units.slice(3).filter((u) => !u.down); ok(!F.done ? F.foc.A !== 'B1' && alive.some((u) => u.id === F.foc.A) && alive.every((u) => alive.find((x) => x.id === F.foc.A).hp <= u.hp) : true, 'when the priority target falls the team picks the weakest foe left'); } else ok(true, 'the fight ended before the priority target fell');
+  }
+  { const F = build(A3, B3, { form: 'line', roles: {}, prio: 0 }, null), tm = F.units[3]; F.units[0].atk = 1000; let marked = 0, plain = 0; const dmg = (F2) => { const u = F2.units[0], t = F2.units[3]; u.x = -0.5; t.x = 0.5; u.y = t.y = 0; t.hp = t.maxhp = 100000; u.atkT = 0; for (const x of F2.units) if (x !== u && x !== t) x.down = true; const h0 = t.hp; LM.setRandom(LM.mulberry(4)); run(F2, 30); return h0 - t.hp; };
+    marked = dmg(F); const G = build(A3, B3, null, null); G.units[0].atk = 1000; LM.focus(G, 'A', 'B0'); plain = dmg(G); ok(marked > 0 && plain > 0 && marked < plain, `the marked foe takes less damage (${marked} vs ${plain}), the price of the priority`); }
+  { const play = (seed) => { LM.setRandom(LM.mulberry(seed)); const F = build(A3, B3, sg1, op1, { cmdAI: true }); const taps = [[40, 'stance', 'A0', 'press'], [70, 'swap'], [120, 'rally'], [150, 'stance', 'A1', 'guard']]; let ti = 0; while (!F.done && F.n < 4000) { while (ti < taps.length && taps[ti][0] <= F.n) { const t = taps[ti++]; LM.command(F, t[1], t[2], t[3]); } LM.step(F, 1 / 30); F.ev.length = 0; } return F; };
+    const r1 = play(21), r2 = play(21); ok(r1.done && hash(r1) === hash(r2), 'a fight with roles, formation, priority, AI plan and taps replays identically');
+    LM.setRandom(LM.mulberry(21)); const F = build(A3, B3, sg1, op1, { cmdAI: true }); const snap = structuredClone(F); ok(snap.pri.A === F.pri.A && snap.foc.A === F.foc.A && snap.units[0].role === F.units[0].role, 'roles, focus and the plan flag survive the replay snapshot');
+    LM.setRandom(LM.mulberry(21)); const G = structuredClone(snap); while (!G.done && G.n < 4000) { LM.step(G, 1 / 30); G.ev.length = 0; } ok(G.done && (G.winner === 'A' || G.winner === 'B'), 'the cloned snapshot plays on to a winner'); }
+  { const a = LM.odds(null, A3, B3, sg1, 20), b = LM.odds(null, A3, B3, sg1, 20), c = LM.odds(null, A3, B3, { form: 'turtle', roles: {}, prio: null }, 20); ok(a === b && a >= 0 && a <= 1 && c >= 0 && c <= 1, 'odds accept a plan: stable and in range'); }
+  // ---- Showmanship: fame and hype up, damage down, real flourishes
+  { const S = LM.newGame({ name: 'Show', seed: 'show49' }), g = LM.makeGlad({ id: S.nextId++, style: 'thraex', lvl: 4 }); S.glads.push(g); const ev = Object.assign({}, LM.events(S, 2, 0).find((e) => e.kind === 'duel'), { fame: 100 });
+    const fameAt = (lv) => { const S2 = JSON.parse(JSON.stringify(S)), g2 = S2.glads[0]; LM.setRandom(LM.mulberry(9)); const r = LM.settle(S2, ev, [g2], { win: true, hype: 100, hpf: { [g2.id]: 0.7 }, odds: 0.5, show: lv }); return { fame: r.fame, fav: g2.fav || 0 }; };
+    const f = [0, 1, 2, 3].map(fameAt); ok(f[1].fame > f[0].fame && f[2].fame > f[1].fame && f[3].fame > f[2].fame, `fame rises with every Showmanship level (${f.map((x) => x.fame).join(', ')})`);
+    ok(f[3].fame >= Math.round(f[0].fame * 1.45) && f[1].fame <= Math.round(f[0].fame * 1.15), 'the fame bonus is the printed one (about +12% to +50%)'); ok(f[1].fav > f[0].fav && f[3].fav >= f[0].fav + 5, `fans rise too (${f.map((x) => x.fav).join(', ')})`);
+    const lose = (lv) => { const S2 = JSON.parse(JSON.stringify(S)), g2 = S2.glads[0]; g2.fav = 50; LM.setRandom(LM.mulberry(9)); LM.settle(S2, ev, [g2], { win: false, hype: 60, hpf: { [g2.id]: 0.3 }, odds: 0.5, show: lv }); return g2.fav; }; ok(lose(3) > lose(0), 'in defeat a showman still keeps more of the crowd');
+    const inj = (lv) => { let n = 0; for (let i = 0; i < 400; i++) { const S2 = JSON.parse(JSON.stringify(S)), g2 = S2.glads[0]; LM.setRandom(LM.mulberry(1000 + i)); const r = LM.settle(S2, ev, [g2], { win: true, hype: 50, hpf: { [g2.id]: 0.5 }, odds: 0.5, show: lv }); if (r.inj.length) n++; } return n; };
+    const i0 = inj(0), i3 = inj(3); ok(i3 > i0 && i3 < i0 * 3, `wounds follow the show (${i0} to ${i3} of 400)`);
+    ok(LM.settle(JSON.parse(JSON.stringify(S)), ev, [JSON.parse(JSON.stringify(S.glads[0]))], { win: true, hype: 50, odds: 0.5, hpf: {}, show: 3 }).notes.some((n) => /Showmanship/.test(n) && /fame/.test(n)), 'the results note names the Showmanship bonus'); }
+  { const duel = (lv, seed, quiet) => { LM.setRandom(LM.mulberry(seed)); const a = mk('thraex', 700), b = mk('murmillo', 701); const ca = LM.teamCtx(null, [a], LM.normPlan({ show: lv }, [a])); const F = LM.createFight(LM.mkUnits([a], 'A', ca), LM.mkUnits([b], 'B', LM.teamCtx(null, [b], 'bal')), { autoA: true, quiet }); return F; };
+    const u0 = duel(0, 1, true).units[0], u3 = duel(3, 1, true).units[0]; ok(u3.show === 3 && u0.show === 0 && u3.atk < u0.atk * (1 - LM.SHOW[3].atk + 0.001) && u3.def < u0.def && u3.flT > 0, 'a showman has less damage and armor at the first bell (the printed cost)');
+    ok(LM.windOf(u3) > LM.windOf(u0) * 1.4 && LM.windOf(u0) <= 0.22, 'a showman winds up longer (the animator uses the same number)');
+    let fl0 = 0, fl3 = 0, h0 = 0, h3 = 0, d0 = 0, d3 = 0, roars0 = 0, roars3 = 0, t0 = 0, t3 = 0; const N = 24;
+    for (let i = 0; i < N; i++) { for (const lv of [0, 3]) { const F = duel(lv, 50 + i, false); let fl = 0, roars = 0, hype = 0; while (!F.done && F.n < 6000) { LM.step(F, 1 / 30); for (const e of F.ev.splice(0)) { if (e.k === 'flourish') fl++; if (e.k === 'roar') roars++; } hype = Math.max(hype, F.hype); } const dmg = F.units[0].dmg; if (lv === 0) { fl0 += fl; roars0 += roars; d0 += dmg; t0 += F.t; } else { fl3 += fl; roars3 += roars; d3 += dmg; t3 += F.t; } } }
+    ok(fl0 === 0 && fl3 > N * 1.5, `flourishes happen only in a showman's fight (${fl0} vs ${fl3} in ${N})`); ok(d3 < d0 * 0.97, `a showman deals less damage over the same duels (${Math.round(d3 / N)} vs ${Math.round(d0 / N)})`); ok(roars3 >= roars0, `the crowd roars at least as often for a showman (${roars3} vs ${roars0})`); ok(t3 >= t0 * 0.95, 'and the fights do not get shorter'); }
+  // ---- old stances and saves
+  { const gl = A3; for (const st of ['bal', 'agg', 'grd', 'cun', 'weird', undefined]) { const p = LM.planFromStance(st, gl, B3); ok(LM.FORMS[p.form] && gl.every((g) => LM.ROLES[p.roles[g.id]]) && p.show === 0, `old stance ${st} maps to a valid plan`); }
+    ok(LM.planFromStance('agg', gl, B3).form === 'wedge' && LM.planFromStance('grd', gl, B3).form === 'turtle' && LM.planFromStance('cun', gl, B3).form === 'pincer', 'Aggressive, Guarded and Cunning open as Wedge, Turtle and Pincer');
+    ok(LM.planFromStance('agg', [gl[0]], [B3[0]]).show === 0, 'a solo fighter with an old stance opens as Efficient');
+    const S = LM.newGame({ name: 'Old', seed: 'old49' }); S.gold = 9999; S.glads.push(...A3.map((g) => Object.assign({}, g, { id: S.nextId++ })));
+    S.entries['5:0:m'] = { ids: [S.glads[0].id], stance: 'agg', paid: 5 }; S.entries['6:0:m'] = { ids: [S.glads[1].id], stance: 'zzz', paid: 5, plan: { form: 'nope', roles: 3 } }; S.entries['7:0:m'] = { ids: [S.glads[2].id], stance: 'bal', paid: 5, plan: { v: 1, form: 'wedge', roles: {}, prio: 1, show: 0 } }; S.entries['8:0:m'] = 'garbage';
+    const M = LM.migrate(JSON.parse(JSON.stringify(S))); ok(M.entries['5:0:m'].stance === 'agg' && M.entries['6:0:m'].stance === 'bal' && !('plan' in M.entries['6:0:m']) && M.entries['7:0:m'].plan.form === 'wedge' && !M.entries['8:0:m'], 'migrate keeps old stances, mends unknown ones, drops broken plans and junk entries');
+    const gg = M.glads.slice(-3); ok(LM.entryPlan(M, '5:0:m', gg, B3).form === 'wedge' && LM.entryPlan(M, '7:0:m', gg, B3).prio === 1 && LM.entryPlan(M, 'none', gg, B3).form, 'an entry opens on its plan, or on the old stance mapped, or on the suggestion');
+    const ev2 = LM.events(M, 2, 0).find((e) => e.kind === 'duel'); M.week = 2; M.gold = 999; const fighter = M.glads[0]; fighter.inj = 0; ok(LM.enter(M, ev2, [fighter.id], { v: 1, form: 'line', roles: {}, prio: null, show: 2 }) === '' && M.entries[ev2.key].stance === 'bal' && M.entries[ev2.key].plan.show === 2, 'LM.enter stores a plan next to the old stance string');
+    ok(LM.SAVE_KEY === 'ludus_maximus_3d_v1', 'the save key is untouched'); }
+}
+
+// ---- FATE: kill / spare / ransom for the beaten foe (core/sim.js LM.fateOffers / LM.fate)
+{
+  const mkS = (seed, lvl = 6) => { LM.setRandom(LM.mulberry(LM.hash('fs' + seed))); const S = LM.newGame({ name: 'Fate', seed }); S.gold = 1000; S.fame = 200; S.week = 5; S.glads.push(LM.makeGlad({ id: S.nextId++, style: 'murmillo', lvl, trait: 'frugal' })); LM.setRandom(null); return S; };
+  const S0 = mkS('fate1'), duelOf = (S, lg = 1) => LM.events(S, 5, lg).find((e) => e.kind === 'duel'), ev0 = duelOf(S0), foe0 = ev0.opps[0];
+  const off = LM.fateOffers(S0, ev0, foe0), by = (o, id) => o.opts.find((x) => x.id === id);
+  ok(off && off.opts.map((o) => o.id).join() === 'kill,spare,ransom' && off.def === 'spare', 'a rival-ludus foe offers kill, spare, ransom with spare as the default');
+  ok(by(off, 'kill').fame > by(off, 'spare').fame && by(off, 'spare').fame > by(off, 'ransom').fame, `fame: kill ${by(off, 'kill').fame} > spare ${by(off, 'spare').fame} > ransom ${by(off, 'ransom').fame}`);
+  ok(by(off, 'kill').fame >= 2 * by(off, 'spare').fame - 1, 'a kill is worth about double the mercy bonus');
+  ok(by(off, 'ransom').gold > 0 && by(off, 'kill').gold === 0 && by(off, 'spare').gold === 0, 'only the ransom pays gold');
+  const ghost = Object.assign({}, foe0, { gh: true, lud: undefined, ludus: undefined }), offG = LM.fateOffers(S0, ev0, ghost);
+  ok(offG.opts[2].id === 'show' && offG.opts[2].why && by(offG, 'show').gold < by(off, 'ransom').gold, 'a foe nobody would pay for gets the Showboat instead, with the reason, and it pays less than a ransom');
+  ok(by(off, 'ransom').gold >= 2 * by(offG, 'show').gold, 'the ransom pays at least twice what the showboat did');
+  ok(by(off, 'kill').cost.some((c) => /Senate/.test(c)) && by(off, 'kill').gain.some((c) => /Plebs/.test(c)) && by(off, 'kill').cost.some((c) => /Vendetta/.test(c)), 'the kill costs Senate standing, Plebs love it, a vendetta follows');
+  ok(by(off, 'spare').gain.some((c) => /Senate \+6/.test(c)) && by(off, 'spare').gain.some((c) => /% he joins/.test(c)), 'the spare shows its Senate gain and the recruit chance');
+  ok(LM.fateOffers(S0, { kind: 'hunt', league: 0 }, { beast: 'lion', lvl: 5 }) === null && ['hunt', 'pit', 'horde', 'bounty', 'champ', 'spar'].every((k) => LM.fateOffers(S0, Object.assign({}, ev0, { kind: k }), foe0) === null), 'no decision for beasts, hunts, pit floors, hordes, bounties, champions or sparring');
+  ok(['duel', 'tourney', 'grand', 'team'].every((k) => LM.fateOffers(S0, Object.assign({}, ev0, { kind: k }), foe0)), 'duels, tournament rounds and team clashes all get the decision');
+  // numbers shown = numbers applied
+  const fresh = () => { const S = mkS('fate2'); S.glads[0].lvl = 6; return S; };
+  for (const id of ['kill', 'spare', 'ransom']) {
+    const S = fresh(), ev = duelOf(S), foe = ev.opps[0], o = by(LM.fateOffers(S, ev, foe), id), f0 = S.fame, g0 = S.gold, rep = { fame: 10, gold: 5, notes: [] }, st0 = S.fac ? Object.assign({}, S.fac) : { sen: 0, mer: 0, ple: 0 };
+    LM.setRandom(LM.mulberry(5)); const r = LM.fate(S, ev, rep, id, foe); LM.setRandom(null);
+    ok(r.id === id && S.fame - f0 === o.fame && S.gold - g0 === o.gold && rep.fame === 10 + o.fame && rep.gold === 5 + o.gold, `${id}: fame and gold applied are the printed ones`);
+    ok(((S.fac.sen || 0) - (st0.sen || 0)) === Math.max(-(st0.sen || 0), o.fac.sen || 0) || (st0.sen || 0) + (o.fac.sen || 0) < 0, `${id}: Senate standing moves by the printed amount (clamped at 0)`);
+  }
+  { const S = fresh(), ev = duelOf(S), foe = ev.opps[0]; LM.fate(S, ev, null, 'kill', foe); ok(S.stats.kills === 1 && LM.vendetta(S, foe.rv) && !S.stats.ransoms, 'a kill counts, marks a vendetta on the rival, and is not a spare');
+    const S2 = fresh(), e2 = duelOf(S2), f2 = e2.opps[0]; LM.fate(S2, e2, null, 'ransom', f2); ok(S2.stats.ransoms === 1 && S2.stats.spares === 0 && !LM.vendetta(S2, f2.rv), 'a ransom counts, is not a spare, and starts no vendetta');
+    const S3 = fresh(), e3 = duelOf(S3), f3 = e3.opps[0]; const sp0 = S3.stats.spares; LM.fate(S3, e3, null, 'spare', f3); ok(S3.stats.spares === sp0 + 1, 'a spare counts toward mercy contracts and the Merciful trophy'); }
+  // no choice means spare; unknown means spare
+  { const S = fresh(), ev = duelOf(S), foe = ev.opps[0]; LM.setRandom(LM.mulberry(2)); const r = LM.fate(S, ev, null, undefined, foe), r2 = LM.fate(fresh(), ev, null, 'zzz', foe); LM.setRandom(null); ok(r.id === 'spare' && r2.id === 'spare', 'no choice (auto, fast-forward, bots) defaults to spare'); }
+  // recruit chance: bounds, determinism, full barracks
+  { let joins = 0, N = 400, lo = 1, hi = 0; const chance = []; for (let i = 0; i < N; i++) { const S = mkS('fj' + (i % 7)); const ev = duelOf(S), foe = ev.opps[0]; chance.push(LM.fateJoin(S, foe)); S.glads.length = 1; LM.setRandom(LM.mulberry(1000 + i)); const r = LM.fate(S, ev, null, 'spare', foe); LM.setRandom(null); if (r.joined) { joins++; ok(S.glads.length === 2 && r.joined.id !== foe.id && r.joined.rv == null && S.glads.includes(r.joined), 'a recruit is a copy added to the roster'); } }
+    lo = Math.min(...chance); hi = Math.max(...chance); const mean = chance.reduce((a, b) => a + b, 0) / N;
+    ok(lo >= 0.08 && hi <= 0.6, `recruit chance stays in 8%..60% (${lo}..${hi})`); ok(Math.abs(joins / N - mean) < 0.07, `recruits follow the chance over ${N} seeds (${(joins / N).toFixed(2)} vs ${mean.toFixed(2)})`); ok(mean >= 0.25 && mean <= 0.45, `the base is around 30% (mean ${mean.toFixed(2)})`);
+    const S = mkS('full'); while (S.glads.length < LM.rosterCap(S)) S.glads.push(LM.makeGlad({ id: S.nextId++, lvl: 3 })); const ev = duelOf(S); ok(LM.fateJoin(S, ev.opps[0]) === 0 && by(LM.fateOffers(S, ev, ev.opps[0]), 'spare').cost.some((c) => /Barracks full/.test(c)), 'a full barracks means no recruit chance, and the panel says why');
+    const Sb = mkS('bar'); const base = LM.fateJoin(Sb, duelOf(Sb).opps[0]); Sb.glads.push(LM.makeGlad({ id: 99, lvl: 2, trait: 'showman' })); ok(LM.fateJoin(Sb, duelOf(Sb).opps[0]) > base, 'a showman in the ludus helps persuade'); }
+  // determinism
+  { const run = () => { const S = mkS('det'); const ev = duelOf(S), foe = ev.opps[0]; LM.setRandom(LM.mulberry(77)); const r = LM.fate(S, ev, null, 'spare', foe); LM.setRandom(null); return JSON.stringify([r.id, r.fame, r.gold, !!r.joined, S.fame, S.fac, S.stats]); }; ok(run() === run(), 'the same seed gives the same outcome'); }
+  // unit shape unchanged
+  { const g = LM.makeGlad({ style: 'thraex', lvl: 4 }), k0 = Object.keys(LM.mkUnits([g], 'A', {})[0]).join(); const S = mkS('shape'); const ev = duelOf(S); LM.fate(S, ev, null, 'kill', ev.opps[0]); const k1 = Object.keys(LM.mkUnits([g], 'B', {})[0]).join(); ok(k0 === k1 && !k1.split(',').some((k) => /^(fate|kills?|killed|vend\w*|ransom\w*)$/i.test(k)), 'unit shape is unchanged by the decision (no new fields)'); }
+  // old save: no kills, no ransoms, rivals without vend
+  { const S = mkS('old'); delete S.stats.kills; delete S.stats.ransoms; S.rivals = { '1-0': { w: 1, l: 0, last: 'w' } }; const M = LM.migrate(JSON.parse(JSON.stringify(S))); ok(M.stats.kills === 0 && M.stats.ransoms === 0 && !LM.vendetta(M, '1-0') && M.stats.spares === S.stats.spares, 'an old save loads with kills and ransoms at 0 and no vendetta');
+    const ev = duelOf(M), r = LM.fate(M, ev, null, 'kill', ev.opps[0]); ok(r.id === 'kill' && M.stats.kills === 1, 'and the decision works on it'); }
+  // vendetta fades after 12 weeks
+  { const S = mkS('vend'); const ev = duelOf(S), foe = ev.opps[0]; LM.fate(S, ev, null, 'kill', foe); ok(LM.vendetta(S, foe.rv), 'vendetta set'); S.week += 13; ok(!LM.vendetta(S, foe.rv), 'a vendetta fades after 12 weeks'); }
+  // trophies
+  { const S = mkS('tr'); S.stats.kills = 5; S.stats.ransoms = 3; const got = LM.checkTrophies(S).map((t) => t.id); ok(got.includes('blood5') && got.includes('ransom3'), 'Blood Sport and Ransomer trophies unlock'); }
+  // rival ludus relation: ransom up, kill down (when the foe belongs to one of the four rival schools)
+  { const S = mkS('rel'); const sch = LM.ludiInit(S).list[0]; const ev = duelOf(S), foe = Object.assign({}, ev.opps[0], { lud: sch.name }); const r0 = sch.rel; LM.fate(S, ev, null, 'ransom', foe); const r1 = sch.rel; LM.fate(S, ev, null, 'kill', foe); ok(r1 > r0 && sch.rel < r1, `ransom raises (${r0} to ${r1}) and a kill lowers (${sch.rel}) the school's regard`); }
+  // balance sanity: the kill bonus stays a fraction of what the win itself pays, in every league and difficulty
+  { let worst = 0, n = 0; for (let lg = 0; lg <= 3; lg++) for (let wk of [2, 6, 10]) { const S = mkS('bal' + lg + wk); const evs = LM.events(S, wk, lg).filter((e) => LM.FATE_KINDS[e.kind]); for (const e of evs) { const o = by(LM.fateOffers(S, e, e.opps[0]), 'kill'); const win = e.kind === 'duel' ? e.fame : LM.fateBase(e).fame; const ratio = o.fame / Math.max(1, win); worst = Math.max(worst, ratio); n++; } }
+    ok(n > 20 && worst <= 1.7, `the kill bonus is at most ${worst.toFixed(2)}x the base win fame over ${n} events (the early-game flat part dominates, late game about 0.4x)`);
+    const S = mkS('balx'); const e = LM.events(S, 6, 2).find((x) => x.kind === 'duel'); const k = by(LM.fateOffers(S, e, e.opps[0]), 'kill'); ok(k.fame / e.fame <= 0.55, `in the Colosseum a kill adds about ${Math.round(100 * k.fame / e.fame)}% of the win fame`); }
+  ok(LM.fateHype('kill') > LM.fateHype('spare') && LM.fateHype('spare') > LM.fateHype('ransom') && LM.fateHype('kill') === by(off, 'kill').hype, 'crowd hype: kill > spare > ransom, the same numbers as printed');
+  ok(LM.mercy(mkS('m1'), ev0, null, 'mercy').f > 0, 'the old LM.mercy API still works');
+}
+
+{ // round 50: BEAST faces, hair cards, foot locks (js/beast.js headless)
+  const had = { window: typeof globalThis.window, document: typeof globalThis.document };
+  if (!globalThis.window) globalThis.window = globalThis; if (!globalThis.document) globalThis.document = { createElement: () => ({ getContext: () => null }) };
+  const { createBeast, JN } = await import('../ludus_maximus_3d/js/beast.js'), THREE = await import('three');
+  const W = new THREE.Vector3();
+  for (const kind of ['lion', 'wolf', 'bear', 'boar', 'nemean', 'elephant']) {
+    const rig = createBeast(LM.makeBeast(kind, 6, { r: LM.mulberry(5), id: 't' }), { detail: 'high' }), A = rig.animator, big = kind === 'elephant';
+    ok(!!rig.joints.browL && !!rig.joints.browR && (big || (!!rig.joints.lipL && !!rig.joints.lipR)), `${kind}: brow bones${big ? '' : ' and lip bones'} exist`);
+    ok(typeof A.setMood === 'function', `${kind}: animator.setMood exists`);
+    if (!big) { A.setMood('snarl'); for (let i = 0; i < 40; i++) rig.update(1 / 30); ok(rig.joints.lipL.scale.y < 0.7 && A.out[JN.indexOf('browL') * 3] > 0.3, `${kind}: a snarl pulls the lips up and frowns`); A.setMood('calm'); for (let i = 0; i < 60; i++) rig.update(1 / 30); ok(rig.joints.lipL.scale.y > 0.95, `${kind}: calm relaxes the lips`); }
+    A.setMood('enraged'); for (let i = 0; i < 40; i++) rig.update(1 / 30); ok(A.mood.wide > 0.9 && A.enraged, `${kind}: enraged opens the eyes wide`); A.setMood('calm');
+    const m = rig.parts.mane; if (m) { ok(!!m.geometry.attributes.aHair && m.geometry.attributes.aHair.itemSize === 4, `${kind}: hair cards carry the aHair attribute`); ok(m.material.userData.hairU && 'uT' in m.material.userData.hairU, `${kind}: hair sway uniforms`); }
+    if (big) { ok(!!rig.parts.fur.geometry.attributes.aSp && !!rig.mats.fur.userData.splayU, 'elephant: foot splay attribute and uniform'); }
+    // stance paws pinned in world space while the root really travels
+    A.setMove(A.sp.gait.trotV, 0); rig.root.position.set(0, 0, 0); for (let i = 0; i < 60; i++) { rig.root.position.z += A.sp.gait.trotV / 60; rig.update(1 / 60); }
+    let pin = null, worst = 0, sink = 0; for (let i = 0; i < 240; i++) { rig.root.position.z += A.sp.gait.trotV / 60; rig.update(1 / 60); rig.root.updateMatrixWorld(true); const on = A.lkOn[0] && A.lkW[0] > 0.99; W.set(0, -A.pads[0] * 0.98, 0).applyMatrix4(rig.joints.wristL.matrixWorld); if (on) { sink = Math.min(sink, W.y); if (!pin) pin = [W.x, W.z]; worst = Math.max(worst, Math.hypot(W.x - pin[0], W.z - pin[1])); } else pin = null; }
+    ok(worst < 0.3 * A.stride && sink > -0.1 * Math.max(1, rig.size), `${kind}: a trotting stance paw slides ${worst.toFixed(3)} m of a ${A.stride.toFixed(2)} m stride, sinks ${sink.toFixed(3)} m`);
+    ok(A.stride * 0.5 * 0.7 <= Math.min(A.legL[0], A.legL[2]) * 0.9, `${kind}: the stride is limited by the leg reach`);
+    A.setMove(0, 0); rig.dispose();
+  }
+  { const r = createBeast(LM.makeBeast('lion', 6, { r: LM.mulberry(5), id: 'p' }), { detail: 'high', noShells: true }); ok(!r.parts.shell && r.drawCalls() === 4, 'noShells (portraits) drops the fur shells'); r.dispose(); }
+  if (had.window === 'undefined') delete globalThis.window; if (had.document === 'undefined') delete globalThis.document;
+}
+
 console.log(`ludus_maximus: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

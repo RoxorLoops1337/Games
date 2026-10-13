@@ -231,8 +231,17 @@ const THEME_INTRO = {
 function bustOf(g, w, h) {
   try {
     const game = globalThis.__LM3D && globalThis.__LM3D.game; if (!game || !g) return null; if (!game._portraits && game.portraitEl) game.portraitEl(g, 40);
-    const P = game._portraits; if (!P || !P.portrait) return null; const c = P.portrait(g, { w, h, style: 'bust' }); c.className = 'vs3-bust'; c.removeAttribute('width'); c.removeAttribute('height'); c.width = w; c.height = h; return c;
+    // BEAST: a cached portrait is kept as it is (removing the width attribute and setting it again wiped the canvas, which left the slot empty); until the render lands the slot shows a medallion
+    const P = game._portraits; if (!P || !P.portrait) return null; const c = P.portrait(g, { w, h, style: 'bust' }); c.className = 'vs3-bust'; if (!c.dataset.ready) bustPlaceholder(c, g, w, h); return c;
   } catch (e) { return null; }
+}
+/** BEAST: a placeholder painted on the portrait canvas (the real render draws over it): a lit medallion with the beast's emblem, or a head and shoulders silhouette for a gladiator */
+function bustPlaceholder(c, g, w, h) {
+  const x = c.getContext('2d'); if (!x) return; const B = g.beast && D().BEASTS ? D().BEASTS[g.beast] : null, col = (B && B.c) || (D().STYLES[g.style] && D().STYLES[g.style].c) || '#b5532f';
+  const lg = x.createLinearGradient(0, 0, 0, h); lg.addColorStop(0, '#2a2540'); lg.addColorStop(0.6, '#3a2a48'); lg.addColorStop(1, '#1d1830'); x.fillStyle = lg; x.fillRect(0, 0, w, h);
+  const rg = x.createRadialGradient(w * 0.55, h * 0.4, 2, w * 0.55, h * 0.4, w * 0.8); rg.addColorStop(0, col + 'aa'); rg.addColorStop(1, 'rgba(42,37,64,0)'); x.fillStyle = rg; x.fillRect(0, 0, w, h);
+  if (B) { import('./glyphs.js').then((m) => { if (c.dataset.ready) return; const svg = m.emblem(g.beast, { size: 128, color: col, boss: !!B.boss }).replace('<svg ', '<svg xmlns="http://www.w3.org/2000/svg" '), im = new Image(); im.onload = () => { if (c.dataset.ready) return; const s = Math.min(w, h) * 0.8; x.drawImage(im, (w - s) / 2, (h - s) / 2 - h * 0.02, s, s); }; im.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg); }).catch(() => {}); return; }
+  x.fillStyle = 'rgba(20,16,32,.75)'; x.beginPath(); x.arc(w * 0.5, h * 0.42, w * 0.17, 0, 6.2832); x.fill(); x.beginPath(); x.ellipse(w * 0.5, h * 0.98, w * 0.34, h * 0.36, 0, Math.PI, 0); x.fill();
 }
 /** units: sim units (u.g is the gladiator or beast record). meta: F.meta (theme id, title, kind). Resolves when the splash has faded out. */
 export function vsIntro({ host = document.body, a = [], b = [], league = '', meta = {}, theme = '', ms = 2600 } = {}) {

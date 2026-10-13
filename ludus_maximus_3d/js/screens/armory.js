@@ -71,7 +71,8 @@ export function open(ctx, arg) {
     f.append(sb);
     const out = h('div', '', [f]);
     const list = sortedItems();
-    if (!list.length) out.append(emptyState('shield', items().length ? 'Nothing in this slot.' : 'No spare items. Win fights, enter tournaments, or visit the Market.'));
+    if (!list.length) out.append(items().length ? U.emptyState({ icon: 'shield', title: 'Nothing in this slot', text: 'You have spare gear, just none for this slot.', action: { label: 'Show all slots', variant: 'bronze', onClick: () => { st.slot = 'all'; render(); } } })
+      : U.emptyState({ icon: 'shield', title: 'No spare items yet', text: 'Spare gear waits here until a fighter equips it, you sell it, or the Forge upgrades it.', how: 'How to get some: win fights and tournaments, or buy from the Market.', action: { label: 'Visit the Market', icon: 'market', onClick: () => ctx.open('market') } }));
     else { const g = h('div', 'am-grid'); list.forEach((it) => g.append(tile(ctx, it, { onClick: () => { st.view = { type: 'item', id: it.id }; ctx.sfx('uiTap', { gain: 0.5 }); render(); content.scrollTop = 0; } }))); out.append(g); }
     out.append(setsCodex());
     return out;
