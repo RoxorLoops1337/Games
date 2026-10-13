@@ -247,7 +247,7 @@ async function renderSprite(env, name, spec, hex, pressed, S, geoCache) {
 
 // slice string (unitless sprite px: top right bottom left), css width string and outset for each 9-slice family
 function sliceInfo(spec, S, mode) {
-  const R = spec.kind === 'ring' ? spec.r : spec.r, f = (v) => Math.round(v * S);
+  const R = spec.r - (spec.fw === spec.fh && spec.r * 2 === spec.fw && mode === 'round' ? 4 : 0), f = (v) => Math.round(v * S);
   const t = spec.mt + R, r = spec.mr + R, b = spec.mb + R, l = spec.ml + R;
   if (mode === 'bar') { const e = spec.r; return { slice: `${f(e)} ${f(e)} ${f(e)} ${f(e)}`, width: `${e}px`, outset: '0' }; }
   return { slice: `${f(t)} ${f(r)} ${f(b)} ${f(l)}`, width: `${t}px ${r}px ${b}px ${l}px`, outset: `${spec.mt}px ${spec.mr}px ${spec.mb}px ${spec.ml}px` };
@@ -256,13 +256,13 @@ function sliceInfo(spec, S, mode) {
 const PILL_C = ['green', 'gold', 'blue', 'pink', 'red', 'lilac', 'cream'];
 const ROUND_C = ['green', 'gold', 'blue', 'pink', 'red', 'lilac', 'cream', 'mint', 'butter', 'sky', 'rose'];
 const CARD_C = ['cCream', 'cGreen', 'cGrey', 'cBlue', 'cPink', 'cGold', 'cLilac'];
-const DOT_C = ['red', 'green', 'gold', 'blue', 'pink', 'lilac'];
+const DOT_C = ['red', 'green', 'gold', 'blue', 'pink', 'lilac', 'cream'];
 const BAR_C = ['gold', 'green', 'blue', 'pink', 'lilac', 'red'];
 const BAR_HEX = { gold: '#ffc22e', green: '#5cc23f', blue: '#4aaee6', pink: '#f0719b', lilac: '#9c84e6', red: '#ea4f46' };
 
 const FAMILIES = [
-  { id: 'pill', spec: 'pill', colors: PILL_C, poses: 2, pre: 'pill' },
   { id: 'round', spec: 'round', colors: ROUND_C, poses: 2, pre: 'round' },
+  { id: 'pill', spec: 'pill', colors: PILL_C, poses: 2, pre: 'pill' },
   { id: 'card', spec: 'card', colors: CARD_C, poses: 1, pre: 'card', dn: ['cCream', 'cGreen'] },
   { id: 'bar', spec: 'bar', colors: BAR_C, poses: 1, pre: 'bar', hex: BAR_HEX },
   { id: 'dot', spec: 'dot', colors: DOT_C, poses: 1, pre: 'dot' },
@@ -280,7 +280,7 @@ export async function renderAll({ onSprite, onFamily, isDead = () => false, only
     for (const fam of FAMILIES) {
       if (only && !only.includes(fam.id)) continue;
       const spec = SPEC[fam.spec];
-      const info = fam.id === 'bar' ? sliceInfo(spec, S, 'bar') : sliceInfo(spec, S);
+      const info = fam.id === 'bar' ? sliceInfo(spec, S, 'bar') : sliceInfo(spec, S, fam.id === 'round' ? 'round' : '');
       onSprite && onSprite(`--r3-${fam.id}-slice`, info.slice); onSprite && onSprite(`--r3-${fam.id}-width`, info.width); onSprite && onSprite(`--r3-${fam.id}-outset`, info.outset);
       for (const c of fam.colors) {
         for (const pressed of fam.poses === 2 ? [false, true] : (fam.dn && fam.dn.includes(c) ? [false, true] : [false])) {

@@ -92,7 +92,8 @@ html[data-ui="comic"] .bar.p i{--bf:var(--m);--bs:var(--md);background:linear-gr
 html[data-ui="comic"] .bar.l i{--bf:var(--v);--bs:var(--vd);background:linear-gradient(0deg,var(--bs) 0 36%,transparent 36%),repeating-linear-gradient(-45deg,rgba(255,255,255,.4) 0 5px,transparent 5px 10px),var(--bf);box-shadow:3px 0 0 var(--o)}
 html[data-ui="comic"] .bar.r i{--bf:var(--r);--bs:var(--rd);background:linear-gradient(0deg,var(--bs) 0 36%,transparent 36%),repeating-linear-gradient(-45deg,rgba(255,255,255,.4) 0 5px,transparent 5px 10px),var(--bf);box-shadow:3px 0 0 var(--o)}
 html[data-ui="comic"] .bar.sh i::before{background:linear-gradient(105deg,transparent 41%,rgba(255,255,255,.8) 41% 52%,transparent 52%) 0 0/260% 100% no-repeat;background-position:220% 0;animation:shine 2.8s steps(12) infinite}
-html[data-ui="comic"] .ringp .t{stroke:#e4d9f0}.ringp .a{stroke:var(--l)}
+html[data-ui="comic"] .ringp .t{stroke:#e4d9f0}
+html[data-ui="comic"] .ringp .a{stroke:var(--l)}
 html[data-ui="comic"] .ringp.gold .a{stroke:var(--y)}html[data-ui="comic"] .ringp.blue .a{stroke:var(--c)}html[data-ui="comic"] .ringp.pink .a{stroke:var(--m)}
 
 /* ---------- HUD ---------- */
@@ -360,7 +361,8 @@ html[data-ui="comic"] body.lowfx{--grain:none}
 html[data-ui="comic"] body.lowfx .b,html[data-ui="comic"] body.lowfx .rb,html[data-ui="comic"] body.lowfx .pill,html[data-ui="comic"] body.lowfx .gp,html[data-ui="comic"] body.lowfx #card,html[data-ui="comic"] body.lowfx .mini-b,html[data-ui="comic"] body.lowfx button.tab{
   background:linear-gradient(0deg,var(--shd) 0 27%,transparent 27%),var(--f)}
 html[data-ui="comic"] body.lowfx .sheet,html[data-ui="comic"] body.lowfx .sec,html[data-ui="comic"] body.lowfx .card,html[data-ui="comic"] body.lowfx #dock,html[data-ui="comic"] body.lowfx .ov-card,html[data-ui="comic"] body.lowfx .tb{background:var(--paper)}
-html[data-ui="comic"] body.lowfx .sheet::before,html[data-ui="comic"] body.lowfx .sheet::after,html[data-ui="comic"] body.lowfx #bBuild::before{display:none}
+html[data-ui="comic"] body.lowfx .sheet::before,html[data-ui="comic"] body.lowfx .sheet::after{display:none}
+html[data-ui="comic"] body.lowfx #bBuild::before{animation:none}
 html[data-ui="comic"] body.lowfx .rb .ic,html[data-ui="comic"] body.lowfx .pill .ic,html[data-ui="comic"] body.lowfx .b .ic,html[data-ui="comic"] body.lowfx .gp .ic,html[data-ui="comic"] body.lowfx .tab .ic,html[data-ui="comic"] body.lowfx #bBuild .bi,html[data-ui="comic"] body.lowfx .lvlbadge .ic{filter:drop-shadow(0 2px 0 var(--o))}
 html[data-ui="comic"] body.lowfx .pip,html[data-ui="comic"] body.lowfx .shine::after,html[data-ui="comic"] body.lowfx .rays.big{animation:none}
 html[data-ui="comic"] body.lowfx #scrim,html[data-ui="comic"] body.lowfx .ov-bg{background-image:none}

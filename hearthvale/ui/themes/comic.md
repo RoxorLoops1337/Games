@@ -1,0 +1,6 @@
+Name: Comic Cel (id comic).
+Technique: pure CSS cel shading: flat fills with one hard highlight blob and one hard shade band, 4px plum (#2b1b3a) outlines on shapes and on text (text-stroke with paint-order), halftone dots from tiled radial-gradients, conic-gradient action-line bursts in clip-path stars, speech-bubble toasts, paper grain from an svg noise data URI.
+Feels touchable: hard block shadow (0 6px 0 plum, no blur) that collapses while the button drops 5px and darkens on press, a visible thick under-edge, punchy saturated colours, jagged POW star pips and level badge, skewed inked tabs, glint stripes on shiny buttons.
+Performance: no blur, no backdrop-filter, no JS, no images; one 140px noise tile, a few tiled dot gradients, a clip-path burst behind Build (one slow rotation) and 4-way hard drop-shadow outlines on small icons only.
+Low quality (body.lowfx): drops grain, halftone layers, sheet corner dots, pip and glint animations, scrim dots and burst rotation; icons keep a single hard shadow. Reduce-motion stops the burst and pips.
+Weaknesses: text-stroke makes very small text heavy, system fonts only so the comic lettering depends on the device, the Build burst overlaps the dock outline, and the tab bar now skips the sliding indicator (the active tab pops instead).

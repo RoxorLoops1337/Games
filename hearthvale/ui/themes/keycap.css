@@ -27,7 +27,7 @@ html[data-ui="keycap"]{
 }
 
 /* ---------- the 3D blocks: .b .rb .pill .gp #card .mini-b ---------- */
-html[data-ui="keycap"] :where(.b,.rb,.pill,.gp,#card,.mini-b){
+html[data-ui="keycap"] :is(.b,.rb,.pill,.gp,.mini-b),html[data-ui="keycap"] #card{
   --d:9px;--ps:1.016;--f:3px;--w:5px;--yy:0px;--zz:0px;--bw:3px;--tx:0deg;--ty:0deg;
   --k1:color-mix(in srgb,var(--c1) 84%,#fff6e2);
   --k2:color-mix(in srgb,var(--c2) 88%,#f3e4c6);
@@ -53,7 +53,7 @@ html[data-ui="keycap"] :where(.b,.rb,.pill,.gp,#card,.mini-b){
   filter:none;
 }
 /* the base plate: ground footprint, walls (shaded from a top-left light) and the contact shadow plane */
-html[data-ui="keycap"] :where(.b,.rb,.pill,.gp,#card,.mini-b)::before{
+html[data-ui="keycap"] :is(.b,.rb,.pill,.gp,.mini-b)::before,html[data-ui="keycap"] #card::before{
   content:"";position:absolute;z-index:0;pointer-events:none;border:0;animation:none;
   top:calc(var(--w) - var(--f) - var(--yy) - var(--bw));
   right:calc(var(--bw)*-1 - var(--f));
@@ -76,7 +76,7 @@ html[data-ui="keycap"] :is(.rb,.pill,.gp,.mini-b,.b.small-b){--d:7px;--ps:1.0125
 html[data-ui="keycap"] :is(.b.big,#bBuild,#quick){--d:12px;--ps:1.0215;--w:7px;--f:4px}
 html[data-ui="keycap"] #card{--d:8px;--ps:1.0145;--w:5px;--f:3px}
 /* hover and tilt (JS toggles .kc-live while the pointer is over the key and .kc-down while pressed) */
-html[data-ui="keycap"] :is(.b,.rb,.pill,.gp,#card,.mini-b).kc-live{transition:transform .1s ease-out}
+html[data-ui="keycap"] :is(.b,.rb,.pill,.gp,#card,.mini-b).kc-live{transition:transform .1s ease-out;will-change:transform}
 html[data-ui="keycap"] :is(.b,.rb,.pill,.gp,#card,.mini-b):is(:active,.kc-down):not(.off){
   --f:1px;--w:1.5px;--yy:3px;--zz:6px;transition:transform .07s ease-out;
 }
@@ -113,7 +113,7 @@ html[data-ui="keycap"] .b-pink,html[data-ui="keycap"] #tools .rb:nth-child(6){--
 html[data-ui="keycap"] .b-blue,html[data-ui="keycap"] .pill.scr,html[data-ui="keycap"] .gp.more,html[data-ui="keycap"] #tools .rb:nth-child(5){--c1:#d3f1fa;--c2:#9bdaee;--ed:#3f90ae;--kc-ink:#0e3a4e}
 html[data-ui="keycap"] .b-lilac{--c1:#e6deff;--c2:#c4b5f3;--ed:#7360b5;--kc-ink:#2b1f5e}
 html[data-ui="keycap"] .b-cream,html[data-ui="keycap"] #tools .rb:nth-child(7),html[data-ui="keycap"] #card{--c1:#fffaf0;--c2:#f6e9cc;--ed:#cdb487;--kc-ink:#4a3624}
-html[data-ui="keycap"] .b.off,html[data-ui="keycap"] .rb.off,html[data-ui="keycap"] .gp.dim{--c1:#efe8d8!important;--c2:#ddd3be!important;--ed:#b5aa90!important;--kc-ink:#857965!important;opacity:1;filter:none}
+html[data-ui="keycap"] .b.off,html[data-ui="keycap"] .rb.off,html[data-ui="keycap"] .gp.dim{--c1:#efe8d8!important;--c2:#ddd3be!important;--ed:#b5aa90!important;--kc-ink:#5f5444!important;opacity:1;filter:none}
 html[data-ui="keycap"] .b.off,html[data-ui="keycap"] .rb.off{box-shadow:inset 2px 3px 4px -2px rgba(var(--kc-shadow),.3),inset 0 0 0 1px rgba(255,255,255,.2)}
 html[data-ui="keycap"] .b.off .ic,html[data-ui="keycap"] .rb.off .ic{filter:grayscale(.6) drop-shadow(0 1px 0 rgba(255,255,255,.6))}
 html[data-ui="keycap"] .b.off{text-shadow:0 1px 0 rgba(255,255,255,.7)}
@@ -143,20 +143,21 @@ html[data-ui="keycap"] .av .trk{stroke:#d9c9a2}
 html[data-ui="keycap"] .av .face{box-shadow:inset 0 3px 4px rgba(var(--kc-shadow),.35),0 0 0 2px #fffaf0,0 2px 0 2px #cdb487}
 
 /* ---------- slabs: panels with real thickness (stacked shadows, no 3D context) ---------- */
-html[data-ui="keycap"] :is(.sec,.card,.rowi,.stat,.tech,.wcard,.fieldchip,.day,.evcard,.phero,.qitem,.chipb,.quest,.good,.slot.full,#saveCard,.tcard2,#track,#place,#mini,.tb,.banner,.uis){
+html[data-ui="keycap"] :is(.sec,.card,.rowi,.stat,.tech,.wcard,.fieldchip,.day,.evcard,.phero,.qitem,.chipb,.quest,.good,.slot.full,.tcard2,.tb,.banner,.uis),
+html[data-ui="keycap"] #saveCard,html[data-ui="keycap"] #track,html[data-ui="keycap"] #place,html[data-ui="keycap"] #mini{
   --sb1:#fffaf0;--sb2:#f4e8cc;--sedge:#cbb284;
   --sl:color-mix(in srgb,var(--sedge) 72%,#fff);--sm:var(--sedge);--sd:color-mix(in srgb,var(--sedge) 82%,#2b1a08);
   background:var(--kc-noise,linear-gradient(transparent,transparent)),radial-gradient(ellipse 120% 110% at 60% 80%,var(--sb1),var(--sb2));
   border:3px solid;border-color:color-mix(in srgb,var(--sb1) 40%,#fff) color-mix(in srgb,var(--sb2) 70%,var(--sedge)) color-mix(in srgb,var(--sb2) 70%,var(--sedge)) color-mix(in srgb,var(--sb1) 40%,#fff);
   box-shadow:inset 2px 3px 3px -2px rgba(255,255,255,.9),inset -1px -2px 3px -1px rgba(var(--kc-shadow),.12),0 1px 0 var(--sl),0 2px 0 var(--sl),0 3px 0 var(--sm),0 4px 0 var(--sm),0 5px 0 var(--sd),0 11px 12px -5px rgba(var(--kc-shadow),.38);
 }
-html[data-ui="keycap"] :is(.sec,.card,.stat,.wcard,.phero,.tcard2,#track){--sedge:#c4aa78}
+html[data-ui="keycap"] :is(.sec,.card,.stat,.wcard,.phero,.tcard2),html[data-ui="keycap"] #track{--sedge:#c4aa78}
 html[data-ui="keycap"] :is(.sec.done,.card.done,.tech.done,.sec.up,.nextup,.pr.me,.stage.built,.quest.done,.day.done,.ach.got){--sb1:#ecfcf2;--sb2:#c6efd7;--sedge:#6cb592}
 html[data-ui="keycap"] :is(.sec.lock,.card.lock){--sb1:#f1ebe0;--sb2:#e2d9c6;--sedge:#bdb197;color:#8a7a66}
 html[data-ui="keycap"] :is(.tb.t-good){--sb1:#ecfcf2;--sb2:#c2edd3;--sedge:#6cb592}
 html[data-ui="keycap"] :is(.tb.t-warn,.banner.gold,.tb.t-gold,.day.today){--sb1:#fff6c9;--sb2:#ffe08a;--sedge:#c9a02c}
 html[data-ui="keycap"] :is(.tb.t-bad){--sb1:#ffe9e1;--sb2:#ffc5b2;--sedge:#c9654a}
-html[data-ui="keycap"] :is(.tb.t-pink,.evcard.on,#festival){--sb1:#ffeaf0;--sb2:#ffc9d8;--sedge:#c9738d}
+html[data-ui="keycap"] :is(.tb.t-pink,.evcard.on){--sb1:#ffeaf0;--sb2:#ffc9d8;--sedge:#c9738d}
 html[data-ui="keycap"] .banner.green{--sb1:#ecfcf2;--sb2:#bfeccf;--sedge:#6cb592}
 html[data-ui="keycap"] .evcard{--sb1:#eaf8fc;--sb2:#c9ebf5;--sedge:#6fa9bf}
 html[data-ui="keycap"] .phero{--sb1:#e9f7fb;--sb2:#c8e8f2;--sedge:#6fa9bf}

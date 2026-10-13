@@ -33,8 +33,9 @@ html[data-ui="gold"] .ov-bg{background:rgba(22,10,52,.62)}
 
 /* ---------- metals: variables only (rim = gold by default) ---------- */
 html[data-ui="gold"] .b,html[data-ui="gold"] .rb,html[data-ui="gold"] .pill,html[data-ui="gold"] .gp,html[data-ui="gold"] #card,html[data-ui="gold"] .mini-b{
-  --m-hi:#fff3b8;--m-1:#f6d56c;--m-2:#c8922b;--m-3:#7a4e0f;--m-4:#43290a;
-  --rim:linear-gradient(100deg,transparent 0 24%,rgba(255,255,255,.5) 31%,transparent 38% 60%,rgba(255,255,255,.34) 67%,transparent 74%),linear-gradient(172deg,var(--m-hi) 0%,var(--m-1) 12%,var(--m-2) 42%,var(--m-3) 60%,var(--m-2) 84%,var(--m-1) 100%);
+  --m-hi:#fff6c4;--m-1:#f8dc78;--m-2:#dba834;--m-3:#9a6a16;--m-4:#43290a;
+  --band:linear-gradient(100deg,transparent 0 24%,rgba(255,255,255,.5) 31%,transparent 38% 60%,rgba(255,255,255,.34) 67%,transparent 74%);
+  --metal:linear-gradient(172deg,var(--m-hi) 0%,var(--m-1) 12%,var(--m-2) 42%,var(--m-3) 60%,var(--m-2) 84%,var(--m-1) 100%);
   --en1:#6a45c4;--en2:#33207f;--tx:#fff0c4;
   --gloss:linear-gradient(180deg,rgba(255,255,255,.46) 0%,rgba(255,255,255,.16) 46%,rgba(255,255,255,0) 47%,rgba(255,255,255,0) 100%);
   --shd:0 0 0 1px rgba(36,16,0,.8),0 3px 0 1px var(--m-3),0 4px 0 2px rgba(30,12,0,.72),0 9px 14px rgba(12,0,36,.5);
@@ -66,11 +67,11 @@ html[data-ui="gold"] .mini-b{--en1:#3a2878;--en2:#1f1348}
 /* ---------- the cast metal plate: all chunky buttons ---------- */
 html[data-ui="gold"] .b,html[data-ui="gold"] .rb,html[data-ui="gold"] .pill,html[data-ui="gold"] .gp,html[data-ui="gold"] #card,html[data-ui="gold"] .mini-b{
   color:var(--tx);border:3px solid transparent;font-family:var(--font);letter-spacing:.25px;
-  background-image:var(--gloss),linear-gradient(180deg,var(--en1),var(--en2)),var(--g-brush,var(--nil)),var(--rim);
-  background-size:100% 100%,100% 100%,200px 96px,100% 100%;
-  background-origin:padding-box,padding-box,border-box,border-box;
-  background-clip:padding-box,padding-box,border-box,border-box;
-  background-repeat:no-repeat,no-repeat,repeat,no-repeat;
+  background-image:var(--gloss),linear-gradient(180deg,var(--en1),var(--en2)),var(--g-brush,var(--nil)),var(--band),var(--metal);
+  background-size:100% 100%,100% 100%,200px 96px,100% 100%,100% 100%;
+  background-origin:padding-box,padding-box,border-box,border-box,border-box;
+  background-clip:padding-box,padding-box,border-box,border-box,border-box;
+  background-repeat:no-repeat,no-repeat,repeat,no-repeat,no-repeat;
   background-color:transparent;
   box-shadow:var(--shd),var(--inn);
   text-shadow:0 -1px 0 rgba(10,0,30,.62),0 1px 0 rgba(255,236,170,.34);
@@ -84,7 +85,7 @@ html[data-ui="gold"] .b:active,html[data-ui="gold"] .rb:active,html[data-ui="gol
 html[data-ui="gold"] .tap:active{transform:translateY(2px) scale(.98)}
 @media (hover:hover){html[data-ui="gold"] .b:hover,html[data-ui="gold"] .rb:hover,html[data-ui="gold"] .pill:hover,html[data-ui="gold"] .gp:hover{filter:brightness(1.1) saturate(1.08)}}
 html[data-ui="gold"] .b:focus-visible,html[data-ui="gold"] .rb:focus-visible,html[data-ui="gold"] input:focus-visible,html[data-ui="gold"] .tab:focus-visible,html[data-ui="gold"] .gp:focus-visible{outline:3px solid #fff3b8;outline-offset:2px}
-html[data-ui="gold"] .b.off,html[data-ui="gold"] .rb.off{opacity:1;filter:saturate(.25) brightness(.78);--tx:#d9cfee}
+html[data-ui="gold"] .b.off,html[data-ui="gold"] .rb.off{opacity:1;filter:saturate(.3) brightness(.92);--tx:#f4eeff}
 html[data-ui="gold"] .b.off:active{transform:none}
 html[data-ui="gold"] .b.big{font-size:19px}
 html[data-ui="gold"] .hot{box-shadow:0 0 0 3px rgba(255,120,110,.9),0 4px 0 #7a0f1c!important}
@@ -114,7 +115,7 @@ html[data-ui="gold"] .ic{filter:drop-shadow(0 1px 1px rgba(10,0,30,.5))}
 html[data-ui="gold"] .rb{width:48px;height:48px}
 
 /* round buttons: spun-metal conic rims */
-html[data-ui="gold"] .rb,html[data-ui="gold"] .b.round{--rim:linear-gradient(100deg,transparent 0 24%,rgba(255,255,255,.4) 31%,transparent 38% 60%,rgba(255,255,255,.28) 67%,transparent 74%),conic-gradient(from 25deg,var(--m-1),var(--m-hi) 9%,var(--m-2) 20%,var(--m-3) 30%,var(--m-1) 42%,var(--m-hi) 53%,var(--m-2) 66%,var(--m-3) 76%,var(--m-1) 88%,var(--m-hi) 95%,var(--m-1))}
+html[data-ui="gold"] .rb,html[data-ui="gold"] .b.round{--metal:conic-gradient(from 25deg,var(--m-1),var(--m-hi) 9%,var(--m-2) 20%,var(--m-3) 30%,var(--m-1) 42%,var(--m-hi) 53%,var(--m-2) 66%,var(--m-3) 76%,var(--m-1) 88%,var(--m-hi) 95%,var(--m-1))}
 html[data-ui="gold"] #bBuild{--en1:#1cb46f;--en2:#06583a;--tx:#fff6d4;border-width:4px;font-size:19px;letter-spacing:.5px}
 html[data-ui="gold"] #bBuild .bi{filter:drop-shadow(0 -1px 0 rgba(255,244,200,.6)) drop-shadow(0 2px 1px rgba(2,40,20,.7))}
 html[data-ui="gold"] .pip{background:radial-gradient(circle at 35% 30%,#ffc2c8,#e0243d 45%,#6e0f26);border:2px solid #f6d56c;box-shadow:0 0 0 1px #4a2d05,0 2px 0 #4a2d05;color:#fff;font-family:var(--font);text-shadow:0 1px 0 rgba(60,0,10,.8)}
@@ -357,7 +358,7 @@ html[data-ui="gold"] #saveCard small{color:#c9f5dc}
 /* ---------- cheaper variant ---------- */
 html[data-ui="gold"] body.lowfx .b::after,html[data-ui="gold"] body.lowfx .rb::after,html[data-ui="gold"] body.lowfx .pill::after,html[data-ui="gold"] body.lowfx .gp::after,html[data-ui="gold"] body.lowfx #card::after,html[data-ui="gold"] body.lowfx .mini-b::after{animation:none;background:none}
 html[data-ui="gold"] body.lowfx .b:active::after,html[data-ui="gold"] body.lowfx .rb:active::after{animation:gdflash .5s ease-out 1 both;background:linear-gradient(105deg,transparent 30%,rgba(255,244,190,.9) 47%,#fff 50%,rgba(255,244,190,.9) 53%,transparent 70%) 0 0/320% 100% no-repeat}
-html[data-ui="gold"] body.lowfx .b,html[data-ui="gold"] body.lowfx .rb,html[data-ui="gold"] body.lowfx .pill,html[data-ui="gold"] body.lowfx .gp,html[data-ui="gold"] body.lowfx #card,html[data-ui="gold"] body.lowfx .mini-b{background-image:var(--gloss),linear-gradient(180deg,var(--en1),var(--en2)),var(--nil),var(--rim)}
+html[data-ui="gold"] body.lowfx .b,html[data-ui="gold"] body.lowfx .rb,html[data-ui="gold"] body.lowfx .pill,html[data-ui="gold"] body.lowfx .gp,html[data-ui="gold"] body.lowfx #card,html[data-ui="gold"] body.lowfx .mini-b{background-image:var(--gloss),linear-gradient(180deg,var(--en1),var(--en2)),var(--nil),var(--band),var(--metal)}
 html[data-ui="gold"] body.lowfx .sheet::before,html[data-ui="gold"] body.lowfx .sheet::after{display:none}
 html[data-ui="gold"] body.lowfx .sh-head,html[data-ui="gold"] body.lowfx .banner{filter:none!important}
 html[data-ui="gold"] body.lowfx .sec,html[data-ui="gold"] body.lowfx .card,html[data-ui="gold"] body.lowfx .tb{box-shadow:0 0 0 1px rgba(30,12,0,.7),0 3px 0 1px #6a430c}

@@ -87,9 +87,8 @@ html[data-ui="gel"] :is(.shine,#bBuild,#quick)::after{content:"";position:absolu
 html[data-ui="gel"] #quick:active,html[data-ui="gel"] #soupAlert:active,html[data-ui="gel"] #tools .rb.visitor:active{animation:none}
 
 /* ================= pips, badges, gems ================= */
-html[data-ui="gel"] .pip{background:linear-gradient(#ff9aa4,#ff3550 55%,#d4123a);color:#fff;border:2px solid #fff;-webkit-text-stroke:0;
+html[data-ui="gel"] .pip{background:linear-gradient(rgba(255,255,255,.75),rgba(255,255,255,0) 52%),linear-gradient(#ff9aa4,#ff3550 55%,#d4123a);color:#fff;border:2px solid #fff;-webkit-text-stroke:0;
   box-shadow:0 0 0 2px #7a0a24,0 3px 0 2px #7a0a24,0 6px 6px rgba(120,0,30,.35);text-shadow:0 1px 0 rgba(90,0,20,.7);isolation:isolate}
-html[data-ui="gel"] .pip::before{content:"";position:absolute;left:3px;right:3px;top:1px;height:42%;border-radius:99px;background:linear-gradient(rgba(255,255,255,.85),rgba(255,255,255,.1));z-index:-1;pointer-events:none}
 html[data-ui="gel"] .badge-new,html[data-ui="gel"] .ribbon{background:linear-gradient(#ffd0e8,#ff4fa3 55%,#d3207c);border:2px solid #fff;box-shadow:0 0 0 2px #6a0c3e,0 3px 0 2px #6a0c3e;text-shadow:0 1px 0 #6a0c3e}
 html[data-ui="gel"] .badge-new.sale{background:linear-gradient(#ffe9a0,#ffb21e 55%,#e87a0a);box-shadow:0 0 0 2px #8a3e00,0 3px 0 2px #8a3e00;text-shadow:0 1px 0 #8a3e00}
 html[data-ui="gel"] .gp em{background:linear-gradient(#ffd0e8,#ff4fa3);border:2px solid #fff;box-shadow:0 0 0 1.5px #6a0c3e}

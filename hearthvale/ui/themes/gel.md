@@ -1,0 +1,6 @@
+Candy Gel (id gel)
+Technique: pure CSS layered gel: multi-stop gradients, hard 3px-outlined jewel under-edge (8 to 12 px thick) built from stacked box-shadows, curved specular band + hot spot in a pseudo-element, inner rim and bounce light, stroked labels (paint-order stroke fill).
+Touchable: visible slab thickness, glossy top third, coloured soft shadow, press moves the face down and collapses the edge with a jelly squash and overshoot spring on release, diagonal glint sweep on Build, Work! and .shine buttons; panels have two-tone indigo frames, candy tube bars, gem corner on sheet headers.
+Performance: no JS, no images, no backdrop-filter added, only transforms and background-position animate (3 sweeps at most); body.lowfx drops soft shadows, inner glows, icon filters and the sweeps; reduced motion and data-reduce=1 stop the sweeps.
+Known weaknesses: many stacked box-shadows per button (cheap on GPU, but ~100 elements in a long list repaint more); the edge strip sticks out 10 px below buttons so tight rows can look crowded; gloss is a fixed ellipse so very wide or very tall buttons show a generic highlight.
+Palette: lime, sunny yellow, sky blue, hot pink, tangerine on deep jewel edges; panels are lavender with indigo frames to make the candy colours pop over the pastel world.

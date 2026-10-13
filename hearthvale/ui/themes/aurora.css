@@ -294,7 +294,7 @@ html[data-ui="aurora"] #bBuild::after,
 html[data-ui="aurora"] #card::after,
 html[data-ui="aurora"] .av .lv::after,
 html[data-ui="aurora"] .lvlbadge::after{background:conic-gradient(from var(--au-a),rgba(255,255,255,.98),rgba(255,160,225,.55) 22%,rgba(160,245,225,.95) 48%,rgba(150,205,255,.5) 72%,rgba(255,255,255,.98));animation:au-spin 9s linear infinite}
-html[data-ui="aurora"] #bBuild{--au-g:0;--au-t:.4;border-width:0;box-shadow:inset 0 1px 0 rgba(255,255,255,.9),inset 0 -8px 16px -6px rgba(120,255,225,.9),0 10px 28px -4px rgba(60,230,200,.7),0 0 34px -4px rgba(150,120,255,.55),0 3px 6px rgba(30,20,90,.3);
+html[data-ui="aurora"] #bBuild{--au-t:.4;border-width:0;box-shadow:inset 0 1px 0 rgba(255,255,255,.9),inset 0 -8px 16px -6px rgba(120,255,225,.9),0 10px 28px -4px rgba(60,230,200,.7),0 0 34px -4px rgba(150,120,255,.55),0 3px 6px rgba(30,20,90,.3);
   font-size:19px;letter-spacing:.4px;--au-sh-b:inset 0 1px 0 rgba(255,255,255,.9),inset 0 -8px 16px -6px rgba(255,160,225,.9),0 10px 30px -2px rgba(255,130,210,.7),0 0 40px -2px rgba(150,120,255,.65),0 3px 6px rgba(30,20,90,.3);animation:au-breathe 5s ease-in-out infinite}
 html[data-ui="aurora"] #bBuild:active{animation:none;box-shadow:inset 0 1px 0 rgba(255,255,255,.6),inset 0 -14px 20px -4px rgba(120,255,225,1),0 0 38px 6px rgba(80,240,210,.85),0 1px 3px rgba(30,20,90,.3)}
 html[data-ui="aurora"] #bBuild.shine::after{animation:au-spin 9s linear infinite}

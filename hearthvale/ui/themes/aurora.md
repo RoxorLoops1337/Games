@@ -1,0 +1,6 @@
+Dreamy Aurora (id aurora): premium mobile glass, pastel pink, lilac, mint and sky over the bright world, white or deep indigo text.
+Technique: animated mesh gradients (stacked radial-gradients moved by @property registered percentages) plus frosted glass with gradient light rims (mask-composite border, conic rim that rotates on hero elements only).
+Touchable because: luminous coloured core glowing from the bottom edge, inner top highlight, coloured diffused shadow, a pointer-following specular (--mx/--my via rAF while hovered or pressed), and pressed = dip plus soft squash while the glow intensifies.
+Performance: backdrop-filter only on sheet, dock, top card, scrim and level-up backdrop; lists and chips use static pre-blurred gradients; animation only on Build, player card and level badge (about 3 small repaints); grain is one 128px canvas data URI (about 40 KB) generated in under 20 ms.
+Fallbacks: body.lowfx removes every backdrop-filter and animation (solid-ish glass, frozen mesh); prefers-reduced-motion and data-reduce=1 stop all animation; mesh pauses while the tab is hidden.
+Weaknesses: needs a modern browser for @property and mask-composite (older ones show flat glass); over a very dark world the dark glass loses contrast with the rim; mesh motion is subtle on small badges; pressed specular can lower text contrast briefly.
