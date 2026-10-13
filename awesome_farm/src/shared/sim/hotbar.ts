@@ -11,6 +11,7 @@
 
 import { POD_POWER } from '../data/creatures';
 import { ITEM_ORDER, ITEMS, ItemId } from '../data/items';
+import { PAL } from '../palette';
 import * as quests from './quests';
 import { countOf } from './stats';
 import type { Cmd, PlayerS } from './types';
@@ -74,4 +75,35 @@ export function cmdHot (sim: Sim, p: PlayerS, c: Extract<Cmd, { t: 'hot' }>) {
     p.hot = bar;
     if (item) quests.count(p, 'pin');       // (the tutorial counts it)
     sim.fx(item ? 'equip' : 'deny', p.x, p.y - 10, p.id);
+}
+
+// ── refilling a slot that ran dry ───────────────────────────────────────────
+const timers = new WeakMap<Sim, number>();
+
+/** The next thing of the same kind to stand in for a pinned food, potion or seed that has run out. */
+function stand_in (p: PlayerS, gone: ItemId, bar: (ItemId | null)[]): ItemId | null {
+    const kind = hotKind(gone);
+    if (kind === 'use') return consumables(p).find((id) => !bar.includes(id)) ?? null;
+    if (kind === 'seed') return ITEM_ORDER.find((id) => countOf(p, id) > 0 && hotKind(id) === 'seed' && !bar.includes(id)) ?? null;
+    return null;
+}
+
+/** Once a second: a pinned food, potion or seed you have used up is replaced by the next one you carry, so the slot is never dead when you reach for it. */
+export function step (sim: Sim, dt: number) {
+    const t = (timers.get(sim) ?? 0) + dt;
+    if (t < 1) { timers.set(sim, t); return; }
+    timers.set(sim, 0);
+    for (const p of sim.online) {
+        if (!p.hot) continue;
+        for (let i = 0; i < HOT_SLOTS; i++) {
+            const id = p.hot[i];
+            if (!id || countOf(p, id) > 0 || Object.values(p.equip).includes(id)) continue;
+            const kind = hotKind(id);
+            if (kind !== 'use' && kind !== 'seed') continue;
+            const next = stand_in(p, id, p.hot);
+            if (!next) continue;
+            p.hot[i] = next;
+            sim.float(p.x, p.y - 30, `${ITEMS[id].name} ran out: ${ITEMS[next].name} is on slot ${i + 1}`, PAL.pebble, p.id, 'hotfill');
+        }
+    }
 }

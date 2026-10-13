@@ -7,7 +7,7 @@ split big ones into slices (rules, art, polish).
 
 ## Phase 1: quick wins that touch every session (small)
 - [x] S16 Chest "in use" indicator (who has it open)
-- [ ] S17 Hotbar auto-refill of a pinned stack
+- [x] S17 Hotbar auto-refill of a pinned stack (food, potions and seeds)
 - [ ] S18 Recent recipes row in Crafting
 - [ ] S21 Item comparison tooltips (Shift) with green/red deltas
 - [ ] S28 Quick-sell undo window
