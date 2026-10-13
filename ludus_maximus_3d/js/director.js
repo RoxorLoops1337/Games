@@ -28,11 +28,13 @@ function sd(o, k, target, smooth, dt, maxSpeed = Infinity) {
 function sdAngle(o, k, target, smooth, dt, maxSpeed) { const cur = o[k]; const t = cur + angDelta(cur, target); sd(o, k, t, smooth, dt, maxSpeed); o[k] = wrap(o[k]); }
 
 // ---------- camera math ----------
+let _bY = NaN, _bP = NaN, _bR = null;   // PERF: update() asks for the same basis several times per frame (needD, camPos, recenter): memoised on the exact arguments; callers only read it
 function basis(yaw, pitch) { // forward looks along horizontal yaw, pitched DOWN by pitch (negative = looks up)
+  if (yaw === _bY && pitch === _bP) return _bR;
   const cp = Math.cos(pitch), f = [cp * Math.cos(yaw), -Math.sin(pitch), cp * Math.sin(yaw)];
   let r = [-f[2], 0, f[0]]; const l = Math.hypot(r[0], r[2]) || 1; r = [r[0] / l, 0, r[2] / l]; // cross(f, up)
   const u = [r[1] * f[2] - r[2] * f[1], r[2] * f[0] - r[0] * f[2], r[0] * f[1] - r[1] * f[0]];
-  return { f, r, u };
+  _bY = yaw; _bP = pitch; return (_bR = { f, r, u });
 }
 // Fix: r = cross(f, up) = (-f.z, 0, f.x) normalised; u = cross(r, f). Verified in tests.
 

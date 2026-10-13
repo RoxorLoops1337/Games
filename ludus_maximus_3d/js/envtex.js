@@ -10,12 +10,12 @@ function hash(ix, iy, s) {
   return (h >>> 0) / 4294967295;
 }
 /** Tileable value noise. x,y in lattice units, `per` = lattice period (wraps). */
-export function tnoise(x, y, per, seed = 0) {
+export function tnoise(x, y, per, seed = 0) {   // PERF: no per-call closure, the four lattice corners hashed inline (same arithmetic, same output)
   const xi = Math.floor(x), yi = Math.floor(y), xf = x - xi, yf = y - yi;
   const u = xf * xf * (3 - 2 * xf), v = yf * yf * (3 - 2 * yf);
-  const m = (a) => ((a % per) + per) % per;
-  const a = hash(m(xi), m(yi), seed), b = hash(m(xi + 1), m(yi), seed);
-  const c = hash(m(xi), m(yi + 1), seed), d = hash(m(xi + 1), m(yi + 1), seed);
+  const x0 = ((xi % per) + per) % per, x1 = (((xi + 1) % per) + per) % per, y0 = ((yi % per) + per) % per, y1 = (((yi + 1) % per) + per) % per;
+  const a = hash(x0, y0, seed), b = hash(x1, y0, seed);
+  const c = hash(x0, y1, seed), d = hash(x1, y1, seed);
   return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v;
 }
 export function tfbm(x, y, per, oct = 4, seed = 0) {

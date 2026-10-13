@@ -136,6 +136,9 @@ function plainMat(color, kind, rough, metal, bu, blood = true, o = {}) {
 // ------------------------------------------------------------------ clip tables (authored, sparse: only the channels a clip names are overridden)
 const JN = ['hips', 'spine', 'chest', 'neck', 'head', 'jaw', 'earL', 'earR', 'tail1', 'tail2', 'tail3', 'shoulderL', 'elbowL', 'wristL', 'shoulderR', 'elbowR', 'wristR', 'hipL', 'kneeL', 'ankleL', 'hipR', 'kneeR', 'ankleR', 'trunk1', 'trunk2', 'trunk3', 'trunk4', 'rider', 'riderArm'];
 const JI = {}; JN.forEach((n, i) => { JI[n] = i; });
+// PERF: channel offsets resolved once (the per-frame code used string concatenation, array literals and closures for these)
+const LEG_I = [['shoulderL', 'elbowL', 'wristL'], ['shoulderR', 'elbowR', 'wristR'], ['hipL', 'kneeL', 'ankleL'], ['hipR', 'kneeR', 'ankleR']].map((r) => r.map((n) => JI[n] * 3));
+const TAIL_I = [1, 2, 3].map((i) => JI['tail' + i] * 3), TRUNK_I = [1, 2, 3, 4].map((i) => JI['trunk' + i] * 3), EAR_I = [JI.earL * 3, JI.earR * 3], REST_I = [[JI.elbowL * 3, JI.wristL * 3, JI.kneeL * 3, JI.ankleL * 3], [JI.elbowR * 3, JI.wristR * 3, JI.kneeR * 3, JI.ankleR * 3]];
 const NB = JN.length * 3, BODY = ['bodyY', 'bodyZ', 'bodyP', 'bodyR', 'bodyW']; // body channels follow the joints
 const CH = {}; JN.forEach((n, i) => { CH[n] = i * 3; }); BODY.forEach((n, i) => { CH[n] = NB + i; });
 const NCH = NB + BODY.length;
@@ -149,7 +152,7 @@ function clip(name, dur, keys, o = {}) {
     else { if (!chans.has(base)) chans.set(base, []); chans.get(base).push([t, v, ez || 'io']); }
   }
   for (const a of chans.values()) a.sort((p, q) => p[0] - q[0]);
-  return Object.assign({ name, dur, chans, fi: 0.08, fo: 0.16, hold: false, swing: 0, hit: 0, recover: dur * 0.7, add: false }, o);
+  return Object.assign({ name, dur, chans, chI: [...chans.keys()], chK: [...chans.values()], fi: 0.08, fo: 0.16, hold: false, swing: 0, hit: 0, recover: dur * 0.7, add: false }, o);
 }
 function evalKeys(a, t) {
   if (t <= a[0][0]) return a[0][1]; const n = a.length;
@@ -495,25 +498,22 @@ class BeastAnimator {
   emit(n, extra) { if (this.onEvent) this.onEvent(n, extra); if (this.rig.onEvent) this.rig.onEvent(n, extra); }
 
   gait(dt) {
-    const G = this.sp.gait, v = Math.hypot(this.mv.vz, this.mv.vx), pb = this.pb, S = this.sp.size, big = this.sp.id === 'elephant';
+    const G = this.sp.gait, v = Math.sqrt(this.mv.vz * this.mv.vz + this.mv.vx * this.mv.vx), pb = this.pb, S = this.sp.size, big = this.sp.id === 'elephant';
     const wk = sm(0.15, G.walkV, v), rn = sm(G.walkV * 0.95, G.runV * 0.85, v);
     this.speed += (v - this.speed) * Math.min(1, dt * 10); const gv = this.speed;
     const stride = lerp(G.strideW, G.strideR, rn); if (gv > 0.12) this.phase = (this.phase + (Math.sign(this.mv.vz || 1) * gv * dt) / stride) % 1; if (this.phase < 0) this.phase += 1;
     const ph = this.phase, wA = G.ampW, rA = G.ampR, A = lerp(wA, rA, rn) * wk;
     // leg phase offsets: lateral sequence walk, rotary gallop (hind pair then fore pair), pace for elephants
-    const off = G.pace ? { LF: 0.0, RH: 0.5, RF: 0.5, LH: 0.0 } : null, lerpO = (a, b) => lerp(a, b, rn);
-    const o = off ? { LH: lerpO(0.0, 0.0), LF: lerpO(0.0, 0.0) + 0, RH: 0.5, RF: 0.5 } : { LH: lerpO(0.0, 0.0), LF: lerpO(0.25, 0.5), RH: lerpO(0.5, 0.08), RF: lerpO(0.75, 0.58) };
-    if (off) { o.LH = 0.1; o.LF = 0.0; o.RH = 0.6; o.RF = 0.5; }
-    const sets = [['L', 'F', o.LF], ['R', 'F', o.RF], ['L', 'H', o.LH], ['R', 'H', o.RH]];
-    sets.forEach(([sd, fr, of], i) => {
+    const pace = !!G.pace; let oLH, oLF, oRH, oRF;
+    if (pace) { oLH = 0.1; oLF = 0.0; oRH = 0.6; oRF = 0.5; } else { oLH = 0; oLF = 0.25 + (0.5 - 0.25) * rn; oRH = 0.5 + (0.08 - 0.5) * rn; oRF = 0.75 + (0.58 - 0.75) * rn; }
+    for (let i = 0; i < 4; i++) {   // 0 LF, 1 RF, 2 LH, 3 RH
+      const of = i === 0 ? oLF : i === 1 ? oRF : i === 2 ? oLH : oRH, front = i < 2, jn = LEG_I[i];
       const c = (ph + of) % 1, ang = -A * Math.cos(c * TAU), lift = c > 0.5 ? Math.sin((c - 0.5) * 2 * Math.PI) : 0, rl = lift * lift;
-      const k = fr === 'F' ? ['shoulder', 'elbow', 'wrist'] : ['hip', 'knee', 'ankle'], jn = k.map((n) => JI[n + sd] * 3);
-      if (fr === 'F') { pb[jn[0]] = ang * 0.9; pb[jn[1]] = (0.18 + 1.25 * rl) * wk * lerp(1, 0.9, rn) * (big ? 0.5 : 1) - 0.06; pb[jn[2]] = -pb[jn[0]] * 0.55 - pb[jn[1]] * 0.45 + 0.05 + lift * 0.3 * wk; }
-      else { pb[jn[0]] = ang * 1.0 + 0.08; pb[jn[1]] = (0.14 + 1.1 * rl) * wk * (big ? 0.5 : 1) + (stanceFlex(ang)); pb[jn[2]] = -pb[jn[0]] * 0.5 - pb[jn[1]] * 0.55 + 0.06 + lift * 0.4 * wk; }
+      if (front) { pb[jn[0]] = ang * 0.9; pb[jn[1]] = (0.18 + 1.25 * rl) * wk * (1 + (0.9 - 1) * rn) * (big ? 0.5 : 1) - 0.06; pb[jn[2]] = -pb[jn[0]] * 0.55 - pb[jn[1]] * 0.45 + 0.05 + lift * 0.3 * wk; }
+      else { pb[jn[0]] = ang * 1.0 + 0.08; pb[jn[1]] = (0.14 + 1.1 * rl) * wk * (big ? 0.5 : 1) + (0.1 + 0.12 * (ang < 0 ? -ang : 0)); pb[jn[2]] = -pb[jn[0]] * 0.5 - pb[jn[1]] * 0.55 + 0.06 + lift * 0.4 * wk; }
       pb[jn[0] + 2] = 0;
-      const prev = this.stepPh[i]; this.stepPh[i] = c; if (gv > 0.5 && prev < 0.5 && c >= 0.5 && Math.abs(prev - c) < 0.5) this.emit('step', { side: sd, front: fr === 'F' });
-    });
-    function stanceFlex(a) { return 0.1 + 0.12 * Math.max(0, -a); }
+      const prev = this.stepPh[i]; this.stepPh[i] = c; if (gv > 0.5 && prev < 0.5 && c >= 0.5 && Math.abs(prev - c) < 0.5) this.emit('step', { side: i & 1 ? 'R' : 'L', front });
+    }
     // body: bob twice per stride, spine wave in the gallop, shoulder roll in the walk
     const bob = Math.sin(ph * TAU * 2 + 0.4) * 0.012 * S * wk * (1 + rn * 2) * (big ? 0.7 : 1);
     pb[NB + 0] = bob; pb[NB + 2] = Math.sin(ph * TAU - 0.5) * 0.045 * wk * (0.5 + rn) + (this.mode === 'charge' ? 0.12 : 0); pb[NB + 3] = Math.sin(ph * TAU) * 0.018 * wk * (1 - rn * 0.6);
@@ -532,12 +532,12 @@ class BeastAnimator {
     const br = Math.sin(this.breath), idle = 1 - this.gw.walk * 0.7;
     pb[JI.chest * 3] += br * 0.02; pb[JI.neck * 3] += br * 0.012 - 0.03; pb[NB + 0] += br * 0.004 * S; pb[JI.head * 3] += Math.sin(this.t * 0.5) * 0.03 * idle; pb[JI.head * 3 + 1] += Math.sin(this.t * 0.37) * 0.12 * idle;
     pb[JI.jaw * 3] += 0.03 + (this.state === 'move' && this.sp.id === 'lion' ? 0 : 0);
-    for (let i = 1; i <= 3; i++) { const c = (JI['tail' + i]) * 3; pb[c + 1] = Math.sin(this.t * 1.1 - i * 0.7) * (0.25 - i * 0.04) * (0.6 + this.speed * 0.15); pb[c] = -0.1 + Math.sin(this.t * 0.8 - i) * 0.08 + this.gw.run * -0.35 * (i === 1 ? 1 : 0.3); }
-    if (sp.trunk) for (let i = 1; i <= 4; i++) { const c = JI['trunk' + i] * 3; pb[c] = Math.sin(this.t * 0.9 - i * 0.6) * 0.18 + 0.12 * i * 0.1 + this.gw.walk * Math.sin(this.phase * TAU * 2 - i) * 0.15; pb[c + 1] = Math.sin(this.t * 0.55 - i * 0.5) * 0.12; }
+    for (let i = 1; i <= 3; i++) { const c = TAIL_I[i - 1]; pb[c + 1] = Math.sin(this.t * 1.1 - i * 0.7) * (0.25 - i * 0.04) * (0.6 + this.speed * 0.15); pb[c] = -0.1 + Math.sin(this.t * 0.8 - i) * 0.08 + this.gw.run * -0.35 * (i === 1 ? 1 : 0.3); }
+    if (sp.trunk) for (let i = 1; i <= 4; i++) { const c = TRUNK_I[i - 1]; pb[c] = Math.sin(this.t * 0.9 - i * 0.6) * 0.18 + 0.12 * i * 0.1 + this.gw.walk * Math.sin(this.phase * TAU * 2 - i) * 0.15; pb[c + 1] = Math.sin(this.t * 0.55 - i * 0.5) * 0.12; }
     if (sp.rider) { pb[JI.rider * 3] = Math.sin(this.phase * TAU * 2 + 1) * 0.03 * this.gw.walk - br * 0.01; pb[JI.rider * 3 + 2] = Math.sin(this.phase * TAU) * 0.04 * this.gw.walk; pb[JI.riderArm * 3] = -0.25 + br * 0.02; }
-    for (const s of ['L', 'R']) { const e = JI['ear' + s] * 3; pb[e + 1] = (s === 'L' ? 1 : -1) * (0.1 + Math.sin(this.t * 1.7 + (s === 'L' ? 0 : 2)) * 0.05 * (sp.ears === 'big' ? 3 : 1)); pb[e + 2] = (s === 'L' ? 1 : -1) * (sp.ears === 'big' ? Math.sin(this.t * 0.9 + (s === 'L' ? 0 : 1.5)) * 0.14 : 0); }
+    for (let si = 0; si < 2; si++) { const s = si ? 'R' : 'L', e = EAR_I[si]; pb[e + 1] = (s === 'L' ? 1 : -1) * (0.1 + Math.sin(this.t * 1.7 + (s === 'L' ? 0 : 2)) * 0.05 * (sp.ears === 'big' ? 3 : 1)); pb[e + 2] = (s === 'L' ? 1 : -1) * (sp.ears === 'big' ? Math.sin(this.t * 0.9 + (s === 'L' ? 0 : 1.5)) * 0.14 : 0); }
     // legs at rest (idle): slight bend so the rest pose is not a statue
-    for (const s of ['L', 'R']) { pb[JI['elbow' + s] * 3] = -0.04; pb[JI['wrist' + s] * 3] = 0.04; pb[JI['knee' + s] * 3] = 0.1; pb[JI['ankle' + s] * 3] = -0.06; }
+    for (let si = 0; si < 2; si++) { const r = REST_I[si]; pb[r[0]] = -0.04; pb[r[1]] = 0.04; pb[r[2]] = 0.1; pb[r[3]] = -0.06; }
     this.gait(dt);
     // ---- action layer
     pa.fill(0); let w = 0; const mask = this._mask || (this._mask = new Uint8Array(NCH)); mask.fill(0);
@@ -546,7 +546,7 @@ class BeastAnimator {
       const c = a.c; a.t += dt * a.speed * (this.hitStopT > 0 ? 1 : 1);
       if (a.t >= c.dur && c.loop && a.loop !== false) a.t -= c.dur;
       const tt = Math.min(a.t, c.dur);
-      for (const [ch, keys] of c.chans) { pa[ch] = evalKeys(keys, tt); mask[ch] = 1; }
+      for (let ci = 0, cn = c.chI.length; ci < cn; ci++) { const ch = c.chI[ci]; pa[ch] = evalKeys(c.chK[ci], tt); mask[ch] = 1; }   // PERF: flat arrays (a Map iterator per frame allocated)
       w = smooth(0, c.fi, a.t) * (a.hold || (c.loop && a.loop !== false) ? 1 : 1 - smooth(c.dur - c.fo, c.dur, a.t));
       if (c === this.clips.roar || c === this.clips.howl || c === this.clips.victory) { const tr = Math.sin(this.t * 38) * 0.05 * w * smooth(0.3, 0.45, a.t); pa[JI.jaw * 3] += tr; pa[JI.head * 3 + 2] = (pa[JI.head * 3 + 2] || 0) + tr * 0.5; mask[JI.jaw * 3] = 1; mask[JI.head * 3 + 2] = 1; }
       if (c === this.clips.pounce) w = Math.max(w, 0.0);
@@ -574,14 +574,14 @@ class BeastAnimator {
     rig.root.updateMatrixWorld(true);
     const fl = this.flashState; if (fl.t > 0) fl.t = Math.max(0, fl.t - dt); const f = fl.t > 0 ? fl.t / fl.dur : 0;
     if (rig.blood.fresh > 0) { rig.blood.fresh = Math.max(0, rig.blood.fresh - dt / 9); rig.bloodU.uBFresh.value = rig.blood.fresh; }
-    for (const k in this.mats) { const m = this.mats[k]; if (!m.userData.base) m.userData.base = m.emissive.clone(); m.emissive.copy(m.userData.base); if (f > 0) m.emissive.lerp(fl.color, f); }
+    if (f > 0 || this._emD !== false) { for (const k in this.mats) { const m = this.mats[k]; if (!m.userData.base) m.userData.base = m.emissive.clone(); m.emissive.copy(m.userData.base); if (f > 0) m.emissive.lerp(fl.color, f); } this._emD = f > 0; }   // PERF: only while a flash runs (and once after)
     this.groundFix(dt, a && a.c.ground !== undefined ? 0 : 1, a ? a.c : null);
   }
   groundFix(dt, grounded, c) {
     const J = this.J, rig = this.rig, sp = this.sp, S = sp.size, _v = this._gv || (this._gv = new V3()); let low = 1e9;
-    const pads = [['wristL', sp.front.pad], ['wristR', sp.front.pad], ['ankleL', sp.hind.pad], ['ankleR', sp.hind.pad]];
+    const pj = this._pj || (this._pj = [J.wristL, J.wristR, J.ankleL, J.ankleR]), pp = this._pp || (this._pp = [sp.front.pad, sp.front.pad, sp.hind.pad, sp.hind.pad]);
     const sc = rig.root.scale.y * (this.rig.body.scale.y || 1);
-    for (const [n, pad] of pads) { J[n].getWorldPosition(_v); low = Math.min(low, _v.y - pad * S * 0.98 * rig.root.scale.y); }
+    for (let i = 0; i < 4; i++) { _v.setFromMatrixPosition(pj[i].matrixWorld); const yy = _v.y - pp[i] * S * 0.98 * rig.root.scale.y; if (yy < low) low = yy; }   // matrices were just updated by update(): no per-joint parent walk
     const err = low - rig.root.position.y; // > 0: floating, < 0: sunk
     if (c && (c.ground === 0)) return;
     if (err < 0) this.go += -err; else if (grounded || !c) this.go -= Math.min(err, dt * 1.6 * S);
