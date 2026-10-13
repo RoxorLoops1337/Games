@@ -191,6 +191,18 @@ function millstone (p: Pix) {
     p.outline();
 }
 
+function fishpond (p: Pix) {
+    // a stone-rimmed pool of green water with a ripple, a lily pad and a gold fish
+    p.ellipse(16, 9, 15.5, 7, [0x6b6f8c, 0x8a8fae, 0xb0b5cc], { bias: 0.1 });
+    p.ellipse(16, 9, 13.5, 5.2, [0x2f6f8c, 0x3f8fae, 0x6cc0d8], { bias: 0.2 });
+    p.ellipse(11, 8, 3, 1.4, [0x9be0ee]);
+    p.ellipse(22, 11, 2.4, 1.3, [0x4caf50, 0x7ccf64]);
+    p.rect(19, 10, 3, 1, 0x2f6f8c);
+    p.poly([[13, 11], [17, 10], [20, 11], [17, 12]], 0xf0a030);
+    p.set(12, 11, 0xf0a030); p.set(20, 10, 0xffd060);
+    p.outline();
+}
+
 function market (p: Pix, rnd: () => number) {
     // a striped awning over a counter loaded with produce
     for (const x of [2, 31]) lit(p, x, 6, 3, 19, W);
@@ -331,6 +343,7 @@ export function registerStorybookBuildings (scene: Phaser.Scene) {
     paint(scene, 'alchemy', 14, 11, alchemy, 2);
     paint(scene, 'sawmill', 32, 15, (p) => sawmill(p), 1);
     paint(scene, 'millstone', 14, 10, (p) => millstone(p), 1);
+    paint(scene, 'fishpond', 32, 15, (p) => fishpond(p), 1);
     paint(scene, 'market', 18, 13, market, 5);
     paint(scene, 'mill', 16, 17, (p) => mill(p), 1);
     paintFrames(scene, 'mill_blades', 25, 25, 1, (p) => millBlades(p, 0), 1);

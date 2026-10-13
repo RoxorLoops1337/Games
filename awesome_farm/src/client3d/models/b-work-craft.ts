@@ -367,5 +367,28 @@ export function millstone(_o: BOpts): Model<BuildE> {
         }
     };
 }
+export function fishpond(_o: BOpts): Model<BuildE> {
+    const root = new THREE.Group();
+    root.add(bake('work.fishpond', (mb) => {
+        const b = mb.main;
+        b.cyl(0.9, 0.95, 0.2, 10, sc(0.7, 0.3), { y: 0.1, j: 0.015 });
+        b.cyl(0.74, 0.74, 0.03, 10, 0x3f8fae, { y: 0.2, ao: false });
+        b.ico(0.12, 0, 0x4caf50, { x: 0.3, y: 0.22, z: 0.2, sy: 0.15, j: 0.01 });
+    }));
+    const fish = new THREE.Group();
+    fish.position.y = 0.23;
+    fish.add(bake('work.fishpond.fish', (mb) => {
+        const b = mb.main;
+        b.ico(0.1, 0, 0xf0a030, { x: 0.45, sy: 0.6, sx: 1.5, j: 0.01 });
+        b.box(0.08, 0.06, 0.04, 0xffd060, { x: 0.33, j: 0.004 });
+    }));
+    root.add(fish);
+    let on = false;
+    return {
+        obj: root,
+        apply(e) { on = isOn(e); },
+        update(_dt: number, t: number) { fish.rotation.y = on ? t * 1.2 : t * 0.3; },
+    };
+}
 export const SL1 = 0x7a7f9e;
-export const CRAFT = { workbench, anvil, kitchen, loom, alchemy, furnace, sawmill, millstone };
+export const CRAFT = { workbench, anvil, kitchen, loom, alchemy, furnace, sawmill, millstone, fishpond };

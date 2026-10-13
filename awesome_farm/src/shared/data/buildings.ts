@@ -3,12 +3,12 @@ import type { WorkKind } from './creatures';
 import type { Cost, ItemId } from './items';
 
 export type StationId = 'hand' | 'workbench' | 'anvil' | 'kitchen' | 'loom' | 'alchemy' | 'altar' | 'riftforge';
-export type ProcId = 'furnace' | 'sawmill' | 'millstone' | 'assembler';
+export type ProcId = 'furnace' | 'sawmill' | 'millstone' | 'assembler' | 'pond';
 export type BuildCat = 'craft' | 'industry' | 'power' | 'logistics' | 'farm' | 'storage' | 'light' | 'home' | 'defense' | 'decor' | 'special';
 
 export const STATION_NAMES: Record<StationId | ProcId, string> = {
     hand: 'By hand', workbench: 'Workbench', anvil: 'Anvil', kitchen: 'Kitchen', loom: 'Loom', alchemy: 'Alchemy Table', altar: 'Boss Altar', riftforge: 'Rift Forge',
-    furnace: 'Furnace', sawmill: 'Sawmill', millstone: 'Millstone', assembler: 'Assembler',
+    furnace: 'Furnace', sawmill: 'Sawmill', millstone: 'Millstone', assembler: 'Assembler', pond: 'Fish Pond',
 };
 
 /** Workshops where a creature can work through an order (the machines run on their own and just need supplying). */
@@ -66,7 +66,7 @@ export interface BuildingDef {
 export const isBeltLike = (kind: string) => kind === 'belt' || kind === 'splitter' || kind === 'sorter' || kind === 'tunnel' || kind === 'tunnelx';
 
 export type BuildingKind =
-    | 'workbench' | 'bed' | 'campfire' | 'chest' | 'market' | 'furnace' | 'sawmill' | 'millstone'
+    | 'workbench' | 'bed' | 'campfire' | 'chest' | 'market' | 'furnace' | 'sawmill' | 'millstone' | 'fishpond'
     | 'anvil' | 'kitchen' | 'loom' | 'alchemy' | 'lantern' | 'fence' | 'path' | 'planks' | 'bench' | 'mill'
     | 'belt' | 'splitter' | 'sorter' | 'tunnel' | 'tunnelx' | 'solar' | 'battery' | 'inserter' | 'drill' | 'pole' | 'windturbine' | 'coalgen' | 'assembler' | 'steelchest' | 'uberchest' | 'altar' | 'den' | 'waystone' | 'dock' | 'riftforge' | 'hatchery' | 'fortune'
     | 'hedge' | 'flowerbed' | 'statue' | 'banner' | 'table' | 'signpost' | 'lamppost' | 'fountain' | 'stonewall' | 'barrel' | 'haybale' | 'scarecrow' | 'mailbox'
@@ -87,6 +87,8 @@ export const BUILDINGS: Record<BuildingKind, BuildingDef> = {
     furnace:   { name: 'Furnace',     tex: 'furnace',   size: [1, 1], cost: { stone: 12 }, cat: 'industry', proc: 'furnace', work: 'craft', fuel: true, desc: 'Smelts ore, bakes bricks, melts glass. Burns coal, wood or peat.' },
     sawmill:   { name: 'Sawmill',     tex: 'sawmill',   size: [2, 1], cost: { wood: 14, stone: 10, ironbar: 2 }, cat: 'industry', proc: 'sawmill', work: 'make', desc: 'Turns logs into twice as many planks.' },
     millstone: { name: 'Millstone',   tex: 'millstone', size: [1, 1], cost: { stone: 14, plank: 4 }, cat: 'industry', proc: 'millstone', work: 'make', desc: 'Grinds wheat into flour.' },
+
+    fishpond:  { name: 'Fish Pond',   tex: 'fishpond',  size: [2, 1], cost: { stone: 16, plank: 4, clay: 6 }, cat: 'industry', proc: 'pond', work: 'make', desc: 'Fish multiply here. Feed it a fish and some bait and it gives back two.' },
 
     belt:      { name: 'Conveyor Belt', tex: 'belt', size: [1, 1], cost: { ironbar: 1 }, cat: 'logistics', req: 'logistics', floor: true, solid: false, dir: true, desc: 'Carries items along. R rotates it; drag to lay a line.' },
     splitter:  { name: 'Splitter',   tex: 'splitter', size: [1, 1], cost: { ironbar: 3, gear: 2 }, cat: 'logistics', req: 'logistics', floor: true, solid: false, dir: true, desc: 'Shares a belt out three ways (forward, left, right), taking turns. A side with nothing there is skipped. R rotates it.' },
