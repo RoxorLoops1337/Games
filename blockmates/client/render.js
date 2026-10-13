@@ -139,7 +139,10 @@ export class Renderer {
       secs.push([sx, sy, cw.section(sx, sy)]);
     }
     const size = (sx) => px((sx + 1) * SEC) - px(sx * SEC);
+    // the back wall sits further away: drawn a little larger around the screen centre, so it slides against the front layer as you move
+    g.save(); g.translate(w / 2, h / 2); g.scale(1.07, 1.07); g.translate(-w / 2, -h / 2);
     for (const [sx, sy, s] of secs) { if (s.empty) continue; g.drawImage(s.bg, px(sx * SEC), py(sy * SEC), size(sx) + 1, py((sy + 1) * SEC) - py(sy * SEC) + 1); }
+    g.restore();
     for (const [sx, sy, s] of secs) { if (s.empty) continue; g.drawImage(s.fg, px(sx * SEC), py(sy * SEC), size(sx) + 1, py((sy + 1) * SEC) - py(sy * SEC) + 1); }
     cw.prune();
   }
@@ -356,6 +359,12 @@ export class Renderer {
       g.strokeStyle = inReach ? 'rgba(255,255,255,0.85)' : 'rgba(255,90,90,0.6)'; g.lineWidth = 2;
       rr(g, sx + 1, sy + 1, ts - 2, ts - 2, 5); g.stroke();
       if (G.ghost && inReach) { g.globalAlpha = 0.45; g.drawImage(tileArt(G.ghost, 0), sx, sy, ts, ts); g.globalAlpha = 1; }
+    }
+    if (G.order && G.mark) {
+      const [sx, sy] = this.toScreen(G, G.mark.x, G.mark.y), pulse = 0.5 + 0.5 * Math.sin(G.t * 8);
+      g.strokeStyle = G.mark.kind === 'mine' ? `rgba(255,220,90,${0.6 + 0.4 * pulse})` : `rgba(120,230,255,${0.6 + 0.4 * pulse})`; g.lineWidth = 2.5;
+      if (G.mark.kind === 'walk') { g.beginPath(); g.ellipse(sx + ts / 2, sy + ts * 0.95, ts * (0.28 + 0.1 * pulse), ts * 0.1, 0, 0, 7); g.stroke(); }
+      else { rr(g, sx + 2, sy + 2, ts - 4, ts - 4, 6); g.stroke(); }
     }
     const mi = G.mining;
     if (mi && mi.prog > 0) {

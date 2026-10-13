@@ -23,6 +23,7 @@ export class CWorld {
     const c = this.chunks.get((x / CHUNK) | 0);
     return c ? c.fg[(x % CHUNK) * H + y] : B.bedrock; // unloaded ground is a wall, so nobody falls through it
   }
+  solidAt(x, y) { const id = this.fgAt(x, y); return !!id && BLOCKS[id].solid; }
   bgAt(x, y) {
     if (x < 0 || x >= W || y < 0 || y >= H) return 0;
     const c = this.chunks.get((x / CHUNK) | 0);
@@ -143,6 +144,15 @@ export class CWorld {
           any = true;
         }
       }
+    }
+    // depth: solid blocks throw a soft shadow onto the back wall behind their neighbours
+    for (let ty = 0; ty < SEC; ty++) for (let tx = 0; tx < SEC; tx++) {
+      const x = x0 + tx, y = y0 + ty;
+      if (x < 0 || x >= W || y < 0 || y >= H || !this.solidFg(x, y)) continue;
+      const px = tx * S, py = ty * S;
+      if (this.bgAt(x + 1, y) && !this.solidFg(x + 1, y)) { gb.fillStyle = 'rgba(0,0,0,0.34)'; gb.fillRect(px + S, py + 7, 9, S); }
+      if (this.bgAt(x, y + 1) && !this.solidFg(x, y + 1)) { gb.fillStyle = 'rgba(0,0,0,0.34)'; gb.fillRect(px + 6, py + S, S, 10); }
+      if (this.bgAt(x + 1, y + 1) && !this.solidFg(x + 1, y + 1)) { gb.fillStyle = 'rgba(0,0,0,0.3)'; gb.fillRect(px + S, py + S, 9, 10); }
     }
     s.empty = !any;
   }

@@ -13,7 +13,25 @@ if (!profile.token) profile.token = Array.from(crypto.getRandomValues(new Uint8A
 if (!profile.soloSeed) profile.soloSeed = 1 + Math.floor(Math.random() * 2e9);
 const save = () => { try { localStorage.setItem(PROFILE_KEY, JSON.stringify(profile)); } catch { /* private mode */ } };
 
+const stage = $('stage');
+// the game always plays on a 16:9 stage, as large as fits; the menu uses the whole window
+function layout() {
+  const W = innerWidth, H = innerHeight;
+  if (!document.body.classList.contains('playing')) { stage.style.cssText = 'left:0;top:0;width:100vw;height:100vh'; return; }
+  let w = W, h = W * 9 / 16;
+  if (h > H) { h = H; w = H * 16 / 9; }
+  stage.style.left = Math.floor((W - w) / 2) + 'px'; stage.style.top = Math.floor((H - h) / 2) + 'px';
+  stage.style.width = Math.floor(w) + 'px'; stage.style.height = Math.floor(h) + 'px';
+}
+export function goFullscreen() {
+  const el = document.documentElement;
+  try { if (!document.fullscreenElement && el.requestFullscreen) el.requestFullscreen({ navigationUI: 'hide' }).then(() => { try { screen.orientation.lock('landscape').catch(() => {}); } catch { /* not supported */ } }).catch(() => {}); } catch { /* blocked */ }
+}
+addEventListener('resize', layout); addEventListener('orientationchange', layout); document.addEventListener('fullscreenchange', layout);
+new MutationObserver(layout).observe(document.body, { attributes: true, attributeFilter: ['class'] });
 const game = new Game($('game'));
+game.goFullscreen = goFullscreen;
+layout();
 window.__bm = game; // handy for tests and tinkering
 const params = new URLSearchParams(location.search);
 
@@ -97,6 +115,7 @@ async function start(kind) {
   if (name.length < 2) { $('err').textContent = 'Please type a name (2 to 16 letters).'; $('name').focus(); return; }
   profile.name = name; save();
   game.sound.start();
+  goFullscreen(); // needs this click, so it is asked for here
   try {
     let net;
     if (kind === 'solo') net = new LoopNet(idbStore, profile.soloSeed);
