@@ -414,11 +414,11 @@ export function createBeast(unitOrRec, opts = {}) {
   mk('neck', J.chest, 0, SS(sp.neck[0]), SS(sp.neck[1])); mk('head', J.neck, 0, SS(sp.hd[0]), SS(sp.hd[1]));
   mk('jaw', J.head, 0, SS(sp.jawAt[0]), SS(sp.jawAt[1]));
   const E = sp.earAt; mk('earL', J.head, SS(E[0]), SS(E[1]), SS(E[2])); mk('earR', J.head, -SS(E[0]), SS(E[1]), SS(E[2]));
-  const eyeP = big ? [0.29, 0.07, 0.2] : [HS.sk[0] * 0.8, HS.sk[1] * 0.3, HS.sk[2] * 0.9];
-  const cat = kind === 'lion' || kind === 'nemean', ER = kind === 'bear' || kind === 'boar' ? 0.02 : kind === 'wolf' ? 0.021 : 0.026, FDROP = kind === 'boar' ? 0.5 : kind === 'wolf' ? 0.3 : 0.24, tipY = -HS.sk[1] * FDROP, tipZ = HS.sk[2] + HS.sn[2];
+  const eyeP = big ? [0.29, 0.07, 0.2] : [HS.sk[0] * 0.58, HS.sk[1] * 0.4, HS.sk[2] * 0.92];
+  const cat = kind === 'lion' || kind === 'nemean', ER = kind === 'bear' || kind === 'boar' ? 0.02 : kind === 'wolf' ? 0.021 : 0.026, FDROP = kind === 'boar' ? 0.5 : kind === 'wolf' ? 0.3 : 0.24, tipY = -HS.sk[1] * FDROP, tipZ = HS.sk[2] + HS.sn[2], FWIDE = kind === 'wolf' ? 1.2 : kind === 'boar' ? 1.1 : 1.32;
   for (const [s, sg] of [['L', 1], ['R', -1]]) { mk('eye' + s, J.head, sg * SS(eyeP[0]), SS(eyeP[1]), SS(eyeP[2])); mk('lid' + s, J.head, sg * SS(eyeP[0]), SS(eyeP[1]), SS(eyeP[2])); }
   for (const [s, sg] of [['L', 1], ['R', -1]]) {   // brow bones (frown) and, on the animals, lip bones (snarl); the brow pivots just above the eye
-    if (big) mk('brow' + s, J.head, sg * SS(eyeP[0] * 0.95), SS(eyeP[1] + 0.07), SS(eyeP[2] - 0.004)); else { mk('brow' + s, J.head, sg * SS(eyeP[0] * 0.95), SS(eyeP[1] + ER * 1.6), SS(eyeP[2] - 0.004)); mk('lip' + s, J.head, sg * SS(HS.sn[0] * 0.7), SS(tipY - HS.sn[1] * 0.18), SS(HS.sk[2] + HS.sn[2] * 0.5)); }
+    if (big) mk('brow' + s, J.head, sg * SS(eyeP[0] * 0.95), SS(eyeP[1] + 0.07), SS(eyeP[2] - 0.004)); else { mk('brow' + s, J.head, sg * SS(eyeP[0] * 0.95), SS(eyeP[1] + ER * 1.6), SS(eyeP[2] - 0.004)); mk('lip' + s, J.head, sg * SS(HS.sn[0] * FWIDE * 0.74), SS(tipY * 0.7 + HS.sn[1] * 0.1), SS(HS.sk[2] + HS.sn[2] * 0.5)); }
   }
   if (!big) { mk('mane1', J.neck, 0, 0, 0); mk('mane2', J.chest, 0, 0, 0); }
   let tp = J.hips; const TL = sp.tail;
@@ -488,7 +488,7 @@ export function createBeast(unitOrRec, opts = {}) {
   // ---- head (cranium and muzzle are one lofted wedge), jaw, nose, eyes, lids, brows, ears, teeth, whiskers
   const sk = HS.sk, sn = HS.sn, hj = jp('head'), HP = (x, y, z) => [hj.x + x * S, hj.y + y * S, hj.z + z * S];
   if (!big) {
-    const wide = kind === 'wolf' ? 1.2 : kind === 'boar' ? 1.1 : 1.32;
+    const wide = FWIDE;
     const headCtrl = [
       { p: HP(0, 0, -0.04), r: [SS(sk[0] * 0.8), SS(sk[1] * 0.85)] }, { p: HP(0, 0.005, sk[2] * 0.32), r: [SS(sk[0]), SS(sk[1] * (kind === 'bear' ? 1.05 : 1))] }, { p: HP(0, -0.004, sk[2] * 0.72), r: [SS(sk[0] * 0.94), SS(sk[1] * 0.92)] },
       { p: HP(0, tipY * 0.6 - 0.01, sk[2] + sn[2] * 0.14), r: [SS(sn[0] * wide), SS(sn[1] * 1.28)] }, { p: HP(0, tipY * 0.85, sk[2] + sn[2] * 0.62), r: [SS(sn[0] * (wide * 0.92)), SS(sn[1] * (kind === 'boar' ? 1.0 : 1.12))] }, { p: HP(0, tipY, tipZ), r: [SS(sn[0] * (kind === 'boar' ? 1.05 : 0.95)), SS(sn[1] * (kind === 'boar' ? 0.95 : 0.9))] },
@@ -509,19 +509,21 @@ export function createBeast(unitOrRec, opts = {}) {
     const lipY = tipY - sn[1] * 0.95;
     for (const sg of [1, -1]) {
       const s = sg > 0 ? 'L' : 'R', eyeW = jp('eye' + s);
-      // brow ridge: a heavy tapered tube over the eye
-      { const rb = ER * (kind === 'boar' ? 0.85 : 1.2);
-        if (FC) { const br = loft([{ p: HL(sg * ex * 0.3, ey + ER * 2.0, ez + ER * 1.0), r: SS(rb * 0.75) }, { p: HL(sg * ex * 0.85, ey + ER * 2.3, ez + ER * 0.1), r: SS(rb) }, { p: HL(sg * ex * 1.18, ey + ER * 1.55, ez - ER * 1.8), r: SS(rb * 0.5) }], { seg: FC > 1 ? 6 : 5, sub: 1, cap: 1 }); setColor(br, (x, y, z, nx, ny) => mix(mix(FUR, DK, 0.5), FUR, 0.25 * sm(0.3, 1, ny))); addRigid('fur', br, 'brow' + s); }
-        else { const br = blob(SS(ER * 2.3), SS(ER * 0.95), SS(ER * 1.7), 5, 3); setColor(br, (x, y, z, nx, ny) => mix(FUR, DK, 0.5)); place(br, HL(sg * ex * 0.78, ey + ER * 1.9, ez - 0.012), [0, 0, sg * -0.25]); addRigid('fur', br, 'brow' + s); } }
+      // brow ridge: a heavy tapered tube arched over the eye, lying on the skull surface (slopes down toward the temple, which reads as a scowl)
+      { const rb = ER * (kind === 'boar' ? 0.85 : 1.15), sf = (x, z) => { const r = ringAt(z); return r.y + r.ry * Math.sqrt(1 - Math.pow(clamp(x / r.rx, 0, 0.985), 2)); }, zi = hj.z + SS(ez + ER * 1.3), zm = hj.z + SS(ez + ER * 0.1), zo = hj.z + SS(ez - ER * 1.7), xi = SS(ex * 0.3), xm = SS(ex * 1.0), xo = SS(ex * 1.32);
+        const bpts = [{ p: [hj.x + sg * xi, sf(xi, zi) + SS(ER * 0.15), zi], r: SS(rb * 0.7) }, { p: [hj.x + sg * xm, Math.max(sf(xm, zm), hj.y + SS(ey)) + SS(ER * 1.25), zm], r: SS(rb) }, { p: [hj.x + sg * xo, sf(xo, zo) + SS(ER * 0.5), zo], r: SS(rb * 0.55) }];
+        if (FC) { const br = loft(bpts, { seg: FC > 1 ? 7 : 5, sub: FC > 1 ? 2 : 1, cap: 1 }); setColor(br, (x, y, z, nx, ny) => mix(mix(FUR, DK, 0.5), FUR, 0.3 * sm(0.3, 1, ny))); addRigid('fur', br, 'brow' + s); }
+        else { const br = blob(SS(ER * 2.2), SS(ER * 0.95), SS(ER * 1.6), 5, 3); setColor(br, (x, y, z, nx, ny) => mix(FUR, DK, 0.5)); place(br, [bpts[1].p[0], bpts[1].p[1], bpts[1].p[2]], [0, 0, sg * -0.3]); addRigid('fur', br, 'brow' + s); } }
       // eye socket: a dark hollow that rims the eyeball, set a little behind it
       if (FC) { const so = blob(SS(ER * 1.7), SS(ER * 1.4), SS(ER * 1.2), 7, 4); setColor(so, (x, y, z, nx, ny) => mix(mix(DK, hexC('#120905'), 0.55), FUR, 0.2 * sm(0.2, 1, ny))); place(so, [eyeW.x + sg * SS(ER * 0.15), eyeW.y - SS(ER * 0.1), eyeW.z - SS(ER * 0.5)]); addRigid('fur', so, 'head'); }
       // cheek mound under the eye
       if (FC && (cat || kind === 'bear')) { const ck = blob(SS(sk[0] * 0.3), SS(sk[1] * 0.36), SS(sk[2] * 0.36), 7, 4); setColor(ck, (x, y, z, nx, ny) => mix(FUR, BEL, 0.3 + 0.2 * sm(0, -1, ny))); place(ck, HL(sg * sk[0] * 0.8, -sk[1] * 0.22, sk[2] * 0.6)); addRigid('fur', ck, 'head'); }
-      // upper lip flap on the lip bone, with a dark lip edge
+      // upper lip: a flap on the lip bone that wraps the lower side of the muzzle, and a dark lip edge along the muzzle's lower margin (a snarl rolls the flap outward and up)
       if (FC && kind !== 'boar') {
-        const lp = jp('lip' + s), flap = blob(SS(sn[0] * 0.24), SS(sn[1] * 0.56), SS(sn[2] * 0.5), 7, 4);
-        setColor(flap, (x, y, z, nx, ny) => mix(mix(MUZ, BEL, 0.25), mix(FUR, DK, 0.3), 0.3 * sm(0.4, 1, ny)).multiplyScalar(0.92 + 0.12 * sm(-1, 0.5, ny))); place(flap, [lp.x + sg * SS(sn[0] * 0.22), lp.y - SS(sn[1] * 0.4), lp.z + SS(sn[2] * 0.04)], [0, 0, sg * 0.1]); addRigid('fur', flap, 'lip' + s);
-        const le = loft([{ p: [lp.x + sg * SS(sn[0] * 0.3), lp.y - SS(sn[1] * 0.93), lp.z - SS(sn[2] * 0.46)], r: SS(0.0045) }, { p: [lp.x + sg * SS(sn[0] * 0.3), lp.y - SS(sn[1] * 0.95), lp.z - SS(sn[2] * 0.02)], r: SS(0.005) }, { p: [lp.x + sg * SS(sn[0] * 0.05), lp.y - SS(sn[1] * 0.86), lp.z + SS(sn[2] * 0.5)], r: SS(0.004) }], { seg: 4, sub: 1, cap: 1 }); setColor(le, flat('#241412')); addRigid('eye', le, 'lip' + s);
+        const lp = jp('lip' + s), zf = hj.z + SS(sk[2] + sn[2] * 0.48), rF = ringAt(zf), qx = 0.72 * rF.rx, flap = blob(SS(sn[0] * 0.24), SS(sn[1] * 0.46), SS(sn[2] * 0.48), 7, 4);
+        setColor(flap, (x, y, z, nx, ny) => mix(mix(MUZ, BEL, 0.25), mix(FUR, DK, 0.3), 0.3 * sm(0.4, 1, ny)).multiplyScalar(0.92 + 0.12 * sm(-1, 0.5, ny))); place(flap, [hj.x + sg * qx, gumAt(qx, zf) + SS(sn[1] * 0.2), zf], [0, 0, sg * 0.45]); addRigid('fur', flap, 'lip' + s);
+        const lpts = [[0.86, sk[2] + sn[2] * 0.04], [0.84, sk[2] + sn[2] * 0.4], [0.62, tipZ - 0.05], [0.2, tipZ - 0.008]].map(([q, zz]) => { const z = hj.z + SS(zz), r = ringAt(z), x = q * r.rx; return { p: [hj.x + sg * x, r.y - r.ry * Math.sqrt(1 - q * q) + SS(0.002), z], r: SS(0.0048) }; });
+        const le = loft(lpts, { seg: 4, sub: 1, cap: 1 }); setColor(le, flat('#241412')); addRigid('eye', le, 'lip' + s);
       }
       // ears
       { const ej = jp('ear' + s), inner = sp.ears === 'point' ? hexC('#c7bdb0') : sp.ears === 'flap' ? hexC('#8a6a58') : hexC('#b4907c'); let ear;
@@ -946,7 +948,7 @@ class BeastAnimator {
     }
     // ---- eyes: gaze leads and counters the head, with small flicks; blinks every few seconds, lids heavier at rest and narrowed when fighting
     const eyaw = -(pb[JI.head * 3 + 1] + pb[JI.neck * 3 + 1]) * 0.6 + Math.sin(t * 1.9) * 0.05 + Math.sin(t * 5.3) * 0.015 + Math.sin(t * 0.7 + 2) * 0.1, epit = -(pb[JI.head * 3] + pb[JI.neck * 3]) * 0.35 + Math.sin(t * 1.3) * 0.03;
-    for (let i = 0; i < 2; i++) { pb[EYE_I[i] + 1] = eyaw * alive; pb[EYE_I[i]] = epit * alive; }
+    const eout = this.sp.id === 'elephant' ? 0.5 : this.sp.id === 'boar' ? 0.45 : 0.3; for (let i = 0; i < 2; i++) { pb[EYE_I[i] + 1] = eyaw * alive + (i ? -eout : eout); pb[EYE_I[i]] = epit * alive; }
     const per2 = 3.4 + h01(Math.floor(t / 4.1) + 3) * 2.2, bt = ((t % per2) + per2) % per2, blink = bt < 0.15 ? Math.sin(Math.PI * bt / 0.15) : 0, fight = this.action && !this.action.hold ? 0.35 : 0, base = (0.1 + 0.1 * idle + 0.1 * Math.max(0, br) * idle) * alive;
     // ---- expression: the mood eases in (snarl: brows frown and lips pull back to show the teeth; squint: lids half shut; wide: lids and brows up, panting jaw)
     const mo = this.mood, mt = this.moodT, mk = dt > 0 ? Math.min(1, dt * 7) : 1; mo.snarl += (mt.snarl - mo.snarl) * mk; mo.squint += (mt.squint - mo.squint) * mk; mo.wide += (mt.wide - mo.wide) * mk; mo.jaw += (mt.jaw - mo.jaw) * mk;
