@@ -40,7 +40,8 @@ split big ones into slices (rules, art, polish).
 - [x] S31 Pet nicknames on plates (a companion wears its name over its head, so photo mode shows who is who)
 
 ## Phase 4: polish and health (small + medium)
-- [ ] M15 Accessibility and phone pack
+- [x] M15 Accessibility pass 1 (the Shake switch now also turns off lightning flashes, slow motion and buzzing, and says so)
+- [ ] M15b Larger text option, colour-blind marks, phone pack leftovers
 - [ ] S35 Settings polish
 - [ ] S34 Playbot short run as a health check
 

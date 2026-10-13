@@ -10,6 +10,7 @@ import { seasonOf, SEASONS, type SeasonId } from '../../shared/season';
 import { nightEvent, weatherAt } from '../../shared/weather';
 import type { GameScene } from '../scenes/Game';
 import { playSfx } from '../juice/sfx';
+import { settings } from '../settings';
 import { H, W } from './kit';
 
 interface Drop { x: number; y: number; v: number; len: number }
@@ -239,7 +240,7 @@ export class NightLayer {
             if (this.shown) this.show(false);
             // a storm's lightning: the same timer and thunder as in 2D, the flash drawn by the 3D view
             this.lightning(dt, w.storm && f.undergroundAmount() <= 0.5);
-            f.view3d?.lightning?.(this.bolt > 0 ? this.bolt / 0.22 : 0);
+            f.view3d?.lightning?.(this.bolt > 0 && settings.shake ? this.bolt / 0.22 : 0);      // (no flashes with shake off: the thunder still rolls)
             return;
         }
         if (!this.shown) this.show(true);
@@ -386,7 +387,7 @@ export class NightLayer {
         } else this.splashes.length = 0;
         // ── lightning ──
         this.lightning(dt, w.storm);
-        if (this.bolt > 0) this.flash.setAlpha(Math.max(0, this.bolt / 0.22) * (Math.random() < 0.4 ? 0.5 : 0.28)); else this.flash.setAlpha(0);
+        if (this.bolt > 0 && settings.shake) this.flash.setAlpha(Math.max(0, this.bolt / 0.22) * (Math.random() < 0.4 ? 0.5 : 0.28)); else this.flash.setAlpha(0);
     }
 
     /** A storm's bolts (every 5 to 16 seconds) and the thunder that follows each one. */
