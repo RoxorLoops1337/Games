@@ -1,5 +1,6 @@
 // Hearthvale client: title screen, HUD, input, panels.
 import { View } from './scene.js';
+import { icon } from './icons.js';
 import { soloLink, wsLink } from './net.js';
 import { toggleAudio, setAmbient, audioOn, wantsMusic } from './audio.js';
 import { findSpot as _fs } from '../shared/sim.js';
@@ -9,8 +10,9 @@ const $ = (s) => document.querySelector(s);
 const qs = new URLSearchParams(location.search);
 const view = new View($('#gl'));
 let link = null, snap = null, you = null, myId = null, mode = null, selected = null, panel = null, prevSnapT = 0;
+document.querySelectorAll('[data-ic]').forEach(e => { e.innerHTML = icon(e.dataset.ic, +e.dataset.s || 20); });
 const labels = new Map(); const known = new Map(); let chatLog = [];
-const HINTS = { q_wood: 'Tap a tree to send a villager', q_house: 'Build > Cottage, tap the grass, Place', q_farm: 'Build > Wheat Field, then tap it to sow', q_wheat: 'Tap the field when it is golden', q_kitch: 'Build > Kitchen', q_soup: 'Tap the Kitchen, cook soup', q_hire: 'Tap the Hearth Hall', q_lvl2: 'Keep gathering and building to earn XP', q_order: 'Open the Valley board 📜 and tap Give', q_saw: 'Needs level 2', q_plank: 'Tap the Sawmill, saw planks', q_study: 'Needs level 3', q_lvl5: 'Fill Valley orders for big XP' };
+const HINTS = { q_wood: 'Tap a tree to send a villager', q_house: 'Build > Cottage, tap the grass, Place', q_farm: 'Build > Wheat Field, then tap it to sow', q_wheat: 'Tap the field when it is golden', q_kitch: 'Build > Kitchen', q_soup: 'Tap the Kitchen, cook soup', q_hire: 'Tap the Hearth Hall', q_lvl2: 'Keep gathering and building to earn XP', q_order: 'Open the Valley board and tap Give', q_saw: 'Needs level 2', q_plank: 'Tap the Sawmill, saw planks', q_study: 'Needs level 3', q_lvl5: 'Fill Valley orders for big XP' };
 
 // ---------- tiny synth sfx ----------
 let ac = null;
@@ -21,10 +23,12 @@ function sfx(kind) {
     let at = t; for (const [f, d] of seq) { const o = ac.createOscillator(), g = ac.createGain(); o.type = kind === 'bad' ? 'square' : 'triangle'; o.frequency.value = f; g.gain.setValueAtTime(0.0001, at); g.gain.exponentialRampToValueAtTime(0.12, at + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, at + d); o.connect(g).connect(ac.destination); o.start(at); o.stop(at + d + 0.02); at += d * 0.9; }
   } catch {}
 }
-const toast = (text) => { const d = document.createElement('div'); d.className = 't'; d.textContent = text; $('#toast').appendChild(d); setTimeout(() => d.remove(), 3100); while ($('#toast').children.length > 4) $('#toast').firstChild.remove(); };
+const toast = (text, ic) => { const d = document.createElement('div'); d.className = 't'; d.innerHTML = (ic ? `<span class="ti">${icon(ic, 22)}</span>` : '') + `<span>${esc(text)}</span>`; $('#toast').appendChild(d); setTimeout(() => d.remove(), 3100); while ($('#toast').children.length > 4) $('#toast').firstChild.remove(); };
 const esc = (s) => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-const costStr = (cost, have) => Object.entries(cost).map(([k, n]) => { const h = k === 'coins' ? you.coins : you.res[k]; return `<span class="${h < n ? 'bad' : ''}">${ICON[k]}${n}</span>`; }).join(' ');
+const costStr = (cost, have) => Object.entries(cost).map(([k, n]) => { const h = k === 'coins' ? you.coins : you.res[k]; return `<span class="cc ${h < n ? 'bad' : ''}">${icon(k, 17)}${n}</span>`; }).join(' ');
 const canAfford = (cost) => Object.entries(cost).every(([k, n]) => (k === 'coins' ? you.coins : you.res[k]) >= n);
+const BCOL = { hall: '#cfeeff', house: '#ffd9e2', farm: '#fff0b0', kitchen: '#ffd9e2', sawmill: '#e3ecf7', kiln: '#ffd9cf', storehouse: '#ffe6bd', study: '#d3ecfb', mill: '#fff0b0', bakery: '#ffe6bd', market: '#ffd9d9', flowers: '#ffd9e8', lantern: '#fff0b0', fountain: '#d3ecfb', banner: '#ffd9e2' };
+const rewardStr = (r) => Object.entries(r).map(([k, n]) => `<span class="cc">${icon(k, 17)}${n}</span>`).join('');
 const myPub = () => snap && snap.players.find(p => p.id === myId);
 const cmd = (c) => { sfx('click'); return link.cmd(c); };
 
@@ -46,7 +50,7 @@ $('#goServer').onclick = () => {
 };
 if (qs.get('solo') !== null) setTimeout(() => $('#goSolo').click(), 0);
 if (qs.get('server') && qs.get('auto') !== null) setTimeout(() => $('#goServer').click(), 0);
-function setConn(s) { $('#conn').textContent = link.kind === 'solo' ? 'Solo' : s === 'online' ? '🟢 ' + link.lag + ' ms' : '🟠 ' + s; }
+function setConn(s) { const c = $('#conn'), ok = link.kind === 'solo' || s === 'online'; c.classList.toggle('warn', !ok); c.innerHTML = link.kind === 'solo' ? icon('house', 16) + 'Solo' : `<span class="dot2 ${s === 'online' ? '' : 'warn'}"></span>` + (s === 'online' ? link.lag + ' ms' : esc(s)); }
 
 function begin(l) {
   link = l; l.onNack = (err) => { toast(err); sfx('bad'); };
@@ -79,18 +83,18 @@ function onSnap(s) {
   const lo = LEVEL_XP[you.level - 1], hi = LEVEL_XP[you.level] || lo + 1;
   $('#xpbar').style.width = Math.min(100, ((you.xp - lo) / (hi - lo)) * 100) + '%';
   const shown = GOODS.filter(g => you.res[g] > 0 || ['wood', 'clay', 'stone', 'wheat', 'soup'].includes(g));
-  $('#res').innerHTML = `<span class="chip">🪙 ${you.coins}</span>` + shown.map(g => `<span class="chip ${you.res[g] >= you.cap ? 'full' : you.res[g] === 0 ? 'dim' : ''}" title="${g}">${ICON[g]} ${you.res[g]}</span>`).join('');
+  $('#res').innerHTML = `<span class="chip" title="coins">${icon('coins', 24)} ${you.coins}</span>` + shown.map(g => `<span class="chip ${you.res[g] >= you.cap ? 'full' : you.res[g] === 0 ? 'dim' : ''}" title="${g}">${icon(g, 24)} ${you.res[g]}</span>`).join('');
   setConn(link.state || 'online');
   const q = QUESTS.find(q => !you.quests[q.id]); const tr = $('#track');
-  if (q) { const v = Math.min(q.n, you.stats[q.stat] || 0); tr.hidden = false; tr.innerHTML = `<b>📋 ${q.text}</b><div class="bar"><i style="width:${v / q.n * 100}%"></i></div><div class="hint">${HINTS[q.id] || ''}</div>`; tr.onclick = () => openPanel('quests'); } else tr.hidden = true;
+  if (q) { const v = Math.min(q.n, you.stats[q.stat] || 0); tr.hidden = false; tr.innerHTML = `<span class="pin">${icon('leaf', 28)}</span><b>${icon('quests', 20)}<span>${q.text}</span></b><div class="bar g"><i style="width:${v / q.n * 100}%"></i></div><div class="hint">${HINTS[q.id] || ''}</div>`; tr.onclick = () => openPanel('quests'); } else tr.hidden = true;
   for (const p of you.popups || []) popup(p);
   for (const e of s.events || []) {
-    if (e.t === 'levelup' && e.pid === myId) { toast('🎉 Village level ' + e.level + '!'); sfx('level'); const V = view.villages.get(myId); if (V) view.burst(V.group.position.x, V.group.position.z); }
-    else if (e.t === 'quest' && e.pid === myId) { toast('📋 Quest complete!'); sfx('coin'); }
+    if (e.t === 'levelup' && e.pid === myId) { toast('Village level ' + e.level + '!', 'star'); sfx('level'); const V = view.villages.get(myId); if (V) view.burst(V.group.position.x, V.group.position.z); }
+    else if (e.t === 'quest' && e.pid === myId) { toast('Quest complete!', 'quests'); sfx('coin'); const V = view.villages.get(myId); if (V) view.star(V.group.position.x, V.group.position.z); }
     else if (e.t === 'built' && e.pid === myId) { sfx('done'); const V = view.villages.get(myId); const m = V && V.b.get(e.id); if (m) view.burst(V.group.position.x + m.position.x, V.group.position.z + m.position.z, '#fff3a0'); }
-    else if (e.t === 'order') { toast('📜 A Valley order was finished!'); sfx('done'); }
-    else if (e.t === 'valleylevel') toast('🌄 The Valley reached level ' + e.level + '!');
-    else if (e.t === 'gift' && e.to === myId) { toast('🎁 A neighbour sent you ' + e.n + ' ' + ICON[e.res]); sfx('coin'); }
+    else if (e.t === 'order') { toast('A Valley order was finished!', 'scrolls'); sfx('done'); view.burst(0, 0, '#ff9ec7'); }
+    else if (e.t === 'valleylevel') toast('The Valley reached level ' + e.level + '!', 'valley');
+    else if (e.t === 'gift' && e.to === myId) { toast('A neighbour sent you ' + e.n + ' ' + e.res, 'gift'); sfx('coin'); const V = view.villages.get(myId); if (V) view.hearts(V.group.position.x, V.group.position.z); }
     else if (e.t === 'emote') { const p = s.players.find(p => p.id === e.pid); if (p) { const V = view.villages.get(p.id); if (V) popupAt(V.group.position.x, 3.5, V.group.position.z, e.e); } }
   }
   if (selected) refreshSheet();
@@ -105,7 +109,7 @@ function popupAt(x, y, z, text) {
 function updateLabels() {
   for (const p of snap.players) {
     let l = labels.get(p.id); if (!l) { l = document.createElement('div'); l.className = 'label'; $('#popups').appendChild(l); labels.set(p.id, l); }
-    l.textContent = `${p.id === myId ? '⭐ ' : ''}${p.name}  Lv${p.level}${p.online ? '' : ' 💤'}`; l.style.color = '#fff';
+    l.innerHTML = `${p.id === myId ? icon('star', 16) : ''}${esc(p.name)}<span class="lv">${p.level}</span>${p.online ? '' : icon('sleep', 14)}`;
   }
   for (const [id, l] of labels) if (!snap.players.some(p => p.id === id)) { l.remove(); labels.delete(id); }
 }
@@ -113,11 +117,11 @@ const vlabels = new Map();
 function placeLabels() {
   for (const [id, m] of view.villagers) {
     if (m.userData.pid !== myId) continue;
-    const ic = { idle: '💤', hungry: '😫', blocked: '⏳', full: '📦' }[m.userData.state];
+    const ic = { idle: 'sleep', hungry: 'hungry', blocked: 'clock', full: 'crate' }[m.userData.state];
     let l = vlabels.get(id);
     if (!ic) { if (l) l.style.display = 'none'; continue; }
-    if (!l) { l = document.createElement('div'); l.className = 'label'; l.style.fontSize = '16px'; $('#popups').appendChild(l); vlabels.set(id, l); }
-    const sp = view.project(m.position.x, 1.5, m.position.z); l.textContent = ic; l.style.display = sp.vis && view.look.dist < 40 ? '' : 'none'; l.style.left = sp.x + 'px'; l.style.top = sp.y + 'px';
+    if (!l) { l = document.createElement('div'); l.className = 'label vbub'; $('#popups').appendChild(l); vlabels.set(id, l); }
+    const sp = view.project(m.position.x, 1.5, m.position.z); if (l.dataset.st !== ic) { l.dataset.st = ic; l.innerHTML = icon(ic, 22); } l.style.display = sp.vis && view.look.dist < 40 ? '' : 'none'; l.style.left = sp.x + 'px'; l.style.top = sp.y + 'px';
   }
   for (const [id, l] of vlabels) if (!view.villagers.has(id)) { l.remove(); vlabels.delete(id); }
   for (const [id, l] of labels) { const V = view.villages.get(id); if (!V) { l.style.display = 'none'; continue; } const s = view.project(V.group.position.x, 3.4, V.group.position.z - 5); l.style.display = s.vis && view.look.dist < 70 ? '' : 'none'; l.style.left = s.x + 'px'; l.style.top = s.y + 'px'; }
@@ -133,21 +137,21 @@ let chatDraft = '', giftFor = null;
 function refreshPanel(force) {
   const el = $('#panel'); if (!panel || (pressed && !force)) return;
   if (panel === 'chat' && !force && document.activeElement && document.activeElement.id === 'chatIn') { renderChatLog(); return; }
-  const head = (t) => `<h3>${t}<button class="x" id="px">✖</button></h3>`;
+  const head = (t, ic) => `<h3><span class="ttl">${icon(ic, 28)}<span>${t}</span></span><button class="x" id="px" aria-label="Close">${icon('close', 20)}</button></h3>`;
   let h = '';
   if (panel === 'quests') {
-    h = head('📋 Quests') + QUESTS.map(q => { const v = Math.min(q.n, you.stats[q.stat] || 0), done = you.quests[q.id]; return `<div class="order ${done ? 'done' : ''}"><b>${done ? '✅' : '▫️'} ${q.text}</b><div class="bar"><i style="width:${v / q.n * 100}%"></i></div><div class="small">${v}/${q.n} · Reward ${Object.entries(q.reward).map(([k, n]) => ICON[k] + n).join(' ')}</div></div>`; }).join('');
+    h = head('Quests', 'quests') + QUESTS.map(q => { const v = Math.min(q.n, you.stats[q.stat] || 0), done = you.quests[q.id]; return `<div class="order ${done ? 'done' : ''}"><b>${done ? icon('check', 22) : '<span class="ring"></span>'}<span>${q.text}</span></b><div class="bar g"><i style="width:${v / q.n * 100}%"></i></div><div class="reward"><span>${v}/${q.n}</span><span>Reward</span>${rewardStr(q.reward)}</div></div>`; }).join('');
   } else if (panel === 'valley') {
     const V = snap.valley, lo = VALLEY_LEVEL_XP[V.level - 1], hi = VALLEY_LEVEL_XP[V.level] || lo + 1;
-    h = head('🌄 Valley board · Lv ' + V.level) + `<div class="bar"><i style="width:${Math.min(100, (V.xp - lo) / (hi - lo) * 100)}%"></i></div><div class="small">Everyone fills these orders together. Rewards are shared by how much you gave.</div>`;
-    h += `<div class="row small" style="margin:6px 0">${V.fields.map(f => { const d = VALLEY_FIELDS.find(x => x.id === f.id); return `<span class="chip" data-f="${f.id}">${ICON[d.res]} ${Math.round(f.stock / 10) * 10}</span>`; }).join('')}</div>`;
-    h += V.orders.map(o => `<div class="order ${o.done ? 'done' : ''}"><b>Order #${o.id}</b> ${o.done ? '✅ Done!' : ''}${Object.keys(o.need).map(g => `<div class="need"><span>${ICON[g]}</span><div class="bar"><i style="width:${o.got[g] / o.need[g] * 100}%"></i></div><span>${o.got[g]}/${o.need[g]}</span>${o.done || o.got[g] >= o.need[g] ? '' : `<button data-o="${o.id}" data-g="${g}">Give</button>`}</div>`).join('')}<div class="small">Reward ${o.reward.coins}🪙 ${o.reward.scrolls}📜 ${o.reward.xp}xp${o.contrib[myId] ? ' · you gave ' + o.contrib[myId] : ''}</div></div>`).join('');
+    h = head('Valley board · Lv ' + V.level, 'valley') + `<div class="bar b"><i style="width:${Math.min(100, (V.xp - lo) / (hi - lo) * 100)}%"></i></div><div class="small">Everyone fills these orders together. Rewards are shared by how much you gave.</div>`;
+    h += `<div class="row small" style="margin:6px 0">${V.fields.map(f => { const d = VALLEY_FIELDS.find(x => x.id === f.id); return `<span class="chip" data-f="${f.id}" title="${d.name || d.res}">${icon(d.res, 24)} ${Math.round(f.stock / 10) * 10}</span>`; }).join('')}</div>`;
+    h += V.orders.map(o => `<div class="order ${o.done ? 'done' : ''}"><b>${icon('scrolls', 22)}<span>Order #${o.id}</span> ${o.done ? icon('check', 20) + ' Done!' : ''}</b>${Object.keys(o.need).map(g => `<div class="need"><span>${icon(g, 26)}</span><div class="bar p"><i style="width:${o.got[g] / o.need[g] * 100}%"></i></div><span>${o.got[g]}/${o.need[g]}</span>${o.done || o.got[g] >= o.need[g] ? '' : `<button data-o="${o.id}" data-g="${g}">Give</button>`}</div>`).join('')}<div class="reward"><span>Reward</span><span class="cc">${icon('coins', 17)}${o.reward.coins}</span><span class="cc">${icon('scrolls', 17)}${o.reward.scrolls}</span><span class="cc">${icon('star', 17)}${o.reward.xp} xp</span>${o.contrib[myId] ? '<span>you gave ' + o.contrib[myId] + '</span>' : ''}</div></div>`).join('');
   } else if (panel === 'players') {
-    h = head('👥 Villages (' + snap.players.length + '/16)') + [...snap.players].sort((a, b) => b.level - a.level).map(p => `<div class="pl" data-p="${p.id}"><span class="dot" style="background:${p.color}"></span><b>${esc(p.name)}</b><span class="small">Lv ${p.level} ${p.online ? '🟢' : '💤'}</span><span style="flex:1"></span>${p.id === myId ? '' : `<button data-gift="${p.id}">🎁</button>`}<button>Visit</button></div>${giftFor === p.id ? `<div class="row" style="margin:-2px 0 8px">${GOODS.filter(g => you.res[g] >= 5).map(g => `<button data-give="${g}">${ICON[g]} 5</button>`).join('') || '<span class="small">Nothing to give yet</span>'}</div>` : ''}`).join('');
+    h = head('Villages (' + snap.players.length + '/16)', 'players') + [...snap.players].sort((a, b) => b.level - a.level).map(p => `<div class="pl" data-p="${p.id}"><span class="dot" style="background:${p.color}"></span><b>${esc(p.name)}</b><span class="small">Lv ${p.level} ${p.online ? '<span class="dot2"></span>' : icon('sleep', 16)}</span><span style="flex:1"></span>${p.id === myId ? '' : `<button data-gift="${p.id}" aria-label="Send a gift">${icon('gift', 24)}</button>`}<button>Visit</button></div>${giftFor === p.id ? `<div class="row" style="margin:-2px 0 8px">${GOODS.filter(g => you.res[g] >= 5).map(g => `<button data-give="${g}">${icon(g, 22)} 5</button>`).join('') || '<span class="small">Nothing to give yet</span>'}</div>` : ''}`).join('');
   } else if (panel === 'chat') {
-    h = head('💬 Chat') + `<div class="chatlog" id="chatlog"></div><input id="chatIn" maxlength="120" placeholder="Say hello..." value="${esc(chatDraft)}"><div class="emotes">${['👋', '❤️', '😂', '🎉', '🙏', '🌾'].map(e => `<button data-e="${e}">${e}</button>`).join('')}</div>`;
+    h = head('Chat', 'chat') + `<div class="chatlog" id="chatlog"></div><input id="chatIn" maxlength="120" placeholder="Say hello..." value="${esc(chatDraft)}"><div class="emotes">${['👋', '❤️', '😂', '🎉', '🙏', '🌾'].map(e => `<button data-e="${e}">${e}</button>`).join('')}</div>`;
   } else if (panel === 'menu') {
-    h = head('⚙️ Menu') + `<div class="row"><button id="mRename">✏️ Rename village</button>${link.kind === 'solo' ? '<button id="mReset">🗑 New solo game</button>' : ''}<button id="mFs">⛶ Fullscreen</button><button id="mMus">${audioOn() ? '🔊 Music on' : '🔈 Music off'}</button>${link.kind === 'server' ? '<button id="mInv">🔗 Copy invite link</button>' : ''}</div><p class="small">${link.kind === 'solo' ? 'Solo mode: five friendly neighbour villages share your valley. Your game saves in this browser.' : 'Connected to a server. Your village is tied to this browser, so keep your link.'}</p><p class="small">Controls: drag to pan, pinch or wheel to zoom, right-drag or two fingers to rotate. Tap trees, rocks and clay to send a villager. Tap buildings to use them.</p>`;
+    h = head('Menu', 'menu') + `<div class="row"><button class="menu-b" id="mRename">${icon('pencil', 22)} Rename village</button>${link.kind === 'solo' ? `<button class="menu-b" id="mReset">${icon('trash', 22)} New solo game</button>` : ''}<button class="menu-b" id="mFs">${icon('expand', 22)} Fullscreen</button><button class="menu-b" id="mMus">${audioOn() ? icon('sound', 22) + ' Music on' : icon('mute', 22) + ' Music off'}</button>${link.kind === 'server' ? `<button class="menu-b" id="mInv">${icon('link', 22)} Copy invite link</button>` : ''}</div><p class="small">${link.kind === 'solo' ? 'Solo mode: five friendly neighbour villages share your valley. Your game saves in this browser.' : 'Connected to a server. Your village is tied to this browser, so keep your link.'}</p><p class="small">Controls: drag to pan, pinch or wheel to zoom, right-drag or two fingers to rotate. Tap trees, rocks and clay to send a villager. Tap buildings to use them.</p>`;
   }
   if (!force && el.dataset.h === h) { if (panel === 'chat') renderChatLog(); return; }
   const keep = el.scrollTop; el.dataset.h = h; el.innerHTML = h; el.scrollTop = keep;
@@ -176,9 +180,9 @@ function openBuildMenu() {
   const s = $('#sheet'); s.hidden = false; selected = { menu: true };
   const rows = Object.entries(BUILDINGS).filter(([, d]) => !d.hidden).map(([id, d]) => {
     const lock = you.level < d.lvl ? 'Level ' + d.lvl : d.tech && !you.tech[d.tech] ? 'Research ' + TECH[d.tech].name : null;
-    return `<div class="card ${lock ? 'lock' : ''}" data-b="${id}"><div class="nm">${d.name}</div><div class="small">${d.w}×${d.h}</div><div class="cost">${lock ? '🔒 ' + lock : costStr(d.cost)}</div></div>`;
+    return `<div class="card ${lock ? 'lock' : ''}" data-b="${id}"><div class="bub" style="--b1:${BCOL[id] || '#d9f3ff'}">${icon(id, 34)}</div><div class="nm">${d.name}</div><div class="small">${d.w}×${d.h}</div><div class="cost">${lock ? icon('lock', 16) + ' ' + lock : costStr(d.cost)}</div></div>`;
   }).join('');
-  s.innerHTML = `<h3>🔨 Build<button class="x" id="sx">✖</button></h3><div class="grid">${rows}</div>`;
+  s.innerHTML = `${hd('Build', 'hammer')}<div class="grid">${rows}</div>`;
   $('#sx').onclick = closeSheet;
   s.querySelectorAll('[data-b]').forEach(c => c.onclick = () => startPlace(c.dataset.b));
 }
@@ -187,7 +191,7 @@ function startPlace(type, moveId = null) {
   if (lock) { toast(lock); sfx('bad'); return; }
   closeSheet(); mode = { type, moveId }; view.setGhost(type, myPub().color);
   const spot = _fs(fakeP(), d.w, d.h, 0) || { x: 0, y: 0 }; ghostTo(spot.x, spot.y);
-  $('#place').hidden = false; $('#placeName').textContent = (moveId ? 'Move ' : 'Place ') + d.name; $('#bottom').hidden = true;
+  $('#place').hidden = false; $('#placeName').innerHTML = icon(type, 26) + ' ' + esc((moveId ? 'Move ' : 'Place ') + d.name); $('#bottom').hidden = true;
 }
 // a stand-in village for the client-side placement check (matches the server rule)
 function fakeP() {
@@ -209,6 +213,7 @@ function cancelPlace() { mode = null; view.setGhost(null); view.hideGrids(); $('
 // ---------- selection sheet ----------
 function closeSheet() { selected = null; $('#sheet').hidden = true; view.select(null); }
 let sheetKey = '';
+const hd = (t, ic, extra = '') => `<h3><span class="ttl">${icon(ic, 28)}<span>${t}</span>${extra}</span><button class="x" id="sx" aria-label="Close">${icon('close', 20)}</button></h3>`;
 function sheet(html) { const s = $('#sheet'); s.hidden = false; const same = s.dataset.h === html && sheetKey === JSON.stringify(selected); if (!same) { const keep = s.scrollTop; s.dataset.h = html; sheetKey = JSON.stringify(selected); s.innerHTML = html; s.scrollTop = keep; } const x = $('#sx'); if (x) x.onclick = closeSheet; s.same = same; return s; }
 function refreshSheet() { if (pressed) return; if (selected && selected.k) showSelection(selected, true); else if (selected && selected.menu) { /* keep menu stable */ } }
 function showSelection(sel, silent) {
@@ -216,38 +221,37 @@ function showSelection(sel, silent) {
   if (sel.k === 'bld') {
     const mine = sel.pid === myId; const pub = snap.players.find(p => p.id === sel.pid); const b = pub && pub.b.find(x => x[0] === sel.id); if (!b) { closeSheet(); return; }
     const type = b[1], d = BUILDINGS[type] || { name: type, w: 2, h: 2 }; const st = mine && you.buildings.find(x => x.id === sel.id);
-    let h = `<h3>${d.name}<button class="x" id="sx">✖</button></h3>`;
+    const lv0 = (st && st.lvl) || 1; let h = hd(d.name, type, (type !== 'hall' && b[4] >= 1 && mine) ? `<span class="small">${icon('star', 14)}${lv0} · ${UPGRADE_NOTE[type] || ''}</span>` : '');
     if (!mine) { h += `<div class="small">Belongs to ${esc(pub.name)}</div>`; return sheet(h); }
-    if (b[4] < 1) { h += `<div class="bar"><i style="width:${Math.round(b[4] * 20) * 5}%"></i></div><div class="small">Under construction. A villager is on the way.</div><div class="row" style="margin-top:8px"><button id="aHelp">👷 Send a builder</button><button id="aDem">🗑 Cancel</button></div>`; const s = sheet(h); $('#aHelp').onclick = () => cmd({ op: 'assign', k: 'bld', id: sel.id }); $('#aDem').onclick = () => { cmd({ op: 'demolish', id: sel.id }); closeSheet(); }; return; }
+    if (b[4] < 1) { h += `<div class="bar g"><i style="width:${Math.round(b[4] * 20) * 5}%"></i></div><div class="small" style="margin-top:6px">Under construction. A villager is on the way.</div><div class="row" style="margin-top:10px"><button id="aHelp">${icon('worker', 24)} Send a builder</button><button id="aDem">${icon('trash', 22)} Cancel</button></div>`; const s = sheet(h); $('#aHelp').onclick = () => cmd({ op: 'assign', k: 'bld', id: sel.id }); $('#aDem').onclick = () => { cmd({ op: 'demolish', id: sel.id }); closeSheet(); }; return; }
     if (type === 'hall') {
-      h += `<div>Villagers ${you.villagers.length}/${you.housing} · Storage ${you.cap} per good · Level ${you.level}</div><div class="row" style="margin:8px 0"><button id="aHire" ${you.villagers.length >= you.housing ? 'disabled' : ''}>🧑‍🌾 Welcome a villager (${costStr(you.hire)})</button></div>`;
+      h += `<div class="stat"><span>${icon('players', 20)} ${you.villagers.length}/${you.housing}</span><span>${icon('crate', 20)} ${you.cap} per good</span><span>${icon('level', 20)} Level ${you.level}</span></div><div class="row" style="margin:8px 0"><button id="aHire" ${you.villagers.length >= you.housing ? 'disabled' : ''}>${icon('worker', 24)} Welcome a villager ${costStr(you.hire)}</button></div>`;
       h += you.villagers.length >= you.housing ? '<div class="small">Build more Cottages to make room.</div>' : '';
-      h += '<div class="small">Villagers</div>' + you.villagers.map(v => `<div class="pl" data-v="${v.id}"><b>${esc(v.name)}</b><span class="small">${stateText(v)}</span><span style="flex:1"></span><span class="small">🍲 ${Math.round(v.hunger / 10) * 10}%</span></div>`).join('');
+      h += '<div class="small" style="margin-bottom:6px">Villagers</div>' + you.villagers.map(v => `<div class="pl" data-v="${v.id}">${icon('worker', 26)}<b>${esc(v.name)}</b><span class="small">${stateText(v)}</span><span style="flex:1"></span><span class="small">${icon('soup', 18)} ${Math.round(v.hunger / 10) * 10}%</span></div>`).join('');
       const s = sheet(h); const hb = $('#aHire'); if (hb) hb.onclick = () => cmd({ op: 'hire' }); s.querySelectorAll('[data-v]').forEach(r => r.onclick = () => showSelection({ k: 'vil', id: +r.dataset.v, pid: myId })); return;
     }
     if (d.field) {
       const stg = b[5], txt = stg === 'empty' ? 'Ready to sow' : stg === 'grow' ? 'Growing ' + Math.round(b[6] * 10) * 10 + '%' : 'Ripe, ready to harvest!';
-      h += `<div>${txt}</div><div class="row" style="margin-top:8px"><button id="aGo" ${stg === 'grow' ? 'disabled' : ''}>${stg === 'ripe' ? '🌾 Harvest' : '🌱 Sow'}</button>`;
+      h += `<div>${txt}</div>${stg === 'grow' ? `<div class="bar g"><i style="width:${Math.round(b[6] * 10) * 10}%"></i></div>` : ''}<div class="row" style="margin-top:10px"><button id="aGo" ${stg === 'grow' ? 'disabled' : ''}>${stg === 'ripe' ? icon('wheat', 24) + ' Harvest' : icon('sow', 24) + ' Sow'}</button>`;
     } else if (d.craft) {
       h += `<div class="row">`;
-      for (const r of d.craft) { const rc = RECIPES[r]; h += `<button data-r="${r}" ${canAfford(rc.in) ? '' : 'disabled'}>${ICON[r]} ${r} ×1 <span class="small">(${costStr(rc.in)})</span></button><button data-r5="${r}">×5</button>`; }
+      for (const r of d.craft) { const rc = RECIPES[r]; h += `<button data-r="${r}" ${canAfford(rc.in) ? '' : 'disabled'}>${icon(r, 24)} ${r} ×1 <span class="small">${costStr(rc.in)}</span></button><button data-r5="${r}">×5</button>`; }
       h += `</div>`;
-      if (st && st.queue.length) h += '<div class="small" style="margin-top:6px">Queue: ' + st.queue.map((q, i) => `<span class="chip" data-dq="${i}">${ICON[q.recipe]}×${q.n}${q.started ? ' ⏳' : ''} ✖</span>`).join(' ') + '</div>';
+      if (st && st.queue.length) h += '<div class="queue"><span class="small">Queue</span>' + st.queue.map((q, i) => `<span class="chip" data-dq="${i}">${icon(q.recipe, 22)}×${q.n}${q.started ? ' ' + icon('clock', 16) : ''} ${icon('close', 12)}</span>`).join('') + '</div>';
       if (d.research) {
-        h += '<div class="small" style="margin-top:8px">Research</div><div class="grid">' + Object.entries(TECH).map(([id, t]) => `<div class="card ${you.tech[id] ? 'lock' : ''}" data-t="${id}"><div class="nm">${t.name}</div><div class="small">${t.desc}</div><div class="cost">${you.tech[id] ? '✅ Learned' : (you.res.scrolls < t.scrolls ? '<span class="bad">' : '<span>') + '📜' + t.scrolls + '</span>'}</div></div>`).join('') + '</div>';
-        if (st && st.research) h += `<div class="small">Studying ${TECH[st.research.tech].name}... ${Math.ceil(st.research.left / 5) * 5}s</div>`;
+        h += '<div class="small" style="margin:10px 0 6px">Research</div><div class="grid">' + Object.entries(TECH).map(([id, t]) => `<div class="card ${you.tech[id] ? 'done' : ''}" data-t="${id}"><div class="nm">${t.name}</div><div class="small">${t.desc}</div><div class="cost">${you.tech[id] ? icon('check', 18) + ' Learned' : '<span class="cc ' + (you.res.scrolls < t.scrolls ? 'bad' : '') + '">' + icon('scrolls', 18) + t.scrolls + '</span>'}</div></div>`).join('') + '</div>';
+        if (st && st.research) h += `<div class="hint-b">${icon('book', 20)} Studying ${TECH[st.research.tech].name}... ${Math.ceil(st.research.left / 5) * 5}s</div>`;
       }
       h += `<div class="row" style="margin-top:8px">`;
     } else if (d.market) {
-      h += '<div class="small">Sell goods for coins</div><div class="grid">' + GOODS.filter(g => you.res[g] > 0).map(g => `<div class="card" data-s="${g}">${ICON[g]} ${you.res[g]}<div class="small">${SELL[g]}🪙 each</div></div>`).join('') + '</div><div class="row" style="margin-top:8px">';
+      h += '<div class="small">Sell goods for coins</div><div class="grid">' + GOODS.filter(g => you.res[g] > 0).map(g => `<div class="card sell" data-s="${g}"><div class="bub" style="--b1:#fff0b0">${icon(g, 34)}</div><div class="nm">${you.res[g]}</div><div class="small cc">${SELL[g]}${icon('coins', 15)} each</div></div>`).join('') + '</div><div class="row" style="margin-top:8px">';
     } else { h += `<div class="small">${d.decor ? 'A lovely decoration (+charm).' : ''}</div><div class="row">`; }
     {
       const lvl = (st && st.lvl) || 1; const need = upgradeNeedsLevel(type, lvl);
-      if (st && st.up) h += `<div class="small" style="width:100%">⬆ Upgrading... ${Math.round((b[8] || 0) * 10) * 10}%</div>`;
-      else if (lvl < MAX_BLD_LEVEL) { const cost = upgradeCost(type, lvl); h += `<button id="aUp" ${you.level >= need && canAfford(cost) ? '' : 'disabled'}>⬆ Level ${lvl + 1} <span class="small">${you.level < need ? '(village Lv ' + need + ')' : costStr(cost)}</span></button>`; }
-      h = h.replace(/<h3>([^<]*)</, `<h3>$1 <span class="small">★${lvl} · ${UPGRADE_NOTE[type] || ''}</span><`);
+      if (st && st.up) h += `<div class="hint-b" style="width:100%">${icon('up', 20)} Upgrading... ${Math.round((b[8] || 0) * 10) * 10}%</div>`;
+      else if (lvl < MAX_BLD_LEVEL) { const cost = upgradeCost(type, lvl); h += `<button id="aUp" ${you.level >= need && canAfford(cost) ? '' : 'disabled'}>${icon('up', 22)} Level ${lvl + 1} <span class="small">${you.level < need ? '(village Lv ' + need + ')' : costStr(cost)}</span></button>`; }
     }
-    h += `<button id="aSend">👷 Send villager</button><button id="aMove">✋ Move</button><button id="aDem">🗑 Demolish</button></div>`;
+    h += `<button id="aSend">${icon('worker', 24)} Send villager</button><button id="aMove">${icon('move', 22)} Move</button><button id="aDem">${icon('trash', 22)} Demolish</button></div>`;
     const s = sheet(h);
     const go = $('#aGo'); if (go) go.onclick = () => cmd({ op: 'assign', k: 'bld', id: sel.id });
     s.querySelectorAll('[data-r]').forEach(b => b.onclick = () => cmd({ op: 'queue', id: sel.id, recipe: b.dataset.r, n: 1 }));
@@ -261,11 +265,11 @@ function showSelection(sel, silent) {
     $('#aDem').onclick = () => { if (confirm('Demolish ' + d.name + '? You get part of the cost back.')) { cmd({ op: 'demolish', id: sel.id }); closeSheet(); } };
   } else if (sel.k === 'vil') {
     const v = you.villagers.find(v => v.id === sel.id); if (!v || sel.pid !== myId) { closeSheet(); return; }
-    const s = sheet(`<h3>🧑‍🌾 ${esc(v.name)}<button class="x" id="sx">✖</button></h3><div>${stateText(v)}</div><div class="bar"><i style="width:${Math.round(v.hunger / 10) * 10}%"></i></div><div class="small">Hunger (eats soup automatically)</div><div class="row" style="margin-top:8px"><button id="vRecall">🛑 Stop task</button></div><div class="small" style="margin-top:6px">Now tap something to give this villager a job.</div>`);
+    const s = sheet(`${hd(esc(v.name), 'worker')}<div>${stateText(v)}</div><div class="bar p"><i style="width:${Math.round(v.hunger / 10) * 10}%"></i></div><div class="small" style="margin-top:4px">Hunger (eats soup automatically)</div><div class="row" style="margin-top:10px"><button id="vRecall">${icon('stop', 22)} Stop task</button></div><div class="small" style="margin-top:8px">Now tap something to give this villager a job.</div>`);
     $('#vRecall').onclick = () => cmd({ op: 'recall', vid: v.id });
   }
 }
-const stateText = (v) => ({ idle: '😴 Idle', walk: '🚶 Walking', work: '⛏ Working', build: '🔨 Building', hungry: '😫 Hungry, no soup!', blocked: '⏳ Waiting for ingredients', full: '📦 Storage full' }[v.state] || v.state);
+const stateText = (v) => { const t = { idle: ['sleep', 'Idle'], walk: ['walk', 'Walking'], work: ['hammer', 'Working'], build: ['hammer', 'Building'], hungry: ['hungry', 'Hungry, no soup!'], blocked: ['clock', 'Waiting for ingredients'], full: ['crate', 'Storage full'] }[v.state]; return t ? icon(t[0], 18) + ' ' + t[1] : esc(v.state); };
 let chosenVillager = null;
 
 // ---------- input ----------

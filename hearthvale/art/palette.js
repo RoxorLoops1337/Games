@@ -1,7 +1,7 @@
 // Hearthvale palette: warm, saturated, candy-soft. Every art module takes its colours from here so the village reads as one world.
 export const P = {
   // greens (grass is light and sunny; foliage is deeper so trees pop off the ground)
-  grass: '#9ad464', grassDeep: '#7cc04e', grassDark: '#5fa83e', leaf: '#4fa845', leafLight: '#7fd05a', leafDark: '#357f3a', moss: '#6b9a3a',
+  grass: '#a8e26e', grassDeep: '#86cf55', grassDark: '#6db845', leaf: '#5cc04e', leafLight: '#8fe06a', leafDark: '#42a346', moss: '#7fb040',
   // woods and earth
   bark: '#8a5a3a', barkDark: '#6b4328', wood: '#c58a52', woodLight: '#e0a96b', plank: '#d9a566', soil: '#8a5d3b', soilDark: '#6e4529', clay: '#c96f3e', clayLight: '#e08a55', sand: '#ecd9a0', path: '#dcc690',
   // stone
@@ -11,7 +11,7 @@ export const P = {
   roofRed: '#d9503d', roofOrange: '#ef8a3c', roofBlue: '#4f86c6', roofTeal: '#37a3a0', roofPurple: '#8e6bc4', roofPink: '#e0709a', roofGold: '#e8b53a', roofGreen: '#4f9a4a',
   thatch: '#e3b857', slate: '#5d6a8c',
   // accents
-  gold: '#ffd24a', goldDeep: '#e8a317', cream: '#fff8e6', white: '#ffffff', red: '#e8564a', blue: '#4a90e0', sky: '#a9dcf3', water: '#59bfe8', waterDeep: '#3a9fd0',
+  gold: '#ffd24a', goldDeep: '#e8a317', cream: '#fff8e6', white: '#ffffff', red: '#e8564a', blue: '#4a90e0', sky: '#a9dcf3', water: '#5fd0ee', waterDeep: '#3cb4dc', blossom: '#ffb7d0', blossomDeep: '#ff8fb5', mint: '#b8f0d0', butter: '#fff2a8', lilac: '#d4c4ff', peach: '#ffd2b0', sky2: '#d6f1ff',
   skin: ['#ffe3cc', '#f8d5b5', '#eebf94', '#d39a6d', '#a8744c'],   // peach, light, tan, golden brown, deep brown (weighted toward the lighter four in characters.js)
   hair: ['#6a4a35', '#8a5a36', '#b8783c', '#e8b85a', '#f4e4c0', '#d9603a', '#6a5aa8', '#e07aa0', '#4aa8a0'],   // warm browns first, then happy fantasy colours: no near-black blobs from above
   outfit: ['#e8564a', '#4a90e0', '#f2b632', '#52b56a', '#a65bd6', '#ef7fb0', '#31b5b0', '#f08a3a'],
