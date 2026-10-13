@@ -203,7 +203,7 @@ export class MenuScreen implements Screen {
         label(L, IN_Y + 122, 'Music volume');
         pane.add(this.win.put(slider(s, 0, 0, 200, settings.music, (v) => { settings.music = v; saveSettings(); }, PAL.plum).root, L + colW - 204, IN_Y + 132));
         this.heading(L, IN_Y + 168, colW, 'Screen');
-        toggle(L, IN_Y + 204, 'Screen shake', undefined, () => settings.shake, (v) => { settings.shake = v; });
+        toggle(L, IN_Y + 204, 'Shake and vibration', undefined, () => settings.shake, (v) => { settings.shake = v; });
         toggle(L, IN_Y + 244, 'Show FPS', undefined, () => settings.fps, (v) => { settings.fps = v; });
         // the view: 2D (the classic) or 3D (beta); the same world, menus and keys (world/view3d-bridge.ts). Live, or one reload back into this world.
         const farm = this.ctx.farm;

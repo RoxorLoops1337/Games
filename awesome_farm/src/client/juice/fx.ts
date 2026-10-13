@@ -4,6 +4,7 @@
 // compiler refuses an action that skips one. Call `fx.play('action', x, y)` — never
 // playSfx/shake/explode by hand for game actions.
 
+import { buzz } from './haptics';
 import type { Action } from '../../shared/actions';
 import { PAL } from '../../shared/palette';
 import { settings } from '../settings';
@@ -157,7 +158,7 @@ export class Fx {
         const spec: FxSpec = FX[action];
         if (!opts.quiet) playSfx(spec.sfx, opts.pitch);
         this.emitter(action, spec.burst).explode(spec.burst.count, x, y);
-        if (!opts.noShake) this.shake(spec.shake.px, spec.shake.ms);
+        if (!opts.noShake) { this.shake(spec.shake.px, spec.shake.ms); buzz(action); }
     }
 
     /** Remove this scene's emitters (a window that made its own Fx calls this when it closes). */
