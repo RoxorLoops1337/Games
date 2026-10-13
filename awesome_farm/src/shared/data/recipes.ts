@@ -76,6 +76,7 @@ const ROWS: Row[] = [
     ['kitchen', 'soup', 1, { beet: 2, carrot: 1 }, 5],
     ['kitchen', 'cornbread', 1, { flour: 1, corn: 2 }, 5],
     ['kitchen', 'jam', 1, { berry: 6 }, 4],
+    ['kitchen', 'apple_tart', 1, { apple: 3, flour: 1, honey: 1 }, 6],
     ['kitchen', 'melon_ice', 1, { melon: 1, berry: 2 }, 7],
     ['kitchen', 'spicy_stew', 1, { pepper: 2, carrot: 2, mushroom: 2 }, 12, { req: 'cooking2' }],
     ['kitchen', 'pie', 1, { pumpkin: 1, flour: 1, berry: 2 }, 10, { req: 'cooking2' }],
@@ -174,6 +175,8 @@ const ROWS: Row[] = [
     ['assembler', 'treat', 2, { flour: 1, berry: 2 }, 2, { time: 3, req: 'taming' }],
     ['assembler', 'core', 1, { circuit: 4, motor: 2, crystal: 2 }, 12, { time: 20, req: 'engineering' }],
     ['millstone', 'flour', 1, { wheat: 2 }, 1, { time: 3 }],
+    // the beehive: berries in, honey out
+    ['hive', 'honey', 1, { berry: 3 }, 2, { time: 40 }],
     // the fish pond: a fish and bait in, two fish out (the dearer the fish, the slower it breeds)
     ['pond', 'fish_minnow', 2, { fish_minnow: 1 }, 0, { time: 20 }],
     ['pond', 'fish_carp', 2, { fish_carp: 1, bait: 1 }, 1, { time: 45 }],

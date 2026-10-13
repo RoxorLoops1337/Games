@@ -390,5 +390,25 @@ export function fishpond(_o: BOpts): Model<BuildE> {
         update(_dt: number, t: number) { fish.rotation.y = on ? t * 1.2 : t * 0.3; },
     };
 }
+export function beehive(_o: BOpts): Model<BuildE> {
+    const root = new THREE.Group();
+    root.add(bake('work.beehive', (mb) => {
+        const b = mb.main;
+        for (const x of [-0.3, 0.3]) for (const z of [-0.2, 0.2]) b.box(0.07, 0.3, 0.07, wc(0.55), { x, y: 0.15, z, j: 0.006 });
+        b.box(0.8, 0.06, 0.6, wc(0.7), { y: 0.32, j: 0.008 });
+        b.cyl(0.34, 0.38, 0.22, 9, 0xe8b232, { y: 0.46, j: 0.015 });
+        b.cyl(0.28, 0.34, 0.2, 9, 0xf0c244, { y: 0.67, j: 0.015 });
+        b.cyl(0.18, 0.26, 0.18, 9, 0xe8b232, { y: 0.86, j: 0.015 });
+        b.box(0.12, 0.08, 0.04, 0x35305c, { y: 0.42, z: 0.36, j: 0.004 });
+    }));
+    const bees = puffs({ x: 0.0, y: 0.5, z: 0.4, rise: 0.2, dx: 0.35, dz: 0.2, size: 0.3, period: 1.1, n: 4, color: 0xffd966 });
+    root.add(bees.group);
+    let on = false;
+    return {
+        obj: root,
+        apply(e) { on = isOn(e); },
+        update(_dt: number, t: number) { bees.update(t, on); },
+    };
+}
 export const SL1 = 0x7a7f9e;
-export const CRAFT = { workbench, anvil, kitchen, loom, alchemy, furnace, sawmill, millstone, fishpond };
+export const CRAFT = { workbench, anvil, kitchen, loom, alchemy, furnace, sawmill, millstone, fishpond, beehive };
