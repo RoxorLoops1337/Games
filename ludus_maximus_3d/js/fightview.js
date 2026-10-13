@@ -27,6 +27,9 @@ const NO_EXEC = new Set(['spar']);                                   // sparring
 // replay camera presets: pitch (deg), distance (m), spin (rad/s, 0 = fixed). 'auto' hands the camera back to the director.
 const CAMS = { auto: null, wide: { pitch: 36, d: 24 }, side: { pitch: 12, d: 13, side: true }, low: { pitch: 5, d: 8.5, side: true }, top: { pitch: 72, d: 22 }, orbit: { pitch: 22, d: 15, spin: 0.35 } };
 const RATES = [0.25, 0.5, 1, 2];
+/** replay seeking: fx calls for events far from the seek target are dropped (a Proxy that swallows everything except the persistent sand decals) */
+const NOOP = new Proxy(function () {}, { get: () => NOOP, apply: () => NOOP });
+const quietFx = (real) => new Proxy(real, { get: (t, k) => (k === 'groundDecal' || k === 'decal' || k === 'markDecals' || k === 'decalDraw' ? t[k] : NOOP) });
 const readSpeed = () => { try { const v = +localStorage.getItem(SPEED_KEY); return SPEEDS.includes(v) ? v : 1; } catch (e) { return 1; } };
 const STATUS_FX = new Set(['stun', 'slow', 'bleed', 'blind', 'taunt', 'root', 'burn']);
 const STATUS_LABEL = { stun: 'STUNNED', slow: 'SLOWED', bleed: 'BLEEDING', blind: 'BLINDED', taunt: 'TAUNT', netted: 'NETTED', guard: 'GUARD', frenzy: 'FRENZY', rage: 'RAGE', rally: 'RALLY', root: 'ROOTED', air: 'KNOCKED UP', spin: 'WHIRLING' };
@@ -244,16 +247,18 @@ export class FightView {
     this.start(F2, o); this.promise = keep.p; this.resolve = keep.r; this.rate = rate; if (cam !== 'auto' && cam !== 'free') this.setCam(cam); this.paused = was; this.syncReplayBar();
   }
   fastForward(n) {
-    const F = this.F, lm = L(), au = this.audio, sfx0 = au.sfx, crowd0 = au.crowd, t0 = performance.now(); let i = 0; this.epoch++;
-    au.sfx = () => {}; au.crowd = () => {}; this.silent = true; this.fx.hold = true;
+    const F = this.F, lm = L(), au = this.audio, sfx0 = au.sfx, crowd0 = au.crowd, real = this.fx, quiet = quietFx(real), t0 = performance.now(), NEAR = 45; let i = 0, crossed = false; this.epoch++;
+    au.sfx = () => {}; au.crowd = () => {}; this.silent = true; real.hold = true;
     try {
       while ((F.n || 0) < n && !F.done && performance.now() - t0 < 4000) {
+        const far = n - (F.n || 0) > NEAR;                                   // events older than ~1.5 s before the target need no sparks, numbers or particles
+        if (far) this.fx = quiet; else { this.fx = real; if (!crossed) { crossed = true; this.gore.settle && this.gore.settle(); } }
         const taps = this.opts.replay.taps; while (this.tapI < taps.length && taps[this.tapI].n <= (F.n || 0)) this.applyTap(taps[this.tapI++]);
-        lm.step(F, STEP); this.consume(); if ((++i % 3) === 0) this.fx.update(0.1, this.camera);
+        lm.step(F, STEP); this.consume(); if (!far && (++i % 3) === 0) real.update(0.1, this.camera);
       }
-    } finally { au.sfx = sfx0; au.crowd = crowd0; this.silent = false; this.fx.hold = false; }
+    } finally { this.fx = real; au.sfx = sfx0; au.crowd = crowd0; this.silent = false; real.hold = false; }
     for (const f of this.fm.values()) { f.rx = f.u.x; f.ry = f.u.y; f.pu.x = f.pu.z = f.pu.vx = f.pu.vz = 0; f.ov = null; f.px0 = f.rx; f.pz0 = f.ry; f.vx = f.vz = 0; for (let k = 0; k < 14; k++) f.rig.update(0.1); }
-    this.fx.update(0.1, this.camera); this.feel.reset(); this.acc = 0; this.ls = null; this.lsK = 0;
+    real.update(0.1, this.camera); this.feel.reset(); this.acc = 0; this.ls = null; this.lsK = 0;
   }
 
   // ---------------------------------------------------------------- fight lifecycle

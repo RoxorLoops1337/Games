@@ -609,7 +609,7 @@ const LEGACY_IDS = ['patron', 'brawl', 'trainer', 'spoiled', 'spy', 'sponsor', '
   ok(ids.length >= 40 && deck.length >= 40, `the deck has 40+ events (${ids.length} total, ${deck.length} new)`);
   ok(deck.every((e) => e.id && e.n && e.t && e.tag && e.c.length >= 1 && e.c.every((c) => c.l && c.o && c.o.length >= 1 && c.o.every((o) => o.r && Array.isArray(o.fx)) && c.o[c.o.length - 1].p == null)), 'every event has a name, tag, text, choices and a final fallback outcome');
   ok(new Set(deck.map((e) => e.id)).size === deck.length && deck.every((e) => !LEGACY_IDS.includes(e.id)), 'event ids are unique and do not collide with the old events');
-  const allText = JSON.stringify(deck) + JSON.stringify(D.SPBEATS) + JSON.stringify(D.SPONSORS); ok(!/—/.test(allText) && !/--/.test(allText.replace(/-->/g, '')), 'event and patron copy has no em dashes');
+  const allText = JSON.stringify(deck) + JSON.stringify(D.SPBEATS) + JSON.stringify(D.SPONSORS); ok(!/\u2014/.test(allText) && !/--/.test(allText.replace(/-->/g, '')), 'event and patron copy has no em dashes');
   const refs = []; deck.forEach((e) => e.c.forEach((c) => c.o.forEach((o) => o.fx.forEach((op) => { if (op[0] === 'q') refs.push(op[1]); }))));
   ok(refs.length >= 10 && refs.every((id) => LM.EVENTS[id] && LM.EVENTS[id].deck.follow), `every queued follow-up exists and is a follow event (${refs.length} links)`);
   ok(deck.filter((e) => e.follow).every((e) => refs.includes(e.id) || deck.some((x) => x.swap && x.swap[1] === e.id)), 'no orphan follow-ups');

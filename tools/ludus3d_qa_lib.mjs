@@ -272,6 +272,20 @@ async function settingsToggle(h) {
   await audit(h, 'more/settings');
 }
 
+/** walk the save for numbers that JSON would turn into null (NaN, Infinity) or undefined holes in arrays: they corrupt saves silently */
+export function integrityFn() {
+  const bad = [], seen = new Set();
+  const walk = (v, path, depth) => {
+    if (bad.length > 8 || depth > 9) return;
+    if (typeof v === 'number') { if (!isFinite(v)) bad.push(path + ' = ' + v); return; }
+    if (v && typeof v === 'object') { if (seen.has(v)) return; seen.add(v); if (Array.isArray(v)) v.forEach((x, i) => { if (x === undefined) bad.push(path + '[' + i + '] undefined'); else walk(x, path + '[' + i + ']', depth + 1); }); else for (const k of Object.keys(v)) walk(v[k], path + '.' + k, depth + 1); }
+  };
+  const S = window.__LM3D.game.S; walk(S, 'S', 0);
+  try { const r = globalThis.LM.loadEx; const raw = JSON.stringify(S); if (raw.length > 4.5e6) bad.push('save is ' + raw.length + ' bytes (localStorage limit is about 5 MB)'); } catch (e) { bad.push('save does not serialise: ' + e.message); }
+  return bad;
+}
+export async function checkState(h, where) { const bad = await h.page.evaluate(integrityFn); bad.forEach((m) => h.add('state', 'high', where, m)); }
+
 export const STEPS = ['open', 'open', 'click', 'click', 'click', 'esc', 'tab', 'api', 'settings', 'photo', 'closeall', 'world', 'more'];
 
 /** one monkey run. opts: {steps, weeks, fights, seed, vp} */
@@ -279,16 +293,17 @@ export async function monkey(o = {}) {
   const h = await launch({ vp: o.vp || 'phone', seed: o.seed || 7, query: o.query, init: o.init });
   const log = [];
   try {
-    await h.page.evaluate(() => { const g = window.__LM3D.game, LM = globalThis.LM, S = g.S; ['murmillo', 'thraex', 'hoplomachus'].forEach((st, i) => { if (S.glads.length < 3) S.glads.push(LM.makeGlad({ id: S.nextId++, style: st, lvl: 3 + i })); }); S.flags.auto = true; S.flags.tut = { v: 1, done: 1, skipped: true }; if (g.tutorial && g.tutorial.skip) { try { g.tutorial.skip(); } catch (e) { /* ok */ } } });
+    await h.page.evaluate((n) => { const g = window.__LM3D.game, LM = globalThis.LM, S = g.S; ['murmillo', 'thraex', 'hoplomachus'].slice(0, n).forEach((st, i) => { if (S.glads.length < n) S.glads.push(LM.makeGlad({ id: S.nextId++, style: st, lvl: 3 + i })); }); S.flags.auto = true; S.flags.tut = { v: 1, done: 1, skipped: true }; if (g.tutorial && g.tutorial.skip) { try { g.tutorial.skip(); } catch (e) { /* ok */ } } }, o.glads || 3);
+    if (o.classes) await h.page.evaluate((c) => document.body.classList.add(...c.split(' ')), o.classes); // e.g. 'lx-large-text lx-hc'
     // every screen once, audited
     if (o.sweep !== false) {
-      for (const id of SCREENS) {
+      for (const id of o.screens || SCREENS) {
         const arg = id === 'building' ? { type: 'plot', i: 6 } : id === 'profile' ? await gid(h) : undefined;
         if (await openScreen(h, id, arg)) await audit(h, 'screen ' + id);
         await closeAll(h);
       }
-      for (const tab of ['ludus', 'honors', 'settings', 'help']) { if (await openScreen(h, 'more', { tab })) await audit(h, 'more/' + tab); await closeAll(h); }
-      for (const tab of ['calendar', 'rivals', 'barracks', 'memorial']) { if (await openScreen(h, 'world', { tab })) await audit(h, 'world/' + tab); await closeAll(h); }
+      for (const tab of o.quick ? ['settings'] : ['ludus', 'honors', 'settings', 'help']) { if (await openScreen(h, 'more', { tab })) await audit(h, 'more/' + tab); await closeAll(h); }
+      for (const tab of o.quick ? ['rivals'] : ['calendar', 'rivals', 'barracks', 'memorial']) { if (await openScreen(h, 'world', { tab })) await audit(h, 'world/' + tab); await closeAll(h); }
     }
     let weeks = 0;
     for (let i = 0; i < (o.steps || 0); i++) {
@@ -306,10 +321,11 @@ export async function monkey(o = {}) {
       else if (s === 'closeall') await closeAll(h);
       const dt = Date.now() - t0; if (dt > 6000) h.add('slow', 'low', s, `step "${s}" took ${dt}ms`);
       if (o.weeks && weeks < o.weeks && (i + 1) % Math.max(4, Math.floor((o.steps || 1) / o.weeks)) === 0) {
-        await closeAll(h); await apiAction(h, 'enter'); const r = await advanceWeek(h, { replay: !!o.replay && weeks === 0 }); weeks++; log.push('week:' + r.steps); await audit(h, 'hub after week');
+        await closeAll(h); await apiAction(h, 'enter'); const r = await advanceWeek(h, { replay: !!o.replay && weeks === 0 }); weeks++; log.push('week:' + r.steps); await audit(h, 'hub after week'); await checkState(h, 'after week ' + weeks);
       }
     }
     if (o.weeks && weeks === 0) { await closeAll(h); await apiAction(h, 'enter'); await advanceWeek(h, { replay: !!o.replay }); await audit(h, 'hub after week'); }
+    await checkState(h, 'end of run');
     const long = await h.page.evaluate(() => window.__qa.long.splice(0)); const worst = Math.max(0, ...long);
     if (worst > 1500) h.add('slow', 'low', 'run', `longest main-thread task ${worst}ms (software GL, informational)`);
     await sweepRejections(h);

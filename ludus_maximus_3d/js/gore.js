@@ -531,6 +531,13 @@ export function createGore(fx, o = {}) {
     return took ? part : null;
   };
 
+  /** replay seek: drop everything airborne (droplets, jets), grow the pools and let the flung props land, so skipped time leaves only what stays on the sand */
+  G.settle = (sec = 3) => {
+    if (!G.on) return; for (const d of drops.splice(0)) dfree.push(d); jets.length = 0;
+    for (const p of pools) { p.delay = 0; if (p.r < p.rMax) p.r = p.rMax * 0.92; }
+    if (gib) { for (let t = 0; t < sec; t += 0.1) stepProps(0.1); for (const d of drops.splice(0)) dfree.push(d); }
+  };
+
   /** shader warm-up: the gib mesh is built and drawn once (a dead instance) so its program compiles before the first limb flies */
   G.warm = (on) => { if (on) { if (!gib) buildGib(); gib.count = 1; gib.visible = true; } else if (gib) { gib.count = chunkHi ? MAXLH + chunkHi : lhCur; gib.visible = props.length > 0; } };
 

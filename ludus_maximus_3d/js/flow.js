@@ -106,7 +106,7 @@ async function pendingEvent(ctx) { // WAVE2: named events, risk hints, costs, co
   const S = ctx.S; if (!S.pendingEv) return; const lm = L(), E = lm.EVENTS[S.pendingEv]; if (!E) { S.pendingEv = null; return; }
   const V = lm.evView ? lm.evView(S) : null;
   const body = h('div', '', [V && V.follow ? para('Word of an earlier matter comes back to you.') : null, para(V ? V.text : E.t)]);
-  const acts = V ? V.choices.map((c) => ({ label: c.l + (c.cost ? ` (${c.cost}g)` : ''), sub: c.h || (c.short ? 'You cannot afford this' : undefined), value: c.i, variant: c.i ? 'ghost' : 'gold' })) : E.c.map((c, k) => ({ label: c.l, value: k, variant: k ? 'ghost' : 'gold' }));
+  const acts = V ? V.choices.map((c) => ({ label: c.l + (c.cost ? ` (${c.cost}g)` : ''), sub: c.h || (c.short ? 'You cannot afford this' : undefined), value: c.i, variant: c.i ? 'bronze' : 'gold' })) : E.c.map((c, k) => ({ label: c.l, value: k, variant: k ? 'ghost' : 'gold' }));
   const i = await ctx.ask({ title: V ? V.n : 'Event', body, actions: acts, dismiss: E.c.length - 1 });
   const msg = lm.runEvent(S, +i); ctx.save(); ctx.refresh();
   const res = h('div', '', [para(msg)]); const fx = (S.evLast && S.evLast.fx) || []; if (fx.length) res.append(h('div', '', fx.map((f) => chip(f, /-\d|hurt|Strained|ickness|gone|\dw$|Barracks full/.test(f) ? '#b5532f' : '#2b9348'))));
