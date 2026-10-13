@@ -22,6 +22,11 @@ import { storageOf } from './uber';
 export const STASH_TILES = 7;
 export const MAX_FAVS = 40;
 
+/** How long (s) a friend who used a chest still counts as being at it. */
+export const BUSY_SECS = 20;
+/** The other farmer using this chest right now (by id), or null. */
+export const busyUser = (b: Pick<BuildE, 'use'>, now: number, me: string): string | null => (b.use && b.use.p !== me && now - b.use.t < BUSY_SECS ? b.use.p : null);
+
 /** Things the bulk tools leave alone: starred, or pinned to your hotbar. */
 export function guarded (p: PlayerS): Set<ItemId> {
     const s = new Set<ItemId>(p.fav ?? []);
@@ -135,7 +140,7 @@ function chestAll (sim: Sim, p: PlayerS, id: number, dir: 'put' | 'take') {
             fly(sim, p, b, [item], 'put', flown);
             kinds++; total += n;
         }
-        if (total) { b.by = p.id; sim.touch(b); sim.fx('load', sim.center(b).x, sim.center(b).y, p.id); }
+        if (total) { b.by = p.id; b.use = { p: p.id, t: sim.s.time }; sim.touch(b); sim.fx('load', sim.center(b).x, sim.center(b).y, p.id); }
     } else {
         for (const item of ITEM_ORDER) {
             const have = invHas(b.inv, item);
@@ -146,7 +151,7 @@ function chestAll (sim: Sim, p: PlayerS, id: number, dir: 'put' | 'take') {
             fly(sim, p, b, [item], 'take', flown);
             kinds++; total += n;
         }
-        if (total) { sim.touch(b); sim.fx('collect', sim.center(b).x, sim.center(b).y, p.id); }
+        if (total) { b.use = { p: p.id, t: sim.s.time }; sim.touch(b); sim.fx('collect', sim.center(b).x, sim.center(b).y, p.id); }
     }
     if (!total) { sim.deny(p, blocked || (dir === 'put' ? 'Nothing to put away' : 'It is empty')); return; }
     sim.float(p.x, p.y - 30, `${dir === 'put' ? 'Put away' : 'Took'} ${total} (${kinds} kind${kinds === 1 ? '' : 's'})${blocked ? '. ' + blocked : ''}`, PAL.lime, p.id, 'aff');

@@ -91,3 +91,15 @@ test('Sell all shown sells every kind you list, but never starred or pinned ones
     assert.equal(countOf(p, 'iron'), 5, 'starred stays');
     assert.ok(p.coins > before);
 });
+
+test('a chest remembers who used it last, and a friend sees it as busy for a few seconds', async () => {
+    const { busyUser, BUSY_SECS } = await import('../src/shared/sim/stash');
+    const { sim, p, chest } = yard();
+    const c = chest(6, 6, { wood: 1 });
+    sim.command('a', { t: 'use', id: c.id });
+    assert.equal(c.use?.p, 'a');
+    assert.equal(busyUser(c, sim.s.time, 'b'), 'a', 'a friend sees it busy');
+    assert.equal(busyUser(c, sim.s.time, 'a'), null, 'not for the one using it');
+    assert.equal(busyUser(c, sim.s.time + BUSY_SECS + 1, 'b'), null, 'and it clears itself');
+    assert.ok(p);
+});

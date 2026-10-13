@@ -209,7 +209,7 @@ export function cmdUse (sim: Sim, p: PlayerS, id: number, seed?: ItemId) {
     if (b.kind === 'fortune') { sim.events.push({ e: 'open', to: p.id, ui: 'fortune', id: b.id }); return; }
     if (def.station) { sim.events.push({ e: 'open', to: p.id, ui: 'station', id: b.id }); return; }
     if (def.proc) { sim.events.push({ e: 'open', to: p.id, ui: 'proc', id: b.id }); return; }
-    if (def.storage || def.grave) { sim.events.push({ e: 'open', to: p.id, ui: 'chest', id: b.id }); return; }
+    if (def.storage || def.grave) { b.use = { p: p.id, t: sim.s.time }; sim.touch(b); sim.events.push({ e: 'open', to: p.id, ui: 'chest', id: b.id }); return; }
     if (b.kind === 'tunnel' || b.kind === 'tunnelx') {
         const other = tunnelPartner((tx, ty) => { const id = sim.world.occAt(tx, ty) || sim.world.floorAt(tx, ty); const f = id ? sim.s.ents[id] : null; return f && f.k === 'bld' ? f : null; }, b);
         sim.float(c.x, c.y - 12, other ? `Linked: ${Math.abs(other.tx - b.tx) + Math.abs(other.ty - b.ty)} tiles` : b.kind === 'tunnel' ? 'No exit ahead' : 'No entrance behind', other ? PAL.lime : PAL.berry, p.id);

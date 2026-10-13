@@ -250,6 +250,7 @@ export function cmdXfer (sim: Sim, p: PlayerS, c: Extract<Cmd, { t: 'xfer' }>) {
         takeItem(p, c.item, n);
         invPut(target, c.item, n);
         b.by = p.id;
+        if (def.storage) b.use = { p: p.id, t: sim.s.time };
         sim.touch(b);
         sim.fx('load', centre.x, centre.y, p.id);
         if (def.storage) quests.count(p, 'stash');       // (the tutorial counts it)
@@ -259,6 +260,7 @@ export function cmdXfer (sim: Sim, p: PlayerS, c: Extract<Cmd, { t: 'xfer' }>) {
         n = addItem(p, c.item, n);
         if (n <= 0) { sim.deny(p, 'Your pockets are full'); return; }
         invDrop(target, c.item, n);
+        if (def.storage) b.use = { p: p.id, t: sim.s.time };
         sim.touch(b);
         sim.fx('collect', centre.x, centre.y, p.id);
         death.tidy(sim, b);

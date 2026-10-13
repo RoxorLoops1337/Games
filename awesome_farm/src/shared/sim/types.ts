@@ -72,6 +72,7 @@ export interface BuildE {
     plant?: ItemId;          // bed: which seed is growing
     growT?: number;
     by?: string;             // who owns the buffer's perks (smelter, planter)
+    use?: { p: string; t: number };   // a chest: who opened or used it last, and when (world time): friends see "Ann is using it" for a few seconds
     sel?: string;            // assembler: the recipe it is set to build
     belt?: (ItemId | null)[]; // belt: three slots, 0 = entry … 2 = exit
     hand?: ItemId;           // inserter: what it is holding

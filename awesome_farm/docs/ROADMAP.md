@@ -6,7 +6,7 @@ here in the same PR, bump PROTOCOL on wire changes. Never rename storage keys. K
 split big ones into slices (rules, art, polish).
 
 ## Phase 1: quick wins that touch every session (small)
-- [ ] S16 Chest "in use" indicator (who has it open)
+- [x] S16 Chest "in use" indicator (who has it open)
 - [ ] S17 Hotbar auto-refill of a pinned stack
 - [ ] S18 Recent recipes row in Crafting
 - [ ] S21 Item comparison tooltips (Shift) with green/red deltas

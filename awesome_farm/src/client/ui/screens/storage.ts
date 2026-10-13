@@ -21,6 +21,7 @@ import { qtyAmount } from '../gestures';
 import { itemTip } from '../tips';
 import type { Screen, ScreenCtx } from './types';
 import { storageOf } from '../../../shared/sim/uber';
+import { busyUser } from '../../../shared/sim/stash';
 
 const ownedItems = (me: ReturnType<ScreenCtx['me']>) => ITEM_ORDER.filter((id) => countOf(me, id) > 0);
 
@@ -114,7 +115,7 @@ export class ChestScreen implements Screen {
         const b = this.ent();
         if (!b) { this.ctx.close(); return; }
         const me = this.ctx.me();
-        const k = JSON.stringify([b.inv, b.cap, me.inv, this.search.value, b.fl, b.ic, this.tools.prefs, me.fav]);
+        const k = JSON.stringify([b.inv, b.cap, me.inv, this.search.value, b.fl, b.ic, this.tools.prefs, me.fav, b.use ? Math.floor(this.ctx.farm.clock.time / 5) : 0]);
         if (k === this.key) return;
         this.key = k;
         const cap = storageOf(b);
@@ -132,7 +133,8 @@ export class ChestScreen implements Screen {
         this.left.setEmptyText(none ?? (this.grave ? 'All taken.' : 'Empty. Put things in!'));
         this.right.setEmptyText(none ?? 'Your pockets are empty.');
         const held = Object.values(b.inv ?? {}).reduce((a, n) => a + (n ?? 0), 0);
-        this.inSec.setRight(this.grave ? '' : `${held} / ${cap} items`, !this.grave && held >= cap ? PAL.berry : PAL.pebble);
+        const who = busyUser(b, this.ctx.farm.clock.time, me.id);
+        this.inSec.setRight(this.grave ? '' : who ? `${this.ctx.farm.players[who]?.name ?? 'A friend'} is using it` : `${held} / ${cap} items`, !this.grave && who ? PAL.gold : !this.grave && held >= cap ? PAL.berry : PAL.pebble);
         const send = this.ctx.send;
         this.left.setItems(inv.map(([id, n]): GridItem => ({
             data: { icon: iconOf(id), count: n, rarity: ITEMS[id].rarity },
