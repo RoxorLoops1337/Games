@@ -1,5 +1,6 @@
 // Player actions that move things around: building, crafting, gear, food, trade, skills.
 
+import { recordSold, worthOf } from '../data/market';
 import { recordSale } from './stash';
 import { TILE, TUNING } from '../config';
 import { BIOME_DEFS, MODS } from '../data/biomes';
@@ -27,7 +28,7 @@ import type { Sim } from './sim';
 import { isUber } from './uber';
 import { ensureVeins } from './worldgen';
 import {
-    addItem, addRes, canAfford, canLearn, countOf, derived, hasUnlock, itemCap, learnSkill, MAX_LEVEL, pay, scaledCost, sellValue, takeItem, xpToNext,
+    addItem, addRes, canAfford, canLearn, countOf, derived, hasUnlock, itemCap, learnSkill, MAX_LEVEL, pay, scaledCost, takeItem, xpToNext,
 } from './stats';
 import type { BuildE, Cmd, PlayerS } from './types';
 
@@ -361,7 +362,8 @@ export function cmdSell (sim: Sim, p: PlayerS, item: ItemId, n: number) {
     if (!sim.stationNear(p, (b) => b.kind === 'market', TUNING.marketRange)) { sim.deny(p, 'Stand next to a market'); return; }
     n = Math.min(Math.floor(n), countOf(p, item));
     if (!(n >= 1)) return;                      // (a NaN from the wire fails this test, and so does an empty sale: `n <= 0` would let both through)
-    const coins = Math.max(1, Math.round(sellValue(p, item, n)));
+    const coins = Math.max(1, Math.round(worthOf(sim.s.mkt, sim.s.seed, item, n, sim.s.day) * derived(p).sellMul));
+    sim.s.mkt = recordSold(sim.s.mkt, item, n, sim.s.day);
     takeItem(p, item, n);
     p.coins += coins;
     recordSale(sim, p, item, n, coins);

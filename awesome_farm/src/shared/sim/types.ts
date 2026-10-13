@@ -349,6 +349,7 @@ export interface WorldState {
     prod?: Record<string, number>;   // items made by machines, ever ('coin': what the export chutes have paid out, ever)
     bosses?: Record<string, number>; // bosses defeated by this world, by boss id
     shop?: Shop;             // the trader's current stock
+    mkt?: { d: number; s: Record<string, number> };   // living prices: units sold per kind as of day d (data/market.ts)
     rifts?: Record<number, RiftRun>;   // expeditions in progress, by rift island
     dread?: Record<number, DreadState>;   // the Dread blocks, by the index of their middle plot
     mine?: MineState;                     // the caves under the world, once somebody has gone down

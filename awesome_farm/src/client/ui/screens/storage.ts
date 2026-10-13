@@ -244,7 +244,7 @@ export class MarketScreen implements Screen {
         const me = this.ctx.me(), mul = derived(me).sellMul;
         const keep = new Set<ItemId>([...(me.fav ?? []), ...((me.hot ?? []).filter(Boolean) as ItemId[])]);
         const ids = this.shown.filter((id) => !keep.has(id));
-        const total = ids.reduce((a, id) => a + Math.round(ITEMS[id].sell * countOf(me, id) * mul), 0);
+        const total = ids.reduce((a, id) => a + Math.round(this.ctx.farm.marketWorth(id, countOf(me, id)) * mul), 0);
         if (!ids.length) { this.ctx.toast('Nothing to sell here: starred and pinned things stay with you', undefined, PAL.pebble); return; }
         const now = this.ctx.scene.time.now;
         if (now - this.armedAt > 3000) {
@@ -281,11 +281,12 @@ export class MarketScreen implements Screen {
         this.foot.setHint(deviceText('Click: sell 1 · Shift: sell all · Right-click: sell 10', 'Tap sells x1, x10 or All as picked · Hold: sell 10'));
         this.grid.setEmptyText(SELL_EMPTY);
         const list = this.tools.apply(ownedItems(me).filter((id) => ITEMS[id].sell > 0 && tab.match(id) && this.search.matches(ITEMS[id].name)), (id) => countOf(me, id));
-        this.sec.setRight(list.length ? 'The gold number is the price each' : '');
+        const hot = this.ctx.farm.hotItem();
+        this.sec.setRight(list.length ? `Hot today: ${ITEMS[hot].name} +50%  ·  the number is the price each` : '');
         this.shown = list;
         this.grid.setItems(list.map((id): GridItem => ({
-            data: { icon: iconOf(id), count: countOf(me, id), rarity: ITEMS[id].rarity, badge: `${Math.round(ITEMS[id].sell * mul)}` },
-            tip: () => itemTip(id, { count: countOf(me, id), sellMul: mul, foot: deviceText('Click: sell 1 · Shift: sell all · Right-click: sell 10', 'Tap: sell (x1, x10 or All below) · Hold: sell 10') }),
+            data: { icon: iconOf(id), count: countOf(me, id), rarity: ITEMS[id].rarity, badge: `${Math.round(ITEMS[id].sell * mul * this.ctx.farm.marketMul(id))}` },
+            tip: () => itemTip(id, { count: countOf(me, id), sellMul: mul * this.ctx.farm.marketMul(id), foot: deviceText('Click: sell 1 · Shift: sell all · Right-click: sell 10', 'Tap: sell (x1, x10 or All below) · Hold: sell 10') }),
             click: (shift, q) => send({ t: 'sell', item: id, n: qtyAmount(q, countOf(me, id), shift, 1) }),
             right: () => send({ t: 'sell', item: id, n: 10 }),
         })));
