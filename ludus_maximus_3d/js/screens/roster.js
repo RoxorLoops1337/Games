@@ -146,7 +146,7 @@ export function open(ctx) {
     body.append(topBar());
     body.append(sec('Weekly plan'), planner(), note('Each fighter repeats their activity every week until you change it. Fighters entered in games should rest.'));
     body.append(sec(`Fighters ${S.glads.length}`));
-    if (!S.glads.length) { body.append(empty('Your barracks are empty. Recruit your first fighter!')); }
+    if (!S.glads.length) { body.append(U.emptyState({ icon: 'roster', title: 'Your barracks are empty', text: 'Fighters you hire live here: their health, energy and the plan they follow each week.', how: 'Citizens wait at the gate every week.', action: { label: 'Recruit your first fighter', icon: 'roster', onClick: () => ctx.open('recruit', { first: true }) } })); }
     else { const grid = h('div', 'lm-grid', S.glads.map(card)); body.append(grid); }
     body.append(h('div', '', [note(`Upkeep ${fmt(lm.upkeep(S))} gold per week. Tap a fighter for their full profile.`)]));
   }

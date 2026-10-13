@@ -203,7 +203,8 @@ export function slider(label, value, onInput, onChange) {
   return h('div', 'ax-col', [h('div', 'ax-row', [h('span', 'ax-grow ax-b', label), out]), r]);
 }
 
-export function empty(ico, text, sub) { return h('div', 'ax-empty', [medal(ico, 'big dark'), h('div', 'ax-b', text), sub ? h('div', 'ax-sub', sub) : null]); }
+/** empty state: medallion, what it is, how it unlocks (sub), and optionally ONE button that takes you there: action {label, onClick, icon} */
+export function empty(ico, text, sub, action) { const e = h('div', 'ax-empty', [medal(ico, 'big dark'), h('div', 'ax-b', text), sub ? h('div', 'ax-sub', sub) : null]); if (action) e.append(U.button({ label: action.label, icon: action.icon, variant: action.variant || 'gold', onClick: action.onClick })); return e; }
 
 export function actions(btns) { return h('div', 'ax-actions', btns); }
 

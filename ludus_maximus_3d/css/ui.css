@@ -700,3 +700,6 @@ body.lx-modal-open .lx-hud-bottom, body.lx-modal-open:not(.lx-peeked) .lx-photo-
 .ax-sheet .lx-es-how { background: rgba(242, 193, 78, .12); box-shadow: inset 0 0 0 1px rgba(242, 193, 78, .35); color: var(--lx-gold); }
 .lx-es .lx-btn { margin-top: 6px; min-width: 190px; }
 body.lx-photo-on .lx-banners, body.lx-photo-on .lx-fv-verdict { display: none !important; } /* photo mode: no live combat callouts over the title or the frame */
+.lx-marble .lx-btn-ghost, .lx-parchment .lx-btn-ghost { background: rgba(255, 255, 255, .5); color: #5a1f5e; border-color: #9c7a42; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .5); }
+.lx-marble .lx-btn-ghost:disabled { filter: grayscale(.6) brightness(.9); opacity: .7; }
+.lx-nav::before { left: 14px; right: 14px; }

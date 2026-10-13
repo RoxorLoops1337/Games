@@ -104,15 +104,15 @@ export function bestiaryTab(ctx, root, draw) {
   const met = list.filter((b) => b.known).length;
   if (!met) { // empty state: six locked emblems and where to start
     const strip = h('div', 'ax-row ax-wrap'); strip.style.justifyContent = 'center'; list.forEach((b) => { const e = h('span', 'lx-bl-unk'); e.style.lineHeight = 0; e.innerHTML = emblem(b.kind, { size: 48, locked: true }); strip.append(e); });
-    root.append(card([strip, h('div', 'ax-b', 'The bestiary is empty'), note('Nothing has been met in the arena yet. Each beast you face is recorded here with an emblem, notes and numbers, and the emblems light up one by one.'), hint('Build the Stands or reach the Provincial Games, then open Arena, Challenges and send hunters after wolves or boars.')]));
+    root.append(card([strip, h('div', 'ax-b', 'The bestiary is empty'), note('Nothing has been met in the arena yet. Each beast you face is recorded here with an emblem, notes and numbers, and the emblems light up one by one.'), hint('Build the Stands or reach the Provincial Games, then open Arena, Challenges and send hunters after wolves or boars.'), U.button({ label: 'Open the Arena', icon: 'arena', variant: 'gold', block: true, onClick: () => ctx.open('arena') })]));
   }
   const huntOf = (kind) => { const hk = Object.values(D.HUNTS).find((x) => x.kinds.some((k) => k[0] === kind)); return hk ? hk.n : ''; };
   list.forEach((b) => {
     const portrait = beastPortrait(ctx, b.sample, 96, 'bust'); if (!b.known) { portrait.style.filter = 'brightness(0.12) saturate(0)'; portrait.title = 'Not yet met'; }
     const emb = h('span', 'lx-bl-emb'); emb.style.cssText = 'line-height:0;flex:none'; emb.innerHTML = emblem(b.kind, { size: 56, color: b.c, boss: b.boss, locked: !b.known });
-    const head = row([portrait, col([row([emb, h('div', 'ax-name', b.known ? b.n : '???')]), h('div', 'ax-row ax-wrap ax-gap4', [pill(b.known ? b.role : 'Unknown', { tone: b.boss ? 'bad' : '' }), pill(`${b.kills} slain`, { tone: b.kills ? 'gold' : '' }), b.first != null ? pill(`First: week ${b.first}`, {}) : null])], 'ax-grow')], 'ax-wrap');
+    const head = row([portrait, col([row([emb, h('div', 'ax-name', b.known ? b.n : 'Unknown beast')]), h('div', 'ax-row ax-wrap ax-gap4', [pill(b.known ? b.role : 'Unknown', { tone: b.boss ? 'bad' : '' }), pill(`${b.kills} slain`, { tone: b.kills ? 'gold' : '' }), b.first != null ? pill(`First: week ${b.first}`, {}) : null])], 'ax-grow')], 'ax-wrap');
     const c = card([head], b.boss ? 'gold' : '');
-    if (!b.known) { c.append(note('Not yet met in the arena.'), huntOf(b.kind) ? hint(`Look for it on the hunt: ${huntOf(b.kind)}.`) : null); grid.append(c); return; }
+    if (!b.known) { c.append(note('Not yet met in the arena. Its portrait and notes unlock when you first face it.'), huntOf(b.kind) ? hint(`Look for it on the hunt: ${huntOf(b.kind)}.`) : null); grid.append(c); return; }
     c.append(h('p', 'lx-bl-lore ax-sub', b.lore[0] || b.d));
     c.append(note(b.d));
     if (b.stats) c.append(h('div', 'ax-row ax-wrap ax-gap4', [pill(`HP ${b.stats.hp}`, { tone: 'good', tip: 'At level 5.' }), pill(`ATK ${b.stats.atk}`, { tone: 'bad' }), pill(`DEF ${b.stats.def}`, {}), pill(`SPD ${b.stats.spd}`, { tone: 'blue' })]));
