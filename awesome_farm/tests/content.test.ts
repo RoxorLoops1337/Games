@@ -54,6 +54,7 @@ test('every item can be obtained: dropped, grown, crafted or a starter item', ()
         for (const [item] of m.drops) got.add(item);
         if (m.boss) { got.add(m.boss.trophy); for (const g of m.boss.gear) got.add(g); }
     }
+    got.add('trophy_dusk');       // (a boss that falls in the Long Dusk: sim/boss.ts)
     // luck: every crate, bottle and shard comes out of the loot tables, the wheel or a monster
     for (const rows of Object.values(LOOT_POOL)) for (const r of rows) got.add(r.item);
     for (const it of Object.values(CRATE_ITEM)) got.add(it);

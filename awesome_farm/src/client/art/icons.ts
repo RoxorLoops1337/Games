@@ -221,6 +221,7 @@ const SPEC: Partial<Record<ItemId, IconSpec>> = {
     trophy_dune: { shape: 'trophy', mat: ['y', 'w', 'o'], accent: 'B' },
     trophy_frost: { shape: 'trophy', mat: ['F', 'w', 'W'], accent: 'D' },
     trophy_heart: { shape: 'trophy', mat: ['r', 'p', 'n'], accent: 'y' },
+    trophy_dusk: { shape: 'trophy', mat: ['v', 'u', 'p'], accent: 'F' },
     potion_might: bottle('o', 'y'), potion_guard: bottle('T', 'w'), potion_mend: bottle('l', 'w'),
     // weapons
     dagger_bone: { shape: 'dagger', mat: ['c', 'w', 's'] }, dagger_steel: { shape: 'dagger', mat: MAT.steel },

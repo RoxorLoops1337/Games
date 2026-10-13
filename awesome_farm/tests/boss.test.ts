@@ -246,6 +246,21 @@ test('beating a boss pays everyone who fought or stood in the arena once, and th
     assert.ok(fxNames(ev).includes('bossDie'));
 });
 
+test('a boss that falls in the Long Dusk also leaves a Dusk Crown, and one that falls in a plain night does not', () => {
+    for (const dusk of [0, 1]) {
+        const { sim, p, altar } = arena(`BOSS-dusk-${dusk}`);
+        sim.s.dusk = dusk;
+        const e = summon(sim, p, altar, 'slime')!;
+        sim.give(p, 'sword_iron', 1);
+        sim.command('a', { t: 'equip', item: 'sword_iron' });
+        e.hp = 1;
+        p.x = e.x - 14; p.y = e.y; p.fx = 1; p.fy = 0; p.swingCd = 0; p.warp++;
+        sim.command('a', { t: 'swing', id: e.id });
+        assert.equal(sim.s.ents[e.id], undefined, 'the King is down');
+        assert.equal(countOf(p, 'trophy_dusk'), dusk, dusk ? 'a Dusk Crown' : 'no crown in an ordinary night');
+    }
+});
+
 test('a boss fires its own kind of shot', () => {
     for (const [id, shot] of [['frost', 'frost'], ['bog', 'orb']] as const) {
         const { sim, p, altar } = arena(`BOSS-shot-${id}`);

@@ -433,7 +433,7 @@ export function defeat (sim: Sim, e: MobE) {
         q.boss[info.id] = (q.boss[info.id] ?? 0) + 1;
         quests.count(q, `boss:${info.id}`);
         const rng = sim.rng;
-        const items: [ItemId, number][] = [[info.trophy, 1], ...fortune.bossCrates(sim, q, info.id)];
+        const items: [ItemId, number][] = [[info.trophy, 1], ...(sim.s.dusk ? [['trophy_dusk', 1] as [ItemId, number]] : []), ...fortune.bossCrates(sim, q, info.id)];       // (a boss that falls in the Long Dusk also leaves a Dusk Crown)
         for (const [item, chance, min = 1, max = min] of def.drops) if (rng.chance(chance)) items.push([item, rng.int(min, max)]);
         if (first) {
             items.push([info.gear[0], 1]);
