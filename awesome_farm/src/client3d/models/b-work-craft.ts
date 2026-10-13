@@ -457,5 +457,22 @@ export function shelf(_o: BOpts): Model<BuildE> {
     }));
     return { obj: root };
 }
+export function sprinkler(_o: BOpts): Model<BuildE> {
+    const root = new THREE.Group();
+    root.add(bake('work.sprinkler', (mb) => {
+        const b = mb.main;
+        b.cyl(0.18, 0.22, 0.1, 8, 0x56526a, { y: 0.05, j: 0.01 });
+        b.cyl(0.05, 0.05, 0.5, 6, 0x7a7f9e, { y: 0.35, j: 0.006 });
+    }));
+    const head = new THREE.Group();
+    head.position.y = 0.62;
+    head.add(bake('work.sprinkler.head', (mb) => {
+        const b = mb.main;
+        b.cyl(0.1, 0.1, 0.06, 8, 0xb0b5cc, { y: 0, j: 0.006 });
+        for (const a of [0, 2.1, 4.2]) b.box(0.3, 0.03, 0.04, 0x9ea4bf, { x: Math.cos(a) * 0.16, z: Math.sin(a) * 0.16, ry: -a, ao: false });
+    }));
+    root.add(head);
+    return { obj: root, update(dt: number) { head.rotation.y += dt * 2.5; } };
+}
 export const SL1 = 0x7a7f9e;
-export const CRAFT = { workbench, anvil, kitchen, loom, alchemy, furnace, sawmill, millstone, fishpond, beehive, museum, coffer, board, shelf };
+export const CRAFT = { workbench, anvil, kitchen, loom, alchemy, furnace, sawmill, millstone, fishpond, beehive, museum, coffer, board, shelf, sprinkler };

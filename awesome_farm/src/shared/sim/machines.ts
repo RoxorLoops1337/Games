@@ -167,6 +167,19 @@ export function seasonGrow (sim: Sim, b: BuildE): number {
     return glassed(sim, b) ? Math.max(g, 1) * TUNING.glasshouseGrow : g;
 }
 
+/** A bed within reach of a Sprinkler grows faster (one is enough: they do not stack with each other). */
+export function sprinkled (sim: Sim, b: BuildE): number {
+    const list = sim.buildings('sprinkler');
+    if (!list.length) return 1;
+    const reach = TUNING.sprinklerRange * TILE;
+    const c = sim.center(b);
+    for (const s of list) {
+        const d = sim.center(s);
+        if (Math.hypot(d.x - c.x, d.y - c.y) <= reach) return TUNING.sprinklerGrow;
+    }
+    return 1;
+}
+
 export function step (sim: Sim, dt: number) {
     sim.machineT += dt;
     const rain = weatherAt(sim.s.seed, sim.s.day, sim.s.clock).rain;
@@ -179,7 +192,7 @@ export function step (sim: Sim, dt: number) {
                 const crop = b.plant ? CROPS[b.plant] : undefined;
                 const owner = b.by ? sim.s.players[b.by] : undefined;
                 if (!crop) { b.crop = -1; sim.touch(b); continue; }
-                b.growT = (b.growT ?? 0) + dt * (owner ? sim.derivedOf(owner).growMul : 1) * (1 + TUNING.rainGrow * rain) * seasonGrow(sim, b) * harvestMoon(sim);
+                b.growT = (b.growT ?? 0) + dt * (owner ? sim.derivedOf(owner).growMul : 1) * (1 + TUNING.rainGrow * rain) * seasonGrow(sim, b) * sprinkled(sim, b) * harvestMoon(sim);
                 if (b.growT >= crop.stageSecs) { b.growT = 0; b.crop++; sim.touch(b); }
             }
             continue;

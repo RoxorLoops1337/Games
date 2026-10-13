@@ -366,6 +366,19 @@ test('a Speed Module makes a machine a quarter faster, one per machine, and come
     assert.equal(countOf(a, 'module_speed'), 1);
 });
 
+test('a Sprinkler makes the beds around it grow faster, and only those in reach', () => {
+    const sim = Sim.create('TEST-SPR', 'test');
+    const a = sim.join('a', 'A')!;
+    const o = sim.world.plotOrigin(sim.homePlot(a.slot));
+    const bed = (dx: number) => sim.add<BuildE>({ k: 'bld', kind: 'bed', tx: o.tx + 4 + dx, ty: o.ty + 8, rot: 0, crop: 0, plant: 'seed_wheat', growT: 0, by: 'a' });
+    const near = bed(0), far = bed(12);
+    sim.add<BuildE>({ k: 'bld', kind: 'sprinkler', tx: o.tx + 5, ty: o.ty + 8, rot: 0 });
+    run(sim, 3);
+    assert.ok((near.growT ?? 0) > 0 && (far.growT ?? 0) > 0);
+    const ratio = (near.growT ?? 0) / (far.growT ?? 1);
+    assert.ok(Math.abs(ratio - 1.3) < 0.02, `near beds grow 30% faster (${ratio})`);
+});
+
 test('a beehive turns berries into honey', () => {
     const sim = Sim.create('TEST-11H', 'test');
     const a = sim.join('a', 'A')!;
