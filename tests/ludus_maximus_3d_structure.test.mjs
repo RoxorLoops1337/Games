@@ -341,5 +341,42 @@ for (const fn of ['newGame', 'makeGlad', 'mkUnits', 'createFight', 'step', 'useU
   for (const [n, t] of [['ui_kit.js', kit], ['css', css], ['flow.js', fl], ['recruit.js', rec], ['ceremonies.js', cer], ['sim.js', sim]]) ok(!t.includes('\u2014'), n + ': no em dashes');
 }
 
+// ---- round 3 (rig team): readable fighters, body blood that reads as blood, a crowd with heads and arms
+{
+  const rd3 = (f) => readFileSync(join(root, f), 'utf8'), rg = rd3('js/rig.js'), gl = rd3('js/gladiator.js'), ea = rd3('js/env_arena.js'), po = rd3('js/post.js'), fvw = rd3('js/fightview.js');
+  ok(/spotsB/.test(rg) && /BL_CAP/.test(rg) && /drip lanes/.test(rg) && /BLOOD_KIND/.test(rg), 'body blood: spray spots, drip lanes, per material kind and a coverage cap');
+  ok(!/bodyN = 0\.5 \* n1/.test(rg) && !/thr = 1\.24/.test(rg), 'body blood: the big noise soak that read as leopard spots is gone');
+  ok(/MAX_WOUNDS = 6, MAX_CUTS = 3/.test(rg) && /addBlood\(amount, fresh = 1\)/.test(rg) && /addWound\(pt, dir/.test(rg) && /clearBlood\(\)/.test(rg), 'gore.js API on the rig is unchanged (addBlood, addWound, clearBlood, sever)');
+  ok(/export function gradeSkin/.test(gl) && /export function teamTint/.test(gl) && /TEAM_ACCENT/.test(gl) && /opts\.team/.test(gl), 'gladiator.js grades skin tones and tints tunic and plume by team');
+  ok(/team: u\.side/.test(fvw), 'fightview passes the team side to createGladiator');
+  ok(/aRand2/.test(ea) && /isFeat/.test(ea) && /featured/.test(ea) && /inBox/.test(ea) && /vFlag/.test(ea), 'crowd: per spectator outfit, headwear, standing fans, senators in the imperial box');
+  ok(/aPart > 3\.5/.test(ea) && /SphereGeometry\(0\.152/.test(ea) && /elbow|bend/.test(ea), 'crowd: hair / cap / hood dome and bending arms');
+  ok(/ov \/ \(1\.0 \+ ov \* 0\.4\)/.test(po), 'post: highlight shoulder before the tonemap');
+  ok(existsSync(join(root, 'tools', 'ludus3d_readability.mjs')) === false && existsSync(join(root, '..', 'tools', 'ludus3d_readability.mjs')), 'readability test script exists (tools/ludus3d_readability.mjs)');
+  ok(/body blood/.test(rd3('lab/rig_test.html')) && /blotch detector/.test(rd3('lab/rig_test.html')), 'rig_test renders body blood and checks cover, cap and blotches');
+  for (const [n, t] of [['rig.js', rg], ['gladiator.js', gl], ['env_arena.js', ea], ['post.js', po], ['readability test', rd3('../tools/ludus3d_readability.mjs')]]) ok(!t.includes('—'), n + ': no em dashes');
+}
+
+{ // block 14: MOVE (rearrange the ludus): sim rules, hub 3D parts, controller, screens, help, tutorial, monkey hook
+  const rd = (f) => readFileSync(join(root, f), 'utf8'), ext = rd('core/ext.js'), dat = rd('core/data.js'), hub = rd('js/hub.js'), bld = rd('js/buildings.js'), rr = rd('js/rearrange.js'), gm = rd('js/game.js'), bs = rd('js/screens/building.js'), mo = rd('js/screens/more.js'), tu = rd('js/tutorial.js'), ui = rd('js/ui_kit.js');
+  const qa = readFileSync(join(here, '..', 'tools', 'ludus3d_qa_lib.mjs'), 'utf8');
+  ok(/LM\.moveBuilding = /.test(ext) && /LM\.moveQuote = /.test(ext) && /LM\.moveUndo = /.test(ext) && /LM\.moving = /.test(ext) && /LM\.moveEffects = /.test(ext) && /LM\.moveWhySource = /.test(ext) && /LM\.moveWhyDest = /.test(ext), 'ext.js: MOVE rules (moveQuote, moveBuilding, moveUndo, moving, moveEffects, reasons)');
+  ok(/D\.MOVE = \{/.test(dat) && /pinned: \{ hall:/.test(dat) && /undoRefund/.test(dat) && /big: \['stands', 'sparring'\]/.test(dat), 'data.js: D.MOVE documents the pinned and the big buildings, prices and the undo refund');
+  ok(/LM\.bfx = \(S, id\) =>/.test(ext.slice(ext.indexOf('MOVE (rearrange'))) && /LM\.synAt = /.test(ext.slice(ext.indexOf('MOVE (rearrange'))) && /LM\.rosterCap = /.test(ext.slice(ext.indexOf('MOVE (rearrange'))) && /LM\.upgrade = /.test(ext.slice(ext.indexOf('MOVE (rearrange'))), 'ext.js: perks, synergy, bed count and upgrades follow the construction state');
+  ok(/\.mv = \{ f: /.test(ext.slice(ext.indexOf('MOVE (rearrange'))) && !/SAVE_VER = 3/.test(ext) && /LM\.SAVE_VER = 2/.test(ext), 'save: the only new data is an optional mv field on a plot, the schema version is unchanged');
+  ok(/uOff/.test(bld) && /export function buildSite\(/.test(bld) && /export function makeCrane\(/.test(bld) && /export function makeWorkerMesh\(/.test(bld) && /export const siteStage/.test(bld), 'buildings.js: per-plot offsets, construction sites, workers and the crane');
+  ok(/buildSite\(/.test(hub) && /customDepthMaterial/.test(hub) && /function playMove\(/.test(hub) && /rrBegin/.test(hub) && /rrGhost/.test(hub) && /frameTwo/.test(hub) && /USE_INSTANCING_COLOR/.test(hub) && /pointer-events:none !important/.test(hub), 'hub.js: sites in the merged world, shadows follow offsets, cinematic, markers, ghost, auto frame, tags never block taps');
+  ok(/'hammer'/.test(hub + bld + rr) && /\bhammer\b/.test(ui) && /sfx\('coin'\)|sfx\('coin'/.test(rr) && /hitSfx = \['hammer', 'thock', 'chop', 'clink'/.test(hub), 'hammer icon exists and the crew uses the existing hammer, thock, chop and clink sfx');
+  ok(/ArrowLeft/.test(rr) && /ArrowUp/.test(rr) && /'Escape'/.test(rr) && /'Enter'/.test(rr) && /aria-live/.test(rr) && /aria-pressed/.test(rr) && /role', 'dialog'/.test(rr) && /navigator\.vibrate/.test(rr), 'rearrange.js: keyboard (arrows, Enter, Escape), aria-live announcements, aria-pressed button, dialog card, haptics');
+  ok(/data-rr|dataset\.rr/.test(rr) && /dataset\.tut = 'rearrange'/.test(rr) && /rearrange-open/.test(bs), 'data attributes: data-tut=rearrange on the hammer button, rearrange-open on the plot screen, data-rr on the confirm buttons');
+  ok(/createRearrange/.test(gm) && /rearr\.stop\(true\)/.test(gm), 'game.js: controller created in the HUD build and stopped before a week or a screen');
+  ok(/moveUndo/.test(bs) && /constructionCard/.test(bs) && /rearrangeCard/.test(bs) && /'hammer'/.test(bs), 'building screen: Move button, construction card with progress, undo');
+  ok(/Rearrange the ludus/.test(mo) && /hammer button/.test(tu), 'More > Help and the tutorial mention rearranging');
+  ok(/rearrWalk/.test(qa) && /'rearr'/.test(qa) && /lx-rr-fab/.test(qa), 'monkey: the rearr step opens the mode with a real click and walks lift, preview, confirm or cancel, undo, Escape');
+  for (const [n, t] of [['rearrange.js', rr], ['hub.js', hub], ['buildings.js', bld], ['building.js', bs], ['ext.js', ext], ['data.js', dat]]) ok(!t.includes('—'), n + ': no em dashes');
+  ok(!/Math\.random/.test(rr) && !/localStorage/.test(rr), 'rearrange.js: no Math.random, no storage keys');
+  ok(/for \(let k = 0; k < 2; k\+\+\) \{ const m = new THREE\.Mesh\(new THREE\.BufferGeometry\(\), k \? ghostMatB : ghostMat\)/.test(hub) && (hub.match(/name = 'move_line'/g) || []).length === 1, 'hub.js: two ghost meshes and one line mesh at most (draw call budget while previewing)');
+}
+
 console.log(`ludus_maximus_3d structure: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

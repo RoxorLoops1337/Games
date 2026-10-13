@@ -237,8 +237,8 @@ function mulberry(seed) { let a = seed >>> 0; return () => { a = (a + 0x6d2b79f5
 
 // ---------------- particle layer (pooled sim + transient immediate writes) ----------------
 // PERF: xorshift32 for per-frame turbulence (Math.random is a builtin call that boxes its result); presentation only, not seeded
-let _xs = 2463534242;
-const fastRand = () => { _xs ^= _xs << 13; _xs ^= _xs >>> 17; _xs ^= _xs << 5; return (_xs >>> 0) / 4294967296; };
+const _xs = new Int32Array([-1831433054]);   // state in a typed array: a module `let` holding an int32 above 2^30 is a heap number (one allocation per store)
+const fastRand = () => { let x = _xs[0]; x ^= x << 13; x ^= x >>> 17; x ^= x << 5; _xs[0] = x; return (x >>> 0) / 4294967296; };
 const FLOOR = { value: 0.04 };
 const WARM = { on: false }; // shader warm-up: every pooled mesh draws one dead instance so its program compiles before the first real effect
 class Layer {
@@ -488,10 +488,10 @@ export function createFx(scene, opts = {}) {
   const shocks = [];
   // Active shockwaves projected for the post pass (up to 4). out: array of Vector4(uv.x, uv.y, radiusUV, strength)
   fx.getShockwaves = (camera, out, aspect = 1) => {
-    let k = 0; for (const s of shocks) { if (k >= 4) break; const age = (uTime.value - s.t0) / s.dur; if (age < 0 || age > 1) continue;
+    let k = 0; for (let si = 0; si < shocks.length; si++) { const s = shocks[si]; if (k >= 4) break; const age = (uTime.value - s.t0) / s.dur; if (age < 0 || age > 1) continue;
       _v.set(s.x, s.y, s.z).project(camera); const e = 1 - Math.pow(1 - age, 4);
       _p.set(s.x + s.r * e, s.y, s.z).project(camera); const ru = Math.hypot((_p.x - _v.x) * 0.5 * aspect, (_p.y - _v.y) * 0.5);
-      out[k++].set(_v.x * 0.5 + 0.5, _v.y * 0.5 + 0.5, Math.max(ru, 0.01), (1 - age) * s.str); }
+      out[k++].set(_v.x * 0.5 + 0.5, _v.y * 0.5 + 0.5, ru > 0.01 ? ru : 0.01, (1 - age) * s.str); }
     for (; k < 4; k++) out[k].set(0, 0, 0, 0);
   };
 

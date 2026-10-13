@@ -53,7 +53,7 @@ export function auditFn(opts) {
   const roots = [...document.querySelectorAll('#ui, .lx-scrim, .lx-toasts, .lx-perf')].filter((r) => r.id === 'ui' || r.hidden !== true);
   const els = new Set(); for (const r of roots) { r.querySelectorAll('*').forEach((e) => els.add(e)); }
   const doc = document.documentElement; if (doc.scrollWidth > vw + 1) out.push({ kind: 'overflow', sev: 'high', msg: `page scrolls horizontally (${doc.scrollWidth} > ${vw})` });
-  const skip = (e) => e.closest('svg') && e.tagName.toLowerCase() !== 'svg' || e.closest('.lx-out') || e.closest('.lx-tip') || e.closest('[data-qa-skip]') || e.closest('.lx-tut-ring') || e.closest('.lx-ttl-embers') || e.closest('.lx-vs, .lx-lvlup, .lx-cer-layer, .lx-cer-lvl, .lx-banners'); // slide-in splashes and ceremonies are mid-animation by design
+  const skip = (e) => e.closest('svg') && e.tagName.toLowerCase() !== 'svg' || e.closest('.lx-out') || e.closest('.lx-tip') || e.closest('[data-qa-skip]') || e.closest('.lx-tut-ring') || e.closest('.lx-ttl-embers') || e.closest('.lx-vs, .vs3, .lx-lvlup, .lx-cer-layer, .lx-cer-lvl, .lx-banners'); // slide-in splashes and ceremonies are mid-animation by design
   for (const e of els) {
     if (skip(e) || !visibleDeep(e) || !vis(e)) continue;
     const r = e.getBoundingClientRect(); const tag = e.tagName.toLowerCase();
@@ -297,6 +297,37 @@ export async function playModes(h, names = ['bounty', 'horde', 'pit', 'champ']) 
   return out;
 }
 
+/** MOVE: open Rearrange mode with a real click on the hammer button, lift a random building, preview a random plot, answer the confirm card with a real click, undo, leave with Escape */
+export async function rearrWalk(h) {
+  h.cur.where = 'rearrange mode';
+  const vis = await h.page.evaluate(() => { const f = document.querySelector('.lx-rr-fab'); return !!(f && !f.hidden && f.getBoundingClientRect().width); });
+  if (!vis) return 'no fab';
+  await h.page.evaluate(() => document.querySelector('.lx-rr-fab').click()); await h.page.waitForTimeout(500);
+  await audit(h, 'rearrange mode');
+  const r1 = h.rnd(), r2 = h.rnd(), r3 = h.rnd();
+  const res = await h.page.evaluate(([a, b]) => {
+    const g = window.__LM3D.game, r = g.rearr, S = g.S; if (!r || !r.active) return { err: 'mode did not open' };
+    S.gold = Math.max(S.gold, 1500);   // the walk must be able to pay
+    const built = S.plots.map((p, i) => (p ? i : -1)).filter((i) => i >= 0 && i < S.rows * 4); if (!built.length) return { none: 1 };
+    const from = built[Math.floor(a * built.length) % built.length], to = Math.floor(b * S.rows * 4);
+    r.tap(from); r.tap(to); return { from, to, sel: r.state.sel, card: !!document.querySelector('.lx-rr-confirm') };
+  }, [r1, r2]);
+  if (res.err) { h.add('stuck', 'high', h.cur.where, res.err); return res.err; }
+  await h.page.waitForTimeout(350);
+  if (res.card) {
+    await audit(h, 'rearrange confirm card');
+    const ok = r3 > 0.45;
+    await h.page.evaluate((ok) => document.querySelector(ok ? '.lx-rr-confirm [data-rr=ok]' : '.lx-rr-confirm [data-rr=cancel]').click(), ok);
+    if (ok) { for (let k = 0; k < 14; k++) { await h.page.evaluate(() => window.__LM3D.advance(0.5)); const cine = await h.page.evaluate(() => window.__LM3D.game.rearr.state.cine); if (!cine) break; } await audit(h, 'rearrange after move'); }
+  }
+  const undo = await h.page.evaluate(() => { const b = document.querySelector('.lx-rr-modebar button.alt:not([hidden])'); if (b) { b.click(); return true; } return false; });
+  await h.page.waitForTimeout(200);
+  for (let k = 0; k < 4; k++) { const on = await h.page.evaluate(() => !!window.__LM3D.game.rearr.active); if (!on) break; await h.page.keyboard.press('Escape'); await h.page.waitForTimeout(150); }
+  const left = await h.page.evaluate(() => !!window.__LM3D.game.rearr.active);
+  if (left) h.add('stuck', 'high', h.cur.where, 'Escape did not leave rearrange mode');
+  await h.page.evaluate(() => window.__LM3D.game.save && window.__LM3D.game.save());
+  return 'rearr ' + JSON.stringify(res) + (undo ? ' undo' : '');
+}
 async function photoToggle(h) {
   h.cur.where = 'photo mode';
   const vis = await h.page.evaluate(() => { const f = document.querySelector('.lx-photo-fab'); return !!(f && f.getBoundingClientRect().width); });
@@ -332,7 +363,7 @@ export function integrityFn() {
 }
 export async function checkState(h, where) { const bad = await h.page.evaluate(integrityFn); bad.forEach((m) => h.add('state', 'high', where, m)); }
 
-export const STEPS = ['open', 'open', 'click', 'click', 'click', 'esc', 'tab', 'api', 'settings', 'photo', 'closeall', 'world', 'more'];
+export const STEPS = ['open', 'open', 'click', 'click', 'click', 'esc', 'tab', 'api', 'settings', 'photo', 'closeall', 'world', 'more', 'rearr'];
 
 /** one monkey run. opts: {steps, weeks, fights, seed, vp} */
 export async function monkey(o = {}) {
@@ -364,6 +395,7 @@ export async function monkey(o = {}) {
       else if (s === 'api') { await apiAction(h, ['hire', 'train', 'equip', 'buy', 'build', 'enter', 'hardcore'][Math.floor(h.rnd() * 7)]); }
       else if (s === 'settings') await settingsToggle(h);
       else if (s === 'photo') await photoToggle(h);
+      else if (s === 'rearr') await rearrWalk(h);
       else if (s === 'closeall') await closeAll(h);
       const dt = Date.now() - t0; if (dt > 6000) h.add('slow', 'low', s, `step "${s}" took ${dt}ms`);
       if (o.weeks && weeks < o.weeks && (i + 1) % Math.max(4, Math.floor((o.steps || 1) / o.weeks)) === 0) {

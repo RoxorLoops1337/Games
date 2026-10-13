@@ -55,7 +55,7 @@ async function session(ctx, fn, tab = 'modes') {
 
 const dismissOk = (label = 'Continue', variant = 'gold') => [{ label, value: 'ok', variant }];
 
-function infoBody(parts) { const b = h('div', 'ax-col'); b.style.cssText = 'color:#33243a;font:500 14px/20px system-ui,sans-serif;overflow-wrap:anywhere'; parts.forEach((p) => p && b.append(p)); return b; }
+function infoBody(parts) { const b = h('div', 'ax-col'); b.style.cssText = 'color:#33243a;font:500 14px/20px system-ui,sans-serif;overflow-wrap:break-word'; parts.forEach((p) => p && b.append(p)); return b; }
 const p = (t) => h('p', '', t);
 
 function xpInjury(ctx, g, xp, lost, chance, maxWeeks) {

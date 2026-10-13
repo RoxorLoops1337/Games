@@ -13,7 +13,19 @@ const VOICE_PITCH = { wolf: 1.15, lion: 1, bear: 0.9, boar: 1, nemean: 0.78, ele
 const NAME = { lion: 'The lion', wolf: 'The wolf', bear: 'The bear', boar: 'The boar', nemean: 'The Nemean Lion', elephant: 'The war elephant' };
 
 /** build the rig for a beast unit (fightview calls this instead of createGladiator) */
-export function makeRig(view, u) { return createBeast(u, { detail: view.tier }); }
+export function makeRig(view, u) { prefetchBusts(view); return createBeast(u, { detail: view.tier }); }
+
+/** the VS splash shows busts of both sides 350 ms after the fight starts: queue those portrait renders now (same sizes as bracket.js bustOf) so they are cached when the splash asks
+ *  (a first render includes the shader compile and was still running when the splash faded, leaving navy slots) */
+const bustSize = (n) => (n > 2 ? [150, 182] : n > 1 ? [170, 206] : [192, 232]);
+function prefetchBusts(view) {
+  const F = view.F, game = globalThis.__LM3D && globalThis.__LM3D.game; if (!F || !game || view._vsPre === F || F.quiet || view.replaying) return; view._vsPre = F;
+  try {
+    const first = F.units.find((x) => x.beast && x.g); if (!game._portraits && game.portraitEl && first) game.portraitEl(first.g, 40);
+    const P = game._portraits; if (!P || !P.portrait) return;
+    for (const side of ['B', 'A']) { const us = F.units.filter((x) => x.side === side && x.g).slice(0, 3), [w, h] = bustSize(us.length); for (const x of us) P.portrait(x.g, { w, h, style: 'bust' }); }
+  } catch (e) { /* portraits are cosmetic */ }
+}
 
 /** after fightview has created the fighter record: paw thuds on the big ones, per-fighter state */
 export function setup(view, f, u) {

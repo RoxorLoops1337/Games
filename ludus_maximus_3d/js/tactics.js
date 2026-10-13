@@ -117,7 +117,11 @@ export function createTactics(fv) {
   // ------------------------------------------------------------------ state helpers
   const allies = () => (T.F ? T.F.units.filter((u) => u.side === 'A' && !u.down && !u.beast) : []);
   const foes = () => (T.F ? T.F.units.filter((u) => u.side === 'B' && !u.down) : []);
-  const selUnit = () => { const F = T.F; if (!F) return null; let u = F.units.find((x) => x.id === T.sel && !x.down); if (!u) { u = allies()[0] || null; T.sel = u ? u.id : null; } return u; };
+  const selUnit = () => { // PERF: index loop, no closure
+    const F = T.F; if (!F) return null; const UN = F.units; let u = null;
+    for (let i = 0; i < UN.length; i++) if (UN[i].id === T.sel && !UN[i].down) { u = UN[i]; break; }
+    if (!u) { u = allies()[0] || null; T.sel = u ? u.id : null; } return u;
+  };
   const stateOf = (k) => { // {st:'ready|cd|on|na', frac:0..1 remaining, secs}
     const F = T.F, C = CMD()[k]; if (!F || !C) return { st: 'na', frac: 0, secs: 0 };
     if (C.stance) { const u = selUnit(); if (!u) return { st: 'na', frac: 0, secs: 0 }; const on = L().stanceOf(u) === k; if (on) { const s = u.s[k === 'guard' ? 'gstance' : k]; return { st: 'on', frac: s ? clamp(s.t / C.dur, 0, 1) : 0, secs: s ? s.t : 0, on: true }; } const cd = u.cmdCd || 0; return cd > 0 ? { st: 'cd', frac: clamp(cd / C.cd, 0, 1), secs: cd } : { st: 'ready', frac: 0, secs: 0 }; }
@@ -131,7 +135,15 @@ export function createTactics(fv) {
     o.ring.setAttribute('stroke', st.st === 'on' ? '#f2c14e' : st.st === 'cd' ? '#8a8aa0' : st.st === 'na' ? '#555' : '#f2c14e');
     if (o.s) o.s.textContent = st.st === 'cd' || st.st === 'on' ? String(Math.ceil(st.secs)) : '';
   }
+  // PERF: a cheap integer signature of what the chips show (down, stance, selection) gates the string key below: no filter / map / join per frame
+  let chipSig = -1, chipF = null;
+  function chipsSig() {
+    const UN = T.F ? T.F.units : null; if (!UN) return 0; let h = 1;
+    for (let i = 0; i < UN.length; i++) { const u = UN[i]; if (u.side !== 'A' || u.beast) continue; const s = u.s; h = (h * 131 + 1 + ((u.down ? 1 : 0) | (s.press ? 2 : 0) | (s.hold ? 4 : 0) | (s.retreat ? 8 : 0) | (s.gstance ? 16 : 0) | (T.sel === u.id ? 32 : 0))) % 1000003; }
+    return h;
+  }
   function chipsRefresh() {
+    const sg = chipsSig(); if (T.key !== '' && sg === chipSig && T.F === chipF) return; chipSig = sg; chipF = T.F;
     const al = T.F ? T.F.units.filter((u) => u.side === 'A' && !u.beast) : []; const key = al.map((u) => u.id + (u.down ? 'd' : '') + (L().stanceOf(u) || '') + (T.sel === u.id ? 's' : '')).join('|');
     if (key === T.key) return; T.key = key; chips.innerHTML = '';
     if (al.length < 2) return;

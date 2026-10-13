@@ -39,9 +39,9 @@ export function open(ctx, arg) {
   function viewShop() {
     const out = h('div'); const mk = lm.bfx(S, 'market'), pct = discountPct(), fest = lm.fest(S, S.week) === 'saturn';
     const info = card('dark', [h('div', 'am-name', [tip('Market', 'Each Market level gives 3% off all prices and weekly income. Stock is renewed every week.', 'Market level'), document.createTextNode(mk.l ? `  level ${mk.l}` : '  not built')]),
-      h('div', 'am-small', pct ? `Prices reduced by ${pct}%${fest ? ' (Saturnalia sale)' : ''}.` : 'Build a Market for discounts and weekly income.'), h('div', 'am-small', 'Stock changes every week.')]);
+      h('div', 'am-small', (pct ? `Prices reduced by ${pct}%${fest ? ' (Saturnalia sale)' : ''}.` : 'Build a Market for discounts and weekly income.') + ' Stock changes every week.')]);
     info.querySelector('.am-name').style.color = '#f2c14e'; info.querySelectorAll('.am-small').forEach((e) => { e.style.color = '#d8c9a0'; });
-    if (!mk.l) { const free = S.plots.findIndex((p, k) => !p && k < S.rows * lm.COLS); info.append(U.button({ label: free >= 0 ? 'Build a Market' : 'Open your buildings', icon: 'ludus', variant: 'gold', block: true, onClick: () => ctx.open('building', free >= 0 ? { type: 'plot', i: free, empty: true } : {}) })); }
+    if (!mk.l) { const free = S.plots.findIndex((p, k) => !p && k < S.rows * lm.COLS); const bb = U.button({ label: free >= 0 ? 'Build a Market' : 'Open your buildings', icon: 'ludus', variant: 'gold', onClick: () => ctx.open('building', free >= 0 ? { type: 'plot', i: free, empty: true } : {}) }); const kids = [...info.childNodes]; info.replaceChildren(h('div', 'am-hero', [h('div', 'am-hi', kids), bb])); }
     out.append(info);
     if (S.raidWeek === S.week) { const w = card('warn', [h('b', '', 'Raided!'), h('div', 'am-p', `${S.rowner ? S.rowner.name : 'A rival'}'s agents bought the best item before you.`)]); w.style.marginTop = '8px'; out.append(w); }
     if (full()) { const w = card('warn', [h('b', '', 'Armory full'), h('div', 'am-p', `Buying will sell your weakest item (${weakest().name}) automatically. Sell spare gear first, or upgrade the Forge for more room.`)]); w.style.marginTop = '8px'; out.append(w); }

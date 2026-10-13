@@ -12,7 +12,7 @@ function beastPortrait(ctx, rec, size, style = 'bust') {
   let el; try { el = ctx.portrait(rec, size, { style }); if (!el.querySelector('canvas')) { const B = D.BEASTS[rec.beast]; el.style.background = `radial-gradient(circle at 35% 30%,${B.c},#1d1830)`; el.textContent = ''; el.append(U.icon(KIND_ICO[rec.beast] || 'skull', Math.round(size * 0.5))); } /* placeholder until the 3D render lands */ } catch (e) { el = dot(rec.beast, size); }
   return el;
 }
-const infoBody = (parts) => { const b = h('div', 'ax-col'); b.style.cssText = 'color:#33243a;font:500 14px/20px system-ui,sans-serif;overflow-wrap:anywhere'; parts.forEach((p) => p && b.append(p)); return b; };
+const infoBody = (parts) => { const b = h('div', 'ax-col'); b.style.cssText = 'color:#33243a;font:500 14px/20px system-ui,sans-serif;overflow-wrap:break-word'; parts.forEach((p) => p && b.append(p)); return b; };
 const para = (t) => h('p', '', t);
 const dismissOk = (label = 'Continue', variant = 'gold') => [{ label, value: 'ok', variant }];
 

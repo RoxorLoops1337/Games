@@ -52,7 +52,7 @@ export function createTutorial(game) {
       met: (t) => !!t.fightSeen || fightOver() || (!!t.advanced && !game.busy), when: () => game.scene === 'fight' && game.fightView && game.fightView.phase === 'fight' },
     { id: 'results', title: 'The spoils', text: 'Gold, fame, experience and sometimes loot. Winning a duel lets you show mercy for fame, or showboat for gold. Hurt fighters need rest.', manual: 'Got it', pos: 'top', passive: true,
       met: (t) => !!t.resSeen || (!!t.advanced && !game.busy), when: () => resultsOpen() },
-    { id: 'week', title: 'The loop is yours', text: 'That is the whole cycle: plan, enter, advance. More holds the Calendar, the rival ludi, the barracks and the memorial wall: the Pit and other risky fights can cost a fighter their life. Tap Advance week whenever you are ready. Ave!', manual: 'Begin', hubOnly: true, last: true,
+    { id: 'week', title: 'The loop is yours', text: 'That is the whole cycle: plan, enter, advance. More holds the Calendar, the rival ludi, the barracks and the memorial wall: the Pit and other risky fights can cost a fighter their life. The hammer button (bottom right) rearranges your buildings for a price. Tap Advance week whenever you are ready. Ave!', manual: 'Begin', hubOnly: true, last: true,
       target: () => tutEl(null, 'advance') || game.advBtn, met: (t) => !!t.done2, when: () => !game.busy && game.scene === 'hub' },
   ];
   function entries() { const e = S() && S().entries; return e ? Object.keys(e).length : 0; }

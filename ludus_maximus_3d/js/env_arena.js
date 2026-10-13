@@ -550,16 +550,16 @@ export function createArena({ crowd = 3700, density = 1, decalRes = 2048, seed =
   const velarium = new THREE.Mesh(velGeo, velMat); velarium.castShadow = true; velarium.receiveShadow = true; velarium.name = 'velarium'; group.add(velarium);
 
   // ---------------- crowd: ONE InstancedMesh, animated in the vertex shader ----------------
-  // Round 3: readable spectators. Hi tier (91 tris): tapered torso, head, hair / cap / hood / laurel dome (15 tris, collapsed for the bald), two-segment arms with an
+  // Round 3: readable spectators. Hi tier (77 tris): tapered torso, head, hair / cap / hood / laurel dome (15 tris, collapsed for the bald), two-segment arms with an
   // elbow. Lite (medium, low: 40 tris, unchanged geometry): same shader, no dome (a hair cap is painted on the head), one-segment arms. Per instance (aRand, aRand2):
   // skin, hair colour, headwear type, outfit (tunic with belt and sleeves / draped toga with folds / hooded cloak), a sash, standing fans (rows near the camera) and
   // senators (the imperial box). Arms: idle on the lap, clapping forearms, one arm waving or both arms cheering, all driven by uHype and the wave, zero CPU per frame.
   const parts = [];
   const addPart = (g, id) => { g = g.toNonIndexed(); const n = g.attributes.position.count; g.setAttribute('aPart', new THREE.BufferAttribute(new Float32Array(n).fill(id), 1)); parts.push(g); };
-  { const g = new THREE.CylinderGeometry(0.2, 0.15, 0.62, lite ? 5 : 6, 1); g.translate(0, 0.39, 0); addPart(g, 0); }
+  if (lite) { const g = new THREE.CylinderGeometry(0.2, 0.15, 0.62, 5, 1); g.translate(0, 0.39, 0); addPart(g, 0); }
+  else { const g = new THREE.CylinderGeometry(0.2, 0.15, 0.62, 6, 1, true), cap = new THREE.CircleGeometry(0.2, 6); cap.rotateX(-Math.PI / 2); cap.translate(0, 0.7, 0); g.translate(0, 0.39, 0); addPart(mergeGeos([g, cap]), 0); }   // hi: no bottom cap (hidden by the seat, a standing fan is an open tube)
   { const g = lite ? new THREE.OctahedronGeometry(0.14, 0) : new THREE.IcosahedronGeometry(0.135, 0); g.translate(0, 0.88, 0.01); addPart(g, 1); }
-  { const g = lite ? new THREE.CylinderGeometry(0.04, 0.032, 0.34, 3, 1, true) : new THREE.CylinderGeometry(0.044, 0.034, 0.34, 4, 2, true); g.translate(-0.25, 0.51, 0); addPart(g, 2); }
-  { const g = lite ? new THREE.CylinderGeometry(0.04, 0.032, 0.34, 3, 1, true) : new THREE.CylinderGeometry(0.044, 0.034, 0.34, 4, 2, true); g.translate(0.25, 0.51, 0); addPart(g, 3); }
+  for (const sx of [-0.25, 0.25]) { const g = lite ? new THREE.CylinderGeometry(0.04, 0.032, 0.34, 3, 1, true) : new THREE.CylinderGeometry(0.046, 0.036, 0.34, 3, 2, true); g.translate(sx, 0.51, 0); addPart(g, sx < 0 ? 2 : 3); }
   if (!lite) { const g = new THREE.SphereGeometry(0.152, 5, 2, 0, TAU, 0, Math.PI * 0.58); g.translate(0, 0.88, 0.0); addPart(g, 4); }
   const crowdGeo = mergeGeos(parts.map((g) => { if (!g.attributes.uv) g.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(g.attributes.position.count * 2), 2)); return g; }));
   // seats

@@ -300,7 +300,9 @@ export class FightView {
     F.units.forEach((u) => {
       const rig = u.beast ? BF.makeRig(this, u) : createGladiator(u, { tunic: u.side === 'B' ? (u.g.color || null) : (u.g.color || null), team: u.side }); /* READ: team accent tint (gladiator.js teamTint) */ // BEAST: beasts get their own rig
       const gx = u.side === 'A' ? -22 : 22;
-      const f = { u, rig, vx: 0, vz: 0, yaw: u.side === 'A' ? Math.PI / 2 : -Math.PI / 2, lx: gx, ly: u.y, handles: {}, atkN: 0, st: '', hpShown: u.hp, plate: null, ring: [], intro: { x: gx, y: u.y, tx: u.x, ty: u.y }, pu: { x: 0, z: 0, vx: 0, vz: 0 }, rx: u.x, ry: u.y, px0: gx, pz0: u.y, X: gx, Z: u.y, skidT: 0, ov: null, kneel: false, faceTo: null };
+      const f = { u, rig, vx: 0, vz: 0, yaw: u.side === 'A' ? Math.PI / 2 : -Math.PI / 2, lx: gx, ly: u.y, handles: {}, atkN: 0, st: '', hpShown: u.hp, plate: null, ring: [], intro: { x: gx, y: u.y, tx: u.x, ty: u.y }, pu: { x: 0, z: 0, vx: 0, vz: 0 }, rx: u.x, ry: u.y, px0: gx, pz0: u.y, X: gx, Z: u.y, skidT: 0, ov: null, kneel: false, faceTo: null,
+        // PERF: every field a fighter ever gets is declared here in one fixed order, so all fighters share ONE hidden class (fields added later in different orders gave 4 to 5 maps: the per-frame code went megamorphic and boxed every double it stored)
+        spin: false, guarding: false, air: false, hpSet: -1, hpSetMax: -1, hpT: -9, plX: -1, plY: -1, plV: null, plS: -1, plOp: -1, nums: null, lastHit: null, lastHitT: -9, lastWord: '', lastWordT: -9, skidAt: -9 };
       trimShadowCasters(rig.root, this.post.tier || this.tier); rig.root.position.set(gx, 0, u.y); this.scene.add(rig.root); rig.resetSecondary && rig.resetSecondary();
       const plate = U.nameplate({ name: u.name, level: u.g.lvl, hp: u.hp, maxHp: u.maxhp, team: u.side === 'A' ? 'ally' : 'foe', rank: 0 });
       this.plates.append(plate); f.plate = plate; this.fm.set(u.id, f); this._fmL = null; this.gore.addFighter(u.id, rig, { maxhp: u.maxhp, side: u.side }); if (u.beast) BF.setup(this, f, u); // BEAST
@@ -472,7 +474,7 @@ export class FightView {
   /** the last living unit of a side is on a sliver of hp while the other side still stands: ease the game clock down and frame the pair with the duel camera */
   updateLastStand(realDt, F) {
     let vic = null, best = 1;
-    if (!F.done) { let nA = 0, nB = 0, lA = null, lB = null; for (const u of F.units) if (!u.down) { if (u.side === 'A') { nA++; lA = u; } else { nB++; lB = u; } }
+    if (!F.done) { let nA = 0, nB = 0, lA = null, lB = null; const UN = F.units; for (let i = 0; i < UN.length; i++) { const u = UN[i]; if (!u.down) { if (u.side === 'A') { nA++; lA = u; } else { nB++; lB = u; } } }
       if (nA === 1 && nB > 0) { const fr = lA.hp / lA.maxhp; if (fr < 0.14 && fr < best) { best = fr; vic = lA; } } if (nB === 1 && nA > 0) { const fr = lB.hp / lB.maxhp; if (fr < 0.14 && fr < best) { best = fr; vic = lB; } } }
     if (this.lsCool > 0) this.lsCool -= realDt; let target = 0;
     if (vic && this.lsCool <= 0 && F.t > 3) {
@@ -725,7 +727,8 @@ export class FightView {
 
   // ---------------------------------------------------------------- events
   consume() {
-    const F = this.F, evs = F.ev.splice(0, F.ev.length);
+    const F = this.F; if (!F.ev.length) return;   // PERF: nothing queued, nothing allocated
+    const evs = F.ev.splice(0, F.ev.length);
     for (const e of evs) { try { this.onEvent(e); } catch (err) { console.error('event', e.k, err); } }
   }
 
@@ -879,7 +882,7 @@ export class FightView {
     if (this.favorBtn) this.favorBtn.style.display = F.favorReady && !F.done ? '' : 'none';
     if (this.duoBtn && F.duo) { const cd = Math.max(0, F.duo.cd); this.duoBtn.disabled = cd > 0; this.duoBtn.style.opacity = cd > 0 ? 0.55 : 1; }
     const FL = this._fmL || (this._fmL = [...this.fm.values()]);
-    for (let fi = 0; fi < FL.length; fi++) for (const r of FL[fi].ring) { const f = FL[fi]; const slot = r.slot, frac = slot.max ? clamp(slot.cd / slot.max, 0, 1) : 0, fr = f.u.down ? 1 : frac, key = Math.round(fr * 200) * 1000 + Math.ceil(Math.max(0, slot.cd)); if (r.key !== key) { r.key = key; r.ring.set(fr, Math.max(0, slot.cd)); } }   // PERF: DOM writes only when the ring visibly changed
+    for (let fi = 0; fi < FL.length; fi++) { const f = FL[fi], RG = f.ring; for (let ri = 0; ri < RG.length; ri++) { const r = RG[ri], slot = r.slot, frac = slot.max ? clamp(slot.cd / slot.max, 0, 1) : 0, fr = f.u.down ? 1 : frac, cd0 = slot.cd > 0 ? slot.cd : 0, key = Math.round(fr * 200) * 1000 + Math.ceil(cd0); if (r.key !== key) { r.key = key; r.ring.set(fr, cd0); } } }   // PERF: DOM writes only when the ring visibly changed
   }
 
   updateAudio(dt, F) {

@@ -46,3 +46,10 @@ Files: `js/title.js`, `js/tutorial.js`, `js/ceremonies.js`; CSS appended to `css
 ## Wave 3: tutorial placement and trophy ceremony
 - Steps may define `avoid: () => Element|null`. `placeCard` keeps the card off the target (or the `avoid` element when the step has no target): it tries top, bottom, above, below, left and right, then falls back to a compact card (`.lx-tut-compact`: no dots, two-line text) in the biggest free band. The `welcome` step avoids the first `.rc-card` of the recruit sheet, so at 390x800 the card docks at the top and at 800x390 it sits above the cards. Test: `localStorage.clear()`, click Begin your ludus, Open the gates, compare `.lx-tut-card` and `.rc-card` rects.
 - `Cer.trophy` shows a gold medallion with the trophy's SVG glyph (`glyphs.trophyIcon`) and "N of M trophies in your hall".
+## UI pass 2 notes (first-run recruit)
+- The first-run recruit sheet is closable on purpose (X, Escape, "Decide later"). Closing with zero fighters sets `game._recruitLater`, toasts what to do, and `Game.refresh` turns the hub's main button into "Hire your first fighter" (pulsing; `advance()` reopens the sheet). The tutorial's hire step then points at that button and its `rescue` no longer reopens the sheet against the player's will.
+- Recruit cards keep Hire in the card header (price above it), so it is visible at 1100x650; stats are a 5-column strip.
+- Confetti rule: see ludus3d-ui-cinematics (never over dialog text).
+
+## MOVE
+The hammer button carries `data-tut="rearrange"` (the plot screen button `data-tut="rearrange-open"`); the `week` tutorial step text now mentions it. More > Help has a "Rearrange the ludus" entry. The tutorial does not require the feature (no step depends on it).

@@ -18,6 +18,7 @@ const CSS = `
 .lm-stag{display:grid;justify-items:center;gap:1px;padding:4px 2px 5px;border-radius:8px;background:rgba(255,255,255,.55);border-top:3px solid var(--sc);box-shadow:inset 0 0 0 1px rgba(122,82,34,.22);min-width:0}
 .lm-stag-n{font:800 10px/1.1 var(--lx-serif);letter-spacing:.08em;color:#7a5222}
 .lm-stag b{font:900 16px/18px var(--lx-sans);color:#2a1a30}
+.rc-head .lm-name{white-space:normal;overflow:visible;text-overflow:clip;overflow-wrap:break-word}.rc-head .lm-name small{display:block}
 .rc-trait{font:600 12px/16px var(--lx-sans);color:#4a3550;overflow-wrap:break-word}
 .rc-gold{display:flex;justify-content:center;gap:8px;flex-wrap:wrap}
 .rc-foot{margin:6px 0 0}

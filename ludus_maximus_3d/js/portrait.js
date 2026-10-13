@@ -18,12 +18,14 @@ const FRAMES = {
   three: { fov: 24, dist: 4.4, y: 1.25, tx: 0.0, yaw: 0.45 },
   full: { fov: 28, dist: 5.4, y: 0.98, tx: 0.0, yaw: 0.4 },
 };
-/** camera for a beast portrait: bust = the head and mane three-quarter, three / full = the whole animal (sizes follow rig.nameH) */
+/** camera for a beast portrait: bust = the head and mane three-quarter (aimed a little behind the head joint so the mane is in frame), three / full = the whole animal (sizes follow rig.nameH) */
+const BUST_AIM = { lion: [0.02, 0.04], nemean: [0.02, 0.04], wolf: [0.03, 0.09], bear: [0.0, 0.08], boar: [0.0, 0.1], elephant: [-0.3, -0.1] };
 function beastFrame(rig, style) {
   const k = rig.nameH, hd = rig.joints.head; rig.root.updateMatrixWorld(true); const hp = new THREE.Vector3(); hd.getWorldPosition(hp);
-  if (style === 'full' || style === 'three') return { fov: 26, dist: k * 2.7 + 2.2, y: k * 0.42, tx: 0, yaw: 0.85 };
-  const s = rig.size || 1, yaw = 0.8, c = Math.cos(yaw), sn = Math.sin(yaw), x1 = hp.x * c + hp.z * sn, z1 = -hp.x * sn + hp.z * c;
-  return { fov: 24, dist: z1 + (rig.portraitD || 2.2), y: hp.y - 0.04 * s - (rig.beast === 'elephant' ? 0.5 : 0), tx: x1, yaw };
+  if (style === 'full' || style === 'three') return { fov: 26, dist: k * 1.9 + 1.6, y: k * 0.42, tx: 0, yaw: 0.85 };
+  const s = rig.size || 1, yaw = 0.8, c = Math.cos(yaw), sn = Math.sin(yaw), aim = BUST_AIM[rig.beast] || [0, -0.05], ax = hp.x + (aim[1] * s) * 0, az = hp.z + aim[1] * s * (rig.beast === 'elephant' ? 1.4 : 1);
+  const x1 = ax * c + az * sn, z1 = -ax * sn + az * c;
+  return { fov: 24, dist: z1 + (rig.portraitD || 2.2), y: hp.y + aim[0] * s - 0.02 * s, tx: x1, yaw };
 }
 const POSES = { idle: null, guard: null, victory: 'victory', taunt: 'taunt', block: 'block' };
 const key = (g, o) => {
@@ -69,7 +71,7 @@ export function createPortraitRenderer({ renderer = null, tier = 'medium', maxCa
 
   function draw(g, o) {
     let fr = FRAMES[o.style] || FRAMES.bust; const w = o.w, h = o.h, t0 = performance.now();
-    const rig = g.beast ? createBeast(g, { detail: 'high' }) : createGladiator(g, { seg: 8 });
+    const rig = g.beast ? createBeast(g, { detail: 'medium' }) : createGladiator(g, { seg: 8 }); // BEAST: medium (strand cards and lids, no fur shells): a bust does not show the shells and compiles one program fewer
     if (rig.beast) fr = beastFrame(rig, o.style); // BEAST
     rig.root.rotation.y = fr.yaw; scene.add(rig.root);
     const clip = POSES[o.pose];

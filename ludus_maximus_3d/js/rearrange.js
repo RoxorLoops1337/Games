@@ -39,6 +39,7 @@ const CSS = `
 .lx-rr-confirm button{flex:1;min-height:48px;border-radius:10px;cursor:pointer;font:800 14px system-ui,sans-serif;letter-spacing:.06em;text-transform:uppercase;border:2px solid #7a4e1c;background:linear-gradient(180deg,#f2c14e,#c58a2a);color:#2a1a30;touch-action:manipulation}
 .lx-rr-confirm button.alt{background:rgba(255,255,255,.08);color:#f6ecd0;border-color:#8a7aa8}
 .lx-rr-confirm button:focus-visible{outline:3px solid #fff;outline-offset:2px}
+@media (max-width:600px){.lx-rr-modebar{top:calc(var(--lx-sat) + 104px);flex-wrap:nowrap;padding:6px 8px}.lx-rr-modebar b{display:none}.lx-rr-modebar .lx-rr-msg{min-width:0;font-size:12px}}
 .lx-rr-sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 `;
 
@@ -47,7 +48,7 @@ export function createRearrange(game) {
   let bar = null, msgEl = null, undoB = null, doneB = null, live = null, fab = null, unKey = null, tick = 0;
   const S = () => game.S, hub = () => game.hub, sfx = (n, o) => { try { game.audio.sfx(n, o); } catch (e) { /* audio optional */ } };
   const vib = (ms) => { try { navigator.vibrate && navigator.vibrate(ms); } catch (e) { /* no haptics */ } };
-  const say = (t) => { st.msg = t; if (msgEl) msgEl.textContent = t; try { hub().say(t); } catch (e) { /* no hub */ } if (live) { live.textContent = ''; setTimeout(() => { if (live) live.textContent = t; }, 60); } };
+  const say = (t, short) => { st.msg = t; if (msgEl) msgEl.textContent = short || t; try { hub().say(t); } catch (e) { /* no hub */ } if (live) { live.textContent = ''; setTimeout(() => { if (live) live.textContent = t; }, 60); } };
   const bname = (i) => { const p = S().plots[i]; return p ? D.BUILD[p.b].n : 'empty plot'; };
   const unlocked = () => { const out = []; for (let i = 0; i < S().rows * COLS; i++) out.push(i); return out; };
   const anyUndo = () => S().plots.map((p, i) => (p && p.mv && L().moveUndoInfo(S(), i).ok ? i : -1)).filter((i) => i >= 0);
@@ -103,11 +104,11 @@ export function createRearrange(game) {
   function lift(i) {
     st.sel = i; st.dest = -1; hub().rrLift(i); hub().rrGhost(null); sfx('uiSelect'); vib(18);
     sync(); const n = bname(i), p = S().plots[i];
-    say(`${n} level ${p.l} lifted. Choose a green plot to move it, a teal one to swap, or the lifted building to put it back. Prices float above each plot.`);
+    say(`${n} level ${p.l} lifted. Choose a green plot to move it, a teal one to swap, or the lifted building to put it back. Prices float above each plot.`, `${n} lifted: tap a green plot (move) or teal (swap)`);
   }
   function drop(silent) {
     const n = st.sel >= 0 ? bname(st.sel) : ''; st.sel = -1; st.dest = -1; hub().rrLift(-1); hub().rrGhost(null); sync();
-    if (!silent) { sfx('uiClose', { gain: 0.6 }); say(`${n} put back. Tap a building to lift it.`); }
+    if (!silent) { sfx('uiClose', { gain: 0.6 }); say(`${n} put back. Tap a building to lift it.`, 'Tap a building to lift it'); }
   }
   async function preview(to) {
     const lm = L(), s = S(), from = st.sel, q = lm.moveQuote(s, from, to);
@@ -115,10 +116,10 @@ export function createRearrange(game) {
     if (s.gold < q.gold) return refuse(`Not enough gold: ${fmt(q.gold)} needed, you have ${fmt(s.gold)}`);
     const A = s.plots[from], B = s.plots[to]; st.dest = to; st.asking = true;
     hub().rrGhost({ from, to, a: { b: A.b, l: A.l }, bb: B ? { b: B.b, l: B.l } : null }); hub().frameTwo(from, to, { dur: 0.8 }); sfx('uiOpen', { gain: 0.5 });
-    say(`${q.kind === 'swap' ? 'Swap' : 'Move'} ${D.BUILD[A.b].n}${B ? ' with ' + D.BUILD[B.b].n : ''}: ${fmt(q.gold)} gold, ${q.weeks.filter(Boolean).join(' and ')} week${Math.max(...q.weeks) > 1 ? 's' : ''}. Confirm or cancel.`);
+    say(`${q.kind === 'swap' ? 'Swap' : 'Move'} ${D.BUILD[A.b].n}${B ? ' with ' + D.BUILD[B.b].n : ''}: ${fmt(q.gold)} gold, ${q.weeks.filter(Boolean).join(' and ')} week${Math.max(...q.weeks) > 1 ? 's' : ''}. Confirm or cancel.`, 'Confirm or cancel below');
     const ok = await askConfirm(from, to, q);
     st.asking = false; if (!st.active) return;
-    if (!ok) { st.dest = -1; hub().rrGhost(null); sfx('uiClose', { gain: 0.6 }); say('Cancelled. The building is still lifted: choose another plot, or tap it to put it back.'); sync(); return; }
+    if (!ok) { st.dest = -1; hub().rrGhost(null); sfx('uiClose', { gain: 0.6 }); say('Cancelled. The building is still lifted: choose another plot, or tap it to put it back.', 'Cancelled. Pick another plot'); sync(); return; }
     commit(from, to, q);
   }
   let cardEl = null, cardRes = null;
@@ -156,10 +157,10 @@ export function createRearrange(game) {
     game.save(); sfx('coin'); vib([30, 40, 30]); st.sel = -1; st.dest = -1; st.cine = true;
     hub().rrLift(-1); hub().rrGhost(null); cached = []; hub().rrItems([], -1);
     const wk = q.weeks[0];
-    say(`${n} is being ${q.kind === 'swap' ? 'swapped' : 'moved'}. The crew starts now.`);
+    say(`${n} is being ${q.kind === 'swap' ? 'swapped' : 'moved'}. The crew starts now.`, 'The crew is at work...');
     hub().playMove({ from, to, a, bb, weeks: q.weeks }, () => {
       st.cine = false; if (!st.active) return; sync();
-      say(`${n} is being rebuilt at ${plotName(to)}. It will be ready in ${wk} week${wk > 1 ? 's' : ''}${q.kind === 'swap' ? '. The other building is rebuilt too' : ''}. Lift another building, or press Done.`);
+      say(`${n} is being rebuilt at ${plotName(to)}. It will be ready in ${wk} week${wk > 1 ? 's' : ''}${q.kind === 'swap' ? '. The other building is rebuilt too' : ''}. Lift another building, or press Done.`, `${n}: ready in ${wk} wk. Lift another, or Done`);
     });
     game.refresh();   // gold counter now; the hub holds the rebuild until the cinematic applies it
   }
@@ -173,7 +174,7 @@ export function createRearrange(game) {
     const s = S();
     if (st.sel < 0) {
       if (i >= s.rows * COLS) return refuse('Unclaimed land. Buy the row first.');
-      if (!s.plots[i]) { sfx('uiTap', { gain: 0.5 }); return say(`${plotName(i)} is empty. Lift a building first.`); }
+      if (!s.plots[i]) { sfx('uiTap', { gain: 0.5 }); return say(`${plotName(i)} is empty. Lift a building first.`, 'Empty plot: lift a building first'); }
       const why = L().moveWhySource(s, i); if (why) return refuse(why);
       return lift(i);
     }
@@ -220,7 +221,7 @@ export function createRearrange(game) {
       document.addEventListener('keydown', onKey, true); unKey = () => document.removeEventListener('keydown', onKey, true);
       sync(); sfx('uiOpen');
       const movable = unlocked().filter((i) => S().plots[i] && !L().moveWhySource(S(), i)).length;
-      say(`Rearrange mode. ${movable} building${movable === 1 ? '' : 's'} can be moved. Tap a building to lift it, or use the arrow keys and Enter. Escape leaves.`);
+      say(`Rearrange mode. ${movable} building${movable === 1 ? '' : 's'} can be moved. Tap a building to lift it, or use the arrow keys and Enter. Escape leaves.`, 'Tap a building to lift it');
       if (o.lift != null && o.lift >= 0) { const why = L().moveWhySource(S(), o.lift); if (why) refuse(why); else { st.cursor = o.lift; lift(o.lift); hub().frameTwo(o.lift, null, { dur: 0.9 }); } }
       return true;
     },

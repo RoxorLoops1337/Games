@@ -43,7 +43,7 @@ function mul(a) { return () => { a = (a + 0x6d2b79f5) | 0; let t = Math.imul(a ^
 // READABILITY (round 3). The sim hands out six skin hexes, two of them nearly white (#f6d3b0, #f0c9a0): lit by the golden key they clip to pink-white and every
 // fighter converges on one hue. gradeSkin() keeps the sim's index (light to dark) but maps it into a believable Mediterranean / Gaulish / Thracian / North African /
 // Nubian range with lower albedo and an olive-leaning hue, with a deterministic per fighter variation so a squad is not six clones.
-const SKIN_SET = [['#cf9d7c', '#c8956f', '#d3a384'], ['#c08a63', '#b98260', '#c4906c'], ['#b17a4c', '#a9744a', '#b4804f'], ['#8f5a38', '#87543a', '#946040'], ['#6a4228', '#5e3a24', '#70472c'], ['#c99a73', '#bf8f68', '#cca07c']];
+const SKIN_SET = [['#c8966f', '#c08e68', '#cc9c7a'], ['#c08a63', '#b98260', '#c4906c'], ['#b17a4c', '#a9744a', '#b4804f'], ['#8f5a38', '#87543a', '#946040'], ['#6a4228', '#5e3a24', '#70472c'], ['#c0956a', '#b78c62', '#c49a72']];
 const SKIN_SRC = ['#f6d3b0', '#e8b583', '#c98a52', '#9a6234', '#6b4224', '#f0c9a0'];
 export function gradeSkin(hex, seed = 0) {
   const h = String(hex || '').toLowerCase(), i = SKIN_SRC.indexOf(h);

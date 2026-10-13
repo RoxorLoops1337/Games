@@ -16,6 +16,25 @@ const setup = await page.evaluate(() => {
   S.flags.auto = true; return { glads: S.glads.length };
 });
 console.log('setup', JSON.stringify(setup));
+// --move: a scripted MOVE (rearrange mode): open it with the hammer button, lift a building, preview an empty plot, confirm, let the cinematic play, leave the mode
+if (a.includes('--move')) {
+  const info = await page.evaluate(async () => {
+    const g = window.__LM3D.game, LM = globalThis.LM, S = g.S; S.gold = Math.max(S.gold, 800);
+    const from = S.plots.findIndex((p, i) => p && !LM.moveWhySource(S, i)), to = S.plots.findIndex((p, i) => !p && i < S.rows * LM.COLS);
+    if (from < 0 || to < 0) return { err: 'no movable building or no empty plot' };
+    document.querySelector('.lx-rr-fab').click(); await new Promise((r) => setTimeout(r, 600));
+    if (!g.rearr.active) return { err: 'mode did not open' };
+    g.rearr.tap(from); g.rearr.tap(to); await new Promise((r) => setTimeout(r, 300));
+    const card = document.querySelector('.lx-rr-confirm'); if (!card) return { err: 'no confirm card', st: g.rearr.state };
+    const b = S.plots[from].b, gold0 = S.gold; card.querySelector('[data-rr=ok]').click();
+    return { from, to, b, gold0 };
+  });
+  console.log('move', JSON.stringify(info)); if (info.err) errs++;
+  for (let k = 0; k < 16; k++) { await page.evaluate(() => window.__LM3D.advance(0.5)); if (!(await page.evaluate(() => window.__LM3D.game.rearr.state.cine))) break; }
+  const after = await page.evaluate(() => { const g = window.__LM3D.game, S = g.S; const r = { moving: S.plots.map((p, i) => (p && p.mv ? i + ':' + p.b + ' until ' + p.mv.u : null)).filter(Boolean), gold: S.gold, active: g.rearr.active }; g.rearr.stop(); return r; });
+  console.log('after move', JSON.stringify(after));
+  if (shots) await page.screenshot({ path: `${shots}/bot_move.png` });
+}
 let n = 0, shotN = 0;
 for (let wk = 0; wk < weeks; wk++) {
   const info = await page.evaluate(() => {
@@ -42,6 +61,6 @@ for (let wk = 0; wk < weeks; wk++) {
   }
   console.log('  week finished after', guard, 'steps');
 }
-const fin = await page.evaluate(() => { const S = window.__LM3D.game.S; return { week: S.week, gold: S.gold, fame: S.fame, fights: S.stats.fights, wins: S.stats.wins }; });
+const fin = await page.evaluate(() => { const S = window.__LM3D.game.S; return { building: S.plots.filter((p) => p && p.mv).length ? 'still rebuilding' : 'all ready', week: S.week, gold: S.gold, fame: S.fame, fights: S.stats.fights, wins: S.stats.wins }; });
 console.log('final', JSON.stringify(fin), errs ? errs + ' errors' : 'ok');
 await browser.close(); process.exit(errs ? 1 : 0);

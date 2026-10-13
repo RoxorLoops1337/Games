@@ -954,29 +954,31 @@ export function makeWorkerMesh(n) {
   return m;
 }
 
-/** The tower crane used in the move cinematic: { group, setPose({az, load, lift, show}) }. 4 meshes (mast, jib, rope, load), shared wood material. */
+/** The tower crane used in the move cinematic: { group, setPose({az, load, lift, show}) }. 3 meshes (mast and jib in one, rope, load), shared wood material. */
 export function makeCrane() {
   const lib = getLib(), group = new THREE.Group(); group.name = 'move_crane';
   const kM = new Kit(3, 0x6a2470); kM.H = 12; const MH = 9.2;
   for (const sx of [-1, 1]) for (const sz of [-1, 1]) kM.box('wood', 0.16, MH, 0.16, sx * 0.4, 0, sz * 0.4, C.wood2, { ao: 0.2 });
   for (let y = 0.9; y < MH; y += 1.5) { for (const s of [-1, 1]) { kM.box('wood', 0.9, 0.08, 0.08, 0, y, s * 0.4, C.woodLt, { c: true, ao: 0.2 }); kM.box('wood', 0.08, 0.08, 0.9, s * 0.4, y, 0, C.woodLt, { c: true, ao: 0.2 }); kM.box('wood', 1.2, 0.07, 0.07, 0, y + 0.7, s * 0.4, C.wood, { c: true, rz: 0.7 * s, ao: 0.2 }); } }
   kM.box('wood', 2.3, 0.35, 2.3, 0, 0, 0, C.stone, { ao: 0.3 }); kM.box('wood', 1.2, 0.4, 1.2, 0, MH, 0, C.iron, { ao: 0.2 });
-  const mast = new THREE.Mesh(mergeGeometries(kM.P.wood, false), lib.wood); mast.castShadow = true; group.add(mast);
+  const mastGeo = mergeGeometries(kM.P.wood, false);
   const kJ = new Kit(4, 0x6a2470); kJ.H = 12; const L = 7.6;
   kJ.box('wood', 0.12, 0.12, L + 2.2, 0.28, 0.6, (L - 2.2) / 2, C.wood2, { c: true, ao: 0.2 }); kJ.box('wood', 0.12, 0.12, L + 2.2, -0.28, 0.6, (L - 2.2) / 2, C.wood2, { c: true, ao: 0.2 }); kJ.box('wood', 0.1, 0.1, L + 2.2, 0, 0.1, (L - 2.2) / 2, C.wood2, { c: true, ao: 0.2 });
   for (let z = -1.8, i = 0; z < L - 0.6; z += 0.9, i++) kJ.box('wood', 0.06, 0.06, 0.95, 0, 0.35, z + 0.45, C.woodLt, { c: true, rx: (i % 2 ? 1 : -1) * 0.66, ao: 0.2 });
   kJ.box('wood', 0.9, 0.7, 0.9, 0, 0.1, -2.3, C.stone, { ao: 0.3 }); kJ.cyl('wood', 0.1, 0.1, 0.9, 0, 0.35, L - 0.1, C.iron, { rz: Math.PI / 2, c: true, seg: 6 });
-  const jib = new THREE.Mesh(mergeGeometries(kJ.P.wood, false), lib.wood); jib.position.y = MH + 0.2; jib.castShadow = true; group.add(jib);
+  // the mast is four posts around the axis, so it can turn with the jib: mast and jib are ONE mesh (one draw call) that rotates about y
+  const jibGeo = mergeGeometries(kJ.P.wood, false); jibGeo.translate(0, MH + 0.2, 0);
+  const jib = new THREE.Mesh(mergeGeometries([mastGeo, jibGeo], false), lib.wood); jib.castShadow = true; group.add(jib); const mast = jib, JY = MH + 0.2;
   const rope = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 1, 4).translate(0, -0.5, 0), new THREE.MeshBasicMaterial({ color: 0xc9b07a })); rope.frustumCulled = false; jib.add(rope);
   const kL = new Kit(6, 0x6a2470); kL.H = 3; kL.box('wood', 0.38, 0.3, 0.3, 0, -0.3, 0, C.iron, { ao: 0.4 }); for (let i = 0; i < 4; i++) kL.cyl('wood', 0.09, 0.09, 1.4, -0.28 + i * 0.19, -0.75 - (i % 2) * 0.1, 0, C.woodLt, { rz: Math.PI / 2, c: true, seg: 5, ry: 0.5, ao: 0.4 });
   const load = new THREE.Mesh(mergeGeometries(kL.P.wood, false), lib.wood); load.frustumCulled = false; load.castShadow = true; jib.add(load);
   const api = {
-    group, jib, mast, rope, load, tipZ: L - 0.1,
+    group, jib, mast, rope, load, tipZ: L - 0.1, setShadows(on) { jib.castShadow = on; load.castShadow = on; },
     /** az = jib yaw (0 points +z), reach 0..1 of the jib, drop = metres the load hangs below the jib tip height, show = load visible */
     setPose({ az = 0, reach = 1, drop = 5, show = true } = {}) {
-      jib.rotation.y = az; const z = 1.5 + (L - 1.7) * clamp(reach); rope.position.set(0, 0.3, z); rope.scale.set(1, Math.max(0.2, drop), 1); load.position.set(0, 0.3 - drop, z); load.visible = show; rope.visible = show;
+      jib.rotation.y = az; const z = 1.5 + (L - 1.7) * clamp(reach); rope.position.set(0, JY + 0.3, z); rope.scale.set(1, Math.max(0.2, drop), 1); load.position.set(0, JY + 0.3 - drop, z); load.visible = show; rope.visible = show;
     },
-    dispose() { for (const m of [mast, jib, rope, load]) { m.geometry && m.geometry.dispose(); } rope.material.dispose(); },
+    dispose() { for (const m of [jib, rope, load]) { m.geometry && m.geometry.dispose(); } rope.material.dispose(); },
   };
   api.setPose(); return api;
 }

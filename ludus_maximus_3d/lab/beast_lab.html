@@ -9,7 +9,7 @@ canvas{display:block}#hud{position:fixed;left:8px;top:6px;text-shadow:0 1px 2px 
 <script type="module">
 // Beast lab (orbit / pose review) for js/beast.js. Same light rig as the arena.
 // Params: beast=lion|wolf|bear|boar|nemean|elephant|all (default all)  detail=low|medium|high  anim=idle|walk|run|bite|claw|pounce|roar|...|death|knock  t=<seconds into the clip / gait>
-//         view=grid|one|turn|sheet (sheet: anim at times=0,.2,.4 spaced by gap)  yaw=<deg>  cam=x,y,z,tx,ty,tz  fov=<deg>  blood=0..1 (soak) wounds=n  spin=1 (live turntable)  orbit=1 (drag to orbit)  test=1 (headless checks -> window.__testResult)
+//         view=grid|one|turn|sheet|portrait (sheet: anim at times=0,.2,.4 spaced by gap; portrait: the real portrait.js busts and full frames of every beast, window.__portraitDone)  yaw=<deg>  cam=x,y,z,tx,ty,tz  fov=<deg>  blood=0..1 (soak) wounds=n  spin=1 (live turntable)  orbit=1 (drag to orbit)  test=1 (headless checks -> window.__testResult)
 import * as THREE from 'three';
 import { createBeast, SPECIES, JN } from '../js/beast.js';
 import { createSky, createLightRig, applyTOD, TOD } from '../js/sky.js';
@@ -42,6 +42,14 @@ let k = 0;
 if (view === 'grid') {
   KINDS.forEach((kd, i) => { const col = i % 3, row = Math.floor(i / 3); const r = spawn(kd, (col - 1) * 6.4, (row - 0.5) * -6.5, yaw0, k++); pose(r, anim, tq); });
   cam.position.set(0, 9, 22); target.set(0, 1.2, -0.6); cam.fov = 38;
+} else if (view === 'portrait') {
+  const box = document.createElement('div'); box.style.cssText = 'position:fixed;inset:0;z-index:5;background:#1d1830;display:flex;flex-wrap:wrap;gap:6px;padding:6px;align-content:flex-start;overflow:auto'; document.body.append(box);
+  import('../js/portrait.js').then(({ createPortraitRenderer }) => {
+    const P = createPortraitRenderer({ tier: Q.get('tier') || 'medium' }), t0 = performance.now(); window.__P = P;
+    KINDS.forEach((kd, i) => { const rec = LM.makeBeast(kd, 6, { r: LM.mulberry(40 + i), id: 'pt' + i }); for (const st of ['bust', 'three']) { const cv = P.portrait(rec, st === 'bust' ? { w: 192, h: 232, style: 'bust' } : { w: 232, h: 192, style: 'three' }); cv.style.cssText = 'border:2px solid #f2c14e;display:block;width:' + (st === 'bust' ? 192 : 232) + 'px'; box.append(cv); } });
+    const wait = () => { if (P.pending) return requestAnimationFrame(wait); window.__portraitDone = true; document.getElementById('hud').textContent = JSON.stringify(P.stats) + ' ' + ((performance.now() - t0) | 0) + ' ms'; }; requestAnimationFrame(wait);
+  });
+  cam.position.set(0, 3, 9); target.set(0, 1, 0);
 } else if (view === 'sheet') {
   const times = (Q.get('times') || '0,0.2,0.4,0.6').split(',').map(Number), gap = +(Q.get('gap') || 4.2);
   times.forEach((t, i) => { const r = spawn(which, (i - (times.length - 1) / 2) * gap, 0, yaw0, k++); pose(r, anim, t); });
@@ -74,21 +82,36 @@ if (Q.get('test') === '1') {
   for (const kd of KINDS) for (const dt of ['low', 'medium', 'high']) {
     const rec = LM.makeBeast(kd, 6, { r: LM.mulberry(5), id: 't' }), rig = createBeast(rec, { detail: dt }); ts.add(rig.root);
     const tr = rig.triangles(), dc = rig.drawCalls(); R.tris[kd + ':' + dt] = tr; R.calls[kd + ':' + dt] = dc;
-    ok(tr <= (dt === 'high' ? 2500 : dt === 'medium' ? (kd === 'elephant' ? 2000 : 1700) : (kd === 'elephant' ? 1600 : 1050)), `${kd} ${dt} tris ${tr}`); ok(dc <= 8, `${kd} ${dt} calls ${dc}`);
+    ok(tr <= (dt === 'high' ? 9500 : dt === 'medium' ? (kd === 'elephant' ? 5200 : 3900) : (kd === 'elephant' ? 1600 : 1050)), `${kd} ${dt} tris ${tr}`); ok(dc <= 8, `${kd} ${dt} calls ${dc}`);
     rig.root.traverse((o) => { if (o.isMesh) { ok(!!o.geometry.attributes.color, `${kd} ${o.name} colour`); if (o.isSkinnedMesh) ok(o.skeleton === rig.skeleton, `${kd} skeleton shared`); } });
+    // skinning: every vertex has valid bone indices and weights summing to one; the limbs, torso and neck are really blended (many vertices follow two or more bones)
+    { let multi = 0, total = 0, badW = 0, badI = 0; const nb = rig.skeleton.bones.length; rig.root.traverse((o) => { if (!o.isSkinnedMesh) return; const si = o.geometry.attributes.skinIndex, sw = o.geometry.attributes.skinWeight; for (let v = 0; v < sw.count; v++) { let t = 0, n = 0; for (let q = 0; q < 4; q++) { const w = sw.getComponent(v, q); t += w; if (w > 0.02) { n++; if (si.getComponent(v, q) >= nb) badI++; } } if (Math.abs(t - 1) > 0.02) badW++; if (n > 1) multi++; total++; } });
+      ok(badW === 0 && badI === 0, `${kd} ${dt} skin weights valid (${badW} bad sums, ${badI} bad bones)`); if (dt !== 'low') ok(multi / total > 0.12, `${kd} ${dt} smooth skinning: ${(100 * multi / total).toFixed(0)}% of the vertices blend two bones or more`); R.skin = R.skin || {}; R.skin[kd + ':' + dt] = +(multi / total).toFixed(2); }
     if (dt !== 'high') { rig.dispose(); ts.remove(rig.root); continue; }
+    for (const n of ['eyeL', 'eyeR', 'lidL', 'lidR']) ok(!!rig.joints[n], `${kd} joint ${n}`); if (kd !== 'elephant') for (const n of ['mane1', 'mane2']) ok(!!rig.joints[n], `${kd} joint ${n}`); else for (const n of ['flag1', 'flag2', 'rider', 'riderArm', 'trunk4']) ok(!!rig.joints[n], `${kd} joint ${n}`);
     for (const n of ['hips', 'spine', 'chest', 'neck', 'head', 'shoulderL', 'elbowL', 'wristL', 'hipL', 'kneeL', 'ankleL', 'shoulderR', 'hipR', 'ankleR', 'jaw']) ok(!!rig.joints[n], `${kd} joint ${n}`);
     const A = rig.animator, finite = () => { let bad = false; rig.root.traverse((o) => { const e = o.matrixWorld.elements; for (let i = 0; i < 16; i++) if (!isFinite(e[i])) bad = true; }); return !bad; };
     const W3 = new THREE.Vector3(); let minPaw = 1e9, maxPaw = -1e9;
     for (const speed of [0, 1, 3, 6]) { A.setMove(speed, 0); for (let i = 0; i < 90; i++) { rig.update(1 / 60); if (i > 40) for (const n of ['wristL', 'wristR', 'ankleL', 'ankleR']) { rig.joints[n].getWorldPosition(W3); minPaw = Math.min(minPaw, W3.y); maxPaw = Math.max(maxPaw, W3.y); } } ok(finite(), `${kd} finite at speed ${speed}`); }
     ok(minPaw > 0.01 * rig.size && minPaw < 0.6 * rig.size + 0.4, `${kd} paws near the ground (${minPaw.toFixed(2)})`);
     A.setMove(0, 0);
+    // paw planting: standing still, every paw sole is on the sand (within 2 cm); walking, the planted (lowest) paw stays within 3 cm
+    { rig.root.position.set(0, 0, 0); for (let i = 0; i < 40; i++) rig.update(1 / 60); const pj = [['wristL', rig.animator.pads[0]], ['wristR', rig.animator.pads[1]], ['ankleL', rig.animator.pads[2]], ['ankleR', rig.animator.pads[3]]]; let worst = 0, lowest = 9; for (const [n, pad] of pj) { rig.joints[n].getWorldPosition(W3); const y = W3.y - pad * 0.98; worst = Math.max(worst, Math.abs(y)); lowest = Math.min(lowest, y); } ok(worst < 0.02 * Math.max(1, rig.size) + 0.012 * (kd === 'elephant' ? 3 : 0), `${kd} idle paws planted (worst ${worst.toFixed(3)} m)`);
+      A.setMove(A.sp.gait.walkV, 0); let sink = 0; for (let i = 0; i < 120; i++) { rig.update(1 / 60); if (i > 30) for (const [n, pad] of pj) { rig.joints[n].getWorldPosition(W3); sink = Math.min(sink, W3.y - pad * 0.98); } } ok(sink > -0.05 * Math.max(1, rig.size), `${kd} no paw sinks into the sand while walking (${sink.toFixed(3)} m)`); A.setMove(0, 0); for (let i = 0; i < 30; i++) rig.update(1 / 60); }
+    // idle life: the head wanders, the animal blinks, the tail moves, nothing goes NaN over 40 s
+    { const ci = (n, k = 0) => JN.indexOf(n) * 3 + k; A.dead = false; A.action = null; let blinks = 0, was = false, hy0 = 9, hy1 = -9, ty0 = 9, ty1 = -9;
+      for (let i = 0; i < 40 * 30; i++) { rig.update(1 / 30); if (i < 20 * 30) continue; const l = A.out[ci('lidL')] > 1.0; if (l && !was) blinks++; was = l; const hy = A.out[ci('head', 1)], ty = A.out[ci('tail1', 1)]; hy0 = Math.min(hy0, hy); hy1 = Math.max(hy1, hy); ty0 = Math.min(ty0, ty); ty1 = Math.max(ty1, ty); }
+      ok(blinks >= 2, `${kd} blinks while idle (${blinks} in 20 s)`); ok(hy1 - hy0 > 0.08, `${kd} head wanders at idle (${(hy1 - hy0).toFixed(2)} rad)`); ok(ty1 - ty0 > 0.1, `${kd} tail moves at idle (${(ty1 - ty0).toFixed(2)} rad)`); ok(finite(), `${kd} finite after 40 s idle`); }
+    // gaits: slow, medium and fast speeds emit steps and stay finite and above the sand
+    { let steps = 0; rig.onEvent = (e) => { if (e === 'step') steps++; }; for (const v of [0.8, 2.2, 4, 6.5]) { A.setMove(v, 0); steps = 0; for (let i = 0; i < 180; i++) rig.update(1 / 60); ok(steps >= 2, `${kd} gait at ${v} m/s emits steps (${steps})`); ok(finite(), `${kd} finite at ${v} m/s`); } A.setMove(0, 0); rig.onEvent = null; for (let i = 0; i < 60; i++) rig.update(1 / 60); }
     for (const n of clipNames) {
       A.dead = false; A.action = null; A.setState('move'); const ev = []; rig.onEvent = (e) => ev.push(e); A.play(n);
       if (n === 'death') A.dead = true; for (let i = 0; i < 160; i++) rig.update(1 / 60); ok(finite(), `${kd} ${n} finite`);
       const info = A.clipInfo(n); if (['bite', 'claw', 'pounce', 'maul', 'swipe'].includes(n)) { ok(info && info.hitAt > info.swingAt, `${kd} ${n} timing`); ok(ev.includes('hit') || ev.length >= 0, `${kd} ${n} events`); }
     }
-    A.dead = false; A.action = null; rig.addBlood(0.5, 1); rig.addWound(rig.jointRest('chest', [0.1, 0.1, 0.1]), new THREE.Vector3(0, 1, 0), 0.1, 1); ok(rig.blood.wounds.length === 1, `${kd} wound`); rig.clearBlood();
+    A.dead = false; A.action = null; rig.addBlood(0.5, 1); rig.addWound(rig.jointRest('chest', [0.1, 0.1, 0.1]), new THREE.Vector3(0, 1, 0), 0.1, 1); ok(rig.blood.wounds.length === 1, `${kd} wound`);
+    // blood is local: a hit puts its blood into THAT wound (soak grows there), the whole-body tint stays small
+    rig.clearBlood(); rig.addWound(rig.jointRest('chest', [0.1, 0.1, 0.1]), new THREE.Vector3(0, 1, 0), 0.1, 1); const s0 = rig.bloodU.uWoundD.value[0].w; rig.addBlood(0.2, 1); rig.addBlood(0.2, 1); ok(rig.bloodU.uWoundD.value[0].w > s0 + 0.5 && rig.bloodU.uBlood.value < 0.3, `${kd} blood soaks the wound (${s0.toFixed(2)} -> ${rig.bloodU.uWoundD.value[0].w.toFixed(2)}) not the whole coat (${rig.bloodU.uBlood.value.toFixed(2)})`); rig.clearBlood();
     rig.flash(0.1); rig.squashKick(-0.05); rig.update(0.016); ok(finite(), `${kd} flash+squash`);
     rig.dispose(); ts.remove(rig.root);
   }

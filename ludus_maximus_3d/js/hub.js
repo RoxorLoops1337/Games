@@ -222,6 +222,11 @@ export function createHub({ renderer, camera, audio, tier = 'high', post = null 
   // ---- merged world meshes (one per shared building material)
   const layers = {};
   for (const m of MATS) { const mesh = new THREE.Mesh(new THREE.BufferGeometry(), lib[m]); mesh.frustumCulled = false; mesh.castShadow = m !== 'glow' && m !== 'cloth'; mesh.receiveShadow = m !== 'glow'; mesh.name = 'hub_' + m; group.add(mesh); layers[m] = mesh; }
+  { // MOVE: shadows follow the per-plot offsets (lift, sink, rise): the depth pass applies the same uOff as the colour pass
+    const depthFor = () => patchMaterial(new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking }), { key: 'hub_depth_off', uniforms: { uOff: buildingUniforms.uOff },
+      vPars: `attribute float aPlot; uniform vec3 uOff[${MAXPLOT}];`, vBody: 'transformed += uOff[int(aPlot + 0.5)];' });
+    for (const m of ['masonry', 'roof', 'wood', 'metal']) layers[m].customDepthMaterial = depthFor();
+  }
   trimCasters();
   const sandTex = makeSandTexture(512, 6); sandTex.map.repeat.set(1, 1); sandTex.map.needsUpdate = true;
   const sandMat = new THREE.MeshStandardMaterial({ map: sandTex.map, bumpMap: sandTex.bump, bumpScale: 0.8, vertexColors: true, roughness: 1 });
@@ -655,7 +660,7 @@ export function createHub({ renderer, camera, audio, tier = 'high', post = null 
     const a = KEYMAP[(e.key || '').toLowerCase()]; if (!a) return; keysHeld.delete(a);
     if (!keysHeld.size) say(`Camera: zoom ${Math.round(((DIST[1] - orb.dist) / (DIST[1] - DIST[0])) * 100)} percent, turned ${Math.round((((orb.az - (Math.PI + 0.4)) * 180 / Math.PI) % 360 + 360) % 360)} degrees from the default view}.`);
   }
-  const onFocus = () => { if (orb.enabled) showHint(true); }, onBlurKb = () => { keysHeld.clear(); showHint(false); };
+  const onFocus = () => { if (orb.enabled && !rr.on) showHint(true); }, onBlurKb = () => { keysHeld.clear(); showHint(false); };
   function stepKeys(dt) {
     if (!keysHeld.size) return; touchedNow(); orb.follow = null;
     const f = (keysHeld.has('f') ? 1 : 0) - (keysHeld.has('b') ? 1 : 0), r = (keysHeld.has('r') ? 1 : 0) - (keysHeld.has('l') ? 1 : 0), sp = orb.dist * 0.7 * dt;
@@ -785,7 +790,7 @@ export function createHub({ renderer, camera, audio, tier = 'high', post = null 
     card.el.addEventListener('pointerdown', (ev) => ev.stopPropagation());
     return card;
   }
-  const plotLabel = (i) => { const p = S && S.plots[i], D = Dg(); return p ? { n: (D.BUILD[p.b] && D.BUILD[p.b].n) || p.b, s: 'Level ' + p.l } : null; };
+  const plotLabel = (i) => { const p = S && S.plots[i], D = Dg(); return p ? { n: (D.BUILD[p.b] && D.BUILD[p.b].n) || p.b, s: 'Level ' + p.l + (LMg().moving && LMg().moving(S, i) ? ', under construction' : '') } : null; };
   function showCard(i, interactive) {
     const lab = plotLabel(i); if (!lab) return hideCard(); ensureCard();
     card.i = i; card.open = !!interactive; card.shown = true; card.t.textContent = lab.n; card.s.textContent = interactive ? lab.s + ' \u00b7 tap again to open' : lab.s;
@@ -876,7 +881,7 @@ export function createHub({ renderer, camera, audio, tier = 'high', post = null 
     if (!audio || !audio.ambient || !S || !entered) return; audT -= dt; if (audT > 0) return; audT = 0.25;
     const zoom = clamp(1.3 - orb.dist / 75, 0, 1), focus = [], ref = orb.target, rows = S.rows || 2;
     for (let i = 0; i < 16; i++) {
-      const pl = S.plots[i]; if (!pl || plotRC(i)[0] >= rows || !SPOT[pl.b]) continue; const c = plotCenter(i), d = Math.hypot(c.x - ref.x, c.z - ref.z), w = zoom / (1 + Math.pow(d / (7 + orb.dist * 0.1), 2));
+      const pl = S.plots[i]; if (!pl || plotRC(i)[0] >= rows || !SPOT[pl.b] || (LMg().moving && LMg().moving(S, i))) continue; const c = plotCenter(i), d = Math.hypot(c.x - ref.x, c.z - ref.z), w = zoom / (1 + Math.pow(d / (7 + orb.dist * 0.1), 2));
       if (w > 0.05) focus.push({ kind: SPOT[pl.b], w, pan: panOf(c) });
     }
     let spar = 0, drill = 0; for (const a of actors.values()) { if (a.kind === 'duel') spar++; else if (a.kind === 'drill') drill++; }
@@ -896,7 +901,7 @@ export function createHub({ renderer, camera, audio, tier = 'high', post = null 
     for (let i = 0; i < 16; i++) { const o = offs[i], u = U[i + 1]; if (o.snap) u.set(o.x, o.y, o.z); else { u.x += (o.x - u.x) * k; u.y += (o.y - u.y) * k; u.z += (o.z - u.z) * k; if (Math.abs(u.x) + Math.abs(u.y) + Math.abs(u.z) < 0.002 && !o.x && !o.y && !o.z) u.set(0, 0, 0); } }
   }
   // ---- crew (one InstancedMesh, matrices written each frame)
-  const crewMesh = makeWorkerMesh(40); crewMesh.visible = false; group.add(crewMesh);
+  const crewMesh = makeWorkerMesh(40); crewMesh.visible = false; crewMesh.castShadow = tier !== 'low'; group.add(crewMesh);   // low tier: no shadow pass draw for the crew
   let siteCrew = [], cineCrew = [];
   const _cm = new THREE.Matrix4(), _cq = new THREE.Quaternion(), _cp = new V3(), _cs = new V3(1, 1, 1), _cy = new V3(0, 1, 0);
   function layoutSiteCrew() {
@@ -913,7 +918,7 @@ export function createHub({ renderer, camera, audio, tier = 'high', post = null 
   const puffGeo = new THREE.BufferGeometry(); puffGeo.setAttribute('position', new THREE.BufferAttribute(pPos, 3)); puffGeo.setAttribute('aA', new THREE.BufferAttribute(pA, 1)); puffGeo.setAttribute('aS', new THREE.BufferAttribute(pS, 1));
   const puffU = { uPR: { value: 1 }, uColor: { value: new THREE.Color(0xcdb58c) } };
   const puffs = new THREE.Points(puffGeo, new THREE.ShaderMaterial({ uniforms: puffU, transparent: true, depthWrite: false, fog: false,
-    vertexShader: 'attribute float aA; attribute float aS; uniform float uPR; varying float vA; void main(){ vec4 mv = modelViewMatrix * vec4(position, 1.0); gl_PointSize = clamp(aS * 90.0 * uPR / -mv.z, 1.0, 120.0 * uPR); vA = aA; gl_Position = projectionMatrix * mv; }',
+    vertexShader: 'attribute float aA; attribute float aS; uniform float uPR; varying float vA; void main(){ vec4 mv = modelViewMatrix * vec4(position, 1.0); gl_PointSize = clamp(aS * 640.0 * uPR / -mv.z, 1.0, 240.0 * uPR); vA = aA; gl_Position = projectionMatrix * mv; }',
     fragmentShader: 'varying float vA; uniform vec3 uColor; void main(){ vec2 c = gl_PointCoord - 0.5; float r = length(c) * 2.0; float a = pow(max(1.0 - r, 0.0), 1.5) * vA; gl_FragColor = vec4(uColor, a);\n#include <tonemapping_fragment>\n#include <colorspace_fragment>\n}' }));
   puffs.frustumCulled = false; puffs.renderOrder = 10; puffs.visible = false; puffs.name = 'move_dust'; group.add(puffs);
   let puffHead = 0, puffLive = 0;
@@ -937,14 +942,14 @@ export function createHub({ renderer, camera, audio, tier = 'high', post = null 
   }
   // ---- crane
   let crane = null;
-  const ensureCrane = () => { if (!crane) { crane = makeCrane(); crane.group.visible = false; group.add(crane.group); } return crane; };
+  const ensureCrane = () => { if (!crane) { crane = makeCrane(); crane.setShadows(tier !== 'low'); crane.group.visible = false; group.add(crane.group); } return crane; };
   // ---- DOM tags: a hammer + progress pill above every site (always), and price / reason pills in rearrange mode
   let tagBox = null; const siteTags = [], rrTags = [];
   function ensureTags() {
     if (tagBox) return tagBox;
     if (!document.getElementById('lx-rr-css')) {
       const st = document.createElement('style'); st.id = 'lx-rr-css';
-      st.textContent = '.lx-rr-tags{position:fixed;inset:0;z-index:28;pointer-events:none;overflow:hidden}.lx-rr-tag{position:absolute;left:0;top:0;display:flex;align-items:center;gap:6px;padding:4px 9px;border-radius:999px;font:800 12px/1 system-ui,sans-serif;letter-spacing:.03em;white-space:nowrap;color:#f6ecd0;background:rgba(29,24,48,.86);border:2px solid #b8803a;box-shadow:0 3px 10px rgba(0,0,0,.45);will-change:transform;opacity:0}.lx-rr-tag.on{opacity:1}.lx-rr-tag b{font-weight:800}.lx-rr-tag small{font-size:11px;opacity:.85;font-weight:700}.lx-rr-tag.ok{border-color:#4fbf6f;color:#d9ffe0;background:rgba(18,52,32,.88)}.lx-rr-tag.swap{border-color:#43b9c4;color:#dcfbff;background:rgba(14,48,54,.88)}.lx-rr-tag.src{border-color:#f2c14e;color:#ffe7a8}.lx-rr-tag.bad{border-color:#6d6a78;color:#b9b6c4;background:rgba(40,38,52,.78)}.lx-rr-tag.cur{outline:3px solid #fff;outline-offset:2px}.lx-rr-tag.site{border-color:#e0a23a}.lx-rr-bar{display:block;width:44px;height:6px;border-radius:3px;background:rgba(255,255,255,.18);overflow:hidden}.lx-rr-bar i{display:block;height:100%;background:linear-gradient(90deg,#f2c14e,#e0782a)}';
+      st.textContent = '.lx-rr-tags,.lx-rr-tags *{pointer-events:none !important}.lx-rr-tags{position:fixed;inset:0;z-index:28;overflow:hidden}.lx-rr-tag{position:absolute;left:0;top:0;display:flex;align-items:center;gap:6px;padding:4px 9px;border-radius:999px;font:800 12px/1 system-ui,sans-serif;letter-spacing:.03em;white-space:nowrap;color:#f6ecd0;background:rgba(29,24,48,.86);border:2px solid #b8803a;box-shadow:0 3px 10px rgba(0,0,0,.45);will-change:transform;opacity:0}.lx-rr-tag.on{opacity:1}.lx-rr-tag b{font-weight:800}.lx-rr-tag small{font-size:11px;opacity:.85;font-weight:700}.lx-rr-tag.ok{border-color:#4fbf6f;color:#d9ffe0;background:rgba(18,52,32,.88)}.lx-rr-tag.swap{border-color:#43b9c4;color:#dcfbff;background:rgba(14,48,54,.88)}.lx-rr-tag.src{border-color:#f2c14e;color:#ffe7a8}.lx-rr-tag.bad{border-color:#6d6a78;color:#b9b6c4;background:rgba(40,38,52,.78)}.lx-rr-tag.cur{outline:3px solid #fff;outline-offset:2px}.lx-rr-tag.site{border-color:#e0a23a}.lx-rr-bar{display:block;width:44px;height:6px;border-radius:3px;background:rgba(255,255,255,.18);overflow:hidden}.lx-rr-bar i{display:block;height:100%;background:linear-gradient(90deg,#f2c14e,#e0782a)}';
       document.head.appendChild(st);
     }
     tagBox = document.createElement('div'); tagBox.className = 'lx-rr-tags'; tagBox.setAttribute('aria-hidden', 'true'); (document.getElementById('ui') || document.body).appendChild(tagBox); return tagBox;
@@ -1017,12 +1022,21 @@ export function createHub({ renderer, camera, audio, tier = 'high', post = null 
     place(g0, spec.to, spec.a.b, spec.a.l); if (spec.bb) place(g1, spec.from, spec.bb.b, spec.bb.l); else g1.visible = false;
     moveLine.geometry.dispose(); moveLine.geometry = lineGeo(spec.from, spec.to); moveLine.visible = true; lineU.uColor.value.setRGB(...(spec.bb ? [0.3, 1.45, 1.6] : [0.45, 1.6, 0.6]));
   }
+  const _fc = new THREE.PerspectiveCamera(); const _fp = new V3();
+  /** frame two plots: the smallest distance at which both footprints (and the buildings on them) fit inside the band the HUD leaves free. opt.bottom = lowest allowed ndc y. */
   function frameTwo(a, b, opt = {}) {
-    const A = plotCenter(a), B = b == null || b < 0 ? A : plotCenter(b), mid = new V3((A.x + B.x) / 2, (A.y + B.y) / 2 + 2.0, (A.z + B.z) / 2);
-    const ext = Math.max(Math.abs(A.x - B.x), Math.abs(A.z - B.z) * 1.25) + 15, port = orb.aspect < 0.95, vf = camera.fov * D2R;
-    const dist = clamp(Math.max(ext / (2 * Math.tan(vf / 2) * Math.min(orb.aspect, 1.7)) * 1.05, port ? 40 : 32), DIST[0], DIST[1]);
+    const A = plotCenter(a), B = b == null || b < 0 ? A : plotCenter(b), mid = new V3((A.x + B.x) / 2, (A.y + B.y) / 2 + 1.6, (A.z + B.z) / 2);
     orb.follow = null; let az = orb.az; const d = angDiff(Math.PI, az); if (Math.abs(d) > 0.7) az = Math.PI + Math.sign(d) * 0.7;
-    animateTo({ az, pitch: opt.pitch ?? clamp(orb.pitch, 0.55, 0.95), dist, target: mid }, opt.dur ?? 0.9);
+    const pitch = opt.pitch ?? clamp(Math.max(orb.pitch, 0.7), 0.55, 1.0), top = opt.top ?? 0.6, bot = opt.bottom ?? -0.42, side = 0.84;
+    _fc.fov = camera.fov; _fc.aspect = orb.aspect; _fc.near = camera.near; _fc.far = camera.far; _fc.updateProjectionMatrix();
+    const pts = []; for (const C of b == null || b < 0 ? [A] : [A, B]) for (const dx of [-4.8, 4.8]) for (const dz of [-3.4, 3.4]) for (const y of [0, 5.5]) pts.push([C.x + dx, C.y + y, C.z + dz]);
+    let dist = orb.aspect < 0.95 ? 36 : 28; const cp = Math.cos(pitch);
+    for (let it = 0; it < 14; it++) {
+      _fc.position.set(mid.x + Math.sin(az) * cp * dist, mid.y + Math.sin(pitch) * dist, mid.z + Math.cos(az) * cp * dist); _fc.lookAt(mid); _fc.updateMatrixWorld(true); _fc.matrixWorldInverse.copy(_fc.matrixWorld).invert();
+      let ok = true; for (const q of pts) { _fp.set(q[0], q[1], q[2]).project(_fc); if (Math.abs(_fp.x) > side || _fp.y > top || _fp.y < bot) { ok = false; break; } }
+      if (ok) break; dist *= 1.1;
+    }
+    animateTo({ az, pitch, dist: clamp(dist, DIST[0], DIST[1]), target: mid }, opt.dur ?? 0.9);
   }
   function rrBegin(o = {}) { rr.on = true; rr.onTap = o.onTap || null; rr.onHover = o.onHover || null; rr.items = []; rr.cursor = -1; rr.lift = -1; preview = -1; hideCard(); setSelection(null); ensureTags(); rrDraw(); }
   function rrEnd() {
@@ -1046,7 +1060,7 @@ export function createHub({ renderer, camera, audio, tier = 'high', post = null 
         if (!pl.had) return; const c = plotCenter(pl.i), fp = pl.fp;
         for (let k = 0; k < 4; k++) { const a = (k / 4) * TAU + 0.4 + pi, rx = fp.w / 2 + 1.0, rz = fp.d / 2 + 1.0; const wx = Math.cos(a) * rx, wz = Math.sin(a) * rz; cineCrew.push({ x: c.x + wx, y: c.y, z: c.z + wz, yaw: Math.atan2(-wx, -wz), ph: k * 2 + pi * 5, cine: pl.i }); }
       });
-      frameTwo(info.from, info.to, { dur: 1.1 });
+      frameTwo(info.from, info.to, { dur: 1.1, bottom: -0.72 });
       playUi('uiOpen', { gain: 0.5 });
     }
     emit('moveStart', info);
@@ -1112,6 +1126,7 @@ export function createHub({ renderer, camera, audio, tier = 'high', post = null 
   function moveFrame(dt, t) {
     if (!S) return;
     lineU.uTime.value = t; rrMat.uniforms.uTime.value = t;
+    { const calm = rr.on || !!cine; linkMesh.visible = !calm && links.length > 0; padRings.visible = !calm; }
     if (cine) cineStep(dt);
     riseStep(dt);
     if (rr.lift >= 0 && rr.on && !cine) setOff(rr.lift, 0, 1.9 + Math.sin(t * 2.4) * 0.16, 0);
@@ -1179,7 +1194,7 @@ export function createHub({ renderer, camera, audio, tier = 'high', post = null 
       rainAmt += (rainTarget - rainAmt) * Math.min(1, dt * 1.2); rain.visible = rainAmt > 0.02; rainU.uAmt.value = rainAmt; rainU.uTime.value = hubT; rainU.uCenter.value.copy(orb.target);
       if (post && post.uniforms && post.uniforms.uHeat) post.uniforms.uHeat.value += ((heatTarget * 0.6) - post.uniforms.uHeat.value) * Math.min(1, dt * 1.5);
       // god rays, wet stone and lightning (reduced motion: no flashes)
-      rayAmt += (rayTarget - rayAmt) * Math.min(1, dt * 1.5); rayU.uInt.value = rayAmt * 0.75; rayU.uTime.value = hubT; rays.visible = rayAmt > 0.02;
+      rayAmt += (rayTarget - rayAmt) * Math.min(1, dt * 1.5); rayU.uInt.value = rayAmt * 0.75; rayU.uTime.value = hubT; rays.visible = rayAmt > 0.02 && !(rr.on || cine);   // MOVE: rearranging / the cinematic frees 3 draw calls (rays, links, pad rings) for its own meshes
       if (Math.abs(wetAmt - rainAmt) > 0.004) { wetAmt += (rainAmt - wetAmt) * Math.min(1, dt * 0.8); wet(wetAmt); }
       if (weatherNow === 'rain' && !prefersReduced()) { nextBolt -= dt; if (nextBolt <= 0) { lightning = 1; nextBolt = 7 + Math.random() * 14; if (audio && audio.ambient && audio.ambient.thunder) audio.ambient.thunder(0.4 + Math.random() * 1.8); } }
       if (lightning > 0 || bolted) { lightning = Math.max(0, lightning - dt * 2.8); const fl = lightning * lightning * (0.6 + 0.4 * Math.sin(hubT * 60)); rig.hemi.intensity = hemiBase + 2.6 * fl; rig.sun.intensity = (tod.cur ? tod.cur.sunInt : rig.sun.intensity) + 3 * fl; bolted = lightning > 0; }
@@ -1197,7 +1212,7 @@ export function createHub({ renderer, camera, audio, tier = 'high', post = null 
     plotCenter, groundAt,
     setHour(h) { hourOverride = h; if (S) refreshSky(S, false); },
     setWeather(w) { weatherOverride = w; if (S) refreshSky(S, false); },
-    setTier(name) { tier = name; trimCasters(); rig.setShadowSize(T().shadow); env.setDensity(Math.max(0.5, T().crowd)); maxGlads = tier === 'low' ? 5 : tier === 'medium' ? 8 : 12; for (const a of actors.values()) if (a.rig.skin) a.rig.skin.castShadow = tier !== 'low'; if (S) syncGlads(S); },
+    setTier(name) { tier = name; trimCasters(); crewMesh.castShadow = tier !== 'low'; if (crane) crane.setShadows(tier !== 'low'); rig.setShadowSize(T().shadow); env.setDensity(Math.max(0.5, T().crowd)); maxGlads = tier === 'low' ? 5 : tier === 'medium' ? 8 : 12; for (const a of actors.values()) if (a.rig.skin) a.rig.skin.castShadow = tier !== 'low'; if (S) syncGlads(S); },
     // MOVE (rearrange mode, see js/rearrange.js)
     rrBegin, rrEnd, rrItems, rrLift, rrGhost, frameTwo, playMove, skipMove, say,
     get rearranging() { return rr.on; }, get moving() { return !!cine; }, get sites() { return sites.map((x) => x.i); },

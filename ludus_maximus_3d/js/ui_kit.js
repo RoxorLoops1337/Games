@@ -241,7 +241,7 @@ export function modal({ title, body, actions = [], onClose, host = document.body
   modalStack.push(api); document.body.classList.add('lx-modal-open'); try { document.dispatchEvent(new CustomEvent('lx-modal-open')); } catch (e) { /* old engine */ }
   if (!kbOn) { kbOn = true; document.addEventListener('keydown', onModalKey, true); }
   scrim.addEventListener('pointerdown', (e) => { if (e.target === scrim && closable && !dock) api.close(); });
-  requestAnimationFrame(() => { scrim.classList.add('lx-in'); if (!scrim.contains(document.activeElement)) (sheet.querySelector('.lx-btn-gold') || x).focus?.({ preventScroll: true }); });
+  requestAnimationFrame(() => { scrim.classList.add('lx-in'); if (!scrim.contains(document.activeElement)) (sheet.querySelector('.lx-btn-gold') || sheet).focus?.({ preventScroll: true }); });
   return api;
 }
 

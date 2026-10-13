@@ -7,7 +7,7 @@ export const D = () => globalThis.LM_D;
 export const L = () => globalThis.LM;
 
 const CSS = `
-.am-root{display:flex;flex-direction:column;flex:1 1 auto;min-height:0;min-width:0;gap:10px;color:#3a2a18;font-family:var(--lx-sans);overflow-wrap:anywhere}
+.am-root{display:flex;flex-direction:column;flex:1 1 auto;min-height:0;min-width:0;gap:10px;color:#3a2a18;font-family:var(--lx-sans);overflow-wrap:break-word}
 .am-root *{min-width:0}
 .am-top{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .am-top .am-sp{flex:1}
@@ -143,7 +143,7 @@ export function ensureCss() {
 /** make the screen sheet stable: fixed height, wider on desktop, body fills the sheet */
 export function shapeSheet(m, root) {
   const sheet = m.el.querySelector('.lx-sheet'); if (!sheet) return;
-  sheet.style.height = 'min(86dvh,86vh)'; sheet.style.maxWidth = 'min(100%,720px)';
+  sheet.style.height = 'min(calc(100vh - 28px), 780px)'; sheet.style.height = 'min(calc(100dvh - 28px), 780px)'; /* the full viewport minus a margin: the old 86% showed two rows at 650px */ sheet.style.maxWidth = 'min(100%,720px)';
   const sc = root.parentNode; if (sc) { sc.style.cssText += ';flex:1 1 auto;min-height:0;display:flex;flex-direction:column;overflow:hidden;padding:0'; }
 }
 

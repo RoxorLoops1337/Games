@@ -4,8 +4,8 @@ import { h, U, D, L, portrait, injectCss, addCss, chip, wide } from './ui_common
 const CSS = `
 .dr{display:grid;gap:12px;justify-items:stretch}
 .dr-head{display:flex;gap:12px;align-items:center;min-width:0}
-.dr-help{margin:0;font:600 14px/20px var(--lx-sans);color:#4a3550;overflow-wrap:anywhere}
-.dr-res{min-height:64px;display:grid;place-items:center;text-align:center;font:900 26px/30px var(--lx-serif);letter-spacing:.06em;text-transform:uppercase;overflow-wrap:anywhere}
+.dr-help{margin:0;font:600 14px/20px var(--lx-sans);color:#4a3550;overflow-wrap:break-word}
+.dr-res{min-height:64px;display:grid;place-items:center;text-align:center;font:900 26px/30px var(--lx-serif);letter-spacing:.06em;text-transform:uppercase;overflow-wrap:break-word}
 .dr-res small{display:block;font:700 13px var(--lx-sans);letter-spacing:.02em;text-transform:none;color:#5a4560;margin-top:2px}
 .dr-res.pop{animation:dr-pop .5s var(--lx-ease) both}
 .dr-res.good{color:#2f7a3f;text-shadow:0 0 14px rgba(95,174,110,.55)} .dr-res.perfect{color:#b07a10;text-shadow:0 0 18px rgba(242,193,78,.9)} .dr-res.bad{color:#9d2a20}
