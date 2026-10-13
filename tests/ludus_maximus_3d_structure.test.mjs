@@ -464,5 +464,14 @@ for (const fn of ['newGame', 'makeGlad', 'mkUnits', 'createFight', 'step', 'useU
   ok(/lx-fate-opt/.test(qa) && /lx-fate-opt/.test(bot) && /fateAudit/.test(qa), 'fate: the bot and the monkey answer the decision panel (and audit it)');
 }
 
+{ // audio loudness calibration: every music mode has a level entry and a bounded boost, bass management exists
+  const au = rd('../js/audio.js'), db = au.slice(au.indexOf('const MODE_DB'), au.indexOf('const MODE_DB') + 400);
+  const modes = ['ludus', 'prep', 'arena', 'beast', 'boss', 'victory', 'defeat', 'title', 'results', 'season', 'elegy'];
+  ok(modes.every((m) => new RegExp('\\b' + m + ': ').test(db)), 'audio: MODE_DB has a calibrated level for every music mode');
+  const nums = (db.slice(0, db.indexOf('};')).match(/-?\d+(\.\d+)?/g) || []).map(Number);
+  ok(nums.length >= 15 && nums.every((n) => n > -3 && n < 14), 'audio: per-mode level boosts stay within -3..14 dB');
+  ok(/MODE_SHAPE/.test(au) && /createWaveShaper\(\)/.test(au) && /highshelf/.test(au) && !new RegExp('\u2014').test(au), 'audio: harmonic exciter and shelf for small speakers, no em dash');
+}
+
 console.log(`ludus_maximus_3d structure: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
