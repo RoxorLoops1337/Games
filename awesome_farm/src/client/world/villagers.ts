@@ -4,13 +4,14 @@
 import * as Phaser from 'phaser';
 import { TILE } from '../../shared/config';
 import { BUILDINGS } from '../../shared/data/buildings';
+import { hearts } from '../../shared/data/folk';
 import { BODY_TONES, EYES, MOUTHS, SPROUTS, SCARF_COLORS, type Look } from '../../shared/data/look';
 import { PAL } from '../../shared/palette';
 import type { BuildE } from '../../shared/sim/types';
 import { ensureFarmer } from '../art/storybook-chars';
 import { overlay3d } from './view3d-bridge';
 
-interface Folk { sprite: Phaser.GameObjects.Sprite; shadow: Phaser.GameObjects.Image; plate: Phaser.GameObjects.Text; name: string; x: number; y: number; tx: number; ty: number; wait: number; t: number }
+interface Folk { sprite: Phaser.GameObjects.Sprite; shadow: Phaser.GameObjects.Image; plate: Phaser.GameObjects.Text; name: string; hearts: Phaser.GameObjects.Image[]; ask: Phaser.GameObjects.Image; x: number; y: number; tx: number; ty: number; wait: number; t: number }
 
 const ROAM = TILE * 2.2;
 const SPEED = 14;
@@ -42,6 +43,7 @@ export class Villagers {
                 this.folk.set(b.id, f);
             }
             this.step(f, dt, hx, hy);
+            this.hearts(f, hearts(b.res.v), !!b.res.q);
         }
         for (const id of [...this.folk.keys()]) if (!seen.has(id)) this.drop(id);
     }
@@ -53,7 +55,8 @@ export class Villagers {
         const sprite = this.scene.add.sprite(hx, hy, ensureFarmer(this.scene, look, color), 0).setOrigin(0.5, 1);
         const shadow = this.scene.add.image(hx, hy, 'shadow', 0).setTint(PAL.ink).setAlpha(0.28).setDepth(-5).setScale(0.9, 1);
         const plate = overlay3d(this.scene.add.text(0, 0, name, { fontFamily: 'Pixelify Sans', fontSize: '11px', color: '#fff6e0', stroke: '#2a1d2c', strokeThickness: 3 }).setOrigin(0.5, 1).setAlpha(0.85));
-        return { sprite, shadow, plate, name, x: hx, y: hy, tx: hx, ty: hy, wait: 1 + Math.random() * 3, t: Math.random() * 10 };
+        const ask = this.scene.add.image(0, 0, 'k_flag', 0).setVisible(false);
+        return { sprite, shadow, plate, name, hearts: [], ask, x: hx, y: hy, tx: hx, ty: hy, wait: 1 + Math.random() * 3, t: Math.random() * 10 };
     }
 
     private step (f: Folk, dt: number, hx: number, hy: number) {
@@ -75,10 +78,18 @@ export class Villagers {
         f.plate.setPosition(f.x, f.y - 17 - hop).setDepth(f.y + 1);
     }
 
+    /** A row of little hearts over the name plate (one per heart earned), and a flag while they have a request open. */
+    private hearts (f: Folk, n: number, asking: boolean) {
+        while (f.hearts.length < n) f.hearts.push(this.scene.add.image(0, 0, 'k_heart', 0).setScale(0.7));
+        while (f.hearts.length > n) f.hearts.pop()!.destroy();
+        f.hearts.forEach((h, i) => h.setPosition(f.x + (i - (n - 1) / 2) * 6, f.y - 31).setDepth(f.y + 1));
+        f.ask.setVisible(asking).setPosition(f.x + 14, f.y - 22 + Math.sin(f.t * 4)).setDepth(f.y + 1);
+    }
+
     private drop (id: number) {
         const f = this.folk.get(id);
         if (!f) return;
-        f.sprite.destroy(); f.shadow.destroy(); f.plate.destroy();
+        f.sprite.destroy(); f.shadow.destroy(); f.plate.destroy(); f.ask.destroy(); for (const h of f.hearts) h.destroy();
         this.folk.delete(id);
     }
 }
