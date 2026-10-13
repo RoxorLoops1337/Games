@@ -48,17 +48,17 @@ const SKIN_SRC = ['#f6d3b0', '#e8b583', '#c98a52', '#9a6234', '#6b4224', '#f0c9a
 export function gradeSkin(hex, seed = 0) {
   const h = String(hex || '').toLowerCase(), i = SKIN_SRC.indexOf(h);
   if (i >= 0) return SKIN_SET[i][(seed >>> 3) % 3];
-  const c = new THREE.Color(h || '#c08a63'); const hsl = {}; c.getHSL(hsl); c.setHSL(hsl.h, Math.min(hsl.s, 0.5), Math.min(hsl.l, 0.62)); return '#' + c.getHexString(); // unknown custom skin: just cap the brightness
+  const SR = THREE.SRGBColorSpace, c = new THREE.Color(h || '#c08a63'), hsl = {}; c.getHSL(hsl, SR); c.setHSL(hsl.h, Math.min(hsl.s, 0.5), Math.min(hsl.l, 0.62), SR); return '#' + c.getHexString(); // unknown custom skin: just cap the brightness
 }
 // TEAM TINTS. Sand is hue ~20-50 deg, so tunics in that band melt into the floor, and two teams that both drew Crimson are the same blob. The arena passes opts.team
 // ('A' | 'B'): team A tunics live in the teal-blue-indigo band, team B in the rose-crimson band. A colour already inside its band is kept (the ludus colour survives);
 // anything else keeps its lightness and saturation but is rotated into the band. Plume = the team accent on top of that, so the head always reads as a side.
-const TEAM = { A: { lo: 168, hi: 262, mid: 214, acc: '#2f86e8' }, B: { lo: 338, hi: 380, mid: 356, acc: '#d02a3e' } };
+const TEAM = { A: { lo: 150, hi: 262, mid: 214, acc: '#2f86e8' }, B: { lo: 335, hi: 372, mid: 356, acc: '#d02a3e' } };
 export function teamTint(hex, team, seed = 0) {
-  const T = TEAM[team]; if (!T) return hex; const c = new THREE.Color(hex), hsl = {}; c.getHSL(hsl); let hd = hsl.h * 360; if (team === 'B' && hd < 20) hd += 360;
+  const T = TEAM[team]; if (!T) return hex; const SR = THREE.SRGBColorSpace, c = new THREE.Color(hex), hsl = {}; c.getHSL(hsl, SR); let hd = hsl.h * 360; if (team === 'B' && hd < 20) hd += 360;
   let s = hsl.s, l = hsl.l; if (s < 0.2) { /* onyx / ivory style neutrals keep their value but pick up a hint of team colour */ s = 0.34; }
-  if (hd < T.lo || hd > T.hi) hd = T.mid + (((seed >>> 5) % 21) - 10);
-  c.setHSL(((hd % 360) + 360) % 360 / 360, Math.max(s, 0.5), Math.min(0.5, Math.max(0.3, l))); return '#' + c.getHexString();
+  if (hd < T.lo || hd > T.hi) hd = T.mid + (((seed >>> 5) % 13) - 6);
+  c.setHSL(((hd % 360) + 360) % 360 / 360, Math.max(s, 0.5), Math.min(0.5, Math.max(0.3, l)), SR); return '#' + c.getHexString();
 }
 export const TEAM_ACCENT = { A: TEAM.A.acc, B: TEAM.B.acc };
 
