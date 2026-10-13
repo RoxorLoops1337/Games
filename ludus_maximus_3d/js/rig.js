@@ -1728,7 +1728,7 @@ export function addCloak(rig, o = {}) {
   const tmp = new V3();
   const g = new ClothGrid({
     anchor: rig.joints.chest, rows, cols, rowLen: rl, stiff: 0.12, stiffFall: 0.85, damping: 0.95, gravity: -9, side: new V3(1, 0, 0),
-    shape: (r) => new V3(0, 0.27 - r * rl * 0.98, -0.16 - r * 0.02), widthFn: (r) => lerp(w0, w1, r / (rows - 1)), material: o.material || rig.mats.cloth, name: 'cloak', tipShade: 0.65, fold: true,
+    shape: (r) => new V3(0, 0.27 - r * rl * 0.98, -0.16 - r * 0.02), widthFn: (r) => lerp(w0, w1, r / (rows - 1)), material: o.material || rig.mats.clothF || rig.mats.cloth, name: 'cloak', tipShade: 0.65, fold: true,
     collide: (p) => { // push out of the body ellipse (body-local), keeps the cloak behind the torso/legs
       tmp.copy(p); rig.body.worldToLocal(tmp); const y = tmp.y / rig.build.height;
       if (y < 0.1) { tmp.y = 0.1 * rig.build.height; }
@@ -1744,7 +1744,7 @@ export function addPlume(rig, o = {}) {
   const g = new ClothGrid({
     anchor: o.anchor || rig.sockets.helm, rows, cols, rowLen: rl, stiff: 0.2, stiffFall: 0.75, damping: 0.93, gravity: -4.5, side: new V3(1, 0, 0),
     shape: (r) => new V3(0, 0.05 + 0.04 * Math.sin(Math.min(r, 3) * 0.55) * tall - 0.0016 * r * r * tall + (o.y || 0), (o.z ?? -0.01) - 0.034 * r * Math.min(1, tall) - 0.004 * r * r),
-    widthFn: (r) => (o.w || 0.075) * (1 - 0.45 * (r / (rows - 1))), material: o.material || rig.mats.plume, name: 'plume', tipShade: 0.62, fold: true,
+    widthFn: (r) => (o.w || 0.075) * (1 - 0.45 * (r / (rows - 1))), material: o.material || rig.mats.plumeF || rig.mats.plume, name: 'plume', tipShade: 0.62, fold: true,
   });
   return rig.addSecondary(g);
 }
