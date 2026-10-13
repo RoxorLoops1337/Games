@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#7fc8ee">
+<title>Hearthvale</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ctext y='26' font-size='26'%3E%F0%9F%8F%A1%3C/text%3E%3C/svg%3E">
+<script type="importmap">{ "imports": { "three": "./vendor/three.module.min.js" } }</script>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<canvas id="gl"></canvas>
+<div id="popups"></div>
+<div id="hud" hidden>
+  <div id="top">
+    <div id="card"><b id="pname">Villager</b><div class="lvl">Lv <span id="plvl">1</span></div><div class="bar"><i id="xpbar"></i></div></div>
+    <div id="res"></div>
+    <div id="tools"><button data-p="quests" title="Quests">📋</button><button data-p="valley" title="Valley board">📜</button><button data-p="players" title="Villages">👥</button><button data-p="chat" title="Chat">💬</button><button data-p="menu" title="Menu">⚙️</button></div>
+  </div>
+  <div id="track" hidden></div>
+  <div id="conn"></div>
+  <div id="toast"></div>
+  <div id="bottom">
+    <button id="bBuild" class="big">🔨 Build</button>
+    <button id="bHome" class="big alt">🏡</button>
+    <button id="bValley" class="big alt">🌄</button>
+  </div>
+  <div id="place" hidden><span id="placeName"></span><button id="placeOk" class="ok">✔ Place</button><button id="placeNo" class="no">✖</button></div>
+  <div id="sheet" class="panel" hidden></div>
+  <div id="panel" class="panel" hidden></div>
+</div>
+<div id="title">
+  <div class="logo">Hearth<span>vale</span></div>
+  <div class="tag">Build a cozy village. Share a valley with up to 15 friends.</div>
+  <input id="nameIn" maxlength="16" placeholder="Your village name" autocomplete="off">
+  <div class="row"><button id="goSolo" class="big">🌱 Play solo</button><button id="goServer" class="big alt">🌍 Join a server</button></div>
+  <input id="srvIn" placeholder="Server address, e.g. ws://192.168.1.5:7788" autocomplete="off" spellcheck="false">
+  <div id="titleMsg"></div>
+  <div class="fine">Original game inspired by cozy village builders. Solo play saves in your browser.</div>
+</div>
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
