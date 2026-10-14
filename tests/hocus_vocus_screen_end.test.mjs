@@ -848,6 +848,78 @@ await t.test('every interactive element is a real button or has a role; images a
     await goRT('title', null, 3000);
     t.eq(gr._console.error.length, 0, 'leaving mid-animation never throws later');
   });
+  // the bus intro (HV_STORY 3.6): five beats before the `intro` page, auto-advancing on the frame clock, tap for the next beat, Skip or Esc to end it
+  await t.test('bus intro: it mounts on the intro page, auto-advances beat by beat, a tap skips a beat, Esc ends it and the page types on', async () => {
+    const F = gr.UI.screens.story._t, FILM = F.FILM;
+    t.eq(FILM.length, 5, 'five beats'); t.ok(F.filmLength() >= 14 && F.filmLength() <= 20, 'about 17 seconds in all, under 20 (' + F.filmLength() + ')');
+    FILM.forEach((b) => { const c = b.cap(); t.ok(c.length >= 20 && c.length <= 64 && /^[\x20-\x7e]+$/.test(c) && !DASH.test(c) && !/ - |--/.test(c) && !/  /.test(c), b.id + ': one short ASCII caption with no dash (' + c + ')'); });
+    t.ok(/AI slop/.test(FILM.map((b) => b.cap()).join(' ')) && /silent/.test(FILM[2].cap()), 'it says plainly that the world goes silent and the Gloss is AI slop');
+    t.ok(FILM[4].cap().indexOf(gr.DATA.heroes.kuro.name) === 0 && FILM[4].cap().indexOf(gr.DATA.heroes.hanae.name) > 0, 'the last beat names the duo');
+    const root = () => gr._doc.querySelector('.s-story');
+    const cap = () => (gr._doc.querySelector('.st-film-cap') || { textContent: '' }).textContent;
+    const beat = () => { const s = F.state(); return s && s.extra.film && s.extra.film.on ? s.extra.film.beat : -1; };
+    const typed = () => (gr._doc.querySelector('.st-typed .tw-on') || { textContent: '' }).textContent.length;
+    gr._resetCounts();
+    await goRT('story', { id: 'intro', then: { name: 'howto' } }, 100);
+    t.ok(root().className.includes('st-filming') && gr._doc.querySelector('.st-film'), 'the film is up and the page waits under it');
+    t.eq(beat(), 0, 'beat one'); t.eq(cap(), FILM[0].cap(), 'with its caption');
+    t.eq(gr._doc.querySelectorAll('.st-film-dots i').length, 5, 'a dot per beat');
+    await gr._tick(1500);
+    t.eq(typed(), 0, 'the page does not type during the film');
+    await gr._tick(FILM[0].s * 1000 - 1500 + 100);
+    t.eq(beat(), 1, 'it moves on by itself'); t.eq(cap(), FILM[1].cap(), 'and the caption follows');
+    t.ok(gr._doc.querySelector('.st-film-dots i.done') && gr._doc.querySelector('.st-film-dots i.on'), 'the dots show where the film is');
+    await gr._tick(300);
+    gr._click(gr._doc.querySelector('.s-story .en-tap')); await gr._tick(40);
+    t.eq(beat(), 2, 'a tap skips to the next beat');
+    gr._click(gr._doc.querySelector('.s-story .en-tap')); await gr._tick(40);
+    t.eq(beat(), 2, 'a second tap at once does not skip two beats');
+    t.ok(gr._ctx && gr._counts && Object.keys(gr._counts).length > 0, 'the canvas draws the beats');
+    t.eq(gr.ART.scene.lastError || null, null, 'no scene error');
+    gr._key('Escape'); await gr._tick(60);
+    t.ok(!root().className.includes('st-filming') && !gr._doc.querySelector('.st-film'), 'Esc ends the film');
+    t.eq(gr.UI.currentName, 'story', 'but stays on the page');
+    await gr._tick(700 + 1000);
+    t.ok(typed() >= 20, 'the page types on after the film (' + typed() + ')');
+    gr._key('Escape'); await gr._tick(900);
+    t.eq(gr.UI.currentName, 'howto', 'the next Esc turns the page as usual');
+  });
+  await t.test('bus intro: left alone it plays to the end and opens the page; Skip ends it; film:false and other pages never show it', async () => {
+    const F = gr.UI.screens.story._t;
+    const filming = () => !!gr._doc.querySelector('.st-film');
+    await goRT('story', { id: 'intro', then: { name: 'howto' } }, 100);
+    t.ok(filming(), 'the film is up');
+    gr._resetCounts();
+    await gr._tick(F.filmLength() * 1000 - 300);
+    t.deep(gr._issues.slice(0, 5), [], 'every beat paints with valid canvas calls (no bad colour, font or number)');
+    await gr._tick(500);
+    t.ok(!filming() && !gr._doc.querySelector('.s-story').className.includes('st-filming'), 'it ended by itself after ' + F.filmLength() + ' s');
+    t.eq(gr.UI.currentName, 'story', 'on the intro page');
+    await goRT('story', { id: 'intro', then: { name: 'howto' } }, 100);
+    gr._click(gr._doc.querySelector('[data-act=filmskip]')); await gr._tick(60);
+    t.ok(!filming(), 'Skip ends it at once'); t.eq(gr.UI.currentName, 'story', 'and shows the page');
+    await goRT('story', { id: 'intro', film: false, then: { name: 'howto' } }, 100);
+    t.ok(!filming(), 'film:false shows the page straight away');
+    await goRT('story', { id: 'ch1_intro', then: { name: 'howto' } }, 100);
+    t.ok(!filming(), 'an Act page has no film');
+    t.ok(F.wantsFilm('intro', {}) && !F.wantsFilm('intro', { film: false }) && !F.wantsFilm('hero_kuro', {}), 'wantsFilm: only the intro page');
+    await goRT('title', null, 300);
+  });
+  await t.test('bus intro under reduced motion: still pictures that still move on, and Skip works', async () => {
+    const F = gr.UI.screens.story._t;
+    gr.UI.opt.reduceMotion = true;
+    try {
+      await goRT('story', { id: 'intro', then: { name: 'howto' } }, 100);
+      t.ok(gr._doc.querySelector('.st-film'), 'the film still tells the story');
+      await gr._tick(F.FILM[0].s * 1000 + 100);
+      t.eq(F.state().extra.film.beat, 1, 'and moves on beat by beat');
+      gr._click(gr._doc.querySelector('[data-act=filmskip]')); await gr._tick(60);
+      t.ok(!gr._doc.querySelector('.st-film'), 'Skip ends it');
+      t.ok(gr._doc.querySelector('.s-story').className.includes('st-done'), 'and the page is complete at once (reduced motion types instantly)');
+    } finally { gr.UI.opt.reduceMotion = false; }
+    await goRT('title', null, 300);
+    t.eq(gr._console.error.length, 0, 'no console errors from the film');
+  });
 }
 
 // ================================================================================================ phone and Larger text rules (F2b: the 844x390 floors, the ribbons at 1.3, the curtain-call boxes)
@@ -897,6 +969,23 @@ await t.test('tutorial catalog: every hint is written well and wired to real bus
   const old = /\b(Echo|Echowake|Hush|Verses?|Songs?|Treasures?|Energy|Keepers?|Bosses|boss|Champions?|peddlers?|camps?|fables?|forges?|journey|awake|wake|Meditate|Sharpen|prism|front row|back row)\b/;
   ids.forEach((id) => t.ok(!old.test(TU.HINTS[id].title + ' ' + TU.HINTS[id].text), id + ': no Echowake word in the hint (' + TU.HINTS[id].title + ')'));
 });
+
+// ================================================================================================ the bus intro on a new tour (headless: the page only, the routing)
+{
+  const gf = fresh({ seed: 21 });
+  await settle(gf);
+  await t.test('bus intro: headless it is skipped; a new tour opens on it once, also for a player who began before it existed', async () => {
+    const { UI: U3, META: M3, GAME: G3 } = gf;
+    t.ok(!U3.screens.story._t.wantsFilm('intro', {}), 'headless never plays the film (the suites read the page at once)');
+    M3.setTutorial('intro'); M3.setTutorial('film_bus', false);                     // an old profile: the intro page seen, the film not yet
+    G3.newRun({ heroes: ['hanae', 'kuro'], seed: 31, trial: 0 }); await settle(gf); await settle(gf);
+    t.eq(U3.currentName, 'story', 'a story first'); t.eq(U3.params.id, 'intro', 'the intro page (and its film) for a player who never saw the film');
+    t.ok(!gf._doc.querySelector('.st-film') && $(gf, '.st-page'), 'headless: straight to the page');
+    t.ok(M3.tutorial('film_bus') && M3.tutorial('intro'), 'both flags are stored');
+    G3.newRun({ heroes: ['hanae', 'kuro'], seed: 32, trial: 0 }); await settle(gf); await settle(gf);
+    t.eq(U3.params.id, 'ch1_intro', 'the next tour opens on the Act page');
+  });
+}
 
 // a fresh page for the guided run: the tutorial flags start empty
 const gt = fresh({ seed: 12 });

@@ -7,7 +7,8 @@
 //   GAME.state = { R, pendingChapter, lastCombat, ended }     R is the current run (also UI.run, and params.R of every routed screen)
 //   GAME.params                       parsed URL params: debug goto seed freeze ticks notutorial perf and opts (what ?goto screens receive)
 //   GAME.newRun({heroes, trial, seed, daily}) -> R      builds the run with META.unlockedSet() and a clock nonce (so the run id is its own), saves it, routes to the
-//                                      intro story and map. A tour that was still saved is paid out as abandoned first (the half share, like Abandon).
+//                                      intro story (the bus intro film and the `intro` page, first tour only) and map. A tour that was still saved is
+//                                      paid out as abandoned first (the half share, like Abandon).
 //   GAME.continueRun() -> Promise      META.loadRun; a saved node is re-entered (a saved combat restarts with the same seed), a save taken between the boss reward
 //                                      and chapterEnd (R.chapterCleared) goes through the Act flow, else the map
 //   GAME.enterNode(node) -> Promise    routes a RUN node to its screen after META.saveRun; Instants {kind:'well'|'brush'} only toast and save;
@@ -155,8 +156,11 @@ const GAME = (() => {
     setRun(R);
     state.ended = null; state.pendingChapter = null; state.lastCombat = null;
     save();
-    const intro = meta && typeof meta.tutorial === 'function' && !safe(() => meta.tutorial('intro'), true) ? ['intro'] : [];
-    if (intro.length && meta && typeof meta.setTutorial === 'function') safe(() => meta.setTutorial('intro'));
+    // the `intro` page (with the bus intro film before it) shows on the first tour, and once more for a player who began before the film existed
+    // (flag `film_bus`); after that a tour opens on the Act's own page
+    const unseen = (flag) => !!(meta && typeof meta.tutorial === 'function' && !safe(() => meta.tutorial(flag), true));
+    const intro = unseen('intro') || unseen('film_bus') ? ['intro'] : [];
+    if (intro.length && meta && typeof meta.setTutorial === 'function') safe(() => { meta.setTutorial('intro'); meta.setTutorial('film_bus'); });
     routeTo(storyChain(intro.concat(['ch1_intro']), { name: 'map', params: { R } }));
     return R;
   }

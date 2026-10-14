@@ -23,8 +23,9 @@
 //   hero can wear and the Sticker that unlocks it. Read only by ui.js (the viewer's choice, kept in its own key hv_skins_v1) and the
 //   menu and end screens; never by RUN, COMBAT, MAP, META or the bot. Andy (raiga) has no outfit yet.
 //
-// LORE. Tour Diary entries {id, title <= 40, text <= 700}: intro, ch1_intro, ch2_intro, ch3_intro, ch1_clear, ch2_clear, victory,
-//   defeat, hero_<id> x4. Plain paragraphs of prose with no line breaks (the story screen types them out). Shared entries never name
+// LORE. Tour Diary entries {id, title <= 40, text <= 280}: intro, ch1_intro, ch2_intro, ch3_intro, ch1_clear, ch2_clear, victory,
+//   defeat, hero_<id> x4. At most three short sentences in plain words a ten year old follows (HV_STORY 3), with no line breaks (the
+//   story screen types them out). The Gloss may be called what it is: fake-perfect AI slop that copies everything. Shared entries never name
 //   a hero. Barks: barks_<hero> with 5 lines for each of start, hurt, kill, down, win, swap, at most 64 characters each. `down` is
 //   spoken by the hero who just lost their voice (it comes back), `win` by the survivor, `swap` by the hero stepping up to the lead
 //   spot, `hurt` by the hero who took the big hit, `kill` (an id) by the hero who won the foe over or quietened it.
@@ -144,54 +145,54 @@
   // ------------------------------------------------------------------ lore: Tour Diary entries
   DATA.add('lore', {
     intro: {
-      title: 'One, Two, Testing',
-      text: "In the Soundlands, voices are magic: a sung note opens a cherry blossom, a beatboxed kick makes the cobbles bounce, and a bass line can roll a hill over in its sleep. Then came the Gloss, a kind little filter made to help one nervous singer feel brave, until everybody turned it up so far that it smoothed everything flat. Now the world is going on mute: buskers lip-sync, birds tweet in perfect tune, and nobody sings along. But two voices were never smoothed, a little wobbly, a little late and completely real. They pack the van, tape Jordan's tour poster in the window and step up to the mic. One, two, testing: the speakers crackle, somebody breathes in, and the beat is about to drop.",
+      title: 'The Big Silence',
+      text: 'The tour bus was rolling to a show, with two voices singing all the way. Then the bus drove through a glitchy shimmer, and the whole world went silent. Far ahead, the Gloss, a big blob of shiny AI slop, was slurping up every sound.',
     },
     ch1_intro: {
       title: 'Blossom Bay',
-      text: 'The first act smells of sea salt and cherry blossom, and Blossom Bay climbs its hill in candy-coloured houses with bunting strung between every balcony. Down on the Snack Pier there are noodle carts, smoothie bikes and a lemonade stand run by a very serious child, while gulls who think they can sing circle overhead. The Gloss has only just arrived, but a few corners have already gone shiny and airbrushed flat, and the buskers on them lip-sync in identical poses. Out in the bay something enormous is singing every song at once, perfectly, through eight microphones. Nobody else is allowed a mic, in case anybody gets it wrong. Unmute a way in, and bring your own voice.',
+      text: 'Blossom Bay is a sunny seaside town, but the Gloss has made it quiet and shiny. Out in the bay, Kraki the Karaoke Kraken hogs eight microphones so nobody else can sing. Unmute the streets and get those mics back!',
     },
     ch1_clear: {
       title: 'Kraki Gives Back the Mics',
-      text: "Kraki's glossy mask cracked right down the middle, and behind it was a big, kind, very embarrassed face. 'I only wanted nobody to be embarrassed,' she said, and eight microphones drooped in eight arms. Then she sang one song with her real voice, wobbly and much too high in the middle, and the whole bay cheered so loudly that the gulls joined in. One by one she handed the mics back, to the buskers, the lemonade child and the old foghorn, and the Gloss slid off the house fronts like rain off a window. The bay came back on, loud and gloriously out of tune. High on a rooftop studio above the harbour, someone in a goat mask stopped recording, grinned and started packing a bag.",
+      text: "Kraki's glossy mask cracked, and she sang with her real voice, wobbly and happy. She gave back the mics, and the whole bay sang along. On a rooftop nearby, someone in a goat mask grinned and packed a bag.",
     },
     ch2_intro: {
       title: 'Scrollopolis',
-      text: 'The second act happens at two in the morning, in blue light, in a city built like a stack of giant phones. In Scrollopolis the streets move by themselves, notifications drift up like balloons, little hearts fall like snow, and someone has sprayed MID on a wall in very neat capitals. Everyone walks looking down, so nobody has noticed the huge moon over the rooftops, or the noodle market steaming underneath it. Across the sky hangs the Feed, a glowing web of cables spun by something with eight bright screens for eyes. It keeps everyone gently tangled, never alone and never bored, while the Gloss gives every face the same smile. Look up, if you can remember how.',
+      text: 'Scrollopolis is a city of giant phones, and the Gloss has everyone staring down at the Feed. Scrollspinner keeps them all stuck in her glowing web, so nobody looks up at the moon. Make some noise they cannot ignore!',
     },
     ch2_clear: {
       title: 'The City Looks Up',
-      text: "The web went slack all at once, and Scrollspinner dropped her filter and sat down among her cables, eight screens dimming. 'I only wanted nobody to be lonely,' she said, and for the first time in years she did not check who had liked it. Across Scrollopolis people lowered their phones and looked up at the moon, which had waited very patiently. Somebody started humming, then somebody else, and the Gloss on the billboards began to peel like old stickers. Then, from far below the street, a bass line rose up through the pavement, so low that no screen had ever seen it. It had been holding the city's groove together all along, and now it was coming up the stairs.",
+      text: "Scrollspinner's web went slack, and she put her phone down at last. People looked up at the moon and started to hum. Then a deep bass line rumbled up from below the street.",
     },
     ch3_intro: {
       title: 'The Perfect Stage',
-      text: "The last act is not sung at all: it is performed, perfectly, on a colossal stage floating above a sea of phone lights. Everything is shiny white and pastel chrome, the floors are mirrors, the confetti falls in a perfect grid, and an APPLAUSE sign glows that never switches off. Rows of identical fans hold up identical phones with identical smiles, and three identical judges' chairs sit empty in the front row. On stage, contestant after contestant lip-syncs the same flawless track, and nobody sings a note. At the centre of it all stands Flawless, the Gloss's own star, who has never sung a wrong note because it has never sung a real one. Every hex you unmuted was leading here.",
+      text: 'The Perfect Stage is all shiny chrome, fake smiles and perfect copies, and nobody sings a note. This is where the Gloss makes its slop. Its star, Flawless, has never sung a real note in its life.',
     },
     victory: {
       title: 'Human',
-      text: 'The Gloss held up a mirror of perfect, silent copies of the heroes and asked, kindly, whether anyone needed to be human any more. They chose to stay human and sing: a voice cracked on the high note, a kick landed a hair late, and it was the best sound in years. One mannequin blinked, then one sang, badly, and then the whole crowd was singing. Flawless smiled a real, nervous smile, for it had been the first little filter all along, made to help a nervous singer feel brave, and it sang one wobbly note of its own. The Gloss softened into ordinary stage shine that makes the lights sparkle. Everyone sang the last line together, and the stage was left open for whoever wants to sing next.',
+      text: 'The Gloss offered perfect, silent copies of the heroes, but they chose to stay human and sang, cracks and all. Flawless was just a little filter that got out of hand, and it sang one wobbly note. Everyone sang the last line together, and the stage stays open for all.',
     },
     defeat: {
       title: 'The Show Must Go On',
-      text: 'The lights went down, and the Gloss smoothed everything over, the noise, the colour and the two voices, until it was all perfectly fine. It did not hurt, because the Gloss never hurts, and that was the worst part. But an intermission is not the end of a show. Somewhere in the Soundlands a kid is singing off-key into a hairbrush, loudly and badly and with total confidence, and the curtain twitches. Two voices clear their throats, a little hoarse and a little wiser, with a very good idea of where the spare mics are kept. Have a sip of water, try a different road, and remember that the show goes on.',
+      text: 'The lights went down, and the Gloss smoothed everything quiet. But this is only an intermission. Have a sip of water, try a new road, and the show goes on!',
     },
 
     // ---------------------------------------------------------------- lore: the four hero entries
     hero_hanae: {
       title: 'Jasmin, the Blossom Voice',
-      text: 'Jasmin sings the way cherry blossom falls: softly, a little at a time, until the whole street is pink. Everyone braces for her to belt, and instead she drops almost to a whisper, and the room leans in. Her vocal runs land like petals, many small bright notes that each find their mark, and with a touch of reverb and delay they shimmer long after she stops. She still remembers her first audition at a talent show beside RoxorLoops, hands shaking, voice wobbling on the first line, and then the whole room standing up. She is warm and dreamy, giggles when she is nervous, and says sorry to every foe she wins over. Her pink scrunchie has never once moved, and nobody knows how.',
+      text: 'Jasmin sings soft notes that land like petals, and she still remembers her first audition at a talent show. Everyone braces for her to belt, and instead she drops almost to a whisper, and the room leans in. She says sorry to every foe she wins over.',
     },
     hero_kuro: {
       title: 'RoxorLoops, the Beatbox Wizard',
-      text: "RoxorLoops plays a whole band with one mouth: kick, snare, hi-hat, a throat bass you feel in your teeth and a vocal scratch like a record being told off. He beatboxes the sound of everything, even a banana being peeled, and comes in a hair late whenever he is grinning, which is always. From the backing spot he builds the groove layer by layer until his beat is stuck in every enemy's head. He still remembers that first audition beside Jasmin, both of them shaking, and the room going quiet, then standing up. The loop station at his feet is strictly for emergencies, and it is always an emergency. Mohawk on top, mullet at the back: a party at both ends and a big heart in the middle.",
+      text: 'RoxorLoops beatboxes a whole band with one mouth: kick, snare, hi-hat and bass. He still remembers his first audition beside Jasmin, both of them shaking. Mohawk on top, mullet at the back, a party at both ends.',
     },
     hero_suzu: {
       title: 'RawClaw, the Sound Alchemist',
-      text: "RawClaw is the duo's producer, a good friend and a beatboxer too, though he mostly lets his drum pad do the talking. Before the tour he spent a long season in a rooftop studio above Blossom Bay, recording the bay's real sounds, gulls and bike bells and laughter, to keep them safe from the Gloss. In a fight he builds a room of reverb around the band, wraps both heroes in warm sound and filters the bite out of an enemy. He is the calm one in the van, never raises his voice, and offers a little more reverb on everything, including sighs. His joke face online is a goat, and he owns a goat suit, which he insists is not a costume. Nobody has ever won that argument, and the suit is very cosy.",
+      text: 'RawClaw is the calm producer who saved the real sounds of Blossom Bay in his rooftop studio. In a fight he wraps the band in warm reverb. He owns a goat suit, and no, it is not a costume.',
     },
     hero_raiga: {
       title: 'Andy, the Thunder Bass',
-      text: "You feel Andy before you see him: cups ripple, the floor starts to hum, and somewhere a window rattles politely. He is a bass player who sometimes joins the duo on stage, and he introduces himself, every time, as just Andy. Under Scrollopolis, in a basement the Feed never reached, he kept the city's groove together with a bass and a loop pedal, too low for the Gloss to see on any screen. In a fight he stands in the lead and soaks up the hits, and every one he takes goes into the floorboards as rumble. When it peaks, the low end comes back up as thunder and the whole room shakes. He is big-hearted and unflappable, says very little and makes everything steadier just by standing near it.",
+      text: 'Andy plays bass so low that you feel it before you hear it. He stands in the lead, soaks up the hits and turns them into thunder. He says very little and calls himself just Andy.',
     },
 
     // ---------------------------------------------------------------- lore: combat barks (5 lines per key, at most 64 characters each)

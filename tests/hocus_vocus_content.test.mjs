@@ -886,7 +886,7 @@ t.test('tips, lore and barks: limits, no dashes, no repeats, and every hero spea
   t.ok(loud('raiga') <= 7 && loud('suzu') === 0 && loud('kuro') <= 10 && loud('hanae') <= 1, `Andy rarely shouts, RoxorLoops a little, Jasmin and RawClaw not at all (${['raiga', 'kuro', 'hanae', 'suzu'].map(loud).join(', ')})`);
   const justAndy = keys.flatMap((k) => DATA.lore.barks_raiga.lines[k]).filter((l) => l === 'Just Andy.').length;
   t.eq(justAndy, 1, `Andy introduces himself as "Just Andy." exactly once (${justAndy} of 30)`);
-  Object.keys(DATA.lore).filter((id) => !/^barks_/.test(id)).forEach((id) => { const p = DATA.lore[id]; t.ok(p.title.length <= 40 && p.text.length <= 700 && p.text.length >= 300 && !DASH.test(p.title + p.text), `${id}: a story page inside its limits (${p.text.length})`); });
+  Object.keys(DATA.lore).filter((id) => !/^barks_/.test(id)).forEach((id) => { const p = DATA.lore[id]; t.ok(p.title.length <= 40 && p.text.length <= 280 && p.text.length >= 120 && !DASH.test(p.title + p.text), `${id}: a story page inside its limits (${p.text.length})`); });
   values(DATA.enemies).forEach((e) => t.ok(e.lore.length <= 260 && e.lore.length >= 40 && !DASH.test(e.lore), `${e.id}: lore inside its limits (${e.lore.length})`));
 });
 

@@ -11,6 +11,9 @@
 //                 seal that stamps down, the first letter on a pink sticker and the text typed at 30 characters per second (a caret blinks at the end).
 //                 A tap on the page, Enter, Space or Right completes the text, the next one turns the page (UI.go(then, {transition:'page'}), or
 //                 UI.back() with no `then`); Skip, Esc or S turn it at once. Every shown page marks META.markLore(id). reduceMotion types instantly.
+//                 The `intro` page first plays the bus intro (FILM, five canvas beats with a caption each, about 17 s, auto-advancing): a tap, Enter,
+//                 Space or Right skips to the next beat, Skip, Esc or S end the film and show the page. Never headless; params.film:false skips it;
+//                 under reduceMotion each beat is a still picture.
 //   chapterClear  After a Headliner (Acts I and II): the Act's scene with the duo cheering, the Act number on a big round pink and green sticker,
 //                 confetti and sparkles, the Headliner fading into a memory of itself, the chN_clear entry (title as the headline, text in a scroll),
 //                 the tour so far counting up (turns, damage, cards, gold, foes, hexes), what RUN.chapterEnd did (max HP gain, healing: each hero's HP
@@ -430,10 +433,377 @@
   }
 
   // ==================================================================================================================
+  // THE BUS INTRO (a short film before the `intro` page, HV_STORY 3.6): five quick beats with one caption each, drawn on the canvas
+  // ==================================================================================================================
+  // The tour bus drives to a show with notes pouring out of it, drives through a glitchy shimmer, the world goes silent (the mute
+  // sticker), far ahead the Gloss slurps up every sound, and RoxorLoops and Jasmin step out with their mics while the colour comes back.
+  // The duo star in it whoever is in the party: they are the band, and it is their tour bus. Beats run on the frame clock (story.update),
+  // auto-advance, and a tap or Enter skips to the next beat; Skip or Esc ends the film and shows the page. Headless it is skipped (a
+  // suite reads the page at once); under reduced motion every beat is a still picture that holds for its time, with no shake or flicker.
+  const FILM = [
+    { id: 'drive', s: 3.4, cap: () => 'On tour! The bus rolls on to the next show.' },
+    { id: 'shimmer', s: 3.0, cap: () => 'Then the road starts to glitch and shimmer...' },
+    { id: 'silence', s: 3.0, cap: () => 'And the whole world goes silent.' },
+    { id: 'gloss', s: 3.8, cap: () => 'Far ahead, the Gloss, a blob of AI slop, slurps up all sound!' },
+    { id: 'mics', s: 4.0, cap: () => heroName('kuro') + ' and ' + heroName('hanae') + ': let\'s bring the noise back!' },
+  ];
+  const FILM_SFX = { drive: 'turn_start', shimmer: 'zap', silence: null, gloss: 'boss_intro', mics: 'level_up' };
+  const filmLength = () => FILM.reduce((a, b) => a + b.s, 0);
+  const NOTE_COLS = [HV.pink, HV.green, HV.gold, HV.sky, HV.violet, HV.lime];
+  const BUS_X = 470, ROAD_Y = 618;
+  const tkOf = () => (typeof ART !== 'undefined' && ART && ART.tk ? ART.tk : null);
+  function filmNote(ctx, x, y, size, o) {
+    const tk = tkOf();
+    if (tk && isFn(tk.note)) { safe(() => tk.note(ctx, x, y, size, o)); return; }
+    ctx.save(); ctx.globalAlpha *= clamp(o && o.alpha !== undefined ? o.alpha : 1, 0, 1); ctx.fillStyle = (o && o.color) || HV.cream; ctx.beginPath(); ctx.arc(x, y, size * 0.45, 0, TAU); ctx.fill(); ctx.restore();
+  }
+  function medal(ctx, id, x, y, r) {
+    if (typeof ART === 'undefined' || !ART || !ART.hero || !isFn(ART.hero.medallion)) { ctx.fillStyle = heroColor(id); ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.fill(); return; }
+    try { ART.hero.medallion(ctx, id, x, y, r); } catch (e) { warnOnce('ART.hero.medallion', e); }
+  }
+  // the world the bus drives through: a candy evening sky, a moon, violet far hills, pink and green near hills with blossom trees, the road.
+  // scroll moves the layers left at their own parallax (the bus stays put on the screen while the world rolls by).
+  const FILM_STARS = (() => { const r = U.rng(U.hash('film', 'stars')); const out = []; for (let i = 0; i < 46; i++) out.push([r() * W, r() * 330, 0.8 + r() * 2.2, r() * 6.28]); return out; })();
+  function hillPath(ctx, off, base, amp, period, k) {
+    ctx.beginPath(); ctx.moveTo(0, H);
+    for (let x = 0; x <= W + 40; x += 40) {
+      const u = (x + off) / period;
+      ctx.lineTo(x, base - amp * (0.6 * Math.sin(u * TAU) + 0.4 * Math.sin(u * TAU * k + 1.3)));
+    }
+    ctx.lineTo(W, H); ctx.closePath();
+  }
+  function filmWorld(ctx, scroll, t, still) {
+    const g = ctx.createLinearGradient(0, 0, 0, 470);
+    g.addColorStop(0, '#2a1d5a'); g.addColorStop(0.55, '#7a4fc4'); g.addColorStop(1, '#ffb38a');
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+    FILM_STARS.forEach((s) => spark(ctx, s[0], s[1], s[2] * 1.6, HV.cream, still ? 0.7 : 0.45 + 0.4 * Math.abs(Math.sin(t * 1.4 + s[3])), s[3]));
+    const tk = tkOf();
+    if (tk && isFn(tk.glow)) safe(() => tk.glow(ctx, 1040, 132, 150, '#fff4d6', 0.5));
+    ctx.fillStyle = '#fff4d6'; ctx.beginPath(); ctx.arc(1040, 132, 52, 0, TAU); ctx.fill();
+    ctx.fillStyle = 'rgba(255,201,222,0.55)'; ctx.beginPath(); ctx.arc(1024, 120, 10, 0, TAU); ctx.arc(1058, 150, 7, 0, TAU); ctx.fill();
+    hillPath(ctx, scroll * 0.12, 430, 34, 620, 2.3); ctx.fillStyle = '#5b3fa8'; ctx.fill();
+    hillPath(ctx, scroll * 0.3 + 200, 480, 30, 480, 1.7); ctx.fillStyle = '#e86aa8'; ctx.fill(); ctx.lineWidth = 4; ctx.strokeStyle = HV.line; ctx.stroke();
+    // blossom trees on the near hills
+    const tw = 300, toff = (scroll * 0.5) % tw;
+    for (let i = -1; i < W / tw + 2; i++) {
+      const x = i * tw - toff + 90, y = 520;
+      ctx.fillStyle = '#7a4a3a'; ctx.fillRect(x - 6, y - 50, 12, 52);
+      ctx.strokeStyle = HV.line; ctx.lineWidth = 3; ctx.strokeRect(x - 6, y - 50, 12, 52);
+      [[0, -86, 40], [-30, -66, 28], [30, -64, 30]].forEach((b) => { ctx.beginPath(); ctx.arc(x + b[0], y + b[1], b[2], 0, TAU); ctx.fillStyle = HV.pinkL; ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = HV.line; ctx.stroke(); });
+    }
+    hillPath(ctx, scroll * 0.55 + 90, 548, 14, 700, 2.9); ctx.fillStyle = HV.green; ctx.fill(); ctx.lineWidth = 4; ctx.strokeStyle = HV.line; ctx.stroke();
+    // the road: a pink kerb, the asphalt, a dashed cream line that rolls by
+    ctx.fillStyle = HV.pinkD; ctx.fillRect(0, 560, W, 12);
+    ctx.fillStyle = '#3b2a5a'; ctx.fillRect(0, 572, W, H - 572);
+    ctx.fillStyle = 'rgba(255,248,236,0.85)';
+    const dash = 140, doff = scroll % dash;
+    for (let x = -dash; x < W + dash; x += dash) { rrect(ctx, x - doff, 650, 76, 9, 4.5); ctx.fill(); }
+    ctx.fillStyle = HV.line; ctx.fillRect(0, 568, W, 4);
+  }
+  // the tour bus: x is the middle, y the road under the wheels, faces right. o: t, wheel (turn), bob, notes (0..1: notes rising from the
+  // roof speaker), stopped (no notes, a little ? bubble)
+  function filmBus(ctx, x, y, s, o) {
+    o = o || {};
+    ctx.save(); ctx.translate(x, y); ctx.scale(s, s);
+    ctx.fillStyle = 'rgba(20,10,40,0.35)'; ctx.beginPath(); ctx.ellipse(0, 2, 196, 14, 0, 0, TAU); ctx.fill();
+    ctx.translate(0, -(o.bob || 0));
+    // roof speaker
+    rrect(ctx, -62, -236, 124, 36, 10); ctx.fillStyle = HV.violet; ctx.fill(); ctx.lineWidth = 5; ctx.strokeStyle = HV.line; ctx.stroke();
+    [-30, 30].forEach((cx) => { ctx.beginPath(); ctx.arc(cx, -218, 12, 0, TAU); ctx.fillStyle = HV.cream; ctx.fill(); ctx.lineWidth = 3; ctx.stroke(); ctx.beginPath(); ctx.arc(cx, -218, 4.5, 0, TAU); ctx.fillStyle = HV.pinkD; ctx.fill(); });
+    // body
+    ctx.beginPath(); ctx.moveTo(-184, -40); ctx.lineTo(-184, -170); ctx.quadraticCurveTo(-184, -202, -152, -202); ctx.lineTo(126, -202);
+    ctx.quadraticCurveTo(164, -202, 176, -160); ctx.lineTo(190, -96); ctx.quadraticCurveTo(194, -40, 170, -40); ctx.closePath();
+    ctx.fillStyle = HV.pink; ctx.fill();
+    ctx.save(); ctx.clip();
+    ctx.fillStyle = HV.green; ctx.fillRect(-200, -98, 400, 26);
+    ctx.fillStyle = HV.lime; ctx.fillRect(-200, -98, 400, 6);
+    ctx.fillStyle = 'rgba(255,255,255,0.35)'; ctx.fillRect(-200, -196, 400, 10);
+    ctx.fillStyle = 'rgba(201,63,120,0.45)'; ctx.fillRect(-200, -62, 400, 30);
+    ctx.restore();
+    ctx.lineWidth = 6; ctx.strokeStyle = HV.line; ctx.stroke();
+    // windows with the duo looking out, the windscreen, the door
+    [[-160, 'kuro'], [-42, 'hanae']].forEach((wv) => {
+      rrect(ctx, wv[0], -184, 98, 70, 14); ctx.fillStyle = HV.sky; ctx.fill();
+      ctx.save(); ctx.clip(); medal(ctx, wv[1], wv[0] + 49, -146, 34); ctx.fillStyle = 'rgba(255,255,255,0.3)'; ctx.beginPath(); ctx.moveTo(wv[0] + 60, -184); ctx.lineTo(wv[0] + 78, -184); ctx.lineTo(wv[0] + 40, -114); ctx.lineTo(wv[0] + 22, -114); ctx.closePath(); ctx.fill(); ctx.restore();
+      rrect(ctx, wv[0], -184, 98, 70, 14); ctx.lineWidth = 4.5; ctx.strokeStyle = HV.line; ctx.stroke();
+    });
+    ctx.beginPath(); ctx.moveTo(78, -184); ctx.lineTo(146, -184); ctx.quadraticCurveTo(160, -184, 166, -164); ctx.lineTo(176, -118); ctx.lineTo(78, -118); ctx.closePath();
+    ctx.fillStyle = HV.sky; ctx.fill(); ctx.lineWidth = 4.5; ctx.strokeStyle = HV.line; ctx.stroke();
+    rrect(ctx, 76, -104, 46, 62, 8); ctx.fillStyle = HV.pinkL; ctx.fill(); ctx.lineWidth = 4; ctx.stroke();
+    // HOCUS VOCUS on the side stripe
+    ctx.font = '900 19px ' + ROUND; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round';
+    ctx.lineWidth = 5; ctx.strokeStyle = HV.line; ctx.strokeText('HOCUS VOCUS', -66, -84); ctx.fillStyle = HV.cream; ctx.fillText('HOCUS VOCUS', -66, -84);
+    // headlight and its beam
+    if (!o.stopped) { ctx.fillStyle = 'rgba(255,240,168,0.28)'; ctx.beginPath(); ctx.moveTo(190, -76); ctx.lineTo(420, -110); ctx.lineTo(420, -10); ctx.closePath(); ctx.fill(); }
+    ctx.beginPath(); ctx.arc(184, -70, 11, 0, TAU); ctx.fillStyle = o.stopped ? '#c9c2a0' : HV.gold; ctx.fill(); ctx.lineWidth = 3.5; ctx.stroke();
+    // wheels
+    [-112, 112].forEach((wx) => {
+      ctx.save(); ctx.translate(wx, -36); ctx.rotate(o.wheel || 0);
+      ctx.beginPath(); ctx.arc(0, 0, 36, 0, TAU); ctx.fillStyle = '#2d2350'; ctx.fill(); ctx.lineWidth = 5; ctx.strokeStyle = HV.line; ctx.stroke();
+      ctx.beginPath(); ctx.arc(0, 0, 16, 0, TAU); ctx.fillStyle = HV.cream; ctx.fill(); ctx.lineWidth = 3; ctx.stroke();
+      ctx.fillStyle = HV.pinkD; for (let i = 0; i < 4; i++) { ctx.rotate(Math.PI / 2); ctx.fillRect(-3, -15, 6, 9); }
+      ctx.restore();
+    });
+    ctx.restore();
+  }
+  // notes pouring out of the roof speaker and drifting back over the bus (k fades them, fall makes them drop and grey out)
+  function busNotes(ctx, x, y, s, t, k, fall) {
+    if (!(k > 0.01)) return;
+    for (let i = 0; i < 12; i++) {
+      const life = 2.4, u = ((t * 0.9 + i / 12) % 1 + 1) % 1, age = u * life;
+      let nx = x + (-20 - age * 150 - (i % 3) * 18) * s, ny = y - (236 + age * 70 + Math.sin(age * 4 + i) * 14) * s;
+      if (fall) { nx = x + (-60 + (i % 6) * 34) * s; ny = y - (300 - fall * (160 + (i % 4) * 30)) * s; }
+      const a = k * (fall ? clamp(1 - fall * 1.15, 0, 1) : clamp(1.3 - u * 1.3, 0, 1) * clamp(u * 6, 0, 1));
+      filmNote(ctx, nx, ny, (18 + (i % 3) * 5) * s, { kind: ['eighth', 'quarter', 'beamed'][i % 3], color: fall ? '#9a96ad' : NOTE_COLS[i % NOTE_COLS.length], alpha: a, rot: Math.sin(t * 2 + i) * 0.3 });
+    }
+  }
+  // the shimmer: an opalescent curtain of the Gloss across the road, with drifting scan lines and sparkles
+  function shimmer(ctx, x, t, a) {
+    if (!(a > 0.01)) return;
+    ctx.save(); ctx.globalAlpha *= clamp(a, 0, 1);
+    const g = ctx.createLinearGradient(x - 170, 0, x + 170, 0);
+    g.addColorStop(0, 'rgba(230,217,255,0)'); g.addColorStop(0.25, 'rgba(230,217,255,0.75)'); g.addColorStop(0.45, 'rgba(217,255,244,0.85)');
+    g.addColorStop(0.65, 'rgba(255,227,241,0.8)'); g.addColorStop(0.82, 'rgba(124,198,255,0.6)'); g.addColorStop(1, 'rgba(230,217,255,0)');
+    ctx.fillStyle = g; ctx.fillRect(x - 170, 0, 340, H);
+    ctx.fillStyle = 'rgba(255,255,255,0.45)';
+    for (let i = 0; i < 18; i++) { const yy = ((i * 47 + t * 160) % H + H) % H; ctx.fillRect(x - 150 + Math.sin(i * 1.7 + t * 3) * 30, yy, 260, 3); }
+    for (let i = 0; i < 10; i++) spark(ctx, x + Math.sin(i * 2.3 + t) * 130, ((i * 83 + t * 60) % H + H) % H, 7 + (i % 3) * 3, '#ffffff', 0.8, t + i);
+    ctx.restore();
+  }
+  // a glitch: some bands of the picture slip sideways with a pastel tint (seeded per time step, so a frame is a pure function of t)
+  function glitch(ctx, t, amt, paint) {
+    paint();
+    if (!(amt > 0.02)) return;
+    const r = U.rng(U.hash('film-glitch', Math.floor(t * 14)));
+    const n = 2 + Math.floor(r() * 5 * amt);
+    for (let i = 0; i < n; i++) {
+      const y = r() * H, h = 12 + r() * 70 * amt, dx = (r() - 0.5) * 120 * amt;
+      ctx.save(); ctx.beginPath(); ctx.rect(0, y, W, h); ctx.clip();
+      ctx.translate(dx, 0); paint();
+      ctx.globalCompositeOperation = 'screen'; ctx.fillStyle = rgba(GLOSS[i % GLOSS.length], 0.45); ctx.fillRect(-dx, y, W, h);
+      ctx.restore();
+    }
+  }
+  // everything painted so far loses its colour (the world on mute)
+  function mute(ctx, k) {
+    if (!(k > 0.01)) return;
+    ctx.save(); ctx.globalCompositeOperation = 'saturation'; ctx.globalAlpha = clamp(k, 0, 1); ctx.fillStyle = '#808080'; ctx.fillRect(0, 0, W, H); ctx.restore();
+    ctx.fillStyle = 'rgba(40,36,60,' + (0.22 * clamp(k, 0, 1)).toFixed(3) + ')'; ctx.fillRect(0, 0, W, H);
+  }
+  // the mute sticker: a cream disc, a speaker, a big pink cross
+  function muteSticker(ctx, x, y, r, k) {
+    if (!(k > 0.01)) return;
+    ctx.save(); ctx.translate(x, y); ctx.scale(k, k); ctx.rotate(-0.08);
+    ctx.fillStyle = 'rgba(20,10,40,0.4)'; ctx.beginPath(); ctx.arc(6, 10, r, 0, TAU); ctx.fill();
+    ctx.beginPath(); ctx.arc(0, 0, r, 0, TAU); ctx.fillStyle = HV.cream; ctx.fill(); ctx.lineWidth = 7; ctx.strokeStyle = HV.line; ctx.stroke();
+    ctx.beginPath(); ctx.arc(0, 0, r - 14, 0, TAU); ctx.lineWidth = 6; ctx.strokeStyle = HV.pinkL; ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(-r * 0.5, -r * 0.18); ctx.lineTo(-r * 0.28, -r * 0.18); ctx.lineTo(-r * 0.02, -r * 0.42); ctx.lineTo(-r * 0.02, r * 0.42); ctx.lineTo(-r * 0.28, r * 0.18); ctx.lineTo(-r * 0.5, r * 0.18); ctx.closePath();
+    ctx.fillStyle = '#4a3a6a'; ctx.fill(); ctx.lineWidth = 5; ctx.strokeStyle = HV.line; ctx.lineJoin = 'round'; ctx.stroke();
+    ctx.lineCap = 'round';
+    [[1, 1], [1, -1]].forEach((d) => { ctx.beginPath(); ctx.moveTo(r * 0.14, -r * 0.2 * d[1]); ctx.lineTo(r * 0.52, r * 0.2 * d[1]); ctx.lineWidth = 20; ctx.strokeStyle = HV.line; ctx.stroke(); ctx.lineWidth = 12; ctx.strokeStyle = HV.pink; ctx.stroke(); });
+    ctx.restore();
+  }
+  // the Gloss: a huge, glossy, slightly wrong blob of AI slop on the horizon. Pastel and airbrushed (never dark, no warm line), a perfect
+  // symmetrical smile, too-shiny eyes, six fingers on its waving hand, drips of slop, and a striped straw that slurps the notes in.
+  function glossBlob(ctx, x, y, s, t, o) {
+    o = o || {};
+    ctx.save(); ctx.translate(x, y); ctx.scale(s, s); ctx.globalAlpha *= clamp(o.alpha === undefined ? 1 : o.alpha, 0, 1);
+    const wob = o.still ? 0 : Math.sin(t * 2.2) * 6;
+    const tk = tkOf();
+    if (tk && isFn(tk.glow)) safe(() => tk.glow(ctx, 0, -170, 330, '#e6d9ff', 0.55));
+    // the puddle of slop it sits in
+    ctx.beginPath(); ctx.ellipse(0, 4, 250, 30, 0, 0, TAU); ctx.fillStyle = 'rgba(230,217,255,0.85)'; ctx.fill();
+    // the body
+    ctx.beginPath(); ctx.moveTo(-200, 0);
+    ctx.bezierCurveTo(-230 - wob, -150, -150, -330 - wob, 0, -330 - wob);
+    ctx.bezierCurveTo(150, -330 - wob, 230 + wob, -150, 200, 0);
+    for (let i = 0; i < 6; i++) { const x0 = 200 - i * 66.6, x1 = x0 - 66.6, d = 26 + (i % 3) * 18 + (o.still ? 0 : Math.sin(t * 3 + i) * 6); ctx.quadraticCurveTo((x0 + x1) / 2, d, x1, 0); }
+    ctx.closePath();
+    const g = ctx.createLinearGradient(-200, -330, 200, 0);
+    g.addColorStop(0, '#ffffff'); g.addColorStop(0.3, '#e6d9ff'); g.addColorStop(0.55, '#d9fff4'); g.addColorStop(0.8, '#ffe3f1'); g.addColorStop(1, '#c9b8ff');
+    ctx.fillStyle = g; ctx.fill(); ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(167,123,255,0.55)'; ctx.stroke();
+    // airbrushed shine
+    ctx.fillStyle = 'rgba(255,255,255,0.75)'; ctx.beginPath(); ctx.ellipse(-90, -250 - wob, 56, 24, -0.5, 0, TAU); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.5)'; ctx.beginPath(); ctx.ellipse(110, -120, 18, 50, 0.3, 0, TAU); ctx.fill();
+    // the eyes: perfect circles, a star for a catchlight, never a blink
+    [-62, 62].forEach((ex) => {
+      ctx.beginPath(); ctx.arc(ex, -200 - wob * 0.6, 34, 0, TAU); ctx.fillStyle = '#ffffff'; ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(167,123,255,0.7)'; ctx.stroke();
+      ctx.beginPath(); ctx.arc(ex, -196 - wob * 0.6, 20, 0, TAU); ctx.fillStyle = '#b9a4ff'; ctx.fill();
+      spark(ctx, ex - 6, -204 - wob * 0.6, 12, '#ffffff', 1, 0);
+    });
+    // the smile: much too wide and much too even, with a row of identical teeth
+    ctx.beginPath(); ctx.moveTo(-96, -128); ctx.quadraticCurveTo(0, -60, 96, -128); ctx.quadraticCurveTo(0, -96, -96, -128); ctx.closePath();
+    ctx.fillStyle = '#ffffff'; ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(167,123,255,0.8)'; ctx.stroke();
+    ctx.strokeStyle = 'rgba(167,123,255,0.45)'; ctx.lineWidth = 2;
+    for (let i = -4; i <= 4; i++) { ctx.beginPath(); ctx.moveTo(i * 19, -118 + Math.abs(i) * -2); ctx.lineTo(i * 19, -94 + Math.abs(i) * -4); ctx.stroke(); }
+    // the straw, from the corner of the smile out towards the world
+    ctx.save(); ctx.translate(-92, -120); ctx.rotate(0.42);
+    rrect(ctx, -330, -12, 330, 24, 12); ctx.fillStyle = '#ffffff'; ctx.fill();
+    ctx.save(); ctx.clip(); ctx.fillStyle = HV.pinkL; for (let i = 0; i < 12; i++) { const sx = -340 + i * 34 + ((o.still ? 0 : t * 90) % 34); ctx.beginPath(); ctx.moveTo(sx, -14); ctx.lineTo(sx + 14, -14); ctx.lineTo(sx + 4, 14); ctx.lineTo(sx - 10, 14); ctx.closePath(); ctx.fill(); } ctx.restore();
+    rrect(ctx, -330, -12, 330, 24, 12); ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(167,123,255,0.8)'; ctx.stroke();
+    ctx.restore();
+    // a waving hand with one finger too many
+    ctx.save(); ctx.translate(232, -190); ctx.rotate(o.still ? 0.2 : 0.2 + Math.sin(t * 5) * 0.25);
+    for (let i = 0; i < 6; i++) { const a = -1.25 + i * 0.42; ctx.save(); ctx.rotate(a); rrect(ctx, -9, -78, 18, 56, 9); ctx.fillStyle = '#efe6ff'; ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(167,123,255,0.7)'; ctx.stroke(); ctx.restore(); }
+    ctx.beginPath(); ctx.arc(0, 0, 36, 0, TAU); ctx.fillStyle = '#efe6ff'; ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(167,123,255,0.7)'; ctx.stroke();
+    ctx.restore();
+    // fake-perfect sparkles all over it
+    for (let i = 0; i < 9; i++) { const a = i * 0.7 + (o.still ? 0 : t * 0.4); spark(ctx, Math.cos(a) * 250, -170 + Math.sin(a * 1.3) * 160, 9 + (i % 3) * 4, '#ffffff', 0.85, a); }
+    ctx.restore();
+  }
+  // where the straw's open end is, in stage px, for a blob at (x, y) scale s
+  const strawTip = (x, y, s) => ({ x: x + (-92 - Math.cos(0.42) * 330) * s, y: y + (-120 - Math.sin(0.42) * 330) * s });
+  // big comic letters
+  function comic(ctx, text, x, y, size, fill, rot, a) {
+    if (!(a > 0.01)) return;
+    ctx.save(); ctx.globalAlpha *= clamp(a, 0, 1); ctx.translate(x, y); ctx.rotate(rot || 0);
+    ctx.font = '900 ' + size + 'px ' + ROUND; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round';
+    ctx.lineWidth = size * 0.22; ctx.strokeStyle = HV.line; ctx.strokeText(text, 0, 0); ctx.fillStyle = fill; ctx.fillText(text, 0, 0);
+    ctx.restore();
+  }
+
+  // the five beats. lt = seconds into the beat (frozen at a key moment under reduced motion), t = the visit clock for idle loops
+  function beatDrive(ctx, lt, t, still) {
+    const scroll = still ? 260 : lt * 260;
+    filmWorld(ctx, scroll, t, still);
+    const bob = still ? 0 : Math.abs(Math.sin(lt * 9)) * 4;
+    filmBus(ctx, BUS_X, ROAD_Y, 1, { wheel: scroll / 36, bob });
+    busNotes(ctx, BUS_X, ROAD_Y - bob, 1, still ? 0.8 : lt, 1);
+  }
+  function beatShimmer(ctx, lt, t, still) {
+    const scroll = 3.4 * 260 + (still ? 1.4 : lt) * 260 * (1 - clamp(lt / 3, 0, 1) * 0.4);
+    const sx = still ? BUS_X + 60 : 1460 - ease.inOut(clamp(lt / 1.9, 0, 1)) * (1460 - BUS_X - 40);
+    const amt = still ? 0 : clamp((lt - 1.5) / 0.8, 0, 1) * (lt > 2.6 ? 1.6 : 1);
+    const bob = still ? 0 : Math.abs(Math.sin(lt * 9)) * 4;
+    glitch(ctx, lt, amt, () => {
+      filmWorld(ctx, scroll, t, still);
+      filmBus(ctx, BUS_X, ROAD_Y, 1, { wheel: scroll / 36, bob });
+      busNotes(ctx, BUS_X, ROAD_Y - bob, 1, still ? 0.8 : lt, clamp(1 - (lt - 1.6) / 1.2, 0, 1));
+      shimmer(ctx, sx, t, 1);
+    });
+    if (!still && lt > 2.75) { ctx.fillStyle = 'rgba(255,248,236,' + clamp((lt - 2.75) / 0.25, 0, 1).toFixed(3) + ')'; ctx.fillRect(0, 0, W, H); }
+  }
+  function beatSilence(ctx, lt, t, still) {
+    const scroll = 3.4 * 260 + 3 * 260 * 0.8;
+    filmWorld(ctx, scroll, 0, true);
+    filmBus(ctx, BUS_X, ROAD_Y, 1, { wheel: scroll / 36, stopped: true });
+    busNotes(ctx, BUS_X, ROAD_Y, 1, 0, 1, still ? 1 : clamp(lt / 1.4, 0, 1));
+    mute(ctx, still ? 1 : clamp(lt / 0.5, 0, 1));
+    const k = still ? 1 : ease.outBack(clamp((lt - 0.7) / 0.5, 0, 1));
+    muteSticker(ctx, 860, 300, 118, k);
+    if (!still && lt < 0.4) { ctx.fillStyle = 'rgba(255,248,236,' + clamp(1 - lt / 0.4, 0, 1).toFixed(3) + ')'; ctx.fillRect(0, 0, W, H); }
+  }
+  function beatGloss(ctx, lt, t, still) {
+    const scroll = 3.4 * 260 + 3 * 260 * 0.8;
+    filmWorld(ctx, scroll, 0, true);
+    filmBus(ctx, 210, 660, 0.55, { wheel: scroll / 36, stopped: true });
+    mute(ctx, 1);
+    const bx = 930, by = 470, bs = still ? 0.62 : 0.5 + ease.outCubic(clamp(lt / 1.2, 0, 1)) * 0.12;
+    glossBlob(ctx, bx, by, bs, still ? 0.6 : t, { still });
+    // the stolen notes: the only colour left, swirling into the straw
+    const tip = strawTip(bx, by, bs);
+    for (let i = 0; i < 16; i++) {
+      const u = still ? (i / 16) : (((lt * 0.45 + i / 16) % 1) + 1) % 1;
+      const a0 = i * 2.4, rad = (1 - u) * (1 - u) * 460 + 10, sw = u * 3;
+      const nx = tip.x + Math.cos(a0 + sw) * rad * 1.1 - (1 - u) * 160, ny = tip.y + Math.sin(a0 + sw) * rad * 0.42 + (1 - u) * 60;
+      filmNote(ctx, nx, ny, 12 + (1 - u) * 16, { kind: ['eighth', 'quarter', 'beamed'][i % 3], color: NOTE_COLS[i % NOTE_COLS.length], alpha: clamp(u * 5, 0, 1) * clamp((1 - u) * 6, 0, 1), rot: sw });
+    }
+    const k = still ? 1 : ease.outBack(clamp((lt - 0.8) / 0.5, 0, 1));
+    comic(ctx, 'SLURRP!', 1040, 210 + (still ? 0 : Math.sin(lt * 6) * 5), 64 * Math.max(0.01, k), '#e6d9ff', 0.12, clamp(k, 0, 1));
+    if (!still && lt < 0.3) { ctx.fillStyle = 'rgba(13,11,30,' + clamp(1 - lt / 0.3, 0, 1).toFixed(3) + ')'; ctx.fillRect(0, 0, W, H); }
+  }
+  function beatMics(ctx, lt, t, still) {
+    const scroll = 3.4 * 260 + 3 * 260 * 0.8;
+    const cx = 640, cy = 520;
+    const rad = still ? 1600 : ease.inOut(clamp((lt - 1.1) / 1.8, 0, 1)) * 1500;
+    const scene = () => { filmWorld(ctx, scroll, t, true); filmBus(ctx, cx, 600, 0.82, { wheel: scroll / 36, stopped: true }); };
+    scene(); mute(ctx, 1);
+    glossBlob(ctx, 1150, 440, 0.3, still ? 0.6 : t, { still, alpha: 0.9 });
+    if (rad > 1) { ctx.save(); ctx.beginPath(); ctx.arc(cx, cy, rad, 0, TAU); ctx.clip(); scene(); ctx.restore(); }
+    if (rad > 1 && rad < 1500) { ctx.save(); ctx.beginPath(); ctx.arc(cx, cy, rad, 0, TAU); ctx.lineWidth = 10; ctx.strokeStyle = 'rgba(255,248,236,0.7)'; ctx.stroke(); ctx.restore(); }
+    // notes burst out from the duo as they sing
+    const sing = still ? 1 : clamp((lt - 1.0) / 0.4, 0, 1);
+    for (let i = 0; i < 18; i++) {
+      const u = still ? (i / 18) : ((lt * 0.6 + i / 18) % 1 + 1) % 1, a = i * 2.39;
+      filmNote(ctx, cx + Math.cos(a) * (60 + u * 520), cy - 140 + Math.sin(a) * (40 + u * 260), 16 + (i % 3) * 6, { kind: ['eighth', 'quarter', 'beamed'][i % 3], color: NOTE_COLS[i % NOTE_COLS.length], alpha: sing * clamp((1 - u) * 3, 0, 1), rot: Math.sin(t * 2 + i) * 0.3 });
+    }
+    // the duo step out of the bus and sing
+    const walk = still ? 1 : ease.outCubic(clamp(lt / 1.0, 0, 1));
+    const pose = !still && lt < 1.0 ? 'walk' : 'cheer';
+    const pt = still ? 1 : Math.max(0, lt - 1.0);
+    artHero(ctx, 'kuro', { x: 640 - walk * 230, y: 668, s: 1.25, pose, t, pt });
+    artHero(ctx, 'hanae', { x: 640 + walk * 230, y: 668, s: 1.25, pose, t, pt, flip: true });
+    if (!still && lt < 0.3) { ctx.fillStyle = 'rgba(13,11,30,' + clamp(1 - lt / 0.3, 0, 1).toFixed(3) + ')'; ctx.fillRect(0, 0, W, H); }
+  }
+  const BEAT_PAINT = { drive: beatDrive, shimmer: beatShimmer, silence: beatSilence, gloss: beatGloss, mics: beatMics };
+  // the moment a still beat is frozen at (reduced motion)
+  const BEAT_KEY = { drive: 1.2, shimmer: 1.6, silence: 2, gloss: 2, mics: 3.5 };
+
+  function paintFilm(ctx, t, S) {
+    const f = S.extra.film;
+    const b = FILM[f.beat];
+    const still = reduced();
+    const lt = still ? BEAT_KEY[b.id] : clamp(S.t - f.at, 0, b.s);
+    ctx.save();
+    try { BEAT_PAINT[b.id](ctx, lt, S.t, still); } catch (e) { warnOnce('film ' + b.id, e); }
+    ctx.restore();
+    vignette(ctx, 0.35);
+  }
+  function filmGo(S, i) {
+    const f = S.extra.film;
+    if (!f || !f.on) return;
+    if (i >= FILM.length) { endFilm(S); return; }
+    f.beat = i; f.at = S.t;
+    const b = FILM[i];
+    const cap = b.cap();
+    f.capEl.textContent = cap;
+    f.capEl.classList.remove('pop'); void f.capEl.offsetWidth; f.capEl.classList.add('pop');
+    f.dots.forEach((d, j) => { d.classList.toggle('on', j === i); d.classList.toggle('done', j < i); });
+    if (FILM_SFX[b.id]) snd(FILM_SFX[b.id]);
+    UI.announce(cap);
+  }
+  function stepFilm(S) {
+    const f = S.extra.film;
+    if (!f || !f.on) return;
+    if (S.t - f.at >= FILM[f.beat].s) filmGo(S, f.beat + 1);
+  }
+  // a tap or Enter: the next beat at once (a tap on the last beat ends the film)
+  function filmNext(S) {
+    const f = S.extra.film;
+    if (!f || !f.on || S.t - f.at < 0.25) return;
+    snd('ui_click');
+    filmGo(S, f.beat + 1);
+  }
+  function endFilm(S) {
+    const f = S.extra.film;
+    if (!f || !f.on) return;
+    f.on = false;
+    f.el.remove();
+    S.root.classList.remove('st-filming');
+    snd('page_turn');
+    if (isFn(S.extra.startPage)) S.extra.startPage();
+  }
+  function startFilm(S) {
+    const capEl = mk('p', { class: 'st-film-cap', 'aria-live': 'polite' });
+    const dots = FILM.map(() => mk('i'));
+    const skip = UI.btn('Skip', { kind: 'secondary', onclick: () => endFilm(S), key: 'Esc' });
+    skip.dataset.act = 'filmskip';
+    skip.classList.add('st-film-skip');
+    const el = mk('div', { class: 'st-film' }, capEl, mk('div', { class: 'st-film-dots', 'aria-hidden': 'true' }, ...dots), skip);
+    S.root.appendChild(el);
+    S.root.classList.add('st-filming');
+    S.extra.film = { on: true, beat: 0, at: S.t, el, capEl, dots };
+    filmGo(S, 0);
+  }
+  // the film plays before the `intro` page unless the route says film:false; never headless (the suites read the page at once)
+  const wantsFilm = (id, params) => id === 'intro' && !(params && params.film === false) && !headless();
+
+  // ==================================================================================================================
   // STORY
   // ==================================================================================================================
   function advanceStory(S) {
     if (!S || S.dead || S.leaving) return;
+    if (S.extra.film && S.extra.film.on) { filmNext(S); return; }
     if (S.tw && !S.tw.done) { S.tw.complete(); S.doneAt = S.t; snd('ui_click'); return; }
     if (!headless() && S.t - S.doneAt < 0.22) return;               // the tap that finished the text must not also turn the page
     leaveStory(S);
@@ -450,11 +820,13 @@
 
   function paintStory(ctx, t, S) {
     const x = S.extra;
+    if (x.film && x.film.on) { paintFilm(ctx, t, S); return; }
+    const t0 = x.pageAt || 0;                                        // the page's own clock starts after the film
     artScene(ctx, x.info.scene, t, { particles: 1, parallaxX: Math.sin(S.t * 0.25) * 18 });
     vignette(ctx, x.info.scene === 'defeat' ? 0.35 : 0.5);
     flecks(ctx, S, t, 26);
     const n = x.cast.length;
-    const reveal = (i) => ease.outBack(clamp((S.t - 0.25 - i * 0.22) / 0.7, 0, 1));
+    const reveal = (i) => ease.outBack(clamp((S.t - t0 - 0.25 - i * 0.22) / 0.7, 0, 1));
     x.cast.forEach((id, i) => {
       const k = reveal(i);
       if (k <= 0) return;
@@ -470,7 +842,7 @@
 
   const story = {
     pausable: false,
-    _t: { pageInfo, castFor, tipFor, state: () => CUR },
+    _t: { pageInfo, castFor, tipFor, FILM, filmLength, wantsFilm, state: () => CUR },
     enter(params, root) {
       const S = begin('story', params, root);
       const id = (params && params.id) || 'intro';
@@ -512,16 +884,22 @@
       root.appendChild(seal);
       if (hasLiveRun(S.R)) root.appendChild(UI.menuButton());
 
-      S.tw = typewriter(S, typed, rest, {
-        cps: 30, delay: 700,
-        onType: () => followPen(bodyEl),
-      });
-      S.tw.then(() => { root.classList.add('st-done'); S.doneAt = S.t; });
-      at(S, 520, () => { snd('ink_splash'); seal.classList.add('stamped'); });
-      UI.announce(title);
-      if (instant()) flush(S);
+      // the page itself (typed text, the seal) starts now, or after the bus intro when this is the `intro` page
+      S.extra.startPage = () => {
+        S.extra.pageAt = S.t;
+        S.tw = typewriter(S, typed, rest, {
+          cps: 30, delay: 700,
+          onType: () => followPen(bodyEl),
+        });
+        S.tw.then(() => { root.classList.add('st-done'); S.doneAt = S.t; });
+        at(S, S.t * 1000 + 520, () => { snd('ink_splash'); seal.classList.add('stamped'); });
+        UI.announce(title);
+        if (instant()) flush(S);
+      };
+      if (wantsFilm(id, params)) startFilm(S);
+      else S.extra.startPage();
     },
-    update(dt) { if (CUR && CUR.kind === 'story') step(CUR, dt); },
+    update(dt) { if (CUR && CUR.kind === 'story') { step(CUR, dt); stepFilm(CUR); } },
     draw(ctx, t) { if (CUR && CUR.kind === 'story' && CUR.paint) CUR.paint(ctx, t, CUR); },
     onKey(e) {
       const S = CUR;
@@ -529,7 +907,7 @@
       if (!armed(S)) return false;
       const onBtn = e.target && e.target.closest && e.target.closest('button, [role=button]');
       if (e.key === 'Enter' || e.key === ' ' || e.key === 'ArrowRight') { if (onBtn && e.key !== 'ArrowRight') return false; e.preventDefault(); advanceStory(S); return true; }
-      if (e.key === 'Escape' || e.key === 's' || e.key === 'S') { e.preventDefault(); leaveStory(S); return true; }
+      if (e.key === 'Escape' || e.key === 's' || e.key === 'S') { e.preventDefault(); if (S.extra.film && S.extra.film.on) endFilm(S); else leaveStory(S); return true; }
       return false;
     },
     leave() { endVisit(CUR); },
@@ -1076,10 +1454,10 @@
   // ==================================================================================================================
   // one closing line per hero for the curtain call (kept short: they sit under the heroes at 14 px)
   const CURTAIN = {
-    hanae: 'Jasmin hummed the last line once more, very softly, and the whole crowd leaned in to hear it. Her scrunchie had not moved at all.',
-    kuro: 'RoxorLoops beatboxed the sound of the curtain coming down, the applause and the van door, then took a bow at both ends of his hair.',
-    suzu: 'RawClaw took off his headphones and listened. For the first time in a long while, nothing needed fixing. He added a little reverb anyway.',
-    raiga: 'Andy played one last low note so warm that the stage lights hummed along. \'Nice,\' he said, and that was the whole speech.',
+    hanae: 'Jasmin sang the last line very softly, and the whole crowd leaned in. Her scrunchie never moved.',
+    kuro: 'RoxorLoops beatboxed the curtain coming down, then took a bow at both ends of his hair.',
+    suzu: 'RawClaw took off his headphones and smiled. Nothing needed fixing. He added a bit of reverb anyway.',
+    raiga: 'Andy played one last warm, low note. \'Nice,\' he said. That was the whole speech.',
   };
 
   // the share card (HV_ART_AUDIO 3.4), composed like the owners' duo card: a background split diagonally light green and pink with a cream seam,
