@@ -2324,4 +2324,38 @@ if (realC && realC.COMBAT && typeof realC.COMBAT.simulate === 'function') {
 } else t.ok(true, 'the real combat integration is skipped: combat.js or the hanae, kuro and chapter 1 and 2 content is not all there yet');
 
 // END-OF-SUITE
+// ================================================================================================ card mechanics: Fanbase persistence
+t.test('Fanbase: combatDone adds the gains to the deck cards (enc), combatInit and saves carry them, old saves load fine', () => {
+  const R = NEW({ seed: 8 });
+  const a = R.deck[0], b = R.deck[1];
+  fight(R, 'normal', 1, { fanbase: { [a.uid]: 3, [b.uid]: 0, 99999: 4 } });
+  t.eq(a.enc, 3, 'the deck card gains its Fanbase damage');
+  t.eq(b.enc, undefined, 'a zero gain adds nothing');
+  t.ok(R.deck.every((c) => c.uid === a.uid || c.enc === undefined), 'an unknown uid (a temp card) touches nothing');
+  fight(R, 'normal', 2, { fanbase: { [a.uid]: 2 } });
+  t.eq(a.enc, 5, 'a second fight adds on top: the bonus lasts the whole tour');
+  fight(R, 'normal', 3, {});
+  t.eq(a.enc, 5, 'a summary with no fanbase field (an older engine) changes nothing');
+  const o = RUN.combatInit(R, { enemies: ['kappa'], tier: 'normal', seed: 1 });
+  t.eq(o.deck.find((c) => c.uid === a.uid).enc, 5, 'combatInit hands the bonus to COMBAT.create');
+  o.deck.find((c) => c.uid === a.uid).enc = 99; t.eq(a.enc, 5, 'as a copy');
+  const back = roundTrip(R);
+  t.eq(back.deck.find((c) => c.uid === a.uid).enc, 5, 'a save keeps enc');
+  const junk = JSON.parse(J(RUN.serialize(R)));
+  junk.deck[0].enc = 'lots'; junk.deck[1].enc = -4; junk.deck[2].enc = 2.7;
+  const j = RUN.deserialize(junk);
+  t.eq(j.deck[0].enc, undefined, 'a junk enc is dropped'); t.eq(j.deck[1].enc, undefined, 'a negative enc is dropped'); t.eq(j.deck[2].enc, 2, 'a fraction is floored');
+  const old = JSON.parse(J(RUN.serialize(NEW({ seed: 8 }))));
+  old.deck.forEach((c) => { delete c.enc; });
+  const ob = RUN.deserialize(old);
+  t.ok(ob && ob.deck.every((c) => c.enc === undefined), 'a save from before Fanbase loads, with no bonus anywhere');
+});
+t.test('Fanbase: a transformed card loses the bonus (it is a different card now)', () => {
+  const R = NEW();
+  R.deck[0].enc = 6;
+  const p = pendingOf(R, { op: 'transformCard' });
+  t.eq(RUN.resolvePending(R, p.id, [R.deck[0].uid]).ok, true, 'transformed');
+  t.eq(R.deck[0].enc, undefined, 'no enc on the new card');
+});
+
 await t.done();

@@ -12,7 +12,7 @@
 // C.summary()). It needs only MAP.key neighbors generate paint pathToPaint canBrush applyBrush canMove move serialize deserialize.
 //
 // R (JSON-safe, see serialize):
-//   v id seed trial daily mods(trial deltas) unlocked({card,relic,gem}|null = everything) heroes[{id,hp,maxHp}] frontIdx deck[{uid,id,up,gems}]
+//   v id seed trial daily mods(trial deltas) unlocked({card,relic,gem}|null = everything) heroes[{id,hp,maxHp}] frontIdx deck[{uid,id,up,gems,enc?}] (enc: a Fanbase card's bonus damage)
 //   gems[gemId] relics[id] brushes[id] gold ink inkMax chapter map node pending[] stats{every LISTS.statKeys} flags{} rareOffset removals
 //   seen{events[]} foes{enemyId:kills} log[{ch,msg}] done victory chapterCleared recorded, plus bookkeeping hk pendSeq opsN lastEnc.
 //   done/victory: a combat was lost, or the chapter 3 boss fell (chapterEnd). chapterCleared: a boss reward was finished and
@@ -329,6 +329,7 @@ const RUN = (() => {
       inst.gems.forEach((g) => { if (g) R.gems.push(g); });
       inst.uid = U.uid();
       inst.id = next.id;
+      delete inst.enc;
       inst.up = inst.up && next.up ? 1 : 0;
       inst.gems = (next.slots || []).map(() => null);
       log.push({ op: kind, id: next.id, uid: inst.uid, from: def.id, text: `${name} became ${next.name}.` });
@@ -1015,6 +1016,11 @@ const RUN = (() => {
     const kills = Array.isArray(stats.kills) ? stats.kills : (Array.isArray(S.kills) ? S.kills : []);
     const win = S.result === 'win';
     mergeCombatStats(R, stats, kills, tier, win);
+    // Fanbase: kills grew these deck cards for the rest of the tour (DATA "Card mechanics"); `enc` is the total bonus damage
+    if (S.fanbase && typeof S.fanbase === 'object') Object.keys(S.fanbase).forEach((k) => {
+      const inst = findInst(R, Number(k)), n = S.fanbase[k];
+      if (inst && isNum(n) && n > 0) inst.enc = (isNum(inst.enc) && inst.enc > 0 ? inst.enc : 0) + Math.floor(n);
+    });
     if (!win) {
       R.done = true;
       R.victory = false;
@@ -1315,7 +1321,9 @@ const RUN = (() => {
     R.map = map;
     R.deck = R.deck.filter((c) => c && DATA.cards[c.id] && isNum(c.uid)).map((c) => {
       const slots = DATA.cards[c.id].slots || [];
-      return { uid: c.uid, id: c.id, up: c.up && DATA.cards[c.id].up ? 1 : 0, gems: slots.map((s, i) => (typeof (c.gems || [])[i] === 'string' && DATA.gems[c.gems[i]] ? c.gems[i] : null)) };
+      const inst = { uid: c.uid, id: c.id, up: c.up && DATA.cards[c.id].up ? 1 : 0, gems: slots.map((s, i) => (typeof (c.gems || [])[i] === 'string' && DATA.gems[c.gems[i]] ? c.gems[i] : null)) };
+      if (isNum(c.enc) && c.enc > 0) inst.enc = Math.floor(c.enc);     // Fanbase bonus; saves from before Fanbase have none
+      return inst;
     });
     R.gems = (Array.isArray(R.gems) ? R.gems : []).filter((g) => typeof g === 'string' && DATA.gems[g]);   // duplicates are real: two copies of one gem
     R.relics = strs(R.relics).filter((r) => DATA.relics[r]);

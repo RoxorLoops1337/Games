@@ -563,9 +563,9 @@ RawClaw never uses `!` and says `It is not a costume.` exactly once; Andy uses `
 
 ---------------------------------------------------------------------------------------------------------------------------------
 
-## 2. THE FULL CARD TABLE (160 ids)
+## 2. THE FULL CARD TABLE (172 ids)
 
-Naming rules (bible 7.4 plus the card suites): 1 to 3 words, 3 to 28 characters, capitalised, unique among all 160 cards (ignoring
+Naming rules (bible 7.4 plus the card suites): 1 to 3 words, 3 to 28 characters, capitalised, unique among all 172 cards (ignoring
 case and punctuation), no hero prefix, no dash. Jasmin's, RawClaw's and Andy's names are letters, apostrophes and spaces only (their
 suites test `/^[A-Z][A-Za-z' ]+$/`); RoxorLoops's suite also allows a hyphen (`Hi-Hat Guard`, `Build-Up`). No name reuses a reserved
 name (H16: Spells, statuses, keywords, tiles, Headliners, passives, hero titles, Stickers, Encores, Untangle, Mic Squeal, Botling, The
@@ -573,7 +573,7 @@ Viral Clip). One bible-binding exception: `hanae_blade_duet` **Calling of the Mo
 4.3 for the test change). Flavour lines: at most 80 characters, end with `.`, `!` or `?`, no dash, never name another hero, never quote
 a real lyric.
 
-### 2.1 Jasmin (`js/data_cards_hanae.js`, 37 cards: floral, vocal and arpeggio spells)
+### 2.1 Jasmin (`js/data_cards_hanae.js`, 40 cards: floral, vocal and arpeggio spells)
 
 | id (stays) | Echowake name | type, rarity, cost | what it does | art.m | **new name** | concept (what it looks and sounds like) | flavour (exact) |
 |---|---|---|---|---|---|---|---|
@@ -614,8 +614,11 @@ a real lyric.
 | `hanae_blossom_field` | Blossom Field | power, rare, 2 | 5 Block; end of turn: damage equal to her Bloom (up to 6) to all enemies | bloom | **Cherry Lane** | Cherry trees bloom along the edge of the stage; at the end of every turn they shake their petals over every enemy. | `Stand still long enough, and the whole street starts to bloom.` |
 | `hanae_blade_dance` | Blade Dance | power, rare, 2 | 1 Crescendo (up: and 1 Volume) | fan | **Slow Swell** | One long note that keeps swelling, a little more every turn, the petals round her drifting thicker. | `Every bar, a little more. She never once raised her voice.` |
 | `hanae_waltz_of_steps` | Waltz of Steps | power, rare, 2 | once a turn, when either hero swaps: 1 Bloom and 4 Block | wind | **Stage Waltz** | Every time the duo trade places they twirl like a waltz, and she gains a blossom and a soft shield. | `One, two, three, swap. One, two, three, swap. Nobody trips.` |
+| `hanae_crowd_pleaser` | (new) | attack, common, 1 | 4 damage; Hype 2 (up: 5 damage, Hype 3) | star (pose) | **Crowd Pleaser** | She points the mic at the crowd and the crowd sings the hook back; every card before it made them louder. | `She points at the crowd. The crowd points back. Everybody wins.` |
+| `hanae_signature_song` | (new) | attack, uncommon, 1 | 5 damage; Fanbase 2 (up: 7 damage) | slash (pose) | **Signature Song** | The song everybody knows; each encore it wins adds another row of fans singing along. | `The one everybody knows the words to. More of them every night.` |
+| `hanae_mashup` | (new) | attack, rare, 1 | 1 damage 3 times; Remix 1 (up: Remix 2) | cross_slash (pose) | **Mashup** | She stitches two songs into one, and every time she sings it the blend gets tighter and the three notes land harder. | `Two songs, one key, zero permission.` |
 
-### 2.2 RoxorLoops (`js/data_cards_kuro.js`, 37 cards: beatbox sounds and arranger moves)
+### 2.2 RoxorLoops (`js/data_cards_kuro.js`, 40 cards: beatbox sounds and arranger moves)
 
 | id (stays) | Echowake name | type, rarity, cost | what it does | art.m | **new name** | concept (what it looks and sounds like) | flavour (exact) |
 |---|---|---|---|---|---|---|---|
@@ -656,8 +659,11 @@ a real lyric.
 | `kuro_second_edition` | Canon | skill, rare, 1 | copy up to 2 cards in hand; Fade | book | **Loop Station** | He stomps the little loop pedal board at his feet: whatever is in his hand plays again, recorded and copied. | `Just for emergencies. It is always an emergency.` |
 | `kuro_scene_change` | Call and Response | power, rare, 2 | whenever either hero swaps: draw 1, 1 Groove | mask | **Back and Forth** | Every time the duo trade places the beat bounces with them: a new card and a new layer of groove each swap. | `You lead, I back. I lead, you back. Nobody sits down.` |
 | `kuro_inkwash_sanctum` | Resonant Sanctum | skill, rare, 2 | spend all Groove: both heroes 3 Block plus 3 per Groove | lotus | **Imperfect Harmony** | He drops the beat out and just hums along with his partner, a hair off the grid and a bit wobbly, and the sound wraps both of them up. | `A hair off the grid, a little wobbly, and completely real.` |
+| `kuro_overdub` | (new) | skill, common, 1 | 4 Block; Loop (up: 6 Block) | scroll | **Overdub** | He taps the looper and the last thing anyone played comes round again, one layer thicker. | `Same take again, one layer thicker.` |
+| `kuro_beat_juggle` | (new) | attack, uncommon, 0 | 3 damage; Remix 2 (up: 4 damage, Remix 3) | ink_splash (pose) | **Beat Juggle** | Two records, one beat: every pass of the juggle is faster and hits harder. | `Two records, one beat, a lot of wrist.` |
+| `kuro_live_looping` | (new) | skill, rare, 1 | 1 Groove; Loop 2; Fade (up: no Fade) | koi | **Live Looping** | He stacks the last part twice on the pedal, live, and nobody can tell which voice is really him. | `One mouth. Forty tracks. Nobody can tell which one is live.` |
 
-### 2.3 RawClaw (`js/data_cards_suzu.js`, 37 cards: electronic effects and production tricks)
+### 2.3 RawClaw (`js/data_cards_suzu.js`, 40 cards: electronic effects and production tricks)
 
 | id (stays) | Echowake name | type, rarity, cost | what it does | art.m | **new name** | concept (what it looks and sounds like) | flavour (exact) |
 |---|---|---|---|---|---|---|---|
@@ -698,8 +704,11 @@ a real lyric.
 | `suzu_guardian_kami` | Guardian Kami | power, rare, 2 | the next time a hero loses their voice, bring them back with 50% HP; both heroes 10 Block | spirit_orb | **Voice Memo** | He kept a voice memo of each of them; when a voice goes, he plays it back until it sings along again. | `He kept a voice memo of you laughing. Just in case.` |
 | `suzu_shrine_grounds` | Shrine Grounds | power, rare, 2 | start of turn: both heroes gain Block equal to his Reverb (up to 5) | torii | **Acoustic Foam** | He lines the stage with violet acoustic foam; every turn the room he built wraps both heroes. | `Where he stands, the room starts to sound better.` |
 | `suzu_lunar_domain` | Lunar Domain | power, rare, 3 | every 2nd turn: 2 Muffled and 1 Exposed to all enemies | moon | **Mixing Desk** | He rolls out the big mixing desk; every second turn he pulls every enemy's fader down and strips their effects. | `He controls the mix. Everyone else just thinks they do.` |
+| `suzu_delay_throw` | (new) | skill, common, 1 | the lead hero 4 Block; Loop (up: 6 Block) | bell | **Delay Throw** | He throws the last sound into the delay and it comes back for another go. | `Say it once. The room says it again.` |
+| `suzu_build_the_buzz` | (new) | attack, uncommon, 1 | 3 damage to all enemies; Hype 1 (up: 4 damage) | wind (pose) | **Build the Buzz** | A murmur under the beat grows with every card into a roar that rolls over every enemy. | `A murmur, a hum, a roar.` |
+| `suzu_platinum_record` | (new) | attack, rare, 2 | 10 damage; Fanbase 3 (up: 13 damage, Fanbase 4) | coin (pose) | **Platinum Record** | A spinning platinum disc; every enemy it knocks out of the charts makes the next spin heavier. | `Every fan you win is one more voice in the chorus.` |
 
-### 2.4 Andy (`js/data_cards_raiga.js`, 37 cards: bass and low-end moves)
+### 2.4 Andy (`js/data_cards_raiga.js`, 40 cards: bass and low-end moves)
 
 | id (stays) | Echowake name | type, rarity, cost | what it does | art.m | **new name** | concept (what it looks and sounds like) | flavour (exact) |
 |---|---|---|---|---|---|---|---|
@@ -740,6 +749,9 @@ a real lyric.
 | `raiga_storms_eye` | Storm's Eye | power, rare, 2 | 3 Rumble, draw 1; up to 2 times a turn, when hit: 1 Rumble | eye | **Calm Centre** | In the middle of the noise he closes his eyes and smiles; every hit just feeds the rumble. | `In the loud middle of everything, someone is smiling.` |
 | `raiga_thornstorm` | Thornstorm | power, rare, 2 | 5 Block, 1 Feedback; start of turn: damage equal to his Feedback (max 8) to all enemies | thorns | **Speaker Quake** | His speakers shake so hard at the start of every turn that every enemy gets a jolt, and anything that hits him gets one too. | `The speakers were a gift. The shaking was a bonus.` |
 | `raiga_storm_taiko` | Storm Taiko | power, rare, 2 | every 3rd card he plays: 2 damage to all enemies, 1 Rumble | sun | **Triplet Feel** | He slips into a triplet feel; every third card he plays lands on the big beat and booms across every enemy. | `One for courage, one for fun, and one for the floor.` |
+| `raiga_deep_cut` | (new) | attack, common, 1 | 6 damage; Fanbase 1 (up: 7 damage, Fanbase 2) | fist (pose) | **Deep Cut** | The album track only the real fans know, and after every win there are more of them. | `Track nine. The fans who know, know.` |
+| `raiga_mosh_pit` | (new) | attack, uncommon, 2 | 8 damage; Hype 3 (up: 10 damage, Hype 4) | kick (pose) | **Mosh Pit** | The floor opens up; every card before it whips the pit harder before he drops in. | `He did not start it. He is just the floor it happens on.` |
+| `raiga_dub_remix` | (new) | attack, rare, 2 | 6 damage to all enemies; Remix 3 (up: 8 damage, Remix 4) | wave (pose) | **Dub Remix** | The same bassline round again, with more low end every pass, rolling over the whole line. | `Same bassline. Heavier every time it comes round.` |
 
 ### 2.5 Shared curse and status cards (`js/data_cards_shared.js`, 12 cards)
 
@@ -821,6 +833,10 @@ shortest: `Undo` (4). Hyphens only in RoxorLoops's `Hi-Hat Guard` and `Build-Up`
 | `prism` | **Rainbow slot** | `A rainbow slot accepts a gem of any colour.` |
 | `xcost` | **X cost** | `Spends all your remaining Breath. The card reads X as the Breath spent.` |
 | `down` | **Voiceless** | `A hero at 0 HP loses their voice: their cards clog your hand and they cannot be targeted. If both heroes lose their voice, the tour ends.` |
+| `fanbase` | **Fanbase** | `Fanbase N: whenever this card defeats an enemy, it deals N more damage for the rest of the tour.` |
+| `remix` | **Remix** | `Remix N: each time you play this card, it deals N more damage for the rest of the fight.` |
+| `hype` | **Hype** | `Hype N: deals N more damage for each card you played earlier this turn.` |
+| `loop` | **Loop** | `Loop: add a Fading copy of the last other Attack or Skill you played this turn to your hand (Loop 2: two copies).` |
 
 ### 3.3 Card text sanity (only names and flavour are ours)
 

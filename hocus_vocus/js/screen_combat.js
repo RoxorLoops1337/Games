@@ -124,14 +124,15 @@
   const sfx = (id) => { if (typeof AUDIO !== 'undefined' && isFn(AUDIO, 'sfx')) safe(() => AUDIO.sfx(id)); };
   const heroName = (id) => (DATA.heroes[id] ? DATA.heroes[id].name : String(id));
   const cardDef = (id) => DATA.cards[id] || null;
-  const cp = (c) => { const o = { uid: c.uid, id: c.id, up: c.up ? 1 : 0, gems: (c.gems || []).slice() }; if (c.tmp) o.tmp = true; return o; };
+  // card mechanics state rides along (DATA "Card mechanics"): enc (Fanbase bonus), rmx (Remix plays), fade (a Loop copy)
+  const cp = (c) => { const o = { uid: c.uid, id: c.id, up: c.up ? 1 : 0, gems: (c.gems || []).slice() }; if (c.tmp) o.tmp = true; if (c.enc > 0) o.enc = c.enc; if (c.rmx > 0) o.rmx = c.rmx; if (c.fade) o.fade = true; return o; };
   const clone = (o) => (o === undefined || o === null ? o : JSON.parse(JSON.stringify(o)));
 
   // ==================================================================================================================
   // the view model (DESIGN 5.9 step 1 and 2). snapshot(C) builds it from the final engine state; applyEvent(vm, evt) advances it by
   // ONE event using only what the event carries. Both are pure and exported for the suite as UI.screens.combat._t.
   //   vm = { heroes:[unit], enemies:[unit], energy, maxEnergy, hand:[inst], draw:[inst], discard:[inst], exhaust:[inst], powers:[inst],
-  //          inPlay:inst+{to}|null, handN, drawN, discardN, exhaustN, powersN, turn, phase, result, pending, retained:{uid:true}, gold, ink }
+  //          inPlay:inst+{to}|null, handN, drawN, discardN, exhaustN, powersN, turn, phase, result, pending, retained:{uid:true}, gold, ink, played }
   //   unit = { kind, id, def, name, hp, maxHp, block, st:{}, down, fled, tier, size, lane, phase, row, intent }
   // The draw pile is a multiset here (the engine never tells the order); piles are exact per event, so a pile overlay opened in the
   // middle of the enemy phase shows what the picture shows.
@@ -157,7 +158,7 @@
       heroes: C.heroes.map(unitVM), enemies: C.enemies.map(unitVM), energy: C.energy, maxEnergy: C.maxEnergy,
       hand: C.hand.map(cp), draw: C.draw.map(cp), discard: C.discard.map(cp), exhaust: C.exhaust.map(cp), powers: C.powers.map(cp),
       inPlay: C.inPlay ? Object.assign(cp(C.inPlay), { to: 'discard' }) : null,
-      turn: C.turn, phase: C.phase, result: C.result, pending: C.pending ? clone(C.pending) : null, retained: {}, gold: 0, ink: 0,
+      turn: C.turn, phase: C.phase, result: C.result, pending: C.pending ? clone(C.pending) : null, retained: {}, gold: 0, ink: 0, played: C.played || 0,
     };
     C.hand.forEach((c) => { if (c.keep) vm.retained[c.uid] = true; });
     return counts(vm);
@@ -183,7 +184,7 @@
     switch (e.type) {
       case 'turn_start':
         vm.phase = e.who;
-        if (e.who === 'player') { vm.turn = e.turn; vm.energy = e.energy; vm.maxEnergy = e.maxEnergy; vm.retained = {}; }
+        if (e.who === 'player') { vm.turn = e.turn; vm.energy = e.energy; vm.maxEnergy = e.maxEnergy; vm.retained = {}; vm.played = 0; }
         break;
       case 'draw':
         e.cards.forEach((c) => { pull(vm, c.uid); vm.hand.push(cp(c)); });
@@ -218,6 +219,7 @@
       case 'play': {
         const c = pull(vm, e.card.uid) || cp(e.card);
         vm.inPlay = Object.assign(cp(c), { to: e.to });
+        vm.played = (vm.played || 0) + 1;      // what Hype reads in the hand: the cards played this turn
         break;
       }
       case 'hit': {
@@ -1097,6 +1099,7 @@
   }
 
   function refreshCards() {
+    S.ctxC.played = S.vm.played || 0;
     S.vm.hand.forEach((inst) => {
       const e = S.cards.get(inst.uid);
       if (!e) return;

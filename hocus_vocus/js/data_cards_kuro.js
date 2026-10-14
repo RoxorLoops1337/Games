@@ -1,4 +1,4 @@
-// Hocus Vocus: RoxorLoops (id `kuro`), The Beatbox Wizard: the complete card set (3 starters, 14 commons, 12 uncommons, 8 rares, no tokens).
+// Hocus Vocus: RoxorLoops (id `kuro`), The Beatbox Wizard: the complete card set (3 starters, 15 commons, 13 uncommons, 9 rares, no tokens).
 //
 // One IIFE that registers into DATA.cards (no top-level names). Data only: every number is an op field, card text is generated
 // from `fx` by DATA.cardHtml, and nothing here uses a function, a clock or randomness. Tests: tests/hocus_vocus_cards_kuro.test.mjs.
@@ -331,6 +331,32 @@
       up: { fx: [{ op: 'block', n: { base: 3, per: 'status', s: 'sumi', mul: 4 }, tgt: 'both', consume: 'sumi' }] },
       kw: [], slots: ['blue', 'any'], art: { m: 'lotus', c: 'azure' },
       flavor: 'A hair off the grid, a little wobbly, and completely real.',
+    },
+    // ------------------------------------------------------------------ card mechanics (DATA "Card mechanics": Loop, Remix)
+    // The looper pedal. Loop copies the last other Attack or Skill played this turn, the partner's cards included, and the copy Fades,
+    // so it is card advantage that never clogs the deck. Both Loop cards are Skills, so they also wake In the Pocket.
+    kuro_overdub: {
+      name: 'Overdub', hero: 'kuro', type: 'skill', rarity: 'common', cost: 1,
+      fx: [{ op: 'block', n: 4, tgt: 'self' }], mech: { loop: 1 },
+      up: { fx: [{ op: 'block', n: 6, tgt: 'self' }] },
+      kw: [], slots: ['blue'], art: { m: 'scroll', c: 'violet' },
+      flavor: 'Same take again, one layer thicker.',
+    },
+    kuro_beat_juggle: {
+      name: 'Beat Juggle', hero: 'kuro', type: 'attack', rarity: 'uncommon', cost: 0,
+      // Remix on a free card: 3, 5, 7, 9 ... and a fine thing to Loop
+      fx: [{ op: 'dmg', n: 3, tgt: 'enemy' }], mech: { remix: 2 },
+      up: { fx: [{ op: 'dmg', n: 4, tgt: 'enemy' }], mech: { remix: 3 } },
+      kw: [], slots: ['red'], art: { m: 'ink_splash', c: 'teal', hero: true },
+      flavor: 'Two records, one beat, a lot of wrist.',
+    },
+    kuro_live_looping: {
+      name: 'Live Looping', hero: 'kuro', type: 'skill', rarity: 'rare', cost: 1,
+      // Loop 2: two Fading copies of the last other card. The upgrade stops it Fading, so the pedal comes back every shuffle
+      fx: [{ op: 'status', s: 'sumi', n: 1, tgt: 'self' }], mech: { loop: 2 },
+      up: { kw: [] },
+      kw: ['exhaust'], slots: ['green', 'any'], art: { m: 'koi', c: 'teal' },
+      flavor: 'One mouth. Forty tracks. Nobody can tell which one is live.',
     },
   };
 
