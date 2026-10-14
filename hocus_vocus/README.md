@@ -5,11 +5,13 @@ Beatboxing and vocal magic. Two heroes, one country on mute, a deck of gem-socke
 Play: https://games-71g.pages.dev/hocus_vocus/
 Art sheets (every sprite, icon and scene the game draws): `hocus_vocus/gallery.html`
 
-In the Soundlands real voices are magic: a sung note opens a blossom, a beatboxed kick makes a whole street bounce. Then the Gloss
-arrived, a polite, shimmering filter that only wants everyone to look and sound perfect, and perfect things have nothing left to say.
-The Soundlands went on mute. Two real, imperfect voices pack the van and go on tour, unmuting the world hex by hex with Vox: hocus
-vocus. You lead two heroes through a shared deck, a hex map and three Acts, and every hex you unmute sings one note of the Act's
-hidden tune, so the road you choose becomes a groove. The finale asks one question: are we losing being human?
+RoxorLoops and Jasmin are on tour, driving the tour bus to a show. The bus drives through a glitchy shimmer, and suddenly the whole
+world is silent. Far ahead the Gloss, a fake-perfect filter that is basically AI slop (glossy, slightly wrong, copying everything into
+something smooth and soulless), is slurping up every sound. The duo grab their mics and bring the noise back with real voices,
+unmuting the Soundlands hex by hex with Vox: hocus vocus. You lead two heroes through a shared deck, a hex map and three Acts, and every
+hex you unmute sings one note of the Act's hidden tune, so the road you choose becomes a groove. A short animated bus intro opens the
+first tour, and the Tour Diary tells the rest in two or three plain lines per entry. The finale asks one question: are we losing being
+human?
 
 ## The cast
 

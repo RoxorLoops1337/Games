@@ -514,9 +514,12 @@ t.test('lore: every fixed id, titles and text within the page, one paragraph eac
   t.eq(barks.length, 4, 'four bark sets');
   stories.forEach((s) => {
     t.ok(s.title.length >= 5 && s.title.length <= 40, `${s.id}: title fits (${s.title.length})`);
-    t.ok(s.text.length >= 400 && s.text.length <= 700, `${s.id}: a full storybook page, within the limit (${s.text.length})`);
+    // HV_STORY 1 and 3: the owners asked for few words, punchy and easy to follow: at most three short sentences and about 280 characters
+    const sentences = s.text.split(/(?<=[.!?])\s+/);
+    t.ok(s.text.length >= 120 && s.text.length <= 280, `${s.id}: a short, punchy page (${s.text.length} characters, 120 to 280)`);
     t.ok(/[.!?]$/.test(s.text), `${s.id}: ends like a page`);
-    t.ok(s.text.split(/(?<=[.!?])\s+/).length >= 6, `${s.id}: written as short sentences`);
+    t.ok(sentences.length >= 2 && sentences.length <= 3, `${s.id}: two or three sentences (${sentences.length})`);
+    sentences.forEach((x) => t.ok(x.split(' ').length <= 24, `${s.id}: a short sentence a ten year old can follow (${x.split(' ').length} words): ${x.slice(0, 40)}`));
   });
   t.eq(new Set(stories.map((s) => s.title)).size, stories.length, 'page titles are unique');
   t.eq(new Set(stories.map((s) => s.text)).size, stories.length, 'page texts are unique');
@@ -545,7 +548,7 @@ t.test('lore is the spine: the Gloss, the two voices, each Headliner who held on
   const all = stories.map((s) => s.text).join(' ');
   t.ok(all.split('Gloss').length - 1 >= 6, `the Gloss recurs through the entries (${all.split('Gloss').length - 1} times)`);
   t.ok(!new RegExp(L.heroIds.map((h) => esc(DATA.heroes[h].name)).join('|')).test([T('intro'), T('ch1_intro'), T('ch2_intro'), T('ch3_intro'), T('ch1_clear'), T('ch2_clear'), T('victory'), T('defeat')].join(' ')), 'the shared story pages never name a hero (the party is chosen by the player)');
-  t.ok(all.length > 6000, 'a lot of story');
+  t.ok(all.length > 1800 && all.length <= 12 * 280, `enough story, told briefly (${all.length} characters)`);
 });
 
 t.test('barks: five lines for each of start, hurt, kill, down, win and swap, at most 64 characters, in four distinct voices', () => {
