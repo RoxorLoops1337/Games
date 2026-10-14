@@ -1942,7 +1942,7 @@ const BLANK_LINKS = { handle: '@roxorloopsandjasmin', website: '', youtube: '', 
 const setLinks = (g, o) => g._run(`DATA.LINKS = Object.freeze(${JSON.stringify(Object.assign({}, BLANK_LINKS, o))});`);
 
 await t.test('follow the duo: the title footer is the credits line, Follow the duo, Share and (only with a URL) Support the duo, with the version last', async () => {
-  const g = fresh();
+  const g = fresh(); setLinks(g, {});
   await go(g, 'title'); g._click('.mn-gate'); await settle(g);
   const foot = $(g, '.mn-foot');
   t.deep(Array.from(foot.children).map((c) => c.className.split(' ')[0]), ['mn-credits', 'mn-foot-btns', 'mn-ver'], 'the footer reads credits, buttons, version: the version stays last');
@@ -1965,6 +1965,16 @@ await t.test('follow the duo: the title footer is the credits line, Follow the d
   t.eq(g._clipboard, SHARE_TEXT + ' ' + g.UI.shareUrl(), 'Share writes the share text, a space and the page address');
   t.ok(toasts(g).indexOf('Copied. Go on, show someone.') >= 0, 'and says so: ' + toasts(g).join(' | '));
   t.eq(errors(g), 0, 'no console errors');
+});
+
+await t.test('follow the duo: the shipped DATA.LINKS are the five public pages, with no Support, shop or booking address', async () => {
+  const g = fresh();
+  const L = g._run('DATA.LINKS');
+  t.deep({ website: L.website, youtube: L.youtube, facebook: L.facebook, tiktok: L.tiktok, instagram: L.instagram }, {
+    website: 'https://roxorloopsandjasmin.com', youtube: 'https://www.youtube.com/@RoxorLoops', facebook: 'https://web.facebook.com/RoxorLoopsAndJasmin/',
+    tiktok: 'https://www.tiktok.com/@roxorloopsandjasmin', instagram: 'https://www.instagram.com/roxorloopsandjasmin' }, 'the duo pages');
+  t.eq(L.support, '', 'no Support button until the owners ask for one');
+  t.ok(Object.keys(L).every((k) => !/^(book|booking|shop|gigs?)$/i.test(k) && !/\/shop|\/book|booking/i.test(String(L[k]))), 'no booking or shop link in the game');
 });
 
 await t.test('follow the duo: Support the duo appears in the footer only once DATA.LINKS.support is a web address, as a new-tab anchor, and never fetches or navigates', async () => {
@@ -2005,7 +2015,7 @@ await t.test('follow the duo: the footer css (one row wide, credits above and tw
 });
 
 await t.test('follow the duo: the sixth Tour Bus tab is the panel at full size with the about text, the no-links line and Jordan, and a URL adds a pill', async () => {
-  const g = fresh();
+  const g = fresh(); setLinks(g, {});
   await go(g, 'library', { tab: 'follow' });
   t.eq(g.UI.screens.library.state().tab, 'follow', 'params.tab opens the follow tab');
   t.eq(tabBtn(g, 'follow').textContent.trim(), 'Follow the duo', 'its label'); t.ok($(g, '.tab[data-id=follow] .mn-tab-ico'), 'with a motif icon like the others');
@@ -2038,7 +2048,7 @@ await t.test('follow the duo: the sixth Tour Bus tab is the panel at full size w
 });
 
 await t.test('follow the duo: the settings About group is the last group on the screen and in the pause overlay, reads DATA.LINKS and fetches nothing', async () => {
-  const g = fresh();
+  const g = fresh(); setLinks(g, {});
   await go(g, 'settings');
   const groups = $$(g, '.mn-set-group');
   const about = groups[groups.length - 1];

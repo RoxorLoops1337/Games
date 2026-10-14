@@ -199,11 +199,11 @@ const DATA = (() => {
   // ------------------------------------------------------------------
   const LINKS = Object.freeze({
     handle: '@roxorloopsandjasmin',
-    website: '',
-    youtube: '',
-    facebook: '',
-    tiktok: '',
-    instagram: '',
+    website: 'https://roxorloopsandjasmin.com',
+    youtube: 'https://www.youtube.com/@RoxorLoops',
+    facebook: 'https://web.facebook.com/RoxorLoopsAndJasmin/',
+    tiktok: 'https://www.tiktok.com/@roxorloopsandjasmin',
+    instagram: 'https://www.instagram.com/roxorloopsandjasmin',
     support: '',
     game: '',   // the public game address used by Share; empty means the current page address without query or hash
   });
