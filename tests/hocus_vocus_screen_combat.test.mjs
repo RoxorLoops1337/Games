@@ -237,6 +237,21 @@ await t.test('applyEvent: units, piles and the played card, event by event', () 
   applyEvent(vm, { type: 'end', result: 'win' }); t.eq(vm.result, 'win', 'end records the result');
 });
 
+await t.test('applyEvent: card mechanics ride along (Fanbase enc, Remix rmx, Loop fade) and the vm counts the cards played this turn for Hype', () => {
+  const g = boot({ only: ['screen_combat'], skip: ['scene'] });
+  const { applyEvent, counts } = g.UI.screens.combat._t;
+  const unit = (id, kind, o) => Object.assign({ kind, id, def: id, name: id, hp: 20, maxHp: 20, block: 0, st: {}, down: false, fled: false, tier: 'normal', size: 'm', lane: 4, phase: 0, row: kind === 'hero' ? 'front' : null, intent: null }, o || {});
+  const vm = counts({ heroes: [unit('hanae', 'hero'), unit('kuro', 'hero', { row: 'back' })], enemies: [unit('kappa#1', 'enemy')], energy: 3, maxEnergy: 3, hand: [], draw: [], discard: [], exhaust: [], powers: [], inPlay: null, turn: 1, phase: 'player', result: null, pending: null, retained: {}, gold: 0, ink: 0, played: 0 });
+  applyEvent(vm, { type: 'draw', cards: [{ uid: 1, id: 'raiga_deep_cut', up: 0, gems: [null], enc: 4 }, { uid: 2, id: 'kuro_beat_juggle', up: 0, gems: [null], rmx: 2 }], reshuffled: false });
+  applyEvent(vm, { type: 'add_card', cards: [{ uid: 3, id: 'kuro_ink_flick', up: 0, gems: [null], tmp: true, fade: true }], to: 'hand' });
+  t.deep(vm.hand.map((c) => [c.enc || 0, c.rmx || 0, !!c.fade]), [[4, 0, false], [0, 2, false], [0, 0, true]], 'enc, rmx and fade survive into the hand');
+  applyEvent(vm, { type: 'play', card: { uid: 2, id: 'kuro_beat_juggle', up: 0, gems: [null], rmx: 2 }, hero: 'kuro', target: 'kappa#1', cost: 0, to: 'discard' });
+  applyEvent(vm, { type: 'play', card: { uid: 3, id: 'kuro_ink_flick', up: 0, gems: [null], tmp: true, fade: true }, hero: 'kuro', target: 'kappa#1', cost: 0, to: 'exhaust' });
+  t.eq(vm.played, 2, 'two plays this turn');
+  applyEvent(vm, { type: 'turn_start', who: 'player', turn: 2, energy: 3, maxEnergy: 3 });
+  t.eq(vm.played, 0, 'a new player turn resets it');
+});
+
 await t.test('describe: one screen-reader line per event that matters', () => {
   const g = boot({ only: ['screen_combat'], skip: ['scene'] });
   const { describe } = g.UI.screens.combat._t;

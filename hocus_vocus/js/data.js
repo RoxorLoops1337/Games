@@ -23,6 +23,8 @@
 //                rewardPool(heroId, rarity, unlocked) relicPool(rarity, unlocked, heroIds)
 //                gemPool({tier,color}, unlocked) eligibleGroups(ch, 'normal'|'elite', diff)
 //                walkOps(ops, fn)                  visits every op, through cond/repeat/hook nesting
+//   Mechanics    mechOf(def, up) -> {fanbase, remix, hype, loop} | null   mechNow(inst, mech, ctx) -> live bonuses   mechKey(inst, ctx)
+//                (card mechanics: see "Card mechanics" below the lookups; they also wrap resolveCard, cardHtml and cardPlain)
 //   Mods         foldMods([deltaObj...]) -> final flat mods     trialDeltas(level) -> summed deltas
 //                modsFor(relicIds, trialLevelOrDeltas) -> final flat mods (what RUN.mods(R) returns: modsFor(R.relics, R.mods))
 //                rowFor(heroId, row, relicIds) -> merged row bonuses (hero row plus relic `rows`)
@@ -59,6 +61,8 @@ const DATA = (() => {
     cardTypes: ['attack', 'skill', 'power', 'curse', 'status'],
     rarities: ['starter', 'common', 'uncommon', 'rare', 'token'],   // token: generated in combat, never a reward
     cardKw: ['exhaust', 'retain', 'innate', 'ethereal', 'unplayable'],
+    // card mechanics a def carries in `mech: {id: N}` (see "Card mechanics" below the lookups): printed as a keyword with a number
+    mechs: ['fanbase', 'remix', 'hype', 'loop'],
     slotColors: ['red', 'blue', 'green', 'gold', 'any'],
     gemColors: ['red', 'blue', 'green', 'gold'],
     gemCuts: ['round', 'oval', 'square', 'drop', 'star'],
@@ -254,6 +258,11 @@ const DATA = (() => {
     prism: { name: 'Rainbow slot', text: 'A rainbow slot accepts a gem of any colour.' },
     xcost: { name: 'X cost', text: 'Spends all your remaining Breath. The card reads X as the Breath spent.' },
     down: { name: 'Voiceless', text: 'A hero at 0 HP loses their voice: their cards clog your hand and they cannot be targeted. If both heroes lose their voice, the tour ends.' },
+    // card mechanics (LISTS.mechs): one sentence each, N is the number printed after the word
+    fanbase: { name: 'Fanbase', text: 'Fanbase N: whenever this card defeats an enemy, it deals N more damage for the rest of the tour.' },
+    remix: { name: 'Remix', text: 'Remix N: each time you play this card, it deals N more damage for the rest of the fight.' },
+    hype: { name: 'Hype', text: 'Hype N: deals N more damage for each card you played earlier this turn.' },
+    loop: { name: 'Loop', text: 'Loop: add a Fading copy of the last other Attack or Skill you played this turn to your hand (Loop 2: two copies).' },
   };
 
   // ------------------------------------------------------------------
@@ -495,7 +504,7 @@ const DATA = (() => {
 
   // How much content (CONTENT_SPEC 3 to 6). DATA.audit checks these.
   const QUOTA = {
-    cards: { starter: 3, common: 14, uncommon: 12, rare: 8, powers: 4, lockedUncommon: 4, lockedRare: 4, slots: { red: 10, blue: 10, green: 8, gold: 8 } },
+    cards: { starter: 3, common: 15, uncommon: 13, rare: 9, powers: 4, lockedUncommon: 4, lockedRare: 4, slots: { red: 10, blue: 10, green: 8, gold: 8 } },
     enemies: { normal: 10, elite: 3, minion: 3, boss: 1, normalGroups: 12, eliteGroups: 3, bossPhases: { 1: 1, 2: 1, 3: 2 } },
     relics: { common: 22, uncommon: 22, rare: 12, boss: 6, shop: 4, perHero: 3, lockedFrac: 0.3, textMax: 90, flavorMax: 80 },
     gems: { perColor: 6, tiers: [1, 1, 2, 2, 3, 3] },
@@ -585,6 +594,93 @@ const DATA = (() => {
       if (o.op === 'hook') D.walkOps(o.fx, fn, depth + 1);
     });
   };
+
+  // ---- card mechanics (LISTS.mechs) ----
+  // A card def may carry `mech: {fanbase?, remix?, hype?, loop?}`, each a whole number 1..9; `up.mech` REPLACES it (like up.kw).
+  //   fanbase N  whenever a hit of this card defeats an enemy, the card deals N more damage for the rest of the tour. COMBAT adds N to
+  //              `enc` on its copy of the card and reports the gains in C.summary().fanbase {uid: total}; RUN adds them to `enc` on the
+  //              deck instance (a whole number, saved with the run; an instance without it simply has no bonus yet).
+  //   remix N    each play adds N damage for the rest of the fight: COMBAT counts the plays on its copy as `rmx`.
+  //   hype N     N more damage for each card played earlier this turn: ctx.played (COMBAT passes it), else ctx.C.played.
+  //   loop N     after its own fx, add N temp copies of the last Attack or Skill played earlier this turn (never a card with Loop) to the
+  //              hand. A copy carries `fade: true`, which resolves with the Fade keyword.
+  // The three damage bonuses are added to `plus` on every dmg op of the card (through cond and repeat, never into hook fx), exactly like
+  // a gem's +N damage, so C.preview, the bots and the printed number all see them. data_text.js owns DATA.resolveCard, cardHtml and
+  // cardPlain; the accessors at the end of this IIFE wrap whatever it installs: resolveCard adds the bonuses (and Fade on a `fade`
+  // copy) plus `mech` (the def's numbers, upgrade applied) and `mechNow` ({fanbase, remix, hype} live bonuses) on the result, and
+  // cardHtml prints one sentence per mechanic before a closing Fade: "Fanbase 2 (now +4)." Pure, deterministic, no DOM.
+  D.mechOf = (def, up) => {
+    if (!def) return null;
+    const m = up && def.up && def.up.mech !== undefined ? def.up.mech : def.mech;
+    return m && typeof m === 'object' && Object.keys(m).length ? m : null;
+  };
+  // live damage bonuses of one instance: {fanbase, remix, hype, total}
+  D.mechNow = (inst, mech, ctx) => {
+    const i = inst && typeof inst === 'object' ? inst : {};
+    const whole = (v) => (typeof v === 'number' && Number.isFinite(v) && v > 0 ? Math.floor(v) : 0);
+    const played = ctx ? (ctx.played !== undefined ? ctx.played : ctx.C && ctx.C.played) : 0;
+    const out = { fanbase: mech && mech.fanbase ? whole(i.enc) : 0, remix: mech && mech.remix ? mech.remix * whole(i.rmx) : 0, hype: mech && mech.hype ? mech.hype * whole(played) : 0 };
+    out.total = out.fanbase + out.remix + out.hype;
+    return out;
+  };
+  // a cache key piece for engines that memoise resolutions ('' for a card the mechanics never change)
+  D.mechKey = (inst, ctx) => {
+    if (!inst || typeof inst !== 'object') return '';
+    const mech = D.mechOf(D.cards[inst.id], inst.up);
+    if (!mech && !inst.fade) return '';
+    const n = D.mechNow(inst, mech, ctx);
+    return 'm' + n.fanbase + ',' + n.remix + ',' + n.hype + (inst.fade ? 'f' : '');
+  };
+  const mechDmg = (ops, fn) => (Array.isArray(ops) ? ops : []).forEach((o) => {
+    if (!o || typeof o !== 'object') return;
+    if (o.op === 'dmg') fn(o);
+    if (o.op === 'cond') { mechDmg(o.then, fn); mechDmg(o.else, fn); }
+    if (o.op === 'repeat') mechDmg(o.do, fn);
+  });
+  const wrapResolve = (raw) => function resolveCard(x, ctx) {
+    const res = raw(x, ctx);
+    if (!res || !res.def) return res;
+    const inst = res.inst && typeof res.inst === 'object' ? res.inst : {};
+    const mech = D.mechOf(res.def, res.up);
+    if (!mech && !inst.fade) return res;
+    const out = Object.assign({}, res);
+    if (inst.fade && out.kw.indexOf('exhaust') < 0) out.kw = out.kw.concat(['exhaust']);
+    if (mech) {
+      out.mech = Object.assign({}, mech);
+      out.mechNow = D.mechNow(inst, mech, ctx);
+      if (out.mechNow.total > 0) {
+        out.fx = JSON.parse(JSON.stringify(out.fx));
+        mechDmg(out.fx, (o) => { o.plus = (o.plus || 0) + out.mechNow.total; });
+      }
+    }
+    return out;
+  };
+  const isResolvedCard = (x) => !!x && typeof x === 'object' && !!x.inst && Array.isArray(x.fx) && 'gemActive' in x;
+  const mechHtml = (res) => {
+    const m = res.mech;
+    if (!m) return [];
+    const base = (res.def && res.def.mech) || {};
+    const now = res.mechNow || {};
+    return LISTS.mechs.filter((k) => m[k]).map((k) => {
+      const word = `<span class="kw" data-kw="${k}">${keywords[k].name}</span>`;
+      const cls = m[k] > (base[k] || 0) ? ' up' : m[k] < (base[k] || 0) ? ' down' : '';
+      const num = k === 'loop' && m[k] === 1 ? '' : ` <span class="num${cls}">${m[k]}</span>`;
+      const live = now[k] > 0 ? ` (now <span class="num up">+${now[k]}</span>)` : '';
+      return word + num + live + '.';
+    });
+  };
+  const wrapHtml = (raw) => function cardHtml(x, ctx) {
+    const res = isResolvedCard(x) ? x : D.resolveCard(x, ctx);
+    const html = raw(res, ctx);
+    const extra = mechHtml(res);
+    if (!extra.length) return html;
+    const fade = `<span class="kw" data-kw="exhaust">${keywords.exhaust.name}</span>.`;
+    const add = extra.join(' ');
+    if (html.slice(-fade.length) === fade) { const head = html.slice(0, -fade.length).trim(); return (head ? head + ' ' : '') + add + ' ' + fade; }
+    return html ? html + ' ' + add : add;
+  };
+  const plainHtml = (h) => String(h).replace(/<[^>]*>/g, '').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, '&');
+  const wrapPlain = () => function cardPlain(x, ctx) { return plainHtml(D.cardHtml(x, ctx)); };
 
   // ---- mods (DESIGN 4.7) ----
   // count keys: [base, min, max]. frac keys fold to max(0.1, 1 + sum). reviveFrac is a delta on ECONOMY.reviveFrac.
@@ -713,7 +809,7 @@ const DATA = (() => {
     const noDash = (w, o) => { if (DASH.test(JSON.stringify(o))) err(w, 'contains an em or en dash'); };
     // top-level fields a def may carry: a typo'd or invented field is an error, not silently ignored
     const FIELDS = {
-      card: ['id', 'name', 'hero', 'type', 'rarity', 'cost', 'fx', 'up', 'kw', 'slots', 'art', 'flavor', 'hand', 'locked'],
+      card: ['id', 'name', 'hero', 'type', 'rarity', 'cost', 'fx', 'up', 'kw', 'slots', 'art', 'flavor', 'hand', 'locked', 'mech'],
       gem: ['id', 'name', 'color', 'tier', 'mod', 'art', 'text', 'locked'],
       relic: ['id', 'name', 'rarity', 'text', 'mods', 'rows', 'hooks', 'art', 'hero', 'locked', 'flavor'],
       enemy: ['id', 'name', 'title', 'chapter', 'tier', 'size', 'hp', 'moves', 'ai', 'start', 'phases', 'hooks', 'immune', 'art', 'lore', 'tags'],
@@ -1009,6 +1105,19 @@ const DATA = (() => {
       });
     }
 
+    // ---- card mechanics: {fanbase, remix, hype, loop}, whole numbers 1..9; the damage ones need a dmg op to grow ----
+    const vMech = (w, m, path, fx, type) => {
+      if (!isObj(m) || !Object.keys(m).length) return err(w, `${path} must be a non-empty object`);
+      Object.keys(m).forEach((k) => {
+        if (!has('mechs', k)) return err(w, `${path}: unknown mechanic "${k}" (one of ${LISTS.mechs.join(', ')})`);
+        if (!(isInt(m[k]) && m[k] >= 1 && m[k] <= 9)) err(w, `${path}.${k} must be a whole number 1..9`);
+      });
+      const flat = [];
+      D.walkOps(A(fx).filter((o) => isObj(o) && o.op !== 'hook'), (o) => { if (o.op !== 'hook') flat.push(o); });
+      if (['fanbase', 'remix', 'hype'].some((k) => m[k] !== undefined) && !flat.some((o) => o.op === 'dmg')) err(w, `${path}: fanbase, remix and hype need a dmg op (outside hooks)`);
+      if (m.loop !== undefined && type === 'power') err(w, `${path}: a power cannot Loop`);
+    };
+
     // ---- cards ----
     if (want('cards')) {
       const shared = (c) => c.hero === 'curse' || c.hero === 'status';
@@ -1035,12 +1144,13 @@ const DATA = (() => {
         if (c.up !== undefined) {
           if (!isObj(c.up)) err(w, 'up must be an object');
           else {
-            Object.keys(c.up).forEach((k) => { if (['fx', 'cost', 'kw'].indexOf(k) < 0) err(w, `up.${k} unknown (up may change fx, cost, kw)`); });
+            Object.keys(c.up).forEach((k) => { if (['fx', 'cost', 'kw', 'mech'].indexOf(k) < 0) err(w, `up.${k} unknown (up may change fx, cost, kw, mech)`); });
+            if (c.up.mech !== undefined) vMech(w, c.up.mech, 'up.mech', c.up.fx || c.fx, c.type);
             const upEnv = { cost: c.up.cost !== undefined ? c.up.cost : c.cost };
             if (c.up.fx) vOps(w, c.up.fx, 'card', 'up.fx', upEnv);
             if (c.up.cost !== undefined && !(c.up.cost === 'X' || (isInt(c.up.cost) && c.up.cost >= 0 && c.up.cost <= 5))) err(w, 'up.cost must be 0..5 or "X"');
             if (c.up.kw !== undefined) { if (!Array.isArray(c.up.kw)) err(w, 'up.kw must be an array (it REPLACES kw)'); else c.up.kw.forEach((k) => { if (!has('cardKw', k)) err(w, `unknown keyword "${k}" in up.kw`); }); }
-            if (playable && !c.up.fx && c.up.cost === undefined && c.up.kw === undefined) err(w, 'up must change fx, cost or kw');
+            if (playable && !c.up.fx && c.up.cost === undefined && c.up.kw === undefined && c.up.mech === undefined) err(w, 'up must change fx, cost, kw or mech');
             if (c.cost === 'X' && c.up.cost !== undefined && c.up.cost !== 'X' && !c.up.fx) err(w, 'up.cost turns an X card into a fixed cost: up.fx is required (per X is illegal there)');
           }
         } else if (playable) err(w, 'missing up (every playable non-token card needs an upgrade)');
@@ -1057,6 +1167,8 @@ const DATA = (() => {
           if (!isObj(c.hand)) err(w, 'hand must be an object');
           else Object.keys(c.hand).forEach((k) => { if (['turnEnd', 'drawn'].indexOf(k) < 0) err(w, `hand.${k} unknown`); else vOps(w, c.hand[k], 'hand', 'hand.' + k); });
         }
+        if (c.mech !== undefined) vMech(w, c.mech, 'mech', c.fx, c.type);
+        if (c.mech !== undefined && !playable) err(w, 'only playable hero cards carry a mech');
         if (c.locked !== undefined && !isBool(c.locked)) err(w, 'locked must be a boolean');
         if (c.locked && (c.rarity === 'starter' || c.rarity === 'common')) err(w, 'starters and commons are never locked');
         if (c.flavor !== undefined && !isStr(c.flavor)) err(w, 'flavor must be a string');
@@ -1548,6 +1660,15 @@ const DATA = (() => {
     }
     return out;
   };
+
+  // Card mechanics: data_text.js installs resolveCard, cardHtml and cardPlain with Object.assign, which goes through these setters,
+  // so every caller of DATA.resolveCard / cardHtml / cardPlain sees the mechanics (see "Card mechanics" above). Until data_text.js has
+  // loaded the getters return undefined, exactly as before.
+  const MECH_WRAP = { resolveCard: wrapResolve, cardHtml: wrapHtml, cardPlain: wrapPlain };
+  Object.keys(MECH_WRAP).forEach((k) => {
+    let fn;
+    Object.defineProperty(D, k, { enumerable: true, configurable: true, get: () => fn, set: (v) => { fn = typeof v === 'function' ? MECH_WRAP[k](v) : v; } });
+  });
 
   return D;
 })();

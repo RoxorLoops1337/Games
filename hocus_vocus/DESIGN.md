@@ -421,6 +421,7 @@ A **card definition** (`DATA.cards[id]`):
   flavor: 'Optional one-line quote.',
   hand: { turnEnd: [ops], drawn: [ops] },       // curses and status cards: ops run if in hand at end of turn / when drawn
   locked: true,                  // meta unlock (the Tour Bus); starters and commons are never locked
+  mech: { fanbase: 2 },          // card mechanics (LISTS.mechs, below); up.mech REPLACES it like up.kw
 }
 ```
 
@@ -440,6 +441,15 @@ A **card definition** (`DATA.cards[id]`):
 - **Upgrades:** one level. `up` replaces `fx` wholesale if given, may change `cost`, and `up.kw` REPLACES the base `kw`
   array (write `['exhaust','retain']` to keep exhaust and add retain, `[]` to remove all). Displayed name gets `+`.
   Every playable non-token card defines `up`.
+
+**Card mechanics** (`mech`, whole numbers 1..9, `LISTS.mechs`; glossary words in `DATA.keywords`; engine notes in `data.js` "Card mechanics"):
+`fanbase N` (Fanbase) whenever a hit of the card defeats an enemy it deals N more damage for the rest of the tour: COMBAT grows `enc` on its
+copy and reports deck gains in `C.summary().fanbase`, RUN adds them to `enc` on the deck instance (saved with the run; old saves have none,
+a transform drops it); `remix N` (Remix) each play adds N damage for the rest of the fight (`rmx` on the combat copy); `hype N` (Hype) N more
+damage per card played earlier this turn (`C.played`); `loop N` (Loop) after its ops, N temp copies of the last other Attack or Skill played
+this turn (`C.lastPlayed`, never a Loop card) go to the hand with `fade:true` and resolve with Fade. The damage bonuses ride on `plus` of
+every dmg op (like a gem's +N damage), so previews, bots and the printed number see them; the text adds one sentence per mechanic before a
+closing Fade, with the live bonus: "Fanbase 2 (now +4)." Deck instance: `{uid, id, up, gems, enc?}`.
 
 **Playing a card.** `C.play(uid, targetId)`:
 
@@ -854,7 +864,7 @@ C.endTurn() -> events                  // 4.2 steps 3 to 6: discards, enemy phas
 C.resolvePick(uids[]) -> events        // answers C.pending: unique candidates, count == min(n, candidates) (or <= n when optional or random)
 C.preview(uid, targetId?) -> { dmg: perHit|null, hits, block, heal }   // adjusted numbers for the live card text
 C.intent(enemyUnit) -> { move, name, kind, dmg (per hit or null), hits, tgt:[hero ids it would hit right now, taunt applied]|'random', block?, blockTo?, heal?, healTo?, statuses:[{s, n, to:'front'|'back'|'both'|'random'|'lowest'|'self'|'allEnemies'|'otherEnemy'|'lowestEnemy'}], adds:[{card,n,to}], summons:[{enemy,n}], text, stunned? }
-C.summary() -> { result, heroes:[{id,hp,maxHp,down}], maxHpGain:{heroId:n}, stats, kills, ink, gold }
+C.summary() -> { result, heroes:[{id,hp,maxHp,down}], maxHpGain:{heroId:n}, stats, kills, ink, gold, fanbase:{deckUid:n} }
 ```
 
 `C.summary().ink` is only the sum of `ink` ops; `gold` = `gold` ops plus thief loot returned minus loot never returned. `RUN.combatDone` adds kill Vox from `stats.kills` and `ECONOMY.killInk`, applies HP (voiceless heroes revive at `mods.reviveFrac`),

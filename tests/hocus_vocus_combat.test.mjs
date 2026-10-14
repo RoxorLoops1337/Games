@@ -2017,7 +2017,7 @@ t.test('summary: shape, copies, downed heroes stay down (RUN revives them), kill
   t.deep([C.heroes[1].down, C.front().id], [true, 'hanae'], 'a hero that starts at 0 HP is down');
   play(C, rig(C, [nuke])[0]);
   const sm = C.summary();
-  t.deep(Object.keys(sm).sort(), ['gold', 'heroes', 'ink', 'kills', 'maxHpGain', 'result', 'stats'], 'summary keys');
+  t.deep(Object.keys(sm).sort(), ['fanbase', 'gold', 'heroes', 'ink', 'kills', 'maxHpGain', 'result', 'stats'], 'summary keys');
   t.deep(sm.heroes, [{ id: 'hanae', hp: 30, maxHp: 70, down: false }, { id: 'kuro', hp: 0, maxHp: 60, down: true }], 'heroes: COMBAT leaves the downed hero down');
   t.deep(sm.kills, [{ def: 't_a', tier: 'normal', by: 'card' }, { def: 't_b', tier: 'elite', by: 'card' }], 'kills carry def, tier and how');
   sm.stats.kills.push('x'); sm.heroes[0].hp = 1; t.eq(C.stats.kills.length, 2, 'the summary is a copy'); t.eq(C.heroes[0].hp, 30, 'the units are untouched');
@@ -2144,7 +2144,7 @@ t.test('COMBAT.simulate and greedyPolicy: plays a whole combat, returns the summ
   const grunt = W.enemy('grunt', { hp: [30, 30], moves: { a: atk(5) }, ai: { seq: ['a'] } }), tank = W.enemy('tank', { hp: [9999, 9999] }), brute = W.enemy('brute', { hp: [999, 999], moves: { a: atk(60, 'both') }, ai: { seq: ['a'] } });
   const opts = () => ({ heroes: [{ id: 'hanae', hp: 70, maxHp: 70 }, { id: 'kuro', hp: 60, maxHp: 60 }], deck: W.deck([strike, strike, strike, strike, guard, guard, guard, guard]), enemies: [grunt], seed: 4 });
   const s = W.COMBAT.simulate(opts());
-  t.deep(Object.keys(s).sort(), ['actions', 'capped', 'gold', 'heroes', 'ink', 'kills', 'maxHpGain', 'result', 'stats', 'turns'], 'summary plus turns, actions, capped');
+  t.deep(Object.keys(s).sort(), ['actions', 'capped', 'fanbase', 'gold', 'heroes', 'ink', 'kills', 'maxHpGain', 'result', 'stats', 'turns'], 'summary plus turns, actions, capped');
   t.eq(s.result, 'win', 'the greedy bot beats a 30 HP grunt'); t.eq(s.capped, false, 'not capped'); t.ok(s.turns >= 2 && s.actions > 0, 'it took some turns'); t.ok(s.C && s.C.phase === 'over', 'the finished combat rides along non-enumerably'); t.ok(!JSON.stringify(s).includes('"C"'), 'and never serialises');
   t.deep(W.COMBAT.simulate(opts()).stats, s.stats, 'deterministic');
   // a custom policy
@@ -2431,6 +2431,162 @@ function fuzzOne(seed, opts = {}) {
   }
   return { C, bad, script, heroes, deck, enemyIds, relics, mods };
 }
+
+// ------------------------------------------------------------------ card mechanics (DATA "Card mechanics": Fanbase, Remix, Hype, Loop)
+const hitsOn = (ev, id) => only(ev, 'hit').filter((e) => e.dst.id === id).map((e) => e.raw);
+
+t.test('Fanbase: a kill grows the card at once, a deck card reports the gain in the summary, and the bonus reads from the instance', () => {
+  const W = world();
+  const fan = W.card('fan', { cost: 0, fx: [{ op: 'dmg', n: 5, tgt: 'enemy' }], mech: { fanbase: 3 } });
+  const weak = W.enemy('weakling', { hp: [4, 4] });
+  const C = W.fight({ deck: [fan], enemies: [weak, weak, W.dummy] });
+  let card = rig(C, [fan])[0];
+  let ev = play(C, card, C.enemies[0].id);
+  t.deep(hitsOn(ev, C.enemies[0].id), [5], 'the killing blow is the printed 5');
+  t.eq(card.enc, 3, 'the kill adds 3 to the card copy (enc)');
+  t.deep(C.summary().fanbase, { [card.uid]: 3 }, 'C.summary().fanbase reports 3 for its deck uid');
+  t.ok(/Fanbase 3 \(now \+3\)/.test(W.D.cardPlain(card)), 'the text shows the live bonus: ' + W.D.cardPlain(card));
+  t.ok(/Deal 8 damage/.test(W.D.cardPlain(card)), 'and the grown damage');
+  card = rig(C, [fan])[0];
+  t.eq(C.preview(card.uid, C.enemies[1].id).dmg, 8, 'C.preview sees 5 + 3');
+  ev = play(C, card, C.enemies[1].id);
+  t.deep(hitsOn(ev, C.enemies[1].id), [8], 'the next play hits for 8 and kills again');
+  t.eq(card.enc, 6, 'and grows again');
+  card = rig(C, [fan])[0];
+  ev = play(C, card, C.enemies[2].id);
+  t.deep(hitsOn(ev, C.enemies[2].id), [11], 'no kill on the 100 HP dummy: 11, no growth');
+  t.eq(card.enc, 6, 'a hit that does not kill adds nothing');
+  t.deep(C.summary().fanbase, { [card.uid]: 6 }, 'the summary sums the fight');
+  // a deck card that arrives with a bonus starts with it
+  const C2 = W.fight({ deck: [{ id: fan, enc: 7 }] });
+  const c2 = rig(C2, [fan])[0];
+  t.eq(c2.enc, 7, 'COMBAT.create keeps enc from the deck');
+  t.deep(hitsOn(play(C2, c2), C2.enemies[0].id), [12], 'and deals 5 + 7');
+  t.deep(C2.summary().fanbase, {}, 'nothing gained, nothing reported');
+  // all-enemy Fanbase counts every enemy it defeats
+  const fanAll = W.card('fan_all', { cost: 0, fx: [{ op: 'dmg', n: 5, tgt: 'all' }], mech: { fanbase: 2 } });
+  const C3 = W.fight({ deck: [fanAll], enemies: [weak, weak, W.dummy] });
+  const c3 = rig(C3, [fanAll])[0];
+  play(C3, c3);
+  t.eq(c3.enc, 4, 'two kills with one AoE: +2 twice');
+});
+
+t.test('Fanbase: temp copies keep the bonus but never report it; a card without Fanbase never grows', () => {
+  const W = world();
+  const fan = W.card('fan', { cost: 0, fx: [{ op: 'dmg', n: 5, tgt: 'enemy' }], mech: { fanbase: 3 } });
+  const plainHit = W.card('plain', { cost: 0, fx: [{ op: 'dmg', n: 5, tgt: 'enemy' }] });
+  const copier = W.card('copier', { type: 'skill', cost: 0, fx: [{ op: 'pick', from: 'hand', n: 1, then: 'copy' }] });
+  const weak = W.enemy('weakling', { hp: [4, 4] });
+  const C = W.fight({ deck: [{ id: fan, enc: 2 }, plainHit, copier], enemies: [weak, weak, W.dummy] });
+  const [f, , cp] = rig(C, [fan, plainHit, copier]);
+  play(C, cp);
+  C.resolvePick && C.pending && C.resolvePick([f.uid]);
+  const copy = C.hand.find((c) => c.tmp && c.id === fan);
+  t.ok(copy && copy.enc === 2, 'a copied Fanbase card carries the bonus (Loop Station style copy)');
+  play(C, copy, C.enemies[0].id);
+  t.eq(copy.enc, 5, 'the copy grows on a kill');
+  t.deep(C.summary().fanbase, {}, 'but a temp copy is not a deck card: nothing is reported');
+  const p = C.hand.find((c) => c.id === plainHit);
+  play(C, p, C.enemies[1].id);
+  t.ok(p.enc === undefined, 'a plain card that kills gets no enc');
+});
+
+t.test('Remix: every play adds N to the next play this fight, per hit, and a new fight starts fresh', () => {
+  const W = world();
+  const rmx = W.card('rmx', { cost: 0, fx: [{ op: 'dmg', n: 3, hits: 2, tgt: 'enemy' }], mech: { remix: 2 } });
+  const C = W.fight({ deck: [rmx] });
+  const id = C.enemies[0].id;
+  const seen = [];
+  for (let i = 0; i < 3; i++) { const c = rig(C, [rmx])[0]; seen.push(hitsOn(play(C, c), id)); }
+  t.deep(seen, [[3, 3], [5, 5], [7, 7]], 'Remix 2 on two hits: 3x2, 5x2, 7x2');
+  const card = C.discard.find((c) => c.id === rmx);
+  t.eq(card.rmx, 3, 'the copy counts its plays (rmx)');
+  t.ok(/Deal 9 damage 2 times\. Remix 2 \(now \+6\)\./.test(W.D.cardPlain(card)), 'the text shows the grown number and the live bonus: ' + W.D.cardPlain(card));
+  t.eq(W.D.cardPlain({ id: rmx, up: 0, gems: [] }), 'Deal 3 damage 2 times. Remix 2.', 'out of combat it prints its own numbers');
+  const C2 = W.fight({ deck: [rmx] });
+  t.deep(hitsOn(play(C2, rig(C2, [rmx])[0]), C2.enemies[0].id), [3, 3], 'a new fight starts from the printed number');
+});
+
+t.test('Hype: N more damage per card played earlier this turn, reset at the start of the next turn', () => {
+  const W = world();
+  const hype = W.card('hype', { cost: 1, fx: [{ op: 'dmg', n: 4, tgt: 'enemy' }], mech: { hype: 3 } });
+  const zero = W.card('zero', { type: 'skill', cost: 0, fx: [{ op: 'block', n: 1 }] });
+  const C = W.fight({ deck: [hype, zero, zero] });
+  const id = C.enemies[0].id;
+  const [h, z1, z2] = rig(C, [hype, zero, zero]);
+  t.eq(C.played, 0, 'C.played starts at 0');
+  play(C, z1); play(C, z2);
+  t.eq(C.played, 2, 'two cards played');
+  t.eq(C.preview(h.uid, id).dmg, 10, 'C.preview: 4 + 3 x 2');
+  t.ok(/Deal 10 damage\. Hype 3 \(now \+6\)\./.test(W.D.cardPlain(h, { played: C.played })), 'the text with ctx.played shows it live');
+  t.deep(hitsOn(play(C, h), id), [10], 'and it deals 10');
+  C.endTurn();
+  t.eq(C.played, 0, 'a new turn resets the count');
+  const h2 = rig(C, [hype])[0];
+  t.deep(hitsOn(play(C, h2), id), [4], 'first card of the turn: the printed 4');
+});
+
+t.test('Loop: Fading copies of the last other Attack or Skill this turn, never a Loop card, never a power, nothing to copy at turn start', () => {
+  const W = world();
+  const hit = W.card('hit', { cost: 0, fx: [{ op: 'dmg', n: 4, tgt: 'enemy' }] });
+  const loop = W.card('loop', { type: 'skill', cost: 0, fx: [{ op: 'block', n: 2 }], mech: { loop: 1 } });
+  const loop2 = W.card('loop2', { type: 'skill', cost: 0, fx: [{ op: 'block', n: 1 }], mech: { loop: 2 } });
+  const pow = W.card('pow', { type: 'power', cost: 0, fx: [{ op: 'status', s: 'might', n: 1 }] });
+  const C = W.fight({ deck: [hit, loop, loop2, loop, pow] });
+  const [hc, lc, l2, lc2, pc] = rig(C, [hit, loop, loop2, loop, pow]);
+  let ev = play(C, lc);
+  t.eq(only(ev, 'add_card').length, 0, 'Loop with nothing played before it adds nothing');
+  t.eq(C.lastPlayed, null, 'and a Loop card is never what Loop copies');
+  play(C, hc);
+  t.eq(C.lastPlayed.id, hit, 'C.lastPlayed is the attack');
+  play(C, pc);
+  t.eq(C.lastPlayed.id, hit, 'a power is never the thing Loop copies');
+  ev = play(C, l2);
+  const added = only(ev, 'add_card');
+  t.eq(added.length, 1, 'Loop 2 adds its copies in one event');
+  t.deep(added[0].cards.map((c) => [c.id, !!c.tmp, !!c.fade]), [[hit, true, true], [hit, true, true]], 'two temp Fading copies of the attack');
+  const copy = C.hand.find((c) => c.uid === added[0].cards[0].uid);
+  t.ok(W.D.resolveCard(copy).kw.indexOf('exhaust') >= 0, 'the copy resolves with Fade');
+  t.ok(/Fade\.$/.test(W.D.cardPlain(copy)), 'and says so: ' + W.D.cardPlain(copy));
+  ev = play(C, copy);
+  t.ok(only(ev, 'exhaust').some((e) => e.card.uid === copy.uid), 'playing the copy Fades it');
+  t.eq(C.lastPlayed.id, hit, 'a played copy counts as the last card');
+  ev = play(C, lc2);
+  t.deep(only(ev, 'add_card').map((e) => e.cards[0].id), [hit], 'a second Loop copies the attack again, not the Loop before it');
+  C.endTurn();
+  t.eq(C.lastPlayed, null, 'the next turn starts with nothing to Loop');
+});
+
+t.test('card mechanics: text, upgrades and the validator', () => {
+  const W = world(); const D = W.D;
+  const id = W.card('mtext', { cost: 1, fx: [{ op: 'dmg', n: 4, tgt: 'enemy' }], mech: { fanbase: 1, hype: 2 }, up: { fx: [{ op: 'dmg', n: 5, tgt: 'enemy' }], mech: { fanbase: 2, hype: 2 } }, kw: ['exhaust'] });
+  t.eq(D.cardPlain({ id, up: 0, gems: [] }), 'Deal 4 damage. Fanbase 1. Hype 2. Fade.', 'mechanic sentences come before a closing Fade, in LISTS.mechs order');
+  t.ok(/data-kw="fanbase">Fanbase<\/span> <span class="num up">2<\/span>/.test(D.cardHtml({ id, up: 1, gems: [] })), 'an upgraded mechanic number is marked up');
+  t.deep(D.resolveCard({ id, up: 1, gems: [] }).mech, { fanbase: 2, hype: 2 }, 'resolveCard carries the upgraded mech');
+  t.eq(D.resolveCard({ id, up: 0, gems: [], enc: 3 }).fx[0].plus, 3, 'a Fanbase bonus rides on plus, like a gem');
+  D.LISTS.mechs.forEach((k) => t.ok(D.keywords[k] && D.keywords[k].text.length > 10, k + ' is in the keyword glossary'));
+  const errs = (over) => { const w = world(); const cid = w.card('vbad', Object.assign({ cost: 1, fx: [{ op: 'dmg', n: 4, tgt: 'enemy' }] }, over)); return w.D.validate('cards').errors.filter((e) => e.indexOf(cid) >= 0 && e.indexOf('id must start') < 0).join(' | '); };
+  t.ok(/unknown mechanic "encore"/.test(errs({ mech: { encore: 1 } })), 'unknown mechanic');
+  t.ok(/whole number 1\.\.9/.test(errs({ mech: { remix: 0 } })), 'bad number');
+  t.ok(/need a dmg op/.test(errs({ type: 'skill', fx: [{ op: 'block', n: 3 }], up: { fx: [{ op: 'block', n: 4 }] }, mech: { hype: 1 } })), 'Hype without damage');
+  t.ok(/a power cannot Loop/.test(errs({ type: 'power', fx: [{ op: 'status', s: 'might', n: 1 }], up: { fx: [{ op: 'status', s: 'might', n: 2 }] }, mech: { loop: 1 } })), 'a power cannot Loop');
+  t.eq(errs({ mech: { loop: 1 }, up: { mech: { loop: 2 } } }), '', 'up.mech alone is a legal upgrade');
+});
+
+t.test('card mechanics: the greedy bot plays them and two identical fights replay identically', () => {
+  const W = world();
+  const fan = W.card('fan', { cost: 1, fx: [{ op: 'dmg', n: 6, tgt: 'enemy' }], mech: { fanbase: 2 } });
+  const rmx = W.card('rmx', { cost: 0, fx: [{ op: 'dmg', n: 2, tgt: 'enemy' }], mech: { remix: 2 } });
+  const hype = W.card('hype', { cost: 1, fx: [{ op: 'dmg', n: 3, tgt: 'all' }], mech: { hype: 2 } });
+  const loop = W.card('loop', { type: 'skill', cost: 1, fx: [{ op: 'block', n: 4 }], mech: { loop: 1 } });
+  const foe = W.hitter(5, { hp: [60, 60] });
+  const mk = () => ({ heroes: [{ id: 'hanae', hp: 70, maxHp: 70 }, { id: 'kuro', hp: 60, maxHp: 60 }], deck: W.deck([fan, fan, rmx, rmx, hype, hype, loop, loop, fan, rmx]), enemies: [foe, foe], seed: 11 });
+  const a = W.COMBAT.simulate(mk()), b = W.COMBAT.simulate(mk());
+  t.eq(a.result, 'win', 'the bot wins with a deck of mechanic cards');
+  t.eq(JSON.stringify(a.C.events), JSON.stringify(b.C.events), 'identical event logs');
+  t.ok(a.C.events.some((e) => e.type === 'add_card' && e.cards.every((c) => c.fade)), 'the bot used a Loop');
+  t.ok(Object.keys(a.fanbase).length > 0, 'and a Fanbase card scored a kill');
+});
 
 t.test('fuzz: 120 generated combats, random legal actions, invariants after every action', () => {
   // the generated content is legal per the validator (the id rules aside)

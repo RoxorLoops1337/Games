@@ -44,7 +44,7 @@ Player-facing numbers come from the ops, never typed into text by hand (card tex
 
 ## 3. Cards (per hero: `data_cards_<hero>.js`)
 
-Per hero, exactly the starters above plus: **14 commons, 12 uncommons, 8 rares** (all non-token, all with `up`), plus tokens only if your cards `add` them (ids `<hero>_tok_<name>`).
+Per hero, exactly the starters above plus: **15 commons, 13 uncommons, 9 rares** (all non-token, all with `up`), plus tokens only if your cards `add` them (ids `<hero>_tok_<name>`).
 Mix: at least 30% attacks and 30% skills; at least 4 powers (uncommon and rare); at least one `X` cost card; at least 3 cards using `cond` on `row`;
 at least 4 cards that touch the ally hero (`tgt:'ally'` / `'both'`, or `per` with `who:'ally'`); at least 2 `pick` cards; at least 5 cards with keywords.
 Three archetypes per hero, each with at least 4 cards that clearly push it, and some that bridge two:
@@ -62,7 +62,7 @@ Power guidance at 3 Breath and starter-deck quality (numbers are base, upgraded 
 Rares should change how you play, not just hit harder. Uncommons carry the archetype pieces. Commons are solid, readable building blocks. Powers are built from `hook` and persistent `status` ops (idioms below).
 
 **Slots.** Colour must be useful for the card's ops because flat gem mods only change ops that exist: `red` (the pink gems) only on cards with a `dmg` op, `blue` only on cards with `block`, `heal` or a hero-targeted `status`, `green` and `gold` on anything.
-Starters and commons have exactly 1 slot, uncommons 1 to 2, rares 2 (`any`, the rainbow slot, on at most 4 rares). Per hero across its 37 cards: at least 10 cards with a `red` slot, 10 `blue`, 8 `green`, 8 `gold`, and a `gold` slot on every power.
+Starters and commons have exactly 1 slot, uncommons 1 to 2, rares 2 (`any`, the rainbow slot, on at most 4 rares). Per hero across its 40 cards: at least 10 cards with a `red` slot, 10 `blue`, 8 `green`, 8 `gold`, and a `gold` slot on every power.
 `locked:true` on at most 4 uncommons and 4 rares per hero, never on starters or commons. Every card has `art` (`m` from `LISTS.motifs`, `c` from `LISTS.palettes`, both required on non-tokens,
 `hero:true` if the hero's pose belongs in the illustration; use it on about half of the attacks, and on at least 30 percent of them, which the audit checks). No two cards of a hero share the same `art.m` plus `art.c` pair.
 Ids are `<hero>_<snake_name>`, tokens `<hero>_tok_<name>`. Add a one-line `flavor` to every rare and to a third of the others. Rules text (generated) stays under 110 characters.
