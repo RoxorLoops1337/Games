@@ -3,8 +3,9 @@
 // loader. The run summaries come from simulated runs: a bot plays real COMBAT fights for all three Acts (a win) or loses the first one,
 // RUN.combatDone / claim / finishNode / chapterEnd move the run exactly as GAME does, and GAME.defeat / GAME.victory / GAME.nodeDone route to
 // the screens with the real summary and the real META.recordRun result. The typewriter and the animation clock are checked in a realtime boot.
-// The `tutorial` section drives a guided beginning through the bus, the placeholder map and the real combat screen and asserts that every hint
-// fires exactly once at its moment, never stacks, never gates input, and honours the settings switch and ?notutorial=1.
+// The `tutorial` section drives the guided first map and first fight (Next, Skip tutorial, steps that survive a screen change), the hints and the
+// data-driven explainers through the bus, the placeholder map and the real combat screen, and asserts that every bubble fires exactly once at its
+// moment, never stacks, never gates input, and honours the Tutorial setting, Stop explaining and ?notutorial=1.
 import fs from 'node:fs';
 import path from 'node:path';
 import { boot, harness, DIR } from './hocus_vocus_lib.mjs';
@@ -718,7 +719,7 @@ await t.test('P9 layout: the credit line has its own strip under the curtain box
 });
 await t.test('finding 38 (tutorial.js): an anchor that fills most of the stage is not an anchor', () => {
   t.ok(/const FULL_STAGE = 0\.6;/.test(TUT) && /\* W \* H\) continue;/.test(TUT), 'findAnchor skips an anchor over 60 percent of the stage');
-  t.ok(/hand: \{[^}]*anchor: \['hand'\][^}]*at: \{ x: 611, y: 620 \}/.test(TUT), 'the hand hint falls back to a point above the hand fan axis (x 611, the middle of the strip between the docks)');
+  t.ok(/hand: \{[^}]*anchor: \['\.cm-hand \.card\.t-attack', 'hand'\][^}]*at: \{ x: 611, y: 620 \}/.test(TUT), 'the attack card step falls back to the hand box, then to a point above the hand fan axis (x 611, the middle of the strip between the docks)');
 });
 
 // ================================================================================================ the score terms
@@ -848,6 +849,78 @@ await t.test('every interactive element is a real button or has a role; images a
     await goRT('title', null, 3000);
     t.eq(gr._console.error.length, 0, 'leaving mid-animation never throws later');
   });
+  // the bus intro (HV_STORY 3.6): five beats before the `intro` page, auto-advancing on the frame clock, tap for the next beat, Skip or Esc to end it
+  await t.test('bus intro: it mounts on the intro page, auto-advances beat by beat, a tap skips a beat, Esc ends it and the page types on', async () => {
+    const F = gr.UI.screens.story._t, FILM = F.FILM;
+    t.eq(FILM.length, 5, 'five beats'); t.ok(F.filmLength() >= 14 && F.filmLength() <= 20, 'about 17 seconds in all, under 20 (' + F.filmLength() + ')');
+    FILM.forEach((b) => { const c = b.cap(); t.ok(c.length >= 20 && c.length <= 64 && /^[\x20-\x7e]+$/.test(c) && !DASH.test(c) && !/ - |--/.test(c) && !/  /.test(c), b.id + ': one short ASCII caption with no dash (' + c + ')'); });
+    t.ok(/AI slop/.test(FILM.map((b) => b.cap()).join(' ')) && /silent/.test(FILM[2].cap()), 'it says plainly that the world goes silent and the Gloss is AI slop');
+    t.ok(FILM[4].cap().indexOf(gr.DATA.heroes.kuro.name) === 0 && FILM[4].cap().indexOf(gr.DATA.heroes.hanae.name) > 0, 'the last beat names the duo');
+    const root = () => gr._doc.querySelector('.s-story');
+    const cap = () => (gr._doc.querySelector('.st-film-cap') || { textContent: '' }).textContent;
+    const beat = () => { const s = F.state(); return s && s.extra.film && s.extra.film.on ? s.extra.film.beat : -1; };
+    const typed = () => (gr._doc.querySelector('.st-typed .tw-on') || { textContent: '' }).textContent.length;
+    gr._resetCounts();
+    await goRT('story', { id: 'intro', then: { name: 'howto' } }, 100);
+    t.ok(root().className.includes('st-filming') && gr._doc.querySelector('.st-film'), 'the film is up and the page waits under it');
+    t.eq(beat(), 0, 'beat one'); t.eq(cap(), FILM[0].cap(), 'with its caption');
+    t.eq(gr._doc.querySelectorAll('.st-film-dots i').length, 5, 'a dot per beat');
+    await gr._tick(1500);
+    t.eq(typed(), 0, 'the page does not type during the film');
+    await gr._tick(FILM[0].s * 1000 - 1500 + 100);
+    t.eq(beat(), 1, 'it moves on by itself'); t.eq(cap(), FILM[1].cap(), 'and the caption follows');
+    t.ok(gr._doc.querySelector('.st-film-dots i.done') && gr._doc.querySelector('.st-film-dots i.on'), 'the dots show where the film is');
+    await gr._tick(300);
+    gr._click(gr._doc.querySelector('.s-story .en-tap')); await gr._tick(40);
+    t.eq(beat(), 2, 'a tap skips to the next beat');
+    gr._click(gr._doc.querySelector('.s-story .en-tap')); await gr._tick(40);
+    t.eq(beat(), 2, 'a second tap at once does not skip two beats');
+    t.ok(gr._ctx && gr._counts && Object.keys(gr._counts).length > 0, 'the canvas draws the beats');
+    t.eq(gr.ART.scene.lastError || null, null, 'no scene error');
+    gr._key('Escape'); await gr._tick(60);
+    t.ok(!root().className.includes('st-filming') && !gr._doc.querySelector('.st-film'), 'Esc ends the film');
+    t.eq(gr.UI.currentName, 'story', 'but stays on the page');
+    await gr._tick(700 + 1000);
+    t.ok(typed() >= 20, 'the page types on after the film (' + typed() + ')');
+    gr._key('Escape'); await gr._tick(900);
+    t.eq(gr.UI.currentName, 'howto', 'the next Esc turns the page as usual');
+  });
+  await t.test('bus intro: left alone it plays to the end and opens the page; Skip ends it; film:false and other pages never show it', async () => {
+    const F = gr.UI.screens.story._t;
+    const filming = () => !!gr._doc.querySelector('.st-film');
+    await goRT('story', { id: 'intro', then: { name: 'howto' } }, 100);
+    t.ok(filming(), 'the film is up');
+    gr._resetCounts();
+    await gr._tick(F.filmLength() * 1000 - 300);
+    t.deep(gr._issues.slice(0, 5), [], 'every beat paints with valid canvas calls (no bad colour, font or number)');
+    await gr._tick(500);
+    t.ok(!filming() && !gr._doc.querySelector('.s-story').className.includes('st-filming'), 'it ended by itself after ' + F.filmLength() + ' s');
+    t.eq(gr.UI.currentName, 'story', 'on the intro page');
+    await goRT('story', { id: 'intro', then: { name: 'howto' } }, 100);
+    gr._click(gr._doc.querySelector('[data-act=filmskip]')); await gr._tick(60);
+    t.ok(!filming(), 'Skip ends it at once'); t.eq(gr.UI.currentName, 'story', 'and shows the page');
+    await goRT('story', { id: 'intro', film: false, then: { name: 'howto' } }, 100);
+    t.ok(!filming(), 'film:false shows the page straight away');
+    await goRT('story', { id: 'ch1_intro', then: { name: 'howto' } }, 100);
+    t.ok(!filming(), 'an Act page has no film');
+    t.ok(F.wantsFilm('intro', {}) && !F.wantsFilm('intro', { film: false }) && !F.wantsFilm('hero_kuro', {}), 'wantsFilm: only the intro page');
+    await goRT('title', null, 300);
+  });
+  await t.test('bus intro under reduced motion: still pictures that still move on, and Skip works', async () => {
+    const F = gr.UI.screens.story._t;
+    gr.UI.opt.reduceMotion = true;
+    try {
+      await goRT('story', { id: 'intro', then: { name: 'howto' } }, 100);
+      t.ok(gr._doc.querySelector('.st-film'), 'the film still tells the story');
+      await gr._tick(F.FILM[0].s * 1000 + 100);
+      t.eq(F.state().extra.film.beat, 1, 'and moves on beat by beat');
+      gr._click(gr._doc.querySelector('[data-act=filmskip]')); await gr._tick(60);
+      t.ok(!gr._doc.querySelector('.st-film'), 'Skip ends it');
+      t.ok(gr._doc.querySelector('.s-story').className.includes('st-done'), 'and the page is complete at once (reduced motion types instantly)');
+    } finally { gr.UI.opt.reduceMotion = false; }
+    await goRT('title', null, 300);
+    t.eq(gr._console.error.length, 0, 'no console errors from the film');
+  });
 }
 
 // ================================================================================================ phone and Larger text rules (F2b: the 844x390 floors, the ribbons at 1.3, the curtain-call boxes)
@@ -872,48 +945,109 @@ await t.test('css (end): phone text keeps the 8 and 9 screen px floors, the ribb
 
 // ================================================================================================ the tutorial
 const TU = UI.tutorial;
-await t.test('tutorial catalog: every hint is written well and wired to real bus events, anchors and screens', () => {
+const PRINTABLE = /^[\x20-\x7e]*$/;
+const sentences = (s) => (String(s).match(/[.!?](\s|$)/g) || []).length;
+await t.test('tutorial catalog: short, plain copy wired to real bus events, anchors and screens; the two walkthroughs in order', () => {
   const ids = Object.keys(TU.HINTS);
-  t.ok(ids.length >= 18, 'at least eighteen hints (' + ids.length + ')');
+  t.ok(ids.length >= 20, 'at least twenty steps and hints (' + ids.length + ')');
   const screens = DATA.LISTS.screens, buses = DATA.LISTS.busEvents, anchors = DATA.LISTS.tutAnchors;
   ids.forEach((id) => {
     const h = TU.HINTS[id];
-    t.ok(h.title && h.title.length <= 30, id + ': a short title');
-    t.ok(h.text && h.text.length >= 40 && h.text.length <= 230, id + ': brief copy (' + h.text.length + ')');
-    t.ok(!DASH.test(h.title + h.text), id + ': no dashes');
+    t.ok(h.title && h.title.length <= 24, id + ': a short title (' + h.title + ')');
+    t.ok(h.text && h.text.length >= 30 && h.text.length <= 110, id + ': short copy, at most 110 characters (' + h.text.length + ')');
+    t.ok(sentences(h.text) >= 1 && sentences(h.text) <= 3, id + ': one or two sentences (and at most one tiny extra like "Go!"): ' + h.text);
+    t.ok(PRINTABLE.test(h.title + h.text) && !DASH.test(h.title + h.text) && !/  /.test(h.title + ' ' + h.text) && !/-/.test(h.title + h.text), id + ': printable ASCII, no dashes, no double spaces');
     t.ok(h.scope && h.scope.length && h.scope.every((s) => screens.indexOf(s) >= 0), id + ': scopes are real screens');
     (h.anchor || []).forEach((a) => t.ok(anchors.indexOf(a) >= 0 || /^[.#\[]/.test(a), id + ': anchor ' + a + ' is a data-tut name or a selector'));
     (h.completeOn || []).forEach((e) => t.ok(buses.indexOf(e) >= 0, id + ': completeOn ' + e + ' is a bus event'));
     t.ok(h.at || h.anchor, id + ': somewhere to point');
     if (h.after) t.ok(TU.HINTS[h.after], id + ': its prerequisite exists');
+    if (h.ready) t.eq(typeof h.ready, 'function', id + ': ready is a test');
   });
-  TU.RULES.forEach((r) => { t.ok(TU.HINTS[r.hint], 'rule for ' + r.hint + ' names a real hint'); [].concat(r.on).forEach((e) => t.ok(buses.indexOf(e) >= 0, 'rule event ' + e + ' is a bus event')); });
-  ['paint', 'ink', 'walk', 'tiles', 'brush', 'energy', 'hand', 'intent', 'endturn', 'block', 'swap', 'status', 'boss', 'camp', 'shop', 'gems', 'event', 'reward'].forEach((id) => t.ok(TU.HINTS[id], 'covers ' + id));
-  // the hint titles are bible 5.6, exact and in order (the Gems hint keeps its plain title)
-  t.eq(['paint', 'ink', 'walk', 'tiles', 'goal', 'brush', 'relics', 'energy', 'hand', 'intent', 'endturn', 'block', 'swap', 'status', 'pick', 'boss', 'reward', 'camp', 'shop', 'event'].map((id) => TU.HINTS[id].title).join(' | '),
-    'Unmute the Soundlands | Vox is your budget | Now roll | Read the map signs | The road to the headliner | A Spell unmutes for free | Charms | Breath | Play a card | Read the intents | End your turn | Block | Lead and backing | Statuses | Choose cards | A headliner | The goodie bag | A green room | Jordan\'s merch stall | A detour', 'the titles are the bible 5.6 list');
-  t.eq(TU.HINTS.paint.text, 'The Soundlands are on mute. Tap a hex beside the live patch to spend 1 Vox and hear what hides there.', 'the first hint is the bible 5.6 example');
+  TU.RULES.forEach((r) => {
+    t.ok(r.hint ? TU.HINTS[r.hint] : TU.CHAINS[r.chain], 'rule for ' + (r.hint || r.chain) + ' names a real hint or walkthrough');
+    [].concat(r.on).forEach((e) => t.ok(buses.indexOf(e) >= 0, 'rule event ' + e + ' is a bus event'));
+  });
+  ['paint', 'ink', 'walk', 'tiles', 'brush', 'energy', 'hand', 'intent', 'endturn', 'swap', 'status', 'boss', 'camp', 'shop', 'gems', 'event', 'reward'].forEach((id) => t.ok(TU.HINTS[id], 'covers ' + id));
+  // the owners' walkthroughs: "This is you", unmute a hex for 1 Vox, walk there, that icon is a fight; then attack cards, block cards, Breath, the enemy intent, End turn
+  t.deep(TU.CHAINS.map, ['you', 'paint', 'walk', 'fight'], 'the map walkthrough, in order');
+  t.deep(TU.CHAINS.combat, ['hand', 'blockcard', 'energy', 'intent', 'endturn'], 'the fight walkthrough, in order');
+  t.eq(TU.CHAINS.map.map((id) => TU.HINTS[id].title).join(' | '), 'This is you | Unmute a hex | Walk there | A fight!', 'map step titles');
+  t.eq(TU.CHAINS.combat.map((id) => TU.HINTS[id].title).join(' | '), 'Attack cards | Block cards | Breath | Enemy intent | End turn', 'fight step titles');
+  t.eq(TU.HINTS.paint.text, 'Tap a hex next to you to unmute it. It costs 1 Vox.', 'the unmute step says it plainly');
+  t.ok(/That icon is a fight/.test(TU.HINTS.fight.text) && /Go!$/.test(TU.HINTS.fight.text), 'the fight step: that icon is a fight, go');
+  t.ok(/Attack cards hit enemies/.test(TU.HINTS.hand.text) && /Drag/.test(TU.HINTS.hand.text), 'attack cards hit enemies; drag or tap twice');
+  t.ok(/Block stops damage/.test(TU.HINTS.blockcard.text), 'block stops damage');
+  t.ok(/3 every turn/.test(TU.HINTS.energy.text) && /costs Breath/.test(TU.HINTS.energy.text), 'each card costs Breath, 3 per turn');
+  t.ok(/what the enemy will do next/.test(TU.HINTS.intent.text), 'the intent bubble is what the enemy will do next');
+  t.ok(TU.HINTS.hand.anchor.indexOf('.cm-hand .card.t-attack') === 0 && TU.HINTS.blockcard.anchor[0] === '.cm-hand .card[data-ops~="block"]', 'the steps spotlight a real attack card and a real Block card');
   t.eq(TU.HINTS.gems.title, 'Gems', 'the Gems hint keeps its title');
   const old = /\b(Echo|Echowake|Hush|Verses?|Songs?|Treasures?|Energy|Keepers?|Bosses|boss|Champions?|peddlers?|camps?|fables?|forges?|journey|awake|wake|Meditate|Sharpen|prism|front row|back row)\b/;
   ids.forEach((id) => t.ok(!old.test(TU.HINTS[id].title + ' ' + TU.HINTS[id].text), id + ': no Echowake word in the hint (' + TU.HINTS[id].title + ')'));
 });
+await t.test('explainers: one for every status, keyword, gem, Charm, Spell and map sign, built from the data, short and plain', () => {
+  const kinds = { status: DATA.statuses, keyword: DATA.keywords, gem: DATA.gems, relic: DATA.relics, spell: DATA.brushes, tile: DATA.tiles };
+  let n = 0;
+  Object.keys(kinds).forEach((kind) => Object.keys(kinds[kind]).forEach((key) => {
+    const d = TU.explainDef('x_' + kind + '_' + key);
+    n++;
+    t.ok(d && d.explain && d.title && d.label && d.text, kind + ' ' + key + ': an explainer with a name, a label and text');
+    if (!d) return;
+    t.ok(d.text.length >= 6 && sentences(d.text) <= 2, kind + ' ' + key + ': at most two sentences: ' + d.text);
+    t.ok(/^New /.test(d.label), kind + ' ' + key + ': labelled ' + d.label);
+    t.ok(!/\bN\b/.test(d.text), kind + ' ' + key + ': no raw N placeholder: ' + d.text);
+  }));
+  t.ok(n > 100, 'every entry of the six registries (' + n + ')');
+  t.eq(TU.explainDef('x_nonsense_thing'), null, 'an unknown kind has none'); t.eq(TU.explainDef('x_status_t_nope'), null, 'nor an unknown id');
+  // a status or keyword added later explains itself with no change in tutorial.js
+  DATA.statuses.t_later = { id: 't_later', name: 'Later Status', kind: 'debuff', stack: 'int', text: 'Takes N more damage. Falls by 1 each turn.' };
+  DATA.keywords.t_kw = { name: 'Encore Echo', text: 'Plays twice. The second time is free.' };
+  const s = TU.explainDef('x_status_t_later'), k = TU.explainDef('x_keyword_t_kw');
+  t.ok(s && s.title === 'Later Status' && s.label === 'New status' && s.tone === 'bad', 'a new status gets an explainer from its data: ' + JSON.stringify(s && [s.title, s.text]));
+  t.ok(k && k.title === 'Encore Echo' && /Plays twice/.test(k.text), 'and so does a new keyword');
+  delete DATA.statuses.t_later; delete DATA.keywords.t_kw;
+  t.ok(/Fits|fits/.test(TU.explainDef('x_gem_' + Object.keys(DATA.gems)[0]).text), 'a gem says which slots it fits');
+  t.ok(/fight/.test(TU.explainDef('x_tile_enemy').text), 'a map sign says what stepping on it does');
+  t.ok(/busy-fight/.test(TUT) && /dragging-card/.test(TUT) && /has-sel/.test(TUT), 'nothing new opens while the fight animates, a card is dragged or lifted (busy)');
+});
+
+// ================================================================================================ the bus intro on a new tour (headless: the page only, the routing)
+{
+  const gf = fresh({ seed: 21 });
+  await settle(gf);
+  await t.test('bus intro: headless it is skipped; a new tour opens on it once, also for a player who began before it existed', async () => {
+    const { UI: U3, META: M3, GAME: G3 } = gf;
+    t.ok(!U3.screens.story._t.wantsFilm('intro', {}), 'headless never plays the film (the suites read the page at once)');
+    M3.setTutorial('intro'); M3.setTutorial('film_bus', false);                     // an old profile: the intro page seen, the film not yet
+    G3.newRun({ heroes: ['hanae', 'kuro'], seed: 31, trial: 0 }); await settle(gf); await settle(gf);
+    t.eq(U3.currentName, 'story', 'a story first'); t.eq(U3.params.id, 'intro', 'the intro page (and its film) for a player who never saw the film');
+    t.ok(!gf._doc.querySelector('.st-film') && $(gf, '.st-page'), 'headless: straight to the page');
+    t.ok(M3.tutorial('film_bus') && M3.tutorial('intro'), 'both flags are stored');
+    G3.newRun({ heroes: ['hanae', 'kuro'], seed: 32, trial: 0 }); await settle(gf); await settle(gf);
+    t.eq(U3.params.id, 'ch1_intro', 'the next tour opens on the Act page');
+  });
+}
 
 // a fresh page for the guided run: the tutorial flags start empty
 const gt = fresh({ seed: 12 });
 await settle(gt);
 {
-  const { UI: U2, RUN: R2, META: M2, GAME: G2, DATA: D2, MAP: MAP2, COMBAT: C2 } = gt;
+  const { UI: U2, RUN: R2, META: M2, GAME: G2, DATA: D2 } = gt;
+  void R2; void D2;
   const tuts = () => Array.from(gt._doc.querySelectorAll('#tips .tut'));
   const cur = () => (U2.tutorial.current() ? U2.tutorial.current().id : null);
   const bubble = () => { const b = tuts()[0]; return b ? b.dataset.hint : null; };
   const tick = async () => { await gt._settle(); await gt._settle(); };
   const flags = () => Object.keys(M2.profile.tutorial || {}).filter((k) => /^tut_/.test(k)).sort();
+  const next = async () => { await click(gt, $(gt, '.tut-ok')); await tick(); };
+  const drain = async (stop, max = 12) => { let guard = 0; while (cur() && cur() !== stop && guard++ < max) await next(); };
 
   await t.test('tutorial: nothing shows before anything happens, and the intro story fires no hint', async () => {
-    t.eq(tuts().length, 0, 'no bubbles on the title'); t.eq(flags().length, 0, 'no flags yet'); t.ok(U2.tutorial.enabled(), 'enabled by default');
+    t.eq(tuts().length, 0, 'no bubbles on the title'); t.eq(flags().length, 0, 'no flags yet'); t.ok(U2.tutorial.enabled(), 'enabled by default'); t.ok(U2.tutorial.explaining(), 'explainers too');
     t.deep(U2.tutorial.shown, [], 'nothing shown');
   });
-  await t.test('tutorial: the story chain and the map: paint, ink, walk, tiles, goal, one bubble at a time', async () => {
+  await t.test('tutorial: the first map is a walkthrough: this is you, unmute a hex, walk there, a fight; Next and Skip tutorial on every step', async () => {
+    M2.setTutorial('tut_x_off', true);                // explainers have their own test below: keep this sequence about the walkthrough
     const R = G2.newRun({ heroes: ['hanae', 'kuro'], seed: 12, trial: 0 });
     R.brushes = [];                                   // a clean tray, so the Spell hint does not join this part of the sequence
     await tick();
@@ -921,85 +1055,128 @@ await settle(gt);
     gt._key('Enter'); await tick(); gt._key('Enter'); await tick(); gt._key('Enter'); await tick(); gt._key('Enter'); await tick();
     t.eq(U2.currentName, 'map', 'the (placeholder) map after two story pages');
     await tick();
-    t.eq(bubble(), 'paint', 'the first map hint: paint'); t.eq(tuts().length, 1, 'exactly one bubble'); t.ok(M2.tutorial('tut_paint'), 'its flag is stored the moment it shows');
-    t.ok(/Vox/.test(txt(tuts()[0])) && $(gt, '.tut-ok'), 'it says something about Vox and has Got it');
-    // the player acts: painting completes the hint, and the next one follows
+    t.eq(bubble(), 'you', 'step 1: This is you'); t.eq(tuts().length, 1, 'exactly one bubble');
+    t.ok(tuts()[0].classList.contains('tut-step') && /Step 1 of 4/.test(txt(tuts()[0])), 'it says Step 1 of 4');
+    t.eq(txt($(gt, '.tut-ok')), 'Next', 'a Next button'); t.eq(txt($(gt, '.tut-off')), 'Skip tutorial', 'and Skip tutorial');
+    t.ok(!M2.tutorial('tut_you'), 'a step is stored when it closes, not when it shows (a screen change brings it back)');
+    await next();
+    t.ok(M2.tutorial('tut_you'), 'Next stored it');
+    t.eq(cur(), 'paint', 'step 2: unmute a hex'); t.ok(/1 Vox/.test(txt(tuts()[0])) && /Step 2 of 4/.test(txt(tuts()[0])), 'it says 1 Vox, Step 2 of 4');
+    // the player acts: unmuting completes the step, and the chain moves on
     U2.bus.emit('map:paint', { q: 3, r: 2, cost: 1 }); await tick();
-    t.eq(cur(), 'ink', 'painting completes paint, and ink follows'); t.eq(tuts().length, 1, 'still one bubble');
+    t.ok(M2.tutorial('tut_paint'), 'unmuting completed it');
+    t.eq(cur(), 'walk', 'step 3: walk there'); t.eq(tuts().length, 1, 'still one bubble');
     U2.bus.emit('map:paint', { q: 4, r: 2, cost: 1 }); await tick();
-    t.eq(cur(), 'ink', 'a second paint does not stack another bubble');
-    await click(gt, $(gt, '.tut-ok')); await tick();
-    t.eq(cur(), 'walk', 'Got it closes ink, the queue brings walk');
-    t.ok(!U2.tutorial.queue().includes('walk'), 'walk left the queue');
+    t.eq(cur(), 'walk', 'a second unmute does not stack another bubble');
     U2.bus.emit('map:walk', { q: 4, r: 2 }); await tick();
-    t.eq(cur(), 'tiles', 'walking completes walk; the stamps guide follows'); t.ok(M2.tutorial('tut_walk'), 'walk was stored');
-    U2.bus.emit('map:paint', { q: 5, r: 2, cost: 1 }); await tick();
-    t.deep(U2.tutorial.queue().filter((x) => x === 'goal'), ['goal'], 'the third paint queues the road to the boss behind the open bubble');
-    await click(gt, $(gt, '.tut-ok')); await tick();
-    t.eq(cur(), 'goal', 'then goal');
-    await click(gt, $(gt, '.tut-ok')); await tick();
-    t.eq(cur(), null, 'the queue is empty'); t.eq(tuts().length, 0, 'no bubble left in #tips');
-    ['paint', 'ink', 'walk', 'tiles', 'goal'].forEach((id) => t.eq(U2.tutorial.shown.filter((x) => x === id).length, 1, id + ' shown exactly once'));
+    t.ok(M2.tutorial('tut_walk'), 'walking completed it');
+    t.ok(!M2.tutorial('tut_fight'), 'the same walk does not also finish the fight step');
+    // no fight is revealed yet: the fight step waits without blocking anything, and the hints of the moment show meanwhile
+    await drain('fight');
+    t.eq(cur(), null, 'the hints of the moment are done');
+    t.eq(U2.tutorial.waiting().map, 'fight', 'the fight step waits for a fight on the map');
+    // a fight comes into view
+    const M = R.map, pos = M.pos;
+    const nb = gt.MAP.neighbors(M, pos.q, pos.r).map((c) => M.tiles[gt.MAP.key(c[0], c[1])]).find((x) => x && x.type !== 'block');
+    nb.type = 'enemy'; nb.painted = true; nb.known = true; nb.done = false;
+    U2.bus.emit('map:paint', { q: nb.q, r: nb.r, cost: 1 }); await tick();
+    await drain('fight');
+    t.eq(cur(), 'fight', 'step 4: a fight!'); t.ok(/Step 4 of 4/.test(txt(tuts()[0])) && /That icon is a fight/.test(txt(tuts()[0])), 'that icon is a fight');
+    t.eq(txt($(gt, '.tut-ok')), 'Got it', 'the last step says Got it');
+    await next();
+    ['you', 'paint', 'walk', 'fight'].forEach((id) => t.eq(U2.tutorial.shown.filter((x) => x === id).length, 1, id + ' shown exactly once'));
+    t.ok(U2.tutorial.shown.indexOf('you') < U2.tutorial.shown.indexOf('paint') && U2.tutorial.shown.indexOf('walk') < U2.tutorial.shown.indexOf('fight'), 'in order: ' + U2.tutorial.shown.join(','));
+    nb.type = 'empty';
   });
-  await t.test('tutorial: events repeated later raise nothing; a Spell hint needs a Spell and completes on use', async () => {
-    const before = U2.tutorial.shown.length;
-    for (let i = 0; i < 4; i++) { U2.bus.emit('map:paint', { q: i, r: 1, cost: 1 }); U2.bus.emit('map:walk', { q: i, r: 1 }); }
-    await tick();
-    t.eq(U2.tutorial.shown.length, before, 'nothing new fires for events already taught');
+  await t.test('tutorial: a walkthrough step survives a screen change, and Next without acting never strands the player', async () => {
     const R = G2.state.R;
-    R.brushes = [];
+    ['you', 'paint', 'walk', 'fight'].forEach((id) => M2.setTutorial('tut_' + id, false));
+    U2.tutorial.counts.paints = 0;
     U2.bus.emit('screen', { name: 'map', params: { R } }); await tick();
-    t.ok(!U2.tutorial.shown.includes('brush'), 'no brush in the tray: no brush hint');
-    R.brushes = ['stroke'];
-    U2.bus.emit('screen', { name: 'map', params: { R } }); await tick();
-    t.eq(cur(), 'brush', 'a brush in the tray raises it');
-    U2.bus.emit('map:brush', { id: 'stroke' }); await tick();
-    t.eq(U2.tutorial.queue().length, 0, 'using it completes the hint'); t.eq(U2.tutorial.shown.filter((x) => x === 'brush').length, 1, 'once');
-    R.relics = ['brass_lantern'];
-    U2.bus.emit('screen', { name: 'map', params: { R } }); await tick();
-    t.eq(cur(), 'relics', 'the first treasure raises the treasures hint'); await click(gt, $(gt, '.tut-ok')); await tick();
+    await drain('you');
+    t.eq(cur(), 'you', 'the map walkthrough starts again');
+    await U2.go('howto', null, { force: true, transition: 'none' }); await tick();
+    t.eq(tuts().length, 0, 'leaving the screen takes the bubble with it'); t.ok(!M2.tutorial('tut_you'), 'and the step was not stored');
+    await U2.go('map', { R }, { force: true, transition: 'none' }); await tick(); await tick();
+    await drain('you');
+    t.eq(cur(), 'you', 'back on the map, the same step returns');
+    await next(); t.eq(cur(), 'paint', 'Next');
+    await next();
+    t.ok(M2.tutorial('tut_paint'), 'Next on the unmute step moves on without unmuting');
+    t.eq(U2.tutorial.waiting().map, 'walk', '"Walk there" waits for the first unmute (it points at the hex just unmuted)');
+    t.ok(!cur() || !U2.tutorial.HINTS[cur()].chain, 'no step is stuck on screen');
+    U2.bus.emit('map:paint', { q: 2, r: 2, cost: 1 }); await tick();
+    await drain('walk');
+    t.eq(cur(), 'walk', 'the first unmute brings it');
+    await next();
+    t.eq(cur() === 'fight' || U2.tutorial.waiting().map === 'fight', true, 'and the walkthrough goes on');
+    await drain(null);
   });
-  await t.test('tutorial: a real fight: energy, hand, then intent and end turn after the first play, block and swap on turn two', async () => {
+  await t.test('tutorial: Skip tutorial ends every step and hint for good, explainers go on', async () => {
     const R = G2.state.R;
+    U2.tutorial.reset();
+    M2.setTutorial('tut_x_off', true);
+    U2.tutorial.counts.paints = 0;
+    U2.bus.emit('screen', { name: 'map', params: { R } }); await tick();
+    t.eq(cur(), 'you', 'the walkthrough after a reset');
+    await click(gt, $(gt, '.tut-off')); await tick();
+    t.eq(tuts().length, 0, 'Skip tutorial closes the bubble');
+    Object.keys(U2.tutorial.HINTS).forEach((id) => t.ok(U2.tutorial.seen(id), id + ' is marked as seen'));
+    t.ok(U2.tutorial.enabled(), 'the tutorial setting itself stays on');
+    U2.bus.emit('map:paint', { q: 1, r: 1, cost: 1 }); U2.bus.emit('screen', { name: 'map', params: { R } }); await tick();
+    t.eq(cur(), null, 'nothing more from the walkthrough or the hints');
+    M2.setTutorial('tut_x_off', false);
+    t.ok(U2.tutorial.explaining(), 'explainers are still allowed');
+    t.ok(U2.tutorial.explain('tile', 'camp', true), 'and an explainer can still show'); await tick();
+    t.eq(cur(), 'x_tile_camp', 'it does'); await next();
+  });
+  await t.test('tutorial: the first fight is a walkthrough: attack cards, block cards, Breath, the enemy intent, End turn; swap on turn two', async () => {
+    const R = G2.state.R;
+    U2.tutorial.reset(); U2.tutorial.shown.length = 0;
+    M2.setTutorial('tut_x_off', true);
+    ['you', 'paint', 'walk', 'fight', 'ink', 'tiles', 'goal', 'relics', 'brush', 'gems'].forEach((id) => M2.setTutorial('tut_' + id, true));
     const node = nodeAtG(gt, R, 'enemy');
     await G2.enterNode(node); await tick(); await tick();
     t.eq(U2.currentName, 'combat', 'the real combat screen');
-    t.eq(cur(), 'energy', 'energy first'); t.ok($(gt, '#tips .tut-ring'), 'a spotlight ring is drawn around the anchor');
+    t.eq(cur(), 'hand', 'step 1: attack cards'); t.ok($(gt, '#tips .tut-ring'), 'a spotlight ring is drawn around the anchor');
     t.ok(!$(gt, '#tips .tut').closest('.screen'), 'the bubble lives in #tips, not inside the screen');
-    // the Breath card is parked on the sea between the heroes and the enemies: above the orb it covered the heroes' legs
-    t.ok(U2.tutorial.HINTS.energy.dock && U2.tutorial.HINTS.energy.dock.x >= 400 && U2.tutorial.HINTS.energy.dock.bottom <= 540, 'the Breath hint is docked clear of the heroes (x from 400, bottom edge above the hand)');
-    t.ok($(gt, '#tips .tut').classList.contains('tut-dock'), 'and the card wears the dock class (no tail; the spotlight ring marks the orb)');
+    t.ok(/Step 1 of 5/.test(txt(tuts()[0])), 'Step 1 of 5');
     // never gates input: the bubble does not capture pointer events (it is pointer-transparent except its buttons)
     t.ok(/\.tut \{[^}]*pointer-events: none/.test(CSS), 'the bubble is pointer-transparent in css');
+    t.ok($(gt, '.cm-hand .card[data-ops~="block"]'), 'the hand marks what each card does, so the Block step can find a Block card');
     const d = G2.debug.combat();
-    await click(gt, $(gt, '.tut-ok')); await tick();
-    t.eq(cur(), 'hand', 'hand follows energy');
-    // play a card with the real screen: the hint completes and intent + end turn queue
+    // play a card with the real screen: the step completes and the next one follows
     const hand0 = d.C.hand.findIndex((c) => d.C.canPlay(c.uid).ok || d.C.canPlay(c.uid).reason === 'target');
     await d.play(hand0 < 0 ? 0 : hand0, 0); await tick(); await tick();
-    t.ok(M2.tutorial('tut_hand'), 'hand is stored');
-    t.eq(cur(), 'intent', 'after the first play: intents'); await click(gt, $(gt, '.tut-ok')); await tick();
-    t.eq(cur(), 'endturn', 'then end turn');
+    t.ok(M2.tutorial('tut_hand'), 'playing a card completed it');
+    t.eq(cur(), 'blockcard', 'step 2: block cards'); await next();
+    t.eq(cur(), 'energy', 'step 3: Breath');
+    t.ok(U2.tutorial.HINTS.energy.dock && U2.tutorial.HINTS.energy.dock.x >= 400 && U2.tutorial.HINTS.energy.dock.bottom <= 540, 'the Breath step is docked clear of the heroes (x from 400, bottom edge above the hand)');
+    t.ok($(gt, '#tips .tut').classList.contains('tut-dock'), 'and the card wears the dock class (no tail; the spotlight ring marks the orb)');
+    await next();
+    t.eq(cur(), 'intent', 'step 4: the enemy intent'); await next();
+    t.eq(cur(), 'endturn', 'step 5: End turn'); t.eq(txt($(gt, '.tut-ok')), 'Got it', 'the last step says Got it');
     await d.endTurn(); await tick(); await tick();
     t.ok(M2.tutorial('tut_endturn'), 'ending the turn completed it');
     const order = U2.tutorial.shown.slice();
-    t.ok(order.indexOf('energy') < order.indexOf('hand') && order.indexOf('hand') < order.indexOf('intent') && order.indexOf('intent') < order.indexOf('endturn'), 'in teaching order: ' + order.join(','));
-    // turn two raises block and swap (and status when a chip exists), one at a time
+    t.deep(order.filter((x) => U2.tutorial.CHAINS.combat.indexOf(x) >= 0), U2.tutorial.CHAINS.combat, 'in teaching order: ' + order.join(','));
+    // turn two raises swap (and status when a chip exists), one at a time
     let guard = 0;
-    while (U2.tutorial.queue().length + (cur() ? 1 : 0) && guard++ < 6) { if (cur()) await click(gt, $(gt, '.tut-ok')); await tick(); await tick(); }
-    ['energy', 'hand', 'intent', 'endturn', 'block', 'swap'].forEach((id) => t.eq(U2.tutorial.shown.filter((x) => x === id).length, 1, id + ' exactly once'));
-    t.ok(U2.tutorial.shown.indexOf('block') < U2.tutorial.shown.indexOf('swap'), 'block before swap');
+    while (U2.tutorial.queue().length + (cur() ? 1 : 0) && guard++ < 6) { if (cur()) await next(); await tick(); }
+    ['hand', 'blockcard', 'energy', 'intent', 'endturn', 'swap'].forEach((id) => t.eq(U2.tutorial.shown.filter((x) => x === id).length, 1, id + ' exactly once'));
+    t.ok(U2.tutorial.shown.indexOf('endturn') < U2.tutorial.shown.indexOf('swap'), 'the walkthrough before swap');
     t.eq(U2.tutorial.queue().length, 0, 'the queue drained');
-    const eN = gt._console.error.length;
-    t.eq(eN, 0, 'no console errors through the whole fight');
+    t.eq(gt._console.error.length, 0, 'no console errors through the whole fight');
   });
-  await t.test('tutorial: a hint that loses its screen is dropped, an overlay hides the bubble, the settings switch and Hide hints work', async () => {
+  await t.test('tutorial: a hint that loses its screen is dropped, an overlay hides the bubble, the Tutorial setting works', async () => {
     const R = G2.state.R;
     U2.tutorial.reset();
-    t.eq(flags().length, 0, 'reset clears the flags');
+    M2.setTutorial('tut_x_off', true);
+    t.eq(flags().filter((f) => f !== 'tut_x_off').length, 0, 'reset clears the flags');
     U2.bus.emit('screen', { name: 'camp', params: { R } });
     await U2.go('camp', { node: nodeAtG(gt, R, 'camp'), R }, { force: true, transition: 'none' }); await tick(); await tick();
-    t.eq(cur(), 'camp', 'the camp hint shows on the camp screen');
+    t.eq(cur(), 'camp', 'the camp hint shows on the camp screen'); t.ok(M2.tutorial('tut_camp'), 'a hint is stored the moment it shows');
+    t.eq(txt($(gt, '.tut-ok')), 'Got it', 'a hint says Got it'); t.eq(txt($(gt, '.tut-off')), 'Skip tutorial', 'and offers Skip tutorial');
     UI_overlay(gt, 'deck'); await tick();
     t.ok(tuts()[0].className.includes('hold'), 'an open overlay hides the bubble');
     U2.overlay.close(); await tick();
@@ -1010,66 +1187,111 @@ await settle(gt);
     await U2.go('shop', { node: nodeAtG(gt, R, 'shop'), R }, { force: true, transition: 'none' }); await tick(); await tick();
     t.eq(cur(), 'shop', 'the shop hint');
     M2.set('hints', false);
-    await click(gt, $(gt, '.tut-ok')); await tick();
+    await next();
     U2.bus.emit('screen', { name: 'event', params: {} }); await U2.go('howto', null, { force: true, transition: 'none' }); await tick();
-    t.ok(!U2.tutorial.enabled(), 'the Hints setting turns the system off'); t.ok(!U2.tutorial.fire('event'), 'and nothing is queued');
+    t.ok(!U2.tutorial.enabled(), 'the Tutorial setting turns the system off'); t.ok(!U2.tutorial.fire('event'), 'and nothing is queued');
+    t.ok(!U2.tutorial.explaining(), 'explainers are off with it'); t.ok(!U2.tutorial.explain('tile', 'camp'), 'none is queued');
     M2.set('hints', true);
     await U2.go('event', { node: nodeAtG(gt, R, 'event'), R }, { force: true, transition: 'none' }); await tick(); await tick();
-    t.eq(cur(), 'event', 'back on, the fable hint shows');
-    await click(gt, $(gt, '.tut-off')); await tick();
-    t.eq(M2.get('hints'), false, 'Hide hints writes the setting'); t.eq(tuts().length, 0, 'and closes the bubble');
-    M2.set('hints', true);
+    t.eq(cur(), 'event', 'back on, the detour hint shows');
+    await next();
   });
-  await t.test('tutorial: a real boss fight raises energy then the boss hint; a pick prompt and a status chip raise theirs, each exactly once', async () => {
+  await t.test('tutorial: a real boss fight runs the fight walkthrough first, then the boss hint; a pick prompt and a status chip raise theirs, each exactly once', async () => {
     const R = G2.state.R;
     U2.tutorial.reset(); U2.tutorial.shown.length = 0;
+    M2.setTutorial('tut_x_off', true);
     R.chapter = 1;
     const node = nodeAtG(gt, R, 'boss');
     await G2.enterNode(node); await tick(); await tick();
     t.eq(U2.currentName, 'combat', 'the boss fight');
-    t.eq(cur(), 'energy', 'energy first in a first fight, even a boss one');
-    await click(gt, $(gt, '.tut-ok')); await tick();
-    t.eq(cur(), 'hand', 'hand next (it was waiting on energy)');
-    await click(gt, $(gt, '.tut-ok')); await tick();
+    t.eq(cur(), 'hand', 'the walkthrough first, even in a boss fight');
+    for (const id of ['hand', 'blockcard', 'energy', 'intent', 'endturn']) { t.eq(cur(), id, 'step ' + id); await next(); }
     t.eq(cur(), 'boss', 'then the boss hint');
-    await click(gt, $(gt, '.tut-ok')); await tick();
+    await next();
     U2.bus.emit('combat:pick', { pending: { n: 1 } }); await tick();
-    t.eq(cur(), 'pick', 'a pick prompt raises its hint'); await click(gt, $(gt, '.tut-ok')); await tick();
+    t.eq(cur(), 'pick', 'a pick prompt raises its hint'); await next();
     const d = G2.debug.combat();
     d.setStatus('hanae', 'might', 2); await tick();
     U2.bus.emit('combat:turn', { turn: 3, phase: 'player' }); await tick(); await tick();
     let guard = 0;
-    while ((cur() || U2.tutorial.queue().length) && guard++ < 8) { if (cur()) await click(gt, $(gt, '.tut-ok')); await tick(); await tick(); }
-    ['energy', 'hand', 'boss', 'pick', 'status', 'block', 'swap'].forEach((id) => t.eq(U2.tutorial.shown.filter((x) => x === id).length, 1, id + ' exactly once'));
-    t.eq(new Set(U2.tutorial.shown).size, U2.tutorial.shown.length, 'no hint was ever shown twice');
+    while ((cur() || U2.tutorial.queue().length) && guard++ < 8) { if (cur()) await next(); await tick(); }
+    ['hand', 'blockcard', 'energy', 'intent', 'endturn', 'boss', 'pick', 'status', 'swap'].forEach((id) => t.eq(U2.tutorial.shown.filter((x) => x === id).length, 1, id + ' exactly once'));
+    t.eq(new Set(U2.tutorial.shown).size, U2.tutorial.shown.length, 'nothing was ever shown twice');
     t.eq(gt._console.error.length, 0, 'no console errors');
   });
-  await t.test('tutorial: boss fights raise the boss hint; a status chip raises the status hint; gems raise on the first gem', async () => {
+  await t.test('tutorial: explainers: a big card the first time a status shows, with What it does, Next, Got it and Stop explaining; one at a time, once each', async () => {
     const R = G2.state.R;
     U2.tutorial.reset(); U2.tutorial.shown.length = 0;
-    await U2.go('howto', null, { force: true, transition: 'none' }); await tick();
-    U2.bus.emit('screen', { name: 'combat', params: { node: { tier: 'boss' }, R } });
-    await tick(); await tick();
-    t.eq(U2.tutorial.shown.length, 0, 'a combat hint raised while another screen is current never shows (scope)');
-    R.gems = ['red_g0'];
-    await U2.go('reward', { rewards: { gold: 5, ink: 0, cards: [], relics: [], gems: [], brush: null, maxHp: 0, boss: false, tier: 'normal', source: 'combat' }, source: 'combat', node: { kind: 'reward', rewards: { gold: 5, cards: [], relics: [], gems: [] } }, R }, { force: true, transition: 'none' });
-    await tick(); await tick();
-    t.eq(cur(), 'reward', 'the spoils hint comes first (catalog order)');
-    await click(gt, $(gt, '.tut-ok')); await tick();
-    t.eq(cur(), 'gems', 'then, with a gem in the pouch, gems');
-    await click(gt, $(gt, '.tut-ok')); await tick();
+    Object.keys(U2.tutorial.HINTS).forEach((id) => M2.setTutorial('tut_' + id, true));      // the walkthrough and hints are done: only explainers are left
+    t.ok(U2.tutorial.explaining(), 'reset turned explainers back on');
+    R.chapter = 1;
+    const node = nodeAtG(gt, R, 'enemy');
+    await G2.enterNode(node); await tick(); await tick();
+    const d = G2.debug.combat();
+    d.setStatus('hanae', 'might', 2); d.setStatus('kuro', 'thorns', 3); await tick();
+    U2.bus.emit('combat:turn', { turn: 2, phase: 'player' }); await tick(); await tick();
+    t.ok(cur() && /^x_/.test(cur()), 'an explainer is up: ' + cur());
+    const card = tuts()[0];
+    t.ok(card.classList.contains('tut-x'), 'it is the big explainer card');
+    t.ok(/^New /.test(txt($(gt, '.tut-kicker', card))) && /What it does/i.test(txt($(gt, '.tut-what', card))), 'labelled New ..., with What it does');
+    t.ok($(gt, '.tut-xico', card) && txt($(gt, '.tut-title', card)).length > 1 && txt($(gt, '.tut-text', card)).length > 5, 'an icon, a name and the text');
+    t.eq(txt($(gt, '.tut-off', card)), 'Stop explaining', 'Stop explaining');
+    t.eq(tuts().length, 1, 'never two at once');
+    const seenX = [];
+    let guard = 0;
+    while (cur() && /^x_/.test(cur()) && guard++ < 20) {
+      const id = cur();
+      seenX.push(id);
+      const label = txt($(gt, '.tut-ok'));
+      t.ok(label === (U2.tutorial.queue().some((q) => /^x_/.test(q)) ? 'Next' : 'Got it'), id + ': Next while more wait, else Got it (' + label + ')');
+      t.ok(!M2.tutorial('tut_' + id), id + ': stored when it closes');
+      await next();
+      t.ok(M2.tutorial('tut_' + id), id + ': stored now');
+    }
+    t.ok(seenX.indexOf('x_status_might') >= 0 && seenX.indexOf('x_status_thorns') >= 0, 'the two new statuses were explained: ' + seenX.join(','));
+    t.eq(new Set(seenX).size, seenX.length, 'each once');
+    const before = U2.tutorial.shown.length;
+    U2.bus.emit('combat:turn', { turn: 3, phase: 'player' }); await tick(); await tick();
+    t.eq(U2.tutorial.shown.length, before, 'meeting them again explains nothing');
+    // Stop explaining
+    d.setStatus('hanae', 'weak', 1); await tick();
+    U2.bus.emit('combat:turn', { turn: 4, phase: 'player' }); await tick(); await tick();
+    t.eq(cur(), 'x_status_weak', 'a newcomer is explained');
+    await click(gt, $(gt, '.tut-off')); await tick();
+    t.ok(M2.tutorial('tut_x_off') && !U2.tutorial.explaining(), 'Stop explaining stores tut_x_off');
+    t.ok(U2.tutorial.enabled(), 'the tutorial itself stays on');
+    d.setStatus('hanae', 'regen', 2); await tick();
+    U2.bus.emit('combat:turn', { turn: 5, phase: 'player' }); await tick(); await tick();
+    t.eq(cur(), null, 'no more explainers');
+    t.eq(gt._console.error.length, 0, 'no console errors');
+  });
+  await t.test('tutorial: explainers wait for the walkthrough, and the map explains Charms, Spells and signs after it', async () => {
+    const R = G2.state.R;
+    U2.tutorial.reset(); U2.tutorial.shown.length = 0;
+    R.relics = ['brass_lantern']; R.brushes = ['stroke']; R.gems = [];
+    U2.tutorial.counts.paints = 0;
+    await U2.go('map', { R }, { force: true, transition: 'none' }); await tick(); await tick();
+    t.eq(cur(), 'you', 'the walkthrough comes first');
+    t.ok(U2.tutorial.queue().some((q) => /^x_/.test(q)), 'explainers are queued behind it: ' + U2.tutorial.queue().join(','));
+    await next();
+    t.eq(cur(), 'paint', 'and the next step still beats them');
+    await click(gt, $(gt, '.tut-off')); await tick();
+    let guard = 0; const xs = [];
+    while (cur() && guard++ < 12) { if (/^x_/.test(cur())) xs.push(cur()); await next(); }
+    t.ok(xs.indexOf('x_relic_brass_lantern') >= 0 && xs.indexOf('x_spell_stroke') >= 0, 'the Charm and the Spell in hand were explained: ' + xs.join(','));
+    R.relics = []; R.brushes = [];
   });
 }
 // the off switch: ?notutorial=1 and a run of events show nothing
 {
   const go = fresh({ search: '?notutorial=1', seed: 4 });
   await go._settle();
-  await t.test('tutorial: ?notutorial=1 disables every hint', async () => {
+  await t.test('tutorial: ?notutorial=1 disables every step, hint and explainer', async () => {
     go.UI.bus.emit('screen', { name: 'map', params: {} });
     go.UI.bus.emit('map:paint', { q: 1, r: 1, cost: 1 });
     await go._settle(); await go._settle();
     t.ok(!go.UI.tutorial.enabled(), 'disabled'); t.eq(go._doc.querySelectorAll('#tips .tut').length, 0, 'no bubble'); t.eq(go.UI.tutorial.shown.length, 0, 'nothing shown');
-    t.ok(!go.UI.tutorial.fire('paint'), 'fire refuses');
+    t.ok(!go.UI.tutorial.fire('paint'), 'fire refuses'); t.ok(!go.UI.tutorial.explain('tile', 'camp'), 'explain refuses');
   });
 }
 

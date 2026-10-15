@@ -1690,6 +1690,7 @@ const UI = (() => {
       lastCost = costTxt;
       root.dataset.cost = costTxt;
       root.setAttribute('aria-label', nm + (R.up ? ' plus' : '') + '. ' + (TYPE_LABEL[R.type] || R.type) + (costTxt ? ', cost ' + costTxt : '') + '. ' + plain);
+      root.dataset.ops = opsOf(R.fx);                    // what the card does ("dmg block"): the tutorial points at a Block card with [data-ops~="block"]
       root.rbResolved = R;
     }
     // state classes are toggled one by one so classes a screen adds to the card (dragging, fanned...) survive updates
@@ -1733,6 +1734,15 @@ const UI = (() => {
     if (o.tip !== false && size === 'mini') attach(root, () => bubbleBody(String(R.name).replace(/\+$/, ''), 'keyword', TYPE_LABEL[R.type] || '', plainOf(cardRulesHtml(instOrId, R, ctx))), { side: 'top' });
     S.fit.push(root); root.rbFit = 0;
     return root;
+  }
+
+  // the distinct op names of a card's effects, nested ones included (DATA.walkOps when the text layer has it)
+  function opsOf(fx) {
+    const out = [];
+    const add = (o) => { if (o && typeof o.op === 'string' && out.indexOf(o.op) < 0) out.push(o.op); };
+    if (typeof DATA.walkOps === 'function') safe(() => DATA.walkOps(fx || [], add));
+    else (fx || []).forEach(add);
+    return out.join(' ');
   }
 
   function cardUpdate(el, patch) { if (el && typeof el.rbUpdate === 'function') el.rbUpdate(patch); return el; }
@@ -2023,7 +2033,7 @@ const UI = (() => {
       row('Reduce motion', seg([{ value: null, label: 'Auto' }, { value: true, label: 'On' }, { value: false, label: 'Off' }], { label: 'Reduce motion', value: S1('reduceMotion'), onchange: (v) => setSetting('reduceMotion', v) })),
       row('Screen shake', slider({ label: 'Screen shake', value: S1('shake'), step: 0.25, onchange: (v) => setSetting('shake', v) })),
       row('Animation speed', seg([{ value: 0, label: 'Normal' }, { value: 1, label: 'Fast' }, { value: 2, label: 'Faster' }], { label: 'Animation speed', value: S1('fastAnim'), onchange: (v) => setSetting('fastAnim', v) })),
-      row('Hints', toggle({ label: 'Hints', value: S1('hints'), onchange: (v) => setSetting('hints', v) }), 'Short tips during your first tour'));
+      row('Tutorial', toggle({ label: 'Tutorial', value: S1('hints'), onchange: (v) => setSetting('hints', v) }), 'Guided first steps and explainers for new things'));
     return root;
   }
 

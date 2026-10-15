@@ -1,4 +1,4 @@
-// Hocus Vocus: Andy (id `raiga`), The Thunder Bass: his complete card set (3 starters, 14 commons, 12 uncommons, 8 rares).
+// Hocus Vocus: Andy (id `raiga`), The Thunder Bass: his complete card set (3 starters, 15 commons, 13 uncommons, 9 rares).
 //
 // One IIFE, no top-level names; it only calls DATA.add('cards', {...}). Card text is generated from `fx`, never typed.
 // Tokens: none. No card here uses the `add` op, so none is defined. Card ids keep their old internal names (raiga_jab and so on);
@@ -391,6 +391,31 @@
       up: { fx: [hook('onPlay', [dmg(3, { tgt: 'all' }), charge(1)], { every: 3 })] },
       kw: [], slots: ['gold', 'any'], art: { m: 'sun', c: 'crimson' },
       flavor: 'One for courage, one for fun, and one for the floor.',
+    },
+    // ------------------------------------------------------------------ card mechanics (DATA "Card mechanics": Fanbase, Hype, Remix)
+    raiga_deep_cut: {
+      name: 'Deep Cut', hero: 'raiga', type: 'attack', rarity: 'common', cost: 1,
+      // Fanbase: the album track only the real fans know, and there are more of them after every win
+      fx: [dmg(6)], mech: { fanbase: 1 },
+      up: { fx: [dmg(7)], mech: { fanbase: 2 } },
+      kw: [], slots: ['red'], art: { m: 'fist', c: 'amber', hero: true },
+      flavor: 'Track nine. The fans who know, know.',
+    },
+    raiga_mosh_pit: {
+      name: 'Mosh Pit', hero: 'raiga', type: 'attack', rarity: 'uncommon', cost: 2,
+      // Hype: a closer after the cheap cards (two earlier cards make it 14)
+      fx: [dmg(8)], mech: { hype: 3 },
+      up: { fx: [dmg(10)], mech: { hype: 4 } },
+      kw: [], slots: ['red'], art: { m: 'kick', c: 'crimson', hero: true },
+      flavor: 'He did not start it. He is just the floor it happens on.',
+    },
+    raiga_dub_remix: {
+      name: 'Dub Remix', hero: 'raiga', type: 'attack', rarity: 'rare', cost: 2,
+      // Remix on every enemy: 6, 9, 12 ... to the whole line
+      fx: [dmg(6, { tgt: 'all' })], mech: { remix: 3 },
+      up: { fx: [dmg(8, { tgt: 'all' })], mech: { remix: 4 } },
+      kw: [], slots: ['red', 'green'], art: { m: 'wave', c: 'indigo', hero: true },
+      flavor: 'Same bassline. Heavier every time it comes round.',
     },
   });
 })();

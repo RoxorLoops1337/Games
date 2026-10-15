@@ -1,4 +1,4 @@
-// Hocus Vocus: Jasmin (id `hanae`), The Blossom Voice: her complete card set (3 starters, 14 commons, 12 uncommons, 8 rares).
+// Hocus Vocus: Jasmin (id `hanae`), The Blossom Voice: her complete card set (3 starters, 15 commons, 13 uncommons, 9 rares).
 //
 // One IIFE, no top-level names; it only calls DATA.add('cards', {...}). Card text is generated from `fx`, never typed.
 // Card ids keep their old internal names (hanae_slash and so on): only `name` and `flavor` speak Hocus Vocus (bible 4, HV_HEROES 2.1).
@@ -353,6 +353,32 @@
       up: { fx: [block(6), hook('onSwap', [bloom(2), block(4)], { filter: { hero: 'any' }, limit: 1 })] },
       kw: [], slots: ['gold', 'any'], art: { m: 'wind', c: 'violet' }, locked: true,
       flavor: 'One, two, three, swap. One, two, three, swap. Nobody trips.',
+    },
+    // ------------------------------------------------------------------ card mechanics (DATA "Card mechanics": Hype, Fanbase, Remix)
+    // Her many small hits carry every bonus on each hit, so Mashup grows by its Remix on all three hits (and her lead bonus lands on each).
+    hanae_crowd_pleaser: {
+      name: 'Crowd Pleaser', hero: 'hanae', type: 'attack', rarity: 'common', cost: 1,
+      // Hype: a late card in a busy turn (two earlier cards make it 8, plus the lead bonus)
+      fx: [dmg(4)], mech: { hype: 2 },
+      up: { fx: [dmg(5)], mech: { hype: 3 } },
+      kw: [], slots: ['red'], art: { m: 'star', c: 'rose', hero: true },
+      flavor: 'She points at the crowd. The crowd points back. Everybody wins.',
+    },
+    hanae_signature_song: {
+      name: 'Signature Song', hero: 'hanae', type: 'attack', rarity: 'uncommon', cost: 1,
+      // Fanbase: every enemy it finishes adds 2 for the rest of the tour
+      fx: [dmg(5)], mech: { fanbase: 2 },
+      up: { fx: [dmg(7)] },
+      kw: [], slots: ['red'], art: { m: 'slash', c: 'gold', hero: true },
+      flavor: 'The one everybody knows the words to. More of them every night.',
+    },
+    hanae_mashup: {
+      name: 'Mashup', hero: 'hanae', type: 'attack', rarity: 'rare', cost: 1,
+      // Remix: three hits that each grow by 1 per play this fight (3, 6, 9 ... and 9, 12, 15 with the lead bonus); the upgrade grows by 2
+      fx: [dmg(1, { hits: 3 })], mech: { remix: 1 },
+      up: { fx: [dmg(1, { hits: 3 })], mech: { remix: 2 } },
+      kw: [], slots: ['red', 'gold'], art: { m: 'cross_slash', c: 'gold', hero: true },
+      flavor: 'Two songs, one key, zero permission.',
     },
   });
 })();

@@ -315,6 +315,14 @@ t.test('daily runs write only dailyRuns, half-rate Cheers, daily.last, their his
 });
 
 // ================================================================================================ the run save
+t.test('a Fanbase bonus (enc on a deck card) survives saveRun and loadRun under the same key, and a save without it still loads', () => {
+  const A = fresh(); A.META.load();
+  const R = mkRun(A, { seed: 43 }); R.deck[0].enc = 9;
+  t.eq(A.META.saveRun(R), true, 'saved');
+  const back = A.META.loadRun(); t.eq(back.deck[0].enc, 9, 'the bonus comes back'); t.eq(typeof A._store.hv_run_v1, 'string', 'the run key is unchanged');
+  delete R.deck[0].enc; A.META.saveRun(R);
+  const plain = A.META.loadRun(); t.ok(plain && plain.deck[0].enc === undefined, 'an old style save loads with no bonus');
+});
 t.test('saveRun, loadRun, hasRun, clearRun: a run round trips through storage', () => {
   const A = fresh(); A.META.load();
   t.eq(A.META.hasRun(), false, 'no run yet'); t.eq(A.META.loadRun(), null, 'nothing to load');

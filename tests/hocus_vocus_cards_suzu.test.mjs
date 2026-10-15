@@ -57,9 +57,18 @@ const flat = (fx) => { const out = []; DATA.walkOps(fx, (o) => out.push(o)); ret
 const allOps = (c) => flat(c.fx);
 const bothOps = (c) => flat(c.fx).concat(flat(c.up && c.up.fx));
 const resolveDef = (c, up) => {
-  if (!up) return { cost: c.cost, fx: c.fx, kw: c.kw || [] };
+  if (!up) return { cost: c.cost, fx: c.fx, kw: c.kw || [], mech: c.mech || {} };
   const u = c.up || {};
-  return { cost: u.cost !== undefined ? u.cost : c.cost, fx: u.fx || c.fx, kw: u.kw || c.kw || [] };
+  return { cost: u.cost !== undefined ? u.cost : c.cost, fx: u.fx || c.fx, kw: u.kw || c.kw || [], mech: u.mech || c.mech || {} };
+};
+// card mechanics (DATA "Card mechanics") priced per point and per hit of the first dmg op (AOE counts as 1.8 targets): a Loop copy is a
+// Fading card that must follow another play (4), Remix pays about once more per fight (1), Hype reads two earlier cards (2), and a
+// Fanbase card has a few kills behind it over a tour (2)
+const mechPts = (d) => {
+  const m = d.mech || {};
+  const o = (d.fx || []).find((x) => x && x.op === 'dmg');
+  const hits = o ? (typeof o.hits === 'number' ? o.hits : 1) * (o.tgt === 'all' ? 1.8 : 1) : 0;
+  return 4 * (m.loop || 0) + hits * (1 * (m.remix || 0) + 2 * (m.hype || 0) + 2 * (m.fanbase || 0));
 };
 const words = (s) => s.trim().split(/\s+/).length;
 // the ops a gem's flat mods can reach: through cond and repeat, never into a hook's fx
@@ -70,7 +79,7 @@ t.test('DATA.validate is clean for suzu: no errors, no warnings', () => {
   const v = DATA.validate('cards', { hero: 'suzu' });
   t.eq(v.errors.length, 0, 'validate errors: ' + v.errors.join(' | '));
   t.eq(v.warnings.length, 0, 'validate warnings: ' + v.warnings.join(' | '));
-  t.eq(cards.length, 37, 'this file registers exactly 37 cards');
+  t.eq(cards.length, 40, 'this file registers exactly 40 cards');
 });
 t.test('DATA.audit has no lines for suzu', () => {
   const a = DATA.audit('cards', { hero: 'suzu' });
@@ -78,10 +87,10 @@ t.test('DATA.audit has no lines for suzu', () => {
 });
 
 // ---------------------------------------------------------------------------------------------- counts and mix
-t.test('counts: 3 starters, 14 commons, 12 uncommons, 8 rares, no tokens', () => {
+t.test('counts: 3 starters, 15 commons, 13 uncommons, 9 rares, no tokens', () => {
   const n = (r) => nonToken.filter((c) => c.rarity === r).length;
-  t.eq(n('starter'), 3, 'starters'); t.eq(n('common'), 14, 'commons'); t.eq(n('uncommon'), 12, 'uncommons'); t.eq(n('rare'), 8, 'rares');
-  t.eq(cards.length, 37, 'total');
+  t.eq(n('starter'), 3, 'starters'); t.eq(n('common'), 15, 'commons'); t.eq(n('uncommon'), 13, 'uncommons'); t.eq(n('rare'), 9, 'rares');
+  t.eq(cards.length, 40, 'total');
   t.eq(cards.filter((c) => c.rarity === 'token').length, 0, 'no card here adds a token, so none is defined');
   t.ok(!cards.some((c) => bothOps(c).some((o) => o.op === 'add')), 'no card uses the add op');
 });
@@ -99,7 +108,7 @@ t.test('mix: 30 percent attacks, 30 percent skills, 4 or more powers, an X card'
   t.ok(n('attack') >= nonToken.length * 0.3, 'attacks ' + n('attack'));
   t.ok(n('skill') >= nonToken.length * 0.3, 'skills ' + n('skill'));
   t.ok(n('power') >= 4, 'powers ' + n('power'));
-  t.eq(n('attack') + n('skill') + n('power'), 37, 'only attack, skill and power types');
+  t.eq(n('attack') + n('skill') + n('power'), 40, 'only attack, skill and power types');
   nonToken.filter((c) => c.type === 'power').forEach((c) => t.ok(c.rarity === 'uncommon' || c.rarity === 'rare', c.id + ': powers are uncommon or rare'));
   t.ok(nonToken.some((c) => c.cost === 'X'), 'an X cost card');
   nonToken.filter((c) => c.type === 'power').forEach((c) => t.ok(allOps(c).some((o) => o.op === 'hook'), c.id + ': a power is built from a hook'));
@@ -214,7 +223,7 @@ t.test('every playable card has an upgrade that changes something', () => {
     t.ok(c.up && typeof c.up === 'object', c.id + ' has up');
     const a = resolveDef(c, false), b = resolveDef(c, true);
     t.ok(JSON.stringify(a) !== JSON.stringify(b), c.id + ': upgrade differs from the base');
-    Object.keys(c.up).forEach((k) => t.ok(['fx', 'cost', 'kw'].includes(k), c.id + ' up.' + k));
+    Object.keys(c.up).forEach((k) => t.ok(['fx', 'cost', 'kw', 'mech'].includes(k), c.id + ' up.' + k));
     if (c.up.cost !== undefined) t.ok(c.up.cost !== c.cost, c.id + ': up.cost differs');
     if (c.cost === 'X') t.ok(b.cost === 'X', c.id + ': an X card stays X');
     t.ok(b.cost === 'X' || b.cost <= (c.cost === 'X' ? 99 : c.cost), c.id + ': an upgrade never costs more');
@@ -372,7 +381,7 @@ function netOf(def, row, setup) {
 // weighted over the two rows; a card that moves between rows is scored from where it starts
 const valueOf = (c, up) => {
   const d = resolveDef(c, up), setup = SETUP[c.id];
-  return W_BACK * netOf(d, 'back', setup) + W_FRONT * netOf(d, 'front', setup);
+  return W_BACK * netOf(d, 'back', setup) + W_FRONT * netOf(d, 'front', setup) + mechPts(d);
 };
 const energyOf = (d) => (d.cost === 'X' ? REF.X : d.cost);
 const bandOf = (c, up) => {
@@ -990,5 +999,48 @@ if (ENGINE) {
     t.ok(sum && sum.actions > 0, 'the bot played cards');
   });
 }
+
+// ---------------------------------------------------------------------------------------------- card mechanics (DATA "Card mechanics")
+// The cards of the mechanics wave, played in a real engine against two test enemies: a 3 HP one (to be defeated) and a 300 HP dummy.
+function mechWorld(partner) {
+  const g = boot({ only: ['data_text', 'combat', 'data_cards_suzu'] });
+  const D = g.DATA;
+  const base = { chapter: 1, tier: 'normal', size: 'm', moves: { idle: { name: 'Idle', kind: 'none', fx: [] } }, ai: { seq: ['idle'] }, lore: 'A test creature.', tags: ['spirit'] };
+  D.add('enemies', { t_mech_weak: Object.assign({ name: 'Weak', hp: [3, 3], art: { id: 't_mech_weak' } }, base), t_mech_dummy: Object.assign({ name: 'Dummy', hp: [300, 300], art: { id: 't_mech_dummy' } }, base) });
+  const fight = (ids, enemies) => {
+    const deck = ids.map((x, i) => Object.assign({ uid: 500 + i, up: 0, gems: [] }, typeof x === 'string' ? { id: x } : x));
+    deck.forEach((c) => { c.gems = (D.cards[c.id].slots || []).map(() => null); });
+    const C = g.COMBAT.create({ heroes: [{ id: 'suzu', hp: 80, maxHp: 80 }, { id: partner, hp: 80, maxHp: 80 }], frontIdx: 0, deck, enemies: enemies || ['t_mech_dummy'], seed: 9 });
+    C.start();
+    C.energy = 99;
+    return C;
+  };
+  // move one card with this id into the hand (from any pile) and return it
+  const take = (C, id) => {
+    for (const pile of [C.hand, C.draw, C.discard, C.exhaust]) { const i = pile.findIndex((c) => c.id === id); if (i >= 0) { const [c] = pile.splice(i, 1); C.hand.push(c); return c; } }
+    throw new Error('no ' + id);
+  };
+  const play = (C, id, target) => { const c = take(C, id); C.energy = 99; return { c, ev: C.play(c.uid, C.needsTarget(c.uid) ? (target || C.enemies.find((e) => !e.down).id) : undefined) }; };
+  const raws = (ev) => ev.filter((e) => e.type === 'hit').map((e) => e.raw);
+  return { g, D, fight, take, play, raws };
+}
+t.test('card mechanics: Delay Throw (Loop), Build the Buzz (Hype) and Platinum Record (Fanbase) print and play as their keyword says', () => {
+  const { D, fight, play, raws } = mechWorld('raiga');
+  t.eq(D.cardPlain('suzu_delay_throw'), 'The lead hero gains 4 Block. Loop.', 'Delay Throw text');
+  t.eq(D.cardPlain('suzu_build_the_buzz'), 'Deal 3 damage to all enemies. Hype 1.', 'Build the Buzz text');
+  t.eq(D.cardPlain('suzu_platinum_record'), 'Deal 10 damage. Fanbase 3.', 'Platinum Record text');
+  t.eq(D.cardPlain({ id: 'suzu_platinum_record', up: 1, gems: [null, null] }), 'Deal 13 damage. Fanbase 4.', 'Platinum Record+ text');
+  let C = fight(['suzu_delay_throw', 'suzu_ofuda']);
+  play(C, 'suzu_ofuda');
+  t.deep(play(C, 'suzu_delay_throw').ev.filter((e) => e.type === 'add_card').map((e) => e.cards[0].id), ['suzu_ofuda'], 'Delay Throw copies the Synth Zap');
+  C = fight(['suzu_build_the_buzz', 'suzu_saisen', 'suzu_paper_seal'], ['t_mech_dummy', 't_mech_dummy']);
+  const alone = raws(play(fight(['suzu_build_the_buzz'], ['t_mech_dummy', 't_mech_dummy']), 'suzu_build_the_buzz').ev);
+  play(C, 'suzu_saisen'); play(C, 'suzu_paper_seal');
+  t.deep(raws(play(C, 'suzu_build_the_buzz').ev), alone.map((x) => x + 2), 'Hype 1 after two cards: 2 more on every enemy');
+  C = fight(['suzu_platinum_record'], ['t_mech_weak', 't_mech_dummy']);
+  const k = play(C, 'suzu_platinum_record', C.enemies[0].id);
+  t.eq(k.c.enc, 3, 'a kill adds 3');
+  t.eq(raws(play(C, 'suzu_platinum_record', C.enemies[1].id).ev)[0], raws(k.ev)[0] + 3, 'the next play is 3 bigger');
+});
 
 t.done();

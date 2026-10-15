@@ -24,9 +24,10 @@
 //               History (META.history rows), Follow the duo (the sixth tab: UI.followPanel('tab'), which carries the about text and Jordan's line). Keys 1 to 6
 //               switch tabs. The Cheers balance counts up and down. Esc goes back.
 //   settings    params none. One shared form (music, effects, shake, reduce motion, text size, animation speed, damage numbers, colour-blind
-//               aids, quality, hints, fullscreen, restore defaults, clear data with a two-step confirm, and a last About group: the about text,
+//               aids, quality, the Tutorial switch (the `hints` setting, On or Off in words) and Replay tutorial (UI.tutorial.reset), fullscreen, restore defaults, clear data with a two-step confirm, and a last About group: the about text,
 //               the follow strip from ui.js and the version). Every change applies at once through UI.setSetting (META.set + save + UI.applySettings).
-//   howto       params none. Eight illustrated pages with small live diagrams, dots, swipe, arrow keys.
+//   howto       params none. Nine pages, one rule each (the goal, the map and Vox, a fight turn, attack and block, Breath, lead and backing, statuses,
+//               gems and Charms, after the tour): a short title, the rule in one line, at most two notes and a small live diagram; dots, swipe, arrow keys.
 // OVERLAYS
 //   pause       Resume, Deck, Charms, Settings, How to play (an in-place sub view of the same overlay), Abandon run (GAME.abandon opens
 //               the confirm), Save and quit, a run strip and a tip. Without a run: Resume, Settings, How to play, Back to title.
@@ -1857,7 +1858,16 @@
     const glyphs = mk('span', { class: 'mn-glyphs', 'aria-hidden': 'true' }, ['red', 'blue', 'green', 'gold', 'any'].map((c) => mk('span', { class: 'gem gc-' + (c === 'any' ? 'gold' : c) + ' sz-sm' }, UI.icon('gem', 'slot:' + c, 26))));
     const cb = UI.toggle({ label: 'Colour-blind aids', value: getSet('colorblind'), onchange: (v) => setSet('colorblind', v) });
     const qSeg = UI.seg([{ value: 'auto', label: 'Auto' }, { value: 'high', label: 'High' }, { value: 'low', label: 'Low' }], { label: 'Quality', value: getSet('quality'), onchange: (v) => setSet('quality', v) });
-    const hints = UI.toggle({ label: 'Hints', value: getSet('hints'), onchange: (v) => setSet('hints', v) });
+    // the tutorial switch (the `hints` setting) says On or Off in words beside it, and Replay tutorial clears every tutorial flag and turns it on
+    const tutState = mk('b', { class: 'mn-tut-state', 'aria-hidden': 'true' });
+    const paintTut = () => { const on = getSet('hints') !== false; tutState.textContent = on ? 'On' : 'Off'; tutState.classList.toggle('off', !on); };
+    const hints = UI.toggle({ label: 'Tutorial', value: getSet('hints'), onchange: (v) => { setSet('hints', v); paintTut(); } });
+    paintTut();
+    const replayBtn = btn('Replay tutorial', { kind: 'secondary', size: 'sm', onclick: () => {
+      safe(() => UI.tutorial.reset());
+      setSet('hints', true); hints.rbSet(true); paintTut();
+      UI.toast('Tutorial reset. It starts again on your next map and fight.', 'info');
+    } });
 
     const fsBtn = fsSupported() ? btn(fsActive() ? 'Leave full screen' : 'Full screen', { kind: 'secondary', size: 'sm', onclick: () => { toggleFullscreen(); UI.after(350, () => fsBtn.rbSet({ label: fsActive() ? 'Leave full screen' : 'Full screen' })); } }) : mk('span', { class: 'mn-set-hint', text: 'Not available here' });
     const defBtn = btn('Restore defaults', { kind: 'secondary', size: 'sm', onclick: () => { Object.keys(DATA.SETTINGS).forEach((k) => UI.setSetting(k, DATA.SETTINGS[k].def)); rebuild(); UI.toast('Settings restored', 'info'); } });
@@ -1869,9 +1879,10 @@
     shakeRowEl = row('shake', 'Screen shake', shakeSl, 'Try it: this line shakes as you drag');
     root.appendChild(mk('div', { class: 'mn-set-cols' },
       mk('div', { class: 'mn-set-col' },
+        group('Help', row('hints', 'Tutorial', mk('div', { class: 'mn-tut-ctl' }, hints, tutState), 'Guided first steps, and a card for anything new'),
+          row('replay', 'Replay tutorial', replayBtn, 'Start the walkthrough and the explainers again')),
         group('Sound', row('musicVol', 'Music', music), row('sfxVol', 'Effects', sfxSl)),
-        group('Motion', row('reduceMotion', 'Reduce motion', rmSeg), mk('div', { class: 'mn-set-note' }, rmNote), shakeRowEl, row('fastAnim', 'Animation speed', animSeg), row('damageNumbers', 'Damage numbers', dmg)),
-        group('Help', row('hints', 'Hints', hints, 'Short tips during your first tour'))),
+        group('Motion', row('reduceMotion', 'Reduce motion', rmSeg), mk('div', { class: 'mn-set-note' }, rmNote), shakeRowEl, row('fastAnim', 'Animation speed', animSeg), row('damageNumbers', 'Damage numbers', dmg))),
       mk('div', { class: 'mn-set-col' },
         group('Display', row('textScale', 'Text size', tsSeg), mk('div', { class: 'mn-set-note' }, sample), row('colorblind', 'Colour-blind aids', cb, 'Patterns, and bigger glyphs on gems'), mk('div', { class: 'mn-set-note' }, glyphs), row('quality', 'Quality', qSeg, 'Auto lowers effects if the game slows down')),
         group('Screen and data', row('fullscreen', 'Full screen', fsBtn), row('defaults', 'Defaults', defBtn), dataRow))));
@@ -1918,7 +1929,7 @@
   };
 
   // ================================================================================================================
-  // HOW TO PLAY: eight illustrated pages, each with a small live diagram (canvas painters and DOM pieces built from real ART and DATA)
+  // HOW TO PLAY: nine pages, one rule each, each with a small live diagram (canvas painters and DOM pieces built from real ART and DATA)
   // ================================================================================================================
   const HT_W = 520, HT_H = 380;
   const fontN = () => (T() ? T().font.num : 'sans-serif');
@@ -2192,36 +2203,11 @@
     illusFg(g, 0.45);
   }
 
-  // ---- 5. intents (a live bubble above a foe, plus a legend of every icon) and the statuses
+  // ---- the intent icons (the fight turn page lists the first six)
   const INTENT_INFO = [
     ['attack', 'Attack', 'One hit'], ['multi', 'Flurry', 'Several hits'], ['heavy', 'Big hit', 'One big hit'], ['defend', 'Guard', 'Gains Block'], ['buff', 'Hype up', 'Gets stronger'],
     ['debuff', 'Jinx', 'Weakens or clogs'], ['summon', 'Summon', 'Calls friends'], ['heal', 'Heal', 'Mends itself'], ['special', 'Special', 'Something odd'], ['flee', 'Flee', 'Runs away'],
   ];
-  function buildIntents() {
-    const wrap = mk('div', { class: 'mn-illus-stack' });
-    const cv = paintedCanvasSized(HT_W, 190, (g, t) => {
-      illusBgSized(g, HT_W, 190, 'night');
-      const k = Math.floor(t / 1.7) % INTENT_INFO.length, info = INTENT_INFO[k];
-      art(() => ART.enemy.draw(g, 'kappa', { x: 170, y: 176, s: 0.78, pose: info[0] === 'heavy' ? 'telegraph' : 'idle', t }), 'enemy');
-      const pop = easeIO(prog(t % 1.7, 0, 0.25));
-      g.save(); g.translate(258, 64); g.scale(0.7 + 0.3 * pop, 0.7 + 0.3 * pop);
-      g.fillStyle = HV.cream; g.strokeStyle = HV.line; g.lineWidth = 3.5; g.beginPath(); g.arc(0, 0, 34, 0, TAU); g.fill(); g.stroke();
-      g.beginPath(); g.moveTo(-20, 26); g.lineTo(-34, 50); g.lineTo(-4, 34); g.closePath(); g.fill(); g.stroke();
-      art(() => ART.icon.draw(g, 'intent', info[0], 0, 0, 52, { n: /attack|multi|heavy/.test(info[0]) ? 7 : undefined }), 'intent');
-      g.restore();
-      label(g, info[1], 372, 60, 24, HV.pinkL); label(g, info[2], 372, 92, 15, HV.cream);
-      label(g, 'over every enemy', 372, 150, 13, 'rgba(255,248,236,0.75)');
-    });
-    const grid = mk('div', { class: 'mn-legend' });
-    INTENT_INFO.forEach((i) => grid.appendChild(mk('div', { class: 'mn-lg' }, UI.icon('intent', i[0], 30, {}), mk('span', {}, mk('b', { text: i[1] }), mk('i', { text: i[2] })))));
-    add(wrap, cv.el, grid);
-    return { el: wrap, update: cv.update };
-  }
-  function paintedCanvasSized(w, h, paint) {
-    const cv = canvasEl(w, h, 'mn-illus-cv');
-    return { el: cv.c, update(dt, t) { if (!cv.g) return; cv.g.clearRect(0, 0, w, h); cv.g.save(); art(() => paint(cv.g, t), 'howto'); cv.g.restore(); } };
-  }
-
   // ---- 6. gems: the same card before and after a gem drops into its slot
   function buildGems() {
     const cid = DATA.cards.hanae_slash ? 'hanae_slash' : (Object.keys(DATA.cards).find((k) => (DATA.cards[k].slots || []).indexOf('red') >= 0) || Object.keys(DATA.cards)[0]);
@@ -2239,18 +2225,7 @@
     return { el: wrap };
   }
 
-  // ---- 7. what waits on the map
-  function buildTiles() {
-    const wrap = mk('div', { class: 'mn-tiles' });
-    ['camp', 'shop', 'forge', 'event', 'chest', 'gemcache', 'well', 'brush', 'elite'].forEach((id, i) => {
-      const d = DATA.tiles[id] || { name: cap(id), text: '' };
-      const el = mk('div', { class: 'mn-tl', style: { '--i': String(i) } }, mk('span', { class: 'mn-tl-ico' }, UI.icon('tile', id, bigText() ? 38 : 50, {})), mk('b', { text: d.name }), mk('i', { text: d.text }));
-      wrap.appendChild(el);
-    });
-    return { el: wrap };
-  }
-
-  // ---- 8. after the tour
+  // ---- 9. after the tour
   function buildAfter() {
     const wrap = mk('div', { class: 'mn-after' });
     const tmax = safe(() => META.trialMax(), 0) || 0;
@@ -2263,40 +2238,92 @@
     return { el: wrap };
   }
 
+  // ---- 4. attack against block: two real cards side by side, each saying what it does
+  const firstCard = (test) => {
+    const ids = [];
+    partyOf().concat(HEROES).forEach((h) => ((DATA.heroes[h] && DATA.heroes[h].starter) || []).forEach((c) => { if (DATA.cards[c] && ids.indexOf(c) < 0) ids.push(c); }));
+    return ids.find(test) || null;
+  };
+  const hasOp = (cid, op) => { let f = false; safe(() => DATA.walkOps((DATA.cards[cid] || {}).fx || [], (o) => { if (o.op === op) f = true; })); return f; };
+  function buildAttackBlock() {
+    const atk = firstCard((c) => DATA.cards[c].type === 'attack' && hasOp(c, 'dmg'));
+    const blk = firstCard((c) => hasOp(c, 'block') && !hasOp(c, 'dmg'));
+    const col = (cid, word, line, cls) => mk('div', { class: 'mn-ab-col ' + cls },
+      cid ? UI.card({ uid: 0, id: cid, up: 0, gems: ((DATA.cards[cid] || {}).slots || []).map(() => null) }, { size: 'deck', class: 'mn-ab-card', tip: false, showGems: false }) : mk('span'),
+      mk('b', { class: 'mn-ab-word', text: word }), mk('i', { text: line }));
+    const wrap = mk('div', { class: 'mn-ab' }, col(atk, 'Attack', 'hits an enemy', 'atk'), mk('b', { class: 'mn-ab-vs', 'aria-hidden': 'true', text: 'or' }), col(blk, 'Block', 'stops damage', 'blk'));
+    return { el: wrap };
+  }
+
+  // ---- 5. Breath: three orbs, three cards; each card played dims the orbs it cost, then the turn ends and they refill
+  function paintBreath(g, t) {
+    illusBg(g, 'night');
+    const ids = [firstCard((c) => DATA.cards[c].type === 'attack'), firstCard((c) => hasOp(c, 'block')), firstCard((c) => DATA.cards[c].type === 'skill' && !hasOp(c, 'block'))].filter(Boolean);
+    const T0 = reduce() ? 3.2 : t % 8;
+    const costs = ids.map((c) => cardNums(c).cost);
+    let left = 3, played = 0;
+    for (let i = 0; i < ids.length; i++) { if (T0 > 1.2 + i * 1.4 && left >= costs[i]) { left -= costs[i]; played++; } else break; }
+    if (T0 > 6.6) left = 3;
+    for (let i = 0; i < 3; i++) { g.save(); g.globalAlpha = i < left ? 1 : 0.25; art(() => ART.icon.draw(g, 'stat', 'energy', 200 + i * 60, 70, 52, {}), 'energy'); g.restore(); }
+    label(g, left + ' Breath left', 260, 124, 22, HV.sky);
+    const cw = 120, ch = 168, xs = [70, 200, 330];
+    ids.forEach((cid, i) => {
+      const gone = i < played && T0 <= 6.6;
+      const f = gone ? easeIO(prog(T0, 1.2 + i * 1.4, 1.2 + i * 1.4 + 0.6)) : 0;
+      if (f >= 1) return;
+      drawMiniCard(g, cid, xs[i], 186 - f * 80, cw, ch, 0, 1 - f);
+      label(g, 'costs ' + costs[i], xs[i] + cw / 2, 368, 15, HV.cream);
+    });
+    if (T0 > 5.2 && T0 <= 6.6) label(g, 'Out of Breath: End turn', 260, 160, 20, HV.pinkL);
+    if (T0 > 6.6) label(g, 'New turn: 3 fresh Breath', 260, 160, 20, HV.pinkL);
+    illusFg(g, 0.4);
+  }
+
+  // ---- 7. statuses: a wall of real status discs (hover or hold one), each with its name and whether it helps or hurts
+  function buildStatuses() {
+    const pref = ['vulnerable', 'weak', 'poison', 'stun', 'might', 'thorns', 'regen', 'dodge'];
+    const ids = pref.filter((s) => DATA.statuses[s]);
+    Object.keys(DATA.statuses).forEach((s) => { if (ids.length < 8 && ids.indexOf(s) < 0 && !DATA.statuses[s].hero) ids.push(s); });
+    const grid = mk('div', { class: 'mn-stwall' });
+    ids.slice(0, 8).forEach((s) => {
+      const d = DATA.statuses[s];
+      grid.appendChild(mk('div', { class: 'mn-stw ' + (d.kind === 'debuff' ? 'bad' : 'good') }, UI.status(s, undefined, { size: 'lg' }),
+        mk('span', { class: 'mn-stw-t' }, mk('b', { text: d.name }), mk('i', { text: d.kind === 'debuff' ? 'hurts' : 'helps' }))));
+    });
+    return { el: grid };
+  }
+
+  // ---- 8. gems and Charms: the same card before and after a gem, and a row of real Charms (hover or hold one)
+  function buildGemsCharms() {
+    const wrap = mk('div', { class: 'mn-gc' });
+    const gems = buildGems().el;
+    const rel = Object.keys(DATA.relics).filter((id) => DATA.relics[id].rarity === 'common').slice(0, 4);
+    const row = mk('div', { class: 'mn-gc-charms' }, mk('b', { class: 'mn-gc-h', text: 'Charms' }), rel.map((id) => UI.relic(id, { size: 'md' })));
+    add(wrap, gems, row);
+    return { el: wrap };
+  }
+
   const KEYS = [['E', 'End turn'], ['S', 'Swap spots'], ['1 to 9', 'Pick a card'], ['Enter', 'Play it'], ['Z', 'Fast mode'], ['D / G', 'Draw / discard pile'], ['Arrows', 'Move the map'], ['B', 'Spell tray']];
+  // One rule per page: a short title, the rule in one line, at most two short notes, and a small diagram.
   const HOWTO = [
-    { id: 'book', tip: /both heroes lose their voice/, title: 'A World on Mute', kicker: 'Two heroes, three acts, one Gloss to sing through.', build: () => paintedCanvas(paintBook), rules: [
-      'You lead two heroes across the Soundlands, where real voices are magic. The Gloss has smoothed them all into silence.',
-      "Play three acts. Each ends with a headliner, and the last one is the Gloss's own star.",
-      'Every tour is a new one: a different map, different cards, different Charms. Win or lose, you earn Cheers to unlock more.'] },
-    { id: 'map', tip: /^Unmuting a hex costs Vox/, title: 'Unmute the Soundlands', kicker: 'The Soundlands are on mute. Your Vox turns them back on.', build: () => paintedCanvas(paintMapDiagram), rules: [
-      'Spend 1 Vox to unmute a hex next to live ground. It reveals what waits there: a fight, a merch stall, a green room, a detour.',
-      'Tap any live hex to walk there. Stepping onto a fight or a detour starts it.',
-      'Vox comes back from tea stalls, wins and green rooms. One-use Spells unmute whole shapes for free.'] },
-    { id: 'rows', tip: /lead hero takes most/, title: 'Two Heroes, Two Spots', kicker: 'Who takes the lead matters.', build: () => paintedCanvas(paintRows), rules: [
-      'The lead hero takes most attacks. The backing hero is safe from most of them.',
-      'Each hero has a favourite spot and a bonus there. Check it on the hero card.',
-      'You get one free swap per turn, more cost 1 Breath. If one hero loses their voice, the other steps up.'] },
-    { id: 'cards', tip: /Block wears off/, title: 'Breath and Cards', kicker: 'Three Breath, five cards, one enemy turn.', build: () => paintedCanvas(paintCards), rules: [
-      'Every card belongs to one hero. Play cards with Breath: you have 3 each turn.',
-      'Attacks hurt, skills defend or set things up. Block soaks damage until your next turn.',
-      'End your turn and unplayed cards are discarded while the enemies act. Then you draw 5 more.'] },
-    { id: 'intents', tip: /Enemy intents show/, title: 'Read the Intents', kicker: 'Every enemy shows what it is about to do.', build: buildIntents, extra: 'statuses', rules: [
-      'The bubble over an enemy tells you what it will do next: hit, block, jinx, summon.',
-      'Statuses stack. ' + statusWord('vulnerable', 'Exposed') + ' takes more damage, ' + statusWord('weak', 'Muffled') + ' deals less, ' + statusWord('poison', 'Earworm') + ' ignores Block.',
-      'Hover or press and hold any icon or underlined word to read what it means.'] },
-    { id: 'gems', tip: /Gems only fit slots/, title: 'Gems in Slots', kicker: 'Set a gem, change the card.', build: buildGems, rules: [
-      'Cards have 0 to 3 slots. A slot takes a gem of its own colour, and a rainbow slot takes any.',
-      'Gems add damage, Block, extra hits, cards, Breath and more. The card text changes to match.',
-      'Set gems at green rooms, studios and merch stalls. Replacing a gem loses the old one, so choose well.'] },
-    { id: 'places', tip: /A detour is a choice/, title: 'Green Rooms, Stalls and Detours', kicker: 'The map is full of small choices.', build: buildTiles, rules: [
-      "Green rooms let you rest, rehearse a card, set gems or warm up. Jordan's merch stalls sell cards, gems, Charms and a Spell, and declutter your deck.",
-      'Detours are choices with a safe way, a gamble and often a price. Charms bend the rules for the whole tour.',
-      'Rivals guard Charms, the studio upgrades a card, and a sparkle booth lets you pick one gem.'] },
-    { id: 'after', title: 'After the Tour', kicker: 'Every tour leaves something behind.', build: buildAfter, extra: 'keys', rules: [
-      'You earn Cheers after every tour. Spend them on the Tour Bus on new cards, Charms and gems.',
-      'Win a tour to open Encores, stackable challenges. The Daily Duet is the same seed for everyone.',
-      'Keys, if you play with a keyboard, are listed below. Everything also works by touch.'] },
+    { id: 'goal', title: 'The goal', rule: 'Unmute the Soundlands and beat three headliners.', build: () => paintedCanvas(paintBook),
+      notes: ['Two heroes, one deck, three acts.', 'Both heroes out of voice? The tour ends.'] },
+    { id: 'map', title: 'The map and Vox', rule: 'Tap a muted hex next to live ground. It costs 1 Vox.', build: () => paintedCanvas(paintMapDiagram),
+      notes: ['Tap live ground to walk there.', 'Wins, tea stalls and green rooms refill Vox.'] },
+    { id: 'turn', title: 'A fight turn', rule: 'Play cards, then press End turn.', build: () => paintedCanvas(paintCards), extra: 'intents',
+      notes: ['The enemies then do what their bubbles said.', 'Next turn: fresh Breath and 5 fresh cards.'] },
+    { id: 'attack', title: 'Attack and block', rule: 'Attack cards hit enemies. Block cards stop damage.', build: buildAttackBlock,
+      notes: ['Block lasts until your next turn.', 'Drag a card up, or tap it twice, to play it.'] },
+    { id: 'breath', title: 'Breath', rule: 'Each card costs Breath. You get 3 every turn.', build: () => paintedCanvas(paintBreath),
+      notes: ['The cost is the number in the card corner.', 'Breath you do not spend is gone.'] },
+    { id: 'rows', title: 'Lead and backing', rule: 'The lead hero takes the hits. The backing hero is safe.', build: () => paintedCanvas(paintRows),
+      notes: ['Each hero gets a bonus in a favourite spot.', 'One swap per turn is free.'] },
+    { id: 'statuses', title: 'Statuses', rule: 'Little discs are statuses. Hover or hold one to read it.', build: buildStatuses,
+      notes: ['The number is the strength, or the turns left.', 'Good ones help, bad ones hurt. Enemies get them too.'] },
+    { id: 'gems', title: 'Gems and Charms', rule: 'Gems go into card slots. Charms change the rules.', build: buildGemsCharms,
+      notes: ['A slot takes its own colour. Rainbow takes any.', 'Charms work for the whole tour.'] },
+    { id: 'after', title: 'After the tour', rule: 'Every tour earns Cheers for new cards and Charms.', build: buildAfter, extra: 'keys',
+      notes: ['Win to open Encores: harder tours that stack.', 'Keys for keyboard players are below.'] },
   ];
 
   // mode: 'screen' | 'overlay'. exit() is what Back and Done do. Returns the pieces a host needs.
@@ -2323,11 +2350,11 @@
       H.cur = pg.build();
       left.firstChild.appendChild(H.cur.el);
       if (H.cur.update) H.cur.update(0, H.t);                  // paint at once: no blank page before the first frame
-      add(right, mk('p', { class: 'mn-pg-kicker', text: pg.kicker }), mk('h2', { class: 'mn-pg-title', text: pg.title }),
-        mk('ol', { class: 'mn-pg-rules' }, pg.rules.map((r, k) => mk('li', {}, UI.hanko(String(k + 1), { size: 'lg' }), mk('p', { text: r })))));
-      if (pg.extra === 'statuses') {
-        const row = mk('div', { class: 'mn-pg-extra statuses', 'aria-label': 'Some statuses' });
-        ['vulnerable', 'weak', 'frail', 'poison', 'burn', 'stun', 'bind', 'thorns', 'might'].forEach((s) => row.appendChild(UI.status(s, undefined, { size: 'md' })));
+      add(right, mk('h2', { class: 'mn-pg-title', text: pg.title }), mk('p', { class: 'mn-pg-rule', text: pg.rule }),
+        mk('ul', { class: 'mn-pg-notes' }, pg.notes.map((r) => mk('li', {}, mk('p', { text: r })))));
+      if (pg.extra === 'intents') {
+        const row = mk('div', { class: 'mn-pg-extra intents', 'aria-label': 'What the enemy bubbles mean' });
+        INTENT_INFO.slice(0, 6).forEach((it) => row.appendChild(mk('div', { class: 'mn-int-i' }, UI.icon('intent', it[0], 30, {}), mk('b', { text: it[1] }))));
         right.appendChild(row);
       }
       if (pg.extra === 'keys') {
@@ -2335,8 +2362,6 @@
         KEYS.forEach((k) => kl.appendChild(mk('div', {}, mk('dt', {}, mk('kbd', { class: 'btn-key', text: k[0] })), mk('dd', { text: k[1] }))));
         right.appendChild(kl);
       }
-      const tip = pg.tip && pg.extra !== 'keys' && !(UI.opt && UI.opt.textScale > 1.1) ? (DATA.tips || []).find((x) => pg.tip.test(x)) : null;
-      if (tip) right.appendChild(mk('div', { class: 'mn-margin' }, mk('b', { text: "Jordan's tip" }), mk('p', { text: tip })));
       right.appendChild(mk('span', { class: 'mn-pg-no', text: (i + 1) + ' / ' + HOWTO.length }));
       [left, right].forEach((el) => { el.classList.remove('turn-next', 'turn-prev'); if (!first) { void el.offsetWidth; el.classList.add(H.dir > 0 ? 'turn-next' : 'turn-prev'); } });
       book.setAttribute('aria-label', 'How to play, page ' + (i + 1) + ' of ' + HOWTO.length + ': ' + pg.title);

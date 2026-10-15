@@ -23,6 +23,9 @@
 //   C.hand C.draw C.discard C.exhaust C.powers C.inPlay: deck instances { uid, id, up, gems } (temp cards add tmp:true). C.draw[0] is the TOP
 //        of the draw pile (the next card drawn). C.added counts temp cards created, so hand+draw+discard+exhaust+powers+(inPlay?1:0) = deck.length + C.added.
 //   C.pending null | { kind:'pick', opId, from, n, then, filter, top, optional, uids }   C.stats (DESIGN 4.10)   C.rng   C.events (every event ever emitted)
+//   C.played (cards played this turn, what Hype reads)   C.lastPlayed (a copy of the last Attack or Skill played this turn that Loop would copy, or null)
+//   Card mechanics (DATA "Card mechanics"): an instance may carry enc (Fanbase damage, from the deck and grown by kills), rmx (Remix plays this
+//        fight) and fade (a Loop copy, resolved with Fade). Copies in events carry them too.
 //
 // ACTIONS (each returns the array of events it produced, also appended to C.events; an illegal call returns [] and changes nothing)
 //   C.start()                     see create. Only legal once.
@@ -40,7 +43,7 @@
 //        adds, summons, removes:[{s,to}], steals?, swap?, flee?, text, stunned? }   computed live from current state (Weak, Might, Vulnerable, Taunt, enemyDmg). Pure.
 //        `to`, `blockTo` and `healTo` say who gets the effect as the op does: 'self' (the default for help), 'allEnemies', 'otherEnemy', 'lowestEnemy' for
 //        the enemy side, 'front' 'back' 'both' 'random' 'lowest' for heroes. block and heal count every op, whoever it is aimed at (read blockTo and healTo).
-//   C.summary() -> { result, heroes:[{id,hp,maxHp,down}], maxHpGain:{heroId:n}, stats, kills, ink, gold }
+//   C.summary() -> { result, heroes:[{id,hp,maxHp,down}], maxHpGain:{heroId:n}, stats, kills, ink, gold, fanbase:{deck uid: Fanbase damage gained} }
 //        Downed heroes are reported as down with hp 0: RUN revives them at mods.reviveFrac (COMBAT never does, except through a revive op).
 //        heroes[].maxHp already includes maxHpGain. gold is the NET change of run gold: gold ops, minus gold stolen, plus stolen gold returned by
 //        killing the thief (a fled thief keeps it). `ink` (Vox) is the sum of the `ink` ops. Hero Block and statuses are cleared when the combat ends.
@@ -78,7 +81,8 @@ const COMBAT = (() => {
   const asList = (v) => (v === undefined || v === null ? [] : Array.isArray(v) ? v : [v]);
   const hide = (o, props) => { Object.keys(props).forEach((k) => Object.defineProperty(o, k, { value: props[k], writable: true, enumerable: false, configurable: true })); return o; };
   const ref = (u) => ({ kind: u.kind, id: u.id });
-  const cardCopy = (c) => { const o = { uid: c.uid, id: c.id, up: c.up ? 1 : 0, gems: c.gems.slice() }; if (c.tmp) o.tmp = true; return o; };
+  // card mechanics state rides on the instance (DATA "Card mechanics"): enc (Fanbase bonus), rmx (Remix plays), fade (a Loop copy)
+  const cardCopy = (c) => { const o = { uid: c.uid, id: c.id, up: c.up ? 1 : 0, gems: c.gems.slice() }; if (c.tmp) o.tmp = true; if (c.enc > 0) o.enc = c.enc; if (c.rmx > 0) o.rmx = c.rmx; if (c.fade) o.fade = true; return o; };
   const lineOrder = (list) => list.slice().sort((a, b) => a.lane - b.lane);
   const inRange = (v, c) => (c.gte === undefined || v >= c.gte) && (c.lte === undefined || v <= c.lte);
   const EL_BY_MOTIF = { fire: 'fire', flame_orb: 'fire', ice: 'ice', lightning: 'lightning', thunder_fist: 'lightning', chain_lightning: 'lightning', ink_splash: 'ink', ink_wave: 'ink', brush_stroke: 'ink', calligraphy: 'ink', quill: 'ink' };
@@ -104,7 +108,7 @@ const COMBAT = (() => {
         turns: 0, cardsPlayed: 0, attacksPlayed: 0, damageDealt: 0, damageTaken: 0, blockGained: 0, maxHit: 0, maxTurnDamage: 0, swaps: 0, heroDowns: 0, revives: 0,
         poisonKills: 0, burnKills: 0, thornKills: 0, multiHitTurns: 0, zeroCostTurns: 0, kills: [],
       },
-      events: [], added: 0,
+      events: [], added: 0, played: 0, lastPlayed: null,
     };
 
     // ---------------------------------------------------------------- engine state (closure)
@@ -126,7 +130,8 @@ const COMBAT = (() => {
     const nextGroup = () => ++groupN;
     const emit = (type, data) => { const e = Object.assign({ type }, data || {}); C.events.push(e); if (batch) batch.push(e); return e; };
     const piles = () => ({ hand: C.hand.length, draw: C.draw.length, discard: C.discard.length, exhaust: C.exhaust.length });
-    const newTurnState = () => ({ cards: 0, attacks: 0, skills: 0, zero: 0, multi: false, freeUsed: 0, dmg: 0 });
+    const newTurnState = () => ({ cards: 0, attacks: 0, skills: 0, zero: 0, multi: false, freeUsed: 0, dmg: 0, last: null });
+    const fanGain = {};           // Fanbase damage gained this fight per deck uid (C.summary().fanbase)
     T = newTurnState();
 
     function act(fn) {
@@ -157,9 +162,10 @@ const COMBAT = (() => {
     }
     function R(card, unit) {
       const u = unit === undefined ? ownerOf(card) : unit;
-      const key = card.id + '|' + (card.up ? 1 : 0) + '|' + card.gems.join(',') + '|' + (u ? u.row : '');
+      const mctx = { unit: u, played: T.cards };
+      const key = card.id + '|' + (card.up ? 1 : 0) + '|' + card.gems.join(',') + '|' + (u ? u.row : '') + '|' + D.mechKey(card, mctx);
       let r = resCache.get(key);
-      if (!r) { r = D.resolveCard(card, { unit: u }); resCache.set(key, r); }
+      if (!r) { r = D.resolveCard(card, mctx); resCache.set(key, r); }
       return r;
     }
     const tmode = new Map();
@@ -761,6 +767,18 @@ const COMBAT = (() => {
       const h = owner || ownerOf(card) || front();
       fireHook('onExhaust', { hero: h, res: R(card, h), card });
     }
+    // Fanbase: the card's own copy grows at once, and a deck card (not a temp copy) reports the gain for RUN to keep
+    function gainFanbase(card, n) {
+      card.enc = (card.enc > 0 ? card.enc : 0) + n;
+      if (!card.tmp) fanGain[card.uid] = (fanGain[card.uid] || 0) + n;
+    }
+    // a temp copy of a card instance keeps its Fanbase bonus (Loop Station, Loop)
+    function copyOf(c, fade) {
+      const t = makeTemp(c.id, c.up, c.gems);
+      if (c.enc > 0) t.enc = c.enc;
+      if (fade) t.fade = true;
+      return t;
+    }
     function makeTemp(id, up, gems) {
       const def = D.cards[id];
       return { uid: nextUid++, id, up: up ? 1 : 0, gems: gems ? gems.slice() : (def && def.slots ? def.slots.map(() => null) : []), tmp: true };
@@ -972,7 +990,7 @@ const COMBAT = (() => {
           const n = fixedN !== null ? fixedN : nFor(v);
           const r = strike(att, v, n, op, { index: i, hits, group, el, by: att ? 'card' : 'hook', credit: env.actor, cardOrHook: true });
           if (!r.dodged) landedHits++;
-          if (r.killed) killedAny = true;
+          if (r.killed) { killedAny = true; if (env.src && env.card && env.card.mech && env.card.mech.fanbase) gainFanbase(env.src, env.card.mech.fanbase); }
           if (dead === 'lose') break;
         }
       }
@@ -1203,7 +1221,7 @@ const COMBAT = (() => {
           cards.forEach((c) => { const pile = pileOf(from); const i = pile.indexOf(c); if (i >= 0) pile.splice(i, 1); C.draw.unshift(c); emit('card_move', { card: cardCopy(c), from, to: 'draw', piles: piles() }); });
           break;
         case 'copy': {
-          const copies = cards.map((c) => makeTemp(c.id, c.up, c.gems));
+          const copies = cards.map((c) => copyOf(c, false));
           if (copies.length) placeCards(copies, 'hand', false);
           break;
         }
@@ -1230,6 +1248,7 @@ const COMBAT = (() => {
     function beginPlayerTurn() {
       C.turn += 1; C.stats.turns = C.turn; C.phase = 'player';
       T = newTurnState();
+      C.played = 0; C.lastPlayed = null;
       hooks.forEach((h) => { h.turnFired = 0; });
       C.enemies.forEach((u) => { u._hookRound = {}; });
       C.energy = C.maxEnergy;
@@ -1364,8 +1383,12 @@ const COMBAT = (() => {
       emit('play', pe);
       if (paid !== 0) emit('energy', { value: C.energy, delta: -paid });
       const mySerial = ++serial;
-      const env = { kind: 'card', actor, card: res, X, target: pe.target ? target : null, lastKill: false, picked: 0, serial: mySerial };
+      const env = { kind: 'card', actor, card: res, X, target: pe.target ? target : null, lastKill: false, picked: 0, serial: mySerial, src: card };
       yield* run(res.fx, env);
+      // Loop: copies of the last other Attack or Skill played this turn (T.last never holds a Loop card), after the card's own ops
+      if (res.mech && res.mech.loop && T.last && dead !== 'lose' && C.phase !== 'over') placeCards(Array.from({ length: res.mech.loop }, () => copyOf(T.last, true)), 'hand', false);
+      // Remix: one more play on this copy (the next resolution reads it)
+      if (res.mech && res.mech.remix) card.rmx = (card.rmx > 0 ? card.rmx : 0) + 1;
       // settle the card
       C.inPlay = null;
       if (to === 'power') C.powers.push(card);
@@ -1375,6 +1398,8 @@ const COMBAT = (() => {
       fireHook('onPlay', { hero: actor, res, cost: paid, target: pe.target ? target : null, serial: mySerial });
       C.enemies.forEach((u) => { if (!u.down) runEnemyHooks(u, 'onHeroPlay', { type: res.type }); });
       T.cards++; if (res.type === 'attack') T.attacks++; if (res.type === 'skill') T.skills++;
+      if ((res.type === 'attack' || res.type === 'skill') && !(res.mech && res.mech.loop)) T.last = cardCopy(card);
+      C.played = T.cards; C.lastPlayed = T.last ? cardCopy(T.last) : null;
       C.stats.cardsPlayed++; if (res.type === 'attack') C.stats.attacksPlayed++;
       if (!costX && paid === 0) { T.zero++; if (T.zero === 3) C.stats.zeroCostTurns++; }
     }
@@ -1526,7 +1551,7 @@ const COMBAT = (() => {
     C.summary = () => {
       const heroesOut = C.heroes.map((h) => ({ id: h.id, hp: h.hp, maxHp: h.maxHp, down: h.down }));
       const stats = JSON.parse(JSON.stringify(C.stats));
-      return { result: C.result, heroes: heroesOut, maxHpGain: Object.assign({}, maxHpGain), stats, kills: stats.kills.slice(), ink: inkTotal, gold: goldTotal };
+      return { result: C.result, heroes: heroesOut, maxHpGain: Object.assign({}, maxHpGain), stats, kills: stats.kills.slice(), ink: inkTotal, gold: goldTotal, fanbase: Object.assign({}, fanGain) };
     };
 
     // ---------------------------------------------------------------- construction
@@ -1543,6 +1568,7 @@ const COMBAT = (() => {
       const gems = [];
       for (let i = 0; i < slotN; i++) gems.push((c.gems && c.gems[i]) || null);
       const inst = { uid: isNum(c.uid) ? c.uid : nextUid++, id: c.id, up: c.up ? 1 : 0, gems };
+      if (isNum(c.enc) && c.enc > 0) inst.enc = Math.floor(c.enc);
       C.draw.push(inst);
     });
     C.deckSize = C.draw.length;
@@ -1610,6 +1636,13 @@ const COMBAT = (() => {
       else if (o.op === 'gold' || o.op === 'ink') s += 1;
     });
     if (res.type === 'power') s += 6;
+    // card mechanics: a Loop pays when there is something to copy, a Fanbase kill keeps paying, a Remix play makes the next one bigger
+    const mech = res.mech;
+    if (mech) {
+      if (mech.loop) s += C.lastPlayed ? 4 * mech.loop : -2;
+      if (mech.fanbase && tgt && pv.dmg !== null && pv.dmg * pv.hits >= tgt.hp + tgt.block) s += 3 * mech.fanbase;
+      if (mech.remix) s += 1.5 * mech.remix;
+    }
     const cost = res.cost === 'X' ? Math.max(1, C.energy) : Math.max(0.5, res.cost);
     return { value: s, per: s / cost };
   }

@@ -115,6 +115,8 @@ const KURO_IDS = [
   'kuro_rain_of_strokes', 'kuro_redraft', 'kuro_rot_script', 'kuro_running_script', 'kuro_scene_change', 'kuro_second_edition',
   'kuro_shared_umbrella', 'kuro_shelter_script', 'kuro_skim_the_scroll', 'kuro_slow_match', 'kuro_strikethrough',
   'kuro_venom_script', 'kuro_viper_nib', 'kuro_well_of_ink', 'kuro_wildfire_verse',
+  // the card mechanics wave (Loop, Remix)
+  'kuro_beat_juggle', 'kuro_live_looping', 'kuro_overdub',
 ];
 
 t.test('names: unique, one to three words, capitalised, no dashes; the ids are frozen (saves store them)', () => {
@@ -129,14 +131,14 @@ t.test('names: unique, one to three words, capitalised, no dashes; the ids are f
     t.ok(!DASH.test(c.name), `${c.id}: no dash in the name`);
     t.ok(/^kuro_[a-z0-9_]+$/.test(c.id), `${c.id}: id is kuro_ plus snake_case`);
   });
-  t.deep(cards.map((c) => c.id).sort(), KURO_IDS, 'the 37 Kuro ids are frozen: saves store them');
+  t.deep(cards.map((c) => c.id).sort(), KURO_IDS.slice().sort(), 'the 40 Kuro ids are frozen: saves store them');
 });
 
 t.test('upgrades: every card has one, it changes fx, cost or keywords, and it never makes a card worse on its face', () => {
   cards.forEach((c) => {
     t.ok(c.up && typeof c.up === 'object', `${c.id}: has up`);
     t.ok(resolved(c, true) !== resolved(c, false), `${c.id}: the upgrade differs from the base`);
-    t.deep(Object.keys(c.up).filter((k) => ['fx', 'cost', 'kw'].indexOf(k) < 0), [], `${c.id}: up only uses fx, cost, kw`);
+    t.deep(Object.keys(c.up).filter((k) => ['fx', 'cost', 'kw', 'mech'].indexOf(k) < 0), [], `${c.id}: up only uses fx, cost, kw, mech`);
     if (c.cost === 'X') t.ok(costOf(c, true) === 'X', `${c.id}: an X card stays X`);
     else t.ok(costOf(c, true) <= c.cost, `${c.id}: an upgrade never raises the cost`);
     if (c.up.kw !== undefined) t.ok(Array.isArray(c.up.kw), `${c.id}: up.kw replaces the array`);
@@ -172,12 +174,12 @@ t.test('card ids and per X: only the X card reads X', () => {
 });
 
 // ------------------------------------------------------------------------------------------------ 2 CONTENT_SPEC section 3
-t.test('counts: 3 starters, 14 commons, 12 uncommons, 8 rares, 37 in all', () => {
+t.test('counts: 3 starters, 15 commons, 13 uncommons, 9 rares, 40 in all', () => {
   t.eq(byRarity('starter').length, 3, 'starters');
-  t.eq(byRarity('common').length, 14, 'commons');
-  t.eq(byRarity('uncommon').length, 12, 'uncommons');
-  t.eq(byRarity('rare').length, 8, 'rares');
-  t.eq(cards.length, 37, 'total');
+  t.eq(byRarity('common').length, 15, 'commons');
+  t.eq(byRarity('uncommon').length, 13, 'uncommons');
+  t.eq(byRarity('rare').length, 9, 'rares');
+  t.eq(cards.length, 40, 'total');
 });
 
 t.test('mix: at least 30 percent attacks and skills, at least 4 powers (uncommon or rare), an X card, keywords', () => {
@@ -393,7 +395,7 @@ t.test('progression: commons are the plain building blocks, uncommons carry the 
   t.ok(commons.filter((c) => c.type === 'attack').length >= 5 && commons.filter((c) => c.type === 'skill').length >= 7, 'a healthy common attack/skill split');
   t.ok(unc.filter((c) => c.type === 'power').length === 2, 'two uncommon powers');
   t.ok(rares.filter((c) => c.type === 'power').length >= 3 && rares.filter((c) => c.type !== 'power').length >= 3, 'rares are a mix of engines and actives');
-  t.ok(rares.every((c) => c.cost === 1 || c.cost === 2 || c.cost === 'X') && rares.filter((c) => c.cost === 1).length <= 1, 'rares cost 2 or X (they are the turn), bar Second Edition at 1 (at 2 it left one Energy to play its own copies)');
+  t.ok(rares.every((c) => c.cost === 1 || c.cost === 2 || c.cost === 'X') && rares.filter((c) => c.cost === 1).map((c) => c.id).sort().join(',') === 'kuro_live_looping,kuro_second_edition', 'rares cost 2 or X (they are the turn), bar the two copy cards at 1, Second Edition and Live Looping (at 2 they left one Energy to play their own copies)');
   t.ok(rares.every((c) => (c.slots || []).length === 2), 'rares have 2 slots');
   const rareShapes = new Set(rares.map((c) => (c.type === 'power' ? 'power:' + flatOps(c.fx).find((o) => o.op === 'hook').on : c.type + ':' + (c.cost === 'X' ? 'X' : flatOps(c.fx)[0].op))));
   t.eq(rareShapes.size, rares.length, 'no two rares share a shape: ' + [...rareShapes].join(', '));
@@ -619,10 +621,20 @@ function opPoints(o, ctx) {
     default: return 0;
   }
 }
+// card mechanics (DATA "Card mechanics"), per point of the mechanic and per hit of the first dmg op: a Loop copy is a Fading card that
+// must follow another play (4, under the 5.5 of a chosen copy), Remix pays about once more per fight, Hype reads TYPICAL.cardsPlayed
+// earlier cards, and a Fanbase card has a few kills behind it over a tour
+const mechOf = (c, up) => (up && upOf(c).mech !== undefined ? upOf(c).mech : c.mech) || {};
+function mechPoints(c, up) {
+  const m = mechOf(c, up);
+  const d = flatOps(fxOf(c, up)).find((o) => o.op === 'dmg');
+  const hits = d ? (d.hits === undefined ? 1 : vVal(d.hits, { X: 2 })) * (TGT_MUL[d.tgt] || 1) : 0;
+  return 4 * (m.loop || 0) + hits * (1.0 * (m.remix || 0) + TYPICAL.cardsPlayed * (m.hype || 0) + 2 * (m.fanbase || 0));
+}
 function pointsOf(c, up) {
   const cost = costOf(c, up);
   const X = 2;
-  const value = listPoints(fxOf(c, up), { X, picked: undefined });
+  const value = listPoints(fxOf(c, up), { X, picked: undefined }) + mechPoints(c, up);
   const energy = cost === 'X' ? X : Math.max(cost, c.type === 'power' ? 1 : 0);
   return { value, energy, perEnergy: energy > 0 ? value / energy : value, cost };
 }
@@ -1289,5 +1301,55 @@ function engineSuite(g) {
 const eng = bootEngine();
 if (eng.g) engineSuite(eng.g);
 else console.log('cards_kuro: engine tests skipped (' + eng.skip + ')');
+
+// ---------------------------------------------------------------------------------------------- card mechanics (DATA "Card mechanics")
+// The cards of the mechanics wave, played in a real engine against two test enemies: a 3 HP one (to be defeated) and a 300 HP dummy.
+function mechWorld(partner) {
+  const g = boot({ only: ['data_text', 'combat', 'data_cards_kuro'] });
+  const D = g.DATA;
+  const base = { chapter: 1, tier: 'normal', size: 'm', moves: { idle: { name: 'Idle', kind: 'none', fx: [] } }, ai: { seq: ['idle'] }, lore: 'A test creature.', tags: ['spirit'] };
+  D.add('enemies', { t_mech_weak: Object.assign({ name: 'Weak', hp: [3, 3], art: { id: 't_mech_weak' } }, base), t_mech_dummy: Object.assign({ name: 'Dummy', hp: [300, 300], art: { id: 't_mech_dummy' } }, base) });
+  const fight = (ids, enemies) => {
+    const deck = ids.map((x, i) => Object.assign({ uid: 500 + i, up: 0, gems: [] }, typeof x === 'string' ? { id: x } : x));
+    deck.forEach((c) => { c.gems = (D.cards[c.id].slots || []).map(() => null); });
+    const C = g.COMBAT.create({ heroes: [{ id: 'kuro', hp: 80, maxHp: 80 }, { id: partner, hp: 80, maxHp: 80 }], frontIdx: 0, deck, enemies: enemies || ['t_mech_dummy'], seed: 9 });
+    C.start();
+    C.energy = 99;
+    return C;
+  };
+  // move one card with this id into the hand (from any pile) and return it
+  const take = (C, id) => {
+    for (const pile of [C.hand, C.draw, C.discard, C.exhaust]) { const i = pile.findIndex((c) => c.id === id); if (i >= 0) { const [c] = pile.splice(i, 1); C.hand.push(c); return c; } }
+    throw new Error('no ' + id);
+  };
+  const play = (C, id, target) => { const c = take(C, id); C.energy = 99; return { c, ev: C.play(c.uid, C.needsTarget(c.uid) ? (target || C.enemies.find((e) => !e.down).id) : undefined) }; };
+  const raws = (ev) => ev.filter((e) => e.type === 'hit').map((e) => e.raw);
+  return { g, D, fight, take, play, raws };
+}
+t.test('card mechanics: Overdub and Live Looping (Loop), Beat Juggle (Remix) print and play as their keyword says', () => {
+  const { D, fight, play, raws } = mechWorld('hanae');
+  t.eq(D.cardPlain('kuro_overdub'), 'Gain 4 Block. Loop.', 'Overdub text');
+  t.eq(D.cardPlain('kuro_beat_juggle'), 'Deal 3 damage. Remix 2.', 'Beat Juggle text');
+  t.eq(D.cardPlain({ id: 'kuro_beat_juggle', up: 1, gems: [null] }), 'Deal 4 damage. Remix 3.', 'Beat Juggle+ text');
+  t.eq(D.cardPlain('kuro_live_looping'), 'Gain 1 Groove. Loop 2. Fade.', 'Live Looping text');
+  t.eq(D.cardPlain({ id: 'kuro_live_looping', up: 1, gems: [null, null] }), 'Gain 1 Groove. Loop 2.', 'Live Looping+ stops Fading');
+  // Overdub copies the last other card played this turn
+  let C = fight(['kuro_overdub', 'kuro_ink_flick']);
+  play(C, 'kuro_ink_flick');
+  const ov = play(C, 'kuro_overdub');
+  const added = ov.ev.filter((e) => e.type === 'add_card');
+  t.deep(added.map((e) => e.cards.map((c) => [c.id, !!c.fade])), [[['kuro_ink_flick', true]]], 'Overdub adds one Fading Rimshot');
+  t.ok(ov.ev.some((e) => e.type === 'block'), 'and gains Block');
+  // Live Looping: two copies, Fades itself
+  C = fight(['kuro_live_looping', 'kuro_ink_bolt']);
+  play(C, 'kuro_ink_bolt');
+  const ll = play(C, 'kuro_live_looping');
+  t.eq(ll.ev.filter((e) => e.type === 'add_card').reduce((n, e) => n + e.cards.length, 0), 2, 'Live Looping adds two copies');
+  t.ok(C.exhaust.some((c) => c.id === 'kuro_live_looping'), 'and Fades');
+  // Beat Juggle: 3, 5, 7
+  C = fight(['kuro_beat_juggle']);
+  const r = [0, 1, 2].map(() => raws(play(C, 'kuro_beat_juggle').ev)[0]);
+  t.deep([r[1] - r[0], r[2] - r[1]], [2, 2], 'each play is 2 bigger');
+});
 
 t.done();

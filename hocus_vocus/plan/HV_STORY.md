@@ -1,6 +1,6 @@
 # HOCUS VOCUS: Detours, the Tour Diary, tips and the social links (agent D2)
 
-Status: STORY rev 1 (agent D2). Names are copied verbatim from `HV_BIBLE.md` (the bible wins any disagreement), enemy names from
+Status: STORY rev 1 (agent D2); section 3 is rev 2 (plain, short Tour Diary entries and the bus intro film, from the owners' note). Names are copied verbatim from `HV_BIBLE.md` (the bible wins any disagreement), enemy names from
 `HV_ENEMIES.md`, curse and card names from `HV_HEROES.md`. Every id, op, weight, gate and scene stays exactly as it is in
 `hocus_vocus/js/data_events.js` and `js/data_meta.js`: only player-facing words change, so the balance bot's records stay
 byte-identical for this data-only phase (bible H2).
@@ -22,7 +22,7 @@ changes this plan forces, section 9 the cross-checks.
 | D2-6 | The social media world | all twelve Act II Detours are Scrollopolis satire of the system: the feed (cables), filters (face-filter booth), adverts (the ad that will not skip), trends (the trend dance), unboxing, the algorithm, comment-section capitals, the night bus with a screen for a face. Never fans, never a real platform, never cruel | bible 1.3 rule 5 |
 | D2-7 | The viral clip | `wandering_storyteller` **Have You Seen the Clip?** (bible 2.9): a fan shows the crew "THE clip", two nervous voices at a talent show and a room standing up. It never names the voices (any two heroes may be in the party). The audition also lives in the hero entries of Jasmin and RoxorLoops, and RoxorLoops's moment (`kuro_footnote`) is his own very first beat | owners; no numbers, no show, no judges |
 | D2-8 | The "Human" thread | Jasmin hears a flawless copy of her own voice and prefers hers (Act I, bible 2.9), and Act III's Detours all ask perfect or real: Notes from the Empty Chairs, The Makeover Booth, Please Wait to Be Auditioned, The Unfinished Line, Two Mirrors (any act). The `victory` entry answers it | the finale must feel earned |
-| D2-9 | Story entry length | every entry is exactly 6 sentences (the brief's "3 to 6" and the narrative suite's "at least 6" by its own splitter), 611 to 694 characters, begins with a letter | both rules hold at once |
+| D2-9 | Story entry length | rev 2: every entry is 2 or 3 short sentences (at most 24 words each), 120 to 280 characters, begins with a letter; plain words a ten year old follows | the owners found the six sentence rev 1 entries too poetic and hard to follow |
 | D2-10 | Social links | one config object, the bible's `DATA.LINKS` (7.2) in `js/data.js` (section 5.2 says why); one shared panel `UI.followPanel` and one `UI.share`; shown on the title footer (a **Follow the duo** sheet), a sixth Tour Bus tab **Follow the duo**, the victory screen, the game-over screen and the settings About group of `HV_WORLD_DATA.md` section 11; links are plain anchors opened in a new tab on a tap; the game never fetches anything | owners; bible 7.2 and H15 |
 | D2-11 | Curtain call lines | the four `CURTAIN` lines of `screen_end.js` (victory cast phase) are rewritten here, since no other plan owns them | they still say blade, flute, shrine bell |
 
@@ -41,7 +41,7 @@ written.
 | Choice label | 4 to 48 characters, unique in its event; a `req.hero` choice names its hero; a label with `(fight)` has a fight; a certain fight says "fight"; a label naming "N gold" equals `req.gold` |
 | Choice cost | 3 to 32 characters; `N gold` equals `req.gold` and is charged; `Lose a card` removes one in every outcome; a curse that is not certain says may, maybe or might; `Hurts the lead hero` hurts `who:'front'` in every outcome; `N Vox` is charged in every outcome (the old `N Echo`) |
 | Outcome text | 40 to 300 characters, ends with `. ! ? ' "`, distinct within its choice; names only the hero of its `req.hero` or of the moment; "<number word> gold" matches a gold op of that size and "<number word> hexes" matches a `paint` op of that `n` (unless the outcome teaches a Spell); no "N HP" in prose |
-| Story entry | title 5 to 40, unique; text 400 to 700 characters, one paragraph, exactly 6 sentences by the suite's splitter, starts with a letter (the drop cap), ends with `. ! ?`; shared entries never match `/Jasmin|RoxorLoops|RawClaw|Andy/` |
+| Story entry | title 5 to 40, unique; text 120 to 280 characters, one paragraph, 2 or 3 sentences by the suite's splitter (at most 24 words each), starts with a letter (the drop cap), ends with `. ! ?`; shared entries never match `/Jasmin|RoxorLoops|RawClaw|Andy/` |
 | Tip | 30 to 110 characters, a sentence, no digits (an `X` cost is allowed), unique |
 
 ## 2. The Detours (all 48 events)
@@ -146,86 +146,97 @@ tools (op `addBrush`), unmuting a hex is op `paint`, and the Gloss is the polish
 Twelve ids are story entries (below). The four bark sets `barks_hanae`, `barks_kuro`, `barks_suzu` and `barks_raiga` are written in
 `HV_HEROES.md` 1.6 and are not repeated here.
 
+**Story rev 2 (the owners' note).** The owners played it and found the first diary far too poetic: six long sentences of dense imagery
+per entry. Rev 2 tells the same story in plain words a ten year old follows: **at most three short sentences, about 280 characters at
+most**, punchy and still charming. The new spine, in one breath: RoxorLoops and Jasmin are driving the tour bus to a show; the bus drives
+through a glitchy shimmer and the whole world goes silent; far ahead the Gloss, a fake-perfect filter that is basically AI slop (glossy,
+slightly wrong, it copies everything and makes the world smooth, soulless and silent), is slurping up every sound; real voices bring the
+sound back. It is fine to call the Gloss "AI slop" or "fake-perfect copies" plainly. Every name stays (the Gloss, the Soundlands, Blossom
+Bay and Kraki, Scrollopolis and Scrollspinner, The Perfect Stage and Flawless, RawClaw, Andy, Jordan), and so does every id.
+
 ### 3.1 The story screen (one entry is one page)
 
 `screen_end.js` (`storyInfo`) shows each entry as one page: a kicker, the title, the text typed out with a drop cap (`text[0]`), a seal
 that stamps down, a scene and a portrait expression. Only the kicker and seal words change (bible 2.6); the scene and expression stay.
 Buttons: the advance button `Play on` becomes `On we go`, `Skip` stays. Any lore id without a rule gets kicker `A DIARY ENTRY` and seal
-`?`. The empty-diary text is `Nothing here yet. On we go, and the tour goes on.`
+`?`. The empty-diary text is `Nothing here yet. On we go, and the tour goes on.` The `intro` page is opened by the bus intro film first
+(3.6).
 
 | lore id (stays) | kicker | seal | title (exact) | characters / sentences |
 |---|---|---|---|---|
-| `intro` | `CURTAIN UP` | `ONCE` | **One, Two, Testing** | 690 / 6 |
-| `ch1_intro` | `ACT ONE` | `I` | **Blossom Bay** | 673 / 6 |
-| `ch1_clear` | `END OF ACT ONE` | `I` | **Kraki Gives Back the Mics** | 680 / 6 |
-| `ch2_intro` | `ACT TWO` | `II` | **Scrollopolis** | 667 / 6 |
-| `ch2_clear` | `END OF ACT TWO` | `II` | **The City Looks Up** | 666 / 6 |
-| `ch3_intro` | `ACT THREE` | `III` | **The Perfect Stage** | 682 / 6 |
-| `victory` | `FINALE` | `BRAVO` | **Human** | 690 / 6 |
-| `defeat` | `INTERMISSION` | `PAUSE` | **The Show Must Go On** | 611 / 6 |
-| `hero_hanae` | `MEET THE CREW` | `J` | **Jasmin, the Blossom Voice** | 677 / 6 |
-| `hero_kuro` | `MEET THE CREW` | `R` | **RoxorLoops, the Beatbox Wizard** | 687 / 6 |
-| `hero_suzu` | `MEET THE CREW` | `R` | **RawClaw, the Sound Alchemist** | 694 / 6 |
-| `hero_raiga` | `MEET THE CREW` | `A` | **Andy, the Thunder Bass** | 693 / 6 |
+| `intro` | `CURTAIN UP` | `ONCE` | **The Big Silence** | 231 / 3 |
+| `ch1_intro` | `ACT ONE` | `I` | **Blossom Bay** | 212 / 3 |
+| `ch1_clear` | `END OF ACT ONE` | `I` | **Kraki Gives Back the Mics** | 204 / 3 |
+| `ch2_intro` | `ACT TWO` | `II` | **Scrollopolis** | 215 / 3 |
+| `ch2_clear` | `END OF ACT TWO` | `II` | **The City Looks Up** | 172 / 3 |
+| `ch3_intro` | `ACT THREE` | `III` | **The Perfect Stage** | 195 / 3 |
+| `victory` | `FINALE` | `BRAVO` | **Human** | 267 / 3 |
+| `defeat` | `INTERMISSION` | `PAUSE` | **The Show Must Go On** | 155 / 3 |
+| `hero_hanae` | `MEET THE CREW` | `J` | **Jasmin, the Blossom Voice** | 249 / 3 |
+| `hero_kuro` | `MEET THE CREW` | `R` | **RoxorLoops, the Beatbox Wizard** | 211 / 3 |
+| `hero_suzu` | `MEET THE CREW` | `R` | **RawClaw, the Sound Alchemist** | 187 / 3 |
+| `hero_raiga` | `MEET THE CREW` | `A` | **Andy, the Thunder Bass** | 178 / 3 |
 
-### 3.2 The entries (exact text, paste as written)
+### 3.2 The entries (exact text, as in `js/data_meta.js`)
 
-#### `intro`: One, Two, Testing
+#### `intro`: The Big Silence
 
-> In the Soundlands, voices are magic: a sung note opens a cherry blossom, a beatboxed kick makes the cobbles bounce, and a bass line can roll a hill over in its sleep. Then came the Gloss, a kind little filter made to help one nervous singer feel brave, until everybody turned it up so far that it smoothed everything flat. Now the world is going on mute: buskers lip-sync, birds tweet in perfect tune, and nobody sings along. But two voices were never smoothed, a little wobbly, a little late and completely real. They pack the van, tape Jordan's tour poster in the window and step up to the mic. One, two, testing: the speakers crackle, somebody breathes in, and the beat is about to drop.
+> The tour bus was rolling to a show, with two voices singing all the way. Then the bus drove through a glitchy shimmer, and the whole world went silent. Far ahead, the Gloss, a big blob of shiny AI slop, was slurping up every sound.
 
 #### `ch1_intro`: Blossom Bay
 
-> The first act smells of sea salt and cherry blossom, and Blossom Bay climbs its hill in candy-coloured houses with bunting strung between every balcony. Down on the Snack Pier there are noodle carts, smoothie bikes and a lemonade stand run by a very serious child, while gulls who think they can sing circle overhead. The Gloss has only just arrived, but a few corners have already gone shiny and airbrushed flat, and the buskers on them lip-sync in identical poses. Out in the bay something enormous is singing every song at once, perfectly, through eight microphones. Nobody else is allowed a mic, in case anybody gets it wrong. Unmute a way in, and bring your own voice.
+> Blossom Bay is a sunny seaside town, but the Gloss has made it quiet and shiny. Out in the bay, Kraki the Karaoke Kraken hogs eight microphones so nobody else can sing. Unmute the streets and get those mics back!
 
 #### `ch1_clear`: Kraki Gives Back the Mics
 
-> Kraki's glossy mask cracked right down the middle, and behind it was a big, kind, very embarrassed face. 'I only wanted nobody to be embarrassed,' she said, and eight microphones drooped in eight arms. Then she sang one song with her real voice, wobbly and much too high in the middle, and the whole bay cheered so loudly that the gulls joined in. One by one she handed the mics back, to the buskers, the lemonade child and the old foghorn, and the Gloss slid off the house fronts like rain off a window. The bay came back on, loud and gloriously out of tune. High on a rooftop studio above the harbour, someone in a goat mask stopped recording, grinned and started packing a bag.
+> Kraki's glossy mask cracked, and she sang with her real voice, wobbly and happy. She gave back the mics, and the whole bay sang along. On a rooftop nearby, someone in a goat mask grinned and packed a bag.
 
 #### `ch2_intro`: Scrollopolis
 
-> The second act happens at two in the morning, in blue light, in a city built like a stack of giant phones. In Scrollopolis the streets move by themselves, notifications drift up like balloons, little hearts fall like snow, and someone has sprayed MID on a wall in very neat capitals. Everyone walks looking down, so nobody has noticed the huge moon over the rooftops, or the noodle market steaming underneath it. Across the sky hangs the Feed, a glowing web of cables spun by something with eight bright screens for eyes. It keeps everyone gently tangled, never alone and never bored, while the Gloss gives every face the same smile. Look up, if you can remember how.
+> Scrollopolis is a city of giant phones, and the Gloss has everyone staring down at the Feed. Scrollspinner keeps them all stuck in her glowing web, so nobody looks up at the moon. Make some noise they cannot ignore!
 
 #### `ch2_clear`: The City Looks Up
 
-> The web went slack all at once, and Scrollspinner dropped her filter and sat down among her cables, eight screens dimming. 'I only wanted nobody to be lonely,' she said, and for the first time in years she did not check who had liked it. Across Scrollopolis people lowered their phones and looked up at the moon, which had waited very patiently. Somebody started humming, then somebody else, and the Gloss on the billboards began to peel like old stickers. Then, from far below the street, a bass line rose up through the pavement, so low that no screen had ever seen it. It had been holding the city's groove together all along, and now it was coming up the stairs.
+> Scrollspinner's web went slack, and she put her phone down at last. People looked up at the moon and started to hum. Then a deep bass line rumbled up from below the street.
 
 #### `ch3_intro`: The Perfect Stage
 
-> The last act is not sung at all: it is performed, perfectly, on a colossal stage floating above a sea of phone lights. Everything is shiny white and pastel chrome, the floors are mirrors, the confetti falls in a perfect grid, and an APPLAUSE sign glows that never switches off. Rows of identical fans hold up identical phones with identical smiles, and three identical judges' chairs sit empty in the front row. On stage, contestant after contestant lip-syncs the same flawless track, and nobody sings a note. At the centre of it all stands Flawless, the Gloss's own star, who has never sung a wrong note because it has never sung a real one. Every hex you unmuted was leading here.
+> The Perfect Stage is all shiny chrome, fake smiles and perfect copies, and nobody sings a note. This is where the Gloss makes its slop. Its star, Flawless, has never sung a real note in its life.
 
 #### `victory`: Human
 
-> The Gloss held up a mirror of perfect, silent copies of the heroes and asked, kindly, whether anyone needed to be human any more. They chose to stay human and sing: a voice cracked on the high note, a kick landed a hair late, and it was the best sound in years. One mannequin blinked, then one sang, badly, and then the whole crowd was singing. Flawless smiled a real, nervous smile, for it had been the first little filter all along, made to help a nervous singer feel brave, and it sang one wobbly note of its own. The Gloss softened into ordinary stage shine that makes the lights sparkle. Everyone sang the last line together, and the stage was left open for whoever wants to sing next.
+> The Gloss offered perfect, silent copies of the heroes, but they chose to stay human and sang, cracks and all. Flawless was just a little filter that got out of hand, and it sang one wobbly note. Everyone sang the last line together, and the stage stays open for all.
 
 #### `defeat`: The Show Must Go On
 
-> The lights went down, and the Gloss smoothed everything over, the noise, the colour and the two voices, until it was all perfectly fine. It did not hurt, because the Gloss never hurts, and that was the worst part. But an intermission is not the end of a show. Somewhere in the Soundlands a kid is singing off-key into a hairbrush, loudly and badly and with total confidence, and the curtain twitches. Two voices clear their throats, a little hoarse and a little wiser, with a very good idea of where the spare mics are kept. Have a sip of water, try a different road, and remember that the show goes on.
+> The lights went down, and the Gloss smoothed everything quiet. But this is only an intermission. Have a sip of water, try a new road, and the show goes on!
 
 #### `hero_hanae`: Jasmin, the Blossom Voice
 
-> Jasmin sings the way cherry blossom falls: softly, a little at a time, until the whole street is pink. Everyone braces for her to belt, and instead she drops almost to a whisper, and the room leans in. Her vocal runs land like petals, many small bright notes that each find their mark, and with a touch of reverb and delay they shimmer long after she stops. She still remembers her first audition at a talent show beside RoxorLoops, hands shaking, voice wobbling on the first line, and then the whole room standing up. She is warm and dreamy, giggles when she is nervous, and says sorry to every foe she wins over. Her pink scrunchie has never once moved, and nobody knows how.
+> Jasmin sings soft notes that land like petals, and she still remembers her first audition at a talent show. Everyone braces for her to belt, and instead she drops almost to a whisper, and the room leans in. She says sorry to every foe she wins over.
 
 #### `hero_kuro`: RoxorLoops, the Beatbox Wizard
 
-> RoxorLoops plays a whole band with one mouth: kick, snare, hi-hat, a throat bass you feel in your teeth and a vocal scratch like a record being told off. He beatboxes the sound of everything, even a banana being peeled, and comes in a hair late whenever he is grinning, which is always. From the backing spot he builds the groove layer by layer until his beat is stuck in every enemy's head. He still remembers that first audition beside Jasmin, both of them shaking, and the room going quiet, then standing up. The loop station at his feet is strictly for emergencies, and it is always an emergency. Mohawk on top, mullet at the back: a party at both ends and a big heart in the middle.
+> RoxorLoops beatboxes a whole band with one mouth: kick, snare, hi-hat and bass. He still remembers his first audition beside Jasmin, both of them shaking. Mohawk on top, mullet at the back, a party at both ends.
 
 #### `hero_suzu`: RawClaw, the Sound Alchemist
 
-> RawClaw is the duo's producer, a good friend and a beatboxer too, though he mostly lets his drum pad do the talking. Before the tour he spent a long season in a rooftop studio above Blossom Bay, recording the bay's real sounds, gulls and bike bells and laughter, to keep them safe from the Gloss. In a fight he builds a room of reverb around the band, wraps both heroes in warm sound and filters the bite out of an enemy. He is the calm one in the van, never raises his voice, and offers a little more reverb on everything, including sighs. His joke face online is a goat, and he owns a goat suit, which he insists is not a costume. Nobody has ever won that argument, and the suit is very cosy.
+> RawClaw is the calm producer who saved the real sounds of Blossom Bay in his rooftop studio. In a fight he wraps the band in warm reverb. He owns a goat suit, and no, it is not a costume.
 
 #### `hero_raiga`: Andy, the Thunder Bass
 
-> You feel Andy before you see him: cups ripple, the floor starts to hum, and somewhere a window rattles politely. He is a bass player who sometimes joins the duo on stage, and he introduces himself, every time, as just Andy. Under Scrollopolis, in a basement the Feed never reached, he kept the city's groove together with a bass and a loop pedal, too low for the Gloss to see on any screen. In a fight he stands in the lead and soaks up the hits, and every one he takes goes into the floorboards as rumble. When it peaks, the low end comes back up as thunder and the whole room shakes. He is big-hearted and unflappable, says very little and makes everything steadier just by standing near it.
+> Andy plays bass so low that you feel it before you hear it. He stands in the lead, soaks up the hits and turns them into thunder. He says very little and calls himself just Andy.
 
 ### 3.3 The spine comment
 
 Replace the "THE SPINE" header comment of `js/data_meta.js` with bible section 2.2, word for word, and change the file's first comment line to
 `// Hocus Vocus: data_meta.js: Stickers (achievements), Encores, tips and the lore (Tour Diary entries, hero entries and combat barks).`
+The LORE paragraph of that header carries the rev 2 rule (text at most 280 characters, at most three short sentences, the Gloss may be
+called AI slop).
 
 ### 3.4 The other story strings of the end screens
 
-These fallbacks and headers in `js/screen_end.js` still carry Echowake words. The UI plan may restyle them; the words are these.
+These fallbacks and headers in `js/screen_end.js` were already short and plain in rev 1 and stay as they are.
 
 | Where in `screen_end.js` | Echowake | Hocus Vocus (exact) |
 |---|---|---|
@@ -244,17 +255,38 @@ These fallbacks and headers in `js/screen_end.js` still carry Echowake words. Th
 
 ### 3.5 Curtain call lines (`CURTAIN` in `screen_end.js`, the victory cast phase, one line under each hero)
 
-Each line is at most 140 characters (about as long as the Echowake lines), names only its own hero, and closes the story softly.
+Each line is at most 140 characters, names only its own hero first, and closes the story softly in plain words (rev 2 shortened them).
 
 | hero id | curtain call line (exact) |
 |---|---|
-| `hanae` | Jasmin hummed the last line once more, very softly, and the whole crowd leaned in to hear it. Her scrunchie had not moved at all. |
-| `kuro` | RoxorLoops beatboxed the sound of the curtain coming down, the applause and the van door, then took a bow at both ends of his hair. |
-| `suzu` | RawClaw took off his headphones and listened. For the first time in a long while, nothing needed fixing. He added a little reverb anyway. |
-| `raiga` | Andy played one last low note so warm that the stage lights hummed along. 'Nice,' he said, and that was the whole speech. |
+| `hanae` | Jasmin sang the last line very softly, and the whole crowd leaned in. Her scrunchie never moved. |
+| `kuro` | RoxorLoops beatboxed the curtain coming down, then took a bow at both ends of his hair. |
+| `suzu` | RawClaw took off his headphones and smiled. Nothing needed fixing. He added a bit of reverb anyway. |
+| `raiga` | Andy played one last warm, low note. 'Nice,' he said. That was the whole speech. |
 
 After the four heroes, the cast phase ends with one small credit line (exact): `Made for RoxorLoops and Jasmin. Find them as
 @roxorloopsandjasmin.` (bible 7.2).
+
+### 3.6 The bus intro (a short film before the `intro` page)
+
+The opening lands as pictures, not prose: the `story` screen plays a short film on its canvas before the `intro` page (`FILM` in
+`js/screen_end.js`, drawn in code with the art kit: `ART.hero.draw` and `ART.hero.medallion` for the duo, `ART.tk` notes, glows and
+sparkles, and its own candy tour bus, road and Gloss blob). Five beats, about 17 s in all, auto-advancing, one caption sticker each:
+
+| beat | seconds | picture | caption (exact) |
+|---|---|---|---|
+| `drive` | 3.4 | the pink tour bus (HOCUS VOCUS on its stripe, the duo in the windows) rolls along a candy evening road, notes pouring out of its roof speaker | On tour! The bus rolls on to the next show. |
+| `shimmer` | 3.0 | an opalescent curtain of the Gloss slides across the road; the bus drives in, the picture glitches and flashes | Then the road starts to glitch and shimmer... |
+| `silence` | 3.0 | the world drains to grey, the notes drop and fade, a big mute sticker pops up | And the whole world goes silent. |
+| `gloss` | 3.8 | far ahead a huge glossy blob of AI slop (pastel, airbrushed, a much too even smile, six fingers on its waving hand, drips of slop) slurps the last coloured notes up a striped straw: SLURRP! | Far ahead, the Gloss, a blob of AI slop, slurps up all sound! |
+| `mics` | 4.0 | RoxorLoops and Jasmin step out of the bus and cheer with their mics; the colour comes back in a ring from them and notes burst out | RoxorLoops and Jasmin: let's bring the noise back! |
+
+The duo star in it whatever the party: they are the band and it is their bus (and the first tour is always theirs). A tap, Enter, Space
+or Right skips to the next beat; Skip (bottom right) or Esc ends the film and the page types on. It never plays headless (the suites read
+the page at once) and `params.film: false` skips it; under reduced motion each beat is a still picture that still holds for its time,
+with no glitch, flash or shake. It is shown with the `intro` page on the first tour, and once more for a profile that began before the
+film existed (the tutorial flag `film_bus` next to `intro`); the Tour Diary's `intro` entry replays it. The phone landscape stage
+(844 x 390) keeps the caption at 9 screen px or more.
 
 ## 4. Tips (30, exact; `DATA.tips` in `js/data_meta.js`)
 

@@ -421,6 +421,7 @@ A **card definition** (`DATA.cards[id]`):
   flavor: 'Optional one-line quote.',
   hand: { turnEnd: [ops], drawn: [ops] },       // curses and status cards: ops run if in hand at end of turn / when drawn
   locked: true,                  // meta unlock (the Tour Bus); starters and commons are never locked
+  mech: { fanbase: 2 },          // card mechanics (LISTS.mechs, below); up.mech REPLACES it like up.kw
 }
 ```
 
@@ -440,6 +441,15 @@ A **card definition** (`DATA.cards[id]`):
 - **Upgrades:** one level. `up` replaces `fx` wholesale if given, may change `cost`, and `up.kw` REPLACES the base `kw`
   array (write `['exhaust','retain']` to keep exhaust and add retain, `[]` to remove all). Displayed name gets `+`.
   Every playable non-token card defines `up`.
+
+**Card mechanics** (`mech`, whole numbers 1..9, `LISTS.mechs`; glossary words in `DATA.keywords`; engine notes in `data.js` "Card mechanics"):
+`fanbase N` (Fanbase) whenever a hit of the card defeats an enemy it deals N more damage for the rest of the tour: COMBAT grows `enc` on its
+copy and reports deck gains in `C.summary().fanbase`, RUN adds them to `enc` on the deck instance (saved with the run; old saves have none,
+a transform drops it); `remix N` (Remix) each play adds N damage for the rest of the fight (`rmx` on the combat copy); `hype N` (Hype) N more
+damage per card played earlier this turn (`C.played`); `loop N` (Loop) after its ops, N temp copies of the last other Attack or Skill played
+this turn (`C.lastPlayed`, never a Loop card) go to the hand with `fade:true` and resolve with Fade. The damage bonuses ride on `plus` of
+every dmg op (like a gem's +N damage), so previews, bots and the printed number see them; the text adds one sentence per mechanic before a
+closing Fade, with the live bonus: "Fanbase 2 (now +4)." Deck instance: `{uid, id, up, gems, enc?}`.
 
 **Playing a card.** `C.play(uid, targetId)`:
 
@@ -854,7 +864,7 @@ C.endTurn() -> events                  // 4.2 steps 3 to 6: discards, enemy phas
 C.resolvePick(uids[]) -> events        // answers C.pending: unique candidates, count == min(n, candidates) (or <= n when optional or random)
 C.preview(uid, targetId?) -> { dmg: perHit|null, hits, block, heal }   // adjusted numbers for the live card text
 C.intent(enemyUnit) -> { move, name, kind, dmg (per hit or null), hits, tgt:[hero ids it would hit right now, taunt applied]|'random', block?, blockTo?, heal?, healTo?, statuses:[{s, n, to:'front'|'back'|'both'|'random'|'lowest'|'self'|'allEnemies'|'otherEnemy'|'lowestEnemy'}], adds:[{card,n,to}], summons:[{enemy,n}], text, stunned? }
-C.summary() -> { result, heroes:[{id,hp,maxHp,down}], maxHpGain:{heroId:n}, stats, kills, ink, gold }
+C.summary() -> { result, heroes:[{id,hp,maxHp,down}], maxHpGain:{heroId:n}, stats, kills, ink, gold, fanbase:{deckUid:n} }
 ```
 
 `C.summary().ink` is only the sum of `ink` ops; `gold` = `gold` ops plus thief loot returned minus loot never returned. `RUN.combatDone` adds kill Vox from `stats.kills` and `ECONOMY.killInk`, applies HP (voiceless heroes revive at `mods.reviveFrac`),
@@ -1188,10 +1198,10 @@ parallax 0, particles x0.3, transitions become 150 ms fades, idle breathing ampl
 **UI.bus and tutorial hooks.** `UI.bus = U.bus()` exists from ui.js. Events (`LISTS.busEvents`): `'screen'` `{name, params}` after every enter; `'overlay'` `{name, open}`; screen_combat emits `'combat:turn'` `{turn, phase}`, `'combat:select'`
 `{uid}`, `'combat:play'` `{uid, target}`, `'combat:endturn'`, `'combat:swap'`, `'combat:pick'` `{pending}`, `'combat:end'` `{result}`; screen_map emits `'map:paint'` `{q,r,cost}`, `'map:brush'` `{id}`, `'map:walk'` `{q,r}`. Screen owners
 must emit these. `tutorial.js` is one IIFE that only subscribes (`UI.bus.on`) and renders hint bubbles into `#tips` pointing at `UI.anchorEl(selector)`; it never mutates other screens and never gates input. Screens mark stable anchors with
-`data-tut="hand|energy|endturn|swap|intent|enemy|ink|hex|brushes|deck|relics"` (`LISTS.tutAnchors`). Each hint has a `META.tutorial` flag and shows once; the settings toggle "Hints" and `?notutorial=1` disable it. The `tutorial`
+`data-tut="hand|energy|endturn|swap|intent|enemy|ink|hex|brushes|deck|relics|party|fight"` (`LISTS.tutAnchors`). Each hint has a `META.tutorial` flag and shows once; the settings toggle "Tutorial" (the `hints` setting) and `?notutorial=1` disable it. The first map and the first fight are guided walkthroughs (Next and Skip tutorial on every step), and the first meeting with any status, keyword, gem, Charm, Spell or map sign opens an explainer card built from the data (flags `tut_x_<kind>_<key>`, Stop explaining is `tut_x_off`). The `tutorial`
 suite drives the whole guided run beat by beat through the bus. Public API: `UI.tutorial = {enabled(), fire(id, force?), current() -> {id, el}|null, queue() -> [ids], dismiss(why?), reset(),
-seen(id), flag(id) -> 'tut_<id>', idle(), HINTS, RULES, shown, counts}`. The map's `hex` anchor is an invisible box: it marks the first hex of the cheapest chain toward the boss (the `paint`
-hint), moves to the hex that was just painted after a paint or a Spell (the `walk` hint) and goes back to the chain once a walk starts.
+seen(id), flag(id) -> 'tut_<id>', idle(), HINTS, RULES, CHAINS, shown, counts, explaining(), next(), skip(), stopExplaining(), explain(kind, key, force?), explainDef(id), scan()}`. The map's `hex` anchor is an invisible box: it marks the first hex of the cheapest chain toward the boss (the `paint`
+hint), moves to the hex that was just painted after a paint or a Spell (the `walk` hint) and goes back to the chain once a walk starts. `party` is an invisible box on the party's hex and `fight` one on the nearest revealed fight that is not done (zero sized when there is none).
 
 **Accessibility.** Keyboard: every interactive element is a real `<button>` or has `tabindex=0` and `role=button`, with a 3 px lime focus ring (a soft dark outer edge keeps it readable on pink, green and cream); Tab and arrows move focus, Enter or Space activate, Esc = back or close top overlay or pause.
 Combat: `1`..`9` and `0` select a hand card, Left and Right move between cards and then cycle targets, Enter plays, `E` ends the turn, `S` swaps, `D` and `G` open the draw and discard piles, `Z` toggles fast animation. Map: arrows pan (Shift pans three times

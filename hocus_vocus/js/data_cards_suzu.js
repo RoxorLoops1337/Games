@@ -1,4 +1,4 @@
-// Hocus Vocus: RawClaw (id `suzu`), The Sound Alchemist: his complete card set (3 starters, 14 commons, 12 uncommons, 8 rares).
+// Hocus Vocus: RawClaw (id `suzu`), The Sound Alchemist: his complete card set (3 starters, 15 commons, 13 uncommons, 9 rares).
 //
 // One IIFE, no top-level names; it only calls DATA.add('cards', {...}). Card text is generated from `fx`, never typed.
 // Tokens: none. No card here uses the `add` op, so none is defined. Card ids keep their old internal names (suzu_ofuda and so on);
@@ -380,6 +380,31 @@
       up: { cost: 2 },
       kw: [], slots: ['gold', 'green'], art: { m: 'moon', c: 'ink' },
       flavor: 'He controls the mix. Everyone else just thinks they do.',
+    },
+    // ------------------------------------------------------------------ card mechanics (DATA "Card mechanics": Loop, Hype, Fanbase)
+    suzu_delay_throw: {
+      name: 'Delay Throw', hero: 'suzu', type: 'skill', rarity: 'common', cost: 1,
+      // Loop: a Fading copy of the last other Attack or Skill, his partner's included, and a little cover for whoever leads
+      fx: [{ op: 'block', n: 4, tgt: 'front' }], mech: { loop: 1 },
+      up: { fx: [{ op: 'block', n: 6, tgt: 'front' }] },
+      kw: [], slots: ['blue'], art: { m: 'bell', c: 'teal' },
+      flavor: 'Say it once. The room says it again.',
+    },
+    suzu_build_the_buzz: {
+      name: 'Build the Buzz', hero: 'suzu', type: 'attack', rarity: 'uncommon', cost: 1,
+      // Hype on every enemy: the bonus lands on each target
+      fx: [dmg(3, { tgt: 'all' })], mech: { hype: 1 },
+      up: { fx: [dmg(4, { tgt: 'all' })] },
+      kw: [], slots: ['red', 'green'], art: { m: 'wind', c: 'rose', hero: true },
+      flavor: 'A murmur, a hum, a roar.',
+    },
+    suzu_platinum_record: {
+      name: 'Platinum Record', hero: 'suzu', type: 'attack', rarity: 'rare', cost: 2,
+      // Fanbase: the big single. Every enemy it finishes adds 3 for the rest of the tour
+      fx: [dmg(10)], mech: { fanbase: 3 },
+      up: { fx: [dmg(13)], mech: { fanbase: 4 } },
+      kw: [], slots: ['red', 'any'], art: { m: 'coin', c: 'moon', hero: true },
+      flavor: 'Every fan you win is one more voice in the chorus.',
     },
   });
 })();

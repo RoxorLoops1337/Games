@@ -553,8 +553,8 @@ if (want('menus')) {
     t.eq(META.get('hints'), true, 'menus: hints start on');
     const toggles = $$(g, '.s-settings [role=switch]');
     t.ok(toggles.length >= 3, 'menus: Settings has its toggles (' + toggles.length + ')');
-    await tap(g, toggles.find((e) => e.getAttribute('aria-label') === 'Hints'), 400);
-    t.eq(META.get('hints'), false, 'menus: the Hints switch turns hints off');
+    await tap(g, toggles.find((e) => e.getAttribute('aria-label') === 'Tutorial'), 400);
+    t.eq(META.get('hints'), false, 'menus: the Tutorial switch turns the tutorial off');
     t.eq(JSON.parse(g._store.hv_profile_v1).settings.hints, false, 'menus: and the profile in storage says so');
     const large = byText(g, /^Large$/);
     t.ok(!!large, 'menus: Settings offers Large text');

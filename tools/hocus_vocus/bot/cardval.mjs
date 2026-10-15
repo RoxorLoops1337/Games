@@ -285,7 +285,21 @@ export function createValuer(G) {
     const X = res.costX ? (ctx.xEnergy || 2.4) : 0;
     const st = { ref, X, temp, might: 0 };
     const v = valueOps(res.fx, st);
-    return v;
+    return v + mechPoints(res);
+  }
+
+  // card mechanics (DATA "Card mechanics"), per point and per hit of the first dmg op: a Loop copy is a Fading card that follows another
+  // play, Remix pays about once more per fight, Hype reads the reference turn's earlier cards, and a Fanbase card's kills over a tour, plus
+  // the bonus it has already banked (the dmg valuation reads the printed n, not the plus the bonus rides on)
+  const MECH_VAL = { loop: 4, remix: 1, hype: 2.2, fanbase: 2 };
+  function mechPoints(res) {
+    const m = res.mech;
+    if (!m) return 0;
+    let dmg = null;
+    asList(res.fx).forEach((o) => { if (!dmg && o && o.op === 'dmg') dmg = o; });
+    const hits = dmg ? (isNum(dmg.hits) ? dmg.hits : 1) * (dmg.tgt === 'all' ? ALL_MUL : 1) : 0;
+    const banked = res.mechNow ? res.mechNow.fanbase || 0 : 0;
+    return MECH_VAL.loop * (m.loop || 0) + hits * (MECH_VAL.remix * (m.remix || 0) + MECH_VAL.hype * (m.hype || 0) + MECH_VAL.fanbase * (m.fanbase || 0) + banked);
   }
 
   // ---------------------------------------------------------------- tags (what a card produces or spends or pays off)
