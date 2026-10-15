@@ -144,7 +144,7 @@ const DATA = (() => {
       'pick_needed', 'relic', 'gold', 'ink', 'max_hp', 'end'],
     busEvents: ['screen', 'overlay', 'combat:turn', 'combat:select', 'combat:play', 'combat:endturn', 'combat:swap', 'combat:pick',
       'combat:end', 'map:paint', 'map:brush', 'map:walk'],
-    tutAnchors: ['hand', 'energy', 'endturn', 'swap', 'intent', 'enemy', 'ink', 'hex', 'brushes', 'deck', 'relics'],
+    tutAnchors: ['hand', 'energy', 'endturn', 'swap', 'intent', 'enemy', 'ink', 'hex', 'brushes', 'deck', 'relics', 'party', 'fight'],
 
     // screens and overlays (closed; DESIGN 5.11)
     screens: ['title', 'heroSelect', 'library', 'settings', 'howto', 'story', 'map', 'combat', 'reward', 'shop', 'event', 'camp', 'forge', 'chest',

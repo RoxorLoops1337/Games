@@ -1007,6 +1007,21 @@ Rows 549 to 733 are the placeholder screens (shown only when a real screen file 
 | 81 | `A fable is a choice, not a test. There is usually a safe option, a gamble and a price. Pick your risk.` | `A detour is a choice, not a test. There is usually a safe option, a gamble and a price. Pick your risk.` | HV_STORY 4 (tip 21) | P2 |
 | 83 | `Gems set into card sockets of their own colour, and a prism socket takes any. Cut them at camps, forges and shops. A new gem replaces the old one for good.` | `Gems set into card sockets of their own colour, and a rainbow socket takes any. Set them at green rooms, studios and merch stalls. A new gem replaces the old one for good.` | new | P2 |
 
+#### 2.12b The tutorial rewrite (supersedes the hint texts above; titles and texts now live only in `js/tutorial.js`)
+
+The owners asked for a tutorial that is short, clear and a bit funny. The first map and the first fight are now step by step walkthroughs, each step
+with Next and Skip tutorial, and every hint is one or two short sentences (at most 110 characters, `tests/hocus_vocus_screen_end.test.mjs` checks it).
+
+| walkthrough | step titles | the line that matters |
+|---|---|---|
+| first map | This is you, Unmute a hex, Walk there, A fight! | `Tap a hex next to you to unmute it. It costs 1 Vox.` and `That icon is a fight. Walk onto it to battle a creature of the Gloss. Go!` |
+| first fight | Attack cards, Block cards, Breath, Enemy intent, End turn | `Attack cards hit enemies. Drag one up, or tap it twice, to play it.` and `This bubble shows what the enemy will do next. Rude of it to tell you, really.` |
+
+Explainer cards (New status, New keyword, New gem, New Charm, New Spell, New map sign) take their name and "What it does" text from the data
+(`DATA.statuses`, `DATA.keywords`, `DATA.gemText`, `DATA.relicText`, `DATA.brushes`, `DATA.tiles` plus a short line per map sign in `tutorial.js`),
+cut to two sentences. Buttons: Next or Got it, Skip tutorial on steps and hints, Stop explaining on explainers. Settings: "Tutorial" On or Off and
+"Replay tutorial". How to Play is nine pages with one rule each (see `HOWTO` in `js/screen_menu.js`); the margin notes and kickers are gone.
+
 ### 2.13 CSS `content` strings (`css/combat.css`; P2 2E)
 
 | line | Echowake literal | Hocus Vocus literal | source | phase |
@@ -1063,7 +1078,7 @@ These are added, not swapped. Their words come from the plan files named; nothin
 | Map info chip action line (`.mp-info-act`) | 66 characters (normal), 52 (Larger text 1.3), 40 (phone, any size) | `tests/hocus_vocus_screen_map.test.mjs` "info chip copy" (about line 1179) | `Too far for your Vox: a chain of 12 hexes costs 12.` 51 and `Tap twice to unmute a chain of 12 hexes for 12 Vox.` 51 (normal only); `Tap twice: a chain of 12 hexes costs 12.` 40 and `Too far: a chain of 12 hexes costs 12.` 38 (Larger and phone; 40 is exactly the Echowake length); `Unmuting 12 hexes. Tap the aimed direction to apply.` 52 (normal only) and `Unmuting 12 hexes. Tap the arrow again.` 39; `Start from a muted hex within 4 hexes of the party.` 51 and `Start from a muted hex beside the live ground.` 46 (normal only; the short forms are 34 and 29); `Not enough Vox to unmute: 1 Vox.` 32; `No way to reach it through the fog.` 35; `This Spell cannot start from here.` 34 (the plain swap `That is not a place this Spell can start.` is 41 and would break the phone budget). The walk lines are pinned verbatim and do not change. |
 | Map info chip text (two clamped lines) | no longer than today | `css/map.css`, the same test | resting `Unmute nearby fog for 1 Vox, or tap live ground to walk.` 56 (was 65), short 54 (was 54); `No Vox left. Walk to a tea stall, fight, or cast a Spell.` 57 (was 60), short 50 (was 48) |
 | Spell mode bar (two clamped lines) | no longer than today | the same test | `Aim, then tap the arrow again to unmute 12 hexes.` 49 (was 51); `Tap again or press Cast to unmute 12 hexes.` 43 (was 49); `Nothing would unmute that way. Aim elsewhere.` 45 (was 43); `Glowing hexes are places to start. Hover for the shape, tap to cast.` 68 (was 68) |
-| Tutorial hints | title at most 30, text 40 to 230, no dashes | `tests/hocus_vocus_screen_end.test.mjs` 706, 707 | titles 6 to 25 characters; texts 88 to 184 |
+| Tutorial hints | title at most 24, text 30 to 110, one or two sentences, no dashes | `tests/hocus_vocus_screen_end.test.mjs` (tutorial catalog) | see 2.12b |
 | Hero select Begin button at Larger text | `len * (0.46 + 0.02) * 27.3 + 32 <= 259` px | `tests/hocus_vocus_screen_menu.test.mjs` "Begin labels" (1772 to 1786): `.ts-big .mn-begin` letter-spacing .02em, `.mn-launch` 296 px, padding 14 px, 9 px scrollbar | `Start the Tour` 14 characters, 215.5 px: fits; `Start Daily Duet` 16 characters, 241.7 px: fits; `Start the Daily Duet` 20 characters, 294 px: fails (why bible 5.2 takes the short form) |
 | Title slim plaques on a phone | 84 px each, three in a row | `tests/hocus_vocus_screen_menu.test.mjs` about 1731 | `Tour Bus` (8 letters at 14 px) stays on one line like `Settings`; `How to Play` wraps as it does today |
 | Continue plaque sub | 3 clamped lines | `css/menu.css` 40 | `Act 2, Vox 5, Jasmin and RoxorLoops` 35 characters (was 31); Larger text and phones already drop the hero faces; check in the G2 Continue shot |

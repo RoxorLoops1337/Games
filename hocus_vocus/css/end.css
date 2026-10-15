@@ -360,3 +360,27 @@ body.reduce-motion .tut, body.reduce-motion .tut-ring { animation: none; transit
 #stage.compact .tut-text { font-size: calc(18px * var(--ts)); }
 #stage.compact .tut-off { font-size: calc(15px * var(--ts)); }
 #stage.compact .tut-seal .hanko { font-size: 16px; }
+/* the walkthrough and the explainers: a step counter, a bubble pointing at a stage spot (no tail), a ghost while the fight is busy, the bigger explainer card */
+.tut-kicker { display: block; margin-bottom: 2px; font: 800 calc(11px * var(--ts)) var(--font-display); letter-spacing: .14em; text-transform: uppercase; color: rgba(36, 26, 58, .62); }
+.tut-free .tut-tail { display: none; }
+.tut.dim, .tut-ring.dim { opacity: .2; }
+.tut-foot .tut-ok { min-width: 96px; }
+.tut-x { width: 420px; }
+.tut-x .tut-in { padding: 13px 16px 11px; }
+.tut-xhead { display: flex; align-items: center; gap: 12px; margin: 4px 0 6px; }
+.tut-xico { flex: none; display: grid; place-items: center; width: 64px; height: 64px; border-radius: 50%; background: radial-gradient(circle at 40% 32%, #3b2a7a, #140f2e); box-shadow: 0 0 0 3px var(--hv-line, #2d170f), 0 0 0 5px #ffc9de; }
+.tut-xico.tone-bad { box-shadow: 0 0 0 3px var(--hv-line, #2d170f), 0 0 0 5px #ff8a8a; }
+.tut-xico.tone-good { box-shadow: 0 0 0 3px var(--hv-line, #2d170f), 0 0 0 5px #7fe3a6; }
+.tut-xico canvas { display: block; }
+.tut-xlet { font: 900 30px var(--font-display); color: var(--hv-cream, #fff4e6); }
+.tut-xname { min-width: 0; }
+.tut-x .tut-title { font-size: calc(23px * var(--ts)); line-height: 1.05; color: var(--ink); }
+.tut-xsub { display: inline-block; margin-top: 4px; padding: 1px 8px; border-radius: 9px; font: 700 calc(12px * var(--ts)) var(--font-ui); color: #fff; background: #7a6bff; }
+.tut-xsub.tone-good { background: #2f9d5c; } .tut-xsub.tone-bad { background: #c0394f; }
+.tut-what { display: block; font: 800 calc(11px * var(--ts)) var(--font-display); letter-spacing: .14em; text-transform: uppercase; color: var(--hv-pink-d, #c93f78); }
+.tut-x .tut-text { margin-top: 2px; font-size: calc(16px * var(--ts)); }
+#stage.compact .tut-x { width: 560px; }
+#stage.compact .tut-kicker, #stage.compact .tut-what { font-size: calc(15px * var(--ts)); }
+#stage.compact .tut-x .tut-title { font-size: calc(30px * var(--ts)); }
+#stage.compact .tut-x .tut-text { font-size: calc(21px * var(--ts)); }
+#stage.compact .tut-xsub { font-size: calc(16px * var(--ts)); }

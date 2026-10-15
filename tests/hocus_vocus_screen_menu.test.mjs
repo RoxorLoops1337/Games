@@ -883,13 +883,15 @@ await t.test('settings screen: five groups, every control shows the saved value,
   const P = g.META.profile;
   Object.assign(P.settings, { musicVol: 0.35, sfxVol: 0.6, shake: 0.5, reduceMotion: true, textScale: 1.15, fastAnim: 2, damageNumbers: false, colorblind: true, quality: 'low', hints: false });
   await go(g, 'title'); await go(g, 'settings');
-  t.deep($$(g, '.mn-set-h').map((h) => h.textContent), ['Sound', 'Motion', 'Help', 'Display', 'Screen and data', 'About'], 'five groups and the About group last (HV_WORLD_DATA 11)');
+  t.deep($$(g, '.mn-set-h').map((h) => h.textContent), ['Help', 'Sound', 'Motion', 'Display', 'Screen and data', 'About'], 'five groups and the About group last (HV_WORLD_DATA 11)');
   t.eq($$(g, '.mn-set-group').pop().querySelector('.mn-set-h').textContent, 'About', 'About is the last group in the document order too');
   t.eq($$(g, '.s-settings h1, .s-settings .panel-title, .s-settings .panel h2').length > 0, true, 'a titled panel');
   t.eq(slid(g, 'musicVol').value, '0.35', 'music volume shows 0.35'); t.eq(row(g, 'musicVol').querySelector('.s-val').textContent, '35%', 'as 35%');
   t.eq(slid(g, 'sfxVol').value, '0.6', 'effects volume shows 0.6'); t.eq(row(g, 'shake').querySelector('.s-val').textContent, '50%', 'shake 50%');
   t.eq(segOn(g, 'reduceMotion'), 'On', 'reduce motion On'); t.eq(segOn(g, 'textScale'), 'Large', 'text size Large'); t.eq(segOn(g, 'fastAnim'), 'Faster', 'animation speed Faster'); t.eq(segOn(g, 'quality'), 'Low', 'quality Low');
-  t.eq(tog(g, 'damageNumbers').getAttribute('aria-checked'), 'false', 'damage numbers off'); t.eq(tog(g, 'colorblind').getAttribute('aria-checked'), 'true', 'colour-blind aids on'); t.eq(tog(g, 'hints').getAttribute('aria-checked'), 'false', 'hints off');
+  t.eq(tog(g, 'damageNumbers').getAttribute('aria-checked'), 'false', 'damage numbers off'); t.eq(tog(g, 'colorblind').getAttribute('aria-checked'), 'true', 'colour-blind aids on'); t.eq(tog(g, 'hints').getAttribute('aria-checked'), 'false', 'the tutorial off');
+  t.eq(tog(g, 'hints').getAttribute('aria-label'), 'Tutorial', 'the switch is named Tutorial'); t.eq($(g, '.mn-set-row[data-setting=hints] .mn-tut-state').textContent, 'Off', 'and says Off in words beside it');
+  t.ok($(g, '.mn-set-row[data-setting=replay] .btn') && /Replay tutorial/.test($(g, '.mn-set-row[data-setting=replay] .btn').textContent), 'a Replay tutorial button');
   t.ok($(g, '.mn-sample') && $(g, '.mn-sample').textContent.length > 15, 'a text size sample line'); t.eq($$(g, '.mn-glyphs .gem').length, 5, 'and a strip of five gem glyphs for the colour-blind aid');
   t.ok($(g, '.mn-set-row[data-setting=clear] .btn'), 'Clear saved data is offered on the screen');
   const unnamed = $$(g, '.s-settings button, .s-settings input').filter((b) => !nameOf(b));
@@ -1058,7 +1060,7 @@ await t.test('settings: fullscreen button, entering with text 1.3, colour-blind 
   g.UI.setSetting('textScale', 1.3); g.UI.setSetting('colorblind', true); g.UI.setSetting('reduceMotion', true);
   await go(g, 'title'); await go(g, 'settings');
   g._frames(120, 16);
-  t.eq($$(g, '.mn-set-row').length, 13, 'thirteen rows at text 1.3');
+  t.eq($$(g, '.mn-set-row').length, 14, 'fourteen rows at text 1.3 (Replay tutorial joined the Help group)');
   t.eq(g._issues.length, 0, 'no canvas issues: ' + JSON.stringify(g._issues.slice(0, 2)));
   const base = g._listeners('keydown');
   await go(g, 'title');
@@ -1068,32 +1070,35 @@ await t.test('settings: fullscreen button, entering with text 1.3, colour-blind 
 
 
 // ==================================================================================================== HOW TO PLAY
-const HT_IDS = ['book', 'map', 'rows', 'cards', 'intents', 'gems', 'places', 'after'];
+const HT_IDS = ['goal', 'map', 'turn', 'attack', 'breath', 'rows', 'statuses', 'gems', 'after'];
 const htState = (g) => g.UI.screens.howto.state();
 const pageTitle = (g) => $(g, '.mn-pg-title').textContent;
 
-await t.test('howto: eight pages, each with a diagram, a kicker, three numbered rules and a page number', async () => {
+await t.test('howto: nine pages, one rule each: a title, the rule in one line, at most two notes, a diagram and a page number', async () => {
   const g = fresh();
   await go(g, 'title'); g._click('.mn-gate'); await settle(g);
   g._key('h'); await settle(g);
   t.eq(g.UI.currentName, 'howto', 'H on the title opens it');
-  t.eq(htState(g).pages, 8, 'eight pages'); t.eq(htState(g).page, 0, 'starting on the first');
+  t.eq(htState(g).pages, 9, 'nine pages'); t.eq(htState(g).page, 0, 'starting on the first');
   t.ok($(g, '.mn-ht-banner') && /How to Play/.test($(g, '.mn-ht-banner').textContent), 'a How to Play banner');
   const seen = [];
-  for (let i = 0; i < 8; i++) {
+  for (let i = 0; i < 9; i++) {
     if (i) { g._click($(g, '.mn-ht-nav .btn-primary')); await settle(g, 2); }
     t.eq(htState(g).id, HT_IDS[i], 'page ' + (i + 1) + ' is ' + HT_IDS[i]);
     seen.push(pageTitle(g));
-    t.ok($(g, '.mn-illus canvas, .mn-illus .mn-af-card, .mn-illus .mn-int, .mn-illus > *'), 'page ' + (i + 1) + ' has a diagram');
-    t.ok($(g, '.mn-pg-kicker').textContent.length > 10, 'and a kicker: ' + $(g, '.mn-pg-kicker').textContent);
-    t.eq($$(g, '.mn-pg-rules li').length, 3, 'three rules'); t.deep($$(g, '.mn-pg-rules li .hanko').map((h) => h.textContent.trim()), ['1', '2', '3'], 'numbered with hanko seals');
-    t.eq($(g, '.mn-pg-no').textContent, (i + 1) + ' / 8', 'the page number');
-    t.ok(/page \d of 8: /.test($(g, '.mn-book').getAttribute('aria-label')), 'the book is labelled: ' + $(g, '.mn-book').getAttribute('aria-label'));
+    t.ok($(g, '.mn-illus canvas, .mn-illus .mn-af-card, .mn-illus > *'), 'page ' + (i + 1) + ' has a diagram');
+    const rule = $(g, '.mn-pg-rule').textContent;
+    t.ok(rule.length >= 20 && rule.length <= 60, 'one rule in a few words (' + rule.length + '): ' + rule);
+    const notes = $$(g, '.mn-pg-notes li').map((li) => li.textContent);
+    t.ok(notes.length >= 1 && notes.length <= 2 && notes.every((n) => n.length <= 60), 'at most two short notes: ' + notes.join(' | '));
+    t.ok([pageTitle(g), rule].concat(notes).every((x) => /^[\x20-\x7e]*$/.test(x) && !/  /.test(x)), 'printable ASCII, no dashes, no double spaces');
+    t.ok(!$(g, '.mn-pg-kicker') && !$(g, '.mn-pg-rules') && !$(g, '.mn-margin'), 'no kicker, no long rule list, no margin note: less to read');
+    t.eq($(g, '.mn-pg-no').textContent, (i + 1) + ' / 9', 'the page number');
+    t.ok(/page \d of 9: /.test($(g, '.mn-book').getAttribute('aria-label')), 'the book is labelled: ' + $(g, '.mn-book').getAttribute('aria-label'));
     t.eq($$(g, '.mn-dot.on').length, 1, 'exactly one dot is lit'); t.eq($$(g, '.mn-dot')[i].classList.contains('on'), true, 'the right one'); t.eq($$(g, '.mn-dot.seen').length, i, 'earlier ones are marked seen');
   }
-  t.eq(new Set(seen).size, 8, 'eight distinct titles: ' + seen.join(' | '));
+  t.eq(seen.join(' | '), 'The goal | The map and Vox | A fight turn | Attack and block | Breath | Lead and backing | Statuses | Gems and Charms | After the tour', 'the topics, in order');
   t.eq($(g, '.mn-ht-nav .btn-primary').textContent.trim(), 'Done', 'the last page offers Done instead of Next');
-  t.ok(!$(g, '.mn-margin'), 'the last page has no margin note (the keys list takes its place)');
   t.eq($$(g, '.mn-pg-extra.keys kbd').length, 8, 'eight keyboard shortcuts on the last page'); t.ok($$(g, '.mn-pg-extra.keys dd').every((d) => d.textContent.length > 3), 'each with a description');
   g._click($(g, '.mn-ht-nav .btn-primary')); await settle(g);
   t.eq(g.UI.currentName, 'title', 'Done goes back to where you came from');
@@ -1109,12 +1114,12 @@ await t.test('howto: Previous, Next, dots, keys and Escape', async () => {
   g._click(next()); await settle(g); t.eq(htState(g).page, 1, 'Next turns to page 2'); t.ok(sfxLog(g).indexOf('page_turn') >= 0, 'with a page turn sound');
   t.ok(!prev().getAttribute('aria-disabled') || prev().getAttribute('aria-disabled') === 'false', 'Previous is live now');
   g._click(prev()); await settle(g); t.eq(htState(g).page, 0, 'Previous goes back');
-  g._click($$(g, '.mn-dot')[5]); await settle(g); t.eq(htState(g).page, 5, 'a dot jumps to that page'); t.ok(/Gems in Slots/.test(pageTitle(g)), 'Gems in Slots: ' + pageTitle(g));
-  t.ok(/Page 6: /.test($$(g, '.mn-dot')[5].getAttribute('aria-label')), 'a dot is named by page and title');
-  g._key('ArrowRight'); t.eq(htState(g).page, 6, 'ArrowRight'); g._key('PageDown'); t.eq(htState(g).page, 7, 'PageDown');
-  g._key('ArrowRight'); t.eq(htState(g).page, 7, 'and stays on the last page');
-  g._key('ArrowLeft'); t.eq(htState(g).page, 6, 'ArrowLeft'); g._key('PageUp'); t.eq(htState(g).page, 5, 'PageUp');
-  g._key('Home'); t.eq(htState(g).page, 0, 'Home'); g._key('ArrowLeft'); t.eq(htState(g).page, 0, 'ArrowLeft on page 1 stays'); g._key('End'); t.eq(htState(g).page, 7, 'End');
+  g._click($$(g, '.mn-dot')[6]); await settle(g); t.eq(htState(g).page, 6, 'a dot jumps to that page'); t.ok(/Statuses/.test(pageTitle(g)), 'Statuses: ' + pageTitle(g));
+  t.ok(/Page 7: /.test($$(g, '.mn-dot')[6].getAttribute('aria-label')), 'a dot is named by page and title');
+  g._key('ArrowRight'); t.eq(htState(g).page, 7, 'ArrowRight'); g._key('PageDown'); t.eq(htState(g).page, 8, 'PageDown');
+  g._key('ArrowRight'); t.eq(htState(g).page, 8, 'and stays on the last page');
+  g._key('ArrowLeft'); t.eq(htState(g).page, 7, 'ArrowLeft'); g._key('PageUp'); t.eq(htState(g).page, 6, 'PageUp');
+  g._key('Home'); t.eq(htState(g).page, 0, 'Home'); g._key('ArrowLeft'); t.eq(htState(g).page, 0, 'ArrowLeft on page 1 stays'); g._key('End'); t.eq(htState(g).page, 8, 'End');
   t.eq(g.UI.currentName, 'howto', 'none of that left the screen');
   const log = sfxLog(g).filter((x) => x === 'page_turn').length;
   g._key('x'); t.eq(g.UI.currentName, 'howto', 'other keys are left alone'); t.eq(sfxLog(g).filter((x) => x === 'page_turn').length, log, 'silently');
@@ -1136,25 +1141,21 @@ await t.test('howto: a horizontal swipe turns the page, a short or vertical drag
   g._pointer('pointerdown', book, { x: 900, y: 300 }); g._pointer('pointercancel', book, { x: 500, y: 300 }); g._pointer('pointerup', book, { x: 300, y: 300 });
   t.eq(htState(g).page, 0, 'a cancelled gesture is forgotten');
   for (let i = 0; i < 9; i++) g._drag(book, [900, 300], [400, 300]);
-  t.eq(g.UI.currentName, 'howto', 'swiping past the last page does not exit'); t.eq(htState(g).page, 7, 'it stops on the last page');
+  t.eq(g.UI.currentName, 'howto', 'swiping past the last page does not exit'); t.eq(htState(g).page, 8, 'it stops on the last page');
 });
 
-await t.test('howto: the margin notes are real tips from DATA, statuses come from DATA.statuses, and big text drops the notes', async () => {
+await t.test('howto: the statuses page shows real status discs from DATA, each named, and big text keeps the rule and the notes', async () => {
   const g = fresh();
   await go(g, 'howto');
-  const notes = [];
-  for (let i = 0; i < 8; i++) { g._click($$(g, '.mn-dot')[i]); await settle(g, 2); const m = $(g, '.mn-margin'); if (m) notes.push(m.querySelector('p').textContent); }
-  t.eq(notes.length, 7, 'seven pages carry a margin note (all but the last)'); t.ok(notes.every((n) => g.DATA.tips.indexOf(n) >= 0), 'each note is a tip from DATA.tips'); t.eq(new Set(notes).size, 7, 'and all are different');
-  t.ok(/Jordan's tip/.test($(g, '.mn-margin b') ? $(g, '.mn-margin b').textContent : "Jordan's tip"), "headed Jordan's tip");
-  g._click($$(g, '.mn-dot')[4]); await settle(g, 2);
-  const st = $$(g, '.mn-pg-extra.statuses .status, .mn-pg-extra.statuses > *');
-  t.eq(st.length, 9, 'nine statuses on the Intents page');
-  t.ok($$(g, '.mn-pg-extra.statuses [aria-label], .mn-pg-extra.statuses .status').length >= 9, 'each is a real UI.status chip (hover for the rules text)');
-  t.ok(g.DATA.statuses.vulnerable && g.DATA.statuses.poison && g.DATA.statuses.might, 'and all exist in the data');
+  g._click($$(g, '.mn-dot')[6]); await settle(g, 2);
+  const st = $$(g, '.mn-stwall .status');
+  t.eq(st.length, 8, 'eight statuses on the Statuses page');
+  t.ok(st.every((el) => g.DATA.statuses[el.dataset.s]), 'each is a real UI.status disc of DATA.statuses (hover or hold it for the rules text)');
+  t.deep($$(g, '.mn-stw-t b').map((b) => b.textContent), st.map((el) => g.DATA.statuses[el.dataset.s].name), 'named from the data');
+  t.ok($$(g, '.mn-stw.bad').length >= 1 && $$(g, '.mn-stw.good').length >= 1, 'some help, some hurt, and each says which');
   g.UI.setSetting('textScale', 1.3);
   await go(g, 'howto'); g._click($$(g, '.mn-dot')[1]); await settle(g, 2);
-  t.ok(!$(g, '.mn-margin'), 'at text 1.3 the margin note is dropped to keep the page from overflowing');
-  t.eq($$(g, '.mn-pg-rules li').length, 3, 'the rules stay');
+  t.ok($(g, '.mn-pg-rule') && $$(g, '.mn-pg-notes li').length === 2, 'at text 1.3 the rule and the notes stay');
 });
 
 await t.test('howto: every diagram animates for several seconds without canvas issues, on every page, with and without reduce motion', async () => {
@@ -1162,7 +1163,7 @@ await t.test('howto: every diagram animates for several seconds without canvas i
     const g = fresh();
     if (rm) g.UI.setSetting('reduceMotion', true);
     await go(g, 'howto');
-    for (let i = 0; i < 8; i++) {
+    for (let i = 0; i < 9; i++) {
       g._click($$(g, '.mn-dot')[i]); await settle(g, 2);
       g._resetCounts();
       g._frames(150, 16);
@@ -1174,18 +1175,22 @@ await t.test('howto: every diagram animates for several seconds without canvas i
   }
 });
 
-await t.test('howto: the DOM diagrams show real data (intent bubbles, gems, tile kinds, Cheers, encore seals, the daily seed)', async () => {
+await t.test('howto: the DOM diagrams show real data (intent icons, an attack and a Block card, statuses, gems and Charms, Cheers, encore seals, the daily seed)', async () => {
   const g = fresh();
   seedProfile(g);
   await go(g, 'howto');
-  g._click($$(g, '.mn-dot')[4]); await settle(g, 2);
-  t.ok($$(g, '.mn-legend .mn-lg').length >= 5 && $$(g, '.mn-legend .mn-lg .ico').length === $$(g, '.mn-legend .mn-lg').length, 'the intents page has a legend of intent icons, one per intent (' + $$(g, '.mn-legend .mn-lg').length + ')');
-  t.ok($(g, '.mn-illus canvas'), 'over a live enemy scene');
-  g._click($$(g, '.mn-dot')[5]); await settle(g, 2);
-  t.ok($$(g, '.mn-illus .gem, .mn-illus canvas').length >= 1, 'the gems page shows gems or a painted card');
+  g._click($$(g, '.mn-dot')[2]); await settle(g, 2);
+  t.eq($$(g, '.mn-pg-extra.intents .mn-int-i').length, 6, 'the fight turn page names six intent icons'); t.ok($(g, '.mn-illus canvas'), 'over a live fight turn');
+  g._click($$(g, '.mn-dot')[3]); await settle(g, 2);
+  const cards = $$(g, '.mn-ab .card');
+  t.eq(cards.length, 2, 'the attack and block page shows two real cards');
+  t.ok(cards[0].classList.contains('t-attack') && /\bdmg\b/.test(cards[0].dataset.ops), 'an attack that deals damage'); t.ok(/\bblock\b/.test(cards[1].dataset.ops), 'and a card that gains Block');
   g._click($$(g, '.mn-dot')[6]); await settle(g, 2);
-  t.ok($$(g, '.mn-illus *').length >= 6, 'the places page shows tiles');
+  t.eq($$(g, '.mn-stwall .status').length, 8, 'the statuses page shows real discs');
   g._click($$(g, '.mn-dot')[7]); await settle(g, 2);
+  t.ok($$(g, '.mn-illus .gem').length >= 1 && $$(g, '.mn-illus .card').length === 2, 'the gems page shows a gem and the card before and after');
+  t.ok($$(g, '.mn-gc-charms .relic').length >= 3 && $$(g, '.mn-gc-charms .relic').every((r) => g.DATA.relics[r.dataset.id]), 'and real Charms');
+  g._click($$(g, '.mn-dot')[8]); await settle(g, 2);
   t.eq($$(g, '.mn-af-card').length, 3, 'the last page has Cheers, Encores and Daily Duet cards');
   t.ok($$(g, '.mn-af-card')[2].textContent.indexOf(String(todaySeed(g))) >= 0, 'the daily card names today\'s seed ' + todaySeed(g));
   t.eq($$(g, '.mn-af-seal').length, 11, 'eleven trial seals are pictured (0 to X)'); t.eq($$(g, '.mn-af-seal.on').length, g.META.trialMax() + 1, 'those you have opened are lit: 0 to ' + g.META.trialMax()); t.ok($(g, '.mn-af-seals').getAttribute('aria-label').indexOf('opened up to ' + g.META.trialMax()) > 0, 'and the strip is described to screen readers');
@@ -1197,7 +1202,7 @@ await t.test('howto: leaves cleanly (no listeners, DOM or timers left) and every
   await go(g, 'title'); g._click('.mn-gate'); await settle(g);
   const base = { pm: g._listeners('pointermove'), key: g._listeners('keydown'), pu: g._listeners('pointerup') };
   await go(g, 'howto');
-  for (let i = 0; i < 8; i++) { g._key('ArrowRight'); g._frames(5, 16); }
+  for (let i = 0; i < 9; i++) { g._key('ArrowRight'); g._frames(5, 16); }
   const unnamed = $$(g, '.s-howto button').filter((b) => !nameOf(b));
   t.eq(unnamed.length, 0, 'every button has a name: ' + unnamed.map((b) => b.className).join(','));
   t.ok($$(g, '.mn-dot').every((d) => d.getAttribute('role') === 'tab'), 'the dots are tabs');
@@ -1287,12 +1292,12 @@ await t.test('pause: How to play is a sub view of the overlay, with its own page
   await openPause(g);
   g._click(pbtn(g, 'howto')); await settle(g);
   t.ok(pausing(g) && $(g, '.mn-ht-wrap'), 'the pages replace the menu inside the same overlay'); t.ok(!$(g, '.mn-pause'), 'the menu is hidden');
-  t.eq($$(g, '.o-pause .mn-dot').length, 8, 'eight pages'); t.eq($(g, '.o-pause .mn-pg-no').textContent, '1 / 8', 'on page 1');
+  t.eq($$(g, '.o-pause .mn-dot').length, 9, 'nine pages'); t.eq($(g, '.o-pause .mn-pg-no').textContent, '1 / 9', 'on page 1');
   g._click($(g, '.o-pause .mn-ht-nav .btn-primary')); await settle(g);
-  t.eq($(g, '.o-pause .mn-pg-no').textContent, '2 / 8', 'Next works'); g._key('End'); t.eq($(g, '.o-pause .mn-pg-no').textContent, '8 / 8', 'End'); g._key('Home'); t.eq($(g, '.o-pause .mn-pg-no').textContent, '1 / 8', 'Home'); g._key('ArrowRight'); t.eq($(g, '.o-pause .mn-pg-no').textContent, '2 / 8', 'ArrowRight');
+  t.eq($(g, '.o-pause .mn-pg-no').textContent, '2 / 9', 'Next works'); g._key('End'); t.eq($(g, '.o-pause .mn-pg-no').textContent, '9 / 9', 'End'); g._key('Home'); t.eq($(g, '.o-pause .mn-pg-no').textContent, '1 / 9', 'Home'); g._key('ArrowRight'); t.eq($(g, '.o-pause .mn-pg-no').textContent, '2 / 9', 'ArrowRight');
   g._key('Escape'); await settle(g);
   t.ok(pausing(g) && $(g, '.mn-pause') && !$(g, '.mn-ht-wrap'), 'Escape returns to the pause menu without closing the overlay');
-  g._click(pbtn(g, 'howto')); await settle(g); t.eq($(g, '.o-pause .mn-pg-no').textContent, '1 / 8', 'reopening starts at page 1');
+  g._click(pbtn(g, 'howto')); await settle(g); t.eq($(g, '.o-pause .mn-pg-no').textContent, '1 / 9', 'reopening starts at page 1');
   g._click('.mn-ht-back'); await settle(g);
   t.ok($(g, '.mn-pause') && !$(g, '.mn-ht-wrap'), 'the Back to pause menu button also returns');
   g._key('h'); await settle(g); t.ok($(g, '.mn-ht-wrap'), 'H opens How to play');
@@ -2238,8 +2243,9 @@ await t.test('copy: the settings screen and overlay, HV_WORLD_DATA 11 (hints, sa
   seedProfile(g); saveRun(g);
   await go(g, 'settings');
   const hint = (key) => ($(g, '.mn-set-row[data-setting=' + key + '] .mn-set-hint') || { textContent: '' }).textContent;
-  t.deep($$(g, '.mn-set-h').map((h) => h.textContent), ['Sound', 'Motion', 'Help', 'Display', 'Screen and data', 'About'], 'the group headings, About last');
-  t.eq(hint('hints'), 'Short tips during your first tour', 'the Hints hint'); t.eq(hint('shake'), 'Try it: this line shakes as you drag', 'the shake hint');
+  t.deep($$(g, '.mn-set-h').map((h) => h.textContent), ['Help', 'Sound', 'Motion', 'Display', 'Screen and data', 'About'], 'the group headings, About last');
+  t.eq(hint('hints'), 'Guided first steps, and a card for anything new', 'the Tutorial hint'); t.eq(hint('replay'), 'Start the walkthrough and the explainers again', 'the Replay tutorial hint');
+  t.eq($(g, '.mn-set-row[data-setting=hints] b').textContent, 'Tutorial', 'the row reads Tutorial'); t.eq(hint('shake'), 'Try it: this line shakes as you drag', 'the shake hint');
   t.eq(hint('clear'), 'Erases unlocks, stickers, past tours and your saved tour. Asks twice.', 'the clear data hint');
   t.eq($(g, '.mn-sample').textContent, 'A soft note, a late kick, and the whole street starts to sing along.', 'the text size sample');
   t.eq(hint('colorblind'), 'Patterns, and bigger glyphs on gems', 'the unchanged hints stay'); t.eq(hint('quality'), 'Auto lowers effects if the game slows down', 'all of them');
@@ -2263,37 +2269,29 @@ await t.test('copy: the settings screen and overlay, HV_WORLD_DATA 11 (hints, sa
   t.eq(errors(g), 0, 'no console errors');
 });
 
-await t.test('copy: How to Play, HV_WORLD_DATA 12 (eight titles, kickers and rules, the seven margin notes, the legends, the After page, the diagram lettering)', async () => {
+await t.test('copy: How to Play (nine titles, rules and notes, the intent row, the After page, the diagram lettering)', async () => {
   const HT = [
-    ['A World on Mute', 'Two heroes, three acts, one Gloss to sing through.', ['You lead two heroes across the Soundlands, where real voices are magic. The Gloss has smoothed them all into silence.', "Play three acts. Each ends with a headliner, and the last one is the Gloss's own star.", 'Every tour is a new one: a different map, different cards, different Charms. Win or lose, you earn Cheers to unlock more.']],
-    ['Unmute the Soundlands', 'The Soundlands are on mute. Your Vox turns them back on.', ['Spend 1 Vox to unmute a hex next to live ground. It reveals what waits there: a fight, a merch stall, a green room, a detour.', 'Tap any live hex to walk there. Stepping onto a fight or a detour starts it.', 'Vox comes back from tea stalls, wins and green rooms. One-use Spells unmute whole shapes for free.']],
-    ['Two Heroes, Two Spots', 'Who takes the lead matters.', ['The lead hero takes most attacks. The backing hero is safe from most of them.', 'Each hero has a favourite spot and a bonus there. Check it on the hero card.', 'You get one free swap per turn, more cost 1 Breath. If one hero loses their voice, the other steps up.']],
-    ['Breath and Cards', 'Three Breath, five cards, one enemy turn.', ['Every card belongs to one hero. Play cards with Breath: you have 3 each turn.', 'Attacks hurt, skills defend or set things up. Block soaks damage until your next turn.', 'End your turn and unplayed cards are discarded while the enemies act. Then you draw 5 more.']],
-    ['Read the Intents', 'Every enemy shows what it is about to do.', ['The bubble over an enemy tells you what it will do next: hit, block, jinx, summon.', 'Statuses stack. Exposed takes more damage, Muffled deals less, Earworm ignores Block.', 'Hover or press and hold any icon or underlined word to read what it means.']],
-    ['Gems in Slots', 'Set a gem, change the card.', ['Cards have 0 to 3 slots. A slot takes a gem of its own colour, and a rainbow slot takes any.', 'Gems add damage, Block, extra hits, cards, Breath and more. The card text changes to match.', 'Set gems at green rooms, studios and merch stalls. Replacing a gem loses the old one, so choose well.']],
-    ['Green Rooms, Stalls and Detours', 'The map is full of small choices.', ["Green rooms let you rest, rehearse a card, set gems or warm up. Jordan's merch stalls sell cards, gems, Charms and a Spell, and declutter your deck.", 'Detours are choices with a safe way, a gamble and often a price. Charms bend the rules for the whole tour.', 'Rivals guard Charms, the studio upgrades a card, and a sparkle booth lets you pick one gem.']],
-    ['After the Tour', 'Every tour leaves something behind.', ['You earn Cheers after every tour. Spend them on the Tour Bus on new cards, Charms and gems.', 'Win a tour to open Encores, stackable challenges. The Daily Duet is the same seed for everyone.', 'Keys, if you play with a keyboard, are listed below. Everything also works by touch.']],
+    ['The goal', 'Unmute the Soundlands and beat three headliners.', ['Two heroes, one deck, three acts.', 'Both heroes out of voice? The tour ends.']],
+    ['The map and Vox', 'Tap a muted hex next to live ground. It costs 1 Vox.', ['Tap live ground to walk there.', 'Wins, tea stalls and green rooms refill Vox.']],
+    ['A fight turn', 'Play cards, then press End turn.', ['The enemies then do what their bubbles said.', 'Next turn: fresh Breath and 5 fresh cards.']],
+    ['Attack and block', 'Attack cards hit enemies. Block cards stop damage.', ['Block lasts until your next turn.', 'Drag a card up, or tap it twice, to play it.']],
+    ['Breath', 'Each card costs Breath. You get 3 every turn.', ['The cost is the number in the card corner.', 'Breath you do not spend is gone.']],
+    ['Lead and backing', 'The lead hero takes the hits. The backing hero is safe.', ['Each hero gets a bonus in a favourite spot.', 'One swap per turn is free.']],
+    ['Statuses', 'Little discs are statuses. Hover or hold one to read it.', ['The number is the strength, or the turns left.', 'Good ones help, bad ones hurt. Enemies get them too.']],
+    ['Gems and Charms', 'Gems go into card slots. Charms change the rules.', ['A slot takes its own colour. Rainbow takes any.', 'Charms work for the whole tour.']],
+    ['After the tour', 'Every tour earns Cheers for new cards and Charms.', ['Win to open Encores: harder tours that stack.', 'Keys for keyboard players are below.']],
   ];
-  const TIPS = [/both heroes lose their voice/, /^Unmuting a hex costs Vox/, /lead hero takes most/, /Block wears off/, /Enemy intents show/, /Gems only fit slots/, /A detour is a choice/];
   const g = fresh(); seedProfile(g);
   await go(g, 'howto');
-  for (let i = 0; i < 8; i++) {
+  for (let i = 0; i < 9; i++) {
     g._click($$(g, '.mn-dot')[i]); await settle(g, 2);
-    t.eq(pageTitle(g), HT[i][0], 'page ' + (i + 1) + ' title'); t.eq($(g, '.mn-pg-kicker').textContent, HT[i][1], 'page ' + (i + 1) + ' kicker');
-    t.deep($$(g, '.mn-pg-rules li p').map((p) => p.textContent), HT[i][2], 'page ' + (i + 1) + ' rules');
+    t.eq(pageTitle(g), HT[i][0], 'page ' + (i + 1) + ' title'); t.eq($(g, '.mn-pg-rule').textContent, HT[i][1], 'page ' + (i + 1) + ' rule');
+    t.deep($$(g, '.mn-pg-notes li p').map((p) => p.textContent), HT[i][2], 'page ' + (i + 1) + ' notes');
     t.eq($$(g, '.mn-dot')[i].getAttribute('aria-label'), 'Page ' + (i + 1) + ': ' + HT[i][0], 'the dot is named');
-    if (i < 7) {
-      const hits = g.DATA.tips.filter((x) => TIPS[i].test(x));
-      t.eq(hits.length, 1, 'page ' + (i + 1) + ': the margin regex ' + TIPS[i] + ' matches exactly one tip');
-      t.eq($(g, '.mn-margin b').textContent, "Jordan's tip", 'the note is headed Jordan\'s tip'); t.eq($(g, '.mn-margin p').textContent, hits[0], 'and shows that tip');
-    } else t.ok(!$(g, '.mn-margin'), 'the last page has no note');
   }
-  // the Read the Intents legend, the status chips and the Keys legend
-  g._click($$(g, '.mn-dot')[4]); await settle(g, 2);
-  t.deep($$(g, '.mn-legend .mn-lg b').map((b) => b.textContent), ['Attack', 'Flurry', 'Big hit', 'Guard', 'Hype up', 'Jinx', 'Summon', 'Heal', 'Special', 'Flee'], 'the intent legend');
-  const names = (ids) => ids.map((id) => g.DATA.statuses[id].name);
-  t.deep(names(['vulnerable', 'weak', 'poison']), ['Exposed', 'Muffled', 'Earworm'], 'the three statuses the rule names exist under those names in DATA');
-  g._click($$(g, '.mn-dot')[7]); await settle(g, 2);
+  g._click($$(g, '.mn-dot')[2]); await settle(g, 2);
+  t.deep($$(g, '.mn-pg-extra.intents b').map((b) => b.textContent), ['Attack', 'Flurry', 'Big hit', 'Guard', 'Hype up', 'Jinx'], 'the intent row');
+  g._click($$(g, '.mn-dot')[8]); await settle(g, 2);
   t.deep($$(g, '.mn-pg-extra.keys dd').map((d) => d.textContent), ['End turn', 'Swap spots', 'Pick a card', 'Play it', 'Fast mode', 'Draw / discard pile', 'Move the map', 'Spell tray'], 'the Keys legend');
   t.deep($$(g, '.mn-af-card b').map((b) => b.textContent), ['Cheers', 'Encores', 'Daily Duet'], 'the After cards');
   t.deep($$(g, '.mn-af-card b').map((b) => b.parentNode.querySelectorAll('span')[0].textContent), ['Earned after every tour. Spend them on the Tour Bus.', 'Win a tour to unlock the next encore. Each one stacks a new rule.', "Today's seed is " + todaySeed(g) + '. Same heroes and map for everyone, once a day.'], 'with their sentences (the straight apostrophe)');
@@ -2310,13 +2308,15 @@ await t.test('copy: How to Play, HV_WORLD_DATA 12 (eight titles, kickers and rul
   t.ok(book.has('3 acts, 3 headliners') && ![...book].some((x) => /verse|boss/i.test(x)), 'page 1 is lettered 3 acts, 3 headliners');
   const map = await lettering(1, 40);
   t.ok(map.has('unmute, then walk') && ![...map].some((x) => /wake/i.test(x)), 'page 2 is lettered unmute, then walk');
-  const rows = await lettering(2, 800);
+  const rows = await lettering(5, 800);
   t.ok(rows.has('LEAD') && rows.has('BACKING') && !rows.has('FRONT') && !rows.has('BACK'), 'page 3 labels the spots LEAD and BACKING');
   t.ok(rows.has('Jasmin likes it here') || rows.has('RoxorLoops likes it here'), 'and says who likes it here');
   t.ok(rows.has('RoxorLoops prefers the backing spot') || rows.has('Jasmin prefers the lead spot'), 'and who prefers the lead or backing, never the id: ' + [...rows].filter((x) => /prefers/.test(x)).join(' | '));
   t.ok(![...rows].some((x) => /prefers (front|back)$/.test(x)), 'no "prefers front" or "prefers back"');
-  const cards = await lettering(3, 40);
-  t.ok(cards.has('Breath') && !cards.has('Energy'), 'page 4 captions the orbs Breath');
+  const cards = await lettering(2, 40);
+  t.ok(cards.has('Breath') && !cards.has('Energy'), 'the fight turn page captions the orbs Breath');
+  const breath = await lettering(4, 500);
+  t.ok([...breath].some((x) => /Breath left/.test(x)) && [...breath].some((x) => /^costs \d/.test(x)) && !breath.has('Energy'), 'the Breath page counts the Breath left and what each card costs: ' + [...breath].join(' | '));
   t.eq(g._issues.length, 0, 'no canvas issues: ' + JSON.stringify(g._issues.slice(0, 2)));
   t.eq(errors(g), 0, 'no console errors');
 });
