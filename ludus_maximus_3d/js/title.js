@@ -39,6 +39,10 @@ export function createTitle(game) {
     const word = (txt) => { const w = U.h('div', 'lx-ttl-word', txt); w.dataset.t = txt; return w; };
     const rule = U.h('div', 'lx-ttl-rule', [U.h('i'), U.laurel('lx-ttl-laurel'), U.h('i')]);
     logo.append(U.h('div', 'lx-ttl-kicker', 'Rise from the sand'), word('LUDUS'), word('MAXIMUS'), rule, U.h('div', 'lx-ttl-sub', 'Gladiator School'));
+    try { // CAMPAIGN: where the story stands, under the logo (only for a save that has one)
+      const S0 = hasSave ? titleState() : null, K = globalThis.LM && globalThis.LM.campaign, ln = S0 && K && K.titleLine ? K.titleLine(S0) : '';
+      if (ln) { const t = U.h('div', 'lx-ttl-story', ln); t.style.cssText = 'margin-top:10px;font:700 12px/1.3 var(--lx-sans);letter-spacing:.22em;text-transform:uppercase;color:#f2c14e;text-shadow:0 2px 6px #000;text-align:center'; logo.append(t); }
+    } catch (e) { /* title never fails on story text */ }
     const menu = U.h('div', 'lx-ttl-menu');
     const mk = (label, icon, variant, v) => U.button({ label, icon, variant, block: true, onClick: () => pick(v) });
     if (hasSave) menu.append(mk('Continue', 'arena', 'gold', 'continue'), mk('New Game', 'ludus', 'bronze', 'new'));

@@ -29,6 +29,7 @@ export async function advanceWeek(ctx) {
   await rivalryEvent(ctx);
   await pendingEvent(ctx);
   await (await import('./screens/infirmary.js')).woundCall(ctx); await (await import('./screens/sponsors.js')).patronFlow(ctx); // WAVE2: wounds decision, patron beats and offers
+  await (await import('./screens/campaign.js')).storyFlow(ctx); // CAMPAIGN: chapter cards, story scenes, finale outcome, epilogue (never during the tutorial)
 }
 
 // ------------------------------------------------------------------ small dialogs
@@ -217,6 +218,7 @@ export async function fightScreen(ctx, gl, opps, stance, o) {
 async function runEvent(ctx, ev, gl, en) {
   const S = ctx.S, lm = L();
   if (ev.kind === 'tourney' || ev.kind === 'grand') return runTourney(ctx, ev, gl[0]);
+  if (ev.camp) await (await import('./screens/campaign.js')).campIntro(ctx, ev); // CAMPAIGN: grudge match / finale card
   const { stance, bet } = await prep(ctx, ev, gl, ev.opps, { entry: en && (en.plan || (en.stance && en.stance !== 'bal')) ? ev.key : null });
   const aug = await pickAug(ctx, ev.league, [], ev.kind === 'grand', null, null, gl[0] && gl[0].style);
   const res = await fightScreen(ctx, gl, ev.opps, stance, { ev, tricks: bet.tricks, augs: [aug] });

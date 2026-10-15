@@ -42,10 +42,25 @@ const CSS = `
 .pf-style-opt:focus-visible{outline:3px solid #5a1f5e;outline-offset:2px}
 .pf-cere{text-align:center;display:grid;gap:10px;justify-items:center}
 .pf-cere .pf-ph{transform:scale(1.2);margin:8px}
+.pf-acts{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:8px}
+.pf-acts .lx-btn{flex:1 1 140px;min-height:44px}
+.pf-q{display:grid;gap:3px}
+.pf-pro,.pf-con{font:600 12.5px/17px var(--lx-sans);overflow-wrap:break-word}
+.pf-pro{color:#1f6a40}.pf-pro:before{content:'+ ';font-weight:900}
+.pf-con{color:#9d2a20}.pf-con:before{content:'- ';font-weight:900}
+.pf-bio{font:500 14px/20px var(--lx-sans);color:#33243a;font-style:italic}
+.pf-log{display:grid;gap:4px;font:500 13px/18px var(--lx-sans);color:#33243a;max-height:none}
+.pf-log b{color:#7a2f30;font-variant-numeric:tabular-nums}
+.pf-rel{display:grid;gap:6px}
+.pf-rel-h{display:flex;gap:10px;align-items:center;min-width:0}
+.pf-opt{display:grid;gap:4px;margin-bottom:8px}
+.pf-shade{display:flex;justify-content:space-between;gap:10px;font:600 12.5px/17px var(--lx-sans);border-bottom:1px dotted rgba(122,82,34,.35);padding:3px 0}
+.pf-shade b{color:#2a1a30;min-width:0}
+.pf-shade span{text-align:right;color:#5a4560}
 `;
 const STAT_TIP = { str: 'Strength: raises attack damage.', agi: 'Agility: raises speed and evasion.', end: 'Endurance: raises HP and armor.', skl: 'Skill: raises crit chance and adds a little damage.', wil: 'Heart: resists stuns and can survive a killing blow with grit.' };
 const DER = [['hp', 'HP', 'Hit points. Reach zero and the fight is lost.', 1], ['atk', 'ATK', 'Damage dealt per hit.', 1], ['def', 'DEF', 'Armor: reduces damage taken.', 1], ['spd', 'SPD', 'Movement and attack speed.', 1], ['crit', 'CRIT', 'Chance to land a critical hit.', 100], ['eva', 'EVA', 'Chance to dodge a blow.', 100]];
-const TABS = [['stats', 'Stats', 'star'], ['gear', 'Gear', 'shield'], ['skills', 'Skills', 'bladedance'], ['life', 'Life', 'scroll']];
+const TABS = [['stats', 'Stats', 'star'], ['gear', 'Gear', 'shield'], ['skills', 'Skills', 'bladedance'], ['bonds', 'Bonds', 'heart'], ['life', 'Life', 'scroll']]; // FIGHTERS: Bonds tab
 
 export function open(ctx, arg) {
   injectCss(); addCss(CSS);
@@ -53,6 +68,7 @@ export function open(ctx, arg) {
   const g = arg && typeof arg === 'object' ? arg : ctx.gOf(arg);
   if (!g) { ctx.toast('That fighter is gone.', { kind: 'bad' }); return; }
   const owned = S.glads.includes(g);
+  if (owned && lm.fEnsure) lm.fEnsure(S, g); // FIGHTERS: origin, quirks, age appear lazily
   const body = h('div', 'lm-sheetbody');
   const m = wide(ctx.sheet({ title: g.name, body, actions: [] }), 800);
   let tab = 'stats', dead = false; const origClose = m.close; m.close = () => { dead = true; origClose.call(m); };
@@ -68,7 +84,9 @@ export function open(ctx, arg) {
     const rec = chip(`${g.rec.w}W ${g.rec.l}L`, 'grey', 'Career record in the arena');
     const stars = h('div', '', U.stars(lm.stars(g), 5)); U.tooltip(stars, 'Stars show natural talent across the five stats.', { title: 'Stars' });
     const tr = h('div', 'lm-chips', [chip(T.n, 'purple'), h('span', 'lm-sub', T.d)]);
-    const nameBox = h('div', 'pf-id', [h('div', 'lm-h1', g.name), (g.nick || g.title) ? h('div', 'lm-sub', [g.nick || '', g.nick && g.title ? ' · ' : '', g.title ? h('b', '', g.title) : ''].filter((x) => x !== '')) : null, h('div', 'lm-chips', [sc, chip('Lv ' + g.lvl, 'gold'), rec]), stars, tr]);
+    const fchips = h('div', 'lm-chips'); // FIGHTERS: title, origin, age and stage
+    if (lm.fEnsure && g.org) { const o = lm.fOrigin(g), sg = lm.fStage(g), tt = lm.fTitleDef(g.rn); if (tt) fchips.append(chip(tt.n, 'gold', tt.d)); fchips.append(chip(o.n, 'grey', lm.fBio(g)), chip(`Age ${g.age}, ${sg.n}`, g.age >= 36 ? 'red' : g.age >= 32 ? 'bronze' : 'green', sg.d)); }
+    const nameBox = h('div', 'pf-id', [h('div', 'lm-h1', g.name), (g.nick || g.title) ? h('div', 'lm-sub', [g.nick || '', g.nick && g.title ? ' · ' : '', g.title ? h('b', '', g.title) : ''].filter((x) => x !== '')) : null, h('div', 'lm-chips', [sc, chip('Lv ' + g.lvl, 'gold'), rec]), stars, tr, fchips.childNodes.length ? fchips : null]);
     const need = lm.need(g.lvl);
     const mt = (label, bar, val) => h('div', 'pf-m', [h('span', 'lm-num', label), bar, h('b', 'lm-num', val)]);
     const meters = h('div', 'pf-meters', [
@@ -76,6 +94,12 @@ export function open(ctx, arg) {
       mt('Energy', U.bar({ value: g.en, max: 100, kind: 'stam', height: 9 }), Math.round(g.en)),
       mt('Morale', U.bar({ value: g.mo, max: 100, kind: 'foe', height: 9 }), Math.round(g.mo))]);
     c.append(ph, nameBox, meters);
+    if (lm.fEnsure && g.q) { // FIGHTERS: talents and look entry points
+      const free = lm.fFree(g), acts = h('div', 'pf-acts');
+      const tb = U.button({ label: free ? `Talents (${free})` : 'Talents', icon: 'star', variant: free ? 'gold' : 'bronze', onClick: async () => { const mod = await import('./talents.js'); ctx.sfx('uiTap'); mod.open(ctx, g, () => { commit(); redraw(); }); } }); tb.dataset.tut = 'talents';
+      acts.append(tb, U.button({ label: 'Look', icon: 'roster', variant: 'bronze', onClick: async () => { const mod = await import('./customize.js'); ctx.sfx('uiTap'); mod.open(ctx, g, () => { commit(); redraw(); }); } }));
+      c.append(acts);
+    }
     return c;
   }
 
@@ -198,6 +222,13 @@ export function open(ctx, arg) {
   function skillsTab() {
     const box = h('div');
     { const st = d.STYLES[g.style]; box.append(sec('Fighting style'), h('div', 'lm-card', [h('div', 'lm-row lm-wrap', [h('b', 'lm-name', st.n), chip(st.role, 'bronze')]), h('div', 'lm-sub', st.d), h('div', 'lm-sub', `Small edge against ${st.beats.map((b) => d.STYLES[b].n).join(' and ')}.`)])); }
+    if (g.tk) { // FIGHTERS: talents and weapon mastery summary
+      const M = lm.fMastery(g), sp = lm.fSpent(g), W = lm.fWEAPONS[M.w], caps = [];
+      lm.fTree(g.style).forEach((b) => b.nodes.forEach((n) => { if (n.cap && lm.fRank(g, n.id) >= n.max) caps.push(n.cap.n); }));
+      const tc = h('div', 'lm-card'); tc.append(h('div', 'lm-row lm-wrap', [h('b', 'lm-name', 'Talents'), chip(`${sp} spent`, 'bronze'), lm.fFree(g) ? chip(`${lm.fFree(g)} to spend`, 'green') : null]), h('div', 'lm-sub', caps.length ? 'Signature: ' + caps.join(', ') : 'No signature upgrade yet. Fill a branch to its second tier.'),
+        h('div', 'lm-row lm-wrap', [h('b', 'lm-name', W.n), chip(M.n, M.tier >= 3 ? 'gold' : 'bronze'), M.perk ? h('span', 'lm-sub', M.perk) : null]));
+      tc.style.marginTop = '8px'; box.append(tc);
+    }
     box.append(sec('Ultimates', h('span', 'lm-sub', 'you trigger these')));
     const ul = h('div', 'pf-list');
     lm.ultsOf(g).forEach((id) => { const u = d.ULTS[id]; const c = h('div', 'lm-card pf-ult', [h('span', 'pf-ult-i', U.icon(id, 24)), h('div', 'lm-grow', [h('div', 'lm-row lm-wrap', [h('b', 'lm-name', u.n), chip(u.cd + 's', 'bronze', 'Cooldown')]), h('div', 'lm-sub', u.d)])]); c.style.setProperty('--uc', u.c); ul.append(c); });
@@ -222,8 +253,70 @@ export function open(ctx, arg) {
   }
 
   // ------------------------------------------------------------ life tab
+  // ------------------------------------------------------------ FIGHTERS: personality, shades, life log, career arc
+  function personaBlock() {
+    const box = h('div'); if (!g.q) return box; const o = lm.fOrigin(g);
+    box.append(sec('Origin and temperament'));
+    const c = h('div', 'lm-card'); c.append(h('div', 'lm-row lm-wrap', [h('b', 'lm-name', o.n), chip(`Age ${g.age}`, 'grey')]), h('p', 'pf-bio', lm.fBio(g)));
+    if (Object.keys(o.mods).length) c.append(h('div', 'lm-sub', `Origin: ${lm.fighters.modLine(o.mods)}.`));
+    box.append(c);
+    lm.fQuirks(g).forEach((q) => { const qc = h('div', 'lm-card pf-q', [h('div', 'lm-row lm-wrap', [h('b', 'lm-name', q.n), chip('Quirk', 'purple')]), h('div', 'pf-pro', q.pro), h('div', 'pf-con', q.con)]); qc.style.marginTop = '8px'; box.append(qc); });
+    const sg = lm.fStage(g); const ac = h('div', 'lm-card'); ac.style.marginTop = '8px'; ac.append(h('div', 'lm-row lm-wrap', [h('b', 'lm-name', `Career stage: ${sg.n}`), chip(`Age ${g.age}`, g.age >= 36 ? 'red' : 'green')]), h('div', 'lm-sub', sg.d + '. Fighters age one year every season (12 weeks).')); box.append(ac);
+    const rows = lm.fShadeRows(g, S);
+    if (rows.length) { const sc = h('div', 'lm-card'); sc.style.marginTop = '8px'; sc.append(h('div', 'lm-name', 'Where the small shades come from')); rows.forEach((r) => sc.append(h('div', 'pf-shade', [h('b', '', r.src), h('span', '', r.text)]))); sc.append(h('div', 'lm-sub', 'Everything on this list is a small shade, never a spike. Total from talents at the cap stays near 11%.')); box.append(sc); }
+    return box;
+  }
+  function logBlock() {
+    const box = h('div'); if (!g.ll) return box; box.append(sec('Life log', h('span', 'lm-sub lm-num', `${g.ll.length} entries`)));
+    if (!g.ll.length) box.append(empty('Nothing notable yet. Fight, win, bleed, and the log fills.'));
+    else box.append(h('div', 'lm-card pf-log', g.ll.slice(-12).reverse().map((x) => h('div', '', [h('b', '', `Wk ${x.w} `), x.t]))));
+    return box;
+  }
+  function careerBlock() {
+    const box = h('div'); if (!owned || !g.q) return box; box.append(sec('Retirement'));
+    if (typeof g.swan === 'number') box.append(h('div', 'lm-card lm-gold', [h('div', 'lm-name', 'A last fight is planned'), h('div', 'lm-sub', `${g.name} fights once more at +8% damage and +6% HP, then retires to the Hall of Legends.`), U.button({ label: 'Change my mind', variant: 'bronze', onClick: () => { lm.fSwanCancel(g); ctx.sfx('uiTap'); commit(); redraw(); } })]));
+    else box.append(note(g.age >= 34 || g.lvl >= 8 ? 'Every fighter ends somewhere. Choose how: freedom, a trainer\'s staff, one last fight or the Hall of Legends.' : 'Retirement opens at level 8 (freedom at level 5).'));
+    return box;
+  }
+  function bondsTab() {
+    const box = h('div'), others = S.glads.filter((o) => o.id !== g.id && !o.beast);
+    box.append(note('Friends fight better together, sworn brothers best of all, and a deep grudge costs both. Roles in the battle plan decide how much a pair helps: a front-liner beside a hunter or flanker gets the most from a brotherhood.'));
+    if (!others.length) { box.append(empty('You have no other fighters yet.')); return box; }
+    const rows = others.map((o) => ({ o, kinds: lm.fKinds(S, g.id, o.id), r: lm.fRelOf(S, g.id, o.id) })).sort((a, b) => (b.kinds.length - a.kinds.length) || (b.r.bond - a.r.bond));
+    rows.forEach(({ o, kinds, r }) => {
+      const c = h('div', 'lm-card pf-rel'), head = h('div', 'pf-rel-h', [portrait(ctx, o, 44), h('div', 'lm-grow', [h('div', 'lm-name', o.name), h('div', 'lm-chips', kinds.length ? kinds.map((k) => chip(lm.fKIND[k].n, { sworn: 'gold', friend: 'green', fond: 'purple', jealous: 'bronze', grudge: 'red' }[k], lm.fKIND[k].d)) : [chip('Acquaintances', 'grey')])])]);
+      c.append(head, U.bar({ value: r.bond, max: 100, kind: 'xp', height: 8, label: `Bond ${Math.round(r.bond)}` }));
+      if (r.gr > 0) c.append(U.bar({ value: r.gr, max: 100, kind: 'hp', height: 8, label: `Grudge ${Math.round(r.gr)}: festers by the week, a brawl at 100` }));
+      if (r.fond) c.append(h('div', 'lm-sub', (r.fond === g.id ? `${g.name} is fond of ${o.name}.` : `${o.name} is fond of ${g.name}.`)));
+      if (r.jeal) c.append(h('div', 'lm-sub', (r.jeal === g.id ? `${g.name} is jealous of ${o.name}.` : `${o.name} is jealous of ${g.name}.`)));
+      kinds.forEach((k) => c.append(h('div', 'lm-sub', lm.fKIND[k].d)));
+      if (owned) {
+        const row = h('div', 'lm-btnrow');
+        if (r.gr > 0) { const why = lm.fSparWhy(S, g, o); const b = U.button({ label: 'Settle in the yard', icon: 'bladedance', variant: 'gold', disabled: !!why, onClick: () => { const res = lm.fSparBout(S, g, o); if (res.err) { ctx.toast(res.err, { kind: 'bad' }); return; } ctx.sfx('uiConfirm'); commit(); ctx.toast(res.line, { kind: 'info', ms: 4200 }); redraw(); } }); U.tooltip(b, why || 'A seeded sparring bout. The winner gains 6 morale, the loser loses 4 and has a 20% chance to be hurt for a week. Either way the grudge ends and the bond grows.', { title: 'Sparring bout' }); row.append(b); }
+        const sw = lm.fSwearWhy(S, g, o); if (!kinds.includes('sworn') && sw) c.append(h('div', 'lm-sub', 'Brotherhood: ' + sw + '.')); if (!kinds.includes('sworn') && !sw) { const b = U.button({ label: 'Swear brotherhood 30g', icon: 'heart', variant: 'bronze', disabled: !!sw, onClick: () => { const e = lm.fSwear(S, g, o); if (e) { ctx.toast(e, { kind: 'bad' }); return; } ctx.sfx('levelUp'); commit(); ctx.toast(`${g.name} and ${o.name} are sworn brothers.`, { kind: 'good', ico: 'check' }); redraw(); } }); U.tooltip(b, sw || 'A cup of wine and an oath. +3% damage and armor for both when they fight on the same team, more with complementary roles. If one dies, the other loses 12 morale.', { title: 'Brotherhood' }); row.append(b); }
+        if (row.childNodes.length) c.append(row);
+      }
+      c.style.marginBottom = '8px'; box.append(c);
+    });
+    const mn = (S.mentors || []).filter((x) => x.m === g.id || x.p === g.id);
+    if (mn.length) { box.append(sec('Teacher and pupil')); mn.forEach((x) => { const o = S.glads.find((y) => y.id === (x.m === g.id ? x.p : x.m)); if (o) box.append(h('div', 'pf-kv', [h('span', '', x.m === g.id ? `Teaching ${o.name}` : `Taught by ${o.name}`), h('b', '', 'Mentor pair')])); }); }
+    return box;
+  }
+  function retireSheet() {
+    const b = h('div', 'lm-sheetbody', [note('Choose how this career ends. Each option has a price.')]); const rm = ctx.sheet({ title: `Retire ${g.name}`, body: b });
+    const optCard = (title, desc, why, label, fn, variant = 'gold') => { const c = h('div', 'lm-card pf-opt', [h('div', 'lm-name', title), h('div', 'lm-sub', desc), why ? h('div', 'lm-sub', why) : null, U.button({ label, variant, disabled: !!why, onClick: fn })]); return c; };
+    lm.fRetireOpts(S, g).forEach((o) => b.append(optCard(o.n, o.d, o.why, o.id === 'rudis' ? `Pay ${o.fee}g` : o.id === 'trainer' ? 'Become a trainer' : 'One last fight', async () => {
+      if (!(await confirm(ctx, { title: o.n + '?', text: o.d, label: 'Confirm', variant: 'gold' }))) return;
+      const res = lm.fRetire(S, g, o.id); if (res.err) { ctx.toast(res.err, { kind: 'bad' }); ctx.sfx('uiError'); return; }
+      ctx.sfx('levelUp'); commit(); ctx.toast(res.msg, { kind: 'good', ico: 'check' }); rm.close(); if (o.id === 'last') redraw(); else { m.close(); ctx.open('roster'); }
+    })));
+    b.append(optCard('Hall of Legends', 'The classic ending: gold and fame now, a statue, and a bonus for everyone\'s training if the Hall has room.', g.lvl < 8 ? 'Needs level 8' : '', 'Retire to the Hall', () => { rm.close(); retire(); }));
+    return rm;
+  }
+
   function lifeTab() {
     const box = h('div');
+    box.append(personaBlock(), logBlock(), careerBlock());
     const sd = lm.storyDef(g);
     if (sd) {
       box.append(sec('Backstory'));
@@ -262,7 +355,7 @@ export function open(ctx, arg) {
       box.append(sec('Manage'));
       const row = h('div', 'lm-btnrow');
       row.append(U.button({ label: 'Rename', variant: 'bronze', onClick: rename }), U.button({ label: 'Retrain style', variant: 'bronze', onClick: retrainSheet }));
-      const rt = U.button({ label: g.lvl < 8 ? 'Retire (Lv 8+)' : 'Retire', variant: 'gold', disabled: g.lvl < 8, onClick: retire }); U.tooltip(rt, 'Retire to the Hall of Legends for gold and fame. Legends boost training for everyone.', { title: 'Retire' });
+      const rt = U.button({ label: g.lvl < 5 ? 'Retire (Lv 5+)' : 'Retire...', variant: 'gold', disabled: g.lvl < 5, onClick: () => (g.q ? retireSheet() : retire()) }); U.tooltip(rt, 'Retire to the Hall of Legends, buy their freedom, make them a trainer or give them one last fight.', { title: 'Retire' }); // FIGHTERS: retirement options
       row.append(rt, U.button({ label: 'Release', variant: 'danger', onClick: release }));
       box.append(row);
     }
@@ -307,7 +400,7 @@ export function open(ctx, arg) {
     if (dead) return;
     clearTips();
     const sc = body.parentElement ? body.parentElement.scrollTop : 0;
-    body.replaceChildren(hero(), ...alerts().map((a) => { a.style.marginTop = '10px'; return a; }), tabs(), h('div', 'pf-pane', [({ stats: statsTab, gear: gearTab, skills: skillsTab, life: lifeTab })[tab]()]));
+    body.replaceChildren(hero(), ...alerts().map((a) => { a.style.marginTop = '10px'; return a; }), tabs(), h('div', 'pf-pane', [({ stats: statsTab, gear: gearTab, skills: skillsTab, bonds: bondsTab, life: lifeTab })[tab]()]));
     if (body.parentElement) body.parentElement.scrollTop = sc;
   }
   render();

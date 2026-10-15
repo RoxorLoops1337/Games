@@ -505,5 +505,45 @@ for (const fn of ['newGame', 'makeGlad', 'mkUnits', 'createFight', 'step', 'useU
   ok(!/\u2014/.test(bs + fx + po + lab), 'no em dashes in the beast files');
 }
 
+{ // ECONOMY: screens, registry, script tag, theme ids and no em dashes in the new code
+  const rd = (f) => readFileSync(join(root, f), 'utf8'), fin = rd('js/screens/finance.js'), cir = rd('js/screens/circuit.js'), eco = rd('core/economy.js'), game = rd('js/game.js'), mkt = rd('js/screens/market.js'), more = rd('js/screens/more.js'), idx = rd('index.html');
+  ok(/'finance', 'circuit'\]/.test(game) && existsSync(join(root, 'js/screens/finance.js')) && existsSync(join(root, 'js/screens/circuit.js')), 'economy: finance and circuit screens are registered');
+  ok(/core\/economy\.js/.test(idx), 'economy: core/economy.js has a script tag');
+  ok(/export function open\(/.test(fin) && /export function open\(/.test(cir), 'economy: both screens export open()');
+  ok(/auction/.test(mkt) && /caravan/.test(mkt) && /ctx\.open\('finance'/.test(more) && /ctx\.open\('circuit'/.test(more), 'economy: market tabs and the More entry points exist');
+  for (const id of ['provincial', 'capua', 'alexandria', 'carthage', 'imperial']) ok(eco.includes(`theme: '${id}'`), 'economy: a town uses the ' + id + ' arena theme');
+  ok(!/\u2014/.test(fin + cir + eco + mkt + more), 'economy: no em dashes in the new code');
+  ok(!/Math\.random|\bLM\.rand\(|\brnd\(/.test(eco.replace(/\/\/.*$/gm, '')), 'economy: core/economy.js never draws from the combat random stream');
+  ok(/ev\.theme/.test(rd('js/fightsetup.js')), 'economy: the fight meta reads the event theme');
+}
+
+{ // COMBAT: file layout, unit shape and wiring
+  const rd = (f) => readFileSync(join(root, f), 'utf8'), arena = rd('core/arena.js'), fv = rd('js/fightview.js'), css = rd('css/ui.css');
+  ok(existsSync(join(root, 'js/directcontrol.js')) && existsSync(join(root, 'js/combatui.js')), 'combat: js/directcontrol.js and js/combatui.js exist');
+  ok(/out: 0, dc: 0, stM: 0, sta: 0/.test(arena) && /rules: null, hz: null/.test(arena), 'combat: the new unit and fight fields are declared in blankUnit / createFight');
+  ok(!/delete u\.|delete t\.|u\.[a-zA-Z]+ = undefined/.test(arena.slice(arena.indexOf('COMBAT: deeper automatic combat'))), 'combat: the combat code never deletes unit fields');
+  ok(/import \{ createDirectControl \}/.test(fv) && /import \{ createAnnouncer/.test(fv) && /combatFrame\(realDt, F, vdt\)/.test(fv), 'combat: fightview imports and drives the direct control, announcer and veil');
+  ok(/\.dc-root/.test(css) && /\.fv-cap/.test(css) && /\.fv-ctut/.test(css) && css.indexOf('COMBAT: direct control') < css.indexOf('/* PLAN:'), 'combat: the fight CSS is tagged and sits before the PLAN block');
+  ok(/LM\.BOUTS/.test(rd('core/sim.js')) && /COMBAT: special bouts/.test(rd('core/sim.js')), 'combat: core/sim.js offers bouts from the event list (tagged)');
+  ok(!/\u2014/.test(rd('js/directcontrol.js') + rd('js/combatui.js')), 'combat: no em dashes in the new files');
+}
+
+// FIGHTERS: individuality, relationships, talents, career arc, customization (core/fighters.js, screens/talents.js, customize.js, profile / roster / recruit, gear + gladiator + portrait look)
+{
+  const rd = (f) => readFileSync(join(root, f), 'utf8'), fg = rd('core/fighters.js'), tal = rd('js/screens/talents.js'), cz = rd('js/screens/customize.js'), prof = rd('js/screens/profile.js'), ros = rd('js/screens/roster.js'), rec = rd('js/screens/recruit.js');
+  const gear = rd('js/gear.js'), gl = rd('js/gladiator.js'), por = rd('js/portrait.js'), fv = rd('js/fightview.js'), idx = rd('index.html'), pkg = readFileSync(join(root, '..', 'package.json'), 'utf8');
+  ok(/core\/fighters\.js/.test(idx) && /export function open\(/.test(tal) && /export function open\(/.test(cz), 'fighters: module script tag and both new sheets export open()');
+  ok(/import\('\.\/talents\.js'\)/.test(prof) && /import\('\.\/customize\.js'\)/.test(prof), 'fighters: the profile opens Talents and Look');
+  ok(/'bonds', 'Bonds'/.test(prof) && /bondsTab/.test(prof) && /retireSheet/.test(prof) && /personaBlock/.test(prof) && /pf-pro/.test(prof) && /pf-con/.test(prof), 'fighters: profile has the Bonds tab, retirement options and pro / con quirk cards');
+  ok(/webCard/.test(ros) && /fWeb/.test(ros) && /fQuirks/.test(ros) && /fQuirks/.test(rec) && /fOrigin/.test(rec), 'fighters: the roster shows the barracks web and the recruit cards show origin and quirks');
+  ok(/g\.look/.test(gl) && /K0\.dye/.test(gl) && /K0\.crest/.test(gl) && /K0\.hairCol/.test(gl) && /addTattoo/.test(gear) && /g\.look \? JSON\.stringify/.test(por), 'fighters: look is rendered by gladiator.js, gear.js and part of the portrait cache key');
+  ok(/opts\.team \? teamTint/.test(gl) && /TEAM_ACCENT\[opts\.team\]/.test(gl), 'fighters: the team tint and accent still win in fights (readability)');
+  ok(/rig\.add\('skin'/.test(gear.slice(gear.indexOf('export function addTattoo'))) && !/addMaterial|new THREE\.Mesh/.test(gear.slice(gear.indexOf('export function addTattoo'))), 'fighters: tattoos are merged into the skin mesh (no new material, no new draw call)');
+  ok(/LM\.fighters\.plate/.test(fv), 'fighters: the nameplate shows the worn title');
+  ok(!/\u2014/.test(fg + tal + cz), 'fighters: no em dashes in the new code');
+  ok(!/Math\.random|\bLM\.rand\(|\brnd\(/.test(fg.replace(/\/\/.*$/gm, '')), 'fighters: core/fighters.js never draws from the combat random stream');
+  ok(!/\bblankUnit\b/.test(fg) && /ctx\.fb/.test(fg), 'fighters: no unit fields, shades travel in the team ctx (ctx.fb)');
+  ok(/ludus_maximus_3d_fighters\.test\.mjs/.test(pkg), 'fighters: the suite is wired into test:ludus3d');
+}
 console.log(`ludus_maximus_3d structure: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

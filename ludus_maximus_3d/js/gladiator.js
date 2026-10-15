@@ -69,10 +69,13 @@ export function lookFor(g, style) {
   const f = (v) => 1 + (r() - 0.5) * v;
   const lvl = Math.min(20, g.lvl || 1), bulkLvl = 1 + Math.min(0.045, lvl * 0.003);
   const b = B.build;
-  return {
+  const lk = {
     look: { face: g.face != null ? g.face : Math.floor(r() * 3), hair: g.hairStyle || pick(B.hair), beard: g.beard != null ? g.beard : pick(B.beard) },
     build: { bulk: b.bulk * f(0.12) * bulkLvl, height: b.height * f(0.06), shoulder: b.shoulder * f(0.06), arm: b.arm * f(0.1), waist: b.waist * f(0.08), leg: b.leg * f(0.06) },
   };
+  const K = g.look; // FIGHTERS: a chosen look (g.look: face, hair style, beard) replaces the generated one AFTER the draws above, so the build never changes
+  if (K) { if (K.face != null) lk.look.face = K.face; if (K.hair) lk.look.hair = K.hair; if (K.beard != null) lk.look.beard = K.beard; }
+  return lk;
 }
 
 /** unitOrGlad: an arena unit ({g, style}) or a glad record. opts: {scale, flip, tunic, seg, look, build, detail: 'low'|'medium'|'high'} */
@@ -81,9 +84,9 @@ export function createGladiator(unitOrGlad, opts = {}) {
   const style = g.style || unitOrGlad.style || 'murmillo';
   const S = D().STYLES[style];
   const lk = lookFor(g, style), hs = hash(String(g.name || '') + '#' + (g.id || 0));
-  const cloth0 = opts.tunic || g.color || unitOrGlad.color || S.c, cloth = opts.team ? teamTint(cloth0, opts.team, hs) : cloth0;
+  const K0 = g.look || {}, cloth0 = opts.tunic || K0.dye || g.color || unitOrGlad.color || S.c, /* FIGHTERS: armour dye */ cloth = opts.team ? teamTint(cloth0, opts.team, hs) : cloth0;
   const rig = buildGladiator({
-    palette: { skin: gradeSkin(g.skin, hs), hair: g.hair, cloth, plume: opts.team ? TEAM_ACCENT[opts.team] || g.plume : g.plume, metal: metalFor(g) },
+    palette: { skin: gradeSkin(g.skin, hs), hair: K0.hairCol || g.hair, cloth, plume: opts.team ? TEAM_ACCENT[opts.team] || K0.crest || g.plume : K0.crest || g.plume, metal: metalFor(g) }, // FIGHTERS: hair colour + crest colour (the team accent still wins in fights)
     build: Object.assign({ seg: opts.seg || 6 }, lk.build, opts.build || {}), look: Object.assign(lk.look, opts.look || {}), detail: detailFor(opts),
     name: g.name || 'gladiator', sculpt: !(style === 'thraex' || style === 'hoplomachus'),
   });

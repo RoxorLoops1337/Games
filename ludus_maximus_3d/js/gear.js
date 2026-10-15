@@ -425,6 +425,7 @@ export function equipStyle(rig, style, o = {}) {
   const best = [rw, rs, ra, rh, rc].reduce((a, b) => (b.r > a.r ? b : a), { r: 0, col: '#fff' });
   if (best.r >= 3) rig.setGlow(best.col, best.r >= 4 ? 0.75 : 0.4, best.r >= 4 ? 0.4 : 0.0, 3.2);
   if (o.g) { try { addMarks(rig, o.g); } catch (e) { /* marks are cosmetic */ } } // SCARS: scars and bandages
+  if (o.g && o.g.look && o.g.look.tat && (rig.detail | 0) > 0) { try { addTattoo(rig, o.g.look.tat); } catch (e) { console.warn('tattoo', e && e.message); } } // FIGHTERS: tattoos painted into the skin mesh (no extra draw call)
   rig.rebuild();
   return out;
 }
@@ -523,4 +524,29 @@ export function addMarks(rig, g) {
     else if (id === 'eye') { eyeCover(rig, L, 1, true); n++; }
   }
   return n;
+}
+
+// ---------------------------------------------------------------- FIGHTERS: tattoos (g.look.tat). Thin painted shells and ribbons merged into the SKIN mesh (zero extra draw calls, a few
+// hundred triangles on the high / medium rigs only). The ink multiplies the skin tone, so it reads on every skin; woad is blue, the rest near-black.
+const INK = [0.26, 0.27, 0.32], WOAD = [0.3, 0.42, 0.8];
+export function addTattoo(rig, id) {
+  const J = rig.joints, B = rig.build.bulk || 1, sh = rig.build.shoulder || 1, AR = rig.build.arm || 1, hd = hdk(rig), co = 0.0125 + 0.012 * hd;
+  const ur = (y) => lerp(0.062, 0.05, clamp(-y / 0.27, 0, 1)) * AR * B + 0.0105 + 0.011 * hd, fr = (y) => lerp(0.054, 0.04, clamp(-y / 0.27, 0, 1)) * AR * B + 0.009 + 0.011 * hd;
+  const shell = (obj, rad, y0, y1, fn, seg = 12, rings = 6) => { const prof = []; for (let i = 0; i <= rings; i++) { const y = y0 + (y1 - y0) * (i / rings); prof.push([rad(y), y]); } rig.add('skin', paint(lathe(prof, seg, 1, 1, 0, 1), fn), obj); };
+  if (id === 'woad') for (const j of [J.shoulderL, J.shoulderR]) shell(j, ur, -0.2, -0.05, (x, y, z) => (Math.sin(Math.atan2(x, z) * 2 + y * 46) > 0.45 || Math.abs(y + 0.12) < 0.008 ? WOAD : [1, 1, 1]), 14, 7);
+  else if (id === 'bands') for (const j of [J.elbowL, J.elbowR]) shell(j, fr, -0.25, -0.03, (x, y) => (((Math.floor((y + 0.3) * 24) % 3) === 0) ? INK : [1, 1, 1]), 12, 8);
+  else if (id === 'sleeve') {
+    shell(J.shoulderR, ur, -0.2, -0.04, (x, y, z) => (Math.sin(Math.atan2(x, z) * 3 + y * 55) > -0.15 ? INK : [1, 1, 1]), 14, 7);
+    shell(J.elbowR, fr, -0.25, -0.03, (x, y, z) => (Math.sin(Math.atan2(x, z) * 3 - y * 50) > 0.1 ? INK : [1, 1, 1]), 12, 8);
+  } else if (id === 'sun') {
+    const c = chestPt(0, 0.13, B, sh, co), q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), c.n);
+    const disc = (r, ox, oy, sy = 1) => { const p = chestPt(ox, 0.13 + oy, B, sh, co); rig.add('skin', paint(faceTo(xf(sphereG(r, 8, 3, 1, sy, 0.2), [0, 0, 0]), p.p, p.n), INK), J.chest); };
+    disc(0.034, 0, 0); for (let k = 0; k < 8; k++) { const a = k * Math.PI / 4; disc(0.012, Math.cos(a) * 0.06, Math.sin(a) * 0.06, 1.6); } void q;
+  } else if (id === 'legion') {
+    for (let k = 0; k < 5; k++) for (let m = 0; m < 4; m++) {
+      const x = -0.16 + k * 0.08 + (m === 3 ? 0 : m * 0.014), pts = []; const y0 = 0.1 + (k % 2) * 0.03;
+      for (let i = 0; i <= 2; i++) pts.push(bodyPt(B, sh, x, m === 3 ? y0 + 0.012 + i * 0.016 : y0 + i * 0.03, co, true));
+      rig.add('skin', paint(ribbon(pts.map((p) => p.p), 0.0045, (p, i) => pts[i].n), INK), J.chest);
+    }
+  }
 }

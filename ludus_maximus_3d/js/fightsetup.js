@@ -19,7 +19,8 @@ export function buildFight(S, gl, opps, stance, o = {}) {
   const unitsB = lm.mkUnits(opps, 'B', ctxB);
   if (lm.isRevenge(S, ev)) unitsA.forEach((u) => { u.grudge = true; });
   unitsB.forEach((u) => { if (u.g && lm.vendetta && lm.vendetta(S, u.g.rv)) u.grudge = true; });   // FATE: you killed one of his school: vendetta (+8% damage, see arena.js)
-  const F = lm.createFight(unitsA, unitsB, { autoA: !!S.flags.auto, manualFavor: true, hazards: (ev.league || 0) >= 2 ? 2 : (ev.league || 0) >= 1 ? 1 : 0 });
+  const bout = (ev.bout && lm.BOUTS && lm.BOUTS[ev.bout] && ev.bout) || (o.bout && lm.BOUTS && lm.BOUTS[o.bout] && o.bout) || ''; // COMBAT: special bout rules (core/arena.js LM.BOUTS)
+  const F = lm.createFight(unitsA, unitsB, { autoA: !!S.flags.auto, manualFavor: true, hazards: (ev.league || 0) >= 2 ? 2 : (ev.league || 0) >= 1 ? 1 : 0, deep: o.deep !== false, bout }); // COMBAT: deep = stamina, weapon classes, armour weight
   const fp = lm.facPerks(S); F.hypeK = fp.hype * (lm.fest(S, S.week) === 'bacchus' ? 1.3 : 1);
   const dp = unitsA.length > 1 ? lm.duoPair(S, gl) : null;
   lm.planFight(F, pa, pb);
@@ -29,7 +30,12 @@ export function buildFight(S, gl, opps, stance, o = {}) {
   // deterministic replay: reseed right after building, snapshot, then record taps (see FightView.tap and Game.watchReplay)
   const seed = (Math.random() * 4294967296) >>> 0; lm.setRandom(lm.mulberry(seed));
   F.replay = { seed, taps: [], snap: null };
-  F.meta = { weather: wxId, WX, odds, stB, league: ev.league || 0, season: S.season || 1, title: ev.title || '', kind: ev.kind || '', festival: lm.fest(S, ev.week || S.week) || '', theme: o.theme || '', plan: pa, planB: pb, show: pa ? pa.show : 0 }; // ARENA_THEME: kind + festival pick the arena look
+  F.meta = { weather: wxId, WX, odds, stB, league: ev.league || 0, season: S.season || 1, title: ev.title || '', kind: ev.kind || '', festival: lm.fest(S, ev.week || S.week) || '', theme: o.theme || ev.theme || '', plan: pa, planB: pb, show: pa ? pa.show : 0 }; // ARENA_THEME: kind + festival pick the arena look
+  // COMBAT: arena hazards per theme (F.meta.hazards, drawn by js/env_arena.js) and the optional hands-on control of one fighter (a preference, default off)
+  { const lg = ev.league || 0, th = ev.theme || o.theme || lm.themeFor(lg, ev.key || 'w' + S.week), noHaz = opps.some((g) => g.beast) || o.hazards === false;
+    F.meta.hazTheme = th; F.meta.bout = bout; F.meta.boutLine = bout ? lm.BOUTS[bout].line : ''; if (!noHaz && lg >= 1) lm.setHazards(F, lm.hazardPlan(th, lg, ev.key || 'w' + S.week)); else F.meta.hazards = [];
+    const dcp = o.dc !== undefined ? o.dc : globalThis.LM3D_DC; // { on, gid }: set by the plan sheet / settings (js/screens/plan.js, more.js)
+    if (dcp && dcp.on && !opps.some((g) => g.beast && false)) { const i = Math.max(0, gl.findIndex((g) => g.id === dcp.gid)); if (lm.dcEnable(F, 'A' + i)) F.meta.dc = 'A' + i; } }
   F.replay.snap = structuredClone(F);
   return F;
 }

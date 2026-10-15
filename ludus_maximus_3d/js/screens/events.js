@@ -3,12 +3,12 @@
 import { U, h, D, L, openScreen, sec, card, row, col, note, hint, kv, medal, pill, empty, chipRow } from './sk.js';
 import { injectDepCss } from './wounds_ui.js';
 
-const TAGS = { omen: ['Omens', 'star'], plot: ['Plots', 'skull'], rival: ['Rivals', 'sword'], patron: ['Patrons', 'coin'], luck: ['Luck', 'coin'], barracks: ['Barracks', 'roster'], coin: ['Coin', 'coin'], fame: ['Fame', 'fame'], memory: ['Memory', 'scroll'], infirmary: ['Healing', 'heart'] };
+const TAGS = { omen: ['Omens', 'star'], plot: ['Plots', 'skull'], rival: ['Rivals', 'sword'], patron: ['Patrons', 'coin'], luck: ['Luck', 'coin'], barracks: ['Barracks', 'roster'], coin: ['Coin', 'coin'], fame: ['Fame', 'fame'], memory: ['Memory', 'scroll'], infirmary: ['Healing', 'heart'], story: ['Story', 'star'] };
 const st = { tag: 'all' };
 
 export function render(ctx, root, draw) {
-  injectDepCss(); root.classList.add('lx-dep'); const S = ctx.S, lm = L(), log = (S.evLog || []).slice().reverse();
-  const ids = Object.keys(lm.EVENTS), seen = Object.keys(S.evHist || {}).filter((id) => lm.EVENTS[id]), threads = lm.evThreads(S), status = lm.evStatusList(S);
+  injectDepCss(); root.classList.add('lx-dep'); const S = ctx.S, lm = L(), log = (S.evLog || []).concat(campLog(S)).sort((a, b) => a.wk - b.wk).reverse(); // CAMPAIGN: story choices share the log
+  const ids = Object.keys(lm.EVENTS), seen = Object.keys(S.evHist || {}).filter((id) => lm.EVENTS[id]), threads = lm.evThreads(S).concat(campThreads(S)), status = lm.evStatusList(S);
   root.append(card([row([medal('scroll', 'dark big'), col([h('div', 'ax-name', 'The Chronicle'), note('Between the fights, life in a ludus goes on: rumours, visitors, plots and favours. Many choices come back a few weeks later with interest. The log keeps what you chose and what it cost.')], 'ax-grow')]),
     h('div', 'ax-row ax-wrap', [pill(`${seen.length} of ${ids.length} stories met`, { tone: 'gold', ico: 'scroll' }), pill(`${threads.length} thread${threads.length === 1 ? '' : 's'} in motion`, { tone: threads.length ? 'warn' : '' }), pill(`${log.length} in the log`, {})])], 'gold'));
   if (status.length || (S.evFlags && S.evFlags.guarded)) {
@@ -26,7 +26,7 @@ export function render(ctx, root, draw) {
   if (!shown.length) root.append(card([empty('scroll', st.tag === 'all' ? 'Nothing has happened yet' : 'Nothing under this tag yet', st.tag === 'all' ? 'The Chronicle records rumours, visitors, plots and favours. Events begin around the third week; about four weeks in ten bring one.' : 'Pick All to see every story so far.', st.tag === 'all' ? { label: 'See the Calendar', icon: 'scroll', onClick: () => ctx.open('world', { tab: 'calendar' }) } : { label: 'Show all stories', icon: 'scroll', onClick: () => { st.tag = 'all'; draw(); } })]));
   shown.slice(0, 40).forEach((e) => root.append(h('div', 'dp-log', [
     h('div', 'ax-row ax-wrap', [h('span', 't', e.n), pill(`Week ${e.wk}`, {}), e.tag && TAGS[e.tag] ? pill(TAGS[e.tag][0], { ico: TAGS[e.tag][1], tone: 'vio' }) : null, e.follow ? pill('Consequence', { tone: 'warn' }) : null]),
-    h('div', 'c', `You chose: ${e.choice}`), h('div', 'r', e.r), e.fx && e.fx.length ? h('div', 'dp-fx', e.fx.map((f) => pill(f, { tone: /-\d|hurt|Strained|sickness|gone|\dw$|Barracks full/i.test(f) ? 'bad' : 'good' }))) : null])));
+    h('div', 'c', e.tag === 'story' ? e.choice : `You chose: ${e.choice}`), h('div', 'r', e.r), e.fx && e.fx.length ? h('div', 'dp-fx', e.fx.map((f) => pill(f, { tone: /-\d|hurt|Strained|sickness|gone|\dw$|Barracks full/i.test(f) ? 'bad' : 'good' }))) : null])));
   root.append(sec('Codex'));
   const byTag = {}; ids.forEach((id) => { const E = lm.EVENTS[id], tg = (E.deck && E.deck.tag) || E.tag || 'coin'; (byTag[tg] = byTag[tg] || []).push(id); });
   const cx = h('div', 'ax-grid');
@@ -39,4 +39,16 @@ export function render(ctx, root, draw) {
 export function open(ctx, arg) {
   arg = arg || {}; const scr = openScreen(ctx, { title: 'Chronicle', wide: true, onClose: arg.onClose });
   const draw = () => scr.render((root) => render(ctx, root, draw)); draw(); scr.m.el.dataset.tutSheet = 'events'; return scr;
+}
+
+// ================================================================== CAMPAIGN: the story shares the Chronicle (log entries tagged Story, open story threads)
+function campLog(S) { return ((S.camp && S.camp.log) || []).map((e) => ({ wk: e.wk, n: 'Story', choice: e.t, r: '', tag: 'story', fx: [] })); }
+function campThreads(S) {
+  const c = S.camp; if (!c || !c.nem) return []; const out = [], K = L().campaign;
+  if (c.fin && !c.end && K) out.push({ n: `Finale open: ${K.CH[c.fin.ch - 1].fin}`, tag: 'story', in: 0 });
+  if (c.nem.intro && c.nem.next != null && ['rival', 'avenger', 'traitor'].includes(c.nem.state)) out.push({ n: `${c.nem.name} is expected in the arena`, tag: 'story', in: Math.max(0, c.nem.next - S.week) });
+  if (c.stake) out.push({ n: "The Senator's wager stands", tag: 'story', in: 0 });
+  if (c.flags && c.flags.loan && !c.flags.loanPaid) out.push({ n: `${c.cast.lanS} wants his silver back`, tag: 'story', in: 0 });
+  if (c.flags && c.flags.debt && !c.flags.debtPaid) out.push({ n: `${c.cast.senS} will call in a favour`, tag: 'story', in: 0 });
+  return out;
 }

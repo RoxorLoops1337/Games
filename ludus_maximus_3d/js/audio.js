@@ -16,7 +16,7 @@ export const SFX_NAMES = ['swordHit', 'swordHitCrit', 'shieldBlock', 'metalClang
   'squelch', 'cleave',   // GORE-JUICE: wet slap layer and a heavy meaty cleave
   'uiHover', 'uiSelect', 'uiOpen', 'uiClose', 'bird', 'owl', 'hammer', 'clink', 'chop', 'sizzle', 'thock', 'thunder',   // HUB-AUDIO: ui hooks and ludus ambience one-shots
   'beastRoar', 'beastHowl', 'beastGrowl', 'beastHurt', 'beastDeath', 'beastBite', 'beastClaw', 'beastGore', 'beastSlam', 'pawThud', 'beastSnort', 'beastCharge',
-  'parry'];
+  'parry', 'gull'];   // ARENAS: gull = alexandria harbour ambience one-shot
 export const MUSIC_MODES = ['ludus', 'prep', 'arena', 'victory', 'defeat', 'title', 'results', 'season', 'elegy', 'beast', 'boss'];
 
 const MUSIC_TRIM = 0.4;       // music bus trim; music sits about 6 dB under the combat sfx at equal slider positions
@@ -51,7 +51,7 @@ const pick = (r, a) => a[Math.floor(r() * a.length) % a.length];
 
 // sfx categories: voice caps keep the CPU flat in a long brawl
 const CAP = { combat: 12, voice: 6, crowd: 3, ui: 5, amb: 8, big: 4, beast: 5, gore: 6 };
-const catOf = (n) => /^ui/.test(n) ? 'ui' : /^crowd(?!Gore)/.test(n) ? 'crowd' : /^beast|^pawThud/.test(n) ? 'beast' : /^(bird|owl|hammer|clink|chop|sizzle|thock|thunder)$/.test(n) ? 'amb'
+const catOf = (n) => /^ui/.test(n) ? 'ui' : /^crowd(?!Gore)/.test(n) ? 'crowd' : /^beast|^pawThud/.test(n) ? 'beast' : /^(bird|owl|gull|hammer|clink|chop|sizzle|thock|thunder)$/.test(n) ? 'amb'
   : /^(grunt|hurt|deathCry)$/.test(n) ? 'voice' : /^ult|^gate$|^horn$|^levelUp$/.test(n) ? 'big' : /^(slashWet|crunch|boneSnap|spurt|splat|gibThud|crowdGore|squelch|cleave)$/.test(n) ? 'gore' : 'combat';
 // the crowd bed swells with these (amount 0..1 of a kick)
 const CROWD_KICK = { swordHitCrit: 0.35, deathThud: 0.5, deathCry: 0.2, ultFire: 0.4, ultLightning: 0.4, ultEarth: 0.45, ultWind: 0.3, ultHoly: 0.3, bash: 0.15, boneSnap: 0.25, crowdGore: 0.4, beastRoar: 0.3, beastSlam: 0.2, beastDeath: 0.4, spurt: 0.1, levelUp: 0.2 };
@@ -509,6 +509,15 @@ export function createAudio(opts = {}) {
     else if (k === 2) for (let i = 0; i < 5; i++) note(i * 0.11, base * (i % 2 ? 1.2 : 0.9), base * (i % 2 ? 0.95 : 1.15), 0.1, 0.4);
     else note(0, base * 1.3, base * 0.8, 0.45, 0.45);
   });
+  // ARENAS: harbour gull, rising then falling "kee-ow" with a rasp (alexandria arena ambience)
+  def('gull', 0.3, 1.5, 0, 0.45, 0, 2, (t, d, o) => {
+    const base = hz(o, 1650 + rng() * 350), n = 2 + (rng() < 0.5 ? 1 : 0);
+    for (let i = 0; i < n; i++) {
+      const tt = t + i * 0.34, e = G(0), f = ctx.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = base * 1.5; f.Q.value = 2.2; env(e.gain, tt, 0.02, 0.55 - 0.08 * i, 0.3); f.connect(e); e.connect(d);
+      osc('sawtooth', base * 1.15, tt, 0.34, f, { f1: base * 1.75, fd: 0.12 }); osc('sawtooth', base * 1.7, tt + 0.12, 0.26, f, { f1: base * 0.95, fd: 0.22 });
+      burst(tt, 0.3, d, { f0: base * 2, q: 1.5, g: 0.08, a: 0.03, kind: 'white' });
+    }
+  });
   def('owl', 0.4, 1.6, 0, 0.45, 0, 1, (t, d, o) => { const b = 400 * (0.88 + rng() * 0.28), gap = 0.5 + rng() * 0.2; [[0, 0.4 + rng() * 0.2], [gap, 0.5 + rng() * 0.25]].forEach(([dt, du], i) => { const e = G(0); env(e.gain, t + dt, 0.08, 0.5 - 0.06 * i, du); e.connect(d); osc('sine', hz(o, b * (1 - 0.05 * i)), t + dt, du + 0.1, e, { f1: b * 0.85 }); osc('sine', hz(o, b * 2), t + dt, du, (() => { const x = G(0.12); x.connect(e); return x; })()); }); });
   def('hammer', 0.85, 0.7, 0, 0.18, 0, 3, (t, d, o) => {   // hammer on an anvil: bright ring over a dull thud
     partials(t, hz(o, 1180), [1, 2.76, 5.4, 8.9], [0.3, 0.22, 0.12, 0.06], 0.5, d, 'triangle'); thump(t, 260, 90, 0.12, 0.4, d); burst(t, 0.03, d, { f0: 3800, q: 0.9, g: 0.5 });
@@ -673,13 +682,13 @@ export function createAudio(opts = {}) {
       const swell = (fr, dep, node) => { const l = ctx.createOscillator(), lg = G(dep); l.frequency.value = fr; l.connect(lg); lg.connect(node.gg.gain); l.start(t); lfos.push(l); };
       swell(0.23, 0.22, f1); swell(0.37, 0.18, f2); swell(0.11, 0.3, body); swell(0.6, 0.04, air); swell(1.9, 0.22, low); swell(0.43, 0.3, exc);   // 1.9 Hz = a slow stomp pulse
       bed = { out, kick, body, f1, f2, air, low, exc, lfos, level: -1, lastSet: -9, nextShout: t + 2 };
-      out.gain.value = 0.0001;
+      out.gain.value = 0.0001; arenaAmbStart();   // ARENAS
     }
     const t = NOW(), first = bed.level < 0, tc = first ? 0.001 : 0.4, L = level;
     if (first || Math.abs(L - bed.level) > 0.004 || t - bed.lastSet > 0.3 || L <= 0.001) {   // the fight view calls this every frame: do not pile automation events on the timeline
-      const target = L <= 0.001 ? 0 : 0.03 + 0.32 * Math.pow(L, 1.3);
+      const ac = AMB[arenaCfg.theme] || AMB.capua, target = L <= 0.001 ? 0 : (0.03 + 0.32 * Math.pow(L, 1.3)) * ac.cg;   // ARENAS: murmur gain per theme
       bed.out.gain.setTargetAtTime(Math.max(0.0001, target), t, tc);
-      bed.body.fl.frequency.setTargetAtTime(380 + 420 * L, t, tc); bed.f1.fl.frequency.setTargetAtTime(700 + 260 * L, t, tc); bed.f2.fl.frequency.setTargetAtTime(1100 + 400 * L, t, tc);
+      bed.body.fl.frequency.setTargetAtTime((380 + 420 * L) * ac.col, t, tc); bed.f1.fl.frequency.setTargetAtTime((700 + 260 * L) * ac.col, t, tc); bed.f2.fl.frequency.setTargetAtTime((1100 + 400 * L) * ac.col, t, tc);   // ARENAS: murmur colour per theme
       bed.air.gg.gain.setTargetAtTime(0.03 + 0.07 * L * L, t, tc); bed.low.gg.gain.setTargetAtTime(0.2 + 0.7 * L, t, tc); bed.exc.gg.gain.setTargetAtTime(0.28 * sstep(0.55, 1, L), t, tc);
       bed.level = L; bed.lastSet = t;
     }
@@ -687,8 +696,48 @@ export function createAudio(opts = {}) {
       bed.nextShout = t + 0.9 + rng() * 2.2 / (0.3 + L);
       sfx('crowdShout', { when: t + 0.02, pan: (rng() * 2 - 1) * 0.9, gain: 0.4 + 0.6 * L, dist: 10 + rng() * 14, pitch: 0.8 + rng() * 0.6, vowel: rng() < 0.5 ? 'o' : 'a' });
     }
-    if (L <= 0.001) { const b = bed; bed = null; const stopAt = t + 2.5; for (const k of ['body', 'f1', 'f2', 'air', 'low', 'exc']) { try { b[k].s.stop(stopAt); } catch (e) { /* ignore */ } } for (const l of b.lfos) { try { l.stop(stopAt); } catch (e) { /* ignore */ } } }
+    if (amb2) arenaAmbTick(t);   // ARENAS: gulls
+    if (L <= 0.001) { arenaAmbStop(); const b = bed; bed = null; const stopAt = t + 2.5; for (const k of ['body', 'f1', 'f2', 'air', 'low', 'exc']) { try { b[k].s.stop(stopAt); } catch (e) { /* ignore */ } } for (const l of b.lfos) { try { l.stop(stopAt); } catch (e) { /* ignore */ } } }
   }
+
+  // ---------- ARENAS: arena ambience per theme. A quiet bed under the crowd: wind (louder in a gale), a harbour wash for alexandria, insects for carthage and the desert, rain, a low
+  // rumble for etna, gulls now and then. The theme and weather arrive as the 'lm3d-arena' event env_arena.js fires from setTheme (or audio.arenaAmbience(cfg)); the bed lives and dies
+  // with the crowd bed, so it only plays during a fight. Levels sit at hub ambience level (about -34 dB under the crowd at rest). The crowd bed itself takes a murmur colour and gain from AMB. ----------
+  const AMB = {
+    sandpit: { wind: 0.12, wf: 330, col: 0.88, cg: 0.82 }, capua: { wind: 0.06, wf: 300, col: 1.0, cg: 1.0 }, colosseum: { wind: 0.05, wf: 260, col: 0.92, cg: 1.12 },
+    alexandria: { wind: 0.1, wf: 420, col: 1.07, cg: 0.95, water: 1, gull: 1 }, carthage: { wind: 0.1, wf: 360, col: 1.12, cg: 0.9, insect: 1 },
+    desert: { wind: 0.16, wf: 380, col: 1.1, cg: 0.8, insect: 0.6 }, gaul: { wind: 0.2, wf: 450, col: 0.95, cg: 0.9 }, etna: { wind: 0.12, wf: 240, col: 0.85, cg: 1.0, rumble: 1 },
+  };
+  AMB.provincial = AMB.sandpit; AMB.imperial = AMB.colosseum;
+  let arenaCfg = { theme: 'capua', wx: 'clear', night: false }, amb2 = null;
+  function arenaAmbSet(t) {
+    if (!amb2) return; const c = AMB[arenaCfg.theme] || AMB.capua, wx = arenaCfg.wx, gale = wx === 'wind' ? 2.6 : wx === 'dust' ? 2 : 1, rain = wx === 'rain' ? 1 : 0, night = arenaCfg.night ? 1 : 0, tc = (p, v, k = 0.9) => p.setTargetAtTime(v, t, k);
+    tc(amb2.wind.gg.gain, Math.min(0.42, c.wind * gale + 0.04 * rain)); tc(amb2.wind.fl.frequency, c.wf * (0.8 + 0.5 * (gale - 1) / 1.6));
+    tc(amb2.water.gain, 0.05 * (c.water || 0) * (1 - 0.5 * rain)); tc(amb2.insect.gain, (c.insect || 0) * 0.012 * (rain ? 0 : 1) * (night ? 1.2 : 1) * (gale > 1.5 ? 0.3 : 1));
+    tc(amb2.rain.gg.gain, 0.16 * rain); tc(amb2.hiss.gg.gain, 0.04 * rain); tc(amb2.rumble.gain, 0.12 * (c.rumble || 0));
+  }
+  function arenaAmbStart() {
+    if (amb2 || !ctx) return; const t = NOW(), out = ctx.createGain(); out.gain.value = 0.0001; out.connect(crowdBus);
+    const mk = (kind, type, f, q) => { const sr = ctx.createBufferSource(); sr.buffer = noiseBuf[kind]; sr.loop = true; const fl = ctx.createBiquadFilter(); fl.type = type; fl.frequency.value = f; fl.Q.value = q; const gg = G(0); sr.connect(fl); fl.connect(gg); gg.connect(out); sr.start(t, rng() * 2); return { sr, fl, gg }; };
+    const wind = mk('pink', 'bandpass', 340, 0.6), rain = mk('white', 'bandpass', 6200, 0.5), hiss = mk('white', 'highpass', 7000, 0.4), wash = mk('brown', 'lowpass', 700, 0.5), rum = mk('brown', 'lowpass', 70, 0.7);
+    const gust = ctx.createOscillator(), gg0 = G(0.4); gust.frequency.value = 0.11; gust.connect(gg0); gg0.connect(wind.gg.gain); gust.start(t);
+    const lap = ctx.createOscillator(), lg = G(0.5); lap.frequency.value = 0.19; lap.connect(lg); lg.connect(wash.gg.gain); lap.start(t);   // slow swell of the harbour wash
+    const waterG = ctx.createGain(); waterG.gain.value = 0; wash.gg.gain.value = 1; wash.gg.disconnect(); wash.gg.connect(waterG); waterG.connect(out);
+    const rumG = ctx.createGain(); rumG.gain.value = 0; rum.gg.gain.value = 1; rum.gg.disconnect(); rum.gg.connect(rumG); rumG.connect(out);
+    const ins = ctx.createOscillator(); ins.type = 'sine'; ins.frequency.value = 5200; const am = G(0), il = ctx.createOscillator(); il.frequency.value = 34; const ilg = G(0.5); il.connect(ilg); ilg.connect(am.gain);
+    const ip = ctx.createOscillator(), ipg = G(0.4); ip.frequency.value = 0.37; ip.connect(ipg); ipg.connect(am.gain); const insG = G(0); ins.connect(am); am.connect(insG); insG.connect(out); [ins, il, ip].forEach((o) => o.start(t));
+    amb2 = { out, wind, rain, hiss, water: waterG, rumble: rumG, insect: insG, srcs: [wind.sr, rain.sr, hiss.sr, wash.sr, rum.sr, gust, lap, ins, il, ip], nextGull: t + 4 };
+    out.gain.setTargetAtTime(1, t, 1.2); arenaAmbSet(t);
+  }
+  function arenaAmbStop() {
+    if (!amb2) return; const b = amb2, t = NOW(); amb2 = null; try { b.out.gain.setTargetAtTime(0.0001, t, 0.5); for (const x of b.srcs) { try { x.stop(t + 2.5); } catch (e) { /* ignore */ } } setTimeout(() => { try { b.out.disconnect(); } catch (e) { /* ignore */ } }, 2800); } catch (e) { /* ignore */ }
+  }
+  function arenaAmbTick(t) {
+    const c = AMB[arenaCfg.theme] || AMB.capua; if (!c.gull || arenaCfg.night || arenaCfg.wx === 'rain' || t < amb2.nextGull || !(OFFLINE ? true : ctx.state === 'running')) return;
+    amb2.nextGull = t + 6 + rng() * 9; sfx('gull', { when: t + 0.05, pan: (rng() - 0.5) * 1.6, gain: 0.45 + rng() * 0.4, dist: 18 + rng() * 22, pitch: 0.9 + rng() * 0.25 });
+  }
+  function arenaAmbience(cfg) { if (cfg) arenaCfg = Object.assign({}, arenaCfg, cfg); if (amb2 && ctx) arenaAmbSet(NOW()); return arenaCfg; }
+  if (!OFFLINE && typeof globalThis.addEventListener === 'function') globalThis.addEventListener('lm3d-arena', (e) => { try { arenaAmbience(e && e.detail); } catch (err) { /* ambience is optional */ } });
 
   // ---------- music ----------
   const players = [];       // {mode, bus, ...}; the last is current, earlier ones fade out
@@ -1229,7 +1278,7 @@ export function createAudio(opts = {}) {
 
   // ---------- public ----------
   const api = {
-    sfxNames: SFX_NAMES.slice(), musicModes: MUSIC_MODES.slice(), music, sfx, crowd, duck, ambient, attachUi,
+    sfxNames: SFX_NAMES.slice(), musicModes: MUSIC_MODES.slice(), music, sfx, crowd, duck, ambient, attachUi, arenaAmbience,   // ARENAS: audio.arenaAmbience({theme, wx, night})
     ui: { hover: () => sfx('uiHover'), tap: () => sfx('uiTap'), select: () => sfx('uiSelect'), open: () => sfx('uiOpen'), close: () => sfx('uiClose') },
     // iOS/Safari: call inside a user gesture. A silent one-sample buffer is started inside the gesture, which also lifts the mute-switch gate on old iOS.
     unlock() {
@@ -1247,7 +1296,7 @@ export function createAudio(opts = {}) {
     get ctx() { return ctx; }, get analyser() { return analyser; }, get supported() { return !dead; }, get state() { return ctx ? ctx.state : 'none'; },
     suspend() { userSuspended = true; try { return ctx && ctx.suspend(); } catch (e) { return null; } },
     resume() { userSuspended = false; return tryResume(); },
-    _stats() { return { strips: strips.made, free: strips.free.length, reused: strips.reused, voices: voices.length, players: players.length, scene, bed: !!bed, errors: errs.n, lastError: errs.last }; },
+    _stats() { return { strips: strips.made, free: strips.free.length, reused: strips.reused, voices: voices.length, players: players.length, scene, bed: !!bed, arenaAmb: !!amb2, arenaCfg, errors: errs.n, lastError: errs.last }; },
     _ready: ensure,
   };
   if (OFFLINE) ensure();

@@ -121,3 +121,72 @@ export const eulogy = safe(async (ctx, o) => {
   if (kind === 'fallen') { try { ctx.audio.music.setMode('elegy', { fade: 0.6 }); p.then(() => { try { ctx.audio.music.setMode('ludus', { fade: 2 }); } catch (e) { /* locked */ } }); } catch (e) { /* locked */ } sfx(ctx, 'deathThud', { gain: 0.6 }); setTimeout(() => sfx(ctx, 'crowdGasp'), 300); } else { sfx(ctx, 'horn', { gain: 0.6 }); setTimeout(() => sfx(ctx, 'crowdChant', { gain: 0.8 }), 900); setTimeout(() => confetti({ n: 36, mode: 'rain', colors: ['#f2c14e', '#fff3c8', '#d9b27c'] }), 900); }
   return p;
 });
+
+// ================================================================== CAMPAIGN: chapter title card, duel card (finale and grudge taunt), epilogue
+// Built on the same overlay look as the level-up fanfare. Styles are injected once (cp-cer-css); every entry is wrapped by safe() so a story moment never breaks the weekly flow.
+const CP_CSS = `
+.cp-card{position:fixed;inset:0;z-index:66;display:grid;place-content:center;justify-items:center;gap:10px;padding:24px 20px;text-align:center;background:radial-gradient(ellipse at 50% 46%,rgba(46,22,64,.82),rgba(10,6,20,.94) 78%);opacity:0;transition:opacity .5s;cursor:pointer}
+.cp-card.in{opacity:1}.cp-card.out{opacity:0}
+.cp-card>*{position:relative;z-index:2}
+.cp-card .lx-rays{position:absolute;z-index:1;left:50%;top:44%;width:150vmax;height:150vmax;margin:-75vmax 0 0 -75vmax;opacity:.35}
+.cp-bars{position:absolute;left:0;right:0;z-index:3;height:11vh;background:#05030a}.cp-bars.t{top:0}.cp-bars.b{bottom:0}
+.cp-num{font:900 clamp(56px,16vw,96px)/1 var(--lx-serif);letter-spacing:.08em;color:#fff3c8;text-shadow:0 0 28px rgba(242,193,78,.7),0 4px 0 rgba(0,0,0,.6);transform:scale(.8);opacity:0;transition:transform .9s var(--lx-ease-out),opacity .9s}
+.cp-card.in .cp-num{transform:none;opacity:1}
+.cp-ttl{font:800 clamp(22px,6.4vw,34px)/1.15 var(--lx-serif);letter-spacing:.1em;text-transform:uppercase;color:var(--lx-gold);max-width:92vw;text-shadow:0 2px 0 rgba(0,0,0,.7);opacity:0;transform:translateY(8px);transition:opacity .8s .5s,transform .8s .5s}
+.cp-sub2{font:600 var(--lx-fs-m)/1.45 var(--lx-sans);color:var(--lx-sand);max-width:30em;opacity:0;transition:opacity .8s 1.1s}
+.cp-goal{margin-top:6px;padding:6px 14px;border-radius:999px;font:700 var(--lx-fs-s)/1.3 var(--lx-sans);color:#2a1a08;background:linear-gradient(180deg,#ffe08a,#f2c14e);opacity:0;transition:opacity .8s 1.6s}
+.cp-card.in .cp-ttl,.cp-card.in .cp-sub2,.cp-card.in .cp-goal{opacity:1;transform:none}
+.cp-tap{font:600 11px/1 var(--lx-sans);letter-spacing:.2em;text-transform:uppercase;color:var(--lx-sand);opacity:.0;transition:opacity .6s 2.4s}.cp-card.in .cp-tap{opacity:.6}
+.cp-duel{display:grid;justify-items:center;gap:10px;padding:2px 0 0;text-align:center}
+.cp-duel .pf{width:116px;height:116px;border-radius:50%;padding:4px;background:conic-gradient(from 0deg,#fff3c8,#f2c14e,#9a6420,#f2c14e,#fff3c8);box-shadow:0 0 34px rgba(242,193,78,.55),0 6px 18px #000;overflow:hidden;display:grid;place-items:center}
+.cp-duel .pf>*{border-radius:50%;width:100%!important;height:100%!important;background:#2a2540}
+.cp-duel .nmx{font:800 var(--lx-fs-xl)/1.15 var(--lx-serif);letter-spacing:.06em;color:var(--lx-text)}
+.cp-duel .nkx{font:700 var(--lx-fs-s)/1.2 var(--lx-sans);letter-spacing:.2em;text-transform:uppercase;color:var(--lx-gold)}
+.cp-duel .qt{font:italic 500 var(--lx-fs-m)/1.45 var(--lx-serif);max-width:28em;color:var(--lx-travertine)}
+.cp-duel .chs{display:flex;flex-wrap:wrap;gap:6px;justify-content:center}
+.cp-ep{display:grid;gap:10px;position:relative}
+.cp-ep p{margin:0;text-align:left;line-height:1.5;color:var(--lx-text)}
+.cp-ep .fl{display:flex;flex-wrap:wrap;gap:6px;justify-content:center}
+.cp-ep .fl span{padding:3px 10px;border-radius:999px;background:rgba(10,6,24,.5);box-shadow:inset 0 0 0 1px rgba(242,193,78,.3);font:600 var(--lx-fs-s)/1.3 var(--lx-sans)}
+.cp-ep .nem{padding:10px 12px;border-radius:10px;background:rgba(10,6,24,.45);box-shadow:inset 0 0 0 1px rgba(242,193,78,.3);text-align:left;font:600 var(--lx-fs-s)/1.45 var(--lx-sans)}
+.cp-ep .tiles{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;width:100%}
+`;
+function cpCss() { if (typeof document === 'undefined' || document.getElementById('cp-cer-css')) return; const s = document.createElement('style'); s.id = 'cp-cer-css'; s.textContent = CP_CSS; document.head.append(s); }
+
+/** the title card of a chapter: roman numeral, title, one line, the goal. Tap to skip; auto-continues. */
+export const chapterCard = safe(async (ctx, ch) => {
+  if (!ch) return; cpCss();
+  const el = h('div', 'cp-card', [h('i', 'lx-rays'), h('i', 'cp-bars t'), h('i', 'cp-bars b'), U.laurel('lx-cer-laurel'), h('div', 'lx-cer-kicker', 'Chapter'), h('div', 'cp-num', ch.n), h('div', 'cp-ttl', ch.t), h('div', 'cp-sub2', ch.line), h('div', 'cp-goal', ch.goal), h('div', 'cp-tap', 'Tap to continue')]);
+  el.setAttribute('role', 'status'); el.setAttribute('aria-label', `Chapter ${ch.n}: ${ch.t}. ${ch.line} ${ch.goal}`); document.body.append(el); void el.offsetWidth; el.classList.add('in');
+  try { ctx.audio.music.setMode('season', { fade: 0.5 }); } catch (e) { /* locked */ }
+  sfx(ctx, 'horn', { gain: 0.5 });
+  await new Promise((done) => { let t = setTimeout(done, globalThis.__CER_HOLD ? globalThis.__CER_HOLD : (U.reduced() ? 1600 : 5200)); el.addEventListener('pointerdown', () => { clearTimeout(t); done(); }); });
+  el.classList.add('out'); await wait(420); el.remove();
+  try { ctx.audio.music.setMode('ludus', { fade: 1.5 }); } catch (e) { /* locked */ }
+});
+
+/** o: {kicker, title, glad (foe fighter for the portrait), name, nick, quote, chips:[{t,tone}], action, finale:boolean}. Resolves when the player confirms. */
+export const duelCard = safe(async (ctx, o) => {
+  cpCss();
+  let ph = null; try { ph = o.glad && ctx.portrait ? ctx.portrait(o.glad, 116) : null; } catch (e) { ph = null; }
+  const chips = h('div', 'chs', (o.chips || []).map((c) => h('span', 'lx-cer-chip ' + (c.tone === 'bad' ? 'fame' : c.tone === 'good' ? 'laurel' : 'gold'), c.t)));
+  const body = h('div', 'cp-duel', [h('div', 'lx-cer-kicker', o.kicker), h('div', 'pf', [ph || U.icon('skull', 48)]), h('div', 'nmx lx-engrave', o.name), o.nick ? h('div', 'nkx', o.nick) : null, o.quote ? h('div', 'qt', `"${o.quote}"`) : null, chips]);
+  try { ctx.audio.music.setMode(o.finale ? 'boss' : 'prep', { fade: 0.4 }); } catch (e) { /* locked */ }
+  const p = ctx.ask({ title: o.title, body, actions: [{ label: o.action || 'To the sand', value: 'ok', variant: o.finale ? 'gold' : 'danger', icon: 'sword' }], dismiss: 'ok', closable: false, why: '' });
+  tag('lx-cer-scrim'); tag('lx-cer-fin'); sfx(ctx, o.finale ? 'horn' : 'crowdGasp', { gain: 0.6 });
+  return p;
+});
+
+/** the epilogue: the ending, what became of the nemesis, the fallen, the stats of your ludus. ep = LM.campaign.epilogue(S). */
+export const epilogue = safe(async (ctx, ep) => {
+  if (!ep) return; cpCss();
+  const tiles = h('div', 'tiles', ep.stats.map(([k, v]) => h('div', 'lx-cer-tile', [h('b', 'lx-num', String(v)), h('span', '', k)])));
+  const body = h('div', 'cp-ep', [h('i', 'lx-rays'), U.laurel('lx-cer-bigl'), h('div', 'lx-cer-kicker', `Epilogue: ${ep.kind}`), h('div', 'lx-cer-finh lx-engrave', ep.title), ...ep.paras.map((t) => h('p', '', t)), tiles]);
+  if (ep.freed && ep.freed.length) body.append(h('div', 'lx-cer-kicker', 'Free men'), h('div', 'fl', ep.freed.map((n) => h('span', '', n))));
+  if (ep.fallen && ep.fallen.length) body.append(h('div', 'lx-cer-kicker', 'Remembered'), h('div', 'fl', ep.fallen.map((f) => h('span', '', `${f.name}${f.nick ? ' ' + f.nick : ''}, level ${f.lvl}`))));
+  body.append(h('div', 'nem', ep.nemLine || ''));
+  try { ctx.audio.music.setMode(ep.id === 'ruin' ? 'elegy' : 'victory', { fade: 0.8 }); } catch (e) { /* locked */ }
+  const p = ctx.ask({ title: 'The story so far', body, actions: [{ label: ep.id === 'ruin' ? 'Rebuild' : 'The sand remains', value: 'ok', variant: 'gold', icon: 'arena' }], dismiss: 'ok' });
+  tag('lx-cer-scrim'); tag('lx-cer-fin'); sfx(ctx, ep.id === 'ruin' ? 'deathThud' : 'horn', { gain: 0.6 }); if (ep.id !== 'ruin') setTimeout(() => { confetti({ n: 90, y: 0.3 }); confetti({ n: 50, mode: 'rain' }); }, 600);
+  const v = await p; try { ctx.audio.music.setMode('ludus', { fade: 2 }); } catch (e) { /* locked */ } return v;
+});

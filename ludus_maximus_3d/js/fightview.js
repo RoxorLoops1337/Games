@@ -14,7 +14,9 @@ import * as U from './ui_kit.js';
 import { trimShadowCasters } from './post.js';
 import { createTactics } from './tactics.js'; // TACTICS: orders, readability overlay
 import { vsIntro } from './bracket.js'; // BRACKET: VS intro
-import { createReel, injectReelCss } from './reel.js'; // REEL: highlight reel + share clip
+import { createReel, injectReelCss } from './reel.js'; // REEL
+import { createDirectControl } from './directcontrol.js'; // COMBAT: optional hands-on control of one fighter
+import { createAnnouncer, createVeil, addPlateExtras, updatePlateExtras, maybeTutorial, showTutorial, hazName } from './combatui.js'; // COMBAT: barks, stamina strip + status icons, blindfold veil, first-fight tutorial: highlight reel + share clip
 
 const D = () => globalThis.LM_D, L = () => globalThis.LM;
 const STEP = 1 / 30;
@@ -82,6 +84,7 @@ export class FightView {
     this.paused = false; this.pauseModal = null; this.ex = null; this.execPending = null; this.fateUi = null; this.fateIds = null; this.forfeited = false; this.rate = 1; this.camMode = 'auto'; this.epoch = 0; this.lsK = 0; this.ls = null; this.lsCool = 0;
     this.tacSlow = 1; this.buildHud(); this.bindInput(); this.tac = createTactics(this); // TACTICS
     injectReelCss(); this.reel = createReel(this); // REEL
+    this.env = this.arena; this.hold = false; this.cap = createAnnouncer(this); this.veil = createVeil(this); this.dc = createDirectControl(this); this.hazT = {}; // COMBAT: env = the arena visuals (setHazards / updateHazards are optional)
   }
 
   // ---------------------------------------------------------------- HUD
@@ -318,10 +321,10 @@ export class FightView {
       const gx = u.side === 'A' ? -INTRO_X : INTRO_X;   // INTRO: they start just outside the gates (visible from the first frame), not 22 m away
       const f = { u, rig, vx: 0, vz: 0, yaw: u.side === 'A' ? Math.PI / 2 : -Math.PI / 2, lx: gx, ly: u.y, handles: {}, atkN: 0, st: '', hpShown: u.hp, plate: null, ring: [], intro: { x: gx, y: u.y, tx: u.x, ty: u.y }, pu: { x: 0, z: 0, vx: 0, vz: 0 }, rx: u.x, ry: u.y, px0: gx, pz0: u.y, X: gx, Z: u.y, skidT: 0, ov: null, kneel: false, faceTo: null,
         // PERF: every field a fighter ever gets is declared here in one fixed order, so all fighters share ONE hidden class (fields added later in different orders gave 4 to 5 maps: the per-frame code went megamorphic and boxed every double it stored)
-        spin: false, guarding: false, air: false, hpSet: -1, hpSetMax: -1, hpT: -9, plX: -1, plY: -1, plV: null, plS: -1, plOp: -1, nums: null, lastHit: null, lastHitT: -9, lastWord: '', lastWordT: -9, skidAt: -9 };
+        spin: false, guarding: false, air: false, hpSet: -1, hpSetMax: -1, hpT: -9, plX: -1, plY: -1, plV: null, plS: -1, plOp: -1, nums: null, lastHit: null, lastHitT: -9, lastWord: '', lastWordT: -9, skidAt: -9, outV: false };
       trimShadowCasters(rig.root, this.post.tier || this.tier); rig.root.position.set(gx, 0, u.y); this.scene.add(rig.root); rig.resetSecondary && rig.resetSecondary();
-      const plate = U.nameplate({ name: u.name, level: u.g.lvl, hp: u.hp, maxHp: u.maxhp, team: u.side === 'A' ? 'ally' : 'foe', rank: 0 });
-      this.plates.append(plate); f.plate = plate; this.fm.set(u.id, f); this._fmL = null; this.gore.addFighter(u.id, rig, { maxhp: u.maxhp, side: u.side }); if (u.beast) BF.setup(this, f, u); // BEAST
+      const plate = U.nameplate({ name: u.name + (u.side === 'A' && !u.beast && globalThis.LM && globalThis.LM.fighters && globalThis.LM.fighters.plate ? globalThis.LM.fighters.plate(u.g) : '') /* FIGHTERS: worn renown title */, level: u.g.lvl, hp: u.hp, maxHp: u.maxhp, team: u.side === 'A' ? 'ally' : 'foe', rank: 0 });
+      this.plates.append(plate); f.plate = plate; addPlateExtras(plate, u); /* COMBAT */ this.fm.set(u.id, f); this._fmL = null; this.gore.addFighter(u.id, rig, { maxhp: u.maxhp, side: u.side }); if (u.beast) BF.setup(this, f, u); // BEAST
       if (u.side === 'B') { plate.style.pointerEvents = 'auto'; plate.style.cursor = 'pointer'; plate.addEventListener('pointerdown', () => this.focusUnit(u.id)); }
       else if (!u.beast && !this.replaying) { plate.style.pointerEvents = 'auto'; plate.style.cursor = 'pointer'; plate.addEventListener('pointerdown', () => this.tac.selectUnit(u.id)); }   // TACTICS: tap an ally plate to give it orders
     });
@@ -332,6 +335,7 @@ export class FightView {
       this.ultBar.append(ring); this.fm.get(u.id).ring.push({ ring, slot });
     }));
     this.applyWeather(F.meta ? F.meta.weather : 'clear');
+    { const hz = (F.meta && F.meta.hazards) || []; this.hazList = hz; this.hazT = {}; this.env.setHazards?.(hz); /* COMBAT: contract with js/env_arena.js */ this.cap.reset(); this.veil.set(!!(F.rules && F.rules.blind)); this.dc.start(F); this.dc.place && this.dc.place(); }
     { const m = F.meta || {}, id = pickTheme(m); this.theme = id; this.arena.setTheme(id, { rig: this.light, scene: this.scene, sky: this.sky, renderer: this.renderer, wx: m.weather, night: themeNight(id, m) }); } // ARENA_THEME: per-fight arena look (env_arena.js THEMES)
     if (!this.replaying) this.buildExtras(F); else if (this.extras) { this.extras.remove(); this.extras = null; if (this.autoBtnOld) { this.autoBtnOld.remove(); this.autoBtnOld = null; } }
     if (!opts.noSplash && !this.replaying) { const a = F.units.filter((u) => u.side === 'A'), b = F.units.filter((u) => u.side === 'B'); setTimeout(() => { if (this.F === F && !this.done) vsIntro({ a, b, meta: F.meta || {}, theme: this.theme, league: opts.league != null && D().LEAGUES[opts.league] ? D().LEAGUES[opts.league].n : '', host: this.host, ms: 2000 }); }, 350); }   // BRACKET: stronger VS (busts, theme colour, event title)
@@ -372,6 +376,7 @@ export class FightView {
     this.favorBtn = U.button({ label: "Crowd's Favor!", variant: 'gold', icon: 'fame', onClick: () => { if (this.tap('favor')) this.audio.sfx('crowdCheer'); } }); this.favorBtn.style.display = 'none'; this.favorBtn.classList.add('lx-pulse');
     box.append(this.favorBtn);
     if (F.duo) { this.duoBtn = U.button({ label: 'Duo: ' + D().DUOS[F.duo.kind].n, variant: 'bronze', icon: 'sword', onClick: () => { const r = this.tap('duo'); if (!r) this.audio.sfx('uiError'); } }); box.append(this.duoBtn); } else this.duoBtn = null;
+    if (F.rules && F.rules.tag) { this.tagBtn = U.button({ label: 'Tag in', variant: 'bronze', icon: 'sword', onClick: () => { const r = this.tap('tag'); if (r !== true) this.audio.sfx('uiError'); } }); this.tagBtn.dataset.fv = 'tag'; box.append(this.tagBtn); } else this.tagBtn = null; // COMBAT: tag team swap
     this.autoBtn = U.button({ label: F.auto.A ? 'Auto ult: on' : 'Auto ult: off', variant: 'ghost', onClick: () => { this.tap('auto', !F.auto.A); setBtnLabel(this.autoBtn, F.auto.A ? 'Auto ult: on' : 'Auto ult: off'); } });
     if (this.autoBtnOld) this.autoBtnOld.remove(); this.autoBtnOld = this.autoBtn; this.autoBtn.classList.add('lx-fv-btn'); this.topRow.prepend(this.autoBtn); this.ultBar.before(box); box.classList.add('lx-fv-extras');
   }
@@ -390,6 +395,9 @@ export class FightView {
     if (t.kind === 'focus') { lm.focus(F, 'A', t.a); return true; }
     if (t.kind === 'auto') { F.auto.A = !!t.a; return true; }
     if (t.kind === 'stance' || t.kind === 'swap' || t.kind === 'rally') return lm.command(F, t.kind, t.a, t.b);   // TACTICS
+    if (t.kind === 'dcmove') return lm.dcInput(F, t.a, 'move', t.b);   // COMBAT: direct control (every input is a tap keyed by F.n)
+    if (t.kind === 'dcact') { const b = String(t.b); return b === 'blk1' ? lm.dcInput(F, t.a, 'block', 1) : b === 'blk0' ? lm.dcInput(F, t.a, 'block', 0) : b.startsWith('lock:') ? lm.dcInput(F, t.a, 'lock', b.slice(5)) : lm.dcInput(F, t.a, b, 1); }
+    if (t.kind === 'tag') return lm.tagIn(F, 'A');
     return false;
   }
 
@@ -416,6 +424,7 @@ export class FightView {
 
   dispose() {
     this.resetPresentation(); this.tac && this.tac.stop(); this.reel && this.reel.stop(!!this._restarting);
+    if (this.dc) { this.dc.stop(); this.veil.set(false); this.cap.reset(); this.hold = false; this.env.setHazards?.([]); this.hazList = null; } // COMBAT
     for (const f of this.fm.values()) { this.scene.remove(f.rig.root); f.rig.dispose && f.rig.dispose(); f.plate && f.plate.remove(); f.ring.forEach((r) => r.ring.remove()); }
     this.fm.clear(); this._fmL = null; if (this.ultBar) this.ultBar.innerHTML = '';
     if (this.fx && this.fx.clearDecals) this.fx.clearDecals();
@@ -434,7 +443,7 @@ export class FightView {
   // ---------------------------------------------------------------- per frame
   frame(realDt, t) {
     this.t = t; realDt = Math.min(realDt, 0.1);
-    if (this.paused && this.F) { this.framePaused(realDt); return; }
+    if ((this.paused || this.hold) && this.F) { this.framePaused(realDt); return; }
     this.sky.update(this.camera, t); this.arena.update(t, realDt); this.godrays.update(t); this.dust.update(t, this.renderer.getPixelRatio());
     const ft = this.feel.update(realDt);
     if (!this.F) { this.camera.updateMatrixWorld(); this.fx.update(ft.dt, this.camera); this.gore.postFrame(realDt); return; }
@@ -470,6 +479,7 @@ export class FightView {
     this.gore.setTier(this.tier); this.fx.update(vdt, this.camera); this.gore.postFrame(realDt); this.reel.tick(realDt);
     this.applyCamera(pose);
     this.updateHud(realDt, F); this.tac.frame(realDt, F, t);
+    this.combatFrame(realDt, F, vdt); // COMBAT
     this.updateAudio(realDt, F);
     this.updateRain(realDt, t);
   }
@@ -516,7 +526,7 @@ export class FightView {
       f.vx = speed; f.vz = 0; f.yaw = u.side === 'A' ? Math.PI / 2 : -Math.PI / 2;
       const fwd = Math.abs(speed); f.rig.animator.setMove(fwd, 0); f.rig.root.position.set(x, 0, u.y); f.rig.root.rotation.y = f.yaw; f.rig.update(dt);
     }
-    if (k >= 1) { this.phase = 'fight'; this.phaseT = 0; this.dir.setShot('follow', {}, 1.0); this.banner('FIGHT!', 'ult'); this.audio.sfx('drum'); this.feel.impact && this.feel.impact('roar', {}); for (const f of this.fm.values()) { f.rx = f.u.x; f.ry = f.u.y; } }
+    if (k >= 1) { this.phase = 'fight'; this.phaseT = 0; this.dir.setShot('follow', {}, 1.0); this.banner('FIGHT!', 'ult'); this.audio.sfx('drum'); this.feel.impact && this.feel.impact('roar', {}); for (const f of this.fm.values()) { f.rx = f.u.x; f.ry = f.u.y; } this.fightStarted(); }
   }
 
   endFight() {
@@ -726,6 +736,8 @@ export class FightView {
     for (let fi = 0; fi < FL.length; fi++) {
       const f = FL[fi];
       const u = f.u, rig = f.rig, an = rig.animator, dn = u.down && !f.kneel, pu = f.pu;   // dn: visually down (an executed fighter kneels first)
+      if (f.outV !== !!u.out) { f.outV = !!u.out; rig.root.visible = !u.out; }   // COMBAT: a fighter waiting outside the sand (gauntlet foe, tag partner) is not drawn
+      if (u.out) { if (f.plOp !== 0) { f.plOp = 0; f.plate.style.opacity = 0; } continue; }
       this.stepPos(f, dt, k);   // PERF: the double maths lives in small functions of their own (they tier up; in the big function every statement boxed its result)
       this.stepFace(f, dt, dn);
       const X = f.X, Z = f.Z;
@@ -830,7 +842,7 @@ export class FightView {
   }
 
   onEvent(e) {
-    const F = this.F, fx = this.fx, A = this.audio, feel = this.feel; this.tac.onEvent(e, F); this.reel.record(F, e);
+    const F = this.F, fx = this.fx, A = this.audio, feel = this.feel; this.tac.onEvent(e, F); this.reel.record(F, e); this.cap.event(e, F); // COMBAT: announcer
     const src = e.src ? this.unitById(e.src) : null, dst = e.dst ? this.unitById(e.dst) : null;
     const fs = src && this.fm.get(src.id), fd = dst && this.fm.get(dst.id);
     const pan = (u) => clamp((u.x) / 12, -1, 1);
@@ -838,7 +850,7 @@ export class FightView {
       case 'atk': {
         if (src && src.beast) { BF.atk(this, e, src, dst, fs); break; } // BEAST
         if (!fs || !dst) break; const an = fs.rig.animator; const rig = fs.rig;
-        const name = fs.atkN++ % 5 === 4 && (src.style === 'murmillo' || src.style === 'hoplomachus' || src.style === 'dimachaerus') ? 'attack3' : (fs.atkN % 2 ? 'attack1' : 'attack2');
+        const name = e.heavy ? 'attack3' : fs.atkN++ % 5 === 4 && (src.style === 'murmillo' || src.style === 'hoplomachus' || src.style === 'dimachaerus') ? 'attack3' : (fs.atkN % 2 ? 'attack1' : 'attack2');
         const info = an.clipInfo(name) || { hitAt: 0.27 }; const wind = L().windOf ? L().windOf(src) : Math.min(0.22, 0.4 / L().apsOf(src)); // PLAN: a showman's wind-up is longer
         an.play(name, { speed: clamp(info.hitAt / wind, 0.8, 3.2) }); rig.squashKick && rig.squashKick(-0.04);
         const dir = this.dirOf(src, dst), c = this.col(src);
@@ -847,7 +859,7 @@ export class FightView {
       }
       case 'hit': {
         if (!dst) break; const frac = e.dmg / dst.maxhp, dir = src ? this.dirOf(src, dst) : new THREE.Vector3(0, 0, 1);
-        if (e.hz) { this.num(dst, e.dmg + ' FIRE', 'fire'); fx.spark(this.chest(dst), new THREE.Vector3(0, 1, 0), 10, '#ffb347'); feel.addTrauma && feel.addTrauma(0.12); A.sfx('dust', { pan: pan(dst) }); this.flashHurt(fd, 0.1); break; }
+        if (e.hz) { this.num(dst, e.dmg + ' ' + (e.hzk ? e.hzk.toUpperCase() : 'FIRE'), 'fire'); fx.spark(this.chest(dst), new THREE.Vector3(0, 1, 0), 10, '#ffb347'); feel.addTrauma && feel.addTrauma(0.12); A.sfx('dust', { pan: pan(dst) }); this.flashHurt(fd, 0.1); break; }
         fx.hit(this.chest(dst), dir, { dmgFrac: frac, crit: !!e.crit, color: src ? this.col(src) : undefined, flesh: this.gore.on && !(dst.s && dst.s.guard) });
         this.num(dst, e.crit ? 'CRIT ' + e.dmg : String(e.dmg), e.crit ? 'crit' : (e.tech && !e.basic ? 'tech' : 'dmg'));
         if (e.save) this.num(dst, e.save, 'block');
@@ -892,7 +904,7 @@ export class FightView {
           if (!e.len) { const h = fx.tele(new THREE.Vector3(e.x, 0.05, e.y), e.r, e.t, e.c || '#ff6a2a'); (this.teles = this.teles || []).push(h); }
           if (fs) fs.rig.flash(Math.min(0.55, e.t), '#ff7a40'); if (src && src.side === 'B') this.banner(((D().ULTS[e.ult] || {}).n || 'Ultimate') + ' incoming!', 'ult'); A.sfx('drum', { gain: 0.7 }); break;
         }
-        const h = fx.tele(new THREE.Vector3(e.x, 0.05, e.y), e.r, e.t, e.c || '#e8742a'); (this.teles = this.teles || []).push(h); if (e.haz) this.banner('Fire jets! Get out of the red circle', 'info'); else this.meteorFall(e); break; }
+        const h = fx.tele(new THREE.Vector3(e.x, 0.05, e.y), e.r, e.t, e.c || '#e8742a'); (this.teles = this.teles || []).push(h); if (e.haz) this.hazBanner(e); else this.meteorFall(e); break; }
       case 'zap': if (src && dst) { fx.zap(this.chest(src), this.chest(dst), '#a8d8ff'); feel.addTrauma && feel.addTrauma(0.1); A.sfx('ultLightning', { gain: 0.4 }); } break;
       case 'hook': if (src && dst) { fx.chain(this.chest(src), this.chest(dst), '#d9e4ee'); fx.shoot(this.chest(src), this.chest(dst), '#eef4fa', { speed: 70, size: 0.22 }); fx.hit(this.chest(dst), this.dirOf(src, dst), { dmgFrac: 0.1 }); A.sfx('netThrow', { pan: pan(src) }); } break;
       case 'bleed': if (dst && e.dmg >= 3) this.num(dst, '-' + e.dmg, e.fire ? 'fire' : 'thorn'); if (dst && !e.fire && this.gore.on) this.gore.onBleed(dst.id, e.dmg); break;
@@ -933,6 +945,19 @@ export class FightView {
       }
       case 'beast': BF.event(this, e, src, dst, fs, fd); break; // BEAST: roar, howl, enrage, telegraph, charge, land, stomp, javelin
       case 'favorready': this.banner("Crowd's Favor ready!", 'ult'); A.sfx('crowdCheer'); break;
+      case 'enter': this.onEnter(e, dst, fd); break;   // COMBAT: bouts and hazards
+      case 'tag': if (src) { fx.ring(this.feet(src), '#e0b04a', 1.8); A.sfx('uiConfirm', { gain: 0.6 }); } break;
+      case 'laststand': if (dst) { fx.ring(this.feet(dst), '#f2c14e', 2.6); fx.shockwave && fx.shockwave(this.feet(dst), 2.2, '#f2c14e'); this.num(dst, 'LAST STAND', 'tech'); this.banner(dst.name + ' makes a last stand!', 'ult'); A.sfx('horn', { gain: 0.8 }); feel.impact('roar', {}); } break;
+      case 'roll': if (src && fs) { fx.kickup(this.feet(src), _kd.set(-e.dx, 0, -e.dy), 10, KICK); fx.trail && fx.trail(fs.rig.root, '#f5ead2'); fs.rig.squashKick && fs.rig.squashKick(-0.12); fs.rig.animator.play('getup', { speed: 3 }); A.sfx('dust', { pan: pan(src), gain: 0.6 }); A.sfx('swish', { pan: pan(src), pitch: 0.8, gain: 0.5 }); } break;
+      case 'parry': if (dst && src) { const c = this.chest(dst, 1.3); fx.spark(c, this.dirOf(src, dst), 16, '#fff3c4'); fx.ring(this.feet(dst), '#fff3c4', 2.2); fx.shockwave && fx.shockwave(this.feet(dst), 1.8, '#fff3c4'); this.num(dst, 'PARRY!', 'tech'); A.sfx('parry', { pan: pan(dst), gain: 1 }); A.sfx('shieldBlock', { pan: pan(dst), gain: 0.7 }); feel.impact('hit', { dmgFrac: 0.3, crit: true, mine: dst.side === 'A', dir: this.dirOf(src, dst) }); if (fd) { fd.rig.animator.hitStop(0.1); fd.rig.flash(0.12, '#fff3c4'); } if (fs) { fs.rig.animator.hitStop(0.1); const ld = fs.rig.localDir ? fs.rig.localDir(dst.x - src.x, dst.y - src.y) : 1; fs.rig.animator.stagger ? fs.rig.animator.stagger(ld) : fs.rig.animator.hurt(ld, 1); } if (dst.side === 'A') this.banner('Perfect parry!', 'ult'); } break;
+      case 'bash': if (src && dst) { fx.shockwave && fx.shockwave(this.chest(dst, 1.1), 1.4, '#f5ead2'); fx.spark(this.chest(dst, 1.2), this.dirOf(src, dst), 10, '#f5ead2'); this.num(dst, 'BASH!', 'tech'); A.sfx('shieldBlock', { pan: pan(dst), gain: 1 }); feel.addTrauma && feel.addTrauma(0.15); if (fs) fs.rig.animator.play('attack3', { speed: 2.2 }); } break;
+      case 'heavy': if (src && dst) { fx.ring(this.feet(src), this.col(src), 1.6); feel.addTrauma && feel.addTrauma(0.12); A.sfx('swish', { heavy: true, pan: pan(src) }); } break;
+      case 'winded': if (dst) { this.num(dst, 'WINDED', 'status'); fx.dust(this.feet(dst), 6); if (fd) fd.rig.animator.hurt(1, 0.5); if (dst.side === 'A' && dst.dc) { this.banner('Winded! Back off and breathe', 'info'); } } break;
+      case 'tired': if (dst && dst.side === 'A') this.num(dst, 'TIRED', 'status'); break;
+      case 'recovered': break;
+      case 'guardbreak': if (dst) { this.num(dst, 'GUARD BROKEN', 'miss'); A.sfx('swordHitCrit', { pan: pan(dst) }); feel.addTrauma && feel.addTrauma(0.2); } break;
+      case 'haz': this.onHaz(e); break;
+      case 'chain': if (src && dst) fx.chain(this.chest(src, 1.0), this.chest(dst, 1.0), '#b9b2a2', { life: 0.5 }); break;
       default: break;
     }
   }
@@ -963,6 +988,44 @@ export class FightView {
   flashHurt(fd, frac) { if (!fd) return; fd.rig.flash(0.09 + Math.min(0.08, frac), '#8a5530'); fd.rig.squashKick && fd.rig.squashKick(-0.05 - Math.min(0.1, frac)); }
   dropHandles(id) { const f = this.fm.get(id); if (!f) return; for (const k in f.handles) { try { f.handles[k].stop(); } catch (e) { /* ignore */ } } f.handles = {}; }
   ultSustain(u, el, dur) { const f = u && this.fm.get(u.id); if (!f) return; const h = this.fx.ult.sustain(el, f.rig.root, dur); f.handles['ult' + el] = h; }
+
+  // ---------------------------------------------------------------- COMBAT: bouts, hazards, per frame upkeep
+  /** the fight proper has begun: the bout rules are named, the announcer opens, and the one-time tutorial appears on the very first fight */
+  fightStarted() {
+    const F = this.F; if (!F || this.replaying) return; const b = F.meta && F.meta.bout && L().BOUTS && L().BOUTS[F.meta.bout];
+    if (b) this.after(1500, () => { this.banner(b.n + ': ' + b.tip, 'info'); });
+    this.cap.opening(F);
+    if (maybeTutorial(this, F)) this.tut = showTutorial(this, () => { this.tut = null; });
+  }
+  hazBanner(e) {
+    if (!e.hzk) { this.banner('Fire jets! Get out of the red circle', 'info'); return; }
+    const last = this.hazT[e.hzk] ?? -99; if (this.t - last < 14) return; this.hazT[e.hzk] = this.t; const H = (L().HAZ || {})[e.hzk];
+    this.banner(hazName(e.hzk) + '! ' + (H && H.tip ? H.tip : 'Clear the marked ground'), 'info');
+  }
+  onHaz(e) {
+    const fx = this.fx, A = this.audio, pos = _hp.set(e.x, 0.05, e.y);
+    if (e.hzk === 'fire') { fx.ring(pos, '#e8742a', e.r); fx.spark(pos, _kd.set(0, 1, 0), 14, '#ffb347'); fx.groundDecal(pos, 'scorch', { size: e.r * 1.5 }); A.sfx('ultFire', { gain: 0.5 }); }
+    else if (e.hzk === 'spikes') { fx.dust(pos, 10); fx.debris && fx.debris(pos, 4); fx.ring(pos, '#d8d2c0', e.r); A.sfx('swordHitCrit', { gain: 0.5 }); this.feel.addTrauma && this.feel.addTrauma(0.15); }
+    else if (e.hzk === 'trapdoor') { fx.dust(pos, 20); fx.debris && fx.debris(pos, 6); fx.groundDecal(pos, 'crater', { size: e.r * 1.4 }); A.sfx('deathThud', { gain: 0.7 }); this.feel.addTrauma && this.feel.addTrauma(0.2); }
+  }
+  onEnter(e, dst, fd) {
+    if (!dst || !fd) return; const A = this.audio;
+    fd.rx = dst.x; fd.ry = dst.y; fd.px0 = dst.x; fd.pz0 = dst.y; fd.X = dst.x; fd.Z = dst.y; fd.vx = fd.vz = 0; fd.pu.x = fd.pu.z = fd.pu.vx = fd.pu.vz = 0; fd.kneel = false; fd.st = ''; fd.hpShown = dst.hp; fd.rig.root.visible = true; fd.outV = false; fd.rig.root.position.set(dst.x, 0, dst.y); fd.rig.animator.setState('move');
+    this.fx.ring(this.feet(dst), dst.side === 'A' ? '#f2c14e' : '#d2412b', 2.2); A.sfx(e.how === 'tag' ? 'uiConfirm' : 'horn', { gain: 0.7 }); A.sfx('gate', { gain: 0.5 });
+    this.banner(e.how === 'tag' ? dst.name + ' tags in' : dst.side === 'B' ? 'Next foe: ' + dst.name : dst.name + ' enters', 'ult');
+    if (dst.side === 'A') this.tac && (this.tac.key = '');
+  }
+  /** world point to canvas pixels (null behind the camera) */
+  projectPx(x, y, z) { const p = _hp.set(x, y, z).project(this.camera); if (p.z > 1) return null; const o = this._px || (this._px = { x: 0, y: 0 }); o.x = (p.x * 0.5 + 0.5) * (this.cw || innerWidth); o.y = (-p.y * 0.5 + 0.5) * (this.ch || innerHeight); return o; }
+  combatFrame(dt, F, vdt) {
+    this.dc.frame(dt); this.cap.tick();
+    if (this.hazList && this.hazList.length) this.env.updateHazards?.(this.hazList, F.t);
+    if ((this.cfN = (this.cfN | 0) + 1) % 4 === 0) { const FL = this._fmL || (this._fmL = [...this.fm.values()]); for (let i = 0; i < FL.length; i++) { const f = FL[i]; if (f.plate._x) updatePlateExtras(f.plate, f.u); } }
+    if (this.veil.on) {
+      this.veil.frame(F, this.camera, this.cw, this.ch); this.stepCue = (this.stepCue || 0) - vdt;
+      if (this.stepCue <= 0 && this.phase === 'fight' && !this.silent) { this.stepCue = 0.7; for (const f of this.fm.values()) { const u = f.u; if (u.down || u.spdNow < 1.2) continue; this.fx.ring(this.feet(u), u.side === 'A' ? '#f2c14e' : '#9fd6ff', 0.9); } } // blindfold: the sound of footsteps is the only map
+    }
+  }
 
   onStatus(e, dst) {
     if (!dst) return; const f = this.fm.get(dst.id), fx = this.fx, st = e.st; if (STATUS_LABEL[st]) this.num(dst, STATUS_LABEL[st], 'status');

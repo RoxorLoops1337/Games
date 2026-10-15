@@ -1158,5 +1158,31 @@ const LEGACY_IDS = ['patron', 'brawl', 'trainer', 'spoiled', 'spy', 'sponsor', '
   if (had.window === 'undefined') delete globalThis.window; if (had.document === 'undefined') delete globalThis.document;
 }
 
+{ // ECONOMY: the weekly bill adds up, old games play the same, the auction and the circuit read through the sim
+  const S = LM.newGame({ name: 'Eco' }); S.seed = 'eco-main'; const g = LM.makeGlad({ id: S.nextId++, lvl: 3 }); g.act = 'rest'; S.glads.push(g);
+  const b = LM.weeklyBill(S);
+  ok(b.total === b.food + b.wages + b.staff + b.building + b.tribute + b.lodging + b.loans && b.wages === LM.upkeep(S), 'ECONOMY: the weekly bill adds up and wages are the sim upkeep');
+  const g0 = S.gold; LM.weekTrain(S); LM.weekFinish(S);
+  ok(LM.eco(S).ledger.length === 1 && LM.eco(S).ledger[0].net === Math.round(S.gold - g0), 'ECONOMY: a week writes one exact ledger row');
+  ok(LM.auction(S).lots.length >= 3 && LM.TOWN_IDS.length === 6 && typeof LM.loanTake === 'function', 'ECONOMY: auction, towns and loans exist');
+}
+
+{ // COMBAT: the engine API the circuit and events agents rely on, and the plain fight guarantees (details in tests/ludus_maximus_3d_combat.test.mjs)
+  ok(typeof LM.boutRules === 'function' && LM.boutRules('gauntlet').fame > 1 && LM.BOUTS.lms && LM.BOUTS.nets, 'COMBAT: LM.boutRules and LM.BOUTS exist for the circuit and events');
+  ok(LM.hazardPlan('imperial', 3, 'k').every((h) => ['fire', 'spikes', 'sand', 'trapdoor', 'pillar'].includes(h.kind) && h.id && h.t0 >= 0 && h.dur > 0), 'COMBAT: hazard plans use the five kinds and carry id, t0 and dur');
+  const F = LM.createFight(LM.mkUnits([LM.makeGlad({ lvl: 4 })], 'A', {}), LM.mkUnits([LM.makeGlad({ lvl: 4 })], 'B', {}), {}); ok(F.rules === null && F.hz === null && F.units.every((u) => u.stM === 0 && u.dc === 0), 'COMBAT: a plain fight carries no combat rules');
+  const quickDeep = LM.quick(LM.mkUnits([LM.makeGlad({ lvl: 4 })], 'A', {}), LM.mkUnits([LM.makeGlad({ lvl: 4 })], 'B', {}), { deep: 1 }); ok(quickDeep.done && quickDeep.rules && quickDeep.rules.deep === 1, 'COMBAT: LM.quick accepts the deep rules');
+}
+
+{ // round 60: FIGHTERS derive shades stay small, old fighters unchanged until ensured, replay stays deterministic
+  const mkG = (o) => LM.makeGlad(Object.assign({ id: 77, style: 'murmillo', lvl: 8, name: 'Tester', q: 0.5 }, o));
+  const a = mkG({}), b = JSON.parse(JSON.stringify(a)); const d0 = LM.derive(a, { noperf: true });
+  LM.fEnsure(null, b); const d1 = LM.derive(b, { noperf: true });
+  ok(Math.abs(d1.atk / d0.atk - 1) < 0.1 && Math.abs(d1.hp / d0.hp - 1) < 0.1, 'FIGHTERS: origin, quirks and age shift a fighter by well under 10%');
+  const run = (g) => { LM.setRandom(seeded(99)); const F = LM.quick(LM.mkUnits([g], 'A', {}), LM.mkUnits([mkG({ id: 78, name: 'Foe' })], 'B', {})); return F.winner + ':' + Math.round(F.t * 10); };
+  ok(run(b) === run(JSON.parse(JSON.stringify(b))), 'FIGHTERS: a fight with shaded fighters replays identically');
+  const g3 = mkG({ id: 3 }); LM.setRandom(seeded(5)); const x = LM.makeGlad({ id: 1, lvl: 3 }).name; LM.setRandom(seeded(5)); LM.fEnsure(null, g3); LM.fBio(g3); LM.fTitles(null, g3); const y = LM.makeGlad({ id: 1, lvl: 3 }).name;
+  ok(x === y, 'FIGHTERS: fEnsure does not move the random stream');
+}
 console.log(`ludus_maximus: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

@@ -72,11 +72,13 @@ export function open(ctx, arg) {
     if (bad) buy.append(h('div', 'rc-why', full ? 'Barracks full' : `Need ${fmt(g.cost - S.gold)} more`));
     c.append(h('div', 'rc-head', [portrait(ctx, g, 64), h('div', 'lm-grow', [h('div', 'lm-name', [g.name, g.nick ? h('small', '', ' ' + g.nick) : null]), h('div', 'lm-chips', [sc, chip('Lv ' + g.lvl, 'gold')]), h('div', '', U.stars(lm.stars(g), 5))]), buy]));
     const tags = h('div', 'lm-chips');
+    if (lm.fEnsure && lm.fEnsure(S, g).q) { const o = lm.fOrigin(g); tags.append(chip(o.n, 'grey', lm.fBio(g)), chip('Age ' + g.age, 'grey', lm.fStage(g).d), ...lm.fQuirks(g).map((q) => chip(q.n, 'purple', `${q.pro}. ${q.con}.`))); } // FIGHTERS: origin, age, two quirks
     if (S.glads.length && !hasStyle) tags.append(chip('New style for you', 'green', 'Your ludus has no ' + st.n + ' yet. A varied roster covers more matchups.'));
     const sd = lm.storyDef(g); if (sd) tags.append(chip(sd.n, 'grey', sd.text));
     if (tags.childNodes.length) c.append(tags);
     const stats = h('div', 'rc-stats'); d.STATS.forEach((s) => stats.append(statTag(g, s))); c.append(stats);
     c.append(h('div', 'rc-trait', [h('b', '', T.n + ': '), T.d]));
+    if (g.q) c.append(...lm.fQuirks(g).map((q) => h('div', 'rc-trait', [h('b', '', q.n + ': '), `${q.pro}. `, (() => { const e = h('span', '', q.con + '.'); e.style.color = '#9d2a20'; return e; })()]))); // FIGHTERS: the trade-off is shown before you hire
     c.append(h('div', 'rc-trait', [h('b', '', 'Ultimate: '), lm.ultsOf(g).map((u) => d.ULTS[u].n).join(', '), '. ', h('b', '', 'Techniques: '), g.techs.map((t) => d.TECHS[t].n).join(', ')]));
     return c;
   }

@@ -32,7 +32,7 @@ const BEAST_MOOD = { lion: 'growl', nemean: 'growl', wolf: 'snarl', bear: 'growl
 const POSES = { idle: null, guard: null, victory: 'victory', taunt: 'taunt', block: 'block' };
 const key = (g, o) => {
   const gear = g.gear || {}, gs = Object.keys(gear).sort().map((k) => { const it = gear[k]; return it ? k + ':' + (it.id || it.name || '') + ':' + (typeof it.rar === 'number' ? it.rar : it.r) : k + ':-'; }).join(',');
-  return [g.id, g.lvl, g.style, g.name, g.skin, g.hair, g.plume, g.color, g.face, g.beard, g.hairStyle, gs, (g.scars || []).join('+'), (g.wounds || []).filter((w) => w.w > 0 || w.w == null).map((w) => w.part || w.id).sort().join('+'), o.w, o.h, o.pose, o.style].join('|');
+  return [g.id, g.lvl, g.style, g.name, g.skin, g.hair, g.plume, g.color, g.face, g.beard, g.hairStyle, gs, (g.scars || []).join('+'), g.look ? JSON.stringify(g.look) : '', /* FIGHTERS */ (g.wounds || []).filter((w) => w.w > 0 || w.w == null).map((w) => w.part || w.id).sort().join('+'), o.w, o.h, o.pose, o.style].join('|');
 };
 const mix = (a, b, t) => new THREE.Color(a).lerp(new THREE.Color(b), t);
 

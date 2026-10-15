@@ -43,6 +43,7 @@ function schedule(ctx, scr, root, draw) {
   const week = S.week + st.wk, Lg = D.LEAGUES[st.league], fs = lm.festival(S, week);
   if (st.league > ml) { root.append(card([row([medal('lock', 'dark big'), col([h('div', 'ax-name', Lg.n), note(Lg.d), note(`Reach ${fmt(Lg.fame)} fame to enter. You have ${fmt(S.fame)}.`)], 'ax-grow')]), meter(S.fame, Lg.fame, 'var(--lx-gold)')], 'dim')); return; }
   if (fs) { const b = h('div', 'ax-banner', [medal('star', 'big'), col([h('div', 'ax-name', fs.n), h('div', '', fs.d)], 'ax-grow')]); b.style.setProperty('--k', fs.c); root.append(b); }
+  { const tw = lm.townFor ? lm.townFor(S, week) : null; if (tw === 'road') { root.append(card([row([medal('arena', 'dark'), col([h('div', 'ax-name', 'On the road'), note('The ludus is travelling: no fights are offered this week.')], 'ax-grow')]), U.button({ label: 'The Circuit', icon: 'arena', variant: 'bronze', onClick: () => ctx.open('circuit', {}) })])); return; } else if (tw && tw.hosts.includes(st.league)) root.append(pill(`${tw.n}: purses x${tw.purse.toFixed(2)}, a Showpiece every other week`, { tone: 'gold', ico: 'arena' })); } // ECONOMY: circuit town banner
   const evs = lm.events(S, week, st.league);
   if (!evs.length) { root.append(empty('arena', 'No matches announced', 'Advance the week, or try a challenge.')); return; }
   const list = h('div', 'ax-grid'); evs.forEach((ev) => list.append(eventCard(ctx, ev, lv, draw))); root.append(list);
@@ -69,7 +70,7 @@ function withdraw(ctx, ev, draw) {
 
 function eventCard(ctx, ev, lv, draw) {
   const S = ctx.S, lm = L(), m = KIND[ev.kind] || KIND.duel, en = S.entries[ev.key], wx = lm.weather(S, ev.key), rev = lm.isRevenge(S, ev);
-  const head = h('div', 'ax-evh', [medal(m.ico), col([h('div', 'ax-evt', ev.title), h('div', 'ax-sub', `${m.label} · ${D.LEAGUES[ev.league].n}`)], 'ax-grow')]);
+  const head = h('div', 'ax-evh', [medal(m.ico), col([h('div', 'ax-evt', ev.title), h('div', 'ax-sub', `${m.label} · ${D.LEAGUES[ev.league].n}${ev.where ? ' · ' + ev.where : ''}`)], 'ax-grow')]); // ECONOMY: circuit town
   head.style.setProperty('--k', m.k);
   const tags = h('div', 'ax-row ax-wrap ax-gap4');
   if (D.DIFF[ev.diff]) tags.append(pill(D.DIFF[ev.diff].n, { tone: ev.diff === 2 ? 'bad' : ev.diff === 1 ? 'warn' : 'good', tip: ev.diff === 2 ? 'A stronger opponent for a bigger purse.' : ev.diff === 0 ? 'A weaker opponent for a smaller purse.' : 'An even match.', tipTitle: D.DIFF[ev.diff].n + ' duel' }));
