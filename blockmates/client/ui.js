@@ -127,7 +127,12 @@ export class UI {
     if (G.showPlayers && now - (this._plT || 0) > 400) {
       this._plT = now;
       this.players.innerHTML = `<h3>${G.worldName} <small>${G.players.size} online</small></h3>` + [...G.players.values()].map((p) => `<div class="pl"><canvas width="26" height="34" data-id="${p.id}"></canvas><b>${esc(p.name)}</b><span>${p.id === G.myId ? G.ping + ' ms' : ''}</span></div>`).join('');
-      for (const cv of this.players.querySelectorAll('canvas')) drawChar(cv, G.players.get(+cv.dataset.id).look);
+      for (const cv of this.players.querySelectorAll('canvas')) {
+        const look = G.players.get(+cv.dataset.id).look;
+        if (G.r3) {
+          import('./r3/preview.js').then(({ portraitURL }) => { const im = new Image(); im.onload = () => { const g = cv.getContext('2d'); g.clearRect(0, 0, cv.width, cv.height); g.drawImage(im, 0, 0, cv.width, cv.height); }; im.src = portraitURL(look); }).catch(() => drawChar(cv, look));
+        } else drawChar(cv, look);
+      }
     }
   }
   emoteBar() {
@@ -361,12 +366,14 @@ export class UI {
     this.showModal(`<div class="card"><h2>Paused</h2>
       <label>Sound <input id="vs" type="range" min="0" max="100" value="${Math.round(G.sound.vol * 100)}"></label>
       <label>Music <input id="vm" type="range" min="0" max="100" value="${Math.round(G.sound.musicVol * 100)}"></label>
+      <label>View <select id="vv"><option value="3d">3D blocks</option><option value="2d">Classic 2D</option></select></label>
       <label>Graphics <select id="vg"><option value="1">Light</option><option value="1.5">Medium</option><option value="2">Sharp</option></select></label>
       <label>Zoom <input id="vz" type="range" min="30" max="180" value="${Math.round(G.zoom * 100)}"></label>
       <div class="keys"><b>WASD / arrows</b> move, <b>Space</b> jump, <b>Shift</b> run, <b>Click</b> a block to walk over and mine it, click open ground to walk there, <b>double click</b> any square to dig your way to it, <b>hold</b> to keep mining, <b>Right mouse</b> place or use, <b>Shift + click</b> back wall, <b>1-0 / wheel</b> hotbar, <b>E</b> backpack, <b>Q</b> drop, <b>T</b> chat, <b>Tab</b> players, <b>F</b> eat, <b>V</b> emotes, <b>+/-</b> zoom, <b>F2</b> photo</div>
       <div class="btns"><button id="mok">Resume</button><button id="mleave">Leave world</button></div></div>`, (m) => {
       m.querySelector('#vs').oninput = (e) => G.sound.setVol(e.target.value / 100, G.sound.musicVol);
       m.querySelector('#vm').oninput = (e) => G.sound.setVol(G.sound.vol, e.target.value / 100);
+      const vv = m.querySelector('#vv'); vv.value = G.view; vv.onchange = () => G.setView(vv.value);
       const vg = m.querySelector('#vg'); vg.value = String(G.r.maxDpr); vg.onchange = () => { G.r.maxDpr = +vg.value; try { localStorage.setItem('blockmates.gfx', vg.value); } catch { /* private mode */ } };
       m.querySelector('#vz').oninput = (e) => { G.zoom = e.target.value / 100; };
       m.querySelector('#mok').onclick = () => this.hideModal();

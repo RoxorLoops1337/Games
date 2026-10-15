@@ -23,6 +23,8 @@ export class Game {
     this.sound = new Sound();
     this.ui = new UI(this);
     this.tut = new Tutorial(this);
+    this.r3 = null;
+    try { this.view = localStorage.getItem('blockmates.view') || '3d'; } catch { this.view = '3d'; }
     this.weather = { kind: '', k: 0 };
     this.reset();
     this.zoom = clamp(window.innerHeight / (22 * 32), 0.7, 1.6);
@@ -67,6 +69,7 @@ export class Game {
     await net.open();
     net.send({ t: 'join', name: profile.name, token: profile.token, look: profile.look, password: profile.password || '' });
     this.pinger = setInterval(() => net.send({ t: 'ping', c: performance.now() }), 2000);
+    await this.setupView();
     this.running = true;
     this.last = performance.now();
     requestAnimationFrame((n) => this.frame(n));
@@ -99,6 +102,25 @@ export class Game {
     }
     this.retrying = false;
     if (!this.leaving) this.leave(true, 'Could not reconnect.');
+  }
+  // 3D by default; falls back to the painted 2D view if WebGL is missing
+  async setupView() {
+    if (this.view === '3d' && !this.r3) {
+      try {
+        const { Renderer3D } = await import('./render3d.js');
+        const r = new Renderer3D(document.getElementById('gl'), this.r);
+        this.r3 = r.ok ? r : null;
+        if (this.r3) this.r3.onLost = () => { this.view = '2d'; this.r3 = null; document.body.classList.remove('mode3d'); this.ui && this.ui.showToast('3D view lost, switched to classic 2D'); };
+      } catch (e) { console.warn('3D view unavailable, using 2D', e); this.r3 = null; }
+    }
+    if (this.view !== '3d') this.r3 = this.r3 && null;
+    if (this.r3) this.r3.reset();
+    document.body.classList.toggle('mode3d', !!this.r3);
+  }
+  setView(v) {
+    this.view = v;
+    try { localStorage.setItem('blockmates.view', v); } catch { /* private mode */ }
+    this.setupView();
   }
   send(o) { if (this.net) this.net.send(o); }
   leave(silent, msg) {
@@ -295,7 +317,9 @@ export class Game {
   photo() {
     const hud = document.getElementById('hud'); hud.style.visibility = 'hidden';
     requestAnimationFrame(() => requestAnimationFrame(() => {
-      this.canvas.toBlob((b) => { const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = 'blockmates-' + Date.now() + '.png'; a.click(); hud.style.visibility = ''; });
+      const out = document.createElement('canvas'); out.width = this.canvas.width; out.height = this.canvas.height; const og = out.getContext('2d');
+      if (this.r3) { og.drawImage(document.getElementById('gl'), 0, 0, out.width, out.height); } og.drawImage(this.canvas, 0, 0);
+      out.toBlob((b) => { const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = 'blockmates-' + Date.now() + '.png'; a.click(); hud.style.visibility = ''; });
     }));
   }
   // ---- tap to act: a click on a block walks over and mines it, a click on open ground walks there
@@ -450,6 +474,7 @@ export class Game {
   // ------------------------------------------------------------ pointer actions
   cellAtMouse() {
     const ts = this.ts, r = this.r;
+    if (this.r3) { const p = this.r3.pick(this.mouse.x * r.dpr, this.mouse.y * r.dpr); if (p) return { wx: p.wx, wy: p.wy, x: Math.floor(p.wx), y: Math.floor(p.wy) }; }
     const wx = this.cam.x + (this.mouse.x * r.dpr - r.w / 2) / ts, wy = this.cam.y + (this.mouse.y * r.dpr - r.h / 2) / ts;
     return { wx, wy, x: Math.floor(wx), y: Math.floor(wy) };
   }
@@ -540,7 +565,7 @@ export class Game {
     while (this.acc >= DT) { this.acc -= DT; this.fixedStep(); }
     if (!this.joined) { this.r.resize(); this.ui.status.textContent = this.status; return; }
     this.update(dt);
-    this.r.frame(this);
+    if (this.r3) this.r3.frame(this); else this.r.frame(this);
     this.frames++; this.fpsT += dt;
     if (this.fpsT > 1) { this.fps = this.frames; this.frames = 0; this.fpsT = 0; }
     if (this.debug) this.drawDebug();
@@ -548,6 +573,7 @@ export class Game {
   }
 
   update(dt) {
+    this.dt = dt;
     const me = this.me;
     this.ts = 32 * this.zoom * this.r.dpr;
     // sky clock keeps ticking between snapshots

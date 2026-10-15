@@ -55,7 +55,8 @@ function renderLook() {
     row.appendChild(sw); lookEl.appendChild(row);
   }
 }
-function preview() { drawChar($('prev'), profile.look); }
+let pv3 = null; // 3D turntable preview when WebGL works
+function preview() { drawChar($('prev'), profile.look); if (pv3) pv3.set(profile.look); }
 $('rand').onclick = () => {
   const r = (n) => Math.floor(Math.random() * n);
   profile.look = { skin: r(SKINS.length), hair: r(HAIRS.length), hairStyle: r(HAIR_STYLES), shirt: r(SHIRTS.length), pants: r(PANTS.length), eyes: r(5) };
@@ -73,6 +74,13 @@ function menuLoop(now) {
   requestAnimationFrame(menuLoop);
   const dt = Math.min(0.1, (now - lastT) / 1000); lastT = now;
   menuG.t += dt; menuG.time += dt * 5; menuG.cam.x += dt * 0.5;
+  if (game.r3 && !game.r3.lost) {
+    try {
+      game.r3.menuFrame(profile.look, menuG.t);
+      if (pv3) pv3.render(menuG.t * 0.8, menuG.t);
+      return;
+    } catch (e) { console.warn('3D menu failed, using 2D', e); game.setView('2d'); document.body.classList.remove('mode3d'); }
+  }
   const r = game.r; r.resize(); menuG.ts = Math.max(24, r.h / 22);
   menuG.cam.y = 90;
   r.drawSky(menuG);
@@ -82,7 +90,14 @@ function menuLoop(now) {
   g.fillStyle = '#7bd85a'; g.fillRect(0, gy, r.w, 6 * r.dpr);
   void phaseOf;
 }
-requestAnimationFrame(menuLoop);
+game.setupView().then(async () => {
+  if (!game.r3) return;
+  try {
+    const { getPreview } = await import('./r3/preview.js');
+    pv3 = getPreview(); const c = pv3.canvas; c.id = 'prev3'; c.style.cssText = 'width:110px;height:150px';
+    $('prev').style.display = 'none'; $('prev').after(c); preview();
+  } catch (e) { console.warn('3D preview unavailable', e); pv3 = null; }
+}).finally(() => requestAnimationFrame(menuLoop));
 
 // ---- connecting
 function normalizeAddr(a) {
