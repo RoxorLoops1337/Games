@@ -516,6 +516,7 @@ export function createAudio(opts = {}) {
       const tt = t + i * 0.34, e = G(0), f = ctx.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = base * 1.5; f.Q.value = 2.2; env(e.gain, tt, 0.02, 0.55 - 0.08 * i, 0.3); f.connect(e); e.connect(d);
       osc('sawtooth', base * 1.15, tt, 0.34, f, { f1: base * 1.75, fd: 0.12 }); osc('sawtooth', base * 1.7, tt + 0.12, 0.26, f, { f1: base * 0.95, fd: 0.22 });
       burst(tt, 0.3, d, { f0: base * 2, q: 1.5, g: 0.08, a: 0.03, kind: 'white' });
+      burst(tt, 0.4, d, { type: 'lowpass', f0: 260, q: 0.7, g: 0.3, a: 0.05, kind: 'brown' });   // chest and wing body so the call does not read as a pure whistle
     }
   });
   def('owl', 0.4, 1.6, 0, 0.45, 0, 1, (t, d, o) => { const b = 400 * (0.88 + rng() * 0.28), gap = 0.5 + rng() * 0.2; [[0, 0.4 + rng() * 0.2], [gap, 0.5 + rng() * 0.25]].forEach(([dt, du], i) => { const e = G(0); env(e.gain, t + dt, 0.08, 0.5 - 0.06 * i, du); e.connect(d); osc('sine', hz(o, b * (1 - 0.05 * i)), t + dt, du + 0.1, e, { f1: b * 0.85 }); osc('sine', hz(o, b * 2), t + dt, du, (() => { const x = G(0.12); x.connect(e); return x; })()); }); });
