@@ -132,11 +132,14 @@
   const TABS = [
     ['body', 'Body', () => [
       section('Skin tone', null, [swatches('skin', CC.SKIN, { label: 'Skin tone' })]),
-      section('Head shape', null, [slider('headW', 'Head width'), slider('headH', 'Head height'), slider('chin', 'Chin')]),
+      section('Body presets', 'a quick frame, then fine-tune below', [bodyPresets()]),
+      section('Jaw', null, [grid('jaw', { kind: 'face', label: 'Jaw' })]),
+      section('Head shape', null, [slider('headW', 'Head width'), slider('headH', 'Head height'), slider('chin', 'Chin'), slider('neckW', 'Neck width')]),
       section('Ears', null, [grid('ear', { kind: 'face', label: 'Ears' }), slider('earSize', 'Ear size')]),
       section('Body', 'double-click a slider to reset', [slider('height', 'Height'), slider('build', 'Shoulders'), slider('torsoLen', 'Torso length'), slider('legLen', 'Leg length'), slider('legT', 'Leg width'), slider('armLen', 'Arm length')]),
     ]],
     ['hair', 'Hair', () => [
+      shuffleRow('face', 'Shuffle the face and hair'),
       section('Hairstyle', null, [grid('hair', { kind: 'headwide', ov: (id) => ({ hair: id, headwear: 'none' }), label: 'Hairstyle' })]),
       section('Hair colour', null, [swatches('hairColor', CC.HAIR, { label: 'Hair colour' })]),
       section('Colour effect', null, [chips('dye'), el('div', { style: 'height:8px' }), colorRow('hairColor2', CC.HAIR, 'Second colour')], null),
@@ -161,6 +164,7 @@
       section('Glasses', null, [grid('glasses', { kind: 'face', label: 'Glasses' }), el('div', { style: 'height:8px' }), colorRow('glC1', CLOTH, 'Frame colour'), colorRow('glC2', CLOTH, 'Lens colour')], null),
     ]],
     ['outfit', 'Outfit', () => [
+      shuffleRow('outfit', 'Shuffle the outfit'),
       section('Outfit style', null, [grid('onepiece', { kind: 'body', label: 'Outfit style' })]),
       section('Animal', 'plush onesie', [grid('animal', { kind: 'headwide', ov: (id) => ({ animal: id, onepiece: 'onesie', headwear: 'hood' }), label: 'Animal' }), el('div', { style: 'height:8px' }), colorRow('opC1', CLOTH, 'Plush colour'), colorRow('opC2', CLOTH, 'Belly and trim colour'), label('The hood is under Extras, Headwear.')], (c) => c.onepiece === 'onesie'),
       section('One-piece colours', null, [colorRow('opC1', CLOTH, 'Main colour'), colorRow('opC2', CLOTH, 'Trim colour')], (c) => ['dress', 'sundress', 'jumpsuit', 'overalls'].indexOf(c.onepiece) >= 0),
@@ -185,6 +189,22 @@
     ['save', 'Save', () => saveTab()],
   ];
 
+  const BODY_PRESETS = [
+    ['Chibi', { height: 1, build: 1, torsoLen: 1, legLen: 0, legT: 1, armLen: 1, neckW: 1 }],
+    ['Petite', { height: 0.92, build: 0.92, torsoLen: 0.96, legLen: -4, legT: 0.92, armLen: 0.96, neckW: 0.9 }],
+    ['Tall', { height: 1.05, build: 1.08, torsoLen: 1.17, legLen: 4, legT: 1, armLen: 1.06, neckW: 1.1 }],
+    ['Broad', { height: 1.03, build: 1.2, torsoLen: 1.12, legLen: 2, legT: 1.15, armLen: 1.04, neckW: 1.3 }],
+    ['Lanky', { height: 1.08, build: 0.92, torsoLen: 1.2, legLen: 12, legT: 0.88, armLen: 1.12, neckW: 1 }],
+  ];
+  function bodyPresets() {
+    const box = el('div', { class: 'chips' });
+    BODY_PRESETS.forEach((p) => { const b = el('button', { type: 'button', class: 'chip', text: p[0], 'aria-pressed': 'false' }); b.onclick = () => set(p[1]); box.appendChild(b); refreshers.push(() => b.setAttribute('aria-pressed', String(Object.keys(p[1]).every((k) => Math.abs(cfg[k] - p[1][k]) < 1e-6)))); });
+    return box;
+  }
+  // a shuffle row at the top of a tab: rolls only that tab's part of the character
+  function shuffleRow(how, text) {
+    return el('div', { class: 'btnrow', style: 'padding-top:10px' }, [el('button', { type: 'button', class: 'btn small gold', text: text, onclick: () => { const r = CC.rng((Date.now() ^ (Math.random() * 1e9)) >>> 0); const c = CC.roll(r, cfg, how); c.name = cfg.name; replaceAll(c); } })]);
+  }
   function presetsSection() {
     const box = el('div', { class: 'grid', role: 'group', 'aria-label': 'Start from' });
     CC.PRESETS.forEach((p) => {
@@ -354,7 +374,7 @@
     $('undo').onclick = undo; $('redo').onclick = redo;
     $('roll').onclick = () => {
       const r = CC.rng((Date.now() ^ (Math.random() * 1e9)) >>> 0), A = ['Loopy', 'Bouncy', 'Glitter', 'Mellow', 'Vocal', 'Fizzy', 'Sunny', 'Moody', 'Disco', 'Echo', 'Sparkly', 'Cosy'], B = ['Rox', 'Jas', 'Fox', 'Bean', 'Comet', 'Pip', 'Nova', 'Tofu', 'Mango', 'Miso', 'Poppy', 'Ziggy'];
-      const c = CC.roll(r, cfg, 'all'); c.name = A[Math.floor(r() * A.length)] + ' ' + B[Math.floor(r() * B.length)];
+      const c = CC.roll(r, cfg, r() < 0.5 ? 'masc' : 'all'); c.name = A[Math.floor(r() * A.length)] + ' ' + B[Math.floor(r() * B.length)];
       replaceAll(c, 'Surprise! Meet ' + c.name);
     };
     $('name').addEventListener('input', () => set({ name: $('name').value }));

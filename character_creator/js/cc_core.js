@@ -25,6 +25,13 @@
   // ---- the default skull (Jasmin's): 17 control points, closed Catmull-Rom ----
   const SKULL = [[-2, -58], [30, -54], [51, -36], [59.5, -8], [59, 11], [53.5, 28], [42, 43], [27, 55.2], [9, 60.4], [-9, 56.4], [-24, 51.5], [-38, 41], [-52, 25], [-60.5, 6], [-62, -10], [-58, -33], [-40, -52]];
   CC.SKULL = SKULL;
+  // the jaw shapes: the same crown (so hair, hats and ears fit every one), a different lower half
+  CC.JAWS = {
+    soft: SKULL,
+    lean: [[-2, -58], [30, -54], [51, -36], [59.5, -8], [57, 14], [51, 34], [40, 50], [26, 60], [8, 63], [-8, 58], [-24, 48], [-40, 34], [-54, 14], [-61, -8], [-58, -33], [-40, -52]],
+    square: [[-2, -58], [30, -54], [51, -36], [59.5, -8], [60, 16], [60, 40], [52, 56], [30, 61], [8, 62], [-14, 61], [-38, 56], [-54, 42], [-61, 16], [-62, -10], [-58, -33], [-40, -52]],
+    pointed: [[-2, -58], [30, -54], [51, -36], [59.5, -8], [57, 10], [50, 26], [38, 40], [24, 52], [10, 64, 1], [-4, 54], [-20, 46], [-36, 36], [-52, 20], [-61, -4], [-62, -14], [-58, -33], [-40, -52]],
+  };
 
   // the top ring of the skull, far temple over the crown to the near ear, pushed outward by d (a hair cap that hugs or puffs)
   CC.ring = function (d, up) {
@@ -98,7 +105,7 @@
     K.sw = sw; K.sh = shh;
     K.T = (p) => { const q = [p[0] * sw, p[1] * shh + (p[1] > 40 ? chin * (p[1] - 40) / 20 : 0)]; if (p.length > 2) q.push(p[2]); return q; };
     K.TT = (pts) => pts.map(K.T);
-    K.skull = K.TT(SKULL);
+    K.skull = K.TT(CC.JAWS[c.jaw] || SKULL);
     // hair palette
     const hc = c.hairColor, h2 = c.hairColor2;
     K.hair = { base: hc, sh: shade(hc, 0.04), hi: tint(hc, 0.34), streak: mix(hc, lum(hc) > 0.5 ? '#c07a30' : '#e8a060', 0.45), c2: h2, c2sh: shade(h2, 0.04), dye: c.dye };

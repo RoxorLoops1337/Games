@@ -34,7 +34,6 @@
       const T = K.TT, a = T([[-48, -2], [-60, -10], [-94, -34, 1], [-78, -2], [-70, 12], [-60, 22], [-50, 20]]);
       RJ.cel(g, a, K.skin, { shadow: K.skinSh, line: LINE.main, depth: 3, tension: 0.7 });
       RJ.ink(g, T([[-64, -4], [-80, -18], [-72, 0], [-62, 14]]), { w: LINE.fine, color: C.inkSoft, taper: 0.4 });
-      const b = T([[48, -4], [60, -12], [78, -26, 1], [68, 0], [58, 14]]);
       return;
     }
     RJ.ear(g, p[0], p[1], { r: r * (st === 'small' ? 0.72 : st === 'big' ? 1.3 : 1), side: -1, skin: K.skin, shade: K.skinSh });
@@ -178,13 +177,13 @@
     const cel = (g, pts, o) => RJ.cel(g, pts, H.base, Object.assign({ shadow: H.sh, line: LINE.main, depth: 4, hi: H.hi, hiW: 1.4, tension: 0.8, weightVar: 0.3 }, o));
     const stache = (g, big) => cel(g, [[cx - 22, my - 4], [cx - 12, my - 12 - (big ? 2 : 0)], [cx, my - 8], [cx + 12, my - 12 - (big ? 2 : 0)], [cx + 22, my - 4], [cx + 16, my + 1], [cx + 8, my - 3.5], [cx, my - 4], [cx - 8, my - 3.5], [cx - 16, my + 1]], { depth: 3 });
     const muzzle = (g) => { g.save(); g.fillStyle = K.skin; g.beginPath(); g.ellipse(cx, my - 1, 15, 8.5, 0, 0, TAU); g.fill(); g.restore(); };
-    const jaw = [[-48, 6], [-46, 22], [-38, 41], [-24, 51.5], [-9, 56.4], [9, 60.4], [27, 55.2], [42, 43], [53.5, 28], [58, 12]];
-    const inner = [[58, 8], [52, 18], [44, 29], [32, 34], [20, 32], [9, 29], [-3, 31], [-14, 33], [-30, 33], [-42, 26], [-47, 8]];
+    const jaw = [[-48, 14], [-46, 26], [-38, 41], [-24, 51.5], [-9, 56.4], [9, 60.4], [27, 55.2], [42, 43], [53.5, 28], [58, 16]];
+    const inner = [[58, 14], [52, 24], [44, 33], [32, 38], [20, 36], [9, 33], [-3, 35], [-14, 37], [-30, 37], [-42, 30], [-47, 14]];
     return (g) => {
       if (st === 'stubble') {
-        g.save(); g.globalAlpha = 0.3; g.fillStyle = H.base; g.beginPath(); tk.trace(g, jaw.concat(inner)); g.fill(); g.globalAlpha = 1;
-        const t = []; for (let i = 0; i < 42; i++) { const x = -42 + (i * 37) % 96, y = 24 + ((i * 29) % 34); t.push([x, y, x + 1.5, y + 2.4]); }
-        RJ.hatch(g, t, { w: 0.9, color: H.base, alpha: 0.7 }); g.restore();
+        g.save(); g.globalAlpha = 0.16; g.fillStyle = H.base; g.beginPath(); tk.trace(g, jaw.concat(inner)); g.fill(); g.globalAlpha = 1;
+        const t = []; for (let i = 0; i < 40; i++) { const x = -40 + (i * 37) % 92, y = 34 + ((i * 29) % 26); if (y < 40 && Math.abs(x - cx) < 18) continue; t.push([x, y, x + 1.5, y + 2.4]); }
+        RJ.hatch(g, t, { w: 0.9, color: H.base, alpha: 0.35 }); g.restore();
       } else if (st === 'moustache') stache(g, false);
       else if (st === 'curly') { stache(g, true); [[-1, 0], [1, 1]].forEach((s) => lockCurl(g, H, cx + s[0] * 21, my - 4, s[0])); }
       else if (st === 'goatee') { cel(g, [[cx - 11, my + 6], [cx + 11, my + 6], [cx + 12, my + 22], [cx + 4, my + 28], [cx - 4, my + 28], [cx - 12, my + 22]], { depth: 3 }); muzzle(g); stache(g, false); }

@@ -56,7 +56,7 @@
     } });
   }
   const seam = (g, pts, c, w) => RJ.ink(g, pts, { w: w || 1.3, color: c, taper: 0.5, wobble: 0.02, alpha: 0.85 });
-  const neckSkin = (g, K) => RJ.neck(g, 2, -160, { w: 21, h: 24, skin: K.skin, shade: K.skinSh });
+  const neckSkin = (g, K) => RJ.neck(g, 2, -160, { w: 21 * K.c.neckW, h: 24, skin: K.skin, shade: K.skinSh });
   // bare torso under every top (so a crop top or a tank shows skin)
   function bareTorso(g, K) {
     RJ.cel(g, sym([[-13, -150, 1], [13, -150, 1]], [[24, -140], [29, -122], [26, -100], [27, -86], [30, -77, 1]]), K.skin, { shadow: K.skinSh, line: LINE.main, depth: 5, tension: 0.6 });
@@ -147,6 +147,46 @@
     const pts = [[-20, -154, 1], [-8, -154, 1], [0, -134, 1], [8, -154, 1], [20, -154, 1]].concat(right, [[0, -72]], right.slice().reverse().map(mirror));
     cloth(g, pts, c.c1, { pattern: c.pat, c2: c.c2, decor: (gg) => { [-112, -98, -84].forEach((y) => { gg.beginPath(); gg.arc(-3, y, 2.1, 0, TAU); gg.fillStyle = col.tint(c.c1, 0.5); gg.fill(); }); } });
     return { sleeve: 'short', len: 0.62, sleeveColor: c.c2 };
+  };
+  TOPS.shirt = (g, K, c) => {
+    const neck = [[-13, -158, 1], [-9, -150], [0, -144], [9, -150], [13, -158, 1]];
+    cloth(g, sym(neck, TEE_R, [0, -71.5]), c.c1, { pattern: c.pat, c2: c.c2, decor: (gg) => { RJ.ink(gg, [[0, -142], [0, -74]], { w: 1.2, color: col.shade(c.c1, 0.2), taper: 0, wobble: 0 }); [-128, -112, -96, -80].forEach((y) => { gg.beginPath(); gg.arc(0, y, 2, 0, TAU); gg.fillStyle = col.tint(c.c1, 0.5); gg.fill(); gg.lineWidth = 0.8; gg.strokeStyle = C.inkSoft; gg.stroke(); }); RJ.cel(gg, [[-30, -128], [-22, -126], [-20, -118], [-30, -117]], c.c1, { shadow: col.shade(c.c1), line: LINE.fine + 0.2, depth: 1.5, tension: 0.2 }); } });
+    // the collar: two points folded over the shoulders
+    [-1, 1].forEach((sd) => cloth(g, [[sd * 2, -144, 1], [sd * 12, -158, 1], [sd * 24, -152], [sd * 18, -138, 1]], c.c2, { depth: 2, tension: 0.2, noHi: true }));
+    return { sleeve: 'short', len: 0.66 };
+  };
+  TOPS.polo = (g, K, c) => {
+    const neck = [[-13, -157, 1], [-10, -150], [-3, -140], [0, -138, 1], [3, -140], [10, -150], [13, -157, 1]];
+    cloth(g, sym(neck, TEE_R, [0, -71.5]), c.c1, { pattern: c.pat, c2: c.c2, decor: (gg) => { RJ.ink(gg, [[0, -138], [0, -118]], { w: 1.2, color: col.shade(c.c1, 0.2), taper: 0, wobble: 0 }); [-130, -122].forEach((y) => { gg.beginPath(); gg.arc(-2, y, 1.8, 0, TAU); gg.fillStyle = col.tint(c.c1, 0.5); gg.fill(); }); } });
+    [-1, 1].forEach((sd) => cloth(g, [[sd * 2, -142, 1], [sd * 11, -157, 1], [sd * 22, -152], [sd * 16, -140, 1]], c.c2, { depth: 2, tension: 0.2, noHi: true }));
+    return { sleeve: 'short', len: 0.62 };
+  };
+  TOPS.track = (g, K, c) => {
+    const right = [[32, -147], [37, -130], [37, -104], [38, -76, 1]];
+    cloth(g, sym(NECK.high.map((p) => [p[0], p[1] + 2].concat(p.slice(2))), right, [0, -72]), c.c1, { pattern: c.pat, c2: c.c2, decor: (gg) => { [-1, 1].forEach((sd) => { RJ.ink(gg, [[sd * 30, -144], [sd * 35, -110], [sd * 35, -76]], { w: 3.2, color: c.c2, taper: 0, wobble: 0, pressure: 'flat' }); RJ.ink(gg, [[sd * 25, -146], [sd * 30, -110], [sd * 30, -76]], { w: 3.2, color: c.c2, taper: 0, wobble: 0, pressure: 'flat' }); }); } });
+    cloth(g, [[-14, -164], [14, -164], [15, -146], [-15, -146]], c.c1, { depth: 3, tension: 0.3, decor: (gg) => { RJ.ink(gg, [[-15, -156], [15, -156]], { w: 2.4, color: c.c2, taper: 0, wobble: 0 }); } });
+    RJ.ink(g, [[0, -160], [0, -76]], { w: 2.6, color: C.ink, taper: 0, wobble: 0 }); RJ.ink(g, [[0, -160], [0, -76]], { w: 1.2, color: '#cfd5de', taper: 0, wobble: 0 });
+    cloth(g, [[-38, -84], [38, -84], [38, -76, 1], [-38, -76, 1]], c.c2, { depth: 1.5, tension: 0.2, noHi: true });
+    return { sleeve: 'long', arm: c.c1, cuff: c.c2 };
+  };
+  TOPS.jersey = (g, K, c) => {
+    const neck = [[-15, -156, 1], [-9, -148], [-3, -138], [0, -136, 1], [3, -138], [9, -148], [15, -156, 1]];
+    const right = [[24, -146], [30, -136], [33, -120], [34, -100], [36, -74, 1]];
+    bareTorso(g, K);
+    cloth(g, neck.concat(right, [[0, -70]], right.slice().reverse().map(mirror)), c.c1, { pattern: c.pat, c2: c.c2, decor: (gg) => { [-1, 1].forEach((sd) => RJ.ink(gg, [[sd * 24, -146], [sd * 33, -120], [sd * 36, -74]], { w: 4, color: c.c2, taper: 0, wobble: 0, pressure: 'flat' })); RJ.fillPts(gg, [[-14, -124], [14, -124], [14, -100], [-14, -100]], c.c2, 0.0); gg.save(); gg.strokeStyle = c.c2; gg.lineWidth = 4.5; gg.lineCap = 'round'; gg.beginPath(); gg.moveTo(-8, -118); gg.lineTo(6, -118); gg.lineTo(-2, -96); gg.stroke(); gg.restore(); } });
+    rim(g, neck, c.c2, 3);
+    return { sleeve: 'none' };
+  };
+  TOPS.cardigan = (g, K, c) => {
+    const under = c.c2;
+    cloth(g, sym(NECK.crew, TEE_R, [0, -71.5]), under, { pattern: c.pat, c2: c.c1 });
+    rim(g, NECK.crew.slice(1, 4), col.shade(under, 0.12), 2);
+    [-1, 1].forEach((sd) => {
+      const pts = [[sd * 15, -157, 1], [sd * 30, -148], [sd * 35, -130], [sd * 38, -104], [sd * 40, -75, 1], [sd * 7, -73, 1], [sd * 6, -100], [sd * 7, -130], [sd * 9, -150]];
+      cloth(g, pts, c.c1, { depth: 6, tension: 0.45, decor: (gg) => { gg.save(); gg.globalAlpha = 0.16; gg.strokeStyle = '#000'; gg.lineWidth = 1; for (let x = 8; x < 40; x += 4) { gg.beginPath(); gg.moveTo(sd * x, -156); gg.lineTo(sd * x, -70); gg.stroke(); } gg.restore(); } });
+    });
+    [-120, -104, -88].forEach((y) => { g.beginPath(); g.arc(-3, y, 2.4, 0, TAU); g.fillStyle = col.tint(c.c1, 0.5); g.fill(); g.lineWidth = 0.9; g.strokeStyle = C.inkSoft; g.stroke(); });
+    return { sleeve: 'long', arm: c.c1, cuff: col.shade(c.c1, -0.02), under };
   };
   function openJacket(g, K, c, o) {
     const under = c.c2;
@@ -245,6 +285,25 @@
     RJ.ink(g, [[t[0] - nx * w * 0.5, t[1] - ny * w * 0.5], [t[0] + nx * w * 0.5, t[1] + ny * w * 0.5]], { w: 3, color: c2, taper: 0, wobble: 0, pressure: 'flat' });
     if (laces) for (let k = 1; k < 4; k++) { const q = [an[0] + ux * (h * k / 4.5), an[1] + uy * (h * k / 4.5)]; RJ.ink(g, [[q[0] - nx * 5, q[1] - ny * 5], [q[0] + nx * 5, q[1] + ny * 5]], { w: 1.2, color: C.inkSoft, taper: 0, wobble: 0 }); }
   }
+  // a sandal: a sole, a bare foot, two straps and an ankle strap (the toe points along the leg's forward direction)
+  function footFrame(g, an, hip) { const d = Math.hypot(hip[0] - an[0], hip[1] - an[1]) || 1, ux = (an[0] - hip[0]) / d, uy = (an[1] - hip[1]) / d; g.translate(an[0], an[1]); g.rotate(Math.atan2(uy, ux) - Math.PI / 2); g.scale(1.2, 1.2); }
+  function sandal(g, K, an, hip, c1, c2) {
+    g.save(); footFrame(g, an, hip);
+    RJ.cel(g, [[-10, 6], [-11, 11], [22, 12, 1], [26, 8], [22, 5]], c1, { shadow: col.shade(c1, 0.15), line: LINE.main, depth: 2.5, tension: 0.4 });
+    RJ.cel(g, [[-9, -4], [-10, 6], [21, 6], [24, 2], [16, -2], [6, -6], [-2, -7]], K.skin, { shadow: K.skinSh, line: LINE.main, depth: 3, hi: false, tension: 0.6, decor: (gg) => { [[14, 4], [18, 4], [22, 5]].forEach((t) => RJ.ink(gg, [[t[0], t[1]], [t[0] + 0.5, t[1] - 4]], { w: 1.1, color: C.inkSoft, taper: 0.5, wobble: 0 })); } });
+    [[4, -7, 11, 6], [-2, -7, 2, 6]].forEach((st) => RJ.ink(g, [[st[0], st[1]], [st[2], st[3]]], { w: 3.2, color: c2, taper: 0, wobble: 0, pressure: 'flat' }));
+    RJ.ink(g, [[-11, -4], [-9, -6], [-4, -6]], { w: 2.6, color: c2, taper: 0, wobble: 0, pressure: 'flat' });
+    g.restore();
+  }
+  // a heeled shoe: a pointed pump with a block heel and a small ankle strap
+  function heel(g, K, an, hip, c1, c2) {
+    g.save(); footFrame(g, an, hip);
+    RJ.cel(g, [[-11, 2], [-12, 13, 1], [-6, 13, 1], [-5, 7]], c2, { shadow: col.shade(c2), line: LINE.main, depth: 2, tension: 0.1 });
+    RJ.cel(g, [[-10, -5], [-12, 4], [-6, 7], [6, 8], [18, 7], [28, 4, 1], [20, -1], [10, -5], [-1, -8]], c1, { shadow: col.shade(c1, 0.15), line: LINE.main, depth: 4, hi: col.tint(c1, 0.4), hiW: 1.5, tension: 0.6, decor: (gg) => { RJ.fillPts(gg, [[-12, 4], [28, 4], [28, 8], [-12, 8]], col.shade(c1, 0.3), 0.5); } });
+    RJ.cel(g, [[-4, -6], [10, -5], [6, 0], [-4, 0]], K.skin, { shadow: K.skinSh, line: LINE.fine + 0.2, depth: 1.5, hi: false, tension: 0.5 });
+    RJ.ink(g, [[-9, -8], [-2, -8], [5, -7]], { w: 2.2, color: c2, taper: 0, wobble: 0, pressure: 'flat' });
+    g.restore();
+  }
   function shoeDef(K, bd) {
     const c = K.c, c1 = c.shoeC1, c2 = c.shoeC2, st = c.shoe;
     const shoe = { color: c1, sole: col.mix(c1, '#ffffff', 0.55), shade: col.shade(c1, 0.1), k: 1.25 };
@@ -254,8 +313,8 @@
     else if (st === 'hightop') { shoe.toeCap = c2; decor = (g, hip, an) => shaft(g, K, an, hip, 17, c1, c2, true); }
     else if (st === 'boot') { shoe.k = 1.3; shoe.sole = col.shade(c1, 0.2); shoe.heel = col.shade(c1, 0.2); decor = (g, hip, an) => shaft(g, K, an, hip, 28, c1, c2, false); }
     else if (st === 'slipon') { shoe.k = 1.2; shoe.accent = c2; shoe.sole = c2; }
-    else if (st === 'sandal') { shoe.color = K.skin; shoe.shade = K.skinSh; shoe.sole = c1; shoe.accent = c2; shoe.k = 1.15; shoe.hi = false; }
-    else if (st === 'heel') { shoe.k = 1.05; shoe.sole = col.shade(c1, 0.25); shoe.heel = c2; shoe.toeCap = null; }
+    else if (st === 'sandal') { shoe.k = 0.001; decor = (g, hip, an) => sandal(g, K, an, hip, c1, c2); }
+    else if (st === 'heel') { shoe.k = 0.001; decor = (g, hip, an) => heel(g, K, an, hip, c1, c2); }
     else if (st === 'socks') { shoe.color = c.sockC; shoe.sole = col.shade(c.sockC, 0.1); shoe.shade = col.shade(c.sockC); shoe.k = 1.2; }
     else if (st === 'paws') { shoe.paw = true; shoe.color = c1; shoe.shade = col.shade(c1); shoe.hi = col.tint(c1, 0.3); shoe.pawLine = c2; shoe.k = 1.35; }
     return { shoe, decor };
@@ -331,7 +390,6 @@
         RJ.cel(g, tk.ellipsePts(2, -92, 20, 24, 14, 0), cc2, { shadow: col.shade(cc2), line: LINE.mid, depth: 4, hi: col.tint(cc2, 0.3) });
         furMarks(g, [[-28, -120], [28, -122], [-30, -80], [32, -76], [-18, -58], [20, -56], [-6, -134]], col.shade(fc, 0.25));
         out.sleeve = 'long'; out.armColor = fc; out.cuff = col.shade(fc, -0.02);
-        const r = TOPS_RES[c.animal] || {};
       } else {
         // separates: skin base, the bottom's hip block or skirt, then the top
         bareTorso(g, K);
@@ -351,11 +409,10 @@
     out.onesie = one === 'onesie';
     return out;
   };
-  const TOPS_RES = {};
   function furMarks(g, pts, c) { RJ.hatch(g, pts.map((p) => [[p[0] - 3.5, p[1] - 2], [p[0] - 2, p[1] + 1.6], [p[0], p[1] - 0.6], [p[0] + 1.6, p[1] + 1.8], [p[0] + 3.4, p[1] - 1.6]]), { w: 1.3, color: c, alpha: 0.9 }); }
 
   // what a top does to the arms, known without drawing: {kind, len, color, cuff}
-  const SLEEVE_OF = { tee: 'short', vneck: 'short', tank: 'none', crop: 'short', long: 'long', baseball: 'short', hoodie: 'long', jumper: 'long', turtle: 'long', jacket: 'long', bomber: 'long', blazer: 'long', vest: 'short' };
+  const SLEEVE_OF = { tee: 'short', vneck: 'short', tank: 'none', crop: 'short', long: 'long', baseball: 'short', hoodie: 'long', jumper: 'long', turtle: 'long', jacket: 'long', bomber: 'long', blazer: 'long', vest: 'short', shirt: 'short', track: 'long', jersey: 'none', cardigan: 'long', polo: 'short' };
   function armInfo(K, one) {
     const c = K.c;
     let kind, len = 0.62, color = null, cuff = null, sleeveColor = null;
@@ -371,7 +428,8 @@
       if (t === 'vest') sleeveColor = c2;
       if (t === 'long') { color = c1; cuff = c2; }
       if (t === 'hoodie' || t === 'jumper' || t === 'turtle') { color = c1; cuff = col.shade(c1, -0.02); }
-      if (t === 'jacket' || t === 'bomber' || t === 'blazer') { color = c1; cuff = t === 'bomber' ? c2 : col.shade(c1, -0.02); }
+      if (t === 'jacket' || t === 'bomber' || t === 'blazer' || t === 'cardigan' || t === 'track') { color = c1; cuff = t === 'bomber' || t === 'track' ? c2 : col.shade(c1, -0.02); }
+      if (t === 'shirt' || t === 'polo') { len = 0.66; sleeveColor = c1; }
       if (t === 'tee' || t === 'vneck') sleeveColor = c1;
       if (t === 'crop') sleeveColor = c1;
     }

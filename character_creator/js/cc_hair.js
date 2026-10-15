@@ -229,17 +229,18 @@
     const d = capDef(K, 0, 'sweep', { outer: ring, strands: 9, flowO: { shift: 0.1, bow: 0.22 } });
     d.top = true; return d;
   };
+  function shavedSide(g, K) {
+    const f = tk.flatten(MH.HAIRLINE, { closed: false, step: 2.5 }), pts = [];
+    for (let i = 0; i < f.length; i += 2) pts.push([f[i], f[i + 1]]);
+    const stub = col.mix(K.skin, '#7a4e38', 0.38), stubDk = col.mix(K.skin, '#5a3626', 0.5);
+    g.save(); g.fillStyle = stub; g.beginPath(); tk.trace(g, K.TT(pts.concat([[-72, 30], [-72, -84], [-17, -84]]))); g.fill();
+    g.globalAlpha = 0.7; g.fillStyle = stubDk; g.beginPath(); g.rect(-100, -100, 200, 200); tk.trace(g, K.skull, RJ.lx(4), -7); g.fill('evenodd'); g.globalAlpha = 1;
+    RJ.hatch(g, K.TT([[-52, -18], [-50, -4], [-53, 8], [-47, -28], [-55, -30], [-47, 12], [-52, 17], [-45, 2]]).map((p) => [p[0], p[1], p[0] + 3, p[1] + 3]), { w: 0.8, color: stubDk, alpha: 0.5 });
+    g.restore();
+  }
   STY.mohawk = (K) => ({
     top: true, fshadow: null,
-    pre(g, S) {                                                                  // the shaved stubble side on the skull
-      const f = tk.flatten(MH.HAIRLINE, { closed: false, step: 2.5 }), pts = [];
-      for (let i = 0; i < f.length; i += 2) pts.push([f[i], f[i + 1]]);
-      const stub = col.mix(K.skin, '#7a4e38', 0.38), stubDk = col.mix(K.skin, '#5a3626', 0.5);
-      g.save(); g.fillStyle = stub; g.beginPath(); tk.trace(g, K.TT(pts.concat([[-72, 30], [-72, -84], [-17, -84]]))); g.fill();
-      g.globalAlpha = 0.7; g.fillStyle = stubDk; g.beginPath(); g.rect(-100, -100, 200, 200); tk.trace(g, K.skull, RJ.lx(4), -7); g.fill('evenodd'); g.globalAlpha = 1;
-      RJ.hatch(g, K.TT([[-52, -18], [-50, -4], [-53, 8], [-47, -28], [-55, -30], [-47, 12], [-52, 17], [-45, 2]].map((p) => p)).map((p, i) => [p[0], p[1], p[0] + 3, p[1] + 3]), { w: 0.8, color: stubDk, alpha: 0.5 });
-      g.restore();
-    },
+    pre(g, S) { shavedSide(g, K); },
     front(g) { mohawkFront(g, K); RJ.ink(g, K.TT(MH.HAIRLINE), { w: LINE.main, color: C.ink, taper: 0.15, pressure: 'flat', wobble: 0.03 }); },
     mid(g, S) { MH.MULLET.forEach((m, i) => lock(g, K, K.TT(m.sp), m.w, { w0: m.w * 0.7, w1: 0, tipPow: 1.5, bend: S.P.hairSwing * 0.5 * (1 + i * 0.3), shadow: col.shade(K.hair.sh, 0.02) })); },
   });
@@ -367,6 +368,77 @@
     const ring = CC.ring(8, 4), outer = CC.teeth(ring, 6, 11, 0.25), hl = jag(HL.bangs, 5, 8);
     return { outer, hl, fshadow: K.TT(ring.concat(HL.bangs)), front(g) { fill(g, K, K.TT(outer.concat(hl)), { flow: [K.TT(HL.bangs), K.TT(ring), 7], flowO: { bow: 0.05 } }); },
       mid(g, S) { MH.MULLET.forEach((m, i) => lock(g, K, K.TT(m.sp), m.w, { w0: m.w * 0.7, w1: 0, tipPow: 1.5, bend: S.P.hairSwing * 0.5 * (1 + i * 0.3), shadow: col.shade(K.hair.sh, 0.02) })); } };
+  };
+
+  // ---- the masculine set ----
+  // undercut: shaved sides, a thick swept-back top that sits high on the head
+  STY.undercut = (K) => {
+    const outer = vol([[58, -22], [57, -40], [50, -54], [38, -66], [20, -74], [0, -78], [-20, -76], [-36, -68], [-46, -56], [-50, -40], [-48, -26]], K.c.hairVol);
+    const hl = [[-44, -24], [-38, -32], [-26, -40], [-10, -46], [8, -50], [26, -50], [42, -46], [54, -36], [58, -24]];
+    const poly = K.TT(outer.concat(hl));
+    return { outer, hl, top: true, fshadow: K.TT(outer.concat(hl)), pre(g) { shavedSide(g, K); },
+      front(g) { fill(g, K, poly, { flow: [K.TT(hl), K.TT(outer), 9], flowO: { shift: -0.12, bow: 0.1 } }); RJ.ink(g, K.TT(hl), { w: LINE.main, color: C.ink, taper: 0.15, pressure: 'flat', wobble: 0.03 }); } };
+  };
+  // slicked back: a smooth cap with a high hairline and every strand flowing back from the forehead
+  STY.slick = (K) => {
+    const d = capDef(K, 10, 'high', { up: 4, strands: 10, flowO: { shift: -0.18, bow: 0.06 }, after(g) { RJ.fillPts(g, K.TT([[-10, -62], [14, -70], [38, -66], [30, -60], [8, -62], [-8, -58]]), K.hair.hi, 0.6); } });
+    return d;
+  };
+  // flat top: straight vertical sides and a level top
+  STY.flattop = (K) => {
+    const outer = vol([[60, -16], [60, -52], [56, -76], [50, -79], [-50, -81], [-56, -78], [-60, -52], [-58, -14]], K.c.hairVol), hl = HL.high;
+    const poly = K.TT(outer.concat(hl));
+    return { outer, hl, top: true, fshadow: K.TT(outer.concat(hl)), front(g) { fill(g, K, poly, { depth: 6, tension: 0.15, flow: [K.TT(hl), K.TT([[-56, -76], [0, -80], [56, -76]]), 9], flowO: { bow: 0.03 } }); } };
+  };
+  // curtains: a centre part with two long locks hanging over the brow on each side
+  STY.curtains = (K) => {
+    const d = capDef(K, 12, 'center', { strands: 8 });
+    const near = K.TT([[-10, -48], [-26, -42], [-42, -30], [-50, -12], [-52, 6, 1], [-44, -2], [-38, -16], [-24, -30], [-6, -40]]);
+    const far = K.TT([[20, -52], [36, -46], [50, -34], [56, -18], [58, 0, 1], [52, -8], [48, -22], [38, -34], [24, -44]]);
+    return Object.assign(d, { over(g) { fill(g, K, near, { depth: 4, noHi: true }); fill(g, K, far, { depth: 4, noHi: true }); } });
+  };
+  // locs: a cap of rope-like strands, ropes hanging to the shoulders at the back and the sides
+  STY.locs = (K) => {
+    const ring = CC.ring(10, 0), outer = bumps(ring, 7, 7), hl = HL.high, poly = K.TT(outer.concat(hl));
+    const rope = (g, sp, w) => { const H = K.hair; RJ.lock(g, sp, H.base, { wMax: w, w0: w, w1: w * 0.7, tipPow: 1, shadow: H.sh, gloss: false, strands: 0, line: LINE.main, cap: 'round' }); for (let i = 1; i < 5; i++) { const p = CC.along(sp, i / 5), q = CC.along(sp, i / 5 + 0.04), a = Math.atan2(q[1] - p[1], q[0] - p[0]); RJ.ink(g, [[p[0] - Math.sin(a) * w * 0.4, p[1] + Math.cos(a) * w * 0.4], [p[0] + Math.sin(a) * w * 0.4, p[1] - Math.cos(a) * w * 0.4]], { w: 1.1, color: H.sh, taper: 0.3, wobble: 0, alpha: 0.8 }); } };
+    return { outer, hl, fshadow: K.TT(ring.concat(hl)),
+      front(g) { fill(g, K, poly, { depth: 5, flow: [K.TT(hl), K.TT(ring), 9], flowO: { bow: 0.04 } }); },
+      back(g, S) { const sw = S.P.hairSwing * 3; for (let i = 0; i < 9; i++) { const x = -58 + i * 14, y0 = -30 - Math.abs(4 - i) * 3; rope(g, K.TT([[x, y0], [x + sw * 0.4 + (i - 4) * 2, y0 + 34], [x + sw + (i - 4) * 4, 64 + (i % 2) * 8]]), 11); } },
+      mid(g, S) { const sw = S.P.hairSwing * 3; [[-54, 2], [-44, 12], [56, 6]].forEach((o, i) => rope(g, K.TT([[o[0], o[1]], [o[0] + sw * 0.4 + (i === 2 ? 4 : -4), o[1] + 30], [o[0] + sw + (i === 2 ? 8 : -8), 58 + i * 4]]), 10)); } };
+  };
+  // man bun: a smooth high cap and a bun low at the back
+  STY.manbun = (K) => {
+    const d = capDef(K, 8, 'high', { strands: 9, flowO: { shift: -0.14, bow: 0.05 } });
+    return Object.assign(d, { ties: [{ x: -38, y: -46, a: 0.6, r: 11 }], back(g) { fill(g, K, K.TT(CC.cloud(-50, -56, 19, 18, 8, 0.1, 0.2)), { depth: 4, tension: 0.9 }); } });
+  };
+  // cornrows: a close cap with parallel braided rows running from the brow over the crown
+  STY.rows = (K) => {
+    const ring = CC.ring(4, 0), hl = HL.high, poly = K.TT(ring.concat(hl)), H = K.hair;
+    return { outer: ring, hl, fshadow: K.TT(ring.concat(hl)),
+      front(g) {
+        fill(g, K, poly, { depth: 3, noHi: true, strands: 0, flow: [K.TT(hl), K.TT(ring), 0] });
+        for (let i = 0; i < 6; i++) {
+          const u = (i + 0.5) / 6, a = CC.along(hl, u), b = CC.along(ring, u), line = K.TT([a, [lerp(a[0], b[0], 0.5) + (u - 0.5) * 6, lerp(a[1], b[1], 0.5) - 4], b]);
+          RJ.ink(g, line, { w: 5.5, color: col.shade(H.base, 0.12), taper: 0.1, wobble: 0, pressure: 'flat' });
+          RJ.ink(g, line, { w: 3.2, color: H.hi, taper: 0.1, wobble: 0, pressure: 'flat', alpha: 0.5 });
+          const n = 7; for (let j = 1; j < n; j++) { const p = CC.along(line, j / n), q = CC.along(line, j / n + 0.02), ang = Math.atan2(q[1] - p[1], q[0] - p[0]), c2 = Math.cos(ang + 0.9) * 2.6, s2 = Math.sin(ang + 0.9) * 2.6; RJ.ink(g, [[p[0] - c2, p[1] - s2], [p[0] + c2, p[1] + s2]], { w: 1.2, color: H.sh, taper: 0.3, wobble: 0 }); }
+        }
+      },
+      ties: [{ x: -58, y: 4, a: 1.2, r: 9 }],
+      back(g, S) { const sw = S.P.hairSwing * 2; lock(g, K, K.TT([[-58, 4], [-62 + sw * 0.4, 30], [-58 + sw, 56]]), 14, { w0: 12, w1: 4, tipPow: 1 }); } };
+  };
+  // faux hawk: a crop whose top is combed up into a soft ridge
+  STY.fauxhawk = (K) => {
+    const ring = CC.ring(7, 0).map((p) => (Math.abs(p[0] + 4) < 26 ? [p[0], p[1] - 14 + Math.abs(p[0] + 4) * 0.3] : p));
+    const outer = CC.teeth(ring, 7, 7, 0.25), hl = jag(HL.sweep, 5, 7), poly = K.TT(outer.concat(hl));
+    return { outer, hl, top: true, fshadow: K.TT(CC.ring(7, 0).concat(HL.sweep)), front(g) { fill(g, K, poly, { flow: [K.TT(HL.sweep), K.TT(ring), 8], flowO: { shift: 0.06, bow: 0.1 } }); } };
+  };
+  // shaggy: a messy mop with a heavy fringe over the brows and tufts round the ears
+  STY.shaggy = (K) => {
+    const ring = CC.ring(12, 2), outer = CC.teeth(ring, 9, 8, 0.3), hl = jag(HL.bangs.map((p) => [p[0], p[1] + 6]), 7, 10), poly = K.TT(outer.concat(hl));
+    const near = K.TT([[-46, -2], [-58, 2], [-66, 22, 1], [-54, 28], [-60, 44, 1], [-46, 34], [-42, 18]]);
+    const far = K.TT([[52, -6], [62, 0], [66, 18, 1], [58, 16], [60, 30, 1], [50, 22]]);
+    return { outer, hl, fshadow: K.TT(ring.concat(HL.bangs)), front(g) { fill(g, K, poly, { flow: [K.TT(HL.bangs), K.TT(ring), 9], flowO: { bow: 0.12 } }); }, over(g) { fill(g, K, near, { depth: 3, noHi: true, tension: 0.4 }); fill(g, K, far, { depth: 3, noHi: true, tension: 0.4 }); } };
   };
 
   CC.hairStyle = function (K) {
