@@ -94,7 +94,7 @@
     return `${nm} ${o.b}. ${qs.map((q) => q.line.replace('{n}', nm)).join(' ')} ${g.age ? `At ${g.age} years, ${nm} ${st}.` : `${nm} ${st}.`}`;
   };
   L.fSummary = (g) => ({ origin: L.fOrigin(g), quirks: L.fQuirks(g), stage: L.fStage(g), bio: L.fBio(g) });
-  L.fighters = { ver: 2, ORIGINS, QUIRKS, KEYS, modLine, hs, roll };
+  L.fighters = { ver: 2, off: false, ORIGINS, QUIRKS, KEYS, modLine, hs, roll };
 
   // ============================================================ 3. age and the career arc
   const STAGES = [
@@ -300,7 +300,7 @@
   const derive1 = L.derive;
   L.derive = (g, ctx) => {
     const d = derive1(g, ctx);
-    if (!g || g.beast || !(g.org || g.q || g.tk || g.wm || g.age)) return d;
+    if (L.fighters.off || !g || g.beast || !(g.org || g.q || g.tk || g.wm || g.age)) return d;
     const s = shade(g, ctx), m = s.m;
     for (const k of ['hp', 'atk', 'def', 'spd']) if (m[k]) d[k] *= 1 + clamp(m[k], -0.2, 0.2);
     if (m.crit) d.crit = clamp(d.crit + clamp(m.crit, -0.1, 0.1), 0, 0.6); if (m.eva) d.eva = clamp(d.eva + clamp(m.eva, -0.1, 0.1), 0, 0.4);
