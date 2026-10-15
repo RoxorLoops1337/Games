@@ -704,3 +704,4 @@
     u.role = 'vanguard'; u.tgt = 'A0'; u.wt = 'A0'; u.swap = { id: 'A0', t: 1 }; u.cmdId = 'press'; u.beast = 'lion'; u.ai = 'pounce'; u.bx = {}; u.wa = {}; u.bs = {}; u.fs = {};
   })();
 })(typeof globalThis !== 'undefined' ? globalThis : this);
+if (typeof module !== 'undefined' && typeof require === 'function') { for (const f of ['campaign', 'fighters', 'economy']) require('./' + f + '.js'); }   // depth wave 10 modules (browser: script tags in index.html)
