@@ -85,7 +85,7 @@ export function open(ctx, arg) {
     const stars = h('div', '', U.stars(lm.stars(g), 5)); U.tooltip(stars, 'Stars show natural talent across the five stats.', { title: 'Stars' });
     const tr = h('div', 'lm-chips', [chip(T.n, 'purple'), h('span', 'lm-sub', T.d)]);
     const fchips = h('div', 'lm-chips'); // FIGHTERS: title, origin, age and stage
-    if (lm.fEnsure && g.org) { const o = lm.fOrigin(g), sg = lm.fStage(g), tt = lm.fTitleDef(g.rn); if (tt) fchips.append(chip(tt.n, 'gold', tt.d)); fchips.append(chip(o.n, 'grey', lm.fBio(g)), chip(`Age ${g.age}, ${sg.n}`, g.age >= 36 ? 'red' : g.age >= 32 ? 'bronze' : 'green', sg.d)); }
+    if (lm.fEnsure && g.org) { const o = lm.fOrigin(g), sg = lm.fStage(g), tt = lm.fTitleDef(g.rn); if (tt) fchips.append(chip(tt.n, 'gold', tt.d)); fchips.append(chip(o.n, 'grey', lm.fBio(g)), chip(`Age ${g.age}, ${sg.n}`, g.age >= 38 ? 'red' : g.age >= 34 ? 'bronze' : 'green', sg.d)); }
     const nameBox = h('div', 'pf-id', [h('div', 'lm-h1', g.name), (g.nick || g.title) ? h('div', 'lm-sub', [g.nick || '', g.nick && g.title ? ' · ' : '', g.title ? h('b', '', g.title) : ''].filter((x) => x !== '')) : null, h('div', 'lm-chips', [sc, chip('Lv ' + g.lvl, 'gold'), rec]), stars, tr, fchips.childNodes.length ? fchips : null]);
     const need = lm.need(g.lvl);
     const mt = (label, bar, val) => h('div', 'pf-m', [h('span', 'lm-num', label), bar, h('b', 'lm-num', val)]);
@@ -261,7 +261,7 @@ export function open(ctx, arg) {
     if (Object.keys(o.mods).length) c.append(h('div', 'lm-sub', `Origin: ${lm.fighters.modLine(o.mods)}.`));
     box.append(c);
     lm.fQuirks(g).forEach((q) => { const qc = h('div', 'lm-card pf-q', [h('div', 'lm-row lm-wrap', [h('b', 'lm-name', q.n), chip('Quirk', 'purple')]), h('div', 'pf-pro', q.pro), h('div', 'pf-con', q.con)]); qc.style.marginTop = '8px'; box.append(qc); });
-    const sg = lm.fStage(g); const ac = h('div', 'lm-card'); ac.style.marginTop = '8px'; ac.append(h('div', 'lm-row lm-wrap', [h('b', 'lm-name', `Career stage: ${sg.n}`), chip(`Age ${g.age}`, g.age >= 36 ? 'red' : 'green')]), h('div', 'lm-sub', sg.d + '. Fighters age one year every season (12 weeks).')); box.append(ac);
+    const sg = lm.fStage(g); const ac = h('div', 'lm-card'); ac.style.marginTop = '8px'; ac.append(h('div', 'lm-row lm-wrap', [h('b', 'lm-name', `Career stage: ${sg.n}`), chip(`Age ${g.age}`, g.age >= 38 ? 'red' : 'green')]), h('div', 'lm-sub', sg.d + '. Fighters age one year every 16 weeks.')); box.append(ac);
     const rows = lm.fShadeRows(g, S);
     if (rows.length) { const sc = h('div', 'lm-card'); sc.style.marginTop = '8px'; sc.append(h('div', 'lm-name', 'Where the small shades come from')); rows.forEach((r) => sc.append(h('div', 'pf-shade', [h('b', '', r.src), h('span', '', r.text)]))); sc.append(h('div', 'lm-sub', 'Everything on this list is a small shade, never a spike. Total from talents at the cap stays near 11%.')); box.append(sc); }
     return box;
@@ -275,7 +275,7 @@ export function open(ctx, arg) {
   function careerBlock() {
     const box = h('div'); if (!owned || !g.q) return box; box.append(sec('Retirement'));
     if (typeof g.swan === 'number') box.append(h('div', 'lm-card lm-gold', [h('div', 'lm-name', 'A last fight is planned'), h('div', 'lm-sub', `${g.name} fights once more at +8% damage and +6% HP, then retires to the Hall of Legends.`), U.button({ label: 'Change my mind', variant: 'bronze', onClick: () => { lm.fSwanCancel(g); ctx.sfx('uiTap'); commit(); redraw(); } })]));
-    else box.append(note(g.age >= 34 || g.lvl >= 8 ? 'Every fighter ends somewhere. Choose how: freedom, a trainer\'s staff, one last fight or the Hall of Legends.' : 'Retirement opens at level 8 (freedom at level 5).'));
+    else box.append(note(g.age >= 36 || g.lvl >= 8 ? 'Every fighter ends somewhere. Choose how: freedom, a trainer\'s staff, one last fight or the Hall of Legends.' : 'Retirement opens at level 8 (freedom at level 5).'));
     return box;
   }
   function bondsTab() {

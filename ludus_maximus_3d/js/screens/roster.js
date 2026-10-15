@@ -121,7 +121,7 @@ export function open(ctx) {
     const chips = h('div', 'lm-chips');
     if (lm.fEnsure && lm.fEnsure(S, g).q) { // FIGHTERS
       const tt = lm.fTitleDef(g.rn), sg = lm.fStage(g); if (tt) chips.append(chip(tt.short, 'gold', tt.n + ': ' + tt.d));
-      chips.append(chip(`${g.age} ${sg.n}`, g.age >= 36 ? 'red' : g.age >= 32 ? 'bronze' : 'green', sg.d), ...lm.fQuirks(g).map((q) => chip(q.n, 'purple', `${q.pro}. ${q.con}.`)));
+      chips.append(chip(`${g.age} ${sg.n}`, g.age >= 38 ? 'red' : g.age >= 34 ? 'bronze' : 'green', sg.d), ...lm.fQuirks(g).map((q) => chip(q.n, 'purple', `${q.pro}. ${q.con}.`)));
       if (lm.fFree(g) > 0) chips.append(chip(`${lm.fFree(g)} talent pt${lm.fFree(g) > 1 ? 's' : ''}`, 'green', 'Open the profile to spend talent points.'));
     }
     if (g.inj > 0) chips.append(chip(`${lm.woundOf && lm.woundOf(g) ? d.WOUNDS[lm.woundOf(g).part].n : 'Injured'} ${g.inj}w`, 'red', 'Injured fighters rest until healed. Treat or rest them from their profile or the Infirmary.')); // WAVE2: body part

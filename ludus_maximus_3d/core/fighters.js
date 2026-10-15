@@ -76,7 +76,7 @@
     if (!(g.age > 0)) {
       const w = (S && S.week) || 1, base = 19 + (hs('age', g.id, g.skin) % 11) + Math.min(6, Math.floor((g.lvl || 1) / 3));
       g.ag0 = [base, w]; g.age = base;
-    } else if (S && Array.isArray(g.ag0)) g.age = g.ag0[0] + Math.floor(Math.max(0, S.week - g.ag0[1]) / 12);
+    } else if (S && Array.isArray(g.ag0)) g.age = g.ag0[0] + Math.floor(Math.max(0, S.week - g.ag0[1]) / AGE_WEEKS);
     if (!isObj(g.tk)) g.tk = {}; if (!isObj(g.wm)) g.wm = {}; if (!Array.isArray(g.ll)) g.ll = []; if (!isObj(g.lk)) g.lk = {};
     return g;
   };
@@ -97,15 +97,16 @@
   L.fighters = { ver: 2, off: false, ORIGINS, QUIRKS, KEYS, modLine, hs, roll };
 
   // ============================================================ 3. age and the career arc
+  const AGE_WEEKS = 16;   // one year of age every 16 weeks (a season is 12): a 96 week career is six years
   const STAGES = [
     { id: 'green', n: 'Green', to: 21, mods: { spd: 0.02, hp: -0.02 }, d: 'Quick but unseasoned: +2% speed, -2% HP' },
-    { id: 'prime', n: 'Prime', to: 31, mods: {}, d: 'In the best years of the body: no penalty' },
-    { id: 'vet', n: 'Veteran', to: 35, mods: { crit: 0.02, def: 0.01, spd: -0.01 }, d: 'Reads a fight: +2% crit, +1% armor, -1% speed' },
-    { id: 'waning', n: 'Waning', to: 39, mods: { crit: 0.02, atk: -0.02, spd: -0.03, hp: -0.02 }, d: 'The knees remember: +2% crit, -2% damage, -3% speed, -2% HP' },
-    { id: 'old', n: 'Old lion', to: 999, mods: { crit: 0.03, atk: -0.04, spd: -0.06, hp: -0.04 }, d: 'Cunning but spent: +3% crit, -4% damage, -6% speed, -4% HP' },
+    { id: 'prime', n: 'Prime', to: 33, mods: {}, d: 'In the best years of the body: no penalty' },
+    { id: 'vet', n: 'Veteran', to: 37, mods: { crit: 0.02, def: 0.01, spd: -0.01 }, d: 'Reads a fight: +2% crit, +1% armor, -1% speed' },
+    { id: 'waning', n: 'Waning', to: 41, mods: { crit: 0.02, atk: -0.015, spd: -0.025, hp: -0.015 }, d: 'The knees remember: +2% crit, -1.5% damage, -2.5% speed, -1.5% HP' },
+    { id: 'old', n: 'Old lion', to: 999, mods: { crit: 0.03, atk: -0.03, spd: -0.05, hp: -0.03 }, d: 'Cunning but spent: +3% crit, -3% damage, -5% speed, -3% HP' },
   ];
   L.fStage = (g) => { const a = g.age || 25; return STAGES.find((s) => a <= s.to) || STAGES[1]; };
-  L.fSTAGES = STAGES;
+  L.fSTAGES = STAGES; L.fAGE_WEEKS = AGE_WEEKS;
 
   // ============================================================ 4. talents, mastery, titles
   const TREES = {
@@ -436,7 +437,7 @@
   // ---------- the weekly pass
   L.fWeek = (S, rep) => {
     rep = rep || { notes: [] }; rep.notes = rep.notes || []; let said = 0; const say = (t) => { if (said++ < 3) rep.notes.push(t); };
-    S.glads.forEach((g) => { if (g.beast) return; const a0 = g.age; L.fEnsure(S, g); if (a0 && g.age > a0) { L.fLog(S, g, 'age' + g.age, `Turned ${g.age}.`); if (g.age === 32 || g.age === 36 || g.age === 40) say(`${g.name} is ${L.fStage(g).n.toLowerCase()} now: ${L.fStage(g).d}.`); } });
+    S.glads.forEach((g) => { if (g.beast) return; const a0 = g.age; L.fEnsure(S, g); if (a0 && g.age > a0) { L.fLog(S, g, 'age' + g.age, `Turned ${g.age}.`); if (g.age === 34 || g.age === 38 || g.age === 42) say(`${g.name} is ${L.fStage(g).n.toLowerCase()} now: ${L.fStage(g).d}.`); } });
     // quirk weeklies
     S.glads.forEach((g) => { if (g.beast) return; L.fQuirks(g).forEach((q) => { if (q.wk) addMo(g, q.wk); if (q.id === 'greedy' && S.gold < 100) addMo(g, -2); }); });
     // trainers coach
@@ -478,7 +479,7 @@
     (S.mentors || []).forEach((m) => { const mm = S.glads.find((x) => x.id === m.m), pp = S.glads.find((x) => x.id === m.p); if (mm && pp) L.fLog(S, pp, 'mt' + mm.id, `Took ${mm.name} as a mentor.`); });
     S.glads.forEach((g) => { if (!g.beast) L.fTitles(S, g).forEach((t) => say(`${g.name} is now known as "${t.n}".`)); });
     // an aging fighter hears the retirement question
-    const old = S.glads.find((g) => (g.age || 0) >= 38 && g.lvl >= 8 && !g.lk.oldnote); if (old) { old.lk.oldnote = 1; say(`${old.name} is ${old.age}. Consider a dignified end: freedom, a trainer's staff, or one last fight.`); }
+    const old = S.glads.find((g) => (g.age || 0) >= 40 && g.lvl >= 8 && !g.lk.oldnote); if (old) { old.lk.oldnote = 1; say(`${old.name} is ${old.age}. Consider a dignified end: freedom, a trainer's staff, or one last fight.`); }
     return rep;
   };
   const week0 = L.extWeek;
