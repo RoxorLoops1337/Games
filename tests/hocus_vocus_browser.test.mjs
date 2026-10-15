@@ -136,6 +136,15 @@ try {
       pos1 = await pos();
     }
     t.ok(pos1 !== pos0 || (await s.screen()) !== 'map', 'guided: the party walked onto painted ground (' + pos0 + ' -> ' + pos1 + ')');
+    // the unmute burst (PKAH!) and the other map effects are short-lived: none may outlive a second of screen time (a ms duration read as
+    // seconds once left frozen green bursts on the map for minutes)
+    if ((await s.screen()) === 'map') {
+      const fx = await s.ev(() => { const S = UI.screens.map && UI.screens.map.mapDebug && UI.screens.map.mapDebug.state(); return S && S.parts ? { n: S.parts.length, maxDur: Math.max(0, ...S.parts.map((p) => p.dur)) } : null; });
+      t.ok(!!fx && fx.maxDur <= 1, 'guided: map effects last at most a second (' + JSON.stringify(fx) + ')');
+      await s.tick(1200);
+      const left = await s.ev(() => { const S = UI.screens.map && UI.screens.map.mapDebug && UI.screens.map.mapDebug.state(); return S && S.parts ? S.parts.length : 0; });
+      t.eq(left, 0, 'guided: a second later every map effect is gone');
+    }
     await noGameErrors(s, 'guided/map');
     clean(s, 'guided/map');
     await s.close();

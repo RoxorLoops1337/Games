@@ -761,10 +761,11 @@
     guard(s, 'petals', () => s.petals.forEach((p) => ART.tk.petal(ctx, p.x, p.y, p.size, p.rot, 0.55, p.col)));
   }
 
-  // the short-lived effects: ART.fx pieces keyed by name (inkSplash, ring, sparkle), anchored to a world point
+  // the short-lived effects: ART.fx pieces keyed by name (inkSplash, ring, sparkle), anchored to a world point. dur is given in ms and kept
+  // in seconds, the unit of the screen clock s.t (a ms value against s.t left a 0.7 s burst on the map for 700 s, frozen mid-pop)
   function addFx(s, name, wx, wy, dur, o) {
     if (headless() || (reduced() && name !== 'ring')) return;
-    s.parts.push(Object.assign({ name, wx, wy, t0: s.t, dur, seed: U.hash(Math.round(wx), Math.round(wy), s.parts.length), sc: 1 }, o || {}));
+    s.parts.push(Object.assign({ name, wx, wy, t0: s.t, dur: dur / 1000, seed: U.hash(Math.round(wx), Math.round(wy), s.parts.length), sc: 1 }, o || {}));
     if (s.parts.length > 60) s.parts.shift();
   }
   function drawParts(s, ctx) {
