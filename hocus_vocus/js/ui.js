@@ -438,8 +438,8 @@ const UI = (() => {
     runTweens(dt);
     if (tipS.owner && tipS.el && tipS.owner.isConnected === false) tipHide();       // the anchor was removed with no pointerleave (a screen or card rebuilt under the pointer): never leave its bubble stuck
     const rec = S.cur;
-    if (rec && !rec.dead.update && typeof rec.def.update === 'function') {
-      try { rec.def.update(dt, c.t); } catch (e) { rec.dead.update = true; fail(rec.name + '.update', e); }
+    if (rec && !rec.dead.update && !(rec.wait && rec.wait.update > c.t) && typeof rec.def.update === 'function') {
+      try { rec.def.update(dt, c.t); } catch (e) { pause(rec, 'update', c.t); fail(rec.name + '.update', e); }
     }
     const ctx = S.vctx;
     if (ctx) {
@@ -447,9 +447,9 @@ const UI = (() => {
       ctx.globalAlpha = 1;
       ctx.fillStyle = '#0d0b1e';
       ctx.fillRect(0, 0, W, H);
-      if (rec && !rec.dead.draw && typeof rec.def.draw === 'function') {
+      if (rec && !rec.dead.draw && !(rec.wait && rec.wait.draw > c.t) && typeof rec.def.draw === 'function') {
         ctx.save();
-        try { rec.def.draw(ctx, c.t); } catch (e) { rec.dead.draw = true; fail(rec.name + '.draw', e); } finally { ctx.restore(); }
+        try { rec.def.draw(ctx, c.t); } catch (e) { pause(rec, 'draw', c.t); fail(rec.name + '.draw', e); } finally { ctx.restore(); }
         ctx.setTransform(S.px, 0, 0, S.px, 0, 0);
         ctx.globalAlpha = 1;
         ctx.globalCompositeOperation = 'source-over';
@@ -504,6 +504,14 @@ const UI = (() => {
     } catch (e) { /* fall through */ }
     api.toast('Could not copy', 'bad');
     return false;
+  }
+
+  // a screen whose update or draw threw is paused for 2 s and then tried again (a phone out of canvas memory throws for a moment and used to
+  // leave the screen frozen until it was left); after 20 failures in one visit it is switched off for good, as before
+  function pause(rec, part, t) {
+    rec.wait = rec.wait || {}; rec.fails = rec.fails || {};
+    rec.fails[part] = (rec.fails[part] || 0) + 1;
+    if (rec.fails[part] >= 20) rec.dead[part] = true; else rec.wait[part] = t + 2;
   }
 
   function fail(where, e) {
@@ -1146,13 +1154,29 @@ const UI = (() => {
 
   function optKey(o) { return o ? (o.dim ? 'd' : '') + (o.glow ? 'g' : '') + (o.on ? 'o' : '') + (o.done ? 'x' : '') + (o.color || '') + (o.n !== undefined && o.n !== null ? 'n' + o.n : '') : ''; }
 
+  // A phone browser that is out of canvas memory (Safari after a long session) returns no 2d context for a new canvas. Then free the icon
+  // cache and the older half of the art sprites and try once more; if that fails too the icon is drawn into a do-nothing context and NOT
+  // cached (o.bad), so the next build asks again instead of showing an empty circle for the rest of the session.
+  const NOCTX = { setTransform() {}, beginPath() {}, arc() {}, fill() {}, fillText() {}, drawImage() {}, save() {}, restore() {} };
   function offscreen(w, h) {
-    const c = document.createElement('canvas');
-    c.width = Math.max(1, Math.round(w * S.px)); c.height = Math.max(1, Math.round(h * S.px));
-    const g = c.getContext('2d');
-    g.setTransform(S.px, 0, 0, S.px, 0, 0);
-    return { c, g };
+    const make = () => {
+      const c = document.createElement('canvas');
+      c.width = Math.max(1, Math.round(w * S.px)); c.height = Math.max(1, Math.round(h * S.px));
+      return { c, g: safe(() => c.getContext('2d'), null) };
+    };
+    let o = make();
+    if (!o.g) {
+      iconCache.clear();
+      const ar = AR();
+      if (ar && ar.sprite && isFn(ar.sprite, 'evictHalf')) safe(() => ar.sprite.evictHalf());
+      o = make();
+    }
+    if (!o.g) return { c: o.c, g: new Proxy(NOCTX, { get: (t, k) => (k in t ? t[k] : () => {}), set: () => true }), bad: true };
+    o.g.setTransform(S.px, 0, 0, S.px, 0, 0);
+    return o;
   }
+  let coarse = null;
+  const ICON_CAP = () => { if (coarse === null) coarse = !!safe(() => window.matchMedia && window.matchMedia('(pointer: coarse)').matches, false); return coarse ? 300 : 700; };
 
   function iconSprite(kind, id, size, opts) {
     const key = kind + '|' + id + '|' + size + '|' + S.px.toFixed(2) + '|' + optKey(opts);
@@ -1160,7 +1184,8 @@ const UI = (() => {
     if (spr) return spr;
     const o = offscreen(size, size);
     drawIcon(o.g, kind, id, size / 2, size / 2, size, opts);
-    if (iconCache.size > 700) iconCache.delete(iconCache.keys().next().value);
+    if (o.bad) return o.c;
+    while (iconCache.size >= ICON_CAP()) iconCache.delete(iconCache.keys().next().value);
     iconCache.set(key, o.c);
     return o.c;
   }
@@ -1252,7 +1277,7 @@ const UI = (() => {
         o.g.fillStyle = '#140f2e'; o.g.textAlign = 'center'; o.g.textBaseline = 'middle'; o.g.font = '900 ' + Math.round(size * 0.5) + 'px Georgia, serif';
         o.g.fillText(String(h.name)[0], size / 2, size / 2 + 1);
       }
-      spr = o.c; iconCache.set(key, spr);
+      spr = o.c; if (!o.bad) iconCache.set(key, spr);
     }
     const c = mk('canvas', { class: 'ico medal-c', width: spr.width, height: spr.height, style: { width: size + 'px', height: size + 'px' }, 'aria-hidden': 'true' });
     safe(() => c.getContext('2d').drawImage(spr, 0, 0));

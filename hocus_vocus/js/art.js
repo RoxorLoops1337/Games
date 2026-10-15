@@ -383,6 +383,15 @@ const ART = (() => {
     } catch (e) { /* fall through to the inert stand-in */ }
     return { c: { width: w, height: h, _inert: true }, g: NOOP };
   }
+  // a real 1 x 1 transparent canvas, made while memory is fine, handed out (uncached) when the browser has no canvas memory left: callers
+  // that drawImage a sprite directly then draw nothing instead of throwing on the inert stand-in (which switched whole art pieces off)
+  let BLANK = null;
+  function blankCanvas() {
+    if (BLANK) return BLANK;
+    try { const c = document.createElement('canvas'); c.width = 1; c.height = 1; if (c.getContext && c.getContext('2d')) BLANK = c; } catch (e) { BLANK = null; }
+    return BLANK;
+  }
+  if (typeof document !== 'undefined' && document && typeof document.createElement === 'function') blankCanvas();
   const sprites = new Map();
   const sstat = { hits: 0, misses: 0, pixels: 0 };
   const patterns = new Map();
@@ -394,7 +403,17 @@ const ART = (() => {
     if (hit) { sstat.hits++; sprites.delete(k); sprites.set(k, hit); return hit.c; }
     sstat.misses++;
     let pw = Math.min(4096, Math.max(1, Math.ceil(w * res))), ph = Math.min(4096, Math.max(1, Math.ceil(h * res)));
-    const { c, g } = makeCanvas(pw, ph);
+    let { c, g } = makeCanvas(pw, ph);
+    // A browser that is out of canvas memory (Safari on a phone after a long session) hands back a canvas with no 2d context. Never cache
+    // that as the sprite (it would stay blank for the rest of the session): free the older half of the cache, try once more, and if it
+    // still fails return the inert stand-in uncached so the next frame asks again.
+    const real = typeof document !== 'undefined' && document && typeof document.createElement === 'function';
+    if (c._inert && real) {
+      sstat.fails = (sstat.fails || 0) + 1;
+      evictHalf();
+      ({ c, g } = makeCanvas(pw, ph));
+      if (c._inert) return blankCanvas() || c;
+    }
     try {
       g.setTransform(pw / w, 0, 0, ph / h, 0, 0);
       drawFn(g, w, h, c);
@@ -414,11 +433,18 @@ const ART = (() => {
     }
     return c;
   }
+  // drop the least recently used half of the sprites (their canvases are freed once nothing draws them)
+  function evictHalf() {
+    let n = sprites.size >> 1;
+    for (const k of sprites.keys()) { if (n-- <= 0) break; const e = sprites.get(k); sstat.pixels -= e.px; sprites.delete(k); }
+    patterns.clear();
+  }
+  sprite.evictHalf = evictHalf;
   sprite.maxCount = 400;
   sprite.maxPixels = 48e6;
   sprite.clear = () => { sprites.clear(); patterns.clear(); sstat.pixels = 0; };
   sprite.has = (key) => sprites.has(key + '@' + (A.res > 0 ? A.res : 1));
-  sprite.stats = () => ({ count: sprites.size, hits: sstat.hits, misses: sstat.misses, pixels: sstat.pixels });
+  sprite.stats = () => ({ count: sprites.size, hits: sstat.hits, misses: sstat.misses, pixels: sstat.pixels, fails: sstat.fails || 0 });
   sprite.drop = (prefix) => { for (const k of Array.from(sprites.keys())) if (k.indexOf(prefix) === 0) { sstat.pixels -= sprites.get(k).px; sprites.delete(k); } };
   // draw a sprite made by ART.sprite into ctx at (x, y) with logical size w x h
   function blit(ctx, spr, x, y, w, h, alpha) {
