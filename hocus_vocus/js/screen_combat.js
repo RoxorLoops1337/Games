@@ -290,7 +290,8 @@
       }
       case 'max_hp': {
         const h = heroOf(vm, e.hero);
-        if (h) { h.maxHp = Math.max(1, h.maxHp + e.n); h.hp = e.n > 0 ? Math.min(h.maxHp, h.hp + e.n) : Math.min(h.hp, h.maxHp); }
+        // a voiceless hero's maximum still grows (COMBAT raises it for lasting max HP), but their HP stays 0 until they come back
+        if (h) { h.maxHp = Math.max(1, h.maxHp + e.n); if (!h.down) h.hp = e.n > 0 ? Math.min(h.maxHp, h.hp + e.n) : Math.min(h.hp, h.maxHp); }
         break;
       }
       case 'pick_needed':

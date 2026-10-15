@@ -496,7 +496,7 @@ Readable at a glance: every buff name says "more", every debuff name says "less"
 | id (stays) | kind | Echowake name | Hocus Vocus name | text (exact) | Why |
 |---|---|---|---|---|---|
 | `might` | buff | Might | **Volume** | `Attacks deal +N damage per hit.` | turn it up, hit harder |
-| `bulwark` | buff | Bulwark | **Soundproof** | `Gain +N extra Block whenever you gain Block from a card.` | |
+| `bulwark` | buff | Bulwark | **Soundproof** | `Gain +N extra Block whenever you gain Block from a card or Charm.` | |
 | `regen` | buff | Regen | **Warm Tea** | `At the start of its turn, heal N, then Warm Tea falls by 1.` | a singer's remedy; the tea cools |
 | `thorns` | buff | Thorns | **Feedback** | `Whenever it is hit by an attack, the attacker takes N damage.` | hit it and it squeals back |
 | `dodge` | buff | Dodge | **Shimmy** | `Shimmies out of the next N attack hits completely.` | |
@@ -509,7 +509,7 @@ Readable at a glance: every buff name says "more", every debuff name says "less"
 | `charge` | resource (`raiga`) | Charge | **Rumble** | `Andy's low end. Built by taking hits and striking, released as thunder from below.` | |
 | `vulnerable` | debuff | Vulnerable | **Exposed** | `Takes 50% more attack damage.` | |
 | `weak` | debuff | Weak | **Muffled** | `Deals 25% less attack damage.` | the opposite of Volume |
-| `frail` | debuff | Frail | **Wobbly** | `Gains 25% less Block from cards.` | |
+| `frail` | debuff | Frail | **Wobbly** | `Gains 25% less Block from cards and Charms.` | |
 | `poison` | debuff | Poison | **Earworm** | `At the start of its turn, lose N HP (ignores Block), then Earworm falls by 1.` | a tune stuck in your head |
 | `burn` | debuff | Burn | **Sizzle** | `At the end of the round, take N damage (ignores Block), then Sizzle halves.` | |
 | `stun` | debuff | Stun | **Starstruck** | `Skips its next action. A starstruck hero cannot play cards on their next turn.` | too dazzled to move |
