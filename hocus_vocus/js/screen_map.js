@@ -55,7 +55,9 @@
 // UI.bus: map:paint {q, r, cost} once per unmute action (q, r is the tapped target, cost the whole Vox), map:brush {id} when a Spell is cast,
 // map:walk {q, r} when a walk starts (the real destination: the walk may stop short on unresolved content). Anchors (data-tut): `ink` (the Vox meter), hex (an
 // invisible box: the first hex of the cheapest chain toward the boss, which is what the `paint` hint points at; right after an unmute or a Spell it
-// moves to the hex that was just unmuted, which is what the `walk` hint points at, and goes back to the chain once a walk starts), `brushes` (the Spell tray), deck, relics.
+// moves to the hex that was just unmuted, which is what the `walk` hint points at, and goes back to the chain once a walk starts), `party` (an invisible box on
+// the party's hex: "This is you"), `fight` (an invisible box on the nearest revealed fight that is not done, zero sized when there is none: "A fight!"),
+// `brushes` (the Spell tray), deck, relics.
 //
 // TIME. Animation runs on update(dt) (the frame clock), so GAME.debug.tick is exact. With window.__HEADLESS every animation is skipped and
 // every walk, bloom and beat completes at once, so suites read final states. reduceMotion: no intro swoop, no petals, no particles, walks
@@ -1141,8 +1143,10 @@
     H.mode = mk('div', { class: 'mp-mode', hidden: true, role: 'group', 'aria-label': 'Spell mode' }, H.modeIco, mk('p', { class: 'mp-mode-txt' }, H.modeName, ' ', H.modeText), H.apply, H.cancel);
     // the box the tutorial points at, and the layer the flying drops live in
     H.hexAnchor = tut(mk('div', { class: 'mp-hexanchor', 'aria-hidden': 'true' }), 'hex');
+    H.partyAnchor = tut(mk('div', { class: 'mp-hexanchor', 'aria-hidden': 'true' }), 'party');
+    H.fightAnchor = tut(mk('div', { class: 'mp-hexanchor', 'aria-hidden': 'true' }), 'fight');
     H.fly = mk('div', { class: 'mp-fly-layer', 'aria-hidden': 'true' });
-    hud.append(H.party, H.inkMeter.root, H.banner, H.gold, H.tools, H.relics, H.tray, H.info, H.mode, H.hexAnchor, H.fly);
+    hud.append(H.party, H.inkMeter.root, H.banner, H.gold, H.tools, H.relics, H.tray, H.info, H.mode, H.hexAnchor, H.partyAnchor, H.fightAnchor, H.fly);
     root.appendChild(hud);
     H.menu = UI.menuButton();
     root.appendChild(H.menu);
@@ -2016,6 +2020,24 @@
     const st = H.hexAnchor.style;
     st.left = Math.round(x - size * 0.9) + 'px'; st.top = Math.round(y - size) + 'px';
     st.width = Math.round(size * 1.8) + 'px'; st.height = Math.round(size * 2) + 'px';
+    // `party`: the hex the party stands on (the walkthrough's "This is you"); `fight`: the nearest revealed fight not done yet ("A fight!"), empty when there is none
+    const box = (el, q, r) => {
+      if (!el) return;
+      const bs = el.style;
+      if (q === null) { bs.width = '0px'; bs.height = '0px'; return; }
+      const pp = worldOf(q, r), px = wx2sx(c, pp.x), py = wy2sy(c, pp.y);
+      bs.left = Math.round(px - size * 0.9) + 'px'; bs.top = Math.round(py - size) + 'px';
+      bs.width = Math.round(size * 1.8) + 'px'; bs.height = Math.round(size * 2) + 'px';
+    };
+    box(H.partyAnchor, s.M.pos.q, s.M.pos.r);
+    let best = null, bd = 1e9;
+    Object.keys(s.M.tiles).forEach((k) => {
+      const t = s.M.tiles[k];
+      if (!t || !t.painted || t.done || (t.type !== 'enemy' && t.type !== 'elite')) return;
+      const d = MAP.dist(s.M.pos.q, s.M.pos.r, t.q, t.r);
+      if (d < bd) { bd = d; best = t; }
+    });
+    if (best) box(H.fightAnchor, best.q, best.r); else box(H.fightAnchor, null);
   }
 
   function update(dt) {

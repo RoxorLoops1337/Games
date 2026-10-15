@@ -1664,6 +1664,7 @@ await t.test('finding 38 (tutorial): findAnchor skips an anchor that covers most
   const full = $(g, '.cm-hand');
   t.ok(!!full, 'the full-stage container still exists');
   full.setAttribute('data-tut', 'hand'); $(g, '.cm-handbox').removeAttribute('data-tut');
+  $$(g, '.cm-hand .card.t-attack').forEach((c) => c.classList.remove('t-attack'));      // the step's first choice (a real attack card) is out of the way: the hand box is what is judged
   let rect = { left: 0, top: 0, right: 1280, bottom: 720, width: 1280, height: 720 };
   Object.defineProperty(full, 'getBoundingClientRect', { value: () => rect, configurable: true });
   g.UI.tutorial.show('hand');
