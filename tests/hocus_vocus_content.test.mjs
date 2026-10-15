@@ -851,9 +851,9 @@ t.test('Encores: each text quotes its own mods, the staircase never gets easier,
       if (kind === 'frac') { cands.push(Math.round(Math.abs(v) * 100) + '%'); if (k === 'reviveFrac') cands.push(Math.round((DATA.ECONOMY.reviveFrac + v) * 100) + '%'); }
       else cands.push(String(Math.abs(v)), { 1: 'a', 2: 'two' }[Math.abs(v)] || 'x');
       t.ok(cands.some((c) => tr.text.indexOf(c) >= 0), `${tr.id}: the text "${tr.text}" quotes the ${k} number (${cands.join(' or ')})`);
-      const harder = k === 'enemyHp' || k === 'eliteHp' || k === 'bossHp' || k === 'enemyDmg' || k === 'priceMul' || k === 'curses' ? v > 0 : v < 0;
+      const harder = k === 'enemyHp' || k === 'eliteHp' || k === 'bossHp' || k === 'enemyDmg' || k === 'priceMul' || k === 'curses' || k === 'crowd' ? v > 0 : v < 0;
       t.ok(harder, `${tr.id}: ${k} ${v} makes the game harder`);
-      const wordsFor = { enemyHp: /more HP/, eliteHp: /more HP/, bossHp: /more/, enemyDmg: /more damage|harder/, priceMul: /more/, goldMul: /less/, healMul: /less/, startInk: /less Vox/, wellInk: /less Vox/, startGold: /less gold/, cardChoices: /fewer/, curses: /curse/, reviveFrac: /HP/ };
+      const wordsFor = { enemyHp: /more HP/, eliteHp: /more HP/, bossHp: /more/, enemyDmg: /more damage|harder/, priceMul: /more/, goldMul: /less/, healMul: /less/, startInk: /less Vox/, wellInk: /less Vox/, startGold: /less gold/, cardChoices: /fewer/, curses: /curse/, reviveFrac: /HP/, crowd: /crowd.*more/ };
       if (wordsFor[k]) t.ok(wordsFor[k].test(tr.text), `${tr.id}: the text uses the right direction for ${k}: ${tr.text}`);
     });
     t.ok(tr.text.length <= 100 && /^[A-Z]/.test(tr.text) && /[.]$/.test(tr.text) && !DASH.test(tr.text), `${tr.id}: a tidy sentence`);

@@ -1655,7 +1655,9 @@ const UI = (() => {
     const def = R.def || DATA.cards[R.id] || {};
     const hero = DATA.heroes[R.hero] || null;
     const junk = R.type === 'curse' || R.type === 'status';
-    const root = mk('div', { class: 'card c-' + size + ' t-' + R.type + ' r-' + R.rarity + (hero ? ' h-' + R.hero : ' h-none') + (junk ? ' junk' : '') + (o.class ? ' ' + o.class : ''), role: 'button', tabindex: '0', dataset: { id: R.id, size } });
+    const medley = !!(R.medley || (def && def.medley));
+    const root = mk('div', { class: 'card c-' + size + ' t-' + R.type + ' r-' + R.rarity + (hero ? ' h-' + R.hero : ' h-none') + (junk ? ' junk' : '') + (medley ? ' medley' : '') + (o.class ? ' ' + o.class : ''), role: 'button', tabindex: '0', dataset: { id: R.id, size } });
+    if (medley && def.parts) root.dataset.parts = def.parts.join('+');
     if (uidOf(instOrId)) root.dataset.uid = uidOf(instOrId);
     vars(root, { '--hc': hero ? hero.color : R.type === 'curse' ? '#7a6bff' : '#8a86a8', '--hc2': hero ? hero.dark : R.type === 'curse' ? '#140f2e' : '#4a4766' });
 
@@ -1669,12 +1671,14 @@ const UI = (() => {
     const aw = cw * ART_W, ah = cw * (size === 'mini' ? ART_H_MINI : ART_H);
     const artCanvas = mk('canvas', { class: 'c-artc', width: Math.round(aw * S.px), height: Math.round(ah * S.px), 'aria-hidden': 'true' });
     const art = mk('div', { class: 'c-art' }, artCanvas, mk('i', { class: 'c-gloss' }));
+    // a Medley wears the first song's art and a "+" badge (the upgrade plus, re-used) that explains itself on a tap
+    if (medley) { const badge = mk('i', { class: 'c-plus c-medley', text: '+', 'aria-hidden': 'true', 'data-kw-explain': 'medley' }); art.appendChild(badge); attach(badge, () => kwNode('medley'), { side: 'top' }); }
     const face = mk('div', { class: 'c-face' }, head, art);
     let socks = null;
 
     if (size !== 'mini') {
       const tico = iconCanvas('type', R.type, Math.round(cw * 0.085), {}, 'c-tico');
-      const strip = mk('div', { class: 'c-type' }, tico, mk('span', { class: 'c-tname', text: TYPE_LABEL[R.type] || cap(R.type) }));
+      const strip = mk('div', { class: 'c-type' }, tico, mk('span', { class: 'c-tname', text: medley ? 'Medley' : TYPE_LABEL[R.type] || cap(R.type) }));
       if (hero) strip.appendChild(mk('span', { class: 'c-medal', 'aria-hidden': 'true' }, medalCanvas(R.hero, Math.round(cw * 0.105))));
       else strip.appendChild(mk('span', { class: 'c-medal c-sigil', 'aria-hidden': 'true' }));
       face.appendChild(strip);
@@ -1690,7 +1694,7 @@ const UI = (() => {
     const inn = mk('div', { class: 'c-in' }, face, cost, mk('div', { class: 'c-orn', 'aria-hidden': 'true' }, mk('i', { class: 'spk k1' }), mk('i', { class: 'spk k2' }), mk('i', { class: 'spk k3' }), mk('i', { class: 'spk k4' }), mk('i', { class: 'shine' })));
     if (socks) inn.appendChild(socks);
     root.insertBefore(inn, root.firstChild);
-    drawCardArt(artCanvas, R, instOrId, aw, ah);
+    drawCardArt(artCanvas, R, medley && def.parts ? { id: def.parts[0], up: R.up ? 1 : 0 } : instOrId, aw, ah);
 
     let lastCost = null;
     function paintDynamic(popCost) {

@@ -434,6 +434,7 @@ const GAME = (() => {
       case 'reward': {
         const source = opts.source || 'combat';
         const rewards = { gold: typeof opts.gold === 'number' ? opts.gold : 18, ink: 1, cards: opts.cards || pickRewardCards(R, 3), relics: opts.relics || [], gems: opts.gems || [], brush: opts.brush || null, maxHp: 0, boss: source === 'boss', tier: source === 'boss' ? 'boss' : source === 'elite' ? 'elite' : 'normal', source };
+        rewards.medley = opts.medley !== undefined ? !!opts.medley : source === 'elite' && !!call('RUN', 'medleyPossible', R);     // the elite's optional Medley (DATA "The Crowd and Medleys")
         const pos = (R.map && R.map.pos) || { q: 0, r: 0 };
         R.node = { kind: 'reward', rewards, source, tile: { q: pos.q, r: pos.r } };
         return go('reward', { rewards, source, node: R.node, R }, force);

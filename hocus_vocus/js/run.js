@@ -58,6 +58,10 @@
 //            The addRelic OP with a fixed id the party owns gives a same-rarity relic instead, or (none left) logs 'Already owned.' and pays 40% of its shop price.
 //            Any choice raised anywhere (a shop entry hook, an Act start hook, a fight win) waits in R.pending: screens check it after every call.
 //   Deck     addCard(R,id,{up,gems}) removeCard(R,uid) (gems return to R.gems) upgradeCard(R,uid) upgradable(R,filter) -> [uid]
+//   Medley   makeMedley(R, uidA, uidB) -> {ok, inst, lost} | reason card|same|medley|type|hero   medleyPossible(R) -> bool
+//            medleyStart(R, rewards) -> {ok, pending} | reason offer|cards: the elite reward's optional fuse (rewards.medley: true -> 'pending' -> 'done';
+//            the pending {op:'medley', n:2} is answered with two uids of one hero's Attack or Skill cards, or [] to decline). Deck instance
+//            {uid, id:'medley', parts:[idA, idB], up, gems, enc?} (DATA "The Crowd and Medleys"); deserialize rebuilds it from parts.
 //            socket(R, uid, slot, gemId) -> {ok, replaced} | reason card|slot|gem|color|same (replacing destroys the old gem; there is no unsocket)
 //            forgeUsable(R) -> bool
 //   Score    score(R)  summary(R) -> {score, victory, done, chapter, trial, daily, seed, id, heroes, deckSize, relics, gold, chaptersCleared, stats}
@@ -105,6 +109,8 @@ const RUN = (() => {
   const tileAt = (R, q, r) => (R.map && R.map.tiles ? R.map.tiles[MAP.key(q, r)] || null : null);
   const findInst = (R, uid) => R.deck.find((c) => c.uid === uid) || null;
   const cardName = (id) => (DATA.cards[id] && DATA.cards[id].name) || id;
+  const defOf = (inst) => DATA.cardDef(inst);                                   // a Medley instance resolves to its merged definition
+  const instName = (inst) => { const d = defOf(inst); return (d && d.name) || cardName(inst.id); };
   const relicName = (id) => (DATA.relics[id] && DATA.relics[id].name) || id;
 
   function note(R, msg) {
@@ -141,6 +147,46 @@ const RUN = (() => {
     R.deck.push(inst);
     return inst;
   }
+  // a Medley instance (DATA "The Crowd and Medleys"): {uid, id:'medley', parts:[idA, idB], up, gems}
+  function addMedleyInst(R, parts, opts) {
+    const def = DATA.medleyDef(parts);
+    if (!def) return null;
+    const inst = { uid: U.uid(), id: DATA.MEDLEY_ID, parts: parts.slice(), up: opts && opts.up && def.up ? 1 : 0, gems: def.slots.map(() => null) };
+    if (opts && isNum(opts.enc) && opts.enc > 0) inst.enc = Math.floor(opts.enc);
+    R.deck.push(inst);
+    return inst;
+  }
+  // fuse two deck cards into one Medley: the parts leave the deck (their gems return to the pouch), the Medley is upgraded when
+  // either part was, and keeps the larger Fanbase bonus. -> {ok, inst, lost:[idA, idB]} | {ok:false, reason: card|same|medley|type|hero}
+  function makeMedley(R, uidA, uidB) {
+    const a = findInst(R, uidA), b = findInst(R, uidB);
+    const can = DATA.canMedley(a, b);
+    if (!can.ok) return { ok: false, reason: can.reason };
+    const up = !!(a.up || b.up);
+    const enc = Math.max(a.enc > 0 ? a.enc : 0, b.enc > 0 ? b.enc : 0);
+    removeCard(R, a.uid); removeCard(R, b.uid);
+    const inst = addMedleyInst(R, [a.id, b.id], { up, enc });
+    return { ok: true, inst, lost: [a.id, b.id] };
+  }
+  // is there any pair the player could fuse? (same hero, Attack or Skill, two cards)
+  function medleyPossible(R) {
+    const by = {};
+    R.deck.forEach((c) => { const d = DATA.cards[c.id]; if (c.id !== DATA.MEDLEY_ID && d && L().heroIds.indexOf(d.hero) >= 0 && (d.type === 'attack' || d.type === 'skill')) by[d.hero] = (by[d.hero] || 0) + 1; });
+    return Object.keys(by).some((h) => by[h] >= 2);
+  }
+  // the elite reward's optional Medley: raises the pending choice the screens answer (two picks), rewards.medley becomes 'pending'
+  function medleyStart(R, rewards) {
+    rewards = rewards || (R.node && R.node.rewards) || null;
+    if (!rewards || rewards.medley !== true) return { ok: false, reason: 'offer', pending: [] };
+    if (!medleyPossible(R)) return { ok: false, reason: 'cards', pending: [] };
+    rewards.medley = 'pending';
+    if (R.node && R.node.rewards && R.node.rewards !== rewards) R.node.rewards.medley = 'pending';
+    const p = addPending(R, { op: 'medley', n: 2, pick: 'choose', filter: { type: ['attack', 'skill'] } });
+    return { ok: true, pending: [p] };
+  }
+  function medleyOfferSet(R, v) {
+    if (R.node && R.node.kind === 'reward' && R.node.rewards && R.node.rewards.medley === 'pending') R.node.rewards.medley = v;
+  }
   function removeCard(R, uid) {
     const i = R.deck.findIndex((c) => c.uid === uid);
     if (i < 0) return null;
@@ -150,7 +196,7 @@ const RUN = (() => {
   }
   function upgradeCard(R, uid) {
     const inst = findInst(R, uid);
-    const def = inst && DATA.cards[inst.id];
+    const def = inst && defOf(inst);
     if (!inst || !def || !def.up || inst.up) return null;
     inst.up = 1;
     R.stats.upgrades += 1;
@@ -159,7 +205,7 @@ const RUN = (() => {
   function socket(R, uid, slot, gemId) {
     const inst = findInst(R, uid);
     if (!inst) return { ok: false, reason: 'card' };
-    const def = DATA.cards[inst.id];
+    const def = defOf(inst);
     const slots = (def && def.slots) || [];
     if (!Number.isInteger(slot) || slot < 0 || slot >= slots.length) return { ok: false, reason: 'slot' };
     const gem = DATA.gems[gemId];
@@ -174,7 +220,7 @@ const RUN = (() => {
     return { ok: true, uid, slot, gem: gemId, replaced };
   }
   function upgradable(R, filter) {
-    return R.deck.filter((c) => { const d = DATA.cards[c.id]; return d && d.up && !c.up && cardMatches(d, filter); }).map((c) => c.uid);
+    return R.deck.filter((c) => { const d = defOf(c); return d && d.up && !c.up && cardMatches(d, filter); }).map((c) => c.uid);
   }
   function cardMatches(def, filter) {
     if (!filter) return true;
@@ -185,7 +231,7 @@ const RUN = (() => {
   function forgeUsable(R) {
     if (upgradable(R).length) return true;
     return R.gems.some((g) => R.deck.some((c) => {
-      const slots = (DATA.cards[c.id] && DATA.cards[c.id].slots) || [];
+      const slots = (defOf(c) && defOf(c).slots) || [];
       return slots.some((s, i) => c.gems[i] !== g && (s === 'any' || (DATA.gems[g] && s === DATA.gems[g].color)));
     }));
   }
@@ -298,8 +344,9 @@ const RUN = (() => {
   }
   const isHeroCard = (def) => !!def && L().heroIds.indexOf(def.hero) >= 0;
   function deckCandidates(R, kind, filter) {
+    if (kind === 'medley') return R.deck.filter((c) => c.id !== DATA.MEDLEY_ID && DATA.canMedley(c, { uid: -1, id: c.id }).ok);   // any card that could be half of a Medley
     return R.deck.filter((c) => {
-      const d = DATA.cards[c.id];
+      const d = defOf(c);
       if (!d) return kind === 'removeCard';
       if (!cardMatches(d, filter)) return false;
       if (kind === 'upgradeCard') return !!d.up && !c.up;
@@ -311,8 +358,8 @@ const RUN = (() => {
     return DATA.cardsBy({ hero: def.hero, rarity: def.rarity }).filter((c) => c.id !== exceptId && c.rarity !== 'token' && DATA.isUnlocked('card', c.id, R.unlocked));
   }
   function doDeckOp(R, kind, inst, rng, log) {
-    const def = DATA.cards[inst.id];
-    const name = cardName(inst.id);
+    const def = defOf(inst);
+    const name = instName(inst);
     if (kind === 'removeCard') {
       removeCard(R, inst.uid);
       log.push({ op: kind, id: inst.id, text: `Lost ${name}.` });
@@ -320,7 +367,8 @@ const RUN = (() => {
       upgradeCard(R, inst.uid);
       log.push({ op: kind, id: inst.id, uid: inst.uid, text: `Upgraded ${name}.` });
     } else if (kind === 'duplicateCard') {
-      const copy = addCard(R, inst.id, { up: !!inst.up });
+      const copy = DATA.isMedley(inst) ? addMedleyInst(R, inst.parts, { up: !!inst.up }) : addCard(R, inst.id, { up: !!inst.up });
+      if (!copy) { log.push({ op: kind, id: inst.id, text: `${name} cannot be copied.` }); return; }
       log.push({ op: kind, id: inst.id, uid: copy.uid, text: `Copied ${name}.` });
     } else if (kind === 'transformCard') {
       const pool = def ? transformPool(R, def, inst.id) : [];
@@ -330,6 +378,7 @@ const RUN = (() => {
       inst.uid = U.uid();
       inst.id = next.id;
       delete inst.enc;
+      delete inst.parts;
       inst.up = inst.up && next.up ? 1 : 0;
       inst.gems = (next.slots || []).map(() => null);
       log.push({ op: kind, id: next.id, uid: inst.uid, from: def.id, text: `${name} became ${next.name}.` });
@@ -542,6 +591,16 @@ const RUN = (() => {
     }
     const uids = Array.isArray(choice) ? choice : (isNum(choice) ? [choice] : null);
     if (!uids) return { ok: false, reason: 'required', log };
+    if (p.op === 'medley') {                                             // optional: [] declines, [a, b] fuses (same hero, Attack or Skill)
+      if (!uids.length) { R.pending.splice(i, 1); medleyOfferSet(R, true); return { ok: true, log }; }
+      if (uids.length !== 2) return { ok: false, reason: 'choice', log };
+      const m = makeMedley(R, uids[0], uids[1]);
+      if (!m.ok) return { ok: false, reason: 'choice', log };
+      R.pending.splice(i, 1);
+      medleyOfferSet(R, 'done');
+      log.push({ op: 'medley', id: DATA.MEDLEY_ID, uid: m.inst.uid, parts: m.lost.slice(), text: `${cardName(m.lost[0])} and ${cardName(m.lost[1])} became a Medley.` });
+      return { ok: true, log };
+    }
     const cands = deckCandidates(R, p.op, p.filter);
     const need = Math.min(p.n, cands.length);
     const set = uniq(uids);
@@ -1082,6 +1141,7 @@ const RUN = (() => {
     const rewards = {
       gold: R.gold - before, goldBase, ink: inkGain, cards, relics, gems, brush, maxHp: maxHpTotal, boss: tier === 'boss', tier,
       source: node ? node.source : 'combat', claimed: false, pending, log,
+      medley: on && tier === 'elite' && medleyPossible(R),                 // the optional Medley of a rival fight: true (offered), 'pending', 'done' or false
     };
     R.node = { kind: 'reward', tile: { q: tile.q, r: tile.r }, rewards, source: rewards.source };
     return rewards;
@@ -1319,9 +1379,13 @@ const RUN = (() => {
       if (!map) return null;
     }
     R.map = map;
-    R.deck = R.deck.filter((c) => c && DATA.cards[c.id] && isNum(c.uid)).map((c) => {
-      const slots = DATA.cards[c.id].slots || [];
-      const inst = { uid: c.uid, id: c.id, up: c.up && DATA.cards[c.id].up ? 1 : 0, gems: slots.map((s, i) => (typeof (c.gems || [])[i] === 'string' && DATA.gems[c.gems[i]] ? c.gems[i] : null)) };
+    R.deck = R.deck.filter((c) => c && isNum(c.uid) && (c.id === DATA.MEDLEY_ID ? DATA.medleyPartsOk(c.parts) : !!DATA.cards[c.id])).map((c) => {
+      const def = DATA.cardDef(c);                                       // a Medley rebuilds from its parts (saves from before Medleys have none)
+      const slots = def.slots || [];
+      const inst = { uid: c.uid, id: c.id };
+      if (c.id === DATA.MEDLEY_ID) inst.parts = c.parts.slice();
+      inst.up = c.up && def.up ? 1 : 0;
+      inst.gems = slots.map((s, i) => (typeof (c.gems || [])[i] === 'string' && DATA.gems[c.gems[i]] ? c.gems[i] : null));
       if (isNum(c.enc) && c.enc > 0) inst.enc = Math.floor(c.enc);     // Fanbase bonus; saves from before Fanbase have none
       return inst;
     });
@@ -1342,5 +1406,6 @@ const RUN = (() => {
     VERSION, newRun, dailyHeroes, startChapter, mods, paint, paintPreview, useBrush, canStep, step, combatInit, combatDone, claim, take,
     shopBuy, shopRemove, eventChoices, eventChoose, pickEvent, campAction, forgeAction, finishNode, chapterEnd, checkStranded,
     applyOps, resolvePending, hook, addRelic: gainRelic, addCard, removeCard, upgradeCard, socket, upgradable, forgeUsable, score, summary, serialize, deserialize,
+    makeMedley, medleyStart, medleyPossible,
   };
 })();

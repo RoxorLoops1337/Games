@@ -547,7 +547,7 @@ t.test('play pipeline: events, energy, destinations, conservation, counters', ()
   t.eq(total(C), C.deckSize + C.added, 'conservation at start');
   const [s1, e1, p1] = rig(C, [strike, ex, pw]);
   let ev = play(C, s1);
-  t.deep(types(ev), ['play', 'energy', 'hit'], 'attack: play, energy, hit');
+  t.deep(types(ev), ['play', 'energy', 'hit', 'crowd'], 'attack: play, energy, hit, then the Crowd meter step');
   t.deep(first(ev, 'play'), { type: 'play', card: { uid: s1.uid, id: strike, up: 0, gems: [null] }, hero: 'hanae', target: 't_dummy#1', cost: 1, to: 'discard' }, 'play event');
   t.deep(first(ev, 'energy'), { type: 'energy', value: 5, delta: -1 }, 'energy event'); t.eq(C.energy, 5, 'energy');
   t.ok(C.discard.some((c) => c.uid === s1.uid) && !C.hand.some((c) => c.uid === s1.uid), 'attack goes to the discard pile');

@@ -123,9 +123,9 @@
   const warnOnce = (key, msg, e) => { if (warned[key]) return; warned[key] = true; console.warn('[combat] ' + msg + (e ? ': ' + (e.message || e) : '')); };
   const sfx = (id) => { if (typeof AUDIO !== 'undefined' && isFn(AUDIO, 'sfx')) safe(() => AUDIO.sfx(id)); };
   const heroName = (id) => (DATA.heroes[id] ? DATA.heroes[id].name : String(id));
-  const cardDef = (id) => DATA.cards[id] || null;
+  const cardDef = (x) => (typeof DATA.cardDef === 'function' ? DATA.cardDef(x) : DATA.cards[x && typeof x === 'object' ? x.id : x]) || null;   // an id, or an instance (a Medley resolves from its parts)
   // card mechanics state rides along (DATA "Card mechanics"): enc (Fanbase bonus), rmx (Remix plays), fade (a Loop copy)
-  const cp = (c) => { const o = { uid: c.uid, id: c.id, up: c.up ? 1 : 0, gems: (c.gems || []).slice() }; if (c.tmp) o.tmp = true; if (c.enc > 0) o.enc = c.enc; if (c.rmx > 0) o.rmx = c.rmx; if (c.fade) o.fade = true; return o; };
+  const cp = (c) => { const o = { uid: c.uid, id: c.id, up: c.up ? 1 : 0, gems: (c.gems || []).slice() }; if (c.parts) o.parts = c.parts.slice(); if (c.tmp) o.tmp = true; if (c.enc > 0) o.enc = c.enc; if (c.rmx > 0) o.rmx = c.rmx; if (c.fade) o.fade = true; if (c.crowd) o.crowd = true; return o; };
   const clone = (o) => (o === undefined || o === null ? o : JSON.parse(JSON.stringify(o)));
 
   // ==================================================================================================================
@@ -159,6 +159,7 @@
       hand: C.hand.map(cp), draw: C.draw.map(cp), discard: C.discard.map(cp), exhaust: C.exhaust.map(cp), powers: C.powers.map(cp),
       inPlay: C.inPlay ? Object.assign(cp(C.inPlay), { to: 'discard' }) : null,
       turn: C.turn, phase: C.phase, result: C.result, pending: C.pending ? clone(C.pending) : null, retained: {}, gold: 0, ink: 0, played: C.played || 0,
+      crowd: C.crowd || 0, crowdMax: C.crowdMax || 7,          // THE CROWD meter (DATA "The Crowd and Medleys")
     };
     C.hand.forEach((c) => { if (c.keep) vm.retained[c.uid] = true; });
     return counts(vm);
@@ -298,6 +299,7 @@
         break;
       case 'gold': vm.gold += e.n; break;
       case 'ink': vm.ink += e.n; break;
+      case 'crowd': vm.crowd = e.value; vm.crowdMax = e.max; break;
       case 'end':
         vm.result = e.result; vm.phase = 'over'; vm.pending = null;
         vm.heroes.forEach((h) => { h.block = 0; h.st = {}; });
@@ -324,6 +326,7 @@
     return [
       vm.heroes.map(unit).join(';'), vm.enemies.map(unit).join(';'), vm.energy + '/' + vm.maxEnergy,
       ids(vm.hand), ids(vm.draw), ids(vm.discard), ids(vm.exhaust), ids(vm.powers), vm.inPlay ? vm.inPlay.uid : '-', vm.turn, vm.result || '-',
+      'crowd' + (vm.crowd || 0) + '/' + (vm.crowdMax || 0),
     ].join('#');
   }
 
@@ -361,7 +364,8 @@
     const nm = (ref) => { const u = unitOf(vm, ref); return u ? u.name : ref && ref.id ? ref.id : 'Someone'; };
     switch (e.type) {
       case 'turn_start': return e.who === 'player' ? 'Turn ' + e.turn + '. Your move.' : 'Enemy turn.';
-      case 'play': return heroName(e.hero) + ' plays ' + ((cardDef(e.card.id) && cardDef(e.card.id).name) || e.card.id) + (e.card.up ? ' plus' : '') + '.';
+      case 'play': return heroName(e.hero) + ' plays ' + ((cardDef(e.card) && cardDef(e.card).name) || e.card.id) + (e.card.up ? ' plus' : '') + '.';
+      case 'crowd': return e.wild ? 'The crowd goes wild' + (e.card && e.hero ? ': ' + heroName(e.hero) + ' sings ' + ((cardDef(e.card) && cardDef(e.card).name) || e.card.id) + ' for free.' : '.') : '';
       case 'enemy_act': return (enemyOf(vm, e.enemy) ? enemyOf(vm, e.enemy).name : 'An enemy') + ' uses ' + e.name + '.';
       case 'skip': return nm(e.unit) + ' is starstruck and loses its action.';
       case 'hit': {
@@ -446,7 +450,7 @@
         const hu = (ref) => (ref && ref.kind === 'hero' ? st.heroes[ref.id] : null);
         const eu = (ref) => (ref && ref.kind === 'enemy' ? st.en[ref.id] : null);
         switch (e.type) {
-          case 'play': { const h = st.heroes[e.hero]; pose(h, DATA.cards[e.card.id] && (DATA.cards[e.card.id].fx || []).some((o) => o.op === 'dmg') ? 'attack' : 'cast'); break; }
+          case 'play': { const h = st.heroes[e.hero]; const pd = cardDef(e.card); pose(h, pd && (pd.fx || []).some((o) => o.op === 'dmg') ? 'attack' : 'cast'); break; }
           case 'enemy_act': pose(st.en[e.enemy], 'attack'); break;
           case 'hit': {
             const a = api.anchor(e.dst.kind, e.dst.id);
@@ -1006,7 +1010,7 @@
   // ==================================================================================================================
   const frontOf = (vm) => vm.heroes.find((h) => h.row === 'front' && !h.down) || vm.heroes.find((h) => !h.down) || vm.heroes[0];
   function cardUnit(inst) {
-    const d = cardDef(inst.id);
+    const d = cardDef(inst);
     const h = d && DATA.heroes[d.hero] ? heroOf(S.vm, d.hero) : null;
     return h || frontOf(S.vm);
   }
@@ -1182,6 +1186,35 @@
     tut(el, 'energy');
     UI.tip.attach(el, () => UI.tip.kw('Breath') || mk('div', { class: 'tk' }, mk('div', { class: 'tk-head' }, mk('b', { class: 'tk-name', text: 'Breath' })), mk('p', { class: 'tk-text', text: 'Spend Breath to play cards. It refills every turn and never carries over.' })), { side: 'top' });
     return { el, n, max, v: null };
+  }
+  // THE CROWD meter: a row of hearts above the Breath orb that fills as cards are played (a kill counts two); full, the crowd goes wild and the
+  // hero's Signature card joins the hand for free. The pips are the stat 'hp' icon, lit or dim.
+  const CROWD_Y = DOCK_CY - 104;
+  function buildCrowd() {
+    const pips = mk('div', { class: 'cr-pips', 'aria-hidden': 'true' });
+    const el = mk('div', { class: 'cm-crowd', role: 'img', tabindex: '0', 'aria-label': 'Crowd', 'data-kw-explain': 'crowd', style: { left: px(PILE.orb.x - 44), top: px(CROWD_Y) } }, mk('b', { class: 'cr-l', text: 'CROWD' }), pips);
+    UI.tip.attach(el, () => UI.tip.kw('crowd'), { side: 'top' });
+    return { el, pips, v: -1, max: -1 };
+  }
+  function renderCrowd(animate, wild) {
+    const vm = S.vm, c = S.ui.crowd;
+    if (!c) return;
+    const max = Math.max(1, vm.crowdMax | 0), v = Math.max(0, Math.min(max, vm.crowd | 0));
+    if (c.max !== max) {
+      c.max = max; c.v = -1;
+      c.pips.innerHTML = '';
+      const size = Math.min(14, Math.floor((104 - (max - 1) * 2) / max));
+      for (let i = 0; i < max; i++) c.pips.appendChild(mk('span', { class: 'cr-pip', style: { width: size + 'px', height: size + 'px' } }, UI.icon('stat', 'hp', size, { on: true })));
+    }
+    if (c.v !== v) {
+      const up = c.v >= 0 && v > c.v;
+      Array.from(c.pips.children).forEach((p, i) => p.classList.toggle('on', i < v));
+      if (animate && up) flare(c.el, 'gain', 420);
+      c.v = v;
+    }
+    if (wild) flare(c.el, 'wild', 900);
+    c.el.classList.toggle('full', v >= max - 1 && max > 1);
+    c.el.setAttribute('aria-label', 'Crowd ' + v + ' of ' + max);
   }
   function renderEnergy(animate) {
     const vm = S.vm, o = S.ui.orb;
@@ -1708,6 +1741,7 @@
     syncHand();
     renderPiles(false);
     renderEnergy(false);
+    renderCrowd(false);
     renderTurn();
     renderSwap();
     renderEnd();
@@ -1799,6 +1833,11 @@
         e.cards.forEach((c) => { const en = S.cards.get(c.uid); if (en) en.wrap.classList.add('retained'); });
         break;
       case 'energy': renderEnergy(true); break;
+      case 'crowd': {
+        renderCrowd(true, e.wild);
+        if (e.wild) { sfx('level_up'); if (e.card && e.hero) UI.toast('The crowd goes wild! ' + heroName(e.hero) + ' sings ' + ((cardDef(e.card) && cardDef(e.card).name) || e.card.id) + ' for free.', 'good'); }
+        break;
+      }
       case 'play': {
         const en = S.cards.get(e.card.uid);
         if (en) flyPlayed(en, e.to);
@@ -2174,6 +2213,7 @@
 
     // ---- docks: energy orb and draw pile bottom left, exhaust, discard and End Turn bottom right
     u.orb = buildOrb();
+    u.crowd = buildCrowd();
     u.draw = buildPile('draw', 130, 'Draw', 'D');
     tut(u.draw.el, 'deck');
     u.disc = buildPile('discard', 1000, 'Discard', 'G');
@@ -2188,7 +2228,7 @@
     u.pow = chip('pow', 'Powers', 748, 6, 'powers');
     u.exh = chip('exh', 'Faded', 888, 6, 'exhaust');
     u.end = buildEnd();
-    [u.orb.el, u.draw.el, u.pow.el, u.disc.el, u.exh.el, u.end].forEach((el) => root.appendChild(el));
+    [u.orb.el, u.crowd.el, u.draw.el, u.pow.el, u.disc.el, u.exh.el, u.end].forEach((el) => root.appendChild(el));
 
     // ---- transient layers: banner, pick prompt, boss reveal, victory and defeat card
     u.banner = mk('div', { class: 'cm-banner', 'aria-hidden': 'true' });

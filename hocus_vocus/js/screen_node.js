@@ -113,10 +113,12 @@
   // the rarity ids as the player reads them (a Charm's rarity: boss is a Headliner's, shop is Jordan's Merch)
   const RARITY_NAME = { common: 'Common', uncommon: 'Uncommon', rare: 'Rare', boss: 'Headliner', shop: 'Merch' };
   const rarityName = (r) => RARITY_NAME[r] || cap(String(r || ''));
-  const slotsOf = (inst) => (inst && DATA.cards[inst.id] && DATA.cards[inst.id].slots) || [];
+  const defOf = (inst) => (inst && typeof DATA.cardDef === 'function' ? DATA.cardDef(inst) : inst && DATA.cards[inst.id]) || null;   // a Medley instance resolves from its parts
+  const instName = (inst) => { const d = defOf(inst); return (d && d.name) || cardName(inst && inst.id); };
+  const slotsOf = (inst) => (defOf(inst) && defOf(inst).slots) || [];
   // a card instance for an offered card id (rewards, shops, previews): uid 0 means "not in the deck"
   const instOf = (id, up, uid) => ({ uid: uid || 0, id, up: up ? 1 : 0, gems: ((DATA.cards[id] && DATA.cards[id].slots) || []).map(() => null) });
-  const canUpgrade = (inst) => { const d = DATA.cards[inst.id]; return !!(d && d.up && !inst.up); };
+  const canUpgrade = (inst) => { const d = defOf(inst); return !!(d && d.up && !inst.up); };
   const gemColorOf = (id) => (DATA.gems[id] && DATA.gems[id].color) || 'gold';
   const gemColourName = (id) => colourWord(gemColorOf(id));
   const slotFits = (slot, gemId) => slot === 'any' || slot === gemColorOf(gemId);
@@ -383,8 +385,9 @@
 
   // the same candidate rules RUN.resolvePending checks
   function pendingCandidates(R, p) {
+    if (p.op === 'medley') return R.deck.filter((c) => DATA.canMedley(c, { uid: -1, id: c.id }).ok);
     return R.deck.filter((c) => {
-      const d = DATA.cards[c.id];
+      const d = defOf(c);
       if (!d) return p.op === 'removeCard';
       if (p.filter && p.filter.type && d.type !== p.filter.type) return false;
       if (p.filter && p.filter.hero && d.hero !== p.filter.hero) return false;
@@ -407,6 +410,19 @@
       return res;
     }
     const cands = pendingCandidates(R, p);
+    if (p.op === 'medley') {
+      // two picks: the first song, then a second of the same hero. Cancel at either step declines the Medley (nothing is lost)
+      const first = await UI.overlay.open('deck', { mode: 'pick', cards: cands, title: 'Make a Medley: the first song', confirm: 'Choose it', note: 'Two Attack or Skill cards of one hero fuse into one card that plays both.', dismiss: true });
+      const a = first === null || first === undefined ? null : cands.find((c) => c.uid === first);
+      if (!a) return RUN.resolvePending(R, p.id, []);
+      const second = cands.filter((c) => c !== a && DATA.canMedley(a, c).ok);
+      const pick2 = second.length ? await UI.overlay.open('deck', { mode: 'pick', cards: second, title: 'Make a Medley: the second song', confirm: 'Fuse them', note: instName(a) + ' and the card you choose become one Medley.', dismiss: true }) : null;
+      const b = pick2 === null || pick2 === undefined ? null : second.find((c) => c.uid === pick2);
+      if (!b) return RUN.resolvePending(R, p.id, []);
+      const out = RUN.resolvePending(R, p.id, [a.uid, b.uid]);
+      if (out.ok) snd('level_up');
+      return out;
+    }
     const need = Math.min(p.n || 1, cands.length);
     if (!need) return RUN.resolvePending(R, p.id, []);
     let res;
@@ -437,6 +453,7 @@
       if (res && res.ok) {
         fails = 0;
         (res.log || []).forEach((l) => { if (l && l.text) UI.toast(l.text, 'good'); });
+        if (isFn(S.medleyRefresh)) safe(() => S.medleyRefresh());
         if (isFn(S.onResolved)) safe(() => S.onResolved(res.log || []));
         snd('upgrade');
         if (S.chrome) S.chrome.sync(false);
@@ -471,14 +488,14 @@
   const slotName = (s) => cap(colourWord(s));
 
   const filterMatch = (inst, f) => {
-    const d = DATA.cards[inst.id] || {};
+    const d = defOf(inst) || {};
     if (f.type && d.type !== f.type) return false;
     if (f.hero && d.hero !== f.hero) return false;
     return true;
   };
 
   function costKey(inst) {
-    const d = DATA.cards[inst.id] || {};
+    const d = defOf(inst) || {};
     const c = inst.up && d.up && d.up.cost !== undefined ? d.up.cost : d.cost;
     return c === 'X' ? 9 : typeof c === 'number' ? c : 99;
   }
@@ -487,7 +504,7 @@
     const heroIdx = (h) => { const i = R ? R.heroes.findIndex((x) => x.id === h) : -1; return i >= 0 ? i : 9; };
     const rows = list.map((c, i) => ({ c, i }));
     rows.sort((a, b) => {
-      const da = DATA.cards[a.c.id] || {}, db = DATA.cards[b.c.id] || {};
+      const da = defOf(a.c) || {}, db = defOf(b.c) || {};
       let d = 0;
       if (key === 'cost') d = costKey(a.c) - costKey(b.c);
       else if (key === 'type') d = (TYPE_ORDER[da.type] ?? 9) - (TYPE_ORDER[db.type] ?? 9);
@@ -552,7 +569,7 @@
     const sortSeg = UI.seg(SORTS, { label: 'Sort by', value: st.sort, onchange: (v) => { st.sort = v; renderGrid(); } });
 
     const passes = (inst) => {
-      const d = DATA.cards[inst.id] || {};
+      const d = defOf(inst) || {};
       if (st.types.size && !st.types.has(d.type === 'status' ? 'curse' : d.type)) return false;
       if (st.heroes.size && !st.heroes.has(d.hero)) return false;
       if (st.flags.has('up') && !inst.up) return false;
@@ -574,10 +591,10 @@
     function renderChips() {
       chipsEl.textContent = '';
       const heroes = [];
-      all.forEach((c) => { const h = (DATA.cards[c.id] || {}).hero; if (DATA.LISTS.heroIds.indexOf(h) >= 0 && heroes.indexOf(h) < 0) heroes.push(h); });
+      all.forEach((c) => { const h = (defOf(c) || {}).hero; if (DATA.LISTS.heroIds.indexOf(h) >= 0 && heroes.indexOf(h) < 0) heroes.push(h); });
       if (heroes.length > 1) heroes.forEach((h) => chipsEl.appendChild(chip(heroName(h), st.heroes.has(h), () => flip(st.heroes, h), UI.medallion(h, 22))));
       const present = {};
-      all.forEach((c) => { const t = (DATA.cards[c.id] || {}).type; present[t === 'status' ? 'curse' : t] = true; });
+      all.forEach((c) => { const t = (defOf(c) || {}).type; present[t === 'status' ? 'curse' : t] = true; });
       ['attack', 'skill', 'power', 'curse'].forEach((t) => { if (present[t]) chipsEl.appendChild(chip(TYPE_LABEL[t], st.types.has(t), () => flip(st.types, t), UI.icon('type', t, 20))); });
       if (mode !== 'socket') chipsEl.appendChild(chip('Upgraded', st.flags.has('up'), () => flip(st.flags, 'up')));
       chipsEl.appendChild(chip('Gems', st.flags.has('gems'), () => flip(st.flags, 'gems')));
@@ -588,7 +605,7 @@
 
     function countTypes() {
       const n = { attack: 0, skill: 0, power: 0, curse: 0 };
-      all.forEach((c) => { const t = (DATA.cards[c.id] || {}).type; const k = t === 'status' ? 'curse' : t; if (k in n) n[k] += 1; });
+      all.forEach((c) => { const t = (defOf(c) || {}).type; const k = t === 'status' ? 'curse' : t; if (k in n) n[k] += 1; });
       typesEl.textContent = '';
       Object.keys(n).forEach((k) => { if (n[k]) typesEl.appendChild(mk('span', { class: 'dk-tcount t-' + k }, UI.icon('type', k, 18), mk('b', { text: n[k] }))); });
     }
@@ -649,7 +666,7 @@
     const actionBtn = (label, cls, fn, o) => UI.btn(label, Object.assign({ kind: 'primary', size: 'lg', class: cls, onclick: fn }, o || {}));
 
     function paneCard(inst) {
-      const d = DATA.cards[inst.id] || {};
+      const d = defOf(inst) || {};
       const canPrev = mode === 'view' && d.up && !inst.up;
       const shown = st.up && canPrev ? Object.assign({}, inst, { up: 1 }) : inst;
       const card = UI.card(shown, { size: 'big', showGems: true });
@@ -1012,6 +1029,32 @@
     if (gemId) { gemRow = ledgerRow(UI.gem(gemId, { size: 'sm' }), gemName(gemId), 'Gem', { kind: 'gem', cls: 'bonus' }); rows.push({ row: gemRow }); }
     if (rw.brush) { brushRow = ledgerRow(UI.icon('brush', rw.brush, 38), (DATA.brushes[rw.brush] || {}).name || 'Spell', 'Spell', { kind: 'brush', cls: 'bonus' }); rows.push({ row: brushRow }); }
     rows.forEach((r) => ledger.appendChild(r.row));
+    // THE MEDLEY (elite only, optional, once): fuse two cards of the deck into one. RUN raises a pending choice, resolvePending answers it with two picks
+    let medleyBox = null;
+    const medleyState = () => (rw.medley === 'done' ? 'done' : rw.medley === true || rw.medley === 'pending' ? 'open' : 'none');
+    const refreshMedley = () => {
+      if (!medleyBox) return;
+      const st = medleyState();
+      medleyBox.classList.toggle('taken', st === 'done');
+      medleyBox.querySelector('.rw-medley-sub').textContent = st === 'done' ? 'Two songs are one now.' : 'Fuse two Attack or Skill cards of one hero into one card that plays both.';
+      medleyBox.querySelectorAll('button').forEach((b) => { b.disabled = st !== 'open' || S.busy; });
+    };
+    S.medleyRefresh = refreshMedley;
+    if (medleyState() !== 'none' && typeof RUN.medleyStart === 'function') {
+      const go = () => {
+        if (S.busy || medleyState() !== 'open') return;
+        const st = RUN.medleyStart(R, rw);
+        if (!st.ok) { UI.toast(st.reason === 'cards' ? 'No two cards of one hero to fuse.' : 'The Medley offer has passed.', 'warn'); rw.medley = false; refreshMedley(); return; }
+        S.busy = true; refreshMedley();
+        resolvePending(S).then(() => { if (!S.alive()) return; S.busy = false; refreshMedley(); if (S.chrome) S.chrome.sync(true); });
+      };
+      medleyBox = mk('div', { class: 'rw-medley' }, mk('h3', { class: 'rw-h3', text: 'A Medley, if you like' }), mk('p', { class: 'rw-medley-sub' }),
+        mk('div', { class: 'row center gap-s rw-acts' }, UI.btn('Make a Medley', { kind: 'primary', size: 'sm', onclick: go })));
+      medleyBox.dataset.medley = '1';
+      ledger.appendChild(medleyBox);
+      medleyBox.classList.add('rise'); medleyBox.style.setProperty('--i', '5');
+      refreshMedley();
+    }
     wrap.appendChild(ledger);
     stagger(S, rows.map((r) => r.row), { delay: 250, step: 160 });
     rows.forEach((r, i) => {

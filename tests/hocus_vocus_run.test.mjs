@@ -764,7 +764,7 @@ t.test('combatDone: the reward node, its shape, and idempotence', () => {
   const R = NEW({ seed: 8 });
   const node = enter(R, 'enemy');
   const rw = RUN.combatDone(R, fakeC({}));
-  t.deep(Object.keys(rw).sort(), ['boss', 'brush', 'cards', 'claimed', 'gems', 'gold', 'goldBase', 'ink', 'log', 'maxHp', 'pending', 'relics', 'source', 'tier'], 'Rewards fields');
+  t.deep(Object.keys(rw).sort(), ['boss', 'brush', 'cards', 'claimed', 'gems', 'gold', 'goldBase', 'ink', 'log', 'maxHp', 'medley', 'pending', 'relics', 'source', 'tier'], 'Rewards fields');
   t.eq(R.node.kind, 'reward', 'R.node becomes the reward'); t.eq(R.node.rewards, rw, 'holding these very rewards'); t.eq(R.node.source, 'combat', 'source'); t.deep(R.node.tile, node.tile, 'on the same tile');
   t.eq(rw.tier, 'normal', 'tier'); t.eq(rw.boss, false, 'not a boss'); t.eq(rw.claimed, false, 'unclaimed');
   const snap = J(RUN.serialize(R));
