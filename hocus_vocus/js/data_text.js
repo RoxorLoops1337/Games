@@ -772,7 +772,8 @@
       case 'discard': h = `discard ${C}${src}`; break;
       case 'exhaust': h = `${KW_EXHAUST()} ${C}${src}`; break;
       case 'retain': h = `${KW(kwName('retain'), 'retain')} ${C}`; break;
-      case 'upgrade': h = `upgrade ${C} ${op.from === 'hand' ? 'in your hand' : src.trim()}`.trim(); break;
+      // a pick upgrade lasts until the fight ends (DESIGN 4.3), and says so: an upgrade at a Studio or Green Room is the lasting kind
+      case 'upgrade': h = `upgrade ${C} ${op.from === 'hand' ? 'in your hand' : src.trim()}`.trim() + ' for this fight'; break;
       case 'copy': h = `copy ${C} in your hand`; break;
       case 'toHand': h = op.from === 'exhaust' ? `return ${C}${src} to your hand` : `put ${C}${src} into your hand`; break;
       case 'toDrawTop': h = `put ${C}${src} on top of your draw pile`; break;

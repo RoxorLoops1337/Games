@@ -793,7 +793,7 @@ shortest: `Undo` (4). Hyphens only in RoxorLoops's `Hi-Hat Guard` and `Build-Up`
 | id | kind | name | text (exact) |
 |---|---|---|---|
 | `might` | buff | **Volume** | `Attacks deal +N damage per hit.` |
-| `bulwark` | buff | **Soundproof** | `Gain +N extra Block whenever you gain Block from a card.` |
+| `bulwark` | buff | **Soundproof** | `Gain +N extra Block whenever you gain Block from a card or Charm.` |
 | `regen` | buff | **Warm Tea** | `At the start of its turn, heal N, then Warm Tea falls by 1.` |
 | `thorns` | buff | **Feedback** | `Whenever it is hit by an attack, the attacker takes N damage.` |
 | `dodge` | buff | **Shimmy** | `Shimmies out of the next N attack hits completely.` |
@@ -806,7 +806,7 @@ shortest: `Undo` (4). Hyphens only in RoxorLoops's `Hi-Hat Guard` and `Build-Up`
 | `charge` | resource (Andy) | **Rumble** | `Andy's low end. Built by taking hits and striking, released as thunder from below.` |
 | `vulnerable` | debuff | **Exposed** | `Takes 50% more attack damage.` |
 | `weak` | debuff | **Muffled** | `Deals 25% less attack damage.` |
-| `frail` | debuff | **Wobbly** | `Gains 25% less Block from cards.` |
+| `frail` | debuff | **Wobbly** | `Gains 25% less Block from cards and Charms.` |
 | `poison` | debuff | **Earworm** | `At the start of its turn, lose N HP (ignores Block), then Earworm falls by 1.` |
 | `burn` | debuff | **Sizzle** | `At the end of the round, take N damage (ignores Block), then Sizzle halves.` |
 | `stun` | debuff | **Starstruck** | `Skips its next action. A starstruck hero cannot play cards on their next turn.` |
