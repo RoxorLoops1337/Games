@@ -10,7 +10,7 @@ const W = +(w0 || (phone ? 390 : 1280)), H = +(h0 || (phone ? 800 : 800));
 const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium', args: ['--use-gl=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
 const p = await b.newPage({ viewport: { width: W, height: H }, hasTouch: phone, isMobile: phone }); const errs = [];
 p.on('pageerror', (e) => errs.push('PAGEERR ' + e.message)); p.on('console', (m) => { if (m.type() === 'error' && !/favicon|404/.test(m.text())) errs.push(m.text()); });
-await p.goto('http://localhost:8123/index.html?solo' + (process.env.Q ? '&q=' + process.env.Q : '')); await p.waitForTimeout(3500);
+await p.goto('http://localhost:8123/index.html?solo' + (process.env.Q ? '&q=' + process.env.Q : '') + (process.env.UI ? '&ui=' + process.env.UI : '')); await p.waitForTimeout(3500);
 await p.evaluate(async (preset) => {
   const m = await import('/shared/sim.js'), D = await import('/shared/data.js'); const W = __hv.link.world, P = W.players.me, v = __hv.view;
   P.level = 8; P.xp = 1100; Object.keys(P.res).forEach((k) => (P.res[k] = 90)); P.tech.milling = true; P.tech.trade = true;
