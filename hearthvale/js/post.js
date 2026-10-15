@@ -171,7 +171,7 @@ export class Post {
     this.U = {
       tScene: { value: null }, tBlur: { value: null }, tBloom: { value: null }, tRay: { value: null }, tDepth: { value: null }, uRes: { value: new THREE.Vector2(2, 2) },
       uExposure: { value: 1.1 }, uBloom: { value: 0.5 }, uTilt: { value: 0 }, uTiltW: { value: 0.52 }, uFocusY: { value: 0.5 },
-      uSat: { value: 1.2 }, uVib: { value: 0.22 }, uContrast: { value: 1.05 }, uLift: { value: new THREE.Vector3(0.006, 0.004, 0.016) }, uGamma: { value: new THREE.Vector3(1.03, 1.02, 1.03) }, uGain: { value: new THREE.Vector3(1.0, 1.0, 1.0) },
+      uSat: { value: 1.3 }, uVib: { value: 0.3 }, uContrast: { value: 1.09 }, uLift: { value: new THREE.Vector3(0.006, 0.004, 0.016) }, uGamma: { value: new THREE.Vector3(1.03, 1.02, 1.03) }, uGain: { value: new THREE.Vector3(1.0, 1.0, 1.0) },
       uTintS: { value: new THREE.Vector3(0.97, 0.95, 1.05) }, uTintH: { value: new THREE.Vector3(1.04, 1.01, 0.95) }, uSplit: { value: 1 },
       uVig: { value: 0.55 }, uVigCol: { value: new THREE.Vector3(0.9, 0.88, 0.98) }, uGrain: { value: 0 }, uTime: { value: 0 }, uFlash: { value: new THREE.Vector4(1, 1, 1, 0) },
       uSun: { value: new THREE.Vector4(0.5, 0.5, 0, 0) }, uSunCol: { value: new THREE.Vector3(1, 0.85, 0.6) }, uRays: { value: 0.1 },

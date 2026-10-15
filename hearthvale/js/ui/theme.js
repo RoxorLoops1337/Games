@@ -1,6 +1,6 @@
 // Interface styles ("skins"). A style is a CSS file (ui/themes/<id>.css, every rule scoped under html[data-ui="<id>"]) and optionally
 // a JS module (ui/themes/<id>.js with `export default function init(api)`; may return a dispose function) that generates assets at runtime
-// (canvas textures, rendered sprites, SVG filters). The default style 'classic' is the base style.css with no overrides.
+// (canvas textures, rendered sprites, SVG filters). 'classic' is the base style.css with no overrides; the default is DEFAULT_THEME (gel).
 export const THEMES = [
   { id: 'classic', name: 'Classic Cozy', tech: 'Layered CSS, paper and candy', swatch: ['#fff8e6', '#78cf55', '#ffd95e'] },
   { id: 'gel', name: 'Candy Gel', tech: 'Glossy gradient gel, thick bevels', swatch: ['#9be877', '#3fae2a', '#ffe88a'], css: true },
@@ -15,12 +15,14 @@ export const THEMES = [
   { id: 'aurora', name: 'Dreamy Aurora', tech: 'Animated mesh gradients, frosted glass', swatch: ['#a5b4ff', '#ffb3e6', '#9ff0e0'], css: true, js: true },
 ];
 const KEY = 'hearthvale.ui';
-let cur = 'classic', link = null, dispose = null;
+// index.html ships the default style inline (html[data-ui] + a link[data-ui-theme]) so the first paint already wears it.
+let cur = document.documentElement.dataset.ui || 'classic', link = document.querySelector('link[data-ui-theme]'), dispose = null;
+export const DEFAULT_THEME = 'gel';
 export const currentTheme = () => cur;
 export function themeFromEnv() {
   try { const q = new URLSearchParams(location.search).get('ui'); if (q && THEMES.some((t) => t.id === q)) return q; } catch { /* ignore */ }
   try { const v = localStorage.getItem(KEY); if (v && THEMES.some((t) => t.id === v)) return v; } catch { /* ignore */ }
-  return 'classic';
+  return DEFAULT_THEME;
 }
 /** Switch style: loads its CSS (and JS), sets html[data-ui], remembers the choice. Safe to call repeatedly. */
 export async function setTheme(id, { persist = true } = {}) {
@@ -29,7 +31,8 @@ export async function setTheme(id, { persist = true } = {}) {
   if (typeof dispose === 'function') { try { dispose(); } catch { /* ignore */ } } dispose = null;
   const base = new URL('../../ui/themes/', import.meta.url);
   let next = null;
-  if (t.css) {
+  if (t.css && link && link.dataset.uiTheme === id && !t.js) { next = link; link = null; }
+  else if (t.css) {
     next = document.createElement('link'); next.rel = 'stylesheet'; next.href = new URL(id + '.css', base).href; next.dataset.uiTheme = id;
     await new Promise((res) => { next.onload = next.onerror = res; document.head.appendChild(next); setTimeout(res, 1500); });
   }

@@ -191,6 +191,7 @@ body:not(.lowfx) #scrim.on{-webkit-backdrop-filter:blur(2.5px);backdrop-filter:b
 .sheet.soft{bottom:calc(100px + var(--sab));max-height:min(60dvh,calc(100dvh - 250px - var(--sat)))}
 .sheet.wide{width:min(780px,calc(100vw - 14px))}
 .sheet.tall{height:min(80dvh,calc(100dvh - 24px - var(--sat)),700px)}
+@media (max-width:600px){.sheet.tall{height:auto;min-height:min(46dvh,420px)}}
 .sheet.closing{pointer-events:none}
 .grab{flex:none;height:18px;display:flex;align-items:center;justify-content:center;cursor:grab;touch-action:none}
 .grab::before{content:"";width:46px;height:5px;border-radius:5px;background:var(--tan2);opacity:.75}
