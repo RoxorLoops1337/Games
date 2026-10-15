@@ -2045,6 +2045,9 @@
     const s = S;
     if (!s || s.empty) return;
     s.t += dt; s.frame++;
+    // an art piece that threw is drawn with the plain stand-in, but only for a while: a phone that ran out of canvas memory makes the art
+    // throw for a moment, and a permanent switch-off left the map flat and plain for the rest of the session. Retry every 5 s.
+    if (s.t - (s.artRetry || 0) >= 5) { s.artRetry = s.t; for (const k in s.artBad) { s.artBad = {}; break; } }
     stepReveals(s);
     if (s.walk) stepWalk(s, dt);
     else if (!s.tokTo) {                                          // idle: the token sits on the party's hex

@@ -254,6 +254,35 @@ try {
   });
 
   // ================================================================================================ phone
+  // a phone browser that runs out of canvas memory (Safari after an hour) hands back canvases with no 2d context for a while. The map and the
+  // icons must come back as soon as memory does: a failed sprite is never cached, the frame and hex art are retried, nothing throws
+  await t.test('canvas memory: the map and the icons recover after the browser runs out of canvas memory', async () => {
+    const s = await open();
+    await s.ev(() => GAME.debug.open('map', { chapter: 1 }));
+    await s.tick(2000);
+    const px = () => s.ev(() => { const c = document.querySelector('#view'), g = c.getContext('2d'), k = c.width / 1280; return [[10, 360], [640, 8], [20, 20]].map(([x, y]) => Array.from(g.getImageData(Math.round(x * k), Math.round(y * k), 1, 1).data).join(',')).join(' '); });
+    const healthy = await px();
+    await s.ev(() => {
+      window.__gc = HTMLCanvasElement.prototype.getContext; window.__go = typeof OffscreenCanvas === 'function' ? OffscreenCanvas.prototype.getContext : null;
+      document.querySelectorAll('canvas').forEach((c) => { c.__ok = true; });
+      HTMLCanvasElement.prototype.getContext = function (t, o) { return this.__ok ? window.__gc.call(this, t, o) : null; };
+      if (window.__go) OffscreenCanvas.prototype.getContext = function () { return null; };
+      ART.sprite.clear();
+    });
+    await s.tick(1000);
+    t.ok((await s.ev(() => ART.sprite.stats().fails)) > 0, 'canvas memory: the starved browser was noticed (sprite fails counted)');
+    await s.ev(() => { HTMLCanvasElement.prototype.getContext = window.__gc; if (window.__go) OffscreenCanvas.prototype.getContext = window.__go; });
+    await s.tick(1000);
+    t.eq(await px(), healthy, 'canvas memory: a second after memory is back the map frame and ground look exactly as before');
+    await s.ev(() => GAME.debug.open('combat', { enemies: ['kappa'] }));
+    await s.tick(2500);
+    const icons = await s.ev(() => { const all = [...document.querySelectorAll('canvas.ico')]; const drawn = all.filter((c) => { const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data; for (let i = 3; i < d.length; i += 16) if (d[i] > 0) return true; return false; }); return [drawn.length, all.length]; });
+    t.ok(icons[1] > 0 && icons[0] === icons[1], 'canvas memory: every icon in the fight is drawn (' + icons[0] + ' of ' + icons[1] + ')');
+    for (let i = s.bad.length - 1; i >= 0; i--) if (/willReadFrequently/.test(s.bad[i])) s.bad.splice(i, 1);   // our own pixel readbacks above
+    clean(s, 'canvas memory');
+    await s.close();
+  });
+
   await t.test('phone: 844x390 landscape reaches Begin by taps; portrait asks to turn the device', async () => {
     const s = await open({ viewport: { width: 844, height: 390 }, hasTouch: true, isMobile: true });
     await s.tick(900);
