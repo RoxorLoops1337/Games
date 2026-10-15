@@ -23,6 +23,8 @@ Link: `https://games-71g.pages.dev/hearthvale/` (solo works at once). Server: se
 ## Rules
 - Hunger never deadlocks a village: a villager with no food keeps working at 40 percent speed (flagged `famished`, shown as 'hungry'), eats soup, then bread, apples or wheat, and the Hearth Hall shares a free bowl every 40 s when there is no food at all. The HUD shows a 'Cook soup' button (`cookSoup` in js/ui/hud.js) when soup runs low.
 - No image files: all art is procedural geometry, sound is synthesised.
+- Interface styles live in `ui/themes/<id>.css` (+ optional `.js`), scoped under `html[data-ui="<id>"]`; registry in `js/ui/theme.js`. The default is `gel` (Candy Gel), shipped inline in `index.html` so the first paint wears it; `style.css` alone is the `classic` look. Try one with `?ui=<id>`; `lab/ingame.mjs` takes `UI=<id>`.
+- Lighting budget: sun + hemisphere must stay near 1.3 + 0.95 by day (scene.js `applyLight`). Brighter blows the palette out to pastel through ACES; make it happier with the grade in post.js, not with more light.
 - Never rename the `hearthvale.*` localStorage keys (solo saves) or the folder.
 - Villages sit on a square ring (`slotOrigin` in sim.js, 17.5 apart, never overlapping); old circular saves are migrated in `deserialize`.
 - Snapshot tuple shapes in `snapshot()` are read by `scene.js` (`b`, `n`, `v` arrays): change both together.

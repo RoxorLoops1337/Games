@@ -236,12 +236,12 @@ export class View {
     this.sunGlow.position.set(this.cam.position.x + Math.cos(a) * 280, this.cam.position.y + Math.max(0.04, sn) * 260 - 10, this.cam.position.z - 120);
     this.sunGlow.visible = sn > -0.05 && ra < 0.7; this.sunGlow.material.opacity = Math.min(1, (sn + 0.05) * 5) * (1 - ra); this.sunGlow.material.color.set('#ffffff').lerp(C.tmp.set('#ffb070'), dusk * 0.6);
     // high-key light: strong soft fill from the hemisphere so shadows stay bright, a golden sun, a lavender moon
-    this.sun.intensity = (1.15 + 0.7 * day) * (1 - 0.3 * ra); this.sun.color.set('#c9d2ff').lerp(C.tmp.set('#fff1cf'), day).lerp(C.tmp.set('#ffb070'), dusk * 0.5);
-    this.hemi.intensity = 1.2 + 1.0 * day + 0.2 * ra; this.hemi.color.set('#b5c2ff').lerp(C.tmp.set('#ecefff'), day); this.hemi.groundColor.set('#9ccc78').lerp(C.tmp.set('#b4ea84'), day);
+    this.sun.intensity = (0.95 + 0.4 * day) * (1 - 0.3 * ra); this.sun.color.set('#c9d2ff').lerp(C.tmp.set('#fff1cf'), day).lerp(C.tmp.set('#ffb070'), dusk * 0.5);
+    this.hemi.intensity = 0.55 + 0.4 * day + 0.2 * ra; this.hemi.color.set('#b5c2ff').lerp(C.tmp.set('#ecefff'), day); this.hemi.groundColor.set('#9ccc78').lerp(C.tmp.set('#b4ea84'), day);
     this.night = 1 - day; setVillagerLight(Math.max(0.15, day));
     this.winMat.emissiveIntensity = Math.max(0, 1 - day * 1.6) * 1.6; this.lanternMat.emissiveIntensity = (1 - day) * 2.4; envLantern.emissiveIntensity = (1 - day) * 2.4; lampMat.emissiveIntensity = 0.25 + (1 - day) * 2.2; propLantern.emissiveIntensity = 0.25 + (1 - day) * 2.2;
     cloudMat.color.set('#ffffff').lerp(C.tmp.set('#8d9cc8'), (1 - day) * 0.8); this.fx.setLight && this.fx.setLight(0.4 + 0.6 * day);
-    this.r.toneMappingExposure = 1.02 + 0.04 * day;
+    this.r.toneMappingExposure = 1.0 + 0.05 * day;
     // everything below is also a pure function of (time, rain, tier)
     this._sn = sn; this._dusk = dusk; this._day = day; const tc = this.tc || TIERS.medium, sunUp = sm(sn, -0.02, 0.14) * (1 - ra);
     // tier-driven strengths ease toward their targets, so a live tier change never pops

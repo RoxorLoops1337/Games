@@ -354,3 +354,15 @@ html[data-ui="gel"] body.lowfx #scrim.on{-webkit-backdrop-filter:none;backdrop-f
 html[data-ui="gel"][data-reduce="1"] :is(.shine,#bBuild,#quick)::after{animation:none;display:none}
 html[data-ui="gel"][data-reduce="1"] :is(.b,.rb,.pill,.gp,#card,.card):active{transition:none}
 html[data-ui="gel"] :is(.need,.good,.offer,.sells,.recipe) .bar{margin:3px 4px 4px}
+
+/* ================= default-style sizing: bigger thumbs-first targets ================= */
+html[data-ui="gel"] .b.round,html[data-ui="gel"] .rb{width:52px;height:52px;min-height:52px}
+html[data-ui="gel"] #dock{gap:9px;padding:9px 13px}
+html[data-ui="gel"] #dock .rb{width:56px;height:56px;min-height:56px}
+html[data-ui="gel"] #bBuild{height:76px;min-width:128px;font-size:21px}
+html[data-ui="gel"] .pill{height:46px;min-height:46px;font-size:18px}
+html[data-ui="gel"] .gp{height:44px;min-height:44px;font-size:16px}
+html[data-ui="gel"] #strip{top:calc(70px + var(--sat))}
+html[data-ui="gel"] .b{min-height:50px;font-size:17px}
+html[data-ui="gel"] .b.small-b{min-height:44px;font-size:14px}
+html[data-ui="gel"] #quick{width:72px;height:72px;min-height:72px;font-size:12.5px}
