@@ -521,7 +521,7 @@ hero target), and `turn` is that enemy's own turn count (1 on the turn of its fi
   In hook ops the enemy target `enemy` means: `onPlay` the card's chosen target (random if none), `onDamaged` the attacker,
   `onKill` and everything else a random living enemy (never the dead unit).
 - **Hero targets:** `self` = the acting hero, `ally` = the other hero, `both` = every living hero, `front` / `back` = by current
-  row. Ops aimed at a voiceless hero are skipped; with one hero alive `ally` is skipped and `front` / `back` both mean the survivor.
+  row. Ops aimed at a voiceless hero are skipped (except `maxHp` with `both` or `ally`, see the op table); with one hero alive `ally` is skipped and `front` / `back` both mean the survivor.
 - **Enemy targets (card and hook ops):** `enemy` = chosen at play; `all` = every living; `random` = one living enemy, re-rolled
   every hit and every execution of `status` / `heal` / `removeStatus`; `lowest` = lowest current HP; `others` = every living
   enemy except the chosen one (needs a chosen enemy; for `random` and `lowest` it means all the rest). Ties go to the lowest
@@ -547,7 +547,7 @@ hero target), and `turn` is that enemy's own turn count (1 on the turn of its fi
 | `swap` | none | swap rows (does not use the free swap; blocked by Tangled) |
 | `cond` | `if:C, then:[ops], else?:[ops]` | conditional |
 | `repeat` | `n:V, do:[ops]` | run the ops n times (X-cost cards: `n:{per:'X'}`) |
-| `gold`, `ink`, `maxHp` | `n:V` (maxHp also `tgt`) | run-level rewards mid-combat (gold pouch, Vox gain, permanent max HP) |
+| `gold`, `ink`, `maxHp` | `n:V` (maxHp also `tgt`) | run-level rewards mid-combat (gold pouch, Vox gain, permanent max HP). `maxHp` raises current HP with the maximum at once; `both` and `ally` also reach a voiceless hero (a lasting stat: they stay at 0 HP and come back after the fight from the raised maximum) |
 | `revive` | `n:V` or `pct` (fraction of max HP) | a voiceless hero stands up in the backing spot with that HP (at least 1). No-op if nobody is voiceless. In a hook on `onHeroDown` it revives the triggering hero; otherwise the first voiceless hero. Emits `hero_revive` |
 | `hook` | `on, fx:[hook ops], filter?, limit?, once?, every?` | registers a combat hook owned by the acting hero until combat ends. `once:true` removes it after it fires once. Playing the card twice registers two hooks. Not allowed inside hook ops |
 

@@ -219,7 +219,7 @@ const DATA = (() => {
   // ------------------------------------------------------------------
   const statuses = {
     might:      { id: 'might', name: 'Volume', kind: 'buff', stack: 'int', text: 'Attacks deal +N damage per hit.' },
-    bulwark:    { id: 'bulwark', name: 'Soundproof', kind: 'buff', stack: 'int', text: 'Gain +N extra Block whenever you gain Block from a card.' },
+    bulwark:    { id: 'bulwark', name: 'Soundproof', kind: 'buff', stack: 'int', text: 'Gain +N extra Block whenever you gain Block from a card or Charm.' },
     regen:      { id: 'regen', name: 'Warm Tea', kind: 'buff', stack: 'int', text: 'At the start of its turn, heal N, then Warm Tea falls by 1.' },
     thorns:     { id: 'thorns', name: 'Feedback', kind: 'buff', stack: 'int', text: 'Whenever it is hit by an attack, the attacker takes N damage.' },
     dodge:      { id: 'dodge', name: 'Shimmy', kind: 'buff', stack: 'int', text: 'Shimmies out of the next N attack hits completely.' },
@@ -232,7 +232,7 @@ const DATA = (() => {
     charge:     { id: 'charge', name: 'Rumble', kind: 'resource', stack: 'int', hero: 'raiga', text: 'Andy\'s low end. Built by taking hits and striking, released as thunder from below.' },
     vulnerable: { id: 'vulnerable', name: 'Exposed', kind: 'debuff', stack: 'dur', text: 'Takes 50% more attack damage.' },
     weak:       { id: 'weak', name: 'Muffled', kind: 'debuff', stack: 'dur', text: 'Deals 25% less attack damage.' },
-    frail:      { id: 'frail', name: 'Wobbly', kind: 'debuff', stack: 'dur', text: 'Gains 25% less Block from cards.' },
+    frail:      { id: 'frail', name: 'Wobbly', kind: 'debuff', stack: 'dur', text: 'Gains 25% less Block from cards and Charms.' },
     poison:     { id: 'poison', name: 'Earworm', kind: 'debuff', stack: 'int', text: 'At the start of its turn, lose N HP (ignores Block), then Earworm falls by 1.' },
     burn:       { id: 'burn', name: 'Sizzle', kind: 'debuff', stack: 'int', text: 'At the end of the round, take N damage (ignores Block), then Sizzle halves.' },
     stun:       { id: 'stun', name: 'Starstruck', kind: 'debuff', stack: 'dur', text: 'Skips its next action. A starstruck hero cannot play cards on their next turn.' },

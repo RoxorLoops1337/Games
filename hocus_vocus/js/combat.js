@@ -1102,14 +1102,22 @@ const COMBAT = (() => {
     }
 
     // ---- run level ops and heroes
+    // max HP is a lasting stat: "both heroes gain 2 max HP" (Gold Record) and "give your ally 2 max HP" reach a voiceless hero too, who
+    // stays voiceless at 0 HP and comes back after the fight from the raised maximum. Every other target follows heroTargets.
+    function maxHpTargets(t, env) {
+      const a = env.actor;
+      if (t === 'both') return C.heroes.slice();
+      if (t === 'ally') { const o = a && !a.down ? otherHero(a) : null; return o ? [o] : []; }
+      return heroTargets(t, env);
+    }
     function doMaxHp(op, env) {
       const n = Math.floor(evalV(op.n, env));
       if (!n) return;
-      heroTargets(op.tgt || 'self', env).forEach((h) => {
+      maxHpTargets(op.tgt || 'self', env).forEach((h) => {
         const before = h.maxHp;
         h.maxHp = Math.max(1, h.maxHp + n);
         const d = h.maxHp - before;
-        if (d > 0) h.hp = Math.min(h.maxHp, h.hp + d); else h.hp = Math.min(h.hp, h.maxHp);
+        if (!h.down) { if (d > 0) h.hp = Math.min(h.maxHp, h.hp + d); else h.hp = Math.min(h.hp, h.maxHp); }
         if (d) { maxHpGain[h.id] = (maxHpGain[h.id] || 0) + d; emit('max_hp', { hero: h.id, n: d }); }
       });
     }

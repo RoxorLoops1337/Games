@@ -329,7 +329,7 @@
           out: [
             { w: 2, text: 'The coin sinks, the fountain fizzes, and one of your cards comes out of it sounding better than it went in.', ops: [{ op: 'gold', n: -10 }, { op: 'upgradeCard', random: true }] },
             { w: 2, text: 'The coin sinks, and the fountain politely spits out something nicer: a small, bright gem.', ops: [{ op: 'gold', n: -10 }, { op: 'addGem', tier: 1 }] },
-            { w: 1, text: 'The coin sinks. Nothing happens. The goldfish looks at you. It is, very clearly, judging you.' },
+            { w: 1, text: 'The coin sinks. Nothing happens. The goldfish looks at you. It is, very clearly, judging you.', ops: [{ op: 'gold', n: -10 }] },
           ] },
         { label: 'Scoop out the coins', cost: 'A curse: Hot Take',
           out: [{ w: 1, text: "You scoop out forty gold of other people's wishes. Somebody films it. By the time you reach the corner, your hot take on wishing fountains is everywhere.", ops: [{ op: 'gold', n: 40 }, { op: 'addCurse', id: 'curse_hex' }] }] },

@@ -306,7 +306,7 @@ Spell names are reserved (H16): no Charm, gem, card or enemy uses them.
 | id (stays) | kind | Echowake name | **new name** | reminder text (exact) |
 |---|---|---|---|---|
 | `might` | buff | Might | **Volume** | `Attacks deal +N damage per hit.` |
-| `bulwark` | buff | Bulwark | **Soundproof** | `Gain +N extra Block whenever you gain Block from a card.` |
+| `bulwark` | buff | Bulwark | **Soundproof** | `Gain +N extra Block whenever you gain Block from a card or Charm.` |
 | `regen` | buff | Regen | **Warm Tea** | `At the start of its turn, heal N, then Warm Tea falls by 1.` |
 | `thorns` | buff | Thorns | **Feedback** | `Whenever it is hit by an attack, the attacker takes N damage.` |
 | `dodge` | buff | Dodge | **Shimmy** | `Shimmies out of the next N attack hits completely.` |
@@ -319,7 +319,7 @@ Spell names are reserved (H16): no Charm, gem, card or enemy uses them.
 | `charge` | resource (`raiga`) | Charge | **Rumble** | `Andy's low end. Built by taking hits and striking, released as thunder from below.` |
 | `vulnerable` | debuff | Vulnerable | **Exposed** | `Takes 50% more attack damage.` |
 | `weak` | debuff | Weak | **Muffled** | `Deals 25% less attack damage.` |
-| `frail` | debuff | Frail | **Wobbly** | `Gains 25% less Block from cards.` |
+| `frail` | debuff | Frail | **Wobbly** | `Gains 25% less Block from cards and Charms.` |
 | `poison` | debuff | Poison | **Earworm** | `At the start of its turn, lose N HP (ignores Block), then Earworm falls by 1.` |
 | `burn` | debuff | Burn | **Sizzle** | `At the end of the round, take N damage (ignores Block), then Sizzle halves.` |
 | `stun` | debuff | Stun | **Starstruck** | `Skips its next action. A starstruck hero cannot play cards on their next turn.` |

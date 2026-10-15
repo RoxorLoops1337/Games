@@ -276,7 +276,7 @@ t.test('card text: energy, draw, cards and the rest', () => {
     ['discard two', [pick('hand', 2, 'discard')], 'Discard 2 cards.'],
     ['exhaust one', [pick('hand', 1, 'exhaust')], 'Fade a card.'],
     ['retain one', [pick('hand', 1, 'retain')], 'Hold a card.'],
-    ['upgrade in hand', [pick('hand', 1, 'upgrade')], 'Upgrade a card in your hand.'],
+    ['upgrade in hand', [pick('hand', 1, 'upgrade')], 'Upgrade a card in your hand for this fight.'],
     ['copy in hand', [pick('hand', 1, 'copy')], 'Copy a card in your hand.'],
     ['discard to hand', [pick('discard', 1, 'toHand')], 'Put a card from your discard pile into your hand.'],
     ['exhaust to hand', [pick('exhaust', 1, 'toHand')], 'Return a card from your Faded pile to your hand.'],

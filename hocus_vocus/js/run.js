@@ -65,7 +65,9 @@
 //            drops unknown cards, relics, gems and brushes; U.resetUid past every uid)
 //
 //   Rewards = {gold (net, what R gained), goldBase, ink, cards[] (offers), relics[] (offers), gems[] (offers), brush|null, maxHp, boss, tier,
-//              source:'combat'|'event', claimed, pending[], log[]}. gold and ink are ALREADY in R; the rest are offers that claim resolves.
+//              source:'combat'|'event', claimed, pending[], log[]}. gold, ink and maxHp are ALREADY in R; the rest are offers that claim resolves.
+//              gold and maxHp count everything the end of the fight added (the fight itself, onFightWon Charms, an event fight's win ops),
+//              so the reward ledger shows every gain; maxHp is summed over both heroes.
 //   Node    = {kind, tile:{q,r}, ...}: 'combat' {tier, enc, enemies, seed, rewards, onWin, source} | 'reward' {rewards, source} | 'shop' {stock:{items,
 //             removePrice}, hookLog} | 'event' {event, chosen} | 'camp' {used[]} | 'forge' {used: null|'upgrade'|'gems'} | 'chest' {loot:{gold, relic, gems[]},
 //             taken} | 'gemcache' {offers[], taken}. Shop items: {key, kind:'card'|'gem'|'relic'|'brush', id, price, sale, sold, was?}.
@@ -1030,13 +1032,15 @@ const RUN = (() => {
     }
     const m = mods(R);
     const gains = S.maxHpGain || {};
-    let maxHpTotal = 0;
+    // Rewards.maxHp and Rewards.gold are everything the fight's end added, so the reward ledger shows it: max HP won in the fight, by
+    // onFightWon Charms and by an event fight's `win` ops, and the gold of those Charms and ops on top of the fight's own gold
+    const maxHpBefore = R.heroes.reduce((s, h) => s + h.maxHp, 0);
+    const before = R.gold;
     (S.heroes || []).forEach((sh) => {
       const h = R.heroes.find((x) => x.id === sh.id);
       if (!h) return;
       const g = gains[sh.id] | 0;
       h.maxHp += g;
-      maxHpTotal += g;
       const hp = sh.down || !(sh.hp > 0) ? Math.round(h.maxHp * m.reviveFrac) : sh.hp;
       h.hp = Math.min(h.maxHp, Math.max(1, hp));
     });
@@ -1053,7 +1057,6 @@ const RUN = (() => {
     const range = E().gold[tier] || E().gold.normal;
     const goldBase = on ? Math.round(gr.int(range[0], range[1]) * m.goldMul) : 0;
     const extraGold = isNum(S.gold) ? S.gold : 0;
-    const before = R.gold;
     R.gold = Math.max(0, R.gold + goldBase + extraGold);
     R.stats.goldEarned += goldBase + Math.max(0, extraGold);
     const killInk = kills.reduce((s, k) => s + (E().killInk[k.tier] || 0), 0);
@@ -1080,7 +1083,7 @@ const RUN = (() => {
       out.pending.forEach((x) => pending.push(x));
     }
     const rewards = {
-      gold: R.gold - before, goldBase, ink: inkGain, cards, relics, gems, brush, maxHp: maxHpTotal, boss: tier === 'boss', tier,
+      gold: R.gold - before, goldBase, ink: inkGain, cards, relics, gems, brush, maxHp: R.heroes.reduce((s, h) => s + h.maxHp, 0) - maxHpBefore, boss: tier === 'boss', tier,
       source: node ? node.source : 'combat', claimed: false, pending, log,
     };
     R.node = { kind: 'reward', tile: { q: tile.q, r: tile.r }, rewards, source: rewards.source };
