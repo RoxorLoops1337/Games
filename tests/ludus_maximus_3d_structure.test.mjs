@@ -545,5 +545,15 @@ for (const fn of ['newGame', 'makeGlad', 'mkUnits', 'createFight', 'step', 'useU
   ok(!/\bblankUnit\b/.test(fg) && /ctx\.fb/.test(fg), 'fighters: no unit fields, shades travel in the team ctx (ctx.fb)');
   ok(/ludus_maximus_3d_fighters\.test\.mjs/.test(pkg), 'fighters: the suite is wired into test:ludus3d');
 }
+
+{ // ARENAS: five arena themes, weather, hazard visuals and ambience are wired (the detailed checks live in ludus_maximus_3d_arenas.test.mjs)
+  const rd = (f) => readFileSync(join(root, f), 'utf8'), env = rd('js/env_arena.js'), fx = rd('js/envfx.js'), au = rd('js/audio.js'), pkg = rd('../package.json'), sk = readFileSync(join(root, '..', '.claude/skills/ludus3d-environment-lighting/SKILL.md'), 'utf8');
+  ok(/export const ARENA_THEME_IDS = \['provincial', 'capua', 'alexandria', 'carthage', 'imperial'\]/.test(env) && /alexandria: \{/.test(env) && /carthage: \{/.test(env), 'arenas: the five circuit themes exist');
+  ok(/export function pickWeather/.test(env) && /setHazards\(list\)/.test(env) && /export function createHazardFX/.test(fx) && /export const HAZARD_KINDS/.test(fx), 'arenas: weather picker and hazard pool are exported');
+  ok(/def\('gull'/.test(au) && /lm3d-arena/.test(au) && /lm3d-arena/.test(env), 'arenas: ambience follows the theme through the lm3d-arena event');
+  ok(existsSync(join(root, 'lab', 'arena_themes.html')) && /window\.__testResult/.test(rd('lab/arena_themes.html')), 'arenas: lab page with a headless check');
+  ok(/ludus_maximus_3d_arenas\.test\.mjs/.test(pkg) && /## Arena themes, weather and hazards \(round 4\)/.test(sk), 'arenas: the suite is wired into test:ludus3d and the skill section exists');
+}
+
 console.log(`ludus_maximus_3d structure: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
