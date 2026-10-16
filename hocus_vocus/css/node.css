@@ -643,3 +643,9 @@ body.reduce-motion .ev-more { animation: none; }
 #stage.compact .cp-line { font-size: calc(14px * min(var(--ts), 1.1) * var(--nkc, 1)); }
 #stage.compact .cp-verb { font-size: calc(13px * min(var(--ts), 1.1) * var(--nkc, 1)); }
 #stage.compact .cp-name { font-size: calc(22px * min(var(--ts), 1.1) * var(--nkc, 1)); }
+
+/* the elite reward's Medley box (screen_node enterReward): the Charm box look (its own class, so the Charm box selectors stay unique), the button greys once the Medley is made */
+.rw-medley { display: flex; flex-direction: column; align-items: center; gap: 6px; margin-top: 8px; padding: 12px 12px 12px; border-radius: 16px; background: var(--nk-stripe) 0 0 / 100% 3px no-repeat, var(--nk-panel); box-shadow: var(--nk-rim), 0 3px 0 var(--nk-line), 0 12px 20px rgba(0, 0, 0, .55); transition: opacity .35s, transform .4s var(--ease-back); }
+.rw-medley .rw-medley-sub { margin: 0 0 4px; text-align: center; font: 600 calc(13px * var(--ts) * var(--nkc, 1)) / 1.25 var(--font-ui); color: var(--nk-cream-c); }
+.rw-medley.taken .rw-medley-sub { color: var(--jade); }
+.rw-medley.taken .rw-h3 { visibility: visible; }

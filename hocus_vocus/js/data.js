@@ -25,6 +25,7 @@
 //                walkOps(ops, fn)                  visits every op, through cond/repeat/hook nesting
 //   Mechanics    mechOf(def, up) -> {fanbase, remix, hype, loop} | null   mechNow(inst, mech, ctx) -> live bonuses   mechKey(inst, ctx)
 //                (card mechanics: see "Card mechanics" below the lookups; they also wrap resolveCard, cardHtml and cardPlain)
+//   Systems      cardDef(inst | id) isMedley(inst) canMedley(a, b) medleyDef(parts) signatureOf(heroId)   (see "The Crowd and Medleys" at the end)
 //   Mods         foldMods([deltaObj...]) -> final flat mods     trialDeltas(level) -> summed deltas
 //                modsFor(relicIds, trialLevelOrDeltas) -> final flat mods (what RUN.mods(R) returns: modsFor(R.relics, R.mods))
 //                rowFor(heroId, row, relicIds) -> merged row bonuses (hero row plus relic `rows`)
@@ -116,8 +117,8 @@ const DATA = (() => {
     // 'frac' keys are fractions (0.25 = x1.25, -0.25 = x0.75) folded as max(0.1, 1 + sum).
     mods: ['energy', 'hand', 'startBlock', 'inkMax', 'startInk', 'wellInk', 'cardChoices', 'freeSwaps', 'campActions', 'rareBoost', 'goldMul', 'priceMul', 'healMul'],
     modKind: { energy: 'int', hand: 'int', startBlock: 'int', inkMax: 'int', startInk: 'int', wellInk: 'int', cardChoices: 'int', freeSwaps: 'int', campActions: 'int', rareBoost: 'int', goldMul: 'frac', priceMul: 'frac', healMul: 'frac' },
-    trialMods: ['enemyHp', 'eliteHp', 'bossHp', 'enemyDmg', 'goldMul', 'priceMul', 'healMul', 'reviveFrac', 'startInk', 'startGold', 'wellInk', 'cardChoices', 'curses'],
-    trialModKind: { enemyHp: 'frac', eliteHp: 'frac', bossHp: 'frac', enemyDmg: 'frac', goldMul: 'frac', priceMul: 'frac', healMul: 'frac', reviveFrac: 'frac', startInk: 'int', startGold: 'int', wellInk: 'int', cardChoices: 'int', curses: 'int' },
+    trialMods: ['enemyHp', 'eliteHp', 'bossHp', 'enemyDmg', 'goldMul', 'priceMul', 'healMul', 'reviveFrac', 'startInk', 'startGold', 'wellInk', 'cardChoices', 'curses', 'crowd'],
+    trialModKind: { enemyHp: 'frac', eliteHp: 'frac', bossHp: 'frac', enemyDmg: 'frac', goldMul: 'frac', priceMul: 'frac', healMul: 'frac', reviveFrac: 'frac', startInk: 'int', startGold: 'int', wellInk: 'int', cardChoices: 'int', curses: 'int', crowd: 'int' },
     rowFields: ['dmgAdd', 'blockAdd', 'startBlock', 'regen', 'thorns', 'drawAdd'],
     gemModKeys: ['dmg', 'block', 'heal', 'hits', 'cost', 'draw', 'energy', 'poison', 'status', 'fx', 'kw', 'kwRemove', 'cond'],
 
@@ -258,6 +259,10 @@ const DATA = (() => {
     prism: { name: 'Rainbow slot', text: 'A rainbow slot accepts a gem of any colour.' },
     xcost: { name: 'X cost', text: 'Spends all your remaining Breath. The card reads X as the Breath spent.' },
     down: { name: 'Voiceless', text: 'A hero at 0 HP loses their voice: their cards clog your hand and they cannot be targeted. If both heroes lose their voice, the tour ends.' },
+    // the two run systems (data.js "The Crowd and Medleys"): the fight HUD meter and the fused cards of an elite reward
+    crowd: { name: 'Crowd', text: 'Every card you play fills the Crowd meter, a defeated enemy fills it by two. When it is full the crowd goes wild: a free Fading copy of a Signature card joins your hand, the two heroes taking turns.' },
+    signature: { name: 'Signature', text: 'Each hero has one Signature card. When the crowd goes wild, a free Fading copy of it joins your hand.' },
+    medley: { name: 'Medley', text: 'A Medley is two cards sung as one: it plays both of their effects. After a rival fight you may fuse two Attack or Skill cards of one hero into a Medley.' },
     // card mechanics (LISTS.mechs): one sentence each, N is the number printed after the word
     fanbase: { name: 'Fanbase', text: 'Fanbase N: whenever this card defeats an enemy, it deals N more damage for the rest of the tour.' },
     remix: { name: 'Remix', text: 'Remix N: each time you play this card, it deals N more damage for the rest of the fight.' },
@@ -280,6 +285,7 @@ const DATA = (() => {
     killInk: { minion: 0, normal: 1, elite: 2, boss: 0 },
     gold: { normal: [14, 22], elite: [30, 44], boss: [70, 90], chest: [45, 75] },
     cardChoices: 3,
+    crowd: 7,                         // the Crowd meter: cards played until the crowd goes wild (a kill counts 2); Encore 5+ adds 1 (trial_5 mods.crowd)
     // rarity weights (percent) for card rewards. rare weight = base.rare + min(rareOffset, rareOffsetCap) + mods.rareBoost,
     // moved from common. rareOffset rises by 1 after each normal or elite reward that offered no rare, resets when a rare is taken.
     rarity: {
@@ -369,6 +375,7 @@ const DATA = (() => {
       rows: { front: { dmgAdd: 2 }, back: { blockAdd: 1 } },
       passives: [{ id: 'blade_flow', name: 'Every Note Blooms', on: 'onPlay', filter: { type: 'attack' }, limit: 1, fx: [{ op: 'status', s: 'bloom', n: 1, tgt: 'self' }] }],
       starter: ['hanae_slash', 'hanae_slash', 'hanae_parry', 'hanae_parry', 'hanae_petal_step'],
+      signature: 'hanae_thousand_petals',      // The High Note: the Crowd's free copy (data.js "The Crowd and Medleys")
       unlock: null,
     },
     kuro: {
@@ -378,6 +385,7 @@ const DATA = (() => {
       rows: { back: { dmgAdd: 2 }, front: { blockAdd: 0 } },
       passives: [{ id: 'steady_hand', name: 'In the Pocket', on: 'onPlay', filter: { type: 'skill' }, limit: 1, fx: [{ op: 'status', s: 'sumi', n: 1, tgt: 'self' }] }],
       starter: ['kuro_ink_bolt', 'kuro_ink_bolt', 'kuro_ink_ward', 'kuro_ink_ward', 'kuro_first_stroke'],
+      signature: 'kuro_grand_flourish',         // Wait For It
       unlock: null,
     },
     suzu: {
@@ -387,6 +395,7 @@ const DATA = (() => {
       rows: { front: { blockAdd: 1, thorns: 2 }, back: { regen: 2 } },
       passives: [{ id: 'moonlit_rite', name: 'Always Rolling', on: 'turnStart', fx: [{ op: 'status', s: 'ward', n: 1, tgt: 'self' }] }],
       starter: ['suzu_ofuda', 'suzu_ofuda', 'suzu_barrier', 'suzu_barrier', 'suzu_moon_prayer'],
+      signature: 'suzu_moonlit_verdict',        // Final Mixdown
       unlock: { ach: 'ch1_clear' },
     },
     raiga: {
@@ -396,6 +405,7 @@ const DATA = (() => {
       rows: { front: { thorns: 2, startBlock: 3 }, back: { dmgAdd: 1 } },
       passives: [{ id: 'storm_born', name: 'Bass Face', on: 'onDamaged', limit: 2, fx: [{ op: 'status', s: 'charge', n: 1, tgt: 'self' }] }],
       starter: ['raiga_jab', 'raiga_jab', 'raiga_brace', 'raiga_brace', 'raiga_static_fist'],
+      signature: 'raiga_thousand_thunders',     // Thunder From Below
       unlock: { ach: 'ch2_clear' },
     },
   };
@@ -717,6 +727,7 @@ const DATA = (() => {
     energy: [ECONOMY.energy, 1, 10], hand: [ECONOMY.handSize, 1, ECONOMY.maxHand], startBlock: [0, 0, 99], inkMax: [ECONOMY.inkMax, 6, 20],
     startInk: [ECONOMY.startInk, 1, 20], wellInk: [ECONOMY.wellInk, 1, 12], cardChoices: [ECONOMY.cardChoices, 1, 6], freeSwaps: [ECONOMY.freeSwaps, 0, 5],
     campActions: [1, 1, 3], rareBoost: [0, 0, 50], startGold: [ECONOMY.startGold, 0, 999], curses: [0, 0, 10],
+    crowd: [ECONOMY.crowd, 4, 12],                                        // the Crowd meter size (data.js "The Crowd and Medleys")
   };
   const FRAC_KEYS = ['goldMul', 'priceMul', 'healMul', 'enemyHp', 'eliteHp', 'bossHp', 'enemyDmg'];
   D.foldMods = (list) => {
@@ -1131,6 +1142,9 @@ const DATA = (() => {
         Object.keys(h.rows).forEach((r) => { if (['front', 'back'].indexOf(r) < 0) err(w, `rows.${r}`); Object.keys(h.rows[r]).forEach((f) => { if (!has('rowFields', f)) err(w, `rows.${r}.${f} unknown`); }); });
         vHooks(w, h.passives, 'passives', 'passive');
         if (!Array.isArray(h.starter) || h.starter.length !== 5) err(w, 'starter must list exactly 5 card ids');
+        if (typeof h.signature !== 'string') err(w, 'signature must name a card id (the Crowd\'s free copy)');
+        else if (D.cards[h.signature] && (D.cards[h.signature].hero !== id || ['attack', 'skill'].indexOf(D.cards[h.signature].type) < 0)) err(w, `signature "${h.signature}" must be an Attack or Skill of this hero`);
+        else if (strict && !D.cards[h.signature]) warn(w, `signature "${h.signature}" is not defined: the Crowd has nothing to sing for this hero`);
       });
     }
 
@@ -1710,6 +1724,127 @@ const DATA = (() => {
     let fn;
     Object.defineProperty(D, k, { enumerable: true, configurable: true, get: () => fn, set: (v) => { fn = typeof v === 'function' ? MECH_WRAP[k](v) : v; } });
   });
+
+  // ==================================================================================================================
+  // The Crowd and Medleys: the two run systems (DESIGN 4.3 "Medleys", 4.2 "The Crowd"). A separate block: it touches none of the
+  // card mechanics above, it only wraps whatever resolveCard they install.
+  //
+  // THE CROWD (COMBAT owns the meter): every card played adds 1, a defeated enemy adds 2, and at mods.crowd (ECONOMY.crowd, 7; Encore 5+
+  //   adds 1 through trial_5) the crowd goes wild: a temp copy of a hero's SIGNATURE card (DATA.heroes[id].signature, an Attack or Skill)
+  //   joins the hand with `crowd: true`, which resolves as cost 0 with Fade (below). The lead hero's signature comes first, then the
+  //   other hero's, and so on. D.signatureOf(heroId) -> card id | null.
+  //
+  // MEDLEY (RUN makes them, after an elite fight): a deck instance {uid, id: 'medley', parts: [idA, idB], up, gems, enc?}. Both parts are
+  //   Attack or Skill cards of ONE hero, never a Medley themselves. The merged definition (D.medleyDef(parts)) is what every reader of a
+  //   card definition gets from D.cardDef(inst): name "A and B", hero, type attack when either part is one (else skill), rarity rare,
+  //   cost max(costA, costB) clamped to 1..3 (an X part makes the Medley cost X), fx A then B, kw the union, slots the union capped at 3
+  //   (A's first), mech merged by max; `up` (when either part has one) does the same with the upgraded parts, so one upgrade lifts both
+  //   songs. Resolving a Medley instance resolves each part with its own share of the gems (slot i belongs to A while i < A.slots.length)
+  //   and merges the results the same way; the card mechanics wrapper above then adds the merged mech bonuses on top.
+  //   D.isMedley(inst)   D.canMedley(instA, instB) -> {ok, reason?: card|same|medley|type|hero}   D.cardDef(inst | id) -> def | undefined
+  // ==================================================================================================================
+  const MEDLEY_ID = 'medley';
+  const MEDLEY_TYPES = ['attack', 'skill'];
+  const medleyCache = new Map();
+  const isPartId = (id) => typeof id === 'string' && !!D.cards[id] && MEDLEY_TYPES.indexOf(D.cards[id].type) >= 0 && LISTS.heroIds.indexOf(D.cards[id].hero) >= 0;
+  D.MEDLEY_ID = MEDLEY_ID;
+  D.isMedley = (inst) => !!inst && typeof inst === 'object' && inst.id === MEDLEY_ID && Array.isArray(inst.parts) && inst.parts.length === 2;
+  D.medleyPartsOk = (parts) => Array.isArray(parts) && parts.length === 2 && parts.every(isPartId) && D.cards[parts[0]].hero === D.cards[parts[1]].hero;
+  D.signatureOf = (heroId) => { const h = heroes[heroId]; const id = h && h.signature; return id && D.cards[id] ? id : null; };
+  // whether two deck instances may be fused: the same hero, Attack or Skill, two different cards of the deck, neither a Medley
+  D.canMedley = (a, b) => {
+    if (!a || !b || typeof a !== 'object' || typeof b !== 'object') return { ok: false, reason: 'card' };
+    if (a === b || (a.uid !== undefined && a.uid === b.uid)) return { ok: false, reason: 'same' };
+    if (D.isMedley(a) || D.isMedley(b) || a.id === MEDLEY_ID || b.id === MEDLEY_ID) return { ok: false, reason: 'medley' };
+    if (!isPartId(a.id) || !isPartId(b.id)) return { ok: false, reason: 'type' };
+    if (D.cards[a.id].hero !== D.cards[b.id].hero) return { ok: false, reason: 'hero' };
+    return { ok: true };
+  };
+  const medleyCost = (ca, cb) => (ca === 'X' || cb === 'X' ? 'X' : Math.min(3, Math.max(1, isNum(ca) ? ca : 0, isNum(cb) ? cb : 0)));
+  const medleyKw = (ka, kb) => (ka || []).concat((kb || []).filter((k) => (ka || []).indexOf(k) < 0));
+  const medleyMech = (ma, mb) => {
+    const out = {};
+    [ma, mb].forEach((m) => { if (m && typeof m === 'object') Object.keys(m).forEach((k) => { if (isNum(m[k])) out[k] = Math.max(out[k] || 0, m[k]); }); });
+    return Object.keys(out).length ? out : undefined;
+  };
+  // the parts' definitions at one upgrade state: {fx, cost, kw, mech}
+  const partView = (def, up) => {
+    const u = up && def.up ? def.up : null;
+    return { fx: u && u.fx ? u.fx : (def.fx || []), cost: u && u.cost !== undefined ? u.cost : def.cost, kw: u && u.kw !== undefined ? u.kw : (def.kw || []), mech: u && u.mech !== undefined ? u.mech : def.mech };
+  };
+  D.medleyDef = (parts) => {
+    if (!D.medleyPartsOk(parts)) return undefined;
+    const key = parts[0] + '+' + parts[1];
+    let def = medleyCache.get(key);
+    const A = D.cards[parts[0]], B = D.cards[parts[1]];
+    if (def && def._a === A && def._b === B) return def;
+    const a = partView(A, false), b = partView(B, false);
+    const slots = (A.slots || []).concat(B.slots || []).slice(0, 3);
+    def = {
+      id: MEDLEY_ID, medley: true, parts: parts.slice(), name: A.name + ' and ' + B.name, hero: A.hero,
+      type: A.type === 'attack' || B.type === 'attack' ? 'attack' : 'skill', rarity: 'rare',
+      cost: medleyCost(a.cost, b.cost), fx: a.fx.concat(b.fx), kw: medleyKw(a.kw, b.kw), slots, art: A.art,
+      flavor: 'Two songs, one breath.',
+    };
+    const mech = medleyMech(a.mech, b.mech);
+    if (mech) def.mech = mech;
+    if (A.up || B.up) {
+      const ua = partView(A, true), ub = partView(B, true);
+      def.up = { fx: ua.fx.concat(ub.fx), cost: medleyCost(ua.cost, ub.cost), kw: medleyKw(ua.kw, ub.kw) };
+      const um = medleyMech(ua.mech, ub.mech);
+      if (um) def.up.mech = um;
+    }
+    Object.defineProperty(def, '_a', { value: A, enumerable: false });
+    Object.defineProperty(def, '_b', { value: B, enumerable: false });
+    medleyCache.set(key, def);
+    return def;
+  };
+  // the definition behind an instance or an id: D.cards[id], or the merged definition of a Medley instance
+  D.cardDef = (x) => {
+    if (typeof x === 'string') return D.cards[x];
+    if (!x || typeof x !== 'object') return undefined;
+    if (x.id === MEDLEY_ID) return D.medleyDef(x.parts);
+    return D.cards[x.id];
+  };
+  // resolve a Medley: each part with its own gems, then the merge above on the results. raw is data_text's resolveCard.
+  function resolveMedley(raw, inst, ctx) {
+    const def = D.medleyDef(inst.parts);
+    if (!def) return raw({ id: inst.id, up: inst.up, gems: [] }, ctx);
+    const A = D.cards[inst.parts[0]], na = (A.slots || []).length;
+    const gems = def.slots.map((_, i) => (inst.gems && inst.gems[i]) || null);
+    const up = !!inst.up && !!def.up;
+    const ra = raw({ id: inst.parts[0], up: up ? 1 : 0, gems: gems.slice(0, na) }, ctx);
+    const rb = raw({ id: inst.parts[1], up: up ? 1 : 0, gems: gems.slice(na) }, ctx);
+    const kw = medleyKw(ra.kw, rb.kw);
+    const cost = medleyCost(ra.cost, rb.cost);
+    return {
+      inst, def, id: MEDLEY_ID, name: def.name + (up ? '+' : ''), cost, costX: cost === 'X', type: def.type, rarity: def.rarity, kw, slots: def.slots.slice(),
+      gems, fx: ra.fx.concat(rb.fx), hero: def.hero, up, playableType: def.type, art: def.art, medley: true,
+      gemActive: ra.gemActive.concat(rb.gemActive).slice(0, def.slots.length), gemNotes: ra.gemNotes.concat(rb.gemNotes.map((n) => Object.assign({}, n, { slot: n.slot + na }))),
+      base: { fx: def.fx, cost: def.cost, kw: def.kw },
+    };
+  }
+  // a Crowd copy (inst.crowd) is free and Fades
+  const wrapSystems = (raw) => function resolveCard(x, ctx) {
+    const inst = x && typeof x === 'object' ? x : null;
+    let res = inst && D.isMedley(inst) ? resolveMedley(raw, inst, ctx) : raw(x, ctx);
+    if (inst && inst.crowd && res && res.def) {
+      res = Object.assign({}, res, { crowd: true });
+      if (res.cost !== null) { res.cost = 0; res.costX = false; }
+      if (res.kw.indexOf('exhaust') < 0) res.kw = res.kw.concat(['exhaust']);
+    }
+    return res;
+  };
+  {
+    const d = Object.getOwnPropertyDescriptor(D, 'resolveCard');          // the card mechanics accessor above: its setter wraps what it is given
+    Object.defineProperty(D, 'resolveCard', { enumerable: true, configurable: true, get: d.get, set: (v) => d.set(typeof v === 'function' ? wrapSystems(v) : v) });
+    // targetMode and cardOps (data_text.js) resolve a plain instance themselves; a Medley or Crowd instance goes through D.resolveCard first
+    const viaResolve = (raw) => function (x) { const inst = x && typeof x === 'object' && !x.inst && (D.isMedley(x) || x.crowd) ? D.resolveCard(x) : x; return raw.apply(this, [inst].concat(Array.prototype.slice.call(arguments, 1))); };
+    ['targetMode', 'cardOps'].forEach((k) => {
+      let fn;
+      Object.defineProperty(D, k, { enumerable: true, configurable: true, get: () => fn, set: (v) => { fn = typeof v === 'function' ? viaResolve(v) : v; } });
+    });
+  }
 
   return D;
 })();

@@ -526,6 +526,8 @@
       if (!info) return;
       explain(info.status ? 'status' : 'keyword', info.key, false, '#screens .kw[data-kw="' + attr(el.dataset.kw) + '"]');
     }));
+    // HUD pieces that teach a keyword of their own (the Crowd meter, a Medley badge) say which with data-kw-explain
+    safe(() => root.querySelectorAll('[data-kw-explain]').forEach((el) => { const k = el.dataset.kwExplain; if (DATA.keywords[k]) explain('keyword', k, false, '#screens [data-kw-explain="' + attr(k) + '"]'); }));
     safe(() => root.querySelectorAll('.card').forEach((el) => {
       const kw = (el.rbResolved && el.rbResolved.kw) || [];
       kw.forEach((k) => { if (DATA.keywords[k]) explain('keyword', k, false, '#screens .card[data-id="' + attr(el.dataset.id) + '"]'); });

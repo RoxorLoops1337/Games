@@ -100,7 +100,7 @@
     trial_2: { level: 2, name: 'Tough Crowd', text: 'Regular enemies and sidekicks have 10% more HP.', mods: { enemyHp: 0.10 } },
     trial_3: { level: 3, name: 'Scratchy Throat', text: 'Green room rests, healing detours and act healing restore 15% less.', mods: { healMul: -0.15 } },
     trial_4: { level: 4, name: 'Cold Open', text: 'Every act begins with 1 less Vox.', mods: { startInk: -1 } },
-    trial_5: { level: 5, name: 'Harsh Critics', text: 'Enemies deal 15% more damage.', mods: { enemyDmg: 0.15 } },
+    trial_5: { level: 5, name: 'Harsh Critics', text: 'Enemies deal 15% more damage, and the crowd takes one more card to go wild.', mods: { enemyDmg: 0.15, crowd: 1 } },
     trial_6: { level: 6, name: 'Cold Tea', text: 'Tea stalls give 1 less Vox, and voiceless heroes rise with 15% HP, not 25%.', mods: { wellInk: -1, reviveFrac: -0.10 } },
     trial_7: { level: 7, name: 'Limited Edition', text: 'Merch stalls charge 15% more, and you start with 20 less gold.', mods: { priceMul: 0.15, startGold: -20 } },
     trial_8: { level: 8, name: 'Jinxed', text: 'Begin the tour with a curse in your deck.', mods: { curses: 1 } },

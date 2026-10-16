@@ -339,3 +339,18 @@ body.reduce-motion .cm-pile.bump, body.reduce-motion .cm-pile.shuffle .p-stack, 
 body.low .cm-danger.on { animation: none; }
 body.colorblind .cm-int.heavy::before { content: "!!"; width: 30px; }
 body.colorblind .cm-pv.lethal::after { content: "WON!"; }
+
+/* THE CROWD meter (screen_combat buildCrowd): a row of heart pips above the Breath orb; .gain on a step, .wild when the crowd goes wild, .full one pip short */
+.cm-crowd { position: absolute; width: 88px; height: 44px; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 3px; pointer-events: auto; cursor: help; filter: drop-shadow(0 3px 3px rgba(0, 0, 0, .55)); }
+.cm-crowd .cr-l { font: 900 calc(11px * var(--ts2)) / 1 var(--font-display); letter-spacing: .18em; color: var(--hv-cream); -webkit-text-stroke: 3px var(--ink); paint-order: stroke fill; }
+.cm-crowd .cr-pips { display: flex; justify-content: center; gap: 2px; width: 104px; margin-left: -8px; }
+.cm-crowd .cr-pip { display: grid; place-items: center; flex: none; opacity: .28; filter: grayscale(1) brightness(.7); transition: opacity .25s, filter .25s, transform .25s; }
+.cm-crowd .cr-pip .ico { width: 100% !important; height: 100% !important; }
+.cm-crowd .cr-pip.on { opacity: 1; filter: none; }
+.cm-crowd.full .cr-pip.on { animation: crPulse 1.1s ease-in-out infinite; }
+.cm-crowd.gain .cr-pip.on:last-of-type { animation: cmBlkGain .42s var(--ease-back); }
+.cm-crowd.wild { animation: crWild .9s var(--ease-back); }
+.cm-crowd.wild .cr-l { color: var(--hv-pink-l); }
+@keyframes crPulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.18); } }
+@keyframes crWild { 0% { transform: scale(.9); filter: brightness(2.4) drop-shadow(0 0 22px #ff7eb6); } 45% { transform: scale(1.3); } 100% { transform: none; } }
+body.reduce-motion .cm-crowd.full .cr-pip.on, body.reduce-motion .cm-crowd.gain .cr-pip.on:last-of-type, body.reduce-motion .cm-crowd.wild { animation: none; }

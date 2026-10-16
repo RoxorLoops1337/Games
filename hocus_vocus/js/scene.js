@@ -981,10 +981,10 @@ const SCENE = (() => {
   const cardCache = new Map();
   function cardInfo(card) {
     if (!card) return { type: 'skill', dmg: false };
-    const key = card.id + '|' + (card.up ? 1 : 0) + '|' + (card.gems ? card.gems.join(',') : '');
+    const key = card.id + (card.parts ? '[' + card.parts.join('+') + ']' : '') + '|' + (card.up ? 1 : 0) + '|' + (card.gems ? card.gems.join(',') : '');
     let c = cardCache.get(key);
     if (c) return c;
-    const def = DATA.cards ? DATA.cards[card.id] : null;
+    const def = DATA.cards ? (typeof DATA.cardDef === 'function' ? DATA.cardDef(card) : DATA.cards[card.id]) : null;   // a Medley resolves from its parts
     let fx = null;
     try { const r = DATA.resolveCard(card); fx = r && r.fx; } catch (e) { fx = null; }
     if (!fx && def) fx = def.fx;
@@ -1020,7 +1020,7 @@ const SCENE = (() => {
     if (!e) return out;
     switch (e.type) {
       case 'play': {
-        const t = cardInfo(e.card).type, def = DATA.cards && e.card ? DATA.cards[e.card.id] : null;
+        const t = cardInfo(e.card).type, def = DATA.cards && e.card ? (typeof DATA.cardDef === 'function' ? DATA.cardDef(e.card) : DATA.cards[e.card.id]) : null;
         out.push(voiced([t === 'attack' ? 'card_play_attack' : t === 'power' ? 'card_play_power' : 'card_play_skill'], heroVoice(e.hero) || heroVoice(def && def.hero)));
         break;
       }
