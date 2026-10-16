@@ -23,9 +23,13 @@
 //   C.hand C.draw C.discard C.exhaust C.powers C.inPlay: deck instances { uid, id, up, gems } (temp cards add tmp:true). C.draw[0] is the TOP
 //        of the draw pile (the next card drawn). C.added counts temp cards created, so hand+draw+discard+exhaust+powers+(inPlay?1:0) = deck.length + C.added.
 //   C.pending null | { kind:'pick', opId, from, n, then, filter, top, optional, uids }   C.stats (DESIGN 4.10)   C.rng   C.events (every event ever emitted)
-//   C.played (cards played this turn, what Hype reads)   C.lastPlayed (a copy of the last Attack or Skill played this turn that Loop would copy, or null)
+//   C.played (cards played this turn, what Hype, Soundcheck and Finale read)   C.lastPlayed (a copy of the last Attack or Skill played this turn
+//        that Loop would copy, or null)   C.lastHero (the hero id of the last card played this turn, what Duet reads, or null)
 //   Card mechanics (DATA "Card mechanics"): an instance may carry enc (Fanbase damage, from the deck and grown by kills), rmx (Remix plays this
-//        fight) and fade (a Loop copy, resolved with Fade). Copies in events carry them too.
+//        fight) and fade (a Loop or Reprise copy, resolved with Fade). Copies in events carry them too. A Finale closes the turn: C.canPlay then
+//        answers { ok:false, reason:'finale' } for every card until the next turn. A Reprise card played in a turn of 3 or more cards is played
+//        again at the end of the turn (C.endTurn, before the hand's end of turn effects) as a free Fading temp copy: a `play` event with
+//        `free:true, reprise:true`, cost 0, the same target when it still stands (else the first living enemy), and no pick can pause it.
 //
 // ACTIONS (each returns the array of events it produced, also appended to C.events; an illegal call returns [] and changes nothing)
 //   C.start()                     see create. Only legal once.
@@ -108,7 +112,7 @@ const COMBAT = (() => {
         turns: 0, cardsPlayed: 0, attacksPlayed: 0, damageDealt: 0, damageTaken: 0, blockGained: 0, maxHit: 0, maxTurnDamage: 0, swaps: 0, heroDowns: 0, revives: 0,
         poisonKills: 0, burnKills: 0, thornKills: 0, multiHitTurns: 0, zeroCostTurns: 0, kills: [],
       },
-      events: [], added: 0, played: 0, lastPlayed: null,
+      events: [], added: 0, played: 0, lastPlayed: null, lastHero: null,
     };
 
     // ---------------------------------------------------------------- engine state (closure)
@@ -130,7 +134,8 @@ const COMBAT = (() => {
     const nextGroup = () => ++groupN;
     const emit = (type, data) => { const e = Object.assign({ type }, data || {}); C.events.push(e); if (batch) batch.push(e); return e; };
     const piles = () => ({ hand: C.hand.length, draw: C.draw.length, discard: C.discard.length, exhaust: C.exhaust.length });
-    const newTurnState = () => ({ cards: 0, attacks: 0, skills: 0, zero: 0, multi: false, freeUsed: 0, dmg: 0, last: null });
+    // lastHero: Duet; closed: a Finale was played; reprise: the Reprise cards played this turn (replayed at the end of the turn)
+    const newTurnState = () => ({ cards: 0, attacks: 0, skills: 0, zero: 0, multi: false, freeUsed: 0, dmg: 0, last: null, lastHero: null, closed: false, reprise: [] });
     const fanGain = {};           // Fanbase damage gained this fight per deck uid (C.summary().fanbase)
     T = newTurnState();
 
@@ -162,7 +167,7 @@ const COMBAT = (() => {
     }
     function R(card, unit) {
       const u = unit === undefined ? ownerOf(card) : unit;
-      const mctx = { unit: u, played: T.cards };
+      const mctx = { unit: u, played: T.cards, lastHero: T.lastHero };
       const key = card.id + '|' + (card.up ? 1 : 0) + '|' + card.gems.join(',') + '|' + (u ? u.row : '') + '|' + D.mechKey(card, mctx);
       let r = resCache.get(key);
       if (!r) { r = D.resolveCard(card, mctx); resCache.set(key, r); }
@@ -1256,7 +1261,7 @@ const COMBAT = (() => {
     function beginPlayerTurn() {
       C.turn += 1; C.stats.turns = C.turn; C.phase = 'player';
       T = newTurnState();
-      C.played = 0; C.lastPlayed = null;
+      C.played = 0; C.lastPlayed = null; C.lastHero = null;
       hooks.forEach((h) => { h.turnFired = 0; });
       C.enemies.forEach((u) => { u._hookRound = {}; });
       C.energy = C.maxEnergy;
@@ -1360,6 +1365,7 @@ const COMBAT = (() => {
       const no = (reason) => ({ ok: false, reason });
       if (C.phase !== 'player') return no('phase');
       if (C.pending) return no('pending');
+      if (T.closed) return no('finale');
       const card = C.hand.find((c) => c.uid === uid);
       if (!card) return no('notInHand');
       const actor = ownerOf(card);
@@ -1377,17 +1383,19 @@ const COMBAT = (() => {
     };
     C.legalTargets = (uid) => (C.needsTarget(uid) ? livingEnemies().map((e) => e.id) : []);
 
-    function* playRoutine(card, targetId) {
+    // free: a Reprise replay (nothing is paid, an X card reads X as 0)
+    function* playRoutine(card, targetId, free) {
       const actor = ownerOf(card);
       const res = R(card, actor);
       const costX = res.cost === 'X';
-      const X = costX ? C.energy : 0;
-      const paid = costX ? X : res.cost;
+      const X = costX && !free ? C.energy : 0;
+      const paid = free ? 0 : costX ? X : res.cost;
       C.energy -= paid;
       const to = res.type === 'power' ? 'power' : res.kw.indexOf('exhaust') >= 0 ? 'exhaust' : 'discard';
       const target = targetId ? enemyById(targetId) : null;
       const pe = { card: cardCopy(card), hero: actor.id, target: target && needsTargetRes(res) ? target.id : null, cost: paid, to };
       if (costX) pe.x = X;
+      if (free) { pe.free = true; pe.reprise = true; }
       emit('play', pe);
       if (paid !== 0) emit('energy', { value: C.energy, delta: -paid });
       const mySerial = ++serial;
@@ -1397,6 +1405,10 @@ const COMBAT = (() => {
       if (res.mech && res.mech.loop && T.last && dead !== 'lose' && C.phase !== 'over') placeCards(Array.from({ length: res.mech.loop }, () => copyOf(T.last, true)), 'hand', false);
       // Remix: one more play on this copy (the next resolution reads it)
       if (res.mech && res.mech.remix) card.rmx = (card.rmx > 0 ? card.rmx : 0) + 1;
+      // Reprise: a deck card (never a Fading copy, so a replay or a Loop copy cannot chain) is replayed at the end of the turn
+      if (res.mech && res.mech.reprise && !card.fade) T.reprise.push({ src: card, target: pe.target });
+      // Finale: the turn is closed for cards
+      if (res.mech && res.mech.finale) T.closed = true;
       // settle the card
       C.inPlay = null;
       if (to === 'power') C.powers.push(card);
@@ -1407,7 +1419,8 @@ const COMBAT = (() => {
       C.enemies.forEach((u) => { if (!u.down) runEnemyHooks(u, 'onHeroPlay', { type: res.type }); });
       T.cards++; if (res.type === 'attack') T.attacks++; if (res.type === 'skill') T.skills++;
       if ((res.type === 'attack' || res.type === 'skill') && !(res.mech && res.mech.loop)) T.last = cardCopy(card);
-      C.played = T.cards; C.lastPlayed = T.last ? cardCopy(T.last) : null;
+      T.lastHero = actor.id;
+      C.played = T.cards; C.lastPlayed = T.last ? cardCopy(T.last) : null; C.lastHero = T.lastHero;
       C.stats.cardsPlayed++; if (res.type === 'attack') C.stats.attacksPlayed++;
       if (!costX && paid === 0) { T.zero++; if (T.zero === 3) C.stats.zeroCostTurns++; }
     }
@@ -1458,10 +1471,39 @@ const COMBAT = (() => {
         fireHook('onSwap', { hero: front() });
       });
     };
+    // Reprise: the replays at the end of the turn (DATA "Card mechanics"). Each Reprise card played this turn, in play order, when 3 or more
+    // cards were played: a free Fading temp copy is played from nowhere (it counts in `added`), at the same target when it still stands,
+    // else the first living enemy. A pick it reaches (a gem could add one) is answered with the first candidates: nobody is there to choose.
+    function repriseReplays() {
+      const encore = T.cards >= 3 ? T.reprise.slice() : [];
+      T.reprise = [];
+      encore.forEach((e) => {
+        if (dead || C.phase !== 'player' || !livingEnemies().length) return;
+        const copy = copyOf(e.src, true);
+        const owner = ownerOf(copy);
+        if (!owner || owner.down) return;
+        const res = R(copy, owner);
+        if (res.kw.indexOf('unplayable') >= 0) return;
+        let tgt = null;
+        if (needsTargetRes(res)) {
+          const t0 = e.target ? enemyById(e.target) : null;
+          tgt = t0 && !t0.down ? t0 : lineOrder(livingEnemies())[0];
+          if (!tgt) return;
+        }
+        C.added += 1;
+        C.inPlay = copy;
+        gen = playRoutine(copy, tgt ? tgt.id : undefined, true);
+        advance(gen);
+        let guard = 0;
+        while (gen && C.pending && guard++ < 8) { const p = C.pending; C.pending = null; advance(gen, p.uids.slice(0, p.optional ? 0 : p.n)); }
+      });
+    }
     C.endTurn = () => {
       if (C.phase !== 'player' || C.pending || dead) return [];
       return act(() => {
         const f = front();
+        repriseReplays();
+        if (dead) return;
         C.hand.slice().forEach((c) => {
           const def = D.cards[c.id];
           if (dead || !def || !def.hand || !def.hand.turnEnd || C.hand.indexOf(c) < 0) return;
@@ -1614,7 +1656,7 @@ const COMBAT = (() => {
   }
   function scoreCard(C, card, targetId) {
     const actor = C.unit(DATA.cards[card.id].hero) || C.front();
-    const res = DATA.resolveCard(card, { unit: actor });
+    const res = DATA.resolveCard(card, { unit: actor, played: C.played, lastHero: C.lastHero });
     const pv = C.preview(card.uid, targetId);
     const tgt = targetId ? C.unit(targetId) : null;
     const f = C.front();
@@ -1644,14 +1686,22 @@ const COMBAT = (() => {
       else if (o.op === 'gold' || o.op === 'ink') s += 1;
     });
     if (res.type === 'power') s += 6;
-    // card mechanics: a Loop pays when there is something to copy, a Fanbase kill keeps paying, a Remix play makes the next one bigger
+    // card mechanics: a Loop pays when there is something to copy, a Fanbase kill keeps paying, a Remix play makes the next one bigger.
+    // Duet, Soundcheck and Finale bonuses are already in the preview (they ride on plus); a Reprise card is worth most as the third card
+    // (its replay comes for free), and a Finale closes the turn, so every other card still affordable after it is value thrown away
     const mech = res.mech;
+    const cost = res.cost === 'X' ? Math.max(1, C.energy) : Math.max(0.5, res.cost);
     if (mech) {
       if (mech.loop) s += C.lastPlayed ? 4 * mech.loop : -2;
       if (mech.fanbase && tgt && pv.dmg !== null && pv.dmg * pv.hits >= tgt.hp + tgt.block) s += 3 * mech.fanbase;
       if (mech.remix) s += 1.5 * mech.remix;
+      if (mech.reprise) s += C.played >= 2 ? 0.6 * Math.max(0, s) : C.hand.length >= 3 ? 1.5 : 0;
+      if (mech.finale) {
+        const left = C.energy - (res.cost === 'X' ? C.energy : res.cost);
+        const others = C.hand.filter((c) => c.uid !== card.uid && isNum((DATA.cards[c.id] || {}).cost) && DATA.cards[c.id].cost <= left && DATA.cards[c.id].type !== 'curse' && DATA.cards[c.id].type !== 'status').length;
+        s -= 2.5 * others;
+      }
     }
-    const cost = res.cost === 'X' ? Math.max(1, C.energy) : Math.max(0.5, res.cost);
     return { value: s, per: s / cost };
   }
   function bestTarget(C, card) {

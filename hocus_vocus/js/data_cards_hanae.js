@@ -1,4 +1,4 @@
-// Hocus Vocus: Jasmin (id `hanae`), The Blossom Voice: her complete card set (3 starters, 15 commons, 13 uncommons, 9 rares).
+// Hocus Vocus: Jasmin (id `hanae`), The Blossom Voice: her complete card set (3 starters, 17 commons, 15 uncommons, 11 rares).
 //
 // One IIFE, no top-level names; it only calls DATA.add('cards', {...}). Card text is generated from `fx`, never typed.
 // Card ids keep their old internal names (hanae_slash and so on): only `name` and `flavor` speak Hocus Vocus (bible 4, HV_HEROES 2.1).
@@ -379,6 +379,56 @@
       up: { fx: [dmg(1, { hits: 3 })], mech: { remix: 2 } },
       kw: [], slots: ['red', 'gold'], art: { m: 'cross_slash', c: 'gold', hero: true },
       flavor: 'Two songs, one key, zero permission.',
+    },
+    // ------------------------------------------------------------------ the duo (DATA "Card mechanics": Duet) and the setlist (Soundcheck, Reprise, Finale)
+    // Duet pays for taking turns with the partner: RoxorLoops lays a beat, Jasmin answers. Warm Up opens the turn, Sing It Twice comes back in a
+    // busy turn, Final Bow closes the show (and the turn). Her lead bonus still lands on every hit, Duet included.
+    hanae_call_and_response: {
+      name: 'Call and Response', hero: 'hanae', type: 'attack', rarity: 'common', cost: 1,
+      fx: [dmg(4)], mech: { duet: 3 },
+      up: { fx: [dmg(5)], mech: { duet: 4 } },
+      kw: [], slots: ['red'], art: { m: 'bell', c: 'rose', hero: true },
+      flavor: 'He calls. She answers. The room does the rest.',
+    },
+    hanae_harmony_line: {
+      name: 'Harmony Line', hero: 'hanae', type: 'skill', rarity: 'uncommon', cost: 1,
+      // Duet on a Block card: the bonus rides on the Block
+      fx: [block(5)], mech: { duet: 4 },
+      up: { fx: [block(6)], mech: { duet: 5 } },
+      kw: [], slots: ['blue', 'green'], art: { m: 'lotus', c: 'azure' },
+      flavor: 'A third above whatever he does. It always fits.',
+    },
+    hanae_two_voices: {
+      name: 'Two Voices', hero: 'hanae', type: 'attack', rarity: 'rare', cost: 2,
+      // Duet on every hit: two hits, 3 more each when the partner sang the previous card
+      fx: [dmg(4, { hits: 2 })], mech: { duet: 3 },
+      up: { fx: [dmg(5, { hits: 2 })], mech: { duet: 3 } },
+      kw: [], slots: ['red', 'gold'], art: { m: 'crane', c: 'gold', hero: true },
+      flavor: 'One voice fills a room. Two voices move it.',
+    },
+    hanae_warm_up: {
+      name: 'Warm Up', hero: 'hanae', type: 'attack', rarity: 'common', cost: 0,
+      // Soundcheck: a free opener that is 6 as the first card of the turn and 2 after that
+      fx: [dmg(2)], mech: { soundcheck: 4 },
+      up: { fx: [dmg(3)], mech: { soundcheck: 5 } },
+      kw: [], slots: ['red'], art: { m: 'sun', c: 'amber' },
+      flavor: 'Scales first. Then the real thing.',
+    },
+    hanae_sing_it_twice: {
+      name: 'Sing It Twice', hero: 'hanae', type: 'attack', rarity: 'uncommon', cost: 1,
+      // Reprise: played in a turn of 3 or more cards it comes back for free at the end of the turn (the upgrade keeps the Reprise)
+      fx: [dmg(4)], mech: { reprise: 1 },
+      up: { fx: [dmg(6)] },
+      kw: [], slots: ['red', 'green'], art: { m: 'star', c: 'gold' },
+      flavor: 'Everybody knows this part. Everybody sings it twice.',
+    },
+    hanae_final_bow: {
+      name: 'Final Bow', hero: 'hanae', type: 'attack', rarity: 'rare', cost: 2,
+      // Finale: 4 more per card played before it, and nothing can be played after it this turn
+      fx: [dmg(8)], mech: { finale: 4 },
+      up: { fx: [dmg(10)], mech: { finale: 5 } },
+      kw: [], slots: ['red', 'gold'], art: { m: 'moon', c: 'rose', hero: true },
+      flavor: 'Last song. She bows, and nobody can follow it.',
     },
   });
 })();

@@ -1,4 +1,4 @@
-// Hocus Vocus: RoxorLoops (id `kuro`), The Beatbox Wizard: the complete card set (3 starters, 15 commons, 13 uncommons, 9 rares, no tokens).
+// Hocus Vocus: RoxorLoops (id `kuro`), The Beatbox Wizard: the complete card set (3 starters, 17 commons, 15 uncommons, 11 rares, no tokens).
 //
 // One IIFE that registers into DATA.cards (no top-level names). Data only: every number is an op field, card text is generated
 // from `fx` by DATA.cardHtml, and nothing here uses a function, a clock or randomness. Tests: tests/hocus_vocus_cards_kuro.test.mjs.
@@ -357,6 +357,58 @@
       up: { kw: [] },
       kw: ['exhaust'], slots: ['green', 'any'], art: { m: 'koi', c: 'teal' },
       flavor: 'One mouth. Forty tracks. Nobody can tell which one is live.',
+    },
+    // ------------------------------------------------------------------ the duo (DATA "Card mechanics": Duet) and the setlist (Soundcheck, Reprise, Finale)
+    // Trading fours with Jasmin: Duet pays when she played the previous card. Mic Check opens the turn (and wakes In the Pocket), One More
+    // Time comes back in a busy turn, Showstopper closes the turn for the whole line. The backing bonus lands on every Duet hit too.
+    kuro_trade_fours: {
+      name: 'Trade Fours', hero: 'kuro', type: 'attack', rarity: 'common', cost: 1,
+      // a catchy exchange: the bar he drops sticks (Earworm), and Duet pays when Jasmin had the previous one
+      fx: [{ op: 'dmg', n: 4, tgt: 'enemy' }, { op: 'status', s: 'poison', n: 1, tgt: 'enemy' }], mech: { duet: 3 },
+      up: { fx: [{ op: 'dmg', n: 5, tgt: 'enemy' }, { op: 'status', s: 'poison', n: 1, tgt: 'enemy' }], mech: { duet: 4 } },
+      kw: [], slots: ['red'], art: { m: 'cross_slash', c: 'teal', hero: true },
+      flavor: 'Four bars his, four bars hers. Nobody counts, everybody knows.',
+    },
+    kuro_backing_vocals: {
+      name: 'Backing Vocals', hero: 'kuro', type: 'skill', rarity: 'uncommon', cost: 1,
+      // Duet on Block for both heroes: the bonus lands on each of them
+      fx: [{ op: 'block', n: 3, tgt: 'both' }], mech: { duet: 3 },
+      up: { fx: [{ op: 'block', n: 4, tgt: 'both' }], mech: { duet: 3 } },
+      kw: [], slots: ['blue', 'green'], art: { m: 'barrier', c: 'teal' },
+      flavor: 'Oohs on the left, aahs on the right, and a kick drum underneath.',
+    },
+    kuro_cypher: {
+      name: 'Cypher', hero: 'kuro', type: 'attack', rarity: 'rare', cost: 2,
+      // a card first, then three bars: Duet adds 2 to each hit when the partner played the previous card (and the backing bonus on each)
+      fx: [{ op: 'draw', n: 1 }, { op: 'dmg', n: 2, hits: 3, tgt: 'enemy' }], mech: { duet: 2 },
+      up: { fx: [{ op: 'draw', n: 1 }, { op: 'dmg', n: 3, hits: 3, tgt: 'enemy' }], mech: { duet: 2 } },
+      kw: [], slots: ['red', 'gold'], art: { m: 'mask', c: 'gold', hero: true },
+      flavor: 'Step in, drop a bar, step out. Her turn. His turn. Hers.',
+    },
+    kuro_one_more_time: {
+      name: 'One More Time', hero: 'kuro', type: 'skill', rarity: 'common', cost: 1,
+      // Reprise: Block and Groove now, and again for free at the end of a turn of 3 or more cards
+      fx: [{ op: 'block', n: 4, tgt: 'self' }, { op: 'status', s: 'sumi', n: 1, tgt: 'self' }], mech: { reprise: 1 },
+      up: { fx: [{ op: 'block', n: 5, tgt: 'self' }, { op: 'status', s: 'sumi', n: 1, tgt: 'self' }] },
+      kw: [], slots: ['blue'], art: { m: 'scroll', c: 'gold' },
+      flavor: 'The crowd will not let it end. Fine. Once more.',
+    },
+    kuro_mic_check: {
+      name: 'Mic Check', hero: 'kuro', type: 'skill', rarity: 'uncommon', cost: 0,
+      // Soundcheck on Block: 7 as the first card of the turn, 3 after that, and a free Skill wakes In the Pocket
+      fx: [{ op: 'block', n: 3, tgt: 'self' }], mech: { soundcheck: 4 },
+      up: { fx: [{ op: 'block', n: 4, tgt: 'self' }], mech: { soundcheck: 5 } },
+      kw: [], slots: ['blue'], art: { m: 'bell', c: 'indigo' },
+      flavor: 'One two. One two. Yes, it is on.',
+    },
+    kuro_showstopper: {
+      name: 'Showstopper', hero: 'kuro', type: 'attack', rarity: 'rare', cost: 2,
+      // the big closer: he steps back to the backing spot (where his +2 is) and drops it on the whole line. Finale: 2 more on every
+      // enemy per card played before it, then the turn is closed; it Fades, so it is one show stopper per fight
+      fx: [{ op: 'cond', if: { row: 'front' }, then: [{ op: 'swap' }] }, { op: 'dmg', n: 5, tgt: 'all' }], mech: { finale: 2 },
+      up: { fx: [{ op: 'cond', if: { row: 'front' }, then: [{ op: 'swap' }] }, { op: 'dmg', n: 7, tgt: 'all' }], mech: { finale: 2 } },
+      kw: ['exhaust'], slots: ['red', 'green'], art: { m: 'meteor', c: 'gold' },
+      flavor: 'Bass, snare, hat, throat, all at once. Then silence. Then the roar.',
     },
   };
 

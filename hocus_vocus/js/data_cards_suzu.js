@@ -1,4 +1,4 @@
-// Hocus Vocus: RawClaw (id `suzu`), The Sound Alchemist: his complete card set (3 starters, 15 commons, 13 uncommons, 9 rares).
+// Hocus Vocus: RawClaw (id `suzu`), The Sound Alchemist: his complete card set (3 starters, 17 commons, 15 uncommons, 11 rares).
 //
 // One IIFE, no top-level names; it only calls DATA.add('cards', {...}). Card text is generated from `fx`, never typed.
 // Tokens: none. No card here uses the `add` op, so none is defined. Card ids keep their old internal names (suzu_ofuda and so on);
@@ -404,7 +404,57 @@
       fx: [dmg(10)], mech: { fanbase: 3 },
       up: { fx: [dmg(13)], mech: { fanbase: 4 } },
       kw: [], slots: ['red', 'any'], art: { m: 'coin', c: 'moon', hero: true },
-      flavor: 'Every fan you win is one more voice in the chorus.',
+      flavor: 'Every fan you win is one more voice in the reprise.',
+    },
+    // ------------------------------------------------------------------ the duo (DATA "Card mechanics": Duet) and the setlist (Soundcheck, Reprise, Finale)
+    // The producer plays off whoever sang last: Duet on a hit, on Block for both, and on the whole line. Line Check opens the turn,
+    // Delay Pedal comes back in a busy turn, Curtain Call closes it.
+    suzu_two_track: {
+      name: 'Two Track', hero: 'suzu', type: 'attack', rarity: 'common', cost: 1,
+      fx: [dmg(5)], mech: { duet: 3 },
+      up: { fx: [dmg(6)], mech: { duet: 4 } },
+      kw: [], slots: ['red'], art: { m: 'wave', c: 'teal' },
+      flavor: 'Her take on the left, his on the right. Pan to taste.',
+    },
+    suzu_stereo_field: {
+      name: 'Stereo Field', hero: 'suzu', type: 'skill', rarity: 'uncommon', cost: 1,
+      // Duet on Block for both heroes: the bonus lands on each of them (and the lead gets his +1)
+      fx: [block(3, 'both')], mech: { duet: 3 },
+      up: { fx: [block(4, 'both')], mech: { duet: 3 } },
+      kw: [], slots: ['blue', 'gold'], art: { m: 'barrier', c: 'indigo' },
+      flavor: 'Wide enough that both of them fit inside the sound.',
+    },
+    suzu_harmonizer: {
+      name: 'Harmonizer', hero: 'suzu', type: 'attack', rarity: 'rare', cost: 2,
+      // Duet on every enemy: 3 more on each when the partner played the previous card
+      fx: [dmg(6, { tgt: 'all' })], mech: { duet: 3 },
+      up: { fx: [dmg(8, { tgt: 'all' })], mech: { duet: 3 } },
+      kw: [], slots: ['red', 'green'], art: { m: 'spirit_orb', c: 'gold', hero: true },
+      flavor: 'One voice goes in. A choir comes out, and every seat gets some.',
+    },
+    suzu_line_check: {
+      name: 'Line Check', hero: 'suzu', type: 'skill', rarity: 'common', cost: 1,
+      // Soundcheck on Block: 9 as the first card of the turn, 5 after that
+      fx: [block(5)], mech: { soundcheck: 4 },
+      up: { fx: [block(6)], mech: { soundcheck: 5 } },
+      kw: [], slots: ['blue'], art: { m: 'shield', c: 'ash' },
+      flavor: 'Every cable, every channel, before anyone sings a note.',
+    },
+    suzu_delay_pedal: {
+      name: 'Delay Pedal', hero: 'suzu', type: 'skill', rarity: 'uncommon', cost: 1,
+      // Reprise: Block and Reverb now, and again for free at the end of a turn of 3 or more cards
+      fx: [block(3), ward(1)], mech: { reprise: 1 },
+      up: { fx: [block(4), ward(1)] },
+      kw: [], slots: ['blue', 'green'], art: { m: 'bell', c: 'azure' },
+      flavor: 'The same note, twice, slightly apart. That is the whole trick.',
+    },
+    suzu_curtain_call: {
+      name: 'Curtain Call', hero: 'suzu', type: 'attack', rarity: 'rare', cost: 2,
+      // Finale: 4 more per card played before it, then the turn is closed
+      fx: [dmg(7)], mech: { finale: 4 },
+      up: { fx: [dmg(9)], mech: { finale: 5 } },
+      kw: [], slots: ['red', 'gold'], art: { m: 'fan', c: 'ink', hero: true },
+      flavor: 'The lights come up. The desk goes quiet. He finally sits down.',
     },
   });
 })();

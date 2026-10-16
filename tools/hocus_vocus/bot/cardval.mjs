@@ -290,16 +290,22 @@ export function createValuer(G) {
 
   // card mechanics (DATA "Card mechanics"), per point and per hit of the first dmg op: a Loop copy is a Fading card that follows another
   // play, Remix pays about once more per fight, Hype reads the reference turn's earlier cards, and a Fanbase card's kills over a tour, plus
-  // the bonus it has already banked (the dmg valuation reads the printed n, not the plus the bonus rides on)
-  const MECH_VAL = { loop: 4, remix: 1, hype: 2.2, fanbase: 2 };
+  // the bonus it has already banked (the dmg valuation reads the printed n, not the plus the bonus rides on). The duo and setlist wave:
+  // Duet pays about half the time (per hit, or per hero on a Block card, at BLOCK_VAL), Soundcheck about a third of the time, a Reprise
+  // replay is a free Fading copy that needs a busy turn (like a Loop copy), and a Finale reads the earlier cards but closes the turn
+  const MECH_VAL = { loop: 4, remix: 1, hype: 2.2, fanbase: 2, duet: 0.5, soundcheck: 0.35, reprise: 4, finale: 2.2, finaleClose: 1.5 };
   function mechPoints(res) {
     const m = res.mech;
     if (!m) return 0;
-    let dmg = null;
-    asList(res.fx).forEach((o) => { if (!dmg && o && o.op === 'dmg') dmg = o; });
+    let dmg = null, block = null;
+    asList(res.fx).forEach((o) => { if (!dmg && o && o.op === 'dmg') dmg = o; if (!block && o && o.op === 'block') block = o; });
     const hits = dmg ? (isNum(dmg.hits) ? dmg.hits : 1) * (dmg.tgt === 'all' ? ALL_MUL : 1) : 0;
+    const cond = dmg ? hits : block ? BLOCK_VAL * (block.tgt === 'both' ? 1.9 : 1) : 0;
     const banked = res.mechNow ? res.mechNow.fanbase || 0 : 0;
-    return MECH_VAL.loop * (m.loop || 0) + hits * (MECH_VAL.remix * (m.remix || 0) + MECH_VAL.hype * (m.hype || 0) + MECH_VAL.fanbase * (m.fanbase || 0) + banked);
+    return MECH_VAL.loop * (m.loop || 0) + MECH_VAL.reprise * (m.reprise || 0)
+      + hits * (MECH_VAL.remix * (m.remix || 0) + MECH_VAL.hype * (m.hype || 0) + MECH_VAL.fanbase * (m.fanbase || 0) + banked)
+      + cond * (MECH_VAL.duet * (m.duet || 0) + MECH_VAL.soundcheck * (m.soundcheck || 0))
+      + (m.finale ? hits * MECH_VAL.finale * m.finale - MECH_VAL.finaleClose : 0);
   }
 
   // ---------------------------------------------------------------- tags (what a card produces or spends or pays off)
