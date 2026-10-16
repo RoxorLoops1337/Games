@@ -964,7 +964,8 @@ function relicSpecs(r, def, h0, h1) {
       if (!tc) { specs.push({ missing: `no card of ${h0} matches ${J(f)}` }); break; }
       [false, true].forEach((back) => specs.push({ tag: `${h0} plays ${tc.id}${back ? ' from the backing spot' : ''}`, back, steps: Array.from({ length: n }, () => playStepFresh(tc.id, tc.gems)), enemies: one, expectFire: true }));
       const tp = triggerCard(h1, f);
-      if (tp) specs.push({ tag: `${h1} plays ${tp.id}` + (party ? ' (either hero)' : ' (its hero only)'), steps: [playStepFresh(tp.id, tp.gems)], enemies: one, expectFire: party });
+      // one play by the ally proves "either hero" (a party Charm fires, an owned one stays quiet); an `every: N` hook never fires on its 1st trigger, so there it only proves the quiet side
+      if (tp) specs.push({ tag: `${h1} plays ${tp.id}` + (party ? ' (either hero)' : ' (its hero only)'), steps: [playStepFresh(tp.id, tp.gems)], enemies: one, expectFire: party && !def.every });
       if (f.type) { const other = triggerCard(h0, { type: list(f.type)[0] === 'attack' ? 'skill' : 'attack' }); if (other) specs.push({ tag: 'a card of the wrong type', steps: [playStepFresh(other.id, other.gems)], enemies: one, expectFire: false }); }
       if (f.gems || f.cost) { const plain = triggerCard(h0, { type: f.type }); if (plain && (!f.cost || !inRange(D.cards[plain.id].cost, f.cost))) specs.push({ tag: 'a card the filter refuses', steps: [playStepFresh(plain.id, plain.gems.map(() => null))], enemies: one, expectFire: false }); }
       break;
