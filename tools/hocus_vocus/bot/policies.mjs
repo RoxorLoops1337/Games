@@ -234,9 +234,8 @@ export function createPolicies(G, V, cfg) {
   }
   function runOpsHookValue(R, ops) { return runOpsValue(R, ops, { quick: true }); }
   const RUN_HOOK_TIMES = { onPickup: 1, onChapterStart: 2.5, onRest: 3, onPaint: 45, onFightWon: 20, onShopEnter: 3 };
-  function relicScore(R, id) {
-    const r = DATA.relics[id];
-    if (!r) return -99;
+  // the worth of one Charm-shaped def {mods?, rows?, hooks?} (a Charm, or one set tier as a virtual Charm)
+  function defScore(R, r) {
     let v = 0;
     Object.keys(r.mods || {}).forEach((k) => {
       const x = r.mods[k];
@@ -260,6 +259,20 @@ export function createPolicies(G, V, cfg) {
         v += pts * hookFights(h) * 3.0 * (r.hero ? 0.9 : 1);
       }
     });
+    return v;
+  }
+  function relicScore(R, id) {
+    const r = DATA.relics[id];
+    if (!r) return -99;
+    let v = defScore(R, r);
+    // Charm sets (DESIGN 4.7): the tier this pick would switch on counts in full, and every piece already held makes the next a little dearer
+    const s = r.set && DATA.relicSets ? DATA.relicSets[r.set] : null;
+    if (s && R.relics.indexOf(id) < 0) {
+      const owned = R.relics.filter((x) => DATA.relics[x] && DATA.relics[x].set === r.set).length;
+      const tier = s.tiers && s.tiers[owned + 1];
+      if (tier) v += defScore(R, tier);
+      v += 3 * owned;
+    }
     if (r.hero && heroIds(R).indexOf(r.hero) < 0) return -99;
     return v;
   }

@@ -9,7 +9,7 @@
 //   * the bodies: each id of a kind paints its own picture; flags (dim, done, on, pattern, color) cache separately; a cached draw is one blit
 //   * gems: colour is never the only signal (a distinct engraved glyph per colour, in the sprite structure and in ART.icon.glyph), tiers add
 //     facets, tier 3 orbits a sparkle, empty sockets exist in five kinds
-//   * relics take their palette from DATA.relics[id].art.c and every Charm draws its own picture (66 different drawings, the second Charm of
+//   * relics take their palette from DATA.relics[id].art.c and every Charm draws its own picture (one drawing per Charm; a set Charm reuses its icon in its own palette, the second Charm of
 //     a shared icon id has its own, and a Charm never borrows the card motif of the same id)
 //   * numbers (opts.n), time (opts.t, reduceMotion), determinism and the gallery sheets
 //   * perf smoke: a first draw and a cached draw stay far below a frame budget
@@ -437,9 +437,9 @@ t.test('rarity shows on the plate rim (common, uncommon, rare, boss, shop) and r
   t.eq(same(glint(rarities.common[0], 0), glint(rarities.common[0], 3)), true, 'a common plate is still');
 });
 
-t.test('every Charm draws its own picture: 66 different drawings, and none of them is the card motif of the same id', () => {
+t.test('every Charm draws its own picture (a set Charm reuses its icon in its own palette), and none of them is the card motif of the same id', () => {
   const charms = Object.keys(DATA.relics);
-  t.eq(charms.length, 66, '66 Charms');
+  t.ok(charms.length >= 66, charms.length + ' Charms (66 before the Charm sets)');
   // a Charm plate never goes through the card illustrator: the motif of the same id means something else on a card now
   const calls = [];
   const orig = ART.card.motif;
@@ -449,7 +449,7 @@ t.test('every Charm draws its own picture: 66 different drawings, and none of th
   ART.icon.draw(newCtx(), 'motif', 'slash', 0, 0, 48, {});
   ART.card.motif = orig;
   t.deep(calls, ['slash'], 'only the standalone motif icon uses ART.card.motif, no Charm and no relic icon id does');
-  // 66 different Charm drawings and 58 different icon ids
+  // every Charm a different drawing (a set Charm reuses a LISTS.relicIcons picture, so its icon, palette and rarity triple is unique) and 58 icon ids
   const sigs = new Map();
   charms.forEach((id) => {
     const body = bodyOf('relic', id, 64, { t: 0 });
@@ -458,7 +458,7 @@ t.test('every Charm draws its own picture: 66 different drawings, and none of th
     if (prev) t.ok(false, `${id} draws exactly like ${prev}`);
     sigs.set(body, id);
   });
-  t.eq(sigs.size, 66, '66 different Charm drawings');
+  t.eq(sigs.size, charms.length, charms.length + ' different Charm drawings');
   t.eq(new Set(L.relicIcons.map((id) => bodyOf('relic', id, 64, { t: 0 }))).size, 58, '58 different relic icon ids');
   // the second Charm of a shared icon id is a different OBJECT, not just another palette or plate rim
   const lines = (id) => bodyOf('relic', id, 64, { t: 0 }).split('\n');
@@ -467,7 +467,8 @@ t.test('every Charm draws its own picture: 66 different drawings, and none of th
   charms.forEach((id) => { (byIcon[DATA.relics[id].art.m] = byIcon[DATA.relics[id].art.m] || []).push(id); });
   const shared = Object.keys(byIcon).filter((m) => byIcon[m].length > 1);
   t.ok(shared.length >= 8, 'several icon ids are shared by two Charms: ' + shared.join(','));
-  shared.forEach((m) => byIcon[m].slice(1).forEach((id) => t.ok(differing(byIcon[m][0], id) > 80, `${id} has its own drawing, not ${byIcon[m][0]} in another palette (${differing(byIcon[m][0], id)} different calls)`)));
+  // a set Charm (DESIGN 4.7, no new art) may be its icon's object in another palette; any other second Charm of an icon is a different OBJECT
+  shared.forEach((m) => byIcon[m].slice(1).forEach((id) => { const d = differing(byIcon[m][0], id); t.ok(DATA.relics[id].set ? d > 0 : d > 80, `${id} has its own drawing, not ${byIcon[m][0]} in another palette (${d} different calls)`); }));
   // the bare icon id draws the first Charm that uses it
   shared.forEach((m) => t.eq(L.relicIcons.indexOf(m) >= 0, true, `${m} is a relic icon id`));
   // no card illustrator needed: the Charms and the relic icon ids still draw without it, and so do the standalone motif icons

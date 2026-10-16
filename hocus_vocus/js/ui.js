@@ -1813,9 +1813,23 @@ const UI = (() => {
     const root = mk('span', { class: 'relic rar-' + def.rarity + ' sz-' + size + (o.class ? ' ' + o.class : ''), role: clickable ? 'button' : 'img', tabindex: '0', 'aria-label': def.name + '. ' + (typeof DATA.relicText === 'function' ? safe(() => DATA.relicText(id), def.text) : def.text), dataset: { id } },
       iconCanvas('relic', id, RELIC_PX[size] - 8, {}));
     if (clickable) root.addEventListener('click', (e) => o.onclick(e, id, root));
-    // the Charm's flavour line (display only) sits in italics under the rules text when the Charm has one
-    if (o.tip !== false) attach(root, () => bubbleBody(def.name, 'keyword', (RARITY_NAME[def.rarity] || cap(def.rarity)), typeof DATA.relicText === 'function' ? safe(() => DATA.relicText(id), def.text) : def.text, def.flavor ? mk('p', { class: 'tk-flavor', text: def.flavor }) : null), { side: o.side || 'bottom' });
+    // the Charm's flavour line (display only) sits in italics under the rules text when the Charm has one, and its set with the run's
+    // progress ("Stage Crew, 2 of 4") under that when it belongs to a set (DESIGN 4.7)
+    if (o.tip !== false) attach(root, () => bubbleBody(def.name, 'keyword', (RARITY_NAME[def.rarity] || cap(def.rarity)), typeof DATA.relicText === 'function' ? safe(() => DATA.relicText(id), def.text) : def.text, relicTipExtra(def)), { side: o.side || 'bottom' });
     return root;
+  }
+  function relicSetLine(def, relicIds) {
+    const sp = def && def.set && typeof DATA.setProgress === 'function' ? safe(() => DATA.setProgress(def.set, relicIds || []), null) : null;
+    if (!sp) return '';
+    return relicIds ? sp.name + ', ' + sp.n + ' of ' + sp.max : sp.name + ' set, ' + sp.max + ' to complete';
+  }
+  function relicTipExtra(def) {
+    const line = relicSetLine(def, S.run && Array.isArray(S.run.relics) ? S.run.relics : null);
+    if (!def.flavor && !line) return null;
+    const frag = document.createDocumentFragment();
+    if (def.flavor) frag.appendChild(mk('p', { class: 'tk-flavor', text: def.flavor }));
+    if (line) frag.appendChild(mk('p', { class: 'tk-set', text: line }));
+    return frag;
   }
 
   function gem(id, o) {
@@ -2168,7 +2182,8 @@ const UI = (() => {
         const grid = mk('div', { class: 'relic-grid' });
         ids.forEach((id) => {
           const d = DATA.relics[id] || { name: id, text: '' };
-          grid.appendChild(mk('div', { class: 'relic-row' }, relic(id, { size: 'lg', tip: false }), mk('div', {}, mk('b', { text: d.name }), mk('p', { text: typeof DATA.relicText === 'function' ? safe(() => DATA.relicText(id), d.text) : d.text }))));
+          const setLine = relicSetLine(d, ids);
+          grid.appendChild(mk('div', { class: 'relic-row' }, relic(id, { size: 'lg', tip: false }), mk('div', {}, mk('b', { text: d.name }), mk('p', { text: typeof DATA.relicText === 'function' ? safe(() => DATA.relicText(id), d.text) : d.text }), setLine ? mk('p', { class: 'tk-set', text: setLine }) : null)));
         });
         if (!ids.length) grid.appendChild(mk('p', { class: 'empty', text: 'No Charms yet. Rivals, gift boxes and merch stalls hold them.' }));
         root.appendChild(panel({ kind: 'dark', title: 'Charms', class: 'relics-panel' }, grid, mk('div', { class: 'row center' }, btn('Close', { kind: 'secondary', size: 'lg', onclick: () => close() }))));

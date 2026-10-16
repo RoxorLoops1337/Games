@@ -27,8 +27,11 @@
 //                (card mechanics: see "Card mechanics" below the lookups; they also wrap resolveCard, cardHtml and cardPlain)
 //   Systems      cardDef(inst | id) isMedley(inst) canMedley(a, b) medleyDef(parts) signatureOf(heroId)   (see "The Crowd and Medleys" at the end)
 //   Mods         foldMods([deltaObj...]) -> final flat mods     trialDeltas(level) -> summed deltas
-//                modsFor(relicIds, trialLevelOrDeltas) -> final flat mods (what RUN.mods(R) returns: modsFor(R.relics, R.mods))
-//                rowFor(heroId, row, relicIds) -> merged row bonuses (hero row plus relic `rows`)
+//                modsFor(relicIds, trialLevelOrDeltas) -> final flat mods (what RUN.mods(R) returns: modsFor(R.relics, R.mods); active set tiers fold in)
+//                rowFor(heroId, row, relicIds) -> merged row bonuses (hero row plus relic `rows` plus active set tier `rows`)
+//   Charm sets   DATA.relicSets[id] (registry, DESIGN 4.7)   setCounts(relicIds) -> {setId: owned}   setMembers(setId) -> [relic ids]
+//                setMax(setId) -> top tier   activeSetTiers(relicIds) -> [{set, tier, name, def}] (the virtual Charms in force)
+//                setProgress(setId, relicIds) -> {id, name, text, n, max, total, tiers:[{tier, text, active}]}   setTierLabel(setId, tier) -> toast line
 //   Misc         tileCount(type, nonBlock)   cleanSetting(key, value)   ratio helpers for tests
 //   Checking     validate(only?, opt?) -> {errors, warnings, counts}
 //                  opt.strict  also check every cross-file reference and that fixed content exists
@@ -521,7 +524,7 @@ const DATA = (() => {
   const QUOTA = {
     cards: { starter: 3, common: 17, uncommon: 15, rare: 11, powers: 4, lockedUncommon: 4, lockedRare: 4, slots: { red: 10, blue: 10, green: 8, gold: 8 } },
     enemies: { normal: 10, elite: 3, minion: 3, boss: 1, normalGroups: 12, eliteGroups: 3, bossPhases: { 1: 1, 2: 1, 3: 2 } },
-    relics: { common: 22, uncommon: 22, rare: 12, boss: 6, shop: 4, perHero: 3, lockedFrac: 0.3, textMax: 90, flavorMax: 80 },
+    relics: { common: 44, uncommon: 30, rare: 12, boss: 6, shop: 4, perHero: 3, lockedFrac: 0.3, textMax: 90, flavorMax: 80 },
     gems: { perColor: 6, tiers: [1, 1, 2, 2, 3, 3] },
     events: { perChapter: 10, any: 10, onceFrac: 0.6 },
     achievements: 32, trials: 10, tips: 30,
@@ -543,7 +546,7 @@ const DATA = (() => {
   // Registries filled by content files. DATA.add throws on a duplicate id so two
   // agents can never silently shadow each other.
   // ------------------------------------------------------------------
-  const REG = ['cards', 'gems', 'relics', 'enemies', 'events', 'achievements', 'trials', 'tips', 'lore'];
+  const REG = ['cards', 'gems', 'relics', 'relicSets', 'enemies', 'events', 'achievements', 'trials', 'tips', 'lore'];
   const D = { LISTS, LINKS, statuses, keywords, ECONOMY, SETTINGS, brushes, tiles, heroes, ROSTER, rosterById, FIXED, QUOTA, GUIDE, encounters: { 1: { normal: [], elite: [] }, 2: { normal: [], elite: [] }, 3: { normal: [], elite: [] } } };
   REG.forEach((k) => { D[k] = k === 'tips' ? [] : {}; });
   // Display names of the gem and slot colour ids (the ids stay; every screen that prints a colour reads this).
@@ -747,14 +750,48 @@ const DATA = (() => {
     return sum;
   };
   // trial: a level number, or the deltas object a run stored at newRun (R.mods), so a saved run does not drift if trial data is retuned
-  D.modsFor = (relicIds, trial) => D.foldMods((relicIds || []).map((id) => D.relics[id] && D.relics[id].mods).concat([trial && typeof trial === 'object' ? trial : D.trialDeltas(trial || 0)]));
+  // Set bonuses fold in like virtual Charms: every active tier's mods (and rows below) count once, whatever the owned count beyond it.
+  D.modsFor = (relicIds, trial) => D.foldMods((relicIds || []).map((id) => D.relics[id] && D.relics[id].mods).concat(D.activeSetTiers(relicIds).map((t) => t.def.mods)).concat([trial && typeof trial === 'object' ? trial : D.trialDeltas(trial || 0)]));
   D.rowFor = (heroId, row, relicIds) => {
     const out = {};
     const add = (r) => { if (r) Object.keys(r).forEach((k) => { out[k] = (out[k] || 0) + r[k]; }); };
     add(heroes[heroId] && heroes[heroId].rows[row]);
     (relicIds || []).forEach((id) => add(D.relics[id] && D.relics[id].rows && D.relics[id].rows[row]));
+    D.activeSetTiers(relicIds).forEach((t) => add(t.def.rows && t.def.rows[row]));
     return out;
   };
+
+  // ---- relicSets (DESIGN 4.7): Charm sets. A Charm def may carry `set: id`; DATA.relicSets[id] = {id, name, text, tiers: {N: {text, mods?,
+  // hooks?, rows?}}}. A tier is ACTIVE while the party owns at least N Charms of the set, and tiers stack (3 owned gives the 2 and 3 bonuses).
+  // Every active tier behaves as one virtual Charm: modsFor and rowFor fold its mods and rows (above), COMBAT registers its combat hooks next
+  // to the relic hooks and RUN.hook runs its run hooks. Nothing is saved: everything is derived from the owned ids. ----
+  D.setCounts = (relicIds) => {
+    const seen = {}, out = {};
+    (relicIds || []).forEach((id) => { const r = D.relics[id]; if (!r || !r.set || seen[id]) return; seen[id] = true; out[r.set] = (out[r.set] || 0) + 1; });
+    return out;
+  };
+  D.setMembers = (setId) => Object.keys(D.relics).filter((id) => D.relics[id] && D.relics[id].set === setId);
+  const tierNs = (s) => (s && s.tiers ? Object.keys(s.tiers).map(Number).filter((n) => Number.isInteger(n)).sort((a, b) => a - b) : []);
+  D.setMax = (setId) => { const ns = tierNs(D.relicSets[setId]); return ns.length ? ns[ns.length - 1] : 0; };
+  // [{set, tier, name, def}] for every tier the owned ids switch on, in set id then tier order (stable, so hook order is stable)
+  D.activeSetTiers = (relicIds) => {
+    const counts = D.setCounts(relicIds), out = [];
+    Object.keys(counts).sort().forEach((sid) => {
+      const s = D.relicSets[sid];
+      if (!s) return;
+      tierNs(s).forEach((n) => { if (counts[sid] >= n) out.push({ set: sid, tier: n, name: s.name, def: s.tiers[n] }); });
+    });
+    return out;
+  };
+  // what a Charms panel shows for one set: {id, name, text, n (owned), max (top tier), total (members), tiers: [{tier, text, active}]}
+  D.setProgress = (setId, relicIds) => {
+    const s = D.relicSets[setId];
+    if (!s) return null;
+    const n = D.setCounts(relicIds)[setId] || 0;
+    return { id: setId, name: s.name, text: s.text, n, max: D.setMax(setId), total: D.setMembers(setId).length, tiers: tierNs(s).map((t) => ({ tier: t, text: s.tiers[t].text, active: n >= t })) };
+  };
+  // the toast line when a tier switches on: "Stage Crew 3 of 4: On the first turn of each fight, both heroes gain 4 Block."
+  D.setTierLabel = (setId, tier) => { const s = D.relicSets[setId]; const tr = s && s.tiers && s.tiers[tier]; return s && tr ? `${s.name} ${tier} of ${D.setMax(setId)}: ${tr.text}` : ''; };
 
   // final tile count for one tile type on a map with `nonBlock` non-void hexes
   D.tileCount = (type, nonBlock) => {
@@ -851,7 +888,7 @@ const DATA = (() => {
     const FIELDS = {
       card: ['id', 'name', 'hero', 'type', 'rarity', 'cost', 'fx', 'up', 'kw', 'slots', 'art', 'flavor', 'hand', 'locked', 'mech'],
       gem: ['id', 'name', 'color', 'tier', 'mod', 'art', 'text', 'locked'],
-      relic: ['id', 'name', 'rarity', 'text', 'mods', 'rows', 'hooks', 'art', 'hero', 'locked', 'flavor'],
+      relic: ['id', 'name', 'rarity', 'text', 'mods', 'rows', 'hooks', 'art', 'hero', 'locked', 'flavor', 'set'],
       enemy: ['id', 'name', 'title', 'chapter', 'tier', 'size', 'hp', 'moves', 'ai', 'start', 'phases', 'hooks', 'immune', 'art', 'lore', 'tags'],
       event: ['id', 'title', 'text', 'art', 'once', 'chapters', 'when', 'w', 'choices'],
       choice: ['label', 'req', 'cost', 'out'],
@@ -1308,10 +1345,36 @@ const DATA = (() => {
         }
         if (r.hero !== undefined && !has('heroIds', r.hero)) err(w, 'hero');
         if (r.locked !== undefined && !isBool(r.locked)) err(w, 'locked must be a boolean');
+        if (r.set !== undefined && (!isStr(r.set) || !D.relicSets[r.set])) err(w, `set "${r.set}" is not in DATA.relicSets`);
         if (!r.mods && !r.hooks && !r.rows) err(w, 'needs mods, hooks or rows');
         noDash(w, r);
       });
       if (strict) Object.keys(FIXED.relics).forEach((id) => { const r = D.relics[id]; if (!r) err('fixed', `relic "${id}" is not defined`); else if (r.rarity !== FIXED.relics[id]) err('relic ' + id, `must be rarity ${FIXED.relics[id]}`); });
+      // ---- relic sets (4.7): {id, name, text, tiers: {2: {text, mods?, hooks?, rows?}, 3: {...}}}; a tier is a virtual Charm, so it takes the Charm checks
+      vals(D.relicSets).forEach((s) => {
+        const w = 'relicSet ' + s.id;
+        Object.keys(s).forEach((k) => { if (['id', 'name', 'text', 'tiers'].indexOf(k) < 0) err(w, `unknown field "${k}" on a relic set`); });
+        if (!ID_RE.test(s.id)) err(w, 'id must be snake_case');
+        if (!isStr(s.name)) err(w, 'name');
+        if (!isStr(s.text)) err(w, 'text'); else if (s.text.length > QUOTA.relics.textMax) err(w, `text over ${QUOTA.relics.textMax} characters`);
+        if (!isObj(s.tiers) || !Object.keys(s.tiers).length) return err(w, 'tiers must be an object keyed by the Charm count, {2: {...}, 3: {...}}');
+        const ns = Object.keys(s.tiers).map(Number);
+        if (!ns.every((n) => isInt(n) && n >= 2 && n <= 8)) err(w, 'tier keys are whole numbers from 2 to 8');
+        ns.forEach((n) => {
+          const tr = s.tiers[n], p = `tiers.${n}`;
+          if (!isObj(tr)) return err(w, `${p} must be an object`);
+          Object.keys(tr).forEach((k) => { if (['text', 'mods', 'hooks', 'rows'].indexOf(k) < 0) err(w, `${p}: unknown field "${k}"`); });
+          if (!isStr(tr.text)) err(w, `${p}.text`); else if (tr.text.length > QUOTA.relics.textMax) err(w, `${p}.text over ${QUOTA.relics.textMax} characters`);
+          if (tr.mods !== undefined) vMods(w, tr.mods, 'mods', 'modKind', p + '.mods');
+          if (tr.hooks !== undefined) vHooks(w, tr.hooks, p + '.hooks', 'relic');
+          if (tr.rows !== undefined) {
+            if (!isObj(tr.rows)) err(w, `${p}.rows must be an object`);
+            else Object.keys(tr.rows).forEach((row) => { if (['front', 'back'].indexOf(row) < 0) err(w, `${p}.rows.${row}`); else cmp(w, tr.rows[row], `${p}.rows.${row}`, LISTS.rowFields, true); });
+          }
+          if (!tr.mods && !tr.hooks && !tr.rows) err(w, `${p} needs mods, hooks or rows`);
+        });
+        noDash(w, s);
+      });
     }
 
     // ---- enemies and encounters ----
@@ -1683,6 +1746,11 @@ const DATA = (() => {
       LISTS.mods.forEach((k) => need('relics', modsUsed[k], `no relic uses the ${k} mod`));
       need('relics', count(rs, (x) => x.rows) >= 2, 'fewer than 2 relics with rows');
       need('relics', count(rs, (x) => A(x.hooks).some((h) => h && h.filter && h.filter.gems)) >= 2, 'fewer than 2 gem-aware relics');
+      // every set is completable by any party from a fresh profile: at least as many unlocked, hero-free members as its top tier asks for
+      vals(D.relicSets).forEach((s) => {
+        const top = D.setMax(s.id), free = count(rs, (x) => x.set === s.id && !x.locked && !x.hero);
+        need('relics', free >= top, `set ${s.id} asks for ${top} Charms but only ${free} unlocked party-wide Charms belong to it`);
+      });
     }
 
     if (want('gems')) {

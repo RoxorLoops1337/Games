@@ -48,7 +48,9 @@
 //           says. The bar hangs from the top in the Act banner's slot (the banner fades while it is up); arming or putting away a Spell measures the HUD
 //           again, and a camera on the fit glides to the new fit (it glides to any fit that moved: it is never clamped onto it first).
 //
-// OVERLAYS  relics {relics?: [ids]}: every Charm of the run sorted by rarity, with art, text, rarity and where it came from (the Act of
+// OVERLAYS  relics {relics?: [ids]}: every Charm of the run grouped by Charm SET (a header "Stage Crew 2/4" with every tier line, lit while
+//           active, then that set's Charms; loose Charms last under "Other Charms"), each sorted by rarity, with art, text, rarity, its set
+//           progress tag and where it came from (the Act of
 //           RUN's "Found X" log line, or its source by rarity). legend: tabs Map (every tile), Spells (each shape drawn on hexes), Controls,
 //           Words (the glossary of statuses and keywords that the basic legend of ui.js showed).
 //
@@ -153,7 +155,7 @@
   const DIR_NAMES = ['east', 'north east', 'north west', 'west', 'south west', 'south east'];
   const RARITY_ORDER = ['boss', 'rare', 'shop', 'uncommon', 'common'];
   const RARITY_NAME = { common: 'Common', uncommon: 'Uncommon', rare: 'Rare', boss: 'Headliner', shop: 'Merch' };   // display words for the rarity ids (never print the id)
-  const MEMO = { id: '', runId: '', chapter: 0, mercy: 0 };                         // what the last visit already showed
+  const MEMO = { id: '', runId: '', chapter: 0, mercy: 0, logN: 0 };                       // what the last visit already showed
   // Where each HUD piece sits when its rectangle cannot be measured (a headless page, a piece not built yet): [x0, y0, x1, y1] in stage px, taken from the
   // real layout at 1280x720 and at the compact phone layout. The measured rectangle always wins; this only keeps the fit and the clamp sensible.
   // `mode` is the Spell mode bar: transient, it only counts while a Spell is armed (it hangs from the top, in the slot of the Act banner, which fades while it is up)
@@ -2136,7 +2138,10 @@
     UI.canvasOn('pointerleave', (e) => { if (S && (e.pointerType === 'mouse' || !e.pointerType)) { setHover(S, null); flushInfo(S); } });
     // the mercy rule can fire while a node closes (finishNode, claim): say so once
     if (MEMO.runId === R.id && (R.stats.mercy | 0) > MEMO.mercy) UI.toast('A passer-by hums along: 1 Vox.', 'good');
-    MEMO.runId = R.id; MEMO.mercy = R.stats.mercy | 0;
+    // a Charm set tier switched on while a node was open (RUN.addRelic notes it in R.log with `set`): say so once, back on the map
+    const log = Array.isArray(R.log) ? R.log : [];
+    if (MEMO.runId === R.id) log.slice(Math.min(MEMO.logN, log.length)).forEach((e) => { if (e && e.set && e.msg) UI.toast(e.msg, 'good'); });
+    MEMO.runId = R.id; MEMO.mercy = R.stats.mercy | 0; MEMO.logN = log.length;
     drainPending(s);
     safe(() => { if (AM() && isFn(AM().warm) && !headless()) AM().warm(HEX * s.cam.z, { ms: 24, chapter: R.chapter }); });
     s.infoDirty = true;
@@ -2200,17 +2205,39 @@
         return (ra < 0 ? 9 : ra) - (rb < 0 ? 9 : rb) || String(DATA.relics[a].name).localeCompare(String(DATA.relics[b].name));
       });
       const grid = mk('div', { class: 'mr-grid' + (sorted.length === 1 ? ' one' : '') });
-      sorted.forEach((id, i) => {
+      let i = 0;
+      const addRow = (id) => {
         const d = DATA.relics[id];
-        const row = mk('div', { class: 'mr-row rar-' + d.rarity, role: 'group', tabindex: '0', 'aria-label': d.name + ', ' + (RARITY_NAME[d.rarity] || String(d.rarity)).toLowerCase() + '. ' + relicLine(id) + ' ' + relicSource(R, id), dataset: { id } },
+        const sp = d.set && typeof DATA.setProgress === 'function' ? safe(() => DATA.setProgress(d.set, ids), null) : null;
+        const setLine = sp ? sp.name + ', ' + sp.n + ' of ' + sp.max + '.' : '';
+        const row = mk('div', { class: 'mr-row rar-' + d.rarity, role: 'group', tabindex: '0', 'aria-label': d.name + ', ' + (RARITY_NAME[d.rarity] || String(d.rarity)).toLowerCase() + '. ' + relicLine(id) + ' ' + (setLine ? setLine + ' ' : '') + relicSource(R, id), dataset: { id } },
           UI.relic(id, { size: 'lg', tip: false }),
           mk('div', { class: 'mr-txt' },
-            mk('div', { class: 'mr-head' }, mk('b', { class: 'mr-name', text: d.name }), mk('span', { class: 'mr-tag mr-' + d.rarity, text: RARITY_NAME[d.rarity] || cap(d.rarity) })),
+            mk('div', { class: 'mr-head' }, mk('b', { class: 'mr-name', text: d.name }), mk('span', { class: 'mr-tag mr-' + d.rarity, text: RARITY_NAME[d.rarity] || cap(d.rarity) }), sp ? mk('span', { class: 'mr-tag mr-setof', text: sp.name + ' ' + sp.n + '/' + sp.max }) : null),
             mk('p', { class: 'mr-text', text: relicLine(id) }),
             mk('p', { class: 'mr-from', text: relicSource(R, id) })));
-        UI.vars(row, { '--i': i });
+        UI.vars(row, { '--i': i++ });
         grid.appendChild(row);
+      };
+      // grouped by set (DESIGN 4.7): a header "Stage Crew 2/4" with every tier line, lit while active, then the set's Charms; loose Charms last
+      const bySet = {};
+      sorted.forEach((id) => { const s = DATA.relics[id].set; if (s && DATA.relicSets && DATA.relicSets[s]) (bySet[s] = bySet[s] || []).push(id); });
+      const setIds = Object.keys(bySet).sort((a, b) => String(DATA.relicSets[a].name).localeCompare(String(DATA.relicSets[b].name)));
+      setIds.forEach((sid) => {
+        const sp = DATA.setProgress(sid, ids);
+        if (!sp) return;
+        const lit = sp.tiers.filter((t) => t.active).length;
+        const head = mk('div', { class: 'mr-set' + (lit ? ' lit' : ''), role: 'group', 'aria-label': sp.name + ' set, ' + sp.n + ' of ' + sp.max + ' Charms. ' + sp.tiers.map((t) => (t.active ? 'Active: ' : 'Needs ' + t.tier + ': ') + t.text).join(' '), dataset: { set: sid } },
+          mk('div', { class: 'mr-set-head' }, mk('b', { class: 'mr-set-name', text: sp.name }), mk('span', { class: 'mr-set-count', text: sp.n + '/' + sp.max }), mk('span', { class: 'mr-set-pips', 'aria-hidden': 'true' }, ...Array.from({ length: sp.max }, (_, k) => mk('i', { class: 'mr-pip' + (k < sp.n ? ' on' : '') })))),
+          mk('p', { class: 'mr-set-text', text: sp.text }),
+          mk('ul', { class: 'mr-tiers' }, ...sp.tiers.map((t) => mk('li', { class: 'mr-tier ' + (t.active ? 'on' : 'off') }, mk('span', { class: 'mr-tier-n', text: String(t.tier) }), mk('span', { class: 'mr-tier-text', text: t.text })))));
+        UI.vars(head, { '--i': i++ });
+        grid.appendChild(head);
+        bySet[sid].forEach(addRow);
       });
+      const loose = sorted.filter((id) => !DATA.relics[id].set || !DATA.relicSets || !DATA.relicSets[DATA.relics[id].set]);
+      if (loose.length && setIds.length) grid.appendChild(mk('div', { class: 'mr-set loose' }, mk('div', { class: 'mr-set-head' }, mk('b', { class: 'mr-set-name', text: 'Other Charms' }), mk('span', { class: 'mr-set-count', text: String(loose.length) }))));
+      loose.forEach(addRow);
       if (!sorted.length) {
         grid.appendChild(mk('div', { class: 'mr-empty' }, UI.icon('relic', 'lantern', 64, { dim: true }), mk('p', { class: 'empty', text: 'No Charms yet. Rivals, gift boxes and merch stalls hold them.' })));
       }
