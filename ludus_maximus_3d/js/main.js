@@ -180,7 +180,9 @@ function makeDemoFight(o = {}) {
   if (o.team) { A.push(mk('retiarius', o.lvl || 5, 3, 'Oenomaus')); B.push(mk('hoplomachus', o.lvl || 5, 4, 'Gannicus')); }
   if (o.team >= 3) { A.push(mk('dimachaerus', o.lvl || 5, 5, 'Varro')); B.push(mk('murmillo', o.lvl || 5, 6, 'Castus')); }
   const ua = LM.mkUnits(A, 'A', {}), ub = LM.mkUnits(B, 'B', {});
-  return LM.createFight(ua, ub, { autoA: o.auto !== false, hazards: o.haz ? 1 : 0 });
+  const F = LM.createFight(ua, ub, { autoA: o.auto !== false, hazards: o.haz ? 1 : 0 });
+  if (o.theme || o.wx) { F.meta = F.meta || {}; if (o.theme) F.meta.theme = o.theme; if (o.wx) F.meta.weather = o.wx; }   // ARENAS: ?demo=1&theme=alexandria|carthage|capua|provincial|imperial&wx=wind|dusk|rain|dust|heat|night
+  return F;
 }
 
 // ---------------------------------------------------------------- hidden performance overlay: ?perf=1 (or __LM3D.perf(true)); one <pre>, refreshed 4x per second
@@ -249,7 +251,7 @@ let idleDone; api.idle = new Promise((r) => { idleDone = r; }); game.onWarmed = 
     bootMsg('Raising the walls...', 0.06); await game.init(); mark('init'); resize(true); syncMotion(); setBoot(0.85);
     if (q.get('demo')) { bootMsg('Lighting the torches...', 0.88); await warmUp(); mark('warmed'); idleDone(true); }
     bootMsg('The gates open...', 0.95); window.__LM3D = api; schedule();
-    if (q.get('demo')) { game.markInteractive({ prewarm: false }); const o = { a: q.get('a') || undefined, b: q.get('b') || undefined, lvl: +(q.get('lvl') || 5), team: +(q.get('team') || 0), auto: q.get('auto') !== '0', haz: q.get('haz') === '1', hunt: q.get('hunt') || undefined }; api.startDemo(o); await reveal(); return; }
+    if (q.get('demo')) { game.markInteractive({ prewarm: false }); const o = { a: q.get('a') || undefined, b: q.get('b') || undefined, lvl: +(q.get('lvl') || 5), team: +(q.get('team') || 0), auto: q.get('auto') !== '0', haz: q.get('haz') === '1', hunt: q.get('hunt') || undefined, theme: q.get('theme') || undefined, wx: q.get('wx') || undefined }; api.startDemo(o); await reveal(); return; }
     if (q.get('new')) { game.newGame({ name: 'Ludus Aurelia', color: 1 }); if (q.get('rich')) { game.S.gold += 5000; game.S.fame += 300; } game.setScene('hub'); game.refresh(); if (!game.S.glads.length && !q.get('empty')) game.open('recruit', { first: true }); await reveal(); return; }
     const booted = game.boot(); await reveal(); await booted;
   } finally { window.__LM3D = api; }
