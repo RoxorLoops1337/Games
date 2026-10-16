@@ -725,7 +725,7 @@ t.test('the synthetic universe passes strict validation and every audit', () => 
   universe(DATA);
   const v = DATA.validate(undefined, { strict: true });
   t.eq(v.errors.length, 0, 'strict errors: ' + v.errors.slice(0, 8).join('; '));
-  t.eq(v.counts.cards, 4 * 40 + 12, 'card count'); t.eq(v.counts.enemies, 51, 'enemy count'); t.eq(v.counts.relics, 66, 'relic count'); t.eq(v.counts.gems, 24, 'gem count');
+  t.eq(v.counts.cards, 4 * 46 + 12, 'card count'); t.eq(v.counts.enemies, 51, 'enemy count'); t.eq(v.counts.relics, 66, 'relic count'); t.eq(v.counts.gems, 24, 'gem count');
   t.eq(v.counts.events, 40, 'event count'); t.eq(v.counts.groups, 45, 'group count');
   const a = DATA.audit().filter((x) => x.indexOf('audit') === 0);
   t.eq(a.length, 0, 'audit lines: ' + a.slice(0, 10).join('; '));
@@ -743,7 +743,7 @@ t.test('breaking the universe one piece at a time is caught', () => {
   D = broken((d) => { delete d.achievements.ch2_clear; }); t.ok(has(D.validate(undefined, { strict: true }).errors, 'ch2_clear'), 'missing achievement');
   D = broken((d) => { d.cards.curse_hex.hero = 'status'; }); t.ok(has(D.validate(undefined, { strict: true }).errors, 'must have hero curse'), 'wrong curse hero');
   // audits: cards
-  D = broken((d) => { delete d.cards.kuro_c13; }); t.ok(auditHas(D, 'cards', 'audit kuro: need 3/15/13/9'), 'card count');
+  D = broken((d) => { delete d.cards.kuro_c13; }); t.ok(auditHas(D, 'cards', 'audit kuro: need 3/17/15/11'), 'card count');
   D = broken((d) => { Object.values(d.cards).filter((c) => c.hero === 'kuro' && c.type === 'power').forEach((c) => { c.type = 'skill'; }); }); t.ok(auditHas(D, 'cards', 'fewer than 4 powers', { hero: 'kuro' }), 'powers');
   D = broken((d) => { Object.values(d.cards).filter((c) => c.hero === 'suzu').forEach((c) => { if (c.cost === 'X') { c.cost = 1; } }); }); t.ok(auditHas(D, 'cards', 'no X cost card', { hero: 'suzu' }), 'X card');
   D = broken((d) => { Object.values(d.cards).filter((c) => c.hero === 'raiga').forEach((c) => { c.kw = []; }); }); t.ok(auditHas(D, 'cards', 'fewer than 5 cards with keywords', { hero: 'raiga' }), 'keywords');

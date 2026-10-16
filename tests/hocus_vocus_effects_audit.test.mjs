@@ -9,7 +9,9 @@
 //      it and every observable must agree: HP, max HP, Block, every status stack on every unit, rows, Breath, the five piles, upgraded
 //      and held cards, gold and Vox, Fanbase and Remix counters.
 //      * Cards: every card, base and upgraded, in both spots, in three set ups (bare; rich: resources, Block, debuffs on the enemy,
-//        damage taken; after a card: one card played first, low HP) and a kill set up (lastKill and Fanbase).
+//        damage taken; after a card: one card played first, low HP) and a kill set up (lastKill and Fanbase). The card mechanics
+//        (Fanbase, Remix, Hype, Loop, Duet, Soundcheck, Reprise, Finale) are part of the oracle, and the ones a single play cannot
+//        show (Duet after the partner, a Reprise replay, a Finale closing the turn) have their own scenarios.
 //      * Hooks (powers, once hooks, Charms): an A/B pair of identical fights, one with the hook and one without, is driven through the
 //        hook's trigger (turn start, turn end, a play, a swap, a hit, a kill, a reshuffle, a Fade, combat start and end). The difference
 //        of the two event streams is the hook's effect, and it must equal the oracle's prediction, fire by fire, honouring limit, once
@@ -79,7 +81,7 @@ function snapPre(C) {
     heroes: C.heroes.map((h) => ({ id: h.id, hp: h.hp, maxHp: h.maxHp, block: h.block, st: Object.assign({}, h.st), row: h.row, down: h.down, dmgTaken: 0, hitsTaken: 0, rowSt: Object.assign({}, h.rowSt) })),
     enemies: C.enemies.map((e) => ({ id: e.id, hp: e.hp, maxHp: e.maxHp, block: e.block, st: Object.assign({}, e.st), down: e.down, lane: e.lane, tier: e.tier })),
     energy: 0, hand: [], draw: C.draw.map((c) => ({ uid: c.uid, id: c.id, up: c.up, gems: c.gems.slice() })), discard: [], exhaust: [], powers: [],
-    counters: { cards: 0, attacks: 0, skills: 0 }, passive: {}, lastPlayed: null, turn: 0, kills: 0, gold: 0, ink: 0, drawn: 0, added: 0, exhausted: 0, unordered: false, hooks: [], relics: C.relics.slice(), nondet: '',
+    counters: { cards: 0, attacks: 0, skills: 0 }, passive: {}, lastPlayed: null, lastHero: null, turn: 0, kills: 0, gold: 0, ink: 0, drawn: 0, added: 0, exhausted: 0, unordered: false, hooks: [], relics: C.relics.slice(), nondet: '',
   };
 }
 const heroU = (C, id) => C.heroes.find((h) => h.id === id);
@@ -107,7 +109,7 @@ function snap(C) {
     heroes: C.heroes.map((h) => ({ id: h.id, hp: h.hp, maxHp: h.maxHp, block: h.block, st: Object.assign({}, h.st), row: h.row, down: h.down, dmgTaken: h._dmgTaken || 0, hitsTaken: h._hitsTaken || 0, rowSt: Object.assign({}, h.rowSt) })),
     enemies: C.enemies.map((e) => ({ id: e.id, hp: e.hp, maxHp: e.maxHp, block: e.block, st: Object.assign({}, e.st), down: e.down, lane: e.lane, tier: e.tier })),
     energy: C.energy, hand: C.hand.map(cardSnap), draw: C.draw.map(cardSnap), discard: C.discard.map(cardSnap), exhaust: C.exhaust.map(cardSnap), powers: C.powers.map(cardSnap),
-    counters: { cards: C.played, attacks: 0, skills: 0 }, passive: {}, lastPlayed: C.lastPlayed ? cardSnap(C.lastPlayed) : null,
+    counters: { cards: C.played, attacks: 0, skills: 0 }, passive: {}, lastPlayed: C.lastPlayed ? cardSnap(C.lastPlayed) : null, lastHero: C.lastHero || null,
     turn: C.turn, kills: C.stats.kills.length, gold: sm.gold, ink: sm.ink, drawn: 0, added: 0, exhausted: 0, unordered: false, hooks: [], relics: C.relics.slice(), nondet: '',
   };
 }
@@ -498,12 +500,14 @@ function defOf(id, up) {
   const u = up && c.up ? c.up : {};
   return { fx: u.fx || c.fx || [], cost: u.cost !== undefined ? u.cost : c.cost, kw: (u.kw !== undefined ? u.kw : (c.kw || [])).slice(), mech: (up && c.up && c.up.mech !== undefined ? c.up.mech : c.mech) || null, type: c.type, hero: c.hero };
 }
-function addPlusToDmg(fx, n) {
+// the card's own ops of one kind, through cond and repeat and never into a hook (DESIGN 4.3: where a gem's and a mechanic's plus lands)
+function addPlusTo(fx, kind, n) {
   const out = JSON.parse(JSON.stringify(fx));
-  const walk = (ops) => list(ops).forEach((o) => { if (!o) return; if (o.op === 'dmg') o.plus = (o.plus || 0) + n; if (o.op === 'cond') { walk(o.then); walk(o.else); } if (o.op === 'repeat') walk(o.do); });
+  const walk = (ops) => list(ops).forEach((o) => { if (!o) return; if (o.op === kind) o.plus = (o.plus || 0) + n; if (o.op === 'cond') { walk(o.then); walk(o.else); } if (o.op === 'repeat') walk(o.do); });
   walk(out);
   return out;
 }
+const ownOp = (fx, kind) => { let r = false; const walk = (ops) => list(ops).forEach((o) => { if (!o) return; if (o.op === kind) r = true; if (o.op === 'cond') { walk(o.then); walk(o.else); } if (o.op === 'repeat') walk(o.do); }); walk(fx); return r; };
 // play a card in the oracle: S is a snapshot taken with the card in hand; d is {fx, cost, kw, mech, type, hero} (defOf or a gemmed variant)
 function oPlay(S, uid, d, targetId) {
   const i = S.hand.findIndex((c) => c.uid === uid);
@@ -513,8 +517,14 @@ function oPlay(S, uid, d, targetId) {
   S.energy -= d.cost === 'X' ? X : d.cost;
   let fx = d.fx;
   const m = d.mech || {};
-  const bonus = (m.fanbase ? (card.enc || 0) : 0) + (m.remix ? m.remix * (card.rmx || 0) : 0) + (m.hype ? m.hype * S.counters.cards : 0);
-  if (bonus) fx = addPlusToDmg(fx, bonus);
+  // DATA "Card mechanics": Fanbase, Remix, Hype and Finale ride on the damage; Duet (the OTHER hero played the previous card this turn)
+  // and Soundcheck (the first card of the turn) ride on the damage too, or on the Block of a card without a dmg op
+  const duet = m.duet && S.lastHero && S.lastHero !== d.hero ? m.duet : 0;
+  const soundcheck = m.soundcheck && S.counters.cards === 0 ? m.soundcheck : 0;
+  const hasDmg = ownOp(fx, 'dmg');
+  const bonus = (m.fanbase ? (card.enc || 0) : 0) + (m.remix ? m.remix * (card.rmx || 0) : 0) + (m.hype ? m.hype * S.counters.cards : 0) + (m.finale ? m.finale * S.counters.cards : 0) + (hasDmg ? duet + soundcheck : 0);
+  if (bonus) fx = addPlusTo(fx, 'dmg', bonus);
+  if (!hasDmg && duet + soundcheck > 0) fx = addPlusTo(fx, 'block', duet + soundcheck);
   const target = targetId ? S.enemies.find((e) => e.id === targetId) : null;
   const env = { kind: 'card', actor, card, X, target, lastKill: false, picked: 0, src: card, mech: m, serial: 'play' };
   oRun(S, fx, env);
@@ -542,6 +552,7 @@ function oPlay(S, uid, d, targetId) {
   if (d.type === 'attack') S.counters.attacks += 1;
   if (d.type === 'skill') S.counters.skills += 1;
   if ((d.type === 'attack' || d.type === 'skill') && !m.loop) S.lastPlayed = Object.assign({}, card);
+  S.lastHero = actor ? actor.id : null;
   return card;
 }
 
@@ -584,7 +595,7 @@ function printedNumbers(fx, mech) {
     if (o.hits !== undefined && !(isNum(o.hits) && o.hits === 1)) v(o.hits);
     if (isObj(o.consume) && isNum(o.consume.upTo)) nums.push(o.consume.upTo);
   });
-  if (mech) Object.keys(mech).forEach((k) => { if (!(k === 'loop' && mech[k] === 1)) nums.push(mech[k]); });
+  if (mech) Object.keys(mech).forEach((k) => { if (!((k === 'loop' || k === 'reprise') && mech[k] === 1)) nums.push(mech[k]); });
   return nums;
 }
 const hasNum = (text, n) => new RegExp('(^|[^0-9])' + n + '([^0-9]|$)').test(text);
@@ -1664,6 +1675,81 @@ t.test('mechanics: a Loop copy is a Fading card, and Fanbase damage gained in a 
     const c2 = toHand(C2, card.uid); C2.energy = 9;
     const second = playUid(C2, c2.uid).find((e) => e.type === 'hit');
     t.eq(second.raw - first.raw, fb, `${id}: the next fight's hit is ${fb} bigger`);
+  });
+});
+
+t.test('mechanics: Duet pays only after the partner, Soundcheck only as the first card, a Finale closes the turn, a Reprise card is replayed free at the end of a turn of 3 cards', () => {
+  const by = (k) => Object.values(D.cards).filter((c) => HEROES.indexOf(c.hero) >= 0 && c.mech && c.mech[k]);
+  const amountOf = (ev, hero) => { const h = ev.find((e) => e.type === 'hit'); if (h) return h.raw; const b = ev.find((e) => e.type === 'block' && e.dst.id === hero); return b ? b.amount : null; };
+  // the card, alone or after one starter skill of `first`
+  const after = (def, first, seed) => {
+    const hero = def.hero, partner = partnerOf(hero, 0);
+    const card = inst(def.id), f = first ? inst(starterOf(first, 'skill')) : null;
+    const C = fight({ owner: hero, partner, deck: f ? [card, f] : [card], seed, enemies: ['ea_dummy'] });
+    toHand(C, card.uid); C.energy = 9;
+    if (f) { toHand(C, f.uid); playUid(C, f.uid); C.energy = 9; }
+    const text = D.cardPlain(card, { unit: heroU(C, hero), played: C.played, lastHero: C.lastHero });
+    return { amt: amountOf(playUid(C, card.uid), hero), text, C };
+  };
+  t.ok(by('duet').length >= 12 && by('soundcheck').length >= 4 && by('reprise').length >= 4 && by('finale').length >= 4, 'the duo and setlist wave: 3 Duet cards and one of each setlist keyword per hero');
+  by('duet').forEach((def) => {
+    const alone = after(def, null, 4), own = after(def, def.hero, 4), duo = after(def, partnerOf(def.hero, 0), 4);
+    t.eq(own.amt, alone.amt, `${def.id} "${own.text}": after the owner's own card there is no Duet bonus`);
+    t.eq(duo.amt, alone.amt + def.mech.duet, `${def.id} "${duo.text}": after the partner's card it pays ${def.mech.duet} more`);
+    t.ok(/now \+/.test(duo.text) && !/now \+/.test(own.text) && !/now \+/.test(alone.text), `${def.id}: the text shows the live bonus only when the partner played last`);
+    t.eq(duo.C.lastHero, def.hero, `${def.id}: C.lastHero is the hero of the last card played`);
+    duo.C.endTurn(); t.eq(duo.C.lastHero, null, `${def.id}: and the next turn starts with nobody`);
+  });
+  by('soundcheck').forEach((def) => {
+    const first = after(def, null, 5), second = after(def, def.hero, 5);
+    t.eq(first.amt, second.amt + def.mech.soundcheck, `${def.id} "${first.text}": as the first card of the turn it pays ${def.mech.soundcheck} more than as the second ("${second.text}")`);
+    t.ok(/now \+/.test(first.text) && !/now \+/.test(second.text), `${def.id}: the text shows the live bonus only as the first card`);
+  });
+  by('finale').forEach((def) => {
+    const hero = def.hero, partner = partnerOf(hero, 2);
+    const alone = after(def, null, 6);
+    const card = inst(def.id), s1 = inst(starterOf(hero, 'skill')), s2 = inst(starterOf(partner, 'skill')), later = inst(starterOf(hero, 'attack'));
+    const C = fight({ owner: hero, partner, deck: [card, s1, s2, later], seed: 6, enemies: ['ea_dummy'] });
+    [card, s1, s2, later].forEach((c) => toHand(C, c.uid)); C.energy = 9;
+    playUid(C, s1.uid); playUid(C, s2.uid); C.energy = 9;
+    const text = D.cardPlain(card, { unit: heroU(C, hero), played: C.played, lastHero: C.lastHero });
+    t.eq(amountOf(playUid(C, card.uid), hero), alone.amt + 2 * def.mech.finale, `${def.id} "${text}": after two cards it pays ${2 * def.mech.finale} more`);
+    const tgt = C.needsTarget(later.uid) ? firstTarget(C) : undefined;
+    t.deep(C.canPlay(later.uid, tgt), { ok: false, reason: 'finale' }, `${def.id}: the Finale closed the turn`);
+    t.eq(C.play(later.uid, tgt).length, 0, `${def.id}: nothing can be played after it`);
+    t.ok(C.canSwap().ok, `${def.id}: a swap is still allowed`);
+    C.endTurn(); toHand(C, later.uid);
+    t.ok(C.canPlay(later.uid, C.needsTarget(later.uid) ? firstTarget(C) : undefined).ok, `${def.id}: the next turn is open again`);
+  });
+  by('reprise').forEach((def) => {
+    const hero = def.hero, partner = partnerOf(hero, 0);
+    const turn = (n) => {
+      const card = inst(def.id), fill = [];
+      for (let i = 0; i < n; i++) fill.push(inst(starterOf(i % 2 ? partner : hero, 'skill')));
+      const C = fight({ owner: hero, partner, deck: [card].concat(fill), seed: 7, enemies: ['ea_dummy'] });
+      [card].concat(fill).forEach((c) => toHand(C, c.uid)); C.energy = 9;
+      fill.forEach((c) => { playUid(C, c.uid); C.energy = 9; });
+      playUid(C, card.uid);
+      return C;
+    };
+    const two = turn(1);
+    t.ok(!two.endTurn().some((e) => e.type === 'play' && e.reprise), `${def.id} "${D.cardPlain(def.id)}": two cards played this turn, no replay`);
+    const three = turn(2);
+    const added0 = three.added;
+    const ev = three.endTurn();
+    const rep = ev.filter((e) => e.type === 'play' && e.reprise);
+    t.eq(rep.length, 1, `${def.id}: one free replay at the end of a turn of 3 cards`);
+    if (!rep.length) return;
+    t.ok(rep[0].free && rep[0].cost === 0 && rep[0].card.id === def.id && rep[0].card.fade && rep[0].card.tmp, `${def.id}: free, the same card, a Fading temp copy`);
+    const iPlay = ev.indexOf(rep[0]), iEnd = ev.findIndex((e) => e.type === 'turn_end' && e.who === 'player');
+    t.ok(iPlay < iEnd, `${def.id}: played before the turn ends`);
+    const slice = ev.slice(iPlay, iEnd);
+    const dmgOp = def.fx.find((o) => o.op === 'dmg'), blockOp = def.fx.find((o) => o.op === 'block');
+    if (dmgOp) t.ok(slice.some((e) => e.type === 'hit' && e.raw >= dmgOp.n), `${def.id}: the replay hits`);
+    else t.ok(slice.some((e) => e.type === 'block' && e.dst.id === hero && e.amount >= blockOp.n), `${def.id}: the replay gives Block`);
+    t.ok(slice.some((e) => e.type === 'exhaust' && e.card.uid === rep[0].card.uid) && three.exhaust.some((c) => c.uid === rep[0].card.uid), `${def.id}: the copy Fades`);
+    t.eq(three.added, added0 + 1, `${def.id}: the copy counts as an added card`);
+    t.eq(three.hand.length + three.draw.length + three.discard.length + three.exhaust.length + three.powers.length, three.deckSize + three.added, `${def.id}: the piles still add up`);
   });
 });
 

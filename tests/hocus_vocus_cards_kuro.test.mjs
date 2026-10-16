@@ -117,6 +117,8 @@ const KURO_IDS = [
   'kuro_venom_script', 'kuro_viper_nib', 'kuro_well_of_ink', 'kuro_wildfire_verse',
   // the card mechanics wave (Loop, Remix)
   'kuro_beat_juggle', 'kuro_live_looping', 'kuro_overdub',
+  // the duo and setlist wave (Duet, Soundcheck, Reprise, Finale)
+  'kuro_backing_vocals', 'kuro_cypher', 'kuro_mic_check', 'kuro_one_more_time', 'kuro_showstopper', 'kuro_trade_fours',
 ];
 
 t.test('names: unique, one to three words, capitalised, no dashes; the ids are frozen (saves store them)', () => {
@@ -131,7 +133,7 @@ t.test('names: unique, one to three words, capitalised, no dashes; the ids are f
     t.ok(!DASH.test(c.name), `${c.id}: no dash in the name`);
     t.ok(/^kuro_[a-z0-9_]+$/.test(c.id), `${c.id}: id is kuro_ plus snake_case`);
   });
-  t.deep(cards.map((c) => c.id).sort(), KURO_IDS.slice().sort(), 'the 40 Kuro ids are frozen: saves store them');
+  t.deep(cards.map((c) => c.id).sort(), KURO_IDS.slice().sort(), 'the 46 Kuro ids are frozen: saves store them');
 });
 
 t.test('upgrades: every card has one, it changes fx, cost or keywords, and it never makes a card worse on its face', () => {
@@ -174,12 +176,12 @@ t.test('card ids and per X: only the X card reads X', () => {
 });
 
 // ------------------------------------------------------------------------------------------------ 2 CONTENT_SPEC section 3
-t.test('counts: 3 starters, 15 commons, 13 uncommons, 9 rares, 40 in all', () => {
+t.test('counts: 3 starters, 17 commons, 15 uncommons, 11 rares, 46 in all', () => {
   t.eq(byRarity('starter').length, 3, 'starters');
-  t.eq(byRarity('common').length, 15, 'commons');
-  t.eq(byRarity('uncommon').length, 13, 'uncommons');
-  t.eq(byRarity('rare').length, 9, 'rares');
-  t.eq(cards.length, 40, 'total');
+  t.eq(byRarity('common').length, 17, 'commons');
+  t.eq(byRarity('uncommon').length, 15, 'uncommons');
+  t.eq(byRarity('rare').length, 11, 'rares');
+  t.eq(cards.length, 46, 'total');
 });
 
 t.test('mix: at least 30 percent attacks and skills, at least 4 powers (uncommon or rare), an X card, keywords', () => {
@@ -623,13 +625,18 @@ function opPoints(o, ctx) {
 }
 // card mechanics (DATA "Card mechanics"), per point of the mechanic and per hit of the first dmg op: a Loop copy is a Fading card that
 // must follow another play (4, under the 5.5 of a chosen copy), Remix pays about once more per fight, Hype reads TYPICAL.cardsPlayed
-// earlier cards, and a Fanbase card has a few kills behind it over a tour
+// earlier cards, and a Fanbase card has a few kills behind it over a tour. The duo and setlist wave: Duet pays about half the time (0.5
+// per point, per hit, or per hero on a Block card), Soundcheck about a third of the time (0.35), a Reprise replay is a free Fading copy that
+// needs a busy turn (4, like a Loop copy), and a Finale reads TYPICAL.cardsPlayed earlier cards but closes the turn (1.5 off)
 const mechOf = (c, up) => (up && upOf(c).mech !== undefined ? upOf(c).mech : c.mech) || {};
 function mechPoints(c, up) {
   const m = mechOf(c, up);
   const d = flatOps(fxOf(c, up)).find((o) => o.op === 'dmg');
+  const b = flatOps(fxOf(c, up)).find((o) => o.op === 'block');
   const hits = d ? (d.hits === undefined ? 1 : vVal(d.hits, { X: 2 })) * (TGT_MUL[d.tgt] || 1) : 0;
-  return 4 * (m.loop || 0) + hits * (1.0 * (m.remix || 0) + TYPICAL.cardsPlayed * (m.hype || 0) + 2 * (m.fanbase || 0));
+  const cond = d ? hits : b ? (b.tgt === 'both' ? 1.9 : 1) : 0;
+  return 4 * (m.loop || 0) + 4 * (m.reprise || 0) + hits * (1.0 * (m.remix || 0) + TYPICAL.cardsPlayed * (m.hype || 0) + 2 * (m.fanbase || 0))
+    + cond * (0.5 * (m.duet || 0) + 0.35 * (m.soundcheck || 0)) + (m.finale ? hits * TYPICAL.cardsPlayed * m.finale - 1.5 : 0);
 }
 function pointsOf(c, up) {
   const cost = costOf(c, up);
@@ -1254,7 +1261,7 @@ function engineSuite(g) {
     for (let seed = 1; seed <= 8; seed++) {
       const deck = KURO.filter((c) => c.rarity !== 'starter').map((c) => inst(c.id, rng.chance(0.5))).concat(D.heroes.kuro.starter.map((id) => inst(id, 0)));
       try {
-        const sum = COMBAT.simulate({ heroes: party(), frontIdx: seed % 2, deck, enemies: [DUMMY, DUMMY], tier: 'normal', chapter: 1, seed, mods: D.modsFor([], 0), relics: [], gold: 0, maxTurns: 40 });
+        const sum = COMBAT.simulate({ heroes: party(), frontIdx: seed % 2, deck, enemies: [DUMMY, DUMMY], tier: 'normal', chapter: 1, seed, mods: D.modsFor([], 0), relics: [], gold: 0, maxTurns: 50 });   // two 900 HP dummies and a 46 card deck take 25 to 41 turns
         t.ok(!sum.capped, `seed ${seed}: the bot finishes the fight (${sum.turns} turns, ${sum.result})`);
         t.ok(sum.stats.cardsPlayed >= 3, `seed ${seed}: the bot played cards (${sum.stats.cardsPlayed})`);
       } catch (e) {
@@ -1350,6 +1357,61 @@ t.test('card mechanics: Overdub and Live Looping (Loop), Beat Juggle (Remix) pri
   C = fight(['kuro_beat_juggle']);
   const r = [0, 1, 2].map(() => raws(play(C, 'kuro_beat_juggle').ev)[0]);
   t.deep([r[1] - r[0], r[2] - r[1]], [2, 2], 'each play is 2 bigger');
+});
+
+t.test('the duo and the setlist: kuro Duet, Soundcheck, Reprise and Finale cards print and play as their keyword says', () => {
+  const { D, fight, play, raws, take } = mechWorld('hanae');
+  const partnerSkill = D.heroes.hanae.starter.find((id) => D.cards[id].type === 'skill' && D.cards[id].cost === 1);
+  const ownSkill = D.heroes.kuro.starter.find((id) => D.cards[id].type === 'skill' && D.cards[id].cost === 1);
+  const blockOf = (ev) => ev.filter((e) => e.type === 'block' && e.dst.id === 'kuro').map((e) => e.amount);
+  t.eq(D.cardPlain('kuro_trade_fours'), 'Deal 4 damage. Apply 1 Earworm. Duet 3.', 'Trade Fours text');
+  t.eq(D.cardPlain('kuro_backing_vocals'), 'Both heroes gain 3 Block. Duet 3.', 'Backing Vocals text (Duet on Block for both)');
+  t.eq(D.cardPlain('kuro_cypher'), 'Draw 1 card. Deal 2 damage 3 times. Duet 2.', 'Cypher text');
+  t.eq(D.cardPlain('kuro_one_more_time'), 'Gain 4 Block and 1 Groove. Reprise.', 'One More Time text');
+  t.eq(D.cardPlain('kuro_mic_check'), 'Gain 3 Block. Soundcheck 4.', 'Mic Check text');
+  t.eq(D.cardPlain({ id: 'kuro_mic_check', up: 1, gems: [null] }, { played: 0 }), 'Gain 9 Block. Soundcheck 5 (now +5).', 'Mic Check+ as the first card of a turn');
+  t.eq(D.cardPlain('kuro_showstopper'), 'Move to the backing spot. Deal 5 damage to all enemies. Finale 2. Fade.', 'Showstopper text');
+  // Duet: alone, after the owner's own card (nothing), after the partner's card (the bonus)
+  const duetCards = [['kuro_trade_fours', 3, 'dmg'], ['kuro_backing_vocals', 3, 'block'], ['kuro_cypher', 2, 'dmg']];
+  duetCards.forEach(([id, n, kind]) => {
+    const measure = (C, ev) => (kind === 'dmg' ? raws(ev)[0] : blockOf(ev)[0]);
+    const alone = measure(null, play(fight([id]), id).ev);
+    let C = fight([id, ownSkill]); play(C, ownSkill);
+    t.eq(measure(C, play(C, id).ev), alone, id + ': no Duet after the owner\'s own card');
+    C = fight([id, partnerSkill]); play(C, partnerSkill);
+    const ready = D.cardPlain(C.hand.find((c) => c.id === id) || { id, up: 0, gems: D.cards[id].slots.map(() => null) }, { played: C.played, lastHero: C.lastHero });
+    t.ok(/now \+/.test(ready), id + ': the card in hand shows the live bonus: ' + ready);
+    t.eq(measure(C, play(C, id).ev), alone + n, id + ': Duet ' + n + ' after the partner\'s card');
+  });
+  // Soundcheck: the first card of the turn, then the same card as the second
+  { const [id, n, kind] = ['kuro_mic_check', 4, 'block']; const measure = (ev) => (kind === 'dmg' ? raws(ev)[0] : blockOf(ev)[0]);
+    const C = fight([id, id]); const first = measure(play(C, id).ev), second = measure(play(C, id).ev);
+    t.eq(first - second, n, id + ': Soundcheck ' + n + ' as the first card of the turn only (' + first + ' then ' + second + ')'); }
+  // Reprise: two cards played, nothing; three cards, the card is played again for free at the end of the turn and the copy Fades
+  { const [id, kind] = ['kuro_one_more_time', 'block'];
+    let C = fight([id, ownSkill]); play(C, ownSkill); play(C, id);
+    t.ok(!C.endTurn().some((e) => e.type === 'play' && e.reprise), id + ': two cards this turn, no replay');
+    C = fight([id, ownSkill, partnerSkill]); play(C, ownSkill); play(C, partnerSkill); play(C, id);
+    const added0 = C.added;
+    const ev = C.endTurn();
+    const rep = ev.filter((e) => e.type === 'play' && e.reprise);
+    t.eq(rep.length, 1, id + ': one free replay at the end of a turn of three cards');
+    if (rep.length) {
+      t.ok(rep[0].free && rep[0].cost === 0 && rep[0].card.id === id && rep[0].card.fade, id + ': free, the same card, a Fading copy');
+      const i0 = ev.indexOf(rep[0]), i1 = ev.findIndex((e) => e.type === 'turn_end' && e.who === 'player');
+      const slice = ev.slice(i0, i1);
+      t.ok(i0 < i1 && (kind === 'dmg' ? slice.some((e) => e.type === 'hit') : slice.some((e) => e.type === 'block' && e.dst.id === 'kuro')), id + ': the replay resolves before the turn ends');
+      t.ok(C.exhaust.some((c) => c.uid === rep[0].card.uid), id + ': the copy Fades'); t.eq(C.added, added0 + 1, id + ': and counts as an added card');
+    } }
+  // Finale: the bonus per earlier card, then the turn is closed
+  { const [id, n] = ['kuro_showstopper', 2];
+    const alone = raws(play(fight([id]), id).ev)[0];
+    const C = fight([id, ownSkill, partnerSkill, 'kuro_ink_bolt']); play(C, ownSkill); play(C, partnerSkill);
+    t.eq(raws(play(C, id).ev)[0], alone + 2 * n, id + ': Finale ' + n + ' after two cards');
+    const later = take(C, 'kuro_ink_bolt');
+    t.eq(C.canPlay(later.uid, C.enemies[0].id).reason, 'finale', id + ': the turn is closed');
+    C.endTurn(); C.energy = 99; const l2 = take(C, 'kuro_ink_bolt');
+    t.ok(C.canPlay(l2.uid, C.enemies[0].id).ok, id + ': and the next turn is open'); }
 });
 
 t.done();

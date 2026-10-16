@@ -1,4 +1,4 @@
-// Hocus Vocus: Andy (id `raiga`), The Thunder Bass: his complete card set (3 starters, 15 commons, 13 uncommons, 9 rares).
+// Hocus Vocus: Andy (id `raiga`), The Thunder Bass: his complete card set (3 starters, 17 commons, 15 uncommons, 11 rares).
 //
 // One IIFE, no top-level names; it only calls DATA.add('cards', {...}). Card text is generated from `fx`, never typed.
 // Tokens: none. No card here uses the `add` op, so none is defined. Card ids keep their old internal names (raiga_jab and so on);
@@ -416,6 +416,56 @@
       up: { fx: [dmg(8, { tgt: 'all' })], mech: { remix: 4 } },
       kw: [], slots: ['red', 'green'], art: { m: 'wave', c: 'indigo', hero: true },
       flavor: 'Same bassline. Heavier every time it comes round.',
+    },
+    // ------------------------------------------------------------------ the duo (DATA "Card mechanics": Duet) and the setlist (Soundcheck, Reprise, Finale)
+    // The rhythm section: bass under the beat, and Duet pays when the partner played the previous card. Tune Up opens the turn, Bass Riff
+    // comes round again in a busy turn, Last Song closes it. The backing bonus lands on every Duet hit too.
+    raiga_bass_and_voice: {
+      name: 'Bass and Voice', hero: 'raiga', type: 'attack', rarity: 'common', cost: 1,
+      fx: [dmg(5)], mech: { duet: 3 },
+      up: { fx: [dmg(6)], mech: { duet: 4 } },
+      kw: [], slots: ['red'], art: { m: 'wave', c: 'amber', hero: true },
+      flavor: 'She takes the top. He takes everything under it.',
+    },
+    raiga_in_sync: {
+      name: 'In Sync', hero: 'raiga', type: 'skill', rarity: 'uncommon', cost: 1,
+      // Duet on a Block card, with a Rumble: the bonus rides on the Block
+      fx: [block(5), charge(1)], mech: { duet: 3 },
+      up: { fx: [block(6), charge(1)], mech: { duet: 4 } },
+      kw: [], slots: ['blue', 'green'], art: { m: 'shield', c: 'teal' },
+      flavor: 'Same breath, same count in. Nobody had to say anything.',
+    },
+    raiga_rhythm_section: {
+      name: 'Rhythm Section', hero: 'raiga', type: 'attack', rarity: 'rare', cost: 2,
+      // Duet on three hits: 2 more each when the partner played the previous card (and the backing bonus on each)
+      fx: [dmg(4, { hits: 3 })], mech: { duet: 2 },
+      up: { fx: [dmg(5, { hits: 3 })], mech: { duet: 2 } },
+      kw: [], slots: ['red', 'gold'], art: { m: 'kick', c: 'gold', hero: true },
+      flavor: 'Beatbox and bass. The whole band, two people.',
+    },
+    raiga_bass_riff: {
+      name: 'Bass Riff', hero: 'raiga', type: 'attack', rarity: 'common', cost: 1,
+      // Reprise: played in a turn of 3 or more cards it comes back for free at the end of the turn
+      fx: [dmg(4)], mech: { reprise: 1 },
+      up: { fx: [dmg(6)] },
+      kw: [], slots: ['red'], art: { m: 'fist', c: 'indigo' },
+      flavor: 'Four notes. You will be humming them on the bus.',
+    },
+    raiga_tune_up: {
+      name: 'Tune Up', hero: 'raiga', type: 'skill', rarity: 'uncommon', cost: 0,
+      // Soundcheck on Block: a free opener, 6 Block and a Rumble as the first card of the turn
+      fx: [block(3), charge(1)], mech: { soundcheck: 3 },
+      up: { fx: [block(4), charge(1)], mech: { soundcheck: 4 } },
+      kw: [], slots: ['blue'], art: { m: 'bell', c: 'teal' },
+      flavor: 'Low E, a little flat. Always a little flat.',
+    },
+    raiga_last_song: {
+      name: 'Last Song', hero: 'raiga', type: 'attack', rarity: 'rare', cost: 1,
+      // Finale for one Breath: 3 more per card played before it, then the turn is closed
+      fx: [dmg(5)], mech: { finale: 3 },
+      up: { fx: [dmg(7)], mech: { finale: 3 } },
+      kw: [], slots: ['red', 'gold'], art: { m: 'sun', c: 'ink' },
+      flavor: 'He plays it slow, because after this one, everyone goes home.',
     },
   });
 })();

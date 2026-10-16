@@ -447,9 +447,17 @@ A **card definition** (`DATA.cards[id]`):
 copy and reports deck gains in `C.summary().fanbase`, RUN adds them to `enc` on the deck instance (saved with the run; old saves have none,
 a transform drops it); `remix N` (Remix) each play adds N damage for the rest of the fight (`rmx` on the combat copy); `hype N` (Hype) N more
 damage per card played earlier this turn (`C.played`); `loop N` (Loop) after its ops, N temp copies of the last other Attack or Skill played
-this turn (`C.lastPlayed`, never a Loop card) go to the hand with `fade:true` and resolve with Fade. The damage bonuses ride on `plus` of
-every dmg op (like a gem's +N damage), so previews, bots and the printed number see them; the text adds one sentence per mechanic before a
-closing Fade, with the live bonus: "Fanbase 2 (now +4)." Deck instance: `{uid, id, up, gems, enc?}`.
+this turn (`C.lastPlayed`, never a Loop card) go to the hand with `fade:true` and resolve with Fade. The duo and the setlist: `duet N` (Duet)
+N more damage, or N more Block on a card without a dmg op, if the OTHER hero played the previous card this turn (`C.lastHero`, the hero id of
+the last card played this turn, null at turn start; the UI marks a ready card with the `duet` class on its hand wrapper); `soundcheck N`
+(Soundcheck) N more damage or Block if it is the first card played this turn (`C.played` is 0, and only inside a turn: a deck view shows no
+bonus); `reprise` (Reprise, always 1, Attacks and Skills with a fixed cost and no pick) at the end of a turn of 3 or more cards COMBAT plays a
+free Fading temp copy of the card again, in play order, at the same target when it still stands, else the first living enemy (a `play` event
+with `free:true, reprise:true`; a copy never Reprise-es again); `finale N` (Finale) N more damage per card played earlier this turn and the turn
+is closed: `C.canPlay` answers `reason:'finale'` for every card until the next turn (swapping and ending the turn still work). The damage
+bonuses ride on `plus` of every dmg op (like a gem's +N damage), Duet and Soundcheck on every block op of a card without damage, so previews,
+bots and the printed number see them; the text adds one sentence per mechanic before a closing Fade, with the live bonus: "Fanbase 2 (now
++4)." Deck instance: `{uid, id, up, gems, enc?}`.
 
 **Playing a card.** `C.play(uid, targetId)`:
 

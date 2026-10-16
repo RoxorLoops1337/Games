@@ -2573,6 +2573,123 @@ t.test('card mechanics: text, upgrades and the validator', () => {
   t.eq(errs({ mech: { loop: 1 }, up: { mech: { loop: 2 } } }), '', 'up.mech alone is a legal upgrade');
 });
 
+t.test('card mechanics: Duet (after the other hero), Soundcheck (the first card), Finale (closes the turn) and Reprise (a free replay at the end of a turn of 3 cards)', () => {
+  const W = world(); const D = W.D;
+  const duet = W.card('duet', { cost: 1, fx: [{ op: 'dmg', n: 4, tgt: 'enemy' }], mech: { duet: 3 } });
+  const duetB = W.card('duetb', { type: 'skill', cost: 1, fx: [{ op: 'block', n: 4 }], mech: { duet: 2 }, slots: ['blue'] });
+  const sc = W.card('sc', { cost: 0, fx: [{ op: 'dmg', n: 2, tgt: 'enemy' }], mech: { soundcheck: 4 } });
+  const scB = W.card('scb', { type: 'skill', cost: 0, fx: [{ op: 'block', n: 3 }, { op: 'status', s: 'might', n: 1 }], mech: { soundcheck: 2 }, slots: ['blue'] });
+  const reprise = W.card('reprise', { cost: 1, fx: [{ op: 'dmg', n: 5, tgt: 'enemy' }], mech: { reprise: 1 } });
+  const fin = W.card('fin', { cost: 1, fx: [{ op: 'dmg', n: 6, tgt: 'enemy' }], mech: { finale: 3 } });
+  const kfree = W.card('kfree', { hero: 'kuro', type: 'skill', cost: 0, fx: [{ op: 'block', n: 1 }], slots: ['blue'] });
+  const hfree = W.card('hfree', { type: 'skill', cost: 0, fx: [{ op: 'block', n: 1 }], slots: ['blue'] });
+  const I = (id, ctx) => D.cardPlain({ id, up: 0, gems: [null] }, ctx);
+  // text: the sentence, and the live bonus only when the condition holds right now
+  t.eq(I(duet), 'Deal 4 damage. Duet 3.', 'Duet text');
+  t.eq(I(duet, { played: 1, lastHero: 'kuro' }), 'Deal 7 damage. Duet 3 (now +3).', 'Duet live after the other hero');
+  t.eq(I(duet, { played: 1, lastHero: 'hanae' }), 'Deal 4 damage. Duet 3.', 'no Duet after the owner');
+  t.eq(I(duetB, { played: 1, lastHero: 'kuro' }), 'Gain 6 Block. Duet 2 (now +2).', 'Duet on a Block card rides on the Block');
+  t.eq(I(sc), 'Deal 2 damage. Soundcheck 4.', 'Soundcheck text outside a turn (a deck view): no bonus');
+  t.eq(I(sc, { played: 0 }), 'Deal 6 damage. Soundcheck 4 (now +4).', 'Soundcheck live as the first card');
+  t.eq(I(sc, { played: 1 }), 'Deal 2 damage. Soundcheck 4.', 'and not as the second');
+  t.eq(I(scB, { played: 0 }), 'Gain 5 Block and 1 Volume. Soundcheck 2 (now +2).', 'Soundcheck on a Block card');
+  t.eq(I(reprise), 'Deal 5 damage. Reprise.', 'Reprise prints no number');
+  t.eq(I(fin), 'Deal 6 damage. Finale 3.', 'Finale text');
+  t.eq(I(fin, { played: 2 }), 'Deal 12 damage. Finale 3 (now +6).', 'Finale live after two cards');
+  t.deep(D.resolveCard({ id: duetB, up: 0, gems: [null] }, { played: 1, lastHero: 'kuro' }).mechNow, { fanbase: 0, remix: 0, hype: 0, duet: 2, soundcheck: 0, finale: 0, total: 0, block: 2 }, 'mechNow splits the bonus between damage and Block');
+  t.ok(D.mechKey({ id: duet, up: 0, gems: [null] }, { played: 1, lastHero: 'kuro' }) !== D.mechKey({ id: duet, up: 0, gems: [null] }, { played: 1, lastHero: 'hanae' }), 'the cache key sees the Duet state');
+  // the validator
+  const errs = (over) => { const w = world(); const cid = w.card('vbad2', Object.assign({ cost: 1, fx: [{ op: 'dmg', n: 4, tgt: 'enemy' }] }, over)); return w.D.validate('cards').errors.filter((e) => e.indexOf(cid) >= 0 && e.indexOf('id must start') < 0).join(' | '); };
+  t.ok(/is always 1/.test(errs({ mech: { reprise: 2 } })), 'Reprise 2 is refused');
+  t.ok(/only an Attack or a Skill can Reprise/.test(errs({ type: 'power', fx: [{ op: 'status', s: 'might', n: 1 }], up: { fx: [{ op: 'status', s: 'might', n: 2 }] }, mech: { reprise: 1 } })), 'a power cannot Reprise');
+  t.ok(/X cost card cannot Reprise/.test(errs({ cost: 'X', fx: [{ op: 'dmg', n: 2, hits: { per: 'X' }, tgt: 'enemy' }], up: { fx: [{ op: 'dmg', n: 3, hits: { per: 'X' }, tgt: 'enemy' }] }, mech: { reprise: 1 } })), 'an X card cannot Reprise');
+  t.ok(/cannot pick/.test(errs({ fx: [{ op: 'dmg', n: 4, tgt: 'enemy' }, { op: 'pick', from: 'hand', n: 1, then: 'discard' }], mech: { reprise: 1 } })), 'a Reprise card cannot pick');
+  t.ok(/do not mix/.test(errs({ mech: { reprise: 1, finale: 2 } })), 'Reprise and Finale do not mix');
+  t.ok(/need a dmg or a block op/.test(errs({ type: 'skill', fx: [{ op: 'status', s: 'might', n: 1 }], up: { fx: [{ op: 'status', s: 'might', n: 2 }] }, mech: { duet: 2 } })), 'Duet needs damage or Block');
+  t.ok(/finale need a dmg op/.test(errs({ type: 'skill', fx: [{ op: 'block', n: 3 }], up: { fx: [{ op: 'block', n: 4 }] }, mech: { finale: 2 } })), 'Finale needs damage');
+  t.eq(errs({ type: 'skill', fx: [{ op: 'block', n: 3 }], up: { fx: [{ op: 'block', n: 4 }] }, mech: { soundcheck: 2 }, slots: ['blue'] }), '', 'Soundcheck on a Block card is legal');
+  // Duet in the engine: the bonus only after the OTHER hero's card, on damage and on Block, and C.lastHero tracks it
+  let C = W.fight({ deck: [duet, duet, duetB, kfree, hfree], filler: 0 });
+  let [d1, d2, db, kf, hf] = rig(C, [duet, duet, duetB, kfree, hfree]);
+  t.eq(C.lastHero, null, 'a turn starts with no last hero');
+  t.eq(first(play(C, d1), 'hit').raw, 4, 'Duet alone: 4');
+  t.eq(C.lastHero, 'hanae', 'C.lastHero is the hero of the last card');
+  t.eq(C.preview(d2.uid, C.enemies[0].id).dmg, 4, 'after her own card the preview shows no bonus');
+  play(C, kf);
+  t.eq(C.lastHero, 'kuro', 'the partner played last');
+  t.eq(C.preview(d2.uid, C.enemies[0].id).dmg, 7, 'now the preview shows 7');
+  t.eq(first(play(C, d2), 'hit').raw, 7, 'and the play deals 7');
+  C.energy = 9;
+  const [kf3, db3] = rig(C, [kfree, duetB]);
+  t.eq(first(play(C, db3), 'block').amount, 4, 'Duet on a Block card after her own card: 4');
+  rig(C, [kfree, duetB]); play(C, kf3); C.energy = 9;
+  t.eq(first(play(C, db3), 'block').amount, 6, 'Duet on a Block card after the partner: 4 plus 2');
+  C.endTurn();
+  t.eq(C.lastHero, null, 'the next turn starts with no last hero again');
+  // Soundcheck in the engine
+  C = W.fight({ deck: [sc, sc, scB], filler: 0 });
+  const [s1, s2, sb] = rig(C, [sc, sc, scB]);
+  t.eq(C.preview(s1.uid, C.enemies[0].id).dmg, 6, 'the first card of the turn previews 6');
+  t.eq(first(play(C, s1), 'hit').raw, 6, 'Soundcheck as the first card: 2 plus 4');
+  t.eq(first(play(C, s2), 'hit').raw, 2, 'the same card as the second: 2');
+  t.eq(first(play(C, sb), 'block').amount, 3, 'a Soundcheck Block card as the third: 3');
+  C.endTurn(); rig(C, [scB]);
+  t.eq(first(play(C, C.hand[0]), 'block').amount, 5, 'and 5 as the first card of the next turn');
+  // Finale in the engine: the bonus per earlier card, then nothing can be played until the next turn
+  C = W.fight({ deck: [fin, hfree, kfree, duet, duetB], filler: 0 });
+  const [f1, hf2, kf2, d3, db2] = rig(C, [fin, hfree, kfree, duet, duetB]);
+  play(C, hf2); play(C, kf2);
+  t.eq(C.preview(f1.uid, C.enemies[0].id).dmg, 12, 'Finale previews 6 plus 2 x 3');
+  t.eq(first(play(C, f1), 'hit').raw, 12, 'and deals it');
+  t.deep(C.canPlay(d3.uid, C.enemies[0].id), { ok: false, reason: 'finale' }, 'the turn is closed for cards');
+  t.deep(C.canPlay(db2.uid), { ok: false, reason: 'finale' }, 'skills too');
+  t.eq(play(C, d3).length, 0, 'C.play refuses');
+  t.ok(C.canSwap().ok, 'a swap is still allowed');
+  t.ok(C.endTurn().length > 0, 'and the turn can end');
+  rig(C, [duet]);
+  t.ok(C.canPlay(C.hand[0].uid, C.enemies[0].id).ok, 'the next turn is open');
+  // Reprise in the engine: no replay after two cards, one free Fading replay after three, before the hand's end of turn, at the same target
+  const weak = W.enemy('weak_ch', { hp: [3, 3] });
+  C = W.fight({ deck: [reprise, hfree, kfree, reprise, hfree, kfree], filler: 0, enemies: [W.dummy, weak] });
+  let [c1, h1, k1] = rig(C, [reprise, hfree, kfree]);
+  play(C, h1); play(C, c1, C.enemies[0].id);
+  let ev = C.endTurn();
+  t.ok(!ev.some((e) => e.type === 'play' && e.reprise), 'two cards this turn: no replay');
+  t.eq(C.enemies[0].hp, 100 - 5, 'the dummy took one hit');
+  [c1, h1, k1] = rig(C, [reprise, hfree, kfree]);
+  play(C, h1); play(C, k1);
+  const dummyHp = C.enemies[0].hp, added0 = C.added;
+  play(C, c1, C.enemies[1].id);
+  t.ok(C.enemies[1].down, 'the Reprise card defeated the 3 HP enemy');
+  ev = C.endTurn();
+  const rep = ev.filter((e) => e.type === 'play' && e.reprise);
+  t.eq(rep.length, 1, 'three cards this turn: one replay');
+  t.ok(rep[0].free && rep[0].cost === 0 && rep[0].card.id === reprise && rep[0].card.fade && rep[0].card.tmp && rep[0].hero === 'hanae', 'free, cost 0, a Fading temp copy, played by the owner');
+  t.eq(rep[0].target, C.enemies[0].id, 'its target fell, so the replay hits the first living enemy');
+  t.eq(C.enemies[0].hp, dummyHp - 5, 'which took the 5');
+  const iPlay = ev.indexOf(rep[0]), iEnd = ev.findIndex((e) => e.type === 'turn_end' && e.who === 'player');
+  t.ok(iPlay >= 0 && iPlay < iEnd, 'the replay comes before the player turn ends');
+  t.ok(ev.slice(iPlay, iEnd).some((e) => e.type === 'exhaust' && e.card.uid === rep[0].card.uid), 'the copy Fades at once');
+  t.eq(C.added, added0 + 1, 'the copy counts in added');
+  t.eq(C.hand.length + C.draw.length + C.discard.length + C.exhaust.length + C.powers.length, C.deckSize + C.added, 'conservation holds');
+  t.eq(C.energy, C.maxEnergy, 'the replay cost nothing (a new turn has full Breath)');
+  // a replay is never a Reprise itself (no chain), and a Reprise card is one of the 3
+  C = W.fight({ deck: [reprise, reprise, reprise], filler: 0 });
+  const cs = rig(C, [reprise, reprise, reprise]);
+  cs.forEach((c) => play(C, c));
+  ev = C.endTurn();
+  t.eq(ev.filter((e) => e.type === 'play' && e.reprise).length, 3, 'three Reprise cards: three replays, no chain');
+  t.eq(C.enemies[0].hp, 100 - 6 * 5, 'six hits of 5');
+  // the greedy bot plays a deck of these cards, wins, and two identical fights replay identically
+  const foe = W.hitter(5, { hp: [60, 60] });
+  const mk = () => ({ heroes: [{ id: 'hanae', hp: 70, maxHp: 70 }, { id: 'kuro', hp: 60, maxHp: 60 }], deck: W.deck([duet, duet, duetB, sc, scB, reprise, reprise, fin, kfree, kfree, hfree, fin]), enemies: [foe, foe], seed: 13 });
+  const a = W.COMBAT.simulate(mk()), b = W.COMBAT.simulate(mk());
+  t.eq(a.result, 'win', 'the bot wins with a deck of duo and setlist cards');
+  t.eq(JSON.stringify(a.C.events), JSON.stringify(b.C.events), 'identical event logs');
+  t.ok(a.C.events.some((e) => e.type === 'play' && e.reprise), 'the bot got a Reprise replay');
+  t.ok(a.C.events.some((e) => e.type === 'play' && e.card.id === fin), 'and played a Finale');
+});
+
 t.test('card mechanics: the greedy bot plays them and two identical fights replay identically', () => {
   const W = world();
   const fan = W.card('fan', { cost: 1, fx: [{ op: 'dmg', n: 6, tgt: 'enemy' }], mech: { fanbase: 2 } });

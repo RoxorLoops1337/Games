@@ -52,12 +52,17 @@ const resolveDef = (c, up) => {
 };
 // card mechanics (DATA "Card mechanics") priced per point and per hit of the first dmg op (AOE counts as 1.8 targets): a Loop copy is a
 // Fading card that must follow another play (4), Remix pays about once more per fight (1), Hype reads two earlier cards (2), and a
-// Fanbase card has a few kills behind it over a tour (2)
+// Fanbase card has a few kills behind it over a tour (2). The duo and setlist wave: Duet pays about half the time (0.5 per point, per hit,
+// or per hero on a Block card), Soundcheck about a third of the time (0.35), a Reprise replay is a free Fading copy that needs a busy turn
+// (4, like a Loop copy), and a Finale reads two earlier cards (2 per point per hit) but closes the turn (1.5 off)
 const mechPts = (d) => {
   const m = d.mech || {};
   const o = (d.fx || []).find((x) => x && x.op === 'dmg');
+  const b = (d.fx || []).find((x) => x && x.op === 'block');
   const hits = o ? (typeof o.hits === 'number' ? o.hits : 1) * (o.tgt === 'all' ? 1.8 : 1) : 0;
-  return 4 * (m.loop || 0) + hits * (1 * (m.remix || 0) + 2 * (m.hype || 0) + 2 * (m.fanbase || 0));
+  const cond = o ? hits : b ? (b.tgt === 'both' ? 1.9 : 1) : 0;
+  return 4 * (m.loop || 0) + 4 * (m.reprise || 0) + hits * (1 * (m.remix || 0) + 2 * (m.hype || 0) + 2 * (m.fanbase || 0))
+    + cond * (0.5 * (m.duet || 0) + 0.35 * (m.soundcheck || 0)) + (m.finale ? hits * 2 * m.finale - 1.5 : 0);
 };
 const words = (s) => s.trim().split(/\s+/).length;
 const inst = (id, up) => ({ uid: U.uid(), id, up: up ? 1 : 0, gems: (byId(id).slots || []).map(() => null) });
@@ -75,10 +80,10 @@ t.test('DATA.audit has no lines for hanae', () => {
 });
 
 // ---------------------------------------------------------------------------------------------- counts and mix
-t.test('counts: 3 starters, 15 commons, 13 uncommons, 9 rares, no tokens', () => {
+t.test('counts: 3 starters, 17 commons, 15 uncommons, 11 rares, no tokens', () => {
   const n = (r) => nonToken.filter((c) => c.rarity === r).length;
-  t.eq(n('starter'), 3, 'starters'); t.eq(n('common'), 15, 'commons'); t.eq(n('uncommon'), 13, 'uncommons'); t.eq(n('rare'), 9, 'rares');
-  t.eq(cards.length, 40, 'total');
+  t.eq(n('starter'), 3, 'starters'); t.eq(n('common'), 17, 'commons'); t.eq(n('uncommon'), 15, 'uncommons'); t.eq(n('rare'), 11, 'rares');
+  t.eq(cards.length, 46, 'total');
   t.eq(cards.filter((c) => c.rarity === 'token').length, 0, 'no card here adds a token, so none is defined');
   t.ok(!allTokenAdds(), 'no card uses the add op');
 });
@@ -95,7 +100,7 @@ t.test('mix: 30 percent attacks, 30 percent skills, 4 or more powers, an X card'
   t.ok(n('attack') >= nonToken.length * 0.3, 'attacks ' + n('attack'));
   t.ok(n('skill') >= nonToken.length * 0.3, 'skills ' + n('skill'));
   t.ok(n('power') >= 4, 'powers ' + n('power'));
-  t.ok(n('attack') + n('skill') + n('power') === 40, 'only attack, skill and power types');
+  t.ok(n('attack') + n('skill') + n('power') === 46, 'only attack, skill and power types');
   nonToken.filter((c) => c.type === 'power').forEach((c) => t.ok(c.rarity === 'uncommon' || c.rarity === 'rare', c.id + ': powers are uncommon or rare'));
   t.ok(nonToken.some((c) => c.cost === 'X'), 'an X cost card');
   t.ok(nonToken.filter((c) => c.cost === 'X').length >= 2, 'two X cards: a common and a rare bomb');
@@ -694,6 +699,64 @@ t.test('card mechanics: Crowd Pleaser (Hype), Signature Song (Fanbase) and Mashu
   const a = raws(play(C, 'hanae_mashup').ev), b = raws(play(C, 'hanae_mashup').ev);
   t.eq(a.length, 3, 'three hits');
   t.deep(b, a.map((x) => x + 1), 'the second play: every hit 1 bigger');
+});
+
+t.test('the duo and the setlist: hanae Duet, Soundcheck, Reprise and Finale cards print and play as their keyword says', () => {
+  const { D, fight, play, raws, take } = mechWorld('kuro');
+  const partnerSkill = D.heroes.kuro.starter.find((id) => D.cards[id].type === 'skill' && D.cards[id].cost === 1);
+  const ownSkill = D.heroes.hanae.starter.find((id) => D.cards[id].type === 'skill' && D.cards[id].cost === 1);
+  const blockOf = (ev) => ev.filter((e) => e.type === 'block' && e.dst.id === 'hanae').map((e) => e.amount);
+  t.eq(D.cardPlain('hanae_call_and_response'), 'Deal 4 damage. Duet 3.', 'Call and Response text');
+  t.eq(D.cardPlain({ id: 'hanae_call_and_response', up: 1, gems: [null] }), 'Deal 5 damage. Duet 4.', 'Call and Response+ text');
+  t.eq(D.cardPlain('hanae_harmony_line'), 'Gain 5 Block. Duet 4.', 'Harmony Line text (Duet on Block)');
+  t.eq(D.cardPlain('hanae_two_voices'), 'Deal 4 damage 2 times. Duet 3.', 'Two Voices text');
+  t.eq(D.cardPlain('hanae_warm_up'), 'Deal 2 damage. Soundcheck 4.', 'Warm Up text');
+  t.eq(D.cardPlain({ id: 'hanae_warm_up', up: 0, gems: [null] }, { played: 0 }), 'Deal 6 damage. Soundcheck 4 (now +4).', 'Warm Up as the first card of a turn');
+  t.eq(D.cardPlain('hanae_sing_it_twice'), 'Deal 4 damage. Reprise.', 'Sing It Twice text');
+  t.eq(D.cardPlain({ id: 'hanae_sing_it_twice', up: 1, gems: [null, null] }), 'Deal 6 damage. Reprise.', 'Sing It Twice+ keeps the Reprise');
+  t.eq(D.cardPlain('hanae_final_bow'), 'Deal 8 damage. Finale 4.', 'Final Bow text');
+  t.eq(D.cardPlain({ id: 'hanae_final_bow', up: 0, gems: [null, null] }, { played: 2 }), 'Deal 16 damage. Finale 4 (now +8).', 'Final Bow after two cards');
+  // Duet: alone, after the owner's own card (nothing), after the partner's card (the bonus)
+  const duetCards = [['hanae_call_and_response', 3, 'dmg'], ['hanae_harmony_line', 4, 'block'], ['hanae_two_voices', 3, 'dmg']];
+  duetCards.forEach(([id, n, kind]) => {
+    const measure = (C, ev) => (kind === 'dmg' ? raws(ev)[0] : blockOf(ev)[0]);
+    const alone = measure(null, play(fight([id]), id).ev);
+    let C = fight([id, ownSkill]); play(C, ownSkill);
+    t.eq(measure(C, play(C, id).ev), alone, id + ': no Duet after the owner\'s own card');
+    C = fight([id, partnerSkill]); play(C, partnerSkill);
+    const ready = D.cardPlain(C.hand.find((c) => c.id === id) || { id, up: 0, gems: D.cards[id].slots.map(() => null) }, { played: C.played, lastHero: C.lastHero });
+    t.ok(/now \+/.test(ready), id + ': the card in hand shows the live bonus: ' + ready);
+    t.eq(measure(C, play(C, id).ev), alone + n, id + ': Duet ' + n + ' after the partner\'s card');
+  });
+  // Soundcheck: the first card of the turn, then the same card as the second
+  { const [id, n, kind] = ['hanae_warm_up', 4, 'dmg']; const measure = (ev) => (kind === 'dmg' ? raws(ev)[0] : blockOf(ev)[0]);
+    const C = fight([id, id]); const first = measure(play(C, id).ev), second = measure(play(C, id).ev);
+    t.eq(first - second, n, id + ': Soundcheck ' + n + ' as the first card of the turn only (' + first + ' then ' + second + ')'); }
+  // Reprise: two cards played, nothing; three cards, the card is played again for free at the end of the turn and the copy Fades
+  { const [id, kind] = ['hanae_sing_it_twice', 'dmg'];
+    let C = fight([id, ownSkill]); play(C, ownSkill); play(C, id);
+    t.ok(!C.endTurn().some((e) => e.type === 'play' && e.reprise), id + ': two cards this turn, no replay');
+    C = fight([id, ownSkill, partnerSkill]); play(C, ownSkill); play(C, partnerSkill); play(C, id);
+    const added0 = C.added;
+    const ev = C.endTurn();
+    const rep = ev.filter((e) => e.type === 'play' && e.reprise);
+    t.eq(rep.length, 1, id + ': one free replay at the end of a turn of three cards');
+    if (rep.length) {
+      t.ok(rep[0].free && rep[0].cost === 0 && rep[0].card.id === id && rep[0].card.fade, id + ': free, the same card, a Fading copy');
+      const i0 = ev.indexOf(rep[0]), i1 = ev.findIndex((e) => e.type === 'turn_end' && e.who === 'player');
+      const slice = ev.slice(i0, i1);
+      t.ok(i0 < i1 && (kind === 'dmg' ? slice.some((e) => e.type === 'hit') : slice.some((e) => e.type === 'block' && e.dst.id === 'hanae')), id + ': the replay resolves before the turn ends');
+      t.ok(C.exhaust.some((c) => c.uid === rep[0].card.uid), id + ': the copy Fades'); t.eq(C.added, added0 + 1, id + ': and counts as an added card');
+    } }
+  // Finale: the bonus per earlier card, then the turn is closed
+  { const [id, n] = ['hanae_final_bow', 4];
+    const alone = raws(play(fight([id]), id).ev)[0];
+    const C = fight([id, ownSkill, partnerSkill, 'hanae_slash']); play(C, ownSkill); play(C, partnerSkill);
+    t.eq(raws(play(C, id).ev)[0], alone + 2 * n, id + ': Finale ' + n + ' after two cards');
+    const later = take(C, 'hanae_slash');
+    t.eq(C.canPlay(later.uid, C.enemies[0].id).reason, 'finale', id + ': the turn is closed');
+    C.endTurn(); C.energy = 99; const l2 = take(C, 'hanae_slash');
+    t.ok(C.canPlay(l2.uid, C.enemies[0].id).ok, id + ': and the next turn is open'); }
 });
 
 t.done();

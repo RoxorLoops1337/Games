@@ -62,7 +62,7 @@ const DATA = (() => {
     rarities: ['starter', 'common', 'uncommon', 'rare', 'token'],   // token: generated in combat, never a reward
     cardKw: ['exhaust', 'retain', 'innate', 'ethereal', 'unplayable'],
     // card mechanics a def carries in `mech: {id: N}` (see "Card mechanics" below the lookups): printed as a keyword with a number
-    mechs: ['fanbase', 'remix', 'hype', 'loop'],
+    mechs: ['fanbase', 'remix', 'hype', 'loop', 'duet', 'soundcheck', 'reprise', 'finale'],
     slotColors: ['red', 'blue', 'green', 'gold', 'any'],
     gemColors: ['red', 'blue', 'green', 'gold'],
     gemCuts: ['round', 'oval', 'square', 'drop', 'star'],
@@ -263,6 +263,11 @@ const DATA = (() => {
     remix: { name: 'Remix', text: 'Remix N: each time you play this card, it deals N more damage for the rest of the fight.' },
     hype: { name: 'Hype', text: 'Hype N: deals N more damage for each card you played earlier this turn.' },
     loop: { name: 'Loop', text: 'Loop: add a Fading copy of the last other Attack or Skill you played this turn to your hand (Loop 2: two copies).' },
+    // the duo (Duet) and the setlist (Soundcheck, Reprise, Finale)
+    duet: { name: 'Duet', text: 'Duet N: deals N more damage (or gives N more Block) if the other hero played the previous card this turn.' },
+    soundcheck: { name: 'Soundcheck', text: 'Soundcheck N: deals N more damage (or gives N more Block) if it is the first card you play this turn.' },
+    reprise: { name: 'Reprise', text: 'Reprise: if you played 3 or more cards this turn, a Fading copy of this card is played again for free at the end of your turn.' },
+    finale: { name: 'Finale', text: 'Finale N: deals N more damage for each card you played earlier this turn, and no card can be played after it this turn.' },
   };
 
   // ------------------------------------------------------------------
@@ -504,7 +509,7 @@ const DATA = (() => {
 
   // How much content (CONTENT_SPEC 3 to 6). DATA.audit checks these.
   const QUOTA = {
-    cards: { starter: 3, common: 15, uncommon: 13, rare: 9, powers: 4, lockedUncommon: 4, lockedRare: 4, slots: { red: 10, blue: 10, green: 8, gold: 8 } },
+    cards: { starter: 3, common: 17, uncommon: 15, rare: 11, powers: 4, lockedUncommon: 4, lockedRare: 4, slots: { red: 10, blue: 10, green: 8, gold: 8 } },
     enemies: { normal: 10, elite: 3, minion: 3, boss: 1, normalGroups: 12, eliteGroups: 3, bossPhases: { 1: 1, 2: 1, 3: 2 } },
     relics: { common: 22, uncommon: 22, rare: 12, boss: 6, shop: 4, perHero: 3, lockedFrac: 0.3, textMax: 90, flavorMax: 80 },
     gems: { perColor: 6, tiers: [1, 1, 2, 2, 3, 3] },
@@ -596,7 +601,8 @@ const DATA = (() => {
   };
 
   // ---- card mechanics (LISTS.mechs) ----
-  // A card def may carry `mech: {fanbase?, remix?, hype?, loop?}`, each a whole number 1..9; `up.mech` REPLACES it (like up.kw).
+  // A card def may carry `mech: {fanbase?, remix?, hype?, loop?, duet?, soundcheck?, reprise?, finale?}`, each a whole number 1..9;
+  // `up.mech` REPLACES it (like up.kw).
   //   fanbase N  whenever a hit of this card defeats an enemy, the card deals N more damage for the rest of the tour. COMBAT adds N to
   //              `enc` on its copy of the card and reports the gains in C.summary().fanbase {uid: total}; RUN adds them to `enc` on the
   //              deck instance (a whole number, saved with the run; an instance without it simply has no bonus yet).
@@ -604,23 +610,42 @@ const DATA = (() => {
   //   hype N     N more damage for each card played earlier this turn: ctx.played (COMBAT passes it), else ctx.C.played.
   //   loop N     after its own fx, add N temp copies of the last Attack or Skill played earlier this turn (never a card with Loop) to the
   //              hand. A copy carries `fade: true`, which resolves with the Fade keyword.
-  // The three damage bonuses are added to `plus` on every dmg op of the card (through cond and repeat, never into hook fx), exactly like
-  // a gem's +N damage, so C.preview, the bots and the printed number all see them. data_text.js owns DATA.resolveCard, cardHtml and
-  // cardPlain; the accessors at the end of this IIFE wrap whatever it installs: resolveCard adds the bonuses (and Fade on a `fade`
-  // copy) plus `mech` (the def's numbers, upgrade applied) and `mechNow` ({fanbase, remix, hype} live bonuses) on the result, and
+  //   duet N     (the duo) N more damage, or N more Block on a card without a dmg op, if the OTHER hero played the previous card this
+  //              turn: ctx.lastHero (COMBAT passes the hero id of the last card played this turn, null at the start of a turn).
+  //   soundcheck N  (the setlist) N more damage, or Block, if this is the first card played this turn (ctx.played is 0).
+  //   reprise     (always 1) at the end of the turn, if 3 or more cards were played, COMBAT plays a Fading temp copy of the card again
+  //              for free (same target when it is still standing). A copy never Reprise-es again, so there is no chain.
+  //   finale N   N more damage for each card played earlier this turn (like Hype), and the turn is closed: C.canPlay refuses every
+  //              card after it with reason 'finale' until the next turn.
+  // The damage bonuses are added to `plus` on every dmg op of the card (through cond and repeat, never into hook fx), exactly like
+  // a gem's +N damage, so C.preview, the bots and the printed number all see them; Duet and Soundcheck ride on every block op instead
+  // when the card has no dmg op. data_text.js owns DATA.resolveCard, cardHtml and cardPlain; the accessors at the end of this IIFE wrap
+  // whatever it installs: resolveCard adds the bonuses (and Fade on a `fade` copy) plus `mech` (the def's numbers, upgrade applied) and
+  // `mechNow` ({fanbase, remix, hype, duet, soundcheck, finale, total (on damage), block (on Block)} live bonuses) on the result, and
   // cardHtml prints one sentence per mechanic before a closing Fade: "Fanbase 2 (now +4)." Pure, deterministic, no DOM.
   D.mechOf = (def, up) => {
     if (!def) return null;
     const m = up && def.up && def.up.mech !== undefined ? def.up.mech : def.mech;
     return m && typeof m === 'object' && Object.keys(m).length ? m : null;
   };
-  // live damage bonuses of one instance: {fanbase, remix, hype, total}
-  D.mechNow = (inst, mech, ctx) => {
+  // live bonuses of one instance: {fanbase, remix, hype, duet, soundcheck, finale, total, block}. `fx` (the resolved ops) decides where
+  // Duet and Soundcheck land: on the damage (total) when the card has a dmg op outside hooks, on the Block (block) otherwise.
+  D.mechNow = (inst, mech, ctx, fx) => {
     const i = inst && typeof inst === 'object' ? inst : {};
     const whole = (v) => (typeof v === 'number' && Number.isFinite(v) && v > 0 ? Math.floor(v) : 0);
-    const played = ctx ? (ctx.played !== undefined ? ctx.played : ctx.C && ctx.C.played) : 0;
-    const out = { fanbase: mech && mech.fanbase ? whole(i.enc) : 0, remix: mech && mech.remix ? mech.remix * whole(i.rmx) : 0, hype: mech && mech.hype ? mech.hype * whole(played) : 0 };
-    out.total = out.fanbase + out.remix + out.hype;
+    const played = whole(ctx ? (ctx.played !== undefined ? ctx.played : ctx.C && ctx.C.played) : 0);
+    const lastHero = ctx ? (ctx.lastHero !== undefined ? ctx.lastHero : ctx.C && ctx.C.lastHero) : null;
+    const inTurn = !!ctx && (ctx.played !== undefined || !!ctx.C);   // a deck or reward view has no turn: no first card, no Soundcheck
+    const def = D.cards[i.id];
+    const other = !!lastHero && !!def && lastHero !== def.hero;
+    const m = mech || {};
+    const out = {
+      fanbase: m.fanbase ? whole(i.enc) : 0, remix: m.remix ? m.remix * whole(i.rmx) : 0, hype: m.hype ? m.hype * played : 0,
+      duet: m.duet && other ? m.duet : 0, soundcheck: m.soundcheck && inTurn && played === 0 ? m.soundcheck : 0, finale: m.finale ? m.finale * played : 0,
+    };
+    const onBlock = fx !== undefined && !hasMechOp(fx, 'dmg');
+    out.total = out.fanbase + out.remix + out.hype + out.finale + (onBlock ? 0 : out.duet + out.soundcheck);
+    out.block = onBlock ? out.duet + out.soundcheck : 0;
     return out;
   };
   // a cache key piece for engines that memoise resolutions ('' for a card the mechanics never change)
@@ -629,14 +654,17 @@ const DATA = (() => {
     const mech = D.mechOf(D.cards[inst.id], inst.up);
     if (!mech && !inst.fade) return '';
     const n = D.mechNow(inst, mech, ctx);
-    return 'm' + n.fanbase + ',' + n.remix + ',' + n.hype + (inst.fade ? 'f' : '');
+    return 'm' + n.fanbase + ',' + n.remix + ',' + n.hype + ',' + n.duet + ',' + n.soundcheck + ',' + n.finale + (inst.fade ? 'f' : '');
   };
-  const mechDmg = (ops, fn) => (Array.isArray(ops) ? ops : []).forEach((o) => {
+  // the card's own ops of one kind (through cond and repeat, never into hook fx)
+  const mechOps = (ops, kind, fn) => (Array.isArray(ops) ? ops : []).forEach((o) => {
     if (!o || typeof o !== 'object') return;
-    if (o.op === 'dmg') fn(o);
-    if (o.op === 'cond') { mechDmg(o.then, fn); mechDmg(o.else, fn); }
-    if (o.op === 'repeat') mechDmg(o.do, fn);
+    if (o.op === kind) fn(o);
+    if (o.op === 'cond') { mechOps(o.then, kind, fn); mechOps(o.else, kind, fn); }
+    if (o.op === 'repeat') mechOps(o.do, kind, fn);
   });
+  const hasMechOp = (ops, kind) => { let r = false; mechOps(ops, kind, () => { r = true; }); return r; };
+  const mechDmg = (ops, fn) => mechOps(ops, 'dmg', fn);
   const wrapResolve = (raw) => function resolveCard(x, ctx) {
     const res = raw(x, ctx);
     if (!res || !res.def) return res;
@@ -647,10 +675,11 @@ const DATA = (() => {
     if (inst.fade && out.kw.indexOf('exhaust') < 0) out.kw = out.kw.concat(['exhaust']);
     if (mech) {
       out.mech = Object.assign({}, mech);
-      out.mechNow = D.mechNow(inst, mech, ctx);
-      if (out.mechNow.total > 0) {
+      out.mechNow = D.mechNow(inst, mech, ctx, out.fx);
+      if (out.mechNow.total > 0 || out.mechNow.block > 0) {
         out.fx = JSON.parse(JSON.stringify(out.fx));
-        mechDmg(out.fx, (o) => { o.plus = (o.plus || 0) + out.mechNow.total; });
+        if (out.mechNow.total > 0) mechDmg(out.fx, (o) => { o.plus = (o.plus || 0) + out.mechNow.total; });
+        if (out.mechNow.block > 0) mechOps(out.fx, 'block', (o) => { o.plus = (o.plus || 0) + out.mechNow.block; });
       }
     }
     return out;
@@ -664,7 +693,7 @@ const DATA = (() => {
     return LISTS.mechs.filter((k) => m[k]).map((k) => {
       const word = `<span class="kw" data-kw="${k}">${keywords[k].name}</span>`;
       const cls = m[k] > (base[k] || 0) ? ' up' : m[k] < (base[k] || 0) ? ' down' : '';
-      const num = k === 'loop' && m[k] === 1 ? '' : ` <span class="num${cls}">${m[k]}</span>`;
+      const num = (k === 'loop' || k === 'reprise') && m[k] === 1 ? '' : ` <span class="num${cls}">${m[k]}</span>`;
       const live = now[k] > 0 ? ` (now <span class="num up">+${now[k]}</span>)` : '';
       return word + num + live + '.';
     });
@@ -1105,8 +1134,10 @@ const DATA = (() => {
       });
     }
 
-    // ---- card mechanics: {fanbase, remix, hype, loop}, whole numbers 1..9; the damage ones need a dmg op to grow ----
-    const vMech = (w, m, path, fx, type) => {
+    // ---- card mechanics: {fanbase, remix, hype, loop, duet, soundcheck, reprise, finale}, whole numbers 1..9 ----
+    // the damage ones need a dmg op to grow; Duet and Soundcheck need a dmg or a block op; Reprise is always 1, on an Attack or Skill
+    // with a fixed cost and no pick (the replay is automatic, nobody is there to choose), and never together with Finale
+    const vMech = (w, m, path, fx, type, cost) => {
       if (!isObj(m) || !Object.keys(m).length) return err(w, `${path} must be a non-empty object`);
       Object.keys(m).forEach((k) => {
         if (!has('mechs', k)) return err(w, `${path}: unknown mechanic "${k}" (one of ${LISTS.mechs.join(', ')})`);
@@ -1114,8 +1145,17 @@ const DATA = (() => {
       });
       const flat = [];
       D.walkOps(A(fx).filter((o) => isObj(o) && o.op !== 'hook'), (o) => { if (o.op !== 'hook') flat.push(o); });
-      if (['fanbase', 'remix', 'hype'].some((k) => m[k] !== undefined) && !flat.some((o) => o.op === 'dmg')) err(w, `${path}: fanbase, remix and hype need a dmg op (outside hooks)`);
+      const hasDmg = flat.some((o) => o.op === 'dmg'), hasBlock = flat.some((o) => o.op === 'block');
+      if (['fanbase', 'remix', 'hype', 'finale'].some((k) => m[k] !== undefined) && !hasDmg) err(w, `${path}: fanbase, remix, hype and finale need a dmg op (outside hooks)`);
+      if (['duet', 'soundcheck'].some((k) => m[k] !== undefined) && !hasDmg && !hasBlock) err(w, `${path}: duet and soundcheck need a dmg or a block op (outside hooks)`);
       if (m.loop !== undefined && type === 'power') err(w, `${path}: a power cannot Loop`);
+      if (m.reprise !== undefined) {
+        if (m.reprise !== 1) err(w, `${path}.reprise is always 1`);
+        if (type !== 'attack' && type !== 'skill') err(w, `${path}: only an Attack or a Skill can Reprise`);
+        if (cost === 'X') err(w, `${path}: an X cost card cannot Reprise (the replay is free)`);
+        if (flat.some((o) => o.op === 'pick')) err(w, `${path}: a Reprise card cannot pick (the replay has nobody to choose)`);
+        if (m.finale !== undefined) err(w, `${path}: Reprise and Finale do not mix`);
+      }
     };
 
     // ---- cards ----
@@ -1145,7 +1185,8 @@ const DATA = (() => {
           if (!isObj(c.up)) err(w, 'up must be an object');
           else {
             Object.keys(c.up).forEach((k) => { if (['fx', 'cost', 'kw', 'mech'].indexOf(k) < 0) err(w, `up.${k} unknown (up may change fx, cost, kw, mech)`); });
-            if (c.up.mech !== undefined) vMech(w, c.up.mech, 'up.mech', c.up.fx || c.fx, c.type);
+            if (c.up.mech !== undefined) vMech(w, c.up.mech, 'up.mech', c.up.fx || c.fx, c.type, c.up.cost !== undefined ? c.up.cost : c.cost);
+            else if (c.mech !== undefined && (c.up.fx || c.up.cost !== undefined)) vMech(w, c.mech, 'mech (upgraded card)', c.up.fx || c.fx, c.type, c.up.cost !== undefined ? c.up.cost : c.cost);
             const upEnv = { cost: c.up.cost !== undefined ? c.up.cost : c.cost };
             if (c.up.fx) vOps(w, c.up.fx, 'card', 'up.fx', upEnv);
             if (c.up.cost !== undefined && !(c.up.cost === 'X' || (isInt(c.up.cost) && c.up.cost >= 0 && c.up.cost <= 5))) err(w, 'up.cost must be 0..5 or "X"');
@@ -1167,7 +1208,7 @@ const DATA = (() => {
           if (!isObj(c.hand)) err(w, 'hand must be an object');
           else Object.keys(c.hand).forEach((k) => { if (['turnEnd', 'drawn'].indexOf(k) < 0) err(w, `hand.${k} unknown`); else vOps(w, c.hand[k], 'hand', 'hand.' + k); });
         }
-        if (c.mech !== undefined) vMech(w, c.mech, 'mech', c.fx, c.type);
+        if (c.mech !== undefined) vMech(w, c.mech, 'mech', c.fx, c.type, c.cost);
         if (c.mech !== undefined && !playable) err(w, 'only playable hero cards carry a mech');
         if (c.locked !== undefined && !isBool(c.locked)) err(w, 'locked must be a boolean');
         if (c.locked && (c.rarity === 'starter' || c.rarity === 'common')) err(w, 'starters and commons are never locked');

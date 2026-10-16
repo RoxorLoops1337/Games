@@ -100,7 +100,7 @@
   const FALLBACK_GATES = { hit: 120, heal: 60, draw: 40, swap: 380, enemy_act: 260, summon: 400, death: 420, enemy_phase: 900, hero_down: 500, hero_revive: 500, turn_start: 500, end: 700 };
   const REASONS = {
     energy: 'Not enough Breath', unplayable: 'That card cannot be played', pending: 'Finish your choice first', phase: 'Wait for your turn',
-    target: 'Choose a target', notInHand: 'That card is not in your hand',
+    target: 'Choose a target', notInHand: 'That card is not in your hand', finale: 'The Finale closed this turn: end your turn',
   };
   const PICK_VERB = { discard: 'discard', exhaust: 'fade', retain: 'keep', upgrade: 'upgrade', copy: 'copy', toHand: 'take into your hand', toDrawTop: 'put on top of your draw pile' };
   const INTENT_LABEL = { attack: 'Attack', multi: 'Flurry', heavy: 'Big hit', defend: 'Guard', buff: 'Hype up', debuff: 'Jinx', summon: 'Summon', heal: 'Heal', special: 'Special', flee: 'Flee', none: 'Idle' };
@@ -158,7 +158,7 @@
       heroes: C.heroes.map(unitVM), enemies: C.enemies.map(unitVM), energy: C.energy, maxEnergy: C.maxEnergy,
       hand: C.hand.map(cp), draw: C.draw.map(cp), discard: C.discard.map(cp), exhaust: C.exhaust.map(cp), powers: C.powers.map(cp),
       inPlay: C.inPlay ? Object.assign(cp(C.inPlay), { to: 'discard' }) : null,
-      turn: C.turn, phase: C.phase, result: C.result, pending: C.pending ? clone(C.pending) : null, retained: {}, gold: 0, ink: 0, played: C.played || 0,
+      turn: C.turn, phase: C.phase, result: C.result, pending: C.pending ? clone(C.pending) : null, retained: {}, gold: 0, ink: 0, played: C.played || 0, lastHero: C.lastHero || null,
     };
     C.hand.forEach((c) => { if (c.keep) vm.retained[c.uid] = true; });
     return counts(vm);
@@ -184,7 +184,7 @@
     switch (e.type) {
       case 'turn_start':
         vm.phase = e.who;
-        if (e.who === 'player') { vm.turn = e.turn; vm.energy = e.energy; vm.maxEnergy = e.maxEnergy; vm.retained = {}; vm.played = 0; }
+        if (e.who === 'player') { vm.turn = e.turn; vm.energy = e.energy; vm.maxEnergy = e.maxEnergy; vm.retained = {}; vm.played = 0; vm.lastHero = null; }
         break;
       case 'draw':
         e.cards.forEach((c) => { pull(vm, c.uid); vm.hand.push(cp(c)); });
@@ -220,6 +220,7 @@
         const c = pull(vm, e.card.uid) || cp(e.card);
         vm.inPlay = Object.assign(cp(c), { to: e.to });
         vm.played = (vm.played || 0) + 1;      // what Hype reads in the hand: the cards played this turn
+        vm.lastHero = e.hero;                  // what Duet reads: the hero of the last card played this turn
         break;
       }
       case 'hit': {
@@ -1101,6 +1102,7 @@
 
   function refreshCards() {
     S.ctxC.played = S.vm.played || 0;
+    S.ctxC.lastHero = S.vm.lastHero || null;
     S.vm.hand.forEach((inst) => {
       const e = S.cards.get(inst.uid);
       if (!e) return;
@@ -1109,6 +1111,9 @@
       e.el.rbUpdate({ unit: cardUnit(inst), C: S.ctxC, inst: cp(inst), refresh: true, playable: ev.ok, disabled: !ev.ok, selected: (S.sel && S.sel.uid === inst.uid) || (S.picking && S.picking.chosen.indexOf(inst.uid) >= 0) });
       e.wrap.classList.toggle('retained', !!S.vm.retained[inst.uid]);
       e.wrap.classList.toggle('needs-target', ev.need);
+      // Duet ready: the other hero played the previous card, so the printed number already holds the bonus (DATA "Card mechanics")
+      const now = e.el.rbResolved && e.el.rbResolved.mechNow;
+      e.wrap.classList.toggle('duet', !!(now && now.duet > 0));
     });
   }
 
