@@ -7,7 +7,7 @@
 //   arena.setDensity(0..1) crowd LOD        arena.DIM  dimensions        arena.shadowHint {center, radius}
 // Draw calls: ~28 (+ shadow pass). Crowd = 1 InstancedMesh animated in the vertex shader (zero CPU per frame).
 import * as THREE from 'three';
-import { mergeGeos, prepGeo, colorize, boxGeo, patchMaterial, bakeInstances, createFlames, createBlobShadows, createDustMotes } from './envfx.js';
+import { mergeGeos, prepGeo, colorize, boxGeo, patchMaterial, bakeInstances, createFlames, createBlobShadows, createDustMotes, createHazardFX } from './envfx.js';
 import { makeSandTexture, makeStoneTexture, makeMarbleTexture, tfbm, tnoise } from './envtex.js';
 import { TOD, applyTOD } from './sky.js';
 
@@ -136,20 +136,20 @@ export const THEMES = {
     name: 'Provincial Sandpit', blurb: 'Rustic timber stands under a plain daytime sky.',
     stone: { kind: 'wood', tint: 0xf0d0a8 }, sand: { kind: 'sand', tint: 0xe6cf9c, decal: 'ruts' }, gold: 0x8a6a3a,
     crowd: { density: 0.55, rows: 8, pleb: [0x8a6a44, 0x6e5236, 0x9a7a50, 0x7a5a3a, 0x5a4a34, 0xa08860, 0x6a6a44, 0x8a5a3a, 0xb59a6a], pat: [0xcaa46a, 0x9a7a50], patLow: 0.04, patHigh: 0 },
-    velarium: false, banners: { tint: 0xb89868, count: 14 }, torch: 0.15, dress: ['palisade', 'hay'], horizon: 'hills',
+    velarium: false, banners: { tint: 0xb89868, count: 14 }, torch: 0.15, dress: ['palisade', 'hay'], horizon: 'hills', wx: { wind: 0.3, dusk: 0.1 },
     base: 'golden', sky: { sunElev: 58, sunAz: 195, sunColor: 0xfff0d8, sunInt: 3.1, hemiSky: 0xa8c0e8, hemiGround: 0xa89470, hemiInt: 1.4, fog: 0xc9d6dc, fogDensity: 0.0046, skyTop: 0x3f7ed0, skyMid: 0x9cc4ec, skyHor: 0xdfe6e0, glow: 0xfff0c0, cloudLit: 0xffffff, cloudShade: 0x8aa0c0, cloudAmt: 0.5, exposure: 0.96, sunSize: 0.03 },
   },
   capua: {
     name: 'Capua Amphitheatre', blurb: 'Weathered travertine at golden hour. The classic look.',
-    stone: { kind: 'stone', tint: 0xffffff }, sand: { kind: 'sand', tint: 0xffffff, decal: 'rake' }, gold: 0xb8803a,
-    crowd: { density: 1, rows: 99, pleb: null, pat: null, patLow: 0.55, patHigh: 0.07 }, velarium: true, banners: { tint: 0xffffff, count: 56 }, torch: 0, dress: [], horizon: null,
+    stone: { kind: 'stone', tint: 0xffe4d2 }, sand: { kind: 'sand', tint: 0xffffff, decal: 'rake' }, gold: 0xb8803a,
+    crowd: { density: 1, rows: 99, pleb: null, pat: null, patLow: 0.55, patHigh: 0.07 }, velarium: true, banners: { tint: 0xf0b898, count: 56 }, torch: 0, dress: [], horizon: null, wx: { wind: 0.15, dusk: 0.2 },
     base: 'golden', sky: { sunElev: 46, sunAz: 205 },
   },
   colosseum: {
     name: 'Colosseum, Rome', blurb: 'Gleaming marble, the imperial box and the velarium. Torchlit by night.',
     stone: { kind: 'marble', tint: 0xfff6e4 }, sand: { kind: 'sand', tint: 0xfff2dc, decal: 'medallion' }, gold: 0xe8c060,
     crowd: { density: 1, rows: 99, pleb: [0xe8dcc0, 0xd8c8a0, 0xc9a66b, 0xf0e8d4, 0xb58a5a, 0xe9e0cc, 0xa8784a], pat: [0xf4efe2, 0xf4efe2, 0x5a1f5e, 0x7a1f3c, 0xe9e0cc, 0xffffff], patLow: 0.8, patHigh: 0.2 },
-    velarium: true, velTint: 0xfff0d8, banners: { tint: 0xffffff, count: 56 }, torch: 0.1, dress: ['imperial'], horizon: 'city',
+    velarium: true, velTint: 0xfff0d8, banners: { tint: 0xffffff, count: 56 }, torch: 0.1, dress: ['imperial', 'statuesGold'], horizon: 'city', wx: { wind: 0.1, dusk: 0.2 },
     base: 'golden', sky: { sunElev: 42, sunAz: 215, sunColor: 0xffd9a8, hemiSky: 0xb0a8d8, sunInt: 3.4, exposure: 0.92 },
     night: { lights: true, exposure: 1.35, sunScale: 0.6 },
   },
@@ -157,7 +157,7 @@ export const THEMES = {
     name: 'Desert Pit', blurb: 'Bleached sandstone under a white sun. Thin, hardy crowd in robes.',
     stone: { kind: 'sandstone', tint: 0xffe6b4 }, sand: { kind: 'sand', tint: 0xfff0c8, decal: 'cracks' }, gold: 0xc8962f,
     crowd: { density: 0.62, rows: 99, pleb: [0xf0e4c8, 0xe0d0a8, 0xd8c090, 0xc8a878, 0xb89868, 0xf4ecd8, 0xa87850], pat: [0x8a2f2f, 0xe6d6a0], patLow: 0.12, patHigh: 0.03 },
-    velarium: true, velTint: 0xd8b078, banners: { tint: 0xe0b070, count: 40 }, torch: 0.05, dress: ['obelisks'], horizon: 'dunes',
+    velarium: true, velTint: 0xd8b078, banners: { tint: 0xe0b070, count: 40 }, torch: 0.05, dress: ['obelisks'], horizon: 'dunes', wx: { wind: 0.4, dusk: 0.1 },
     base: 'golden', sky: { sunElev: 66, sunAz: 200, sunColor: 0xfff4dc, sunInt: 3.9, hemiSky: 0xd8c8a8, hemiGround: 0xd9b078, hemiInt: 1.5, fog: 0xe8c48c, fogDensity: 0.0098, skyTop: 0x5a8ed0, skyMid: 0xe6c8a0, skyHor: 0xf8dca8, glow: 0xfff0b0, cloudAmt: 0.15, cloudLit: 0xfff4dc, cloudShade: 0xc8a878, exposure: 1.0 },
   },
   gaul: {
@@ -174,13 +174,34 @@ export const THEMES = {
     velarium: false, banners: { tint: 0xff9a60, count: 56 }, torch: 0.75, dress: ['embers'], horizon: 'volcano',
     base: 'dusk', sky: { sunElev: 14, sunAz: 250, sunColor: 0xff8a50, sunInt: 3.6, hemiSky: 0xb08090, hemiGround: 0xc07850, hemiInt: 2.0, fog: 0x6a3a34, fogDensity: 0.0062, skyTop: 0x2a1a30, skyMid: 0x7a3a34, skyHor: 0xff7a40, glow: 0xff5a28, cloudLit: 0xff9a60, cloudShade: 0x3a2028, cloudAmt: 0.8, stars: 0, exposure: 1.2, night: 0.3 },
   },
+  // ARENAS: alexandria and carthage (round 4). wx = ambient weather weights rolled on a clear forecast (see pickWeather); velPal = velarium sail colours.
+  alexandria: {
+    name: 'Alexandria Harbour Arena', blurb: 'Pale limestone above the harbour: blue water, white sails and a linen-clad crowd.',
+    stone: { kind: 'limestone', tint: 0xf4f8fc }, sand: { kind: 'sand', tint: 0xfff4e0, decal: 'mosaic' }, gold: 0xd8c68e,
+    crowd: { density: 0.92, rows: 99, pleb: [0xf4efe4, 0xe6ecf0, 0xd6e4ea, 0xcfdccf, 0xf0e6cc, 0xb8d0e0, 0xe8dcc4, 0xa8c4d4, 0xd8c8a8], pat: [0xffffff, 0x3a78b8, 0xe8eef4, 0x2e5e98], patLow: 0.5, patHigh: 0.1 },
+    velarium: true, velTint: 0xffffff, velPal: [0xf4f6f8, 0x3e7ab8], banners: { tint: 0x9cc8ec, count: 36 }, torch: 0.05, dress: ['sails', 'statuesMarble'], horizon: 'harbour', wx: { wind: 0.35, dusk: 0.15 },
+    base: 'golden', sky: { sunElev: 56, sunAz: 190, sunColor: 0xfff2dc, sunInt: 3.3, hemiSky: 0xb4d0f0, hemiGround: 0xc8b898, hemiInt: 1.45, fog: 0xcfe0ee, fogDensity: 0.0052, skyTop: 0x3a86d6, skyMid: 0x8cc4ec, skyHor: 0xe6f0f2, glow: 0xfff0d0, cloudAmt: 0.35, cloudLit: 0xffffff, cloudShade: 0x9ab4d0, exposure: 0.95 },
+    night: { lights: true, exposure: 1.3, sunScale: 0.6 },
+  },
+  carthage: {
+    name: 'Carthage Sun Arena', blurb: 'Honeyed sandstone, palms and striped awnings under a golden desert light.',
+    stone: { kind: 'sandstone', tint: 0xffd8a0 }, sand: { kind: 'sand', tint: 0xfff0cc, decal: 'ripples' }, gold: 0xd8a038,
+    crowd: { density: 0.78, rows: 99, pleb: [0xf2e6c8, 0xb83a2a, 0x2a4a8a, 0xe0a838, 0xf4f0e0, 0x7a3a2a, 0x3a7a6a, 0xc88a4a, 0x5a3a6a], pat: [0x2a3a8a, 0xf4f0e0, 0xb83030], patLow: 0.25, patHigh: 0.05 },
+    velarium: false, banners: { tint: 0xf0b060, count: 30 }, torch: 0.08, dress: ['palms', 'awnings'], horizon: 'oasis', wx: { wind: 0.3, dusk: 0.1 },
+    base: 'golden', sky: { sunElev: 62, sunAz: 195, sunColor: 0xffe2b0, sunInt: 3.7, hemiSky: 0xe0c8a0, hemiGround: 0xd8a868, hemiInt: 1.45, fog: 0xf0cc8c, fogDensity: 0.0085, skyTop: 0x4a86cc, skyMid: 0xe8c898, skyHor: 0xfad8a0, glow: 0xffe0a0, cloudAmt: 0.1, cloudLit: 0xfff0d0, cloudShade: 0xc8a070, exposure: 1.0 },
+    night: { lights: true, exposure: 1.35, sunScale: 0.6 },
+  },
 };
 export const THEME_IDS = Object.keys(THEMES);
+// ARENAS: the five league arenas the circuit names (event.theme). provincial and imperial are the sandpit and colosseum looks under their circuit ids.
+THEMES.provincial = THEMES.sandpit; THEMES.imperial = THEMES.colosseum;
+export const ARENA_THEME_IDS = ['provincial', 'capua', 'alexandria', 'carthage', 'imperial'];
 
 /** choose a theme id from the fight meta {weather, league, season, kind, festival}. Order: game mode, weather, festival, tournament, league. */
 export function pickTheme(m = {}) {
+  lastMeta = m;
   const lg = m.league | 0, season = m.season || 1, kind = m.kind || '', wx = m.weather || 'clear';
-  if (m.theme && THEMES[m.theme]) return m.theme;                 // explicit override (lab, screenshots, tests)
+  if (m.theme && THEMES[m.theme]) return ({ provincial: 'sandpit', imperial: 'colosseum' })[m.theme] || m.theme;   // explicit override (circuit event.theme, lab, tests); ARENAS: the circuit ids map to the canonical looks
   if (kind === 'pit') return 'etna';
   if (kind === 'horde') return 'desert';
   if (kind === 'bounty') return 'sandpit';
@@ -195,6 +216,19 @@ export function pickTheme(m = {}) {
 }
 /** true when this theme should be lit as a torchlit night (weather night, or the evening finals of an Imperial season) */
 export function themeNight(id, m = {}) { return (m.weather === 'night') || (id === 'colosseum' && m.kind === 'grand' && (m.season || 1) % 2 === 0); }
+
+/** ARENAS: ambient weather for a fight. An explicit forecast (meta.weather: rain, dust, heat, night, wind, dusk) always wins; on a clear forecast the theme rolls wind or dusk
+ *  from its wx weights, deterministic per (theme, season, title, kind, seed) so a replay of the same fight looks the same. Rain is never rolled: it needs the fight view's streaks. */
+export function pickWeather(id, m = {}) {
+  const wx = m.weather || 'clear'; if (wx !== 'clear') return wx;
+  const th = THEMES[id], w = th && th.wx; if (!w || m.ambient === false) return 'clear';
+  const str = id + ':' + (m.season || 1) + ':' + (m.title || '') + ':' + (m.kind || '') + ':' + (m.seed || m.week || 0);
+  let h = 2166136261; for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); }
+  const r = ((h >>> 0) % 10007) / 10007; let acc = 0;
+  for (const k of ['wind', 'dusk']) { acc += w[k] || 0; if (r < acc) return k; }
+  return 'clear';
+}
+let lastMeta = null;   // ARENAS: remembered by pickTheme so setTheme can roll the ambient weather without a new argument (fightview calls pickTheme(m) right before setTheme)
 
 function weatherSky(base, wx) {
   const p = Object.assign({}, base);
@@ -322,14 +356,14 @@ export function createArena({ crowd = 3700, density = 1, decalRes = 2048, seed =
     const ell = (cx, cy, rx, ry) => { dx.beginPath(); dx.ellipse(cx, cy, rx, ry, 0, 0, TAU); };
     if (style === 'snow') { dx.fillStyle = 'rgba(236,244,255,0.62)'; dx.fillRect(0, 0, DW, DH); }
     if (style === 'ash') { dx.fillStyle = 'rgba(30,18,18,0.28)'; dx.fillRect(0, 0, DW, DH); }
-    const rings = style === 'ruts' ? 14 : style === 'cracks' || style === 'ash' ? 0 : 46;
+    const rings = style === 'ruts' ? 14 : style === 'cracks' || style === 'ash' || style === 'ripples' ? 0 : 46;
     for (let i = 0; i < rings; i++) {
       const f = 0.12 + i * (style === 'ruts' ? 0.06 : 0.019) + rnd() * 0.004; const dark = i % 2;
       dx.strokeStyle = style === 'snow' ? (dark ? 'rgba(90,100,120,0.12)' : 'rgba(255,255,255,0.16)') : dark ? 'rgba(120,92,58,0.10)' : 'rgba(255,240,205,0.09)'; dx.lineWidth = Math.max(1.5, ppm * (dark ? 0.05 : 0.04));
       dx.beginPath(); dx.ellipse(DW / 2, DH / 2, (SA - 0.4) * f * ppm * 1.0, (SB - 0.4) * f * ppm * 1.0, 0, 0, TAU); dx.stroke();
     }
     // trampled patches: many soft darker blotches, dense near the centre, thinning out (fighting-circle wear)
-    const wear = style === 'snow' ? '96,84,72' : style === 'ash' ? '10,6,6' : style === 'cracks' ? '150,110,64' : '122,92,58';
+    const wear = style === 'snow' ? '96,84,72' : style === 'ash' ? '10,6,6' : style === 'cracks' || style === 'ripples' ? '150,110,64' : '122,92,58';
     const nWear = style === 'ruts' ? 130 : style === 'snow' ? 120 : 90;
     for (let i = 0; i < nWear; i++) {
       const a = rnd() * TAU, d = Math.pow(rnd(), 1.6) * 0.62, rx = (0.7 + rnd() * 1.9) * ppm, ry = rx * (0.45 + rnd() * 0.4);
@@ -354,6 +388,18 @@ export function createArena({ crowd = 3700, density = 1, decalRes = 2048, seed =
         dx.stroke();
       }
     }
+    if (style === 'mosaic') {   // ARENAS alexandria: a blue and cream mosaic ring with a dashed key pattern (alpha stays low, the sand must read as sand)
+      dx.strokeStyle = 'rgba(46,92,152,0.22)'; dx.lineWidth = ppm * 0.26; ell(DW / 2, DH / 2, SA * 0.6 * ppm, SB * 0.6 * ppm); dx.stroke();
+      dx.strokeStyle = 'rgba(244,236,214,0.26)'; dx.lineWidth = ppm * 0.12; ell(DW / 2, DH / 2, SA * 0.645 * ppm, SB * 0.645 * ppm); dx.stroke();
+      dx.setLineDash([ppm * 0.32, ppm * 0.32]); dx.strokeStyle = 'rgba(46,92,152,0.2)'; dx.lineWidth = ppm * 0.16; ell(DW / 2, DH / 2, SA * 0.69 * ppm, SB * 0.69 * ppm); dx.stroke(); dx.setLineDash([]);
+    }
+    if (style === 'ripples') {  // ARENAS carthage: long wind ripples across the sand, light crest and dark trough strokes
+      for (let i = 0; i < 150; i++) {
+        const y0 = rnd() * DH, x0 = rnd() * DW, len = (1.5 + rnd() * 4) * ppm, amp = ppm * (0.05 + rnd() * 0.1), crest = i % 2;
+        dx.strokeStyle = crest ? 'rgba(255,238,196,0.13)' : 'rgba(128,94,52,0.10)'; dx.lineWidth = Math.max(1.2, ppm * 0.05);
+        dx.beginPath(); dx.moveTo(x0, y0); for (let k = 1; k <= 8; k++) dx.lineTo(x0 + (len * k) / 8, y0 + Math.sin(k * 0.9 + i) * amp); dx.stroke();
+      }
+    }
     if (style === 'medallion') {
       dx.strokeStyle = 'rgba(242,193,78,0.22)'; dx.lineWidth = ppm * 0.18; ell(DW / 2, DH / 2, SA * 0.62 * ppm, SB * 0.62 * ppm); dx.stroke();
       dx.strokeStyle = 'rgba(122,48,110,0.16)'; dx.lineWidth = ppm * 0.45; ell(DW / 2, DH / 2, SA * 0.7 * ppm, SB * 0.7 * ppm); dx.stroke();
@@ -362,6 +408,27 @@ export function createArena({ crowd = 3700, density = 1, decalRes = 2048, seed =
     cg.addColorStop(0, style === 'ash' ? 'rgba(0,0,0,0.3)' : 'rgba(118,88,56,0.16)'); cg.addColorStop(1, 'rgba(118,88,56,0)'); dx.fillStyle = cg; dx.fillRect(DW / 2 - 7 * ppm, DH / 2 - 7 * ppm, 14 * ppm, 14 * ppm);
   }
   paintDecal('rake', rnd);
+  /** ARENAS: light rain on the sand: dark wet rim, sky-tinted puddles with a bright core, a faint overall darkening. Painted once per weather change (never per frame). */
+  function paintPuddles(r) {
+    for (let i = 0; i < 15; i++) {
+      const a = r() * TAU, d = Math.pow(r(), 0.8) * 0.78, cx = DW / 2 + Math.cos(a) * d * SA * ppm, cy = DH / 2 + Math.sin(a) * d * SB * ppm, rx = (0.55 + r() * 1.3) * ppm, ry = rx * (0.45 + r() * 0.35);
+      dx.save(); dx.translate(cx, cy); dx.rotate(r() * Math.PI); dx.scale(1, ry / rx);
+      let g = dx.createRadialGradient(0, 0, rx * 0.25, 0, 0, rx * 1.2); g.addColorStop(0, 'rgba(56,50,46,0.4)'); g.addColorStop(0.75, 'rgba(56,50,46,0.3)'); g.addColorStop(1, 'rgba(56,50,46,0)'); dx.fillStyle = g; dx.fillRect(-rx * 1.3, -rx * 1.3, rx * 2.6, rx * 2.6);
+      g = dx.createRadialGradient(-rx * 0.15, -rx * 0.15, 0, 0, 0, rx * 0.88); g.addColorStop(0, 'rgba(196,212,232,0.42)'); g.addColorStop(0.7, 'rgba(120,138,168,0.32)'); g.addColorStop(1, 'rgba(120,138,168,0)'); dx.fillStyle = g; dx.fillRect(-rx, -rx, rx * 2, rx * 2);
+      dx.restore();
+    }
+    dx.fillStyle = 'rgba(60,48,40,0.1)'; dx.fillRect(0, 0, DW, DH);
+  }
+  /** ARENAS: a hazard that ends leaves a mark on the sand (fire and pillar: scorch / crater with cracks, sand: a pale ring). One paint per hazard, no mipmaps involved. */
+  function hazardMark(kind, x, z, r) {
+    const [px, pz] = toPx(x, z), R0 = Math.max(1, r * ppm);
+    dx.save(); dx.translate(px, pz);
+    if (kind === 'fire' || kind === 'pillar') {
+      const g = dx.createRadialGradient(0, 0, 0, 0, 0, R0 * 1.05); g.addColorStop(0, kind === 'fire' ? 'rgba(18,12,8,0.5)' : 'rgba(40,30,22,0.42)'); g.addColorStop(0.62, 'rgba(18,12,8,0.3)'); g.addColorStop(1, 'rgba(18,12,8,0)'); dx.fillStyle = g; dx.fillRect(-R0 * 1.1, -R0 * 1.1, R0 * 2.2, R0 * 2.2);
+      if (kind === 'pillar') { dx.strokeStyle = 'rgba(30,20,14,0.5)'; dx.lineWidth = Math.max(1.2, ppm * 0.05); dx.lineCap = 'round'; for (let i = 0; i < 7; i++) { const a = i * 0.9 + x, l = R0 * (0.5 + 0.4 * ((i * 37) % 10) / 10); dx.beginPath(); dx.moveTo(Math.cos(a) * R0 * 0.1, Math.sin(a) * R0 * 0.1); dx.lineTo(Math.cos(a + 0.1) * l, Math.sin(a + 0.1) * l); dx.stroke(); } }
+    } else if (kind === 'sand') { dx.strokeStyle = 'rgba(255,236,190,0.12)'; dx.lineWidth = Math.max(1.5, ppm * 0.12); dx.beginPath(); dx.arc(0, 0, R0 * 0.8, 0, TAU); dx.stroke(); }
+    dx.restore(); decalDirty = true;
+  }
   let decalDirty = true;
   const decalGeo = sandGeo.clone(); {
     const p = decalGeo.attributes.position, uv = decalGeo.attributes.uv;
@@ -487,12 +554,23 @@ export function createArena({ crowd = 3700, density = 1, decalRes = 2048, seed =
   bronzeParts.push(...bakeIM(torchMesh));
   // brazier tripods flanking gates
   const brGeo = mergeGeos([(() => { const c = new THREE.CylinderGeometry(0.42, 0.2, 0.34, 10); c.translate(0, 1.15, 0); return c; })(), ...[0, 1, 2].map((k) => { const c = new THREE.CylinderGeometry(0.03, 0.04, 1.2, 5); c.translate(0.22, 0.6, 0); c.rotateY((k / 3) * TAU); return c; })]);
-  const brPos = [[SA - 2.6, 2.7], [SA - 2.6, -2.7], [-SA + 2.6, 2.7], [-SA + 2.6, -2.7]];
-  const brMesh = new THREE.InstancedMesh(brGeo, bronzeMat, 4);
+  const brPos = [[SA - 2.6, 2.7], [SA - 2.6, -2.7], [-SA + 2.6, 2.7], [-SA + 2.6, -2.7], [12, 9.6], [-12, 9.6], [12, -9.6], [-12, -9.6], [0, 12.6], [0, -12.6]];   // ARENAS: 4 gate braziers + 6 rim braziers (lit only at dusk and night)
+  const brMesh = new THREE.InstancedMesh(brGeo, bronzeMat, brPos.length);
+  const EXTRA_FROM = flamePts.length + 4;
   brPos.forEach(([x, z], i) => { brMesh.setMatrixAt(i, new THREE.Matrix4().makeTranslation(x, 0, z)); flamePts.push({ x, y: 1.3, z, s: 1.7 }); });
   bronzeParts.push(...bakeIM(brMesh));
   { const bm = new THREE.Mesh(mergeGeos(bronzeParts), bronzeMat); bm.name = 'bronze_fittings'; bm.castShadow = !lite; group.add(bm); }
   const flames = createFlames(flamePts, { glowScale: 3.4 }); group.add(flames.group);
+  // ARENAS: the six rim braziers burn only when the light drops. Their flame instances (halo i, body n+i) are kept and swapped for a zero matrix in daylight.
+  const FN = flamePts.length, ZEROM = new THREE.Matrix4().makeScale(0, 0, 0), rimM = [];
+  for (let i = EXTRA_FROM; i < FN; i++) { const a = new THREE.Matrix4(), b = new THREE.Matrix4(); flames.flame.getMatrixAt(i, a); flames.flame.getMatrixAt(FN + i, b); rimM.push([i, a, b]); }
+  let rimOn = null;
+  function rimBraziers(on) {
+    if (rimOn === on) return; rimOn = on;
+    for (const [i, a, b] of rimM) { flames.flame.setMatrixAt(i, on ? a : ZEROM); flames.flame.setMatrixAt(FN + i, on ? b : ZEROM); }
+    flames.flame.instanceMatrix.needsUpdate = true;
+  }
+  rimBraziers(false);
 
   // ---------------- banners (vertex sway) + masts ----------------
   const banGeo = new THREE.PlaneGeometry(1.4, 3.6, 3, 12); banGeo.translate(0, -1.8, 0);
@@ -547,6 +625,11 @@ export function createArena({ crowd = 3700, density = 1, decalRes = 2048, seed =
     vBody: 'transformed.y += aSway * uWind * (sin(uTime*0.9 + position.x*0.13 + position.z*0.11) * 0.28 + sin(uTime*1.9 + position.x*0.31) * 0.08);',
   });
   velMat.emissiveIntensity = 0.55;
+  let curVelPal = '';
+  function velPalette(a, b) {   // ARENAS: sail colours per theme (default cream and terracotta)
+    const key = a + ',' + b; if (key === curVelPal) return; curVelPal = key; const A = C(a), B = C(b), col = velGeo.attributes.color, per = col.count / SAILS;
+    for (let i = 0; i < col.count; i++) { const c = Math.floor(i / per) % 2 === 0 ? A : B; col.setXYZ(i, c.r, c.g, c.b); } col.needsUpdate = true;
+  }
   const velarium = new THREE.Mesh(velGeo, velMat); velarium.castShadow = true; velarium.receiveShadow = true; velarium.name = 'velarium'; group.add(velarium);
 
   // ---------------- crowd: ONE InstancedMesh, animated in the vertex shader ----------------
@@ -722,6 +805,7 @@ export function createArena({ crowd = 3700, density = 1, decalRes = 2048, seed =
     if (kind === 'wood') t = makeStoneTexture(512, { bx: 2, by: 10, base: 0x9a6a3c, tint: 0x6a4222, mortar: 0x24120a, seed: 5 });
     else if (kind === 'marble') { t = makeMarbleTexture(512, 21); t.map.repeat.set(2, 2); t.bump.repeat.set(2, 2); }
     else if (kind === 'sandstone') t = makeStoneTexture(512, { bx: 3, by: 5, base: 0xe6c88c, tint: 0xc89a58, mortar: 0x8a6a40, seed: 9 });
+    else if (kind === 'limestone') t = makeStoneTexture(512, { bx: 3, by: 6, base: 0xf2eee2, tint: 0xd2ccbc, mortar: 0x9a9484, seed: 23 });   // ARENAS alexandria: pale whitewashed limestone
     else if (kind === 'snowstone') t = makeStoneTexture(512, { bx: 4, by: 6, base: 0xe8eef8, tint: 0xaebcd4, mortar: 0x6a7890, seed: 13 });
     else t = makeStoneTexture(512, { bx: 4, by: 6, base: 0x8a7870, tint: 0x4e3e3a, mortar: 0x2a1a18, seed: 17 });   // basalt
     t.map.anisotropy = t.bump.anisotropy = 8; return t;
@@ -772,8 +856,9 @@ export function createArena({ crowd = 3700, density = 1, decalRes = 2048, seed =
     parts.push(colored(boxGeo(7.6, 0.3, 3.8, 0, 3.85, 0), 0x5a1f5e), colored(boxGeo(7.8, 0.12, 4.0, 0, 4.06, 0), 0xf2c14e), colored(boxGeo(7.0, 1.7, 0.1, 0, 2.0, -1.65), 0x7a1f3c));
     const gm = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.55, metalness: 0.25 });
     const mesh = new THREE.Mesh(mergeGeos(parts), gm); mesh.castShadow = !lite; mesh.receiveShadow = true;
-    const row = rowsInfo[6];
-    [Math.PI / 2, -Math.PI / 2].forEach((th) => { const m = mesh.clone(); m.applyMatrix4(ringMatrix(row.d + 0.3, th, row.y + 0.02, { inward: true })); g.add(m); });
+    const row = rowsInfo[6], bg = mesh.geometry;
+    const both = mergeGeos([Math.PI / 2, -Math.PI / 2].map((th) => bg.clone().applyMatrix4(ringMatrix(row.d + 0.3, th, row.y + 0.02, { inward: true }))));   // ARENAS: both boxes baked into ONE mesh (was two draw calls)
+    const m = new THREE.Mesh(both, gm); m.castShadow = !lite; m.receiveShadow = true; g.add(m);
     return g;
   };
   dressBuild.obelisks = () => {
@@ -789,13 +874,76 @@ export function createArena({ crowd = 3700, density = 1, decalRes = 2048, seed =
     arcThetas(dEnd + 0.4, 64, 0.5).thetas.forEach((th) => { const q = P(dEnd + 0.4, th), s = 0.45 + r() * 0.6; list.push(new THREE.Matrix4().compose(new THREE.Vector3(q[0], yTop, q[1]), new THREE.Quaternion(), new THREE.Vector3(s * 1.6, s * 0.4, s))); });
     const m = instRing(lump, sm, list, 'snowdrifts'); m.receiveShadow = true; return m;
   };
+
+  // ---- ARENAS dressing: cloth (awnings, sails, palms) and statues. Each key is ONE merged mesh = one draw call; a theme has at most two keys.
+  let clothMat = null;
+  const getCloth = () => clothMat || (clothMat = patchMaterial(new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide }), {
+    key: 'arenacloth', uniforms: { uTime: U.uTime, uWind: U.uWind },
+    vPars: 'attribute float aSway; uniform float uTime, uWind;',
+    vBody: 'float ph = position.x * 0.21 + position.z * 0.17; transformed.x += aSway * uWind * sin(uTime * 1.7 + ph) * 0.3; transformed.z += aSway * uWind * cos(uTime * 1.3 + ph * 1.7) * 0.26; transformed.y += aSway * uWind * sin(uTime * 2.3 + ph * 2.0) * 0.07;',
+  }));
+  /** indexed cloth grid: pos(u,v) -> [x,y,z], col(u,v) -> hex, sway(u,v) -> 0..1 */
+  const clothGrid = (nu, nv, pos, col, sway) => {
+    const P3 = [], CO = [], SW = [], IX = [], cc = new THREE.Color();
+    for (let j = 0; j <= nv; j++) for (let i = 0; i <= nu; i++) { const u = i / nu, v = j / nv; P3.push(...pos(u, v)); cc.setHex(col(u, v, i, j)); CO.push(cc.r, cc.g, cc.b); SW.push(sway(u, v)); }
+    for (let j = 0; j < nv; j++) for (let i = 0; i < nu; i++) { const a = j * (nu + 1) + i, b = a + 1, c = a + nu + 1, d2 = c + 1; IX.push(a, c, b, b, c, d2); }
+    const g = new THREE.BufferGeometry(); g.setIndex(IX); g.setAttribute('position', new THREE.Float32BufferAttribute(P3, 3)); g.setAttribute('color', new THREE.Float32BufferAttribute(CO, 3)); g.setAttribute('aSway', new THREE.Float32BufferAttribute(SW, 1)); g.computeVertexNormals(); return g;
+  };
+  const clothMesh = (geos, name) => { const m = new THREE.Mesh(mergeGeos(geos), getCloth()); m.name = name; m.frustumCulled = false; m.castShadow = !lite; m.receiveShadow = true; return m; };
+  dressBuild.awnings = () => {   // carthage: 16 striped awnings over the upper rows, sagging, rippling in the wind
+    const pals = [[0xeee6d0, 0xb83a2a], [0xeee6d0, 0x2a4a8a], [0xeee6d0, 0xc88a2a]], geos = [], rFront = rowsInfo[11], dB = dEnd + 0.3;
+    for (let k = 0; k < 16; k++) {
+      const c0 = (k + 0.5) / 16 * TAU, pal = pals[k % 3], span = 0.14;
+      geos.push(clothGrid(8, 4, (u, v) => { const th = c0 + (u - 0.5) * 2 * span, d = lerp(rFront.d, dB, v), q = P(d, th); return [q[0], lerp(rFront.y + 2.5, yTop + 3.3, v) - Math.sin(Math.PI * u) * 0.28 * (1 - 0.5 * v), q[1]]; },
+        (u, v, i) => pal[i % 2], (u, v) => 0.25 + 0.75 * (1 - v) * Math.sin(Math.PI * u) + 0.1));
+    }
+    return clothMesh(geos, 'awnings');
+  };
+  dressBuild.sails = () => {   // alexandria: white lateen sails with a blue hem on every second facade mast, billowing outward
+    const geos = [], th = arcThetas(FD - 0.5, 28, 0).thetas;
+    for (let k = 0; k < th.length; k += 2) {
+      const t0 = th[k], q0 = P(FD - 0.5, t0), n = NRM(FD - 0.5, t0), tx = -n[1], tz = n[0], w = 3.4;
+      geos.push(clothGrid(5, 8, (u, v) => { const wd = w * (1 - v) + 0.05, a = -0.1 + u * wd + 0.15 * v, bil = Math.sin(Math.PI * u) * 0.55 * (1 - v * 0.8); return [q0[0] + tx * a + n[0] * (0.2 + bil), FH + 0.7 + v * 5.6, q0[1] + tz * a + n[1] * (0.2 + bil)]; },
+        (u, v) => (v < 0.1 ? 0x3e7ab8 : 0xf6f8fa), (u, v) => 0.3 + 0.7 * v));
+    }
+    return clothMesh(geos, 'sails');
+  };
+  dressBuild.palms = () => {   // carthage: 24 date palms on the promenade, trunk bent and ringed, nine drooping fronds
+    const trunk = () => { const NS = 6, NR = 6, P3 = [], CO = [], SW = [], IX = [], cc = new THREE.Color();
+      for (let j = 0; j <= NR; j++) for (let i = 0; i < NS; i++) { const v = j / NR, a = (i / NS) * TAU, r = 0.27 - 0.1 * v + (j % 2 ? 0.03 : 0); P3.push(Math.cos(a) * r + 0.9 * v * v, v * 5.6, Math.sin(a) * r); cc.setHex(j % 2 ? 0x6a4a2a : 0x84603a); CO.push(cc.r, cc.g, cc.b); SW.push(0.12 * v * v); }
+      for (let j = 0; j < NR; j++) for (let i = 0; i < NS; i++) { const a = j * NS + i, b = j * NS + (i + 1) % NS, c = a + NS, d2 = b + NS; IX.push(a, c, b, b, c, d2); }
+      const g = new THREE.BufferGeometry(); g.setIndex(IX); g.setAttribute('position', new THREE.Float32BufferAttribute(P3, 3)); g.setAttribute('color', new THREE.Float32BufferAttribute(CO, 3)); g.setAttribute('aSway', new THREE.Float32BufferAttribute(SW, 1)); g.computeVertexNormals(); return g; };
+    const frond = (ang, len) => clothGrid(2, 5, (u, v) => { const wd = (u - 0.5) * 0.95 * Math.sin(Math.PI * (0.15 + 0.85 * v) * 0.95) * (1 - 0.25 * v), L = v * len, ca = Math.cos(ang), sa = Math.sin(ang); return [0.9 + ca * L - sa * wd, 5.6 + Math.sin(v * 2.0) * 0.75 - v * v * 1.7 + Math.abs(u - 0.5) * -0.35, sa * L + ca * wd]; },
+      (u, v) => (v > 0.6 ? 0x4f7a2e : 0x3e6a26), (u, v) => 0.45 + 0.55 * v);
+    const base = [trunk()]; for (let i = 0; i < 9; i++) base.push(frond((i / 9) * TAU + 0.3, 2.9 + (i % 3) * 0.3));
+    const bg = mergeGeos(base), geos = [], thp = arcThetas(dEnd + 0.9, 24, 0.3).thetas, m4 = new THREE.Matrix4();
+    for (let k = 0; k < thp.length; k++) { const q = P(dEnd + 0.9, thp[k]), sc = 0.85 + ((k * 7) % 5) * 0.08; m4.compose(_p.set(q[0], yTop, q[1]), _q.setFromEuler(_e.set(0, k * 1.7, 0)), _s.set(sc, sc, sc)); geos.push(bg.clone().applyMatrix4(m4)); }
+    return clothMesh(geos, 'palms');
+  };
+  const statueBuild = (name, figure, plinth) => () => {   // 16 statues on plinths along the promenade (imperial: gilded, alexandria: white marble)
+    const lin = (g, hex) => colored(g, hex);
+    const one = mergeGeos([lin(boxGeo(1.0, 1.1, 1.0, 0, 0.55, 0), plinth), lin(boxGeo(1.2, 0.18, 1.2, 0, 1.19, 0), plinth), lin(new THREE.CylinderGeometry(0.2, 0.3, 1.5, 6).translate(0, 2.03, 0), figure), lin(new THREE.IcosahedronGeometry(0.17, 0).translate(0, 2.95, 0), figure),
+      lin(new THREE.BoxGeometry(0.1, 0.85, 0.1).rotateZ(-0.5).translate(0.36, 2.55, 0), figure), lin(new THREE.BoxGeometry(0.05, 2.4, 0.05).translate(-0.34, 2.45, 0.06), figure)]);
+    const geos = [], m4 = new THREE.Matrix4(), thp = arcThetas(dEnd + 0.5, 16, 0.5).thetas;
+    for (let k = 0; k < thp.length; k++) { const n = NRM(dEnd + 0.5, thp[k]), q = P(dEnd + 0.5, thp[k]); m4.compose(_p.set(q[0], yTop, q[1]), _q.setFromEuler(_e.set(0, Math.atan2(-n[0], -n[1]), 0)), _s.set(1.1, 1.1, 1.1)); geos.push(one.clone().applyMatrix4(m4)); }
+    const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: figure === 0xf2d27a ? 0.34 : 0.55, metalness: figure === 0xf2d27a ? 0.5 : 0.05 });
+    const m = new THREE.Mesh(mergeGeos(geos), mat); m.name = name; m.castShadow = !lite; m.receiveShadow = true; return m;
+  };
+  dressBuild.statuesGold = statueBuild('statues_gold', 0xf2d27a, 0xe8dcc0);
+  dressBuild.statuesMarble = statueBuild('statues_marble', 0xf6f4ee, 0xe2ddd2);
   const particles = {};
   dressBuild.snowfall = () => { const f = createDustMotes({ count: lite ? 140 : 340, min: new THREE.Vector3(-30, 0.3, -22), max: new THREE.Vector3(30, 24, 22), size: 3.4, color: 0xffffff, wind: new THREE.Vector3(0.7, -2.2, 0.3), intensity: 2.0, seed: 5 }); particles.snowfall = f; return f.points; };
   dressBuild.embers = () => { const f = createDustMotes({ count: lite ? 90 : 220, min: new THREE.Vector3(-30, 0.3, -22), max: new THREE.Vector3(30, 26, 22), size: 2.6, color: 0xff8a30, wind: new THREE.Vector3(0.5, 1.6, 0.2), intensity: 2.6, seed: 9 }); particles.embers = f; return f.points; };
   let lights = null;
-  function nightLights(on) {
+  function nightLights(on, k = 1) {   // ARENAS: k scales the three warm lights (dusk 0.65, night 1)
     if (lite) return; if (!lights) { lights = new THREE.Group(); lights.name = 'torch_lights'; [[-11, 6, 0], [11, 6, 0], [0, 6, 8]].forEach(([x, y, z]) => { const l = new THREE.PointLight(0xffa860, 36, 50, 1.6); l.position.set(x, y, z); lights.add(l); }); group.add(lights); }
-    lights.visible = on;
+    lights.visible = on; for (const l of lights.children) l.intensity = 36 * k;
+  }
+  // ARENAS: sand blown across the floor in a gale (one Points draw call, only while the weather is wind or dust)
+  let windFx = null;
+  function windSand(on, hex) {
+    if (on && !windFx) { windFx = createDustMotes({ count: lite ? 120 : 280, min: new THREE.Vector3(-30, 0.15, -22), max: new THREE.Vector3(30, 5.5, 22), size: 2.9, color: 0xf0d8a0, wind: new THREE.Vector3(12, 0.1, 3.2), intensity: 1.3, seed: 21 }); windFx.points.name = 'sandwind'; group.add(windFx.points); }
+    if (windFx) { windFx.points.visible = on; if (on) windFx.setSunColor(hex); }
   }
 
   // ---- distant horizon silhouettes (one merged unlit mesh each; they show when the camera is high or the shot is wide) ----
@@ -820,35 +968,59 @@ export function createArena({ crowd = 3700, density = 1, decalRes = 2048, seed =
       const cr = new THREE.CircleGeometry(14, 12); cr.rotateX(-Math.PI / 2); cr.translate(VX, 127, VZ); parts.push(colored(cr, 0xffa040));
       for (let i = 0; i < 14; i++) cone(26 + r() * 20, 10 + r() * 14, 6, (i / 14) * TAU, 270 + r() * 30, 0x1a1214, 0x3a2220, 0.8);
     }
+    else if (kind === 'harbour') {   // ARENAS alexandria: a half ring of sea (turquoise to haze) with sails and the Pharos, whitewashed city on the other half
+      const sea = new THREE.RingGeometry(190, 470, 72, 1, 0, Math.PI); sea.rotateX(-Math.PI / 2); sea.translate(0, -3, 0);
+      const SA0 = new THREE.Color(0x58c0cc), SB0 = new THREE.Color(0x2f78b0), SC0 = new THREE.Color(0xa4cde8), tmp = new THREE.Color();
+      parts.push(colorize(sea, (x, y, z) => { const t = Math.min(1, (Math.hypot(x, z) - 190) / 280); if (t < 0.45) tmp.copy(SA0).lerp(SB0, t / 0.45); else tmp.copy(SB0).lerp(SC0, (t - 0.45) / 0.55); return [tmp.r, tmp.g, tmp.b]; }));
+      const lh = [colored(new THREE.BoxGeometry(16, 30, 16).translate(0, 11, 0), 0xe8e2d2), colored(new THREE.CylinderGeometry(6, 8, 26, 8).translate(0, 39, 0), 0xf0ebdd), colored(new THREE.CylinderGeometry(3.4, 5, 14, 8).translate(0, 59, 0), 0xe8e2d2), colored(new THREE.BoxGeometry(5, 4, 5).translate(0, 68, 0), 0xffd080)];
+      parts.push(mergeGeos(lh).translate(40, 0, -300));
+      for (let i = 0; i < 20; i++) {
+        const a = 0.12 + r() * (Math.PI - 0.24), dist = 215 + r() * 120, bx = Math.cos(a) * dist, bz = -Math.sin(a) * dist, hull = colored(new THREE.BoxGeometry(7, 1.6, 2.2).translate(0, -2.2, 0), 0x6a4a30), sail = new THREE.ConeGeometry(2.6, 9, 3, 1, true); sail.scale(1, 1, 0.12); sail.translate(0.5, 2.8, 0);
+        const bg = mergeGeos([hull, colored(sail, i % 3 ? 0xf4f2ea : 0xe8dcc0)]); bg.rotateY(r() * 3); bg.translate(bx, 0, bz); parts.push(bg);
+      }
+      for (let i = 0; i < 44; i++) { const a = (i / 44) * Math.PI + r() * 0.05, dist = 205 + r() * 50, hgt = 6 + r() * 16, w = 10 + r() * 12, b = new THREE.BoxGeometry(w, hgt, w * 0.8); b.translate(0, hgt / 2 - 4, 0); b.rotateY(a); b.translate(Math.cos(a) * dist, 0, Math.sin(a) * dist); const tc = [0xf4f0e6, 0xe8e0d0, 0xdcc9a8, 0xf0ebdd][i % 4], A = new THREE.Color(tc), B = A.clone().multiplyScalar(0.6); parts.push(colorize(b, (x, y) => { const k = Math.min(1, Math.max(0, (y + 4) / hgt)); return [B.r + (A.r - B.r) * k, B.g + (A.g - B.g) * k, B.b + (A.b - B.b) * k]; })); if (i % 5 === 0) { const dm = new THREE.SphereGeometry(w * 0.35, 8, 4, 0, TAU, 0, Math.PI / 2); dm.translate(0, hgt - 4, 0); dm.rotateY(a); dm.translate(Math.cos(a) * dist, 0, Math.sin(a) * dist); parts.push(colored(dm, 0x3e7ab8)); } }
+    } else if (kind === 'oasis') {   // ARENAS carthage: golden dunes, a ring of distant date palms, the stepped mud-brick Byrsa hill
+      for (let i = 0; i < 18; i++) cone(66 + r() * 40, 12 + r() * 12, 8, (i / 18) * TAU + r() * 0.2, 235 + r() * 40, 0xd8a458, 0xf0d298, 0.8);
+      for (let i = 0; i < 38; i++) { const a = r() * TAU, dist = 205 + r() * 70, trunk = new THREE.CylinderGeometry(0.5, 0.8, 14, 5); trunk.translate(0, 3, 0); const crown = new THREE.ConeGeometry(5.5, 3.2, 6); crown.scale(1, 0.7, 1); crown.translate(0, 11.5, 0); const pg = mergeGeos([colored(trunk, 0x6a4a2a), colored(crown, 0x4a7a2c)]); pg.translate(Math.cos(a) * dist, 0, Math.sin(a) * dist); parts.push(pg); }
+      const hl = [0, 1, 2].map((k) => colored(new THREE.BoxGeometry(34 - k * 9, 12, 26 - k * 7).translate(0, 2 + k * 11, 0), [0xd8b078, 0xe0bc84, 0xe8c890][k])); parts.push(mergeGeos(hl).translate(-90, 0, 290));
+    }
     const geo = mergeGeos(parts), m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ vertexColors: true, fog: false, side: THREE.DoubleSide }));
     m.name = 'horizon_' + kind; m.frustumCulled = false; m.renderOrder = -5; return m;
   }
 
-  let curTheme = 'capua', curDecal = 'rake', curNight = false;
-  /** apply a theme. ctx: {rig, scene, sky, renderer, wx, night, seed}. Returns the sky preset it applied (null when no lighting rig was given). */
+  let curTheme = 'capua', curDecal = 'rake', curNight = false, curWet = false, curWx = 'clear';
+  /** apply a theme. ctx: {rig, scene, sky, renderer, wx, night, seed, ambient}. wx: clear | rain | dust | heat | night | wind | dusk. A clear forecast rolls wind or dusk from the theme's weights
+   *  (pickWeather, using the meta pickTheme just saw) unless ctx.ambient === false. Returns the sky preset it applied (null when no lighting rig was given). */
   function setTheme(id, ctx = {}) {
     const th = THEMES[id] || THEMES.capua; curTheme = THEMES[id] ? id : 'capua';
-    const st = stoneTex(th.stone.kind); stoneMat.map = st.map; stoneMat.bumpMap = st.bump; stoneMat.color.setHex(th.stone.tint);
-    const sa = sandTexFor(th.sand.kind); sandMat.map = sa.map; sandMat.bumpMap = sa.bump; sandMat.color.setHex(th.sand.tint);
-    if (curDecal !== th.sand.decal) { paintDecal(th.sand.decal, lcg(1234 + curTheme.length)); curDecal = th.sand.decal; decalDirty = true; }
+    let wx = ctx.wx || 'clear'; if (wx === 'clear' && lastMeta && ctx.ambient !== false) wx = pickWeather(curTheme, lastMeta);
+    curWx = wx; const wet = wx === 'rain', dusk = wx === 'dusk', windy = wx === 'wind' || wx === 'dust';
+    const st = stoneTex(th.stone.kind); stoneMat.map = st.map; stoneMat.bumpMap = st.bump; stoneMat.color.setHex(th.stone.tint); stoneMat.roughness = wet ? 0.72 : 0.93;
+    const sa = sandTexFor(th.sand.kind); sandMat.map = sa.map; sandMat.bumpMap = sa.bump; sandMat.color.setHex(th.sand.tint); if (wet) sandMat.color.multiplyScalar(0.74); sandMat.roughness = wet ? 0.55 : 1;   // wet sand: darker and glossier
+    if (curDecal !== th.sand.decal || curWet !== wet) { const r0 = lcg(1234 + curTheme.length); paintDecal(th.sand.decal, r0); if (wet) paintPuddles(lcg(777 + curTheme.length)); curDecal = th.sand.decal; curWet = wet; decalDirty = true; }
     decalMat.emissiveMap = decalTex; decalMat.emissive.setHex(th.glowSand ? 0xffffff : 0x000000); decalMat.emissiveIntensity = th.glowSand ? 1.0 : 0;
     bronzeMat.color.setHex(th.gold);
-    velarium.visible = !!th.velarium; velMat.color.setHex(th.velTint || 0xffffff);
+    velarium.visible = !!th.velarium; velMat.color.setHex(th.velTint || 0xffffff); velPalette(...(th.velPal || [0xf3e6c8, 0xc4663f]));
     banMat.color.setHex(th.banners.tint); thinBanners(th.banners.count);
     themeDensity = th.crowd.density; dressCrowd(th.crowd, 4242 + curTheme.length * 31, th.dress); recount();
     for (const k of Object.keys(dressG)) dressG[k].visible = false;
     for (const k of th.dress) { if (!dressG[k]) { dressG[k] = dressBuild[k](); group.add(dressG[k]); } dressG[k].visible = true; }
     for (const k of Object.keys(hz)) hz[k].visible = false;
     if (th.horizon) { if (!hz[th.horizon]) { hz[th.horizon] = buildHorizon(th.horizon); group.add(hz[th.horizon]); } hz[th.horizon].visible = true; }
-    const night = !!ctx.night || ctx.wx === 'night'; curNight = night; nightLights(night && !!th.night && th.night.lights);
+    U.uWind.value = wx === 'wind' ? 2.6 : wx === 'dust' ? 1.9 : 1;   // banners, awnings, sails and palms fly in the wind
+    windSand(windy, wx === 'dust' ? 0xd9a066 : th.sand.tint);
+    const night = !!ctx.night || wx === 'night'; curNight = night || dusk;
+    nightLights((night && !!th.night && th.night.lights) || (dusk && !night), night ? 1 : 0.65); rimBraziers(night || dusk);
     let preset = null;
     if (ctx.rig && ctx.scene && ctx.sky) {
       let p;
       if (night) { p = Object.assign({}, TOD.night, th.night && th.night.exposure ? { exposure: th.night.exposure } : {}); if (th.night && th.night.sunScale) p.sunInt *= th.night.sunScale; }
-      else p = weatherSky(Object.assign({}, TOD[th.base], th.sky), ctx.wx || 'clear');
+      else if (dusk) p = Object.assign({}, TOD.dusk, { sunElev: 15, sunAz: 238, sunInt: 2.7, hemiSky: 0x7f86c4, hemiGround: 0xa86a50, hemiInt: 1.4, exposure: 1.08, night: 0.7, fogDensity: Math.max(TOD.dusk.fogDensity, (th.sky && th.sky.fogDensity) || 0) });
+      else p = weatherSky(Object.assign({}, TOD[th.base], th.sky), wx);
       preset = applyTOD(p, { rig: ctx.rig, scene: ctx.scene, sky: ctx.sky, renderer: ctx.renderer });
     }
     api.setNight(Math.max(preset ? preset.night || 0 : night ? 1 : 0, th.torch || 0));
+    try { if (typeof CustomEvent === 'function' && globalThis.dispatchEvent) globalThis.dispatchEvent(new CustomEvent('lm3d-arena', { detail: { theme: curTheme, wx, night: night || dusk } })); } catch (e) { /* audio is optional */ }   // ARENAS: audio.js picks the ambience from this
     return preset;
   }
 
@@ -858,12 +1030,15 @@ export function createArena({ crowd = 3700, density = 1, decalRes = 2048, seed =
 
   function update(t, dt) {
     U.uTime.value = t;
-    flames.update(t, nightV);
+    flames.update(t, nightV); haz.update(t);
     for (const k in particles) if (dressG[k] && dressG[k].visible) particles[k].update(t, Math.min(2, globalThis.devicePixelRatio || 1));
+    if (windFx && windFx.points.visible) windFx.update(t, Math.min(2, globalThis.devicePixelRatio || 1));
     if (decalDirty && t - lastDecalUp > 0.12) { decalTex.needsUpdate = true; decalDirty = false; lastDecalUp = t; } // throttled upload
   }
   let lastDecalUp = -1;
   let nightV = 0;
+  // ARENAS: pooled hazard visuals (fire, spikes, sand, trapdoor, pillar), see createHazardFX in envfx.js for the list contract and the cost
+  const haz = createHazardFX({ max: 6, lite, onEnd: hazardMark }); group.add(haz.group);
   const api = {
     group, DIM, uniforms: U, stoneMat, crowdMesh, velarium, flames, decalCanvas: dc,
     shadowHint: { center: new THREE.Vector3(0, 6, 0), radius: 50 },
@@ -871,7 +1046,9 @@ export function createArena({ crowd = 3700, density = 1, decalRes = 2048, seed =
     update(t, dt) { update(t, dt); },
     setHype(v) { U.uHype.value = v; }, setWave(v) { U.uWave.value = v; }, setWind(v) { U.uWind.value = v; },
     setGate, setNight(n) { nightV = n; setNight(n); },
-    setTheme, get theme() { return curTheme; }, THEMES,
+    setTheme, get theme() { return curTheme; }, get weather() { return curWx; }, THEMES,
+    /** hazards (sim plane coordinates, see createHazardFX): setHazards(list) on change, updateHazards(list, t) every frame (t = the sim clock the items' t0 use) */
+    setHazards(list) { haz.setHazards(list); }, updateHazards(list, t) { haz.updateHazards(list, t); }, hazardStats: () => haz.stats(), hazardFX: haz,
     setDensity(d) { tierDensity = d; recount(); },
     stampFootprint, scuff,
     /** Paint a walking trail of footprints between two points (lab / intro helper). */

@@ -1,5 +1,6 @@
 // Roster screen: every fighter at a glance, quick weekly activity assignment, planner presets, kitchen menu, recruit entry.
 import { h, U, D, L, fmt, portrait, injectCss, addCss, clearTips, chip, sec, wide, actDesc, activityGrid, empty, note } from './ui_common.js';
+// FIGHTERS: barracks web summary + origin / age / quirk chips on the cards
 
 const CSS = `
 .lm-r-top{display:grid;gap:10px;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));align-items:stretch}
@@ -118,6 +119,11 @@ export function open(ctx) {
     ]));
 
     const chips = h('div', 'lm-chips');
+    if (lm.fEnsure && lm.fEnsure(S, g).q) { // FIGHTERS
+      const tt = lm.fTitleDef(g.rn), sg = lm.fStage(g); if (tt) chips.append(chip(tt.short, 'gold', tt.n + ': ' + tt.d));
+      chips.append(chip(`${g.age} ${sg.n}`, g.age >= 38 ? 'red' : g.age >= 34 ? 'bronze' : 'green', sg.d), ...lm.fQuirks(g).map((q) => chip(q.n, 'purple', `${q.pro}. ${q.con}.`)));
+      if (lm.fFree(g) > 0) chips.append(chip(`${lm.fFree(g)} talent pt${lm.fFree(g) > 1 ? 's' : ''}`, 'green', 'Open the profile to spend talent points.'));
+    }
     if (g.inj > 0) chips.append(chip(`${lm.woundOf && lm.woundOf(g) ? d.WOUNDS[lm.woundOf(g).part].n : 'Injured'} ${g.inj}w`, 'red', 'Injured fighters rest until healed. Treat or rest them from their profile or the Infirmary.')); // WAVE2: body part
     else if (g.weak && g.weak.w > 0) chips.append(chip(`Weak ${g.weak.w}w`, 'gold', 'Still recovering: ' + lm.modText(g.weak.mods).join(', ')));
     if (g.scars && g.scars.length) chips.append(chip(`${g.scars.length} scar${g.scars.length > 1 ? 's' : ''}`, 'purple', g.scars.map((id) => d.SCARS[id].n).join(', ')));
@@ -140,10 +146,31 @@ export function open(ctx) {
     return c;
   }
 
+  function webCard() { // FIGHTERS: who is sworn, friends, feuding, fond
+    if (!lm.fWeb || S.glads.length < 2) return null;
+    const W = lm.fWeb(S), n = (k) => W[k].length, c = h('div', 'lm-card'); const trs = (S.trainers || []);
+    c.append(h('div', 'lm-row lm-wrap', [h('b', 'lm-name', 'Barracks web'), n('sworn') ? chip(`${n('sworn')} sworn`, 'gold') : null, n('friend') ? chip(`${n('friend')} friends`, 'green') : null, n('grudge') ? chip(`${n('grudge')} feud${n('grudge') > 1 ? 's' : ''}`, 'red') : null, n('fond') ? chip(`${n('fond')} fond`, 'purple') : null, n('jealous') ? chip(`${n('jealous')} jealous`, 'bronze') : null, trs.length ? chip(`${trs.length} trainer${trs.length > 1 ? 's' : ''}`, 'blue') : null]));
+    const top = W.grudge[0] || W.sworn[0] || W.friend[0];
+    c.append(h('div', 'lm-sub', top ? `${top.a.name} and ${top.b.name}: ${lm.fPairText(S, top.a, top.b)}.` : 'No bonds yet. Fighters who train and fight together grow close, or fall out.'));
+    const b = U.button({ label: 'Open the web', icon: 'roster', variant: 'bronze', onClick: webSheet }); b.style.marginTop = '8px'; c.append(b); return c;
+  }
+  function webSheet() {
+    const W = lm.fWeb(S), b = h('div', 'lm-sheetbody', [note('Every pair in the barracks. Sworn brothers fight better together, friends a little, a deep grudge hurts both until it is settled in the yard.')]); const sm = ctx.sheet({ title: 'Barracks web', body: b });
+    const names = { sworn: 'Sworn brothers', friend: 'Friends', fond: 'Fond', jealous: 'Jealous', grudge: 'Grudges' };
+    for (const k of ['grudge', 'sworn', 'fond', 'jealous', 'friend']) if (W[k].length) { b.append(sec(names[k]), h('div', 'lm-sub', lm.fKIND[k].d));
+      W[k].forEach((p) => { const row = h('div', 'lm-card lm-row'); row.style.marginBottom = '6px'; row.append(portrait(ctx, p.a, 36), h('div', 'lm-grow', [h('div', 'lm-name', `${p.a.name} and ${p.b.name}`), h('div', 'lm-sub', k === 'grudge' ? `Grudge ${Math.round(p.r.gr)}` : `Bond ${Math.round(p.r.bond)}`)]), portrait(ctx, p.b, 36));
+        if (k === 'grudge') row.append(U.button({ label: 'Settle', variant: 'gold', disabled: !!lm.fSparWhy(S, p.a, p.b), onClick: () => { const res = lm.fSparBout(S, p.a, p.b); if (res.err) { ctx.toast(res.err, { kind: 'bad' }); return; } ctx.sfx('uiConfirm'); commit(); ctx.toast(res.line, { kind: 'info', ms: 4200 }); sm.close(); render(); webSheet(); } }));
+        b.append(row); }); }
+    if (!Object.values(W).some((a) => a.length)) b.append(empty('No bonds yet.'));
+    const trs = S.trainers || []; if (trs.length) { b.append(sec('Trainers')); trs.forEach((t) => { const p = lm.fTrainerPupil(S, t); const row = h('div', 'lm-card lm-row'); row.style.marginBottom = '6px'; row.append(h('div', 'lm-grow', [h('div', 'lm-name', `${t.name} (${d.STYLES[t.style].n}, Lv ${t.lvl})`), h('div', 'lm-sub', p ? `Coaching ${p.name}. 12 gold a week.` : 'No pupil to coach yet. 12 gold a week.')]));
+      if (S.glads.length > 1) row.append(U.button({ label: 'Next pupil', variant: 'bronze', onClick: () => { const ids = S.glads.map((x) => x.id); const i = ids.indexOf(t.p); t.p = ids[(i + 1) % ids.length]; ctx.sfx('uiTap'); commit(); sm.close(); webSheet(); } })); b.append(row); }); }
+  }
+
   function render() {
     if (dead) return;
     clearTips(); body.replaceChildren();
     body.append(topBar());
+    { const wc = webCard(); if (wc) { wc.style.marginTop = '10px'; body.append(wc); } }
     body.append(sec('Weekly plan'), planner(), note('Each fighter repeats their activity every week until you change it. Fighters entered in games should rest.'));
     body.append(sec(`Fighters ${S.glads.length}`));
     if (!S.glads.length) { body.append(U.emptyState({ icon: 'roster', title: 'Your barracks are empty', text: 'Fighters you hire live here: their health, energy and the plan they follow each week.', how: 'Citizens wait at the gate every week.', action: { label: 'Recruit your first fighter', icon: 'roster', onClick: () => ctx.open('recruit', { first: true }) } })); }

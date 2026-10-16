@@ -3,6 +3,7 @@
 import { U, h, D, L, fmt, openScreen, sec, card, row, col, note, hint, kv, medal, pill, goldPill, famePill, tabs, chipRow, meter, empty, actions, styleBadge, pickFighters } from './sk.js';
 import { heirOffer } from '../flow.js';
 import { bestiaryTab } from './venatio.js'; // BEAST: the Bestiary tab (3D beast portraits, kills, notes, pelts, trophies)
+import * as Cmp from './campaign.js'; // CAMPAIGN: the Story tab
 import * as Inf from './infirmary.js'; import * as Pat from './sponsors.js'; import * as Chr from './events.js'; // WAVE2: wounds, patrons and the event chronicle live in The World too
 
 const st = { tab: 'calendar', wk: null };
@@ -53,9 +54,9 @@ export function open(ctx, arg) {
   css(); arg = arg || {}; if (arg.tab) st.tab = arg.tab;
   const scr = openScreen(ctx, { title: 'The World', wide: true });
   const draw = () => scr.render((root) => {
-    root.append(chipRow([{ id: 'calendar', label: 'Calendar', icon: 'scroll' }, { id: 'rivals', label: 'Rivals', icon: 'skull' }, { id: 'barracks', label: 'Barracks', icon: 'roster' }, { id: 'memorial', label: 'Memorial', icon: 'fame' }, { id: 'infirmary', label: 'Infirmary', icon: 'heart' }, { id: 'patrons', label: 'Patrons', icon: 'coin' }, { id: 'chronicle', label: 'Chronicle', icon: 'scroll' }, { id: 'bestiary', label: 'Bestiary', icon: 'skull' }], st.tab, (id) => { st.tab = id; ctx.sfx('uiTap'); scr.scroller.scrollTop = 0; draw(); }));
+    root.append(chipRow([{ id: 'story', label: 'Story', icon: 'star' }, { id: 'calendar', label: 'Calendar', icon: 'scroll' }, { id: 'rivals', label: 'Rivals', icon: 'skull' }, { id: 'barracks', label: 'Barracks', icon: 'roster' }, { id: 'memorial', label: 'Memorial', icon: 'fame' }, { id: 'infirmary', label: 'Infirmary', icon: 'heart' }, { id: 'patrons', label: 'Patrons', icon: 'coin' }, { id: 'chronicle', label: 'Chronicle', icon: 'scroll' }, { id: 'bestiary', label: 'Bestiary', icon: 'skull' }], st.tab, (id) => { st.tab = id; ctx.sfx('uiTap'); scr.scroller.scrollTop = 0; draw(); }));
     root.lastChild.setAttribute('data-tut', 'world-tabs');
-    if (st.tab === 'calendar') calendarTab(ctx, root, draw); else if (st.tab === 'rivals') rivalsTab(ctx, root, draw); else if (st.tab === 'barracks') barracksTab(ctx, root, draw); else if (st.tab === 'infirmary') Inf.render(ctx, root, draw); else if (st.tab === 'patrons') Pat.render(ctx, root, draw); else if (st.tab === 'chronicle') Chr.render(ctx, root, draw); else if (st.tab === 'bestiary') bestiaryTab(ctx, root, draw); else memorialTab(ctx, root, draw);
+    if (st.tab === 'story') Cmp.render(ctx, root, draw); else if (st.tab === 'calendar') calendarTab(ctx, root, draw); else if (st.tab === 'rivals') rivalsTab(ctx, root, draw); else if (st.tab === 'barracks') barracksTab(ctx, root, draw); else if (st.tab === 'infirmary') Inf.render(ctx, root, draw); else if (st.tab === 'patrons') Pat.render(ctx, root, draw); else if (st.tab === 'chronicle') Chr.render(ctx, root, draw); else if (st.tab === 'bestiary') bestiaryTab(ctx, root, draw); else memorialTab(ctx, root, draw);
   });
   scr.m.el.dataset.tutSheet = 'world';
   draw(); return scr;

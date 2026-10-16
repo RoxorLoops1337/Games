@@ -9,7 +9,7 @@ export function open(ctx, arg) {
   P.ensureCss();
   const S = ctx.S, lm = L(), d = D();
   lm.ensureShops(S);
-  const st = { tab: (arg && arg.tab) || 'shop', view: null, confirm: null, fx: null };
+  const st = { tab: (arg && arg.tab) || 'shop', bid: {}, qty: {}, view: null, confirm: null, fx: null };
   const items = () => S.items, byId = (id) => S.market.find((i) => i.id === id);
   let confirmT = 0;
 
@@ -20,7 +20,7 @@ export function open(ctx, arg) {
   const capLab = h('div', 'am-cap'); const capBar = U.bar({ value: 0, max: 1, kind: 'xp', height: 8 });
   capLab.append(h('div', '', [tip('Armory space', 'Spare items you own. When it is full, buying loot sells your weakest item automatically.', 'Capacity'), document.createTextNode(' '), h('span', 'am-capn')]), capBar);
   root.append(h('div', 'am-top', [gold, capLab, arm]), tabsEl, content);
-  const TABS = [['shop', 'Shop', 'market'], ['sell', 'Sell', 'coin']];
+  const TABS = [['shop', 'Shop', 'market'], ['sell', 'Sell', 'coin'], ['auction', 'Auction', 'roster'], ['caravan', 'Caravan', 'scroll']]; // ECONOMY: auction + caravan tabs
   const tabBtns = TABS.map(([id, label, ic]) => { const b = h('button', 'am-tab', [U.icon(ic, 20), h('span', '', label)]); b.type = 'button'; b.setAttribute('role', 'tab'); b.addEventListener('click', () => { ctx.sfx('uiTap'); st.tab = id; st.view = null; st.confirm = null; render(); content.scrollTop = 0; }); tabsEl.append(b); return b; });
   tabsEl.style.gridAutoColumns = '1fr';
   const m = ctx.sheet({ title: 'Market', body: root, actions: [] });
@@ -154,6 +154,96 @@ export function open(ctx, arg) {
   }
   function arm_(key) { st.confirm = key; clearTimeout(confirmT); confirmT = setTimeout(() => { st.confirm = null; if (m.el.isConnected) render(); }, 3500); ctx.sfx('uiTap'); render(); }
 
+
+  // ---------- ECONOMY: AUCTION ----------
+  const stars = (n) => '★'.repeat(n) + '☆'.repeat(5 - n);
+  const BIDS = [1, 1.15, 1.3, 1.5];
+  function viewAuction() {
+    const out = h('div'), A = lm.auction(S), sees = lm.auctionSees(S), debt = lm.inDebtChapter(S);
+    out.append(card('dark', [h('div', 'am-name', `The weekly auction, ${A.quarter}`), h('div', 'am-small', A.note + (A.fest ? ` A festival fills the hall (${d.FESTIVALS.find((f) => f.id === A.fest).n}).` : '')),
+      h('div', 'am-small', 'Set the highest bid you will pay. If you win, you pay just above the best rival bid, never more than your bid. Rival schools bid against you, and they remember it.')]));
+    out.firstChild.querySelectorAll('.am-name,.am-small').forEach((e) => { e.style.color = e.classList.contains('am-name') ? '#f2c14e' : '#d8c9a0'; });
+    if (debt) out.append(card('warn', [h('b', '', 'Creditors at the door'), h('div', 'am-p', 'In a debt chapter your purchases would be seized. Clear what is overdue first.')]));
+    if (S.glads.length >= lm.rosterCap(S)) out.append(card('warn', [h('b', '', 'Barracks full'), h('div', 'am-p', 'Release a fighter or upgrade the Barracks to bid.')]));
+    A.lots.forEach((lot) => {
+      const g = lot.g, res = A.res[lot.id], mult = st.bid[lot.id] || 1, bid = Math.round(lot.reserve * mult), why = lm.auctionWhy(S, lot, bid);
+      const top = d.STATS.slice().sort((a, b) => g.st[b] - g.st[a]).slice(0, 3).map((k) => `${d.SA[k]} ${lm.grade(g.st[k], g.lvl)}`).join('  ');
+      const c = card(lot.feature ? 'gold' : '', [h('div', 'am-hero', [portrait(ctx, g, 56), h('div', 'am-hi', [h('div', 'am-name', g.name + (g.nick ? ' ' + g.nick : '')), h('div', 'am-p', `${d.STYLES[g.style].n}, level ${g.lvl}  ${stars(lm.stars(g))}`), h('div', 'am-small', `${top}  ·  ${d.TRAITS[g.trait].n}`)])])]);
+      if (lot.feature) c.append(h('span', 'am-ribbon', 'Featured'));
+      const riv = lot.bids.length;
+      c.append(h('div', 'am-small', sees >= 2 ? (riv ? `Rival ceilings: ${lot.bids.map((b) => `${b.name} ${b.ceil}`).join(', ')}` : 'No rival wants him.') : sees === 1 ? (riv ? `${riv} rival school${riv > 1 ? 's' : ''} in the room, top ceiling about ${Math.round(Math.max(...lot.bids.map((b) => b.ceil)) * 0.85)} to ${Math.round(Math.max(...lot.bids.map((b) => b.ceil)) * 1.15)}.` : 'Nobody else seems keen.') : 'Other schools are in the room. A Spymaster or a bribed auctioneer shows what they will pay.'));
+      if (res) { c.append(h('div', 'am-p', res.won ? `Won for ${res.price} gold.` : `Lost to ${res.by}.`)); c.classList.add(res.won ? 'good' : 'warn'); }
+      else {
+        const chips = h('div', 'am-filters'); BIDS.forEach((m) => { const b = h('button', 'am-chipbtn' + (m === mult ? ' on' : ''), `${Math.round(lot.reserve * m)}`); b.type = 'button'; b.setAttribute('aria-pressed', m === mult ? 'true' : 'false'); b.addEventListener('click', () => { st.bid[lot.id] = m; ctx.sfx('uiTap'); render(); }); chips.append(b); });
+        c.append(h('div', 'am-small', `Reserve ${lot.reserve} gold. Your highest bid:`), chips,
+          h('div', 'am-btns', [btn(ctx, { label: `Bid up to ${bid}`, sub: 'gold', icon: 'coin', variant: 'gold', off: why, block: true, onClick: () => bidLot(lot, bid) })]));
+      }
+      out.append(c);
+    });
+    return out;
+  }
+  function bidLot(lot, bid) {
+    const r = lm.auctionBid(S, lot.id, bid); if (r.err) { ctx.sfx('uiError'); ctx.toast(r.err, { kind: 'bad' }); return; }
+    sync();
+    if (r.won) { ctx.sfx('levelUp'); ctx.toast(`${r.g.name} is yours for ${r.price} gold`, { kind: 'good', ico: 'check' }); st.fx = { text: 'Sold!', color: '#f2c14e' }; }
+    else { ctx.sfx('uiError'); ctx.toast(`${r.by} outbids you`, { kind: 'bad' }); }
+    render();
+  }
+
+  // ---------- ECONOMY: CARAVAN, TRADE GOODS, PELTS, THE BACK ALLEY ----------
+  function viewCaravan() {
+    const out = h('div'), C = lm.caravan(S);
+    out.append(card('dark', [h('div', 'am-name', C.here ? 'A merchant caravan is in town' : 'No caravan this week'), h('div', 'am-small', C.here ? `${lm.quarterName(S.week)} prices. The caravan sells gear at swinging prices, trades goods and buys pelts (today x${C.peltMul}).` : 'Caravans come most weeks. Trade goods and pelts can only be handled while one is here.')]));
+    out.firstChild.querySelectorAll('.am-name,.am-small').forEach((e) => { e.style.color = e.classList.contains('am-name') ? '#f2c14e' : '#d8c9a0'; });
+    if (C.here) {
+      out.append(secH('Wares', h('span', 'am-small', 'prices swing with the season')));
+      const g = h('div', 'am-grid'); C.items.forEach((row, i) => { if (!lm.caravanSold(S, i)) g.append(tile(ctx, row.it, { price: row.price, onClick: () => { st.view = { type: 'cvitem', i }; render(); content.scrollTop = 0; } })); });
+      out.append(g.childNodes.length ? g : emptyState('market', 'The caravan is sold out.'));
+      out.append(secH('Trade goods', h('span', 'am-small', `${lm.cargoUnits(S)} / ${lm.cargoCap(S)} crates`)));
+      out.append(h('div', 'am-small', 'Buy where it is cheap, sell where it is dear. The season and the town you are in move the price. A 5% spread applies each way.'));
+      Object.keys(lm.GOODS).forEach((id) => {
+        const G = lm.GOODS[id], p = lm.goodPrice(S, id), held = lm.eco(S).cargo[id], rel = p / G.p;
+        const tr = rel < 0.92 ? 'cheap' : rel > 1.08 ? 'dear' : 'fair';
+        const r = h('div', 'am-row', [h('div', 'am-mid', [h('div', 'am-t', `${G.n}  ${p} gold`), h('div', 'am-s', `${tr === 'cheap' ? 'Cheap now' : tr === 'dear' ? 'Dear now' : 'Fair price'} (usual ${G.p})` + (held ? `  ·  you hold ${held.n}, paid ${Math.round(held.cost / held.n)} each` : ''))])]);
+        const b1 = U.button({ label: 'Buy 2', variant: 'bronze', onClick: () => tradeDo(() => lm.goodBuy(S, id, 2)) }), b2 = U.button({ label: held ? `Sell ${held.n}` : 'Sell', variant: 'gold', onClick: () => tradeDo(() => lm.goodSell(S, id, held ? held.n : 1)) });
+        [b1, b2].forEach((b) => { b.style.flex = 'none'; b.style.minWidth = '72px'; b.style.padding = '6px 10px'; r.append(b); }); out.append(r);
+      });
+      const V = lm.venatio(S), pk = Object.keys(V.pelts || {}).filter((k) => V.pelts[k] > 0);
+      out.append(secH('Pelts and trophies of the hunt'));
+      if (!pk.length) out.append(h('div', 'am-small', 'No pelts in the store. Beast hunts in the Arena bring them home.'));
+      pk.forEach((k) => { const n = V.pelts[k], v = Math.round(n * lm.peltValue(S, k) * C.peltMul); out.append(h('div', 'am-row', [h('div', 'am-mid', [h('div', 'am-t', `${n} x ${lm.pelt(k)}`), h('div', 'am-s', `The caravan pays ${v} gold (x${C.peltMul})`)]), (() => { const b = U.button({ label: `Sell ${v}`, variant: 'gold', onClick: () => { const r = lm.peltSell(S, k); if (r.err) { ctx.sfx('uiError'); ctx.toast(r.err, { kind: 'bad' }); return; } sync(); ctx.sfx('coin'); ctx.toast(`Sold for ${r.gold} gold`, { kind: 'good', ico: 'coin' }); render(); } }); b.style.flex = 'none'; b.style.minWidth = '90px'; return b; })()])); });
+    }
+    // the back alley
+    out.append(secH('The back alley', h('span', 'am-small', `Senate suspicion: ${lm.susLabel(lm.suspicion(S))} (${Math.round(lm.suspicion(S))})`)));
+    const A = lm.alley(S);
+    if (!A.here) out.append(h('div', 'am-small', 'The alley is empty tonight.'));
+    else {
+      out.append(h('div', 'am-small', 'Stolen goods at half price. Each purchase carries a chance the Senate hears of it. The odds are on the sign.'));
+      const g = h('div', 'am-grid'); A.items.forEach((row) => g.append(tile(ctx, row.it, { price: row.price, onClick: () => { st.view = { type: 'alley', i: row.i }; render(); content.scrollTop = 0; } }))); out.append(g.childNodes.length ? g : emptyState('market', 'Nothing left tonight.'));
+    }
+    return out;
+  }
+  function tradeDo(fn) { const e = fn(); if (e) { ctx.sfx('uiError'); ctx.toast(e, { kind: 'bad' }); return; } sync(); ctx.sfx('coin'); render(); }
+  function viewCvItem(v) {
+    const C = lm.caravan(S), row = C.items[v.i], out = h('div'); out.append(backBtn('Caravan', () => { st.view = null; render(); }));
+    if (!row || lm.caravanSold(S, v.i)) { out.append(card('', [h('div', 'am-p', 'Sold.')])); return out; }
+    const it = row.it, base = lm.buyVal(S, it), diff = Math.round((row.price / base - 1) * 100);
+    out.append(card('', [itemHead(ctx, it)]), secH('Effects'), affixList(it));
+    out.append(card(diff <= -10 ? 'good' : diff >= 10 ? 'warn' : '', [h('div', 'am-p', `Shop price ${ctx.fmt(base)}. The caravan asks ${ctx.fmt(row.price)} (${diff >= 0 ? '+' : ''}${diff}%).`)]));
+    out.append(secH('Your fighters'), compareList(ctx, it));
+    out.append(h('div', 'am-btns', [btn(ctx, { label: 'Buy', sub: ctx.fmt(row.price) + ' gold', icon: 'coin', variant: 'gold', off: S.gold < row.price ? 'Not enough gold' : '', block: true, onClick: () => { const e = lm.caravanBuy(S, v.i); if (e) { ctx.sfx('uiError'); ctx.toast(e, { kind: 'bad' }); return; } sync(); ctx.sfx('coin'); ctx.toast(`Bought ${it.name}`, { kind: 'good', ico: 'coin' }); st.view = { type: 'bought', item: it, sold: null }; render(); } })]));
+    return out;
+  }
+  function viewAlley(v) {
+    const A = lm.alley(S), row = A.items.find((x) => x.i === v.i), out = h('div'); out.append(backBtn('Back alley', () => { st.view = null; render(); }));
+    if (!row) { out.append(card('', [h('div', 'am-p', 'Gone.')])); return out; }
+    const it = row.it;
+    out.append(card('', [itemHead(ctx, it)]), secH('Effects'), affixList(it));
+    out.append(card('warn', [h('b', '', `${Math.round(row.risk * 100)}% chance the Senate learns of it`), h('div', 'am-p', 'If it does: the item is confiscated, you pay a fine of 30% of the price on top, lose 5 fame and Senate standing, and suspicion climbs by 18. If not, suspicion still rises by 6 or more. The price is paid either way.'),
+      h('div', 'am-small', `The odds rise with the item's rarity and your suspicion (now ${Math.round(lm.suspicion(S))}). A friendly Senate and a Spymaster lower them.`)]));
+    out.append(h('div', 'am-btns', [btn(ctx, { label: 'Buy it, quietly', sub: ctx.fmt(row.price) + ' gold', icon: 'coin', variant: 'danger', off: S.gold < row.price ? 'Not enough gold' : '', block: true, onClick: () => { const r = lm.alleyBuy(S, v.i); if (r.err) { ctx.sfx('uiError'); ctx.toast(r.err, { kind: 'bad' }); return; } sync(); if (r.caught) { ctx.sfx('uiError'); ctx.toast(`Caught! The item is confiscated and you pay a fine of ${r.fine}`, { kind: 'bad' }); st.view = null; } else { ctx.sfx('coin'); ctx.toast(`Nobody noticed. ${it.name} is yours`, { kind: 'good', ico: 'coin' }); st.view = { type: 'bought', item: it, sold: null }; } render(); } })]));
+    return out;
+  }
   // ---------- render ----------
   function render() {
     if (!m.el.isConnected) return;
@@ -163,10 +253,10 @@ export function open(ctx, arg) {
     let v;
     if (st.view) {
       const t = st.view.type;
-      if (t === 'item') { const it = byId(st.view.id); v = it ? viewItem(it) : null; } else if (t === 'bought') v = viewBought(st.view); else if (t === 'visitor') v = viewVisitor(); else if (t === 'visited') v = viewVisited(st.view);
+      if (t === 'item') { const it = byId(st.view.id); v = it ? viewItem(it) : null; } else if (t === 'bought') v = viewBought(st.view); else if (t === 'visitor') v = viewVisitor(); else if (t === 'visited') v = viewVisited(st.view); else if (t === 'cvitem') v = viewCvItem(st.view); else if (t === 'alley') v = viewAlley(st.view); // ECONOMY
       if (!v) st.view = null;
     }
-    if (!v) v = st.tab === 'shop' ? viewShop() : viewSell();
+    if (!v) v = st.tab === 'shop' ? viewShop() : st.tab === 'sell' ? viewSell() : st.tab === 'auction' ? viewAuction() : viewCaravan();
     content.replaceChildren(v); content.scrollTop = keep;
     if (st.fx) { const fx = st.fx; st.fx = null; const host = content.querySelector('[data-fx]'); requestAnimationFrame(() => burst(host, { text: fx.text, color: fx.color })); }
   }

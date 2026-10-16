@@ -26,3 +26,5 @@ Lab: `lab/portrait_lab.html?rar=3&frame=bust|three|full&pose=victory&shared=1&si
 
 ## Scars and wounds (wave 3)
 The cache key includes `g.scars` and the wound part ids, so a new scar or bandage re-renders. Contact sheet recipe: `const P = (await import('/ludus_maximus_3d/js/portrait.js')).createPortraitRenderer({tier:'low'})`, then for each case `document.body.append(P.portrait(Object.assign({}, glad, {id: 100+i, style: 'retiarius', scars: ['lost_eye'], wounds: [{id:'head', part:'head', w:2, w0:2}]}), {w: 420, h: 480, style: 'bust'}))` and `P.flush(99)`; screenshot with `tools/ludus3d_shot.mjs`. Use a retiarius (no helmet) to see face marks.
+
+FIGHTERS: the portrait cache key includes `JSON.stringify(g.look)`, so the Look sheet previews a draft look live (`ctx.portrait(Object.assign({}, g, {look: draft}), size)`) and old cached busts never show a stale tattoo or hair colour.

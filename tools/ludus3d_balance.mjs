@@ -1,6 +1,9 @@
 // Ludus Maximus 3D: headless balance harness. Plays many seeded careers with a competent, boring policy and prints the economy,
 // win rates by league, injury / scar / death rates, event and patron activity.
-//   node tools/ludus3d_balance.mjs [--careers 200] [--weeks 96] [--seed 1] [--hardcore] [--policy solid|lazy] [--json out.json]
+//   node tools/ludus3d_balance.mjs [--careers 200] [--weeks 96] [--seed 1] [--hardcore] [--policy solid|lazy] [--eco both|on|off] [--json out.json]
+//   ECONOMY (wave 10): --eco on plays the same seeds with loans, auction, staff, caravan goods, bets, favors and the circuit; --eco off switches core/economy.js off (the old economy);
+//   --skip staff,loan,auc,trade,bet,fav,trip leaves single policy parts out (to see what each one costs or earns).
+//   --eco both (default) prints the full report for 'on' and a before/after table with the runaway and dead-end checks.
 // Runs entirely on core/*.js (no DOM). Deterministic for a given --seed.
 import { createRequire } from 'node:module';
 import { writeFileSync } from 'node:fs';
@@ -11,17 +14,18 @@ require('../ludus_maximus_3d/core/ext.js');
 require('../ludus_maximus_3d/core/arena.js');
 
 const a = process.argv.slice(2), opt = (k, d) => { const i = a.indexOf('--' + k); return i >= 0 ? a[i + 1] : d; };
-const N = +opt('careers', 200), WEEKS = +opt('weeks', 96), SEED = +opt('seed', 1), HARD = a.includes('--hardcore'), POLICY = opt('policy', 'solid'), JSON_OUT = opt('json', '');
+const N = +opt('careers', 200), WEEKS = +opt('weeks', 96), SEED = +opt('seed', 1), HARD = a.includes('--hardcore'), POLICY = opt('policy', 'solid'), ECOMODE = opt('eco', 'both'), SKIP = new Set(opt('skip', '').split(',')), JSON_OUT = opt('json', '');
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 
 const PRIO = ['palaestra', 'barracks', 'infirmary', 'market', 'kitchen', 'bath', 'sparring', 'stands', 'forge', 'scout', 'shrine', 'hall'];
 
 let CUR = null; const cw0 = LM.closeWound; LM.closeWound = (S2, g2, wd, o2) => { const r = cw0(S2, g2, wd, o2); if (CUR) { CUR.closed = (CUR.closed || 0) + 1; if (r.scar) CUR.newScars = (CUR.newScars || 0) + 1; } return r; };
 const sw0 = LM.sponsorWeek; LM.sponsorWeek = (S2, rep) => { const g = S2.gold, f = S2.fame; sw0(S2, rep); if (CUR) { CUR.src.spG += S2.gold - g; CUR.src.spF += S2.fame - f; } };
-function career(seed) {
+function career(seed, eco) {
+  LM.economy.off = !eco;
   LM.setRandom(LM.mulberry(seed * 7919 + 13));
   const S = LM.newGame({ name: 'B' + seed }); S.seed = 's' + seed; if (HARD) S.opts = { hardcore: true };
-  const M = { src: { spG: 0, spF: 0, setG: 0, setF: 0, evG: 0, evF: 0, wkG: 0, wkF: 0, upk: 0 }, seed, gold: [], fame: [], league: [], fights: [0, 0, 0, 0], wins: [0, 0, 0, 0], inj: [0, 0, 0, 0], parts: {}, scars: 0, deaths: 0, losses: [0, 0, 0, 0], evs: 0, evGold: 0, prize: 0, spIncome: 0, spOk: 0, spFail: 0, spMeh: 0, spAcc: 0, bankrupt: 0, wkInj: 0, wkHurtMax: 0, glads: [], upkeepShort: 0, healTime: 0, healN: 0 };
+  const M = { src: { spG: 0, spF: 0, setG: 0, setF: 0, evG: 0, evF: 0, wkG: 0, wkF: 0, upk: 0 }, seed, gold: [], fame: [], league: [], fights: [0, 0, 0, 0], wins: [0, 0, 0, 0], inj: [0, 0, 0, 0], parts: {}, scars: 0, deaths: 0, losses: [0, 0, 0, 0], evs: 0, evGold: 0, prize: 0, spIncome: 0, spOk: 0, spFail: 0, spMeh: 0, spAcc: 0, bankrupt: 0, wkInj: 0, wkHurtMax: 0, glads: [], upkeepShort: 0, healTime: 0, healN: 0, ec: { loans: 0, missed: 0, seized: 0, chapters: 0, hired: 0, aucWon: 0, aucLost: 0, bets: 0, betNet: 0, trade: 0, trips: 0, favors: 0, poor: 0, tribute: 0, bld: 0, wages: 0, interest: 0, debtEnd: 0 } };
   const tryHire = () => {
     LM.ensureShops(S);
     while (S.glads.length < LM.rosterCap(S) && S.recruits && S.recruits.length) {
@@ -61,7 +65,7 @@ function career(seed) {
   };
   const doSettle = (ev, gl, res) => {
     const g0 = S.gold, f0 = S.fame, rep = LM.settle(S, ev, gl, res); M.prize += S.gold - g0; M.src.setG += S.gold - g0; M.src.setF += S.fame - f0;
-    const L = ev.league, K = ev.kind; M.fights[L]++; if (res.win || res.place === 1) M.wins[L]++; else M.losses[L]++; M.kind = M.kind || {}; const kk = (M.kind[K + L] = M.kind[K + L] || [0, 0, 0]); kk[0]++; if (res.win || res.place === 1) kk[1]++; kk[2] += (rep.inj || []).length;
+    const L = ev.league, K = ev.kind; M.lastL = L; M.fights[L]++; if (res.win || res.place === 1) M.wins[L]++; else M.losses[L]++; M.kind = M.kind || {}; const kk = (M.kind[K + L] = M.kind[K + L] || [0, 0, 0]); kk[0]++; if (res.win || res.place === 1) kk[1]++; kk[2] += (rep.inj || []).length;
     (rep.inj || []).forEach((i) => { M.inj[L]++; M.parts[i.part || 'gash'] = (M.parts[i.part || 'gash'] || 0) + 1; M.healN++; M.healTime += i.w; });
     if (HARD && !(res.win || res.place === 1)) gl.forEach((g) => { if (res.hpf[g.id] != null && res.hpf[g.id] <= 0.01 || true) { const r = LM.deathRoll(S, g, { kind: 'event' }); if (r.dies && S.glads.length > 1 && res.hpf[g.id] < 0.2) { LM.fall(S, g, { kind: 'event' }); M.deaths++; } } });
     return rep;
@@ -105,8 +109,37 @@ function career(seed) {
       if (wd.w >= 4 && S.gold > 400) LM.treatWound(S, g, wd, 'surg'); else if (wd.w >= 3 && S.gold > 220 && !LM.treatWhy(S, g, wd, 'doc')) LM.treatWound(S, g, wd, 'doc'); else if (wd.w >= 2 && !wd.rest) LM.setRest(S, g, wd, true); }); });
   };
 
+
+  // ---- ECONOMY policy: a competent, careful player who uses the new systems without gambling the ludus away
+  const ecoWeek = () => {
+    const E = LM.eco(S), ml = LM.maxLeague(S);
+    // staff: hire when the building stands and the strongbox can carry eight weeks of wages
+    if (!SKIP.has('staff')) for (const c of LM.staffPool(S)) { if (LM.hireWhy(S, c) === '' && S.gold >= c.fee + 260 + c.wage * 8 && (c.role === 'cook' || (c.role === 'doctore' && c.lvl >= 2) || (c.role === 'spy' && c.lvl >= 2 && S.fame >= 500))) { LM.hireStaff(S, c); M.ec.hired++; } }
+    // loans: borrow only to close the gap to a clear upgrade, repay as soon as the purse is comfortable
+    if (!SKIP.has('loan')) E.loans.slice().forEach((l) => { if (S.gold > 520 + l.bal * 0.5) LM.loanRepay(S, l.id, l.bal); });
+    if (!SKIP.has('loan') && !E.loans.length && !E.debt && S.week > 8 && S.gold < 140 && S.glads.length >= 2) { const id = S.fame >= 60 ? 'guild' : 'temple', amt = Math.min(220, LM.loanMax(S, id)); if (amt >= 80 && !LM.loanTake(S, id, amt, 8)) M.ec.loans++; }
+    // auction: bid at the lot's fair value when it beats the weakest fighter and there is a free bed
+    if (!SKIP.has('auc') && S.glads.length < LM.rosterCap(S)) {
+      const A = LM.auction(S), worst = S.glads.length ? Math.min(...S.glads.map((g) => g.lvl * 3 + LM.stars(g))) : 0;
+      for (const lot of A.lots) { const bid = Math.round(lot.value * 0.97); if (!A.res[lot.id] && lot.g.lvl * 3 + LM.stars(lot.g) > worst + 2 && S.gold >= bid + 200 && !LM.auctionWhy(S, lot, bid)) { const r = LM.auctionBid(S, lot.id, bid); if (r.won) M.ec.aucWon++; else M.ec.aucLost++; break; } }
+    }
+    // caravan goods: buy in the cheap season, sell in the dear one, never more than a third of the purse
+    if (!SKIP.has('trade') && LM.caravanHere(S)) for (const id of Object.keys(LM.GOODS)) {
+      const p = LM.goodPrice(S, id), base = LM.GOODS[id].p, held = (E.cargo[id] || {}).n || 0;
+      if (held && p > base * 1.08) { const before = S.gold; LM.goodSell(S, id, held); M.ec.trade += S.gold - before - 0; }
+      else if (p < base * 0.9 && S.gold > 350) { const n = Math.min(4, Math.floor(S.gold / 3 / p)); if (n > 0) { const before = S.gold; if (!LM.goodBuy(S, id, n)) M.ec.trade += S.gold - before; } }
+    }
+    // bets: bet only when the scouts see an edge; a flat 4% stake
+    if (!SKIP.has('bet') && LM.scoutLevel(S) >= 2 && S.gold > 300) LM.board(S).forEach((b) => { const t = LM.boardTruth(S, b); if (t == null) return; const side = t * b.ma > 1.12 ? 'a' : (1 - t) * b.mb > 1.12 ? 'b' : ''; if (side) { const st = Math.min(Math.round(S.gold * 0.04), LM.betCaps(S).one); if (st >= 5 && !LM.betBout(S, b.id, side, st)) M.ec.bets++; } });
+    // favors: the clerk when the tribute is big enough to pay for it
+    const tr = LM.tributeInfo(S); if (!SKIP.has('fav') && tr.base * 0.6 * 6 > LM.favorCost(S, 'clerk') * 1.6 && S.gold > 400 && !LM.favorWhy(S, 'clerk')) { LM.favorDo(S, 'clerk'); M.ec.favors++; }
+    // circuit: once a season, move to the best town the fame unlocks (the road costs a week of fights, so only with a spare purse)
+    if (!SKIP.has('trip') && S.week % 12 === 2 && S.gold > 200) { const best = LM.TOWN_IDS.filter((id) => S.fame >= LM.TOWNS[id].fame && LM.TOWNS[id].hosts.includes(M.lastL || 0)).sort((a, b) => LM.TOWNS[b].purse - LM.TOWNS[a].purse)[0]; const cur = LM.townFor(S, S.week + 1), cp = cur && cur !== 'road' && cur.hosts.includes(M.lastL || 0) ? cur.purse : 1; if (best && LM.TOWNS[best].purse - cp >= 0.07 && !LM.travel(S, best)) M.ec.trips++; }
+    if (S.gold < 40) M.ec.poor++;
+  };
   CUR = M;
   for (let w = 1; w <= WEEKS; w++) {
+    if (eco) ecoWeek();
     tryHire(); tryBuild(); if (S.week % 4 === 1) LM.rerollMarket(S); shop(); S.glads.forEach((g) => LM.autoEquip(S, g)); if (POLICY !== 'lazy') treat();
     plan(); if (S.glads.length) enterAll();
     const g0 = S.gold;
@@ -114,6 +147,7 @@ function career(seed) {
     for (const key of LM.dueKeys(S)) runKey(key);
     const before = S.gold, fbefore = S.fame, fin = LM.weekFinish(S); M.src.wkG += S.gold - before; M.src.wkF += S.fame - fbefore; M.src.upk += fin.upkeep || 0;
     if (fin.upkeep && S.gold < 5) M.upkeepShort++;
+    if (eco) { const row = LM.eco(S).ledger.slice(-1)[0] || {}; M.ec.tribute += row.tribute || 0; M.ec.bld += row.building || 0; M.ec.wages += row.staff || 0; M.ec.interest += row.interest || 0; M.ec.betNet += (row.bets || 0); }
     const hurt = S.glads.filter((g) => g.inj > 0).length; M.wkInj += hurt; M.wkHurtMax = Math.max(M.wkHurtMax, hurt);
     sponsors(); handleEvent();
     if (w % 12 === 0) { M.gold.push(S.gold); M.fame.push(S.fame); M.league.push(LM.maxLeague(S)); }
@@ -124,16 +158,17 @@ function career(seed) {
   }
   const T = LM.sponsInit(S); T.hist.forEach((h) => { if (h.res === 'ok') M.spOk++; else if (h.res === 'fail') M.spFail++; else if (h.res === 'meh') M.spMeh++; M.spIncome += h.earned || 0; });
   M.scars = S.glads.reduce((x, g) => x + (g.scars || []).length, 0); M.nGl = S.glads.length; M.lvl = S.glads.reduce((x, g) => Math.max(x, g.lvl), 0); M.fame_end = S.fame; M.gold_end = S.gold; M.fallen = (S.fallen || []).length;
+  if (eco) { const E = LM.eco(S), st = E.stat; ['missed', 'seized', 'chapters'].forEach((k) => { M.ec[k] = st[k] || 0; }); M.ec.debtEnd = E.debt ? 1 : 0; M.ec.trade = st.tradeProfit || 0; }
   M.wounded = S.glads.filter((g) => (g.scars || []).length).length;
   return M;
 }
 
 const pct = (arr, p) => { const s = arr.slice().sort((x, y) => x - y); return s.length ? s[Math.min(s.length - 1, Math.floor(p * s.length))] : 0; };
-const t0 = Date.now(), R = [];
-for (let i = 0; i < N; i++) R.push(career(SEED * 100000 + i));
+const t0 = Date.now(), runSet = (eco) => { const out = []; for (let i = 0; i < N; i++) out.push(career(SEED * 100000 + i, eco)); return out; };
+const RB = ECOMODE === 'on' ? null : runSet(false), R = ECOMODE === 'off' ? RB : runSet(true);
 const secs = ((Date.now() - t0) / 1000).toFixed(1);
 const seasons = Math.floor(WEEKS / 12);
-console.log(`ludus3d balance: ${N} careers x ${WEEKS} weeks, policy ${POLICY}${HARD ? ', hardcore' : ''}, seed ${SEED} (${secs}s)`);
+console.log(`ludus3d balance: ${N} careers x ${WEEKS} weeks, policy ${POLICY}${HARD ? ', hardcore' : ''}, seed ${SEED}, economy ${ECOMODE === 'off' ? 'OFF (old economy)' : 'ON'} (${secs}s)`);
 console.log('\nGOLD at end of season (p10 / median / p90)');
 for (let s = 0; s < seasons; s++) { const v = R.map((r) => r.gold[s]).filter((x) => x != null); console.log(`  S${s + 1}: ${pct(v, 0.1)} / ${pct(v, 0.5)} / ${pct(v, 0.9)}`); }
 console.log('\nFAME at end of season (p10 / median / p90) and league reached (median)');
@@ -156,3 +191,29 @@ console.log(`Patrons per career: accepted ${(R.reduce((x, r) => x + r.spAcc, 0) 
 console.log(`Careers that ended broke: ${R.reduce((x, r) => x + r.bankrupt, 0)}; weeks the upkeep could not be paid in full (mean): ${(R.reduce((x, r) => x + r.upkeepShort, 0) / N).toFixed(2)}`);
 console.log(`End of career: fame median ${pct(R.map((r) => r.fame_end), 0.5)}, top level median ${pct(R.map((r) => r.lvl), 0.5)}, roster median ${pct(R.map((r) => r.nGl), 0.5)}`);
 if (JSON_OUT) writeFileSync(JSON_OUT, JSON.stringify(R));
+
+if (RB && R !== RB) {
+  console.log('\n=== ECONOMY BEFORE (economy off) vs AFTER (loans, auction, staff, caravan, bets, favors, circuit) ===');
+  console.log('GOLD at end of season, median (p10-p90): before | after | ratio');
+  let worst = 0, worstP90 = 0;
+  for (let s = 0; s < seasons; s++) { const a = RB.map((r) => r.gold[s]).filter((x) => x != null), b = R.map((r) => r.gold[s]).filter((x) => x != null); const ma = pct(a, 0.5), mb = pct(b, 0.5), r90 = pct(b, 0.9) / Math.max(1, pct(a, 0.9)); worst = Math.max(worst, mb / Math.max(1, ma)); worstP90 = Math.max(worstP90, r90);
+    console.log(`  S${s + 1}: ${String(ma).padStart(5)} (${pct(a, 0.1)}-${pct(a, 0.9)}) | ${String(mb).padStart(5)} (${pct(b, 0.1)}-${pct(b, 0.9)}) | x${(mb / Math.max(1, ma)).toFixed(2)}`); }
+  console.log('FAME at end of season, median: before | after | ratio');
+  let fmin = 9, fmax = 0;
+  for (let s = 0; s < seasons; s++) { const a = RB.map((r) => r.fame[s]).filter((x) => x != null), b = R.map((r) => r.fame[s]).filter((x) => x != null); const ma = pct(a, 0.5), mb = pct(b, 0.5), q = mb / Math.max(1, ma); if (s >= 1) { fmin = Math.min(fmin, q); fmax = Math.max(fmax, q); }
+    console.log(`  S${s + 1}: ${String(ma).padStart(5)} | ${String(mb).padStart(5)} | x${q.toFixed(2)}`); }
+  const E = (k) => (R.reduce((x, r) => x + r.ec[k], 0) / N), f1 = (x) => x.toFixed(1);
+  console.log(`\nPER CAREER with the economy on: loans taken ${f1(E('loans'))}, missed payments ${f1(E('missed'))}, items seized ${f1(E('seized'))}, debt chapters ${f1(E('chapters'))} (${R.reduce((x, r) => x + r.ec.debtEnd, 0)} careers end in one), interest paid ${Math.round(E('interest'))} gold`);
+  console.log(`  staff hired ${f1(E('hired'))} (wages ${Math.round(E('wages'))} gold), auctions won ${f1(E('aucWon'))} / lost ${f1(E('aucLost'))}, caravan profit ${Math.round(E('trade'))} gold, scouted bets ${f1(E('bets'))} (net ${Math.round(E('betNet'))} gold), favors ${f1(E('favors'))}, trips ${f1(E('trips'))}`);
+  console.log(`  governor's tribute ${Math.round(E('tribute'))} gold and building upkeep ${Math.round(E('bld'))} gold per career (new costs: ${(((E('tribute') + E('bld')) / Math.max(1, SRC('wkG') + SRC('setG'))) * 100).toFixed(1)}% of gross income)`);
+  const poorOn = E('poor'), poorOff = 0; const brokeOn = R.reduce((x, r) => x + r.bankrupt, 0), brokeOff = RB.reduce((x, r) => x + r.bankrupt, 0);
+  console.log(`\nCHECKS`);
+  const chk = (ok, t) => console.log(`  ${ok ? 'PASS' : 'FAIL'}  ${t}`);
+  chk(worst <= 1.35, `no runaway: median gold at most x1.35 of before in every season (worst x${worst.toFixed(2)})`);
+  chk(worstP90 <= 1.7, `no runaway tail: p90 gold at most x1.7 of before (worst x${worstP90.toFixed(2)})`);
+  chk(fmin >= 0.8 && fmax <= 1.35, `fame stays in step: median fame within x0.8..x1.35 of before from season 2 (x${fmin.toFixed(2)}..x${fmax.toFixed(2)})`);
+  chk(brokeOn <= brokeOff, `no dead end: careers ending broke ${brokeOn} (before ${brokeOff})`);
+  chk(poorOn <= 14, `no dead end: weeks under 40 gold per career ${poorOn.toFixed(1)} (limit 14)`);
+  chk(R.reduce((x, r) => x + r.ec.debtEnd, 0) <= Math.ceil(N * 0.1), `debt chapters are rare at the end of a career (${R.reduce((x, r) => x + r.ec.debtEnd, 0)} of ${N})`);
+  chk(E('betNet') < 0.1 * Math.max(1, SRC('setG') + SRC('wkG')), `bets stay a side income (${Math.round(E('betNet'))} gold net per career, under 10% of gross)`);
+}

@@ -3,6 +3,7 @@
 //   Solo fights: the Showmanship dial (more show: more fame, fans and crowd noise; less damage and armor, longer wind-ups, more wounds).
 // Everything is pre-filled with a sensible suggestion, so one tap on "Fight!" starts. Every choice prints its exact gain and cost. No em dashes in copy.
 import { h, D, L, portrait } from './ui_common.js';
+import { readDc, writeDc } from '../directcontrol.js'; // COMBAT: optional direct control of one fighter
 
 const SW = 64, SH = 40;
 /** a tiny map of a formation: your fighters (gold) on the left, a grey line of foes on the right */
@@ -94,6 +95,14 @@ export function planPanel(ctx, o) {
     root.append(dial, h('p', 'pl-desc', 'A win pays the fame bonus in full. A loss pays little, but the fans still like the show. A louder crowd roars sooner, and its roar backs whoever is behind. The lost damage and the wound risk are real.'));
     if (gl[0].trait === 'showman') root.append(h('p', 'pl-foe-plan', `${gl[0].name} is a natural Showman: +25% fame already, and it stacks.`));
   }
+  // COMBAT: direct control (default off): one toggle, and for a team the fighter you drive. Saved as a device preference, mirrored in More > Settings.
+  { const dc = readDc(), box = h('div', 'pl-dc'), cb = h('input'); cb.type = 'checkbox'; cb.checked = dc.on; cb.id = 'pl-dc-on'; cb.dataset.dc = 'toggle';
+    const lab = h('label', '', [cb, h('span', '', [h('b', '', 'Take control yourself'), h('small', '', 'Move, strike, roll and block with the stick or keys. Your team stays on its plan and orders. A blow met with a block just before it lands is a parry.')])]); lab.htmlFor = 'pl-dc-on';
+    box.append(lab); let sel = null;
+    if (team) { sel = h('select', 'pl-sel'); sel.setAttribute('aria-label', 'Fighter you control'); gl.forEach((g) => { const op = h('option', '', g.name); op.value = String(g.id); sel.append(op); }); sel.value = String(dc.gid != null && gl.some((g) => String(g.id) === String(dc.gid)) ? dc.gid : gl[0].id); sel.style.display = cb.checked ? '' : 'none'; sel.addEventListener('change', () => writeDc(cb.checked, isNaN(+sel.value) ? sel.value : +sel.value)); box.append(sel); }
+    const gid = () => (sel ? (isNaN(+sel.value) ? sel.value : +sel.value) : gl[0].id);
+    cb.addEventListener('change', () => { ctx.sfx('uiTap'); writeDc(cb.checked, gid()); if (sel) sel.style.display = cb.checked ? '' : 'none'; });
+    if (dc.on) writeDc(true, gid()); root.append(box); }
   root.append(oddsEl); changed();
   return { el: root, get: () => lm.normPlan(st.plan, gl) };
 }

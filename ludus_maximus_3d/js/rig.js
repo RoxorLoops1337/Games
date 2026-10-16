@@ -225,7 +225,7 @@ if (uSweat > 0.01) { float sb = smoothstep(0.5 - 0.3 * uSweat, 0.85, bn(vBP * 30
 //  - soak (cloth, leather, hair only): wet darkening that climbs from the hem, multiplicative so the weave and the tunic colour survive
 //  - ageing: bright wet crimson -> dark congealed maroon, gloss drops from a wet 0.12 to a tacky 0.5 roughness
 // Total paint coverage is capped (BL_CAP) so skin, cloth and metal stay readable under the winner's blood.
-const BL_CAP = '0.84';
+const BL_CAP = '0.55';   // DEPTH: was 0.84; team tunics stay recognisable under blood (readability tool, team hue separation)
 
 const BLOOD_KIND = { skin: { hem: 0, spray: 1.0, soak: 0 }, cloth: { hem: 1, spray: 0.8, soak: 1 }, plume: { hem: 0.5, spray: 0.6, soak: 1 }, leather: { hem: 0.8, spray: 0.8, soak: 1 }, hair: { hem: 0, spray: 0.5, soak: 1 }, metal: { hem: 0, spray: 0.7, soak: 0 }, steel: { hem: 0, spray: 0.7, soak: 0 }, trim: { hem: 0, spray: 0.6, soak: 0 } };
 const bloodCode = (gash, key = 'skin') => { const K = BLOOD_KIND[key] || BLOOD_KIND.skin; return `gBM = 0.0;

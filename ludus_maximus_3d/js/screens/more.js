@@ -4,7 +4,7 @@ import { glyph, trophyIcon } from '../glyphs.js'; // WAVE3: trophy glyphs
 import { legendsSheet, perksSheet, ascendFlow } from './legacy.js';
 
 const PREF_KEY = 'ludus_maximus_3d_prefs';
-const DEF = { master: 0.9, music: 0.7, sfx: 0.9, muted: false, rm: false, big: false, hc: false, gore: 'full' };
+const DEF = { master: 0.9, music: 0.7, sfx: 0.9, muted: false, rm: false, big: false, hc: false, gore: 'full', dc: false, barks: true }; // COMBAT: dc = direct control (default off), barks = announcer captions
 let tab = 'ludus';
 
 // ------------------------------------------------------------------ preferences (localStorage, safe)
@@ -16,6 +16,7 @@ export function applyPrefs(ctx) {
   // QA: a save carries its own comfort choices (S.opts), so an imported save brings them along; either source switches the option on
   p.rm = !!(p.rm || so.rm); p.big = !!(p.big || so.big); p.hc = !!(p.hc || so.hc);
   globalThis.LM3D_GORE = ['off', 'low', 'full'].includes(p.gore) ? p.gore : 'full'; // read by js/gore.js at the start of every fight
+  globalThis.LM3D_DC = { on: !!p.dc, gid: p.dcId == null ? null : p.dcId }; // COMBAT: read by js/fightsetup.js when a fight is built
   try { document.body.classList.toggle('lx-large-text', !!p.big); document.body.classList.toggle('lx-reduce-motion', !!p.rm); document.body.classList.toggle('lx-hc', !!(p.hc || (typeof matchMedia !== 'undefined' && matchMedia('(prefers-contrast: more)').matches))); } catch (e) { /* no body yet */ }
   if (a) { try { a.setMaster(p.muted ? 0 : p.master); a.setMusic(p.music); a.setSfx(p.sfx); } catch (e) { /* audio not ready */ } }
   return p;
@@ -39,6 +40,10 @@ function ludusTab(ctx, root, draw) {
   if (v) root.append(visitorCard(ctx, v, draw));
   root.append(sec('Buildings'));
   root.append(card([note('Build and upgrade the kitchen, barracks, forge and the rest of your ludus. You can also tap a plot in the ludus view.'), U.button({ label: 'Open buildings', icon: 'ludus', variant: 'bronze', block: true, onClick: () => ctx.open('building', {}) })])); // QA: the plot screen used to open only by tapping the 3D scene, which keyboard and screen reader players cannot do
+  // ECONOMY: finance, the circuit and the market's new stalls
+  root.append(sec('Money and the road'));
+  { const E = lm.eco(S), b = lm.weeklyBill(S);
+    root.append(card([note(`The strongbox: the weekly bill is ${fmt(b.total)} gold${lm.debtTotal(S) ? `, and you owe ${fmt(lm.debtTotal(S))}` : ''}. Loans, hired staff, the bookmaker and political favors live in Finance. The Circuit map lets you take the ludus to other towns.`), actions([U.button({ label: 'Finance', icon: 'coin', variant: 'gold', onClick: () => ctx.open('finance', {}) }), U.button({ label: 'The Circuit', icon: 'arena', variant: 'bronze', onClick: () => ctx.open('circuit', {}) }), U.button({ label: 'Auction and caravan', icon: 'market', variant: 'ghost', onClick: () => ctx.open('market', { tab: 'auction' }) })])])); }
   root.append(sec('The world'));
   root.append(card([note('Plan the whole season, deal with the rival schools, look after the barracks, and honor the fallen.'), actions([U.button({ label: 'Calendar', icon: 'scroll', variant: 'bronze', onClick: () => ctx.open('world', { tab: 'calendar' }) }), U.button({ label: 'Rival ludi', icon: 'skull', variant: 'bronze', onClick: () => ctx.open('world', { tab: 'rivals' }) }), U.button({ label: 'Barracks', icon: 'roster', variant: 'bronze', onClick: () => ctx.open('world', { tab: 'barracks' }) }), U.button({ label: `Memorial (${(S.fallen || []).length})`, icon: 'fame', variant: 'bronze', onClick: () => ctx.open('world', { tab: 'memorial' }) }), U.button({ label: 'Infirmary', icon: 'heart', variant: 'bronze', onClick: () => ctx.open('world', { tab: 'infirmary' }) }), U.button({ label: 'Patrons', icon: 'coin', variant: 'bronze', onClick: () => ctx.open('world', { tab: 'patrons' }) }), U.button({ label: 'Chronicle', icon: 'scroll', variant: 'bronze', onClick: () => ctx.open('world', { tab: 'chronicle' }) })])]));
   root.append(sec('Sponsors'));
@@ -136,6 +141,11 @@ function settingsTab(ctx, root, draw) {
     toggle('Reduced motion', 'Calms menu animations and transitions, shakes less and turns gore off.', !!(S.opts.rm || p.rm), (v) => setOpt('rm', 'rm', v)),
     toggle('Large text', 'Bigger text in menus and dialogs.', !!(S.opts.big || p.big), (v) => setOpt('big', 'big', v)),
     toggle('High contrast', 'Flat dark panels, white text and thick edges. Follows your device setting when it asks for more contrast.', !!(S.opts.hc || p.hc), (v) => setOpt('hc', 'hc', v)),
+  ]));
+  root.append(sec('Combat'));   // COMBAT
+  root.append(card([
+    toggle('Direct control', 'Fight with one chosen gladiator yourself (stick or WASD, strike, heavy, roll, block and parry). Off by default; the plan sheet before a fight also has this switch.', !!p.dc, (v) => { p.dc = v; save(); applyPrefs(ctx); ctx.sfx('uiTap'); }),
+    toggle('Announcer captions', 'Short subtitled lines from the editor and the crowd at key moments.', p.barks !== false, (v) => { p.barks = v; save(); ctx.sfx('uiTap'); }),
   ]));
   root.append(sec('Violence'));
   const gl = h('div', 'ax-grid s'), gnote = { off: 'No blood, no wounds, no dismemberment.', low: 'Blood splashes and wounds. No dismemberment.', full: 'Arterial sprays, pools, wounds and dismemberment.' };

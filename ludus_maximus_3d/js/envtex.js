@@ -47,7 +47,8 @@ export const PLAN = {
   themes: () => [
     SP.stone(512, { bx: 2, by: 10, base: 0x9a6a3c, tint: 0x6a4222, mortar: 0x24120a, seed: 5 }), SP.marble(512, 21),
     SP.stone(512, { bx: 3, by: 5, base: 0xe6c88c, tint: 0xc89a58, mortar: 0x8a6a40, seed: 9 }), SP.stone(512, { bx: 4, by: 6, base: 0xe8eef8, tint: 0xaebcd4, mortar: 0x6a7890, seed: 13 }),
-    SP.stone(512, { bx: 4, by: 6, base: 0x8a7870, tint: 0x4e3e3a, mortar: 0x2a1a18, seed: 17 })],
+    SP.stone(512, { bx: 4, by: 6, base: 0x8a7870, tint: 0x4e3e3a, mortar: 0x2a1a18, seed: 17 }),
+    SP.stone(512, { bx: 3, by: 6, base: 0xf2eee2, tint: 0xd2ccbc, mortar: 0x9a9484, seed: 23 })],   // ARENAS: + alexandria limestone
 };
 
 // ---------------------------------------------------------------- bytes ready for the synchronous make* calls

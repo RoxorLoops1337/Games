@@ -338,6 +338,17 @@
       const n = league >= 2 ? 3 : 2; const purse = Math.round(L.purse * 2.5 * sm);
       out.push({ key: `${week}:${league}:m`, kind: 'team', week, league, title: `Team Clash ${n}v${n}`, size: n, opps: field(n, 0), purse, fame: Math.round(L.fameWin * 2.2), fee: Math.round(purse * 0.12) });
     }
+    if (league >= 1 && LM.BOUTS) { // COMBAT: special bouts from league 1 (own random stream, so the events above stay exactly as they were)
+      const rb = mulberry(hash(S.seed + '|bout|' + week + '|' + league)), pick = (id) => { const B = LM.BOUTS[id], rv = riv[Math.floor(rb() * riv.length)]; return { B, rv }; };
+      const make = (id, size, n, lvlAdj, kind) => {
+        const { B } = pick(id); if (league < B.minLeague) return; const opps = []; for (let i = 0; i < n; i++) opps.push(mkOpp(S, riv[Math.floor(rb() * riv.length)], baseLvl(1) + lvlAdj, 1.0, rb, league, false));
+        const purse = Math.round(L.purse * (kind === 'team' ? 2.5 : 1.6) * sm * B.purse), fame = Math.round(L.fameWin * (kind === 'team' ? 2.2 : 1.3) * B.fame);
+        out.push({ key: `${week}:${league}:b${id}`, kind, week, league, title: B.n, size, bout: id, opps, purse, fame, fee: Math.round(purse * 0.12 * B.fee) });
+      };
+      if (week % 6 === 3) make('gauntlet', 1, 3, -1, 'duel');
+      if (week % 6 === 5) make('lms', league >= 2 ? 3 : 2, league >= 2 ? 3 : 2, 0, 'team');
+      if (week % 6 === 1) make('nets', 1, 1, 0, 'duel');
+    }
     return out;
   };
   LM.eventByKey = (S, key) => { const [w, l] = key.split(':'); return LM.events(S, parseInt(w, 10), parseInt(l, 10)).find((e) => e.key === key); };

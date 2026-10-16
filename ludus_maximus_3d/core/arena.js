@@ -36,6 +36,8 @@
       dmg: 0, taken: 0, crits: 0, grudge: false, bacc: 0, racc: 0, srT: 0.5, noDmgT: 9, graspReady: true, graspT: 0, elecAt: 0, phaseAt: 0, thCnt: 0, fs: null, airT: 1,
       frT: 0, ltT: 0, cqT: 0, swap: null, cmdCd: 0, cmdId: null, aiFell: 0, aiPressed: 0, aiHeld: 0,
       role: '', show: 0, flT: 0, // PLAN: battle-plan role ('' = none) and Showmanship level 0..3 (declared here, only ever assigned), next flourish time
+      // COMBAT: stamina (stM 0 = no stamina system), direct control (dc, input, queued action), block / parry, heavy / bash flag, bout state (out = waiting off the sand). Only ever assigned.
+      out: 0, dc: 0, stM: 0, sta: 0, stT: 0, wndT: 0, bsT: 0, jvT: 0, blk: 0, par: 0, parCd: 0, dcAx: 0, dcAy: 0, dcq: 0, dcqT: 0, dcCd: 0, hv: 0, lk: '', tgC: 0,
       beast: null, bx: null, ai: null, sz: 0, boss: false, enraged: false, wa: null, bs: null,
     };
   }
@@ -81,10 +83,13 @@
   L.mkUnits = (glads, side, ctx, hpFracs, grudge) => glads.map((g, i) => mkUnit(g, side, i, glads.length, ctx, hpFracs && hpFracs[i], grudge));
   L.createFight = (A, B, o) => {
     o = o || {};
-    return { t: 0, A, B, units: A.concat(B), ev: [], hype: 0, peak: 0, done: false, winner: null, auto: { A: !!o.autoA, B: true }, foc: { A: null, B: null }, quiet: !!o.quiet, sched: [], dtmax: 0.1, duo: o.duo ? { ids: o.duo.ids, kind: o.duo.kind, cd: 10, max: D.DUOS[o.duo.kind].cd } : null, manualFavor: !!o.manualFavor, favorReady: false, hazards: o.hazards || 0, hazT: 7 + rnd() * 3, zones: [], cmd: { rally: 6, swap: 0 }, cmdAI: !!o.cmdAI,
+    const F = { t: 0, A, B, units: A.concat(B), ev: [], hype: 0, peak: 0, done: false, winner: null, auto: { A: !!o.autoA, B: true }, foc: { A: null, B: null }, quiet: !!o.quiet, sched: [], dtmax: 0.1, duo: o.duo ? { ids: o.duo.ids, kind: o.duo.kind, cd: 10, max: D.DUOS[o.duo.kind].cd } : null, manualFavor: !!o.manualFavor, favorReady: false, hazards: o.hazards || 0, hazT: 7 + rnd() * 3, zones: [], cmd: { rally: 6, swap: 0 }, cmdAI: !!o.cmdAI,
       // declared up front so the fight keeps one hidden class (js/fightsetup.js fills hypeK / meta / replay, L.step counts n)
-      n: 0, hypeK: 0, meta: null, replay: null,
+      n: 0, hypeK: 0, meta: null, replay: null, rules: null, hz: null, // COMBAT: rules (deep combat, bout state) and hazard state, both null in a plain fight
       pri: { A: false, B: false } }; // PLAN: a side whose focus came from its battle plan: when that target falls the side picks the weakest left
+    if (o.deep || o.bout) L.deepen(F, o.deep || o.bout); // COMBAT: stamina, weapon classes and the special bout rules (opt in: a plain fight is unchanged)
+    if (o.bout) L.applyBout(F, o.bout);
+    return F;
   };
 
   // ---------- derived live stats ----------
@@ -98,6 +103,7 @@
     if (s.slow) m *= s.slow.f;
     if (s.gstance) m *= 0.5; // TACTICS: a guarding fighter does not swing
     if (u.enraged) m += u.bx.enrage.aps; // BEAST
+    if (u.stM > 0) m *= staAps(u); // COMBAT: a tired fighter swings slower
     return u.aps * m;
   }
   function msOf(u) {
@@ -107,6 +113,7 @@
     if (s.slow) m *= 0.4 + 0.6 * s.slow.f;
     if (s.press) m += 0.12; if (s.retreat) m += 0.3; if (s.gstance) m *= 0.4; // TACTICS
     if (u.enraged) m += u.bx.enrage.ms; // BEAST
+    if (u.stM > 0) m *= staMs(u); // COMBAT: tired and heavily armoured fighters are slower
     return u.ms * m;
   }
   L.apsOf = apsOf; L.msOf = msOf;
@@ -142,7 +149,8 @@
       if (t.fx.revive && !t.revived) { t.revived = true; t.hp = Math.round(t.maxhp * 0.2 * Math.min(1, t.fx.revive)); t.s.inv = 0.6; emit(F, { k: 'revive', dst: t.id }); return; }
       t.hp = 0; t.down = true; t.s = mkSt(); emit(F, { k: 'down', dst: t.id, src: src && src.id }); F.hype += 10;
       if (F.pri && F.pri[other(t.side)] && F.foc[other(t.side)] === t.id) F.foc[other(t.side)] = refocus(F, t.side); // PLAN: the priority target fell
-      if (!alive(F, t.side).length) finish(F, other(t.side));
+      const lastOne = !alive(F, t.side).length;
+      if (F.rules ? boutDown(F, t, lastOne) : lastOne) finish(F, other(t.side)); // COMBAT: a waiting partner or the next foe of a gauntlet takes over (boutDown says whether the side is really beaten)
     }
   }
   // the weakest fighter left on `side` (lowest hp, first on a tie), or null: where a battle plan's focus goes when its target falls
@@ -158,15 +166,18 @@
   }
   function strike(F, u, t, o) {
     o = o || {}; if (t.down || u.down) return 0;
-    if (t.s.inv) { emit(F, { k: 'miss', src: u.id, dst: t.id, inv: 1 }); return 0; }
+    if (t.s.inv) { emit(F, t.s.dash && t.s.dash.roll ? { k: 'miss', src: u.id, dst: t.id, inv: 1, roll: 1 } : { k: 'miss', src: u.id, dst: t.id, inv: 1 }); return 0; }
+    if (t.par > 0 && o.basic && parried(F, u, t)) return 0; // COMBAT: a perfectly timed parry (direct control)
     const av = L.adv(u.style, t.style);
-    let hc = 0.94 - t.eva - (u.s.blind ? 0.4 : 0) + (t.s.netted ? 0.12 : 0) - (t.s.retreat ? 0.2 : 0); if (o.sure) hc = 1; hc = clamp(hc, 0.3, 1);
+    let hc = 0.94 - t.eva - (u.s.blind ? 0.4 : 0) + (t.s.netted ? 0.12 : 0) - (t.s.retreat ? 0.2 : 0); if (F.rules && F.rules.blind) hc -= 0.12; if (o.sure) hc = 1; hc = clamp(hc, 0.3, 1);
     if (rnd() > hc) { emit(F, { k: 'miss', src: u.id, dst: t.id }); return 0; }
     const df = t.def * (1 + (t.s.frenzy ? t.s.frenzy.def : 0)) * (1 - (o.ignore || 0)) * (1 - Math.min(0.6, 0.08 * (u.fx.pen || 0)));
     let dmg = DK * u.atk * (o.mult || 1) * (0.85 + rnd() * 0.3) * (60 / (60 + Math.max(0, df))) * dmgMul(F, u, t, o);
+    if (F.rules && F.rules.deep && o.basic) dmg *= wcMul(F, u, t); // COMBAT: thrust at the point or cut in the clinch
     if (u.rk === 'first') { u.fs = u.fs || new Set(); if (!u.fs.has(t.id)) { u.fs.add(t.id); dmg *= 2.2; } dmg *= 1.05; }
     if (u.rk === 'grasp' && u.graspReady && o.basic) { dmg += t.maxhp * 0.02; u.graspReady = false; u.graspT = 5; heal(F, u, u.maxhp * 0.015); const g = Math.round(u.maxhp * 0.003); u.maxhp += g; u.hp += g; emit(F, { k: 'rune', src: u.id, id: 'grasp' }); }
     const crit = rnd() < clamp(u.crit + (o.critB || 0), 0, 0.8); if (crit) dmg *= 1.6 + 0.15 * (u.fx.critdmg || 0);
+    if (t.blk) dmg = blockHit(F, t, dmg); // COMBAT: a raised shield (direct control) costs stamina, and a broken guard staggers
     if (t.s.guard) dmg *= 1 - t.s.guard.f;
     if (F.pri[other(t.side)] && F.foc[other(t.side)] === t.id) dmg *= PRIO.guard; // PLAN: a marked foe is expected: its side closes ranks around it
     if (t.s.press) dmg *= 1.1; if (t.s.expo) dmg *= 1.1; if (t.s.hold) dmg *= 0.85; // TACTICS: the price of Press / Rally, the reward of Hold
@@ -179,7 +190,7 @@
       else if (!t.gritUsed && rnd() < t.wil * 0.004) { t.gritUsed = true; dmg = t.hp - 1; save = 'GRIT'; F.hype += 14; }
     }
     u.dmg += shown; if (crit) u.crits++; t.noDmgT = 0;
-    emit(F, { k: 'hit', src: u.id, dst: t.id, dmg: shown, crit, adv: av, tech: o.tag, save, basic: !!o.basic });
+    const he = { k: 'hit', src: u.id, dst: t.id, dmg: shown, crit, adv: av, tech: o.tag, save, basic: !!o.basic }; if (t.blk) he.blk = 1; emit(F, he);
     F.hype += (2 + (shown / t.maxhp) * 50 + (crit ? 5 : 0)) * (u.show ? SHOWT[u.show].hy : 1);
     if (dmg > 0) damage(F, t, dmg, u);
     if (!o.noProc) procs(F, u, t, shown, crit, o);
@@ -215,7 +226,7 @@
   function startDash(F, u, tx, ty, fn) { u.s.dash = { tx, ty, t: 0.5, fn }; emit(F, { k: 'dash', src: u.id }); }
   const toward = (u, t, d) => { const dx = t.x - u.x, dy = t.y - u.y, l = Math.hypot(dx, dy) || 1; return [dx / l * d, dy / l * d]; };
   function castSkill(F, u, sk, t, foes) {
-    const T = D.TECHS[sk.id]; sk.cd = T.cd; u.cast = 0.22; emit(F, { k: 'tech', src: u.id, tech: sk.id });
+    const T = D.TECHS[sk.id]; sk.cd = T.cd; u.cast = 0.22; emit(F, { k: 'tech', src: u.id, tech: sk.id }); if (u.stM > 0) drain(F, u, TUNE.skill * (1 + 0.3 * wtOf(u)));
     F.hype += 5;
     if (T.tg === 'enemy') {
       if (sk.id === 'lunge') { const [ox, oy] = toward(u, t, Math.max(0, dist(u, t) - 1.1)); startDash(F, u, u.x + ox, u.y + oy, () => { strike(F, u, t, { mult: T.mult, ignore: T.ignore, sure: true, tag: sk.id }); }); return; }
@@ -253,7 +264,7 @@
 
   // ---------- ultimates (player or AI) ----------
   function castUlt(F, u, k, t) {
-    const slot = u.ults[k]; const U = D.ULTS[slot.id]; slot.cd = U.cd; u.cast = 0.2; F.hype += 22;
+    const slot = u.ults[k]; const U = D.ULTS[slot.id]; slot.cd = U.cd; u.cast = 0.2; F.hype += 22; if (u.stM > 0) drain(F, u, TUNE.ult);
     emit(F, { k: 'ult', src: u.id, id: slot.id, c: U.c }); if (u.rm.has('nimbus')) u.s.nimbus = 3;
     const foes = alive(F, other(u.side));
     switch (slot.id) {
@@ -379,6 +390,7 @@
       const key = ST_TIMED[i], v = s[key]; if (!v) continue;
       if (typeof v === 'number') { s[key] = v - dt; if (s[key] <= 0) s[key] = 0; } else { v.t -= dt; if (v.t <= 0) s[key] = 0; }
     }
+    if (u.stM > 0) stamUp(F, u, dt); if (u.dc) dcTick(u, dt); // COMBAT
     u.atkT -= dt; u.noDmgT += dt; if (u.cmdCd > 0) u.cmdCd -= dt; if (u.swap && (u.swap.t -= dt) <= 0) u.swap = null;
     const hk = hasteK(u) * dt, sks = u.skills; for (let i = 0; i < sks.length; i++) sks[i].cd = Math.max(0, sks[i].cd - hk); const uk = ultK(u) * dt, uls = u.ults; for (let i = 0; i < uls.length; i++) uls[i].cd = Math.max(0, uls[i].cd - uk);
     if (u.frT > 0 && (u.frT -= dt) <= 0) u.stk.fr = 0; if (u.ltT > 0 && (u.ltT -= dt) <= 0) u.stk.lt = 0; if (u.cqT > 0 && (u.cqT -= dt) <= 0) u.stk.cq = 0;
@@ -391,9 +403,12 @@
   }
   function think(F, u, dt) {
     if (u.down) return; const s = u.s;
-    if (s.stun || s.air || s.dash || s.pull) { u.mvx = u.mvy = 0; return; }
+    if (u.dc && u.dcq === 3) dcRoll(F, u); // COMBAT: a queued roll can cancel a wind-up
+    if (s.stun || s.air || s.dash || s.pull) { u.mvx = u.mvy = 0; if (u.blk && (s.stun || s.air)) u.blk = 0; return; }
     if (u.cast > 0) { u.cast -= dt; u.mvx = u.mvy = 0; return; }
     if (u.wind > 0) { u.wind -= dt; u.mvx = u.mvy = 0; if (u.wind <= 0) resolveAttack(F, u); return; }
+    if (u.dc) return dcThink(F, u, dt); // COMBAT: the player drives this fighter
+    if (F.rules && u.stM > 0 && u.wndT > 0) { u.mvx = u.mvy = 0; return; } // COMBAT: winded: he stands and gasps
     if (F.zones.length) { let z = null; for (let i = 0; i < F.zones.length; i++) { const q = F.zones[i]; if (Math.hypot(u.x - q.x, u.y - q.y) < q.r + 0.6) { z = q; break; } } if (z) { const dx = u.x - z.x, dy = u.y - z.y, l = Math.hypot(dx, dy) || 1; u.mvx = dx / l; u.mvy = dy / l; return; } }
     if (u.beast) return beastThink(F, u, dt); // BEAST
     const foes = aliveInto(F, other(u.side), foesBuf); if (!foes.length) return;
@@ -407,14 +422,18 @@
     if (F.cmdAI && u.side === 'B') aiCmd(F, u, foes, t, d);
     if (s.retreat) { retreatMove(F, u, foes); return; } // TACTICS
     if (s.gstance) { u.mvx = u.mvy = 0; return; }
+    if (F.rules && F.rules.deep && u.stM > 0 && boutThink(F, u, t, d)) return; // COMBAT: javelin opener, tag-team swaps
     if (rnd() < dt * 3 && !s.silence) { for (const sk of u.skills) { if (sk.cd <= 0 && skillOk(F, u, sk, t, foes, d)) { castSkill(F, u, sk, t, foes); return; } } }
+    if (F.rules && F.rules.blind && d > 4.2) { // COMBAT blindfold: he hunts by sound, so he drifts toward the noise and wanders
+      const bx = (t.x - u.x) / d, by = (t.y - u.y) / d, wob = Math.sin(F.t * 1.9 + u.i * 2.3 + (u.side === 'A' ? 0 : 1.7)); u.mvx = bx * 0.7 - by * wob * 0.5; u.mvy = by * 0.7 + bx * wob * 0.5; return;
+    }
     if (d <= u.range + 0.1) {
       u.strafeT -= dt; if (u.strafeT <= 0) { u.strafeT = 1 + rnd() * 1.5; u.strafeDir = rnd() < 0.5 ? -1 : 1; }
       const nx = (t.x - u.x) / (d || 1), ny = (t.y - u.y) / (d || 1);
       if (u.style === 'retiarius' && d < u.range * 0.62) { u.mvx = -nx * 0.9; u.mvy = -ny * 0.9; }
       else if (u.role === 'skirmisher' && d < u.range * 0.7 && u.atkT > 0.15 && Math.hypot(u.x, u.y) < R * 0.8) { u.mvx = -nx * 0.9 - ny * u.strafeDir * 0.25; u.mvy = -ny * 0.9 + nx * u.strafeDir * 0.25; } // PLAN: the Skirmisher gives ground while the blow recovers
       else { u.mvx = -ny * u.strafeDir * 0.3; u.mvy = nx * u.strafeDir * 0.3; }
-      if (u.atkT <= 0 && !s.spin) { u.wt = t.id; u.wind = L.windOf(u); u.atkT = 1 / apsOf(u); emit(F, { k: 'atk', src: u.id, dst: t.id }); }
+      if (u.atkT <= 0 && !s.spin && (u.stM <= 0 || swingGate(F, u, t, d))) { u.wt = t.id; u.wind = L.windOf(u); u.atkT = 1 / apsOf(u); emit(F, { k: 'atk', src: u.id, dst: t.id }); }
     } else if (s.hold) { u.mvx = u.mvy = 0; } else { const nx = (t.x - u.x) / d, ny = (t.y - u.y) / d; u.mvx = nx; u.mvy = ny; if (u.role) roleChase(F, u, t, d, nx, ny); }
   }
   // PLAN: how a role walks toward its target. Anchors stay near the team while someone else carries the fight, Flankers swing wide before they close.
@@ -535,6 +554,7 @@
   function resolveAttack(F, u) {
     const t = F.units.find((x) => x.id === u.wt); if (!t || t.down || u.s.stun) { u.wa = null; return; }
     if (u.wa) { beastHit(F, u, t); return; } // BEAST
+    if (u.hv) { hvStrike(F, u, t); return; } // COMBAT: heavy blow (direct control) or shield bash
     if (dist(u, t) <= u.range + 0.9) strike(F, u, t, { mult: 1, basic: true }); else emit(F, { k: 'whiff', src: u.id });
   }
   function motion(F, u, dt) {
@@ -603,13 +623,15 @@
     for (let i = 0; i < nU; i++) think(F, us[rv ? nU - 1 - i : i], dt);
     for (let i = 0; i < nU; i++) motion(F, us[rv ? nU - 1 - i : i], dt);
     separate(F);
+    if (F.rules) boutStep(F, dt); // COMBAT
+    if (F.hz && !F.done) hazStep(F, dt);
     if (F.hype >= 100 / (F.hypeK || 1) && !F.done) {
       const behind = sideHp(F, 'A') <= sideHp(F, 'B');
       if (F.manualFavor && behind) { if (!F.favorReady) { F.favorReady = true; F.hype = 100 / (F.hypeK || 1); emit(F, { k: 'favorready' }); } else F.hype = Math.min(F.hype, 100 / (F.hypeK || 1)); } else roar(F, F.manualFavor && !behind ? 'B' : null);
     }
     if (F.hazards && !F.done) { F.hazT -= dt; if (F.hazT <= 0) { F.hazT = 11 + rnd() * 5; hazard(F); } }
     F.peak = Math.max(F.peak, F.hype);
-    if (!F.done && F.t > 95) { const hp = (s) => F.units.filter((u) => u.side === s).reduce((a, u) => a + u.hp / u.maxhp, 0); finish(F, hp('A') >= hp('B') ? 'A' : 'B'); }
+    if (!F.done && F.t > (F.rules && F.rules.maxT ? F.rules.maxT : 95)) { const hp = (s) => F.units.filter((u) => u.side === s).reduce((a, u) => a + u.hp / u.maxhp, 0); finish(F, hp('A') >= hp('B') ? 'A' : 'B'); }
   };
 
   // ---------- TACTICS: player commands (stances per fighter, team Rally, partner Swap). Every command is a tap keyed by F.n (replay safe), uses no rnd(),
@@ -634,7 +656,7 @@
   L.command = (F, kind, a, b) => {
     if (!F || F.done) return false; if (!F.cmd) F.cmd = { rally: 0, swap: 0 };
     if (kind === 'stance') {
-      const u = F.units.find((x) => x.id === a); if (!u || u.down || u.beast) return false;
+      const u = F.units.find((x) => x.id === a); if (!u || u.down || u.beast || u.dc) return false;
       if (b === 'none') { let had = false; for (const k in STANCE_KEYS) if (u.s[STANCE_KEYS[k]]) { u.s[STANCE_KEYS[k]] = 0; had = true; } if (u.s.guard && u.s.guard.stance) u.s.guard = 0; return had; }
       if (!L.CMD[b] || !L.CMD[b].stance) return false;
       if ((u.cmdCd || 0) > 0) return 'cd';
@@ -688,10 +710,307 @@
     const pls = stanceA && typeof stanceA === 'object' ? L.fightPlans(S, gA, gB, stanceA) : null; // PLAN: a battle plan changes the odds (both sides' plans, same as the real fight)
     L.withRandom(L.mulberry(L.hash(gA.map((g) => g.id + ':' + g.lvl).join() + '|' + gB.map((g) => g.name + g.lvl).join() + (pls ? L.planKey(pls.pa) : stanceA || ''))), () => {
       const ca = L.teamCtx(S, gA, pls ? pls.pa : stanceA || 'bal'); const cb = L.teamCtx(null, gB, 'bal'); if (pls && pls.pb) cb.plan = pls.pb;
-      for (let i = 0; i < n; i++) { const F = L.quick(L.mkUnits(gA, 'A', ca), L.mkUnits(gB, 'B', cb), pls ? { plans: pls } : undefined); if (F.winner === 'A') w++; }
+      for (let i = 0; i < n; i++) { const F = L.quick(L.mkUnits(gA, 'A', ca), L.mkUnits(gB, 'B', cb), pls ? { plans: pls, deep: 1 } : { deep: 1 }); if (F.winner === 'A') w++; } // COMBAT: the odds use the same deep rules as the live fight
     });
     return w / n;
   };
+
+  // =====================================================================================================================================================
+  // COMBAT: deeper automatic combat (weapon classes, stamina, armour weight), optional direct control, arena hazards, special bouts.
+  // Everything here is opt in: a fight made without { deep } / { bout } / hazards / a controlled fighter never reaches this code (F.rules, F.hz are null, u.stM and u.dc are 0),
+  // so those fights are byte identical to before (digest in tests/ludus_maximus_3d_combat.test.mjs). Player input is only ever a tap keyed by F.n (L.dcInput, L.tagIn) and
+  // uses no rnd() of its own. No counters: every choice below trades something for something.
+  // =====================================================================================================================================================
+  const TUNE = L.COMBAT_TUNE = { swing: 7, regen: 15, regenEnd: 0.3, skill: 0, ult: 3, wtMs: 0.02, wtRegen: 0.2, tired: 0.9, tiredMs: 0.96, thrustFar: 1.03, thrustIn: 0.97, cutIn: 1.02, cutFar: 0.99, bashMul: 1.6, jav: 0.55, k: { murmillo: 1.03, retiarius: 1.02, thraex: 0.99, hoplomachus: 0.99, dimachaerus: 0.97 } }; // the numbers of the deep rules (tools/ludus3d_combat_balance.mjs)
+  const mkRules = () => ({ deep: 1, bout: '', maxT: 0, wave: 0, lms: 0, blind: 0, chain: null, tag: 0, nets: 0, dcId: '', rest: 0 });
+
+  // ---------- weapon classes ----------
+  // form: thrust (best at the point of the weapon, clumsy inside it) or cut (best in the clinch, a little short at the tip). cost: stamina per swing. bash: carries a shield that can
+  // interrupt a wind-up. jav: opens with a thrown javelin. Every class gives something and takes something.
+  L.WCLASS = {
+    murmillo:    { n: 'Sword and tower shield', form: 'cut',    bash: 1, jav: 0, cost: 1.2,  tip: 'Cuts best close in. A shield bash interrupts a wind-up, but every swing costs the most stamina.' },
+    retiarius:   { n: 'Trident and net',        form: 'thrust', bash: 0, jav: 0, cost: 0.9,  tip: 'Thrusts hardest at the tip and ignores a little armour. Light kit tires slowly, but a clinch is awkward.' },
+    thraex:      { n: 'Curved blade, small shield', form: 'cut', bash: 0, jav: 0, cost: 0.95, tip: 'Cuts best close in and bleeds foes on a crit. Quick and light, so the guard is thin.' },
+    hoplomachus: { n: 'Spear and round shield', form: 'thrust', bash: 1, jav: 1, cost: 1.1,  tip: 'Opens with a thrown javelin and bashes with the shield. Strongest at the spear point, weak in a clinch.' },
+    dimachaerus: { n: 'Twin blades',            form: 'cut',    bash: 0, jav: 0, cost: 1.0,  tip: 'Cuts best close in and bleeds on a crit. No shield, no bash.' },
+  };
+  const wtOf = (u) => { const v = u.def / 20; return v > 1 ? 1 : v < 0 ? 0 : v; }; // armour weight 0..1 from the armour value: it protects, and it tires
+  L.armourWeight = wtOf;
+  const endOf = (u) => (u.g && u.g.st && u.g.st.end) || 10;
+  function staAps(u) { return u.wndT > 0 ? 0.6 : u.sta < 25 ? TUNE.tired : 1; }
+  function staMs(u) { return (u.wndT > 0 ? 0.5 : u.sta < 25 ? TUNE.tiredMs : 1) * (1 - TUNE.wtMs * wtOf(u)); }
+  const swingCost = (u) => TUNE.swing * ((L.WCLASS[u.style] || { cost: 1 }).cost) * (1 + 0.45 * wtOf(u));
+  // pay for an action that is optional (a swing, a roll): false when the fighter cannot afford it
+  function spend(u, n) { if (!(u.stM > 0)) return true; if (u.wndT > 0 || u.sta < n) return false; u.sta -= n; u.stT = 0.55; return true; }
+  // pay for an action that cannot be refused (an ultimate, a blocked blow): stamina runs out and the fighter is winded
+  function drain(F, u, n) {
+    if (!(u.stM > 0) || u.down) return; u.sta -= n; u.stT = 0.55;
+    if (u.sta <= 0) { u.sta = 0; if (!(u.wndT > 0)) { u.wndT = 1.2; u.wind = 0; u.blk = 0; emit(F, { k: 'winded', dst: u.id }); } }
+    else if (u.sta < 25 && !u.tgC) { u.tgC = 1; emit(F, { k: 'tired', dst: u.id }); }
+  }
+  function stamUp(F, u, dt) {
+    if (u.wndT > 0) { u.wndT -= dt; if (u.wndT <= 0) { u.wndT = 0; u.sta = Math.max(u.sta, u.stM * 0.22); u.tgC = 0; emit(F, { k: 'recovered', dst: u.id }); } return; }
+    if (u.stT > 0) { u.stT -= dt; return; } if (u.blk) return;
+    u.sta += (TUNE.regen + TUNE.regenEnd * endOf(u)) * (1 - TUNE.wtRegen * wtOf(u)) * (u.out ? 1.6 : 1) * dt; if (u.sta >= u.stM) u.sta = u.stM; if (u.tgC && u.sta > 45) u.tgC = 0;
+  }
+  // thrust or cut: +-5 to 8 percent by distance, so no weapon is better, only better placed
+  function wcMul(F, u, t) {
+    const w = L.WCLASS[u.style]; if (!w) return 1; const d = dist(u, t), r = u.range, k = TUNE.k[u.style] || 1; // k: the per style trim that keeps the style table where it was (at most 3 percent, see the balance tool)
+    if (w.form === 'thrust') return k * (d >= r * 0.9 ? TUNE.thrustFar : d < r * 0.6 ? TUNE.thrustIn : 1);
+    return k * (d < r * 0.7 ? TUNE.cutIn : d > r * 0.95 ? TUNE.cutFar : 1);
+  }
+  // who tires and how: opt in per fight (L.createFight { deep: 1 }); beasts have no stamina
+  L.deepen = (F, how) => {
+    F.rules = F.rules || mkRules(); void how;
+    for (const u of F.units) if (!u.beast && !(u.stM > 0)) { u.stM = Math.round(88 + 1.15 * endOf(u)); u.sta = u.stM; }
+    return F.rules;
+  };
+  // the swing gate for stamina fighters (AI and DC share it): pays the swing, and picks a shield bash over a swing when the foe is winding up
+  function swingGate(F, u, t, d) {
+    u.hv = 0; if (u.wndT > 0) return false; const w = L.WCLASS[u.style];
+    if (w && w.bash && u.bsT <= 0 && u.sta >= 30 && t.wind > 0 && !t.beast && d < u.range + 0.5) { if (spend(u, swingCost(u) * TUNE.bashMul)) { u.hv = 2; u.bsT = 8; return true; } }
+    return spend(u, swingCost(u));
+  }
+  // heavy blow (hv 1, direct control) or shield bash (hv 2)
+  function hvStrike(F, u, t) {
+    const hv = u.hv; u.hv = 0; if (dist(u, t) > u.range + 0.9) { emit(F, { k: 'whiff', src: u.id }); return; }
+    const a = bAng(u, t);
+    if (hv === 2) { emit(F, { k: 'bash', src: u.id, dst: t.id }); const d = strike(F, u, t, { mult: 0.45, basic: true, noProc: true, tag: 'bash' }); if (d && !t.down) { t.kx += Math.cos(a) * 3.2; t.ky += Math.sin(a) * 3.2; if (!t.boss) cc(F, t, 'stun', 0.5, 0.5); } return; }
+    emit(F, { k: 'heavy', src: u.id, dst: t.id });
+    const d = strike(F, u, t, { mult: 1.9, basic: true, critB: 0.08, tag: 'heavy' });
+    if (d && !t.down) { t.kx += Math.cos(a) * 4.5; t.ky += Math.sin(a) * 4.5; if (!t.boss && d >= t.maxhp * 0.08) cc(F, t, 'stun', 0.5, 0.5); }
+  }
+  function parried(F, u, t) {
+    t.par = 0; t.parCd = 0.5; emit(F, { k: 'parry', src: u.id, dst: t.id });
+    if (!u.s.ccimm && !u.s.spin && !u.down) { u.s.stun = u.boss ? 0.5 : 0.95; u.wind = 0; u.cast = 0; u.s.dash = 0; emit(F, { k: 'status', dst: u.id, st: 'stun', t: 0.95 }); }
+    if (t.stM > 0) { t.sta = Math.min(t.stM, t.sta + 12); }
+    t.atkT = Math.min(t.atkT, 0.05); F.hype += 12; return true;
+  }
+  function blockHit(F, t, dmg) {
+    const bc = 4 + dmg * 0.4;
+    if (!(t.stM > 0) || t.sta >= bc) { drain(F, t, bc); return dmg; }
+    t.blk = 0; t.s.guard = 0; t.s.stun = 0.75; t.wind = 0; emit(F, { k: 'status', dst: t.id, st: 'stun', t: 0.75 }); emit(F, { k: 'guardbreak', dst: t.id }); return dmg;
+  }
+  // javelin opener and the tag-team swaps (deep fights, AI side only)
+  function boutThink(F, u, t, d) {
+    const w = L.WCLASS[u.style], R = F.rules;
+    if (R.tag && !u.dc && (u.side === 'B' || F.auto.A) && F.t > 3 && u.hp < u.maxhp * 0.3 && hasReserve(F, u.side, 0.45) && tagReady(F, u.side)) { L.tagIn(F, u.side); return true; }
+    if (w && w.jav && u.jvT <= 0 && d > 4 && d < 8.5 && u.sta >= 16 && !u.cast && u.atkT <= 0.4) {
+      u.jvT = 13; drain(F, u, 10); u.cast = 0.3; emit(F, { k: 'proj', src: u.id, dst: t.id, c: '#f5ead2', jav: 1 }); strike(F, u, t, { mult: TUNE.jav, sure: true, noProc: true, tag: 'javelin' }); return true;
+    }
+    return false;
+  }
+
+  // ---------- direct control ----------
+  // L.dcEnable(F, uid): from now on that fighter (side A) obeys L.dcInput instead of the AI. Called while the fight is built, so the replay snapshot has it.
+  L.dcEnable = (F, uid) => {
+    const u = F.units.find((x) => x.id === uid && x.side === 'A' && !x.beast); if (!u) return false;
+    L.deepen(F); F.rules.dcId = uid; u.dc = 1; u.s.rally = 0; return true;
+  };
+  const DC_N = 16, DC_TAU = Math.PI * 2 / DC_N;
+  // stick code for the tap: 0 = centred, 1..16 = a direction at full speed, 17..32 = the same at a walk
+  L.dcCode = (x, y) => { const m = Math.sqrt(x * x + y * y); if (m < 0.18) return 0; let a = Math.atan2(y, x); if (a < 0) a += Math.PI * 2; const i = Math.round(a / DC_TAU) % DC_N; return 1 + i + (m < 0.55 ? DC_N : 0); };
+  L.dcVec = (code, out) => { out = out || {}; if (!code) { out.x = out.y = 0; return out; } const c = code - 1, i = c % DC_N, m = c >= DC_N ? 0.5 : 1; out.x = Math.cos(i * DC_TAU) * m; out.y = Math.sin(i * DC_TAU) * m; return out; };
+  // kind: 'move' (val = code), 'light' | 'heavy' | 'roll' (queued for 0.28 s so a press during a recovery still lands), 'block' (val 1 / 0), 'lock' (val = foe id or '')
+  L.dcInput = (F, uid, kind, val) => {
+    const u = F && F.units.find((x) => x.id === uid); if (!u || !u.dc || u.down || F.done) return false;
+    if (kind === 'move') { const v = L.dcVec(val | 0, _dcv); u.dcAx = v.x; u.dcAy = v.y; return true; }
+    if (kind === 'light') { u.dcq = 1; u.dcqT = 0.28; return true; }
+    if (kind === 'heavy') { u.dcq = 2; u.dcqT = 0.28; return true; }
+    if (kind === 'roll') { u.dcq = 3; u.dcqT = 0.28; return true; }
+    if (kind === 'block') { const on = val ? 1 : 0; if (on && !u.blk && u.parCd <= 0 && !u.s.stun) { u.par = 0.2; u.parCd = 0.55; } if (on && u.wndT > 0) return false; u.blk = on; if (!on) u.s.guard = 0; return true; }
+    if (kind === 'lock') { u.lk = val || ''; return true; }
+    return false;
+  };
+  const _dcv = { x: 0, y: 0 };
+  function dcTick(u, dt) {
+    if (u.par > 0) u.par -= dt; if (u.parCd > 0) u.parCd -= dt; if (u.dcCd > 0) u.dcCd -= dt; if (u.bsT > 0) u.bsT -= dt; if (u.jvT > 0) u.jvT -= dt;
+    if (u.dcqT > 0 && (u.dcqT -= dt) <= 0) u.dcq = 0;
+  }
+  // pre-pass (before the wind-up / stun gates): a queued roll can cancel a wind-up
+  function dcRoll(F, u) {
+    const s = u.s; if (s.stun || s.air || s.pull || s.dash || u.dcCd > 0 || u.wndT > 0 || !spend(u, 20)) return;
+    let dx = u.dcAx, dy = u.dcAy, m = Math.sqrt(dx * dx + dy * dy);
+    if (m < 0.2) { const f = nearestFoeOf(F, u); if (f) { dx = u.x - f.x; dy = u.y - f.y; m = Math.sqrt(dx * dx + dy * dy) || 1; } else { dx = -u.face; dy = 0; m = 1; } }
+    dx /= m; dy /= m; let tx = u.x + dx * 3.3, ty = u.y + dy * 3.3; const r = Math.sqrt(tx * tx + ty * ty); if (r > R * 0.98) { tx *= R * 0.98 / r; ty *= R * 0.98 / r; }
+    u.wind = 0; u.cast = 0; u.hv = 0; u.blk = 0; u.s.guard = 0; u.s.dash = { tx, ty, t: 0.34, sp: 11.5, fn: null, roll: 1 }; if (!(s.inv > 0.3)) s.inv = 0.3; u.dcCd = 0.6; u.dcq = 0; u.dcqT = 0;
+    emit(F, { k: 'roll', src: u.id, dx, dy });
+  }
+  function nearestFoeOf(F, u) { const us = F.units; let b = null, bd = 1e9; for (let i = 0; i < us.length; i++) { const f = us[i]; if (f.side === u.side || f.down) continue; const d = dist(u, f); if (d < bd) { bd = d; b = f; } } return b; }
+  function dcThink(F, u, dt) {
+    const s = u.s, foes = aliveInto(F, other(u.side), foesBuf);
+    if (u.dcq === 3) dcRoll(F, u);
+    if (!foes.length) { u.mvx = u.mvy = 0; return; }
+    let t = null; if (u.lk) for (let i = 0; i < foes.length; i++) if (foes[i].id === u.lk) t = foes[i];
+    if (!t) t = nearestOf(u, foes);
+    u.tgt = t.id; if (Math.abs(t.x - u.x) > 0.15) u.face = t.x > u.x ? 1 : -1;
+    const ax = u.dcAx, ay = u.dcAy, am = Math.sqrt(ax * ax + ay * ay), k = u.blk ? 0.45 : 1;
+    if (s.gstance) { u.mvx = u.mvy = 0; } else { u.mvx = ax * k; u.mvy = ay * k; }
+    if (u.blk) { s.guard = { f: 0.6, t: 0.14, dc: 1 }; return; }
+    if (u.wndT > 0) { u.mvx *= 0.5; u.mvy *= 0.5; return; }
+    if (u.dcq && u.dcqT > 0 && u.atkT <= 0 && !s.spin) {
+      // directional bias: the foe best lined up with the stick (or the lock) takes the blow, and the swing steps toward it
+      let at = t; if (!u.lk && am > 0.3) { let bk = 1e9; for (let i = 0; i < foes.length; i++) { const f = foes[i], d = dist(u, f) || 0.01, dot = ((f.x - u.x) * ax + (f.y - u.y) * ay) / (d * am), kk = d * (1.9 - dot); if (kk < bk) { bk = kk; at = f; } } }
+      const heavy = u.dcq === 2;
+      if (spend(u, heavy ? 26 : swingCost(u))) {
+        const dd = dist(u, at) || 1; u.wt = at.id; u.hv = heavy ? 1 : 0; u.wind = heavy ? 0.46 : L.windOf(u); u.atkT = (heavy ? 1.35 : 0.8) / apsOf(u); u.dcq = 0; u.dcqT = 0;
+        const lg = dd > u.range + 0.3 ? 2.6 : 1.2; u.kx += (at.x - u.x) / dd * lg; u.ky += (at.y - u.y) / dd * lg; if (Math.abs(at.x - u.x) > 0.15) u.face = at.x > u.x ? 1 : -1; u.tgt = at.id;
+        emit(F, { k: 'atk', src: u.id, dst: at.id, heavy: heavy ? 1 : 0 });
+      }
+    }
+  }
+  function nearestOf(u, foes) { let b = foes[0], bd = 1e9; for (let i = 0; i < foes.length; i++) { const d = dist(u, foes[i]); if (d < bd) { bd = d; b = foes[i]; } } return b; }
+
+  // ---------- special bouts ----------
+  // fame / fee / purse are multipliers on the event's numbers (core/sim.js applies them when it offers the bout). minLeague: the first league that offers it.
+  // a / b: fighters on each side (1 = a single fighter, the bout adds waiting partners or foes of its own). kind: the event shape that carries it (duel or team).
+  L.BOUTS = {
+    gauntlet: { id: 'gauntlet', n: 'Gauntlet', kind: 'duel', a: 1, b: 3, fame: 1.8, fee: 1.15, purse: 1.6, minLeague: 1, line: 'One fighter, three foes, one after another. A drink and a breath between them, nothing more.', tip: 'Each foe you drop restores 12% health. The next one walks in at once.' },
+    lms:      { id: 'lms', n: 'Last Man Standing', kind: 'team', a: 0, b: 0, fame: 1.5, fee: 1.1, purse: 1.4, minLeague: 2, line: 'The team fights to the last man. Each fallen friend feeds the survivors.', tip: 'When a friend falls the rest heal 10%. The last of a team makes a desperate stand: faster, hard to stop.' },
+    blind:    { id: 'blind', n: 'Blindfold Bout', kind: 'duel', a: 1, b: 1, fame: 1.6, fee: 1.2, purse: 1.5, minLeague: 2, line: 'Both fighters wear the hood. Listen for the sand and the steel.', tip: 'Beyond four metres nobody sees. Blows land 12% less often. Footsteps and clashes show as rings.' },
+    nets:     { id: 'nets', n: 'Nets and Tridents', kind: 'duel', a: 1, b: 1, fame: 1.35, fee: 1.0, purse: 1.3, minLeague: 1, line: 'Both fighters carry a net and a trident. Reach decides the first exchange.', tip: 'Everyone throws a net and thrusts with +0.45 m reach, at 7% less speed. A roll beats a net.' },
+    chained:  { id: 'chained', n: 'Chained Pair', kind: 'duel', a: 1, b: 1, fame: 1.5, fee: 1.15, purse: 1.45, minLeague: 2, line: 'Wrist chained to wrist. Neither can run past the length of the chain.', tip: 'The chain is 3.6 m. Whoever pulls away drags the other along.' },
+    tag:      { id: 'tag', n: 'Tag Team', kind: 'team', a: 2, b: 2, fame: 1.3, fee: 1.1, purse: 1.3, minLeague: 1, line: 'Two against two, but only one fights at a time. Tag your partner in before you fall.', tip: 'Tag in at any time (the swap button): the rested partner arrives untouchable for a moment and the one outside heals 3% a second.' },
+  };
+  L.BOUT_IDS = Object.keys(L.BOUTS);
+  // the rules of a bout by id, with defaults filled in; null for an unknown id
+  L.boutRules = (id) => { const B = L.BOUTS[id]; return B ? Object.assign({ fame: 1, fee: 1, purse: 1, minLeague: 0, kind: 'duel', a: 1, b: 1 }, B) : null; };
+  const hasReserve = (F, side, minHp) => { const us = F.units; for (let i = 0; i < us.length; i++) { const u = us[i]; if (u.side === side && u.out && u.hp > 0 && u.hp >= u.maxhp * (minHp || 0)) return true; } return false; };
+  const tagReady = (F, side) => !F.rules.tagCd || F.rules.tagCd[side === 'A' ? 0 : 1] <= F.t;
+  function park(F, u) { u.out = 1; u.down = true; u.s = mkSt(); u.wind = 0; u.cast = 0; u.blk = 0; u.atkT = 0.5; u.x = (u.side === 'A' ? -1 : 1) * (R + 3.2); u.y = (u.i - 1) * 1.6; u.tgt = null; }
+  function enterUnit(F, u, x, y, how) {
+    u.out = 0; u.down = false; u.s = mkSt(); u.x = x; u.y = y; u.atkT = 0.6; u.s.inv = how === 'tag' ? 0.9 : 0.5; u.mvx = u.mvy = 0; u.face = u.side === 'A' ? 1 : -1;
+    if (u.stM > 0) { u.sta = Math.max(u.sta, u.stM * 0.7); u.wndT = 0; u.tgC = 0; }
+    emit(F, { k: 'enter', dst: u.id, how: how || 'gate', n: u.i }); F.hype += 8;
+  }
+  // bring the next waiting fighter of `side` onto the sand
+  function enterNext(F, side, how, x, y, except) {
+    const us = F.units; for (let i = 0; i < us.length; i++) { const u = us[i]; if (u.side === side && u.out && u.hp > 0 && u !== except) { enterUnit(F, u, x != null ? x : (side === 'A' ? -1 : 1) * R * 0.9, y != null ? y : 0, how); return u; } }
+    return null;
+  }
+  // a fighter fell: waiting fighters step in; the gauntlet restores the hero, last man standing feeds the survivors. returns true when the side is really beaten
+  function boutDown(F, t, last) {
+    const R_ = F.rules; if (!R_) return last;
+    if (R_.chain) R_.chain = R_.chain.filter((p) => p[0] !== t.id && p[1] !== t.id);
+    if (R_.wave && t.side === 'B') { for (const a of alive(F, 'A')) { heal(F, a, a.maxhp * 0.12); if (a.stM > 0) a.sta = Math.min(a.stM, a.sta + a.stM * 0.35); } }
+    if (last && hasReserve(F, t.side, 0)) { F.sched.push({ at: F.t + (R_.wave ? 1.3 : 0.7), fn: () => { if (F.done) return; if (!alive(F, t.side).length) enterNext(F, t.side, R_.tag ? 'tag' : 'gate'); } }); return false; }
+    if (R_.lms && !last) {
+      const left = alive(F, t.side); for (const a of left) heal(F, a, a.maxhp * 0.1);
+      if (left.length === 1) { const w = left[0]; w.s.lastB = 8; w.s.ccimm = Math.max(w.s.ccimm || 0, 1.5); heal(F, w, w.maxhp * 0.12); F.hype += 16; emit(F, { k: 'laststand', dst: w.id }); }
+    }
+    return last;
+  }
+  // tag in the waiting partner of `side` (a tap from the player: kind 'tag'). returns true | 'cd' | false
+  L.tagIn = (F, side) => {
+    side = side === 'B' ? 'B' : 'A'; const R_ = F && F.rules; if (!R_ || !R_.tag || F.done) return false;
+    if (!R_.tagCd) R_.tagCd = [0, 0]; if (!tagReady(F, side)) return 'cd';
+    const cur = alive(F, side)[0]; if (!cur || !hasReserve(F, side, 0)) return false;
+    const x = cur.x, y = cur.y; park(F, cur); cur.s = mkSt(); R_.tagCd[side === 'A' ? 0 : 1] = F.t + 4;
+    enterNext(F, side, 'tag', x, y, cur); emit(F, { k: 'tag', src: cur.id, side }); return true;
+  };
+  L.applyBout = (F, id) => {
+    const B = L.BOUTS[id]; if (!B) return false; const R_ = F.rules = F.rules || mkRules(); R_.bout = id;
+    const side = (s) => F.units.filter((u) => u.side === s);
+    if (id === 'gauntlet') { R_.wave = 1; R_.maxT = 180; const bs = side('B'); for (let i = 1; i < bs.length; i++) park(F, bs[i]); }
+    else if (id === 'lms') { R_.lms = 1; R_.maxT = 150; }
+    else if (id === 'blind') { R_.blind = 1; }
+    else if (id === 'nets') {
+      R_.nets = 1; let k = 0;
+      for (const u of F.units) { if (u.beast) continue; u.range += 0.45; u.aps *= 0.93; if (!u.skills.some((s) => s.id === 'netthrow')) u.skills.push({ id: 'netthrow', cd: 1.2 + 0.7 * (k++ % 3) }); }
+    }
+    else if (id === 'chained') { R_.chain = []; const as = side('A'), bs = side('B'); for (let i = 0; i < Math.min(as.length, bs.length); i++) R_.chain.push([as[i].id, bs[i].id]); R_.maxT = 130; }
+    else if (id === 'tag') { R_.tag = 1; R_.tagCd = [0, 0]; R_.maxT = 150; for (const s of ['A', 'B']) { const us = side(s); for (let i = 1; i < us.length; i++) park(F, us[i]); } }
+    return true;
+  };
+  const CHAIN_LEN = 3.6;
+  // per step bout upkeep: waiting fighters rest (tag team) and the chain pulls
+  function boutStep(F, dt) {
+    const R_ = F.rules, us = F.units;
+    if (R_.tag) for (let i = 0; i < us.length; i++) { const u = us[i]; if (!u.out || u.hp <= 0) continue; if (u.hp < u.maxhp * 0.9) { u.racc += u.maxhp * 0.03 * dt; if (u.racc >= 1) { const h = Math.floor(u.racc); u.racc -= h; u.hp = Math.min(u.maxhp, u.hp + h); } } if (u.stM > 0) u.sta = Math.min(u.stM, u.sta + 25 * dt); }
+    if (R_.chain) chainStep(F, dt);
+  }
+  function chainStep(F, dt) {
+    const ch = F.rules.chain; if (!ch.length) return;
+    for (const [ia, ib] of ch) {
+      const a = F.units.find((x) => x.id === ia), b = F.units.find((x) => x.id === ib); if (!a || !b || a.down || b.down) continue;
+      let dx = b.x - a.x, dy = b.y - a.y; const d = Math.sqrt(dx * dx + dy * dy); if (d <= CHAIN_LEN) continue;
+      dx /= d; dy /= d; const pull = Math.min((d - CHAIN_LEN) * 0.5, 14 * dt), sa = a.s.dash ? 0 : 1, sb = b.s.dash ? 0 : 1, tot = sa + sb || 1;
+      a.x += dx * pull * 2 * sa / tot; a.y += dy * pull * 2 * sa / tot; b.x -= dx * pull * 2 * sb / tot; b.y -= dy * pull * 2 * sb / tot;
+      if (d > CHAIN_LEN + 0.25 && (F.n % 12) === 0) emit(F, { k: 'chain', src: a.id, dst: b.id, taut: 1 });
+    }
+  }
+
+  // ---------- arena hazards ----------
+  // F.meta.hazards = [{ id, kind, x, y, r, t0, dur }] (sim plane, arena radius 8.6 m). A hazard is armed from t0 to t0 + dur; the telegraph starts L.HAZ[kind].tele seconds BEFORE t0.
+  //   fire: burns 3% of max health every half second inside r, for dur.   spikes: one blow at t0 (10%, knocks up), spikes stay up for dur.
+  //   sand: slows everyone inside (no telegraph, t0 0, dur 999).         trapdoor: at t0 the floor drops: 8% and a 1 s stun, the hole stays open for dur.
+  //   pillar: at t0 a pillar falls: 13%, knocks up, the rubble stays for dur.
+  // Both sides are hurt. Fighters walk out of a telegraphed circle on their own (F.zones). Used by the arena visuals (this.env.setHazards / updateHazards in js/fightview.js).
+  L.HAZ = {
+    fire:     { n: 'Fire pit',        tele: 1.4, c: '#e8742a', r: 1.7, harm: 1, tip: 'Burns 3% health every half second.' },
+    spikes:   { n: 'Spike trap',      tele: 1.0, c: '#d8d2c0', r: 1.5, harm: 1, tip: 'One blow of 10% health and a knock up.' },
+    sand:     { n: 'Sand pit',        tele: 0,   c: '#c9a15a', r: 2.4, harm: 0, tip: 'Slows everyone inside.' },
+    trapdoor: { n: 'Trapdoor',        tele: 1.2, c: '#9a6a3a', r: 1.8, harm: 1, tip: 'The floor drops: 8% health and a stun.' },
+    pillar:   { n: 'Falling pillar',  tele: 1.6, c: '#e6dfd0', r: 1.6, harm: 1, tip: 'Crushes for 13% and knocks up.' },
+  };
+  L.HAZ_THEMES = { provincial: ['sand', 'spikes'], capua: ['fire', 'sand', 'spikes'], alexandria: ['sand', 'pillar', 'fire'], carthage: ['spikes', 'trapdoor', 'sand'], imperial: ['trapdoor', 'pillar', 'fire', 'spikes'] };
+  L.ARENA_THEMES = ['provincial', 'capua', 'alexandria', 'carthage', 'imperial'];
+  // the arena look for a league when the event names none (matches js/env_arena.js ARENA_THEME_IDS)
+  L.themeFor = (league, key) => { const lg = Math.max(0, Math.min(3, league | 0)); return lg === 0 ? 'provincial' : lg === 1 ? 'capua' : lg === 3 ? 'imperial' : (L.hash(String(key || '')) & 1 ? 'carthage' : 'alexandria'); };
+  const HAZ_SITES = [0, 2, 3, 4]; // distinct hazard sites by league
+  L.hazardPlan = (theme, league, key) => {
+    const lg = Math.max(0, Math.min(3, league | 0)), n = HAZ_SITES[lg], kinds = L.HAZ_THEMES[theme] || L.HAZ_THEMES.provincial, out = [];
+    if (!n) return out;
+    const r = L.mulberry(L.hash(String(key || 'x') + '|haz|' + theme)), sites = [];
+    for (let tries = 0; sites.length < n && tries < 60; tries++) {
+      const a = r() * Math.PI * 2, d = 2.3 + r() * 3.6, x = Math.cos(a) * d, y = Math.sin(a) * d;
+      if (sites.every((s) => Math.hypot(s.x - x, s.y - y) > 3.9)) sites.push({ x: Math.round(x * 100) / 100, y: Math.round(y * 100) / 100 });
+    }
+    const PER = { fire: { t: 7, dur: 3.6, per: 13 }, spikes: { t: 9, dur: 1.4, per: 10 }, trapdoor: { t: 12, dur: 4.5, per: 17 }, pillar: { t: 15, dur: 8, per: 26 } };
+    sites.forEach((s, i) => {
+      const kind = kinds[i % kinds.length], H = L.HAZ[kind];
+      if (kind === 'sand') { out.push({ id: 'h' + out.length, kind, x: s.x, y: s.y, r: H.r, t0: 0, dur: 999 }); return; }
+      const P = PER[kind]; for (let t0 = P.t + 2.5 * i; t0 < 120; t0 += P.per) out.push({ id: 'h' + out.length, kind, x: s.x, y: s.y, r: H.r, t0: Math.round(t0 * 10) / 10, dur: P.dur });
+    });
+    return out;
+  };
+  L.setHazards = (F, list) => {
+    if (!F.meta) F.meta = {}; F.meta.hazards = list; F.hz = list.length ? { st: list.map(() => 0), acc: list.map(() => 0), z: list.map(() => null) } : null;
+    if (F.hz) F.hazards = 0; // the themed hazards replace the old random fire jets
+  };
+  function hzHit(F, u, h, frac, min, how) {
+    if (u.down || u.s.inv) return; const dmg = Math.max(min, Math.round(u.maxhp * frac));
+    emit(F, { k: 'hit', src: null, dst: u.id, dmg, crit: false, adv: 0, tech: 'hazard', hz: 1, hzk: h.kind }); damage(F, u, dmg, null);
+    if (!u.down && how === 'air') cc(F, u, 'air', 0.8, 0.8); else if (!u.down && how === 'stun') cc(F, u, 'stun', 1.0, 1.0);
+  }
+  function hazStep(F, dt) {
+    const hz = F.hz, list = F.meta.hazards, t = F.t, us = F.units;
+    for (let i = 0; i < list.length; i++) {
+      const h = list[i], H = L.HAZ[h.kind]; let st = hz.st[i]; if (st === 3) continue;
+      if (st === 0 && t >= h.t0 - H.tele) {
+        hz.st[i] = st = 1;
+        if (H.tele > 0) { emit(F, { k: 'tele', x: h.x, y: h.y, r: h.r, t: H.tele, c: H.c, haz: 1, hzk: h.kind, hid: h.id }); const z = { x: h.x, y: h.y, r: h.r, at: h.t0, hz: 1 }; hz.z[i] = z; F.zones.push(z); }
+      }
+      if (st === 1 && t >= h.t0) {
+        hz.st[i] = st = 2; emit(F, { k: 'haz', hid: h.id, hzk: h.kind, x: h.x, y: h.y, r: h.r, dur: h.dur });
+        if (h.kind === 'spikes' || h.kind === 'trapdoor' || h.kind === 'pillar') {
+          const rr = h.kind === 'pillar' ? h.r + 0.6 : h.r;
+          if (h.kind === 'pillar') emit(F, { k: 'aoe', x: h.x, y: h.y, r: rr, c: H.c, big: 1, haz: 1 });
+          for (let j = 0; j < us.length; j++) { const u = us[j]; if (u.down || Math.hypot(u.x - h.x, u.y - h.y) > rr) continue; if (h.kind === 'spikes') hzHit(F, u, h, 0.1, 3, 'air'); else if (h.kind === 'trapdoor') hzHit(F, u, h, 0.08, 3, 'stun'); else hzHit(F, u, h, 0.13, 4, 'air'); }
+          if (hz.z[i]) { const k = F.zones.indexOf(hz.z[i]); if (k >= 0) F.zones.splice(k, 1); hz.z[i] = null; }
+        }
+      }
+      if (st === 2) {
+        if (h.kind === 'fire') {
+          hz.acc[i] -= dt; if (hz.acc[i] <= 0) { hz.acc[i] += 0.5; for (let j = 0; j < us.length; j++) { const u = us[j]; if (!u.down && Math.hypot(u.x - h.x, u.y - h.y) <= h.r) hzHit(F, u, h, 0.03, 2, ''); } }
+        } else if (h.kind === 'sand') {
+          for (let j = 0; j < us.length; j++) { const u = us[j]; if (!u.down && Math.hypot(u.x - h.x, u.y - h.y) <= h.r && (!u.s.slow || (u.s.slow.f > 0.7 && !u.s.slow.cc))) u.s.slow = { f: 0.7, t: 0.15 }; }
+        }
+        if (t >= h.t0 + h.dur) { hz.st[i] = 3; if (hz.z[i]) { const k = F.zones.indexOf(hz.z[i]); if (k >= 0) F.zones.splice(k, 1); hz.z[i] = null; } emit(F, { k: 'hazend', hid: h.id, hzk: h.kind }); }
+      }
+    }
+  }
+
   // generalise the field representations of the literals above once at load (Smi -> double -> object), so the first fights do not deprecate their maps under optimised code
   (function primeShapes() {
     const st = mkSt(), fx = mkFx({}), stk = { fr: 0, lt: 0, cq: 0, gr: 0 }, u = blankUnit();
@@ -701,6 +1020,7 @@
     for (const k of Object.keys(u)) { const v = u[k]; if (typeof v === 'number') u[k] = 0.5; }
     const r0 = L.rand; L.rand = () => 0.5; // createFight draws one rnd() (hazT): keep the real random stream untouched while priming the fight literal
     try { const F = L.createFight([], [], {}); for (const k of ['t', 'hype', 'peak', 'hazT', 'hypeK']) F[k] = 0.5; F.meta = {}; F.replay = {}; F.winner = 'A'; } finally { L.rand = r0; }
-    u.role = 'vanguard'; u.tgt = 'A0'; u.wt = 'A0'; u.swap = { id: 'A0', t: 1 }; u.cmdId = 'press'; u.beast = 'lion'; u.ai = 'pounce'; u.bx = {}; u.wa = {}; u.bs = {}; u.fs = {};
+    u.lk = 'B0'; u.role = 'vanguard'; u.tgt = 'A0'; u.wt = 'A0'; u.swap = { id: 'A0', t: 1 }; u.cmdId = 'press'; u.beast = 'lion'; u.ai = 'pounce'; u.bx = {}; u.wa = {}; u.bs = {}; u.fs = {};
   })();
 })(typeof globalThis !== 'undefined' ? globalThis : this);
+if (typeof module !== 'undefined' && typeof require === 'function') { for (const f of ['campaign', 'fighters', 'economy']) require('./' + f + '.js'); }   // depth wave 10 modules (browser: script tags in index.html)

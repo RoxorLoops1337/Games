@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Arena themes lab</title>
+<style>html,body{margin:0;height:100%;background:#2a2540;overflow:hidden;font:12px system-ui,sans-serif;color:#f2e6c8}
+canvas{display:block}#hud{position:fixed;left:8px;top:6px;text-shadow:0 1px 2px #000;white-space:pre;pointer-events:none}</style>
+<script type="importmap">{"imports":{"three":"../vendor/three.module.min.js","three/addons/":"../vendor/jsm/"}}</script>
+</head><body><div id="hud"></div>
+<script type="module">
+// ARENAS lab: the real js/env_arena.js bowl with the real sky, light rig and post chain, every theme, weather and hazard kind, for screenshots and a headless check.
+// Params: theme=provincial|capua|alexandria|carthage|imperial (or sandpit|colosseum|desert|gaul|etna)  wx=clear|wind|rain|dust|heat|dusk|night  tier=high|medium|low
+//         cam=0 fight level | 1 overview | 2 hazard close | 3 horizon   haz=none|fire|spikes|sand|trapdoor|pillar|all   fighters=0|1 (two stand-ins in the team colours)
+//         t=<seconds simulated before the frame; hazards use t0 0, tele 2 s, dur 6 s>   test=1 runs the headless check and sets window.__testResult
+import * as THREE from 'three';
+import { createArena, ARENA_THEME_IDS, THEME_IDS, THEMES, pickWeather } from '../js/env_arena.js';
+import { createSky, createLightRig, TOD, applyTOD } from '../js/sky.js';
+import { createPost, TIERS } from '../js/post.js';
+
+const Q = new URLSearchParams(location.search), W = innerWidth, H = innerHeight, tier = Q.get('tier') || 'high';
+const renderer = new THREE.WebGLRenderer({ antialias: false, preserveDrawingBuffer: true, powerPreference: 'high-performance' });
+renderer.setPixelRatio(1); renderer.setSize(W, H); renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.localClippingEnabled = true; renderer.info.autoReset = false;
+document.body.appendChild(renderer.domElement);
+const scene = new THREE.Scene(), camera = new THREE.PerspectiveCamera(48, W / H, 0.1, 900), sky = createSky(); scene.add(sky.mesh);
+const light = createLightRig(scene, { shadowSize: tier === 'high' ? 2048 : 1024, shadowRadius: 50, shadowCenter: new THREE.Vector3(0, 0, 0) });
+const arena = createArena({ density: tier === 'low' ? 0.45 : tier === 'medium' ? 0.7 : 1, decalRes: tier === 'low' ? 1024 : tier === 'medium' ? 1536 : 2048, lite: tier !== 'high' });
+scene.add(arena.group);
+const post = createPost(renderer, scene, camera, { tier }); post.setSize(W, H);
+// two stand-ins in the team colours so readability against each theme can be judged without booting the whole game
+const fighters = new THREE.Group(); fighters.name = 'standins';
+[[-1.6, 0x2f86e8], [1.6, 0xd02a3e]].forEach(([x, c]) => { const m = new THREE.Mesh(new THREE.CapsuleGeometry(0.34, 1.1, 4, 8), new THREE.MeshStandardMaterial({ color: c, roughness: 0.8 })); m.position.set(x, 0.9, 0); m.castShadow = true; fighters.add(m); });
+fighters.visible = Q.get('fighters') !== '0'; scene.add(fighters);
+
+const KINDS = ['fire', 'spikes', 'sand', 'trapdoor', 'pillar'];
+const hazList = (which) => {
+  const ks = which === 'all' ? KINDS : KINDS.includes(which) ? [which] : [], pos = which === 'all' ? [[-5, -3.2], [0, -4.8], [5, -3.2], [-3.4, 3.6], [3.4, 3.6]] : [[0, 0]];
+  return ks.map((k, i) => ({ id: 'h' + i, kind: k, x: pos[i][0], y: pos[i][1], r: which === 'all' ? 1.7 : 2.2, t0: 0, dur: 6, tele: 2 }));
+};
+let list = hazList(Q.get('haz') || 'none'), clock = 0;
+function frame(dt) { clock += dt; arena.update(clock, dt); arena.updateHazards(list, clock); }
+function setTheme(id, wx, extra = {}) {
+  return arena.setTheme(id, Object.assign({ rig: light, scene, sky, renderer, wx, night: wx === 'night', ambient: false }, extra));
+}
+function setCam(c) {
+  const P = [[8.5, 4.6, 7.5, 0, 1, 0], [0, 30, 26, 0, 3, -2], [5.5, 3.6, 4.5, 0, 0.2, 0], [0, 24, 34, 0, 12, -40]][c] || [8.5, 4.6, 7.5, 0, 1, 0];
+  camera.position.set(P[0], P[1], P[2]); camera.lookAt(P[3], P[4], P[5]); camera.updateMatrixWorld();
+}
+const id0 = Q.get('theme') || 'imperial', wx0 = Q.get('wx') || 'clear';
+setTheme(id0, wx0); setCam(+(Q.get('cam') || 0));
+const hud = document.getElementById('hud');
+function render() { renderer.info.reset(); post.render(1 / 60, clock); }
+function stats() { const i = renderer.info.render; return { calls: i.calls, tris: i.triangles, theme: arena.theme, weather: arena.weather, hazards: arena.hazardStats() }; }
+async function shot(secs) {
+  const n = Math.round((+Q.get('t') || 0) + (secs || 0)) * 30;
+  for (let i = 0; i < n; i++) frame(1 / 30);
+  frame(1 / 30); render(); const s = stats(); window.__stat = s;
+  hud.textContent = `${s.theme} | ${s.weather} | ${tier} | calls ${s.calls} | tris ${(s.tris / 1000).toFixed(0)}k | hazards ${s.hazards.active} (${s.hazards.drawCalls} calls)`; return s;
+}
+window.__labShot = shot; window.__arena = arena; window.__setTheme = setTheme; window.__lab = { renderer, scene, camera, post, light, sky, setCam, frame, render, stats, setList: (l) => { list = l; clock = 0; }, hazList };
+window.__labReady = Promise.resolve(true);
+
+// ---------------------------------------------------------------- headless check (?test=1)
+async function runTests() {
+  const R = { ok: true, errors: [], themes: {}, hazards: {}, notes: [] }, bad = (m) => { R.ok = false; R.errors.push(m); };
+  fighters.visible = false; setCam(0);
+  const wxs = ['clear', 'wind', 'rain', 'dusk', 'night'];
+  const ids = ARENA_THEME_IDS.concat(THEME_IDS.filter((x) => !['sandpit', 'colosseum'].includes(x)));
+  for (const id of ids) {
+    if (!THEMES[id]) { bad('missing theme ' + id); continue; }
+    R.themes[id] = {};
+    for (const wx of wxs) {
+      try {
+        setTheme(id, wx); for (let i = 0; i < 4; i++) frame(1 / 30);
+        renderer.info.reset(); renderer.render(scene, camera); const raw = { calls: renderer.info.render.calls, tris: renderer.info.render.triangles };
+        render(); const full = { calls: renderer.info.render.calls, tris: renderer.info.render.triangles };
+        R.themes[id][wx] = { scene: raw, post: full };
+        const gl = renderer.getContext(), e = gl.getError(); if (e) bad(`GL error ${e} at ${id}/${wx}`);
+        if (!(raw.calls > 5 && raw.tris > 1000)) bad(`nothing drawn at ${id}/${wx}`);
+      } catch (e) { bad(`${id}/${wx}: ${e && e.message}`); }
+    }
+  }
+  // pickWeather: forecast wins, clear rolls only wind or dusk, deterministic
+  const pw = (m) => pickWeather('carthage', m);
+  if (pw({ weather: 'rain' }) !== 'rain' || pw({ weather: 'heat' }) !== 'heat') bad('forecast must win over the ambient roll');
+  let seen = new Set(); for (let s = 1; s < 80; s++) seen.add(pw({ season: s, title: 't' + s }));
+  if (![...seen].every((x) => ['clear', 'wind', 'dusk'].includes(x)) || !seen.has('wind') || !seen.has('clear')) bad('ambient roll gave ' + [...seen]);
+  if (pw({ season: 3, title: 'x' }) !== pw({ season: 3, title: 'x' })) bad('pickWeather not deterministic');
+  // hazards
+  setTheme('imperial', 'clear'); frame(1 / 30);
+  renderer.info.reset(); renderer.render(scene, camera); const idle = renderer.info.render.calls, idleTris = renderer.info.render.triangles;
+  for (const kind of KINDS) {
+    const L = [{ id: 7, kind, x: 1, y: 2, r: 2, t0: 0, dur: 5, tele: 1.5 }], H = { kind };
+    const at = (t) => { clock = t; arena.updateHazards(L, t); renderer.info.reset(); renderer.render(scene, camera); const s = arena.hazardStats(); return { calls: renderer.info.render.calls - idle, tris: renderer.info.render.triangles - idleTris, active: s.active, hz: s.drawCalls }; };
+    H.before = at(-0.5); H.tele = at(0.8); H.active = at(2.6); H.fade = at(4.85); H.after = at(5.4);
+    if (H.before.calls !== 0 || H.before.hz !== 0) bad(kind + ': draws before t0 ' + JSON.stringify(H.before));
+    if (!(H.tele.calls >= 1 && H.tele.calls <= 3)) bad(kind + ': telegraph draw calls ' + H.tele.calls);
+    if (!(H.active.calls >= 2 && H.active.calls <= 3)) bad(kind + ': active draw calls ' + H.active.calls);
+    if (H.after.calls !== 0 || H.after.active !== 0) bad(kind + ': not cleaned up ' + JSON.stringify(H.after));
+    if (H.active.tris > 12000) bad(kind + ': too many triangles ' + H.active.tris);
+    R.hazards[kind] = H;
+  }
+  { // pool: 8 at once -> 6 live; ids that vanish fade out within 0.5 s; slots are reused
+    const L = Array.from({ length: 8 }, (_, i) => ({ id: 'p' + i, kind: KINDS[i % 5], x: i - 4, y: -3, r: 1.5, t0: 0, dur: 4, tele: 1 }));
+    arena.updateHazards(L, 2.0); const a = arena.hazardStats().active; if (a !== 6) bad('pool cap: ' + a);
+    L.length = 0; arena.updateHazards(L, 2.1); arena.updateHazards(L, 2.7); if (arena.hazardStats().active !== 0) bad('vanished ids must clear: ' + arena.hazardStats().active);
+    const L2 = [{ id: 'z', kind: 'fire', x: 0, y: 0, r: 1.5, t0: 3, dur: 3, tele: 1 }]; arena.updateHazards(L2, 3.5); if (arena.hazardStats().active !== 1) bad('slot reuse failed');
+    arena.updateHazards(L2, 7); arena.updateHazards([], 7); if (arena.hazardStats().active !== 0) bad('final cleanup failed');
+  }
+  { // no allocation per frame once warm: 600 updates of a live list must not grow the heap by more than a few hundred KB
+    const L = hazList('all'); arena.updateHazards(L, 2.5); const m0 = performance.memory ? performance.memory.usedJSHeapSize : 0;
+    for (let i = 0; i < 600; i++) { arena.update(i / 60, 1 / 60); arena.updateHazards(L, 2.5 + i / 60); }
+    const m1 = performance.memory ? performance.memory.usedJSHeapSize : 0; R.notes.push('heap delta bytes over 600 hazard frames: ' + (m1 - m0)); if (m0 && m1 - m0 > 600000) bad('hazard update allocates: ' + (m1 - m0));
+  }
+  window.__testResult = R; hud.textContent = (R.ok ? 'OK ' : 'FAIL ') + JSON.stringify(R.errors);
+}
+if (Q.get('test')) runTests().catch((e) => { window.__testResult = { ok: false, errors: [String(e && e.stack || e)] }; });
+else { frame(1 / 30); render(); }
+</script></body></html>

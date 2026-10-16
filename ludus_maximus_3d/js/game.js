@@ -16,7 +16,7 @@ import * as ET from './envtex.js'; // PERF: texture release / re-warm between sc
 
 const bm = (k) => { const b = window.__bootT; if (b) b[k] = Math.round(performance.now() - b.t0); };   // boot phase marks (main.js stats().boot)
 const D = () => globalThis.LM_D, L = () => globalThis.LM;
-const SCREENS = ['building', 'roster', 'profile', 'recruit', 'arena', 'market', 'armory', 'more', 'world', 'infirmary', 'sponsors', 'events']; // WAVE2 infirmary/sponsors/events (screens/*.js)
+const SCREENS = ['building', 'roster', 'profile', 'recruit', 'arena', 'market', 'armory', 'more', 'world', 'infirmary', 'sponsors', 'events', 'finance', 'circuit']; // ECONOMY: finance + circuit screens; WAVE2 infirmary/sponsors/events (screens/*.js)
 // 'world' = calendar, rival ludi, barracks, memorial (screens/world.js)
 // TUT: every sheet and dialog carries data-tut-sheet=<key> so the tutorial never has to read titles
 const TUT_SHEETS = [[/^Roster$/, 'roster'], [/^The Arena$/, 'arena'], [/^(Choose your first fighter|Volunteers)$/, 'recruit'], [/^(Victory|Defeat|Duel won)$/, 'results'], [/^Week \d+ done$/, 'week-done'], [/^More$/, 'more'], [/^The World$/, 'world'], [/^Your Ludus$/, 'building'], [/^Market$/, 'market']];
@@ -307,7 +307,7 @@ export class Game {
     this.goldC = U.counter({ ico: 'coin', value: 0, kind: 'gold' }); this.fameC = U.counter({ ico: 'fame', value: 0, kind: 'fame' });
     this.weekChip = document.createElement('div'); this.weekChip.className = 'fv-week';
     this.weekChip.style.cssText = 'font:800 12px/16px system-ui,sans-serif;letter-spacing:.06em;color:#f2c14e;text-shadow:0 1px 0 #1d1830;padding:6px 10px;border-radius:999px;background:rgba(29,24,48,.62);white-space:nowrap';
-    const row = document.createElement('div'); row.className = 'lx-row'; row.append(this.goldC, this.fameC);
+    const row = document.createElement('div'); row.className = 'lx-row'; row.append(this.goldC, this.fameC); this.goldC.style.cursor = 'pointer'; this.goldC.addEventListener('click', () => this.open('finance')); // ECONOMY: tap the gold to open Finance
     const right = document.createElement('div'); right.className = 'lx-row'; right.append(this.weekChip, U.iconButton('gear', 'Settings and more', () => this.open('more', { tab: 'settings' })));
     top.append(row, right);
     const mid = document.createElement('div'); mid.style.cssText = 'flex:1;pointer-events:none';
