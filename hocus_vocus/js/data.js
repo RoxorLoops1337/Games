@@ -730,7 +730,7 @@ const DATA = (() => {
     energy: [ECONOMY.energy, 1, 10], hand: [ECONOMY.handSize, 1, ECONOMY.maxHand], startBlock: [0, 0, 99], inkMax: [ECONOMY.inkMax, 6, 20],
     startInk: [ECONOMY.startInk, 1, 20], wellInk: [ECONOMY.wellInk, 1, 12], cardChoices: [ECONOMY.cardChoices, 1, 6], freeSwaps: [ECONOMY.freeSwaps, 0, 5],
     campActions: [1, 1, 3], rareBoost: [0, 0, 50], startGold: [ECONOMY.startGold, 0, 999], curses: [0, 0, 10],
-    crowd: [ECONOMY.crowd, 4, 12],                                        // the Crowd meter size (data.js "The Crowd and Medleys")
+    crowd: [ECONOMY.crowd, 0, 12],                                        // the Crowd meter size (data.js "The Crowd and Medleys"); 0 is off (a mod never folds below 4 in play, the sims pass 0 directly)
   };
   const FRAC_KEYS = ['goldMul', 'priceMul', 'healMul', 'enemyHp', 'eliteHp', 'bossHp', 'enemyDmg'];
   D.foldMods = (list) => {

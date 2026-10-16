@@ -119,7 +119,7 @@ const COMBAT = (() => {
       },
       events: [], added: 0, played: 0, lastPlayed: null, lastHero: null,
       // THE CROWD (DATA "The Crowd and Medleys"): cards played fill it (+1, a kill +2); at crowdMax the crowd goes wild (crowdWild counts the fills)
-      crowd: 0, crowdMax: Math.max(1, isNum(mods.crowd) ? mods.crowd : (ECO.crowd || 7)), crowdWild: 0,
+      crowd: 0, crowdMax: isNum(mods.crowd) && mods.crowd <= 0 ? 0 : Math.max(1, isNum(mods.crowd) ? mods.crowd : (ECO.crowd || 7)), crowdWild: 0,   // crowdMax 0 switches the Crowd off (sims that measure enemies against a steady party)
     };
 
     // ---------------------------------------------------------------- engine state (closure)
@@ -839,7 +839,7 @@ const COMBAT = (() => {
       return ok(want) ? want : ok(order.find((h) => h !== want)) ? order.find((h) => h !== want) : null;
     }
     function crowdAdd(n) {
-      if (n <= 0 || dead || C.phase === 'over' || C.phase === 'setup' || !C.enemies.some((e) => !e.down)) return;   // the kill that wins the fight wakes nobody
+      if (n <= 0 || !C.crowdMax || dead || C.phase === 'over' || C.phase === 'setup' || !C.enemies.some((e) => !e.down)) return;   // the kill that wins the fight wakes nobody; crowdMax 0 is off
       C.crowd += n;
       const wild = C.crowd >= C.crowdMax;
       let hero = null, card = null;

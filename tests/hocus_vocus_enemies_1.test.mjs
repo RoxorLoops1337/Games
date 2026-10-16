@@ -1215,9 +1215,10 @@ else {
     };
     const tierOf = (ids) => (ids.some((x) => E[x].tier === 'boss') ? 'boss' : ids.some((x) => E[x].tier === 'elite') ? 'elite' : 'normal');
     const heroesAt = (hp) => HEROES.map((h) => ({ id: h, hp: hp === undefined ? D2.heroes[h].maxHp : Math.min(hp, D2.heroes[h].maxHp * 20), maxHp: hp === undefined ? D2.heroes[h].maxHp : hp }));
+    // crowd 0 (the Crowd off): these sims measure the enemies against a steady party, and the Crowd's free Signature copies would make the chip and starter policies sing rares (DATA "The Crowd and Medleys")
     const play = (ids, deck, seed, o) => {
       o = o || {};
-      return COMBAT.simulate({ heroes: o.heroes || heroesAt(), frontIdx: 0, deck: deck(), enemies: ids, tier: o.tier || tierOf(ids), chapter: 1, seed, mods: D2.foldMods([]), relics: [], gold: o.gold === undefined ? 60 : o.gold, maxTurns: o.maxTurns || 60 }, o.policy);
+      return COMBAT.simulate({ heroes: o.heroes || heroesAt(), frontIdx: 0, deck: deck(), enemies: ids, tier: o.tier || tierOf(ids), chapter: 1, seed, mods: Object.assign(D2.foldMods([]), { crowd: 0 }), relics: [], gold: o.gold === undefined ? 60 : o.gold, maxTurns: o.maxTurns || 60 }, o.policy);
     };
     const lostOf = (s) => s.heroes.reduce((a, h) => a + (h.maxHp - h.hp), 0);
     const many = (ids, deck, n, o) => { const out = []; for (let i = 1; i <= n; i++) out.push(play(ids, deck, U2.hash('eng1', ids.join('+'), i), o)); return out; };

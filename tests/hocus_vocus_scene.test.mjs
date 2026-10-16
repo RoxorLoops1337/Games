@@ -27,7 +27,7 @@ function combatOpts(g, enemies, tier = 'normal', chapter = 1, seed = 11, delta =
   const deck = [];
   let uid = 1;
   heroes.forEach((h) => DATA.heroes[h].starter.forEach((id) => deck.push({ uid: uid++, id, up: 0, gems: (DATA.cards[id].slots || []).map(() => null) })));
-  return { heroes: heroes.map((id) => ({ id, hp: DATA.heroes[id].maxHp, maxHp: DATA.heroes[id].maxHp })), frontIdx: 0, deck, enemies, tier, chapter, seed, mods: DATA.foldMods([delta]), relics: [], gold: 50 };
+  return { heroes: heroes.map((id) => ({ id, hp: DATA.heroes[id].maxHp, maxHp: DATA.heroes[id].maxHp })), frontIdx: 0, deck, enemies, tier, chapter, seed, mods: Object.assign(DATA.foldMods([delta]), { crowd: 0 }), relics: [], gold: 50 };   // crowd 0: a starter deck must not sing free Signatures here, these fights are recorded for their enemy beats (flee, summon, phases)
 }
 const mountSynthetic = (g, enemies, extra = {}) => g.SCENE.mount({ chapter: 1, boss: false, heroes: ['hanae', 'kuro'], enemies, seed: 5, instant: true, ...extra });
 const kappas = (n) => Array.from({ length: n }, () => 'kappa');
