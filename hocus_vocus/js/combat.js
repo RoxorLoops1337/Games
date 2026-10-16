@@ -6,7 +6,7 @@
 // PUBLIC API
 //   COMBAT.create({ heroes:[{id,hp,maxHp}], frontIdx, deck:[{uid,id,up,gems}], enemies:[enemyId], tier, chapter, seed, mods, relics:[id], gold }) -> C
 //        mods is RUN.mods(R) verbatim (partial objects are fine, missing keys default from DATA.foldMods([])); only energy, hand, startBlock,
-//        freeSwaps, enemyHp, eliteHp, bossHp and enemyDmg are read. relics are only for hooks and row bonuses. Enemy HP is rolled in create
+//        freeSwaps, enemyHp, eliteHp, bossHp and enemyDmg are read. relics are only for hooks and row bonuses (the combat hooks of every active Charm set tier, DATA.activeSetTiers(relics), register after them as party hooks with src 'set'). Enemy HP is rolled in create
 //        (C.rng), so units are fully formed before start(); C.start() then runs enemy `start` ops, the opening shuffle, combatStart hooks,
 //        the first intents and turn 1. The opening shuffle is not a `shuffle` event and does not fire onShuffle.
 //   COMBAT.simulate(opts, policyFn?) -> summary   plays a whole combat with policyFn(C) (default COMBAT.greedyPolicy). The summary is C.summary()
@@ -1577,6 +1577,10 @@ const COMBAT = (() => {
     relicIds.forEach((id) => {
       const r = D.relics[id];
       asList(r.hooks).forEach((h) => { if (D.LISTS.combatHooks.indexOf(h.on) >= 0) registerHook(h, r.hero || null, 'relic', id); });
+    });
+    // active Charm set tiers (DESIGN 4.7) are party hooks too, after the Charms' own; src 'set' so no `relic` event names a Charm that is not one
+    asList(typeof D.activeSetTiers === 'function' ? D.activeSetTiers(relicIds) : []).forEach((t) => {
+      asList(t.def.hooks).forEach((h) => { if (D.LISTS.combatHooks.indexOf(h.on) >= 0) registerHook(h, null, 'set', t.set + ':' + t.tier); });
     });
     hide(C, { _hooks: hooks });
     return C;

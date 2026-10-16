@@ -682,6 +682,18 @@ Rest), `onPaint` (after each hex unmuted, by Vox, a Spell or a chain), `onFightW
 - COMBAT gets `mods` verbatim from `RUN.mods(R)` and reads only `energy hand startBlock freeSwaps enemyHp eliteHp bossHp enemyDmg`. COMBAT never reads `DATA.relics[id].mods`;
   `relics:[ids]` are for hooks only.
 
+**Charm sets (`set`, `DATA.relicSets`).** A relic def may carry `set: setId`. `DATA.relicSets[setId]` (registered with `DATA.add('relicSets', defs)`, data in
+`data_relics.js`) is `{id, name, text, tiers: {N: {text, mods?, hooks?, rows?}}}` with `N` a whole number from 2 to 8. A tier is ACTIVE while the party owns at least
+`N` Charms of that set (any rarity, any source; a Charm counts once); tiers stack, so owning 3 gives the 2 and 3 bonuses. Each active tier is a virtual Charm built
+only from existing mod keys, hook ops and conditions: `DATA.modsFor` and `DATA.rowFor` fold its `mods` and `rows` (so `RUN.mods(R)` and COMBAT see them), COMBAT
+registers its combat hooks after the Charms' own (`src: 'set'`, party hooks, no `relic` event), and `RUN.hook` runs its run hooks after the Charms' own (never for
+`onPickup`). Nothing new is saved: `DATA.activeSetTiers(R.relics)` derives everything from the owned ids, so old saves load unchanged. Helpers: `setCounts`,
+`setMembers`, `setMax`, `setProgress(setId, relicIds)` (what the Charms panel shows: owned, top tier, every tier line and whether it is lit) and
+`setTierLabel(setId, tier)`, the toast line "Stage Crew 3 of 4: ..." that `RUN.addRelic` notes in `R.log` (with `set` and `tier`) and logs as `{op:'set'}` when a
+pickup switches a tier on. Each tier `text` is one sentence of at most 90 characters and carries every number and trigger of its data (the treasure suite checks
+it like a Charm text). Breath and hand size stay Headliner trades: the one Breath tier (Rhythm Section 4) is gated by `every` and `limit`, and the one draw tier (Demo Tape 3) is every 3rd turn (a turn 1 draw would be absorbed by the opening hand, which is topped up to the hand size). The audit demands every
+set be completable by any party from a fresh profile (at least as many unlocked, hero-free members as its top tier).
+
 ### 4.8 Map, Vox and Spells
 
 - **Layout.** Pointy-top axial hexes `(q, r)`, key `'q,r'`, odd-r offset: `column = q + floor(r / 2)`, and a tile exists iff `0 <= column < cols` and `0 <= r < rows`. The map is

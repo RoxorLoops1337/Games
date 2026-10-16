@@ -39,7 +39,7 @@ shell, feather, fang, skull, leather, wool, silk, felt); food appears and is nev
 names of `HV_HEROES.md`, the 51 enemy names of `HV_ENEMIES.md`). Relic names 4 to 28 characters, gem names 8 to 28 characters, all
 unique across cards, Charms, gems and enemies (content suite).
 
-## 2. Charms (`js/data_relics.js`, 66 ids: common 22, uncommon 22, rare 12, boss 6, shop 4)
+## 2. Charms (`js/data_relics.js`, 96 ids: common 44, uncommon 30, rare 12, boss 6, shop 4; 8 Charm sets in `DATA.relicSets`)
 
 Columns: the rules `text` is exact (it replaces the Echowake `text`), the flavour is exact (new `flavor` field, D1-3), the icon look
 is a brief for the art plan, the last column marks the owners' nods.
@@ -148,6 +148,61 @@ is a brief for the art plan, the last column marks the owners' nods.
 - Hero looks and kits: 12 hero Charms (D1-6). Each names only its own hero in its rules text (the suite requires it) and never another.
 - Jordan's merch: Tour Poster, Giant Water Bottle, Tote Bag, Spare Mic, Crew Lanyard, Sticker Sheet, Mystery Pin.
 - The Gloss: Pitch Fixer (it compliments, gag 9), Glowing Phone (Scrollopolis), Sampler Pad ("Not glossy, clean").
+
+### 2.7 Charm sets (`DATA.relicSets`, 8 ids; DESIGN 4.7)
+
+The owners asked for "a lot more relics with small gains, but great if you have many in combo". A set bonus tier is active while the party owns at least that many
+Charms of the set (tiers stack); the Charms panel shows "Stage Crew 2/4" with the tier lines lit or greyed, a Charm tooltip adds "Stage Crew, 2 of 4", and a pickup
+that switches a tier on toasts "Stage Crew 3 of 4: ..." back on the map. Every bonus is built from existing mods, hook ops and conditions.
+
+| set id | name | one-line text | older members | tier 2 | tier 3 | tier 4 |
+|---|---|---|---|---|---|---|
+| `crew` | **Stage Crew** | `Roadie things. The more of the crew you carry, the steadier the show.` | Pop Filter, Smoke Machine | `Each hero gains 1 more Block at the start of every turn.` | `On the first turn of each fight, both heroes gain 4 Block.` | `At the start of combat, both heroes gain 1 Soundproof.` |
+| `merch` | **Merch Table** | `Tour money. The table pays better the fuller it gets.` | Busking Hat, Battle Trophy | `Combat and gift box gold is 15% higher.` | `All merch stall prices are 15% lower.` | `At the start of each act, gain 25 gold.` |
+| `warmup` | **Warm-Up Routine** | `Looking after the voice. Small habits that add up over a tour.` | Travel Mug, Warm Oat Bar | `After each fight, both heroes heal 2 HP.` | `Healing outside combat is 25% stronger.` | |
+| `rhythm` | **Rhythm Section** | `Everything that keeps the beat. Lock in and the hits land harder.` | Floor Tom | `The first Attack you play each turn deals 1 more damage.` | `Whenever you defeat an enemy, that hero gains 1 Volume.` | `Every 3rd card you play gives 1 Breath (once per turn).` |
+| `pass` | **All Areas** | `The road opens up for whoever carries the right passes.` | Tour Kettle, Tour Poster | `Tea stalls give 1 more Vox.` | `At the start of each act, unmute 1 more hex for free towards the headliner.` | |
+| `fanclub` | **Fan Club** | `Swap and duo things. The crowd loves it when you change places.` | Roller Skates, Wireless Mic | `Whenever you swap spots, the new lead hero gains 2 Block (twice a turn).` | `You get 1 more free swap each turn.` | `Whenever you swap spots, the new lead hero gains 1 Volume (once per turn).` |
+| `demo` | **Demo Tape** | `Card things. A better pick, and a quicker start.` | Lucky Plectrum, The Viral Clip | `Card rewards offer 1 more card.` | `At the start of every 3rd turn, draw 1 card.` | |
+| `soundcheck` | **Soundcheck** | `Openers. The first beat of every fight lands in your favour.` | Trumpet Mute, Triangle | `At the start of combat, apply 2 Sizzle to all enemies.` | `At the start of combat, both heroes gain 1 Volume.` | |
+
+### 2.8 Set Charms (30 ids: common 22, uncommon 8)
+
+Each is a small, always readable gain on its own. No new art: every set Charm reuses a `LISTS.relicIcons` picture in its own palette, and every (icon, palette,
+rarity) triple in the file stays unique. The icon column names the reused motif id.
+
+| id | **name** | rarity | set | rules text (exact) | flavour (exact) | icon |
+|---|---|---|---|---|---|---|
+| `gaffer_tape` | **Gaffer Tape** | common | crew | `At the end of your turn, the lead hero gains 2 Block.` | `Fixes cables, cases, trousers and one wobbly mic stand. Never let go of it.` | seal, azure |
+| `cable_coil` | **Cable Coil** | common | crew | `The first time a hero is hit each fight, they gain 3 Block.` | `Over, under, over, under. Coiled right it never tangles. Coiled wrong, it bites.` | ribbon, ash |
+| `sandbag` | **Sandbag** | common | crew | `Whenever you defeat an enemy, both heroes gain 1 Block.` | `Heavy, dull and exactly where it should be. The stand has never fallen over.` | riceball, ash |
+| `roadie_gloves` | **Roadie Gloves** | common | crew | `Whenever a hero is hit, they gain 1 Block.` | `Thick, grey and missing a thumb. They have carried every amp you ever heard.` | tooth, indigo |
+| `head_torch` | **Head Torch** | uncommon | crew | `On the first turn of each fight, the lead hero gains 3 Block and 1 Shimmy.` | `Hands free, eyes bright, and a little circle of day wherever you happen to look.` | lantern, indigo |
+| `tip_jar` | **Tip Jar** | common | merch | `Combat and gift box gold is 10% higher.` | `A label says thank you in four colours of marker. It works on most people.` | teacup, gold |
+| `float_tin` | **Float Tin** | common | merch | `After every fight, gain 3 gold.` | `Coins for change, sorted by size. Jordan counts it twice and sings the total.` | shrine, ash |
+| `price_stickers` | **Price Stickers** | common | merch | `All merch stall prices are 10% lower.` | `Little stars with a number on. The number is always a bit kinder for the crew.` | star, rose |
+| `card_reader` | **Card Reader** | uncommon | merch | `Winning a Rival fight pays 10 extra gold, and a Headliner fight pays 30.` | `Tap, beep, done. It only beeps for the big crowds, but then it really means it.` | dice, ink |
+| `spare_strings` | **Spare Strings** | common | warmup | `After each fight, both heroes heal 2 HP.` | `A fresh set in the case, always. A snapped string is a shrug, not a crisis.` | bow, teal |
+| `throat_sweets` | **Throat Sweets** | common | warmup | `At the start of combat, the lead hero gains 2 Warm Tea.` | `Lemon and ginger, in a tin that rattles on every drum fill. Take two, pass it.` | plum, moon |
+| `humidifier` | **Little Humidifier** | common | warmup | `Whenever you defeat an enemy, that hero heals 1 HP.` | `Plugs in anywhere, hisses softly, and makes every dressing room smell of mint.` | incense, teal |
+| `stretch_band` | **Stretch Band** | uncommon | warmup | `When you rest at a green room, both heroes heal 3 more HP.` | `Bright orange and very stretchy. Somebody always lets go of the wrong end.` | fan, azure |
+| `click_track` | **Click Track** | common | rhythm | `The first Attack you play each turn deals 1 more damage.` | `Tick, tick, tick, tick. Boring to listen to and impossible to argue with.` | hourglass, azure |
+| `drum_key` | **Drum Key** | common | rhythm | `Every 4th Attack you play deals 4 damage to all enemies.` | `Tiny, square and always in the wrong pocket. Tighten a lug, loosen a lug, go.` | key, ash |
+| `kick_pedal` | **Kick Pedal** | common | rhythm | `At the start of every 4th turn, both heroes gain 1 Volume.` | `Thump. The floor agrees. Thump. The floor agrees again.` | geta, ink |
+| `drum_machine` | **Drum Machine** | uncommon | rhythm | `Every 3rd card you play, the lead hero gains 2 Block.` | `Sixteen pads, one tempo knob, a sticker that says do not touch. Everyone does.` | drum, teal |
+| `tour_map` | **Folded Tour Map** | common | pass | `Start each act with 1 more Vox.` | `Folded nine times, torn twice, and still the only one who knows the ring road.` | compass, ink |
+| `day_ticket` | **Day Ticket** | common | pass | `Every 4th hex you unmute refunds 1 Vox.` | `Valid on every bus, tram and ferry until midnight. Jordan has a drawer full.` | bridge, indigo |
+| `big_flask` | **Big Flask** | uncommon | pass | `Tea stalls give 1 more Vox, and taking this gives 2 Vox.` | `Two litres of tea that stay hot through a whole soundcheck. The lid is a cup.` | kasa, moon |
+| `tour_shirt` | **Tour T-Shirt** | common | fanclub | `Whenever you swap spots, the backing hero gains 2 Block (once per turn).` | `Last tour's towns on the back, two of them crossed out in biro. Still fits.` | charm, azure |
+| `signed_photo` | **Signed Photo** | common | fanclub | `Every 3rd time you swap spots, both heroes heal 2 HP.` | `Two signatures, one upside down. It gets a wave from the back every night.` | eye, gold |
+| `glow_bracelets` | **Glow Bracelets** | common | fanclub | `Whenever you swap spots, the new lead hero gains 1 Feedback (once per turn).` | `Pink, green and lime, snapped on by the dozen. The front glows for hours.` | candle, moon |
+| `fan_banner` | **Fan Banner** | uncommon | fanclub | `You get 1 more free swap a turn, and once per fight a swap gives both heroes 3 Block.` | `Bedsheet, glitter glue and love. The letters get smaller towards the right.` | sun, azure |
+| `lucky_pick` | **Lucky Pick** | uncommon | demo | `Once per fight, the first card you play gives 1 Breath.` | `Found in a pocket after a very good night. Never used on stage, only held.` | petal, gold |
+| `felt_tip` | **Felt Tip** | common | demo | `When you take this, upgrade 1 random card in your deck.` | `Squeaks on every signature. The cap went missing around the second show.` | brush, jade |
+| `headphone_splitter` | **Headphone Splitter** | common | demo | `Rare cards appear 4 percentage points more often in card rewards.` | `One song, two pairs of ears, one very short cable. Walk together or fall over.` | fox, moon |
+| `tuner_clip` | **Tuner Clip** | common | soundcheck | `At the start of combat, apply 2 Earworm to all enemies.` | `Clip it on, hum a note, watch the needle wobble. Then hum it again, properly.` | bolt, gold |
+| `ear_monitors` | **Ear Monitors** | common | soundcheck | `At the start of combat, the lead hero gains 1 Shimmy.` | `Moulded to the ear and worth more than the van. Nobody tells the van.` | beads, teal |
+| `mixing_desk` | **Fader Board** | uncommon | soundcheck | `At the start of combat, both heroes gain 1 Feedback and 1 Soundproof.` | `Forty knobs, three of which do something. Everyone has a favourite.` | comb, indigo |
 
 ## 3. Gems (`js/data_gems.js`, 24 ids)
 

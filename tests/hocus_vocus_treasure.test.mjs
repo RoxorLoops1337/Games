@@ -1,10 +1,10 @@
-// Charms: the 66 relics (js/data_relics.js), the 24 gems (js/data_gems.js) and the 12 junk cards (js/data_cards_shared.js).
+// Charms: the 96 relics (js/data_relics.js: 66 plus the 30 set Charms) and their 8 sets, the 24 gems (js/data_gems.js) and the 12 junk cards (js/data_cards_shared.js).
 //
 //   node tests/hocus_vocus_treasure.test.mjs
 //
 // What this suite guards (each block is its own group of assertions so a failure names the rule):
 //   1 structure   registries, validator (zero errors and zero warnings), audit (zero lines), ids, unique names
-//   2 relic quotas CONTENT_SPEC section 5: 66 = 22/22/12/6/4, the four fixed ids and rarities, three per hero, locked share, icon and
+//   2 relic quotas CONTENT_SPEC section 5: 96 = 44/30/12/6/4, the four fixed ids and rarities, three per hero, locked share, icon and
 //                 palette spread, coverage of every mod key, every hook, rows, gem and swap relics, boss trades
 //   3 relic text  one plain sentence of at most 90 characters, and a MACHINE SUMMARY of each relic (mods, rows and every hook through
 //                 DATA.hookText) that the sentence must agree with: every number, status, resource, noun and trigger the data uses has
@@ -59,7 +59,7 @@ const numbersDeep = (v, out) => {
 // ================================================================================================ 1 structure
 t.test('loading: the three files load without errors and define only their own registries', () => {
   t.eq(api._errors.length, 0, 'no load errors: ' + JSON.stringify(api._errors));
-  t.eq(relics.length, 66, 'relic count');
+  t.eq(relics.length, 96, 'relic count (66 plus the 30 set Charms)');
   t.eq(gems.length, 24, 'gem count');
   t.eq(junk.length, 12, 'only the 12 junk cards are defined by these files');
   t.ok(junk.every((c) => c.hero === 'curse' || c.hero === 'status'), 'every card here is a curse or a status card');
@@ -92,10 +92,10 @@ t.test('names are unique, non empty and short enough to fit a plaque', () => {
 });
 
 // ================================================================================================ 2 relic quotas
-t.test('relic quota: 66 = common 22, uncommon 22, rare 12, boss 6, shop 4', () => {
+t.test('relic quota: 96 = common 44, uncommon 30, rare 12, boss 6, shop 4', () => {
   const q = DATA.QUOTA.relics;
   ['common', 'uncommon', 'rare', 'boss', 'shop'].forEach((r) => t.eq(byRarity(r).length, q[r], `${r} count`));
-  t.eq(q.common + q.uncommon + q.rare + q.boss + q.shop, 66, 'the quota itself sums to 66');
+  t.eq(q.common + q.uncommon + q.rare + q.boss + q.shop, 96, 'the quota itself sums to 96');
   t.ok(relics.every((r) => L.relicRarities.indexOf(r.rarity) >= 0), 'every rarity is a legal rarity');
 });
 
@@ -127,14 +127,14 @@ t.test('locked share is at most 30 percent, boss and shop pools keep enough unlo
   t.ok(locked.length >= 6, 'and there is something to buy in the Library');
   t.ok(count(byRarity('boss'), (r) => !r.locked) >= 5, 'at least 5 unlocked boss relics (a boss offers 3, and there are 3 chapters)');
   t.ok(count(byRarity('shop'), (r) => !r.locked) >= 3, 'at least 3 unlocked shop relics');
-  t.ok(count(byRarity('common'), (r) => !r.locked) >= 18, 'at least 18 unlocked commons');
-  t.ok(count(byRarity('uncommon'), (r) => !r.locked) >= 14, 'at least 14 unlocked uncommons');
+  t.ok(count(byRarity('common'), (r) => !r.locked) >= 40, 'at least 40 unlocked commons');
+  t.ok(count(byRarity('uncommon'), (r) => !r.locked) >= 22, 'at least 22 unlocked uncommons');
   t.ok(count(byRarity('rare'), (r) => !r.locked) >= 7, 'at least 7 unlocked rares');
   ['common', 'uncommon', 'rare', 'boss', 'shop'].forEach((r) => t.ok(DATA.relicPool(r, { card: [], relic: [], gem: [] }, ['hanae', 'kuro']).length >= 3, `a fresh profile has a ${r} pool for a Hanae and Kuro party`));
   t.ok(locked.every((r) => r.rarity !== 'common' || locked.filter((x) => x.rarity === 'common').length <= 2), 'at most 2 locked commons');
 });
 
-t.test('icons: at least 40 (in fact all 58) different, none used more than twice; palettes spread over all twelve hues', () => {
+t.test('icons: at least 40 (in fact all 58) different, none used more than twice (the 30 set Charms reuse the 30 icons that were used once); palettes spread over all twelve hues', () => {
   const icons = {}; relics.forEach((r) => { icons[r.art.m] = (icons[r.art.m] || 0) + 1; });
   t.ok(Object.keys(icons).length >= 40, `distinct icons ${Object.keys(icons).length}`);
   t.eq(Object.keys(icons).length, L.relicIcons.length, 'every relic icon in LISTS.relicIcons is drawn by at least one relic (the icon art is never wasted)');
@@ -197,6 +197,83 @@ t.test('economy guards: fractions and counts stay inside the folding rules; noth
   t.ok(all.cardChoices <= 6 && all.wellInk <= 12 && all.campActions <= 3 && all.freeSwaps <= 5, 'counts stay in their clamps even with every relic');
   relics.forEach((r) => Object.keys(r.mods || {}).forEach((k) => { if (L.modKind[k] === 'frac') t.ok(Math.abs(r.mods[k]) <= 0.5, `${r.id}.${k} is a modest fraction`); }));
   relics.forEach((r) => Object.keys(r.mods || {}).forEach((k) => t.ok(Math.abs(r.mods[k]) <= 8 || L.modKind[k] === 'frac', `${r.id}.${k} is a sane size`)));
+});
+
+// ================================================================================================ 2b Charm sets (DESIGN 4.7)
+const sets = Object.values(DATA.relicSets);
+const tiersOf = (s) => Object.keys(s.tiers).map(Number).sort((a, b) => a - b);
+const SET_CHARMS = ['gaffer_tape', 'cable_coil', 'sandbag', 'roadie_gloves', 'head_torch', 'tip_jar', 'float_tin', 'price_stickers', 'card_reader', 'spare_strings', 'throat_sweets',
+  'humidifier', 'stretch_band', 'click_track', 'drum_key', 'kick_pedal', 'drum_machine', 'tour_map', 'day_ticket', 'big_flask', 'tour_shirt', 'signed_photo', 'glow_bracelets',
+  'fan_banner', 'lucky_pick', 'felt_tip', 'headphone_splitter', 'tuner_clip', 'ear_monitors', 'mixing_desk'];
+const activeTiers = (ids) => DATA.activeSetTiers(ids).map((x) => x.set + ':' + x.tier);
+
+t.test('sets: 8 sets, each with a name, a line and 2 to 3 stacked tiers from 2 up; every `set` names a set; every set is completable from a fresh profile by any party', () => {
+  t.eq(sets.length, 8, '8 sets');
+  sets.forEach((s) => {
+    t.ok(/^[a-z][a-z0-9_]*$/.test(s.id) && typeof s.name === 'string' && s.name.length >= 4 && s.name.length <= 20, `${s.id}: id and name`);
+    t.ok(typeof s.text === 'string' && s.text.length >= 12 && s.text.length <= 90 && /\.$/.test(s.text), `${s.id}: one line`);
+    const ns = tiersOf(s);
+    t.ok(ns.length >= 2 && ns.length <= 3 && ns.every((n, i) => n === 2 + i), `${s.id}: tiers 2, 3 (and 4) with no gap: ${ns.join(',')}`);
+    const members = relics.filter((r) => r.set === s.id);
+    t.ok(members.length >= DATA.setMax(s.id) + 1 && members.length <= 7, `${s.id}: ${members.length} members for a top tier of ${DATA.setMax(s.id)} (one spare at least, seven at most)`);
+    t.ok(members.filter((r) => !r.locked && !r.hero).length >= DATA.setMax(s.id), `${s.id}: completable with unlocked, party wide Charms`);
+    t.ok(members.filter((r) => r.rarity === 'common').length >= 2, `${s.id}: at least two commons to hunt`);
+    t.deep(DATA.setMembers(s.id).sort(), members.map((r) => r.id).sort(), `${s.id}: DATA.setMembers`);
+    ns.forEach((n) => { const tr = s.tiers[n]; t.ok(tr.mods || tr.hooks || tr.rows, `${s.id} tier ${n} does something`); });
+  });
+  t.eq(sets.map((s) => s.name).sort().join('|'), 'All Areas|Demo Tape|Fan Club|Merch Table|Rhythm Section|Soundcheck|Stage Crew|Warm-Up Routine', 'the eight set names');
+  relics.forEach((r) => { if (r.set) t.ok(DATA.relicSets[r.set], `${r.id}: set ${r.set} exists`); });
+  t.eq(count(relics, (r) => r.set), 45, '45 Charms belong to a set (the 30 set Charms and 15 older ones)');
+  t.ok(relics.every((r) => !r.set || !r.hero), 'no hero Charm is in a set (a set must be completable by any party)');
+  t.ok(relics.every((r) => !r.set || (r.rarity !== 'boss' && r.rarity !== 'shop')), 'no Headliner or Merch Charm is in a set');
+  const v = DATA.validate('relics');
+  t.deep(v.errors, [], 'the validator checks the sets too (fields, tier keys, mods, hooks, rows, dashes)');
+});
+
+t.test('sets: the 30 set Charms are small (22 common, 8 uncommon), reuse an icon in their own palette, and no icon, palette, rarity triple repeats', () => {
+  t.eq(SET_CHARMS.length, 30, '30 set Charms');
+  SET_CHARMS.forEach((id) => t.ok(DATA.relics[id] && DATA.relics[id].set && !DATA.relics[id].locked && !DATA.relics[id].hero, `${id} exists, is in a set, unlocked and party wide`));
+  const defs = SET_CHARMS.map((id) => DATA.relics[id]);
+  t.eq(count(defs, (r) => r.rarity === 'common'), 22, '22 common'); t.eq(count(defs, (r) => r.rarity === 'uncommon'), 8, '8 uncommon');
+  const seen = {};
+  relics.forEach((r) => { const k = r.art.m + '|' + r.art.c + '|' + r.rarity; t.ok(!seen[k], `${r.id}: ${k} is already drawn by ${seen[k]} (a set Charm reuses an icon, so the triple must be its own)`); seen[k] = r.id; });
+  defs.forEach((r) => {
+    Object.keys(r.mods || {}).forEach((k) => t.ok(Math.abs(r.mods[k]) <= (L.modKind[k] === 'frac' ? 0.1 : 4), `${r.id}.${k} is a small gain`));
+    hooksOf(r).forEach((h) => DATA.walkOps(h.fx, (o) => { if (typeof o.n === 'number' && o.op !== 'gold') t.ok(o.n <= 4, `${r.id}: ${o.op} ${o.n} stays small`); if (o.op === 'gold') t.ok(o.n <= 30, `${r.id}: gold ${o.n} stays small`); t.ok(o.op !== 'energy' || h.once, `${r.id}: Breath only once per fight`); }));
+    t.ok(typeof r.flavor === 'string' && r.flavor.length <= 80, `${r.id} has a flavour joke`);
+  });
+  t.deep(activeTiers(['lucky_pick']), [], 'one Charm switches nothing on');
+});
+
+t.test('sets: tiers switch on at the right counts, stack, count a Charm once, and fold their mods into DATA.modsFor', () => {
+  const crew = ['gaffer_tape', 'cable_coil', 'sandbag', 'roadie_gloves', 'head_torch', 'paper_umbrella', 'green_bamboo'];
+  t.deep(DATA.setMembers('crew').sort(), crew.slice().sort(), 'the Stage Crew');
+  t.deep(activeTiers([]), [], 'nothing owned, nothing active');
+  t.deep(activeTiers(crew.slice(0, 1)), [], 'one: nothing');
+  t.deep(activeTiers(crew.slice(0, 2)), ['crew:2'], 'two: tier 2');
+  t.deep(activeTiers(crew.slice(0, 3)), ['crew:2', 'crew:3'], 'three: tiers 2 and 3 stack');
+  t.deep(activeTiers(crew.slice(0, 4)), ['crew:2', 'crew:3', 'crew:4'], 'four: all three');
+  t.deep(activeTiers(crew), ['crew:2', 'crew:3', 'crew:4'], 'seven: still the three, nothing beyond the top tier');
+  t.deep(activeTiers(['gaffer_tape', 'gaffer_tape', 'gaffer_tape']), [], 'a repeated id counts once');
+  t.deep(activeTiers(['gaffer_tape', 'cable_coil', 'tip_jar', 'float_tin', 'price_stickers']), ['crew:2', 'merch:2', 'merch:3'], 'two sets at once, in set id order');
+  t.deep(DATA.setCounts(['gaffer_tape', 'cable_coil', 'tip_jar', 'ghost', 'brass_lantern']), { crew: 2, merch: 1, pass: 1 }, 'setCounts (unknown ids and set-less Charms are skipped)');
+  t.eq(DATA.setMax('crew'), 4, 'Stage Crew tops at 4'); t.eq(DATA.setMax('warmup'), 3, 'Warm-Up Routine at 3'); t.eq(DATA.setMax('nope'), 0, 'unknown set');
+  t.eq(DATA.modsFor(['gaffer_tape'], 0).startBlock, 0, 'one crew Charm: no startBlock');
+  t.eq(DATA.modsFor(['gaffer_tape', 'cable_coil'], 0).startBlock, 1, 'Stage Crew 2 adds 1 startBlock through modsFor');
+  t.eq(DATA.modsFor(['gaffer_tape', 'cable_coil', 'paper_umbrella'], 0).startBlock, 2, 'with Pop Filter: 1 from the Charm, 1 from the tier');
+  t.eq(DATA.modsFor(crew, 0).startBlock, 2, 'the tier counts once however many members are owned');
+  t.near(DATA.modsFor(['float_tin', 'price_stickers'], 0).goldMul, 1.15, 1e-9, 'Merch Table 2: gold x1.15');
+  t.near(DATA.modsFor(['float_tin', 'price_stickers', 'card_reader'], 0).priceMul, 1 - 0.1 - 0.15, 1e-9, 'Merch Table 3 and Price Stickers add');
+  t.eq(DATA.modsFor(['tour_shirt', 'signed_photo', 'glow_bracelets'], 0).freeSwaps, 2, 'Fan Club 3: a second free swap');
+  t.eq(DATA.modsFor(['lucky_pick', 'felt_tip'], 0).cardChoices, 4, 'Demo Tape 2: 4 cards per reward');
+  t.eq(DATA.modsFor(['tour_map', 'day_ticket'], 0).wellInk, 5, 'All Areas 2: tea stalls give 5');
+  t.near(DATA.modsFor(['spare_strings', 'throat_sweets', 'humidifier'], 0).healMul, 1.25, 1e-9, 'Warm-Up Routine 3: healing x1.25');
+  const sp = DATA.setProgress('crew', ['gaffer_tape', 'cable_coil', 'sandbag']);
+  t.deep({ n: sp.n, max: sp.max, total: sp.total, name: sp.name, lit: sp.tiers.map((x) => x.active), texts: sp.tiers.map((x) => x.text) }, { n: 3, max: 4, total: 7, name: 'Stage Crew', lit: [true, true, false], texts: [2, 3, 4].map((n) => DATA.relicSets.crew.tiers[n].text) }, 'setProgress for the Charms panel');
+  t.eq(DATA.setProgress('nope', []), null, 'setProgress of an unknown set');
+  t.eq(DATA.setTierLabel('crew', 3), 'Stage Crew 3 of 4: ' + DATA.relicSets.crew.tiers[3].text, 'the toast line'); t.eq(DATA.setTierLabel('crew', 9), '', 'no such tier');
+  const all = DATA.modsFor(relics.map((r) => r.id), 0);
+  t.ok(all.goldMul >= 0.1 && all.cardChoices <= 6 && all.freeSwaps <= 5 && all.energy === 3 + 2 && all.hand === 5 + 1 - 1, 'every Charm and every tier at once stays inside the clamps, and no tier touches Breath or hand size as a mod (only the two Breath and two hand Headliner Charms do)');
 });
 
 // ================================================================================================ 3 relic text
@@ -324,6 +401,34 @@ t.test('text: the machine summaries themselves are sane (DATA.hookText reads eve
   t.eq(say('longbow_of_reach'), 'Up to 2 times per turn, whenever you play an Attack, Backing: deal 3 damage to the same target.', 'longbow_of_reach reads the row');
   t.eq(JSON.stringify(DATA.relics.formation_scroll.rows), '{"front":{"startBlock":3},"back":{"blockAdd":1}}', 'formation_scroll rows');
   t.eq(JSON.stringify(DATA.relics.war_banner.rows), '{"front":{"dmgAdd":1}}', 'war_banner rows');
+});
+
+t.test('sets: every tier text agrees with its data the way a Charm text does (numbers, nouns, statuses, targets, triggers), and hookText reads it', () => {
+  sets.forEach((s) => tiersOf(s).forEach((n) => {
+    const tr = s.tiers[n];
+    const pseudo = { id: `${s.id} tier ${n}`, text: tr.text, mods: tr.mods, hooks: tr.hooks, rows: tr.rows };
+    t.ok(tr.text.length >= 12 && tr.text.length <= 90 && /^[A-Z0-9]/.test(tr.text) && /\.$/.test(tr.text) && !/[.!?;:](\s|$)/.test(tr.text.slice(0, -1)) && !/\s\s/.test(tr.text) && !DASH.test(tr.text), `${pseudo.id}: one clean sentence: "${tr.text}"`);
+    const sm = summary(pseudo);
+    sm.nums.forEach((x) => t.ok(mentions(tr.text, x.n), `${pseudo.id}: "${tr.text}" must mention ${x.n} (${x.why})`));
+    sm.words.forEach((x) => t.ok(x.re.test(tr.text), `${pseudo.id}: "${tr.text}" must match ${x.re} (${x.why})`));
+    if (HAS_TEXT) hooksOf(pseudo).forEach((h) => { const str = DATA.hookText(h); t.ok(typeof str === 'string' && str.length > 10 && /\.$/.test(str) && !/undefined|NaN|\[object/.test(str), `${pseudo.id}: hookText reads the ${h.on} hook: ${str}`); });
+  }));
+  if (HAS_TEXT) {
+    t.eq(DATA.hookText(DATA.relicSets.rhythm.tiers[4].hooks[0]), 'Once per turn, every 3rd time you play a card, gain 1 Breath.', 'Rhythm Section 4');
+    t.eq(DATA.hookText(DATA.relicSets.crew.tiers[3].hooks[0]), 'At the start of your turn, if it is turn 1 or earlier, both heroes gain 4 Block.', 'Stage Crew 3');
+    t.eq(DATA.hookText(DATA.relicSets.pass.tiers[3].hooks[0]), 'At the start of each act, unmute 1 hex for free.', 'All Areas 3');
+  }
+  // Breath and hand size stay Headliner trades: no tier mod touches them; the one Breath hook is gated, the one draw is first turn only
+  const extras = [];
+  sets.forEach((s) => tiersOf(s).forEach((n) => {
+    const tr = s.tiers[n];
+    if (tr.mods && (tr.mods.energy || tr.mods.hand)) extras.push(`${s.id}:${n}:mod`);
+    hooksOf(tr).forEach((h) => DATA.walkOps(h.fx, (o) => { if (o.op === 'energy' || o.op === 'draw') extras.push(`${s.id}:${n}:${o.op}`); }));
+  }));
+  t.deep(extras.sort(), ['demo:3:draw', 'rhythm:4:energy'], 'one gated Breath hook and one every 3rd turn draw, nothing else');
+  const b = DATA.relicSets.rhythm.tiers[4].hooks[0];
+  t.ok(b.limit === 1 && b.every === 3, 'the Breath tier is once per turn and every 3rd card');
+  t.eq(DATA.relicSets.demo.tiers[3].hooks[0].every, 3, 'the draw tier is every 3rd turn (a turn 1 draw would be absorbed by the opening hand)');
 });
 
 // ================================================================================================ 4 gems
@@ -783,7 +888,7 @@ if (E) {
     t.ok(combatRelics.length >= 34, 'there are at least 34 combat hook relics: ' + combatRelics.length);
   });
 
-  t.test('engine: the kitchen sink (all 66 relics at once) plays whole fights without throwing, in every scenario', () => {
+  t.test('engine: the kitchen sink (all 96 relics at once, every set tier lit) plays whole fights without throwing, in every scenario', () => {
     const all = Object.keys(ED.relics);
     SCEN.forEach((cfg) => [[['hanae', 'kuro'], 0], [['suzu', 'raiga'], 1], [['raiga', 'hanae'], 0]].forEach(([party, front], k) => {
       const s = scenario(all, cfg, party, 20 + k, front);
@@ -894,6 +999,42 @@ if (E) {
       const withG = taken(R('bottomless_gourd', { deck: D(P('hanae') + 'plain'), seed: 2 })), plain = taken(mk({ deck: D(P('hanae') + 'plain'), enemies: ['kappa'], seed: 2 }));
       t.eq(withG, Math.floor(plain * 1.5), 'bottomless_gourd: and the first enemy hit lands 50% harder (Vulnerable 2)'); }
   });
+
+  t.test('engine: set tiers fire in combat as virtual Charms (nothing with one member, everything with enough), stack, and never pose as a Charm', () => {
+    const P = (h) => `zz_${h}_`;
+    const plain = [P('hanae') + 'plain', P('kuro') + 'plain'];
+    const evs = (C, type, f) => of(C.events, type, f);
+    // Stage Crew: 2 is startBlock 1, 3 is 4 Block on the first turn, 4 is Soundproof at combat start
+    const one = mk({ relics: ['gaffer_tape'], deck: plain }); t.deep(one.heroes.map((h) => h.block), [0, 0], 'one crew Charm: no set Block on turn 1');
+    const two = mk({ relics: ['gaffer_tape', 'cable_coil'], deck: plain }); t.deep(two.heroes.map((h) => h.block), [1, 1], 'two: tier 2 gives 1 Block at every turn start');
+    const three = mk({ relics: ['gaffer_tape', 'cable_coil', 'sandbag'], deck: plain, enemies: ['paper_kodama'] }); t.deep(three.heroes.map((h) => h.block), [5, 5], 'three: tier 3 adds 4 Block on the first turn (1 + 4)');
+    three.endTurn(); t.ok(three.heroes.every((h) => h.block === 1), 'and on the second turn only the 1 is left'); t.ok(!three.heroes[0].st.bulwark, 'three: no Soundproof yet');
+    const four = mk({ relics: ['gaffer_tape', 'cable_coil', 'sandbag', 'roadie_gloves'], deck: plain }); t.deep(four.heroes.map((h) => h.st.bulwark), [1, 1], 'four: tier 4 gives both heroes 1 Soundproof at the start of combat');
+    t.ok(!four.events.some((e) => e.type === 'relic' && !ED.relics[e.id]), 'a set tier never emits a relic event (it is not a Charm)');
+    t.ok(four.events.filter((e) => e.type === 'relic').length <= 4, 'the Charms themselves still report');
+    // Soundcheck: 2 Sizzle on all, then 1 Volume on both
+    const sc1 = mk({ relics: ['tuner_clip'], enemies: ['kappa'], deck: plain }); t.ok(!sc1.enemies[0].st.burn && sc1.enemies[0].st.poison === 2, 'one Soundcheck Charm: its own Earworm, no set Sizzle');
+    const sc2 = mk({ relics: ['tuner_clip', 'ear_monitors'], enemies: ['kappa', 'kappa'], deck: plain }); t.ok(sc2.enemies.every((e) => e.st.burn === 2), 'Soundcheck 2: 2 Sizzle on every enemy'); t.ok(!sc2.heroes[0].st.might, 'and no Volume yet');
+    const sc3 = mk({ relics: ['tuner_clip', 'ear_monitors', 'mixing_desk'], enemies: ['kappa'], deck: plain }); t.deep(sc3.heroes.map((h) => h.st.might), [1, 1], 'Soundcheck 3: 1 Volume for both'); t.ok(sc3.enemies[0].st.burn === 2, 'tiers stack: the Sizzle is still there');
+    // Demo Tape 3: draw 1 on the first turn only
+    const many = Array.from({ length: 14 }, () => P('hanae') + 'plain');
+    const demo2 = mk({ relics: ['lucky_pick', 'felt_tip'], deck: many, enemies: ['paper_kodama'] }); t.eq(demo2.hand.length, 5, 'Demo Tape 2: a map bonus only, 5 cards');
+    const demo3 = mk({ relics: ['lucky_pick', 'felt_tip', 'headphone_splitter'], deck: many, enemies: ['paper_kodama'] }); t.eq(demo3.hand.length, 5, 'Demo Tape 3: 5 cards on the first turn (a turn 1 draw would be absorbed by the opening hand, so the tier counts turns)'); demo3.endTurn(); t.eq(demo3.hand.length, 5, '5 on the second'); demo3.endTurn(); t.eq(demo3.hand.length, 6, 'and 6 on the third');
+    // Rhythm Section 2: the first Attack each turn hits once more for 1 (Drum Key and Kick Pedal carry no such hook of their own)
+    const rh = mk({ relics: ['drum_key', 'kick_pedal'], deck: plain, enemies: ['kappa'] }); const h0 = evs(rh, 'hit').length; playAll(rh, P('hanae') + 'plain'); const hits = evs(rh, 'hit').slice(h0).filter((e) => e.dst.kind === 'enemy'); t.eq(hits.length, 2, 'Rhythm Section 2: a second hit'); t.eq(hits[1].raw, 1, 'of 1 damage'); t.eq(hits[1].dst.id, hits[0].dst.id, 'on the same target');
+    const rh1 = mk({ relics: ['drum_key'], deck: plain, enemies: ['kappa'] }); const h1 = evs(rh1, 'hit').length; playAll(rh1, P('hanae') + 'plain'); t.eq(evs(rh1, 'hit').slice(h1).filter((e) => e.dst.kind === 'enemy').length, 1, 'one Rhythm Charm: one hit');
+    // Rhythm Section 4: every 3rd card gives 1 Breath, once per turn
+    const zeros = Array.from({ length: 6 }, () => P('hanae') + 'zero');
+    const rh4 = mk({ relics: ['drum_key', 'kick_pedal', 'click_track', 'drum_machine'], deck: zeros, enemies: ['kappa'] }); t.eq(rh4.energy, 3, '(control) 3 Breath');
+    for (let i = 0; i < 3; i++) playAll(rh4, P('hanae') + 'zero'); t.eq(rh4.energy, 4, 'Rhythm Section 4: the 3rd card gives 1 Breath');
+    while (rh4.hand.length) playAll(rh4, P('hanae') + 'zero'); t.eq(rh4.energy, 4, 'and once per turn (the 6th card pays nothing)');
+    // Fan Club: 2 Block to the new lead on a swap, a second free swap at 3, 1 Volume at 4 (once per turn)
+    const fc2 = mk({ relics: ['tour_shirt', 'signed_photo'], deck: plain }); fc2.swap(); t.eq(fc2.front().id, 'kuro', '(sanity) Kuro leads'); t.eq(fc2.front().block, 2, 'Fan Club 2: the new lead hero gains 2 Block on a swap'); t.eq(fc2.back().block, 2, '(Tour T-Shirt gives the backing hero 2 as well)');
+    const fc3 = mk({ relics: ['tour_shirt', 'signed_photo', 'glow_bracelets'], deck: plain }); t.eq(fc3.canSwap().cost, 0, '(control) first swap free'); fc3.swap(); t.eq(fc3.canSwap().cost, 0, 'Fan Club 3: a second free swap'); fc3.swap(); t.eq(fc3.canSwap().cost, 1, 'the third costs Breath');
+    const fc4 = mk({ relics: ['tour_shirt', 'signed_photo', 'glow_bracelets', 'fan_banner'], deck: plain }); fc4.swap(); t.eq(fc4.front().st.might, 1, 'Fan Club 4: the new lead hero gains 1 Volume'); fc4.swap(); t.ok(!fc4.front().st.might, 'once per turn: the hero who swaps in next gets none'); fc4.endTurn(); fc4.swap(); t.eq(fc4.front().st.might, 2, 'and again next turn (Volume stays, so the hero who swapped in twice has 2)');
+    // every set lit at once, all 96 Charms, is the kitchen sink above; the set hooks register after the Charms' own, so order is stable
+    t.ok(ED.activeSetTiers(Object.keys(ED.relics)).length === sets.reduce((n, s) => n + tiersOf(s).length, 0), 'every tier of every set is lit with every Charm owned');
+  });
 }
 
 // ================================================================================================ 8 run hooks
@@ -965,14 +1106,14 @@ if (RB) {
   t.test('run: taking every relic in a row never throws, keeps the run consistent and survives a save round trip', () => {
     const R = NEW({ heroes: ['suzu', 'raiga'], seed: 21 });
     Object.keys(RD.relics).forEach((id) => { const r = RUN.addRelic(R, id); t.ok(r.ok, `${id} can be taken`); });
-    t.eq(R.relics.length, 66, 'all 66 relics owned');
+    t.eq(R.relics.length, 96, 'all 96 relics owned');
     const m = RUN.mods(R);
     t.ok(Object.keys(m).every((k) => Number.isFinite(m[k])), 'every folded mod is a finite number');
     t.ok(m.energy >= 1 && m.hand >= 1 && m.inkMax >= 6 && m.startInk <= m.inkMax, 'and inside its clamp');
     t.eq(curses(R), 3, 'the boss curses are in the deck');
     t.ok(R.heroes.every((h) => h.hp <= h.maxHp && h.hp >= 1), 'heroes are consistent');
     const back = RUN.deserialize(JSON.parse(JSON.stringify(RUN.serialize(R))));
-    t.ok(back && back.relics.length === 66 && back.deck.length === R.deck.length, 'the run round-trips through a save');
+    t.ok(back && back.relics.length === 96 && back.deck.length === R.deck.length, 'the run round-trips through a save');
     RUN.startChapter(R, 2); RUN.startChapter(R, 3); t.ok(R.map && R.chapter === 3, 'chapters still start with every chapter hook owned');
   });
 
@@ -985,8 +1126,36 @@ if (RB) {
     });
     t.deep(RD.relicPool('boss', fresh, ['suzu', 'raiga']).map((x) => x.id).sort(), Object.values(RD.relics).filter((x) => x.rarity === 'boss' && !x.locked).map((x) => x.id).sort(), 'boss pool = the unlocked boss relics');
     t.ok(RD.relicPool('shop', undefined, ['hanae', 'kuro']).length === 4, 'with everything unlocked, all four shop relics can be sold');
-    t.ok(RD.relicPool('common', undefined, ['hanae', 'kuro']).length === 18 + 2, 'a Hanae and Kuro party can see 18 generic and 2 hero commons');
+    t.ok(RD.relicPool('common', undefined, ['hanae', 'kuro']).length === 40 + 2, 'a Hanae and Kuro party can see 40 generic and 2 hero commons');
+  });
+
+  t.test('run: set tiers run their run hooks, fold into RUN.mods, survive a save, and a pickup that switches a tier on is noted and logged', () => {
+    { const R = NEW(); const r0 = RUN.addRelic(R, 'tip_jar'); t.eq(r0.log.filter((x) => x.op === 'set').length, 0, 'the first Merch Charm switches nothing on');
+      const r1 = RUN.addRelic(R, 'float_tin'); t.deep(r1.log.filter((x) => x.op === 'set').map((x) => [x.id, x.tier, x.text]), [['merch', 2, RD.setTierLabel('merch', 2)]], 'Merch Table 2 switches on: one op set log line for the reward page');
+      t.ok(R.log.some((e) => e.set === 'merch' && e.tier === 2 && e.msg === RD.setTierLabel('merch', 2)), 'and a note in R.log with set and tier (the map toasts it)');
+      t.near(RUN.mods(R).goldMul, 1 + 0.1 + 0.15, 1e-9, 'Tip Jar and Merch Table 2 add in RUN.mods');
+      const r2 = RUN.addRelic(R, 'price_stickers'); t.deep(r2.log.filter((x) => x.op === 'set').map((x) => x.tier), [3], 'tier 3 switches on with the third'); t.near(RUN.mods(R).priceMul, 1 - 0.1 - 0.15, 1e-9, 'Merch Table 3 and Price Stickers add');
+      RUN.addRelic(R, 'card_reader'); const g0 = R.gold; const sc = RUN.startChapter(R, 2); t.eq(R.gold, g0 + 25, 'Merch Table 4: 25 gold when an act starts'); t.ok(sc.log.some((x) => x.op === 'set' && x.id === 'merch' && x.tier === 4 && x.hook === 'onChapterStart'), 'reported as a set hook, not a Charm');
+      const r5 = RUN.addRelic(R, 'fortune_coin'); t.eq(r5.log.filter((x) => x.op === 'set').length, 0, 'a fifth member switches nothing more on'); t.eq(RD.setCounts(R.relics).merch, 5, '(but it counts)'); }
+    { const R = NEW(); R.heroes[0].hp = 10; R.heroes[1].hp = 10; RUN.addRelic(R, 'humidifier'); RUN.hook(R, 'onFightWon', { tier: 'normal' }); t.deep(R.heroes.map((h) => h.hp), [10, 10], 'one Warm-Up Charm: no set heal');
+      RUN.addRelic(R, 'stretch_band'); RUN.hook(R, 'onFightWon', { tier: 'normal' }); t.deep(R.heroes.map((h) => h.hp), [12, 12], 'Warm-Up Routine 2: 2 HP for both after a fight'); R.heroes[0].hp = 10; RUN.hook(R, 'onRest', {}); t.eq(R.heroes[0].hp, 13, 'Stretch Band itself: 3 at a rest (x1 healing, the tier 3 heal boost is not on yet)'); }
+    { const control = NEW(); RUN.startChapter(control, 2); const R = NEW(); RUN.addRelic(R, 'tour_map'); RUN.addRelic(R, 'day_ticket'); RUN.addRelic(R, 'big_flask'); RUN.startChapter(R, 2); t.eq(paintedN(R) - paintedN(control), 1, 'All Areas 3: 1 free hex at act start'); t.eq(RUN.mods(R).wellInk, 4 + 1 + 1, 'Big Flask and All Areas 2 add'); }
+    { const R = NEW(); ['gaffer_tape', 'cable_coil', 'sandbag'].forEach((id) => RUN.addRelic(R, id)); const back = RUN.deserialize(JSON.parse(JSON.stringify(RUN.serialize(R))));
+      t.deep(RD.activeSetTiers(back.relics).map((x) => x.set + ':' + x.tier), ['crew:2', 'crew:3'], 'tiers come back from a save (derived from the ids, nothing new is saved)'); t.eq(RUN.mods(back).startBlock, 1, 'and so do their mods'); t.ok(back.log.some((e) => e.set === 'crew'), 'the set notes survive too'); }
+    { const R = NEW(); RUN.addRelic(R, 'spare_strings'); RUN.addRelic(R, 'throat_sweets'); const h = RUN.hook(R, 'onPickup', { only: 'spare_strings' }); t.ok(h.log.every((x) => x.op !== 'set'), 'a set never answers a pickup hook'); }
+    { const R = NEW(); R.relics.push('tuner_clip', 'ear_monitors'); const m = RUN.mods(R); t.ok(Number.isFinite(m.startBlock) && m.startBlock === 0, 'Soundcheck has only hooks: RUN.mods stays plain'); }
   });
 }
+
+t.test('sets: a tier with rows folds through DATA.rowFor as well (a probe set added last, so it touches no other check)', () => {
+  DATA.add('relicSets', { zz_probe: { name: 'Probe Set', text: 'A probe set for the rows fold.', tiers: { 2: { text: 'Probe.', rows: { front: { dmgAdd: 2 }, back: { blockAdd: 1 } }, mods: { startInk: 1 } } } } });
+  DATA.add('relics', { zz_probe_a: { name: 'Probe A', rarity: 'common', set: 'zz_probe', text: 'A probe.', art: { m: 'seal', c: 'gold' }, mods: { startInk: 1 } }, zz_probe_b: { name: 'Probe B', rarity: 'common', set: 'zz_probe', text: 'A probe.', art: { m: 'seal', c: 'ink' }, mods: { startInk: 1 } } });
+  const base = DATA.rowFor('hanae', 'front', []).dmgAdd || 0;
+  t.eq(DATA.rowFor('hanae', 'front', ['zz_probe_a']).dmgAdd || 0, base, 'one probe: no row bonus');
+  t.eq(DATA.rowFor('hanae', 'front', ['zz_probe_a', 'zz_probe_b']).dmgAdd, base + 2, 'two probes: the tier adds 2 front damage');
+  t.eq(DATA.rowFor('kuro', 'back', ['zz_probe_a', 'zz_probe_b']).blockAdd, (DATA.rowFor('kuro', 'back', []).blockAdd || 0) + 1, 'and 1 backing Block');
+  t.eq(DATA.modsFor(['zz_probe_a', 'zz_probe_b'], 0).startInk, 10 + 1 + 1 + 1, 'mods from both probes and the tier');
+  t.deep(DATA.validate('relics').errors, [], 'the probe set validates');
+});
 
 t.done();

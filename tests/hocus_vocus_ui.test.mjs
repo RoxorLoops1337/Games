@@ -838,6 +838,18 @@ await t.test('shared components speak Hocus Vocus: card back, Charm rarity and f
   const pin = g.UI.relic('t_pin', {}).rbTip();
   t.eq(pin.querySelector('.tk-kind').textContent, 'Merch', 'a shop Charm reads Merch'); t.ok(!pin.querySelector('.tk-flavor'), 'no flavour element when the Charm has none');
   t.eq(g.UI.relic('t_ring', {}).rbTip().querySelector('.tk-kind').textContent, 'Uncommon', 'the other rarities keep their words');
+  // a set Charm's tooltip adds its set and the run's progress (DESIGN 4.7)
+  g.DATA.add('relicSets', { t_set: { name: 'Test Set', text: 'A test set.', tiers: { 2: { text: 'Two.', mods: { startBlock: 1 } }, 3: { text: 'Three.', mods: { startInk: 1 } } } } });
+  g.DATA.add('relics', { t_s1: { name: 'Test One', rarity: 'common', set: 't_set', text: 'One.', mods: { startInk: 1 }, art: { m: 'lantern' } }, t_s2: { name: 'Test Two', rarity: 'common', set: 't_set', text: 'Two.', mods: { startInk: 1 }, art: { m: 'lantern' } } });
+  t.eq(g.UI.relic('t_s1', {}).rbTip().querySelector('.tk-set').textContent, 'Test Set set, 3 to complete', 'without a run the tooltip names the set and its size');
+  t.ok(!g.UI.relic('t_crown', {}).rbTip().querySelector('.tk-set'), 'a Charm outside every set has no set line');
+  g.UI.setRun({ relics: ['t_s1', 't_s2'] });
+  const setTip = g.UI.relic('t_s1', {}).rbTip();
+  t.eq(setTip.querySelector('.tk-set').textContent, 'Test Set, 2 of 3', 'with a run it reads the progress');
+  t.ok(setTip.querySelector('.tk-set').previousSibling === setTip.querySelector('.tk-text'), 'under the rules text (this Charm has no flavour line)');
+  g.UI.setRun({ relics: ['t_s1'] });
+  t.eq(g.UI.relic('t_s2', {}).rbTip().querySelector('.tk-set').textContent, 'Test Set, 1 of 3', 'an offer the party does not own yet still reads the progress it would join');
+  g.UI.setRun(null);
   t.eq(g.UI.gem('t_ruby', {}).rbTip().querySelector('.tk-kind').textContent, 'Tier 1 pink gem', 'the red gem family reads pink (DATA.COLOUR_NAME)');
   t.eq(g.UI.gem('t_topaz', {}).rbTip().querySelector('.tk-kind').textContent, 'Tier 2 gold gem', 'a gold gem reads gold');
   const socks = Array.from(g.UI.card(inst('t_guard'), { size: 'big' }).querySelectorAll('.c-sock')).map((x) => x.getAttribute('aria-label'));

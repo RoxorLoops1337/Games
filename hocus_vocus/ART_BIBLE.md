@@ -180,7 +180,7 @@ where an icon sits on a plate), centred on `(x, y)`. What `id` means for each `k
 - `status`: all 20 statuses in `DATA.statuses`, buffs on warm or blue discs, debuffs on red-violet, resources on hero-coloured discs
   (Bloom pink, Groove green, Reverb violet, Rumble orange). Each glyph says what it is: a volume knob, a mic with a cushion over its
   grille, a mug with a heart in its steam, a note-worm curling round an ear.
-- `relic`: every id of `LISTS.relicIcons` (currently 58, for the 66 Charms), with `art.c` palette and a cream rim. The ids shared with
+- `relic`: every id of `LISTS.relicIcons` (currently 58, for the 96 Charms; a set Charm reuses an icon in its own palette, so every icon, palette, rarity triple stays unique), with `art.c` palette and a cream rim. The ids shared with
   `LISTS.motifs` reuse `ART.card.motif`.
 - `gem`: cut (`round oval square drop star`) by `tier` (1 to 3: more facets, more glint, tier 3 has an orbiting sparkle) and colour
   (`red` is drawn pink, `blue`, `green`, `gold`, and a rainbow ring for `any`). Colour is never the only signal: every gem, socket and

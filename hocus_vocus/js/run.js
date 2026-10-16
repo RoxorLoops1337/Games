@@ -56,6 +56,9 @@
 //            (removeCard upgradeCard transformCard duplicateCard) want an array of exactly min(n, candidates) uids, cardReward a card id from offers or null.
 //            hook(R, name, ctx) -> {log, pending}   addRelic(R, id) -> {ok, id, log, pending} | reason unknown|owned (runs that relic's onPickup).
 //            The addRelic OP with a fixed id the party owns gives a same-rarity relic instead, or (none left) logs 'Already owned.' and pays 40% of its shop price.
+//            Charm SETS (DESIGN 4.7): hook() also runs the run hooks of every active set tier (DATA.activeSetTiers(R.relics), after the relics, never for
+//            onPickup), logged as {op:'set', id: setId, tier, hook}; addRelic notes every tier a pickup switches on in R.log ({msg, set, tier}) and logs it as
+//            {op:'set', id, tier, text} so the reward page shows it and the map toasts it. Nothing is saved for sets: they derive from R.relics.
 //            Any choice raised anywhere (a shop entry hook, an Act start hook, a fight win) waits in R.pending: screens check it after every call.
 //   Deck     addCard(R,id,{up,gems}) removeCard(R,uid) (gems return to R.gems) upgradeCard(R,uid) upgradable(R,filter) -> [uid]
 //            socket(R, uid, slot, gemId) -> {ok, replaced} | reason card|slot|gem|color|same (replacing destroys the old gem; there is no unsocket)
@@ -107,8 +110,8 @@ const RUN = (() => {
   const cardName = (id) => (DATA.cards[id] && DATA.cards[id].name) || id;
   const relicName = (id) => (DATA.relics[id] && DATA.relics[id].name) || id;
 
-  function note(R, msg) {
-    R.log.push({ ch: R.chapter, msg });
+  function note(R, msg, extra) {
+    R.log.push(Object.assign({ ch: R.chapter, msg }, extra || {}));
     if (R.log.length > LOG_MAX) R.log.splice(0, R.log.length - LOG_MAX);
   }
   function syncInk(R) {
@@ -563,49 +566,61 @@ const RUN = (() => {
     }
     return true;
   }
+  // the active set tiers (DESIGN 4.7) as virtual Charms: [{rid: 'set:crew:2', hooks, set, tier}], derived from the owned ids every call
+  const setTiers = (R) => (typeof DATA.activeSetTiers === 'function' ? DATA.activeSetTiers(R.relics) : []).map((t) => ({ rid: 'set:' + t.set + ':' + t.tier, hooks: t.def.hooks, set: t.set, tier: t.tier }));
   function hook(R, name, ctx) {
     ctx = ctx || {};
     const res = { log: [], pending: [] };
     if (hookDepth > 6) return res;
+    const fire = (rid, h, idx, logEntry) => {
+      if (h.on !== name || !filterOk(h.filter, ctx)) return;
+      const key = rid + '#' + idx;
+      const gkey = name + ':' + key;
+      if (hookGuard[gkey]) return;                                  // a hook never re-enters itself (onPaint + paint)
+      const st = R.hk[key] || (R.hk[key] = { n: 0, ch: 0, once: 0 });
+      if (h.once && st.once) return;
+      st.n += 1;                                                   // every counts triggers per run
+      if (h.every && st.n % h.every !== 0) return;
+      if (h.limit && st.ch >= h.limit) return;                     // limit is per Act
+      st.ch += 1;
+      if (h.once) st.once = 1;
+      hookGuard[gkey] = true;
+      hookDepth += 1;
+      try {
+        const out = applyOps(R, h.fx, { rng: U.rng(U.hash(R.seed, 'hook', R.chapter, name, key, st.n)), fight: false, src: rid });
+        res.log.push(logEntry);
+        out.log.forEach((x) => res.log.push(Object.assign({ src: rid }, x)));
+        out.pending.forEach((x) => res.pending.push(x));
+      } finally {
+        hookDepth -= 1;
+        delete hookGuard[gkey];
+      }
+    };
     R.relics.slice().forEach((rid) => {
       if (ctx.only && ctx.only !== rid) return;
       const def = DATA.relics[rid];
       if (!def || !Array.isArray(def.hooks)) return;
-      def.hooks.forEach((h, idx) => {
-        if (h.on !== name || !filterOk(h.filter, ctx)) return;
-        const key = rid + '#' + idx;
-        const gkey = name + ':' + key;
-        if (hookGuard[gkey]) return;                                  // a hook never re-enters itself (onPaint + paint)
-        const st = R.hk[key] || (R.hk[key] = { n: 0, ch: 0, once: 0 });
-        if (h.once && st.once) return;
-        st.n += 1;                                                   // every counts triggers per run
-        if (h.every && st.n % h.every !== 0) return;
-        if (h.limit && st.ch >= h.limit) return;                     // limit is per Act
-        st.ch += 1;
-        if (h.once) st.once = 1;
-        hookGuard[gkey] = true;
-        hookDepth += 1;
-        try {
-          const out = applyOps(R, h.fx, { rng: U.rng(U.hash(R.seed, 'hook', R.chapter, name, key, st.n)), fight: false, src: rid });
-          res.log.push({ op: 'relic', id: rid, hook: name, text: '' });
-          out.log.forEach((x) => res.log.push(Object.assign({ src: rid }, x)));
-          out.pending.forEach((x) => res.pending.push(x));
-        } finally {
-          hookDepth -= 1;
-          delete hookGuard[gkey];
-        }
-      });
+      def.hooks.forEach((h, idx) => fire(rid, h, idx, { op: 'relic', id: rid, hook: name, text: '' }));
     });
+    // set tier hooks run after the Charms' own (never for a pickup, which is one Charm's own moment)
+    if (!ctx.only) setTiers(R).forEach((t) => { if (Array.isArray(t.hooks)) t.hooks.forEach((h, idx) => fire(t.rid, h, idx, { op: 'set', id: t.set, tier: t.tier, hook: name, text: '' })); });
     return res;
   }
   function gainRelic(R, id) {
     if (!DATA.relics[id]) return { ok: false, reason: 'unknown', log: [], pending: [] };
     if (R.relics.indexOf(id) >= 0) return { ok: false, reason: 'owned', log: [], pending: [] };
+    const tiersBefore = setTiers(R).map((t) => t.rid);
     R.relics.push(id);
     syncInk(R);
     R.stats.relicsFound += 1;
     note(R, `Found ${relicName(id)}.`);
     const h = hook(R, 'onPickup', { only: id });
+    // a set tier that just switched on: one log line each (the reward page shows it, the map toasts it from R.log)
+    setTiers(R).filter((t) => tiersBefore.indexOf(t.rid) < 0).forEach((t) => {
+      const text = DATA.setTierLabel(t.set, t.tier);
+      note(R, text, { set: t.set, tier: t.tier });
+      h.log.push({ op: 'set', id: t.set, tier: t.tier, text });
+    });
     return { ok: true, id, log: h.log, pending: h.pending };
   }
 

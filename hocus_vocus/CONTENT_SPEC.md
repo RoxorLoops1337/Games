@@ -217,7 +217,7 @@ must be honest (the validator checks the ops behind an icon). Moves that add jun
 
 ## 5. Charms and gems
 
-**Charms** (relics, `data_relics.js`): exactly **66**: common 22, uncommon 22, rare 12, boss 6, shop 4 (hero-specific Charms count within these: exactly 3 per hero, using `hero`).
+**Charms** (relics, `data_relics.js`): exactly **96**: common 44, uncommon 30, rare 12, boss 6, shop 4 (hero-specific Charms count within these: exactly 3 per hero, using `hero`). 45 of them carry `set` (DESIGN 4.7): 8 Charm sets (`DATA.relicSets`) of 5 to 7 members, each set with at least as many unlocked, hero-free members as its top tier (2 to 4) needs, so every set can be completed by any party from a fresh profile.
 Things a touring musician would keep close (a lucky plectrum, a sticker sheet, a travel mug, a mic-wand keyring, a ring light that was set free), never animal products, and no Charm name ends in "Charm".
 Cover: static `mods` (every key of `LISTS.mods`: `energy`, `hand`, `startBlock`, `inkMax`, `startInk`, `wellInk`, `cardChoices`, `freeSwaps`, `campActions`, `rareBoost`, `goldMul`, `priceMul`, `healMul`), combat hooks (every hook of `LISTS.combatHooks` except `combatEnd`:
 turn start and end, on play with a `filter`, on damaged, on kill, on swap, on hero down, on shuffle, on Fade, combat start), run hooks (every one of `LISTS.runHooks`: `onPickup`, `onChapterStart`, `onRest`, `onPaint`, `onFightWon`, `onShopEnter`),
