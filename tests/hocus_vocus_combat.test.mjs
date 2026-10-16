@@ -2658,9 +2658,11 @@ t.test('card mechanics: Duet (after the other hero), Soundcheck (the first card)
   t.eq(C.enemies[0].hp, 100 - 5, 'the dummy took one hit');
   [c1, h1, k1] = rig(C, [reprise, hfree, kfree]);
   play(C, h1); play(C, k1);
-  const dummyHp = C.enemies[0].hp, added0 = C.added;
+  const dummyHp = C.enemies[0].hp;
+  C.crowd = 0;                                                        // the kill below would otherwise fill the Crowd meter and add a Signature copy too: this test counts only the Reprise copy
   play(C, c1, C.enemies[1].id);
   t.ok(C.enemies[1].down, 'the Reprise card defeated the 3 HP enemy');
+  const added0 = C.added;
   ev = C.endTurn();
   const rep = ev.filter((e) => e.type === 'play' && e.reprise);
   t.eq(rep.length, 1, 'three cards this turn: one replay');
