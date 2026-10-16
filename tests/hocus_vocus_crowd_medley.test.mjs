@@ -75,6 +75,18 @@ await t.test('every hero has a Signature: an Attack or Skill of their own, and t
 });
 
 // ================================================================================================ the Crowd in the engine
+await t.test('the Crowd: crowd 0 switches the meter off (no crowd events, no free copy), which the enemy balance sims rely on', () => {
+  const g = engine();
+  const deck = [];
+  for (let i = 0; i < 20; i++) deck.push(i % 2 ? 'hanae_slash' : 'kuro_ink_bolt');
+  const C = dummyFight(g, { deck, mods: { energy: 20, hand: 10, crowd: 0 } });
+  t.eq(C.crowdMax, 0, 'crowdMax is 0');
+  const ev = playAll(C, 9);
+  t.eq(only(ev, 'crowd').length, 0, 'nine plays raise no crowd event');
+  t.eq(C.crowdWild, 0, 'the crowd never goes wild'); t.eq(C.added, 0, 'and no free Signature copy was added');
+  t.eq(g.DATA.foldMods([{ crowd: -10 }]).crowd, 0, 'the data clamp lets a fold reach 0');
+});
+
 await t.test('the Crowd: +1 per card, +2 per kill, wraps at 7 with a free Fading Signature copy, alternating from the lead hero', () => {
   const g = engine();
   const { DATA: D } = g;
