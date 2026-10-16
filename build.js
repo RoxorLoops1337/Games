@@ -82,6 +82,7 @@ const STATIC_PATHS = [
   'claw_crawl',
   'rogue_book',
   'hocus_vocus',
+  'character_creator',
   'LoopDoku',
   'battle_call',
   'beatbox_heroes',

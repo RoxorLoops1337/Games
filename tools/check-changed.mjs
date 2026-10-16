@@ -69,6 +69,7 @@ const GAME_SUITES = {
   pixel_colony: ['test:colony'],
   rogue_book: ['test:rogue_book'],
   hocus_vocus: ['test:hocus_vocus'],
+  character_creator: ['test:creator'],
   beatbox_heroes: ['test:heroes'],
   LoopDoku: ['test:loopdoku'],
   blockmates: ['test:blockmates'],
