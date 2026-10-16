@@ -227,6 +227,8 @@ const THEME_INTRO = {
   sandpit: { c: '#e0b070', tag: 'Dust and splinters', amb: 'rise', col: '#d9b27c' }, capua: { c: '#f2c14e', tag: 'The old amphitheatre', amb: 'rise', col: '#f2c14e' },
   colosseum: { c: '#ffe08a', tag: 'Under the imperial gaze', amb: 'rise', col: '#ffe9a8' }, desert: { c: '#ffd27a', tag: 'No shade, no mercy', amb: 'drift', col: '#fff0c8' },
   gaul: { c: '#bfe0ff', tag: 'Frost on the sand', amb: 'fall', col: '#ffffff' }, etna: { c: '#ff9a52', tag: 'The mountain is awake', amb: 'rise', col: '#ff8a3a' },
+  provincial: { c: '#e0b070', tag: 'Dust and splinters', amb: 'rise', col: '#d9b27c' }, imperial: { c: '#ffe08a', tag: 'Under the imperial gaze', amb: 'rise', col: '#ffe9a8' },   // ARENAS: theme ids from the circuit
+  alexandria: { c: '#9fd0ff', tag: 'Harbour winds and white marble', amb: 'drift', col: '#eaf6ff' }, carthage: { c: '#f0b25a', tag: 'Golden dust, striped shade', amb: 'drift', col: '#ffe2a8' },
 };
 function bustOf(g, w, h) {
   try {
