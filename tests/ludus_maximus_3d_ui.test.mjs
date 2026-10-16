@@ -39,7 +39,7 @@ const scrims = (h) => h.page.evaluate(() => document.querySelectorAll('.lx-scrim
   await press(h, 'ArrowLeft');
   ok((await h.page.evaluate(() => document.activeElement.textContent)) === 'Ludus', 'ArrowLeft moves back');
   await press(h, 'ArrowDown');
-  ok(await h.page.evaluate(() => document.activeElement.closest('.ax') && document.activeElement.tagName === 'BUTTON' && !document.activeElement.classList.contains('ax-tab')), 'ArrowDown moves from the tabs into the content');
+  ok(await h.page.evaluate(() => document.activeElement.closest('.ax') && (document.activeElement.tagName === 'BUTTON' || document.activeElement.tagName === 'INPUT') && !document.activeElement.classList.contains('ax-tab')), 'ArrowDown moves from the tabs into the content (a button or a slider)');
   // Esc closes only the top of two stacked dialogs
   await h.page.evaluate(() => { window.__ask = window.__LM3D.game.ask({ title: 'Stack test', body: 'Top dialog', actions: [{ label: 'Fine', value: 'x' }], dismiss: 'esc' }); });
   await h.page.waitForTimeout(350); ok((await scrims(h)) === 2, 'two dialogs stacked');
