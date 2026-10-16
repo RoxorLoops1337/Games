@@ -352,7 +352,7 @@ export class Renderer {
       g.strokeText(m.name || 'Waystone', sx, sy); g.fillText(m.name || 'Waystone', sx, sy);
     }
     g.textAlign = 'left';
-    const c = G.cursor;
+    const c = this.mode3d ? null : G.cursor;
     if (c && c.ok) {
       const [sx, sy] = this.toScreen(G, c.x, c.y);
       const inReach = c.reach;
@@ -360,13 +360,13 @@ export class Renderer {
       rr(g, sx + 1, sy + 1, ts - 2, ts - 2, 5); g.stroke();
       if (G.ghost && inReach) { g.globalAlpha = 0.45; g.drawImage(tileArt(G.ghost, 0), sx, sy, ts, ts); g.globalAlpha = 1; }
     }
-    if (G.order && G.mark) {
+    if (!this.mode3d && G.order && G.mark) {
       const [sx, sy] = this.toScreen(G, G.mark.x, G.mark.y), pulse = 0.5 + 0.5 * Math.sin(G.t * 8);
       g.strokeStyle = G.mark.kind === 'dig' ? `rgba(255,140,60,${0.6 + 0.4 * pulse})` : G.mark.kind === 'mine' ? `rgba(255,220,90,${0.6 + 0.4 * pulse})` : `rgba(120,230,255,${0.6 + 0.4 * pulse})`; g.lineWidth = 2.5;
       if (G.mark.kind === 'walk') { g.beginPath(); g.ellipse(sx + ts / 2, sy + ts * 0.95, ts * (0.28 + 0.1 * pulse), ts * 0.1, 0, 0, 7); g.stroke(); }
       else { rr(g, sx + 2, sy + 2, ts - 4, ts - 4, 6); g.stroke(); }
     }
-    const mi = G.mining;
+    const mi = this.mode3d ? null : G.mining;
     if (mi && mi.prog > 0) {
       const [sx, sy] = this.toScreen(G, mi.x, mi.y);
       g.fillStyle = `rgba(0,0,0,${0.12 + mi.prog * 0.3})`; g.fillRect(sx, sy, ts, ts);
@@ -380,6 +380,7 @@ export class Renderer {
   drawParticles(G) {
     const g = this.g, ts = G.ts;
     for (const p of G.parts) {
+      if (this.mode3d && !p.text) continue;
       const [sx, sy] = this.toScreen(G, p.x, p.y);
       g.globalAlpha = clamp(p.life / p.max * 1.6, 0, 1);
       if (p.text) {
@@ -446,7 +447,16 @@ export class Renderer {
     g.fillStyle = gr; g.fillRect(0, 0, this.w, this.h);
   }
 
+  // used under the 3D view: only the layer that is easier in 2D (names, bubbles, glows, weather, vignette)
+  frameOverlay(G) {
+    this.mode3d = true;
+    this.resize();
+    this.g.clearRect(0, 0, this.w, this.h);
+    this.drawAmbient(G); this.drawOverlays(G); this.drawParticles(G); this.drawNames(G); this.drawWeather(G); this.drawScreenFx(G);
+  }
+
   frame(G) {
+    this.mode3d = false;
     this.resize();
     this.drawSky(G);
     this.drawWorld(G);

@@ -1,6 +1,6 @@
 # Blockmates
 
-A cozy 2D side-view block sandbox for up to 16 players. Original game and original art (everything is painted by code at
+A cozy block sandbox seen from the side (real 3D blocks, with a classic 2D view as fallback) for up to 16 players. Original game and original art (everything is painted by code at
 boot, sounds are synthesised): inspired by the genre, no code or assets taken from any commercial game.
 
 Play: `https://games-71g.pages.dev/blockmates/` (solo works at once, the world is saved in the browser).

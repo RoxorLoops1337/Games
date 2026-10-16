@@ -362,9 +362,7 @@ export function itemIcon(id) {
     if (bd.plant || bd.station || bd.climb || bd.sign || bd.bed || bd.container || bd.waystone || bd.oneway || bd.door || id === I.torch || bid === B.leaves || bid === B.pine_leaves || bid === B.cactus || bid === B.glass) {
       g.drawImage(tileArt(bid === B.door_closed ? B.door_closed : bid), 0, 0);
     } else {
-      g.fillStyle = 'rgba(0,0,0,0.25)'; rr(g, 3, 4, 27, 27, 5); g.fill();
-      g.save(); rr(g, 2, 2, 27, 27, 5); g.clip(); g.drawImage(tileArt(bid), 2, 2, 27, 27); g.restore();
-      g.strokeStyle = 'rgba(0,0,0,0.45)'; g.lineWidth = 1.5; rr(g, 2, 2, 27, 27, 5); g.stroke();
+      isoCube(g, bid);
     }
     iconCache.set(id, c); return c;
   }
@@ -372,6 +370,25 @@ export function itemIcon(id) {
   iconCache.set(id, c);
   return c;
 }
+// a block item is drawn as a little isometric cube: top, left and right faces
+function isoCube(g, bid) {
+  const t = tileArt(bid, 0);
+  const T = (a, b, c, d, e, f, fn) => { g.save(); g.transform(a / S, b / S, c / S, d / S, e, f); fn(); g.restore(); };
+  const topFill = () => {
+    if (bid === B.grass) { g.fillStyle = '#62c244'; g.fillRect(0, 0, S, S); g.fillStyle = '#86e45f'; for (let i = 0; i < 12; i++) g.fillRect((i * 11) % 30, (i * 7) % 30, 3, 2); }
+    else if (bid === B.snow) { g.fillStyle = '#f6faff'; g.fillRect(0, 0, S, S); }
+    else if (bid === B.log) { g.fillStyle = '#c99a62'; g.fillRect(0, 0, S, S); g.strokeStyle = '#8a5a2a'; g.lineWidth = 2; for (const k of [12, 7]) { g.beginPath(); g.arc(16, 16, k, 0, 7); g.stroke(); } }
+    else g.drawImage(t, 0, 0);
+  };
+  // top rhombus, left face, right face (13 px half width)
+  T(13, -6.5, 13, 6.5, 3, 9.5, () => { topFill(); g.fillStyle = 'rgba(255,255,255,0.14)'; g.fillRect(0, 0, S, S); });
+  T(13, 6.5, 0, 13, 3, 9.5, () => { g.drawImage(t, 0, 0); g.fillStyle = 'rgba(0,0,0,0.16)'; g.fillRect(0, 0, S, S); });
+  T(13, -6.5, 0, 13, 16, 16, () => { g.drawImage(t, 0, 0); g.fillStyle = 'rgba(0,0,0,0.34)'; g.fillRect(0, 0, S, S); });
+  g.strokeStyle = 'rgba(0,0,0,0.55)'; g.lineWidth = 1.2; g.lineJoin = 'round';
+  g.beginPath(); g.moveTo(16, 3); g.lineTo(29, 9.5); g.lineTo(29, 22.5); g.lineTo(16, 29); g.lineTo(3, 22.5); g.lineTo(3, 9.5); g.closePath(); g.moveTo(3, 9.5); g.lineTo(16, 16); g.lineTo(29, 9.5); g.moveTo(16, 16); g.lineTo(16, 29); g.stroke();
+  g.strokeStyle = 'rgba(255,255,255,0.35)'; g.lineWidth = 1; g.beginPath(); g.moveTo(4, 10); g.lineTo(16, 4); g.lineTo(28, 10); g.stroke();
+}
+
 function paintItem(g, name) {
   const outline = (fn) => { g.save(); g.shadowColor = 'rgba(0,0,0,0.5)'; g.shadowBlur = 2; g.shadowOffsetY = 1; fn(); g.restore(); };
   const m = /^(wood|stone|copper|bronze|iron|titanium|gold|leather)_(pickaxe|axe|shovel|sword|helmet|chest|boots)$/.exec(name);

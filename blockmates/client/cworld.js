@@ -11,6 +11,7 @@ export class CWorld {
     this.meta = new Map();
     this.secs = new Map();
     this.dirty = new Set();
+    this.dirty3 = new Set(); // sections the 3D view must rebuild (a tile change also changes the light and faces around it)
     this.skyTop = new Int16Array(W).fill(-1); // first opaque row per column (-1 = unknown)
     this.ver = 0;
     this.map = document.createElement('canvas'); this.map.width = W; this.map.height = H; // everything ever seen, one pixel per tile
@@ -40,6 +41,7 @@ export class CWorld {
     for (let lx = 0; lx < CHUNK; lx++) this.recomputeSky(cx * CHUNK + lx);
     for (const m of meta || []) this.meta.set(m[0] + ',' + m[1], m[2]);
     this.mapDirty.add(cx);
+    for (const c of [cx - 1, cx, cx + 1]) for (let sx = c * CHUNK / SEC; sx < (c + 1) * CHUNK / SEC; sx++) for (let sy = 0; sy < H / SEC; sy++) this.dirty3.add(sx + ',' + sy);
     this.dirtyChunk(cx);
     for (const n of [cx - 1, cx + 1]) if (this.chunks.has(n)) this.dirtyChunk(n); // borders shade against neighbours
     this.ver++;
@@ -60,7 +62,9 @@ export class CWorld {
     arr[i] = v;
     this.mapDirty.add((x / CHUNK) | 0);
     if (l === 0) this.recomputeSky(x);
-    if (l === 2) { this.dirtyLiq = true; this.ver++; return; }
+    const ssx = Math.floor(x / SEC), ssy = Math.floor(y / SEC);
+    if (l === 2) { this.dirtyLiq = true; this.dirty3.add(ssx + ',' + ssy); this.ver++; return; }
+    for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= (l === 0 ? 2 : 1); dy++) this.dirty3.add((ssx + dx) + ',' + (ssy + dy));
     const sx = Math.floor(x / SEC), sy = Math.floor(y / SEC);
     this.dirty.add(sx + ',' + sy);
     // edge shading of the next section over

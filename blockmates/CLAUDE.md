@@ -1,6 +1,6 @@
 # Blockmates
 
-Original 2D block sandbox for up to 16 players. Read [README.md](README.md) for the layout and hosting. The game page lives at
+Original block sandbox (3D blocks seen from the side, with a classic 2D fallback) for up to 16 players. Read [README.md](README.md) for the layout and hosting. The game page lives at
 `https://games-71g.pages.dev/blockmates/` and is served as-is (no build): edit the files and commit.
 
 Rules for this folder:
@@ -11,3 +11,4 @@ Rules for this folder:
 - Never copy code or art from the commercial game this genre grew from. Names, art and mobs here are original.
 - Tests: `npm run test:blockmates` (headless, includes 16 players). Browser check: start `node blockmates/server/node.js`
   and open http://localhost:8787/ (playwright chromium at /opt/pw-browsers works); `window.__bm` is the Game instance.
+- 3D view: `client/render3d.js` + `client/r3/*` use the vendored `vendor/three.module.min.js` (importmap in `index.html`). Painted tiles are packed into an atlas (`r3/atlas.js`), terrain is meshed per 16x16 section (`r3/terrain.js`). The 2D renderer in `render.js` stays as the fallback and also draws the text/weather overlay. New block => painter in `art.js` is enough; special shapes go in `terrain.js`. Check visually with playwright (`--use-angle=swiftshader`).
