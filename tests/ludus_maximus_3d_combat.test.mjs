@@ -35,6 +35,14 @@ const hashOf = (F) => { let h = 2166136261; for (const u of F.units) for (const 
   ok((h >>> 0).toString(16) === '99e6a573', `regression digest of plain fights is 99e6a573 (got ${(h >>> 0).toString(16)}; update only if core/sim.js derive changed on purpose)`);
 }
 
+// an older replay snapshot (made before these fields existed) still plays exactly the same
+{
+  const mkF = () => { const F = fight(2, 2, {}, 11); return F; }; const F1 = mkF(), F2 = mkF();
+  const strip = (F) => { delete F.rules; delete F.hz; for (const u of F.units) for (const k of ['out', 'dc', 'stM', 'sta', 'stT', 'wndT', 'bsT', 'jvT', 'blk', 'par', 'parCd', 'dcAx', 'dcAy', 'dcq', 'dcqT', 'dcCd', 'hv', 'lk', 'tgC']) delete u[k]; return F; };
+  strip(F2); LM.setRandom(LM.mulberry(4)); run(F1); LM.setRandom(LM.mulberry(4)); run(F2);
+  ok(F1.winner === F2.winner && F1.units.every((u, i) => u.hp === F2.units[i].hp && u.x === F2.units[i].x), 'a snapshot without the combat fields plays the same fight (old replays and saves keep working)');
+}
+
 // ---------- 2. weapon classes and stamina ----------
 {
   ok(ST.every((s) => LM.WCLASS[s] && LM.WCLASS[s].n && LM.WCLASS[s].tip && /thrust|cut/.test(LM.WCLASS[s].form)), 'every style has a weapon class with a name, a tip and a form');

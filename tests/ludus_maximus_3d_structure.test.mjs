@@ -555,5 +555,23 @@ for (const fn of ['newGame', 'makeGlad', 'mkUnits', 'createFight', 'step', 'useU
   ok(/ludus_maximus_3d_arenas\.test\.mjs/.test(pkg) && /## Arena themes, weather and hazards \(round 4\)/.test(sk), 'arenas: the suite is wired into test:ludus3d and the skill section exists');
 }
 
+{ // CAMPAIGN: the story layer is wired, tagged and clean
+  const rd = (f) => readFileSync(join(root, f), 'utf8'), cs = rd('core/campaign.js'), ui = rd('js/screens/campaign.js'), wd = rd('js/screens/world.js'), fl = rd('js/flow.js'), cer = rd('js/ceremonies.js'), ev = rd('js/screens/events.js'), tt = rd('js/title.js'), ix = rd('index.html'), ar = rd('core/arena.js');
+  ok(ix.indexOf('core/campaign.js') > ix.indexOf('core/arena.js') && ix.indexOf('core/campaign.js') > 0, 'campaign: core/campaign.js loads after arena.js in index.html');
+  ok(/'campaign'/.test(ar), 'campaign: arena.js requires the module in Node');
+  ok(/export function playScene/.test(ui) && /export async function storyFlow/.test(ui) && /export async function campIntro/.test(ui) && /export function render/.test(ui), 'campaign: screens/campaign.js exports the dialogue sheet, the story flow, the intro card and the Story tab');
+  ok(/import \* as Cmp from '\.\/campaign\.js'/.test(wd) && /id: 'story'/.test(wd) && /Cmp\.render\(ctx, root, draw\)/.test(wd), 'campaign: The World has a Story tab');
+  ok((fl.match(/CAMPAIGN/g) || []).length === 2 && /campIntro\(ctx, ev\)/.test(fl) && /storyFlow\(ctx\)/.test(fl), 'campaign: flow.js has exactly two tagged CAMPAIGN lines (intro card, story flow)');
+  ok(/export const chapterCard/.test(cer) && /export const duelCard/.test(cer) && /export const epilogue/.test(cer), 'campaign: ceremonies has the chapter card, the duel card and the epilogue');
+  ok(/campThreads/.test(ev) && /story: \['Story'/.test(ev), 'campaign: the Chronicle shows story choices and open story threads');
+  ok(/titleLine/.test(tt), 'campaign: the title screen names the chapter under the logo');
+  ok(!/—|–/.test(cs + ui) && !/—/.test(cer) && !/—/.test(ev + tt), 'campaign: no em or en dashes in the story files');
+  ok(/lm\.campaign|L\.campaign|ver: 1/.test(cs) && !/Math\.random|\brnd\(/.test(cs.replace(/\/\/.*$/gm, '')), 'campaign: the module never uses Math.random or the global rnd (every roll is a seed hash or a private stream)');
+  ok(/optional|S\.camp/.test(cs) && /L\.migrate = /.test(cs), 'campaign: S.camp is optional and validated on load');
+  const pk = JSON.parse(readFileSync(join(root, '..', 'package.json'), 'utf8')); ok(/ludus_maximus_3d_campaign\.test\.mjs/.test(pk.scripts['test:ludus3d']), 'campaign: the suite is part of test:ludus3d');
+  const sk = readFileSync(join(root, '..', '.claude', 'skills', 'ludus3d-content', 'SKILL.md'), 'utf8'); ok(/CAMPAIGN/.test(sk) && /S\.camp/.test(sk), 'campaign: the content skill documents the story layer');
+  const { createRequire: cr2 } = await import('node:module'); const req = cr2(import.meta.url); const LMx = req('../ludus_maximus_3d/core/sim.js'); const T = LMx.campaign.allText(); ok(!/\{\w+\}/.test(T.replace(/\{(doc|docF|sen|senF|pri|priF|lan|lanF|school|nem|nick|from|grudge|cry|kin|prev|av|fel|ludus|he|He|him|his|His|trust|stake)\}/g, '')), 'campaign: every {token} in the authored text is a known token');
+}
+
 console.log(`ludus_maximus_3d structure: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

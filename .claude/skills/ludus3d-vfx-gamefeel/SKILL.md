@@ -117,3 +117,17 @@ Flow in `js/fightview.js`: `endFight` -> `startExec` (victim kneels, killer walk
 - Reduced motion (`U.reduced()`): no zoom punch, no CA pulse, no twist, no flavour orbit, milder slow motion. Gore Off: no blood or props, the move, hit-stop, dust and roar still play.
 - Decision panel = DOM (`.lx-fate`, z 33), zero GPU cost; keys 1/2/3 and Enter; touch buttons are >= 44px (52px on phones). The panel is removed on `resetPresentation`.
 - Spare/ransom: `setState('victory')`, horn or coin sfx, banner, a gold ring; 2.4 s, then the normal victory shot.
+
+# Update: COMBAT depth, feel and cues
+New sim events and what the view does (js/fightview.js `onEvent`, tagged COMBAT):
+| event | cue |
+|---|---|
+| `parry` (src = attacker, dst = parrier) | white sparks and ring, shockwave, `PARRY!`, `parry` + `shieldBlock` sfx, hit-stop 0.1 on both, attacker staggers, banner `Perfect parry!` for your side |
+| `roll` (src, dx, dy) | kick-up dust against the roll, trail, squash, `getup` clip at x3, dust + swish |
+| `bash` / `heavy` | shockwave + `BASH!` + shield sfx / ring + trauma 0.12 and a heavy swish (the `atk` event carries `heavy: 1`, played as `attack3`) |
+| `tired` / `winded` / `recovered` | `TIRED` (your side only) / `WINDED` + dust + hurt flinch; the stamina strip under every nameplate turns amber below 25% and pulses red when winded |
+| `guardbreak` | `GUARD BROKEN`, crit hit sfx, trauma 0.2 |
+| `haz` (hzk, x, y, r, dur) | fire: ring, sparks, scorch decal; spikes: dust, debris, ring; trapdoor: dust, debris, crater decal, thud; pillar rides on the `aoe big` event |
+| `tele` with `haz: 1` | `fx.tele` disc in the hazard colour, one banner per kind per 14 s (`hazBanner`) |
+| `enter` / `tag` / `laststand` / `chain` | snap the rig to the gate (no lerp across the sand), ring + horn + banner `Next foe: NAME`; ring at the swap point; gold ring, shockwave, `LAST STAND`; `fx.chain` between the pair every 0.4 s while taut |
+Nameplate extras (`addPlateExtras` / `updatePlateExtras`, every 4th frame): thin stamina strip and status icon chips (stun, launched, tired, winded, slow, bleed, blind, guard, net, rage, exposed, taunt) as 13 px SVG in a round chip with a title and aria-label. The blindfold veil (`createVeil`) is one div with a radial gradient centred on your team (projected every other frame, radius = 4.2 m on screen) and footstep rings every 0.7 s. Hazard contract with the arena visuals: `this.env.setHazards?.(list)` once at fight start, `this.env.updateHazards?.(list, F.t)` per frame, `setHazards?.([])` on dispose (`this.env` is `this.arena`). Budgets measured (software GL, 3v3 with hazards and direct control): 390x800 low 115 to 118 calls and 215k to 267k tris; 1100x650 high 157 to 162 calls and 432k to 502k tris; no per-frame allocation added in the sim, the view allocates only the chips when a status set changes.

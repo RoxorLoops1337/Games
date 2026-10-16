@@ -59,7 +59,6 @@
   // ================================================================ state
   const live = (S) => !!(S && S.week >= 3 && !(S.flags && S.flags.tut && typeof S.flags.tut === 'object' && !S.flags.tut.done));
   C.ready = live;
-  const chOf = (S, c) => CHS[clamp((c || S.camp).ch, 1, 5) - 1];
   /** the campaign state; created lazily and deterministically from the seed. Returns null until week 3 so a new game is never touched. */
   C.get = (S, force) => {
     if (!S) return null;
@@ -346,6 +345,7 @@
       else { c.q.push({ t: 'fin', ch: chn, win: true }); c.ch = chn + 1; c.card = c.ch; c.lastBeat = S.week; if (c.ch === 2 && c.nem.state === 'rival') c.nem.stage = Math.max(c.nem.stage, 2); }
     } else {
       f.tries = (f.tries | 0) + 1;
+      if (ev.opps[0] && ev.opps[0].nem) { meet(S, c, { won: false, kind: 'finale', hpf: 0, ids: [] }); c.q.pop(); }
       if (chn === 5 && c.stake) { ruin(S, c, rep); return; }
       c.q.push({ t: 'fin', ch: chn, win: false });
     }
@@ -527,8 +527,8 @@
       ['sen', 'Win, and you are rich. Lose, and, well. I should have to take the house. It is the custom.'],
       ['doc', '(to you, afterwards) A man who offers you a bet has already counted the loser.'],
     ], cs: [
-      { l: 'Sign for the wager when the Games arrive.', set: { wagerOffer: 1 }, h: 'You decide in chapter V. The exact stake is printed there.', then: [['sen', 'I shall hold the pen. You will hold the nerve.']] },
       { l: 'Decline. You want your house, not his fortune.', set: { noWager: 1 }, fx: { sen: -2 }, then: [['sen', 'Prudence is a virtue. Nobody ever put it on a monument.']] },
+      { l: 'Sign for the wager when the Games arrive.', set: { wagerOffer: 1 }, h: 'You decide in chapter V. The exact stake is printed there.', then: [['sen', 'I shall hold the pen. You will hold the nerve.']] },
     ] },
     { id: 'b43', ch: 4, at: 0.7, t: 'What the God Asks', lines: [
       ['nar', 'The temple of Mars is a different thing from the little shrine at home. Here the priestess {priF} receives you in a room of cold marble.'],
@@ -548,8 +548,8 @@
       ['doc', '(grim) Betrayed by a man you spared. It has happened to better lanistas than you.', 'betrayed'],
       ['nem', 'You killed {prev}. Tomorrow I kill you, or I die trying. Either way the account closes.', '@avenger'],
     ], cs: [
-      { l: 'Stake {stake} gold on your champion. Win: 4x back. Lose: Ruin.', if: 'wagerOffer&!noWager', fx: { stake: 1 }, set: { wager: 1 }, h: 'The Senator holds your money in escrow. If you lose the Emperor\'s Day, the house is his.', then: [['sen', 'It is signed. May Fortune love you more than she has loved me.']] },
       { l: 'Tear up the Senator\'s contract.', if: 'wagerOffer&!noWager', fx: { sen: -4 }, set: { noWager: 1 }, then: [['sen', 'As you like. I shall tell people you were wise. It costs me nothing.']] },
+      { l: 'Stake {stake} gold on your champion. Win: 4x back. Lose: Ruin.', if: 'wagerOffer&!noWager', fx: { stake: 1 }, set: { wager: 1 }, h: 'The Senator holds your money in escrow. If you lose the Emperor\'s Day, the house is his.', then: [['sen', 'It is signed. May Fortune love you more than she has loved me.']] },
       { l: 'Go to the baths and clear your head.', if: '!wagerOffer|noWager', fx: { mo: 4 }, then: [['nar', 'Steam, cold water, the shapes of men on benches. Nobody asks you for anything.']] },
     ] },
     { id: 'b52', ch: 5, at: 0.5, t: 'The Last Vigil', lines: [

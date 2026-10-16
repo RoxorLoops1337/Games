@@ -378,7 +378,7 @@ export function createHazardFX({ max = 6, lite = false, onEnd = null } = {}) {
   add(new THREE.BoxGeometry(0.78, 0.07, 1.56).translate(0.39, -0.035, 0), 3, -0.78, 0, 0, [0.26, 0.16, 0.09]);
   { const col = new THREE.CylinderGeometry(0.5, 0.56, 7, 10).translate(0, 3.5, 0), cap = new THREE.BoxGeometry(1.5, 0.32, 1.5).translate(0, 7.16, 0), base = new THREE.BoxGeometry(1.4, 0.3, 1.4).translate(0, 0.15, 0);
     add(col, 4, 0, 0, 0, [0.86, 0.82, 0.74], (y) => 0.8 + 0.2 * Math.sin(y * 3.0)); add(cap, 4, 0, 0, 0, [0.92, 0.88, 0.8]); add(base, 4, 0, 0, 0, [0.7, 0.66, 0.6]); }
-  add(new THREE.CylinderGeometry(0.4, 1.0, 5.5, lite ? 10 : 14, lite ? 6 : 9, true).translate(0, 2.75, 0), 5, 0, 0, 0, [0.86, 0.68, 0.42]);
+  add(new THREE.CylinderGeometry(0.4, 1.0, 5.5, lite ? 14 : 20, lite ? 7 : 11, true).translate(0, 2.75, 0), 5, 0, 0, 0, [0.86, 0.68, 0.42]);
   const sGeo = mergeGeometries(parts); sGeo.setAttribute('aH', aH); sGeo.setAttribute('aP', aP);
   const sMat = patchMaterial(new THREE.MeshLambertMaterial({ vertexColors: true, transparent: true, depthWrite: true }), {
     key: 'hazsolid', uniforms: { uTime },
@@ -392,7 +392,7 @@ export function createHazardFX({ max = 6, lite = false, onEnd = null } = {}) {
       else if (pk < 1.5) { float rise = clamp(act * (1.15 + 0.3 * aPI) - 0.1 * aPI, 0.0, 1.0); rise = 1.0 - pow(1.0 - rise, 3.0); float s = clamp(r / 2.0, 0.7, 1.25); transformed = anchor + vec3(sp.x * s, sp.y * rise * s - 0.03, sp.z * s); }
       else if (pk < 3.5) { float side = pk < 2.5 ? 1.0 : -1.0; float ph = act * 1.5 * side; float cs = cos(ph), sn = sin(ph); vec3 l = vec3(sp.x * r, sp.y, sp.z * r); transformed = vec3(anchor.x + l.x * cs - l.y * sn, l.x * sn + l.y * cs + 0.02, l.z) * step(0.001, act) + vec3(0.0, -50.0, 0.0) * (1.0 - step(0.001, act)); }
       else if (pk < 4.5) { float sc = clamp(r * 0.45, 0.8, 1.4); float fall = 1.0 - f * f * f; float hgt = (1.0 - step(0.0, imp)) * fall * 22.0 + step(0.0, imp) * exp(-imp * 14.0) * 0.25; float sink = (1.0 - fd) * 7.4; transformed = vec3(sp.x * sc, sp.y + hgt - sink, sp.z * sc); vA = step(0.001, f); }
-      else { float hh = sp.y / 5.5; float rr = r * 0.85; float tw = hh * 2.2 + uTime * (3.0 + 4.0 * hh); float cs = cos(tw), sn = sin(tw); vec2 xz = sp.xz * rr; xz = vec2(xz.x * cs - xz.y * sn, xz.x * sn + xz.y * cs); float grow = clamp(act * 1.3, 0.0, 1.0); transformed = vec3(xz.x * (0.25 + 0.75 * grow), sp.y * grow, xz.y * (0.25 + 0.75 * grow)); vSt = vec2(atan(sp.z, sp.x) * 2.0 + hh * 5.0 - uTime * 6.0, hh); vA = act * fd * (0.55 - 0.3 * hh); }
+      else { float hh = sp.y / 5.5; float rr = r * 0.85; float tw = hh * 1.2 + 0.4 * sin(uTime * 1.3 + hh * 3.0); float cs = cos(tw), sn = sin(tw); vec2 xz = sp.xz * rr; xz = vec2(xz.x * cs - xz.y * sn, xz.x * sn + xz.y * cs); float grow = clamp(act * 1.3, 0.0, 1.0); transformed = vec3(xz.x * (0.25 + 0.75 * grow), sp.y * grow, xz.y * (0.25 + 0.75 * grow)); vSt = vec2(atan(sp.z, sp.x) * 2.0 + hh * 5.0 - uTime * 6.0, hh); vA = act * fd * (0.42 - 0.26 * hh); }
       `,
     fPars: 'varying float vA; varying vec2 vSt;',
     fBody: 'diffuseColor.a *= vA * mix(1.0, 0.55 + 0.45 * sin(vSt.x * 3.0), step(0.0001, abs(vSt.y)));',

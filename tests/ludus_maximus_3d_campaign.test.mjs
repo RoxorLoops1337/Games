@@ -32,9 +32,9 @@ ok(K.NEM.length >= 4 && K.NEM.every((n) => D.STYLES[n.style] && D.TRAITS[n.trait
 ok(new Set(K.NEM.map((n) => n.style)).size === K.NEM.length, 'each archetype fights in a different style');
 ok(K.TAC.length === 4 && K.TAC.every((t) => LM.FORMS[t.form]), 'four tactic stages, each a real formation');
 const TEXT = K.allText();
-ok(!/—|–/.test(TEXT), 'no em or en dashes in any story text');
+ok(!/\u2014|\u2013/.test(TEXT), 'no em or en dashes in any story text');
 ok(K.BEATS.every((b) => b.lines.length >= 2 && b.lines.length <= 8 && b.cs.length >= 2), 'every beat has real dialogue and at least two answers');
-ok(K.BEATS.every((b) => b.cs.every((c) => !/[—]/.test(c.l + (c.h || ''))) ), 'choice labels are clean');
+ok(K.BEATS.every((b) => b.cs.every((c) => !/[\u2014]/.test(c.l + (c.h || ''))) ), 'choice labels are clean');
 
 // ---------------------------------------------------------------- 2. lazy, deterministic, tutorial-safe
 {
@@ -230,7 +230,7 @@ function ending(id, o = {}) {
 {
   const G = ending('glory'); const S = G.S, c = S.camp; ok(c.end === 'glory', 'glory ending reached');
   const epG = K.epilogue(S); ok(epG.id === 'glory' && epG.title === 'A Name in Marble' && epG.paras.length >= 3 && epG.stats.length >= 8, 'glory epilogue: title, paragraphs and stats');
-  ok(epG.paras.every((p) => !/\{/.test(p)) && !/—/.test(JSON.stringify(epG)), 'epilogue text is resolved and clean');
+  ok(epG.paras.every((p) => !/\{/.test(p)) && !/\u2014/.test(JSON.stringify(epG)), 'epilogue text is resolved and clean');
   ok(G.S.laurels >= 3, 'glory pays laurels');
   const F = ending('freedom'); const Sf = F.S; ok(Sf.camp.end === 'freedom' && Sf.glads.length === 0 && Sf.camp.freed.length === 3 && Sf.legends.filter((l) => l.title === 'Freedman').length === 3, 'freedom: every fighter leaves a free man and becomes a legend of the house');
   ok(Sf.laurels >= 9 && Sf.mentors.length === 0, 'freedom pays laurels and clears the mentor pairs');

@@ -74,6 +74,7 @@ function eventCard(ctx, ev, lv, draw) {
   head.style.setProperty('--k', m.k);
   const tags = h('div', 'ax-row ax-wrap ax-gap4');
   if (D.DIFF[ev.diff]) tags.append(pill(D.DIFF[ev.diff].n, { tone: ev.diff === 2 ? 'bad' : ev.diff === 1 ? 'warn' : 'good', tip: ev.diff === 2 ? 'A stronger opponent for a bigger purse.' : ev.diff === 0 ? 'A weaker opponent for a smaller purse.' : 'An even match.', tipTitle: D.DIFF[ev.diff].n + ' duel' }));
+  if (ev.bout && lm.boutRules && lm.boutRules(ev.bout)) { const bq = lm.boutRules(ev.bout); tags.append(pill(bq.n, { ico: 'fame', tone: 'vio', tip: bq.line + ' ' + bq.tip + ` Fame x${bq.fame}.`, tipTitle: bq.n })); } // COMBAT: special bout, one line on the event card
   if (ev.kind === 'team') tags.append(pill(`${ev.size}v${ev.size} team`, { ico: 'roster', tone: 'blue', tip: `Send ${ev.size} fighters. Mixed styles earn synergy bonuses, and fighters with a strong bond unlock a duo ultimate.`, tipTitle: 'Team clash' }));
   if (ev.kind === 'tourney' || ev.kind === 'grand') tags.append(pill(`${ev.size} fighters`, { ico: 'fame', tone: 'vio', tip: 'One fighter enters a knockout bracket. Wounds carry over between rounds.', tipTitle: 'Bracket' }));
   if (wx !== 'clear') tags.append(pill(D.WEATHER[wx].n, { tone: 'blue', tip: D.WEATHER[wx].d, tipTitle: 'Weather' }));

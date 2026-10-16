@@ -1184,5 +1184,44 @@ const LEGACY_IDS = ['patron', 'brawl', 'trainer', 'spoiled', 'spy', 'sponsor', '
   const g3 = mkG({ id: 3 }); LM.setRandom(seeded(5)); const x = LM.makeGlad({ id: 1, lvl: 3 }).name; LM.setRandom(seeded(5)); LM.fEnsure(null, g3); LM.fBio(g3); LM.fTitles(null, g3); const y = LM.makeGlad({ id: 1, lvl: 3 }).name;
   ok(x === y, 'FIGHTERS: fEnsure does not move the random stream');
 }
+{ // CAMPAIGN: the story spine (core/campaign.js). The long suite is tests/ludus_maximus_3d_campaign.test.mjs; these are the guards that sit next to the sim rounds.
+  const K = LM.campaign, mkC = (seed, wk = 8, fame = 0) => { const T = LM.newGame({ name: 'Camp' }); T.seed = seed; T.week = wk; T.fame = fame; T.flags.tut = { v: 1, done: 1 }; return T; };
+  ok(!!K && K.CH.length === 5 && K.BEATS.length >= 15 && K.NEM.length === 4, 'campaign: 5 chapters, at least 15 story beats, 4 nemesis archetypes');
+  { const T = mkC('c-a', 1); ok(K.get(T) === null && !T.camp, 'campaign: nothing is created in week 1 (a new game is untouched)'); const U = mkC('c-a', 8); ok(!!K.get(U) && U.camp.v === 1 && U.camp.nem.name === K.get(mkC('c-a', 30)).nem.name, 'campaign: created lazily and deterministically from the seed'); }
+  { const T = mkC('c-b', 8); T.flags.tut = { v: 1 }; ok(K.next(T) === null, 'campaign: no story over an unfinished tutorial'); }
+  { // no draws from the global random stream
+    const T = mkC('c-c', 8, 60); let calls = 0; const keep = LM.rand; LM.setRandom(() => { calls++; return 0.5; });
+    const c = K.get(T); c.card = 0; c.lastBeat = 0; const sc = K.next(T); if (sc && sc.choices.length) K.choose(T, sc, sc.choices[0].i); K.nemGlad(T, 1, 8, {}); K.chips(T, { item: 2, xp: 5 }); LM.setRandom(seeded(42));
+    ok(calls === 0, 'campaign: answering a scene and building the nemesis draws nothing from the global random stream (' + calls + ')'); void keep;
+  }
+  { // events: no campaign, no change; a nemesis on his week replaces the even duel
+    const T = mkC('c-d', 20, 300), norm = (o) => JSON.stringify(o, (k, v) => (k === 'gear' && v ? Object.fromEntries(Object.entries(v).map(([q, it]) => [q, it && Object.assign({}, it, { id: 0 })])) : v));
+    const base = LM.events(T, 20, 1), U = JSON.parse(JSON.stringify(T)); const c = K.get(U, true); c.nem.intro = true; c.nem.next = 20; c.nem.lg = 1;
+    const ev = LM.events(U, 20, 1); ok(ev.find((e) => e.key === '20:1:d1').camp === 'nem' && ev.find((e) => e.key === '20:1:d1').opps[0].nem === 1, 'campaign: on his week the even duel is a Grudge Match with the nemesis');
+    ok(norm(ev.filter((e) => e.key !== '20:1:d1')) === norm(base.filter((e) => e.key !== '20:1:d1')), 'campaign: every other event of the week is unchanged');
+    c.nem.intro = false; ok(norm(LM.events(U, 20, 1)) === norm(base), 'campaign: an unintroduced nemesis leaves the schedule alone');
+  }
+  { // fate: kill gives an avenger and a vendetta; spare is remembered; other foes are untouched
+    const T = mkC('c-e', 20, 300), c = K.get(T, true); c.nem.intro = true; const evx = { kind: 'duel', league: 1, key: '20:1:d1', week: 20, title: 'x', purse: 100, fame: 20, opps: [] }; const nm = c.nem.name;
+    LM.fate(T, evx, null, 'kill', K.nemGlad(T, 1, 8, {})); ok(c.nem.state === 'avenger' && c.nem.prev === nm && LM.vendetta(T, 'nem'), 'campaign: killing the nemesis leaves an avenger and a school vendetta');
+    const U = mkC('c-f', 20, 300), d = K.get(U, true); LM.setRandom(() => 0.99); LM.fate(U, evx, null, 'spare', K.nemGlad(U, 1, 8, {})); LM.setRandom(seeded(42)); ok(d.nem.fates[0].id === 'spare' && d.flags.sparedNem === 1, 'campaign: a spared nemesis is remembered');
+  }
+  { // the plan: his stage shapes his team
+    const T = mkC('c-g', 20, 300), c = K.get(T, true); c.nem.intro = true; const gl = [0, 1, 2].map((i) => LM.makeGlad({ id: 500 + i, style: D.STYLE_IDS[i], lvl: 5 })); const foes = [0, 1, 2].map((i) => LM.mkOpp(T, { id: 'q' + i, name: 'Q' + i, nick: '', ludus: 'X', style: D.STYLE_IDS[i], trait: 'ironjaw', skin: D.SKIN[0], hair: D.HAIR[0], plume: D.PLUME[0], face: 0, color: '#888' }, 6, 1, LM.mulberry(i + 1), 1, false));
+    foes[1] = K.nemGlad(T, 1, 6, {}); c.nem.stage = 3; c.nem.mark = gl[2].id; const p = LM.oppPlan(T, foes, gl); ok(p.form === 'pincer' && p.roles[foes[1].id] === 'hunter' && p.prio === 2, 'campaign: stage 3 nemesis forms a pincer, hunts, and marks the fighter who beat him');
+  }
+  { // a whole chapter I of story: four beats, in order, then the finale opens
+    const T = mkC('c-h', 3, 0); T.glads.push(LM.makeGlad({ id: T.nextId++, style: 'thraex', lvl: 4 })); const c = K.get(T), told = [];
+    for (let i = 0; i < 14 && !c.fin; i++) { T.week += 3; T.fame = Math.min(95, T.fame + 20); LM.extWeek(T, { notes: [] }); for (let g = 0; g < 4; g++) { const sc = K.next(T); if (!sc) break; if (sc.kind === 'card') K.dismiss(T, sc); else if (sc.choices.length) { told.push(sc.id); K.choose(T, sc, sc.choices.find((x) => !x.why).i); } else K.dismiss(T, sc); } }
+    ok(told.slice(0, 4).join() === 'b11,b12,b13,b14' && !!c.fin && c.fin.ch === 1, 'campaign: chapter I tells four beats in order, then the finale opens (' + told.join() + ')');
+    const fe = LM.events(T, T.week, c.fin.lg).find((e) => e.camp === 'cf'); ok(!!fe && fe.fee === 0 && /Finale/.test(fe.title), 'campaign: the finale is a free duel in the arena schedule');
+    LM.settle(T, fe, [T.glads[0]], { win: true, hype: 50, hpf: { [T.glads[0].id]: 0.5 }, odds: 0.5 }); ok(c.ch === 2 && c.done[1] > 0 && !c.fin, 'campaign: winning the finale closes the chapter and starts the next');
+  }
+  { // saves
+    const T = mkC('c-i', 20, 100); K.get(T, true); const B = LM.importCode(LM.exportCode(T)); ok(JSON.stringify(B.camp) === JSON.stringify(T.camp), 'campaign: the story survives a save code');
+    const O = JSON.parse(JSON.stringify(T)); delete O.camp; ok(LM.migrate(O).camp === undefined, 'campaign: an old save loads without a story'); const X = JSON.parse(JSON.stringify(T)); X.camp = { v: 1, nem: 3 }; ok(LM.migrate(X).camp === undefined, 'campaign: a damaged story is dropped on load');
+  }
+}
+
 console.log(`ludus_maximus: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

@@ -20,7 +20,7 @@
     "test:cars": "node tests/nineties_cars.test.mjs",
     "test:frietkot": "node tests/frietkot_tycoon.test.mjs",
     "test:ludus": "node tests/ludus_maximus.test.mjs",
-    "test:ludus3d": "node tests/ludus_maximus_3d.test.mjs && node tests/ludus_maximus_3d_structure.test.mjs && node tests/ludus_maximus_3d_saves.test.mjs && node tests/ludus_maximus_3d_economy.test.mjs && node tests/ludus_maximus_3d_fighters.test.mjs && node tests/ludus_maximus_3d_combat.test.mjs && node tests/ludus_maximus_3d_arenas.test.mjs",
+    "test:ludus3d": "node tests/ludus_maximus_3d.test.mjs && node tests/ludus_maximus_3d_structure.test.mjs && node tests/ludus_maximus_3d_saves.test.mjs && node tests/ludus_maximus_3d_economy.test.mjs && node tests/ludus_maximus_3d_fighters.test.mjs && node tests/ludus_maximus_3d_combat.test.mjs && node tests/ludus_maximus_3d_arenas.test.mjs && node tests/ludus_maximus_3d_campaign.test.mjs",
     "test:ludus3dqa": "node tests/ludus_maximus_3d_ui.test.mjs && node tests/ludus_maximus_3d_monkey.test.mjs && node tests/ludus_maximus_3d_gore.test.mjs",
     "test:horse": "node tests/horse_ranch.test.mjs",
     "test:wildwalk": "node tests/wildwalk.test.mjs",

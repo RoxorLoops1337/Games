@@ -79,7 +79,8 @@ export function createDirectControl(fv) {
 
   function place() { // keep the controls above the ultimate bar and out of the way of the nameplates
     if (!S.root || !fv.ultBar) return; const hb = fv.host.getBoundingClientRect(), ub = fv.ultBar.getBoundingClientRect(), H = hb.height || innerHeight;
-    const top = ub.height > 0 ? Math.min(H, ub.top - hb.top) : H, off = Math.max(8, H - top + 8); S.root.style.setProperty('--dc-b', off.toFixed(0) + 'px');
+    let top = ub.height > 0 ? Math.min(H, ub.top - hb.top) : H; const ex = fv.extras; if (ex && ex.isConnected && ex.style.visibility !== 'hidden') { const vis = [...ex.children].some((c) => c.style.display !== 'none'); if (vis) { const eb = ex.getBoundingClientRect(); if (eb.height > 0) top = Math.min(top, eb.top - hb.top); } }
+    const off = Math.max(8, H - top + 8); S.root.style.setProperty('--dc-b', off.toFixed(0) + 'px');
     S.root.classList.toggle('dc-land', hb.width > hb.height);
   }
 
@@ -109,7 +110,7 @@ export function createDirectControl(fv) {
   };
   // per frame: send a changed stick code, poll the pad, paint the stamina bar
   S.frame = function (dt) {
-    if (!S.on) return; const F = fv.F, u = me(); if (!F || !u) return;
+    if (!S.on) return; if ((S.pn = (S.pn | 0) + 1) % 20 === 0) place(); const F = fv.F, u = me(); if (!F || !u) return;
     if (fv.phase !== 'fight' || fv.replaying || F.done) { if (S.code !== 0 && fv.phase === 'fight' && !F.done) fv.tap('dcmove', S.uid, 0); S.code = 0; S.root.style.visibility = fv.phase === 'fight' && !F.done ? '' : 'hidden'; return; }
     S.root.style.visibility = ''; pollPad(); if (!canDrive()) return;
     const v = readInput(), code = L().dcCode(v.x, v.y);

@@ -270,6 +270,7 @@ export async function driveFlow(h, start, { label = 'flow', maxSteps = 700, repl
       }
       const fo = [...document.querySelectorAll('.lx-fate .lx-fate-opt:not([disabled])')];   // FATE: the decision panel in the fight view (kill / spare / ransom); answered with a real click, rotating through the options
       if (fo.length && !document.querySelector('.lx-scrim:not(.lx-out)')) { if (!window.__fateAud) { window.__fateAud = 1; return { fateAudit: true }; } window.__fateAud = 0; window.__fateN = (window.__fateN | 0) + 1; const b = fo[window.__fateN % fo.length]; b.click(); return { clicked: 'fate ' + b.dataset.id }; }
+      { const cp = [...document.querySelectorAll('.lx-scrim:not(.lx-out) .cp-opt .lx-btn')].find((b) => !b.disabled); if (cp) { cp.click(); return { clicked: 'story choice' }; } } // CAMPAIGN: a story scene's answers live in the body (their numbers are shown before you commit); answer the first one
       const acts = [...document.querySelectorAll('.lx-scrim:not(.lx-out) .lx-actions .lx-btn')].filter((b) => !b.disabled);
       if (acts.length) {
         const title = (document.querySelector('.lx-scrim:not(.lx-out) .lx-title') || {}).textContent || '';

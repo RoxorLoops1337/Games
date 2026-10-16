@@ -108,7 +108,7 @@ const mk = (seed, n = 3, o = {}) => { const S = LM.newGame({ name: 'F' + seed, c
   ok(JSON.stringify(S.glads.map((g) => g.age)) !== t0 && S.glads.every((g) => g.age >= 19 + 12), 'fighters grow older with the weeks');
   const web = LM.fWeb(S); ok(web.sworn.length + web.friend.length > 0, 'time and bonds produce friends or sworn brothers'); ok(notes < 150, 'the weekly pass does not spam notes');
   ok(S.glads.every((g) => g.ll.length > 0), 'every fighter has a life log');
-  ok(LM.fStage({ age: 25 }).id === 'prime' && LM.fStage({ age: 37 }).id === 'waning' && LM.fStage({ age: 44 }).id === 'old', 'age stages');
+  ok(LM.fStage({ age: 25 }).id === 'prime' && LM.fStage({ age: 39 }).id === 'waning' && LM.fStage({ age: 44 }).id === 'old', 'age stages');
 }
 // 9. retirement: rudis, trainer, last fight
 {

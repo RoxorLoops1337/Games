@@ -71,7 +71,7 @@ export function playScene(ctx, sc, choose) {
   return new Promise((resolve) => {
     const S = ctx.S, x = C().CH[sc.ch - 1];
     const top = h('div', 'cp-top', [pill(`Chapter ${NUM[sc.ch - 1]}`, { tone: 'gold', ico: 'scroll' }), pill(x.t, { tone: '' })]);
-    const log = h('div', 'cp-log'), cho = h('div', 'cp-cho'), body = h('div', 'cp', [top, log, cho]);
+    const log = h('div', 'cp-log'); log.setAttribute('aria-live', 'polite'); const cho = h('div', 'cp-cho'), body = h('div', 'cp', [top, log, cho]);
     const forced = !!(sc.choices && sc.choices.length);
     let shown = 0, phase = 'lines', picked = null, queue = [], closedBy = false, pendingDone = [];
     const cont = U.button({ label: 'Continue', variant: 'gold', icon: 'play', block: true, onClick: () => advance() });
@@ -102,7 +102,7 @@ export function playScene(ctx, sc, choose) {
       if (phase !== 'choose') return; ctx.sfx('uiConfirm'); const c = sc.choices.find((q) => q.i === i); picked = i;
       let res = { done: [], then: [] }; try { res = (choose && choose(i)) || res; } catch (e) { console.warn('story choice', e && e.message); }
       cho.replaceChildren(); add({ who: 'you', spk: { id: 'you', name: 'You', role: '', ico: 'star' }, text: c.label }, ' you');
-      queue = (res.then || []).slice(); pendingDone = [...new Set([...(c.chips || []).map((x) => x.t), ...(res.done || [])])]; phase = 'then'; cont.style.display = ''; setLabel('Continue'); thenStep();
+      queue = (res.then || []).slice(); pendingDone = [...new Set([...(c.chips || []).map((x) => x.t), ...(res.done || [])])]; phase = 'then'; cont.style.display = ''; setLabel('Continue'); thenStep(); try { cont.focus({ preventScroll: true }); } catch (e) { /* detached */ }
     };
     const advance = () => {
       if (phase === 'lines') {
