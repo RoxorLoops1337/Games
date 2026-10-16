@@ -447,9 +447,34 @@ A **card definition** (`DATA.cards[id]`):
 copy and reports deck gains in `C.summary().fanbase`, RUN adds them to `enc` on the deck instance (saved with the run; old saves have none,
 a transform drops it); `remix N` (Remix) each play adds N damage for the rest of the fight (`rmx` on the combat copy); `hype N` (Hype) N more
 damage per card played earlier this turn (`C.played`); `loop N` (Loop) after its ops, N temp copies of the last other Attack or Skill played
-this turn (`C.lastPlayed`, never a Loop card) go to the hand with `fade:true` and resolve with Fade. The damage bonuses ride on `plus` of
-every dmg op (like a gem's +N damage), so previews, bots and the printed number see them; the text adds one sentence per mechanic before a
-closing Fade, with the live bonus: "Fanbase 2 (now +4)." Deck instance: `{uid, id, up, gems, enc?}`.
+this turn (`C.lastPlayed`, never a Loop card) go to the hand with `fade:true` and resolve with Fade. The duo and the setlist: `duet N` (Duet)
+N more damage, or N more Block on a card without a dmg op, if the OTHER hero played the previous card this turn (`C.lastHero`, the hero id of
+the last card played this turn, null at turn start; the UI marks a ready card with the `duet` class on its hand wrapper); `soundcheck N`
+(Soundcheck) N more damage or Block if it is the first card played this turn (`C.played` is 0, and only inside a turn: a deck view shows no
+bonus); `reprise` (Reprise, always 1, Attacks and Skills with a fixed cost and no pick) at the end of a turn of 3 or more cards COMBAT plays a
+free Fading temp copy of the card again, in play order, at the same target when it still stands, else the first living enemy (a `play` event
+with `free:true, reprise:true`; a copy never Reprise-es again); `finale N` (Finale) N more damage per card played earlier this turn and the turn
+is closed: `C.canPlay` answers `reason:'finale'` for every card until the next turn (swapping and ending the turn still work). The damage
+bonuses ride on `plus` of every dmg op (like a gem's +N damage), Duet and Soundcheck on every block op of a card without damage, so previews,
+bots and the printed number see them; the text adds one sentence per mechanic before a closing Fade, with the live bonus: "Fanbase 2 (now
++4)." Deck instance: `{uid, id, up, gems, enc?}`.
+
+**The Crowd** (a per fight hype meter, `C.crowd` 0..`C.crowdMax`): every card you play fills the Crowd meter by 1 and a defeated enemy fills it by 2;
+when it is full the crowd goes wild: the meter wraps (the surplus carries) and a temp copy of a hero's **Signature** card (`DATA.heroes[id].signature`, an
+Attack or Skill of that hero; `crowd:true` on the copy makes it cost 0 and Fade) joins the hand. The lead hero at the start of the fight sings first, then
+the other hero, alternating (`C.crowdWild` counts the fills); a voiceless hero or one without a Signature passes the turn. The kill that wins the fight
+wakes nobody. The size is `mods.crowd` (`ECONOMY.crowd`, 7; the Encore 5 level adds 1 through `trialMods`). Event `crowd` (5.2); the HUD shows the meter
+beside Breath. Keywords `crowd` and `signature` explain it.
+
+**Medleys** (fused cards, offered once after every elite fight, optional): a Medley is two cards sung as one. The player picks two Attack or Skill cards
+of ONE hero from the deck (neither a Medley), both leave the deck (their gems return to the pouch) and one deck instance `{uid, id:'medley', parts:[idA, idB],
+up, gems}` replaces them: upgraded when either part was, the larger Fanbase bonus kept. `DATA.medleyDef(parts)` is the merged definition that every reader
+gets from `DATA.cardDef(inst)`: name "A and B", hero, type attack when either part is one (else skill), rarity rare, cost `max(costA, costB)` clamped to 1..3
+(an X part makes it X), fx A then B, keywords the union, slots the union capped at 3 (A's first), `mech` merged by max, and `up` the same from the upgraded
+parts. `DATA.resolveCard` resolves each part with its own share of the gems (slot i belongs to A while i < A.slots.length) and merges the results, so card
+text, previews, the bot and the engine all read one card that plays both. The deck view and combat show it with the first part's art, a "+" badge and the
+type strip "Medley". `RUN.medleyStart(R, rewards)` raises the pending `{op:'medley', n:2}` (answered with two uids or `[]` to decline, `rewards.medley`
+true -> 'pending' -> 'done'); saves keep `parts` and `RUN.deserialize` rebuilds the instance (older saves simply have none).
 
 **Playing a card.** `C.play(uid, targetId)`:
 
@@ -682,6 +707,18 @@ Rest), `onPaint` (after each hex unmuted, by Vox, a Spell or a chain), `onFightW
 - COMBAT gets `mods` verbatim from `RUN.mods(R)` and reads only `energy hand startBlock freeSwaps enemyHp eliteHp bossHp enemyDmg`. COMBAT never reads `DATA.relics[id].mods`;
   `relics:[ids]` are for hooks only.
 
+**Charm sets (`set`, `DATA.relicSets`).** A relic def may carry `set: setId`. `DATA.relicSets[setId]` (registered with `DATA.add('relicSets', defs)`, data in
+`data_relics.js`) is `{id, name, text, tiers: {N: {text, mods?, hooks?, rows?}}}` with `N` a whole number from 2 to 8. A tier is ACTIVE while the party owns at least
+`N` Charms of that set (any rarity, any source; a Charm counts once); tiers stack, so owning 3 gives the 2 and 3 bonuses. Each active tier is a virtual Charm built
+only from existing mod keys, hook ops and conditions: `DATA.modsFor` and `DATA.rowFor` fold its `mods` and `rows` (so `RUN.mods(R)` and COMBAT see them), COMBAT
+registers its combat hooks after the Charms' own (`src: 'set'`, party hooks, no `relic` event), and `RUN.hook` runs its run hooks after the Charms' own (never for
+`onPickup`). Nothing new is saved: `DATA.activeSetTiers(R.relics)` derives everything from the owned ids, so old saves load unchanged. Helpers: `setCounts`,
+`setMembers`, `setMax`, `setProgress(setId, relicIds)` (what the Charms panel shows: owned, top tier, every tier line and whether it is lit) and
+`setTierLabel(setId, tier)`, the toast line "Stage Crew 3 of 4: ..." that `RUN.addRelic` notes in `R.log` (with `set` and `tier`) and logs as `{op:'set'}` when a
+pickup switches a tier on. Each tier `text` is one sentence of at most 90 characters and carries every number and trigger of its data (the treasure suite checks
+it like a Charm text). Breath and hand size stay Headliner trades: the one Breath tier (Rhythm Section 4) is gated by `every` and `limit`, and the one draw tier (Demo Tape 3) is every 3rd turn (a turn 1 draw would be absorbed by the opening hand, which is topped up to the hand size). The audit demands every
+set be completable by any party from a fresh profile (at least as many unlocked, hero-free members as its top tier).
+
 ### 4.8 Map, Vox and Spells
 
 - **Layout.** Pointy-top axial hexes `(q, r)`, key `'q,r'`, odd-r offset: `column = q + floor(r / 2)`, and a tile exists iff `0 <= column < cols` and `0 <= r < rows`. The map is
@@ -894,6 +931,7 @@ intent {enemy:unitId, intent}     enemy_act {enemy:unitId, move, name, kind, say
 summon {enemy:unitSnapshot}       enemy_phase {enemy:unitId, index, at, say}     death {unit:ref, tier}       flee {unit:ref}
 hero_down {hero:id}               hero_revive {hero:id, hp}                      pick_needed {pending}
 relic {id}                        gold {n}                                       ink {n}                      max_hp {hero, n}
+crowd {value, max, delta, wild, hero|null, card|null}   (the Crowd meter, 4.3; on `wild` an add_card of the free Signature copy follows)
 end {result:'win'|'lose'}
 ```
 

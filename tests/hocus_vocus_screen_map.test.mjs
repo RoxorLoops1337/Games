@@ -1402,7 +1402,15 @@ await t.test('relics overlay: every charm with art, text and where it came from,
   t.ok(ov && ov.querySelector('.mr-grid'), 'tapping a charm opens the relics overlay (the screen_map version)');
   const rows = $$(g, '.mr-row', ov);
   t.eq(rows.length, 5, 'one row per charm');
-  t.deep(rows.map((r) => r.dataset.id), [picks[1], picks[2], picks[4], picks[3], picks[0]], 'sorted boss, rare, shop, uncommon, common');
+  // grouped by Charm set (DESIGN 4.7): the first common (Tour Poster) belongs to All Areas, so its set group comes first; the loose Charms follow sorted by rarity
+  t.deep(rows.map((r) => r.dataset.id), [picks[0], picks[1], picks[2], picks[4], picks[3]], 'the set group first, then boss, rare, shop, uncommon');
+  const heads = $$(g, '.mr-set', ov);
+  t.eq(heads.length, 2, 'a set header and the Other Charms header');
+  t.ok(/All Areas/.test(txt($(g, '.mr-set-name', heads[0]))) && txt($(g, '.mr-set-count', heads[0])) === '1/3', 'the set header reads All Areas 1/3');
+  t.eq($$(g, '.mr-tier', heads[0]).length, 2, 'both tier lines are listed'); t.ok($$(g, '.mr-tier', heads[0]).every((li) => li.classList.contains('off')) && !heads[0].classList.contains('lit'), 'and greyed: one Charm lights nothing');
+  t.ok(/Other Charms/.test(txt($(g, '.mr-set-name', heads[1]))), 'the loose Charms sit under Other Charms');
+  t.ok(/All Areas 1\/3/.test(txt($(g, '.mr-setof', rows[0]))), 'the set Charm carries its progress tag');
+  const byId = {}; rows.forEach((r) => { byId[r.dataset.id] = r; });
   rows.forEach((row) => {
     const d = g.DATA.relics[row.dataset.id];
     t.ok($(g, '.relic canvas', row), d.name + ': art');
@@ -1411,8 +1419,8 @@ await t.test('relics overlay: every charm with art, text and where it came from,
     t.ok(new RegExp(d.rarity === 'boss' ? 'headliner' : d.rarity === 'shop' ? 'merch' : d.rarity, 'i').test(txt($(g, '.mr-tag', row))), d.name + ': rarity tag (the boss rarity reads Headliner, the shop rarity Merch)');
     t.ok(/Found in Act (I|II),/.test(txt($(g, '.mr-from', row))), d.name + ': where it was found (' + txt($(g, '.mr-from', row)).slice(0, 50) + ')');
   });
-  t.ok(/Found in Act I,/.test(txt($(g, '.mr-from', rows[4]))) && /Found in Act II,/.test(txt($(g, '.mr-from', rows[1]))), 'the chapter comes from RUN\'s log');
-  t.ok(/headliner/i.test(txt($(g, '.mr-from', rows[0]))) && /merch/i.test(txt($(g, '.mr-from', rows[2]))), 'and the source from the rarity');
+  t.ok(/Found in Act I,/.test(txt($(g, '.mr-from', byId[picks[0]]))) && /Found in Act II,/.test(txt($(g, '.mr-from', byId[picks[2]]))), 'the chapter comes from RUN\'s log');
+  t.ok(/headliner/i.test(txt($(g, '.mr-from', byId[picks[1]]))) && /merch/i.test(txt($(g, '.mr-from', byId[picks[4]]))), 'and the source from the rarity');
   t.ok(/5 Charms/.test(txt($(g, '.mr-sum', ov))), 'a summary line');
   g._click($(g, '.btn', ov)); await settle(g);
   t.eq(g.UI.overlay.count(), 0, 'Close closes it');

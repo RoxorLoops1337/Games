@@ -282,7 +282,7 @@ const D = g.DATA;
 
 // Every string whose key is a display field, anywhere inside a registry. Ids, ops, tags and art names are never display fields.
 const DISPLAY_KEYS = new Set(['name', 'title', 'flavor', 'text', 'lore', 'say', 'label', 'blurb']);
-const REGISTRIES = ['cards', 'gems', 'relics', 'enemies', 'events', 'achievements', 'trials', 'lore', 'tiles', 'brushes', 'keywords', 'statuses', 'heroes', 'ROSTER', 'outfits'];
+const REGISTRIES = ['cards', 'gems', 'relics', 'relicSets', 'enemies', 'events', 'achievements', 'trials', 'lore', 'tiles', 'brushes', 'keywords', 'statuses', 'heroes', 'ROSTER', 'outfits'];
 const data = [];            // { kind:'data', where, text, reg, key }
 const collect = (o, p, reg, key) => {
   if (typeof o === 'string') { data.push({ kind: 'data', where: p, text: o, reg, key }); return; }
@@ -527,7 +527,7 @@ const artClosed = (s, r) => {
 t.test('the DATA walk found the display fields it should (guards the walker itself)', () => {
   const by = {};
   for (const f of data) by[f.reg] = (by[f.reg] || 0) + 1;
-  for (const [reg, min] of Object.entries({ cards: 250, gems: 20, relics: 100, enemies: 300, events: 200, achievements: 60, trials: 20, lore: 20, tiles: 20, brushes: 10, keywords: 20, statuses: 30, heroes: 14, tips: 20, ROSTER: 100, outfits: 3, COLOUR_NAME: 5 })) t.ok((by[reg] || 0) >= min, `DATA.${reg} contributed ${by[reg] || 0} display strings, expected at least ${min}`);
+  for (const [reg, min] of Object.entries({ cards: 250, gems: 20, relics: 100, relicSets: 30, enemies: 300, events: 200, achievements: 60, trials: 20, lore: 20, tiles: 20, brushes: 10, keywords: 20, statuses: 30, heroes: 14, tips: 20, ROSTER: 100, outfits: 3, COLOUR_NAME: 5 })) t.ok((by[reg] || 0) >= min, `DATA.${reg} contributed ${by[reg] || 0} display strings, expected at least ${min}`);
   t.ok(data.some((f) => /\.lines\.start\[/.test(f.where)), 'bark lines are walked');
   t.ok(data.some((f) => /\.phases\[\d+\]\.say$/.test(f.where)), 'enemy phase say is walked');
   t.ok(data.some((f) => /\.out\[\d+\]\.text$/.test(f.where)), 'event outcome text is walked');

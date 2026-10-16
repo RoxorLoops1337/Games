@@ -6,7 +6,7 @@
 // PUBLIC API
 //   COMBAT.create({ heroes:[{id,hp,maxHp}], frontIdx, deck:[{uid,id,up,gems}], enemies:[enemyId], tier, chapter, seed, mods, relics:[id], gold }) -> C
 //        mods is RUN.mods(R) verbatim (partial objects are fine, missing keys default from DATA.foldMods([])); only energy, hand, startBlock,
-//        freeSwaps, enemyHp, eliteHp, bossHp and enemyDmg are read. relics are only for hooks and row bonuses. Enemy HP is rolled in create
+//        freeSwaps, enemyHp, eliteHp, bossHp and enemyDmg are read. relics are only for hooks and row bonuses (the combat hooks of every active Charm set tier, DATA.activeSetTiers(relics), register after them as party hooks with src 'set'). Enemy HP is rolled in create
 //        (C.rng), so units are fully formed before start(); C.start() then runs enemy `start` ops, the opening shuffle, combatStart hooks,
 //        the first intents and turn 1. The opening shuffle is not a `shuffle` event and does not fire onShuffle.
 //   COMBAT.simulate(opts, policyFn?) -> summary   plays a whole combat with policyFn(C) (default COMBAT.greedyPolicy). The summary is C.summary()
@@ -23,9 +23,13 @@
 //   C.hand C.draw C.discard C.exhaust C.powers C.inPlay: deck instances { uid, id, up, gems } (temp cards add tmp:true). C.draw[0] is the TOP
 //        of the draw pile (the next card drawn). C.added counts temp cards created, so hand+draw+discard+exhaust+powers+(inPlay?1:0) = deck.length + C.added.
 //   C.pending null | { kind:'pick', opId, from, n, then, filter, top, optional, uids }   C.stats (DESIGN 4.10)   C.rng   C.events (every event ever emitted)
-//   C.played (cards played this turn, what Hype reads)   C.lastPlayed (a copy of the last Attack or Skill played this turn that Loop would copy, or null)
+//   C.played (cards played this turn, what Hype, Soundcheck and Finale read)   C.lastPlayed (a copy of the last Attack or Skill played this turn
+//        that Loop would copy, or null)   C.lastHero (the hero id of the last card played this turn, what Duet reads, or null)
 //   Card mechanics (DATA "Card mechanics"): an instance may carry enc (Fanbase damage, from the deck and grown by kills), rmx (Remix plays this
-//        fight) and fade (a Loop copy, resolved with Fade). Copies in events carry them too.
+//        fight) and fade (a Loop or Reprise copy, resolved with Fade). Copies in events carry them too. A Finale closes the turn: C.canPlay then
+//        answers { ok:false, reason:'finale' } for every card until the next turn. A Reprise card played in a turn of 3 or more cards is played
+//        again at the end of the turn (C.endTurn, before the hand's end of turn effects) as a free Fading temp copy: a `play` event with
+//        `free:true, reprise:true`, cost 0, the same target when it still stands (else the first living enemy), and no pick can pause it.
 //
 // ACTIONS (each returns the array of events it produced, also appended to C.events; an illegal call returns [] and changes nothing)
 //   C.start()                     see create. Only legal once.
@@ -68,9 +72,13 @@
 //     counter: the global U.uid is never touched), so an event log is identical for identical inputs.
 //
 // EVENTS (DESIGN 5.2): combat_start turn_start turn_end draw shuffle discard exhaust add_card card_move card_upgrade retain energy play hit dodge thorns block
-//   block_lost heal hurt status immune swap intent enemy_act skip summon enemy_phase death flee hero_down hero_revive pick_needed relic gold ink max_hp end.
+//   block_lost heal hurt status immune swap intent enemy_act skip summon enemy_phase death flee hero_down hero_revive pick_needed relic gold ink max_hp crowd end.
 //   Cards inside events are copies. `piles` counts are AFTER the event. `end` is always the last event of a combat. Extra fields beyond the design:
 //   none on events; extra fields on C.intent objects are listed above.
+//   THE CROWD (DATA "The Crowd and Medleys"): C.crowd (0..C.crowdMax, mods.crowd) rises by 1 per card played and 2 per enemy defeated (never on the
+//   kill that wins the fight); at crowdMax it wraps and `crowd {value, max, delta, wild:true, hero, card}` is followed by an add_card of a free Fading
+//   copy (crowd:true) of that hero's Signature (DATA.heroes[id].signature) into the hand; the first lead hero sings first, then the other (C.crowdWild
+//   counts the fills). A Medley deck instance {uid, id:'medley', parts, up, gems} plays as DATA.resolveCard merges it; copies keep `parts`.
 const COMBAT = (() => {
   'use strict';
 
@@ -82,7 +90,8 @@ const COMBAT = (() => {
   const hide = (o, props) => { Object.keys(props).forEach((k) => Object.defineProperty(o, k, { value: props[k], writable: true, enumerable: false, configurable: true })); return o; };
   const ref = (u) => ({ kind: u.kind, id: u.id });
   // card mechanics state rides on the instance (DATA "Card mechanics"): enc (Fanbase bonus), rmx (Remix plays), fade (a Loop copy)
-  const cardCopy = (c) => { const o = { uid: c.uid, id: c.id, up: c.up ? 1 : 0, gems: c.gems.slice() }; if (c.tmp) o.tmp = true; if (c.enc > 0) o.enc = c.enc; if (c.rmx > 0) o.rmx = c.rmx; if (c.fade) o.fade = true; return o; };
+  // a Medley instance carries `parts` (two card ids, DATA "The Crowd and Medleys") and a Crowd copy `crowd: true` (free, Fades)
+  const cardCopy = (c) => { const o = { uid: c.uid, id: c.id, up: c.up ? 1 : 0, gems: c.gems.slice() }; if (c.parts) o.parts = c.parts.slice(); if (c.tmp) o.tmp = true; if (c.enc > 0) o.enc = c.enc; if (c.rmx > 0) o.rmx = c.rmx; if (c.fade) o.fade = true; if (c.crowd) o.crowd = true; return o; };
   const lineOrder = (list) => list.slice().sort((a, b) => a.lane - b.lane);
   const inRange = (v, c) => (c.gte === undefined || v >= c.gte) && (c.lte === undefined || v <= c.lte);
   const EL_BY_MOTIF = { fire: 'fire', flame_orb: 'fire', ice: 'ice', lightning: 'lightning', thunder_fist: 'lightning', chain_lightning: 'lightning', ink_splash: 'ink', ink_wave: 'ink', brush_stroke: 'ink', calligraphy: 'ink', quill: 'ink' };
@@ -108,7 +117,9 @@ const COMBAT = (() => {
         turns: 0, cardsPlayed: 0, attacksPlayed: 0, damageDealt: 0, damageTaken: 0, blockGained: 0, maxHit: 0, maxTurnDamage: 0, swaps: 0, heroDowns: 0, revives: 0,
         poisonKills: 0, burnKills: 0, thornKills: 0, multiHitTurns: 0, zeroCostTurns: 0, kills: [],
       },
-      events: [], added: 0, played: 0, lastPlayed: null,
+      events: [], added: 0, played: 0, lastPlayed: null, lastHero: null,
+      // THE CROWD (DATA "The Crowd and Medleys"): cards played fill it (+1, a kill +2); at crowdMax the crowd goes wild (crowdWild counts the fills)
+      crowd: 0, crowdMax: isNum(mods.crowd) && mods.crowd <= 0 ? 0 : Math.max(1, isNum(mods.crowd) ? mods.crowd : (ECO.crowd || 7)), crowdWild: 0,   // crowdMax 0 switches the Crowd off (sims that measure enemies against a steady party)
     };
 
     // ---------------------------------------------------------------- engine state (closure)
@@ -130,8 +141,10 @@ const COMBAT = (() => {
     const nextGroup = () => ++groupN;
     const emit = (type, data) => { const e = Object.assign({ type }, data || {}); C.events.push(e); if (batch) batch.push(e); return e; };
     const piles = () => ({ hand: C.hand.length, draw: C.draw.length, discard: C.discard.length, exhaust: C.exhaust.length });
-    const newTurnState = () => ({ cards: 0, attacks: 0, skills: 0, zero: 0, multi: false, freeUsed: 0, dmg: 0, last: null });
+    // lastHero: Duet; closed: a Finale was played; reprise: the Reprise cards played this turn (replayed at the end of the turn)
+    const newTurnState = () => ({ cards: 0, attacks: 0, skills: 0, zero: 0, multi: false, freeUsed: 0, dmg: 0, last: null, lastHero: null, closed: false, reprise: [] });
     const fanGain = {};           // Fanbase damage gained this fight per deck uid (C.summary().fanbase)
+    let crowdStart = 0;           // index in C.heroes of the hero whose Signature the Crowd sings first (the lead at the start)
     T = newTurnState();
 
     function act(fn) {
@@ -156,21 +169,21 @@ const COMBAT = (() => {
 
     // ---------------------------------------------------------------- card resolution
     function ownerOf(card) {
-      const def = D.cards[card.id];
+      const def = D.cardDef(card);
       if (def && D.heroes[def.hero]) return heroById(def.hero);
       return front();
     }
     function R(card, unit) {
       const u = unit === undefined ? ownerOf(card) : unit;
-      const mctx = { unit: u, played: T.cards };
-      const key = card.id + '|' + (card.up ? 1 : 0) + '|' + card.gems.join(',') + '|' + (u ? u.row : '') + '|' + D.mechKey(card, mctx);
+      const mctx = { unit: u, played: T.cards, lastHero: T.lastHero };
+      const key = card.id + (card.parts ? '[' + card.parts.join('+') + ']' : '') + (card.crowd ? '!' : '') + '|' + (card.up ? 1 : 0) + '|' + card.gems.join(',') + '|' + (u ? u.row : '') + '|' + D.mechKey(card, mctx);
       let r = resCache.get(key);
       if (!r) { r = D.resolveCard(card, mctx); resCache.set(key, r); }
       return r;
     }
     const tmode = new Map();
     function needsTargetRes(res) {
-      const key = res.id + '|' + (res.up ? 1 : 0) + '|' + res.gems.join(',') + '|' + res.gemActive.join(',');
+      const key = res.id + (res.def && res.def.parts ? '[' + res.def.parts.join('+') + ']' : '') + '|' + (res.up ? 1 : 0) + '|' + res.gems.join(',') + '|' + res.gemActive.join(',');
       let m = tmode.get(key);
       if (m === undefined) { m = D.targetMode(res) === 'enemy'; tmode.set(key, m); }
       return m;
@@ -431,6 +444,7 @@ const COMBAT = (() => {
       C.stats.kills.push({ def: u.def, tier: u.tier, by });
       if (by === 'poison') C.stats.poisonKills++; else if (by === 'burn') C.stats.burnKills++; else if (by === 'thorns') C.stats.thornKills++;
       emit('death', { unit: ref(u), tier: u.tier });
+      crowdAdd(2);
       if (u.loot > 0) { const g = u.loot; u.loot = 0; goldEvent(g); }
       runEnemyHooks(u, 'onDeath', {});
       C.enemies.forEach((o) => { if (o !== u && !o.down) runEnemyHooks(o, 'onAllyDeath', {}); });
@@ -723,7 +737,7 @@ const COMBAT = (() => {
     // ---------------------------------------------------------------- piles: draw, discard, exhaust, add
     function landed(cards) {
       cards.forEach((c) => {
-        const def = D.cards[c.id];
+        const def = D.cardDef(c);
         if (!def || !def.hand || !def.hand.drawn) return;
         const f = front();
         if (!f || dead === 'lose') return;
@@ -774,14 +788,16 @@ const COMBAT = (() => {
     }
     // a temp copy of a card instance keeps its Fanbase bonus (Loop Station, Loop)
     function copyOf(c, fade) {
-      const t = makeTemp(c.id, c.up, c.gems);
+      const t = makeTemp(c.id, c.up, c.gems, c.parts);
       if (c.enc > 0) t.enc = c.enc;
       if (fade) t.fade = true;
       return t;
     }
-    function makeTemp(id, up, gems) {
-      const def = D.cards[id];
-      return { uid: nextUid++, id, up: up ? 1 : 0, gems: gems ? gems.slice() : (def && def.slots ? def.slots.map(() => null) : []), tmp: true };
+    function makeTemp(id, up, gems, parts) {
+      const def = parts ? D.cardDef({ id, parts }) : D.cards[id];
+      const t = { uid: nextUid++, id, up: up ? 1 : 0, gems: gems ? gems.slice() : (def && def.slots ? def.slots.map(() => null) : []), tmp: true };
+      if (parts) t.parts = parts.slice();
+      return t;
     }
     // place new cards. to: hand | draw | discard | exhaust. top: for draw, put on top instead of a random position.
     function placeCards(cards, to, top) {
@@ -813,6 +829,28 @@ const COMBAT = (() => {
       const d = nv - C.energy;
       C.energy = nv;
       if (d !== 0) emit('energy', { value: C.energy, delta: d });
+    }
+    // THE CROWD. The signature alternates: the fight's first lead hero sings first, then the other, and so on; a voiceless hero or one
+    // without a Signature passes the turn to the other. The free copy (crowd:true, cost 0, Fade) goes to the hand like any added card.
+    function crowdHero() {
+      const order = [C.heroes[crowdStart % 2], C.heroes[(crowdStart + 1) % 2]].filter(Boolean);
+      const want = order[C.crowdWild % 2] || order[0];
+      const ok = (h) => h && !h.down && !!D.signatureOf(h.id);
+      return ok(want) ? want : ok(order.find((h) => h !== want)) ? order.find((h) => h !== want) : null;
+    }
+    function crowdAdd(n) {
+      if (n <= 0 || !C.crowdMax || dead || C.phase === 'over' || C.phase === 'setup' || !C.enemies.some((e) => !e.down)) return;   // the kill that wins the fight wakes nobody; crowdMax 0 is off
+      C.crowd += n;
+      const wild = C.crowd >= C.crowdMax;
+      let hero = null, card = null;
+      if (wild) {
+        C.crowd -= C.crowdMax;
+        hero = crowdHero();
+        C.crowdWild += 1;
+        if (hero) { card = makeTemp(D.signatureOf(hero.id)); card.crowd = true; }
+      }
+      emit('crowd', { value: C.crowd, max: C.crowdMax, delta: n, wild, hero: hero ? hero.id : null, card: card ? cardCopy(card) : null });
+      if (card) placeCards([card], 'hand', false);
     }
 
     // ---------------------------------------------------------------- hooks
@@ -1171,8 +1209,8 @@ const COMBAT = (() => {
       let cands = pileOf(op.from).slice();
       if (op.from === 'draw' && op.top) cands = cands.slice(0, op.top);
       const f = op.filter;
-      if (f) cands = cands.filter((c) => { const d = D.cards[c.id]; return d && (f.type === undefined || d.type === f.type) && (f.hero === undefined || d.hero === f.hero); });
-      if (op.then === 'upgrade') cands = cands.filter((c) => { const d = D.cards[c.id]; return d && d.up && !c.up; });
+      if (f) cands = cands.filter((c) => { const d = D.cardDef(c); return d && (f.type === undefined || d.type === f.type) && (f.hero === undefined || d.hero === f.hero); });
+      if (op.then === 'upgrade') cands = cands.filter((c) => { const d = D.cardDef(c); return d && d.up && !c.up; });
       const n = Math.max(0, evalV(op.n, env));
       if (!cands.length || n === 0) { env.picked = 0; return; }
       let chosen;
@@ -1256,7 +1294,7 @@ const COMBAT = (() => {
     function beginPlayerTurn() {
       C.turn += 1; C.stats.turns = C.turn; C.phase = 'player';
       T = newTurnState();
-      C.played = 0; C.lastPlayed = null;
+      C.played = 0; C.lastPlayed = null; C.lastHero = null;
       hooks.forEach((h) => { h.turnFired = 0; });
       C.enemies.forEach((u) => { u._hookRound = {}; });
       C.energy = C.maxEnergy;
@@ -1360,6 +1398,7 @@ const COMBAT = (() => {
       const no = (reason) => ({ ok: false, reason });
       if (C.phase !== 'player') return no('phase');
       if (C.pending) return no('pending');
+      if (T.closed) return no('finale');
       const card = C.hand.find((c) => c.uid === uid);
       if (!card) return no('notInHand');
       const actor = ownerOf(card);
@@ -1377,17 +1416,19 @@ const COMBAT = (() => {
     };
     C.legalTargets = (uid) => (C.needsTarget(uid) ? livingEnemies().map((e) => e.id) : []);
 
-    function* playRoutine(card, targetId) {
+    // free: a Reprise replay (nothing is paid, an X card reads X as 0)
+    function* playRoutine(card, targetId, free) {
       const actor = ownerOf(card);
       const res = R(card, actor);
       const costX = res.cost === 'X';
-      const X = costX ? C.energy : 0;
-      const paid = costX ? X : res.cost;
+      const X = costX && !free ? C.energy : 0;
+      const paid = free ? 0 : costX ? X : res.cost;
       C.energy -= paid;
       const to = res.type === 'power' ? 'power' : res.kw.indexOf('exhaust') >= 0 ? 'exhaust' : 'discard';
       const target = targetId ? enemyById(targetId) : null;
       const pe = { card: cardCopy(card), hero: actor.id, target: target && needsTargetRes(res) ? target.id : null, cost: paid, to };
       if (costX) pe.x = X;
+      if (free) { pe.free = true; pe.reprise = true; }
       emit('play', pe);
       if (paid !== 0) emit('energy', { value: C.energy, delta: -paid });
       const mySerial = ++serial;
@@ -1397,6 +1438,10 @@ const COMBAT = (() => {
       if (res.mech && res.mech.loop && T.last && dead !== 'lose' && C.phase !== 'over') placeCards(Array.from({ length: res.mech.loop }, () => copyOf(T.last, true)), 'hand', false);
       // Remix: one more play on this copy (the next resolution reads it)
       if (res.mech && res.mech.remix) card.rmx = (card.rmx > 0 ? card.rmx : 0) + 1;
+      // Reprise: a deck card (never a Fading copy, so a replay or a Loop copy cannot chain) is replayed at the end of the turn
+      if (res.mech && res.mech.reprise && !card.fade) T.reprise.push({ src: card, target: pe.target });
+      // Finale: the turn is closed for cards
+      if (res.mech && res.mech.finale) T.closed = true;
       // settle the card
       C.inPlay = null;
       if (to === 'power') C.powers.push(card);
@@ -1407,9 +1452,11 @@ const COMBAT = (() => {
       C.enemies.forEach((u) => { if (!u.down) runEnemyHooks(u, 'onHeroPlay', { type: res.type }); });
       T.cards++; if (res.type === 'attack') T.attacks++; if (res.type === 'skill') T.skills++;
       if ((res.type === 'attack' || res.type === 'skill') && !(res.mech && res.mech.loop)) T.last = cardCopy(card);
-      C.played = T.cards; C.lastPlayed = T.last ? cardCopy(T.last) : null;
+      T.lastHero = actor.id;
+      C.played = T.cards; C.lastPlayed = T.last ? cardCopy(T.last) : null; C.lastHero = T.lastHero;
       C.stats.cardsPlayed++; if (res.type === 'attack') C.stats.attacksPlayed++;
       if (!costX && paid === 0) { T.zero++; if (T.zero === 3) C.stats.zeroCostTurns++; }
+      crowdAdd(1);
     }
     function advance(g, val) {
       const r = g.next(val);
@@ -1458,12 +1505,41 @@ const COMBAT = (() => {
         fireHook('onSwap', { hero: front() });
       });
     };
+    // Reprise: the replays at the end of the turn (DATA "Card mechanics"). Each Reprise card played this turn, in play order, when 3 or more
+    // cards were played: a free Fading temp copy is played from nowhere (it counts in `added`), at the same target when it still stands,
+    // else the first living enemy. A pick it reaches (a gem could add one) is answered with the first candidates: nobody is there to choose.
+    function repriseReplays() {
+      const encore = T.cards >= 3 ? T.reprise.slice() : [];
+      T.reprise = [];
+      encore.forEach((e) => {
+        if (dead || C.phase !== 'player' || !livingEnemies().length) return;
+        const copy = copyOf(e.src, true);
+        const owner = ownerOf(copy);
+        if (!owner || owner.down) return;
+        const res = R(copy, owner);
+        if (res.kw.indexOf('unplayable') >= 0) return;
+        let tgt = null;
+        if (needsTargetRes(res)) {
+          const t0 = e.target ? enemyById(e.target) : null;
+          tgt = t0 && !t0.down ? t0 : lineOrder(livingEnemies())[0];
+          if (!tgt) return;
+        }
+        C.added += 1;
+        C.inPlay = copy;
+        gen = playRoutine(copy, tgt ? tgt.id : undefined, true);
+        advance(gen);
+        let guard = 0;
+        while (gen && C.pending && guard++ < 8) { const p = C.pending; C.pending = null; advance(gen, p.uids.slice(0, p.optional ? 0 : p.n)); }
+      });
+    }
     C.endTurn = () => {
       if (C.phase !== 'player' || C.pending || dead) return [];
       return act(() => {
         const f = front();
+        repriseReplays();
+        if (dead) return;
         C.hand.slice().forEach((c) => {
-          const def = D.cards[c.id];
+          const def = D.cardDef(c);
           if (dead || !def || !def.hand || !def.hand.turnEnd || C.hand.indexOf(c) < 0) return;
           const actor = ownerOf(c) || f;
           if (actor) drain(run(def.hand.turnEnd, { kind: 'hand', actor: def.hero === 'curse' || def.hero === 'status' ? front() : actor, card: R(c, actor), X: 0, target: null }));
@@ -1564,6 +1640,7 @@ const COMBAT = (() => {
 
     // ---------------------------------------------------------------- construction
     const frontIdx = opts.frontIdx || 0;
+    crowdStart = frontIdx === 1 ? 1 : 0;
     asList(opts.heroes).forEach((h, i) => C.heroes.push(makeHero(h, i, frontIdx)));
     if (C.heroes.length === 2 && C.heroes[0].id === C.heroes[1].id) throw new Error('COMBAT.create: the party is two distinct heroes');
     const enemyIds = asList(opts.enemies).slice(0, 5);
@@ -1571,11 +1648,13 @@ const COMBAT = (() => {
     const deck = asList(opts.deck);
     deck.forEach((c) => { if (isNum(c.uid) && c.uid >= nextUid) nextUid = c.uid + 1; });
     deck.forEach((c) => {
-      const def = D.cards[c.id];
+      const medley = D.isMedley(c) && !!D.medleyDef(c.parts);
+      const def = medley ? D.medleyDef(c.parts) : D.cards[c.id];
       const slotN = def && def.slots ? def.slots.length : asList(c.gems).length;
       const gems = [];
       for (let i = 0; i < slotN; i++) gems.push((c.gems && c.gems[i]) || null);
       const inst = { uid: isNum(c.uid) ? c.uid : nextUid++, id: c.id, up: c.up ? 1 : 0, gems };
+      if (medley) inst.parts = c.parts.slice();
       if (isNum(c.enc) && c.enc > 0) inst.enc = Math.floor(c.enc);
       C.draw.push(inst);
     });
@@ -1585,6 +1664,10 @@ const COMBAT = (() => {
     relicIds.forEach((id) => {
       const r = D.relics[id];
       asList(r.hooks).forEach((h) => { if (D.LISTS.combatHooks.indexOf(h.on) >= 0) registerHook(h, r.hero || null, 'relic', id); });
+    });
+    // active Charm set tiers (DESIGN 4.7) are party hooks too, after the Charms' own; src 'set' so no `relic` event names a Charm that is not one
+    asList(typeof D.activeSetTiers === 'function' ? D.activeSetTiers(relicIds) : []).forEach((t) => {
+      asList(t.def.hooks).forEach((h) => { if (D.LISTS.combatHooks.indexOf(h.on) >= 0) registerHook(h, null, 'set', t.set + ':' + t.tier); });
     });
     hide(C, { _hooks: hooks });
     return C;
@@ -1613,8 +1696,8 @@ const COMBAT = (() => {
     return cands.slice(0, p.n).map((c) => c.uid);
   }
   function scoreCard(C, card, targetId) {
-    const actor = C.unit(DATA.cards[card.id].hero) || C.front();
-    const res = DATA.resolveCard(card, { unit: actor });
+    const actor = C.unit((DATA.cardDef(card) || {}).hero) || C.front();
+    const res = DATA.resolveCard(card, { unit: actor, played: C.played, lastHero: C.lastHero });
     const pv = C.preview(card.uid, targetId);
     const tgt = targetId ? C.unit(targetId) : null;
     const f = C.front();
@@ -1644,14 +1727,22 @@ const COMBAT = (() => {
       else if (o.op === 'gold' || o.op === 'ink') s += 1;
     });
     if (res.type === 'power') s += 6;
-    // card mechanics: a Loop pays when there is something to copy, a Fanbase kill keeps paying, a Remix play makes the next one bigger
+    // card mechanics: a Loop pays when there is something to copy, a Fanbase kill keeps paying, a Remix play makes the next one bigger.
+    // Duet, Soundcheck and Finale bonuses are already in the preview (they ride on plus); a Reprise card is worth most as the third card
+    // (its replay comes for free), and a Finale closes the turn, so every other card still affordable after it is value thrown away
     const mech = res.mech;
+    const cost = res.cost === 'X' ? Math.max(1, C.energy) : Math.max(0.5, res.cost);
     if (mech) {
       if (mech.loop) s += C.lastPlayed ? 4 * mech.loop : -2;
       if (mech.fanbase && tgt && pv.dmg !== null && pv.dmg * pv.hits >= tgt.hp + tgt.block) s += 3 * mech.fanbase;
       if (mech.remix) s += 1.5 * mech.remix;
+      if (mech.reprise) s += C.played >= 2 ? 0.6 * Math.max(0, s) : C.hand.length >= 3 ? 1.5 : 0;
+      if (mech.finale) {
+        const left = C.energy - (res.cost === 'X' ? C.energy : res.cost);
+        const others = C.hand.filter((c) => c.uid !== card.uid && isNum((DATA.cards[c.id] || {}).cost) && DATA.cards[c.id].cost <= left && DATA.cards[c.id].type !== 'curse' && DATA.cards[c.id].type !== 'status').length;
+        s -= 2.5 * others;
+      }
     }
-    const cost = res.cost === 'X' ? Math.max(1, C.energy) : Math.max(0.5, res.cost);
     return { value: s, per: s / cost };
   }
   function bestTarget(C, card) {

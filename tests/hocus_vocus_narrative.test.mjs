@@ -408,7 +408,7 @@ t.test('achievements really unlock through META.check, pay their Cheers and unlo
 });
 
 // =================================================================================================== 2. trials
-const HARM = { enemyHp: 40, eliteHp: 12, bossHp: 25, enemyDmg: 60, goldMul: -12, priceMul: 10, healMul: -20, reviveFrac: -20, startInk: -3, startGold: -0.05, wellInk: -4, cardChoices: -8, curses: 4 };
+const HARM = { enemyHp: 40, eliteHp: 12, bossHp: 25, enemyDmg: 60, goldMul: -12, priceMul: 10, healMul: -20, reviveFrac: -20, startInk: -3, startGold: -0.05, wellInk: -4, cardChoices: -8, curses: 4, crowd: 3 };
 const score = (mods) => Object.keys(mods).reduce((s, k) => s + HARM[k] * mods[k], 0);
 const cumulative = (n) => { const sum = {}; trials.filter((x) => x.level <= n).forEach((x) => Object.keys(x.mods).forEach((k) => { sum[k] = (sum[k] || 0) + x.mods[k]; })); return sum; };
 
@@ -490,6 +490,7 @@ t.test('each trial text quotes its own numbers, so the rule and the mod cannot d
     eliteHp: (v, s) => new RegExp('Rivals have ' + pct(v) + '% more HP').test(s),
     bossHp: (v, s) => new RegExp('headliners have ' + pct(v) + '% more').test(s),
     cardChoices: (v, s) => /one card fewer/.test(s),
+    crowd: (v, s) => new RegExp('crowd takes ' + ({ 1: 'one' }[Math.abs(v)] || Math.abs(v)) + ' more card').test(s),
   };
   trials.forEach((x) => Object.keys(x.mods).forEach((k) => t.ok(want[k] && want[k](x.mods[k], x.text), `${x.id}: text "${x.text}" quotes ${k} ${x.mods[k]}`)));
 });

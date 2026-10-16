@@ -11,6 +11,7 @@ import path from 'node:path';
 import { boot, harness, DIR } from './hocus_vocus_lib.mjs';
 
 const t = harness('hocus_vocus data');
+const RELIC_TOTAL = (q) => q.common + q.uncommon + q.rare + q.boss + q.shop;   // the Charm count follows DATA.QUOTA.relics (66 before the Charm sets, 96 with them)
 const EM = String.fromCharCode(0x2014), EN = String.fromCharCode(0x2013);   // built at run time: this file must contain no dash characters itself
 const read = (f) => fs.readFileSync(path.join(DIR, f), 'utf8');
 const load = () => boot({ only: ['util', 'data'] });
@@ -652,7 +653,7 @@ function universe(D) {
     });
   });
   // --- relics: 66
-  const rar = [['common', 22], ['uncommon', 22], ['rare', 12], ['boss', 6], ['shop', 4]];
+  const rar = ['common', 'uncommon', 'rare', 'boss', 'shop'].map((r) => [r, D.QUOTA.relics[r]]);
   const hooks = D.LISTS.combatHooks.filter((x) => x !== 'combatEnd').concat(D.LISTS.runHooks);
   const relics = {};
   let ri = 0;
@@ -725,7 +726,7 @@ t.test('the synthetic universe passes strict validation and every audit', () => 
   universe(DATA);
   const v = DATA.validate(undefined, { strict: true });
   t.eq(v.errors.length, 0, 'strict errors: ' + v.errors.slice(0, 8).join('; '));
-  t.eq(v.counts.cards, 4 * 40 + 12, 'card count'); t.eq(v.counts.enemies, 51, 'enemy count'); t.eq(v.counts.relics, 66, 'relic count'); t.eq(v.counts.gems, 24, 'gem count');
+  t.eq(v.counts.cards, 4 * 46 + 12, 'card count'); t.eq(v.counts.enemies, 51, 'enemy count'); t.eq(v.counts.relics, RELIC_TOTAL(DATA.QUOTA.relics), 'relic count'); t.eq(v.counts.gems, 24, 'gem count');
   t.eq(v.counts.events, 40, 'event count'); t.eq(v.counts.groups, 45, 'group count');
   const a = DATA.audit().filter((x) => x.indexOf('audit') === 0);
   t.eq(a.length, 0, 'audit lines: ' + a.slice(0, 10).join('; '));
@@ -743,7 +744,7 @@ t.test('breaking the universe one piece at a time is caught', () => {
   D = broken((d) => { delete d.achievements.ch2_clear; }); t.ok(has(D.validate(undefined, { strict: true }).errors, 'ch2_clear'), 'missing achievement');
   D = broken((d) => { d.cards.curse_hex.hero = 'status'; }); t.ok(has(D.validate(undefined, { strict: true }).errors, 'must have hero curse'), 'wrong curse hero');
   // audits: cards
-  D = broken((d) => { delete d.cards.kuro_c13; }); t.ok(auditHas(D, 'cards', 'audit kuro: need 3/15/13/9'), 'card count');
+  D = broken((d) => { delete d.cards.kuro_c13; }); t.ok(auditHas(D, 'cards', 'audit kuro: need 3/17/15/11'), 'card count');
   D = broken((d) => { Object.values(d.cards).filter((c) => c.hero === 'kuro' && c.type === 'power').forEach((c) => { c.type = 'skill'; }); }); t.ok(auditHas(D, 'cards', 'fewer than 4 powers', { hero: 'kuro' }), 'powers');
   D = broken((d) => { Object.values(d.cards).filter((c) => c.hero === 'suzu').forEach((c) => { if (c.cost === 'X') { c.cost = 1; } }); }); t.ok(auditHas(D, 'cards', 'no X cost card', { hero: 'suzu' }), 'X card');
   D = broken((d) => { Object.values(d.cards).filter((c) => c.hero === 'raiga').forEach((c) => { c.kw = []; }); }); t.ok(auditHas(D, 'cards', 'fewer than 5 cards with keywords', { hero: 'raiga' }), 'keywords');
@@ -843,9 +844,9 @@ t.test('CONTENT_SPEC roster and number tables equal the machine copy', () => {
   ['brass_lantern', 'fox_mask', 'silver_bell', 'jade_key'].forEach((id) => t.ok(md.includes('`' + id + '`') && D0.FIXED.relics[id], `fixed relic ${id} documented`));
   D0.FIXED.curses.concat(D0.FIXED.statusCards, D0.FIXED.achievements).forEach((id) => t.ok(md.includes('`' + id + '`'), `fixed id ${id} documented`));
   D0.FIXED.lore.filter((x) => !/^hero_|^barks_/.test(x)).forEach((id) => t.ok(md.includes('`' + id + '`'), `lore id ${id} documented`));
-  t.ok(/exactly \*\*66\*\*/.test(md) && /at least \*\*40\*\*/.test(md) && /\*\*24\*\*/.test(md) && /\*\*32\*\*/.test(md), 'quotas quoted in CONTENT_SPEC');
+  t.ok(new RegExp('exactly \\*\\*' + RELIC_TOTAL(D0.QUOTA.relics) + '\\*\\*').test(md) && /at least \*\*40\*\*/.test(md) && /\*\*24\*\*/.test(md) && /\*\*32\*\*/.test(md), 'quotas quoted in CONTENT_SPEC');
   const q = D0.QUOTA;
-  t.eq(q.relics.common + q.relics.uncommon + q.relics.rare + q.relics.boss + q.relics.shop, 66, 'relic quota sums to 66');
+  t.eq(q.relics.common + q.relics.uncommon + q.relics.rare + q.relics.boss + q.relics.shop, 96, 'relic quota sums to 96 (66 before the Charm sets)');
   t.eq(q.events.perChapter * 3 + q.events.any, 40, 'event quota sums to 40');
   t.eq(q.gems.perColor * 4, 24, 'gem quota'); t.eq(q.achievements, 32, 'achievement quota');
 });

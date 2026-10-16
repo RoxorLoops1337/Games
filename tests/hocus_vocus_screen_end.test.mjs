@@ -43,8 +43,10 @@ await settle(g);
 
 // ---------------------------------------------------------------------------------------------------- a simulated run
 // A bot that plays real COMBAT: any playable card, a legal target, picks resolved, then end turn. Heroes are given a big HP pool so a long boss
-// fight survives; a fight that drags on is forced to its end the way GAME.debug.win does.
-function bot(C, cap = 700) {
+// fight survives; a fight that drags on is forced to its end the way GAME.debug.win does. The cap is in actions (a play or an end turn), about
+// 180 turns: it must fire before the HP pool runs out against a wall of Sequins (the card pool decides which deck this blind bot drafts, so
+// any fight can be the one that stalls; a chapter 3 Rival at 16 Block and 2 Sequins a cycle once took it 276 turns to lose).
+function bot(C, cap = 450) {
   let guard = 0;
   while (C.result === null && guard++ < cap) {
     let did = false;
@@ -77,7 +79,7 @@ function nodeAt(R, kind) {
 
 function simFight(R, kind, lose) {
   const node = nodeAt(R, kind);
-  if (!lose) R.heroes.forEach((h) => { h.hp = Math.max(h.hp, 1500); });
+  if (!lose) R.heroes.forEach((h) => { h.hp = h.maxHp; });
   if (lose) R.heroes.forEach((h) => { h.hp = 1; });
   const C = COMBAT.create(RUN.combatInit(R, node));
   C.start();

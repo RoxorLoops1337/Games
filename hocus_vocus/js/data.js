@@ -25,9 +25,13 @@
 //                walkOps(ops, fn)                  visits every op, through cond/repeat/hook nesting
 //   Mechanics    mechOf(def, up) -> {fanbase, remix, hype, loop} | null   mechNow(inst, mech, ctx) -> live bonuses   mechKey(inst, ctx)
 //                (card mechanics: see "Card mechanics" below the lookups; they also wrap resolveCard, cardHtml and cardPlain)
+//   Systems      cardDef(inst | id) isMedley(inst) canMedley(a, b) medleyDef(parts) signatureOf(heroId)   (see "The Crowd and Medleys" at the end)
 //   Mods         foldMods([deltaObj...]) -> final flat mods     trialDeltas(level) -> summed deltas
-//                modsFor(relicIds, trialLevelOrDeltas) -> final flat mods (what RUN.mods(R) returns: modsFor(R.relics, R.mods))
-//                rowFor(heroId, row, relicIds) -> merged row bonuses (hero row plus relic `rows`)
+//                modsFor(relicIds, trialLevelOrDeltas) -> final flat mods (what RUN.mods(R) returns: modsFor(R.relics, R.mods); active set tiers fold in)
+//                rowFor(heroId, row, relicIds) -> merged row bonuses (hero row plus relic `rows` plus active set tier `rows`)
+//   Charm sets   DATA.relicSets[id] (registry, DESIGN 4.7)   setCounts(relicIds) -> {setId: owned}   setMembers(setId) -> [relic ids]
+//                setMax(setId) -> top tier   activeSetTiers(relicIds) -> [{set, tier, name, def}] (the virtual Charms in force)
+//                setProgress(setId, relicIds) -> {id, name, text, n, max, total, tiers:[{tier, text, active}]}   setTierLabel(setId, tier) -> toast line
 //   Misc         tileCount(type, nonBlock)   cleanSetting(key, value)   ratio helpers for tests
 //   Checking     validate(only?, opt?) -> {errors, warnings, counts}
 //                  opt.strict  also check every cross-file reference and that fixed content exists
@@ -62,7 +66,7 @@ const DATA = (() => {
     rarities: ['starter', 'common', 'uncommon', 'rare', 'token'],   // token: generated in combat, never a reward
     cardKw: ['exhaust', 'retain', 'innate', 'ethereal', 'unplayable'],
     // card mechanics a def carries in `mech: {id: N}` (see "Card mechanics" below the lookups): printed as a keyword with a number
-    mechs: ['fanbase', 'remix', 'hype', 'loop'],
+    mechs: ['fanbase', 'remix', 'hype', 'loop', 'duet', 'soundcheck', 'reprise', 'finale'],
     slotColors: ['red', 'blue', 'green', 'gold', 'any'],
     gemColors: ['red', 'blue', 'green', 'gold'],
     gemCuts: ['round', 'oval', 'square', 'drop', 'star'],
@@ -116,8 +120,8 @@ const DATA = (() => {
     // 'frac' keys are fractions (0.25 = x1.25, -0.25 = x0.75) folded as max(0.1, 1 + sum).
     mods: ['energy', 'hand', 'startBlock', 'inkMax', 'startInk', 'wellInk', 'cardChoices', 'freeSwaps', 'campActions', 'rareBoost', 'goldMul', 'priceMul', 'healMul'],
     modKind: { energy: 'int', hand: 'int', startBlock: 'int', inkMax: 'int', startInk: 'int', wellInk: 'int', cardChoices: 'int', freeSwaps: 'int', campActions: 'int', rareBoost: 'int', goldMul: 'frac', priceMul: 'frac', healMul: 'frac' },
-    trialMods: ['enemyHp', 'eliteHp', 'bossHp', 'enemyDmg', 'goldMul', 'priceMul', 'healMul', 'reviveFrac', 'startInk', 'startGold', 'wellInk', 'cardChoices', 'curses'],
-    trialModKind: { enemyHp: 'frac', eliteHp: 'frac', bossHp: 'frac', enemyDmg: 'frac', goldMul: 'frac', priceMul: 'frac', healMul: 'frac', reviveFrac: 'frac', startInk: 'int', startGold: 'int', wellInk: 'int', cardChoices: 'int', curses: 'int' },
+    trialMods: ['enemyHp', 'eliteHp', 'bossHp', 'enemyDmg', 'goldMul', 'priceMul', 'healMul', 'reviveFrac', 'startInk', 'startGold', 'wellInk', 'cardChoices', 'curses', 'crowd'],
+    trialModKind: { enemyHp: 'frac', eliteHp: 'frac', bossHp: 'frac', enemyDmg: 'frac', goldMul: 'frac', priceMul: 'frac', healMul: 'frac', reviveFrac: 'frac', startInk: 'int', startGold: 'int', wellInk: 'int', cardChoices: 'int', curses: 'int', crowd: 'int' },
     rowFields: ['dmgAdd', 'blockAdd', 'startBlock', 'regen', 'thorns', 'drawAdd'],
     gemModKeys: ['dmg', 'block', 'heal', 'hits', 'cost', 'draw', 'energy', 'poison', 'status', 'fx', 'kw', 'kwRemove', 'cond'],
 
@@ -258,11 +262,20 @@ const DATA = (() => {
     prism: { name: 'Rainbow slot', text: 'A rainbow slot accepts a gem of any colour.' },
     xcost: { name: 'X cost', text: 'Spends all your remaining Breath. The card reads X as the Breath spent.' },
     down: { name: 'Voiceless', text: 'A hero at 0 HP loses their voice: their cards clog your hand and they cannot be targeted. If both heroes lose their voice, the tour ends.' },
+    // the two run systems (data.js "The Crowd and Medleys"): the fight HUD meter and the fused cards of an elite reward
+    crowd: { name: 'Crowd', text: 'Every card you play fills the Crowd meter, a defeated enemy fills it by two. When it is full the crowd goes wild: a free Fading copy of a Signature card joins your hand, the two heroes taking turns.' },
+    signature: { name: 'Signature', text: 'Each hero has one Signature card. When the crowd goes wild, a free Fading copy of it joins your hand.' },
+    medley: { name: 'Medley', text: 'A Medley is two cards sung as one: it plays both of their effects. After a rival fight you may fuse two Attack or Skill cards of one hero into a Medley.' },
     // card mechanics (LISTS.mechs): one sentence each, N is the number printed after the word
     fanbase: { name: 'Fanbase', text: 'Fanbase N: whenever this card defeats an enemy, it deals N more damage for the rest of the tour.' },
     remix: { name: 'Remix', text: 'Remix N: each time you play this card, it deals N more damage for the rest of the fight.' },
     hype: { name: 'Hype', text: 'Hype N: deals N more damage for each card you played earlier this turn.' },
     loop: { name: 'Loop', text: 'Loop: add a Fading copy of the last other Attack or Skill you played this turn to your hand (Loop 2: two copies).' },
+    // the duo (Duet) and the setlist (Soundcheck, Reprise, Finale)
+    duet: { name: 'Duet', text: 'Duet N: deals N more damage (or gives N more Block) if the other hero played the previous card this turn.' },
+    soundcheck: { name: 'Soundcheck', text: 'Soundcheck N: deals N more damage (or gives N more Block) if it is the first card you play this turn.' },
+    reprise: { name: 'Reprise', text: 'Reprise: if you played 3 or more cards this turn, a Fading copy of this card is played again for free at the end of your turn.' },
+    finale: { name: 'Finale', text: 'Finale N: deals N more damage for each card you played earlier this turn, and no card can be played after it this turn.' },
   };
 
   // ------------------------------------------------------------------
@@ -275,6 +288,7 @@ const DATA = (() => {
     killInk: { minion: 0, normal: 1, elite: 2, boss: 0 },
     gold: { normal: [14, 22], elite: [30, 44], boss: [70, 90], chest: [45, 75] },
     cardChoices: 3,
+    crowd: 7,                         // the Crowd meter: cards played until the crowd goes wild (a kill counts 2); Encore 5+ adds 1 (trial_5 mods.crowd)
     // rarity weights (percent) for card rewards. rare weight = base.rare + min(rareOffset, rareOffsetCap) + mods.rareBoost,
     // moved from common. rareOffset rises by 1 after each normal or elite reward that offered no rare, resets when a rare is taken.
     rarity: {
@@ -364,6 +378,7 @@ const DATA = (() => {
       rows: { front: { dmgAdd: 2 }, back: { blockAdd: 1 } },
       passives: [{ id: 'blade_flow', name: 'Every Note Blooms', on: 'onPlay', filter: { type: 'attack' }, limit: 1, fx: [{ op: 'status', s: 'bloom', n: 1, tgt: 'self' }] }],
       starter: ['hanae_slash', 'hanae_slash', 'hanae_parry', 'hanae_parry', 'hanae_petal_step'],
+      signature: 'hanae_thousand_petals',      // The High Note: the Crowd's free copy (data.js "The Crowd and Medleys")
       unlock: null,
     },
     kuro: {
@@ -373,6 +388,7 @@ const DATA = (() => {
       rows: { back: { dmgAdd: 2 }, front: { blockAdd: 0 } },
       passives: [{ id: 'steady_hand', name: 'In the Pocket', on: 'onPlay', filter: { type: 'skill' }, limit: 1, fx: [{ op: 'status', s: 'sumi', n: 1, tgt: 'self' }] }],
       starter: ['kuro_ink_bolt', 'kuro_ink_bolt', 'kuro_ink_ward', 'kuro_ink_ward', 'kuro_first_stroke'],
+      signature: 'kuro_grand_flourish',         // Wait For It
       unlock: null,
     },
     suzu: {
@@ -382,6 +398,7 @@ const DATA = (() => {
       rows: { front: { blockAdd: 1, thorns: 2 }, back: { regen: 2 } },
       passives: [{ id: 'moonlit_rite', name: 'Always Rolling', on: 'turnStart', fx: [{ op: 'status', s: 'ward', n: 1, tgt: 'self' }] }],
       starter: ['suzu_ofuda', 'suzu_ofuda', 'suzu_barrier', 'suzu_barrier', 'suzu_moon_prayer'],
+      signature: 'suzu_moonlit_verdict',        // Final Mixdown
       unlock: { ach: 'ch1_clear' },
     },
     raiga: {
@@ -391,6 +408,7 @@ const DATA = (() => {
       rows: { front: { thorns: 2, startBlock: 3 }, back: { dmgAdd: 1 } },
       passives: [{ id: 'storm_born', name: 'Bass Face', on: 'onDamaged', limit: 2, fx: [{ op: 'status', s: 'charge', n: 1, tgt: 'self' }] }],
       starter: ['raiga_jab', 'raiga_jab', 'raiga_brace', 'raiga_brace', 'raiga_static_fist'],
+      signature: 'raiga_thousand_thunders',     // Thunder From Below
       unlock: { ach: 'ch2_clear' },
     },
   };
@@ -504,9 +522,9 @@ const DATA = (() => {
 
   // How much content (CONTENT_SPEC 3 to 6). DATA.audit checks these.
   const QUOTA = {
-    cards: { starter: 3, common: 15, uncommon: 13, rare: 9, powers: 4, lockedUncommon: 4, lockedRare: 4, slots: { red: 10, blue: 10, green: 8, gold: 8 } },
+    cards: { starter: 3, common: 17, uncommon: 15, rare: 11, powers: 4, lockedUncommon: 4, lockedRare: 4, slots: { red: 10, blue: 10, green: 8, gold: 8 } },
     enemies: { normal: 10, elite: 3, minion: 3, boss: 1, normalGroups: 12, eliteGroups: 3, bossPhases: { 1: 1, 2: 1, 3: 2 } },
-    relics: { common: 22, uncommon: 22, rare: 12, boss: 6, shop: 4, perHero: 3, lockedFrac: 0.3, textMax: 90, flavorMax: 80 },
+    relics: { common: 44, uncommon: 30, rare: 12, boss: 6, shop: 4, perHero: 3, lockedFrac: 0.3, textMax: 90, flavorMax: 80 },
     gems: { perColor: 6, tiers: [1, 1, 2, 2, 3, 3] },
     events: { perChapter: 10, any: 10, onceFrac: 0.6 },
     achievements: 32, trials: 10, tips: 30,
@@ -528,7 +546,7 @@ const DATA = (() => {
   // Registries filled by content files. DATA.add throws on a duplicate id so two
   // agents can never silently shadow each other.
   // ------------------------------------------------------------------
-  const REG = ['cards', 'gems', 'relics', 'enemies', 'events', 'achievements', 'trials', 'tips', 'lore'];
+  const REG = ['cards', 'gems', 'relics', 'relicSets', 'enemies', 'events', 'achievements', 'trials', 'tips', 'lore'];
   const D = { LISTS, LINKS, statuses, keywords, ECONOMY, SETTINGS, brushes, tiles, heroes, ROSTER, rosterById, FIXED, QUOTA, GUIDE, encounters: { 1: { normal: [], elite: [] }, 2: { normal: [], elite: [] }, 3: { normal: [], elite: [] } } };
   REG.forEach((k) => { D[k] = k === 'tips' ? [] : {}; });
   // Display names of the gem and slot colour ids (the ids stay; every screen that prints a colour reads this).
@@ -596,7 +614,8 @@ const DATA = (() => {
   };
 
   // ---- card mechanics (LISTS.mechs) ----
-  // A card def may carry `mech: {fanbase?, remix?, hype?, loop?}`, each a whole number 1..9; `up.mech` REPLACES it (like up.kw).
+  // A card def may carry `mech: {fanbase?, remix?, hype?, loop?, duet?, soundcheck?, reprise?, finale?}`, each a whole number 1..9;
+  // `up.mech` REPLACES it (like up.kw).
   //   fanbase N  whenever a hit of this card defeats an enemy, the card deals N more damage for the rest of the tour. COMBAT adds N to
   //              `enc` on its copy of the card and reports the gains in C.summary().fanbase {uid: total}; RUN adds them to `enc` on the
   //              deck instance (a whole number, saved with the run; an instance without it simply has no bonus yet).
@@ -604,23 +623,42 @@ const DATA = (() => {
   //   hype N     N more damage for each card played earlier this turn: ctx.played (COMBAT passes it), else ctx.C.played.
   //   loop N     after its own fx, add N temp copies of the last Attack or Skill played earlier this turn (never a card with Loop) to the
   //              hand. A copy carries `fade: true`, which resolves with the Fade keyword.
-  // The three damage bonuses are added to `plus` on every dmg op of the card (through cond and repeat, never into hook fx), exactly like
-  // a gem's +N damage, so C.preview, the bots and the printed number all see them. data_text.js owns DATA.resolveCard, cardHtml and
-  // cardPlain; the accessors at the end of this IIFE wrap whatever it installs: resolveCard adds the bonuses (and Fade on a `fade`
-  // copy) plus `mech` (the def's numbers, upgrade applied) and `mechNow` ({fanbase, remix, hype} live bonuses) on the result, and
+  //   duet N     (the duo) N more damage, or N more Block on a card without a dmg op, if the OTHER hero played the previous card this
+  //              turn: ctx.lastHero (COMBAT passes the hero id of the last card played this turn, null at the start of a turn).
+  //   soundcheck N  (the setlist) N more damage, or Block, if this is the first card played this turn (ctx.played is 0).
+  //   reprise     (always 1) at the end of the turn, if 3 or more cards were played, COMBAT plays a Fading temp copy of the card again
+  //              for free (same target when it is still standing). A copy never Reprise-es again, so there is no chain.
+  //   finale N   N more damage for each card played earlier this turn (like Hype), and the turn is closed: C.canPlay refuses every
+  //              card after it with reason 'finale' until the next turn.
+  // The damage bonuses are added to `plus` on every dmg op of the card (through cond and repeat, never into hook fx), exactly like
+  // a gem's +N damage, so C.preview, the bots and the printed number all see them; Duet and Soundcheck ride on every block op instead
+  // when the card has no dmg op. data_text.js owns DATA.resolveCard, cardHtml and cardPlain; the accessors at the end of this IIFE wrap
+  // whatever it installs: resolveCard adds the bonuses (and Fade on a `fade` copy) plus `mech` (the def's numbers, upgrade applied) and
+  // `mechNow` ({fanbase, remix, hype, duet, soundcheck, finale, total (on damage), block (on Block)} live bonuses) on the result, and
   // cardHtml prints one sentence per mechanic before a closing Fade: "Fanbase 2 (now +4)." Pure, deterministic, no DOM.
   D.mechOf = (def, up) => {
     if (!def) return null;
     const m = up && def.up && def.up.mech !== undefined ? def.up.mech : def.mech;
     return m && typeof m === 'object' && Object.keys(m).length ? m : null;
   };
-  // live damage bonuses of one instance: {fanbase, remix, hype, total}
-  D.mechNow = (inst, mech, ctx) => {
+  // live bonuses of one instance: {fanbase, remix, hype, duet, soundcheck, finale, total, block}. `fx` (the resolved ops) decides where
+  // Duet and Soundcheck land: on the damage (total) when the card has a dmg op outside hooks, on the Block (block) otherwise.
+  D.mechNow = (inst, mech, ctx, fx) => {
     const i = inst && typeof inst === 'object' ? inst : {};
     const whole = (v) => (typeof v === 'number' && Number.isFinite(v) && v > 0 ? Math.floor(v) : 0);
-    const played = ctx ? (ctx.played !== undefined ? ctx.played : ctx.C && ctx.C.played) : 0;
-    const out = { fanbase: mech && mech.fanbase ? whole(i.enc) : 0, remix: mech && mech.remix ? mech.remix * whole(i.rmx) : 0, hype: mech && mech.hype ? mech.hype * whole(played) : 0 };
-    out.total = out.fanbase + out.remix + out.hype;
+    const played = whole(ctx ? (ctx.played !== undefined ? ctx.played : ctx.C && ctx.C.played) : 0);
+    const lastHero = ctx ? (ctx.lastHero !== undefined ? ctx.lastHero : ctx.C && ctx.C.lastHero) : null;
+    const inTurn = !!ctx && (ctx.played !== undefined || !!ctx.C);   // a deck or reward view has no turn: no first card, no Soundcheck
+    const def = D.cards[i.id];
+    const other = !!lastHero && !!def && lastHero !== def.hero;
+    const m = mech || {};
+    const out = {
+      fanbase: m.fanbase ? whole(i.enc) : 0, remix: m.remix ? m.remix * whole(i.rmx) : 0, hype: m.hype ? m.hype * played : 0,
+      duet: m.duet && other ? m.duet : 0, soundcheck: m.soundcheck && inTurn && played === 0 ? m.soundcheck : 0, finale: m.finale ? m.finale * played : 0,
+    };
+    const onBlock = fx !== undefined && !hasMechOp(fx, 'dmg');
+    out.total = out.fanbase + out.remix + out.hype + out.finale + (onBlock ? 0 : out.duet + out.soundcheck);
+    out.block = onBlock ? out.duet + out.soundcheck : 0;
     return out;
   };
   // a cache key piece for engines that memoise resolutions ('' for a card the mechanics never change)
@@ -629,14 +667,17 @@ const DATA = (() => {
     const mech = D.mechOf(D.cards[inst.id], inst.up);
     if (!mech && !inst.fade) return '';
     const n = D.mechNow(inst, mech, ctx);
-    return 'm' + n.fanbase + ',' + n.remix + ',' + n.hype + (inst.fade ? 'f' : '');
+    return 'm' + n.fanbase + ',' + n.remix + ',' + n.hype + ',' + n.duet + ',' + n.soundcheck + ',' + n.finale + (inst.fade ? 'f' : '');
   };
-  const mechDmg = (ops, fn) => (Array.isArray(ops) ? ops : []).forEach((o) => {
+  // the card's own ops of one kind (through cond and repeat, never into hook fx)
+  const mechOps = (ops, kind, fn) => (Array.isArray(ops) ? ops : []).forEach((o) => {
     if (!o || typeof o !== 'object') return;
-    if (o.op === 'dmg') fn(o);
-    if (o.op === 'cond') { mechDmg(o.then, fn); mechDmg(o.else, fn); }
-    if (o.op === 'repeat') mechDmg(o.do, fn);
+    if (o.op === kind) fn(o);
+    if (o.op === 'cond') { mechOps(o.then, kind, fn); mechOps(o.else, kind, fn); }
+    if (o.op === 'repeat') mechOps(o.do, kind, fn);
   });
+  const hasMechOp = (ops, kind) => { let r = false; mechOps(ops, kind, () => { r = true; }); return r; };
+  const mechDmg = (ops, fn) => mechOps(ops, 'dmg', fn);
   const wrapResolve = (raw) => function resolveCard(x, ctx) {
     const res = raw(x, ctx);
     if (!res || !res.def) return res;
@@ -647,10 +688,11 @@ const DATA = (() => {
     if (inst.fade && out.kw.indexOf('exhaust') < 0) out.kw = out.kw.concat(['exhaust']);
     if (mech) {
       out.mech = Object.assign({}, mech);
-      out.mechNow = D.mechNow(inst, mech, ctx);
-      if (out.mechNow.total > 0) {
+      out.mechNow = D.mechNow(inst, mech, ctx, out.fx);
+      if (out.mechNow.total > 0 || out.mechNow.block > 0) {
         out.fx = JSON.parse(JSON.stringify(out.fx));
-        mechDmg(out.fx, (o) => { o.plus = (o.plus || 0) + out.mechNow.total; });
+        if (out.mechNow.total > 0) mechDmg(out.fx, (o) => { o.plus = (o.plus || 0) + out.mechNow.total; });
+        if (out.mechNow.block > 0) mechOps(out.fx, 'block', (o) => { o.plus = (o.plus || 0) + out.mechNow.block; });
       }
     }
     return out;
@@ -664,7 +706,7 @@ const DATA = (() => {
     return LISTS.mechs.filter((k) => m[k]).map((k) => {
       const word = `<span class="kw" data-kw="${k}">${keywords[k].name}</span>`;
       const cls = m[k] > (base[k] || 0) ? ' up' : m[k] < (base[k] || 0) ? ' down' : '';
-      const num = k === 'loop' && m[k] === 1 ? '' : ` <span class="num${cls}">${m[k]}</span>`;
+      const num = (k === 'loop' || k === 'reprise') && m[k] === 1 ? '' : ` <span class="num${cls}">${m[k]}</span>`;
       const live = now[k] > 0 ? ` (now <span class="num up">+${now[k]}</span>)` : '';
       return word + num + live + '.';
     });
@@ -688,6 +730,7 @@ const DATA = (() => {
     energy: [ECONOMY.energy, 1, 10], hand: [ECONOMY.handSize, 1, ECONOMY.maxHand], startBlock: [0, 0, 99], inkMax: [ECONOMY.inkMax, 6, 20],
     startInk: [ECONOMY.startInk, 1, 20], wellInk: [ECONOMY.wellInk, 1, 12], cardChoices: [ECONOMY.cardChoices, 1, 6], freeSwaps: [ECONOMY.freeSwaps, 0, 5],
     campActions: [1, 1, 3], rareBoost: [0, 0, 50], startGold: [ECONOMY.startGold, 0, 999], curses: [0, 0, 10],
+    crowd: [ECONOMY.crowd, 0, 12],                                        // the Crowd meter size (data.js "The Crowd and Medleys"); 0 is off (a mod never folds below 4 in play, the sims pass 0 directly)
   };
   const FRAC_KEYS = ['goldMul', 'priceMul', 'healMul', 'enemyHp', 'eliteHp', 'bossHp', 'enemyDmg'];
   D.foldMods = (list) => {
@@ -707,14 +750,48 @@ const DATA = (() => {
     return sum;
   };
   // trial: a level number, or the deltas object a run stored at newRun (R.mods), so a saved run does not drift if trial data is retuned
-  D.modsFor = (relicIds, trial) => D.foldMods((relicIds || []).map((id) => D.relics[id] && D.relics[id].mods).concat([trial && typeof trial === 'object' ? trial : D.trialDeltas(trial || 0)]));
+  // Set bonuses fold in like virtual Charms: every active tier's mods (and rows below) count once, whatever the owned count beyond it.
+  D.modsFor = (relicIds, trial) => D.foldMods((relicIds || []).map((id) => D.relics[id] && D.relics[id].mods).concat(D.activeSetTiers(relicIds).map((t) => t.def.mods)).concat([trial && typeof trial === 'object' ? trial : D.trialDeltas(trial || 0)]));
   D.rowFor = (heroId, row, relicIds) => {
     const out = {};
     const add = (r) => { if (r) Object.keys(r).forEach((k) => { out[k] = (out[k] || 0) + r[k]; }); };
     add(heroes[heroId] && heroes[heroId].rows[row]);
     (relicIds || []).forEach((id) => add(D.relics[id] && D.relics[id].rows && D.relics[id].rows[row]));
+    D.activeSetTiers(relicIds).forEach((t) => add(t.def.rows && t.def.rows[row]));
     return out;
   };
+
+  // ---- relicSets (DESIGN 4.7): Charm sets. A Charm def may carry `set: id`; DATA.relicSets[id] = {id, name, text, tiers: {N: {text, mods?,
+  // hooks?, rows?}}}. A tier is ACTIVE while the party owns at least N Charms of the set, and tiers stack (3 owned gives the 2 and 3 bonuses).
+  // Every active tier behaves as one virtual Charm: modsFor and rowFor fold its mods and rows (above), COMBAT registers its combat hooks next
+  // to the relic hooks and RUN.hook runs its run hooks. Nothing is saved: everything is derived from the owned ids. ----
+  D.setCounts = (relicIds) => {
+    const seen = {}, out = {};
+    (relicIds || []).forEach((id) => { const r = D.relics[id]; if (!r || !r.set || seen[id]) return; seen[id] = true; out[r.set] = (out[r.set] || 0) + 1; });
+    return out;
+  };
+  D.setMembers = (setId) => Object.keys(D.relics).filter((id) => D.relics[id] && D.relics[id].set === setId);
+  const tierNs = (s) => (s && s.tiers ? Object.keys(s.tiers).map(Number).filter((n) => Number.isInteger(n)).sort((a, b) => a - b) : []);
+  D.setMax = (setId) => { const ns = tierNs(D.relicSets[setId]); return ns.length ? ns[ns.length - 1] : 0; };
+  // [{set, tier, name, def}] for every tier the owned ids switch on, in set id then tier order (stable, so hook order is stable)
+  D.activeSetTiers = (relicIds) => {
+    const counts = D.setCounts(relicIds), out = [];
+    Object.keys(counts).sort().forEach((sid) => {
+      const s = D.relicSets[sid];
+      if (!s) return;
+      tierNs(s).forEach((n) => { if (counts[sid] >= n) out.push({ set: sid, tier: n, name: s.name, def: s.tiers[n] }); });
+    });
+    return out;
+  };
+  // what a Charms panel shows for one set: {id, name, text, n (owned), max (top tier), total (members), tiers: [{tier, text, active}]}
+  D.setProgress = (setId, relicIds) => {
+    const s = D.relicSets[setId];
+    if (!s) return null;
+    const n = D.setCounts(relicIds)[setId] || 0;
+    return { id: setId, name: s.name, text: s.text, n, max: D.setMax(setId), total: D.setMembers(setId).length, tiers: tierNs(s).map((t) => ({ tier: t, text: s.tiers[t].text, active: n >= t })) };
+  };
+  // the toast line when a tier switches on: "Stage Crew 3 of 4: On the first turn of each fight, both heroes gain 4 Block."
+  D.setTierLabel = (setId, tier) => { const s = D.relicSets[setId]; const tr = s && s.tiers && s.tiers[tier]; return s && tr ? `${s.name} ${tier} of ${D.setMax(setId)}: ${tr.text}` : ''; };
 
   // final tile count for one tile type on a map with `nonBlock` non-void hexes
   D.tileCount = (type, nonBlock) => {
@@ -811,7 +888,7 @@ const DATA = (() => {
     const FIELDS = {
       card: ['id', 'name', 'hero', 'type', 'rarity', 'cost', 'fx', 'up', 'kw', 'slots', 'art', 'flavor', 'hand', 'locked', 'mech'],
       gem: ['id', 'name', 'color', 'tier', 'mod', 'art', 'text', 'locked'],
-      relic: ['id', 'name', 'rarity', 'text', 'mods', 'rows', 'hooks', 'art', 'hero', 'locked', 'flavor'],
+      relic: ['id', 'name', 'rarity', 'text', 'mods', 'rows', 'hooks', 'art', 'hero', 'locked', 'flavor', 'set'],
       enemy: ['id', 'name', 'title', 'chapter', 'tier', 'size', 'hp', 'moves', 'ai', 'start', 'phases', 'hooks', 'immune', 'art', 'lore', 'tags'],
       event: ['id', 'title', 'text', 'art', 'once', 'chapters', 'when', 'w', 'choices'],
       choice: ['label', 'req', 'cost', 'out'],
@@ -1102,11 +1179,16 @@ const DATA = (() => {
         Object.keys(h.rows).forEach((r) => { if (['front', 'back'].indexOf(r) < 0) err(w, `rows.${r}`); Object.keys(h.rows[r]).forEach((f) => { if (!has('rowFields', f)) err(w, `rows.${r}.${f} unknown`); }); });
         vHooks(w, h.passives, 'passives', 'passive');
         if (!Array.isArray(h.starter) || h.starter.length !== 5) err(w, 'starter must list exactly 5 card ids');
+        if (typeof h.signature !== 'string') err(w, 'signature must name a card id (the Crowd\'s free copy)');
+        else if (D.cards[h.signature] && (D.cards[h.signature].hero !== id || ['attack', 'skill'].indexOf(D.cards[h.signature].type) < 0)) err(w, `signature "${h.signature}" must be an Attack or Skill of this hero`);
+        else if (strict && !D.cards[h.signature]) warn(w, `signature "${h.signature}" is not defined: the Crowd has nothing to sing for this hero`);
       });
     }
 
-    // ---- card mechanics: {fanbase, remix, hype, loop}, whole numbers 1..9; the damage ones need a dmg op to grow ----
-    const vMech = (w, m, path, fx, type) => {
+    // ---- card mechanics: {fanbase, remix, hype, loop, duet, soundcheck, reprise, finale}, whole numbers 1..9 ----
+    // the damage ones need a dmg op to grow; Duet and Soundcheck need a dmg or a block op; Reprise is always 1, on an Attack or Skill
+    // with a fixed cost and no pick (the replay is automatic, nobody is there to choose), and never together with Finale
+    const vMech = (w, m, path, fx, type, cost) => {
       if (!isObj(m) || !Object.keys(m).length) return err(w, `${path} must be a non-empty object`);
       Object.keys(m).forEach((k) => {
         if (!has('mechs', k)) return err(w, `${path}: unknown mechanic "${k}" (one of ${LISTS.mechs.join(', ')})`);
@@ -1114,8 +1196,17 @@ const DATA = (() => {
       });
       const flat = [];
       D.walkOps(A(fx).filter((o) => isObj(o) && o.op !== 'hook'), (o) => { if (o.op !== 'hook') flat.push(o); });
-      if (['fanbase', 'remix', 'hype'].some((k) => m[k] !== undefined) && !flat.some((o) => o.op === 'dmg')) err(w, `${path}: fanbase, remix and hype need a dmg op (outside hooks)`);
+      const hasDmg = flat.some((o) => o.op === 'dmg'), hasBlock = flat.some((o) => o.op === 'block');
+      if (['fanbase', 'remix', 'hype', 'finale'].some((k) => m[k] !== undefined) && !hasDmg) err(w, `${path}: fanbase, remix, hype and finale need a dmg op (outside hooks)`);
+      if (['duet', 'soundcheck'].some((k) => m[k] !== undefined) && !hasDmg && !hasBlock) err(w, `${path}: duet and soundcheck need a dmg or a block op (outside hooks)`);
       if (m.loop !== undefined && type === 'power') err(w, `${path}: a power cannot Loop`);
+      if (m.reprise !== undefined) {
+        if (m.reprise !== 1) err(w, `${path}.reprise is always 1`);
+        if (type !== 'attack' && type !== 'skill') err(w, `${path}: only an Attack or a Skill can Reprise`);
+        if (cost === 'X') err(w, `${path}: an X cost card cannot Reprise (the replay is free)`);
+        if (flat.some((o) => o.op === 'pick')) err(w, `${path}: a Reprise card cannot pick (the replay has nobody to choose)`);
+        if (m.finale !== undefined) err(w, `${path}: Reprise and Finale do not mix`);
+      }
     };
 
     // ---- cards ----
@@ -1145,7 +1236,8 @@ const DATA = (() => {
           if (!isObj(c.up)) err(w, 'up must be an object');
           else {
             Object.keys(c.up).forEach((k) => { if (['fx', 'cost', 'kw', 'mech'].indexOf(k) < 0) err(w, `up.${k} unknown (up may change fx, cost, kw, mech)`); });
-            if (c.up.mech !== undefined) vMech(w, c.up.mech, 'up.mech', c.up.fx || c.fx, c.type);
+            if (c.up.mech !== undefined) vMech(w, c.up.mech, 'up.mech', c.up.fx || c.fx, c.type, c.up.cost !== undefined ? c.up.cost : c.cost);
+            else if (c.mech !== undefined && (c.up.fx || c.up.cost !== undefined)) vMech(w, c.mech, 'mech (upgraded card)', c.up.fx || c.fx, c.type, c.up.cost !== undefined ? c.up.cost : c.cost);
             const upEnv = { cost: c.up.cost !== undefined ? c.up.cost : c.cost };
             if (c.up.fx) vOps(w, c.up.fx, 'card', 'up.fx', upEnv);
             if (c.up.cost !== undefined && !(c.up.cost === 'X' || (isInt(c.up.cost) && c.up.cost >= 0 && c.up.cost <= 5))) err(w, 'up.cost must be 0..5 or "X"');
@@ -1167,7 +1259,7 @@ const DATA = (() => {
           if (!isObj(c.hand)) err(w, 'hand must be an object');
           else Object.keys(c.hand).forEach((k) => { if (['turnEnd', 'drawn'].indexOf(k) < 0) err(w, `hand.${k} unknown`); else vOps(w, c.hand[k], 'hand', 'hand.' + k); });
         }
-        if (c.mech !== undefined) vMech(w, c.mech, 'mech', c.fx, c.type);
+        if (c.mech !== undefined) vMech(w, c.mech, 'mech', c.fx, c.type, c.cost);
         if (c.mech !== undefined && !playable) err(w, 'only playable hero cards carry a mech');
         if (c.locked !== undefined && !isBool(c.locked)) err(w, 'locked must be a boolean');
         if (c.locked && (c.rarity === 'starter' || c.rarity === 'common')) err(w, 'starters and commons are never locked');
@@ -1253,10 +1345,36 @@ const DATA = (() => {
         }
         if (r.hero !== undefined && !has('heroIds', r.hero)) err(w, 'hero');
         if (r.locked !== undefined && !isBool(r.locked)) err(w, 'locked must be a boolean');
+        if (r.set !== undefined && (!isStr(r.set) || !D.relicSets[r.set])) err(w, `set "${r.set}" is not in DATA.relicSets`);
         if (!r.mods && !r.hooks && !r.rows) err(w, 'needs mods, hooks or rows');
         noDash(w, r);
       });
       if (strict) Object.keys(FIXED.relics).forEach((id) => { const r = D.relics[id]; if (!r) err('fixed', `relic "${id}" is not defined`); else if (r.rarity !== FIXED.relics[id]) err('relic ' + id, `must be rarity ${FIXED.relics[id]}`); });
+      // ---- relic sets (4.7): {id, name, text, tiers: {2: {text, mods?, hooks?, rows?}, 3: {...}}}; a tier is a virtual Charm, so it takes the Charm checks
+      vals(D.relicSets).forEach((s) => {
+        const w = 'relicSet ' + s.id;
+        Object.keys(s).forEach((k) => { if (['id', 'name', 'text', 'tiers'].indexOf(k) < 0) err(w, `unknown field "${k}" on a relic set`); });
+        if (!ID_RE.test(s.id)) err(w, 'id must be snake_case');
+        if (!isStr(s.name)) err(w, 'name');
+        if (!isStr(s.text)) err(w, 'text'); else if (s.text.length > QUOTA.relics.textMax) err(w, `text over ${QUOTA.relics.textMax} characters`);
+        if (!isObj(s.tiers) || !Object.keys(s.tiers).length) return err(w, 'tiers must be an object keyed by the Charm count, {2: {...}, 3: {...}}');
+        const ns = Object.keys(s.tiers).map(Number);
+        if (!ns.every((n) => isInt(n) && n >= 2 && n <= 8)) err(w, 'tier keys are whole numbers from 2 to 8');
+        ns.forEach((n) => {
+          const tr = s.tiers[n], p = `tiers.${n}`;
+          if (!isObj(tr)) return err(w, `${p} must be an object`);
+          Object.keys(tr).forEach((k) => { if (['text', 'mods', 'hooks', 'rows'].indexOf(k) < 0) err(w, `${p}: unknown field "${k}"`); });
+          if (!isStr(tr.text)) err(w, `${p}.text`); else if (tr.text.length > QUOTA.relics.textMax) err(w, `${p}.text over ${QUOTA.relics.textMax} characters`);
+          if (tr.mods !== undefined) vMods(w, tr.mods, 'mods', 'modKind', p + '.mods');
+          if (tr.hooks !== undefined) vHooks(w, tr.hooks, p + '.hooks', 'relic');
+          if (tr.rows !== undefined) {
+            if (!isObj(tr.rows)) err(w, `${p}.rows must be an object`);
+            else Object.keys(tr.rows).forEach((row) => { if (['front', 'back'].indexOf(row) < 0) err(w, `${p}.rows.${row}`); else cmp(w, tr.rows[row], `${p}.rows.${row}`, LISTS.rowFields, true); });
+          }
+          if (!tr.mods && !tr.hooks && !tr.rows) err(w, `${p} needs mods, hooks or rows`);
+        });
+        noDash(w, s);
+      });
     }
 
     // ---- enemies and encounters ----
@@ -1628,6 +1746,11 @@ const DATA = (() => {
       LISTS.mods.forEach((k) => need('relics', modsUsed[k], `no relic uses the ${k} mod`));
       need('relics', count(rs, (x) => x.rows) >= 2, 'fewer than 2 relics with rows');
       need('relics', count(rs, (x) => A(x.hooks).some((h) => h && h.filter && h.filter.gems)) >= 2, 'fewer than 2 gem-aware relics');
+      // every set is completable by any party from a fresh profile: at least as many unlocked, hero-free members as its top tier asks for
+      vals(D.relicSets).forEach((s) => {
+        const top = D.setMax(s.id), free = count(rs, (x) => x.set === s.id && !x.locked && !x.hero);
+        need('relics', free >= top, `set ${s.id} asks for ${top} Charms but only ${free} unlocked party-wide Charms belong to it`);
+      });
     }
 
     if (want('gems')) {
@@ -1669,6 +1792,127 @@ const DATA = (() => {
     let fn;
     Object.defineProperty(D, k, { enumerable: true, configurable: true, get: () => fn, set: (v) => { fn = typeof v === 'function' ? MECH_WRAP[k](v) : v; } });
   });
+
+  // ==================================================================================================================
+  // The Crowd and Medleys: the two run systems (DESIGN 4.3 "Medleys", 4.2 "The Crowd"). A separate block: it touches none of the
+  // card mechanics above, it only wraps whatever resolveCard they install.
+  //
+  // THE CROWD (COMBAT owns the meter): every card played adds 1, a defeated enemy adds 2, and at mods.crowd (ECONOMY.crowd, 7; Encore 5+
+  //   adds 1 through trial_5) the crowd goes wild: a temp copy of a hero's SIGNATURE card (DATA.heroes[id].signature, an Attack or Skill)
+  //   joins the hand with `crowd: true`, which resolves as cost 0 with Fade (below). The lead hero's signature comes first, then the
+  //   other hero's, and so on. D.signatureOf(heroId) -> card id | null.
+  //
+  // MEDLEY (RUN makes them, after an elite fight): a deck instance {uid, id: 'medley', parts: [idA, idB], up, gems, enc?}. Both parts are
+  //   Attack or Skill cards of ONE hero, never a Medley themselves. The merged definition (D.medleyDef(parts)) is what every reader of a
+  //   card definition gets from D.cardDef(inst): name "A and B", hero, type attack when either part is one (else skill), rarity rare,
+  //   cost max(costA, costB) clamped to 1..3 (an X part makes the Medley cost X), fx A then B, kw the union, slots the union capped at 3
+  //   (A's first), mech merged by max; `up` (when either part has one) does the same with the upgraded parts, so one upgrade lifts both
+  //   songs. Resolving a Medley instance resolves each part with its own share of the gems (slot i belongs to A while i < A.slots.length)
+  //   and merges the results the same way; the card mechanics wrapper above then adds the merged mech bonuses on top.
+  //   D.isMedley(inst)   D.canMedley(instA, instB) -> {ok, reason?: card|same|medley|type|hero}   D.cardDef(inst | id) -> def | undefined
+  // ==================================================================================================================
+  const MEDLEY_ID = 'medley';
+  const MEDLEY_TYPES = ['attack', 'skill'];
+  const medleyCache = new Map();
+  const isPartId = (id) => typeof id === 'string' && !!D.cards[id] && MEDLEY_TYPES.indexOf(D.cards[id].type) >= 0 && LISTS.heroIds.indexOf(D.cards[id].hero) >= 0;
+  D.MEDLEY_ID = MEDLEY_ID;
+  D.isMedley = (inst) => !!inst && typeof inst === 'object' && inst.id === MEDLEY_ID && Array.isArray(inst.parts) && inst.parts.length === 2;
+  D.medleyPartsOk = (parts) => Array.isArray(parts) && parts.length === 2 && parts.every(isPartId) && D.cards[parts[0]].hero === D.cards[parts[1]].hero;
+  D.signatureOf = (heroId) => { const h = heroes[heroId]; const id = h && h.signature; return id && D.cards[id] ? id : null; };
+  // whether two deck instances may be fused: the same hero, Attack or Skill, two different cards of the deck, neither a Medley
+  D.canMedley = (a, b) => {
+    if (!a || !b || typeof a !== 'object' || typeof b !== 'object') return { ok: false, reason: 'card' };
+    if (a === b || (a.uid !== undefined && a.uid === b.uid)) return { ok: false, reason: 'same' };
+    if (D.isMedley(a) || D.isMedley(b) || a.id === MEDLEY_ID || b.id === MEDLEY_ID) return { ok: false, reason: 'medley' };
+    if (!isPartId(a.id) || !isPartId(b.id)) return { ok: false, reason: 'type' };
+    if (D.cards[a.id].hero !== D.cards[b.id].hero) return { ok: false, reason: 'hero' };
+    return { ok: true };
+  };
+  const medleyCost = (ca, cb) => (ca === 'X' || cb === 'X' ? 'X' : Math.min(3, Math.max(1, isNum(ca) ? ca : 0, isNum(cb) ? cb : 0)));
+  const medleyKw = (ka, kb) => (ka || []).concat((kb || []).filter((k) => (ka || []).indexOf(k) < 0));
+  const medleyMech = (ma, mb) => {
+    const out = {};
+    [ma, mb].forEach((m) => { if (m && typeof m === 'object') Object.keys(m).forEach((k) => { if (isNum(m[k])) out[k] = Math.max(out[k] || 0, m[k]); }); });
+    return Object.keys(out).length ? out : undefined;
+  };
+  // the parts' definitions at one upgrade state: {fx, cost, kw, mech}
+  const partView = (def, up) => {
+    const u = up && def.up ? def.up : null;
+    return { fx: u && u.fx ? u.fx : (def.fx || []), cost: u && u.cost !== undefined ? u.cost : def.cost, kw: u && u.kw !== undefined ? u.kw : (def.kw || []), mech: u && u.mech !== undefined ? u.mech : def.mech };
+  };
+  D.medleyDef = (parts) => {
+    if (!D.medleyPartsOk(parts)) return undefined;
+    const key = parts[0] + '+' + parts[1];
+    let def = medleyCache.get(key);
+    const A = D.cards[parts[0]], B = D.cards[parts[1]];
+    if (def && def._a === A && def._b === B) return def;
+    const a = partView(A, false), b = partView(B, false);
+    const slots = (A.slots || []).concat(B.slots || []).slice(0, 3);
+    def = {
+      id: MEDLEY_ID, medley: true, parts: parts.slice(), name: A.name + ' and ' + B.name, hero: A.hero,
+      type: A.type === 'attack' || B.type === 'attack' ? 'attack' : 'skill', rarity: 'rare',
+      cost: medleyCost(a.cost, b.cost), fx: a.fx.concat(b.fx), kw: medleyKw(a.kw, b.kw), slots, art: A.art,
+      flavor: 'Two songs, one breath.',
+    };
+    const mech = medleyMech(a.mech, b.mech);
+    if (mech) def.mech = mech;
+    if (A.up || B.up) {
+      const ua = partView(A, true), ub = partView(B, true);
+      def.up = { fx: ua.fx.concat(ub.fx), cost: medleyCost(ua.cost, ub.cost), kw: medleyKw(ua.kw, ub.kw) };
+      const um = medleyMech(ua.mech, ub.mech);
+      if (um) def.up.mech = um;
+    }
+    Object.defineProperty(def, '_a', { value: A, enumerable: false });
+    Object.defineProperty(def, '_b', { value: B, enumerable: false });
+    medleyCache.set(key, def);
+    return def;
+  };
+  // the definition behind an instance or an id: D.cards[id], or the merged definition of a Medley instance
+  D.cardDef = (x) => {
+    if (typeof x === 'string') return D.cards[x];
+    if (!x || typeof x !== 'object') return undefined;
+    if (x.id === MEDLEY_ID) return D.medleyDef(x.parts);
+    return D.cards[x.id];
+  };
+  // resolve a Medley: each part with its own gems, then the merge above on the results. raw is data_text's resolveCard.
+  function resolveMedley(raw, inst, ctx) {
+    const def = D.medleyDef(inst.parts);
+    if (!def) return raw({ id: inst.id, up: inst.up, gems: [] }, ctx);
+    const A = D.cards[inst.parts[0]], na = (A.slots || []).length;
+    const gems = def.slots.map((_, i) => (inst.gems && inst.gems[i]) || null);
+    const up = !!inst.up && !!def.up;
+    const ra = raw({ id: inst.parts[0], up: up ? 1 : 0, gems: gems.slice(0, na) }, ctx);
+    const rb = raw({ id: inst.parts[1], up: up ? 1 : 0, gems: gems.slice(na) }, ctx);
+    const kw = medleyKw(ra.kw, rb.kw);
+    const cost = medleyCost(ra.cost, rb.cost);
+    return {
+      inst, def, id: MEDLEY_ID, name: def.name + (up ? '+' : ''), cost, costX: cost === 'X', type: def.type, rarity: def.rarity, kw, slots: def.slots.slice(),
+      gems, fx: ra.fx.concat(rb.fx), hero: def.hero, up, playableType: def.type, art: def.art, medley: true,
+      gemActive: ra.gemActive.concat(rb.gemActive).slice(0, def.slots.length), gemNotes: ra.gemNotes.concat(rb.gemNotes.map((n) => Object.assign({}, n, { slot: n.slot + na }))),
+      base: { fx: def.fx, cost: def.cost, kw: def.kw },
+    };
+  }
+  // a Crowd copy (inst.crowd) is free and Fades
+  const wrapSystems = (raw) => function resolveCard(x, ctx) {
+    const inst = x && typeof x === 'object' ? x : null;
+    let res = inst && D.isMedley(inst) ? resolveMedley(raw, inst, ctx) : raw(x, ctx);
+    if (inst && inst.crowd && res && res.def) {
+      res = Object.assign({}, res, { crowd: true });
+      if (res.cost !== null) { res.cost = 0; res.costX = false; }
+      if (res.kw.indexOf('exhaust') < 0) res.kw = res.kw.concat(['exhaust']);
+    }
+    return res;
+  };
+  {
+    const d = Object.getOwnPropertyDescriptor(D, 'resolveCard');          // the card mechanics accessor above: its setter wraps what it is given
+    Object.defineProperty(D, 'resolveCard', { enumerable: true, configurable: true, get: d.get, set: (v) => d.set(typeof v === 'function' ? wrapSystems(v) : v) });
+    // targetMode and cardOps (data_text.js) resolve a plain instance themselves; a Medley or Crowd instance goes through D.resolveCard first
+    const viaResolve = (raw) => function (x) { const inst = x && typeof x === 'object' && !x.inst && (D.isMedley(x) || x.crowd) ? D.resolveCard(x) : x; return raw.apply(this, [inst].concat(Array.prototype.slice.call(arguments, 1))); };
+    ['targetMode', 'cardOps'].forEach((k) => {
+      let fn;
+      Object.defineProperty(D, k, { enumerable: true, configurable: true, get: () => fn, set: (v) => { fn = typeof v === 'function' ? viaResolve(v) : v; } });
+    });
+  }
 
   return D;
 })();

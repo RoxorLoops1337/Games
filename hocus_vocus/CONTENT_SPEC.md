@@ -44,7 +44,7 @@ Player-facing numbers come from the ops, never typed into text by hand (card tex
 
 ## 3. Cards (per hero: `data_cards_<hero>.js`)
 
-Per hero, exactly the starters above plus: **15 commons, 13 uncommons, 9 rares** (all non-token, all with `up`), plus tokens only if your cards `add` them (ids `<hero>_tok_<name>`).
+Per hero, exactly the starters above plus: **17 commons, 15 uncommons, 11 rares** (all non-token, all with `up`), plus tokens only if your cards `add` them (ids `<hero>_tok_<name>`).
 Mix: at least 30% attacks and 30% skills; at least 4 powers (uncommon and rare); at least one `X` cost card; at least 3 cards using `cond` on `row`;
 at least 4 cards that touch the ally hero (`tgt:'ally'` / `'both'`, or `per` with `who:'ally'`); at least 2 `pick` cards; at least 5 cards with keywords.
 Three archetypes per hero, each with at least 4 cards that clearly push it, and some that bridge two:
@@ -217,7 +217,7 @@ must be honest (the validator checks the ops behind an icon). Moves that add jun
 
 ## 5. Charms and gems
 
-**Charms** (relics, `data_relics.js`): exactly **66**: common 22, uncommon 22, rare 12, boss 6, shop 4 (hero-specific Charms count within these: exactly 3 per hero, using `hero`).
+**Charms** (relics, `data_relics.js`): exactly **96**: common 44, uncommon 30, rare 12, boss 6, shop 4 (hero-specific Charms count within these: exactly 3 per hero, using `hero`). 45 of them carry `set` (DESIGN 4.7): 8 Charm sets (`DATA.relicSets`) of 5 to 7 members, each set with at least as many unlocked, hero-free members as its top tier (2 to 4) needs, so every set can be completed by any party from a fresh profile.
 Things a touring musician would keep close (a lucky plectrum, a sticker sheet, a travel mug, a mic-wand keyring, a ring light that was set free), never animal products, and no Charm name ends in "Charm".
 Cover: static `mods` (every key of `LISTS.mods`: `energy`, `hand`, `startBlock`, `inkMax`, `startInk`, `wellInk`, `cardChoices`, `freeSwaps`, `campActions`, `rareBoost`, `goldMul`, `priceMul`, `healMul`), combat hooks (every hook of `LISTS.combatHooks` except `combatEnd`:
 turn start and end, on play with a `filter`, on damaged, on kill, on swap, on hero down, on shuffle, on Fade, combat start), run hooks (every one of `LISTS.runHooks`: `onPickup`, `onChapterStart`, `onRest`, `onPaint`, `onFightWon`, `onShopEnter`),
