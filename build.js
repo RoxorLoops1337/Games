@@ -89,6 +89,7 @@ const STATIC_PATHS = [
   'ludus_maximus',
   'ludus_maximus_3d',
   'blockmates',
+  'rustgrift',
   'tools',
 ];
 

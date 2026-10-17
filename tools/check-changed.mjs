@@ -72,6 +72,7 @@ const GAME_SUITES = {
   beatbox_heroes: ['test:heroes'],
   LoopDoku: ['test:loopdoku'],
   blockmates: ['test:blockmates'],
+  rustgrift: ['test:rustgrift'],
 };
 
 // Folders the site serves that have no test suite: a change there only needs
