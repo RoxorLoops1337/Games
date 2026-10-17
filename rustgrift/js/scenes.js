@@ -1,5 +1,7 @@
 'use strict';
 // ===================== SCENES: menus, map, shop, rest, events, modals =====================
+// The world map replaces the node map once a run has a `world` (see WORLD_DESIGN.md); old runs and tests fall back to the node map.
+function makeMapScene(o) { return (typeof WorldMapScene === 'function' && G.run && G.run.world) ? new WorldMapScene(o) : new MapScene(o); }
 function setScene(s) { G.scene = s; G.modal = null; if (s.enter) s.enter(); }
 function toast(msg) { floatText(W / 2, 140, msg, C.mustard, 34, { life: 1.6 }); }
 
@@ -279,7 +281,7 @@ class MenuScene {
   }
   cont() {
     const r = store.get('rg_run', null); if (!r) return;
-    G.run = r; go(() => setScene(new MapScene()));
+    G.run = r; go(() => setScene(makeMapScene()));
   }
 }
 
@@ -320,7 +322,7 @@ class CharSelectScene {
     });
     if (UI.btn(W / 2 - 150, 640, 300, 60, 'START RUN', { col: C.orange, size: 38 })) {
       G.run = newRun(CHARS[this.sel].id); G.meta.runs++; saveMeta(); saveRun();
-      go(() => setScene(new MapScene({ intro: true })));
+      go(() => setScene(makeMapScene({ intro: true })));
     }
     if (UI.btn(30, 650, 130, 46, 'BACK', { col: C.grey, size: 24 })) go(() => setScene(new MenuScene()));
   }
@@ -523,9 +525,9 @@ class RewardScene {
     if (this.r.boss) {
       if (run.act >= 2) { go(() => setScene(new VictoryScene())); return; }
       run.act++; run.pos = -1; run.map = genMap(run.act); run.hp = Math.min(run.maxhp, run.hp);
-      go(() => setScene(new MapScene({ intro: true }))); return;
+      go(() => setScene(makeMapScene({ intro: true }))); return;
     }
-    go(() => setScene(new MapScene()));
+    go(() => setScene(makeMapScene()));
   }
 }
 
@@ -582,7 +584,7 @@ class ShopScene {
     // shopkeeper
     c.save(); c.translate(1170, 380); c.scale(.85, .85); c.scale(-1, 1); drawFigure(c, this.shopkeeper, { t: G.time, atk: 0, talk: 0 }); c.restore();
     if (UI.hit(1100, 170, 140, 210)) tip('Shopkeeper', this.line);
-    if (UI.btn(1080, 640, 170, 52, 'LEAVE', { col: C.red, size: 32 })) go(() => setScene(new MapScene()));
+    if (UI.btn(1080, 640, 170, 52, 'LEAVE', { col: C.red, size: 32 })) go(() => setScene(makeMapScene()));
     drawHUD(c, run);
   }
   onKey(k) { if (k === 'Escape') openPause(); }
@@ -622,7 +624,7 @@ class RestScene {
       }
     } else {
       txt(c, this.msg, W / 2, 250, { size: 36, align: 'center', color: C.cream, stroke: C.ink, sw: 7 });
-      if (UI.btn(W / 2 - 140, 280, 280, 64, 'MOVE ON', { col: C.teal, size: 38 })) go(() => setScene(new MapScene()));
+      if (UI.btn(W / 2 - 140, 280, 280, 64, 'MOVE ON', { col: C.teal, size: 38 })) go(() => setScene(makeMapScene()));
     }
     drawHUD(c, run);
   }
@@ -668,7 +670,7 @@ class EventScene {
       if (r.upgrade && !r.taken) { if (UI.btn(250, y, 780, 52, 'UPGRADE A CARD', { col: C.orange, size: 26 })) openDeckView('Upgrade', { b: run.deck, n: run.ndeck }, { pick: (inst, tab) => { const l = tab === 'b' ? run.deck : run.ndeck; const k = l.findIndex(q => q.id === inst.id && q.up === inst.up); if (k >= 0) l[k].up = true; r.taken = true; Snd.play('buff'); burst(W / 2, 300, 40, { col: [C.mustard, C.green], shape: 'star' }); }, canPick: inst => !inst.up && Object.keys((BC[inst.id] || NC[inst.id]).upg).length > 0, hint: 'Choose a card to upgrade.', preview: 1 }); y += 64; }
       if (r.removeCard && !r.taken) { if (UI.btn(250, y, 780, 52, 'REMOVE A CARD', { col: C.plum, size: 26 })) openDeckView('Remove', { b: run.deck, n: run.ndeck }, { pick: (inst, tab) => { const l = tab === 'b' ? run.deck : run.ndeck; const k = l.findIndex(q => q.id === inst.id && q.up === inst.up); if (k >= 0) l.splice(k, 1); r.taken = true; Snd.play('stamp'); }, hint: 'Choose a card to remove.' }); y += 64; }
       if (r.tradeCard && !r.taken) { if (UI.btn(250, y, 780, 52, 'TRADE A CARD', { col: C.plum, size: 26 })) openDeckView('Trade Away', { b: run.deck }, { pick: (inst) => { const k = run.deck.findIndex(q => q.id === inst.id && q.up === inst.up); if (k >= 0) run.deck.splice(k, 1); const rares = Object.values(BC).filter(b => b.rarity === 'rare' && (b.cls === 'any' || b.cls === run.char)); run.deck.push({ id: pick(rares).id, up: false }); r.taken = true; Snd.play('buff'); toast('Traded for a rare card!'); }, hint: 'Choose a card to trade.' }); y += 64; }
-      if (UI.btn(W / 2 - 130, 570, 260, 56, 'CONTINUE', { col: C.green, size: 32 })) go(() => setScene(new MapScene()));
+      if (UI.btn(W / 2 - 130, 570, 260, 56, 'CONTINUE', { col: C.green, size: 32 })) go(() => setScene(makeMapScene()));
     }
     drawHUD(c, run);
   }

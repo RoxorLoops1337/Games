@@ -49,6 +49,14 @@ bc('gambit', 'Gambit', 1, 'rare', 'pia', 'cards', { draw: 4, exhaust: 1 }, { dra
 bc('spiked_collar', 'Spiked Collar', 1, 'uncommon', 'pia', 'thorn', { pwr: 1, thorns: 3 }, { thorns: 5 });
 bc('second_wind', 'Second Wind', 0, 'uncommon', 'pia', 'bolt', { ap: 2, exhaust: 1 }, { ap: 2, draw: 2 });
 bc('fancy_footwork', 'Fancy Footwork', 1, 'common', 'pia', 'boot', { blk: 5, weak: 1, all: 1, type: 'skl' }, { blk: 8, weak: 2 });
+// ----- RawClaw: sound alchemist (debuffs, cheap cycling, resonance) -----
+bc('sample_chop', 'Sample Chop', 0, 'common', 'claw', 'cards', { dmg: 3, draw: 1 }, { dmg: 5 });
+bc('static_burst', 'Static Burst', 1, 'common', 'claw', 'dust', { dmg: 5, weak: 1 }, { dmg: 8, weak: 2 });
+bc('filter_sweep', 'Filter Sweep', 1, 'common', 'claw', 'smoke', { weak: 2, vuln: 1 }, { weak: 3, vuln: 2 });
+bc('echo_bomb', 'Echo Bomb', 2, 'uncommon', 'claw', 'quake', { dmg: 6, all: 1, weak: 1 }, { dmg: 9, weak: 2 });
+bc('bass_boost', 'Bass Boost', 1, 'uncommon', 'claw', 'bolt', { str: 1, blk: 5 }, { str: 2, blk: 7 });
+bc('resonance', 'Resonance', 2, 'rare', 'claw', 'fire', { dmg: 7, hits: 2, vuln: 2 }, { dmg: 9, vuln: 3 });
+bc('loop_station', 'Loop Station', 1, 'rare', 'claw', 'clock', { pwr: 1, plating: 2 }, { plating: 3 });
 // ----- negotiation -----
 nc('plea', 'Plea', 1, 'starter', 'any', 'mouth', { inf: 4 }, { inf: 6 });
 nc('hold_ground', 'Hold Ground', 1, 'starter', 'any', 'shield', { comp: 5 }, { comp: 8 });
@@ -79,6 +87,12 @@ nc('mirrors', 'Smoke & Mirrors', 1, 'uncommon', 'pia', 'smoke', { inf: 3, all: 1
 nc('charm', 'Charming', 2, 'uncommon', 'pia', 'heart', { arg: { name: 'Charming', kind: 'comp', n: 3, turns: 0 } }, { arg: { name: 'Charming', kind: 'comp', n: 5, turns: 0 } });
 nc('bluff', 'Bluff', 2, 'rare', 'pia', 'cards', { inf: 8, draw: 2, ap: 1 }, { inf: 11, draw: 2, ap: 1 });
 nc('sleight', 'Sleight of Hand', 1, 'common', 'pia', 'coin', { inf: 4, money: 6 }, { inf: 6, money: 10 });
+
+nc('remix', 'Remix', 1, 'common', 'claw', 'cards', { inf: 3, draw: 1 }, { inf: 5 });
+nc('sample_pitch', 'Pitch Shift', 1, 'common', 'claw', 'mask', { comp: 6, soften: 2 }, { comp: 9, soften: 3 });
+nc('feedback', 'Feedback', 0, 'uncommon', 'claw', 'mouth', { inf: 2, strip: 1 }, { inf: 4 });
+nc('dub_plate', 'Dub Plate', 2, 'uncommon', 'claw', 'eye', { inf: 6, all: 1 }, { inf: 8 });
+nc('mastering', 'Mastering', 2, 'rare', 'claw', 'crown', { arg: { name: 'Mastering', kind: 'inf', n: 4, turns: 0 } }, { arg: { name: 'Mastering', kind: 'inf', n: 6, turns: 0 } });
 
 // resolved card definitions (upgrade merged) + text
 const _cdCache = {};
@@ -155,25 +169,36 @@ const STATUS = {
 // ----- characters -----
 const CHARS = [
   {
-    id: 'rook', name: 'Roxor', title: 'The Beatbox Brawler', hp: 62, nres: 38, desc: 'Spiky-haired beatboxer with a mic and a loop for every occasion. Wins fights by bleeding foes dry with sound, or sweet-talking them into leaving.',
-    spec: { kind: 'human', look: 'roxor', skin: '#f2c09a', coat: '#7fd0e8', accent: '#b79ae8', hat: 'mohawk', hatCol: '#4a2a1a', weapon: 'knife', face: 'grin', build: 1, seed: 21, scarf: '#3fd8e8', pants: '#3a3f6a' },
+    id: 'rook', name: 'Roxor', title: 'The Beatbox Wizard', hp: 62, nres: 38, desc: 'Cheeky mohawked beatboxer with a mic and a loop for every occasion. Wins fights by bleeding foes dry with sound, or sweet-talking them into leaving.',
+    spec: { kind: 'rj', rj: 'roxor', s: 1, seed: 21 }, accent: '#3fcf6a',
+    start: { loop_rats: 1, gloss: -1 },
     deck: ['strike', 'strike', 'strike', 'strike', 'guard', 'guard', 'guard', 'guard', 'quick_stab', 'deep_cut'],
     ndeck: ['plea', 'plea', 'plea', 'plea', 'hold_ground', 'hold_ground', 'hold_ground', 'hold_ground', 'needle', 'cold_read'],
     trait: 'Bleeding foes take double from Rend.', graft: 'wire_spool'
   },
   {
-    id: 'mourn', name: 'Bass', title: 'The Roadie', hp: 82, nres: 26, desc: 'A huge, friendly-grumpy roadie with headphones and a drumstick. Stacks Strength and Block, then flattens things. Bad at small talk.',
-    spec: { kind: 'human', look: 'bass', skin: '#c08a60', coat: '#2a2638', accent: '#ffd23a', hat: 'bald', weapon: 'club', face: 'angry', build: 1.35, seed: 34, scar: 0, pants: '#3a3a52' },
+    id: 'mourn', name: 'Andy', title: 'The Thunder Bass', hp: 82, nres: 26, desc: 'Big-hearted, unflappable bassist with an orange bass slung low. Stacks Strength and Block, then flattens things with groove. Not a smooth talker.',
+    spec: { kind: 'rj', rj: 'andy', s: 1.05, seed: 34 }, accent: '#ff9a2e',
+    start: { bass_cartel: 1, static_choir: -1 },
     deck: ['strike', 'strike', 'strike', 'strike', 'guard', 'guard', 'guard', 'guard', 'headbutt', 'shrug'],
     ndeck: ['plea', 'plea', 'plea', 'hold_ground', 'hold_ground', 'hold_ground', 'hold_ground', 'glare', 'glare', 'loom'],
     trait: 'Starts each fight with 1 Strength.', graft: 'iron_knuckle'
   },
   {
-    id: 'pia', name: 'Jasmin', title: 'The Vocal Hustler', hp: 52, nres: 46, desc: 'A silver-tongued singer with a high braided ponytail. Weakens, cheapens and out-draws everything. Born to haggle.',
-    spec: { kind: 'human', look: 'jasmin', skin: '#c68a62', coat: '#f48fb8', accent: '#f06aa0', hat: 'hair', hatCol: '#2a1a22', weapon: 'cane', face: 'grin', build: .88, seed: 47, scarf: '#ff4fa0', pants: '#6a4a9a' },
+    id: 'pia', name: 'Jasmin', title: 'The Blossom Voice', hp: 52, nres: 46, desc: 'Warm, dreamy singer with a high ponytail and a silver tongue. Weakens, cheapens and out-draws everything. Born to haggle.',
+    spec: { kind: 'rj', rj: 'jasmin', s: 1, seed: 47 }, accent: '#ff7eb6',
+    start: { gloss: 1, scrap_kings: -1 },
     deck: ['strike', 'strike', 'strike', 'guard', 'guard', 'guard', 'guard', 'jab', 'jab', 'dirty_trick'],
     ndeck: ['plea', 'plea', 'plea', 'hold_ground', 'hold_ground', 'hold_ground', 'flatter', 'flatter', 'fast_talk', 'fast_talk'],
     trait: 'Starts negotiations with 3 Composure.', graft: 'silver_tongue'
+  },
+  {
+    id: 'claw', name: 'RawClaw', title: 'The Sound Alchemist', hp: 56, nres: 40, desc: 'Laid-back sampler nerd who mixes sound into trouble. Dusts foes with debuffs, cycles cards fast, and out-argues with clever tricks.',
+    spec: { kind: 'rj', rj: 'rawclaw', s: 1, seed: 58 }, accent: '#a77bff',
+    start: { scrap_kings: 1 },
+    deck: ['strike', 'strike', 'strike', 'guard', 'guard', 'guard', 'guard', 'pocket_sand', 'pocket_sand', 'adrenal'],
+    ndeck: ['plea', 'plea', 'plea', 'hold_ground', 'hold_ground', 'hold_ground', 'hold_ground', 'deep_breath', 'deep_breath', 'stall'],
+    trait: 'Starts each battle drawing one extra card.', graft: 'lucky_coin'
   }
 ];
 

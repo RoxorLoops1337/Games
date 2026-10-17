@@ -694,12 +694,13 @@ MapScene.prototype.draw = function (c) {
 };
 
 // ================================================================ TITLE SCREEN (concert poster)
-const SCN_MENU_FIG = [ // back to front
-  { spec: () => CHARS[1].spec, x: 150, y: 612, s: 1.5, ph: 2 },
-  { spec: () => ENEMIES.sludge.spec, x: 1190, y: 660, s: -1.0, ph: 4 },
-  { spec: () => CHARS[0].spec, x: 335, y: 600, s: 1.48, ph: 0 },
-  { spec: () => CHARS[2].spec, x: 990, y: 606, s: -1.5, ph: 1 },
-  { spec: () => ENEMIES.rat.spec, x: 895, y: 668, s: -0.95, ph: 3 }
+const SCN_MENU_FIG = [ // back to front: the four Hocus Vocus kit heroes flank the logo buttons
+  { spec: () => CHARS[1].spec, x: 110, y: 624, s: 1.2, ph: 2 },
+  { spec: () => CHARS[3].spec, x: 1170, y: 620, s: -1.2, ph: 5 },
+  { spec: () => ENEMIES.sludge.spec, x: 830, y: 668, s: -0.8, ph: 4 },
+  { spec: () => CHARS[0].spec, x: 300, y: 628, s: 1.2, ph: 0 },
+  { spec: () => CHARS[2].spec, x: 990, y: 628, s: -1.2, ph: 1 },
+  { spec: () => ENEMIES.rat.spec, x: 470, y: 672, s: 0.8, ph: 3 }
 ];
 function scn_menuBg() {
   return scn_layer('m_bg', W, H, (c) => {
@@ -796,7 +797,8 @@ MenuScene.prototype.draw = function (c) {
 const SCN_HERO = {
   rook: { base: '#dcf5fb', a: ZP.cyan, b: ZP.lav, name: ZP.lime, motif: 'tie' },
   mourn: { base: '#fff3c4', a: ZP.yel, b: ZP.denim, name: ZP.yel, motif: 'smile' },
-  pia: { base: '#ffe3ef', a: ZP.pinkL, b: ZP.pink, name: ZP.pink, motif: 'heart' }
+  pia: { base: '#ffe3ef', a: ZP.pinkL, b: ZP.pink, name: ZP.pink, motif: 'heart' },
+  claw: { base: '#ece2ff', a: ZP.lav, b: '#a77bff', name: '#a77bff', motif: 'tie' }
 };
 function scn_heroCard(i, sel) {
   const ch = CHARS[i], th = SCN_HERO[ch.id] || SCN_HERO.rook;
@@ -844,14 +846,15 @@ function scn_csBg() {
 CharSelectScene.prototype.draw = function (c) {
   const t = G.time;
   scn_blit(c, scn_csBg(), 0, 0);
-  CHARS.forEach((ch, i) => { const cx = 70 + i * 400 + 180, sel = this.sel === i, hov = UI.hit(70 + i * 400, 105, 360, 520); if (sel || hov) scn_drawCone(c, [ZP.cyan, ZP.yel, ZP.pink][i % 3], cx, -30, 0, 760, sel ? .55 : .25); });
+  const L4 = RGHeroCards(CHARS.length);
+  CHARS.forEach((ch, i) => { const q = L4[i], cx = q.cx, sel = this.sel === i, hov = UI.hit(q.x, q.y, q.w, q.h); if (sel || hov) scn_drawCone(c, [ZP.cyan, ZP.yel, ZP.pink, ZP.lav][i % 4], cx, -30, 0, 760, sel ? .55 : .25); });
   const TL = scn_bubbleLayer('CHOOSE YOUR HUSTLER', 58, ZP.lime, { seed: 7 }); c.save(); c.translate(W / 2, 56); c.rotate(-.012); scn_blitC(c, TL, 0, 0, 1); c.restore();
   CHARS.forEach((ch, i) => {
-    const px = 70 + i * 400, py = 105, pw = 360, ph = 520;
-    const hov = UI.hit(px, py, pw, ph), sel = this.sel === i;
-    c.save(); c.translate(px + pw / 2, py + ph / 2); const s = sel ? 1.03 : hov ? 1.015 : 1; c.scale(s, s); c.rotate((i - 1) * .012 * (sel ? 0 : 1)); c.translate(-pw / 2, -ph / 2);
+    const q = L4[i], px = q.x, py = q.y, pw = 360, ph = 520;
+    const hov = UI.hit(q.x, q.y, q.w, q.h), sel = this.sel === i;
+    c.save(); c.translate(px + q.w / 2, py + q.h / 2); const s = (sel ? 1.03 : hov ? 1.015 : 1) * q.k; c.scale(s, s); c.rotate((i - 1) * .012 * (sel ? 0 : 1)); c.translate(-pw / 2, -ph / 2);
     const L = scn_heroCard(i, sel); c.drawImage(L.cv, -12, -12, L.w, L.h);
-    c.save(); c.translate(pw / 2, 268); c.scale(1.02, 1.02); drawFigure(c, ch.spec, { t: G.time + i, atk: sel ? (Math.sin(G.time * 2) > .96 ? .5 : 0) : 0, talk: 0 }); c.restore();
+    c.save(); c.translate(pw / 2, 268); c.scale(.86, .86); drawFigure(c, ch.spec, { t: G.time + i, atk: sel ? (Math.sin(G.time * 2) > .96 ? .5 : 0) : 0, talk: 0 }); c.restore();
     if (sel) {
       c.save(); c.setLineDash([16, 10]); c.lineDashOffset = -t * 30; c.lineCap = 'round'; c.strokeStyle = ZP.lime; c.lineWidth = 5; scn_rrect(c, -14, -14, pw + 28, ph + 28, 34); c.stroke(); c.restore();
       c.save(); c.translate(pw - 58, 44); c.rotate(.2 + Math.sin(t * 3) * .04); scn_sticker(c, -54, -18, 108, 36, 18, ZP.pink, { pad: 4, lw: 3 }); txt(c, 'CHOSEN!', 0, 1, { size: 22, font: FD, weight: 800, color: '#fff', stroke: ZK, sw: 4, align: 'center', base: 'middle' }); c.restore();
@@ -863,7 +866,7 @@ CharSelectScene.prototype.draw = function (c) {
   scn_btnBack(c, W / 2 - 150, 640, 300, 60); scn_btnBack(c, 30, 650, 130, 46);
   if (UI.btn(W / 2 - 150, 640, 300, 60, 'START RUN', { col: ZP.pink, size: 38 })) {
     G.run = newRun(CHARS[this.sel].id); G.meta.runs++; saveMeta(); saveRun();
-    go(() => setScene(new MapScene({ intro: true })));
+    go(() => setScene(makeMapScene({ intro: true })));
   }
   if (UI.btn(30, 650, 130, 46, 'BACK', { col: '#9a78d8', size: 24 })) go(() => setScene(new MenuScene()));
 };
@@ -1065,7 +1068,7 @@ ShopScene.prototype.draw = function (c) {
   c.save(); c.translate(1170, 380); c.scale(.85, .85); c.scale(-1, 1); drawFigure(c, this.shopkeeper, { t: G.time, atk: 0, talk: 0 }); c.restore();
   if (UI.hit(1100, 170, 140, 210)) tip('Shopkeeper', this.line);
   scn_btnBack(c, 1080, 640, 170, 52);
-  if (UI.btn(1080, 640, 170, 52, 'LEAVE', { col: ZP.pink, size: 32 })) go(() => setScene(new MapScene()));
+  if (UI.btn(1080, 640, 170, 52, 'LEAVE', { col: ZP.pink, size: 32 })) go(() => setScene(makeMapScene()));
   drawHUD(c, run);
 };
 
@@ -1120,7 +1123,7 @@ EventScene.prototype.draw = function (c) {
     if (r.upgrade && !r.taken) { if (UI.btn(250, y, 780, 52, 'UPGRADE A CARD', { col: ZP.orange, size: 26 })) openDeckView('Upgrade', { b: run.deck, n: run.ndeck }, { pick: (inst, tab) => { const l = tab === 'b' ? run.deck : run.ndeck; const k = l.findIndex(q => q.id === inst.id && q.up === inst.up); if (k >= 0) l[k].up = true; r.taken = true; Snd.play('buff'); burst(W / 2, 300, 40, { col: [C.mustard, C.green], shape: 'star' }); }, canPick: inst => !inst.up && Object.keys((BC[inst.id] || NC[inst.id]).upg).length > 0, hint: 'Choose a card to upgrade.', preview: 1 }); y += 64; }
     if (r.removeCard && !r.taken) { if (UI.btn(250, y, 780, 52, 'REMOVE A CARD', { col: '#9a78d8', size: 26 })) openDeckView('Remove', { b: run.deck, n: run.ndeck }, { pick: (inst, tab) => { const l = tab === 'b' ? run.deck : run.ndeck; const k = l.findIndex(q => q.id === inst.id && q.up === inst.up); if (k >= 0) l.splice(k, 1); r.taken = true; Snd.play('stamp'); }, hint: 'Choose a card to remove.' }); y += 64; }
     if (r.tradeCard && !r.taken) { if (UI.btn(250, y, 780, 52, 'TRADE A CARD', { col: '#9a78d8', size: 26 })) openDeckView('Trade Away', { b: run.deck }, { pick: (inst) => { const k = run.deck.findIndex(q => q.id === inst.id && q.up === inst.up); if (k >= 0) run.deck.splice(k, 1); const rares = Object.values(BC).filter(b => b.rarity === 'rare' && (b.cls === 'any' || b.cls === run.char)); run.deck.push({ id: pick(rares).id, up: false }); r.taken = true; Snd.play('buff'); toast('Traded for a rare card!'); }, hint: 'Choose a card to trade.' }); y += 64; }
-    if (UI.btn(W / 2 - 130, 570, 260, 56, 'CONTINUE', { col: ZP.lime, size: 32 })) go(() => setScene(new MapScene()));
+    if (UI.btn(W / 2 - 130, 570, 260, 56, 'CONTINUE', { col: ZP.lime, size: 32 })) go(() => setScene(makeMapScene()));
   }
   drawHUD(c, run);
 };

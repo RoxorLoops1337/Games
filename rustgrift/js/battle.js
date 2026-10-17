@@ -194,7 +194,7 @@ class BattleScene {
   *endTurnSeq() {
     Snd.play('endturn');
     const P = this.P;
-    this.discardHandVis(); this.hand.forEach(h => this.discard.push(h.inst));
+    this.hand.forEach(h => this.discard.push(h.inst)); this.discardHandVis();
     if (P.st.weak) { P.st.weak--; if (!P.st.weak) delete P.st.weak; }
     if (P.st.vuln) { P.st.vuln--; if (!P.st.vuln) delete P.st.vuln; }
     yield 0.5;

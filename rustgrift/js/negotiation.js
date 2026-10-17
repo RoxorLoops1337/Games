@@ -150,7 +150,7 @@ class NegotiationScene {
   *endTurnSeq() {
     Snd.play('endturn');
     const P = this.P, O = this.O;
-    this.discardHandVis(); this.hand.forEach(h => this.discard.push(h.inst)); this.hand = [];
+    this.hand.forEach(h => this.discard.push(h.inst)); this.discardHandVis(); this.hand = [];
     yield 0.5; this.banner_('THEIR TURN', C.red, .8); yield 0.6;
     O.block = 0;
     for (const a of this.oargs.slice()) {
