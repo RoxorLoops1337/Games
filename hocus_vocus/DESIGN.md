@@ -1102,6 +1102,10 @@ ART.hero.pointAt keyPt warm audit expressions ids, and (Hocus Vocus P3) outfits(
 ART.enemy.register(id, { draw(ctx, o), bounds:{w,h,head:{x,y},body:{x,y},feet:{x,y}} })   // art_enemies_N.js call this once per id of Act N (the 3 files are disjoint by DATA.enemies[id].chapter)
 ART.enemy.draw(ctx, enemyId, {x, y, s, pose, t, pt, flip, hpPct, phase, alpha, glow})
 ART.enemy.bounds(enemyId) -> same shape as register      ART.enemy.poseMs(pose)
+ART.guest.draw(ctx, guestId, {x, y, s, pose, t, pt, flip, alpha, shadow})   // art_guests.js: the 12 guests of DATA.guests, feet centre, nominal height 150 * s, faces RIGHT; poses idle act enter exit shove (4.3 "Guests")
+ART.guest.bounds(guestId) -> {w, h, head, body, feet}   ART.guest.poseMs(pose)   ART.guest.ids()
+ART.mascot.draw(ctx, mascotId, {x, y, s, pose, t, pt, level, flip, alpha, shadow})   // the 6 mascots of DATA.mascots, nominal height 90 * s; poses idle cheer; level 2 adds a bandana, 3 a crown (4.7 "The Mascot")
+ART.mascot.bounds(mascotId) -> {w, h, head, body, feet}   ART.mascot.poseMs(pose)   ART.mascot.ids()
 ART.card.draw(ctx, cardIdOrInst, w, h, t?)      // paints at (0,0) of the current transform, cached per id + up + size
 ART.card.motif(ctx, motifId, x, y, size, palette, t)   // exported and reused by art_icons for the ids LISTS.motifs and LISTS.relicIcons share
 ART.icon.draw(ctx, kind, id, x, y, size, opts)  // (x,y) = CENTRE, size = box edge in px
@@ -1313,7 +1317,9 @@ SCENE.shake(mag, ms)  SCENE.flash(color, ms)  SCENE.hitstop(ms)   SCENE.speed(k)
 
 **Layout** (exported as `SCENE.LAYOUT`, stage px). Ground (feet) y = 520. The lead hero stands at x=330, y=520, s=1; the backing hero at x=170, y=508, s=0.94 (a swap hops both along an arc in 380 ms and exchanges the values).
 Enemy lanes are FIXED for the whole fight: x = `[560, 705, 850, 995, 1120]` for lanes 0..4 (lane 4 nearest the right edge; an `xl` boss at x=1120 spans about 970..1270); lanes are assigned by COMBAT (5.2), a unit never changes lane, and when a unit dies its lane stays
-empty (nothing shifts) until a summon takes it. Size `l` and `xl` actors may overlap neighbouring lanes; draw order is lane 0 first. `SCENE.anchor` returns at REST (no bob, lunge, hop or shake): `{x, y, w, h}` = the actor bounds rect with x,y
+empty (nothing shifts) until a summon takes it. Size `l` and `xl` actors may overlap neighbouring lanes; draw order is lane 0 first. Two GUEST SPOTS stand between the heroes and the lanes, behind the ground line and smaller
+(`LAYOUT.guests`, x 484 y 492 s 0.8 and x 436 y 484 s 0.74; a guest takes the lowest free spot on `guest_enter` and keeps it; `anchor('guest', id)` and `hitTest` answer for a guest), and the MASCOT sits at the back hero's feet
+(`LAYOUT.mascot`, x 238 y 516 s 0.8; an anchor, never a hit): the scene.js header "GUESTS AND THE MASCOT" has the beats. `SCENE.anchor` returns at REST (no bob, lunge, hop or shake): `{x, y, w, h}` = the actor bounds rect with x,y
 top-left (from `ART.*.bounds` scaled), `top = {x: centre, y: y}`, `head`, and `feet` on the ground line. Intent bubbles sit centred on `top.x` with their bottom at `top.y - 6`, clamped to y >= 62; enemy HP bars sit centred at `feet.y + 14`.
 DOM overlays are repositioned once per frame after `SCENE.update`.
 
