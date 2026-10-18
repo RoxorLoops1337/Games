@@ -1475,4 +1475,178 @@ await t.test('the stand-in painters draw cleanly: every Act backdrop (normal and
   t.eq(stats(g).drawErrors, 0, 'every stand-in effect draws'); t.eq(g._issues.length, 0, 'no canvas issues: ' + JSON.stringify(g._issues.slice(0, 3))); t.eq(g._console.error.length, 0, 'no console errors');
 });
 
+// ==================================================================================================================================
+// guests and the mascot (scene.js header GUESTS AND THE MASCOT; DESIGN 4.3 "Guests", 4.7 "The Mascot")
+// ==================================================================================================================================
+const DJ = { kind: 'guest', id: 'guest_dj_scratchy#1', def: 'guest_dj_scratchy', name: 'DJ Scratchy', owner: 'kuro', stay: 3, up: 0, born: 1 };
+const CHOIR = { kind: 'guest', id: 'guest_backing_choir#1', def: 'guest_backing_choir', name: 'Backing Choir', owner: 'hanae', stay: 3, up: 0, born: 1 };
+const GREMLIN = { kind: 'guest', id: 'guest_cable_gremlin#1', def: 'guest_cable_gremlin', name: 'Cable Gremlin', owner: 'suzu', stay: 3, up: 0, born: 2 };
+await t.test('guests and the mascot: the layout, a synthetic mount, anchors and hit tests', () => {
+  const g = fresh();
+  const L = g.SCENE.LAYOUT;
+  t.deep(L.guests.map((m) => ({ x: m.x, y: m.y, s: m.s })), [{ x: 484, y: 492, s: 0.8 }, { x: 436, y: 484, s: 0.74 }], 'two guest spots between the heroes and the lanes, behind the ground line and smaller');
+  t.deep({ x: L.mascot.x, y: L.mascot.y, s: L.mascot.s }, { x: 238, y: 516, s: 0.8 }, 'the mascot sits at the back hero feet');
+  mountSynthetic(g, ['kappa', 'oni_cub'], { guests: ['guest_dj_scratchy', 'guest_backing_choir'], mascot: { id: 'mascot_pug', level: 2 } });
+  const st = stats(g);
+  t.eq(st.actors, 2 + 2 + 2 + 1, 'heroes, enemies, two guests and the mascot are actors');
+  t.deep(st.guests.map((x) => [x.def, x.spot, x.leaving]), [['guest_dj_scratchy', 0, false], ['guest_backing_choir', 1, false]], 'guests take the spots in enter order');
+  t.deep(st.mascot, { id: 'mascot_pug', level: 2, pose: 'idle' }, 'the mascot idles at its level');
+  const a = g.SCENE.anchor('guest', 'guest_dj_scratchy#1');
+  t.ok(a && near(a.feet.x, 484) && near(a.feet.y, 492) && a.h > 100 && a.h < 130 && a.top.y < a.head.y && a.head.y < a.feet.y, 'the first guest stands on spot 0 at 0.8 scale: ' + JSON.stringify(a));
+  const b = g.SCENE.anchor('guest', 'guest_backing_choir#1');
+  t.ok(b && near(b.feet.x, 436) && near(b.feet.y, 484) && b.h < a.h, 'the second guest stands further back, left and smaller');
+  const lead = g.SCENE.anchor('hero', 'hanae'), foe = g.SCENE.anchor('enemy', 'kappa#1');
+  t.ok(a.feet.x > lead.feet.x && a.feet.x < foe.feet.x && a.feet.y < lead.feet.y, 'between the lead hero and the enemies, behind the ground line');
+  t.deep(g.SCENE.hitTest(a.feet.x, a.y + a.h / 2), { kind: 'guest', id: 'guest_dj_scratchy#1' }, 'a guest can be hit-tested, so it can be hovered');
+  t.deep(g.SCENE.hitTest(a.x + 3, a.y + 3), { kind: 'guest', id: 'guest_dj_scratchy#1' }, 'inside the corner of its rect too');
+  const gi = info(g, 'guest', 'guest_dj_scratchy#1');
+  t.ok(gi && gi.kind === 'guest' && gi.owner === 'kuro' && gi.spot === 0 && gi.name === 'DJ Scratchy' && gi.pose === 'idle', 'actorInfo knows the guest: ' + JSON.stringify(gi && { owner: gi.owner, spot: gi.spot, name: gi.name }));
+  const m = g.SCENE.anchor('mascot', 'mascot_pug');
+  t.ok(m && near(m.feet.x, 238) && near(m.feet.y, 516) && m.h > 50 && m.h < 90, 'the mascot has an anchor at its seat: ' + JSON.stringify(m));
+  const hm = g.SCENE.hitTest(m.feet.x, m.y + m.h / 2);
+  t.ok(!hm || hm.kind !== 'mascot', 'the mascot is scenery: a tap on it never answers mascot');
+  t.eq(g.SCENE.anchor('guest', 'nobody#9'), null, 'an unknown guest has no anchor');
+  g.SCENE.setHover('guest', 'guest_dj_scratchy#1');
+  t.deep(stats(g).hover, { kind: 'guest', id: 'guest_dj_scratchy#1' }, 'setHover takes a guest');
+  for (let i = 0; i < 12; i++) { g.SCENE.update(0.016); g.SCENE.draw(g._ctx, i * 0.016); }
+  t.eq(stats(g).drawErrors, 0, 'guests, the mascot and the hover ring draw'); t.eq(g._issues.length, 0, 'no canvas issues: ' + JSON.stringify(g._issues.slice(0, 3)));
+  g.SCENE.unmount();
+  g.SCENE.mount({ enemies: ['kappa'], guests: ['guest_roadie'], mascot: 'mascot_cat', instant: true, layout: { guests: [{ x: 500 }], mascot: { x: 100, s: 1 } } });
+  t.near(g.SCENE.anchor('guest', 'guest_roadie#1').feet.x, 500, 0.01, 'a layout override moves the guest spot');
+  t.near(g.SCENE.anchor('mascot', 'mascot_cat').feet.x, 100, 0.01, 'and the mascot seat');
+  g.SCENE.unmount();
+  t.deep(g.SCENE.LAYOUT.guests.map((x) => x.x), [484, 436], 'the defaults come back at unmount');
+  t.eq(g.SCENE.LAYOUT.mascot.x, 238, 'for the mascot too');
+});
+await t.test('guests: gates and sounds', () => {
+  const g = fresh();
+  const G = g.SCENE.gateMs;
+  t.eq(G({ type: 'guest_enter' }), 420, 'guest_enter gate'); t.eq(G({ type: 'guest_act' }), 300, 'guest_act gate');
+  t.eq(G({ type: 'guest_exit', reason: 'done' }), 300, 'guest_exit done'); t.eq(G({ type: 'guest_exit', reason: 'replaced' }), 300, 'guest_exit replaced');
+  t.eq(G({ type: 'guest_exit', reason: 'end' }), 0, 'a guest leaving at the end of the fight holds nothing up');
+  t.deep(Object.assign({}, g.SCENE.GATES).guest_enter, undefined, 'the frozen DESIGN gate table is untouched');
+  const ids = (e) => g.SCENE.sfxForEvent(e).map((x) => x[0]);
+  t.deep(ids({ type: 'guest_enter', guest: DJ, hero: 'kuro' }), ['step'], 'a guest hops in with a step');
+  t.deep(ids({ type: 'guest_act', guest: DJ, hero: 'kuro' }), ['buff'], 'an act is a soft buff');
+  t.deep(ids({ type: 'guest_exit', guest: DJ, reason: 'done' }), ['step'], 'a guest walks off with a step');
+  t.deep(ids({ type: 'guest_exit', guest: DJ, reason: 'replaced' }), ['dodge'], 'a shove is a swish');
+  t.deep(ids({ type: 'guest_exit', guest: DJ, reason: 'end' }), [], 'the end of the fight is silent for a guest (the stinger follows)');
+  t.ok(g.SCENE.SFX.indexOf('step') >= 0 && g.DATA.LISTS.sfx.indexOf('step') >= 0, 'step is a listed sound');
+});
+await t.test('guest events (headless): enter creates the actor, act poses it and aims its hits, exit walks it off, a replaced guest is shoved; the mascot cheers', async () => {
+  const g = fresh();
+  mountSynthetic(g, ['kappa', 'oni_cub'], { mascot: 'mascot_cat' });
+  t.eq(stats(g).guests.length, 0, 'no guest at mount');
+  await g.SCENE.play({ type: 'guest_enter', guest: DJ, hero: 'kuro' });
+  let gi = info(g, 'guest', DJ.id);
+  t.ok(gi && gi.pose === 'enter' && gi.spot === 0 && gi.owner === 'kuro', 'the DJ hops in on spot 0 in the enter pose');
+  t.deep(g.ids().slice(-1), ['step'], 'with a step');
+  t.ok(g.sfx[g.sfx.length - 1][1] && typeof g.sfx[g.sfx.length - 1][1].pan === 'number' && g.sfx[g.sfx.length - 1][1].pan < 0, 'the step pans with the guest spot (left of centre)');
+  await g.SCENE.play({ type: 'guest_enter', guest: CHOIR, hero: 'hanae' });
+  t.eq(info(g, 'guest', CHOIR.id).spot, 1, 'the second guest takes spot 1');
+  await g.SCENE.play({ type: 'guest_enter', guest: DJ, hero: 'kuro' });
+  t.eq(stats(g).guests.length, 2, 'a repeated enter of the same id adds nothing');
+  await g.SCENE.play({ type: 'guest_act', guest: DJ, hero: 'kuro' });
+  gi = info(g, 'guest', DJ.id);
+  t.eq(gi.pose, 'act', 'the act pose'); t.eq(stats(g).actingGuest, DJ.id, 'the acting guest is remembered');
+  t.deep(g.ids().slice(-1), ['buff'], 'an act sounds');
+  const fx0 = stats(g).fx;
+  await g.SCENE.play(enemyHit('kappa#1', { src: null, amount: 4 }));
+  t.ok(stats(g).fx > fx0 + 1, 'a src-less hit while the guest acts is aimed from the guest: a beam and the hit effects (' + (stats(g).fx - fx0) + ' effects)');
+  t.eq(info(g, 'enemy', 'kappa#1').pose, 'hurt', 'the target still reacts');
+  await g.SCENE.play({ type: 'block', dst: ref('hero', 'hanae'), amount: 2, block: 2, group: 9 });
+  t.eq(info(g, 'hero', 'hanae').block, 2, 'Block from a guest lands on the hero');
+  await g.SCENE.play({ type: 'turn_start', who: 'enemy', turn: 1, energy: 0, maxEnergy: 3 });
+  t.eq(stats(g).actingGuest, null, 'the next turn clears the acting guest');
+  await g.SCENE.play({ type: 'enemy_act', enemy: 'oni_cub#1', move: 'x', name: 'Bump', kind: 'attack' });
+  await g.SCENE.play(heroEv);
+  t.ok(stats(g).fx >= 0, 'an enemy hit with no acting guest draws no beam');
+  await g.SCENE.play({ type: 'death', unit: ref('enemy', 'oni_cub#1'), tier: 'normal' });
+  t.eq(stats(g).mascot.pose, 'cheer', 'the mascot cheers a win-over');
+  // exits: headless timers fire at once, so the actor is gone right after its beat
+  await g.SCENE.play({ type: 'guest_exit', guest: DJ, reason: 'replaced' });
+  t.deep(g.ids().slice(-1), ['dodge'], 'a shove swishes');
+  t.eq(info(g, 'guest', DJ.id), null, 'the shoved guest is gone');
+  t.eq(g.SCENE.hitTest(508, 420), null, 'and cannot be hovered (a point on spot 0 clear of the choir on spot 1)');
+  await g.SCENE.play({ type: 'guest_enter', guest: GREMLIN, hero: 'suzu' });
+  t.eq(info(g, 'guest', GREMLIN.id).spot, 0, 'the newcomer takes the freed spot 0');
+  await g.SCENE.play({ type: 'guest_exit', guest: CHOIR, reason: 'done' });
+  t.deep(g.ids().slice(-1), ['step'], 'a guest whose stay ran out walks off');
+  t.deep(stats(g).guests.map((x) => x.def), ['guest_cable_gremlin'], 'one guest left');
+  await g.SCENE.play({ type: 'guest_exit', guest: GREMLIN, reason: 'end' });
+  await g.SCENE.play({ type: 'end', result: 'win' });
+  t.eq(stats(g).guests.length, 0, 'every guest leaves before the win');
+  t.eq(stats(g).mascot.pose, 'cheer', 'the mascot cheers the win banner');
+  for (let i = 0; i < 40; i++) { g.SCENE.update(0.016); g.SCENE.draw(g._ctx, i * 0.016); }
+  t.eq(stats(g).mascot.pose, 'cheer', 'and keeps cheering (a held pose)');
+  t.eq(stats(g).drawErrors, 0, 'everything drew'); t.eq(g._issues.length, 0, 'no canvas issues: ' + JSON.stringify(g._issues.slice(0, 3))); t.eq(g._console.error.length, 0, 'no console errors');
+  await g.SCENE.play({ type: 'guest_act', guest: DJ, hero: 'kuro' });
+  await g.SCENE.play({ type: 'guest_exit', guest: { id: 'ghost#1' }, reason: 'done' });
+  await g.SCENE.play({ type: 'guest_enter', guest: null }); await g.SCENE.play({ type: 'guest_act' }); await g.SCENE.play({ type: 'guest_exit' });
+  t.eq(g._console.warn.length, 0, 'events for a guest that is not on stage, or with no guest at all, are ignored without a warning');
+});
+await t.test('guest events (realtime): the walk-off lasts the exit pose, a shove is quicker, flush finishes both', async () => {
+  const g = fresh({ realtime: true });
+  mountSynthetic(g, ['kappa'], { guests: ['guest_dj_scratchy', 'guest_backing_choir'] });
+  const enterP = g.SCENE.play({ type: 'guest_enter', guest: GREMLIN, hero: 'suzu' });
+  t.eq(stats(g).guests.length, 3, 'SCENE trusts the engine: a third enter (COMBAT replaces the oldest first, so it never sends one) shares the last spot');
+  t.eq(info(g, 'guest', GREMLIN.id).spot, 1, 'on the last spot');
+  await pump(g, enterP);
+  await pump(g, g.SCENE.play({ type: 'guest_exit', guest: GREMLIN, reason: 'replaced' }));
+  g.SCENE.flush();
+  const p = g.SCENE.play({ type: 'guest_exit', guest: { id: 'guest_dj_scratchy#1', def: 'guest_dj_scratchy', owner: 'kuro' }, reason: 'done' });
+  const r = await pump(g, p);
+  t.ok(r.done && r.ms >= 300 - 20 && r.ms <= 300 + 40, 'the exit gate is 300 ms (' + r.ms + ')');
+  let gi = info(g, 'guest', 'guest_dj_scratchy#1');
+  t.ok(gi && gi.leaving && gi.pose === 'exit', 'the guest is still on stage, leaving, in the exit pose');
+  t.eq(g.SCENE.hitTest(508, 420), null, 'a leaving guest cannot be hovered');
+  await runFor(g, 500, { draw: true });
+  gi = info(g, 'guest', 'guest_dj_scratchy#1');
+  t.ok(gi && !gi.gone && gi.alpha > 0, 'at 800 ms it is walking off, still visible');
+  await runFor(g, 500, { draw: true });
+  t.eq(info(g, 'guest', 'guest_dj_scratchy#1'), null, 'after the 1100 ms exit pose the actor is dropped');
+  const q = g.SCENE.play({ type: 'guest_exit', guest: { id: 'guest_backing_choir#1', def: 'guest_backing_choir', owner: 'hanae' }, reason: 'replaced' });
+  await pump(g, q);
+  t.eq(info(g, 'guest', 'guest_backing_choir#1').pose, 'shove', 'a replaced guest is shoved');
+  g.SCENE.flush();
+  t.eq(info(g, 'guest', 'guest_backing_choir#1'), null, 'flush finishes the shove: the guest is gone');
+  t.eq(stats(g).drawErrors, 0, 'drew clean'); t.eq(g._issues.length, 0, 'no canvas issues');
+});
+await t.test('a real fight with a Guest card and a mascot: C.guests and C.mascot mount, the end of the turn plays clean, deterministic', async () => {
+  const run = (g) => {
+    const opts = combatOpts(g, ['kappa', 'oni_cub'], 'normal', 1, 33);
+    opts.deck.push({ uid: 900, id: 'kuro_guest_dj', up: 0, gems: [] });
+    opts.mascot = { id: 'mascot_pug', xp: 6 };
+    const C = g.COMBAT.create(opts);
+    C.start();
+    let card = C.hand.find((c) => c.id === 'kuro_guest_dj');
+    if (!card) { const i = C.draw.findIndex((c) => c.id === 'kuro_guest_dj'); card = C.draw.splice(i, 1)[0]; C.hand.push(card); }
+    C.energy = 9;
+    const evs = C.play(card.uid);
+    return { C, evs, after: C.endTurn() };
+  };
+  const g = fresh();
+  const f = run(g);
+  t.deep(f.C.mascot, { id: 'mascot_pug', level: 2 }, 'COMBAT echoes the mascot at its level');
+  t.ok(f.evs.some((e) => e.type === 'guest_enter'), 'playing the Guest card emits guest_enter');
+  const types = f.after.map((e) => e.type);
+  t.ok(types.indexOf('guest_act') >= 0 && types.indexOf('hit') > types.indexOf('guest_act'), 'the guest acts at the end of the turn and its hit follows');
+  g.SCENE.mount({ C: f.C, chapter: 1, instant: true });
+  t.eq(stats(g).guests.length, 1, 'mount reads C.guests'); t.eq(stats(g).guests[0].def, 'guest_dj_scratchy', 'the DJ'); t.deep(stats(g).mascot, { id: 'mascot_pug', level: 2, pose: 'idle' }, 'and C.mascot');
+  for (const e of f.after) await g.SCENE.play(e);
+  for (let i = 0; i < 30; i++) { g.SCENE.update(0.016); g.SCENE.draw(g._ctx, i * 0.016); }
+  t.eq(stats(g).drawErrors, 0, 'the turn drew'); t.eq(g._issues.length, 0, 'no canvas issues: ' + JSON.stringify(g._issues.slice(0, 3))); t.eq(g._console.error.length, 0, 'no console errors');
+  const sig1 = g.SCENE.signature();
+  const g2 = fresh();
+  const f2 = run(g2);
+  g2.SCENE.mount({ C: f2.C, chapter: 1, instant: true });
+  for (const e of f2.after) await g2.SCENE.play(e);
+  for (let i = 0; i < 30; i++) { g2.SCENE.update(0.016); g2.SCENE.draw(g2._ctx, i * 0.016); }
+  t.eq(g2.SCENE.signature(), sig1, 'the same fight gives the same picture');
+  g.SCENE.unmount(); g2.SCENE.unmount();
+  t.deep(stats(g).guests, [], 'stats after unmount: no guests'); t.eq(stats(g).mascot, null, 'and no mascot');
+  await g.SCENE.play({ type: 'guest_enter', guest: DJ, hero: 'kuro' });
+  t.ok(true, 'play after unmount resolves');
+});
+
 h.done();
