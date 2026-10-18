@@ -84,7 +84,7 @@ t.test('DATA.validate is clean for suzu: no errors, no warnings', () => {
   const v = DATA.validate('cards', { hero: 'suzu' });
   t.eq(v.errors.length, 0, 'validate errors: ' + v.errors.join(' | '));
   t.eq(v.warnings.length, 0, 'validate warnings: ' + v.warnings.join(' | '));
-  t.eq(cards.length, 46, 'this file registers exactly 46 cards');
+  t.eq(cards.length, 49, 'this file registers exactly 49 cards');
 });
 t.test('DATA.audit has no lines for suzu', () => {
   const a = DATA.audit('cards', { hero: 'suzu' });
@@ -92,10 +92,10 @@ t.test('DATA.audit has no lines for suzu', () => {
 });
 
 // ---------------------------------------------------------------------------------------------- counts and mix
-t.test('counts: 3 starters, 17 commons, 15 uncommons, 11 rares, no tokens', () => {
+t.test('counts: 3 starters, 17 commons, 17 uncommons, 12 rares, no tokens', () => {
   const n = (r) => nonToken.filter((c) => c.rarity === r).length;
-  t.eq(n('starter'), 3, 'starters'); t.eq(n('common'), 17, 'commons'); t.eq(n('uncommon'), 15, 'uncommons'); t.eq(n('rare'), 11, 'rares');
-  t.eq(cards.length, 46, 'total');
+  t.eq(n('starter'), 3, 'starters'); t.eq(n('common'), 17, 'commons'); t.eq(n('uncommon'), 17, 'uncommons'); t.eq(n('rare'), 12, 'rares');
+  t.eq(cards.length, 49, 'total');
   t.eq(cards.filter((c) => c.rarity === 'token').length, 0, 'no card here adds a token, so none is defined');
   t.ok(!cards.some((c) => bothOps(c).some((o) => o.op === 'add')), 'no card uses the add op');
 });
@@ -113,7 +113,7 @@ t.test('mix: 30 percent attacks, 30 percent skills, 4 or more powers, an X card'
   t.ok(n('attack') >= nonToken.length * 0.3, 'attacks ' + n('attack'));
   t.ok(n('skill') >= nonToken.length * 0.3, 'skills ' + n('skill'));
   t.ok(n('power') >= 4, 'powers ' + n('power'));
-  t.eq(n('attack') + n('skill') + n('power'), 46, 'only attack, skill and power types');
+  t.eq(n('attack') + n('skill') + n('power'), 49, 'only attack, skill and power types');
   nonToken.filter((c) => c.type === 'power').forEach((c) => t.ok(c.rarity === 'uncommon' || c.rarity === 'rare', c.id + ': powers are uncommon or rare'));
   t.ok(nonToken.some((c) => c.cost === 'X'), 'an X cost card');
   nonToken.filter((c) => c.type === 'power').forEach((c) => t.ok(allOps(c).some((o) => o.op === 'hook'), c.id + ': a power is built from a hook'));
@@ -374,10 +374,20 @@ function evalOps(ops, S, A, hookMode, revert) {
         evalOps(o.fx, S2, A2, true, null);
         A.gross += n * (A2.gross - A2.spent); break;
       }
+      case 'guest': {
+        // a Guest (DESIGN 4.3 "Guests"): its act once per turn of its stay, its enter and exit ops once, its hooks over the turns it stays; every op is a
+        // hook op acted by RawClaw (no spot bonus), and the value is discounted (GUEST_LATER) because it arrives at the end of the turn, not now
+        const gd = DATA.guestDef(o.id, !!o.up);
+        if (!gd) break;
+        const part = (ops) => { const S2 = clone(S), A2 = { gross: 0, spent: 0 }; evalOps(ops, S2, A2, true, null); return A2.gross - A2.spent; };
+        A.gross += GUEST_LATER * (gd.stay * part(gd.act) + part(gd.enter) + part(gd.exit) + gd.hooks.reduce((s, h) => s + Math.min(gd.stay, TURNS) * part(h.fx), 0));
+        break;
+      }
       default: break;
     }
   });
 }
+const GUEST_LATER = 0.75;
 function netOf(def, row, setup) {
   const S = fresh(row, setup), A = { gross: 0, spent: 0 };
   evalOps(def.fx, S, A, false, revertOf(def.fx));

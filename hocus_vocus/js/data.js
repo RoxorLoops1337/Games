@@ -26,6 +26,8 @@
 //   Mechanics    mechOf(def, up) -> {fanbase, remix, hype, loop} | null   mechNow(inst, mech, ctx) -> live bonuses   mechKey(inst, ctx)
 //                (card mechanics: see "Card mechanics" below the lookups; they also wrap resolveCard, cardHtml and cardPlain)
 //   Systems      cardDef(inst | id) isMedley(inst) canMedley(a, b) medleyDef(parts) signatureOf(heroId)   (see "The Crowd and Medleys" at the end)
+//   Guests       DATA.guests[id] (registry, data_guests.js; DESIGN 4.3 "Guests")   guestDef(id, up) -> {id, name, hero, stay, act, enter, exit, hooks, art, blurb, up}
+//                the card op {op:'guest', id, up?} (LISTS.cardOps, top level only, on a Skill of the guest's hero) brings it on stage; ECONOMY.guestSlots
 //   Mods         foldMods([deltaObj...]) -> final flat mods     trialDeltas(level) -> summed deltas
 //                modsFor(relicIds, trialLevelOrDeltas, mascot?) -> final flat mods (what RUN.mods(R) returns: modsFor(R.relics, R.mods, R.mascot); active set tiers and mascot levels fold in)
 //                rowFor(heroId, row, relicIds, mascot?) -> merged row bonuses (hero row plus relic `rows` plus active set tier `rows` plus mascot level `rows`)
@@ -80,7 +82,7 @@ const DATA = (() => {
     elements: ['slash', 'fire', 'ice', 'lightning', 'ink', 'poison', 'holy'],
 
     // ops usable in each context (DESIGN 4.4)
-    cardOps: ['dmg', 'block', 'heal', 'status', 'removeStatus', 'draw', 'energy', 'pick', 'add', 'swap', 'hurt', 'cond', 'repeat', 'gold', 'ink', 'maxHp', 'revive', 'hook'],
+    cardOps: ['dmg', 'block', 'heal', 'status', 'removeStatus', 'draw', 'energy', 'pick', 'add', 'swap', 'hurt', 'cond', 'repeat', 'gold', 'ink', 'maxHp', 'revive', 'hook', 'guest'],
     hookOps: ['dmg', 'block', 'heal', 'status', 'removeStatus', 'draw', 'energy', 'add', 'hurt', 'cond', 'gold', 'ink', 'maxHp', 'revive'],
     enemyOps: ['dmg', 'block', 'heal', 'status', 'removeStatus', 'add', 'summon', 'swap', 'cond', 'stealGold', 'flee'],
     runOps: ['gold', 'ink', 'heal', 'hurt', 'maxHp', 'addCard', 'removeCard', 'upgradeCard', 'transformCard', 'duplicateCard', 'addRelic', 'addGem', 'addBrush', 'addCurse', 'fight', 'flag', 'paint', 'cardReward', 'adoptMascot', 'mascotXp'],
@@ -95,14 +97,14 @@ const DATA = (() => {
     // value expression: number, or {base, per, mul, s, who, cap, min, upTo}
     per: ['X', 'handSize', 'drawPile', 'discardPile', 'exhaustPile', 'cardsPlayed', 'attacksPlayed', 'skillsPlayed',
       'energy', 'block', 'missingHp', 'hp', 'status', 'debuffs', 'enemies', 'kills', 'turn', 'gems', 'front',
-      'damageTaken', 'hitsTaken', 'targetBlock', 'picked'],
+      'damageTaken', 'hitsTaken', 'targetBlock', 'picked', 'guests'],
     perEnemy: ['turn', 'enemies', 'status', 'hp', 'missingHp', 'block', 'debuffs', 'handSize', 'drawPile', 'discardPile'],
     perWho: ['self', 'ally', 'target', 'enemy'],
     perWhoEnemy: ['self', 'target'],
     perWhoPer: ['status', 'block', 'hp', 'missingHp', 'debuffs'],         // the only counters that take `who`
     // conditions for the `cond` op and enemy AI rules
     cond: ['row', 'status', 'hpPct', 'handEmpty', 'cardsPlayed', 'attacksPlayed', 'turn', 'lastKill', 'targetStatus',
-      'allyDown', 'block', 'energy', 'handSize', 'enemies'],
+      'allyDown', 'block', 'energy', 'handSize', 'enemies', 'guests'],
     condEnemy: ['status', 'hpPct', 'block', 'turn', 'enemies'],
     aiCond: ['hpLt', 'hpGt', 'turnGte', 'turnEvery', 'alone', 'minions', 'heroStatus', 'heroDown', 'allyHpLt', 'heroHpLt'],
     intents: ['attack', 'multi', 'heavy', 'defend', 'buff', 'debuff', 'summon', 'heal', 'special', 'flee', 'none'],
@@ -151,7 +153,7 @@ const DATA = (() => {
     combatEvents: ['combat_start', 'turn_start', 'turn_end', 'draw', 'shuffle', 'discard', 'exhaust', 'add_card', 'card_move',
       'card_upgrade', 'retain', 'energy', 'play', 'hit', 'dodge', 'thorns', 'block', 'block_lost', 'heal', 'hurt', 'status',
       'immune', 'swap', 'intent', 'enemy_act', 'skip', 'summon', 'enemy_phase', 'death', 'flee', 'hero_down', 'hero_revive',
-      'pick_needed', 'relic', 'gold', 'ink', 'max_hp', 'end'],
+      'pick_needed', 'relic', 'gold', 'ink', 'max_hp', 'guest_enter', 'guest_act', 'guest_exit', 'end'],
     busEvents: ['screen', 'overlay', 'combat:turn', 'combat:select', 'combat:play', 'combat:endturn', 'combat:swap', 'combat:pick',
       'combat:end', 'map:paint', 'map:brush', 'map:walk'],
     tutAnchors: ['hand', 'energy', 'endturn', 'swap', 'intent', 'enemy', 'ink', 'hex', 'brushes', 'deck', 'relics', 'party', 'fight'],
@@ -280,6 +282,8 @@ const DATA = (() => {
     soundcheck: { name: 'Soundcheck', text: 'Soundcheck N: deals N more damage (or gives N more Block) if it is the first card you play this turn.' },
     reprise: { name: 'Reprise', text: 'Reprise: if you played 3 or more cards this turn, a Fading copy of this card is played again for free at the end of your turn.' },
     finale: { name: 'Finale', text: 'Finale N: deals N more damage for each card you played earlier this turn, and no card can be played after it this turn.' },
+    // Guests (data_guests.js, DESIGN 4.3 "Guests"): the ally cards
+    guest: { name: 'Guest', text: 'A Guest joins you on stage for a few turns and acts at the end of each of your turns. Two fit on stage; a third replaces the oldest. Enemies never hit guests.' },
   };
 
   // ------------------------------------------------------------------
@@ -298,6 +302,7 @@ const DATA = (() => {
     mascotXp: [0, 5, 12],
     mascotFightXp: { normal: 1, elite: 2, boss: 3 },
     snackXp: 2,
+    guestSlots: 2,                    // Guests on stage at once (DESIGN 4.3 "Guests"): a third guest replaces the oldest
     // rarity weights (percent) for card rewards. rare weight = base.rare + min(rareOffset, rareOffsetCap) + mods.rareBoost,
     // moved from common. rareOffset rises by 1 after each normal or elite reward that offered no rare, resets when a rare is taken.
     rarity: {
@@ -531,7 +536,7 @@ const DATA = (() => {
 
   // How much content (CONTENT_SPEC 3 to 6). DATA.audit checks these.
   const QUOTA = {
-    cards: { starter: 3, common: 17, uncommon: 15, rare: 11, powers: 4, lockedUncommon: 4, lockedRare: 4, slots: { red: 10, blue: 10, green: 8, gold: 8 } },
+    cards: { starter: 3, common: 17, uncommon: 17, rare: 12, powers: 4, lockedUncommon: 4, lockedRare: 4, slots: { red: 10, blue: 10, green: 8, gold: 8 }, guests: 3 },   // uncommon and rare include the 3 Guest cards (2 uncommon, 1 rare)
     enemies: { normal: 10, elite: 3, minion: 3, boss: 1, normalGroups: 12, eliteGroups: 3, bossPhases: { 1: 1, 2: 1, 3: 2 } },
     relics: { common: 44, uncommon: 30, rare: 12, boss: 6, shop: 4, perHero: 3, lockedFrac: 0.3, textMax: 90, flavorMax: 80 },
     gems: { perColor: 6, tiers: [1, 1, 2, 2, 3, 3] },
@@ -556,7 +561,7 @@ const DATA = (() => {
   // Registries filled by content files. DATA.add throws on a duplicate id so two
   // agents can never silently shadow each other.
   // ------------------------------------------------------------------
-  const REG = ['cards', 'gems', 'relics', 'relicSets', 'mascots', 'enemies', 'events', 'achievements', 'trials', 'tips', 'lore'];
+  const REG = ['cards', 'gems', 'relics', 'relicSets', 'mascots', 'enemies', 'events', 'achievements', 'trials', 'tips', 'lore', 'guests'];
   const D = { LISTS, LINKS, statuses, keywords, ECONOMY, SETTINGS, brushes, tiles, heroes, ROSTER, rosterById, FIXED, QUOTA, GUIDE, encounters: { 1: { normal: [], elite: [] }, 2: { normal: [], elite: [] }, 3: { normal: [], elite: [] } } };
   REG.forEach((k) => { D[k] = k === 'tips' ? [] : {}; });
   // Display names of the gem and slot colour ids (the ids stay; every screen that prints a colour reads this).
@@ -611,7 +616,18 @@ const DATA = (() => {
   D.rewardPool = (heroId, rarity, unlocked) => (rarity === 'starter' || rarity === 'token' ? [] : D.cardsBy({ hero: heroId, rarity }).filter((c) => D.isUnlocked('card', c.id, unlocked)));
   D.relicPool = (rarity, unlocked, heroIds) => Object.values(D.relics).filter((r) => r.rarity === rarity && D.isUnlocked('relic', r.id, unlocked) && (!r.hero || !heroIds || heroIds.indexOf(r.hero) >= 0));
   D.gemPool = (f, unlocked) => Object.values(D.gems).filter((g) => (!f || !f.tier || g.tier === f.tier) && (!f || !f.color || g.color === f.color) && D.isUnlocked('gem', g.id, unlocked));
-  // Visit every op in a list, through cond (then/else), repeat (do) and hook (fx) nesting.
+  // ---- guests (data_guests.js, DESIGN 4.3 "Guests") ----
+  // A guest definition {id, name, hero, stay, act, enter?, exit?, hooks?, up?, art, blurb}. The card op {op:'guest', id, up?} calls it.
+  // guestDef(id, up) -> the definition at that upgrade state (up.stay/act/enter/exit/hooks REPLACE the base fields), or null.
+  D.guestDef = (id, up) => {
+    const g = D.guests[id];
+    if (!g || typeof g !== 'object') return null;
+    const u = up && g.up && typeof g.up === 'object' ? g.up : null;
+    const pick = (k, dflt) => (u && u[k] !== undefined ? u[k] : (g[k] === undefined ? dflt : g[k]));
+    return { id: g.id, name: g.name, hero: g.hero, art: g.art, blurb: g.blurb, up: !!u, stay: pick('stay', 1), act: pick('act', []), enter: pick('enter', []), exit: pick('exit', []), hooks: pick('hooks', []) };
+  };
+  // Visit every op in a list, through cond (then/else), repeat (do) and hook (fx) nesting. A `guest` op is visited as one op: its
+  // guest's own ops live in DATA.guests and never count as the card's (a guest's `enemy` strike must not make the card ask for a target).
   D.walkOps = (ops, fn, depth) => {
     depth = depth || 0;
     if (!Array.isArray(ops) || depth > 8) return;
@@ -890,6 +906,7 @@ const DATA = (() => {
     cond: { card: ['if', 'then', 'else'], hook: ['if', 'then', 'else'], enemy: ['if', 'then', 'else'] },
     repeat: { card: ['n', 'do'] },
     hook: { card: ['on', 'fx', 'filter', 'limit', 'once', 'every'] },
+    guest: { card: ['id', 'up'] },
     summon: { enemy: ['enemy', 'n'] },
     stealGold: { enemy: ['n'] },
     flee: { enemy: [] },
@@ -922,9 +939,9 @@ const DATA = (() => {
     const err = (where, msg) => errors.push(`${where}: ${msg}`);
     const warn = (where, msg) => warnings.push(`${where}: ${msg}`);
     const want = (k) => !only || only === k || (Array.isArray(only) && only.indexOf(k) >= 0);
-    const KINDS = ['heroes', 'cards', 'gems', 'relics', 'mascots', 'enemies', 'events', 'achievements', 'trials', 'tips', 'lore'];
+    const KINDS = ['heroes', 'cards', 'gems', 'relics', 'mascots', 'enemies', 'events', 'achievements', 'trials', 'tips', 'lore', 'guests'];
     if (only !== undefined) (Array.isArray(only) ? only : [only]).forEach((k) => { if (KINDS.indexOf(k) < 0) err('validate', `unknown registry "${k}" (one of ${KINDS.join(', ')})`); });
-    ['cards', 'gems', 'relics', 'mascots', 'enemies', 'events', 'achievements', 'trials', 'lore'].forEach((k) => {
+    ['cards', 'gems', 'relics', 'mascots', 'enemies', 'events', 'achievements', 'trials', 'lore', 'guests'].forEach((k) => {
       if (want(k)) Object.keys(D[k]).forEach((id) => { if (!isObj(D[k][id])) err(k + ' ' + id, 'must be an object'); });
     });
     const noDash = (w, o) => { if (DASH.test(JSON.stringify(o))) err(w, 'contains an em or en dash'); };
@@ -939,6 +956,7 @@ const DATA = (() => {
       choice: ['label', 'req', 'cost', 'out'],
       achievement: ['id', 'name', 'text', 'stat', 'reward'],
       trial: ['id', 'level', 'name', 'text', 'mods'],
+      guest: ['id', 'name', 'hero', 'stay', 'act', 'enter', 'exit', 'hooks', 'up', 'art', 'blurb'],
     };
     const fields = (w, o, kind) => Object.keys(o).forEach((k) => { if (FIELDS[kind].indexOf(k) < 0) err(w, `unknown field "${k}" on a ${kind}`); });
     // object of numeric comparators: keys outside `keys` are errors, keys in `skip` are checked by the caller
@@ -992,7 +1010,7 @@ const DATA = (() => {
       }
       if (c.row !== undefined && ['front', 'back'].indexOf(c.row) < 0) err(w, `${path}.row must be front or back`);
       ['handEmpty', 'lastKill', 'allyDown'].forEach((k) => { if (c[k] !== undefined && c[k] !== true) err(w, `${path}.${k} must be true`); });
-      ['cardsPlayed', 'attacksPlayed', 'turn', 'block', 'energy', 'handSize', 'enemies'].forEach((k) => { if (c[k] !== undefined) cmp(w, c[k], `${path}.${k}`, ['gte', 'lte'], false); });
+      ['cardsPlayed', 'attacksPlayed', 'turn', 'block', 'energy', 'handSize', 'enemies', 'guests'].forEach((k) => { if (c[k] !== undefined) cmp(w, c[k], `${path}.${k}`, ['gte', 'lte'], false); });
       if (c.status !== undefined) {
         if (!isObj(c.status) || !D.isStatus(c.status.s)) err(w, `${path}.status.s must be a known status`);
         else { cmp(w, c.status, path + '.status', ['s', 'who', 'gte', 'lte'], false, ['s', 'who']); if (c.status.who !== undefined && !has(whoList, c.status.who)) err(w, `${path}.status.who "${c.status.who}" not legal for ${kind}`); }
@@ -1111,6 +1129,12 @@ const DATA = (() => {
           case 'hook':
             vHookMeta(w, o, p, 'combatHooks', false);
             if (!Array.isArray(o.fx) || !o.fx.length) err(w, `${p}.fx must be a non-empty array`); else vOps(w, o.fx, 'hook', p + '.fx', env, depth + 1);
+            break;
+          case 'guest':
+            if (!isStr(o.id)) err(w, `${p}: guest needs the id of a DATA.guests entry`);
+            else if (strict && !D.guests[o.id]) err(w, `${p}: unknown guest "${o.id}"`);
+            if (o.up !== undefined && o.up !== true) err(w, `${p}.up must be true when given (the upgraded guest)`);
+            if (depth > 0) err(w, `${p}: a guest op sits at the top level of a card's fx (never inside cond, repeat or a hook)`);
             break;
           default: break;
         }
@@ -1308,6 +1332,14 @@ const DATA = (() => {
         }
         if (c.mech !== undefined) vMech(w, c.mech, 'mech', c.fx, c.type, c.cost);
         if (c.mech !== undefined && !playable) err(w, 'only playable hero cards carry a mech');
+        // a Guest card (DESIGN 4.3 "Guests") is a Skill of the guest's hero, and its upgrade calls the upgraded guest (or the same guest)
+        const guestOps = [];
+        [A(c.fx), A(O(c.up).fx)].forEach((fx) => fx.forEach((o) => { if (isObj(o) && o.op === 'guest') guestOps.push(o); }));
+        if (guestOps.length) {
+          if (c.type !== 'skill') err(w, 'a card with a guest op is type skill');
+          if (guestOps.length > 1 && new Set(guestOps.map((o) => o.id)).size > 1) err(w, 'a card calls one guest (base and upgrade)');
+          guestOps.forEach((o) => { const gd = D.guests[o.id]; if (gd && isObj(gd) && gd.hero !== c.hero) err(w, `guest "${o.id}" belongs to ${gd.hero}, not ${c.hero}`); });
+        }
         if (c.locked !== undefined && !isBool(c.locked)) err(w, 'locked must be a boolean');
         if (c.locked && (c.rarity === 'starter' || c.rarity === 'common')) err(w, 'starters and commons are never locked');
         if (c.flavor !== undefined && !isStr(c.flavor)) err(w, 'flavor must be a string');
@@ -1329,6 +1361,51 @@ const DATA = (() => {
       if (strict) {
         FIXED.curses.forEach((id) => { const c = D.cards[id]; if (!c) err('fixed', `curse card "${id}" is not defined`); else if (c.hero !== 'curse') err('card ' + id, 'must have hero curse'); });
         FIXED.statusCards.forEach((id) => { const c = D.cards[id]; if (!c) err('fixed', `status card "${id}" is not defined`); else if (c.hero !== 'status') err('card ' + id, 'must have hero status'); });
+      }
+    }
+
+    // ---- guests (DESIGN 4.3 "Guests"): {id, name, hero, stay 1..6, act:[hook ops], enter?, exit?, hooks? (combat hooks, no once/every), up?, art, blurb} ----
+    if (want('guests')) {
+      const vGuestHooks = (w, list, path) => {
+        if (!Array.isArray(list)) return err(w, `${path} must be an array`);
+        list.forEach((h, i) => {
+          const p = `${path}[${i}]`;
+          if (!isObj(h) || !isStr(h.on)) return err(w, `${p}: hook needs "on"`);
+          Object.keys(h).forEach((k) => { if (['on', 'filter', 'limit', 'fx'].indexOf(k) < 0) err(w, `${p}: unknown field "${k}" (a guest hook has on, fx, filter, limit: it lives while the guest stays, so no once or every)`); });
+          vHookMeta(w, h, p, 'combatHooks', false);
+          if (!Array.isArray(h.fx) || !h.fx.length) err(w, `${p}.fx must be a non-empty array`); else vOps(w, h.fx, 'hook', p + '.fx');
+        });
+      };
+      const vGuestBody = (w, g, path, isUp) => {
+        if (g.stay !== undefined || !isUp) { if (!(isInt(g.stay) && g.stay >= 1 && g.stay <= 6)) err(w, `${path}stay must be a whole number 1..6`); }
+        if (g.act !== undefined || !isUp) { if (!Array.isArray(g.act) || !g.act.length) err(w, `${path}act must be a non-empty array of hook ops`); else vOps(w, g.act, 'hook', path + 'act'); }
+        ['enter', 'exit'].forEach((k) => { if (g[k] !== undefined) { if (!Array.isArray(g[k]) || !g[k].length) err(w, `${path}${k} must be a non-empty array of hook ops`); else vOps(w, g[k], 'hook', path + k); } });
+        if (g.hooks !== undefined) vGuestHooks(w, g.hooks, path + 'hooks');
+      };
+      vals(D.guests).forEach((g) => {
+        const w = 'guest ' + g.id;
+        fields(w, g, 'guest');
+        if (!ID_RE.test(g.id) || g.id.indexOf('guest_') !== 0) err(w, 'id must be snake_case and start with "guest_"');
+        if (!isStr(g.name)) err(w, 'name');
+        if (!has('heroIds', g.hero)) err(w, `hero "${g.hero}" must be a hero id`);
+        vGuestBody(w, g, '', false);
+        if (g.up !== undefined) {
+          if (!isObj(g.up)) err(w, 'up must be an object');
+          else {
+            Object.keys(g.up).forEach((k) => { if (['stay', 'act', 'enter', 'exit', 'hooks'].indexOf(k) < 0) err(w, `up.${k} unknown (up may change stay, act, enter, exit, hooks)`); });
+            if (!Object.keys(g.up).length) err(w, 'up must change stay, act, enter, exit or hooks');
+            vGuestBody(w, g.up, 'up.', true);
+          }
+        }
+        if (!isObj(g.art) || !has('motifs', g.art.m)) err(w, `art.m "${g.art && g.art.m}" not in LISTS.motifs`);
+        else if (!has('palettes', g.art.c)) err(w, `art.c "${g.art.c}" not in LISTS.palettes`);
+        if (!isStr(g.blurb)) err(w, 'blurb (one funny line)');
+        else { if (g.blurb.length > 100) err(w, 'blurb over 100 characters'); if (!/^[\x20-\x7e]+$/.test(g.blurb)) err(w, 'blurb must be printable ASCII'); if (!/[.!?]$/.test(g.blurb)) err(w, 'blurb must end with . ! or ?'); }
+        noDash(w, g);
+      });
+      if (strict && vals(D.guests).length) {
+        LISTS.heroIds.forEach((id) => { const n = vals(D.guests).filter((g) => g.hero === id).length; if (n !== QUOTA.cards.guests) err('guests', `${id} has ${n} guests, the quota is ${QUOTA.cards.guests}`); });
+        vals(D.guests).forEach((g) => { if (!vals(D.cards).some((c) => [A(c.fx), A(O(c.up).fx)].some((fx) => fx.some((o) => isObj(o) && o.op === 'guest' && o.id === g.id)))) err('guest ' + g.id, 'no card calls this guest'); });
       }
     }
 

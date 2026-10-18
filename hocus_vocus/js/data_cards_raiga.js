@@ -467,5 +467,29 @@
       kw: [], slots: ['red', 'gold'], art: { m: 'sun', c: 'ink' },
       flavor: 'He plays it slow, because after this one, everyone goes home.',
     },
+    // ------------------------------------------------------------------ guests (DATA.guests, data_guests.js; DESIGN 4.3 "Guests")
+    // Three Skills that bring a guest on stage: a roadie with a flight case (Block for the lead each turn), a bass amp on wheels (Rumble on
+    // arrival, a strike a turn) and a mosh pit uncle (damage to every enemy for each guest on stage). Guest ops are hook ops acted by Andy.
+    raiga_guest_roadie: {
+      name: 'Flight Case Roadie', hero: 'raiga', type: 'skill', rarity: 'uncommon', cost: 1,
+      fx: [{ op: 'guest', id: 'guest_roadie' }],
+      up: { fx: [{ op: 'guest', id: 'guest_roadie', up: true }] },
+      kw: [], slots: ['gold'], art: { m: 'key', c: 'ash' },
+      flavor: 'Lift with the legs. Then put it down in front of the singer.',
+    },
+    raiga_guest_amp: {
+      name: 'Rolling Bass Amp', hero: 'raiga', type: 'skill', rarity: 'uncommon', cost: 1,
+      fx: [{ op: 'guest', id: 'guest_bass_amp' }],
+      up: { fx: [{ op: 'guest', id: 'guest_bass_amp', up: true }] },
+      kw: [], slots: ['green'], art: { m: 'sigil', c: 'amber' },
+      flavor: 'Four wheels, no brakes, one knob, and it is already turned up.',
+    },
+    raiga_guest_uncle: {
+      name: 'Mosh Pit Uncle', hero: 'raiga', type: 'skill', rarity: 'rare', cost: 2,
+      fx: [{ op: 'guest', id: 'guest_mosh_uncle' }],
+      up: { fx: [{ op: 'guest', id: 'guest_mosh_uncle', up: true }] },
+      kw: [], slots: ['gold', 'green'], art: { m: 'star', c: 'gold' },
+      flavor: 'He came for the bass. He stayed for the bouncing. He is not leaving.',
+    },
   });
 })();

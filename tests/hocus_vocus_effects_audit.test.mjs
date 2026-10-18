@@ -81,7 +81,7 @@ function snapPre(C) {
     heroes: C.heroes.map((h) => ({ id: h.id, hp: h.hp, maxHp: h.maxHp, block: h.block, st: Object.assign({}, h.st), row: h.row, down: h.down, dmgTaken: 0, hitsTaken: 0, rowSt: Object.assign({}, h.rowSt) })),
     enemies: C.enemies.map((e) => ({ id: e.id, hp: e.hp, maxHp: e.maxHp, block: e.block, st: Object.assign({}, e.st), down: e.down, lane: e.lane, tier: e.tier })),
     energy: 0, hand: [], draw: C.draw.map((c) => ({ uid: c.uid, id: c.id, up: c.up, gems: c.gems.slice() })), discard: [], exhaust: [], powers: [],
-    counters: { cards: 0, attacks: 0, skills: 0 }, passive: {}, lastPlayed: null, lastHero: null, turn: 0, kills: 0, gold: 0, ink: 0, drawn: 0, added: 0, exhausted: 0, unordered: false, hooks: [], relics: C.relics.slice(), nondet: '',
+    counters: { cards: 0, attacks: 0, skills: 0 }, passive: {}, lastPlayed: null, lastHero: null, turn: 0, kills: 0, gold: 0, ink: 0, drawn: 0, added: 0, exhausted: 0, unordered: false, hooks: [], relics: C.relics.slice(), nondet: '', guests: [],
   };
 }
 const heroU = (C, id) => C.heroes.find((h) => h.id === id);
@@ -111,6 +111,8 @@ function snap(C) {
     energy: C.energy, hand: C.hand.map(cardSnap), draw: C.draw.map(cardSnap), discard: C.discard.map(cardSnap), exhaust: C.exhaust.map(cardSnap), powers: C.powers.map(cardSnap),
     counters: { cards: C.played, attacks: 0, skills: 0 }, passive: {}, lastPlayed: C.lastPlayed ? cardSnap(C.lastPlayed) : null, lastHero: C.lastHero || null,
     turn: C.turn, kills: C.stats.kills.length, gold: sm.gold, ink: sm.ink, drawn: 0, added: 0, exhausted: 0, unordered: false, hooks: [], relics: C.relics.slice(), nondet: '',
+    // the guests on stage (DESIGN 4.3 "Guests"): owner, merged definition, turns left
+    guests: (C.guests || []).map((g) => ({ owner: g.owner, def: D.guestDef(g.def, !!g.up), stay: g.stay, up: g.up, hooks: [] })),
   };
 }
 const clean = (st) => { const o = {}; Object.keys(st).sort().forEach((k) => { if (st[k]) o[k] = st[k]; }); return o; };
@@ -121,6 +123,7 @@ function view(S) {
     enemies: S.enemies.map((e) => ({ id: e.id, hp: e.hp, block: e.block, st: clean(e.st), down: !!e.down })),
     energy: S.energy, piles: [S.hand.length, S.draw.length, S.discard.length, S.exhaust.length, S.powers.length],
     upInHand: S.hand.filter((c) => c.up).length, held: S.hand.filter((c) => c.keep).length, gold: S.gold, ink: S.ink,
+    guests: (S.guests || []).map((g) => (g.def ? g.def.id : g.def) + ':' + g.owner + ':' + g.stay),
   };
 }
 // a readable list of what differs between two views
@@ -201,6 +204,7 @@ function oCount(S, v, env, victim) {
     case 'hitsTaken': return a ? a.hitsTaken : 0;
     case 'targetBlock': { const tt = victim || env.target; return tt ? tt.block : 0; }
     case 'picked': return env.picked || 0;
+    case 'guests': return S.guests.length;
     default: throw new Error('oracle: unknown per ' + v.per);
   }
 }
@@ -233,6 +237,7 @@ function oCond(S, c, env) {
       case 'energy': if (!inRange(S.energy, x)) return false; break;
       case 'handSize': if (!inRange(S.hand.length, x)) return false; break;
       case 'enemies': if (!inRange(O.liveEnemies(S).length, x)) return false; break;
+      case 'guests': if (!inRange(S.guests.length, x)) return false; break;
       default: throw new Error('oracle: unknown cond ' + k);
     }
   }
@@ -472,10 +477,30 @@ function oRun(S, ops, env) {
         break;
       }
       case 'hook': S.hooks.push({ def: op, owner: env.actor ? env.actor.id : null, count: 0, fired: 0, turn: 0, active: true, born: env.serial }); break;
+      case 'guest': oGuest(S, op, env); break;
       case 'pick': oPick(S, op, env); break;
       default: throw new Error('oracle: unknown op ' + op.op);
     }
   }
+}
+// a Guest card (DESIGN 4.3 "Guests"): a full stage sends the oldest guest off first (its exit ops run while it still counts, acted by its owner unless
+// voiceless), then the newcomer steps on (its hooks are owned by the owner and born with this play), then its enter ops run as hook ops of the owner
+function oGuest(S, op, env) {
+  const gd = D.guestDef(op.id, !!op.up);
+  const owner = env.actor;
+  if (!gd || !owner || owner.down) return;
+  const slots = D.ECONOMY.guestSlots || 2;
+  while (S.guests.length >= slots) {
+    const old = S.guests[0];
+    const oo = O.hero(S, old.owner);
+    if (oo && !oo.down && old.def.exit.length) oRun(S, old.def.exit, { kind: 'hook', actor: oo, target: null, X: 0, hookOn: 'guestExit' });
+    (old.hooks || []).forEach((h) => { h.active = false; });
+    S.guests.shift();
+  }
+  const g = { owner: owner.id, def: gd, stay: gd.stay, up: gd.up ? 1 : 0, hooks: [] };
+  S.guests.push(g);
+  gd.hooks.forEach((h) => { const hk = { def: h, owner: owner.id, count: 0, fired: 0, turn: 0, active: true, born: env.serial }; g.hooks.push(hk); S.hooks.push(hk); });
+  if (gd.enter.length) oRun(S, gd.enter, { kind: 'hook', actor: owner, target: null, X: 0, hookOn: 'guestEnter' });
 }
 // hooks the oracle registered itself (a card's own hook reacting to a later op of the same card, Charms in the A/B worlds are measured, not simulated)
 function oFire(S, on, ev) {
@@ -578,9 +603,11 @@ function printedNumbers(fx, mech) {
     if (o.op === 'pick') { if (isNum(o.n) && o.n !== 1) nums.push(o.n); if (o.top && o.top !== 1) nums.push(o.top); return; }
     if (o.op === 'add') { if (isNum(o.n) && o.n !== 1) nums.push(o.n); return; }
     if (o.op === 'hook') { if (o.limit && o.limit > 1) nums.push(o.limit); if (o.every) nums.push(o.every); return; }
+    // a Guest card prints the stay and every number of the guest's own ops (act, enter, exit and its hooks)
+    if (o.op === 'guest') { const gd = D.guestDef(o.id, !!o.up); if (gd) { nums.push(gd.stay); [gd.act, gd.enter, gd.exit].concat(gd.hooks.map((h) => [Object.assign({ op: 'hook' }, h)])).forEach((l) => printedNumbers(l).forEach((x) => nums.push(x))); } return; }
     if (o.op === 'cond') {
       const c = o.if;
-      ['status', 'targetStatus', 'cardsPlayed', 'attacksPlayed', 'turn', 'block', 'energy', 'handSize', 'enemies'].forEach((k) => {
+      ['status', 'targetStatus', 'cardsPlayed', 'attacksPlayed', 'turn', 'block', 'energy', 'handSize', 'enemies', 'guests'].forEach((k) => {
         if (!c[k]) return;
         if (c[k].gte !== undefined && c[k].gte > 1) nums.push(c[k].gte);
         if (c[k].lte !== undefined && c[k].lte > 0) nums.push(c[k].lte);
@@ -611,7 +638,10 @@ t.test('cards: every number, status, keyword and target of every card (base and 
     const tag = `${c.id}${up ? '+' : ''} "${text}"`;
     n++;
     printedNumbers(d.fx, d.mech).forEach((x) => t.ok(hasNum(text, x), `${tag} prints ${x}`));
-    D.walkOps(d.fx, (o) => {
+    // a Guest card's text carries the guest's name and the words of the guest's own ops too
+    const guestOps = [];
+    d.fx.forEach((o) => { if (o && o.op === 'guest') { const gd = D.guestDef(o.id, !!o.up); if (gd) { t.ok(text.indexOf('Guest ' + gd.name) >= 0, `${tag} names its guest`); guestOps.push(...gd.act, ...gd.enter, ...gd.exit, ...gd.hooks.map((h) => Object.assign({ op: 'hook' }, h))); } } });
+    D.walkOps(d.fx.concat(guestOps), (o) => {
       if ((o.op === 'status' || o.op === 'removeStatus') && D.statuses[o.s]) {
         const nm = D.statuses[o.s].name;
         const alt = o.s === 'plating' ? 'Sequin' : nm;

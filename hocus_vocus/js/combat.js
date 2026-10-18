@@ -74,13 +74,27 @@
 //     counter: the global U.uid is never touched), so an event log is identical for identical inputs.
 //
 // EVENTS (DESIGN 5.2): combat_start turn_start turn_end draw shuffle discard exhaust add_card card_move card_upgrade retain energy play hit dodge thorns block
-//   block_lost heal hurt status immune swap intent enemy_act skip summon enemy_phase death flee hero_down hero_revive pick_needed relic gold ink max_hp crowd end.
+//   block_lost heal hurt status immune swap intent enemy_act skip summon enemy_phase death flee hero_down hero_revive pick_needed relic gold ink max_hp crowd
+//   guest_enter guest_act guest_exit end.
 //   Cards inside events are copies. `piles` counts are AFTER the event. `end` is always the last event of a combat. Extra fields beyond the design:
 //   none on events; extra fields on C.intent objects are listed above.
 //   THE CROWD (DATA "The Crowd and Medleys"): C.crowd (0..C.crowdMax, mods.crowd) rises by 1 per card played and 2 per enemy defeated (never on the
 //   kill that wins the fight); at crowdMax it wraps and `crowd {value, max, delta, wild:true, hero, card}` is followed by an add_card of a free Fading
 //   copy (crowd:true) of that hero's Signature (DATA.heroes[id].signature) into the hand; the first lead hero sings first, then the other (C.crowdWild
 //   counts the fills). A Medley deck instance {uid, id:'medley', parts, up, gems} plays as DATA.resolveCard merges it; copies keep `parts`.
+//   GUESTS (DATA.guests, data_guests.js; DESIGN 4.3 "Guests"): the card op {op:'guest', id, up?} brings a guest on stage. C.guests is the array, in
+//   enter order, of { kind:'guest', id:'guest_dj_scratchy#1' (opaque, a per-def counter), def, name, owner: heroId, stay (turns left), up: 0|1,
+//   born (the turn it entered) }. ECONOMY.guestSlots (2) fit; a third replaces the oldest. Events: guest_enter {guest, hero}, guest_act {guest, hero}
+//   (before its act ops run), guest_exit {guest, reason:'done'|'replaced'|'end'}; `guest` is always a plain snapshot. Order at the end of the player
+//   turn (C.endTurn): Reprise replays, hand turnEnd ops, turnEnd hooks, THEN the guests in enter order (a guest whose owner is voiceless is silent:
+//   no guest_act, no ops, it still counts down), then the One Take fades and the discard. A guest's ops run as hook ops acted by the owner (no
+//   attacker: no spot bonus, Volume or Muffled; `enemy` = a random living enemy, C.rng); kills credit the owner. After its act stay falls by 1 and
+//   at 0 the guest leaves: exit ops (skipped when the owner is voiceless), guest_exit 'done', removed. A replaced guest leaves the same way with
+//   reason 'replaced' BEFORE the newcomer enters (so `per guests` counts the newcomer during its own enter ops, and a leaving guest during its exit
+//   ops). The guests stop acting as soon as the combat is decided. A guest's `hooks` register through registerHook (owner = the owner hero, src
+//   'guest', srcId the guest def id, born = the summoning play's serial so an onPlay hook skips that play) and are deactivated when it leaves. At
+//   combat end (finalizeEnd, after the combatEnd hooks) every guest gets guest_exit {reason:'end'} BEFORE the `end` event, with no exit ops.
+//   Counter per:'guests' and cond guests:{gte,lte} read C.guests.length. C.canPlay, C.summary and the conservation rule are untouched.
 const COMBAT = (() => {
   'use strict';
 
@@ -124,7 +138,9 @@ const COMBAT = (() => {
       events: [], added: 0, played: 0, lastPlayed: null, lastHero: null,
       // THE CROWD (DATA "The Crowd and Medleys"): cards played fill it (+1, a kill +2); at crowdMax the crowd goes wild (crowdWild counts the fills)
       crowd: 0, crowdMax: isNum(mods.crowd) && mods.crowd <= 0 ? 0 : Math.max(1, isNum(mods.crowd) ? mods.crowd : (ECO.crowd || 7)), crowdWild: 0,   // crowdMax 0 switches the Crowd off (sims that measure enemies against a steady party)
+      guests: [],                   // GUESTS (header): the guests on stage, in enter order
     };
+    const GUEST_SLOTS = isNum(ECO.guestSlots) ? Math.max(1, ECO.guestSlots) : 2;
 
     // ---------------------------------------------------------------- engine state (closure)
     let batch = null;             // events of the running action
@@ -136,6 +152,8 @@ const COMBAT = (() => {
     let T = null;                 // per player turn counters
     let nextUid = 1;
     const enemySerial = {};
+    const guestSerial = {};
+    const guestHooks = new Map();   // guest unit id -> the hook objects it registered (deactivated when it leaves)
     const hooks = [];
     const resCache = new Map();
     let goldTotal = 0, inkTotal = 0;
@@ -366,6 +384,7 @@ const COMBAT = (() => {
       if (!dead || C.phase === 'over') return;
       const res = dead;
       if (res === 'win') fireHook('combatEnd', {});
+      clearGuests();
       gen = null; C.pending = null;
       settleInPlay();
       C.result = res; C.phase = 'over';
@@ -665,6 +684,7 @@ const COMBAT = (() => {
         case 'hitsTaken': return a && a.kind === 'hero' ? a._hitsTaken : 0;
         case 'targetBlock': { const t = victim || env.target; return t ? t.block : 0; }
         case 'picked': return env.picked || 0;
+        case 'guests': return C.guests.length;
         default: return 0;
       }
     }
@@ -699,6 +719,7 @@ const COMBAT = (() => {
           case 'energy': if (!inRange(C.energy, x)) return false; break;
           case 'handSize': if (!inRange(C.hand.length, x)) return false; break;
           case 'enemies': if (!inRange(C.enemies.filter((e) => !e.down).length, x)) return false; break;
+          case 'guests': if (!inRange(C.guests.length, x)) return false; break;
           default: break;
         }
       }
@@ -772,6 +793,7 @@ const COMBAT = (() => {
           flush();
           reshuffle();
           reshuffled = true;
+          if (C.hand.length >= MAXHAND) break;        // an onShuffle hook may have added cards to the hand (the fuzz found an 11th card here)
         }
         const c = C.draw.shift();
         C.hand.push(c);
@@ -859,7 +881,9 @@ const COMBAT = (() => {
 
     // ---------------------------------------------------------------- hooks
     function registerHook(def, owner, src, srcId, born) {
-      hooks.push({ on: def.on, fx: def.fx, filter: def.filter, limit: def.limit, once: def.once, every: def.every, owner, src, srcId, count: 0, turnFired: 0, fired: false, active: true, born });
+      const h = { on: def.on, fx: def.fx, filter: def.filter, limit: def.limit, once: def.once, every: def.every, owner, src, srcId, count: 0, turnFired: 0, fired: false, active: true, born };
+      hooks.push(h);
+      return h;
     }
     function fireHook(on, ev) {
       if (depth > MAX_DEPTH) return;
@@ -991,6 +1015,7 @@ const COMBAT = (() => {
         case 'maxHp': doMaxHp(op, env); break;
         case 'revive': doRevive(op, env); break;
         case 'hook': registerHook(op, env.actor ? env.actor.id : null, 'card', env.card ? env.card.id : null, env.serial); break;
+        case 'guest': if (!enemyCtx) enterGuest(op, env); break;
         case 'summon': doSummon(op, env); break;
         case 'stealGold': doSteal(op, env); break;
         case 'flee': if (enemyCtx) env.enemy._fleeing = true; break;
@@ -1170,6 +1195,52 @@ const COMBAT = (() => {
       if (!h) return;
       const hp = op.pct !== undefined ? Math.round(op.pct * h.maxHp) : Math.floor(evalV(op.n, env));
       reviveHero(h, Math.max(1, hp), nextGroup());
+    }
+
+    // ---- guests (header GUESTS, DESIGN 4.3 "Guests")
+    const guestSnapshot = (g) => ({ kind: 'guest', id: g.id, def: g.def, name: g.name, owner: g.owner, stay: g.stay, up: g.up, born: g.born });
+    const guestEnv = (owner, on) => ({ kind: 'hook', actor: owner, card: null, target: null, X: 0, hookOn: on });
+    function enterGuest(op, env) {
+      const gd = D.guestDef ? D.guestDef(op.id, !!op.up) : null;
+      const owner = env.actor && env.actor.kind === 'hero' ? env.actor : front();
+      if (!gd || !owner || owner.down || dead === 'lose') return;
+      while (C.guests.length >= GUEST_SLOTS) leaveGuest(C.guests[0], 'replaced');
+      guestSerial[gd.id] = (guestSerial[gd.id] || 0) + 1;
+      const g = { kind: 'guest', id: gd.id + '#' + guestSerial[gd.id], def: gd.id, name: gd.name, owner: owner.id, stay: Math.max(1, Math.floor(gd.stay)), up: gd.up ? 1 : 0, born: C.turn };
+      hide(g, { _def: gd });
+      C.guests.push(g);
+      emit('guest_enter', { guest: guestSnapshot(g), hero: owner.id });
+      // its hooks live while it stands on stage; born = the summoning play, so an onPlay hook does not fire for that same play (as a card hook)
+      guestHooks.set(g.id, asList(gd.hooks).filter((h) => h && D.LISTS.combatHooks.indexOf(h.on) >= 0).map((h) => registerHook(h, owner.id, 'guest', gd.id, env.serial)));
+      if (asList(gd.enter).length) drain(run(gd.enter, guestEnv(owner, 'guestEnter')));
+    }
+    function leaveGuest(g, reason) {
+      const i = C.guests.indexOf(g);
+      if (i < 0) return;
+      (guestHooks.get(g.id) || []).forEach((h) => { h.active = false; });
+      guestHooks.delete(g.id);
+      const owner = heroById(g.owner);
+      if (reason !== 'end' && owner && !owner.down && asList(g._def.exit).length && dead !== 'lose') drain(run(g._def.exit, guestEnv(owner, 'guestExit')));
+      emit('guest_exit', { guest: guestSnapshot(g), reason });
+      const j = C.guests.indexOf(g);
+      if (j >= 0) C.guests.splice(j, 1);
+    }
+    // the end of the player turn: every guest acts in enter order, then counts down (silent while its owner is voiceless); stops when the fight is decided
+    function guestsAct() {
+      C.guests.slice().forEach((g) => {
+        if (dead || C.guests.indexOf(g) < 0) return;
+        const owner = heroById(g.owner);
+        if (owner && !owner.down) {
+          emit('guest_act', { guest: guestSnapshot(g), hero: owner.id });
+          drain(run(g._def.act, guestEnv(owner, 'guestAct')));
+          if (dead) return;
+        }
+        g.stay -= 1;
+        if (g.stay <= 0) leaveGuest(g, 'done');
+      });
+    }
+    function clearGuests() {
+      C.guests.slice().forEach((g) => leaveGuest(g, 'end'));
     }
 
     // ---- enemy only
@@ -1551,6 +1622,8 @@ const COMBAT = (() => {
         if (dead) return;
         fireHook('turnEnd', {});
         if (dead) return;
+        guestsAct();
+        if (dead) return;
         C.hand.slice().forEach((c) => {
           if (R(c, ownerOf(c)).kw.indexOf('ethereal') >= 0) { C.hand.splice(C.hand.indexOf(c), 1); exhaustCard(c, 'ethereal', ownerOf(c) || front()); }
         });
@@ -1730,6 +1803,7 @@ const COMBAT = (() => {
         const w = { poison: 2.2, vulnerable: 3, weak: 2.5, stun: 8, mark: 2, burn: 1.5, frail: 1, might: 3, bulwark: 2, thorns: 1.5, dodge: 3, regen: 2, ritual: 5, plating: 2, taunt: 1.5, bloom: 1.5, sumi: 1.5, ward: 1.5, charge: 1.5 }[o.s] || 1;
         s += (enemySide === debuff ? w * Math.abs(n) : -w * 0.2);
       } else if (o.op === 'hook') s += 6;
+      else if (o.op === 'guest') s += guestWorth(C, o);
       else if (o.op === 'pick') s += 1.5;
       else if (o.op === 'hurt') s -= n;
       else if (o.op === 'gold' || o.op === 'ink') s += 1;
@@ -1752,6 +1826,32 @@ const COMBAT = (() => {
       }
     }
     return { value: s, per: s / cost };
+  }
+  // what a Guest card is worth to the bot: its act (damage, Block, healing, statuses, Breath) once per turn of its stay, plus its enter and exit
+  // ops and a flat value per hook; a full stage costs the oldest guest's remaining turns (plain numbers only: hook damage has no spot bonus)
+  function opsWorth(C, ops) {
+    let s = 0;
+    const enemies = Math.max(1, C.enemies.filter((e) => !e.down).length);
+    DATA.walkOps(ops, (o) => {
+      const n = isNum(o.n) ? o.n : (isObj(o.n) ? (o.n.base || o.n.mul || 1) : 1);
+      const hits = isNum(o.hits) ? o.hits : 1;
+      if (o.op === 'dmg') s += n * hits * (o.tgt === 'all' ? enemies : 1);
+      else if (o.op === 'block') s += n * (o.tgt === 'both' ? 1.2 : 0.8);
+      else if (o.op === 'heal') s += n * 0.6 * (o.tgt === 'both' ? 1.5 : 1);
+      else if (o.op === 'status') s += Math.abs(n) * ({ poison: 2.2, vulnerable: 3, weak: 2.5, stun: 8, mark: 2, burn: 1.5, might: 3, bulwark: 2, thorns: 1.5, dodge: 3, regen: 2 }[o.s] || 1.5);
+      else if (o.op === 'draw') s += 3 * n;
+      else if (o.op === 'energy') s += 4 * n;
+    });
+    return s;
+  }
+  function guestWorth(C, o) {
+    const gd = DATA.guestDef ? DATA.guestDef(o.id, !!o.up) : null;
+    if (!gd) return 0;
+    let s = gd.stay * opsWorth(C, gd.act) + opsWorth(C, gd.enter) + opsWorth(C, gd.exit) + 4 * gd.hooks.length;
+    gd.hooks.forEach((h) => { s += gd.stay * opsWorth(C, h.fx); });
+    const slots = isNum(DATA.ECONOMY.guestSlots) ? DATA.ECONOMY.guestSlots : 2;
+    if (C.guests && C.guests.length >= slots) { const old = C.guests[0], od = DATA.guestDef(old.def, !!old.up); if (od) s -= Math.max(0, old.stay) * opsWorth(C, od.act); }
+    return Math.max(0, s);
   }
   function bestTarget(C, card) {
     const ts = C.legalTargets(card.uid);

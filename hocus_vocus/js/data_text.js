@@ -327,6 +327,7 @@
       case 'hitsTaken': return { eq: 'the number of hits you took last enemy turn', unit: 'hit you took last enemy turn' };
       case 'targetBlock': return { eq: `the target's ${KW_BLOCK()}`, unit: `${KW_BLOCK()} on the target` };
       case 'picked': return { eq: 'the number of cards chosen', unit: 'card chosen' };
+      case 'guests': return { eq: `the number of ${KW('guests', 'guest')} on stage`, unit: `${KW('guest', 'guest')} on stage` };
       default: return { eq: 'something', unit: 'something' };
     }
   }
@@ -491,6 +492,12 @@
       if (p.gte !== undefined && p.lte === undefined) out.push(p.gte <= 1 ? 'an enemy remains' : `${NUM(p.gte)} or more enemies remain`);
       else if (p.lte !== undefined && p.gte === undefined) out.push(p.lte === 1 ? 'only one enemy remains' : `${NUM(p.lte)} or fewer enemies remain`);
       else out.push(`${NUM(p.gte)} to ${NUM(p.lte)} enemies remain`);
+    }
+    if (c.guests) {
+      const p = c.guests, G = (n) => KW(n === 1 ? 'guest' : 'guests', 'guest');
+      if (p.gte !== undefined && p.lte === undefined) out.push(p.gte <= 1 ? `a ${G(1)} is on stage` : `${NUM(p.gte)} or more ${G(2)} are on stage`);
+      else if (p.lte !== undefined && p.gte === undefined) out.push(p.lte === 0 ? `no ${G(1)} is on stage` : `at most ${NUM(p.lte)} ${G(p.lte)} ${p.lte === 1 ? 'is' : 'are'} on stage`);
+      else out.push(`${NUM(p.gte)} to ${NUM(p.lte)} ${G(2)} are on stage`);
     }
     return out;
   }
@@ -999,6 +1006,7 @@
       case 'maxHp': { const t = op.tgt || 'self'; const A = `${NUM(Math.abs(op.n))} max HP`; return [{ h: isNum(op.n) && op.n < 0 ? LOSE(t, A) : GAIN(t, A), k: 'maxhp' }]; }
       case 'revive': return [reviveFrag(op, S)];
       case 'hook': { const f = hookFrag(op, S); return f ? [f] : []; }
+      case 'guest': { const f = guestFrag(op, S); return f ? [f] : []; }
       case 'repeat': return repeatFrags(op, S);
       case 'cond': return condFrags(op, S, prev);
       case 'summon': return [{ h: `summon ${op.n && op.n > 1 ? NUM(op.n) + ' ' : aAn(D.enemies[op.enemy] ? D.enemies[op.enemy].name : op.enemy) + ' '}${esc(D.enemies[op.enemy] ? D.enemies[op.enemy].name : op.enemy)}`, k: 'summon' }];
@@ -1027,6 +1035,44 @@
     let h = `${lead}${lead === 'next turn' ? ': ' : ', '}${joinFrags(frs)}`;
     if (lim) h = `${lim}, ${h}`;
     return { h, k: 'hook' };
+  }
+
+  // A Guest card (DESIGN 4.3 "Guests"): "Guest DJ Scratchy for 3 turns: at the end of your turn, deal 4 damage to a random enemy." An enter
+  // list reads "on arrival, ...", an exit list "On leaving, ...", and each guest hook is its own hook sentence ("At the start of your turn, gain 1
+  // Breath."). The guest's ops are hook ops acted by the owner with no attacker, so they read like a hook's (random enemy, no spot bonus); the
+  // compact wording (S.compact) says "at turn end" / "at turn start" when the full card text would run past the 110 character audit.
+  function guestFrag(op, S) {
+    const g = D.guestDef ? D.guestDef(op.id, !!op.up) : null;
+    if (!g) return null;
+    const S2 = Object.assign({}, S, { hookOn: 'guestAct', hand: false, hookAny: false, live: S.live.hook || {} });
+    // up and down colouring: the upgraded guest's ops are aligned with the printed guest's, k-th op of a kind with k-th op of that kind (as buildRef)
+    const base = g.up ? D.guestDef(op.id, false) : null;
+    if (base) {
+      S2.ref = new Map(S.ref);
+      const align = (cur, prev) => {
+        const flat = (fx) => { const o = []; D.walkOps(fx, (x) => o.push(x)); return o; };
+        const by = {}, seen = {};
+        flat(prev).forEach((o) => { (by[o.op] = by[o.op] || []).push(o); });
+        flat(cur).forEach((o) => {
+          const i = seen[o.op] === undefined ? 0 : seen[o.op] + 1;
+          seen[o.op] = i;
+          const b = by[o.op] && by[o.op][i];
+          S2.ref.set(o, b && (o.op !== 'status' || b.s === o.s) ? b : null);
+        });
+      };
+      align(g.act, base.act); align(g.enter, base.enter); align(g.exit, base.exit);
+      g.hooks.forEach((hk, i) => align(hk.fx, base.hooks[i] ? base.hooks[i].fx : []));
+    }
+    const act = joinFrags(fragsOfList(g.act, S2));
+    const enter = g.enter.length ? joinFrags(fragsOfList(g.enter, Object.assign({}, S2, { hookOn: 'guestEnter' }))) : '';
+    const exit = g.exit.length ? joinFrags(fragsOfList(g.exit, Object.assign({}, S2, { hookOn: 'guestExit' }))) : '';
+    const stay = `${NUM(g.stay, base && base.stay !== g.stay ? (g.stay > base.stay ? 'up' : 'down') : '')} ${g.stay === 1 ? 'turn' : 'turns'}`;
+    let h = `${KW('Guest', 'guest')} ${esc(g.name)} for ${stay}: `;
+    if (enter) h += `on arrival, ${enter}. `;
+    h += `${S.compact ? (enter ? 'At' : 'at') + ' turn end' : (enter ? 'At' : 'at') + ' the end of your turn'}, ${act}.`;
+    if (exit) h += ` On leaving, ${exit}.`;
+    g.hooks.forEach((hk) => { const f = hookFrag(Object.assign({ op: 'hook' }, hk), S2); if (f) h += ' ' + sentence(f.h); });
+    return { h, k: 'guest' };
   }
 
   function condFrags(op, S, prev) {

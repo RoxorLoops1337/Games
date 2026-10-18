@@ -146,7 +146,7 @@ const SCENE = (() => {
   const ELEMENT_SFX = { fire: 'flame', ice: 'ice', lightning: 'zap', poison: 'poison_tick', slash: 'slash', ink: 'slash', holy: 'slash' };
   const EVENTS = Object.freeze(['combat_start', 'turn_start', 'turn_end', 'draw', 'shuffle', 'discard', 'exhaust', 'add_card', 'card_move', 'card_upgrade', 'retain', 'energy', 'play', 'hit', 'dodge', 'thorns',
     'block', 'block_lost', 'heal', 'hurt', 'status', 'immune', 'swap', 'intent', 'enemy_act', 'skip', 'summon', 'enemy_phase', 'death', 'flee', 'hero_down', 'hero_revive', 'pick_needed', 'relic', 'gold', 'ink',
-    'max_hp', 'end']);
+    'max_hp', 'guest_enter', 'guest_act', 'guest_exit', 'end']);
 
   // element look: main colour, hot accent, the ART.fx effect that carries it, the hit word (bible 4.10) and sh, the saturated colour that is the hit word's shadow
   const EL = {

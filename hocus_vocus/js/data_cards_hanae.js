@@ -430,5 +430,29 @@
       kw: [], slots: ['red', 'gold'], art: { m: 'moon', c: 'rose', hero: true },
       flavor: 'Last song. She bows, and nobody can follow it.',
     },
+    // ------------------------------------------------------------------ guests (DATA.guests, data_guests.js; DESIGN 4.3 "Guests")
+    // Three Skills that bring a guest artist on stage: a backing choir (Block for both), a harp grandma (healing, Block when she leaves)
+    // and a hype parrot (Bloom on arrival, a strike a turn). The guest's ops are hook ops acted by Jasmin, so no lead bonus rides on them.
+    hanae_guest_choir: {
+      name: 'Backing Choir', hero: 'hanae', type: 'skill', rarity: 'uncommon', cost: 1,
+      fx: [{ op: 'guest', id: 'guest_backing_choir' }],
+      up: { fx: [{ op: 'guest', id: 'guest_backing_choir', up: true }] },
+      kw: [], slots: ['gold'], art: { m: 'heal_light', c: 'moon' },
+      flavor: 'Oohs on the left, aahs on the right, and nobody misses a cue.',
+    },
+    hanae_guest_grandma: {
+      name: 'Harp Grandma', hero: 'hanae', type: 'skill', rarity: 'uncommon', cost: 1,
+      fx: [{ op: 'guest', id: 'guest_harp_grandma' }],
+      up: { fx: [{ op: 'guest', id: 'guest_harp_grandma', up: true }] },
+      kw: [], slots: ['green'], art: { m: 'book', c: 'gold' },
+      flavor: 'She tunes the harp, pours the tea, and asks if everyone has eaten.',
+    },
+    hanae_guest_parrot: {
+      name: 'Hype Parrot', hero: 'hanae', type: 'skill', rarity: 'rare', cost: 2,
+      fx: [{ op: 'guest', id: 'guest_hype_parrot' }],
+      up: { fx: [{ op: 'guest', id: 'guest_hype_parrot', up: true }] },
+      kw: [], slots: ['gold', 'green'], art: { m: 'spirit_orb', c: 'amber' },
+      flavor: 'It knows one word. The word is LOUDER.',
+    },
   });
 })();
