@@ -340,7 +340,9 @@ function wsStandingBar(c, x, y, w, n, crew, o = {}) {
 function wsActor(c, id, x, y, s, o = {}) {
   const npc = wsNpc(id), e = typeof ENEMIES !== 'undefined' ? ENEMIES[id] : null;
   if (npc || id === 'jordan' || (e && e.spec && e.spec.kind === 'rj') || !e || o.rj) {
-    ART.rj.draw(c, o.rj || wsRjOf(id), { x, y, s, pose: o.pose || 'idle', t: o.t || 0, flip: !!o.flip, expr: o.expr });
+    const rjid = o.rj || wsRjOf(id);
+    if (o.pose === 'sing' && typeof RGFigure === 'function') RGFigure(c, rjid, x, y, s, { talk: 1 }, o.t || 0, !!o.flip, { expr: o.expr });
+    else ART.rj.draw(c, rjid, { x, y, s, pose: o.pose || 'idle', t: o.t || 0, flip: !!o.flip, expr: o.expr });
   } else {
     c.save(); c.translate(x, y); c.scale(o.flip ? -s * 1.05 : s * 1.05, s * 1.05); drawFigure(c, e.spec, { t: o.t || 0, atk: 0, talk: 0 }); c.restore();
   }

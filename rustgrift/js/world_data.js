@@ -248,8 +248,8 @@ const ROLE_KIT = {
   grunt: { core: 22, talkMul: 1, max: 2, gold: 14, scale: 1 },
   merchant: { core: 26, talkMul: 1, max: 2, gold: 18, scale: 1 },
   fixer: { core: 26, talkMul: 1, max: 2, gold: 18, scale: 1 },
-  enforcer: { core: 40, talkMul: 1.25, max: 3, gold: 40, scale: 1.14 },
-  boss: { core: 60, talkMul: 1.5, max: 3, gold: 90, scale: 1.26 }
+  enforcer: { core: 40, talkMul: 1.25, max: 3, gold: 40, scale: 1.08 },
+  boss: { core: 60, talkMul: 1.5, max: 3, gold: 90, scale: 1.14 }
 };
 // crew minions (procedural figures, no talking): pets / summons / ambush padding
 Object.assign(ENEMIES, {
@@ -299,7 +299,7 @@ const NPC_SCALE = { loop_mama: 1.24, gloss_sheen: 1.22, cartel_sub: 1.3, choir_h
     const n = NPCS[id], m = NPC_MOVES[id], kit = CREW_KIT[n.crew], rk = ROLE_KIT[n.role], cr = CREWS[n.crew];
     ENEMIES[id] = {
       name: n.name, hp: m.hp, npc: id, crew: n.crew, role: n.role,
-      spec: { kind: 'rj', rj: n.rj, scale: NPC_SCALE[id] || rk.scale * kit.scaleMul, coat: cr.color, accent: cr.colorDark, seed: id.length * 7 },
+      spec: { kind: 'rj', rj: n.rj, scale: Math.min(1.15, NPC_SCALE[id] || rk.scale * kit.scaleMul), coat: cr.color, accent: cr.colorDark, seed: id.length * 7 },
       moves: m.moves, mode: 'cycle', gold: rk.gold,
       elite: n.role === 'enforcer' ? 1 : 0, boss: n.role === 'boss' ? 1 : 0,
       talk: {

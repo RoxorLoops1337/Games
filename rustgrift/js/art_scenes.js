@@ -695,10 +695,10 @@ MapScene.prototype.draw = function (c) {
 
 // ================================================================ TITLE SCREEN (concert poster)
 const SCN_MENU_FIG = [ // back to front: the four Hocus Vocus kit heroes flank the logo buttons
-  { spec: () => CHARS[1].spec, x: 110, y: 624, s: 1.2, ph: 2 },
+  { spec: () => CHARS[1].spec, x: 150, y: 624, s: 1.2, ph: 2 },
   { spec: () => CHARS[3].spec, x: 1170, y: 620, s: -1.2, ph: 5 },
   { spec: () => ENEMIES.sludge.spec, x: 830, y: 668, s: -0.8, ph: 4 },
-  { spec: () => CHARS[0].spec, x: 300, y: 628, s: 1.2, ph: 0 },
+  { spec: () => CHARS[0].spec, x: 345, y: 628, s: 1.2, ph: 0 },
   { spec: () => CHARS[2].spec, x: 990, y: 628, s: -1.2, ph: 1 },
   { spec: () => ENEMIES.rat.spec, x: 470, y: 672, s: 0.8, ph: 3 }
 ];

@@ -195,33 +195,42 @@
   function poses() {
     const smirk = { eyes: 'open', mouth: 'smirkTeeth', brow: 0.22 };
     return {
+      // idle (prop fix): the mic held upright at the chest in a closed fist, its head pointing up at the mouth (the Hocus Vocus idle), the free hand
+      // hanging loose at the side (the backward finger-point read as a broken wrist at battle scale)
       idle: Object.assign({
-        mic: 'hand', fHand: [16, 36], fBend: -1, micAng: 1.3, micGrip: 22,
-        bHand: [-42, 10], bBend: -1, bKind: 'point', bRot: 0.28, fx: [], headRot: 0.04, torsoRot: -0.02,
+        mic: 'hand', fHand: [10, 22], fBend: 1, micAng: 1.72, micGrip: 22,
+        bHand: [-14, 44], bBend: 1, bKind: 'relaxed', bRot: 0.25, fx: [], headRot: 0.04, torsoRot: -0.02,
       }, smirk),
-      sing: { mic: 'mouth', micDx: 5, micDy: 6, micAng: 1.0, fBend: 1, bHand: [-44, -2], bBend: -1, bKind: 'point', bRot: 0.12, eyes: 'open', mouth: 'beat', brow: 0.1, headRot: -0.03, fx: ['notes'], look: [0.4, 0] },
-      attack: { mic: 'mouth', micDx: 6, micDy: 5, micAng: 0.95, fBend: 1, lean: 0.1, torsoRot: 0.07, headRot: 0.07, headDx: 3, bHand: [-34, -30], bBend: -1, bKind: 'fist', bRot: -0.3,
+      sing: { mic: 'mouth', micDx: 5, micDy: 6, micAng: 1.0, fBend: 1, bHand: [-40, 8], bBend: -1, bKind: 'open', bSpread: 0.9, bRot: -0.2, eyes: 'open', mouth: 'beat', brow: 0.1, headRot: -0.03, fx: ['notes'], look: [0.4, 0] },
+      // attack (prop fix): the sound blast. The arm drives the mic out toward the enemy at chest height, the ball head leading (tip about x 110,
+      // y -170 at s 1), the fist still closed on the shaft; the free fist pulls back low as the counterweight, the green burst fires off the mic head
+      attack: { mic: 'hand', fHand: [44, -12], fBend: 1, micAng: 2.45, micGrip: 24, micFace: -0.1, lean: 0.12, torsoRot: 0.07, headRot: 0.07, headDx: 3,
+        bHand: [-22, 32], bBend: 1, bKind: 'fist', bRot: 0.3,
         fFoot: [34, -12], bFoot: [-26, -12], eyes: 'determined', mouth: 'beat', brow: 0.5, fx: ['burst'], look: [0.5, 0] },
-      hurt: { mic: 'hand', fHand: [4, 38], fBend: -1, micAng: 1.9, micGrip: 22, lean: -0.13, torsoRot: -0.08, headRot: -0.14, headDx: -3, bHand: [-34, -8], bBend: -1, bKind: 'open', bSpread: 1.3, bFront: 1,
+      // hurt (prop fix): a flinch away with the mic clutched to the chest, the free hand thrown up
+      hurt: { mic: 'hand', fHand: [-4, 22], fBend: 1, micAng: 1.85, micGrip: 22, lean: -0.13, torsoRot: -0.08, headRot: -0.14, headDx: -3, bHand: [-34, -8], bBend: -1, bKind: 'open', bSpread: 1.3, bFront: 1,
         fFoot: [12, -12], bFoot: [-20, -12], eyes: 'hurt', mouth: 'ow', brow: -0.7, sweat: 1, blush: 0.6, fx: ['stars'] },
       cheer: { mic: 'hand', fHand: [46, -34], fBend: 1, micAng: 1.45, micGrip: 22, bHand: [-46, -34], bBend: -1, bKind: 'fist', bRot: -0.2, eyes: 'happy', mouth: 'grin', brow: -0.2, headRot: 0.04,
         fFoot: [20, -12], bFoot: [-18, -12], fx: ['sparkles'] },
       // the new poses (HV_ART_AUDIO 2.5). windup: a crouch with both hands cupped round the mic at the mouth, eyes half shut, the beatbox mouth
-      windup: { mic: 'mouth', micDx: 4, micDy: 7, micAng: 1.05, fBend: 1, squash: 0.97, torsoDy: 6, lean: -0.03, headRot: -0.02, bHand: [32, -10], bBend: 1, bKind: 'relaxed', bRot: -1.4, bSpread: 0.6, bFront: 1,
-        fFoot: [26, -12], bFoot: [-24, -12], eyes: 'half', mouth: 'beat', brow: 0.3, fx: [], look: [0.4, 0] },
-      // strike: the kit attack (the green burst at the mic) leaning 0.06 further in
-      strike: { mic: 'mouth', micDx: 6, micDy: 5, micAng: 0.95, fBend: 1, lean: 0.16, bx: 4, torsoRot: 0.07, headRot: 0.07, headDx: 3, bHand: [-34, -30], bBend: -1, bKind: 'fist', bRot: -0.3,
-        fFoot: [36, -12], bFoot: [-26, -12], eyes: 'determined', mouth: 'beat', brow: 0.5, fx: ['burst'], look: [0.5, 0] },
-      // block: arms crossed over the smiley, the mic tucked under the far arm, chin up, the cocky smirk, green rings
-      block: { mic: 'hand', fHand: [-36, 26], fBend: -1, micAng: -0.15, micGrip: 20, bHand: [44, 30], bBend: 1, bKind: 'fist', bRot: 0.2, bFront: 1, headRot: -0.09, torsoRot: -0.02,
+      // windup (prop fix): the anticipation runs opposite to the blast. A crouch leaning back, both hands cupped round the mic at the mouth (the beatbox
+      // gather: the free hand's fingers wrap the mic head from the front), eyes half shut
+      windup: { mic: 'mouth', micDx: 4, micDy: 7, micAng: 1.25, fBend: 1, squash: 0.96, torsoDy: 6, lean: -0.08, torsoRot: -0.05, headRot: -0.06, bHand: [36, -14], bBend: 1, bKind: 'relaxed', bRot: -1.6, bSpread: 0.6, bFront: 1,
+        fFoot: [26, -12], bFoot: [-26, -12], eyes: 'half', mouth: 'beat', brow: 0.3, fx: [], look: [0.4, 0] },
+      // strike: the attack blast with a step in, the body leaning 0.05 further in
+      strike: { mic: 'hand', fHand: [44, -12], fBend: 1, micAng: 2.45, micGrip: 24, micFace: -0.1, lean: 0.17, bx: 4, torsoRot: 0.07, headRot: 0.07, headDx: 3,
+        bHand: [-22, 32], bBend: 1, bKind: 'fist', bRot: 0.3,
+        fFoot: [38, -12], bFoot: [-26, -12], eyes: 'determined', mouth: 'beat', brow: 0.5, fx: ['burst'], look: [0.5, 0] },
+      // block: arms crossed over the smiley like a guard, the mic held upright against the chest under the crossing arm, chin up, the cocky smirk, green rings
+      block: { mic: 'hand', fHand: [-30, 24], fBend: -1, micAng: 1.75, micGrip: 20, bHand: [44, 30], bBend: 1, bKind: 'fist', bRot: 0.2, bFront: 1, headRot: -0.09, torsoRot: -0.02,
         fFoot: [26, -12], bFoot: [-26, -12], eyes: 'open', mouth: 'smirkTeeth', brow: 0.3, fx: ['rings'] },
-      // down: sitting cross-legged, the mic dangling from one hand, shoulders slumped, eyes closed, the grey '...' bubble
-      down: { mic: 'hand', fHand: [16, 46], fBend: 1, micAng: -1.35, micGrip: 18, by: 52, torsoDy: 4, torsoRot: 0.07, lean: 0.03, headRot: 0.24, headDy: 2, bHand: [-6, 50], bBend: -1, bKind: 'relaxed', bRot: 0.3,
+      // down: sitting cross-legged, the mic lying across his lap in the loose fist (head forward, not stuck into the floor), shoulders slumped, eyes closed
+      down: { mic: 'hand', fHand: [14, 46], fBend: 1, micAng: 2.95, micGrip: 20, by: 52, torsoDy: 4, torsoRot: 0.07, lean: 0.03, headRot: 0.24, headDy: 2, bHand: [-6, 50], bBend: -1, bKind: 'relaxed', bRot: 0.3,
         fFoot: [-12, -60], bFoot: [14, -60], fBow: 24, bBow: -22, fFootRot: -0.5, bFootRot: 0.4, eyes: 'closed', mouth: 'flat', brow: -0.25, blush: 0.6, fx: ['mute'] },
-      // walk: the bouncy strut, the free hand clicking its fingers (see the tweak)
+      // walk: the bouncy strut, the mic upright at the chest, the free arm swinging against the steps (see the tweak)
       walk: Object.assign({
-        mic: 'hand', fHand: [16, 36], fBend: -1, micAng: 1.3, micGrip: 22,
-        bHand: [-34, 4], bBend: -1, bKind: 'point', bRot: 0.1, fx: [], headRot: 0.04, torsoRot: -0.02,
+        mic: 'hand', fHand: [10, 24], fBend: 1, micAng: 1.72, micGrip: 22,
+        bHand: [-14, 44], bBend: 1, bKind: 'relaxed', bRot: 0.25, fx: [], headRot: 0.04, torsoRot: -0.02,
       }, smirk),
     };
   }
@@ -230,10 +239,10 @@
   function bustPose() {
     return Object.assign({ mic: 'hand', fHand: [12, 56], fBend: -1, micAng: 1.5, micGrip: 22, bHand: [-14, 56], bBend: 1, bKind: 'relaxed', fx: [], headRot: 0.04, torsoRot: -0.02 }, { eyes: 'open', mouth: 'smirkTeeth', brow: 0.2 });
   }
-  // the monster keeps the same poses but points with the free hand in idle (as in the artist's costume picture)
+  // the monster keeps the same poses; its free paw hangs a little wider of the fluffy onesie body
   function monsterPoses() {
     const p = poses();
-    p.idle = Object.assign({}, p.idle, { bHand: [-42, 8], bBend: -1, bKind: 'point', bRot: 0.3 });
+    p.idle = Object.assign({}, p.idle, { bHand: [-18, 44] });
     return p;
   }
 
@@ -270,8 +279,8 @@
       mic: { accent: RJ.ACCENT.roxor.main, headR: 10.5, len: 44, bands: 2 },
       bounds: monster ? { w: 240, h: 318, x0: -150, x1: 90 } : { w: 212, h: 332, x0: -122, x1: 90 },     // hair, mane and the widest pose reach (not effects)
       life: { walk: { bob: 3, per: 0.5, head: 0.012, step: { hz: 2, stride: 10, lift: 6 } } },      // the strut bounces a little more than the kit walk
-      // the free hand snaps its fingers on every other step of the walk
-      tweak(P, t) { if (P.pose === 'walk') P.bKind = Math.sin(Math.PI * t * 2) > 0.2 ? 'fist' : 'point'; },
+      // the walk: the free arm swings against the steps (stepPhase > 0 = front foot forward, so the back-side arm swings forward), pure in t
+      tweak(P, t) { if (P.pose === 'walk' && typeof P.stepPhase === 'number') P.bHand = [P.bHand[0] + 9 * P.stepPhase, P.bHand[1] - 2 * Math.abs(P.stepPhase)]; },
       bust: { rect: monster ? [-100, -322, 100, -108] : [-92, -338, 92, -126], face: monster ? [-78, -310, 78, -150] : [-70, -322, 64, -152], pose: 'bust' },
       layers: {},
     };
@@ -776,26 +785,32 @@
   function poses() {
     const happy = { eyes: 'open', mouth: 'happyOpen', brow: -0.15 };
     return {
+      // idle (prop fix): the mic relaxed at the chest in a closed fist, held nearly upright so its head sits just under the chin (as in the Hocus Vocus idle)
       idle: Object.assign({
-        mic: 'hand', fHand: [22, -4], fBend: 1, micAng: 1.0, micGrip: 22,
+        mic: 'hand', fHand: [18, -2], fBend: 1, micAng: 1.3, micGrip: 22,
         bHand: [-38, 14], bBend: -1, bKind: 'open', bSpread: 0.85, bRot: 0.12, flare: 0, fx: [], headRot: -0.04,
       }, happy),
       sing: { mic: 'mouth', micDx: 18, micDy: 11, micAng: 1.1, fBend: 1, bHand: [-36, 8], bBend: -1, bKind: 'open', bSpread: 0.8, bRot: 0.1, eyes: 'closed', mouth: 'sing', brow: -0.5, headRot: 0.05, flare: 0.3, fx: ['notes'] },
-      attack: { mic: 'hand', fHand: [46, -6], fBend: 1, micAng: 0.2, micGrip: 24, bHand: [-34, 20], bBend: -1, bKind: 'open', bRot: 0.2, lean: 0.05, torsoRot: 0.04, headRot: 0.05, headDx: 2,
+      // attack (prop fix): the mic held out at the enemy, the ball head LEADING (it used to point back at her own forearm with the tail aimed at the foe),
+      // arm extended at chest height (tip about x 95, y -150 at s 1), the free hand swept back low; the pink arcs leave the mic head
+      attack: { mic: 'hand', fHand: [44, -14], fBend: 1, micAng: 2.4, micGrip: 24, micFace: -0.1, bHand: [-30, 22], bBend: -1, bKind: 'open', bSpread: 1.1, bRot: 0.3, lean: 0.07, torsoRot: 0.04, headRot: 0.05, headDx: 2,
         eyes: 'determined', mouth: 'sing', brow: 0.5, browY: -1, flare: 0.7, fFoot: [22, -12], bFoot: [-14, -12], fx: ['arcs', 'sparkleMic'] },
-      hurt: { mic: 'hand', fHand: [8, 12], fBend: 1, micAng: 1.3, micGrip: 22, lean: -0.1, torsoRot: -0.06, headRot: -0.12, headDx: -3, bHand: [-34, -10], bBend: -1, bKind: 'open', bSpread: 1.3, flare: -0.2,
+      hurt: { mic: 'hand', fHand: [8, 12], fBend: 1, micAng: 1.45, micGrip: 22, lean: -0.1, torsoRot: -0.06, headRot: -0.12, headDx: -3, bHand: [-34, -10], bBend: -1, bKind: 'open', bSpread: 1.3, flare: -0.2,
         eyes: 'hurt', mouth: 'ow', brow: -0.8, sweat: 1, blush: 0.5, fFoot: [12, -12], bFoot: [-18, -12], fx: ['stars'] },
-      cheer: { mic: 'hand', fHand: [22, -4], fBend: 1, micAng: 1.0, micGrip: 22, bHand: [-40, -34], bBend: -1, bKind: 'open', bRot: 0.3, bSpread: 1.4, eyes: 'happy', mouth: 'happyOpen', brow: -0.2, headRot: 0.05, flare: 0.8,
+      // cheer (prop fix): the mic raised high in the fist (it used to stay at the chest, identical to idle), its head up and clear of the face, the free hand up and open
+      cheer: { mic: 'hand', fHand: [34, -34], fBend: 1, micAng: 1.9, micGrip: 22, bHand: [-38, -34], bBend: -1, bKind: 'open', bRot: 0.3, bSpread: 1.4, eyes: 'happy', mouth: 'happyOpen', brow: -0.2, headRot: 0.05, flare: 0.8,
         fFoot: [18, -12], bFoot: [-14, -12], fx: ['hearts'] },
-      // the new poses (HV_ART_AUDIO 2.5). windup: eyes closed, a small inhale, the mic drawn to the chest, the free hand lifted open like a conductor's breath
-      windup: { mic: 'hand', fHand: [-12, 10], fBend: 1, micAng: 1.45, micGrip: 22, torsoDy: -2, lean: -0.04, headRot: -0.07, bHand: [-40, -16], bBend: -1, bKind: 'open', bSpread: 1.2, bRot: -0.5,
-        flare: 0.25, eyes: 'closed', mouth: 'tiny', brow: -0.35, fFoot: [20, -12], bFoot: [-16, -12], fx: [] },
-      // strike: the kit attack (the mic thrust toward the enemy, sparkles) plus three cherry petals, mouth singing
-      strike: { mic: 'hand', fHand: [46, -6], fBend: 1, micAng: 0.2, micGrip: 24, bHand: [-34, 20], bBend: -1, bKind: 'open', bRot: 0.2, lean: 0.06, bx: 3, torsoRot: 0.04, headRot: 0.05, headDx: 2,
-        eyes: 'determined', mouth: 'sing', brow: 0.5, browY: -1, flare: 0.7, fFoot: [24, -12], bFoot: [-14, -12], fx: ['arcs', 'sparkleMic', 'petals'] },
-      // block: the free hand raised palm forward (a soft shield), the mic at the mouth, a held 'ooh', pink rings
-      block: { mic: 'mouth', micDx: 16, micDy: 10, micAng: 1.2, fBend: 1, bHand: [-44, -12], bBend: -1, bKind: 'open', bSpread: 1.0, bRot: 0.2, bFront: 1, headRot: 0.02, lean: -0.02,
-        eyes: 'determined', mouth: 'sing', brow: 0.3, flare: 0.3, fFoot: [22, -12], bFoot: [-18, -12], fx: ['rings'] },
+      // the new poses (HV_ART_AUDIO 2.5). windup (prop fix): the anticipation runs opposite to the strike. She leans back with a breath in, the mic drawn
+      // in and up under the chin (fist closed, head up), the free hand swept back open like a conductor's breath
+      windup: { mic: 'hand', fHand: [-10, -2], fBend: 1, micAng: 1.7, micGrip: 22, torsoDy: -2, lean: -0.08, torsoRot: -0.04, headRot: -0.1, bHand: [-42, -18], bBend: -1, bKind: 'open', bSpread: 1.2, bRot: -0.5,
+        flare: 0.25, eyes: 'closed', mouth: 'tiny', brow: -0.35, fFoot: [20, -12], bFoot: [-18, -12], fx: [] },
+      // strike: the attack (the mic held out at the enemy, head leading, sparkles) with a step in, plus three cherry petals, mouth singing
+      strike: { mic: 'hand', fHand: [44, -14], fBend: 1, micAng: 2.4, micGrip: 24, micFace: -0.1, bHand: [-30, 22], bBend: -1, bKind: 'open', bSpread: 1.1, bRot: 0.3, lean: 0.09, bx: 3, torsoRot: 0.04, headRot: 0.05, headDx: 2,
+        eyes: 'determined', mouth: 'sing', brow: 0.5, browY: -1, flare: 0.7, fFoot: [26, -12], bFoot: [-14, -12], fx: ['arcs', 'sparkleMic', 'petals'] },
+      // block (prop fix): she guards the mic, hugging it upright to her chest with BOTH hands (the free hand cupped under the fist; it used to wave
+      // behind her back), shoulders drawn in, chin tucked, eyes on the foe, pink rings as the shield
+      block: { mic: 'hand', fHand: [-10, 20], fBend: 1, micAng: 1.55, micGrip: 22, bHand: [40, 26], bBend: 1, bKind: 'relaxed', bRot: -1.2, bFront: 1, headRot: 0.07, headDy: 2, lean: -0.04, torsoRot: -0.03, squash: 0.985,
+        eyes: 'determined', mouth: 'tiny', brow: 0.3, flare: 0.3, fFoot: [22, -12], bFoot: [-18, -12], fx: ['rings'] },
       // down: sitting on the stage floor, both knees to one side, the mic in her lap, head bowed, eyes closed, the grey '...' bubble
       down: { mic: 'hand', fHand: [4, 42], fBend: 1, micAng: 0.1, micGrip: 22, by: 46, lean: -0.02, torsoRot: 0.05, headRot: 0.26, headDx: 2, bHand: [-10, 48], bBend: -1, bKind: 'relaxed', bRot: 0.2,
         fFoot: [-24, -55], bFoot: [-36, -55], fBow: 26, bBow: 20, fFootRot: 0.15, bFootRot: 0.1, flare: 0.4, eyes: 'closed', mouth: 'flat', brow: -0.3, blush: 0.7, fx: ['mute'] },
@@ -832,6 +847,12 @@
   // the near arm's round shoulder cap lies over the dress, so the strap and the armhole edge are drawn again on top of it (clipped to the strap region)
   function strapOver(g, S) {
     if (S.P.mic === 'mouth') return;                              // the mic at the mouth: the raised forearm crosses the strap, so the shoulder must stay on top
+    // a fist (and its mic) drawn up to the chin, or the free hand raised across the chest, passes over the strap region: the strap must not cover them
+    const h = S.pt.hand, sb = S.pt.shB, P = S.P;
+    if (h && h[1] < -112 && h[0] < 34) return;
+    const mh = S.pt.micHead;
+    if (mh && mh[0] > 0 && mh[0] < 30 && mh[1] > -160 && mh[1] < -112) return;
+    if (P.bFront && sb && Array.isArray(P.bHand) && sb[0] + P.bHand[0] > -4 && sb[1] + P.bHand[1] < -104) return;
     g.save();
     g.beginPath(); g.rect(15, -150, 30, 21); g.clip();
     RJ.cel(g, BODICE, J.dress, { shadow: J.dressSh, line: LINE.main, depth: 6, hi: '#ffc3d7', hiW: 1.5, tension: 0.8 });
@@ -1395,6 +1416,7 @@
   const RC_JACKET = [[-15, -151], [15, -151], [31, -146], [37, -132], [38, -108], [41, -79, 1], [-41, -79, 1], [-38, -108], [-37, -132], [-31, -146]];
   const RC_PANEL = [[-13, -152], [13, -152], [19, -132], [20, -106], [22, -80, 1], [-22, -80, 1], [-20, -106], [-19, -132]];
   function rcTorso(g, S) {
+    rcGrip(S.spec, S.P, S.M.torso, S.pt);                                  // hands on the pad, exact for the blended pose (the arms draw after this layer)
     const goat = !!S.spec.goatSuit, Q = goat ? GOAT : R;                    // the goat suit wears the same cut in cream; its headphones sit over the ears
     // the headphones' violet cord round the back of the neck, then the neck itself
     const band = [[-29, -136], [-26, -150], [-12, -158], [4, -159], [20, -156], [30, -148], [31, -137]];
@@ -1470,6 +1492,28 @@
   // attack effect: sound arcs climbing off the pads, short rays that pulse on the beat, a violet bloom and a few pops
   function rcFx(g, S, name) {
     if (name === 'goatnotes') { const h = S.pt.head; RJ.fx.notes(g, h[0] + 56, h[1] - 16, S.t, RJ.accent('rawclaw').main, 3); return; }
+    if (name === 'chargefx') {
+      // the windup: a small violet ball of sound swelling in the open palm at the hip
+      const h = S.pt.hand, q = 0.5 + 0.5 * Math.sin(S.t * 9);
+      tk.glow(g, h[0] + 8, h[1] - 4, 18 + 6 * q, R.violet, 0.45 + 0.2 * q, false);
+      RJ.fx.sparkles(g, h[0] + 8, h[1] - 4, [[-14, -16, 4, 0.1], [16, -10, 4.5, 0.3], [6, 18, 3.5, 0.2]], R.glow, S.t);
+      return;
+    }
+    if (name === 'pushfx') {
+      // the push: sound arcs leaving the open palm toward the target, a violet bloom on the palm, the pads glowing under the back hand
+      const h = S.pt.hand, t = S.t, b = S.beat, pc = tPt(S, 0, -100), x0 = h[0] + 10, y0 = h[1] - 4;
+      tk.glow(g, pc[0], pc[1], 30 + 8 * b, R.violet, 0.25 + 0.25 * b, false);
+      tk.glow(g, x0, y0, 30 + 12 * b, R.violet, 0.35 + 0.3 * b, false);
+      g.save(); g.lineCap = 'round';
+      for (let i = 0; i < 3; i++) {
+        const u = fr(t * 1.6 + i / 3), r = 10 + u * 58, a = Math.sin(Math.PI * Math.min(1, u * 1.1)) * 0.95, sp = 0.85 - u * 0.25;
+        g.globalAlpha = a; g.strokeStyle = C.ink; g.lineWidth = 6.4 - u * 2.4; g.beginPath(); g.arc(x0, y0, r, -sp, sp); g.stroke();
+        g.strokeStyle = i % 2 ? '#e9dcff' : R.glow; g.lineWidth = 3.8 - u * 1.5; g.beginPath(); g.arc(x0, y0, r, -sp, sp); g.stroke();
+      }
+      g.restore();
+      RJ.fx.sparkles(g, x0, y0, [[30, -30, 5, 0.2], [44, 22, 5.5, 0.35], [18, 34, 4, 0.1]], R.glow, t);
+      return;
+    }
     if (name !== 'padfx') return;
     const p = tPt(S, 1, -104), t = S.t, b = S.beat;
     tk.glow(g, p[0], p[1], 42 + 10 * b, R.violet, 0.4 + 0.3 * b, false);
@@ -1490,6 +1534,24 @@
     RJ.fx.sparkles(g, p[0], p[1], [[-46, -34, 6, 0.2], [48, -38, 7, 0.3], [-30, -62, 4.5, 0], [32, -66, 4, 0.1]], R.glow, t);
   }
 
+  // ---- hands held on a prop (RawClaw's pad, Andy's bass): the prop lives in torso space, the kit's hand targets are figure-space offsets from the
+  // shoulders. gripHands turns torso-space grip points into those offsets through the real torso matrix, so a hand stays glued to its prop through
+  // lean, torso turns, breathing and pose blends. It runs twice: in the spec's tweak (so RJ.point / bounds see sensible hands) and again at the top
+  // of the torso layer with the blended pose and the live matrix (exact: pose blends lerp the grip points in prop space, never the hand offsets).
+  // P.fFree / P.bFree keep the table's free targets; fw / bw (0..1) blend from the free target to the grip.
+  function torsoOf(spec, P) {
+    const SK = spec.skel, root = mat.local(0, 0, P.bx, P.by, P.lean, 1, P.squash);
+    return mat.mul(root, mat.local(SK.hip[0], SK.hip[1], P.torsoDx, P.torsoDy, P.torsoRot, 1, P.breath));
+  }
+  function gripHands(spec, P, T, f, fw, b, bw, pt) {
+    const SK = spec.skel, sF = mat.pt(T, SK.shF[0], SK.shF[1]), sB = mat.pt(T, SK.shB[0], SK.shB[1]), w01 = (v) => clamp(isFinite(v) ? +v : 0, 0, 1);
+    const ff = P.fFree || P.fHand, bf = P.bFree || P.bHand;
+    if (f && w01(fw) > 0) { const q = mat.pt(T, f[0], f[1]), w = w01(fw), x = lerp(sF[0] + ff[0], q[0], w), y = lerp(sF[1] + ff[1], q[1], w); P.fHand = [x - sF[0], y - sF[1]]; if (pt) pt.hand = [x, y]; }
+    if (b && w01(bw) > 0) { const q = mat.pt(T, b[0], b[1]), w = w01(bw), x = lerp(sB[0] + bf[0], q[0], w), y = lerp(sB[1] + bf[1], q[1], w); P.bHand = [x - sB[0], y - sB[1]]; }
+  }
+  // RawClaw's grip points on the pad (torso space): P.fPad / P.bPad, held with P.fGrip / P.bGrip
+  function rcGrip(spec, P, T, pt) { gripHands(spec, P, T, P.fPad, P.fGrip, P.bPad, P.bGrip, pt); }
+
   // The five poses plus the portrait pose. The goat shares them but keeps a happier face (it never frowns, it bleats).
   function rcPoses(goat) {
     const cool = goat ? { eyes: 'open', mouth: 'happyOpen', brow: -0.15 } : { eyes: 'open', mouth: 'smile', brow: 0 };
@@ -1499,18 +1561,22 @@
       sing: { mic: 'mouth', micDx: 14, micDy: 7, micAng: 1.0, fBend: 1, bHand: [8, 36], bBend: 1, bKind: 'fist', bRot: 0.4, bFront: 1, eyes: goat ? 'open' : 'half', mouth: 'beat', brow: goat ? -0.1 : 0.1, headRot: -0.03, fx: [goat ? 'goatnotes' : 'notes'], look: [0.4, 0] },
       attack: { mic: 'none', fHand: [-6, 38], fBend: -1, fKind: 'fist', fRot: -0.4, bHand: [8, 38], bBend: 1, bKind: 'fist', bRot: 0.4, bFront: 1, lean: 0.08, torsoRot: 0.05, headRot: 0.08, headDx: 3,
         fFoot: [32, -12], bFoot: [-24, -12], eyes: goat ? 'open' : 'determined', mouth: goat ? 'grin' : 'beat', brow: goat ? 0.2 : 0.4, fx: ['padfx'], look: [0.5, 0.2] },
-      hurt: { mic: 'none', fHand: [30, -4], fBend: -1, fKind: 'open', fSpread: 1.3, fRot: 0.2, bHand: [-34, -10], bBend: 1, bKind: 'open', bSpread: 1.3, lean: -0.13, torsoRot: -0.08, headRot: -0.14, headDx: -3,
+      // hurt: the front hand flinches up open, the back hand clutches the pad to him (it is on a strap, it never just dangles)
+      hurt: { mic: 'none', fHand: [30, -4], fBend: -1, fKind: 'open', fSpread: 1.3, fRot: 0.2, bHand: [-34, -10], bBend: 1, bKind: 'fist', bRot: 0.6, bFront: 1, bPad: [-21, -100], bGrip: 1, lean: -0.13, torsoRot: -0.08, headRot: -0.14, headDx: -3,
         fFoot: [12, -12], bFoot: [-20, -12], eyes: 'hurt', mouth: 'ow', brow: -0.7, sweat: 1, blush: 0.6, fx: ['stars'] },
       cheer: { mic: 'none', fHand: [30, -40], fBend: 1, fKind: 'fist', fRot: -0.1, bHand: [-30, -40], bBend: -1, bKind: 'fist', bRot: 0.1, eyes: 'happy', mouth: goat ? 'happyOpen' : 'grin', brow: -0.2, headRot: 0.04,
         fFoot: [20, -12], bFoot: [-18, -12], fx: ['sparkles'] },
       // the portrait pose: both hands low so no stray fist shows at the edge of the head-and-shoulders crop
       bust: Object.assign({ mic: 'none', fHand: [12, 58], fBend: -1, fKind: 'fist', fRot: -0.2, bHand: [-12, 58], bBend: 1, bKind: 'fist', bRot: 0.2, bFront: 1, headRot: 0.03, fx: [] }, cool),
       // the new poses (HV_ART_AUDIO 2.5). windup: both hands lifted above the pad, leaning back
-      windup: { mic: 'none', fHand: [-3, 18], fBend: -1, fKind: 'open', fSpread: 1.1, fRot: 0.6, bHand: [7, 17], bBend: 1, bKind: 'open', bSpread: 1.1, bRot: -0.6, bFront: 1, lean: -0.05, headRot: -0.05,
-        fFoot: [26, -12], bFoot: [-22, -12], eyes: goat ? 'open' : 'determined', mouth: goat ? 'happyOpen' : 'flat', brow: goat ? 0 : 0.3, fx: [], look: [0.4, 0.3] },
-      // strike: the kit attack (hands slam the pad) with a step in, the pad flashing violet
-      strike: { mic: 'none', fHand: [-6, 38], fBend: -1, fKind: 'fist', fRot: -0.4, bHand: [8, 38], bBend: 1, bKind: 'fist', bRot: 0.4, bFront: 1, bx: goat ? 6 : 17, lean: goat ? 0.06 : 0.09, torsoRot: 0.05, headRot: 0.08, headDx: 3,
-        fFoot: [34, -12], bFoot: [-24, -12], eyes: goat ? 'open' : 'determined', mouth: goat ? 'grin' : 'beat', brow: goat ? 0.2 : 0.4, fx: ['padfx', 'pad'], look: [0.5, 0.2] },
+      // windup: the front hand drawn back low at the hip, palm open, gathering a ball of sound; the back hand stays on the pad holding a lit pad down
+      windup: { mic: 'none', fHand: [2, 54], fBend: 1, fKind: 'open', fSpread: 1.1, fRot: -1.0, bHand: [-1, 44], bBend: 1, bKind: 'relaxed', bRot: 0.5, bFront: 1, bPad: [-10, -97], bGrip: 1, lean: -0.06, torsoRot: -0.03, headRot: -0.05,
+        fFoot: [26, -12], bFoot: [-22, -12], eyes: goat ? 'open' : 'determined', mouth: goat ? 'happyOpen' : 'flat', brow: goat ? 0 : 0.3, fx: ['chargefx'], look: [0.4, 0.3] },
+      // strike: the push. The front arm thrusts out at chest height, palm open toward the target, and a violet sound blast leaves the palm (the
+      // striking point, see tip); the back hand keeps a pad pressed so the pads flash on the beat. A step in carries the reach to ~x 100..130.
+      strike: { mic: 'none', fHand: [47, 6], fBend: 1, fKind: 'open', fSpread: 0.9, fRot: -1.35, bHand: [-1, 44], bBend: 1, bKind: 'relaxed', bRot: 0.5, bFront: 1, bPad: [-10, -97], bGrip: 1, push: 1,
+        bx: goat ? 12 : 17, lean: goat ? 0.07 : 0.09, torsoRot: 0.05, headRot: 0.08, headDx: 3,
+        fFoot: [34, -12], bFoot: [-24, -12], eyes: goat ? 'open' : 'determined', mouth: goat ? 'grin' : 'beat', brow: goat ? 0.2 : 0.4, fx: ['pushfx', 'pad'], look: [0.5, 0.2] },
       // block: the pad hugged to the chest like a shield, calm eyes, violet rings
       block: { mic: 'none', fHand: [-4, 24], fBend: -1, fKind: 'fist', fRot: -0.9, bHand: [6, 24], bBend: 1, bKind: 'fist', bRot: 0.9, bFront: 1, headRot: 0.02, lean: -0.03, torsoDy: 2,
         fFoot: [26, -12], bFoot: [-24, -12], eyes: 'open', mouth: goat ? 'happyOpen' : 'smile', brow: -0.1, fx: ['rings'] },
@@ -1526,7 +1592,8 @@
       id: goat ? 'rawclaw_goat' : 'rawclaw',
       accent: 'rawclaw',
       skel: { neck: [0, -150], headC: [2, -208], shF: [26, -135], shB: [-26, -135], hip: [0, -78] },
-      base: {},
+      // grip defaults (every pose has them, so blends lerp them instead of switching): no grip, grip points on the pad's lower corners, no push
+      base: { fGrip: 0, bGrip: 0, fPad: [19, -95], bPad: [-19, -95], push: 0 },
       poses: rcPoses(goat),
       face: rcFaceSpec(goat),
       exprs: { smirk: { eyes: 'open', mouth: 'smirk', brow: 0.15 } },
@@ -1546,18 +1613,25 @@
       mic: { accent: R.violet, headR: 10, len: 40, bands: 2 },
       bounds: goat ? { h: 337, x0: -150, x1: 143 } : { h: 336, x0: -131, x1: 137 },       // the silhouette over all five poses (the hurt lean, the attack reach, the goat's ears), not the effects
       life: { walk: { bob: 1.6, per: 0.5, head: 0.008, step: { hz: 2, stride: 7, lift: 4 } } },       // a slow, laid-back walk
-      tip: (P, L) => mat.pt(L.torso, 0, -96),                                                         // the striking point: the centre of the pads
+      // the striking point: the centre of the pads, sliding out to just ahead of the pushing palm as P.push grows (the strike's sound blast)
+      tip: (P, L) => { const c = mat.pt(L.torso, 0, -96), h = L.pt.hand, k = clamp(isFinite(P.push) ? +P.push : 0, 0, 1); return [lerp(c[0], h[0] + 20, k), lerp(c[1], h[1] - 4, k)]; },
       bust: goat ? { rect: [-136, -324, 134, -96], face: [-110, -318, 112, -142], pose: 'bust' } : { rect: [-92, -324, 88, -92], face: [-76, -318, 78, -146], pose: 'bust' },
       layers: { backHair: rcNape, torso: rcTorso, head: goat ? gtHead : rcHead, over: rcOver, fx: rcFx },
       // the hands drum the pads: alternate hits in the attack, a lazy tap of the back hand while he beatboxes
       tweak(P, t) {
-        if (P.pose === 'attack' || P.pose === 'strike') {
+        if (P.pose === 'attack') {
           const f = Math.pow(Math.abs(Math.sin(Math.PI * t * 2.6)), 3), k = Math.pow(Math.abs(Math.sin(Math.PI * (t * 2.6 + 0.5))), 3);
           P.fHand = [P.fHand[0], P.fHand[1] - 11 * (1 - f)]; P.bHand = [P.bHand[0], P.bHand[1] - 11 * (1 - k)];
+        } else if (P.pose === 'strike') {
+          // the palm punches out on each beat; the back fingers tap the pad in between
+          P.fHand = [P.fHand[0] + 2.5 * (P.beat || 0), P.fHand[1]];
+          P.bPad = [P.bPad[0], P.bPad[1] - 4 * (1 - (P.beat || 0))];
         } else if (P.pose === 'sing') {
           const k = Math.pow(Math.abs(Math.sin(Math.PI * t * 2)), 3);
           P.bHand = [P.bHand[0], P.bHand[1] - 7 * (1 - k)];
         }
+        P.fFree = P.fHand; P.bFree = P.bHand;
+        rcGrip(this, P, torsoOf(this, P));
       },
     };
   }
@@ -1642,8 +1716,8 @@
   const AN_BODY = [[48, -18, 1], [41, -27], [22, -36], [-5, -40], [-33, -36], [-50, -21], [-55, 3], [-50, 22], [-33, 35], [-7, 39], [15, 34], [28, 27], [35, 25, 1], [33, 10], [29, 0], [33, -8]];
   const AN_NECK = 118, AN_BRIDGE = -33;
   function anBass(g, S) {
-    // the strap over the shoulder to the upper horn
-    const sp = [[-17, -152], [-3, -140], [15, -128], [34, -118]];
+    // the strap over the shoulder to the strap pin on the upper horn: the pin end rides with the bass, so a turned or lifted bass keeps its strap on
+    const hn = bassPt(42, -24, S.P), sp = [[-17, -152], [-3, -140], [lerp(-3, hn[0], 0.55), lerp(-140, hn[1], 0.5) + 1.5], hn];
     RJ.ink(g, sp, { w: 9, color: C.ink, taper: 0, wobble: 0, weightVar: 0 });
     RJ.ink(g, sp, { w: 6.4, color: A.strap, taper: 0, wobble: 0, weightVar: 0 });
     RJ.ink(g, sp.map((p) => [p[0] + 0.6, p[1] + 2.2]), { w: 1.3, color: A.stitch, taper: 0, wobble: 0, weightVar: 0, alpha: 0.9 });
@@ -1676,7 +1750,14 @@
     for (let i = 0; i < 4; i++) RJ.ink(g, [[AN_BRIDGE, -4.8 + i * 3.2], [N, -2.5 + i * 1.7]], { w: 1.0, color: '#f3eee0', taper: 0, wobble: 0, weightVar: 0, alpha: 0.95 });
     g.restore();
   }
+  // Andy's grip points: the fretting (front) hand at P.fretAt and the plucking (back) hand at P.pluckAt, both in the bass's own frame
+  // (lx along the neck from the body centre, ly across it, + toward the lower edge), held with P.fGrip / P.bGrip
+  function anGrip(P, T, pt) {
+    const fa = P.fretAt || [74, 7], pa = P.pluckAt || [-8, -10];
+    gripHands(anSpec, P, T, bassPt(fa[0], fa[1], P), P.fGrip, bassPt(pa[0], pa[1], P), P.bGrip, pt);
+  }
   function anTorso(g, S) {
+    anGrip(S.P, S.M.torso, S.pt);                                           // both hands on the bass, exact for the blended pose (the arms draw after this layer)
     RJ.neck(g, 2, -156, { w: 22, h: 22 });
     RJ.cel(g, [[-14, -151], [14, -151], [32, -146], [37, -131], [37, -106], [40, -78, 1], [-40, -78, 1], [-37, -106], [-37, -131], [-32, -146]], A.tee, { shadow: A.teeSh, line: LINE.main, depth: 8, hi: A.teeHi, hiW: 1.6, hiAlpha: 0.7, tension: 0.5, decor: (gg) => {
       gg.beginPath(); gg.rect(-45, -128, 90, 8); gg.fillStyle = A.cream; gg.fill();
@@ -1707,16 +1788,18 @@
     if (name === 'prop') { anPedal(g, S); return; }
     if (name === 'bassnotes') { const hp = bassPt(AN_NECK + 12, -22, S.P), p = tPt(S, hp[0], hp[1]); RJ.fx.notes(g, p[0] - 22, p[1] - 6, t, A.band, 3); return; }
     if (name === 'bassfx') {
-      // the slap: fat sound rings spreading from the body, a chunky note popping out, a small burst on the strings at the hit
-      const cp = bassPt(-4, 0, S.P), c = tPt(S, cp[0], cp[1]), a = fr(t * 2.6), b = S.beat, ra = -bassAng(S.P);
-      tk.glow(g, c[0], c[1], 40 + 12 * b, A.glow, 0.22 + 0.2 * b, false);
+      // the power chord: a warm bloom on the body, fat sound arcs rolling forward off the bass toward the target (only the front half, so they never
+      // ring the figure or cross the hands), a chunky note popping out, a small burst on the strings at the hit
+      const cp = bassPt(-4, 0, S.P), c = tPt(S, cp[0], cp[1]), a = fr(t * 2.6), b = S.beat;
+      const op = bassPt(AN_NECK * 0.62, 0, S.P), o = tPt(S, op[0], op[1]), dir = Math.atan2(o[1] - c[1], o[0] - c[0]) * 0.45;   // aimed between the neck and level
+      tk.glow(g, c[0], c[1], 34 + 12 * b, A.glow, 0.22 + 0.2 * b, false);
       g.save(); g.lineCap = 'round';
       for (let k = 0; k < 3; k++) {
-        const age = a + k, r = 16 + age * 34, al = Math.max(0, 1 - age / 2.8);
+        const age = a + k, r = 62 + age * 30, al = Math.max(0, 1 - age / 2.8) * Math.min(1, age * 2.5), sp = 0.62 - age * 0.1;
         g.globalAlpha = al;
-        g.strokeStyle = C.ink; g.lineWidth = 8.4 - age * 1.4; g.beginPath(); g.ellipse(c[0], c[1], r, r * 0.86, ra, 0, TAU); g.stroke();
-        g.strokeStyle = k % 2 ? '#ffd9a8' : A.band; g.lineWidth = 5.6 - age * 1.0; g.beginPath(); g.ellipse(c[0], c[1], r, r * 0.86, ra, 0, TAU); g.stroke();
-        g.strokeStyle = 'rgba(255,255,255,0.75)'; g.lineWidth = 1.2; g.beginPath(); g.ellipse(c[0], c[1], r - 1.2, r * 0.86 - 1.2, ra, 3.7, 4.7); g.stroke();
+        g.strokeStyle = C.ink; g.lineWidth = 8.4 - age * 1.4; g.beginPath(); g.arc(c[0] + 10, c[1] + 6, r, dir - sp, dir + sp); g.stroke();
+        g.strokeStyle = k % 2 ? '#ffd9a8' : A.band; g.lineWidth = 5.6 - age * 1.0; g.beginPath(); g.arc(c[0] + 10, c[1] + 6, r, dir - sp, dir + sp); g.stroke();
+        g.strokeStyle = 'rgba(255,255,255,0.75)'; g.lineWidth = 1.2; g.beginPath(); g.arc(c[0] + 10, c[1] + 6, r - 1.4, dir - sp * 0.9, dir - sp * 0.3); g.stroke();
       }
       g.restore();
       // one chunky note per slap, floating off the headstock side so it never crosses the face
@@ -1730,27 +1813,43 @@
   function anPoses() {
     const easy = { eyes: 'open', mouth: 'happyOpen', brow: -0.15 };
     return {
+      // The hands are held ON the bass: fretAt / pluckAt are grip points in the bass frame (see anGrip), fGrip / bGrip 1 = held (the defaults in
+      // anSpec.base). fHand / bHand are only the free targets a hand drifts to when its grip is released (the cheer's fist pump, the bust).
+      // idle: the relaxed playing stance. Bass slung at the belly, neck rising forward; the fretting hand well out on the neck, the plucking
+      // fingers resting over the strings between the pickups.
       idle: Object.assign({ mic: 'none', fHand: [33, 22], fBend: 1, fKind: 'fist', fRot: -0.25, bHand: [20, 42], bBend: 1, bKind: 'relaxed', bRot: 0.3, bFront: 1, headRot: 0.03, fx: ['prop'] }, easy),
       sing: { mic: 'none', fHand: [35, 19], fBend: 1, fKind: 'fist', fRot: -0.25, bHand: [20, 42], bBend: 1, bKind: 'relaxed', bRot: 0.3, bFront: 1, eyes: 'happy', mouth: 'grin', brow: -0.2, headRot: -0.05, bFoot: [-40, -12], fx: ['prop', 'bassnotes'] },
       attack: { mic: 'none', fHand: [35, 19], fBend: 1, fKind: 'fist', fRot: -0.25, bHand: [20, 42], bBend: 1, bKind: 'fist', bRot: 0.5, bFront: 1, lean: 0.05, torsoRot: 0.03, headRot: 0.06, headDx: 2,
         fFoot: [30, -12], bFoot: [-26, -12], eyes: 'open', mouth: 'grin', brow: 0.45, fx: ['prop', 'bassfx'] },
-      hurt: { mic: 'none', fHand: [30, 0], fBend: -1, fKind: 'open', fSpread: 1.3, fRot: 0.2, bHand: [-34, -12], bBend: 1, bKind: 'open', bSpread: 1.3, lean: -0.13, torsoRot: -0.08, headRot: -0.14, headDx: -3,
+      // hurt: a flinch that hugs the bass: pulled in and up against the chest, the fretting hand slides down toward the body, the plucking hand
+      // clutches the top edge of the body
+      hurt: { mic: 'none', fHand: [30, 0], fBend: 1, fKind: 'fist', fRot: -0.3, bHand: [-34, -12], bBend: 1, bKind: 'fist', bRot: 0.9, bFront: 1, lean: -0.13, torsoRot: -0.08, headRot: -0.14, headDx: -3,
+        bassRot: 0.14, bassDx: -5, bassDy: -7, fretAt: [54, 7], pluckAt: [-18, -27],
         fFoot: [12, -12], bFoot: [-20, -12], eyes: 'hurt', mouth: 'ow', brow: -0.7, sweat: 1, blush: 0.6, fx: ['prop', 'stars'] },
-      cheer: { mic: 'none', fHand: [30, -42], fBend: 1, fKind: 'fist', fRot: -0.1, bHand: [-36, -36], bBend: -1, bKind: 'open', bSpread: 1.4, bRot: 0.3, eyes: 'happy', mouth: 'happyOpen', brow: -0.2, headRot: 0.05,
+      // cheer: the bass raised: neck tipped up high by the fretting hand (high up the neck), the free hand pumps a fist in the air
+      cheer: { mic: 'none', fHand: [30, -42], fBend: 1, fKind: 'fist', fRot: -0.25, bHand: [-34, -40], bBend: -1, bKind: 'fist', bRot: -0.2, bFront: 0, bGrip: 0,
+        bassRot: 0.24, bassDx: 10, bassDy: -6, fretAt: [86, 6], eyes: 'happy', mouth: 'happyOpen', brow: -0.2, headRot: 0.05,
         fFoot: [20, -12], bFoot: [-18, -12], fx: ['prop', 'sparkles'] },
-      // the portrait pose: both hands low and close to the bass body, so no stray hand sits at the edge of the head-and-shoulders crop
-      bust: Object.assign({ mic: 'none', fHand: [22, 50], fBend: 1, fKind: 'fist', fRot: -0.25, bHand: [8, 54], bBend: 1, bKind: 'fist', bRot: 0.35, bFront: 1, headRot: 0.03, fx: [] }, easy),
-      // the new poses (HV_ART_AUDIO 2.5). windup: the bass neck raised (the fretting hand comes up with it), leaning back, eyes closed: the bass face
-      windup: { mic: 'none', fHand: [35, 19], fBend: 1, fKind: 'fist', fRot: -0.25, bHand: [20, 42], bBend: 1, bKind: 'relaxed', bRot: 0.3, bFront: 1, bassRot: 0.4, lean: -0.06, headRot: -0.1,
+      // the portrait pose: both hands low and close to the bass body, so no stray hand sits at the edge of the head-and-shoulders crop (grips off)
+      bust: Object.assign({ mic: 'none', fHand: [22, 50], fBend: 1, fKind: 'fist', fRot: -0.25, bHand: [8, 54], bBend: 1, bKind: 'fist', bRot: 0.35, bFront: 1, fGrip: 0, bGrip: 0, headRot: 0.03, fx: [] }, easy),
+      // windup: the bass hauled up and back for the swing (body lifted, neck raised but clear of the face), leaning back, the strumming arm cocked
+      // high above the strings for the big downstroke, eyes closed: the bass face
+      windup: { mic: 'none', fHand: [35, 19], fBend: 1, fKind: 'fist', fRot: -0.25, bHand: [20, 42], bBend: 1, bKind: 'relaxed', bRot: 0.1, bFront: 1, lean: -0.09, torsoRot: -0.04, headRot: -0.17, headDx: -3,
+        bassRot: 0.17, bassDx: -6, bassDy: -12, fretAt: [64, 6], pluckAt: [-6, -34],
         fFoot: [26, -12], bFoot: [-24, -12], eyes: 'closed', mouth: 'flat', brow: 0.35, fx: ['prop'] },
-      // strike: the kit attack (a big strum) with a step in, bass notes and an orange wave rolling along the ground
-      strike: { mic: 'none', fHand: [35, 19], fBend: 1, fKind: 'fist', fRot: -0.25, bHand: [20, 42], bBend: 1, bKind: 'fist', bRot: 0.5, bFront: 1, bx: 14, lean: 0.05, torsoRot: 0.03, headRot: 0.06, headDx: 2, bassRot: 0.3,
+      // strike: the swing lands. The bass sweeps down and forward until the neck points level at the target (the headstock end is the striking
+      // point, x ~ +125 at body height), a step in, and the plucking hand slams the power chord on the beat: sound arcs roll forward off the bass.
+      strike: { mic: 'none', fHand: [35, 19], fBend: 1, fKind: 'fist', fRot: -0.25, bHand: [20, 42], bBend: 1, bKind: 'fist', bRot: 0.5, bFront: 1, bx: 12, lean: 0.07, torsoRot: 0.04, headRot: 0.06, headDx: 2,
+        bassRot: -0.1, bassDx: 4, bassDy: 0, fretAt: [62, 6], pluckAt: [-8, -2],
         fFoot: [32, -12], bFoot: [-26, -12], eyes: 'open', mouth: 'grin', brow: 0.45, fx: ['prop', 'bassfx', 'bassnotes', 'wave'] },
-      // block: the bass body turned forward like a shield, feet planted wide, determined eyes
-      block: { mic: 'none', fHand: [35, 19], fBend: 1, fKind: 'fist', fRot: -0.25, bHand: [20, 42], bBend: 1, bKind: 'fist', bRot: 0.3, bFront: 1, bassRot: 0.8, bassDx: 12, bassDy: 4, headRot: 0.02,
+      // block: the bass hoisted to the chest and pushed out in front like a shield (body forward, neck kept clear of the face), both fists
+      // locked on it, feet planted wide, determined eyes
+      block: { mic: 'none', fHand: [35, 19], fBend: 1, fKind: 'fist', fRot: -0.25, bHand: [20, 42], bBend: 1, bKind: 'fist', bRot: 0.9, bFront: 1, headRot: 0.02,
+        bassRot: 0.16, bassDx: 14, bassDy: -15, fretAt: [60, 6], pluckAt: [-20, -27],
         fFoot: [36, -12], bFoot: [-34, -12], eyes: 'determined', mouth: 'flat', brow: 0.4, fx: ['prop', 'rings'] },
       // down: sitting on the floor with the bass across his knees, head tipped back, eyes closed, the grey '...' bubble
       down: { mic: 'none', fHand: [35, 22], fBend: 1, fKind: 'relaxed', fRot: -0.25, bHand: [20, 42], bBend: 1, bKind: 'relaxed', bRot: 0.3, bFront: 1, by: 52, bassRot: -0.12, headRot: -0.3, headDx: -2,
+        fretAt: [68, 6],
         fFoot: [52, -62], bFoot: [38, -62], fFootRot: -1.2, bFootRot: -1.1, eyes: 'closed', mouth: 'flat', brow: -0.1, fx: ['prop', 'mute'] },
       // walk: a heavy, relaxed walk with the bass bouncing (see the tweak)
       walk: Object.assign({ mic: 'none', fHand: [33, 22], fBend: 1, fKind: 'fist', fRot: -0.25, bHand: [20, 42], bBend: 1, bKind: 'relaxed', bRot: 0.3, bFront: 1, headRot: 0.03, fx: [] }, easy),
@@ -1761,10 +1860,11 @@
     id: 'andy',
     accent: 'andy',
     skel: {},
-    base: {},
+    // every pose carries the bass frame and the grips, so a blend between any two poses lerps them (a missing key would make the bass pop at k .5)
+    base: { bassRot: 0, bassDx: 0, bassDy: 0, fretAt: [74, 6], pluckAt: [-10, -12], fGrip: 1, bGrip: 1 },
     poses: anPoses(),
     life: { idle: { bob: 1.8, per: 1.7, sway: 0.03, head: 0.04 }, sing: { bob: 2.0, per: 1.1, sway: 0.04, head: 0.06, beat: 0.5, beatHz: 2 }, walk: { bob: 2.8, per: 0.5, head: 0.012, step: { hz: 2, stride: 8, lift: 4 } } },
-    tip: (P, L) => { const p = bassPt(AN_NECK + 14, 0, P); return mat.pt(L.torso, p[0], p[1]); },        // the striking point: the bass headstock
+    tip: (P, L) => { const p = bassPt(AN_NECK - 8, 0, P); return mat.pt(L.torso, p[0], p[1]); },         // the striking point: the top of the neck below the headstock
     face: anFaceSpec(),
     exprs: { smirk: { eyes: 'open', mouth: 'smirkTeeth', brow: 0.3 } },
     arm: { l: [26, 24], w: [19, 15], skin: C.skin, skinSh: C.skinSh, sleeve: { color: A.tee, shade: A.teeSh, len: 0.8, w0: 24, w1: 28, hi: false }, cuff: { color: A.cream, light: A.creamSh }, hand: { skin: C.skin, shade: C.skinSh } },
@@ -1784,22 +1884,21 @@
     layers: { backHair: anBack, torso: anTorso, head: anHead, fx: anFx },
     // the slap: the plucking hand lifts between hits and comes down on the beat; in the groove it bobs a little and the back foot taps the pedal
     tweak(P, t) {
+      const pa = P.pluckAt || [-10, -12];
       if (P.pose === 'attack' || P.pose === 'strike') {
+        // the slam: the plucking hand lifts off the strings between hits and comes down through them on the beat
         const b = P.beat;
-        P.bHand = [P.bHand[0] - 4 * (1 - b), P.bHand[1] - 21 * (1 - b)];
+        P.pluckAt = [pa[0] - 2 * (1 - b), pa[1] - 18 * (1 - b)];
         P.bKind = b > 0.45 ? 'fist' : 'relaxed';
       } else if (P.pose === 'sing') {
         const k = Math.pow(Math.abs(Math.sin(Math.PI * t * 2)), 2);
-        P.bHand = [P.bHand[0], P.bHand[1] - 4 * (1 - k)];
+        P.pluckAt = [pa[0], pa[1] - 5 * (1 - k)];
         P.bFoot = [P.bFoot[0], P.bFoot[1] - 8 * Math.pow(Math.max(0, Math.sin(Math.PI * t * 2)), 2)];
       } else if (P.pose === 'walk') P.bassRot = 0.05 * Math.sin(Math.PI * t * 4) * tk.motion();
-      // a turned or moved bass carries both hands along (the fretting hand on the neck, the plucking hand on the body)
-      if (P.bassRot || P.bassDx || P.bassDy) {
-        const SK = anSpec.skel, sf = SK.shF || [26, -131], sb = SK.shB || [-26, -131];
-        const f0 = [sf[0] + P.fHand[0], sf[1] + P.fHand[1]], f1 = onBass(f0, P), b0 = [sb[0] + P.bHand[0], sb[1] + P.bHand[1]], b1 = onBass(b0, P);
-        P.fHand = [P.fHand[0] + f1[0] - f0[0], P.fHand[1] + f1[1] - f0[1]];
-        P.bHand = [P.bHand[0] + b1[0] - b0[0], P.bHand[1] + b1[1] - b0[1]];
-      }
+      else if (P.pose === 'idle') { const k = Math.pow(Math.max(0, Math.sin(Math.PI * t * 1.2)), 6); P.pluckAt = [pa[0], pa[1] - 4 * k * tk.motion()]; }   // a lazy pluck now and then
+      // both hands on the bass (the exact pass runs again in anTorso with the blended pose)
+      P.fFree = P.fHand; P.bFree = P.bHand;
+      anGrip(P, torsoOf(anSpec, P));
     },
   };
   RJ.register('andy', crewRig(anSpec));
