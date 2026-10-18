@@ -27,10 +27,12 @@
 //                (card mechanics: see "Card mechanics" below the lookups; they also wrap resolveCard, cardHtml and cardPlain)
 //   Systems      cardDef(inst | id) isMedley(inst) canMedley(a, b) medleyDef(parts) signatureOf(heroId)   (see "The Crowd and Medleys" at the end)
 //   Mods         foldMods([deltaObj...]) -> final flat mods     trialDeltas(level) -> summed deltas
-//                modsFor(relicIds, trialLevelOrDeltas) -> final flat mods (what RUN.mods(R) returns: modsFor(R.relics, R.mods); active set tiers fold in)
-//                rowFor(heroId, row, relicIds) -> merged row bonuses (hero row plus relic `rows` plus active set tier `rows`)
+//                modsFor(relicIds, trialLevelOrDeltas, mascot?) -> final flat mods (what RUN.mods(R) returns: modsFor(R.relics, R.mods, R.mascot); active set tiers and mascot levels fold in)
+//                rowFor(heroId, row, relicIds, mascot?) -> merged row bonuses (hero row plus relic `rows` plus active set tier `rows` plus mascot level `rows`)
 //   Charm sets   DATA.relicSets[id] (registry, DESIGN 4.7)   setCounts(relicIds) -> {setId: owned}   setMembers(setId) -> [relic ids]
 //                setMax(setId) -> top tier   activeSetTiers(relicIds) -> [{set, tier, name, def}] (the virtual Charms in force)
+//   Mascot       DATA.mascots[id] (registry, DESIGN 4.7 "The Mascot"; data_mascots.js)   mascotLevel(xp) -> 1..mascotMax()   mascotNext(xp) -> XP to the next level
+//                activeMascotTiers(mascotOrNull) -> [{mascot, level, name, def}] (levels 1..current, each a virtual Charm)   mascotProgress(mascot) (overlay)   mascotLabel(id, level) (toast)
 //                setProgress(setId, relicIds) -> {id, name, text, n, max, total, tiers:[{tier, text, active}]}   setTierLabel(setId, tier) -> toast line
 //   Misc         tileCount(type, nonBlock)   cleanSetting(key, value)   ratio helpers for tests
 //   Checking     validate(only?, opt?) -> {errors, warnings, counts}
@@ -81,7 +83,7 @@ const DATA = (() => {
     cardOps: ['dmg', 'block', 'heal', 'status', 'removeStatus', 'draw', 'energy', 'pick', 'add', 'swap', 'hurt', 'cond', 'repeat', 'gold', 'ink', 'maxHp', 'revive', 'hook'],
     hookOps: ['dmg', 'block', 'heal', 'status', 'removeStatus', 'draw', 'energy', 'add', 'hurt', 'cond', 'gold', 'ink', 'maxHp', 'revive'],
     enemyOps: ['dmg', 'block', 'heal', 'status', 'removeStatus', 'add', 'summon', 'swap', 'cond', 'stealGold', 'flee'],
-    runOps: ['gold', 'ink', 'heal', 'hurt', 'maxHp', 'addCard', 'removeCard', 'upgradeCard', 'transformCard', 'duplicateCard', 'addRelic', 'addGem', 'addBrush', 'addCurse', 'fight', 'flag', 'paint', 'cardReward'],
+    runOps: ['gold', 'ink', 'heal', 'hurt', 'maxHp', 'addCard', 'removeCard', 'upgradeCard', 'transformCard', 'duplicateCard', 'addRelic', 'addGem', 'addBrush', 'addCurse', 'fight', 'flag', 'paint', 'cardReward', 'adoptMascot', 'mascotXp'],
 
     // target vocabularies
     cardTgt: ['enemy', 'all', 'random', 'lowest', 'others', 'self', 'ally', 'both', 'front', 'back'],
@@ -136,7 +138,7 @@ const DATA = (() => {
     statMax: ['maxHit', 'maxTurnDamage', 'maxDeck', 'trialBest'],
 
     // events
-    reqKeys: ['gold', 'hpPct', 'hpBelow', 'relic', 'flag', 'hero', 'chapter'],
+    reqKeys: ['gold', 'hpPct', 'hpBelow', 'relic', 'flag', 'hero', 'chapter', 'mascot'],   // mascot: false = "no mascot yet", true = "needs one" (hidden either way, like hero)
     whenKeys: ['flag', 'relic', 'hero'],
     runWho: ['both', 'front', 'lowest', 'random', 'hanae', 'kuro', 'suzu', 'raiga'],
 
@@ -266,6 +268,8 @@ const DATA = (() => {
     crowd: { name: 'Crowd', text: 'Every card you play fills the Crowd meter, a defeated enemy fills it by two. When it is full the crowd goes wild: a free Fading copy of a Signature card joins your hand, the two heroes taking turns.' },
     signature: { name: 'Signature', text: 'Each hero has one Signature card. When the crowd goes wild, a free Fading copy of it joins your hand.' },
     medley: { name: 'Medley', text: 'A Medley is two cards sung as one: it plays both of their effects. After a rival fight you may fuse two Attack or Skill cards of one hero into a Medley.' },
+    // the tour bus pet (DESIGN 4.7 "The Mascot"): one per run, adopted at a Detour, levels up with fights won and Merch Stall Snacks
+    mascot: { name: 'Mascot', text: 'A stray the tour bus adopts. It sits beside the duo and gives a small bonus that grows: level 2 at 5 XP, level 3 at 12 XP. Fights won give XP (rivals 2, headliners 3) and a Snack at the merch stall gives 2.' },
     // card mechanics (LISTS.mechs): one sentence each, N is the number printed after the word
     fanbase: { name: 'Fanbase', text: 'Fanbase N: whenever this card defeats an enemy, it deals N more damage for the rest of the tour.' },
     remix: { name: 'Remix', text: 'Remix N: each time you play this card, it deals N more damage for the rest of the fight.' },
@@ -289,6 +293,11 @@ const DATA = (() => {
     gold: { normal: [14, 22], elite: [30, 44], boss: [70, 90], chest: [45, 75] },
     cardChoices: 3,
     crowd: 7,                         // the Crowd meter: cards played until the crowd goes wild (a kill counts 2); Encore 5+ adds 1 (trial_5 mods.crowd)
+    // The Mascot (DESIGN 4.7 "The Mascot"): XP thresholds per level (index = level - 1: level 1 at 0, level 2 at 5, level 3 at 12),
+    // XP per fight won by tier (minions never count on their own), and the Merch Stall Snack (price.snack gold for snackXp XP, one per stall)
+    mascotXp: [0, 5, 12],
+    mascotFightXp: { normal: 1, elite: 2, boss: 3 },
+    snackXp: 2,
     // rarity weights (percent) for card rewards. rare weight = base.rare + min(rareOffset, rareOffsetCap) + mods.rareBoost,
     // moved from common. rareOffset rises by 1 after each normal or elite reward that offered no rare, resets when a rare is taken.
     rarity: {
@@ -299,7 +308,7 @@ const DATA = (() => {
     },
     rareOffsetCap: 40,
     relicWeights: { elite: { common: 50, uncommon: 40, rare: 10 }, chest: { common: 45, uncommon: 40, rare: 15 }, shop: { common: 40, uncommon: 40, rare: 20 } },
-    price: { card: { common: 50, uncommon: 80, rare: 150 }, relic: { common: 140, uncommon: 190, rare: 260, shop: 160 }, gem: { 1: 60, 2: 110, 3: 180 }, remove: 75, removeStep: 25, brush: 45, saleFrac: 0.5 },
+    price: { card: { common: 50, uncommon: 80, rare: 150 }, relic: { common: 140, uncommon: 190, rare: 260, shop: 160 }, gem: { 1: 60, 2: 110, 3: 180 }, remove: 75, removeStep: 25, brush: 45, snack: 35, saleFrac: 0.5 },
     shop: { cards: 5, gems: 2, relics: 3, brushes: 1 },
     camp: { restPct: 0.35 },
     chapterEnd: { healPct: 0.30, maxHp: 8 },
@@ -528,6 +537,7 @@ const DATA = (() => {
     gems: { perColor: 6, tiers: [1, 1, 2, 2, 3, 3] },
     events: { perChapter: 10, any: 10, onceFrac: 0.6 },
     achievements: 32, trials: 10, tips: 30,
+    mascots: 6,                       // the strays the tour bus can adopt (DATA.mascots), each with ECONOMY.mascotXp.length levels
   };
 
   // Enemy numbers at Trial 0 (CONTENT_SPEC 4 table; the data test asserts the markdown table equals this).
@@ -546,7 +556,7 @@ const DATA = (() => {
   // Registries filled by content files. DATA.add throws on a duplicate id so two
   // agents can never silently shadow each other.
   // ------------------------------------------------------------------
-  const REG = ['cards', 'gems', 'relics', 'relicSets', 'enemies', 'events', 'achievements', 'trials', 'tips', 'lore'];
+  const REG = ['cards', 'gems', 'relics', 'relicSets', 'mascots', 'enemies', 'events', 'achievements', 'trials', 'tips', 'lore'];
   const D = { LISTS, LINKS, statuses, keywords, ECONOMY, SETTINGS, brushes, tiles, heroes, ROSTER, rosterById, FIXED, QUOTA, GUIDE, encounters: { 1: { normal: [], elite: [] }, 2: { normal: [], elite: [] }, 3: { normal: [], elite: [] } } };
   REG.forEach((k) => { D[k] = k === 'tips' ? [] : {}; });
   // Display names of the gem and slot colour ids (the ids stay; every screen that prints a colour reads this).
@@ -751,13 +761,15 @@ const DATA = (() => {
   };
   // trial: a level number, or the deltas object a run stored at newRun (R.mods), so a saved run does not drift if trial data is retuned
   // Set bonuses fold in like virtual Charms: every active tier's mods (and rows below) count once, whatever the owned count beyond it.
-  D.modsFor = (relicIds, trial) => D.foldMods((relicIds || []).map((id) => D.relics[id] && D.relics[id].mods).concat(D.activeSetTiers(relicIds).map((t) => t.def.mods)).concat([trial && typeof trial === 'object' ? trial : D.trialDeltas(trial || 0)]));
-  D.rowFor = (heroId, row, relicIds) => {
+  // The Mascot's active levels (below) fold in the same way; `mascot` is R.mascot ({id, xp}) or null/undefined for none.
+  D.modsFor = (relicIds, trial, mascot) => D.foldMods((relicIds || []).map((id) => D.relics[id] && D.relics[id].mods).concat(D.activeSetTiers(relicIds).map((t) => t.def.mods)).concat(D.activeMascotTiers(mascot).map((t) => t.def.mods)).concat([trial && typeof trial === 'object' ? trial : D.trialDeltas(trial || 0)]));
+  D.rowFor = (heroId, row, relicIds, mascot) => {
     const out = {};
     const add = (r) => { if (r) Object.keys(r).forEach((k) => { out[k] = (out[k] || 0) + r[k]; }); };
     add(heroes[heroId] && heroes[heroId].rows[row]);
     (relicIds || []).forEach((id) => add(D.relics[id] && D.relics[id].rows && D.relics[id].rows[row]));
     D.activeSetTiers(relicIds).forEach((t) => add(t.def.rows && t.def.rows[row]));
+    D.activeMascotTiers(mascot).forEach((t) => add(t.def.rows && t.def.rows[row]));
     return out;
   };
 
@@ -792,6 +804,37 @@ const DATA = (() => {
   };
   // the toast line when a tier switches on: "Stage Crew 3 of 4: On the first turn of each fight, both heroes gain 4 Block."
   D.setTierLabel = (setId, tier) => { const s = D.relicSets[setId]; const tr = s && s.tiers && s.tiers[tier]; return s && tr ? `${s.name} ${tier} of ${D.setMax(setId)}: ${tr.text}` : ''; };
+
+  // ---- mascots (DESIGN 4.7 "The Mascot"): the tour bus pet. DATA.mascots[id] = {id, name, blurb, art:{m, c}, levels: {1: {text, mods?, hooks?,
+  // rows?}, 2: {...}, 3: {...}}}. A run adopts ONE (R.mascot = {id, xp}); its level is read from the XP thresholds ECONOMY.mascotXp (level 1 at
+  // 0 XP, 2 at 5, 3 at 12) and the levels STACK like Charm set tiers: every level up to the current one is a virtual Charm, folded by modsFor
+  // and rowFor (above), its combat hooks registered by COMBAT (src 'mascot') and its run hooks run by RUN.hook. Nothing beyond {id, xp} is saved. ----
+  D.mascotMax = () => ECONOMY.mascotXp.length;
+  D.mascotLevel = (xp) => {
+    const n = typeof xp === 'number' && Number.isFinite(xp) ? xp : 0;
+    let lv = 1;
+    ECONOMY.mascotXp.forEach((need, i) => { if (n >= need) lv = i + 1; });
+    return lv;
+  };
+  // XP still needed for the next level, or 0 at the top level
+  D.mascotNext = (xp) => { const lv = D.mascotLevel(xp); return lv >= D.mascotMax() ? 0 : ECONOMY.mascotXp[lv] - (xp || 0); };
+  // [{mascot: id, level, name, def}] for levels 1..current (empty for no mascot or an unknown id), in level order so hook order is stable
+  D.activeMascotTiers = (mascot) => {
+    const m = mascot && typeof mascot === 'object' ? D.mascots[mascot.id] : null;
+    if (!m || !m.levels) return [];
+    const lv = D.mascotLevel(mascot.xp), out = [];
+    for (let n = 1; n <= lv; n++) if (m.levels[n]) out.push({ mascot: m.id, level: n, name: m.name, def: m.levels[n] });
+    return out;
+  };
+  // what the Charms overlay shows: {id, name, blurb, art, xp, level, max, next (XP to the next level, 0 at the top), levels: [{level, text, active, at (XP needed)}]}
+  D.mascotProgress = (mascot) => {
+    const m = mascot && typeof mascot === 'object' ? D.mascots[mascot.id] : null;
+    if (!m) return null;
+    const xp = typeof mascot.xp === 'number' ? mascot.xp : 0, lv = D.mascotLevel(xp);
+    return { id: m.id, name: m.name, blurb: m.blurb, art: m.art, xp, level: lv, max: D.mascotMax(), next: D.mascotNext(xp), levels: ECONOMY.mascotXp.map((at, i) => ({ level: i + 1, text: m.levels && m.levels[i + 1] ? m.levels[i + 1].text : '', active: lv >= i + 1, at })) };
+  };
+  // the toast line when a level switches on: "Beatbox Pug 2 of 3: The lead hero deals 1 more damage."
+  D.mascotLabel = (id, level) => { const m = D.mascots[id]; const lv = m && m.levels && m.levels[level]; return m && lv ? `${m.name} ${level} of ${D.mascotMax()}: ${lv.text}` : ''; };
 
   // final tile count for one tile type on a map with `nonBlock` non-void hexes
   D.tileCount = (type, nonBlock) => {
@@ -869,6 +912,7 @@ const DATA = (() => {
     addCard: ['card', 'pool', 'rarity', 'n', 'up'], removeCard: ['n', 'random', 'filter'], upgradeCard: ['n', 'random', 'filter'],
     transformCard: ['n', 'random', 'filter'], duplicateCard: ['n', 'random', 'filter'], addRelic: ['id', 'rarity'], addGem: ['id', 'color', 'tier'],
     addBrush: ['id'], addCurse: ['id', 'n'], fight: ['enc', 'enemies', 'tier', 'rewards', 'win'], flag: ['k', 'v'], paint: ['n'], cardReward: ['rarity', 'hero', 'n'],
+    adoptMascot: ['id'], mascotXp: ['n'],
   };
 
   D.validate = (only, opt) => {
@@ -878,9 +922,9 @@ const DATA = (() => {
     const err = (where, msg) => errors.push(`${where}: ${msg}`);
     const warn = (where, msg) => warnings.push(`${where}: ${msg}`);
     const want = (k) => !only || only === k || (Array.isArray(only) && only.indexOf(k) >= 0);
-    const KINDS = ['heroes', 'cards', 'gems', 'relics', 'enemies', 'events', 'achievements', 'trials', 'tips', 'lore'];
+    const KINDS = ['heroes', 'cards', 'gems', 'relics', 'mascots', 'enemies', 'events', 'achievements', 'trials', 'tips', 'lore'];
     if (only !== undefined) (Array.isArray(only) ? only : [only]).forEach((k) => { if (KINDS.indexOf(k) < 0) err('validate', `unknown registry "${k}" (one of ${KINDS.join(', ')})`); });
-    ['cards', 'gems', 'relics', 'enemies', 'events', 'achievements', 'trials', 'lore'].forEach((k) => {
+    ['cards', 'gems', 'relics', 'mascots', 'enemies', 'events', 'achievements', 'trials', 'lore'].forEach((k) => {
       if (want(k)) Object.keys(D[k]).forEach((id) => { if (!isObj(D[k][id])) err(k + ' ' + id, 'must be an object'); });
     });
     const noDash = (w, o) => { if (DASH.test(JSON.stringify(o))) err(w, 'contains an em or en dash'); };
@@ -889,6 +933,7 @@ const DATA = (() => {
       card: ['id', 'name', 'hero', 'type', 'rarity', 'cost', 'fx', 'up', 'kw', 'slots', 'art', 'flavor', 'hand', 'locked', 'mech'],
       gem: ['id', 'name', 'color', 'tier', 'mod', 'art', 'text', 'locked'],
       relic: ['id', 'name', 'rarity', 'text', 'mods', 'rows', 'hooks', 'art', 'hero', 'locked', 'flavor', 'set'],
+      mascot: ['id', 'name', 'blurb', 'art', 'levels'],
       enemy: ['id', 'name', 'title', 'chapter', 'tier', 'size', 'hp', 'moves', 'ai', 'start', 'phases', 'hooks', 'immune', 'art', 'lore', 'tags'],
       event: ['id', 'title', 'text', 'art', 'once', 'chapters', 'when', 'w', 'choices'],
       choice: ['label', 'req', 'cost', 'out'],
@@ -1137,6 +1182,8 @@ const DATA = (() => {
             if (o.hero !== undefined && o.hero !== 'party' && !has('heroIds', o.hero)) err(w, `${p}: bad hero`);
             if (o.n !== undefined && !(isInt(o.n) && o.n >= 1 && o.n <= 5)) err(w, `${p}.n must be 1..5`);
             break;
+          case 'adoptMascot': if (!isStr(o.id)) err(w, `${p}: adoptMascot needs a mascot id`); break;
+          case 'mascotXp': if (!(isInt(o.n) && o.n >= 1 && o.n <= 12)) err(w, `${p}: mascotXp needs n 1..12`); break;
           default: break;
         }
       });
@@ -1377,6 +1424,42 @@ const DATA = (() => {
       });
     }
 
+    // ---- mascots (4.7 "The Mascot"): {id, name, blurb, art:{m, c}, levels: {1: {text, mods?, hooks?, rows?}, 2: {...}, 3: {...}}}; a level is a virtual Charm ----
+    if (want('mascots')) {
+      const LV = ECONOMY.mascotXp.length;
+      vals(D.mascots).forEach((m) => {
+        const w = 'mascot ' + m.id;
+        fields(w, m, 'mascot');
+        if (!ID_RE.test(m.id)) err(w, 'id must be snake_case');
+        if (!isStr(m.name) || m.name.length > 24) err(w, 'name must be 1 to 24 characters');
+        if (!isStr(m.blurb)) err(w, 'blurb must be a non-empty string');
+        else {
+          if (m.blurb.length > QUOTA.relics.flavorMax) err(w, `blurb over ${QUOTA.relics.flavorMax} characters`);
+          if (!/^[\x20-\x7e]+$/.test(m.blurb)) err(w, 'blurb must be printable ASCII');
+          if (!/[.!?]$/.test(m.blurb)) err(w, 'blurb must end with . ! or ?');
+        }
+        if (!isObj(m.art) || !has('motifs', m.art.m)) err(w, `art.m "${m.art && m.art.m}" not in LISTS.motifs`);
+        else if (m.art.c && !has('palettes', m.art.c)) err(w, 'art.c not in LISTS.palettes');
+        if (!isObj(m.levels)) return err(w, `levels must be an object keyed by level, {1: {...}, 2: {...}, 3: {...}}`);
+        const ns = Object.keys(m.levels).map(Number).sort((a, b) => a - b);
+        if (ns.length !== LV || !ns.every((n, i) => n === i + 1)) err(w, `levels must be exactly 1..${LV} (ECONOMY.mascotXp has ${LV} thresholds)`);
+        ns.forEach((n) => {
+          const lv = m.levels[n], p = `levels.${n}`;
+          if (!isObj(lv)) return err(w, `${p} must be an object`);
+          Object.keys(lv).forEach((k) => { if (['text', 'mods', 'hooks', 'rows'].indexOf(k) < 0) err(w, `${p}: unknown field "${k}"`); });
+          if (!isStr(lv.text)) err(w, `${p}.text`); else if (lv.text.length > QUOTA.relics.textMax) err(w, `${p}.text over ${QUOTA.relics.textMax} characters`);
+          if (lv.mods !== undefined) vMods(w, lv.mods, 'mods', 'modKind', p + '.mods');
+          if (lv.hooks !== undefined) vHooks(w, lv.hooks, p + '.hooks', 'relic');
+          if (lv.rows !== undefined) {
+            if (!isObj(lv.rows)) err(w, `${p}.rows must be an object`);
+            else Object.keys(lv.rows).forEach((row) => { if (['front', 'back'].indexOf(row) < 0) err(w, `${p}.rows.${row}`); else cmp(w, lv.rows[row], `${p}.rows.${row}`, LISTS.rowFields, true); });
+          }
+          if (!lv.mods && !lv.hooks && !lv.rows) err(w, `${p} needs mods, hooks or rows`);
+        });
+        noDash(w, m);
+      });
+    }
+
     // ---- enemies and encounters ----
     if (want('enemies')) {
       const chOk = (ch) => !opt.chapter || ch === opt.chapter;
@@ -1526,6 +1609,7 @@ const DATA = (() => {
               if (c.req.chapter !== undefined && !has('chapters', c.req.chapter)) err(w, `${cp}.req.chapter`);
               if (c.req.hero !== undefined && !has('heroIds', c.req.hero)) err(w, `${cp}.req.hero`);
               ['relic', 'flag'].forEach((k) => { if (c.req[k] !== undefined && !isStr(c.req[k])) err(w, `${cp}.req.${k}`); });
+              if (c.req.mascot !== undefined && !isBool(c.req.mascot)) err(w, `${cp}.req.mascot must be a boolean (false: no mascot yet, true: needs one)`);
             }
           }
           if (!Array.isArray(c.out) || !c.out.length) return err(w, `${cp}.out`);
@@ -1613,6 +1697,7 @@ const DATA = (() => {
         if (o.op === 'addCard' && o.card) { const c = D.cards[o.card]; if (!c) err(w, `addCard: unknown card "${o.card}"`); else if (c.hero === 'curse') err(w, 'addCard: use addCurse for curse cards'); }
         if (o.op === 'addGem' && o.id && !D.gems[o.id]) err(w, `addGem: unknown gem "${o.id}"`);
         if (o.op === 'addCurse' && o.id && !(D.cards[o.id] && D.cards[o.id].hero === 'curse')) err(w, `addCurse: unknown curse "${o.id}"`);
+        if (o.op === 'adoptMascot' && o.id && !D.mascots[o.id]) err(w, `adoptMascot: unknown mascot "${o.id}"`);
         if (o.op === 'fight') {
           A(o.enemies).forEach((id) => { if (!D.enemies[id]) err(w, `fight: unknown enemy "${id}"`); });
           if (o.enc && !groupIds[o.enc]) err(w, `fight: unknown enc "${o.enc}"`);
@@ -1772,6 +1857,18 @@ const DATA = (() => {
         const risky = (o) => A(o && o.ops).some((x) => x && (['hurt', 'addCurse', 'fight'].indexOf(x.op) >= 0 || ((x.op === 'gold' || x.op === 'maxHp') && x.n < 0)));
         need('events', A(e.choices).some((c) => c && !c.cost && !A(c.out).some(risky)), `${e.id}: needs at least one safe choice`);
       });
+    }
+
+    if (want('mascots')) {
+      const ms = vals(D.mascots);
+      need('mascots', ms.length === QUOTA.mascots, `need exactly ${QUOTA.mascots} mascots, have ${ms.length}`);
+      // Breath and hand size stay Headliner trades: no level gives either, and every mascot is a different animal
+      ms.forEach((m) => Object.keys(O(m.levels)).forEach((n) => {
+        const lv = O(m.levels[n]);
+        need('mascots', !(lv.mods && (lv.mods.energy || lv.mods.hand)), `${m.id} level ${n}: no mascot level may change Breath or hand size`);
+        A(lv.hooks).forEach((h) => D.walkOps(O(h).fx, (o) => need('mascots', o.op !== 'energy' && o.op !== 'draw' || (h.every >= 3 || h.limit === 1), `${m.id} level ${n}: a Breath or draw hook must be gated (every 3+ or limit 1)`)));
+      }));
+      need('mascots', new Set(ms.map((m) => m.name)).size === ms.length, 'mascot names are unique');
     }
 
     if (want('meta')) {

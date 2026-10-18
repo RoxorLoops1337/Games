@@ -263,7 +263,7 @@ js/data.js            DATA      registries, closed lists, statuses, heroes, vali
 js/data_text.js       (DATA+)   text generation: cardHtml, gemText, ...
 js/data_cards_hanae.js  data_cards_kuro.js  data_cards_suzu.js  data_cards_raiga.js  data_cards_shared.js
 js/data_enemies_1.js  data_enemies_2.js  data_enemies_3.js
-js/data_relics.js  data_gems.js  data_events.js  data_meta.js
+js/data_relics.js  data_mascots.js  data_gems.js  data_events.js  data_meta.js
 js/data_samples.js    (DATA+)   DATA.SAMPLES: the owners' optional recordings, ships empty (read by audio.js; audio/README.md)
 js/art.js             ART       toolkit + style helpers + sprite cache + working placeholders for EVERY ART member
 js/art_cast_kit.js  art_cast.js  art_enemies_1.js  art_enemies_2.js  art_enemies_3.js  art_cards.js
@@ -719,6 +719,28 @@ pickup switches a tier on. Each tier `text` is one sentence of at most 90 charac
 it like a Charm text). Breath and hand size stay Headliner trades: the one Breath tier (Rhythm Section 4) is gated by `every` and `limit`, and the one draw tier (Demo Tape 3) is every 3rd turn (a turn 1 draw would be absorbed by the opening hand, which is topped up to the hand size). The audit demands every
 set be completable by any party from a fresh profile (at least as many unlocked, hero-free members as its top tier).
 
+**The Mascot (`DATA.mascots`, `data_mascots.js`).** The tour bus can adopt ONE mascot per run: a stray that sits on stage beside the duo, gives a small
+bonus and LEVELS UP as the tour goes on. `DATA.mascots[id]` (registered with `DATA.add('mascots', defs)`) is `{id, name, blurb, art:{m: motif, c: palette},
+levels: {1: {text, mods?, hooks?, rows?}, 2: {...}, 3: {...}}}`: exactly `ECONOMY.mascotXp.length` levels, each the same shape as a Charm set tier (one sentence of at
+most 90 characters that carries every number and trigger of its data; the mascot suite checks it like a Charm text; `blurb` is the joke line, display only, Charm flavour
+rules). There are `QUOTA.mascots` (6) of them: Beatbox Pug, Loop Pedal Cat, Tour Bus Hamster, Stage Goose, Merch Fox, Karaoke Parrot. Run state is `R.mascot = null |
+{id, xp}` (saved; optional, so old saves load with none). Level = `DATA.mascotLevel(xp)`: level 1 on adoption, level 2 at 5 XP, level 3 at 12 XP (`ECONOMY.mascotXp =
+[0, 5, 12]`). XP: `ECONOMY.mascotFightXp` per fight won (`normal` 1, `elite` 2, `boss` 3; a Sidekick-only fight gives none) and `ECONOMY.snackXp` (2) for a Snack at the
+Merch Stall (`ECONOMY.price.snack` 35 gold times `priceMul`, one per stall, stocked only while the bus has a mascot; shop item `{kind:'snack', id:'snack'}` through the
+ordinary `shopBuy` path). Levels STACK like set tiers: `DATA.activeMascotTiers(R.mascot)` -> `[{mascot, level, name, def}]` for levels 1..current, and every active level is
+a virtual Charm built only from existing mod keys, row fields, hook triggers and hook ops (no new engine ops): `DATA.modsFor(relicIds, trial, mascot)` and
+`DATA.rowFor(hero, row, relicIds, mascot)` fold its `mods` and `rows` (so `RUN.mods(R)` and COMBAT's row bonuses see them), `COMBAT.create` takes `opts.mascot` (`{id, xp}`),
+echoes `C.mascot = {id, level}` (null without one) and registers the levels' combat hooks after the set tiers (`src: 'mascot'`, `srcId: 'mascot_pug:2'`, party hooks, no
+`relic` event), and `RUN.hook` runs their run hooks after the set tiers (logged `{op:'mascot', id, level, hook}`). Breath and hand size stay Headliner trades: no level touches
+them (the audit checks). Adoption: the run op `adoptMascot {id}` (`LISTS.runOps`; a second adoption logs and changes nothing) in the once-per-tour Detour
+`stray_at_the_bus_stop` (any act, weight 12 so most tours meet it in Act I; three calls hidden by `req.mascot: false` once the bus has a mascot, each bringing one of two
+strays seeded by the tile, plus a safe "drive on"), and the run op `mascotXp {n}` feeds it. Event choices may carry `req.mascot` (`false`: only while there is no mascot,
+`true`: only with one; a failed check hides the choice like `req.hero`). Helpers: `RUN.adoptMascot(R, id)` -> `{ok, id, level: 1, log, pending}` | `unknown|owned`,
+`RUN.mascotXp(R, n)` -> `{level, leveled, xp, log}` (every level switched on is noted in `R.log` as `{msg, mascot, level}` and returned as `{op:'mascot', id, level, text}`
+with `DATA.mascotLabel(id, level)`, "Beatbox Pug 2 of 3: ..."); `RUN.combatDone` feeds the fight's XP BEFORE the mods, gold and `onFightWon` hooks of that win and puts the
+level-up lines first in `Rewards.log` so the reward screen can toast them. `DATA.mascotProgress(R.mascot)` gives the Charms overlay `{id, name, blurb, art, xp, level, max,
+next, levels:[{level, text, active, at}]}`; `DATA.mascotNext(xp)` the XP still needed. `DATA.keywords.mascot` is the glossary line.
+
 ### 4.8 Map, Vox and Spells
 
 - **Layout.** Pointy-top axial hexes `(q, r)`, key `'q,r'`, odd-r offset: `column = q + floor(r / 2)`, and a tile exists iff `0 <= column < cols` and `0 <= r < rows`. The map is
@@ -876,7 +898,7 @@ DATA.cardOps(resolved)             -> flat op list
 ### 5.2 `COMBAT` (`combat.js`)
 
 ```
-COMBAT.create({ heroes:[{id,hp,maxHp}], frontIdx, deck:[inst], enemies:[enemyId], tier:'normal'|'elite'|'boss', chapter, seed, mods, relics:[ids], gold }) -> C
+COMBAT.create({ heroes:[{id,hp,maxHp}], frontIdx, deck:[inst], enemies:[enemyId], tier:'normal'|'elite'|'boss', chapter, seed, mods, relics:[ids], gold, mascot: null | {id, xp} }) -> C   // mascot: 4.7 "The Mascot"; C.mascot echoes {id, level}
 ```
 
 `mods` is `RUN.mods(R)` verbatim (4.7); `gold` is the run gold for `stealGold`; `tier` is the fight's reward tier, echoed as `C.tier` (HP scaling reads each unit's own tier: minion and normal use `enemyHp`, elite `eliteHp`, boss `bossHp`). `C` is a plain object plus methods. All action methods return an **array of events** (also appended to `C.events`). State is always the
@@ -980,7 +1002,8 @@ Owns everything that lives for one run. `RUN.newRun({heroes:[id,id], trial, seed
 
 ```
 R = { v:1, id, seed, trial, daily, mods (trial deltas only), unlocked, heroes:[{id,hp,maxHp}], frontIdx, deck:[inst], gems:[gemId], relics:[id], brushes:[id],
-      gold, ink, inkMax, chapter, map:M, node:null|Node, stats:{...}, flags:{...}, rareOffset, removals, seen:{events:[],...}, log:[], done:bool, victory:bool }
+      gold, ink, inkMax, chapter, map:M, node:null|Node, stats:{...}, flags:{...}, rareOffset, removals, seen:{events:[],...}, log:[], done:bool, victory:bool,
+      mascot: null | {id, xp} }      // the tour bus pet (4.7 "The Mascot"); optional in old saves, its levels derive from xp
 ```
 
 **Randomness.** R stores no RNG state. Every roll builds `U.rng(U.hash(R.seed, kind, R.chapter, q, r, extra))` with `kind` in `'map'` (as `U.hash(R.seed, 'ch' + n, 'map')`), `'combat'`, `'reward'`, `'chest'`, `'gemcache'`,
@@ -1000,7 +1023,7 @@ RUN.take(R, node, choice) -> {ok}    // chest {relic:bool, gem:id|null} (its gol
 RUN.shopBuy(R, stock, key) -> {ok, reason}   RUN.shopRemove(R, stock, uid) -> {ok}
 RUN.eventChoose(R, eventDef, i) -> { text, applied:[...], fight?:Node, pending?:[...] }
 RUN.applyOps(R, ops, ctx) -> {log:[...], pending:[{id, op, n, pick, filter}]}     RUN.resolvePending(R, id, choice) -> {ok, log}   // choice = uids for card ops, a card id for cardReward, null to skip an optional op
-RUN.hook(R, name, ctx) -> {log, pending}
+RUN.hook(R, name, ctx) -> {log, pending}     RUN.adoptMascot(R, id) -> {ok, id, level, log, pending}     RUN.mascotXp(R, n) -> {level, leveled, xp, log}   // the Mascot, 4.7
 RUN.campAction(R, 'rest'|'sharpen'|'gems'|'meditate', arg) -> {ok,...}
 RUN.addCard(R,id,opts) RUN.removeCard(R,uid) RUN.upgradeCard(R,uid) RUN.socket(R,uid,slot,gemId)      // replacing a gem in a slot is the only way to lose one
 RUN.checkStranded(R) -> bool     // 4.8 mercy rule; called at the end of step, paint, useBrush, finishNode and claim
