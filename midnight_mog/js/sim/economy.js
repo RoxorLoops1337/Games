@@ -9,6 +9,8 @@
 //
 // See docs/ECONOMY.md for the tables and the reasoning.
 
+import { BUILDING_BY_ID, PRODUCERS, adjacency, statsAt, outputPerSecond } from '../data/buildings.js';
+
 // ---------------------------------------------------------------- constants
 
 export const STAGES_PER_DISTRICT = 30;
@@ -303,28 +305,64 @@ export function multipliers(profile) {
 
 // ------------------------------------------------------------------ town
 
-/** Classify a building id into the resource it makes. Unknown ids make fish. */
+/**
+ * Classify a building id into the resource it makes: 'fish', 'yarn' or null (it makes neither: shrine,
+ * observatory, nap dome, ...). Buildings in data/buildings.js are read from their effect specs (only a
+ * fishPerSec / yarnPerSec effect counts). Ids that data/buildings.js does not know keep the legacy name
+ * rule (the economy model uses 'fish_stand'): yarn, mill, loom, knit, wool make yarn, the rest fish.
+ */
 export function buildingKind(id) {
   const s = String(id || '');
+  const def = BUILDING_BY_ID[s];
+  if (def) {
+    if (!PRODUCERS.includes(s)) return null;
+    if (def.effects.some((e) => e.stat === 'fishPerSec')) return 'fish';
+    if (def.effects.some((e) => e.stat === 'yarnPerSec')) return 'yarn';
+    return null;
+  }
   if (/yarn|mill|loom|knit|wool/.test(s)) return 'yarn';
   return 'fish';
 }
 
-/** Passive output per second of one building at `level` (0 when level < 1). */
+/** Passive output per second of one building at `level` (0 when level < 1 or it makes no fish or yarn). */
 export function buildingOutput(buildingId, level) {
   const L = Math.floor(level);
   if (!(L >= 1)) return 0;
-  return BUILDING_BASE[buildingKind(buildingId)] * L * Math.pow(BUILDING_LEVEL_GROWTH, L - 1);
+  const kind = buildingKind(buildingId);
+  if (!kind) return 0;
+  return BUILDING_BASE[kind] * L * Math.pow(BUILDING_LEVEL_GROWTH, L - 1);
 }
 
-/** Passive town output per second {fish, yarn}, before multipliers. */
+/**
+ * Passive town output per second {fish, yarn}, before the income multipliers. Only PRODUCERS count, through
+ * buildings.outputPerSecond with the adjacency potency of each plot and the clock tower's townOutputPct.
+ * Plots with ids unknown to data/buildings.js use the legacy buildingOutput.
+ */
 export function townOutput(profile) {
   const out = { fish: 0, yarn: 0 };
   const pl = profile.town && profile.town.plots;
   if (!pl) return out;
-  for (const p of pl) {
+  let clock = 1;
+  const rows = [];
+  for (let i = 0; i < pl.length; i++) {
+    const p = pl[i];
     if (!p || !p.b) continue;
-    out[buildingKind(p.b)] += buildingOutput(p.b, p.level);
+    const def = BUILDING_BY_ID[p.b];
+    if (!def) {
+      const k = buildingKind(p.b);
+      out[k] += buildingOutput(p.b, p.level);
+      continue;
+    }
+    const lvl = Math.floor(p.level);
+    if (!(lvl >= 1)) continue;
+    const pot = adjacency(pl, i).potency;
+    if (def.effects.some((e) => e.stat === 'townOutputPct')) clock += statsAt(def, lvl, pot).townOutputPct || 0;
+    if (PRODUCERS.includes(def.id)) rows.push({ def, lvl, pot });
+  }
+  for (const r of rows) {
+    const o = outputPerSecond(r.def, r.lvl, r.pot);
+    out.fish += o.fish * clock;
+    out.yarn += o.yarn * clock;
   }
   return out;
 }

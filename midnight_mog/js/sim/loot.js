@@ -15,6 +15,7 @@ import {
   STAR_DUPES, MAX_STARS, DUPE_SHARE,
 } from '../data/crates.js';
 import { crateCost, DUPE_YARN, metaLevel, money } from './economy.js';
+import { BUILDING_BY_ID, adjacency, statValue } from '../data/buildings.js';
 
 export { CRATES, CRATE_BY_ID };
 
@@ -41,12 +42,38 @@ export function poolSizes() {
 
 export function pityKey(crateId, tier) { return tier === 'epic' ? crateId : crateId + '@' + tier; }
 
-export function pityCounters(profile, crateId) {
+/** Pulls of pity credit the Crate Workshop gives (its pityCredit stat with adjacency potency), 0 without one. */
+export function townPityCredit(profile) {
+  const pl = profile && profile.town && profile.town.plots;
+  if (!Array.isArray(pl)) return 0;
+  const def = BUILDING_BY_ID.crate_workshop;
+  const spec = def && def.effects.find((e) => e.stat === 'pityCredit');
+  if (!spec) return 0;
+  let credit = 0;
+  for (let i = 0; i < pl.length; i++) {
+    const p = pl[i];
+    if (!p || p.b !== 'crate_workshop' || !(Math.floor(p.level) >= 1)) continue;
+    credit = Math.max(credit, statValue(spec, p.level, adjacency(pl, i).potency));
+  }
+  return Math.max(0, Math.floor(credit));
+}
+
+/**
+ * Pity counters used to compute odds. `withCredit` (default true) adds the Crate Workshop credit: it is added only
+ * when the odds and the roll are computed, never stored, and never lifts a counter into the hard pity by itself
+ * (it stops 2 pulls short of the hard limit; a real counter above that is left as it is).
+ * openCrate stores the raw counters (withCredit false).
+ */
+export function pityCounters(profile, crateId, withCredit = true) {
   const pity = (profile && profile.pity) || {};
+  const credit = withCredit ? townPityCredit(profile) : 0;
+  const def = CRATE_BY_ID[crateId];
   const out = {};
   for (const t of PITY_TIERS) {
     const v = pity[pityKey(crateId, t)];
-    out[t] = Number.isFinite(v) && v > 0 ? Math.floor(v) : 0;
+    const raw = Number.isFinite(v) && v > 0 ? Math.floor(v) : 0;
+    const cfg = def && def.pity && def.pity[t];
+    out[t] = credit > 0 && cfg ? Math.max(raw, Math.min(raw + credit, cfg.hard - 2)) : raw;
   }
   return out;
 }
@@ -334,6 +361,9 @@ function makeReveal(def, drop, rng) {
  * player cannot pay, {profile (unchanged copy), drops: [], pityHit: null, error: 'cant_afford', need, have, cur}.
  *   opts.count : 1 (default) or 10 (the x10 button, with its guarantee)
  *   opts.free  : true skips payment (rewards, tests); price creep and opens are not touched either
+ *   opts.useKey: true pays with Crate Workshop keys instead of currency: one key (profile.town.keys[crateId]) per
+ *                open, no currency cost, no price creep; pity and cratesTotal count as usual. Too few keys gives
+ *                {error: 'no_key', need, have, crate} and an unchanged profile copy.
  * Each drop: {kind:'cat'|'card'|'relic'|'yarn'|'gems', id, rarity, isNew, dupeValue, golden, reveal,
  *   amount? (currency), stars?/starsGained? (cats), count? (cards), pity?: 'hard'|'soft'}.
  * pityHit: null or {tier, pull, hard: true} for the best pull in the batch that a hard guarantee delivered.
@@ -348,7 +378,14 @@ export function openCrate(profile, crateId, rng, opts = {}) {
   const opens = Math.max(0, p.stats.crateOpens | 0);
 
   let spent = { cur: null, amount: 0 };
-  if (!opts.free) {
+  if (opts.useKey && !opts.free) {
+    const keys = (p.town && p.town.keys) || {};
+    const have = Math.max(0, Math.floor(Number(keys[crateId]) || 0));
+    if (have < count) return { profile: p, drops: [], pityHit: null, error: 'no_key', need: count, have, crate: crateId };
+    p.town = { ...p.town, keys: { ...keys, [crateId]: have - count } };
+    if (!p.town.keys[crateId]) delete p.town.keys[crateId];
+    spent = { cur: 'key', amount: count };
+  } else if (!opts.free) {
     let total = 0, cur = null;
     for (let i = 0; i < count; i++) { const c = crateCost(crateId, opens + i); total += c.price; cur = c.cur; }
     const have = p.cur[cur] || 0;
@@ -365,9 +402,10 @@ export function openCrate(profile, crateId, rng, opts = {}) {
   let sawGuarantee = false;
 
   for (let n = 0; n < count; n++) {
-    const counters = pityCounters(p, crateId);
+    const counters = pityCounters(p, crateId, false);   // stored values
+    const credited = pityCounters(p, crateId, true);    // plus the workshop credit, for the odds only
     const needSlot = count === MULTI_COUNT && n === count - 1 && !sawGuarantee;
-    const r = rarityProbs(def, counters, luck, needSlot ? gIdx : 0);
+    const r = rarityProbs(def, credited, luck, needSlot ? gIdx : 0);
     const ri = pickFromCum(r.probs, rng.next());
     const rarity = RARITY_IDS[ri];
     const m = mixFor(def, rarity);
