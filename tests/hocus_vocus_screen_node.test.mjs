@@ -703,7 +703,7 @@ await t.test('event: every Detour, every choice, played on the real screen: text
       t.eq(txt($(g, '.ev-title', root)), ev.title, ev.id + ': title');
       t.eq(txt($(g, '.ev-text', root)), ev.text, ev.id + ': the whole fable text is on the page');
       const shown = $$(g, '.ev-choice', root);
-      const visible = ev.choices.map((c, k) => ({ c, k })).filter((x) => !(x.c.req && x.c.req.hero && heroes.indexOf(x.c.req.hero) < 0));
+      const visible = ev.choices.map((c, k) => ({ c, k })).filter((x) => !(x.c.req && x.c.req.hero && heroes.indexOf(x.c.req.hero) < 0) && !(x.c.req && x.c.req.mascot !== undefined && !!x.c.req.mascot !== !!R.mascot));   // req.hero and req.mascot (DESIGN 4.7) hide a choice
       t.eq(shown.length, visible.length, ev.id + ': one button per visible choice');
       shown.forEach((b) => { t.ok(b.querySelector('.ev-label') && b.querySelector('.ev-label').textContent.length > 2, ev.id + ': a label'); t.ok(/^\d/.test(txt(b.querySelector('.ev-num'))), ev.id + ': numbered'); });
       const b = shown.find((x) => Number(x.dataset.i) === i);
