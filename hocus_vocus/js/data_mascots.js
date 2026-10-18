@@ -33,7 +33,7 @@
     },
     mascot_cat: {
       name: 'Loop Pedal Cat', art: { m: 'moon', c: 'indigo' },
-      blurb: 'Sits on the loop pedal. Every song now has a second verse. The cat is not sorry.',
+      blurb: 'Sits on the loop pedal. Every song now plays twice. The cat is not sorry.',
       levels: {
         1: { text: 'At the start of every 4th turn, draw 1 card.', hooks: [{ on: 'turnStart', every: 4, fx: [{ op: 'draw', n: 1 }] }] },
         2: { text: 'Whenever a card Fades, that hero gains 1 Block (up to twice a turn).', hooks: [{ on: 'onExhaust', limit: 2, fx: [{ op: 'block', n: 1, tgt: 'self' }] }] },
@@ -69,7 +69,7 @@
     },
     mascot_parrot: {
       name: 'Karaoke Parrot', art: { m: 'bell', c: 'jade' },
-      blurb: 'Knows every chorus and none of the verses. Sings them anyway, at the enemy.',
+      blurb: 'Knows every chorus and none of the words. Sings them anyway, at the enemy.',
       levels: {
         1: { text: 'At the start of each fight, all enemies are Muffled for 1 turn.', hooks: [{ on: 'combatStart', fx: [{ op: 'status', s: 'weak', n: 1, tgt: 'all' }] }] },
         2: { text: 'Whenever you reshuffle, both heroes gain 1 Volume.', hooks: [{ on: 'onShuffle', fx: [{ op: 'status', s: 'might', n: 1, tgt: 'both' }] }] },

@@ -682,7 +682,7 @@ t.test('combatInit: the options COMBAT.create needs, with copies not references'
   RUN.addRelic(R, 't_energy');
   const node = enter(R, 'enemy');
   const o = RUN.combatInit(R, node);
-  t.deep(Object.keys(o).sort(), ['chapter', 'deck', 'enemies', 'frontIdx', 'gold', 'heroes', 'mods', 'relics', 'seed', 'tier'], 'exactly the documented options');
+  t.deep(Object.keys(o).sort(), ['chapter', 'deck', 'enemies', 'frontIdx', 'gold', 'heroes', 'mascot', 'mods', 'relics', 'seed', 'tier'], 'exactly the documented options');
   t.deep(o.heroes, R.heroes.map((h) => ({ id: h.id, hp: h.hp, maxHp: h.maxHp })), 'party with current HP'); t.eq(o.frontIdx, 0, 'frontIdx');
   t.deep(o.deck, R.deck, 'the deck'); t.ok(o.deck[0] !== R.deck[0], 'deck instances are copies');
   o.deck[0].up = 1; o.deck[0].gems[0] = 'red_g0'; t.eq(R.deck[0].up, 0, 'mutating the copy leaves R alone'); t.eq(R.deck[0].gems[0], null, 'also the gems');
@@ -1415,7 +1415,7 @@ t.test('eventChoose fight: the combat node replaces the event node and pays out 
   t.eq(res.ok, true, 'ok'); t.ok(res.fight, 'a fight comes back'); t.eq(R.node, res.fight, 'R.node is that combat node'); t.eq(R.gold, g + 5, 'ops before the fight applied first');
   t.eq(res.fight.kind, 'combat', 'combat node'); t.eq(res.fight.tier, 'elite', 'the tier picks the reward table'); t.deep(res.fight.enemies, ['kappa', 'kodama'], 'enemies'); t.eq(res.fight.source, 'event', 'source'); t.eq(res.fight.rewards, true, 'rewards on');
   t.deep(res.fight.onWin, [{ op: 'gold', n: 30 }, { op: 'flag', k: 'won' }], 'win ops travel on the node'); t.deep(res.fight.tile, { q: R.map.start.q, r: R.map.start.r }, 'same tile as the event');
-  t.ok(Number.isInteger(res.fight.seed), 'a seed'); t.deep(Object.keys(A.RUN.combatInit(R, res.fight)).sort(), ['chapter', 'deck', 'enemies', 'frontIdx', 'gold', 'heroes', 'mods', 'relics', 'seed', 'tier'], 'and it can start a combat');
+  t.ok(Number.isInteger(res.fight.seed), 'a seed'); t.deep(Object.keys(A.RUN.combatInit(R, res.fight)).sort(), ['chapter', 'deck', 'enemies', 'frontIdx', 'gold', 'heroes', 'mascot', 'mods', 'relics', 'seed', 'tier'], 'and it can start a combat');
   const gold0 = R.gold;
   const rw = A.RUN.combatDone(R, fakeC({}));
   t.eq(rw.source, 'event', 'the rewards know they came from a fable'); t.eq(rw.tier, 'elite', 'elite table'); t.ok(rw.brush, 'fable fights drop a brush'); t.eq(rw.relics.length, 1, 'elite reward offers a relic'); t.eq(R.flags.won, 1, 'win ops applied'); t.ok(R.gold >= gold0 + 30 + E.gold.elite[0], 'win gold plus elite gold');

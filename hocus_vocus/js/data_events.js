@@ -799,6 +799,9 @@
             { w: 3, text: 'The soup is thick and warm and full of beans. Someone starts humming, someone else joins in, and the road ahead glows a little.', ops: [{ op: 'heal', pct: 0.2 }, { op: 'paint', n: 1 }] },
             { w: 1, text: 'The soup is the best you have ever had, and the roadies sing a road song so out of tune it loops right back round to lovely. The road ahead lights up to meet you.', ops: [{ op: 'heal', pct: 0.3 }, { op: 'paint', n: 2 }] },
           ] },
+        // the Mascot (DESIGN 4.7): only with one aboard (req.mascot true hides it otherwise); a free meal, 2 XP
+        { label: 'A bowl for the mascot', req: { mascot: true },
+          out: [{ w: 1, text: 'The roadies ladle out a small bowl for your mascot, who eats it with the focus of a creature that has decided soup is now its whole personality. It looks a little bigger afterwards.', ops: [{ op: 'mascotXp', n: 2 }] }] },
       ],
     },
 
@@ -876,25 +879,25 @@
     // Each call brings one of two strays (seeded by the tile, so a reload gives the same animal), all six mascots reachable from one Detour.
     stray_at_the_bus_stop: {
       title: 'Strays at the Bus Stop', art: { scene: 'event' }, once: true, w: 12,
-      text: 'The bus stops for fuel. Six strays sit at the bus stop in a neat row, each one looking like it already knows the setlist. Jasmin says you cannot keep them all. RoxorLoops says: one, then.',
+      text: 'The bus stops for fuel. Six strays sit at the bus stop in a neat row, each one looking like it already knows the setlist. The band agrees you cannot keep them all. One, then.',
       choices: [
         { label: 'Whistle a beat (a pug or a cat answers)', req: { mascot: false },
           out: [
-            { w: 1, text: 'A small round pug snores along in perfect 4/4, wakes up, and beatboxes a reply. It climbs the bus steps one at a time and claims the front seat.', ops: [{ op: 'adoptMascot', id: 'mascot_pug' }] },
-            { w: 1, text: 'A cat walks across the loop pedal, looks at you, and walks across it again. The beat now has a second verse. The cat is on the bus before you are.', ops: [{ op: 'adoptMascot', id: 'mascot_cat' }] },
+            { w: 1, text: 'A small round pug snores along in perfect 4/4, sits up, and beatboxes a reply. It climbs the bus steps one at a time and claims the front seat.', ops: [{ op: 'adoptMascot', id: 'mascot_pug' }] },
+            { w: 1, text: 'A cat walks across the loop pedal, looks at you, and walks across it again. The beat now plays twice. The cat is on the bus before you are.', ops: [{ op: 'adoptMascot', id: 'mascot_cat' }] },
           ] },
         { label: 'Shake the snack bag (a hamster or a fox answers)', req: { mascot: false },
           out: [
             { w: 1, text: 'A hamster the size of a bread roll sprints to the bag, then to the bus, then to the wheel under the floor. The bus starts. Nobody turned the key.', ops: [{ op: 'adoptMascot', id: 'mascot_hamster' }] },
             { w: 1, text: 'A fox in a tour tee three sizes too big takes the bag, squeaks a price at Jordan, and wins. It leaves with the bag and boards the bus like it owns it.', ops: [{ op: 'adoptMascot', id: 'mascot_fox' }] },
           ] },
-        { label: 'Honk the bus horn (a goose or a parrot answers)', req: { mascot: false },
+        { label: 'Ring the bus bell (a goose or a parrot answers)', req: { mascot: false },
           out: [
             { w: 1, text: 'A goose honks back, louder, and stares down the Gloss on the horizon until it blinks. It takes the step by the door. Security has arrived.', ops: [{ op: 'adoptMascot', id: 'mascot_goose' }] },
-            { w: 1, text: 'A parrot sings the chorus of every song you know and none of the verses, at full volume, then lands on the mic stand. Fine. It can stay.', ops: [{ op: 'adoptMascot', id: 'mascot_parrot' }] },
+            { w: 1, text: 'A parrot sings the chorus of every song you know and none of the words, at full volume, then lands on the mic stand. Fine. It can stay.', ops: [{ op: 'adoptMascot', id: 'mascot_parrot' }] },
           ] },
         { label: 'Drive on',
-          out: [{ w: 1, text: 'You pull away. Six strays watch the bus go with the same expression. Jasmin does not look back, very deliberately, for twelve whole minutes.' }] },
+          out: [{ w: 1, text: 'You pull away. Six strays watch the bus go with the same expression. Nobody on the bus looks back, very deliberately, for twelve whole minutes.' }] },
       ],
     },
   });

@@ -828,6 +828,8 @@ next, levels:[{level, text, active, at}]}`; `DATA.mascotNext(xp)` the XP still n
 | `flag` | `k`, `v?=1` | `R.flags[k] = v` |
 | `paint` | `n` | unmutes n hexes for free along the cheapest chain toward the boss |
 | `cardReward` | `rarity?`, `hero?`, `n?=3` | a skippable card pick like a combat reward |
+| `adoptMascot` | `id` | the tour bus adopts that mascot at level 1 (4.7 "The Mascot"); with a mascot already aboard it logs and changes nothing |
+| `mascotXp` | `n` (1..12) | feeds the mascot n XP (levels switch on at `ECONOMY.mascotXp`); without a mascot it logs "No mascot to feed." |
 
   Bounds the validator enforces: `n` on the card ops and `addCurse` and `cardReward` is 1..5, `paint` `n` is 1..12, `fight.enemies` lists 1 to 4 ids, `gold` and `ink` take a whole `n` (negative is a cost) or a non-zero `pct` in -1..1 (`heal` and `hurt` need a positive `n` or a `pct` in (0,1]), `maxHp` a non-zero whole `n`.
   `choice.req` keys (all must hold): `gold:N` (has at least N), `hpPct:F` (every living hero at or above fraction F of max HP), `hpBelow:F` (some living hero below F), `relic:id`, `flag:k` (truthy),
