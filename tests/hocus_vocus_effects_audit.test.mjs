@@ -1260,7 +1260,7 @@ function checkRunOp(R, op, ctx, tag) {
   const errs = [];
   const healMul = RUN.mods(R).healMul;
   const who = (w) => (!w || w === 'both' ? R.heroes.slice() : w === 'front' ? [R.heroes[R.frontIdx]] : w === 'lowest' ? null : w === 'random' ? null : R.heroes.filter((h) => h.id === w));
-  const before = JSON.parse(JSON.stringify({ gold: R.gold, ink: R.ink, inkMax: R.inkMax, heroes: R.heroes, deck: R.deck.length, gems: R.gems.slice(), brushes: R.brushes.slice(), relics: R.relics.slice(), pending: R.pending.length, painted: MAP.progress(R.map).painted, upgraded: R.deck.filter((c) => c.up).length }));
+  const before = JSON.parse(JSON.stringify({ gold: R.gold, ink: R.ink, inkMax: R.inkMax, heroes: R.heroes, deck: R.deck.length, gems: R.gems.slice(), brushes: R.brushes.slice(), relics: R.relics.slice(), pending: R.pending.length, painted: MAP.progress(R.map).painted, upgraded: R.deck.filter((c) => c.up).length, mascot: R.mascot || null }));
   const out = RUN.applyOps(R, [op], ctx);
   const ex = (cond, msg) => { if (!cond) errs.push(`${tag} ${J(op)}: ${msg}`); };
   const ws = who(op.who);
@@ -1315,6 +1315,9 @@ function checkRunOp(R, op, ctx, tag) {
     case 'paint': { const got = MAP.progress(R.map).painted - before.painted; ex(got === op.n, `unmuted ${got}, text says ${op.n}`); break; }
     case 'flag': ex(R.flags[op.k] === (op.v === undefined ? 1 : op.v), 'flag set'); break;
     case 'fight': ex(!!out.fight && J(out.fight.enemies) === J(op.enemies || []) && J(out.fight.onWin || null) === J(op.win && op.win.length ? op.win : null), 'a fight with the stated enemies and win ops'); break;
+    // the Mascot (DESIGN 4.7 "The Mascot"): the bus adopts ONE stray at level 1 (a second adoption changes nothing); XP feeds the one it has, none without one
+    case 'adoptMascot': ex(before.mascot ? J(R.mascot) === J(before.mascot) : !!R.mascot && R.mascot.id === op.id && R.mascot.xp === 0 && D.mascotLevel(R.mascot.xp) === 1, `mascot ${J(before.mascot)} -> ${J(R.mascot)}, text says ${op.id} at level 1 (or no change with a mascot already aboard)`); break;
+    case 'mascotXp': ex(before.mascot ? R.mascot.xp === before.mascot.xp + op.n && D.mascotLevel(R.mascot.xp) === out.log.filter((l) => l.op === 'mascot').reduce((lv, l) => Math.max(lv, l.level), D.mascotLevel(before.mascot.xp)) : R.mascot === null, `mascot ${J(before.mascot)} -> ${J(R.mascot)}, text says +${op.n} XP and one log line per level gained`); break;
     default: errs.push(`${tag}: unknown run op ${op.op}`);
   }
   return { errs, out };

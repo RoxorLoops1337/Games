@@ -702,7 +702,16 @@ function universe(D) {
   }
   evs.ev_1.choices.push({ label: 'Ring the bell', req: { relic: 'silver_bell' }, out: [{ w: 1, text: 'It rings true.', ops: [{ op: 'flag', k: 'fox_spared' }] }] });
   evs.ev_2.when = { flag: 'fox_spared' };
+  evs.ev_3.choices.push({ label: 'Adopt the stray', req: { mascot: false }, out: [{ w: 1, text: 'It hops aboard.', ops: [{ op: 'adoptMascot', id: 'mascot_0' }] }] });
   D.add('events', evs);
+  // --- mascots: QUOTA.mascots, each with ECONOMY.mascotXp.length levels (DESIGN 4.7 "The Mascot")
+  const mascots = {};
+  for (let i = 0; i < D.QUOTA.mascots; i++) {
+    const levels = {};
+    D.ECONOMY.mascotXp.forEach((xp, li) => { levels[li + 1] = li === 0 ? { text: 'The lead hero deals 1 more damage.', rows: { front: { dmgAdd: 1 } } } : li === 1 ? { text: 'Combat and gift box gold is 10% higher.', mods: { goldMul: 0.1 } } : { text: 'After each fight, both heroes heal 2 HP.', hooks: [{ on: 'onFightWon', fx: [{ op: 'heal', n: 2, who: 'both' }] }] }; });
+    mascots['mascot_' + i] = { name: 'Stray ' + i, blurb: 'A stray with a plan.', art: { m: motifs[i % motifs.length], c: pal[i % pal.length] }, levels };
+  }
+  D.add('mascots', mascots);
   // --- meta
   const ach = {};
   const keys = D.LISTS.statKeys;
