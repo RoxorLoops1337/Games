@@ -2667,4 +2667,99 @@ await t.test('css (reward): the reward cards keep their joke line at 8 screen px
   t.ok(!/#stage\.compact (\.sh-|\.dk-)[^{]*\.c-flavor/.test(CSS), 'the shop and deck card faces are left as designed');
 });
 
+
+// ==================================================================================================== the Mascot (DESIGN 4.7): the Snack, the reward toast, the Detour chips
+const toastTexts = (g) => $$(g, '#toasts .toast .t-text').map(txt);
+const clearToasts = (g) => $$(g, '#toasts .toast').forEach((e) => e.remove());
+await t.test('shop: with a mascot the stall holds the Snack plaque (medallion, "Snack for <name>: +2 XP", the price); buying it feeds the XP through RUN.shopBuy, stamps SOLD, gets a snack line from Jordan and toasts the XP and the level the Snack switched on; no mascot, no Snack', async () => {
+  const g = fresh({ seed: 11 }); const R = mkRun(g, { seed: 11, gold: 500 });
+  const node0 = nodeAt(g, R, 'shop', { shop: { seed: 5 } });
+  await open(g, 'shop', R, node0);
+  t.ok(!node0.stock.items.some((i) => i.kind === 'snack') && !$(g, '.sh-plaque.kind-snack'), 'no mascot: RUN stocks no Snack and the shelf shows none');
+  g.RUN.adoptMascot(R, 'mascot_hamster'); g.RUN.mascotXp(R, 4);
+  const node = nodeAt(g, R, 'shop', { shop: { seed: 9 } });
+  const snack = node.stock.items.find((i) => i.kind === 'snack');
+  t.ok(snack && snack.id === 'snack', 'RUN stocks one Snack');
+  await open(g, 'shop', R, node);
+  t.eq(shopItems(g).length, node.stock.items.length, 'one element per ware, the Snack among them');
+  const pl = itemEl(g, snack.key);
+  t.ok(pl && pl.classList.contains('sh-plaque') && pl.classList.contains('kind-snack') && pl.closest('.sh-row2'), 'the Snack is a plaque on the second shelf with the other wares');
+  t.eq(txt($(g, '.sh-kind', pl)), 'Snack for Tour Bus Hamster: +' + g.DATA.ECONOMY.snackXp + ' XP', 'the kicker names the mascot and the XP');
+  t.eq(txt($(g, '.sh-name', pl)), 'Snack', 'the name'); t.eq(txt($(g, '.sh-tag b', pl)), String(snack.price), 'the price');
+  t.ok($(g, '.sh-ico canvas', pl), 'the mascot medallion');
+  t.ok(pl.classList.contains('can'), 'affordable');
+  clearToasts(g);
+  const gold0 = R.gold, say0 = txt($(g, '.sh-say'));
+  await click(g, pl);
+  t.ok(snack.sold && pl.classList.contains('sold'), 'SOLD');
+  t.eq(R.gold, gold0 - snack.price, 'paid');
+  t.eq(R.mascot.xp, 6, 'the mascot ate: 4 + 2 XP');
+  const toasts = toastTexts(g);
+  t.ok(toasts.some((x) => /Tour Bus Hamster gains 2 XP\./.test(x)), 'the XP line is toasted (' + toasts.join(' | ') + ')');
+  t.ok(toasts.some((x) => /^Tour Bus Hamster grew to level 2: /.test(x) && x.indexOf(g.DATA.mascots.mascot_hamster.levels[2].text) > 0), 'the level the Snack switched on is toasted with its text');
+  const say = txt($(g, '.sh-say'));
+  t.ok(say !== say0 && /snack|glitter/i.test(say), 'Jordan has a snack line: ' + say);
+  await click(g, pl);
+  t.eq(R.mascot.xp, 6, 'a second tap feeds nothing');
+  // the refusal path: a stock with a Snack but a bus without a mascot (never happens in play; the screen must still not throw)
+  R.mascot = null; const node2 = nodeAt(g, R, 'shop', { shop: { seed: 10 } }); node2.stock.items.push({ key: 's0', kind: 'snack', id: 'snack', price: 10, sale: false, sold: false });
+  await open(g, 'shop', R, node2); clearToasts(g);
+  await click(g, itemEl(g, 's0'));
+  t.ok(toastTexts(g).some((x) => /No mascot to feed/.test(x)), 'RUN says no mascot: a plain toast');
+  t.ok(/kind-snack/.test(CSS), 'css styles the Snack plaque');
+  t.eq(errs(g), 0, 'no console errors');
+});
+
+await t.test('reward: a win that grows the mascot toasts "<name> grew to level N: <text>" once, from the mascot lines that lead Rewards.log, and a reopened claimed page stays quiet', async () => {
+  const g = fresh({ seed: 12 }); const R = mkRun(g, { seed: 12 });
+  g.RUN.adoptMascot(R, 'mascot_pug'); g.RUN.mascotXp(R, 4);
+  const node = winFight(g, R, 'enemy');
+  const rw = node.rewards;
+  t.ok(rw.log.length && rw.log[0].op === 'mascot' && rw.log[0].level === 2, 'RUN put the level line first');
+  clearToasts(g);
+  await open(g, 'reward', R, node);
+  const toasts = toastTexts(g);
+  t.eq(toasts.filter((x) => /grew to level/.test(x)).length, 1, 'one level toast');
+  t.eq(toasts.find((x) => /grew to level/.test(x)), 'Beatbox Pug grew to level 2: ' + g.DATA.mascots.mascot_pug.levels[2].text, 'the toast text');
+  rw.claimed = true;
+  clearToasts(g);
+  await open(g, 'reward', R, node);
+  t.eq(toastTexts(g).filter((x) => /grew to level/.test(x)).length, 0, 'a claimed page reopened does not toast again');
+  // no level up: nothing
+  const R2 = mkRun(g, { seed: 13 }); g.RUN.adoptMascot(R2, 'mascot_pug');
+  const node2 = winFight(g, R2, 'enemy'); clearToasts(g);
+  await open(g, 'reward', R2, node2);
+  t.eq(toastTexts(g).filter((x) => /grew to level/.test(x)).length, 0, 'a win without a level up toasts nothing about the mascot');
+  t.eq(errs(g), 0, 'no console errors');
+});
+
+await t.test('event: the bus stop Detour ends in a chip with the medallion and "<name> hops aboard the tour bus."; a snack op makes an XP chip and a level-up chip; both read well through DATA.opsText', async () => {
+  const g = fresh({ seed: 14 }); const R = mkRun(g, { seed: 14 });
+  const node = nodeAt(g, R, 'event', { id: 'stray_at_the_bus_stop' });
+  await open(g, 'event', R, node);
+  const root = $(g, '.s-event');
+  t.eq($$(g, '.ev-choice', root).length, 4, 'three strays and the way on');
+  await click(g, $(g, '.ev-choice', root)); g._flush(5000); await settle(g);
+  t.ok(R.mascot && g.DATA.mascots[R.mascot.id], 'a stray was adopted');
+  const chips = $$(g, '.ev-chip', root);
+  t.eq(chips.length, 1, 'one chip');
+  t.ok(chips[0].classList.contains('has-mascot') && chips[0].classList.contains('k-good') && $(g, 'canvas', chips[0]), 'the chip carries the medallion');
+  t.eq(txt(chips[0]), g.DATA.mascots[R.mascot.id].name + ' hops aboard the tour bus.', 'and says who hopped aboard');
+  t.eq(g.DATA.opsText([{ op: 'adoptMascot', id: R.mascot.id }]), g.DATA.mascots[R.mascot.id].name + ' hops aboard the tour bus.', 'opsText reads the adopt op the same way');
+  t.eq(g.DATA.opsText([{ op: 'mascotXp', n: 2 }]), 'Feed your mascot 2 XP.', 'and the feed op');
+  // a synthetic Detour that feeds the mascot past a level
+  g.DATA.add('events', { t_snack_time: { title: 'Snack Time', art: { scene: 'event' }, text: 'A vending machine hums. It takes compliments.', choices: [{ label: 'Compliment it', out: [{ w: 1, text: 'It drops a snack. Your mascot is delighted.', ops: [{ op: 'mascotXp', n: 5 }] }] }] } });
+  R.mascot.xp = 1;
+  const node2 = nodeAt(g, R, 'event', { id: 't_snack_time' });
+  await open(g, 'event', R, node2);
+  await click(g, $(g, '.s-event .ev-choice')); g._flush(5000); await settle(g);
+  t.eq(R.mascot.xp, 6, 'fed');
+  const chips2 = $$(g, '.s-event .ev-chip');
+  t.ok(chips2.length === 2 && chips2.every((c) => c.classList.contains('has-mascot')), 'an XP chip and a level chip (' + chips2.map(txt).join(' | ') + ')');
+  t.eq(txt(chips2[0]), g.DATA.mascots[R.mascot.id].name + ' gains 5 XP.', 'the XP chip');
+  t.ok(/grew to level 2: /.test(txt(chips2[1])), 'the level chip');
+  delete g.DATA.events.t_snack_time;
+  t.eq(errs(g), 0, 'no console errors');
+});
+
 await t.done();

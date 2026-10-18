@@ -1251,4 +1251,16 @@ t.test('markup: an upgrade colours the base and the multiplier of a "plus ... fo
   t.ok(nums(H({ id: both, up: 1, gems: [] })).some((x) => x[0] === 4 && x[1] === 'down'), 'a lowered base reads "down"');
 });
 
+
+// ------------------------------------------------------------------ the Mascot run ops (DESIGN 4.7)
+t.test('opsText: adoptMascot and mascotXp read as sentences (never the bare op name)', () => {
+  D.add('mascots', { t_pug: { name: 'Test Pug', blurb: 'Snores in 4/4.', art: { m: 'bell', c: 'gold' }, levels: {} } });
+  t.eq(D.opsText([{ op: 'adoptMascot', id: 't_pug' }]), 'Test Pug hops aboard the tour bus.', 'a named stray hops aboard');
+  t.eq(D.opsText([{ op: 'adoptMascot', id: 't_nobody' }]), 'A stray hops aboard the tour bus as your mascot.', 'an unknown id still reads as a stray');
+  t.eq(D.opsText([{ op: 'mascotXp', n: 2 }]), 'Feed your mascot 2 XP.', 'the Snack');
+  t.eq(D.opsText([{ op: 'mascotXp', n: 5 }, { op: 'gold', n: 10 }], { run: true }), 'Feed your mascot 5 XP. Gain 10 gold.', 'with the run flag, among other run ops');
+  t.eq(D.opsText([{ op: 'adoptMascot', id: 't_pug' }, { op: 'mascotXp', n: 2 }]), 'Test Pug hops aboard the tour bus. Feed your mascot 2 XP.', 'both in one list');
+  delete D.mascots.t_pug;
+});
+
 t.done();

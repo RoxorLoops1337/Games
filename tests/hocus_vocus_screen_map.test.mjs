@@ -2176,4 +2176,80 @@ await t.test('P8 realtime: with AUDIO.sfx, wake, wakeDegree and awake missing or
   }
 });
 
+
+// ==================================================================================================== the Mascot (DESIGN 4.7 "The Mascot")
+await t.test('mascot: the HUD chip (medallion, level pips, data-kw-explain) joins the Charm strip on adoption, follows level ups and opens the Charms overlay; the overlay leads with the Mascot section (name, blurb, pips, XP to go, level lines lit like set tiers) or the bus stop line', async () => {
+  const g = fresh(); const R = mkRun(g, { relics: ['brass_lantern'] });
+  await open(g, R);
+  t.ok(!$(g, '.mp-mascot'), 'no chip without a mascot');
+  g._click($(g, '.mp-relics .relic')); await settle(g);
+  const none = $(g, '.o-relics .mr-mascot');
+  t.ok(none && none.classList.contains('none') && txt(none).indexOf('No mascot yet. A stray waits at a bus stop somewhere.') >= 0, 'without a mascot the overlay says so, at the top');
+  t.ok($(g, '.o-relics .mr-grid').firstElementChild === none, 'the Mascot section leads the grid');
+  t.ok($$(g, '.o-relics .mr-set').every((e) => !e.classList.contains('mr-mascot')), 'the Mascot section is not a Charm set header');
+  g.UI.overlay.closeAll(); await settle(g);
+  // the stray hops aboard: the strip re-renders on the next frame
+  g.RUN.adoptMascot(R, 'mascot_pug');
+  for (let i = 0; i < 4; i++) g._raf(16); await settle(g);
+  const chip = $(g, '.mp-mascot');
+  t.ok(chip && chip.closest('.mp-relics') && chip.closest('.mp-relics').firstElementChild === chip, 'adopting a stray puts the Mascot chip first in the Charm strip (inside it, so the HUD footprint counts it)');
+  t.ok(chip.localName === 'button' && chip.dataset.id === 'mascot_pug' && chip.dataset.level === '1', 'a real button that names the mascot and its level');
+  t.ok($(g, 'canvas', chip), 'a medallion'); t.eq($$(g, '.mr-pip', chip).length, 3, 'three pips'); t.eq($$(g, '.mr-pip.on', chip).length, 1, 'one lit at level 1');
+  t.eq(chip.dataset.kwExplain, 'mascot', 'the chip teaches the Mascot keyword (data-kw-explain)');
+  t.ok(/Beatbox Pug, level 1 of 3\. 5 more XP to level 2\./.test(chip.getAttribute('aria-label')), 'aria: ' + chip.getAttribute('aria-label'));
+  t.ok($(g, '.mp-relics').classList.contains('has-mascot'), 'the strip knows');
+  g.RUN.mascotXp(R, 6);
+  for (let i = 0; i < 4; i++) g._raf(16); await settle(g);
+  const chip2 = $(g, '.mp-mascot');
+  t.eq(chip2.dataset.level, '2', 'a level up re-renders the chip'); t.eq($$(g, '.mr-pip.on', chip2).length, 2, 'two pips lit');
+  g._click(chip2); await settle(g);
+  const ov = $(g, '.o-relics'); t.ok(ov, 'the chip opens the Charms overlay');
+  const sec = $(g, '.mr-mascot', ov);
+  t.ok(sec && sec.classList.contains('lit') && $(g, '.mr-grid', ov).firstElementChild === sec, 'the Mascot section leads the overlay, lit');
+  const P = g.DATA.mascotProgress(R.mascot);
+  t.eq(txt($(g, '.mr-set-name', sec)), 'Beatbox Pug', 'name'); t.ok(txt(sec).indexOf(P.blurb) >= 0, 'the blurb');
+  t.ok($(g, '.mr-mascot-ico canvas', sec), 'the medallion');
+  t.eq(txt($(g, '.mr-set-count', sec)), 'Level 2/3', 'the level count'); t.eq($$(g, '.mr-set-pips .mr-pip.on', sec).length, 2, 'two of three pips lit');
+  t.ok(/^6 more XP to level 3\./.test(txt($(g, '.mr-mascot-next', sec))) && /Snack/.test(txt($(g, '.mr-mascot-next', sec))), 'the XP still needed and how to earn it');
+  const tiers = $$(g, '.mr-tier', sec); t.eq(tiers.length, 3, 'every level line');
+  t.deep(tiers.map((l) => l.classList.contains('on')), [true, true, false], 'levels 1 and 2 lit, level 3 not (like set tiers)');
+  P.levels.forEach((l, i) => t.ok(txt(tiers[i]).indexOf(l.text) >= 0, 'level ' + l.level + ' carries its text'));
+  t.ok(/\(at 12 XP\)/.test(txt(tiers[2])), 'an unlit level says when it comes');
+  t.eq($$(g, '.mr-row', ov).length, 1, 'the Charm rows follow');
+  t.ok(/Mascot: Beatbox Pug, level 2 of 3/.test(sec.getAttribute('aria-label')) && /Active: /.test(sec.getAttribute('aria-label')), 'read out as one group');
+  g.UI.overlay.closeAll(); await settle(g);
+  g.RUN.mascotXp(R, 20);
+  for (let i = 0; i < 4; i++) g._raf(16); await settle(g);
+  g._click($(g, '.mp-mascot')); await settle(g);
+  t.ok(/^Fully grown\./.test(txt($(g, '.o-relics .mr-mascot-next'))), 'at the top level: fully grown');
+  t.ok($$(g, '.o-relics .mr-mascot .mr-tier').every((l) => l.classList.contains('on')), 'every level lit');
+  g.UI.overlay.closeAll(); await settle(g);
+  // an explicit list may leave the Mascot out
+  g.UI.overlay.open('relics', { relics: ['brass_lantern'], mascot: false }); await settle(g);
+  t.ok(!$(g, '.o-relics .mr-mascot') && $$(g, '.o-relics .mr-row').length === 1, 'params.mascot false hides the section');
+  g.UI.overlay.closeAll();
+  t.ok(/mp-mascot/.test(CSS) && /mr-mascot/.test(CSS) && /mr-mascot-next/.test(CSS), 'css has the chip and the section');
+  t.eq(errs(g), 0, 'clean');
+});
+
+await t.test('mascot: the chip is drawn by UI.mascotIcon (ART.mascot.draw when it exists, else the Charm sticker of its motif) and a throwing ART.mascot never breaks the HUD; the first map after adoption raises the mascot hint at the chip', async () => {
+  const g = fresh(); const R = mkRun(g);
+  g.RUN.adoptMascot(R, 'mascot_cat');
+  // every other step and hint is seen (and Stop explaining is on), so the only bubble the map can raise is the mascot one
+  const tut = g.UI.tutorial && g.UI.tutorial.HINTS.mascot ? g.UI.tutorial : null;
+  if (tut) { Object.keys(tut.HINTS).filter((id) => id !== 'mascot').forEach((id) => g.META.setTutorial('tut_' + id, true)); g.META.setTutorial('tut_x_off', true); }
+  g._run("globalThis.__mdraw = []; ART.mascot = { draw(ctx, id, x, y, size) { __mdraw.push([id, size]); ctx.fillRect(0, 0, 2, 2); } };");
+  await open(g, R);
+  if (tut) { await settle(g); await settle(g); const c0 = tut.current(); t.ok(c0 && c0.id === 'mascot', 'the first map with a mascot raises the mascot hint (' + (c0 && c0.id) + '; headless has no boxes to anchor on)'); tut.dismiss('ok'); await settle(g); t.ok(tut.seen('mascot'), 'and stores it'); }
+  const drew = g._run('__mdraw');
+  t.ok(drew.length >= 1 && drew.every((d) => d[0] === 'mascot_cat'), 'ART.mascot.draw drew the chip (' + JSON.stringify(drew[0]) + ')');
+  t.ok($(g, '.mp-mascot canvas.mascot-ico'), 'into the chip canvas');
+  g._run("ART.mascot = { draw() { throw new Error('no art yet'); } };");
+  g.RUN.mascotXp(R, 5);
+  for (let i = 0; i < 4; i++) g._raf(16); await settle(g);
+  t.ok($(g, '.mp-mascot[data-level="2"] canvas'), 'a throwing ART.mascot falls back to the sticker and the chip still renders');
+  g._run('delete ART.mascot');
+  t.eq(errs(g), 0, 'clean');
+});
+
 await t.done();
