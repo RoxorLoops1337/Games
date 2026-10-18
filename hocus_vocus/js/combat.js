@@ -4,9 +4,11 @@
 // header records every public function and the few places where the design left a choice open.
 //
 // PUBLIC API
-//   COMBAT.create({ heroes:[{id,hp,maxHp}], frontIdx, deck:[{uid,id,up,gems}], enemies:[enemyId], tier, chapter, seed, mods, relics:[id], gold }) -> C
+//   COMBAT.create({ heroes:[{id,hp,maxHp}], frontIdx, deck:[{uid,id,up,gems}], enemies:[enemyId], tier, chapter, seed, mods, relics:[id], gold, mascot }) -> C
 //        mods is RUN.mods(R) verbatim (partial objects are fine, missing keys default from DATA.foldMods([])); only energy, hand, startBlock,
-//        freeSwaps, enemyHp, eliteHp, bossHp and enemyDmg are read. relics are only for hooks and row bonuses (the combat hooks of every active Charm set tier, DATA.activeSetTiers(relics), register after them as party hooks with src 'set'). Enemy HP is rolled in create
+//        freeSwaps, enemyHp, eliteHp, bossHp and enemyDmg are read. relics are only for hooks and row bonuses (the combat hooks of every active Charm set tier, DATA.activeSetTiers(relics), register after them as party hooks with src 'set').
+//        mascot is R.mascot ({id, xp}) or null (DESIGN 4.7 "The Mascot"): C.mascot echoes {id, level} (null without one); the levels' rows join every row bonus read
+//        (rowB -> DATA.rowFor(hero, row, relics, mascot)) and their combat hooks register after the set tiers as party hooks with src 'mascot', srcId 'id:level'. Enemy HP is rolled in create
 //        (C.rng), so units are fully formed before start(); C.start() then runs enemy `start` ops, the opening shuffle, combatStart hooks,
 //        the first intents and turn 1. The opening shuffle is not a `shuffle` event and does not fire onShuffle.
 //   COMBAT.simulate(opts, policyFn?) -> summary   plays a whole combat with policyFn(C) (default COMBAT.greedyPolicy). The summary is C.summary()
@@ -17,7 +19,7 @@
 //   COMBAT.applyAction(C, action) -> events
 //
 // STATE (all plain data; internal engine fields are non-enumerable and start with an underscore)
-//   C.turn C.phase ('setup' before start, then 'player' | 'enemy' | 'over') C.energy C.maxEnergy C.result (null | 'win' | 'lose') C.tier C.chapter C.seed
+//   C.turn C.phase ('setup' before start, then 'player' | 'enemy' | 'over') C.energy C.maxEnergy C.result (null | 'win' | 'lose') C.tier C.chapter C.seed C.mascot (null | {id, level})
 //   C.heroes[2]   { kind:'hero', id, name, hp, maxHp, block, st, fresh, rowSt:{thorns,regen}, down, row }   C.front() C.back() C.unit(id)
 //   C.enemies[]   { kind:'enemy', id:'kappa#1', def, name, hp, maxHp, block, st, fresh, down, fled, tier, size, lane, phase, turn, intent, loot, ai }
 //   C.hand C.draw C.discard C.exhaust C.powers C.inPlay: deck instances { uid, id, up, gems } (temp cards add tmp:true). C.draw[0] is the TOP
@@ -106,11 +108,13 @@ const COMBAT = (() => {
     const MAXHAND = ECO.maxHand;
     const mods = Object.assign(D.foldMods([]), opts.mods || {});
     const relicIds = asList(opts.relics).filter((id) => D.relics[id]);
+    // the Mascot (DESIGN 4.7 "The Mascot"): {id, xp} from RUN; its levels are virtual Charms (rows via rowB, combat hooks registered below with src 'mascot')
+    const mascot = opts.mascot && typeof opts.mascot === 'object' && D.mascots && D.mascots[opts.mascot.id] ? { id: opts.mascot.id, xp: Math.max(0, isNum(opts.mascot.xp) ? Math.floor(opts.mascot.xp) : 0) } : null;
     const seed = opts.seed === undefined ? 1 : opts.seed;
     const rng = U.rng(seed);
 
     const C = {
-      seed, rng, tier: opts.tier || 'normal', chapter: opts.chapter || 1, mods, relics: relicIds,
+      seed, rng, tier: opts.tier || 'normal', chapter: opts.chapter || 1, mods, relics: relicIds, mascot: mascot ? { id: mascot.id, level: D.mascotLevel(mascot.xp) } : null,
       turn: 0, phase: 'setup', energy: 0, maxEnergy: mods.energy, result: null,
       heroes: [], enemies: [], hand: [], draw: [], discard: [], exhaust: [], powers: [], inPlay: null, pending: null,
       stats: {
@@ -163,7 +167,7 @@ const COMBAT = (() => {
     const front = () => C.heroes.find((h) => h.row === 'front') || null;
     const back = () => C.heroes.find((h) => h.row === 'back') || null;
     const otherHero = (h) => C.heroes.find((x) => x.id !== h.id) || null;
-    const rowB = (h) => D.rowFor(h.id, h.row, relicIds);
+    const rowB = (h) => D.rowFor(h.id, h.row, relicIds, mascot);
     C.front = front; C.back = back;
     C.unit = (id) => heroById(id) || enemyById(id);
 
@@ -1592,7 +1596,7 @@ const COMBAT = (() => {
       const target = targetId ? enemyById(targetId) : null;
       const sim = { kind: 'hero', id: actor.id, hp: actor.hp, maxHp: actor.maxHp, block: actor.block, st: Object.assign({}, actor.st), row: actor.row, down: actor.down, _dmgTaken: actor._dmgTaken, _hitsTaken: actor._hitsTaken };
       const env = { kind: 'card', actor: sim, card: res, X: res.cost === 'X' ? C.energy : 0, target: target && !target.down ? target : null, lastKill: false, picked: 0 };
-      const rowAdd = () => (D.rowFor(sim.id, sim.row, relicIds).dmgAdd || 0);
+      const rowAdd = () => (rowB(sim).dmgAdd || 0);
       const visit = (op) => {
         switch (op.op) {
           case 'dmg': {
@@ -1668,6 +1672,10 @@ const COMBAT = (() => {
     // active Charm set tiers (DESIGN 4.7) are party hooks too, after the Charms' own; src 'set' so no `relic` event names a Charm that is not one
     asList(typeof D.activeSetTiers === 'function' ? D.activeSetTiers(relicIds) : []).forEach((t) => {
       asList(t.def.hooks).forEach((h) => { if (D.LISTS.combatHooks.indexOf(h.on) >= 0) registerHook(h, null, 'set', t.set + ':' + t.tier); });
+    });
+    // the Mascot's active levels (DESIGN 4.7 "The Mascot") follow the set tiers: party hooks, src 'mascot', srcId 'mascot_pug:2', no `relic` event
+    asList(typeof D.activeMascotTiers === 'function' ? D.activeMascotTiers(mascot) : []).forEach((t) => {
+      asList(t.def.hooks).forEach((h) => { if (D.LISTS.combatHooks.indexOf(h.on) >= 0) registerHook(h, null, 'mascot', t.mascot + ':' + t.level); });
     });
     hide(C, { _hooks: hooks });
     return C;

@@ -1,4 +1,4 @@
-// Hocus Vocus: data_events.js: the Detours (event tiles). 48 events: 12 per act (`chapters:[n]`) plus 12 for any act.
+// Hocus Vocus: data_events.js: the Detours (event tiles). 49 events: 12 per act (`chapters:[n]`) plus 13 for any act (one of them the Mascot Detour).
 // Data only (DESIGN 4.9, CONTENT_SPEC 6): one IIFE that registers into DATA.events. No functions, no clock, no unseeded randomness,
 // no em or en dashes. Everything here is validated by DATA.validate('events') and DATA.audit('events'), and
 // tests/hocus_vocus_narrative.test.mjs replays every outcome through the real RUN.applyOps when RUN is present.
@@ -868,6 +868,33 @@
           ] },
         { label: 'Help him cut',
           out: [{ w: 1, text: 'You sit with him and cut stickers until the stars come out, talking about nothing. It is very restful, and the stickers are very good.', ops: [{ op: 'heal', n: 6 }, { op: 'ink', n: 2 }] }] },
+      ],
+    },
+
+    // ---- The Mascot (DESIGN 4.7 "The Mascot"): the one Detour that adopts the tour bus pet. Any act, once per tour, heavy weight so most tours
+    // meet it in Act I. The three calls are hidden once the bus has a mascot (req.mascot false), so the safe "drive on" stays with any party.
+    // Each call brings one of two strays (seeded by the tile, so a reload gives the same animal), all six mascots reachable from one Detour.
+    stray_at_the_bus_stop: {
+      title: 'Strays at the Bus Stop', art: { scene: 'event' }, once: true, w: 12,
+      text: 'The bus stops for fuel. Six strays sit at the bus stop in a neat row, each one looking like it already knows the setlist. Jasmin says you cannot keep them all. RoxorLoops says: one, then.',
+      choices: [
+        { label: 'Whistle a beat (a pug or a cat answers)', req: { mascot: false },
+          out: [
+            { w: 1, text: 'A small round pug snores along in perfect 4/4, wakes up, and beatboxes a reply. It climbs the bus steps one at a time and claims the front seat.', ops: [{ op: 'adoptMascot', id: 'mascot_pug' }] },
+            { w: 1, text: 'A cat walks across the loop pedal, looks at you, and walks across it again. The beat now has a second verse. The cat is on the bus before you are.', ops: [{ op: 'adoptMascot', id: 'mascot_cat' }] },
+          ] },
+        { label: 'Shake the snack bag (a hamster or a fox answers)', req: { mascot: false },
+          out: [
+            { w: 1, text: 'A hamster the size of a bread roll sprints to the bag, then to the bus, then to the wheel under the floor. The bus starts. Nobody turned the key.', ops: [{ op: 'adoptMascot', id: 'mascot_hamster' }] },
+            { w: 1, text: 'A fox in a tour tee three sizes too big takes the bag, squeaks a price at Jordan, and wins. It leaves with the bag and boards the bus like it owns it.', ops: [{ op: 'adoptMascot', id: 'mascot_fox' }] },
+          ] },
+        { label: 'Honk the bus horn (a goose or a parrot answers)', req: { mascot: false },
+          out: [
+            { w: 1, text: 'A goose honks back, louder, and stares down the Gloss on the horizon until it blinks. It takes the step by the door. Security has arrived.', ops: [{ op: 'adoptMascot', id: 'mascot_goose' }] },
+            { w: 1, text: 'A parrot sings the chorus of every song you know and none of the verses, at full volume, then lands on the mic stand. Fine. It can stay.', ops: [{ op: 'adoptMascot', id: 'mascot_parrot' }] },
+          ] },
+        { label: 'Drive on',
+          out: [{ w: 1, text: 'You pull away. Six strays watch the bus go with the same expression. Jasmin does not look back, very deliberately, for twelve whole minutes.' }] },
       ],
     },
   });
