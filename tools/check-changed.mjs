@@ -73,6 +73,7 @@ const GAME_SUITES = {
   LoopDoku: ['test:loopdoku'],
   blockmates: ['test:blockmates'],
   rustgrift: ['test:rustgrift'],
+  midnight_mog: ['test:midnightmog'],
 };
 
 // Folders the site serves that have no test suite: a change there only needs
