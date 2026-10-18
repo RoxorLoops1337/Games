@@ -482,7 +482,7 @@ are owned by the owner hero (src `guest`, deactivated when it leaves, never `onc
 number on stage (a guest counts itself in its own act). Generated text: "Guest DJ Scratchy for 3 turns: at the end of your turn, deal 4 damage to a
 random enemy." ("on arrival, ..." / "On leaving, ..." for enter and exit, one hook sentence per hook). Keyword `guest` explains it. Each hero has
 3 Guest cards (2 uncommon, 1 rare; `QUOTA.cards.guests`): Jasmin a backing choir, a harp grandma and a hype parrot; RoxorLoops a DJ, a loop pedal
-robot and a drum machine; RawClaw the sound tech, a cable gremlin and a reverb ghost; Andy a flight case roadie, a bass amp on wheels and a mosh pit
+robot and a metronome gnome; RawClaw the sound tech, a cable gremlin and a reverb ghost; Andy a flight case roadie, a bass amp on wheels and a mosh pit
 uncle. No guest gives more than 1 Breath per turn, and none draws at the end of the turn (the hand is discarded right after).
 
 **Medleys** (fused cards, offered once after every elite fight, optional): a Medley is two cards sung as one. The player picks two Attack or Skill cards

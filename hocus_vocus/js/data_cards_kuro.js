@@ -411,7 +411,7 @@
       flavor: 'Bass, snare, hat, throat, all at once. Then silence. Then the roar.',
     },
     // ------------------------------------------------------------------ guests (DATA.guests, data_guests.js; DESIGN 4.3 "Guests")
-    // Three Skills that bring a guest on stage: a DJ (a strike a turn), a loop pedal robot (Block and Groove a turn) and a drum machine (a beat on
+    // Three Skills that bring a guest on stage: a DJ (a strike a turn), a loop pedal robot (Block and Groove a turn) and a metronome gnome (a beat on
     // every enemy, and 1 Breath at the start of each turn while it stays). Guest ops are hook ops acted by RoxorLoops: no backing bonus on them.
     kuro_guest_dj: {
       name: 'DJ Scratchy', hero: 'kuro', type: 'skill', rarity: 'uncommon', cost: 1,
@@ -428,7 +428,7 @@
       flavor: 'Beep. Four bars. Beep. The same four bars. It is very proud of them.',
     },
     kuro_guest_drum_machine: {
-      name: 'Drum Machine', hero: 'kuro', type: 'skill', rarity: 'rare', cost: 2,
+      name: 'Metro Gnome', hero: 'kuro', type: 'skill', rarity: 'rare', cost: 2,
       fx: [{ op: 'guest', id: 'guest_drum_machine' }],
       up: { fx: [{ op: 'guest', id: 'guest_drum_machine', up: true }] },
       kw: [], slots: ['gold', 'green'], art: { m: 'fist', c: 'indigo' },

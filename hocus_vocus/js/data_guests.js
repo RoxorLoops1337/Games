@@ -24,7 +24,7 @@
 //
 // THE TWELVE (two uncommon Guest cards and one rare per hero; the card files hold the cards, ids <hero>_guest_*)
 //   Jasmin (bloom, petals, singing)   Backing Choir (Block for both), Harp Grandma (healing, a parting gift of Block), Hype Parrot (Bloom, random strikes)
-//   RoxorLoops (sumi ink, beats)      DJ Scratchy (random strikes), Loop Pedal Bot (Block and Groove), Drum Machine (a Breath a turn, a beat on everyone)
+//   RoxorLoops (sumi ink, beats)      DJ Scratchy (random strikes), Loop Pedal Bot (Block and Groove), Metro Gnome (a Breath a turn, a beat on everyone)
 //   RawClaw (ward, mixing)            Sound Tech (Block for the lead), Cable Gremlin (trips the smallest enemy), Reverb Ghost (Reverb, damage to all)
 //   Andy (charge, bass, thorns)       Flight Case Roadie (Block for the lead), Rolling Bass Amp (Rumble, random strikes), Mosh Pit Uncle (damage per guest)
 (() => {
@@ -36,13 +36,13 @@
     // ------------------------------------------------------------------ Jasmin (hanae)
     guest_backing_choir: {
       name: 'Backing Choir', hero: 'hanae', stay: 3,
-      act: [block(3, 'both')],
-      up: { act: [block(4, 'both')] },
+      act: [block(2, 'both')],
+      up: { act: [block(3, 'both')] },
       art: { m: 'heal_light', c: 'rose' },
       blurb: 'Four singers, one breath, and they all know the words better than you do.',
     },
     guest_harp_grandma: {
-      name: 'Harp Grandma', hero: 'hanae', stay: 3,
+      name: 'Harp Grandma', hero: 'hanae', stay: 2,
       act: [{ op: 'heal', n: 2, tgt: 'both' }],
       exit: [block(3, 'both')],
       up: { act: [{ op: 'heal', n: 3, tgt: 'both' }] },
@@ -74,19 +74,19 @@
       blurb: 'A little robot that records four bars and plays them back forever, politely.',
     },
     guest_drum_machine: {
-      name: 'Drum Machine', hero: 'kuro', stay: 2,
+      name: 'Metro Gnome', hero: 'kuro', stay: 2,
       act: [dmg(2, 'all')],
       hooks: [{ on: 'turnStart', fx: [{ op: 'energy', n: 1 }] }],
       up: { stay: 3 },
       art: { m: 'fist', c: 'indigo' },
-      blurb: 'Boots and cats at a tempo nobody asked for. Everybody keeps up anyway.',
+      blurb: 'A tiny gnome with a metronome and no mercy. Tick, tick, tick. Everybody keeps up anyway.',
     },
 
     // ------------------------------------------------------------------ RawClaw (suzu)
     guest_sound_tech: {
       name: 'Sound Tech', hero: 'suzu', stay: 3,
-      act: [block(5, 'front')],
-      up: { act: [block(7, 'front')] },
+      act: [block(4, 'front')],
+      up: { act: [block(6, 'front')] },
       art: { m: 'book', c: 'violet' },
       blurb: 'Black t-shirt, gaffer tape, a torch in her teeth. The lead has never sounded safer.',
     },
@@ -109,13 +109,13 @@
     // ------------------------------------------------------------------ Andy (raiga)
     guest_roadie: {
       name: 'Flight Case Roadie', hero: 'raiga', stay: 3,
-      act: [block(5, 'front')],
-      up: { act: [block(7, 'front')] },
+      act: [block(4, 'front')],
+      up: { act: [block(6, 'front')] },
       art: { m: 'key', c: 'ash' },
       blurb: 'Pushes a flight case the size of a van in front of whoever is in the lead. Asks no questions.',
     },
     guest_bass_amp: {
-      name: 'Rolling Bass Amp', hero: 'raiga', stay: 3,
+      name: 'Rolling Bass Amp', hero: 'raiga', stay: 2,
       enter: [status('charge', 2, 'self')],
       act: [dmg(5, 'enemy')],
       up: { act: [dmg(7, 'enemy')] },

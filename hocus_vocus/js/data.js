@@ -1356,7 +1356,7 @@ const DATA = (() => {
         else { if (g.blurb.length > 100) err(w, 'blurb over 100 characters'); if (!/^[\x20-\x7e]+$/.test(g.blurb)) err(w, 'blurb must be printable ASCII'); if (!/[.!?]$/.test(g.blurb)) err(w, 'blurb must end with . ! or ?'); }
         noDash(w, g);
       });
-      if (strict) {
+      if (strict && vals(D.guests).length) {
         LISTS.heroIds.forEach((id) => { const n = vals(D.guests).filter((g) => g.hero === id).length; if (n !== QUOTA.cards.guests) err('guests', `${id} has ${n} guests, the quota is ${QUOTA.cards.guests}`); });
         vals(D.guests).forEach((g) => { if (!vals(D.cards).some((c) => [A(c.fx), A(O(c.up).fx)].some((fx) => fx.some((o) => isObj(o) && o.op === 'guest' && o.id === g.id)))) err('guest ' + g.id, 'no card calls this guest'); });
       }

@@ -789,6 +789,7 @@ const COMBAT = (() => {
           flush();
           reshuffle();
           reshuffled = true;
+          if (C.hand.length >= MAXHAND) break;        // an onShuffle hook may have added cards to the hand (the fuzz found an 11th card here)
         }
         const c = C.draw.shift();
         C.hand.push(c);

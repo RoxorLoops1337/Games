@@ -33,8 +33,8 @@ const has = (file) => fs.existsSync(path.join(DIR, 'js', file));
 // ---------------------------------------------------------------------------------------------- load
 // data_text.js belongs to a teammate: use it when it loads, fall back to structure-only checks when it does not (RB_STRICT=1 refuses the fallback)
 let g = null, textErr = null;
-if (has('data_text.js')) { try { g = boot({ only: ['data_text', 'data_cards_hanae'] }); } catch (e) { textErr = e; } }
-if (!g) g = boot({ only: ['data_cards_hanae'] });
+if (has('data_text.js')) { try { g = boot({ only: ['data_text', 'data_cards_hanae', 'data_guests'] }); } catch (e) { textErr = e; } }
+if (!g) g = boot({ only: ['data_cards_hanae', 'data_guests'] });
 if (textErr) console.log('  note: data_text.js did not load (' + (textErr.message || textErr) + '), text checks skipped');
 const { DATA, U } = g;
 t.ok(!g._errors || g._errors.length === 0, 'the card file loads without errors: ' + JSON.stringify(g._errors));
@@ -80,10 +80,10 @@ t.test('DATA.audit has no lines for hanae', () => {
 });
 
 // ---------------------------------------------------------------------------------------------- counts and mix
-t.test('counts: 3 starters, 17 commons, 15 uncommons, 11 rares, no tokens', () => {
+t.test('counts: 3 starters, 17 commons, 17 uncommons, 12 rares, no tokens', () => {
   const n = (r) => nonToken.filter((c) => c.rarity === r).length;
-  t.eq(n('starter'), 3, 'starters'); t.eq(n('common'), 17, 'commons'); t.eq(n('uncommon'), 15, 'uncommons'); t.eq(n('rare'), 11, 'rares');
-  t.eq(cards.length, 46, 'total');
+  t.eq(n('starter'), 3, 'starters'); t.eq(n('common'), 17, 'commons'); t.eq(n('uncommon'), 17, 'uncommons'); t.eq(n('rare'), 12, 'rares');
+  t.eq(cards.length, 49, 'total');
   t.eq(cards.filter((c) => c.rarity === 'token').length, 0, 'no card here adds a token, so none is defined');
   t.ok(!allTokenAdds(), 'no card uses the add op');
 });
@@ -100,7 +100,7 @@ t.test('mix: 30 percent attacks, 30 percent skills, 4 or more powers, an X card'
   t.ok(n('attack') >= nonToken.length * 0.3, 'attacks ' + n('attack'));
   t.ok(n('skill') >= nonToken.length * 0.3, 'skills ' + n('skill'));
   t.ok(n('power') >= 4, 'powers ' + n('power'));
-  t.ok(n('attack') + n('skill') + n('power') === 46, 'only attack, skill and power types');
+  t.ok(n('attack') + n('skill') + n('power') === 49, 'only attack, skill and power types');
   nonToken.filter((c) => c.type === 'power').forEach((c) => t.ok(c.rarity === 'uncommon' || c.rarity === 'rare', c.id + ': powers are uncommon or rare'));
   t.ok(nonToken.some((c) => c.cost === 'X'), 'an X cost card');
   t.ok(nonToken.filter((c) => c.cost === 'X').length >= 2, 'two X cards: a common and a rare bomb');
@@ -344,6 +344,15 @@ function evalOps(ops, S, A, hookMode, revert) {
         evalOps(o.fx, S2, A2, true, null);
         A.gross += r.total * (A2.gross - A2.spent); break;
       }
+      case 'guest': {
+        // a Guest (DESIGN 4.3 "Guests"): its act once per turn of its stay, its enter and exit ops once, its hooks over the turns it stays (at most
+        // the 4 turn horizon); every op is a hook op (no spot bonus), discounted to 0.75 because the first act only lands at the end of the turn
+        const gd = DATA.guestDef(o.id, !!o.up);
+        if (!gd) break;
+        const part = (ops) => { const S2 = clone(S), A2 = { gross: 0, spent: 0 }; evalOps(ops, S2, A2, true, null); return A2.gross - A2.spent; };
+        A.gross += 0.75 * (gd.stay * part(gd.act) + part(gd.enter) + part(gd.exit) + gd.hooks.reduce((s, h) => s + Math.min(gd.stay, 4) * part(h.fx), 0));
+        break;
+      }
       default: break;
     }
   });
@@ -422,7 +431,7 @@ t.test('rules text: non-empty, clean and under 110 characters for every card, ba
 const wantEngine = has('data_text.js') && has('combat.js');
 let eng = null, engErr = null;
 if (wantEngine) {
-  try { eng = boot({ only: ['data_text', 'combat', 'data_cards_hanae'] }); if (!eng.COMBAT) throw new Error('COMBAT namespace missing'); } catch (e) { engErr = e; eng = null; }
+  try { eng = boot({ only: ['data_text', 'combat', 'data_cards_hanae', 'data_guests'] }); if (!eng.COMBAT) throw new Error('COMBAT namespace missing'); } catch (e) { engErr = e; eng = null; }
 }
 if (!eng) {
   const why = !wantEngine ? 'combat.js or data_text.js is not written yet' : 'the engine did not boot: ' + (engErr && (engErr.message || engErr));
@@ -654,7 +663,7 @@ if (!eng) {
 // ---------------------------------------------------------------------------------------------- card mechanics (DATA "Card mechanics")
 // The cards of the mechanics wave, played in a real engine against two test enemies: a 3 HP one (to be defeated) and a 300 HP dummy.
 function mechWorld(partner) {
-  const g = boot({ only: ['data_text', 'combat', 'data_cards_hanae'] });
+  const g = boot({ only: ['data_text', 'combat', 'data_cards_hanae', 'data_guests'] });
   const D = g.DATA;
   const base = { chapter: 1, tier: 'normal', size: 'm', moves: { idle: { name: 'Idle', kind: 'none', fx: [] } }, ai: { seq: ['idle'] }, lore: 'A test creature.', tags: ['spirit'] };
   D.add('enemies', { t_mech_weak: Object.assign({ name: 'Weak', hp: [3, 3], art: { id: 't_mech_weak' } }, base), t_mech_dummy: Object.assign({ name: 'Dummy', hp: [300, 300], art: { id: 't_mech_dummy' } }, base) });
