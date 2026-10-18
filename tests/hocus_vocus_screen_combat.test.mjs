@@ -1681,4 +1681,239 @@ await t.test('css (piles): a phone hides the HOCUS VOCUS word on the Draw and Di
   t.ok(/#stage\.compact \.p-stack \.back-word \{[^}]*display: none/.test(CSS), 'the back word is hidden when the stage is compact');
   t.ok(!/\.cm-pile[^{]*\.back-word \{[^}]*display: none/.test(CSS.replace(/#stage\.compact[^{]*\{[^}]*\}/g, '')), 'and only there: a full-size stage still shows it');
 });
+// ==================================================================================================== guests and the mascot (header GUESTS AND THE MASCOT)
+const GUEST_HAND = ['kuro_guest_dj', 'hanae_guest_choir', 'hanae_guest_grandma', 'hanae_slash', 'kuro_ink_bolt'];
+// a real run that adopted a mascot, entered like `enter` (RUN.combatInit passes R.mascot to COMBAT.create)
+async function enterWithMascot(g, o = {}) {
+  const R = g.GAME.debug.quickRun({ heroes: o.heroes || ['hanae', 'kuro'], seed: o.seed || 777, chapter: 1 });
+  await idle(g);
+  R.mascot = { id: o.mascot || 'mascot_pug', xp: o.xp === undefined ? 6 : o.xp };
+  const node = { kind: 'combat', tile: { q: 1, r: 1 }, tier: 'normal', enemies: o.enemies || ['kappa', 'oni_cub'], seed: 4242, chapter: R.chapter };
+  R.node = node;
+  await g.UI.go('combat', { node, R }, { force: true, transition: 'none' });
+  await idle(g, 6);
+  if (o.hand) { scr(g).debugSetup({ hand: o.hand }); await idle(g); }
+  return { R, node, st: S(g) };
+}
+const guestChips = (g) => $$(g, '.cm-side .cm-guest');
+const pipsOf = (el) => el.querySelectorAll('.gu-pip.on').length + '/' + el.querySelectorAll('.gu-pip').length;
+
+await t.test('describe: the guest lines, and a guest hit names the guest', () => {
+  const g = boot({ only: ['screen_combat'], skip: ['scene'] });
+  const { describe, applyEvent } = g.UI.screens.combat._t;
+  const vm = { heroes: [{ kind: 'hero', id: 'hanae', name: 'Hanae' }], enemies: [{ kind: 'enemy', id: 'kappa#1', name: 'Kappa' }], guests: [], hand: [], draw: [], discard: [], exhaust: [], powers: [], inPlay: null, retained: {} };
+  const dj = { kind: 'guest', id: 'guest_dj_scratchy#1', def: 'guest_dj_scratchy', name: 'DJ Scratchy', owner: 'kuro', stay: 3, up: 0, born: 1 };
+  t.eq(describe(vm, { type: 'guest_enter', guest: dj, hero: 'kuro' }), 'DJ Scratchy joins the stage for 3 turns.', 'enter');
+  t.eq(describe(vm, { type: 'guest_enter', guest: Object.assign({}, dj, { stay: 1 }), hero: 'kuro' }), 'DJ Scratchy joins the stage for 1 turn.', 'enter, one turn');
+  t.eq(describe(vm, { type: 'guest_act', guest: dj, hero: 'kuro' }), 'DJ Scratchy: Deal 4 damage.', 'act reads the generated act sentence');
+  t.eq(describe(vm, { type: 'guest_act', guest: { id: 'guest_drum_machine#1', def: 'guest_drum_machine', name: 'Metro Gnome', up: 1 }, hero: 'kuro' }), 'Metro Gnome: Deal 2 damage to all enemies.', 'an upgraded guest reads its upgraded act');
+  t.eq(describe(vm, { type: 'guest_exit', guest: dj, reason: 'done' }), 'DJ Scratchy leaves the stage.', 'exit');
+  t.eq(describe(vm, { type: 'guest_exit', guest: dj, reason: 'replaced' }), 'DJ Scratchy leaves the stage.', 'a replaced guest leaves too');
+  t.eq(describe(vm, { type: 'guest_exit', guest: { id: 'x#1', def: 'nobody' } }), 'nobody leaves the stage.', 'an unknown guest still reads');
+  const hit = { type: 'hit', src: null, dst: { kind: 'enemy', id: 'kappa#1' }, amount: 4, blocked: 0, killed: false };
+  t.eq(describe(vm, hit), 'Something hits Kappa for 4.', 'a src-less hit with no guest acting');
+  applyEvent(vm, { type: 'guest_act', guest: dj, hero: 'kuro' });
+  t.eq(describe(vm, hit), 'DJ Scratchy hits Kappa for 4.', 'while a guest acts its hits are named after it');
+  applyEvent(vm, { type: 'turn_start', who: 'enemy', turn: 1 });
+  t.eq(describe(vm, hit), 'Something hits Kappa for 4.', 'the next turn clears the acting guest');
+});
+
+await t.test('snapshot and applyEvent: guests arrive, count down and leave; the mascot rides in the vm; the digest ignores them (no drift)', () => {
+  const g = boot({ only: ['screen_combat'], skip: ['scene'] });
+  const { snapshot, applyEvent, digest, guestVM, settle } = g.UI.screens.combat._t;
+  const DATA = g.DATA;
+  const deck = [];
+  let uid = 1;
+  ['hanae', 'kuro'].forEach((h) => DATA.heroes[h].starter.forEach((id) => deck.push({ uid: uid++, id, up: 0, gems: (DATA.cards[id].slots || []).map(() => null) })));
+  deck.push({ uid: 900, id: 'kuro_guest_dj', up: 0, gems: [] });
+  const C = g.COMBAT.create({ heroes: [{ id: 'hanae', hp: 84, maxHp: 84 }, { id: 'kuro', hp: 68, maxHp: 68 }], frontIdx: 0, deck, enemies: ['kappa', 'oni_cub'], tier: 'normal', chapter: 1, seed: 11, mods: DATA.foldMods([]), relics: [], gold: 50, mascot: { id: 'mascot_pug', xp: 13 } });
+  C.start();
+  const vm0 = snapshot(C);
+  t.deep(vm0.guests, [], 'no guest at the start'); t.deep(vm0.mascot, { id: 'mascot_pug', level: 3 }, 'the mascot and its level ride in the vm');
+  t.deep(guestVM({ id: 'g#1', def: 'guest_dj_scratchy', owner: 'kuro', stay: 2, up: 0 }), { id: 'g#1', def: 'guest_dj_scratchy', name: 'DJ Scratchy', owner: 'kuro', stay: 2, up: 0, max: 3 }, 'guestVM: the name from DATA, max from the definition');
+  t.eq(guestVM({ id: 'g#2', def: 'guest_drum_machine', owner: 'kuro', stay: 3, up: 1 }).max, 3, 'an upgraded Metro Gnome stays 3');
+  let card = C.hand.find((c) => c.id === 'kuro_guest_dj');
+  if (!card) { const i = C.draw.findIndex((c) => c.id === 'kuro_guest_dj'); card = C.draw.splice(i, 1)[0]; C.hand.push(card); }
+  const vm = snapshot(C);
+  C.energy = 9;
+  C.play(card.uid).forEach((e) => applyEvent(vm, e)); settle(vm);
+  t.eq(vm.guests.length, 1, 'guest_enter adds the guest'); t.eq(vm.guests[0].stay, 3, 'with its whole stay left'); t.eq(vm.guests[0].max, 3, 'and max 3');
+  t.eq(digest(vm), digest(snapshot(C)), 'the digest equals the engine after the play');
+  C.endTurn().forEach((e) => applyEvent(vm, e)); settle(vm);
+  t.eq(vm.guests.length, 1, 'still on stage after a turn'); t.eq(vm.guests[0].stay, 2, 'guest_act counts a turn down');
+  t.eq(digest(vm), digest(snapshot(C)), 'the digest equals the engine after the turn (guests are not in it: a silent guest would drift it)');
+  t.deep(snapshot(C).guests.map((x) => [x.id, x.stay]), [[vm.guests[0].id, 2]], 'the engine agrees');
+  applyEvent(vm, { type: 'guest_exit', guest: { id: vm.guests[0].id }, reason: 'done' });
+  t.deep(vm.guests, [], 'guest_exit removes it');
+  applyEvent(vm, { type: 'guest_exit', guest: { id: 'nobody#1' }, reason: 'done' }); applyEvent(vm, { type: 'guest_act', guest: { id: 'nobody#1', def: 'guest_dj_scratchy' } });
+  t.deep(vm.guests, [], 'events for an unknown guest change nothing');
+});
+
+await t.test('guest chips (fake SCENE): a played Guest card adds a chip with pips, the act counts a pip down, a third guest replaces the oldest, hover lights the actor', async () => {
+  const g = fresh();
+  const { st } = await enterWithMascot(g, { hand: GUEST_HAND });
+  t.ok(!!$(g, '.cm-side'), 'the side column exists');
+  const mc = $(g, '.cm-mascot');
+  t.ok(!!mc, 'the mascot chip exists');
+  t.eq(mc && mc.getAttribute('aria-label'), g.DATA.mascots.mascot_pug.name + ', level 2', 'the mascot chip reads the name and the level (6 XP is level 2)');
+  t.eq(mc && txt(mc.querySelector('.gu-lvl')), 'level 2', 'the level text');
+  t.ok(mc && mc.querySelector('canvas.gu-thumb'), 'with a mini puppet');
+  t.deep(st.C.mascot, { id: 'mascot_pug', level: 2 }, 'COMBAT got the mascot through RUN.combatInit');
+  t.eq(guestChips(g).length, 0, 'no guest chip before a Guest card');
+  scr(g).debug().play(0);
+  await idle(g, 6);
+  t.eq(st.C.guests.length, 1, 'the DJ is on stage');
+  t.ok(sc(g).played.indexOf('guest_enter') >= 0, 'SCENE.play saw guest_enter');
+  let chips = guestChips(g);
+  t.eq(chips.length, 1, 'one guest chip');
+  t.eq(chips[0].getAttribute('data-guest'), st.C.guests[0].id, 'keyed by the guest id'); t.eq(chips[0].getAttribute('data-def'), 'guest_dj_scratchy', 'and its definition');
+  t.eq(txt(chips[0].querySelector('.gu-name')), 'DJ Scratchy', 'the name');
+  t.eq(pipsOf(chips[0]), '3/3', 'three pips, all lit');
+  t.eq(chips[0].getAttribute('aria-label'), 'DJ Scratchy, guest of ' + g.DATA.heroes.kuro.name + ', 3 turns left', 'the chip aria-label');
+  t.ok(chips[0].querySelector('canvas.gu-thumb'), 'with a mini puppet');
+  t.ok(/--hc:\s*#3fcf6a/i.test(chips[0].getAttribute('style') || '') || chips[0].style.getPropertyValue('--hc').trim() === g.DATA.heroes.kuro.color, 'the chip wears the owner colour');
+  // hover from the chip lights the actor
+  g._pointer('pointerenter', chips[0], { pointerType: 'mouse' });
+  t.deep(sc(g).hover.slice(-1), [['guest', st.C.guests[0].id]], 'hovering the chip asks SCENE for a guest hover ring');
+  t.ok(chips[0].classList.contains('hot'), 'and the chip is hot');
+  g._pointer('pointerleave', chips[0], { pointerType: 'mouse' });
+  t.deep(sc(g).hover.slice(-1), [[null, null]], 'leaving clears it');
+  t.ok(!chips[0].classList.contains('hot'), 'the chip cools');
+  // the second and third guests
+  scr(g).debug().play(0);
+  await idle(g, 6);
+  t.eq(guestChips(g).length, 2, 'two chips');
+  scr(g).debug().play(0);
+  await idle(g, 6);
+  chips = guestChips(g);
+  t.eq(st.C.guests.length, 2, 'two guests fit: the third replaced the oldest');
+  t.eq(chips.length, 2, 'two chips');
+  t.deep(chips.map((c) => c.getAttribute('data-def')), ['guest_backing_choir', 'guest_harp_grandma'], 'in enter order: the DJ was replaced');
+  t.ok(sc(g).played.indexOf('guest_exit') >= 0, 'SCENE.play saw the guest_exit');
+  t.eq(pipsOf(chips[1]), '2/2', 'Harp Grandma stays two turns');
+  // the end of the turn: the guests act, their pips count down, the log names them
+  g._click($(g, '.cm-end'));
+  await idle(g, 12);
+  chips = guestChips(g);
+  t.eq(chips.length, 2, 'both still on stage after the turn');
+  t.deep(chips.map(pipsOf), ['2/3', '1/2'], 'each act took a pip');
+  t.ok(sc(g).played.filter((x) => x === 'guest_act').length >= 2, 'SCENE.play saw both acts');
+  const sr = g._byId.sr ? g._byId.sr.textContent : '';
+  t.ok(/Backing Choir: Both heroes gain 2 Block\./.test(sr) || sr.indexOf('Backing Choir:') >= 0, 'the live region logged the choir act: ' + sr.slice(0, 120));
+  assertPicture(g, 'after the guests acted');
+  t.eq(errs(g), 0, 'no console errors');
+  // the chips survive a resync and go when the fight ends
+  g._click($(g, '.cm-end'));
+  await idle(g, 12);
+  chips = guestChips(g);
+  t.deep(chips.map(pipsOf), ['1/3'], 'Harp Grandma left after her two turns, the choir has one turn left');
+  t.eq(st.C.guests.length, 1, 'the engine agrees');
+  await g.UI.go('title', null, { force: true, transition: 'none' });
+  await idle(g);
+  t.eq($$(g, '.cm-guest').length, 0, 'the chips are gone with the screen');
+});
+
+await t.test('guest chips: the tooltips read the generated text, the turns left and the blurb; the mascot tooltip lists its level texts', async () => {
+  const g = fresh();
+  await enterWithMascot(g, { hand: GUEST_HAND, xp: 0 });
+  scr(g).debug().play(0);
+  await idle(g, 6);
+  const chip = guestChips(g)[0];
+  g._pointer('pointerenter', chip, { pointerType: 'mouse' });
+  g._flush(200);
+  const tip = $(g, '#tips .tk') || $(g, '.tk');
+  t.ok(!!tip, 'a tooltip opened on hover');
+  const text = tip ? tip.textContent : '';
+  t.ok(text.indexOf('DJ Scratchy') >= 0 && text.indexOf('Guest of ' + g.DATA.heroes.kuro.name) >= 0, 'the head names the guest and its owner');
+  t.ok(text.indexOf(g.DATA.opsText([{ op: 'guest', id: 'guest_dj_scratchy' }])) >= 0, 'the generated Guest text');
+  t.ok(text.indexOf('3 turns left on stage.') >= 0, 'the turns left');
+  t.ok(text.indexOf(g.DATA.guests.guest_dj_scratchy.blurb) >= 0, 'the blurb');
+  g._pointer('pointerleave', chip, { pointerType: 'mouse' });
+  g._flush(200);
+  const mc = $(g, '.cm-mascot');
+  t.eq(mc.getAttribute('aria-label'), g.DATA.mascots.mascot_pug.name + ', level 1', 'at 0 XP the mascot is level 1');
+  g._pointer('pointerenter', mc, { pointerType: 'mouse' });
+  g._flush(200);
+  const mt = $(g, '#tips .tk') || $(g, '.tk');
+  const mtext = mt ? mt.textContent : '';
+  t.ok(mtext.indexOf(g.DATA.mascots.mascot_pug.name) >= 0 && mtext.indexOf('level 1 of 3') >= 0, 'the mascot tooltip head');
+  [1, 2, 3].forEach((n) => t.ok(mtext.indexOf('Level ' + n + ': ' + g.DATA.mascots.mascot_pug.levels[n].text) >= 0, 'lists level ' + n));
+  t.ok(mt && mt.querySelectorAll('.tk-text.now').length === 1 && mt.querySelectorAll('.tk-text.off').length === 2, 'the active level is marked, the others are off');
+  t.eq(errs(g), 0, 'no console errors');
+  await g.UI.go('title', null, { force: true, transition: 'none' });
+});
+
+await t.test('no mascot, no chip; a mascot on a run without the field (an old save) is simply absent', async () => {
+  const g = fresh();
+  await enter(g, { hand: GUEST_HAND });
+  t.eq($$(g, '.cm-mascot').length, 0, 'no mascot chip without a mascot');
+  t.ok(!!$(g, '.cm-side'), 'the side column still exists for the guests');
+  t.eq(S(g).C.mascot, null, 'C.mascot is null');
+  await g.UI.go('title', null, { force: true, transition: 'none' });
+});
+
+if (fs.existsSync(new URL('../hocus_vocus/js/scene.js', import.meta.url))) {
+  await t.test('real SCENE: the guest actor stands on its spot, the chip and the stage hover each other, the fallback agrees on the geometry', async () => {
+    const g = fresh({ stage: 'real' });
+    const { st } = await enterWithMascot(g, { hand: GUEST_HAND });
+    t.deep(g.SCENE.stats().mascot, { id: 'mascot_pug', level: 2, pose: 'idle' }, 'the mascot actor is on stage at its level');
+    scr(g).debug().play(0);
+    await idle(g, 8);
+    const gid = st.C.guests[0].id;
+    t.deep(g.SCENE.stats().guests.map((x) => [x.def, x.spot]), [['guest_dj_scratchy', 0]], 'the DJ stands on spot 0');
+    const a = g.SCENE.anchor('guest', gid);
+    t.ok(a && a.feet.x > g.SCENE.anchor('hero', 'hanae').feet.x && a.feet.x < g.SCENE.LAYOUT.lanes[0], 'between the lead hero and the first lane');
+    g._frames(3);
+    const chip = guestChips(g)[0];
+    g._pointer('pointerenter', chip, { pointerType: 'mouse' });
+    t.deep(g.SCENE.stats().hover, { kind: 'guest', id: gid }, 'hovering the chip lights the ring under the guest');
+    g._pointer('pointerleave', chip, { pointerType: 'mouse' });
+    t.eq(g.SCENE.stats().hover, null, 'leaving the chip clears it');
+    t.deep(g.SCENE.hitTest(a.feet.x, a.y + a.h / 2), { kind: 'guest', id: gid }, 'the stage answers a tap on the guest');
+    g._click($(g, '.cm-end'));
+    await idle(g, 12);
+    t.eq(guestChips(g).length, 1, 'the chip survives the turn'); t.eq(pipsOf(guestChips(g)[0]), '2/3', 'and counted down');
+    assertPicture(g, 'real SCENE with a guest');
+    t.eq(errs(g), 0, 'no console errors');
+    await g.UI.go('title', null, { force: true, transition: 'none' });
+    await idle(g);
+    t.ok(!g.SCENE.stats().mounted, 'SCENE unmounted at leave');
+  });
+}
+
+await t.test('fallback stage: the guests and the mascot have anchors, draw, and a guest can be hit-tested', async () => {
+  const g = fresh({ stage: 'none' });
+  const { st } = await enterWithMascot(g, { hand: GUEST_HAND });
+  t.ok(st.sc.fallback, 'the built-in stage is in use');
+  scr(g).debug().play(0);
+  await idle(g, 6);
+  const gid = st.C.guests[0].id;
+  const a = st.sc.anchor('guest', gid);
+  t.ok(a && a.feet.x === 484 && a.feet.y === 492 && a.h > 100, 'the fallback anchors the guest on spot 0: ' + JSON.stringify(a));
+  t.deep(st.sc.hitTest(a.feet.x, a.y + a.h / 2), { kind: 'guest', id: gid }, 'and hit-tests it');
+  const m = st.sc.anchor('mascot', 'mascot_pug');
+  t.ok(m && m.feet.x === 238 && m.h > 50, 'the mascot anchor');
+  g._resetCounts();
+  g._frames(5);
+  t.eq(g._issues.length, 0, 'drawing the guests on the fallback stage is clean');
+  t.eq(guestChips(g).length, 1, 'the chip is there without SCENE too');
+  t.eq(errs(g), 0, 'no console errors');
+  await g.UI.go('title', null, { force: true, transition: 'none' });
+});
+
+await t.test('compact stage (a phone): the side column and its chips exist, the fight with guests still drains clean', async () => {
+  const g = fresh({ viewport: { w: 844, h: 390 }, touch: true });
+  await enterWithMascot(g, { hand: GUEST_HAND });
+  scr(g).debug().play(0); await idle(g, 6);
+  scr(g).debug().play(0); await idle(g, 6);
+  t.eq(guestChips(g).length, 2, 'two chips on a phone');
+  t.ok(!!$(g, '.cm-mascot'), 'and the mascot chip');
+  g._click($(g, '.cm-end'));
+  await idle(g, 12);
+  t.deep(guestChips(g).map(pipsOf), ['2/3', '2/3'], 'the acts counted down');
+  assertPicture(g, 'phone with guests');
+  t.eq(errs(g), 0, 'no console errors');
+  await g.UI.go('title', null, { force: true, transition: 'none' });
+});
+
 await t.done();
