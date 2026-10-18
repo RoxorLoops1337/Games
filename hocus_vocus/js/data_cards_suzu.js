@@ -456,5 +456,29 @@
       kw: [], slots: ['red', 'gold'], art: { m: 'fan', c: 'ink', hero: true },
       flavor: 'The lights come up. The desk goes quiet. He finally sits down.',
     },
+    // ------------------------------------------------------------------ guests (DATA.guests, data_guests.js; DESIGN 4.3 "Guests")
+    // Three Skills that bring a guest on stage: the sound tech (Block for the lead each turn), a cable gremlin (trips the smallest enemy: damage
+    // and Exposed on the lowest HP enemy) and a reverb ghost (Reverb on arrival, damage to every enemy each turn). Guest ops are hook ops acted by RawClaw.
+    suzu_guest_sound_tech: {
+      name: 'Sound Tech', hero: 'suzu', type: 'skill', rarity: 'uncommon', cost: 1,
+      fx: [{ op: 'guest', id: 'guest_sound_tech' }],
+      up: { fx: [{ op: 'guest', id: 'guest_sound_tech', up: true }] },
+      kw: [], slots: ['gold'], art: { m: 'book', c: 'violet' },
+      flavor: 'Can you hear me? Good. Now nobody else will.',
+    },
+    suzu_guest_gremlin: {
+      name: 'Cable Gremlin', hero: 'suzu', type: 'skill', rarity: 'uncommon', cost: 1,
+      fx: [{ op: 'guest', id: 'guest_cable_gremlin' }],
+      up: { fx: [{ op: 'guest', id: 'guest_cable_gremlin', up: true }] },
+      kw: [], slots: ['green'], art: { m: 'skull', c: 'jade' },
+      flavor: 'Every venue has one. This one is on our side tonight.',
+    },
+    suzu_guest_ghost: {
+      name: 'Reverb Ghost', hero: 'suzu', type: 'skill', rarity: 'rare', cost: 2,
+      fx: [{ op: 'guest', id: 'guest_reverb_ghost' }],
+      up: { fx: [{ op: 'guest', id: 'guest_reverb_ghost', up: true }] },
+      kw: [], slots: ['gold', 'green'], art: { m: 'void', c: 'moon' },
+      flavor: 'Boo. Boo. Boo. Boo. It is one boo. It just keeps going.',
+    },
   });
 })();

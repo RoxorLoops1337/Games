@@ -262,6 +262,7 @@ js/util.js            U         shared helpers                                  
 js/data.js            DATA      registries, closed lists, statuses, heroes, validator   (done)
 js/data_text.js       (DATA+)   text generation: cardHtml, gemText, ...
 js/data_cards_hanae.js  data_cards_kuro.js  data_cards_suzu.js  data_cards_raiga.js  data_cards_shared.js
+js/data_guests.js     (DATA+)   DATA.guests: the 12 Guests the Guest cards call (4.3 "Guests")
 js/data_enemies_1.js  data_enemies_2.js  data_enemies_3.js
 js/data_relics.js  data_gems.js  data_events.js  data_meta.js
 js/data_samples.js    (DATA+)   DATA.SAMPLES: the owners' optional recordings, ships empty (read by audio.js; audio/README.md)
@@ -466,6 +467,24 @@ the other hero, alternating (`C.crowdWild` counts the fills); a voiceless hero o
 wakes nobody. The size is `mods.crowd` (`ECONOMY.crowd`, 7; the Encore 5 level adds 1 through `trialMods`). Event `crowd` (5.2); the HUD shows the meter
 beside Breath. Keywords `crowd` and `signature` explain it.
 
+**Guests** (Roguebook style allies; `DATA.guests`, `js/data_guests.js`; engine in `combat.js` "GUESTS"): a **Guest card** is a Skill with the card op
+`{op:'guest', id, up?}` (top level only) that brings a guest artist on stage. A guest definition is `{id, name, hero, stay (1..6 turns), act:[hook ops],
+enter?, exit?, hooks?:[{on, fx, filter?, limit?}], up?:{stay?, act?, enter?, exit?, hooks?}, art:{m, c}, blurb}`; `DATA.guestDef(id, up)` merges the upgrade
+(each `up` field REPLACES the base one) and an upgraded Guest card calls `up:true`. `ECONOMY.guestSlots` (2) guests fit on stage; a third replaces the
+oldest (its exit ops run, then `guest_exit` reason `replaced`). `C.guests` lists them in enter order as `{kind:'guest', id:'guest_dj_scratchy#1', def,
+name, owner: heroId, stay (turns left), up:0|1, born (the turn it entered)}`. A guest ACTS at the end of each of its owner's turns: inside `C.endTurn`
+after the Reprise replays and the `turnEnd` hooks and BEFORE the hand is discarded, in enter order, `guest_act {guest, hero}` then its `act` ops as
+hook ops acted by the owner (no attacker: no spot bonus, Volume or Muffled; `enemy` = a random living enemy; kills credit the owner); then `stay`
+falls by 1 and at 0 the guest leaves (exit ops, `guest_exit` reason `done`). A guest whose owner is voiceless is silent (no act, no exit ops, it
+still counts down). Guests stop acting the moment the fight is decided. `enter` ops run right after `guest_enter {guest, hero}`; a guest's `hooks`
+are owned by the owner hero (src `guest`, deactivated when it leaves, never `once` or `every`). At combat end every guest gets `guest_exit` reason
+`end` before the `end` event, with no exit ops. Enemies never hit guests (no HP). Counter `per:'guests'` and cond `guests:{gte, lte}` read the
+number on stage (a guest counts itself in its own act). Generated text: "Guest DJ Scratchy for 3 turns: at the end of your turn, deal 4 damage to a
+random enemy." ("on arrival, ..." / "On leaving, ..." for enter and exit, one hook sentence per hook). Keyword `guest` explains it. Each hero has
+3 Guest cards (2 uncommon, 1 rare; `QUOTA.cards.guests`): Jasmin a backing choir, a harp grandma and a hype parrot; RoxorLoops a DJ, a loop pedal
+robot and a drum machine; RawClaw the sound tech, a cable gremlin and a reverb ghost; Andy a flight case roadie, a bass amp on wheels and a mosh pit
+uncle. No guest gives more than 1 Breath per turn, and none draws at the end of the turn (the hand is discarded right after).
+
 **Medleys** (fused cards, offered once after every elite fight, optional): a Medley is two cards sung as one. The player picks two Attack or Skill cards
 of ONE hero from the deck (neither a Medley), both leave the deck (their gems return to the pouch) and one deck instance `{uid, id:'medley', parts:[idA, idB],
 up, gems}` replaces them: upgraded when either part was, the larger Fanbase bonus kept. `DATA.medleyDef(parts)` is the merged definition that every reader
@@ -526,6 +545,7 @@ resolved victim. `value = floor(clamp(base + mul * min(count(per), upTo), min, c
 | `hitsTaken` | enemy hits that removed HP from the acting hero over that same window |
 | `targetBlock` | Block of the chosen enemy |
 | `picked` | cards resolved by the most recent `pick` of this card |
+| `guests` | guests on stage (`C.guests.length`, 4.3 "Guests") |
 
 In enemy contexts only `LISTS.perEnemy` is legal (`turn enemies status hp missingHp block debuffs handSize drawPile
 discardPile`), `who:'self'` is the acting enemy, `who:'target'` is the hero being hit (the front hero when the op has no
@@ -575,6 +595,7 @@ hero target), and `turn` is that enemy's own turn count (1 on the turn of its fi
 | `gold`, `ink`, `maxHp` | `n:V` (maxHp also `tgt`) | run-level rewards mid-combat (gold pouch, Vox gain, permanent max HP). `maxHp` raises current HP with the maximum at once; `both` and `ally` also reach a voiceless hero (a lasting stat: they stay at 0 HP and come back after the fight from the raised maximum) |
 | `revive` | `n:V` or `pct` (fraction of max HP) | a voiceless hero stands up in the backing spot with that HP (at least 1). No-op if nobody is voiceless. In a hook on `onHeroDown` it revives the triggering hero; otherwise the first voiceless hero. Emits `hero_revive` |
 | `hook` | `on, fx:[hook ops], filter?, limit?, once?, every?` | registers a combat hook owned by the acting hero until combat ends. `once:true` removes it after it fires once. Playing the card twice registers two hooks. Not allowed inside hook ops |
+| `guest` | `id, up?:true` | brings the guest `DATA.guests[id]` (its upgraded version with `up`) on stage for the acting hero (4.3 "Guests"). Top level of a Skill's fx only; never a hook op. Playing the card twice brings a second copy |
 
 **Spending resources.** `consume` is legal on every op with an `n` (`dmg block heal hurt status draw energy`): `consume?: statusId | 'block' |
 {s: statusId|'block', upTo?: V}`. `n` is evaluated first, then the stacks are removed from the acting hero (`'block'` removes all their
@@ -583,7 +604,7 @@ Block; omitted `upTo` means all stacks). Partial spending is `V.upTo` to cap wha
 **Conditions** `C` (`LISTS.cond`), all keys must hold: `row:'front'|'back'` (acting hero's row), `status:{s, who?, gte?, lte?}`,
 `hpPct:{who?, lt?, gt?}` (fractions 0..1), `handEmpty:true`, `cardsPlayed:{gte?,lte?}`, `attacksPlayed:{...}`, `turn:{gte?,lte?}`,
 `lastKill:true` (any target of the immediately preceding `dmg` op of this card died from it), `targetStatus:{s, gte?, lte?}`,
-`allyDown:true`, `block:{gte?,lte?}` (acting hero), `energy:{...}` (remaining), `handSize:{...}`, `enemies:{gte?,lte?}`.
+`allyDown:true`, `block:{gte?,lte?}` (acting hero), `energy:{...}` (remaining), `handSize:{...}`, `enemies:{gte?,lte?}`, `guests:{gte?,lte?}` (guests on stage).
 Enemy `cond` uses `LISTS.condEnemy` (`status hpPct block turn enemies`; `who` is `self` or `target`).
 
 **Hook ops** (`LISTS.hookOps`, used by relics, hero passives and `hook` ops) are the card ops minus `pick`, `repeat`, `swap` and `hook`.
@@ -840,7 +861,7 @@ The shapes below are what other modules may already rely on.
 
 ### 5.1 `DATA` (`data.js`, `data_text.js`)
 
-Registries: `DATA.cards heroes gems relics enemies events achievements trials tips lore encounters brushes tiles statuses keywords ECONOMY SETTINGS LISTS ROSTER FIXED QUOTA GUIDE`, plus the presentation tables `DATA.LINKS` (the owners' links, after `LISTS`, in `data.js`), `DATA.SAMPLES` (the owners' recordings, `data_samples.js`), `DATA.outfits` (the three outfits, `data_meta.js`) and `DATA.COLOUR_NAME` (the gem colour words). None of the four changes a rule: the bot and the daily seed never read them.
+Registries: `DATA.cards heroes gems relics enemies events achievements trials tips lore guests encounters brushes tiles statuses keywords ECONOMY SETTINGS LISTS ROSTER FIXED QUOTA GUIDE` (`guests` and `DATA.guestDef(id, up)`: 4.3 "Guests"), plus the presentation tables `DATA.LINKS` (the owners' links, after `LISTS`, in `data.js`), `DATA.SAMPLES` (the owners' recordings, `data_samples.js`), `DATA.outfits` (the three outfits, `data_meta.js`) and `DATA.COLOUR_NAME` (the gem colour words). None of the four changes a rule: the bot and the daily seed never read them.
 `DATA.LINKS` (HV_STORY 5.2) is frozen with exactly the keys `handle website youtube facebook tiktok instagram support game`: `handle` is `@roxorloopsandjasmin`, `game` is the address Share uses (empty means the current page address without query or hash), and every other value is an empty string until the owners fill it in. A button whose URL is empty is not drawn. A filled URL starts `https://` and sits on a line with the pragma `hygiene-allow(network)` and a reason; it is only ever an anchor that opens on a tap in a new tab (`rel="noopener noreferrer"`), never fetched. The hygiene suite pins all of this.
 `DATA.add(kind, defs)` takes an object keyed by id (`{hanae_slash: {...}}`; an array throws), except `tips`, which takes a string or an array of strings. `DATA.addEncounters`.
 `DATA.validate(only?, opt?)`: lenient by default (references to content other files may not have written yet are skipped); `DATA.validate(only, {strict:true})` checks every cross-file reference and
@@ -932,6 +953,7 @@ summon {enemy:unitSnapshot}       enemy_phase {enemy:unitId, index, at, say}    
 hero_down {hero:id}               hero_revive {hero:id, hp}                      pick_needed {pending}
 relic {id}                        gold {n}                                       ink {n}                      max_hp {hero, n}
 crowd {value, max, delta, wild, hero|null, card|null}   (the Crowd meter, 4.3; on `wild` an add_card of the free Signature copy follows)
+guest_enter {guest, hero}         guest_act {guest, hero}   (before its act ops run)        guest_exit {guest, reason:'done'|'replaced'|'end'}   (4.3 "Guests"; `guest` is a plain snapshot of the C.guests entry)
 end {result:'win'|'lose'}
 ```
 
