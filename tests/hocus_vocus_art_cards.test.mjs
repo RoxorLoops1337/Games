@@ -364,7 +364,7 @@ T('the gallery sheets are registered and render', () => {
 });
 
 T('the hero sheets page through all 37 cards of a hero, and the junk sheet shows all twelve', () => {
-  HEROES.forEach((h) => { const per = 12, pages = Math.ceil(CARDS.filter((c) => c.hero === h).length / per); t.eq(pages, 4, h + ' needs four pages of twelve'); });
+  HEROES.forEach((h) => { const per = 12, pages = Math.ceil(CARDS.filter((c) => c.hero === h).length / per); t.eq(pages, 5, h + ' needs five pages of twelve (49 cards with the Guest cards)'); });
   t.eq(CARDS.filter((c) => c.type === 'curse' || c.type === 'status').length, 12, 'twelve junk cards');
 });
 

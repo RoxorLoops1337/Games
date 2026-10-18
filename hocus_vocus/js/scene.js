@@ -51,6 +51,20 @@
 //   boss and elite ground ring), the whole enemy line slides left by that overhang plus 10 px at mount (never more than 240). Gaps between lanes are unchanged, so
 //   screen_combat's bar widths and chip caps (which only use lane DISTANCES) stay right, and SCENE.anchor already reports the shifted positions. stats().fit is the shift.
 //
+// GUESTS AND THE MASCOT (DESIGN 4.3 "Guests", 4.7 "The Mascot"; art in art_guests.js). Two GUEST SPOTS stand between the heroes and the enemy line, behind both
+//   and a little smaller: LAYOUT.guests = [{x 484, y 492, s 0.8}, {x 436, y 484, s 0.74}] (the second spot is further back and left, so two guests read as a row
+//   receding into the wings); a guest takes the lowest free spot when it enters and keeps it; the spots slide left by 0.4 of the stage fit so a wide boss never
+//   covers them. The MASCOT sits at the back hero's feet, LAYOUT.mascot = {x 238, y 516, s 0.8}, a small idle bob, and cheers on every win-over and on the win
+//   banner. Both are plain layout values: mount({layout:{guests:[...], mascot:{...}}}) overrides them like the hero marks. Actors: kind 'guest' (id = the C.guests
+//   entry id, def = the guest def id, owner = the hero) and kind 'mascot' (id = def = the mascot id, level). mount reads C.guests and C.mascot; a synthetic stage
+//   takes `guests` ([defId | {id, def, owner}]) and `mascot` (id | {id, level}). Events: guest_enter (the actor is created and hops in from the left wing: the
+//   art's enter pose, a dust puff and a ground ring in the owner's colour when it lands, sfx `step`), guest_act (the act pose, a bounce, a ring in the owner's
+//   colour, sfx `buff`; the hits, Block, heals and statuses its ops then produce arrive with src null and are AIMED FROM THE GUEST: a beam from its hands to the
+//   target and the usual numbers; S.actingGuest holds the guest until the next play, enemy_act or turn_start), guest_exit (reason done or end: the exit pose, a wave
+//   then a walk off to the left, sfx `step`; reason replaced: the shove pose, a quick knock off the stage with a puff, sfx `dodge`; the actor is dropped after the
+//   pose). Gates: guest_enter 420, guest_act 300, guest_exit 300 (0 for reason end, the win beat follows at once). anchor('guest', id) and hitTest answer for a guest
+//   (never for the mascot, which is scenery), so a hover ring can light under it; setHover('guest', id) works like an enemy's.
+//
 // GATES (ms at speed 1, DESIGN 5.9 item 5): hit 70 (non-final hit of a group on the same dst), 120 (final), 200 (killed); 0 when the PREVIOUS event has the same group
 //   and another dst (AoE). With the optional look-ahead the rule is exact instead: 0 when the NEXT event has the same group and another dst. play 0 block 0 heal 60 status 0
 //   draw 40 discard 0 exhaust 0 energy 0 swap 380 enemy_act 260 summon 400 death 420 enemy_phase 900 hero_down 500 hero_revive 500 turn_start 500 end 700, unlisted 0.
@@ -117,16 +131,21 @@ const SCENE = (() => {
     lanes: [560, 705, 850, 995, 1120],
     laneY: 520,
     hopMs: 380, hopLift: 96, hopLiftBack: 56,
+    guests: [{ x: 484, y: 492, s: 0.8 }, { x: 436, y: 484, s: 0.74 }],      // the two guest spots (header GUESTS AND THE MASCOT), in enter order
+    mascot: { x: 238, y: 516, s: 0.8 },                                       // the mascot's seat at the back hero's feet
   };
-  const cloneLayout = (l) => ({ W: l.W, H: l.H, groundY: l.groundY, front: Object.assign({}, l.front), back: Object.assign({}, l.back), lanes: l.lanes.slice(), laneY: l.laneY, hopMs: l.hopMs, hopLift: l.hopLift, hopLiftBack: l.hopLiftBack });
+  const cloneMark = (m) => ({ x: m.x, y: m.y, s: m.s });
+  const cloneLayout = (l) => ({ W: l.W, H: l.H, groundY: l.groundY, front: cloneMark(l.front), back: cloneMark(l.back), lanes: l.lanes.slice(), laneY: l.laneY, hopMs: l.hopMs, hopLift: l.hopLift, hopLiftBack: l.hopLiftBack, guests: l.guests.map(cloneMark), mascot: cloneMark(l.mascot) });
   const LAYOUT = cloneLayout(DEFAULT_LAYOUT);
+  const markOver = (into, v) => { if (v && typeof v === 'object') ['x', 'y', 's'].forEach((k) => { if (typeof v[k] === 'number' && isFinite(v[k])) into[k] = v[k]; }); };
   function applyLayout(over) {
     const d = cloneLayout(DEFAULT_LAYOUT);
     if (over && typeof over === 'object') {
       Object.keys(over).forEach((k) => {
         const v = over[k];
-        if (k === 'front' || k === 'back') { if (v && typeof v === 'object') Object.assign(d[k], v); }
+        if (k === 'front' || k === 'back' || k === 'mascot') markOver(d[k], v);
         else if (k === 'lanes') { if (Array.isArray(v) && v.length) d.lanes = v.map((n) => fin(n, 0)); }
+        else if (k === 'guests') { if (Array.isArray(v)) v.forEach((m, i) => { if (i < d.guests.length) markOver(d.guests[i], m); }); }
         else if (typeof v === 'number' && isFinite(v)) d[k] = v;
       });
     }
@@ -134,19 +153,23 @@ const SCENE = (() => {
     LAYOUT.front.x = d.front.x; LAYOUT.front.y = d.front.y; LAYOUT.front.s = d.front.s;
     LAYOUT.back.x = d.back.x; LAYOUT.back.y = d.back.y; LAYOUT.back.s = d.back.s;
     LAYOUT.lanes.length = 0; d.lanes.forEach((n) => LAYOUT.lanes.push(n));
+    LAYOUT.guests.forEach((m, i) => { m.x = d.guests[i].x; m.y = d.guests[i].y; m.s = d.guests[i].s; });
+    LAYOUT.mascot.x = d.mascot.x; LAYOUT.mascot.y = d.mascot.y; LAYOUT.mascot.s = d.mascot.s;
   }
 
   // The gate table of DESIGN 5.9 item 5 (ms at speed 1). Frozen: the suite reads it.
   const GATES = Object.freeze({ hit: 70, hitFinal: 120, hitKill: 200, play: 0, block: 0, heal: 60, status: 0, draw: 40, discard: 0, exhaust: 0, energy: 0, swap: 380, enemy_act: 260, summon: 400, death: 420, enemy_phase: 900, hero_down: 500, hero_revive: 500, turn_start: 500, end: 700 });
 
+  // the guest beats (header GUESTS AND THE MASCOT): their own table, GATES above is the frozen DESIGN 5.9 one the suite pins
+  const GUEST_GATES = Object.freeze({ guest_enter: 420, guest_act: 300, guest_exit: 300 });
   // The sound ids SCENE may play (every one is in DATA.LISTS.sfx; the suite checks it).
   const SFX = Object.freeze(['card_play_attack', 'card_play_skill', 'card_play_power', 'hit_light', 'hit_heavy', 'hit_crit', 'hit_multi', 'block_hit', 'block_break', 'block_gain', 'heal', 'stun', 'buff', 'debuff',
     'dodge', 'thorn', 'swap', 'card_draw', 'shuffle', 'card_discard', 'card_exhaust', 'energy_gain', 'turn_start', 'enemy_turn', 'enemy_die', 'boss_die', 'hero_down', 'hero_revive', 'phase_change',
-    'flame', 'ice', 'zap', 'poison_tick', 'slash', 'thud', 'boss_intro', 'victory', 'defeat']);
+    'flame', 'ice', 'zap', 'poison_tick', 'slash', 'thud', 'boss_intro', 'victory', 'defeat', 'step']);
   const ELEMENT_SFX = { fire: 'flame', ice: 'ice', lightning: 'zap', poison: 'poison_tick', slash: 'slash', ink: 'slash', holy: 'slash' };
   const EVENTS = Object.freeze(['combat_start', 'turn_start', 'turn_end', 'draw', 'shuffle', 'discard', 'exhaust', 'add_card', 'card_move', 'card_upgrade', 'retain', 'energy', 'play', 'hit', 'dodge', 'thorns',
     'block', 'block_lost', 'heal', 'hurt', 'status', 'immune', 'swap', 'intent', 'enemy_act', 'skip', 'summon', 'enemy_phase', 'death', 'flee', 'hero_down', 'hero_revive', 'pick_needed', 'relic', 'gold', 'ink',
-    'max_hp', 'end']);
+    'max_hp', 'guest_enter', 'guest_act', 'guest_exit', 'end']);
 
   // element look: main colour, hot accent, the ART.fx effect that carries it, the hit word (bible 4.10) and sh, the saturated colour that is the hit word's shadow
   const EL = {
@@ -223,7 +246,7 @@ const SCENE = (() => {
     Object.assign(S, {
       mounted: false, flushing: false, seed: 1, chapter: 1, boss: false, sceneId: 'ch1', C: null,
       at: 0, lt: 0, freeze: 0, evi: 0, prev: null, phase: 'setup', rng: U.rng(1), arng: U.rng(2),
-      actors: [], order: [], hmap: {}, emap: {}, timers: [], tseq: 0, bcache: {}, enemySerial: {}, acting: null,
+      actors: [], order: [], hmap: {}, emap: {}, gmap: {}, timers: [], tseq: 0, bcache: {}, enemySerial: {}, acting: null, actingGuest: null,
       fit: 0, pcur: 0, fx: [], nums: [], banners: [], barks: {}, shouts: [],
       shk: { mag: 0, t0: 0, dur: 1 }, zoom: { k: 0, x: 640, y: 360, t0: 0, dur: 1 }, dim: { a: 0, t0: 0, dur: 1, x: 640, y: 420 }, flashes: [],
       targetable: {}, hover: null, aim: null, ptr: { x: 640, y: 360 }, par: 0, inkFadeT0: -1, win: false, lose: false,
@@ -273,6 +296,7 @@ const SCENE = (() => {
       ox: 0, oy: 0, rot: 0, sx: 1, sy: 1, alpha: 1, flash: 0,
       lx: 0, ly: 0, ex: 0, ey: 0, rx: 0, rv: 0, ry: 0, ryv: 0, sq: 0, sqP: 0,
       lunge: null, hop: null, enter: null, flee: null, ghost: 0, ghostDir: 1, deathT0: 0, z: 0, zb: 0, auraAcc: 0, phaseOff: 0, arng: null,
+      owner: '', spot: -1, name: '', level: 1, leaving: false,            // guests (owner hero, guest spot) and the mascot (level)
     };
   }
   const copySt = (st) => { const o = {}; if (st && typeof st === 'object') Object.keys(st).forEach((k) => { const v = fin(st[k], 0); if (v !== 0) o[k] = v; }); return o; };
@@ -301,26 +325,44 @@ const SCENE = (() => {
     if (a.intent === 'heavy') { a.pose = 'telegraph'; a.base = 'telegraph'; }
     return a;
   }
+  // a guest from a C.guests entry (or its snapshot): the lowest free spot, kept until it leaves
+  function makeGuest(u, spot) {
+    const a = newActor('guest', u.id);
+    a.def = u.def || String(u.id).split('#')[0]; a.owner = u.owner || ''; a.name = u.name || a.def;
+    a.spot = clamp(spot | 0, 0, LAYOUT.guests.length - 1);
+    a.phaseOff = 2.1 + a.spot * 0.9;
+    return a;
+  }
+  const freeSpot = () => { const used = {}; S.actors.forEach((a) => { if (a.kind === 'guest' && !a.gone) used[a.spot] = true; }); for (let i = 0; i < LAYOUT.guests.length; i++) if (!used[i]) return i; return LAYOUT.guests.length - 1; };
+  function makeMascot(m) {
+    const id = typeof m === 'string' ? m : m && m.id;
+    const a = newActor('mascot', String(id));
+    a.level = clamp(fin(m && m.level, 1) | 0, 1, 3); a.name = (DATA.mascots && DATA.mascots[id] && DATA.mascots[id].name) || String(id);
+    a.phaseOff = 1.4;
+    return a;
+  }
   function addActor(a) {
     S.actors.push(a); S.order.push(a);
-    if (a.kind === 'hero') S.hmap[a.id] = a; else S.emap[a.id] = a;
+    if (a.kind === 'hero') S.hmap[a.id] = a; else if (a.kind === 'guest' || a.kind === 'mascot') S.gmap[a.id] = a; else S.emap[a.id] = a;
     a.arng = U.rng(U.hash(S.seed, 'actor', a.kind, a.id));
     return a;
   }
   function actorOf(ref) {
     if (!ref) return null;
-    const a = ref.kind === 'hero' ? S.hmap[ref.id] : ref.kind === 'enemy' ? S.emap[ref.id] : (S.hmap[ref.id] || S.emap[ref.id]);
+    const a = ref.kind === 'hero' ? S.hmap[ref.id] : ref.kind === 'enemy' ? S.emap[ref.id] : ref.kind === 'guest' || ref.kind === 'mascot' ? S.gmap[ref.id] : (S.hmap[ref.id] || S.emap[ref.id] || S.gmap[ref.id]);
     return a && !a.gone ? a : null;
   }
   const heroActor = (id) => { const a = S.hmap[id]; return a && !a.gone ? a : null; };
   const enemyActor = (id) => { const a = S.emap[id]; return a && !a.gone ? a : null; };
+  const guestActor = (id) => { const a = S.gmap[id]; return a && !a.gone && a.kind === 'guest' ? a : null; };
+  const mascotActor = () => { for (const k in S.gmap) { const a = S.gmap[k]; if (a.kind === 'mascot' && !a.gone) return a; } return null; };
   const livingEnemies = () => S.actors.filter((a) => a.kind === 'enemy' && !a.gone && !a.dying && !a.fled);
 
   function normBounds(kind, id) {
     const A = AR();
     let b = null;
-    try { b = kind === 'hero' ? A.hero.bounds(id) : A.enemy.bounds(id); } catch (e) { warnOnce('bounds:' + id, e); }
-    const w = fin(b && b.w, 120), h = fin(b && b.h, kind === 'hero' ? 250 : 170);
+    try { b = kind === 'hero' ? A.hero.bounds(id) : kind === 'guest' ? A.guest.bounds(id) : kind === 'mascot' ? A.mascot.bounds(id) : A.enemy.bounds(id); } catch (e) { warnOnce('bounds:' + id, e); }
+    const w = fin(b && b.w, kind === 'guest' || kind === 'mascot' ? 80 : 120), h = fin(b && b.h, kind === 'hero' ? 250 : kind === 'guest' ? 150 : kind === 'mascot' ? 90 : 170);
     const pt = (p, dx, dy) => ({ x: fin(p && p.x, dx), y: fin(p && p.y, dy) });
     return { w, h, head: pt(b && b.head, 0, -h * 0.86), feet: pt(b && b.feet, 0, 0), body: pt(b && b.body, b && b.feet ? b.feet.x : 0, -h * 0.45), hand: pt(b && b.hand, 30, -h * 0.4), right: max(0, fin(b && b.right, 0)) };
   }
@@ -350,6 +392,8 @@ const SCENE = (() => {
   // where the actor stands at rest (its mark or lane, less the stage fit)
   function restPos(a, o) {
     if (a.kind === 'hero') { const r = a.row === 'front' ? LAYOUT.front : LAYOUT.back; o.x = r.x; o.y = r.y; o.s = r.s; }
+    else if (a.kind === 'guest') { const r = LAYOUT.guests[clamp(a.spot, 0, LAYOUT.guests.length - 1)]; o.x = r.x - S.fit * 0.4; o.y = r.y; o.s = r.s; }
+    else if (a.kind === 'mascot') { const r = LAYOUT.mascot; o.x = r.x; o.y = r.y; o.s = r.s; }
     else { const lx = LAYOUT.lanes[clamp(a.lane, 0, LAYOUT.lanes.length - 1)]; o.x = lx - S.fit; o.y = LAYOUT.laneY; o.s = a.scale; }
     o.lift = 0;
     return o;
@@ -380,7 +424,9 @@ const SCENE = (() => {
   function findActor(kind, id) {
     if (kind === 'hero') return heroActor(id);
     if (kind === 'enemy') return enemyActor(id);
-    return heroActor(id) || enemyActor(id);
+    if (kind === 'guest') return guestActor(id);
+    if (kind === 'mascot') { const a = S.gmap[id]; return a && !a.gone && a.kind === 'mascot' ? a : mascotActor(); }
+    return heroActor(id) || enemyActor(id) || guestActor(id);
   }
   function anchor(kind, id) {
     if (!S.mounted) return null;
@@ -397,7 +443,7 @@ const SCENE = (() => {
     let best = null, bBox = false, bArea = 1e12, bz = -1e9;
     for (let i = 0; i < S.actors.length; i++) {
       const a = S.actors[i];
-      if (a.gone || a.dying || a.fled || a.down) continue;
+      if (a.gone || a.dying || a.fled || a.down || a.leaving || a.kind === 'mascot') continue;
       const an = anchorOf(a), b = bnd(a), r = restPos(a, _rp);
       const bx = an.feet.x + (b.body.x - b.feet.x) * r.s, by = an.feet.y + (b.body.y - b.feet.y) * r.s;
       const inRect = x >= an.x && x <= an.x + an.w && y >= an.y && y <= an.y + an.h;
@@ -749,13 +795,14 @@ const SCENE = (() => {
   function poseLen(a, pose) {
     const A = AR();
     let ms = 0;
-    try { ms = a.kind === 'hero' ? A.hero.poseMs(pose) : A.enemy.poseMs(pose); } catch (e) { ms = 0; }
+    try { ms = a.kind === 'hero' ? A.hero.poseMs(pose) : a.kind === 'guest' ? A.guest.poseMs(pose) : a.kind === 'mascot' ? A.mascot.poseMs(pose) : A.enemy.poseMs(pose); } catch (e) { ms = 0; }
     return fin(ms, 0);
   }
   function setPose(a, pose) {
     if (!a || a.gone) return;
     if (a.dying && pose !== 'die') return;
     if (a.kind === 'hero' && a.down && pose !== 'down' && pose !== 'cheer' && pose !== 'idle') return;
+    if (a.kind === 'guest' && a.leaving && pose !== 'exit' && pose !== 'shove') return;        // a guest on its way out keeps walking
     a.pose = pose; a.poseT0 = S.at;
     const ms = poseLen(a, pose);
     a.poseDur = pose === 'die' ? ms / a.poseScale : ms;
@@ -974,6 +1021,8 @@ const SCENE = (() => {
       case 'heal': return (look ? par(next) : par(prev)) ? 0 : GATES.heal;
       case 'play': case 'block': case 'status': case 'discard': case 'exhaust': case 'energy': return 0;
       case 'draw': case 'swap': case 'enemy_act': case 'summon': case 'death': case 'enemy_phase': case 'hero_down': case 'hero_revive': case 'turn_start': case 'end': return GATES[e.type];
+      case 'guest_enter': case 'guest_act': return GUEST_GATES[e.type];
+      case 'guest_exit': return e.reason === 'end' ? 0 : GUEST_GATES.guest_exit;
       default: return 0;
     }
   }
@@ -1054,6 +1103,9 @@ const SCENE = (() => {
       case 'hero_revive': out.push(voiced(['hero_revive'], e.hero)); break;
       case 'enemy_phase': out.push(['phase_change']); break;
       case 'summon': out.push(['debuff']); break;
+      case 'guest_enter': out.push(['step']); break;
+      case 'guest_act': out.push(['buff', { vol: 0.55 }]); break;
+      case 'guest_exit': if (e.reason === 'replaced') out.push(['dodge', { vol: 0.6 }]); else if (e.reason !== 'end') out.push(['step', { vol: 0.7 }]); break;
       case 'end': out.push([e.result === 'win' ? 'victory' : 'defeat']); break;
       default: break;
     }
@@ -1086,12 +1138,13 @@ const SCENE = (() => {
     return 0;
   };
   H_.turn_start = (e) => {
-    S.phase = e.who === 'enemy' ? 'enemy' : 'player'; S.acting = null;
+    S.phase = e.who === 'enemy' ? 'enemy' : 'player'; S.acting = null; S.actingGuest = null;
     if (S.autoBanners) banner(e.who === 'enemy' ? 'ENEMY TURN' : 'YOUR TURN', e.who === 'enemy' ? 'enemy' : 'player');
     return 0;
   };
   H_.play = (e) => {
     const h = heroActor(e.hero), info = cardInfo(e.card);
+    S.actingGuest = null;
     if (!h || h.gone) return 0;
     const tgt = e.target ? enemyActor(e.target) : null;
     const hc = heroColor(h.id), b = bodyOf(h);
@@ -1130,12 +1183,22 @@ const SCENE = (() => {
     return delay;
   };
 
+  // the guest whose act is landing right now (its ops' hits, Block, heals and statuses carry no src): the beats are aimed from it
+  const actingGuest = () => (S.actingGuest ? guestActor(S.actingGuest) : null);
+  // a beam from the guest's hands to the target, in the owner's colour, with a few notes flung off its hands
+  function guestBeam(gst, dst, color) {
+    const gb = bodyOf(gst), hx = gb.cx + 18 * gb.s, hy = gb.cy - 10 * gb.s, db = bodyOf(dst);
+    spawnFx('thrust', hx, hy, { x2: db.cx, y2: db.cy, s: 0.8, color, ms: 320 });
+    burstP(P_NOTE, 4, hx, hy, 110, 700, 7, (rr) => (rr() > 0.5 ? color : HIT_CREAM), { ang: Math.atan2(db.cy - hy, db.cx - hx), spread: 0.25, up: 20, drag: 1.6 });
+  }
   function impact(e, atk, dst) {
     if (dst.gone) return;
     const r = S.rng;
     const el = EL[e.element] ? e.element : 'slash', col = EL[el];
-    // a hero's default slash is tinted by the attacker (pink, green, violet, orange); the hit word stays the element's, only its shadow takes the tint
-    const hc = el === 'slash' && atk && atk.kind === 'hero' ? heroColor(atk.id) : null, cmain = hc || col.c, cacc = hc ? undefined : col.c2, shw = hc || col.sh;
+    const gst = !atk ? actingGuest() : null;
+    if (gst && !gst.gone) { atk = gst; guestBeam(gst, dst, heroColor(gst.owner)); }
+    // a hero's default slash is tinted by the attacker (pink, green, violet, orange); a guest's by its owner; the hit word stays the element's, only its shadow takes the tint
+    const hc = el === 'slash' && atk && (atk.kind === 'hero' || atk.kind === 'guest') ? heroColor(atk.kind === 'guest' ? atk.owner : atk.id) : null, cmain = hc || col.c, cacc = hc ? undefined : col.c2, shw = hc || col.sh;
     const amount = fin(e.amount, 0) | 0, blocked = fin(e.blocked, 0) | 0, crit = !!e.crit, killed = !!e.killed, removed = amount > 0, full = !removed && blocked > 0;
     const idx = fin(e.index, 0) | 0, last = idx >= (fin(e.hits, 1) || 1) - 1, heavy = amount >= 15;
     dst.hp = clamp(fin(e.hp, dst.hp), 0, 1e6); dst.maxHp = max(dst.maxHp, dst.hp); dst.block = max(0, fin(e.block, dst.block));
@@ -1249,6 +1312,7 @@ const SCENE = (() => {
     const a = actorOf(e.dst);
     if (!a) return 0;
     a.block = max(0, fin(e.block, a.block));
+    { const gst = actingGuest(); if (gst && a.kind === 'hero') guestBeam(gst, a, '#bfe4ff'); }
     const b = bodyOf(a), bb = bnd(a), sc = sizeK(a);
     if (!a.dying && !(a.kind === 'hero' && a.down)) setPose(a, 'block');
     spawnFx('shield', b.cx, b.cy, { w: bb.w * b.s, h: bb.h * b.s, s: sc, color: '#5fb4ff', ms: 520 });
@@ -1271,6 +1335,7 @@ const SCENE = (() => {
     const a = actorOf(e.dst);
     if (!a) return 0;
     a.hp = clamp(fin(e.hp, a.hp), 0, 1e6); a.maxHp = max(a.maxHp, a.hp);
+    { const gst = actingGuest(); if (gst && a.kind === 'hero') guestBeam(gst, a, '#7dffb0'); }
     const b = bodyOf(a), sc = sizeK(a);
     spawnFx('heal', b.cx, b.cy, { s: sc, color: '#7dffb0', follow: a });
     spawnNum(b.cx, topOf(a) + 24, '+' + fin(e.amount, 0), 'heal', { s: sc, rise: 70 });
@@ -1302,6 +1367,7 @@ const SCENE = (() => {
     const delta = fin(e.delta, 0);
     if (!delta) return 0;
     const b = bodyOf(a), sc = sizeK(a), kind = statusKind(e.s), colr = ST_COL[e.s] || (kind === 'debuff' ? '#c49bff' : '#ffd84d');
+    { const gst = actingGuest(); if (gst && delta > 0) guestBeam(gst, a, colr); }
     if (delta > 0) {
       if (kind === 'debuff') {
         spawnFx('debuff', b.cx, b.cy, { s: sc, color: colr, follow: a });
@@ -1356,6 +1422,7 @@ const SCENE = (() => {
   };
   H_.enemy_act = (e) => {
     const a = enemyActor(e.enemy);
+    S.actingGuest = null;
     if (!a) return 0;
     S.acting = a.id;
     a.atkT0 = S.at;
@@ -1468,6 +1535,7 @@ const SCENE = (() => {
       }
     } else if (elite) { shake(7, 400); flash('#ffe9a8', 200, 0.3); }
     later(a.deathDur, () => { a.gone = true; });
+    mascotCheer(false);                                                      // the mascot hops for every win-over
     return 0;
   };
   H_.flee = (e) => {
@@ -1519,13 +1587,71 @@ const SCENE = (() => {
     return 0;
   };
   H_.relic = () => { flash('#f5c96a', 160, 0.18); return 0; };
+  // ---- guests and the mascot (header GUESTS AND THE MASCOT) ----
+  H_.guest_enter = (e) => {
+    const u = e.guest;
+    if (!u || u.id === undefined) return 0;
+    let a = S.gmap[u.id];
+    if (a && !a.gone) { a.leaving = false; } else { a = addActor(makeGuest(u, freeSpot())); a.z = zOf(a); }
+    setPose(a, 'enter');
+    const p = restPos(a, { x: 0, y: 0, s: 1, lift: 0 }), col = heroColor(a.owner);
+    // the landing: a dust puff and a ground ring in the owner's colour when the second hop comes down (the art hops in over 520 ms)
+    later(rmotion() ? 0 : 400, () => {
+      if (a.gone) return;
+      spawnFx('ringGround', p.x, p.y, { s: 0.6 * p.s, color: col, ms: 360 });
+      burstP(P_PUFF, 5, p.x, p.y - 3, 60, 460, 11, '#e6d3a3', { spread: 0.9, drag: 2.6, s1: 24, a: 0.5, front: false, up: 10 });
+      burstP(P_STAR, 4, p.x, p.y - 60 * p.s, 90, 600, 5, col, { up: 40, drag: 1.4, add: true });
+    });
+    return 0;
+  };
+  H_.guest_act = (e) => {
+    const u = e.guest;
+    const a = u && u.id !== undefined ? guestActor(u.id) : null;
+    S.actingGuest = a ? a.id : null;
+    if (!a) return 0;
+    setPose(a, 'act');
+    squash(a, 0.09);
+    const b = bodyOf(a), col = heroColor(a.owner);
+    spawnFx('ringGround', b.x, b.y, { s: 0.7 * b.s, color: col, ms: 420 });
+    spawnFx('sparkle', b.cx, b.cy - 30 * b.s, { s: 0.7, color: col, follow: a, dx: 0, dy: -30 * b.s });
+    burstP(P_NOTE, 4, b.cx, b.cy - 20 * b.s, 70, 800, 7, (rr) => (rr() > 0.5 ? col : HIT_CREAM), { up: 60, drag: 1.2, spread: 0.6, ang: -PI / 2 });
+    return 0;
+  };
+  H_.guest_exit = (e) => {
+    const u = e.guest;
+    const a = u && u.id !== undefined ? guestActor(u.id) : null;
+    if (S.actingGuest === (u && u.id)) S.actingGuest = null;
+    if (!a) return 0;
+    a.leaving = true;
+    if (S.hover && S.hover.id === a.id) S.hover = null;
+    const shove = e.reason === 'replaced', b = bodyOf(a);
+    setPose(a, shove ? 'shove' : 'exit');
+    if (shove) {
+      burstP(P_PUFF, 5, b.x, b.y - 3, 80, 460, 11, '#e6d3a3', { spread: 0.9, drag: 2.4, s1: 24, a: 0.5, front: false });
+      burstP(P_STAR, 5, b.cx, b.cy, 120, 500, 5, '#ffe45e', { up: 40, drag: 1.4, add: true });
+    } else {
+      burstP(P_NOTE, 3, b.cx + 12 * b.s, b.cy - 30 * b.s, 50, 900, 6.5, HIT_CREAM, { up: 50, drag: 1.1, spread: 0.4, ang: -PI / 2 });
+    }
+    const dur = max(60, poseLen(a, shove ? 'shove' : 'exit'));
+    later(dur, () => { a.gone = true; });
+    return 0;
+  };
+  const mascotCheer = (hold) => {
+    const m = mascotActor();
+    if (!m) return;
+    if (hold) m.base = 'cheer';
+    setPose(m, 'cheer'); squash(m, 0.08);
+    const b = bodyOf(m);
+    burstP(P_STAR, 5, b.cx, b.cy - 20 * b.s, 90, 700, 5, '#ffe9a8', { up: 50, drag: 1.3, add: true });
+  };
   H_.end = (e) => {
-    S.phase = 'over'; S.aim = null; S.hover = null; S.targetable = {};
+    S.phase = 'over'; S.aim = null; S.hover = null; S.targetable = {}; S.actingGuest = null;
     if (e.result === 'win') {
       S.win = true;
       S.actors.forEach((a) => {
         if (a.kind === 'hero' && !a.down && !a.gone) { a.base = 'cheer'; setPose(a, 'cheer'); const b = bodyOf(a); spawnFx('sparkle', b.cx, b.cy - 40, { s: 1.2, color: '#ffe9a8' }); squash(a, 0.08); }
       });
+      mascotCheer(true);
       flash('#ffe9a8', 300, 0.3);
       const r = S.rng, n = pcount(46), act = ACT[S.chapter] || ACT[1];
       for (let i = 0; i < n; i++) {
@@ -1558,7 +1684,7 @@ const SCENE = (() => {
   // play, update, mount, flush
   // ==================================================================================================================
   function sfxX(e) {
-    const ref = e.hero ? { kind: 'hero', id: e.hero } : e.dst || e.unit || null;
+    const ref = e.guest && e.guest.id !== undefined ? { kind: 'guest', id: e.guest.id } : e.hero ? { kind: 'hero', id: e.hero } : e.dst || e.unit || null;
     const a = ref ? actorOf(typeof ref === 'object' ? ref : { kind: 'hero', id: ref }) : null;
     return a ? restPos(a, _rp).x : undefined;
   }
@@ -1630,6 +1756,7 @@ const SCENE = (() => {
     S.order = S.order.filter((a) => !a.gone);
     Object.keys(S.hmap).forEach((k) => { if (S.hmap[k].gone) delete S.hmap[k]; });
     Object.keys(S.emap).forEach((k) => { if (S.emap[k].gone) delete S.emap[k]; });
+    Object.keys(S.gmap).forEach((k) => { if (S.gmap[k].gone) delete S.gmap[k]; });
   }
 
   function normalizeEnemies(list) {
@@ -1661,11 +1788,21 @@ const SCENE = (() => {
     heroes.forEach((u, i) => addActor(makeHero(u, i)));
     const enemies = C && C.enemies ? C.enemies.filter((u) => !u.down && !u.fled) : normalizeEnemies(o.enemies || []);
     enemies.forEach((u, i) => addActor(makeEnemy(u, u.lane !== undefined ? u.lane : 5 - enemies.length + i)));
+    // guests on stage (C.guests in enter order, or a synthetic list of def ids) and the mascot (C.mascot {id, level}, or an id)
+    const guests = C ? (Array.isArray(C.guests) ? C.guests : []) : (Array.isArray(o.guests) ? o.guests : []), gserial = {};
+    guests.slice(0, LAYOUT.guests.length).forEach((u, i) => {
+      if (typeof u === 'string') gserial[u] = (gserial[u] || 0) + 1;
+      const snap = typeof u === 'string' ? { id: u + '#' + gserial[u], def: u, owner: (DATA.guests && DATA.guests[u] && DATA.guests[u].hero) || 'hanae', name: (DATA.guests && DATA.guests[u] && DATA.guests[u].name) || u } : u;   // synthetic ids count per def, like COMBAT's
+      if (snap && snap.id !== undefined && !S.gmap[snap.id]) addActor(makeGuest(snap, i));
+    });
+    const mascot = C ? C.mascot : o.mascot;
+    if (mascot && (typeof mascot === 'string' || (typeof mascot === 'object' && mascot.id))) addActor(makeMascot(mascot));
     S.fit = lineFit();
     if (!o.instant && !headless()) {
       const rm = rmotion();
       S.actors.forEach((a) => {
         if (a.kind === 'hero') a.enter = { t0: a.row === 'front' ? 0 : 90, dur: 560, dx: rm ? 0 : -230, dy: 0 };
+        else if (a.kind === 'guest' || a.kind === 'mascot') a.enter = { t0: 120 + (a.kind === 'guest' ? a.spot * 60 : 0), dur: 480, dx: rm ? 0 : -160, dy: 0 };
         else a.enter = { t0: 150 + a.lane * 55, dur: 420, dx: rm ? 0 : 70, dy: 0 };
       });
     }
@@ -1697,7 +1834,7 @@ const SCENE = (() => {
       S.actors.forEach((a) => {
         a.lunge = null; a.lx = 0; a.ly = 0; a.hop = null; a.zb = 0; a.enter = null; a.ex = 0; a.ey = 0; a.ox = 0; a.oy = 0;
         a.rx = 0; a.rv = 0; a.ry = 0; a.ryv = 0; a.sq = 0; a.sx = 1; a.sy = 1; a.flash = 0; a.ghost = 0; a.alpha = 1;
-        if (a.flee || a.dying) { a.gone = true; a.flee = null; }
+        if (a.flee || a.dying || (a.kind === 'guest' && a.leaving)) { a.gone = true; a.flee = null; }
         if (a.pose !== 'die') {
           const hold = a.base === 'down' || a.base === 'cheer' || a.base === 'telegraph';
           a.pose = a.base; a.poseT0 = hold ? S.at - 5000 : S.at; a.poseDur = 0;
@@ -1774,7 +1911,7 @@ const SCENE = (() => {
     return {
       kind: a.kind, id: a.id, def: a.def, pose: a.pose, base: a.base, poseAgeMs: S.at - a.poseT0, hp: a.hp, maxHp: a.maxHp, block: a.block, st: Object.assign({}, a.st), down: a.down, dying: a.dying, fled: a.fled, gone: a.gone,
       row: a.row, lane: a.lane, phase: a.phase, tier: a.tier, size: a.size, intent: a.intent, x: p.x, y: p.y, s: p.s, restX: r.x, restY: r.y, ox: a.ox, oy: a.oy, rx: a.rx, alpha: a.alpha, flash: a.flash,
-      lunging: !!a.lunge, hopping: !!a.hop, ghost: a.ghost,
+      lunging: !!a.lunge, hopping: !!a.hop, ghost: a.ghost, owner: a.owner, spot: a.spot, level: a.level, leaving: a.leaving, name: a.name,
     };
   }
   function stats() {
@@ -1788,6 +1925,7 @@ const SCENE = (() => {
       shake: shakeMag(), freeze: S.freeze, speed: speedK, zoom: zoomNow(), dim: dimNow(), flashes: S.flashes.length, events: S.evi, phase: S.phase, sceneId: S.sceneId, boss: S.boss, chapter: S.chapter, fit: S.fit,
       aim: S.aim ? { on: S.aim.on, gold: !!S.aim.target, target: S.aim.target } : null, targetable: Object.keys(S.targetable), hover: S.hover ? { kind: S.hover.kind, id: S.hover.id } : null,
       actors: S.actors.filter((a) => !a.gone).length, drawErrors: S.drawErrors, win: S.win, lose: S.lose,
+      guests: S.actors.filter((a) => a.kind === 'guest' && !a.gone).map((a) => ({ id: a.id, def: a.def, spot: a.spot, leaving: a.leaving })), mascot: (() => { const m = mascotActor(); return m ? { id: m.id, level: m.level, pose: m.pose } : null; })(), actingGuest: S.actingGuest,
     };
   }
   // a hash of everything visible: two runs of the same event stream must give the same number
@@ -2045,6 +2183,8 @@ const SCENE = (() => {
     const A = AR(), pt = poseTime(a), tt = t + a.phaseOff;
     try {
       if (a.kind === 'hero') A.hero.draw(ctx, a.id, { x: 0, y: 0, s, pose: a.pose, t: tt, pt, alpha: al, glow: glw || 0, shadow: noShadow ? false : undefined, gloss: glossAmount(), reuse: true });
+      else if (a.kind === 'guest') A.guest.draw(ctx, a.def, { x: 0, y: 0, s, pose: a.pose, t: tt, pt, alpha: al, shadow: !noShadow });
+      else if (a.kind === 'mascot') A.mascot.draw(ctx, a.def, { x: 0, y: 0, s, pose: a.pose, t: tt, pt, alpha: al, level: a.level, shadow: !noShadow });
       else A.enemy.draw(ctx, a.def, { x: 0, y: 0, s, pose: a.pose, t: tt, pt, hpPct: a.maxHp > 0 ? clamp(a.hp / a.maxHp, 0, 1) : 1, phase: a.phase, alpha: al, glow: glw || 0 });
     } catch (e) {
       warnOnce('actor:' + a.def, e);
@@ -2527,7 +2667,7 @@ const SCENE = (() => {
   const ENEMIES_OF = { 1: ['kappa', 'oni_cub', 'crow_tengu'], 2: ['chochin', 'karakuri_puppet', 'drowned_samurai'], 3: ['storm_drone', 'komainu_guardian', 'void_scribe'] };
   function buildStage(o) {
     const ch = clamp(fin(o.chapter, 1) | 0, 1, 3);
-    mount({ chapter: ch, boss: !!o.boss, banners: true, heroes: o.heroes, enemies: o.enemies || (o.boss ? [BOSS_OF[ch]] : ENEMIES_OF[ch]), seed: o.seed === undefined ? 7 : o.seed, instant: o.instant, layout: o.layout });
+    mount({ chapter: ch, boss: !!o.boss, banners: true, heroes: o.heroes, enemies: o.enemies || (o.boss ? [BOSS_OF[ch]] : ENEMIES_OF[ch]), seed: o.seed === undefined ? 7 : o.seed, instant: o.instant, layout: o.layout, guests: o.guests, mascot: o.mascot });
   }
   // mount a synthetic stage and show it on a private screen (or just mount it when there is no UI to show it on)
   function stage(o) {
@@ -2601,6 +2741,15 @@ const SCENE = (() => {
     aimgold: () => { const a = anchor('enemy', eid(1)); setTargetable(liveEnemies().map((x) => x.id)); setHover('enemy', eid(1)); aim({ x: 640, y: 560 }, a ? { x: a.feet.x, y: a.y + a.h * 0.4 } : { x: 800, y: 350 }, eid(1)); return Promise.resolve(); },
     rings: () => { setTargetable(liveEnemies().map((a) => a.id)); setHover('enemy', eid(1)); return Promise.resolve(); },
     shake: () => { shake(12, 500); flash('#ffffff', 200); return Promise.resolve(); },
+    // guests (header GUESTS AND THE MASCOT): a DJ hops in, acts (a strike aimed from its hands), then a second guest arrives and a third shoves the DJ off
+    guest: () => {
+      const dj = { kind: 'guest', id: 'guest_dj_scratchy#1', def: 'guest_dj_scratchy', name: 'DJ Scratchy', owner: 'kuro', stay: 3, up: 0, born: 1 };
+      const choir = { kind: 'guest', id: 'guest_backing_choir#1', def: 'guest_backing_choir', name: 'Backing Choir', owner: 'hanae', stay: 3, up: 0, born: 1 };
+      return seq([{ type: 'guest_enter', guest: dj, hero: 'kuro' }, { type: 'guest_act', guest: dj, hero: 'kuro' }, evHit(null, ref('enemy', eid(1)), { amount: 4 }), { type: 'guest_enter', guest: choir, hero: 'hanae' }, { type: 'guest_act', guest: choir, hero: 'hanae' }, { type: 'block', dst: ref('hero', hero1()), amount: 2, block: 2, group: ++demoGroup }]);
+    },
+    guest_exit: () => { const dj = { kind: 'guest', id: 'guest_dj_scratchy#1', def: 'guest_dj_scratchy', name: 'DJ Scratchy', owner: 'kuro', stay: 0, up: 0, born: 1 }; return seq([{ type: 'guest_enter', guest: dj, hero: 'kuro' }, { type: 'guest_exit', guest: dj, reason: 'done' }]); },
+    guest_shove: () => { const dj = { kind: 'guest', id: 'guest_dj_scratchy#1', def: 'guest_dj_scratchy', name: 'DJ Scratchy', owner: 'kuro', stay: 1, up: 0, born: 1 }; return seq([{ type: 'guest_enter', guest: dj, hero: 'kuro' }, { type: 'guest_exit', guest: dj, reason: 'replaced' }]); },
+    mascot: () => { if (!mascotActor()) addActor(makeMascot({ id: 'mascot_pug', level: 3 })); return seq([{ type: 'death', unit: ref('enemy', eid(1)), tier: 'normal' }]); },
   };
   function demo(name, o) {
     if (name === undefined) return Object.keys(DEMOS);

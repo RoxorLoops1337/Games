@@ -28,6 +28,16 @@
 //   'BOSS') (a Rival or a screen without SCENE gets a DOM plate); an enemy `say` is left to SCENE.shout when SCENE has it, else a DOM bubble.
 //   Without SCENE.mount and SCENE.play (missing or broken file) a small built-in stage keeps the fight playable (fallbackScene).
 //
+// GUESTS AND THE MASCOT (DESIGN 4.3 "Guests", 4.7 "The Mascot"; actors in scene.js, puppets in art_guests.js). A side column beside the hero panels
+//   (.cm-side, x 372, y 64, right of the Swap seal and left of lane 0's intent bubble) holds one GUEST CHIP per guest on stage (.cm-guest, in enter order:
+//   a mini puppet, the name, and one pip per turn of its stay, lit while a turn is left; the tooltip is the generated Guest text (DATA.opsText of the guest
+//   op), the turns left and the guest's blurb) and, under them, the MASCOT CHIP (.cm-mascot: the mini puppet, "Beatbox Pug, level 2"; the tooltip lists the
+//   level texts, the active ones first). vm.guests ({id, def, name, owner, stay, up, max}) and vm.mascot ({id, level}) come from C.guests and C.mascot at
+//   mount and follow guest_enter (a chip arrives), guest_act (its pips: stay - 1 left after this act) and guest_exit (the chip leaves); the resync at the end
+//   of a batch rebuilds them from C like everything else. Hovering a chip lights the hover ring under its actor (SCENE.setHover('guest', id)) and hovering the
+//   actor on the stage lights its chip (SCENE.hitTest answers {kind:'guest'}). Log lines (describe): "DJ Scratchy joins the stage for 3 turns.",
+//   "DJ Scratchy: Deal 4 damage.", "DJ Scratchy leaves the stage.". The fallback stage draws the guests and the mascot too (ART.guest / ART.mascot).
+//
 // INPUT. Tap a card: select (it rises to y 420, the preview opens, SCENE.setTargetable lights the legal targets, every target shows its C.preview number).
 //   No-target card: a second tap plays. Targeting card: tap an enemy; a second tap on the card puts it back, except that with exactly one legal target
 //   a MOUSE (or keyboard click) plays on the first click (hover already showed the card), while a finger or pen only lifts it on the first tap (the rules
@@ -160,10 +170,17 @@
       inPlay: C.inPlay ? Object.assign(cp(C.inPlay), { to: 'discard' }) : null,
       turn: C.turn, phase: C.phase, result: C.result, pending: C.pending ? clone(C.pending) : null, retained: {}, gold: 0, ink: 0, played: C.played || 0, lastHero: C.lastHero || null,
       crowd: C.crowd || 0, crowdMax: C.crowdMax || 7,          // THE CROWD meter (DATA "The Crowd and Medleys")
+      guests: (Array.isArray(C.guests) ? C.guests : []).map(guestVM), mascot: C.mascot && C.mascot.id ? { id: C.mascot.id, level: C.mascot.level | 0 || 1 } : null,   // GUESTS AND THE MASCOT (header)
     };
     C.hand.forEach((c) => { if (c.keep) vm.retained[c.uid] = true; });
     return counts(vm);
   }
+  // a guest for the vm from a C.guests entry or an event snapshot: `max` is the whole stay (the pips), `stay` the turns still left
+  function guestVM(g) {
+    const def = safe(() => DATA.guestDef(g.def, !!g.up), null);
+    return { id: g.id, def: g.def, name: g.name || (def && def.name) || g.def, owner: g.owner, stay: Math.max(0, g.stay | 0), up: g.up ? 1 : 0, max: Math.max(g.stay | 0, def ? def.stay | 0 : 0, 1) };
+  }
+  const guestOf = (vm, id) => (vm.guests || []).find((g) => g.id === id) || null;
 
   const unitOf = (vm, ref) => (ref ? (ref.kind === 'hero' ? vm.heroes : vm.enemies).find((u) => u.id === ref.id) || null : null);
   const heroOf = (vm, id) => vm.heroes.find((h) => h.id === id) || null;
@@ -184,7 +201,7 @@
   function applyEvent(vm, e) {
     switch (e.type) {
       case 'turn_start':
-        vm.phase = e.who;
+        vm.phase = e.who; vm.actingGuest = null;
         if (e.who === 'player') { vm.turn = e.turn; vm.energy = e.energy; vm.maxEnergy = e.maxEnergy; vm.retained = {}; vm.played = 0; vm.lastHero = null; }
         break;
       case 'draw':
@@ -222,8 +239,10 @@
         vm.inPlay = Object.assign(cp(c), { to: e.to });
         vm.played = (vm.played || 0) + 1;      // what Hype reads in the hand: the cards played this turn
         vm.lastHero = e.hero;                  // what Duet reads: the hero of the last card played this turn
+        vm.actingGuest = null;
         break;
       }
+      case 'enemy_act': vm.actingGuest = null; break;
       case 'hit': {
         const u = unitOf(vm, e.dst);
         if (u) { u.hp = e.hp; u.block = e.block; }
@@ -302,6 +321,9 @@
       case 'gold': vm.gold += e.n; break;
       case 'ink': vm.ink += e.n; break;
       case 'crowd': vm.crowd = e.value; vm.crowdMax = e.max; break;
+      case 'guest_enter': if (e.guest && !guestOf(vm, e.guest.id)) (vm.guests = vm.guests || []).push(guestVM(e.guest)); break;
+      case 'guest_act': { const gu = e.guest && guestOf(vm, e.guest.id); if (gu) gu.stay = Math.max(0, (e.guest.stay | 0) - 1); vm.actingGuest = e.guest ? guestName(e.guest) : null; break; }      // the snapshot is taken before the countdown
+      case 'guest_exit': if (e.guest) vm.guests = (vm.guests || []).filter((x) => x.id !== e.guest.id); break;
       case 'end':
         vm.result = e.result; vm.phase = 'over'; vm.pending = null;
         vm.heroes.forEach((h) => { h.block = 0; h.st = {}; });
@@ -372,7 +394,7 @@
       case 'skip': return nm(e.unit) + ' is starstruck and loses its action.';
       case 'hit': {
         if (e.amount <= 0 && e.blocked <= 0) return '';
-        const who = e.src ? nm(e.src) : 'Something';
+        const who = e.src ? nm(e.src) : vm.actingGuest ? vm.actingGuest : 'Something';      // a guest's hits carry no src: the acting guest is named
         return who + ' hits ' + nm(e.dst) + ' for ' + e.amount + (e.blocked ? ', ' + e.blocked + ' blocked' : '') + (e.killed ? ', and that wins it over' : '') + '.';
       }
       case 'dodge': return nm(e.dst) + ' shimmies out of it.';
@@ -390,10 +412,14 @@
         return u.name + ' gains ' + statusLabel(e.s) + ' ' + e.value + '.';
       }
       case 'pick_needed': return 'Choose cards.';
+      case 'guest_enter': { const gu = e.guest || {}; const n = Math.max(1, gu.stay | 0); return guestName(gu) + ' joins the stage for ' + n + (n === 1 ? ' turn.' : ' turns.'); }
+      case 'guest_act': { const gu = e.guest || {}; const def = safe(() => DATA.guestDef(gu.def, !!gu.up), null); const act = def ? safe(() => DATA.opsText(def.act), '') : ''; return guestName(gu) + ': ' + (act || 'acts.'); }
+      case 'guest_exit': return guestName(e.guest || {}) + ' leaves the stage.';
       case 'end': return e.result === 'win' ? 'Victory.' : 'Defeat.';
       default: return '';
     }
   }
+  const guestName = (gu) => gu.name || (DATA.guests && DATA.guests[gu.def] ? DATA.guests[gu.def].name : String(gu.def || gu.id || 'A guest'));
 
   // the C.canPlay reason as a sentence ("<Hero> is down", "<Hero> is stunned"); ctx.hero names the owner of the card
   function reasonText(reason, heroId) {
@@ -409,8 +435,11 @@
   // loop behaves identically. It is deliberately plain: real VFX are SCENE's job. It only talks to ART through documented calls.
   // ==================================================================================================================
   function fallbackScene() {
-    const L = { ground: 520, front: { x: 330, y: 520, s: 1 }, back: { x: 170, y: 508, s: 0.94 }, lanes: LANE_X.slice() };
-    const st = { on: false, t: 0, speed: 1, chapter: 1, boss: false, heroes: {}, en: {}, hover: null, targets: [], aim: null, bark: null, banner: null, shake: null, flash: null, nums: [], timers: [], view: {} };
+    const L = { ground: 520, front: { x: 330, y: 520, s: 1 }, back: { x: 170, y: 508, s: 0.94 }, lanes: LANE_X.slice(), guests: [{ x: 484, y: 492, s: 0.8 }, { x: 436, y: 484, s: 0.74 }], mascot: { x: 238, y: 516, s: 0.8 } };
+    const st = { on: false, t: 0, speed: 1, chapter: 1, boss: false, heroes: {}, en: {}, guests: {}, mascot: null, hover: null, targets: [], aim: null, bark: null, banner: null, shake: null, flash: null, nums: [], timers: [], view: {} };
+    // guests (header GUESTS AND THE MASCOT): the lowest free spot, kept until the guest leaves
+    const freeSpot = () => { const used = {}; Object.keys(st.guests).forEach((k) => { used[st.guests[k].spot] = true; }); for (let i = 0; i < L.guests.length; i++) if (!used[i]) return i; return L.guests.length - 1; };
+    const addGuest = (u) => { if (!u || u.id === undefined || st.guests[u.id]) return; st.guests[u.id] = { id: u.id, def: u.def, owner: u.owner, spot: freeSpot(), pose: 'idle', t0: st.t }; };
     const maxDur = (ms) => Math.max(0, ms);
 
     function gate(e) {
@@ -429,11 +458,13 @@
       fallback: true, LAYOUT: L, MAX_PARTICLES: 500,
       mount(o) {
         st.on = true; st.t = 0; st.chapter = (o && o.chapter) || 1; st.boss = !!(o && o.boss);
-        st.heroes = {}; st.en = {}; st.nums = []; st.timers = []; st.view = {};
+        st.heroes = {}; st.en = {}; st.guests = {}; st.mascot = null; st.nums = []; st.timers = []; st.view = {};
         const C = o && o.C;
         if (C) {
           C.heroes.forEach((h) => { st.heroes[h.id] = { id: h.id, row: h.row, down: h.down, x: (h.row === 'front' ? L.front : L.back).x, pose: 'idle', t0: 0 }; });
           C.enemies.forEach((u) => { st.en[u.id] = { id: u.id, def: u.def, lane: u.lane, hp: u.hp, maxHp: u.maxHp, down: u.down, phase: u.phase, tier: u.tier, pose: 'idle', t0: 0 }; });
+          (Array.isArray(C.guests) ? C.guests : []).forEach(addGuest);
+          if (C.mascot && C.mascot.id) st.mascot = { id: C.mascot.id, level: C.mascot.level | 0 || 1, pose: 'idle', t0: 0 };
         }
       },
       unmount() { api.flush(); st.on = false; st.timers = []; },
@@ -471,7 +502,10 @@
           case 'enemy_phase': { const u = st.en[e.enemy]; if (u) u.phase = e.index; api.flash('#ffffff', 160); break; }
           case 'hero_down': { const h = st.heroes[e.hero]; if (h) { h.down = true; pose(h, 'down'); } break; }
           case 'hero_revive': { const h = st.heroes[e.hero]; if (h) { h.down = false; pose(h, 'idle'); } break; }
-          case 'end': if (e.result === 'win') Object.keys(st.heroes).forEach((id) => { if (!st.heroes[id].down) pose(st.heroes[id], 'cheer'); }); break;
+          case 'end': if (e.result === 'win') { Object.keys(st.heroes).forEach((id) => { if (!st.heroes[id].down) pose(st.heroes[id], 'cheer'); }); if (st.mascot) pose(st.mascot, 'cheer'); } break;
+          case 'guest_enter': addGuest(e.guest); if (e.guest && st.guests[e.guest.id]) pose(st.guests[e.guest.id], 'enter'); break;
+          case 'guest_act': if (e.guest && st.guests[e.guest.id]) pose(st.guests[e.guest.id], 'act'); break;
+          case 'guest_exit': if (e.guest) delete st.guests[e.guest.id]; break;
           default: break;
         }
         const ms = maxDur(gate(e));
@@ -498,6 +532,14 @@
           const w = b.w * pos.s, hh = b.h * pos.s, x = pos.x - w / 2;
           return { x, y: pos.y - hh, w, h: hh, top: { x: pos.x, y: pos.y - hh }, feet: { x: pos.x, y: pos.y }, head: { x: pos.x + (b.head ? b.head.x : 0) * pos.s, y: pos.y + (b.head ? b.head.y : -hh) * pos.s } };
         }
+        if (kind === 'guest' || kind === 'mascot') {
+          const gu = kind === 'guest' ? st.guests[id] : st.mascot;
+          if (!gu) return null;
+          const pos = kind === 'guest' ? L.guests[clamp(gu.spot, 0, L.guests.length - 1)] : L.mascot;
+          const b = safe(() => (kind === 'guest' ? ART.guest.bounds(gu.def) : ART.mascot.bounds(gu.id)), null) || { w: 80, h: kind === 'guest' ? 150 : 90, head: { x: 0, y: -120 }, feet: { x: 0, y: 0 } };
+          const w = b.w * pos.s, hh = b.h * pos.s;
+          return { x: pos.x - w / 2, y: pos.y - hh, w, h: hh, top: { x: pos.x, y: pos.y - hh }, feet: { x: pos.x, y: pos.y }, head: { x: pos.x + (b.head ? b.head.x : 0) * pos.s, y: pos.y + (b.head ? b.head.y : -hh) * pos.s } };
+        }
         const u = st.en[id];
         if (!u || u.lane === undefined || u.lane === null) return null;
         const fx = L.lanes[clamp(u.lane, 0, 4)];
@@ -518,6 +560,11 @@
         for (let i = 0; i < hs.length; i++) {
           const a = api.anchor('hero', hs[i]);
           if (a && x >= a.x && x <= a.x + a.w && y >= a.y && y <= a.y + a.h) return { kind: 'hero', id: hs[i] };
+        }
+        const gs = Object.keys(st.guests);
+        for (let i = 0; i < gs.length; i++) {
+          const a = api.anchor('guest', gs[i]);
+          if (a && x >= a.x && x <= a.x + a.w && y >= a.y && y <= a.y + a.h) return { kind: 'guest', id: gs[i] };
         }
         return null;
       },
@@ -546,6 +593,12 @@
           const pn = ms && pt * 1000 > ms && u.pose !== 'die' && u.pose !== 'telegraph' ? 'idle' : u.pose;
           safe(() => ART.enemy.draw(ctx, u.def, { x: a.feet.x, y: a.feet.y, s: 1, pose: pn, t, pt: pn === u.pose ? pt : 0, hpPct: u.maxHp ? u.hp / u.maxHp : 1, phase: u.phase || 0, alpha: u.down ? Math.max(0, 1 - pt / 0.8) : 1 }));
         });
+        // the guests (behind the heroes) and the mascot (at the back hero's feet)
+        if (typeof ART !== 'undefined' && ART.guest && isFn(ART.guest, 'draw')) Object.keys(st.guests).map((id) => st.guests[id]).sort((a, b) => b.spot - a.spot).forEach((gu) => {
+          const pos = L.guests[clamp(gu.spot, 0, L.guests.length - 1)], pt = st.t - gu.t0, ms = safe(() => ART.guest.poseMs(gu.pose), 0), pn = ms && pt * 1000 > ms ? 'idle' : gu.pose;
+          safe(() => ART.guest.draw(ctx, gu.def, { x: pos.x, y: pos.y, s: pos.s, pose: pn, t, pt: pn === gu.pose ? pt : 0 }));
+        });
+        if (st.mascot && typeof ART !== 'undefined' && ART.mascot && isFn(ART.mascot, 'draw')) safe(() => ART.mascot.draw(ctx, st.mascot.id, { x: L.mascot.x, y: L.mascot.y, s: L.mascot.s, pose: st.mascot.pose, level: st.mascot.level, t, pt: st.t - st.mascot.t0 }));
         Object.keys(st.heroes).map((id) => st.heroes[id]).sort((a, b) => (a.row === 'front' ? 1 : 0) - (b.row === 'front' ? 1 : 0)).forEach((h) => {
           const pos = heroPos(h);
           const pt = st.t - h.t0;
@@ -1748,6 +1801,7 @@
     renderPiles(false);
     renderEnergy(false);
     renderCrowd(false);
+    renderGuests(false);
     renderTurn();
     renderSwap();
     renderEnd();
@@ -1875,15 +1929,100 @@
         updateIntensity();
         break;
       }
-      case 'death': case 'flee': unitRender(e.unit, true); updateIntensity(); break;
+      case 'death': case 'flee': unitRender(e.unit, true); updateIntensity(); if (e.type === 'death' && S.ui.mascot) flare(S.ui.mascot.el, 'cheer', 700); break;
       case 'hero_down': { const h = heroOf(vm, e.hero); if (h) renderHero(h, true); S.ui.danger.classList.toggle('on', vm.heroes.some((x) => !x.down && x.hp / x.maxHp < 0.3)); break; }
       case 'hero_revive': { const h = heroOf(vm, e.hero); if (h) renderHero(h, true); break; }
       case 'gold': S.gain.gold += e.n; if (S.ui.gold) S.ui.gold.rbSet(Math.max(0, S.R.gold + S.gain.gold), { animate: true }); break;
       case 'ink': S.gain.ink += e.n; if (S.ui.ink) S.ui.ink.rbSet(clamp(S.R.ink + S.gain.ink, 0, S.R.inkMax || 99), { animate: true, max: S.R.inkMax }); break;
       case 'relic': { const r = S.ui.relicEls[e.id]; if (r) flare(r, 'flash', 800); break; }
-      case 'end': renderTurn(); break;
+      case 'guest_enter': renderGuests(true); { const c = e.guest && S.gc[e.guest.id]; if (c) flare(c.el, 'arrive', 700); } break;
+      case 'guest_act': renderGuests(true); { const c = e.guest && S.gc[e.guest.id]; if (c) flare(c.el, 'act', 520); } break;
+      case 'guest_exit': renderGuests(true); break;
+      case 'end': renderTurn(); if (e.result === 'win' && S.ui.mascot) flare(S.ui.mascot.el, 'cheer', 1200); break;
       default: break;
     }
+  }
+
+  // ------------------------------------------------------------------------------------------------------------------
+  // the side column: guest chips and the mascot chip (header GUESTS AND THE MASCOT)
+  // ------------------------------------------------------------------------------------------------------------------
+  // a mini puppet on a canvas (feet near the bottom edge), the chip's picture
+  function puppetThumb(kind, id, size, level) {
+    const px = Math.max(1, (UI.px || 1)), nom = kind === 'guest' ? 158 : 96;
+    const c = mk('canvas', { class: 'gu-thumb', width: Math.round(size * px), height: Math.round(size * px), style: { width: size + 'px', height: size + 'px' }, 'aria-hidden': 'true' });
+    safe(() => {
+      const g = c.getContext('2d');
+      if (!g || typeof ART === 'undefined' || !ART[kind] || !isFn(ART[kind], 'draw')) return;
+      g.scale(px, px);
+      ART[kind].draw(g, id, { x: size / 2, y: size * 0.94, s: size / nom, pose: 'idle', t: 0.4, level, shadow: false });
+    });
+    return c;
+  }
+  function guestTip(gu) {
+    const def = DATA.guests[gu.def], gd = safe(() => DATA.guestDef(gu.def, !!gu.up), null);
+    const body = mk('div', { class: 'tk' }, mk('div', { class: 'tk-head' }, mk('b', { class: 'tk-name', text: gu.name + (gu.up ? ' plus' : '') }), mk('span', { class: 'tk-kind k-keyword', text: 'Guest of ' + heroName(gu.owner) })));
+    const text = gd ? safe(() => DATA.opsText([{ op: 'guest', id: gu.def, up: !!gu.up }]), '') : '';
+    if (text) body.appendChild(mk('p', { class: 'tk-text', text }));
+    body.appendChild(mk('p', { class: 'tk-text now', text: gu.stay === 1 ? '1 turn left on stage.' : gu.stay + ' turns left on stage.' }));
+    if (def && def.blurb) body.appendChild(mk('p', { class: 'tk-text tk-flavor', text: def.blurb }));
+    return body;
+  }
+  function mascotTip(m) {
+    const def = DATA.mascots[m.id];
+    if (!def) return null;
+    const maxLv = safe(() => DATA.mascotMax(), 3);
+    const body = mk('div', { class: 'tk' }, mk('div', { class: 'tk-head' }, mk('b', { class: 'tk-name', text: def.name }), mk('span', { class: 'tk-kind k-keyword', text: 'Mascot, level ' + m.level + ' of ' + maxLv })));
+    for (let n = 1; n <= maxLv; n++) { const lv = def.levels && def.levels[n]; if (!lv) continue; body.appendChild(mk('p', { class: 'tk-text' + (n <= m.level ? ' now' : ' off'), text: 'Level ' + n + ': ' + lv.text })); }
+    if (def.blurb) body.appendChild(mk('p', { class: 'tk-text tk-flavor', text: def.blurb }));
+    return body;
+  }
+  function buildGuestChip(gu) {
+    const def = DATA.heroes[gu.owner] || {};
+    const pips = mk('span', { class: 'gu-pips', role: 'img' });
+    const el = mk('button', { type: 'button', class: 'cm-guest', 'data-guest': gu.id, 'data-def': gu.def }, puppetThumb('guest', gu.def, 40), mk('span', { class: 'gu-main' }, mk('b', { class: 'gu-name', text: gu.name }), pips));
+    UI.vars(el, { '--hc': def.color || '#ff7eb6', '--hc2': def.dark || '#b0245c' });
+    UI.tip.attach(el, () => { const live = S ? guestOf(S.vm, gu.id) : null; return live ? guestTip(live) : null; }, { side: 'right' });
+    el.addEventListener('pointerenter', (e) => { if (e.pointerType === 'touch') return; setGuestHover(gu.id); });
+    el.addEventListener('pointerleave', () => setGuestHover(null));
+    el.addEventListener('click', () => { const live = S ? guestOf(S.vm, gu.id) : null; if (live) UI.announce(live.name + ', ' + live.stay + ' turns left'); });
+    return { id: gu.id, el, pips, stay: -1, max: -1 };
+  }
+  function renderGuestChip(c, gu) {
+    if (c.stay === gu.stay && c.max === gu.max) return;
+    c.stay = gu.stay; c.max = gu.max;
+    c.pips.textContent = '';
+    for (let i = 0; i < gu.max; i++) c.pips.appendChild(mk('i', { class: 'gu-pip' + (i < gu.stay ? ' on' : '') }));
+    c.pips.setAttribute('aria-label', gu.stay + ' of ' + gu.max + ' turns left');
+    c.el.setAttribute('aria-label', gu.name + ', guest of ' + heroName(gu.owner) + ', ' + gu.stay + (gu.stay === 1 ? ' turn left' : ' turns left'));
+  }
+  function renderGuests(animate) {
+    if (!S || !S.ui || !S.ui.side) return;
+    const list = S.vm.guests || [], side = S.ui.side;
+    Object.keys(S.gc).forEach((id) => { if (!list.some((g) => g.id === id)) { const c = S.gc[id]; if (S.hoverGuest === id) setGuestHover(null); c.el.remove(); delete S.gc[id]; } });
+    list.forEach((gu, i) => {
+      let c = S.gc[gu.id];
+      if (!c) { c = S.gc[gu.id] = buildGuestChip(gu); }
+      renderGuestChip(c, gu);
+      if (side.children[i] !== c.el) side.insertBefore(c.el, side.children[i] || null);
+    });
+    if (S.ui.mascot && side.lastElementChild !== S.ui.mascot.el) side.appendChild(S.ui.mascot.el);
+    void animate;
+  }
+  function buildMascotChip(m) {
+    const def = DATA.mascots[m.id] || { name: String(m.id) };
+    const lvl = mk('span', { class: 'gu-lvl', text: 'level ' + m.level });
+    const el = mk('button', { type: 'button', class: 'cm-mascot', 'data-mascot': m.id, 'aria-label': def.name + ', level ' + m.level }, puppetThumb('mascot', m.id, 40, m.level), mk('span', { class: 'gu-main' }, mk('b', { class: 'gu-name', text: def.name }), lvl));
+    UI.tip.attach(el, () => (S && S.vm.mascot ? mascotTip(S.vm.mascot) : null), { side: 'right' });
+    el.addEventListener('click', () => UI.announce(def.name + ', level ' + m.level));
+    return { id: m.id, el, lvl };
+  }
+  function setGuestHover(id) {
+    if (!S) return;
+    if (S.hoverGuest === id) return;
+    if (S.hoverGuest && S.gc[S.hoverGuest]) S.gc[S.hoverGuest].el.classList.remove('hot');
+    S.hoverGuest = id || null;
+    if (id && S.gc[id]) S.gc[id].el.classList.add('hot');
+    safe(() => S.sc.setHover(id ? 'guest' : null, id || null));
   }
 
   // barks (DESIGN 5.9 item 9): key by event, then pickBark decides (6 s gap, 35%, seeded by the event index)
@@ -2205,6 +2344,11 @@
     u.swap = buildSwap();
     u.heroes.appendChild(u.swap.el);
     root.appendChild(u.heroes);
+    // ---- the side column beside the hero panels: guest chips in enter order, then the mascot chip (header GUESTS AND THE MASCOT)
+    u.side = mk('div', { class: 'cm-side', role: 'list', 'aria-label': 'Guests and mascot' });
+    u.mascot = S.vm.mascot ? buildMascotChip(S.vm.mascot) : null;
+    if (u.mascot) { u.mascot.el.setAttribute('role', 'listitem'); u.side.appendChild(u.mascot.el); }
+    root.appendChild(u.side);
 
     // ---- enemy overlays, the hand, the play line
     u.enemies = mk('div', { class: 'cm-enemies', role: 'group', 'aria-label': 'Enemies' });
@@ -2389,6 +2533,7 @@
         sel: null, kb: null, drag: null, press: null, picking: null, hoverUid: null, hoverEnemy: null, pvToken: 0, pvShown: false,
         evIndex: 0, lastBark: null, lastKill: null, barks: [], gain: { gold: 0, ink: 0 }, startEnemies: C.enemies.length, intensity: -1, bannerSeq: 0,
         gate: null, waiter: null, ctxC: { relics: C.relics }, drift: null, readyRes: null, ready: null, wantPile: null, inspectToken: 0,
+        gc: {}, hoverGuest: null,                            // the guest chips by guest id, and the hovered guest (header GUESTS AND THE MASCOT)
       };
       const me = S;
       me.ready = new Promise((res) => { me.readyRes = res; });
@@ -2404,6 +2549,7 @@
         if (!S || S.drag || S.draining) return;
         const h = safe(() => S.sc.hitTest(p.x, p.y), null);
         setHover(h && h.kind === 'enemy' ? h.id : null);
+        setGuestHover(h && h.kind === 'guest' ? h.id : null);
       });
       root.addEventListener('pointerdown', (e) => { if (S && S.draining && !S.picking && !(e.target.closest && e.target.closest('.menu-btn, .cm-speed'))) fastForward(); }, true);
       runIntro(me);
@@ -2449,7 +2595,7 @@
   };
 
   // pure pieces, exported for tests/hocus_vocus_screen_combat.test.mjs
-  def._t = { snapshot, applyEvent, settle, digest, describe, pickBark, rowBrief, reasonText, slotFor, counts, enemyChips, widestRow, barWidths, handBounds, LANE_GAP, LANE_X, BAR_W, BAR_W_COMPACT, BAR_CLEAR, UNDER, ROW_CHIP, DOCK_CY, RELIC_SLOTS, state: () => S, HAND, PILE };
+  def._t = { snapshot, applyEvent, settle, digest, describe, pickBark, rowBrief, reasonText, slotFor, counts, enemyChips, widestRow, barWidths, handBounds, guestVM, LANE_GAP, LANE_X, BAR_W, BAR_W_COMPACT, BAR_CLEAR, UNDER, ROW_CHIP, DOCK_CY, RELIC_SLOTS, state: () => S, HAND, PILE };
 
   UI.screens.combat = def;
 })();

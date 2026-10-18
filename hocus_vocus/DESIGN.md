@@ -262,11 +262,12 @@ js/util.js            U         shared helpers                                  
 js/data.js            DATA      registries, closed lists, statuses, heroes, validator   (done)
 js/data_text.js       (DATA+)   text generation: cardHtml, gemText, ...
 js/data_cards_hanae.js  data_cards_kuro.js  data_cards_suzu.js  data_cards_raiga.js  data_cards_shared.js
+js/data_guests.js     (DATA+)   DATA.guests: the 12 Guests the Guest cards call (4.3 "Guests")
 js/data_enemies_1.js  data_enemies_2.js  data_enemies_3.js
-js/data_relics.js  data_gems.js  data_events.js  data_meta.js
+js/data_relics.js  data_mascots.js  data_gems.js  data_events.js  data_meta.js
 js/data_samples.js    (DATA+)   DATA.SAMPLES: the owners' optional recordings, ships empty (read by audio.js; audio/README.md)
 js/art.js             ART       toolkit + style helpers + sprite cache + working placeholders for EVERY ART member
-js/art_cast_kit.js  art_cast.js  art_enemies_1.js  art_enemies_2.js  art_enemies_3.js  art_cards.js
+js/art_cast_kit.js  art_cast.js  art_enemies_1.js  art_enemies_2.js  art_enemies_3.js  art_guests.js  art_cards.js
 js/art_icons.js  art_scenes.js  art_map.js  art_fx.js
 js/audio.js           AUDIO     WebAudio SFX + procedural music
 js/combat.js          COMBAT    combat engine (pure logic, event log)
@@ -466,6 +467,24 @@ the other hero, alternating (`C.crowdWild` counts the fills); a voiceless hero o
 wakes nobody. The size is `mods.crowd` (`ECONOMY.crowd`, 7; the Encore 5 level adds 1 through `trialMods`). Event `crowd` (5.2); the HUD shows the meter
 beside Breath. Keywords `crowd` and `signature` explain it.
 
+**Guests** (Roguebook style allies; `DATA.guests`, `js/data_guests.js`; engine in `combat.js` "GUESTS"): a **Guest card** is a Skill with the card op
+`{op:'guest', id, up?}` (top level only) that brings a guest artist on stage. A guest definition is `{id, name, hero, stay (1..6 turns), act:[hook ops],
+enter?, exit?, hooks?:[{on, fx, filter?, limit?}], up?:{stay?, act?, enter?, exit?, hooks?}, art:{m, c}, blurb}`; `DATA.guestDef(id, up)` merges the upgrade
+(each `up` field REPLACES the base one) and an upgraded Guest card calls `up:true`. `ECONOMY.guestSlots` (2) guests fit on stage; a third replaces the
+oldest (its exit ops run, then `guest_exit` reason `replaced`). `C.guests` lists them in enter order as `{kind:'guest', id:'guest_dj_scratchy#1', def,
+name, owner: heroId, stay (turns left), up:0|1, born (the turn it entered)}`. A guest ACTS at the end of each of its owner's turns: inside `C.endTurn`
+after the Reprise replays and the `turnEnd` hooks and BEFORE the hand is discarded, in enter order, `guest_act {guest, hero}` then its `act` ops as
+hook ops acted by the owner (no attacker: no spot bonus, Volume or Muffled; `enemy` = a random living enemy; kills credit the owner); then `stay`
+falls by 1 and at 0 the guest leaves (exit ops, `guest_exit` reason `done`). A guest whose owner is voiceless is silent (no act, no exit ops, it
+still counts down). Guests stop acting the moment the fight is decided. `enter` ops run right after `guest_enter {guest, hero}`; a guest's `hooks`
+are owned by the owner hero (src `guest`, deactivated when it leaves, never `once` or `every`). At combat end every guest gets `guest_exit` reason
+`end` before the `end` event, with no exit ops. Enemies never hit guests (no HP). Counter `per:'guests'` and cond `guests:{gte, lte}` read the
+number on stage (a guest counts itself in its own act). Generated text: "Guest DJ Scratchy for 3 turns: at the end of your turn, deal 4 damage to a
+random enemy." ("on arrival, ..." / "On leaving, ..." for enter and exit, one hook sentence per hook). Keyword `guest` explains it. Each hero has
+3 Guest cards (2 uncommon, 1 rare; `QUOTA.cards.guests`): Jasmin a backing choir, a harp grandma and a hype parrot; RoxorLoops a DJ, a loop pedal
+robot and a metronome gnome; RawClaw the sound tech, a cable gremlin and a reverb ghost; Andy a flight case roadie, a bass amp on wheels and a mosh pit
+uncle. No guest gives more than 1 Breath per turn, and none draws at the end of the turn (the hand is discarded right after).
+
 **Medleys** (fused cards, offered once after every elite fight, optional): a Medley is two cards sung as one. The player picks two Attack or Skill cards
 of ONE hero from the deck (neither a Medley), both leave the deck (their gems return to the pouch) and one deck instance `{uid, id:'medley', parts:[idA, idB],
 up, gems}` replaces them: upgraded when either part was, the larger Fanbase bonus kept. `DATA.medleyDef(parts)` is the merged definition that every reader
@@ -526,6 +545,7 @@ resolved victim. `value = floor(clamp(base + mul * min(count(per), upTo), min, c
 | `hitsTaken` | enemy hits that removed HP from the acting hero over that same window |
 | `targetBlock` | Block of the chosen enemy |
 | `picked` | cards resolved by the most recent `pick` of this card |
+| `guests` | guests on stage (`C.guests.length`, 4.3 "Guests") |
 
 In enemy contexts only `LISTS.perEnemy` is legal (`turn enemies status hp missingHp block debuffs handSize drawPile
 discardPile`), `who:'self'` is the acting enemy, `who:'target'` is the hero being hit (the front hero when the op has no
@@ -575,6 +595,7 @@ hero target), and `turn` is that enemy's own turn count (1 on the turn of its fi
 | `gold`, `ink`, `maxHp` | `n:V` (maxHp also `tgt`) | run-level rewards mid-combat (gold pouch, Vox gain, permanent max HP). `maxHp` raises current HP with the maximum at once; `both` and `ally` also reach a voiceless hero (a lasting stat: they stay at 0 HP and come back after the fight from the raised maximum) |
 | `revive` | `n:V` or `pct` (fraction of max HP) | a voiceless hero stands up in the backing spot with that HP (at least 1). No-op if nobody is voiceless. In a hook on `onHeroDown` it revives the triggering hero; otherwise the first voiceless hero. Emits `hero_revive` |
 | `hook` | `on, fx:[hook ops], filter?, limit?, once?, every?` | registers a combat hook owned by the acting hero until combat ends. `once:true` removes it after it fires once. Playing the card twice registers two hooks. Not allowed inside hook ops |
+| `guest` | `id, up?:true` | brings the guest `DATA.guests[id]` (its upgraded version with `up`) on stage for the acting hero (4.3 "Guests"). Top level of a Skill's fx only; never a hook op. Playing the card twice brings a second copy |
 
 **Spending resources.** `consume` is legal on every op with an `n` (`dmg block heal hurt status draw energy`): `consume?: statusId | 'block' |
 {s: statusId|'block', upTo?: V}`. `n` is evaluated first, then the stacks are removed from the acting hero (`'block'` removes all their
@@ -583,7 +604,7 @@ Block; omitted `upTo` means all stacks). Partial spending is `V.upTo` to cap wha
 **Conditions** `C` (`LISTS.cond`), all keys must hold: `row:'front'|'back'` (acting hero's row), `status:{s, who?, gte?, lte?}`,
 `hpPct:{who?, lt?, gt?}` (fractions 0..1), `handEmpty:true`, `cardsPlayed:{gte?,lte?}`, `attacksPlayed:{...}`, `turn:{gte?,lte?}`,
 `lastKill:true` (any target of the immediately preceding `dmg` op of this card died from it), `targetStatus:{s, gte?, lte?}`,
-`allyDown:true`, `block:{gte?,lte?}` (acting hero), `energy:{...}` (remaining), `handSize:{...}`, `enemies:{gte?,lte?}`.
+`allyDown:true`, `block:{gte?,lte?}` (acting hero), `energy:{...}` (remaining), `handSize:{...}`, `enemies:{gte?,lte?}`, `guests:{gte?,lte?}` (guests on stage).
 Enemy `cond` uses `LISTS.condEnemy` (`status hpPct block turn enemies`; `who` is `self` or `target`).
 
 **Hook ops** (`LISTS.hookOps`, used by relics, hero passives and `hook` ops) are the card ops minus `pick`, `repeat`, `swap` and `hook`.
@@ -719,6 +740,28 @@ pickup switches a tier on. Each tier `text` is one sentence of at most 90 charac
 it like a Charm text). Breath and hand size stay Headliner trades: the one Breath tier (Rhythm Section 4) is gated by `every` and `limit`, and the one draw tier (Demo Tape 3) is every 3rd turn (a turn 1 draw would be absorbed by the opening hand, which is topped up to the hand size). The audit demands every
 set be completable by any party from a fresh profile (at least as many unlocked, hero-free members as its top tier).
 
+**The Mascot (`DATA.mascots`, `data_mascots.js`).** The tour bus can adopt ONE mascot per run: a stray that sits on stage beside the duo, gives a small
+bonus and LEVELS UP as the tour goes on. `DATA.mascots[id]` (registered with `DATA.add('mascots', defs)`) is `{id, name, blurb, art:{m: motif, c: palette},
+levels: {1: {text, mods?, hooks?, rows?}, 2: {...}, 3: {...}}}`: exactly `ECONOMY.mascotXp.length` levels, each the same shape as a Charm set tier (one sentence of at
+most 90 characters that carries every number and trigger of its data; the mascot suite checks it like a Charm text; `blurb` is the joke line, display only, Charm flavour
+rules). There are `QUOTA.mascots` (6) of them: Beatbox Pug, Loop Pedal Cat, Tour Bus Hamster, Stage Goose, Merch Fox, Karaoke Parrot. Run state is `R.mascot = null |
+{id, xp}` (saved; optional, so old saves load with none). Level = `DATA.mascotLevel(xp)`: level 1 on adoption, level 2 at 5 XP, level 3 at 12 XP (`ECONOMY.mascotXp =
+[0, 5, 12]`). XP: `ECONOMY.mascotFightXp` per fight won (`normal` 1, `elite` 2, `boss` 3; a Sidekick-only fight gives none) and `ECONOMY.snackXp` (2) for a Snack at the
+Merch Stall (`ECONOMY.price.snack` 35 gold times `priceMul`, one per stall, stocked only while the bus has a mascot; shop item `{kind:'snack', id:'snack'}` through the
+ordinary `shopBuy` path). Levels STACK like set tiers: `DATA.activeMascotTiers(R.mascot)` -> `[{mascot, level, name, def}]` for levels 1..current, and every active level is
+a virtual Charm built only from existing mod keys, row fields, hook triggers and hook ops (no new engine ops): `DATA.modsFor(relicIds, trial, mascot)` and
+`DATA.rowFor(hero, row, relicIds, mascot)` fold its `mods` and `rows` (so `RUN.mods(R)` and COMBAT's row bonuses see them), `COMBAT.create` takes `opts.mascot` (`{id, xp}`),
+echoes `C.mascot = {id, level}` (null without one) and registers the levels' combat hooks after the set tiers (`src: 'mascot'`, `srcId: 'mascot_pug:2'`, party hooks, no
+`relic` event), and `RUN.hook` runs their run hooks after the set tiers (logged `{op:'mascot', id, level, hook}`). Breath and hand size stay Headliner trades: no level touches
+them (the audit checks). Adoption: the run op `adoptMascot {id}` (`LISTS.runOps`; a second adoption logs and changes nothing) in the once-per-tour Detour
+`stray_at_the_bus_stop` (any act, weight 12 so most tours meet it in Act I; three calls hidden by `req.mascot: false` once the bus has a mascot, each bringing one of two
+strays seeded by the tile, plus a safe "drive on"), and the run op `mascotXp {n}` feeds it. Event choices may carry `req.mascot` (`false`: only while there is no mascot,
+`true`: only with one; a failed check hides the choice like `req.hero`). Helpers: `RUN.adoptMascot(R, id)` -> `{ok, id, level: 1, log, pending}` | `unknown|owned`,
+`RUN.mascotXp(R, n)` -> `{level, leveled, xp, log}` (every level switched on is noted in `R.log` as `{msg, mascot, level}` and returned as `{op:'mascot', id, level, text}`
+with `DATA.mascotLabel(id, level)`, "Beatbox Pug 2 of 3: ..."); `RUN.combatDone` feeds the fight's XP BEFORE the mods, gold and `onFightWon` hooks of that win and puts the
+level-up lines first in `Rewards.log` so the reward screen can toast them. `DATA.mascotProgress(R.mascot)` gives the Charms overlay `{id, name, blurb, art, xp, level, max,
+next, levels:[{level, text, active, at}]}`; `DATA.mascotNext(xp)` the XP still needed. `DATA.keywords.mascot` is the glossary line.
+
 ### 4.8 Map, Vox and Spells
 
 - **Layout.** Pointy-top axial hexes `(q, r)`, key `'q,r'`, odd-r offset: `column = q + floor(r / 2)`, and a tile exists iff `0 <= column < cols` and `0 <= r < rows`. The map is
@@ -806,6 +849,8 @@ set be completable by any party from a fresh profile (at least as many unlocked,
 | `flag` | `k`, `v?=1` | `R.flags[k] = v` |
 | `paint` | `n` | unmutes n hexes for free along the cheapest chain toward the boss |
 | `cardReward` | `rarity?`, `hero?`, `n?=3` | a skippable card pick like a combat reward |
+| `adoptMascot` | `id` | the tour bus adopts that mascot at level 1 (4.7 "The Mascot"); with a mascot already aboard it logs and changes nothing |
+| `mascotXp` | `n` (1..12) | feeds the mascot n XP (levels switch on at `ECONOMY.mascotXp`); without a mascot it logs "No mascot to feed." |
 
   Bounds the validator enforces: `n` on the card ops and `addCurse` and `cardReward` is 1..5, `paint` `n` is 1..12, `fight.enemies` lists 1 to 4 ids, `gold` and `ink` take a whole `n` (negative is a cost) or a non-zero `pct` in -1..1 (`heal` and `hurt` need a positive `n` or a `pct` in (0,1]), `maxHp` a non-zero whole `n`.
   `choice.req` keys (all must hold): `gold:N` (has at least N), `hpPct:F` (every living hero at or above fraction F of max HP), `hpBelow:F` (some living hero below F), `relic:id`, `flag:k` (truthy),
@@ -840,7 +885,7 @@ The shapes below are what other modules may already rely on.
 
 ### 5.1 `DATA` (`data.js`, `data_text.js`)
 
-Registries: `DATA.cards heroes gems relics enemies events achievements trials tips lore encounters brushes tiles statuses keywords ECONOMY SETTINGS LISTS ROSTER FIXED QUOTA GUIDE`, plus the presentation tables `DATA.LINKS` (the owners' links, after `LISTS`, in `data.js`), `DATA.SAMPLES` (the owners' recordings, `data_samples.js`), `DATA.outfits` (the three outfits, `data_meta.js`) and `DATA.COLOUR_NAME` (the gem colour words). None of the four changes a rule: the bot and the daily seed never read them.
+Registries: `DATA.cards heroes gems relics enemies events achievements trials tips lore guests encounters brushes tiles statuses keywords ECONOMY SETTINGS LISTS ROSTER FIXED QUOTA GUIDE` (`guests` and `DATA.guestDef(id, up)`: 4.3 "Guests"), plus the presentation tables `DATA.LINKS` (the owners' links, after `LISTS`, in `data.js`), `DATA.SAMPLES` (the owners' recordings, `data_samples.js`), `DATA.outfits` (the three outfits, `data_meta.js`) and `DATA.COLOUR_NAME` (the gem colour words). None of the four changes a rule: the bot and the daily seed never read them.
 `DATA.LINKS` (HV_STORY 5.2) is frozen with exactly the keys `handle website youtube facebook tiktok instagram support game`: `handle` is `@roxorloopsandjasmin`, `game` is the address Share uses (empty means the current page address without query or hash), and every other value is an empty string until the owners fill it in. A button whose URL is empty is not drawn. A filled URL starts `https://` and sits on a line with the pragma `hygiene-allow(network)` and a reason; it is only ever an anchor that opens on a tap in a new tab (`rel="noopener noreferrer"`), never fetched. The hygiene suite pins all of this.
 `DATA.add(kind, defs)` takes an object keyed by id (`{hanae_slash: {...}}`; an array throws), except `tips`, which takes a string or an array of strings. `DATA.addEncounters`.
 `DATA.validate(only?, opt?)`: lenient by default (references to content other files may not have written yet are skipped); `DATA.validate(only, {strict:true})` checks every cross-file reference and
@@ -876,7 +921,7 @@ DATA.cardOps(resolved)             -> flat op list
 ### 5.2 `COMBAT` (`combat.js`)
 
 ```
-COMBAT.create({ heroes:[{id,hp,maxHp}], frontIdx, deck:[inst], enemies:[enemyId], tier:'normal'|'elite'|'boss', chapter, seed, mods, relics:[ids], gold }) -> C
+COMBAT.create({ heroes:[{id,hp,maxHp}], frontIdx, deck:[inst], enemies:[enemyId], tier:'normal'|'elite'|'boss', chapter, seed, mods, relics:[ids], gold, mascot: null | {id, xp} }) -> C   // mascot: 4.7 "The Mascot"; C.mascot echoes {id, level}
 ```
 
 `mods` is `RUN.mods(R)` verbatim (4.7); `gold` is the run gold for `stealGold`; `tier` is the fight's reward tier, echoed as `C.tier` (HP scaling reads each unit's own tier: minion and normal use `enemyHp`, elite `eliteHp`, boss `bossHp`). `C` is a plain object plus methods. All action methods return an **array of events** (also appended to `C.events`). State is always the
@@ -932,6 +977,7 @@ summon {enemy:unitSnapshot}       enemy_phase {enemy:unitId, index, at, say}    
 hero_down {hero:id}               hero_revive {hero:id, hp}                      pick_needed {pending}
 relic {id}                        gold {n}                                       ink {n}                      max_hp {hero, n}
 crowd {value, max, delta, wild, hero|null, card|null}   (the Crowd meter, 4.3; on `wild` an add_card of the free Signature copy follows)
+guest_enter {guest, hero}         guest_act {guest, hero}   (before its act ops run)        guest_exit {guest, reason:'done'|'replaced'|'end'}   (4.3 "Guests"; `guest` is a plain snapshot of the C.guests entry)
 end {result:'win'|'lose'}
 ```
 
@@ -980,7 +1026,8 @@ Owns everything that lives for one run. `RUN.newRun({heroes:[id,id], trial, seed
 
 ```
 R = { v:1, id, seed, trial, daily, mods (trial deltas only), unlocked, heroes:[{id,hp,maxHp}], frontIdx, deck:[inst], gems:[gemId], relics:[id], brushes:[id],
-      gold, ink, inkMax, chapter, map:M, node:null|Node, stats:{...}, flags:{...}, rareOffset, removals, seen:{events:[],...}, log:[], done:bool, victory:bool }
+      gold, ink, inkMax, chapter, map:M, node:null|Node, stats:{...}, flags:{...}, rareOffset, removals, seen:{events:[],...}, log:[], done:bool, victory:bool,
+      mascot: null | {id, xp} }      // the tour bus pet (4.7 "The Mascot"); optional in old saves, its levels derive from xp
 ```
 
 **Randomness.** R stores no RNG state. Every roll builds `U.rng(U.hash(R.seed, kind, R.chapter, q, r, extra))` with `kind` in `'map'` (as `U.hash(R.seed, 'ch' + n, 'map')`), `'combat'`, `'reward'`, `'chest'`, `'gemcache'`,
@@ -1000,7 +1047,7 @@ RUN.take(R, node, choice) -> {ok}    // chest {relic:bool, gem:id|null} (its gol
 RUN.shopBuy(R, stock, key) -> {ok, reason}   RUN.shopRemove(R, stock, uid) -> {ok}
 RUN.eventChoose(R, eventDef, i) -> { text, applied:[...], fight?:Node, pending?:[...] }
 RUN.applyOps(R, ops, ctx) -> {log:[...], pending:[{id, op, n, pick, filter}]}     RUN.resolvePending(R, id, choice) -> {ok, log}   // choice = uids for card ops, a card id for cardReward, null to skip an optional op
-RUN.hook(R, name, ctx) -> {log, pending}
+RUN.hook(R, name, ctx) -> {log, pending}     RUN.adoptMascot(R, id) -> {ok, id, level, log, pending}     RUN.mascotXp(R, n) -> {level, leveled, xp, log}   // the Mascot, 4.7
 RUN.campAction(R, 'rest'|'sharpen'|'gems'|'meditate', arg) -> {ok,...}
 RUN.addCard(R,id,opts) RUN.removeCard(R,uid) RUN.upgradeCard(R,uid) RUN.socket(R,uid,slot,gemId)      // replacing a gem in a slot is the only way to lose one
 RUN.checkStranded(R) -> bool     // 4.8 mercy rule; called at the end of step, paint, useBrush, finishNode and claim
@@ -1055,6 +1102,10 @@ ART.hero.pointAt keyPt warm audit expressions ids, and (Hocus Vocus P3) outfits(
 ART.enemy.register(id, { draw(ctx, o), bounds:{w,h,head:{x,y},body:{x,y},feet:{x,y}} })   // art_enemies_N.js call this once per id of Act N (the 3 files are disjoint by DATA.enemies[id].chapter)
 ART.enemy.draw(ctx, enemyId, {x, y, s, pose, t, pt, flip, hpPct, phase, alpha, glow})
 ART.enemy.bounds(enemyId) -> same shape as register      ART.enemy.poseMs(pose)
+ART.guest.draw(ctx, guestId, {x, y, s, pose, t, pt, flip, alpha, shadow})   // art_guests.js: the 12 guests of DATA.guests, feet centre, nominal height 150 * s, faces RIGHT; poses idle act enter exit shove (4.3 "Guests")
+ART.guest.bounds(guestId) -> {w, h, head, body, feet}   ART.guest.poseMs(pose)   ART.guest.ids()
+ART.mascot.draw(ctx, mascotId, {x, y, s, pose, t, pt, level, flip, alpha, shadow})   // the 6 mascots of DATA.mascots, nominal height 90 * s; poses idle cheer; level 2 adds a bandana, 3 a crown (4.7 "The Mascot")
+ART.mascot.bounds(mascotId) -> {w, h, head, body, feet}   ART.mascot.poseMs(pose)   ART.mascot.ids()
 ART.card.draw(ctx, cardIdOrInst, w, h, t?)      // paints at (0,0) of the current transform, cached per id + up + size
 ART.card.motif(ctx, motifId, x, y, size, palette, t)   // exported and reused by art_icons for the ids LISTS.motifs and LISTS.relicIcons share
 ART.icon.draw(ctx, kind, id, x, y, size, opts)  // (x,y) = CENTRE, size = box edge in px
@@ -1266,7 +1317,9 @@ SCENE.shake(mag, ms)  SCENE.flash(color, ms)  SCENE.hitstop(ms)   SCENE.speed(k)
 
 **Layout** (exported as `SCENE.LAYOUT`, stage px). Ground (feet) y = 520. The lead hero stands at x=330, y=520, s=1; the backing hero at x=170, y=508, s=0.94 (a swap hops both along an arc in 380 ms and exchanges the values).
 Enemy lanes are FIXED for the whole fight: x = `[560, 705, 850, 995, 1120]` for lanes 0..4 (lane 4 nearest the right edge; an `xl` boss at x=1120 spans about 970..1270); lanes are assigned by COMBAT (5.2), a unit never changes lane, and when a unit dies its lane stays
-empty (nothing shifts) until a summon takes it. Size `l` and `xl` actors may overlap neighbouring lanes; draw order is lane 0 first. `SCENE.anchor` returns at REST (no bob, lunge, hop or shake): `{x, y, w, h}` = the actor bounds rect with x,y
+empty (nothing shifts) until a summon takes it. Size `l` and `xl` actors may overlap neighbouring lanes; draw order is lane 0 first. Two GUEST SPOTS stand between the heroes and the lanes, behind the ground line and smaller
+(`LAYOUT.guests`, x 484 y 492 s 0.8 and x 436 y 484 s 0.74; a guest takes the lowest free spot on `guest_enter` and keeps it; `anchor('guest', id)` and `hitTest` answer for a guest), and the MASCOT sits at the back hero's feet
+(`LAYOUT.mascot`, x 238 y 516 s 0.8; an anchor, never a hit): the scene.js header "GUESTS AND THE MASCOT" has the beats. `SCENE.anchor` returns at REST (no bob, lunge, hop or shake): `{x, y, w, h}` = the actor bounds rect with x,y
 top-left (from `ART.*.bounds` scaled), `top = {x: centre, y: y}`, `head`, and `feet` on the ground line. Intent bubbles sit centred on `top.x` with their bottom at `top.y - 6`, clamped to y >= 62; enemy HP bars sit centred at `feet.y + 14`.
 DOM overlays are repositioned once per frame after `SCENE.update`.
 

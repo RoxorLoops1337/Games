@@ -44,7 +44,7 @@ Player-facing numbers come from the ops, never typed into text by hand (card tex
 
 ## 3. Cards (per hero: `data_cards_<hero>.js`)
 
-Per hero, exactly the starters above plus: **17 commons, 15 uncommons, 11 rares** (all non-token, all with `up`), plus tokens only if your cards `add` them (ids `<hero>_tok_<name>`).
+Per hero, exactly the starters above plus: **17 commons, 17 uncommons, 12 rares** (all non-token, all with `up`; the uncommons and rares include the hero's 3 Guest cards, DESIGN 4.3 "Guests": 2 uncommon, 1 rare), plus tokens only if your cards `add` them (ids `<hero>_tok_<name>`).
 Mix: at least 30% attacks and 30% skills; at least 4 powers (uncommon and rare); at least one `X` cost card; at least 3 cards using `cond` on `row`;
 at least 4 cards that touch the ally hero (`tgt:'ally'` / `'both'`, or `per` with `who:'ally'`); at least 2 `pick` cards; at least 5 cards with keywords.
 Three archetypes per hero, each with at least 4 cards that clearly push it, and some that bridge two:

@@ -60,6 +60,7 @@ export function createValuer(G) {
       case 'debuffs': count = 1.4; break;
       case 'enemies': count = 2; break;
       case 'kills': count = 1; break;
+      case 'guests': count = 1.5; break;   // a Guest op's own body counts itself plus, often, one more on stage
       case 'turn': count = 3; break;
       case 'gems': count = ref.gems || 0; break;
       case 'front': count = 0.5; break;
@@ -218,6 +219,17 @@ export function createValuer(G) {
         const body = valueOps(op.fx, sub);
         return body * hookTriggers(op) * 0.8;
       }
+      case 'guest': {
+        // a Guest (DESIGN 4.3): its act runs once per turn on stage, so stay x act, plus arrival and leaving once, plus its hooks
+        // over the turns it stands there (a hook's triggers are priced per fight, here scaled to the guest's share of the fight)
+        const g = typeof DATA.guestDef === 'function' ? DATA.guestDef(op.id, !!op.up) : null;
+        if (!g) return 0;
+        const sub = Object.assign({}, st, { depth: (st.depth || 0) + 1 });
+        const stay = Math.max(1, Math.min(6, g.stay || 1));
+        let v = stay * valueOps(g.act, sub) * 0.85 + valueOps(g.enter, sub) + valueOps(g.exit, sub) * 0.7;
+        asList(g.hooks).forEach((h) => { v += valueOps(h.fx, sub) * hookTriggers(h) * 0.8 * Math.min(1, stay / 3); });
+        return v;
+      }
       default: return 0;
     }
   }
@@ -358,6 +370,11 @@ export function createValuer(G) {
           }
           case 'repeat': walk(op.do, mult * 2.2); break;
           case 'hook': walk(op.fx, mult * 2.5); break;
+          case 'guest': {
+            const g = typeof DATA.guestDef === 'function' ? DATA.guestDef(op.id, !!op.up) : null;
+            if (g) { walk(g.act, mult * Math.max(1, g.stay || 1)); walk(g.enter, mult); walk(g.exit, mult * 0.7); asList(g.hooks).forEach((h) => walk(h.fx, mult * 2)); }
+            break;
+          }
           case 'pick': t.pick = true; break;
           case 'swap': t.swap = true; break;
           default: break;
