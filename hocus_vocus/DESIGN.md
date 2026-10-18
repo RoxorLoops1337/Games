@@ -267,7 +267,7 @@ js/data_enemies_1.js  data_enemies_2.js  data_enemies_3.js
 js/data_relics.js  data_mascots.js  data_gems.js  data_events.js  data_meta.js
 js/data_samples.js    (DATA+)   DATA.SAMPLES: the owners' optional recordings, ships empty (read by audio.js; audio/README.md)
 js/art.js             ART       toolkit + style helpers + sprite cache + working placeholders for EVERY ART member
-js/art_cast_kit.js  art_cast.js  art_enemies_1.js  art_enemies_2.js  art_enemies_3.js  art_cards.js
+js/art_cast_kit.js  art_cast.js  art_enemies_1.js  art_enemies_2.js  art_enemies_3.js  art_guests.js  art_cards.js
 js/art_icons.js  art_scenes.js  art_map.js  art_fx.js
 js/audio.js           AUDIO     WebAudio SFX + procedural music
 js/combat.js          COMBAT    combat engine (pure logic, event log)
