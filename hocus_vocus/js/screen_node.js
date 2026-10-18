@@ -124,7 +124,7 @@
   // (text is DATA.mascotLabel, "Beatbox Pug 2 of 3: ..."); the toast reads "Beatbox Pug grew to level 2: The lead hero deals 1 more damage."
   const mascotDef = (id) => safe(() => (DATA.mascots && DATA.mascots[id]) || null, null);
   const mascotNameOf = (id) => { const d = mascotDef(id); return d && d.name ? d.name : 'Your mascot'; };
-  const mascotIcon = (id, size) => (isFn(UI.mascotIcon) ? safe(() => UI.mascotIcon(id, size), null) : null) || UI.icon('relic', 'charm', size);
+  const mascotIcon = (id, size) => (isFn(UI.mascotIcon) ? safe(() => UI.mascotIcon(id, size, { level: typeof DATA.mascotLevel === 'function' && UI.run && UI.run.mascot ? DATA.mascotLevel(UI.run.mascot.xp) : 1 }), null) : null) || UI.icon('relic', 'charm', size);
   function mascotLevelText(l) {
     if (!l || !l.id) return (l && l.text) || '';
     const d = mascotDef(l.id), lv = d && d.levels && d.levels[l.level];

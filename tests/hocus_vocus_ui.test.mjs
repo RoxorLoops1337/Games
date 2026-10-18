@@ -1700,9 +1700,9 @@ await t.test('UI.mascotIcon: a canvas medallion from ART.mascot.draw when the ar
   g.log.icons.length = 0;
   g.UI.mascotIcon('mascot_u', 32);
   t.ok(g.log.icons.some((i) => i[0] === 'relic' && i[1] === 'charm'), 'a motif that is not a Charm icon falls back to the charm sticker');
-  g._run("__log.mascot = []; ART.mascot = { draw(ctx, id, x, y, size, opts) { __log.mascot.push([id, x, y, size]); } };");
-  const c = g.UI.mascotIcon('mascot_t', 48, { dim: true });
-  t.deep(g._run('__log.mascot'), [['mascot_t', 24, 24, 48]], 'ART.mascot.draw(ctx, id, x, y, size, opts) is called centred');
+  g._run("__log.mascot = []; ART.mascot = { bounds() { return { h: 90 }; }, draw(ctx, id, o) { __log.mascot.push([id, o.x, o.y, Math.round(o.s * 90), o.level, o.pose]); } };");
+  const c = g.UI.mascotIcon('mascot_t', 48, { dim: true, level: 2 });
+  t.deep(g._run('__log.mascot'), [['mascot_t', 24, Math.round(48 * 0.93 * 100) / 100, 40, 2, 'idle']], 'ART.mascot.draw(ctx, id, {x, y, s, pose, level}) is called with the feet centred low and the height fitted to the medallion');
   t.ok(c.localName === 'canvas' && c.classList.contains('mascot-ico') && c.style.width === '48px', 'into a canvas of the asked size');
   g._run("ART.mascot = { draw() { throw new Error('not yet'); } };");
   g.log.icons.length = 0;

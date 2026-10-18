@@ -1084,7 +1084,7 @@
   // the Mascot (DESIGN 4.7 "The Mascot"): R.mascot = null | {id, xp}; DATA.mascotProgress reads it into {id, name, blurb, art, xp, level, max, next, levels}
   const mascotProgress = (R) => (R && R.mascot && typeof DATA.mascotProgress === 'function' ? safe(() => DATA.mascotProgress(R.mascot), null) : null);
   const mascotSig = (R) => { const m = mascotProgress(R); return m ? m.id + ':' + m.level : ''; };
-  const mascotIcon = (id, size) => (typeof UI.mascotIcon === 'function' ? safe(() => UI.mascotIcon(id, size), null) : null) || UI.icon('relic', 'charm', size, {});
+  const mascotIcon = (id, size, level) => (typeof UI.mascotIcon === 'function' ? safe(() => UI.mascotIcon(id, size, { level: level || 1 }), null) : null) || UI.icon('relic', 'charm', size, {});
   // the XP line under the pips: "3 more XP to level 2" (a win is 1, a rival 2, a headliner 3, a Snack 2), or "Fully grown." at the top level
   const mascotNextLine = (m) => (m.next > 0 ? m.next + ' more XP to level ' + (m.level + 1) + '.' : 'Fully grown.');
   const MASCOT_XP_HELP = 'Fights won give XP: 1 for a Face-Off, 2 for a Rival, 3 for a Headliner. A Snack at the merch stall gives 2.';
@@ -1093,7 +1093,7 @@
     const m = mascotProgress(s.R);
     if (!m) return null;
     const chip = mk('button', { type: 'button', class: 'mp-mascot', 'aria-label': 'Mascot: ' + m.name + ', level ' + m.level + ' of ' + m.max + '. ' + mascotNextLine(m), 'data-kw-explain': 'mascot', dataset: { id: m.id, level: String(m.level) }, onclick: open },
-      mk('span', { class: 'mp-mascot-ico' }, mascotIcon(m.id, 32)), pipsEl('mp-mascot-pips', m.level, m.max));
+      mk('span', { class: 'mp-mascot-ico' }, mascotIcon(m.id, 32, m.level)), pipsEl('mp-mascot-pips', m.level, m.max));
     UI.tip.attach(chip, () => tipNode(m.name, 'Mascot ' + m.level + '/' + m.max, m.levels.filter((l) => l.active).map((l) => l.text).join(' '), mascotNextLine(m)), { side: 'top' });
     return chip;
   }
@@ -2246,7 +2246,7 @@
       const m = p.mascot === false ? null : mascotProgress(R);
       if (m) {
         const sec = mk('div', { class: 'mr-mascot lit', role: 'group', 'aria-label': 'Mascot: ' + m.name + ', level ' + m.level + ' of ' + m.max + '. ' + m.blurb + ' ' + mascotNextLine(m) + ' ' + m.levels.map((l) => (l.active ? 'Active: ' : 'Level ' + l.level + ' at ' + l.at + ' XP: ') + l.text).join(' '), dataset: { id: m.id, level: String(m.level) } },
-          mk('div', { class: 'mr-set-head' }, mk('span', { class: 'mr-mascot-ico' }, mascotIcon(m.id, 56)), mk('b', { class: 'mr-set-name', text: m.name }), mk('span', { class: 'mr-tag mr-mascot-tag', text: 'Mascot' }), mk('span', { class: 'mr-set-count', text: 'Level ' + m.level + '/' + m.max }), pipsEl('mr-set-pips', m.level, m.max)),
+          mk('div', { class: 'mr-set-head' }, mk('span', { class: 'mr-mascot-ico' }, mascotIcon(m.id, 56, m.level)), mk('b', { class: 'mr-set-name', text: m.name }), mk('span', { class: 'mr-tag mr-mascot-tag', text: 'Mascot' }), mk('span', { class: 'mr-set-count', text: 'Level ' + m.level + '/' + m.max }), pipsEl('mr-set-pips', m.level, m.max)),
           mk('p', { class: 'mr-set-text', text: m.blurb }),
           mk('p', { class: 'mr-mascot-next', text: mascotNextLine(m) + ' ' + (m.next > 0 ? MASCOT_XP_HELP : 'It has learnt every trick it knows.') }),
           mk('ul', { class: 'mr-tiers' }, ...m.levels.map((l) => mk('li', { class: 'mr-tier ' + (l.active ? 'on' : 'off'), dataset: { level: String(l.level) } }, mk('span', { class: 'mr-tier-n', text: String(l.level) }), mk('span', { class: 'mr-tier-text', text: l.text + (l.active ? '' : ' (at ' + l.at + ' XP)') })))));

@@ -50,7 +50,7 @@
 //   UI.panel({kind:'paper'|'dark', torn, gold, title, class}, ...children) -> el with .body      UI.hanko(text, {size})   UI.divider()   UI.bar(v, max, 'hp'|'ink'|'xp'|'boss')
 //   UI.tabs(items, {value, onchange})   UI.seg(items, {value, onchange})   UI.toggle({value, onchange})   UI.slider({min, max, step, value, onchange, format})   UI.settingsPanel()
 //   UI.icon(kind, id, size, opts) canvas   UI.medallion(heroId, size, skin?) canvas (skin 'stage' | 'skin'; default the viewer's outfit)
-//   UI.mascotIcon(mascotId, size, opts) canvas: the Mascot's medallion (DESIGN 4.7). ART.mascot.draw(ctx, id, x, y, size, opts) when the art file has it (every call
+//   UI.mascotIcon(mascotId, size, opts) canvas: the Mascot's medallion (DESIGN 4.7). ART.mascot.draw(ctx, id, {x, y, s, pose, t, level}) when the art file has it (opts.level picks the accessory) (every call
 //     guarded: that file is written in parallel), else the Charm sticker of the mascot's own motif (art.m when it is a LISTS.relicIcons id, 'charm' otherwise). Never throws.
 //   UI.vars(el, {'--x': v}) (setProperty; assigning style['--x'] does nothing in a browser)   UI.resolveCard(inst, ctx)   UI.plain(html)   UI.el = U.el   UI.esc
 // OUTFITS     (HV_ART_AUDIO 2.11, bible 7.1; presentation only) the viewer's costume per hero, in its own localStorage key 'hv_skins_v1' ({heroId: 'skin' | 'stage'}),
@@ -1202,8 +1202,8 @@ const UI = (() => {
     return c;
   }
 
-  // The Mascot's medallion (DESIGN 4.7 "The Mascot"): ART.mascot.draw(ctx, id, x, y, size, opts) draws the stray when the art file has it; that file is
-  // written in parallel, so the call is a typeof check inside try/catch and a throw falls back to the Charm sticker of the mascot's own motif
+  // The Mascot's medallion (DESIGN 4.7 "The Mascot"): ART.mascot.draw(ctx, id, {x, y, s, pose, t, level}) draws the stray (feet centre, height bounds.h * s)
+  // when the art file has it; the call is a typeof check inside try/catch and a throw falls back to the Charm sticker of the mascot's own motif
   // (DATA.mascots[id].art.m when it is a LISTS.relicIcons id, the 'charm' sticker otherwise). Unknown ids get the plain sticker. Never throws.
   function mascotIcon(id, size, opts) {
     opts = opts || {};
@@ -1214,7 +1214,9 @@ const UI = (() => {
       const o = offscreen(size, size);
       if (!o.bad) {
         try {
-          ar.mascot.draw(o.g, id, size / 2, size / 2, size, opts);
+          // ART.mascot.draw takes an options object: (x, y) is the feet centre, nominal height bounds.h (about 90) * s
+          const bh = Math.max(40, safe(() => (isFn(ar.mascot, 'bounds') ? ar.mascot.bounds(id).h : 0), 0) || 90);
+          ar.mascot.draw(o.g, id, { x: size / 2, y: size * 0.93, s: (size * 0.84) / bh, pose: opts.pose || 'idle', t: 0, pt: 0, level: opts.level || 1, shadow: false });
           const c = mk('canvas', { class: 'ico mascot-ico', width: o.c.width, height: o.c.height, style: { width: size + 'px', height: size + 'px' }, 'aria-hidden': 'true' });
           safe(() => c.getContext('2d').drawImage(o.c, 0, 0));
           return c;
