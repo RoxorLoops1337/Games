@@ -60,6 +60,7 @@ export function createValuer(G) {
       case 'debuffs': count = 1.4; break;
       case 'enemies': count = 2; break;
       case 'kills': count = 1; break;
+      case 'guests': count = 1.5; break;   // a Guest op's own body counts itself plus, often, one more on stage
       case 'turn': count = 3; break;
       case 'gems': count = ref.gems || 0; break;
       case 'front': count = 0.5; break;
