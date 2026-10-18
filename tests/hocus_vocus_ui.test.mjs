@@ -45,6 +45,7 @@ const CARDS = {
   t_start: { name: 'Test Jab', hero: 'raiga', type: 'attack', rarity: 'starter', cost: 0, fx: [{ op: 'dmg', n: 3 }], up: { fx: [{ op: 'dmg', n: 5 }] }, slots: ['red'], art: { m: 'fist', c: 'amber' } },
   t_curse: { name: 'Test Regret', hero: 'curse', type: 'curse', rarity: 'token', kw: ['unplayable'], fx: [], slots: [], art: { m: 'skull', c: 'ink' } },
   t_status: { name: 'Test Blot', hero: 'status', type: 'status', rarity: 'token', kw: ['unplayable'], fx: [], slots: [], art: { m: 'void', c: 'ash' } },
+  t_guest: { name: 'Test Guest', hero: 'kuro', type: 'skill', rarity: 'uncommon', cost: 2, fx: [{ op: 'guest', id: 'guest_dj_scratchy' }], up: { fx: [{ op: 'guest', id: 'guest_dj_scratchy', up: true }] }, slots: ['blue'], art: { m: 'drum', c: 'indigo' } },
 };
 const GEMS = { t_ruby: { name: 'Test Ruby', color: 'red', tier: 1, mod: { dmg: 2 }, art: { cut: 'round' } }, t_topaz: { name: 'Test Topaz', color: 'gold', tier: 2, mod: { draw: 1 }, art: { cut: 'star' } } };
 
@@ -1659,6 +1660,55 @@ await t.test('smoke: with every real module that exists, the gallery and placeho
   for (const id of ids) { const c = g.UI.card({ uid: 1, id, up: 0, gems: [] }, { size: 'hand' }); if (c.querySelector('.c-name')) built++; const c2 = g.UI.card({ uid: 2, id, up: 1, gems: [] }, { size: 'mini' }); if (c2.querySelector('.c-name')) built++; }
   t.eq(built, ids.length * 2, 'UI.card builds every real card (' + ids.length + ') at hand and mini size');
   t.eq(g._issues.filter((i) => /ui\.js/.test(i.at || '')).length, 0, 'no canvas issues from ui.js');
+});
+
+
+// ==================================================================================================== Guest cards and the Mascot medallion (DESIGN 4.3 "Guests", 4.7 "The Mascot")
+await t.test('UI.card: a Guest card (a Skill whose fx holds a guest op) keeps t-skill, reads Guest on its type strip and aria-label, and wears a star badge that explains the Guest keyword', () => {
+  const g = fresh();
+  g.UI.init();
+  const c = g.UI.card(inst('t_guest'), { size: 'hand' });
+  t.ok(c.classList.contains('t-skill') && c.classList.contains('guest') && !c.classList.contains('medley'), 'type skill in data, the guest class on the face');
+  t.eq(c.querySelector('.c-tname').textContent, 'Guest', 'the type strip reads Guest');
+  const badge = c.querySelector('.c-art .c-guest');
+  t.ok(badge && badge.classList.contains('c-plus') && badge.dataset.kwExplain === 'guest' && badge.textContent === '*', 'a star badge in the Medley corner with data-kw-explain guest');
+  t.ok(/^Test Guest\. Guest, cost 2\./.test(c.getAttribute('aria-label')), 'the aria-label says Guest: ' + c.getAttribute('aria-label'));
+  const up = g.UI.card(inst('t_guest', 1), { size: 'deck' });
+  t.ok(up.classList.contains('guest') && up.querySelector('.c-guest') && up.querySelector('.c-tname').textContent === 'Guest', 'the upgraded card too');
+  const mini = g.UI.card(inst('t_guest'), { size: 'mini' });
+  t.ok(mini.querySelector('.c-guest') && !mini.querySelector('.c-type'), 'the mini card keeps the badge (no strip to label)');
+  const plain = g.UI.card(inst('t_guard'), { size: 'hand' });
+  t.eq(plain.querySelector('.c-tname').textContent, 'Skill', 'an ordinary Skill still reads Skill'); t.ok(!plain.querySelector('.c-guest') && !plain.classList.contains('guest'), 'and wears no star');
+  const info = g.UI.tip.info('guest');
+  t.ok(info && info.kind === 'keyword' && info.text === g.DATA.keywords.guest.text, 'the badge explains DATA.keywords.guest');
+  const css = fs.readFileSync(path.join(DIR, 'css', 'base.css'), 'utf8');
+  t.ok(/\.card \.c-art \.c-guest/.test(css) && /\.card\.guest \.c-tname/.test(css), 'base.css styles the star and the strip');
+  t.eq(errCount(g), 0, 'no console errors');
+});
+
+await t.test('UI.mascotIcon: a canvas medallion from ART.mascot.draw when the art has it, else the Charm sticker of the mascot motif; unknown ids and a throwing ART.mascot never break it', () => {
+  const g = fresh();
+  g.UI.init();
+  t.eq(typeof g.UI.mascotIcon, 'function', 'UI.mascotIcon exists');
+  const none = g.UI.mascotIcon('mascot_nobody', 40);
+  t.ok(none && none.localName === 'canvas' && none.classList.contains('mascot-ico') && none.style.width === '40px', 'an unknown mascot gets the plain sticker canvas');
+  t.ok(g.log.icons.some((i) => i[0] === 'relic' && i[1] === 'charm'), 'drawn as the charm sticker through ART.icon');
+  g.DATA.add('mascots', { mascot_t: { name: 'Test Pug', blurb: 'Snores.', art: { m: 'bell', c: 'gold' }, levels: {} }, mascot_u: { name: 'Odd', blurb: 'Hm.', art: { m: 'not_an_icon', c: 'gold' }, levels: {} } });
+  g.log.icons.length = 0;
+  g.UI.mascotIcon('mascot_t', 32);
+  t.ok(g.log.icons.some((i) => i[0] === 'relic' && i[1] === 'bell' && i[2] === 32), 'without ART.mascot the sticker of its own motif is drawn (bell)');
+  g.log.icons.length = 0;
+  g.UI.mascotIcon('mascot_u', 32);
+  t.ok(g.log.icons.some((i) => i[0] === 'relic' && i[1] === 'charm'), 'a motif that is not a Charm icon falls back to the charm sticker');
+  g._run("__log.mascot = []; ART.mascot = { draw(ctx, id, x, y, size, opts) { __log.mascot.push([id, x, y, size]); } };");
+  const c = g.UI.mascotIcon('mascot_t', 48, { dim: true });
+  t.deep(g._run('__log.mascot'), [['mascot_t', 24, 24, 48]], 'ART.mascot.draw(ctx, id, x, y, size, opts) is called centred');
+  t.ok(c.localName === 'canvas' && c.classList.contains('mascot-ico') && c.style.width === '48px', 'into a canvas of the asked size');
+  g._run("ART.mascot = { draw() { throw new Error('not yet'); } };");
+  g.log.icons.length = 0;
+  const f = g.UI.mascotIcon('mascot_t', 40);
+  t.ok(f && f.localName === 'canvas' && g.log.icons.some((i) => i[0] === 'relic' && i[1] === 'bell'), 'a throwing ART.mascot falls back to the sticker');
+  t.eq(errCount(g), 0, 'no console errors (a warning at most)');
 });
 
 t.done();

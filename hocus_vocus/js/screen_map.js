@@ -27,7 +27,9 @@
 //
 // HUD (DOM over the canvas): hero badges with HP (top left), the Vox meter of drops (below them), the Act banner and a progress meter
 // (MAP.progress) at the top, gold and the menu button (top right), the tool column (Deck, Legend, Fit, Zoom), the Charm strip (bottom left,
-// opens the `relics` overlay), the Spell tray, a hex info chip (bottom right) that names what the pointer or cursor is on and what a
+// opens the `relics` overlay; while the bus has a Mascot (DESIGN 4.7) the strip starts with the Mascot chip `.mp-mascot`: its medallion through
+// UI.mascotIcon, one pip per level lit to the current one, data-kw-explain mascot for the tutorial, a tooltip with its name and active levels, and a tap opens
+// the same overlay; the chip lives INSIDE the strip so the camera's HUD footprint already counts it), the Spell tray, a hex info chip (bottom right) that names what the pointer or cursor is on and what a
 // tap would cost, and, while a Spell is armed, the Spell mode bar (top centre, in the Act banner's slot: the Spell, a line of help, Cast and Cancel). The Act intro flourish (title, a stripe underline (`.mp-intro-brush`), a swoop from the whole map down to the party) plays once per Act.
 //
 // THE HUD AND THE CAMERA. The HUD lies over the map, so the camera never works with the whole window but with what the HUD leaves free. It measures the
@@ -48,7 +50,9 @@
 //           says. The bar hangs from the top in the Act banner's slot (the banner fades while it is up); arming or putting away a Spell measures the HUD
 //           again, and a camera on the fit glides to the new fit (it glides to any fit that moved: it is never clamped onto it first).
 //
-// OVERLAYS  relics {relics?: [ids]}: every Charm of the run grouped by Charm SET (a header "Stage Crew 2/4" with every tier line, lit while
+// OVERLAYS  relics {relics?: [ids]}: a "Mascot" section first (DESIGN 4.7, from DATA.mascotProgress(R.mascot): medallion, name, blurb, level pips,
+//           the XP still needed ("3 more XP to level 2"), every level line lit when active like a set tier; without one "No mascot yet. A stray waits at a
+//           bus stop somewhere."), then every Charm of the run grouped by Charm SET (a header "Stage Crew 2/4" with every tier line, lit while
 //           active, then that set's Charms; loose Charms last under "Other Charms"), each sorted by rarity, with art, text, rarity, its set
 //           progress tag and where it came from (the Act of
 //           RUN's "Found X" log line, or its source by rarity). legend: tabs Map (every tile), Spells (each shape drawn on hexes), Controls,
@@ -1077,16 +1081,35 @@
     if (!st || !st.classList.contains('compact')) return six ? RELIC_SHOWN - 1 : RELIC_SHOWN;
     return six ? 2 : 3;
   }
-  const relicKey = (R) => R.relics.join(',') + '|' + relicShown(R);
+  // the Mascot (DESIGN 4.7 "The Mascot"): R.mascot = null | {id, xp}; DATA.mascotProgress reads it into {id, name, blurb, art, xp, level, max, next, levels}
+  const mascotProgress = (R) => (R && R.mascot && typeof DATA.mascotProgress === 'function' ? safe(() => DATA.mascotProgress(R.mascot), null) : null);
+  const mascotSig = (R) => { const m = mascotProgress(R); return m ? m.id + ':' + m.level : ''; };
+  const mascotIcon = (id, size) => (typeof UI.mascotIcon === 'function' ? safe(() => UI.mascotIcon(id, size), null) : null) || UI.icon('relic', 'charm', size, {});
+  // the XP line under the pips: "3 more XP to level 2" (a win is 1, a rival 2, a headliner 3, a Snack 2), or "Fully grown." at the top level
+  const mascotNextLine = (m) => (m.next > 0 ? m.next + ' more XP to level ' + (m.level + 1) + '.' : 'Fully grown.');
+  const MASCOT_XP_HELP = 'Fights won give XP: 1 for a Face-Off, 2 for a Rival, 3 for a Headliner. A Snack at the merch stall gives 2.';
+  const pipsEl = (cls, n, max) => mk('span', { class: cls, 'aria-hidden': 'true' }, ...Array.from({ length: max }, (_, k) => mk('i', { class: 'mr-pip' + (k < n ? ' on' : '') })));
+  function mascotChip(s, open) {
+    const m = mascotProgress(s.R);
+    if (!m) return null;
+    const chip = mk('button', { type: 'button', class: 'mp-mascot', 'aria-label': 'Mascot: ' + m.name + ', level ' + m.level + ' of ' + m.max + '. ' + mascotNextLine(m), 'data-kw-explain': 'mascot', dataset: { id: m.id, level: String(m.level) }, onclick: open },
+      mk('span', { class: 'mp-mascot-ico' }, mascotIcon(m.id, 32)), pipsEl('mp-mascot-pips', m.level, m.max));
+    UI.tip.attach(chip, () => tipNode(m.name, 'Mascot ' + m.level + '/' + m.max, m.levels.filter((l) => l.active).map((l) => l.text).join(' '), mascotNextLine(m)), { side: 'top' });
+    return chip;
+  }
+  const relicKey = (R) => R.relics.join(',') + '|' + relicShown(R) + '|' + mascotSig(R);
   function renderRelics(s) {
     const H = s.hud, R = s.R;
     clearKids(H.relics);
     const open = () => UI.overlay.open('relics', {});
     const shown = relicShown(R);
+    const chip = mascotChip(s, open);
+    if (chip) H.relics.appendChild(chip);
     R.relics.slice(-shown).forEach((id) => H.relics.appendChild(UI.relic(id, { size: 'sm', onclick: open, side: 'top' })));
     if (R.relics.length > shown) H.relics.appendChild(mk('button', { type: 'button', class: 'mp-relic-more', 'aria-label': (R.relics.length - shown) + ' more Charms', text: '+' + (R.relics.length - shown), onclick: open }));
     if (!R.relics.length) H.relics.appendChild(mk('button', { type: 'button', class: 'mp-relic-none', 'aria-label': 'Charms: none yet', onclick: open }, UI.icon('relic', 'lantern', 24, { dim: true }, 'mp-relic-none-ico'), mk('span', { text: 'Charms' })));
     H.relics.classList.toggle('empty', !R.relics.length);
+    H.relics.classList.toggle('has-mascot', !!chip);
     s.last.relics = relicKey(R);
     s.hudDirty = true;
   }
@@ -2219,6 +2242,22 @@
         UI.vars(row, { '--i': i++ });
         grid.appendChild(row);
       };
+      // the Mascot first (DESIGN 4.7 "The Mascot"): the stray on the bus, its level pips, the XP still needed and every level line lit when active (like a set tier)
+      const m = p.mascot === false ? null : mascotProgress(R);
+      if (m) {
+        const sec = mk('div', { class: 'mr-mascot lit', role: 'group', 'aria-label': 'Mascot: ' + m.name + ', level ' + m.level + ' of ' + m.max + '. ' + m.blurb + ' ' + mascotNextLine(m) + ' ' + m.levels.map((l) => (l.active ? 'Active: ' : 'Level ' + l.level + ' at ' + l.at + ' XP: ') + l.text).join(' '), dataset: { id: m.id, level: String(m.level) } },
+          mk('div', { class: 'mr-set-head' }, mk('span', { class: 'mr-mascot-ico' }, mascotIcon(m.id, 56)), mk('b', { class: 'mr-set-name', text: m.name }), mk('span', { class: 'mr-tag mr-mascot-tag', text: 'Mascot' }), mk('span', { class: 'mr-set-count', text: 'Level ' + m.level + '/' + m.max }), pipsEl('mr-set-pips', m.level, m.max)),
+          mk('p', { class: 'mr-set-text', text: m.blurb }),
+          mk('p', { class: 'mr-mascot-next', text: mascotNextLine(m) + ' ' + (m.next > 0 ? MASCOT_XP_HELP : 'It has learnt every trick it knows.') }),
+          mk('ul', { class: 'mr-tiers' }, ...m.levels.map((l) => mk('li', { class: 'mr-tier ' + (l.active ? 'on' : 'off'), dataset: { level: String(l.level) } }, mk('span', { class: 'mr-tier-n', text: String(l.level) }), mk('span', { class: 'mr-tier-text', text: l.text + (l.active ? '' : ' (at ' + l.at + ' XP)') })))));
+        UI.vars(sec, { '--i': i++ });
+        grid.appendChild(sec);
+      } else if (p.mascot !== false) {
+        grid.appendChild(mk('div', { class: 'mr-mascot none', role: 'group', 'aria-label': 'Mascot: none yet' },
+          mk('div', { class: 'mr-set-head' }, mk('span', { class: 'mr-mascot-ico' }, UI.icon('relic', 'charm', 56, { dim: true })), mk('b', { class: 'mr-set-name', text: 'Mascot' })),
+          mk('p', { class: 'mr-set-text mr-mascot-none', text: 'No mascot yet. A stray waits at a bus stop somewhere.' })));
+        i++;
+      }
       // grouped by set (DESIGN 4.7): a header "Stage Crew 2/4" with every tier line, lit while active, then the set's Charms; loose Charms last
       const bySet = {};
       sorted.forEach((id) => { const s = DATA.relics[id].set; if (s && DATA.relicSets && DATA.relicSets[s]) (bySet[s] = bySet[s] || []).push(id); });

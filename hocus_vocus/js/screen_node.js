@@ -7,14 +7,18 @@
 // passes them. R falls back to UI.run and node to R.node. Every stateful action goes through RUN, and every page ends in GAME.nodeDone()
 // (the ONLY GAME calls in this file besides GAME.enterNode for a fight an event starts, and UI.toTitle on the "no run" page).
 //   reward    Ledger of what was simply earned (gold, Vox, max HP, a gem, a Spell) that counts up, three cards dealt face down then flipped,
+//             and, once per unclaimed visit, a toast for every {op:'mascot'} line that leads Rewards.log ("Beatbox Pug grew to level 2: ...", DESIGN 4.7),
 //             pick one (or Skip: needs a second tap), a relic panel for an elite (take or leave it), a relic page of three for a boss
 //             and then the card page. RUN.claim is single-shot, so the page collects every decision and claims ONCE, when all are made
 //             (rewards.claimed). Number keys pick a card. Continue calls GAME.nodeDone.
 //   shop      Jordan with a speech bubble and moods (hello, buy, poor, sold, leave, empty), a shelf of cards (price tags, sale
-//             stickers, SOLD stamps) and plaques for gems, relics and a Spell, card removal (deck overlay, remove mode, rising price)
-//             and free gem cutting. Buys go through RUN.shopBuy and RUN.shopRemove. Keys 1..5 buy the n-th card.
+//             stickers, SOLD stamps) and plaques for gems, relics, a Spell and the Snack (DESIGN 4.7: stocked while the bus has a Mascot, a plaque
+//             "Snack for Beatbox Pug: +2 XP" with the mascot's medallion through UI.mascotIcon; bought through RUN.shopBuy like the rest, Jordan has a snack
+//             line, the XP line is toasted and a level the Snack switched on toasts "Beatbox Pug grew to level 2: ..."), card removal (deck overlay,
+//             remove mode, rising price) and free gem cutting. Buys go through RUN.shopBuy and RUN.shopRemove. Keys 1..5 buy the n-th card.
 //   event     A Detour board: plate (ART.scene.draw of the event's scene), typewriter text (tap or Enter completes it), the choices
-//             revealed after the text with locks and reasons, then the outcome text with a chip per change (a tap or Enter finishes that text too), and
+//             revealed after the text with locks and reasons, then the outcome text with a chip per change (a tap or Enter finishes that text too; the
+//             Mascot's adoptMascot, mascotXp and level-up lines get a chip with the mascot's medallion), and
 //             Continue (it takes the focus; Enter or Space press it). A gamble that ends in a fight hands the real combat node to GAME.enterNode.
 //             Keys 1..9 choose the n-th VISIBLE choice, and only once the choices are up. A missing Detour shows an empty board with a way on.
 //   camp      A bonfire scene, four tiles (Rest with the exact heal previewed, Sharpen, Cut Gems, Meditate), a fire meter for the actions
@@ -116,6 +120,18 @@
   const defOf = (inst) => (inst && typeof DATA.cardDef === 'function' ? DATA.cardDef(inst) : inst && DATA.cards[inst.id]) || null;   // a Medley instance resolves from its parts
   const instName = (inst) => { const d = defOf(inst); return (d && d.name) || cardName(inst && inst.id); };
   const slotsOf = (inst) => (defOf(inst) && defOf(inst).slots) || [];
+  // the Mascot (DESIGN 4.7 "The Mascot"): what a log line about it says on a toast or a chip. {op:'mascot', id, level, text} is a level switched on
+  // (text is DATA.mascotLabel, "Beatbox Pug 2 of 3: ..."); the toast reads "Beatbox Pug grew to level 2: The lead hero deals 1 more damage."
+  const mascotDef = (id) => safe(() => (DATA.mascots && DATA.mascots[id]) || null, null);
+  const mascotNameOf = (id) => { const d = mascotDef(id); return d && d.name ? d.name : 'Your mascot'; };
+  const mascotIcon = (id, size) => (isFn(UI.mascotIcon) ? safe(() => UI.mascotIcon(id, size), null) : null) || UI.icon('relic', 'charm', size);
+  function mascotLevelText(l) {
+    if (!l || !l.id) return (l && l.text) || '';
+    const d = mascotDef(l.id), lv = d && d.levels && d.levels[l.level];
+    const what = lv && lv.text ? lv.text : String(l.text || '').replace(/^[^:]*:\s*/, '');
+    return mascotNameOf(l.id) + (l.level === 1 ? ' joins the tour bus' : ' grew to level ' + l.level) + (what ? ': ' + what : '.');
+  }
+
   // a card instance for an offered card id (rewards, shops, previews): uid 0 means "not in the deck"
   const instOf = (id, up, uid) => ({ uid: uid || 0, id, up: up ? 1 : 0, gems: ((DATA.cards[id] && DATA.cards[id].slots) || []).map(() => null) });
   const canUpgrade = (inst) => { const d = defOf(inst); return !!(d && d.up && !inst.up); };
@@ -1015,6 +1031,8 @@
     wrap.appendChild(S.chrome.el);
     root.appendChild(S.chrome.menu);
     wrap.appendChild(bannerEl(title, sub));
+    // the Mascot grew on this win (RUN.combatDone puts its level lines first in Rewards.log): one toast per level, only on the live visit (never on a reopened, claimed page)
+    if (!rw.claimed) (rw.log || []).forEach((l) => { if (l && l.op === 'mascot' && l.level > 1) UI.toast(mascotLevelText(l), 'good'); });
 
     // ---- the ledger (left): what was simply earned
     const ledger = mk('div', { class: 'rw-ledger' });
@@ -1300,6 +1318,7 @@
     sold: ['That one is gone. I am already drawing a new one.', 'Sold out! Try the one next to it.'],
     remove: ['Gone! Your deck feels lighter already.', 'Decluttered. I might put it on a sticker.'],
     cut: ['Free gem setting! Do not tell the other stalls.', 'Steady hands make sparkling cards.'],
+    snack: ['A snack for the mascot! Tour food, but the good kind.', 'That one is baked with love. And a little glitter. Do not worry about the glitter.', 'Mascot snacks are my best seller. My only customer is very loyal.'],
     empty: ['You have cleaned me out! Time to draw more merch.'],
     leave: ['Come again! I will have new designs by then.', 'Safe travels! Wear the merch with pride.', 'Off you go! Buy something next time, or at least admire it louder.'],
     idle: ['Psst. The blue gems are the sensible ones.', 'A Charm is forever. A card is a mood.', 'My grandmother sold cards, and my grandmother was never wrong. Twice.', 'Do you hear that? That is the sound of new merch.', 'Sale sticker means sale. I do not make the rules. I make the stickers.'],
@@ -1356,7 +1375,7 @@
     });
 
     // ---- wares
-    const by = { card: [], gem: [], relic: [], brush: [] };
+    const by = { card: [], gem: [], relic: [], brush: [], snack: [] };
     stock.items.forEach((it) => { if (by[it.kind]) by[it.kind].push(it); });
     const els = {};
     const cardShelf = mk('div', { class: 'sh-cards', role: 'group', 'aria-label': 'Cards for sale' });
@@ -1423,6 +1442,13 @@
     by.gem.forEach((it) => { const g = DATA.gems[it.id] || {}; const b = plaque(it, UI.icon('gem', it.id, 62), g.name || it.id, 'Tier ' + (g.tier || 1) + ' ' + colourWord(g.color || 'gold') + ' gem', () => tipBubble(g.name || it.id, 'Tier ' + (g.tier || 1) + ' ' + colourWord(g.color || 'gold') + ' gem', gemLine(it.id))); b.classList.add('rise'); b.style.setProperty('--i', String(5 + ri++)); row2.appendChild(b); });
     by.relic.forEach((it) => { const d = DATA.relics[it.id] || {}; const b = plaque(it, UI.icon('relic', it.id, 62), d.name || it.id, d.rarity === 'shop' ? 'Merch Charm' : d.rarity === 'boss' ? 'Headliner Charm' : d.rarity ? rarityName(d.rarity) : 'Charm', () => tipBubble(d.name || it.id, d.rarity ? rarityName(d.rarity) : '', safe(() => DATA.relicText(it.id), d.text))); b.classList.add('rar-' + (d.rarity || 'common'), 'rise'); b.style.setProperty('--i', String(5 + ri++)); row2.appendChild(b); });
     by.brush.forEach((it) => { const d = DATA.brushes[it.id] || {}; const b = plaque(it, UI.icon('brush', it.id, 62), d.name || it.id, 'Spell', () => tipBubble(d.name || it.id, 'One use', d.text)); b.classList.add('rise'); b.style.setProperty('--i', String(5 + ri++)); row2.appendChild(b); });
+    // the Snack (DESIGN 4.7 "The Mascot"): RUN stocks one while the bus has a mascot; the plaque names the mascot and the XP it gives
+    by.snack.forEach((it) => {
+      const mid = R.mascot && R.mascot.id, name = mascotNameOf(mid), xp = (DATA.ECONOMY && DATA.ECONOMY.snackXp) || 2;
+      const kicker = 'Snack for ' + name + ': +' + xp + ' XP';
+      const b = plaque(it, mascotIcon(mid, 62), 'Snack', kicker, () => tipBubble('Snack', 'For ' + name, name + ' gains ' + xp + ' XP. Level 2 at ' + ((DATA.ECONOMY.mascotXp || [])[1] || 5) + ' XP, level 3 at ' + ((DATA.ECONOMY.mascotXp || [])[2] || 12) + '. One per stall.'));
+      b.classList.add('rise'); b.style.setProperty('--i', String(5 + ri++)); row2.appendChild(b);
+    });
 
     // services: card removal (price rises) and free gem cutting
     const removeTag = mk('span', { class: 'sh-tag' }, mk('i', { class: 'sh-coin', 'aria-hidden': 'true' }), mk('b', { text: stock.removePrice }));
@@ -1491,6 +1517,7 @@
       if (!res.ok) {
         if (res.reason === 'gold') poorFeedback(entry.slot, it.price - R.gold);
         else if (res.reason === 'owned') { UI.toast('You already own that Charm.', 'warn'); snd('ui_error'); }
+        else if (res.reason === 'mascot') { UI.toast('No mascot to feed. A stray waits at a bus stop somewhere.', 'warn'); snd('ui_error'); }
         else UI.toast('Jordan shakes his head.', 'warn');
         refresh();
         return;
@@ -1508,9 +1535,11 @@
       if (it.kind === 'gem') snd('gem_get');
       if (it.kind === 'brush') snd('brush_pick');
       if (it.kind === 'card') UI.pulse(S.chrome.deckBtn);
-      say('buy', 'happy');
+      if (it.kind === 'snack') snd('heal');
+      say(it.kind === 'snack' ? 'snack' : 'buy', 'happy');
       refresh();
-      (res.log || []).forEach((l) => { if (l.text && ['addRelic'].indexOf(l.op) < 0) UI.toast(l.text, 'good'); });
+      // the Snack's log: the XP line, then one line per level the mascot just reached ("Beatbox Pug grew to level 2: ...")
+      (res.log || []).forEach((l) => { if (l.op === 'mascot') UI.toast(mascotLevelText(l), 'good'); else if (l.text && ['addRelic'].indexOf(l.op) < 0) UI.toast(l.text, 'good'); });
       if (R.pending && R.pending.length) { S.busy = true; resolvePending(S).then(() => { S.busy = false; refresh(); }); }
     }
 
@@ -1593,6 +1622,10 @@
         case 'addBrush': if (l.id && DATA.brushes[l.id]) chips.push(chip('good', UI.icon('brush', l.id, 30), DATA.brushes[l.id].name)); break;
         case 'paint': if (l.n) chips.push(chip('good', UI.icon('tile', 'empty', 30), l.text || 'The sound comes back')); break;
         case 'fight': chips.push(chip('bad', UI.icon('tile', 'enemy', 30), 'A fight breaks out!')); break;
+        // the Mascot (DESIGN 4.7): the stray that hopped aboard, a snack's XP, a level switched on
+        case 'adoptMascot': if (l.id && mascotDef(l.id)) chips.push(chip('good', mascotIcon(l.id, 30), l.text || mascotNameOf(l.id) + ' hops aboard the tour bus.', 'has-mascot')); else if (l.text) chips.push(chip('info', UI.icon('type', 'skill', 28), l.text)); break;
+        case 'mascotXp': if (l.id && mascotDef(l.id)) chips.push(chip('good', mascotIcon(l.id, 30), l.text || mascotNameOf(l.id) + ' gains ' + (l.n || 0) + ' XP.', 'has-mascot')); else if (l.text) chips.push(chip('info', UI.icon('type', 'skill', 28), l.text)); break;
+        case 'mascot': if (l.level > 1) chips.push(chip('good', mascotIcon(l.id, 30), mascotLevelText(l), 'has-mascot')); break;
         default: if (l.text && l.op !== 'relic' && l.op !== 'flag') chips.push(chip('info', UI.icon('type', 'skill', 28), l.text)); break;
       }
     });

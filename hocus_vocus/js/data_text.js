@@ -582,7 +582,7 @@
     if (h.limit === undefined) return '';
     return h.limit === 1 ? `once per ${per}` : `up to ${h.limit} times per ${per}`;
   }
-  const RUN_OPS = ['addCard', 'removeCard', 'upgradeCard', 'transformCard', 'duplicateCard', 'addRelic', 'addGem', 'addBrush', 'addCurse', 'flag', 'paint', 'cardReward', 'fight'];
+  const RUN_OPS = ['addCard', 'removeCard', 'upgradeCard', 'transformCard', 'duplicateCard', 'addRelic', 'addGem', 'addBrush', 'addCurse', 'flag', 'paint', 'cardReward', 'fight', 'adoptMascot', 'mascotXp'];
 
   // ------------------------------------------------------------------------------------------------
   // Text: op fragments. A fragment is {h, k, ...}: h is lower case html without the final period; k is the merge kind.
@@ -1157,6 +1157,9 @@
       case 'paint': return [{ h: `unmute ${NUM(op.n)} ${op.n === 1 ? 'hex' : 'hexes'} for free`, k: 'run' }];
       case 'cardReward': return [{ h: 'choose a card reward', k: 'run' }];
       case 'fight': return [{ h: 'a fight begins', k: 'run' }];
+      // the Mascot (DESIGN 4.7): "Beatbox Pug hops aboard the tour bus" / "feed your mascot 2 XP" (an unknown id still reads as a stray)
+      case 'adoptMascot': return [{ h: op.id && D.mascots && D.mascots[op.id] ? `${nameOf('mascots', op.id)} hops aboard the tour bus` : 'a stray hops aboard the tour bus as your mascot', k: 'run' }];
+      case 'mascotXp': return [{ h: `feed your mascot ${NUM(op.n === undefined ? 1 : op.n)} XP`, k: 'run' }];
       default: return [{ h: esc(String(op.op)), k: 'unknown' }];
     }
   }

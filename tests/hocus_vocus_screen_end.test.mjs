@@ -1013,6 +1013,22 @@ await t.test('explainers: one for every status, keyword, gem, Charm, Spell and m
   t.ok(/busy-fight/.test(TUT) && /dragging-card/.test(TUT) && /has-sel/.test(TUT), 'nothing new opens while the fight animates, a card is dragged or lifted (busy)');
 });
 
+await t.test('tutorial: the guest and mascot hints (DESIGN 4.3 "Guests", 4.7 "The Mascot") sit in the catalog on real bus events and anchors, and both keywords explain themselves from the data', () => {
+  t.ok(TU.HINTS.guest && TU.HINTS.mascot, 'both hints exist');
+  t.eq(TU.HINTS.guest.text, 'Your guest acts at the end of your turn. Two fit on stage.', 'the guest hint says it plainly');
+  t.deep(TU.HINTS.guest.scope, ['combat'], 'the guest hint belongs to the fight'); t.deep(TU.HINTS.mascot.scope, ['map'], 'the mascot hint to the map');
+  t.eq(TU.HINTS.mascot.anchor[0], '.mp-mascot', 'the mascot hint points at the HUD chip'); t.ok(TU.HINTS.mascot.anchor.indexOf('relics') > 0, 'with the Charm strip as the fallback');
+  t.ok(/stray rides the bus/.test(TU.HINTS.mascot.text) && /grows/.test(TU.HINTS.mascot.text), 'the mascot hint: the stray rides the bus and grows');
+  const gr = TU.RULES.find((r) => r.hint === 'guest'), mr = TU.RULES.find((r) => r.hint === 'mascot');
+  t.ok(gr && [].concat(gr.on).indexOf('combat:play') >= 0 && [].concat(gr.on).indexOf('combat:turn') >= 0 && typeof gr.when === 'function', 'the guest hint is raised by a played card or a new turn, when a guest is on stage');
+  t.eq(gr && gr.when(), false, 'with no fight on screen no guest is on stage (never throws)');
+  t.ok(mr && mr.on === 'screen' && typeof mr.when === 'function' && mr.when({ name: 'map' }) === false, 'the mascot hint waits for the map screen and a mascot (none yet: false)');
+  const kg = TU.explainDef('x_keyword_guest'), km = TU.explainDef('x_keyword_mascot');
+  t.ok(kg && kg.label === 'New keyword' && /Guest joins you on stage/.test(kg.text), 'the Guest keyword explains itself from DATA.keywords');
+  t.ok(km && km.label === 'New keyword' && /stray the tour bus adopts/.test(km.text), 'and so does the Mascot keyword');
+  t.ok(TU.HINTS.mascot.teaches.indexOf('x_keyword_mascot') >= 0, 'the mascot hint stands in for the keyword card');
+});
+
 // ================================================================================================ the bus intro on a new tour (headless: the page only, the routing)
 {
   const gf = fresh({ seed: 21 });
