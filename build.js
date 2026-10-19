@@ -90,6 +90,7 @@ const STATIC_PATHS = [
   'ludus_maximus_3d',
   'blockmates',
   'rustgrift',
+  'midnight_mog',
   'tools',
 ];
 

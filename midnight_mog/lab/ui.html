@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Midnight Mog UI lab</title>
+<style>
+  html, body { margin: 0; background: #05030c; color: #f4ecff; font: 13px "Trebuchet MS", sans-serif; }
+  nav { padding: 6px 10px; position: relative; z-index: 2; }
+  nav a { color: #ff2e88; margin-right: 12px; }
+  #stage { display: flex; justify-content: center; }
+  canvas { display: block; background: #0b0716; touch-action: none; }
+</style>
+</head>
+<body>
+<nav>
+  <a href="?v=battle">battle</a><a href="?v=battle&warp=30&auto=1&speed=1">battle t30</a><a href="?v=battle&warp=30&sel=1">select</a><a href="?v=battle&warp=30&drag=1">drag</a>
+  <a href="?v=boss">boss</a><a href="?v=pause&warp=20">pause</a><a href="?v=result&warp=999&auto=1&speed=3">result</a><a href="?v=widgets">widgets</a>
+  <a href="?v=battle&w=1280&h=800&warp=30&auto=1">wide</a>
+</nav>
+<div id="stage"><canvas id="c"></canvas></div>
+<script type="module">
+import { createUI } from '../js/ui/shell.js';
+import { createBattleScreen } from '../js/ui/screens_battle.js';
+import { newProfile } from '../js/sim/profile.js';
+import { makeRng } from '../js/rng.js';
+import { PAL } from '../js/palette.js';
+import { CARD_BY_ID } from '../js/data/cards.js';
+
+const q = new URLSearchParams(location.search);
+const view = q.get('v') || 'battle';
+const W = parseInt(q.get('w') || '390', 10), H = parseInt(q.get('h') || (view === 'widgets' ? '1000' : '800'), 10);
+const canvas = document.getElementById('c');
+canvas.style.width = W + 'px'; canvas.style.height = H + 'px';
+const ui = createUI(canvas, { width: W, height: H, dpr: Math.min(2, window.devicePixelRatio || 1) });
+window.__ui = ui;
+
+// ---- a lived-in profile
+const profile = newProfile(q.get('seed') ? parseInt(q.get('seed'), 10) : 11);
+profile.relics = { rusty_bell: true, lucky_collar: true, tesla_whisker: true, ember_locket: true, warm_sock: true };
+profile.progress = { district: 1, stage: parseInt(q.get('stage') || '1', 10), best: {} };
+if (q.get('stage') && parseInt(q.get('stage'), 10) > 3) profile.progress.best = { 1: parseInt(q.get('stage'), 10) };
+const app = {
+  profile, setProfile(p) { this.profile = p; }, save() {}, audio: null, fx: null,
+  router: { go(id) { console.log('go', id); }, back() {} }, now: () => 0, dayIndex: () => 0,
+  toast(m, k) { ui.toast(m, k); }, rng: (k) => makeRng(q.get('bseed') ? parseInt(q.get('bseed'), 10) : 3),
+};
+
+let last = performance.now();
+const screen = createBattleScreen();
+window.__screen = screen;
+
+window.__frame = frame;
+function frame(dt) { ui.begin(dt); screen.update(app, dt, ui); screen.draw(ui.ctx, app, ui); ui.end(); }
+
+if (view === 'widgets') {
+  let tab = 'cards', tog = true, vol = 0.6;
+  function sheet(dt) {
+    ui.begin(dt);
+    ui.clear(PAL.ink);
+    ui.background('laser_lights', { dim: 0.35 });
+    const c = ui.content;
+    let y = 12;
+    ui.text('UI KIT', c.x + 16, y + 30, { size: 34, kind: 'display', gradient: [PAL.bone, PAL.cyan], glow: 14, glowColor: PAL.cyan });
+    y += 46;
+    ui.currencyStrip({ x: c.x + 12, y, w: c.w - 24, h: 30 }, { fish: 12840, yarn: 3210, gems: 87, tokens: 5 });
+    y += 42;
+    const bw = (c.w - 24 - 20) / 3;
+    ui.button('b1', { x: c.x + 12, y, w: bw, h: 48 }, 'Play', { kind: 'primary', pulse: true });
+    ui.button('b2', { x: c.x + 12 + bw + 10, y, w: bw, h: 48 }, 'Claim', { kind: 'positive' });
+    ui.button('b3', { x: c.x + 12 + (bw + 10) * 2, y, w: bw, h: 48 }, 'Back', { kind: 'secondary' });
+    y += 58;
+    ui.button('b4', { x: c.x + 12, y, w: bw, h: 48 }, 'Sell', { kind: 'danger' });
+    ui.button('b5', { x: c.x + 12 + bw + 10, y, w: bw, h: 48 }, 'Locked', { disabled: true });
+    ui.button('b6', { x: c.x + 12 + (bw + 10) * 2, y, w: 48, h: 48 }, '', { kind: 'icon', icon: 'gear', badge: 3 });
+    y += 62;
+    tab = ui.tabs('tabs', { x: c.x + 12, y, w: c.w - 24, h: 38 }, [{ id: 'cards', label: 'Cards' }, { id: 'cats', label: 'Cats', badge: 2 }, { id: 'relics', label: 'Relics' }], tab);
+    y += 48;
+    const inner = ui.panel({ x: c.x + 12, y, w: c.w - 24, h: 160 }, { title: 'PANEL', rarity: 'epic' });
+    ui.bar({ x: inner.x, y: inner.y + 6, w: inner.w, h: 18 }, 0.7, { kind: 'hp', label: '70 / 100', id: 'h' });
+    ui.bar({ x: inner.x, y: inner.y + 34, w: inner.w, h: 14 }, 0.4, { kind: 'progress', markers: [0.25, 0.5, 0.75] });
+    ui.bar({ x: inner.x, y: inner.y + 58, w: inner.w, h: 12 }, 0.55, { kind: 'energy', segments: 10 });
+    tog = ui.toggle('tg', { x: inner.x, y: inner.y + 76, w: inner.w, h: 32 }, tog, 'Sound effects');
+    vol = ui.slider('sl', { x: inner.x, y: inner.y + 108, w: inner.w, h: 30 }, vol, { label: 'Volume', format: (v) => Math.round(v * 100) + '%' });
+    y += 176;
+    const ids = ['call_ember_mog', 'pounce', 'neon_mine', 'cat_nap'];
+    const all = Object.keys(CARD_BY_ID);
+    const pick = [all.find((i) => CARD_BY_ID[i].rarity === 'common' && CARD_BY_ID[i].type === 'summon'), all.find((i) => CARD_BY_ID[i].rarity === 'rare'), all.find((i) => CARD_BY_ID[i].rarity === 'epic'), all.find((i) => CARD_BY_ID[i].rarity === 'legend')];
+    const cw = (c.w - 24 - 3 * 8) / 4;
+    for (let i = 0; i < 4; i++) ui.card('card' + i, { x: c.x + 12 + i * (cw + 8), y, w: cw, h: cw * 1.4 }, pick[i] || ids[i], { level: 3, count: 2, selected: i === 1, afford: i !== 3 });
+    y += cw * 1.4 + 12;
+    const cats = ['ember_mog', 'biscuit_bruiser', 'sir_purrcival', 'baron_von_fluff'];
+    for (let i = 0; i < 4; i++) ui.catTile('cat' + i, { x: c.x + 12 + i * (cw + 8), y, w: cw, h: cw * 1.25 }, cats[i], { level: 4 + i, stars: i, locked: i === 3, badge: i === 1 ? '!' : 0 });
+    ui.end();
+    requestAnimationFrame(() => sheet(1 / 60));
+  }
+  if (q.has('toast')) { ui.toast('Cat recruited', 'ok'); ui.toast('Not enough yarn', 'warn'); }
+  if (q.has('dialog')) ui.dialog({ title: 'Release cat?', text: 'This cannot be undone. The cat will be sent to the shelter.', buttons: [{ id: 'no', label: 'Keep', kind: 'secondary' }, { id: 'yes', label: 'Release', kind: 'danger' }] });
+  sheet(1 / 60);
+} else {
+  const params = {};
+  if (view === 'boss') { params.stage = 10; params.district = 1; app.profile.progress = { district: 1, stage: 10, best: { 1: 10 } }; }
+  screen.enter(app, params);
+  const S = screen.state;
+  ui.resize();
+  // fast-forward the sim without drawing
+  const warp = parseFloat(q.get('warp') || '0');
+  if (q.get('speed')) S.speedIdx = Math.max(0, Math.min(2, parseInt(q.get('speed'), 10) - 1));
+  if (q.get('auto')) { S.auto = true; }
+  if (view === 'boss') {
+    // jump straight to the boss wave: spawn the boss intro for the screenshot
+    S.bossFast = true;
+  }
+  if (S.b) {
+    let tt = 0;
+    while (tt < warp && !S.b.over) { ui.begin(1 / 30); screen.update(app, 1 / 30, ui); tt += 1 / 30; ui.end(); }
+  }
+  if (view === 'boss' && S.b) {
+    // force the boss on the field for a stable shot
+    import('../js/sim/battle.js').then((B) => {
+      const e = B.spawnEnemy(S.b, 'king_coo', 2, 7.2);
+      for (const id of ['pigeon_scout', 'gutter_gull']) B.spawnEnemy(S.b, id, 1, 8.4);
+      B.placeCat(S.b, 'ember_mog', 3, 2); B.placeCat(S.b, 'biscuit_bruiser', 4, 1); B.placeCat(S.b, 'sir_purrcival', 2, 3);
+    });
+  }
+  if (view === 'pause') setTimeout(() => screen.ctl.pause(), 50);
+  if (q.get('sel') && S.b) S.sel = parseInt(q.get('sel'), 10);
+  function loop(now) {
+    const dt = Math.min(0.05, (now - last) / 1000); last = now;
+    frame(dt);
+    window.__frames = (window.__frames || 0) + 1;
+    requestAnimationFrame(loop);
+  }
+  requestAnimationFrame(loop);
+  if (q.get('drag') && S.b) {
+    setTimeout(() => {
+      const L = S.L;
+      const hr = L.handRect;
+      const n = S.b.hand.length;
+      const cw = (hr.w - 16 - 6 * (n - 1)) / n;
+      const x = hr.x + 8 + cw * 0.5, y = hr.y + hr.h - cw * 0.7 - 4;
+      ui.input.move(x, y); ui.input.down(x, y);
+      const tl = L.tile(3, 2);
+      setTimeout(() => ui.input.move(tl.cx, tl.cy + 40), 50);
+      setTimeout(() => ui.input.move(tl.cx + 2, tl.cy + 42), 120);
+    }, 250);
+  }
+}
+</script>
+</body>
+</html>

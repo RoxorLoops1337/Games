@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Midnight Mog audio lab</title>
+<style>
+  :root { --ink:#0b0716; --ink2:#150c28; --ink3:#21123d; --mag:#ff2e88; --cy:#19e6ff; --lime:#b6ff2e; --bone:#f4ecff; --dim:#b9a9d6; --vio:#5b2a86; }
+  html, body { margin:0; background:var(--ink); color:var(--bone); font:13px "Trebuchet MS", sans-serif; }
+  header { position:sticky; top:0; z-index:5; background:var(--ink2); border-bottom:2px solid var(--vio); padding:8px 12px; display:flex; flex-wrap:wrap; gap:10px 16px; align-items:center; }
+  h1 { font:20px Impact, "Arial Narrow", sans-serif; letter-spacing:.06em; margin:0; color:var(--cy); text-transform:uppercase; }
+  h2 { font:15px Impact, sans-serif; letter-spacing:.06em; text-transform:uppercase; color:var(--mag); margin:18px 0 6px; }
+  main { padding:6px 12px 40px; max-width:1100px; margin:0 auto; }
+  button { background:var(--ink3); color:var(--bone); border:2px solid var(--vio); padding:7px 10px; margin:2px; font:inherit; cursor:pointer; clip-path:polygon(6px 0,100% 0,100% calc(100% - 6px),calc(100% - 6px) 100%,0 100%,0 6px); min-height:36px; }
+  button:hover { border-color:var(--cy); } button:active { transform:translateY(2px); }
+  button.on { background:var(--mag); border-color:var(--bone); }
+  button.big { background:var(--mag); font-size:15px; }
+  label { color:var(--dim); } input[type=range] { vertical-align:middle; width:140px; }
+  canvas { background:var(--void,#05030c); border:1px solid var(--vio); display:block; }
+  #stat { color:var(--lime); font:12px monospace; }
+  .grp { display:flex; flex-wrap:wrap; }
+  table { border-collapse:collapse; font:12px monospace; } td, th { padding:2px 8px; border-bottom:1px solid var(--ink3); text-align:right; } th:first-child, td:first-child { text-align:left; }
+  .bad { color:var(--mag); } .ok { color:var(--lime); }
+</style>
+</head>
+<body>
+<header>
+  <h1>audio lab</h1>
+  <button class="big" id="go">Start audio</button>
+  <label><input type="checkbox" id="mute"> mute</label>
+  <label>volume <input type="range" id="vol" min="0" max="1" step="0.01" value="0.8"></label>
+  <label>intensity <input type="range" id="int" min="0" max="1" step="0.01" value="0.4"> <span id="intv">0.40</span></label>
+  <span id="stat"></span>
+  <canvas id="scope" width="260" height="46"></canvas>
+</header>
+<main>
+  <h2>Music</h2><div class="grp" id="music"></div>
+  <h2>Crate ceremony</h2>
+  <div class="grp" id="crate"></div>
+  <h2>Battle events (what the sim emits)</h2><div class="grp" id="events"></div>
+  <h2>150 unit storm</h2><div class="grp"><button id="storm">1 second of heavy combat</button><button id="storm4">4 seconds</button></div>
+  <h2>Every sfx</h2><div id="sfxs"></div>
+  <h2>Offline audit (OfflineAudioContext)</h2><div class="grp"><button id="audit">Render all and measure</button><button id="auditm">Music only</button></div>
+  <div id="auditout"></div>
+</main>
+<script type="module">
+import { createAudio, SFX_NAMES, MUSIC_MODES, EVENT_TYPES, CRATE_KINDS } from '../js/audio.js';
+import { PAL } from '../js/palette.js';
+const R = document.documentElement.style;
+R.setProperty('--ink', PAL.ink); R.setProperty('--ink2', PAL.ink2); R.setProperty('--ink3', PAL.ink3); R.setProperty('--mag', PAL.magenta); R.setProperty('--cy', PAL.cyan);
+R.setProperty('--lime', PAL.lime); R.setProperty('--bone', PAL.bone); R.setProperty('--dim', PAL.boneDim); R.setProperty('--vio', PAL.violet); R.setProperty('--void', PAL.void);
+
+const $ = (id) => document.getElementById(id);
+const audio = createAudio();
+window.audio = audio;
+const ensure = () => audio.resume();
+const btn = (parent, label, fn, cls) => { const b = document.createElement('button'); b.textContent = label; if (cls) b.className = cls; b.onclick = async () => { await ensure(); fn(b); }; $(parent).appendChild(b); return b; };
+
+$('go').onclick = async () => { await ensure(); $('go').textContent = 'Audio running'; };
+$('mute').onchange = (e) => audio.setMuted(e.target.checked);
+$('vol').oninput = (e) => audio.setVolume(+e.target.value);
+$('int').oninput = (e) => { audio.setIntensity(+e.target.value); $('intv').textContent = (+e.target.value).toFixed(2); };
+
+const mus = [];
+for (const m of MUSIC_MODES) mus.push(btn('music', m, (b) => { audio.music(m, { restart: true }); mus.forEach((x) => x.classList.toggle('on', x === b)); }));
+btn('music', 'stop', () => { audio.stopMusic(); mus.forEach((x) => x.classList.remove('on')); });
+
+// crate ceremony: a scripted opening with tension ticks, rise, lid, reveal
+const RAR = ['common', 'rare', 'epic', 'legend', 'mythic'];
+const timers = [];
+function ceremony(r) {
+  timers.forEach(clearTimeout); timers.length = 0;
+  audio.music('crate', { restart: true });
+  const at = (ms, f) => timers.push(setTimeout(f, ms));
+  for (let i = 0; i < 6; i++) at(i * 450, () => audio.crateBeat('tick', r, i));
+  at(1200, () => audio.crateBeat('shake', r, 0)); at(2200, () => audio.crateBeat('shake', r, 1));
+  at(2700, () => audio.crateBeat('rise', r, 0));
+  at(3900, () => audio.crateBeat('open', r, 0));
+  at(4100, () => audio.crateBeat('reveal', r, 0, { isNew: r !== 'common' }));
+  at(r === 'mythic' ? 9000 : 7000, () => audio.music('town'));
+}
+for (const r of RAR) btn('crate', 'open ' + r, () => ceremony(r), r === 'mythic' || r === 'legend' ? 'big' : '');
+for (const k of CRATE_KINDS) for (const r of ['common', 'epic', 'mythic']) btn('crate', k + ' ' + r, () => audio.crateBeat(k, r, 3));
+
+const SAMPLE = {
+  hit: [{ amount: 10 }, { amount: 10, element: 'fire' }, { amount: 10, element: 'elec' }, { amount: 10, element: 'poison' }, { amount: 10, element: 'holy' }, { amount: 10, element: 'shadow' }, { amount: 10, element: 'void' }, { amount: 10, element: 'bleed' }, { amount: 90 }, { amount: 2 }, { amount: 4, dot: true }],
+  death: [{ side: 'enemy' }, { side: 'enemy', boss: true }, { side: 'cat', kind: 'cat' }, { kind: 'barricade' }, { kind: 'minion' }],
+  spawn: [{ side: 'cat' }, { side: 'enemy' }, { side: 'enemy', minion: true }],
+  cast: [{ src: 1 }, { card: 'pounce' }], status: [{ status: 'buff' }, { status: 'debuff' }, { status: 'stun' }, { status: 'dot' }, { status: 'reflect' }],
+  aoe: [{ element: 'fire', radius: 2 }, { element: 'elec', radius: 1.5 }, { element: 'holy', radius: 3 }, { element: 'void', radius: 2 }],
+  wave: [{ wave: 2 }, { isBossWave: true }, { boss: 5 }], loot: [{ kind: 'fish' }, { kind: 'yarn' }, { kind: 'gems' }, { kind: 'tokens' }, { kind: 'relic' }, { kind: 'card' }, { kind: 'cat' }],
+  attack: [{}, { ranged: true }], chain: [{ path: [1, 2, 3, 4] }], merge: [{ stars: 1 }, { stars: 3 }],
+};
+for (const t of EVENT_TYPES) {
+  const list = SAMPLE[t] || [{}];
+  list.forEach((s, i) => btn('events', t + (list.length > 1 ? ' ' + (s.element || s.status || s.kind || s.side || s.card || (s.isBossWave && 'boss') || (s.boss && 'phase') || (s.ranged && 'ranged') || (s.stars && s.stars + '*') || (s.dot && 'dot') || s.amount || i) : ''), () => { audio.debug.ctx && audio.onEvent(Object.assign({ type: t, x: 2 + i, y: 2 }, s)); }));
+}
+function storm(sec) {
+  let f = 0; const id = setInterval(() => {
+    for (let k = 0; k < 12; k++) audio.onEvent({ type: k % 5 === 0 ? 'death' : k % 4 === 0 ? 'attack' : k % 3 === 0 ? 'crit' : 'hit', amount: 10 + k, element: k % 2 ? 'fire' : 'phys', x: k % 9, side: 'enemy', ranged: k % 2 === 0 });
+    if (++f >= sec * 30) clearInterval(id);
+  }, 33);
+}
+btn('events', 'wave sequence', () => { audio.music('battle', { restart: true }); audio.onEvent({ type: 'wave', isBossWave: false }); setTimeout(() => audio.music('boss'), 4000); setTimeout(() => audio.onEvent({ type: 'win' }), 9000); }, 'big');
+$('storm').onclick = async () => { await ensure(); storm(1); };
+$('storm4').onclick = async () => { await ensure(); storm(4); };
+
+const groups = { UI: /^(click|hover|toggle|tab|back|confirm|error|levelup|build|upgrade|unlock)$/, Pickups: /^(coin|fish|yarn|gem|token|relic|reward|loot_)/, Cats: /^(meow|chirp|purr|hiss)/, Cards: /^(card_|energy)/ };
+const used = new Set();
+const box = $('sfxs');
+function section(title, names) {
+  const h = document.createElement('div'); h.style.cssText = 'color:#b9a9d6;margin:10px 0 2px'; h.textContent = title; box.appendChild(h);
+  const g = document.createElement('div'); g.className = 'grp'; box.appendChild(g);
+  for (const n of names) { used.add(n); const b = document.createElement('button'); b.textContent = n; b.onclick = async () => { await ensure(); audio.sfx(n, { rarity: n.startsWith('reveal') ? n.slice(7) : 'epic', n: 3, amt: 1, element: 'fire' }); }; g.appendChild(b); }
+}
+for (const [t, re] of Object.entries(groups)) section(t, SFX_NAMES.filter((n) => re.test(n) && !used.has(n)));
+section('Combat', SFX_NAMES.filter((n) => /^(hit_|crit|death_|shield_hit|spawn_|cast|heal|status_|shield|cleanse|aura|taunt|reflect|attack_|chain|pierce|aoe|knockback|pull|execute|trap_|barricade|burrow|emerge|summon|merge|revive|wave|boss_|base_hit|rule|win|lose)/.test(n) && !used.has(n)));
+section('Crate', SFX_NAMES.filter((n) => !used.has(n)));
+
+// scope + stats
+const sc = $('scope').getContext('2d'); const buf = new Uint8Array(1024);
+function tick() {
+  const an = audio.getAnalyser();
+  sc.fillStyle = PAL.void; sc.fillRect(0, 0, 260, 46);
+  if (an) {
+    an.getByteTimeDomainData(buf); sc.strokeStyle = PAL.cyan; sc.lineWidth = 1.5; sc.beginPath();
+    let pk = 0;
+    for (let i = 0; i < 260; i++) { const v = buf[i * 3] / 128 - 1; pk = Math.max(pk, Math.abs(v)); const y = 23 + v * 22; i ? sc.lineTo(i, y) : sc.moveTo(i, y); }
+    sc.stroke();
+    $('stat').textContent = JSON.stringify(audio.getStats()).replace(/[{}"]/g, '') + ' peak ' + pk.toFixed(2);
+  }
+  audio.update(1 / 60);
+  requestAnimationFrame(tick);
+}
+requestAnimationFrame(tick);
+
+// ---------------------------------------------------------------- offline audit
+async function renderOne(setup, sec) {
+  const sr = 44100, off = new OfflineAudioContext(2, sr * sec, sr);
+  const a = createAudio({ context: off, offline: true, noTimer: true, noVisibility: true, strict: true });
+  await a.resume();
+  setup(a, sec);
+  const out = await off.startRendering();
+  let peak = 0, sum = 0, n = 0, clip = 0;
+  const l = out.getChannelData(0), r = out.getChannelData(1);
+  for (let i = 0; i < l.length; i++) { const v = Math.max(Math.abs(l[i]), Math.abs(r[i])); if (v > peak) peak = v; if (v >= 0.999) clip++; sum += l[i] * l[i] + r[i] * r[i]; n += 2; }
+  const rms = Math.sqrt(sum / n);
+  let nan = 0; for (let i = 0; i < l.length; i++) if (!Number.isFinite(l[i])) nan++;
+  return { peak, rms, db: 20 * Math.log10(Math.max(1e-6, rms)), pdb: 20 * Math.log10(Math.max(1e-6, peak)), clip, nan, errors: a.getStats().errors, data: l };
+}
+window.auditSfx = async () => { const rows = []; for (const n of SFX_NAMES) { const r = await renderOne((a) => a.sfx(n, { rarity: n.startsWith('reveal') ? n.slice(7) : 'epic', n: 3, amt: 1, element: 'fire' }), n.startsWith('reveal_m') || n === 'wave_boss' ? 7 : 4); rows.push({ name: n, peak: +r.pdb.toFixed(1), rms: +r.db.toFixed(1), clip: r.clip, nan: r.nan, err: r.errors }); } return rows; };
+window.auditMusic = async (sec = 24) => {
+  const rows = [];
+  for (const m of MUSIC_MODES) for (const I of (m === 'battle' ? [0, 0.4, 0.7, 1] : [0.4, 1])) {
+    const r = await renderOne((a, s) => { a.music(m); a.debug.setIntensityNow(I); a.debug.pumpTo(s); }, sec);
+    rows.push({ name: m + ' I=' + I, peak: +r.pdb.toFixed(1), rms: +r.db.toFixed(1), clip: r.clip, nan: r.nan, err: r.errors });
+  }
+  return rows;
+};
+window.auditStorm = async () => renderOne((a) => { for (let i = 0; i < 120; i++) { /* offline time is frozen at 0, so this only tests same-instant caps */ for (let k = 0; k < 12; k++) a.onEvent({ type: 'hit', amount: 10 + k, element: k % 2 ? 'fire' : 'phys', x: k % 9 }); } a.sfx('base_hit'); }, 3).then((r) => ({ peak: +r.pdb.toFixed(1), rms: +r.db.toFixed(1), clip: r.clip }));
+window.renderSamples = async (kind, name, I, sec) => { const r = await renderOne((a, s) => { if (kind === 'music') { a.music(name); a.debug.setIntensityNow(I); a.debug.pumpTo(s); } else a.sfx(name, { rarity: 'epic', n: 3, amt: 1 }); }, sec); return Array.from(r.data); };
+function show(rows) {
+  const t = document.createElement('table');
+  t.innerHTML = '<tr><th>name</th><th>peak dB</th><th>rms dB</th><th>clip</th><th>nan</th><th>err</th></tr>' + rows.map((r) => `<tr><td>${r.name}</td><td class="${r.peak > -0.5 ? 'bad' : ''}">${r.peak}</td><td>${r.rms}</td><td class="${r.clip ? 'bad' : ''}">${r.clip}</td><td>${r.nan}</td><td>${r.err}</td></tr>`).join('');
+  $('auditout').innerHTML = ''; $('auditout').appendChild(t);
+}
+$('audit').onclick = async () => { show([...(await window.auditMusic()), ...(await window.auditSfx())]); };
+$('auditm').onclick = async () => { show(await window.auditMusic()); };
+window.__ready = true;
+</script>
+</body>
+</html>

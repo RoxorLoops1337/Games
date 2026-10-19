@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Midnight Mog meta screens lab</title>
+<style>
+  html, body { margin: 0; background: #05030c; color: #f4ecff; font: 13px "Trebuchet MS", sans-serif; }
+  nav { padding: 6px 10px; position: relative; z-index: 2; display: flex; flex-wrap: wrap; gap: 4px 12px; }
+  nav a { color: #ff2e88; }
+  #stage { display: flex; justify-content: center; }
+  canvas { display: block; background: #0b0716; touch-action: none; }
+</style>
+</head>
+<body>
+<nav id="nav"></nav>
+<div id="stage"><canvas id="c"></canvas></div>
+<script type="module">
+// Lab for js/ui/screens_deck.js and js/ui/screens_meta.js.
+// ?s=deck|roster|relics|map|quests|bestiary|settings|nine_lives   w= h=   tab=   cat=   warp=<frames>   fresh=1 (new save)   rich=1 (lots of currency)
+//   obs=1 (build an Observatory)  mode=ready (quests with claimable rewards)  open=<dialog hook: enemy|relic|reset|nl>  drag=1 (deck: drag a card)
+import { createUI } from '../js/ui/shell.js';
+import { DECK_SCREENS } from '../js/ui/screens_deck.js';
+import { META_SCREENS } from '../js/ui/screens_meta.js';
+import { newProfile } from '../js/sim/profile.js';
+import * as TOWN from '../js/sim/town.js';
+import { makeRng } from '../js/rng.js';
+import { CATS } from '../js/data/cats.js';
+import { CARDS } from '../js/data/cards.js';
+import { RELICS } from '../js/data/relics.js';
+
+const q = new URLSearchParams(location.search);
+const W = parseInt(q.get('w') || '390', 10), H = parseInt(q.get('h') || '800', 10);
+const canvas = document.getElementById('c');
+canvas.style.width = W + 'px'; canvas.style.height = H + 'px';
+const ui = createUI(canvas, { width: W, height: H, dpr: Math.min(2, window.devicePixelRatio || 1) });
+window.__ui = ui;
+const screens = Object.fromEntries([...DECK_SCREENS, ...META_SCREENS].map((s) => [s.id, s]));
+
+const nav = document.getElementById('nav');
+for (const id of Object.keys(screens)) { const a = document.createElement('a'); a.href = '?s=' + id; a.textContent = id; nav.appendChild(a); }
+
+// ---- a lived-in profile
+function lived() {
+  const p = newProfile(11);
+  const rng = makeRng(5);
+  const ownedCats = CATS.filter((c, i) => i % 4 !== 3 || c.rarity === 'common');
+  for (const c of ownedCats) {
+    const dupes = c.rarity === 'common' ? rng.int(0, 8) : rng.int(0, 5);
+    p.cats[c.id] = { level: rng.int(1, c.rarity === 'common' ? 14 : 9), dupes, stars: dupes >= 10 ? 4 : dupes >= 6 ? 3 : dupes >= 3 ? 2 : dupes >= 1 ? 1 : 0 };
+    p.cards['call_' + c.id] = { level: rng.int(1, 6), count: rng.int(1, 3) };
+  }
+  for (const c of CARDS) if (c.type !== 'summon' && rng.chance(0.7)) p.cards[c.id] = { level: rng.int(1, 8), count: rng.int(1, 2) };
+  for (const r of RELICS) if (rng.chance(0.4)) p.relics[r.id] = true;
+  p.cur = { fish: 1234567, yarn: q.get('rich') ? 9e6 : 4210, gems: 87, tokens: q.get('rich') ? 4000 : 42 };
+  p.progress = { district: 1, stage: 24, best: { 1: 23 }, maxCleared: 23 };
+  p.stats.battlesWon = 63; p.stats.kills = 1830; p.stats.bossKills = 2; p.stats.cratesOpened = 11; p.stats.fishEarned = 52000; p.stats.catLevelUps = 40;
+  if (q.get('late')) { p.progress = { district: 3, stage: 12, best: { 1: 30, 2: 30, 3: 11 }, maxCleared: 71 }; p.nineLives = { count: 3, shards: 41 }; }
+  if (q.get('deep')) { p.progress = { district: 5, stage: 4, best: { 1: 30, 2: 30, 3: 30, 4: 30, 5: 3 }, maxCleared: 123 }; p.nineLives = { count: 2, shards: 12 }; }
+  if (q.get('ready')) { p.progress = { district: 2, stage: 22, best: { 1: 30, 2: 21 }, maxCleared: 51 }; }
+  if (q.get('obs')) p.town.plots[1] = { b: 'observatory', level: 14, t: 0 };
+  p.deck = ['call_scrap_tabby', 'call_scrap_tabby', 'call_whisker_scout', 'call_spark_kit', 'call_nurse_purrnell', 'call_tin_can_tom', 'pounce', 'tuna_tripwire', 'curious_cat', 'zoomies'].filter((id) => p.cards[id]);
+  if (p.deck.length < 5) p.deck = Object.keys(p.cards).slice(0, 8);
+  return TOWN.refresh(p, 5);
+}
+const profile = q.get('fresh') ? newProfile(11) : lived();
+const app = {
+  profile, settings: null,
+  setProfile(p) { this.profile = p; }, save() {}, audio: null, fx: null,
+  router: { go(id, params) { console.log('go', id, params); if (screens[id]) { cur = screens[id]; cur.enter(app, params || {}); } }, back() { console.log('back'); } },
+  now: () => 86400000 * 5 + 3600000 * 7, dayIndex: () => 5,
+  toast(m, k) { ui.toast(m, k); },
+  rng: () => makeRng(3),
+  io: { download() { return true; }, copy() { return Promise.resolve(true); }, paste() { return Promise.resolve(''); }, pickFile() { return Promise.resolve(''); } },
+};
+window.__app = app;
+
+let cur = screens[q.get('s') || 'deck'];
+cur.enter(app, { tab: q.get('tab') || undefined, cat: q.get('cat') || undefined, stage: q.get('stage') ? parseInt(q.get('stage'), 10) : undefined });
+if (q.get('mode') === 'ready' && app.profile.quests) {
+  // make a couple of quests complete so the claim states show
+  const st = { ...app.profile.stats };
+  for (const k of Object.keys(st)) if (typeof st[k] === 'number') st[k] = st[k] + 40;
+  st.battlesWon = 400; st.kills = 60000; st.bossKills = 9;
+  app.profile = { ...app.profile, stats: st };
+}
+
+function frame() {
+  ui.begin(1 / 60);
+  cur.update(app, 1 / 60, ui);
+  cur.draw(ui.ctx, app, ui);
+  ui.end();
+}
+// warm up, then optional scripted state, then animate
+const warp = parseInt(q.get('warp') || '8', 10);
+for (let i = 0; i < warp; i++) frame();
+function after(n, fn) { for (let i = 0; i < n; i++) frame(); fn(); }
+if (q.get('open') === 'enemy') { ui.input.down(40, 400); ui.input.up(40, 400); }
+if (q.get('open') === 'reset') after(2, () => ui.confirm('Replace your save?', 'Preview dialog', () => {}, { danger: true }));
+if (q.get('drag')) { ui.input.down(80, 590); ui.input.move(120, 520); ui.input.move(150, 300); }
+if (q.get('tapat')) { const [x, y] = q.get('tapat').split(',').map(Number); frame(); ui.input.down(x, y); frame(); ui.input.up(x, y); for (let i = 0; i < 4; i++) frame(); }
+window.__ready = true;
+function loop() { frame(); requestAnimationFrame(loop); }
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
