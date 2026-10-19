@@ -54,7 +54,7 @@ export const REWARD = {
   fish:  { base: 10, growth: 1.072 },
   yarn:  { base: 1.8, growth: 1.062 },
   // gems: boss stages only (every 10th), first clear of a stage in this Nine Lives, plus daily
-  gemsBoss: 2, gemsBossPerDistrict: 1, gemsDaily: 10, gemsDailyCapPerDay: 40,
+  gemsBoss: 1, gemsBossPerDistrict: 0.5, gemsDaily: 10, gemsDailyCapPerDay: 40,
   repeatDecay: 0.55,       // replaying an already cleared stage pays this fraction
   firstClearBonus: 2.5,    // first clear of a stage pays this multiple of the base
 };
@@ -115,8 +115,12 @@ export const TARGETS = {
   runWallStage: [80, 115],
   firstResetActiveHours: [3, 8],     // continuous play until the first Nine Lives is attractive
   nineLivesSpeedup: [2, 6],          // a prestiged run reaches stage 30 this many times faster
-  offlineCapHours: [8, 24],
-  offlineEfficiency: [0.35, 0.6],
+  // Meta perks alone stay in 8-24h and 0.35-0.6; the Nap Dome (SYSTEMS 10.6) extends the end state to 40h and 0.8.
+  // The bots measure the end state of a week, so the band is the dome's. The meta only bands are asserted by the balance test.
+  offlineCapHours: [8, 40],
+  offlineEfficiency: [0.35, 0.8],
+  offlineMetaCapHours: [8, 24],
+  offlineMetaEfficiency: [0.35, 0.6],
   gemsPerActiveHour: [3, 12],        // never "bought", earned slowly
   crateReturnMax: 0.9,               // expected dupe-yarn per crate must be below 90% of its price
   maxCurrency: MAX_CUR,
@@ -133,12 +137,13 @@ export function softCap(x, cap, exp = 0.5) {
 }
 
 /** Round currency amounts for display and storage: floor to integer, clamp to MAX_CUR. */
-export function money(x) { return Math.floor(clamp(fin(x), 0, MAX_CUR)); }
+export function money(x) { return Math.floor(clamp(x === Infinity ? MAX_CUR : fin(x), 0, MAX_CUR)); }
 
 /** Global stage index, 1 based. District and stage are both 1 based in the profile. */
 export function globalStage(district, stage) {
-  const d = Math.max(1, Math.floor(district || 1));
-  const s = Math.max(1, Math.floor(stage || 1));
+  // clamped to [1, 1e9] so Infinity or 1e308 (a bad caller) cannot overflow the stage index
+  const d = Math.min(1e9, Math.max(1, Math.floor(Number.isFinite(Number(district)) ? Number(district) : 1)));
+  const s = Math.min(1e9, Math.max(1, Math.floor(Number.isFinite(Number(stage)) ? Number(stage) : 1)));
   return (d - 1) * STAGES_PER_DISTRICT + s;
 }
 
@@ -251,8 +256,8 @@ export function stageReward(gs, opts = {}) {
   if (opts.firstClear) { fish *= REWARD.firstClearBonus; yarn *= REWARD.firstClearBonus; }
   if (opts.replay && !opts.firstClear) { fish *= REWARD.repeatDecay; yarn *= REWARD.repeatDecay; }
   let gems = 0;
-  if (boss && opts.firstClear) gems = REWARD.gemsBoss + Math.floor(g / STAGES_PER_DISTRICT) * REWARD.gemsBossPerDistrict;
-  return { fish, yarn, gems, boss };
+  if (boss && opts.firstClear) gems = Math.floor(REWARD.gemsBoss + Math.floor(g / STAGES_PER_DISTRICT) * REWARD.gemsBossPerDistrict);
+  return { fish: Math.min(fish, MAX_CUR), yarn: Math.min(yarn, MAX_CUR), gems, boss };   // rewards never exceed the currency cap (no Infinity at stage 10000+)
 }
 
 // --------------------------------------------------------- multiplier tiers
@@ -465,7 +470,7 @@ export function startingFish(profile) {
 // this so the pacing targets hold. power is relative to stage 1 = 1.
 export function enemyPower(gs) {
   const g = Math.max(1, gs);
-  return Math.pow(1.064, g - 1) * (1 + 0.012 * (g - 1));
+  return Math.min(1e300, Math.pow(1.064, g - 1) * (1 + 0.012 * (g - 1)));   // finite forever (stage 11000+ would overflow)
 }
 
 // A deliberately simple, deterministic player model used to calibrate TARGETS and by the bots'

@@ -21,6 +21,7 @@ import {
 
 export const LANES = 5;                          // default lane count for spawn schedules (override via opts.lanes)
 export const ECHO_SECONDS = NINE_LIVES.echoSeconds;
+export const MAX_GS = 3e7;                       // 1e6 districts x 30 stages: the largest stage profile.js keeps
 export const BIG = 1e300;                        // all scaling factors are clamped here, so nothing becomes Infinity
 
 const fin = (x, d = 0) => (Number.isFinite(x) ? x : d);
@@ -307,8 +308,11 @@ function addCur(p, k, v) { p.cur[k] = Math.min(MAX_CUR, num(p.cur[k]) + v); }
  * the Cannery-style battleFishPct and the Radio Tower battleYarnPct. Gems come from economy.stageReward, first clears only.
  */
 export function stageRewards(profile, result = {}) {
-  const gs = result.gs != null ? Math.max(1, Math.floor(result.gs))
+  let gs = result.gs != null ? Math.max(1, Math.floor(result.gs))
     : (result.district != null || result.stage != null) ? toGlobal(result.district, result.stage) : frontierGs(profile);
+  // a stage that is NaN or Infinity (a buggy caller) falls back to the frontier; the top is the largest stage a save can hold
+  if (!Number.isFinite(gs)) gs = frontierGs(profile);
+  gs = Number.isFinite(gs) ? Math.min(MAX_GS, Math.max(1, gs)) : 1;
   const mode = stageMode(profile, gs);
   const zero = { fish: 0, yarn: 0, gems: 0 };
   if (!result.won) return { profile, rewards: zero, won: false, gs, echo: mode.echo, firstClear: false, boss: gs % 10 === 0, advanced: false };
@@ -348,7 +352,7 @@ export function stageRewards(profile, result = {}) {
  * Resolve up to `maxStages` echo clears in a row from the frontier (20 s each in game time). Returns
  * {profile, cleared, seconds, rewards}. Stops at the echo threshold.
  */
-export function echoClear(profile, maxStages = Infinity) {
+export function echoClear(profile, maxStages = 5000) {   // bounded by default: a tampered echo threshold of 1e9 must not freeze the game
   let p = profile, cleared = 0;
   const rewards = { fish: 0, yarn: 0, gems: 0 };
   while (cleared < maxStages && isEchoStage(p, frontierGs(p))) {

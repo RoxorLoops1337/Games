@@ -374,7 +374,7 @@ export function createBattleScreen() {
         const r = app.rng ? app.rng('battle:' + gs + ':' + (app.dayIndex ? app.dayIndex() : 0)) : null;
         seed = r ? r.int(1, 2147483646) : ((profile.seed || 1) + gs * 7919) >>> 0;
       }
-      const echo = !params.forceBattle && !params.noEcho && isEchoStage(profile, dist, stg);
+      const echo = !params.forceBattle && !params.noEcho && !params.noAdvance && isEchoStage(profile, dist, stg);   // map battles (noAdvance) are never instant
       S.echo = echo;
       const info = stageInfo(null, gs);
       S.district = info.district.id;
@@ -401,6 +401,7 @@ export function createBattleScreen() {
       const L = S.L = layout(ui);
       if (S.fx.layout !== L) FXMOD.setLayout(S.fx, L);
       if (S.fx.reducedMotion !== ui.reduceMotion) FXMOD.setReducedMotion(S.fx, ui.reduceMotion);
+      if (ui.quality && S.fx.userQ !== ui.quality) { S.fx.userQ = ui.quality; FXMOD.setQuality(S.fx, ui.quality === 'low' ? 0 : ui.quality === 'medium' ? 1 : 2, ui.quality === 'high'); }   // Settings quality: low and medium are fixed, high adapts to the frame time
       S.clock += dt;
       S.frame++;
       ui.toastY = L.topBar.y + L.topBar.h + 30;
@@ -412,7 +413,8 @@ export function createBattleScreen() {
       if (S.intro) { S.intro.t += dt; if (S.intro.t >= S.intro.dur) S.intro = null; }
       if (!S.paused) {
         const fx = S.fx;
-        if (!b.over && fx.hitstop <= 0) {
+        const hold = S.params && typeof S.params.holdSim === 'function' && S.params.holdSim(b);   // tutorial: freeze while a spotlight waits
+        if (!b.over && fx.hitstop <= 0 && !hold) {
           let scale = HUD.SPEEDS[S.speedIdx] * (fx.timeScale || 1);
           if (S.intro && !ui.reduceMotion) scale *= 0.35;
           S.acc = Math.min(0.5, S.acc + dt * scale);
@@ -577,7 +579,7 @@ export function createBattleScreen() {
     const tl = L.tile(g.col, g.lane);
     ctx.save();
     ctx.globalAlpha = 0.62;
-    CO.t = t; CO.anim = 'idle'; CO.animT = 0; CO.hitFlash = 0; CO.shield = 0; CO.facing = 1; CO.level = 1; CO.stars = 1; CO.tint = null;
+    CO.t = t; CO.anim = 'idle'; CO.animT = 0; CO.hitFlash = 0; CO.shield = 0; CO.facing = 1; CO.level = 1; CO.stars = 1; CO.tint = null; CO.lod = 0;
     if (CATART.drawCat) CATART.drawCat(ctx, card.effect.cat, tl.cx, L.footY(g.lane), L.scale * 0.9, CO);
     ctx.restore();
   }
@@ -605,6 +607,7 @@ export function createBattleScreen() {
       order.push(r);
     }
     order.sort(sortFn);
+    S.lod = order.length >= 60 ? 1 : 0;   // crowd level of detail for catart and enemyart (see their o.lod)
     // dying first, under the living
     for (let i = 0; i < S.dying.length; i++) { const d = S.dying[i]; if (d.on) drawDying(ctx, L, d); }
     for (let i = 0; i < order.length; i++) drawUnit(ctx, L, order[i]);
@@ -623,6 +626,30 @@ export function createBattleScreen() {
     return { shield: shield > 0 ? clamp(shield / Math.max(1, u.maxHp), 0.15, 1) : 0, stun, taunt, dot };
   }
   const SI = { shield: 0, stun: false, taunt: false, dot: false };
+  // Crowd level of detail: on a crowded field a calm cat (idle or walking) is repainted into its own small bitmap at 10 Hz and the bitmap is
+  // blitted every frame at the smooth interpolated position. Fights keep full quality below 60 units and for every attack, cast and hit pose.
+  const CAT_REPAINT = 0.1;
+  function cachedCat(ctx, r, catId, px, py, size, o) {
+    if (typeof document === 'undefined' && typeof OffscreenCanvas === 'undefined') return false;
+    const dpr = (S.ui && S.ui.dpr) || 1;
+    const W = Math.ceil(size * 2.4), H = Math.ceil(size * 2.3), ax = W / 2, ay = Math.ceil(size * 1.85);
+    let c = r.cv;
+    if (!c || r.cvW !== W || r.cvD !== dpr) {
+      try { c = typeof OffscreenCanvas !== 'undefined' ? new OffscreenCanvas(Math.ceil(W * dpr), Math.ceil(H * dpr)) : Object.assign(document.createElement('canvas'), { width: Math.ceil(W * dpr), height: Math.ceil(H * dpr) }); } catch (e) { return false; }
+      r.cv = c; r.cvW = W; r.cvD = dpr; r.cvT = -9; r.cvK = '';
+    }
+    const key = catId + '|' + o.anim + '|' + o.stars + '|' + o.level;
+    const now = S.clock;
+    if (key !== r.cvK || now - r.cvT >= CAT_REPAINT) {
+      const g = c.getContext('2d');
+      if (!g) return false;
+      g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, W, H);
+      CATART.drawCat(g, catId, ax, ay, size, o);
+      r.cvK = key; r.cvT = now - ((r.u.uid * 0.0371) % CAT_REPAINT) * (r.cvT < -1 ? 1 : 0);   // first paint staggers units so repaints spread over frames
+    }
+    ctx.drawImage(c, px - ax, py - ay, W, H);
+    return true;
+  }
   function drawUnit(ctx, L, r) {
     const u = r.u, t = S.clock;
     const px = L.colX(r.rx), py = L.footY(r.ry);
@@ -637,6 +664,7 @@ export function createBattleScreen() {
     if (u.side === 'cat') {
       const catId = CAT_BY_ID[u.id] ? u.id : MINION_CATS[Math.floor(hash01(u.id) * MINION_CATS.length)];
       const o = CO;
+      o.lod = S.lod;
       o.t = t + ph; o.level = u.level || 1; o.stars = 1 + (u.stars || 0); o.hitFlash = hf; o.shield = st.shield; o.facing = 1;
       o.tint = null;
       if (castAge < CAST_T) { o.anim = 'cast'; o.animT = castAge / CAST_T; }
@@ -644,11 +672,13 @@ export function createBattleScreen() {
       else if (hitAge < HIT_T) { o.anim = 'hit'; o.animT = hitAge / HIT_T; }
       else if (Math.abs(u.x - r.x0) > 0.0015 || Math.abs(r.rx - (u.home ? u.home.x : u.x)) > 0.05) { o.anim = 'walk'; o.animT = 0; }
       else { o.anim = 'idle'; o.animT = 0; }
-      if (CATART.drawCat) CATART.drawCat(ctx, catId, px, py, size, o);
+      if (S.lod && hf === 0 && st.shield === 0 && (o.anim === 'idle' || o.anim === 'walk') && cachedCat(ctx, r, catId, px, py, size, o)) { /* blitted from the unit's own bitmap */ }
+      else if (CATART.drawCat) CATART.drawCat(ctx, catId, px, py, size, o);
       top = size * 1.05;
     } else {
       const eid = ENEMY_BY_ID[u.id] ? u.id : u.id;
       const o = EO;
+      o.lod = S.lod;
       o.t = t; o.hitFlash = hf; o.shield = st.shield; o.phase = u.phaseIdx || 0; o.seed = u.uid;
       if (r.burrow || u.untargetable) { o.anim = 'burrow'; o.animT = 0; }
       else if (st.stun) { o.anim = 'stun'; o.animT = 0; }

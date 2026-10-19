@@ -207,12 +207,14 @@ export function canPlay(d, i, energy = d.energy) {
 
 /** Regenerate energy over dt seconds (fixed 1/30 in battle). Returns the new energy. */
 export function tick(d, dt) {
+  if (!(dt > 0) || !Number.isFinite(dt)) return d.energy;
   d.energy = Math.min(d.energyCap, d.energy + d.regen * dt);
   return d.energy;
 }
 
 /** Add (or remove, if negative) energy, clamped to 0..cap. */
 export function gainEnergy(d, n) {
+  if (!Number.isFinite(n)) n = n === Infinity ? d.energyCap : n === -Infinity ? -d.energyCap : 0;
   d.energy = Math.max(0, Math.min(d.energyCap, d.energy + n));
   return d.energy;
 }

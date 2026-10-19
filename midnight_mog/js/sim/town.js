@@ -252,7 +252,7 @@ function bankAll(profile, nowMs) {
     const p = plots[r.i];
     const pend = pendingOf(p, r.rate, r.capSeconds, nowMs);
     p.acc = pend.amount;
-    p.t = nowMs;
+    p.t = Math.max(fin(p.t, 0), nowMs);     // monotonic, see collect()
   }
   for (const p of plots) if (p.b && !(p.acc > 0)) delete p.acc;
   return plots;
@@ -296,7 +296,7 @@ export function build(profile, b, plot, nowMs, opt) {
     useOpt = { district: useOpt.district, strain: useOpt.strain };
   }
   const plots = bankAll(profile, nowMs);
-  plots[plot] = { b, level: 1, t: nowMs, ...(useOpt ? { opt: useOpt } : {}) };
+  plots[plot] = { b, level: 1, t: Math.max(nowMs, fin(profile.lastSeen, 0)), ...(useOpt ? { opt: useOpt } : {}) };   // never starts accruing in the past (rewound clock)
   const cur = curOf(profile);
   cur.fish = money(cur.fish - chk.cost.fish);
   cur.gems = money(cur.gems - chk.cost.gems);
@@ -462,7 +462,7 @@ export function collect(profile, nowMs, dayIndex) {
     const full = pend.fill >= CHECKIN.fillBonusAt;
     if (full) fullCount++;
     report.push({ i: r.i, b: r.b, cur: r.cur, amount: pend.amount, fill: pend.fill, full });
-    p.t = nowMs;                              // also pulls a future t back to now (clock went backwards)
+    p.t = Math.max(fin(p.t, 0), nowMs);       // t never moves backwards: a rewound clock must not let the next forward step pay the same hours again (exploit C1)
     if (r.cur === 'keys') { keyAmount += pend.amount; keyLevel = r.level; delete p.acc; continue; }
     const batch = pend.amount * fillMult(pend.fill) * (1 + sBonus) * (r.cur === 'gems' ? 1 : inc);
     if (r.cur === 'gems') {
@@ -559,7 +559,7 @@ export function maps(profile, dayIndex) {
   const out = [];
   for (let i = 0; i < n && i < 200; i++) {
     const m = mapAt(i);
-    out.push({ ...m, stage: Math.max(1, Math.round(best * m.difficulty)), rewardMult: m.rewardMult * (1 + (st.mapRewardPct || 0)), clearedToday: cleared[m.id] === dayIndex });
+    out.push({ ...m, stage: Math.max(1, Math.round(best * m.difficulty)), rewardMult: m.rewardMult * (1 + (st.mapRewardPct || 0)), clearedToday: Number.isInteger(cleared[m.id]) && cleared[m.id] >= dayIndex });
   }
   return out;
 }

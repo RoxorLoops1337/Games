@@ -188,9 +188,10 @@ export function refreshQuests(q, dayIndex, profile, ctx = {}) {
   if (!s.ach) s.ach = {};
   if (!s.col) s.col = {};
   if (dayIndex < 0 || !Number.isFinite(dayIndex)) return s;
-  if (!s.daily || s.daily.day !== dayIndex) s.daily = rollDaily(dayIndex, profile, ctx);
+  // Blocks only roll forward: a rewound clock keeps the block (and its claimed flags) instead of rolling a fresh one to claim again (exploit C4).
+  if (!s.daily || !(s.daily.day >= dayIndex)) s.daily = rollDaily(dayIndex, profile, ctx);
   const wk = Math.floor(dayIndex / DAYS_PER_WEEK);
-  if (!s.weekly || s.weekly.week !== wk) s.weekly = rollWeekly(wk, profile, ctx);
+  if (!s.weekly || !(s.weekly.week >= wk)) s.weekly = rollWeekly(wk, profile, ctx);
   return s;
 }
 
@@ -246,9 +247,9 @@ export function achievementTarget(fam, n) {
   return arr[n];
 }
 
-/** Reward of tier n (0 based), same for every family. Gems rise by 2 per tier; keys every third tier; a token every fifth. */
+/** Reward of tier n (0 based), same for every family. Gems rise by 2 per named tier then stay at 2 (the endless ladder must not mint gems); keys every third tier; a token every fifth. */
 export function achievementReward(n) {
-  const r = { gems: 3 + 2 * n, fish: { minutes: 10 * (n + 1) } };
+  const r = { gems: n < NAMED_TIERS ? 3 + 2 * n : 2, fish: { minutes: 10 * (n + 1) } };
   if (n % 3 === 2) {
     const crate = n < 6 ? 'alley_crate' : n < 15 ? 'neon_crate' : n < 30 ? 'rooftop_crate' : 'midnight_crate';
     r.keys = { [crate]: 1 };
@@ -300,7 +301,7 @@ function byRarity(r) { return CATS.filter((c) => c.rarity === r); }
 export function starGalleryAt(n) {
   let prev = 0, v = 0;
   for (let i = 0; i <= n; i++) { v = niceNumber(Math.min(1e15, 3 * Math.pow(1.7, i))); if (v <= prev) v = prev + 1; prev = v; }
-  return { id: 'col_stars_' + (n + 1), group: 'stars', label: 'Reach ' + v + ' total cat stars', need: v, reward: { gems: 3 + 2 * n, ...(n % 4 === 3 ? { keys: { rooftop_crate: 1 } } : {}) } };
+  return { id: 'col_stars_' + (n + 1), group: 'stars', label: 'Reach ' + v + ' total cat stars', need: v, reward: { gems: n < 5 ? 3 + 2 * n : 2, ...(n % 4 === 3 ? { keys: { rooftop_crate: 1 } } : {}) } };
 }
 
 /**

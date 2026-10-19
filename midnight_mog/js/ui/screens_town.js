@@ -504,7 +504,7 @@ export function createTownScreen() {
   }
 
   function chip(ctx, ui, r, id, title, sub, col, hot, icon) {
-    const st = ui.region('chip:' + id, r, { focus: hot, label: title + ' ' + sub });
+    const st = ui.region('chip:' + id, { x: r.x, y: r.y - Math.max(0, (44 - r.h) / 2), w: r.w, h: Math.max(r.h, 44) }, { focus: hot, label: title + ' ' + sub });
     const pulse = hot ? 0.5 + 0.5 * Math.sin(ui.t * 4) : 0;
     ctx.save(); ctx.translate(r.x, r.y + (st.down ? 1.5 : 0));
     if (hot) glow(ctx, r.w / 2, r.h / 2, r.w * 0.7, col, 0.2 + 0.2 * pulse);
@@ -542,7 +542,7 @@ export function createTownScreen() {
         const isNext = i === pl.length;
         const owned = !isNext;
         const inf = owned ? S.infos[i] : null;
-        const st = ui.region('plot:' + i, rect, { focus: true, label: owned ? (inf && !inf.empty ? BUILDING_BY_ID[inf.b].name + ' level ' + inf.level : 'empty plot ' + (i + 1)) : 'unlock next plot' });
+        const st = ui.region('plot:' + i, { x: rect.x - Math.max(0, (44 - rect.w) / 2), y: rect.y - Math.max(0, (44 - rect.h) / 2), w: Math.max(rect.w, 44), h: Math.max(rect.h, 44) }, { focus: true, label: owned ? (inf && !inf.empty ? BUILDING_BY_ID[inf.b].name + ' level ' + inf.level : 'empty plot ' + (i + 1)) : 'unlock next plot' });
         const selected = (S.sel === i && S.sheet) || S.moveFrom === i || S.moveTo === i;
         const fl = S.flash[i] !== undefined ? clamp(1 - (S.t - S.flash[i]) / 0.8, 0, 1) : 0;
         if (isNext) {
@@ -718,8 +718,8 @@ export function createTownScreen() {
         ICONS.drawBuilding(cc, o.d.id, 1, tw / 2, 36, 56, t);
         cc.globalAlpha = 1;
         drawText(cc, o.d.name, tw / 2, 70, { size: 11, kind: 'display', align: 'center', color: PAL.bone, maxWidth: tw - 8, stroke: 3 });
-        if (locked) drawText(cc, 'Stage ' + o.d.unlockStage, tw / 2, 90, { size: 12, kind: 'body', weight: 800, align: 'center', color: PAL.slate, stroke: 3 });
-        else if (o.ok.reason === 'limit') drawText(cc, 'MAX BUILT', tw / 2, 90, { size: 12, kind: 'body', weight: 800, align: 'center', color: PAL.slate, stroke: 3 });
+        if (locked) drawText(cc, 'Stage ' + o.d.unlockStage, tw / 2, 90, { size: 12, kind: 'body', weight: 800, align: 'center', color: PAL.slateText, stroke: 3 });
+        else if (o.ok.reason === 'limit') drawText(cc, 'MAX BUILT', tw / 2, 90, { size: 12, kind: 'body', weight: 800, align: 'center', color: PAL.slateText, stroke: 3 });
         else drawText(cc, num(o.ok.cost.fish, 0) + (o.ok.cost.gems ? ' +' + o.ok.cost.gems + 'g' : ''), tw / 2, 90, { size: 13, kind: 'body', weight: 800, align: 'center', color: o.ok.ok ? PAL.bone : PAL.magenta, maxWidth: tw - 6, stroke: 3 });
         cc.restore();
         if (st.tap) { S.pick = o.d.id; S.prevKey = ''; }
@@ -746,7 +746,7 @@ export function createTownScreen() {
       for (const l of lines) { y += fs + 5; drawText(cc, l, 2 + ((o && o.indent) || 0), y, { size: fs, kind: 'body', weight: (o && o.weight) || 600, color: (o && o.color) || PAL.boneDim, stroke: 3 }); }
     };
     y += 18; drawText(cc, def.name, 2, y, { size: 20, kind: 'display', color: PAL.bone, stroke: 4 });
-    drawText(cc, def.tags.join(' / '), w - 2, y, { size: 12, kind: 'body', weight: 700, align: 'right', color: PAL.violetHi, stroke: 3 });
+    drawText(cc, def.tags.join(' / '), w - 2, y, { size: 12, kind: 'body', weight: 700, align: 'right', color: PAL.violetText, stroke: 3 });
     text(def.blurb, { color: PAL.bone });
     // output at this spot
     y += 8;
@@ -774,7 +774,7 @@ export function createTownScreen() {
       }
     }
     // likes and dislikes (all rules of this building)
-    y += 10; y += 16; drawText(cc, 'Likes and dislikes', 2, y, { size: 14, kind: 'display', color: PAL.violetHi, stroke: 3 });
+    y += 10; y += 16; drawText(cc, 'Likes and dislikes', 2, y, { size: 14, kind: 'display', color: PAL.violetText, stroke: 3 });
     for (const r of def.receives) {
       y += 17;
       const col = r.add >= 0 ? PAL.boneDim : PAL.magenta;

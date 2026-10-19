@@ -213,7 +213,7 @@ export function drawBottomBar(ctx, ui, L, S, ctl) {
   if (ui.button('auto', autoR, '', { kind: 'icon', icon: 'auto', aria: 'Auto play cards ' + (S.auto ? 'on' : 'off'), toggled: S.auto })) ctl.toggleAuto();
   if (S.auto) drawText(ctx, 'AUTO', autoR.x + 22, autoR.y - 2, { size: 10, kind: 'display', align: 'center', color: PAL.cyan, stroke: 3 });
   if (ui.button('cycle', cycleR, '', { kind: 'icon', icon: 'cycle', aria: 'Redraw hand for 1 energy', disabled: !canCycle })) ctl.cycleHand();
-  drawText(ctx, '1', cycleR.x + 37, cycleR.y + 40, { size: 12, kind: 'display', color: canCycle ? PAL.cyan : PAL.slate, align: 'center', stroke: 3 });
+  drawText(ctx, '1', cycleR.x + 37, cycleR.y + 40, { size: 12, kind: 'display', color: canCycle ? PAL.cyan : PAL.slateText, align: 'center', stroke: 3 });
   const er = { x: bb.x + pad, y: bb.y, w: autoR.x - bb.x - pad - 8, h: bb.h };
   drawEnergy(ctx, ui, er, b.energy, b.energyCap, S.clock, { shake: S.energyShake });
 }
@@ -242,7 +242,7 @@ export function drawHand(ctx, ui, L, S, ctl) {
   } else {
     const dr = b.draw ? b.draw.length : 0, di = b.discard ? b.discard.length : 0;
     drawText(ctx, S.hintText || 'Pick a card', st.x + 10, st.y + st.h / 2 + 4, { size: 13, kind: 'body', weight: 700, color: PAL.boneDim, stroke: 2.5, maxWidth: st.w - 130 });
-    drawText(ctx, 'DRAW ' + dr + ' / DISC ' + di, st.x + st.w - 10, st.y + st.h / 2 + 4, { size: 10, kind: 'display', align: 'right', color: PAL.violetHi, stroke: 2.5 });
+    drawText(ctx, 'DRAW ' + dr + ' / DISC ' + di, st.x + st.w - 10, st.y + st.h / 2 + 4, { size: 10, kind: 'display', align: 'right', color: PAL.violetText, stroke: 2.5 });
   }
   // cards
   for (let i = 0; i < n; i++) {
@@ -259,7 +259,7 @@ export function drawHand(ctx, ui, L, S, ctl) {
     if (cs.dragging) ctl.dragCard(i, ui.px, ui.py);
     if (dragging) { ctx.save(); chamfer(ctx, r.x, r.y, r.w, r.h, 6); ctx.fillStyle = rgba(PAL.void, 0.55); ctx.fill(); ctx.restore(); }
     // hotkey number
-    if (L.w > 600) drawText(ctx, String(i + 1), r.x + r.w / 2, r.y - 4, { size: 11, kind: 'display', align: 'center', color: PAL.violetHi, stroke: 2.5 });
+    if (L.w > 600) drawText(ctx, String(i + 1), r.x + r.w / 2, r.y - 4, { size: 11, kind: 'display', align: 'center', color: PAL.violetText, stroke: 2.5 });
     // affordable shine: a thin cyan underline pulse when the card is ready
     if (afford && !dragging) { ctx.fillStyle = rgba(PAL.cyan, 0.35 + 0.25 * Math.sin(S.clock * 5 + i)); ctx.fillRect(r.x + 6, r.y + r.h + 1, r.w - 12, 2); }
   }
@@ -393,7 +393,7 @@ export function drawResult(ctx, ui, L, S, ctl) {
   if (stats.length) {
     const cw = inner.w / stats.length;
     for (let i = 0; i < stats.length; i++) {
-      drawText(ctx, stats[i][0], inner.x + cw * (i + 0.5), inner.y + 12, { size: 11, kind: 'display', align: 'center', color: PAL.violetHi, stroke: 2.5 });
+      drawText(ctx, stats[i][0], inner.x + cw * (i + 0.5), inner.y + 12, { size: 11, kind: 'display', align: 'center', color: PAL.violetText, stroke: 2.5 });
       drawText(ctx, stats[i][1], inner.x + cw * (i + 0.5), inner.y + 32, { size: 17, kind: 'body', weight: 800, align: 'center', color: PAL.bone, stroke: 3 });
     }
   }

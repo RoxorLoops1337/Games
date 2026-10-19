@@ -136,10 +136,13 @@ function assertFinite(b) {
 // ---------------------------------------------------------------- 6. echo stage fast path
 {
   const p = newProfile(6);
-  p.progress = { district: 1, stage: 25, best: {}, echo: 20 };
+  p.progress = { district: 1, stage: 5, best: {}, echo: 20 };
   assert.equal(B.isEchoStage(p, null, 5), true);
+  assert.equal(B.isEchoStage(p, null, 4), false, 'behind the frontier an echo is a real battle (no instant replay farming)');
   assert.equal(B.isEchoStage(p, null, 25), false);
-  const r = B.resolveEcho(p, { district: null, stage: 5, noAdvance: true });
+  const refused = B.resolveEcho(p, { district: null, stage: 5, noAdvance: true });
+  assert.equal(refused.won, false); assert.equal(refused.refused, true); assert.equal(refused.totals.fish, 0); assert.equal(refused.profile, p);
+  const r = B.resolveEcho(p, { district: null, stage: 5 });
   assert.equal(r.won, true); assert.equal(r.echo, true); assert.equal(r.seconds, 20);
   assert.ok(r.totals.fish > 0 && r.profile.cur.fish > p.cur.fish);
   const b = B.createBattle({ seed: 1, district: null, stage: 5, profile: p, noAdvance: true });

@@ -140,7 +140,7 @@ const RAW = [
     costMult: 2, buildMult: 8, keep: 0.75,
     effects: [
       { stat: 'keysPerDay', kind: 'lin', a: 0.25, b: 0.06, cap: 4, exp: 0.5 },
-      { stat: 'pityCredit', kind: 'lin', a: 0, b: 0.5, cap: 20, exp: 0.5, int: true, hardMax: 30 },
+      { stat: 'pityCredit', kind: 'lin', a: 0, b: 0.5, cap: 3, exp: 0.5, int: true, hardMax: 3 },
     ],
     receives: [
       { name: 'Raw materials', src: 'tag:craft', mode: '4', add: 0.1, cap: 0.3 },
@@ -232,7 +232,7 @@ const RAW = [
     buildExtra: { gems: 25 },
     blurb: 'Dug into the sewers. Slow, but it makes real gems.',
     costMult: 2.5, buildMult: 16, keep: 0.5, storage: 1.5,
-    effects: [{ stat: 'gemsPerHour', kind: 'pow', a: 0.12, p: 0.9, mile: 1.25 }],
+    effects: [{ stat: 'gemsPerHour', kind: 'pow', a: 0.06, p: 0.9, mile: 1.25, hardMax: 2 }],
     receives: [
       { name: 'Ore cart', src: 'tag:money', mode: '4', add: 0.12, cap: 0.24 },
       { name: 'Ventilation', src: 'empty', mode: '4', add: 0.05, cap: 0.2 },
@@ -314,6 +314,7 @@ const RAW = [
 
 const ROMAN = [[1000, 'M'], [900, 'CM'], [500, 'D'], [400, 'CD'], [100, 'C'], [90, 'XC'], [50, 'L'], [40, 'XL'], [10, 'X'], [9, 'IX'], [5, 'V'], [4, 'IV'], [1, 'I']];
 export function roman(n) {
+  if (!Number.isFinite(n) || n > 3999) return Number.isFinite(n) ? String(Math.floor(n)) : '1';   // no Roman numeral past MMMCMXCIX; also stops an endless loop on Infinity or 1e308
   let x = Math.max(1, Math.floor(n)), s = '';
   for (const [v, r] of ROMAN) while (x >= v) { s += r; x -= v; }
   return s;

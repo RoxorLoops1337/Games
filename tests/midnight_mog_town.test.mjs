@@ -481,9 +481,11 @@ const anyNeg = (p) => Object.values(p.cur).some((v) => !(v >= 0) || !Number.isFi
   const fut = { ...p, town: { ...p.town, plots: p.town.plots.map((x) => ({ ...x, t: 1000 * H })) } };
   const r = T.collect(fut, 10 * H, 50);
   assert.equal(r.gained.fish, 0); assert.equal(r.gained.yarn, 0);
-  assert.ok(r.profile.town.plots.every((x) => !x.b || x.t === 10 * H), 'timers pulled back to now');
-  const after = T.collect(r.profile, 11 * H, 50);
-  assert.ok(after.gained.fish > 0, 'works again afterwards');
+  // exploit hunt (C1): the timer is NOT pulled back to now. Pulling it back would let a clock that flips back and forth be
+  // paid for the same hours again and again. A timer ahead of the clock stays until real time catches up.
+  assert.ok(r.profile.town.plots.every((x) => !x.b || x.t === 1000 * H), 'timers never move backwards');
+  const after = T.collect(r.profile, 1001 * H, 50);
+  assert.ok(after.gained.fish > 0, 'works again once the clock passes the timer');
   assert.ok(!T.collect(p, NaN, 50).ok);
   assert.equal(T.collect(p, NaN, 50).profile, p);
   // collecting at an earlier time never pays more than at a later time

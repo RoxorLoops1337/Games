@@ -528,7 +528,7 @@ function onCast(fx, ev) {
     ring(fx, R_RING, x, y, 6 * u, 40 * u, 3 * u, 0.3, col, 0.9);
     ring(fx, R_PILLAR, x, y + 14 * u, 20 * u, 70 * u, 0, 0.4, col, 0.55);
     radial(fx, x, y + 6 * u, 8, SH_STAR4, 30 * u, 100 * u, 0.55, 5 * u, 1 * u, col, C.bone, 2, -120 * u, -Math.PI / 2, 1.6, 1);
-    if (ev.name && !ev.echo) floater(fx, F_LABEL, String(ev.name), x, y - 34 * u, 13, col);
+    if (ev.name && !ev.echo && !/_ability$/.test(String(ev.name))) floater(fx, F_LABEL, String(ev.name), x, y - 34 * u, 13, col);   // enemy abilities carry only a raw id, never show it
     if (ev.echo) { ring(fx, R_RING, x, y, 10 * u, 70 * u, 2 * u, 0.4, C.bone, 0.8); floater(fx, F_LABEL, 'ECHO', x, y - 46 * u, 12, C.bone); }
     return;
   }

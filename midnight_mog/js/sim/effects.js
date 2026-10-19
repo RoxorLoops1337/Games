@@ -455,7 +455,8 @@ export function resolvePoint(b, at, caster, ctx) {
     if (best) return best;
   }
   if (at === 'lane_ahead' && caster) return { x: caster.x + dir * 2.5, y: caster.y };
-  if (at === 'edge') return { x: side === 'cat' ? f.edgeX : f.baseX, y: b.rng.int(0, Math.max(0, f.rows - 1)) };
+  // 'edge' is the entry edge of the enemy lanes for every caster (a boss calling its flock must not spawn them at the cat base)
+  if (at === 'edge') return { x: f.edgeX, y: b.rng.int(0, Math.max(0, f.rows - 1)) };
   if (ctx.point) return ctx.point;
   if (caster) return caster;
   if (ctx.tile) return ctx.tile;

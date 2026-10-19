@@ -20,10 +20,12 @@ const card = (id, name, cost, type, rarity, text, effect) => ({ id, name, cost, 
 
 const spells = [
   // cost 0
-  card('cat_nap', 'Cat Nap', 0, 'spell', 'common', 'Heal the base for 40.',
-    { kind: 'heal', target: 'none', to: 'base', amount: 40 }),
-  card('tail_flick', 'Tail Flick', 0, 'spell', 'common', 'Knock enemies near a tile back 1 tile.',
-    { kind: 'knockback', target: 'tile', to: 'radius', at: 'target', radius: 1.5, tiles: 1 }),
+  // Free cards are single use per battle (exhaust): the hand refills after every play, so a free card could otherwise be
+  // played without limit in zero time (infinite heal, endless knockback). Same for the one card that returns energy.
+  card('cat_nap', 'Cat Nap', 0, 'spell', 'common', 'Heal the base for 40. Once per battle.',
+    { kind: 'heal', target: 'none', to: 'base', amount: 40, exhaust: true }),
+  card('tail_flick', 'Tail Flick', 0, 'spell', 'common', 'Knock enemies near a tile back 1 tile. Once per battle.',
+    { kind: 'knockback', target: 'tile', to: 'radius', at: 'target', radius: 1.5, tiles: 1, exhaust: true }),
   // cost 1
   card('pounce', 'Pounce', 1, 'spell', 'common', 'Deal 90 damage to an enemy.',
     { kind: 'damage', target: 'enemy', to: 'target', amount: 90 }),
@@ -33,8 +35,8 @@ const spells = [
     { kind: 'debuff', target: 'tile', to: 'radius', at: 'target', radius: 2, stat: 'speed', pct: 0.4, duration: 4 }),
   card('curious_cat', 'Curious Cat', 1, 'spell', 'common', 'Draw 2 cards.',
     { kind: 'draw', target: 'none', count: 2 }),
-  card('catnip_stash', 'Catnip Stash', 1, 'spell', 'rare', 'Gain 2 energy.',
-    { kind: 'energy', target: 'none', amount: 2 }),
+  card('catnip_stash', 'Catnip Stash', 1, 'spell', 'rare', 'Gain 4 energy. Once per battle.',
+    { kind: 'energy', target: 'none', amount: 4, exhaust: true }),
   // cost 2
   card('moonlit_mend', 'Moonlit Mend', 2, 'spell', 'common', 'Heal all cats for 30% max HP.',
     { kind: 'heal', target: 'none', to: 'all', pct: 0.3 }),

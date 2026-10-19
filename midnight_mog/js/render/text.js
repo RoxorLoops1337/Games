@@ -84,6 +84,12 @@ function measure(ctx, str) {
 }
 export function clearTextCache() { widthCache.clear(); }
 
+// Accessibility text size (Settings). Only text of 18 px and under grows: headlines already read at a distance and their panels are tight.
+let TSCALE = 1;
+export function setTextScale(k) { TSCALE = k >= 1 && k <= 2 ? k : 1; }
+export function getTextScale() { return TSCALE; }
+const scaled = (sz) => (TSCALE === 1 || sz > 18 ? sz : sz * TSCALE);
+
 function setFont(ctx, o, size) {
   const kind = o && o.kind ? o.kind : 'body';
   const weight = o && o.weight ? o.weight : 700;
@@ -99,7 +105,7 @@ function trackOf(o) {
 /** Width of a string under the options (accounts for tracking and uppercase). */
 export function textWidth(ctx, str, o) {
   o = o || {};
-  const size = fin(o.size, 16);
+  const size = scaled(fin(o.size, 16));
   str = prep(str, o);
   ctx.save();
   setFont(ctx, o, size);
@@ -120,7 +126,7 @@ export function drawText(ctx, str, x, y, o) {
   str = prep(str, o);
   if (!str) return 0;
   x = fin(x); y = fin(y);
-  const size = Math.max(1, fin(o.size, 16));
+  const size = Math.max(1, scaled(fin(o.size, 16)));
   const track = trackOf(o);
   const color = o.color || PAL.bone;
   ctx.save();
@@ -182,7 +188,7 @@ export function wrapText(ctx, str, maxWidth, o) {
   str = str === undefined || str === null ? '' : String(str);
   maxWidth = Math.max(1, fin(maxWidth, 100));
   ctx.save();
-  setFont(ctx, o, fin(o.size, 14));
+  setFont(ctx, o, scaled(fin(o.size, 14)));
   const out = [];
   const paras = str.split('\n');
   for (let p = 0; p < paras.length; p++) {
@@ -219,16 +225,16 @@ export function fitText(ctx, str, maxWidth, o) {
   ctx.save();
   let size = max, w = 0;
   for (; size >= min; size -= 1) {
-    setFont(ctx, o, size);
-    w = measure(ctx, str) + tr * size * Math.max(0, str.length - 1);
+    setFont(ctx, o, scaled(size));
+    w = measure(ctx, str) + tr * scaled(size) * Math.max(0, str.length - 1);
     if (w <= maxWidth) { ctx.restore(); return { size, text: str, width: w }; }
   }
   size = min;
-  setFont(ctx, o, size);
+  setFont(ctx, o, scaled(size));
   let t = str;
   while (t.length > 1) {
     t = t.slice(0, -1);
-    w = measure(ctx, t + '…') + tr * size * t.length;
+    w = measure(ctx, t + '…') + tr * scaled(size) * t.length;
     if (w <= maxWidth) break;
   }
   ctx.restore();

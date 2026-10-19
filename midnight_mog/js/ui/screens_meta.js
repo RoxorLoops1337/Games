@@ -12,7 +12,7 @@
 // Exported pure helpers: claimEverything, claimableCounts, seenEnemies, markSeen, buyMetaPerk, perkRows, exportCode, parseSaveText,
 //                        defaultSettings, loadSettings, saveSettings, applySettings.
 import { PAL, ENEMY_COLOR, rgba, mix, glow } from '../palette.js';
-import { drawText, formatNum, formatTime, wrapText } from '../render/text.js';
+import { drawText, formatNum, formatTime, wrapText, setTextScale } from '../render/text.js';
 import * as ICONS from '../render/icons.js';
 import * as ENEMYART from '../render/enemyart.js';
 import { chamfer, clamp, fin, outBack, outCubic, hash01 } from './shell.js';
@@ -70,6 +70,7 @@ export function applySettings(app, ui) {
     if (s.motion === 'auto') { try { rm = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) { rm = false; } }
     if (ui.setReduceMotion) ui.setReduceMotion(rm);
     ui.textScale = TEXT_SCALE[s.textSize] || 1;
+    setTextScale(1 + (ui.textScale - 1) * 0.65);   // the canvas layouts are tight: 65% of the nominal step (large x1.10, huge x1.20) keeps labels inside their panels
     ui.quality = s.quality;
   }
   return s;
@@ -89,7 +90,7 @@ export function exportCode(profile) {
 /** Accepts the export code or the raw JSON. Returns a profile or null. */
 export function parseSaveText(text) {
   let s = String(text || '').trim();
-  if (!s) return null;
+  if (!s || s.length > 12e6) return null;      // a save is at most 8 MB of JSON (about 10.7 MB as a code)
   try {
     if (s.indexOf('MOG1.') === 0) {
       const b64 = s.slice(5).replace(/\s+/g, '');
@@ -160,7 +161,7 @@ export function drawRewardItems(ctx, ui, items, x, cy, align, size) {
     const it = items[i];
     if (it.kind === 'cur') ICONS.drawCurrency(ctx, it.id, px + 10, cy, 20, ui.t);
     else if (it.kind === 'key') ICONS.drawCrate(ctx, it.id, px + 10, cy, 22, { t: ui.t });
-    else drawText(ctx, 'XP', px + 2, cy + 4, { size: 11, weight: 800, color: PAL.violetHi, stroke: 2.5 });
+    else drawText(ctx, 'XP', px + 2, cy + 4, { size: 11, weight: 800, color: PAL.violetText, stroke: 2.5 });
     drawText(ctx, (it.kind === 'key' ? 'x' : '') + formatNum(it.n), px + 24 + (it.kind === 'xp' ? 12 : 0), cy + s * 0.36, { size: s, weight: 800, color: PAL.bone, stroke: 3 });
     px += widths[i];
   }
@@ -342,9 +343,9 @@ export function createMapScreen() {
       g.addColorStop(0, rgba(col, open ? 0.5 : 0.15)); g.addColorStop(1, rgba(PAL.ink, 0.1));
       ctx.fillStyle = g; ctx.fillRect(inn.x, inn.y, inn.w, 66);
       if (open && bossE) ENEMYART.drawEnemyPortrait(ctx, bossE.id, inn.x + inn.w - 78, inn.y, 78, 66, { t: ui.t, anim: 'walk', animT: (ui.t * 0.5) % 1 });
-      else { ctx.fillStyle = rgba(PAL.void, 0.7); ctx.fillRect(inn.x + inn.w - 78, inn.y, 78, 66); drawText(ctx, '?', inn.x + inn.w - 39, inn.y + 48, { size: 44, kind: 'display', align: 'center', color: PAL.slate }); }
+      else { ctx.fillStyle = rgba(PAL.void, 0.7); ctx.fillRect(inn.x + inn.w - 78, inn.y, 78, 66); drawText(ctx, '?', inn.x + inn.w - 39, inn.y + 48, { size: 44, kind: 'display', align: 'center', color: PAL.slateText }); }
       ctx.restore();
-      drawText(ctx, d.name, inn.x + 4, inn.y + 24, { size: 21, kind: 'display', color: open ? PAL.bone : PAL.slate, maxWidth: inn.w - 100 });
+      drawText(ctx, d.name, inn.x + 4, inn.y + 24, { size: 21, kind: 'display', color: open ? PAL.bone : PAL.slateText, maxWidth: inn.w - 100 });
       drawText(ctx, open ? d.tagline : 'Reach stage ' + first + ' to open', inn.x + 4, inn.y + 42, { size: 12, color: PAL.boneDim, maxWidth: inn.w - 100 });
       ui.bar({ x: inn.x + 4, y: inn.y + 50, w: inn.w - 100, h: 12 }, done / 10, { kind: 'progress', label: done + '/10' });
       // nodes
@@ -355,7 +356,7 @@ export function createMapScreen() {
         this.node(ctx, app, ui, gs, r, cleared, front, gs === d.bossStage);
       }
       // modifier line
-      if (open) drawText(ctx, d.modifier.text, inn.x + 4, inn.y + inn.h - 2, { size: 11, color: PAL.violetHi, weight: 700, stroke: 2, maxWidth: inn.w - 8 });
+      if (open) drawText(ctx, d.modifier.text, inn.x + 4, inn.y + inn.h - 2, { size: 11, color: PAL.violetText, weight: 700, stroke: 2, maxWidth: inn.w - 8 });
     },
     riftCard(ctx, app, ui, x, y, w, cleared, front, open) {
       const first = ENDLESS.startStage + S.riftPage * 10;
@@ -370,7 +371,7 @@ export function createMapScreen() {
         for (let i = 0; i < 6; i++) { const px = ((ui.t * (30 + i * 9) + i * 90) % (inn.w + 80)) - 40; ctx.fillStyle = rgba(PAL.bone, 0.5); ctx.fillRect(inn.x + inn.w - px, inn.y + 8 + i * 9, 26 + i * 4, 1.5); }
       }
       ctx.restore();
-      drawText(ctx, 'COMET RIFT', inn.x + 4, inn.y + 24, { size: 21, kind: 'display', color: open ? PAL.bone : PAL.slate, glow: open ? 8 : 0, glowColor: PAL.magenta, maxWidth: inn.w - 100 });
+      drawText(ctx, 'COMET RIFT', inn.x + 4, inn.y + 24, { size: 21, kind: 'display', color: open ? PAL.bone : PAL.slateText, glow: open ? 8 : 0, glowColor: PAL.magenta, maxWidth: inn.w - 100 });
       if (!open) { drawText(ctx, 'Clear stage 60 to open the rift', inn.x + 4, inn.y + 44, { size: 12, color: PAL.boneDim }); return; }
       drawText(ctx, 'Round ' + (inf.round + 1) + '  ' + inf.district.name + '  endless', inn.x + 4, inn.y + 42, { size: 12, color: PAL.boneDim, maxWidth: inn.w - 100 });
       const aff = ENDLESS.affixesByRound(inf.round);
@@ -384,7 +385,7 @@ export function createMapScreen() {
         const r = { x: inn.x + (k % NODE_COLS) * (nw + gap), y: inn.y + 74 + Math.floor(k / NODE_COLS) * (nh + 8), w: nw, h: nh };
         this.node(ctx, app, ui, gs, r, cleared, front, stageInfo(null, gs).isBoss);
       }
-      drawText(ctx, 'Never ends. Each loop of 60 adds an affix.', inn.x + 4, inn.y + inn.h - 2, { size: 11, color: PAL.violetHi, weight: 700, stroke: 2, maxWidth: inn.w - 8 });
+      drawText(ctx, 'Never ends. Each loop of 60 adds an affix.', inn.x + 4, inn.y + inn.h - 2, { size: 11, color: PAL.violetText, weight: 700, stroke: 2, maxWidth: inn.w - 8 });
     },
     node(ctx, app, ui, gs, r, cleared, front, boss) {
       const p = app.profile;
@@ -399,7 +400,7 @@ export function createMapScreen() {
       ctx.fillStyle = unlocked ? mix(PAL.ink2, base, isDone ? 0.28 : boss ? 0.34 : 0.18) : PAL.ink; ctx.fill();
       ctx.lineWidth = sel ? 2.5 : 1.8; ctx.strokeStyle = sel ? PAL.bone : rgba(base, unlocked ? 0.95 : 0.4); ctx.stroke();
       ctx.restore();
-      drawText(ctx, String(gs), r.x + r.w / 2, r.y + r.h / 2 + (boss ? 3 : 7), { size: boss ? 16 : 18, kind: 'display', align: 'center', color: unlocked ? PAL.bone : PAL.slate, stroke: 3 });
+      drawText(ctx, String(gs), r.x + r.w / 2, r.y + r.h / 2 + (boss ? 3 : 7), { size: boss ? 16 : 18, kind: 'display', align: 'center', color: unlocked ? PAL.bone : PAL.slateText, stroke: 3 });
       if (boss) { // crown spikes
         ctx.fillStyle = unlocked ? PAL.magenta : PAL.slate;
         const cx0 = r.x + r.w / 2, cy0 = r.y + 12;
@@ -453,7 +454,7 @@ export function createMapScreen() {
           const inn = ui.panel({ x: 4, y, w: view.w - 8, h: rowH }, { pad: 10, color: m.clearedToday ? PAL.lime : PAL.violetHi, glow: !m.clearedToday });
           drawText(ctx, m.name, inn.x, inn.y + 17, { size: 19, kind: 'display', maxWidth: inn.w - 120 });
           drawText(ctx, d.name + '  stage ' + m.stage + '  ' + m.waves + ' waves', inn.x, inn.y + 34, { size: 12, color: PAL.boneDim, weight: 700, maxWidth: inn.w - 120 });
-          para(ctx, m.modifier.text, inn.x, inn.y + 40, inn.w - 120, { size: 12, color: PAL.violetHi, maxLines: 2 });
+          para(ctx, m.modifier.text, inn.x, inn.y + 40, inn.w - 120, { size: 12, color: PAL.violetText, maxLines: 2 });
           chip(ctx, inn.x, inn.y + inn.h - 28, 'x' + m.rewardMult.toFixed(2) + ' rewards', PAL.cyan, { size: 11, h: 18 });
           if (m.clearedToday) chip(ctx, inn.x + 100, inn.y + inn.h - 28, 'CLEARED TODAY', PAL.lime, { size: 11, h: 18 });
           else { ICONS.drawCurrency(ctx, 'gems', inn.x + 106, inn.y + inn.h - 19, 15, ui.t); drawText(ctx, '+1 first win today', inn.x + 118, inn.y + inn.h - 14, { size: 11, weight: 800, color: PAL.cyan, stroke: 2.5 }); }
@@ -674,14 +675,14 @@ export function createBestiaryScreen() {
         ctx.restore();
         const pw = wide ? r.h - 6 : r.w - 6, ph = wide ? r.h - 6 : r.h - 24;
         if (known) ENEMYART.drawEnemyPortrait(ctx, e.id, r.x + 3, r.y + 3, pw, ph, { t: ui.t, anim: 'walk', animT: (ui.t * 0.4 + hash01(e.id)) % 1 });
-        else { ctx.fillStyle = PAL.void; ctx.fillRect(r.x + 3, r.y + 3, pw, ph); drawText(ctx, '?', r.x + 3 + pw / 2, r.y + 3 + ph / 2 + 16, { size: 36, kind: 'display', align: 'center', color: PAL.slate }); }
+        else { ctx.fillStyle = PAL.void; ctx.fillRect(r.x + 3, r.y + 3, pw, ph); drawText(ctx, '?', r.x + 3 + pw / 2, r.y + 3 + ph / 2 + 16, { size: 36, kind: 'display', align: 'center', color: PAL.slateText }); }
         ctx.save(); chamfer(ctx, r.x, r.y, r.w, r.h, 6); ctx.lineWidth = 2; ctx.strokeStyle = known ? (e.boss ? PAL.magenta : ENEMY_COLOR[factionOf(e)] || PAL.violetHi) : rgba(PAL.slate, 0.5); ctx.stroke(); ctx.restore();
         if (wide) {
           const tx = r.x + r.h + 6;
-          drawText(ctx, known ? e.name : '???', tx, r.y + 28, { size: 18, kind: 'display', color: known ? PAL.bone : PAL.slate, maxWidth: r.w - r.h - 14 });
+          drawText(ctx, known ? e.name : '???', tx, r.y + 28, { size: 18, kind: 'display', color: known ? PAL.bone : PAL.slateText, maxWidth: r.w - r.h - 14 });
           drawText(ctx, known ? 'BOSS  HP ' + formatNum(e.base.hp) : 'BOSS', tx, r.y + 48, { size: 12, weight: 800, color: PAL.magenta, stroke: 2.5 });
           if (known) para(ctx, e.desc, tx, r.y + 54, r.w - r.h - 14, { size: 12, maxLines: 2, lh: 14 });
-        } else drawText(ctx, known ? e.name.split(',')[0] : '???', r.x + r.w / 2, r.y + r.h - 7, { size: 11, weight: 800, align: 'center', maxWidth: r.w - 6, stroke: 2.5, color: known ? PAL.bone : PAL.slate });
+        } else drawText(ctx, known ? e.name.split(',')[0] : '???', r.x + r.w / 2, r.y + r.h - 7, { size: 11, weight: 800, align: 'center', maxWidth: r.w - 6, stroke: 2.5, color: known ? PAL.bone : PAL.slateText });
         if (st.tap) tapped = e;
       };
       ui.scroll('bes:scroll', view, total, () => {
@@ -689,7 +690,7 @@ export function createBestiaryScreen() {
         for (const s of secs) {
           const everyone = s.list.concat(s.boss ? [s.boss] : []);
           const have = everyone.filter((e) => seen.has(e.id)).length;
-          drawText(ctx, s.d.name, 8, yy + 20, { size: 18, kind: 'display', color: have ? PAL.bone : PAL.slate });
+          drawText(ctx, s.d.name, 8, yy + 20, { size: 18, kind: 'display', color: have ? PAL.bone : PAL.slateText });
           drawText(ctx, have + '/' + everyone.length, view.w - 12, yy + 20, { size: 13, weight: 800, align: 'right', color: have === everyone.length ? PAL.lime : PAL.boneDim });
           yy += 34;
           for (let i = 0; i < s.list.length; i++) tile(s.list[i], { x: 4 + (i % colsN) * (tw + gap), y: yy + Math.floor(i / colsN) * (th + gap), w: tw, h: th }, false);
@@ -781,7 +782,7 @@ export function createSettingsScreen() {
         if (ui.button('set:credits', { x: inn.x, y: inn.y, w: bw, h: 52 }, 'CREDITS', { kind: 'secondary', size: 15 })) this.credits(ui);
         if (ui.button('set:reset', { x: inn.x + bw + 8, y: inn.y, w: bw, h: 52 }, 'RESET SAVE', { kind: 'danger', size: 15 })) this.reset(app, ui);
         drawText(ctx, 'Midnight Mog', inn.x, inn.y + 78, { size: 15, kind: 'display', color: PAL.boneDim });
-        drawText(ctx, 'Save v' + (app.profile.v | 0) + '  seed ' + formatNum(app.profile.seed), inn.x, inn.y + 98, { size: 12, color: PAL.slate, weight: 700 });
+        drawText(ctx, 'Save v' + (app.profile.v | 0) + '  seed ' + formatNum(app.profile.seed), inn.x, inn.y + 98, { size: 12, color: PAL.slateText, weight: 700 });
       });
       if (changed) { saveSettings(s); applySettings(app, ui); sfx(app, 'ui_toggle'); }
       ui.vignette(0.4);

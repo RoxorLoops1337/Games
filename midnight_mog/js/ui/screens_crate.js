@@ -686,13 +686,13 @@ export function createCrateScreen() {
     for (let i = 0; i < PITY_TIERS.length; i++) {
       const tier = PITY_TIERS[i], pt = tbl && tbl.pity[tier], ry = pin.y + i * rowH;
       const col = rcol(tier, t);
-      drawText(ctx, tierNames[tier], pin.x + 2, ry + rowH * 0.62, { size: 15, kind: 'display', color: pt ? col : PAL.slate, stroke: 3 });
+      drawText(ctx, tierNames[tier], pin.x + 2, ry + rowH * 0.62, { size: 15, kind: 'display', color: pt ? col : PAL.slateText, stroke: 3 });
       if (pt) {
         const v = pt.counter / pt.hard;
         drawBar(ctx, pin.x + 74, ry + rowH * 0.22, pin.w - 74 - 74, rowH * 0.5, v, col, pt.soft / pt.hard);
         const left = pt.remaining;
         drawText(ctx, left <= 1 ? 'NEXT!' : left + ' to go', pin.x + pin.w, ry + rowH * 0.64, { size: 13, kind: 'body', weight: 800, align: 'right', color: left <= 1 ? PAL.lime : PAL.boneDim, maxWidth: 70, stroke: 3 });
-      } else drawText(ctx, 'no guarantee in this crate', pin.x + 74, ry + rowH * 0.62, { size: 13, kind: 'body', weight: 600, color: PAL.slate, stroke: 3 });
+      } else drawText(ctx, 'no guarantee in this crate', pin.x + 74, ry + rowH * 0.62, { size: 13, kind: 'body', weight: 600, color: PAL.slateText, stroke: 3 });
     }
     // ---- buttons
     const p1 = priceFor(p, id, 1), p10 = priceFor(p, id, MULTI_COUNT);
@@ -1064,7 +1064,7 @@ export function createCrateScreen() {
     for (const tier of PITY_TIERS) {
       const pt = tbl.pity[tier], col = rcol(tier, t);
       y += 6;
-      if (!pt) { y += 16; drawText(ctx, RARITY[tier].name + ': not guaranteed in this crate', 2, y, { size: 13, kind: 'body', weight: 700, color: PAL.slate, stroke: 3 }); continue; }
+      if (!pt) { y += 16; drawText(ctx, RARITY[tier].name + ': not guaranteed in this crate', 2, y, { size: 13, kind: 'body', weight: 700, color: PAL.slateText, stroke: 3 }); continue; }
       y += 18;
       drawText(ctx, RARITY[tier].name + ' or better', 2, y, { size: 15, kind: 'display', color: col, stroke: 3 });
       drawText(ctx, pt.counter + ' / ' + pt.hard, w - 4, y, { size: 14, kind: 'mono', weight: 800, align: 'right', color: PAL.bone, stroke: 3 });
@@ -1081,7 +1081,7 @@ export function createCrateScreen() {
       if (tbl.rarity.find((r) => r.id === rid).base <= 0) continue;
       y += 22;
       drawText(ctx, RARITY[rid].name, 2, y - 2, { size: 13, kind: 'display', color: rcol(rid, t), stroke: 3 });
-      for (let k = 0; k < kinds.length; k++) drawText(ctx, pct(tbl.content[rid][kinds[k]]), 76 + k * ((w - 80) / 5) + ((w - 80) / 10), y - 2, { size: 12, kind: 'mono', weight: 700, align: 'center', color: tbl.content[rid][kinds[k]] > 0 ? PAL.bone : PAL.slate, stroke: 3 });
+      for (let k = 0; k < kinds.length; k++) drawText(ctx, pct(tbl.content[rid][kinds[k]]), 76 + k * ((w - 80) / 5) + ((w - 80) / 10), y - 2, { size: 12, kind: 'mono', weight: 700, align: 'center', color: tbl.content[rid][kinds[k]] > 0 ? PAL.bone : PAL.slateText, stroke: 3 });
     }
     y += 4;
     const pools = tbl.pools;

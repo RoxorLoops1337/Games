@@ -144,6 +144,7 @@ export function createUI(canvas, opts = {}) {
     canvas, ctx, w: 390, h: 800, dpr: 1, t: 0, dt: 1 / 60, frame: 0,
     safe: { top: 0, bottom: 0, left: 0, right: 0 }, col: { x: 0, w: 390 }, content: { x: 0, y: 0, w: 390, h: 800 }, maxColumn: opts.maxColumn || 520,
     reduceMotion: false, keyboard: false, layer: 0,
+    renderScale: 1,   // 0.5..1: dynamic resolution, main.js lowers it when the battle cannot hold the frame rate (backing store only, layout and input stay in CSS px)
     // pointer
     px: -1, py: -1, down: false, dragging: false, sx: 0, sy: 0, dx: 0, dy: 0, pointerType: 'mouse', inside: false,
     pressId: '', pressLayer: 0, pressT: 0,
@@ -171,8 +172,25 @@ export function createUI(canvas, opts = {}) {
     }
     return best;
   }
+  /** Rect {x,y,w,h} of a region drawn last frame (tutorial spotlights, tests), or null. Scroll offsets are already applied. */
+  ui.rectOf = function (id) {
+    for (let i = 0; i < prevN; i++) if (prev[i].id === id) return { x: prev[i].x, y: prev[i].y, w: prev[i].w, h: prev[i].h };
+    return null;
+  };
+  /** Snapshot of the regions drawn last frame: [{id,x,y,w,h,layer}] (QA tools, monkey tests). Allocates, never call per frame in the game. */
+  ui.regionList = function () { const out = []; for (let i = 0; i < prevN; i++) { const r = prev[i]; out.push({ id: r.id, x: r.x, y: r.y, w: r.w, h: r.h, layer: r.layer, label: r.label }); } return out; };
   function topLayer() { let m = 0; for (let i = 0; i < prevN; i++) if (prev[i].layer > m) m = prev[i].layer; return m; }
 
+  // Hit target growth: a control drawn smaller than 44 px gets a 44 px hit region centred on it (the drawing does not change).
+  const MIN_HIT = 44;
+  const grown = { x: 0, y: 0, w: 0, h: 0 };
+  function grow(r) {
+    if (r.h >= MIN_HIT && r.w >= MIN_HIT) return r;
+    grown.x = r.x; grown.y = r.y; grown.w = r.w; grown.h = r.h;
+    if (r.h < MIN_HIT) { grown.y = r.y - (MIN_HIT - r.h) / 2; grown.h = MIN_HIT; }
+    if (r.w < MIN_HIT) { grown.x = r.x - (MIN_HIT - r.w) / 2; grown.w = MIN_HIT; }
+    return grown;
+  }
   /** Register a hit region and read its state. The returned object is shared: read it immediately. */
   function region(id, r, o) {
     let x = r.x + ox, y = r.y + oy, w = r.w, h = r.h;
@@ -259,7 +277,7 @@ export function createUI(canvas, opts = {}) {
       }
     }
     const d = dpr || opts.dpr || (win && win.devicePixelRatio) || 1;
-    ui.dpr = clamp(d, 1, 3);
+    ui.dpr = Math.max(0.5, clamp(d, 1, 3) * clamp(ui.renderScale, 0.5, 1));
     ui.w = Math.max(160, Math.round(cw)); ui.h = Math.max(200, Math.round(ch));
     canvas.width = Math.round(ui.w * ui.dpr); canvas.height = Math.round(ui.h * ui.dpr);
     if (canvas.style && !opts.width) { /* css size comes from the stylesheet */ }
@@ -474,11 +492,42 @@ export function createUI(canvas, opts = {}) {
     ctx.fillStyle = rgba(PAL.void, a === undefined ? 0.06 : a);
     for (let y = 0; y < ui.h; y += 3) ctx.fillRect(0, y, ui.w, 1);
   };
+  // ---- cached layers: a slow animated backdrop (window lights, weather) is painted into an offscreen canvas at a low rate and
+  // blitted every frame. Rasterising the city each frame costs about 17 ms on software canvases; the blit costs almost nothing.
+  // Without a document (tests) it returns false and the caller paints directly.
+  const layers = new Map();
+  ui.cachedDraw = function (key, x, y, w, h, interval, paint) {
+    if (!doc || !doc.createElement || ui.noLayerCache || !(w > 0) || !(h > 0)) return false;
+    const px = Math.max(1, Math.round(w * ui.dpr)), py = Math.max(1, Math.round(h * ui.dpr));
+    let L = layers.get(key);
+    if (!L || L.px !== px || L.py !== py) {
+      let cv = null, cx = null;
+      try { cv = doc.createElement('canvas'); cv.width = px; cv.height = py; cx = cv.getContext && cv.getContext('2d'); } catch (e) { cx = null; }
+      if (!cx) return false;
+      if (layers.size > 10) layers.delete(layers.keys().next().value);
+      L = { cv, cx, px, py, t: -1e9 };
+      layers.set(key, L);
+    }
+    if (ui.t - L.t >= interval) {
+      L.cx.setTransform(ui.dpr, 0, 0, ui.dpr, 0, 0); L.cx.globalAlpha = 1; L.cx.globalCompositeOperation = 'source-over';
+      L.cx.clearRect(0, 0, w, h);
+      paint(L.cx, w, h, ui.t);
+      L.t = ui.t;
+    }
+    ctx.drawImage(L.cv, x, y, w, h);
+    return true;
+  };
   /** Night-city backdrop for menu screens. districtId optional. Falls back to a plain gradient if world.js is unavailable. */
   ui.background = function (districtId, o) {
     o = o || {};
     let done = false;
-    if (WORLD.drawTownBackdrop) { try { WORLD.drawTownBackdrop(ctx, ui.w, ui.h, ui.t, { districtId: districtId || 'rooftop_row' }); done = true; } catch (e) { done = false; } }
+    const did = districtId || 'rooftop_row';
+    if (WORLD.drawTownBackdrop) {
+      try {
+        done = ui.cachedDraw('bg:' + did, 0, 0, ui.w, ui.h, 0.1, (c, w, h, t) => WORLD.drawTownBackdrop(c, w, h, t, { districtId: did }));
+        if (!done) { WORLD.drawTownBackdrop(ctx, ui.w, ui.h, ui.t, { districtId: did }); done = true; }
+      } catch (e) { done = false; }
+    }
     if (!done) {
       const g = vgrad(ctx, 'bg', ui.h, PAL.void, PAL.ink3, PAL.violet);
       ctx.fillStyle = g; ctx.fillRect(0, 0, ui.w, ui.h);
@@ -505,7 +554,7 @@ export function createUI(canvas, opts = {}) {
     o = o || {};
     const disabled = !!o.disabled;
     const k = KINDS[o.kind] || (o.icon ? KINDS.icon : KINDS.secondary);
-    const st = region(id, r, { focus: !disabled, label: o.aria || (typeof label === 'string' ? label : o.icon || id) });
+    const st = region(id, grow(r), { focus: !disabled, label: o.aria || (typeof label === 'string' ? label : o.icon || id) });
     const hover = st.hover, isDown = st.down && !disabled, tapped = st.tap, focused = st.focus;
     const S = state('btn:' + id, { pr: 0, hv: 0 });
     S.pr += ((isDown ? 1 : 0) - S.pr) * Math.min(1, ui.dt * 28);
@@ -543,7 +592,7 @@ export function createUI(canvas, opts = {}) {
     chamfer(ctx, 1, 1, w - 2, h - 2, c); ctx.lineWidth = 1; ctx.strokeStyle = rgba(shade(base, 0.45), disabled ? 0.3 : 0.7); ctx.stroke();
     if (o.toggled) { chamfer(ctx, 1, 1, w - 2, h - 2, c); ctx.lineWidth = 2; ctx.strokeStyle = PAL.cyan; ctx.stroke(); glow(ctx, w / 2, h / 2, Math.max(w, h) * 0.7, PAL.cyan, 0.2); }
     // content
-    const col = disabled ? rgba(PAL.boneDim, 0.7) : k.text;
+    const col = disabled ? PAL.bone : k.text;   // bone on the slate fill is 5.3:1 (boneDim at 0.7 was 2:1)
     if (o.icon) {
       const s = o.size || Math.min(w, h) * 0.56;
       if (typeof o.icon === 'function') o.icon(ctx, w / 2, h / 2, s, ui.t);
@@ -552,7 +601,7 @@ export function createUI(canvas, opts = {}) {
       const size = o.size || clamp(h * 0.4, 12, 24);
       const hasSub = !!o.sub;
       drawText(ctx, label, w / 2, h / 2 + size * (hasSub ? 0.08 : 0.34) - (hasSub ? size * 0.28 : 0), { size, kind: 'display', color: col, align: 'center', maxWidth: w - 14, stroke: k.stroke && !disabled ? Math.max(3, size * 0.16) : false });
-      if (hasSub) drawText(ctx, o.sub, w / 2, h / 2 + size * 0.82, { size: clamp(size * 0.55, 11, 15), kind: 'body', weight: 700, color: disabled ? PAL.boneDim : (o.kind === 'positive' ? PAL.ink : PAL.bone), align: 'center', maxWidth: w - 14, stroke: o.kind === 'positive' ? false : 2 });
+      if (hasSub) drawText(ctx, o.sub, w / 2, h / 2 + size * 0.82, { size: clamp(size * 0.55, 11, 15), kind: 'body', weight: 700, color: disabled ? PAL.bone : (o.kind === 'positive' ? PAL.ink : PAL.bone), align: 'center', maxWidth: w - 14, stroke: o.kind === 'positive' ? false : 2 });
     }
     ctx.restore();
     if (o.badge) ui.badge(r.x + r.w - 4, r.y + 2, o.badge);
@@ -610,7 +659,7 @@ export function createUI(canvas, opts = {}) {
     let out = active;
     for (let i = 0; i < n; i++) {
       const it = items[i], x = r.x + i * (tw + gap), on = it.id === active;
-      const st = region(id + ':' + it.id, { x, y: r.y, w: tw, h: r.h }, { focus: true, label: it.label + (on ? ', selected' : '') });
+      const st = region(id + ':' + it.id, grow({ x, y: r.y, w: tw, h: r.h }), { focus: true, label: it.label + (on ? ', selected' : '') });
       const S = state('tab:' + id + ':' + it.id, { a: on ? 1 : 0 });
       S.a += ((on ? 1 : 0) - S.a) * Math.min(1, ui.dt * 16);
       ctx.save(); ctx.translate(x, r.y);
@@ -620,7 +669,7 @@ export function createUI(canvas, opts = {}) {
       ctx.fillStyle = mix(PAL.ink2, mix(PAL.cyanDeep, PAL.ink3, 0.4), S.a); ctx.fill();
       ctx.lineWidth = 2; ctx.strokeStyle = on ? PAL.cyan : rgba(PAL.violet, 1); ctx.stroke();
       if (S.a > 0.05) { glow(ctx, tw / 2, h, tw * 0.7, PAL.cyan, 0.25 * S.a); ctx.fillStyle = PAL.cyan; ctx.fillRect(6, h - 3, tw - 12, 3); }
-      drawText(ctx, it.label, tw / 2, h / 2 + 6, { size: clamp(h * 0.38, 12, 17), kind: 'display', align: 'center', color: on ? PAL.bone : PAL.violetHi, maxWidth: tw - 10, stroke: on ? 3 : 2 });
+      drawText(ctx, it.label, tw / 2, h / 2 + 6, { size: clamp(h * 0.38, 12, 17), kind: 'display', align: 'center', color: on ? PAL.bone : PAL.violetText, maxWidth: tw - 10, stroke: on ? 3 : 2 });
       ctx.restore();
       if (it.badge) ui.badge(x + tw - 6, r.y + 4, it.badge);
       if (st.focus) focusRing(x, r.y, tw, r.h, 6);
@@ -717,7 +766,7 @@ export function createUI(canvas, opts = {}) {
 
   /** Toggle switch (chamfered, not a pill). Returns the new value. */
   ui.toggle = function (id, r, value, label) {
-    const st = region(id, r, { focus: true, label: (label || id) + (value ? ', on' : ', off') });
+    const st = region(id, grow(r), { focus: true, label: (label || id) + (value ? ', on' : ', off') });
     const S = state('tg:' + id, { a: value ? 1 : 0 });
     S.a += ((value ? 1 : 0) - S.a) * Math.min(1, ui.dt * 18);
     const tw = Math.min(64, r.w), th = Math.min(r.h, 32), tx = r.x + r.w - tw, ty = r.y + (r.h - th) / 2;
@@ -803,7 +852,7 @@ export function createUI(canvas, opts = {}) {
     let tapped = '';
     for (let i = 0; i < show.length; i++) {
       const id = show[i], cr = cells[i];
-      const st = region('cur:' + id, cr, { focus: true, label: id + ' ' + formatNum(fin(cur && cur[id])) });
+      const st = region('cur:' + id, grow(cr), { focus: true, label: id + ' ' + formatNum(fin(cur && cur[id])) });
       const col = id === 'fish' ? PAL.bone : id === 'yarn' ? PAL.magenta : id === 'gems' ? PAL.cyan : PAL.lime;
       ctx.save(); ctx.translate(cr.x, cr.y);
       chamfer(ctx, 0, 0, cr.w, cr.h, 5); ctx.lineWidth = 5; ctx.strokeStyle = PAL.ink; ctx.stroke();
@@ -934,7 +983,7 @@ export function createUI(canvas, opts = {}) {
     if (CATART.drawCatPortrait && cat) {
       try { CATART.drawCatPortrait(ctx, catId, 3, 3, w - 6, ph - 3, { t: ui.t, level: o.level, stars: o.stars }); } catch (e) { ctx.fillStyle = PAL.violet; ctx.fillRect(3, 3, w - 6, ph - 3); }
     } else { ctx.fillStyle = PAL.violet; ctx.fillRect(3, 3, w - 6, ph - 3); }
-    if (o.locked) { ctx.fillStyle = rgba(PAL.void, 0.82); ctx.fillRect(3, 3, w - 6, ph - 3); drawText(ctx, '?', w / 2, 3 + (ph - 3) / 2 + 14, { size: 40, kind: 'display', align: 'center', color: PAL.slate }); }
+    if (o.locked) { ctx.fillStyle = rgba(PAL.void, 0.82); ctx.fillRect(3, 3, w - 6, ph - 3); drawText(ctx, '?', w / 2, 3 + (ph - 3) / 2 + 14, { size: 40, kind: 'display', align: 'center', color: PAL.slateText }); }
     ctx.restore();
     if (CATART.drawRarityFrame) { try { CATART.drawRarityFrame(ctx, rid, 0, 0, w, h, ui.t, { chamfer: c }); } catch (e) { /* optional */ } }
     else { chamfer(ctx, 0, 0, w, h, c); ctx.lineWidth = 2; ctx.strokeStyle = rarityColor(rid); ctx.stroke(); }

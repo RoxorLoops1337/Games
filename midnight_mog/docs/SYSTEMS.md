@@ -144,7 +144,7 @@ Helpers: `districtForStage(stage)` returns `{district, stageInDistrict, round, e
 
 ## 9. Balance notes for the sim authors
 - Time to kill target: a level-appropriate team kills a basic enemy in 1 to 2s; an armored one in 3 to 4s; a boss in 60 to 90s.
-- Energy: start 3, regen 0.5 per second (`deck.energyRegen`), cap 10 by default. Cost 0 cards are small but free; `catnip_stash` nets +1.
+- Energy: start 3, regen 0.5 per second (`deck.energyRegen`), cap 10 by default. Cost 0 cards (`cat_nap`, `tail_flick`) and `catnip_stash` (cost 1, gain 4) exhaust: once per battle each copy, because the hand refills after every play and a repeatable free or energy positive card is an infinite loop in zero time (docs/EXPLOIT_REPORT.md B2).
 - Cheapest strong combos to keep an eye on (bot test): `infinite_yarn` + `catnip_stash`, `moonstone_prism` + `starfall_purrade`, `bulwark_bowl` + `baron_von_fluff` reflect, `tesla_whisker` + `empress_whiskerwind`.
 - Contract additions: extra fields on Cat.ability (`name`, `text`, `effect`), Enemy (`district`, `range`, `rate`, `size`, `params`, `ability`, `phases`, `desc`), and Relic/District shapes (defined here).
 

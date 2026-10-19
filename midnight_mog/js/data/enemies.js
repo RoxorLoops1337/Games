@@ -99,7 +99,7 @@ export const ENEMIES = [
     { range: 5, params: { explosive: { radius: 1.5, mult: 1.2, on: 'death' } }, desc: 'Pops up toast at supersonic speed.' }),
   en('microwave_medic', 'Microwave Medic', 'appliance_heights', 5, 360, 14, 0.4, 20, ['healer', 'shielded'],
     { range: 2, params: { healer: { pct: 0.15, radius: 3, every: 3 }, shielded: { shield: 200, regen: 20 } }, desc: 'Heals in thirty second bursts. Beeps when done.' }),
-  en('hoovermatron_prime', 'Hoovermatron Prime', 'appliance_heights', 5, 36000, 75, 0.35, 800, ['armored', 'summoner', 'boss'],
+  en('hoovermatron_prime', 'Hoovermatron Prime', 'appliance_heights', 5, 30000, 75, 0.35, 800, ['armored', 'summoner', 'boss'],
     { boss: true, size: 2.3, params: { armored: { armor: 0.45 }, summoner: { enemy: 'roomba_rover', every: 8, count: 6 } },
       desc: 'Vacuum cleaner. Mech. Prime. Three problems in one.',
       phases: [
@@ -109,19 +109,19 @@ export const ENEMIES = [
       ] }),
 
   // ---- District 6: Bathtub Bay (the drain) ----
-  en('rubber_duck_raider', 'Rubber Duck Raider', 'bathtub_bay', 6, 180, 14, 1.0, 16, ['swarm', 'flying'],
+  en('rubber_duck_raider', 'Rubber Duck Raider', 'bathtub_bay', 6, 150, 14, 1.0, 16, ['swarm', 'flying'],
     { params: { swarm: { group: 8 } }, desc: 'Squeaks before it strikes. Always.' }),
-  en('soap_slimer', 'Soap Slimer', 'bathtub_bay', 6, 400, 20, 0.5, 18, ['splitter'],
+  en('soap_slimer', 'Soap Slimer', 'bathtub_bay', 6, 330, 20, 0.5, 18, ['splitter'],
     { params: { splitter: { into: 'soap_bubble', count: 4 } }, desc: 'Slippery. Then very many.' }),
   en('soap_bubble', 'Soap Bubble', 'bathtub_bay', 6, 50, 8, 1.0, 2, ['swarm', 'flying'],
     { params: { swarm: { group: 1 } }, desc: 'Floats. Pops. Stings.' }),
-  en('plunger_crab', 'Plunger Crab', 'bathtub_bay', 6, 640, 40, 0.45, 26, ['armored', 'burrower'],
+  en('plunger_crab', 'Plunger Crab', 'bathtub_bay', 6, 520, 40, 0.45, 26, ['armored', 'burrower'],
     { params: { armored: { armor: 0.4 }, burrower: { every: 7, duration: 2, emergeAoe: { radius: 1.5, mult: 1.2 } } }, desc: 'Claws made of rubber suction cups. Do not ask.' }),
-  en('faucet_eel', 'Faucet Eel', 'bathtub_bay', 6, 480, 30, 0.5, 24, ['ranged', 'shielded'],
+  en('faucet_eel', 'Faucet Eel', 'bathtub_bay', 6, 400, 30, 0.5, 24, ['ranged', 'shielded'],
     { range: 5, params: { shielded: { shield: 250, regen: 25 } }, ability: { every: 8, effect: { kind: 'chain', jumps: 3, mult: 1.0, falloff: 0.1, range: 2, element: 'elec' } }, desc: 'Drips with ambition.' }),
   en('kraken_tentacle', 'Kraken Tentacle', 'bathtub_bay', 6, 900, 35, 0.3, 10, ['armored'],
     { params: { armored: { armor: 0.25 } }, desc: 'Not attached to anything anymore.' }),
-  en('bathtub_kraken', 'The Bathtub Kraken', 'bathtub_bay', 6, 90000, 110, 0.3, 2000, ['summoner', 'shielded', 'boss'],
+  en('bathtub_kraken', 'The Bathtub Kraken', 'bathtub_bay', 6, 65000, 110, 0.3, 2000, ['summoner', 'shielded', 'boss'],
     { boss: true, size: 2.6, params: { summoner: { enemy: 'kraken_tentacle', every: 10, count: 2 }, shielded: { shield: 4000, regen: 100 } },
       desc: 'Drawn from the drain by the sound of a running tap. Hates baths. Is one.',
       phases: [

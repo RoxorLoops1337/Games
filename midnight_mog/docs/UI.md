@@ -100,3 +100,10 @@ Pointer events cover mouse and touch. A press that travels more than 9 px become
 
 ## 9. Lab
 `lab/ui.html`: `?v=widgets` (contact sheet, add `&toast=1&dialog=1`), `?v=battle` (live, with `warp=<sim seconds>`, `auto=1`, `speed=1..3`, `sel=<hand index>`, `drag=1`, `stage=<n>`, `w=`, `h=`), `?v=boss`, `?v=pause`, `?v=result`. Serve the repo root and open `/midnight_mog/lab/ui.html`.
+
+## 10. Integration additions (main.js)
+- `ui.rectOf(id)` returns the rect of a region drawn last frame (or null). The tutorial uses it to spotlight real widgets.
+- `ui.cachedDraw(key, x, y, w, h, interval, paint(ctx, w, h, t))` paints a slow animated layer into an offscreen canvas at most every `interval` seconds and blits it each frame (returns false without a document, so the caller paints directly). `ui.background` uses it (10 fps city) because rasterising the backdrop each frame costs about 17 ms on software canvases.
+- The bottom navigation bar (`screens_hub.js`, 64 px, hidden on `title`, `battle`, `nine_lives` and during a crate ceremony) is reserved by raising `ui.safe.bottom` and shrinking `ui.content.h` before every frame, so screens that anchor to the bottom already sit above it. `main.js` keeps the real safe inset in `baseSafe`.
+- Battle params gain `holdSim(b)`: when it returns true the sim does not advance (the tutorial freezes the fight while a spotlight waits).
+- Router: `router.go(id, params, {kind, back, replace})`, `params.reset` clears the history (tab roots), `router.back()` pops it (never back into a battle) and lands on the hub when empty. `router.go` called while a transition is already covering the screen switches at once.

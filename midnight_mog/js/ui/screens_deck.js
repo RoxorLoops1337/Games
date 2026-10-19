@@ -552,9 +552,9 @@ export function createDeckScreen() {
       }
       if (card.type === 'summon') {
         const cat = CAT_BY_ID[card.effect.cat], ce = p.cats[cat.id];
-        const cc = catLevelCost(p, cat.id), cmax = !Number.isFinite(cc);
+        const cc = ce ? catLevelCost(p, cat.id) : Infinity, cmax = !Number.isFinite(cc);   // a card can be owned before its cat is found (crate drops)
         const cok = !cmax && catBudget(p) >= cc;
-        if (ui.button('det:cat_lv', { x: bx, y: inn.y + bh + 4, w: btnW, h: bh }, cmax ? 'MAX' : 'CAT LV ' + (ce.level + 1), { kind: cok ? 'positive' : 'secondary', size: 13, sub: cmax ? 'Lv ' + ce.level : formatNum(cc) + ' yarn', disabled: cmax })) {
+        if (ui.button('det:cat_lv', { x: bx, y: inn.y + bh + 4, w: btnW, h: bh }, cmax ? (ce ? 'MAX' : 'NO CAT') : 'CAT LV ' + (ce.level + 1), { kind: cok ? 'positive' : 'secondary', size: 13, sub: cmax ? (ce ? 'Lv ' + ce.level : 'find it in crates') : formatNum(cc) + ' yarn', disabled: cmax })) {
           const res = levelUpCat(app.profile, cat.id);
           if (res.ok) { commit(app, res.profile); sfx(app, 'reward_tick'); toast(app, cat.name + ' is now Lv ' + res.profile.cats[cat.id].level, 'ok'); }
           else { sfx(app, 'deny'); toast(app, needMsg('yarn', catBudget(p), cc), 'warn'); }
@@ -640,7 +640,7 @@ export function createRosterScreen() {
         const hr = { x: lx, y, w: lw, h: heroH };
         cx.save(); chamfer(cx, hr.x, hr.y, hr.w, hr.h, 8); cx.clip();
         CATART.drawCatPortrait(cx, cat.id, hr.x, hr.y, hr.w, hr.h, { t: ui.t, level: e ? e.level : 1, stars: e ? e.stars : 0 });
-        if (!e) { cx.fillStyle = rgba(PAL.void, 0.78); cx.fillRect(hr.x, hr.y, hr.w, hr.h); drawText(cx, '?', hr.x + hr.w / 2, hr.y + hr.h / 2 + 30, { size: 90, kind: 'display', align: 'center', color: PAL.slate }); }
+        if (!e) { cx.fillStyle = rgba(PAL.void, 0.78); cx.fillRect(hr.x, hr.y, hr.w, hr.h); drawText(cx, '?', hr.x + hr.w / 2, hr.y + hr.h / 2 + 30, { size: 90, kind: 'display', align: 'center', color: PAL.slateText }); }
         cx.restore();
         CATART.drawRarityFrame(cx, cat.rarity, hr.x, hr.y, hr.w, hr.h, ui.t, { chamfer: 8 });
         chip(cx, hr.x + 10, hr.y + 10, RARITY[cat.rarity].name.toUpperCase(), rc, { size: 12 });
@@ -783,8 +783,8 @@ export function createRelicScreen() {
           } else {
             ctx.save(); ctx.globalAlpha = 0.55; ICONS.drawRelic(ctx, rel.id, r.x + tw / 2, r.y + th * 0.42, tw * 0.55, 0); ctx.restore();
             ctx.fillStyle = rgba(PAL.void, 0.8); chamfer(ctx, r.x + 2, r.y + 2, tw - 4, th - 4, 6); ctx.fill();
-            drawText(ctx, '?', r.x + tw / 2, r.y + th * 0.55, { size: 34, kind: 'display', align: 'center', color: PAL.slate });
-            drawText(ctx, RARITY[rel.rarity].name, r.x + tw / 2, r.y + th - 9, { size: 11, weight: 800, align: 'center', color: PAL.slate, stroke: 2 });
+            drawText(ctx, '?', r.x + tw / 2, r.y + th * 0.55, { size: 34, kind: 'display', align: 'center', color: PAL.slateText });
+            drawText(ctx, RARITY[rel.rarity].name, r.x + tw / 2, r.y + th - 9, { size: 11, weight: 800, align: 'center', color: PAL.slateText, stroke: 2 });
           }
           if (st.tap) tapped = rel;
         }

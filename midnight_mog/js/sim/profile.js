@@ -134,9 +134,21 @@ function sRelics(src) {
 function sDeck(src, cards) {
   let deck = Array.isArray(src) ? src.filter((id) => typeof id === 'string' && has(CARD_BY_ID, id)) : [];
   if (deck.length > MAX_DECK_CARDS) deck = deck.slice(0, MAX_DECK_CARDS);
-  if (deck.length < 4) deck = STARTER_DECK.slice();
-  // every deck card must be owned, otherwise the deck screen could not show or level it
+  // a deck holds at most as many copies of a card as the profile owns (a card the deck lists but cards does not is repaired
+  // as one owned copy, so the deck screen can show it): an edited save cannot run twelve free Cat Naps (exploit B1)
+  const left = {};
+  deck = deck.filter((id) => {
+    if (!has(left, id)) left[id] = cards[id] ? cards[id].count : 1;
+    return left[id]-- > 0;
+  });
   for (const id of deck) if (!cards[id]) cards[id] = { level: 1, count: 1 };
+  if (deck.length < 4) {
+    deck = STARTER_DECK.slice();
+    // the starter deck is always owned in full
+    const need = {};
+    for (const id of deck) need[id] = (need[id] || 0) + 1;
+    for (const id of Object.keys(need)) cards[id] = { level: cards[id] ? cards[id].level : 1, count: Math.max(need[id], cards[id] ? cards[id].count : 0) };
+  }
   return deck;
 }
 
@@ -300,10 +312,10 @@ export function sanitize(src) {
   const seed = int(s.seed, 0, 4294967295, 1);
   const cards = sCards(s.cards);
   const cats = sCats(s.cats);
-  const deck = sDeck(s.deck, cards);
   // a profile with no cats is not playable: grant the starters back
   if (!Object.keys(cats).length) for (const id of START.cats) cats[id] = { level: 1, dupes: 0, stars: 0 };
   for (const id of Object.keys(cats)) if (!cards['call_' + id] && has(CARD_BY_ID, 'call_' + id)) cards['call_' + id] = { level: 1, count: 1 };
+  const deck = sDeck(s.deck, cards);
   const town = sTown(s.town);
   if (!town.plots.some((pl) => pl.b)) town.plots[0] = { b: START.firstPlot.b, level: 1, t: 0 };
   const createdAt = Math.floor(Math.min(MAX_TIME, Math.max(0, fin(s.createdAt, 0))));
@@ -459,8 +471,10 @@ export function touchSeen(profile, nowMs) {
  * and reset when dayIndex changes. Returns {profile, granted}. Boss first-clear gems do not use this.
  */
 export function grantDailyGems(profile, amount, dayIndex) {
-  const day = int(dayIndex, 0, 1e7, 0);
   const stats = { ...(profile.stats || {}) };
+  // The day only moves forward: a rewound clock keeps counting against the day already seen, so flipping the date
+  // back and forth cannot reset the cap (exploit C3). gemDay starts at -1.
+  const day = Math.max(int(dayIndex, 0, 1e7, 0), int(stats.gemDay, -1, 1e7, -1));
   if ((stats.gemDay | 0) !== day) { stats.gemDay = day; stats.gemToday = 0; }
   const room = Math.max(0, REWARD.gemsDailyCapPerDay - (stats.gemToday | 0));
   const granted = Math.min(room, Math.max(0, Math.floor(fin(amount, 0))));

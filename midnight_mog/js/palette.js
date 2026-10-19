@@ -21,6 +21,8 @@ export const PAL = Object.freeze({
   bone: '#f4ecff',      // text, eye highlights, rim hot spot
   boneDim: '#b9a9d6',   // secondary text
   slate: '#6b5f86',     // disabled, common rarity base
+  violetText: '#a97be8', // violetHi lifted for TEXT on dark panels (5.5:1 or better on ink2 and ink3; violetHi itself is 3.3:1 and is for fills and strokes)
+  slateText: '#9a8fb4',  // slate lifted for muted TEXT (5.8:1 on ink3); slate stays the disabled stroke and fill colour
   // reserved
   gold: '#ffc83d',      // RARITY AND BEST LOOT ONLY
   goldDeep: '#a9701a',

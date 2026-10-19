@@ -24,6 +24,7 @@ import { deckSlots } from '../sim/deck.js';
 import { CARD_BY_ID } from '../data/cards.js';
 import { CAT_BY_ID } from '../data/cats.js';
 import { BUILDING_BY_ID, PRODUCERS } from '../data/buildings.js';
+import { ACHIEVEMENT_FAMILIES, NAMED_TIERS, achievementReward, collectionStatus } from '../data/quests.js';
 
 export const BOT_KINDS = ['random', 'greedy', 'strong'];
 
@@ -66,6 +67,15 @@ const cardPrice = (p, id, level, ts) =>
   Math.ceil(ECON.cost('card_level', level, { rarity: CARD_BY_ID[id].rarity }) * (1 - clamp(ts.cardCostDiscount || 0, 0, 0.4)));
 const catPrice = (p, id, level, ts) =>
   Math.ceil(ECON.cost('cat_level', level, { rarity: CAT_BY_ID[id].rarity }) * (1 - clamp(ts.catLevelDiscount || 0, 0, 0.4)));
+
+/** Gems of the finite onboarding ladders a player claims once (named achievement tiers, role and rarity collection sets). */
+function oneTimeGems(p) {
+  let g = 0;
+  const ach = (p.quests && p.quests.ach) || {};
+  for (const f of ACHIEVEMENT_FAMILIES) for (let i = 0; i < Math.min(ach[f.id] | 0, NAMED_TIERS); i++) g += achievementReward(i).gems;
+  for (const e of collectionStatus(p, p.quests)) if (e.claimed && e.group !== 'stars') g += (e.reward && e.reward.gems) || 0;
+  return g;
+}
 
 // ------------------------------------------------------------------------------------------------ bot state
 
@@ -408,10 +418,29 @@ function chooseStrong(b, S) {
   return best;
 }
 
+/** Strong saves energy for a big summon (cost 3+) that is within 4 energy of playable, unless something is urgent. */
+function savingForBig(b, c) {
+  if (b.base.hp < b.base.maxHp * 0.6) return false;
+  const card = CARD_BY_ID[b.hand[c.i]];
+  if (card.cost >= 3 || (card.type !== 'summon' && c.score >= 5)) return false;
+  let wait = false;
+  for (let i = 0; i < b.hand.length; i++) {
+    const k = CARD_BY_ID[b.hand[i]];
+    if (k.type === 'summon' && k.cost >= 3 && k.cost > b.energy && k.cost - b.energy <= 4) wait = true;
+  }
+  if (!wait) return false;
+  let cats = 0;
+  for (const u of b.units) if (u.kind === 'cat' && !u.dead) cats++;
+  if (cats < 3) return false;
+  for (const e of b.enemies) if (!e.dead && e.x < 3) return false;
+  return true;
+}
+
 function actStrong(b, S) {
   for (let g = 0; g < 4; g++) {
     const c = chooseStrong(b, S);
     if (!c || c.score < 2) return;
+    if (savingForBig(b, c)) return;
     const r = BATTLE.playCard(b, c.i, c.arg);
     if (!r.ok) return;
   }
@@ -948,7 +977,7 @@ function maybeReset(S) {
 const POLICIES = {
   random: { act: actRandom, farmAfter: 99, farmBack: 0, resetStall: Infinity },
   greedy: { act: actGreedy, farmAfter: 6, farmBack: 2, farmN: 2, resetStall: 40 * 60 },
-  strong: { act: actStrong, farmAfter: 2, farmBack: 2, farmN: 3, resetStall: 12 * 60, resetRecover: 0.95, resetGain: 1.25 },
+  strong: { act: actStrong, farmAfter: 2, farmBack: 2, farmN: 3, resetStall: 12 * 60, resetRecover: 0.95, resetGain: 1.03 },
 };
 
 /** One step of the session: an echo clear, a farm battle or a frontier attempt. Advances the clock. */
@@ -1074,6 +1103,8 @@ export function runBot(kind, opts = {}) {
   st.finalGs = frontierOf(S.p);
   const ah = Math.max(1e-9, S.activeT / 3600);
   st.gemsPerActiveHour = +(((S.p.cur.gems | 0) - 10 + S.gemsSpent) / ah).toFixed(2);
+  st.gemsOneTime = oneTimeGems(S.p);
+  st.gemsPerActiveHourOngoing = +(Math.max(0, (S.p.cur.gems | 0) - 10 + S.gemsSpent - st.gemsOneTime) / ah).toFixed(2);
   const lim = offlineLimits(S.p);
   st.offlineCapHours = +(lim.capSeconds / 3600).toFixed(1);
   st.offlineEfficiency = +lim.efficiency.toFixed(2);
@@ -1130,15 +1161,17 @@ export function compareOther(strong) {
   add('nineLivesSpeedup', T.nineLivesSpeedup, st.nineLivesSpeedup, 'first life time to stage 30 over the last life');
   add('offlineCapHours', T.offlineCapHours, st.offlineCapHours, 'end of run, with the Nap Dome the bot built');
   add('offlineEfficiency', T.offlineEfficiency, st.offlineEfficiency, 'end of run');
-  add('gemsPerActiveHour', T.gemsPerActiveHour, st.gemsPerActiveHour, 'earned (current + spent) per active hour');
+  add('gemsPerActiveHour', T.gemsPerActiveHour, st.gemsPerActiveHourOngoing, 'earned (current + spent) per active hour, without the one-time achievement tiers and collection sets (' + st.gemsOneTime + ' gems)');
   let worst = 0, worstId = null;
   for (const id of Object.keys(st.crateByType)) {
     const n = st.crateByType[id];
-    const price = ECON.crateCost(id, 0).price;
-    const ret = n > 0 ? (st.crateYarn[id] || 0) / n / price : 0;
+    // yarn back and price are compared in fish equivalents (yarn x4, gems x50): a gem crate pays gems, the yarn comes back as yarn
+    const c = ECON.crateCost(id, 0);
+    const priceFish = c.price * (c.cur === 'yarn' ? YARN_IN_FISH : c.cur === 'gems' ? GEM_IN_FISH : 1);
+    const ret = n > 0 ? ((st.crateYarn[id] || 0) / n) * YARN_IN_FISH / priceFish : 0;
     if (ret > worst) { worst = ret; worstId = id; }
   }
-  rows.push({ id: 'crateReturn', band: [0, T.crateReturnMax], got: +worst.toFixed(3), verdict: worst <= T.crateReturnMax ? 'ok' : 'above', note: 'measured yarn back per crate over base price (' + worstId + ')' });
+  rows.push({ id: 'crateReturn', band: [0, T.crateReturnMax], got: +worst.toFixed(3), verdict: worst <= T.crateReturnMax ? 'ok' : 'above', note: 'measured dupe and yarn drops per crate over base price, in fish equivalents (' + worstId + ')' });
   return rows;
 }
 

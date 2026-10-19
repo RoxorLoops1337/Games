@@ -1530,6 +1530,7 @@ export function drawCat(ctx, catId, x, y, size, o) {
   OL = Math.max(1.1, 1.5 / (core ? core.b : need));
   const rc = ROLE_COLOR[g.role];
   const dying = anim === 'die';
+  const lod = o.lod > 0 ? 1 : 0;   // crowd level of detail (set by the battle screen): no auras, sparkles, mouth or role ring
 
   // ground: shadow and role ring (never moves with the pose)
   const fade = P.alpha;
@@ -1537,14 +1538,14 @@ export function drawCat(ctx, catId, x, y, size, o) {
   c.globalAlpha = gA * fade;
   const rw = g.brx * 1.5 + 2.5;
   c.beginPath(); ell(c, 0, 0.6, rw, 2.8); c.fillStyle = rgba(PAL.ink, 0.55); c.fill();
-  c.beginPath(); ell(c, 0, 0.6, rw + 1.4, 3.5); c.strokeStyle = rgba(rc, 0.28); c.lineWidth = 0.8; c.stroke();
+  if (!lod) { c.beginPath(); ell(c, 0, 0.6, rw + 1.4, 3.5); c.strokeStyle = rgba(rc, 0.28); c.lineWidth = 0.8; c.stroke(); }
 
   // auras behind the cat
-  if (rar.order >= 3 && !dying) {
+  if (lod) { /* skipped */ } else if (rar.order >= 3 && !dying) {
     const col = rid === 'mythic' ? prism(t, 0.3) : rar.color;
     bloom(c, 0, -15, 24, col, rar.glowAlpha * 0.55);
   } else if (rar.order === 2 && !dying) bloom(c, 0, -15, 18, rar.color, 0.16 + 0.06 * Math.sin(t * 3 + ph * 6));
-  if (stars >= 2) bloom(c, 0, -14, 20, PAL.cyan, 0.08 * stars);
+  if (stars >= 2 && !lod) bloom(c, 0, -14, 20, PAL.cyan, 0.08 * stars);
   if (P.cast > 0) runeRing(c, rc, t, P.cast);
   if (anim === 'sleep') runeRing(c, rc, t, 0.0);
 
@@ -1555,7 +1556,7 @@ export function drawCat(ctx, catId, x, y, size, o) {
   const fl = P.flashCol, fa = P.flash;
 
   // mythic afterimage
-  if (rid === 'mythic' && !dying && core) {
+  if (rid === 'mythic' && !dying && core && !lod) {
     c.save();
     for (let i = 2; i >= 1; i--) { c.translate(-2.4, 0); blitCore(c, catId, core, 0.14 / i * 1.4, null); }
     c.restore();
@@ -1569,7 +1570,7 @@ export function drawCat(ctx, catId, x, y, size, o) {
   const furC = S.pat === 'points' ? S.f2 : S.fur;
   let tcol = fl ? mix(furC, fl, fa) : furC;
   if (S.tails === 9) {
-    for (let i = 0; i < 9; i++) {
+    for (let i = 0; i < 9; i += (lod ? 4 : 1)) {   // crowd level of detail: tails 0, 4 and 8 only
       const off = (i - 4) * 0.2;
       const cc = prism(t * 0.5 + i * 0.11, 0.4);
       drawTail(c, g, S, t + i * 0.37, ph, tcol, off, 0.85 + 0.12 * Math.cos((i - 4) * 0.5), 0.55, mix(furC, cc, 0.7), null, null);
@@ -1587,15 +1588,15 @@ export function drawCat(ctx, catId, x, y, size, o) {
 
   // ear flick: draw darker tips back when hit is handled by dropping glow only (cheap)
   drawFace(c, g, S, t, ph, P.glowMul * (1 + fin(o.level, 1) * 0.004));
-  drawMouth(c, g, S, t);
+  if (!lod) drawMouth(c, g, S, t);
 
   drawCatProps(c, g, S, catId, t, ph, true);
 
   // heart / bolt glows on the chest pulse
-  if (S.acc.indexOf('heartmark') >= 0) bloom(c, g.bx + g.brx * 0.5, g.by + 0.4, 6, PAL.lime, 0.25 + 0.15 * Math.sin(t * 3 + ph * 6));
+  if (S.acc.indexOf('heartmark') >= 0 && !lod) bloom(c, g.bx + g.brx * 0.5, g.by + 0.4, 6, PAL.lime, 0.25 + 0.15 * Math.sin(t * 3 + ph * 6));
 
   // rarity live ornaments
-  if (!dying) {
+  if (!dying && !lod) {
     if (rid === 'epic') {
       for (let i = 0; i < 3; i++) { const k = frac(t * 0.5 + i / 3 + ph); sparkle(c, -6 + i * 7 + Math.sin(k * 6 + i) * 2, -4 - k * 22, 0.9, rar.color, Math.sin(k * Math.PI)); }
     } else if (rid === 'legend' || rid === 'mythic') {

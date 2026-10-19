@@ -1090,6 +1090,20 @@ function paintInto(c, def, kind, idx, ph) {
   ST.lights = null;
   return lights;
 }
+/** Tight box of the non transparent pixels of a baked sprite, [sx, sy, sw, sh] in bitmap pixels (null when it cannot be read). Blitting only this box saves most of the fill rate on software canvases. */
+function alphaBox(cx, w, h) {
+  try {
+    const d = cx.getImageData(0, 0, w, h).data;
+    let x0 = w, y0 = h, x1 = -1, y1 = -1;
+    for (let y = 0; y < h; y++) {
+      const row = y * w * 4;
+      for (let x = 0; x < w; x++) if (d[row + x * 4 + 3] > 2) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; y1 = y; }
+    }
+    if (x1 < 0) return null;
+    x0 = Math.max(0, x0 - 1); y0 = Math.max(0, y0 - 1); x1 = Math.min(w - 1, x1 + 1); y1 = Math.min(h - 1, y1 + 1);
+    return (x1 - x0 + 1) * (y1 - y0 + 1) < w * h * 0.9 ? [x0, y0, x1 - x0 + 1, y1 - y0 + 1] : null;
+  } catch (e) { return null; }
+}
 function getSprite(def, kind, idx, ph, bi) {
   const key = ((((def.i * 2 + kind) * 8 + idx) * 4 + ph) * 8) + bi;
   let s = CACHE.get(key);
@@ -1100,7 +1114,7 @@ function getSprite(def, kind, idx, ph, bi) {
     cx.save(); cx.scale(cv.width / BW, cv.height / BH); cx.translate(-BX0, -BY0);
     const lights = paintInto(cx, def, kind, idx, ph);
     cx.restore();
-    s = { cv, lights, core: ST.core, w: cv.width, h: cv.height };
+    s = { cv, lights, core: ST.core, w: cv.width, h: cv.height, bb: alphaBox(cx, cv.width, cv.height) };
     bakeCount++;
   }
   CACHE.set(key, s === null ? false : s);
@@ -1261,9 +1275,10 @@ function drawLights(ctx, lights, t, seed, boost) {
   }
 }
 
-function drawGround(ctx, def, t, fly, ph, seed) {
+function drawGround(ctx, def, t, fly, ph, seed, lod) {
   const sw = def.sh, fc = def.boss ? eyeColor(def, ph) : ENEMY_COLOR[def.fac];
   ctx.fillStyle = fly ? SH_AIR : SH_GROUND; ctx.beginPath(); ctx.ellipse(0, 0, sw * (fly ? 0.72 : 1), sw * (fly ? 0.2 : 0.27), 0, 0, TAU); ctx.fill();
+  if (lod && !def.boss) return;   // crowd level of detail: the shadow stays, the faction ring goes
   ctx.strokeStyle = def.boss ? rgba(fc, 0.5 + 0.15 * sin(t * 3)) : RING[def.fac]; ctx.lineWidth = def.boss ? 1.6 : 1.1;
   ctx.beginPath(); ctx.ellipse(0, 0, sw * 1.12, sw * 0.32, 0, 0, TAU); ctx.stroke();
   if (def.boss) { ctx.lineWidth = 0.8; ctx.beginPath(); ctx.ellipse(0, 0, sw * 1.35 + sin(t * 2) * 1.5, sw * 0.4, 0, 0, TAU); ctx.strokeStyle = rgba(fc, 0.22); ctx.stroke(); }
@@ -1347,7 +1362,8 @@ export function drawEnemy(ctx, enemyId, x, y, size, o) {
   ctx.save();
   ctx.translate(x, y); ctx.scale(u, u);
   const bob = def.fly ? sin(t * 2.6 + seed) * 1.8 : 0;
-  drawGround(ctx, def, t, def.fly, ph, seed);
+  const lod = o.lod > 0 && !def.boss ? 1 : 0;   // set by the battle screen when the field is crowded
+  drawGround(ctx, def, t, def.fly, ph, seed, lod);
   if (affs) { const fc = AFFIX_COLOR[affs[0]] || PAL.bone; ctx.strokeStyle = rgba(fc, 0.55); ctx.lineWidth = 1.3; ctx.beginPath(); ctx.ellipse(0, 0, def.sh * 0.85, def.sh * 0.24, 0, 0, TAU); ctx.stroke(); }
   if (anim === 'burrow') {
     const sink = animT;
@@ -1388,8 +1404,10 @@ export function drawEnemy(ctx, enemyId, x, y, size, o) {
       const col = hf > 0.55 ? PAL.bone : PAL.magenta, tn = tinted(spr, col, hf > 0.55 ? 1 : cl(hf * 1.4, 0, 0.85));
       if (tn) img = tn;
     }
-    ctx.drawImage(img, BX0, BY0, BW, BH);
-    drawLights(ctx, spr.lights, t, seed, hf);
+    const bb = spr.bb;
+    if (bb) { const fx = BW / spr.w, fy = BH / spr.h; ctx.drawImage(img, bb[0], bb[1], bb[2], bb[3], BX0 + bb[0] * fx, BY0 + bb[1] * fy, bb[2] * fx, bb[3] * fy); }
+    else ctx.drawImage(img, BX0, BY0, BW, BH);
+    if (!lod) drawLights(ctx, spr.lights, t, seed, hf);
   } else {
     const lights = paintInto(ctx, def, kind, idx, ph);
     if (hf > 0.02) softGlow(ctx, 0, def.cy, def.rx * 1.3, hf > 0.55 ? PAL.bone : PAL.magenta, hf);
@@ -1397,7 +1415,7 @@ export function drawEnemy(ctx, enemyId, x, y, size, o) {
   }
   drawTraits(ctx, def, spr, t, seed, anim, ph);
   // dripping neon from the lower edge
-  if (eff > 20) {
+  if (eff > 20 && !lod) {
     const dc = FAC_BOUNCE[def.fac] || PAL.lime, by = def.fly ? def.cy + def.ry * 0.55 : -2.5;
     for (let i = 0; i < 3; i++) {
       const p = frac(t * (0.42 + hsh(seed, i) * 0.25) + hsh(seed, i + 4)), px = (hsh(seed, i + 8) - 0.5) * def.rx * 1.5;

@@ -84,9 +84,31 @@ function needOf(e) {
 /** Tile helper: the {x, y} of a column (1..COLS) and lane (0..LANES-1). */
 export function tileAt(col, lane) { return { x: col, y: lane }; }
 
+function frontierOf(profile) {
+  const p = profile && profile.progress;
+  return p ? toGlobal(p.district, p.stage) : 1;
+}
+
+/**
+ * Is this stage an INSTANT echo clear? Only the stage that moves the frontier is: it can be done once, so an echo can
+ * never be tapped over and over for pay. A stage behind the frontier is a real battle even below the echo threshold.
+ */
 export function isEchoStage(profile, district, stage) {
   if (!profile) return false;
-  return stageMode(profile, toGlobal(district, stage)).echo;
+  const gs = toGlobal(district, stage);
+  return stageMode(profile, gs).echo && gs >= frontierOf(profile);
+}
+
+/** Keep at most as many copies of each card as the profile owns (cards the profile does not list at all are left alone). */
+function capCopies(ids, cards) {
+  if (!cards || typeof cards !== 'object') return ids;
+  const left = {};
+  return ids.filter((id) => {
+    const own = cards[id];
+    if (!own || typeof own.count !== 'number') return true;
+    if (!(id in left)) left[id] = Math.max(0, Math.floor(own.count));
+    return left[id]-- > 0;
+  });
 }
 
 /**
@@ -142,7 +164,7 @@ export function createBattle(opts = {}) {
 
   // deck: effects.js treats b.energy as truth, deck.js owns the piles
   let ids = (opts.deck || profile.deck || []).filter((id) => CARD_BY_ID[id]);
-  if (!opts.deck) ids = ids.slice(0, DK.deckSlots(profile));
+  if (!opts.deck) ids = capCopies(ids, profile.cards).slice(0, DK.deckSlots(profile));
   if (!ids.length) ids = STARTER_DECK.slice();
   b.deck = DK.newDeck(ids, makeRng(mixSeed(seed, 4)), { deal: false });
   b.deck.handSize = Math.max(1, Math.min(DK.HAND_MAX, b.handSize));
@@ -283,8 +305,8 @@ export function spawnEnemy(b, enemyId, lane, x, o = {}) {
   return u;
 }
 
-// effects.js 'spawn_enemies' (boss phases) goes through this hook. effects resolves at:'edge' for an enemy caster to the base
-// side, so any x near the base is mapped back to the real entry edge here. effects emits the spawn event itself.
+// effects.js 'spawn_enemies' (boss phases) goes through this hook. effects resolves at:'edge' to the entry edge for every caster;
+// the guard below keeps any stray x near the base on the entry edge. effects emits the spawn event itself.
 function hookSpawnEnemy(b, enemyId, x, y) {
   const lane = clamp(Math.round(y), 0, b.lanes - 1);
   const ex = x < EDGE_X * 0.5 ? EDGE_X : x;
@@ -686,6 +708,7 @@ function stepOnce(b, dt) {
 /** Advance the battle by dt seconds (the fixed step is 1/30; larger dt is split into fixed steps). */
 export function step(b, dt = DT) {
   if (b.over) return b;
+  if (!(dt > 0) || !Number.isFinite(dt)) return b;     // NaN, Infinity, zero and negative time do nothing (a NaN would poison energy and the clock for good)
   let n = 1, h = dt;
   if (dt > DT * 1.5) { n = Math.min(10, Math.ceil(dt / DT - 1e-9)); h = dt / n; }
   for (let i = 0; i < n && !b.over; i++) stepOnce(b, h);
@@ -847,6 +870,14 @@ export function battleResult(b) {
 /** Echo clear fast path: no simulation. Same result shape as battleResult for a stage below the profile's echo threshold. */
 export function resolveEcho(profile, opts = {}) {
   const gs = toGlobal(opts.district, opts.stage);
+  if (opts.noAdvance || gs < frontierOf(profile)) {
+    // not the advancing clear: an instant echo pays nothing here (exploit N1). The caller plays a real battle instead.
+    return {
+      won: false, over: null, refused: true, wave: 0, waves: 0, gs, seconds: 0, kills: 0, bossKills: 0, perfect: false, baseHp: 0, echo: true,
+      merges: 0, stats: {}, rewards: [], totals: { fish: 0, yarn: 0, gems: 0 }, profile,
+      firstClear: false, advanced: false, boss: false,
+    };
+  }
   const sr = stageRewards(profile, { won: true, gs, seconds: ECHO_SECONDS, rewardMult: opts.rewardMult, noAdvance: opts.noAdvance });
   const rewards = [];
   if (sr.rewards.fish > 0) rewards.push({ kind: 'fish', amount: sr.rewards.fish });

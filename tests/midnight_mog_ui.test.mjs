@@ -405,7 +405,11 @@ LAP('echo stage resolves witho');
   prof.progress = { district: 1, stage: 5, best: {}, echo: 40, maxCleared: 30 };
   const app = makeApp(prof);
   const scr = createBattleScreen();
+  // exploit hunt (N1): a stage behind the frontier is a real battle, never an instant echo tap; the frontier stage is the instant one
   scr.enter(app, { district: 1, stage: 2 });
+  assert.ok(!scr.state.echo && scr.state.b, 'a stage behind the frontier plays a real battle');
+  scr.exit(app);
+  scr.enter(app, { district: 1, stage: 5 });
   assert.ok(scr.state.echo && !scr.state.b && scr.state.result);
   assert.equal(scr.state.result.title, 'ECHO CLEAR');
   assert.ok(app.log.setProfile === 1);

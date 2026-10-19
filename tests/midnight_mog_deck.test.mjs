@@ -45,7 +45,7 @@ const mk = (seed, ids = STARTER_DECK, opts) => D.newDeck(ids, makeRng(seed), opt
 
 // reshuffle: draw pile empty -> discard comes back; hand never shows duplicates beyond deck copies
 {
-  const ids = ['pounce', 'pounce', 'zoomies', 'curious_cat', 'cat_nap', 'tail_flick'];
+  const ids = ['pounce', 'pounce', 'zoomies', 'curious_cat', 'fur_ball', 'sour_milk'];   // no exhaust cards: this test is about the discard cycle
   const d = D.newDeck(ids, makeRng(5), { mods: { startEnergyAdd: 100, energyCapAdd: 100 } });
   assert.equal(d.hand.length, 5); assert.equal(d.draw.length, 1);
   D.play(d, 0); // plays one, refill takes the last draw card
