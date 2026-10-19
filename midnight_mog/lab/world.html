@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Midnight Mog world lab</title>
+<style>
+  body { background: #05030c; color: #f4ecff; font: 13px "Trebuchet MS", sans-serif; margin: 10px; }
+  h2 { font: 700 14px "Trebuchet MS", sans-serif; color: #19e6ff; margin: 14px 0 6px; letter-spacing: .06em; text-transform: uppercase; }
+  canvas { display: block; background: #0b0716; }
+  .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-start; }
+  nav a { color: #ff2e88; margin-right: 12px; }
+</style>
+</head>
+<body>
+<nav><a href="?v=battle">battle x6</a><a href="?v=wide&d=laser_lights">wide</a><a href="?v=icons">icons</a><a href="?v=crates">crates</a><a href="?v=town">town</a><a href="?v=buildings">buildings</a></nav>
+<div id="root"></div>
+<script type="module">
+import { layoutFor, drawWorld, drawWorldFront, drawTownBackdrop, drawPlot, drawSkyline } from '../js/render/world.js';
+import { drawCurrency, drawRelic, drawBuilding, drawCrate, drawStatusIcon, drawRoleIcon, RELIC_IDS, BUILDING_IDS, CRATE_IDS, STATUS_IDS, ROLE_IDS } from '../js/render/icons.js';
+import { drawCat } from '../js/render/catart.js';
+import { drawEnemy } from '../js/render/enemyart.js';
+import { DISTRICTS } from '../js/data/districts.js';
+import { RELIC_BY_ID } from '../js/data/relics.js';
+import { PAL, font, rarityColor } from '../js/palette.js';
+
+const params = new URLSearchParams(location.search);
+const view = params.get('v') || 'battle';
+const frozen = params.has('t') ? parseFloat(params.get('t')) : null;
+const dpr = Math.min(2, window.devicePixelRatio || 1);
+const root = document.getElementById('root');
+const sheets = [];
+let row = null;
+function newRow() { row = document.createElement('div'); row.className = 'row'; root.appendChild(row); }
+function sheet(title, w, h, draw, wrap) {
+  const box = document.createElement('div');
+  if (title) { const hd = document.createElement('h2'); hd.textContent = title; box.appendChild(hd); }
+  const cv = document.createElement('canvas');
+  cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr); cv.style.width = w + 'px'; cv.style.height = h + 'px';
+  box.appendChild(cv); (wrap || row || root).appendChild(box);
+  sheets.push({ cv, w, h, draw });
+}
+function label(ctx, s, x, y, col, size = 10) {
+  ctx.font = font(size, 700, 'body'); ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
+  ctx.lineWidth = 3; ctx.strokeStyle = PAL.ink; ctx.strokeText(s, x, y); ctx.fillStyle = col || PAL.bone; ctx.fillText(s, x, y);
+}
+
+// a believable fake battle
+const CATS = ['scrap_tabby', 'whisker_scout', 'spark_kit', 'nurse_purrnell', 'snare_stray', 'tin_can_tom'];
+const FOES = ['pigeon_scout', 'rat_courier', 'sludge_blob', 'red_dot_drone', 'roomba_rover', 'rubber_duck_raider'];
+function fakeBattle(hpFrac) {
+  return { base: { hp: hpFrac * 100, maxHp: 100 }, units: [{ kind: 'barricade', x: 4, y: 3, hp: 6, maxHp: 10, life: 20 }], fx: { traps: [{ x: 5, y: 1, radius: 1, charges: 3, side: 'cat' }, { x: 6, y: 4, radius: 1, charges: 1, side: 'cat' }] } };
+}
+function battleScene(ctx, L, did, t, hp, di) {
+  const view = { districtId: did, battle: fakeBattle(hp), hoverTile: { col: 3, lane: 2 }, placeable: (c, l) => c <= 3 && (l + c) % 2 === 0, ghost: di === 0 ? { col: 5, lane: 2, kind: 'cat', valid: true } : null, baseFlash: 0 };
+  drawWorld(ctx, L, view, t);
+  const tile = L.tile;
+  const cats = [[1, 0, 0], [2, 1, 1], [1, 2, 2], [3, 3, 3], [2, 4, 4], [4, 2, 5]];
+  for (const [c, l, k] of cats) { const tt = tile(c, l); drawCat(ctx, CATS[k], tt.cx, L.footY(l), L.scale, { t, anim: 'idle' }); }
+  const fo = [[7.2, 0], [8.4, 1], [6.5, 2], [9.2, 3], [7.8, 4], [9.8, 2]];
+  fo.forEach(([x, l], i) => drawEnemy(ctx, FOES[(i + di) % 6], L.colX(x), L.footY(l), L.scale, { t, anim: 'walk', animT: (t * 0.8 + i * 0.13) % 1 }));
+  drawWorldFront(ctx, L, view, t);
+  // fake bars
+  ctx.fillStyle = 'rgba(21,12,40,.8)'; ctx.fillRect(0, L.topBar.y, L.w, L.topBar.h); label(ctx, did.replace('_', ' ').toUpperCase(), L.w / 2, L.topBar.y + 32, PAL.bone, 16);
+  ctx.fillStyle = 'rgba(21,12,40,.8)'; ctx.fillRect(L.handRect.x, L.handRect.y, L.handRect.w, L.handRect.h); ctx.fillRect(0, L.bottomBar.y, L.w, L.bottomBar.h);
+}
+
+if (view === 'battle') {
+  newRow();
+  const L = layoutFor(390, 800);
+  DISTRICTS.forEach((d, i) => sheet(d.name, 390, 800, (ctx, t) => battleScene(ctx, L, d.id, t, [1, 0.8, 0.6, 0.4, 0.2, 0.9][i], i)));
+} else if (view === 'wide') {
+  const d = params.get('d') || 'rooftop_row';
+  const L = layoutFor(1280, 800);
+  sheet(d + ' wide', 1280, 800, (ctx, t) => battleScene(ctx, L, d, t, parseFloat(params.get('hp') || '1'), 0));
+} else if (view === 'icons') {
+  newRow();
+  sheet('Currencies', 360, 90, (ctx, t) => { ['fish', 'yarn', 'gems', 'tokens'].forEach((c, i) => { drawCurrency(ctx, c, 45 + i * 90, 36, 56, t); label(ctx, c, 45 + i * 90, 82, PAL.bone); drawCurrency(ctx, c, 14 + i * 90, 84, 14, t); }); });
+  sheet('Status', 520, 90, (ctx, t) => { STATUS_IDS.forEach((s, i) => { const x = 22 + (i % 10) * 50, y = 24 + Math.floor(i / 10) * 48; drawStatusIcon(ctx, s, x, y, 34); label(ctx, s, x, y + 26, PAL.boneDim, 8); }); });
+  sheet('Roles', 360, 90, (ctx, t) => { ROLE_IDS.forEach((r, i) => { drawRoleIcon(ctx, r, 30 + i * 58, 34, 48); label(ctx, r, 30 + i * 58, 74, PAL.boneDim, 9); }); });
+  newRow();
+  sheet('Relics (27)', 9 * 96, 3 * 110, (ctx, t) => { RELIC_IDS.forEach((id, i) => { const x = 48 + (i % 9) * 96, y = 46 + Math.floor(i / 9) * 110; drawRelic(ctx, id, x, y, 78, t); label(ctx, RELIC_BY_ID[id].name, x, y + 52, rarityColor(RELIC_BY_ID[id].rarity), 9); }); });
+  newRow();
+  sheet('Relic sizes', 360, 70, (ctx, t) => { [24, 32, 44, 56].forEach((s, i) => drawRelic(ctx, ['rusty_bell', 'tesla_whisker', 'midnight_crown', 'cheshire_grin'][i], 40 + i * 90, 36, s, t)); });
+} else if (view === 'buildings') {
+  newRow();
+  const lv = [0, 1, 6, 11, 21, 41, 61, 81, 121];
+  sheet('Buildings by level', lv.length * 92 + 70, BUILDING_IDS.length * 96 + 10, (ctx, t) => {
+    BUILDING_IDS.forEach((b, r) => { label(ctx, b, 32, r * 96 + 50, PAL.boneDim, 8); lv.forEach((l, i) => { drawBuilding(ctx, b, l, 100 + i * 92, r * 96 + 48, 84, t); }); });
+  });
+} else if (view === 'crates') {
+  newRow();
+  const opens = [0, 0.15, 0.4, 0.7, 1];
+  sheet('Crates', opens.length * 190 + 20, CRATE_IDS.length * 200, (ctx, t) => {
+    CRATE_IDS.forEach((cid, r) => opens.forEach((o, i) => { drawCrate(ctx, cid, 100 + i * 190, r * 200 + 110, 150, { open: o, t, shake: i === 1 ? 0.8 : 0, glow: r === 4 ? undefined : undefined }); }));
+  });
+} else if (view === 'town') {
+  const L = layoutFor(390, 800, 'town');
+  newRow();
+  sheet('Town portrait', 390, 800, (ctx, t) => {
+    drawTownBackdrop(ctx, 390, 800, t, { districtId: 'rooftop_row', layout: L });
+    const bs = [['tuna_cannery', 7], ['yarn_mill', 24], ['scratching_post', 3], ['crate_workshop', 45], null, ['nap_dome', 12], ['barracks', 66], ['laser_arcade', 2], ['kitty_bank', 90], ['clock_tower', 5], ['observatory', 30], ['radio_tower', 1], ['gem_mine', 15], ['catnip_garden', 8], ['shrine_nine_lives', 100]];
+    bs.forEach((b, i) => drawPlot(ctx, L.town.plot(i, 15), { b: b && b[0], level: b && b[1], selected: i === 3, hover: i === 6, ready: i === 0 || i === 9, locked: i === 14 }, t));
+    ctx.fillStyle = 'rgba(21,12,40,.8)'; ctx.fillRect(0, L.topBar.y, 390, L.topBar.h); ctx.fillRect(0, L.bottomBar.y, 390, L.bottomBar.h);
+  });
+  const L2 = layoutFor(1280, 800, 'town');
+  sheet('Town wide', 1280, 800, (ctx, t) => {
+    drawTownBackdrop(ctx, 1280, 800, t, { districtId: 'laser_lights', layout: L2 });
+    ['tuna_cannery', 'yarn_mill', 'scratching_post', 'crate_workshop', 'nap_dome'].forEach((b, i) => drawPlot(ctx, L2.town.plot(i, 5), { b, level: 3 + i * 17 }, t));
+  });
+}
+
+let t0 = performance.now();
+function frame(now) {
+  const t = frozen !== null ? frozen : (now - t0) / 1000;
+  for (const s of sheets) {
+    const ctx = s.cv.getContext('2d');
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, s.w, s.h);
+    s.draw(ctx, t);
+  }
+  window.__frames = (window.__frames || 0) + 1;
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+window.addEventListener('error', (e) => { window.__err = (window.__err || '') + e.message + '\n'; });
+</script>
+</body>
+</html>

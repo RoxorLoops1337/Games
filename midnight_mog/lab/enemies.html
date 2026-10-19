@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Midnight Mog enemy lab</title>
+<style>
+  html, body { margin: 0; background: #05030c; color: #f4ecff; font: 13px "Trebuchet MS", sans-serif; }
+  nav { padding: 8px 12px; background: #0b0716; z-index: 2; }
+  nav a { color: #19e6ff; margin-right: 14px; text-decoration: none; }
+  canvas { display: block; }
+</style>
+</head>
+<body>
+<nav>
+  <a href="?view=regular">regular</a><a href="?view=bosses">bosses</a><a href="?view=traits">traits and affixes</a><a href="?view=anims">animations</a><a href="?view=portraits">portraits</a>
+  <span id="info"></span>
+</nav>
+<canvas id="c"></canvas>
+<script type="module">
+import { PAL, font, rgba } from '../js/palette.js';
+import { ENEMIES } from '../js/data/enemies.js';
+import { drawEnemy, drawEnemyPortrait, enemyArtStats } from '../js/render/enemyart.js';
+
+const q = new URLSearchParams(location.search);
+const view = q.get('view') || 'regular';
+const live = q.has('live');
+const fixedT = parseFloat(q.get('t') || '1.1');
+const cv = document.getElementById('c'), ctx = cv.getContext('2d');
+const dpr = Math.min(2, window.devicePixelRatio || 1);
+let W = 1400, H = 800;
+
+function label(s, x, y, col, size, align) {
+  ctx.font = font(size || 12, 700, 'body'); ctx.textAlign = align || 'left'; ctx.fillStyle = col || PAL.boneDim; ctx.fillText(s, x, y);
+}
+function cell(x, y, w, h, tint) {
+  ctx.fillStyle = PAL.ink2; ctx.fillRect(x, y, w, h);
+  const g = ctx.createLinearGradient(0, y, 0, y + h); g.addColorStop(0, rgba(PAL.violet, 0.05)); g.addColorStop(1, rgba(tint || PAL.magenta, 0.2));
+  ctx.fillStyle = g; ctx.fillRect(x, y, w, h);
+  ctx.strokeStyle = rgba(PAL.violet, 0.6); ctx.lineWidth = 1; ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
+  // ground line
+  ctx.fillStyle = rgba(PAL.bone, 0.05); ctx.fillRect(x, y + h - 26, w, 1);
+}
+const zoomIds = (q.get('ids') || '').split(',').filter(Boolean);
+const zph = parseInt(q.get('ph') || '0', 10);
+const regs = ENEMIES.filter((e) => !e.boss), bosses = ENEMIES.filter((e) => e.boss);
+
+function layout() {
+  if (view === 'regular') { W = 1400; H = 56 + Math.ceil(regs.length / 5) * 176; }
+  else if (view === 'bosses') { W = 1400; H = 40 + bosses.length * 270; }
+  else if (view === 'traits') { W = 1400; H = 900; }
+  else if (view === 'zoom') { W = 1400; H = 20 + Math.ceil(zoomIds.length / 4) * 300; }
+  else if (view === 'anims') { W = 1400; H = 900; }
+  else { W = 1400; H = 640; }
+  cv.width = W * dpr; cv.height = H * dpr; cv.style.width = W + 'px'; cv.style.height = H + 'px';
+}
+
+function frame(t) {
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.fillStyle = PAL.void; ctx.fillRect(0, 0, W, H);
+  if (view === 'regular') {
+    regs.forEach((e, i) => {
+      const cw = 276, ch = 168, x = (i % 5) * cw + 10, y = Math.floor(i / 5) * (ch + 8) + 10;
+      cell(x, y, cw - 8, ch);
+      drawEnemy(ctx, e.id, x + 82, y + ch - 28, 76, { t: t + i * 0.13, seed: i });
+      drawEnemy(ctx, e.id, x + 205, y + ch - 28, 40, { t: t + i * 0.13, seed: i });
+      drawEnemy(ctx, e.id, x + 245, y + ch - 28, 24, { t: t + i * 0.13, seed: i });
+      label(e.name, x + 8, y + 16, PAL.bone, 12); label(e.traits.join(' '), x + 8, y + ch - 8, PAL.boneDim, 10);
+    });
+  } else if (view === 'zoom') {
+    zoomIds.forEach((id, i) => {
+      const x = (i % 4) * 346 + 10, y = Math.floor(i / 4) * 300 + 10; cell(x, y, 338, 288);
+      const e = ENEMIES.find((z) => z.id === id);
+      drawEnemy(ctx, id, x + 169, y + 262, e && e.boss ? 46 : 150, { t, phase: zph });
+      label(id, x + 8, y + 16, PAL.bone, 12);
+    });
+  } else if (view === 'bosses') {
+    bosses.forEach((e, r) => {
+      const n = Math.max(3, e.phases.length);
+      for (let p = 0; p < n; p++) {
+        const cw = 340, x = p * cw + 10, y = r * 270 + 10;
+        cell(x, y, cw - 8, 258, PAL.magenta);
+        drawEnemy(ctx, e.id, x + cw / 2 - 4, y + 236, 40, { t: t + p * 0.4, phase: p, shield: e.traits.includes('shielded') ? 0.8 : undefined });
+        label(e.name + '  /  phase ' + p + (e.phases[p] ? ': ' + e.phases[p].name : ''), x + 8, y + 16, PAL.bone, 12);
+      }
+    });
+  } else if (view === 'traits') {
+    const aff = ['swift', 'plated', 'regenerating', 'volatile', 'warded', 'vampiric'];
+    label('affixes on Sewer Gator / Rat Shaman / Red Dot Drone', 14, 22, PAL.bone, 13);
+    const subs = ['sewer_gator', 'rat_shaman', 'red_dot_drone'];
+    aff.forEach((a, i) => {
+      const x = 10 + i * 230, y = 34; cell(x, y, 222, 330);
+      label(a, x + 8, y + 16, PAL.bone, 12);
+      subs.forEach((s, k) => drawEnemy(ctx, s, x + 54 + k * 62, y + 104 + k * 100, 56, { t, affix: a, seed: k }));
+      drawEnemy(ctx, 'pigeon_bomber', x + 110, y + 318, 72, { t, affix: [a, aff[(i + 2) % 6]] });
+    });
+    label('shield bubble (0.2, 0.6, 1.0), hit flash (0.3, 0.6, 1.0), stun, burrow', 14, 392, PAL.bone, 13);
+    [0.2, 0.6, 1].forEach((s, i) => { cell(10 + i * 150, 402, 144, 160); drawEnemy(ctx, 'strobe_sentry', 82 + i * 150, 540, 64, { t, shield: s }); });
+    [0.3, 0.6, 1].forEach((s, i) => { cell(470 + i * 150, 402, 144, 160); drawEnemy(ctx, 'dumpster_raccoon', 542 + i * 150, 540, 64, { t, hitFlash: s }); });
+    cell(930, 402, 144, 160); drawEnemy(ctx, 'mud_mole', 1002, 540, 64, { t, anim: 'stun' });
+    cell(1084, 402, 144, 160); drawEnemy(ctx, 'plunger_crab', 1156, 540, 64, { t, anim: 'burrow', animT: 0.6 });
+    label('healer cross, explosive core, swarm flocks', 14, 592, PAL.bone, 13);
+    ['rat_shaman', 'microwave_medic', 'pigeon_bomber', 'toaster_turret'].forEach((s, i) => { cell(10 + i * 150, 602, 144, 160); drawEnemy(ctx, s, 82 + i * 150, 740, 60, { t, seed: i }); });
+    for (let i = 0; i < 6; i++) drawEnemy(ctx, 'pigeon_scout', 650 + (i % 3) * 36, 690 + Math.floor(i / 3) * 34 - (i % 2) * 20, 40, { t: t + i * 0.2, seed: i });
+    for (let i = 0; i < 8; i++) drawEnemy(ctx, 'rat_courier', 900 + (i % 4) * 34, 690 + Math.floor(i / 4) * 40, 36, { t: t + i * 0.17, seed: i });
+    for (let i = 0; i < 4; i++) drawEnemy(ctx, 'roomba_rover', 1100 + (i % 2) * 52, 690 + Math.floor(i / 2) * 36, 40, { t: t + i * 0.3, seed: i });
+  } else if (view === 'anims') {
+    const anims = [['walk', 0], ['attack', 0.1], ['attack', 0.4], ['attack', 0.6], ['hit', 0.1], ['stun', 0], ['burrow', 0.5]];
+    const ids = ['stray_mutt', 'vacuum_mech', 'toxic_toad', 'antenna_raven', 'sludge_blob', 'gator_mayor'];
+    ids.forEach((id, r) => anims.forEach((a, i) => {
+      const x = 10 + i * 196, y = 10 + r * 122; cell(x, y, 190, 118);
+      drawEnemy(ctx, id, x + 100, y + 108, id === 'gator_mayor' ? 24 : 56, { t, anim: a[0], animT: a[1], hitFlash: a[0] === 'hit' ? 0.6 : 0 });
+      label(a[0] + ' ' + a[1], x + 6, y + 14, PAL.boneDim, 10);
+    }));
+    const dieT = [0.04, 0.16, 0.3, 0.45, 0.62, 0.8, 0.92];
+    dieT.forEach((d, i) => {
+      const x = 10 + i * 196, y = 750; cell(x, y, 190, 130);
+      drawEnemy(ctx, i % 2 ? 'sewer_gator' : 'rat_emperor', x + 100, y + 120, i % 2 ? 56 : 26, { t, anim: 'die', animT: d });
+      label('die ' + d, x + 6, y + 14, PAL.boneDim, 10);
+    });
+  } else {
+    const ids = ['king_coo', 'rat_emperor', 'gator_mayor', 'dot_overlord', 'hoovermatron_prime', 'bathtub_kraken', 'microwave_medic', 'pigeon_scout'];
+    ids.forEach((id, i) => { const x = 10 + (i % 4) * 346, y = 10 + Math.floor(i / 4) * 310; drawEnemyPortrait(ctx, id, x, y, 330, 296, { t, phase: 1 }); });
+  }
+  document.getElementById('info').textContent = JSON.stringify(enemyArtStats());
+}
+
+layout();
+function run(ts) {
+  frame(live ? ts / 1000 : fixedT);
+  if (live) requestAnimationFrame(run);
+}
+run(0);
+window.__ready = true;
+</script>
+</body>
+</html>

@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Midnight Mog town and crates lab</title>
+<style>
+  html, body { margin: 0; background: #05030c; color: #f4ecff; font: 13px "Trebuchet MS", sans-serif; }
+  nav { padding: 6px 10px; position: relative; z-index: 2; }
+  nav a { color: #ff2e88; margin-right: 12px; }
+  #stage { display: flex; justify-content: center; }
+  canvas { display: block; background: #0b0716; touch-action: none; }
+</style>
+</head>
+<body>
+<nav>
+  <a href="?v=town">town</a><a href="?v=town&sheet=build">build</a><a href="?v=town&sheet=detail">detail</a><a href="?v=town&welcome=1">welcome</a><a href="?v=town&collect=1&warp=0.5">collect</a>
+  <a href="?v=crates">crates</a><a href="?v=crates&odds=1">odds</a><a href="?v=ceremony&crate=rooftop_crate&count=10&warp=4">cer x10</a><a href="?v=ceremony&crate=mythic_crate&count=1&warp=3">cer x1</a>
+  <a href="?v=ceremony&crate=midnight_crate&count=10&warp=60">summary</a>
+</nav>
+<div id="stage"><canvas id="c"></canvas></div>
+<script type="module">
+import { createUI } from '../js/ui/shell.js';
+import { createTownScreen } from '../js/ui/screens_town.js';
+import { createCrateScreen } from '../js/ui/screens_crate.js';
+import { newProfile } from '../js/sim/profile.js';
+import { makeRng } from '../js/rng.js';
+import { hash32 } from '../js/data/buildings.js';
+import { PAL } from '../js/palette.js';
+
+const q = new URLSearchParams(location.search);
+const view = q.get('v') || 'town';
+const W = parseInt(q.get('w') || '390', 10), H = parseInt(q.get('h') || '800', 10);
+const canvas = document.getElementById('c');
+canvas.style.width = W + 'px'; canvas.style.height = H + 'px';
+const ui = createUI(canvas, { width: W, height: H, dpr: Math.min(2, window.devicePixelRatio || 1) });
+if (q.get('reduced')) ui.setReduceMotion(true);
+window.__ui = ui;
+
+const NOW = 1.75e12;
+const profile = newProfile(parseInt(q.get('seed') || '7', 10), NOW - 4 * 3600e3);
+profile.cur = { fish: 48200, yarn: 5200, gems: 380, tokens: 14 };
+profile.progress = { district: 3, stage: 4, best: { 1: 10, 2: 20, 3: 28 } };
+const lay = ['tuna_cannery', 'yarn_mill', 'smokehouse', 'scratching_post', 'tuna_cannery', 'crate_workshop', 'catnip_garden', 'nap_dome', 'gem_mine'];
+const lv = [14, 9, 6, 5, 11, 8, 4, 3, 2];
+profile.town.plots = [];
+for (let i = 0; i < 12; i++) profile.town.plots.push(i < lay.length ? { b: lay[i], level: lv[i], t: NOW - (1 + i * 0.4) * 3600e3, ...(lay[i] === 'catnip_garden' ? { opt: { district: 'alley_alamo', strain: 'rate' } } : {}) } : {});
+profile.town.plots[7] = {};
+profile.town.keys = { alley_crate: 3, neon_crate: 1 };
+profile.town.streak = { days: 6, last: Math.floor(NOW / 86400000) - 1 };
+profile.lastSeen = NOW - (q.get('welcome') ? 7.5 * 3600e3 : 1000);
+profile.meta = { ...profile.meta, crate_luck: 2 };
+profile.pity = { rooftop_crate: 11, 'rooftop_crate@legend': 70, 'rooftop_crate@mythic': 310, neon_crate: 7, midnight_crate: 4, 'midnight_crate@legend': 33 };
+profile.stats = { ...profile.stats, crateOpens: 12 };
+if (q.get('rich')) profile.cur = { fish: 1e7, yarn: 1e7, gems: 1e5, tokens: 14 };
+
+let clock = 0;
+const app = {
+  profile, setProfile(p) { this.profile = p; }, save() {}, audio: null, fx: null,
+  router: { go(id) { console.log('go', id); }, back() { console.log('back'); } },
+  now: () => NOW + clock * 1000, dayIndex: () => Math.floor((NOW + clock * 1000) / 86400000),
+  toast(m, k) { ui.toast(m, k); }, rng: (key) => makeRng(hash32(app.profile.seed, key)),
+};
+const screen = view.startsWith('town') ? createTownScreen() : createCrateScreen();
+window.__screen = screen; window.__app = app;
+screen.enter(app, view.startsWith('town') ? {} : { crate: q.get('crate') || undefined, open: view === 'ceremony' ? { crateId: q.get('crate') || 'rooftop_crate', count: parseInt(q.get('count') || '1', 10) } : undefined });
+
+function frame(dt) { clock += dt; ui.begin(dt); screen.update(app, dt, ui); screen.draw(ui.ctx, app, ui); ui.end(); }
+window.__frame = frame;
+function warp(sec, step = sec > 10 ? 0.1 : 1 / 30) { for (let t = 0; t < sec; t += step) frame(step); }
+
+warp(0.3);
+if (q.get('sheet') === 'build') { screen.openPlot(7); const st = screen.state; if (q.get('pick')) st.pick = q.get('pick'); }
+if (q.get('sheet') === 'detail') { screen.openPlot(parseInt(q.get('plot') || '0', 10)); if (q.get('tab')) screen.state.tab = q.get('tab'); }
+if (q.get('move')) { screen.openPlot(parseInt(q.get('move'), 10)); warp(0.3); const S = screen.state; S.moveFrom = S.sel; S.sheet = null; S.sel = -1; warp(0.4); if (q.get('to')) { screen.openPlot(parseInt(q.get('to'), 10)); warp(0.3); } }
+if (q.get('sheet')) warp(0.6);
+if (q.get('collect')) { warp(0.1); screen.doCollect(); }
+if (q.get('odds')) { screen.state.odds = screen.state.odds || 'rooftop_crate'; }
+if (q.get('warp')) warp(parseFloat(q.get('warp')));
+if (q.get('welcome') && q.get('wclaim')) { warp(0.2); }
+
+let last = performance.now();
+function loop(now) { const dt = Math.min(0.05, (now - last) / 1000); last = now; frame(dt); requestAnimationFrame(loop); }
+if (!q.get('freeze')) requestAnimationFrame(loop);
+</script>
+</body>
+</html>

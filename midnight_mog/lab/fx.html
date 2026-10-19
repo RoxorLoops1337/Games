@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Midnight Mog fx lab</title>
+<style>
+  html, body { margin: 0; background: #05030c; color: #f4ecff; font: 13px "Trebuchet MS", sans-serif; }
+  #bar { padding: 6px 10px; display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
+  #bar a { color: #ff2e88; }
+  #bar b { color: #19e6ff; }
+  canvas { display: block; margin: 0 auto; background: #0b0716; }
+</style>
+</head>
+<body>
+<div id="bar"><b>fx lab</b><span id="stat"></span>
+  <a href="?">390x800</a><a href="?w=1280&h=700">1280x700</a><a href="?q=0">quality 0</a><a href="?seek=8.4">seek 8.4 (merge)</a></div>
+<canvas id="c"></canvas>
+<script type="module">
+import { createFx, consume, update, draw, fxStats, hitFlashOf, popOf } from '../js/render/fx.js';
+import { drawCat } from '../js/render/catart.js';
+import { drawEnemy } from '../js/render/enemyart.js';
+import { drawText } from '../js/render/text.js';
+import { PAL, rgba } from '../js/palette.js';
+
+const params = new URLSearchParams(location.search);
+const W = +(params.get('w') || 390), H = +(params.get('h') || 800);
+const dpr = Math.min(2, window.devicePixelRatio || 1);
+const cv = document.getElementById('c');
+cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); cv.style.width = W + 'px'; cv.style.height = H + 'px';
+const ctx = cv.getContext('2d');
+
+// ---- a layout that follows the shared render/world.js contract (5 lanes x 8 columns, base left, enemies enter at 9.5)
+function layoutFor(w, h) {
+  const fy = h * 0.2, fh = Math.min(h * 0.46, w * 0.62), tw = w / 10.2, th = fh / 5;
+  return {
+    w, h, scale: 1, field: { x: 0, y: fy, w, h: fh },
+    tile: (c, l) => ({ x: c * tw, y: fy + l * th, w: tw, h: th, cx: c * tw + tw / 2, cy: fy + l * th + th / 2 }),
+    colX: (c) => c * tw + tw / 2, laneY: (l) => fy + l * th + th / 2,
+    baseRect: { x: 0, y: fy, w: tw * 0.9, h: fh }, handRect: { x: 0, y: h * 0.76, w, h: h * 0.24 },
+    topBar: { x: 0, y: 0, w, h: h * 0.07 }, safe: { top: 0, bottom: 0 },
+  };
+}
+const L = layoutFor(W, H);
+
+// ---- tiny fake battle: static cats, marching enemies
+const cats = [
+  { uid: 1, id: 'scrap_tabby', side: 'cat', x: 2, y: 2, maxHp: 140, hp: 140 },
+  { uid: 2, id: 'whisker_scout', side: 'cat', x: 1, y: 1, maxHp: 80, hp: 80 },
+  { uid: 3, id: 'spark_kit', side: 'cat', x: 1, y: 3, maxHp: 90, hp: 90 },
+  { uid: 4, id: 'scrap_tabby', side: 'cat', x: 3, y: 2, maxHp: 140, hp: 140 },
+  { uid: 5, id: 'nurse_purrnell', side: 'cat', x: 1, y: 2, maxHp: 90, hp: 90 },
+  { uid: 6, id: 'tin_can_tom', side: 'cat', x: 2, y: 4, maxHp: 300, hp: 300 },
+];
+const foes = [
+  { uid: 20, id: 'gutter_gull', side: 'enemy', x: 6.2, y: 2, maxHp: 200, hp: 200, v: 0.18 },
+  { uid: 21, id: 'pigeon_scout', side: 'enemy', x: 7.4, y: 1, maxHp: 60, hp: 60, v: 0.2 },
+  { uid: 22, id: 'pigeon_scout', side: 'enemy', x: 7.0, y: 3, maxHp: 60, hp: 60, v: 0.2 },
+  { uid: 23, id: 'antenna_raven', side: 'enemy', x: 8.2, y: 2, maxHp: 90, hp: 90, v: 0.12 },
+  { uid: 24, id: 'gutter_gull', side: 'enemy', x: 8.8, y: 4, maxHp: 200, hp: 200, v: 0.15 },
+];
+const battle = { units: cats, enemies: foes };
+
+// ---- scripted event stream (looping). Times are seconds into the loop.
+const SCRIPT = [];
+const at = (t, ...events) => SCRIPT.push({ t, events });
+at(0.3, { type: 'wave', wave: 3, waves: 6, name: 'Wave 3', isBossWave: false });
+at(0.9, { type: 'spawn', uid: 21, id: 'pigeon_scout', x: 7.4, y: 1, side: 'enemy' }, { type: 'spawn', uid: 24, id: 'gutter_gull', x: 8.8, y: 4, side: 'enemy', elite: true });
+at(1.6, { type: 'attack', src: 2, tgt: 21, ranged: true, x: 1, y: 1, tx: 7.4, ty: 1 }, { type: 'attack', src: 1, tgt: 20, ranged: false, x: 2, y: 2, tx: 3, ty: 2 });
+at(1.8, { type: 'hit', src: 2, tgt: 21, x: 7.4, y: 1, amount: 24, absorbed: 0, crit: false, element: 'phys', kind: 'hit' },
+        { type: 'hit', src: 1, tgt: 20, x: 6.2, y: 2, amount: 61, absorbed: 0, crit: false, element: 'phys', kind: 'hit' });
+at(2.4, { type: 'hit', src: 2, tgt: 22, x: 7.0, y: 3, amount: 480, absorbed: 0, crit: true, element: 'phys', kind: 'hit' },
+        { type: 'crit', src: 2, tgt: 22, x: 7.0, y: 3, amount: 480, element: 'phys' });
+at(3.2, { type: 'cast', src: 3, id: 'arc', name: 'Chain Zap', x: 1, y: 3 },
+        { type: 'chain', path: [{ x: 1, y: 3 }, { x: 7.0, y: 3 }, { x: 6.2, y: 2 }, { x: 7.4, y: 1 }, { x: 8.2, y: 2 }], element: 'elec', src: 3 });
+for (const [x, y, a, el] of [[7.0, 3, 90, 'elec'], [6.2, 2, 70, 'elec'], [7.4, 1, 60, 'elec'], [8.2, 2, 50, 'elec']]) at(3.3, { type: 'hit', src: 3, tgt: 22, x, y, amount: a, absorbed: 0, crit: false, element: el, kind: 'chain' });
+at(4.2, { type: 'cast', src: 2, id: 'needle', name: 'Needle Shot', x: 1, y: 1 }, { type: 'pierce', x1: 1, y1: 1, x2: 8.5, y2: 1, element: 'phys', src: 2 },
+        { type: 'hit', src: 2, tgt: 21, x: 7.4, y: 1, amount: 110, absorbed: 0, crit: false, element: 'phys', kind: 'pierce' });
+at(5.0, { type: 'cast', card: 'fire_bomb', name: 'Fire Bomb', cardType: 'spell', x: 6.5, y: 2 }, { type: 'aoe', x: 6.5, y: 2, radius: 1.8, element: 'fire' },
+        { type: 'hit', src: 0, tgt: 20, x: 6.2, y: 2, amount: 220, absorbed: 0, crit: false, element: 'fire', kind: 'aoe' }, { type: 'status', tgt: 20, x: 6.2, y: 2, status: 'dot', element: 'fire', dps: 5 });
+at(5.8, { type: 'aoe', x: 7.4, y: 3, radius: 1.2, element: 'poison' }, { type: 'aoe', x: 3.5, y: 4, radius: 1.4, element: 'holy' });
+at(6.4, { type: 'heal', src: 5, tgt: 1, x: 2, y: 2, amount: 38, base: false }, { type: 'shield', tgt: 6, x: 2, y: 4, amount: 60 }, { type: 'aura', uid: 30, x: 1, y: 2, radius: 2.2 },
+        { type: 'status', tgt: 4, x: 3, y: 2, status: 'buff', stat: 'dmg', pct: 0.3, dur: 5 }, { type: 'cleanse', tgt: 6, x: 2, y: 4, removed: 1 });
+at(7.0, { type: 'knockback', tgt: 20, x0: 5.0, x1: 6.4, y: 2 }, { type: 'pull', tgt: 23, x0: 8.8, y0: 1, x1: 7.6, y1: 2 }, { type: 'status', tgt: 22, x: 7.0, y: 3, status: 'stun', dur: 2 },
+        { type: 'taunt', src: 6, x: 2, y: 4, radius: 2.5, dur: 3 }, { type: 'barricade', uid: 31, x: 4, y: 3, hp: 90 }, { type: 'trap_set', uid: 32, x: 5, y: 1, radius: 1.2, charges: 1 });
+at(7.8, { type: 'trap_trigger', uid: 32, tgt: 21, x: 5, y: 1 }, { type: 'execute', tgt: 22, x: 7.0, y: 3, killed: true },
+        { type: 'death', uid: 22, id: 'pigeon_scout', side: 'enemy', kind: 'enemy', x: 7.0, y: 3, boss: false });
+// the merge: partner flies into the keeper, then the burst
+at(8.2, { type: 'merge', uid: 4, gone: true, id: 'scrap_tabby', x: 3, y: 2, fx: 2, fy: 2 }, { type: 'merge', uid: 1, id: 'scrap_tabby', stars: 2, merged: 1, x: 2, y: 2, fx: 3, fy: 2 });
+at(9.6, { type: 'merge', uid: 6, gone: true, id: 'tin_can_tom', x: 3, y: 4, fx: 2, fy: 4 }, { type: 'merge', uid: 6, id: 'tin_can_tom', stars: 4, merged: 3, x: 2, y: 4, fx: 3, fy: 4 });
+at(10.8, { type: 'energy', amount: 2, energy: 7 }, { type: 'draw', count: 2 }, { type: 'rule', rule: 'double_energy', value: 2 }, { type: 'reward', resource: 'fish', pct: 0.25 });
+at(11.6, { type: 'burrow', uid: 23, x: 8.2, y: 2 }, { type: 'summon_call', uid: 24, id: 'pigeon_scout', count: 4 });
+at(12.4, { type: 'emerge', uid: 23, x: 6.0, y: 2 }, { type: 'base_hit', src: 20, amount: 34, hp: 90, x: 0, y: 2 });
+at(13.2, { type: 'wave', wave: 6, waves: 6, name: 'Boss wave', isBossWave: true }, { type: 'spawn', uid: 40, id: 'king_coo', x: 9.2, y: 2, side: 'enemy', boss: true });
+at(15.0, { type: 'wave', name: 'Royal Roost', boss: 40, phase: 1, x: 8.5, y: 2 });
+at(16.6, { type: 'revive', tgt: 1, x: 2, y: 2 }, { type: 'revive', base: true, hp: 60 });
+at(17.4, { type: 'death', uid: 40, id: 'king_coo', side: 'enemy', kind: 'enemy', x: 8.5, y: 2, boss: true });
+at(19.0, { type: 'win', wave: 6, seconds: 120 }, { type: 'loot', kind: 'fish', amount: 1240 }, { type: 'loot', kind: 'gems', amount: 12 }, { type: 'loot', kind: 'key', id: 'neon_crate', amount: 1 });
+at(24.5, { type: 'lose', wave: 3, seconds: 90, reason: 'base' });
+const LOOP = 29;
+
+// ---- scenery
+let bgGrad = null;
+function drawBackdrop(t) {
+  if (!bgGrad) {
+    bgGrad = ctx.createLinearGradient(0, 0, 0, L.field.y);
+    PAL.sky.forEach((c, i) => bgGrad.addColorStop(i / (PAL.sky.length - 1), c));
+  }
+  ctx.fillStyle = PAL.ink; ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = bgGrad; ctx.fillRect(0, 0, W, L.field.y);
+  // skyline silhouettes
+  const fy = L.field.y;
+  let seed = 7;
+  const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  ctx.fillStyle = PAL.ink2;
+  for (let x = 0; x < W; x += 28) { const h = 40 + rnd() * 110; ctx.fillRect(x, fy - h, 24, h + 4); }
+  ctx.fillStyle = PAL.ink;
+  for (let x = 10; x < W; x += 40) { const h = 20 + rnd() * 70; ctx.fillRect(x, fy - h, 34, h + 4); }
+  // rooftop lanes
+  for (let l = 0; l < 5; l++) {
+    const r = L.tile(0, l);
+    ctx.fillStyle = l & 1 ? '#150c28' : '#1a0f33';
+    ctx.fillRect(0, r.y, W, r.h);
+    ctx.fillStyle = rgba(PAL.violet, 0.5); ctx.fillRect(0, r.y + r.h - 2, W, 2);
+  }
+  for (let c = 1; c <= 9; c++) { const r = L.tile(c, 0); ctx.fillStyle = rgba(PAL.violetHi, 0.12); ctx.fillRect(r.x, L.field.y, 1, L.field.h); }
+  // base
+  const b = L.baseRect;
+  ctx.fillStyle = PAL.ink3; ctx.fillRect(b.x, b.y, b.w, b.h);
+  ctx.fillStyle = rgba(PAL.cyan, 0.8); ctx.fillRect(b.x + b.w - 2, b.y, 2, b.h);
+  // hand strip
+  const h = L.handRect;
+  ctx.fillStyle = PAL.ink2; ctx.fillRect(h.x, h.y, h.w, h.h);
+  ctx.fillStyle = rgba(PAL.cyan, 0.5); ctx.fillRect(h.x, h.y, h.w, 2);
+  for (let i = 0; i < 5; i++) { ctx.fillStyle = PAL.ink3; ctx.strokeStyle = PAL.violet; ctx.lineWidth = 2; const cw = (h.w - 60) / 5; ctx.fillRect(h.x + 10 + i * (cw + 10), h.y + 14, cw, h.h - 28); ctx.strokeRect(h.x + 10 + i * (cw + 10), h.y + 14, cw, h.h - 28); }
+  const tb = L.topBar;
+  ctx.fillStyle = PAL.ink2; ctx.fillRect(tb.x, tb.y, tb.w, tb.h);
+  drawText(ctx, 'FISH  YARN  GEMS', W / 2, tb.h / 2, { size: 13, kind: 'display', align: 'center', baseline: 'middle', color: PAL.boneDim });
+}
+function drawUnits(t, fxs) {
+  const size = L.tile(0, 0).h * 1.05;
+  const list = [];
+  for (const c of cats) list.push(c);
+  for (const e of foes) list.push(e);
+  list.sort((a, b) => a.y - b.y);
+  for (const u of list) {
+    const px = L.colX(u.x), py = L.laneY(u.y) + L.tile(0, 0).h * 0.34;
+    const pop = popOf(fxs, u.uid);
+    const sz = size * (1 + 0.22 * pop);
+    const hf = hitFlashOf(fxs, u.uid);
+    if (u.side === 'cat') {
+      const stars = u.uid === 1 && t > 8.4 ? 2 : 1;
+      drawCat(ctx, u.id, px, py, sz, { t, anim: u.uid === 1 && t % 3 < 0.3 ? 'attack' : 'idle', animT: (t % 3) / 0.3, stars, hitFlash: hf });
+    } else drawEnemy(ctx, u.id, px, py, sz * 0.9, { t, anim: hf > 0.2 ? 'hit' : 'walk', animT: (t * 1.3) % 1, hitFlash: hf, facing: -1 });
+  }
+}
+
+// ---- run
+const fx = createFx(3);
+if (params.has('q')) { fx.quality = +params.get('q'); fx.auto = false; }
+let simT = 0, si = 0;
+function advance(dt) {
+  simT += dt;
+  if (simT >= LOOP) { simT -= LOOP; si = 0; for (const e of foes) e.x = e.x + 0; }
+  const out = [];
+  while (si < SCRIPT.length && SCRIPT[si].t <= simT) { for (const e of SCRIPT[si].events) out.push(e); si++; }
+  for (const e of foes) { e.x -= e.v * dt * 0.5; if (e.x < 3.5) e.x = 9; }
+  consume(fx, out, L, battle);
+  update(fx, dt);
+}
+function frame(now, t) {
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, W, H);
+  ctx.save();
+  ctx.translate(fx.shake.x, fx.shake.y);
+  drawBackdrop(t);
+  drawUnits(t, fx);
+  draw(ctx, fx, t);
+  ctx.restore();
+  const s = fxStats(fx);
+  document.getElementById('stat').textContent = 't=' + simT.toFixed(1) + ' particles ' + s.particles + ' rings ' + s.rings + ' beams ' + s.beams + ' floaters ' + s.floaters + ' q' + s.quality + ' timeScale ' + fx.timeScale.toFixed(2);
+}
+const seek = params.has('seek') ? parseFloat(params.get('seek')) : null;
+if (seek !== null) {
+  // deterministic freeze for screenshots: simulate to the seek time in fixed steps, then draw once
+  const steps = Math.round(seek * 60);
+  for (let i = 0; i < steps; i++) advance(1 / 60);
+  frame(0, simT);
+  window.__ready = true;
+} else {
+  let last = performance.now();
+  const loop = (now) => {
+    const dt = Math.min(0.05, (now - last) / 1000); last = now;
+    if (fx.hitstop <= 0) advance(dt * fx.timeScale); else { update(fx, dt); }
+    frame(now, simT);
+    requestAnimationFrame(loop);
+  };
+  requestAnimationFrame(loop);
+  window.__ready = true;
+}
+window.__fx = fx;
+</script>
+</body>
+</html>

@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Midnight Mog cat lab</title>
+<style>
+  body { background: #05030c; color: #f4ecff; font: 13px "Trebuchet MS", sans-serif; margin: 12px; }
+  h2 { font: 700 15px "Trebuchet MS", sans-serif; color: #19e6ff; margin: 18px 0 6px; letter-spacing: .06em; text-transform: uppercase; }
+  canvas { display: block; background: #0b0716; }
+  nav a { color: #ff2e88; margin-right: 12px; }
+</style>
+</head>
+<body>
+<nav><a href="?">live</a><a href="?t=1.3">frozen t=1.3</a></nav>
+<div id="root"></div>
+<script type="module">
+import { drawCat, drawCatPortrait, drawCardArt, drawRarityFrame, CAT_IDS, CARD_ART_IDS, prewarmCats } from '../js/render/catart.js';
+import { CATS, CAT_BY_ID } from '../js/data/cats.js';
+import { CARD_BY_ID } from '../js/data/cards.js';
+import { PAL, RARITY, ROLE_COLOR, font, rarityColor } from '../js/palette.js';
+
+const params = new URLSearchParams(location.search);
+const frozen = params.has('t') ? parseFloat(params.get('t')) : null;
+const dpr = Math.min(2, window.devicePixelRatio || 1);
+const root = document.getElementById('root');
+const sheets = [];
+
+function sheet(id, title, w, h, draw) {
+  const hd = document.createElement('h2'); hd.textContent = title; root.appendChild(hd);
+  const cv = document.createElement('canvas'); cv.id = id;
+  cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr); cv.style.width = w + 'px'; cv.style.height = h + 'px';
+  root.appendChild(cv);
+  sheets.push({ cv, w, h, draw });
+}
+function label(ctx, s, x, y, col, size = 11, align = 'center') {
+  ctx.font = font(size, 700, 'body'); ctx.textAlign = align; ctx.textBaseline = 'alphabetic';
+  ctx.lineWidth = 3; ctx.strokeStyle = PAL.ink; ctx.strokeText(s, x, y); ctx.fillStyle = col || PAL.bone; ctx.fillText(s, x, y);
+}
+
+// 1. all cats at 4 sizes
+sheet('cats', 'All 32 cats at 4 sizes (idle)', 1480, 1430, (ctx, t) => {
+  const cols = 4, cw = 370, ch = 178;
+  CAT_IDS.forEach((id, i) => {
+    const cx = (i % cols) * cw, cy = Math.floor(i / cols) * ch;
+    const cat = CAT_BY_ID[id];
+    ctx.fillStyle = i % 2 ? '#0e0920' : '#120b26'; ctx.fillRect(cx, cy, cw, ch);
+    const base = cy + 134;
+    drawCat(ctx, id, cx + 72, base, 118, { t, anim: 'idle', stars: 1 });
+    drawCat(ctx, id, cx + 170, base, 64, { t, anim: 'idle' });
+    drawCat(ctx, id, cx + 236, base, 40, { t, anim: 'idle' });
+    drawCat(ctx, id, cx + 280, base, 28, { t, anim: 'walk' });
+    drawCat(ctx, id, cx + 322, base, 28, { t, anim: 'attack', animT: (t * 0.8) % 1, facing: -1 });
+    label(ctx, cat.name, cx + cw / 2, cy + 160, rarityColor(cat.rarity), 12);
+    label(ctx, cat.role + '  ' + cat.rarity, cx + cw / 2, cy + 173, ROLE_COLOR[cat.role], 10);
+  });
+});
+
+// 2. animation set
+const ANIM_CATS = ['scrap_tabby', 'whisker_scout', 'spark_kit', 'nurse_purrnell', 'snare_stray', 'tin_can_tom'];
+const ANIMS = [['idle', 0], ['walk', 0], ['attack', 0.12], ['attack', 0.3], ['attack', 0.42], ['attack', 0.75], ['cast', 0.3], ['cast', 0.5], ['hit', 0.1], ['die', 0.08], ['die', 0.4], ['die', 0.7], ['sleep', 0]];
+sheet('anims', 'Animation set: idle, walk, attack (anticipation, strike, recover), cast, hit, die, sleep', 1500, 6 * 130 + 24, (ctx, t) => {
+  const cw = 114, ch = 130;
+  ANIMS.forEach((a, c) => { label(ctx, a[0] + (a[1] ? ' ' + a[1] : ''), c * cw + cw / 2 + 4, 14, PAL.boneDim, 10); });
+  ANIM_CATS.forEach((id, r) => {
+    ANIMS.forEach((a, c) => {
+      const x = c * cw + cw / 2 + 4, y = 24 + r * ch + 104;
+      ctx.fillStyle = (r + c) % 2 ? '#0e0920' : '#120b26'; ctx.fillRect(c * cw + 4, 24 + r * ch, cw, ch);
+      drawCat(ctx, id, x, y, 74, { t: t + c * 0.1, anim: a[0], animT: a[1], hitFlash: a[0] === 'hit' ? 0.8 : 0 });
+    });
+  });
+});
+
+// 3. rarity frames
+sheet('frames', 'Rarity frames: common, rare, epic, legend, mythic (portrait + frame)', 1480, 420, (ctx, t) => {
+  const picks = ['scrap_tabby', 'duchess_noir', 'baron_von_fluff', 'lord_lunar_lynx', 'cheshire_void'];
+  const rs = ['common', 'rare', 'epic', 'legend', 'mythic'];
+  picks.forEach((id, i) => {
+    const x = 40 + i * 290, y = 44, w = 230, h = 322;
+    drawRarityFrame(ctx, rs[i], x, y, w, h, t, { layer: 'back' });
+    drawCatPortrait(ctx, id, x + 8, y + 8, w - 16, h - 16, { t, stars: i + 1 });
+    drawRarityFrame(ctx, rs[i], x, y, w, h, t, { layer: 'front' });
+    label(ctx, RARITY[rs[i]].name + ' ' + RARITY[rs[i]].ornament, x + w / 2, y + h + 22, RARITY[rs[i]].color, 13);
+  });
+});
+
+// 4. card art
+sheet('cards', 'Card art: 36 spells, traps, builds and 6 summon cut-outs', 1480, 6 * 176 + 8 * 0 + 190 + 20, (ctx, t) => {
+  const ids = CARD_ART_IDS;
+  const cw = 244, ch = 176;
+  ids.forEach((id, i) => {
+    const card = CARD_BY_ID[id];
+    const x = (i % 6) * cw + 18, y = Math.floor(i / 6) * ch + 14;
+    drawRarityFrame(ctx, card.rarity, x - 3, y - 3, 206 + 6, 138 + 6, t, { layer: 'back' });
+    drawCardArt(ctx, card, x, y, 206, 138, { t });
+    drawRarityFrame(ctx, card.rarity, x - 3, y - 3, 206 + 6, 138 + 6, t, { layer: 'front' });
+    label(ctx, card.name, x + 103, y + 154, rarityColor(card.rarity), 11);
+  });
+  const sums = ['call_ember_mog', 'call_nyx_longshot', 'call_hex_hisser', 'call_big_mama_maine', 'call_cheshire_void', 'call_mother_of_nine_lives'];
+  const by = 6 * ch + 40;
+  sums.forEach((id, i) => {
+    const card = CARD_BY_ID[id];
+    const x = i * cw + 18, y = by;
+    drawRarityFrame(ctx, card.rarity, x - 3, y - 3, 206 + 6, 138 + 6, t, { layer: 'back' });
+    drawCardArt(ctx, card, x, y, 206, 138, { t, stars: 1 });
+    drawRarityFrame(ctx, card.rarity, x - 3, y - 3, 206 + 6, 138 + 6, t, { layer: 'front' });
+    label(ctx, card.name, x + 103, y + 154, rarityColor(card.rarity), 11);
+  });
+});
+
+function frame(ms) {
+  const t = frozen != null ? frozen : ms / 1000;
+  for (const s of sheets) {
+    const ctx = s.cv.getContext('2d');
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, s.w, s.h);
+    ctx.fillStyle = PAL.ink; ctx.fillRect(0, 0, s.w, s.h);
+    s.draw(ctx, t);
+  }
+  window.__drawn = (window.__drawn || 0) + 1;
+  if (frozen == null) requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+window.addEventListener('error', (e) => { document.title = 'ERR ' + e.message; });
+</script>
+</body>
+</html>
