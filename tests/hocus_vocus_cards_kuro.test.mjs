@@ -38,7 +38,7 @@ const t = harness('hocus_vocus cards_kuro');
 const JS = path.join(DIR, 'js');
 const exists = (f) => fs.existsSync(path.join(JS, f));
 
-const api = boot({ only: ['data_cards_kuro'] });
+const api = boot({ only: ['data_cards_kuro', 'data_guests'] });   // the Guest cards read their guests (DESIGN 4.3 "Guests")
 const { DATA } = api;
 const L = DATA.LISTS;
 
@@ -119,6 +119,8 @@ const KURO_IDS = [
   'kuro_beat_juggle', 'kuro_live_looping', 'kuro_overdub',
   // the duo and setlist wave (Duet, Soundcheck, Reprise, Finale)
   'kuro_backing_vocals', 'kuro_cypher', 'kuro_mic_check', 'kuro_one_more_time', 'kuro_showstopper', 'kuro_trade_fours',
+  // the Guests wave (DATA.guests, DESIGN 4.3 "Guests")
+  'kuro_guest_dj', 'kuro_guest_drum_machine', 'kuro_guest_loop_bot',
 ];
 
 t.test('names: unique, one to three words, capitalised, no dashes; the ids are frozen (saves store them)', () => {
@@ -133,7 +135,7 @@ t.test('names: unique, one to three words, capitalised, no dashes; the ids are f
     t.ok(!DASH.test(c.name), `${c.id}: no dash in the name`);
     t.ok(/^kuro_[a-z0-9_]+$/.test(c.id), `${c.id}: id is kuro_ plus snake_case`);
   });
-  t.deep(cards.map((c) => c.id).sort(), KURO_IDS.slice().sort(), 'the 46 Kuro ids are frozen: saves store them');
+  t.deep(cards.map((c) => c.id).sort(), KURO_IDS.slice().sort(), 'the 49 Kuro ids are frozen: saves store them');
 });
 
 t.test('upgrades: every card has one, it changes fx, cost or keywords, and it never makes a card worse on its face', () => {
@@ -176,12 +178,12 @@ t.test('card ids and per X: only the X card reads X', () => {
 });
 
 // ------------------------------------------------------------------------------------------------ 2 CONTENT_SPEC section 3
-t.test('counts: 3 starters, 17 commons, 15 uncommons, 11 rares, 46 in all', () => {
+t.test('counts: 3 starters, 17 commons, 17 uncommons, 12 rares, 49 in all', () => {
   t.eq(byRarity('starter').length, 3, 'starters');
   t.eq(byRarity('common').length, 17, 'commons');
-  t.eq(byRarity('uncommon').length, 15, 'uncommons');
-  t.eq(byRarity('rare').length, 11, 'rares');
-  t.eq(cards.length, 46, 'total');
+  t.eq(byRarity('uncommon').length, 17, 'uncommons');
+  t.eq(byRarity('rare').length, 12, 'rares');
+  t.eq(cards.length, 49, 'total');
 });
 
 t.test('mix: at least 30 percent attacks and skills, at least 4 powers (uncommon or rare), an X card, keywords', () => {
@@ -315,10 +317,13 @@ t.test('flavour: on every rare and on at least a third of the others, short, no 
 });
 
 // ------------------------------------------------------------------------------------------------ 3 design: archetypes
-const status = (c, ids2) => flatOps(c.fx).some((o) => (o.op === 'status' && ids2.indexOf(o.s) >= 0) || vObjects([o]).some((v) => v.per === 'status' && ids2.indexOf(v.s) >= 0));
+// a Guest card is read through its guest's ops (DESIGN 4.3 "Guests"): the Loop Pedal Bot is a Groove card, the Metro Gnome a Breath card
+const guestOps = (c) => flatOps(c.fx).flatMap((o) => { if (o.op !== 'guest') return []; const g = DATA.guestDef(o.id, false); return g ? [].concat(g.act, g.enter, g.exit, ...g.hooks.map((h) => h.fx)) : []; });
+const withGuests = (c) => flatOps(c.fx).concat(guestOps(c));
+const status = (c, ids2) => withGuests(c).some((o) => (o.op === 'status' && ids2.indexOf(o.s) >= 0) || vObjects([o]).some((v) => v.per === 'status' && ids2.indexOf(v.s) >= 0));
 const blight = cards.filter((c) => status(c, ['poison', 'burn']));
-const sumi = cards.filter((c) => status(c, ['sumi']) || flatOps(c.fx).some((o) => spent(o) === 'sumi'));
-const scribe = cards.filter((c) => flatOps(c.fx).some((o) => ['pick', 'draw', 'energy', 'swap'].indexOf(o.op) >= 0) || (c.kw || []).some((k) => ['retain', 'innate', 'exhaust'].indexOf(k) >= 0));
+const sumi = cards.filter((c) => status(c, ['sumi']) || withGuests(c).some((o) => spent(o) === 'sumi'));
+const scribe = cards.filter((c) => withGuests(c).some((o) => ['pick', 'draw', 'energy', 'swap'].indexOf(o.op) >= 0) || (c.kw || []).some((k) => ['retain', 'innate', 'exhaust'].indexOf(k) >= 0));
 
 t.test('archetypes: Stuck in your head, Big drops and Remix each have 8 or more cards, several bridge two, and the plain cards stay a minority', () => {
   t.ok(blight.length >= 8, 'Blight cards: ' + blight.map((c) => c.id).join(', '));
@@ -327,7 +332,7 @@ t.test('archetypes: Stuck in your head, Big drops and Remix each have 8 or more 
   const bridges = cards.filter((c) => [blight, sumi, scribe].filter((a) => a.indexOf(c) >= 0).length >= 2);
   t.ok(bridges.length >= 4, 'cards that bridge two archetypes: ' + bridges.map((c) => c.id).join(', '));
   const basics = cards.filter((c) => [blight, sumi, scribe].every((a) => a.indexOf(c) < 0));
-  t.ok(basics.length <= 12, 'plain cards (strikes and Block) stay a minority: ' + basics.map((c) => c.id).join(', '));
+  t.ok(basics.length <= 13, 'plain cards (strikes and Block) stay a minority (13 of 49 with DJ Scratchy, a plain striker on purpose): ' + basics.map((c) => c.id).join(', '));
   ['kuro_ink_bolt', 'kuro_ink_ward'].forEach((id) => t.ok(basics.some((c) => c.id === id), id + ' is a plain starter'));
 });
 
@@ -619,6 +624,14 @@ function opPoints(o, ctx) {
       if (o.limit) T = Math.min(T, o.limit * 3.5);
       if (o.every) T /= o.every;
       return T * 0.8 * listPoints(o.fx, ctx);
+    }
+    case 'guest': {
+      // a Guest (DESIGN 4.3 "Guests"): its act once per turn of its stay, enter and exit once, its hooks over the turns it stays (at most the
+      // 3.5 turn horizon), all hook ops; discounted to 0.6 because the first act only lands at the end of the turn and a replaced guest loses the rest
+      const g = DATA.guestDef(o.id, !!o.up);
+      if (!g) return 0;
+      const hooks = g.hooks.reduce((s, h) => s + Math.min(g.stay, 3.5) * listPoints(h.fx, ctx), 0);
+      return 0.6 * (g.stay * listPoints(g.act, ctx) + listPoints(g.enter, ctx) + listPoints(g.exit, ctx) + hooks);
     }
     default: return 0;
   }

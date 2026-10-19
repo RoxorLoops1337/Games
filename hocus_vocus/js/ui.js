@@ -39,7 +39,9 @@
 //   `.kw[data-kw]` spans inside card text open glossary bubbles on hover or long press by themselves.
 // COMPONENTS  UI.card(inst | id, {size:'mini'|'deck'|'hand'|'reward'|'big', unit, C, selected, disabled, playable, showGems, onclick, class, tip}) -> el
 //     el.rbUpdate({unit, C, inst, refresh, selected, disabled, playable}) or UI.cardUpdate(el, patch): live numbers and glows; classes a screen adds survive.
-//     Given C (and neither disabled nor playable) the card dims itself from C.canPlay. Classes: card c-SIZE t-TYPE r-RARITY h-HERO up sel dis play junk nocost x-cost.
+//     Given C (and neither disabled nor playable) the card dims itself from C.canPlay. Classes: card c-SIZE t-TYPE r-RARITY h-HERO up sel dis play junk nocost x-cost medley guest.
+//     A Guest card (a Skill whose fx holds the card op `guest`, DESIGN 4.3 "Guests") keeps type skill in data but its type strip reads "Guest" and its art wears a star
+//     badge (.c-plus.c-guest, data-kw-explain guest) that explains the Guest keyword on a tap, exactly like the Medley "+". The deck view and the rewards get it through the face.
 //     Parts: .c-in > .c-face (.c-head .c-name, .c-art canvas, .c-type, .c-text .c-rules) .c-cost .c-socks .c-sock. el.rbResolved is the DATA.resolveCard result.
 //   UI.cardBack(size)   UI.relic(id, {size:'xs'|'sm'|'md'|'lg', onclick, tip})   UI.gem(id, {size, selected, onclick, tip})   UI.status(id, n, {size, tip}) (el.rbSet(n))
 //   UI.heroBadge(heroId, {size:'sm'|'md'|'lg', hp, maxHp, selected, onclick}) (el.rbSet({hp, maxHp, selected}))   UI.stat(kind, value, {size, max, tip}) (el.rbSet(v, {animate, max}))
@@ -48,6 +50,8 @@
 //   UI.panel({kind:'paper'|'dark', torn, gold, title, class}, ...children) -> el with .body      UI.hanko(text, {size})   UI.divider()   UI.bar(v, max, 'hp'|'ink'|'xp'|'boss')
 //   UI.tabs(items, {value, onchange})   UI.seg(items, {value, onchange})   UI.toggle({value, onchange})   UI.slider({min, max, step, value, onchange, format})   UI.settingsPanel()
 //   UI.icon(kind, id, size, opts) canvas   UI.medallion(heroId, size, skin?) canvas (skin 'stage' | 'skin'; default the viewer's outfit)
+//   UI.mascotIcon(mascotId, size, opts) canvas: the Mascot's medallion (DESIGN 4.7). ART.mascot.draw(ctx, id, {x, y, s, pose, t, level}) when the art file has it (opts.level picks the accessory) (every call
+//     guarded: that file is written in parallel), else the Charm sticker of the mascot's own motif (art.m when it is a LISTS.relicIcons id, 'charm' otherwise). Never throws.
 //   UI.vars(el, {'--x': v}) (setProperty; assigning style['--x'] does nothing in a browser)   UI.resolveCard(inst, ctx)   UI.plain(html)   UI.el = U.el   UI.esc
 // OUTFITS     (HV_ART_AUDIO 2.11, bible 7.1; presentation only) the viewer's costume per hero, in its own localStorage key 'hv_skins_v1' ({heroId: 'skin' | 'stage'}),
 //   read and written only by ui.js and always inside try/catch: missing, unreadable or garbled storage means stage clothes. Never in the profile or the run;
@@ -1198,6 +1202,32 @@ const UI = (() => {
     return c;
   }
 
+  // The Mascot's medallion (DESIGN 4.7 "The Mascot"): ART.mascot.draw(ctx, id, {x, y, s, pose, t, level}) draws the stray (feet centre, height bounds.h * s)
+  // when the art file has it; the call is a typeof check inside try/catch and a throw falls back to the Charm sticker of the mascot's own motif
+  // (DATA.mascots[id].art.m when it is a LISTS.relicIcons id, the 'charm' sticker otherwise). Unknown ids get the plain sticker. Never throws.
+  function mascotIcon(id, size, opts) {
+    opts = opts || {};
+    size = Math.max(8, Number(size) || 40);
+    const def = safe(() => (DATA.mascots && DATA.mascots[id]) || null, null);
+    const ar = AR();
+    if (def && ar && ar.mascot && isFn(ar.mascot, 'draw')) {
+      const o = offscreen(size, size);
+      if (!o.bad) {
+        try {
+          // ART.mascot.draw takes an options object: (x, y) is the feet centre, nominal height bounds.h (about 90) * s
+          const bh = Math.max(40, safe(() => (isFn(ar.mascot, 'bounds') ? ar.mascot.bounds(id).h : 0), 0) || 90);
+          ar.mascot.draw(o.g, id, { x: size / 2, y: size * 0.93, s: (size * 0.84) / bh, pose: opts.pose || 'idle', t: 0, pt: 0, level: opts.level || 1, shadow: false });
+          const c = mk('canvas', { class: 'ico mascot-ico', width: o.c.width, height: o.c.height, style: { width: size + 'px', height: size + 'px' }, 'aria-hidden': 'true' });
+          safe(() => c.getContext('2d').drawImage(o.c, 0, 0));
+          return c;
+        } catch (e) { warnOnce('mascot:' + id, 'ART.mascot.draw threw for ' + id, e); }
+      }
+    }
+    const motif = def && def.art && def.art.m;
+    const icons = safe(() => DATA.LISTS.relicIcons, null) || [];
+    return iconCanvas('relic', motif && icons.indexOf(motif) >= 0 ? motif : 'charm', size, opts, 'mascot-ico');
+  }
+
   // ==================================================================================================================
   // outfits (HV_ART_AUDIO 2.11, bible 7.1): the viewer's costume per hero. Presentation only. The key hv_skins_v1 is read and written HERE
   // and nowhere else, always inside try/catch; RUN, COMBAT, MAP, META, the bot and the daily seed never see it, and nothing new goes into
@@ -1656,7 +1686,10 @@ const UI = (() => {
     const hero = DATA.heroes[R.hero] || null;
     const junk = R.type === 'curse' || R.type === 'status';
     const medley = !!(R.medley || (def && def.medley));
-    const root = mk('div', { class: 'card c-' + size + ' t-' + R.type + ' r-' + R.rarity + (hero ? ' h-' + R.hero : ' h-none') + (junk ? ' junk' : '') + (medley ? ' medley' : '') + (o.class ? ' ' + o.class : ''), role: 'button', tabindex: '0', dataset: { id: R.id, size } });
+    // a Guest card (DESIGN 4.3 "Guests"): a Skill whose fx brings a guest on stage; the type stays skill in data, the face says Guest
+    const guest = !junk && !medley && Array.isArray(R.fx) && R.fx.some((x) => x && x.op === 'guest');
+    const typeLabel = medley ? 'Medley' : guest ? 'Guest' : TYPE_LABEL[R.type] || cap(R.type);
+    const root = mk('div', { class: 'card c-' + size + ' t-' + R.type + ' r-' + R.rarity + (hero ? ' h-' + R.hero : ' h-none') + (junk ? ' junk' : '') + (medley ? ' medley' : '') + (guest ? ' guest' : '') + (o.class ? ' ' + o.class : ''), role: 'button', tabindex: '0', dataset: { id: R.id, size } });
     if (medley && def.parts) root.dataset.parts = def.parts.join('+');
     if (uidOf(instOrId)) root.dataset.uid = uidOf(instOrId);
     vars(root, { '--hc': hero ? hero.color : R.type === 'curse' ? '#7a6bff' : '#8a86a8', '--hc2': hero ? hero.dark : R.type === 'curse' ? '#140f2e' : '#4a4766' });
@@ -1673,12 +1706,14 @@ const UI = (() => {
     const art = mk('div', { class: 'c-art' }, artCanvas, mk('i', { class: 'c-gloss' }));
     // a Medley wears the first song's art and a "+" badge (the upgrade plus, re-used) that explains itself on a tap
     if (medley) { const badge = mk('i', { class: 'c-plus c-medley', text: '+', 'aria-hidden': 'true', 'data-kw-explain': 'medley' }); art.appendChild(badge); attach(badge, () => kwNode('medley'), { side: 'top' }); }
+    // a Guest card wears a guest star in the same corner, and the star explains the Guest keyword on a tap (the tutorial reads data-kw-explain too)
+    if (guest) { const badge = mk('i', { class: 'c-plus c-guest', text: '*', 'aria-hidden': 'true', 'data-kw-explain': 'guest' }); art.appendChild(badge); attach(badge, () => kwNode('guest'), { side: 'top' }); }
     const face = mk('div', { class: 'c-face' }, head, art);
     let socks = null;
 
     if (size !== 'mini') {
       const tico = iconCanvas('type', R.type, Math.round(cw * 0.085), {}, 'c-tico');
-      const strip = mk('div', { class: 'c-type' }, tico, mk('span', { class: 'c-tname', text: medley ? 'Medley' : TYPE_LABEL[R.type] || cap(R.type) }));
+      const strip = mk('div', { class: 'c-type' }, tico, mk('span', { class: 'c-tname', text: typeLabel }));
       if (hero) strip.appendChild(mk('span', { class: 'c-medal', 'aria-hidden': 'true' }, medalCanvas(R.hero, Math.round(cw * 0.105))));
       else strip.appendChild(mk('span', { class: 'c-medal c-sigil', 'aria-hidden': 'true' }));
       face.appendChild(strip);
@@ -1718,7 +1753,7 @@ const UI = (() => {
       if (popCost && lastCost !== null && lastCost !== costTxt) pulse(cost);
       lastCost = costTxt;
       root.dataset.cost = costTxt;
-      root.setAttribute('aria-label', nm + (R.up ? ' plus' : '') + '. ' + (TYPE_LABEL[R.type] || R.type) + (costTxt ? ', cost ' + costTxt : '') + '. ' + plain);
+      root.setAttribute('aria-label', nm + (R.up ? ' plus' : '') + '. ' + (guest ? 'Guest' : TYPE_LABEL[R.type] || R.type) + (costTxt ? ', cost ' + costTxt : '') + '. ' + plain);
       root.dataset.ops = opsOf(R.fx);                    // what the card does ("dmg block"): the tutorial points at a Block card with [data-ops~="block"]
       root.rbResolved = R;
     }
@@ -1760,7 +1795,7 @@ const UI = (() => {
     };
     if (typeof o.onclick === 'function') root.addEventListener('click', (e) => o.onclick(e, instOrId, root));
     // a mini card shows only its name and cost, so hovering explains it
-    if (o.tip !== false && size === 'mini') attach(root, () => bubbleBody(String(R.name).replace(/\+$/, ''), 'keyword', TYPE_LABEL[R.type] || '', plainOf(cardRulesHtml(instOrId, R, ctx))), { side: 'top' });
+    if (o.tip !== false && size === 'mini') attach(root, () => bubbleBody(String(R.name).replace(/\+$/, ''), 'keyword', guest ? 'Guest' : TYPE_LABEL[R.type] || '', plainOf(cardRulesHtml(instOrId, R, ctx))), { side: 'top' });
     S.fit.push(root); root.rbFit = 0;
     return root;
   }
@@ -2353,7 +2388,7 @@ const UI = (() => {
     confirm(o) { return overlayOpen('confirm', o || {}); },
     toast, menuButton, announce, anchorEl, floatText, pulse, shake, toStage,
     card, cardUpdate, cardBack, relic, gem, status, heroBadge, stat, btn, setDisabled, panel, hanko, divider, bar, tabs, seg, toggle, slider, settingsPanel,
-    icon: iconCanvas, medallion: medalCanvas, outfit: outfitApi, vars, el: mk, esc: U.esc, plain: plainOf, resolveCard, kwInfo,
+    icon: iconCanvas, mascotIcon, medallion: medalCanvas, outfit: outfitApi, vars, el: mk, esc: U.esc, plain: plainOf, resolveCard, kwInfo,
     tip, fail, toTitle,
     share: shareNow, shareUrl, followPanel, followSheet, followText: FOLLOW_TEXT,
     setRun(R) { S.run = R; return R; },

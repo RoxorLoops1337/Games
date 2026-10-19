@@ -600,7 +600,7 @@ function universe(D) {
     };
     mk(starters[0], 'starter', 'attack'); mk(starters[1], 'starter', 'skill'); mk(starters[2], 'starter', 'skill');
     for (let i = 0; i < D.QUOTA.cards.common; i++) mk(`${h}_c${i}`, 'common', i < 6 ? 'attack' : 'skill', i === 0 ? { cost: 'X', fx: [{ op: 'repeat', n: { per: 'X' }, do: [{ op: 'dmg', n: 4, tgt: 'enemy' }] }], up: { cost: 'X', kw: ['retain'] } } : null);
-    for (let i = 0; i < D.QUOTA.cards.uncommon; i++) mk(`${h}_u${i}`, 'uncommon', i < 4 ? 'attack' : i < 9 ? 'skill' : 'power', null);
+    for (let i = 0; i < D.QUOTA.cards.uncommon; i++) mk(`${h}_u${i}`, 'uncommon', i < 6 ? 'attack' : i < 11 ? 'skill' : 'power', null);
     for (let i = 0; i < D.QUOTA.cards.rare; i++) mk(`${h}_r${i}`, 'rare', i < 3 ? 'attack' : i < 6 ? 'skill' : 'power', null);
     // quota features spread over commons and uncommons
     ['c1', 'c2', 'c3'].forEach((k) => { const c = defs[`${h}_${k}`]; c.fx = [{ op: 'cond', if: { row: 'front' }, then: c.fx, else: [{ op: 'draw', n: 1 }] }]; c.up = { fx: c.fx }; });
@@ -702,7 +702,16 @@ function universe(D) {
   }
   evs.ev_1.choices.push({ label: 'Ring the bell', req: { relic: 'silver_bell' }, out: [{ w: 1, text: 'It rings true.', ops: [{ op: 'flag', k: 'fox_spared' }] }] });
   evs.ev_2.when = { flag: 'fox_spared' };
+  evs.ev_3.choices.push({ label: 'Adopt the stray', req: { mascot: false }, out: [{ w: 1, text: 'It hops aboard.', ops: [{ op: 'adoptMascot', id: 'mascot_0' }] }] });
   D.add('events', evs);
+  // --- mascots: QUOTA.mascots, each with ECONOMY.mascotXp.length levels (DESIGN 4.7 "The Mascot")
+  const mascots = {};
+  for (let i = 0; i < D.QUOTA.mascots; i++) {
+    const levels = {};
+    D.ECONOMY.mascotXp.forEach((xp, li) => { levels[li + 1] = li === 0 ? { text: 'The lead hero deals 1 more damage.', rows: { front: { dmgAdd: 1 } } } : li === 1 ? { text: 'Combat and gift box gold is 10% higher.', mods: { goldMul: 0.1 } } : { text: 'After each fight, both heroes heal 2 HP.', hooks: [{ on: 'onFightWon', fx: [{ op: 'heal', n: 2, who: 'both' }] }] }; });
+    mascots['mascot_' + i] = { name: 'Stray ' + i, blurb: 'A stray with a plan.', art: { m: motifs[i % motifs.length], c: pal[i % pal.length] }, levels };
+  }
+  D.add('mascots', mascots);
   // --- meta
   const ach = {};
   const keys = D.LISTS.statKeys;
@@ -726,7 +735,7 @@ t.test('the synthetic universe passes strict validation and every audit', () => 
   universe(DATA);
   const v = DATA.validate(undefined, { strict: true });
   t.eq(v.errors.length, 0, 'strict errors: ' + v.errors.slice(0, 8).join('; '));
-  t.eq(v.counts.cards, 4 * 46 + 12, 'card count'); t.eq(v.counts.enemies, 51, 'enemy count'); t.eq(v.counts.relics, RELIC_TOTAL(DATA.QUOTA.relics), 'relic count'); t.eq(v.counts.gems, 24, 'gem count');
+  t.eq(v.counts.cards, 4 * 49 + 12, 'card count'); t.eq(v.counts.enemies, 51, 'enemy count'); t.eq(v.counts.relics, RELIC_TOTAL(DATA.QUOTA.relics), 'relic count'); t.eq(v.counts.gems, 24, 'gem count');
   t.eq(v.counts.events, 40, 'event count'); t.eq(v.counts.groups, 45, 'group count');
   const a = DATA.audit().filter((x) => x.indexOf('audit') === 0);
   t.eq(a.length, 0, 'audit lines: ' + a.slice(0, 10).join('; '));
@@ -744,7 +753,7 @@ t.test('breaking the universe one piece at a time is caught', () => {
   D = broken((d) => { delete d.achievements.ch2_clear; }); t.ok(has(D.validate(undefined, { strict: true }).errors, 'ch2_clear'), 'missing achievement');
   D = broken((d) => { d.cards.curse_hex.hero = 'status'; }); t.ok(has(D.validate(undefined, { strict: true }).errors, 'must have hero curse'), 'wrong curse hero');
   // audits: cards
-  D = broken((d) => { delete d.cards.kuro_c13; }); t.ok(auditHas(D, 'cards', 'audit kuro: need 3/17/15/11'), 'card count');
+  D = broken((d) => { delete d.cards.kuro_c13; }); t.ok(auditHas(D, 'cards', 'audit kuro: need 3/17/17/12'), 'card count');
   D = broken((d) => { Object.values(d.cards).filter((c) => c.hero === 'kuro' && c.type === 'power').forEach((c) => { c.type = 'skill'; }); }); t.ok(auditHas(D, 'cards', 'fewer than 4 powers', { hero: 'kuro' }), 'powers');
   D = broken((d) => { Object.values(d.cards).filter((c) => c.hero === 'suzu').forEach((c) => { if (c.cost === 'X') { c.cost = 1; } }); }); t.ok(auditHas(D, 'cards', 'no X cost card', { hero: 'suzu' }), 'X card');
   D = broken((d) => { Object.values(d.cards).filter((c) => c.hero === 'raiga').forEach((c) => { c.kw = []; }); }); t.ok(auditHas(D, 'cards', 'fewer than 5 cards with keywords', { hero: 'raiga' }), 'keywords');

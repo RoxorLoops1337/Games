@@ -282,7 +282,7 @@ const D = g.DATA;
 
 // Every string whose key is a display field, anywhere inside a registry. Ids, ops, tags and art names are never display fields.
 const DISPLAY_KEYS = new Set(['name', 'title', 'flavor', 'text', 'lore', 'say', 'label', 'blurb']);
-const REGISTRIES = ['cards', 'gems', 'relics', 'relicSets', 'enemies', 'events', 'achievements', 'trials', 'lore', 'tiles', 'brushes', 'keywords', 'statuses', 'heroes', 'ROSTER', 'outfits'];
+const REGISTRIES = ['cards', 'gems', 'relics', 'relicSets', 'mascots', 'enemies', 'events', 'achievements', 'trials', 'lore', 'tiles', 'brushes', 'keywords', 'statuses', 'heroes', 'ROSTER', 'outfits', 'guests'];
 const data = [];            // { kind:'data', where, text, reg, key }
 const collect = (o, p, reg, key) => {
   if (typeof o === 'string') { data.push({ kind: 'data', where: p, text: o, reg, key }); return; }

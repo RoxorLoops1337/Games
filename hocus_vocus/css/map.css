@@ -90,6 +90,13 @@
 .mp-relic-more, .mp-relic-none { display: inline-flex; align-items: center; gap: 8px; padding: 0 12px; border: 0; border-radius: 99px; cursor: pointer; font: 800 calc(14px * var(--ts)) / 1 var(--font-display); color: var(--hv-cream); background: rgba(255, 244, 230, .12); box-shadow: inset 0 0 0 1.5px rgba(255, 244, 230, .5); }
 .mp-relic-more:hover, .mp-relic-none:hover { background: rgba(255, 244, 230, .24); }
 .mp-relics.empty { opacity: .9; }
+/* the Mascot chip (DESIGN 4.7): the stray's medallion with one pip per level, first in the strip; a tap opens the Charms overlay */
+.mp-mascot { display: inline-flex; flex-direction: column; align-items: center; gap: 3px; padding: 2px 6px 3px; border: 0; border-radius: 12px; cursor: pointer; color: var(--hv-cream); background: rgba(255, 216, 77, .14); box-shadow: inset 0 0 0 1.5px rgba(255, 216, 77, .55); transition: translate .12s var(--ease-out); }
+.mp-mascot:hover { translate: 0 -3px; background: rgba(255, 216, 77, .26); }
+.mp-mascot-ico { display: grid; place-items: center; width: 32px; height: 32px; filter: drop-shadow(0 2px 2px rgba(0, 0, 0, .5)); }
+.mp-mascot-pips { display: inline-flex; gap: 3px; }
+.mp-mascot-pips .mr-pip { width: 7px; height: 7px; }
+.mp-relics.has-mascot.empty .mp-relic-none { margin-left: 2px; }
 
 /* ------------------------------------------------------------------------------------------------ the Spell tray */
 .mp-tray { left: 0; right: 0; bottom: 10px; margin-inline: auto; width: fit-content; max-width: 540px; display: flex; align-items: center; gap: 10px; padding: 9px 14px 9px 10px; pointer-events: auto; }
@@ -283,4 +290,20 @@ body.low .mp-banner { filter: none; }
 .mr-tier.on .mr-tier-n { background: #ffd84d; }
 .mr-tag.mr-setof { background: rgba(255, 244, 230, .22); color: var(--hv-cream); letter-spacing: .06em; text-transform: none; }
 body.colorblind .mr-tier.off .mr-tier-text { text-decoration: line-through; }
+/* the Mascot section at the top of the overlay (DESIGN 4.7): medallion, name, level count and pips, the blurb, the XP still needed, the level lines */
+.mr-mascot { grid-column: 1 / -1; margin: 6px 0 2px; padding: 10px 14px 10px; border-radius: 14px; background: linear-gradient(135deg, rgba(255, 255, 255, .05), rgba(255, 255, 255, .015)); box-shadow: inset 0 0 0 1.5px rgba(255, 244, 230, .18); animation: mpIn .34s var(--ease-out) both; animation-delay: calc(var(--i, 0) * 45ms); }
+.mr-mascot.lit .mr-set-name { color: #ffd84d; }
+.mr-mascot.lit .mr-set-count { background: #ffd84d; }
+body.reduce-motion .mr-mascot { animation-name: fadeIn; animation-duration: .15s; animation-delay: 0ms; }
+.mr-mascot .mr-mascot-ico { display: grid; place-items: center; width: 56px; height: 56px; margin-right: 2px; filter: drop-shadow(0 3px 3px rgba(0, 0, 0, .5)); }
+.mr-mascot.lit { box-shadow: inset 0 0 0 1.5px rgba(255, 216, 77, .55), 0 0 18px rgba(255, 216, 77, .12); background: linear-gradient(135deg, rgba(255, 216, 77, .09), rgba(255, 255, 255, .015)); }
+.mr-mascot.none { opacity: .85; }
+.mr-mascot.none .mr-set-name { color: var(--hv-cream); }
+.mr-mascot-tag { background: #ffd84d; color: var(--ink); }
+.mr-mascot-next { margin: 4px 0 0; font: 600 calc(12px * var(--ts)) / 1.3 var(--font-ui); color: var(--hv-cream); opacity: .85; }
+.mr-mascot-none { font-style: italic; }
+#stage.compact .mp-mascot { padding: 1px 4px 2px; }
+#stage.compact .mp-mascot-ico { width: 28px; height: 28px; }
+#stage.compact .mp-mascot-ico .ico { width: 28px !important; height: 28px !important; }
+body.reduce-motion .mp-mascot:hover { translate: none; }
 body.reduce-motion .mr-set { animation-name: fadeIn; animation-duration: .15s; animation-delay: 0ms; }

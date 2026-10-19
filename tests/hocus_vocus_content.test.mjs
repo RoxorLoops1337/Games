@@ -682,6 +682,7 @@ t.test('a gated choice can really be reached, and the same choice is refused wit
       if (full) {
         if (req.relic) R.relics.push(req.relic);
         if (req.flag) R.flags[req.flag] = 1;
+        if (req.mascot === true && DATA.mascots) R.mascot = { id: Object.keys(DATA.mascots)[0], xp: 0 };   // the Mascot (DESIGN 4.7)
         if (req.hpBelow) R.heroes.forEach((h) => { h.hp = Math.max(1, Math.floor(h.maxHp * (req.hpBelow / 2))); });
       } else {
         R.gold = 0;

@@ -10,11 +10,15 @@
 //      player does what it teaches (completeOn: the bubble ticks and fades), and the chain moves on. A step's flag is stored when it CLOSES, so a
 //      screen change in the middle (a walk into a fight, a reload) brings the same step back the next time that screen opens: the walkthrough
 //      survives screen changes. A step whose moment has not come yet (the fight step needs a fight on the map) waits without blocking anything.
-//   2. Hints (the rest of HINTS): one short bubble the first time something happens (a reward screen, a Spell in the tray, a status chip...).
-//      Their flag is stored the moment they show, so a reload never repeats them.
+//   2. Hints (the rest of HINTS): one short bubble the first time something happens (a reward screen, a Spell in the tray, a status chip, the first
+//      guest on stage (`guest`: "Your guest acts at the end of your turn. Two fit on stage.", raised by combat:play or combat:turn while the live
+//      fight (UI.current.debug().C.guests) or the stage DOM shows a guest), the first map after a mascot is adopted (`mascot`, pointing at the
+//      HUD's Mascot chip)...). Their flag is stored the moment they show, so a reload never repeats them.
 //   3. Explainers: the first time the player meets ANY status, keyword, gem, Charm, Spell or map sign, a bigger card shows its icon, its name and
 //      "What it does" in one or two plain sentences, with Next or Got it and Stop explaining. They are built from the data (DATA.statuses,
-//      DATA.keywords, DATA.gems, DATA.relics, DATA.brushes, DATA.tiles), so a status or keyword added later gets an explainer with no change here.
+//      DATA.keywords, DATA.gems, DATA.relics, DATA.brushes, DATA.tiles), so a status or keyword added later gets an explainer with no change here
+//      (the Guest keyword is met through a Guest card's underlined word or its star badge, the Mascot keyword through the map HUD's Mascot chip: both
+//      carry data-kw-explain, which scan() reads).
 //      Their ids are 'x_<kind>_<key>' and their flags 'tut_x_<kind>_<key>'; 'tut_x_off' is Stop explaining.
 //   Priority: guided steps, then hints in catalog order, then explainers in the order they were met. Explainers wait while a walkthrough step is up
 //   or queued on that screen. In a fight nothing new opens while the fight is animating, a card is lifted or dragged, or the fight is over (busy());
@@ -106,6 +110,11 @@
       text: 'A choice, not a test. Usually one safe pick, one gamble and one price.' },
     gems: { title: 'Gems', anchor: ['.c-sock', 'deck'], at: { x: 640, y: 120 }, side: 'bottom', scope: ['map', 'reward', 'camp', 'forge', 'shop', 'gemcache'], ttl: 18000,
       text: 'Set a gem into a card slot of its colour. Rainbow slots take any gem.' },
+    // ---- allies (DESIGN 4.3 "Guests") and the pet (DESIGN 4.7 "The Mascot")
+    guest: { title: 'A guest on stage', anchor: ['.cm-guests', '.cm-guest', '[data-guest]', 'enemy'], at: { x: 430, y: 300 }, side: 'bottom', scope: ['combat'], ttl: 16000,
+      text: 'Your guest acts at the end of your turn. Two fit on stage.' },
+    mascot: { title: 'Your mascot', anchor: ['.mp-mascot', 'relics'], at: { x: 60, y: 660 }, side: 'top', scope: ['map'], ttl: 16000, teaches: ['x_keyword_mascot'],
+      text: 'The stray rides the bus now. Wins and snacks feed it, and it grows. Tap it to see how.' },
   };
   const CHAINS = { map: ['you', 'paint', 'walk', 'fight'], combat: ['hand', 'blockcard', 'energy', 'intent', 'endturn'] };
   // a veteran (the old hints of these steps were seen) skips the steps that are new to this walkthrough
@@ -183,6 +192,15 @@
   const hasBrushes = () => { const R = run(); return !!(R && Array.isArray(R.brushes) && R.brushes.length); };
   const hasRelics = () => { const R = run(); return !!(R && Array.isArray(R.relics) && R.relics.length); };
   const hasGems = () => { const R = run(); return !!(R && Array.isArray(R.gems) && R.gems.length); };
+  const hasMascot = () => { const R = run(); return !!(R && R.mascot && R.mascot.id); };
+  // a guest is on stage: the live fight (the combat screen's debug() hands out C) says so, else the stage DOM does (the guest stands are the combat screen's)
+  const guestOnStage = () => safe(() => {
+    const scr = UI.current;
+    const d = scr && isFn(scr.debug) ? scr.debug() : null;
+    const C = d && d.C;
+    if (C && Array.isArray(C.guests)) return C.guests.length > 0;
+    return !!(UI.anchorEl('.cm-guest') || UI.anchorEl('[data-guest]'));
+  }, false);
   const isBoss = (e) => !!(e && e.params && e.params.node && e.params.node.tier === 'boss');
   // a fight the party can walk to: a revealed Face-Off or Rival that is not done yet
   function fightOnMap() {
@@ -216,6 +234,9 @@
     { on: 'screen', hint: 'shop', when: (e) => e.name === 'shop', delay: 1200 },
     { on: 'screen', hint: 'event', when: (e) => e.name === 'event', delay: 1200 },
     { on: 'screen', hint: 'gems', when: (e) => e.name === 'gemcache' || e.name === 'forge' || (hasGems() && ['map', 'reward', 'camp', 'shop'].indexOf(e.name) >= 0), delay: 1400 },
+    // the first guest that steps on stage (a Guest card was played, or a new turn finds one there), and the first map after a stray joined the bus
+    { on: ['combat:play', 'combat:turn'], hint: 'guest', when: () => guestOnStage(), delay: 900 },
+    { on: 'screen', hint: 'mascot', when: (e) => e.name === 'map' && hasMascot(), delay: 2000 },
   ];
   // when to look for new things to explain (after the screen's own hints have had their turn)
   const SCAN_ON = { screen: 1700, 'combat:turn': 900, 'combat:play': 900, 'map:paint': 700, 'map:walk': 700, 'map:brush': 700 };

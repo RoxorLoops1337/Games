@@ -682,3 +682,7 @@ a.btn.hv-support { text-decoration: none; }
 /* a Medley (two cards sung as one, DATA "The Crowd and Medleys"): the first song's art wears a "+" badge in the corner (the upgrade plus, re-used) */
 .card .c-art .c-medley { position: absolute; right: calc(var(--u) * 2); top: calc(var(--u) * 1); z-index: 2; pointer-events: auto; cursor: help; font: 900 calc(var(--u) * 13) / 1 var(--font-num); text-shadow: 0 0 .5em #ff7eb6, 0 0 .2em #ffd84d, 1px 0 0 var(--hv-line), -1px 0 0 var(--hv-line), 0 1px 0 var(--hv-line), 0 -1px 0 var(--hv-line); }
 .card.medley .c-tname { color: #ffb6e0; }
+
+/* a Guest card (a Skill that brings a guest artist on stage, DESIGN 4.3 "Guests"): the art wears a guest star in the Medley's corner and the type strip reads Guest */
+.card .c-art .c-guest { position: absolute; right: calc(var(--u) * 2); top: calc(var(--u) * 0); z-index: 2; pointer-events: auto; cursor: help; font: 900 calc(var(--u) * 15) / 1 var(--font-num); color: #ffd84d; text-shadow: 0 0 .5em #ff7eb6, 0 0 .2em #fff, 1px 0 0 var(--hv-line), -1px 0 0 var(--hv-line), 0 1px 0 var(--hv-line), 0 -1px 0 var(--hv-line); }
+.card.guest .c-tname { color: #ffe08a; }

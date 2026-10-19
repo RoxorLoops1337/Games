@@ -14,7 +14,7 @@
 // R (JSON-safe, see serialize):
 //   v id seed trial daily mods(trial deltas) unlocked({card,relic,gem}|null = everything) heroes[{id,hp,maxHp}] frontIdx deck[{uid,id,up,gems,enc?}] (enc: a Fanbase card's bonus damage)
 //   gems[gemId] relics[id] brushes[id] gold ink inkMax chapter map node pending[] stats{every LISTS.statKeys} flags{} rareOffset removals
-//   seen{events[]} foes{enemyId:kills} log[{ch,msg}] done victory chapterCleared recorded, plus bookkeeping hk pendSeq opsN lastEnc.
+//   seen{events[]} foes{enemyId:kills} log[{ch,msg}] done victory chapterCleared recorded mascot(null | {id, xp}), plus bookkeeping hk pendSeq opsN lastEnc.
 //   done/victory: a combat was lost, or the chapter 3 boss fell (chapterEnd). chapterCleared: a boss reward was finished and
 //   chapterEnd has not run yet (a save taken in that gap must route to chapterClear, not to the map). recorded: set by
 //   META.recordRun so a run pays out once. foes: per-enemy kill counts for the Who's Who. pending: choices that wait for the
@@ -60,6 +60,16 @@
 //            onPickup), logged as {op:'set', id: setId, tier, hook}; addRelic notes every tier a pickup switches on in R.log ({msg, set, tier}) and logs it as
 //            {op:'set', id, tier, text} so the reward page shows it and the map toasts it. Nothing is saved for sets: they derive from R.relics.
 //            Any choice raised anywhere (a shop entry hook, an Act start hook, a fight win) waits in R.pending: screens check it after every call.
+//   Mascot   THE MASCOT (DESIGN 4.7 "The Mascot"): R.mascot = null | {id, xp} (saved; optional in old saves). adoptMascot(R, id) -> {ok, id, level:1, log, pending}
+//            | reason unknown|owned (the bus keeps ONE mascot per tour; notes R.log {msg, mascot, level}). mascotXp(R, n) -> {level, leveled, xp, log}: feeds n XP and
+//            notes every level switched on in R.log ({msg, mascot, level}) and in log as {op:'mascot', id, level, text (DATA.mascotLabel)}; without a mascot
+//            {level:0, leveled:false}. combatDone feeds ECONOMY.mascotFightXp[tier] BEFORE the mods, gold and onFightWon hooks of that win and puts the
+//            level-up lines first in Rewards.log (the reward screen toasts them). The levels are virtual Charms: mods(R) folds them (DATA.modsFor(R.relics,
+//            R.mods, R.mascot)), combatInit passes `mascot: {id, xp}` so COMBAT registers their combat hooks and row bonuses, hook() runs their run hooks
+//            after the set tiers (logged as {op:'mascot', id, level, hook}). Run ops: adoptMascot {id} (events and shops; a second adoption logs and does
+//            nothing) and mascotXp {n}. Event choices may carry req.mascot (false: only while the bus has none, true: only with one; both hide the choice).
+//            The Merch Stall stocks ONE Snack ({key:'s0', kind:'snack', id:'snack', price: ECONOMY.price.snack x priceMul}) while the bus has a mascot;
+//            shopBuy feeds ECONOMY.snackXp through the ordinary buy path (reason 'mascot' without one) and logs {op:'mascotXp', ...} plus the level lines.
 //   Deck     addCard(R,id,{up,gems}) removeCard(R,uid) (gems return to R.gems) upgradeCard(R,uid) upgradable(R,filter) -> [uid]
 //   Medley   makeMedley(R, uidA, uidB) -> {ok, inst, lost} | reason card|same|medley|type|hero   medleyPossible(R) -> bool
 //            medleyStart(R, rewards) -> {ok, pending} | reason offer|cards: the elite reward's optional fuse (rewards.medley: true -> 'pending' -> 'done';
@@ -77,7 +87,7 @@
 //              so the reward ledger shows every gain; maxHp is summed over both heroes.
 //   Node    = {kind, tile:{q,r}, ...}: 'combat' {tier, enc, enemies, seed, rewards, onWin, source} | 'reward' {rewards, source} | 'shop' {stock:{items,
 //             removePrice}, hookLog} | 'event' {event, chosen} | 'camp' {used[]} | 'forge' {used: null|'upgrade'|'gems'} | 'chest' {loot:{gold, relic, gems[]},
-//             taken} | 'gemcache' {offers[], taken}. Shop items: {key, kind:'card'|'gem'|'relic'|'brush', id, price, sale, sold, was?}.
+//             taken} | 'gemcache' {offers[], taken}. Shop items: {key, kind:'card'|'gem'|'relic'|'brush'|'snack', id, price, sale, sold, was?}.
 //
 // Dials data.js has no home for live below as constants: gem tier weights per Act, elite gem and Spell drop chances, Spell weights.
 // Deviations from the task text, all following DESIGN: no unsocket and no maxHpPct (both removed in the revised design), unlock filtering
@@ -109,7 +119,8 @@ const RUN = (() => {
     L().statKeys.forEach((k) => { s[k] = 0; });
     return s;
   }
-  const mods = (R) => DATA.modsFor(R.relics, R.mods || {});
+  const mods = (R) => DATA.modsFor(R.relics, R.mods || {}, R.mascot || null);
+  const mascotName = (id) => (DATA.mascots && DATA.mascots[id] && DATA.mascots[id].name) || id;
   const partyIds = (R) => R.heroes.map((h) => h.id);
   const tileAt = (R, q, r) => (R.map && R.map.tiles ? R.map.tiles[MAP.key(q, r)] || null : null);
   const findInst = (R, uid) => R.deck.find((c) => c.uid === uid) || null;
@@ -567,6 +578,19 @@ const RUN = (() => {
       out.fight = fightNode(R, o, tile);
       out.log.push({ op: 'fight', enemies: out.fight.enemies.slice(), text: 'A fight breaks out!' });
     },
+    // The Mascot (DESIGN 4.7): a Detour choice adopts the stray; a Snack or an event feeds it. The bus keeps ONE mascot for the whole tour.
+    adoptMascot(R, o, ctx, out) {
+      const res = adoptMascot(R, o.id);
+      if (!res.ok) { out.log.push({ op: 'adoptMascot', id: o.id, text: res.reason === 'owned' ? `The bus already has a mascot: ${mascotName(R.mascot.id)}.` : 'The stray wanders off.' }); return; }
+      out.log.push({ op: 'adoptMascot', id: res.id, text: `${mascotName(res.id)} hops aboard the tour bus.` });
+      res.log.forEach((x) => out.log.push(x));
+    },
+    mascotXp(R, o, ctx, out) {
+      if (!R.mascot) { out.log.push({ op: 'mascotXp', n: o.n, text: 'No mascot to feed.' }); return; }
+      const res = mascotXp(R, o.n);
+      out.log.push({ op: 'mascotXp', id: R.mascot.id, n: o.n, xp: res.xp, level: res.level, leveled: res.leveled, text: `${mascotName(R.mascot.id)} gains ${o.n} XP.` });
+      res.log.forEach((x) => out.log.push(x));
+    },
   };
   function applyOps(R, ops, ctx) {
     ctx = ctx || {};
@@ -663,9 +687,39 @@ const RUN = (() => {
       if (!def || !Array.isArray(def.hooks)) return;
       def.hooks.forEach((h, idx) => fire(rid, h, idx, { op: 'relic', id: rid, hook: name, text: '' }));
     });
-    // set tier hooks run after the Charms' own (never for a pickup, which is one Charm's own moment)
+    // set tier hooks run after the Charms' own (never for a pickup, which is one Charm's own moment), then the mascot's levels
     if (!ctx.only) setTiers(R).forEach((t) => { if (Array.isArray(t.hooks)) t.hooks.forEach((h, idx) => fire(t.rid, h, idx, { op: 'set', id: t.set, tier: t.tier, hook: name, text: '' })); });
+    if (!ctx.only) mascotTiers(R).forEach((t) => { if (Array.isArray(t.hooks)) t.hooks.forEach((h, idx) => fire(t.rid, h, idx, { op: 'mascot', id: t.mascot, level: t.level, hook: name, text: '' })); });
     return res;
+  }
+  // ---- the Mascot (DESIGN 4.7 "The Mascot"): R.mascot = null | {id, xp}. Its levels are virtual Charms derived from the XP every call:
+  // [{rid: 'mascot:mascot_pug:2', hooks, mascot, level}]. Nothing but {id, xp} is saved.
+  const mascotTiers = (R) => (typeof DATA.activeMascotTiers === 'function' ? DATA.activeMascotTiers(R.mascot || null) : []).map((t) => ({ rid: 'mascot:' + t.mascot + ':' + t.level, hooks: t.def.hooks, mascot: t.mascot, level: t.level }));
+  // adopt the stray: -> {ok, id, level: 1, log: [{op:'mascot', id, level, text}], pending: []} | {ok:false, reason: unknown|owned}
+  function adoptMascot(R, id) {
+    if (!DATA.mascots || !DATA.mascots[id]) return { ok: false, reason: 'unknown', log: [], pending: [] };
+    if (R.mascot) return { ok: false, reason: 'owned', log: [], pending: [] };
+    R.mascot = { id, xp: 0 };
+    syncInk(R);
+    const text = DATA.mascotLabel(id, 1);
+    note(R, `${mascotName(id)} joins the tour bus.`, { mascot: id, level: 1 });
+    return { ok: true, id, level: 1, log: [{ op: 'mascot', id, level: 1, text }], pending: [] };
+  }
+  // feed the mascot n XP: -> {level, leveled, xp, log: [{op:'mascot', id, level, text} per level switched on]}; {level: 0, leveled: false, xp: 0, log: []} without one.
+  // Called by combatDone with the fight tier's XP (ECONOMY.mascotFightXp) and by the Merch Stall Snack (ECONOMY.snackXp).
+  function mascotXp(R, n) {
+    if (!R.mascot || !DATA.mascots[R.mascot.id]) return { level: 0, leveled: false, xp: 0, log: [] };
+    const before = DATA.mascotLevel(R.mascot.xp);
+    R.mascot.xp = Math.max(0, (R.mascot.xp | 0) + Math.max(0, Math.floor(Number(n) || 0)));
+    const level = DATA.mascotLevel(R.mascot.xp);
+    const log = [];
+    for (let lv = before + 1; lv <= level; lv++) {
+      const text = DATA.mascotLabel(R.mascot.id, lv);
+      note(R, `${mascotName(R.mascot.id)} grew to level ${lv}.`, { mascot: R.mascot.id, level: lv });
+      log.push({ op: 'mascot', id: R.mascot.id, level: lv, text });
+    }
+    if (level > before) syncInk(R);
+    return { level, leveled: level > before, xp: R.mascot.xp, log };
   }
   function gainRelic(R, id) {
     if (!DATA.relics[id]) return { ok: false, reason: 'unknown', log: [], pending: [] };
@@ -704,7 +758,7 @@ const RUN = (() => {
       heroes: heroes.map((id) => ({ id, hp: DATA.heroes[id].maxHp, maxHp: DATA.heroes[id].maxHp })), frontIdx: 0,
       deck: [], gems: [], relics: [], brushes: ['stroke'], gold: 0, ink: 0, inkMax: 0, chapter: 0, map: null, node: null, pending: [],
       stats: newStats(), flags: {}, rareOffset: 0, removals: 0, seen: { events: [] }, foes: {}, log: [], done: false, victory: false,
-      chapterCleared: false, recorded: false, hk: {}, pendSeq: 0, opsN: 0, lastEnc: null,
+      chapterCleared: false, recorded: false, hk: {}, pendSeq: 0, opsN: 0, lastEnc: null, mascot: null,
     };
     const m = mods(R);
     R.gold = m.startGold;
@@ -904,6 +958,8 @@ const RUN = (() => {
     }
     picked.forEach((rel) => add('r', 'relic', rel.id, price(E().price.relic[rel.rarity] || E().price.relic.common)));
     for (let i = 0; i < E().shop.brushes; i++) { const b = rollBrush(sub('brush' + i)); if (b) add('b', 'brush', b, price(E().price.brush)); }
+    // the Snack (DESIGN 4.7 "The Mascot"): one per stall, ECONOMY.snackXp XP for the mascot; absent while the bus has no mascot
+    if (R.mascot && DATA.mascots[R.mascot.id]) add('s', 'snack', 'snack', price(E().price.snack));
     return { items, removePrice: removePrice(R) };
   }
   const removePrice = (R) => Math.max(1, Math.round((E().price.remove + E().price.removeStep * R.removals) * mods(R).priceMul));
@@ -921,6 +977,8 @@ const RUN = (() => {
     if (req.relic !== undefined && R.relics.indexOf(req.relic) < 0) return { ok: false, reason: `Needs the ${relicName(req.relic)}` };
     if (req.flag !== undefined && !R.flags[req.flag]) return { ok: false, reason: FLAG_HINTS[req.flag] || 'Not yet: the tour has not come this way' };
     if (req.chapter !== undefined && R.chapter !== req.chapter) return { ok: false, reason: `Act ${req.chapter} only` };
+    // mascot: false = only while the bus has no mascot yet, true = only with one; both hide the choice like a missing hero
+    if (req.mascot !== undefined && !!R.mascot !== !!req.mascot) return { ok: false, hidden: true, reason: 'mascot' };
     return { ok: true };
   }
   // Ops that can only do nothing right now: a curse to remove with no curse in the deck, a card to sharpen with every card sharp, a fixed Charm
@@ -933,6 +991,8 @@ const RUN = (() => {
       return o.op === 'removeCard' && o.filter && o.filter.type === 'curse' ? 'You carry no curse' : DEAD_DECK_TEXT[o.op];
     }
     if (o.op === 'addRelic' && o.id && DATA.relics[o.id] && R.relics.indexOf(o.id) >= 0) return `You already carry the ${relicName(o.id)}`;
+    if (o.op === 'adoptMascot' && R.mascot) return `The bus already has a mascot: ${mascotName(R.mascot.id)}`;
+    if (o.op === 'mascotXp' && !R.mascot) return 'No mascot to feed';
     return null;
   }
   function deadReason(R, ops) {
@@ -1064,6 +1124,7 @@ const RUN = (() => {
     return {
       heroes: R.heroes.map((h) => ({ id: h.id, hp: h.hp, maxHp: h.maxHp })), frontIdx: R.frontIdx, deck: U.deepCopy(R.deck),
       enemies: node.enemies.slice(), tier: node.tier, chapter: R.chapter, seed: node.seed, mods: mods(R), relics: R.relics.slice(), gold: R.gold,
+      mascot: R.mascot ? { id: R.mascot.id, xp: R.mascot.xp } : null,
     };
   }
   function mergeCombatStats(R, stats, kills, tier, win) {
@@ -1104,6 +1165,9 @@ const RUN = (() => {
       note(R, 'The party lost their voices.');
       return null;
     }
+    // the Mascot grows first (ECONOMY.mascotFightXp by tier), so a level that just switched on already counts for the mods, the gold and the
+    // hooks below; its level-up lines ({op:'mascot', id, level, text}) lead the reward log so the reward screen can toast "Beatbox Pug grew to level 2"
+    const grew = R.mascot ? mascotXp(R, E().mascotFightXp[tier] || 0) : null;
     const m = mods(R);
     const gains = S.maxHpGain || {};
     // Rewards.maxHp and Rewards.gold are everything the fight's end added, so the reward ledger shows it: max HP won in the fight, by
@@ -1125,7 +1189,7 @@ const RUN = (() => {
 
     const won = hook(R, 'onFightWon', { tier });
     const pending = won.pending.slice();
-    const log = won.log.slice();
+    const log = (grew ? grew.log : []).concat(won.log);
     const on = !node || node.rewards !== false;
     const gr = rngFor(R, 'reward', tile.q, tile.r, 'gold');
     const range = E().gold[tier] || E().gold.normal;
@@ -1230,6 +1294,7 @@ const RUN = (() => {
     if (item.sold) return { ok: false, reason: 'sold' };
     if (R.gold < item.price) return { ok: false, reason: 'gold' };
     if (item.kind === 'relic' && R.relics.indexOf(item.id) >= 0) return { ok: false, reason: 'owned' };
+    if (item.kind === 'snack' && !R.mascot) return { ok: false, reason: 'mascot' };
     R.gold -= item.price;                                            // pay first: a pickup hook may change gold
     R.stats.goldSpent += item.price;
     R.stats.purchases += 1;
@@ -1241,6 +1306,9 @@ const RUN = (() => {
     else if (item.kind === 'relic') {
       const g = gainRelic(R, item.id);
       res.pending = g.pending; res.log = g.log;
+    } else if (item.kind === 'snack') {
+      const fed = mascotXp(R, E().snackXp);
+      res.log = [{ op: 'mascotXp', id: R.mascot.id, n: E().snackXp, xp: fed.xp, level: fed.level, leveled: fed.leveled, text: `${mascotName(R.mascot.id)} gains ${E().snackXp} XP.` }].concat(fed.log);
     }
     shopSync(R, stock, key);
     return res;
@@ -1410,6 +1478,8 @@ const RUN = (() => {
     R.gems = (Array.isArray(R.gems) ? R.gems : []).filter((g) => typeof g === 'string' && DATA.gems[g]);   // duplicates are real: two copies of one gem
     R.relics = strs(R.relics).filter((r) => DATA.relics[r]);
     R.brushes = (Array.isArray(R.brushes) ? R.brushes : []).filter((b) => typeof b === 'string' && DATA.brushes[b]);
+    // the Mascot (optional: saves from before mascots have none, and an unknown id means no mascot)
+    R.mascot = R.mascot && typeof R.mascot === 'object' && DATA.mascots && DATA.mascots[R.mascot.id] ? { id: R.mascot.id, xp: Math.max(0, Math.floor(isNum(R.mascot.xp) ? R.mascot.xp : 0)) } : null;
     const dflt = { stats: newStats(), flags: {}, seen: { events: [] }, foes: {}, log: [], pending: [], hk: {}, mods: {}, pendSeq: 0, opsN: 0, lastEnc: null, rareOffset: 0, removals: 0, chapterCleared: false, recorded: false, done: false, victory: false, node: null, frontIdx: 0 };
     Object.keys(dflt).forEach((k) => { if (R[k] === undefined) R[k] = dflt[k]; });
     R.stats = Object.assign(newStats(), R.stats);
@@ -1425,5 +1495,6 @@ const RUN = (() => {
     shopBuy, shopRemove, eventChoices, eventChoose, pickEvent, campAction, forgeAction, finishNode, chapterEnd, checkStranded,
     applyOps, resolvePending, hook, addRelic: gainRelic, addCard, removeCard, upgradeCard, socket, upgradable, forgeUsable, score, summary, serialize, deserialize,
     makeMedley, medleyStart, medleyPossible,
+    adoptMascot, mascotXp,
   };
 })();

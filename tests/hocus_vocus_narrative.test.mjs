@@ -118,7 +118,7 @@ t.test('every event is a dilemma: a safe choice, a weighted gamble, and choices 
 });
 
 t.test('once only where the change lasts, and at most 60 percent of events', () => {
-  const LASTING = ['flag', 'addRelic', 'addCurse', 'upgradeCard', 'removeCard', 'transformCard', 'duplicateCard', 'addCard', 'cardReward', 'maxHp', 'addGem'];
+  const LASTING = ['flag', 'addRelic', 'addCurse', 'upgradeCard', 'removeCard', 'transformCard', 'duplicateCard', 'addCard', 'cardReward', 'maxHp', 'addGem', 'adoptMascot'];   // adoptMascot: the tour bus keeps its mascot for the whole tour
   const once = evs.filter((e) => e.once);
   t.ok(once.length <= Math.floor(evs.length * 0.6), `once cap (${once.length} of ${evs.length})`);
   t.ok(once.length >= 8, 'a healthy number of story beats are once');
@@ -759,6 +759,7 @@ t.test('integration: RUN.eventChoose runs each choice end to end with seeded, de
       const R = clone(R0);
       R.relics = R0.relics.slice();                                              // deserialize drops relic ids nobody has defined yet
       if (c.req && c.req.chapter) R.chapter = c.req.chapter;                     // an Act-gated choice is only offered in that Act
+      if (c.req && c.req.mascot !== undefined) R.mascot = c.req.mascot && DATA.mascots ? { id: Object.keys(DATA.mascots)[0], xp: 0 } : null;   // a mascot-gated choice (4.7 "The Mascot")
       liveFor(R, c);
       R.node = { kind: 'event', tile: { q: R.map.start.q, r: R.map.start.r }, event: e.id, chosen: null };
       const st = RUN.eventChoices(R, e);

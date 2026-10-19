@@ -410,6 +410,30 @@
       kw: ['exhaust'], slots: ['red', 'green'], art: { m: 'meteor', c: 'gold' },
       flavor: 'Bass, snare, hat, throat, all at once. Then silence. Then the roar.',
     },
+    // ------------------------------------------------------------------ guests (DATA.guests, data_guests.js; DESIGN 4.3 "Guests")
+    // Three Skills that bring a guest on stage: a DJ (a strike a turn), a loop pedal robot (Block and Groove a turn) and a metronome gnome (a beat on
+    // every enemy, and 1 Breath at the start of each turn while it stays). Guest ops are hook ops acted by RoxorLoops: no backing bonus on them.
+    kuro_guest_dj: {
+      name: 'DJ Scratchy', hero: 'kuro', type: 'skill', rarity: 'uncommon', cost: 1,
+      fx: [{ op: 'guest', id: 'guest_dj_scratchy' }],
+      up: { fx: [{ op: 'guest', id: 'guest_dj_scratchy', up: true }] },
+      kw: [], slots: ['green'], art: { m: 'star', c: 'teal' },
+      flavor: 'Wikka wikka. He has been asked to stop. He has not stopped.',
+    },
+    kuro_guest_loop_bot: {
+      name: 'Loop Pedal Bot', hero: 'kuro', type: 'skill', rarity: 'uncommon', cost: 1,
+      fx: [{ op: 'guest', id: 'guest_loop_bot' }],
+      up: { fx: [{ op: 'guest', id: 'guest_loop_bot', up: true }] },
+      kw: [], slots: ['gold'], art: { m: 'key', c: 'jade' },
+      flavor: 'Beep. Four bars. Beep. The same four bars. It is very proud of them.',
+    },
+    kuro_guest_drum_machine: {
+      name: 'Metro Gnome', hero: 'kuro', type: 'skill', rarity: 'rare', cost: 2,
+      fx: [{ op: 'guest', id: 'guest_drum_machine' }],
+      up: { fx: [{ op: 'guest', id: 'guest_drum_machine', up: true }] },
+      kw: [], slots: ['gold', 'green'], art: { m: 'fist', c: 'indigo' },
+      flavor: 'It never gets tired, never gets thirsty, and never, ever lets you breathe late.',
+    },
   };
 
   DATA.add('cards', cards);
