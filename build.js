@@ -62,6 +62,7 @@ const STATIC_PATHS = [
   'ballistic',
   'coin_pusher',
   'cell_survivor',
+  'cell_serpent',
   'leviathan_press',
   'dungeon_pusher',
   'grimhold',

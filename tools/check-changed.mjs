@@ -48,6 +48,7 @@ const GAME_SUITES = {
   coin_pusher: ['test:pusher', 'test:pusherrender'],
   dungeon_pusher: ['test:dungeon', 'test:dpboard', 'test:dpsave', 'test:dpinball', 'test:dpfont'],
   cell_survivor: ['test:cells'],
+  cell_serpent: ['test:serpent'],
   grimhold: ['test:grimhold'],
   leviathan_press: ['test:leviathan'],
   ironbridge: ['test:ironbridge'],
