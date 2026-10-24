@@ -2475,6 +2475,8 @@ function drawBody(e, col, ang){
       ctx.beginPath(); ctx.moveTo(-L / 2, 0);
       for (let i = 1; i <= 6; i++) ctx.lineTo(-L / 2 - i * 3.6, Math.sin(w * 6 - i * .8) * 4.5);
       ctx.strokeStyle = INK; ctx.lineWidth = 4.6; ctx.stroke(); ctx.strokeStyle = col; ctx.lineWidth = 2.2; ctx.stroke();
+      const tx = -L / 2 - 6 * 3.6, ty = Math.sin(w * 6 - 4.8) * 4.5; // the cable's plug
+      ctx.fillStyle = '#c9cbd6'; ctx.lineWidth = 2; ctx.strokeStyle = INK; ctx.beginPath(); ctx.rect(tx - 6, ty - 4, 7, 8); ctx.fill(); ctx.stroke();
     }
     ctx.scale(1, 1 + Math.sin(w * 3) * .06);
     capsule(L, W); celPath(col, W * .07, 2.4);
