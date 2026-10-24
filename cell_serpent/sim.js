@@ -106,14 +106,14 @@ export const skinFor = n => (Math.floor((n - 1) / 5) % 2 === 0 ? 'pink' : 'purpl
 
 // Small crawlers that swarm in beside the snake. `art` is the sprite key.
 export const MINIONS = [
-  { id: 'green', art: 'min_green', unlock: 2, hp: 0.8, speed: 82, r: 17, dmg: 8, w: 3 },
-  { id: 'red', art: 'min_red', unlock: 4, hp: 0.6, speed: 130, r: 16, dmg: 9, w: 2 },
-  { id: 'yellow', art: 'min_yellow', unlock: 5, hp: 1, speed: 100, r: 16, dmg: 9, w: 2 },
-  { id: 'jelly', art: 'min_jelly', unlock: 6, hp: 3, speed: 58, r: 25, dmg: 12, w: 1.5 },
-  { id: 'eye', art: 'min_eye', unlock: 7, hp: 1.4, speed: 96, r: 20, dmg: 10, w: 1.5 },
-  { id: 'robot', art: 'min_robot', unlock: 8, hp: 2, speed: 110, r: 22, dmg: 11, w: 1.2 },
-  { id: 'bat', art: 'mon_bat', unlock: 10, hp: 1.6, speed: 150, r: 24, dmg: 11, w: 1.2, erratic: true },
-  { id: 'ghost', art: 'mon_ghost', unlock: 12, hp: 2.2, speed: 90, r: 26, dmg: 12, w: 1, erratic: true },
+  { id: 'green', art: 'green', unlock: 2, hp: 0.8, speed: 82, r: 17, dmg: 8, w: 3 },
+  { id: 'red', art: 'red', unlock: 4, hp: 0.6, speed: 130, r: 16, dmg: 9, w: 2 },
+  { id: 'yellow', art: 'yellow', unlock: 5, hp: 1, speed: 100, r: 16, dmg: 9, w: 2 },
+  { id: 'jelly', art: 'jelly', unlock: 6, hp: 3, speed: 58, r: 25, dmg: 12, w: 1.5 },
+  { id: 'eye', art: 'eye', unlock: 7, hp: 1.4, speed: 96, r: 20, dmg: 10, w: 1.5 },
+  { id: 'robot', art: 'robot', unlock: 8, hp: 2, speed: 110, r: 22, dmg: 11, w: 1.2 },
+  { id: 'bat', art: 'bat', unlock: 10, hp: 1.6, speed: 150, r: 24, dmg: 11, w: 1.2, erratic: true },
+  { id: 'ghost', art: 'ghost', unlock: 12, hp: 2.2, speed: 90, r: 26, dmg: 12, w: 1, erratic: true },
 ];
 
 function spawnMinions(g, n) {

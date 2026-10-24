@@ -1,6 +1,7 @@
 import { W, H, createGame, step, choose, botInput, META, metaCost, buyMeta, defaultSave, sanitizeSave } from './sim.js';
 import { loadArt } from './art.js';
 import { createRenderer } from './render.js';
+import { createArtDraw } from './art_draw.js';
 import { createAudio } from './audio.js';
 
 const SAVE_KEY = 'cell_serpent_save_v1';
@@ -12,7 +13,7 @@ const persist = () => { try { localStorage.setItem(SAVE_KEY, JSON.stringify(save
 
 const audio = createAudio();
 audio.setMuted(save.muted);
-let art = null, R = null;
+let art = null, R = null, kit = null;
 let mode = 'title', g = null, demo = null, acc = 0, last = 0, overT = 0, cardsFor = null;
 const joy = { on: false, id: -1, x: 0, y: 0, dx: 0, dy: 0 };
 const keys = {};
@@ -153,8 +154,14 @@ $('resumeBtn').onclick = () => resume();
 $('quitBtn').onclick = () => { g.p.hp = 0; g.phase = 'dead'; g.result = { stage: g.stage, kills: g.kills, coins: Math.floor(g.coins), score: g.score, level: g.level, time: g.t, boss: false }; finishRun(); mode = 'over'; audio.music(false); };
 $('muteBtn').onclick = toggleMute; $('muteBtn').textContent = save.muted ? '🔇' : '🔊';
 
+function decorateTitle() {
+  const spots = [['green', 'deco1'], ['bat', 'deco2'], ['jelly', 'deco3'], ['ghost', 'deco4']];
+  for (const [id, el] of spots) { const s = kit.SPR.minion(id); if (s && $(el)) $(el).src = s.c.toDataURL(); }
+}
 window.CS = { g: null, save: () => save, mode: () => mode };
 loadArt('assets/').then(a => {
-  art = a; R = createRenderer(canvas, art); window.CS.art = art; window.CS.R = R;
+  art = a; kit = createArtDraw((w, h) => { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; }, 2);
+  decorateTitle();
+  R = createRenderer(canvas, art, kit); window.CS.art = art; window.CS.R = R;
   newDemo(); refreshTitle(); show('title'); last = performance.now(); requestAnimationFrame(frame);
 });

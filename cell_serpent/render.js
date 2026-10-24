@@ -1,33 +1,33 @@
 // Canvas renderer. Reads the sim state, never changes it. Uses sprites from art.js
 // where they exist and draws procedural stand-ins otherwise.
 import { W, H, isBossStage } from './sim.js';
+import { INK } from './art_draw.js';
 
 const TAU = Math.PI * 2;
-const SKIN = { pink: ['#ff7ac6', '#c93a8f'], purple: ['#a98cff', '#5d3fc4'] };
-const KIND_TINT = { normal: null, armor: '#9aa3b2', bomb: '#ff3b5c', spitter: '#7dff5e', gold: '#ffd24a' };
 const num = v => { v = Math.ceil(v); return v >= 10000 ? (v / 1000).toFixed(0) + 'k' : v >= 1000 ? (v / 1000).toFixed(1) + 'k' : String(v); };
 
-export function createRenderer(canvas, art) {
+export function createRenderer(canvas, art, kit) {
   const ctx = canvas.getContext('2d');
   const S = { particles: [], floats: [], rings: [], trauma: 0, flash: 0, flashCol: '#fff', banner: null, t: 0, specks: [], hurtT: 0, popped: 0, lastShot: -9 };
-  for (let i = 0; i < 46; i++) S.specks.push({ x: Math.random() * W, y: Math.random() * H, r: 10 + Math.random() * 46, v: 4 + Math.random() * 10, a: Math.random() * TAU });
+  for (let i = 0; i < 26; i++) S.specks.push({ i, x: Math.random() * W, y: Math.random() * H, r: 26 + Math.random() * 70, v: 4 + Math.random() * 10, a: Math.random() * TAU });
+  S.petals = [];
+  for (let i = 0; i < 22; i++) S.petals.push({ x: Math.random() * W, y: Math.random() * H, s: 6 + Math.random() * 7, v: 18 + Math.random() * 26, a: Math.random() * TAU, rot: 0.4 + Math.random(), c: i % 3 ? '#ff9ac6' : '#ffe0ee' });
   const layout = () => {
     const cw = canvas.width, ch = canvas.height, s = Math.min(cw / W, ch / H);
     return { cw, ch, s, ox: (cw - W * s) / 2, oy: (ch - H * s) / 2 };
   };
 
-  function spr(key, x, y, w, h, rot = 0, alpha = 1, flip = false) {
+  // duo images only come from art (PNG); everything else is the drawing kit
+  function img(key, x, y, w, h, rot = 0, alpha = 1) {
     const im = art && art.get(key);
     if (!im) return false;
-    ctx.save(); ctx.translate(x, y); if (rot) ctx.rotate(rot); if (flip) ctx.scale(-1, 1);
-    if (alpha !== 1) ctx.globalAlpha = alpha;
+    ctx.save(); ctx.translate(x, y); if (rot) ctx.rotate(rot); if (alpha !== 1) ctx.globalAlpha = alpha;
     ctx.drawImage(im, -w / 2, -h / 2, w, h); ctx.restore(); return true;
   }
-  function sprFit(key, x, y, size, rot = 0, alpha = 1, flip = false) {
-    const im = art && art.get(key);
-    if (!im) return false;
-    const k = size / Math.max(im.width, im.height);
-    return spr(key, x, y, im.width * k, im.height * k, rot, alpha, flip);
+  const blit = (spr, x, y, size, rot, flip, a) => kit && kit.blit(ctx, spr, x, y, size, rot, flip, a);
+  function flashBlit(spr, x, y, size, rot, a) {
+    if (!spr || a <= 0) return;
+    ctx.save(); ctx.globalCompositeOperation = 'lighter'; blit(spr, x, y, size, rot, false, Math.min(0.8, a)); ctx.restore();
   }
   function glow(x, y, r, col, a = 0.6) {
     const g = ctx.createRadialGradient(x, y, 0, x, y, r);
@@ -40,12 +40,6 @@ export function createRenderer(canvas, art) {
     ctx.textAlign = align; ctx.textBaseline = 'middle';
     ctx.lineJoin = 'round'; ctx.lineWidth = Math.max(2, size * 0.2); ctx.strokeStyle = stroke; ctx.strokeText(str, x, y);
     ctx.fillStyle = fill; ctx.fillText(str, x, y);
-  }
-  function flashOver(key, x, y, w, h, rot, a) {
-    const im = art && art.get(key);
-    if (!im || a <= 0) return;
-    ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = a; ctx.translate(x, y); if (rot) ctx.rotate(rot);
-    ctx.drawImage(im, -w / 2, -h / 2, w, h); ctx.restore();
   }
 
   // -------------------------------------------------- events -> particles
@@ -90,109 +84,81 @@ export function createRenderer(canvas, art) {
 
   // -------------------------------------------------- world pieces
   function drawBg(g, L) {
-    // outside the arena: full-bleed dish colour
     ctx.setTransform(1, 0, 0, 1, 0, 0);
-    const bgi = art && art.get('bg');
-    if (bgi) ctx.drawImage(bgi, 0, 0, L.cw, L.ch);
-    else { ctx.fillStyle = '#071018'; ctx.fillRect(0, 0, L.cw, L.ch); }
+    ctx.fillStyle = '#0d0924'; ctx.fillRect(0, 0, L.cw, L.ch);
     ctx.setTransform(L.s, 0, 0, L.s, L.ox, L.oy);
-    if (!bgi) {
-      const gr = ctx.createRadialGradient(W / 2, H * 0.45, 80, W / 2, H * 0.5, H * 0.75);
-      gr.addColorStop(0, '#12354a'); gr.addColorStop(0.6, '#0b2233'); gr.addColorStop(1, '#06121c');
-      ctx.fillStyle = gr; ctx.fillRect(0, 0, W, H);
-      ctx.save(); ctx.globalAlpha = 0.16;
-      for (const sp of S.specks) {
-        const y = (sp.y + S.t * sp.v) % (H + 100) - 50, x = sp.x + Math.sin(S.t * 0.3 + sp.a) * 14;
-        ctx.strokeStyle = '#6fe3ff'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(x, y, sp.r, 0, TAU); ctx.stroke();
-        ctx.fillStyle = '#6fe3ff'; ctx.globalAlpha = 0.05; ctx.beginPath(); ctx.arc(x, y, sp.r, 0, TAU); ctx.fill(); ctx.globalAlpha = 0.16;
-      }
-      ctx.restore();
+    const gr = ctx.createRadialGradient(W / 2, H * 0.42, 60, W / 2, H * 0.5, H * 0.78);
+    gr.addColorStop(0, '#2b2260'); gr.addColorStop(0.55, '#1a1445'); gr.addColorStop(1, '#0d0924');
+    ctx.fillStyle = gr; ctx.fillRect(0, 0, W, H);
+    // bokeh stage lights
+    ctx.save(); ctx.globalCompositeOperation = 'lighter';
+    for (const sp of S.specks) {
+      const y = (sp.y + S.t * sp.v) % (H + 120) - 60, x = sp.x + Math.sin(S.t * 0.3 + sp.a) * 16, hue = sp.i % 3;
+      ctx.globalAlpha = 0.07 + 0.03 * Math.sin(S.t + sp.a); ctx.fillStyle = hue === 0 ? '#ff7eb6' : hue === 1 ? '#6fe3ff' : '#ffd84d';
+      ctx.beginPath(); ctx.arc(x, y, sp.r, 0, TAU); ctx.fill();
     }
-    // vignette + arena edge
-    const v = ctx.createLinearGradient(0, 0, 0, H); v.addColorStop(0, 'rgba(0,0,0,.35)'); v.addColorStop(0.2, 'rgba(0,0,0,0)'); v.addColorStop(0.85, 'rgba(0,0,0,0)'); v.addColorStop(1, 'rgba(0,0,0,.3)');
+    ctx.restore();
+    // drifting cherry petals and notes
+    for (const p of S.petals) {
+      const y = (p.y + S.t * p.v) % (H + 80) - 40, x = p.x + Math.sin(S.t * 0.8 + p.a) * 30;
+      ctx.save(); ctx.translate(x, y); ctx.rotate(S.t * p.rot + p.a); ctx.globalAlpha = 0.5;
+      ctx.fillStyle = p.c; ctx.beginPath(); ctx.ellipse(0, 0, p.s, p.s * 0.55, 0, 0, TAU); ctx.fill(); ctx.restore();
+    }
+    const v = ctx.createLinearGradient(0, 0, 0, H); v.addColorStop(0, 'rgba(0,0,0,.35)'); v.addColorStop(0.2, 'rgba(0,0,0,0)'); v.addColorStop(0.85, 'rgba(0,0,0,0)'); v.addColorStop(1, 'rgba(0,0,0,.35)');
     ctx.fillStyle = v; ctx.fillRect(0, 0, W, H);
-    ctx.strokeStyle = 'rgba(111,227,255,.35)'; ctx.lineWidth = 6; ctx.strokeRect(3, 3, W - 6, H - 6);
-  }
-
-  function segKey(sn, head) {
-    const base = sn.boss ? (sn.skin === 'pink' ? 'pinkelite' : 'purpleboss') : sn.skin;
-    return `snake_${base}_${head ? 'head' : 'body'}`;
-  }
-
-  function drawSegProcedural(s, sn, idx, ang) {
-    const cols = SKIN[sn.skin] || SKIN.pink;
-    const tint = KIND_TINT[s.kind];
-    const g = ctx.createRadialGradient(s.x - s.r * 0.3, s.y - s.r * 0.35, s.r * 0.1, s.x, s.y, s.r);
-    g.addColorStop(0, '#fff'); g.addColorStop(0.25, cols[0]); g.addColorStop(1, tint || cols[1]);
-    ctx.fillStyle = g; ctx.strokeStyle = '#1a0f2a'; ctx.lineWidth = 3;
-    ctx.beginPath(); ctx.arc(s.x, s.y, s.r, 0, TAU); ctx.fill(); ctx.stroke();
-    if (idx === 0) {
-      ctx.save(); ctx.translate(s.x, s.y); ctx.rotate(ang); ctx.fillStyle = '#ffe14a';
-      for (const sd of [-1, 1]) { ctx.beginPath(); ctx.ellipse(s.r * 0.35, sd * s.r * 0.38, s.r * 0.22, s.r * 0.14, sd * 0.4, 0, TAU); ctx.fill(); ctx.stroke(); }
-      ctx.restore();
-    }
+    ctx.lineWidth = 8; ctx.strokeStyle = 'rgba(255,126,182,.55)'; ctx.strokeRect(4, 4, W - 8, H - 8);
+    ctx.lineWidth = 2; ctx.strokeStyle = 'rgba(111,227,255,.6)'; ctx.strokeRect(10, 10, W - 20, H - 20);
   }
 
   function drawSnake(g, sn) {
-    const segs = sn.segs;
+    const segs = sn.segs, p = g.p;
     for (let i = segs.length - 1; i >= 0; i--) {   // tail first so the head sits on top
-      const s = segs[i], prev = segs[i - 1];
+      const s = segs[i], prev = segs[i - 1], r = s.r;
       const ang = i === 0 ? sn.ang : Math.atan2(prev.y - s.y, prev.x - s.x);
-      const r = s.r, bob = 1 + Math.sin(S.t * 6 - i * 0.5) * 0.03;
-      let drawn = false;
       if (i === 0) {
-        const im = art && art.get(segKey(sn, true));
-        if (im) { const across = r * 2.55 * bob, along = across * (im.width / im.height); drawn = spr(segKey(sn, true), s.x, s.y, along, across, ang); if (s.flash > 0) flashOver(segKey(sn, true), s.x, s.y, along, across, ang, s.flash * 5); }
-      } else if (s.kind === 'armor' || s.kind === 'bomb' || s.kind === 'spitter') {
-        const key = s.kind === 'armor' ? 'min_golem' : s.kind === 'bomb' ? 'min_mine' : 'min_plant';
-        const pulse = s.kind === 'bomb' ? 1 + Math.sin(S.t * 9 + i) * 0.07 : 1;
-        if (s.kind === 'bomb') glow(s.x, s.y, r * 1.7, '#ff3b5c', 0.35 + Math.sin(S.t * 9 + i) * 0.15);
-        drawn = sprFit(key, s.x, s.y, r * 2.7 * pulse, 0);
-        if (drawn && s.flash > 0) { const im = art.get(key), k = r * 2.7 / Math.max(im.width, im.height); flashOver(key, s.x, s.y, im.width * k, im.height * k, 0, s.flash * 5); }
-      } else {
-        const im = art && art.get(segKey(sn, false));
-        if (im) {
-          const across = r * 2.5 * bob, along = r * 2.05;
-          if (s.kind === 'gold') glow(s.x, s.y, r * 1.8, '#ffd24a', 0.5);
-          drawn = spr(segKey(sn, false), s.x, s.y, along, across, ang);
-          if (s.flash > 0) flashOver(segKey(sn, false), s.x, s.y, along, across, ang, s.flash * 5);
-          if (s.kind === 'gold') sprFit('icon_coin', s.x, s.y - r * 0.15, r * 1.2, 0);
-        }
+        if (kit) { const dx = p.x - s.x, dy = p.y - s.y, d = Math.hypot(dx, dy) || 1; kit.drawHead(ctx, s.x, s.y, r * 1.14, ang, { skin: sn.skin, boss: sn.boss, t: S.t + sn.id, look: [dx / d, dy / d], flash: s.flash }); }
+        else { ctx.fillStyle = '#ff7eb6'; ctx.strokeStyle = INK; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(s.x, s.y, r, 0, TAU); ctx.fill(); ctx.stroke(); }
+        text(num(s.hp), s.x, s.y - r * 1.55, 24, '#fff', INK);
+        continue;
       }
-      if (!drawn) drawSegProcedural(s, sn, i, ang);
-      if (s.flash > 0 && !drawn) glow(s.x, s.y, r * 1.3, '#fff', s.flash * 6);
-      if (i === 0) text(num(s.hp), s.x, s.y - r * 1.2, 22, '#fff', '#2a0f33'); else text(num(s.hp), s.x, s.y + r * 0.05, Math.max(11, r * 0.62), '#fff', '#2a0f33');
+      const bob = 1 + Math.sin(S.t * 6 - i * 0.5) * 0.03;
+      const upright = s.kind === 'armor' || s.kind === 'bomb' || s.kind === 'spitter';
+      if (s.kind === 'bomb') { const pulse = 0.5 + Math.sin(S.t * 9 + i) * 0.5; glow(s.x, s.y, r * 1.8, '#ff3b5c', 0.15 + pulse * 0.25); }
+      if (s.kind === 'gold') glow(s.x, s.y, r * 1.9, '#ffd24a', 0.35);
+      const spr = kit && kit.SPR.body(sn.skin, sn.boss, s.kind === 'normal' ? '' : s.kind);
+      if (spr) {
+        const size = r * 3.9 * bob;
+        blit(spr, s.x, s.y, size, upright ? 0 : ang);
+        if (s.flash > 0) flashBlit(spr, s.x, s.y, size, upright ? 0 : ang, s.flash * 5);
+        if (s.kind === 'bomb') { const f = 0.6 + Math.sin(S.t * 18 + i) * 0.4; sparkleAt(s.x + r * 0.1, s.y - r * 1.2, r * 0.3 * f); }
+        if (s.kind === 'gold') sparkleAt(s.x + r * 0.5 + Math.sin(S.t * 4 + i) * 4, s.y - r * 0.5, r * 0.28);
+      } else { ctx.fillStyle = '#ff7eb6'; ctx.strokeStyle = INK; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(s.x, s.y, r, 0, TAU); ctx.fill(); ctx.stroke(); }
+      text(num(s.hp), s.x, s.y + r * 0.05, Math.max(12, r * 0.64), '#fff', INK);
     }
     if (sn.slow > 0) { const h = segs[0]; glow(h.x, h.y, h.r * 2, '#7fe8ff', 0.3); }
   }
+  function sparkleAt(x, y, r) { if (kit) { ctx.save(); ctx.translate(x, y); ctx.scale(r / 20, r / 20); kit.sparkle(ctx, 0, 0, 20); ctx.restore(); } }
 
   function drawMinion(m) {
-    const t = m.type, bob = Math.sin(S.t * 8 + m.ph) * 3, sz = m.r * 2.7;
-    ctx.save(); ctx.globalAlpha = 0.3; ctx.fillStyle = '#000'; ctx.beginPath(); ctx.ellipse(m.x, m.y + m.r * 0.9, m.r * 0.9, m.r * 0.3, 0, 0, TAU); ctx.fill(); ctx.restore();
-    const flip = m.vx < -5;
-    const ok = sprFit(t.art, m.x, m.y + bob, sz, Math.sin(S.t * 5 + m.ph) * 0.08, 1, flip);
-    if (ok && m.flash > 0) { const im = art.get(t.art), k = sz / Math.max(im.width, im.height); ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = m.flash * 5; ctx.translate(m.x, m.y + bob); if (flip) ctx.scale(-1, 1); ctx.drawImage(im, -im.width * k / 2, -im.height * k / 2, im.width * k, im.height * k); ctx.restore(); }
-    if (!ok) { ctx.fillStyle = '#9dff6d'; ctx.strokeStyle = '#123'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(m.x, m.y, m.r, 0, TAU); ctx.fill(); ctx.stroke(); }
-    text(num(m.hp), m.x, m.y + m.r * 1.05, 13, '#fff', '#0b1020');
+    const bob = Math.sin(S.t * 8 + m.ph) * 3, size = m.r * 6.4;
+    ctx.save(); ctx.globalAlpha = 0.3; ctx.fillStyle = '#000'; ctx.beginPath(); ctx.ellipse(m.x, m.y + m.r * 1.1, m.r * 0.9, m.r * 0.3, 0, 0, TAU); ctx.fill(); ctx.restore();
+    const spr = kit && kit.SPR.minion(m.type.art), rot = Math.sin(S.t * 5 + m.ph) * 0.08;
+    if (spr) { blit(spr, m.x, m.y + bob, size, rot, m.vx < -5); if (m.flash > 0) flashBlit(spr, m.x, m.y + bob, size, rot, m.flash * 5); }
+    else { ctx.fillStyle = '#9dff6d'; ctx.strokeStyle = INK; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(m.x, m.y, m.r, 0, TAU); ctx.fill(); ctx.stroke(); }
+    text(num(m.hp), m.x, m.y + m.r * 1.25, 14, '#fff', INK);
   }
 
   function drawPickup(pk) {
     const k = pk.kind, bob = Math.sin(S.t * 6 + pk.x) * 2;
-    if (k === 'gem') { glow(pk.x, pk.y, 18, '#39f0ff', 0.5); if (!sprFit('icon_crystal', pk.x, pk.y + bob, 26, S.t * 3)) { ctx.fillStyle = '#39f0ff'; ctx.beginPath(); ctx.arc(pk.x, pk.y, 6, 0, TAU); ctx.fill(); } }
-    else if (k === 'coin') {
-      const sq = Math.abs(Math.cos(S.t * 7 + pk.x)); const im = art && art.get('icon_coin');
-      if (im) spr('icon_coin', pk.x, pk.y + bob, 24 * Math.max(0.25, sq), 24); else { ctx.fillStyle = '#ffd24a'; ctx.beginPath(); ctx.ellipse(pk.x, pk.y, 9 * Math.max(0.25, sq), 9, 0, 0, TAU); ctx.fill(); }
-    } else {
-      const col = k === 'heal' ? '#ff6a8a' : k === 'shield' ? '#39d0ff' : '#ffd24a';
-      const key = k === 'heal' ? 'icon_heal' : k === 'shield' ? 'icon_shield' : 'icon_heartsword';
-      glow(pk.x, pk.y, 34, col, 0.6); if (!sprFit(key, pk.x, pk.y + bob * 2, 40)) { ctx.fillStyle = col; ctx.beginPath(); ctx.arc(pk.x, pk.y, 12, 0, TAU); ctx.fill(); }
-    }
+    if (k === 'gem') { glow(pk.x, pk.y, 22, '#39f0ff', 0.5); blit(kit && kit.SPR.pickup('gem'), pk.x, pk.y + bob, 64, Math.sin(S.t * 3 + pk.x) * 0.25); }
+    else if (k === 'coin') { const sq = Math.max(0.3, Math.abs(Math.cos(S.t * 7 + pk.x))); ctx.save(); ctx.translate(pk.x, pk.y + bob); ctx.scale(sq, 1); blit(kit && kit.SPR.pickup('coin'), 0, 0, 58); ctx.restore(); }
+    else { const col = k === 'heal' ? '#ff6a8a' : k === 'shield' ? '#39d0ff' : '#ffb020'; glow(pk.x, pk.y, 38, col, 0.6); blit(kit && kit.SPR.pickup(k), pk.x, pk.y + bob * 2, 92, Math.sin(S.t * 4) * 0.12); }
   }
 
   function drawPlayer(g) {
     const p = g.p;
     if (p.iframes > 0 && Math.floor(S.t * 20) % 2 === 0 && !(p.shield > 0)) ctx.globalAlpha = 0.45;
-    ctx.save(); ctx.globalAlpha *= 0.35; ctx.fillStyle = '#000'; ctx.beginPath(); ctx.ellipse(p.x, p.y + 38, 34, 10, 0, 0, TAU); ctx.fill(); ctx.restore();
+    ctx.save(); ctx.globalAlpha *= 0.35; ctx.fillStyle = '#000'; ctx.beginPath(); ctx.ellipse(p.x, p.y + 40, 56, 14, 0, 0, TAU); ctx.fill(); ctx.restore();
     // orbiting spores
     for (let i = 0; i < p.orbit; i++) {
       const a = p.orbAng + (i / p.orbit) * TAU, x = p.x + Math.cos(a) * 74, y = p.y + Math.sin(a) * 74;
@@ -205,7 +171,7 @@ export function createRenderer(canvas, art) {
     const key = singing ? 'duo_sing' : 'duo_idle';
     const sq = 1 + Math.sin(S.t * 9) * 0.025 * (Math.hypot(p.mx, p.my) > 0.1 ? 2 : 1);
     const im = art && art.get(key);
-    if (im) { const h = 104, w = h * im.width / im.height; spr(key, p.x, p.y - 10, w / sq, h * sq, p.mx * 0.08); }
+    if (im) { const h = 170, w = h * im.width / im.height; img(key, p.x, p.y - 26, w / sq, h * sq, p.mx * 0.05); }
     else { glow(p.x, p.y, 40, '#39f0ff', 0.7); ctx.fillStyle = '#39f0ff'; ctx.strokeStyle = '#06323f'; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(p.x, p.y, 22, 0, TAU); ctx.fill(); ctx.stroke(); }
     // hitbox core: the part that actually gets hurt
     ctx.strokeStyle = 'rgba(255,255,255,.55)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(p.x, p.y + 10, 9, 0, TAU); ctx.stroke();
@@ -217,16 +183,17 @@ export function createRenderer(canvas, art) {
 
   function drawBullets(g) {
     for (const b of g.bullets) {
-      const a = Math.atan2(b.vy, b.vx), k = b.crit ? 'bullet_crit' : 'bullet';
-      if (art && art.get(k)) { sprFit(k, b.x, b.y, b.crit ? 34 : 26, a); continue; }
-      const col = b.crit ? '#ffe14a' : '#8ff3ff';
-      glow(b.x, b.y, b.crit ? 26 : 18, col, 0.7);
-      ctx.save(); ctx.translate(b.x, b.y); ctx.rotate(a); ctx.fillStyle = '#fff'; ctx.strokeStyle = col; ctx.lineWidth = 3;
-      ctx.beginPath(); ctx.ellipse(0, 0, b.crit ? 14 : 11, b.crit ? 6 : 4.5, 0, 0, TAU); ctx.fill(); ctx.stroke(); ctx.restore();
+      const col = b.crit ? '#ffd84d' : '#6fe3ff';
+      glow(b.x, b.y, b.crit ? 30 : 20, col, 0.55);
+      const spr = kit && kit.SPR.note(b.crit);
+      if (spr) blit(spr, b.x, b.y, b.crit ? 104 : 84, S.t * 6 + b.x * 0.05);
+      else { ctx.fillStyle = col; ctx.beginPath(); ctx.arc(b.x, b.y, 7, 0, TAU); ctx.fill(); }
     }
     for (const b of g.ebullets) {
-      glow(b.x, b.y, b.r * 2.6, '#7dff5e', 0.55);
-      if (!sprFit('min_green', b.x, b.y, b.r * 2.4, S.t * 4)) { ctx.fillStyle = '#7dff5e'; ctx.beginPath(); ctx.arc(b.x, b.y, b.r, 0, TAU); ctx.fill(); }
+      glow(b.x, b.y, b.r * 2.6, '#7dff5e', 0.5);
+      const spr = kit && kit.SPR.acid();
+      if (spr) blit(spr, b.x, b.y, b.r * 4.6, Math.sin(S.t * 8 + b.x) * 0.3);
+      else { ctx.fillStyle = '#7dff5e'; ctx.beginPath(); ctx.arc(b.x, b.y, b.r, 0, TAU); ctx.fill(); }
     }
   }
 
@@ -263,7 +230,7 @@ export function createRenderer(canvas, art) {
     ctx.fillStyle = isBossStage(g.stage) ? '#ff3d6e' : '#e0489d'; ctx.fillRect(bx, by, bw * frac, 14);
     ctx.strokeStyle = 'rgba(255,255,255,.5)'; ctx.lineWidth = 2; ctx.strokeRect(bx - 3, by - 3, bw + 6, 20);
     // coins
-    sprFit('icon_coin', W - pad - 172, 38, 30); text(String(Math.floor(g.coins)), W - pad - 152, 38, 24, '#ffd24a', '#0b1020', 'left');
+    blit(kit && kit.SPR.pickup('coin'), W - pad - 172, 38, 52); text(String(Math.floor(g.coins)), W - pad - 152, 38, 24, '#ffd24a', '#0b1020', 'left');
     ctx.fillStyle = 'rgba(0,0,0,.5)'; ctx.beginPath(); ctx.arc(W - 40, 38, 24, 0, TAU); ctx.fill(); ctx.fillStyle = '#fff'; ctx.fillRect(W - 48, 28, 6, 20); ctx.fillRect(W - 36, 28, 6, 20);
     // player hp
     const hx = pad, hy = H - 46, hw = 250;
@@ -271,7 +238,7 @@ export function createRenderer(canvas, art) {
     const hf = Math.max(0, p.hp / p.maxHp); ctx.fillStyle = hf > 0.35 ? '#5df08a' : '#ff4d6d'; ctx.fillRect(hx, hy, hw * hf, 20);
     ctx.strokeStyle = 'rgba(255,255,255,.6)'; ctx.lineWidth = 2; ctx.strokeRect(hx - 3, hy - 3, hw + 6, 26);
     text(`${Math.ceil(p.hp)} / ${p.maxHp}`, hx + hw / 2, hy + 10, 16);
-    sprFit('icon_heal', hx - 2, hy - 24, 30);
+    blit(kit && kit.SPR.pickup('heal'), hx + 6, hy - 26, 56);
     if (p.shield > 0) text('SHIELD ' + p.shield.toFixed(0), W - pad, H - 78, 18, '#7fe8ff', '#0b1020', 'right');
     if (p.rage > 0) text('RAGE ' + p.rage.toFixed(0), W - pad, H - 50, 18, '#ffd24a', '#0b1020', 'right');
     if (g.combo > 2 && g.t - g.lastKill < 2.2) text('COMBO x' + g.combo, W / 2, 112, 24 + Math.min(10, g.combo * 0.3), '#ffe14a');

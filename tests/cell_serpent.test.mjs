@@ -11,6 +11,10 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..', 'cell_serpent')
 const sim = await import(join(root, 'sim.js'));
 const { createRenderer } = await import(join(root, 'render.js'));
 const { ART_KEYS } = await import(join(root, 'art.js'));
+const { createArtDraw } = await import(join(root, 'art_draw.js'));
+const noop = () => {};
+const stubCtx = () => new Proxy({}, { get: (_t, k) => (k === 'createLinearGradient' || k === 'createRadialGradient') ? () => ({ addColorStop: noop }) : k === 'measureText' ? () => ({ width: 10 }) : noop, set: () => true });
+const stubCanvas = (w, h) => ({ width: w, height: h, getContext: stubCtx });
 const { W, H } = sim;
 
 let n = 0;
@@ -209,14 +213,24 @@ ok('snake segments stay chained: neighbours never drift apart', () => {
   }
 });
 
-ok('renderer draws every phase against a stub context with and without art', () => {
-  const noop = () => {};
-  const ctx = new Proxy({}, { get: (_t, k) => (k === 'createLinearGradient' || k === 'createRadialGradient') ? () => ({ addColorStop: noop }) : k === 'measureText' ? () => ({ width: 10 }) : noop, set: () => true });
-  const canvas = { width: 420, height: 860, getContext: () => ctx };
-  const fakeArt = { get: k => ({ width: 100, height: 80 }), has: () => true };
-  for (const art of [null, fakeArt]) {
-    const R = createRenderer(canvas, art);
-    const g = sim.createGame({ seed: 16, stage: 5, meta: { rev: 1 } });
+ok('drawing kit bakes every snake skin, kind, minion, pickup and shot, and draws heads', () => {
+  const kit = createArtDraw(stubCanvas, 2);
+  const g = stubCtx();
+  for (const skin of ['pink', 'purple']) for (const boss of [false, true]) for (const kind of ['', 'armor', 'bomb', 'spitter', 'gold']) assert.ok(kit.SPR.body(skin, boss, kind), `${skin} ${boss} ${kind}`);
+  for (const m of sim.MINIONS) assert.ok(kit.MINION_IDS.includes(m.art) && kit.SPR.minion(m.art), m.art);
+  for (const k of ['gem', 'coin', 'heal', 'shield', 'rage']) assert.ok(kit.SPR.pickup(k), k);
+  assert.ok(kit.SPR.note(false) && kit.SPR.note(true) && kit.SPR.acid());
+  for (const skin of ['pink', 'purple']) for (const boss of [false, true]) kit.drawHead(g, 10, 10, 38, 1.2, { skin, boss, t: 3.6, look: [1, 0], flash: 0.1 });
+  assert.equal(kit.SPR.body('pink', false, ''), kit.SPR.body('pink', false, ''), 'sprites are cached');
+  assert.equal(createArtDraw(null).SPR.body('pink', false, ''), null, 'no canvas factory degrades to null');
+});
+
+ok('renderer draws every phase against a stub context, with and without the kit and the duo art', () => {
+  const canvas = { width: 420, height: 860, getContext: stubCtx };
+  const fakeArt = { get: () => ({ width: 100, height: 80 }), has: () => true };
+  for (const [art, kit] of [[null, null], [fakeArt, createArtDraw(stubCanvas, 2)]]) {
+    const R = createRenderer(canvas, art, kit);
+    const g = sim.createGame({ seed: 16, stage: 12, meta: { rev: 1 } });
     g.p.orbit = 2; g.p.shield = 2; g.p.rage = 2; g.wave = 0.01;
     for (let i = 0; i < 600; i++) {
       sim.step(g, 1 / 60, bot(g)); if (g.phase === 'levelup') sim.choose(g, 0);
@@ -228,10 +242,9 @@ ok('renderer draws every phase against a stub context with and without art', () 
   }
 });
 
-ok('every sprite in the manifest ships (bullet, bullet_crit and bg are optional)', () => {
-  const optional = new Set(['bullet', 'bullet_crit', 'bg']);
-  for (const k of ART_KEYS) if (!optional.has(k)) assert.ok(existsSync(join(root, 'assets', k + '.png')), k + '.png missing');
-  for (const m of sim.MINIONS) assert.ok(ART_KEYS.includes(m.art), m.art);
+ok('the player art ships; everything else is drawn in code (no stray sheet crops)', () => {
+  for (const k of ART_KEYS) assert.ok(existsSync(join(root, 'assets', k + '.png')), k + '.png missing');
+  assert.deepEqual(ART_KEYS, ['duo_idle', 'duo_sing']);
 });
 
 ok('index.html wires the module, the screens and the save key; folder is deployed and listed', () => {
