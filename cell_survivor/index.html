@@ -17,6 +17,9 @@
     font-family:var(--font);
     touch-action:none;-webkit-user-select:none;user-select:none;overscroll-behavior:none}
   canvas{display:block;position:fixed;inset:0;width:100%;height:100%}
+  .gi{display:inline-block;vertical-align:middle;width:1.2em;height:1.2em;object-fit:contain;pointer-events:none}
+  .card .ic .gi{width:42px;height:42px} .up .ic .gi{width:24px;height:24px} .kitico .gi{width:22px;height:22px} .ab .ic .gi{width:30px;height:30px}
+  .tale{margin:0 auto 12px;font-size:12.5px;color:#e6dcff} .clearsub i{color:#fff4e6}
   .mono{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-variant-numeric:tabular-nums}
   /* a chunky warm-brown outline on loose text, the house look */
   .out{text-shadow:0 2px 0 var(--brown),0 -1px 0 var(--brown),1px 0 0 var(--brown),-1px 0 0 var(--brown),1px 2px 0 var(--brown),-1px 2px 0 var(--brown)}
@@ -211,7 +214,7 @@
   <div id="topline">
     <span id="lvlchip">LV 1</span>
     <span id="clock" class="mono">0:00</span>
-    <span id="rstats"><span>☠ <b id="kills">0</b></span><span>🧬 <b id="dna">0</b></span></span>
+    <span id="rstats"><span><i class="gi" data-ico="critter" data-px="16"></i> <b id="kills">0</b></span><span><i class="gi" data-ico="note" data-px="16"></i> <b id="dna">0</b></span></span>
   </div>
   <div id="objwrap">
     <div id="objline"><span id="objname">Stage 1 · Colonisation</span><span id="objval">70s left</span></div>
@@ -220,35 +223,36 @@
   <div id="bosswrap"><div id="bossname">—</div><div id="bossbar"><div id="bossfill"></div></div></div>
   <div id="kit"></div>
   <div id="abil">
-    <div class="ab" id="dash"><div class="ic">💨</div><div class="lab">DASH</div><div class="fill"></div></div>
-    <div class="ab" id="ult"><div class="ic">🧬</div><div class="lab">DUET</div><div class="fill"></div></div>
+    <div class="ab" id="dash"><div class="ic"><i data-ico="shoe" data-px="30"></i></div><div class="lab">SLIDE</div><div class="fill"></div></div>
+    <div class="ab" id="ult"><div class="ic"><i data-ico="duet" data-px="30"></i></div><div class="lab">DUET</div><div class="fill"></div></div>
   </div>
 </div>
-<div id="gear">⏸</div>
+<div id="gear"><i data-ico="pause" data-px="20"></i></div>
 
 <div class="screen on" id="menu">
   <h1 class="logo">CYTOSIS<small>a cell survivor with RoxorLoops &amp; Jasmin</small></h1>
   <canvas id="duo"></canvas>
   <div class="panel">
+    <p class="hint tale">The Gloss has put the Soundlands on mute. RoxorLoops and Jasmin hop into a soap bubble and bounce from venue to venue, singing the noise critters out of every room. Twelve venues, one Gloss.</p>
     <div class="ttl">Who is in the bubble?</div>
     <div id="heroes"></div>
-    <div class="ttl">Choose your strain</div>
+    <div class="ttl">Pick your style</div>
     <div id="species"></div>
-    <div class="ttl" style="margin-top:4px">Culture strength</div>
+    <div class="ttl" style="margin-top:4px">Crowd size</div>
     <div id="diffs"></div>
     <div class="hint" id="best" style="margin:0 0 12px"></div>
     <div class="row go">
       <button class="btn big" id="play">Start the show</button>
-      <button class="btn ghost" id="tolab">🧪 Lab</button>
-      <button class="btn ghost" id="mute">🔊</button>
-      <button class="btn ghost" id="shakebtn">🎥 Shake: Full</button>
+      <button class="btn ghost" id="tolab"><i data-ico="metronome" data-px="20"></i> Rehearsal</button>
+      <button class="btn ghost" id="mute"><i data-ico="vol" data-px="22"></i></button>
+      <button class="btn ghost" id="shakebtn">Shake: Full</button>
     </div>
   </div>
   <p class="hint" style="margin-top:16px">
-    <b style="color:var(--lime)">12 stages, one objective each</b> — survive, purge, hunt the marked host, kill the boss.<br>
-    Clear a stage, take a reward, face a nastier one. Kill The Culture in stage 12 to win the dish.<br>
-    <kbd>WASD</kbd>/<kbd>◀▶</kbd> swim &nbsp;·&nbsp; <kbd>Space</kbd> dash &nbsp;·&nbsp; <kbd>E</kbd> duet &nbsp;·&nbsp; <kbd>Esc</kbd> pause<br>
-    Touch: drag anywhere to swim, tap the buttons for dash &amp; duet.
+    <b style="color:var(--lime)">12 venues, one objective each</b>: survive, silence critters, find the critter VIP, out-sing the boss.<br>
+    Clear a venue, take a reward, face a bigger crowd. Out-sing The Gloss on the Big Stage to unmute the Soundlands.<br>
+    <kbd>WASD</kbd>/<kbd>◀▶</kbd> move &nbsp;·&nbsp; <kbd>Space</kbd> slide &nbsp;·&nbsp; <kbd>E</kbd> duet &nbsp;·&nbsp; <kbd>Esc</kbd> pause<br>
+    Touch: drag anywhere to move, tap the buttons for slide &amp; duet.
   </p>
   <div class="row" style="margin-top:14px"><a class="link" href="/">← all games</a></div>
 </div>
@@ -256,14 +260,14 @@
 <div class="screen" id="lab">
   <div class="panel">
     <div id="dnabar">
-      <div><div class="ttl" style="margin:0">Gene Lab</div>
-        <div style="font-size:11px;color:var(--dim)">Permanent splices. They stick between runs.</div></div>
-      <div id="dnaval" class="mono">🧬 0</div>
+      <div><div class="ttl" style="margin:0">Rehearsal Room</div>
+        <div style="font-size:11px;color:var(--dim)">Permanent upgrades. They stick between shows.</div></div>
+      <div id="dnaval" class="mono">0</div>
     </div>
     <div id="ups"></div>
     <div class="row" style="margin-top:14px">
       <button class="btn" id="labback">Back</button>
-      <button class="btn ghost" id="wipe">Reset lab</button>
+      <button class="btn ghost" id="wipe">Reset rehearsals</button>
     </div>
   </div>
 </div>
@@ -272,9 +276,9 @@
   <div class="flash" id="lvlflash">Level up</div>
   <div id="cards"></div>
   <div class="cardfoot">
-    <button class="btn ghost" id="reroll">🎲 Reroll <span id="rrn">0</span></button>
-    <button class="btn ghost" id="banish">🚫 Banish <span id="bnn">0</span></button>
-    <button class="btn ghost" id="skip">Skip → +heal</button>
+    <button class="btn ghost" id="reroll"><i data-ico="dice" data-px="20"></i> Reroll <span id="rrn">0</span></button>
+    <button class="btn ghost" id="banish"><i data-ico="noentry" data-px="20"></i> Cut <span id="bnn">0</span></button>
+    <button class="btn ghost" id="skip">Skip, grab a snack</button>
   </div>
 </div>
 
@@ -292,28 +296,29 @@
     <div id="pkit" class="hint" style="margin-bottom:14px"></div>
     <div class="row">
       <button class="btn" id="resume">Resume</button>
-      <button class="btn ghost" id="pmute">🔊</button>
-      <button class="btn ghost" id="pshake">🎥 Shake: Full</button>
-      <button class="btn ghost" id="quit">Abandon</button>
+      <button class="btn ghost" id="pmute"><i data-ico="vol" data-px="22"></i></button>
+      <button class="btn ghost" id="pshake">Shake: Full</button>
+      <button class="btn ghost" id="quit">Leave the show</button>
     </div>
   </div>
 </div>
 
 <div class="screen" id="over">
-  <h2 id="overttl">CULTURE COLLAPSED</h2>
+  <h2 id="overttl">THE SET WENT QUIET</h2>
+  <p class="hint" id="overtale" style="margin:6px 0 0"></p>
   <div id="unlocked"></div>
   <div class="panel" style="max-width:560px">
     <div class="stats">
       <div class="st"><div class="k">Survived</div><div class="v mono" id="rTime">0:00</div></div>
-      <div class="st"><div class="k">Stage</div><div class="v mono" id="rStage">1/12</div></div>
+      <div class="st"><div class="k">Venue</div><div class="v mono" id="rStage">1/12</div></div>
       <div class="st"><div class="k">Level</div><div class="v mono" id="rLvl">1</div></div>
-      <div class="st"><div class="k">Kills</div><div class="v mono" id="rKills">0</div></div>
-      <div class="st"><div class="k">DNA</div><div class="v mono" id="rDna">0</div></div>
+      <div class="st"><div class="k">Silenced</div><div class="v mono" id="rKills">0</div></div>
+      <div class="st"><div class="k">Applause</div><div class="v mono" id="rDna">0</div></div>
     </div>
     <div class="row">
       <button class="btn big" id="again">Again</button>
       <button class="btn ghost" id="tomenu">Menu</button>
-      <button class="btn ghost" id="tolab2">🧪 Lab</button>
+      <button class="btn ghost" id="tolab2"><i data-ico="metronome" data-px="20"></i> Rehearsal</button>
     </div>
   </div>
 </div>
@@ -391,8 +396,8 @@ function shuffle(a){ for (let i = a.length - 1; i > 0; i--){ const j = Math.floo
 
 const WEAPONS = {
   pseudo: {
-    nm: 'Pseudopod Spines', ic: '🦴', kind: 'w',
-    ds: 'Fires bone-hard spines at the nearest pathogen.',
+    nm: 'Beatbox Burst', ic: 'mic', kind: 'w',
+    ds: 'Fires punchy beatbox bursts at the nearest critter.',
     st: l => ({ cd: .95 - .06 * l, dmg: 14 + 7 * l, n: 1 + (l >= 3) + (l >= 5) + (l >= 7), spd: 620,
                 pierce: (l >= 4 ? 1 : 0) + (l >= 8 ? 1 : 0), r: 6 }),
     evo: { into: 'harpoon', wth: 'ribo' },
@@ -407,8 +412,8 @@ const WEAPONS = {
     },
   },
   harpoon: {
-    nm: 'Harpoon Cluster', ic: '🔱', kind: 'w', hidden: true, evolved: true,
-    ds: 'Evolved: barbed harpoons rip clean through the culture.',
+    nm: 'Drop the Bass', ic: 'mic+', kind: 'w', hidden: true, evolved: true,
+    ds: 'Evolved: bass-heavy drops punch clean through the crowd.',
     st: () => ({ cd: .42, dmg: 82, n: 5, spd: 760, pierce: 99, r: 9 }),
     fire(s, o, m){
       const tgt = nearest(o.x, o.y, 1100);
@@ -422,8 +427,8 @@ const WEAPONS = {
   },
 
   cilia: {
-    nm: 'Cilia Whip', ic: '🌾', kind: 'w',
-    ds: 'Lashes a sweeping arc of cilia, knocking pathogens back.',
+    nm: 'Hi-Hat Swipe', ic: 'cymbal', kind: 'w',
+    ds: 'Swipes a sweeping hi-hat arc, knocking critters back.',
     st: l => ({ cd: 1.2 - .075 * l, dmg: 15 + 9.5 * l, arc: .95 + .05 * l, r: 62 + 9 * l, kb: 210 }),
     evo: { into: 'corona', wth: 'mito' },
     fire(s, o, m){
@@ -435,8 +440,8 @@ const WEAPONS = {
     },
   },
   corona: {
-    nm: 'Razor Corona', ic: '🌀', kind: 'w', hidden: true, evolved: true,
-    ds: 'Evolved: a full ring of razor cilia, every sweep, every side.',
+    nm: 'Crash Cymbal Ring', ic: 'cymbal+', kind: 'w', hidden: true, evolved: true,
+    ds: 'Evolved: a full ring of crashing cymbals, every swipe, every side.',
     st: () => ({ cd: .62, dmg: 102, arc: Math.PI, r: 150, kb: 320 }),
     fire(s, o, m){
       swipe(o, 0, Math.PI, s.r * P.s.area, s.dmg * m, s.kb, true);
@@ -445,8 +450,8 @@ const WEAPONS = {
   },
 
   enzyme: {
-    nm: 'Enzyme Trail', ic: '🧪', kind: 'w',
-    ds: 'Leaks digestive acid in your wake. It keeps eating.',
+    nm: 'Glitter Trail', ic: 'glitter', kind: 'w',
+    ds: 'Leaves a trail of sticky glitter in your wake. It keeps stinging.',
     st: l => ({ cd: 1.05 - .06 * l, dps: 10 + 5.2 * l, r: 40 + 7 * l, life: 3 + .35 * l }),
     evo: { into: 'necro', wth: 'golgi' },
     fire(s, o, m){
@@ -455,8 +460,8 @@ const WEAPONS = {
     },
   },
   necro: {
-    nm: 'Necrotic Bloom', ic: '☣️', kind: 'w', hidden: true, evolved: true,
-    ds: 'Evolved: the acid blooms outward and slows everything in it.',
+    nm: 'Rainbow Road', ic: 'glitter+', kind: 'w', hidden: true, evolved: true,
+    ds: 'Evolved: the glitter blooms outward and slows everything in it.',
     st: () => ({ cd: .7, dps: 80, r: 105, life: 5.5 }),
     fire(s, o, m){
       if (m >= 1 && len(P.vx, P.vy) < 45) { o.w.t = .12; return; }
@@ -465,22 +470,22 @@ const WEAPONS = {
   },
 
   ion: {
-    nm: 'Ion Orbitals', ic: '⚛️', kind: 'w',
-    ds: 'Charged nodes orbit your membrane and shred what touches them.',
+    nm: 'Vinyl Orbit', ic: 'vinyl', kind: 'w',
+    ds: 'Spinning vinyl records orbit you and slice what touches them.',
     st: l => ({ n: 2 + Math.floor(l / 2), dmg: 9 + 5.2 * l, r: 76 + 7 * l, spd: 2.0 + .12 * l, hitcd: .55 }),
     evo: { into: 'shell', wth: 'nucleus' },
     tick(s, o, m, dt, w){ orbitals(w, s, o, m, dt, 1); },
   },
   shell: {
-    nm: 'Electron Shell', ic: '💫', kind: 'w', hidden: true, evolved: true,
-    ds: 'Evolved: two counter-spinning rings that arc lightning on contact.',
+    nm: 'Disco Halo', ic: 'vinyl+', kind: 'w', hidden: true, evolved: true,
+    ds: 'Evolved: two counter-spinning rings that spark lightning on contact.',
     st: () => ({ n: 5, dmg: 62, r: 118, spd: 3.1, hitcd: .38, zap: 34 }),
     tick(s, o, m, dt, w){ orbitals(w, s, o, m, dt, 2); },
   },
 
   spore: {
-    nm: 'Spore Burst', ic: '🍄', kind: 'w',
-    ds: 'Bursts a ring of drifting spores in every direction.',
+    nm: 'Confetti Pop', ic: 'confetti', kind: 'w',
+    ds: 'Pops a ring of drifting confetti in every direction.',
     st: l => ({ cd: 2.7 - .18 * l, n: 6 + 2 * l, dmg: 11 + 6.4 * l, spd: 215, life: 1.6, r: 8 }),
     evo: { into: 'fungal', wth: 'vacuole' },
     fire(s, o, m){
@@ -492,8 +497,8 @@ const WEAPONS = {
     },
   },
   fungal: {
-    nm: 'Fungal Nova', ic: '🌸', kind: 'w', hidden: true, evolved: true,
-    ds: 'Evolved: seeking spores that rot the ground where they land.',
+    nm: 'Blossom Nova', ic: 'blossom', kind: 'w', hidden: true, evolved: true,
+    ds: 'Evolved: seeking cherry petals that leave sticky nectar where they land.',
     st: () => ({ cd: 1.5, n: 18, dmg: 60, spd: 250, life: 2.6, r: 10 }),
     fire(s, o, m){
       const off = rnd() * TAU;
@@ -505,50 +510,50 @@ const WEAPONS = {
   },
 
   arc: {
-    nm: 'Neural Arc', ic: '⚡', kind: 'w',
-    ds: 'A charge that leaps from pathogen to pathogen.',
+    nm: 'Power Chord', ic: 'bolt', kind: 'w',
+    ds: 'A charge that leaps from critter to critter.',
     st: l => ({ cd: 1.6 - .1 * l, dmg: 17 + 10.5 * l, chains: 2 + Math.floor(l * .8), range: 270 + 16 * l }),
     evo: { into: 'storm', wth: 'flagellum' },
     fire(s, o, m){ chain(o, s.dmg * m, s.chains, s.range * P.s.area, 0); },
   },
   storm: {
-    nm: 'Synaptic Storm', ic: '🌩️', kind: 'w', hidden: true, evolved: true,
+    nm: 'Stadium Storm', ic: 'bolt+', kind: 'w', hidden: true, evolved: true,
     ds: 'Evolved: the charge never stops jumping, and it stuns.',
     st: () => ({ cd: .8, dmg: 96, chains: 12, range: 430, stun: .45 }),
     fire(s, o, m){ chain(o, s.dmg * m, s.chains, s.range * P.s.area, s.stun); },
   },
 
   cryo: {
-    nm: 'Cryo Vacuole', ic: '❄️', kind: 'w',
-    ds: 'Vents a freezing pulse that chills everything nearby.',
+    nm: 'Cool Down Hum', ic: 'snow', kind: 'w',
+    ds: 'Hums a freezing pulse that chills everything nearby.',
     st: l => ({ cd: 3.1 - .18 * l, dmg: 9 + 6.5 * l, r: 118 + 20 * l, slow: .42, dur: 2 + .2 * l }),
     evo: { into: 'zero', wth: 'membrane' },
     fire(s, o, m){ wave(o, s.r * P.s.area, s.dmg * m, { slow: s.slow, dur: s.dur * P.s.dur, col: '#ffc2dc' }); },
   },
   zero: {
-    nm: 'Absolute Zero', ic: '🧊', kind: 'w', hidden: true, evolved: true,
-    ds: 'Evolved: freezes solid — and frozen things shatter for double.',
+    nm: 'Frozen Falsetto', ic: 'snow+', kind: 'w', hidden: true, evolved: true,
+    ds: 'Evolved: freezes solid. Frozen critters shatter for double.',
     st: () => ({ cd: 2.2, dmg: 78, r: 330, slow: 1, dur: 2.4, freeze: 1 }),
     fire(s, o, m){ wave(o, s.r * P.s.area, s.dmg * m, { slow: 1, dur: s.dur * P.s.dur, freeze: true, col: '#fff4e6' }); },
   },
 
   symb: {
-    nm: 'Symbiote', ic: '🐟', kind: 'w',
-    ds: 'A friendly cell tags along and fires on its own.',
+    nm: 'Mascot Buddy', ic: 'mascot', kind: 'w',
+    ds: 'A little mascot tags along and sings on its own.',
     st: l => ({ n: 1 + (l >= 5 ? 1 : 0), dmg: 9 + 4.8 * l, cd: .9 - .05 * l, spd: 540 }),
     evo: { into: 'hive', wth: 'regen' },
     tick(s, o, m, dt, w){ symbiotes(w, s, m); },
   },
   hive: {
-    nm: 'Hive Symbiont', ic: '🐠', kind: 'w', hidden: true, evolved: true,
-    ds: 'Evolved: three symbiotes, and every kill they land feeds you.',
+    nm: 'Mascot Squad', ic: 'mascot+', kind: 'w', hidden: true, evolved: true,
+    ds: 'Evolved: three mascots, and every kill they land feeds you.',
     st: () => ({ n: 3, dmg: 57, cd: .34, spd: 660, leech: 1 }),
     tick(s, o, m, dt, w){ symbiotes(w, s, m); },
   },
 
   lyso: {
-    nm: 'Lysosome Bomb', ic: '💣', kind: 'w',
-    ds: 'Lobs a sac of enzymes that detonates on arrival.',
+    nm: 'Bass Bomb', ic: 'bomb', kind: 'w',
+    ds: 'Lobs a speaker pop that detonates on arrival.',
     st: l => ({ cd: 2.3 - .14 * l, dmg: 26 + 14.5 * l, r: 74 + 8 * l, n: 1 + (l >= 4) + (l >= 7) }),
     evo: { into: 'detona', wth: 'spike' },
     fire(s, o, m){
@@ -562,7 +567,7 @@ const WEAPONS = {
     },
   },
   detona: {
-    nm: 'Chain Detonation', ic: '🧨', kind: 'w', hidden: true, evolved: true,
+    nm: 'Chain Drop', ic: 'bomb+', kind: 'w', hidden: true, evolved: true,
     ds: 'Evolved: every blast kicks off two more.',
     st: () => ({ cd: 1.15, dmg: 115, r: 130, n: 3 }),
     fire(s, o, m){
@@ -576,8 +581,8 @@ const WEAPONS = {
   },
 
   virus: {
-    nm: 'Viral Payload', ic: '🦠', kind: 'w',
-    ds: 'Infects a host. It rots, dies, and infects its neighbours.',
+    nm: 'Earworm', ic: 'worm', kind: 'w',
+    ds: 'Plants a catchy tune in a critter. It hums, tires, and passes it on.',
     st: l => ({ cd: 2.5 - .15 * l, dps: 8 + 4.6 * l, dur: 4 + .4 * l, spread: 2 + Math.floor(l / 2), n: 1 + (l >= 6 ? 1 : 0) }),
     evo: { into: 'pandemic', wth: 'plasmid' },
     fire(s, o, m){
@@ -588,8 +593,8 @@ const WEAPONS = {
     },
   },
   pandemic: {
-    nm: 'Pandemic', ic: '☠️', kind: 'w', hidden: true, evolved: true,
-    ds: 'Evolved: an outbreak that never runs out of hosts.',
+    nm: 'Chart Topper', ic: 'worm+', kind: 'w', hidden: true, evolved: true,
+    ds: 'Evolved: a hit that never runs out of listeners.',
     st: () => ({ cd: 1.1, dps: 55, dur: 8, spread: 6, n: 3 }),
     fire(s, o, m){
       for (let i = 0; i < s.n; i++){
@@ -602,16 +607,16 @@ const WEAPONS = {
 
 // Passives feed straight into recalc(); each level is a flat step.
 const PASSIVES = {
-  mito:      { nm: 'Mitochondria', ic: '🔥', kind: 'p', ds: '+12% damage per level.' },
-  ribo:      { nm: 'Ribosome',     ic: '🧫', kind: 'p', ds: '+1 projectile at levels 2 and 4, +8% projectile speed.' },
-  golgi:     { nm: 'Golgi Body',   ic: '🫧', kind: 'p', ds: '+14% area of effect per level.' },
-  nucleus:   { nm: 'Nucleus',      ic: '🧠', kind: 'p', ds: '-7% organelle cooldown per level.' },
-  flagellum: { nm: 'Flagellum',    ic: '🌊', kind: 'p', ds: '+9% swim speed, -6% dash cooldown per level.' },
-  membrane:  { nm: 'Thick Membrane', ic: '🛡️', kind: 'p', ds: '+14% max HP and +1 armour per level.' },
-  vacuole:   { nm: 'Vacuole',      ic: '🧲', kind: 'p', ds: '+30% pickup range and +9% biomass per level.' },
-  regen:     { nm: 'Telomerase',   ic: '💚', kind: 'p', ds: 'Regenerate +0.45 HP/s per level.' },
-  spike:     { nm: 'Chitin Spikes', ic: '🗡️', kind: 'p', ds: '+7% crit chance and contact thorns per level.' },
-  plasmid:   { nm: 'Plasmid',      ic: '🍀', kind: 'p', ds: '+12% luck, +15% DNA and effect duration per level.' },
+  mito:      { nm: 'Bass Boost', ic: 'speaker', kind: 'p', ds: '+12% damage per level.' },
+  ribo:      { nm: 'Harmony', ic: 'notes', kind: 'p', ds: '+1 projectile at levels 2 and 4, +8% projectile speed.' },
+  golgi:     { nm: 'Reverb', ic: 'rings', kind: 'p', ds: '+14% area of effect per level.' },
+  nucleus:   { nm: 'Metronome', ic: 'metronome', kind: 'p', ds: '-7% song cooldown per level.' },
+  flagellum: { nm: 'Sneakers', ic: 'shoe', kind: 'p', ds: '+9% move speed, -6% slide cooldown per level.' },
+  membrane:  { nm: 'Monster Onesie', ic: 'onesie', kind: 'p', ds: '+14% max HP and +1 armour per level.' },
+  vacuole:   { nm: 'Fan Club', ic: 'magnet', kind: 'p', ds: '+30% pickup range and +9% hype per level.' },
+  regen:     { nm: 'Green Smoothie', ic: 'smoothie', kind: 'p', ds: 'Regenerate +0.45 HP/s per level.' },
+  spike:     { nm: 'Stage Sparkle', ic: 'sparkle', kind: 'p', ds: '+7% crit chance and sparkle thorns per level.' },
+  plasmid:   { nm: 'Lucky Scrunchie', ic: 'scrunchie', kind: 'p', ds: '+12% luck, +15% applause and effect duration per level.' },
 };
 
 const ALL = Object.assign({}, WEAPONS, PASSIVES);
@@ -622,53 +627,53 @@ const def = id => ALL[id];
 // duo is the one who joins you for the DUET (mitosis) ultimate.
 const HEROES = [
   { id: 'roxor',          nm: 'RoxorLoops',     mate: 'jasmin',         ds: 'Beatbox loops and big drops.' },
-  { id: 'jasmin',         nm: 'Jasmin',         mate: 'roxor',          ds: 'Sings the whole dish in tune.' },
+  { id: 'jasmin',         nm: 'Jasmin',         mate: 'roxor',          ds: 'Sings every venue back in tune.' },
   { id: 'roxor_monster',  nm: 'Monster Roxor',  mate: 'jasmin_unicorn', ds: 'The green onesie. Do not ask.' },
   { id: 'jasmin_unicorn', nm: 'Unicorn Jasmin', mate: 'roxor_monster',  ds: 'Sparkles, glitter, one horn.' },
 ];
 
 // ------------------------------------------------------------------- strains
 const SPECIES = [
-  { id: 'amoeba',  nm: 'Amoeba',      ic: '🫧', start: 'pseudo',
-    ds: 'The all-rounder. Nothing special, everything workable.', mods: {}, free: true },
-  { id: 'ciliate', nm: 'Ciliate',     ic: '🌾', start: 'cilia',
-    ds: 'Quick and close-range. Thin skin, fast fins.', mods: { spd: 1.2, hp: .82, cd: .95 },
+  { id: 'amoeba',  nm: 'Acoustic Duo', ic: 'mic', start: 'pseudo',
+    ds: 'The all-rounder. Nothing fancy, everything works.', mods: {}, free: true },
+  { id: 'ciliate', nm: 'Street Busker', ic: 'cymbal', start: 'cilia',
+    ds: 'Quick and close-range. Light hoodie, fast feet.', mods: { spd: 1.2, hp: .82, cd: .95 },
     cond: m => m.bestLvl >= 15, condTxt: 'Reach level 15 in a run' },
-  { id: 'myco',    nm: 'Sporeling',   ic: '🍄', start: 'spore',
-    ds: 'Blooms wide. Big area, softer punch.', mods: { area: 1.28, dmg: .9, hp: .95 },
+  { id: 'myco',    nm: 'Confetti Queen', ic: 'confetti', start: 'spore',
+    ds: 'Pops wide. Big area, softer punch.', mods: { area: 1.28, dmg: .9, hp: .95 },
     cond: m => m.bestT >= 8 * 60, condTxt: 'Survive 8 minutes' },
-  { id: 'neuron',  nm: 'Neurocyte',   ic: '⚡', start: 'arc',
-    ds: 'Glass cannon. Fires fast, folds faster.', mods: { cd: .84, dmg: 1.15, hp: .7 },
-    cond: m => m.kills >= 1500, condTxt: 'Kill 1500 pathogens (lifetime)' },
-  { id: 'phago',   nm: 'Phagocyte',   ic: '🛡️', start: 'enzyme',
-    ds: 'A wall with a stomach. Slow, tanky, drains life.', mods: { hp: 1.6, spd: .88, leech: .012, armor: 2 },
+  { id: 'neuron',  nm: 'Rock Star', ic: 'bolt', start: 'arc',
+    ds: 'Glass cannon. Plays fast, folds faster.', mods: { cd: .84, dmg: 1.15, hp: .7 },
+    cond: m => m.kills >= 1500, condTxt: 'Silence 1500 critters (lifetime)' },
+  { id: 'phago',   nm: 'Wall of Sound', ic: 'speaker', start: 'enzyme',
+    ds: 'A wall with a lunchbox. Slow, tanky, drains life.', mods: { hp: 1.6, spd: .88, leech: .012, armor: 2 },
     cond: m => m.bosses >= 1, condTxt: 'Defeat the first boss' },
-  { id: 'plasmo',  nm: 'Plasmodium',  ic: '🦠', start: 'virus',
+  { id: 'plasmo',  nm: 'Viral Star', ic: 'worm', start: 'virus',
     ds: 'Lucky, greedy, fragile. Levels absurdly fast.', mods: { xp: 1.22, luck: 1.3, hp: .78, dna: 1.25 },
-    cond: m => m.dnaTotal >= 3000, condTxt: 'Bank 3000 DNA (lifetime)' },
+    cond: m => m.dnaTotal >= 3000, condTxt: 'Bank 3000 applause (lifetime)' },
 ];
 
 // ----------------------------------------------------------------- pathogens
 // `from` = minute the type enters the spawn table, `w` = relative weight.
 const ENEMIES = [
-  { id: 'cocci',  nm: 'Coccus',        hp: 12,  spd: 58,  dmg: 7,  r: 13, xp: 1, col: '#8ff0a8', from: 0, w: 10 },
-  { id: 'bacil',  nm: 'Bacillus',      hp: 22,  spd: 78,  dmg: 8,  r: 12, xp: 2, col: '#ffc2dc', from: 1, w: 9 },
-  { id: 'virion', nm: 'Virion',        hp: 23,  spd: 112, dmg: 9,  r: 11, xp: 2, col: '#ff9ec9', from: 2, w: 8, zig: 1 },
-  { id: 'sac',    nm: 'Spore Sac',     hp: 64,  spd: 40,  dmg: 12, r: 20, xp: 4, col: '#c6ff3d', from: 3, w: 6, split: 2 },
-  { id: 'phage',  nm: 'Phage',         hp: 44,  spd: 46,  dmg: 10, r: 15, xp: 4, col: '#ffb44d', from: 4, w: 6, ranged: 2.2 },
-  { id: 'swarm',  nm: 'Swarmer',       hp: 13,  spd: 128, dmg: 5,  r: 8,  xp: 1, col: '#ffe08a', from: 4, w: 7, pack: 8 },
-  { id: 'leech',  nm: 'Leech',         hp: 54,  spd: 96,  dmg: 6,  r: 13, xp: 4, col: '#ff6d8a', from: 6, w: 6, latch: 1 },
-  { id: 'blob',   nm: 'Amoeboid',      hp: 185, spd: 34,  dmg: 16, r: 29, xp: 9, col: '#b28aff', from: 7, w: 4, heavy: 1 },
-  { id: 'prion',  nm: 'Prion',         hp: 100, spd: 72,  dmg: 14, r: 16, xp: 7, col: '#ff5a6e', from: 8, w: 6, armor: 4 },
-  { id: 'macro',  nm: 'Rogue Macrophage', hp: 350, spd: 54, dmg: 22, r: 34, xp: 18, col: '#ff8a3d', from: 9, w: 3, charge: 1, heavy: 1 },
+  { id: 'cocci',  nm: 'Buzzlet',        hp: 12,  spd: 58,  dmg: 7,  r: 13, xp: 1, col: '#8ff0a8', from: 0, w: 10 },
+  { id: 'bacil',  nm: 'Cable Worm',     hp: 22,  spd: 78,  dmg: 8,  r: 12, xp: 2, col: '#ffc2dc', from: 1, w: 9 },
+  { id: 'virion', nm: 'Screech Pom',    hp: 23,  spd: 112, dmg: 9,  r: 11, xp: 2, col: '#ff9ec9', from: 2, w: 8, zig: 1 },
+  { id: 'sac',    nm: 'Echo Pod',       hp: 64,  spd: 40,  dmg: 12, r: 20, xp: 4, col: '#c6ff3d', from: 3, w: 6, split: 2 },
+  { id: 'phage',  nm: 'Autotune Drone', hp: 44,  spd: 46,  dmg: 10, r: 15, xp: 4, col: '#ffb44d', from: 4, w: 6, ranged: 2.2 },
+  { id: 'swarm',  nm: 'Static Sprite',  hp: 13,  spd: 128, dmg: 5,  r: 8,  xp: 1, col: '#ffe08a', from: 4, w: 7, pack: 8 },
+  { id: 'leech',  nm: 'Clinger',        hp: 54,  spd: 96,  dmg: 6,  r: 13, xp: 4, col: '#ff6d8a', from: 6, w: 6, latch: 1 },
+  { id: 'blob',   nm: 'Reverb Cloud',   hp: 185, spd: 34,  dmg: 16, r: 29, xp: 9, col: '#b28aff', from: 7, w: 4, heavy: 1 },
+  { id: 'prion',  nm: 'Feedback Spike', hp: 100, spd: 72,  dmg: 14, r: 16, xp: 7, col: '#ff5a6e', from: 8, w: 6, armor: 4 },
+  { id: 'macro',  nm: 'Rogue Spotlight', hp: 350, spd: 54, dmg: 22, r: 34, xp: 18, col: '#ff8a3d', from: 9, w: 3, charge: 1, heavy: 1 },
 ];
 const EDEF = {}; for (const e of ENEMIES) EDEF[e.id] = e;
 
 const BOSSES = [
-  { id: 'engulfer', nm: 'The Engulfer',   hp: 2600,  spd: 56, r: 54, dmg: 28, col: '#ff8a3d', xp: 140, dna: 60,  pat: ['charge', 'spray'] },
-  { id: 'mother',   nm: 'Mother Spore',   hp: 9000,  spd: 36, r: 64, dmg: 32, col: '#c6ff3d', xp: 260, dna: 110, pat: ['spawn', 'rings'] },
-  { id: 'colossus', nm: 'Prion Colossus', hp: 23000, spd: 48, r: 72, dmg: 38, col: '#ff5a6e', xp: 420, dna: 190, pat: ['rings', 'mark', 'charge', 'spawn'] },
-  { id: 'culture',  nm: 'The Culture',    hp: 58000, spd: 44, r: 88, dmg: 46, col: '#a77bff', xp: 900, dna: 400, pat: ['rings', 'spawn', 'mark', 'charge', 'spray'], last: true },
+  { id: 'engulfer', nm: 'The Gobbler Amp', hp: 2600,  spd: 56, r: 54, dmg: 28, col: '#ff8a3d', xp: 140, dna: 60,  pat: ['charge', 'spray'] },
+  { id: 'mother',   nm: 'Mother Mute',     hp: 9000,  spd: 36, r: 64, dmg: 32, col: '#c6ff3d', xp: 260, dna: 110, pat: ['spawn', 'rings'] },
+  { id: 'colossus', nm: 'Feedback Colossus', hp: 23000, spd: 48, r: 72, dmg: 38, col: '#ff5a6e', xp: 420, dna: 190, pat: ['rings', 'mark', 'charge', 'spawn'] },
+  { id: 'culture',  nm: 'The Gloss',       hp: 58000, spd: 44, r: 88, dmg: 46, col: '#e6d9ff', xp: 900, dna: 400, pat: ['rings', 'spawn', 'mark', 'charge', 'spray'], last: true },
 ];
 
 // ---------------------------------------------------------------- the stages
@@ -676,33 +681,45 @@ const BOSSES = [
 // end. Difficulty is driven by stage progress, not the wall clock, so the
 // pressure steps up visibly every time you finish one.
 const MODS = {
-  frenzy:   { nm: 'FRENZY',   ic: '💢', ds: 'Pathogens swim 25% faster',      spd: 1.25 },
-  armoured: { nm: 'ARMOURED', ic: '🛡️', ds: 'Pathogens carry 45% more health', hp: 1.45 },
-  swarm:    { nm: 'SWARM',    ic: '🐝', ds: 'Twice the spawns, weaker hosts',  rate: 1.95, hp: .6 },
-  venom:    { nm: 'VENOM',    ic: '☠️', ds: 'Contact damage +35%',             dmg: 1.35 },
-  starve:   { nm: 'STARVE',   ic: '🥀', ds: 'No health drops — survive on skill', nohp: 1 },
+  frenzy:   { nm: 'FAST TEMPO', ic: 'bolt', ds: 'Critters move 25% faster',      spd: 1.25 },
+  armoured: { nm: 'PADDED', ic: 'onesie', ds: 'Critters carry 45% more health', hp: 1.45 },
+  swarm:    { nm: 'FULL HOUSE', ic: 'duet', ds: 'Twice the spawns, weaker critters',  rate: 1.95, hp: .6 },
+  venom:    { nm: 'SOUR NOTES', ic: 'sour', ds: 'Contact damage +35%',             dmg: 1.35 },
+  starve:   { nm: 'NO SNACKS', ic: 'noheart', ds: 'No health drops. Survive on skill', nohp: 1 },
 };
 const STAGES = [
-  { nm: 'Colonisation', obj: { t: 'survive', n: 70 } },
-  { nm: 'Bloom',        obj: { t: 'kill',    n: 120 } },
-  { nm: 'First Contact', obj: { t: 'boss' }, boss: 0 },
-  { nm: 'Fever',        obj: { t: 'survive', n: 85 },  mod: 'frenzy' },
-  { nm: 'Sporulation',  obj: { t: 'elite',   n: 1 } },
-  { nm: 'Incubation',   obj: { t: 'boss' }, boss: 1, mod: 'swarm' },
-  { nm: 'Necrosis',     obj: { t: 'survive', n: 95 },  mod: 'armoured' },
-  { nm: 'Outbreak',     obj: { t: 'kill',    n: 320 }, mod: 'swarm' },
-  { nm: 'Cascade',      obj: { t: 'boss' }, boss: 2, mod: 'frenzy' },
-  { nm: 'Sepsis',       obj: { t: 'survive', n: 105 }, mod: 'venom' },
-  { nm: 'Bloomfall',    obj: { t: 'elite',   n: 2 },   mod: 'starve' },
-  { nm: 'The Culture',  obj: { t: 'boss' }, boss: 3, mod: 'venom', last: true },
+  { nm: 'Soundcheck',     obj: { t: 'survive', n: 70 },
+    tale: 'The club has gone quiet. Test the mics and wake the room.', done: 'The speakers hum again. Someone in the back claps once.' },
+  { nm: 'Open Mic Night', obj: { t: 'kill',    n: 120 },
+    tale: 'Word gets around. Silence the noisy critters before the next act.', done: 'The open mic is open again. Jasmin takes a bow.' },
+  { nm: 'The Gobbler Amp', obj: { t: 'boss' }, boss: 0,
+    tale: 'A giant amp is swallowing every sound in the building.', done: 'The amp coughs up a hundred lost notes.' },
+  { nm: 'Street Corner',  obj: { t: 'survive', n: 85 },  mod: 'frenzy',
+    tale: 'Busking outside. The critters are in a hurry, and so is the rain.', done: 'The hat on the pavement is full of coins and petals.' },
+  { nm: 'Farmers Market', obj: { t: 'elite',   n: 1 },
+    tale: 'Fresh veg, loud critters. One of them is running the whole stall.', done: 'RoxorLoops buys a very large kale. Worth it.' },
+  { nm: "Mother Mute's Green Room", obj: { t: 'boss' }, boss: 1, mod: 'swarm',
+    tale: 'Mother Mute keeps the backstage quiet. Far too quiet.', done: 'The green room smells of smoothies again.' },
+  { nm: 'Festival Field', obj: { t: 'survive', n: 95 },  mod: 'armoured',
+    tale: 'A festival field, and every critter is wearing earmuffs.', done: 'Sunset. The crowd sings the chorus without being asked.' },
+  { nm: 'Rooftop Party',  obj: { t: 'kill',    n: 320 }, mod: 'swarm',
+    tale: 'The rooftop is packed. Hold the beat while the critters swarm.', done: 'The city lights wink along to the rhythm.' },
+  { nm: 'Stadium Soundcheck', obj: { t: 'boss' }, boss: 2, mod: 'frenzy',
+    tale: 'The stadium feedback is huge, and it is coming for you.', done: 'The stadium roars. For real, this time.' },
+  { nm: 'Tour Bus Night', obj: { t: 'survive', n: 105 }, mod: 'venom',
+    tale: 'A long night on the bus. The critters are sour, and so are the notes.', done: 'The bus rolls on, windows glowing pink.' },
+  { nm: 'Blossom Garden', obj: { t: 'elite',   n: 2 },   mod: 'starve',
+    tale: 'A quiet garden, and no snacks. Two critter VIPs are hiding in the trees.', done: 'Petals fall like applause.' },
+  { nm: 'The Big Stage',  obj: { t: 'boss' }, boss: 3, mod: 'venom', last: true,
+    tale: 'The Gloss waits under the biggest spotlight. Sing it out.', done: 'The Soundlands are unmuted. Encore?' },
 ];
 // Culture strength — picked on the menu. Harder dishes pay more DNA.
 const DIFFS = [
-  { id: 'std', nm: 'Standard', ic: '🧫', ds: 'The dish as designed.',
+  { id: 'std', nm: 'Open Mic', ic: 'mic', ds: 'The show as designed.',
     hp: 1, dmg: 1, rate: 1, dna: 1 },
-  { id: 'vir', nm: 'Virulent', ic: '🔥', ds: 'Up to +45% pathogen health and +25% damage, thicker spawns. ×1.6 DNA',
+  { id: 'vir', nm: 'Headliner', ic: 'flame', ds: 'Up to +45% critter health and +25% damage, thicker spawns. ×1.6 applause',
     hp: 1.45, dmg: 1.25, rate: 1.22, dna: 1.6 },
-  { id: 'let', nm: 'Lethal',   ic: '☠️', ds: 'Up to double health and +55% damage, relentless spawns. ×2.5 DNA',
+  { id: 'let', nm: 'Festival Closer', ic: 'crown', ds: 'Up to double health and +55% damage, relentless spawns. ×2.5 applause',
     hp: 2.1, dmg: 1.55, rate: 1.45, dna: 2.5 },
 ];
 const curDiff = () => DIFFS.find(d => d.id === meta.diff) || DIFFS[0];
@@ -716,37 +733,37 @@ const STAGE_NOMINAL = 90;      // assumed length of a non-timed stage, for pacin
 const objText = st => {
   const o = st.obj;
   if (o.t === 'survive') return 'Survive ' + o.n + 's';
-  if (o.t === 'kill')    return 'Purge ' + o.n + ' pathogens';
-  if (o.t === 'elite')   return o.n > 1 ? 'Hunt ' + o.n + ' marked hosts' : 'Hunt the marked host';
-  return 'Destroy the boss';
+  if (o.t === 'kill')    return 'Silence ' + o.n + ' critters';
+  if (o.t === 'elite')   return o.n > 1 ? 'Find ' + o.n + ' critter VIPs' : 'Find the critter VIP';
+  return 'Out-sing the boss';
 };
 
 // Stage-clear rewards — a real payoff for finishing, chosen from three.
 const REWARDS = [
-  { id: 'heal',  ic: '🫀', nm: 'Reinforce',  ds: '+12% max health, and top it all up.' },
-  { id: 'power', ic: '⚡', nm: 'Overclock',  ds: '+2 levels on one of your organelles.' },
-  { id: 'splice',ic: '✨', nm: 'Free Splice', ds: 'An extra level-up pick, right now.' },
-  { id: 'dna',   ic: '🧬', nm: 'Harvest',    ds: 'A fat DNA payout for the lab.' },
-  { id: 'might', ic: '🔥', nm: 'Hot Mitochondria', ds: '+12% damage for the rest of the run.' },
-  { id: 'guard', ic: '🛡️', nm: 'Hardened Wall', ds: '+2 armour for the rest of the run.' },
+  { id: 'heal',  ic: 'onesie', nm: 'Onesie Upgrade',  ds: '+12% max health, and top it all up.' },
+  { id: 'power', ic: 'bolt', nm: 'Turn It Up',  ds: '+2 levels on one of your songs.' },
+  { id: 'splice',ic: 'sparkle', nm: 'Request Line', ds: 'An extra level-up pick, right now.' },
+  { id: 'dna',   ic: 'note', nm: 'Tip Jar',    ds: 'A fat applause payout for the rehearsal room.' },
+  { id: 'might', ic: 'flame', nm: 'Bass Heavy', ds: '+12% damage for the rest of the run.' },
+  { id: 'guard', ic: 'onesie', nm: 'Padded Hoodie', ds: '+2 armour for the rest of the run.' },
 ];
 
 // -------------------------------------------------------------- the gene lab
 const META_UPS = [
-  { id: 'might',   nm: 'Mitochondrial Density', ic: '🔥', ds: '+6% damage',           max: 8, cost: l => 60 + l * 60 },
-  { id: 'vita',    nm: 'Cytoplasm Volume',      ic: '❤️', ds: '+10 max HP',           max: 8, cost: l => 50 + l * 45 },
-  { id: 'armor',   nm: 'Peptide Wall',          ic: '🛡️', ds: '+1 armour',            max: 5, cost: l => 90 + l * 90 },
-  { id: 'speed',   nm: 'Flagellar Tuning',      ic: '🌊', ds: '+4% swim speed',       max: 6, cost: l => 70 + l * 55 },
-  { id: 'cool',    nm: 'Enzyme Kinetics',       ic: '⏱️', ds: '-3% cooldowns',        max: 6, cost: l => 100 + l * 95 },
-  { id: 'growth',  nm: 'Ribosomal Uptake',      ic: '📈', ds: '+8% biomass gained',   max: 6, cost: l => 80 + l * 75 },
-  { id: 'magnet',  nm: 'Membrane Charge',       ic: '🧲', ds: '+22% pickup range',    max: 5, cost: l => 55 + l * 45 },
-  { id: 'luck',    nm: 'Mutagen Exposure',      ic: '🍀', ds: '+8% luck',             max: 5, cost: l => 110 + l * 100 },
-  { id: 'greed',   nm: 'DNA Scavenging',        ic: '🧬', ds: '+15% DNA from runs',   max: 5, cost: l => 120 + l * 110 },
-  { id: 'dash',    nm: 'Contractile Vacuole',   ic: '💨', ds: '-8% dash cooldown',    max: 4, cost: l => 90 + l * 80 },
-  { id: 'reroll',  nm: 'Unstable Genome',       ic: '🎲', ds: '+1 level-up reroll',   max: 4, cost: l => 140 + l * 130 },
-  { id: 'banish',  nm: 'Gene Silencing',        ic: '🚫', ds: '+1 level-up banish',   max: 4, cost: l => 140 + l * 130 },
-  { id: 'revive',  nm: 'Apoptosis Block',       ic: '💀', ds: '+1 revival per run',   max: 2, cost: l => 450 + l * 650 },
-  { id: 'start',   nm: 'Head Start',            ic: '⭐', ds: 'Begin the run 1 level higher', max: 3, cost: l => 200 + l * 180 },
+  { id: 'might',   nm: 'Bass Practice', ic: 'flame', ds: '+6% damage',           max: 8, cost: l => 60 + l * 60 },
+  { id: 'vita',    nm: 'Stamina Training', ic: 'heart', ds: '+10 max HP',           max: 8, cost: l => 50 + l * 45 },
+  { id: 'armor',   nm: 'Padded Hoodie', ic: 'onesie', ds: '+1 armour',            max: 5, cost: l => 90 + l * 90 },
+  { id: 'speed',   nm: 'Dance Lessons', ic: 'shoe', ds: '+4% move speed',       max: 6, cost: l => 70 + l * 55 },
+  { id: 'cool',    nm: 'Tight Timing', ic: 'clock', ds: '-3% cooldowns',        max: 6, cost: l => 100 + l * 95 },
+  { id: 'growth',  nm: 'Stage Presence', ic: 'sparkle', ds: '+8% hype gained',   max: 6, cost: l => 80 + l * 75 },
+  { id: 'magnet',  nm: 'Fan Magnet', ic: 'magnet', ds: '+22% pickup range',    max: 5, cost: l => 55 + l * 45 },
+  { id: 'luck',    nm: 'Lucky Charms', ic: 'clover', ds: '+8% luck',             max: 5, cost: l => 110 + l * 100 },
+  { id: 'greed',   nm: 'Merch Table', ic: 'note', ds: '+15% applause from runs',   max: 5, cost: l => 120 + l * 110 },
+  { id: 'dash',    nm: 'Slide Practice', ic: 'shoe', ds: '-8% slide cooldown',    max: 4, cost: l => 90 + l * 80 },
+  { id: 'reroll',  nm: 'Setlist Shuffle', ic: 'dice', ds: '+1 level-up reroll',   max: 4, cost: l => 140 + l * 130 },
+  { id: 'banish',  nm: 'Cut From Setlist', ic: 'noentry', ds: '+1 level-up banish',   max: 4, cost: l => 140 + l * 130 },
+  { id: 'revive',  nm: 'Encore!', ic: 'star', ds: '+1 revival per run',   max: 2, cost: l => 450 + l * 650 },
+  { id: 'start',   nm: 'Pre-Show Hype', ic: 'star', ds: 'Begin the run 1 level higher', max: 3, cost: l => 200 + l * 180 },
 ];
 
 // ----------------------------------------------------------------- meta save
@@ -1027,7 +1044,7 @@ function boom(x, y, r, dmg, col, chainsLeft){
 }
 function infect(e, dps, dur, spread){
   e.inf = { dps, t: dur, spread };
-  text(e.x, e.y - e.r, 'INFECTED', '#5fe38a', .8);
+  text(e.x, e.y - e.r, 'EARWORM', '#5fe38a', .8);
 }
 
 // ============================================================================
@@ -1075,7 +1092,7 @@ function cycleShake(){
   saveMeta();
   return meta.shake;
 }
-const shakeLabel = () => '🎥 Shake: ' + (SHAKE_STEPS.find(s => s.v === shakeAmt()) || SHAKE_STEPS[0]).nm;
+const shakeLabel = () => 'Shake: ' + (SHAKE_STEPS.find(s => s.v === shakeAmt()) || SHAKE_STEPS[0]).nm;
 
 // ============================================================================
 // ENEMIES
@@ -1158,7 +1175,7 @@ function spawnWaveTick(dt){
       const aa = a + rr(-.5, .5);
       spawnEnemy(pick(t2).id, P.x + Math.cos(aa) * R + rr(-40, 40), P.y + Math.sin(aa) * R + rr(-40, 40));
     }
-    toast('🌊 Surge incoming', 1.4);
+    toast('Crowd surge incoming', 1.4);
   }
   // stages that ask for a hunt keep a marked host on the board
   const st = stage();
@@ -1177,8 +1194,8 @@ function spawnElite(marked){
   const e = spawnEnemy(D.id, p.x, p.y, { elite: 1 });
   if (!e) return null;
   e.chest = 1;
-  if (marked){ e.mark = 1; e.hp = e.mhp = e.mhp * 1.6; toast('🎯 A marked host surfaced — hunt it down', 2.4); }
-  else toast('⚡ An elite strain approaches', 1.6);
+  if (marked){ e.mark = 1; e.hp = e.mhp = e.mhp * 1.6; toast('A critter VIP snuck in. Find them!', 2.4); }
+  else toast('A big critter approaches', 1.6);
   return e;
 }
 function spawnBoss(i){
@@ -1193,7 +1210,7 @@ function spawnBoss(i){
   };
   e.mhp = e.hp;
   G.en.push(e); G.boss = e;
-  toast('☣️ ' + B.nm.toUpperCase(), 2.4);
+  toast('BOSS: ' + B.nm.toUpperCase(), 2.4);
   shake(10);
   return e;
 }
@@ -1252,7 +1269,7 @@ function killEnemy(e, opt){
   if (e.boss){
     G.boss = null;
     meta.bosses++;
-    toast('🏆 ' + e.B.nm + ' dissolved', 2.2);
+    toast(e.B.nm + ' is out-sung!', 2.2);
     for (let i = 0; i < 26; i++) spark(e.x, e.y, e.col, rr(80, 420), 1.1);
   }
   // mitosis charge + lifesteal
@@ -1433,7 +1450,7 @@ function playerDown(){
     G.revives--;
     P.hp = P.mhp; P.iT = 2.4; P.ult = ULT_MAX;
     nuke(520, 9999);
-    toast('💀 APOPTOSIS BLOCKED — revived', 2.4);
+    toast('ENCORE! You are back on stage', 2.4);
     return;
   }
   endRun(false);
@@ -1469,7 +1486,7 @@ function tryUlt(){
   }
   wave(P, 300 * P.s.area, 60, { slow: .6, dur: 2, col: '#a77bff' });
   G.slowmo = .45; shake(10); G.flash = .3;
-  toast('🧬 DUET', 1.4);
+  toast('DUET! Your other half joins in', 1.4);
   sfx('ult');
   return true;
 }
@@ -1677,10 +1694,10 @@ function updateOrbs(dt){
 }
 function collect(o){
   if (o.type === 'xp'){ gainXp(o.val); sfx('orb'); }
-  else if (o.type === 'dna'){ G.dna += o.val; text(P.x, P.y - 26, '+' + o.val + ' DNA', '#ffd84d'); }
+  else if (o.type === 'dna'){ G.dna += o.val; text(P.x, P.y - 26, '+' + o.val + ' applause', '#ffd84d'); }
   else if (o.type === 'hp'){ heal(P.mhp * .28); text(P.x, P.y - 26, '+HEAL', '#5fe38a'); }
-  else if (o.type === 'magnet'){ for (const q of G.orbs) q.pull = 1; text(P.x, P.y - 26, 'MAGNET', '#ffc2dc'); }
-  else if (o.type === 'nuke'){ nuke(700, 500 + G.t * 2); text(P.x, P.y - 26, 'PURGE', '#ffffff'); }
+  else if (o.type === 'magnet'){ for (const q of G.orbs) q.pull = 1; text(P.x, P.y - 26, 'FAN CLUB', '#ffc2dc'); }
+  else if (o.type === 'nuke'){ nuke(700, 500 + G.t * 2); text(P.x, P.y - 26, 'BASS DROP!', '#ffffff'); }
   else if (o.type === 'chest'){ openChest(); }
 }
 function openChest(){
@@ -1690,11 +1707,11 @@ function openChest(){
     const cand = P.weapons.filter(w => !def(w.id).evolved && w.lvl < WEP_MAX);
     if (!cand.length) break;
     const w = pick(cand); w.lvl++; given++;
-    toast('📦 ' + def(w.id).nm + ' → Lv' + w.lvl, 1.8);
+    toast(def(w.id).nm + ' → Lv' + w.lvl, 1.8);
   }
   const dna = Math.round(rr(14, 34) * P.s.dnaM);
   G.dna += dna;
-  if (!given) { heal(P.mhp * .3); toast('📦 +' + dna + ' DNA & a top-up', 1.8); }
+  if (!given) { heal(P.mhp * .3); toast('+' + dna + ' applause & a snack', 1.8); }
   sfx('chest');
 }
 
@@ -1760,11 +1777,11 @@ function rollChoices(){
     const maxL = c.t === 'w' ? WEP_MAX : PAS_MAX;
     while (lv + rar + 1 > maxL && rar > 0) rar--;
     out.push({ t: c.t, id: c.id, rar, nm: D.nm, ic: D.ic, ds: D.ds,
-               lv: lv ? 'Lv ' + lv + ' → ' + (lv + 1 + rar) : (c.t === 'w' ? 'New organelle' : 'New mutation') });
+               lv: lv ? 'Lv ' + lv + ' → ' + (lv + 1 + rar) : (c.t === 'w' ? 'New song' : 'New gear') });
   }
   if (!out.length){
-    out.push({ t: 'heal', id: 'heal', rar: 0, nm: 'Cytoplasm Top-Up', ic: '💚', ds: 'Restore 40% of your health.', lv: 'Fallback' });
-    out.push({ t: 'dna',  id: 'dna',  rar: 0, nm: 'Free DNA', ic: '🧬', ds: 'Bank 40 DNA for the lab.', lv: 'Fallback' });
+    out.push({ t: 'heal', id: 'heal', rar: 0, nm: 'Green Smoothie', ic: 'smoothie', ds: 'Restore 40% of your health.', lv: 'Fallback' });
+    out.push({ t: 'dna',  id: 'dna',  rar: 0, nm: 'Tip Jar', ic: 'note', ds: 'Bank 40 applause for the rehearsal room.', lv: 'Fallback' });
   }
   G.choices = out;
   return out;
@@ -1782,7 +1799,7 @@ function choose(i){
   if (c.t === 'evo'){
     const w = ownedW(c.from);
     if (w){ w.id = c.id; w.lvl = WEP_MAX; w.t = 0; w.hit = {}; }
-    toast('✨ ' + c.nm, 2.2);
+    toast(c.nm, 2.2);
   } else if (c.t === 'w'){
     // a fresh organelle arrives at Lv1 (+rarity); an owned one gains 1 (+rarity)
     let w = ownedW(c.id);
@@ -1832,8 +1849,9 @@ function beginStage(){
   P.iT = Math.max(P.iT, 1.4);   // you resume inside whatever you didn't kill; don't get chewed on frame one
   if (st.boss !== undefined) spawnBoss(st.boss);
   toast('STAGE ' + (G.stage + 1) + ' · ' + st.nm.toUpperCase(), 2.6);
-  toast('🎯 ' + objText(st), 3.2);
-  if (st.mod) toast(MODS[st.mod].ic + ' ' + MODS[st.mod].nm + ' — ' + MODS[st.mod].ds, 3.6);
+  if (st.tale) toast(st.tale, 4);
+  toast(objText(st), 3.2);
+  if (st.mod) toast(MODS[st.mod].nm + ': ' + MODS[st.mod].ds, 3.6);
 }
 function objProgress(){
   const st = stage(), o = st.obj;
@@ -1846,7 +1864,7 @@ function objLabel(){
   const st = stage(), o = st.obj;
   if (o.t === 'survive') return Math.max(0, Math.ceil(o.n - G.stageT)) + 's left';
   if (o.t === 'kill')    return Math.min(G.stageKills, o.n) + ' / ' + o.n;
-  if (o.t === 'elite')   return G.marks + ' / ' + o.n + ' hunted';
+  if (o.t === 'elite')   return G.marks + ' / ' + o.n + ' found';
   return G.boss ? Math.ceil(clamp(G.boss.hp / G.boss.mhp, 0, 1) * 100) + '% left' : 'incoming';
 }
 function objDone(){
@@ -1896,11 +1914,11 @@ function takeReward(i){
     if (r.id === 'heal'){ P.bonusHp = (P.bonusHp || 0) + .12; recalc(true); P.hp = P.mhp; }
     else if (r.id === 'power'){
       const cand = P.weapons.filter(w => w.lvl < WEP_MAX && !def(w.id).evolved);
-      if (cand.length){ const w = pick(cand); w.lvl = Math.min(WEP_MAX, w.lvl + 2); toast('⚡ ' + def(w.id).nm + ' → Lv' + w.lvl, 2); }
+      if (cand.length){ const w = pick(cand); w.lvl = Math.min(WEP_MAX, w.lvl + 2); toast(def(w.id).nm + ' → Lv' + w.lvl, 2); }
       else { heal(P.mhp * .5); }
     }
     else if (r.id === 'splice') splice = true;
-    else if (r.id === 'dna'){ const d = Math.round((80 + G.stage * 40) * P.s.dnaM); G.dna += d; toast('🧬 +' + d + ' DNA', 2); }
+    else if (r.id === 'dna'){ const d = Math.round((80 + G.stage * 40) * P.s.dnaM); G.dna += d; toast('+' + d + ' applause', 2); }
     else if (r.id === 'might'){ P.bonusDmg = (P.bonusDmg || 0) + .12; recalc(true); }
     else if (r.id === 'guard'){ P.bonusArmor = (P.bonusArmor || 0) + 2; recalc(true); }
   }
@@ -2282,20 +2300,22 @@ function groundShadow(x, y, rx, ry){
 // ------------------------------------------------------------- the stage floor
 const NOTE_COLS = ['#ff7eb6', '#ffd84d', '#a77bff', '#5fe38a'];
 function drawDish(){
-  // a round stage: warm indigo floor with a spotlight pool
+  const vi = Math.min(G.state === 'menu' ? 0 : G.stage, VENUES.length - 1), v = VENUES[vi], bk = BOKEH[v.bk];
+  // the venue floor, with its own pattern and props
   const g = ctx.createRadialGradient(0, 0, 80, 0, 0, DISH_R);
-  g.addColorStop(0, '#4b3896'); g.addColorStop(.5, '#38297a'); g.addColorStop(1, '#1d1647');
+  g.addColorStop(0, v.floor[0]); g.addColorStop(.5, v.floor[1]); g.addColorStop(1, v.floor[2]);
   ctx.fillStyle = g;
   ctx.beginPath(); ctx.arc(0, 0, DISH_R, 0, TAU); ctx.fill();
-  // staggered polka dots, the floor pattern
+  drawFloorPattern(v);
   const step = 150;
   const x0 = Math.floor((G.cam.x - G.vw / 2) / step) * step, x1 = G.cam.x + G.vw / 2 + step;
   const y0 = Math.floor((G.cam.y - G.vh / 2) / step) * step, y1 = G.cam.y + G.vh / 2 + step;
-  ctx.fillStyle = 'rgba(255,126,182,.10)';
+  ctx.fillStyle = v.dot;
   ctx.beginPath();
   for (let y = y0, row = 0; y <= y1; y += step, row++)
     for (let x = x0 + (row & 1 ? step / 2 : 0); x <= x1; x += step){ ctx.moveTo(x + 7, y); ctx.arc(x, y, 7, 0, TAU); }
   ctx.fill();
+  for (const pr of propsFor(vi)) if (onScreen(pr.x, pr.y, 50)) drawProp(pr, v);
   // the key light follows the duo
   if (P){
     const sp = ctx.createRadialGradient(P.x, P.y, 20, P.x, P.y, 330);
@@ -2307,17 +2327,17 @@ function drawDish(){
     const m = MOTES[i];
     if (!onScreen(m.x, m.y, 30)) continue;
     const yy = m.y + Math.sin(G.at * .5 + m.p) * 9, xx = m.x + Math.cos(G.at * .37 + m.p) * 9;
-    const col = NOTE_COLS[i & 3], tw = .5 + .5 * Math.sin(G.at + m.p);
+    const col = bk[i & 3], tw = .5 + .5 * Math.sin(G.at + m.p);
     if (i % 9 === 0){ ctx.globalAlpha = .55; note(xx, yy, 6 + m.r * 1.4, col); }
     else if (i % 9 === 4){ ctx.globalAlpha = .6; ctx.save(); ctx.translate(xx, yy); petal(0, 0, 9, G.at * .6 + m.p, '#ffc2dc'); petal(0, 0, 9, G.at * .6 + m.p + 2.1, '#ff7eb6'); ctx.restore(); }
     else { ctx.globalAlpha = m.a * tw * .8; ctx.fillStyle = col; ctx.beginPath(); ctx.arc(xx, yy, m.r + .8, 0, TAU); ctx.fill(); }
   }
   ctx.globalAlpha = 1;
-  // the stage lip (cream) with its brown outline, and the curtains beyond; only when the rim is in view
+  // the venue wall (curtains, tent, hedge, stands...) and the cream lip; only when the rim is in view
   if (Math.hypot(G.cam.x, G.cam.y) + Math.hypot(G.vw, G.vh) * .5 < DISH_R - 80) return;
-  ctx.strokeStyle = '#8f1838'; ctx.lineWidth = 360;
+  ctx.strokeStyle = v.cur[0]; ctx.lineWidth = 360;
   ctx.beginPath(); ctx.arc(0, 0, DISH_R + 200, 0, TAU); ctx.stroke();
-  ctx.strokeStyle = 'rgba(200,38,79,.55)'; ctx.setLineDash([46, 38]);
+  ctx.strokeStyle = v.cur[1]; ctx.setLineDash([46, 38]);
   ctx.beginPath(); ctx.arc(0, 0, DISH_R + 200, 0, TAU); ctx.stroke(); ctx.setLineDash([]);
   ctx.strokeStyle = INK; ctx.lineWidth = 30;
   ctx.beginPath(); ctx.arc(0, 0, DISH_R + 6, 0, TAU); ctx.stroke();
@@ -2576,15 +2596,17 @@ function drawBoss(e, col, gx, gy){
       ctx.fillStyle = CREAM2; ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = INK; ctx.stroke();
     }
     face(r, gx, gy, { mouth: 'grin', es: .16, ex: .3, ey: -.14, my: .42, mw: .2, brow: 1, ph });
-  } else { // the Culture: crown, many eyes
-    face(r, gx, gy, { mouth: 'grin', es: .13, ex: .42, ey: -.12, my: .46, mw: .18, brow: 1, ph });
-    eye(0, -r * .3, r * .15, r * .18, gx, gy);
-    eye(-r * .2, -r * .5, r * .07, r * .08, gx, gy); eye(r * .2, -r * .5, r * .07, r * .08, gx, gy);
-    ctx.beginPath(); ctx.moveTo(-r * .38, -r * .9); ctx.lineTo(-r * .38, -r * 1.22); ctx.lineTo(-r * .19, -r * 1.02); ctx.lineTo(0, -r * 1.3);
-    ctx.lineTo(r * .19, -r * 1.02); ctx.lineTo(r * .38, -r * 1.22); ctx.lineTo(r * .38, -r * .9); ctx.closePath();
-    ctx.fillStyle = '#ffd84d'; ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = INK; ctx.stroke();
-    ctx.fillStyle = '#ff5a6e'; ctx.beginPath(); ctx.arc(0, -r * 1.02, r * .05, 0, TAU); ctx.fill(); ctx.stroke();
-    for (let i = 0; i < 4; i++){ const a = G.t * 1.2 + i / 4 * TAU; sparkle(Math.cos(a) * r * 1.3, Math.sin(a) * r * 1.3, 8, CREAM, 1.8); }
+  } else { // The Gloss: opalescent, calm, symmetrical, one shared smile
+    ctx.save(); blobPath(0, 0, r * .96, w * .6, .07, 24); ctx.clip();
+    ctx.fillStyle = 'rgba(255,255,255,.6)';
+    ctx.beginPath(); ctx.moveTo(-r * .95, -r * .1); ctx.lineTo(-r * .2, -r * 1.1); ctx.lineTo(r * .2, -r * 1.1); ctx.lineTo(-r * .7, r * .3); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = 'rgba(217,255,244,.45)';
+    ctx.beginPath(); ctx.moveTo(r * .2, r * 1.1); ctx.lineTo(r * .95, r * .1); ctx.lineTo(r * .95, r * .5); ctx.lineTo(r * .55, r * 1.1); ctx.closePath(); ctx.fill();
+    ctx.restore();
+    eye(-r * .3, -r * .12, r * .13, r * .17, gx, gy); eye(r * .3, -r * .12, r * .13, r * .17, gx, gy);
+    ctx.strokeStyle = INK; ctx.lineWidth = 3.6; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.arc(0, r * .02, r * .24, .25 * Math.PI, .75 * Math.PI); ctx.stroke();
+    for (let i = 0; i < 4; i++){ const a2 = G.t * 1.2 + i / 4 * TAU; sparkle(Math.cos(a2) * r * 1.3, Math.sin(a2) * r * 1.3, 8, CREAM, 1.8); }
   }
 }
 
@@ -2783,6 +2805,175 @@ function drawOverlay(){
   ctx.setTransform(1, 0, 0, 1, 0, 0);
 }
 
+// ----------------------------------------------------------------- the icons
+// Every icon in the game is drawn here in the house style (flat candy colour, warm brown
+// outline) onto a 96px canvas once, then used as an <img>. `key+` = the same glyph with a
+// gold star badge (the evolved songs). No emoji anywhere.
+const ICON_FN = {};
+function _p(c, fill, fn, lw){ c.beginPath(); fn(c); if (fill){ c.fillStyle = fill; c.fill(); } c.lineWidth = lw || 6; c.strokeStyle = INK; c.lineJoin = 'round'; c.lineCap = 'round'; c.stroke(); }
+function _o(c, fill, x, y, r, lw){ _p(c, fill, k => k.arc(x, y, r, 0, TAU), lw); }
+function _e(c, fill, x, y, rx, ry, rot, lw){ _p(c, fill, k => k.ellipse(x, y, rx, ry, rot || 0, 0, TAU), lw); }
+function _s(c, fill, x, y, r, pinch, lw){
+  const q = r * (pinch || .3);
+  _p(c, fill, k => { k.moveTo(x, y - r); k.quadraticCurveTo(x + q, y - q, x + r, y); k.quadraticCurveTo(x + q, y + q, x, y + r); k.quadraticCurveTo(x - q, y + q, x - r, y); k.quadraticCurveTo(x - q, y - q, x, y - r); }, lw || 5);
+}
+function _l(c, col, w, pts){ c.beginPath(); c.moveTo(pts[0], pts[1]); for (let i = 2; i < pts.length; i += 2) c.lineTo(pts[i], pts[i + 1]); c.strokeStyle = col; c.lineWidth = w; c.lineCap = 'round'; c.lineJoin = 'round'; c.stroke(); }
+function _eyes(c, x, y, sp, r){ for (const sx of [-1, 1]){ _o(c, CREAM2, x + sx * sp, y, r, 3.2); c.fillStyle = INK; c.beginPath(); c.arc(x + sx * sp + 1, y + 1, r * .5, 0, TAU); c.fill(); } }
+function _shine(c, x, y, r, a0, a1){ c.beginPath(); c.arc(x, y, r, a0, a1); c.strokeStyle = 'rgba(255,255,255,.85)'; c.lineWidth = 4.5; c.lineCap = 'round'; c.stroke(); }
+Object.assign(ICON_FN, {
+  mic(c){ _p(c, '#ff7eb6', k => { k.moveTo(39, 50); k.lineTo(57, 50); k.lineTo(53, 88); k.lineTo(43, 88); k.closePath(); }); _o(c, '#c9cbd6', 48, 32, 22); _l(c, 'rgba(45,23,15,.55)', 3, [34, 28, 62, 28]); _l(c, 'rgba(45,23,15,.55)', 3, [34, 38, 62, 38]); _p(c, '#ffd84d', k => k.rect(37, 49, 22, 8), 5); _shine(c, 48, 32, 14, 3.6, 4.5); },
+  cymbal(c){ _l(c, INK, 11, [48, 46, 48, 88]); _l(c, '#c9cbd6', 4, [48, 46, 48, 86]); _e(c, '#ffd84d', 48, 40, 40, 14); _e(c, '#ffe9a8', 48, 35, 11, 5, 0, 4); _shine(c, 48, 40, 28, 3.3, 3.9); },
+  glitter(c){ _s(c, '#ff7eb6', 38, 54, 30); _s(c, '#ffd84d', 72, 26, 16); _s(c, '#a77bff', 70, 74, 14); },
+  vinyl(c){ _o(c, '#3a2a5c', 48, 48, 40); c.strokeStyle = 'rgba(255,244,230,.35)'; c.lineWidth = 2.5; for (const r of [32, 24]){ c.beginPath(); c.arc(48, 48, r, 0, TAU); c.stroke(); } _o(c, '#ff7eb6', 48, 48, 13, 5); _o(c, CREAM, 48, 48, 3.5, 3); _shine(c, 48, 48, 33, 3.7, 4.5); },
+  confetti(c){ _p(c, '#ff7eb6', k => { k.moveTo(10, 88); k.lineTo(50, 44); k.lineTo(64, 58); k.closePath(); }); _l(c, CREAM, 4, [22, 74, 34, 80]); _l(c, CREAM, 4, [32, 62, 44, 68]); _o(c, '#ffd84d', 72, 24, 7, 4); _p(c, '#5fe38a', k => k.rect(76, 42, 12, 12), 4); _s(c, '#a77bff', 44, 22, 11, .3, 4); _o(c, '#ffc2dc', 86, 76, 5, 3.5); },
+  blossom(c){ for (let i = 0; i < 5; i++){ c.save(); c.translate(48, 50); c.rotate(i / 5 * TAU); _e(c, '#ff9ec9', 0, -22, 14, 22, 0, 5); c.restore(); } _o(c, '#ffd84d', 48, 50, 11, 4.5); },
+  bolt(c){ _p(c, '#ffd84d', k => { k.moveTo(56, 6); k.lineTo(20, 54); k.lineTo(44, 54); k.lineTo(34, 90); k.lineTo(78, 38); k.lineTo(54, 38); k.closePath(); }, 6.5); },
+  snow(c){ for (let a = 0; a < 3; a++){ const t = a * Math.PI / 3, dx = Math.cos(t) * 38, dy = Math.sin(t) * 38; _l(c, INK, 13, [48 - dx, 48 - dy, 48 + dx, 48 + dy]); } for (let a = 0; a < 3; a++){ const t = a * Math.PI / 3, dx = Math.cos(t) * 38, dy = Math.sin(t) * 38; _l(c, '#bff0ff', 6, [48 - dx, 48 - dy, 48 + dx, 48 + dy]); } _o(c, '#fff', 48, 48, 8, 4); },
+  mascot(c){ _o(c, '#5fe38a', 24, 28, 12); _o(c, '#5fe38a', 72, 28, 12); _o(c, '#5fe38a', 48, 54, 34); _eyes(c, 48, 50, 14, 9); c.beginPath(); c.arc(48, 62, 9, .2, Math.PI - .2); c.strokeStyle = INK; c.lineWidth = 4; c.stroke(); c.fillStyle = 'rgba(255,126,182,.7)'; for (const sx of [-1, 1]){ c.beginPath(); c.ellipse(48 + sx * 24, 62, 6, 4, 0, 0, TAU); c.fill(); } },
+  bomb(c){ _o(c, '#a77bff', 44, 58, 30); _l(c, INK, 11, [62, 36, 72, 22, 80, 18]); _l(c, '#c9cbd6', 5, [62, 36, 72, 22, 80, 18]); _s(c, '#ffd84d', 82, 14, 12, .3, 4); _shine(c, 44, 58, 21, 3.5, 4.5); },
+  worm(c){ c.beginPath(); c.moveTo(14, 70); c.bezierCurveTo(30, 20, 46, 90, 62, 40); c.bezierCurveTo(68, 22, 80, 26, 84, 36); c.lineCap = 'round'; c.strokeStyle = INK; c.lineWidth = 32; c.stroke(); c.strokeStyle = '#ff7eb6'; c.lineWidth = 22; c.stroke(); _eyes(c, 80, 33, 6, 5); _p(c, '#ffd84d', k => { k.arc(24, 24, 7, 0, TAU); }, 4); _l(c, INK, 4, [30, 24, 30, 8]); },
+  speaker(c){ _p(c, '#4a3794', k => k.rect(18, 8, 60, 80), 6); _o(c, '#ff7eb6', 48, 28, 10, 4.5); _o(c, '#c9cbd6', 48, 64, 21, 5); _o(c, '#3a2a5c', 48, 64, 10, 4); },
+  notes(c){ _l(c, INK, 13, [34, 70, 34, 26, 74, 18, 74, 62]); _l(c, '#ffd84d', 6, [34, 70, 34, 26, 74, 18, 74, 62]); _p(c, '#ffd84d', k => { k.moveTo(34, 26); k.lineTo(74, 18); k.lineTo(74, 34); k.lineTo(34, 42); k.closePath(); }, 5); _e(c, '#ffd84d', 26, 72, 13, 10, -.35, 5); _e(c, '#ffd84d', 66, 64, 13, 10, -.35, 5); },
+  note(c){ _l(c, INK, 13, [58, 66, 58, 14]); _l(c, '#ffd84d', 6, [58, 66, 58, 14]); _p(c, '#ffd84d', k => { k.moveTo(58, 14); k.quadraticCurveTo(64, 38, 82, 44); k.quadraticCurveTo(72, 28, 58, 28); }, 5); _e(c, '#ffd84d', 44, 70, 17, 13, -.35, 5.5); },
+  rings(c){ for (const r of [46, 32, 18]){ c.beginPath(); c.arc(14, 48, r, -1, 1); c.strokeStyle = INK; c.lineWidth = 13; c.lineCap = 'round'; c.stroke(); } for (const r of [46, 32, 18]){ c.beginPath(); c.arc(14, 48, r, -1, 1); c.strokeStyle = r === 32 ? '#ff7eb6' : '#a77bff'; c.lineWidth = 6.5; c.stroke(); } _o(c, '#ffd84d', 14, 48, 9, 4.5); },
+  metronome(c){ _p(c, '#ffd84d', k => { k.moveTo(28, 88); k.lineTo(68, 88); k.lineTo(56, 10); k.lineTo(40, 10); k.closePath(); }); _l(c, INK, 10, [48, 78, 62, 24]); _l(c, CREAM, 4, [48, 78, 62, 24]); _o(c, '#ff7eb6', 58, 38, 8, 4.5); },
+  shoe(c){ _p(c, '#ff7eb6', k => { k.moveTo(10, 30); k.lineTo(34, 30); k.quadraticCurveTo(46, 52, 72, 56); k.quadraticCurveTo(90, 58, 90, 72); k.lineTo(90, 78); k.lineTo(10, 78); k.closePath(); }); _p(c, CREAM, k => k.rect(8, 74, 84, 14), 5); _l(c, CREAM, 4, [40, 42, 50, 36]); _l(c, CREAM, 4, [50, 50, 60, 44]); },
+  onesie(c){ _p(c, CREAM, k => { k.moveTo(16, 40); k.lineTo(20, 8); k.lineTo(38, 24); k.closePath(); }, 5); _p(c, CREAM, k => { k.moveTo(80, 40); k.lineTo(76, 8); k.lineTo(58, 24); k.closePath(); }, 5); _o(c, '#3fcf6a', 48, 54, 36); _eyes(c, 48, 48, 14, 9); c.beginPath(); c.arc(48, 62, 12, .25, Math.PI - .25); c.strokeStyle = INK; c.lineWidth = 4.5; c.stroke(); },
+  magnet(c){ c.beginPath(); c.moveTo(22, 88); c.lineTo(22, 46); c.arc(48, 46, 26, Math.PI, 0); c.lineTo(74, 88); c.lineCap = 'butt'; c.strokeStyle = INK; c.lineWidth = 34; c.stroke(); c.strokeStyle = '#ff5a6e'; c.lineWidth = 22; c.stroke(); c.beginPath(); c.moveTo(22, 88); c.lineTo(22, 68); c.moveTo(74, 88); c.lineTo(74, 68); c.strokeStyle = CREAM; c.lineWidth = 22; c.stroke(); },
+  smoothie(c){ _l(c, INK, 13, [62, 30, 72, 6]); _l(c, '#ff7eb6', 6, [62, 30, 72, 6]); _p(c, '#5fe38a', k => { k.moveTo(22, 30); k.lineTo(74, 30); k.lineTo(65, 88); k.lineTo(31, 88); k.closePath(); }); _p(c, CREAM, k => k.rect(18, 24, 60, 10), 5); _p(c, '#3fcf6a', k => { k.moveTo(28, 22); k.quadraticCurveTo(24, 6, 42, 8); k.quadraticCurveTo(44, 22, 28, 22); }, 4); _shine(c, 48, 60, 14, 3.5, 4.4); },
+  sparkle(c){ _s(c, '#ffd84d', 44, 54, 38, .28, 6); _s(c, '#ff7eb6', 78, 22, 15); _s(c, '#a77bff', 18, 18, 10, .3, 4); },
+  scrunchie(c){ c.beginPath(); c.arc(48, 48, 28, 0, TAU); c.strokeStyle = INK; c.lineWidth = 30; c.stroke(); c.strokeStyle = '#ff7eb6'; c.lineWidth = 21; c.stroke(); c.strokeStyle = 'rgba(45,23,15,.4)'; c.lineWidth = 3; for (let i = 0; i < 10; i++){ const a = i / 10 * TAU; c.beginPath(); c.moveTo(48 + Math.cos(a) * 20, 48 + Math.sin(a) * 20); c.lineTo(48 + Math.cos(a) * 36, 48 + Math.sin(a) * 36); c.stroke(); } _shine(c, 48, 48, 28, 3.6, 4.6); },
+  heart(c){ _p(c, '#ff5a6e', k => { k.moveTo(48, 86); k.bezierCurveTo(6, 54, 16, 14, 48, 34); k.bezierCurveTo(80, 14, 90, 54, 48, 86); k.closePath(); }); _e(c, 'rgba(255,255,255,.85)', 30, 34, 7, 4, -.7, 0); },
+  critter(c){ _o(c, '#8ff0a8', 48, 52, 36); _eyes(c, 48, 46, 15, 10); c.beginPath(); c.arc(48, 66, 9, .2, Math.PI - .2); c.strokeStyle = INK; c.lineWidth = 4.5; c.stroke(); _shine(c, 48, 52, 28, 3.5, 4.3); },
+  duet(c){ _o(c, '#ff7eb6', 32, 54, 26); _eyes(c, 32, 50, 9, 6); _o(c, '#3fcf6a', 66, 46, 26); _eyes(c, 66, 42, 9, 6); },
+  pause(c){ _p(c, '#ff7eb6', k => k.rect(22, 16, 18, 64), 6); _p(c, '#ff7eb6', k => k.rect(56, 16, 18, 64), 6); },
+  vol(c){ _p(c, '#4a3794', k => { k.moveTo(8, 36); k.lineTo(28, 36); k.lineTo(50, 14); k.lineTo(50, 82); k.lineTo(28, 60); k.lineTo(8, 60); k.closePath(); }); for (const r of [14, 26]){ c.beginPath(); c.arc(54, 48, r, -.9, .9); c.strokeStyle = INK; c.lineWidth = 11; c.lineCap = 'round'; c.stroke(); } for (const r of [14, 26]){ c.beginPath(); c.arc(54, 48, r, -.9, .9); c.strokeStyle = '#ff7eb6'; c.lineWidth = 5; c.stroke(); } },
+  mute(c){ _p(c, '#4a3794', k => { k.moveTo(8, 36); k.lineTo(28, 36); k.lineTo(50, 14); k.lineTo(50, 82); k.lineTo(28, 60); k.lineTo(8, 60); k.closePath(); }); _l(c, INK, 13, [60, 34, 88, 62]); _l(c, INK, 13, [88, 34, 60, 62]); _l(c, '#ff5a6e', 6.5, [60, 34, 88, 62]); _l(c, '#ff5a6e', 6.5, [88, 34, 60, 62]); },
+  sour(c){ _p(c, '#ffe45c', k => { k.moveTo(8, 56); k.quadraticCurveTo(16, 18, 52, 16); k.quadraticCurveTo(84, 22, 88, 52); k.quadraticCurveTo(66, 90, 8, 56); k.closePath(); }); _p(c, '#3fcf6a', k => { k.moveTo(52, 16); k.quadraticCurveTo(62, 4, 76, 8); k.quadraticCurveTo(72, 22, 52, 16); }, 4); _shine(c, 46, 50, 22, 3.6, 4.7); },
+  noheart(c){ ICON_FN.heart(c); _l(c, INK, 14, [14, 14, 82, 82]); _l(c, CREAM, 6.5, [14, 14, 82, 82]); },
+  flame(c){ _p(c, '#ff9a2e', k => { k.moveTo(48, 6); k.bezierCurveTo(54, 30, 84, 42, 80, 66); k.bezierCurveTo(78, 86, 60, 90, 48, 90); k.bezierCurveTo(30, 90, 14, 80, 16, 60); k.bezierCurveTo(18, 46, 32, 40, 34, 24); k.bezierCurveTo(40, 30, 44, 22, 48, 6); k.closePath(); }); _p(c, '#ffd84d', k => { k.moveTo(48, 44); k.bezierCurveTo(52, 58, 66, 62, 62, 76); k.bezierCurveTo(60, 84, 54, 84, 48, 84); k.bezierCurveTo(38, 84, 32, 78, 34, 68); k.bezierCurveTo(36, 60, 46, 56, 48, 44); k.closePath(); }, 4); },
+  crown(c){ _p(c, '#ffd84d', k => { k.moveTo(10, 78); k.lineTo(10, 28); k.lineTo(30, 48); k.lineTo(48, 14); k.lineTo(66, 48); k.lineTo(86, 28); k.lineTo(86, 78); k.closePath(); }); _o(c, '#ff5a6e', 48, 58, 7, 4); _o(c, '#5fe38a', 24, 62, 5, 3.5); _o(c, '#a77bff', 72, 62, 5, 3.5); },
+  dice(c){ _p(c, CREAM, k => k.rect(12, 12, 72, 72), 6); for (const [x, y] of [[30, 30], [66, 30], [48, 48], [30, 66], [66, 66]]){ c.fillStyle = INK; c.beginPath(); c.arc(x, y, 6, 0, TAU); c.fill(); } },
+  noentry(c){ _o(c, '#ff5a6e', 48, 48, 38); _l(c, CREAM, 14, [26, 48, 70, 48]); _l(c, INK, 3, [26, 48, 70, 48]); },
+  clock(c){ _o(c, CREAM, 48, 50, 38); _l(c, INK, 7, [48, 50, 48, 26]); _l(c, INK, 7, [48, 50, 66, 58]); _o(c, '#ff7eb6', 48, 50, 5, 3); },
+  clover(c){ for (const [x, y] of [[34, 34], [62, 34], [34, 62], [62, 62]]) _o(c, '#3fcf6a', x, y, 19, 5); _l(c, INK, 9, [50, 56, 62, 88]); _l(c, '#3fcf6a', 4, [50, 56, 62, 88]); },
+  star(c){ _p(c, '#ffd84d', k => { for (let i = 0; i < 10; i++){ const a = -Math.PI / 2 + i * Math.PI / 5, r = i & 1 ? 20 : 42; k[i ? 'lineTo' : 'moveTo'](48 + Math.cos(a) * r, 52 + Math.sin(a) * r); } k.closePath(); }, 6); },
+  target(c){ _o(c, '#ff5a6e', 48, 48, 40); _o(c, CREAM, 48, 48, 27, 4); _o(c, '#ff5a6e', 48, 48, 15, 4); _o(c, CREAM, 48, 48, 5, 3); },
+  lock(c){ c.beginPath(); c.arc(48, 38, 20, Math.PI, 0); c.lineTo(68, 52); c.moveTo(28, 52); c.lineTo(28, 38); c.strokeStyle = INK; c.lineWidth = 17; c.lineCap = 'round'; c.stroke(); c.strokeStyle = '#c9cbd6'; c.lineWidth = 7; c.stroke(); _p(c, '#ffd84d', k => k.rect(16, 48, 64, 42), 6); _o(c, INK, 48, 66, 6, 2); },
+  arrow(c){ _p(c, '#5fe38a', k => { k.moveTo(10, 36); k.lineTo(52, 36); k.lineTo(52, 14); k.lineTo(88, 48); k.lineTo(52, 82); k.lineTo(52, 60); k.lineTo(10, 60); k.closePath(); }); },
+  gloss(c){ _o(c, '#e6d9ff', 48, 50, 38); _l(c, '#fff', 6, [24, 30, 44, 18]); c.beginPath(); c.arc(48, 58, 14, .3, Math.PI - .3); c.strokeStyle = INK; c.lineWidth = 4.5; c.stroke(); _eyes(c, 48, 44, 13, 7); },
+});
+const ICON_URL = {};
+function iconURL(key){
+  if (ICON_URL[key] !== undefined) return ICON_URL[key];
+  const evo = key.charAt(key.length - 1) === '+', base = evo ? key.slice(0, -1) : key;
+  const fn = ICON_FN[base]; let url = '';
+  try {
+    const cv2 = document.createElement('canvas'); cv2.width = cv2.height = 96;
+    const c = cv2.getContext('2d');
+    if (fn){ c.save(); fn(c); c.restore(); }
+    if (evo) _s(c, '#ffd84d', 78, 20, 17, .3, 5);
+    url = cv2.toDataURL ? String(cv2.toDataURL('image/png')) : '';
+  } catch (err) { url = ''; }
+  return (ICON_URL[key] = url);
+}
+const ico = (key, px) => '<img class="gi" alt="" draggable="false" src="' + iconURL(key) + '"' + (px ? ' width="' + px + '" height="' + px + '"' : '') + '>';
+function hydrateIcons(){
+  if (HEADLESS) return;
+  document.querySelectorAll('[data-ico]').forEach(el => { el.innerHTML = ico(el.getAttribute('data-ico'), +el.getAttribute('data-px') || 0); });
+}
+
+// ------------------------------------------------------------ the venues
+// Twelve venues, one per stage: the floor, the rim and the little props change with the story.
+const VENUES = [
+  { nm: 'club',      floor: ['#4b3896', '#38297a', '#1d1647'], pat: 'planks',  dot: 'rgba(255,126,182,.10)', cur: ['#8f1838', 'rgba(200,38,79,.6)'],  props: ['tape', 'speaker', 'vinyl'],     bk: 0 },
+  { nm: 'open mic',  floor: ['#5a3a9c', '#412c86', '#241a58'], pat: 'checker', dot: 'rgba(255,216,77,.10)',  cur: ['#4a1d6e', 'rgba(167,123,255,.55)'], props: ['vinyl', 'cable', 'pillow'],  bk: 1 },
+  { nm: 'amp',       floor: ['#33264f', '#271c3e', '#150f26'], pat: 'tiles',   dot: 'rgba(255,90,110,.08)',  cur: ['#1b1226', 'rgba(255,90,110,.4)'],  props: ['cable', 'speaker', 'cable'],   bk: 0 },
+  { nm: 'street',    floor: ['#3b4470', '#2d3560', '#1a2040'], pat: 'asphalt', dot: 'rgba(255,244,230,.07)', cur: ['#6b3a3a', 'rgba(224,120,100,.5)'], props: ['cone', 'balloon', 'tape'],     bk: 1 },
+  { nm: 'market',    floor: ['#6a5a4a', '#52443a', '#2e2620'], pat: 'cobble',  dot: 'rgba(255,244,230,.05)', cur: ['#2f7a4b', 'rgba(88,194,125,.6)'],  props: ['crate', 'flower', 'crate'],    bk: 3 },
+  { nm: 'green room',floor: ['#2a7068', '#1f5a55', '#123a3a'], pat: 'checker', dot: 'rgba(255,244,230,.07)', cur: ['#1f6a55', 'rgba(46,196,182,.55)'], props: ['pillow', 'flower', 'pillow'],  bk: 3 },
+  { nm: 'festival',  floor: ['#3f9a58', '#2f8048', '#1c5a30'], pat: 'grass',   dot: 'rgba(255,244,230,.08)', cur: ['#ff7eb6', 'rgba(255,244,230,.7)'], props: ['balloon', 'flower', 'tape'],   bk: 0 },
+  { nm: 'rooftop',   floor: ['#2c3a78', '#212c62', '#121838'], pat: 'tiles',   dot: 'rgba(255,216,77,.10)',  cur: ['#161034', 'rgba(255,216,77,.45)'], props: ['pool', 'speaker', 'pool'],     bk: 1 },
+  { nm: 'stadium',   floor: ['#3a8a52', '#2c7140', '#174a28'], pat: 'grass',   dot: 'rgba(255,255,255,.12)', cur: ['#c8264f', 'rgba(255,154,46,.6)'],  props: ['cone', 'tape', 'balloon'],     bk: 0 },
+  { nm: 'tour bus',  floor: ['#8a5034', '#6f3e28', '#43241a'], pat: 'planks',  dot: 'rgba(255,216,77,.08)',  cur: ['#7a3b1e', 'rgba(255,154,46,.5)'],  props: ['pillow', 'cable', 'vinyl'],    bk: 1 },
+  { nm: 'garden',    floor: ['#4a8a5e', '#3b7050', '#244a34'], pat: 'grass',   dot: 'rgba(255,194,220,.14)', cur: ['#1f7a3a', 'rgba(63,207,106,.6)'],  props: ['flower', 'flower', 'pool'],    bk: 3 },
+  { nm: 'big stage', floor: ['#8a7ac8', '#6a5aa8', '#3e3478'], pat: 'gloss',   dot: 'rgba(255,255,255,.14)', cur: ['#b6b8cf', 'rgba(244,241,251,.8)'], props: ['pool', 'sparkle', 'pool'],     bk: 2 },
+];
+const BOKEH = [NOTE_COLS, ['#ffd84d', '#ff9a2e', '#ff7eb6', '#fff4e6'], ['#fff4e6', '#e6d9ff', '#d9fff4', '#ffe3f1'], ['#ffc2dc', '#c6ff3d', '#fff4e6', '#5fe38a']];
+const venueNow = () => VENUES[Math.min(G.state === 'menu' ? 0 : G.stage, VENUES.length - 1)];
+function hash2(a, b){ let h = Math.imul(a + 374761393, 668265263) ^ Math.imul(b + 1274126177, 2246822519); h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; }
+const PROPS = {};
+function propsFor(vi){
+  if (PROPS[vi]) return PROPS[vi];
+  const v = VENUES[vi], list = [];
+  for (let i = 0; i < 150; i++){
+    const a = hash2(vi * 97 + i, 11) * TAU, d = Math.sqrt(hash2(vi * 97 + i, 23)) * (DISH_R - 90);
+    list.push({ x: Math.cos(a) * d, y: Math.sin(a) * d, k: v.props[i % v.props.length], v: Math.floor(hash2(i, vi) * 4), rot: hash2(i, 5) * TAU });
+  }
+  return (PROPS[vi] = list);
+}
+function drawProp(p, v){
+  const x = p.x, y = p.y;
+  ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+  if (p.k === 'pool'){ ctx.fillStyle = 'rgba(255,244,214,.07)'; ctx.beginPath(); ctx.ellipse(x, y, 70, 46, 0, 0, TAU); ctx.fill(); return; }
+  if (p.k === 'tape'){ ctx.save(); ctx.translate(x, y); ctx.rotate(p.rot); ctx.fillStyle = 'rgba(255,244,230,.35)'; ctx.fillRect(-22, -3, 44, 6); ctx.rotate(1.57); ctx.fillRect(-22, -3, 44, 6); ctx.restore(); return; }
+  if (p.k === 'cable'){ ctx.strokeStyle = 'rgba(20,12,10,.55)'; ctx.lineWidth = 5; ctx.beginPath(); ctx.moveTo(x - 40, y); ctx.bezierCurveTo(x - 20, y - 26, x + 10, y + 26, x + 40, y - 4); ctx.stroke(); return; }
+  if (p.k === 'vinyl'){ ctx.beginPath(); ctx.arc(x, y, 15, 0, TAU); ctx.fillStyle = '#3a2a5c'; ctx.fill(); ctx.lineWidth = 2.4; ctx.strokeStyle = INK; ctx.stroke(); ctx.fillStyle = ['#ff7eb6', '#ffd84d', '#5fe38a', '#a77bff'][p.v]; ctx.beginPath(); ctx.arc(x, y, 5.5, 0, TAU); ctx.fill(); return; }
+  if (p.k === 'speaker'){ ctx.beginPath(); ctx.rect(x - 13, y - 17, 26, 34); ctx.fillStyle = '#4a3794'; ctx.fill(); ctx.lineWidth = 2.6; ctx.strokeStyle = INK; ctx.stroke(); ctx.fillStyle = '#c9cbd6'; ctx.beginPath(); ctx.arc(x, y + 5, 7, 0, TAU); ctx.fill(); ctx.stroke(); ctx.fillStyle = '#ff7eb6'; ctx.beginPath(); ctx.arc(x, y - 9, 3, 0, TAU); ctx.fill(); return; }
+  if (p.k === 'pillow'){ ctx.save(); ctx.translate(x, y); ctx.rotate(p.rot); ctx.beginPath(); ctx.ellipse(0, 0, 22, 16, 0, 0, TAU); celPath(['#ff7eb6', '#5fe38a', '#ffd84d', '#a77bff'][p.v], 3, 2.4); ctx.restore(); return; }
+  if (p.k === 'crate'){ ctx.beginPath(); ctx.rect(x - 15, y - 11, 30, 22); ctx.fillStyle = '#b8642c'; ctx.fill(); ctx.lineWidth = 2.4; ctx.strokeStyle = INK; ctx.stroke(); ctx.fillStyle = ['#5fe38a', '#ff9a2e', '#ff5a6e', '#c6ff3d'][p.v]; for (let i = -1; i <= 1; i++){ ctx.beginPath(); ctx.arc(x + i * 8, y - 11, 5, 0, TAU); ctx.fill(); ctx.stroke(); } return; }
+  if (p.k === 'cone'){ ctx.beginPath(); ctx.moveTo(x, y - 16); ctx.lineTo(x + 11, y + 11); ctx.lineTo(x - 11, y + 11); ctx.closePath(); ctx.fillStyle = '#ff9a2e'; ctx.fill(); ctx.lineWidth = 2.4; ctx.strokeStyle = INK; ctx.stroke(); ctx.fillStyle = CREAM; ctx.fillRect(x - 6, y - 2, 12, 4); return; }
+  if (p.k === 'balloon'){ const sway = Math.sin(G.at + p.rot) * 2; ctx.strokeStyle = INK; ctx.lineWidth = 1.6; ctx.beginPath(); ctx.moveTo(x, y); ctx.quadraticCurveTo(x + sway * 2, y + 14, x + sway, y + 28); ctx.stroke(); ctx.beginPath(); ctx.ellipse(x, y - 12, 10, 13, 0, 0, TAU); ctx.fillStyle = ['#ff7eb6', '#ffd84d', '#5fe38a', '#a77bff'][p.v]; ctx.fill(); ctx.lineWidth = 2.2; ctx.stroke(); ctx.fillStyle = 'rgba(255,255,255,.8)'; ctx.beginPath(); ctx.ellipse(x - 3.5, y - 17, 2, 3.5, -.4, 0, TAU); ctx.fill(); return; }
+  if (p.k === 'flower'){ ctx.strokeStyle = '#2f8048'; ctx.lineWidth = 2.4; ctx.beginPath(); ctx.moveTo(x, y + 14); ctx.lineTo(x, y); ctx.stroke(); const pc = ['#ff7eb6', '#fff4e6', '#ffd84d', '#ffc2dc'][p.v]; for (let i = 0; i < 5; i++){ const a = i / 5 * TAU + p.rot; ctx.beginPath(); ctx.arc(x + Math.cos(a) * 6, y - 2 + Math.sin(a) * 6, 4.6, 0, TAU); ctx.fillStyle = pc; ctx.fill(); ctx.lineWidth = 1.4; ctx.strokeStyle = INK; ctx.stroke(); } ctx.fillStyle = '#ffd84d'; ctx.beginPath(); ctx.arc(x, y - 2, 3.2, 0, TAU); ctx.fill(); return; }
+  if (p.k === 'sparkle'){ ctx.globalAlpha = .5 + .5 * Math.sin(G.at * 2 + p.rot); sparkle(x, y, 9, CREAM, 1.6); ctx.globalAlpha = 1; }
+}
+// floor patterns, only the visible window
+function drawFloorPattern(v){
+  const cx = G.cam.x, cy = G.cam.y, hw = G.vw / 2 + 80, hh = G.vh / 2 + 80;
+  const x0 = cx - hw, x1 = cx + hw, y0 = cy - hh, y1 = cy + hh;
+  const f = v.floor;
+  if (v.pat === 'planks'){
+    const st = 64; ctx.strokeStyle = 'rgba(20,10,40,.22)'; ctx.lineWidth = 2.4; ctx.beginPath();
+    for (let y = Math.floor(y0 / st) * st, r = Math.floor(y0 / st); y < y1; y += st, r++){
+      ctx.moveTo(x0, y); ctx.lineTo(x1, y);
+      for (let x = Math.floor(x0 / 260) * 260 + (r & 1 ? 130 : 0); x < x1; x += 260){ ctx.moveTo(x, y); ctx.lineTo(x, y + st); }
+    }
+    ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,.035)';
+    for (let y = Math.floor(y0 / (st * 2)) * st * 2; y < y1; y += st * 2) ctx.fillRect(x0, y, x1 - x0, st);
+  } else if (v.pat === 'checker' || v.pat === 'tiles'){
+    const st = v.pat === 'checker' ? 130 : 96; ctx.fillStyle = v.pat === 'checker' ? 'rgba(255,255,255,.07)' : 'rgba(255,255,255,.03)';
+    ctx.beginPath();
+    for (let j = Math.floor(y0 / st); j * st < y1; j++) for (let i = Math.floor(x0 / st); i * st < x1; i++) if ((i + j) & 1) ctx.rect(i * st, j * st, st, st);
+    ctx.fill();
+    if (v.pat === 'tiles'){ ctx.strokeStyle = 'rgba(0,0,0,.25)'; ctx.lineWidth = 2; ctx.beginPath(); for (let x = Math.floor(x0 / st) * st; x < x1; x += st){ ctx.moveTo(x, y0); ctx.lineTo(x, y1); } for (let y = Math.floor(y0 / st) * st; y < y1; y += st){ ctx.moveTo(x0, y); ctx.lineTo(x1, y); } ctx.stroke(); }
+  } else if (v.pat === 'asphalt'){
+    ctx.strokeStyle = 'rgba(255,244,230,.28)'; ctx.lineWidth = 7; ctx.setLineDash([60, 52]); ctx.beginPath();
+    for (let y = Math.floor(y0 / 700) * 700; y < y1; y += 700){ ctx.moveTo(x0, y); ctx.lineTo(x1, y); }
+    ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle = 'rgba(255,255,255,.05)'; ctx.beginPath();
+    for (let j = Math.floor(y0 / 90); j * 90 < y1; j++) for (let i = Math.floor(x0 / 90); i * 90 < x1; i++){ const h = hash2(i, j); if (h > .86){ ctx.moveTo(i * 90 + 18, j * 90); ctx.arc(i * 90, j * 90, 18, 0, TAU); } }
+    ctx.fill();
+  } else if (v.pat === 'cobble'){
+    ctx.strokeStyle = 'rgba(0,0,0,.28)'; ctx.lineWidth = 2.4; ctx.beginPath();
+    const w = 64, h = 46;
+    for (let j = Math.floor(y0 / h); j * h < y1; j++) for (let i = Math.floor(x0 / w); i * w < x1; i++){ const ox = (j & 1) ? w / 2 : 0; ctx.rect(i * w + ox + 3, j * h + 3, w - 6, h - 6); }
+    ctx.stroke();
+  } else if (v.pat === 'grass'){
+    const st = 200; ctx.fillStyle = 'rgba(255,255,255,.045)'; ctx.beginPath();
+    for (let i = Math.floor(x0 / st); i * st < x1; i++) if (i & 1) ctx.rect(i * st, y0, st, y1 - y0);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(20,70,30,.5)'; ctx.lineWidth = 2.2; ctx.beginPath();
+    for (let j = Math.floor(y0 / 70); j * 70 < y1; j++) for (let i = Math.floor(x0 / 70); i * 70 < x1; i++){ const h = hash2(i, j + 900); if (h > .55){ const x = i * 70 + h * 50, y = j * 70 + hash2(j, i) * 50; ctx.moveTo(x - 4, y); ctx.lineTo(x, y - 8); ctx.lineTo(x + 4, y); } }
+    ctx.stroke();
+  } else if (v.pat === 'gloss'){
+    ctx.fillStyle = 'rgba(255,255,255,.10)'; ctx.beginPath();
+    const st = 260;
+    for (let k = Math.floor((x0 + y0) / st); k * st < x1 + y1; k += 2){ ctx.moveTo(k * st, y0); ctx.lineTo(k * st + st * .5, y0); ctx.lineTo(k * st + st * .5 - (y1 - y0), y1); ctx.lineTo(k * st - (y1 - y0), y1); ctx.closePath(); }
+    ctx.fill();
+  }
+}
+
 // ------------------------------------------- menu: the duo and the portraits
 function drawDuo(){
   if (HEADLESS || G.state !== 'menu') return;
@@ -2897,8 +3088,8 @@ function syncUI(){
   else if (G.state === 'over') renderOver();
 }
 function kitText(){
-  const w = P.weapons.map(x => def(x.id).ic + ' ' + def(x.id).nm + ' Lv' + x.lvl).join(' · ');
-  const p = Object.keys(P.pas).map(k => PASSIVES[k].ic + ' ' + PASSIVES[k].nm + ' Lv' + P.pas[k]).join(' · ');
+  const w = P.weapons.map(x => ico(def(x.id).ic, 18) + ' ' + def(x.id).nm + ' Lv' + x.lvl).join(' · ');
+  const p = Object.keys(P.pas).map(k => ico(PASSIVES[k].ic, 18) + ' ' + PASSIVES[k].nm + ' Lv' + P.pas[k]).join(' · ');
   return w + (p ? '<br>' + p : '');
 }
 function renderDiffs(){
@@ -2908,7 +3099,7 @@ function renderDiffs(){
   for (const d of DIFFS){
     const el = document.createElement('div');
     el.className = 'diff' + (curDiff().id === d.id ? ' sel' : '');
-    el.innerHTML = '<div class="nm">' + d.ic + ' ' + d.nm + '</div><div class="ds">' + d.ds + '</div>';
+    el.innerHTML = '<div class="nm">' + ico(d.ic, 20) + ' ' + d.nm + '</div><div class="ds">' + d.ds + '</div>';
     el.onclick = () => { meta.diff = d.id; saveMeta(); renderDiffs(); sfx('orb'); };
     host.appendChild(el);
   }
@@ -2918,10 +3109,10 @@ function renderBest(){
   const b = meta.bestStage || 0;
   $('best').innerHTML = meta.runs
     ? 'Best run: <b style="color:var(--lime)">Stage ' + Math.max(1, b) + '/' + STAGES.length + '</b>' +
-      ' &nbsp;·&nbsp; level ' + meta.bestLvl + ' &nbsp;·&nbsp; ' + fmtN(meta.kills) + ' purged' +
-      (meta.wins ? ' &nbsp;·&nbsp; <b style="color:var(--amber)">' + meta.wins + ' dish' + (meta.wins > 1 ? 'es' : '') + ' dominated</b>' : '') +
-      ' &nbsp;·&nbsp; 🧬 ' + fmtN(meta.dna) + ' banked'
-    : 'First culture. Clear stage 1 and the dish opens up.';
+      ' &nbsp;·&nbsp; level ' + meta.bestLvl + ' &nbsp;·&nbsp; ' + fmtN(meta.kills) + ' silenced' +
+      (meta.wins ? ' &nbsp;·&nbsp; <b style="color:var(--amber)">Soundlands unmuted ' + meta.wins + '×</b>' : '') +
+      ' &nbsp;·&nbsp; ' + ico('note', 16) + ' ' + fmtN(meta.dna) + ' banked'
+    : 'First show. Clear the Soundcheck and the tour opens up.';
 }
 function renderSpecies(){
   const host = $('species');
@@ -2930,9 +3121,9 @@ function renderSpecies(){
     const ok = specUnlocked(s);
     const el = document.createElement('div');
     el.className = 'spec' + (meta.spec === s.id ? ' sel' : '') + (ok ? '' : ' lock');
-    el.innerHTML = '<div class="nm">' + (ok ? s.ic : '🔒') + ' ' + s.nm + '</div>' +
+    el.innerHTML = '<div class="nm">' + ico(ok ? s.ic : 'lock', 22) + ' ' + s.nm + '</div>' +
       '<div class="ds">' + s.ds + '</div>' +
-      '<div class="pk">' + (ok ? 'Starts with ' + WEAPONS[s.start].ic + ' ' + WEAPONS[s.start].nm : s.condTxt) + '</div>';
+      '<div class="pk">' + (ok ? 'Starts with ' + ico(WEAPONS[s.start].ic, 16) + ' ' + WEAPONS[s.start].nm : s.condTxt) + '</div>';
     if (ok) el.onclick = () => { meta.spec = s.id; saveMeta(); renderSpecies(); sfx('orb'); };
     host.appendChild(el);
   }
@@ -2947,7 +3138,7 @@ function renderCards(){
     el.style.animationDelay = (i * .05) + 's';
     el.innerHTML = '<div class="rar"></div>' + (c.rar ? '<div class="tag">×' + (1 + c.rar) + '</div>' : '') +
       (c.t === 'evo' ? '<div class="tag">EVOLVE</div>' : '') +
-      '<div class="ic">' + c.ic + '</div><div class="nm">' + c.nm + '</div>' +
+      '<div class="ic">' + ico(c.ic, 42) + '</div><div class="nm">' + c.nm + '</div>' +
       '<div class="lv">' + c.lv + '</div><div class="ds">' + c.ds + '</div>';
     el.onclick = () => { if (banishMode){ banishMode = false; banish(i); } else { choose(i); sfx('chest'); } };
     host.appendChild(el);
@@ -2961,21 +3152,21 @@ function renderCards(){
 let banishMode = false;
 function renderClear(){
   const st = STAGES[Math.min(G.stage, STAGES.length - 1)];
-  $('clearnm').textContent = 'Stage ' + (G.stage + 1) + ' — ' + st.nm;
-  $('clearsub').innerHTML = '🧬 +' + fmtN(G.stageDna) + ' DNA banked &nbsp;·&nbsp; ☠ ' + fmtN(G.stageKills) +
-    ' purged &nbsp;·&nbsp; ⏱ ' + fmtT(G.t) + ' total<br>Take one reward and push on.';
+  $('clearnm').textContent = 'Stage ' + (G.stage + 1) + ' · ' + st.nm;
+  $('clearsub').innerHTML = '<i>' + (st.done || '') + '</i><br>' + ico('note', 16) + ' +' + fmtN(G.stageDna) + ' applause &nbsp;·&nbsp; ' + ico('critter', 16) + ' ' + fmtN(G.stageKills) +
+    ' silenced &nbsp;·&nbsp; ' + fmtT(G.t) + ' total<br>Take one reward and push on.';
   const nx = STAGES[G.stage + 1];
   $('nextline').innerHTML = nx
     ? 'Next: <b style="color:var(--ink);margin:0 6px">Stage ' + (G.stage + 2) + ' · ' + nx.nm + '</b> — ' + objText(nx) +
-      (nx.mod ? ' &nbsp;' + MODS[nx.mod].ic + ' ' + MODS[nx.mod].nm : '')
-    : 'Next: the run is yours to finish.';
+      (nx.mod ? ' &nbsp;' + ico(MODS[nx.mod].ic, 18) + ' ' + MODS[nx.mod].nm : '')
+    : 'Next: the encore is yours.';
   const host = $('rewards');
   host.innerHTML = '';
   G.rewards.forEach((r, i) => {
     const el = document.createElement('div');
     el.className = 'card r1';
     el.style.animationDelay = (i * .06) + 's';
-    el.innerHTML = '<div class="rar"></div><div class="ic">' + r.ic + '</div><div class="nm">' + r.nm +
+    el.innerHTML = '<div class="rar"></div><div class="ic">' + ico(r.ic, 42) + '</div><div class="nm">' + r.nm +
       '</div><div class="lv">Stage reward</div><div class="ds">' + r.ds + '</div>';
     el.onclick = () => { takeReward(i); sfx('chest'); };
     host.appendChild(el);
@@ -2983,7 +3174,7 @@ function renderClear(){
 }
 function renderLab(){
   if (HEADLESS) return;
-  $('dnaval').textContent = '🧬 ' + fmtN(meta.dna);
+  $('dnaval').innerHTML = ico('note', 24) + ' ' + fmtN(meta.dna);
   const host = $('ups');
   host.innerHTML = '';
   for (const u of META_UPS){
@@ -2992,9 +3183,9 @@ function renderLab(){
     el.className = 'up' + (maxed ? ' max' : poor ? ' poor' : '');
     let pips = '';
     for (let i = 0; i < u.max; i++) pips += '<span class="pip' + (i < l ? ' on' : '') + '"></span>';
-    el.innerHTML = '<div class="ic">' + u.ic + '</div>' +
+    el.innerHTML = '<div class="ic">' + ico(u.ic, 24) + '</div>' +
       '<div><div class="nm">' + u.nm + '</div><div class="ds">' + u.ds + '</div><div class="pips">' + pips + '</div></div>' +
-      '<div class="cost">' + (maxed ? 'MAX' : '🧬 ' + cost) + '</div>';
+      '<div class="cost">' + (maxed ? 'MAX' : ico('note', 16) + ' ' + cost) + '</div>';
     if (!maxed) el.onclick = () => { if (buyUp(u.id)){ sfx('level'); renderLab(); } else { sfx('dash'); } };
     host.appendChild(el);
   }
@@ -3003,13 +3194,15 @@ function renderOver(){
   if (HEADLESS) return;
   show('over');
   $('over').className = 'screen on ' + (G.won ? 'win' : 'lose');
-  $('overttl').textContent = G.won ? 'CULTURE DOMINATED' : 'CULTURE COLLAPSED';
+  $('overttl').textContent = G.won ? 'THE SOUNDLANDS ARE UNMUTED' : 'THE SET WENT QUIET';
+  $('overtale').textContent = G.won ? 'The Gloss is out-sung and every venue rings again. RoxorLoops and Jasmin take a very deep bow.'
+    : 'The critters muffled the room, but a soap bubble always bounces back. One more show?';
   $('rTime').textContent = fmtT(G.t);
   $('rStage').textContent = G.won ? '12/12' : (G.stage + 1) + '/' + STAGES.length;
   $('rLvl').textContent = P.lvl;
   $('rKills').textContent = fmtN(G.kills);
   $('rDna').textContent = '+' + fmtN(G.earned || 0);
-  $('unlocked').textContent = G.unlocked.length ? '🔓 Unlocked: ' + G.unlocked.join(', ') : '';
+  $('unlocked').textContent = G.unlocked.length ? 'New style unlocked: ' + G.unlocked.join(', ') : '';
 }
 let kitSig = '';
 function hudTick(){
@@ -3021,7 +3214,7 @@ function hudTick(){
   $('dna').textContent = fmtN(G.dna);
   const st = STAGES[Math.min(G.stage, STAGES.length - 1)];
   $('objname').textContent = 'Stage ' + (G.stage + 1) + '/' + STAGES.length + ' · ' + st.nm +
-    (st.mod ? ' ' + MODS[st.mod].ic : '');
+    (st.mod ? ' · ' + MODS[st.mod].nm : '');
   $('objval').textContent = objLabel();
   $('objfill').style.width = (objProgress() * 100).toFixed(1) + '%';
   const bw = $('bosswrap');
@@ -3035,9 +3228,9 @@ function hudTick(){
     kitSig = sig;
     let html = '';
     for (const w of P.weapons)
-      html += '<div class="kitico' + (def(w.id).evolved ? ' evo' : '') + '">' + def(w.id).ic + '<i>' + w.lvl + '</i></div>';
+      html += '<div class="kitico' + (def(w.id).evolved ? ' evo' : '') + '">' + ico(def(w.id).ic, 22) + '<i>' + w.lvl + '</i></div>';
     for (const k in P.pas)
-      html += '<div class="kitico pas">' + PASSIVES[k].ic + '<i>' + P.pas[k] + '</i></div>';
+      html += '<div class="kitico pas">' + ico(PASSIVES[k].ic, 22) + '<i>' + P.pas[k] + '</i></div>';
     $('kit').innerHTML = html;
   }
   const dashK = clamp(P.dashCd / Math.max(.01, P.s.dashCd), 0, 1);
@@ -3100,13 +3293,13 @@ function bindInput(){
   $('play').onclick = () => { audio(); startRun(meta.spec); syncUI(); };
   $('tolab').onclick = () => { show('lab'); renderLab(); };
   $('labback').onclick = () => { show(G.state === 'over' ? 'over' : 'menu'); if (G.state === 'over') renderOver(); };
-  $('wipe').onclick = () => { if (confirm('Erase all lab progress and DNA?')){ meta = freshMeta(); saveMeta(); renderLab(); renderHeroes(); renderSpecies(); } };
-  $('mute').onclick = () => { meta.mute = meta.mute ? 0 : 1; saveMeta(); if (master) master.gain.value = meta.mute ? 0 : .26; $('mute').textContent = meta.mute ? '🔇' : '🔊'; };
+  $('wipe').onclick = () => { if (confirm('Erase all rehearsal progress and applause?')){ meta = freshMeta(); saveMeta(); renderLab(); renderHeroes(); renderSpecies(); } };
+  $('mute').onclick = () => { meta.mute = meta.mute ? 0 : 1; saveMeta(); if (master) master.gain.value = meta.mute ? 0 : .26; syncMute(); };
   const syncShake = () => { $('shakebtn').textContent = shakeLabel(); $('pshake').textContent = shakeLabel(); };
   $('shakebtn').onclick = () => { cycleShake(); syncShake(); sfx('orb'); };
   $('pshake').onclick = () => { cycleShake(); syncShake(); };
   syncShake();
-  $('pmute').onclick = () => { $('mute').onclick(); $('pmute').textContent = meta.mute ? '🔇' : '🔊'; };
+  $('pmute').onclick = () => { $('mute').onclick(); };
   $('resume').onclick = togglePause;
   $('quit').onclick = () => { endRun(false); };
   $('reroll').onclick = () => { reroll(); sfx('dash'); };
@@ -3115,8 +3308,9 @@ function bindInput(){
   $('again').onclick = () => { startRun(meta.spec); syncUI(); };
   $('tomenu').onclick = () => { G.state = 'menu'; P = makePlayer(SPECIES.find(s => s.id === meta.spec) || SPECIES[0]); recalc(false); syncUI(); };
   $('tolab2').onclick = () => { show('lab'); renderLab(); };
-  $('mute').textContent = meta.mute ? '🔇' : '🔊';
+  syncMute();
 }
+function syncMute(){ const h = ico(meta.mute ? 'mute' : 'vol', 22); $('mute').innerHTML = h; $('pmute').innerHTML = h; }
 function togglePause(){
   if (G.state === 'play'){ G.state = 'pause'; syncUI(); }
   else if (G.state === 'pause'){ G.state = 'play'; syncUI(); }
@@ -3143,6 +3337,7 @@ recalc(false);
 if (!HEADLESS){
   fit();
   bindInput();
+  hydrateIcons();
   renderHeroes();
   renderSpecies();
   renderDiffs();
@@ -3178,6 +3373,7 @@ window.CS = {
   hudTick, syncUI, show, toast, sfx, SAVE_KEY,
   shake, shakeAmt, cycleShake, shakeLabel, SHAKE_CAP, SHAKE_STEPS,
   HEROES, heroDef, heroPose, renderHeroes, frnd,
+  ico, ICON_FN, VENUES, iconURL,
   get heroArt(){ return !!HERO_ART && !heroBroken; },
   get heroIds(){ return HERO_ART ? HERO_ART.ids : null; },
 };

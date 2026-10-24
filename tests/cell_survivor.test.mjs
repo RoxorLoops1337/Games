@@ -755,6 +755,24 @@ t.ok(true, 'draw survives a fully populated field');
   t.ok(f1 >= 0 && f1 < 1 && f1 !== f2, 'the art-only rng is a separate stream');
   t.ok(CS.heroArt === false, 'without the cast kit the hero falls back to a plain face (no crash)');
 }
+// ---------------------------------------------------------------- the RoxorLoops & Jasmin world
+{
+  const base = k => k.replace(/\+$/, '');
+  const keys = [];
+  for (const o of [CS.WEAPONS, CS.PASSIVES]) for (const id in o) keys.push(o[id].ic);
+  for (const o of [CS.SPECIES, CS.META_UPS, CS.REWARDS, CS.DIFFS, Object.values(CS.MODS)]) for (const x of o) keys.push(x.ic);
+  t.ok(keys.every(k => typeof k === 'string' && CS.ICON_FN[base(k)]), 'every item icon is a drawn glyph (no emoji)');
+  t.ok(CS.STAGES.length === CS.VENUES.length, 'every stage has its own venue');
+  t.ok(CS.STAGES.every(s => s.tale && s.done), 'every stage tells its bit of the story');
+  const words = /pathogen|organelle|membrane|biomass|mutation|petri|dish|DNA|culture|infect/i;
+  const names = [];
+  for (const o of [CS.WEAPONS, CS.PASSIVES]) for (const id in o) names.push(o[id].nm, o[id].ds);
+  for (const x of [...CS.SPECIES, ...CS.META_UPS, ...CS.REWARDS, ...CS.DIFFS, ...CS.ENEMIES, ...CS.BOSSES, ...CS.STAGES]) names.push(x.nm, x.ds || '');
+  t.ok(!names.some(n => words.test(n)), 'no petri dish vocabulary is left in the names and descriptions');
+  t.ok(CS.BOSSES[3].nm === 'The Gloss' && CS.STAGES[11].last, 'the last boss is The Gloss');
+  const g0 = CS.G.stage; for (let i = 0; i < CS.STAGES.length; i++){ CS.G.stage = i; CS.draw(); } CS.G.stage = g0;
+  t.ok(true, 'every venue draws');
+}
 {
   // the same run with the real cast kit loaded
   const S2 = {};
