@@ -11,9 +11,10 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import vm from 'node:vm';
 import { harness } from './no_room_for_heroes_lib.mjs';
 
-function loadGame(store){
+function loadGame(store, withArt){
   const here = dirname(fileURLToPath(import.meta.url));
   const html = readFileSync(join(here, '..', 'cell_survivor', 'index.html'), 'utf8');
   const code = html.match(/<script>([\s\S]*)<\/script>/)[1];
@@ -53,6 +54,10 @@ function loadGame(store){
     set(t, k, v){ t[k] = v; return true; },
   });
   global.__CS_HEADLESS__ = true;
+  if (withArt){ // the Hocus Vocus cast kit, loaded as classic scripts like the page does
+    for (const f of ['util', 'shim', 'art', 'art_cast_kit', 'art_cast'])
+      vm.runInThisContext(readFileSync(join(here, '..', 'cell_survivor', 'hv', f + '.js'), 'utf8'), { filename: f + '.js' });
+  }
 
   eval('(function(){' + code + '\n})()');
   return globalThis.CS;
@@ -728,5 +733,73 @@ function clk(sec){ return Math.floor(sec / 60) + ':' + String(Math.floor(sec % 6
 }
 CS.draw();
 t.ok(true, 'draw survives a fully populated field');
+
+// ---------------------------------------------------------------- the duo (cosmetic art)
+{
+  t.ok(CS.HEROES.length === 4 && CS.HEROES.every(h => CS.HEROES.some(m => m.id === h.mate && m.mate === h.id)),
+    'four costumes, and every costume has its duet partner (mutual)');
+  t.ok(CS.meta.hero === 'roxor', 'RoxorLoops is the default hero');
+  store[CS.SAVE_KEY] = JSON.stringify({ hero: 'nobody' }); CS.loadMeta();
+  t.ok(CS.meta.hero === 'roxor', 'an unknown hero in the save falls back to RoxorLoops');
+  store[CS.SAVE_KEY] = JSON.stringify({ hero: 'jasmin_unicorn' }); CS.loadMeta();
+  t.ok(CS.meta.hero === 'jasmin_unicorn', 'a valid hero survives the save round trip');
+  CS.meta.hero = 'jasmin'; CS.saveMeta(); CS.loadMeta();
+  t.ok(CS.meta.hero === 'jasmin', 'picking a hero is saved');
+
+  // the art never touches the seeded simulation stream (replays stay replayable)
+  G.cam.sh = 0;                                  // camera shake (pre-existing) is the one draw-time rng user
+  CS.reseed(77); const a = [CS.rnd(), CS.rnd(), CS.rnd()];
+  CS.reseed(77); CS.draw(); CS.renderHeroes(); const b = [CS.rnd(), CS.rnd(), CS.rnd()];
+  t.ok(a.join() === b.join(), 'drawing and picker rendering do not consume the sim rng');
+  const f1 = CS.frnd(), f2 = CS.frnd();
+  t.ok(f1 >= 0 && f1 < 1 && f1 !== f2, 'the art-only rng is a separate stream');
+  t.ok(CS.heroArt === false, 'without the cast kit the hero falls back to a plain face (no crash)');
+}
+// ---------------------------------------------------------------- the RoxorLoops & Jasmin world
+{
+  const base = k => k.replace(/\+$/, '');
+  const keys = [];
+  for (const o of [CS.WEAPONS, CS.PASSIVES]) for (const id in o) keys.push(o[id].ic);
+  for (const o of [CS.SPECIES, CS.META_UPS, CS.REWARDS, CS.DIFFS, Object.values(CS.MODS)]) for (const x of o) keys.push(x.ic);
+  t.ok(keys.every(k => typeof k === 'string' && CS.ICON_FN[base(k)]), 'every item icon is a drawn glyph (no emoji)');
+  t.ok(CS.STAGES.length === CS.VENUES.length, 'every stage has its own venue');
+  t.ok(CS.STAGES.every(s => s.tale && s.done), 'every stage tells its bit of the story');
+  const words = /pathogen|organelle|membrane|biomass|mutation|petri|dish|DNA|culture|infect/i;
+  const names = [];
+  for (const o of [CS.WEAPONS, CS.PASSIVES]) for (const id in o) names.push(o[id].nm, o[id].ds);
+  for (const x of [...CS.SPECIES, ...CS.META_UPS, ...CS.REWARDS, ...CS.DIFFS, ...CS.ENEMIES, ...CS.BOSSES, ...CS.STAGES]) names.push(x.nm, x.ds || '');
+  t.ok(!names.some(n => words.test(n)), 'no petri dish vocabulary is left in the names and descriptions');
+  t.ok(CS.BOSSES[3].nm === 'The Gloss' && CS.STAGES[11].last, 'the last boss is The Gloss');
+  const g0 = CS.G.stage; for (let i = 0; i < CS.STAGES.length; i++){ CS.G.stage = i; CS.draw(); } CS.G.stage = g0;
+  t.ok(true, 'every venue draws');
+}
+{
+  // the same run with the real cast kit loaded
+  const S2 = {};
+  const CA = loadGame(S2, true);
+  t.ok(CA.heroArt === true, 'with the cast kit loaded the duo is drawn by ART.rj');
+  t.ok(CA.HEROES.every(h => CA.heroIds.includes(h.id) && CA.heroIds.includes(h.mate)), 'every costume and partner exists in the cast kit');
+  CA.startRun('amoeba', 5);
+  const g = CA.G;
+  CA.draw();
+  for (const pose of ['idle', 'walk', 'sing', 'hurt', 'cheer']){
+    if (pose === 'walk'){ CA.P.vx = 120; CA.P.vy = 0; } else { CA.P.vx = CA.P.vy = 0; }
+    CA.P.hurtT = pose === 'hurt' ? .3 : 0; CA.P.singT = pose === 'sing' ? .3 : 0; CA.P.ultT = pose === 'cheer' ? .5 : 0;
+    t.ok(CA.heroPose() === pose, 'the hero is posed "' + pose + '" when it should be');
+    CA.draw();
+  }
+  CA.P.hurtT = 0; CA.P.singT = 0; CA.P.ultT = 0; CA.P.vx = 0;
+  CA.P.ult = CA.C.ULT_MAX; CA.tryUlt();
+  t.ok(g.clones.length > 0, 'the duet summons the partner');
+  for (let i = 0; i < 90; i++){ CA.update(1 / 60); if (i % 30 === 0) CA.draw(); }
+  for (const h of CA.HEROES){ CA.meta.hero = h.id; CA.draw(); CA.renderHeroes(); }
+  t.ok(CA.heroArt === true, 'drawing every costume and the duet partners never breaks the cast kit');
+  for (const k of ['cocci', 'bacil', 'virion', 'sac', 'phage', 'swarm', 'leech', 'blob', 'prion', 'macro']) CA.spawnEnemy(k, CA.P.x + 90, CA.P.y);
+  CA.spawnBoss(0); CA.spawnBoss(1); CA.spawnBoss(2); CA.spawnBoss(3);
+  g.en[0].frozen = 2; g.en[1].inf = { t: 2 }; g.en[2].mark = 1; g.en[3].elite = 1; g.en[4].tele = 1; g.en[5].flash = .1;
+  for (const o of ['xp', 'dna', 'hp', 'magnet', 'nuke', 'chest']) CA.dropOrb(CA.P.x + 30, CA.P.y + 30, o, 2);
+  CA.draw();
+  t.ok(true, 'every germ, every boss, every pickup and every status draws');
+}
 
 t.done();
