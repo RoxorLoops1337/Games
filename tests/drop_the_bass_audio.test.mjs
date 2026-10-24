@@ -174,7 +174,7 @@ for (const id of TRACK_IDS) {
 // 10. source hygiene
 import { readFileSync } from 'node:fs';
 const src = readFileSync(new URL('../drop_the_bass/js/audio.js', import.meta.url), 'utf8');
-assert.ok(!src.includes('—'), 'no em dash');
+assert.ok(!src.includes(String.fromCharCode(8212)), 'no em dash');
 assert.ok(!/Math\.random|Date\.now/.test(src), 'no unseeded randomness or clock');
 
 AudioFx._reset();

@@ -48,6 +48,8 @@ export function genWave(world, w, seed, o = {}) {
     groups.push({ type, count, gap, delay });
     delay += count * gap + 1.2;
   }
+  const tot = groups.reduce((a, g) => a + g.count, 0);
+  if (tot > 80) { const k = 80 / tot; delay = 0.6; for (const g of groups) { g.count = Math.max(2, Math.floor(g.count * k)); g.delay = delay; delay += g.count * g.gap + 1.2; } }
   let boss = null, bossScale = 1;
   if (bossWave) {
     if (endless) { const ids = ['compressor', 'noisegate', 'reverb', 'djglitch', 'playback']; boss = ids[(Math.floor(w / 10) - 1) % ids.length]; bossScale = 1 + 0.35 * Math.floor((w - 1) / 50); }
@@ -116,7 +118,7 @@ export class Run {
     this.grid = new Map();    // slot idx -> turret
     this.uid = 1;
     this.events = [];
-    this.hype = 0; this.level = 1; this.hypeNeed = ECON.hypeBase;
+    this.hype = 0; this.level = 1; this.hypeNeed = opts.hypeNeed || ECON.hypeBase;
     this.combo = 0; this.comboT = 0; this.bestCombo = 0;
     this.kills = 0; this.leaks = 0; this.merges = 0; this.bossKills = 0; this.coinsEarned = 0; this.runGems = 0;
     this.healCount = 0; this.heroUses = 0; this.perfects = 0; this.duets = 0; this.remixCount = 0; this.maxLevelSeen = 1; this.bossTypes = [];
@@ -368,7 +370,7 @@ export class Run {
     if (this.phase === 'won' || this.phase === 'lost' || this.choice) return false;
     if (this.phase === 'wave' && this.spawnQ.length) return false;
     if (!this.endless && this.wave >= this.wavesTotal) return false;
-    if (early && this.phase === 'prep') this.addCoins(Math.round(Math.max(0, this.prepT) * ECON.earlyBonusPerSec), null, null, true);
+    if (early && this.phase === 'prep') this.addCoins(Math.round(Math.min(ECON.prepSeconds, Math.max(0, this.prepT)) * ECON.earlyBonusPerSec), null, null, true);
     else if (early && this.phase === 'wave') this.addCoins(8 + this.wave * 2, null, null, true);
     this.wave++;
     const spec = this.upcoming(this.wave);

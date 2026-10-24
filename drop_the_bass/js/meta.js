@@ -443,7 +443,7 @@ export function applyRunResult(p, result, rng, now = 0) {
   dp.bestCombo = Math.max(dp.bestCombo || 0, result.bestCombo); dp.maxLevel = Math.max(dp.maxLevel || 0, result.maxLevel || 0);
   // bosses seen for the first time
   for (const b of result.bossTypes || []) if (!p.bossesSeen[b]) { p.bossesSeen[b] = true; out.firstBosses.push(b); out.diamonds += 8; }
-  if (result.mode === 'story' || result.mode === 'tutorial') {
+  if (result.mode === 'story') {
     pr.bestWave = Math.max(pr.bestWave, result.cleared);
     if (result.won) {
       S.wins++;

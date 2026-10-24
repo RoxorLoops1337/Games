@@ -74,6 +74,7 @@ const GAME_SUITES = {
   blockmates: ['test:blockmates'],
   rustgrift: ['test:rustgrift'],
   midnight_mog: ['test:midnightmog'],
+  drop_the_bass: ['test:dropbass'],
 };
 
 // Folders the site serves that have no test suite: a change there only needs

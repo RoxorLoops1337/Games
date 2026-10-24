@@ -91,6 +91,7 @@ const STATIC_PATHS = [
   'blockmates',
   'rustgrift',
   'midnight_mog',
+  'drop_the_bass',
   'tools',
 ];
 
