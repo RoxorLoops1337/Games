@@ -26,9 +26,12 @@ drop_the_bass/
     art_world.js       heroes, Loopy, backdrops, board tiles, stage base, cutscene scenes, title scene, logo
     fx.js              particles, floaters, screen shake
     battle.js          canvas battle view + input (uses sim.js and the art modules)
-    cutscene.js        canvas cutscene player
-    ui.js              DOM screens (hub, studio, band, crates, goals, codex, settings, remix pick, results)
-    main.js            shell, loop, router, save hooks
+    cutscene.js        cutscene player (canvas scene + DOM dialogue box)
+    ui_core.js         DOM helpers, canvas icons, live canvases, modal, toast
+    ui_hub.js          hub tabs (Tour, Studio, Band, Crates, Goals), codex, settings, lucky wheel, leaderboard modal
+    ui_run.js          remix/relic pick, pause, hints, defeat, results, how to play
+    lb.js              leaderboard client (functions/api/dropbass_board.js, KV binding BOARD, keys prefixed dtb:)
+    main.js            shell, loop, router, save hooks, run resume (snapshot in profile.resume)
 tests/drop_the_bass_*.test.mjs   headless suites; `npm run test:dropbass` runs them all
 ```
 
@@ -104,3 +107,14 @@ victory_stage credits_van (ending), defeat_quiet (all lights down, Loopy glows).
 Every module gets a headless suite in tests/ (node, no browser needed; browser-only checks use a mock ctx Proxy). Visual checks use
 Playwright Chromium (`require('playwright')` works; never run `playwright install`): render a lab page or a data URL, screenshot to the
 scratchpad, LOOK at it (Read the png), fix, repeat. Lab pages live in `drop_the_bass/lab/` (plain html importing ../js/*.js).
+
+## Game design in one page
+- Core loop: DROP a random turret from your pool (cost grows per drop), merge two of the same level (drag or tap), every level doubles power up to 7.
+  Kills give coins and hype. Hype fills: pick a Remix card (47, stackable). Bosses and wave 5/15 chests: Merch relics (24, unique).
+- Twists: wave modifiers (10), elites (5 affixes), 5 bosses with tricks, beat-synced drops (discount), kill combos, hero moves + Duet Finale.
+- Modes: Story (5 stages x 20 waves, Encore 0 to 5), Endless (leaderboards), Daily Challenge (8 mods), Boss Rush (10 bosses), tutorial.
+- Meta: Records (Studio upgrades, turret unlocks, hero levels, gear upgrades), Diamonds (crates, boosters, revive, outfits, auto-merge; earned only),
+  Fans (Fame level), gear (30 templates, 3 sets, merge 3 into next rarity, pity timer), daily login, 3 daily quests, 39 stickers, star chests,
+  offline Streaming Royalties, lucky wheel, boosters.
+- Tests: `npm run test:dropbass` (data, sim, meta, battle view headless, balance bot, board function, audio, art, browser smoke when Playwright exists).
+- Balance: tests/drop_the_bass_balance.test.mjs prints the bot win-rate table. Stage difficulty is set by WORLDS[].hpMul/coinMul and ECON.hpGrowth.
