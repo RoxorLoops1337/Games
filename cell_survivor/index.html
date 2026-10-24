@@ -3,179 +3,206 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="theme-color" content="#04070d">
-<title>Cytosis — Cell Survivor</title>
+<meta name="theme-color" content="#0d0b1e">
+<title>Cytosis: Cell Survivor</title>
 <style>
   :root{
-    --bg:#04070d; --ink:#dff6ff; --dim:#7e97ad;
-    --cyan:#39f0ff; --lime:#9dff6d; --mag:#ff4dd2; --amber:#ffcf4d; --red:#ff4d6d;
-    --glass:rgba(12,26,38,.78); --line:rgba(57,240,255,.22);
+    --bg:#0d0b1e; --ink:#fff4e6; --dim:#c9b9ec; --brown:#2d170f;
+    --cyan:#ff7eb6; --lime:#5fe38a; --mag:#a77bff; --amber:#ffd84d; --red:#ff5a6e; --green:#3fcf6a;
+    --glass:rgba(38,27,88,.94); --line:#2d170f;
+    --font:"Arial Rounded MT Bold","Nunito","Quicksand","Varela Round","Trebuchet MS",Arial,"Liberation Sans",system-ui,sans-serif;
   }
   *{box-sizing:border-box; -webkit-tap-highlight-color:transparent}
   html,body{margin:0;padding:0;height:100%;overflow:hidden;background:var(--bg);color:var(--ink);
-    font-family:"Segoe UI",system-ui,-apple-system,Roboto,Helvetica,Arial,sans-serif;
+    font-family:var(--font);
     touch-action:none;-webkit-user-select:none;user-select:none;overscroll-behavior:none}
   canvas{display:block;position:fixed;inset:0;width:100%;height:100%}
+  .gi{display:inline-block;vertical-align:middle;width:1.2em;height:1.2em;object-fit:contain;pointer-events:none}
+  .card .ic .gi{width:42px;height:42px} .up .ic .gi{width:24px;height:24px} .kitico .gi{width:22px;height:22px} .ab .ic .gi{width:30px;height:30px}
+  .tale{margin:0 auto 12px;font-size:12.5px;color:#e6dcff} .clearsub i{color:#fff4e6}
   .mono{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-variant-numeric:tabular-nums}
+  /* a chunky warm-brown outline on loose text, the house look */
+  .out{text-shadow:0 2px 0 var(--brown),0 -1px 0 var(--brown),1px 0 0 var(--brown),-1px 0 0 var(--brown),1px 2px 0 var(--brown),-1px 2px 0 var(--brown)}
 
   /* ---------------------------------------------------------------- HUD */
   #hud{position:fixed;inset:0;pointer-events:none;opacity:0;transition:opacity .25s;
     padding:calc(8px + env(safe-area-inset-top)) 10px 10px}
   #hud.on{opacity:1}
-  #xpwrap{height:9px;border-radius:9px;background:rgba(255,255,255,.07);
-    box-shadow:inset 0 0 0 1px rgba(57,240,255,.25);overflow:hidden}
-  #xpbar{height:100%;width:0%;border-radius:9px;transition:width .12s linear;
-    background:linear-gradient(90deg,#1ad9ff,#9dff6d);box-shadow:0 0 14px rgba(57,240,255,.85)}
+  #xpwrap{height:13px;border-radius:13px;background:#241a55;border:2.5px solid var(--brown);
+    box-shadow:inset 0 0 0 1.5px rgba(255,244,230,.22);overflow:hidden}
+  #xpbar{height:100%;width:0%;border-radius:13px;transition:width .12s linear;
+    background:linear-gradient(90deg,#ff7eb6,#ffd84d 70%,#3fcf6a);border-right:2px solid var(--brown)}
   #topline{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:6px;padding-right:46px;
-    font-size:13px;letter-spacing:.06em;text-shadow:0 2px 10px #000}
-  #lvlchip{background:linear-gradient(180deg,rgba(57,240,255,.25),rgba(57,240,255,.06));
-    border:1px solid var(--line);border-radius:999px;padding:3px 10px;font-weight:700;font-size:12px}
-  #clock{font-size:26px;font-weight:800;letter-spacing:.04em;
-    text-shadow:0 0 18px rgba(57,240,255,.55),0 2px 6px #000}
-  #rstats{display:flex;gap:12px;font-size:12px;color:var(--dim)}
-  #rstats b{color:var(--ink);font-weight:700}
+    font-size:13px;letter-spacing:.04em}
+  #lvlchip{background:#ff7eb6;color:var(--brown);border:2.5px solid var(--brown);border-radius:999px;padding:2px 11px;
+    font-weight:900;font-size:12px;box-shadow:inset 0 0 0 1.5px #fff4e6,0 2px 0 var(--brown)}
+  #clock{font-size:28px;font-weight:900;letter-spacing:.03em;color:var(--ink);
+    text-shadow:0 3px 0 var(--brown),0 -2px 0 var(--brown),2px 0 0 var(--brown),-2px 0 0 var(--brown),2px 3px 0 var(--brown),-2px 3px 0 var(--brown)}
+  #rstats{display:flex;gap:12px;font-size:12px;color:var(--ink)}
+  #rstats b{color:var(--ink);font-weight:900}
+  #rstats span{background:rgba(38,27,88,.82);border:2px solid var(--brown);border-radius:999px;padding:1px 9px}
   #objwrap{margin:8px auto 0;max-width:min(520px,90vw)}
   #objline{display:flex;justify-content:space-between;align-items:baseline;gap:10px;font-size:11.5px;
-    letter-spacing:.12em;text-transform:uppercase;color:var(--dim);text-shadow:0 2px 8px #000}
-  #objname{color:var(--lime);font-weight:700}
+    letter-spacing:.1em;text-transform:uppercase;color:var(--ink)}
+  #objname{color:var(--lime);font-weight:900}
   #objval{font-family:ui-monospace,Menlo,monospace;color:var(--ink);font-weight:700}
-  #objbar{height:5px;border-radius:5px;background:rgba(255,255,255,.08);overflow:hidden;margin-top:3px;
-    box-shadow:inset 0 0 0 1px rgba(157,255,109,.25)}
-  #objfill{height:100%;width:0%;background:linear-gradient(90deg,#9dff6d,#ffcf4d);
-    box-shadow:0 0 12px rgba(157,255,109,.7);transition:width .18s}
+  #objline span{text-shadow:0 2px 0 var(--brown),1px 0 0 var(--brown),-1px 0 0 var(--brown),0 -1px 0 var(--brown)}
+  #objbar{height:8px;border-radius:8px;background:#241a55;border:2px solid var(--brown);overflow:hidden;margin-top:3px}
+  #objfill{height:100%;width:0%;background:linear-gradient(90deg,#3fcf6a,#c6ff3d);transition:width .18s}
   #bosswrap{margin:10px auto 0;max-width:min(560px,86vw);opacity:0;transition:opacity .3s}
   #bosswrap.on{opacity:1}
-  #bossname{font-size:11px;letter-spacing:.28em;text-align:center;color:var(--mag);margin-bottom:4px;
-    text-transform:uppercase;text-shadow:0 0 12px rgba(255,77,210,.7)}
-  #bossbar{height:8px;border-radius:8px;background:rgba(255,255,255,.08);overflow:hidden;
-    box-shadow:inset 0 0 0 1px rgba(255,77,210,.35)}
-  #bossfill{height:100%;width:100%;background:linear-gradient(90deg,#ff4dd2,#ff8a3d);
-    box-shadow:0 0 16px rgba(255,77,210,.8);transition:width .15s}
+  #bossname{font-size:12px;letter-spacing:.18em;text-align:center;color:#fff4e6;margin-bottom:4px;
+    text-transform:uppercase;text-shadow:0 2px 0 var(--brown),1px 0 0 var(--brown),-1px 0 0 var(--brown),0 -1px 0 var(--brown)}
+  #bossbar{height:13px;border-radius:13px;background:#241a55;border:2.5px solid var(--brown);overflow:hidden}
+  #bossfill{height:100%;width:100%;background:linear-gradient(90deg,#a77bff,#ff7eb6);transition:width .15s}
   #gear{position:fixed;top:calc(10px + env(safe-area-inset-top));right:10px;pointer-events:auto;
-    width:38px;height:38px;border-radius:12px;display:grid;place-items:center;font-size:17px;
-    background:var(--glass);border:1px solid var(--line);color:var(--ink);opacity:0;transition:opacity .25s}
-  #hud.on ~ #gear{opacity:.9}
-  #kit{position:fixed;left:10px;bottom:calc(12px + env(safe-area-inset-bottom));display:flex;gap:5px;flex-wrap:wrap;
+    width:40px;height:40px;border-radius:50%;display:grid;place-items:center;font-size:16px;
+    background:#fff4e6;border:2.5px solid var(--brown);color:var(--brown);box-shadow:0 3px 0 var(--brown);opacity:0;transition:opacity .25s}
+  #hud.on ~ #gear{opacity:1}
+  #kit{position:fixed;left:10px;bottom:calc(12px + env(safe-area-inset-bottom));display:flex;gap:6px;flex-wrap:wrap;
     max-width:56vw}
-  .kitico{width:30px;height:30px;border-radius:9px;display:grid;place-items:center;font-size:15px;position:relative;
-    background:rgba(8,20,30,.75);border:1px solid rgba(57,240,255,.2)}
-  .kitico.evo{border-color:var(--amber);box-shadow:0 0 12px rgba(255,207,77,.45)}
-  .kitico i{position:absolute;right:-2px;bottom:-3px;font-style:normal;font-size:9px;font-weight:800;
-    color:#04070d;background:var(--cyan);border-radius:5px;padding:0 3px;line-height:12px}
+  .kitico{width:32px;height:32px;border-radius:50%;display:grid;place-items:center;font-size:16px;position:relative;
+    background:#fff4e6;border:2.5px solid var(--brown);box-shadow:0 2px 0 var(--brown)}
+  .kitico.evo{background:#ffe9a8;box-shadow:0 0 0 2px #ffd84d,0 2px 0 2px var(--brown)}
+  .kitico i{position:absolute;right:-5px;bottom:-5px;font-style:normal;font-size:9px;font-weight:900;
+    color:var(--brown);background:var(--cyan);border:2px solid var(--brown);border-radius:8px;padding:0 4px;line-height:11px}
   .kitico.pas i{background:var(--lime)}
   #abil{position:fixed;right:10px;bottom:calc(12px + env(safe-area-inset-bottom));display:flex;gap:10px;align-items:flex-end}
-  .ab{width:62px;height:62px;border-radius:20px;position:relative;display:grid;place-items:center;
-    background:var(--glass);border:1px solid var(--line);pointer-events:auto;overflow:hidden}
-  .ab .lab{font-size:9px;letter-spacing:.14em;color:var(--dim);position:absolute;bottom:5px}
-  .ab .ic{font-size:22px;margin-bottom:6px;filter:drop-shadow(0 0 8px rgba(57,240,255,.7))}
-  .ab .fill{position:absolute;inset:0;background:rgba(0,0,0,.62);transform-origin:bottom;pointer-events:none}
-  .ab.ready{border-color:var(--cyan);box-shadow:0 0 22px rgba(57,240,255,.35)}
-  #ult.ready{border-color:var(--mag);box-shadow:0 0 26px rgba(255,77,210,.5);animation:pulse 1.4s infinite}
-  @keyframes pulse{50%{box-shadow:0 0 40px rgba(255,77,210,.8)}}
+  .ab{width:66px;height:66px;border-radius:50%;position:relative;display:grid;place-items:center;
+    background:#fff4e6;border:3px solid var(--brown);box-shadow:0 4px 0 var(--brown);pointer-events:auto;overflow:hidden}
+  .ab .lab{font-size:9px;font-weight:900;letter-spacing:.1em;color:var(--brown);position:absolute;bottom:6px}
+  .ab .ic{font-size:22px;margin-bottom:8px}
+  .ab .fill{position:absolute;inset:0;background:rgba(45,23,15,.62);transform-origin:bottom;pointer-events:none}
+  .ab.ready{background:#ffd9ea}
+  #ult.ready{background:#ffe9a8;animation:pulse 1.2s infinite}
+  @keyframes pulse{50%{transform:scale(1.08)}}
 
   /* ------------------------------------------------------------ screens */
-  .screen{position:fixed;inset:0;display:none;flex-direction:column;align-items:center;justify-content:center;
+  .screen{position:fixed;inset:0;display:none;flex-direction:column;align-items:center;justify-content:flex-start;
     padding:calc(16px + env(safe-area-inset-top)) 14px calc(16px + env(safe-area-inset-bottom));z-index:5;
-    background:radial-gradient(120% 90% at 50% 0%,rgba(9,26,38,.86),rgba(2,5,9,.95));
-    backdrop-filter:blur(9px);-webkit-backdrop-filter:blur(9px);overflow:auto}
+    background:radial-gradient(120% 90% at 50% 0%,rgba(58,40,128,.88),rgba(13,11,30,.96));
+    backdrop-filter:blur(7px);-webkit-backdrop-filter:blur(7px);overflow:auto}
   .screen.on{display:flex}
-  h1{margin:0;font-size:clamp(38px,11vw,74px);font-weight:900;letter-spacing:.1em;line-height:.94;
-    background:linear-gradient(180deg,#eafcff,#39f0ff 55%,#0aa8c9);-webkit-background-clip:text;background-clip:text;
-    color:transparent;filter:drop-shadow(0 0 26px rgba(57,240,255,.45))}
-  .sub{color:var(--dim);letter-spacing:.34em;font-size:11px;text-transform:uppercase;margin:8px 0 22px}
-  .btn{appearance:none;border:1px solid var(--line);border-radius:14px;padding:13px 26px;font-size:15px;font-weight:800;
-    letter-spacing:.1em;text-transform:uppercase;color:var(--ink);cursor:pointer;
-    background:linear-gradient(180deg,rgba(57,240,255,.2),rgba(57,240,255,.05));
-    transition:transform .1s,box-shadow .2s,background .2s}
-  .btn:hover{box-shadow:0 0 26px rgba(57,240,255,.35);transform:translateY(-1px)}
-  .btn:active{transform:translateY(1px) scale(.98)}
-  .btn.big{padding:17px 54px;font-size:19px;border-radius:18px;
-    background:linear-gradient(180deg,rgba(157,255,109,.28),rgba(57,240,255,.1));border-color:rgba(157,255,109,.45)}
-  .btn.ghost{background:rgba(255,255,255,.04);border-color:rgba(255,255,255,.14);font-weight:700}
-  .btn:disabled{opacity:.35;cursor:default;transform:none;box-shadow:none}
+  .screen>:first-child{margin-top:auto} .screen>:last-child{margin-bottom:auto}
+  .logo{margin:0;text-align:center;font-weight:900;line-height:.95;letter-spacing:.03em;font-size:clamp(40px,14vw,110px);
+    color:#3fcf6a;text-shadow:0.034em 0.000em 0 #fff4e6,0.031em 0.013em 0 #fff4e6,0.024em 0.024em 0 #fff4e6,0.013em 0.031em 0 #fff4e6,0.000em 0.034em 0 #fff4e6,-0.013em 0.031em 0 #fff4e6,-0.024em 0.024em 0 #fff4e6,-0.031em 0.013em 0 #fff4e6,-0.034em 0.000em 0 #fff4e6,-0.031em -0.013em 0 #fff4e6,-0.024em -0.024em 0 #fff4e6,-0.013em -0.031em 0 #fff4e6,-0.000em -0.034em 0 #fff4e6,0.013em -0.031em 0 #fff4e6,0.024em -0.024em 0 #fff4e6,0.031em -0.013em 0 #fff4e6,0.060em 0.000em 0 #2d170f,0.055em 0.023em 0 #2d170f,0.042em 0.042em 0 #2d170f,0.023em 0.055em 0 #2d170f,0.000em 0.060em 0 #2d170f,-0.023em 0.055em 0 #2d170f,-0.042em 0.042em 0 #2d170f,-0.055em 0.023em 0 #2d170f,-0.060em 0.000em 0 #2d170f,-0.055em -0.023em 0 #2d170f,-0.042em -0.042em 0 #2d170f,-0.023em -0.055em 0 #2d170f,-0.000em -0.060em 0 #2d170f,0.023em -0.055em 0 #2d170f,0.042em -0.042em 0 #2d170f,0.055em -0.023em 0 #2d170f,0 .09em 0 #2d170f;padding-bottom:.1em}
+  .logo::first-line{color:#ff7eb6}
+  .logo small{font-size:.2em}
+  .logo small{display:block;font-size:.3em;letter-spacing:.14em;color:#fff4e6;margin-top:.5em;text-shadow:0 .08em 0 #2d170f,0 -.03em 0 #2d170f,.06em 0 0 #2d170f,-.06em 0 0 #2d170f}
+  #duo{position:static;width:min(440px,92vw);height:clamp(140px,27vh,250px);margin:-4px 0 6px;pointer-events:none;flex:none}
+  .row.go{position:sticky;bottom:-4px;z-index:2;padding:12px 0 4px;background:linear-gradient(rgba(38,27,88,0),rgba(38,27,88,1) 22%)}
+  @media (max-height:760px){.logo{font-size:clamp(34px,9vh,60px)} #duo{height:clamp(120px,22vh,170px)}}
+  .sub{color:var(--dim);letter-spacing:.3em;font-size:11px;text-transform:uppercase;margin:10px 0 16px}
+  .btn{appearance:none;font:inherit;border:2.5px solid var(--brown);border-radius:999px;padding:12px 26px;font-size:15px;font-weight:900;
+    letter-spacing:.06em;text-transform:uppercase;color:var(--brown);cursor:pointer;background:#ff7eb6;min-height:44px;
+    box-shadow:inset 0 0 0 2px #fff4e6,0 4px 0 var(--brown);
+    transition:transform .08s,box-shadow .08s,filter .15s}
+  .btn:hover{filter:brightness(1.07);transform:translateY(-1px)}
+  .btn:active{transform:translateY(3px);box-shadow:inset 0 0 0 2px #fff4e6,0 1px 0 var(--brown)}
+  .btn.big{padding:16px 54px;font-size:19px;background:#3fcf6a}
+  .btn.ghost{background:#fff4e6;font-weight:800}
+  .btn:disabled{opacity:.4;cursor:default;transform:none;filter:grayscale(.4)}
   .row{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;align-items:center}
-  .panel{width:min(940px,96vw);background:var(--glass);border:1px solid var(--line);border-radius:20px;padding:16px}
-  .ttl{font-size:12px;letter-spacing:.26em;text-transform:uppercase;color:var(--cyan);margin:0 0 10px}
+  .panel{width:min(940px,96vw);background:var(--glass);border:3px solid var(--brown);border-radius:24px;padding:16px;
+    box-shadow:inset 0 0 0 2px rgba(255,244,230,.16),0 6px 0 var(--brown)}
+  .ttl{font-size:12px;font-weight:900;letter-spacing:.22em;text-transform:uppercase;color:var(--cyan);margin:0 0 10px}
 
-  /* species picker */
+  /* hero + strain pickers */
+  #heroes{display:grid;grid-template-columns:repeat(auto-fit,minmax(118px,1fr));gap:9px;margin:4px 0 14px}
+  .hero{position:relative;text-align:center;padding:8px 6px 9px;border-radius:18px;cursor:pointer;
+    background:#2b2066;border:2.5px solid var(--brown);transition:transform .12s}
+  .hero:hover{transform:translateY(-2px)}
+  .hero.sel{background:#ffd9ea;box-shadow:inset 0 0 0 2px #fff4e6,0 0 0 3px #ff7eb6,0 4px 0 3px var(--brown);color:var(--brown)}
+  .hero canvas{position:static;width:72px;height:72px;margin:0 auto;border-radius:50%;background:#3a2c80;border:2.5px solid var(--brown)}
+  .hero.sel canvas{background:#fff4e6}
+  .hero .nm{font-weight:900;font-size:12.5px;margin-top:5px}
+  .hero .ds{font-size:10px;color:var(--dim);line-height:1.25;margin-top:2px}
+  .hero.sel .ds{color:#6b4a3c}
   #species{display:grid;grid-template-columns:repeat(auto-fit,minmax(168px,1fr));gap:9px;margin:4px 0 14px}
-  .spec{position:relative;text-align:left;padding:11px 12px;border-radius:14px;cursor:pointer;
-    background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.1);transition:.15s}
-  .spec:hover{background:rgba(57,240,255,.08)}
-  .spec.sel{border-color:var(--cyan);background:rgba(57,240,255,.13);box-shadow:0 0 20px rgba(57,240,255,.25)}
-  .spec.lock{opacity:.42;cursor:default}
-  .spec .nm{font-weight:800;font-size:14px;display:flex;align-items:center;gap:7px}
+  .spec{position:relative;text-align:left;padding:11px 12px;border-radius:16px;cursor:pointer;
+    background:#2b2066;border:2.5px solid var(--brown);transition:transform .12s}
+  .spec:hover{transform:translateY(-2px)}
+  .spec.sel{background:#ffd9ea;color:var(--brown);box-shadow:inset 0 0 0 2px #fff4e6,0 0 0 3px #ff7eb6,0 4px 0 3px var(--brown)}
+  .spec.lock{opacity:.5;cursor:default}
+  .spec .nm{font-weight:900;font-size:14px;display:flex;align-items:center;gap:7px}
   .spec .ds{font-size:11px;color:var(--dim);margin-top:3px;line-height:1.35}
-  .spec .pk{font-size:10px;color:var(--lime);margin-top:5px;letter-spacing:.08em}
+  .spec.sel .ds{color:#6b4a3c}
+  .spec .pk{font-size:10px;font-weight:800;color:var(--lime);margin-top:5px;letter-spacing:.06em}
+  .spec.sel .pk{color:#1f7a3a}
   #diffs{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:9px;margin:4px 0 14px}
-  .diff{text-align:left;padding:10px 12px;border-radius:14px;cursor:pointer;transition:.15s;
-    background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.1)}
-  .diff:hover{background:rgba(255,207,77,.08)}
-  .diff.sel{border-color:var(--amber);background:rgba(255,207,77,.12);box-shadow:0 0 20px rgba(255,207,77,.2)}
-  .diff .nm{font-weight:800;font-size:13px}
+  .diff{text-align:left;padding:10px 12px;border-radius:16px;cursor:pointer;transition:transform .12s;
+    background:#2b2066;border:2.5px solid var(--brown)}
+  .diff:hover{transform:translateY(-2px)}
+  .diff.sel{background:#ffe9a8;color:var(--brown);box-shadow:inset 0 0 0 2px #fff4e6,0 0 0 3px #ffd84d,0 4px 0 3px var(--brown)}
+  .diff .nm{font-weight:900;font-size:13px}
   .diff .ds{font-size:10.5px;color:var(--dim);margin-top:3px;line-height:1.35}
+  .diff.sel .ds{color:#6b4a3c}
   .spec.lock .pk{color:var(--amber)}
 
   /* level-up cards */
-  #lvlup{background:radial-gradient(120% 90% at 50% 40%,rgba(10,30,44,.82),rgba(2,5,9,.93))}
-  .flash{font-size:12px;letter-spacing:.4em;color:var(--lime);text-transform:uppercase;margin-bottom:14px;
-    text-shadow:0 0 18px rgba(157,255,109,.8)}
+  #lvlup{background:radial-gradient(120% 90% at 50% 40%,rgba(58,40,128,.84),rgba(13,11,30,.94))}
+  .flash{font-size:20px;font-weight:900;letter-spacing:.3em;color:#ffd84d;text-transform:uppercase;margin-bottom:14px;
+    text-shadow:0 3px 0 var(--brown),0 -2px 0 var(--brown),2px 0 0 var(--brown),-2px 0 0 var(--brown),2px 3px 0 var(--brown),-2px 3px 0 var(--brown)}
   #cards{display:flex;gap:12px;flex-wrap:wrap;justify-content:center;max-width:min(1000px,97vw)}
-  .card{width:min(232px,44vw);border-radius:18px;padding:16px 14px;cursor:pointer;text-align:center;position:relative;
-    background:linear-gradient(180deg,rgba(16,34,48,.95),rgba(6,14,22,.95));
-    border:1px solid rgba(255,255,255,.13);transition:transform .12s,box-shadow .2s;overflow:hidden;
+  .card{width:min(232px,44vw);border-radius:22px;padding:18px 14px 14px;cursor:pointer;text-align:center;position:relative;
+    background:#2b2066;color:var(--ink);
+    border:3px solid var(--brown);box-shadow:inset 0 0 0 2px rgba(255,244,230,.2),0 5px 0 var(--brown);transition:transform .12s;overflow:hidden;
     animation:cardin .28s cubic-bezier(.2,1.4,.5,1) backwards}
   @keyframes cardin{from{opacity:0;transform:translateY(22px) scale(.94)}}
-  .card:hover{transform:translateY(-5px)}
-  .card .ic{font-size:38px;filter:drop-shadow(0 4px 14px rgba(0,0,0,.6))}
-  .card .nm{font-weight:800;font-size:15px;margin:8px 0 3px;letter-spacing:.02em}
-  .card .lv{font-size:10px;letter-spacing:.2em;color:var(--dim);text-transform:uppercase}
-  .card .ds{font-size:12px;color:#b9d5e6;margin-top:9px;line-height:1.4;min-height:34px}
-  .card .rar{position:absolute;top:0;left:0;right:0;height:3px}
-  .card.r0{border-color:rgba(150,180,200,.3)} .card.r0 .rar{background:#8fa8ba}
-  .card.r1{border-color:rgba(57,240,255,.5);box-shadow:0 0 26px rgba(57,240,255,.16)} .card.r1 .rar{background:var(--cyan)}
-  .card.r2{border-color:rgba(255,77,210,.6);box-shadow:0 0 34px rgba(255,77,210,.24)} .card.r2 .rar{background:var(--mag)}
-  .card.evo{border-color:var(--amber);box-shadow:0 0 44px rgba(255,207,77,.35)} .card.evo .rar{background:linear-gradient(90deg,#ffcf4d,#ff8a3d)}
-  .card .tag{position:absolute;top:9px;right:9px;font-size:9px;letter-spacing:.16em;color:#04070d;font-weight:900;
-    background:var(--amber);border-radius:6px;padding:2px 6px}
-  .cardfoot{margin-top:16px;display:flex;gap:10px;align-items:center;justify-content:center;color:var(--dim);font-size:12px}
+  .card:hover{transform:translateY(-6px) rotate(-.6deg)}
+  .card .ic{width:62px;height:62px;margin:0 auto;border-radius:50%;display:grid;place-items:center;font-size:32px;
+    background:#fff4e6;border:3px solid var(--brown);box-shadow:0 3px 0 var(--brown)}
+  .card .nm{font-weight:900;font-size:15px;margin:10px 0 3px}
+  .card .lv{font-size:10px;font-weight:800;letter-spacing:.18em;color:var(--dim);text-transform:uppercase}
+  .card .ds{font-size:12px;color:#e6dcff;margin-top:9px;line-height:1.4;min-height:34px}
+  .card .rar{position:absolute;top:0;left:0;right:0;height:7px;border-bottom:2.5px solid var(--brown)}
+  .card.r0 .rar{background:#8d83b8}
+  .card.r1{background:#3a2275} .card.r1 .rar{background:var(--cyan)}
+  .card.r2{background:#47227a} .card.r2 .rar{background:var(--mag)}
+  .card.evo{background:#5a3a1f} .card.evo .rar{background:linear-gradient(90deg,#ffd84d,#ff9a2e)}
+  .card.evo{box-shadow:inset 0 0 0 2px #ffd84d,0 5px 0 var(--brown)}
+  .card .tag{position:absolute;top:13px;right:9px;font-size:9px;letter-spacing:.1em;color:var(--brown);font-weight:900;
+    background:var(--amber);border:2px solid var(--brown);border-radius:8px;padding:1px 6px}
+  .cardfoot{margin-top:18px;display:flex;gap:10px;align-items:center;justify-content:center;color:var(--dim);font-size:12px;flex-wrap:wrap}
 
   /* lab */
   #ups{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:8px}
-  .up{display:flex;gap:10px;align-items:center;text-align:left;padding:9px 11px;border-radius:12px;cursor:pointer;
-    background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.09);transition:.15s}
-  .up:hover{background:rgba(157,255,109,.09);border-color:rgba(157,255,109,.35)}
-  .up.max{opacity:.5;cursor:default}
-  .up.poor{opacity:.55}
-  .up .ic{font-size:20px}
-  .up .nm{font-weight:700;font-size:13px}
+  .up{display:flex;gap:10px;align-items:center;text-align:left;padding:9px 11px;border-radius:16px;cursor:pointer;
+    background:#2b2066;border:2.5px solid var(--brown);transition:transform .12s}
+  .up:hover{transform:translateY(-2px);background:#35287a}
+  .up.max{opacity:.55;cursor:default}
+  .up.poor{opacity:.6}
+  .up .ic{width:34px;height:34px;flex:none;border-radius:50%;display:grid;place-items:center;font-size:18px;
+    background:#fff4e6;border:2.5px solid var(--brown)}
+  .up .nm{font-weight:900;font-size:13px}
   .up .ds{font-size:10.5px;color:var(--dim);line-height:1.3}
-  .up .cost{margin-left:auto;text-align:right;font-size:12px;font-weight:800;color:var(--amber);white-space:nowrap}
-  .up .pips{display:flex;gap:2px;margin-top:4px}
-  .pip{width:11px;height:3px;border-radius:2px;background:rgba(255,255,255,.16)}
-  .pip.on{background:var(--lime);box-shadow:0 0 6px rgba(157,255,109,.8)}
+  .up .cost{margin-left:auto;text-align:right;font-size:12px;font-weight:900;color:var(--amber);white-space:nowrap}
+  .up .pips{display:flex;gap:3px;margin-top:4px}
+  .pip{width:11px;height:5px;border-radius:3px;background:#1a1340;border:1.5px solid var(--brown)}
+  .pip.on{background:var(--lime)}
   #dnabar{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px}
-  #dnaval{font-size:22px;font-weight:900;color:var(--amber);text-shadow:0 0 18px rgba(255,207,77,.5)}
+  #dnaval{font-size:22px;font-weight:900;color:var(--amber);text-shadow:0 2px 0 var(--brown)}
 
   /* results */
   .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;margin:14px 0}
-  .st{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.09);border-radius:12px;padding:10px}
-  .st .k{font-size:10px;letter-spacing:.18em;color:var(--dim);text-transform:uppercase}
-  .st .v{font-size:22px;font-weight:800;margin-top:2px}
-  #overttl{font-size:clamp(30px,8vw,52px);font-weight:900;letter-spacing:.08em;margin:0}
-  .win #overttl{color:var(--lime);text-shadow:0 0 30px rgba(157,255,109,.6)}
-  .lose #overttl{color:var(--red);text-shadow:0 0 30px rgba(255,77,109,.5)}
-  #unlocked{color:var(--amber);font-size:13px;margin-top:6px;min-height:18px}
+  .st{background:#2b2066;border:2.5px solid var(--brown);border-radius:16px;padding:10px}
+  .st .k{font-size:10px;font-weight:800;letter-spacing:.16em;color:var(--dim);text-transform:uppercase}
+  .st .v{font-size:22px;font-weight:900;margin-top:2px}
+  #overttl{font-size:clamp(30px,8vw,52px);font-weight:900;letter-spacing:.05em;margin:0;text-align:center;
+    text-shadow:0 .07em 0 var(--brown),0 -.04em 0 var(--brown),.05em 0 0 var(--brown),-.05em 0 0 var(--brown),.05em .07em 0 var(--brown),-.05em .07em 0 var(--brown)}
+  .win #overttl{color:#5fe38a}
+  .lose #overttl{color:#ff7eb6}
+  #unlocked{color:var(--amber);font-size:13px;font-weight:800;margin-top:6px;min-height:18px}
 
   #toast{position:fixed;left:50%;top:22%;transform:translateX(-50%);pointer-events:none;z-index:8;
     display:flex;flex-direction:column;align-items:center;gap:6px}
-  .tst{background:rgba(6,16,24,.86);border:1px solid var(--line);border-radius:999px;padding:7px 16px;font-size:13px;
-    font-weight:700;letter-spacing:.06em;animation:tin .3s backwards;box-shadow:0 6px 30px rgba(0,0,0,.5)}
-  @keyframes tin{from{opacity:0;transform:translateY(-12px)}}
+  .tst{background:#fff4e6;color:var(--brown);border:2.5px solid var(--brown);border-radius:999px;padding:6px 16px;font-size:13px;
+    font-weight:900;letter-spacing:.03em;animation:tin .3s backwards;box-shadow:0 4px 0 var(--brown)}
+  @keyframes tin{from{opacity:0;transform:translateY(-12px) scale(.9)}}
   .hint{color:var(--dim);font-size:12px;line-height:1.6;text-align:center;max-width:640px}
-  kbd{background:rgba(255,255,255,.09);border:1px solid rgba(255,255,255,.16);border-bottom-width:2px;
-    border-radius:5px;padding:1px 6px;font-size:11px;font-family:inherit}
-  a.link{color:var(--dim);font-size:11px;letter-spacing:.14em;text-decoration:none;text-transform:uppercase}
+  kbd{background:#fff4e6;color:var(--brown);border:2px solid var(--brown);border-bottom-width:3px;
+    border-radius:6px;padding:0 6px;font-size:11px;font-weight:800;font-family:inherit}
+  a.link{color:var(--dim);font-size:11px;font-weight:800;letter-spacing:.14em;text-decoration:none;text-transform:uppercase}
   a.link:hover{color:var(--cyan)}
 </style>
 </head>
@@ -187,7 +214,7 @@
   <div id="topline">
     <span id="lvlchip">LV 1</span>
     <span id="clock" class="mono">0:00</span>
-    <span id="rstats"><span>☠ <b id="kills">0</b></span><span>🧬 <b id="dna">0</b></span></span>
+    <span id="rstats"><span><i class="gi" data-ico="critter" data-px="16"></i> <b id="kills">0</b></span><span><i class="gi" data-ico="note" data-px="16"></i> <b id="dna">0</b></span></span>
   </div>
   <div id="objwrap">
     <div id="objline"><span id="objname">Stage 1 · Colonisation</span><span id="objval">70s left</span></div>
@@ -196,33 +223,36 @@
   <div id="bosswrap"><div id="bossname">—</div><div id="bossbar"><div id="bossfill"></div></div></div>
   <div id="kit"></div>
   <div id="abil">
-    <div class="ab" id="dash"><div class="ic">💨</div><div class="lab">DASH</div><div class="fill"></div></div>
-    <div class="ab" id="ult"><div class="ic">🧬</div><div class="lab">MITOSIS</div><div class="fill"></div></div>
+    <div class="ab" id="dash"><div class="ic"><i data-ico="shoe" data-px="30"></i></div><div class="lab">SLIDE</div><div class="fill"></div></div>
+    <div class="ab" id="ult"><div class="ic"><i data-ico="duet" data-px="30"></i></div><div class="lab">DUET</div><div class="fill"></div></div>
   </div>
 </div>
-<div id="gear">⏸</div>
+<div id="gear"><i data-ico="pause" data-px="20"></i></div>
 
 <div class="screen on" id="menu">
-  <h1>CYTOSIS</h1>
-  <div class="sub">a cell survivor</div>
+  <h1 class="logo">CYTOSIS<small>a cell survivor with RoxorLoops &amp; Jasmin</small></h1>
+  <canvas id="duo"></canvas>
   <div class="panel">
-    <div class="ttl">Choose your strain</div>
+    <p class="hint tale">The Gloss has put the Soundlands on mute. RoxorLoops and Jasmin hop into a soap bubble and bounce from venue to venue, singing the noise critters out of every room. Twelve venues, one Gloss.</p>
+    <div class="ttl">Who is in the bubble?</div>
+    <div id="heroes"></div>
+    <div class="ttl">Pick your style</div>
     <div id="species"></div>
-    <div class="ttl" style="margin-top:4px">Culture strength</div>
+    <div class="ttl" style="margin-top:4px">Crowd size</div>
     <div id="diffs"></div>
     <div class="hint" id="best" style="margin:0 0 12px"></div>
-    <div class="row">
-      <button class="btn big" id="play">Incubate</button>
-      <button class="btn ghost" id="tolab">🧪 Lab</button>
-      <button class="btn ghost" id="mute">🔊</button>
-      <button class="btn ghost" id="shakebtn">🎥 Shake: Full</button>
+    <div class="row go">
+      <button class="btn big" id="play">Start the show</button>
+      <button class="btn ghost" id="tolab"><i data-ico="metronome" data-px="20"></i> Rehearsal</button>
+      <button class="btn ghost" id="mute"><i data-ico="vol" data-px="22"></i></button>
+      <button class="btn ghost" id="shakebtn">Shake: Full</button>
     </div>
   </div>
   <p class="hint" style="margin-top:16px">
-    <b style="color:var(--lime)">12 stages, one objective each</b> — survive, purge, hunt the marked host, kill the boss.<br>
-    Clear a stage, take a reward, face a nastier one. Kill The Culture in stage 12 to win the dish.<br>
-    <kbd>WASD</kbd>/<kbd>◀▶</kbd> swim &nbsp;·&nbsp; <kbd>Space</kbd> dash &nbsp;·&nbsp; <kbd>E</kbd> mitosis &nbsp;·&nbsp; <kbd>Esc</kbd> pause<br>
-    Touch: drag anywhere to swim, tap the buttons for dash &amp; mitosis.
+    <b style="color:var(--lime)">12 venues, one objective each</b>: survive, silence critters, find the critter VIP, out-sing the boss.<br>
+    Clear a venue, take a reward, face a bigger crowd. Out-sing The Gloss on the Big Stage to unmute the Soundlands.<br>
+    <kbd>WASD</kbd>/<kbd>◀▶</kbd> move &nbsp;·&nbsp; <kbd>Space</kbd> slide &nbsp;·&nbsp; <kbd>E</kbd> duet &nbsp;·&nbsp; <kbd>Esc</kbd> pause<br>
+    Touch: drag anywhere to move, tap the buttons for slide &amp; duet.
   </p>
   <div class="row" style="margin-top:14px"><a class="link" href="/">← all games</a></div>
 </div>
@@ -230,14 +260,14 @@
 <div class="screen" id="lab">
   <div class="panel">
     <div id="dnabar">
-      <div><div class="ttl" style="margin:0">Gene Lab</div>
-        <div style="font-size:11px;color:var(--dim)">Permanent splices. They stick between runs.</div></div>
-      <div id="dnaval" class="mono">🧬 0</div>
+      <div><div class="ttl" style="margin:0">Rehearsal Room</div>
+        <div style="font-size:11px;color:var(--dim)">Permanent upgrades. They stick between shows.</div></div>
+      <div id="dnaval" class="mono">0</div>
     </div>
     <div id="ups"></div>
     <div class="row" style="margin-top:14px">
       <button class="btn" id="labback">Back</button>
-      <button class="btn ghost" id="wipe">Reset lab</button>
+      <button class="btn ghost" id="wipe">Reset rehearsals</button>
     </div>
   </div>
 </div>
@@ -246,9 +276,9 @@
   <div class="flash" id="lvlflash">Level up</div>
   <div id="cards"></div>
   <div class="cardfoot">
-    <button class="btn ghost" id="reroll">🎲 Reroll <span id="rrn">0</span></button>
-    <button class="btn ghost" id="banish">🚫 Banish <span id="bnn">0</span></button>
-    <button class="btn ghost" id="skip">Skip → +heal</button>
+    <button class="btn ghost" id="reroll"><i data-ico="dice" data-px="20"></i> Reroll <span id="rrn">0</span></button>
+    <button class="btn ghost" id="banish"><i data-ico="noentry" data-px="20"></i> Cut <span id="bnn">0</span></button>
+    <button class="btn ghost" id="skip">Skip, grab a snack</button>
   </div>
 </div>
 
@@ -266,34 +296,40 @@
     <div id="pkit" class="hint" style="margin-bottom:14px"></div>
     <div class="row">
       <button class="btn" id="resume">Resume</button>
-      <button class="btn ghost" id="pmute">🔊</button>
-      <button class="btn ghost" id="pshake">🎥 Shake: Full</button>
-      <button class="btn ghost" id="quit">Abandon</button>
+      <button class="btn ghost" id="pmute"><i data-ico="vol" data-px="22"></i></button>
+      <button class="btn ghost" id="pshake">Shake: Full</button>
+      <button class="btn ghost" id="quit">Leave the show</button>
     </div>
   </div>
 </div>
 
 <div class="screen" id="over">
-  <h2 id="overttl">CULTURE COLLAPSED</h2>
+  <h2 id="overttl">THE SET WENT QUIET</h2>
+  <p class="hint" id="overtale" style="margin:6px 0 0"></p>
   <div id="unlocked"></div>
   <div class="panel" style="max-width:560px">
     <div class="stats">
       <div class="st"><div class="k">Survived</div><div class="v mono" id="rTime">0:00</div></div>
-      <div class="st"><div class="k">Stage</div><div class="v mono" id="rStage">1/12</div></div>
+      <div class="st"><div class="k">Venue</div><div class="v mono" id="rStage">1/12</div></div>
       <div class="st"><div class="k">Level</div><div class="v mono" id="rLvl">1</div></div>
-      <div class="st"><div class="k">Kills</div><div class="v mono" id="rKills">0</div></div>
-      <div class="st"><div class="k">DNA</div><div class="v mono" id="rDna">0</div></div>
+      <div class="st"><div class="k">Silenced</div><div class="v mono" id="rKills">0</div></div>
+      <div class="st"><div class="k">Applause</div><div class="v mono" id="rDna">0</div></div>
     </div>
     <div class="row">
       <button class="btn big" id="again">Again</button>
       <button class="btn ghost" id="tomenu">Menu</button>
-      <button class="btn ghost" id="tolab2">🧪 Lab</button>
+      <button class="btn ghost" id="tolab2"><i data-ico="metronome" data-px="20"></i> Rehearsal</button>
     </div>
   </div>
 </div>
 
 <div id="toast"></div>
 
+<script src="hv/util.js"></script>
+<script src="hv/shim.js"></script>
+<script src="hv/art.js"></script>
+<script src="hv/art_cast_kit.js"></script>
+<script src="hv/art_cast.js"></script>
 <script>
 'use strict';
 // ============================================================================
@@ -360,8 +396,8 @@ function shuffle(a){ for (let i = a.length - 1; i > 0; i--){ const j = Math.floo
 
 const WEAPONS = {
   pseudo: {
-    nm: 'Pseudopod Spines', ic: '🦴', kind: 'w',
-    ds: 'Fires bone-hard spines at the nearest pathogen.',
+    nm: 'Beatbox Burst', ic: 'mic', kind: 'w',
+    ds: 'Fires punchy beatbox bursts at the nearest critter.',
     st: l => ({ cd: .95 - .06 * l, dmg: 14 + 7 * l, n: 1 + (l >= 3) + (l >= 5) + (l >= 7), spd: 620,
                 pierce: (l >= 4 ? 1 : 0) + (l >= 8 ? 1 : 0), r: 6 }),
     evo: { into: 'harpoon', wth: 'ribo' },
@@ -371,13 +407,13 @@ const WEAPONS = {
       const n = s.n + P.s.proj;
       for (let i = 0; i < n; i++){
         const a = base + (i - (n - 1) / 2) * .17;
-        shoot(o, a, { dmg: s.dmg * m, spd: s.spd, r: s.r, pierce: s.pierce, col: '#bff3ff', kind: 'spine' });
+        shoot(o, a, { dmg: s.dmg * m, spd: s.spd, r: s.r, pierce: s.pierce, col: '#fff4e6', kind: 'spine' });
       }
     },
   },
   harpoon: {
-    nm: 'Harpoon Cluster', ic: '🔱', kind: 'w', hidden: true, evolved: true,
-    ds: 'Evolved: barbed harpoons rip clean through the culture.',
+    nm: 'Drop the Bass', ic: 'mic+', kind: 'w', hidden: true, evolved: true,
+    ds: 'Evolved: bass-heavy drops punch clean through the crowd.',
     st: () => ({ cd: .42, dmg: 82, n: 5, spd: 760, pierce: 99, r: 9 }),
     fire(s, o, m){
       const tgt = nearest(o.x, o.y, 1100);
@@ -385,14 +421,14 @@ const WEAPONS = {
       const n = s.n + P.s.proj;
       for (let i = 0; i < n; i++){
         const a = base + (i - (n - 1) / 2) * .13;
-        shoot(o, a, { dmg: s.dmg * m, spd: s.spd, r: s.r, pierce: 99, col: '#ffe08a', kind: 'spine', glow: '#ffcf4d' });
+        shoot(o, a, { dmg: s.dmg * m, spd: s.spd, r: s.r, pierce: 99, col: '#ffe08a', kind: 'spine', glow: '#ffd84d' });
       }
     },
   },
 
   cilia: {
-    nm: 'Cilia Whip', ic: '🌾', kind: 'w',
-    ds: 'Lashes a sweeping arc of cilia, knocking pathogens back.',
+    nm: 'Hi-Hat Swipe', ic: 'cymbal', kind: 'w',
+    ds: 'Swipes a sweeping hi-hat arc, knocking critters back.',
     st: l => ({ cd: 1.2 - .075 * l, dmg: 15 + 9.5 * l, arc: .95 + .05 * l, r: 62 + 9 * l, kb: 210 }),
     evo: { into: 'corona', wth: 'mito' },
     fire(s, o, m){
@@ -404,8 +440,8 @@ const WEAPONS = {
     },
   },
   corona: {
-    nm: 'Razor Corona', ic: '🌀', kind: 'w', hidden: true, evolved: true,
-    ds: 'Evolved: a full ring of razor cilia, every sweep, every side.',
+    nm: 'Crash Cymbal Ring', ic: 'cymbal+', kind: 'w', hidden: true, evolved: true,
+    ds: 'Evolved: a full ring of crashing cymbals, every swipe, every side.',
     st: () => ({ cd: .62, dmg: 102, arc: Math.PI, r: 150, kb: 320 }),
     fire(s, o, m){
       swipe(o, 0, Math.PI, s.r * P.s.area, s.dmg * m, s.kb, true);
@@ -414,18 +450,18 @@ const WEAPONS = {
   },
 
   enzyme: {
-    nm: 'Enzyme Trail', ic: '🧪', kind: 'w',
-    ds: 'Leaks digestive acid in your wake. It keeps eating.',
+    nm: 'Glitter Trail', ic: 'glitter', kind: 'w',
+    ds: 'Leaves a trail of sticky glitter in your wake. It keeps stinging.',
     st: l => ({ cd: 1.05 - .06 * l, dps: 10 + 5.2 * l, r: 40 + 7 * l, life: 3 + .35 * l }),
     evo: { into: 'necro', wth: 'golgi' },
     fire(s, o, m){
       if (m >= 1 && len(P.vx, P.vy) < 45) { o.w.t = .12; return; }   // no swimming, no trail
-      addPool(o.x, o.y, s.r * P.s.area, s.dps * m, s.life, '#9dff6d');
+      addPool(o.x, o.y, s.r * P.s.area, s.dps * m, s.life, '#5fe38a');
     },
   },
   necro: {
-    nm: 'Necrotic Bloom', ic: '☣️', kind: 'w', hidden: true, evolved: true,
-    ds: 'Evolved: the acid blooms outward and slows everything in it.',
+    nm: 'Rainbow Road', ic: 'glitter+', kind: 'w', hidden: true, evolved: true,
+    ds: 'Evolved: the glitter blooms outward and slows everything in it.',
     st: () => ({ cd: .7, dps: 80, r: 105, life: 5.5 }),
     fire(s, o, m){
       if (m >= 1 && len(P.vx, P.vy) < 45) { o.w.t = .12; return; }
@@ -434,22 +470,22 @@ const WEAPONS = {
   },
 
   ion: {
-    nm: 'Ion Orbitals', ic: '⚛️', kind: 'w',
-    ds: 'Charged nodes orbit your membrane and shred what touches them.',
+    nm: 'Vinyl Orbit', ic: 'vinyl', kind: 'w',
+    ds: 'Spinning vinyl records orbit you and slice what touches them.',
     st: l => ({ n: 2 + Math.floor(l / 2), dmg: 9 + 5.2 * l, r: 76 + 7 * l, spd: 2.0 + .12 * l, hitcd: .55 }),
     evo: { into: 'shell', wth: 'nucleus' },
     tick(s, o, m, dt, w){ orbitals(w, s, o, m, dt, 1); },
   },
   shell: {
-    nm: 'Electron Shell', ic: '💫', kind: 'w', hidden: true, evolved: true,
-    ds: 'Evolved: two counter-spinning rings that arc lightning on contact.',
+    nm: 'Disco Halo', ic: 'vinyl+', kind: 'w', hidden: true, evolved: true,
+    ds: 'Evolved: two counter-spinning rings that spark lightning on contact.',
     st: () => ({ n: 5, dmg: 62, r: 118, spd: 3.1, hitcd: .38, zap: 34 }),
     tick(s, o, m, dt, w){ orbitals(w, s, o, m, dt, 2); },
   },
 
   spore: {
-    nm: 'Spore Burst', ic: '🍄', kind: 'w',
-    ds: 'Bursts a ring of drifting spores in every direction.',
+    nm: 'Confetti Pop', ic: 'confetti', kind: 'w',
+    ds: 'Pops a ring of drifting confetti in every direction.',
     st: l => ({ cd: 2.7 - .18 * l, n: 6 + 2 * l, dmg: 11 + 6.4 * l, spd: 215, life: 1.6, r: 8 }),
     evo: { into: 'fungal', wth: 'vacuole' },
     fire(s, o, m){
@@ -457,67 +493,67 @@ const WEAPONS = {
       const off = rnd() * TAU;
       for (let i = 0; i < n; i++)
         shoot(o, off + i / n * TAU, { dmg: s.dmg * m, spd: s.spd, r: s.r, life: s.life * P.s.dur,
-                                      pierce: 1, col: '#d7ff6d', kind: 'spore' });
+                                      pierce: 1, col: '#c6ff3d', kind: 'spore' });
     },
   },
   fungal: {
-    nm: 'Fungal Nova', ic: '🌸', kind: 'w', hidden: true, evolved: true,
-    ds: 'Evolved: seeking spores that rot the ground where they land.',
+    nm: 'Blossom Nova', ic: 'blossom', kind: 'w', hidden: true, evolved: true,
+    ds: 'Evolved: seeking cherry petals that leave sticky nectar where they land.',
     st: () => ({ cd: 1.5, n: 18, dmg: 60, spd: 250, life: 2.6, r: 10 }),
     fire(s, o, m){
       const off = rnd() * TAU;
       const n = s.n + P.s.proj * 2;
       for (let i = 0; i < n; i++)
         shoot(o, off + i / n * TAU, { dmg: s.dmg * m, spd: s.spd, r: s.r, life: s.life * P.s.dur,
-                                      pierce: 2, col: '#ffa1e8', kind: 'spore', home: 3.2, rot: 1 });
+                                      pierce: 2, col: '#ffa6d2', kind: 'spore', home: 3.2, rot: 1 });
     },
   },
 
   arc: {
-    nm: 'Neural Arc', ic: '⚡', kind: 'w',
-    ds: 'A charge that leaps from pathogen to pathogen.',
+    nm: 'Power Chord', ic: 'bolt', kind: 'w',
+    ds: 'A charge that leaps from critter to critter.',
     st: l => ({ cd: 1.6 - .1 * l, dmg: 17 + 10.5 * l, chains: 2 + Math.floor(l * .8), range: 270 + 16 * l }),
     evo: { into: 'storm', wth: 'flagellum' },
     fire(s, o, m){ chain(o, s.dmg * m, s.chains, s.range * P.s.area, 0); },
   },
   storm: {
-    nm: 'Synaptic Storm', ic: '🌩️', kind: 'w', hidden: true, evolved: true,
+    nm: 'Stadium Storm', ic: 'bolt+', kind: 'w', hidden: true, evolved: true,
     ds: 'Evolved: the charge never stops jumping, and it stuns.',
     st: () => ({ cd: .8, dmg: 96, chains: 12, range: 430, stun: .45 }),
     fire(s, o, m){ chain(o, s.dmg * m, s.chains, s.range * P.s.area, s.stun); },
   },
 
   cryo: {
-    nm: 'Cryo Vacuole', ic: '❄️', kind: 'w',
-    ds: 'Vents a freezing pulse that chills everything nearby.',
+    nm: 'Cool Down Hum', ic: 'snow', kind: 'w',
+    ds: 'Hums a freezing pulse that chills everything nearby.',
     st: l => ({ cd: 3.1 - .18 * l, dmg: 9 + 6.5 * l, r: 118 + 20 * l, slow: .42, dur: 2 + .2 * l }),
     evo: { into: 'zero', wth: 'membrane' },
-    fire(s, o, m){ wave(o, s.r * P.s.area, s.dmg * m, { slow: s.slow, dur: s.dur * P.s.dur, col: '#7fe0ff' }); },
+    fire(s, o, m){ wave(o, s.r * P.s.area, s.dmg * m, { slow: s.slow, dur: s.dur * P.s.dur, col: '#ffc2dc' }); },
   },
   zero: {
-    nm: 'Absolute Zero', ic: '🧊', kind: 'w', hidden: true, evolved: true,
-    ds: 'Evolved: freezes solid — and frozen things shatter for double.',
+    nm: 'Frozen Falsetto', ic: 'snow+', kind: 'w', hidden: true, evolved: true,
+    ds: 'Evolved: freezes solid. Frozen critters shatter for double.',
     st: () => ({ cd: 2.2, dmg: 78, r: 330, slow: 1, dur: 2.4, freeze: 1 }),
-    fire(s, o, m){ wave(o, s.r * P.s.area, s.dmg * m, { slow: 1, dur: s.dur * P.s.dur, freeze: true, col: '#bff3ff' }); },
+    fire(s, o, m){ wave(o, s.r * P.s.area, s.dmg * m, { slow: 1, dur: s.dur * P.s.dur, freeze: true, col: '#fff4e6' }); },
   },
 
   symb: {
-    nm: 'Symbiote', ic: '🐟', kind: 'w',
-    ds: 'A friendly cell tags along and fires on its own.',
+    nm: 'Mascot Buddy', ic: 'mascot', kind: 'w',
+    ds: 'A little mascot tags along and sings on its own.',
     st: l => ({ n: 1 + (l >= 5 ? 1 : 0), dmg: 9 + 4.8 * l, cd: .9 - .05 * l, spd: 540 }),
     evo: { into: 'hive', wth: 'regen' },
     tick(s, o, m, dt, w){ symbiotes(w, s, m); },
   },
   hive: {
-    nm: 'Hive Symbiont', ic: '🐠', kind: 'w', hidden: true, evolved: true,
-    ds: 'Evolved: three symbiotes, and every kill they land feeds you.',
+    nm: 'Mascot Squad', ic: 'mascot+', kind: 'w', hidden: true, evolved: true,
+    ds: 'Evolved: three mascots, and every kill they land feeds you.',
     st: () => ({ n: 3, dmg: 57, cd: .34, spd: 660, leech: 1 }),
     tick(s, o, m, dt, w){ symbiotes(w, s, m); },
   },
 
   lyso: {
-    nm: 'Lysosome Bomb', ic: '💣', kind: 'w',
-    ds: 'Lobs a sac of enzymes that detonates on arrival.',
+    nm: 'Bass Bomb', ic: 'bomb', kind: 'w',
+    ds: 'Lobs a speaker pop that detonates on arrival.',
     st: l => ({ cd: 2.3 - .14 * l, dmg: 26 + 14.5 * l, r: 74 + 8 * l, n: 1 + (l >= 4) + (l >= 7) }),
     evo: { into: 'detona', wth: 'spike' },
     fire(s, o, m){
@@ -531,7 +567,7 @@ const WEAPONS = {
     },
   },
   detona: {
-    nm: 'Chain Detonation', ic: '🧨', kind: 'w', hidden: true, evolved: true,
+    nm: 'Chain Drop', ic: 'bomb+', kind: 'w', hidden: true, evolved: true,
     ds: 'Evolved: every blast kicks off two more.',
     st: () => ({ cd: 1.15, dmg: 115, r: 130, n: 3 }),
     fire(s, o, m){
@@ -545,8 +581,8 @@ const WEAPONS = {
   },
 
   virus: {
-    nm: 'Viral Payload', ic: '🦠', kind: 'w',
-    ds: 'Infects a host. It rots, dies, and infects its neighbours.',
+    nm: 'Earworm', ic: 'worm', kind: 'w',
+    ds: 'Plants a catchy tune in a critter. It hums, tires, and passes it on.',
     st: l => ({ cd: 2.5 - .15 * l, dps: 8 + 4.6 * l, dur: 4 + .4 * l, spread: 2 + Math.floor(l / 2), n: 1 + (l >= 6 ? 1 : 0) }),
     evo: { into: 'pandemic', wth: 'plasmid' },
     fire(s, o, m){
@@ -557,8 +593,8 @@ const WEAPONS = {
     },
   },
   pandemic: {
-    nm: 'Pandemic', ic: '☠️', kind: 'w', hidden: true, evolved: true,
-    ds: 'Evolved: an outbreak that never runs out of hosts.',
+    nm: 'Chart Topper', ic: 'worm+', kind: 'w', hidden: true, evolved: true,
+    ds: 'Evolved: a hit that never runs out of listeners.',
     st: () => ({ cd: 1.1, dps: 55, dur: 8, spread: 6, n: 3 }),
     fire(s, o, m){
       for (let i = 0; i < s.n; i++){
@@ -571,63 +607,73 @@ const WEAPONS = {
 
 // Passives feed straight into recalc(); each level is a flat step.
 const PASSIVES = {
-  mito:      { nm: 'Mitochondria', ic: '🔥', kind: 'p', ds: '+12% damage per level.' },
-  ribo:      { nm: 'Ribosome',     ic: '🧫', kind: 'p', ds: '+1 projectile at levels 2 and 4, +8% projectile speed.' },
-  golgi:     { nm: 'Golgi Body',   ic: '🫧', kind: 'p', ds: '+14% area of effect per level.' },
-  nucleus:   { nm: 'Nucleus',      ic: '🧠', kind: 'p', ds: '-7% organelle cooldown per level.' },
-  flagellum: { nm: 'Flagellum',    ic: '🌊', kind: 'p', ds: '+9% swim speed, -6% dash cooldown per level.' },
-  membrane:  { nm: 'Thick Membrane', ic: '🛡️', kind: 'p', ds: '+14% max HP and +1 armour per level.' },
-  vacuole:   { nm: 'Vacuole',      ic: '🧲', kind: 'p', ds: '+30% pickup range and +9% biomass per level.' },
-  regen:     { nm: 'Telomerase',   ic: '💚', kind: 'p', ds: 'Regenerate +0.45 HP/s per level.' },
-  spike:     { nm: 'Chitin Spikes', ic: '🗡️', kind: 'p', ds: '+7% crit chance and contact thorns per level.' },
-  plasmid:   { nm: 'Plasmid',      ic: '🍀', kind: 'p', ds: '+12% luck, +15% DNA and effect duration per level.' },
+  mito:      { nm: 'Bass Boost', ic: 'speaker', kind: 'p', ds: '+12% damage per level.' },
+  ribo:      { nm: 'Harmony', ic: 'notes', kind: 'p', ds: '+1 projectile at levels 2 and 4, +8% projectile speed.' },
+  golgi:     { nm: 'Reverb', ic: 'rings', kind: 'p', ds: '+14% area of effect per level.' },
+  nucleus:   { nm: 'Metronome', ic: 'metronome', kind: 'p', ds: '-7% song cooldown per level.' },
+  flagellum: { nm: 'Sneakers', ic: 'shoe', kind: 'p', ds: '+9% move speed, -6% slide cooldown per level.' },
+  membrane:  { nm: 'Monster Onesie', ic: 'onesie', kind: 'p', ds: '+14% max HP and +1 armour per level.' },
+  vacuole:   { nm: 'Fan Club', ic: 'magnet', kind: 'p', ds: '+30% pickup range and +9% hype per level.' },
+  regen:     { nm: 'Green Smoothie', ic: 'smoothie', kind: 'p', ds: 'Regenerate +0.45 HP/s per level.' },
+  spike:     { nm: 'Stage Sparkle', ic: 'sparkle', kind: 'p', ds: '+7% crit chance and sparkle thorns per level.' },
+  plasmid:   { nm: 'Lucky Scrunchie', ic: 'scrunchie', kind: 'p', ds: '+12% luck, +15% applause and effect duration per level.' },
 };
 
 const ALL = Object.assign({}, WEAPONS, PASSIVES);
 const def = id => ALL[id];
 
+// ------------------------------------------------------------ the duo (cosmetic)
+// Who stands in the bubble. Same powers whoever you pick; the other half of the
+// duo is the one who joins you for the DUET (mitosis) ultimate.
+const HEROES = [
+  { id: 'roxor',          nm: 'RoxorLoops',     mate: 'jasmin',         ds: 'Beatbox loops and big drops.' },
+  { id: 'jasmin',         nm: 'Jasmin',         mate: 'roxor',          ds: 'Sings every venue back in tune.' },
+  { id: 'roxor_monster',  nm: 'Monster Roxor',  mate: 'jasmin_unicorn', ds: 'The green onesie. Do not ask.' },
+  { id: 'jasmin_unicorn', nm: 'Unicorn Jasmin', mate: 'roxor_monster',  ds: 'Sparkles, glitter, one horn.' },
+];
+
 // ------------------------------------------------------------------- strains
 const SPECIES = [
-  { id: 'amoeba',  nm: 'Amoeba',      ic: '🫧', start: 'pseudo',
-    ds: 'The all-rounder. Nothing special, everything workable.', mods: {}, free: true },
-  { id: 'ciliate', nm: 'Ciliate',     ic: '🌾', start: 'cilia',
-    ds: 'Quick and close-range. Thin skin, fast fins.', mods: { spd: 1.2, hp: .82, cd: .95 },
+  { id: 'amoeba',  nm: 'Acoustic Duo', ic: 'mic', start: 'pseudo',
+    ds: 'The all-rounder. Nothing fancy, everything works.', mods: {}, free: true },
+  { id: 'ciliate', nm: 'Street Busker', ic: 'cymbal', start: 'cilia',
+    ds: 'Quick and close-range. Light hoodie, fast feet.', mods: { spd: 1.2, hp: .82, cd: .95 },
     cond: m => m.bestLvl >= 15, condTxt: 'Reach level 15 in a run' },
-  { id: 'myco',    nm: 'Sporeling',   ic: '🍄', start: 'spore',
-    ds: 'Blooms wide. Big area, softer punch.', mods: { area: 1.28, dmg: .9, hp: .95 },
+  { id: 'myco',    nm: 'Confetti Queen', ic: 'confetti', start: 'spore',
+    ds: 'Pops wide. Big area, softer punch.', mods: { area: 1.28, dmg: .9, hp: .95 },
     cond: m => m.bestT >= 8 * 60, condTxt: 'Survive 8 minutes' },
-  { id: 'neuron',  nm: 'Neurocyte',   ic: '⚡', start: 'arc',
-    ds: 'Glass cannon. Fires fast, folds faster.', mods: { cd: .84, dmg: 1.15, hp: .7 },
-    cond: m => m.kills >= 1500, condTxt: 'Kill 1500 pathogens (lifetime)' },
-  { id: 'phago',   nm: 'Phagocyte',   ic: '🛡️', start: 'enzyme',
-    ds: 'A wall with a stomach. Slow, tanky, drains life.', mods: { hp: 1.6, spd: .88, leech: .012, armor: 2 },
+  { id: 'neuron',  nm: 'Rock Star', ic: 'bolt', start: 'arc',
+    ds: 'Glass cannon. Plays fast, folds faster.', mods: { cd: .84, dmg: 1.15, hp: .7 },
+    cond: m => m.kills >= 1500, condTxt: 'Silence 1500 critters (lifetime)' },
+  { id: 'phago',   nm: 'Wall of Sound', ic: 'speaker', start: 'enzyme',
+    ds: 'A wall with a lunchbox. Slow, tanky, drains life.', mods: { hp: 1.6, spd: .88, leech: .012, armor: 2 },
     cond: m => m.bosses >= 1, condTxt: 'Defeat the first boss' },
-  { id: 'plasmo',  nm: 'Plasmodium',  ic: '🦠', start: 'virus',
+  { id: 'plasmo',  nm: 'Viral Star', ic: 'worm', start: 'virus',
     ds: 'Lucky, greedy, fragile. Levels absurdly fast.', mods: { xp: 1.22, luck: 1.3, hp: .78, dna: 1.25 },
-    cond: m => m.dnaTotal >= 3000, condTxt: 'Bank 3000 DNA (lifetime)' },
+    cond: m => m.dnaTotal >= 3000, condTxt: 'Bank 3000 applause (lifetime)' },
 ];
 
 // ----------------------------------------------------------------- pathogens
 // `from` = minute the type enters the spawn table, `w` = relative weight.
 const ENEMIES = [
-  { id: 'cocci',  nm: 'Coccus',        hp: 12,  spd: 58,  dmg: 7,  r: 13, xp: 1, col: '#8fffb0', from: 0, w: 10 },
-  { id: 'bacil',  nm: 'Bacillus',      hp: 22,  spd: 78,  dmg: 8,  r: 12, xp: 2, col: '#7fe0ff', from: 1, w: 9 },
-  { id: 'virion', nm: 'Virion',        hp: 23,  spd: 112, dmg: 9,  r: 11, xp: 2, col: '#ff9de0', from: 2, w: 8, zig: 1 },
-  { id: 'sac',    nm: 'Spore Sac',     hp: 64,  spd: 40,  dmg: 12, r: 20, xp: 4, col: '#d7ff6d', from: 3, w: 6, split: 2 },
-  { id: 'phage',  nm: 'Phage',         hp: 44,  spd: 46,  dmg: 10, r: 15, xp: 4, col: '#ffb44d', from: 4, w: 6, ranged: 2.2 },
-  { id: 'swarm',  nm: 'Swarmer',       hp: 13,  spd: 128, dmg: 5,  r: 8,  xp: 1, col: '#ffe08a', from: 4, w: 7, pack: 8 },
-  { id: 'leech',  nm: 'Leech',         hp: 54,  spd: 96,  dmg: 6,  r: 13, xp: 4, col: '#ff6d8a', from: 6, w: 6, latch: 1 },
-  { id: 'blob',   nm: 'Amoeboid',      hp: 185, spd: 34,  dmg: 16, r: 29, xp: 9, col: '#b28aff', from: 7, w: 4, heavy: 1 },
-  { id: 'prion',  nm: 'Prion',         hp: 100, spd: 72,  dmg: 14, r: 16, xp: 7, col: '#ff4d6d', from: 8, w: 6, armor: 4 },
-  { id: 'macro',  nm: 'Rogue Macrophage', hp: 350, spd: 54, dmg: 22, r: 34, xp: 18, col: '#ff8a3d', from: 9, w: 3, charge: 1, heavy: 1 },
+  { id: 'cocci',  nm: 'Buzzlet',        hp: 12,  spd: 58,  dmg: 7,  r: 13, xp: 1, col: '#8ff0a8', from: 0, w: 10 },
+  { id: 'bacil',  nm: 'Cable Worm',     hp: 22,  spd: 78,  dmg: 8,  r: 12, xp: 2, col: '#ffc2dc', from: 1, w: 9 },
+  { id: 'virion', nm: 'Screech Pom',    hp: 23,  spd: 112, dmg: 9,  r: 11, xp: 2, col: '#ff9ec9', from: 2, w: 8, zig: 1 },
+  { id: 'sac',    nm: 'Echo Pod',       hp: 64,  spd: 40,  dmg: 12, r: 20, xp: 4, col: '#c6ff3d', from: 3, w: 6, split: 2 },
+  { id: 'phage',  nm: 'Autotune Drone', hp: 44,  spd: 46,  dmg: 10, r: 15, xp: 4, col: '#ffb44d', from: 4, w: 6, ranged: 2.2 },
+  { id: 'swarm',  nm: 'Static Sprite',  hp: 13,  spd: 128, dmg: 5,  r: 8,  xp: 1, col: '#ffe08a', from: 4, w: 7, pack: 8 },
+  { id: 'leech',  nm: 'Clinger',        hp: 54,  spd: 96,  dmg: 6,  r: 13, xp: 4, col: '#ff6d8a', from: 6, w: 6, latch: 1 },
+  { id: 'blob',   nm: 'Reverb Cloud',   hp: 185, spd: 34,  dmg: 16, r: 29, xp: 9, col: '#b28aff', from: 7, w: 4, heavy: 1 },
+  { id: 'prion',  nm: 'Feedback Spike', hp: 100, spd: 72,  dmg: 14, r: 16, xp: 7, col: '#ff5a6e', from: 8, w: 6, armor: 4 },
+  { id: 'macro',  nm: 'Rogue Spotlight', hp: 350, spd: 54, dmg: 22, r: 34, xp: 18, col: '#ff8a3d', from: 9, w: 3, charge: 1, heavy: 1 },
 ];
 const EDEF = {}; for (const e of ENEMIES) EDEF[e.id] = e;
 
 const BOSSES = [
-  { id: 'engulfer', nm: 'The Engulfer',   hp: 2600,  spd: 56, r: 54, dmg: 28, col: '#ff8a3d', xp: 140, dna: 60,  pat: ['charge', 'spray'] },
-  { id: 'mother',   nm: 'Mother Spore',   hp: 9000,  spd: 36, r: 64, dmg: 32, col: '#d7ff6d', xp: 260, dna: 110, pat: ['spawn', 'rings'] },
-  { id: 'colossus', nm: 'Prion Colossus', hp: 23000, spd: 48, r: 72, dmg: 38, col: '#ff4d6d', xp: 420, dna: 190, pat: ['rings', 'mark', 'charge', 'spawn'] },
-  { id: 'culture',  nm: 'The Culture',    hp: 58000, spd: 44, r: 88, dmg: 46, col: '#ff4dd2', xp: 900, dna: 400, pat: ['rings', 'spawn', 'mark', 'charge', 'spray'], last: true },
+  { id: 'engulfer', nm: 'The Gobbler Amp', hp: 2600,  spd: 56, r: 54, dmg: 28, col: '#ff8a3d', xp: 140, dna: 60,  pat: ['charge', 'spray'] },
+  { id: 'mother',   nm: 'Mother Mute',     hp: 9000,  spd: 36, r: 64, dmg: 32, col: '#c6ff3d', xp: 260, dna: 110, pat: ['spawn', 'rings'] },
+  { id: 'colossus', nm: 'Feedback Colossus', hp: 23000, spd: 48, r: 72, dmg: 38, col: '#ff5a6e', xp: 420, dna: 190, pat: ['rings', 'mark', 'charge', 'spawn'] },
+  { id: 'culture',  nm: 'The Gloss',       hp: 58000, spd: 44, r: 88, dmg: 46, col: '#e6d9ff', xp: 900, dna: 400, pat: ['rings', 'spawn', 'mark', 'charge', 'spray'], last: true },
 ];
 
 // ---------------------------------------------------------------- the stages
@@ -635,33 +681,45 @@ const BOSSES = [
 // end. Difficulty is driven by stage progress, not the wall clock, so the
 // pressure steps up visibly every time you finish one.
 const MODS = {
-  frenzy:   { nm: 'FRENZY',   ic: '💢', ds: 'Pathogens swim 25% faster',      spd: 1.25 },
-  armoured: { nm: 'ARMOURED', ic: '🛡️', ds: 'Pathogens carry 45% more health', hp: 1.45 },
-  swarm:    { nm: 'SWARM',    ic: '🐝', ds: 'Twice the spawns, weaker hosts',  rate: 1.95, hp: .6 },
-  venom:    { nm: 'VENOM',    ic: '☠️', ds: 'Contact damage +35%',             dmg: 1.35 },
-  starve:   { nm: 'STARVE',   ic: '🥀', ds: 'No health drops — survive on skill', nohp: 1 },
+  frenzy:   { nm: 'FAST TEMPO', ic: 'bolt', ds: 'Critters move 25% faster',      spd: 1.25 },
+  armoured: { nm: 'PADDED', ic: 'onesie', ds: 'Critters carry 45% more health', hp: 1.45 },
+  swarm:    { nm: 'FULL HOUSE', ic: 'duet', ds: 'Twice the spawns, weaker critters',  rate: 1.95, hp: .6 },
+  venom:    { nm: 'SOUR NOTES', ic: 'sour', ds: 'Contact damage +35%',             dmg: 1.35 },
+  starve:   { nm: 'NO SNACKS', ic: 'noheart', ds: 'No health drops. Survive on skill', nohp: 1 },
 };
 const STAGES = [
-  { nm: 'Colonisation', obj: { t: 'survive', n: 70 } },
-  { nm: 'Bloom',        obj: { t: 'kill',    n: 120 } },
-  { nm: 'First Contact', obj: { t: 'boss' }, boss: 0 },
-  { nm: 'Fever',        obj: { t: 'survive', n: 85 },  mod: 'frenzy' },
-  { nm: 'Sporulation',  obj: { t: 'elite',   n: 1 } },
-  { nm: 'Incubation',   obj: { t: 'boss' }, boss: 1, mod: 'swarm' },
-  { nm: 'Necrosis',     obj: { t: 'survive', n: 95 },  mod: 'armoured' },
-  { nm: 'Outbreak',     obj: { t: 'kill',    n: 320 }, mod: 'swarm' },
-  { nm: 'Cascade',      obj: { t: 'boss' }, boss: 2, mod: 'frenzy' },
-  { nm: 'Sepsis',       obj: { t: 'survive', n: 105 }, mod: 'venom' },
-  { nm: 'Bloomfall',    obj: { t: 'elite',   n: 2 },   mod: 'starve' },
-  { nm: 'The Culture',  obj: { t: 'boss' }, boss: 3, mod: 'venom', last: true },
+  { nm: 'Soundcheck',     obj: { t: 'survive', n: 70 },
+    tale: 'The club has gone quiet. Test the mics and wake the room.', done: 'The speakers hum again. Someone in the back claps once.' },
+  { nm: 'Open Mic Night', obj: { t: 'kill',    n: 120 },
+    tale: 'Word gets around. Silence the noisy critters before the next act.', done: 'The open mic is open again. Jasmin takes a bow.' },
+  { nm: 'The Gobbler Amp', obj: { t: 'boss' }, boss: 0,
+    tale: 'A giant amp is swallowing every sound in the building.', done: 'The amp coughs up a hundred lost notes.' },
+  { nm: 'Street Corner',  obj: { t: 'survive', n: 85 },  mod: 'frenzy',
+    tale: 'Busking outside. The critters are in a hurry, and so is the rain.', done: 'The hat on the pavement is full of coins and petals.' },
+  { nm: 'Farmers Market', obj: { t: 'elite',   n: 1 },
+    tale: 'Fresh veg, loud critters. One of them is running the whole stall.', done: 'RoxorLoops buys a very large kale. Worth it.' },
+  { nm: "Mother Mute's Green Room", obj: { t: 'boss' }, boss: 1, mod: 'swarm',
+    tale: 'Mother Mute keeps the backstage quiet. Far too quiet.', done: 'The green room smells of smoothies again.' },
+  { nm: 'Festival Field', obj: { t: 'survive', n: 95 },  mod: 'armoured',
+    tale: 'A festival field, and every critter is wearing earmuffs.', done: 'Sunset. The crowd sings the chorus without being asked.' },
+  { nm: 'Rooftop Party',  obj: { t: 'kill',    n: 320 }, mod: 'swarm',
+    tale: 'The rooftop is packed. Hold the beat while the critters swarm.', done: 'The city lights wink along to the rhythm.' },
+  { nm: 'Stadium Soundcheck', obj: { t: 'boss' }, boss: 2, mod: 'frenzy',
+    tale: 'The stadium feedback is huge, and it is coming for you.', done: 'The stadium roars. For real, this time.' },
+  { nm: 'Tour Bus Night', obj: { t: 'survive', n: 105 }, mod: 'venom',
+    tale: 'A long night on the bus. The critters are sour, and so are the notes.', done: 'The bus rolls on, windows glowing pink.' },
+  { nm: 'Blossom Garden', obj: { t: 'elite',   n: 2 },   mod: 'starve',
+    tale: 'A quiet garden, and no snacks. Two critter VIPs are hiding in the trees.', done: 'Petals fall like applause.' },
+  { nm: 'The Big Stage',  obj: { t: 'boss' }, boss: 3, mod: 'venom', last: true,
+    tale: 'The Gloss waits under the biggest spotlight. Sing it out.', done: 'The Soundlands are unmuted. Encore?' },
 ];
 // Culture strength — picked on the menu. Harder dishes pay more DNA.
 const DIFFS = [
-  { id: 'std', nm: 'Standard', ic: '🧫', ds: 'The dish as designed.',
+  { id: 'std', nm: 'Open Mic', ic: 'mic', ds: 'The show as designed.',
     hp: 1, dmg: 1, rate: 1, dna: 1 },
-  { id: 'vir', nm: 'Virulent', ic: '🔥', ds: 'Up to +45% pathogen health and +25% damage, thicker spawns. ×1.6 DNA',
+  { id: 'vir', nm: 'Headliner', ic: 'flame', ds: 'Up to +45% critter health and +25% damage, thicker spawns. ×1.6 applause',
     hp: 1.45, dmg: 1.25, rate: 1.22, dna: 1.6 },
-  { id: 'let', nm: 'Lethal',   ic: '☠️', ds: 'Up to double health and +55% damage, relentless spawns. ×2.5 DNA',
+  { id: 'let', nm: 'Festival Closer', ic: 'crown', ds: 'Up to double health and +55% damage, relentless spawns. ×2.5 applause',
     hp: 2.1, dmg: 1.55, rate: 1.45, dna: 2.5 },
 ];
 const curDiff = () => DIFFS.find(d => d.id === meta.diff) || DIFFS[0];
@@ -675,44 +733,44 @@ const STAGE_NOMINAL = 90;      // assumed length of a non-timed stage, for pacin
 const objText = st => {
   const o = st.obj;
   if (o.t === 'survive') return 'Survive ' + o.n + 's';
-  if (o.t === 'kill')    return 'Purge ' + o.n + ' pathogens';
-  if (o.t === 'elite')   return o.n > 1 ? 'Hunt ' + o.n + ' marked hosts' : 'Hunt the marked host';
-  return 'Destroy the boss';
+  if (o.t === 'kill')    return 'Silence ' + o.n + ' critters';
+  if (o.t === 'elite')   return o.n > 1 ? 'Find ' + o.n + ' critter VIPs' : 'Find the critter VIP';
+  return 'Out-sing the boss';
 };
 
 // Stage-clear rewards — a real payoff for finishing, chosen from three.
 const REWARDS = [
-  { id: 'heal',  ic: '🫀', nm: 'Reinforce',  ds: '+12% max health, and top it all up.' },
-  { id: 'power', ic: '⚡', nm: 'Overclock',  ds: '+2 levels on one of your organelles.' },
-  { id: 'splice',ic: '✨', nm: 'Free Splice', ds: 'An extra level-up pick, right now.' },
-  { id: 'dna',   ic: '🧬', nm: 'Harvest',    ds: 'A fat DNA payout for the lab.' },
-  { id: 'might', ic: '🔥', nm: 'Hot Mitochondria', ds: '+12% damage for the rest of the run.' },
-  { id: 'guard', ic: '🛡️', nm: 'Hardened Wall', ds: '+2 armour for the rest of the run.' },
+  { id: 'heal',  ic: 'onesie', nm: 'Onesie Upgrade',  ds: '+12% max health, and top it all up.' },
+  { id: 'power', ic: 'bolt', nm: 'Turn It Up',  ds: '+2 levels on one of your songs.' },
+  { id: 'splice',ic: 'sparkle', nm: 'Request Line', ds: 'An extra level-up pick, right now.' },
+  { id: 'dna',   ic: 'note', nm: 'Tip Jar',    ds: 'A fat applause payout for the rehearsal room.' },
+  { id: 'might', ic: 'flame', nm: 'Bass Heavy', ds: '+12% damage for the rest of the run.' },
+  { id: 'guard', ic: 'onesie', nm: 'Padded Hoodie', ds: '+2 armour for the rest of the run.' },
 ];
 
 // -------------------------------------------------------------- the gene lab
 const META_UPS = [
-  { id: 'might',   nm: 'Mitochondrial Density', ic: '🔥', ds: '+6% damage',           max: 8, cost: l => 60 + l * 60 },
-  { id: 'vita',    nm: 'Cytoplasm Volume',      ic: '❤️', ds: '+10 max HP',           max: 8, cost: l => 50 + l * 45 },
-  { id: 'armor',   nm: 'Peptide Wall',          ic: '🛡️', ds: '+1 armour',            max: 5, cost: l => 90 + l * 90 },
-  { id: 'speed',   nm: 'Flagellar Tuning',      ic: '🌊', ds: '+4% swim speed',       max: 6, cost: l => 70 + l * 55 },
-  { id: 'cool',    nm: 'Enzyme Kinetics',       ic: '⏱️', ds: '-3% cooldowns',        max: 6, cost: l => 100 + l * 95 },
-  { id: 'growth',  nm: 'Ribosomal Uptake',      ic: '📈', ds: '+8% biomass gained',   max: 6, cost: l => 80 + l * 75 },
-  { id: 'magnet',  nm: 'Membrane Charge',       ic: '🧲', ds: '+22% pickup range',    max: 5, cost: l => 55 + l * 45 },
-  { id: 'luck',    nm: 'Mutagen Exposure',      ic: '🍀', ds: '+8% luck',             max: 5, cost: l => 110 + l * 100 },
-  { id: 'greed',   nm: 'DNA Scavenging',        ic: '🧬', ds: '+15% DNA from runs',   max: 5, cost: l => 120 + l * 110 },
-  { id: 'dash',    nm: 'Contractile Vacuole',   ic: '💨', ds: '-8% dash cooldown',    max: 4, cost: l => 90 + l * 80 },
-  { id: 'reroll',  nm: 'Unstable Genome',       ic: '🎲', ds: '+1 level-up reroll',   max: 4, cost: l => 140 + l * 130 },
-  { id: 'banish',  nm: 'Gene Silencing',        ic: '🚫', ds: '+1 level-up banish',   max: 4, cost: l => 140 + l * 130 },
-  { id: 'revive',  nm: 'Apoptosis Block',       ic: '💀', ds: '+1 revival per run',   max: 2, cost: l => 450 + l * 650 },
-  { id: 'start',   nm: 'Head Start',            ic: '⭐', ds: 'Begin the run 1 level higher', max: 3, cost: l => 200 + l * 180 },
+  { id: 'might',   nm: 'Bass Practice', ic: 'flame', ds: '+6% damage',           max: 8, cost: l => 60 + l * 60 },
+  { id: 'vita',    nm: 'Stamina Training', ic: 'heart', ds: '+10 max HP',           max: 8, cost: l => 50 + l * 45 },
+  { id: 'armor',   nm: 'Padded Hoodie', ic: 'onesie', ds: '+1 armour',            max: 5, cost: l => 90 + l * 90 },
+  { id: 'speed',   nm: 'Dance Lessons', ic: 'shoe', ds: '+4% move speed',       max: 6, cost: l => 70 + l * 55 },
+  { id: 'cool',    nm: 'Tight Timing', ic: 'clock', ds: '-3% cooldowns',        max: 6, cost: l => 100 + l * 95 },
+  { id: 'growth',  nm: 'Stage Presence', ic: 'sparkle', ds: '+8% hype gained',   max: 6, cost: l => 80 + l * 75 },
+  { id: 'magnet',  nm: 'Fan Magnet', ic: 'magnet', ds: '+22% pickup range',    max: 5, cost: l => 55 + l * 45 },
+  { id: 'luck',    nm: 'Lucky Charms', ic: 'clover', ds: '+8% luck',             max: 5, cost: l => 110 + l * 100 },
+  { id: 'greed',   nm: 'Merch Table', ic: 'note', ds: '+15% applause from runs',   max: 5, cost: l => 120 + l * 110 },
+  { id: 'dash',    nm: 'Slide Practice', ic: 'shoe', ds: '-8% slide cooldown',    max: 4, cost: l => 90 + l * 80 },
+  { id: 'reroll',  nm: 'Setlist Shuffle', ic: 'dice', ds: '+1 level-up reroll',   max: 4, cost: l => 140 + l * 130 },
+  { id: 'banish',  nm: 'Cut From Setlist', ic: 'noentry', ds: '+1 level-up banish',   max: 4, cost: l => 140 + l * 130 },
+  { id: 'revive',  nm: 'Encore!', ic: 'star', ds: '+1 revival per run',   max: 2, cost: l => 450 + l * 650 },
+  { id: 'start',   nm: 'Pre-Show Hype', ic: 'star', ds: 'Begin the run 1 level higher', max: 3, cost: l => 200 + l * 180 },
 ];
 
 // ----------------------------------------------------------------- meta save
 const SAVE_KEY = 'cell_survivor_meta_v1';
 const freshMeta = () => ({
   dna: 0, dnaTotal: 0, kills: 0, bestT: 0, bestLvl: 1, bosses: 0, runs: 0, wins: 0,
-  ups: {}, seen: {}, spec: 'amoeba', diff: 'std', mute: 0, shake: 1, bestStage: 0,
+  ups: {}, seen: {}, spec: 'amoeba', diff: 'std', mute: 0, shake: 1, bestStage: 0, hero: 'roxor',
 });
 let meta = freshMeta();
 
@@ -729,6 +787,7 @@ function loadMeta(){
     }
   } catch (e) { /* corrupt save → fresh start, never a crash */ }
   if (!SPECIES.some(s => s.id === meta.spec && specUnlocked(s))) meta.spec = 'amoeba';
+  if (!HEROES.some(h => h.id === meta.hero)) meta.hero = 'roxor';
   return meta;
 }
 function saveMeta(){ try { localStorage.setItem(SAVE_KEY, JSON.stringify(meta)); } catch (e) {} }
@@ -771,7 +830,7 @@ function makePlayer(spec){
     x: 0, y: 0, vx: 0, vy: 0, r: 20, face: 0, lvl: 1, xp: 0, xpN: xpNeed(1),
     hp: 100, mhp: 100, weapons: [], pas: {}, s: {},
     dashT: 0, dashCd: 0, iT: 0, hurtT: 0, ult: 0, ultT: 0, regenAcc: 0,
-    spec, wob: 0, kills: 0,
+    spec, wob: 0, kills: 0, singT: 0,
   };
   return p;
 }
@@ -884,7 +943,7 @@ function shoot(o, ang, opt){
   G.proj.push({
     x: o.x, y: o.y, vx: Math.cos(ang) * spd, vy: Math.sin(ang) * spd, ang,
     r: opt.r || 6, dmg: opt.dmg, pierce: opt.pierce || 0, life: opt.life || 1.6,
-    col: opt.col || '#bff3ff', glow: opt.glow || opt.col || '#39f0ff', kind: opt.kind || 'spine',
+    col: opt.col || '#fff4e6', glow: opt.glow || opt.col || '#ff7eb6', kind: opt.kind || 'spine',
     home: opt.home || 0, rot: opt.rot || 0, hits: [], uid: uid++,
   });
 }
@@ -899,12 +958,12 @@ function swipe(o, ang, arc, r, dmg, kb, both){
     let da = Math.atan2(dy, dx) - a0;
     while (da > Math.PI) da -= TAU; while (da < -Math.PI) da += TAU;
     if (Math.abs(da) > arc) return;
-    hurtEnemy(e, dmg, { kb, kx: dx, ky: dy, col: '#bff3ff' });
+    hurtEnemy(e, dmg, { kb, kx: dx, ky: dy, col: '#fff4e6' });
   });
 }
 function addPool(x, y, r, dps, life, col, opt){
   if (G.pools.length > 90) G.pools.shift();
-  G.pools.push({ x, y, r, r0: r, dps, life, max: life, col: col || '#9dff6d',
+  G.pools.push({ x, y, r, r0: r, dps, life, max: life, col: col || '#5fe38a',
                  grow: (opt && opt.grow) || 0, slow: (opt && opt.slow) || 0, t: 0, uid: uid++ });
 }
 function orbitals(w, s, o, m, dt, rings){
@@ -923,7 +982,7 @@ function orbitals(w, s, o, m, dt, rings){
         if ((w.hit[key] || 0) > G.t) return;
         if ((e.x - x) ** 2 + (e.y - y) ** 2 > (e.r + 15) ** 2) return;
         w.hit[key] = G.t + s.hitcd;
-        hurtEnemy(e, s.dmg * m, { kb: 90, kx: e.x - o.x, ky: e.y - o.y, col: '#7fe0ff' });
+        hurtEnemy(e, s.dmg * m, { kb: 90, kx: e.x - o.x, ky: e.y - o.y, col: '#ffc2dc' });
         if (s.zap) chain({ x, y }, s.zap * m, 2, 200, 0);
       });
     }
@@ -950,13 +1009,13 @@ function chain(o, dmg, chains, range, stun){
     if (!t) break;
     hitIds.push(t.uid);
     G.zaps.push({ x0: from.x, y0: from.y, x1: t.x, y1: t.y, life: .16, t: 0, seed: rnd() * 999 });
-    hurtEnemy(t, dmg * (1 - i * .04), { col: '#bff3ff' });
+    hurtEnemy(t, dmg * (1 - i * .04), { col: '#fff4e6' });
     if (stun) t.stun = Math.max(t.stun || 0, stun);
     from = { x: t.x, y: t.y };
   }
 }
 function wave(o, r, dmg, opt){
-  G.waves.push({ x: o.x, y: o.y, r: 10, max: r, life: .55, t: 0, col: opt.col || '#7fe0ff', hits: [] });
+  G.waves.push({ x: o.x, y: o.y, r: 10, max: r, life: .55, t: 0, col: opt.col || '#ffc2dc', hits: [] });
   around(o.x, o.y, r, e => {
     if (e.dead) return;
     if ((e.x - o.x) ** 2 + (e.y - o.y) ** 2 > (r + e.r) ** 2) return;
@@ -970,9 +1029,9 @@ function lob(o, ang, d, dmg, r, chainsLeft){
                  t: 0, dur: clamp(d / 620, .22, .9), dmg, r, chain: chainsLeft, uid: uid++ });
 }
 function boom(x, y, r, dmg, col, chainsLeft){
-  G.waves.push({ x, y, r: r * .3, max: r, life: .4, t: 0, col: col || '#ffcf4d', hits: [] });
+  G.waves.push({ x, y, r: r * .3, max: r, life: .4, t: 0, col: col || '#ffd84d', hits: [] });
   shake(Math.min(4, r * .02), 1);
-  for (let i = 0; i < 12; i++) spark(x, y, col || '#ffcf4d', rr(60, 240));
+  for (let i = 0; i < 12; i++) spark(x, y, col || '#ffd84d', rr(60, 240));
   around(x, y, r, e => {
     if (e.dead) return;
     if ((e.x - x) ** 2 + (e.y - y) ** 2 > (r + e.r) ** 2) return;
@@ -985,7 +1044,7 @@ function boom(x, y, r, dmg, col, chainsLeft){
 }
 function infect(e, dps, dur, spread){
   e.inf = { dps, t: dur, spread };
-  text(e.x, e.y - e.r, 'INFECTED', '#9dff6d', .8);
+  text(e.x, e.y - e.r, 'EARWORM', '#5fe38a', .8);
 }
 
 // ============================================================================
@@ -1033,7 +1092,7 @@ function cycleShake(){
   saveMeta();
   return meta.shake;
 }
-const shakeLabel = () => '🎥 Shake: ' + (SHAKE_STEPS.find(s => s.v === shakeAmt()) || SHAKE_STEPS[0]).nm;
+const shakeLabel = () => 'Shake: ' + (SHAKE_STEPS.find(s => s.v === shakeAmt()) || SHAKE_STEPS[0]).nm;
 
 // ============================================================================
 // ENEMIES
@@ -1116,7 +1175,7 @@ function spawnWaveTick(dt){
       const aa = a + rr(-.5, .5);
       spawnEnemy(pick(t2).id, P.x + Math.cos(aa) * R + rr(-40, 40), P.y + Math.sin(aa) * R + rr(-40, 40));
     }
-    toast('🌊 Surge incoming', 1.4);
+    toast('Crowd surge incoming', 1.4);
   }
   // stages that ask for a hunt keep a marked host on the board
   const st = stage();
@@ -1135,8 +1194,8 @@ function spawnElite(marked){
   const e = spawnEnemy(D.id, p.x, p.y, { elite: 1 });
   if (!e) return null;
   e.chest = 1;
-  if (marked){ e.mark = 1; e.hp = e.mhp = e.mhp * 1.6; toast('🎯 A marked host surfaced — hunt it down', 2.4); }
-  else toast('⚡ An elite strain approaches', 1.6);
+  if (marked){ e.mark = 1; e.hp = e.mhp = e.mhp * 1.6; toast('A critter VIP snuck in. Find them!', 2.4); }
+  else toast('A big critter approaches', 1.6);
   return e;
 }
 function spawnBoss(i){
@@ -1151,7 +1210,7 @@ function spawnBoss(i){
   };
   e.mhp = e.hp;
   G.en.push(e); G.boss = e;
-  toast('☣️ ' + B.nm.toUpperCase(), 2.4);
+  toast('BOSS: ' + B.nm.toUpperCase(), 2.4);
   shake(10);
   return e;
 }
@@ -1170,7 +1229,8 @@ function hurtEnemy(e, dmg, opt){
     const l = len(opt.kx, opt.ky);
     e.vx += opt.kx / l * opt.kb; e.vy += opt.ky / l * opt.kb;
   }
-  if (rnd() < .55 || crit) text(e.x + rr(-6, 6), e.y - e.r - 4, Math.round(d), crit ? '#ffcf4d' : '#ffffff', crit ? 1.35 : 1);
+  if (rnd() < .55 || crit) text(e.x + rr(-6, 6), e.y - e.r - 4, Math.round(d), crit ? '#ffd84d' : '#ffffff', crit ? 1.35 : 1);
+  if (crit && frnd() < .3) text(e.x + 14, e.y - e.r - 22, HITWORDS[Math.floor(frnd() * HITWORDS.length)], '#fff8ec', 1.55);
   if (e.hp <= 0) killEnemy(e, opt);
   return d;
 }
@@ -1197,7 +1257,7 @@ function killEnemy(e, opt){
   if (e.inf && e.inf.spread > 0){
     const near = nearList(e.x, e.y, 150, e.inf.spread, o => !o.inf && !o.dead);
     for (const n of near) infect(n, e.inf.dps, e.inf.t > 0 ? e.inf.t : 3, e.inf.spread - 1);
-    G.waves.push({ x: e.x, y: e.y, r: 8, max: 150, life: .4, t: 0, col: '#9dff6d', hits: [] });
+    G.waves.push({ x: e.x, y: e.y, r: 8, max: 150, life: .4, t: 0, col: '#5fe38a', hits: [] });
   }
   // splitters
   if (e.D.split && !e.elite){
@@ -1209,7 +1269,7 @@ function killEnemy(e, opt){
   if (e.boss){
     G.boss = null;
     meta.bosses++;
-    toast('🏆 ' + e.B.nm + ' dissolved', 2.2);
+    toast(e.B.nm + ' is out-sung!', 2.2);
     for (let i = 0; i < 26; i++) spark(e.x, e.y, e.col, rr(80, 420), 1.1);
   }
   // mitosis charge + lifesteal
@@ -1233,7 +1293,7 @@ function updateEnemies(dt){
     if (e.stun > 0) e.stun -= dt;
     if (e.inf){
       e.inf.t -= dt;
-      if (rnd() < dt * 6) spark(e.x + rr(-8, 8), e.y + rr(-8, 8), '#9dff6d', 20, .35);
+      if (rnd() < dt * 6) spark(e.x + rr(-8, 8), e.y + rr(-8, 8), '#5fe38a', 20, .35);
       hurtEnemyDot(e, e.inf.dps * dt);
       if (e.inf.t <= 0) e.inf = null;
       if (e.dead) { continue; }
@@ -1382,7 +1442,7 @@ function hurtPlayer(dmg, src){
   P.hurtT = .35; P.iT = Math.max(P.iT, .26);
   G.flash = Math.min(.6, G.flash + .22);
   shake(Math.min(6, 1.4 + d * .10), 1);
-  text(P.x, P.y - P.r - 6, '-' + Math.round(d), '#ff4d6d', 1.1);
+  text(P.x, P.y - P.r - 6, '-' + Math.round(d), '#ff5a6e', 1.1);
   if (P.hp <= 0) playerDown();
 }
 function playerDown(){
@@ -1390,7 +1450,7 @@ function playerDown(){
     G.revives--;
     P.hp = P.mhp; P.iT = 2.4; P.ult = ULT_MAX;
     nuke(520, 9999);
-    toast('💀 APOPTOSIS BLOCKED — revived', 2.4);
+    toast('ENCORE! You are back on stage', 2.4);
     return;
   }
   endRun(false);
@@ -1410,7 +1470,7 @@ function tryDash(){
   const l = len(ax, ay);
   P.dashT = DASH_TIME; P.dashCd = P.s.dashCd; P.iT = Math.max(P.iT, DASH_TIME + .1);
   P.dvx = ax / l * P.s.spd * 4.4; P.dvy = ay / l * P.s.spd * 4.4;
-  for (let i = 0; i < 10; i++) spark(P.x, P.y, '#39f0ff', rr(40, 160));
+  for (let i = 0; i < 10; i++) spark(P.x, P.y, '#ff7eb6', rr(40, 160));
   sfx('dash');
   return true;
 }
@@ -1424,9 +1484,9 @@ function tryUlt(){
       weapons: P.weapons.map(w => ({ id: w.id, lvl: w.lvl, t: rnd() * .3, ang: rnd() * TAU, hit: {}, nodes: [], side: 1, syms: [] })),
     });
   }
-  wave(P, 300 * P.s.area, 60, { slow: .6, dur: 2, col: '#ff4dd2' });
+  wave(P, 300 * P.s.area, 60, { slow: .6, dur: 2, col: '#a77bff' });
   G.slowmo = .45; shake(10); G.flash = .3;
-  toast('🧬 MITOSIS', 1.4);
+  toast('DUET! Your other half joins in', 1.4);
   sfx('ult');
   return true;
 }
@@ -1440,10 +1500,10 @@ function updatePlayer(dt){
   if (P.dashT > 0){
     P.dashT -= dt;
     P.vx = P.dvx; P.vy = P.dvy;
-    if (rnd() < .6) spark(P.x, P.y, '#39f0ff', 30, .3);
+    if (rnd() < .6) spark(P.x, P.y, '#ff7eb6', 30, .3);
     around(P.x, P.y, P.r + 28, e => {
       if (!e.dead && (e.x - P.x) ** 2 + (e.y - P.y) ** 2 < (e.r + P.r + 8) ** 2)
-        hurtEnemy(e, 26, { kb: 260, kx: e.x - P.x, ky: e.y - P.y, col: '#39f0ff' });
+        hurtEnemy(e, 26, { kb: 260, kx: e.x - P.x, ky: e.y - P.y, col: '#ff7eb6' });
     });
   } else {
     P.vx = lerp(P.vx, tx, 1 - Math.pow(.0009, dt));
@@ -1457,6 +1517,7 @@ function updatePlayer(dt){
   if (P.dashCd > 0) P.dashCd -= dt;
   if (P.iT > 0) P.iT -= dt;
   if (P.hurtT > 0) P.hurtT -= dt;
+  if (P.singT > 0) P.singT -= dt;
   if (P.s.regen){ P.regenAcc += P.s.regen * dt; if (P.regenAcc >= 1){ const n = Math.floor(P.regenAcc); P.regenAcc -= n; heal(n); } }
 
   // weapons
@@ -1475,7 +1536,7 @@ function updatePlayer(dt){
       tickWeapons(co, c.weapons, .55, dt);
     }
     if (P.ultT <= 0){
-      for (const c of G.clones) for (let i = 0; i < 12; i++) spark(c.x, c.y, '#ff4dd2', rr(40, 200));
+      for (const c of G.clones) for (let i = 0; i < 12; i++) spark(c.x, c.y, '#a77bff', rr(40, 200));
       G.clones.length = 0;
     }
   }
@@ -1491,7 +1552,7 @@ function tickWeapons(o, list, m, dt){
       if (w.t <= 0){
         w.t = Math.max(.07, s.cd * P.s.cd);
         D.fire(s, o, m);
-        if (m >= 1) sfx('fire');
+        if (m >= 1){ sfx('fire'); P.singT = .5; }
       }
     }
   }
@@ -1511,7 +1572,7 @@ function updateSyms(dt){
       if (tgt){
         const ang = Math.atan2(tgt.y - s.y, tgt.x - s.x);
         s.ang = ang;
-        shoot(s, ang, { dmg: s.dmg, spd: s.spd || 520, r: 5, pierce: 0, col: '#9dffd0', kind: 'sym',
+        shoot(s, ang, { dmg: s.dmg, spd: s.spd || 520, r: 5, pierce: 0, col: '#9ff0b8', kind: 'sym',
                         leech: s.leech });
       }
     }
@@ -1546,7 +1607,7 @@ function updateProj(dt){
         p.hits.push(e.uid);
         hurtEnemy(e, p.dmg, { kb: 70, kx: p.vx, ky: p.vy, col: p.col, leech: p.leech });
         for (let k = 0; k < 3; k++) spark(p.x, p.y, p.col, rr(30, 120), .25);
-        if (p.rot) addPool(p.x, p.y, 34 * P.s.area, p.dmg * .5, 2, '#ffa1e8');
+        if (p.rot) addPool(p.x, p.y, 34 * P.s.area, p.dmg * .5, 2, '#ffa6d2');
         if (p.pierce-- <= 0) gone = true;
       });
     }
@@ -1557,8 +1618,8 @@ function updateProj(dt){
     const z = G.zones[i];
     z.t -= dt;
     if (z.t <= 0){
-      G.waves.push({ x: z.x, y: z.y, r: z.r * .4, max: z.r, life: .45, t: 0, col: '#c8a1ff', hits: [] });
-      for (let k = 0; k < 10; k++) spark(z.x, z.y, '#c8a1ff', rr(60, 220));
+      G.waves.push({ x: z.x, y: z.y, r: z.r * .4, max: z.r, life: .45, t: 0, col: '#a77bff', hits: [] });
+      for (let k = 0; k < 10; k++) spark(z.x, z.y, '#a77bff', rr(60, 220));
       if ((P.x - z.x) ** 2 + (P.y - z.y) ** 2 < (z.r + P.r) ** 2){ hurtPlayer(z.dmg); shake(5); }
       G.zones.splice(i, 1);
     }
@@ -1579,7 +1640,7 @@ function updateProj(dt){
     const k = clamp(b.t / b.dur, 0, 1);
     b.px = lerp(b.x, b.tx, k); b.py = lerp(b.y, b.ty, k);
     b.h = Math.sin(k * Math.PI) * 46;
-    if (k >= 1){ boom(b.tx, b.ty, b.r, b.dmg, '#ffcf4d', b.chain); G.bombs.splice(i, 1); }
+    if (k >= 1){ boom(b.tx, b.ty, b.r, b.dmg, '#ffd84d', b.chain); G.bombs.splice(i, 1); }
   }
 }
 function updatePools(dt){
@@ -1633,10 +1694,10 @@ function updateOrbs(dt){
 }
 function collect(o){
   if (o.type === 'xp'){ gainXp(o.val); sfx('orb'); }
-  else if (o.type === 'dna'){ G.dna += o.val; text(P.x, P.y - 26, '+' + o.val + ' DNA', '#ffcf4d'); }
-  else if (o.type === 'hp'){ heal(P.mhp * .28); text(P.x, P.y - 26, '+HEAL', '#9dff6d'); }
-  else if (o.type === 'magnet'){ for (const q of G.orbs) q.pull = 1; text(P.x, P.y - 26, 'MAGNET', '#7fe0ff'); }
-  else if (o.type === 'nuke'){ nuke(700, 500 + G.t * 2); text(P.x, P.y - 26, 'PURGE', '#ffffff'); }
+  else if (o.type === 'dna'){ G.dna += o.val; text(P.x, P.y - 26, '+' + o.val + ' applause', '#ffd84d'); }
+  else if (o.type === 'hp'){ heal(P.mhp * .28); text(P.x, P.y - 26, '+HEAL', '#5fe38a'); }
+  else if (o.type === 'magnet'){ for (const q of G.orbs) q.pull = 1; text(P.x, P.y - 26, 'FAN CLUB', '#ffc2dc'); }
+  else if (o.type === 'nuke'){ nuke(700, 500 + G.t * 2); text(P.x, P.y - 26, 'BASS DROP!', '#ffffff'); }
   else if (o.type === 'chest'){ openChest(); }
 }
 function openChest(){
@@ -1646,11 +1707,11 @@ function openChest(){
     const cand = P.weapons.filter(w => !def(w.id).evolved && w.lvl < WEP_MAX);
     if (!cand.length) break;
     const w = pick(cand); w.lvl++; given++;
-    toast('📦 ' + def(w.id).nm + ' → Lv' + w.lvl, 1.8);
+    toast(def(w.id).nm + ' → Lv' + w.lvl, 1.8);
   }
   const dna = Math.round(rr(14, 34) * P.s.dnaM);
   G.dna += dna;
-  if (!given) { heal(P.mhp * .3); toast('📦 +' + dna + ' DNA & a top-up', 1.8); }
+  if (!given) { heal(P.mhp * .3); toast('+' + dna + ' applause & a snack', 1.8); }
   sfx('chest');
 }
 
@@ -1716,11 +1777,11 @@ function rollChoices(){
     const maxL = c.t === 'w' ? WEP_MAX : PAS_MAX;
     while (lv + rar + 1 > maxL && rar > 0) rar--;
     out.push({ t: c.t, id: c.id, rar, nm: D.nm, ic: D.ic, ds: D.ds,
-               lv: lv ? 'Lv ' + lv + ' → ' + (lv + 1 + rar) : (c.t === 'w' ? 'New organelle' : 'New mutation') });
+               lv: lv ? 'Lv ' + lv + ' → ' + (lv + 1 + rar) : (c.t === 'w' ? 'New song' : 'New gear') });
   }
   if (!out.length){
-    out.push({ t: 'heal', id: 'heal', rar: 0, nm: 'Cytoplasm Top-Up', ic: '💚', ds: 'Restore 40% of your health.', lv: 'Fallback' });
-    out.push({ t: 'dna',  id: 'dna',  rar: 0, nm: 'Free DNA', ic: '🧬', ds: 'Bank 40 DNA for the lab.', lv: 'Fallback' });
+    out.push({ t: 'heal', id: 'heal', rar: 0, nm: 'Green Smoothie', ic: 'smoothie', ds: 'Restore 40% of your health.', lv: 'Fallback' });
+    out.push({ t: 'dna',  id: 'dna',  rar: 0, nm: 'Tip Jar', ic: 'note', ds: 'Bank 40 applause for the rehearsal room.', lv: 'Fallback' });
   }
   G.choices = out;
   return out;
@@ -1738,7 +1799,7 @@ function choose(i){
   if (c.t === 'evo'){
     const w = ownedW(c.from);
     if (w){ w.id = c.id; w.lvl = WEP_MAX; w.t = 0; w.hit = {}; }
-    toast('✨ ' + c.nm, 2.2);
+    toast(c.nm, 2.2);
   } else if (c.t === 'w'){
     // a fresh organelle arrives at Lv1 (+rarity); an owned one gains 1 (+rarity)
     let w = ownedW(c.id);
@@ -1788,8 +1849,9 @@ function beginStage(){
   P.iT = Math.max(P.iT, 1.4);   // you resume inside whatever you didn't kill; don't get chewed on frame one
   if (st.boss !== undefined) spawnBoss(st.boss);
   toast('STAGE ' + (G.stage + 1) + ' · ' + st.nm.toUpperCase(), 2.6);
-  toast('🎯 ' + objText(st), 3.2);
-  if (st.mod) toast(MODS[st.mod].ic + ' ' + MODS[st.mod].nm + ' — ' + MODS[st.mod].ds, 3.6);
+  if (st.tale) toast(st.tale, 4);
+  toast(objText(st), 3.2);
+  if (st.mod) toast(MODS[st.mod].nm + ': ' + MODS[st.mod].ds, 3.6);
 }
 function objProgress(){
   const st = stage(), o = st.obj;
@@ -1802,7 +1864,7 @@ function objLabel(){
   const st = stage(), o = st.obj;
   if (o.t === 'survive') return Math.max(0, Math.ceil(o.n - G.stageT)) + 's left';
   if (o.t === 'kill')    return Math.min(G.stageKills, o.n) + ' / ' + o.n;
-  if (o.t === 'elite')   return G.marks + ' / ' + o.n + ' hunted';
+  if (o.t === 'elite')   return G.marks + ' / ' + o.n + ' found';
   return G.boss ? Math.ceil(clamp(G.boss.hp / G.boss.mhp, 0, 1) * 100) + '% left' : 'incoming';
 }
 function objDone(){
@@ -1824,7 +1886,7 @@ function clearStage(){
   // A pressure wave scatters the culture — nothing dies for free, and no
   // free pile of biomass lands in your lap. What you didn't kill is still
   // out there when the next stage starts.
-  G.waves.push({ x: P.x, y: P.y, r: 40, max: 900, life: .7, t: 0, col: '#9dff6d', hits: [] });
+  G.waves.push({ x: P.x, y: P.y, r: 40, max: 900, life: .7, t: 0, col: '#5fe38a', hits: [] });
   for (let i = G.en.length - 1; i >= 0; i--){
     const e = G.en[i];
     if (e.boss) continue;
@@ -1852,11 +1914,11 @@ function takeReward(i){
     if (r.id === 'heal'){ P.bonusHp = (P.bonusHp || 0) + .12; recalc(true); P.hp = P.mhp; }
     else if (r.id === 'power'){
       const cand = P.weapons.filter(w => w.lvl < WEP_MAX && !def(w.id).evolved);
-      if (cand.length){ const w = pick(cand); w.lvl = Math.min(WEP_MAX, w.lvl + 2); toast('⚡ ' + def(w.id).nm + ' → Lv' + w.lvl, 2); }
+      if (cand.length){ const w = pick(cand); w.lvl = Math.min(WEP_MAX, w.lvl + 2); toast(def(w.id).nm + ' → Lv' + w.lvl, 2); }
       else { heal(P.mhp * .5); }
     }
     else if (r.id === 'splice') splice = true;
-    else if (r.id === 'dna'){ const d = Math.round((80 + G.stage * 40) * P.s.dnaM); G.dna += d; toast('🧬 +' + d + ' DNA', 2); }
+    else if (r.id === 'dna'){ const d = Math.round((80 + G.stage * 40) * P.s.dnaM); G.dna += d; toast('+' + d + ' applause', 2); }
     else if (r.id === 'might'){ P.bonusDmg = (P.bonusDmg || 0) + .12; recalc(true); }
     else if (r.id === 'guard'){ P.bonusArmor = (P.bonusArmor || 0) + 2; recalc(true); }
   }
@@ -1954,7 +2016,7 @@ function updateFx(dt){
 // RENDER
 // ============================================================================
 const cv = document.getElementById('c');
-const ctx = cv.getContext('2d');
+let ctx = cv.getContext('2d'); // let: the menu duo borrows it to draw on its own canvas
 let CW = 1280, CH = 720, Z = 1, DPR = 1;
 
 function fit(){
@@ -2013,7 +2075,7 @@ const MOTES = [];
 function draw(){
   const w = cv.width, h = cv.height;
   ctx.setTransform(1, 0, 0, 1, 0, 0);
-  ctx.fillStyle = '#04070d';
+  ctx.fillStyle = '#0d0b1e';
   ctx.fillRect(0, 0, w, h);
   ctx.save();
   ctx.scale(DPR, DPR);
@@ -2042,458 +2104,913 @@ function draw(){
   drawOverlay();
 }
 
-function drawDish(){
-  // culture medium
-  const g = ctx.createRadialGradient(0, 0, 80, 0, 0, DISH_R);
-  g.addColorStop(0, '#0a1b26'); g.addColorStop(.55, '#071320'); g.addColorStop(1, '#03070e');
-  ctx.fillStyle = g;
-  ctx.beginPath(); ctx.arc(0, 0, DISH_R, 0, TAU); ctx.fill();
-  // faint cell-culture grid
-  ctx.strokeStyle = 'rgba(57,240,255,.045)'; ctx.lineWidth = 1;
-  const step = 160;
-  const x0 = Math.floor((G.cam.x - G.vw / 2) / step) * step, x1 = G.cam.x + G.vw / 2;
-  const y0 = Math.floor((G.cam.y - G.vh / 2) / step) * step, y1 = G.cam.y + G.vh / 2;
-  ctx.beginPath();
-  for (let x = x0; x <= x1; x += step){ ctx.moveTo(x, y0); ctx.lineTo(x, y1); }
-  for (let y = y0; y <= y1; y += step){ ctx.moveTo(x0, y); ctx.lineTo(x1, y); }
-  ctx.stroke();
-  // drifting motes
-  ctx.globalCompositeOperation = 'lighter';
-  for (const m of MOTES){
-    if (!onScreen(m.x, m.y, 30)) continue;
-    const yy = m.y + Math.sin(G.at * .5 + m.p) * 9, xx = m.x + Math.cos(G.at * .37 + m.p) * 9;
-    ctx.globalAlpha = m.a * (.5 + .5 * Math.sin(G.at + m.p));
-    ctx.fillStyle = '#6ff0ff';
-    ctx.beginPath(); ctx.arc(xx, yy, m.r, 0, TAU); ctx.fill();
+// ============================================================================
+// ART: the RoxorLoops & Jasmin look. The Hocus Vocus "chibi candy" style:
+// a warm brown outline on everything, flat candy colour + ONE hard cel shadow
+// (light from the upper right), a thin gloss, big flat-cel eyes with a
+// catchlight, sparkles and notes. The duo themselves are drawn by the Hocus
+// Vocus cast kit (hv/*.js, ART.rj); everything else is canvas paths in this
+// file. All of it is cosmetic: it never touches the seeded simulation rng
+// (frnd() is the art-only stream), and without the cast kit loaded (the
+// headless suite) the hero falls back to a plain cartoon face in the bubble.
+// ============================================================================
+const INK = '#2d170f', CREAM = '#fff4e6', CREAM2 = '#fff8ec';
+const FONT = '"Arial Rounded MT Bold","Nunito","Quicksand","Varela Round","Trebuchet MS",Arial,sans-serif';
+const HITWORDS = ['LA!', 'BOOM!', 'TING!', 'PKAH!', 'NANANA!', 'SIZZ!', 'WOMP!'];
+let fxSeed = 20241024;
+let LOD = 0; // 1 in a big crowd: germs lose their gloss, brows and cheeks
+function frnd(){ fxSeed = (Math.imul(fxSeed, 1664525) + 1013904223) >>> 0; return fxSeed / 4294967296; }
+
+// the warm hard cel shadow: the base colour pulled toward the brown ink
+const SHADE = {};
+function shadeOf(hex){
+  let s = SHADE[hex]; if (s) return s;
+  const n = parseInt(hex.slice(1, 7), 16), r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
+  const m = (a, t) => Math.round(a + (t - a) * .36).toString(16).padStart(2, '0');
+  return (SHADE[hex] = '#' + m(r, 0x2d) + m(g, 0x17) + m(b, 0x0f));
+}
+
+// ------------------------------------------------------------- small glyphs
+function star4(x, y, r, k){ // the 4-point sparkle
+  const q = r * (k || .3);
+  ctx.beginPath(); ctx.moveTo(x, y - r);
+  ctx.quadraticCurveTo(x + q, y - q, x + r, y); ctx.quadraticCurveTo(x + q, y + q, x, y + r);
+  ctx.quadraticCurveTo(x - q, y + q, x - r, y); ctx.quadraticCurveTo(x - q, y - q, x, y - r);
+  ctx.closePath();
+}
+function sparkle(x, y, r, col, lw){ // inked sparkle
+  star4(x, y, r, .28); ctx.lineWidth = lw || 2; ctx.strokeStyle = INK; ctx.lineJoin = 'round'; ctx.stroke();
+  ctx.fillStyle = col; ctx.fill();
+}
+function note(x, y, s, col){ // an eighth note
+  ctx.save(); ctx.translate(x, y); ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  for (let p = 0; p < 2; p++){
+    const c = p ? col : INK, ex = p ? 0 : 3;
+    ctx.strokeStyle = c; ctx.fillStyle = c; ctx.lineWidth = s * .26 + ex;
+    ctx.beginPath(); ctx.moveTo(s * .5, -s * .1); ctx.lineTo(s * .5, -s * 1.45);
+    ctx.quadraticCurveTo(s * .55, -s * .9, s * 1.05, -s * .7); ctx.stroke();
+    ctx.beginPath(); ctx.ellipse(0, 0, s * .62 + ex * .5, s * .46 + ex * .5, -.35, 0, TAU); ctx.fill();
+  }
+  ctx.restore();
+}
+function heartPath(x, y, s){
+  ctx.beginPath(); ctx.moveTo(x, y + s * .9);
+  ctx.bezierCurveTo(x - s * 1.5, y - s * .1, x - s * .7, y - s * 1.1, x, y - s * .35);
+  ctx.bezierCurveTo(x + s * .7, y - s * 1.1, x + s * 1.5, y - s * .1, x, y + s * .9);
+  ctx.closePath();
+}
+function petal(x, y, r, rot, col){
+  ctx.save(); ctx.translate(x, y); ctx.rotate(rot);
+  ctx.beginPath(); ctx.moveTo(0, 0); ctx.quadraticCurveTo(r * .9, -r * .35, r * .55, -r * .95);
+  ctx.quadraticCurveTo(r * .1, -r * .6, 0, 0); ctx.closePath();
+  ctx.fillStyle = col; ctx.fill(); ctx.restore();
+}
+function capsule(len, wid){ // centred, along +x
+  const rr = wid / 2, h = Math.max(0, len / 2 - rr);
+  ctx.beginPath(); ctx.arc(h, 0, rr, -Math.PI / 2, Math.PI / 2); ctx.arc(-h, 0, rr, Math.PI / 2, Math.PI * 1.5); ctx.closePath();
+}
+
+// A cel-shaded blob: hard shadow underneath, the lit base shifted toward the
+// upper right, one warm outline, one gloss arc. Origin = centre.
+function celBlob(r, wob, amp, pts, base, sx, sy){
+  ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+  blobPath(0, 0, r, wob, amp, pts, sx, sy); ctx.fillStyle = shadeOf(base); ctx.fill();
+  blobPath(r * .07, -r * .07, r * .93, wob, amp, pts, sx, sy); ctx.fillStyle = base; ctx.fill();
+  blobPath(0, 0, r, wob, amp, pts, sx, sy); ctx.lineWidth = r > 40 ? 3.4 : r > 24 ? 2.8 : 2.3; ctx.strokeStyle = INK; ctx.stroke();
+  if (LOD) return;
+  ctx.strokeStyle = 'rgba(255,248,236,.85)'; ctx.lineWidth = Math.max(1.6, r * .1);
+  ctx.beginPath(); ctx.arc(0, 0, r * .68, -1.3, -.55); ctx.stroke();
+}
+// the same idea for any closed shape the caller has just built as a path
+function celPath(base, off, lw){
+  ctx.fillStyle = shadeOf(base); ctx.fill();
+  ctx.save(); ctx.clip(); ctx.translate(off, -off); ctx.fillStyle = base; ctx.fill(); ctx.restore();
+  ctx.lineWidth = lw || 2.4; ctx.strokeStyle = INK; ctx.stroke();
+}
+
+// Big flat-cel eyes with a catchlight. (lx, ly) = where it looks, unit vector.
+function eye(x, y, rx, ry, lx, ly){
+  ctx.fillStyle = CREAM2; ctx.beginPath(); ctx.ellipse(x, y, rx, ry, 0, 0, TAU); ctx.fill();
+  ctx.lineWidth = 1.4; ctx.strokeStyle = INK; ctx.stroke();
+  const px = x + lx * rx * .32, py = y + ly * ry * .3;
+  ctx.fillStyle = INK; ctx.beginPath(); ctx.ellipse(px, py, rx * .62, ry * .74, 0, 0, TAU); ctx.fill();
+  ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(px - rx * .2, py - ry * .28, Math.max(.9, rx * .22), 0, TAU); ctx.fill();
+}
+// o: ex, ey, es (eye spread / height / size, x radius), mouth ('smile' | 'open' | 'grin' | 'o'), brow (angry), blush, ph
+function face(r, gx, gy, o){
+  o = o || {};
+  const ex = r * (o.ex || .32), ey = r * (o.ey === undefined ? -.08 : o.ey), es = Math.max(1.8, r * (o.es || .2));
+  const bl = ((G.at + (o.ph || 0)) % 4.3) < .12 ? .14 : 1;
+  if (!o.noEyes){
+    eye(-ex, ey, es, es * 1.15 * bl, gx, gy);
+    eye(ex, ey, es, es * 1.15 * bl, gx, gy);
+  }
+  if (LOD && !o.keep) return;
+  if (o.blush){
+    ctx.fillStyle = 'rgba(255,126,182,.55)';
+    ctx.beginPath(); ctx.ellipse(-ex * 1.42, ey + es * 1.5, es * .7, es * .42, 0, 0, TAU); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(ex * 1.42, ey + es * 1.5, es * .7, es * .42, 0, 0, TAU); ctx.fill();
+  }
+  if (o.brow){
+    ctx.strokeStyle = INK; ctx.lineWidth = Math.max(1.7, r * .09); ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(-ex - es * 1.15, ey - es * 2); ctx.lineTo(-ex + es * 1, ey - es * 1.35);
+    ctx.moveTo(ex + es * 1.15, ey - es * 2); ctx.lineTo(ex - es * 1, ey - es * 1.35); ctx.stroke();
+  }
+  const m = o.mouth, my = r * (o.my === undefined ? .26 : o.my), mw = r * (o.mw || .17);
+  if (m === 'smile'){
+    ctx.strokeStyle = INK; ctx.lineWidth = Math.max(1.5, r * .075); ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.arc(0, my - mw * .5, mw, .22 * Math.PI, .78 * Math.PI); ctx.stroke();
+  } else if (m === 'open' || m === 'grin'){
+    ctx.beginPath(); ctx.arc(0, my - mw * .45, mw * 1.25, 0, Math.PI); ctx.closePath();
+    ctx.fillStyle = INK; ctx.fill();
+    ctx.fillStyle = '#ff7eb6'; ctx.beginPath(); ctx.ellipse(0, my + mw * .55, mw * .62, mw * .36, 0, 0, TAU); ctx.fill();
+    if (m === 'grin'){
+      ctx.fillStyle = CREAM2; ctx.fillRect(-mw * 1.05, my - mw * .5, mw * .8, mw * .5); ctx.fillRect(mw * .25, my - mw * .5, mw * .8, mw * .5);
+    }
+  } else if (m === 'o'){
+    ctx.fillStyle = INK; ctx.beginPath(); ctx.ellipse(0, my, mw * .55, mw * .7, 0, 0, TAU); ctx.fill();
+  }
+}
+
+// ----------------------------------------------------------------- the cast
+const HERO_ART = (typeof ART !== 'undefined' && ART && ART.rj && typeof ART.rj.draw === 'function') ? ART.rj : null;
+const heroDef = id => HEROES.find(h => h.id === id) || HEROES[0];
+const heroScale = r => (3.5 * (20 + (r - 20) * .45)) / 262; // the figure is ~262 px tall at s = 1
+let heroBroken = false;
+// The cast kit paints a figure from ~200 paths (about 3 ms in software raster), too much to repeat at 60 fps for
+// the player and every duet partner. So each figure keeps its own offscreen frame, redrawn 16 times a second
+// (or at once when the pose, size or direction changes) and blitted every frame: a chibi's 16 fps idle life.
+const HERO_CACHE = {}, HB = { half: 190, top: 360, bot: 30 };
+function heroSprite(slot, id, s, pose, t, flip, q){
+  const sq = Math.round(s * 400) / 400, key = id + '|' + pose + '|' + (flip ? 1 : 0) + '|' + sq + '|' + q.toFixed(1);
+  let h = HERO_CACHE[slot];
+  if (!h) h = HERO_CACHE[slot] = { cv: document.createElement('canvas'), key: '', t: -9 };
+  if (h.key !== key || Math.abs(t - h.t) > 1 / 16){
+    const W = Math.ceil(2 * HB.half * sq * q), H = Math.ceil((HB.top + HB.bot) * sq * q);
+    if (h.cv.width !== W || h.cv.height !== H){ h.cv.width = W; h.cv.height = H; }
+    const c = h.cv.getContext('2d');
+    c.setTransform(1, 0, 0, 1, 0, 0); c.clearRect(0, 0, W, H); c.setTransform(q, 0, 0, q, 0, 0);
+    HERO_ART.draw(c, id, { x: HB.half * sq, y: HB.top * sq, s: sq, pose, t, flip: !!flip, noShadow: true });
+    h.key = key; h.t = t;
+  }
+  return { cv: h.cv, s: sq };
+}
+function drawHeroFig(id, x, feetY, s, pose, t, flip, alpha, slot, q){
+  if (alpha !== undefined) ctx.globalAlpha = alpha;
+  if (HERO_ART && !heroBroken){
+    try {
+      if (slot === undefined) HERO_ART.draw(ctx, id, { x, y: feetY, s, pose, t, flip: !!flip, noShadow: true });
+      else {
+        const f = heroSprite(slot, id, s, pose, t, flip, q || clamp(Z * DPR, 1, 4));
+        ctx.drawImage(f.cv, x - HB.half * f.s, feetY - HB.top * f.s, 2 * HB.half * f.s, (HB.top + HB.bot) * f.s);
+      }
+    } catch (err){ heroBroken = true; }
+  }
+  if (!HERO_ART || heroBroken){ // plain cartoon face, never a crash
+    ctx.save(); ctx.translate(x, feetY - 131 * s); ctx.scale(s * 2.4, s * 2.4);
+    ctx.fillStyle = id.indexOf('jasmin') === 0 ? '#ff7eb6' : '#3fcf6a'; ctx.beginPath(); ctx.arc(0, 0, 22, 0, TAU); ctx.fill();
+    ctx.lineWidth = 2.6; ctx.strokeStyle = INK; ctx.stroke(); face(22, 0, 0, { mouth: 'smile', blush: 1 });
+    ctx.restore();
   }
   ctx.globalAlpha = 1;
-  ctx.globalCompositeOperation = 'source-over';
-  // rim
-  ctx.strokeStyle = 'rgba(57,240,255,.30)'; ctx.lineWidth = 7;
-  ctx.beginPath(); ctx.arc(0, 0, DISH_R, 0, TAU); ctx.stroke();
-  ctx.strokeStyle = 'rgba(255,77,210,.10)'; ctx.lineWidth = 26;
-  ctx.beginPath(); ctx.arc(0, 0, DISH_R + 15, 0, TAU); ctx.stroke();
 }
-function drawDecals(){
+function heroPose(){
+  if (G.state === 'over') return G.won ? 'cheer' : 'down';
+  if (P.hurtT > 0) return 'hurt';
+  if (P.ultT > 0 || P.dashT > 0) return 'cheer';
+  if (len(P.vx, P.vy) > 30) return 'walk';
+  return P.singT > 0 ? 'sing' : 'idle';
+}
+// the cell membrane: a soap bubble with a cream rim; back half under the hero, gloss over it
+function bubbleBack(x, y, r, tint){
+  ctx.fillStyle = tint; ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.fill();
+  ctx.lineWidth = 3; ctx.strokeStyle = INK; ctx.stroke();
+  ctx.lineWidth = 1.6; ctx.strokeStyle = 'rgba(255,244,230,.8)';
+  ctx.beginPath(); ctx.arc(x, y, r - 2.2, 0, TAU); ctx.stroke();
+}
+function bubbleFront(x, y, r){
+  ctx.lineCap = 'round'; ctx.strokeStyle = 'rgba(255,255,255,.9)'; ctx.lineWidth = 2.6;
+  ctx.beginPath(); ctx.arc(x, y, r * .86, -.95, -.35); ctx.stroke();      // the gloss sits on the lit rim, clear of the face
+  ctx.fillStyle = 'rgba(255,255,255,.9)'; ctx.beginPath(); ctx.arc(x + r * .86 * Math.cos(-.1), y + r * .86 * Math.sin(-.1), 1.8, 0, TAU); ctx.fill();
+}
+function groundShadow(x, y, rx, ry){
+  ctx.fillStyle = 'rgba(13,11,30,.34)'; ctx.beginPath(); ctx.ellipse(x, y, rx, ry, 0, 0, TAU); ctx.fill();
+}
+
+// ------------------------------------------------------------- the stage floor
+const NOTE_COLS = ['#ff7eb6', '#ffd84d', '#a77bff', '#5fe38a'];
+function drawDish(){
+  const vi = Math.min(G.state === 'menu' ? 0 : G.stage, VENUES.length - 1), v = VENUES[vi], bk = BOKEH[v.bk];
+  // the venue floor, with its own pattern and props
+  const g = ctx.createRadialGradient(0, 0, 80, 0, 0, DISH_R);
+  g.addColorStop(0, v.floor[0]); g.addColorStop(.5, v.floor[1]); g.addColorStop(1, v.floor[2]);
+  ctx.fillStyle = g;
+  ctx.beginPath(); ctx.arc(0, 0, DISH_R, 0, TAU); ctx.fill();
+  drawFloorPattern(v);
+  const step = 150;
+  const x0 = Math.floor((G.cam.x - G.vw / 2) / step) * step, x1 = G.cam.x + G.vw / 2 + step;
+  const y0 = Math.floor((G.cam.y - G.vh / 2) / step) * step, y1 = G.cam.y + G.vh / 2 + step;
+  ctx.fillStyle = v.dot;
+  ctx.beginPath();
+  for (let y = y0, row = 0; y <= y1; y += step, row++)
+    for (let x = x0 + (row & 1 ? step / 2 : 0); x <= x1; x += step){ ctx.moveTo(x + 7, y); ctx.arc(x, y, 7, 0, TAU); }
+  ctx.fill();
+  for (const pr of propsFor(vi)) if (onScreen(pr.x, pr.y, 50)) drawProp(pr, v);
+  // the key light follows the duo
+  if (P){
+    const sp = ctx.createRadialGradient(P.x, P.y, 20, P.x, P.y, 330);
+    sp.addColorStop(0, 'rgba(255,244,214,.16)'); sp.addColorStop(1, 'rgba(255,244,214,0)');
+    ctx.fillStyle = sp; ctx.fillRect(P.x - 340, P.y - 340, 680, 680);
+  }
+  // bokeh, drifting notes and petals
+  for (let i = 0; i < MOTES.length; i++){
+    const m = MOTES[i];
+    if (!onScreen(m.x, m.y, 30)) continue;
+    const yy = m.y + Math.sin(G.at * .5 + m.p) * 9, xx = m.x + Math.cos(G.at * .37 + m.p) * 9;
+    const col = bk[i & 3], tw = .5 + .5 * Math.sin(G.at + m.p);
+    if (i % 9 === 0){ ctx.globalAlpha = .55; note(xx, yy, 6 + m.r * 1.4, col); }
+    else if (i % 9 === 4){ ctx.globalAlpha = .6; ctx.save(); ctx.translate(xx, yy); petal(0, 0, 9, G.at * .6 + m.p, '#ffc2dc'); petal(0, 0, 9, G.at * .6 + m.p + 2.1, '#ff7eb6'); ctx.restore(); }
+    else { ctx.globalAlpha = m.a * tw * .8; ctx.fillStyle = col; ctx.beginPath(); ctx.arc(xx, yy, m.r + .8, 0, TAU); ctx.fill(); }
+  }
+  ctx.globalAlpha = 1;
+  // the venue wall (curtains, tent, hedge, stands...) and the cream lip; only when the rim is in view
+  if (Math.hypot(G.cam.x, G.cam.y) + Math.hypot(G.vw, G.vh) * .5 < DISH_R - 80) return;
+  ctx.strokeStyle = v.cur[0]; ctx.lineWidth = 360;
+  ctx.beginPath(); ctx.arc(0, 0, DISH_R + 200, 0, TAU); ctx.stroke();
+  ctx.strokeStyle = v.cur[1]; ctx.setLineDash([46, 38]);
+  ctx.beginPath(); ctx.arc(0, 0, DISH_R + 200, 0, TAU); ctx.stroke(); ctx.setLineDash([]);
+  ctx.strokeStyle = INK; ctx.lineWidth = 30;
+  ctx.beginPath(); ctx.arc(0, 0, DISH_R + 6, 0, TAU); ctx.stroke();
+  ctx.strokeStyle = CREAM; ctx.lineWidth = 16;
+  ctx.beginPath(); ctx.arc(0, 0, DISH_R, 0, TAU); ctx.stroke();
+  ctx.strokeStyle = 'rgba(255,126,182,.22)'; ctx.lineWidth = 22;
+  ctx.beginPath(); ctx.arc(0, 0, DISH_R - 22, 0, TAU); ctx.stroke();
+}
+function drawDecals(){ // candy splats
   for (const d of G.decals){
     if (!onScreen(d.x, d.y, 20)) continue;
-    ctx.globalAlpha = clamp(d.life / d.max, 0, 1) * .3;
+    ctx.globalAlpha = clamp(d.life / d.max, 0, 1) * .42;
     ctx.fillStyle = d.col;
     blobPath(d.x, d.y, d.r, d.rot, .28, 9);
     ctx.fill();
   }
   ctx.globalAlpha = 1;
 }
-function drawPools(){
-  ctx.globalCompositeOperation = 'lighter';
+function drawPools(){ // gooey puddles
   for (const p of G.pools){
     if (!onScreen(p.x, p.y, p.r)) continue;
     const a = clamp(p.life / p.max, 0, 1);
-    glow(p.x, p.y, p.r * 1.15, p.col, .18 * a);
-    ctx.globalAlpha = .22 * a;
-    ctx.fillStyle = p.col;
     blobPath(p.x, p.y, p.r, G.t * 1.6 + p.uid, .09, 16);
-    ctx.fill();
-    ctx.globalAlpha = .5 * a; ctx.strokeStyle = p.col; ctx.lineWidth = 2; ctx.stroke();
-    // bubbles
-    ctx.globalAlpha = .35 * a;
+    ctx.globalAlpha = .34 * a; ctx.fillStyle = p.col; ctx.fill();
+    ctx.globalAlpha = .75 * a; ctx.lineWidth = 2.4; ctx.strokeStyle = INK; ctx.stroke();
+    ctx.globalAlpha = .75 * a; ctx.fillStyle = CREAM;
     for (let i = 0; i < 3; i++){
       const ang = p.uid * 1.7 + i * 2.1 + G.t * 1.1;
       ctx.beginPath(); ctx.arc(p.x + Math.cos(ang) * p.r * .5, p.y + Math.sin(ang) * p.r * .5, 3 + i, 0, TAU); ctx.fill();
     }
   }
-  ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
-}
-const ORB_COL = { xp: '#39f0ff', dna: '#ffcf4d', hp: '#9dff6d', magnet: '#7fe0ff', nuke: '#ffffff', chest: '#ffcf4d' };
-function drawOrbs(){
-  ctx.globalCompositeOperation = 'lighter';
-  for (const o of G.orbs){
-    if (!onScreen(o.x, o.y, 20)) continue;
-    const col = ORB_COL[o.type] || '#39f0ff';
-    const pulse = 1 + Math.sin(G.t * 6 + o.uid) * .12;
-    if (o.type === 'chest'){
-      glow(o.x, o.y, 30 * pulse, col, .8);
-      ctx.globalCompositeOperation = 'source-over';
-      ctx.fillStyle = '#1b1206'; ctx.strokeStyle = col; ctx.lineWidth = 2;
-      ctx.beginPath(); ctx.rect(o.x - 11, o.y - 9, 22, 18); ctx.fill(); ctx.stroke();
-      ctx.fillStyle = col; ctx.fillRect(o.x - 11, o.y - 2, 22, 3);
-      ctx.globalCompositeOperation = 'lighter';
-      continue;
-    }
-    const r = o.type === 'xp' ? 5 + Math.min(4, o.val * .5) : 8;
-    glow(o.x, o.y, r * 3.4 * pulse, col, .55);
-    ctx.fillStyle = col;
-    ctx.beginPath(); ctx.arc(o.x, o.y, r * pulse, 0, TAU); ctx.fill();
-  }
-  ctx.globalCompositeOperation = 'source-over';
   ctx.globalAlpha = 1;
 }
+const ORB_COL = { xp: '#ff7eb6', dna: '#ffd84d', hp: '#ff5a6e', magnet: '#a77bff', nuke: '#ffd84d', chest: '#ffd84d' };
+function drawOrbs(){
+  ctx.lineJoin = 'round';
+  for (const o of G.orbs){
+    if (!onScreen(o.x, o.y, 24)) continue;
+    const pulse = 1 + Math.sin(G.t * 6 + o.uid) * .1, x = o.x, y = o.y + Math.sin(G.t * 3 + o.uid) * 1.6;
+    if (o.type === 'chest'){
+      groundShadow(x, y + 12, 16, 4.5);
+      ctx.beginPath(); ctx.rect(x - 13, y - 9, 26, 19);
+      ctx.fillStyle = '#c8264f'; ctx.fill(); ctx.lineWidth = 2.6; ctx.strokeStyle = INK; ctx.stroke();
+      ctx.fillStyle = '#8f1838'; ctx.fillRect(x - 11.5, y + 3, 23, 5.5);
+      ctx.fillStyle = '#ffd84d'; ctx.fillRect(x - 13, y - 3, 26, 5); ctx.strokeRect(x - 13, y - 3, 26, 5);
+      ctx.fillRect(x - 3.5, y - 5, 7, 9); ctx.strokeRect(x - 3.5, y - 5, 7, 9);
+      sparkle(x + 12, y - 14 + Math.sin(G.t * 5) * 1.5, 6 * pulse, CREAM, 1.6);
+      continue;
+    }
+    if (o.type === 'xp'){
+      const r = (5 + Math.min(4, o.val * .5)) * 1.3 * pulse;
+      star4(x, y, r, .32); ctx.fillStyle = '#ff9ec9'; ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = INK; ctx.stroke();
+      star4(x, y, r * .45, .3); ctx.fillStyle = CREAM; ctx.fill();
+    } else if (o.type === 'dna'){
+      note(x - 2, y + 4, 7.5 * pulse, '#ffd84d');
+    } else if (o.type === 'hp'){
+      heartPath(x, y, 8.5 * pulse); ctx.fillStyle = '#ff5a6e'; ctx.fill(); ctx.lineWidth = 2.4; ctx.strokeStyle = INK; ctx.stroke();
+      ctx.fillStyle = 'rgba(255,255,255,.9)'; ctx.beginPath(); ctx.ellipse(x - 4, y - 3.5, 2.4, 1.5, -.6, 0, TAU); ctx.fill();
+    } else if (o.type === 'magnet'){
+      ctx.lineCap = 'butt';
+      ctx.strokeStyle = INK; ctx.lineWidth = 12;
+      ctx.beginPath(); ctx.arc(x, y, 7, Math.PI, TAU); ctx.moveTo(x - 7, y); ctx.lineTo(x - 7, y + 7); ctx.moveTo(x + 7, y); ctx.lineTo(x + 7, y + 7); ctx.stroke();
+      ctx.strokeStyle = '#ff5a6e'; ctx.lineWidth = 7.4;
+      ctx.beginPath(); ctx.arc(x, y, 7, Math.PI, TAU); ctx.moveTo(x - 7, y); ctx.lineTo(x - 7, y + 5); ctx.moveTo(x + 7, y); ctx.lineTo(x + 7, y + 5); ctx.stroke();
+      ctx.strokeStyle = CREAM; ctx.lineWidth = 7.4;
+      ctx.beginPath(); ctx.moveTo(x - 7, y + 4); ctx.lineTo(x - 7, y + 7); ctx.moveTo(x + 7, y + 4); ctx.lineTo(x + 7, y + 7); ctx.stroke();
+      ctx.lineCap = 'round';
+    } else { // nuke: a comic burst
+      ctx.beginPath();
+      for (let i = 0; i < 16; i++){ const a = i / 16 * TAU + G.t, rr2 = (i & 1 ? 6 : 12.5) * pulse; ctx.lineTo(x + Math.cos(a) * rr2, y + Math.sin(a) * rr2); }
+      ctx.closePath(); ctx.fillStyle = '#ffd84d'; ctx.fill(); ctx.lineWidth = 2.4; ctx.strokeStyle = INK; ctx.stroke();
+      ctx.fillStyle = '#ff5a6e'; ctx.beginPath(); ctx.arc(x, y, 4.2, 0, TAU); ctx.fill();
+    }
+  }
+}
 
+// ------------------------------------------------------------------ germs
 function drawEnemies(){
+  const crowd = G.en.length > 150 ? 1 : 0;
   for (const e of G.en){
-    if (!onScreen(e.x, e.y, e.r + 40)) continue;
+    if (!onScreen(e.x, e.y, e.r + 44)) continue;
+    LOD = crowd;
     const flash = e.flash > 0;
-    const col = flash ? '#ffffff' : e.col;
-    ctx.globalCompositeOperation = 'lighter';
-    glow(e.x, e.y, e.r * (e.boss ? 3.4 : e.elite ? 3 : 2.4), col, e.boss ? .6 : e.elite ? .55 : .42);
-    if (e.frozen > 0) glow(e.x, e.y, e.r * 3, '#bff3ff', .5);
-    if (e.inf) glow(e.x, e.y, e.r * 2.6, '#9dff6d', .4);
-    ctx.globalCompositeOperation = 'source-over';
+    const col = flash ? CREAM2 : e.col;
+    groundShadow(e.x + e.r * .1, e.y + e.r * .78, e.r * (e.boss ? 1.1 : .95), e.r * .36);
     ctx.save();
     ctx.translate(e.x, e.y);
     const ang = Math.atan2(e.vy, e.vx);
+    if (e.elite || e.boss || e.mark){ // the die-cut cream rim says "important"
+      ctx.lineWidth = 7; ctx.strokeStyle = INK; ctx.beginPath(); ctx.arc(0, 0, e.r + (e.boss ? 7 : 5), 0, TAU); ctx.stroke();
+      ctx.lineWidth = 3.4; ctx.strokeStyle = e.mark ? '#ff7eb6' : CREAM; ctx.stroke();
+    }
     if (e.tele > 0){ // charge telegraph
-      ctx.globalAlpha = .5 + .5 * Math.sin(G.t * 30);
-      ctx.strokeStyle = '#ff4d6d'; ctx.lineWidth = 3;
-      ctx.beginPath(); ctx.arc(0, 0, e.r + 12, 0, TAU); ctx.stroke();
+      ctx.globalAlpha = .55 + .45 * Math.sin(G.t * 30);
+      ctx.strokeStyle = '#ff5a6e'; ctx.lineWidth = 4; ctx.setLineDash([9, 7]);
+      ctx.beginPath(); ctx.arc(0, 0, e.r + 16, 0, TAU); ctx.stroke(); ctx.setLineDash([]);
       ctx.globalAlpha = 1;
     }
     drawBody(e, col, ang);
+    if (e.frozen > 0){ // an icy glaze
+      ctx.globalAlpha = .5; ctx.fillStyle = '#bff0ff'; ctx.beginPath(); ctx.arc(0, 0, e.r * 1.02, 0, TAU); ctx.fill();
+      ctx.globalAlpha = 1; ctx.lineWidth = 2.2; ctx.strokeStyle = INK; ctx.stroke();
+      sparkle(e.r * .5, -e.r * .55, 5, '#fff', 1.4);
+    }
+    if (e.inf){ // minty infection spots
+      ctx.fillStyle = '#5fe38a'; ctx.lineWidth = 1.6; ctx.strokeStyle = INK;
+      for (let i = 0; i < 3; i++){
+        const a = G.t * 2 + i * 2.1 + e.phase;
+        ctx.beginPath(); ctx.arc(Math.cos(a) * e.r * .55, Math.sin(a) * e.r * .55, 3.4, 0, TAU); ctx.fill(); ctx.stroke();
+      }
+    }
+    if (e.mark) sparkle(0, -e.r - 14 + Math.sin(G.t * 5) * 2, 7, '#ffd84d', 1.8);
     ctx.restore();
     // health pip for the chunky ones
     if ((e.boss || e.elite || e.r > 22) && e.hp < e.mhp){
-      const wpx = e.r * 1.8, hp = clamp(e.hp / e.mhp, 0, 1);
-      ctx.fillStyle = 'rgba(0,0,0,.55)'; ctx.fillRect(e.x - wpx / 2, e.y - e.r - 12, wpx, 4);
-      ctx.fillStyle = e.boss ? '#ff4dd2' : '#9dff6d'; ctx.fillRect(e.x - wpx / 2, e.y - e.r - 12, wpx * hp, 4);
+      const wpx = e.r * 1.8, hp = clamp(e.hp / e.mhp, 0, 1), by = e.y - e.r - (e.boss ? 20 : 14);
+      ctx.fillStyle = INK; ctx.fillRect(e.x - wpx / 2 - 2, by - 2, wpx + 4, 8);
+      ctx.fillStyle = '#241a55'; ctx.fillRect(e.x - wpx / 2, by, wpx, 4);
+      ctx.fillStyle = e.boss ? '#a77bff' : '#5fe38a'; ctx.fillRect(e.x - wpx / 2, by, wpx * hp, 4);
     }
   }
 }
 function drawBody(e, col, ang){
-  const k = e.k, r = e.r, w = e.wob;
-  ctx.lineWidth = 2.4;
-  ctx.strokeStyle = col;
-  ctx.fillStyle = col + '5c';
-  if (e.boss){
-    ctx.rotate(Math.sin(w * .4) * .1);
-    blobPath(0, 0, r, w * .6, .07, 22); ctx.fill(); ctx.stroke();
-    ctx.fillStyle = col + '66';
-    for (let i = 0; i < 7; i++){
-      const a = i / 7 * TAU + w * .3;
-      ctx.beginPath(); ctx.arc(Math.cos(a) * r * .5, Math.sin(a) * r * .5, r * .17, 0, TAU); ctx.fill();
-    }
-    ctx.fillStyle = '#04070d';
-    ctx.beginPath(); ctx.arc(0, 0, r * .3, 0, TAU); ctx.fill();
-    ctx.strokeStyle = col; ctx.stroke();
-    return;
-  }
+  const k = e.k, r = e.r, w = e.wob, ph = e.phase || 0;
+  let gx = P.x - e.x, gy = P.y - e.y; const gl = Math.hypot(gx, gy) || 1; gx /= gl; gy /= gl;
+  const angry = e.tele > 0 || e.elite;
+  ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+  if (e.boss) return drawBoss(e, col, gx, gy);
+  const cs = Math.cos(-ang), sn = Math.sin(-ang), rgx = gx * cs - gy * sn, rgy = gx * sn + gy * cs; // gaze inside a body rotated by ang
+
   if (k === 'bacil' || k === 'leech'){
+    const L = r * 2.7, W = r * (k === 'leech' ? 1.5 : 1.3);
     ctx.rotate(ang);
-    // segmented rod with a whipping tail
-    ctx.beginPath();
-    for (let i = 0; i <= 12; i++){
-      const t = i / 12, x = -r * 1.4 + t * r * 2.8;
-      const yy = Math.sin(t * 6 + w * 3) * r * .18;
-      const rr2 = Math.sin(t * Math.PI) * r * .8;
-      if (i === 0) ctx.moveTo(x, yy - rr2); else ctx.lineTo(x, yy - rr2);
+    if (k === 'bacil'){ // wagging tail
+      ctx.beginPath(); ctx.moveTo(-L / 2, 0);
+      for (let i = 1; i <= 6; i++) ctx.lineTo(-L / 2 - i * 3.6, Math.sin(w * 6 - i * .8) * 4.5);
+      ctx.strokeStyle = INK; ctx.lineWidth = 4.6; ctx.stroke(); ctx.strokeStyle = col; ctx.lineWidth = 2.2; ctx.stroke();
+      const tx = -L / 2 - 6 * 3.6, ty = Math.sin(w * 6 - 4.8) * 4.5; // the cable's plug
+      ctx.fillStyle = '#c9cbd6'; ctx.lineWidth = 2; ctx.strokeStyle = INK; ctx.beginPath(); ctx.rect(tx - 6, ty - 4, 7, 8); ctx.fill(); ctx.stroke();
     }
-    for (let i = 12; i >= 0; i--){
-      const t = i / 12, x = -r * 1.4 + t * r * 2.8;
-      const yy = Math.sin(t * 6 + w * 3) * r * .18;
-      const rr2 = Math.sin(t * Math.PI) * r * .8;
-      ctx.lineTo(x, yy + rr2);
+    ctx.scale(1, 1 + Math.sin(w * 3) * .06);
+    capsule(L, W); celPath(col, W * .07, 2.4);
+    if (k === 'leech'){
+      ctx.fillStyle = shadeOf(col);
+      for (let i = -1; i <= 0; i++){ ctx.beginPath(); ctx.ellipse(i * L * .24 - L * .08, 0, L * .05, W * .38, 0, 0, TAU); ctx.fill(); }
     }
-    ctx.closePath(); ctx.fill(); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(-r * 1.4, 0);
-    for (let i = 1; i <= 6; i++) ctx.lineTo(-r * 1.4 - i * 4, Math.sin(w * 6 - i * .8) * 5);
-    ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,248,236,.85)'; ctx.lineWidth = Math.max(1.6, r * .1);
+    ctx.beginPath(); ctx.moveTo(-L * .22, -W * .3); ctx.lineTo(L * .16, -W * .3); ctx.stroke();
+    ctx.save(); ctx.translate(L * .2, 0); // face at the head end
+    eye(0, -W * .2, r * .2, r * .24, rgx, rgy); eye(0, W * .2, r * .2, r * .24, rgx, rgy);
+    ctx.fillStyle = INK; ctx.beginPath(); ctx.ellipse(L * .2, 0, r * .1, r * (k === 'leech' ? .22 : .12), 0, 0, TAU); ctx.fill();
+    ctx.restore();
     return;
   }
   if (k === 'virion'){
-    ctx.rotate(w * .8);
-    ctx.beginPath();
-    for (let i = 0; i < 12; i++){
-      const a = i / 12 * TAU, rr2 = i % 2 ? r * 1.35 : r * .8;
-      const px = Math.cos(a) * rr2, py = Math.sin(a) * rr2;
-      if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+    ctx.save(); ctx.rotate(w * .8);
+    for (let p = 0; p < 2; p++){
+      ctx.strokeStyle = p ? col : INK; ctx.fillStyle = p ? col : INK; ctx.lineWidth = p ? 3 : 6.4;
+      for (let i = 0; i < 8; i++){
+        const a = i / 8 * TAU, c = Math.cos(a), s = Math.sin(a);
+        ctx.beginPath(); ctx.moveTo(c * r * .7, s * r * .7); ctx.lineTo(c * r * 1.18, s * r * 1.18); ctx.stroke();
+        ctx.beginPath(); ctx.arc(c * r * 1.3, s * r * 1.3, p ? 2.6 : 4.2, 0, TAU); ctx.fill();
+      }
     }
-    ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.restore();
+    celBlob(r * .98, w, .04, 14, col);
+    face(r, gx, gy, { mouth: 'o', es: .22, ex: .3, ph, brow: angry });
     return;
   }
   if (k === 'phage'){
-    ctx.rotate(ang + Math.PI / 2);
-    ctx.beginPath();
-    for (let i = 0; i < 6; i++){ const a = i / 6 * TAU - Math.PI / 2; const px = Math.cos(a) * r, py = Math.sin(a) * r - r * .3;
-      if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py); }
-    ctx.closePath(); ctx.fill(); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(0, r * .5); ctx.lineTo(0, r * 1.5); ctx.stroke();
-    for (let i = -1; i <= 1; i += 2){
-      ctx.beginPath(); ctx.moveTo(0, r * 1.5); ctx.lineTo(i * r * .8, r * 2.1 + Math.sin(w * 4) * 3); ctx.stroke();
+    ctx.save(); ctx.rotate(ang + Math.PI / 2); // spindly legs trailing behind
+    ctx.strokeStyle = INK; ctx.lineWidth = 5.2;
+    for (let p = 0; p < 2; p++){
+      ctx.strokeStyle = p ? col : INK; ctx.lineWidth = p ? 2.4 : 5.2;
+      ctx.beginPath(); ctx.moveTo(0, r * .5); ctx.lineTo(0, r * 1.5); ctx.stroke();
+      for (let i = -1; i <= 1; i += 2){ ctx.beginPath(); ctx.moveTo(0, r * 1.5); ctx.lineTo(i * r * .8, r * 2 + Math.sin(w * 4) * 3); ctx.stroke(); }
     }
+    ctx.restore();
+    ctx.beginPath();
+    for (let i = 0; i < 6; i++){ const a = i / 6 * TAU - Math.PI / 2; const px = Math.cos(a) * r, py = Math.sin(a) * r; if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py); }
+    ctx.closePath(); celPath(col, r * .08, 2.5);
+    face(r, gx, gy, { mouth: 'smile', es: .21, ex: .3, ph, blush: 1, brow: angry });
     return;
   }
   if (k === 'sac'){
-    blobPath(0, 0, r, w, .12, 16); ctx.fill(); ctx.stroke();
-    ctx.fillStyle = col;
+    celBlob(r, w, .12, 16, col);
+    ctx.fillStyle = shadeOf(col);
     for (let i = 0; i < 5; i++){
       const a = i / 5 * TAU + w * .5;
-      ctx.beginPath(); ctx.arc(Math.cos(a) * r * .45, Math.sin(a) * r * .45, r * .16, 0, TAU); ctx.fill();
+      ctx.beginPath(); ctx.arc(Math.cos(a) * r * .62, Math.sin(a) * r * .62, r * .13, 0, TAU); ctx.fill();
     }
+    face(r, gx, gy, { mouth: 'smile', es: .17, ey: -.04, blush: 1, ph, brow: angry });
     return;
   }
   if (k === 'blob'){
-    blobPath(0, 0, r, w * .7, .2, 18); ctx.fill(); ctx.stroke();
-    ctx.fillStyle = col + '55';
-    ctx.beginPath(); ctx.arc(Math.cos(w) * r * .2, Math.sin(w * .8) * r * .2, r * .34, 0, TAU); ctx.fill();
+    celBlob(r, w * .7, .2, 18, col);
+    ctx.fillStyle = shadeOf(col); ctx.globalAlpha = .55;
+    ctx.beginPath(); ctx.arc(Math.cos(w) * r * .5, Math.sin(w * .8) * r * .3 + r * .35, r * .22, 0, TAU); ctx.fill(); ctx.globalAlpha = 1;
+    face(r, gx, gy, { mouth: 'open', es: .15, ey: -.1, my: .3, mw: .16, blush: 1, ph, brow: angry });
     return;
   }
   if (k === 'prion'){
-    ctx.rotate(w * .3);
-    ctx.beginPath();
-    for (let i = 0; i < 3; i++){
-      const a = i / 3 * TAU;
-      ctx.moveTo(0, 0); ctx.lineTo(Math.cos(a) * r * 1.4, Math.sin(a) * r * 1.4);
+    ctx.save(); ctx.rotate(w * .3);
+    for (let p = 0; p < 2; p++){
+      ctx.strokeStyle = p ? col : INK; ctx.fillStyle = p ? col : INK; ctx.lineWidth = p ? 3.4 : 7;
+      for (let i = 0; i < 3; i++){
+        const a = i / 3 * TAU, c = Math.cos(a), s = Math.sin(a);
+        ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(c * r * 1.3, s * r * 1.3); ctx.stroke();
+        ctx.beginPath(); ctx.arc(c * r * 1.45, s * r * 1.45, p ? 3.4 : 5.2, 0, TAU); ctx.fill();
+      }
     }
-    ctx.lineWidth = 4; ctx.stroke(); ctx.lineWidth = 2;
-    ctx.beginPath(); ctx.arc(0, 0, r * .6, 0, TAU); ctx.fill(); ctx.stroke();
+    ctx.restore();
+    celBlob(r * .7, w, .05, 14, col);
+    face(r * .8, gx, gy, { mouth: 'o', es: .22, ex: .3, ph, brow: 1 });
     return;
   }
   if (k === 'macro'){
-    blobPath(0, 0, r, w * .5, .22, 20); ctx.fill(); ctx.stroke();
-    ctx.fillStyle = '#04070d';
-    ctx.beginPath(); ctx.arc(0, 0, r * .36, 0, TAU); ctx.fill(); ctx.strokeStyle = col; ctx.stroke();
-    ctx.fillStyle = col;
-    ctx.beginPath(); ctx.arc(0, 0, r * .18, 0, TAU); ctx.fill();
+    celBlob(r, w * .5, .22, 20, col);
+    ctx.fillStyle = shadeOf(col);
+    for (let i = 0; i < 3; i++){ const a = w * .3 + i * 2.1 + 1; ctx.beginPath(); ctx.arc(Math.cos(a) * r * .7, Math.sin(a) * r * .7, r * .1, 0, TAU); ctx.fill(); }
+    eye(0, -r * .1, r * .36, r * .4, gx, gy);   // one big cyclops eye
+    ctx.strokeStyle = INK; ctx.lineWidth = Math.max(2, r * .09);
+    ctx.beginPath(); ctx.moveTo(-r * .52, -r * .62); ctx.lineTo(r * .36, -r * .46); ctx.stroke();
+    face(r, gx, gy, { mouth: 'grin', noEyes: 1, my: .5, mw: .2 }); // just the toothy mouth
     return;
   }
-  // coccus / swarmer — the humble sphere, doubled
-  blobPath(0, 0, r, w, .1, 12); ctx.fill(); ctx.stroke();
-  ctx.beginPath(); ctx.arc(-r * .25, -r * .2, r * .3, 0, TAU); ctx.fillStyle = col + '55'; ctx.fill();
+  // coccus / swarmer: the humble sphere
+  celBlob(r, w, .1, 12, col);
+  face(r, gx, gy, { mouth: k === 'swarm' ? null : 'smile', es: k === 'swarm' ? .26 : .21, ex: .34, blush: k !== 'swarm', ph, brow: angry });
+}
+function drawBoss(e, col, gx, gy){
+  LOD = 0;
+  const r = e.r, w = e.wob, id = e.B ? e.B.id : 'engulfer', ph = e.phase || 0;
+  ctx.rotate(Math.sin(w * .4) * .06);
+  if (id === 'mother'){ // spore dots poking out behind
+    ctx.fillStyle = INK;
+    for (let i = 0; i < 9; i++){ const a = i / 9 * TAU + w * .2; ctx.beginPath(); ctx.arc(Math.cos(a) * r * 1.02, Math.sin(a) * r * 1.02, r * .1, 0, TAU); ctx.fill(); }
+  }
+  celBlob(r, w * .6, .07, 24, col);
+  if (id === 'engulfer'){
+    face(r, gx, gy, { mouth: null, es: .15, ex: .3, ey: -.3, brow: 1, ph });
+    ctx.beginPath(); ctx.arc(0, r * .05, r * .52, 0, Math.PI); ctx.closePath();
+    ctx.fillStyle = INK; ctx.fill();
+    ctx.fillStyle = CREAM2;
+    for (let i = 0; i < 5; i++){ const x = -r * .42 + i * r * .21; ctx.beginPath(); ctx.moveTo(x, r * .05); ctx.lineTo(x + r * .1, r * .22); ctx.lineTo(x + r * .2, r * .05); ctx.closePath(); ctx.fill(); }
+    ctx.fillStyle = '#ff7eb6'; ctx.beginPath(); ctx.ellipse(0, r * .42, r * .26, r * .12, 0, 0, TAU); ctx.fill();
+  } else if (id === 'mother'){
+    ctx.fillStyle = shadeOf(col);
+    for (let i = 0; i < 6; i++){ const a = i / 6 * TAU + .4; ctx.beginPath(); ctx.arc(Math.cos(a) * r * .66, Math.sin(a) * r * .5 + r * .1, r * .1, 0, TAU); ctx.fill(); }
+    face(r, gx, gy, { mouth: 'smile', es: .16, ex: .28, ey: -.04, blush: 1, ph });
+    ctx.save(); ctx.translate(0, -r * .98); // a blossom on top
+    for (let i = 0; i < 5; i++){ ctx.save(); ctx.rotate(i / 5 * TAU + w * .1); ctx.translate(0, 0); petal(0, 0, r * .34, 0, '#ff7eb6'); ctx.restore(); }
+    ctx.fillStyle = '#ffd84d'; ctx.strokeStyle = INK; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(0, 0, r * .1, 0, TAU); ctx.fill(); ctx.stroke();
+    ctx.restore();
+  } else if (id === 'colossus'){
+    for (let i = -1; i <= 1; i++){ // three horns
+      ctx.beginPath(); ctx.moveTo(i * r * .4 - r * .13, -r * .86); ctx.lineTo(i * r * .46, -r * 1.36 + Math.abs(i) * r * .12); ctx.lineTo(i * r * .4 + r * .13, -r * .86); ctx.closePath();
+      ctx.fillStyle = CREAM2; ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = INK; ctx.stroke();
+    }
+    face(r, gx, gy, { mouth: 'grin', es: .16, ex: .3, ey: -.14, my: .42, mw: .2, brow: 1, ph });
+  } else { // The Gloss: opalescent, calm, symmetrical, one shared smile
+    ctx.save(); blobPath(0, 0, r * .96, w * .6, .07, 24); ctx.clip();
+    ctx.fillStyle = 'rgba(255,255,255,.6)';
+    ctx.beginPath(); ctx.moveTo(-r * .95, -r * .1); ctx.lineTo(-r * .2, -r * 1.1); ctx.lineTo(r * .2, -r * 1.1); ctx.lineTo(-r * .7, r * .3); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = 'rgba(217,255,244,.45)';
+    ctx.beginPath(); ctx.moveTo(r * .2, r * 1.1); ctx.lineTo(r * .95, r * .1); ctx.lineTo(r * .95, r * .5); ctx.lineTo(r * .55, r * 1.1); ctx.closePath(); ctx.fill();
+    ctx.restore();
+    eye(-r * .3, -r * .12, r * .13, r * .17, gx, gy); eye(r * .3, -r * .12, r * .13, r * .17, gx, gy);
+    ctx.strokeStyle = INK; ctx.lineWidth = 3.6; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.arc(0, r * .02, r * .24, .25 * Math.PI, .75 * Math.PI); ctx.stroke();
+    for (let i = 0; i < 4; i++){ const a2 = G.t * 1.2 + i / 4 * TAU; sparkle(Math.cos(a2) * r * 1.3, Math.sin(a2) * r * 1.3, 8, CREAM, 1.8); }
+  }
 }
 
-function drawCell(x, y, r, wob, col, glowCol, face, vel, alpha){
-  ctx.globalAlpha = alpha === undefined ? 1 : alpha;
-  ctx.globalCompositeOperation = 'lighter';
-  glow(x, y, r * 3.4, glowCol, .5);
-  ctx.globalCompositeOperation = 'source-over';
-  ctx.save();
-  ctx.translate(x, y);
-  // flagellum trails
-  ctx.strokeStyle = glowCol + '99'; ctx.lineWidth = 3;
-  const back = face + Math.PI;
-  for (let f = -1; f <= 1; f++){
-    ctx.beginPath(); ctx.moveTo(Math.cos(back) * r * .8, Math.sin(back) * r * .8);
-    for (let i = 1; i <= 5; i++){
-      const t = i / 5, a = back + Math.sin(wob * 3 + i * .9 + f) * .35 + f * .28;
-      ctx.lineTo(Math.cos(a) * (r + t * r * 1.7), Math.sin(a) * (r + t * r * 1.7));
-    }
-    ctx.stroke();
-  }
-  const st = 1 + Math.min(.16, vel * .00035);
-  ctx.rotate(face); ctx.scale(st, 2 - st); ctx.rotate(-face);
-  const g = ctx.createRadialGradient(-r * .3, -r * .3, r * .1, 0, 0, r);
-  g.addColorStop(0, col + 'ee'); g.addColorStop(.55, col + '99'); g.addColorStop(1, col + '4d');
-  ctx.fillStyle = g;
-  blobPath(0, 0, r, wob, .08, 20); ctx.fill();
-  ctx.strokeStyle = glowCol; ctx.lineWidth = 3; ctx.stroke();
-  // organelles
-  ctx.fillStyle = glowCol + '77';
-  for (let i = 0; i < 4; i++){
-    const a = wob * .5 + i / 4 * TAU;
-    ctx.beginPath(); ctx.arc(Math.cos(a) * r * .5, Math.sin(a) * r * .5, r * .13, 0, TAU); ctx.fill();
-  }
-  // nucleus
-  ctx.fillStyle = '#eafcff';
-  ctx.beginPath(); ctx.arc(Math.cos(wob * .7) * r * .12, Math.sin(wob * .9) * r * .12, r * .3, 0, TAU); ctx.fill();
-  ctx.fillStyle = glowCol;
-  ctx.beginPath(); ctx.arc(0, 0, r * .14, 0, TAU); ctx.fill();
-  ctx.restore();
-  ctx.globalAlpha = 1;
-}
-function drawPlayer(){
-  // orbital nodes first (behind the cell reads better)
-  ctx.globalCompositeOperation = 'lighter';
-  const drawNodes = list => {
-    for (const w of list){
-      if (!w.nodes || !w.nodes.length) continue;
-      const evo = def(w.id) && def(w.id).evolved;
-      for (let i = 0; i < w.nodes.length; i += 2){
-        const x = w.nodes[i], y = w.nodes[i + 1];
-        glow(x, y, evo ? 26 : 20, evo ? '#ffcf4d' : '#7fe0ff', .75);
-        ctx.fillStyle = '#eafcff';
-        ctx.beginPath(); ctx.arc(x, y, evo ? 6 : 5, 0, TAU); ctx.fill();
+// ----------------------------------------------------------------- the duo
+function drawNodes(list){
+  for (const w of list){
+    if (!w.nodes || !w.nodes.length) continue;
+    const evo = def(w.id) && def(w.id).evolved;
+    for (let i = 0; i < w.nodes.length; i += 2){
+      const x = w.nodes[i], y = w.nodes[i + 1];
+      if (evo){ sparkle(x, y, 11, '#ffd84d', 2); }
+      else {
+        ctx.fillStyle = 'rgba(255,194,220,.85)'; ctx.beginPath(); ctx.arc(x, y, 7, 0, TAU); ctx.fill();
+        ctx.lineWidth = 2.2; ctx.strokeStyle = INK; ctx.stroke();
+        ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(x - 2, y - 2.2, 1.9, 0, TAU); ctx.fill();
       }
     }
-  };
+  }
+}
+function drawDuoMember(id, x, y, r, fa, pose, alpha, tint, ghost){
+  const bR = r * 1.62, bx = x, by = y + r * .12;
+  groundShadow(x, y + r * 1.5, bR * .8, bR * .26);
+  ctx.globalAlpha = alpha;
+  bubbleBack(bx, by, bR, tint);
+  const cx = Math.cos(fa); if (Math.abs(cx) > .2) ghost.flip = cx < 0;
+  drawHeroFig(id, x, y + r * 1.3, heroScale(r) * (ghost.scale || 1), pose, G.at + (ghost.t0 || 0), ghost.flip, alpha, ghost.slot);
+  ctx.globalAlpha = alpha;
+  bubbleFront(bx, by, bR);
+  ctx.globalAlpha = 1;
+}
+const MEMBER = { flip: false, slot: 0 }, MATES = [1, 2, 3, 4].map(i => ({ flip: true, scale: .88, t0: 1.7, slot: i }));
+function drawPlayer(){
   drawNodes(P.weapons);
   for (const c of G.clones) drawNodes(c.weapons);
-  ctx.globalCompositeOperation = 'source-over';
 
-  for (const s of G.syms){
-    ctx.globalCompositeOperation = 'lighter';
-    glow(s.x, s.y, 26, '#9dffd0', .55);
-    ctx.globalCompositeOperation = 'source-over';
+  for (const s of G.syms){ // symbiotes: little minty dumplings
     ctx.save(); ctx.translate(s.x, s.y); ctx.rotate(s.ang || 0);
-    ctx.fillStyle = '#9dffd0'; ctx.strokeStyle = '#dfffee'; ctx.lineWidth = 1.5;
-    ctx.beginPath(); ctx.ellipse(0, 0, 11, 7, 0, 0, TAU); ctx.fill(); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(-10, 0); ctx.lineTo(-18, -5); ctx.lineTo(-18, 5); ctx.closePath(); ctx.fill();
-    ctx.restore();
+    ctx.beginPath(); ctx.moveTo(-10, 0); ctx.lineTo(-18, -5); ctx.lineTo(-18, 5); ctx.closePath();
+    ctx.fillStyle = '#9ff0b8'; ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = INK; ctx.stroke();
+    ctx.beginPath(); ctx.ellipse(0, 0, 11, 8, 0, 0, TAU); celPath('#9ff0b8', 1.2, 2.2);
+    ctx.rotate(-(s.ang || 0)); eye(3, -1.5, 2.6, 3, 1, 0); ctx.restore();
   }
-  for (const c of G.clones)
-    drawCell(c.x, c.y, c.r, c.wob, '#ff4dd2', '#ff8ae0', P.face, 0, .78);
+  const mate = heroDef(heroDef(meta.hero).mate).id;
+  G.clones.forEach((c, i) => drawDuoMember(mate, c.x, c.y, c.r, P.face, 'sing', .86, 'rgba(255,126,182,.3)', MATES[Math.min(3, i)]));
 
-  const hurt = P.hurtT > 0;
-  const inv = P.iT > 0;
-  drawCell(P.x, P.y, P.r, P.wob, hurt ? '#ff4d6d' : '#39f0ff', hurt ? '#ff8aa0' : '#9dffd0',
-           P.face, len(P.vx, P.vy), inv ? .74 + .26 * Math.sin(G.t * 26) : 1);
-  // health ring
-  const hp = clamp(P.hp / P.mhp, 0, 1);
-  ctx.lineWidth = 3;
-  ctx.strokeStyle = 'rgba(4,7,13,.55)';
-  ctx.beginPath(); ctx.arc(P.x, P.y, P.r + 12, 0, TAU); ctx.stroke();
-  ctx.strokeStyle = hp > .5 ? '#9dff6d' : hp > .25 ? '#ffcf4d' : '#ff4d6d';
-  ctx.beginPath(); ctx.arc(P.x, P.y, P.r + 12, -Math.PI / 2, -Math.PI / 2 + hp * TAU); ctx.stroke();
+  const hurt = P.hurtT > 0, inv = P.iT > 0;
+  if (P.dashT > 0){ // speed lines
+    ctx.lineCap = 'round';
+    for (let i = -1; i <= 1; i++){
+      const bx = P.x - Math.cos(P.face) * (P.r + 10) - Math.sin(P.face) * i * 13, by = P.y - Math.sin(P.face) * (P.r + 10) + Math.cos(P.face) * i * 13;
+      ctx.strokeStyle = INK; ctx.lineWidth = 6; ctx.beginPath(); ctx.moveTo(bx, by); ctx.lineTo(bx - Math.cos(P.face) * 26, by - Math.sin(P.face) * 26); ctx.stroke();
+      ctx.strokeStyle = CREAM; ctx.lineWidth = 3; ctx.stroke();
+    }
+  }
+  drawDuoMember(meta.hero, P.x, P.y, P.r, P.face, heroPose(), inv ? .78 + .22 * Math.sin(G.t * 26) : 1,
+                hurt ? 'rgba(255,90,110,.42)' : 'rgba(255,248,236,.2)', MEMBER);
+  // health ring around the bubble
+  const hp = clamp(P.hp / P.mhp, 0, 1), rr0 = P.r * 1.62 + 7, cy = P.y + P.r * .12;
+  ctx.lineCap = 'round';
+  ctx.lineWidth = 8; ctx.strokeStyle = INK; ctx.beginPath(); ctx.arc(P.x, cy, rr0, 0, TAU); ctx.stroke();
+  ctx.lineWidth = 4.6; ctx.strokeStyle = '#241a55'; ctx.stroke();
+  if (hp > .01){
+    ctx.strokeStyle = hp > .5 ? '#5fe38a' : hp > .25 ? '#ffd84d' : '#ff5a6e';
+    ctx.beginPath(); ctx.arc(P.x, cy, rr0, -Math.PI / 2, -Math.PI / 2 + hp * TAU); ctx.stroke();
+  }
 }
+
+// ------------------------------------------------------- shots and effects
 function drawProj(){
-  ctx.globalCompositeOperation = 'lighter';
+  ctx.lineJoin = 'round';
   for (const p of G.proj){
     if (!onScreen(p.x, p.y, 40)) continue;
-    glow(p.x, p.y, p.r * 4, p.glow, .5);
     ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.ang);
-    ctx.fillStyle = p.col;
-    if (p.kind === 'spore'){
-      ctx.beginPath(); ctx.arc(0, 0, p.r, 0, TAU); ctx.fill();
-      ctx.fillStyle = '#ffffff88';
-      ctx.beginPath(); ctx.arc(-p.r * .3, -p.r * .3, p.r * .4, 0, TAU); ctx.fill();
-    } else {
-      ctx.beginPath();
-      ctx.moveTo(p.r * 2.1, 0); ctx.lineTo(-p.r, p.r * .8); ctx.lineTo(-p.r * .4, 0); ctx.lineTo(-p.r, -p.r * .8);
-      ctx.closePath(); ctx.fill();
+    if (p.kind === 'spore'){ // a glossy bubble
+      ctx.beginPath(); ctx.arc(0, 0, p.r * 1.15, 0, TAU); ctx.fillStyle = p.col; ctx.fill(); ctx.lineWidth = 2.4; ctx.strokeStyle = INK; ctx.stroke();
+      ctx.fillStyle = 'rgba(255,255,255,.85)'; ctx.beginPath(); ctx.arc(-p.r * .3, -p.r * .35, p.r * .36, 0, TAU); ctx.fill();
+    } else { // a note-bolt
+      ctx.beginPath(); ctx.moveTo(p.r * 2.2, 0); ctx.lineTo(-p.r, p.r * .9); ctx.lineTo(-p.r * .35, 0); ctx.lineTo(-p.r, -p.r * .9); ctx.closePath();
+      ctx.fillStyle = p.col; ctx.fill(); ctx.lineWidth = 2.4; ctx.strokeStyle = INK; ctx.stroke();
+      ctx.fillStyle = CREAM; ctx.beginPath(); ctx.ellipse(p.r * .5, 0, p.r * .55, p.r * .2, 0, 0, TAU); ctx.fill();
     }
     ctx.restore();
   }
   for (const b of G.bombs){
     const x = b.px === undefined ? b.x : b.px, y = (b.py === undefined ? b.y : b.py) - (b.h || 0);
-    glow(x, y, 26, '#ffcf4d', .7);
-    ctx.fillStyle = '#ffcf4d';
-    ctx.beginPath(); ctx.arc(x, y, 8, 0, TAU); ctx.fill();
-    ctx.globalCompositeOperation = 'source-over';
-    ctx.strokeStyle = 'rgba(255,207,77,.25)';
-    ctx.beginPath(); ctx.ellipse(b.px || b.x, b.py || b.y, 12, 4, 0, 0, TAU); ctx.stroke();
-    ctx.globalCompositeOperation = 'lighter';
+    groundShadow(b.px || b.x, b.py || b.y, 12, 4);
+    ctx.beginPath(); ctx.arc(x, y, 9, 0, TAU); celPath('#ffd84d', 1.8, 2.6);
+    ctx.fillStyle = CREAM; ctx.beginPath(); ctx.arc(x - 3, y - 3.3, 2.3, 0, TAU); ctx.fill();
+    sparkle(x + 7, y - 11, 4.6 + Math.sin(G.t * 20) * 1.2, '#ff7eb6', 1.4);
   }
-  ctx.globalCompositeOperation = 'source-over';
 }
 function drawZones(){
   for (const z of G.zones){
     const k = 1 - clamp(z.t / z.max, 0, 1);
     ctx.save();
-    ctx.globalCompositeOperation = 'lighter';
-    ctx.globalAlpha = .16 + .18 * k;
-    ctx.fillStyle = '#c8a1ff';
+    ctx.globalAlpha = .2 + .2 * k; ctx.fillStyle = '#a77bff';
     ctx.beginPath(); ctx.arc(z.x, z.y, z.r * k, 0, TAU); ctx.fill();
     ctx.globalAlpha = .55 + .45 * Math.sin(G.t * 22);
-    ctx.strokeStyle = '#e0c8ff'; ctx.lineWidth = 3;
-    ctx.setLineDash([12, 10]);
+    ctx.strokeStyle = INK; ctx.lineWidth = 7; ctx.setLineDash([12, 10]);
     ctx.beginPath(); ctx.arc(z.x, z.y, z.r, 0, TAU); ctx.stroke();
+    ctx.strokeStyle = '#e6d9ff'; ctx.lineWidth = 3.4; ctx.stroke();
     ctx.setLineDash([]);
     ctx.restore();
   }
 }
 function drawEProj(){
-  ctx.globalCompositeOperation = 'lighter';
   for (const p of G.eproj){
     if (!onScreen(p.x, p.y, 30)) continue;
-    glow(p.x, p.y, 22, '#ff4d6d', .65);
-    ctx.fillStyle = '#ffd7de';
-    ctx.beginPath(); ctx.arc(p.x, p.y, p.r * .7, 0, TAU); ctx.fill();
+    ctx.beginPath(); ctx.arc(p.x, p.y, p.r * .95, 0, TAU); ctx.fillStyle = '#ff5a6e'; ctx.fill();
+    ctx.lineWidth = 2.4; ctx.strokeStyle = INK; ctx.stroke();
+    ctx.fillStyle = CREAM; ctx.beginPath(); ctx.arc(p.x - p.r * .25, p.y - p.r * .28, p.r * .3, 0, TAU); ctx.fill();
   }
-  ctx.globalCompositeOperation = 'source-over';
 }
 function drawSwipes(){
-  ctx.globalCompositeOperation = 'lighter';
+  ctx.lineCap = 'round';
   for (const s of G.swipes){
-    const k = clamp(s.t / .26, 0, 1);
-    ctx.globalAlpha = (1 - k) * .8;
-    ctx.strokeStyle = '#bff3ff';
-    ctx.lineWidth = 9 * (1 - k * .5);
-    ctx.beginPath();
-    ctx.arc(s.x, s.y, s.r * (.55 + k * .5), s.ang - s.arc, s.ang + s.arc);
-    ctx.stroke();
-    ctx.globalAlpha = (1 - k) * .22;
-    ctx.lineWidth = 16;
-    ctx.stroke();
+    const k = clamp(s.t / .26, 0, 1), rad = s.r * (.55 + k * .5);
+    ctx.globalAlpha = 1 - k;
+    ctx.strokeStyle = INK; ctx.lineWidth = 15 * (1 - k * .5);
+    ctx.beginPath(); ctx.arc(s.x, s.y, rad, s.ang - s.arc, s.ang + s.arc); ctx.stroke();
+    ctx.strokeStyle = CREAM; ctx.lineWidth = 9 * (1 - k * .5); ctx.stroke();
+    ctx.strokeStyle = '#ff9ec9'; ctx.lineWidth = 3.2; ctx.beginPath(); ctx.arc(s.x, s.y, rad - 2, s.ang - s.arc * .8, s.ang + s.arc * .8); ctx.stroke();
   }
-  ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
+  ctx.globalAlpha = 1;
 }
 function drawZaps(){
-  ctx.globalCompositeOperation = 'lighter';
+  ctx.lineJoin = 'round'; ctx.lineCap = 'round';
   for (const z of G.zaps){
-    const a = clamp(z.life / .16, 0, 1);
+    const a = clamp(z.life / .16, 0, 1), segs = 7, pts = [[z.x0, z.y0]];
+    for (let i = 1; i < segs; i++){
+      const t = i / segs, jx = Math.sin(z.seed + i * 2.7) * 16 * (1 - Math.abs(t - .5) * 2), jy = Math.cos(z.seed + i * 3.1) * 16 * (1 - Math.abs(t - .5) * 2);
+      pts.push([lerp(z.x0, z.x1, t) + jx, lerp(z.y0, z.y1, t) + jy]);
+    }
+    pts.push([z.x1, z.y1]);
     ctx.globalAlpha = a;
-    ctx.strokeStyle = '#bff3ff'; ctx.lineWidth = 3;
-    const segs = 7;
-    for (let pass = 0; pass < 2; pass++){
-      ctx.lineWidth = pass ? 9 : 3;
-      ctx.globalAlpha = pass ? a * .25 : a;
-      ctx.beginPath(); ctx.moveTo(z.x0, z.y0);
-      for (let i = 1; i < segs; i++){
-        const t = i / segs;
-        const jx = Math.sin(z.seed + i * 2.7) * 16 * (1 - Math.abs(t - .5) * 2);
-        const jy = Math.cos(z.seed + i * 3.1) * 16 * (1 - Math.abs(t - .5) * 2);
-        ctx.lineTo(lerp(z.x0, z.x1, t) + jx, lerp(z.y0, z.y1, t) + jy);
-      }
-      ctx.lineTo(z.x1, z.y1); ctx.stroke();
+    for (let pass = 0; pass < 3; pass++){
+      ctx.strokeStyle = pass === 0 ? INK : pass === 1 ? '#ffd84d' : CREAM; ctx.lineWidth = pass === 0 ? 8 : pass === 1 ? 4.4 : 1.8;
+      ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]); for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]); ctx.stroke();
     }
   }
-  ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
+  ctx.globalAlpha = 1;
 }
-function drawWaves(){
-  ctx.globalCompositeOperation = 'lighter';
+function drawWaves(){ // sound rings
   for (const w of G.waves){
     const a = clamp(w.life / .6, 0, 1);
-    ctx.globalAlpha = a * a * .55;
-    ctx.strokeStyle = w.col; ctx.lineWidth = 3 + 5 * (1 - a);
-    ctx.beginPath(); ctx.arc(w.x, w.y, w.r, 0, TAU); ctx.stroke();
+    ctx.globalAlpha = Math.min(1, a * 1.4);
+    for (let i = 0; i < 2; i++){
+      const rad = w.r * (1 - i * .13); if (rad < 4) continue;
+      ctx.strokeStyle = INK; ctx.lineWidth = 8 + 3 * (1 - a) - i * 2.5; ctx.beginPath(); ctx.arc(w.x, w.y, rad, 0, TAU); ctx.stroke();
+    }
+    for (let i = 0; i < 2; i++){
+      const rad = w.r * (1 - i * .13); if (rad < 4) continue;
+      ctx.strokeStyle = i ? CREAM : w.col; ctx.lineWidth = 4.4 + 2 * (1 - a) - i * 1.6; ctx.beginPath(); ctx.arc(w.x, w.y, rad, 0, TAU); ctx.stroke();
+    }
   }
-  ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
+  ctx.globalAlpha = 1;
 }
-function drawParts(){
-  ctx.globalCompositeOperation = 'lighter';
-  for (const p of G.parts){
-    const a = clamp(p.life / p.max, 0, 1);
-    ctx.globalAlpha = a;
-    ctx.fillStyle = p.col;
-    ctx.beginPath(); ctx.arc(p.x, p.y, p.r * (.4 + a * .8), 0, TAU); ctx.fill();
+function drawParts(){ // confetti
+  for (let i = 0; i < G.parts.length; i++){
+    const p = G.parts[i], a = clamp(p.life / p.max, 0, 1), s = p.r * (.5 + a * .9);
+    ctx.globalAlpha = a; ctx.fillStyle = p.col;
+    if (i & 1){ ctx.beginPath(); ctx.arc(p.x, p.y, s, 0, TAU); ctx.fill(); }
+    else { ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.life * 9 + i); ctx.fillRect(-s, -s * .6, s * 2, s * 1.2); ctx.restore(); }
   }
-  ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
+  ctx.globalAlpha = 1;
 }
-function drawTexts(){
-  ctx.textAlign = 'center';
+function drawTexts(){ // chunky rounded numbers and hit words
+  ctx.textAlign = 'center'; ctx.lineJoin = 'round';
   for (const t of G.texts){
-    const a = clamp(t.life / t.max, 0, 1);
-    ctx.globalAlpha = a;
-    ctx.font = '800 ' + Math.round(15 * t.sc) + 'px ui-monospace,Menlo,monospace';
-    ctx.fillStyle = 'rgba(0,0,0,.55)';
-    ctx.fillText(t.s, t.x + 1, t.y + 2);
-    ctx.fillStyle = t.col;
-    ctx.fillText(t.s, t.x, t.y);
+    const a = clamp(t.life / t.max, 0, 1), pop = 1 + Math.max(0, a - .8) * 1.6;
+    ctx.globalAlpha = Math.min(1, a * 2);
+    ctx.font = '900 ' + Math.round(16 * t.sc * pop) + 'px ' + FONT;
+    ctx.lineWidth = 4.2 * Math.min(1.4, t.sc); ctx.strokeStyle = INK; ctx.strokeText(t.s, t.x, t.y);
+    ctx.fillStyle = t.col === '#ffffff' ? CREAM : t.col; ctx.fillText(t.s, t.x, t.y);
   }
   ctx.globalAlpha = 1; ctx.textAlign = 'left';
 }
 function drawOverlay(){
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.scale(DPR, DPR);
-  // damage flash
-  if (G.flash > 0){
-    ctx.globalCompositeOperation = 'lighter';
-    ctx.fillStyle = 'rgba(255,60,90,' + (G.flash * .35).toFixed(3) + ')';
+  if (G.flash > 0){ // the pink impact flash
+    ctx.fillStyle = 'rgba(255,90,140,' + (G.flash * .32).toFixed(3) + ')';
     ctx.fillRect(0, 0, CW, CH);
-    ctx.globalCompositeOperation = 'source-over';
   }
-  // vignette
-  const g = ctx.createRadialGradient(CW / 2, CH / 2, Math.min(CW, CH) * .35, CW / 2, CH / 2, Math.max(CW, CH) * .78);
-  g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, 'rgba(0,0,0,.55)');
+  const g = ctx.createRadialGradient(CW / 2, CH / 2, Math.min(CW, CH) * .38, CW / 2, CH / 2, Math.max(CW, CH) * .8);
+  g.addColorStop(0, 'rgba(13,11,30,0)'); g.addColorStop(1, 'rgba(13,11,30,.4)');
   ctx.fillStyle = g; ctx.fillRect(0, 0, CW, CH);
-  // offscreen boss pointer
-  if (G.boss && !onScreen(G.boss.x, G.boss.y, -20)){
+  if (G.boss && !onScreen(G.boss.x, G.boss.y, -20)){ // offscreen boss pointer
     const dx = G.boss.x - G.cam.x, dy = G.boss.y - G.cam.y, a = Math.atan2(dy, dx);
     const rx = CW / 2 + Math.cos(a) * Math.min(CW, CH) * .38, ry = CH / 2 + Math.sin(a) * Math.min(CW, CH) * .38;
     ctx.save(); ctx.translate(rx, ry); ctx.rotate(a);
-    ctx.fillStyle = '#ff4dd2';
-    ctx.beginPath(); ctx.moveTo(14, 0); ctx.lineTo(-9, 8); ctx.lineTo(-9, -8); ctx.closePath(); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(15, 0); ctx.lineTo(-10, 10); ctx.lineTo(-10, -10); ctx.closePath();
+    ctx.fillStyle = '#a77bff'; ctx.fill(); ctx.lineJoin = 'round'; ctx.lineWidth = 3; ctx.strokeStyle = INK; ctx.stroke();
     ctx.restore();
   }
   ctx.setTransform(1, 0, 0, 1, 0, 0);
+}
+
+// ----------------------------------------------------------------- the icons
+// Every icon in the game is drawn here in the house style (flat candy colour, warm brown
+// outline) onto a 96px canvas once, then used as an <img>. `key+` = the same glyph with a
+// gold star badge (the evolved songs). No emoji anywhere.
+const ICON_FN = {};
+function _p(c, fill, fn, lw){ c.beginPath(); fn(c); if (fill){ c.fillStyle = fill; c.fill(); } c.lineWidth = lw || 6; c.strokeStyle = INK; c.lineJoin = 'round'; c.lineCap = 'round'; c.stroke(); }
+function _o(c, fill, x, y, r, lw){ _p(c, fill, k => k.arc(x, y, r, 0, TAU), lw); }
+function _e(c, fill, x, y, rx, ry, rot, lw){ _p(c, fill, k => k.ellipse(x, y, rx, ry, rot || 0, 0, TAU), lw); }
+function _s(c, fill, x, y, r, pinch, lw){
+  const q = r * (pinch || .3);
+  _p(c, fill, k => { k.moveTo(x, y - r); k.quadraticCurveTo(x + q, y - q, x + r, y); k.quadraticCurveTo(x + q, y + q, x, y + r); k.quadraticCurveTo(x - q, y + q, x - r, y); k.quadraticCurveTo(x - q, y - q, x, y - r); }, lw || 5);
+}
+function _l(c, col, w, pts){ c.beginPath(); c.moveTo(pts[0], pts[1]); for (let i = 2; i < pts.length; i += 2) c.lineTo(pts[i], pts[i + 1]); c.strokeStyle = col; c.lineWidth = w; c.lineCap = 'round'; c.lineJoin = 'round'; c.stroke(); }
+function _eyes(c, x, y, sp, r){ for (const sx of [-1, 1]){ _o(c, CREAM2, x + sx * sp, y, r, 3.2); c.fillStyle = INK; c.beginPath(); c.arc(x + sx * sp + 1, y + 1, r * .5, 0, TAU); c.fill(); } }
+function _shine(c, x, y, r, a0, a1){ c.beginPath(); c.arc(x, y, r, a0, a1); c.strokeStyle = 'rgba(255,255,255,.85)'; c.lineWidth = 4.5; c.lineCap = 'round'; c.stroke(); }
+Object.assign(ICON_FN, {
+  mic(c){ _p(c, '#ff7eb6', k => { k.moveTo(39, 50); k.lineTo(57, 50); k.lineTo(53, 88); k.lineTo(43, 88); k.closePath(); }); _o(c, '#c9cbd6', 48, 32, 22); _l(c, 'rgba(45,23,15,.55)', 3, [34, 28, 62, 28]); _l(c, 'rgba(45,23,15,.55)', 3, [34, 38, 62, 38]); _p(c, '#ffd84d', k => k.rect(37, 49, 22, 8), 5); _shine(c, 48, 32, 14, 3.6, 4.5); },
+  cymbal(c){ _l(c, INK, 11, [48, 46, 48, 88]); _l(c, '#c9cbd6', 4, [48, 46, 48, 86]); _e(c, '#ffd84d', 48, 40, 40, 14); _e(c, '#ffe9a8', 48, 35, 11, 5, 0, 4); _shine(c, 48, 40, 28, 3.3, 3.9); },
+  glitter(c){ _s(c, '#ff7eb6', 38, 54, 30); _s(c, '#ffd84d', 72, 26, 16); _s(c, '#a77bff', 70, 74, 14); },
+  vinyl(c){ _o(c, '#3a2a5c', 48, 48, 40); c.strokeStyle = 'rgba(255,244,230,.35)'; c.lineWidth = 2.5; for (const r of [32, 24]){ c.beginPath(); c.arc(48, 48, r, 0, TAU); c.stroke(); } _o(c, '#ff7eb6', 48, 48, 13, 5); _o(c, CREAM, 48, 48, 3.5, 3); _shine(c, 48, 48, 33, 3.7, 4.5); },
+  confetti(c){ _p(c, '#ff7eb6', k => { k.moveTo(10, 88); k.lineTo(50, 44); k.lineTo(64, 58); k.closePath(); }); _l(c, CREAM, 4, [22, 74, 34, 80]); _l(c, CREAM, 4, [32, 62, 44, 68]); _o(c, '#ffd84d', 72, 24, 7, 4); _p(c, '#5fe38a', k => k.rect(76, 42, 12, 12), 4); _s(c, '#a77bff', 44, 22, 11, .3, 4); _o(c, '#ffc2dc', 86, 76, 5, 3.5); },
+  blossom(c){ for (let i = 0; i < 5; i++){ c.save(); c.translate(48, 50); c.rotate(i / 5 * TAU); _e(c, '#ff9ec9', 0, -22, 14, 22, 0, 5); c.restore(); } _o(c, '#ffd84d', 48, 50, 11, 4.5); },
+  bolt(c){ _p(c, '#ffd84d', k => { k.moveTo(56, 6); k.lineTo(20, 54); k.lineTo(44, 54); k.lineTo(34, 90); k.lineTo(78, 38); k.lineTo(54, 38); k.closePath(); }, 6.5); },
+  snow(c){ for (let a = 0; a < 3; a++){ const t = a * Math.PI / 3, dx = Math.cos(t) * 38, dy = Math.sin(t) * 38; _l(c, INK, 13, [48 - dx, 48 - dy, 48 + dx, 48 + dy]); } for (let a = 0; a < 3; a++){ const t = a * Math.PI / 3, dx = Math.cos(t) * 38, dy = Math.sin(t) * 38; _l(c, '#bff0ff', 6, [48 - dx, 48 - dy, 48 + dx, 48 + dy]); } _o(c, '#fff', 48, 48, 8, 4); },
+  mascot(c){ _o(c, '#5fe38a', 24, 28, 12); _o(c, '#5fe38a', 72, 28, 12); _o(c, '#5fe38a', 48, 54, 34); _eyes(c, 48, 50, 14, 9); c.beginPath(); c.arc(48, 62, 9, .2, Math.PI - .2); c.strokeStyle = INK; c.lineWidth = 4; c.stroke(); c.fillStyle = 'rgba(255,126,182,.7)'; for (const sx of [-1, 1]){ c.beginPath(); c.ellipse(48 + sx * 24, 62, 6, 4, 0, 0, TAU); c.fill(); } },
+  bomb(c){ _o(c, '#a77bff', 44, 58, 30); _l(c, INK, 11, [62, 36, 72, 22, 80, 18]); _l(c, '#c9cbd6', 5, [62, 36, 72, 22, 80, 18]); _s(c, '#ffd84d', 82, 14, 12, .3, 4); _shine(c, 44, 58, 21, 3.5, 4.5); },
+  worm(c){ c.beginPath(); c.moveTo(14, 70); c.bezierCurveTo(30, 20, 46, 90, 62, 40); c.bezierCurveTo(68, 22, 80, 26, 84, 36); c.lineCap = 'round'; c.strokeStyle = INK; c.lineWidth = 32; c.stroke(); c.strokeStyle = '#ff7eb6'; c.lineWidth = 22; c.stroke(); _eyes(c, 80, 33, 6, 5); _p(c, '#ffd84d', k => { k.arc(24, 24, 7, 0, TAU); }, 4); _l(c, INK, 4, [30, 24, 30, 8]); },
+  speaker(c){ _p(c, '#4a3794', k => k.rect(18, 8, 60, 80), 6); _o(c, '#ff7eb6', 48, 28, 10, 4.5); _o(c, '#c9cbd6', 48, 64, 21, 5); _o(c, '#3a2a5c', 48, 64, 10, 4); },
+  notes(c){ _l(c, INK, 13, [34, 70, 34, 26, 74, 18, 74, 62]); _l(c, '#ffd84d', 6, [34, 70, 34, 26, 74, 18, 74, 62]); _p(c, '#ffd84d', k => { k.moveTo(34, 26); k.lineTo(74, 18); k.lineTo(74, 34); k.lineTo(34, 42); k.closePath(); }, 5); _e(c, '#ffd84d', 26, 72, 13, 10, -.35, 5); _e(c, '#ffd84d', 66, 64, 13, 10, -.35, 5); },
+  note(c){ _l(c, INK, 13, [58, 66, 58, 14]); _l(c, '#ffd84d', 6, [58, 66, 58, 14]); _p(c, '#ffd84d', k => { k.moveTo(58, 14); k.quadraticCurveTo(64, 38, 82, 44); k.quadraticCurveTo(72, 28, 58, 28); }, 5); _e(c, '#ffd84d', 44, 70, 17, 13, -.35, 5.5); },
+  rings(c){ for (const r of [46, 32, 18]){ c.beginPath(); c.arc(14, 48, r, -1, 1); c.strokeStyle = INK; c.lineWidth = 13; c.lineCap = 'round'; c.stroke(); } for (const r of [46, 32, 18]){ c.beginPath(); c.arc(14, 48, r, -1, 1); c.strokeStyle = r === 32 ? '#ff7eb6' : '#a77bff'; c.lineWidth = 6.5; c.stroke(); } _o(c, '#ffd84d', 14, 48, 9, 4.5); },
+  metronome(c){ _p(c, '#ffd84d', k => { k.moveTo(28, 88); k.lineTo(68, 88); k.lineTo(56, 10); k.lineTo(40, 10); k.closePath(); }); _l(c, INK, 10, [48, 78, 62, 24]); _l(c, CREAM, 4, [48, 78, 62, 24]); _o(c, '#ff7eb6', 58, 38, 8, 4.5); },
+  shoe(c){ _p(c, '#ff7eb6', k => { k.moveTo(10, 30); k.lineTo(34, 30); k.quadraticCurveTo(46, 52, 72, 56); k.quadraticCurveTo(90, 58, 90, 72); k.lineTo(90, 78); k.lineTo(10, 78); k.closePath(); }); _p(c, CREAM, k => k.rect(8, 74, 84, 14), 5); _l(c, CREAM, 4, [40, 42, 50, 36]); _l(c, CREAM, 4, [50, 50, 60, 44]); },
+  onesie(c){ _p(c, CREAM, k => { k.moveTo(16, 40); k.lineTo(20, 8); k.lineTo(38, 24); k.closePath(); }, 5); _p(c, CREAM, k => { k.moveTo(80, 40); k.lineTo(76, 8); k.lineTo(58, 24); k.closePath(); }, 5); _o(c, '#3fcf6a', 48, 54, 36); _eyes(c, 48, 48, 14, 9); c.beginPath(); c.arc(48, 62, 12, .25, Math.PI - .25); c.strokeStyle = INK; c.lineWidth = 4.5; c.stroke(); },
+  magnet(c){ c.beginPath(); c.moveTo(22, 88); c.lineTo(22, 46); c.arc(48, 46, 26, Math.PI, 0); c.lineTo(74, 88); c.lineCap = 'butt'; c.strokeStyle = INK; c.lineWidth = 34; c.stroke(); c.strokeStyle = '#ff5a6e'; c.lineWidth = 22; c.stroke(); c.beginPath(); c.moveTo(22, 88); c.lineTo(22, 68); c.moveTo(74, 88); c.lineTo(74, 68); c.strokeStyle = CREAM; c.lineWidth = 22; c.stroke(); },
+  smoothie(c){ _l(c, INK, 13, [62, 30, 72, 6]); _l(c, '#ff7eb6', 6, [62, 30, 72, 6]); _p(c, '#5fe38a', k => { k.moveTo(22, 30); k.lineTo(74, 30); k.lineTo(65, 88); k.lineTo(31, 88); k.closePath(); }); _p(c, CREAM, k => k.rect(18, 24, 60, 10), 5); _p(c, '#3fcf6a', k => { k.moveTo(28, 22); k.quadraticCurveTo(24, 6, 42, 8); k.quadraticCurveTo(44, 22, 28, 22); }, 4); _shine(c, 48, 60, 14, 3.5, 4.4); },
+  sparkle(c){ _s(c, '#ffd84d', 44, 54, 38, .28, 6); _s(c, '#ff7eb6', 78, 22, 15); _s(c, '#a77bff', 18, 18, 10, .3, 4); },
+  scrunchie(c){ c.beginPath(); c.arc(48, 48, 28, 0, TAU); c.strokeStyle = INK; c.lineWidth = 30; c.stroke(); c.strokeStyle = '#ff7eb6'; c.lineWidth = 21; c.stroke(); c.strokeStyle = 'rgba(45,23,15,.4)'; c.lineWidth = 3; for (let i = 0; i < 10; i++){ const a = i / 10 * TAU; c.beginPath(); c.moveTo(48 + Math.cos(a) * 20, 48 + Math.sin(a) * 20); c.lineTo(48 + Math.cos(a) * 36, 48 + Math.sin(a) * 36); c.stroke(); } _shine(c, 48, 48, 28, 3.6, 4.6); },
+  heart(c){ _p(c, '#ff5a6e', k => { k.moveTo(48, 86); k.bezierCurveTo(6, 54, 16, 14, 48, 34); k.bezierCurveTo(80, 14, 90, 54, 48, 86); k.closePath(); }); _e(c, 'rgba(255,255,255,.85)', 30, 34, 7, 4, -.7, 0); },
+  critter(c){ _o(c, '#8ff0a8', 48, 52, 36); _eyes(c, 48, 46, 15, 10); c.beginPath(); c.arc(48, 66, 9, .2, Math.PI - .2); c.strokeStyle = INK; c.lineWidth = 4.5; c.stroke(); _shine(c, 48, 52, 28, 3.5, 4.3); },
+  duet(c){ _o(c, '#ff7eb6', 32, 54, 26); _eyes(c, 32, 50, 9, 6); _o(c, '#3fcf6a', 66, 46, 26); _eyes(c, 66, 42, 9, 6); },
+  pause(c){ _p(c, '#ff7eb6', k => k.rect(22, 16, 18, 64), 6); _p(c, '#ff7eb6', k => k.rect(56, 16, 18, 64), 6); },
+  vol(c){ _p(c, '#4a3794', k => { k.moveTo(8, 36); k.lineTo(28, 36); k.lineTo(50, 14); k.lineTo(50, 82); k.lineTo(28, 60); k.lineTo(8, 60); k.closePath(); }); for (const r of [14, 26]){ c.beginPath(); c.arc(54, 48, r, -.9, .9); c.strokeStyle = INK; c.lineWidth = 11; c.lineCap = 'round'; c.stroke(); } for (const r of [14, 26]){ c.beginPath(); c.arc(54, 48, r, -.9, .9); c.strokeStyle = '#ff7eb6'; c.lineWidth = 5; c.stroke(); } },
+  mute(c){ _p(c, '#4a3794', k => { k.moveTo(8, 36); k.lineTo(28, 36); k.lineTo(50, 14); k.lineTo(50, 82); k.lineTo(28, 60); k.lineTo(8, 60); k.closePath(); }); _l(c, INK, 13, [60, 34, 88, 62]); _l(c, INK, 13, [88, 34, 60, 62]); _l(c, '#ff5a6e', 6.5, [60, 34, 88, 62]); _l(c, '#ff5a6e', 6.5, [88, 34, 60, 62]); },
+  sour(c){ _p(c, '#ffe45c', k => { k.moveTo(8, 56); k.quadraticCurveTo(16, 18, 52, 16); k.quadraticCurveTo(84, 22, 88, 52); k.quadraticCurveTo(66, 90, 8, 56); k.closePath(); }); _p(c, '#3fcf6a', k => { k.moveTo(52, 16); k.quadraticCurveTo(62, 4, 76, 8); k.quadraticCurveTo(72, 22, 52, 16); }, 4); _shine(c, 46, 50, 22, 3.6, 4.7); },
+  noheart(c){ ICON_FN.heart(c); _l(c, INK, 14, [14, 14, 82, 82]); _l(c, CREAM, 6.5, [14, 14, 82, 82]); },
+  flame(c){ _p(c, '#ff9a2e', k => { k.moveTo(48, 6); k.bezierCurveTo(54, 30, 84, 42, 80, 66); k.bezierCurveTo(78, 86, 60, 90, 48, 90); k.bezierCurveTo(30, 90, 14, 80, 16, 60); k.bezierCurveTo(18, 46, 32, 40, 34, 24); k.bezierCurveTo(40, 30, 44, 22, 48, 6); k.closePath(); }); _p(c, '#ffd84d', k => { k.moveTo(48, 44); k.bezierCurveTo(52, 58, 66, 62, 62, 76); k.bezierCurveTo(60, 84, 54, 84, 48, 84); k.bezierCurveTo(38, 84, 32, 78, 34, 68); k.bezierCurveTo(36, 60, 46, 56, 48, 44); k.closePath(); }, 4); },
+  crown(c){ _p(c, '#ffd84d', k => { k.moveTo(10, 78); k.lineTo(10, 28); k.lineTo(30, 48); k.lineTo(48, 14); k.lineTo(66, 48); k.lineTo(86, 28); k.lineTo(86, 78); k.closePath(); }); _o(c, '#ff5a6e', 48, 58, 7, 4); _o(c, '#5fe38a', 24, 62, 5, 3.5); _o(c, '#a77bff', 72, 62, 5, 3.5); },
+  dice(c){ _p(c, CREAM, k => k.rect(12, 12, 72, 72), 6); for (const [x, y] of [[30, 30], [66, 30], [48, 48], [30, 66], [66, 66]]){ c.fillStyle = INK; c.beginPath(); c.arc(x, y, 6, 0, TAU); c.fill(); } },
+  noentry(c){ _o(c, '#ff5a6e', 48, 48, 38); _l(c, CREAM, 14, [26, 48, 70, 48]); _l(c, INK, 3, [26, 48, 70, 48]); },
+  clock(c){ _o(c, CREAM, 48, 50, 38); _l(c, INK, 7, [48, 50, 48, 26]); _l(c, INK, 7, [48, 50, 66, 58]); _o(c, '#ff7eb6', 48, 50, 5, 3); },
+  clover(c){ for (const [x, y] of [[34, 34], [62, 34], [34, 62], [62, 62]]) _o(c, '#3fcf6a', x, y, 19, 5); _l(c, INK, 9, [50, 56, 62, 88]); _l(c, '#3fcf6a', 4, [50, 56, 62, 88]); },
+  star(c){ _p(c, '#ffd84d', k => { for (let i = 0; i < 10; i++){ const a = -Math.PI / 2 + i * Math.PI / 5, r = i & 1 ? 20 : 42; k[i ? 'lineTo' : 'moveTo'](48 + Math.cos(a) * r, 52 + Math.sin(a) * r); } k.closePath(); }, 6); },
+  target(c){ _o(c, '#ff5a6e', 48, 48, 40); _o(c, CREAM, 48, 48, 27, 4); _o(c, '#ff5a6e', 48, 48, 15, 4); _o(c, CREAM, 48, 48, 5, 3); },
+  lock(c){ c.beginPath(); c.arc(48, 38, 20, Math.PI, 0); c.lineTo(68, 52); c.moveTo(28, 52); c.lineTo(28, 38); c.strokeStyle = INK; c.lineWidth = 17; c.lineCap = 'round'; c.stroke(); c.strokeStyle = '#c9cbd6'; c.lineWidth = 7; c.stroke(); _p(c, '#ffd84d', k => k.rect(16, 48, 64, 42), 6); _o(c, INK, 48, 66, 6, 2); },
+  arrow(c){ _p(c, '#5fe38a', k => { k.moveTo(10, 36); k.lineTo(52, 36); k.lineTo(52, 14); k.lineTo(88, 48); k.lineTo(52, 82); k.lineTo(52, 60); k.lineTo(10, 60); k.closePath(); }); },
+  gloss(c){ _o(c, '#e6d9ff', 48, 50, 38); _l(c, '#fff', 6, [24, 30, 44, 18]); c.beginPath(); c.arc(48, 58, 14, .3, Math.PI - .3); c.strokeStyle = INK; c.lineWidth = 4.5; c.stroke(); _eyes(c, 48, 44, 13, 7); },
+});
+const ICON_URL = {};
+function iconURL(key){
+  if (ICON_URL[key] !== undefined) return ICON_URL[key];
+  const evo = key.charAt(key.length - 1) === '+', base = evo ? key.slice(0, -1) : key;
+  const fn = ICON_FN[base]; let url = '';
+  try {
+    const cv2 = document.createElement('canvas'); cv2.width = cv2.height = 96;
+    const c = cv2.getContext('2d');
+    if (fn){ c.save(); fn(c); c.restore(); }
+    if (evo) _s(c, '#ffd84d', 78, 20, 17, .3, 5);
+    url = cv2.toDataURL ? String(cv2.toDataURL('image/png')) : '';
+  } catch (err) { url = ''; }
+  return (ICON_URL[key] = url);
+}
+const ico = (key, px) => '<img class="gi" alt="" draggable="false" src="' + iconURL(key) + '"' + (px ? ' width="' + px + '" height="' + px + '"' : '') + '>';
+function hydrateIcons(){
+  if (HEADLESS) return;
+  document.querySelectorAll('[data-ico]').forEach(el => { el.innerHTML = ico(el.getAttribute('data-ico'), +el.getAttribute('data-px') || 0); });
+}
+
+// ------------------------------------------------------------ the venues
+// Twelve venues, one per stage: the floor, the rim and the little props change with the story.
+const VENUES = [
+  { nm: 'club',      floor: ['#4b3896', '#38297a', '#1d1647'], pat: 'planks',  dot: 'rgba(255,126,182,.10)', cur: ['#8f1838', 'rgba(200,38,79,.6)'],  props: ['tape', 'speaker', 'vinyl'],     bk: 0 },
+  { nm: 'open mic',  floor: ['#5a3a9c', '#412c86', '#241a58'], pat: 'checker', dot: 'rgba(255,216,77,.10)',  cur: ['#4a1d6e', 'rgba(167,123,255,.55)'], props: ['vinyl', 'cable', 'pillow'],  bk: 1 },
+  { nm: 'amp',       floor: ['#33264f', '#271c3e', '#150f26'], pat: 'tiles',   dot: 'rgba(255,90,110,.08)',  cur: ['#1b1226', 'rgba(255,90,110,.4)'],  props: ['cable', 'speaker', 'cable'],   bk: 0 },
+  { nm: 'street',    floor: ['#3b4470', '#2d3560', '#1a2040'], pat: 'asphalt', dot: 'rgba(255,244,230,.07)', cur: ['#6b3a3a', 'rgba(224,120,100,.5)'], props: ['cone', 'balloon', 'tape'],     bk: 1 },
+  { nm: 'market',    floor: ['#6a5a4a', '#52443a', '#2e2620'], pat: 'cobble',  dot: 'rgba(255,244,230,.05)', cur: ['#2f7a4b', 'rgba(88,194,125,.6)'],  props: ['crate', 'flower', 'crate'],    bk: 3 },
+  { nm: 'green room',floor: ['#2a7068', '#1f5a55', '#123a3a'], pat: 'checker', dot: 'rgba(255,244,230,.07)', cur: ['#1f6a55', 'rgba(46,196,182,.55)'], props: ['pillow', 'flower', 'pillow'],  bk: 3 },
+  { nm: 'festival',  floor: ['#3f9a58', '#2f8048', '#1c5a30'], pat: 'grass',   dot: 'rgba(255,244,230,.08)', cur: ['#ff7eb6', 'rgba(255,244,230,.7)'], props: ['balloon', 'flower', 'tape'],   bk: 0 },
+  { nm: 'rooftop',   floor: ['#2c3a78', '#212c62', '#121838'], pat: 'tiles',   dot: 'rgba(255,216,77,.10)',  cur: ['#161034', 'rgba(255,216,77,.45)'], props: ['pool', 'speaker', 'pool'],     bk: 1 },
+  { nm: 'stadium',   floor: ['#3a8a52', '#2c7140', '#174a28'], pat: 'grass',   dot: 'rgba(255,255,255,.12)', cur: ['#c8264f', 'rgba(255,154,46,.6)'],  props: ['cone', 'tape', 'balloon'],     bk: 0 },
+  { nm: 'tour bus',  floor: ['#8a5034', '#6f3e28', '#43241a'], pat: 'planks',  dot: 'rgba(255,216,77,.08)',  cur: ['#7a3b1e', 'rgba(255,154,46,.5)'],  props: ['pillow', 'cable', 'vinyl'],    bk: 1 },
+  { nm: 'garden',    floor: ['#4a8a5e', '#3b7050', '#244a34'], pat: 'grass',   dot: 'rgba(255,194,220,.14)', cur: ['#1f7a3a', 'rgba(63,207,106,.6)'],  props: ['flower', 'flower', 'pool'],    bk: 3 },
+  { nm: 'big stage', floor: ['#8a7ac8', '#6a5aa8', '#3e3478'], pat: 'gloss',   dot: 'rgba(255,255,255,.14)', cur: ['#b6b8cf', 'rgba(244,241,251,.8)'], props: ['pool', 'sparkle', 'pool'],     bk: 2 },
+];
+const BOKEH = [NOTE_COLS, ['#ffd84d', '#ff9a2e', '#ff7eb6', '#fff4e6'], ['#fff4e6', '#e6d9ff', '#d9fff4', '#ffe3f1'], ['#ffc2dc', '#c6ff3d', '#fff4e6', '#5fe38a']];
+const venueNow = () => VENUES[Math.min(G.state === 'menu' ? 0 : G.stage, VENUES.length - 1)];
+function hash2(a, b){ let h = Math.imul(a + 374761393, 668265263) ^ Math.imul(b + 1274126177, 2246822519); h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; }
+const PROPS = {};
+function propsFor(vi){
+  if (PROPS[vi]) return PROPS[vi];
+  const v = VENUES[vi], list = [];
+  for (let i = 0; i < 150; i++){
+    const a = hash2(vi * 97 + i, 11) * TAU, d = Math.sqrt(hash2(vi * 97 + i, 23)) * (DISH_R - 90);
+    list.push({ x: Math.cos(a) * d, y: Math.sin(a) * d, k: v.props[i % v.props.length], v: Math.floor(hash2(i, vi) * 4), rot: hash2(i, 5) * TAU });
+  }
+  return (PROPS[vi] = list);
+}
+function drawProp(p, v){
+  const x = p.x, y = p.y;
+  ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+  if (p.k === 'pool'){ ctx.fillStyle = 'rgba(255,244,214,.07)'; ctx.beginPath(); ctx.ellipse(x, y, 70, 46, 0, 0, TAU); ctx.fill(); return; }
+  if (p.k === 'tape'){ ctx.save(); ctx.translate(x, y); ctx.rotate(p.rot); ctx.fillStyle = 'rgba(255,244,230,.35)'; ctx.fillRect(-22, -3, 44, 6); ctx.rotate(1.57); ctx.fillRect(-22, -3, 44, 6); ctx.restore(); return; }
+  if (p.k === 'cable'){ ctx.strokeStyle = 'rgba(20,12,10,.55)'; ctx.lineWidth = 5; ctx.beginPath(); ctx.moveTo(x - 40, y); ctx.bezierCurveTo(x - 20, y - 26, x + 10, y + 26, x + 40, y - 4); ctx.stroke(); return; }
+  if (p.k === 'vinyl'){ ctx.beginPath(); ctx.arc(x, y, 15, 0, TAU); ctx.fillStyle = '#3a2a5c'; ctx.fill(); ctx.lineWidth = 2.4; ctx.strokeStyle = INK; ctx.stroke(); ctx.fillStyle = ['#ff7eb6', '#ffd84d', '#5fe38a', '#a77bff'][p.v]; ctx.beginPath(); ctx.arc(x, y, 5.5, 0, TAU); ctx.fill(); return; }
+  if (p.k === 'speaker'){ ctx.beginPath(); ctx.rect(x - 13, y - 17, 26, 34); ctx.fillStyle = '#4a3794'; ctx.fill(); ctx.lineWidth = 2.6; ctx.strokeStyle = INK; ctx.stroke(); ctx.fillStyle = '#c9cbd6'; ctx.beginPath(); ctx.arc(x, y + 5, 7, 0, TAU); ctx.fill(); ctx.stroke(); ctx.fillStyle = '#ff7eb6'; ctx.beginPath(); ctx.arc(x, y - 9, 3, 0, TAU); ctx.fill(); return; }
+  if (p.k === 'pillow'){ ctx.save(); ctx.translate(x, y); ctx.rotate(p.rot); ctx.beginPath(); ctx.ellipse(0, 0, 22, 16, 0, 0, TAU); celPath(['#ff7eb6', '#5fe38a', '#ffd84d', '#a77bff'][p.v], 3, 2.4); ctx.restore(); return; }
+  if (p.k === 'crate'){ ctx.beginPath(); ctx.rect(x - 15, y - 11, 30, 22); ctx.fillStyle = '#b8642c'; ctx.fill(); ctx.lineWidth = 2.4; ctx.strokeStyle = INK; ctx.stroke(); ctx.fillStyle = ['#5fe38a', '#ff9a2e', '#ff5a6e', '#c6ff3d'][p.v]; for (let i = -1; i <= 1; i++){ ctx.beginPath(); ctx.arc(x + i * 8, y - 11, 5, 0, TAU); ctx.fill(); ctx.stroke(); } return; }
+  if (p.k === 'cone'){ ctx.beginPath(); ctx.moveTo(x, y - 16); ctx.lineTo(x + 11, y + 11); ctx.lineTo(x - 11, y + 11); ctx.closePath(); ctx.fillStyle = '#ff9a2e'; ctx.fill(); ctx.lineWidth = 2.4; ctx.strokeStyle = INK; ctx.stroke(); ctx.fillStyle = CREAM; ctx.fillRect(x - 6, y - 2, 12, 4); return; }
+  if (p.k === 'balloon'){ const sway = Math.sin(G.at + p.rot) * 2; ctx.strokeStyle = INK; ctx.lineWidth = 1.6; ctx.beginPath(); ctx.moveTo(x, y); ctx.quadraticCurveTo(x + sway * 2, y + 14, x + sway, y + 28); ctx.stroke(); ctx.beginPath(); ctx.ellipse(x, y - 12, 10, 13, 0, 0, TAU); ctx.fillStyle = ['#ff7eb6', '#ffd84d', '#5fe38a', '#a77bff'][p.v]; ctx.fill(); ctx.lineWidth = 2.2; ctx.stroke(); ctx.fillStyle = 'rgba(255,255,255,.8)'; ctx.beginPath(); ctx.ellipse(x - 3.5, y - 17, 2, 3.5, -.4, 0, TAU); ctx.fill(); return; }
+  if (p.k === 'flower'){ ctx.strokeStyle = '#2f8048'; ctx.lineWidth = 2.4; ctx.beginPath(); ctx.moveTo(x, y + 14); ctx.lineTo(x, y); ctx.stroke(); const pc = ['#ff7eb6', '#fff4e6', '#ffd84d', '#ffc2dc'][p.v]; for (let i = 0; i < 5; i++){ const a = i / 5 * TAU + p.rot; ctx.beginPath(); ctx.arc(x + Math.cos(a) * 6, y - 2 + Math.sin(a) * 6, 4.6, 0, TAU); ctx.fillStyle = pc; ctx.fill(); ctx.lineWidth = 1.4; ctx.strokeStyle = INK; ctx.stroke(); } ctx.fillStyle = '#ffd84d'; ctx.beginPath(); ctx.arc(x, y - 2, 3.2, 0, TAU); ctx.fill(); return; }
+  if (p.k === 'sparkle'){ ctx.globalAlpha = .5 + .5 * Math.sin(G.at * 2 + p.rot); sparkle(x, y, 9, CREAM, 1.6); ctx.globalAlpha = 1; }
+}
+// floor patterns, only the visible window
+function drawFloorPattern(v){
+  const cx = G.cam.x, cy = G.cam.y, hw = G.vw / 2 + 80, hh = G.vh / 2 + 80;
+  const x0 = cx - hw, x1 = cx + hw, y0 = cy - hh, y1 = cy + hh;
+  const f = v.floor;
+  if (v.pat === 'planks'){
+    const st = 64; ctx.strokeStyle = 'rgba(20,10,40,.22)'; ctx.lineWidth = 2.4; ctx.beginPath();
+    for (let y = Math.floor(y0 / st) * st, r = Math.floor(y0 / st); y < y1; y += st, r++){
+      ctx.moveTo(x0, y); ctx.lineTo(x1, y);
+      for (let x = Math.floor(x0 / 260) * 260 + (r & 1 ? 130 : 0); x < x1; x += 260){ ctx.moveTo(x, y); ctx.lineTo(x, y + st); }
+    }
+    ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,.035)';
+    for (let y = Math.floor(y0 / (st * 2)) * st * 2; y < y1; y += st * 2) ctx.fillRect(x0, y, x1 - x0, st);
+  } else if (v.pat === 'checker' || v.pat === 'tiles'){
+    const st = v.pat === 'checker' ? 130 : 96; ctx.fillStyle = v.pat === 'checker' ? 'rgba(255,255,255,.07)' : 'rgba(255,255,255,.03)';
+    ctx.beginPath();
+    for (let j = Math.floor(y0 / st); j * st < y1; j++) for (let i = Math.floor(x0 / st); i * st < x1; i++) if ((i + j) & 1) ctx.rect(i * st, j * st, st, st);
+    ctx.fill();
+    if (v.pat === 'tiles'){ ctx.strokeStyle = 'rgba(0,0,0,.25)'; ctx.lineWidth = 2; ctx.beginPath(); for (let x = Math.floor(x0 / st) * st; x < x1; x += st){ ctx.moveTo(x, y0); ctx.lineTo(x, y1); } for (let y = Math.floor(y0 / st) * st; y < y1; y += st){ ctx.moveTo(x0, y); ctx.lineTo(x1, y); } ctx.stroke(); }
+  } else if (v.pat === 'asphalt'){
+    ctx.strokeStyle = 'rgba(255,244,230,.28)'; ctx.lineWidth = 7; ctx.setLineDash([60, 52]); ctx.beginPath();
+    for (let y = Math.floor(y0 / 700) * 700; y < y1; y += 700){ ctx.moveTo(x0, y); ctx.lineTo(x1, y); }
+    ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle = 'rgba(255,255,255,.05)'; ctx.beginPath();
+    for (let j = Math.floor(y0 / 90); j * 90 < y1; j++) for (let i = Math.floor(x0 / 90); i * 90 < x1; i++){ const h = hash2(i, j); if (h > .86){ ctx.moveTo(i * 90 + 18, j * 90); ctx.arc(i * 90, j * 90, 18, 0, TAU); } }
+    ctx.fill();
+  } else if (v.pat === 'cobble'){
+    ctx.strokeStyle = 'rgba(0,0,0,.28)'; ctx.lineWidth = 2.4; ctx.beginPath();
+    const w = 64, h = 46;
+    for (let j = Math.floor(y0 / h); j * h < y1; j++) for (let i = Math.floor(x0 / w); i * w < x1; i++){ const ox = (j & 1) ? w / 2 : 0; ctx.rect(i * w + ox + 3, j * h + 3, w - 6, h - 6); }
+    ctx.stroke();
+  } else if (v.pat === 'grass'){
+    const st = 200; ctx.fillStyle = 'rgba(255,255,255,.045)'; ctx.beginPath();
+    for (let i = Math.floor(x0 / st); i * st < x1; i++) if (i & 1) ctx.rect(i * st, y0, st, y1 - y0);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(20,70,30,.5)'; ctx.lineWidth = 2.2; ctx.beginPath();
+    for (let j = Math.floor(y0 / 70); j * 70 < y1; j++) for (let i = Math.floor(x0 / 70); i * 70 < x1; i++){ const h = hash2(i, j + 900); if (h > .55){ const x = i * 70 + h * 50, y = j * 70 + hash2(j, i) * 50; ctx.moveTo(x - 4, y); ctx.lineTo(x, y - 8); ctx.lineTo(x + 4, y); } }
+    ctx.stroke();
+  } else if (v.pat === 'gloss'){
+    ctx.fillStyle = 'rgba(255,255,255,.10)'; ctx.beginPath();
+    const st = 260;
+    for (let k = Math.floor((x0 + y0) / st); k * st < x1 + y1; k += 2){ ctx.moveTo(k * st, y0); ctx.lineTo(k * st + st * .5, y0); ctx.lineTo(k * st + st * .5 - (y1 - y0), y1); ctx.lineTo(k * st - (y1 - y0), y1); ctx.closePath(); }
+    ctx.fill();
+  }
+}
+
+// ------------------------------------------- menu: the duo and the portraits
+function drawDuo(){
+  if (HEADLESS || G.state !== 'menu') return;
+  const el = $('duo'); if (!el || !el.getContext || !el.clientWidth) return;
+  const w = el.clientWidth, h = el.clientHeight, dp = Math.min(2, (typeof devicePixelRatio === 'number' ? devicePixelRatio : 1) || 1);
+  if (el.width !== Math.round(w * dp) || el.height !== Math.round(h * dp)){ el.width = Math.round(w * dp); el.height = Math.round(h * dp); }
+  const c = el.getContext('2d'), main = ctx;
+  c.setTransform(dp, 0, 0, dp, 0, 0); c.clearRect(0, 0, w, h);
+  ctx = c;
+  const s = h / 318, hero = heroDef(meta.hero), mate = heroDef(hero.mate), t = G.at;
+  for (let i = 0; i < 5; i++){ // notes floating up between them
+    const u = ((t * .35 + i * .2) % 1);
+    ctx.globalAlpha = Math.sin(u * Math.PI);
+    note(w / 2 + Math.sin(u * 7 + i * 2) * w * .1, h * .62 - u * h * .55, 7 + (i & 1) * 2, NOTE_COLS[i & 3]);
+  }
+  ctx.globalAlpha = 1;
+  groundShadow(w / 2 - w * .17, h - 6, 62 * s, 10 * s); groundShadow(w / 2 + w * .17, h - 6, 56 * s, 9 * s);
+  drawHeroFig(hero.id, w / 2 - w * .17, h - 6, s, 'sing', t, false, 1, 20, dp);
+  drawHeroFig(mate.id, w / 2 + w * .17, h - 6, s * .95, 'sing', t + 1.3, true, 1, 21, dp);
+  ctx = main;
+}
+function renderHeroes(){
+  const host = $('heroes'); if (!host) return;
+  host.innerHTML = '';
+  for (const h of HEROES){
+    const el = document.createElement('div');
+    el.className = 'hero' + (meta.hero === h.id ? ' sel' : '');
+    el.innerHTML = '<canvas width="144" height="144"></canvas><div class="nm">' + h.nm + '</div><div class="ds">' + h.ds + '</div>';
+    const cvs = el.querySelector('canvas');
+    if (HERO_ART && cvs && cvs.getContext){
+      try { HERO_ART.bust(cvs.getContext('2d'), h.id, 144, 144, { t: 0 }); } catch (err) {}
+    }
+    el.onclick = () => { meta.hero = h.id; saveMeta(); renderHeroes(); sfx('orb'); };
+    host.appendChild(el);
+  }
 }
 
 // ============================================================================
@@ -2573,8 +3090,8 @@ function syncUI(){
   else if (G.state === 'over') renderOver();
 }
 function kitText(){
-  const w = P.weapons.map(x => def(x.id).ic + ' ' + def(x.id).nm + ' Lv' + x.lvl).join(' · ');
-  const p = Object.keys(P.pas).map(k => PASSIVES[k].ic + ' ' + PASSIVES[k].nm + ' Lv' + P.pas[k]).join(' · ');
+  const w = P.weapons.map(x => ico(def(x.id).ic, 18) + ' ' + def(x.id).nm + ' Lv' + x.lvl).join(' · ');
+  const p = Object.keys(P.pas).map(k => ico(PASSIVES[k].ic, 18) + ' ' + PASSIVES[k].nm + ' Lv' + P.pas[k]).join(' · ');
   return w + (p ? '<br>' + p : '');
 }
 function renderDiffs(){
@@ -2584,7 +3101,7 @@ function renderDiffs(){
   for (const d of DIFFS){
     const el = document.createElement('div');
     el.className = 'diff' + (curDiff().id === d.id ? ' sel' : '');
-    el.innerHTML = '<div class="nm">' + d.ic + ' ' + d.nm + '</div><div class="ds">' + d.ds + '</div>';
+    el.innerHTML = '<div class="nm">' + ico(d.ic, 20) + ' ' + d.nm + '</div><div class="ds">' + d.ds + '</div>';
     el.onclick = () => { meta.diff = d.id; saveMeta(); renderDiffs(); sfx('orb'); };
     host.appendChild(el);
   }
@@ -2594,10 +3111,10 @@ function renderBest(){
   const b = meta.bestStage || 0;
   $('best').innerHTML = meta.runs
     ? 'Best run: <b style="color:var(--lime)">Stage ' + Math.max(1, b) + '/' + STAGES.length + '</b>' +
-      ' &nbsp;·&nbsp; level ' + meta.bestLvl + ' &nbsp;·&nbsp; ' + fmtN(meta.kills) + ' purged' +
-      (meta.wins ? ' &nbsp;·&nbsp; <b style="color:var(--amber)">' + meta.wins + ' dish' + (meta.wins > 1 ? 'es' : '') + ' dominated</b>' : '') +
-      ' &nbsp;·&nbsp; 🧬 ' + fmtN(meta.dna) + ' banked'
-    : 'First culture. Clear stage 1 and the dish opens up.';
+      ' &nbsp;·&nbsp; level ' + meta.bestLvl + ' &nbsp;·&nbsp; ' + fmtN(meta.kills) + ' silenced' +
+      (meta.wins ? ' &nbsp;·&nbsp; <b style="color:var(--amber)">Soundlands unmuted ' + meta.wins + '×</b>' : '') +
+      ' &nbsp;·&nbsp; ' + ico('note', 16) + ' ' + fmtN(meta.dna) + ' banked'
+    : 'First show. Clear the Soundcheck and the tour opens up.';
 }
 function renderSpecies(){
   const host = $('species');
@@ -2606,9 +3123,9 @@ function renderSpecies(){
     const ok = specUnlocked(s);
     const el = document.createElement('div');
     el.className = 'spec' + (meta.spec === s.id ? ' sel' : '') + (ok ? '' : ' lock');
-    el.innerHTML = '<div class="nm">' + (ok ? s.ic : '🔒') + ' ' + s.nm + '</div>' +
+    el.innerHTML = '<div class="nm">' + ico(ok ? s.ic : 'lock', 22) + ' ' + s.nm + '</div>' +
       '<div class="ds">' + s.ds + '</div>' +
-      '<div class="pk">' + (ok ? 'Starts with ' + WEAPONS[s.start].ic + ' ' + WEAPONS[s.start].nm : s.condTxt) + '</div>';
+      '<div class="pk">' + (ok ? 'Starts with ' + ico(WEAPONS[s.start].ic, 16) + ' ' + WEAPONS[s.start].nm : s.condTxt) + '</div>';
     if (ok) el.onclick = () => { meta.spec = s.id; saveMeta(); renderSpecies(); sfx('orb'); };
     host.appendChild(el);
   }
@@ -2623,7 +3140,7 @@ function renderCards(){
     el.style.animationDelay = (i * .05) + 's';
     el.innerHTML = '<div class="rar"></div>' + (c.rar ? '<div class="tag">×' + (1 + c.rar) + '</div>' : '') +
       (c.t === 'evo' ? '<div class="tag">EVOLVE</div>' : '') +
-      '<div class="ic">' + c.ic + '</div><div class="nm">' + c.nm + '</div>' +
+      '<div class="ic">' + ico(c.ic, 42) + '</div><div class="nm">' + c.nm + '</div>' +
       '<div class="lv">' + c.lv + '</div><div class="ds">' + c.ds + '</div>';
     el.onclick = () => { if (banishMode){ banishMode = false; banish(i); } else { choose(i); sfx('chest'); } };
     host.appendChild(el);
@@ -2637,21 +3154,21 @@ function renderCards(){
 let banishMode = false;
 function renderClear(){
   const st = STAGES[Math.min(G.stage, STAGES.length - 1)];
-  $('clearnm').textContent = 'Stage ' + (G.stage + 1) + ' — ' + st.nm;
-  $('clearsub').innerHTML = '🧬 +' + fmtN(G.stageDna) + ' DNA banked &nbsp;·&nbsp; ☠ ' + fmtN(G.stageKills) +
-    ' purged &nbsp;·&nbsp; ⏱ ' + fmtT(G.t) + ' total<br>Take one reward and push on.';
+  $('clearnm').textContent = 'Stage ' + (G.stage + 1) + ' · ' + st.nm;
+  $('clearsub').innerHTML = '<i>' + (st.done || '') + '</i><br>' + ico('note', 16) + ' +' + fmtN(G.stageDna) + ' applause &nbsp;·&nbsp; ' + ico('critter', 16) + ' ' + fmtN(G.stageKills) +
+    ' silenced &nbsp;·&nbsp; ' + fmtT(G.t) + ' total<br>Take one reward and push on.';
   const nx = STAGES[G.stage + 1];
   $('nextline').innerHTML = nx
     ? 'Next: <b style="color:var(--ink);margin:0 6px">Stage ' + (G.stage + 2) + ' · ' + nx.nm + '</b> — ' + objText(nx) +
-      (nx.mod ? ' &nbsp;' + MODS[nx.mod].ic + ' ' + MODS[nx.mod].nm : '')
-    : 'Next: the run is yours to finish.';
+      (nx.mod ? ' &nbsp;' + ico(MODS[nx.mod].ic, 18) + ' ' + MODS[nx.mod].nm : '')
+    : 'Next: the encore is yours.';
   const host = $('rewards');
   host.innerHTML = '';
   G.rewards.forEach((r, i) => {
     const el = document.createElement('div');
     el.className = 'card r1';
     el.style.animationDelay = (i * .06) + 's';
-    el.innerHTML = '<div class="rar"></div><div class="ic">' + r.ic + '</div><div class="nm">' + r.nm +
+    el.innerHTML = '<div class="rar"></div><div class="ic">' + ico(r.ic, 42) + '</div><div class="nm">' + r.nm +
       '</div><div class="lv">Stage reward</div><div class="ds">' + r.ds + '</div>';
     el.onclick = () => { takeReward(i); sfx('chest'); };
     host.appendChild(el);
@@ -2659,7 +3176,7 @@ function renderClear(){
 }
 function renderLab(){
   if (HEADLESS) return;
-  $('dnaval').textContent = '🧬 ' + fmtN(meta.dna);
+  $('dnaval').innerHTML = ico('note', 24) + ' ' + fmtN(meta.dna);
   const host = $('ups');
   host.innerHTML = '';
   for (const u of META_UPS){
@@ -2668,9 +3185,9 @@ function renderLab(){
     el.className = 'up' + (maxed ? ' max' : poor ? ' poor' : '');
     let pips = '';
     for (let i = 0; i < u.max; i++) pips += '<span class="pip' + (i < l ? ' on' : '') + '"></span>';
-    el.innerHTML = '<div class="ic">' + u.ic + '</div>' +
+    el.innerHTML = '<div class="ic">' + ico(u.ic, 24) + '</div>' +
       '<div><div class="nm">' + u.nm + '</div><div class="ds">' + u.ds + '</div><div class="pips">' + pips + '</div></div>' +
-      '<div class="cost">' + (maxed ? 'MAX' : '🧬 ' + cost) + '</div>';
+      '<div class="cost">' + (maxed ? 'MAX' : ico('note', 16) + ' ' + cost) + '</div>';
     if (!maxed) el.onclick = () => { if (buyUp(u.id)){ sfx('level'); renderLab(); } else { sfx('dash'); } };
     host.appendChild(el);
   }
@@ -2679,13 +3196,15 @@ function renderOver(){
   if (HEADLESS) return;
   show('over');
   $('over').className = 'screen on ' + (G.won ? 'win' : 'lose');
-  $('overttl').textContent = G.won ? 'CULTURE DOMINATED' : 'CULTURE COLLAPSED';
+  $('overttl').textContent = G.won ? 'THE SOUNDLANDS ARE UNMUTED' : 'THE SET WENT QUIET';
+  $('overtale').textContent = G.won ? 'The Gloss is out-sung and every venue rings again. RoxorLoops and Jasmin take a very deep bow.'
+    : 'The critters muffled the room, but a soap bubble always bounces back. One more show?';
   $('rTime').textContent = fmtT(G.t);
   $('rStage').textContent = G.won ? '12/12' : (G.stage + 1) + '/' + STAGES.length;
   $('rLvl').textContent = P.lvl;
   $('rKills').textContent = fmtN(G.kills);
   $('rDna').textContent = '+' + fmtN(G.earned || 0);
-  $('unlocked').textContent = G.unlocked.length ? '🔓 Unlocked: ' + G.unlocked.join(', ') : '';
+  $('unlocked').textContent = G.unlocked.length ? 'New style unlocked: ' + G.unlocked.join(', ') : '';
 }
 let kitSig = '';
 function hudTick(){
@@ -2697,7 +3216,7 @@ function hudTick(){
   $('dna').textContent = fmtN(G.dna);
   const st = STAGES[Math.min(G.stage, STAGES.length - 1)];
   $('objname').textContent = 'Stage ' + (G.stage + 1) + '/' + STAGES.length + ' · ' + st.nm +
-    (st.mod ? ' ' + MODS[st.mod].ic : '');
+    (st.mod ? ' · ' + MODS[st.mod].nm : '');
   $('objval').textContent = objLabel();
   $('objfill').style.width = (objProgress() * 100).toFixed(1) + '%';
   const bw = $('bosswrap');
@@ -2711,9 +3230,9 @@ function hudTick(){
     kitSig = sig;
     let html = '';
     for (const w of P.weapons)
-      html += '<div class="kitico' + (def(w.id).evolved ? ' evo' : '') + '">' + def(w.id).ic + '<i>' + w.lvl + '</i></div>';
+      html += '<div class="kitico' + (def(w.id).evolved ? ' evo' : '') + '">' + ico(def(w.id).ic, 22) + '<i>' + w.lvl + '</i></div>';
     for (const k in P.pas)
-      html += '<div class="kitico pas">' + PASSIVES[k].ic + '<i>' + P.pas[k] + '</i></div>';
+      html += '<div class="kitico pas">' + ico(PASSIVES[k].ic, 22) + '<i>' + P.pas[k] + '</i></div>';
     $('kit').innerHTML = html;
   }
   const dashK = clamp(P.dashCd / Math.max(.01, P.s.dashCd), 0, 1);
@@ -2776,13 +3295,13 @@ function bindInput(){
   $('play').onclick = () => { audio(); startRun(meta.spec); syncUI(); };
   $('tolab').onclick = () => { show('lab'); renderLab(); };
   $('labback').onclick = () => { show(G.state === 'over' ? 'over' : 'menu'); if (G.state === 'over') renderOver(); };
-  $('wipe').onclick = () => { if (confirm('Erase all lab progress and DNA?')){ meta = freshMeta(); saveMeta(); renderLab(); renderSpecies(); } };
-  $('mute').onclick = () => { meta.mute = meta.mute ? 0 : 1; saveMeta(); if (master) master.gain.value = meta.mute ? 0 : .26; $('mute').textContent = meta.mute ? '🔇' : '🔊'; };
+  $('wipe').onclick = () => { if (confirm('Erase all rehearsal progress and applause?')){ meta = freshMeta(); saveMeta(); renderLab(); renderHeroes(); renderSpecies(); } };
+  $('mute').onclick = () => { meta.mute = meta.mute ? 0 : 1; saveMeta(); if (master) master.gain.value = meta.mute ? 0 : .26; syncMute(); };
   const syncShake = () => { $('shakebtn').textContent = shakeLabel(); $('pshake').textContent = shakeLabel(); };
   $('shakebtn').onclick = () => { cycleShake(); syncShake(); sfx('orb'); };
   $('pshake').onclick = () => { cycleShake(); syncShake(); };
   syncShake();
-  $('pmute').onclick = () => { $('mute').onclick(); $('pmute').textContent = meta.mute ? '🔇' : '🔊'; };
+  $('pmute').onclick = () => { $('mute').onclick(); };
   $('resume').onclick = togglePause;
   $('quit').onclick = () => { endRun(false); };
   $('reroll').onclick = () => { reroll(); sfx('dash'); };
@@ -2791,8 +3310,9 @@ function bindInput(){
   $('again').onclick = () => { startRun(meta.spec); syncUI(); };
   $('tomenu').onclick = () => { G.state = 'menu'; P = makePlayer(SPECIES.find(s => s.id === meta.spec) || SPECIES[0]); recalc(false); syncUI(); };
   $('tolab2').onclick = () => { show('lab'); renderLab(); };
-  $('mute').textContent = meta.mute ? '🔇' : '🔊';
+  syncMute();
 }
+function syncMute(){ const h = ico(meta.mute ? 'mute' : 'vol', 22); $('mute').innerHTML = h; $('pmute').innerHTML = h; }
 function togglePause(){
   if (G.state === 'play'){ G.state = 'pause'; syncUI(); }
   else if (G.state === 'pause'){ G.state = 'play'; syncUI(); }
@@ -2819,6 +3339,8 @@ recalc(false);
 if (!HEADLESS){
   fit();
   bindInput();
+  hydrateIcons();
+  renderHeroes();
   renderSpecies();
   renderDiffs();
   renderBest();
@@ -2830,6 +3352,7 @@ if (!HEADLESS){
     pollInput();
     update(dt);
     draw();
+    drawDuo();
     hudTick();
     requestAnimationFrame(frame);
   }
@@ -2851,6 +3374,10 @@ window.CS = {
   DIFFS, curDiff, diffHp, diffDmg,
   hudTick, syncUI, show, toast, sfx, SAVE_KEY,
   shake, shakeAmt, cycleShake, shakeLabel, SHAKE_CAP, SHAKE_STEPS,
+  HEROES, heroDef, heroPose, renderHeroes, frnd,
+  ico, ICON_FN, VENUES, iconURL,
+  get heroArt(){ return !!HERO_ART && !heroBroken; },
+  get heroIds(){ return HERO_ART ? HERO_ART.ids : null; },
 };
 
 </script>
