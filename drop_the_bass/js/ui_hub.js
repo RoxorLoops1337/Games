@@ -4,10 +4,11 @@ import {
 } from './data_core.js';
 import {
   STUDIO, STUDIO_IDS, HERO_MAX, SLOTS, SLOT_NAMES, STATS, SETS, GEAR, CRATES, CRATE_IDS, PITY, OUTFITS, LOGIN_REWARDS, ACHIEVEMENTS,
-  STAR_MILESTONES, AUTOMERGE_PRICE, fansForLevel, fameReward, GEAR_MAX_LEVEL, GEAR_SELL,
+  STAR_MILESTONES, AUTOMERGE_PRICE, fansForLevel, fameReward, BOOSTERS, BOOSTER_IDS, WHEEL, WHEEL_SPIN_PRICE, GEAR_MAX_LEVEL, GEAR_SELL,
 } from './data_meta.js';
 import { REMIX, RELICS, DAILY_MODS } from './data_run.js';
 import * as M from './meta.js';
+import { fetchBoard, rankOf } from './lb.js';
 import {
   h, canvasOf, icon, turretIcon, turretLive, gearIcon, enemyIcon, currencyChip, modal, toast, btn, rarClass, rarName, AE, AW,
 } from './ui_core.js';
@@ -41,7 +42,7 @@ export function buildHub(app, startTab) {
     const b = M.readyBadges(p, app.now());
     for (const [id, name, glyph] of TABS) {
       const badge = id === 'goals' ? b.goals : id === 'shop' ? (p.pendingCrates ? p.pendingCrates.length : 0) : id === 'band' ? M.mergeableGear(p).length : 0;
-      tabs.append(h('button', { class: 'tab' + (state.tab === id ? ' on' : ''), onclick: () => { state.tab = id; app.hubTab = id; app.audio.play('ui_tab'); render(); } },
+      tabs.append(h('button', { class: 'tab' + (state.tab === id ? ' on' : ''), onclick: () => { state.tab = id; app.hubTab = id; app.audio.play('ui_tab'); render(); main.scrollTop = 0; } },
         icon(glyph, 34), name, badge ? h('span', { class: 'badge' }, badge) : null));
     }
   };
@@ -75,6 +76,25 @@ function tourTab(app, st, rerender) {
     h('div', { class: 'row', style: 'margin-top:8px' }, h('div', { class: 'grow sub' }, p.loadout.length + '/' + M.loadoutSize(p) + ' turrets in your drop pool.'), btn('Edit', () => loadoutModal(app, rerender), 'dark small')));
   wrap.append(lo);
 
+  // resume a saved run
+  if (p.resume) {
+    const rw = WORLDS.find((x) => x.id === p.resume.world);
+    wrap.append(h('div', { class: 'card', style: 'border-color:var(--green)' }, h('div', { class: 'row' }, icon('play', 40, '#9dff3a'),
+      h('div', { class: 'grow' }, h('h3', null, 'Run in progress'), h('div', { class: 'sub' }, rw.name + ', wave ' + p.resume.wave + (p.resume.mode === 'endless' ? ' (Endless)' : ''))),
+      btn('Resume', () => app.resumeRun(), 'green small'), btn('Drop', () => { p.resume = null; app.save(); rerender(); }, 'dark small'))));
+  }
+  // boosters
+  if (p.tutorial.done) {
+    p.boosters = p.boosters || {};
+    const tot = M.boosterTotal(p);
+    const bs = h('div', { class: 'row', style: 'flex-wrap:wrap;gap:6px' });
+    for (const id of BOOSTER_IDS) {
+      const b = BOOSTERS[id], on = !!p.boosters[id];
+      bs.append(h('button', { class: 'btn small ' + (on ? 'green' : 'dark'), style: 'flex:1 1 45%', title: b.desc, onclick: () => { M.toggleBooster(p, id); app.audio.play('ui_click'); rerender(); } }, icon(b.glyph, 22), b.name, h('span', { class: 'chip' }, icon('diamond', 14), b.price)));
+    }
+    wrap.append(h('div', { class: 'card' }, h('h3', null, 'Boosters'), h('div', { class: 'sub', style: 'margin-bottom:6px' }, BOOSTER_IDS.filter((id) => p.boosters[id]).map((id) => BOOSTERS[id].desc).join(' ') || 'Optional diamond boosts for your next run. Pick any.'), bs,
+      tot ? h('div', { class: 'sub', style: 'margin-top:6px' }, 'Costs ' + tot + ' diamonds when the run starts.') : null));
+  }
   // daily challenge
   if (p.tutorial.done) {
     const dc = M.dailyChallenge(p, app.now());
@@ -87,6 +107,11 @@ function tourTab(app, st, rerender) {
         btn(dc.done ? 'Play' : 'Play!', () => app.startRun({ mode: 'daily', world: dc.world, encore: 0, seed: dc.seed, daily: dc.mod, wavesTotal: dc.waves }), dc.done ? 'dark' : 'gold'))));
   }
 
+  if (M.endlessUnlocked(p) && p.prog.arena.cleared) {
+    wrap.append(h('div', { class: 'card', style: 'border-color:var(--red)' }, h('div', { class: 'row' }, enemyIcon('playback', 56, true),
+      h('div', { class: 'grow' }, h('h3', null, 'Boss Rush'), h('div', { class: 'sub' }, 'Ten bosses back to back, no breaks. Best: ' + (p.stats.rushBest || 0) + '/10. Diamonds for every boss.')),
+      btn('Play', () => { const m = modal(h('div', null, h('h2', null, 'Boss Rush'), h('div', { class: 'sub', style: 'text-align:center' }, 'Pick the stage to fight on.'), h('div', { class: 'col', style: 'margin-top:10px' }, WORLDS.filter((w) => p.prog[w.id].cleared).map((w) => btn(w.name, () => { m.close(); app.startRun({ mode: 'rush', world: w.id, encore: 0 }); }, 'dark'))))); }, 'red small'))));
+  }
   wrap.append(h('h2', null, 'The Tour'));
   const ts = M.totalStars(p);
   wrap.append(h('div', { class: 'sub', style: 'margin:-4px 2px 8px' }, 'Stars ' + ts + '/' + (WORLDS.length * 3 * (ENCORE_MAX + 1)) + '. Clear a stage to unlock the next. Higher Encores are tougher and pay more.'));
@@ -115,7 +140,7 @@ function tourTab(app, st, rerender) {
     }
     body.append(encRow);
     const acts = h('div', { class: 'btnrow' }, btn('PLAY', () => app.startRun({ mode: 'story', world: w.id, encore: enc }), 'green'));
-    if (pr.cleared) acts.append(btn('ENDLESS', () => app.startRun({ mode: 'endless', world: w.id, encore: enc }), 'blue'));
+    if (pr.cleared) acts.append(btn('ENDLESS', () => app.startRun({ mode: 'endless', world: w.id, encore: enc }), 'blue'), btn(icon('crown', 24), () => boardModal(app, 'endless:' + w.id, w.name + ' Endless'), 'dark small', { 'aria-label': 'Leaderboard' }));
     body.append(acts);
     card.append(art, body);
     if (!unlocked) {
@@ -354,6 +379,9 @@ function goalsTab(app, st, rerender) {
   const off = M.offlineRecords(p, now);
   if (off >= 10) wrap.append(h('div', { class: 'card', style: 'border-color:var(--record)' }, h('div', { class: 'row' }, icon('note', 40), h('div', { class: 'grow' }, h('b', null, 'Streaming Royalties'), h('div', { class: 'sub' }, 'Your songs kept playing while you were away: ' + off + ' Records (' + M.offlineRate(p) + '/hour, max ' + M.offlineCapHours(p) + ' hours).')),
     btn('Claim', () => { M.claimOffline(p, now); app.audio.play('record'); rerender(); }, 'green small'))));
+  // lucky wheel
+  wrap.append(h('h2', null, 'Lucky Wheel'));
+  wrap.append(wheelCard(app, rerender));
   // login
   const ls = M.loginStatus(p, now);
   wrap.append(h('h2', null, 'Daily Gig'));
@@ -439,6 +467,7 @@ export function settingsModal(app) {
     body.append(slider('Music', 'music', () => app.applySettings()), slider('Sound', 'sfx', () => app.applySettings()),
       tog('Screen shake', 'shake'), tog('Damage numbers', 'numbers'), tog('Vibration', 'vibrate'), tog('Beat helper (DROP ring)', 'beat'), tog('Reduce motion', 'reduce'));
     if (p.autoMerge) body.append(tog2('Auto-merge after each drop', p.autoMergeOn, () => { p.autoMergeOn = !p.autoMergeOn; app.save(); draw(); }));
+    body.append(h('div', { class: 'hr' }), h('h3', null, 'Leaderboard name'), h('input', { type: 'text', maxlength: 16, value: p.name || '', placeholder: 'Your name (optional)', style: 'width:100%;font:800 18px sans-serif;padding:10px;border-radius:10px;border:3px solid var(--line);background:#12082b;color:#fff', oninput: (e) => { p.name = e.target.value.replace(/[^\w \-.']/g, '').slice(0, 16); app.save(); } }));
     body.append(h('div', { class: 'hr' }), h('h3', null, 'Save data'), h('div', { class: 'sub' }, 'Your progress is saved on this device. Copy the code to move it to another device.'));
     const ta = h('textarea', { class: 'code', readonly: true }, M.exportCode(p));
     body.append(ta, h('div', { class: 'btnrow' }, btn('Copy code', () => { ta.select(); try { navigator.clipboard.writeText(ta.value); toast('Copied!'); } catch (e) { document.execCommand('copy'); toast('Copied!'); } }, 'blue small'),
@@ -459,4 +488,53 @@ function importModal(app) {
 function resetModal(app) {
   const m = modal(h('div', null, h('h2', null, 'Reset everything?'), h('div', { class: 'sub', style: 'text-align:center' }, 'This deletes all progress on this device. It cannot be undone.'),
     h('div', { class: 'btnrow' }, btn('Delete it all', () => { app.replaceProfile(M.newProfile(app.now())); m.close(); app.showTitle(); }, 'red'), btn('Keep playing', () => m.close(), 'green'))));
+}
+
+// ================================================================================================ lucky wheel and leaderboard
+function wheelCard(app, rerender) {
+  const p = app.profile, now = app.now();
+  const st = M.wheelState(p, now);
+  const seg = Math.PI * 2 / WHEEL.length;
+  const anim = { a: 0, from: 0, to: 0, t0: 0, dur: 0, spinning: false };
+  const cv = canvasOf(240, 250, (ctx, t) => {
+    if (anim.spinning) { const k = Math.min(1, (performance.now() - anim.t0) / anim.dur); const e = 1 - Math.pow(1 - k, 3); anim.a = anim.from + (anim.to - anim.from) * e; if (k >= 1) anim.spinning = false; }
+    ctx.save(); ctx.translate(120, 135);
+    ctx.save(); ctx.rotate(anim.a);
+    WHEEL.forEach((w, i) => {
+      const a0 = -Math.PI / 2 + i * seg, a1 = a0 + seg;
+      ctx.beginPath(); ctx.moveTo(0, 0); ctx.arc(0, 0, 108, a0, a1); ctx.closePath();
+      ctx.fillStyle = ['#ff5fb0', '#7a5cff', '#2fe6ff', '#ffc83d'][i % 4]; ctx.globalAlpha = 0.92; ctx.fill(); ctx.globalAlpha = 1; ctx.lineWidth = 3; ctx.strokeStyle = '#12082b'; ctx.stroke();
+      ctx.save(); ctx.rotate(a0 + seg / 2); AE.drawGlyph(ctx, w.glyph, 74, 0, 26, '#fff');
+      ctx.translate(48, 0); ctx.rotate(Math.PI / 2 * 0); ctx.fillStyle = '#fff'; ctx.font = '900 13px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.strokeStyle = '#12082b'; ctx.lineWidth = 3; ctx.strokeText(w.label, 0, 0); ctx.fillText(w.label, 0, 0); ctx.restore();
+    });
+    ctx.restore();
+    ctx.beginPath(); ctx.arc(0, 0, 16, 0, Math.PI * 2); ctx.fillStyle = '#12082b'; ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = '#fff'; ctx.stroke();
+    ctx.restore();
+    ctx.beginPath(); ctx.moveTo(120, 36); ctx.lineTo(108, 10); ctx.lineTo(132, 10); ctx.closePath(); ctx.fillStyle = '#fff'; ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = '#12082b'; ctx.stroke();
+  }, { live: true });
+  const label = h('div', { class: 'sub', style: 'text-align:center' }, st.free ? 'Your free daily spin is ready!' : 'Come back tomorrow for a free spin, or spin for ' + WHEEL_SPIN_PRICE + ' diamonds.');
+  let busy = false;
+  const spin = btn(st.free ? 'SPIN!' : [icon('diamond', 20), WHEEL_SPIN_PRICE + ' Spin'], () => {
+    if (busy) return;
+    const r = M.spinWheel(p, now, app.rng());
+    if (!r.ok) { app.audio.play('error'); toast('Need ' + WHEEL_SPIN_PRICE + ' diamonds.'); return; }
+    busy = true; app.audio.play('crate_shake');
+    anim.from = anim.a % (Math.PI * 2); anim.to = anim.from + Math.PI * 2 * 5 + ((-(r.index * seg + seg / 2) - anim.from) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2); anim.t0 = performance.now(); anim.dur = 3600; anim.spinning = true;
+    let ticks = 0; const tk = setInterval(() => { if (!anim.spinning) { clearInterval(tk); return; } app.audio.play('tick', { vol: 0.4, pitch: 1 + (ticks++ % 3) * 0.05 }); }, 140);
+    setTimeout(() => { app.audio.play('reveal_' + (r.seg.reward.crate || r.seg.reward.diamonds >= 10 ? 'epic' : 'rare')); toast('You won ' + r.seg.label + (r.seg.reward.records ? ' Records' : r.seg.reward.diamonds ? ' diamonds' : ' crate') + '!', 2600); if (r.loot && r.loot.length) crateOpening(app, r.seg.reward.crate, r.loot, rerender); else rerender(); }, 3800);
+  }, st.free ? 'gold big' : 'blue');
+  return h('div', { class: 'card', style: 'text-align:center' }, cv, label, h('div', { style: 'margin-top:8px' }, spin));
+}
+
+export function boardModal(app, id, title) {
+  const p = app.profile;
+  const body = h('div', null, h('h2', null, title), h('div', { class: 'sub', style: 'text-align:center' }, 'Loading...'));
+  const m = modal(body);
+  fetchBoard(id).then((top) => {
+    body.replaceChildren(h('h2', null, title));
+    if (!top) { body.append(h('div', { class: 'sub', style: 'text-align:center;padding:14px' }, 'The leaderboard is offline right now. Your own best is still saved.')); }
+    else if (!top.length) body.append(h('div', { class: 'sub', style: 'text-align:center;padding:14px' }, 'No scores yet. Be the first!'));
+    else top.slice(0, 20).forEach((e, i) => body.append(h('div', { class: 'row', style: 'padding:6px 4px;border-bottom:2px solid #12082b' + (e.name === p.name ? ';background:#3b2a7a55' : '') }, h('div', { style: 'width:34px;font-weight:900;color:' + (i < 3 ? 'var(--gold)' : 'var(--dim)') }, '#' + (i + 1)), h('div', { class: 'grow', style: 'font-weight:800' }, e.name), h('div', { style: 'font-weight:900' }, e.score))));
+    body.append(h('div', { class: 'sub', style: 'font-size:12px;text-align:center;margin-top:8px' }, p.name ? 'You appear as ' + p.name + '.' : 'Set your name in Settings to join the board.'), h('div', { class: 'btnrow' }, btn('Close', () => m.close(), 'green')));
+  });
 }

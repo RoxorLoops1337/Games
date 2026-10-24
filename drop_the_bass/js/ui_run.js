@@ -105,8 +105,8 @@ export function showResults(app, run, out, opts = {}) {
     body.append(st);
     body.append(h('div', { class: 'sub', style: 'text-align:center' }, r.stars === 3 ? 'Perfect stage!' : r.stars === 2 ? 'Great! Only a few leaks. Hold the line for 3 stars.' : 'Cleared. 3 stars needs 2 or fewer leaks.'));
   }
-  const wave = r.mode === 'endless' ? 'Reached wave ' + r.cleared + (out.newBestEndless ? '  NEW BEST!' : '') : r.mode === 'daily' ? 'Cleared ' + r.cleared + ' waves' : 'Waves cleared ' + r.cleared + (r.mode === 'tutorial' ? '/3' : '/' + run.wavesTotal);
-  body.append(h('div', { class: 'statgrid' }, h('div', null, 'Waves', h('b', null, wave)), h('div', null, 'Kills', h('b', null, fmt(r.kills))), h('div', null, 'Merges', h('b', null, r.merges)), h('div', null, 'Best combo', h('b', null, r.bestCombo)),
+  const wave = r.mode === 'endless' ? r.cleared + (out.newBestEndless ? ' BEST!' : '') : r.mode === 'daily' ? r.cleared + '' : r.cleared + (r.mode === 'tutorial' ? '/3' : '/' + run.wavesTotal);
+  body.append(h('div', { class: 'statgrid' }, h('div', null, r.mode === 'endless' ? 'Wave reached' : 'Waves cleared', h('b', null, wave)), h('div', null, 'Kills', h('b', null, fmt(r.kills))), h('div', null, 'Merges', h('b', null, r.merges)), h('div', null, 'Best combo', h('b', null, r.bestCombo)),
     h('div', null, 'Bosses', h('b', null, r.bossKills)), h('div', null, 'Time', h('b', null, Math.floor(r.time / 60) + 'm ' + Math.round(r.time % 60) + 's'))));
   const rew = h('div', { class: 'rew' });
   const add = (kind, n, i) => rew.append(h('div', { class: 'rewi', style: 'animation-delay:' + (300 + i * 150) + 'ms' }, kind === 'fans' ? icon('fans', 28) : icon(kind === 'records' ? 'record' : 'diamond', 28), '+' + fmt(n)));
@@ -129,6 +129,17 @@ export function showResults(app, run, out, opts = {}) {
     app.audio.play('levelup');
   }
   if (r.mode === 'tutorial') body.append(h('div', { class: 'card', style: 'margin-top:8px' }, h('div', { class: 'sub', style: 'text-align:center' }, 'Practice complete! You got a free crate and Records. Spend them in the Studio and Crates tabs, then head out on the Tour.')));
+  if ((r.mode === 'endless' || r.mode === 'daily') && r.cleared >= 1) {
+    const line = h('div', { class: 'sub', style: 'text-align:center;margin-top:6px' });
+    body.append(line);
+    const submit = () => { line.textContent = 'Posting your score...'; app.submitBoard(run).then((rank) => { line.textContent = rank ? 'Leaderboard rank #' + rank + '!' : 'Leaderboard is offline.'; }); };
+    if (p.name) submit();
+    else {
+      const inp = h('input', { type: 'text', maxlength: 16, placeholder: 'Your name', style: 'flex:1;font:800 18px sans-serif;padding:8px;border-radius:10px;border:3px solid var(--line);background:#12082b;color:#fff;min-width:0' });
+      const row = h('div', { class: 'row', style: 'margin-top:6px' }, inp, btn('Post score', () => { const nm = inp.value.replace(/[^\w \-.']/g, '').trim().slice(0, 16); if (!nm) return; p.name = nm; app.save(); row.remove(); submit(); }, 'blue small'));
+      body.append(row);
+    }
+  }
   const btns = h('div', { class: 'btnrow' });
   if (win && r.mode === 'story' && out.unlockedWorld) btns.append(btn('Next Stage', () => { m.close(); app.afterResults(run, out, { next: out.unlockedWorld }); }, 'green'));
   btns.append(btn(win && r.mode === 'story' && out.unlockedWorld ? 'Hub' : 'Continue', () => { m.close(); app.afterResults(run, out, {}); }, win && out.unlockedWorld ? 'dark' : 'green'));

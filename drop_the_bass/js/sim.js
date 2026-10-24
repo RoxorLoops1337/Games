@@ -10,6 +10,7 @@ import { makeRng } from './rng.js';
 export const DT = 1 / 60;
 const INTRO_WAVE = { fuzz: 1, zip: 2, drone: 3, echo: 4, brick: 5, leech: 6, gate: 7, rager: 7, squeal: 8, mute: 9 };
 const NONE_WM = Object.freeze({});
+const RUSH_BOSSES = ['compressor', 'noisegate', 'reverb', 'djglitch', 'playback'];
 
 // ------------------------------------------------------------------------------------------------ wave generation (pure)
 export function waveBaseHp(world, w, encore = 0) {
@@ -83,7 +84,7 @@ export class Run {
     this.endless = this.mode === 'endless';
     this.seed = (opts.seed ?? 1) >>> 0;
     this.rng = makeRng(this.seed ^ 0x9e3779b9);
-    this.wavesTotal = opts.wavesTotal || this.world.wavesTotal;
+    this.wavesTotal = this.mode === 'rush' ? 10 : (opts.wavesTotal || this.world.wavesTotal);
     this.loadout = (opts.loadout && opts.loadout.length ? opts.loadout : ['kick', 'snare', 'hat', 'sub']).slice();
     this.heroLv = Object.assign({ roxor: 1, jasmin: 1 }, opts.heroLv || {});
     this.daily = opts.daily && DAILY_MODS[opts.daily] ? DAILY_MODS[opts.daily] : null;
@@ -365,7 +366,10 @@ export class Run {
   }
 
   // ---------------------------------------------------------------- waves
-  upcoming(w = this.wave + 1) { return genWave(this.world, w, this.seed, { endless: this.endless, wavesTotal: this.wavesTotal }); }
+  upcoming(w = this.wave + 1) {
+    if (this.mode === 'rush') return { w, groups: [{ type: 'fuzz', count: 5 + w, gap: 0.55, delay: 0.5 }], boss: RUSH_BOSSES[(w - 1) % 5], bossScale: 0.5 + 0.06 * w, mod: null, duration: 20 };
+    return genWave(this.world, w, this.seed, { endless: this.endless, wavesTotal: this.wavesTotal });
+  }
   startWave(early = false) {
     if (this.phase === 'won' || this.phase === 'lost' || this.choice) return false;
     if (this.phase === 'wave' && this.spawnQ.length) return false;
@@ -378,7 +382,7 @@ export class Run {
     this.wmId = spec.mod; this.wm = spec.mod ? WAVE_MODS[spec.mod].wm : NONE_WM;
     const lanes = this.map.lanes.length;
     const w = this.wave;
-    const hpBase = this.baseHp(w) * (this.wm.hp || 1);
+    const hpBase = this.baseHp(this.mode === 'rush' ? 6 + 2 * w : w) * (this.wm.hp || 1);
     let laneCtr = this.rng.int(0, lanes - 1);
     const q = [];
     for (const g of spec.groups) {
@@ -1121,6 +1125,31 @@ export class Run {
     }
     if (p.heal && this.stageHp < this.stageMax && this.rng.chance(0.15)) { this.stageHp++; this.emit({ k: 'heal', n: 1 }); }
     this.emit({ k: 'explode', x: p.x, y: p.y, r: p.radius, style: p.style, big: !!p.big });
+  }
+
+
+  // ---------------------------------------------------------------- save and resume (JSON safe)
+  snapshot() {
+    const skip = new Set(['map', 'world', 'grid', 'daily', 'rng', 'events', 'wm', 'projectiles', 'curSpec', 'result']);
+    const o = {};
+    for (const k of Object.keys(this)) if (!skip.has(k)) o[k] = this[k];
+    o.rngState = this.rng.getState();
+    o.projectiles = this.projectiles.map((p) => Object.assign({}, p, { target: p.target ? p.target.id : null, hits: p.hits ? [...p.hits] : undefined, hits2: p.hits2 ? [...p.hits2] : undefined }));
+    return JSON.parse(JSON.stringify(o));
+  }
+  static restore(snap) {
+    const s = JSON.parse(JSON.stringify(snap));
+    const run = new Run(s.opts);
+    const special = new Set(['rngState', 'projectiles', 'opts']);
+    for (const k of Object.keys(s)) if (!special.has(k)) run[k] = s[k];
+    run.rng.setState(s.rngState);
+    run.grid = new Map(); for (const t of run.turrets) run.grid.set(t.slot, t);
+    run.relicSet = new Set(run.relics);
+    run.wm = run.wmId ? WAVE_MODS[run.wmId].wm : NONE_WM;
+    const byId = new Map(run.enemies.map((e) => [e.id, e]));
+    run.projectiles = s.projectiles.map((p) => Object.assign(p, { target: p.target != null ? byId.get(p.target) || null : null, hits: p.hits ? new Set(p.hits) : undefined, hits2: p.hits2 ? new Set(p.hits2) : undefined }));
+    run.events = []; run.result = null; run.opts = s.opts;
+    return run;
   }
 
   // ---------------------------------------------------------------- bot helpers (also used by the tutorial and tests)

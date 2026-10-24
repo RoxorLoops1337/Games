@@ -200,4 +200,25 @@ for (const w of WORLDS) {
     n++;
   }
 }
+// ---- boss rush
+{
+  const r = new Run({ world: 'garage', mode: 'rush', seed: 3, firstPrep: 0.1 });
+  ok(r.wavesTotal === 10, 'rush is ten waves'); const ids = []; for (let w = 1; w <= 10; w++) ids.push(r.upcoming(w).boss);
+  ok(new Set(ids).size === 5 && ids.every(Boolean), 'rush has a boss every wave, all five kinds');
+  r.coins = 1e6; for (let i = 0; i < 16; i++) r.deploy(); r.mergeAll(30);
+  for (let i = 0; i < 20000 && r.phase !== 'won' && r.phase !== 'lost'; i++) { r.advance(0.1); r.autoPlayStep({ early: true }); r.drain(); }
+  ok(r.bossKills >= 1, 'rush bosses can be killed');
+}
+
+// ---- save and resume
+{
+  const a = new Run({ world: 'club', seed: 4, firstPrep: 1, loadout: ['kick', 'snare', 'hat', 'sub', 'mic', 'synth', 'horn', 'scratch', 'cowbell', 'vocal', 'loop', 'amp'] }); a.coins = 5000;
+  for (let i = 0; i < 1500; i++) { a.advance(0.1); a.autoPlayStep({ early: true }); a.drain(); }
+  const snap = JSON.parse(JSON.stringify(a.snapshot())); const b = Run.restore(snap);
+  ok(a.enemies.length + a.projectiles.length + a.turrets.length > 3, 'snapshot taken mid fight');
+  for (let i = 0; i < 800; i++) for (const r of [a, b]) { r.advance(0.1); r.autoPlayStep({ early: true }); r.drain(); }
+  const key = (r) => JSON.stringify([r.t.toFixed(3), r.wave, r.kills, r.coins.toFixed(2), r.stageHp, r.enemies.map((e) => [e.id, Math.round(e.hp), Math.round(e.d)]), r.turrets.map((t) => t.type + t.level + t.slot), r.rng.getState(), Object.keys(r.remix).sort(), r.relics]);
+  eq(key(a), key(b), 'a restored run plays out identically'); ok(JSON.stringify(a.snapshot()).length < 200000, 'snapshot stays small');
+  const mid = new Run({ world: 'garage', seed: 2, firstPrep: 1 }); mid.hype = mid.hypeNeed; mid.checkHype(); const rs = Run.restore(JSON.parse(JSON.stringify(mid.snapshot()))); ok(rs.choice && rs.choice.options.length === 3, 'a pending choice survives a save');
+}
 console.log('drop_the_bass sim: ' + n + ' checks passed');

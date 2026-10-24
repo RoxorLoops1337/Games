@@ -4,6 +4,15 @@ import * as AW from './art_world.js';
 import { TURRETS, RARITY, COL } from './data_core.js';
 import { GEAR } from './data_meta.js';
 
+// Element.append / replaceChildren turn null and false into the text "null": drop them instead, so conditional children are safe.
+if (typeof Element !== 'undefined' && !Element.prototype.__dtbPatched) {
+  for (const m of ['append', 'prepend', 'replaceChildren']) {
+    const orig = Element.prototype[m];
+    Element.prototype[m] = function (...kids) { return orig.apply(this, kids.flat(Infinity).filter((k) => k != null && k !== false)); };
+  }
+  Element.prototype.__dtbPatched = true;
+}
+
 export function h(tag, attrs, ...kids) {
   const el = document.createElement(tag);
   if (attrs) {

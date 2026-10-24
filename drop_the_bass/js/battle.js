@@ -214,6 +214,7 @@ export class Battle {
         case 'clear': {
           this.queueBanner('WAVE CLEAR', '+' + e.coins + ' coins', COL.green, 1.5);
           this.sfx('wave_clear');
+          if (this.app.hooks.onWaveClear && !this.tut) setTimeout(() => this.app.hooks.onWaveClear(), 50);
           this.tip = LOOPY_TIPS[(run.wave * 7 + run.seed) % LOOPY_TIPS.length];
           break;
         }
@@ -588,7 +589,16 @@ export class Battle {
     const w = R.wave;
     text(ctx, run.endless ? 'WAVE ' + Math.max(1, run.wave) : 'WAVE ' + Math.max(1, run.wave) + '/' + run.wavesTotal, w.x + w.w / 2, w.y + 16, 19, '#fff', 'center');
     if (run.wmId) { const m = WAVE_MODS[run.wmId]; text(ctx, m.name, w.x + w.w / 2, w.y + 37, 14, m.good ? COL.green : COL.orange, 'center'); }
-    else text(ctx, run.world.name, w.x + w.w / 2, w.y + 37, 13, COL.dim, 'center');
+    else if (run.phase === 'prep' && (run.endless || run.wave < run.wavesTotal)) {
+      const spec = run.upcoming();
+      const types = [...new Set(spec.groups.map((g) => g.type))].slice(0, 3);
+      const n = types.length + (spec.boss ? 1 : 0) + (spec.mod ? 1 : 0);
+      let x = w.x + w.w / 2 - (n - 1) * 13;
+      text(ctx, 'NEXT', w.x + 12, w.y + 37, 10, COL.dim, 'left');
+      for (const ty of types) { AE.drawEnemy(ctx, ty, x + 8, w.y + 36, { t, scale: 0.62, hp: 1 }); x += 26; }
+      if (spec.boss) { AE.drawGlyph(ctx, 'crown', x + 8, w.y + 36, 22, '#ff4a5e'); x += 26; }
+      if (spec.mod) AE.drawGlyph(ctx, WAVE_MODS[spec.mod].glyph, x + 8, w.y + 36, 20, WAVE_MODS[spec.mod].good ? COL.green : COL.orange);
+    } else text(ctx, run.world.name, w.x + w.w / 2, w.y + 37, 13, COL.dim, 'center');
     // coins
     const c = R.coins;
     ctx.save(); rrect(ctx, c.x, c.y, c.w, c.h, 12); ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fill(); ctx.restore();

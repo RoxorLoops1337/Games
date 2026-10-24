@@ -134,4 +134,16 @@ const rng = () => makeRng(42);
   ok(M.buyOutfit(s, 'roxor', 'default').ok && s.outfits.worn.roxor === 'default', 'switch outfit back for free');
   ok(M.readyBadges(fresh(), NOW).goals >= 1, 'badge for the daily reward');
 }
+// ---- boosters, wheel, codex stats
+{
+  const p = fresh(); p.diamonds = 100; M.toggleBooster(p, 'cash'); M.toggleBooster(p, 'hype'); ok(M.boosterTotal(p) === 20, 'booster total');
+  const b = M.useBoosters(p); ok(b.ok && b.hype && p.diamonds === 80 && b.fx.length > 0 && M.boosterTotal(p) === 0, 'boosters are paid once and cleared');
+  M.toggleBooster(p, 'tough'); p.diamonds = 1; ok(!M.useBoosters(p).ok && p.diamonds === 1, 'cannot afford boosters');
+  const w = fresh(); ok(M.wheelState(w, NOW).free, 'free spin'); const r = M.spinWheel(w, NOW, makeRng(3)); ok(r.ok && r.index >= 0 && !M.wheelState(w, NOW).free && w.stats.spins === 1, 'spin');
+  w.diamonds = 0; ok(!M.spinWheel(w, NOW, makeRng(3)).ok, 'paid spin needs diamonds'); w.diamonds = 100; ok(M.spinWheel(w, NOW, makeRng(4)).ok && w.diamonds === 85, 'paid spin');
+  ok(M.wheelState(w, NOW + 86400000).free, 'free spin again tomorrow');
+  const seen = {}; const rr = makeRng(11); for (let i = 0; i < 300; i++) { const q = fresh(); const x = M.spinWheel(q, NOW, rr); seen[x.seg.id] = 1; } ok(Object.keys(seen).length >= 6, 'wheel pays many things');
+  const c = fresh(); c.seen.enemies = { fuzz: 1, zip: 1, mini: 1 }; ok(M.statValueOf(c, 'seenEnemies') === 2, 'hidden enemies do not count'); c.bossesSeen.playback = true; c.seen.bosses.reverb = 1; ok(M.statValueOf(c, 'seenBosses') === 2, 'bosses seen'); ok(M.statValueOf(c, 'turretsOwned') === 4, 'turrets owned');
+  const rush = fresh(); const o = M.applyRunResult(rush, { won: true, world: 'garage', encore: 0, mode: 'rush', cleared: 10, wave: 10, kills: 100, leaks: 0, merges: 10, deploys: 30, bossKills: 10, bossTypes: [], bestCombo: 9, coinsEarned: 500, stars: 3 }, makeRng(1), NOW); ok(rush.stats.rushBest === 10 && o.diamonds >= 55 && !rush.prog.garage.cleared, 'boss rush pays and does not clear the stage');
+}
 console.log('drop_the_bass meta: ' + n + ' checks passed');

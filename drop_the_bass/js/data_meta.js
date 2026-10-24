@@ -188,6 +188,11 @@ export const ACHIEVEMENTS = [
   { id: 'a_streak7',  stat: 'streak',    goal: 7,      name: 'Seven Day Tour',    text: 'Log in 7 days in a row.',       diamonds: 25, max: true },
   { id: 'a_daily5',   stat: 'dailies',   goal: 5,      name: 'Daily Duet',        text: 'Complete 5 daily challenges.',  diamonds: 25 },
   { id: 'a_duet',     stat: 'duets',     goal: 10,     name: 'In Harmony',        text: 'Trigger the Duet Finale 10 times.', diamonds: 15 },
+  { id: 'a_codex1',   stat: 'seenEnemies', goal: 10,  name: 'Know Your Enemy',   text: 'Meet all 10 kinds of Static.',  diamonds: 20, max: true },
+  { id: 'a_codex2',   stat: 'seenBosses',  goal: 5,   name: 'Boss Collector',    text: 'Meet all 5 bosses.',            diamonds: 30, max: true },
+  { id: 'a_rack',     stat: 'turretsOwned', goal: 12, name: 'Full Rack',         text: 'Unlock all 12 turrets.',        diamonds: 40, max: true },
+  { id: 'a_rush',     stat: 'rushBest',    goal: 10,  name: 'Boss Rush Done',    text: 'Beat all 10 bosses in Boss Rush.', diamonds: 50, max: true },
+  { id: 'a_wheel',    stat: 'spins',       goal: 10,  name: 'Lucky Spinner',     text: 'Spin the Lucky Wheel 10 times.', diamonds: 15 },
   { id: 'a_perfect',  stat: 'flawless',  goal: 1,      name: 'Not A Scratch',     text: 'Win a stage with no leaks.',    diamonds: 20 },
 ];
 
@@ -203,4 +208,26 @@ export const STAR_MILESTONES = [
   { stars: 50, reward: { crate: 'platinum' } },
   { stars: 60, reward: { diamonds: 80 } },
   { stars: 75, reward: { crate: 'platinum', diamonds: 50 } },
+];
+
+// ---------------------------------------------------------------- Boosters: optional pre-run purchases (diamonds)
+export const BOOSTERS = {
+  cash:  { id: 'cash',  name: 'Head Start',  glyph: 'coin',    price: 8,  desc: '+250 starting coins.',                         fx: [['startCoins', 'add', 250]] },
+  lucky: { id: 'lucky', name: 'Lucky Start', glyph: 'dice',    price: 10, desc: 'First 3 drops are free and 25% start at level 2.', fx: [['freeDeploys', 'add', 3], ['lucky', 'add', 0.25]] },
+  tough: { id: 'tough', name: 'Roadies',     glyph: 'shield',  price: 8,  desc: '+6 stage health.',                             fx: [['stageHp', 'add', 6]] },
+  hype:  { id: 'hype',  name: 'Hype Pack',   glyph: 'rocket',  price: 12, desc: 'Start with a Remix pick ready.',               fx: [], special: 'hype' },
+};
+export const BOOSTER_IDS = Object.keys(BOOSTERS);
+
+// ---------------------------------------------------------------- Lucky Wheel: one free spin a day, more for diamonds
+export const WHEEL_SPIN_PRICE = 15;
+export const WHEEL = [
+  { id: 'r100',  weight: 22, label: '100',   reward: { records: 100 },  glyph: 'record' },
+  { id: 'd5',    weight: 18, label: '5',     reward: { diamonds: 5 },   glyph: 'diamond' },
+  { id: 'r250',  weight: 16, label: '250',   reward: { records: 250 },  glyph: 'record' },
+  { id: 'c1',    weight: 10, label: 'Crate', reward: { crate: 'garage' }, glyph: 'gift' },
+  { id: 'd10',   weight: 12, label: '10',    reward: { diamonds: 10 },  glyph: 'diamond' },
+  { id: 'r600',  weight: 8,  label: '600',   reward: { records: 600 },  glyph: 'record' },
+  { id: 'c2',    weight: 4,  label: 'Studio', reward: { crate: 'studio' }, glyph: 'gift' },
+  { id: 'd30',   weight: 2,  label: '30',    reward: { diamonds: 30 },  glyph: 'diamond' },
 ];

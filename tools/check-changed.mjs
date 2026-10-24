@@ -92,6 +92,7 @@ const FUNCTION_SUITES = {
   'wildwalk_board.js': ['test:wwboard'],
   'dungeon_board.js': ['test:dpboard'],
   'dungeon_save.js': ['test:dpsave'],
+  'dropbass_board.js': ['test:dropbass'],
 };
 
 const TOOL_SUITES = {

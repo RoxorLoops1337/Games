@@ -1,11 +1,11 @@
 // meta.js: the profile (save data) and everything that changes it between runs. Pure functions on a plain object:
 // no DOM, no Math.random (callers pass an rng), no Date.now (callers pass `now` in ms).
 import {
-  GAME, WORLDS, WORLD_BY_ID, TURRETS, STARTER_TURRETS, RARITY, RARITY_ORDER, ENCORE_MAX, encoreReward, ECON,
+  GAME, WORLDS, WORLD_BY_ID, ENEMIES, BOSSES, TURRETS, STARTER_TURRETS, RARITY, RARITY_ORDER, ENCORE_MAX, encoreReward, ECON,
 } from './data_core.js';
 import {
   STUDIO, STUDIO_IDS, HERO_MAX, heroCost, LOADOUT_BASE, AUTOMERGE_PRICE, SLOTS, STATS, SETS, GEAR, GEAR_IDS, GEAR_MAX_LEVEL,
-  gearUpgradeCost, GEAR_SELL, CRATES, PITY, fansForLevel, FAME_MAX, fameReward, OUTFITS, LOGIN_REWARDS, QUESTS, ACHIEVEMENTS, STAR_MILESTONES,
+  gearUpgradeCost, GEAR_SELL, CRATES, PITY, fansForLevel, FAME_MAX, fameReward, OUTFITS, LOGIN_REWARDS, QUESTS, ACHIEVEMENTS, STAR_MILESTONES, BOOSTERS, BOOSTER_IDS, WHEEL, WHEEL_SPIN_PRICE,
 } from './data_meta.js';
 import { DAILY_MODS, DAILY_MOD_IDS } from './data_run.js';
 import { makeRng, hashSeed } from './rng.js';
@@ -21,14 +21,14 @@ export function newProfile(now = 0) {
   for (const t of STARTER_TURRETS) turretsUnlocked[t] = true;
   return {
     v: GAME.version, created: now, lastSeen: now,
-    records: 250, diamonds: 30, fans: 0, fame: 1,
+    records: 250, diamonds: 30, fans: 0, fame: 1, name: '', resume: null, boosters: {}, wheel: null,
     studio: {}, heroLv: { roxor: 1, jasmin: 1 },
     turretsUnlocked, loadout: STARTER_TURRETS.slice(),
     prog, bossesSeen: {}, encoreCleared: {},
     gear: { items: [], equipped: { head: null, mic: null, body: null, chain: null, feet: null }, uid: 1 },
     outfits: { owned: { roxor: ['default'], jasmin: ['default'] }, worn: { roxor: 'default', jasmin: 'default' } },
     stats: { kills: 0, merges: 0, deploys: 0, runs: 0, wins: 0, bosses: 0, waves: 0, heroUses: 0, bestCombo: 0, perfects: 0, remixes: 0, maxLevel: 0,
-             crates: 0, legendary: 0, gearMerges: 0, endless: 0, relics: 0, dailies: 0, duets: 0, flawless: 0, streak: 0, coins: 0 },
+             crates: 0, spins: 0, rushBest: 0, legendary: 0, gearMerges: 0, endless: 0, relics: 0, dailies: 0, duets: 0, flawless: 0, streak: 0, coins: 0 },
     achClaimed: {}, starClaimed: {},
     daily: { day: -1, quests: [], rerolled: false, prog: {}, challengeDay: -1, challengeBest: 0 },
     login: { lastDay: -1, streak: 0, claimedDay: -1 },
@@ -385,6 +385,9 @@ export function statValueOf(p, stat) {
   if (stat === 'stars') return totalStars(p);
   if (stat === 'fame') return p.fame;
   if (stat === 'streak') return Math.max(p.stats.streak, p.login.streak);
+  if (stat === 'seenEnemies') return Object.keys(ENEMIES).filter((k) => !ENEMIES[k].hidden && p.seen.enemies[k]).length;
+  if (stat === 'seenBosses') return Object.keys(BOSSES).filter((k) => p.seen.bosses[k] || p.bossesSeen[k]).length;
+  if (stat === 'turretsOwned') return Object.keys(p.turretsUnlocked).filter((k) => p.turretsUnlocked[k]).length;
   return p.stats[stat] || 0;
 }
 export function achievementState(p, a) {
@@ -464,6 +467,9 @@ export function applyRunResult(p, result, rng, now = 0) {
   } else if (result.mode === 'endless') {
     if (result.cleared > pr.bestEndless) { pr.bestEndless = result.cleared; out.newBestEndless = true; }
     S.endless = Math.max(S.endless, result.cleared);
+  } else if (result.mode === 'rush') {
+    S.rushBest = Math.max(S.rushBest || 0, result.bossKills);
+    out.diamonds += result.bossKills * 3 + (result.won ? 25 : 0);
   } else if (result.mode === 'daily') {
     out.challenge = { first: p.daily.challengeDay !== dayOf(now) };
     if (out.challenge.first) {
@@ -485,6 +491,34 @@ export function applyRunResult(p, result, rng, now = 0) {
   if (result.won && result.stars === 3) out.loot.push(rollGearItem(p, 'garage', rng, { min: 'rare' }));
   p.lastSeen = now || p.lastSeen;
   return out;
+}
+
+// ------------------------------------------------------------------------------------------------ boosters, wheel
+export function boosterTotal(p) { return BOOSTER_IDS.filter((id) => p.boosters && p.boosters[id]).reduce((a, id) => a + BOOSTERS[id].price, 0); }
+export function toggleBooster(p, id) { p.boosters = p.boosters || {}; p.boosters[id] = !p.boosters[id]; return p.boosters[id]; }
+// pay for and consume the selected boosters. Returns { ok, fx, hype } or { ok:false } when diamonds are short.
+export function useBoosters(p) {
+  const total = boosterTotal(p);
+  if (total > p.diamonds) return { ok: false, total };
+  const fx = []; let hype = false;
+  for (const id of BOOSTER_IDS) if (p.boosters && p.boosters[id]) { fx.push(...BOOSTERS[id].fx); if (BOOSTERS[id].special === 'hype') hype = true; }
+  p.diamonds -= total; p.boosters = {};
+  return { ok: true, fx, hype, total };
+}
+export function wheelState(p, now) {
+  const day = dayOf(now);
+  const free = !p.wheel || p.wheel.day !== day;
+  return { free, price: WHEEL_SPIN_PRICE };
+}
+export function spinWheel(p, now, rng) {
+  const st = wheelState(p, now);
+  if (!st.free) { if (p.diamonds < WHEEL_SPIN_PRICE) return { ok: false, reason: 'diamonds' }; p.diamonds -= WHEEL_SPIN_PRICE; }
+  p.wheel = { day: dayOf(now) };
+  const seg = rng.weighted(WHEEL, (w) => w.weight);
+  const index = WHEEL.indexOf(seg);
+  const g = grant(p, seg.reward, rng);
+  p.stats.spins = (p.stats.spins || 0) + 1;
+  return { ok: true, index, seg, loot: g.loot };
 }
 
 export function markSeen(p, kind, id) { if (!p.seen[kind][id]) { p.seen[kind][id] = true; return true; } return false; }

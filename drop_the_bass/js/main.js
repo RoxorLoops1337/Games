@@ -9,6 +9,7 @@ import { Cutscene } from './cutscene.js';
 import { buildHub, settingsModal, codexModal } from './ui_hub.js';
 import { showChoice, showPause, showHint, showDefeat, showResults, showHowTo } from './ui_run.js';
 import { setRoot, h, btn, modal, toast, tickLive, AE, AW } from './ui_core.js';
+import { submitScore, rankOf } from './lb.js';
 
 const canvas = document.getElementById('game');
 const ui = document.getElementById('ui');
@@ -45,11 +46,12 @@ const app = {
     app.screen = 'cut';
     app.cut = new Cutscene(app, id, () => { app.cut = null; if (done) done(); });
   },
-  showTitle, openHub, startRun, quitRun, afterResults,
+  showTitle, openHub, startRun, quitRun, afterResults, resumeRun, submitBoard,
   hooks: {
     toast: (m) => toast(m),
     spendDiamonds: (n) => app.spendDiamonds(n),
-    onPause: (b) => showPause(app, b),
+    onPause: (b) => { saveResume(); showPause(app, b); },
+    onWaveClear: () => saveResume(),
     onChoice: (run, b) => showChoice(app, run, b),
     onHint: (id, done) => showHint(app, id, done),
     onEnd: (run, b) => onRunEnd(run, b),
@@ -148,16 +150,48 @@ function startTutorial() {
 function startRun(cfg) {
   const p = app.profile;
   if (!p.tutorial.done) { startTutorial(); return; }
+  if (p.resume && !cfg.confirmed) {
+    const m = modal(h('div', null, h('h2', null, 'Start a new run?'), h('div', { class: 'sub', style: 'text-align:center' }, 'You have a run in progress. Starting a new one drops it.'),
+      h('div', { class: 'btnrow' }, btn('Start new', () => { m.close(); p.resume = null; startRun(Object.assign({}, cfg, { confirmed: true })); }, 'red'), btn('Back', () => m.close(), 'green'))));
+    return;
+  }
+  const b = M.useBoosters(p);
+  if (!b.ok) { toast('Not enough diamonds for your boosters (' + b.total + ').'); return; }
   const setup = M.computeRunSetup(p);
   const run = new Run({
     world: cfg.world, mode: cfg.mode, encore: cfg.encore || 0, seed: cfg.seed != null ? cfg.seed : (Date.now() & 0x7fffffff),
-    loadout: setup.loadout, baseFx: setup.baseFx, heroLv: setup.heroLv, autoMerge: setup.autoMerge, autoMergeOn: setup.autoMergeOn,
+    loadout: setup.loadout, baseFx: setup.baseFx.concat(b.fx), heroLv: setup.heroLv, autoMerge: setup.autoMerge, autoMergeOn: setup.autoMergeOn,
     daily: cfg.daily, wavesTotal: cfg.wavesTotal,
   });
-  run.cfg = cfg;
+  run.cfg = { mode: cfg.mode, world: cfg.world, encore: cfg.encore || 0, seed: run.seed, daily: cfg.daily, wavesTotal: cfg.wavesTotal };
+  if (b.hype) { run.hype = run.hypeNeed; run.checkHype(); }
+  app.save();
   const go = () => beginBattle(run, false);
   if (cfg.mode === 'story' && !p.story.worlds[cfg.world]) { p.story.worlds[cfg.world] = true; app.save(); app.playCutscene('world_' + cfg.world, go); }
   else go();
+}
+function saveResume() {
+  const b = app.battle;
+  if (app.screen !== 'battle' || !b || b.ended || b.tut || !b.run.cfg) return;
+  const run = b.run;
+  if (run.phase === 'won' || run.phase === 'lost') return;
+  try { app.profile.resume = { cfg: run.cfg, snap: run.snapshot(), world: run.world.id, wave: run.wave, mode: run.mode, t: Date.now() }; writeSave(); } catch (e) { /* too big or blocked: skip */ }
+}
+function resumeRun() {
+  const r = app.profile.resume;
+  if (!r) return;
+  let run;
+  try { run = Run.restore(r.snap); } catch (e) { app.profile.resume = null; toast('That run could not be restored.'); app.save(); return; }
+  run.cfg = r.cfg;
+  beginBattle(run, false);
+}
+async function submitBoard(run) {
+  const p = app.profile, r = run.result;
+  if (!r || !p.name) return 0;
+  const id = r.mode === 'endless' ? 'endless:' + r.world : r.mode === 'daily' ? 'daily' : null;
+  if (!id || r.cleared < 1) return 0;
+  const top = await submitScore(id, p.name, r.cleared);
+  return rankOf(top, p.name);
 }
 function beginBattle(run, tutorial) {
   ui.replaceChildren();
@@ -174,9 +208,10 @@ function finalize(run, battle) {
   const p = app.profile;
   if (!run.result) run.finish(false);
   const out = M.applyRunResult(p, run.result, app.rng(), app.now());
+  p.resume = null;
   if (run.mode === 'tutorial') {
     p.tutorial.done = true; p.records += 150; p.diamonds += 20; p.pendingCrates = (p.pendingCrates || []).concat(['garage']);
-    out.records += 150; out.diamonds += 20;
+    out.records += 150; out.diamonds += 20; app.sessionGreeted = true;
   }
   app.saveNow();
   showResults(app, run, out);
@@ -224,9 +259,9 @@ window.addEventListener('keydown', (e) => {
   app.battle.key(e.key);
 });
 document.addEventListener('visibilitychange', () => {
-  if (document.hidden) { writeSave(); if (app.screen === 'battle' && app.battle && !app.battle.paused && !app.battle.ended && !app.battle.run.choice) showPause(app, app.battle); }
+  if (document.hidden) { saveResume(); writeSave(); if (app.screen === 'battle' && app.battle && !app.battle.paused && !app.battle.ended && !app.battle.run.choice) showPause(app, app.battle); }
 });
-window.addEventListener('pagehide', writeSave);
+window.addEventListener('pagehide', () => { saveResume(); writeSave(); });
 
 // ------------------------------------------------------------------------------------------------ loop
 let last = performance.now(), T = 0;
