@@ -1,4 +1,4 @@
-# Cell Survivor (folder `cell_survivor`, save key `cell_survivor_meta_v1`)
+# Cytosis: Cell Survivor (folder `cell_survivor`, save key `cell_survivor_meta_v1`)
 
 One self-contained `index.html` (simulation + canvas drawing + DOM screens) plus `hv/`.
 
