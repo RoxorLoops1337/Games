@@ -1,4 +1,4 @@
-import { W, H, createGame, step, choose, botInput, META, metaCost, buyMeta, defaultSave, sanitizeSave } from './sim.js';
+import { W, H, createGame, step, choose, botInput, META, WEAPONS, metaCost, buyMeta, buyWeapon, defaultSave, sanitizeSave } from './sim.js';
 import { loadArt } from './art.js';
 import { createRenderer } from './render.js';
 import { createArtDraw } from './art_draw.js';
@@ -27,11 +27,11 @@ addEventListener('resize', resize); resize();
 function show(id) { for (const s of document.querySelectorAll('.scr')) s.classList.toggle('on', s.id === id); $('muteBtn').classList.toggle('on', id === 'title' || id === 'pause'); }
 function refreshTitle() { $('bestStat').textContent = save.best; $('runStat').textContent = save.runs; $('coinStat').textContent = save.coins; }
 
-function newDemo() { demo = createGame({ seed: (Math.random() * 1e9) | 0, bot: true, stage: 1 + ((Math.random() * 4) | 0) }); demo.p.hp = demo.p.maxHp = 400; }
+function newDemo() { demo = createGame({ seed: (Math.random() * 1e9) | 0, bot: true, stage: 1 + ((Math.random() * 4) | 0) }); demo.p.hp = demo.p.maxHp = 400; demo.weap = { swab: { lv: 2, cd: 0 }, daggers: { lv: 2, cd: 0 }, dragon: { lv: 1, cd: 0 } }; }
 function startRun() {
   audio.unlock(); audio.music(true);
   const qs = new URLSearchParams(location.search);
-  g = createGame({ seed: (Math.random() * 1e9) | 0, meta: save.meta, stage: Math.max(1, +qs.get('stage') || 1) });
+  g = createGame({ seed: (Math.random() * 1e9) | 0, meta: save.meta, unlocked: save.unlocked, firstPick: true, stage: Math.max(1, +qs.get('stage') || 1) });
   mode = 'play'; acc = 0; cardsFor = null; show('');
   window.CS.g = g;
 }
@@ -41,6 +41,8 @@ function toTitle() { mode = 'title'; audio.music(false); refreshTitle(); newDemo
 function renderShop() {
   $('shopCoins').textContent = save.coins;
   const list = $('shopList'); list.innerHTML = '';
+  const head = t => { const h = document.createElement('div'); h.className = 'banner'; h.style.marginTop = '8px'; h.textContent = t; list.appendChild(h); };
+  head('STATS');
   for (const d of META) {
     const lvl = save.meta[d.id] || 0, maxed = lvl >= d.max, cost = metaCost(d, lvl);
     const b = document.createElement('button'); b.className = 'card'; b.disabled = maxed || save.coins < cost;
@@ -49,16 +51,25 @@ function renderShop() {
     b.onclick = () => { if (buyMeta(save, d.id)) { persist(); audio.unlock(); audio.play('upgrade'); renderShop(); } };
     list.appendChild(b);
   }
+  head('SKILLS');
+  for (const w of WEAPONS) {
+    const own = !!save.unlocked[w.id];
+    const b = document.createElement('button'); b.className = 'card'; b.disabled = own || save.coins < w.cost;
+    b.innerHTML = `<div class="ic" style="background:#9dff6d">${w.name[0]}</div><div><div class="nm">${w.name}</div><div class="ds">${w.desc}</div></div><div class="cost">${own ? 'OWNED' : w.cost + ' 🪙'}</div>`;
+    b.onclick = () => { if (buyWeapon(save, w.id)) { persist(); audio.unlock(); audio.play('upgrade'); renderShop(); } };
+    list.appendChild(b);
+  }
 }
 
 // ---------------------------------------------------------------- level-up cards
-const UP_COL = { dmg: '#ff7a6a', rate: '#ffd24a', multi: '#9dff6d', pierce: '#6fe3ff', crit: '#ffe14a', speed: '#b6a2ff', hp: '#ff6a8a', magnet: '#6fe3ff', orbit: '#7dff5e', splash: '#a0ff5e', regen: '#ff8ab0', slow: '#8fe8ff', homing: '#ffb36a' };
+const UP_COL = { swab: '#6fe0a8', daggers: '#c9d3ee', tower: '#4fb8ff', dragon: '#8dff6a', needles: '#ff7eb6', stick: '#ff9ac6', bubble: '#bfe9ff', satellite: '#b69cf0', maw: '#a070f0', power: '#ff7a6a', haste: '#ffd24a', crit: '#ffe14a', vital: '#ff6a8a', speed: '#b6a2ff', magnet: '#6fe3ff' };
 function showCards() {
   const wrap = $('cards'); wrap.innerHTML = '';
   g.choices.forEach((c, i) => {
     const b = document.createElement('button'); b.className = 'card';
     const pips = Array.from({ length: c.max }, (_, k) => `<span class="pip ${k <= c.lvl ? 'on' : ''}"></span>`).join('');
-    b.innerHTML = `<div class="ic" style="background:${UP_COL[c.id] || '#fff'}">${i + 1}</div><div><div class="nm">${c.name}</div><div class="ds">${c.desc}</div><div class="pips">${pips}</div></div>`;
+    const tag = c.isNew ? '<span style="color:#9dff6d;font-size:13px"> NEW</span>' : `<span style="color:#ffd84d;font-size:13px"> Lv ${c.lvl} → ${c.lvl + 1}</span>`;
+    b.innerHTML = `<div class="ic" style="background:${UP_COL[c.id] || '#fff'}">${i + 1}</div><div><div class="nm">${c.name}${tag}</div><div class="ds">${c.desc}</div><div class="pips">${pips}</div></div>`;
     b.onclick = () => pick(i);
     wrap.appendChild(b);
   });
@@ -114,7 +125,7 @@ function finishRun() {
   save.coins += r.coins; save.runs++; save.kills += r.kills; if (newBest) save.best = r.stage; persist();
   $('oStage').textContent = r.stage; $('oBest').textContent = newBest ? 'NEW BEST!' : '';
   $('oKills').textContent = r.kills; $('oLevel').textContent = r.level; $('oScore').textContent = r.score; $('oCoins').textContent = r.coins;
-  $('overTitle').textContent = r.boss ? 'THE BOSS WINS' : 'THE SERPENT WINS';
+  $('overTitle').textContent = r.name ? r.name.toUpperCase() + ' WINS' : 'THE VIRUS WINS';
   show('over');
 }
 

@@ -1,6 +1,6 @@
 // Canvas renderer. Reads the sim state, never changes it. Uses sprites from art.js
 // where they exist and draws procedural stand-ins otherwise.
-import { W, H, isBossStage } from './sim.js';
+import { W, H, isBossStage, LINE_Y, virusName, daggerPos, stickSeg } from './sim.js';
 import { INK } from './art_draw.js';
 
 const TAU = Math.PI * 2;
@@ -8,7 +8,7 @@ const num = v => { v = Math.ceil(v); return v >= 10000 ? (v / 1000).toFixed(0) +
 
 export function createRenderer(canvas, art, kit) {
   const ctx = canvas.getContext('2d');
-  const S = { particles: [], floats: [], rings: [], trauma: 0, flash: 0, flashCol: '#fff', banner: null, t: 0, specks: [], hurtT: 0, popped: 0, lastShot: -9 };
+  const S = { particles: [], floats: [], rings: [], trauma: 0, flash: 0, flashCol: '#fff', banner: null, t: 0, specks: [], hurtT: 0, popped: 0, lastShot: -9, bolts: [] };
   for (let i = 0; i < 26; i++) S.specks.push({ i, x: Math.random() * W, y: Math.random() * H, r: 26 + Math.random() * 70, v: 4 + Math.random() * 10, a: Math.random() * TAU });
   S.petals = [];
   for (let i = 0; i < 22; i++) S.petals.push({ x: Math.random() * W, y: Math.random() * H, s: 6 + Math.random() * 7, v: 18 + Math.random() * 26, a: Math.random() * TAU, rot: 0.4 + Math.random(), c: i % 3 ? '#ff9ac6' : '#ffe0ee' });
@@ -60,7 +60,8 @@ export function createRenderer(canvas, art, kit) {
         burst(e.x, e.y, e.crit ? 5 : 2, e.crit ? ['#ffe14a', '#fff'] : ['#fff', '#b9f3ff'], 160, 0.3, 3);
         break;
       case 'kill': {
-        const sk = e.skin === 'purple' ? ['#b7a2ff', '#6a4cd6', '#fff'] : ['#ff9ad6', '#e0489d', '#fff'];
+        const SKC = { purple: ['#b7a2ff', '#6a4cd6', '#fff'], mint: ['#9af0c8', '#2fae78', '#fff'], sun: ['#ffd08a', '#d9791e', '#fff'], sky: ['#a8dcff', '#3d8fd6', '#fff'] };
+        const sk = SKC[e.skin] || ['#ff9ad6', '#e0489d', '#fff'];
         burst(e.x, e.y, e.head ? 40 : 14, e.kind === 'minion' ? ['#9dff6d', '#fff', '#39f0ff'] : sk, e.head ? 360 : 240, 0.7, 6);
         ring(e.x, e.y, e.r * 2.4, '#fff', 0.35);
         if (e.head) { S.trauma = Math.min(1, S.trauma + 0.5); }
@@ -68,13 +69,20 @@ export function createRenderer(canvas, art, kit) {
       }
       case 'boom': ring(e.x, e.y, e.r, '#ff6a3d', 0.5); ring(e.x, e.y, e.r * 0.6, '#ffd24a', 0.35); burst(e.x, e.y, 30, ['#ff6a3d', '#ffd24a', '#fff'], 420, 0.6, 7); S.trauma = Math.min(1, S.trauma + 0.55); break;
       case 'splash': ring(e.x, e.y, e.r, '#7dff5e', 0.25); break;
+      case 'burst': ring(e.x, e.y, e.r, '#bfe9ff', 0.4); burst(e.x, e.y, 16, ['#bfe9ff', '#fff'], 260, 0.5, 5); break;
+      case 'leak': S.trauma = Math.min(1, S.trauma + 0.55); S.flash = 0.4; S.flashCol = '#ff2a4d'; ring(e.x, LINE_Y, 120, '#ff2a4d', 0.5); burst(e.x, LINE_Y - 10, 22, ['#ff2a4d', '#ffd0e6', '#fff'], 360, 0.6, 6); addFloat(e.x, LINE_Y - 70, 'LEAK -' + Math.ceil(e.d), '#ff5a78', 26, -60); break;
+      case 'pulse': ring(e.x, e.y, e.r, '#7fe8ff', 0.5); break;
+      case 'strike': S.bolts.push({ x: e.x, y: e.y, life: 0.28, seed: Math.random() * 9 }); burst(e.x, e.y, 12, ['#d8c4ff', '#fff'], 280, 0.4, 5); ring(e.x, e.y, 70, '#b69cf0', 0.35); break;
+      case 'maw': ring(e.x, e.y, 130, '#8a4fe0', 0.7); break;
+      case 'chestdrop': S.banner = { text: 'CHEST!', sub: e.pct + '% of the virus down', t: 0, dur: 1.4, clear: true }; break;
+      case 'chest': ring(e.x, e.y, 100, '#ffd84d', 0.6); burst(e.x, e.y, 28, ['#ffd84d', '#fff', '#ff7eb6'], 380, 0.8, 6); break;
       case 'hurt': S.trauma = Math.min(1, S.trauma + 0.6); S.flash = 0.35; S.flashCol = '#ff2a4d'; burst(e.x, e.y, 16, ['#ff2a4d', '#ff8aa0'], 300, 0.5, 5); addFloat(e.x, e.y - 30, '-' + Math.ceil(e.d), '#ff5a78', 28, -90); break;
       case 'block': ring(e.x, e.y, 46, '#39d0ff', 0.3); break;
       case 'power': ring(e.x, e.y, 60, e.kind === 'heal' ? '#ff6a8a' : e.kind === 'shield' ? '#39d0ff' : '#ffd24a', 0.5); addFloat(g.p.x, g.p.y - 60, e.kind === 'heal' ? 'HEAL' : e.kind === 'shield' ? 'SHIELD' : 'RAGE', '#fff', 26, -60); break;
       case 'coin': if (S.floats.length < 40) addFloat(g.p.x + 20, g.p.y - 40, '+' + Math.max(1, Math.round(e.v * g.p.coinMul)), '#ffd24a', 15, -50); break;
       case 'levelup': S.flash = 0.4; S.flashCol = '#9dff6d'; ring(g.p.x, g.p.y, 220, '#9dff6d', 0.6); break;
-      case 'stage': S.banner = { text: e.boss ? 'BOSS' : 'STAGE ' + e.n, sub: e.boss ? 'Stage ' + e.n : '', t: 0, dur: 1.8, boss: e.boss }; if (e.boss) S.trauma = 0.6; break;
-      case 'clear': S.banner = { text: 'STAGE CLEAR', sub: '+' + e.bonus + ' coins', t: 0, dur: 2.2, clear: true }; break;
+      case 'stage': S.banner = { text: e.boss ? 'BOSS' : 'CHAPTER ' + e.n, sub: e.name || '', t: 0, dur: 2.0, boss: e.boss }; if (e.boss) S.trauma = 0.6; break;
+      case 'clear': S.banner = { text: 'CHAPTER CLEAR', sub: '+' + e.bonus + ' coins', t: 0, dur: 2.2, clear: true }; break;
       case 'roar': S.trauma = Math.min(1, S.trauma + 0.35); break;
       case 'revive': S.flash = 0.6; S.flashCol = '#fff'; ring(g.p.x, g.p.y, 300, '#fff', 0.8); break;
       case 'shoot': S.lastShot = S.t; break;
@@ -106,6 +114,18 @@ export function createRenderer(canvas, art, kit) {
     }
     const v = ctx.createLinearGradient(0, 0, 0, H); v.addColorStop(0, 'rgba(0,0,0,.35)'); v.addColorStop(0.2, 'rgba(0,0,0,0)'); v.addColorStop(0.85, 'rgba(0,0,0,0)'); v.addColorStop(1, 'rgba(0,0,0,.35)');
     ctx.fillStyle = v; ctx.fillRect(0, 0, W, H);
+    if (g.path) {
+      const pts = g.path.pts;
+      ctx.save(); ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+      ctx.beginPath(); pts.forEach((q, i) => (i % 3 === 0 ? (i ? ctx.lineTo(q.x, q.y) : ctx.moveTo(q.x, q.y)) : 0));
+      ctx.lineWidth = 96; ctx.strokeStyle = 'rgba(255,255,255,.05)'; ctx.stroke();
+      ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(255,255,255,.16)'; ctx.setLineDash([12, 20]); ctx.lineDashOffset = -S.t * 50; ctx.stroke();
+      ctx.restore();
+    }
+    // the membrane: where leaks hurt
+    ctx.save(); ctx.beginPath();
+    for (let x = 0; x <= W; x += 10) { const y = LINE_Y + Math.sin(x * 0.05 + S.t * 2.2) * 5; x ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }
+    ctx.lineWidth = 16; ctx.strokeStyle = 'rgba(255,90,140,.18)'; ctx.stroke(); ctx.lineWidth = 5; ctx.strokeStyle = 'rgba(255,150,190,.75)'; ctx.stroke(); ctx.restore();
     ctx.lineWidth = 8; ctx.strokeStyle = 'rgba(255,126,182,.55)'; ctx.strokeRect(4, 4, W - 8, H - 8);
     ctx.lineWidth = 2; ctx.strokeStyle = 'rgba(111,227,255,.6)'; ctx.strokeRect(10, 10, W - 20, H - 20);
   }
@@ -114,7 +134,7 @@ export function createRenderer(canvas, art, kit) {
     const segs = sn.segs, p = g.p;
     for (let i = segs.length - 1; i >= 0; i--) {   // tail first so the head sits on top
       const s = segs[i], prev = segs[i - 1], r = s.r;
-      const ang = i === 0 ? sn.ang : Math.atan2(prev.y - s.y, prev.x - s.x);
+      const ang = s.ang;
       if (i === 0) {
         if (kit) { const dx = p.x - s.x, dy = p.y - s.y, d = Math.hypot(dx, dy) || 1; kit.drawHead(ctx, s.x, s.y, r * 1.14, ang, { skin: sn.skin, boss: sn.boss, t: S.t + sn.id, look: [dx / d, dy / d], flash: s.flash }); }
         else { ctx.fillStyle = '#ff7eb6'; ctx.strokeStyle = INK; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(s.x, s.y, r, 0, TAU); ctx.fill(); ctx.stroke(); }
@@ -152,6 +172,7 @@ export function createRenderer(canvas, art, kit) {
     const k = pk.kind, bob = Math.sin(S.t * 6 + pk.x) * 2;
     if (k === 'gem') { glow(pk.x, pk.y, 22, '#39f0ff', 0.5); blit(kit && kit.SPR.pickup('gem'), pk.x, pk.y + bob, 64, Math.sin(S.t * 3 + pk.x) * 0.25); }
     else if (k === 'coin') { const sq = Math.max(0.3, Math.abs(Math.cos(S.t * 7 + pk.x))); ctx.save(); ctx.translate(pk.x, pk.y + bob); ctx.scale(sq, 1); blit(kit && kit.SPR.pickup('coin'), 0, 0, 58); ctx.restore(); }
+    else if (k === 'chest') { glow(pk.x, pk.y, 60, '#ffd84d', 0.55 + Math.sin(S.t * 5) * 0.2); blit(kit && kit.SPR.pickup('chest'), pk.x, pk.y + bob * 2, 104, Math.sin(S.t * 4) * 0.1); }
     else { const col = k === 'heal' ? '#ff6a8a' : k === 'shield' ? '#39d0ff' : '#ffb020'; glow(pk.x, pk.y, 38, col, 0.6); blit(kit && kit.SPR.pickup(k), pk.x, pk.y + bob * 2, 92, Math.sin(S.t * 4) * 0.12); }
   }
 
@@ -159,11 +180,6 @@ export function createRenderer(canvas, art, kit) {
     const p = g.p;
     if (p.iframes > 0 && Math.floor(S.t * 20) % 2 === 0 && !(p.shield > 0)) ctx.globalAlpha = 0.45;
     ctx.save(); ctx.globalAlpha *= 0.35; ctx.fillStyle = '#000'; ctx.beginPath(); ctx.ellipse(p.x, p.y + 40, 56, 14, 0, 0, TAU); ctx.fill(); ctx.restore();
-    // orbiting spores
-    for (let i = 0; i < p.orbit; i++) {
-      const a = p.orbAng + (i / p.orbit) * TAU, x = p.x + Math.cos(a) * 74, y = p.y + Math.sin(a) * 74;
-      glow(x, y, 26, '#7dff5e', 0.7); ctx.fillStyle = '#c8ff9e'; ctx.strokeStyle = '#2f7a1c'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(x, y, 10, 0, TAU); ctx.fill(); ctx.stroke();
-    }
     // aim tick
     ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.aim); ctx.globalAlpha *= 0.55; ctx.fillStyle = '#6fe3ff';
     ctx.beginPath(); ctx.moveTo(30, 0); ctx.lineTo(22, -6); ctx.lineTo(22, 6); ctx.fill(); ctx.restore();
@@ -183,6 +199,13 @@ export function createRenderer(canvas, art, kit) {
 
   function drawBullets(g) {
     for (const b of g.bullets) {
+      if (b.kind === 'needle') { blit(kit && kit.SPR.weapon('needle'), b.x, b.y, 62, Math.atan2(b.vy, b.vx)); continue; }
+      if (b.kind === 'snot') { glow(b.x, b.y, 34, '#8dff6a', 0.5); blit(kit && kit.SPR.acid(), b.x, b.y, b.r * 5.2, S.t * 5); continue; }
+      if (b.kind === 'bubble') {
+        ctx.save(); ctx.translate(b.x, b.y); ctx.fillStyle = 'rgba(190,235,255,.22)'; ctx.strokeStyle = 'rgba(255,255,255,.85)'; ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.arc(0, 0, b.r, 0, TAU); ctx.fill(); ctx.stroke();
+        ctx.strokeStyle = 'rgba(255,255,255,.9)'; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(0, 0, b.r * 0.66, -2.4, -1.2); ctx.stroke(); ctx.restore(); continue;
+      }
       const col = b.crit ? '#ffd84d' : '#6fe3ff';
       glow(b.x, b.y, b.crit ? 30 : 20, col, 0.55);
       const spr = kit && kit.SPR.note(b.crit);
@@ -197,6 +220,43 @@ export function createRenderer(canvas, art, kit) {
     }
   }
 
+  const WCOL = { swab: '#6fe0a8', daggers: '#c9d3ee', tower: '#4fb8ff', dragon: '#8dff6a', needles: '#ff7eb6', stick: '#ff9ac6', bubble: '#bfe9ff', satellite: '#b69cf0', maw: '#8a4fe0' };
+  const WAB = { swab: 'SW', daggers: 'DG', tower: 'MT', dragon: 'SD', needles: 'AC', stick: 'MS', bubble: 'DB', satellite: 'ST', maw: 'AM' };
+  function drawWeapons(g) {
+    const p = g.p;
+    for (const z of g.zones) {
+      const fade = Math.min(1, z.life * 2);
+      ctx.save(); ctx.globalAlpha = 0.28 * fade; ctx.fillStyle = '#bff7e6'; ctx.beginPath(); ctx.arc(z.x, z.y, z.r, 0, TAU); ctx.fill();
+      ctx.globalAlpha = 0.7 * fade; ctx.strokeStyle = '#6fe0a8'; ctx.lineWidth = 4; ctx.setLineDash([14, 10]); ctx.lineDashOffset = -S.t * 40; ctx.beginPath(); ctx.arc(z.x, z.y, z.r, 0, TAU); ctx.stroke(); ctx.restore();
+      ctx.save(); ctx.globalAlpha = fade; blit(kit && kit.SPR.weapon('swab'), z.x, z.y, z.r * 1.7, -0.6 + Math.sin(S.t * 6) * 0.12); ctx.restore();
+    }
+    for (const t of g.towers) {
+      ctx.save(); ctx.globalAlpha = 0.25; ctx.fillStyle = '#000'; ctx.beginPath(); ctx.ellipse(t.x, t.y + 34, 30, 9, 0, 0, TAU); ctx.fill(); ctx.restore();
+      if (t.pulse > 0) glow(t.x, t.y, 90, '#7fe8ff', t.pulse);
+      blit(kit && kit.SPR.weapon('tower'), t.x, t.y, 120, Math.sin(S.t * 3 + t.x) * 0.04);
+    }
+    const dl = g.weap.daggers ? g.weap.daggers.lv : 0;
+    for (let i = 0; i < (dl ? 1 + dl : 0); i++) { const d = daggerPos(g, i); blit(kit && kit.SPR.weapon('dagger'), d.x, d.y, 76, d.a + Math.PI / 2); }
+    if (g.weap.stick) for (let k = 0; k < (g.weap.stick.lv >= 4 ? 2 : 1); k++) {
+      const sg = stickSeg(g, k), sc = sg.len / 144, mid = 80 * sc;
+      blit(kit && kit.SPR.weapon('stick'), sg.x0 + Math.cos(sg.a) * mid, sg.y0 + Math.sin(sg.a) * mid, 184 * sc, sg.a);
+    }
+    for (const m of g.maws) {
+      const k = Math.min(1, m.life * 3, (m.max - m.life) * 4) || 0;
+      ctx.save(); ctx.translate(m.x, m.y); ctx.globalAlpha = 0.9 * k;
+      const gr = ctx.createRadialGradient(0, 0, 4, 0, 0, m.r); gr.addColorStop(0, '#12051f'); gr.addColorStop(0.7, '#3a1066'); gr.addColorStop(1, 'rgba(90,30,160,0)');
+      ctx.fillStyle = gr; ctx.beginPath(); ctx.arc(0, 0, m.r, 0, TAU); ctx.fill();
+      ctx.rotate(S.t * 2); ctx.fillStyle = '#fff8ec'; ctx.strokeStyle = INK; ctx.lineWidth = 2.5;
+      for (let i = 0; i < 12; i++) { ctx.rotate(TAU / 12); ctx.beginPath(); ctx.moveTo(m.r * 0.72, -9); ctx.lineTo(m.r * 0.5, 0); ctx.lineTo(m.r * 0.72, 9); ctx.closePath(); ctx.fill(); ctx.stroke(); }
+      ctx.restore();
+    }
+    for (let i = S.bolts.length - 1; i >= 0; i--) {
+      const b = S.bolts[i]; b.life -= 0.016; if (b.life <= 0) { S.bolts.splice(i, 1); continue; }
+      ctx.save(); ctx.globalAlpha = Math.min(1, b.life * 5); ctx.lineJoin = 'round';
+      ctx.beginPath(); ctx.moveTo(b.x + 30, -10); const n = 7; for (let k = 1; k < n; k++) ctx.lineTo(b.x + Math.sin(b.seed + k * 2.3) * 28 * (1 - k / n) + 30 * (1 - k / n), (b.y + 10) * (k / n));
+      ctx.lineTo(b.x, b.y); ctx.strokeStyle = '#b69cf0'; ctx.lineWidth = 14; ctx.stroke(); ctx.strokeStyle = '#fff'; ctx.lineWidth = 5; ctx.stroke(); ctx.restore();
+    }
+  }
   function drawFx(dt) {
     for (let i = S.rings.length - 1; i >= 0; i--) {
       const r = S.rings[i]; r.life -= dt; if (r.life <= 0) { S.rings.splice(i, 1); continue; }
@@ -223,12 +283,15 @@ export function createRenderer(canvas, art, kit) {
     const gx = ctx.createLinearGradient(0, 0, W, 0); gx.addColorStop(0, '#1ad9ff'); gx.addColorStop(1, '#9dff6d');
     ctx.fillStyle = gx; ctx.fillRect(0, 0, W * Math.min(1, g.xp / g.xpNeed), 14);
     text('LV ' + g.level, pad, 38, 22, '#fff', '#0b1020', 'left');
-    // stage + snake health
-    text(isBossStage(g.stage) ? 'BOSS  ' + g.stage : 'STAGE ' + g.stage, W / 2, 38, 28, isBossStage(g.stage) ? '#ff7a9a' : '#fff');
-    const bw = 360, bx = W / 2 - bw / 2, by = 62, frac = g.stageHpMax ? Math.max(0, g.stageHp / g.stageHpMax) : 0;
+    // chapter, virus name, and progress with chests at 25% / 50% / 100%
+    const boss = isBossStage(g.stage);
+    text(boss ? 'BOSS  ' + g.stage : 'CHAPTER ' + g.stage, W / 2, 34, 26, boss ? '#ff7a9a' : '#fff');
+    text(virusName(g.stage), W / 2, 62, 17, '#ffd0e6');
+    const bw = 400, bx = W / 2 - bw / 2, by = 84;
     ctx.fillStyle = 'rgba(0,0,0,.55)'; ctx.fillRect(bx - 3, by - 3, bw + 6, 20);
-    ctx.fillStyle = isBossStage(g.stage) ? '#ff3d6e' : '#e0489d'; ctx.fillRect(bx, by, bw * frac, 14);
-    ctx.strokeStyle = 'rgba(255,255,255,.5)'; ctx.lineWidth = 2; ctx.strokeRect(bx - 3, by - 3, bw + 6, 20);
+    ctx.fillStyle = boss ? '#ff3d6e' : '#ff7eb6'; ctx.fillRect(bx, by, bw * (g.progress || 0), 14);
+    ctx.strokeStyle = 'rgba(255,255,255,.55)'; ctx.lineWidth = 2; ctx.strokeRect(bx - 3, by - 3, bw + 6, 20);
+    for (const th of [0.25, 0.5, 1]) { const done = (g.progress || 0) >= th - 1e-6; ctx.save(); ctx.globalAlpha = done ? 0.45 : 1; blit(kit && kit.SPR.pickup('chest'), bx + bw * th - (th === 1 ? 4 : 0), by + 7, 46); ctx.restore(); }
     // coins
     blit(kit && kit.SPR.pickup('coin'), W - pad - 172, 38, 52); text(String(Math.floor(g.coins)), W - pad - 152, 38, 24, '#ffd24a', '#0b1020', 'left');
     ctx.fillStyle = 'rgba(0,0,0,.5)'; ctx.beginPath(); ctx.arc(W - 40, 38, 24, 0, TAU); ctx.fill(); ctx.fillStyle = '#fff'; ctx.fillRect(W - 48, 28, 6, 20); ctx.fillRect(W - 36, 28, 6, 20);
@@ -241,7 +304,15 @@ export function createRenderer(canvas, art, kit) {
     blit(kit && kit.SPR.pickup('heal'), hx + 6, hy - 26, 56);
     if (p.shield > 0) text('SHIELD ' + p.shield.toFixed(0), W - pad, H - 78, 18, '#7fe8ff', '#0b1020', 'right');
     if (p.rage > 0) text('RAGE ' + p.rage.toFixed(0), W - pad, H - 50, 18, '#ffd24a', '#0b1020', 'right');
-    if (g.combo > 2 && g.t - g.lastKill < 2.2) text('COMBO x' + g.combo, W / 2, 112, 24 + Math.min(10, g.combo * 0.3), '#ffe14a');
+    if (g.combo > 2 && g.t - g.lastKill < 2.2) text('COMBO x' + g.combo, W / 2, 136, 24 + Math.min(10, g.combo * 0.3), '#ffe14a');
+    // owned weapons
+    let wx = W - pad - 24; const wy = H - 36;
+    for (const id of Object.keys(g.weap)) {
+      ctx.save(); ctx.translate(wx, wy); ctx.fillStyle = WCOL[id] || '#fff'; ctx.strokeStyle = INK; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.roundRect ? ctx.roundRect(-22, -22, 44, 44, 10) : ctx.rect(-22, -22, 44, 44); ctx.fill(); ctx.stroke(); ctx.restore();
+      text(WAB[id] || '', wx, wy - 4, 16, '#2d170f', 'rgba(255,255,255,.6)'); text('Lv' + g.weap[id].lv, wx, wy + 14, 11, '#fff', INK);
+      wx -= 52;
+    }
     // joystick
     if (ui && ui.joy && ui.joy.on) {
       const j = ui.joy; ctx.save(); ctx.globalAlpha = 0.45; ctx.strokeStyle = '#fff'; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(j.x, j.y, 70, 0, TAU); ctx.stroke();
@@ -268,6 +339,7 @@ export function createRenderer(canvas, art, kit) {
     for (const pk of g.pickups) drawPickup(pk);
     for (const sn of g.snakes) drawSnake(g, sn);
     for (const m of g.minions) drawMinion(m);
+    drawWeapons(g);
     if (g.phase !== 'dead') drawPlayer(g);
     drawBullets(g);
     drawFx(dt);

@@ -67,7 +67,10 @@ function sparkle(g, x, y, r, col = '#fff8ec') { g.save(); g.translate(x, y); sta
 // ------------------------------------------------------------------ palettes
 const SKIN = {
   pink: { base: '#ff7eb6', sh: '#d9488f', lite: '#ffc2dc', eye: '#ffc23d', acc: '#ffd84d' },
-  purple: { base: '#a88bff', sh: '#6a4cd6', lite: '#dccfff', eye: '#ff5a8a', acc: '#ff7eb6' },
+  purple: { base: '#a88bff', sh: '#6a4cd6', lite: '#dccfff', eye: '#ff5a8a', acc: '#ff7eb6', crystal: true },
+  mint: { base: '#6fe0a8', sh: '#2fae78', lite: '#c4f5dc', eye: '#ff7eb6', acc: '#ffd84d' },
+  sun: { base: '#ffb84d', sh: '#d9791e', lite: '#ffe0a8', eye: '#6a4cd6', acc: '#ff5a8a' },
+  sky: { base: '#6fc8ff', sh: '#3d8fd6', lite: '#cdeaff', eye: '#ff5a8a', acc: '#ffd84d', crystal: true },
 };
 const KIND = { armor: '#aebbd6', bomb: '#ff4d6d', spitter: '#7be35a', gold: '#ffd84d' };
 
@@ -108,7 +111,7 @@ export function createArtDraw(makeCanvas, dpr = 2) {
     };
   }
   function bodyBase(g, P, boss, r) {
-    const crystal = P === SKIN.purple;
+    const crystal = !!P.crystal;
     for (const s of [-1, 1]) for (const x of [-0.25, 0.3]) {   // stubby legs
       stick(g, [x * r, s * r * 0.7], [x * r + r * 0.12, s * r * 1.12], r * 0.26, tint(P.base, 0.15));
       cel(g, tint(P.base, 0.35), circ(x * r + r * 0.14, s * r * 1.14, r * 0.14), { r: r * 0.14, hi: false, lw: 1.8 });
@@ -196,12 +199,39 @@ export function createArtDraw(makeCanvas, dpr = 2) {
   const PICK = {
     gem: g => { const r = B * 0.7; cel(g, '#39f0ff', poly([[0, -r], [r * 0.75, -r * 0.1], [0, r], [-r * 0.75, -r * 0.1]]), { r, shadow: '#1b9ccf', lw: 3 }); line(g, [[-r * 0.75, -r * 0.1], [r * 0.75, -r * 0.1]], 2.2, '#1b9ccf'); sparkle(g, r * 0.2, -r * 0.4, r * 0.28); },
     coin: g => { const r = B * 0.7; cel(g, '#ffd84d', circ(0, 0, r), { r, shadow: '#d49a1e' }); g.strokeStyle = '#d49a1e'; g.lineWidth = r * 0.12; circ(0, 0, r * 0.66)(g); g.stroke(); cel(g, '#fff1a8', star(5, r * 0.42, r * 0.18, -Math.PI / 2), { r: r * 0.4, hi: false, lw: 1.6, shadow: '#e0a82a' }); },
+    chest: g => { const r = B * 0.85;
+      cel(g, '#c9803c', poly([[-r, -r * 0.2], [r, -r * 0.2], [r, r * 0.8], [-r, r * 0.8]]), { r, shadow: '#8c4f22', lw: 3, hi: false });
+      cel(g, '#e09a52', poly([[-r, -r * 0.2], [-r * 0.9, -r * 0.8], [r * 0.9, -r * 0.8], [r, -r * 0.2]]), { r, shadow: '#a8622b', lw: 3, hi: false });
+      g.fillStyle = '#ffd84d'; g.fillRect(-r * 0.12, -r * 0.8, r * 0.24, r * 1.6); ink(g, 2); g.strokeRect(-r * 0.12, -r * 0.8, r * 0.24, r * 1.6);
+      cel(g, '#fff1a8', circ(0, r * 0.12, r * 0.22), { r: r * 0.22, shadow: '#e0a82a', lw: 2.4, hi: false }); sparkle(g, r * 0.7, -r * 0.95, r * 0.3); },
     heal: g => { const r = B * 0.8; const path = gg => { gg.beginPath(); gg.moveTo(0, r * 0.85); gg.bezierCurveTo(-r * 1.4, -r * 0.1, -r * 0.7, -r * 1.0, 0, -r * 0.35); gg.bezierCurveTo(r * 0.7, -r * 1.0, r * 1.4, -r * 0.1, 0, r * 0.85); gg.closePath(); };
       cel(g, '#ff5a7e', path, { r, shadow: '#c42a54', hy: -r * 0.2 }); g.fillStyle = '#fff8ec'; g.fillRect(-r * 0.1, -r * 0.3, r * 0.2, r * 0.6); g.fillRect(-r * 0.3, -r * 0.1, r * 0.6, r * 0.2); },
     shield: g => { const r = B * 0.85, path = gg => { gg.beginPath(); gg.moveTo(-r * 0.8, -r * 0.7); gg.quadraticCurveTo(0, -r * 1.05, r * 0.8, -r * 0.7); gg.lineTo(r * 0.8, -r * 0.05); gg.quadraticCurveTo(r * 0.7, r * 0.7, 0, r); gg.quadraticCurveTo(-r * 0.7, r * 0.7, -r * 0.8, -r * 0.05); gg.closePath(); };
       cel(g, '#4fb8ff', path, { r, shadow: '#2a78d6', hy: -r * 0.2 }); cel(g, '#bfe6ff', star(5, r * 0.34, r * 0.15, -Math.PI / 2), { r: r * 0.3, hi: false, lw: 1.6, shadow: '#7fc8ff' }); },
     rage: g => { const r = B * 0.85; cel(g, '#ff9a2e', star(8, r, r * 0.62, 0.2), { r, shadow: '#d6601a', lw: 3 }); cel(g, '#ffe14a', circ(0, 0, r * 0.45), { r: r * 0.45, shadow: '#e0a82a', hi: false, lw: 2 });
       g.fillStyle = '#c42a54'; poly([[-r * 0.1, -r * 0.32], [r * 0.2, -r * 0.05], [0, -r * 0.02], [r * 0.12, r * 0.32], [-r * 0.2, 0], [0, 0]])(g); g.fill(); },
+  };
+
+  // ---- weapon pieces (face +x unless upright) ----
+  const WPN = {
+    swab: g => { const r = B; line(g, [[-r * 1.2, 0], [r * 1.2, 0]], r * 0.42); line(g, [[-r * 1.2, 0], [r * 1.2, 0]], r * 0.24, '#ffe8c8');
+      for (const s of [-1, 1]) cel(g, '#fffaf0', circ(s * r * 1.3, 0, r * 0.46), { r: r * 0.46, shadow: '#e6d6c8', lw: 3 }); },
+    dagger: g => { const r = B;
+      cel(g, '#dfe6f6', poly([[r * 1.2, 0], [r * 0.1, -r * 0.3], [-r * 0.35, 0], [r * 0.1, r * 0.3]]), { r: r * 0.7, shadow: '#9aa6c6', lw: 3, hi: false });
+      line(g, [[r * 0.9, 0], [-r * 0.2, 0]], 2, '#9aa6c6');
+      cel(g, '#ffd84d', poly([[-r * 0.35, -r * 0.4], [-r * 0.2, -r * 0.4], [-r * 0.2, r * 0.4], [-r * 0.35, r * 0.4]]), { r: r * 0.3, shadow: '#d49a1e', lw: 2.4, hi: false });
+      cel(g, '#ff7eb6', poly([[-r * 0.85, -r * 0.14], [-r * 0.35, -r * 0.14], [-r * 0.35, r * 0.14], [-r * 0.85, r * 0.14]]), { r: r * 0.3, shadow: '#d9488f', lw: 2.4, hi: false }); },
+    needle: g => { const r = B; line(g, [[-r * 1.0, 0], [r * 1.2, 0]], r * 0.2); line(g, [[-r * 1.0, 0], [r * 1.2, 0]], r * 0.09, '#f2f6ff');
+      cel(g, '#ff7eb6', circ(-r * 1.05, 0, r * 0.2), { r: r * 0.2, shadow: '#d9488f', lw: 2.4, hi: false }); },
+    stick: g => { const r = B; line(g, [[-r * 2, 0], [r * 1.6, 0]], r * 0.5); line(g, [[-r * 2, 0], [r * 1.6, 0]], r * 0.32, '#ff9ac6'); line(g, [[-r * 2, -r * 0.05], [r * 1.2, -r * 0.05]], r * 0.07, '#ffd0e6');
+      for (const x of [0.5, 1.0, 1.5]) cel(g, '#ffe3f0', circ(r * x, 0, r * 0.3), { r: r * 0.3, shadow: '#ff9ac6', lw: 3, hi: false });
+      cel(g, '#ffd84d', circ(-r * 2, 0, r * 0.34), { r: r * 0.34, shadow: '#d49a1e', lw: 3, hi: false }); },
+    tower: g => { const r = B;
+      cel(g, '#fff8ec', poly([[-r * 0.6, r * 0.9], [-r * 0.5, -r * 0.5], [r * 0.5, -r * 0.5], [r * 0.6, r * 0.9]]), { r, shadow: '#e6d6c8', lw: 3.4, hi: false });
+      cel(g, '#4fb8ff', poly([[-r * 0.8, -r * 0.5], [0, -r * 1.25], [r * 0.8, -r * 0.5]]), { r, shadow: '#2a78d6', lw: 3.4, hi: false });
+      g.fillStyle = '#ff5a7e'; g.fillRect(-r * 0.09, -r * 0.1, r * 0.18, r * 0.5); g.fillRect(-r * 0.25, r * 0.06, r * 0.5, r * 0.18);
+      eye(g, -r * 0.22, -r * 0.3, r * 0.1, r * 0.13, { iris: '#2d170f' }); eye(g, r * 0.22, -r * 0.3, r * 0.1, r * 0.13, { iris: '#2d170f' });
+      sparkle(g, r * 0.55, -r * 1.1, r * 0.22); },
   };
 
   // ---- shots: music notes (sound is the currency of this world) ----
@@ -223,6 +253,7 @@ export function createArtDraw(makeCanvas, dpr = 2) {
     pickup: k => bake('pk|' + k, B * 2.4, B * 2.4, PICK[k] || PICK.gem),
     note: crit => bake('note|' + (crit ? 1 : 0), B * 2.4, B * 2.4, noteFn(crit ? '#ffd84d' : '#6fe3ff', crit)),
     acid: () => bake('acid', B * 1.6, B * 1.6, acidFn),
+    weapon: id => bake('wpn|' + id, B * 4.6, B * 3.4, WPN[id] || WPN.dagger),
   };
 
   // blit a baked sprite centred at (x, y), `size` wide, optional rotation / flip
@@ -235,7 +266,7 @@ export function createArtDraw(makeCanvas, dpr = 2) {
 
   // live head: body and feelers rotate with the snake, the FACE stays upright and looks at the player.
   function drawHead(g, x, y, r, ang, o = {}) {
-    const P = SKIN[o.skin] || SKIN.pink, boss = !!o.boss, crystal = o.skin === 'purple', t = o.t || 0;
+    const P = SKIN[o.skin] || SKIN.pink, boss = !!o.boss, crystal = !!P.crystal, t = o.t || 0;
     g.save(); g.translate(x, y); g.scale(r / B, r / B);
     const R = B;
     g.save(); g.rotate(ang);

@@ -51,10 +51,10 @@
   <img class="deco" id="deco4" style="right:4vw;bottom:11vh;animation-delay:-.5s" alt="">
   <h1>CELL<br>SERPENT</h1>
   <img class="hero" src="assets/duo_sing.png" alt="RoxorLoops and Jasmin">
-  <div class="sub">Drag to move. You shoot on your own. Cut the serpent down, segment by segment, and dodge everything else.</div>
+  <div class="sub">A giant virus crawls toward your membrane. Your cell shoots on its own: drag to dodge, pick a new skill at every level-up, and destroy every segment before it leaks through.</div>
   <button class="btn" id="playBtn">PLAY</button>
   <button class="btn alt" id="shopBtn">UPGRADES</button>
-  <div class="stat"><span>Best stage <b id="bestStat">0</b></span><span>Runs <b id="runStat">0</b></span><span class="coins" style="font-size:16px"><span class="coin-dot"></span><b id="coinStat" style="color:var(--gold)">0</b></span></div>
+  <div class="stat"><span>Best chapter <b id="bestStat">0</b></span><span>Runs <b id="runStat">0</b></span><span class="coins" style="font-size:16px"><span class="coin-dot"></span><b id="coinStat" style="color:var(--gold)">0</b></span></div>
 </section>
 
 <section class="scr" id="shop">
@@ -65,8 +65,8 @@
 </section>
 
 <section class="scr" id="levelup">
-  <div class="banner">LEVEL UP</div>
-  <h2>Pick a mutation</h2>
+  <div class="banner" id="luBanner">LEVEL UP</div>
+  <h2>Choose a skill</h2>
   <div class="cards" id="cards"></div>
 </section>
 
@@ -80,7 +80,7 @@
   <h2 id="overTitle">THE SERPENT WINS</h2>
   <img class="hero" id="overImg" src="assets/duo_idle.png" style="width:min(220px,50vw)" alt="">
   <div class="stat" style="flex-direction:column;align-items:center;gap:6px;font-size:18px">
-    <span>Reached stage <b id="oStage">1</b> <span id="oBest" style="color:var(--gold)"></span></span>
+    <span>Reached chapter <b id="oStage">1</b> <span id="oBest" style="color:var(--gold)"></span></span>
     <span>Kills <b id="oKills">0</b> &nbsp; Level <b id="oLevel">1</b> &nbsp; Score <b id="oScore">0</b></span>
     <span class="coins"><span class="coin-dot"></span>+<span id="oCoins">0</span></span>
   </div>
