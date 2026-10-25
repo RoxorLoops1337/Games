@@ -27,6 +27,8 @@ globalThis.Path2D = class { constructor() { return new Proxy(this, { get: (o, k)
 const { CATS, ENEMY_TYPES, THEMES, NESTS } = await import('../stacking_cats/cats.js');
 const { drawCat } = await import('../stacking_cats/art_cats.js');
 const art = await import('../stacking_cats/art_world.js');
+const { drawBuilding } = await import('../stacking_cats/art_kingdom.js');
+const { BUILDINGS } = await import('../stacking_cats/cats.js');
 
 t('every cat draws without errors', () => {
   for (const d of CATS) for (const v of ['open', 'blink', 'hurt']) drawCat(fakeCtx(), d, v);
@@ -38,6 +40,10 @@ t('every mouse type, elite and nest draws', () => {
   for (const nest of NESTS) { const s = art.nestSprite(nest.id); assert.ok(s.c); art.nestOverlay(fakeCtx(), 0.3, 1.2); }
 });
 
+t('every kingdom building draws at every level', () => {
+  for (const b of BUILDINGS) for (let l = 0; l <= b.max; l++) drawBuilding(fakeCtx(), b.id, l);
+});
+
 t('every theme builds a backdrop and scrolls', () => {
   THEMES.forEach((th, i) => { const bd = art.makeBackdrop(th, i); art.drawBackdrop(fakeCtx(), bd, 123.4, 2); art.drawRays(fakeCtx(), bd, 1); art.drawFront(fakeCtx(), bd, 55); });
 });
@@ -47,12 +53,13 @@ t('main.js parses and the ids it uses exist in index.html', () => {
   const js = readFileSync('stacking_cats/main.js', 'utf8'), html = readFileSync('stacking_cats/index.html', 'utf8');
   const ids = new Set([...js.matchAll(/\$\('([A-Za-z]+)'\)/g)].map((m) => m[1]));
   assert.ok(ids.size >= 10);
-  for (const id of ids) assert.ok(html.includes(`id="${id}"`), 'index.html misses #' + id);
+  const dynamic = new Set(['earn']); // created by the game over screen
+  for (const id of ids) assert.ok(dynamic.has(id) || html.includes(`id="${id}"`), 'index.html misses #' + id);
   assert.ok(html.includes('type="module" src="main.js"'));
 });
 
 t('no em dashes anywhere in the game files', () => {
-  for (const f of ['main.js', 'index.html', 'cats.js', 'sim.js', 'art_cats.js', 'art_world.js', 'audio.js']) {
+  for (const f of ['main.js', 'index.html', 'cats.js', 'sim.js', 'art_cats.js', 'art_world.js', 'art_kingdom.js', 'audio.js']) {
     assert.ok(!readFileSync('stacking_cats/' + f, 'utf8').includes('—'), f);
   }
 });

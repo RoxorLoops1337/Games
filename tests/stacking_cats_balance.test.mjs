@@ -3,7 +3,9 @@
 import assert from 'node:assert/strict';
 import {
   newGame, addCat, mergeCats, mergePairs, rollCatChoices, rollSnackChoices, eatSnack, startWave, step, catMaxHp, releaseCat, moveCat, TUNE,
+  rollItemChoices, takeItem, equipItem, useReroll,
 } from '../stacking_cats/sim.js';
+import { ITEM_BY_ID, emptyKingdom } from '../stacking_cats/cats.js';
 import { CAT_BY_ID, CATS, SNACK_BY_ID, STARTERS, MAX_STACK, START_CATS } from '../stacking_cats/cats.js';
 
 const QUICK = !!process.env.QUICK;
@@ -46,28 +48,48 @@ function snack(g) {
   eatSnack(g, ch[0]);
 }
 
-export function playRun(seed, { maxWave = 80 } = {}) {
-  const g = newGame({ seed, unlocked: STARTERS, events: false });
+const RAR = { common: 1, rare: 2, epic: 3 };
+function loot(g) {
+  const ch = rollItemChoices(g).sort((a, b) => RAR[ITEM_BY_ID[b].rarity] - RAR[ITEM_BY_ID[a].rarity]);
+  takeItem(g, ch[0]);
+  // put it on the strongest cat that still has a free slot (or the first cat)
+  const target = g.cats.find((c) => c.items.length < (c.lvl >= 3 ? 2 : 1)) || g.cats[0];
+  if (target) equipItem(g, g.stash.length - 1, target.uid);
+}
+
+export function playRun(seed, { maxWave = 80, kingdom = null } = {}) {
+  const g = newGame({ seed, unlocked: STARTERS, events: false, kingdom });
   for (let i = 0; i < START_CATS; i++) recruit(g);
+  for (let i = 0; i < g.meta.startSnacks; i++) snack(g);
   while (g.state !== 'over' && g.wave < maxWave) {
     startWave(g);
     let guard = 0;
     while (g.state !== 'clear' && g.state !== 'over' && guard++ < 30 * 600) step(g);
     if (g.state === 'over') break;
-    if (g.bossWave) recruit(g);
-    snack(g);
+    for (const r of g.reward) { if (r === 'cat') recruit(g); else if (r === 'item') loot(g); else snack(g); }
     arrange(g);
   }
-  return { wave: g.wave, kills: g.run.kills, cats: g.cats.length, state: g.state };
+  return { wave: g.wave, kills: g.run.kills, cats: g.cats.length, state: g.state, coins: Math.floor(g.run.coins) };
+}
+
+export function maxedKingdom(frac = 1) {
+  const k = emptyKingdom();
+  for (const [id, mx] of Object.entries({ dojo: 5, beds: 5, yarn: 5, spa: 5, tower: 5, shrine: 5, vault: 5, tent: 4, stall: 3 })) k.lv[id] = Math.round(mx * frac);
+  return k;
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
   const N = QUICK ? 6 : 16;
-  const waves = [];
-  for (let s = 1; s <= N; s++) { const r = playRun(s * 7919); waves.push(r.wave); }
-  waves.sort((a, b) => a - b);
+  const spread = (opts) => { const w = []; for (let s = 1; s <= N; s++) w.push(playRun(s * 7919, opts).wave); return w.sort((a, b) => a - b); };
+  const waves = spread({});
   const med = waves[Math.floor(N / 2)];
   console.log('waves reached', waves.join(' '), 'median', med);
+  const rich = spread({ kingdom: maxedKingdom(1) }), half = spread({ kingdom: maxedKingdom(0.5) });
+  console.log('half kingdom', half.join(' '), 'median', half[Math.floor(N / 2)]);
+  console.log('full kingdom', rich.join(' '), 'median', rich[Math.floor(N / 2)]);
+  assert.ok(half[Math.floor(N / 2)] >= med, 'a half built kingdom should not be weaker');
+  assert.ok(rich[Math.floor(N / 2)] > med + 2, 'a full kingdom should clearly help');
+  assert.ok(rich.every((w) => w < 80), 'even a full kingdom must be beatable');
   assert.ok(med >= 8, 'too hard: median wave ' + med);
   assert.ok(med <= 40, 'too easy: median wave ' + med);
   assert.ok(waves.every((w) => w < 80), 'a run never ended: the game is endless-easy');
