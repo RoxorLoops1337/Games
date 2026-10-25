@@ -29,10 +29,20 @@ function bolt(ctx, x, y, s, fill, lw = 0.9) {
 const sparkle = (ctx, x, y, r, col = '#fff') => { ctx.fillStyle = col; ctx.fill(star(x, y, r, r * 0.3, 4)); };
 
 // ---------------------------------------------------------------- face
-function eye(ctx, x, y, color, cool, flip) {
+function eye(ctx, x, y, color, cool, flip, variant) {
   ctx.save();
   ctx.translate(x, y);
   if (flip) ctx.scale(-1, 1);
+  if (variant === 'blink' || variant === 'hurt') {
+    ctx.strokeStyle = INK; ctx.lineWidth = 2; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    ctx.beginPath();
+    if (variant === 'blink') { ctx.moveTo(-6.4, -0.5); ctx.quadraticCurveTo(0, 5.4, 6.4, -0.5); }
+    else { ctx.moveTo(-6, -5); ctx.lineTo(4, 0); ctx.lineTo(-6, 5); }
+    ctx.stroke();
+    if (variant === 'blink') { ctx.lineWidth = 1.2; ctx.beginPath(); ctx.moveTo(-6.4, -0.5); ctx.lineTo(-9, -2.6); ctx.stroke(); }
+    ctx.restore();
+    return;
+  }
   const ry = cool ? 6.6 : 8.4, rx = cool ? 6.6 : 6.4;
   const g = ctx.createLinearGradient(0, -ry, 0, ry);
   g.addColorStop(0, shade(color, -0.55)); g.addColorStop(0.55, color); g.addColorStop(1, shade(color, 0.45));
@@ -56,10 +66,10 @@ function eye(ctx, x, y, color, cool, flip) {
   ctx.restore();
 }
 
-function face(ctx, A, id) {
+function face(ctx, A, id, variant) {
   const cool = COOL.has(id);
-  eye(ctx, 46, 59, A.eye, cool, false);
-  eye(ctx, 74, 59, A.eye, cool, true);
+  eye(ctx, 46, 59, A.eye, cool, false, variant);
+  eye(ctx, 74, 59, A.eye, cool, true, variant);
   // blush
   ctx.fillStyle = 'rgba(255,110,140,.38)';
   ctx.beginPath(); ctx.ellipse(38, 69, 5.2, 3, 0, 0, TAU); ctx.fill();
@@ -69,7 +79,8 @@ function face(ctx, A, id) {
   ctx.strokeStyle = INK; ctx.lineWidth = 0.95; ctx.lineCap = 'round';
   ctx.beginPath(); ctx.moveTo(60, 68.4); ctx.lineTo(60, 70.2); ctx.stroke();
   ctx.beginPath();
-  if (cool) { ctx.moveTo(54, 71.4); ctx.quadraticCurveTo(57, 73.4, 60, 70.4); ctx.quadraticCurveTo(64, 74.2, 67.6, 71); }
+  if (variant === 'hurt') { ctx.ellipse(60, 72.6, 2.6, 3.2, 0, 0, TAU); ctx.fillStyle = '#5a2236'; ctx.fill(); }
+  else if (cool) { ctx.moveTo(54, 71.4); ctx.quadraticCurveTo(57, 73.4, 60, 70.4); ctx.quadraticCurveTo(64, 74.2, 67.6, 71); }
   else { ctx.moveTo(53.6, 71); ctx.quadraticCurveTo(57, 74.6, 60, 70.4); ctx.quadraticCurveTo(63, 74.6, 66.4, 71); }
   ctx.stroke();
   // whiskers
@@ -417,7 +428,7 @@ const ACC = {
 };
 
 // ---------------------------------------------------------------- main
-export function drawCat(ctx, d) {
+export function drawCat(ctx, d, variant = 'open') {
   const A = d.art, id = d.id, acc = ACC[id] || {}, B = acc.body || {};
   const fur = A.fur, belly = A.belly;
   ctx.lineJoin = 'round'; ctx.lineCap = 'round';
@@ -492,7 +503,7 @@ export function drawCat(ctx, d) {
   pattern(ctx, A, head, bodyPath);
   ctx.strokeStyle = lineOf(fur); ctx.lineWidth = 1.15; ctx.stroke(head);
 
-  face(ctx, A, id);
+  face(ctx, A, id, variant);
   acc.front && acc.front(ctx, A);
   ctx.globalAlpha = 1;
 }

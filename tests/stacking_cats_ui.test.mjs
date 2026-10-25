@@ -29,7 +29,7 @@ const { drawCat } = await import('../stacking_cats/art_cats.js');
 const art = await import('../stacking_cats/art_world.js');
 
 t('every cat draws without errors', () => {
-  for (const d of CATS) drawCat(fakeCtx(), d);
+  for (const d of CATS) for (const v of ['open', 'blink', 'hurt']) drawCat(fakeCtx(), d, v);
   assert.ok(calls.n > 1000);
 });
 
@@ -39,7 +39,7 @@ t('every mouse type, elite and nest draws', () => {
 });
 
 t('every theme builds a backdrop and scrolls', () => {
-  THEMES.forEach((th, i) => { const bd = art.makeBackdrop(th, i); art.drawBackdrop(fakeCtx(), bd, 123.4, 2); });
+  THEMES.forEach((th, i) => { const bd = art.makeBackdrop(th, i); art.drawBackdrop(fakeCtx(), bd, 123.4, 2); art.drawRays(fakeCtx(), bd, 1); art.drawFront(fakeCtx(), bd, 55); });
 });
 
 t('main.js parses and the ids it uses exist in index.html', () => {

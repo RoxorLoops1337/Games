@@ -264,7 +264,7 @@ export function makeEnemy(g, type, w, o = {}) {
     dmg: d.dmg * sc.dmg * (elite ? 1.35 : 1), cd: d.cd * (0.4 + g.rnd() * 0.8), spd: d.spd * (0.9 + g.rnd() * 0.2) * (elite ? 0.92 : 1),
     w: d.w * (elite ? 1.2 : 1), h: d.h * (elite ? 1.2 : 1), armor: d.armor || 0, ai: d.ai, range: d.range || 0,
     fly: d.ai === 'fly', alt: d.alt || 0, elite, flash: 0, stun: 0, slow: 0, slowT: 0, burn: null, poison: null,
-    dead: false, swing: 0, t: g.rnd() * 6, ability: 0, boss: false,
+    dead: false, swing: 0, t: g.rnd() * 6, ability: 0, boss: false, age: 0, kb: 0,
   };
 }
 const ecy = (e) => (e.fly ? e.y - e.alt : e.y - e.h * 0.5);
@@ -320,6 +320,7 @@ function hurtEnemy(g, e, dmg, o = {}) {
   if (e.armor && !o.pierceArmor) d *= 1 - e.armor;
   e.hp -= d;
   e.flash = 0.1;
+  if (!e.boss && !o.silent) e.kb = Math.min(9, e.kb + (e.w > 50 ? 1.6 : 4));
   if (!o.silent) emit(g, { k: 'dmg', x: e.x, y: ecy(e) - e.h * 0.4, v: d, crit: !!o.crit });
   if (o.slow) { e.slow = Math.max(e.slow, o.slow); e.slowT = Math.max(e.slowT, o.slowT || 2); }
   if (o.stun && !e.boss) e.stun = Math.max(e.stun, o.stun);
@@ -689,7 +690,7 @@ function updateEnemies(g, dt) {
     if (e.dead) continue;
     e.flash = Math.max(0, e.flash - dt);
     e.swing = Math.max(0, e.swing - dt);
-    e.t += dt;
+    e.t += dt; e.age += dt; e.kb *= Math.exp(-11 * dt);
     if (e.slowT > 0) { e.slowT -= dt; if (e.slowT <= 0) e.slow = 0; }
     if (e.ai === 'nest') { nestAI(g, e, dt); continue; }
     if (e.stun > 0) { e.stun -= dt; continue; }

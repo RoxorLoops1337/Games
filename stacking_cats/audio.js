@@ -34,7 +34,7 @@ export class Sfx {
     s.buffer = buf; f.type = 'lowpass'; f.frequency.value = lp; g.gain.value = v;
     s.connect(f); f.connect(g); g.connect(this.master); s.start();
   }
-  play(name) {
+  play(name, pitch = 1) {
     const now = performance.now();
     const gap = { hit: 45, swipe: 60, shoot: 70, pop: 40, flame: 120, zap: 80, boom: 80 }[name] || 0;
     if (gap && now - (this.last[name] || 0) < gap) return;
@@ -47,7 +47,7 @@ export class Sfx {
       case 'flame': this.noise(0.12, 0.1, 900); break;
       case 'zap': this.tone(900, 0.14, { to: 200, type: 'sawtooth', v: 0.08 }); this.noise(0.1, 0.08, 6000); break;
       case 'boom': this.noise(0.35, 0.34, 700); this.tone(90, 0.3, { to: 40, type: 'sine', v: 0.3 }); break;
-      case 'pop': this.tone(420 + Math.random() * 160, 0.1, { to: 900, type: 'sine', v: 0.1 }); break;
+      case 'pop': this.tone((420 + Math.random() * 120) * pitch, 0.1, { to: 900 * pitch, type: 'sine', v: 0.1 }); break;
       case 'ko': this.tone(400, 0.4, { to: 90, type: 'triangle', v: 0.18 }); break;
       case 'heal': this.tone(660, 0.12, { type: 'sine', v: 0.1 }); this.tone(880, 0.16, { type: 'sine', v: 0.1, delay: 0.08 }); break;
       case 'ui': this.tone(520, 0.06, { type: 'triangle', v: 0.1 }); break;

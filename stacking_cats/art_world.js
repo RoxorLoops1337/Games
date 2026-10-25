@@ -278,9 +278,29 @@ export function makeBackdrop(theme, seed) {
   }
   for (let i = 0; i < 40; i++) { gx.fillStyle = 'rgba(255,255,255,.1)'; gx.fillRect(rnd() * W, top + 20 + rnd() * 90, 14 + rnd() * 26, 1.5); }
 
+  // tall foreground tufts (drawn in front of the action) and soft sun rays
+  const [front, ftx] = mk();
+  const tuft = theme.deco === 'snow' ? '#ffffff' : shade(theme.ground[1], -0.12);
+  for (let i = 0; i < 46; i++) {
+    const x = rnd() * W, h = 26 + rnd() * 34, n = 3 + Math.floor(rnd() * 3);
+    for (let k = 0; k < n; k++) {
+      const bx = x + (k - n / 2) * 4, lean = (rnd() - 0.5) * 16;
+      ftx.strokeStyle = k % 2 ? tuft : shade(tuft, 0.14); ftx.lineWidth = 3.2; ftx.lineCap = 'round';
+      ftx.beginPath(); ftx.moveTo(bx, H + 2); ftx.quadraticCurveTo(bx + lean * 0.4, H - h * 0.6, bx + lean, H - h); ftx.stroke();
+    }
+  }
+  const [rays, rx] = mk();
+  if (!night) for (let i = 0; i < 5; i++) {
+    const a0 = 1.75 + i * 0.22, spread = 0.07 + rnd() * 0.05;
+    const gr = rx.createLinearGradient(740, 120, 740 + Math.cos(a0) * 700, 120 + Math.sin(a0) * 700);
+    gr.addColorStop(0, 'rgba(255,255,220,.5)'); gr.addColorStop(1, 'rgba(255,255,220,0)');
+    rx.fillStyle = gr; rx.beginPath(); rx.moveTo(740, 120);
+    rx.lineTo(740 + Math.cos(a0 - spread) * 900, 120 + Math.sin(a0 - spread) * 900); rx.lineTo(740 + Math.cos(a0 + spread) * 900, 120 + Math.sin(a0 + spread) * 900); rx.fill();
+  }
+
   const stars = []; if (night) for (let i = 0; i < 70; i++) stars.push([rnd() * W, rnd() * 300, 0.6 + rnd() * 1.4, rnd() * 6]);
   const clouds = []; for (let i = 0; i < 5; i++) clouds.push([rnd() * W, 50 + rnd() * 130, 0.6 + rnd() * 0.8, 6 + rnd() * 8]);
-  return { sky, far, mid, gr, stars, clouds, night };
+  return { sky, far, mid, gr, front, rays, stars, clouds, night, deco: theme.deco };
 }
 
 export function drawBackdrop(ctx, bd, scroll, t) {
@@ -296,4 +316,14 @@ export function drawBackdrop(ctx, bd, scroll, t) {
     const o = ((scroll * k) % W + W) % W;
     ctx.drawImage(layer, -o, 0); ctx.drawImage(layer, W - o, 0);
   }
+}
+
+export function drawRays(ctx, bd, t) {
+  if (bd.night) return;
+  ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 0.11 + 0.05 * Math.sin(t * 0.7);
+  ctx.drawImage(bd.rays, 0, 0); ctx.restore();
+}
+export function drawFront(ctx, bd, scroll) {
+  const W = 960, o = ((scroll * 1.35) % W + W) % W;
+  ctx.drawImage(bd.front, -o, 0); ctx.drawImage(bd.front, W - o, 0);
 }
