@@ -183,7 +183,7 @@ function drawIllustration(g, spec) {
   for (let i = -120; i < 140; i += 4.5) { g.moveTo(cx + i - 60 * Math.sin(ang), cy - 60); g.lineTo(cx + i + 60 * Math.sin(ang), cy + 60); }
   g.stroke();
   // motif
-  g.save(); const sc = (0.9 + r() * 0.16) * (variant === 2 ? 0.95 : 1.02); const ox = (r() - 0.5) * 18, oy = (r() - 0.5) * 6;
+  g.save(); const sc = (1.0 + r() * 0.14) * (variant === 2 ? 0.95 : 1.04); const ox = (r() - 0.5) * 18, oy = (r() - 0.5) * 6;
   g.translate(cx + ox, cy + oy); g.scale((variant === 1 ? -1 : 1) * sc, sc); g.rotate((r() - 0.5) * (variant === 2 ? 0.5 : 0.2));
   g.save(); g.translate(2, 3); g.globalAlpha = 0.22; g.fillStyle = INK; g.restore();
   g.lineJoin = 'round'; g.lineCap = 'round';
@@ -278,11 +278,11 @@ function drawSeam(g, seed) {
 function drawClamp(g, seed) {
   const r = rngOf('clamp:' + seed);
   g.save(); g.translate(0, -18); g.rotate(-0.2);
-  g.fillStyle = 'rgba(0,0,0,.35)'; g.fillRect(-142, 3, 284, 26);
-  g.fillStyle = grad(g, 0, -12, 0, 14, [[0, '#c27a49'], [0.45, COL.rust], [1, '#4d2714']]); g.fillRect(-140, -12, 280, 26); g.lineWidth = 2.4; g.strokeStyle = INK; g.strokeRect(-140, -12, 280, 26);
-  for (let i = 0; i < 40; i++) { g.fillStyle = r() > 0.5 ? 'rgba(60,25,10,.5)' : 'rgba(220,150,90,.35)'; g.fillRect(-138 + r() * 274, -10 + r() * 22, 2 + r() * 5, 1.5 + r() * 2.5); }
-  [-118, -70, 70, 118].forEach((x) => { circ(g, x, 1, 3.6, STEEL_D, 1.4); });
-  rr(g, -150, -18, 16, 38, 3); fs(g, STEEL_D, 2); rr(g, 134, -18, 16, 38, 3); fs(g, STEEL_D, 2);
+  g.fillStyle = 'rgba(0,0,0,.35)'; g.fillRect(-112, 3, 224, 26);
+  g.fillStyle = grad(g, 0, -12, 0, 14, [[0, '#c27a49'], [0.45, COL.rust], [1, '#4d2714']]); g.fillRect(-112, -12, 224, 26); g.lineWidth = 2.4; g.strokeStyle = INK; g.strokeRect(-112, -12, 224, 26);
+  for (let i = 0; i < 40; i++) { g.fillStyle = r() > 0.5 ? 'rgba(60,25,10,.5)' : 'rgba(220,150,90,.35)'; g.fillRect(-110 + r() * 218, -10 + r() * 22, 2 + r() * 5, 1.5 + r() * 2.5); }
+  [-96, -60, 60, 96].forEach((x) => { circ(g, x, 1, 3.6, STEEL_D, 1.4); });
+  rr(g, -122, -18, 16, 38, 3); fs(g, STEEL_D, 2); rr(g, 106, -18, 16, 38, 3); fs(g, STEEL_D, 2);
   // padlock
   g.beginPath(); g.arc(0, -5, 8, Math.PI, 0); g.lineWidth = 3.4; g.strokeStyle = INK; g.stroke(); g.lineWidth = 1.8; g.strokeStyle = STEEL; g.stroke();
   rr(g, -11, -5, 22, 18, 3); fs(g, grad(g, 0, -5, 0, 13, [[0, '#f1d675'], [1, BRASS_D]]), 2); circ(g, 0, 3, 2.2, INK, 0); line(g, 0, 3, 0, 8, INK, 2);
@@ -372,7 +372,7 @@ function layoutText(g, spec, lines, price, o) {
   const priceTop = lower - pH;
   const zoneTop = TOP + 2, zoneBot = pH ? priceTop - 2 : lower;
   let y = zoneTop + Math.max(0, (zoneBot - zoneTop - rH) / 2);
-  g.font = font(s); g.fillStyle = o.tithed ? '#6e5f56' : INK;
+  g.font = font(s); g.fillStyle = o.tithed ? '#5f5048' : INK;
   rl.forEach((group) => { group.forEach((ln) => { y += lh; g.fillText(ln, 0, y - lh * 0.22); }); y += 2.5; });
   if (pH) {
     const dy = priceTop + 2;
@@ -509,8 +509,8 @@ export function drawGraftPatch(ctx, graft, x, y, w, h, o = {}) {
   const pad = Math.max(10, w * 0.07);
   // glyph + name
   const gr = Math.min(16, Math.max(10, w * 0.075));
-  circ(g, pad + gr, pad + gr + 2, gr + 3, 'rgba(26,22,20,.85)', 1.6); drawSchoolGlyph(g, graft.school, pad + gr, pad + gr + 2, gr, COL[graft.school]);
-  const nameX = pad + gr * 2 + 10, nameW = w - nameX - pad;
+  rr(g, pad - 4, pad - 2, w - pad * 2 + 8, gr * 2 + 10, 8); g.fillStyle = 'rgba(26,22,20,.62)'; g.fill(); circ(g, pad + gr + 2, pad + gr + 2, gr + 3, 'rgba(26,22,20,.85)', 1.6); drawSchoolGlyph(g, graft.school, pad + gr + 2, pad + gr + 2, gr, COL[graft.school]);
+  const nameX = pad + gr * 2 + 14, nameW = w - nameX - pad;
   g.textAlign = 'left'; g.textBaseline = 'middle';
   const lines = []; g.font = font(17, { bold: true }); const sz = fitText(g, graft.name, nameW, 17, 9, { bold: true });
   g.font = font(sz, { bold: true }); let nm = [graft.name]; if (g.measureText(graft.name).width > nameW) nm = wrapText(g, graft.name, nameW).slice(0, 2); void lines;

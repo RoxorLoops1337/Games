@@ -345,9 +345,9 @@ const WHY = { gold: 'Not enough gold.', slots: 'Potion slots are full.', cantgra
 
 let S = null;
 const CARD_X = (i) => 347 + i * 198, CARD_Y = 190;
-const GRAFT_X = (i) => 270 + i * 220, GRAFT_Y = 356;
-const POT_X = (i) => 270 + i * 220, POT_Y = 474;
-const REL_X = 940, REL_Y = (i) => 356 + i * 104;
+const GRAFT_X = (i) => 270 + i * 220, GRAFT_Y = 362;
+const POT_X = (i) => 270 + i * 220, POT_Y = 492;
+const REL_X = 940, REL_Y = (i) => 362 + i * 112;
 
 function say(kind, seed) { S.quip = pickQ(kind, seed); S.quipT = 0; S.react = 1; }
 function hv(app, key, on) { const v = S.h[key] || 0; const n = clamp(v + (on ? 1 : -1) * app.dt * 9, 0, 1); S.h[key] = n; return EASE.out(n); }
@@ -526,7 +526,7 @@ export default {
 
     // ---- section labels ----
     const lab = (s, x, y) => app.text(s, x, y, { size: 12, ui: true, bold: true, color: 'rgba(232,220,196,.55)' });
-    lab('CARDS FOR SALE', 270, 56); lab('GRAFT PATCHES', 270, 336); lab('POTIONS  ' + run.potions.length + '/' + RUN.potionSlots(run), 270, 454); lab('RELICS', REL_X, 336); lab('SERVICES', 270, 560);
+    lab('CARDS FOR SALE', 270, 56); lab('GRAFT PATCHES', 270, 342); lab('POTIONS  ' + run.potions.length + '/' + RUN.potionSlots(run), 270, 474); lab('RELICS', REL_X, 342); lab('SERVICES', 270, 596);
 
     const priceTag = (cx, cy, price, sold) => {
       if (sold) return;
@@ -559,14 +559,13 @@ export default {
       g.save(); if (it.sold) g.globalAlpha = 0.45; g.translate(0, -3 * k);
       drawGraftPatch(g, gr, x, y, w, h, { hover: k });
       g.restore();
-      app.text(`Weight ${gr.weight}  ${gr.tier}`, x + 4, y + h + 6, { size: 13, ui: true, color: 'rgba(232,220,196,.75)' });
-      if (it.sold) stamp(app, x + w / 2, y + h / 2, 'SOLD'); else priceTag(GRAFT_X(i) + w - 42, y + h + 17, it.price, false);
+      if (it.sold) stamp(app, x + w / 2, y + h / 2, 'SOLD'); else priceTag(GRAFT_X(i) + w / 2, y + h + 26, it.price, false);
       if (!it.sold && app.clicked(GRAFT_X(i), y, w, 100)) startGraftBuy(app, i);
     });
 
     // ---- potions ----
     shop.potions.forEach((it, i) => {
-      const p = POTIONS[it.id], x = POT_X(i) + shakeX('potion' + i), y = POT_Y, w = 205, h = 78;
+      const p = POTIONS[it.id], x = POT_X(i) + shakeX('potion' + i), y = POT_Y, w = 205, h = 84;
       const over = !it.sold && app.inRect(POT_X(i), y, w, h), k = hv(app, 'p' + i, over);
       app.panel(x, y - 2 * k, w, h, { fill: over ? 'rgba(52,42,32,.95)' : 'rgba(26,22,20,.88)', stroke: over ? COL.lamp : 'rgba(232,220,196,.3)' });
       g.save(); if (it.sold) g.globalAlpha = 0.4;
@@ -574,7 +573,7 @@ export default {
       app.text(p.name, x + 56, y + 8 - 2 * k, { size: 15, bold: true, color: COL.vellum, maxW: w - 62 });
       app.text(p.text, x + 56, y + 28 - 2 * k, { size: 12, ui: true, color: 'rgba(232,220,196,.75)', maxW: w - 64, lineH: 14 });
       g.restore();
-      if (it.sold) stamp(app, x + w / 2, y + h / 2, 'SOLD'); else priceTag(x + w - 44, y + h - 4, it.price, false);
+      if (it.sold) stamp(app, x + w / 2, y + h / 2, 'SOLD'); else priceTag(x + w - 46, y + h - 18, it.price, false);
       if (over) { app.cursor = 'pointer'; app.tooltip(p.name, `${p.rarity}\n${p.text}\nPotion slots ${run.potions.length}/${RUN.potionSlots(run)}. ${it.price} gold.`); }
       if (!it.sold && app.clicked(POT_X(i), y, w, h)) buyDirect(app, 'potion', i, { x: x + 30, y: y + 38 }, it.price);
     });
@@ -589,7 +588,7 @@ export default {
       app.text(r.name, x + 76, y + 8 - 2 * k, { size: 18, bold: true, color: COL.lamp, maxW: w - 86 });
       app.text(r.text, x + 76, y + 31 - 2 * k, { size: 13, ui: true, color: 'rgba(232,220,196,.85)', maxW: w - 90, lineH: 15 });
       g.restore();
-      if (it.sold) stamp(app, x + w / 2, y + h / 2, 'SOLD'); else priceTag(x + w - 50, y + h - 6, it.price, false);
+      if (it.sold) stamp(app, x + w / 2, y + h / 2, 'SOLD'); else priceTag(x + w - 52, y + h - 18, it.price, false);
       if (over) { app.cursor = 'pointer'; app.tooltip(r.name, `${r.rarity} relic\n${r.text}\n${it.price} gold.`, { color: COL.lamp }); }
       if (!it.sold && app.clicked(REL_X, y, w, h)) buyDirect(app, 'relic', i, { x: x + 40, y: y + 46 }, it.price);
     });
@@ -597,16 +596,16 @@ export default {
     // ---- services ----
     const rp = RUN.servicePrice(run, 'remove'), sp = RUN.servicePrice(run, 'strip');
     const grafted = run.deck.some((c) => c.grafts.length);
-    if (app.button('Remove a card', 270, 580, 300, 66, { size: 22, sub: `${rp} gold`, subColor: run.gold >= rp ? COL.gold : COL.bad })) startRemove(app);
-    if (app.inRect(270, 580, 300, 66)) app.tooltip('Remove a card', `Delete one card from the deck for ${rp} gold. The price rises with every removal this run (${run.shopUses.remove} so far).`);
+    if (app.button('Remove a card', 270, 614, 300, 66, { size: 22, sub: `${rp} gold`, subColor: run.gold >= rp ? COL.gold : COL.bad })) startRemove(app);
+    if (app.inRect(270, 614, 300, 66)) app.tooltip('Remove a card', `Delete one card from the deck for ${rp} gold. The price rises with every removal this run (${run.shopUses.remove} so far).`);
     const stripDis = !grafted;
-    if (app.button('Strip a graft', 590, 580, 300, 66, { size: 22, disabled: stripDis, sub: sp === 0 ? 'Free' : `${sp} gold`, subColor: run.gold >= sp ? COL.gold : COL.bad })) startStrip(app);
-    if (app.inRect(590, 580, 300, 66)) app.tooltip('Strip a graft', stripDis ? 'None of your cards carry a graft.' : `Pick a card, then one of its grafts. The graft and its boon are lost, its price goes with it. ${sp === 0 ? 'Free this once.' : sp + ' gold.'}`);
+    if (app.button('Strip a graft', 590, 614, 300, 66, { size: 22, disabled: stripDis, sub: sp === 0 ? 'Free' : `${sp} gold`, subColor: run.gold >= sp ? COL.gold : COL.bad })) startStrip(app);
+    if (app.inRect(590, 614, 300, 66)) app.tooltip('Strip a graft', stripDis ? 'None of your cards carry a graft.' : `Pick a card, then one of its grafts. The graft and its boon are lost, its price goes with it. ${sp === 0 ? 'Free this once.' : sp + ' gold.'}`);
     const stripTitle = null; void stripTitle;
-    if (app.button('LEAVE', 940, 568, 310, 90, { size: 38, fill: '#4a2a1c', stroke: COL.lamp })) { RUN.advance(run); flow.route(); }
-    if (app.inRect(940, 568, 310, 90)) app.tooltip('Leave the market', 'Back to the map. Unsold stock stays here.');
+    if (app.button('LEAVE', 940, 600, 310, 90, { size: 38, fill: '#4a2a1c', stroke: COL.lamp })) { RUN.advance(run); flow.route(); }
+    if (app.inRect(940, 600, 310, 90)) app.tooltip('Leave the market', 'Back to the map. Unsold stock stays here.');
 
-    toastDraw(app, S, 664);
+    toastDraw(app, S, 560);
     S.fx.draw(g);
     g.restore();
     S.fx.drawFlash(g, 1280, 720);
