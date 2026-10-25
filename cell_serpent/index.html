@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#0d0924">
+<title>Cell Serpent</title>
+<style>
+  :root{ --bg:#0d0924; --ink:#eaf8ff; --dim:#8aa7ba; --pink:#ff5cb8; --cyan:#39f0ff; --lime:#9dff6d; --gold:#ffd24a; --glass:rgba(10,24,36,.9); }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;height:100%;overflow:hidden;background:var(--bg);color:var(--ink);font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;touch-action:none;-webkit-user-select:none;user-select:none;overscroll-behavior:none}
+  canvas{position:fixed;inset:0;width:100%;height:100%;display:block}
+  .scr{position:fixed;inset:0;display:none;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:calc(18px + env(safe-area-inset-top)) 18px calc(18px + env(safe-area-inset-bottom));background:rgba(4,12,20,.55);backdrop-filter:blur(3px);overflow:auto;touch-action:pan-y}
+  .scr.on{display:flex}
+  h1{margin:0;font-size:clamp(40px,11vw,76px);line-height:.9;text-align:center;letter-spacing:.02em;font-weight:900;
+     background:linear-gradient(180deg,#fff,#ff9ad6 55%,#c93a8f);-webkit-background-clip:text;background-clip:text;color:transparent;filter:drop-shadow(0 4px 0 #3a0e30) drop-shadow(0 0 22px rgba(255,92,184,.45))}
+  h2{margin:0;font-size:30px;font-weight:900;letter-spacing:.04em}
+  .sub{color:var(--dim);font-size:14px;text-align:center;max-width:340px;line-height:1.35}
+  .btn{appearance:none;border:0;cursor:pointer;font:inherit;font-weight:900;letter-spacing:.05em;color:#1b0a24;background:linear-gradient(180deg,#ffe3f4,#ff7ac6);border-radius:16px;padding:15px 30px;font-size:22px;min-width:220px;box-shadow:0 5px 0 #8c2a66,0 10px 24px rgba(0,0,0,.4);transition:transform .08s}
+  .btn:active{transform:translateY(3px);box-shadow:0 2px 0 #8c2a66}
+  .btn.alt{background:linear-gradient(180deg,#d9fbff,#4fd8f0);box-shadow:0 5px 0 #17707f,0 10px 24px rgba(0,0,0,.4);font-size:18px}
+  .btn.dim{background:linear-gradient(180deg,#46576a,#2e3b4b);color:#cfe0ee;box-shadow:0 5px 0 #18212c;font-size:16px;min-width:160px;padding:11px 20px}
+  .hero{width:min(300px,62vw);filter:drop-shadow(0 8px 18px rgba(0,0,0,.55));animation:bob 2.4s ease-in-out infinite}
+  @keyframes bob{50%{transform:translateY(-8px) rotate(1deg)}}
+  .deco{position:fixed;pointer-events:none;width:clamp(70px,16vw,120px);opacity:.95;filter:drop-shadow(0 6px 10px rgba(0,0,0,.5));animation:bob 3s ease-in-out infinite}
+  .row{display:flex;gap:10px;flex-wrap:wrap;justify-content:center}
+  .stat{display:flex;gap:18px;font-size:15px;color:var(--dim)} .stat b{color:var(--ink)}
+  .coins{display:flex;align-items:center;gap:8px;font-weight:900;font-size:22px;color:var(--gold)} .coins img{width:28px}
+  .coin-dot{width:22px;height:22px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#fff1a8,#ffd84d 55%,#d49a1e);border:2.5px solid #2d170f;display:inline-block;flex:none}
+  .cards{display:flex;flex-direction:column;gap:12px;width:min(440px,100%)}
+  .card{display:flex;align-items:center;gap:14px;text-align:left;width:100%;padding:14px 16px;border-radius:18px;border:2px solid rgba(255,255,255,.18);background:var(--glass);color:var(--ink);font:inherit;cursor:pointer;box-shadow:0 8px 20px rgba(0,0,0,.4);transition:transform .1s,border-color .1s}
+  .card:active,.card:hover{transform:scale(1.02);border-color:var(--lime)}
+  .card .ic{flex:none;width:52px;height:52px;border-radius:14px;display:grid;place-items:center;font-size:26px;font-weight:900;color:#10131c}
+  .card .nm{font-weight:900;font-size:19px} .card .ds{font-size:14px;color:var(--dim);margin-top:2px}
+  .card .pips{display:flex;gap:4px;margin-top:6px} .card .pip{width:16px;height:6px;border-radius:3px;background:rgba(255,255,255,.18)} .card .pip.on{background:var(--lime)}
+  .card .cost{margin-left:auto;font-weight:900;color:var(--gold);white-space:nowrap}
+  .card[disabled]{opacity:.45;cursor:default;transform:none;border-color:rgba(255,255,255,.1)}
+  .banner{font-size:15px;color:var(--lime);font-weight:800;letter-spacing:.16em}
+  #muteBtn{position:fixed;top:calc(10px + env(safe-area-inset-top));left:10px;z-index:5;width:44px;height:44px;border-radius:50%;border:0;background:rgba(0,0,0,.5);color:#fff;font-size:20px;cursor:pointer;display:none}
+  #muteBtn.on{display:block}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<button id="muteBtn" aria-label="Sound">🔊</button>
+
+<section class="scr" id="title">
+  <img class="deco" id="deco1" style="left:3vw;top:10vh" alt="">
+  <img class="deco" id="deco2" style="right:3vw;top:14vh;animation-delay:-1s" alt="">
+  <img class="deco" id="deco3" style="left:5vw;bottom:9vh;animation-delay:-2s" alt="">
+  <img class="deco" id="deco4" style="right:4vw;bottom:11vh;animation-delay:-.5s" alt="">
+  <h1>CELL<br>SERPENT</h1>
+  <img class="hero" src="assets/duo_sing.png" alt="RoxorLoops and Jasmin">
+  <div class="sub">A giant virus crawls toward your membrane. Your cell shoots on its own: drag to dodge, pick a new skill at every level-up, and destroy every segment before it leaks through.</div>
+  <button class="btn" id="playBtn">PLAY</button>
+  <button class="btn alt" id="shopBtn">UPGRADES</button>
+  <div class="stat"><span>Best chapter <b id="bestStat">0</b></span><span>Runs <b id="runStat">0</b></span><span class="coins" style="font-size:16px"><span class="coin-dot"></span><b id="coinStat" style="color:var(--gold)">0</b></span></div>
+</section>
+
+<section class="scr" id="shop">
+  <h2>UPGRADES</h2>
+  <div class="coins"><span class="coin-dot"></span><span id="shopCoins">0</span></div>
+  <div class="cards" id="shopList"></div>
+  <button class="btn dim" id="shopBack">BACK</button>
+</section>
+
+<section class="scr" id="levelup">
+  <div class="banner" id="luBanner">LEVEL UP</div>
+  <h2>Choose a skill</h2>
+  <div class="cards" id="cards"></div>
+</section>
+
+<section class="scr" id="pause">
+  <h2>PAUSED</h2>
+  <button class="btn" id="resumeBtn">RESUME</button>
+  <button class="btn dim" id="quitBtn">QUIT RUN</button>
+</section>
+
+<section class="scr" id="over">
+  <h2 id="overTitle">THE SERPENT WINS</h2>
+  <img class="hero" id="overImg" src="assets/duo_idle.png" style="width:min(220px,50vw)" alt="">
+  <div class="stat" style="flex-direction:column;align-items:center;gap:6px;font-size:18px">
+    <span>Reached chapter <b id="oStage">1</b> <span id="oBest" style="color:var(--gold)"></span></span>
+    <span>Kills <b id="oKills">0</b> &nbsp; Level <b id="oLevel">1</b> &nbsp; Score <b id="oScore">0</b></span>
+    <span class="coins"><span class="coin-dot"></span>+<span id="oCoins">0</span></span>
+  </div>
+  <button class="btn" id="againBtn">AGAIN</button>
+  <div class="row"><button class="btn alt" id="overShop">UPGRADES</button><button class="btn dim" id="overMenu">MENU</button></div>
+</section>
+
+<script type="module" src="main.js"></script>
+</body>
+</html>
