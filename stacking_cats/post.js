@@ -13,8 +13,12 @@ export function lightSprite(col, size = 64) {
   if (!c) {
     c = document.createElement('canvas'); c.width = c.height = size;
     const x = c.getContext('2d'), g = x.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
-    g.addColorStop(0, col); g.addColorStop(0.35, col); g.addColorStop(1, 'rgba(0,0,0,0)');
+    g.addColorStop(0, col); g.addColorStop(1, col);
     x.globalAlpha = 1; x.fillStyle = g; x.fillRect(0, 0, size, size);
+    // smooth, quadratic-like falloff instead of a flat core with a hard edge
+    const m = x.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
+    m.addColorStop(0, 'rgba(0,0,0,1)'); m.addColorStop(0.25, 'rgba(0,0,0,.72)'); m.addColorStop(0.6, 'rgba(0,0,0,.24)'); m.addColorStop(1, 'rgba(0,0,0,0)');
+    x.globalCompositeOperation = 'destination-in'; x.fillStyle = m; x.fillRect(0, 0, size, size); x.globalCompositeOperation = 'source-over';
     glowCache.set(key, c);
   }
   return c;
@@ -118,7 +122,7 @@ export function createPost(W, H) {
       ctx.save();
       ctx.globalCompositeOperation = 'lighter';
       const cx = W / 2, cy = H / 2;
-      for (const [u, r, col] of [[0.35, 26, '#ffe9b0'], [0.6, 14, '#ffb8e0'], [0.85, 36, '#b8e8ff'], [1.15, 18, '#fff3c0']]) {
+      for (const [u, r, col] of [[0.9, 36, '#b8e8ff'], [1.15, 18, '#fff3c0'], [1.4, 26, '#ffd8f0']]) {
         const x = sx + (cx - sx) * u, y = sy + (cy - sy) * u;
         ctx.globalAlpha = strength * (u > 1 ? 0.7 : 1);
         ctx.drawImage(lightSprite(col), x - r, y - r, r * 2, r * 2);

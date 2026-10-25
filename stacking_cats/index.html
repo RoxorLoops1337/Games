@@ -342,6 +342,79 @@ body.touch .card:hover{transform:none}body.touch #meter{top:164px}
 .btn.amber{background:linear-gradient(#fff3c8 0%,#ffd23a 55%,#f0a81a 100%);box-shadow:0 4px 0 #7a5410,0 6px 10px #0005,inset 0 1px 0 #fffc}
 .btn.purple{background:linear-gradient(#f2e6ff 0%,#c89cff 55%,#a870ee 100%);box-shadow:0 4px 0 #4a2a7a,0 6px 10px #0005,inset 0 1px 0 #fffc}
 body.touch .bag{height:52px}
+/* ===== round 4: UI polish (cards, arrange, title, HUD, touch, button roles, icons) ===== */
+.cards{align-items:stretch}
+.cards .card{min-height:236px;justify-content:flex-start}
+.card.item{border-top:9px solid #8a8aa0;min-height:236px}
+.card.item.r-rare{border-top-color:#2f7ad0}
+.card.item.r-epic{border-top-color:#b83ad0}
+.card.item .rar{position:static;align-self:center;font-size:15px;letter-spacing:1.5px;padding:1px 14px;border-radius:9px;margin:-2px 0 2px}
+.card.item .impact{background:transparent;border:1.5px dashed #c9bdd9;color:#7a6a90;font-size:12px;font-weight:600;opacity:.85}
+.card.item.r-rare::after,.card.item.r-epic::after{content:'';position:absolute;inset:0;border-radius:17px;pointer-events:none;background:linear-gradient(105deg,transparent 35%,rgba(255,255,255,.5) 50%,transparent 65%);background-size:250% 100%;background-position:150% 0;animation:rarshim 5s ease-in-out infinite}
+@keyframes rarshim{0%,55%{background-position:150% 0}100%{background-position:-50% 0}}
+@media (prefers-reduced-motion:reduce){.card.item::after{animation:none!important;display:none}}
+body.nomotion .card.item::after{display:none}
+
+/* arrange */
+.tfoot .btn,.tfoot .fbtn{min-height:44px}
+.tfoot .fbtn{font-size:16px;padding:3px 14px}
+.tfoot .btn.amber{background:linear-gradient(#fff3c8 0%,#ffd23a 55%,#f0a81a 100%)}
+.tfoot .btn.purple{background:linear-gradient(#f2e6ff 0%,#c89cff 55%,#9a5ce8 100%);color:#2a1050;border-color:#2a1050}
+.tfoot .btn.fbtn.grey[disabled]{background:#8a84a0;color:#4a4560;filter:none;opacity:.55;box-shadow:0 3px 0 #3a3550}
+.tfoot .btn.big2{min-height:48px;font-size:26px;padding:4px 34px}
+.sdps{font-size:16px;width:74px}.sdps small{font-size:12px}.sdps em{font-size:12px}
+.islot{width:34px;height:34px;font-size:20px}
+.screen.arr .col h4 span{text-shadow:0 2px 0 #271c33,0 0 6px #000a}
+.screen.arr .col h4{text-shadow:0 2px 0 #271c33,0 0 6px #000a}
+.screen.arr .slot:not(.has){height:30px;min-height:0}
+.slot.has .sc small{font-size:12px}
+
+/* title */
+.screen .logo+.tag{font-size:19px;background:rgba(21,15,38,.72);border-radius:999px;padding:3px 18px;margin:10px 0 16px;text-shadow:0 1px 0 #000}
+.btn.big{font-size:38px;padding:10px 68px}
+.screen .row>.btn:not(.big):not(.small){min-width:190px}
+.screen .row>.btn.small.grey{min-width:150px}
+.btn[data-act=dex]{background:linear-gradient(#f7f3fc 0%,#d8cdea 55%,#bfb0d8 100%);box-shadow:0 6px 0 #4a3a6a,0 10px 18px #0006,inset 0 2px 0 #fffc}
+.screen .hint{font-size:15px;background:rgba(21,15,38,.72);border-radius:999px;padding:3px 16px;text-shadow:0 1px 0 #000}
+
+/* HUD */
+#meter,#synBar{opacity:.6;transition:opacity .2s}
+#meter:hover,#synBar:hover{opacity:1}
+#zoom span{font-size:14px;font-weight:800}
+#zoom small{font-size:16px;font-weight:900}
+body.touch #zoom::before{display:none}
+#coinBox .ico,#chestBox .ico{font-size:22px;min-width:22px}
+#coinBox .gi,#chestBox .gi{width:22px;height:22px}
+.ib .gi{width:1.3em;height:1.3em}
+#tools .ib{font-size:20px}
+
+/* button roles */
+.btn.red{background:linear-gradient(#ffe0dc 0%,#ff9d90 55%,#f0695c 100%);color:#3a0f0a;box-shadow:0 5px 0 #8a2a22,0 8px 14px #0006,inset 0 2px 0 #fffc}
+.btn.red:active{box-shadow:0 2px 0 #8a2a22}
+.btn.small.red{box-shadow:0 4px 0 #8a2a22,0 6px 10px #0005,inset 0 1px 0 #fffc}
+.btn:focus-visible,.ib:focus-visible,.seg button:focus-visible,.tog:focus-visible,.card:focus-visible,.bag:focus-visible,#zoom:focus-visible{outline:3px solid #fff;outline-offset:3px;box-shadow:0 0 0 6px var(--grape)}
+@keyframes scrfirst{from{opacity:0;transform:translateY(-12px) scale(.94)}to{opacity:1;transform:none}}
+.screen>h2:first-child,.screen>.logo:first-child{animation:scrfirst .3s ease-out both}
+.screen>.logo:first-child{animation:scrfirst .3s ease-out both,bob 3.2s ease-in-out .3s infinite}
+body.nomotion .screen>:first-child{animation:none!important}
+@media (prefers-reduced-motion:reduce){.screen>:first-child{animation:none!important}}
+
+/* icons */
+.gi{filter:drop-shadow(0 1px 0 rgba(0,0,0,.35))}
+.card .ic .gi{filter:drop-shadow(0 3px 0 #0003)}
+
+/* text floor 12px */
+.tile small{font-size:12px}.slot .base{font-size:12px}.rb u{font-size:12px}.rb em{font-size:12px}.tog small{font-size:12px}
+.sdps small{font-size:12px}.impact{font-size:12.5px}
+.card.item .impact{font-size:12px}
+
+/* touch targets */
+body.touch .btn.small{min-height:44px}
+body.touch .seg button{min-height:44px}
+body.touch .islot{width:40px;height:40px;font-size:22px}
+body.touch .bag,body.touch .screen.arr .bag{height:48px}
+body.touch .tog{padding-top:12px;padding-bottom:12px}
+body.touch .tfoot .btn,body.touch .tfoot .fbtn{min-height:44px}
 </style>
 </head>
 <body>
