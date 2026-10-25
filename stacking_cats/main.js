@@ -693,6 +693,8 @@ function eventOptionHtml(o, i) {
     case 'blood': return head(it.icon, 'Offer blood', `Every cat loses ${Math.round(o.hp * 100)}% health. The shrine gives <b>${it.name}</b> (${it.desc}).`);
     case 'gamble': return head(it.icon, 'Make a wish', `${Math.round(o.chance * 100)}% chance of <b>${it.name}</b> (${it.desc}). Coins are gone either way.`);
     case 'curse': return head(it.icon, it.name, `${it.desc}. <b class="warn">Mice bite ${Math.round(o.hurt * 100)}% harder for the rest of the run.</b>`);
+    case 'snack': { const sn = SNACK_BY_ID[o.id]; return head(sn.icon, sn.name, sn.desc, `<div class="rar ${sn.kind === 'perm' ? 'rare' : 'common'}">${sn.kind === 'perm' ? 'whole run' : sn.kind === 'temp' ? '3 waves' : 'instant'}</div>`); }
+    case 'toss': return head('&#129689;', 'Toss ' + o.cost + ' coins', `${Math.round(o.chance * 100)}% chance to get ${o.prize} coins back.`);
     case 'train': { const c = S.findCat(g, o.uid); return head(`<img class="thumb" src="${thumbURL(c.id)}" alt="">`, CAT_BY_ID[c.id].name, `Trains hard: +${Math.round(o.bonus * 100)}% damage for the rest of the run.`); }
     default: return head('&#128062;', 'Move on', 'Walk away. Nothing happens.');
   }
@@ -1277,11 +1279,11 @@ function handle(e) {
       flashGlow(p.x, p.y, 120, col, 0.6); sparks(p.x, p.y, 16, col, 300, 0.5);
       txtFx(p.x + 60, p.y - 56, e.name + '!', col, 28, 1.3);
       screenFlash(col.length === 7 ? col + '33' : 'rgba(255,255,255,.2)', 0.22);
-      shake = Math.max(shake, 5); hit(0.06); slowmo(0.35, 0.3); sfx.play('zoom'); sfx.meow(e.id, 'happy');
+      shake = Math.max(shake, 5); hit(0.06); slowmo(0.35, 0.3); sfx.play('special'); sfx.meow(e.id, 'happy');
       if (e.kind === 'anthem') for (let i = 0; i < 8; i++) spawnFx({ k: 'h', x: p.x + (Math.random() - 0.3) * 160, y: p.y - 20, life: 1.2, max: 1.2 });
       break;
     }
-    case 'shieldbreak': ring(e.x, e.y, 46, '#8fd0ff', 0.4, 6); sparks(e.x, e.y, 12, '#cfe8ff', 240, 0.4); flashGlow(e.x, e.y, 44, '#8fd0ff', 0.4); sfx.play('pop', 0.6); break;
+    case 'shieldbreak': sfx.play('shield');  ring(e.x, e.y, 46, '#8fd0ff', 0.4, 6); sparks(e.x, e.y, 12, '#cfe8ff', 240, 0.4); flashGlow(e.x, e.y, 44, '#8fd0ff', 0.4); sfx.play('pop', 0.6); break;
     case 'leap': puff(e.x, e.y - 8, 6, '#d9c9a0', 90, 0.4, 4); ring(e.x, e.y + 2, 26, '#e8dcb8', 0.25, 3); break;
     case 'dig': puff(e.x, e.y, 14, '#8a6a48', 150, 0.6, 5); ring(e.x, e.y + 4, 42, '#a07a52', 0.35, 5); smoke(e.x, e.y, 2, 10, '#9a7a58'); shake = Math.max(shake, 2); sfx.play('pop', 0.5); break;
     case 'bubble': ring(e.x, e.y, 90, '#cfc0ff', 0.5, 6); flashGlow(e.x, e.y, 110, '#cfc0ff', 0.5); sfx.play('route'); break;

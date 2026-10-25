@@ -493,6 +493,8 @@ export const EVENTS = [
   { id: 'rest', name: 'Cozy Campfire', icon: '🔥', desc: 'A warm rest. Free, but only one choice.' },
   { id: 'deal', name: 'Shady Deal', icon: '🎭', desc: 'A masked mouse offers loot with a catch.' },
   { id: 'dojo', name: 'Training Yard', icon: '🥋', desc: 'Pick one cat to train for the rest of the run.' },
+  { id: 'picnic', name: 'Cat Picnic', icon: '🍱', desc: 'A blanket full of snacks. Take one, free.' },
+  { id: 'fountain', name: 'Wishing Fountain', icon: '🪙', desc: 'Toss in some coins and make a wish. It may pay back, it may not.' },
 ];
 export const EVENT_BY_ID = Object.fromEntries(EVENTS.map((e) => [e.id, e]));
 

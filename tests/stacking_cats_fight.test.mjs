@@ -170,4 +170,20 @@ t('the deal and training events change the run as promised', () => {
   }
 });
 
+t('picnic hands out a snack and the fountain pays back only sometimes, never beyond its stake in the long run', () => {
+  let picnic = false, wins = 0, tosses = 0, net = 0;
+  for (let s = 1; s < 400; s++) {
+    const g = newGame({ seed: s, unlocked: CATS.map((c) => c.id) }); addCat(g, 'mochi'); g.wave = 6; g.bossWave = false; g.run.coins = 1000;
+    const ev = rollEvent(g);
+    if (ev.id === 'picnic' && !picnic) { const n0 = g.perm.length + g.temp.length; assert.ok(chooseEvent(g, 0).ok); assert.ok(g.perm.length + g.temp.length >= n0); assert.equal(g.event.done, true); picnic = true; }
+    if (ev.id === 'fountain') {
+      const c0 = g.run.coins; const r = chooseEvent(g, 0); assert.ok(r.ok && r.again); tosses++; net += g.run.coins - c0; if (g.run.coins > c0) wins++;
+      assert.equal(chooseEvent(g, 0).ok, false, 'tossed the same coin twice');
+    }
+  }
+  assert.ok(picnic && tosses > 10);
+  assert.ok(wins > 0 && wins < tosses, 'fountain always or never pays');
+  assert.ok(net / tosses < 15, 'fountain is a money printer: ' + net / tosses);
+});
+
 console.log(n + ' tests passed');

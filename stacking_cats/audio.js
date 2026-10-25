@@ -146,7 +146,7 @@ export function songInfo(theme, mode) {
 }
 
 // music ducks under the big effects: [gain it dips to, seconds to recover]
-const DUCK = { boom: [0.55, 0.4], roar: [0.6, 0.55], thunder: [0.6, 0.9], boss: [0.5, 0.9], bang: [0.75, 0.25], win: [0.6, 1.2], over: [0.6, 1.2] };
+const DUCK = { boom: [0.55, 0.4], roar: [0.6, 0.55], thunder: [0.6, 0.9], boss: [0.5, 0.9], bang: [0.75, 0.25], special: [0.7, 0.5], win: [0.6, 1.2], over: [0.6, 1.2] };
 
 export class Sfx {
   constructor() {
@@ -269,6 +269,8 @@ export class Sfx {
       case 'win': [392, 523, 659, 784, 1046, 1318].forEach((f, i) => this.tone(f, 0.28, { type: 'triangle', v: 0.14, delay: i * 0.1 })); break;
       case 'over': [392, 330, 262, 196].forEach((f, i) => this.tone(f, 0.4, { type: 'triangle', v: 0.16, delay: i * 0.22 })); break;
       case 'zoom': this.tone(300, 0.5, { to: 1200, type: 'sawtooth', v: 0.12 }); break;
+      case 'special': [523, 659, 784, 1047, 1319].forEach((f, i) => this.tone(f, 0.22, { type: i % 2 ? 'triangle' : 'square', v: 0.09, delay: i * 0.045 })); this.tone(130, 0.5, { to: 260, type: 'sawtooth', v: 0.1 }); break;
+      case 'shield': this.tone(1500, 0.12, { to: 500, type: 'triangle', v: 0.1 }); this.noise(0.1, 0.07, 4500); break;
       case 'roar': this.tone(140, 0.5, { to: 60, type: 'sawtooth', v: 0.2 }); this.noise(0.4, 0.16, 600); break;
       default: break;
     }
