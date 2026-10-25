@@ -24,10 +24,10 @@ export function auditFight(hero, seed, graftSpec, extraCards = [], hook = null) 
   }
   if (hook) hook(run);
   run.hp = run.maxHp;
-  const hp0 = run.hp;
+  const hp0 = run.hp, gold0 = run.gold;
   run.pending = { enemies: pair, fightKind: 'normal' };
   const { res, c } = fight(run, POLICIES.careful, 30);
-  return { win: res.win, turns: res.turns, hpLost: hp0 - c.player.hp, maxHpLost: 0 };
+  return { win: res.win, turns: res.turns, hpLost: hp0 - c.player.hp, gold: run.gold - gold0 };
 }
 
 // legal (hero, cardId) targets for a graft
@@ -60,7 +60,7 @@ export function auditGraft(gid, N = 40, pool = 'starters', baseCache = new Map()
     const withG = Array.from({ length: N }, (_, i) => auditFight(t.hero, `au-${t.hero}-${i}`, { cardId: t.cardId, grafts: [gid] }, t.extra));
     const bt = mean(base.map((r) => r.turns)), gt = mean(withG.map((r) => r.turns));
     const bh = mean(base.map((r) => r.hpLost)), gh = mean(withG.map((r) => r.hpLost));
-    rows.push({ gid, hero: t.hero, cardId: t.cardId, baseTurns: bt, turns: gt, faster: (1 - gt / bt) * 100, baseHp: bh, hpLost: gh, hpBetter: bh > 0 ? (1 - gh / bh) * 100 : 0 });
+    rows.push({ gid, hero: t.hero, cardId: t.cardId, baseTurns: bt, turns: gt, faster: (1 - gt / bt) * 100, baseHp: bh, hpLost: gh, hpBetter: bh > 0 ? (1 - gh / bh) * 100 : 0, goldD: mean(withG.map((r) => r.gold)) - mean(base.map((r) => r.gold)) });
   }
   return rows;
 }
@@ -69,8 +69,10 @@ export function summarize(gid, rows) {
   const g = GRAFTS[gid];
   const faster = mean(rows.map((r) => r.faster)), hpBetter = mean(rows.map((r) => r.hpBetter));
   // headline power: turns faster, with HP saved counted at half weight (HP lost is the other face of the same speed)
-  const power = faster * 0.6 + hpBetter * 0.4;
-  return { gid, name: g.name, tier: g.tier, weight: g.weight, rarity: g.rarity, cards: rows.length, faster, hpBetter, power };
+  // gold is the third currency: 1 gold per fight counts as 0.5 points (a normal Act-1 fight pays 18)
+  const gold = mean(rows.map((r) => r.goldD));
+  const power = faster * 0.6 + hpBetter * 0.4 + gold * 0.5;
+  return { gid, name: g.name, tier: g.tier, weight: g.weight, rarity: g.rarity, cards: rows.length, faster, hpBetter, gold, power };
 }
 
 export function flagsFor(s) {
@@ -107,9 +109,9 @@ if (process.argv[1] && process.argv[1].endsWith('graftwork_audit.mjs')) {
   const N = +args.find((a) => /^\d+$/.test(a)) || 40;
   const opt = (k) => (args.find((a) => a.startsWith('--' + k + '=')) || '').split('=')[1] || null;
   const res = runAudit({ N, pool: opt('pool') || 'starters', tier: opt('tier'), only: opt('graft') });
-  console.log(`graft                 tier   w  rar        cards  faster%  hpSaved%  power  flags`);
+  console.log(`graft                 tier   w  rar        cards  faster%  hpSaved%  gold/f  power  flags`);
   for (const s of res) {
-    console.log(`${s.gid.padEnd(21)} ${s.tier.padEnd(6)} ${s.weight}  ${s.rarity.padEnd(9)} ${String(s.cards).padStart(5)}  ${s.faster.toFixed(1).padStart(7)}  ${s.hpBetter.toFixed(1).padStart(8)}  ${s.power.toFixed(1).padStart(5)}  ${flagsFor(s).join('; ')}`);
+    console.log(`${s.gid.padEnd(21)} ${s.tier.padEnd(6)} ${s.weight}  ${s.rarity.padEnd(9)} ${String(s.cards).padStart(5)}  ${s.faster.toFixed(1).padStart(7)}  ${s.hpBetter.toFixed(1).padStart(8)}  ${s.gold.toFixed(1).padStart(6)}  ${s.power.toFixed(1).padStart(5)}  ${flagsFor(s).join('; ')}`);
     if (args.includes('--rows')) for (const r of s.rows) console.log(`    ${r.hero}/${r.cardId}: turns ${r.baseTurns.toFixed(2)} -> ${r.turns.toFixed(2)} (${r.faster.toFixed(1)}%), hp ${r.baseHp.toFixed(1)} -> ${r.hpLost.toFixed(1)}`);
   }
   for (const w of [1, 2, 3]) {
