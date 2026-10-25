@@ -92,6 +92,7 @@ async function fight(opts, style = 'clicks') {
   frames(app, 5);
   const before = ctx.run.stats.fights;
   const ticks = playFight(app, ctx, style);
+  if (!ctx.routed.length) { const a = combat.api(); console.log('STUCK', a.busy, a.canAct, a.ending, a.queueLen, !!a.c.pending, a.c.turn, a.c.hand.length, a.c.energy, a.c.enemies.map((e) => e.id + ':' + e.hp + (e.dead ? 'x' : ''))); }
   assert.ok(ctx.routed.length > 0, `fight did not finish in ${MAX_TICKS} ticks: ${opts.enemies.join(',')} (${style})`);
   assert.notEqual(ctx.run.phase, 'combat', 'run did not leave combat');
   assert.equal(ctx.run.stats.fights, before + 1, 'resolveFight was not applied exactly once');
