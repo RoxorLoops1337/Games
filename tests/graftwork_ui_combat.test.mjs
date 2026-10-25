@@ -62,7 +62,7 @@ function playFight(app, ctx, style) {
       plays++; idle = 0; continue;
     }
     let hi = -1;
-    for (let i = 0; i < c.hand.length; i++) { if (canPlay(c, i).ok) { hi = i; break; } }
+    for (let i = 0; i < c.hand.length; i++) { const ck = canPlay(c, i); if (ck.ok && (hi < 0 || (ck.spec.type === 'attack' && c.hand[hi] && canPlay(c, hi).spec.type !== 'attack'))) hi = i; }
     if (hi < 0 || guard > 60) { guard = 0; click(app, a.endTurn.x, a.endTurn.y); ticks += 2; idle = 0; continue; }
     guard++;
     const live = c.enemies.map((e, i) => (e.dead ? -1 : i)).filter((i) => i >= 0);
