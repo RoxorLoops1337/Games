@@ -1,0 +1,41 @@
+<!doctype html>
+<meta charset="utf-8"><title>art_ui lab</title>
+<style>body{margin:0;background:#111;color:#eee;font:12px sans-serif}canvas{display:block}</style>
+<canvas id="c"></canvas>
+<script type="module">
+import * as A from '../js/art_entities.js';
+// ?what=glyphs|gear|crates|frames|all&t=1.5&s=2
+const q = new URLSearchParams(location.search);
+const what = q.get('what') || 'all', t = +q.get('t') || 1.5;
+A.setArtScale(+q.get('s') || 2);
+const c = document.getElementById('c'), ctx = c.getContext('2d');
+const W = 900; c.width = W; c.height = what === 'all' ? 1500 : 900;
+ctx.fillStyle = '#241650'; ctx.fillRect(0, 0, W, c.height);
+let y = 20;
+function label(s) { ctx.fillStyle = '#fff'; ctx.font = '13px sans-serif'; ctx.fillText(s, 10, y); y += 12; }
+if (what === 'glyphs' || what === 'all') {
+  label('glyphs 44px, then 22px');
+  const names = A.GLYPH_NAMES;
+  names.forEach((n, i) => { const x = 40 + (i % 15) * 58, yy = y + 30 + Math.floor(i / 15) * 62; A.drawGlyph(ctx, n, x, yy, 44); });
+  y += Math.ceil(names.length / 15) * 62 + 20;
+  names.forEach((n, i) => A.drawGlyph(ctx, n, 20 + i * 28, y + 10, 22)); y += 36;
+  label('hero currency 120px'); ['coin', 'diamond', 'record', 'heart', 'star', 'fans', 'lock', 'crown'].forEach((n, i) => A.drawGlyph(ctx, n, 70 + i * 105, y + 70, 100)); y += 150;
+}
+if (what === 'gear' || what === 'all') {
+  label('gear: 5 slots x 5 rarities, 60px');
+  const slots = ['head', 'mic', 'body', 'chain', 'feet'], rar = ['common', 'rare', 'epic', 'legendary', 'mythic'];
+  slots.forEach((s, r) => rar.forEach((ra, i) => { const x = 50 + i * 80 + (r % 2) * 440, yy = y + 40 + Math.floor(r / 2) * 80; A.drawRarityFrame(ctx, ra, x, yy, 66, 66, t); A.drawGear(ctx, s, 'x' + r, ra, x, yy, 46); }));
+  y += 270;
+}
+if (what === 'crates' || what === 'all') {
+  label('crates closed, shaking, opening 40%, open 100%');
+  ['garage', 'studio', 'platinum'].forEach((tier, r) => [{}, { shake: 1 }, { open: 0.4 }, { open: 1 }].forEach((o, i) => A.drawCrate(ctx, tier, 90 + i * 210, y + 90 + r * 190, 130, Object.assign({ t }, o))));
+  y += 580;
+}
+if (what === 'frames' || what === 'all') {
+  label('rarity frames 150x200 at t=0, 1, 2');
+  ['common', 'rare', 'epic', 'legendary', 'mythic'].forEach((ra, i) => [0, 1.2, 2.4].forEach((tt, j) => A.drawRarityFrame(ctx, ra, 90 + i * 170, y + 110 + j * 0 + (j ? 0 : 0), 140, 180, t + tt * (j ? 1 : 0))));
+  y += 230;
+}
+window.__done = true;
+</script>

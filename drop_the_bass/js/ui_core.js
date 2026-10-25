@@ -36,7 +36,7 @@ export function h(tag, attrs, ...kids) {
 const live = [];
 export function canvasOf(w, h, draw, opts = {}) {
   const c = document.createElement('canvas');
-  const dpr = 2;
+  const dpr = typeof window !== 'undefined' && window.devicePixelRatio ? Math.min(3, Math.max(2, Math.ceil(window.devicePixelRatio))) : 2;
   c.width = Math.round(w * dpr); c.height = Math.round(h * dpr);
   c.style.width = w + 'px'; c.style.height = h + 'px';
   const ctx = c.getContext('2d');
