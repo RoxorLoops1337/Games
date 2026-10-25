@@ -1509,6 +1509,25 @@ function render(dt) {
 // ---------------------------------------------------------------- input
 function togglePause() { if (mode !== 'play') return; if (paused) { paused = false; closeScreen(); } else showPause(); }
 function doZoomies() { if (mode === 'play' && !paused && S.useZoomies(g)) drain(); }
+// full screen: the Fullscreen API where the browser has it (Android, desktop); iPhone Safari has none, so the button stays hidden there
+const fsEl = document.documentElement;
+const fsReq = fsEl.requestFullscreen || fsEl.webkitRequestFullscreen;
+function isFull() { return !!(document.fullscreenElement || document.webkitFullscreenElement); }
+function toggleFull() {
+  try {
+    if (isFull()) { (document.exitFullscreen || document.webkitExitFullscreen).call(document); return; }
+    const r = fsReq.call(fsEl);
+    const lock = () => { try { screen.orientation.lock('landscape').catch(() => {}); } catch (e) { /* not supported */ } };
+    if (r && r.then) r.then(lock, () => {}); else lock();
+  } catch (e) { /* refused */ }
+}
+if (fsReq && !matchMedia('(display-mode: standalone)').matches) {
+  $('bFull').hidden = false;
+  $('bFull').addEventListener('click', () => { sfx.unlock(); toggleFull(); });
+  const syncFull = () => $('bFull').classList.toggle('on', isFull());
+  document.addEventListener('fullscreenchange', () => { syncFull(); fit(); });
+  document.addEventListener('webkitfullscreenchange', () => { syncFull(); fit(); });
+}
 function toggleSpeed() { speed = speed === 1 ? 2 : 1; $('bSpeed').textContent = 'x' + speed; }
 $('bPause').addEventListener('click', () => { sfx.unlock(); togglePause(); });
 $('bSpeed').addEventListener('click', () => { sfx.unlock(); toggleSpeed(); });
@@ -1521,6 +1540,7 @@ addEventListener('keydown', (e) => {
   if (k === ' ') { e.preventDefault(); doZoomies(); }
   else if (k === 'p' || k === 'escape') togglePause();
   else if (k === 'f') toggleSpeed();
+  else if (k === 'g' && !$('bFull').hidden) toggleFull();
   else if (k === 'd') { save.meter = !save.meter; persist(); meterT = 0; }
   else if (k === 'm') { save.sound = !save.sound; sfx.on = save.sound; persist(); }
 });
