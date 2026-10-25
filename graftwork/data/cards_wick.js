@@ -1,0 +1,46 @@
+const burnT = (n) => ({ op: 'status', s: 'burn', n });
+const burnAll = (n) => ({ op: 'status', s: 'burn', n, to: 'all' });
+const charge = (n) => ({ op: 'status', s: 'charge', n, to: 'self' });
+const spendCharge = { op: 'setStatus', s: 'charge', n: 0 };
+const chargeVal = (base, mul) => ({ base, per: 'st:charge@player', mul });
+
+export const CARDS_WICK = [
+  { id: 'w_spark', name: 'Spark', hero: 'wick', type: 'attack', cost: 1, rarity: 'starter', fx: [{ op: 'dmg', n: 6 }], up: { fx: [{ op: 'dmg', n: 9 }] }, flavor: 'It only needs one.' },
+  { id: 'w_snuff', name: 'Snuff', hero: 'wick', type: 'skill', cost: 1, rarity: 'starter', target: 'self', fx: [{ op: 'block', n: 5 }], up: { fx: [{ op: 'block', n: 8 }] }, flavor: 'Fingers wet, flame gone.' },
+  { id: 'w_kindle', name: 'Kindle', hero: 'wick', type: 'attack', cost: 1, rarity: 'starter', school: 'ember', fx: [{ op: 'dmg', n: 4 }, { op: 'status', s: 'burn', n: 3 }], up: { fx: [{ op: 'dmg', n: 5 }, { op: 'status', s: 'burn', n: 5 }] }, flavor: 'Blow gently.' },
+  { id: 'w_match', name: "Wick's Last Match", hero: 'wick', type: 'attack', cost: 0, rarity: 'starter', school: 'ember', fx: [{ op: 'status', s: 'burn', n: 6 }], flags: { exhaust: true }, up: { fx: [{ op: 'status', s: 'burn', n: 9 }] }, flavor: 'He had more. Somewhere.' },
+  { id: 'w_flare', name: 'Flare', hero: 'wick', type: 'attack', cost: 2, rarity: 'starter', target: 'all', fx: [{ op: 'dmg', n: 8, to: 'all' }], up: { fx: [{ op: 'dmg', n: 12, to: 'all' }] }, flavor: 'Look away.' },
+  { id: 'w_fan', name: 'Fan the Flames', hero: 'wick', type: 'skill', cost: 1, rarity: 'starter', school: 'ember', fx: [{ op: 'double', s: 'burn', cap: 24 }], flags: { exhaust: true }, up: { fx: [{ op: 'double', s: 'burn', cap: 40 }], cost: 0 }, flavor: 'Air is a kind of fuel.' },
+  { id: 'w_trim', name: 'Trim the Wick', hero: 'wick', type: 'skill', cost: 0, rarity: 'starter', target: 'self', fx: [{ op: 'block', n: 2 }, { op: 'draw', n: 1 }], up: { fx: [{ op: 'block', n: 4 }, { op: 'draw', n: 1 }] }, flavor: 'Neater burns longer.' },
+
+  // ---------------- common ----------------
+  { id: 'w_ember_toss', name: 'Ember Toss', hero: 'wick', type: 'attack', cost: 1, rarity: 'common', school: 'ember', fx: [{ op: 'dmg', n: 7 }, burnT(2)], up: { fx: [{ op: 'dmg', n: 9 }, burnT(3)] }, flavor: 'Catch it by the cool end.' },
+  { id: 'w_cinder_rain', name: 'Cinder Rain', hero: 'wick', type: 'attack', cost: 1, rarity: 'common', school: 'ember', target: 'all', fx: [{ op: 'dmg', n: 4, to: 'all' }, burnAll(2)], up: { fx: [{ op: 'dmg', n: 5, to: 'all' }, burnAll(3)] }, flavor: 'Everyone gets a little.' },
+  { id: 'w_static_cling', name: 'Static Cling', hero: 'wick', type: 'skill', cost: 0, rarity: 'common', school: 'static', target: 'self', fx: [charge(2)], up: { fx: [charge(3)] }, flavor: 'Wool, friction, regret.' },
+  { id: 'w_discharge', name: 'Discharge', hero: 'wick', type: 'attack', cost: 1, rarity: 'common', school: 'static', fx: [{ op: 'dmg', n: chargeVal(4, 2) }, spendCharge], up: { fx: [{ op: 'dmg', n: chargeVal(5, 3) }, spendCharge] }, flavor: 'Touch the doorknob. Mean it.' },
+  { id: 'w_scald', name: 'Scald', hero: 'wick', type: 'attack', cost: 1, rarity: 'common', school: 'ember', fx: [{ op: 'dmg', n: 9 }, burnT(3), { op: 'hp', n: 4 }], up: { fx: [{ op: 'dmg', n: 12 }, burnT(4), { op: 'hp', n: 4 }] }, flavor: 'The handle was also hot.' },
+  { id: 'w_leather_apron', name: 'Leather Apron', hero: 'wick', type: 'skill', cost: 1, rarity: 'common', school: 'static', target: 'self', fx: [{ op: 'block', n: 7 }, charge(1)], up: { fx: [{ op: 'block', n: 9 }, charge(2)] }, flavor: 'Insulating, mostly.' },
+  { id: 'w_wax_drip', name: 'Wax Drip', hero: 'wick', type: 'skill', cost: 1, rarity: 'common', school: 'ember', target: 'enemy', fx: [{ op: 'block', n: 6 }, burnT(3)], up: { fx: [{ op: 'block', n: 8 }, burnT(4)] }, flavor: 'Cools into a lesson.' },
+  { id: 'w_quick_flick', name: 'Quick Flick', hero: 'wick', type: 'attack', cost: 0, rarity: 'common', school: 'ember', fx: [{ op: 'dmg', n: 2 }, burnT(2)], up: { fx: [{ op: 'dmg', n: 4 }, burnT(3)] }, flavor: 'Thumbnail, flint, hope.' },
+  { id: 'w_blowtorch', name: 'Blowtorch', hero: 'wick', type: 'attack', cost: 2, rarity: 'common', school: 'ember', fx: [{ op: 'dmg', n: 14 }, burnT(3)], up: { fx: [{ op: 'dmg', n: 18 }, burnT(4)] }, flavor: 'Borrowed from the pipe fitter.' },
+  { id: 'w_tinder_stack', name: 'Tinder Stack', hero: 'wick', type: 'skill', cost: 1, rarity: 'common', school: 'ember', target: 'self', fx: [{ op: 'draw', n: 2 }, { op: 'hp', n: 2 }], up: { fx: [{ op: 'draw', n: 3 }, { op: 'hp', n: 2 }] }, flavor: 'Carried against the chest.' },
+  { id: 'w_spark_gap', name: 'Spark Gap', hero: 'wick', type: 'attack', cost: 1, rarity: 'common', school: 'static', fx: [{ op: 'dmg', n: 6 }, charge(2)], up: { fx: [{ op: 'dmg', n: 8 }, charge(3)] }, flavor: 'Two wires and a bad idea.' },
+
+  // ---------------- uncommon ----------------
+  { id: 'w_flashpoint', name: 'Flashpoint', hero: 'wick', type: 'attack', cost: 1, rarity: 'uncommon', school: 'ember', fx: [{ op: 'detonate', s: 'burn' }], up: { fx: [{ op: 'detonate', s: 'burn', mul: 1.5 }] }, flavor: 'All the heat, all at once.' },
+  { id: 'w_capacitor_bank', name: 'Capacitor Bank', hero: 'wick', type: 'skill', cost: 'X', rarity: 'uncommon', school: 'static', target: 'self', fx: [{ op: 'status', s: 'charge', n: { base: 0, per: 'x', mul: 3 }, to: 'self' }], up: { fx: [{ op: 'status', s: 'charge', n: { base: 1, per: 'x', mul: 4 }, to: 'self' }] }, flavor: 'Store now, regret later.' },
+  { id: 'w_arc_flash', name: 'Arc Flash', hero: 'wick', type: 'attack', cost: 2, rarity: 'uncommon', school: 'static', target: 'all', fx: [{ op: 'dmg', n: chargeVal(8, 3), to: 'all' }, spendCharge], up: { fx: [{ op: 'dmg', n: chargeVal(10, 4), to: 'all' }, spendCharge] }, flavor: 'Brief, bright, and thorough.' },
+  { id: 'w_pyre_dance', name: 'Pyre Dance', hero: 'wick', type: 'attack', cost: 1, rarity: 'uncommon', school: 'ember', fx: [{ op: 'dmg', n: { base: 5, per: 'st:burn@target', mul: 0.5 } }], up: { fx: [{ op: 'dmg', n: { base: 7, per: 'st:burn@target', mul: 0.6 } }] }, flavor: 'Hot feet, enthusiastic.' },
+  { id: 'w_wildfire_spread', name: 'Spreading Rumor', hero: 'wick', type: 'skill', cost: 1, rarity: 'uncommon', school: 'ember', target: 'all', fx: [burnAll(4), { op: 'hp', n: 3 }], up: { fx: [burnAll(6), { op: 'hp', n: 3 }] }, flavor: 'Fire travels by word of mouth.' },
+  { id: 'w_burnout', name: 'Burnout', hero: 'wick', type: 'attack', cost: 2, rarity: 'uncommon', school: 'ember', fx: [{ op: 'dmg', n: 18 }, burnT(4)], flags: { exhaust: true }, up: { fx: [{ op: 'dmg', n: 22 }, burnT(5)] }, flavor: 'Bright is not the same as lasting.' },
+  { id: 'w_slow_match', name: 'Slow Match', hero: 'wick', type: 'power', cost: 1, rarity: 'uncommon', school: 'ember', target: 'self', fx: [{ op: 'status', s: 'smolder', n: 2, to: 'self' }], up: { fx: [{ op: 'status', s: 'smolder', n: 3, to: 'self' }] }, flavor: 'Patience, applied to others.' },
+  { id: 'w_wax_armor', name: 'Wax Armor', hero: 'wick', type: 'power', cost: 1, rarity: 'uncommon', school: 'ember', target: 'self', fx: [{ op: 'status', s: 'waxarmor', n: 3, to: 'self' }], up: { fx: [{ op: 'status', s: 'waxarmor', n: 4, to: 'self' }] }, flavor: 'Hardens as the neighbors burn.' },
+
+  // ---------------- rare ----------------
+  { id: 'w_chain_reaction', name: 'Chain Reaction', hero: 'wick', type: 'skill', cost: 2, rarity: 'rare', school: 'ember', target: 'all', fx: [{ op: 'detonate', s: 'burn', to: 'all' }], flags: { exhaust: true }, up: { fx: [{ op: 'detonate', s: 'burn', to: 'all' }], cost: 1 }, flavor: 'The safety sheet was optimistic.' },
+  { id: 'w_backdraft', name: 'Backdraft', hero: 'wick', type: 'attack', cost: 3, rarity: 'rare', school: 'ember', target: 'all', fx: [{ op: 'dmg', n: 12, to: 'all' }, burnAll(5)], flags: { exhaust: true }, up: { fx: [{ op: 'dmg', n: 16, to: 'all' }, burnAll(6)] }, flavor: 'Do not open that door.' },
+  { id: 'w_pilot_light', name: 'Pilot Light', hero: 'wick', type: 'power', cost: 2, rarity: 'rare', school: 'ember', target: 'self', fx: [{ op: 'status', s: 'emberaura', n: 2, to: 'self' }], up: { fx: [{ op: 'status', s: 'emberaura', n: 2, to: 'self' }], cost: 1 }, flavor: 'Always on. Always a problem.' },
+  { id: 'w_wildfire', name: 'Wildfire', hero: 'wick', type: 'power', cost: 1, rarity: 'rare', school: 'ember', target: 'self', fx: [{ op: 'status', s: 'wildfire', n: 1, to: 'self' }], up: { fx: [{ op: 'status', s: 'wildfire', n: 1, to: 'self' }], cost: 0 }, flavor: 'The dead make excellent kindling.' },
+  { id: 'w_dynamo', name: 'Dynamo', hero: 'wick', type: 'power', cost: 2, rarity: 'rare', school: 'static', target: 'self', fx: [{ op: 'status', s: 'dynamo', n: 2, to: 'self' }], up: { fx: [{ op: 'status', s: 'dynamo', n: 3, to: 'self' }] }, flavor: 'Hand-cranked by an intern.' },
+  { id: 'w_powder_keg', name: 'Powder Keg', hero: 'wick', type: 'power', cost: 1, rarity: 'rare', school: 'ember', target: 'self', fx: [{ op: 'status', s: 'powderkeg', n: 1, to: 'self' }], up: { fx: [{ op: 'status', s: 'powderkeg', n: 1, to: 'self' }, { op: 'block', n: 8 }] }, flavor: 'You are the fuse. Please sit still.' },
+];

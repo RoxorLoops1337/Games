@@ -91,6 +91,7 @@ const STATIC_PATHS = [
   'ludus_maximus_3d',
   'blockmates',
   'stacking_cats',
+  'graftwork',
   'rustgrift',
   'midnight_mog',
   'drop_the_bass',
