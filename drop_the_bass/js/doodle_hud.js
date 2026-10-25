@@ -153,8 +153,16 @@ export function text(ctx, s, x, y, size, color, align = 'left', weight = 900, o)
   }
   ctx.save();
   ctx.font = (size >= 15 ? 'bold ' : '') + size + 'px ' + FONT; ctx.textAlign = align; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round';
-  ctx.lineWidth = Math.max(3, size * 0.26); ctx.strokeStyle = INK; ctx.strokeText(s, x, y + 1);
-  ctx.fillStyle = color; ctx.fillText(s, x, y);
+  // the paper panels are light: pale neutral text (white, lavender) becomes ink with a white halo so it reads on paper and on the dark board; coloured text keeps its colour with a thin ink outline
+  let paleNeutral = false;
+  if (isHex(color)) { const h = hex6(color).slice(1), r = parseInt(h.slice(0, 2), 16), g = parseInt(h.slice(2, 4), 16), b = parseInt(h.slice(4, 6), 16); paleNeutral = (r + g + b) / 3 > 140 && Math.max(r, g, b) - Math.min(r, g, b) < 60; }
+  if (paleNeutral) {
+    ctx.lineWidth = Math.max(3, size * 0.22); ctx.strokeStyle = '#fffdf4'; ctx.strokeText(s, x, y + 1);
+    ctx.fillStyle = INK; ctx.fillText(s, x, y);
+  } else {
+    ctx.lineWidth = Math.max(2.5, size * 0.14); ctx.strokeStyle = INK; ctx.strokeText(s, x, y + 1);
+    ctx.fillStyle = color; ctx.fillText(s, x, y);
+  }
   ctx.restore();
 }
 export function wrapText(ctx, s, x, y, maxW, size, lh, color, align = 'left') {
