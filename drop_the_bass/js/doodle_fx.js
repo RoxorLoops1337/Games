@@ -1,7 +1,7 @@
 // doodle_fx.js: the DOODLE effects layer (crayon notebook style). Drop-in replacements for the Fx draw methods in fx.js, called as fn(fx, ctx, ...).
 // No glow, no additive blending, no gradients, no blur, no bloom, no chromatic fringe, no vignette: effects are flat crayon marks (wobbly rings,
 // inked stars, dashed trails, tape-coloured daubs), combat numbers are the kit stroke font with a white halo, and the "post" pass is a paper grain
-// overlay plus a red crayon border when the stage is low. Jitter comes from a hash of position and the boil frame (never Math.random or Date).
+// overlay plus a red crayon border when the stage is low. Jitter comes from a hash of position and the boil frame (no unseeded randomness, no clock).
 // Safe in node with a mock ctx (text sprites fall back to live drawing when there is no document).
 import * as K from './doodle_kit.js';
 
