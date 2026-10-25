@@ -6,7 +6,7 @@ import { drawHero } from './art_heroes.js';
 
 let ART_SCALE = 2;
 const cacheBg = new Map(), cacheBoard = new Map(), glowCache = new Map(), misc = new Map();
-export function setArtScale(n) { ART_SCALE = Math.max(1, Math.min(3, n || 2)); cacheBg.clear(); cacheBoard.clear(); glowCache.clear(); misc.clear(); }
+export function setArtScale(n) { ART_SCALE = Math.max(1, Math.min(3, n || 2)); cacheBg.clear(); cacheBoard.clear(); glowCache.clear(); misc.clear(); baseSprites.clear(); heroBuf.cv = null; heroBuf.key = ''; }
 export function makeCanvas(w, h) {
   if (typeof document === 'undefined' || !document.createElement) return null;
   const c = document.createElement('canvas'); c.width = Math.max(1, Math.ceil(w)); c.height = Math.max(1, Math.ceil(h)); return c;
@@ -35,8 +35,9 @@ function hexRgb(hex) {
   let h = hex.slice(1); if (h.length === 3) h = h[0] + h[0] + h[1] + h[1] + h[2] + h[2];
   return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)];
 }
-function hexA(hex, a) { if (hex[0] === 'r' && hex[3] === 'a') return hex; const c = hexRgb(hex); return 'rgba(' + c[0] + ',' + c[1] + ',' + c[2] + ',' + a + ')'; }
-function mix(a, b, k) { const pa = hexRgb(a), pb = hexRgb(b); return 'rgb(' + Math.round(lerp(pa[0], pb[0], k)) + ',' + Math.round(lerp(pa[1], pb[1], k)) + ',' + Math.round(lerp(pa[2], pb[2], k)) + ')'; }
+const memoA = new Map(), memoMix = new Map();
+function hexA(hex, a) { if (hex[0] === 'r' && hex[3] === 'a') return hex; const key = hex + a; let v = memoA.get(key); if (v === undefined) { const c = hexRgb(hex); v = 'rgba(' + c[0] + ',' + c[1] + ',' + c[2] + ',' + a + ')'; if (memoA.size > 4000) memoA.clear(); memoA.set(key, v); } return v; }
+function mix(a, b, k) { const key = a + b + k; let v = memoMix.get(key); if (v === undefined) { const pa = hexRgb(a), pb = hexRgb(b); v = 'rgb(' + Math.round(lerp(pa[0], pb[0], k)) + ',' + Math.round(lerp(pa[1], pb[1], k)) + ',' + Math.round(lerp(pa[2], pb[2], k)) + ')'; if (memoMix.size > 4000) memoMix.clear(); memoMix.set(key, v); } return v; }
 function vgrad(ctx, y0, y1, c0, c1, c2) { const g = ctx.createLinearGradient(0, y0, 0, y1); g.addColorStop(0, c0); if (c2) { g.addColorStop(0.5, c1); g.addColorStop(1, c2); } else g.addColorStop(1, c1); return g; }
 function hgrad(ctx, x0, x1, c0, c1) { const g = ctx.createLinearGradient(x0, 0, x1, 0); g.addColorStop(0, c0); g.addColorStop(1, c1); return g; }
 
@@ -358,7 +359,7 @@ function clubDyn(ctx, w, h, t, beat) {
   const hz = h * 0.58, cols = ['#ff4fd0', '#2fe6ff', '#9dff3a'];
   for (let i = 0; i < 7; i++) { const ox = w * (0.1 + i * 0.13), a = Math.PI / 2 + Math.sin(t * 1.2 + i * 1.1) * 0.75; cone(ctx, ox, 44, a, h * 0.95, 0.07, cols[i % 3], 0.34 + beat * 0.15); bloom(ctx, ox, 44, 26, cols[i % 3], 0.8); }
   ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.lineWidth = 1.6;
-  for (let i = 0; i < 6; i++) { const ox = w * (0.15 + i * 0.14), a = Math.PI / 2 + Math.sin(t * 2.1 + i * 1.7) * 1.0; ctx.strokeStyle = hexA(cols[(i + 1) % 3], 0.5); ctx.beginPath(); ctx.moveTo(ox, 40); ctx.lineTo(ox + Math.cos(a) * h, 40 + Math.sin(a) * h); ctx.stroke(); }
+  for (let i = 0; i < 4; i++) { const ox = w * (0.15 + i * 0.23), a = Math.PI / 2 + Math.sin(t * 2.1 + i * 1.7) * 1.0; ctx.strokeStyle = hexA(cols[(i + 1) % 3], 0.5); ctx.beginPath(); ctx.moveTo(ox, 40); ctx.lineTo(ox + Math.cos(a) * h, 40 + Math.sin(a) * h); ctx.stroke(); }
   ctx.restore();
   const bx = w * 0.5, by = h * 0.2, r = Math.min(w, h) * 0.07; line(ctx, bx, -4, bx, by - r, 2, '#aaa'); const bg = ctx.createRadialGradient(bx - r * 0.3, by - r * 0.3, r * 0.1, bx, by, r); bg.addColorStop(0, '#e4e8ff'); bg.addColorStop(1, '#6a70a0'); circle(ctx, bx, by, r, bg, 2.4);
   for (let i = 0; i < 22; i++) { const a = t * 1.5 + i * 1.7, fx = bx + Math.cos(a) * r * 0.8 * Math.sin(i), fy = by + Math.sin(i * 3.1) * r * 0.82; if (Math.cos(a) > 0) { ctx.fillStyle = ['#fff', '#2fe6ff', '#ff4fd0'][i % 3]; ctx.fillRect(fx - 2, fy - 2, 4, 4); } }
@@ -366,7 +367,7 @@ function clubDyn(ctx, w, h, t, beat) {
   for (let i = 0; i < 12; i++) { const a = t * 0.6 + i * 0.53, sx = (Math.cos(a) * 0.5 + 0.5) * w, sy = hz * 0.15 + (Math.sin(a * 1.3) * 0.5 + 0.5) * hz * 0.8; bloom(ctx, sx, sy, 10 + beat * 6, cols[i % 3], 0.5); }
   // floor tiles pulse with the beat and the haze drifts
   const fl = ctx.createLinearGradient(0, hz, 0, h); fl.addColorStop(0, hexA(cols[Math.floor(t * 0.5) % 3], 0.1 + beat * 0.2)); fl.addColorStop(1, 'rgba(0,0,0,0)'); ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = fl; ctx.fillRect(0, hz, w, h - hz); ctx.restore();
-  for (let i = 0; i < 4; i++) { const fx = ((t * 14 + i * w * 0.4) % (w * 1.6)) - w * 0.3; bloom(ctx, fx, h * (0.5 + i * 0.1), w * 0.5, '#b890ff', 0.1); }
+  for (let i = 0; i < 2; i++) { const fx = ((t * 14 + i * w * 0.7) % (w * 1.6)) - w * 0.3; bloom(ctx, fx, h * (0.55 + i * 0.12), w * 0.5, '#b890ff', 0.12); }
   ctx.fillStyle = 'rgba(0,0,0,.9)'; for (let i = 0; i < 2; i++) { const row = i ? h * 0.97 : h * 0.9; crowdRow(ctx, w, row + Math.sin(t * 4 + i) * (3 + beat * 4), i ? 78 : 56, 9 + i * 12, i ? '#040108' : '#080212', true); }
 }
 
@@ -509,9 +510,17 @@ function buildBg(id, w, h) {
     if (!fn) return null; const cv = makeCanvas((w + 2 * M) * s, (h + 2 * M) * s); if (!cv) return null;
     const cc = cv.getContext('2d'); if (!cc) return null; cc.scale(s, s); cc.translate(M, M); fn(cc, w, h); return cv;
   };
-  const e = { far: mk(st.far, sc * 0.5), mid: mk(st.mid, sc), near: mk(st.near, sc), ok: false };
-  e.ok = !!(e.mid || e.far || e.near);
-  return e;
+  const layers = [mk(st.far, sc * 0.5), mk(st.mid, sc), mk(st.near, sc)];
+  if (!layers.some(Boolean)) return { img: null };
+  // one baked image per stage: far (soft), mid and near composited, then the horizon haze and the vignette, so a frame costs one full-screen blit
+  const img = makeCanvas(w * sc, h * sc), ic = img && img.getContext('2d');
+  if (!ic) return { img: null };
+  ic.scale(sc, sc);
+  for (const l of layers) if (l) ic.drawImage(l, -M, -M, w + 2 * M, h + 2 * M);
+  const hz = hzOf(h), gr = GRADE[id] || '#ff5fb0';
+  const hg = ic.createLinearGradient(0, hz - h * 0.12, 0, hz + h * 0.1); hg.addColorStop(0, hexA(gr, 0)); hg.addColorStop(0.5, hexA(gr, 0.1)); hg.addColorStop(1, hexA(gr, 0)); ic.fillStyle = hg; ic.fillRect(0, hz - h * 0.12, w, h * 0.22);
+  const vg = ic.createRadialGradient(w / 2, h / 2, Math.min(w, h) * 0.32, w / 2, h / 2, Math.hypot(w, h) * 0.58); vg.addColorStop(0, 'rgba(4,0,16,0)'); vg.addColorStop(1, 'rgba(4,0,16,.62)'); ic.fillStyle = vg; ic.fillRect(0, 0, w, h);
+  return { img };
 }
 
 export function drawBackdrop(ctx, id, w, h, t, o) {
@@ -521,18 +530,13 @@ export function drawBackdrop(ctx, id, w, h, t, o) {
   const key = id + '|' + Math.round(w) + '|' + Math.round(h) + '|' + ART_SCALE;
   let e = cacheBg.get(key);
   if (!e) { e = buildBg(id, w, h); if (cacheBg.size > 10) cacheBg.delete(cacheBg.keys().next().value); cacheBg.set(key, e); }
-  if (e.ok) {
-    const dx = Math.sin(t * 0.13) * 4;                           // slow parallax drift, mid layer stays put so dynamic lights line up
-    if (e.far) ctx.drawImage(e.far, -M + dx * 0.4, -M, w + 2 * M, h + 2 * M);
-    if (e.mid) ctx.drawImage(e.mid, -M, -M, w + 2 * M, h + 2 * M);
-    if (e.near) ctx.drawImage(e.near, -M - dx * 0.8, -M, w + 2 * M, h + 2 * M);
-  } else { ctx.save(); ctx.translate(M, M); for (const fn of [st.far, st.mid, st.near]) if (fn) fn(ctx, w, h); ctx.restore(); }
+  if (e.img) ctx.drawImage(e.img, 0, 0, w, h);
+  else {
+    ctx.save(); ctx.translate(M, M); for (const fn of [st.far, st.mid, st.near]) if (fn) fn(ctx, w, h); ctx.restore();
+    const v = vignetteCanvas(w, h); if (v) ctx.drawImage(v, 0, 0, w, h);
+  }
   st.dyn(ctx, w, h, t, beat);
-  // atmosphere: horizon haze in the stage grade, a beat pulse, then the vignette
-  const hz = hzOf(h), gr = GRADE[id] || '#ff5fb0';
-  const hg = ctx.createLinearGradient(0, hz - h * 0.12, 0, hz + h * 0.1); hg.addColorStop(0, hexA(gr, 0)); hg.addColorStop(0.5, hexA(gr, 0.1 + beat * 0.06)); hg.addColorStop(1, hexA(gr, 0)); ctx.fillStyle = hg; ctx.fillRect(0, hz - h * 0.12, w, h * 0.22);
-  if (beat > 0.02) bloom(ctx, w / 2, hz, Math.max(w, h) * 0.55, gr, 0.1 * beat);
-  const v = vignetteCanvas(w, h); if (v) ctx.drawImage(v, 0, 0, w, h);
+  if (beat > 0.02) bloom(ctx, w / 2, hzOf(h), Math.max(w, h) * 0.55, GRADE[id] || '#ff5fb0', 0.1 * beat);
   staticCreep(ctx, w, h, t, o.staticAmt || 0);
   ctx.restore();
 }
@@ -660,7 +664,8 @@ export function drawBoard(ctx, mapId, worldId, t, o) {
   if (e.cv) ctx.drawImage(e.cv, BOARD_X - e.pad, BOARD_Y - e.pad, BOARD_W + e.pad * 2, BOARD_H + e.pad * 2); else boardStatic(ctx, mapId, worldId);
   ctx.save(); rr(ctx, BOARD_X, BOARD_Y, BOARD_W, BOARD_H, 12); ctx.clip();
   // soft light in each buildable pad that breathes with the beat
-  for (const s of m.buildable) bloom(ctx, s.x, s.y, 34, th.padHi, 0.05 + beat * 0.08 + 0.02 * Math.sin(t * 2 + s.c + s.r));
+  const pg = glowTex(th.padHi);
+  if (pg) { ctx.save(); ctx.globalCompositeOperation = 'lighter'; for (const s of m.buildable) { ctx.globalAlpha = 0.05 + beat * 0.08 + 0.02 * Math.sin(t * 2 + s.c + s.r); ctx.drawImage(pg, s.x - 34, s.y - 34, 68, 68); } ctx.restore(); }
   // chevrons and travelling light pulses along every lane
   for (const lane of m.lanes) {
     const sp = 54, off = (t * 34) % sp;
@@ -695,32 +700,63 @@ export function drawBoard(ctx, mapId, worldId, t, o) {
 
 // ================================================================================================================ STAGE BASE
 // The stage the Static are attacking. (x,y) = stage tile centre. A lit rig with a screen, speakers and the duo; reacts to hp, hit and the beat.
+const baseSprites = new Map();
+const heroBuf = { cv: null, key: '' };
+function heroSprite(pose, t) {
+  if (heroBuf.cv === null) { const cv = makeCanvas(88 * ART_SCALE, 52 * ART_SCALE); heroBuf.cv = cv || false; }
+  if (!heroBuf.cv) return null;
+  const key = pose + '|' + Math.floor(t * 15);
+  if (heroBuf.key !== key) {
+    const c = heroBuf.cv.getContext('2d'); if (!c) return null;
+    c.setTransform(1, 0, 0, 1, 0, 0); c.clearRect(0, 0, heroBuf.cv.width, heroBuf.cv.height); c.scale(ART_SCALE, ART_SCALE); c.translate(44, 26);
+    drawHero(c, 'roxor', -11, 7, 38, { t, pose }); drawHero(c, 'jasmin', 11, 7, 36, { t: t + 0.4, pose: pose === 'beat' ? 'sing' : pose });
+    heroBuf.key = key;
+  }
+  return heroBuf.cv;
+}
+function baseSprite(worldId, ok) {
+  const key = worldId + '|' + ok + '|' + ART_SCALE;
+  if (baseSprites.has(key)) return baseSprites.get(key);
+  const wd = WORLD_BY_ID[worldId] || { accent: '#ff5fb0' }, acc = wd.accent, PW = 120, PH = 100, cv = makeCanvas(PW * ART_SCALE, PH * ART_SCALE), c = cv && cv.getContext('2d');
+  let e = null;
+  if (c) {
+    c.scale(ART_SCALE, ART_SCALE); c.translate(PW / 2, 62);
+    shadow(c, 0, 16, 42, 8, 0.6);
+    litRect(c, -29, -35, 58, 36, 4, ok ? '#1c1040' : '#241c30', 2.8);
+    line(c, -33, -41, 33, -41, 4.6, '#55557a'); line(c, -33, -42.4, 33, -42.4, 1.2, 'rgba(255,255,255,.4)');
+    for (const sd of [-1, 1]) { litRect(c, sd * 31 - 7, -24, 14, 30, 3, '#2e2456', 2.6); circle(c, sd * 31, -9, 5.4, '#0a0618', 1.8); circle(c, sd * 31 - 1, -10, 2, '#4a3c88', 0); circle(c, sd * 31, -18, 2.2, acc, 0); }
+    litRect(c, -36, 0, 72, 15, 5, '#46347a', 3); c.save(); rr(c, -36, 0, 72, 15, 5); c.clip(); c.fillStyle = hexA(acc, 0.7); c.fillRect(-36, 0, 72, 4); c.fillStyle = 'rgba(255,255,255,.2)'; c.fillRect(-36, 4, 72, 1.4); c.restore();
+    e = { cv, PW, PH };
+  }
+  baseSprites.set(key, e); return e;
+}
+// The stage the Static are attacking. (x,y) = stage tile centre. A lit rig with a screen, speakers and the duo; reacts to hp, hit and the beat.
 export function drawStageBase(ctx, worldId, x, y, o) {
   o = o || {}; const t = o.t || 0, hp = o.hp == null ? 1 : clamp(o.hp, 0, 1), hit = clamp(o.hit || 0, 0, 1), beat = clamp(o.beat || 0, 0, 1);
   const wd = WORLD_BY_ID[worldId] || { accent: '#ff5fb0' }, acc = wd.accent, ok = hp > 0.34;
   ctx.save(); ctx.translate(x + (hit > 0.05 ? Math.sin(t * 90) * 2.6 * hit : 0), y + 5);
   bloom(ctx, 0, -10, 70, acc, ok ? 0.28 + beat * 0.2 : 0.08);
-  shadow(ctx, 0, 16, 42, 8, 0.6);
-  // light beams from the truss
-  if (ok) for (let i = 0; i < 3; i++) cone(ctx, -18 + i * 18, -38, -Math.PI / 2 + (i - 1) * 0.35 + Math.sin(t * 1.4 + i) * 0.18, 110, 0.12, ['#ff5fb0', '#2fe6ff', '#ffd23c'][i], 0.22 + beat * 0.15);
-  // LED screen
-  litRect(ctx, -29, -35, 58, 36, 4, ok ? '#1c1040' : '#241c30', 2.8);
+  if (ok) for (let i = 0; i < 3; i++) cone(ctx, -18 + i * 18, -38, -Math.PI / 2 + (i - 1) * 0.35 + Math.sin(t * 1.4 + i) * 0.18, 100, 0.12, ['#ff5fb0', '#2fe6ff', '#ffd23c'][i], 0.22 + beat * 0.15);
+  const sp = baseSprite(worldId, ok);
+  if (sp) ctx.drawImage(sp.cv, -sp.PW / 2, -62, sp.PW, sp.PH);
+  else {
+    shadow(ctx, 0, 16, 42, 8, 0.6); litRect(ctx, -29, -35, 58, 36, 4, ok ? '#1c1040' : '#241c30', 2.8); line(ctx, -33, -41, 33, -41, 4.6, '#55557a');
+    for (const sd of [-1, 1]) litRect(ctx, sd * 31 - 7, -24, 14, 30, 3, '#2e2456', 2.6);
+    litRect(ctx, -36, 0, 72, 15, 5, '#46347a', 3);
+  }
+  // LED screen contents
   ctx.save(); rr(ctx, -26, -32, 52, 30, 3); ctx.clip(); ctx.fillStyle = '#0a0620'; ctx.fillRect(-26, -32, 52, 30);
   for (let i = 0; i < 10; i++) { const bh = (ok ? (0.18 + 0.82 * Math.abs(Math.sin(t * (2.2 + hn(i) * 3) + i)) * (0.5 + beat * 0.5)) : 0.1 + 0.1 * Math.abs(Math.sin(t * 30 + i))) * 26; ctx.fillStyle = i % 3 ? acc : '#2fe6ff'; ctx.fillRect(-24 + i * 5, -4 - bh, 3.4, bh); }
-  if (!ok) { for (let i = 0; i < 3; i++) { ctx.fillStyle = 'rgba(200,196,214,' + (0.15 + 0.2 * Math.abs(Math.sin(t * 20 + i))) + ')'; ctx.fillRect(-26, -30 + ((t * 40 + i * 11) % 28), 52, 2); } }
+  if (!ok) for (let i = 0; i < 3; i++) { ctx.fillStyle = 'rgba(200,196,214,' + (0.15 + 0.2 * Math.abs(Math.sin(t * 20 + i))) + ')'; ctx.fillRect(-26, -30 + ((t * 40 + i * 11) % 28), 52, 2); }
   ctx.fillStyle = 'rgba(255,255,255,.1)'; ctx.fillRect(-26, -32, 52, 7); ctx.restore();
-  // truss with four lights
-  line(ctx, -33, -41, 33, -41, 4.6, '#55557a'); line(ctx, -33, -42.4, 33, -42.4, 1.2, 'rgba(255,255,255,.4)');
   for (let i = 0; i < 4; i++) { const on = ok || Math.sin(t * 17 + i * 3) > 0, lc = ['#ff5fb0', '#2fe6ff', '#ffd23c', '#9dff3a'][i]; circle(ctx, -21 + i * 14, -38, 3.8, on ? lc : '#403858', 1.8); if (on) bloom(ctx, -21 + i * 14, -38, 20, lc, 0.7); }
-  // speaker towers with pumping cones
-  for (const s of [-1, 1]) { litRect(ctx, s * 31 - 7, -24, 14, 30, 3, '#2e2456', 2.6); circle(ctx, s * 31, -9, 5.4 + beat * 1.6, '#0a0618', 1.8); circle(ctx, s * 31 - 1, -10, 2, '#4a3c88', 0); circle(ctx, s * 31, -18, 2.2, acc, 0); }
-  // stage slab
-  litRect(ctx, -36, 0, 72, 15, 5, '#46347a', 3); ctx.save(); rr(ctx, -36, 0, 72, 15, 5); ctx.clip(); ctx.fillStyle = hexA(acc, 0.7); ctx.fillRect(-36, 0, 72, 4); ctx.fillStyle = 'rgba(255,255,255,.2)'; ctx.fillRect(-36, 4, 72, 1.4); ctx.restore();
+  for (const sd of [-1, 1]) circle(ctx, sd * 31, -9, 1.6 + beat * 2.4, acc, 0);
   const pose = hp <= 0.34 ? 'sad' : hit > 0.2 ? 'shock' : (hp > 0.7 ? 'cheer' : 'beat');
-  drawHero(ctx, 'roxor', -11, 7, 38, { t, pose });
-  drawHero(ctx, 'jasmin', 11, 7, 36, { t: t + 0.4, pose: pose === 'beat' ? 'sing' : pose });
+  // the duo is re-drawn into a small sprite about 15 times a second: the hero art is detailed, the stage is tiny
+  const hs = heroSprite(pose, t);
+  if (hs) ctx.drawImage(hs, -44, -26, 88, 52);
+  else { drawHero(ctx, 'roxor', -11, 7, 38, { t, pose }); drawHero(ctx, 'jasmin', 11, 7, 36, { t: t + 0.4, pose: pose === 'beat' ? 'sing' : pose }); }
   if (hit > 0.05) { rr(ctx, -38, -44, 76, 62, 8); ctx.fillStyle = 'rgba(255,60,80,' + hit * 0.35 + ')'; ctx.fill(); bloom(ctx, 0, -8, 60, '#ff3c50', hit * 0.5); }
-  // damage: sparks and a grey fuzz creeping onto the slab as the health drops
   if (hp < 0.6) for (let i = 0; i < 3; i++) { const k = (t * 2 + i * 0.37) % 1; if (k < 0.3) { ctx.fillStyle = 'rgba(255,230,140,' + (1 - k / 0.3) + ')'; ctx.fillRect(-26 + hn(i + Math.floor(t * 2)) * 52, -30 + k * 40, 2.2, 2.2); } }
   if (hp < 0.5) for (let i = 0; i < 5; i++) { const fx = (i % 2 ? 1 : -1) * (30 + (i >> 1) * 4), fy = 10 - (i % 3) * 3, r = 4 + (1 - hp) * 5 + Math.sin(t * 6 + i) * 0.6; ctx.beginPath(); for (let k = 0; k < 12; k++) { const a = k / 12 * TAU, rd = r * (k % 2 ? 0.7 : 1.1); const px = fx + Math.cos(a) * rd, py = fy + Math.sin(a) * rd; k ? ctx.lineTo(px, py) : ctx.moveTo(px, py); } ctx.closePath(); ctx.fillStyle = '#c9c4d6'; ctx.fill(); circle(ctx, fx - 1.4, fy - 1, 1.5, '#fff', 0); circle(ctx, fx + 1.4, fy - 1, 1.5, '#fff', 0); circle(ctx, fx - 1.2, fy - 1, 0.7, OUT, 0); circle(ctx, fx + 1.6, fy - 1, 0.7, OUT, 0); }
   ctx.restore();
