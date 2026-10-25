@@ -1,5 +1,5 @@
 // Procedural art for the mice and rats, the nests and the parallax backdrops.
-import { TAU, INK, mix, shade, lineOf, ell, cel, poly, fillPath, star, line, mulberry, hash, outlineCanvas } from './art_util.js';
+import { TAU, INK, mix, shade, lineOf, ell, cel, poly, fillPath, star, line, mulberry, hash, outlineCanvas, rimLight } from './art_util.js';
 
 const B = [-20, -50, 20, 0];
 function limb(ctx, x, y, rx, ry, fill, lw = 0.9) { fillPath(ctx, ell(ctx, x, y, rx, ry), fill, lw); }
@@ -140,7 +140,7 @@ export function enemySprite(type, elite) {
     fillPath(ctx, poly(ctx, [[-8, hy], [-8, hy - 8], [-4, hy - 4], [0, hy - 10], [4, hy - 4], [8, hy - 8], [8, hy]]), '#ffd23f', 0.9);
     ctx.restore();
   }
-  const r = { c: outlineCanvas(c, 2, '#2a1840', 0.85), ax, ay, w: W, h: H };
+  const r = { c: outlineCanvas(rimLight(c, 2, '#fff0c0', 0.4), 2, '#2a1840', 0.85), ax, ay, w: W, h: H };
   spriteCache.set(key, r);
   return r;
 }

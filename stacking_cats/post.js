@@ -64,7 +64,9 @@ export function createPost(W, H) {
         lctx.globalAlpha = Math.min(1, l.a == null ? 1 : l.a);
         lctx.drawImage(lightSprite(l.col), l.x / LS - r, l.y / LS - r, r * 2, r * 2);
       }
-      lctx.globalAlpha = 1; lctx.globalCompositeOperation = 'source-over';
+      // a whisper of noise breaks up the banding that 8-bit multiplies show in dark, smooth gradients (night themes)
+      lctx.globalAlpha = 0.035; lctx.globalCompositeOperation = 'source-over'; lctx.drawImage(noiseCv, 0, 0, lightCv.width, lightCv.height);
+      lctx.globalAlpha = 1;
       ctx.save();
       ctx.globalCompositeOperation = 'multiply';
       ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
