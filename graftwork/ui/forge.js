@@ -234,7 +234,7 @@ function drawForgeAnim(app, a) {
 
 export default {
   enter(app) { S = { fx: new Fx(), modal: { m: null }, h: {}, anim: null, toast: '', toastT: 0, log: [], t: 0, shakeI: -1, shakeT: 0 }; },
-  leave() { S = null; },
+
   update(app, dt) {
     if (!S) return; S.t += dt;
     S.shakeT = Math.max(0, S.shakeT - dt);

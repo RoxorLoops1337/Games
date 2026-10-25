@@ -494,7 +494,7 @@ export default {
     S.quip = pickQ('greet', hashStr(String(run.seed) + ':' + run.act + ':' + run.row + ':' + (run.node || '')));
     void params;
   },
-  leave() { S = null; },
+
   update(app, dt) {
     if (!S) return;
     S.t += dt; S.quipT += dt; S.react = Math.max(0, S.react - dt * 1.4);

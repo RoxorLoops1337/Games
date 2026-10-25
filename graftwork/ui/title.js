@@ -245,7 +245,7 @@ export default {
         y += step + 14; continue;
       }
       if (id === 'new') {
-        if (app.button('New Run', x, yy, bw, bh, { size: 22 })) { if (this.hasSave) { this.confirmAbandon = true; } else this.openSelect(app); }
+        if (app.button('New Run', x, yy, bw, bh, { size: 22 })) { if (this.hasSave) { this.confirmAbandon = true; app.mouse.released = false; } else this.openSelect(app); }
       } else if (id === 'daily') {
         const seed = todaySeed(), hero = RUN.dailyHero(seed), played = meta.dailyPlayed === seed;
         const hn = HEROES[hero].name;

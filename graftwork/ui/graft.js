@@ -169,7 +169,7 @@ function drawTopBar(app, strain, interactive) {
   app.text(`Budget ${strain.weight}/${strain.budget}`, 24, 8, { size: 25, bold: true, color: strain.strain > 0 ? '#ff9aa6' : COL.vellum, shadow: true });
   drawGauge(app, 24, 42, 360, 16, strain.weight, strain.budget, 0, st.t);
   if (app.inRect(24, 6, 372, 58)) app.tooltip('Budget', 'The total graft weight your deck carries for free. Every point over Budget is Strain, and each Strain Tithes one Bare card: it fights at -25% numbers that combat. Strain with no Bare card left to take it becomes Backfire.', { color: COL.lamp });
-  const sx = 420;
+  const sx = 470;
   app.text(`Strain ${strain.strain}`, sx, 8, { size: 25, bold: true, color: strain.strain > 0 ? COL.bad : COL.good, shadow: true });
   app.text(strain.strain === 0 ? 'Nothing is Tithed' : `${strain.tithed.length} card${strain.tithed.length === 1 ? '' : 's'} Tithed now${strain.backfire ? `, Backfire ${strain.backfire}` : ''}`, sx, 40, { size: 15, ui: true, color: DIM });
   if (app.inRect(sx - 6, 6, 250, 58)) app.tooltip('Strain', 'Weight over Budget. Each point lands a Tithe on the cheapest, oldest Bare card in your deck.', { color: COL.bad });
@@ -221,7 +221,7 @@ function drawOfferCard(app, r, i, c) {
   } else {
     drawCard(ctx, cardSpec(inst), cx, cy, { scale: SC, tithed, selected: sel, hover, dim: dim ? 0.5 : 0 });
   }
-  if (dim) { ctx.save(); ctx.fillStyle = 'rgba(12,10,9,.58)'; app.rr(cx - CW / 2, cy - CH / 2, CW, CH, 12); ctx.fill(); ctx.restore(); }
+  if (dim) { ctx.save(); ctx.fillStyle = 'rgba(12,10,9,.58)'; app.rr(cx - CW / 2, cy - CH / 2, CW, CH, 12); ctx.fill(); ctx.restore(); app.text('Cannot take it', cx, cy - 10, { size: 22, bold: true, align: 'center', color: '#ffb3bd', stroke: '#1a0a0c', strokeW: 5 }); }
   // tithe seam (preview or current)
   const seamP = seamProgress(r.uid);
   if (tithed && !pairSel) drawSeam(ctx, cx, cy, CW - 10, CH - 14, seamP, st.t);
@@ -309,11 +309,16 @@ function drawPatchBody(app, g, x, y, w, h, o) {
   // swatch
   const sw = 64, sx = x + 12, sy = y + 12, sh = h - 24;
   ctx.save(); app.rr(sx, sy, sw, sh, 6); ctx.clip();
-  ctx.fillStyle = rgba(sc, 0.28); ctx.fillRect(sx, sy, sw, sh);
-  drawGraftPatch(ctx, g, sx, sy, sw, sh, { tier: g.tier, weight: g.weight, compact: true });
+  const fg = ctx.createLinearGradient(sx, sy, sx + sw, sy + sh);
+  fg.addColorStop(0, rgba(sc, 0.75)); fg.addColorStop(1, rgba(sc, 0.3));
+  ctx.fillStyle = fg; ctx.fillRect(sx, sy, sw, sh);
+  ctx.strokeStyle = 'rgba(14,12,10,.22)'; ctx.lineWidth = 1; ctx.beginPath();
+  for (let i = -sh; i < sw; i += 6) { ctx.moveTo(sx + i, sy); ctx.lineTo(sx + i + sh * 0.7, sy + sh); }
+  ctx.stroke();
   ctx.restore();
   ctx.lineWidth = 1.5; ctx.strokeStyle = sc; app.rr(sx, sy, sw, sh, 6); ctx.stroke();
-  drawSchoolGlyph(ctx, g.school, sx + sw / 2, sy + sh - 16, 11, sc);
+  ctx.beginPath(); ctx.arc(sx + sw / 2, sy + sh / 2, 21, 0, 6.283); ctx.fillStyle = 'rgba(20,16,14,.82)'; ctx.fill(); ctx.strokeStyle = sc; ctx.lineWidth = 2; ctx.stroke();
+  drawSchoolGlyph(ctx, g.school, sx + sw / 2, sy + sh / 2, 15, sc);
   ctx.restore();
 
   const tx = x + 88, tw = w - 88 - 12;
@@ -424,9 +429,9 @@ function drawAfter(app, c) {
     ctx.globalAlpha = isNew || !pair ? 1 : 0.65;
     app.rr(cx, cy, cw, chipH, 6); ctx.fillStyle = '#2a1114'; ctx.fill(); ctx.strokeStyle = isNew ? '#ff4d63' : 'rgba(179,38,58,.7)'; ctx.lineWidth = isNew ? 2 : 1.5; ctx.stroke();
     ctx.restore();
-    app.text(label, cx + cw / 2, cy + 6, { size: 14, ui: true, bold: true, align: 'center', color: COL.vellum });
     const p = anim ? seamProgress(u) : 1;
-    drawSeam(ctx, cx + cw / 2, cy + chipH / 2, cw - 4, chipH, p, st.t);
+    ctx.save(); ctx.globalAlpha = 0.75; drawSeam(ctx, cx + cw / 2, cy + chipH / 2, cw - 6, chipH - 8, p, st.t); ctx.restore();
+    app.text(label, cx + cw / 2, cy + 6, { size: 14, ui: true, bold: true, align: 'center', color: COL.vellum, stroke: '#1a0a0c', strokeW: 4 });
     if (hov) app.tooltip(label, (isNew ? 'Newly Tithed by this graft. ' : 'Already Tithed. ') + 'Fights at -25% numbers that combat.', { color: COL.bad });
     cx += cw + 8; shown++;
   }
@@ -582,8 +587,8 @@ function advanceAnim(app, d) {
   if (a.t >= T(T_CLUNK) && !f.clunk) {
     f.clunk = 1;
     fx.hitstop(40);
-    fx.emit({ x: cx + 52, y: cy + 112, n: 30, colors: [col, '#ffffff', COL.lamp], speed: 340, life: 0.8, size: 4.5, glow: true, gravity: 380 });
-    fx.ring(cx + 52, cy + 112, col, 150, 0.5);
+    fx.emit({ x: cx + 36, y: cy + 92, n: 30, colors: [col, '#ffffff', COL.lamp], speed: 340, life: 0.8, size: 4.5, glow: true, gravity: 380 });
+    fx.ring(cx + 36, cy + 92, col, 150, 0.5);
     if (!st.reduce) fx.shake(0.3);
   }
   if (a.t >= T(T_TITHE) && s.newTithed.length) {
@@ -631,7 +636,7 @@ function drawAttach(app) {
   const col = schoolColor(s.g.school);
   const tier = TIER[s.g.tier] || TIER.safe;
   const cx = s.cardR.cx, cy = s.cardR.cy - 18;
-  const tx = cx + 52, ty = cy + 112, tw = 112, th = 66;
+  const tx = cx + 36, ty = cy + 92, tw = 150, th = 100;
   const fly = EASE.inOut(clamp(t / T_FLY, 0, 1));
   const sx = s.patchR.x + s.patchR.w / 2, sy = s.patchR.y + s.patchR.h / 2;
   const px = lerp(sx, tx, fly), py = lerp(sy, ty, fly) - Math.sin(Math.PI * fly) * 90;
@@ -642,10 +647,7 @@ function drawAttach(app) {
   if (fly < 1) {
     drawPatchBody(app, s.g, -w / 2, -h / 2, w, h, { tier, sc: col, compact: true, sel: true, hover: false, dim: false });
   } else {
-    app.rr(-tw / 2, -th / 2, tw, th, 8); ctx.fillStyle = '#2b231e'; ctx.fill(); ctx.shadowBlur = 0;
-    ctx.lineWidth = 2; ctx.strokeStyle = col; ctx.stroke();
-    ctx.save(); app.rr(-tw / 2 + 6, -th / 2 + 6, 44, th - 12, 5); ctx.clip(); ctx.fillStyle = rgba(col, 0.3); ctx.fillRect(-tw / 2, -th / 2, tw, th); drawGraftPatch(ctx, s.g, -tw / 2 + 6, -th / 2 + 6, 44, th - 12, { tier: s.g.tier, compact: true }); ctx.restore();
-    drawSchoolGlyph(ctx, s.g.school, tw / 2 - 26, 0, 12, col);
+    drawGraftPatch(ctx, s.g, -tw / 2, -th / 2, tw, th, {});
     // needle + thread zigzag, six stitches
     const sp = clamp((t - T_STITCH) / (T_CLUNK - T_STITCH), 0, 1);
     const n = 6, cnt = sp * n;

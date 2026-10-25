@@ -127,11 +127,11 @@ for (const [i, hero] of ['marrow', 'wick', 'odile'].entries()) {
   // reset needs two confirms
   meta.stats.wins = 5; saveRun(RUN.newRun({ seed: 'x' }));
   const ry = 306 + 5 * 46 + 22;
-  click(app, 140, ry + 4 + 20); frames(app, 2); assert.equal(settings.reset, 1);
+  click(app, 450, ry + 4 + 20); frames(app, 2); assert.equal(settings.reset, 1);
   assert.equal(meta.stats.wins, 5, 'not erased after one confirm');
-  click(app, 100, ry + 26 + 19); frames(app, 2); assert.equal(settings.reset, 2);
+  click(app, 420, ry + 26 + 19); frames(app, 2); assert.equal(settings.reset, 2);
   assert.equal(meta.stats.wins, 5);
-  click(app, 100, ry + 26 + 19); frames(app, 2);
+  click(app, 420, ry + 26 + 19); frames(app, 2);
   assert.equal(meta.stats.wins, 0, 'erased after second confirm'); assert.equal(hasRun(), false);
   assert.equal(meta.settings.reducedMotion, true, 'settings survive a reset');
   key(app, 'Escape'); assert.equal(app.stack.length, 1, 'esc closes');
@@ -153,7 +153,7 @@ async function endRun(phase, withInfo) {
   assert.equal(end.won, true); assert.equal(end.news.length, 3);
   app.mouse.x = 400; app.mouse.y = 300; frames(app, 5);                 // hover over grid
   app.mouse.wheel = 200; frames(app, 3);
-  click(app, 640 - 427 + 200 + 100 + 231, 685);                         // Endless
+  click(app, 531, 685);                         // Endless
   assert.equal(run.phase, 'map'); assert.equal(run.ended, false); assert.equal(run.endInfo, undefined); assert.equal(run.loop, 1); assert.equal(log.routed, 1);
 }
 {

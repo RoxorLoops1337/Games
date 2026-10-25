@@ -1,6 +1,7 @@
 // Small drawing + rules helpers for the graft table and reward screens (pure canvas, no state).
 import { COL, EASE, clamp, rgba } from './core.js';
 import { SCHOOLS, GRAFTS, CARDS } from '../data/index.js';
+import * as ICONS from '../art/icons.js';
 import { cardSpec } from '../engine/cards.js';
 import { OVERLOAD_SHATTER, relicMod } from '../engine/cards.js';
 
@@ -132,6 +133,7 @@ export function drawCrack(ctx, cx, cy, w, h, p = 1, t = 0) {
 // If art/icons ever ships drawBudgetGauge with a matching contract the screens can swap it in; this one has the preview cells.
 export function drawGauge(app, x, y, w, h, weight, budget, addW = 0, t = 0) {
   const ctx = app.ctx;
+  if (ICONS.drawBudgetGauge) { ICONS.drawBudgetGauge(ctx, x + 5, y + (h - 22) / 2, w - 10, weight, budget, addW); return { x, y, w, h }; }
   const total = clamp(Math.max(budget, weight + Math.max(0, addW), 1), 1, 30);
   const gap = 4;
   const cw = Math.min(34, (w - gap * (total - 1)) / total);
