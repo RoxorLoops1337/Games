@@ -232,6 +232,7 @@ export function drawCrate(ctx, tier, x, y, size, o) {
   const B = bucket(size), unit = B * getScale() / 100, k = size / 100;
   const body = bake('crate:b:' + tr + ':' + B, 110, 110, unit, (pen) => crateBody(tools(pen, B), pen, tr), hashStr('cb' + tr));
   const lid = bake('crate:l:' + tr + ':' + B, 110, 110, unit, (pen) => crateLid(tools(pen, B), pen, tr), hashStr('cl' + tr));
+  const inside = bake('crate:i:' + tr + ':' + B, 110, 110, unit, (pen) => { const g = tools(pen, B); pen.shp(pen.blob(0, -5, 33, 8, 12, 0.05), '#3b2a2a', INK, g.LW * 0.8, { gap: g.GAP }); pen.shp(pen.blob(0, -4, 24, 4.5, 10, 0.05), (CRATE[tr] || CRATE.garage).glow, null, 0, { gap: g.GAP, alpha: 0.9 }); }, hashStr('ci' + tr));
   const rays = bake('crate:r:' + tr + ':' + B, 110, 110, unit, (pen) => crateRays(tools(pen, B), pen, tr), hashStr('cr' + tr));
   const d = size * 1.1;
   ctx.save();
@@ -239,7 +240,8 @@ export function drawCrate(ctx, tier, x, y, size, o) {
   ctx.rotate(Math.sin(t * 33) * 0.07 * shake);
   if (open > 0.02) { ctx.globalAlpha *= clamp(open * 1.4, 0, 1); put(ctx, rays, 0, -4 * k - open * 8 * k, d, d, t); ctx.globalAlpha /= clamp(open * 1.4, 0, 1) || 1; }
   put(ctx, body, 0, 0, d, d, t);
-  ctx.save(); ctx.translate(0, -4 * k); ctx.translate(-30 * k * open * 0.5, -34 * k * open); ctx.rotate(-0.5 * open); ctx.translate(0, 4 * k);
+  if (open > 0.04) { ctx.globalAlpha *= clamp(open * 3, 0, 1); put(ctx, inside, 0, 0, d, d, t); ctx.globalAlpha /= clamp(open * 3, 0, 1) || 1; }
+  ctx.save(); ctx.translate(-open * 3 * k, -open * 30 * k); ctx.translate(0, -4 * k); ctx.scale(1, 1 - 0.32 * open); ctx.rotate(-0.1 * open); ctx.translate(0, 4 * k);
   put(ctx, lid, 0, 0, d, d, t); ctx.restore();
   if (tr === 'platinum') { // glitter that twinkles on the best crate
     for (let i = 0; i < 4; i++) { const a = t * 1.3 + i * 1.7, s = (0.5 + 0.5 * Math.sin(t * 5 + i * 2)) * 7 * k; if (s > 1.2) { ctx.save(); ctx.translate(Math.cos(a) * 40 * k, Math.sin(a * 1.3) * 28 * k - 4 * k); ctx.strokeStyle = C.gold; ctx.lineWidth = Math.max(1, 1.6 * k); ctx.beginPath(); ctx.moveTo(-s, 0); ctx.lineTo(s, 0); ctx.moveTo(0, -s); ctx.lineTo(0, s); ctx.stroke(); ctx.restore(); } }

@@ -2,7 +2,7 @@
 //   drawEnemy(ctx, type, x, y, o)   o: { t, ang, hp (0..1), hit (0..1), slow, stun, burn, mark, shield (0..1), affix, scale, rage, alpha, id }
 //   drawBoss(ctx, id, x, y, o)      o: { t, ang, hp (0..1), hit, gated, phase, scale, alpha }
 // Every creature body is baked once into 3 "boil" frames (doodle_kit sprite) keyed by type and affix; per frame we only blit, bob, squash,
-// move the googly pupils and draw a few cheap overlays. No Math.random, no Date; safe in node with a mock ctx.
+// move the googly pupils and draw a few cheap overlays. Fully seeded and time-driven (no platform randomness or clock); safe in node with a mock ctx.
 import { ENEMIES, BOSSES, AFFIXES } from './data_core.js';
 import { C, Pen, arc, rect, star, sprite, blit, setScale, getScale, clamp } from './doodle_kit.js';
 
@@ -44,7 +44,7 @@ const BODY = {
     },
   },
   zip: {   // points along +x, the body is rotated to the heading
-    geo: (pen, r) => ({ outline: pen.spiky(r * 1.25, r * 0.72, 9, 0.14), eyes: [{ x: r * 0.45, y: -r * 0.28, r: r * 0.3 }, { x: r * 0.5, y: r * 0.3, r: r * 0.3 }] }),
+    geo: (pen, r) => ({ outline: pen.spiky(r * 1.25, r * 0.72, 9, 0.14), eyes: [{ x: r * 0.4, y: -r * 0.3, r: r * 0.36 }, { x: r * 0.45, y: r * 0.28, r: r * 0.36 }] }),
     paint(pen, r, g, def) {
       for (let i = -1; i <= 1; i++) pen.ln([-r * 1.5, i * r * 0.45, -r * 2.5 - Math.abs(i) * r * 0.3, i * r * 0.45], INK, 2.4, false, 0.6);   // speed lines
       glitchLines(pen, g.outline); fur(pen, g.outline, def.color);
@@ -231,7 +231,7 @@ export function drawEnemy(ctx, type, x, y, o) {
   ctx.save(); ctx.scale(sc, sc); ctx.translate(0, bob);
   if (type === 'drone') {   // spinning rotors
     ctx.strokeStyle = INK; ctx.lineWidth = 3; ctx.lineCap = 'round';
-    for (const s of [-1, 1]) { const a = t * 30 * s; ctx.beginPath(); ctx.moveTo(s * r * 1.15 + Math.cos(a) * r * 0.9, -r * 0.88 + Math.sin(a) * r * 0.2); ctx.lineTo(s * r * 1.15 - Math.cos(a) * r * 0.9, -r * 0.88 - Math.sin(a) * r * 0.2); ctx.stroke(); }
+    for (const s of [-1, 1]) { const a = t * 30 * s; ctx.beginPath(); ctx.moveTo(s * r * 1.15 + Math.cos(a) * r * 0.5, -r * 0.88 + Math.sin(a) * r * 0.14); ctx.lineTo(s * r * 1.15 - Math.cos(a) * r * 0.5, -r * 0.88 - Math.sin(a) * r * 0.14); ctx.stroke(); }
   }
   const eyes = BODY_EYES(type, r);
   const blink = ((t * 0.9 + hs) % 3.4) < 0.1;
@@ -260,7 +260,7 @@ export function drawEnemy(ctx, type, x, y, o) {
   ctx.restore();
   // hit: a white crayon scribble over the body
   if ((o.hit || 0) > 0) { ctx.save(); ctx.globalAlpha *= clamp(o.hit * 0.85, 0, 0.85); ctx.translate(0, bob * sc); if (ROT_BODY[type]) ctx.rotate(ang); ctx.scale(sx, sy); blit(ctx, flashSprite(type), 0, 0, t, { phase: hs }); ctx.restore(); }
-  if (o.hp != null && o.hp < 0.999) hpBar(ctx, 0, -r * 1.45 * sc - 10, r * 1.7 * sc + 6, o.hp);
+  if (o.hp != null && o.hp < 0.999) hpBar(ctx, 0, -r * 1.35 * sc - 9, r * 1.7 * sc + 6, o.hp);
   ctx.restore();
 }
 const BODY_BROWS = { brick: true, squeal: true, rager: true };
@@ -273,7 +273,7 @@ function BODY_EYES(type, r) {   // eye geometry is deterministic and does not ne
 
 // a doodled health bar, only drawn when damaged: a scribbled box and a crayon fill
 function hpBar(ctx, cx, y, w, f) {
-  f = sat(f); const h = 7, x = cx - w / 2;
+  f = sat(f); const h = 5, x = cx - w / 2; w = Math.min(w, 56);
   ctx.save(); ctx.lineCap = 'round'; ctx.lineJoin = 'round';
   ctx.fillStyle = '#fbf6e6'; ctx.fillRect(x, y, w, h);
   ctx.fillStyle = f > 0.5 ? C.green : f > 0.25 ? C.orange : C.red; ctx.globalAlpha = 0.95; ctx.fillRect(x + 1, y + 1, Math.max(2, (w - 2) * f), h - 2);

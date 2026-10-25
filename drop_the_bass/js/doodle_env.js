@@ -4,7 +4,7 @@
 //   drawBoard(ctx, mapId, worldId, t, o)     logical coords, board at BOARD_X/BOARD_Y. o: beat, slotHint [[c,r]], hoverSlot [c,r], dropSlot [c,r]
 //   drawStageBase(ctx, worldId, x, y, o)     (x,y) = stage tile centre. o: t, hp 0..1, hit 0..1, beat
 // Everything static is baked once into 2 or 3 "boil" frames (different seeds) and replayed slowly; per frame work is a drawImage plus a few cheap
-// live bits (twinkles, notes, rain, bunting, lasers, chevrons). No gradients, no glow, no Math.random, no Date. Safe in node with a mock ctx.
+// live bits (twinkles, notes, rain, bunting, lasers, chevrons). No gradients, no glow, no unseeded randomness, no clock. Safe in node with a mock ctx.
 import { C, Pen, arc, rect, star, heart, makeCanvas as kitCanvas, setScale, getScale } from './doodle_kit.js';
 import { BOARD_X, BOARD_Y, BOARD_W, BOARD_H, TILE, COLS, ROWS, WORLD_BY_ID, buildMap, laneAt, tileCx, tileCy } from './data_core.js';
 import { drawHero } from './doodle_heroes.js';
@@ -225,7 +225,7 @@ function staticCreep(ctx, w, h, t, amt) {
   const key = Math.round(w) + 'x' + Math.round(h) + '|' + getScale();
   let e = creepCache.get(key); if (!e) e = lruSet(creepCache, key, bakeCreep(w, h), 6);
   // the fuzz creeps in from the edges: draw the layer a little larger when calm, full size at full static
-  const k = 1 + (1 - clamp(amt, 0, 1)) * 0.3, a = clamp(amt * 1.3, 0, 0.95);
+  const k = 1 + (1 - clamp(amt, 0, 1)) * 0.3, a = clamp(amt * 0.95, 0, 0.85);
   ctx.save(); ctx.translate(w / 2, h / 2); ctx.scale(k, k); ctx.translate(-w / 2, -h / 2);
   put(ctx, e, 0, 0, t, 3, a);
   ctx.restore();
@@ -364,7 +364,6 @@ function paintStage(p, c, ok, cracked, accent) {
   for (let i = 0; i < 3; i++) { const x = -20 + i * 20; p.shp(rect(x - 5, -55, 10, 9, 2), ok ? [C.pink, C.cyan, C.yellow][i] : '#6a6478', INK, 2.2, { gap: 4 }); }
   p.shp(rect(-26, -32, 52, 24, 3), ok ? '#2a2548' : '#3e3a50', INK, 2.6, { gap: 6 });
   if (cracked) { p.ln([-38, -44, -30, -30, -34, -16, -22, -4], INK, 2.6, false, 1.4); p.ln([30, -40, 24, -26, 32, -12], INK, 2.4, false, 1.2); p.ln([-4, 10, 0, 18, 8, 22], INK, 2.2, false, 1); }
-  p.txt(ok ? 'LIVE' : 'OFF', 0, 60 - 8, 12, ok ? C.red : '#8a869a', { align: 'c', w: 2 });
 }
 function stageEntry(worldId, ok, cracked) {
   const key = worldId + '|' + ok + '|' + cracked + '|' + getScale();

@@ -42,9 +42,9 @@ const eyeBlink = (t, seed) => { const c = (t + seed * 1.7) % 3.6; return c > 3.4
 const POSE = {
   idle:  { sp: 2.2, bob: 1.6, hands: [[-25, -30], [26, -32]], mic: -0.5, eye: 'open', mouth: 'closed' },
   cheer: { sp: 5, bob: 2.4, jump: 5, hands: [[-36, -104], [37, -106]], alt: [[-32, -94], [33, -97]], mic: -0.15, eye: 'happy', mouth: 'open' },
-  sing:  { sp: 2.4, bob: 1.4, hands: [[-28, -42], [11, -70]], alt: [[-31, -46], [10, -72]], mic: -2.0, eye: 'happy', mouth: 'alt', micMouth: true, tilt: -0.05 },
-  beat:  { sp: 8, bob: 3, hands: [[-26, -62], [11, -70]], alt: [[-24, -50], [11, -70]], mic: -2.0, eye: 'happy', mouth: 'alt', micMouth: true, foot: true },
-  sad:   { sp: 1.2, bob: 0.8, hands: [[-15, -22], [15, -22]], mic: 1.5, eye: 'sad', mouth: 'sad', tilt: 0.09, slump: 5 },
+  sing:  { sp: 2.4, bob: 1.4, hands: [[-28, -42], [25, -40]], alt: [[-31, -46], [24, -43]], mic: -2.15, eye: 'happy', mouth: 'alt', micMouth: true, tilt: -0.05 },
+  beat:  { sp: 8, bob: 3, hands: [[-26, -62], [25, -40]], alt: [[-24, -50], [24, -43]], mic: -2.15, eye: 'happy', mouth: 'alt', micMouth: true, foot: true },
+  sad:   { sp: 1.2, bob: 0.8, hands: [[-15, -26], [15, -38]], mic: 1.5, eye: 'sad', mouth: 'sad', tilt: 0.09, slump: 5 },
   shock: { sp: 14, bob: 1.2, jump: 2.5, hands: [[-44, -74], [44, -74]], mic: -0.4, eye: 'wide', mouth: 'o', tilt: -0.03 },
   talk:  { sp: 2.4, bob: 1.4, hands: [[-23, -30], [38, -62]], alt: [[-23, -30], [41, -74]], mic: -0.7, eye: 'open', mouth: 'alt', talkOnly: true, tilt: 0.03 },
   point: { sp: 2.4, bob: 1.6, hands: [[-23, -30], [55, -68]], mic: 0.3, eye: 'open', mouth: 'closed', point: true, tilt: -0.04 },
@@ -53,6 +53,8 @@ const POSE = {
 
 // ------------------------------------------------------------------------------------------------ the figures
 const SKIN = { roxor: '#f1b98a', jasmin: '#f8cfa8' };
+function solid(pen, p, col) { const c = pen.ctx; c.beginPath(); c.moveTo(p[0], p[1]); for (let i = 2; i < p.length; i += 2) c.lineTo(p[i], p[i + 1]); c.closePath(); c.fillStyle = col; c.fill(); }
+const SKIN2 = { roxor: '#e6a574', jasmin: '#f0bc92' };
 function limb(pen, x0, y0, x1, y1, col, w, bend = 0) {
   const mx = (x0 + x1) / 2 + bend, my = (y0 + y1) / 2 + Math.abs(bend) * 0.4;
   const p = [x0, y0, mx, my, x1, y1];
@@ -69,11 +71,11 @@ function mic(pen, hx, hy, ang, band) {
   pen.ln([hx2 - 3, hy2 - 3, hx2 + 3, hy2 + 3], '#fff', 1.8, false, 0.2);
 }
 function eyeBall(pen, x, y, r, iris, look, lash) {
-  pen.dot(x, y, r + 1.4, INK); pen.dot(x, y, r, '#fff');
+  pen.dot(x, y, r + (lash ? 1 : 1.4), INK); pen.dot(x, y, r, '#fff');
   pen.dot(x + Math.cos(look) * r * 0.28, y + Math.sin(look) * r * 0.28, r * 0.64, iris);
   pen.dot(x + Math.cos(look) * r * 0.34, y + Math.sin(look) * r * 0.34, r * 0.34, INK);
   pen.dot(x + r * 0.14, y - r * 0.28, r * 0.16, '#fff');
-  if (lash) { pen.ln([x - r * 0.9, y - r * 0.5, x - r * 1.4, y - r * 0.95], INK, 2, false, 0.2); pen.ln([x + r * 0.9, y - r * 0.5, x + r * 1.4, y - r * 0.95], INK, 2, false, 0.2); }
+  if (lash) pen.ln(arc(x, y, r + 1.2, r + 1.2, 200, 340), INK, 3, false, 0.2);
 }
 function eyes(pen, who, st, hx, hy, spread, r) {
   const iris = who === 'roxor' ? '#8fa6c8' : '#6b4a3a', lash = who === 'jasmin';
@@ -109,14 +111,14 @@ function headRoxor(pen, st, onesie) {
   } else {   // mullet tail behind, shaved side
     pen.shp([hx - 20, hy + 4, hx - 38, hy + 12, hx - 32, hy + 28, hx - 18, hy + 18], '#8a4a24', INK, 3, { gap: 4 });
   }
-  pen.shp(pen.blob(hx, hy, 27, 26, 16, 0.03), SKIN.roxor, INK, 3.6, { gap: 5.5, alpha: 0.78, ang: -0.9 });
+  { const f = pen.blob(hx, hy, 27, 26, 16, 0.03); solid(pen, f, SKIN.roxor); pen.shp(f, SKIN2.roxor, INK, 3.6, { gap: 6, alpha: 0.5, ang: -0.9 }); }
   pen.dot(hx - 27, hy + 1, 6, INK); pen.dot(hx - 27, hy + 1, 4.4, SKIN.roxor);   // ear
   if (!onesie) {
     // swooping mohawk crest pushed up and forward
     const crest = [hx - 22, hy - 14, hx - 24, hy - 34, hx - 12, hy - 46, hx + 4, hy - 48, hx + 24, hy - 40, hx + 36, hy - 24, hx + 22, hy - 28, hx + 14, hy - 22, hx + 4, hy - 26, hx - 8, hy - 22, hx - 14, hy - 12];
     pen.shp(crest, '#8a4a24', INK, 3.4, { gap: 4.2, f2: '#b8743c', ang: -0.5 });
     pen.ln([hx - 14, hy - 38, hx + 4, hy - 42, hx + 22, hy - 34], '#d29a60', 2.2, false, 0.6);
-    for (let i = 0; i < 7; i++) pen.dot(hx - 22 + pen.rnd() * 7, hy - 8 + i * 4.5 + pen.rnd() * 2, 1.1, '#6a5a52');   // stubble on the shaved side
+    for (let i = 0; i < 4; i++) pen.dot(hx - 25 + pen.rnd() * 4, hy - 6 + i * 4.5 + pen.rnd() * 2, 1.1, '#6a5a52');   // stubble on the shaved side
   } else pen.ln([hx - 16, hy - 20, hx - 6, hy - 26, hx + 8, hy - 24, hx + 18, hy - 19], INK, 3, false, 0.5);
   // face
   eyes(pen, 'roxor', st, hx, hy - 4, 11, 6.6);
@@ -138,7 +140,7 @@ function headJasmin(pen, st, onesie) {
     for (let i = 0; i < 6; i++) pen.ln([hx + 22 + i * 1.5, hy - 24 + i * 7, hx + 40 + i * 3, hy - 14 + i * 9, hx + 36 + i * 3, hy + 4 + i * 9], maneCols[i], 4.4, false, 1);
     for (const sx of [-1, 1]) pen.shp([hx + sx * 18, hy - 26, hx + sx * 25, hy - 46, hx + sx * 31, hy - 22], '#f1e8ff', INK, 3, { gap: 4, f2: C.pink });
   }
-  pen.shp(pen.blob(hx, hy, 26.5, 25.5, 16, 0.03), SKIN.jasmin, INK, 3.6, { gap: 5.5, alpha: 0.72, ang: -0.9 });
+  { const f = pen.blob(hx, hy, 26.5, 25.5, 16, 0.03); solid(pen, f, SKIN.jasmin); pen.shp(f, SKIN2.jasmin, INK, 3.6, { gap: 6, alpha: 0.5, ang: -0.9 }); }
   pen.dot(hx - 26, hy + 3, 5.6, INK); pen.dot(hx - 26, hy + 3, 4, SKIN.jasmin);
   if (!onesie) {
     pen.shp([hx - 27, hy - 4, hx - 26, hy - 22, hx - 12, hy - 33, hx + 8, hy - 34, hx + 24, hy - 24, hx + 27, hy - 4, hx + 16, hy - 14, hx + 4, hy - 20, hx - 6, hy - 16, hx - 16, hy - 8], '#2a2236', INK, 3.2, { gap: 4, f2: '#51406a', ang: -0.7 });
@@ -191,18 +193,20 @@ function bodyParts(pen, who, onesie, st, bust) {
   pen.shp([-6, -60 + slump, 6, -60 + slump, 6, -54 + slump, -6, -54 + slump], SKIN[who], INK, 2.4, { gap: 3, alpha: 0.7 });
 }
 
-function armsAndMic(pen, who, onesie, st, hands) {
+function armsAndMic(pen, who, onesie, st, hands, only) {
   const roxor = who === 'roxor';
   const sleeve = onesie ? (roxor ? C.green : '#f1e8ff') : (roxor ? '#403a4c' : C.pink);
   const armCol = onesie ? (roxor ? C.green : '#f1e8ff') : SKIN[who];
   const sh = [[-16, -54 + (st.slump || 0)], [16, -54 + (st.slump || 0)]];
   const micHand = st.micMouth || st.pose === 'sing' || st.pose === 'beat' ? 1 : (st.pose === 'point' ? 0 : 1);
   for (let i = 0; i < 2; i++) {
+    if (only != null && i !== only) continue;
     const s = i === 0 ? -1 : 1, h = hands[i];
     limb(pen, sh[i][0], sh[i][1], h[0], h[1], armCol, 7.4, s * 5);
     if (!onesie) pen.shp(pen.blob(sh[i][0] + s * 2, sh[i][1] + 5, 7, 7, 8, 0.05), sleeve, INK, 2.6, { gap: 3.4 });
   }
   for (let i = 0; i < 2; i++) {
+    if (only != null && i !== only) continue;
     const h = hands[i];
     if (i === micHand) { hand(pen, h[0], h[1], onesie ? (roxor ? C.green : '#fff') : SKIN[who]); mic(pen, h[0], h[1], st.mic, roxor ? C.lime : C.pink); }
     else if (st.point) { hand(pen, h[0], h[1], SKIN[who], 5.2); pen.ln([h[0], h[1], h[0] + 15, h[1] - 3], INK, 7.5, false, 0.3); pen.ln([h[0], h[1], h[0] + 15, h[1] - 3], SKIN[who], 4, false, 0.3); }
@@ -215,10 +219,13 @@ function drawFigure(pen, ctx, who, pose, onesie, v) {
   const st = { pose, eye: P.eye, mouth: v.mouth, blink: v.blink, look: who === 'roxor' ? 0.25 : 0.1, mic: P.mic, micMouth: P.micMouth, slump: P.slump || 0, foot: P.foot && v.alt, point: P.point };
   ctx.save(); ctx.translate(0, P.slump ? P.slump * 0.4 : 0);
   bodyParts(pen, who, onesie, st, false);
-  armsAndMic(pen, who, onesie, st, hands.map((h) => [h[0], h[1] + (P.slump || 0) * 0.3]));
-  ctx.save(); ctx.translate(0, P.slump || 0); ctx.translate(0, -80 * 0); ctx.rotate((P.tilt || 0) * 0.8);
+  const hh = hands.map((h) => [h[0], h[1] + (P.slump || 0) * 0.3]);
+  armsAndMic(pen, who, onesie, st, hh, P.micMouth ? 0 : null);
+  ctx.save(); ctx.translate(0, P.slump || 0); ctx.rotate((P.tilt || 0) * 0.8);
   (who === 'roxor' ? headRoxor : headJasmin)(pen, st, onesie);
-  ctx.restore(); ctx.restore();
+  ctx.restore();
+  if (P.micMouth) armsAndMic(pen, who, onesie, st, hh, 1);   // the singing arm and mic go in front of the face
+  ctx.restore();
 }
 
 // mouth state for time t
@@ -230,7 +237,7 @@ function mouthAt(P, t, talk) {
 }
 
 // ------------------------------------------------------------------------------------------------ public: hero and bust
-const BOX_W = 132, BOX_H = 156, FEET = 70;   // sprite box: feet sit FEET below the box centre
+const BOX_W = 184, BOX_H = 172, FEET = 78;   // sprite box: feet sit FEET below the box centre
 export function drawHero(ctx, who, x, y, size, o) {
   o = o || {}; who = who === 'jasmin' ? 'jasmin' : 'roxor';
   const t = o.t || 0, pose = POSE[o.pose] ? o.pose : 'idle', P = POSE[pose], onesie = o.outfit === 'onesie', k = size / 118;
@@ -285,7 +292,7 @@ function loopyBody(pen, mood, eyesOpen, mouthOpen) {
     else if (mood === 'excited') { pen.shp(star(x, ey, 7.5, 0.5), glow, null, 0, { gap: 2.4 }); }
     else { pen.dot(x, ey, mood === 'worried' ? 5.2 : 4.6, glow); pen.dot(x + 1, ey - 1, 1.5, '#fff'); }
   }
-  if (mood === 'worried') { pen.ln([-19, -9, -6, -7], glow, 2.4, false, 0.3); pen.ln([6, -7, 19, -9], glow, 2.4, false, 0.3); }
+  if (mood === 'worried') { pen.ln([-19, -5, -6, -10], glow, 2.4, false, 0.3); pen.ln([6, -10, 19, -5], glow, 2.4, false, 0.3); }
   if (mouthOpen) pen.shp(pen.blob(0, 12, 5, 4, 8, 0.05), glow, null, 0, { gap: 2.6 });
   else if (mood === 'worried') pen.ln(arc(0, 16, 7, 4, 200, 340), glow, 2.6, false, 0.3);
   else if (mood === 'sleepy') pen.dot(0, 12, 2.2, glow);
@@ -323,17 +330,17 @@ function logoBase(pen, c, w) {
   const u = w;
   // doodled margins: notes, stars, hearts, a spiral
   const note = (nx, ny, s, col) => { pen.dot(nx, ny, 7 * s, col); pen.ln([nx + 6 * s, ny, nx + 6 * s, ny - 28 * s, nx + 18 * s, ny - 22 * s], col === C.ink ? INK : INK, 3, false, 0.5); pen.ln([nx + 6 * s, ny - 28 * s, nx + 18 * s, ny - 22 * s], col, 3, false, 0.4); };
-  note(-u * 0.44, -u * 0.30, u / 500, C.pink); note(u * 0.40, u * 0.16, u / 480, C.green); note(-u * 0.38, u * 0.20, u / 520, C.blue); note(u * 0.43, -u * 0.31, u / 470, C.orange);
-  pen.shp(star(-u * 0.30, -u * 0.38, u * 0.035), C.yellow, INK, 2.6, { gap: 3 }); pen.shp(star(u * 0.33, -u * 0.37, u * 0.028, 0.5, 0.3), C.cyan, INK, 2.6, { gap: 3 });
-  pen.shp(heart(u * 0.45, u * 0.33, u * 0.06), C.red, INK, 2.6, { gap: 3 });
+  note(-u * 0.47, -u * 0.05, u / 500, C.pink); note(u * 0.44, u * 0.02, u / 480, C.green); note(-u * 0.30, u * 0.03, u / 700, C.blue); note(u * 0.30, -u * 0.04, u / 700, C.orange);
+  pen.shp(star(-u * 0.34, -u * 0.37, u * 0.035), C.yellow, INK, 2.6, { gap: 3 }); pen.shp(star(u * 0.36, -u * 0.36, u * 0.028, 0.5, 0.3), C.cyan, INK, 2.6, { gap: 3 });
+  pen.shp(heart(u * 0.47, u * 0.37, u * 0.05), C.red, INK, 2.6, { gap: 3 });
   const sp = []; for (let i = 0; i < 40; i++) { const a = i * 0.45, r = 3 + i * 1.1 * u / 500; sp.push(-u * 0.45 + Math.cos(a) * r, u * 0.36 + Math.sin(a) * r); } pen.ln(sp, C.purple, 3, false, 0.3);
   // the words
-  const big = u * 0.27, ow = u * 0.02, lw = big * 0.2;
-  pen.txt('DROP', 0, -u * 0.09, big, C.pink, { align: 'c', out: INK, ow, w: lw, rainbow: RAIN_TOP, rot: -0.025, ph: 0 });
-  pen.txt('BASS', 0, u * 0.36, big, C.lime, { align: 'c', out: INK, ow, w: lw, rainbow: RAIN_BOT, rot: 0.02, ph: 1.4 });
+  const big = u * 0.215, ow = u * 0.016, lw = big * 0.2;
+  pen.txt('DROP', 0, -u * 0.13, big, C.pink, { align: 'c', out: INK, ow, w: lw, rainbow: RAIN_TOP, rot: -0.025, ph: 0 });
+  pen.txt('BASS', 0, u * 0.32, big, C.lime, { align: 'c', out: INK, ow, w: lw, rainbow: RAIN_BOT, rot: 0.02, ph: 1.4 });
   // THE on a blue felt-tip banner
-  pen.shp([-u * 0.13, -u * 0.075, u * 0.13, -u * 0.095, u * 0.145, u * 0.025, -u * 0.12, u * 0.045], C.sky, INK, 3.2, { gap: 4.4, f2: '#cfeeff' });
-  pen.txt('THE', 0, u * 0.04, u * 0.085, INK, { align: 'c', w: u * 0.016 });
+  pen.shp([-u * 0.12, -u * 0.095, u * 0.12, -u * 0.115, u * 0.135, u * 0.005, -u * 0.11, u * 0.025], C.sky, INK, 3.2, { gap: 4.4, f2: '#cfeeff' });
+  pen.txt('THE', 0, u * 0.0, u * 0.075, INK, { align: 'c', w: u * 0.016 });
 }
 export function drawLogo(ctx, x, y, w, t) {
   t = t || 0;
