@@ -466,7 +466,7 @@ export function resolveFight(run, result) {
   run.stats.fights++;
   if (result.damageTaken) run.stats.damageTaken += result.damageTaken;
   run.stats.shatters += result.shattered.length;
-  if (!result.win || run.hp <= 0) { run.phase = 'dead'; run.pending = null; return 'dead'; }
+  if (!result.win || run.hp <= 0) { run.killedBy = result.killedBy || null; run.phase = 'dead'; run.pending = null; return 'dead'; }
   if (kind === 'elite') run.stats.elites++;
   if (kind === 'boss') run.stats.bosses++;
   const hero = HEROES[run.hero];

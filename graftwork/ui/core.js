@@ -94,8 +94,9 @@ export function createApp(canvas, opts = {}) {
     app.textCache.set(key, out); return out;
   };
   // text(str, x, y, {size, color, align, baseline, bold, italic, ui, maxW, lineH, shadow, alpha, stroke}) -> total height
+  app.textScale = 1;
   app.text = (str, x, y, o = {}) => {
-    const size = o.size || 18, lineH = o.lineH || Math.round(size * 1.22);
+    const size = Math.round((o.size || 18) * (o.fixed ? 1 : app.textScale)), lineH = o.lineH || Math.round(size * 1.22);
     ctx.save();
     ctx.font = font(size, o); ctx.textAlign = o.align || 'left'; ctx.textBaseline = o.baseline || 'top';
     if (o.alpha !== undefined) ctx.globalAlpha *= o.alpha;

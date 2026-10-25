@@ -200,7 +200,7 @@ export function dealDamage(c, src, tgt, base, o = {}) {
   let absorbed = 0;
   if (!o.pierce && tgt.block > 0) { absorbed = Math.min(tgt.block, n); tgt.block -= absorbed; n -= absorbed; }
   if (n > 0) tgt.hp -= n;
-  if (tgt.kind === 'player') c.damageTakenThisCombat += n;
+  if (tgt.kind === 'player') { c.damageTakenThisCombat += n; if (src && src.kind === 'enemy') c.lastHitBy = src.name; }
   c.ev.push({ t: 'dmg', src: src ? (src.uid || 'player') : null, who: tgt.uid || 'player', raw, n, absorbed, hit: !o.status, thorns: !!o.thorns, broke: absorbed > 0 && tgt.block === 0 });
   if (src && o.card && c.currentCard) c.currentCard.dealt = (c.currentCard.dealt || 0) + n;
   if (raw > 0 && !o.status && !o.thorns) {
@@ -712,5 +712,5 @@ export function finishCombat(c) {
   const g = c.player.st.gilt || 0;
   if (g) run.gold = (run.gold || 0) + g;
   fire(c, 'combatEnd', {});
-  return { win: c.over === 'win', shattered: shattered.map((i) => i.id), turns: c.turn, damageTaken: c.damageTakenThisCombat };
+  return { win: c.over === 'win', killedBy: c.lastHitBy || null, shattered: shattered.map((i) => i.id), turns: c.turn, damageTaken: c.damageTakenThisCombat };
 }

@@ -81,14 +81,14 @@ function unknownCard(app, ctx, cx, cy, sc, hot) {
 const CELLS = {
   grafts: { h: 112, draw(app, ctx, id, d, seen, x, y, w, h) {
     if (!seen) {
-      app.rr(x + 8, y + 8, 100, h - 16, 14); ctx.fillStyle = '#15110f'; ctx.fill(); ctx.setLineDash([8, 6]); ctx.lineWidth = 2; ctx.strokeStyle = 'rgba(232,220,196,.25)'; ctx.stroke(); ctx.setLineDash([]);
-      qmark(app, x + 58, y + h / 2, 44);
-      app.text('Unknown graft', x + 122, y + 12, { size: 17, bold: true, color: 'rgba(232,220,196,.6)' });
-      app.text(hintFor.grafts(d), x + 122, y + 38, { size: 13, ui: true, italic: true, maxW: w - 134, lineH: 16, color: 'rgba(232,220,196,.55)' });
+      app.rr(x + 8, y + 8, 124, h - 16, 14); ctx.fillStyle = '#15110f'; ctx.fill(); ctx.setLineDash([8, 6]); ctx.lineWidth = 2; ctx.strokeStyle = 'rgba(232,220,196,.25)'; ctx.stroke(); ctx.setLineDash([]);
+      qmark(app, x + 70, y + h / 2, 44);
+      app.text('Unknown graft', x + 146, y + 12, { size: 17, bold: true, color: 'rgba(232,220,196,.6)' });
+      app.text(hintFor.grafts(d), x + 146, y + 38, { size: 13, ui: true, italic: true, maxW: w - 158, lineH: 16, color: 'rgba(232,220,196,.55)' });
       return;
     }
-    drawGraftPatch(ctx, d, x + 8, y + 10, 100, h - 20);
-    const col = COL[d.school] || COL.vellum, tx = x + 122, tw = w - 134;
+    drawGraftPatch(ctx, d, x + 8, y + 10, 128, h - 20);
+    const col = COL[d.school] || COL.vellum, tx = x + 148, tw = w - 160;
     app.text(d.name, tx, y + 8, { size: 17, bold: true, color: COL.vellum, maxW: tw });
     drawSchoolGlyph(ctx, d.school, tx + 7, y + 36, 6, col);
     app.text(`${(SCHOOLS[d.school] || {}).name} · Weight ${d.weight} · ${cap(d.tier)}`, tx + 18, y + 29, { size: 12, ui: true, color: 'rgba(232,220,196,.7)' });
@@ -162,10 +162,10 @@ function ruleArt(app, i, cx, cy, w, h) {
   const arrow = (x1, y1, x2, col) => { ctx.save(); ctx.strokeStyle = col || COL.lamp; ctx.fillStyle = col || COL.lamp; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2 - 8, y1); ctx.stroke(); ctx.beginPath(); ctx.moveTo(x2, y1); ctx.lineTo(x2 - 12, y1 - 7); ctx.lineTo(x2 - 12, y1 + 7); ctx.closePath(); ctx.fill(); ctx.restore(); };
   switch (i) {
     case 0: {
-      drawCard(ctx, card([]), cx - 110, cy, { scale: 0.4 });
-      drawGraftPatch(ctx, demoGraft, cx - 28, cy - 30 + Math.sin(t * 2) * 3, 56, 60);
-      arrow(cx + 34, cy, cx + 64);
-      drawCard(ctx, card([demoGraft.id]), cx + 112, cy, { scale: 0.4 });
+      drawCard(ctx, card([]), cx - 124, cy, { scale: 0.4 });
+      drawGraftPatch(ctx, demoGraft, cx - 36, cy - 28 + Math.sin(t * 2) * 3, 80, 56);
+      arrow(cx + 50, cy, cx + 74);
+      drawCard(ctx, card([demoGraft.id]), cx + 124, cy, { scale: 0.4 });
       break;
     }
     case 1: {
@@ -179,16 +179,16 @@ function ruleArt(app, i, cx, cy, w, h) {
     }
     case 2: {
       gaugeCells(app, cx - w / 2 + 28, cy - 44, { budget: 6, weight: 4, strain: 0 }, { cell: 22, maxW: 300 });
-      app.text('Weight 4 of 6. Fine.', cx - w / 2 + 28 + 190, cy - 40, { size: 13, ui: true, color: COL.good });
+      app.text('4 of 6', cx - w / 2 + 28 + 175, cy - 40, { size: 13, ui: true, color: COL.good });
       gaugeCells(app, cx - w / 2 + 28, cy + 8, { budget: 6, weight: 8, strain: 2 }, { cell: 22, maxW: 300 });
-      app.text('Weight 8 of 6. Strain 2.', cx - w / 2 + 28 + 230, cy + 12, { size: 13, ui: true, color: COL.bad });
+      app.text('8 of 6', cx - w / 2 + 28 + 230, cy + 12, { size: 13, ui: true, color: COL.bad });
       break;
     }
     case 3: {
       drawCard(ctx, card([demoGraft.id]), cx - 120, cy, { scale: 0.4 });
       app.text('+', cx - 74, cy - 14, { size: 22, bold: true, color: COL.vellum });
       drawCard(ctx, card([]), cx - 20, cy, { scale: 0.4, tithed: true });
-      pill(app, 'TITHED', cx - 20, cy + 62, COL.bad);
+      pill(app, 'TITHED', cx - 20, cy + 60, COL.bad);
       app.text('75%', cx + 70, cy - 24, { size: 34, bold: true, color: COL.bad });
       app.text('numbers', cx + 70, cy + 14, { size: 14, ui: true, color: 'rgba(232,220,196,.7)' });
       break;
@@ -196,7 +196,7 @@ function ruleArt(app, i, cx, cy, w, h) {
     case 4: {
       const sp = cardSpec({ uid: 0, id: 'm_cut', grafts: [demoGraft.id, ...g3.map((g) => g.id)].slice(0, 3), up: 0 });
       drawCard(ctx, sp, cx - 70, cy, { scale: 0.42 });
-      pill(app, 'OVERLOAD', cx - 70, cy + 68, COL.gold);
+      pill(app, 'OVERLOAD', cx - 70, cy + 60, COL.gold);
       app.text('x1.5', cx + 30, cy - 40, { size: 28, bold: true, color: COL.gold });
       app.text('25% Shatter', cx + 30, cy + 2, { size: 17, bold: true, color: COL.vellum });
       ctx.save(); ctx.fillStyle = COL.gold;
@@ -369,9 +369,9 @@ export default {
     RULES.forEach(([title, text], i) => {
       const cx = x + (i % 3) * (cw + gap), cy = y + Math.floor(i / 3) * (ch + gap);
       app.panel(cx, cy, cw, ch, { r: 12, fill: 'rgba(22,18,15,.92)', stroke: 'rgba(232,220,196,.3)', lw: 2 });
-      ctx.save(); ctx.beginPath(); ctx.rect(cx + 2, cy + 2, cw - 4, 150); ctx.clip();
-      app.rr(cx + 6, cy + 6, cw - 12, 144, 8); ctx.fillStyle = 'rgba(232,220,196,.06)'; ctx.fill();
-      ruleArt(app, i, cx + cw / 2, cy + 78, cw - 24, 140);
+      ctx.save(); ctx.beginPath(); ctx.rect(cx + 2, cy + 2, cw - 4, 156); ctx.clip();
+      app.rr(cx + 6, cy + 6, cw - 12, 148, 8); ctx.fillStyle = 'rgba(232,220,196,.06)'; ctx.fill();
+      ruleArt(app, i, cx + cw / 2, cy + 74, cw - 24, 140);
       ctx.restore();
       ctx.save(); ctx.fillStyle = COL.lamp; ctx.beginPath(); ctx.arc(cx + 26, cy + 174, 14, 0, 6.283); ctx.fill(); ctx.restore();
       app.text(String(i + 1), cx + 26, cy + 174 - 10, { size: 18, bold: true, align: 'center', color: COL.ink });

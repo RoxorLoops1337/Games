@@ -12,9 +12,9 @@ import {
   TIER, schoolColor, shatterChance, cantReason, resonanceInfo, wrapLimit, drawStaple, keyBadge, drawSeam, drawCrack, drawGauge, drawLamp,
 } from './graft_parts.js';
 
-const SC = 1.1;                       // offered card scale
+const SC = 1.05;                       // offered card scale
 const CW = CARD_W * SC, CH = CARD_H * SC;
-const CARD_Y = 262;                   // card centre line
+const CARD_Y = 274;                   // card centre line
 const TRAY_X = 826, TRAY_W = 430;
 const AFTER = { x: 24, y: 466, w: 776, h: 244 };
 const GRAFT_KEYS = ['q', 'w', 'e', 'r'];
@@ -194,7 +194,7 @@ function drawOfferCard(app, r, i, c) {
   st.lift[r.uid] = lerp(st.lift[r.uid] || 0, target, Math.min(1, app.dt * 14));
   const cx = r.cx, cy = r.cy + st.lift[r.uid] - (1 - deal) * 420;
   const dim = st.mode === 'pick' && c.g && !canGraft(inst, st.selGraft);
-  const tithed = c.tithedSet.has(r.uid);
+  const tithed = c.tithedSet.has(r.uid) && seamProgress(r.uid) >= 1;
   const pairSel = sel && c.pair;
 
   ctx.save();
@@ -224,7 +224,7 @@ function drawOfferCard(app, r, i, c) {
   if (dim) { ctx.save(); ctx.fillStyle = 'rgba(12,10,9,.58)'; app.rr(cx - CW / 2, cy - CH / 2, CW, CH, 12); ctx.fill(); ctx.restore(); app.text('Cannot take it', cx, cy - 10, { size: 22, bold: true, align: 'center', color: '#ffb3bd', stroke: '#1a0a0c', strokeW: 5 }); }
   // tithe seam (preview or current)
   const seamP = seamProgress(r.uid);
-  if (tithed && !pairSel) drawSeam(ctx, cx, cy, CW - 10, CH - 14, seamP, st.t);
+  if (c.tithedSet.has(r.uid) && seamP < 1) drawSeam(ctx, cx, cy, CW - 10, CH - 14, seamP, st.t);
   // overload crack
   if (pairSel ? c.pv.overload : inst.grafts.length >= 2) {
     if (pairSel) drawCrack(ctx, cx, cy, CW, CH, overloadProgress(), st.t);
@@ -383,7 +383,7 @@ function drawAfter(app, c) {
   const A = pair ? pv.after : strain, B = pair ? pv.before : strain;
   app.text(pair ? 'AFTER' : 'THE TABLE', x + 16, y + 8, { size: 28, bold: true, color: pair ? COL.lamp : COL.vellum, shadow: true });
   const sub = st.note ? st.note.text : pair ? `${c.g.name} on ${spec2name(c.inst)}. Nothing is sewn until you press Sew it on.` : 'Choose one of your cards and one graft. This panel shows the whole bill first.';
-  app.text(sub, x + (pair ? 110 : 190), y + 15, { size: 14, ui: true, color: st.note ? '#ff9aa6' : DIM, maxW: w - (pair ? 126 : 206) });
+  app.text(sub, x + (pair ? 134 : 196), y + 15, { size: 14, ui: true, color: st.note ? '#ff9aa6' : DIM, maxW: w - (pair ? 150 : 212) });
 
   // rows
   const lx = x + 16;
@@ -640,12 +640,12 @@ function drawAttach(app) {
   const fly = EASE.inOut(clamp(t / T_FLY, 0, 1));
   const sx = s.patchR.x + s.patchR.w / 2, sy = s.patchR.y + s.patchR.h / 2;
   const px = lerp(sx, tx, fly), py = lerp(sy, ty, fly) - Math.sin(Math.PI * fly) * 90;
-  const w = lerp(s.patchR.w, tw, fly), h = lerp(s.patchR.h, th, fly);
+  const w = lerp(300, tw, fly), h = lerp(s.patchR.h + 30, th, fly);
   ctx.save();
   ctx.translate(px, py); ctx.rotate(0.14 * fly * (1 - 0.0));
   ctx.shadowColor = 'rgba(0,0,0,.7)'; ctx.shadowBlur = 18 * (1 - fly) + 4;
   if (fly < 1) {
-    drawPatchBody(app, s.g, -w / 2, -h / 2, w, h, { tier, sc: col, compact: true, sel: true, hover: false, dim: false });
+    drawGraftPatch(ctx, s.g, -w / 2, -h / 2, w, h, { hover: true });
   } else {
     drawGraftPatch(ctx, s.g, -tw / 2, -th / 2, tw, th, {});
     // needle + thread zigzag, six stitches

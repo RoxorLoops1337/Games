@@ -1,11 +1,14 @@
 // Particles, floating numbers, screen shake, hit-stop, flashes. One Fx per scene; the scene calls fx.update(dt) and fx.draw(ctx).
 import { rgba } from './core.js';
 
+// Global accessibility switches, synced from meta.settings by main.js each frame.
+export const FX_OPTS = { shake: true, reduced: false };
+
 export class Fx {
   constructor() { this.p = []; this.floats = []; this.bolts = []; this.trauma = 0; this.stop = 0; this.flashes = []; this.rings = []; this.slow = 0; this.slowScale = 1; }
   // generic emitter. o: {x,y,n,color|colors[],speed,spread(rad),angle,life,size,gravity,drag,glow,shape:'dot'|'shard'|'streak'|'flake'|'coin', spin}
   emit(o) {
-    const n = o.n || 8;
+    const n = FX_OPTS.reduced ? Math.ceil((o.n || 8) / 2) : (o.n || 8);
     for (let i = 0; i < n; i++) {
       const a = (o.angle === undefined ? Math.random() * Math.PI * 2 : o.angle + (Math.random() - 0.5) * (o.spread === undefined ? Math.PI * 2 : o.spread));
       const sp = (o.speed || 200) * (0.4 + Math.random() * 0.8);
@@ -38,10 +41,10 @@ export class Fx {
   float(text, x, y, o = {}) { this.floats.push({ text: String(text), x, y, vy: o.vy === undefined ? -60 : o.vy, life: o.life || 1.1, age: 0, color: o.color || '#fff', size: o.size || 30, big: !!o.big, stroke: o.stroke || '#1a1614' }); }
   bolt(x1, y1, x2, y2, color = '#E8F542') { this.bolts.push({ x1, y1, x2, y2, color, age: 0, life: 0.18, seed: Math.random() * 1000 }); }
   ring(x, y, color = '#fff', r = 120, life = 0.5) { this.rings.push({ x, y, color, r, age: 0, life }); }
-  shake(amount) { this.trauma = Math.min(1, this.trauma + amount); }
-  hitstop(ms) { this.stop = Math.max(this.stop, ms / 1000); }
-  slowmo(scale, ms) { this.slow = ms / 1000; this.slowScale = scale; }
-  flash(color = '#fff', a = 0.4, life = 0.25) { this.flashes.push({ color, a, age: 0, life }); }
+  shake(amount) { if (!FX_OPTS.shake || FX_OPTS.reduced) return; this.trauma = Math.min(1, this.trauma + amount); }
+  hitstop(ms) { if (FX_OPTS.reduced) return; this.stop = Math.max(this.stop, ms / 1000); }
+  slowmo(scale, ms) { if (FX_OPTS.reduced) return; this.slow = ms / 1000; this.slowScale = scale; }
+  flash(color = '#fff', a = 0.4, life = 0.25) { if (FX_OPTS.reduced) a *= 0.35; this.flashes.push({ color, a, age: 0, life }); }
   // returns the effective dt (0 while hit-stopped, scaled in slow-mo)
   update(dt) {
     if (this.stop > 0) { this.stop -= dt; return 0; }

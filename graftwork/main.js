@@ -1,5 +1,6 @@
 // Boot + flow. Screens never import each other: they call app.shared.flow.* and read app.shared.run.
 import { createApp } from './ui/core.js';
+import { FX_OPTS } from './ui/fx.js';
 import * as audio from './ui/audio.js';
 import * as RUN from './engine/run.js';
 import * as META from './engine/meta.js';
@@ -65,6 +66,11 @@ export function boot(canvas) {
   window.addEventListener('pointerdown', first); window.addEventListener('keydown', first);
   const st = meta.settings || {};
   audio.setVolumes({ master: st.master ?? 0.8, sfx: st.sfx ?? 0.8, music: st.music ?? 0.35 });
+  app.overlay = () => {
+    const st = app.shared.meta.settings || {};
+    FX_OPTS.shake = st.screenShake !== false; FX_OPTS.reduced = !!st.reducedMotion;
+    app.textScale = st.textSize === 'large' ? 1.12 : 1;
+  };
   app.go('title');
   app.start();
   return { app, flow };
