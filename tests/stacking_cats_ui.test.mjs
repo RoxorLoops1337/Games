@@ -43,6 +43,20 @@ const { drawBuilding } = await import('../stacking_cats/art_kingdom.js');
 const { BUILDINGS, WONDERS, emptyKingdom } = await import('../stacking_cats/cats.js');
 const scene = await import('../stacking_cats/kingdom_scene.js');
 
+const postMod = await import('../stacking_cats/post.js');
+t('lighting and post stack runs and ambient colours resolve for every theme', () => {
+  const ctx = fakeCtx(); ctx.canvas = { width: 960, height: 540 };
+  ctx.createImageData = () => ({ data: new Uint8ClampedArray(128 * 128 * 4) });
+  const orig = globalThis.document.createElement;
+  globalThis.document.createElement = () => { const c = { width: 0, height: 0 }; const x = fakeCtx(); x.createImageData = ctx.createImageData; c.getContext = () => x; return c; };
+  const post = postMod.createPost(960, 540);
+  post.light(ctx, 'rgb(200,200,220)', [{ x: 100, y: 100, r: 80, col: '#ffcc66', a: 0.8 }], [{ x: 50, y: 50, rx: 40, ry: 10, a: 0.2 }]);
+  post.bloom(ctx, { width: 960, height: 540 }, 0.3); post.grade(ctx, 'rgba(0,0,255,.2)', 'rgba(255,0,0,.1)', 0.5);
+  post.grain(ctx, 1.2, 0.05); post.flare(ctx, 740, 120, 0.1);
+  globalThis.document.createElement = orig;
+  for (const th of THEMES) for (const boss of [false, true]) assert.ok(postMod.ambientFor(th, 2, 5, boss, boss));
+});
+
 t('every cat draws without errors', () => {
   for (const d of CATS) for (const v of ['open', 'blink', 'hurt', 'happy']) drawCat(fakeCtx(), d, v);
   assert.ok(calls.n > 1000);
@@ -99,7 +113,7 @@ t('main.js parses and the ids it uses exist in index.html', () => {
 });
 
 t('no em dashes anywhere in the game files', () => {
-  for (const f of ['main.js', 'index.html', 'cats.js', 'sim.js', 'art_cats.js', 'art_world.js', 'art_kingdom.js', 'audio.js', 'kingdom_scene.js', 'savecode.js', 'daily.js']) {
+  for (const f of ['main.js', 'index.html', 'cats.js', 'sim.js', 'art_cats.js', 'art_world.js', 'art_kingdom.js', 'audio.js', 'kingdom_scene.js', 'savecode.js', 'daily.js', 'post.js']) {
     assert.ok(!readFileSync('stacking_cats/' + f, 'utf8').includes('—'), f);
   }
 });

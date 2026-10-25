@@ -106,6 +106,7 @@ export class Sfx {
       case 'achieve': [523, 659, 784, 1046, 1318].forEach((f, i) => this.tone(f, 0.22, { type: 'triangle', v: 0.13, delay: i * 0.07 })); this.tone(2093, 0.4, { type: 'sine', v: 0.06, delay: 0.38 }); break;
       case 'synergy': [440, 554, 659, 880].forEach((f, i) => this.tone(f, 0.14, { type: 'sawtooth', v: 0.05, delay: i * 0.05 })); this.tone(1320, 0.3, { type: 'sine', v: 0.07, delay: 0.2 }); break;
       case 'route': this.tone(392, 0.12, { type: 'triangle', v: 0.1 }); this.tone(588, 0.2, { type: 'triangle', v: 0.1, delay: 0.1 }); break;
+      case 'thunder': this.noise(1.1, 0.22, 380); this.tone(58, 0.9, { to: 32, type: 'sine', v: 0.22 }); break;
       case 'swipe': this.noise(0.08, 0.12, 4000); this.tone(520, 0.07, { to: 260, type: 'triangle', v: 0.08 }); break;
       case 'hit': this.tone(190, 0.06, { to: 90, type: 'square', v: 0.07 }); break;
       case 'shoot': this.tone(700, 0.09, { to: 380, type: 'triangle', v: 0.09 }); break;

@@ -13,6 +13,8 @@ import * as S from './sim.js';
 import { drawCat } from './art_cats.js';
 import { enemySprite, nestSprite, nestOverlay, makeBackdrop, drawBackdrop, drawRays, drawFront } from './art_world.js';
 import { Sfx } from './audio.js';
+import { createPost, ambientFor, lightSprite } from './post.js';
+import { mix } from './art_util.js';
 
 const SAVE_KEY = 'stacking_cats_save_v1';
 const W = S.W, H = S.H, GROUND = S.GROUND, SLOT = S.SLOT;
@@ -52,7 +54,7 @@ sfx.on = save.sound; sfx.musicOn = save.music;
 sfx.setVolumes(save.opt.sfxVol, save.opt.musicVol);
 
 // ---------------------------------------------------------------- layout
-let res = 1, quality = 1, fxCap = 440;
+let res = 1, quality = 1, fxCap = 440, gfx = 3;   // gfx: 3 everything, 2 no bloom or grain, 1 no lighting pass, 0 plain
 const coarse = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
 function fit() {
   // on a phone held upright the whole game turns sideways so it can use the full screen
@@ -80,6 +82,7 @@ function applyOptions() {
   cl.toggle('cb', !!o.colorblind); cl.toggle('bigtext', !!o.bigText); cl.toggle('nomotion', !o.motion); cl.toggle('touch', coarse);
   sfx.setVolumes(o.sfxVol, o.musicVol);
   fxCap = o.quality === 'low' ? 180 : 440;
+  gfx = o.quality === 'low' ? 0 : 3;
   quality = 1;
   fit();
 }
@@ -1089,7 +1092,7 @@ function drawFx() {
   for (const f of fx) {
     const a = Math.max(0, f.life / f.max);
     if (f.k === 'p') { ctx.globalAlpha = a; ctx.fillStyle = f.col; ctx.beginPath(); ctx.arc(f.x, f.y, f.r * (0.5 + a * 0.5), 0, TAU); ctx.fill(); }
-    else if (f.k === 'sm') { ctx.globalAlpha = a * 0.5; ctx.fillStyle = f.col; ctx.beginPath(); ctx.arc(f.x, f.y, f.r, 0, TAU); ctx.fill(); }
+    else if (f.k === 'sm') { ctx.globalAlpha = a * 0.55; ctx.drawImage(lightSprite(f.col), f.x - f.r * 1.3, f.y - f.r * 1.3, f.r * 2.6, f.r * 2.6); }
     else if (f.k === 'cf') { ctx.globalAlpha = Math.min(1, a * 3); ctx.save(); ctx.translate(f.x, f.y); ctx.rotate(f.rot); ctx.scale(1, Math.cos(f.rot * 1.7)); ctx.fillStyle = f.col; ctx.fillRect(-4, -2.5, 8, 5); ctx.restore(); }
     else if (f.k === 'corpse') {
       const sp = enemySprite(f.type, f.elite); ctx.globalAlpha = Math.min(1, a * 1.6); ctx.save(); ctx.translate(f.x, f.y); ctx.rotate(f.rot); ctx.scale(f.elite ? 1.16 : 1, f.elite ? 1.16 : 1);
@@ -1104,7 +1107,7 @@ function drawFx() {
   add();
   for (const f of fx) {
     const a = Math.max(0, f.life / f.max);
-    if (f.k === 'g') glow(f.x, f.y, f.r * (1.2 - a * 0.3), f.col, a);
+    if (f.k === 'g') glow(f.x, f.y, f.r * (1.2 - a * 0.3), f.col, a * 0.62);
     else if (f.k === 'f') glow(f.x, f.y, Math.max(3, f.r), a > 0.5 ? '#ffb040' : '#ff5a1f', a * 0.85);
     else if (f.k === 'sp') { ctx.globalAlpha = a; ctx.strokeStyle = f.col; ctx.lineWidth = 2; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(f.x, f.y); ctx.lineTo(f.x - f.vx * 0.04, f.y - f.vy * 0.04); ctx.stroke(); }
     else if (f.k === 'r') { const u = 1 - a; ctx.globalAlpha = a; ctx.strokeStyle = f.col; ctx.lineWidth = f.w * a + 1; ctx.beginPath(); ctx.ellipse(f.x, f.y, f.r * (0.3 + 0.7 * u), f.r * (0.3 + 0.7 * u) * 0.55, 0, 0, TAU); ctx.stroke(); }
@@ -1159,6 +1162,37 @@ function drawAmbient(t, dt, scrollNow) {
 }
 
 // ---------------------------------------------------------------- drawing the world
+// ---- cast shadows: a soft dark silhouette of each sprite, laid on the ground away from the sun
+const shadowCache = new Map();
+function shadowOf(key, src) {
+  let s = shadowCache.get(key);
+  if (!s) {
+    s = document.createElement('canvas'); s.width = Math.max(1, src.width >> 1); s.height = Math.max(1, src.height >> 1);
+    const x = s.getContext('2d');
+    x.drawImage(src, 0, 0, s.width, s.height);
+    x.globalCompositeOperation = 'source-in'; x.fillStyle = '#1a1030'; x.fillRect(0, 0, s.width, s.height);
+    shadowCache.set(key, s);
+  }
+  return s;
+}
+// ox,oy: where the sprite's feet are on the ground; sx,sy,sw,sh: sprite rectangle relative to that point
+function castShadow(key, src, ox, oy, sx, sy, sw, sh, a) {
+  if (gfx < 2) return;
+  ctx.save();
+  ctx.translate(ox, oy);
+  ctx.transform(1, 0, 0.85, -0.2, 0, 0);   // lay the silhouette down and lean it away from the sun
+  ctx.globalAlpha = a;
+  ctx.drawImage(shadowOf(key, src), sx, sy, sw, sh);
+  ctx.restore();
+}
+// squishy secondary motion: the sprite is drawn in slices that sway a little more toward the top
+function drawJelly(img, dx, dy, dw, dh, t, amp, phase) {
+  const n = 8, sh = img.height / n, dsh = dh / n;
+  for (let k = 0; k < n; k++) {
+    const u = k / (n - 1), off = Math.sin(t * 2.4 + phase + (1 - u) * 2.2) * amp * (1 - u) * (1 - u * 0.4);
+    ctx.drawImage(img, 0, k * sh, img.width, sh + 0.6, dx + off, dy + k * dsh, dw, dsh + 0.7);
+  }
+}
 function shadow(x, y, rx) { ctx.fillStyle = 'rgba(30,20,50,.22)'; ctx.beginPath(); ctx.ellipse(x, y, rx, rx * 0.22, 0, 0, TAU); ctx.fill(); }
 
 const iconCache = new Map();
@@ -1182,6 +1216,7 @@ function drawStack(cx, list, t, marching, hpBars, cheer, zoomies) {
     const variant = c.flash > 0 ? 'hurt' : mood > 0 || cheer ? 'happy' : (cheer ? 'blink' : ((t * 0.9 + i * 1.37 + (c.seed || 0)) % 4.3 < 0.13 ? 'blink' : 'open'));
     const spr = catSprite(c.id, variant);
     if (i === 0) shadow(cx, GROUND + 3, 46);
+    castShadow('cat:' + c.id, catSprite(c.id), cx + lunge * 0.3, GROUND + 2, -60 * sc, feetY - GROUND - 107 * sc, 120 * sc, 120 * sc, 0.30 - i * 0.03);
     if (c.lvl >= 2) { add(); glow(cx + sway, feetY - 44, 58 + c.lvl * 8, c.lvl === 3 ? '#ffd24a' : '#ffe38c', (c.lvl === 3 ? 0.5 : 0.32) + 0.08 * Math.sin(t * 3 + i)); norm(); }
     const squash = c.flash > 0 ? 0.06 : 0;
     for (let k = zoomies ? 2 : 0; k >= 0; k--) {
@@ -1190,7 +1225,8 @@ function drawStack(cx, list, t, marching, hpBars, cheer, zoomies) {
       ctx.scale(1 + atk * 0.05 + squash, 1 - atk * 0.06 - squash);
       ctx.rotate(Math.sin(t * 2 + i * 1.3) * 0.015 + (marching ? Math.sin(t * 9 + i) * 0.03 : 0) + sway * 0.002);
       ctx.globalAlpha = k ? 0.22 / k : 1;
-      ctx.drawImage(spr, -60 * sc, -107 * sc, 120 * sc, 120 * sc);
+      if (gfx >= 2 && !k) drawJelly(spr, -60 * sc, -107 * sc, 120 * sc, 120 * sc, t, 0.9 + atk * 2.2 + (marching ? 1.6 : 0) + towerWob * 2.5, i * 1.3 + (c.seed || 0));
+      else ctx.drawImage(spr, -60 * sc, -107 * sc, 120 * sc, 120 * sc);
       if (!k && c.flash > 0) { ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = Math.min(0.8, c.flash * 4); ctx.drawImage(spr, -60 * sc, -107 * sc, 120 * sc, 120 * sc); }
       ctx.restore();
     }
@@ -1220,6 +1256,7 @@ function drawEnemy(e, t) {
   const pop = e.age < 0.3 ? (() => { const u = e.age / 0.3, c1 = 1.7; return Math.max(0.01, 1 + (c1 + 1) * Math.pow(u - 1, 3) + c1 * Math.pow(u - 1, 2)); })() : 1;
   if (!e.fly) shadow(e.x + e.kb, e.y + 1, (e.boss ? 80 : e.w * 0.5) * pop);
   else shadow(e.x, e.y + 1, e.w * 0.35);
+  if (!e.boss && gfx >= 2) { const sp0 = enemySprite(e.type, e.elite), es = (e.elite ? 1.16 : 1) * pop; castShadow('en:' + e.type + (e.elite ? '*' : ''), sp0.c, e.x + e.kb, e.y + 1, -sp0.ax * es, -sp0.ay * es - (e.fly ? e.alt : 0), sp0.w * es, sp0.h * es, e.fly ? 0.14 : 0.26); }
   ctx.save();
   ctx.translate(e.x + e.kb, y - hop);
   const f = e.flash > 0 ? e.flash / 0.1 : 0;
@@ -1361,6 +1398,72 @@ function drawCombo(t) {
   ctx.restore();
 }
 
+// ---------------------------------------------------------------- lighting and post processing
+const post = createPost(W, H);
+let ambCur = '#ffffff', thunder = 0, duskAmt = 0;
+const drops = Array.from({ length: 90 }, () => ({ x: Math.random() * (W + 200), y: Math.random() * H, v: 620 + Math.random() * 300, l: 10 + Math.random() * 14 }));
+const flakes = Array.from({ length: 70 }, () => ({ x: Math.random() * W, y: Math.random() * H, v: 24 + Math.random() * 40, p: Math.random() * 6, s: 1 + Math.random() * 2 }));
+
+function ambientTarget() {
+  const th = THEMES[bdIdx] || THEMES[0];
+  if (!g || mode === 'title') return { color: th.amb[0], dusk: 0 };
+  const nest = g.enemies.some((e) => e.boss && !e.dead);
+  return ambientFor(th, ((g.wave - 1) % BOSS_EVERY) + 1, BOSS_EVERY, g.bossWave, nest);
+}
+function gatherLights(t) {
+  const th = THEMES[bdIdx] || THEMES[0], night = th.deco === 'star', L = [];
+  L.push({ x: 740, y: 120, r: 560, col: night ? '#8fa8ff' : '#fff0c8', a: night ? 0.4 : 0.55 });
+  if (g && mode !== 'title') {
+    L.push({ x: g.towerX, y: GROUND - 110, r: 200, col: '#ffe9c8', a: 0.5 });
+    if (g.zoomT > 0) L.push({ x: W / 2, y: H / 2, r: 640, col: '#ffb8e0', a: 0.4 });
+    for (const p of g.projs) {
+      if (L.length > 50) break;
+      const col = p.kind === 'lob' ? '#ffb040' : p.kind === 'enemy' ? '#c8c8d8' : (p.fx && p.fx.color) || '#ffffff';
+      L.push({ x: p.x, y: p.y, r: p.kind === 'enemy' ? 44 : 78, col, a: 0.9 });
+    }
+    for (const e of g.enemies) {
+      if (L.length > 50) break;
+      if (e.dead) continue;
+      if (e.boss) L.push({ x: e.x, y: e.y - 40, r: 190 + Math.sin(t * 3) * 14, col: '#ff4a4a', a: 0.75 });
+      else if (e.elite) L.push({ x: e.x, y: e.y - e.h * 0.5, r: 70, col: '#ffd23f', a: 0.55 });
+      else if (e.burn) L.push({ x: e.x, y: e.y - e.h * 0.5, r: 60, col: '#ff7a2b', a: 0.6 });
+      else if (e.slowT > 0 && e.slow > 0) L.push({ x: e.x, y: e.y - e.h * 0.5, r: 52, col: '#8fd3ff', a: 0.5 });
+    }
+    for (const mi of g.mines) if (Math.sin(t * 8) > 0 && L.length < 54) L.push({ x: mi.x, y: GROUND + 6, r: 46, col: '#ff5d5d', a: 0.7 });
+    for (const p of g.pools) if (L.length < 54) L.push({ x: p.x, y: GROUND + 14, r: p.r * 1.5, col: '#ff7a2b', a: Math.min(1, p.t / 1.2) * 0.8 });
+  } else {
+    L.push({ x: 100, y: GROUND - 120, r: 220, col: '#ffe9c8', a: 0.5 });
+  }
+  for (const f of fx) {
+    if (L.length > 58) break;
+    const a = Math.max(0, f.life / f.max);
+    if (f.k === 'g') L.push({ x: f.x, y: f.y, r: f.r * 1.5, col: f.col, a });
+    else if (f.k === 'f') L.push({ x: f.x, y: f.y, r: 56, col: '#ff8a2b', a: a * 0.9 });
+    else if (f.k === 'l') { const p = f.pts[Math.floor(f.pts.length / 2)]; L.push({ x: p.x, y: p.y, r: 110, col: f.col, a }); }
+    else if (f.k === 'corpse' && f.elite) L.push({ x: f.x, y: f.y, r: 60, col: '#ffd23f', a: a * 0.6 });
+  }
+  return L;
+}
+function drawWeather(t, dt) {
+  const th = THEMES[bdIdx] || THEMES[0];
+  if (th.weather === 'rain') {
+    ctx.save(); ctx.strokeStyle = 'rgba(190,210,255,.42)'; ctx.lineWidth = 1.2; ctx.beginPath();
+    for (const d of drops) {
+      d.y += d.v * dt; d.x -= d.v * dt * 0.18;
+      if (d.y > H) { if (Math.random() < 0.5 && d.y < H + 40) { /* splash handled below */ } d.y = -20; d.x = Math.random() * (W + 200); }
+      ctx.moveTo(d.x, d.y); ctx.lineTo(d.x + d.l * 0.18, d.y - d.l);
+    }
+    ctx.stroke();
+    ctx.fillStyle = 'rgba(200,220,255,.5)';
+    for (let i = 0; i < 6; i++) { const x = (i * 197 + t * 330) % W, y = GROUND + 6 + ((i * 53) % 40), r = 3 + ((t * 9 + i) % 1) * 7; ctx.globalAlpha = 0.5 * (1 - (r - 3) / 7); ctx.beginPath(); ctx.ellipse(x, y, r, r * 0.3, 0, 0, TAU); ctx.fill(); }
+    ctx.restore();
+  } else if (th.weather === 'snow') {
+    ctx.save(); ctx.fillStyle = 'rgba(255,255,255,.85)';
+    for (const f of flakes) { f.y += f.v * dt; f.x += Math.sin(t + f.p) * 14 * dt - 8 * dt; if (f.y > H) { f.y = -4; f.x = Math.random() * W; } if (f.x < -4) f.x = W; ctx.beginPath(); ctx.arc(f.x, f.y, f.s, 0, TAU); ctx.fill(); }
+    ctx.restore();
+  }
+}
+
 function render(dt) {
   const t = tAnim;
   ctx.setTransform(res, 0, 0, res, 0, 0);
@@ -1371,7 +1474,7 @@ function render(dt) {
   zpunch *= Math.exp(-6 * dt);
   if (sk > 0.2) ctx.translate((Math.random() - 0.5) * sk, (Math.random() - 0.5) * sk);
   shake = Math.max(0, shake - dt * 40);
-  if (!bd) setBackdrop(0);
+  if (g && mode !== 'title' && g.wave > 0) setBackdrop(themeFor(g.wave)); else if (!bd) setBackdrop(0);
   const inRun = g && mode !== 'title';
   if (!inRun) titleScroll += dt * 40;
   const sc = inRun ? g.scroll : titleScroll;
@@ -1379,8 +1482,27 @@ function render(dt) {
   if (save.opt.quality !== 'low') { drawRays(ctx, bd, t); drawAmbient(t, dt, sc); }
   if (inRun) drawField(t, dt); else drawTitleScene(t);
   drawFront(ctx, bd, sc);
+  const th = THEMES[bdIdx] || THEMES[0], lit = gfx >= 1 && save.opt.quality !== 'low';
+  const tgt = ambientTarget();
+  if (lit) {
+    if (th.weather === 'rain' && g && mode === 'play' && save.opt.motion && Math.random() < dt * 0.1) { thunder = 1; screenFlash('rgba(210,220,255,.35)', 0.25); sfx.play('thunder'); }
+    thunder *= Math.exp(-3.2 * dt);
+    ambCur = mix(ambCur, mix(tgt.color, '#ffffff', Math.min(0.9, thunder)), Math.min(1, dt * 1.6));
+    duskAmt += (tgt.dusk - duskAmt) * Math.min(1, dt * 1.2);
+    const blobs = th.deco === 'star' ? null : [0, 1, 2].map((i) => ({ x: ((t * 12 + i * 430) % 1350) - 170, y: GROUND + 22 + i * 12, rx: 200, ry: 34, a: 0.16 }));
+    post.light(ctx, ambCur, gatherLights(t), blobs);
+  }
   drawFx();
+  if (gfx >= 2) drawWeather(t, dt);
   ctx.restore();
+  if (gfx >= 3) {
+    // glow reads best in dim light, so it is gentle at noon and stronger at dusk, at night and in the rain
+    const lum = (parseInt(ambCur.slice(1, 3), 16) + parseInt(ambCur.slice(3, 5), 16) + parseInt(ambCur.slice(5, 7), 16)) / 765;
+    post.bloom(ctx, cv, (post.hasFilter ? 0.5 : 0.2) * (1.25 - lum));
+  }
+  if (gfx >= 2) post.grade(ctx, th.grade[0], th.grade[1], duskAmt);
+  if (gfx >= 3 && th.deco !== 'star') post.flare(ctx, 740, 120, 0.08);
+  if (gfx >= 3) post.grain(ctx, t, 0.045);
   vignette(t);
   drawCombo(t);
 }
@@ -1415,7 +1537,9 @@ function frame(ts) {
   tAnim += dt;
   // drop render resolution if the device cannot keep up
   frameEma = frameEma * 0.95 + Math.min(100, raw * 1000) * 0.05;
-  if (save.opt.quality === 'auto' && frameEma > 26 && res > 1.01) { if (++slowFrames > 90) { quality *= 0.78; slowFrames = 0; fit(); } } else slowFrames = 0;
+  if (save.opt.quality === 'auto' && frameEma > 26 && (gfx > 1 || res > 1.01)) {
+    if (++slowFrames > 90) { slowFrames = 0; if (gfx > 1) gfx--; else { quality *= 0.78; fit(); } }
+  } else slowFrames = 0;
   if (slowT > 0) { slowT -= dt; if (slowT <= 0) slowT = 0; } else timeScale += (1 - timeScale) * Math.min(1, dt * 5);
   if (comboT > 0) { comboT -= dt; if (comboT <= 0) combo = 0; }
   comboPulse *= Math.exp(-8 * dt); towerWob *= Math.exp(-5 * dt);

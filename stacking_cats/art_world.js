@@ -298,9 +298,20 @@ export function makeBackdrop(theme, seed) {
     rx.lineTo(740 + Math.cos(a0 - spread) * 900, 120 + Math.sin(a0 - spread) * 900); rx.lineTo(740 + Math.cos(a0 + spread) * 900, 120 + Math.sin(a0 + spread) * 900); rx.fill();
   }
 
+  // depth of field and atmospheric haze: the distant layers are softer and drift toward the haze colour
+  const soften = (cv, px, haze, hazeA) => {
+    const [o, ox] = mk();
+    if (typeof CanvasRenderingContext2D !== 'undefined' && 'filter' in CanvasRenderingContext2D.prototype && px > 0) ox.filter = `blur(${px}px)`;
+    ox.drawImage(cv, 0, 0); ox.filter = 'none';
+    ox.globalCompositeOperation = 'source-atop'; ox.globalAlpha = hazeA; ox.fillStyle = haze; ox.fillRect(0, 0, W, H);
+    return o;
+  };
+  const hz = theme.haze || '#ffffff';
+  const farSoft = soften(far, 2.6, hz, 0.38), midSoft = soften(mid, 0.9, hz, 0.14);
+
   const stars = []; if (night) for (let i = 0; i < 70; i++) stars.push([rnd() * W, rnd() * 300, 0.6 + rnd() * 1.4, rnd() * 6]);
   const clouds = []; for (let i = 0; i < 5; i++) clouds.push([rnd() * W, 50 + rnd() * 130, 0.6 + rnd() * 0.8, 6 + rnd() * 8]);
-  return { sky, far, mid, gr, front, rays, stars, clouds, night, deco: theme.deco };
+  return { sky, far: farSoft, mid: midSoft, gr, front, rays, stars, clouds, night, deco: theme.deco, sun: { x: 740, y: 120 } };
 }
 
 export function drawBackdrop(ctx, bd, scroll, t) {
