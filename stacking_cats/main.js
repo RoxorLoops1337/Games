@@ -1799,6 +1799,7 @@ function updateSpecials() {
   }
   const show = g && mode === 'play' && g.state === 'fight';
   box.style.display = show || (g && mode === 'play') ? 'flex' : 'none';
+  box.classList.toggle('auto', !!save.opt.autoSpecial);
   if (!g) return;
   const cats = g.cats;
   for (const [uid, b] of spBtns) if (!cats.some((c) => c.uid === uid)) { b.remove(); spBtns.delete(uid); }
