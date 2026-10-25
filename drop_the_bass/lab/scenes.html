@@ -1,0 +1,24 @@
+<!doctype html>
+<meta charset="utf-8"><title>art_scenes lab</title>
+<style>body{margin:0;background:#111;color:#eee;font:12px sans-serif}canvas{display:block}</style>
+<canvas id="c"></canvas>
+<script type="module">
+import * as A from '../js/art_world.js';
+// ?id=garage_day|title|all&w=390&h=844&t=2&p=0.5&beat=0.5&s=2 ; id=all draws a contact sheet of every scene (cols=5)
+const q = new URLSearchParams(location.search);
+const id = q.get('id') || 'all', t = +q.get('t') || 2.1, p = q.has('p') ? +q.get('p') : 0.5, s = +q.get('s') || 2;
+A.setArtScale(s);
+const c = document.getElementById('c'), ctx = c.getContext('2d');
+function one(w, h, x, y, sid) {
+  ctx.save(); ctx.translate(x, y); ctx.beginPath(); ctx.rect(0, 0, w, h); ctx.clip();
+  if (sid === 'title') { A.drawTitle(ctx, w, h, t, { beat: q.has('beat') ? +q.get('beat') : 0.6 }); const sc = Math.min(w / 540, h / 960); ctx.translate((w - 540 * sc) / 2, (h - 960 * sc) / 2); ctx.scale(sc, sc); A.drawLogo(ctx, 270, 190, 480, t); }
+  else A.drawScene(ctx, sid, w, h, t, { progress: p });
+  ctx.restore();
+}
+if (id === 'all') {
+  const ids = A.SCENE_IDS.concat(['title']), cols = 5, w = 300, h = 520;
+  c.width = cols * w; c.height = Math.ceil(ids.length / cols) * h;
+  ids.forEach((sid, i) => { one(w, h, (i % cols) * w, Math.floor(i / cols) * h, sid); ctx.fillStyle = '#fff'; ctx.font = '14px sans-serif'; ctx.fillText(sid, (i % cols) * w + 8, Math.floor(i / cols) * h + 16); });
+} else { const w = +q.get('w') || 390, h = +q.get('h') || 844; c.width = w; c.height = h; one(w, h, 0, 0, id); }
+window.__done = true;
+</script>

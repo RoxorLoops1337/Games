@@ -38,7 +38,8 @@ const app = {
     const s = app.profile.settings;
     AudioFx.setVolume({ music: s.music, sfx: s.sfx });
     document.body.classList.toggle('reduce', !!s.reduce);
-    if (app.battle) app.battle.fx.noShake = !s.shake || !!s.reduce;
+    if (app.battle) { app.battle.fx.noShake = !s.shake || !!s.reduce; if (s.lowfx) app.battle.fx.bloomOn = false; }
+    if (app.view && app.view.lowfx !== !!s.lowfx) { app.view.lowfx = !!s.lowfx; resize(); }
   },
   showHowTo() { showHowTo(app); },
   playCutscene(id, done) {
@@ -76,7 +77,7 @@ function resize() {
   v.cw = cw; v.ch = ch; v.dpr = dpr; v.s = s; v.ox = (cw - W * s) / 2; v.oy = (ch - H * s) / 2;
   canvas.width = Math.round(cw * dpr); canvas.height = Math.round(ch * dpr);
   ui.style.left = v.ox + 'px'; ui.style.height = ch / s + 'px'; ui.style.transform = 'scale(' + s + ')';
-  const as = Math.max(1.5, Math.min(3, dpr * s));
+  const as = app.profile.settings.lowfx ? 1.25 : Math.max(1.5, Math.min(3, dpr * s));
   AE.setArtScale(as); AW.setArtScale(as);
 }
 window.addEventListener('resize', resize);
