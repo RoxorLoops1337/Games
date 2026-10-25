@@ -205,6 +205,7 @@ export function fight(run, pol, maxTurns = 40) {
         // lethal target if any, else chosen focus target
         ti = c.enemies.indexOf(st.target);
       }
+      if (globalThis.GW_TRACE) console.log(`T${c.turn} hp${c.player.hp} blk${c.player.block} en${c.energy} play ${sp.id} (need ${st.need}) foes ${live.map((e) => e.id + ':' + e.hp).join(',')}`);
       playCard(c, best, ti);
       c.ev.length = 0;
     }

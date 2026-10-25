@@ -724,7 +724,7 @@ function cardGrid(n, cw, ch, x0, x1, gap) {
 
 function drawPilesModal(app) {
   const ctx = app.ctx, M = S.modal, c = S.c;
-  ctx.save(); ctx.fillStyle = 'rgba(8,6,6,.86)'; ctx.fillRect(0, 0, W, H); ctx.restore();
+  ctx.save(); ctx.fillStyle = 'rgba(8,6,6,.95)'; ctx.fillRect(0, 0, W, H); ctx.restore();
   const tabs = [['draw', 'Draw'], ['discard', 'Discard'], ['exhaust', 'Exhaust']];
   tabs.forEach(([k, lab], i) => {
     const n = k === 'draw' ? c.drawPile.length : k === 'discard' ? c.discard.length : c.exhaust.length;
@@ -732,7 +732,8 @@ function drawPilesModal(app) {
   });
   if (app.button('Close', 1120, 22, 120, 44, { size: 20 })) { S.modal = null; sfx('uiBack'); return; }
   const pool = poolOf(M.tab);
-  app.text(M.tab === 'draw' ? 'Draw pile (shown in no particular order)' : M.tab === 'discard' ? 'Discard pile' : 'Exhausted this combat', 40, 34, { size: 20, color: COL.lamp });
+  app.text(M.tab === 'draw' ? 'Draw pile' : M.tab === 'discard' ? 'Discard pile' : 'Exhausted', 40, 22, { size: 24, bold: true, color: COL.lamp });
+  app.text(M.tab === 'draw' ? 'No particular order' : M.tab === 'discard' ? 'Reshuffled when the draw pile runs out' : 'Gone until the combat ends', 40, 54, { size: 13, ui: true, color: 'rgba(232,220,196,.6)' });
   if (!pool.length) { app.text('Empty.', W / 2, 300, { size: 28, align: 'center', color: 'rgba(232,220,196,.6)' }); return; }
   const sc = 0.5, cw = CARD_W * sc, ch = CARD_H * sc;
   const g = cardGrid(pool.length, cw, ch, 60, W - 60, 14);
@@ -757,7 +758,7 @@ function drawPilesModal(app) {
 
 function drawPendingModal(app) {
   const ctx = app.ctx, c = S.c, p = c.pending;
-  ctx.save(); ctx.fillStyle = 'rgba(8,6,6,.82)'; ctx.fillRect(0, 0, W, H); ctx.restore();
+  ctx.save(); ctx.fillStyle = 'rgba(8,6,6,.95)'; ctx.fillRect(0, 0, W, H); ctx.restore();
   const pool = pendPool(), need = pendingNeed();
   const verb = p.kind === 'discard' ? 'Discard' : p.kind === 'exhaust' ? 'Exhaust' : `Take from ${p.zone === 'exhaust' ? 'exhaust' : 'discard'}`;
   app.text(`Choose ${need}`, W / 2, 56, { size: 44, bold: true, align: 'center', color: COL.lamp, shadow: true });
@@ -1024,14 +1025,14 @@ function drawEnemyHud(app, ed, alpha, hot) {
   const iy = FOOT_Y - ed.h - 34 + Math.sin(S.t * 2.4 + ed.phase) * 3;
   if (info && ed.intentOut < 1) {
     const r = drawIntentBubble(app, info, ed.x, iy, ed.intentT, (1 - ed.intentOut) * alpha);
-    if (r.w && ed.intentOut === 0 && app.inRect(ed.x - r.w / 2, iy - r.h / 2, r.w, r.h)) app.tooltip(info.hidden ? 'Hidden intent' : moveName(info), intentText(info), { color: COL.vellum });
+    if (r.w && ed.intentOut === 0 && !S.banner && !S.modal && app.inRect(ed.x - r.w / 2, iy - r.h / 2, r.w, r.h)) app.tooltip(info.hidden ? 'Hidden intent' : moveName(info), intentText(info), { color: COL.vellum });
   }
   if (ed.callout && ed.callout.text) {
     const k = ed.callout.t; ctx.save(); ctx.globalAlpha = clamp(1 - (k - 0.6) / 0.4, 0, 1) * alpha;
     app.text(ed.callout.text, ed.x, iy - 10 - k * 16, { size: 22, bold: true, align: 'center', color: COL.vellum, stroke: '#0e0e0e', strokeW: 5, baseline: 'middle' }); ctx.restore();
   }
   // hover tooltip on the body
-  if (hot && !app.blocked) {
+  if (hot && !app.blocked && !S.banner && !S.modal) {
     const ents = Object.keys(ed.st).length;
     if (!targeting() && app.inRect(ed.x - ed.w / 2, FOOT_Y - ed.h, ed.w, ed.h)) {
       const kindTxt = def.kind === 'boss' ? 'Boss' : def.kind === 'elite' ? 'Elite' : '';
@@ -1191,7 +1192,7 @@ function drawTips(app) {
   const has = (k) => app.shared.meta && app.shared.meta.tips && app.shared.meta.tips[k];
   const tip = (k, x, y, o, txt) => maybeTip(app, k, x, y, txt, o);
   if (first && !S.hov) {
-    if (tip('energy', L.ORB.x + 46, L.ORB.y, { side: 'right', w: 280 })) return;
+    if (tip('energy', L.ORB.x + 46, L.ORB.y - 50, { side: 'right', w: 280 })) return;
     if (tip('intent', first.x, FOOT_Y - first.h - 8, { side: 'below', w: 290 })) return;
     if (S.hand.length && tip('playcard', L.HAND_CX, L.HAND_Y - 120, { side: 'above', w: 330 }, 'Click a card to select it, then click it again or drag it up to play it. Attacks ask for a target. Keys 1 to 0 also select.')) return;
     if (c.enemies.some((e) => !e.dead && e.move && intentWith(S.edBy.get(e.uid), e.move) && intentWith(S.edBy.get(e.uid), e.move).kinds.includes('attack')) && tip('block', HERO_X + 70, FOOT_Y - 150, { side: 'right', w: 280 })) return;
