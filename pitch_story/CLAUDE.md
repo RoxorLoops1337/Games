@@ -1,7 +1,7 @@
 # Pitch Story: Draft Day
 
 Kairosoft-style football club manager with a roguelike card draft. Concept: `design/gdd/game-concept.md`.
-Live at `/pitch_story/` (do not rename this folder or the save key: they are live URLs and save data).
+Live at `/pitch_story/`, which forwards to `/pitch_story/play/` (do not rename this folder or the save key: they are live URLs and save data).
 
 ## Stack
 Godot 4.7.1, GDScript, GL Compatibility renderer, 360x640 portrait base (stretch `canvas_items`, aspect `expand`).
@@ -15,7 +15,8 @@ for this version: `@../docs/engine-reference/godot/VERSION.md` (the model's own 
 - `src/ui/`: screens and `town_view.gd` (the diorama), `pitch_view.gd`, `sfx.gd` (synthesised sounds), `app.gd` (router, save).
 - `tests/`: `run_tests.gd` runs every `*.test.gd`. `balance.gd`, `cards_balance.gd`, `career.gd` are probes, not tests.
 - `web/`: `shell.html` (page shell, unpacks the gzipped engine) and `cover.webp` (home page poster).
-- `play/`: the committed web export, served at `/pitch_story/` (see below). Never edit it by hand.
+- `index.html`: forwards `/pitch_story/` to `play/`. The site serves the repo as it is (like `awesome_farm/`), so a game page must exist at the folder's own path or the URL falls back to the home gallery.
+- `play/`: the committed web export, served at `/pitch_story/play/` (see below). Never edit it by hand.
 
 ## Rules (from the technical review)
 - The match sim is a pure function of (seed, teams, cards, calls) and returns an event log. Screens only DISPLAY it and never
