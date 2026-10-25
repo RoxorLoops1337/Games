@@ -9,7 +9,7 @@ import { REMIX, WAVE_MODS } from './data_run.js';
 import { TUTORIAL, HINTS, LOOPY_TIPS } from './data_story.js';
 import * as AE from './art_entities.js';
 import * as AW from './art_world.js';
-import { glass, button, liquidBar, bezel, text, wrapText, rrect, rrectPath, rgba } from './hud.js';
+import { glass, button, liquidBar, bezel, text, wrapText, rrect, rrectPath, rgba } from './hudx.js';
 import { drawGlow } from './fx.js';
 
 const FONT = '"Trebuchet MS", "Segoe UI", system-ui, sans-serif';

@@ -464,6 +464,9 @@ export function settingsModal(app) {
     body.replaceChildren(h('h2', null, 'Settings'));
     const slider = (label, key, apply) => h('div', { class: 'rangeRow' }, h('span', { style: 'width:80px' }, label), h('input', { type: 'range', min: 0, max: 100, value: Math.round(s[key] * 100), oninput: (e) => { s[key] = e.target.value / 100; apply(); app.save(); }, onchange: () => app.audio.play('ui_click') }));
     const tog = (label, key) => h('div', { class: 'toggle' }, label, btn(s[key] ? 'ON' : 'OFF', () => { s[key] = !s[key]; app.applySettings(); app.save(); draw(); }, s[key] ? 'green small' : 'dark small'));
+    body.append(h('div', { class: 'toggle' }, 'Visual style', h('div', { class: 'row', style: 'gap:6px' },
+      btn('Doodle', () => { s.style = 'doodle'; app.applySettings(); app.save(); draw(); app.hub && app.hub.render(); }, s.style === 'classic' ? 'dark small' : 'green small'),
+      btn('Classic', () => { s.style = 'classic'; app.applySettings(); app.save(); draw(); app.hub && app.hub.render(); }, s.style === 'classic' ? 'green small' : 'dark small'))));
     body.append(slider('Music', 'music', () => app.applySettings()), slider('Sound', 'sfx', () => app.applySettings()),
       tog('Screen shake', 'shake'), tog('Damage numbers', 'numbers'), tog('Vibration', 'vibrate'), tog('Beat helper (DROP ring)', 'beat'), tog('Reduce motion', 'reduce'), tog('Low graphics (faster)', 'lowfx'));
     if (p.autoMerge) body.append(tog2('Auto-merge after each drop', p.autoMergeOn, () => { p.autoMergeOn = !p.autoMergeOn; app.save(); draw(); }));

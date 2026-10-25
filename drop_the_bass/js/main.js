@@ -10,6 +10,7 @@ import { buildHub, settingsModal, codexModal } from './ui_hub.js';
 import { showChoice, showPause, showHint, showDefeat, showResults, showHowTo } from './ui_run.js';
 import { setRoot, h, btn, modal, toast, tickLive, AE, AW } from './ui_core.js';
 import { submitScore, rankOf } from './lb.js';
+import { setStyle } from './style.js';
 
 const canvas = document.getElementById('game');
 const ui = document.getElementById('ui');
@@ -38,6 +39,7 @@ const app = {
     const s = app.profile.settings;
     AudioFx.setVolume({ music: s.music, sfx: s.sfx });
     document.body.classList.toggle('reduce', !!s.reduce);
+    const st = setStyle(s.style); document.body.classList.toggle('doodle', st === 'doodle'); document.body.classList.toggle('classic', st === 'classic');
     if (app.battle) { app.battle.fx.noShake = !s.shake || !!s.reduce; if (s.lowfx) app.battle.fx.bloomOn = false; }
     if (app.view && app.view.lowfx !== !!s.lowfx) { app.view.lowfx = !!s.lowfx; resize(); }
   },
