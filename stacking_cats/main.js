@@ -161,7 +161,7 @@ function hideCoach() {
 // a friendly speech bubble for the first runs. dir says which way the little tail points.
 // opt.target: element (or selector in the screen) to ring with a pulse; opt.wait: stay until the real action (no timer).
 function coach(key, html, x, y, dir = 'down', opt = {}) {
-  if (!save.opt.tutorial || save.tips[key]) return;
+  if (!save.opt.tutorial || save.tips[key] || paused) return;   // never float a tip over the pause menu
   hideCoach();
   save.tips[key] = true; persist();
   let hl = opt.target;
