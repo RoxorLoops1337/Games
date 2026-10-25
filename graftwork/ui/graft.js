@@ -89,7 +89,7 @@ export default {
     const R = st.rects;
     const inst = st.selCard ? RUN.findInst(run, st.selCard) : null;
     const g = st.selGraft ? GRAFTS[st.selGraft] : null;
-    const pair = !!(inst && g && (live ? canGraft(inst, st.selGraft) : true));
+    const pair = !!(inst && g && (live ? canGraft(inst, st.selGraft) : !!st.snap)); // 'leaving' (skip) has no snap
     const pv = pair ? (live ? getPreview(inst, st.selGraft) : st.snap.pv) : null;
     const tithedSet = new Set(pair ? pv.after.tithed : strain.tithed);
 

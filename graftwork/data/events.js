@@ -1,6 +1,11 @@
 // Events: { id, name, act: 0 (any)|1|2|3, text, art?, choices: [{ label, text, cond?(run), pick?, pickFilter?, apply(run, R, inst) -> resultText }] }  R = engine/run.js helper API
 const leave = (msg) => ({ label: 'Walk away', text: 'Nothing happens.', apply: () => msg || 'You leave. Nobody objects.' });
 const grafted = (i) => i.grafts.length > 0;
+const bareCount = (run) => { let n = 0; for (const i of run.deck) if (i.grafts.length === 0 && !i.id.startsWith('j_')) n++; return n; };
+// A Bare card re-filed under a fresh uid: Tithe picks cheapest then OLDEST, so the new uid goes to the back of its cost.
+const refile = (run, R, inst) => { const id = inst.id, up = inst.up; R.removeCard(run, inst.uid); R.addCard(run, id); const n = run.deck[run.deck.length - 1]; if (up) R.upgrade(run, n.uid); if (run.flags.mem && run.flags.mem.uid === inst.uid) run.flags.mem.uid = n.uid; };
+// Replace every graft on a card with the same number of random ones.
+const rerollCard = (run, R, inst) => { const n = inst.grafts.length; for (const g of inst.grafts.slice()) R.stripGraft(run, inst.uid, g); let k = 0; for (let j = 0; j < n; j++) if (R.addGraftRandom(run, inst.uid)) k++; return k; };
 
 export const EVENT_LIST = [
   // ---------------- ANY ACT ----------------
@@ -262,6 +267,234 @@ export const EVENT_LIST = [
         apply: (run, R, inst) => { R.removeCard(run, inst.uid); R.heal(run, 5); return 'A small crack, a small relief. The card is gone. You heal 5 HP, and receive a lollipop.'; } },
       { label: 'Just a cleaning (15 gold)', text: 'Pay 15 gold. Heal 8 HP.', cond: (run) => run.gold >= 15, apply: (run, R) => { R.gold(run, -15); R.heal(run, 8); return 'He scrapes something off you. You heal 8 HP. -15 gold.'; } },
       leave('He holds the molar up to the light, and sighs for it.'),
+    ],
+  },
+  // =====================================================================
+  // CONTENT WAVE 2. Chains use run.flags: debt, patient, mem, cult, signed, owe.
+  // =====================================================================
+  // ---------------- ANY ACT: graft-system events ----------------
+  {
+    id: 'e_filing_clerk', name: 'The Filing Clerk', act: 0,
+    text: 'A clerk sits behind a wall of index cards, each one a card of yours. "The Tithe is collected cheapest first, then oldest first," she says. "Age is a matter of paperwork."',
+    choices: [
+      { label: 'File one Bare card at the back (10 gold)', text: 'Pay 10 gold. A Bare card is re-filed as the newest, so among Bare cards of equal cost it is Tithed last.', pick: 'card', pickFilter: (i) => !grafted(i) && !i.id.startsWith('j_'), cond: (run) => run.gold >= 10 && bareCount(run) > 1,
+        apply: (run, R, inst) => { R.gold(run, -10); refile(run, R, inst); return 'She stamps it NEW. It is the same card with a younger number. 10 gold paid. Whoever is older pays first.'; } },
+      { label: 'Re-file everything now Tithed (25 gold)', text: 'Pay 25 gold. Every currently Tithed card is re-filed as the newest, so the Tithe falls on the next in line. If nothing else shares their cost, nothing changes.', cond: (run) => run.gold >= 25 && bareCount(run) > 1,
+        apply: (run, R) => { const ids = R.strainOf(run).tithed.slice(); R.gold(run, -25); for (const u of ids) { const i = run.deck.find((x) => x.uid === u); if (i) refile(run, R, i); } return 'The stamp comes down ' + ids.length + ' time' + (ids.length === 1 ? '' : 's') + '. -25 gold. The Tithe takes a different seat.'; } },
+      leave('"Your file is in order," she says. It is not.'),
+    ],
+  },
+  {
+    id: 'e_lottery_ward', name: 'The Reroll Ward', act: 0,
+    text: 'A ward of cots, each with a card under the pillow and a graft stitched crooked. A nurse offers to unpick everything and sew it again from the bin. "Surprises are good for patients," she says. She has never been a patient.',
+    choices: [
+      { label: 'Reroll one card (4 HP)', text: 'Lose 4 HP. Remove all grafts from a grafted card and sew the same number of random ones. Max HP Prices apply again.', pick: 'card', pickFilter: grafted, cond: (run) => run.hp > 6 && run.deck.some(grafted),
+        apply: (run, R, inst) => { R.hurt(run, 4); const n = rerollCard(run, R, inst); return 'Unpicked and resewn: ' + n + ' graft' + (n === 1 ? '' : 's') + ' drawn from the bin. -4 HP. She calls this "a fresh start".'; } },
+      { label: 'Reroll every graft in the deck (10 HP)', text: 'Lose 10 HP. Every graft on every card is replaced by a random one, same count per card.', cond: (run) => run.hp > 14 && run.deck.some(grafted),
+        apply: (run, R) => { R.hurt(run, 10); let n = 0; for (const i of run.deck.filter(grafted)) n += rerollCard(run, R, i); return 'The whole ward is unpicked at once. ' + n + ' grafts are drawn from the bin. -10 HP. Some of them are even good.'; } },
+      leave('She puts the needle back in the cushion, reluctantly.'),
+    ],
+  },
+  {
+    id: 'e_budget_pharmacy', name: 'The Budget Pharmacist', act: 0,
+    text: 'A counter, a scale, a jar of small numbers. "Budget is prescribed, not found," says the pharmacist. "Payment on collection. Any currency the body recognizes."',
+    choices: [
+      { label: 'Fill it with blood (+1 Budget, -5 max HP)', text: 'Gain 1 Budget permanently. Lose 5 max HP.', cond: (run) => run.maxHp > 30,
+        apply: (run, R) => { R.budget(run, 1); R.maxHp(run, -5); return 'A small label: TAKE AS NEEDED. +1 Budget, -5 max HP.'; } },
+      { label: 'Fill it with gold (+1 Budget, 45 gold)', text: 'Pay 45 gold. Gain 1 Budget permanently.', cond: (run) => run.gold >= 45,
+        apply: (run, R) => { R.gold(run, -45); R.budget(run, 1); return 'The jar rattles once. +1 Budget, -45 gold. No refills.'; } },
+      leave('"Side effects include leaving," she says.'),
+    ],
+  },
+  {
+    id: 'e_actuary', name: 'The Actuary', act: 0,
+    text: 'A man with a slide rule and no shadow. "Shatter is only a number," he says, "and I know all of them." He offers to put your next stitch on the books at a known rate.',
+    choices: [
+      { label: 'Free third graft (10% the stitch fails)', text: 'Pick a card with 2 grafts. Add a random third graft (Overload). 10% chance the stitch fails at once: the card is destroyed and he pays 20 gold. The Overload still rolls its usual Shatter in combat.', pick: 'card', pickFilter: (i) => i.grafts.length === 2, cond: (run) => run.deck.some((i) => i.grafts.length === 2),
+        apply: (run, R, inst) => { if (R.rng(run).chance(0.1)) { R.shatter(run, inst.uid); R.gold(run, 20); return 'The ten percent arrives on schedule. The card is gone. He pays 20 gold and writes "as predicted".'; } const g = R.addGraftRandom(run, inst.uid); return g ? 'The ninety percent holds. The third graft takes. It is Overloaded and in the books.' : 'No graft fits this card. He shrugs, in italics.'; } },
+      { label: 'Insured third graft (40 gold, 0% fail)', text: 'Pay 40 gold. Same as above, but the stitch cannot fail. The Overload still rolls its usual Shatter in combat.', pick: 'card', pickFilter: (i) => i.grafts.length === 2, cond: (run) => run.gold >= 40 && run.deck.some((i) => i.grafts.length === 2),
+        apply: (run, R, inst) => { R.gold(run, -40); const g = R.addGraftRandom(run, inst.uid); return g ? 'Premium paid. The third graft takes, guaranteed. -40 gold. The policy excludes combat.' : 'No graft fits this card. He refunds the 40 gold with visible pain.'; } },
+      leave('He writes "declined" in a column of his own.'),
+    ],
+  },
+
+  // ---------------- ACT I ----------------
+  {
+    id: 'e_loan_shark', name: 'A Friendly Lender', act: 1,
+    text: 'He has a sofa in a stairwell and a ledger on the sofa. "Gold now, gold later," he says. "No hurry. I always find you."',
+    choices: [
+      { label: 'Borrow 90 gold', text: 'Gain 90 gold. You will owe him 120 later.', apply: (run, R) => { R.gold(run, 90); run.flags.debt = 120; return 'The money is warm from his pocket. +90 gold. He writes 120 in his ledger, and underlines it gently.'; } },
+      { label: 'Borrow 40 gold', text: 'Gain 40 gold. You will owe him 55 later.', apply: (run, R) => { R.gold(run, 40); run.flags.debt = 55; return 'A smaller loan, a smaller underline. +40 gold. He writes 55.'; } },
+      leave('"Another time," he says. He is already writing something.'),
+    ],
+  },
+  {
+    id: 'e_stray_patient', name: 'The Unregistered Patient', act: 1,
+    text: 'A man sits on the stairs with a graft coming loose at the wrist. Nobody has signed him in. He is polite about it, which is worse.',
+    choices: [
+      { label: 'Stabilize him (12 gold)', text: 'Pay 12 gold. He may remember.', cond: (run) => run.gold >= 12, apply: (run, R) => { R.gold(run, -12); run.flags.patient = 1; return 'You clamp, you tape, you do not know his name. -12 gold. He nods as if filing it.'; } },
+      { label: 'Carry him to a bed (6 HP)', text: 'Lose 6 HP. He will remember.', cond: (run) => run.hp > 10, apply: (run, R) => { R.hurt(run, 6); run.flags.patient = 2; return 'He weighs more than he looks. -6 HP. He holds your sleeve until the nurse arrives.'; } },
+      leave('You step around him. He understands. That is the worst part.'),
+    ],
+  },
+  {
+    id: 'e_scar_reader', name: 'The Scar Reader', act: 1,
+    text: 'An old woman reads your cards the way others read palms. "This one has a graft," she says, "and it is not entirely sure it wants one." She offers to take it off. Gently. The card will keep the shape of it.',
+    choices: [
+      { label: 'Lift the last graft (card remembers)', text: 'Remove the last graft from a grafted card, free. That card is marked: it may ask for the graft back later.', pick: 'card', pickFilter: grafted, cond: (run) => run.deck.some(grafted),
+        apply: (run, R, inst) => { const gid = inst.grafts[inst.grafts.length - 1]; R.stripGraft(run, inst.uid, gid); run.flags.mem = { uid: inst.uid, gid }; return 'The graft lifts like a plaster. The card keeps a pale outline where it was. It will remember.'; } },
+      { label: 'Read your scars', text: 'Heal 6 HP.', apply: (run, R) => { R.heal(run, 6); return 'She reads you aloud for a while. You heal 6 HP. Some of it is accurate.'; } },
+      leave('"The scars will wait," she says. They always do.'),
+    ],
+  },
+  {
+    id: 'e_cult_pamphlet', name: 'The Even Stitch', act: 1,
+    text: 'A pamphlet is pressed into your hand by someone with perfectly even stitching. THE DECK IS A BODY, it reads. THE BODY OWES NOTHING. The last line is smaller: ASK ABOUT OUR VOW.',
+    choices: [
+      { label: 'Take the vow (+1 Budget)', text: 'Gain 1 Budget permanently. They will come for what you promised.', apply: (run, R) => { R.budget(run, 1); run.flags.cult = 1; return 'You sign in even letters. +1 Budget. They bow, evenly, and write down your address.'; } },
+      { label: 'Take the snacks', text: 'Heal 7 HP.', apply: (run, R) => { R.heal(run, 7); return 'The biscuits are excellent. You heal 7 HP. Nobody asks for anything.'; } },
+      leave('You fold the pamphlet into a very small square.'),
+    ],
+  },
+  {
+    id: 'e_weigh_in', name: 'The Weigh-In', act: 1,
+    text: 'A nurse with a deck scale and a printout. "Weight, Budget, difference," she recites. "The difference is what we call Strain. Step up, please."',
+    choices: [
+      { label: 'Step on the scale', text: 'No Strain: heal 8 HP. Strain: gain 10 gold per Strain (max 40) and lose 3 HP.',
+        apply: (run, R) => { const s = R.strainOf(run); if (s.strain === 0) { R.heal(run, 8); return 'Weight ' + s.weight + ', Budget ' + s.budget + '. "Very good," she says. You heal 8 HP.'; } const g = Math.min(40, 10 * s.strain); R.gold(run, g); R.hurt(run, 3); return 'Weight ' + s.weight + ', Budget ' + s.budget + '. Strain ' + s.strain + '. She sighs, pays you ' + g + ' gold for the data, and takes 3 HP for the sigh.'; } },
+      { label: 'Have her trim a card (4 HP)', text: 'Lose 4 HP. Remove the FIRST graft of a grafted card.', pick: 'card', pickFilter: grafted, cond: (run) => run.hp > 6 && run.deck.some(grafted),
+        apply: (run, R, inst) => { R.hurt(run, 4); R.stripGraft(run, inst.uid, inst.grafts[0]); return 'She trims the oldest stitch and bins it. -4 HP. The scale is visibly relieved.'; } },
+      leave('She prints the weight anyway and tucks it in your pocket.'),
+    ],
+  },
+  {
+    id: 'e_ward_ledger', name: 'The Visitor Log', act: 1,
+    text: 'A clipboard on a string. Every line is a name and a time, and every name is yours in a different hand. A pen is chained to it. The note says: SIGN, AND WE WILL REMEMBER WHAT YOU SEW.',
+    choices: [
+      { label: 'Sign (+10 gold)', text: 'Gain 10 gold. Grafts sewn from now on are logged. Someone will settle up later.', apply: (run, R) => { R.gold(run, 10); run.flags.signed = run.stats.grafts | 0; return 'You sign. The pen is warm. +10 gold and a faint sense of being counted.'; } },
+      { label: 'Sign a false name', text: 'Gain a random potion. Nobody settles up.', apply: (run, R) => { R.addPotion(run, null); return 'You sign Dr. Nobody. A potion is handed over without eye contact.'; } },
+      leave('The pen swings back and forth on its chain.'),
+    ],
+  },
+
+  // ---------------- ACT II ----------------
+  {
+    id: 'e_patient_returns', name: 'A Familiar Wrist', act: 2,
+    text: 'A man behind a tray of bottles lifts his sleeve to show a neat graft at the wrist. He is trying to remember how he knows you.',
+    choices: [
+      { label: 'Accept the gift (he remembers a lot)', text: 'Gain a random relic.', cond: (run) => run.flags.patient === 2, apply: (run, R) => { delete run.flags.patient; R.addRelic(run, null); return '"You carried me," he says. He presses a relic into your hand and will not hear no.'; } },
+      { label: 'Accept the gift (he remembers a little)', text: 'Gain a random potion and 30 gold.', cond: (run) => run.flags.patient === 1, apply: (run, R) => { delete run.flags.patient; R.addPotion(run, null); R.gold(run, 30); return '"You clamped it," he says. A potion and 30 gold, from a tray that has seen fewer customers.'; } },
+      { label: 'Browse his tray (20 gold)', text: 'Pay 20 gold. Gain a random potion.', cond: (run) => !run.flags.patient && run.gold >= 20, apply: (run, R) => { R.gold(run, -20); R.addPotion(run, null); return 'Nobody here owes you anything. The potion is fairly priced. -20 gold.'; } },
+      leave('He keeps squinting at you, still working it out.'),
+    ],
+  },
+  {
+    id: 'e_debt_collector', name: 'The Collector, Courteous', act: 2,
+    text: 'He appears in the market as if he had been there all along. "A word about the matter of the loan," he begins. If you owe nothing, the words are just a pleasant noise.',
+    choices: [
+      { label: 'Pay the balance', text: 'Pay what you owe in gold. The debt is cleared.', cond: (run) => run.flags.debt > 0 && run.gold >= run.flags.debt, apply: (run, R) => { const d = run.flags.debt; R.gold(run, -d); delete run.flags.debt; return 'He counts it twice. -' + d + ' gold. "A pleasure," he says, and for once nobody is lying.'; } },
+      { label: 'Pay in blood (-10 max HP)', text: 'Lose 10 max HP. The debt is cleared.', cond: (run) => run.flags.debt > 0 && run.maxHp > 30, apply: (run, R) => { R.maxHp(run, -10); delete run.flags.debt; return 'He does not take much, but what he takes does not come back. -10 max HP. The ledger is closed.'; } },
+      { label: 'Send him away by force', text: 'Fight two Orderlies he brought. Win and the debt is cleared.', cond: (run) => run.flags.debt > 0, apply: (run, R) => { delete run.flags.debt; R.queueFight(run, ['orderly', 'orderly']); return '"As you like," he says, and whistles. Two orderlies come in with mops and an invoice.'; } },
+      { label: 'Take his spare receipt', text: 'Gain 20 gold. He had you confused with someone else.', cond: (run) => !run.flags.debt, apply: (run, R) => { R.gold(run, 20); return '"Not you," he says, embarrassed, and pays you 20 gold for the inconvenience.'; } },
+      leave('He writes it down. The number is bigger than it was.'),
+    ],
+  },
+  {
+    id: 'e_borrowed_graft', name: 'Graft on Account', act: 2,
+    text: 'A stall that sells grafts without a price tag. "On account," says the vendor, whose face is a very good loan. "You will not notice the bill until it arrives."',
+    choices: [
+      { label: 'Take a graft on account', text: 'A normal graft reward screen follows. Something will be taken back later.', apply: (run, R) => { run.flags.owe = 1; R.queueGraftPick(run); return 'The graft is yours, warm and unpaid. He writes your name on a small card and puts it in a very large drawer.'; } },
+      { label: 'Pay now (60 gold)', text: 'Pay 60 gold. A normal graft reward screen follows.', cond: (run) => run.gold >= 60, apply: (run, R) => { R.gold(run, -60); R.queueGraftPick(run); return 'He looks almost sad to be paid. -60 gold. A graft follows.'; } },
+      leave('"Everyone comes back," he says, kindly.'),
+    ],
+  },
+  {
+    id: 'e_load_balancer', name: 'The Load Balancer', act: 2,
+    text: 'A man in a hard hat walks across your deck with a spirit level. "Heavy here," he says, tapping a card. "Light there. We can even that out, and the stitches do not mind. Most of them."',
+    choices: [
+      { label: 'Move a graft to a Bare card', text: 'Move the last graft of a grafted card onto the first card that can take it and has no grafts. The Bare card is no longer Bare, so it escapes the Tithe but the weight stays.', pick: 'card', pickFilter: grafted, cond: (run) => run.deck.some(grafted) && run.deck.length > 1,
+        apply: (run, R, inst) => { const gid = inst.grafts[inst.grafts.length - 1]; const dest = run.deck.filter((i) => i.uid !== inst.uid && i.grafts.length === 0 && (i.id.charAt(0) !== 'j')).find((i) => R.moveGraft(run, inst.uid, i.uid, gid)); return dest ? 'The graft is lifted, carried across the deck, and set down on a new card. It sits up straight. The weight is the same. The Tithe is not.' : 'He walks the whole deck and finds no card that will take it. No charge.'; } },
+      { label: 'Weigh the deck', text: 'Hear Weight, Budget and Strain. Heal 5 HP.', apply: (run, R) => { const s = R.strainOf(run); R.heal(run, 5); return 'Weight ' + s.weight + '. Budget ' + s.budget + '. Strain ' + s.strain + ', Tithed ' + s.tithed.length + (s.backfire ? ', Backfire ' + s.backfire : '') + '. He gives you tea. You heal 5 HP.'; } },
+      leave('He taps the hard hat and goes up the stairs backwards.'),
+    ],
+  },
+  {
+    id: 'e_graft_clone', name: 'The Duplicator', act: 2,
+    text: 'A printing press that does not take paper. A tray says INSERT ONE STITCHED CARD. The output slot already holds a card, plain, wearing a graft that has not stopped blinking.',
+    choices: [
+      { label: 'Clone a card with its graft (60 gold)', text: 'Pay 60 gold. Add a copy of a card that has exactly 1 graft, with the same graft. Its weight raises Strain.', pick: 'card', pickFilter: (i) => i.grafts.length === 1, cond: (run) => run.gold >= 60 && run.deck.some((i) => i.grafts.length === 1),
+        apply: (run, R, inst) => { R.gold(run, -60); R.addCard(run, inst.id); const c = run.deck[run.deck.length - 1]; if (inst.up) R.upgrade(run, c.uid); R.addGraft(run, c.uid, inst.grafts[0]); return 'The press shudders and hands you a twin with the same stitch and the same expression. -60 gold. Mind the Strain.'; } },
+      { label: 'Clone a card, plain (12 HP)', text: 'Lose 12 HP. Add a plain copy of any card.', pick: 'card', cond: (run) => run.hp > 16 && run.deck.length > 0,
+        apply: (run, R, inst) => { R.hurt(run, 12); R.addCard(run, inst.id); return 'The press takes 12 HP and prints a copy with no graft and no memory. It is, however, Bare.'; } },
+      leave('The blinking graft in the slot follows you with its light.'),
+    ],
+  },
+  {
+    id: 'e_cure_shelf', name: 'The Cure Shelf', act: 2,
+    text: 'Two shelves behind a locked glass door. Left: cures for the body of the deck. Right: cures for the arithmetic. The keeper has a tidy handwriting and a poor opinion of Budget.',
+    choices: [
+      { label: 'Left shelf (20 gold)', text: 'Pay 20 gold. Gain Unjam Solvent and Absolution Drops.', cond: (run) => run.gold >= 20, apply: (run, R) => { R.gold(run, -20); R.addPotion(run, 'p_unjam'); R.addPotion(run, 'p_untithe'); return 'Two small bottles, labeled in the keeper\'s tidy hand. -20 gold. Only as many as you can carry.'; } },
+      { label: 'Right shelf (25 gold)', text: 'Pay 25 gold. Gain Borrowed Budget and Loaded Dice.', cond: (run) => run.gold >= 25, apply: (run, R) => { R.gold(run, -25); R.addPotion(run, 'p_borrowed_budget'); R.addPotion(run, 'p_loaded_dice'); return 'Two bottles that clink like coins. -25 gold. Only as many as you can carry.'; } },
+      leave('The keeper locks the glass again, with relief.'),
+    ],
+  },
+
+  // ---------------- ACT III ----------------
+  {
+    id: 'e_memory_returns', name: 'The Card That Remembers', act: 3,
+    text: 'A card in your deck is warm. You did not play it. You turn it over and it shows you a pale outline on its face, the shape of a graft that is no longer there.',
+    choices: [
+      { label: 'Give it back its graft (free)', text: 'Re-sew the graft that was lifted from that card, and upgrade it. The weight returns with it.', cond: (run) => !!run.flags.mem && run.deck.some((i) => i.uid === run.flags.mem.uid),
+        apply: (run, R) => { const m = run.flags.mem; delete run.flags.mem; const r = R.addGraft(run, m.uid, m.gid); if (r && r.ok) { R.upgrade(run, m.uid); return 'The graft slots into its outline as if it had never left. The card is upgraded, and warmer. The weight came back too.'; } return 'The outline will not take the graft any more. The card sighs and cools.'; } },
+      { label: 'Let it forget (upgrade it)', text: 'Upgrade that card. It stays plain.', cond: (run) => !!run.flags.mem && run.deck.some((i) => i.uid === run.flags.mem.uid),
+        apply: (run, R) => { const m = run.flags.mem; delete run.flags.mem; R.upgrade(run, m.uid); return 'The outline fades. The card is upgraded and lighter. It does not say thank you; it was the one who asked.'; } },
+      { label: 'Read your own scars', text: 'Heal 10 HP.', cond: (run) => !run.flags.mem || !run.deck.some((i) => i.uid === run.flags.mem.uid), apply: (run, R) => { R.heal(run, 10); return 'Nothing in the deck is asking for anything. You sit with it. You heal 10 HP.'; } },
+      leave('The warmth fades. For now.'),
+    ],
+  },
+  {
+    id: 'e_cult_recruiter', name: 'The Even Stitch, Again', act: 3,
+    text: 'They are waiting at the foot of the stage, in a line, perfectly even. "It is the day," says the one in front. "You promised."',
+    choices: [
+      { label: 'Keep the vow (strip a card bare)', text: 'Remove EVERY graft from one grafted card. Gain 2 Budget permanently.', pick: 'card', pickFilter: grafted, cond: (run) => run.flags.cult === 1 && run.deck.some(grafted),
+        apply: (run, R, inst) => { for (const g of inst.grafts.slice()) R.stripGraft(run, inst.uid, g); delete run.flags.cult; R.budget(run, 2); return 'They unpick it in a single clean motion. +2 Budget. They bow again, evenly, and leave no crumbs.'; } },
+      { label: 'Break the vow (-12 max HP)', text: 'Lose 12 max HP and gain 80 gold. The vow is void.', cond: (run) => run.flags.cult === 1 && run.maxHp > 34, apply: (run, R) => { delete run.flags.cult; R.maxHp(run, -12); R.gold(run, 80); return 'They take the 12 max HP politely. They also press 80 gold on you, for the trouble. It feels like an apology.'; } },
+      { label: 'Donate (30 gold)', text: 'Pay 30 gold. Heal 12 HP.', cond: (run) => run.flags.cult !== 1 && run.gold >= 30, apply: (run, R) => { R.gold(run, -30); R.heal(run, 12); return 'Everyone is very even about it. -30 gold. You heal 12 HP.'; } },
+      leave('They straighten the line behind you.'),
+    ],
+  },
+  {
+    id: 'e_repossession', name: 'Repossession', act: 3,
+    text: 'Two men in matching gloves and a van with no doors. They have a clipboard with your name on it and a small, regretful smile.',
+    choices: [
+      { label: 'Let them take a graft', text: 'They remove the last graft from one grafted card (the one with the most grafts). You gain 40 gold. The debt is cleared.', cond: (run) => run.flags.owe === 1 && run.deck.some(grafted),
+        apply: (run, R) => { delete run.flags.owe; const t = run.deck.filter(grafted).sort((a, b) => b.grafts.length - a.grafts.length)[0]; R.stripGraft(run, t.uid, t.grafts[t.grafts.length - 1]); R.gold(run, 40); return 'Thread, scissors, a wet sound. The graft goes into the van. They leave you 40 gold for the inconvenience, which is more than the usual.'; } },
+      { label: 'Settle in gold (70 gold)', text: 'Pay 70 gold. The debt is cleared.', cond: (run) => run.flags.owe === 1 && run.gold >= 70, apply: (run, R) => { R.gold(run, -70); delete run.flags.owe; return 'They count it on the van roof. -70 gold. They shake your hand in the glove.'; } },
+      { label: 'Pick through the van', text: 'Gain 25 gold. They are on a different street today.', cond: (run) => run.flags.owe !== 1, apply: (run, R) => { R.gold(run, 25); return 'The van is empty except for a purse of loose coins. +25 gold. Somebody else is having a bad day.'; } },
+      leave('They tick a box and let you go. The box does not stay ticked.'),
+    ],
+  },
+  {
+    id: 'e_ledger_audit', name: 'The Audit', act: 3,
+    text: 'A woman at a folding table, with the visitor log open in front of her. She has been counting your stitches since the ward, and she has a number.',
+    choices: [
+      { label: 'Collect the settlement', text: 'Gain 12 gold per graft you have sewn since you signed the log (max 72).', cond: (run) => run.flags.signed !== undefined, apply: (run, R) => { const n = Math.max(0, (run.stats.grafts | 0) - run.flags.signed); const g = Math.min(72, 12 * n); delete run.flags.signed; R.gold(run, g); return n + ' graft' + (n === 1 ? '' : 's') + ' logged since the ward. +' + g + ' gold. She stamps PAID with satisfaction.'; } },
+      { label: 'Contest the count', text: 'Heal 8 HP. The log is closed with no settlement.', cond: (run) => run.flags.signed !== undefined, apply: (run, R) => { delete run.flags.signed; R.heal(run, 8); return 'You argue pleasantly. She closes the log and gives you tea. You heal 8 HP, and no gold.'; } },
+      { label: 'Audit yourself (15 gold)', text: 'Pay 15 gold. Upgrade a card.', pick: 'card', pickFilter: (i) => !i.up, cond: (run) => run.flags.signed === undefined && run.gold >= 15 && run.deck.some((i) => !i.up),
+        apply: (run, R, inst) => { R.gold(run, -15); R.upgrade(run, inst.uid); return 'She finds an error in your favour and charges for it. A card is upgraded. -15 gold.'; } },
+      leave('She turns a page. It is yours.'),
+    ],
+  },
+  {
+    id: 'e_glassblower', name: 'The Glassblower', act: 3,
+    text: 'A furnace backstage and a man who makes things that were meant to break. He eyes your most overloaded card the way a baker eyes a hot loaf. "Shatter is just glass finishing early," he says.',
+    choices: [
+      { label: 'Shatter an Overloaded card on purpose', text: 'Destroy a card with 3 grafts. Gain 70 gold and 1 Budget permanently.', pick: 'card', pickFilter: (i) => i.grafts.length === 3, cond: (run) => run.deck.some((i) => i.grafts.length === 3),
+        apply: (run, R, inst) => { R.shatter(run, inst.uid); R.gold(run, 70); R.budget(run, 1); return 'He breaks it with a single tap. The shards are very pretty and very expensive. +70 gold, +1 Budget. The weight leaves with them.'; } },
+      { label: 'Buy a Shatter Ward (80 gold)', text: 'Pay 80 gold. Gain the relic Shatter Ward (Shatter chance 10% lower), if you do not own it.', cond: (run) => run.gold >= 80 && !run.relics.includes('r_shatter_ward'),
+        apply: (run, R) => { R.gold(run, -80); R.addRelic(run, 'r_shatter_ward'); return 'A thin glass ring, hot from the furnace. -80 gold. "It will break," he says, "later than usual."'; } },
+      { label: 'Sweep the shards', text: 'Gain 25 gold.', apply: (run, R) => { R.gold(run, 25); return 'You sweep for an hour. +25 gold. Nobody in the house is cut.'; } },
+      leave('He turns back to the furnace and exhales through the pipe.'),
     ],
   },
 ];

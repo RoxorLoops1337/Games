@@ -172,5 +172,32 @@ for (const id of ids) {
   if (costly >= 0) { const q = combat.api().handPos(costly); click(app, q.x, q.y); click(app, q.x, q.y); assert.equal(st.c.playsTurn, plays0, 'unplayable card was not played'); }
 }
 
+// ---- 5. first-run tips: fire once, persist in meta.tips, respect settings.tips === false
+{
+  const mk = async (meta) => {
+    const ctx = setup({ seed: 'tip', enemies: ['bedpan_slime'], hp: 200 });
+    let saved = 0; ctx.flow.saveMeta = () => { saved++; };
+    const app = await makeApp({ run: ctx.run, audio, flow: ctx.flow, meta });
+    app.register('combat', combat); app.go('combat', { run: ctx.run });
+    frames(app, 200);
+    return { app, ctx, get saved() { return saved; } };
+  };
+  const meta = { tips: {}, settings: { tips: true } };
+  const a = await mk(meta);
+  frames(app0(a), 1);
+  assert.equal(a.app._tipKey, 'energy', 'first fight starts with the energy tip');
+  click(a.app, 260, 484); frames(a.app, 3);
+  assert.equal(meta.tips.energy, 1, 'dismissing the energy tip persists it');
+  assert.ok(a.saved > 0, 'meta was saved');
+  frames(a.app, 3);
+  assert.equal(a.app._tipKey, 'intent', 'next tip in sequence is the intent tip');
+  const b = await mk(meta); frames(b.app, 3);
+  assert.notEqual(b.app._tipKey, 'energy', 'a dismissed tip never shows again');
+  const off = { tips: {}, settings: { tips: false } };
+  const c = await mk(off); frames(c.app, 3);
+  assert.ok(!c.app._tipKey, 'settings.tips === false shows no tips');
+}
+function app0(x) { return x.app; }
+
 assert.ok(total > 0);
 console.log('graftwork ui combat ok, ticks', total, 'fights', ids.length + heroes.length * 3 + 2);

@@ -66,6 +66,8 @@ function cardValue(c, card, ck, st) {
   const m = mult(sp, card.tithed) * (card.brand ? 1.5 : 1);
   const live = st.live;
   const need = st.need;
+  // spare energy after this card versus the other playable cards in hand (draw/energy only matter if we can spend)
+  { const others = c.hand.filter((k) => k !== card).reduce((a, k) => { const sp2 = specOf(c, k); const ce = effCost(c, k); return a + (sp2.unplayable ? 0 : ce === 'X' ? 1 : ce); }, 0); st = { ...st, spare: (c.energy - (ck.cost === 'X' ? c.energy : ck.cost)) - Math.min(others, 99) + (others > 0 ? 0 : 1) }; }
   const times = 1 + sp.repeat + (c.player.st.echo > 0 && sp.type !== 'power' ? 1 : 0);
   const lowHp = c.player.hp < c.player.maxHp * 0.3;
   const x = ck.cost === 'X' ? c.energy : 0;
@@ -110,8 +112,8 @@ function cardValue(c, card, ck, st) {
           else v += sc * n * 1.5;
         }
       }
-    } else if (o.op === 'draw') { const d = Math.min(n, 4); const pool = c.drawPile.length + c.discard.length; if (pool > 0 && c.hand.length < 9) setup += d * 3.2; }
-    else if (o.op === 'energy') setup += n * 6;
+    } else if (o.op === 'draw') { const d = Math.min(n, 4); const pool = c.drawPile.length + c.discard.length; if (pool > 0 && c.hand.length < 9) setup += d * (st.spare > 0 ? 3.2 : 0.4); }
+    else if (o.op === 'energy') setup += n * (st.spare > -1 ? 6 : 1);
     else if (o.op === 'heal') v += Math.min(n, c.player.maxHp - c.player.hp) * 1.1;
     else if (o.op === 'gold') v += n * 0.3;
     else if (o.op === 'hp') v -= Math.abs(n) * (lowHp ? 5 : 1.2);

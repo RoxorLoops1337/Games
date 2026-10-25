@@ -1,6 +1,9 @@
 // Odile: the polite collector. Schools: hoard, gilded, echo. Gold in the pocket becomes damage and block.
 const G = (base, mul, max) => ({ base, per: 'gold', mul, max });
 const fxOn = (s, n) => ({ op: 'status', s, n, to: 'self' });
+const OVL = (c, ctx) => !!(ctx.spec && ctx.spec.overload); // true when this card carries a 3rd graft
+// gold per Tithed card in the deck
+const titheGold = (per, max) => ({ op: 'custom', fn: (A, ctx) => { const n = Math.min(max, per * A.c.strain.tithed.length); if (n > 0 && !ctx.replay) A.gold(n); }, text: `Gain ${per} gold per Tithed card in your deck (max ${max}).` });
 
 export const CARDS_ODILE = [
   // ---- starters ----
@@ -47,4 +50,12 @@ export const CARDS_ODILE = [
     fx: [{ op: 'if', cond: { src: 'gold', gte: 20 }, ifText: 'you have 20 gold', then: [{ op: 'gold', n: -20 }, { op: 'energy', n: 2 }, { op: 'draw', n: 4 }], else: [{ op: 'draw', n: 2 }] }], flags: { exhaust: true },
     up: { fx: [{ op: 'if', cond: { src: 'gold', gte: 15 }, ifText: 'you have 15 gold', then: [{ op: 'gold', n: -15 }, { op: 'energy', n: 3 }, { op: 'draw', n: 4 }], else: [{ op: 'draw', n: 3 }] }] }, flavor: 'Buy low. Panic politely.' },
   { id: 'o_golden_parachute', name: 'Golden Parachute', hero: 'odile', type: 'skill', cost: 1, rarity: 'rare', school: 'gilded', target: 'self', fx: [{ op: 'block', n: G(8, 0.15, 24) }], flags: { retain: true }, up: { fx: [{ op: 'block', n: G(11, 0.15, 30) }] }, flavor: 'Departing, with severance.' },
+
+  // ---- graft builders (wave 2) ----
+  { id: 'o_ledger_line', name: 'Ledger Line', hero: 'odile', type: 'attack', cost: 1, rarity: 'common', school: 'gilded', fx: [{ op: 'dmg', n: { base: 4, per: 'grafts', mul: 1, max: 12 } }, { op: 'gold', n: 2 }], up: { fx: [{ op: 'dmg', n: { base: 6, per: 'grafts', mul: 1, max: 15 } }, { op: 'gold', n: 3 }] }, flavor: 'Each addition is itemised.' },
+  { id: 'o_clean_book', name: 'Clean Books', hero: 'odile', type: 'skill', cost: 1, rarity: 'common', school: 'hoard', target: 'self', fx: [{ op: 'block', n: 6 }, { op: 'if', cond: { src: 'cardGrafts', eq: 0 }, ifText: 'this card has no grafts', then: [{ op: 'block', n: 6 }, { op: 'draw', n: 1 }] }], up: { fx: [{ op: 'block', n: 8 }, { op: 'if', cond: { src: 'cardGrafts', eq: 0 }, ifText: 'this card has no grafts', then: [{ op: 'block', n: 8 }, { op: 'draw', n: 1 }] }] }, flavor: 'Nothing to declare. Nothing to audit.' },
+  { id: 'o_tithe_ledger', name: 'Tithe Ledger', hero: 'odile', type: 'skill', cost: 1, rarity: 'uncommon', school: 'gilded', target: 'self', fx: [{ op: 'block', n: 4 }, titheGold(3, 15)], up: { fx: [{ op: 'block', n: 6 }, titheGold(4, 20)] }, flavor: 'Someone has to collect.' },
+  { id: 'o_heirloom', name: 'Heirloom', hero: 'odile', type: 'attack', cost: 1, rarity: 'uncommon', school: 'hoard', flags: { retain: true }, fx: [{ op: 'dmg', n: { base: 6, per: 'cardGrafts', mul: 5 } }], up: { fx: [{ op: 'dmg', n: { base: 8, per: 'cardGrafts', mul: 6 } }] }, flavor: 'Passed down. Added to. Never sold.' },
+  { id: 'o_overdraft', name: 'Overdraft', hero: 'odile', type: 'skill', cost: 1, rarity: 'rare', school: 'gilded', target: 'self', fx: [{ op: 'gold', n: { base: 0, per: 'strain', mul: 4, max: 20 } }, { op: 'block', n: { base: 4, per: 'strain', mul: 3, max: 16 } }], flags: { exhaust: true }, up: { fx: [{ op: 'gold', n: { base: 3, per: 'strain', mul: 5, max: 25 } }, { op: 'block', n: { base: 6, per: 'strain', mul: 4, max: 20 } }] }, flavor: 'Strain is only debt that has not been named.' },
+  { id: 'o_triple_threat', name: 'Triple Threat', hero: 'odile', type: 'attack', cost: 2, rarity: 'rare', school: 'echo', fx: [{ op: 'dmg', n: 12 }, { op: 'if', cond: OVL, ifText: 'this card is Overloaded', then: [{ op: 'dmg', n: 12 }, { op: 'gold', n: 10 }] }], up: { fx: [{ op: 'dmg', n: 16 }, { op: 'if', cond: OVL, ifText: 'this card is Overloaded', then: [{ op: 'dmg', n: 16 }, { op: 'gold', n: 15 }] }] }, flavor: 'Three seams. Two encores. One invoice.' },
 ];

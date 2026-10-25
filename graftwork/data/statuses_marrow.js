@@ -29,4 +29,7 @@ export const STATUS_MARROW = [
   // Pay HP each turn for Strength.
   { id: 'bloodrite', name: 'Blood Rite', good: true, stack: 'int', desc: (n) => `At turn start, lose ${n} HP (never fatal) and gain ${n} Strength.`,
     hooks: { turnStart: (A, o, n) => { A.loseHp(o, n, { floor1: true, src: 'card' }); A.status(o, 'strength', n); } } },
+  // Every seam in the deck is armour at turn end.
+  { id: 'stitchwork', name: 'Patchwork Doctrine', good: true, stack: 'int', desc: (n) => `At turn end, gain ${n} Block per graft in your deck (max ${12 * n}).`,
+    hooks: { turnEnd: (A, o, n) => { const g = A.c.run.deck.reduce((a, i) => a + i.grafts.length, 0); if (g) A.block(o, Math.min(12 * n, g * n)); } } },
 ];

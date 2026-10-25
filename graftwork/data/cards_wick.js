@@ -3,6 +3,12 @@ const burnAll = (n) => ({ op: 'status', s: 'burn', n, to: 'all' });
 const charge = (n) => ({ op: 'status', s: 'charge', n, to: 'self' });
 const spendCharge = { op: 'setStatus', s: 'charge', n: 0 };
 const chargeVal = (base, mul) => ({ base, per: 'st:charge@player', mul });
+const OVL = (c, ctx) => !!(ctx.spec && ctx.spec.overload); // true when this card carries a 3rd graft
+const hurt = (A, ctx, n) => { const t = ctx.target && !ctx.target.dead ? ctx.target : A.alive()[0]; if (t && n > 0) A.dmg(A.player, t, Math.max(1, Math.round(n * (ctx.mult || 1))), { card: true }); };
+// extra damage per jammed card in your hand (the jam stays: it is the fuel)
+const jamHit = (per) => ({ op: 'custom', fn: (A, ctx) => hurt(A, ctx, per * A.c.hand.filter((k) => k.jam).length), text: `Deal ${per} extra damage per jammed card in your hand.` });
+// Burn per Tithed card in the deck
+const tithePyre = (per, max) => ({ op: 'custom', fn: (A, ctx) => { const t = ctx.target && !ctx.target.dead ? ctx.target : A.alive()[0]; const n = Math.min(max, per * A.c.strain.tithed.length); if (t && n > 0) A.status(t, 'burn', n); }, text: `Apply ${per} Burn per Tithed card in your deck (max ${max}).` });
 
 export const CARDS_WICK = [
   { id: 'w_spark', name: 'Spark', hero: 'wick', type: 'attack', cost: 1, rarity: 'starter', fx: [{ op: 'dmg', n: 6 }], up: { fx: [{ op: 'dmg', n: 9 }] }, flavor: 'It only needs one.' },
@@ -43,4 +49,12 @@ export const CARDS_WICK = [
   { id: 'w_wildfire', name: 'Wildfire', hero: 'wick', type: 'power', cost: 1, rarity: 'rare', school: 'ember', target: 'self', fx: [{ op: 'status', s: 'wildfire', n: 1, to: 'self' }], up: { fx: [{ op: 'status', s: 'wildfire', n: 1, to: 'self' }], cost: 0 }, flavor: 'The dead make excellent kindling.' },
   { id: 'w_dynamo', name: 'Dynamo', hero: 'wick', type: 'power', cost: 2, rarity: 'rare', school: 'static', target: 'self', fx: [{ op: 'status', s: 'dynamo', n: 2, to: 'self' }], up: { fx: [{ op: 'status', s: 'dynamo', n: 3, to: 'self' }] }, flavor: 'Hand-cranked by an intern.' },
   { id: 'w_powder_keg', name: 'Powder Keg', hero: 'wick', type: 'power', cost: 1, rarity: 'rare', school: 'ember', target: 'self', fx: [{ op: 'status', s: 'powderkeg', n: 1, to: 'self' }], up: { fx: [{ op: 'status', s: 'powderkeg', n: 1, to: 'self' }, { op: 'block', n: 8 }] }, flavor: 'You are the fuse. Please sit still.' },
+
+  // ---------------- graft builders (wave 2) ----------------
+  { id: 'w_hot_seam', name: 'Hot Seam', hero: 'wick', type: 'attack', cost: 1, rarity: 'common', school: 'ember', fx: [{ op: 'dmg', n: { base: 5, per: 'cardGrafts', mul: 4 } }, burnT(2)], up: { fx: [{ op: 'dmg', n: { base: 6, per: 'cardGrafts', mul: 5 } }, burnT(3)] }, flavor: 'Cauterised on the way in.' },
+  { id: 'w_ringing_ears', name: 'Ringing Ears', hero: 'wick', type: 'attack', cost: 1, rarity: 'common', school: 'static', fx: [{ op: 'dmg', n: 5 }, jamHit(4)], up: { fx: [{ op: 'dmg', n: 7 }, jamHit(6)] }, flavor: 'The jam is the instrument.' },
+  { id: 'w_tithe_pyre', name: 'Tithe Pyre', hero: 'wick', type: 'skill', cost: 1, rarity: 'uncommon', school: 'ember', fx: [tithePyre(3, 15)], up: { fx: [tithePyre(4, 20)] }, flavor: 'The Tithed burn brightest.' },
+  { id: 'w_bare_wire', name: 'Bare Wire', hero: 'wick', type: 'attack', cost: 1, rarity: 'uncommon', school: 'static', fx: [{ op: 'dmg', n: 6 }, charge(2), { op: 'if', cond: { src: 'cardGrafts', eq: 0 }, ifText: 'this card has no grafts', then: [{ op: 'dmg', n: 8 }] }], up: { fx: [{ op: 'dmg', n: 8 }, charge(3), { op: 'if', cond: { src: 'cardGrafts', eq: 0 }, ifText: 'this card has no grafts', then: [{ op: 'dmg', n: 11 }] }] }, flavor: 'Insulation is for the timid.' },
+  { id: 'w_overcurrent', name: 'Overcurrent', hero: 'wick', type: 'attack', cost: 2, rarity: 'rare', school: 'static', fx: [{ op: 'dmg', n: 14 }, { op: 'if', cond: OVL, ifText: 'this card is Overloaded', then: [{ op: 'dmg', n: 14, to: 'all' }, charge(3)] }], up: { fx: [{ op: 'dmg', n: 18 }, { op: 'if', cond: OVL, ifText: 'this card is Overloaded', then: [{ op: 'dmg', n: 18, to: 'all' }, charge(4)] }] }, flavor: 'Rated for two seams. Used with three.' },
+  { id: 'w_graft_furnace', name: 'Graft Furnace', hero: 'wick', type: 'power', cost: 2, rarity: 'rare', school: 'ember', target: 'self', fx: [{ op: 'status', s: 'graftfurnace', n: 1, to: 'self' }], up: { cost: 1, fx: [{ op: 'status', s: 'graftfurnace', n: 1, to: 'self' }] }, flavor: 'Fed on other people\'s improvements.' },
 ];

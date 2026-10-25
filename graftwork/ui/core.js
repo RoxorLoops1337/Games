@@ -32,6 +32,7 @@ export function createApp(canvas, opts = {}) {
   // ---- stage scaling ----
   app.resize = () => {
     const iw = window.innerWidth, ih = window.innerHeight;
+    if (!(iw > 0 && ih > 0)) return; // hidden iframe / minimised: keep the last good size
     app.scale = Math.min(iw / W, ih / H);
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
     canvas.style.width = W * app.scale + 'px'; canvas.style.height = H * app.scale + 'px';
@@ -39,7 +40,7 @@ export function createApp(canvas, opts = {}) {
     canvas.width = Math.round(W * app.scale * dpr); canvas.height = Math.round(H * app.scale * dpr);
     app.dpr = dpr; app.px = canvas.width / W;
   };
-  const toLogical = (e) => { const r = canvas.getBoundingClientRect(); return { x: ((e.clientX - r.left) / r.width) * W, y: ((e.clientY - r.top) / r.height) * H }; };
+  const toLogical = (e) => { const r = canvas.getBoundingClientRect(); if (!(r.width > 0 && r.height > 0)) return { x: app.mouse.x, y: app.mouse.y }; return { x: ((e.clientX - r.left) / r.width) * W, y: ((e.clientY - r.top) / r.height) * H }; };
   canvas.addEventListener('pointermove', (e) => { const p = toLogical(e); app.mouse.x = p.x; app.mouse.y = p.y; });
   canvas.addEventListener('pointerdown', (e) => { const p = toLogical(e); app.mouse.x = p.x; app.mouse.y = p.y; app.mouse.down = true; app.mouse.pressed = true; app.mouse.button = e.button; canvas.setPointerCapture && canvas.setPointerCapture(e.pointerId); });
   canvas.addEventListener('pointerup', (e) => { const p = toLogical(e); app.mouse.x = p.x; app.mouse.y = p.y; app.mouse.down = false; app.mouse.released = true; });

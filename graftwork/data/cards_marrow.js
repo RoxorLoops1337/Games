@@ -2,6 +2,7 @@
 // fx ops: see engine/combat.js runOp. up = the upgrade (full replacement fx / cost).
 // Statuses used here (scar, rustplate, anticoag, bloodrite) live in statuses_marrow.js.
 const bleedOf = { per: 'st:bleed@target' };
+const OVL = (c, ctx) => !!(ctx.spec && ctx.spec.overload); // true when this card carries a 3rd graft
 export const CARDS_MARROW = [
   // ---------- starters ----------
   { id: 'm_cut', name: 'Cut', hero: 'marrow', type: 'attack', cost: 1, rarity: 'starter', fx: [{ op: 'dmg', n: 6 }], up: { fx: [{ op: 'dmg', n: 9 }] }, flavor: 'Steady hands.' },
@@ -44,4 +45,12 @@ export const CARDS_MARROW = [
   { id: 'm_laybare', name: 'Lay Bare', hero: 'marrow', type: 'skill', cost: 1, rarity: 'rare', school: 'blood', fx: [{ op: 'detonate', s: 'bleed', mul: 2 }], flags: { exhaust: true }, up: { fx: [{ op: 'detonate', s: 'bleed', mul: 3 }] }, flavor: 'Everything out at once.' },
   { id: 'm_biohazard', name: 'Biohazard', hero: 'marrow', type: 'attack', cost: 1, rarity: 'rare', school: 'rust', target: 'all', fx: [{ op: 'dmg', n: { base: 4, per: 'junk', mul: 2, max: 20 }, to: 'all' }], flags: { exhaust: true }, up: { fx: [{ op: 'dmg', n: { base: 6, per: 'junk', mul: 3, max: 30 }, to: 'all' }] }, flavor: 'Gloves not provided.' },
   { id: 'm_secondwind', name: 'Second Wind', hero: 'marrow', type: 'skill', cost: 2, rarity: 'rare', school: 'blood', target: 'self', fx: [{ op: 'heal', n: { base: 4, per: 'missingHp', mul: 0.5 } }], flags: { exhaust: true }, up: { cost: 1, fx: [{ op: 'heal', n: { base: 4, per: 'missingHp', mul: 0.5 } }] }, flavor: 'Back from the brink. Terms apply.' },
+
+  // ---------- graft builders (wave 2) ----------
+  { id: 'm_stitch_count', name: 'Stitch Count', hero: 'marrow', type: 'attack', cost: 1, rarity: 'common', school: 'rust', fx: [{ op: 'dmg', n: { base: 4, per: 'grafts', mul: 1, max: 14 } }], up: { fx: [{ op: 'dmg', n: { base: 6, per: 'grafts', mul: 1, max: 18 } }] }, flavor: 'Counted aloud, every one.' },
+  { id: 'm_sewn_shut', name: 'Sewn Shut', hero: 'marrow', type: 'skill', cost: 1, rarity: 'common', school: 'blood', target: 'self', fx: [{ op: 'block', n: { base: 5, per: 'cardGrafts', mul: 5 } }], up: { fx: [{ op: 'block', n: { base: 6, per: 'cardGrafts', mul: 6 } }] }, flavor: 'The more seams, the less leaks.' },
+  { id: 'm_fever_chart', name: 'Fever Chart', hero: 'marrow', type: 'attack', cost: 1, rarity: 'uncommon', school: 'blood', fx: [{ op: 'hp', n: 2 }, { op: 'dmg', n: { base: 5, per: 'strain', mul: 4, max: 24 } }], up: { fx: [{ op: 'hp', n: 2 }, { op: 'dmg', n: { base: 7, per: 'strain', mul: 5, max: 30 } }] }, flavor: 'Temperature rising. Good.' },
+  { id: 'm_blank_chart', name: 'Blank Chart', hero: 'marrow', type: 'attack', cost: 1, rarity: 'uncommon', school: 'rust', fx: [{ op: 'dmg', n: 7 }, { op: 'if', cond: { src: 'cardGrafts', eq: 0 }, ifText: 'this card has no grafts', then: [{ op: 'dmg', n: 8 }] }], up: { fx: [{ op: 'dmg', n: 9 }, { op: 'if', cond: { src: 'cardGrafts', eq: 0 }, ifText: 'this card has no grafts', then: [{ op: 'dmg', n: 11 }] }] }, flavor: 'Nothing on file. Nothing to hide.' },
+  { id: 'm_stitchwork', name: 'Patchwork Doctrine', hero: 'marrow', type: 'power', cost: 2, rarity: 'rare', school: 'rust', target: 'self', fx: [{ op: 'status', s: 'stitchwork', n: 1, to: 'self' }], up: { cost: 1, fx: [{ op: 'status', s: 'stitchwork', n: 1, to: 'self' }] }, flavor: 'Every seam is an asset.' },
+  { id: 'm_stress_test', name: 'Stress Test', hero: 'marrow', type: 'attack', cost: 2, rarity: 'rare', school: 'blood', fx: [{ op: 'dmg', n: 15 }, { op: 'if', cond: OVL, ifText: 'this card is Overloaded', then: [{ op: 'dmg', n: 12 }, { op: 'heal', n: 6 }] }], up: { fx: [{ op: 'dmg', n: 19 }, { op: 'if', cond: OVL, ifText: 'this card is Overloaded', then: [{ op: 'dmg', n: 16 }, { op: 'heal', n: 8 }] }] }, flavor: 'It holds until it does not.' },
 ];
