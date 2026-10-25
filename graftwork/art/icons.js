@@ -5,6 +5,7 @@
 //          drawDeckIcon drawPileIcon(ctx,x,y,size,'draw'|'discard'|'exhaust')  drawMapPath(ctx,x1,y1,x2,y2,state,t)
 //          STATUS_IDS_DRAWN / RELIC_GLYPHS (introspection for tests)
 import { COL, FONT, rgba, shade } from '../ui/core.js';
+import { RELICS } from '../data/index.js';
 
 const TAU = Math.PI * 2;
 const D = '#120d0b';
@@ -264,8 +265,7 @@ const RACC = ['#F2C14E', '#B3263A', '#5aa86a', '#7FD1E0', '#c9a8ff', '#ff8a3c', 
 const RSPEC = { r_marrow_kit: ['#cfd6dc', '#B3263A'], r_wick_kit: ['#c9a227', '#ff6a2b'], r_odile_kit: ['#b98a50', '#F2C14E'] };
 export function drawRelic(ctx, id, x, y, size, rarity) {
   const h = hash(id); const r = size / 2;
-  let rar = rarity;
-  if (!rar) { try { rar = (globalThis.__gwRelicRarity && globalThis.__gwRelicRarity[id]) || relicRarityOf(id); } catch (e) { rar = 'common'; } }
+  const rar = rarity || (RELICS[id] && RELICS[id].rarity) || 'common';
   const rim = RIM[rar] || RIM.common;
   const k = (RSPEC[id] && RSPEC[id][0]) || RTINT[h % RTINT.length], a = (RSPEC[id] && RSPEC[id][1]) || RACC[(h >> 5) % RACC.length];
   ctx.save(); ctx.translate(x, y);
@@ -282,16 +282,6 @@ export function drawRelic(ctx, id, x, y, size, rarity) {
   ctx.restore();
   withGlyph(ctx, x, y, size, k, a, relicGlyph(id), 0.6);
 }
-let relicIndex = null;
-function relicRarityOf(id) {
-  if (!relicIndex) relicIndex = {};
-  if (id in relicIndex) return relicIndex[id];
-  if (id.startsWith('r_') && RSPEC[id]) return 'start';
-  return 'common';
-}
-// the UI can hand us rarity directly: drawRelic(ctx, id, x, y, size, 'rare'). To let callers register data once:
-export function setRelicData(list) { relicIndex = {}; const arr = Array.isArray(list) ? list : Object.values(list || {}); for (const r of arr) relicIndex[r.id] = r.rarity; }
-
 // ======================================================================================
 // POTIONS
 // ======================================================================================

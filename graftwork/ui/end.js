@@ -208,7 +208,7 @@ export default {
     for (let i = 0; i < this.news.length; i++) {
       const n = this.news[i];
       const lines = app.wrap(n.text || '', w - 28, 12, { ui: true }).length, hh = 36 + Math.min(lines, 2) * 14 + 6;
-      if (yy + hh > ny + nh - 22 && i < this.news.length) { if (i < this.news.length - 0 && yy + hh > ny + nh - 8) break; }
+      if (yy + hh > ny + nh - (i < this.news.length - 1 ? 24 : 6)) break;
       fitted = i + 1;
       const at = this.nextNew + i * 0.45, k = clamp((this.t0 - at) / 0.4, 0, 1);
       if (k > 0 && this.shown <= i) { this.shown = i + 1; if (!calm(app)) { this.fx.burst(x + w / 2, yy + 14, 'gild', { n: 18 }); this.fx.ring(x + w / 2, yy + 14, COL.lamp, 70, 0.6); } if (app.shared.audio) app.shared.audio.sfx(n.kind === 'Unlocked' ? 'relic' : 'gilded', { vol: 0.7 }); }

@@ -126,7 +126,8 @@ export function cardGrid(app, items, x, y, w, h, o = {}) {
         const over = inView(app, st, left, cardTop, cw, ch);
         const hot = hover === i && !it.disabled;
         const cx = left + cw / 2, cy = cardTop + ch / 2 - (hot ? 4 : 0);
-        if (it.spec) {
+        if (it.draw) it.draw(ctx, cx, cy, sc * (hot ? 1.04 : 1), hot);
+        else if (it.spec) {
           drawCard(ctx, it.spec, cx, cy, { scale: sc * (hot ? 1.04 : 1), tithed: !!it.tithed, jam: !!it.jam, glow: hot ? 0.6 : 0, selected: !!it.selected, dim: it.dim ? 0.55 : 0, hover: hot });
         }
         if (it.selected) { ctx.save(); app.rr(left - 3, cardTop - 3, cw + 6, ch + 6, 8); ctx.lineWidth = 3; ctx.strokeStyle = COL.lamp; ctx.stroke(); ctx.restore(); }
