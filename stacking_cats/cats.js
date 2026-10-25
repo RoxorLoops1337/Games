@@ -212,12 +212,12 @@ export const NESTS = [
 // amb: ambient light on the first wave of a stage and on the nest wave (the day turns to dusk). grade: colour grading
 // laid over the picture (top, bottom). weather: rain, snow, drip or none. haze: distance fog colour.
 export const THEMES = [
-  { name: 'Sunny Garden',  sky: ['#8fd3ff', '#fff1c9'], far: '#a9d8b8', mid: '#6fbf8a', ground: ['#8fd36e', '#5fa84f'], dirt: '#a6764a', deco: 'flower', amb: ['#ffffff', '#efc6b8'], grade: ['rgba(255,214,150,.16)', 'rgba(120,200,255,.10)'], weather: 'none', haze: '#e8f6ff' },
+  { name: 'Sunny Garden',  sky: ['#8fd3ff', '#e6dcb8'], far: '#a9d8b8', mid: '#6fbf8a', ground: ['#8fd36e', '#5fa84f'], dirt: '#a6764a', deco: 'flower', amb: ['#ffffff', '#efc6b8'], grade: ['rgba(255,214,150,.16)', 'rgba(120,200,255,.10)'], weather: 'none', haze: '#cfe4f2' },
   { name: 'Autumn Alley',  sky: ['#ffb58a', '#ffe6b0'], far: '#d99a7a', mid: '#b86a4a', ground: ['#d9a24a', '#a8742f'], dirt: '#7a4a2a', deco: 'leaf', amb: ['#fff6ec', '#e0b0a0'], grade: ['rgba(255,170,90,.18)', 'rgba(140,90,200,.10)'], weather: 'none', haze: '#ffe3c4' },
-  { name: 'Moonlit Roofs', sky: ['#1d1b4a', '#5a4a9a'], far: '#3a3a78', mid: '#2a2a5a', ground: ['#4a5a9a', '#2f3a78'], dirt: '#1f2550', deco: 'star', amb: ['#a8a8e8', '#7a6cb8'], grade: ['rgba(80,110,255,.22)', 'rgba(255,120,200,.10)'], weather: 'rain', haze: '#6a62b0' },
-  { name: 'Cheese Caves',  sky: ['#ffd36b', '#fff2b0'], far: '#e0b24a', mid: '#c98f2a', ground: ['#f2c94c', '#c9992a'], dirt: '#8a5f1a', deco: 'hole', amb: ['#ffe9b8', '#c08a60'], grade: ['rgba(255,180,60,.18)', 'rgba(255,120,60,.10)'], weather: 'drip', haze: '#ffe49a' },
-  { name: 'Frosty Pond',   sky: ['#a8c8ff', '#eaf6ff'], far: '#c9dcf5', mid: '#9ab8e0', ground: ['#e8f4ff', '#bcd8f2'], dirt: '#8aa8c8', deco: 'snow', amb: ['#f6faff', '#c8c8f0'], grade: ['rgba(150,200,255,.16)', 'rgba(255,180,230,.10)'], weather: 'snow', haze: '#eef6ff' },
-  { name: 'Sakura Hill',   sky: ['#ffc6e0', '#fff0f5'], far: '#f2a6c4', mid: '#e07aa6', ground: ['#a8e08a', '#6fb85f'], dirt: '#a8765a', deco: 'petal', amb: ['#fff4fa', '#e8b0c8'], grade: ['rgba(255,160,210,.16)', 'rgba(255,230,150,.10)'], weather: 'none', haze: '#ffe6f2' },
+  { name: 'Moonlit Roofs', sky: ['#1d1b4a', '#4a4088'], far: '#3a3a78', mid: '#2a2a5a', ground: ['#5a6ab0', '#3a4590'], dirt: '#2a3266', deco: 'star', amb: ['#a8a8e8', '#7a6cb8'], grade: ['rgba(80,110,255,.22)', 'rgba(255,120,200,.10)'], weather: 'rain', haze: '#8078c4' },
+  { name: 'Cheese Caves',  sky: ['#ffd36b', '#fff2b0'], far: '#e0b24a', mid: '#c98f2a', ground: ['#f2c94c', '#c9992a'], dirt: '#8a5f1a', deco: 'hole', amb: ['#ffe9b8', '#c08a60'], grade: ['rgba(255,190,90,.12)', 'rgba(90,120,220,.14)'], weather: 'drip', haze: '#ffe49a' },
+  { name: 'Frosty Pond',   sky: ['#a8c8ff', '#d2e2f4'], far: '#c9dcf5', mid: '#9ab8e0', ground: ['#e8f4ff', '#bcd8f2'], dirt: '#8aa8c8', deco: 'snow', amb: ['#f6faff', '#c8c8f0'], grade: ['rgba(150,200,255,.16)', 'rgba(255,180,230,.10)'], weather: 'snow', haze: '#d4e2f2' },
+  { name: 'Sakura Hill',   sky: ['#ffc6e0', '#e8d4dc'], far: '#f2a6c4', mid: '#e07aa6', ground: ['#a8e08a', '#6fb85f'], dirt: '#a8765a', deco: 'petal', amb: ['#fff4fa', '#e8b0c8'], grade: ['rgba(255,160,210,.16)', 'rgba(255,230,150,.10)'], weather: 'none', haze: '#e8cddc' },
 ];
 
 // ---- meta progression (saved between runs) ----

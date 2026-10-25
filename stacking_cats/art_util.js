@@ -80,3 +80,18 @@ export function mulberry(seed) {
   return () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
 }
 export function hash(str) { let h = 2166136261; for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; }
+
+// A dark outer outline around whatever is drawn on a canvas, so a sprite keeps its silhouette against bright or busy
+// backdrops. Draws a tinted copy of the sprite at 12 offsets underneath it. Cheap: run once when the sprite is cached.
+export function outlineCanvas(src, px = 2, color = '#2a1840', alpha = 0.85) {
+  const w = src.width, h = src.height;
+  const sil = document.createElement('canvas'); sil.width = w; sil.height = h;
+  const s = sil.getContext('2d');
+  s.drawImage(src, 0, 0); s.globalCompositeOperation = 'source-in'; s.fillStyle = color; s.fillRect(0, 0, w, h);
+  const out = document.createElement('canvas'); out.width = w; out.height = h;
+  const o = out.getContext('2d');
+  o.globalAlpha = alpha;
+  for (let i = 0; i < 12; i++) { const a = (i / 12) * Math.PI * 2; o.drawImage(sil, Math.cos(a) * px, Math.sin(a) * px); }
+  o.globalAlpha = 1; o.drawImage(src, 0, 0);
+  return out;
+}

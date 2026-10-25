@@ -1,5 +1,5 @@
 // Procedural art for the mice and rats, the nests and the parallax backdrops.
-import { TAU, INK, mix, shade, lineOf, ell, cel, poly, fillPath, star, line, mulberry, hash } from './art_util.js';
+import { TAU, INK, mix, shade, lineOf, ell, cel, poly, fillPath, star, line, mulberry, hash, outlineCanvas } from './art_util.js';
 
 const B = [-20, -50, 20, 0];
 function limb(ctx, x, y, rx, ry, fill, lw = 0.9) { fillPath(ctx, ell(ctx, x, y, rx, ry), fill, lw); }
@@ -10,6 +10,7 @@ function rod(ctx, x1, y1, x2, y2, w, color) {
 }
 
 // ---------------------------------------------------------------- mice and rats (face left, feet at 0,0)
+let curElite = false;
 function mouseBody(ctx, o) {
   const fur = o.fur, belly = o.belly || shade(fur, 0.5), inner = o.inner || '#ffb3c8';
   // tail
@@ -37,6 +38,12 @@ function mouseBody(ctx, o) {
   ctx.strokeStyle = INK; ctx.lineWidth = 0.9; ctx.stroke();
   ctx.fillStyle = eyeC; ctx.beginPath(); ctx.ellipse(-9.4, -32.8, 2.6, 3.7, 0, 0, TAU); ctx.fill();
   ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(-10.2, -34.4, 1.1, 0, TAU); ctx.fill();
+  // threat cue: narrowed upper lid and a red glint in the eye (stronger on elites)
+  ctx.save(); ctx.beginPath(); ctx.ellipse(-8.6, -33, 4.2, 4.8, 0.1, 0, TAU); ctx.clip();
+  ctx.fillStyle = fur; ctx.beginPath(); ctx.moveTo(-14, -39); ctx.lineTo(-3, -39); ctx.lineTo(-3, -34.6); ctx.lineTo(-14, -36.8); ctx.fill();
+  ctx.strokeStyle = INK; ctx.lineWidth = 1.1; ctx.beginPath(); ctx.moveTo(-14, -36.8); ctx.lineTo(-3, -34.6); ctx.stroke();
+  ctx.restore();
+  ctx.fillStyle = curElite ? 'rgba(255,50,50,.95)' : 'rgba(255,60,60,.5)'; ctx.beginPath(); ctx.arc(-8.2, -31.2, curElite ? 1.25 : 0.95, 0, TAU); ctx.fill();
   ctx.strokeStyle = INK; ctx.lineWidth = 1.9;
   ctx.beginPath(); ctx.moveTo(-14.2, -36.6); ctx.lineTo(-3.2, -40.4); ctx.stroke();
   // grin with a little fang
@@ -54,7 +61,7 @@ function dagger(ctx, x = -13, y = -14, len = 15) {
 }
 
 const ENEMY_ART = {
-  mouse(ctx) { mouseBody(ctx, { fur: '#b9b3cc' }); dagger(ctx); },
+  mouse(ctx) { ctx.save(); ctx.scale(1.2, 1.2); mouseBody(ctx, { fur: '#b9b3cc' }); dagger(ctx); ctx.restore(); },
   scout(ctx) {
     mouseBody(ctx, { fur: '#d8cf9a', inner: '#ffc4b0' });
     ctx.fillStyle = '#e04a4a'; ctx.beginPath(); ctx.moveTo(-17, -38); ctx.quadraticCurveTo(-6, -46, 6, -36); ctx.lineTo(6, -33); ctx.quadraticCurveTo(-6, -42, -17, -34); ctx.fill();
@@ -123,6 +130,7 @@ export function enemySprite(type, elite) {
   const S = 2, W = 130, H = 130, ax = 65, ay = 110;
   const c = document.createElement('canvas'); c.width = W * S; c.height = H * S;
   const ctx = c.getContext('2d'); ctx.scale(S, S); ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+  curElite = !!elite;
   const draw = () => { ctx.save(); ctx.translate(ax, ay); ENEMY_ART[type](ctx); ctx.restore(); };
   if (elite) { ctx.shadowColor = '#ffcf3a'; ctx.shadowBlur = 10; draw(); draw(); ctx.shadowBlur = 0; }
   draw();
@@ -132,7 +140,7 @@ export function enemySprite(type, elite) {
     fillPath(ctx, poly(ctx, [[-8, hy], [-8, hy - 8], [-4, hy - 4], [0, hy - 10], [4, hy - 4], [8, hy - 8], [8, hy]]), '#ffd23f', 0.9);
     ctx.restore();
   }
-  const r = { c, ax, ay, w: W, h: H };
+  const r = { c: outlineCanvas(c, 2, '#2a1840', 0.85), ax, ay, w: W, h: H };
   spriteCache.set(key, r);
   return r;
 }
@@ -190,7 +198,8 @@ export function nestSprite(kind) {
   const c = document.createElement('canvas'); c.width = W * S; c.height = H * S;
   const ctx = c.getContext('2d'); ctx.scale(S, S); ctx.lineJoin = 'round'; ctx.lineCap = 'round';
   nestBody(ctx, kind);
-  const r = { c, ax: 100, ay: 192, w: W, h: H };
+  // art spans x 8..192, y 6..196 of the 200 box, so the 1px outline fits; nestOverlay shares these coordinates
+  const r = { c: outlineCanvas(c, 2, '#2a1840', 0.85), ax: 100, ay: 192, w: W, h: H };
   spriteCache.set(key, r);
   return r;
 }
@@ -208,6 +217,12 @@ export function nestOverlay(ctx, hpFrac, t) {
 }
 
 // ---------------------------------------------------------------- backdrops
+// give a backdrop's canvases back right away (waiting for the garbage collector lets phones run out of canvas memory)
+export function freeBackdrop(bd) {
+  if (!bd) return;
+  for (const k of ['sky', 'far', 'mid', 'gr', 'front', 'rays']) if (bd[k] && bd[k].width) bd[k].width = bd[k].height = 0;
+}
+export function resetWorldArt() { spriteCache.clear(); }
 export function makeBackdrop(theme, seed) {
   const W = 960, H = 540;
   const rnd = mulberry(hash(theme.name) + seed);
@@ -223,14 +238,15 @@ export function makeBackdrop(theme, seed) {
   sx.fillStyle = night ? '#fff7d6' : '#fffbe6'; sx.beginPath(); sx.arc(740, 120, 38, 0, TAU); sx.fill();
   if (night) { sx.fillStyle = theme.sky[0]; sx.beginPath(); sx.arc(754, 112, 32, 0, TAU); sx.fill(); sx.fillStyle = '#fff7d6'; sx.beginPath(); sx.arc(740, 120, 38, 0, TAU); sx.fill(); sx.fillStyle = 'rgba(40,30,100,.2)'; sx.beginPath(); sx.arc(748, 126, 32, 0, TAU); sx.fill(); }
 
+  const hz = theme.haze || '#ffffff';
   const wrapX = (x, fn) => { fn(x); fn(x - W); fn(x + W); };
   const [far, fx] = mk();
-  fx.fillStyle = theme.far;
+  fx.fillStyle = mix(theme.far, hz, 0.22);
   fx.beginPath(); fx.moveTo(0, H);
   const ph = rnd() * 6, ph2 = rnd() * 6;
   for (let x = 0; x <= W; x += 8) { const a = x / W * TAU; fx.lineTo(x, 320 + Math.sin(a * 2 + ph) * 26 + Math.sin(a * 3 + ph2) * 14); }
   fx.lineTo(W, H); fx.fill();
-  fx.fillStyle = mix(theme.far, theme.sky[1], 0.35);
+  fx.fillStyle = mix(mix(theme.far, theme.sky[1], 0.35), hz, 0.12);
   fx.beginPath(); fx.moveTo(0, H);
   for (let x = 0; x <= W; x += 8) { const a = x / W * TAU; fx.lineTo(x, 350 + Math.sin(a * 3 + ph2 + 1) * 18 + Math.sin(a * 5 + ph) * 8); }
   fx.lineTo(W, H); fx.fill();
@@ -239,11 +255,16 @@ export function makeBackdrop(theme, seed) {
   const base = 404;
   const tree = (x, s, c1, c2) => {
     wrapX(x, (xx) => {
+      mx.fillStyle = 'rgba(0,0,0,.18)'; mx.beginPath(); mx.ellipse(xx, base + 1, 26 * s, 4.5 * s, 0, 0, TAU); mx.fill();
       mx.fillStyle = '#6a4a3a'; mx.fillRect(xx - 3 * s, base - 30 * s, 6 * s, 30 * s);
-      for (const [dx, dy, r, c] of [[-12, -42, 18, c2], [12, -42, 18, c2], [0, -56, 22, c1], [0, -38, 20, c1]]) { mx.fillStyle = c; mx.beginPath(); mx.arc(xx + dx * s, base + dy * s, r * s, 0, TAU); mx.fill(); }
+      for (const [dx, dy, r, c] of [[-12, -42, 18, c2], [12, -42, 18, c2], [0, -56, 22, c1], [0, -38, 20, c1]]) {
+        const cy = base + dy * s, tg = mx.createLinearGradient(0, cy - r * s, 0, cy + r * s);
+        tg.addColorStop(0, shade(c, 0.16)); tg.addColorStop(1, shade(c, -0.14));
+        mx.fillStyle = tg; mx.beginPath(); mx.arc(xx + dx * s, cy, r * s, 0, TAU); mx.fill();
+      }
     });
   };
-  const col = theme.mid, dark = shade(col, -0.18), light = shade(col, 0.18);
+  const col = mix(theme.mid, hz, 0.1), dark = shade(col, -0.18), light = shade(col, 0.18);
   for (let i = 0; i < 9; i++) {
     const x = (i + rnd() * 0.7) * (W / 9), s = 0.8 + rnd() * 0.6;
     if (theme.deco === 'flower' || theme.deco === 'petal') tree(x, s, theme.deco === 'petal' ? '#ffa6c9' : light, theme.deco === 'petal' ? '#f27aa8' : col);
@@ -257,7 +278,7 @@ export function makeBackdrop(theme, seed) {
       wrapX(x, (xx) => { const h = (60 + rnd() * 40) * s, w = 40 * s; mx.fillStyle = '#6a8a7a'; mx.fillRect(xx - 2, base - 12, 4, 12); for (let k = 0; k < 3; k++) { mx.fillStyle = k % 2 ? '#7aa08a' : '#8ab89a'; mx.beginPath(); mx.moveTo(xx - w / 2 + k * 3, base - 10 - k * h * 0.28); mx.lineTo(xx, base - h * (0.5 + k * 0.28)); mx.lineTo(xx + w / 2 - k * 3, base - 10 - k * h * 0.28); mx.fill(); mx.fillStyle = '#fff'; mx.beginPath(); mx.moveTo(xx - 8 + k * 2, base - h * (0.38 + k * 0.28)); mx.lineTo(xx, base - h * (0.5 + k * 0.28)); mx.lineTo(xx + 8 - k * 2, base - h * (0.38 + k * 0.28)); mx.fill(); } });
     }
   }
-  if (theme.deco === 'hole') { mx.fillStyle = '#c98f2a'; for (let i = 0; i < 12; i++) { const x = i * 84 + rnd() * 30; mx.beginPath(); mx.moveTo(x, 0); mx.lineTo(x + 26, 0); mx.lineTo(x + 13, 40 + rnd() * 50); mx.fill(); } }
+  if (theme.deco === 'hole') { mx.fillStyle = '#8a5a14'; for (let i = 0; i < 12; i++) { const x = i * 84 + rnd() * 30; mx.beginPath(); mx.moveTo(x, 0); mx.lineTo(x + 26, 0); mx.lineTo(x + 13, 40 + rnd() * 50); mx.fill(); } }
 
   const [gr, gx] = mk();
   const top = 424;
@@ -265,6 +286,10 @@ export function makeBackdrop(theme, seed) {
   gx.fillStyle = gg; gx.beginPath(); gx.moveTo(0, top + 6);
   for (let x = 0; x <= W; x += 6) gx.lineTo(x, top + Math.sin(x / W * TAU * 3) * 3 + 2);
   gx.lineTo(W, H); gx.lineTo(0, H); gx.fill();
+  // thin light edge along the top of the strip
+  gx.strokeStyle = shade(theme.ground[0], 0.4); gx.globalAlpha = 0.7; gx.lineWidth = 1.5; gx.beginPath();
+  for (let x = 0; x <= W; x += 6) { const y = top + Math.sin(x / W * TAU * 3) * 3 + 2; x ? gx.lineTo(x, y) : gx.moveTo(x, y); }
+  gx.stroke(); gx.globalAlpha = 1;
   gx.fillStyle = theme.ground[0];
   for (let i = 0; i < 90; i++) { const x = rnd() * W, h = 5 + rnd() * 9; gx.beginPath(); gx.moveTo(x - 2, top + 4); gx.lineTo(x, top - h + 4); gx.lineTo(x + 2, top + 4); gx.fill(); }
   const dec = theme.deco;
@@ -276,27 +301,55 @@ export function makeBackdrop(theme, seed) {
     else if (dec === 'snow') { gx.fillStyle = 'rgba(255,255,255,.8)'; gx.beginPath(); gx.ellipse(x, y, 9, 2.4, 0, 0, TAU); gx.fill(); }
     else { gx.fillStyle = 'rgba(0,0,0,.14)'; gx.beginPath(); gx.ellipse(x, y, 6 + rnd() * 6, 2.6, 0, 0, TAU); gx.fill(); }
   }
+  // a few stones or flowers in the mid ground
+  const nProps = 5 + Math.floor(rnd() * 4);
+  for (let i = 0; i < nProps; i++) {
+    const x = rnd() * W, y = top + 20 + rnd() * 40, r = 2 + rnd() * 2.5;
+    if (dec === 'flower' || dec === 'petal') {
+      gx.strokeStyle = shade(theme.ground[1], -0.2); gx.lineWidth = 1; gx.beginPath(); gx.moveTo(x, y + 5); gx.lineTo(x, y); gx.stroke();
+      gx.fillStyle = dec === 'petal' ? '#ffd0e2' : ['#fff', '#ffd23f', '#ff9ac6'][i % 3]; gx.beginPath(); gx.arc(x, y, r, 0, TAU); gx.fill();
+      gx.fillStyle = '#ffcf3a'; gx.beginPath(); gx.arc(x, y, r * 0.35, 0, TAU); gx.fill();
+    } else {
+      gx.fillStyle = 'rgba(0,0,0,.2)'; gx.beginPath(); gx.ellipse(x + 1, y + r * 0.7, r * 1.4, r * 0.5, 0, 0, TAU); gx.fill();
+      gx.fillStyle = shade(theme.dirt, 0.12 + rnd() * 0.12); gx.beginPath(); gx.ellipse(x, y, r * 1.3, r * 0.9, 0, 0, TAU); gx.fill();
+      gx.fillStyle = 'rgba(255,255,255,.3)'; gx.beginPath(); gx.ellipse(x - r * 0.3, y - r * 0.3, r * 0.5, r * 0.3, 0, 0, TAU); gx.fill();
+    }
+  }
   for (let i = 0; i < 40; i++) { gx.fillStyle = 'rgba(255,255,255,.1)'; gx.fillRect(rnd() * W, top + 20 + rnd() * 90, 14 + rnd() * 26, 1.5); }
 
   // tall foreground tufts (drawn in front of the action) and soft sun rays
   const [front, ftx] = mk();
   const tuft = theme.deco === 'snow' ? '#ffffff' : shade(theme.ground[1], -0.12);
   for (let i = 0; i < 46; i++) {
-    const x = rnd() * W, h = 26 + rnd() * 34, n = 3 + Math.floor(rnd() * 3);
+    const x = rnd() * W, h = 22 + rnd() * 26, n = 3 + Math.floor(rnd() * 3);
     for (let k = 0; k < n; k++) {
       const bx = x + (k - n / 2) * 4, lean = (rnd() - 0.5) * 16;
-      ftx.strokeStyle = k % 2 ? tuft : shade(tuft, 0.14); ftx.lineWidth = 3.2; ftx.lineCap = 'round';
+      ftx.globalAlpha = 0.75; ftx.strokeStyle = shade(k % 2 ? tuft : shade(tuft, 0.14), (rnd() - 0.5) * 0.16); ftx.lineWidth = 3; ftx.lineCap = 'round';
       ftx.beginPath(); ftx.moveTo(bx, H + 2); ftx.quadraticCurveTo(bx + lean * 0.4, H - h * 0.6, bx + lean, H - h); ftx.stroke();
     }
   }
   const [rays, rx] = mk();
-  if (!night) for (let i = 0; i < 5; i++) {
-    const a0 = 1.75 + i * 0.22, spread = 0.07 + rnd() * 0.05;
-    const gr = rx.createLinearGradient(740, 120, 740 + Math.cos(a0) * 700, 120 + Math.sin(a0) * 700);
-    gr.addColorStop(0, 'rgba(255,255,220,.5)'); gr.addColorStop(1, 'rgba(255,255,220,0)');
-    rx.fillStyle = gr; rx.beginPath(); rx.moveTo(740, 120);
-    rx.lineTo(740 + Math.cos(a0 - spread) * 900, 120 + Math.sin(a0 - spread) * 900); rx.lineTo(740 + Math.cos(a0 + spread) * 900, 120 + Math.sin(a0 + spread) * 900); rx.fill();
+  if (!night) for (let i = 0; i < 6; i++) {
+    const a0 = 1.7 + i * 0.2 + (rnd() - 0.5) * 0.08, spread = 0.025 + rnd() * 0.075, peak = 0.05 + rnd() * 0.05;
+    const L = 520 + rnd() * 120, ca = Math.cos(a0), sa = Math.sin(a0);
+    // along the shaft: bright near the sun, gone before the ground
+    const gl = rx.createLinearGradient(740, 120, 740 + ca * L, 120 + sa * L);
+    gl.addColorStop(0, `rgba(255,255,220,${peak})`); gl.addColorStop(0.6, `rgba(255,255,220,${peak * 0.5})`); gl.addColorStop(1, 'rgba(255,255,220,0)');
+    const [sh, shx] = mk();
+    shx.fillStyle = gl; shx.beginPath(); shx.moveTo(740, 120);
+    shx.lineTo(740 + Math.cos(a0 - spread) * 900, 120 + Math.sin(a0 - spread) * 900); shx.lineTo(740 + Math.cos(a0 + spread) * 900, 120 + Math.sin(a0 + spread) * 900); shx.fill();
+    // soft edges: multiply the shaft by a gradient across its width
+    const px = -sa, py = ca, mxp = 740 + ca * L * 0.5, myp = 120 + sa * L * 0.5, hw = Math.tan(spread) * L * 0.5 + 1;
+    const ge = shx.createLinearGradient(mxp - px * hw, myp - py * hw, mxp + px * hw, myp + py * hw);
+    ge.addColorStop(0, 'rgba(0,0,0,0)'); ge.addColorStop(0.35, 'rgba(0,0,0,1)'); ge.addColorStop(0.65, 'rgba(0,0,0,1)'); ge.addColorStop(1, 'rgba(0,0,0,0)');
+    shx.globalCompositeOperation = 'destination-in'; shx.fillStyle = ge; shx.fillRect(0, 0, W, H);
+    rx.drawImage(sh, 0, 0);
+    sh.width = sh.height = 0;                 // temp canvases are freed at once: phones cap total canvas memory
   }
+  // fade everything out toward the ground so rays never wash over the characters
+  rx.globalCompositeOperation = 'destination-in';
+  const rf = rx.createLinearGradient(0, 200, 0, 420); rf.addColorStop(0, 'rgba(0,0,0,1)'); rf.addColorStop(1, 'rgba(0,0,0,0)');
+  rx.fillStyle = rf; rx.fillRect(0, 0, W, H); rx.globalCompositeOperation = 'source-over';
 
   // depth of field and atmospheric haze: the distant layers are softer and drift toward the haze colour
   const soften = (cv, px, haze, hazeA) => {
@@ -304,9 +357,9 @@ export function makeBackdrop(theme, seed) {
     if (typeof CanvasRenderingContext2D !== 'undefined' && 'filter' in CanvasRenderingContext2D.prototype && px > 0) ox.filter = `blur(${px}px)`;
     ox.drawImage(cv, 0, 0); ox.filter = 'none';
     ox.globalCompositeOperation = 'source-atop'; ox.globalAlpha = hazeA; ox.fillStyle = haze; ox.fillRect(0, 0, W, H);
+    cv.width = cv.height = 0;                 // the sharp source layer is not needed again
     return o;
   };
-  const hz = theme.haze || '#ffffff';
   const farSoft = soften(far, 2.6, hz, 0.38), midSoft = soften(mid, 0.9, hz, 0.14);
 
   const stars = []; if (night) for (let i = 0; i < 70; i++) stars.push([rnd() * W, rnd() * 300, 0.6 + rnd() * 1.4, rnd() * 6]);

@@ -11,10 +11,10 @@ import { dailyScore, fetchBoard, submitScore, rankOf } from './daily.js';
 import { drawBuilding } from './art_kingdom.js';
 import * as S from './sim.js';
 import { drawCat } from './art_cats.js';
-import { enemySprite, nestSprite, nestOverlay, makeBackdrop, drawBackdrop, drawRays, drawFront } from './art_world.js';
+import { enemySprite, nestSprite, nestOverlay, makeBackdrop, drawBackdrop, drawRays, drawFront, freeBackdrop, resetWorldArt } from './art_world.js';
 import { Sfx } from './audio.js';
 import { createPost, ambientFor, lightSprite } from './post.js';
-import { mix } from './art_util.js';
+import { mix, outlineCanvas } from './art_util.js';
 import { iconCanvas, installGlyphs } from './art_icons.js';
 
 const SAVE_KEY = 'stacking_cats_save_v1';
@@ -73,8 +73,8 @@ function fit() {
   }
   // render at the real screen resolution (capped) so lines stay sharp on high-DPI screens
   const dpr = Math.min(window.devicePixelRatio || 1, 2);
-  const cap = save.opt.quality === 'low' ? 1 : 2;
-  res = Math.max(1, Math.min(cap, k * dpr * quality));
+  const cap = save.opt.quality === 'low' ? 1 : coarse ? 1.5 : 2;
+  res = Math.max(quality < 1 ? 0.75 : 1, Math.min(cap, k * dpr * quality));
   const pw = Math.round(W * res);
   if (cv.width !== pw) { cv.width = pw; cv.height = Math.round(H * res); }
 }
@@ -98,6 +98,7 @@ function catSprite(id, variant = 'open') {
   if (!c) {
     c = document.createElement('canvas'); c.width = c.height = 240;
     const x = c.getContext('2d'); x.scale(2, 2); drawCat(x, CAT_BY_ID[id], variant);
+    c = outlineCanvas(c, 3, '#2a1840', 0.8);                // a dark rim so the tower keeps its silhouette on bright backdrops
     catSprites.set(key, c);
   }
   return c;
@@ -131,7 +132,11 @@ function themeFor(wave) { return (S.stageOf(Math.max(1, wave)) - 1) % THEMES.len
 function setBackdrop(idx) {
   if (idx === bdIdx && bd) return;
   initAmbient(THEMES[idx].deco);
-  if (!backdrops.has(idx)) backdrops.set(idx, makeBackdrop(THEMES[idx], idx));
+  if (!backdrops.has(idx)) {
+    // only the backdrop in use is kept: every theme is ~15 MB of canvases and phones blank them all when memory runs out
+    for (const [k, v] of backdrops) { freeBackdrop(v); backdrops.delete(k); }
+    backdrops.set(idx, makeBackdrop(THEMES[idx], idx));
+  }
   bd = backdrops.get(idx); bdIdx = idx;
 }
 
@@ -686,7 +691,7 @@ function showTower(back, opt = {}) {
       ? `<b class="warn">Backpack is over full by ${over}.</b> Sell, forge or equip items to continue.`
       : it ? `<b>${it.icon} ${it.name}</b>: ${it.desc}. Tap a cat to equip it, or sell / forge it.` : sel ? 'Tap another cat to swap, or a matching one to merge.' : 'Tap a cat to move it. Tap a backpack item, then a cat, to equip it.';
     setScreen(`<h2>Arrange your tower <small class="klv">Team DPS &asymp; ${Math.round(teamDps(S.calcMods(g)))}</small></h2><div class="synrow">${synChips || '<small>Stack cats of the same kind for synergy bonuses!</small>'}</div>
-      <div class="tbody"><div class="tower"><div class="col"><h4>Tower (top to bottom)</h4>${tw.join('')}<button class="btn small grey relbtn" data-act="release" ${sel ? '' : 'disabled'}>${rel ? 'Really release?' : 'Release cat'}</button></div><div class="col"><h4>Bench (rests, heals fast)</h4>${bn.join('')}
+      <div class="tbody"><div class="tower"><div class="col"><h4>Tower (top to bottom)</h4>${tw.join('')}<button class="btn small red relbtn" data-act="release" ${sel ? '' : 'disabled'}>${rel ? 'Really release?' : 'Release cat'}</button></div><div class="col"><h4>Bench (rests, heals fast)</h4>${bn.join('')}
         <h4>Backpack <span class="${over ? 'warn' : ''}">${g.stash.length}/${MAX_STASH}</span></h4><div class="bagrow">${bag}</div></div></div></div>
       <div class="tfoot"><div class="detail slim ${over ? 'bad' : ''}"><span>${msg}</span></div>${acts2}<button class="btn big2" data-act="done" ${over ? 'disabled' : ''}>Done</button></div>`, 'wide arr');
     if (selItem != null) coach('c6', 'Now tap a cat to equip it. The green numbers show how much stronger that cat gets!', 790, 6);
@@ -932,7 +937,7 @@ function glowSprite(col, r) {
   if (!c) {
     c = document.createElement('canvas'); c.width = c.height = rr * 2;
     const x = c.getContext('2d'), gr = x.createRadialGradient(rr, rr, 0, rr, rr, rr);
-    gr.addColorStop(0, hexA(col, 1)); gr.addColorStop(0.3, hexA(col, 0.6)); gr.addColorStop(1, hexA(col, 0));
+    gr.addColorStop(0, hexA(col, 1)); gr.addColorStop(0.3, hexA(col, 0.6)); gr.addColorStop(0.6, hexA(col, 0.18)); gr.addColorStop(1, hexA(col, 0));
     x.fillStyle = gr; x.fillRect(0, 0, rr * 2, rr * 2);
     glowCache.set(key, c);
   }
@@ -955,7 +960,12 @@ function cheerRandom(chance) {
 }
 let hitstop = 0, timeScale = 1, slowT = 0, zpunch = 0, towerWob = 0;
 let combo = 0, comboT = 0, comboPulse = 0, celeb = 0;
-const hit = (t) => { hitstop = Math.max(hitstop, t); };
+let lastSmallHit = -1;
+const hit = (t) => {
+  // tiny stops (every swipe) are throttled so fast attackers do not stutter; crits, elites, KOs and bosses always land
+  if (t < 0.025) { if (tAnim - lastSmallHit < 0.14) return; lastSmallHit = tAnim; }
+  hitstop = Math.max(hitstop, t);
+};
 const slowmo = (sec, scale) => { slowT = sec; timeScale = scale; };
 
 const spawnFx = (f) => { if (fx.length < Math.min(MAXFX, fxCap)) fx.push(f); };
@@ -1018,7 +1028,8 @@ function handle(e) {
       sparks(e.x, e.y, 4, '#ffffff', 170, 0.22); hit(0.018);
       sfx.play('swipe'); break;
     case 'flame':
-      for (let i = 0; i < 6; i++) spawnFx({ k: 'f', x: e.x + Math.random() * e.len, y: e.y + (Math.random() - 0.5) * (6 + i * 4), vy: -34 - Math.random() * 34, r: 12 + Math.random() * 14, life: 0.38, max: 0.38 });
+      for (let i = 0; i < 9; i++) spawnFx({ k: 'f', x: e.x + Math.random() * e.len, y: e.y + (Math.random() - 0.5) * (6 + i * 4), vy: -34 - Math.random() * 34, r: 12 + Math.random() * 14, life: 0.38, max: 0.38 });
+      sparks(e.x + e.len * (0.4 + Math.random() * 0.6), e.y, 2, '#ffb040', 120, 0.45);
       sfx.play('flame'); break;
     case 'chain': {
       const pts = [];
@@ -1112,7 +1123,7 @@ function drawFx() {
     else if (f.k === 'cf') { ctx.globalAlpha = Math.min(1, a * 3); ctx.save(); ctx.translate(f.x, f.y); ctx.rotate(f.rot); ctx.scale(1, Math.cos(f.rot * 1.7)); ctx.fillStyle = f.col; ctx.fillRect(-4, -2.5, 8, 5); ctx.restore(); }
     else if (f.k === 'corpse') {
       const sp = enemySprite(f.type, f.elite); ctx.globalAlpha = Math.min(1, a * 1.6); ctx.save(); ctx.translate(f.x, f.y); ctx.rotate(f.rot); ctx.scale(f.elite ? 1.16 : 1, f.elite ? 1.16 : 1);
-      ctx.drawImage(sp.c, -sp.ax, -sp.ay, sp.w, sp.h); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = a * 0.7; ctx.drawImage(sp.c, -sp.ax, -sp.ay, sp.w, sp.h); ctx.restore();
+      ctx.drawImage(sp.c, -sp.ax, -sp.ay, sp.w, sp.h); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = a > 0.85 ? 0.9 : a * 0.45; ctx.drawImage(sp.c, -sp.ax, -sp.ay, sp.w, sp.h); ctx.restore();
     } else if (f.k === 's') { ctx.globalAlpha = a; ctx.fillStyle = '#fff6b0'; for (let i = 0; i < 4; i++) { const an = i * 1.57 + (1 - a) * 2, d = (1 - a) * 24 + 4; ctx.beginPath(); ctx.arc(f.x + Math.cos(an) * d, f.y + Math.sin(an) * d, 2.6 * a + 0.6, 0, TAU); ctx.fill(); } }
     else if (f.k === 'a') { ctx.globalAlpha = a; ctx.strokeStyle = '#fff'; ctx.lineCap = 'round'; for (let i = 0; i < 3; i++) { ctx.lineWidth = 3.4 - i; ctx.beginPath(); ctx.arc(f.x + 16, f.y, (f.wide ? 46 : 28) + i * 6 + (1 - a) * 8, Math.PI * 0.62, Math.PI * 1.38); ctx.stroke(); } }
     else if (f.k === 'fly') { ctx.globalAlpha = 1; if (f.kind === 'coin') { ctx.fillStyle = '#ffd23f'; ctx.strokeStyle = '#8a5a14'; ctx.lineWidth = 1.4; ctx.beginPath(); ctx.ellipse(f.x, f.y, 5.5 * Math.abs(Math.cos(f.life * 14)) + 1.2, 5.5, 0, 0, TAU); ctx.fill(); ctx.stroke(); } else ctx.drawImage(iconSprite('\uD83C\uDF81'), f.x - 13, f.y - 13, 26, 26); }
@@ -1124,12 +1135,13 @@ function drawFx() {
   for (const f of fx) {
     const a = Math.max(0, f.life / f.max);
     if (f.k === 'g') glow(f.x, f.y, f.r * (1.2 - a * 0.3), f.col, a * 0.62);
-    else if (f.k === 'f') glow(f.x, f.y, Math.max(3, f.r), a > 0.5 ? '#ffb040' : '#ff5a1f', a * 0.85);
+    else if (f.k === 'f') glow(f.x, f.y, Math.max(3, f.r) * (1.4 - a * 0.4), a > 0.7 ? '#ffe9a0' : a > 0.4 ? '#ffb040' : '#ff5a1f', a * 0.85);
     else if (f.k === 'sp') { ctx.globalAlpha = a; ctx.strokeStyle = f.col; ctx.lineWidth = 2; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(f.x, f.y); ctx.lineTo(f.x - f.vx * 0.04, f.y - f.vy * 0.04); ctx.stroke(); }
     else if (f.k === 'r') { const u = 1 - a; ctx.globalAlpha = a; ctx.strokeStyle = f.col; ctx.lineWidth = f.w * a + 1; ctx.beginPath(); ctx.ellipse(f.x, f.y, f.r * (0.3 + 0.7 * u), f.r * (0.3 + 0.7 * u) * 0.55, 0, 0, TAU); ctx.stroke(); }
     else if (f.k === 'l') {
       ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-      for (const [wm, al, col] of [[2.4, 0.3, f.col], [1, 0.95, f.col]]) { ctx.globalAlpha = a * al; ctx.strokeStyle = col; ctx.lineWidth = f.w * wm; ctx.beginPath(); f.pts.forEach((p, i) => (i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y))); ctx.stroke(); }
+      const ph = Math.floor(tAnim * 28), last = f.pts.length - 1;
+      for (const [wm, al, col] of [[3.2, 0.24, f.col], [1.6, 0.9, f.col], [0.7, 1, '#ffffff']]) { ctx.globalAlpha = a * al; ctx.strokeStyle = col; ctx.lineWidth = f.w * wm; ctx.beginPath(); f.pts.forEach((p, i) => { const j = i && i < last && f.pts.length > 2 ? Math.sin(ph * 12.9 + i * 78.2 + p.x * 0.31) * 5 : 0; if (i) ctx.lineTo(p.x, p.y + j); else ctx.moveTo(p.x, p.y); }); ctx.stroke(); }
     }
   }
   norm();
@@ -1488,7 +1500,7 @@ function render(dt) {
   const sk = shake * save.opt.shake, zp = save.opt.motion ? zpunch + (sk > 0.5 ? 0.012 : 0) : 0;
   if (zp > 0.001) { ctx.translate(W / 2, H / 2); ctx.scale(1 + zp, 1 + zp); ctx.translate(-W / 2, -H / 2); }
   zpunch *= Math.exp(-6 * dt);
-  if (sk > 0.2) ctx.translate((Math.random() - 0.5) * sk, (Math.random() - 0.5) * sk);
+  if (sk > 0.2) ctx.translate(Math.round(Math.sin(tAnim * 83) * sk * 0.5), Math.round(Math.sin(tAnim * 71 + 1.7) * sk * 0.5));
   shake = Math.max(0, shake - dt * 40);
   if (g && mode !== 'title' && g.wave > 0) setBackdrop(themeFor(g.wave)); else if (!bd) setBackdrop(0);
   const inRun = g && mode !== 'title';
@@ -1508,17 +1520,17 @@ function render(dt) {
     const blobs = th.deco === 'star' ? null : [0, 1, 2].map((i) => ({ x: ((t * 12 + i * 430) % 1350) - 170, y: GROUND + 22 + i * 12, rx: 200, ry: 34, a: 0.16 }));
     post.light(ctx, ambCur, gatherLights(t), blobs, [th.grade[0], th.grade[1], duskAmt]);
   }
-  drawFx();
   if (gfx >= 2) drawWeather(t, dt);
+  drawFx();
   ctx.restore();
   if (gfx >= 3) {
     // glow reads best in dim light, so it is gentle at noon and stronger at dusk, at night and in the rain
     const lum = (parseInt(ambCur.slice(1, 3), 16) + parseInt(ambCur.slice(3, 5), 16) + parseInt(ambCur.slice(5, 7), 16)) / 765;
-    post.bloom(ctx, cv, (post.hasFilter ? 0.5 : 0.2) * (1.25 - lum));
+    post.bloom(ctx, cv, (post.hasFilter ? 0.36 : 0.16) * (1.25 - lum));
   }
-  if (gfx >= 3 && th.deco !== 'star') post.flare(ctx, 740, 120, 0.08);
-  if (gfx >= 3) post.grain(ctx, t, 0.045);
-  vignette(t);
+  if (gfx >= 3 && th.deco !== 'star') post.flare(ctx, 740, 120, 0.035);
+  if (gfx >= 3 && !coarse) post.grain(ctx, t, 0.045);
+  if (save.opt.quality !== 'low') vignette(t);
   drawCombo(t);
 }
 
@@ -1560,21 +1572,50 @@ addEventListener('keydown', (e) => {
   else if (k === 'd') { save.meter = !save.meter; persist(); meterT = 0; }
   else if (k === 'm') { save.sound = !save.sound; sfx.on = save.sound; persist(); }
 });
-document.addEventListener('visibilitychange', () => { if (document.hidden && mode === 'play' && !paused) showPause(); });
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden && mode === 'play' && !paused) showPause();
+  // phones may discard canvas contents while the tab is in the background: rebuild everything that is cached
+  if (!document.hidden) {
+    catSprites.clear(); silSprites.clear(); iconCache.clear(); shadowCache.clear(); glowCache.clear();
+    for (const [k, v] of backdrops) { freeBackdrop(v); backdrops.delete(k); }
+    resetWorldArt(); bd = null; bdIdx = -1;
+  }
+});
 addEventListener('pagehide', () => { if (g && mode !== 'over' && g.wave > 1) commitRun(); });
 
 // ---------------------------------------------------------------- main loop
-let frameEma = 16, slowFrames = 0;
+let frameEma = 16, slowFrames = 0, fastFrames = 0, refreshMs = 16.7, calmNeed = 300, lastDrop = -99;
+// adaptive quality: step down when frames run long, step back up after a calm stretch (with back-off so it cannot flap).
+// The limit follows the real refresh rate, so a 30 Hz or battery saver display is not mistaken for a slow device.
+function adaptQuality(rawMs) {
+  if (save.opt.quality !== 'auto' || document.hidden || paused || rawMs > 120) { slowFrames = fastFrames = 0; return; }
+  refreshMs = Math.min(refreshMs + 0.02, rawMs);
+  frameEma = frameEma * 0.95 + rawMs * 0.05;
+  const limit = Math.max(26, refreshMs * 1.55);
+  if (frameEma > limit && (gfx > 0 || quality > 0.61)) {
+    fastFrames = 0;
+    if (++slowFrames > 90) {
+      slowFrames = 0;
+      if (tAnim - lastDrop < 40) calmNeed = Math.min(2400, calmNeed * 2);
+      lastDrop = tAnim;
+      if (gfx > 1) gfx--; else if (quality > 0.61) { quality *= 0.78; fit(); } else gfx = 0;
+    }
+  } else {
+    slowFrames = 0;
+    if (frameEma < limit * 0.62 && (gfx < 3 || quality < 1)) {
+      if (++fastFrames > calmNeed) {
+        fastFrames = 0;
+        if (gfx < 1) gfx = 1; else if (quality < 1) { quality = Math.min(1, quality / 0.78); fit(); } else gfx++;
+      }
+    } else fastFrames = 0;
+  }
+}
 function frame(ts) {
   const raw = (ts - last) / 1000;
   const dt = Math.min(0.05, raw);
   last = ts;
   tAnim += dt;
-  // drop render resolution if the device cannot keep up
-  frameEma = frameEma * 0.95 + Math.min(100, raw * 1000) * 0.05;
-  if (save.opt.quality === 'auto' && frameEma > 26 && (gfx > 1 || res > 1.01)) {
-    if (++slowFrames > 90) { slowFrames = 0; if (gfx > 1) gfx--; else { quality *= 0.78; fit(); } }
-  } else slowFrames = 0;
+  adaptQuality(Math.min(100, raw * 1000));
   if (slowT > 0) { slowT -= dt; if (slowT <= 0) slowT = 0; } else timeScale += (1 - timeScale) * Math.min(1, dt * 5);
   if (comboT > 0) { comboT -= dt; if (comboT <= 0) combo = 0; }
   comboPulse *= Math.exp(-8 * dt); towerWob *= Math.exp(-5 * dt);
