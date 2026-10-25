@@ -380,7 +380,7 @@ export function eatSnack(g, id) {
     g.perm.push(id);
     if (s.nine) g.nineLives++;
   } else if (s.heal) {
-    for (const c of g.cats.concat(g.bench)) c.hp = Math.min(catMaxHp(g, c), c.hp + catMaxHp(g, c) * s.heal * g.mods.snackMul);
+    for (const c of g.cats.concat(g.bench)) c.hp = Math.min(catMaxHp(g, c), c.hp + catMaxHp(g, c) * s.heal * (g.mods || calcMods(g)).snackMul);
   }
   refreshHp(g, before);
 }
