@@ -396,7 +396,7 @@ export default {
       app.text('to see its grafts', x + w / 2, y + 208, { size: 16, ui: true, align: 'center', color: 'rgba(232,220,196,.7)', shadow: true });
       return;
     }
-    drawCard(ctx, hv.spec, x + w / 2, y + 16 + (CARD_H * 1.1) / 2, { scale: 1.1, tithed: hv.tithed, glow: 0.35, hover: true, preview: true });
+    drawCard(ctx, hv.spec, x + w / 2 - 8, y + 16 + (CARD_H * 1.1) / 2, { scale: 1.1, tithed: hv.tithed, glow: 0.35, hover: true, preview: true });
     const py = y + 16 + CARD_H * 1.1 + 22;
     const tags = [];
     if (hv.tithed) tags.push(['TITHED', COL.bad]);

@@ -303,21 +303,21 @@ export default {
   drawPicker(app, run, ev) {
     const g = app.ctx, mouse = app.mouse, pk = this.picker;
     const blocked0 = app.blocked;
-    g.fillStyle = 'rgba(8,6,5,.88)'; g.fillRect(0, 0, W, H);
+    g.fillStyle = 'rgba(8,6,5,.95)'; g.fillRect(0, 0, W, H);
     app.text(pk.label, 640, 22, { size: 34, bold: true, align: 'center' });
     app.text(pk.text || 'Choose a card.', 640, 64, { size: 16, ui: true, align: 'center', color: 'rgba(232,220,196,.75)', maxW: 800 });
     const sc = 0.56, cw = CARD_W * sc, ch = CARD_H * sc, gap = 16, per = Math.max(1, Math.floor((W - 120 + gap) / (cw + gap)));
     const rows = Math.ceil(pk.cards.length / per);
-    const gridW = per * cw + (per - 1) * gap, gx = (W - gridW) / 2;
+    const cols = Math.min(per, pk.cards.length), gridW = cols * cw + (cols - 1) * gap, gx = (W - gridW) / 2;
     const viewTop = 100, viewH = H - viewTop - 90;
     const contentH = rows * (ch + gap);
-    const maxS = Math.max(0, contentH - viewH);
+    const maxS = Math.max(0, contentH - viewH), yoff = contentH < viewH ? (viewH - contentH) / 2 - 20 : 0;
     if (mouse.wheel) pk.scroll += mouse.wheel * 0.6;
     pk.scroll = clamp(pk.scroll, 0, maxS);
     let hover = -1;
     g.save(); g.beginPath(); g.rect(0, viewTop, W, viewH); g.clip();
     pk.cards.forEach((inst, i) => {
-      const cx = gx + (i % per) * (cw + gap) + cw / 2, cy = viewTop + Math.floor(i / per) * (ch + gap) + ch / 2 + 8 - pk.scroll;
+      const cx = gx + (i % per) * (cw + gap) + cw / 2, cy = viewTop + Math.floor(i / per) * (ch + gap) + ch / 2 + 8 + yoff - pk.scroll;
       if (cy < viewTop - ch || cy > viewTop + viewH + ch) return;
       const over = mouse.y > viewTop && mouse.y < viewTop + viewH && Math.abs(mouse.x - cx) < cw / 2 && Math.abs(mouse.y - cy) < ch / 2;
       if (over) hover = i;

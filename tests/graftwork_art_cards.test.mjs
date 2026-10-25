@@ -24,7 +24,7 @@ t('every_card_draws_in_every_variant_without_throwing', () => {
   const gids = GRAFT_LIST.map((g) => g.id);
   for (const c of CARD_LIST) {
     for (const up of [0, 1]) for (let ng = 0; ng <= 3; ng++) {
-      const grafts = []; while (grafts.length < ng) { const id = gids[Math.floor(rng() * gids.length)]; if (!grafts.includes(id)) grafts.push(id); }
+      const grafts = []; while (grafts.length < ng) { const id = gids[rng.int(gids.length)]; if (!grafts.includes(id)) grafts.push(id); }
       const spec = cardSpec({ uid: ++k, id: c.id, grafts, up });
       drawCard(ctx, spec, 100, 100, {});
       drawCard(ctx, spec, 100, 100, { tithed: true, jam: true, cost: 'X', glow: 1, selected: true, dim: 0.5, alpha: 0.7, hover: true, preview: true, scale: 1.2, rot: 0.3 });

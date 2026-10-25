@@ -116,7 +116,7 @@ export function drawModal(app, st, run, extra = {}) {
 
   if (m.kind === 'cards') {
     const sc = 0.55, cw = CARD_W * sc, chh = CARD_H * sc, gapX = 16, gapY = 14;
-    const gx = 60, gy = 112, gw = 1160, gh = 440;
+    const gx = 60, gy = 118, gw = 1160, gh = 436;
     const cols = Math.max(1, Math.floor((gw + gapX) / (cw + gapX)));
     const left = gx + (gw - (cols * cw + (cols - 1) * gapX)) / 2;
     const rows = Math.ceil(m.cards.length / cols), total = rows * (chh + gapY);
@@ -143,7 +143,12 @@ export function drawModal(app, st, run, extra = {}) {
       const inst = m.cards[hover], p = rects[hover], why = m.reason ? m.reason(inst) : null, hs = 0.82;
       const hx = clamp(p.x, gx + CARD_W * hs / 2, gx + gw - CARD_W * hs / 2), hy = clamp(p.y, gy + CARD_H * hs / 2 - 20, gy + gh - CARD_H * hs / 2 + 40);
       g.save(); g.shadowColor = 'rgba(0,0,0,.8)'; g.shadowBlur = 24;
-      drawCard(g, cardSpec(inst), hx, hy, { scale: hs, tithed: tith.has(inst.uid), selected: !why, dim: why ? 0.4 : 0, hover: true });
+      if (m.compare && !why) {
+        const pcx = clamp(p.x, gx + CARD_W * hs + 24, gx + gw - CARD_W * hs - 24), dx = CARD_W * hs / 2 + 26;
+        drawCard(g, cardSpec(inst), pcx - dx, hy, { scale: hs, tithed: tith.has(inst.uid) });
+        drawCard(g, m.compare(inst), pcx + dx, hy, { scale: hs, selected: true, glow: 0.5 });
+        g.fillStyle = COL.lamp; g.beginPath(); g.moveTo(pcx - 12, hy - 16); g.lineTo(pcx + 12, hy); g.lineTo(pcx - 12, hy + 16); g.closePath(); g.fill();
+      } else drawCard(g, cardSpec(inst), hx, hy, { scale: hs, tithed: tith.has(inst.uid), selected: !why, dim: why ? 0.4 : 0, hover: true });
       g.restore();
       app.cursor = why ? 'not-allowed' : 'pointer';
       info = why ? { before: strainInfo(run), after: strainInfo(run), lines: [{ t: why, c: COL.bad }] } : (m.info ? m.info(inst) : null);
@@ -165,16 +170,19 @@ export function drawModal(app, st, run, extra = {}) {
     inst.grafts.forEach((gid, i) => {
       const gr = GRAFTS[gid], bx = 440, by = 130 + i * (bh + 16);
       const over = app.inRect(bx, by, bw, bh); if (over) hover = i;
-      app.panel(bx, by, bw, bh, { fill: over ? 'rgba(60,48,30,.95)' : 'rgba(38,32,28,.95)', stroke: over ? COL.lamp : 'rgba(232,220,196,.35)', lw: over ? 3 : 2 });
+      const why = m.reason ? m.reason(gid) : null;
+      app.panel(bx, by, bw, bh, { fill: over && !why ? 'rgba(60,48,30,.95)' : 'rgba(38,32,28,.95)', stroke: over && !why ? COL.lamp : 'rgba(232,220,196,.35)', lw: over ? 3 : 2 });
+      if (why) { g.save(); g.globalAlpha = 0.55; g.fillStyle = '#000'; app.rr(bx, by, bw, bh, 10); g.fill(); g.restore(); }
       drawGraftPatch(g, gr, bx + 14, by + 14, 250, 90, {});
       app.text(`Weight ${gr.weight}${i >= MAX_GRAFTS_NORMAL ? ' +1 Overload' : ''}`, bx + 280, by + 12, { size: 15, ui: true, bold: true, color: COL.lamp });
       app.text('Boon: ' + gr.boon, bx + 280, by + 36, { size: 15, ui: true, color: COL.good, maxW: bw - 300, lineH: 18 });
       app.text('Price: ' + gr.price, bx + 280, by + 72, { size: 15, ui: true, color: COL.bad, maxW: bw - 300, lineH: 18 });
       if (over) app.cursor = 'pointer';
-      if (app.clicked(bx, by, bw, bh)) picked = gid;
+      if (app.clicked(bx, by, bw, bh)) { if (why) { sfx(app, 'error'); m.toast = why; m.toastT = 1.6; } else picked = gid; }
     });
     if (hover !== m.hov) { m.hov = hover; if (hover >= 0) sfx(app, 'uiHover', { vol: 0.3 }); }
-    info = hover >= 0 && m.info ? m.info(inst.grafts[hover]) : null;
+    const hwhy = hover >= 0 && m.reason ? m.reason(inst.grafts[hover]) : null;
+    info = hwhy ? { before: strainInfo(run), after: strainInfo(run), lines: [{ t: hwhy, c: COL.bad }] } : hover >= 0 && m.info ? m.info(inst.grafts[hover]) : null;
     drawInfo(app, 60, 566, 1160, 108, info, 'Hover a graft to see the result of removing it.');
     void n;
   }
@@ -235,11 +243,11 @@ function patchAt(app, graft, bx, by, w, h, rot, al) {
   const g = app.ctx; g.save(); g.globalAlpha = al === undefined ? 1 : al; g.translate(bx + w / 2, by + h / 2); g.rotate(rot || 0);
   g.shadowColor = 'rgba(0,0,0,.6)'; g.shadowBlur = 14; drawGraftPatch(g, graft, -w / 2, -h / 2, w, h, {}); g.restore();
 }
-function dimBg(app, k) { const g = app.ctx; g.save(); g.fillStyle = 'rgba(6,4,3,' + (0.78 * k) + ')'; g.fillRect(0, 0, 1280, 720); g.restore(); }
+function dimBg(app, k) { const g = app.ctx; g.save(); g.fillStyle = 'rgba(6,4,3,' + (0.97 * k) + ')'; g.fillRect(0, 0, 1280, 720); g.restore(); }
 
 export function drawAnim(app, a, fx) {
   const g = app.ctx, k = clamp(a.t / a.dur, 0, 1);
-  dimBg(app, clamp(k * 6, 0, 1) * (k > 0.92 ? (1 - k) / 0.08 : 1));
+  dimBg(app, 0.9 * clamp(k * 6, 0, 1) * (k > 0.92 ? (1 - k) / 0.08 : 1));
   if (a.kind === 'attach') {
     const cx = a.cx, cy = a.cy, graft = GRAFTS[a.gid], pb = patchBox(cx, cy);
     const lift = EASE.out(clamp(k / 0.1, 0, 1));
