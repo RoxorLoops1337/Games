@@ -23,6 +23,19 @@ static func migrations() -> Dictionary:
 			if not st.has("offer_n"):
 				st["offer_n"] = 0
 			st["schema_version"] = 1,
+		# 1 -> 2: formations and mentality (the match engine now plays 4-4-2, 4-3-3, 3-5-2 and 5-3-2).
+		1: func(st: Dictionary) -> void:
+			if not st.has("formation"):
+				st["formation"] = "4-4-2"
+			if not st.has("mentality"):
+				st["mentality"] = "balanced"
+			if st.has("season") and st["season"].has("teams"):
+				var i: int = 0
+				for t in st["season"]["teams"]:
+					if not t.has("formation"):
+						t["formation"] = "4-4-2"
+					i += 1
+			st["schema_version"] = 2,
 	}
 
 ## JSON turns every number into a float: put the integers back.

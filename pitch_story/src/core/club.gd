@@ -5,7 +5,7 @@ extends RefCounted
 ## every function here takes it as `st` and changes it in place.
 ## Randomness always comes from a PsRng seeded from st.seed, never from the engine.
 
-const SCHEMA: int = 1
+const SCHEMA: int = 2
 const TEAMS: int = 8
 const MATCHDAYS: int = 14
 const BLOCK_STARTS: Array = [0, 4, 8, 11]      # a draft before each block of fixtures
@@ -47,7 +47,7 @@ const COLORS: Array = [
 
 static func new_game(seed_value: int, club_name: String, color_idx: int) -> Dictionary:
 	var rng: PsRng = PsRng.new(PsRng.mix(seed_value, 1))
-	var squad: Array = PsPlayers.make_squad(rng, 53)
+	var squad: Array = PsPlayers.make_squad(rng, 55)
 	var st: Dictionary = {
 		"schema_version": SCHEMA,
 		"seed": seed_value & 0xFFFFFFFF,
@@ -55,6 +55,8 @@ static func new_game(seed_value: int, club_name: String, color_idx: int) -> Dict
 		"facilities": {"stand": 0, "lights": 0, "training": 0, "academy": 0},
 		"squad": squad,
 		"next_pid": squad.size() + 1,
+		"formation": PsFormations.DEFAULT,
+		"mentality": "balanced",
 		"lineup": PsPlayers.auto_lineup(squad),
 		"cards": [],
 		"legacy": "",
@@ -74,11 +76,12 @@ static func start_season(st: Dictionary, no: int) -> void:
 	var names: Array = CLUB_NAMES.duplicate()
 	# Rivals: spread of strength around the league level of this season.
 	var league_base: int = 52 + (no - 1) * 2
-	var teams: Array = [{"name": st["club"]["name"], "base": 0, "me": true}]
+	var teams: Array = [{"name": st["club"]["name"], "base": 0, "me": true, "formation": str(st.get("formation", PsFormations.DEFAULT))}]
 	var pool: Array = names.duplicate()
 	for i in range(1, TEAMS):
 		var nm: String = str(pool.pop_at(rng.below(pool.size())))
-		teams.append({"name": nm, "base": league_base + rng.between(-5, 9), "me": false})
+		teams.append({"name": nm, "base": league_base + rng.between(-5, 9), "me": false,
+			"formation": str(rng.pick(PsFormations.LIST))})
 	var table: Array = []
 	for i in TEAMS:
 		table.append({"idx": i, "name": teams[i]["name"], "p": 0, "w": 0, "d": 0, "l": 0, "gf": 0, "ga": 0, "pts": 0})
@@ -174,13 +177,39 @@ static func team_cfg(st: Dictionary, idx: int, at_home: bool = false) -> Diction
 	var s: Dictionary = st["season"]
 	var squad: Array = team_squad(st, idx)
 	if idx == 0:
-		var lineup: Dictionary = PsPlayers.fix_lineup(squad, st["lineup"])
+		var formation: String = my_formation(st)
+		var lineup: Dictionary = PsPlayers.fix_lineup(squad, st["lineup"], formation)
+		var xi: Array = PsPlayers.lineup_players(squad, lineup)
+		var ids: Array = []
+		for p in xi:
+			ids.append(int(p["id"]))
 		# Floodlights: a roaring home crowd lifts the attack by 1 per level.
 		var bonus: Dictionary = {"atk": facility(st, "lights") if at_home else 0}
-		return {"name": s["teams"][0]["name"], "xi": PsPlayers.lineup_players(squad, lineup),
-			"cards": st["cards"].duplicate(), "bonus": bonus}
-	return {"name": s["teams"][idx]["name"],
-		"xi": PsPlayers.lineup_players(squad, PsPlayers.auto_lineup(squad)), "cards": []}
+		return {"name": s["teams"][0]["name"], "xi": xi, "bench": PsPlayers.bench_players(squad, ids),
+			"cards": st["cards"].duplicate(), "bonus": bonus, "formation": formation,
+			"mentality": str(st.get("mentality", "balanced")), "ai": false}
+	var f: String = str(s["teams"][idx].get("formation", PsFormations.DEFAULT))
+	var best: Dictionary = PsPlayers.auto_lineup(squad, f)
+	var oxi: Array = PsPlayers.lineup_players(squad, best)
+	var oids: Array = []
+	for p in oxi:
+		oids.append(int(p["id"]))
+	return {"name": s["teams"][idx]["name"], "xi": oxi, "bench": PsPlayers.bench_players(squad, oids),
+		"cards": [], "formation": f, "mentality": "balanced", "ai": true}
+
+static func my_formation(st: Dictionary) -> String:
+	var f: String = str(st.get("formation", PsFormations.DEFAULT))
+	return f if PsFormations.valid(f) else PsFormations.DEFAULT
+
+## Change formation; the XI is rebuilt for it, keeping players that still fit.
+static func set_formation(st: Dictionary, f: String) -> bool:
+	if not PsFormations.valid(f):
+		return false
+	st["formation"] = f
+	st["lineup"] = PsPlayers.fix_lineup(st["squad"], st["lineup"], f)
+	if st["season"].has("teams"):
+		st["season"]["teams"][0]["formation"] = f
+	return true
 
 static func match_seed(st: Dictionary) -> int:
 	var s: Dictionary = st["season"]
@@ -268,13 +297,11 @@ static func finish_matchday(st: Dictionary, sim: PsMatchSim) -> Dictionary:
 		others.append({"home": s["teams"][int(f[0])]["name"], "away": s["teams"][int(f[1])]["name"],
 			"hg": int(r["home"]), "ag": int(r["away"])})
 	# Player stats
-	var xi_ids: Array = []
-	for p in sim.sides["home" if fx["me_home"] else "away"]["xi"]:
-		xi_ids.append(int(p["id"]))
-	for p in st["squad"]:
-		if xi_ids.has(int(p["id"])):
-			p["apps"] = int(p["apps"]) + 1
 	var my_side: String = "home" if fx["me_home"] else "away"
+	# Everyone who played, starters and substitutes, gets an appearance.
+	for p in st["squad"]:
+		if sim.pstats.has("%s:%d" % [my_side, int(p["id"])]):
+			p["apps"] = int(p["apps"]) + 1
 	for sc in res["scorers"]:
 		if sc["side"] == my_side:
 			var pl: Dictionary = PsPlayers.by_id(st["squad"], int(sc["pid"]))
@@ -307,6 +334,8 @@ static func finish_matchday(st: Dictionary, sim: PsMatchSim) -> Dictionary:
 		"opp": s["teams"][int(fx["opp"])]["name"], "home": fx["me_home"],
 		"income": income, "wages": wages, "gate": gate, "bonus": bonus,
 		"others": others, "grown": grown, "scorers": res["scorers"],
+		"stats": res["stats"], "possession_home": res["possession_home"], "mom": res["mom"],
+		"ratings": sim.ratings(), "my_side": my_side,
 	}
 	s["results"].append({"day": day + 1, "opp": summary["opp"], "home": fx["me_home"], "mg": my_goals, "og": opp_goals})
 	st["last_match"] = summary
@@ -392,7 +421,7 @@ static func end_season(st: Dictionary, keep_card: String) -> Dictionary:
 			keep.append(p)
 	st["squad"] = keep
 	var joined: Array = _refill_squad(st, rng)
-	st["lineup"] = PsPlayers.fix_lineup(st["squad"], st["lineup"])
+	st["lineup"] = PsPlayers.fix_lineup(st["squad"], st["lineup"], my_formation(st))
 	start_season(st, no + 1)
 	return {"pos": pos, "champion": champion, "prize": prize, "retired": retired, "joined": joined}
 

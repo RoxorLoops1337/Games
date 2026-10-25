@@ -94,6 +94,7 @@ const FUNCTION_SUITES = {
   'board.js': ['test:boss'],
   'save.js': ['test:boss'],
   'wildwalk_board.js': ['test:wwboard'],
+  'stackingcats_board.js': ['test:stackingcats'],
   'dungeon_board.js': ['test:dpboard'],
   'dungeon_save.js': ['test:dpsave'],
   'dropbass_board.js': ['test:dropbass'],

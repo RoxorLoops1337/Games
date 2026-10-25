@@ -18,6 +18,22 @@ func run(t: PsT) -> void:
 	var m2: PsMatchSim = PsMatchSim.simulate(5, b, opp)
 	t.eq(JSON.stringify(m1.events), JSON.stringify(m2.events), "a restored game replays the same match")
 
+	# Migration from version 1: formations arrive.
+	var v1: Dictionary = JSON.parse_string(text)
+	v1["schema_version"] = 1
+	v1.erase("formation")
+	v1.erase("mentality")
+	for team in v1["season"]["teams"]:
+		team.erase("formation")
+	var r1: Dictionary = PsSave.decode(JSON.stringify(v1))
+	t.ok(r1["ok"], "a version 1 save is migrated")
+	t.eq(r1["migrated_from"], 1, "the migration from 1 is reported")
+	t.eq(r1["state"]["formation"], "4-4-2", "old saves play 4-4-2")
+	t.eq(r1["state"]["mentality"], "balanced", "and a balanced mentality")
+	t.eq(r1["state"]["season"]["teams"][1]["formation"], "4-4-2", "rivals get a formation too")
+	var cfg1: Dictionary = PsClub.team_cfg(r1["state"], 0, true)
+	t.eq(cfg1["xi"].size(), 11, "a migrated save still lines up eleven")
+
 	# Migration from version 0.
 	var old: Dictionary = JSON.parse_string(text)
 	old["schema_version"] = 0

@@ -39,7 +39,7 @@ export const CATS = [
   // ---- unlockable ----
   { id: 'yuki', name: 'Yuki', title: 'Snowball Scout', role: 'Frost', hp: 0.9,
     desc: 'Snowballs that slow whatever they hit.',
-    atk: { t: 'proj', dmg: 0.75, cd: 1.0, range: 380, speed: 480, color: '#bfeaff', fx: { slow: 0.4, t: 2.2 } },
+    atk: { t: 'proj', dmg: 0.95, cd: 1.0, range: 380, speed: 480, color: '#bfeaff', fx: { slow: 0.4, t: 2.2 } },
     art: { fur: '#dff3ff', belly: '#ffffff', accent: '#5bb8ff', eye: '#2f8fe0', pat: 'plain' },
     unlock: { k: 'bestWave', n: 6, text: 'Reach wave 6' } },
   { id: 'hawkeye', name: 'Hawkeye', title: 'Long Shot', role: 'Sniper', hp: 0.8,
@@ -54,13 +54,13 @@ export const CATS = [
     unlock: { k: 'bossKills', n: 1, text: 'Destroy your first nest' } },
   { id: 'pudding', name: 'Pudding', title: 'Nurse', role: 'Healer', hp: 1.0,
     desc: 'Heals the most hurt cat. Tosses little hearts at mice.',
-    atk: { t: 'proj', dmg: 0.35, cd: 1.2, range: 320, speed: 420, color: '#ff9ac6', r: 4 },
-    sup: { t: 'heal', pct: 0.14, cd: 2.4 },
+    atk: { t: 'proj', dmg: 0.55, cd: 1.2, range: 320, speed: 420, color: '#ff9ac6', r: 4 },
+    sup: { t: 'heal', pct: 0.16, cd: 2.4 },
     art: { fur: '#ffd1e0', belly: '#fff5f8', accent: '#ff6b9a', eye: '#e0508a', pat: 'plain' },
     unlock: { k: 'recruits', n: 8, text: 'Recruit 8 cats in total' } },
   { id: 'shadow', name: 'Shadow', title: 'Night Blade', role: 'Ninja', hp: 0.8,
     desc: 'Twin shuriken, often critical.',
-    atk: { t: 'proj', dmg: 0.4, cd: 0.6, range: 350, speed: 820, color: '#cfd6e6', count: 2, crit: 0.25, r: 4 },
+    atk: { t: 'proj', dmg: 0.52, cd: 0.6, range: 350, speed: 820, color: '#cfd6e6', count: 2, crit: 0.25, r: 4 },
     art: { fur: '#2e2b3c', belly: '#6c6785', accent: '#d4324b', eye: '#ffd23f', pat: 'plain' },
     unlock: { k: 'bestWave', n: 10, text: 'Reach wave 10' } },
   { id: 'ronin', name: 'Ronin', title: 'Wandering Blade', role: 'Samurai', hp: 1.2,
@@ -90,7 +90,7 @@ export const CATS = [
     unlock: { k: 'bossKills', n: 3, text: 'Destroy 3 nests' } },
   { id: 'lyra', name: 'Lyra', title: 'Songstress', role: 'Bard', hp: 0.9,
     desc: 'Her song makes every cat attack faster.',
-    atk: { t: 'proj', dmg: 0.5, cd: 0.9, range: 330, speed: 420, color: '#ffe27a', r: 4 }, pas: { haste: 0.12 },
+    atk: { t: 'proj', dmg: 0.68, cd: 0.9, range: 330, speed: 420, color: '#ffe27a', r: 4 }, pas: { haste: 0.14 },
     art: { fur: '#ffb8d9', belly: '#fff0f7', accent: '#8a4bd0', eye: '#8a4bd0', pat: 'plain' },
     unlock: { k: 'recruits', n: 15, text: 'Recruit 15 cats in total' } },
   { id: 'nibbles', name: 'Count Nibbles', title: 'Vampire Lord', role: 'Vampire', hp: 1.0,
@@ -110,12 +110,12 @@ export const CATS = [
     unlock: { k: 'lvl3Of', id: 'ember', text: 'Merge Ember up to Lv 3' } },
   { id: 'blizzard', name: 'Blizzard', title: 'Ice Queen', role: 'Freeze', hp: 1.0,
     desc: 'Frost nova freezes everything around the tower.',
-    atk: { t: 'nova', dmg: 1.1, cd: 3.2, radius: 230, freeze: 1.3 },
+    atk: { t: 'nova', dmg: 1.5, cd: 3.2, radius: 230, freeze: 1.3 },
     art: { fur: '#e8f6ff', belly: '#ffffff', accent: '#78c8ff', eye: '#4aa8ff', pat: 'plain' },
     unlock: { k: 'bestWave', n: 20, text: 'Reach wave 20' } },
   { id: 'dusty', name: 'Dusty', title: 'Fastest Paw', role: 'Gunslinger', hp: 0.9,
     desc: 'Fires a six-shooter volley in a blink.',
-    atk: { t: 'proj', dmg: 0.5, cd: 2.0, range: 400, speed: 900, color: '#ffe9a0', burst: 6, gap: 0.09, r: 3 },
+    atk: { t: 'proj', dmg: 0.62, cd: 2.0, range: 400, speed: 900, color: '#ffe9a0', burst: 6, gap: 0.09, r: 3 },
     art: { fur: '#d9a066', belly: '#fff0dc', accent: '#7a4a2a', eye: '#3a2a1a', pat: 'stripes' },
     unlock: { k: 'kills', n: 3000, text: 'Defeat 3000 mice in total' } },
   { id: 'cyber', name: 'Cyber', title: 'Laser Unit', role: 'Laser', hp: 1.0,
@@ -125,7 +125,7 @@ export const CATS = [
     unlock: { k: 'bossKills', n: 7, text: 'Destroy 7 nests' } },
   { id: 'boo', name: 'Boo', title: 'Friendly Ghost', role: 'Spirit', hp: 0.85,
     desc: 'Ghost bolts pass through 3 mice and ignore armor. Sometimes dodges.',
-    atk: { t: 'proj', dmg: 0.7, cd: 0.9, range: 410, speed: 400, color: '#b9f5ff', pierce: 3, pierceArmor: true, r: 5 }, pas: { dodge: 0.15 },
+    atk: { t: 'proj', dmg: 0.88, cd: 0.9, range: 410, speed: 400, color: '#b9f5ff', pierce: 3, pierceArmor: true, r: 5 }, pas: { dodge: 0.15 },
     art: { fur: '#e9f8ff', belly: '#ffffff', accent: '#7fd8ff', eye: '#2a3a5a', pat: 'plain' },
     unlock: { k: 'flawless', n: 8, text: 'Clear 8 waves with no cat going down' } },
   { id: 'draco', name: 'Draco', title: 'Dragon Cat', role: 'Dragon', hp: 1.3,
@@ -135,7 +135,7 @@ export const CATS = [
     unlock: { k: 'bossKills', n: 10, text: 'Destroy 10 nests' } },
   { id: 'halo', name: 'Halo', title: 'Guardian Angel', role: 'Angel', hp: 1.1,
     desc: 'Once per wave, brings a fallen cat back. Heals the stack a little.',
-    atk: { t: 'proj', dmg: 0.6, cd: 1.0, range: 390, speed: 450, color: '#fff6b0', r: 4 },
+    atk: { t: 'proj', dmg: 0.8, cd: 1.0, range: 390, speed: 450, color: '#fff6b0', r: 4 },
     sup: { t: 'heal', pct: 0.06, cd: 3 }, pas: { revive: true },
     art: { fur: '#fffaf0', belly: '#ffffff', accent: '#ffd966', eye: '#6aa8ff', pat: 'plain' },
     unlock: { k: 'recruits', n: 30, text: 'Recruit 30 cats in total' } },
@@ -146,7 +146,7 @@ export const CATS = [
     unlock: { k: 'bestWave', n: 25, text: 'Reach wave 25' } },
   { id: 'hexa', name: 'Hexa', title: 'Hex Witch', role: 'Curse', hp: 0.85,
     desc: 'Curses make every mouse take more damage from every cat.',
-    atk: { t: 'proj', dmg: 0.6, cd: 1.0, range: 390, speed: 400, color: '#c06bff', r: 4 }, pas: { curse: 0.10 },
+    atk: { t: 'proj', dmg: 0.82, cd: 1.0, range: 390, speed: 400, color: '#c06bff', r: 4 }, pas: { curse: 0.13 },
     art: { fur: '#6a3f8f', belly: '#e0c8f5', accent: '#9bff6b', eye: '#9bff6b', pat: 'plain' },
     unlock: { k: 'temp', n: 20, text: 'Eat 20 temporary snacks' } },
   { id: 'nori', name: 'Chef Nori', title: 'Sushi Master', role: 'Chef', hp: 1.1,
@@ -209,13 +209,15 @@ export const NESTS = [
   { id: 'moon', name: 'Moon Burrow' },
 ];
 
+// amb: ambient light on the first wave of a stage and on the nest wave (the day turns to dusk). grade: colour grading
+// laid over the picture (top, bottom). weather: rain, snow, drip or none. haze: distance fog colour.
 export const THEMES = [
-  { name: 'Sunny Garden',  sky: ['#8fd3ff', '#fff1c9'], far: '#a9d8b8', mid: '#6fbf8a', ground: ['#8fd36e', '#5fa84f'], dirt: '#a6764a', deco: 'flower' },
-  { name: 'Autumn Alley',  sky: ['#ffb58a', '#ffe6b0'], far: '#d99a7a', mid: '#b86a4a', ground: ['#d9a24a', '#a8742f'], dirt: '#7a4a2a', deco: 'leaf' },
-  { name: 'Moonlit Roofs', sky: ['#1d1b4a', '#5a4a9a'], far: '#3a3a78', mid: '#2a2a5a', ground: ['#4a5a9a', '#2f3a78'], dirt: '#1f2550', deco: 'star' },
-  { name: 'Cheese Caves',  sky: ['#ffd36b', '#fff2b0'], far: '#e0b24a', mid: '#c98f2a', ground: ['#f2c94c', '#c9992a'], dirt: '#8a5f1a', deco: 'hole' },
-  { name: 'Frosty Pond',   sky: ['#a8c8ff', '#eaf6ff'], far: '#c9dcf5', mid: '#9ab8e0', ground: ['#e8f4ff', '#bcd8f2'], dirt: '#8aa8c8', deco: 'snow' },
-  { name: 'Sakura Hill',   sky: ['#ffc6e0', '#fff0f5'], far: '#f2a6c4', mid: '#e07aa6', ground: ['#a8e08a', '#6fb85f'], dirt: '#a8765a', deco: 'petal' },
+  { name: 'Sunny Garden',  sky: ['#8fd3ff', '#fff1c9'], far: '#a9d8b8', mid: '#6fbf8a', ground: ['#8fd36e', '#5fa84f'], dirt: '#a6764a', deco: 'flower', amb: ['#ffffff', '#efc6b8'], grade: ['rgba(255,214,150,.16)', 'rgba(120,200,255,.10)'], weather: 'none', haze: '#e8f6ff' },
+  { name: 'Autumn Alley',  sky: ['#ffb58a', '#ffe6b0'], far: '#d99a7a', mid: '#b86a4a', ground: ['#d9a24a', '#a8742f'], dirt: '#7a4a2a', deco: 'leaf', amb: ['#fff6ec', '#e0b0a0'], grade: ['rgba(255,170,90,.18)', 'rgba(140,90,200,.10)'], weather: 'none', haze: '#ffe3c4' },
+  { name: 'Moonlit Roofs', sky: ['#1d1b4a', '#5a4a9a'], far: '#3a3a78', mid: '#2a2a5a', ground: ['#4a5a9a', '#2f3a78'], dirt: '#1f2550', deco: 'star', amb: ['#a8a8e8', '#7a6cb8'], grade: ['rgba(80,110,255,.22)', 'rgba(255,120,200,.10)'], weather: 'rain', haze: '#6a62b0' },
+  { name: 'Cheese Caves',  sky: ['#ffd36b', '#fff2b0'], far: '#e0b24a', mid: '#c98f2a', ground: ['#f2c94c', '#c9992a'], dirt: '#8a5f1a', deco: 'hole', amb: ['#ffe9b8', '#c08a60'], grade: ['rgba(255,180,60,.18)', 'rgba(255,120,60,.10)'], weather: 'drip', haze: '#ffe49a' },
+  { name: 'Frosty Pond',   sky: ['#a8c8ff', '#eaf6ff'], far: '#c9dcf5', mid: '#9ab8e0', ground: ['#e8f4ff', '#bcd8f2'], dirt: '#8aa8c8', deco: 'snow', amb: ['#f6faff', '#c8c8f0'], grade: ['rgba(150,200,255,.16)', 'rgba(255,180,230,.10)'], weather: 'snow', haze: '#eef6ff' },
+  { name: 'Sakura Hill',   sky: ['#ffc6e0', '#fff0f5'], far: '#f2a6c4', mid: '#e07aa6', ground: ['#a8e08a', '#6fb85f'], dirt: '#a8765a', deco: 'petal', amb: ['#fff4fa', '#e8b0c8'], grade: ['rgba(255,160,210,.16)', 'rgba(255,230,150,.10)'], weather: 'none', haze: '#ffe6f2' },
 ];
 
 // ---- meta progression (saved between runs) ----
@@ -294,7 +296,7 @@ export const BUILDINGS = [
 ];
 export const BUILDING_BY_ID = Object.fromEntries(BUILDINGS.map((b) => [b.id, b]));
 
-export const emptyKingdom = () => ({ coins: 0, lv: {}, earned: 0 });
+export const emptyKingdom = () => ({ coins: 0, lv: {}, earned: 0, gems: 0, wonders: {} });
 export const buildingLevel = (k, id) => Math.min(BUILDING_BY_ID[id].max, (k && k.lv && k.lv[id]) | 0);
 export function upgradeCost(id, level) {
   const b = BUILDING_BY_ID[id];
@@ -302,14 +304,23 @@ export function upgradeCost(id, level) {
 }
 export const kingdomLevel = (k) => BUILDINGS.reduce((n, b) => n + buildingLevel(k, b.id), 0);
 export function kingdomBonuses(k) {
-  const m = { dmg: 0, hp: 0, haste: 0, waveHeal: 0, reviveHp: 0, range: 0, crit: 0, luck: 0, coinMul: 0, rerolls: 0, startSnacks: 0 };
+  const m = { dmg: 0, hp: 0, haste: 0, waveHeal: 0, reviveHp: 0, range: 0, crit: 0, luck: 0, coinMul: 0, rerolls: 0, startSnacks: 0, startItem: 0, bench: 0, startPicks: 0, zoomStart: 0, zoomDur: 0, nine: 0 };
   for (const b of BUILDINGS) {
     const l = buildingLevel(k, b.id);
     if (!l) continue;
     const bo = b.bonus(l);
     for (const key in bo) m[key] += bo[key];
   }
+  for (const w of WONDERS) if (k && k.wonders && k.wonders[w.id]) for (const key in w.bonus) m[key] += w.bonus[key];
   return m;
+}
+export function buyWonder(k, id) {
+  const w = WONDER_BY_ID[id];
+  if (!w || (k.wonders && k.wonders[id]) || (k.gems | 0) < w.cost) return false;
+  k.gems -= w.cost;
+  k.wonders = k.wonders || {};
+  k.wonders[id] = true;
+  return true;
 }
 export function buyUpgrade(k, id) {
   const l = buildingLevel(k, id), b = BUILDING_BY_ID[id];
@@ -323,3 +334,109 @@ export function buyUpgrade(k, id) {
 
 // coins earned while playing (before the vault bonus)
 export const COIN = { kill: 1, elite: 5, wave: 3, waveGrow: 0.6, nest: 30, nestGrow: 12 };
+
+// ---------------------------------------------------------------- difficulty
+export const DIFFS = {
+  cozy:   { name: 'Cozy',   icon: '🌼', desc: 'Gentler mice, a few less of them. Coins x0.8.',          hp: 0.84, dmg: 0.8, budget: 0.93, coin: 0.8 },
+  normal: { name: 'Normal', icon: '🐱', desc: 'The way it was meant to be played.',                hp: 1,    dmg: 1,    budget: 1,    coin: 1 },
+  hard:   { name: 'Hard',   icon: '🔥', desc: 'Tougher, hungrier mice. Coins x1.5.',                hp: 1.3,  dmg: 1.25, budget: 1.12, coin: 1.5 },
+};
+
+// ---------------------------------------------------------------- synergies (cats that share a tag boost each other)
+export const CAT_TAGS = {
+  tabby: ['blade'], ember: ['fire'], sparky: ['storm'], buckshot: ['gun'], mochi: ['guardian'],
+  yuki: ['storm'], hawkeye: ['gun'], boomer: ['gun'], pudding: ['guardian', 'cheer'], shadow: ['blade'], ronin: ['blade'],
+  merlin: ['magic'], cutlass: ['gun'], sprout: ['cheer'], gizmo: ['tech'], lyra: ['cheer'], nibbles: ['blade'],
+  zeus: ['storm'], volcano: ['fire'], blizzard: ['storm'], dusty: ['gun'], cyber: ['tech'], boo: ['magic'],
+  draco: ['fire'], halo: ['guardian'], mecha: ['gun', 'tech'], hexa: ['magic'], nori: ['cheer'], leo: ['guardian'], nebula: ['magic'],
+};
+// self: applies to the cats with the tag. team: applies to every cat. Tier 1 needs 2 cats, tier 2 needs 3 or more.
+export const SYNERGIES = {
+  fire:     { name: 'Flame Club',    icon: '🔥', tiers: [{ self: { dmg: 0.15 } }, { self: { dmg: 0.35 } }] },
+  storm:    { name: 'Storm Squad',   icon: '⚡',       tiers: [{ self: { haste: 0.12 } }, { self: { haste: 0.28 } }] },
+  gun:      { name: 'Sharpshooters', icon: '🎯', tiers: [{ self: { crit: 0.10 } }, { self: { crit: 0.22, dmg: 0.10 } }] },
+  blade:    { name: 'Blade Pack',    icon: '🗡️', tiers: [{ self: { dmg: 0.12, crit: 0.08 } }, { self: { dmg: 0.25, crit: 0.16 } }] },
+  magic:    { name: 'Mystic Circle', icon: '✨',       tiers: [{ self: { range: 0.18, dmg: 0.10 } }, { self: { range: 0.35, dmg: 0.22 } }] },
+  guardian: { name: 'Guardians',     icon: '🛡️', tiers: [{ team: { dr: 0.06, hp: 0.10 } }, { team: { dr: 0.12, hp: 0.22 } }] },
+  tech:     { name: 'Gearheads',     icon: '⚙️', tiers: [{ team: { dmg: 0.08 } }, { team: { dmg: 0.18 } }] },
+  cheer:    { name: 'Cheer Squad',   icon: '🎵', tiers: [{ team: { regen: 0.01 } }, { team: { regen: 0.02, haste: 0.05 } }] },
+};
+export const synergyText = (tag, tier) => {
+  const t = SYNERGIES[tag].tiers[tier - 1], f = t.self || t.team;
+  const nm = { dmg: 'damage', haste: 'attack speed', crit: 'crit', range: 'range', dr: 'less damage taken', hp: 'health', regen: 'health regen per second' };
+  return Object.entries(f).map(([k, v]) => `+${Math.round(v * 100)}% ${nm[k]}`).join(', ') + (t.self ? ` for ${SYNERGIES[tag].name} cats` : ' for the whole team');
+};
+
+// ---------------------------------------------------------------- routes (pick the road to the next nest)
+export const ROUTES = [
+  { id: 'trail',    name: 'Sunny Trail',   icon: '☀️', desc: 'A calm stroll. Nothing special.', enemyHp: 1, enemyDmg: 1, coin: 1, chest: 0, budget: 1, bossHp: 1, rare: 0, snackExtra: 0, healNow: 0, speed: 1 },
+  { id: 'treasure', name: 'Treasure Road', icon: '💰', desc: 'Coins x1.5 and more chests, but tougher mice.', enemyHp: 1.12, enemyDmg: 1, coin: 1.5, chest: 1.2, budget: 1, bossHp: 1, rare: 0, snackExtra: 0, healNow: 0, speed: 1 },
+  { id: 'danger',   name: 'Danger Pass',   icon: '☠️', desc: 'Much deadlier mice. Coins x1.3 and a better chance of epic loot.', enemyHp: 1.25, enemyDmg: 1.2, coin: 1.3, chest: 0.4, budget: 1.05, bossHp: 1.1, rare: 2, snackExtra: 0, healNow: 0, speed: 1 },
+  { id: 'meadow',   name: 'Cozy Meadow',   icon: '🌼', desc: 'Heal 50% now. Fewer, softer mice. Coins x0.8.', enemyHp: 0.88, enemyDmg: 0.9, coin: 0.8, chest: 0, budget: 0.85, bossHp: 0.9, rare: 0, snackExtra: 0, healNow: 0.5, speed: 1 },
+  { id: 'moon',     name: 'Moon Path',     icon: '🌙', desc: 'Mice move 15% slower, but the nest is 30% tougher. Better loot.', enemyHp: 1, enemyDmg: 1, coin: 1.1, chest: 0.5, budget: 1, bossHp: 1.3, rare: 1, snackExtra: 0, healNow: 0, speed: 0.85 },
+  { id: 'market',   name: 'Snack Market',  icon: '🍣', desc: 'One extra snack to choose from after every wave of this stage.', enemyHp: 1.05, enemyDmg: 1, coin: 1, chest: 0, budget: 1, bossHp: 1, rare: 0, snackExtra: 1, healNow: 0, speed: 1 },
+];
+export const ROUTE_BY_ID = Object.fromEntries(ROUTES.map((r) => [r.id, r]));
+
+// ---------------------------------------------------------------- the daily challenge
+export const DAILY_POOL = [...STARTERS, 'yuki', 'hawkeye', 'boomer', 'pudding', 'shadow', 'ronin', 'merlin', 'cutlass'];
+export const DAILY_MODS = [
+  { id: 'fast',  name: 'Zoomies Day',   icon: '💨', desc: 'Mice move 25% faster.',                         speed: 1.25 },
+  { id: 'glass', name: 'Glass Cats',    icon: '🔮', desc: 'Cats deal +40% damage but have 35% less health.', dmg: 0.4, hp: -0.35 },
+  { id: 'horde', name: 'Horde Day',     icon: '🐀', desc: '40% more mice, each 20% weaker.',                budget: 1.4, enemyHp: 0.8 },
+  { id: 'elite', name: 'Elite Storm',   icon: '👑', desc: 'Elite mice show up from wave 2. Chests drop more.', elite: 0.2, chest: 1 },
+  { id: 'tiny',  name: 'Tiny Tower',    icon: '🧱', desc: 'The tower only holds 4 cats.',                    stack: 4 },
+  { id: 'rich',  name: 'Gold Rush',     icon: '🪙', desc: 'Double coins and double the chests.',            coin: 2, chest: 1 },
+];
+export function dayKey(ms = Date.now()) {
+  const d = new Date(ms), p = (n) => String(n).padStart(2, '0');
+  return `${d.getUTCFullYear()}-${p(d.getUTCMonth() + 1)}-${p(d.getUTCDate())}`;
+}
+export function dayInfo(day) {
+  let h = 2166136261;
+  for (let i = 0; i < day.length; i++) { h ^= day.charCodeAt(i); h = Math.imul(h, 16777619); }
+  h >>>= 0;
+  return { day, seed: h || 1, mod: DAILY_MODS[h % DAILY_MODS.length] };
+}
+
+// ---------------------------------------------------------------- wonders (bought with gems, the second currency)
+export const WONDERS = [
+  { id: 'paw',     name: 'Golden Paw',      icon: '🐾', cost: 4, desc: 'Start every run with a random rare item already equipped.', bonus: { startItem: 1 } },
+  { id: 'bench',   name: 'Big Bench',       icon: '🪑', cost: 3, desc: 'One more bench spot (5 instead of 4).',                    bonus: { bench: 1 } },
+  { id: 'cafe',    name: 'Cat Cafe',        icon: '☕',       cost: 6, desc: 'Pick one extra cat at the start of every run.',             bonus: { startPicks: 1 } },
+  { id: 'academy', name: 'Zoomies Academy', icon: '🎓', cost: 4, desc: 'Zoomies meter starts half full and lasts 3 seconds longer.', bonus: { zoomStart: 50, zoomDur: 3 } },
+  { id: 'coin',    name: 'Lucky Coin',      icon: '🍀', cost: 3, desc: 'One more free reroll in every run.',                        bonus: { rerolls: 1 } },
+  { id: 'spring',  name: 'Phoenix Fountain', icon: '🕊️', cost: 8, desc: 'Every run starts with Nine Lives: the tower rises once after falling.', bonus: { nine: 1 } },
+];
+export const WONDER_BY_ID = Object.fromEntries(WONDERS.map((w) => [w.id, w]));
+
+// ---------------------------------------------------------------- achievements (coins and gems)
+// check gets { stats (after this run), run, save, kingdom }.
+const bld = (k, n) => BUILDINGS.filter((b) => buildingLevel(k, b.id) >= n).length;
+export const ACHIEVEMENTS = [
+  { id: 'first',    name: 'First Catch',      desc: 'Defeat your first mouse.',                    coins: 20,  gems: 0, check: (c) => c.stats.kills >= 1 },
+  { id: 'hunter',   name: 'Mouser',           desc: 'Defeat 1000 mice in total.',                  coins: 80,  gems: 0, check: (c) => c.stats.kills >= 1000 },
+  { id: 'exterm',   name: 'Exterminator',     desc: 'Defeat 10000 mice in total.',                 coins: 300, gems: 2, check: (c) => c.stats.kills >= 10000 },
+  { id: 'nest1',    name: 'Nest Buster',      desc: 'Destroy a nest.',                             coins: 50,  gems: 1, check: (c) => c.stats.bossKills >= 1 },
+  { id: 'nest10',   name: 'Nest Crusher',     desc: 'Destroy 10 nests in total.',                  coins: 150, gems: 1, check: (c) => c.stats.bossKills >= 10 },
+  { id: 'w10',      name: 'Getting Warm',     desc: 'Reach wave 10.',                              coins: 60,  gems: 0, check: (c) => c.stats.bestWave >= 10 },
+  { id: 'w20',      name: 'Cat Hero',         desc: 'Reach wave 20.',                              coins: 120, gems: 1, check: (c) => c.stats.bestWave >= 20 },
+  { id: 'w30',      name: 'Cat Legend',       desc: 'Reach wave 30.',                              coins: 250, gems: 2, check: (c) => c.stats.bestWave >= 30 },
+  { id: 'w50',      name: 'Whisker of Gold',  desc: 'Reach wave 50.',                              coins: 500, gems: 3, check: (c) => c.stats.bestWave >= 50 },
+  { id: 'merge5',   name: 'Merge Master',     desc: 'Merge cats up to Lv 3, 5 times.',             coins: 100, gems: 1, check: (c) => c.stats.lvl3 >= 5 },
+  { id: 'flaw5',    name: 'Not a Scratch',    desc: 'Clear 5 waves in one run without a cat going down.', coins: 80, gems: 0, check: (c) => c.run.flawless >= 5 },
+  { id: 'combo50',  name: 'Combo King',       desc: 'Chain a 50 mouse combo.',                     coins: 80,  gems: 1, check: (c) => (c.run.maxCombo || 0) >= 50 },
+  { id: 'rich',     name: 'Piggy Bank',       desc: 'Earn 5000 coins in total.',                   coins: 100, gems: 1, check: (c) => c.kingdom.earned >= 5000 },
+  { id: 'build15',  name: 'Town Planner',     desc: 'Reach Kingdom level 15.',                     coins: 100, gems: 1, check: (c) => kingdomLevel(c.kingdom) >= 15 },
+  { id: 'allbld',   name: 'Full Village',     desc: 'Build every Kingdom building.',               coins: 150, gems: 2, check: (c) => bld(c.kingdom, 1) >= BUILDINGS.length },
+  { id: 'maxbld',   name: 'Finishing Touch',  desc: 'Fully upgrade one building.',                 coins: 100, gems: 1, check: (c) => BUILDINGS.some((b) => buildingLevel(c.kingdom, b.id) >= b.max) },
+  { id: 'coll15',   name: 'Cat Collector',    desc: 'Unlock 15 cats.',                             coins: 100, gems: 1, check: (c) => c.save.unlocked.length >= 15 },
+  { id: 'coll30',   name: 'Gotta Pet Them All', desc: 'Unlock all 30 cats.',                       coins: 300, gems: 3, check: (c) => c.save.unlocked.length >= 30 },
+  { id: 'loot8',    name: 'Loot Goblin',      desc: 'Collect 8 items in one run.',                 coins: 80,  gems: 1, check: (c) => c.run.items >= 8 },
+  { id: 'hard15',   name: 'Brave Whiskers',   desc: 'Reach wave 15 on Hard.',                      coins: 200, gems: 2, check: (c) => c.run.diff === 'hard' && c.run.wave >= 15 },
+  { id: 'daily1',   name: 'Daily Dabbler',    desc: 'Play the daily challenge.',                   coins: 40,  gems: 1, check: (c) => !!c.run.daily },
+  { id: 'daily20',  name: 'Daily Champion',   desc: 'Reach wave 20 in a daily challenge.',         coins: 200, gems: 2, check: (c) => !!c.run.daily && c.run.wave >= 20 },
+  { id: 'syn3',     name: 'Dream Team',       desc: 'Get a full tier 2 synergy (3 cats of one kind).', coins: 80, gems: 1, check: (c) => (c.run.synMax || 0) >= 3 },
+  { id: 'big1000',  name: 'Big Hitter',       desc: 'Land a single hit of 1000 damage.',           coins: 120, gems: 1, check: (c) => c.run.biggest >= 1000 },
+  { id: 'nine',     name: 'Nine Lives',       desc: 'Be saved by Nine Lives.',                     coins: 60,  gems: 1, check: (c) => (c.run.nine || 0) >= 1 },
+];
