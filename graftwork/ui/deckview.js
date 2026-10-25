@@ -86,7 +86,7 @@ export function cardGrid(app, items, x, y, w, h, o = {}) {
   const hasLabel = items.some((it) => it.label);
   const rowH = ch + gap + (hasLabel ? 20 : 0);
   const sbw = 16;
-  const cols = Math.max(1, Math.floor((w - sbw - gap) / (cw + gap)));
+  const cols = Math.max(1, Math.floor((w - sbw + gap) / (cw + gap)));
   const gridW = cols * cw + (cols - 1) * gap, ox = x + Math.max(gap, (w - sbw - gridW) / 2);
   const rows = Math.ceil(items.length / cols);
   const contentH = items.length ? rows * rowH + gap : 0;
@@ -355,8 +355,8 @@ export default {
       const w = instWeight(c.inst), tithed = tithedSet.has(c.inst.uid);
       const badges = [];
       if (tithed) badges.push({ text: 'TITHED', color: COL.bad });
+      if (w > 0) badges.push({ text: `W${w}`, color: c.spec.overload ? COL.gold : COL.vellum });
       if (c.spec.overload) badges.push({ text: 'OVERLOAD', color: COL.gold });
-      else if (w > 0) badges.push({ text: `WEIGHT ${w}`, color: COL.vellum });
       return {
         spec: c.spec, tithed, inst: c.inst, badges, weight: w,
         dim: this.pick && !c.ok, disabled: this.pick && !c.ok, selected: this.sel.has(c.inst.uid),
@@ -429,7 +429,7 @@ export default {
       ];
       for (const [t, c, d] of rows) {
         app.text(t, x + pad, yy, { size: 14, ui: true, bold: true, color: c });
-        yy += app.text(d, x + pad + 62, yy, { size: 13, ui: true, maxW: w - 2 * pad - 62, lineH: 15, color: 'rgba(232,220,196,.85)' }) + 6;
+        yy += app.text(d, x + pad + 74, yy, { size: 13, ui: true, maxW: w - 2 * pad - 74, lineH: 15, color: 'rgba(232,220,196,.85)' }) + 6;
       }
     } else {
       const inst = hv.inst, spec = hv.spec;

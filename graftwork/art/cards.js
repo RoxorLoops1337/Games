@@ -294,7 +294,6 @@ function drawBandages(g) {
   g.save(); g.translate(-82, 118); g.rotate(-0.6); g.fillStyle = '#e9e2d0'; g.fillRect(-48, -9, 96, 18); g.lineWidth = 1.5; g.strokeStyle = 'rgba(43,30,26,.8)'; g.strokeRect(-48, -9, 96, 18);
   g.fillStyle = 'rgba(160,140,110,.5)'; for (let i = 0; i < 12; i++) g.fillRect(-44 + i * 8, -6, 2, 2);
   g.fillStyle = 'rgba(179,38,58,.55)'; g.beginPath(); g.arc(14, 0, 6, 0, 6.3); g.fill(); line(g, -30, -9, -30, 9, '#0e0e0e', 1.6); line(g, -22, -9, -22, 9, '#0e0e0e', 1.6); g.restore();
-  g.save(); g.translate(70, -112); g.rotate(0.5); g.fillStyle = '#e9e2d0'; g.fillRect(-26, -7, 52, 14); g.lineWidth = 1.5; g.strokeStyle = 'rgba(43,30,26,.8)'; g.strokeRect(-26, -7, 52, 14); line(g, -8, -7, -8, 7, '#0e0e0e', 1.4); line(g, 2, -7, 2, 7, '#0e0e0e', 1.4); g.restore();
 }
 
 // ---------- the card face (static layers) ----------
