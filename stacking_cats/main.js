@@ -19,6 +19,7 @@ import { iconCanvas, installGlyphs } from './art_icons.js';
 
 const SAVE_KEY = 'stacking_cats_save_v1';
 const W = S.W, H = S.H, GROUND = S.GROUND, SLOT = S.SLOT;
+const DISPLAY = '"Lilita One","Baloo 2","Arial Rounded MT Bold",system-ui,sans-serif';
 const FONT = '"Baloo 2","Nunito","Arial Rounded MT Bold","Trebuchet MS",system-ui,sans-serif';
 const $ = (id) => document.getElementById(id);
 const app = $('app'), cv = $('cv'), ctx = cv.getContext('2d'), screenEl = $('screen');
@@ -1157,7 +1158,7 @@ function drawFx() {
     }
     else if (f.k === 't') {
       const age = f.max - f.life, sc = f.pop ? 1 + Math.max(0, 0.7 * (1 - age / 0.14)) : 1;
-      ctx.globalAlpha = Math.min(1, a * 2.2); ctx.font = `800 ${Math.round(f.size * sc)}px ${FONT}`; ctx.textAlign = 'center'; ctx.lineWidth = 4; ctx.strokeStyle = '#271c33'; ctx.lineJoin = 'round';
+      ctx.globalAlpha = Math.min(1, a * 2.2); ctx.font = `400 ${Math.round(f.size * sc)}px ${DISPLAY}`; ctx.textAlign = 'center'; ctx.lineWidth = 4; ctx.strokeStyle = '#271c33'; ctx.lineJoin = 'round';
       ctx.strokeText(f.t, f.x, f.y); ctx.fillStyle = f.col; ctx.fillText(f.t, f.x, f.y);
     }
   }
@@ -1422,7 +1423,7 @@ function drawCombo(t) {
   if (combo < 3 || mode !== 'play') return;
   const s = 1 + comboPulse * 0.35, fade = Math.min(1, comboT * 2);
   ctx.save(); ctx.translate(18, 176); ctx.scale(s, s); ctx.globalAlpha = fade;
-  ctx.font = `800 ${24 + Math.min(14, combo / 4)}px ${FONT}`; ctx.textAlign = 'left'; ctx.lineWidth = 5; ctx.strokeStyle = '#271c33'; ctx.lineJoin = 'round';
+  ctx.font = `400 ${26 + Math.min(14, combo / 4)}px ${DISPLAY}`; ctx.textAlign = 'left'; ctx.lineWidth = 5; ctx.strokeStyle = '#271c33'; ctx.lineJoin = 'round';
   const col = combo >= 50 ? '#ff8fb7' : combo >= 20 ? '#ffd23f' : '#ffffff';
   ctx.strokeText(`x${combo}`, 0, 0); ctx.fillStyle = col; ctx.fillText(`x${combo}`, 0, 0);
   ctx.font = `800 13px ${FONT}`; ctx.lineWidth = 3.5; ctx.strokeText('COMBO', 2, 15); ctx.fillStyle = '#ffe3c4'; ctx.fillText('COMBO', 2, 15);

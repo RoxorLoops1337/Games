@@ -5,10 +5,14 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
 <meta name="theme-color" content="#2a1d4a">
 <title>Stacking Cats</title>
+<link rel="preload" href="fonts/lilitaone-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="fonts/baloo2-latin.woff2" as="font" type="font/woff2" crossorigin>
 <style>
+@font-face{font-family:"Lilita One";src:url(fonts/lilitaone-latin.woff2) format("woff2");font-weight:400;font-style:normal;font-display:swap}
+@font-face{font-family:"Baloo 2";src:url(fonts/baloo2-latin.woff2) format("woff2");font-weight:400 800;font-style:normal;font-display:swap}
 :root{
   --ink:#271c33; --paper:#fff8ef; --pink:#ff8fb7; --peach:#ffc38a; --mint:#8fe0b4; --sky:#8fd3ff; --grape:#6b4fc9;
-  --panel:rgba(32,22,58,.82); --font:"Baloo 2","Nunito","Hiragino Maru Gothic ProN","Arial Rounded MT Bold","Trebuchet MS",system-ui,sans-serif;
+  --panel:rgba(32,22,58,.82); --display:"Lilita One","Baloo 2","Arial Rounded MT Bold",system-ui,sans-serif; --font:"Baloo 2","Nunito","Hiragino Maru Gothic ProN","Arial Rounded MT Bold","Trebuchet MS",system-ui,sans-serif;
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{margin:0;height:100%;overflow:hidden;background:#150f26;font-family:var(--font);color:var(--ink);touch-action:manipulation;user-select:none;-webkit-user-select:none}
@@ -415,6 +419,25 @@ body.touch .islot{width:40px;height:40px;font-size:22px}
 body.touch .bag,body.touch .screen.arr .bag{height:48px}
 body.touch .tog{padding-top:12px;padding-bottom:12px}
 body.touch .tfoot .btn,body.touch .tfoot .fbtn{min-height:44px}
+
+/* ===== identity: display font, sticker buttons with cat ears ===== */
+.logo,.screen h2,.card h3,.btn,#banner,#waveTxt,#coinBox b,#chestBox b,.klv,.stats b,.kcoins b,.ib,#zoom span,.sdps,.schip,.bag,h4,.rar,.card .kind{font-family:var(--display);font-weight:400}
+.logo{font-size:92px;letter-spacing:2px;-webkit-text-stroke:0;paint-order:stroke fill}
+.logo span{font-size:62px;letter-spacing:3px}
+.screen h2{letter-spacing:.6px}
+.btn{font-size:23px;letter-spacing:.5px;text-shadow:0 2px 0 #fff8;border-width:3.5px}
+.btn.small{font-size:17px;letter-spacing:.3px}
+.btn.big{font-size:36px;letter-spacing:1px;overflow:visible}
+.btn.big::after{display:none}
+/* the signature: primary buttons wear cat ears, with a pink inner ear */
+.btn.big{z-index:0;isolation:isolate}
+.btn.big::before,.btn.big::after{display:block;content:'';position:absolute;z-index:-1;pointer-events:none;transform:none;transition:none;width:auto;left:10px;right:10px}
+.btn.big::before{top:-23px;height:20px;background:var(--ink);clip-path:polygon(0 100%,9% 6%,31% 100%,69% 100%,91% 6%,100% 100%)}
+.btn.big::after{top:-19px;height:16px;background:#ffb0cf;clip-path:polygon(6% 100%,10% 34%,26% 100%,74% 100%,90% 34%,94% 100%)}
+.pill{border-width:2px}
+#waveTxt{font-size:23px;letter-spacing:.5px;font-weight:400}
+.sdps b,.stats b{font-weight:400}
+.card h3{font-size:24px;letter-spacing:.3px}
 </style>
 </head>
 <body>
