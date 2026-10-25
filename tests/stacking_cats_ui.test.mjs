@@ -127,6 +127,13 @@ t('main.js parses and the ids it uses exist in index.html', () => {
   assert.ok(html.includes('type="module" src="main.js"'));
 });
 
+t('auto special moves: a Settings toggle, an A key and the default off are all wired', () => {
+  const js = readFileSync('stacking_cats/main.js', 'utf8');
+  assert.ok(/autoSpecial: false/.test(js), 'default must be off');
+  assert.ok(js.includes("tog('autoSpecial'"), 'Settings toggle missing');
+  assert.ok(js.includes("k === 'a'") && js.includes('save.opt.autoSpecial = !save.opt.autoSpecial'), 'A key missing');
+});
+
 t('no em dashes anywhere in the game files', () => {
   for (const f of ['main.js', 'index.html', 'cats.js', 'sim.js', 'art_cats.js', 'art_world.js', 'art_kingdom.js', 'audio.js', 'kingdom_scene.js', 'savecode.js', 'daily.js', 'post.js', 'art_icons.js', 'share.js', 'haptics.js', 'pwa.js', 'sw.js', 'manifest.webmanifest']) {
     assert.ok(!readFileSync('stacking_cats/' + f, 'utf8').includes('—'), f);
