@@ -3,7 +3,7 @@ import { CARD_W, CARD_H } from '../art/cards.js';
 import { enemyBounds } from '../art/enemies.js';
 
 export const W = 1280, H = 720;
-export const HERO_X = 260, FOOT_Y = 470;
+export const HERO_X = 260, FOOT_Y = 458;
 export const BAR_H = 56;
 export const PLAY_LINE = 420;
 export const DRAW_POS = { x: 64, y: 642 }, DISC_POS = { x: 1216, y: 642 }, EXH_POS = { x: 1136, y: 664 };
@@ -11,7 +11,7 @@ export const PILE_S = 0.3, EXH_S = 0.2;
 export const ORB = { x: 86, y: 534, size: 88 };
 export const STRAIN_BOX = { x: 14, y: 442, w: 150, h: 44 };
 export const END_BTN = { x: 1086, y: 546, w: 172, h: 54 };
-export const HAND_CX = 622, HAND_Y = 614;
+export const HAND_CX = 622, HAND_Y = 626;
 export const HOVER_Y = 552, HOVER_S = 1.0;
 export const ENEMY_REGION = { x0: 500, x1: 1252 };
 export const GOLD_POS = { x: 300, y: 28 };

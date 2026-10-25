@@ -428,11 +428,11 @@ function stepSprite(sp, d) {
       else if (t < 0.2) { const k = EASE.out((t - 0.13) / 0.07); sp.x = C.x - ux * 16 * k; sp.y = C.y - uy * 16 * k; sp.s = 0.78 + 0.05 * k; sp.rot = 0; }
       else if (t < 0.28) {
         const k = EASE.in((t - 0.2) / 0.08); const bx = C.x - ux * 16, by = C.y - uy * 16;
-        sp.x = lerp(bx, tp.x, k); sp.y = lerp(by, tp.y, k); sp.s = lerp(0.83, 0.42, k);
+        sp.x = lerp(bx, tp.x, k); sp.y = lerp(by, tp.y, k); sp.s = lerp(0.83, 0.34, k);
         fx.emit({ x: sp.x, y: sp.y, n: 2, color: sp.col, speed: 40, size: 6, life: 0.3, gravity: 0, glow: true, jitter: 20 });
       } else {
         const j = sp.jit || 0; sp.jit = Math.max(0, j - d * 8);
-        sp.x = tp.x + (j ? rnd(-5, 5) : 0); sp.y = tp.y + (j ? rnd(-5, 5) : 0); sp.s = 0.42; sp.alpha = 0.92;
+        sp.x = tp.x + (j ? rnd(-5, 5) : 0); sp.y = tp.y + (j ? rnd(-5, 5) : 0); sp.s = 0.34; sp.alpha = 0.85;
       }
     }
   }
@@ -534,8 +534,8 @@ function drawClamp(ctx, dc) {
   ctx.save(); ctx.translate(dc.x, dc.y); ctx.rotate(dc.rot); ctx.scale(dc.s, dc.s); ctx.globalAlpha = dc.alpha;
   const off = (1 - k) * 160;
   ctx.fillStyle = '#6b3a1f'; ctx.strokeStyle = '#2a140a'; ctx.lineWidth = 3;
-  ctx.fillRect(-CARD_W / 2 - 6 - off, -22, CARD_W / 2 + 6, 44); ctx.strokeRect(-CARD_W / 2 - 6 - off, -22, CARD_W / 2 + 6, 44);
-  ctx.fillRect(off, -22, CARD_W / 2 + 6, 44); ctx.strokeRect(off, -22, CARD_W / 2 + 6, 44);
+  ctx.fillRect(-CARD_W / 2 - 6 - off, -14, CARD_W / 2 + 6, 26); ctx.strokeRect(-CARD_W / 2 - 6 - off, -14, CARD_W / 2 + 6, 26);
+  ctx.fillRect(off, -14, CARD_W / 2 + 6, 26); ctx.strokeRect(off, -14, CARD_W / 2 + 6, 26);
   ctx.fillStyle = '#a0522d'; for (let i = 0; i < 4; i++) { ctx.beginPath(); ctx.arc(-CARD_W / 2 + 12 + i * 22 - off, 0, 5, 0, 6.283); ctx.fill(); ctx.beginPath(); ctx.arc(14 + i * 22 + off, 0, 5, 0, 6.283); ctx.fill(); }
   ctx.restore();
 }
