@@ -80,7 +80,7 @@ function fit() {
   }
   // render at the real screen resolution (capped) so lines stay sharp on high-DPI screens
   const dpr = Math.min(window.devicePixelRatio || 1, 2);
-  const cap = save.opt.quality === 'low' ? 1 : coarse ? 1.5 : 2;
+  const cap = save.opt.quality === 'low' ? 1 : coarse ? 1.25 : 2;
   res = Math.max(quality < 1 ? 0.75 : 1, Math.min(cap, k * dpr * quality));
   const pw = Math.round(W * res);
   if (cv.width !== pw) { cv.width = pw; cv.height = Math.round(H * res); }
@@ -91,7 +91,7 @@ function applyOptions() {
   setHaptics(o.haptics !== false && !!o.motion);
   sfx.setVolumes(o.sfxVol, o.musicVol);
   fxCap = o.quality === 'low' ? 180 : 440;
-  gfx = o.quality === 'low' ? 0 : 3;
+  gfx = o.quality === 'low' ? 0 : coarse ? 2 : 3;      // phones skip the bloom pass by default (it is the most expensive single step)
   quality = 1;
   fit();
 }
@@ -1406,7 +1406,7 @@ function castShadow(key, src, ox, oy, sx, sy, sw, sh, a) {
 }
 // squishy secondary motion: the sprite is drawn in slices that sway a little more toward the top
 function drawJelly(img, dx, dy, dw, dh, t, amp, phase) {
-  const n = 8, sh = img.height / n, dsh = dh / n;
+  const n = coarse ? 5 : 8, sh = img.height / n, dsh = dh / n;
   for (let k = 0; k < n; k++) {
     const u = k / (n - 1), off = Math.sin(t * 2.4 + phase + (1 - u) * 2.2) * amp * (1 - u) * (1 - u * 0.4);
     ctx.drawImage(img, 0, k * sh, img.width, sh + 0.6, dx + off, dy + k * dsh, dw, dsh + 0.7);
@@ -1885,7 +1885,7 @@ function adaptQuality(rawMs) {
     }
   } else {
     slowFrames = 0;
-    if (frameEma < limit * 0.62 && (gfx < 3 || quality < 1)) {
+    if (frameEma < limit * 0.62 && (gfx < (coarse ? 2 : 3) || quality < 1)) {
       if (++fastFrames > calmNeed) {
         fastFrames = 0;
         if (gfx < 1) gfx = 1; else if (quality < 1) { quality = Math.min(1, quality / 0.78); fit(); } else gfx++;
@@ -1933,7 +1933,7 @@ function frame(ts) {
   requestAnimationFrame(frame);
 }
 
-window.stackingCats = { get g() { return g; }, get mode() { return mode; }, S, save: () => save, hideCoach, startRun, toast, get res() { return res; }, get fxCount() { return fx.length; }, showTower, showItemReward, showEvent, doSpecial };
+window.stackingCats = { get g() { return g; }, get mode() { return mode; }, S, save: () => save, hideCoach, startRun, toast, get res() { return res; }, get fxCount() { return fx.length; }, showTower, showItemReward, showEvent, doSpecial, get gfx() { return gfx; }, set gfx(v) { gfx = v; } };
 showTitle();
 requestAnimationFrame(frame);
 void ENEMY_TYPES;
