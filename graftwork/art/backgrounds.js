@@ -169,14 +169,13 @@ function marketDyn(ctx, t, o) {
   LANTERNS.forEach(([x, y, len], i) => {
     const ang = Math.sin(t * 0.9 + i * 1.7) * 0.07; const f = 0.8 + 0.2 * Math.sin(t * 9 + i * 2) * Math.sin(t * 3.3 + i);
     const [lx, ly] = lantern(ctx, x, y, len, ang, f);
-    glow(ctx, 'mkg', '#ffb450', lx, ly, 230, 0.55 * f);
-    glow(ctx, 'mkg', '#ffb450', lx + Math.sin(ang) * 40, 600, 220, 0.12 * f); // light pool on floor sways
+    glow(ctx, 'mkg', '#ffb450', lx, ly, 150, 0.6 * f);
   });
-  drawMotes(ctx, t, 31, 45, '#ffd9a0', 0.55);
+  drawMotes(ctx, t, 31, 30, '#ffd9a0', 0.55);
 }
 function marketDraw(ctx, t, o) {
   const dx = Math.sin(t * 0.12) * 6;
-  ctx.save(); ctx.translate(640, 360); ctx.scale(1.03, 1.03); ctx.translate(-640 + dx, -360); stat(ctx, 'mk_far', marketFar); ctx.restore();
+  ctx.save(); ctx.translate(dx, 0); stat(ctx, 'mk_far', marketFar); ctx.restore();
   stat(ctx, 'mk_mid', marketMid); marketDyn(ctx, t, o);
   ctx.save(); ctx.translate(-dx * 1.5, 0); stat(ctx, 'mk_near', marketNear); ctx.restore();
 }
@@ -360,8 +359,7 @@ function shopDyn(ctx, t, o) {
     const ang = Math.sin(t * 0.8 + i * 1.3) * 0.045; ctx.save(); ctx.globalAlpha = 0.9; hangingJar(ctx, x, y, len, ang, k, t, tint); ctx.restore();
     glow(ctx, 'shj', '#7fe0b0', x + Math.sin(ang) * (len + 40), y + len + 42, 70, 0.22);
   });
-  [[150, 96, 90], [1130, 96, 100], [420, 96, 60]].forEach(([x, y, len], i) => { const ang = Math.sin(t * 1.0 + i * 2) * 0.08; const f = 0.8 + 0.2 * Math.sin(t * 8 + i * 3); const [lx, ly] = lantern(ctx, x, y, len, ang, f); glow(ctx, 'mkg', '#ffa840', lx, ly, 260, 0.6 * f); });
-  glow(ctx, 'mkg', '#ffa840', 640, 640, 420, 0.1);
+  [[150, 96, 90], [1130, 96, 100], [420, 96, 60]].forEach(([x, y, len], i) => { const ang = Math.sin(t * 1.0 + i * 2) * 0.08; const f = 0.8 + 0.2 * Math.sin(t * 8 + i * 3); const [lx, ly] = lantern(ctx, x, y, len, ang, f); glow(ctx, 'mkg', '#ffa840', lx, ly, 160, 0.6 * f); });
   drawMotes(ctx, t, 81, 40, '#ffd9a0', 0.5);
 }
 function shopDraw(ctx, t, o) { stat(ctx, 'shop', shopStatic); shopDyn(ctx, t, o); }
