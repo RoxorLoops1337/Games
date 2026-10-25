@@ -73,13 +73,16 @@ function drawLogo(app, cx, cy, k) {
   // stitched seams cut through the letters
   const seamY = cy - 6 + bob;
   g.globalAlpha = clamp(k * 2 - 0.4, 0, 1);
-  const zig = (x0, x3, y0) => {
-    g.save(); g.strokeStyle = '#0a0808'; g.lineWidth = 3; g.lineCap = 'round'; g.beginPath();
-    for (let x = x0; x <= x3; x += 9) { const yy = y0 + ((x / 9) % 2 ? -4 : 4); if (x === x0) g.moveTo(x, yy); else g.lineTo(x, yy); }
-    g.stroke(); g.restore();
+  const seam = (x0, x3, y0, ang) => {
+    g.save(); g.translate(x0, y0); g.rotate(ang); const L = x3 - x0;
+    g.strokeStyle = 'rgba(0,0,0,.5)'; g.lineWidth = 6; g.lineCap = 'round'; g.beginPath(); g.moveTo(0, 0); g.lineTo(L, 0); g.stroke();
+    g.strokeStyle = '#0a0808'; g.lineWidth = 3; g.beginPath(); g.moveTo(0, 0); g.lineTo(L, 0); g.stroke();
+    g.lineWidth = 3; g.beginPath(); for (let x = 8; x < L; x += 16) { g.moveTo(x - 4, -13); g.lineTo(x + 4, 13); } g.stroke();
+    g.strokeStyle = 'rgba(255,240,200,.25)'; g.lineWidth = 1; g.beginPath(); for (let x = 8; x < L; x += 16) { g.moveTo(x - 3, -12); g.lineTo(x + 3, 12); } g.stroke();
+    g.restore();
   };
-  zig(x1 + 6, x1 + w1 - 6, seamY + 10);
-  zig(x2 + 4, x2 + w2 - 8, seamY + 14);
+  seam(x1 + w1 * 0.1, x1 + w1 * 0.9, seamY - 4, -0.04);
+  seam(x2 + w2 * 0.12, x2 + w2 * 0.88, seamY + 14, 0.035);
   // vertical join between the halves
   const jx = x1 + w1 + gap / 2;
   g.globalAlpha = clamp((k - 0.6) / 0.4, 0, 1);
@@ -185,14 +188,14 @@ export default {
   draw(app) {
     const g = app.ctx, meta = app.shared.meta, flow = app.shared.flow;
     drawScene(app, this);
-    const logoY = this.state === 'menu' ? 150 : 70;
+    const logoY = this.state === 'menu' ? 170 : 62;
     const sc = this.state === 'menu' ? 1 : 0.42;
     g.save();
     if (sc !== 1) { g.translate(640, logoY); g.scale(sc, sc); g.translate(-640, -logoY); }
     drawLogo(app, 640, logoY, this.logoK);
     g.restore();
     if (this.state === 'menu') {
-      app.text('Cut what you love. Stitch what you need.', 640, 242, { size: 22, italic: true, align: 'center', color: '#d9cba8', shadow: true, alpha: clamp((this.logoK - 0.6) * 3, 0, 1) });
+      app.text('Cut what you love. Stitch what you need.', 640, 262, { size: 22, italic: true, align: 'center', color: '#d9cba8', shadow: true, alpha: clamp((this.logoK - 0.6) * 3, 0, 1) });
     }
     // keys
     const keys = app.blocked ? [] : app.pressedKeys;
@@ -224,7 +227,7 @@ export default {
     const g = app.ctx, meta = app.shared.meta, flow = app.shared.flow;
     if (keys.some((e) => e.key === 'Escape') && this.confirmAbandon) this.confirmAbandon = false;
     const bw = 330, bh = 48, step = 56, x = 640 - bw / 2;
-    let y = 286;
+    let y = 306;
     const k = EASE.out(clamp(this.menuK, 0, 1));
     g.save(); g.globalAlpha = k;
     // dim plate behind menu for contrast
@@ -261,7 +264,7 @@ export default {
     }
     g.restore();
     // daily card on the right
-    this.drawDailyCard(app, 930, 292);
+    this.drawDailyCard(app, 930, 312);
     if (this.confirmAbandon) this.drawConfirm(app, 'Start a new run?', 'Your saved run will be replaced. This cannot be undone.', 'Replace saved run', () => { this.confirmAbandon = false; this.openSelect(app); }, () => { this.confirmAbandon = false; });
   },
   startDaily(app) {
@@ -279,7 +282,7 @@ export default {
     app.panel(x, y, 300, 190, { r: 12, fill: 'rgba(14,11,10,.72)', stroke: played ? 'rgba(232,220,196,.25)' : rgba(COL.lamp, 0.55) });
     app.text("TODAY'S CASE", x + 16, y + 12, { size: 13, ui: true, bold: true, color: COL.lamp });
     app.text(seed.replace('daily-', ''), x + 284, y + 12, { size: 13, ui: true, align: 'right', color: 'rgba(232,220,196,.6)' });
-    drawPortrait(g, hero, x + 16 + 36, y + 62 + 20, 72);
+    drawPortrait(g, hero, x + 16 + 32, y + 66, 64);
     app.text(h.name, x + 100, y + 38, { size: 22, bold: true });
     app.text(h.title, x + 100, y + 64, { size: 14, italic: true, color: '#cdbf9d' });
     stitchLine(g, x + 16, y + 106, x + 284, y + 106, { color: 'rgba(232,220,196,.25)', size: 3, step: 10, lw: 1 });
@@ -308,16 +311,16 @@ export default {
   drawSelect(app, keys) {
     const g = app.ctx, meta = app.shared.meta;
     const k = EASE.out(clamp(this.selK, 0, 1));
-    g.save(); g.fillStyle = 'rgba(8,6,5,.5)'; g.fillRect(0, 100, W, H - 100); g.restore();
+    g.save(); const dg = g.createLinearGradient(0, 0, 0, 130); dg.addColorStop(0, 'rgba(8,6,5,.0)'); dg.addColorStop(1, 'rgba(8,6,5,.55)'); g.fillStyle = dg; g.fillRect(0, 0, W, 130); g.fillStyle = 'rgba(8,6,5,.55)'; g.fillRect(0, 130, W, H - 130); g.restore();
     app.text('Choose your grafter', 640, 112, { size: 26, align: 'center', bold: true, alpha: k });
-    const pw = 380, ph = 392, gap = 20, px0 = (W - (pw * 3 + gap * 2)) / 2, py = 150;
+    const pw = 380, ph = 352, gap = 20, px0 = (W - (pw * 3 + gap * 2)) / 2, py = 148;
     HERO_ORDER.forEach((id, i) => {
       const h = HEROES[id]; if (!h) return;
       const px = px0 + i * (pw + gap), yy = py + (1 - k) * 30 * (i + 1) / 3;
       this.drawHeroPanel(app, h, px, yy, pw, ph, i);
     });
     // lower row
-    const ly = 556;
+    const ly = 536;
     const unlocked = heroUnlocked(meta, this.hero);
     const maxA = Math.min(10, maxAscension(meta, this.hero) + 1);
     this.asc = clamp(this.asc, 0, maxA);
@@ -386,9 +389,9 @@ export default {
     g.save();
     if (locked) g.globalAlpha = 0.28;
     const sway = sel && !calm(app) ? Math.sin(app.t * 1.5) * 2 : 0;
-    drawPortrait(g, h.id, x + 56, y + 46 + sway, 82);
+    drawPortrait(g, h.id, x + 54, y + 40 + sway, 66);
     g.restore();
-    if (locked) { padlock(g, x + 56, y + 50, 1.1); }
+    if (locked) { padlock(g, x + 54, y + 44, 0.9); }
     // name block
     app.text(h.name, x + 108, y + 12, { size: 28, bold: true, color: locked ? '#8c8372' : COL.vellum, shadow: true });
     app.text(h.title, x + 108, y + 46, { size: 15, italic: true, color: locked ? '#6d655a' : '#d6c7a6' });

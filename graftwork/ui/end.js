@@ -9,7 +9,7 @@ import * as RUN from '../engine/run.js';
 import { HEROES, ENEMIES, RELICS, GRAFTS } from '../data/index.js';
 import { ACHIEVEMENT_LIST } from '../data/achievements.js';
 
-const CS = 0.38, GAP = 7, COLS = 7;
+const GAP = 7;
 const calm = (app) => !!(app.shared.meta && app.shared.meta.settings && app.shared.meta.settings.reducedMotion);
 
 function stitch(g, x1, y1, x2, y2, col = 'rgba(232,220,196,.25)') {
@@ -81,7 +81,7 @@ export default {
       const hc = this.hover, s = 0.82;
       const w = CARD_W * s, h = CARD_H * s;
       const x = clamp(hc.x, 8 + w / 2, W - 8 - w / 2), y = clamp(hc.y, 8 + h / 2, H - 8 - h / 2);
-      g.save(); g.fillStyle = 'rgba(0,0,0,.45)'; g.fillRect(0, 0, W, H); g.restore();
+      g.save(); g.fillStyle = 'rgba(0,0,0,.4)'; g.fillRect(0, 0, W, H); g.restore();
       drawCard(g, hc.spec, x, y, { scale: s, tithed: this.tithed.has(hc.inst.uid), glow: !!this.star && hc.inst === this.star.inst });
     }
     this.hover = null;
@@ -153,7 +153,13 @@ export default {
     app.panel(x, y, w, h, { r: 12, fill: 'rgba(16,12,11,.78)' });
     app.text('THE DECK AS YOU LEFT IT', x + 18, y + 12, { size: 12, ui: true, bold: true, color: COL.lamp });
     app.text(`${this.cards.length} cards, ${this.cards.filter((c) => c.w > 0).length} grafted`, x + w - 18, y + 12, { size: 12, ui: true, align: 'right', color: '#b7aa8c' });
-    const cw = CARD_W * CS, ch = CARD_H * CS, gx = x + (w - (COLS * (cw + GAP) - GAP)) / 2, top = y + 36, viewH = h - 46;
+    const top = y + 36, viewH = h - 46, n = this.cards.length;
+    let CS = 0.3, COLS = Math.floor((w - 24 + GAP) / (CARD_W * 0.3 + GAP));
+    for (let cols = 4; cols <= 10; cols++) {
+      const sw = (w - 24 - GAP * (cols - 1)) / cols / CARD_W, rows = Math.ceil(n / cols), sh = (viewH - GAP * (rows - 1)) / rows / CARD_H;
+      const sc = Math.min(sw, sh, 0.52); if (sc > CS || cols === 4) { CS = Math.max(0.3, sc); COLS = cols; }
+    }
+    const cw = CARD_W * CS, ch = CARD_H * CS, gx = x + (w - (COLS * (cw + GAP) - GAP)) / 2;
     const rows = Math.ceil(this.cards.length / COLS), contentH = rows * (ch + GAP);
     const maxS = Math.max(0, contentH - viewH);
     if (app.inRect(x, y, w, h)) this.scroll = clamp(this.scroll + app.mouse.wheel * 0.6, 0, maxS);
@@ -198,17 +204,22 @@ export default {
     app.panel(x, ny, w, nh, { r: 12, fill: 'rgba(16,12,11,.88)', stroke: this.news.length ? rgba(COL.lamp, 0.5) : undefined });
     app.text(this.news.length ? 'NEW ON THE RECORD' : 'NOTHING NEW ON THE RECORD', x + w / 2, ny + 10, { size: 12, ui: true, bold: true, align: 'center', color: this.news.length ? COL.lamp : '#8c8372' });
     let yy = ny + 32;
-    this.news.slice(0, 5).forEach((n, i) => {
+    let fitted = 0;
+    for (let i = 0; i < this.news.length; i++) {
+      const n = this.news[i];
+      const lines = app.wrap(n.text || '', w - 28, 12, { ui: true }).length, hh = 36 + Math.min(lines, 2) * 14 + 6;
+      if (yy + hh > ny + nh - 22 && i < this.news.length) { if (i < this.news.length - 0 && yy + hh > ny + nh - 8) break; }
+      fitted = i + 1;
       const at = this.nextNew + i * 0.45, k = clamp((this.t0 - at) / 0.4, 0, 1);
       if (k > 0 && this.shown <= i) { this.shown = i + 1; if (!calm(app)) { this.fx.burst(x + w / 2, yy + 14, 'gild', { n: 18 }); this.fx.ring(x + w / 2, yy + 14, COL.lamp, 70, 0.6); } if (app.shared.audio) app.shared.audio.sfx(n.kind === 'Unlocked' ? 'relic' : 'gilded', { vol: 0.7 }); }
       g.save(); g.globalAlpha = EASE.out(k); g.translate((1 - EASE.out(k)) * 30, 0);
       app.text(n.kind === 'Unlocked' ? 'UNLOCKED' : 'RECORD', x + 14, yy, { size: 10, ui: true, bold: true, color: n.kind === 'Unlocked' ? '#8fe0a0' : COL.lamp });
       app.text(n.name, x + 14, yy + 11, { size: 17, bold: true, color: '#fbe9b0', shadow: true });
-      const ht = app.text(n.text, x + 14, yy + 33, { size: 12, ui: true, maxW: w - 28, lineH: 14, color: '#cdbf9d' });
+      app.text(lines > 2 ? (n.text || '').slice(0, 56) + '...' : n.text || '', x + 14, yy + 33, { size: 12, ui: true, maxW: w - 28, lineH: 14, color: '#cdbf9d' });
       g.restore();
-      yy += 38 + Math.min(ht, 28) + 4;
-    });
-    if (this.news.length > 5) app.text(`and ${this.news.length - 5} more in the Codex`, x + w / 2, ny + nh - 24, { size: 12, ui: true, italic: true, align: 'center', color: '#a58f6b' });
+      yy += hh;
+    }
+    if (this.news.length > fitted) app.text(`and ${this.news.length - fitted} more in the Codex`, x + w / 2, ny + nh - 24, { size: 12, ui: true, italic: true, align: 'center', color: '#a58f6b' });
   },
   drawButtons(app, flow, run) {
     const y = 662, bh = 46;

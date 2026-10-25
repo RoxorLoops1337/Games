@@ -34,7 +34,7 @@ export default {
     const live = app.top() === this;
     const k = EASE.out(clamp(this.k, 0, 1));
     g.save(); g.fillStyle = `rgba(6,4,3,${0.72 * k})`; g.fillRect(0, 0, W, H); g.restore();
-    const w = 600, h = 560, x = 640 - w / 2, y = 80 + (1 - k) * 20;
+    const w = 600, h = 640, x = 640 - w / 2, y = 40 + (1 - k) * 20;
     g.save(); g.globalAlpha = k;
     app.panel(x, y, w, h, { r: 16, fill: 'rgba(22,18,16,.98)', stroke: 'rgba(232,220,196,.5)', lw: 2.5 });
     app.text('Settings', x + 32, y + 22, { size: 32, bold: true });
@@ -79,7 +79,7 @@ export default {
       }
     });
     // reset
-    const ry = ty0 + 14 + toggles.length * 46 + 14;
+    const ry = ty0 + 14 + toggles.length * 46 + 22;
     stitch(g, x + 32, ry - 8, x + w - 32, ry - 8);
     if (this.reset === 0) {
       if (app.button('Reset all progress', x + 32, ry + 4, 240, 40, { size: 17, fill: '#3a2020', stroke: 'rgba(179,38,58,.7)' })) this.reset = 1;
