@@ -203,7 +203,7 @@ export function drawStatus(ctx, id, x, y, size, good = true) {
   badge(ctx, r, rim, good ? '#1c2a20' : '#2e1818');
   // small pip so good/bad is readable without color: good = notch dots, bad = zigzag teeth
   ctx.restore();
-  if (e) withGlyph(ctx, x, y, size, e[1], e[2], e[0], 0.62);
+  if (e) withGlyph(ctx, x, y, size, e[1], e[2], e[0], 0.8);
   else {
     ctx.save(); ctx.fillStyle = good ? '#d8f5da' : '#ffd2cc'; ctx.font = `bold ${Math.round(size * 0.5)}px ${FONT}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.fillText(String(id || '?')[0].toUpperCase(), x, y + size * 0.03); ctx.restore();
@@ -280,7 +280,7 @@ export function drawRelic(ctx, id, x, y, size, rarity) {
   const pips = 1 + (h % 3);
   for (let i = 0; i < pips; i++) { const an = ((((h >> (3 + i * 4)) % 12) / 12) * TAU) - Math.PI / 2; ctx.beginPath(); ctx.arc(Math.cos(an) * r * 0.83, Math.sin(an) * r * 0.83, Math.max(0.9, r * 0.055), 0, TAU); ctx.fillStyle = 'rgba(255,255,255,.55)'; ctx.fill(); }
   ctx.restore();
-  withGlyph(ctx, x, y, size, k, a, relicGlyph(id), 0.6);
+  withGlyph(ctx, x, y, size, k, a, relicGlyph(id), 0.78);
 }
 // ======================================================================================
 // POTIONS
@@ -377,7 +377,7 @@ export function drawNodeIcon(ctx, type, x, y, size, state = 'available') {
   ctx.save(); ctx.globalAlpha *= locked ? 0.4 : visited ? 0.55 : 1;
   if (d) {
     const k = locked || visited ? '#9a9088' : d.col, a = locked || visited ? '#7a7068' : d.acc;
-    withGlyph(ctx, x, y, size, k, a, d.g, 0.64);
+    withGlyph(ctx, x, y, size, k, a, d.g, 0.78);
     if (d.q) { ctx.save(); ctx.fillStyle = D; ctx.font = `bold ${Math.round(size * 0.3)}px ${FONT}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('?', x - size * 0.03, y - size * 0.1); ctx.restore(); }
   } else withGlyph(ctx, x, y, size, '#ddd', '#999', 'question', 0.6);
   ctx.restore();
