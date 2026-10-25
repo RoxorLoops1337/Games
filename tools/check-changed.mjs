@@ -74,6 +74,7 @@ const GAME_SUITES = {
   LoopDoku: ['test:loopdoku'],
   blockmates: ['test:blockmates'],
   stacking_cats: ['test:stackingcats'],
+  graftwork: ['test:graftwork'],
   rustgrift: ['test:rustgrift'],
   midnight_mog: ['test:midnightmog'],
   drop_the_bass: ['test:dropbass'],
