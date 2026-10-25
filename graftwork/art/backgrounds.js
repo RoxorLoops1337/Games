@@ -174,10 +174,10 @@ function marketDyn(ctx, t, o) {
   drawMotes(ctx, t, 31, 30, '#ffd9a0', 0.55);
 }
 function marketDraw(ctx, t, o) {
-  const dx = Math.sin(t * 0.12) * 6;
+  const dx = Math.round(Math.sin(t * 0.12) * 6);
   ctx.save(); ctx.translate(dx, 0); stat(ctx, 'mk_far', marketFar); ctx.restore();
   stat(ctx, 'mk_mid', marketMid); marketDyn(ctx, t, o);
-  ctx.save(); ctx.translate(-dx * 1.5, 0); stat(ctx, 'mk_near', marketNear); ctx.restore();
+  ctx.save(); ctx.translate(Math.round(-dx * 1.5), 0); stat(ctx, "mk_near", marketNear); ctx.restore();
 }
 
 // ======================================================================================

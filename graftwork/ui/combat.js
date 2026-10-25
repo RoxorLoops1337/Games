@@ -1136,9 +1136,6 @@ function drawHudBottom(app) {
   pileStack(app, L.DRAW_POS, dn, L.PILE_S, 'Draw pile', 'draw', () => { S.modal = { kind: 'piles', tab: 'draw', scroll: 0 }; sfx('uiClick'); });
   pileStack(app, L.DISC_POS, dsc, L.PILE_S, 'Discard pile', 'disc', () => { S.modal = { kind: 'piles', tab: 'discard', scroll: 0 }; sfx('uiClick'); });
   pileStack(app, L.EXH_POS, ex, L.EXH_S, 'Exhaust pile', 'exh', () => { S.modal = { kind: 'piles', tab: 'exhaust', scroll: 0 }; sfx('uiClick'); });
-  app.text('Draw', L.DRAW_POS.x, L.DRAW_POS.y - 62, { size: 12, ui: true, align: 'center', color: 'rgba(232,220,196,.6)' });
-  app.text('Discard', L.DISC_POS.x, L.DISC_POS.y - 62, { size: 12, ui: true, align: 'center', color: 'rgba(232,220,196,.6)' });
-  app.text('Exhaust', L.EXH_POS.x, L.EXH_POS.y - 40, { size: 11, ui: true, align: 'center', color: 'rgba(232,220,196,.5)' });
 
   // energy orb
   const O = L.ORB, pulse = 1 + S.orbPulse * 0.22;
