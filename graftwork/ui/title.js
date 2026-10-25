@@ -7,6 +7,7 @@ import { drawSchoolGlyph } from '../art/cards.js';
 import * as RUN from '../engine/run.js';
 import { HEROES, SCHOOLS, CARDS } from '../data/index.js';
 import { heroUnlocked, maxAscension } from '../engine/meta.js';
+import { loadRun } from '../engine/save.js';
 import { hashSeed } from '../engine/rng.js';
 
 export const VERSION = 'v1.0';
@@ -166,8 +167,7 @@ export default {
   leave(app) { app.clearTweens(this); },
   readSave(app) {
     try {
-      const raw = globalThis.localStorage && globalThis.localStorage.getItem('graftwork_run_v1');
-      const r = raw ? JSON.parse(raw) : null; if (!r || r.v !== 1) return null;
+      const r = loadRun(); if (!r) return null;
       const h = HEROES[r.hero];
       return { hero: h ? h.name : r.hero, act: r.act, floor: (r.stats && r.stats.floors) || r.row + 1, hp: r.hp, maxHp: r.maxHp, asc: r.ascension, daily: !!r.daily, loop: r.loop };
     } catch { return null; }
