@@ -9,12 +9,13 @@ async function withTimeout(promise, ms) {
 }
 
 // returns { ok: true, day, top, all } or { ok: false }. Never throws, the game just hides the board.
-export async function fetchBoard(day, fetchFn = (typeof fetch === 'function' ? fetch : null), ms = 4000) {
+export async function fetchBoard(day, fetchFn = (typeof fetch === 'function' ? fetch : null), ms = 4000, weekly = false) {
   try {
-    const r = await withTimeout(fetchFn(`${BOARD_URL}?day=${encodeURIComponent(day)}`), ms);
+    // weekly boards use ?type=weekly&week=YYYY-Www, the daily client keeps ?day=
+    const r = await withTimeout(fetchFn(weekly ? `${BOARD_URL}?type=weekly&week=${encodeURIComponent(day)}` : `${BOARD_URL}?day=${encodeURIComponent(day)}`), ms);
     if (!r.ok) return { ok: false };
     const j = await r.json();
-    return { ok: true, day: j.day, top: Array.isArray(j.top) ? j.top : [], all: Array.isArray(j.all) ? j.all : [] };
+    return { ok: true, day: j.day || j.week, week: j.week, top: Array.isArray(j.top) ? j.top : [], all: Array.isArray(j.all) ? j.all : [] };
   } catch (e) { return { ok: false }; }
 }
 
@@ -23,7 +24,7 @@ export async function submitScore(entry, fetchFn = (typeof fetch === 'function' 
     const r = await withTimeout(fetchFn(BOARD_URL, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(entry) }), ms);
     if (!r.ok) return { ok: false, status: r.status };
     const j = await r.json();
-    return { ok: true, day: j.day, top: j.top || [], all: j.all || [] };
+    return { ok: true, day: j.day || j.week, week: j.week, top: j.top || [], all: j.all || [] };
   } catch (e) { return { ok: false }; }
 }
 

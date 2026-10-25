@@ -120,6 +120,41 @@ const ENEMY_ART = {
     ctx.fillStyle = 'rgba(155,255,107,.9)'; ctx.beginPath(); ctx.arc(-9, -32, 2.4, 0, TAU); ctx.fill(); ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(-9.8, -33, 0.9, 0, TAU); ctx.fill();
     rod(ctx, -13, -2, -15, -44, 2.2, '#6a4a2a'); fillPath(ctx, ell(ctx, -15.4, -48, 4.6, 4.6), '#7fdc5a', 1); ctx.fillStyle = 'rgba(255,255,255,.7)'; ctx.beginPath(); ctx.arc(-16.6, -49.4, 1.3, 0, TAU); ctx.fill();
     ctx.restore();
+  },  dasher(ctx) {
+    // lean and fast: speed streaks behind it, a flying red bandana
+    ctx.save(); ctx.scale(0.95, 0.95); ctx.rotate(-0.07);
+    for (const [y, l] of [[-30, 22], [-22, 30], [-14, 18]]) line(ctx, [[22, y], [22 + l, y + 1]], 'rgba(255,255,255,.55)', 1.6);
+    mouseBody(ctx, { fur: '#c9a98a', inner: '#ffc4b0', eye: '#ff4a4a' });
+    fillPath(ctx, poly(ctx, [[-17, -42], [4, -45], [3, -39], [-16, -37]]), '#e8404a', 1);
+    fillPath(ctx, poly(ctx, [[3, -43], [20, -50], [14, -44], [22, -41], [4, -40]]), '#e8404a', 0.9);
+    dagger(ctx, -14, -15, 12);
+    ctx.restore();
+  },
+  shield(ctx) {
+    // a big round shield held in front: it soaks up burns, slows and poison until it breaks
+    ctx.save(); ctx.scale(1.08, 1.08);
+    mouseBody(ctx, { fur: '#aeb4c8', inner: '#ffc4cc' });
+    fillPath(ctx, new Path2D('M-17 -38 Q-5 -50 8 -38 Z'), '#7a8aa8', 1.1);
+    fillPath(ctx, ell(ctx, -21, -17, 14, 17), '#4a7ad8', 1.5);
+    fillPath(ctx, ell(ctx, -21, -17, 10.5, 13.5), '#5c90ee', 0.9);
+    ctx.strokeStyle = '#d8e4ff'; ctx.lineWidth = 1.8; ctx.beginPath(); ctx.ellipse(-21, -17, 14, 17, 0, 0, TAU); ctx.stroke();
+    fillPath(ctx, star(-21, -17, 6, 2.6, 4), '#ffd23f', 0.8);
+    for (const [x, y] of [[-21, -31], [-21, -3], [-33, -17], [-9, -17]]) { ctx.fillStyle = '#e8eef8'; ctx.beginPath(); ctx.arc(x, y, 1.2, 0, TAU); ctx.fill(); }
+    ctx.restore();
+  },
+  digger(ctx) {
+    // hard hat with a lamp, goggles and a pickaxe, dusty from tunnelling
+    ctx.save(); ctx.scale(1.08, 1.08);
+    mouseBody(ctx, { fur: '#9a8068', inner: '#e0b090' });
+    fillPath(ctx, new Path2D('M-18 -37 Q-5 -54 9 -37 Z'), '#ffcf3a', 1.1);
+    line(ctx, [[-18, -37], [9, -37]], '#c8901a', 1.6);
+    fillPath(ctx, ell(ctx, -15, -41, 3.4, 3), '#fff6b0', 0.9);
+    ctx.fillStyle = 'rgba(255,255,200,.35)'; ctx.beginPath(); ctx.moveTo(-17, -41); ctx.lineTo(-34, -48); ctx.lineTo(-34, -33); ctx.fill();
+    fillPath(ctx, ell(ctx, -8.5, -33, 5.6, 5.2), 'rgba(160,230,255,.55)', 1.2);
+    rod(ctx, -4, -4, 12, -40, 2.4, '#7a4a2a');
+    fillPath(ctx, new Path2D('M8 -43 Q14 -50 22 -44 L19 -41 Q14 -45 10 -40 Z'), '#aab4c4', 1);
+    for (const [x, y] of [[8, -4], [16, -2], [-26, -2]]) { ctx.fillStyle = 'rgba(140,100,60,.8)'; ctx.beginPath(); ctx.arc(x, y, 2.4, 0, TAU); ctx.fill(); }
+    ctx.restore();
   },
 };
 
