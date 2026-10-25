@@ -39,7 +39,7 @@ export const CATS = [
   // ---- unlockable ----
   { id: 'yuki', name: 'Yuki', title: 'Snowball Scout', role: 'Frost', hp: 0.9,
     desc: 'Snowballs that slow whatever they hit.',
-    atk: { t: 'proj', dmg: 0.75, cd: 1.0, range: 380, speed: 480, color: '#bfeaff', fx: { slow: 0.4, t: 2.2 } },
+    atk: { t: 'proj', dmg: 0.95, cd: 1.0, range: 380, speed: 480, color: '#bfeaff', fx: { slow: 0.4, t: 2.2 } },
     art: { fur: '#dff3ff', belly: '#ffffff', accent: '#5bb8ff', eye: '#2f8fe0', pat: 'plain' },
     unlock: { k: 'bestWave', n: 6, text: 'Reach wave 6' } },
   { id: 'hawkeye', name: 'Hawkeye', title: 'Long Shot', role: 'Sniper', hp: 0.8,
@@ -54,13 +54,13 @@ export const CATS = [
     unlock: { k: 'bossKills', n: 1, text: 'Destroy your first nest' } },
   { id: 'pudding', name: 'Pudding', title: 'Nurse', role: 'Healer', hp: 1.0,
     desc: 'Heals the most hurt cat. Tosses little hearts at mice.',
-    atk: { t: 'proj', dmg: 0.35, cd: 1.2, range: 320, speed: 420, color: '#ff9ac6', r: 4 },
-    sup: { t: 'heal', pct: 0.14, cd: 2.4 },
+    atk: { t: 'proj', dmg: 0.55, cd: 1.2, range: 320, speed: 420, color: '#ff9ac6', r: 4 },
+    sup: { t: 'heal', pct: 0.16, cd: 2.4 },
     art: { fur: '#ffd1e0', belly: '#fff5f8', accent: '#ff6b9a', eye: '#e0508a', pat: 'plain' },
     unlock: { k: 'recruits', n: 8, text: 'Recruit 8 cats in total' } },
   { id: 'shadow', name: 'Shadow', title: 'Night Blade', role: 'Ninja', hp: 0.8,
     desc: 'Twin shuriken, often critical.',
-    atk: { t: 'proj', dmg: 0.4, cd: 0.6, range: 350, speed: 820, color: '#cfd6e6', count: 2, crit: 0.25, r: 4 },
+    atk: { t: 'proj', dmg: 0.52, cd: 0.6, range: 350, speed: 820, color: '#cfd6e6', count: 2, crit: 0.25, r: 4 },
     art: { fur: '#2e2b3c', belly: '#6c6785', accent: '#d4324b', eye: '#ffd23f', pat: 'plain' },
     unlock: { k: 'bestWave', n: 10, text: 'Reach wave 10' } },
   { id: 'ronin', name: 'Ronin', title: 'Wandering Blade', role: 'Samurai', hp: 1.2,
@@ -90,7 +90,7 @@ export const CATS = [
     unlock: { k: 'bossKills', n: 3, text: 'Destroy 3 nests' } },
   { id: 'lyra', name: 'Lyra', title: 'Songstress', role: 'Bard', hp: 0.9,
     desc: 'Her song makes every cat attack faster.',
-    atk: { t: 'proj', dmg: 0.5, cd: 0.9, range: 330, speed: 420, color: '#ffe27a', r: 4 }, pas: { haste: 0.12 },
+    atk: { t: 'proj', dmg: 0.68, cd: 0.9, range: 330, speed: 420, color: '#ffe27a', r: 4 }, pas: { haste: 0.14 },
     art: { fur: '#ffb8d9', belly: '#fff0f7', accent: '#8a4bd0', eye: '#8a4bd0', pat: 'plain' },
     unlock: { k: 'recruits', n: 15, text: 'Recruit 15 cats in total' } },
   { id: 'nibbles', name: 'Count Nibbles', title: 'Vampire Lord', role: 'Vampire', hp: 1.0,
@@ -110,12 +110,12 @@ export const CATS = [
     unlock: { k: 'lvl3Of', id: 'ember', text: 'Merge Ember up to Lv 3' } },
   { id: 'blizzard', name: 'Blizzard', title: 'Ice Queen', role: 'Freeze', hp: 1.0,
     desc: 'Frost nova freezes everything around the tower.',
-    atk: { t: 'nova', dmg: 1.1, cd: 3.2, radius: 230, freeze: 1.3 },
+    atk: { t: 'nova', dmg: 1.5, cd: 3.2, radius: 230, freeze: 1.3 },
     art: { fur: '#e8f6ff', belly: '#ffffff', accent: '#78c8ff', eye: '#4aa8ff', pat: 'plain' },
     unlock: { k: 'bestWave', n: 20, text: 'Reach wave 20' } },
   { id: 'dusty', name: 'Dusty', title: 'Fastest Paw', role: 'Gunslinger', hp: 0.9,
     desc: 'Fires a six-shooter volley in a blink.',
-    atk: { t: 'proj', dmg: 0.5, cd: 2.0, range: 400, speed: 900, color: '#ffe9a0', burst: 6, gap: 0.09, r: 3 },
+    atk: { t: 'proj', dmg: 0.62, cd: 2.0, range: 400, speed: 900, color: '#ffe9a0', burst: 6, gap: 0.09, r: 3 },
     art: { fur: '#d9a066', belly: '#fff0dc', accent: '#7a4a2a', eye: '#3a2a1a', pat: 'stripes' },
     unlock: { k: 'kills', n: 3000, text: 'Defeat 3000 mice in total' } },
   { id: 'cyber', name: 'Cyber', title: 'Laser Unit', role: 'Laser', hp: 1.0,
@@ -125,7 +125,7 @@ export const CATS = [
     unlock: { k: 'bossKills', n: 7, text: 'Destroy 7 nests' } },
   { id: 'boo', name: 'Boo', title: 'Friendly Ghost', role: 'Spirit', hp: 0.85,
     desc: 'Ghost bolts pass through 3 mice and ignore armor. Sometimes dodges.',
-    atk: { t: 'proj', dmg: 0.7, cd: 0.9, range: 410, speed: 400, color: '#b9f5ff', pierce: 3, pierceArmor: true, r: 5 }, pas: { dodge: 0.15 },
+    atk: { t: 'proj', dmg: 0.88, cd: 0.9, range: 410, speed: 400, color: '#b9f5ff', pierce: 3, pierceArmor: true, r: 5 }, pas: { dodge: 0.15 },
     art: { fur: '#e9f8ff', belly: '#ffffff', accent: '#7fd8ff', eye: '#2a3a5a', pat: 'plain' },
     unlock: { k: 'flawless', n: 8, text: 'Clear 8 waves with no cat going down' } },
   { id: 'draco', name: 'Draco', title: 'Dragon Cat', role: 'Dragon', hp: 1.3,
@@ -135,7 +135,7 @@ export const CATS = [
     unlock: { k: 'bossKills', n: 10, text: 'Destroy 10 nests' } },
   { id: 'halo', name: 'Halo', title: 'Guardian Angel', role: 'Angel', hp: 1.1,
     desc: 'Once per wave, brings a fallen cat back. Heals the stack a little.',
-    atk: { t: 'proj', dmg: 0.6, cd: 1.0, range: 390, speed: 450, color: '#fff6b0', r: 4 },
+    atk: { t: 'proj', dmg: 0.8, cd: 1.0, range: 390, speed: 450, color: '#fff6b0', r: 4 },
     sup: { t: 'heal', pct: 0.06, cd: 3 }, pas: { revive: true },
     art: { fur: '#fffaf0', belly: '#ffffff', accent: '#ffd966', eye: '#6aa8ff', pat: 'plain' },
     unlock: { k: 'recruits', n: 30, text: 'Recruit 30 cats in total' } },
@@ -146,7 +146,7 @@ export const CATS = [
     unlock: { k: 'bestWave', n: 25, text: 'Reach wave 25' } },
   { id: 'hexa', name: 'Hexa', title: 'Hex Witch', role: 'Curse', hp: 0.85,
     desc: 'Curses make every mouse take more damage from every cat.',
-    atk: { t: 'proj', dmg: 0.6, cd: 1.0, range: 390, speed: 400, color: '#c06bff', r: 4 }, pas: { curse: 0.10 },
+    atk: { t: 'proj', dmg: 0.82, cd: 1.0, range: 390, speed: 400, color: '#c06bff', r: 4 }, pas: { curse: 0.13 },
     art: { fur: '#6a3f8f', belly: '#e0c8f5', accent: '#9bff6b', eye: '#9bff6b', pat: 'plain' },
     unlock: { k: 'temp', n: 20, text: 'Eat 20 temporary snacks' } },
   { id: 'nori', name: 'Chef Nori', title: 'Sushi Master', role: 'Chef', hp: 1.1,
@@ -199,23 +199,30 @@ export const ENEMY_TYPES = {
   glider:  { name: 'Glider',       w: 44, h: 34, hp: 30,  dmg: 8,  cd: 1.2, spd: 72, cost: 2, minWave: 6, wt: 3, ai: 'fly', alt: 105 },
   bomber:  { name: 'Bomb Mouse',   w: 36, h: 38, hp: 36,  dmg: 36, cd: 1,   spd: 86, cost: 3, minWave: 7, wt: 3, ai: 'bomb' },
   shaman:  { name: 'Shaman Rat',   w: 40, h: 50, hp: 58,  dmg: 0,  cd: 2.6, spd: 38, cost: 4, minWave: 8, wt: 2, ai: 'shaman', range: 400 },
+  // counters to a one-note tower: dashers leap over the stack to bite the top cat, shield bearers shrug off status effects until the
+  // shield breaks, diggers tunnel under the field and cannot be hit until they pop up next to the stack
+  dasher:  { name: 'Dash Mouse',   w: 30, h: 32, hp: 22,  dmg: 9,  cd: 1.5, spd: 120, cost: 2, minWave: 9, wt: 3, ai: 'dash', hint: 'Leaps over the stack to bite the top cat' },
+  shield:  { name: 'Shield Bearer', w: 46, h: 46, hp: 60, dmg: 9,  cd: 1.2, spd: 34, cost: 4, minWave: 10, wt: 3, ai: 'melee', shield: 1.4, hint: 'Its shield blocks burns, slows and poison until it breaks' },
+  digger:  { name: 'Digger',       w: 40, h: 40, hp: 52,  dmg: 15, cd: 1.3, spd: 44, cost: 4, minWave: 12, wt: 2, ai: 'burrow', hint: 'Tunnels under the field and cannot be hit until it pops up' },
 };
 
 export const NESTS = [
-  { id: 'cheese', name: 'Cheese Hut' },
-  { id: 'pipe', name: 'Drain Pipe Den' },
-  { id: 'castle', name: 'Rat Castle' },
-  { id: 'trash', name: 'Trash Tower' },
-  { id: 'moon', name: 'Moon Burrow' },
+  { id: 'cheese', name: 'Cheese Hut', trick: 'Lobs cheese bombs and calls for help as it gets hurt' },
+  { id: 'pipe', name: 'Drain Pipe Den', trick: 'Floods the field with fast Dash Mice every few seconds' },
+  { id: 'castle', name: 'Rat Castle', trick: 'Guards with shields: it takes far less damage while a Shield Bearer stands' },
+  { id: 'trash', name: 'Trash Tower', trick: 'Rots and heals itself unless you keep hitting it' },
+  { id: 'moon', name: 'Moon Burrow', trick: 'Wraps itself in a moon bubble for a moment: save your big hits' },
 ];
 
+// amb: ambient light on the first wave of a stage and on the nest wave (the day turns to dusk). grade: colour grading
+// laid over the picture (top, bottom). weather: rain, snow, drip or none. haze: distance fog colour.
 export const THEMES = [
-  { name: 'Sunny Garden',  sky: ['#8fd3ff', '#fff1c9'], far: '#a9d8b8', mid: '#6fbf8a', ground: ['#8fd36e', '#5fa84f'], dirt: '#a6764a', deco: 'flower' },
-  { name: 'Autumn Alley',  sky: ['#ffb58a', '#ffe6b0'], far: '#d99a7a', mid: '#b86a4a', ground: ['#d9a24a', '#a8742f'], dirt: '#7a4a2a', deco: 'leaf' },
-  { name: 'Moonlit Roofs', sky: ['#1d1b4a', '#5a4a9a'], far: '#3a3a78', mid: '#2a2a5a', ground: ['#4a5a9a', '#2f3a78'], dirt: '#1f2550', deco: 'star' },
-  { name: 'Cheese Caves',  sky: ['#ffd36b', '#fff2b0'], far: '#e0b24a', mid: '#c98f2a', ground: ['#f2c94c', '#c9992a'], dirt: '#8a5f1a', deco: 'hole' },
-  { name: 'Frosty Pond',   sky: ['#a8c8ff', '#eaf6ff'], far: '#c9dcf5', mid: '#9ab8e0', ground: ['#e8f4ff', '#bcd8f2'], dirt: '#8aa8c8', deco: 'snow' },
-  { name: 'Sakura Hill',   sky: ['#ffc6e0', '#fff0f5'], far: '#f2a6c4', mid: '#e07aa6', ground: ['#a8e08a', '#6fb85f'], dirt: '#a8765a', deco: 'petal' },
+  { name: 'Sunny Garden',  sky: ['#8fd3ff', '#e6dcb8'], far: '#a9d8b8', mid: '#6fbf8a', ground: ['#8fd36e', '#5fa84f'], dirt: '#a6764a', deco: 'flower', amb: ['#ffffff', '#efc6b8'], grade: ['rgba(255,214,150,.16)', 'rgba(120,200,255,.10)'], weather: 'none', haze: '#cfe4f2' },
+  { name: 'Autumn Alley',  sky: ['#ffb58a', '#ffe6b0'], far: '#d99a7a', mid: '#b86a4a', ground: ['#d9a24a', '#a8742f'], dirt: '#7a4a2a', deco: 'leaf', amb: ['#fff6ec', '#e0b0a0'], grade: ['rgba(255,170,90,.18)', 'rgba(140,90,200,.10)'], weather: 'none', haze: '#ffe3c4' },
+  { name: 'Moonlit Roofs', sky: ['#1d1b4a', '#4a4088'], far: '#3a3a78', mid: '#2a2a5a', ground: ['#5a6ab0', '#3a4590'], dirt: '#2a3266', deco: 'star', amb: ['#a8a8e8', '#7a6cb8'], grade: ['rgba(80,110,255,.22)', 'rgba(255,120,200,.10)'], weather: 'rain', haze: '#8078c4' },
+  { name: 'Cheese Caves',  sky: ['#ffd36b', '#fff2b0'], far: '#e0b24a', mid: '#c98f2a', ground: ['#f2c94c', '#c9992a'], dirt: '#8a5f1a', deco: 'hole', amb: ['#ffe9b8', '#c08a60'], grade: ['rgba(255,190,90,.12)', 'rgba(90,120,220,.14)'], weather: 'drip', haze: '#ffe49a' },
+  { name: 'Frosty Pond',   sky: ['#a8c8ff', '#d2e2f4'], far: '#c9dcf5', mid: '#9ab8e0', ground: ['#e8f4ff', '#bcd8f2'], dirt: '#8aa8c8', deco: 'snow', amb: ['#f6faff', '#c8c8f0'], grade: ['rgba(150,200,255,.16)', 'rgba(255,180,230,.10)'], weather: 'snow', haze: '#d4e2f2' },
+  { name: 'Sakura Hill',   sky: ['#ffc6e0', '#e8d4dc'], far: '#f2a6c4', mid: '#e07aa6', ground: ['#a8e08a', '#6fb85f'], dirt: '#a8765a', deco: 'petal', amb: ['#fff4fa', '#e8b0c8'], grade: ['rgba(255,160,210,.16)', 'rgba(255,230,150,.10)'], weather: 'none', haze: '#e8cddc' },
 ];
 
 // ---- meta progression (saved between runs) ----
@@ -248,3 +255,390 @@ export function mergeRun(stats, run) {
   for (const id in run.lvl3Of) s.lvl3Of[id] = true;
   return s;
 }
+
+// ---------------------------------------------------------------- items (equipped on one cat)
+// fx keys: dmg hp haste crit critMul range (all as fractions), ls lifesteal, dr damage reduction, regen (maxHp per second),
+// thorns (reflect), berserk (extra dmg below half hp), extra (one more shot), burn, slow, stun (chance), coin.
+export const ITEMS = [
+  { id: 'claws', name: 'Sharpened Claws', icon: '🗡️', rarity: 'common', fx: { dmg: 0.20 }, desc: '+20% damage' },
+  { id: 'bell', name: 'Swift Bell', icon: '🔔', rarity: 'common', fx: { haste: 0.18 }, desc: '+18% attack speed' },
+  { id: 'cushion', name: 'Soft Cushion', icon: '🛏️', rarity: 'common', fx: { hp: 0.30 }, desc: '+30% health' },
+  { id: 'clover', name: 'Lucky Clover', icon: '🍀', rarity: 'common', fx: { crit: 0.12 }, desc: '+12% critical chance' },
+  { id: 'monocle', name: 'Eagle Monocle', icon: '🧐', rarity: 'common', fx: { range: 0.25 }, desc: '+25% range' },
+  { id: 'vest', name: 'Fish Scale Vest', icon: '🦺', rarity: 'common', fx: { dr: 0.15 }, desc: 'Takes 15% less damage' },
+  { id: 'spikes', name: 'Spiky Collar', icon: '📿', rarity: 'common', fx: { thorns: 0.5 }, desc: 'Mice that bite this cat take 50% of their damage back' },
+  { id: 'fang', name: 'Vampire Fang', icon: '🦷', rarity: 'rare', fx: { ls: 0.12 }, desc: 'Heals for 12% of the damage it deals' },
+  { id: 'heart', name: 'Healing Charm', icon: '💖', rarity: 'rare', fx: { regen: 0.02 }, desc: 'Heals 2% of its health every second' },
+  { id: 'scarf', name: 'Berserker Scarf', icon: '🧣', rarity: 'rare', fx: { dmg: 0.08, berserk: 0.5 }, desc: '+8% damage, +50% more below half health' },
+  { id: 'whistle', name: 'Twin Whistle', icon: '📯', rarity: 'rare', fx: { extra: 1 }, desc: 'One extra shot, pellet, jump or star with every attack' },
+  { id: 'flamering', name: 'Ember Ring', icon: '💍', rarity: 'rare', fx: { burn: 1 }, desc: 'Attacks set mice on fire' },
+  { id: 'frost', name: 'Frost Charm', icon: '❄️', rarity: 'rare', fx: { slow: 0.3 }, desc: 'Attacks slow mice by 30%' },
+  { id: 'thunder', name: 'Thunder Stone', icon: '🪨', rarity: 'rare', fx: { stun: 0.12 }, desc: '12% chance to stun on every hit' },
+  { id: 'gbell', name: 'Golden Bell', icon: '🛎️', rarity: 'rare', fx: { coin: 0.15 }, desc: '+15% coins from this run' },
+  { id: 'crown', name: 'Cheese Crown', icon: '🧀', rarity: 'epic', fx: { dmg: 0.25, hp: 0.25 }, desc: '+25% damage and +25% health' },
+  { id: 'hourglass', name: 'Time Hourglass', icon: '⏳', rarity: 'epic', fx: { haste: 0.30, range: 0.10 }, desc: '+30% attack speed, +10% range' },
+  { id: 'dragonheart', name: 'Dragon Heart', icon: '🐲', rarity: 'epic', fx: { dmg: 0.30, burn: 1, crit: 0.08 }, desc: '+30% damage, +8% crit, sets mice on fire' },
+  { id: 'feather', name: 'Angel Feather', icon: '🪶', rarity: 'epic', fx: { dr: 0.20, regen: 0.015 }, desc: 'Takes 20% less damage and heals 1.5% per second' },
+  { id: 'mask', name: "Assassin's Mask", icon: '🎭', rarity: 'epic', fx: { crit: 0.20, critMul: 0.8 }, desc: '+20% crit chance and much bigger crits' },
+];
+export const ITEM_BY_ID = Object.fromEntries(ITEMS.map((i) => [i.id, i]));
+export const ITEM_WEIGHT = { common: 10, rare: 5, epic: 1.4 };
+export const MAX_STASH = 12;
+// selling pays coins (scaled a little by wave); forging turns three of one rarity into one of the next
+export const SELL_VALUE = { common: 8, rare: 22, epic: 60 };
+export const FORGE_NEXT = { common: 'rare', rare: 'epic', epic: 'epic' };
+export const FORGE_COUNT = 3;
+export const itemSlots = (lvl) => (lvl >= 3 ? 2 : 1);
+
+// ---------------------------------------------------------------- the Cat Kingdom (spend coins between runs)
+// bonus(level) returns the part of the run bonuses this building gives at that level.
+export const BUILDINGS = [
+  { id: 'dojo', name: 'Training Dojo', icon: '🥋', max: 5, base: 60, blurb: 'All cats hit harder.', bonus: (l) => ({ dmg: 0.04 * l }), text: (l) => `+${4 * l}% damage` },
+  { id: 'beds', name: 'Cozy Cat Beds', icon: '🛏️', max: 5, base: 60, blurb: 'Well rested cats are tougher.', bonus: (l) => ({ hp: 0.05 * l }), text: (l) => `+${5 * l}% health` },
+  { id: 'yarn', name: 'Yarn Workshop', icon: '🧶', max: 5, base: 70, blurb: 'Playful cats attack faster.', bonus: (l) => ({ haste: 0.03 * l }), text: (l) => `+${3 * l}% attack speed` },
+  { id: 'spa', name: 'Healing Springs', icon: '♨️', max: 5, base: 70, blurb: 'Better rests between waves.', bonus: (l) => ({ waveHeal: 0.04 * l, reviveHp: 0.05 * l }), text: (l) => `+${4 * l}% wave healing, fallen cats return with +${5 * l}% health` },
+  { id: 'tower', name: 'Lookout Tower', icon: '🔭', max: 5, base: 80, blurb: 'See farther, aim better.', bonus: (l) => ({ range: 0.04 * l, crit: 0.02 * l }), text: (l) => `+${4 * l}% range, +${2 * l}% crit` },
+  { id: 'shrine', name: 'Lucky Shrine', icon: '⛩️', max: 5, base: 90, blurb: 'Fortune smiles on loot.', bonus: (l) => ({ luck: l }), text: (l) => `Better loot odds, +${4 * l}% chance elites drop a chest` },
+  { id: 'vault', name: 'Treasure Vault', icon: '💰', max: 5, base: 100, blurb: 'Cats find more coins.', bonus: (l) => ({ coinMul: 0.10 * l }), text: (l) => `+${10 * l}% coins every run` },
+  { id: 'tent', name: 'Fortune Teller Tent', icon: '🔮', max: 4, base: 80, blurb: 'Look again at any choice.', bonus: (l) => ({ rerolls: l }), text: (l) => `${l} free reroll${l > 1 ? 's' : ''} per run` },
+  { id: 'stall', name: 'Snack Stall', icon: '🍣', max: 3, base: 90, blurb: 'Start each run with snacks.', bonus: (l) => ({ startSnacks: l }), text: (l) => `Start every run with ${l} free snack${l > 1 ? 's' : ''}` },
+];
+export const BUILDING_BY_ID = Object.fromEntries(BUILDINGS.map((b) => [b.id, b]));
+
+export const emptyKingdom = () => ({ coins: 0, lv: {}, earned: 0, gems: 0, wonders: {} });
+export const buildingLevel = (k, id) => Math.min(BUILDING_BY_ID[id].max, (k && k.lv && k.lv[id]) | 0);
+export function upgradeCost(id, level) {
+  const b = BUILDING_BY_ID[id];
+  return Math.round((b.base * Math.pow(1.75, level)) / 5) * 5;
+}
+export const kingdomLevel = (k) => BUILDINGS.reduce((n, b) => n + buildingLevel(k, b.id), 0);
+export function kingdomBonuses(k) {
+  const m = { dmg: 0, hp: 0, haste: 0, waveHeal: 0, reviveHp: 0, range: 0, crit: 0, luck: 0, coinMul: 0, rerolls: 0, startSnacks: 0, startItem: 0, bench: 0, startPicks: 0, zoomStart: 0, zoomDur: 0, nine: 0 };
+  for (const b of BUILDINGS) {
+    const l = buildingLevel(k, b.id);
+    if (!l) continue;
+    const bo = b.bonus(l);
+    for (const key in bo) m[key] += bo[key];
+  }
+  for (const w of WONDERS) if (k && k.wonders && k.wonders[w.id]) for (const key in w.bonus) m[key] += w.bonus[key];
+  return m;
+}
+export function buyWonder(k, id) {
+  const w = WONDER_BY_ID[id];
+  if (!w || (k.wonders && k.wonders[id]) || (k.gems | 0) < w.cost) return false;
+  k.gems -= w.cost;
+  k.wonders = k.wonders || {};
+  k.wonders[id] = true;
+  return true;
+}
+export function buyUpgrade(k, id) {
+  const l = buildingLevel(k, id), b = BUILDING_BY_ID[id];
+  if (l >= b.max) return false;
+  const c = upgradeCost(id, l);
+  if (k.coins < c) return false;
+  k.coins -= c;
+  k.lv[id] = l + 1;
+  return true;
+}
+
+// coins earned while playing (before the vault bonus)
+export const COIN = { kill: 1, elite: 5, wave: 3, waveGrow: 0.6, nest: 30, nestGrow: 12 };
+
+// ---------------------------------------------------------------- difficulty
+export const DIFFS = {
+  cozy:   { name: 'Cozy',   icon: '🌼', desc: 'Gentler mice, a few less of them. Coins x0.8.',          hp: 0.84, dmg: 0.8, budget: 0.93, coin: 0.8 },
+  normal: { name: 'Normal', icon: '🐱', desc: 'The way it was meant to be played.',                hp: 1,    dmg: 1,    budget: 1,    coin: 1 },
+  hard:   { name: 'Hard',   icon: '🔥', desc: 'Tougher, hungrier mice. Coins x1.5.',                hp: 1.3,  dmg: 1.25, budget: 1.12, coin: 1.5 },
+};
+
+// ---------------------------------------------------------------- synergies (cats that share a tag boost each other)
+export const CAT_TAGS = {
+  tabby: ['blade'], ember: ['fire'], sparky: ['storm'], buckshot: ['gun'], mochi: ['guardian'],
+  yuki: ['storm'], hawkeye: ['gun'], boomer: ['gun'], pudding: ['guardian', 'cheer'], shadow: ['blade'], ronin: ['blade'],
+  merlin: ['magic'], cutlass: ['gun'], sprout: ['cheer'], gizmo: ['tech'], lyra: ['cheer'], nibbles: ['blade'],
+  zeus: ['storm'], volcano: ['fire'], blizzard: ['storm'], dusty: ['gun'], cyber: ['tech'], boo: ['magic'],
+  draco: ['fire'], halo: ['guardian'], mecha: ['gun', 'tech'], hexa: ['magic'], nori: ['cheer'], leo: ['guardian'], nebula: ['magic'],
+};
+// self: applies to the cats with the tag. team: applies to every cat. Tier 1 needs 2 cats, tier 2 needs 3 or more.
+export const SYNERGIES = {
+  fire:     { name: 'Flame Club',    icon: '🔥', tiers: [{ self: { dmg: 0.15 } }, { self: { dmg: 0.35 } }] },
+  storm:    { name: 'Storm Squad',   icon: '⚡',       tiers: [{ self: { haste: 0.12 } }, { self: { haste: 0.28 } }] },
+  gun:      { name: 'Sharpshooters', icon: '🎯', tiers: [{ self: { crit: 0.10 } }, { self: { crit: 0.22, dmg: 0.10 } }] },
+  blade:    { name: 'Blade Pack',    icon: '🗡️', tiers: [{ self: { dmg: 0.12, crit: 0.08 } }, { self: { dmg: 0.25, crit: 0.16 } }] },
+  magic:    { name: 'Mystic Circle', icon: '✨',       tiers: [{ self: { range: 0.18, dmg: 0.10 } }, { self: { range: 0.35, dmg: 0.22 } }] },
+  guardian: { name: 'Guardians',     icon: '🛡️', tiers: [{ team: { dr: 0.06, hp: 0.10 } }, { team: { dr: 0.12, hp: 0.22 } }] },
+  tech:     { name: 'Gearheads',     icon: '⚙️', tiers: [{ team: { dmg: 0.08 } }, { team: { dmg: 0.18 } }] },
+  cheer:    { name: 'Cheer Squad',   icon: '🎵', tiers: [{ team: { regen: 0.01 } }, { team: { regen: 0.02, haste: 0.05 } }] },
+};
+export const synergyText = (tag, tier) => {
+  const t = SYNERGIES[tag].tiers[tier - 1], f = t.self || t.team;
+  const nm = { dmg: 'damage', haste: 'attack speed', crit: 'crit', range: 'range', dr: 'less damage taken', hp: 'health', regen: 'health regen per second' };
+  return Object.entries(f).map(([k, v]) => `+${Math.round(v * 100)}% ${nm[k]}`).join(', ') + (t.self ? ` for ${SYNERGIES[tag].name} cats` : ' for the whole team');
+};
+
+// ---------------------------------------------------------------- routes (pick the road to the next nest)
+export const ROUTES = [
+  { id: 'trail',    name: 'Sunny Trail',   icon: '☀️', desc: 'A calm stroll. Nothing special.', enemyHp: 1, enemyDmg: 1, coin: 1, chest: 0, budget: 1, bossHp: 1, rare: 0, snackExtra: 0, healNow: 0, speed: 1 },
+  { id: 'treasure', name: 'Treasure Road', icon: '💰', desc: 'Coins x1.5 and more chests, but tougher mice.', enemyHp: 1.12, enemyDmg: 1, coin: 1.5, chest: 1.2, budget: 1, bossHp: 1, rare: 0, snackExtra: 0, healNow: 0, speed: 1 },
+  { id: 'danger',   name: 'Danger Pass',   icon: '☠️', desc: 'Much deadlier mice. Coins x1.3 and a better chance of epic loot.', enemyHp: 1.25, enemyDmg: 1.2, coin: 1.3, chest: 0.4, budget: 1.05, bossHp: 1.1, rare: 2, snackExtra: 0, healNow: 0, speed: 1 },
+  { id: 'meadow',   name: 'Cozy Meadow',   icon: '🌼', desc: 'Heal 50% now. Fewer, softer mice. Coins x0.8.', enemyHp: 0.88, enemyDmg: 0.9, coin: 0.8, chest: 0, budget: 0.85, bossHp: 0.9, rare: 0, snackExtra: 0, healNow: 0.5, speed: 1 },
+  { id: 'moon',     name: 'Moon Path',     icon: '🌙', desc: 'Mice move 15% slower, but the nest is 30% tougher. Better loot.', enemyHp: 1, enemyDmg: 1, coin: 1.1, chest: 0.5, budget: 1, bossHp: 1.3, rare: 1, snackExtra: 0, healNow: 0, speed: 0.85 },
+  { id: 'market',   name: 'Snack Market',  icon: '🍣', desc: 'One extra snack to choose from after every wave of this stage.', enemyHp: 1.05, enemyDmg: 1, coin: 1, chest: 0, budget: 1, bossHp: 1, rare: 0, snackExtra: 1, healNow: 0, speed: 1 },
+];
+export const ROUTE_BY_ID = Object.fromEntries(ROUTES.map((r) => [r.id, r]));
+
+// ---------------------------------------------------------------- the daily challenge
+export const DAILY_POOL = [...STARTERS, 'yuki', 'hawkeye', 'boomer', 'pudding', 'shadow', 'ronin', 'merlin', 'cutlass'];
+export const DAILY_MODS = [
+  { id: 'fast',  name: 'Zoomies Day',   icon: '💨', desc: 'Mice move 25% faster.',                         speed: 1.25 },
+  { id: 'glass', name: 'Glass Cats',    icon: '🔮', desc: 'Cats deal +40% damage but have 35% less health.', dmg: 0.4, hp: -0.35 },
+  { id: 'horde', name: 'Horde Day',     icon: '🐀', desc: '40% more mice, each 20% weaker.',                budget: 1.4, enemyHp: 0.8 },
+  { id: 'elite', name: 'Elite Storm',   icon: '👑', desc: 'Elite mice show up from wave 2. Chests drop more.', elite: 0.2, chest: 1 },
+  { id: 'tiny',  name: 'Tiny Tower',    icon: '🧱', desc: 'The tower only holds 4 cats.',                    stack: 4 },
+  { id: 'rich',  name: 'Gold Rush',     icon: '🪙', desc: 'Double coins and double the chests.',            coin: 2, chest: 1 },
+];
+export function dayKey(ms = Date.now()) {
+  const d = new Date(ms), p = (n) => String(n).padStart(2, '0');
+  return `${d.getUTCFullYear()}-${p(d.getUTCMonth() + 1)}-${p(d.getUTCDate())}`;
+}
+export function dayInfo(day) {
+  let h = 2166136261;
+  for (let i = 0; i < day.length; i++) { h ^= day.charCodeAt(i); h = Math.imul(h, 16777619); }
+  h >>>= 0;
+  return { day, seed: h || 1, mod: DAILY_MODS[h % DAILY_MODS.length] };
+}
+
+// ---------------------------------------------------------------- wonders (bought with gems, the second currency)
+export const WONDERS = [
+  { id: 'paw',     name: 'Golden Paw',      icon: '🐾', cost: 4, desc: 'Start every run with a random rare item already equipped.', bonus: { startItem: 1 } },
+  { id: 'bench',   name: 'Big Bench',       icon: '🪑', cost: 3, desc: 'One more bench spot (5 instead of 4).',                    bonus: { bench: 1 } },
+  { id: 'cafe',    name: 'Cat Cafe',        icon: '☕',       cost: 6, desc: 'Pick one extra cat at the start of every run.',             bonus: { startPicks: 1 } },
+  { id: 'academy', name: 'Zoomies Academy', icon: '🎓', cost: 4, desc: 'Zoomies meter starts half full and lasts 3 seconds longer.', bonus: { zoomStart: 50, zoomDur: 3 } },
+  { id: 'coin',    name: 'Lucky Coin',      icon: '🍀', cost: 3, desc: 'One more free reroll in every run.',                        bonus: { rerolls: 1 } },
+  { id: 'spring',  name: 'Phoenix Fountain', icon: '🕊️', cost: 8, desc: 'Every run starts with Nine Lives: the tower rises once after falling.', bonus: { nine: 1 } },
+];
+export const WONDER_BY_ID = Object.fromEntries(WONDERS.map((w) => [w.id, w]));
+
+// ---------------------------------------------------------------- achievements (coins and gems)
+// check gets { stats (after this run), run, save, kingdom }.
+const bld = (k, n) => BUILDINGS.filter((b) => buildingLevel(k, b.id) >= n).length;
+export const ACHIEVEMENTS = [
+  { id: 'first',    name: 'First Catch',      desc: 'Defeat your first mouse.',                    coins: 20,  gems: 0, check: (c) => c.stats.kills >= 1 },
+  { id: 'hunter',   name: 'Mouser',           desc: 'Defeat 1000 mice in total.',                  coins: 80,  gems: 0, check: (c) => c.stats.kills >= 1000 },
+  { id: 'exterm',   name: 'Exterminator',     desc: 'Defeat 10000 mice in total.',                 coins: 300, gems: 2, check: (c) => c.stats.kills >= 10000 },
+  { id: 'nest1',    name: 'Nest Buster',      desc: 'Destroy a nest.',                             coins: 50,  gems: 1, check: (c) => c.stats.bossKills >= 1 },
+  { id: 'nest10',   name: 'Nest Crusher',     desc: 'Destroy 10 nests in total.',                  coins: 150, gems: 1, check: (c) => c.stats.bossKills >= 10 },
+  { id: 'w10',      name: 'Getting Warm',     desc: 'Reach wave 10.',                              coins: 60,  gems: 0, check: (c) => c.stats.bestWave >= 10 },
+  { id: 'w20',      name: 'Cat Hero',         desc: 'Reach wave 20.',                              coins: 120, gems: 1, check: (c) => c.stats.bestWave >= 20 },
+  { id: 'w30',      name: 'Cat Legend',       desc: 'Reach wave 30.',                              coins: 250, gems: 2, check: (c) => c.stats.bestWave >= 30 },
+  { id: 'w50',      name: 'Whisker of Gold',  desc: 'Reach wave 50.',                              coins: 500, gems: 3, check: (c) => c.stats.bestWave >= 50 },
+  { id: 'merge5',   name: 'Merge Master',     desc: 'Merge cats up to Lv 3, 5 times.',             coins: 100, gems: 1, check: (c) => c.stats.lvl3 >= 5 },
+  { id: 'flaw5',    name: 'Not a Scratch',    desc: 'Clear 5 waves in one run without a cat going down.', coins: 80, gems: 0, check: (c) => c.run.flawless >= 5 },
+  { id: 'combo50',  name: 'Combo King',       desc: 'Chain a 50 mouse combo.',                     coins: 80,  gems: 1, check: (c) => (c.run.maxCombo || 0) >= 50 },
+  { id: 'rich',     name: 'Piggy Bank',       desc: 'Earn 5000 coins in total.',                   coins: 100, gems: 1, check: (c) => c.kingdom.earned >= 5000 },
+  { id: 'build15',  name: 'Town Planner',     desc: 'Reach Kingdom level 15.',                     coins: 100, gems: 1, check: (c) => kingdomLevel(c.kingdom) >= 15 },
+  { id: 'allbld',   name: 'Full Village',     desc: 'Build every Kingdom building.',               coins: 150, gems: 2, check: (c) => bld(c.kingdom, 1) >= BUILDINGS.length },
+  { id: 'maxbld',   name: 'Finishing Touch',  desc: 'Fully upgrade one building.',                 coins: 100, gems: 1, check: (c) => BUILDINGS.some((b) => buildingLevel(c.kingdom, b.id) >= b.max) },
+  { id: 'coll15',   name: 'Cat Collector',    desc: 'Unlock 15 cats.',                             coins: 100, gems: 1, check: (c) => c.save.unlocked.length >= 15 },
+  { id: 'coll30',   name: 'Gotta Pet Them All', desc: 'Unlock all 30 cats.',                       coins: 300, gems: 3, check: (c) => c.save.unlocked.length >= 30 },
+  { id: 'loot8',    name: 'Loot Goblin',      desc: 'Collect 8 items in one run.',                 coins: 80,  gems: 1, check: (c) => c.run.items >= 8 },
+  { id: 'hard15',   name: 'Brave Whiskers',   desc: 'Reach wave 15 on Hard.',                      coins: 200, gems: 2, check: (c) => c.run.diff === 'hard' && c.run.wave >= 15 },
+  { id: 'daily1',   name: 'Daily Dabbler',    desc: 'Play the daily challenge.',                   coins: 40,  gems: 1, check: (c) => !!c.run.daily },
+  { id: 'daily20',  name: 'Daily Champion',   desc: 'Reach wave 20 in a daily challenge.',         coins: 200, gems: 2, check: (c) => !!c.run.daily && c.run.wave >= 20 },
+  { id: 'syn3',     name: 'Dream Team',       desc: 'Get a full tier 2 synergy (3 cats of one kind).', coins: 80, gems: 1, check: (c) => (c.run.synMax || 0) >= 3 },
+  { id: 'big1000',  name: 'Big Hitter',       desc: 'Land a single hit of 1000 damage.',           coins: 120, gems: 1, check: (c) => c.run.biggest >= 1000 },
+  { id: 'nine',     name: 'Nine Lives',       desc: 'Be saved by Nine Lives.',                     coins: 60,  gems: 1, check: (c) => (c.run.nine || 0) >= 1 },
+  { id: 'sp5',      name: 'Special Delivery', desc: 'Use 5 special moves in one run.',             coins: 60,  gems: 1, check: (c) => (c.run.specials || 0) >= 5 },
+  { id: 'sp25',     name: 'Showstopper',      desc: 'Use 25 special moves in one run.',            coins: 150, gems: 2, check: (c) => (c.run.specials || 0) >= 25 },
+  { id: 'forge1',   name: 'Blacksmith',       desc: 'Forge three items into a better one.',        coins: 50,  gems: 1, check: (c) => (c.run.forged || 0) >= 1 },
+  { id: 'sell5',    name: 'Yard Sale',        desc: 'Sell 5 items in one run.',                    coins: 50,  gems: 0, check: (c) => (c.run.sold || 0) >= 5 },
+  { id: 'event3',   name: 'Wanderer',         desc: 'Visit 3 event stops in one run.',             coins: 70,  gems: 1, check: (c) => (c.run.events || 0) >= 3 },
+  { id: 'wish',     name: 'Lucky Wish',       desc: 'Win a toss at the Wishing Fountain.',         coins: 70,  gems: 1, check: (c) => (c.run.fountainWins || 0) >= 1 },
+];
+
+// ---------------------------------------------------------------- special moves (tap a charged cat; each cat has one)
+// kind picks the effect in sim.js (useSpecial); pow scales its damage or length
+export const SPECIALS = {
+  tabby:    { kind: 'frenzy', name: 'Claw Frenzy', icon: '🗡️', color: '#ffb35a', pow: 1 },
+  ember:    { kind: 'inferno', name: 'Inferno', icon: '🔥', color: '#ff7a2b', pow: 1 },
+  sparky:   { kind: 'storm', name: 'Static Storm', icon: '⚡', color: '#ffe14d', pow: 1 },
+  buckshot: { kind: 'volley', name: 'Double Barrel', icon: '🎯', color: '#ffd27a', pow: 1 },
+  mochi:    { kind: 'fortress', name: 'Fluffy Fortress', icon: '🛡️', color: '#9ad0ff', pow: 1 },
+  yuki:     { kind: 'freeze', name: 'Deep Freeze', icon: '❄️', color: '#bfeaff', pow: 1 },
+  hawkeye:  { kind: 'snipe', name: 'Headshot', icon: '🎯', color: '#ffffff', pow: 1 },
+  boomer:   { kind: 'barrage', name: 'Bomb Rain', icon: '✨', color: '#ff9a3a', pow: 1 },
+  pudding:  { kind: 'heal', name: 'Mass Healing', icon: '💖', color: '#ff9ec6', pow: 1 },
+  shadow:   { kind: 'volley', name: 'Shadow Dance', icon: '🌙', color: '#b88aff', pow: 1.2 },
+  ronin:    { kind: 'frenzy', name: 'Iaido Rush', icon: '🗡️', color: '#e8eef8', pow: 1.1 },
+  merlin:   { kind: 'meteor', name: 'Meteor', icon: '✨', color: '#c8a0ff', pow: 1 },
+  cutlass:  { kind: 'barrage', name: 'Broadside', icon: '✨', color: '#ffcf6a', pow: 1 },
+  sprout:   { kind: 'toxin', name: 'Toxic Bloom', icon: '☠️', color: '#8be05a', pow: 1 },
+  gizmo:    { kind: 'barrage', name: 'Minefield', icon: '✨', color: '#ffd23f', pow: 1.1 },
+  lyra:     { kind: 'anthem', name: 'Battle Anthem', icon: '🎵', color: '#ffd23f', pow: 1 },
+  nibbles:  { kind: 'frenzy', name: 'Bloodlust', icon: '🦷', color: '#ff6a8a', pow: 1.2 },
+  zeus:     { kind: 'storm', name: 'Judgement', icon: '⚡', color: '#fff27a', pow: 1.3 },
+  volcano:  { kind: 'inferno', name: 'Eruption', icon: '🔥', color: '#ff5a1f', pow: 1.2 },
+  blizzard: { kind: 'freeze', name: 'Absolute Zero', icon: '❄️', color: '#dff4ff', pow: 1.3 },
+  dusty:    { kind: 'volley', name: 'Quick Draw', icon: '🎯', color: '#ffc27a', pow: 1.1 },
+  cyber:    { kind: 'snipe', name: 'Orbital Beam', icon: '⚡', color: '#7bf0ff', pow: 1.2 },
+  boo:      { kind: 'phase', name: 'Phase Out', icon: '💨', color: '#cfd8ff', pow: 1 },
+  draco:    { kind: 'inferno', name: 'Dragon Breath', icon: '🔥', color: '#ff4a2a', pow: 1.4 },
+  halo:     { kind: 'heal', name: 'Holy Light', icon: '💖', color: '#fff6b0', pow: 1.2 },
+  mecha:    { kind: 'barrage', name: 'Missile Rain', icon: '✨', color: '#ff8a5a', pow: 1.2 },
+  hexa:     { kind: 'hex', name: 'Hex', icon: '🔮', color: '#d28aff', pow: 1 },
+  nori:     { kind: 'barrage', name: 'Hot Pot', icon: '✨', color: '#ffb05a', pow: 1 },
+  leo:      { kind: 'frenzy', name: 'Royal Roar', icon: '👑', color: '#ffd23f', pow: 1.3 },
+  nebula:   { kind: 'supernova', name: 'Supernova', icon: '✨', color: '#9a8aff', pow: 1 },
+};
+export const SPECIAL_TIME = 26;       // seconds of fighting to charge a special by itself (kills help)
+
+// ---------------------------------------------------------------- event stops between waves
+export const EVENTS = [
+  { id: 'shop', name: 'Wandering Shop', icon: '💰', desc: 'A travelling cat sells supplies. Coins you spend here are not saved for the Kingdom.' },
+  { id: 'shrine', name: 'Moon Shrine', icon: '🌙', desc: 'Offer something and the shrine may give back more.' },
+  { id: 'rest', name: 'Cozy Campfire', icon: '🔥', desc: 'A warm rest. Free, but only one choice.' },
+  { id: 'deal', name: 'Shady Deal', icon: '🎭', desc: 'A masked mouse offers loot with a catch.' },
+  { id: 'dojo', name: 'Training Yard', icon: '🥋', desc: 'Pick one cat to train for the rest of the run.' },
+  { id: 'picnic', name: 'Cat Picnic', icon: '🍱', desc: 'A blanket full of snacks. Take one, free.' },
+  { id: 'fountain', name: 'Wishing Fountain', icon: '🪙', desc: 'Toss in some coins and make a wish. It may pay back, it may not.' },
+];
+export const EVENT_BY_ID = Object.fromEntries(EVENTS.map((e) => [e.id, e]));
+
+// ================================================================ META 2: cat mastery, challenge ladder, weekly challenge
+// ---- cat mastery: every cat earns XP from use (waves survived in the tower, damage, kills) and levels 1 to 5.
+// Each level above 1 gives that cat a tiny permanent bonus. Level 5 also unlocks the Master's Medal cosmetic for it.
+export const MASTERY_XP = [0, 50, 200, 500, 1000];       // total XP needed for level 1..5
+export const MASTERY_MAX = 5;
+export const MASTERY_BONUS = { dmg: 0.02, hp: 0.01 };    // per level above 1 (level 5 = +8% damage, +4% health)
+export function masteryXp(s) {
+  if (!s) return 0;
+  const waves = s.waves != null ? s.waves : (s.runs || 0) * 4;   // older saves did not count waves
+  return Math.floor(waves * 3 + (s.kills || 0) + (s.dmg || 0) / 500);
+}
+export function masteryLevel(s) {
+  const xp = masteryXp(s);
+  let lv = 1;
+  for (let i = 1; i < MASTERY_XP.length; i++) if (xp >= MASTERY_XP[i]) lv = i + 1;
+  return lv;
+}
+// { lv, xp, from, to, pct } where to is null at the top level
+export function masteryProgress(s) {
+  const xp = masteryXp(s), lv = masteryLevel(s), from = MASTERY_XP[lv - 1], to = lv >= MASTERY_MAX ? null : MASTERY_XP[lv];
+  return { lv, xp, from, to, pct: to == null ? 100 : Math.max(0, Math.min(100, Math.round((100 * (xp - from)) / (to - from)))) };
+}
+export const masteryBonus = (lv) => ({ dmg: MASTERY_BONUS.dmg * Math.max(0, lv - 1), hp: MASTERY_BONUS.hp * Math.max(0, lv - 1) });
+// the map newGame takes: { catId: level } for cats that have reached level 2 or more
+export function masteryMap(catStats) {
+  const out = {};
+  for (const id in catStats || {}) if (CAT_BY_ID[id]) { const lv = masteryLevel(catStats[id]); if (lv >= 2) out[id] = lv; }
+  return out;
+}
+
+// ---- challenge ladder: Nightmare I to V, each tier stacks one more rule on top of the last
+// mod keys: speed (mice speed, multiplies), heal (wave healing multiplier, smallest wins), elite (extra elite chance from wave 3, adds),
+// snack (fewer snack choices, adds), rerolls (fewer free rerolls, adds)
+export const LADDER_RULES = [
+  { tier: 1, name: 'Quick Mice',    icon: '💨', desc: 'Mice move 6% faster.',                        mod: { speed: 1.06 } },
+  { tier: 2, name: 'Lean Times',    icon: '🥫', desc: 'Cats heal half as much after each wave.',      mod: { heal: 0.5 } },
+  { tier: 3, name: 'Royal Guard',   icon: '👑', desc: 'Elite mice show up much more often.',          mod: { elite: 0.1 } },
+  { tier: 4, name: 'Slim Pickings', icon: '🍱', desc: 'One snack choice fewer, and one reroll fewer.', mod: { snack: 1, rerolls: 1 } },
+  { tier: 5, name: 'Sealed Pantry', icon: '🔒', desc: 'No healing after waves and no free rerolls. Mice are faster still.', mod: { heal: 0, rerolls: 9, speed: 1.05 } },
+];
+export const LADDER_TIERS = LADDER_RULES.length;
+// the wave to reach on a tier to unlock the next one (index 0 is Hard, index n is Nightmare n)
+export const LADDER_WAVE = [15, 14, 13, 12, 12];
+const ROMAN = ['', 'I', 'II', 'III', 'IV', 'V'];
+export const ladderId = (tier) => 'nm' + tier;
+export const ladderTier = (diff) => { const m = /^nm([1-5])$/.exec(String(diff)); return m ? +m[1] : 0; };
+export function stackRules(tier) {
+  const out = { speed: 1, heal: 1, elite: 0, snack: 0, rerolls: 0 };
+  for (const r of LADDER_RULES) if (r.tier <= tier) {
+    const m = r.mod;
+    if (m.speed != null) out.speed *= m.speed;
+    if (m.heal != null) out.heal = Math.min(out.heal, m.heal);
+    for (const k of ['elite', 'snack', 'rerolls']) if (m[k]) out[k] += m[k];
+  }
+  return out;
+}
+for (let t = 1; t <= LADDER_TIERS; t++) {
+  const r = LADDER_RULES[t - 1];
+  DIFFS[ladderId(t)] = {
+    name: 'Nightmare ' + ROMAN[t], icon: '☠', tier: t, rule: r,
+    desc: 'Hard plus ' + LADDER_RULES.filter((x) => x.tier <= t).map((x) => x.name).join(', ') + '. Coins x' + (1.5 + 0.25 * t) + '.',
+    hp: 1.3 + 0.03 * t, dmg: 1.25 + 0.02 * t, budget: 1.12 + 0.01 * t, coin: 1.5 + 0.25 * t, ...stackRules(t),
+  };
+}
+export const DIFF_ORDER = ['cozy', 'normal', 'hard', ...LADDER_RULES.map((r) => ladderId(r.tier))];
+// highest Nightmare tier the player may start: Hard must have been cleared first (the 'hard15' trophy), then each tier clears the next
+export function ladderUnlocked(save) {
+  const cleared = Math.max(0, Math.min(LADDER_TIERS, (save && save.ladder) | 0));
+  const hard = cleared > 0 || !!(save && save.ach && save.ach.hard15);
+  return Math.min(LADDER_TIERS, cleared + (hard ? 1 : 0));
+}
+export const diffAllowed = (save, id) => !!DIFFS[id] && ladderTier(id) <= ladderUnlocked(save);
+// the tier a finished run clears, or 0 (Hard is tracked by the trophy)
+export const ladderClears = (run) => { const t = ladderTier(run.diff); return t && run.wave >= LADDER_WAVE[t] ? t : 0; };
+
+// ---- weekly challenge: one seed and three stacked modifiers per ISO week (UTC)
+export const WEEKLY_MODS = [
+  { id: 'fast',  name: 'Zoomies Week',  icon: '💨', desc: 'Mice move 20% faster.',                 speed: 1.2 },
+  { id: 'glass', name: 'Glass Cats',    icon: '🔮', desc: 'Cats deal +30% damage, 30% less health.', dmg: 0.3, hp: -0.3 },
+  { id: 'horde', name: 'Horde Week',    icon: '🐀', desc: '30% more mice, each 15% weaker.',        budget: 1.3, enemyHp: 0.85 },
+  { id: 'elite', name: 'Elite Storm',   icon: '👑', desc: 'Elite mice from wave 2. More chests.',   elite: 0.18, chest: 0.5 },
+  { id: 'tiny',  name: 'Tiny Tower',    icon: '🧱', desc: 'The tower only holds 4 cats.',           stack: 4 },
+  { id: 'brute', name: 'Brute Mice',    icon: '🛡', desc: 'Mice have 30% more health.',             enemyHp: 1.3 },
+  { id: 'poor',  name: 'Tight Purse',   icon: '🪙', desc: 'Coins are halved, chests are rarer.',    coin: 0.5, chest: -0.4 },
+];
+export function weekKey(ms = Date.now()) {
+  const d = new Date(ms), day0 = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
+  const dow = (new Date(day0).getUTCDay() + 6) % 7;                // Monday = 0
+  const thu = day0 + (3 - dow) * 86400000;                          // the Thursday decides which year the week belongs to
+  const y = new Date(thu).getUTCFullYear();
+  const wk = Math.floor((thu - Date.UTC(y, 0, 1)) / (7 * 86400000)) + 1;
+  return `${y}-W${String(wk).padStart(2, '0')}`;
+}
+export const WEEK_RE = /^\d{4}-W(0[1-9]|[1-4]\d|5[0-3])$/;
+export function mergeMods(list) {
+  const m = { id: 'weekly', enemyHp: 1.1 };                          // an iron week: mice are a little tougher before any rule
+  for (const x of list) {
+    for (const k of ['speed', 'budget', 'enemyHp', 'coin']) if (x[k]) m[k] = (m[k] || 1) * x[k];
+    for (const k of ['dmg', 'hp', 'elite', 'chest']) if (x[k]) m[k] = (m[k] || 0) + x[k];
+    if (x.stack) m.stack = Math.min(m.stack || 99, x.stack);
+  }
+  return m;
+}
+export function weekInfo(week) {
+  let h = 2166136261;
+  const s = 'weekly:' + week;
+  for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
+  h >>>= 0;
+  const pool = WEEKLY_MODS.slice(), picks = [];
+  let r = h;
+  while (picks.length < 3) {
+    const i = r % pool.length;
+    picks.push(pool.splice(i, 1)[0]);
+    r = Math.imul(r ^ (r >>> 15), 2246822519) >>> 0;
+  }
+  const mod = mergeMods(picks);
+  mod.name = 'Weekly Gauntlet'; mod.icon = '🏆'; mod.desc = picks.map((p) => p.name).join(', ');
+  return { day: week, week, kind: 'weekly', seed: h || 1, mod, mods: picks };
+}
+
+// one plain sentence per special move kind, for the Cat Dex and the tray tooltips
+export const SPECIAL_TEXT = {
+  frenzy: 'Attacks about twice as fast for a few seconds.',
+  fortress: 'The whole stack takes 70% less damage for 5 seconds.',
+  inferno: 'A wall of fire burns every mouse in front of the stack.',
+  storm: 'Lightning jumps through up to ten mice and stuns them.',
+  volley: 'Fires a burst of shots at random mice.',
+  freeze: 'Freezes every mouse for a few seconds (nests only slow down).',
+  snipe: 'One huge shot at the toughest mouse, ignoring armor.',
+  barrage: 'Seven explosions rain down on the mice.',
+  heal: 'Heals the whole team and wakes up fallen cats.',
+  meteor: 'A giant explosion where the mice are packed tightest.',
+  toxin: 'Poisons every mouse on the field.',
+  anthem: 'The whole team attacks 50% faster for 6 seconds.',
+  hex: 'Cursed mice take 35% more damage for 6 seconds.',
+  phase: 'The stack dodges 60% of attacks for 5 seconds.',
+  supernova: 'A cosmic blast hits every mouse on the field.',
+};

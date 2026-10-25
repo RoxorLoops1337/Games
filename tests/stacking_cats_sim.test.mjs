@@ -173,7 +173,7 @@ t('a nest wave: nest spawns mice, can be destroyed, ends the wave with a cat rew
   spawned = seen.size;
   assert.equal(g.state, 'clear');
   assert.ok(spawned >= 5, 'nest spawned ' + spawned);
-  assert.deepEqual(g.reward, ['cat', 'snack']);
+  assert.deepEqual(g.reward, ['cat', 'item', 'snack']);
   assert.equal(g.run.bossKills, 1);
   assert.ok(minNest < 450, 'the world scrolled the nest toward the stack: ' + minNest);
 });

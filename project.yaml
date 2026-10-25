@@ -40,8 +40,8 @@ naming:
 
 commands:
   # The Godot project lives in pitch_story/, so every command passes --path pitch_story.
-  # build: no export preset exists yet; add a Web preset in the editor, then set it here.
-  build: "[TO BE CONFIGURED]"
-  test: "godot --headless --path pitch_story -s -d --remote-debug tcp://127.0.0.1:0 res://addons/gdUnit4/bin/GdUnitCmdTool.gd -a res://tests --ignoreHeadlessMode"
+  # test: the project uses its own headless runner (tests/run_tests.gd), not gdUnit4.
+  build: "bash pitch_story/build_web.sh"
+  test: "godot --headless --path pitch_story -s tests/run_tests.gd"
   run: "godot --path pitch_story --windowed --resolution 1280x720"
   smoke: "godot --headless --path pitch_story --quit-after 5"

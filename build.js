@@ -91,6 +91,7 @@ const STATIC_PATHS = [
   'ludus_maximus_3d',
   'blockmates',
   'stacking_cats',
+  'graftwork',
   'rustgrift',
   'midnight_mog',
   'drop_the_bass',
@@ -154,6 +155,18 @@ const buildAwesomeFarm = () => {
   } catch (err) {
     console.error(`!! awesome_farm did not build (${err.message}); the rest of the site is unaffected`);
   }
+};
+
+// Pitch Story is a Godot 4 project (pitch_story/). Like Awesome Farm, its web export is kept in git in pitch_story/play/
+// (rebuild with `npm run build:pitchstory`, needs Godot 4.7.1 + web templates, then commit play/). The site serves the repo as
+// it is, so the game runs at /pitch_story/play/ and pitch_story/index.html forwards /pitch_story/ there. The 39 MB engine is
+// shipped gzipped (host limit 25 MiB).
+const buildPitchStory = () => {
+  const play = path.join(REPO, 'pitch_story', 'play');
+  if (!fs.existsSync(path.join(play, 'index.html'))) { console.log('pitch_story: no build in pitch_story/play (npm run build:pitchstory makes one)'); return; }
+  fs.cpSync(play, path.join(DIST, 'pitch_story', 'play'), { recursive: true });
+  fs.copyFileSync(path.join(REPO, 'pitch_story', 'index.html'), path.join(DIST, 'pitch_story', 'index.html'));
+  console.log('copied pitch_story/play → dist/pitch_story/play');
 };
 
 // Beatbox Heroes ESM splitting build (park3d/entry.js -> r3/entry.js + r3/p3-*.js): one tool owns the esbuild options (tools/beatbox_heroes/build_park3d.mjs --esm).
@@ -338,6 +351,7 @@ const minifyClawspire = () => {
   writeArtManifest();
   minifyClawspire();
   buildAwesomeFarm();
+  buildPitchStory();
 
   for (const t of BUNDLES) {
     await esbuild.build(buildOpts(t));

@@ -46,7 +46,7 @@
 
 ## Testing
 
-- **Framework**: gdUnit4
+- **Framework**: custom headless runner (pitch_story/tests/run_tests.gd), not gdUnit4
 - **Minimum Coverage**: [TO BE CONFIGURED]
 - **Required Tests**: Balance formulas, gameplay systems, networking (if applicable)
 
