@@ -217,6 +217,12 @@ export function nestOverlay(ctx, hpFrac, t) {
 }
 
 // ---------------------------------------------------------------- backdrops
+// give a backdrop's canvases back right away (waiting for the garbage collector lets phones run out of canvas memory)
+export function freeBackdrop(bd) {
+  if (!bd) return;
+  for (const k of ['sky', 'far', 'mid', 'gr', 'front', 'rays']) if (bd[k] && bd[k].width) bd[k].width = bd[k].height = 0;
+}
+export function resetWorldArt() { spriteCache.clear(); }
 export function makeBackdrop(theme, seed) {
   const W = 960, H = 540;
   const rnd = mulberry(hash(theme.name) + seed);
@@ -338,6 +344,7 @@ export function makeBackdrop(theme, seed) {
     ge.addColorStop(0, 'rgba(0,0,0,0)'); ge.addColorStop(0.35, 'rgba(0,0,0,1)'); ge.addColorStop(0.65, 'rgba(0,0,0,1)'); ge.addColorStop(1, 'rgba(0,0,0,0)');
     shx.globalCompositeOperation = 'destination-in'; shx.fillStyle = ge; shx.fillRect(0, 0, W, H);
     rx.drawImage(sh, 0, 0);
+    sh.width = sh.height = 0;                 // temp canvases are freed at once: phones cap total canvas memory
   }
   // fade everything out toward the ground so rays never wash over the characters
   rx.globalCompositeOperation = 'destination-in';
@@ -350,6 +357,7 @@ export function makeBackdrop(theme, seed) {
     if (typeof CanvasRenderingContext2D !== 'undefined' && 'filter' in CanvasRenderingContext2D.prototype && px > 0) ox.filter = `blur(${px}px)`;
     ox.drawImage(cv, 0, 0); ox.filter = 'none';
     ox.globalCompositeOperation = 'source-atop'; ox.globalAlpha = hazeA; ox.fillStyle = haze; ox.fillRect(0, 0, W, H);
+    cv.width = cv.height = 0;                 // the sharp source layer is not needed again
     return o;
   };
   const farSoft = soften(far, 2.6, hz, 0.38), midSoft = soften(mid, 0.9, hz, 0.14);

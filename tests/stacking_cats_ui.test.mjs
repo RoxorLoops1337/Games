@@ -113,7 +113,8 @@ t('kingdom scene draws, and taps land on the right building or wonder', () => {
 });
 
 t('every theme builds a backdrop and scrolls', () => {
-  THEMES.forEach((th, i) => { const bd = art.makeBackdrop(th, i); art.drawBackdrop(fakeCtx(), bd, 123.4, 2); art.drawRays(fakeCtx(), bd, 1); art.drawFront(fakeCtx(), bd, 55); });
+  THEMES.forEach((th, i) => { const bd = art.makeBackdrop(th, i); art.drawBackdrop(fakeCtx(), bd, 123.4, 2); art.drawRays(fakeCtx(), bd, 1); art.drawFront(fakeCtx(), bd, 55); art.freeBackdrop(bd); });
+  art.resetWorldArt(); art.freeBackdrop(null);
 });
 
 t('main.js parses and the ids it uses exist in index.html', () => {

@@ -11,7 +11,7 @@ import { dailyScore, fetchBoard, submitScore, rankOf } from './daily.js';
 import { drawBuilding } from './art_kingdom.js';
 import * as S from './sim.js';
 import { drawCat } from './art_cats.js';
-import { enemySprite, nestSprite, nestOverlay, makeBackdrop, drawBackdrop, drawRays, drawFront } from './art_world.js';
+import { enemySprite, nestSprite, nestOverlay, makeBackdrop, drawBackdrop, drawRays, drawFront, freeBackdrop, resetWorldArt } from './art_world.js';
 import { Sfx } from './audio.js';
 import { createPost, ambientFor, lightSprite } from './post.js';
 import { mix, outlineCanvas } from './art_util.js';
@@ -132,7 +132,11 @@ function themeFor(wave) { return (S.stageOf(Math.max(1, wave)) - 1) % THEMES.len
 function setBackdrop(idx) {
   if (idx === bdIdx && bd) return;
   initAmbient(THEMES[idx].deco);
-  if (!backdrops.has(idx)) backdrops.set(idx, makeBackdrop(THEMES[idx], idx));
+  if (!backdrops.has(idx)) {
+    // only the backdrop in use is kept: every theme is ~15 MB of canvases and phones blank them all when memory runs out
+    for (const [k, v] of backdrops) { freeBackdrop(v); backdrops.delete(k); }
+    backdrops.set(idx, makeBackdrop(THEMES[idx], idx));
+  }
   bd = backdrops.get(idx); bdIdx = idx;
 }
 
@@ -1568,7 +1572,15 @@ addEventListener('keydown', (e) => {
   else if (k === 'd') { save.meter = !save.meter; persist(); meterT = 0; }
   else if (k === 'm') { save.sound = !save.sound; sfx.on = save.sound; persist(); }
 });
-document.addEventListener('visibilitychange', () => { if (document.hidden && mode === 'play' && !paused) showPause(); });
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden && mode === 'play' && !paused) showPause();
+  // phones may discard canvas contents while the tab is in the background: rebuild everything that is cached
+  if (!document.hidden) {
+    catSprites.clear(); silSprites.clear(); iconCache.clear(); shadowCache.clear(); glowCache.clear();
+    for (const [k, v] of backdrops) { freeBackdrop(v); backdrops.delete(k); }
+    resetWorldArt(); bd = null; bdIdx = -1;
+  }
+});
 addEventListener('pagehide', () => { if (g && mode !== 'over' && g.wave > 1) commitRun(); });
 
 // ---------------------------------------------------------------- main loop
