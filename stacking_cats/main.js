@@ -4,7 +4,9 @@ import {
   emptyStats, checkUnlocks, mergeRun, unlockProgress,
   ITEM_BY_ID, MAX_STASH, FORGE_NEXT, FORGE_COUNT, itemSlots, BUILDINGS, BUILDING_BY_ID, emptyKingdom, buildingLevel, upgradeCost, buyUpgrade, kingdomLevel,
   DIFFS, CAT_TAGS, SYNERGIES, synergyText, ROUTE_BY_ID, dayKey, dayInfo, WONDERS, WONDER_BY_ID, buyWonder, ACHIEVEMENTS,
+  masteryProgress, masteryMap, masteryBonus, MASTERY_MAX, DIFF_ORDER, LADDER_RULES, LADDER_WAVE, ladderTier, ladderUnlocked, diffAllowed, ladderClears, weekKey, weekInfo,
 } from './cats.js';
+import { COSMETICS, COSMETIC_BY_ID, SLOTS, SLOT_NAMES, lookOf, lookSig, drawLook, drawCosmetic, canWear, buyCosmetic, toggleWear, isOwned } from './cosmetics.js';
 import { createKingdomScene } from './kingdom_scene.js';
 import { encodeSave, decodeSave } from './savecode.js';
 import { dailyScore, fetchBoard, submitScore, rankOf } from './daily.js';
@@ -16,6 +18,9 @@ import { Sfx } from './audio.js';
 import { createPost, ambientFor, lightSprite } from './post.js';
 import { mix, outlineCanvas, rimLight } from './art_util.js';
 import { iconCanvas, installGlyphs } from './art_icons.js';
+import { canInstall, promptInstall, onInstallChange, isIosSafari } from './pwa.js';
+import { buzz, setHaptics } from './haptics.js';
+import { shareRun } from './share.js';
 
 const SAVE_KEY = 'stacking_cats_save_v1';
 const W = S.W, H = S.H, GROUND = S.GROUND, SLOT = S.SLOT;
@@ -26,9 +31,9 @@ const app = $('app'), cv = $('cv'), ctx = cv.getContext('2d'), screenEl = $('scr
 const sfx = new Sfx();
 
 // ---------------------------------------------------------------- save
-const DEFAULT_OPT = { shake: 1, colorblind: false, bigText: false, quality: 'auto', motion: true, sfxVol: 1, musicVol: 0.7, tutorial: true };
+const DEFAULT_OPT = { shake: 1, colorblind: false, bigText: false, quality: 'auto', motion: true, sfxVol: 1, musicVol: 0.7, tutorial: true, haptics: true };
 function freshSave() {
-  return { v: 1, stats: emptyStats(), unlocked: [...STARTERS], sound: true, music: true, tips: {}, kingdom: emptyKingdom(), meter: true, diff: 'normal', name: '', ach: {}, catStats: {}, daily: {}, opt: { ...DEFAULT_OPT } };
+  return { v: 1, stats: emptyStats(), unlocked: [...STARTERS], sound: true, music: true, tips: {}, kingdom: emptyKingdom(), meter: true, diff: 'normal', name: '', ach: {}, catStats: {}, daily: {}, opt: { ...DEFAULT_OPT }, weekly: {}, ladder: 0, owned: [], wardrobe: {} };
 }
 // fill in anything an older save does not have yet (new fields are always additive)
 function adoptSave(s) {
@@ -40,7 +45,8 @@ function adoptSave(s) {
     tips: s.tips || {}, opt: { ...DEFAULT_OPT, ...(s.opt || {}) },
     kingdom: { ...f.kingdom, ...(s.kingdom || {}), lv: { ...((s.kingdom && s.kingdom.lv) || {}) }, wonders: { ...((s.kingdom && s.kingdom.wonders) || {}) } },
     ach: { ...(s.ach || {}) }, catStats: { ...(s.catStats || {}) }, daily: { ...(s.daily || {}) },
-    diff: ['cozy', 'normal', 'hard'].includes(s.diff) ? s.diff : 'normal', name: String(s.name || ''),
+    diff: DIFF_ORDER.includes(s.diff) ? s.diff : 'normal', name: String(s.name || ''),
+    weekly: { ...(s.weekly || {}) }, ladder: Math.max(0, Math.min(5, (s.ladder | 0))), owned: (s.owned || []).filter((id) => COSMETIC_BY_ID[id]), wardrobe: { ...(s.wardrobe || {}) },
   };
 }
 function loadSave() {
@@ -82,6 +88,7 @@ function fit() {
 function applyOptions() {
   const o = save.opt, cl = document.body.classList;
   cl.toggle('cb', !!o.colorblind); cl.toggle('bigtext', !!o.bigText); cl.toggle('nomotion', !o.motion); cl.toggle('touch', coarse);
+  setHaptics(o.haptics !== false && !!o.motion);
   sfx.setVolumes(o.sfxVol, o.musicVol);
   fxCap = o.quality === 'low' ? 180 : 440;
   gfx = o.quality === 'low' ? 0 : 3;
@@ -93,12 +100,15 @@ installGlyphs(app);
 
 // ---------------------------------------------------------------- sprites
 const catSprites = new Map(), silSprites = new Map();
-function catSprite(id, variant = 'open') {
-  const key = variant === 'open' ? id : id + ':' + variant;
+function catSprite(id, variant = 'open', look = null) {
+  // the cache key carries the cosmetics signature, so changing what a cat wears makes a fresh sprite (look overrides it for previews)
+  const sig = look ? (look.head || '') + '.' + (look.face || '') + '.' + (look.neck || '') : lookSig(save, id);
+  const key = (variant === 'open' ? id : id + ':' + variant) + (sig && sig !== '..' ? '|' + sig : '');
   let c = catSprites.get(key);
   if (!c) {
     c = document.createElement('canvas'); c.width = c.height = 240;
     const x = c.getContext('2d'); x.scale(2, 2); drawCat(x, CAT_BY_ID[id], variant);
+    if (sig && sig !== '..') drawLook(x, look || lookOf(save, id), id);
     c = outlineCanvas(rimLight(c, 4, '#fff0c0', 0.45), 3, '#2a1840', 0.8);                // a dark rim so the tower keeps its silhouette on bright backdrops
     catSprites.set(key, c);
   }
@@ -139,22 +149,31 @@ function setBackdrop(idx) {
     backdrops.set(idx, makeBackdrop(THEMES[idx], idx));
   }
   bd = backdrops.get(idx); bdIdx = idx;
+  try { sfx.setTheme(idx); } catch (e) { /* music theme is optional */ }
 }
 
 // ---------------------------------------------------------------- screens (DOM)
 let coachEl = null;
-function hideCoach() { if (coachEl) { coachEl.remove(); coachEl = null; } }
+function hideCoach() {
+  if (coachEl) { if (coachEl._hl) coachEl._hl.classList.remove('tuthl'); coachEl.remove(); coachEl = null; }
+}
 // a friendly speech bubble for the first runs. dir says which way the little tail points.
-function coach(key, html, x, y, dir = 'down') {
+// opt.target: element (or selector in the screen) to ring with a pulse; opt.wait: stay until the real action (no timer).
+function coach(key, html, x, y, dir = 'down', opt = {}) {
   if (!save.opt.tutorial || save.tips[key]) return;
   hideCoach();
   save.tips[key] = true; persist();
+  let hl = opt.target;
+  if (typeof hl === 'string') hl = screenEl.querySelector(hl) || document.querySelector(hl);
+  if (hl && hl.classList) hl.classList.add('tuthl'); else hl = null;
   const el = document.createElement('div');
   el.className = 'coach ' + dir; el.style.left = x + 'px'; el.style.top = y + 'px';
   el.innerHTML = `<span class="cico">&#128049;</span><div>${html}</div><button>Got it</button>`;
   el.querySelector('button').addEventListener('click', (e) => { e.stopPropagation(); sfx.play('ui'); hideCoach(); });
+  if (dir === 'right') { el.style.left = 'auto'; el.style.right = (W - x) + 'px'; el.style.transform = 'none'; }   // anchor to the right edge so the bubble keeps its full width
+  el._hl = hl; el.dataset.key = key;
   app.appendChild(el); coachEl = el;
-  setTimeout(() => { if (coachEl === el) hideCoach(); }, 14000);
+  if (!opt.wait) setTimeout(() => { if (coachEl === el) hideCoach(); }, 14000);
 }
 function setScreen(html, cls = '') {
   hideCoach();
@@ -167,7 +186,7 @@ screenEl.addEventListener('click', (e) => {
   if (!t || t.hasAttribute('disabled')) return;
   sfx.unlock(); sfx.music(sfx.mode);
   const fn = acts[t.dataset.act];
-  if (fn) { sfx.play('ui'); fn(t.dataset, t); }
+  if (fn) { sfx.play('ui'); buzz('ui'); fn(t.dataset, t); }
 });
 let lastHover = null;
 screenEl.addEventListener('pointerover', (e) => { const t = e.target.closest('[data-act]'); if (t && t !== lastHover) { lastHover = t; sfx.play('hover'); } });
@@ -240,8 +259,9 @@ function itemCard(id) {
 
 const thumbURLs = new Map();
 function thumbURL(id) {
-  let u = thumbURLs.get(id);
-  if (!u) { const c = document.createElement('canvas'); c.width = c.height = 48; c.getContext('2d').drawImage(catSprite(id), 0, 0, 48, 48); u = c.toDataURL(); thumbURLs.set(id, u); }
+  const tk = id + '|' + lookSig(save, id);
+  let u = thumbURLs.get(tk);
+  if (!u) { const c = document.createElement('canvas'); c.width = c.height = 48; c.getContext('2d').drawImage(catSprite(id), 0, 0, 48, 48); u = c.toDataURL(); thumbURLs.set(tk, u); }
   return u;
 }
 
@@ -255,13 +275,14 @@ function showTitle() {
     <h1 class="logo">Stacking<span>Cats</span></h1>
     <div class="tag">Stack your cats. Merge them. Smash the mouse nests.</div>
     <div class="row"><button class="btn big" data-act="play">Play</button><button class="btn small grey" data-act="diff" title="Change difficulty">${d.icon} ${d.name}</button></div>
-    <div class="row"><button class="btn green" data-act="kingdom">Kingdom <span class="badge">&#129689; ${num(k.coins)}${k.gems ? ` &middot; &#128142; ${k.gems}` : ''}</span>${can ? '<i class="bang">!</i>' : ''}</button><button class="btn pink" data-act="daily">Daily ${di.mod.icon}${played ? '' : '<i class="bang">!</i>'}</button><button class="btn" data-act="dex">Cat Dex ${save.unlocked.length}/${CATS.length}</button></div>
+    <div class="row"><button class="btn green" data-act="kingdom">Kingdom <span class="badge">&#129689; ${num(k.coins)}${k.gems ? ` &middot; &#128142; ${k.gems}` : ''}</span>${can ? '<i class="bang">!</i>' : ''}</button><button class="btn pink" data-act="daily">Daily ${di.mod.icon}${played ? '' : '<i class="bang">!</i>'}</button><button class="btn pink wk" data-act="weekly">Weekly &#127942;${save.weekly[weekKey()] ? '' : '<i class="bang">!</i>'}</button><button class="btn" data-act="dex">Cat Dex ${save.unlocked.length}/${CATS.length}</button></div>
     <div class="row"><button class="btn grey small" data-act="trophies">Trophies ${trophies}/${ACHIEVEMENTS.length}</button><button class="btn grey small" data-act="settings">Settings</button><button class="btn grey small" data-act="how">How to play</button></div>
     <div class="hint">${total.runs ? `Best wave ${total.bestWave} &middot; ${total.kills} mice defeated &middot; ${total.bossKills} nests destroyed` : 'Tap Play to begin'}</div>`, 'clear');
   acts = {
     play: () => startRun(), dex: () => showDex(showTitle), how: () => showHow(showTitle), kingdom: () => showKingdom(showTitle),
     daily: () => showDaily(showTitle), trophies: () => showTrophies(showTitle), settings: () => showSettings(showTitle),
-    diff: () => { const order = ['cozy', 'normal', 'hard']; save.diff = order[(order.indexOf(save.diff) + 1) % 3]; persist(); showTitle(); },
+    weekly: () => showDaily(showTitle, true),
+    diff: () => showDiffPicker(showTitle),
   };
   setBackdrop(0);
   sfx.music('calm');
@@ -284,7 +305,9 @@ function showSettings(back, msg) {
         ${tog('motion', 'Flashes and motion', o.motion, 'Turn off for calmer screens')}
         ${tog('colorblind', 'Colorblind friendly colors', o.colorblind, 'Blue, yellow and orange bars')}
         ${tog('bigText', 'Larger text', o.bigText)}
+        ${tog('haptics', 'Vibration', o.haptics !== false, 'Short buzzes on hits, if your device has them')}
         ${tog('tutorial', 'Tutorial hints', o.tutorial, 'Little tips during your first runs')}
+        ${canInstall() ? '<div class="setrow"><b>Install app</b><div class="row"><button class="btn small" data-act="install">Install Stacking Cats</button></div><small>Full screen, works offline.</small></div>' : isIosSafari() ? '<div class="setrow"><b>Install app</b><small>Share, then Add to Home Screen for full screen</small></div>' : ''}
         <div class="setrow"><b>Leaderboard name</b><input type="text" maxlength="12" value="${save.name.replace(/"/g, '')}" placeholder="Your name" data-n="1"></div>
         <div class="setrow"><b>Save backup</b><div class="row"><button class="btn small grey" data-act="export">Copy save code</button><button class="btn small grey" data-act="import">Restore from code</button></div>
         <small>${msg || 'Moves your cats, coins and trophies to another device.'}</small></div>
@@ -300,6 +323,7 @@ function showSettings(back, msg) {
       persist(); applyOptions(); showSettings(back);
     },
     tog: (d) => { save.opt[d.k] = !save.opt[d.k]; persist(); applyOptions(); showSettings(back); },
+    install: () => { promptInstall().then(() => showSettings(back)); },
     tipsreset: () => { save.tips = {}; save.opt.tutorial = true; persist(); showSettings(back, 'Tutorial hints will show again.'); },
     export: () => {
       const code = encodeSave(save);
@@ -367,9 +391,9 @@ function showHow(back) {
 }
 
 // ---------------------------------------------------------------- the Cat Dex, with how much each cat has done
-function showDex(back) {
+function showDex(back, sel0) {
   const un = new Set(save.unlocked);
-  let sel = null;
+  let sel = sel0 || null;
   const fav = Object.entries(save.catStats).sort((a, b) => b[1].runs - a[1].runs)[0];
   const draw = () => {
     setScreen(`<h2>Cat Dex</h2><div class="dex">${CATS.map((d) => {
@@ -380,30 +404,31 @@ function showDex(back) {
     <div class="row"><button class="btn" data-act="back">Back</button></div>`);
   };
   draw();
-  acts = { back, tile: (d) => { sel = d.id; draw(); sfx.meow(d.id, 'pick'); } };
+  acts = { back, tile: (d) => { sel = d.id; draw(); sfx.meow(d.id, 'pick'); }, wardrobe: (d) => showWardrobe(() => showDex(back, d.id), d.id) };
 }
 function dexDetail(id, unlocked) {
   const d = CAT_BY_ID[id];
   if (unlocked) {
     const s = save.catStats[id], tags = (CAT_TAGS[id] || []).map((t) => `${SYNERGIES[t].icon} ${SYNERGIES[t].name}`).join(', ');
-    return `<b>${d.name}, ${d.title}</b> (${d.role}). ${d.desc}<br><small>${tags ? `Teams up as: ${tags}. ` : ''}${s ? `Used in ${s.runs} run${s.runs === 1 ? '' : 's'}, best wave ${s.best}, ${num(s.dmg)} total damage, ${num(s.kills)} mice defeated.` : 'Not used yet.'}</small>`;
+    return `<b>${d.name}, ${d.title}</b> (${d.role}). ${d.desc}<br><small>${tags ? `Teams up as: ${tags}. ` : ''}${s ? `Used in ${s.runs} run${s.runs === 1 ? '' : 's'}, best wave ${s.best}, ${num(s.dmg)} total damage, ${num(s.kills)} mice defeated.` : 'Not used yet.'}</small>${masteryHtml(id)}<button class="btn small wbtn" data-act="wardrobe" data-id="${id}">Wardrobe</button>`;
   }
   const p = unlockProgress(d, save.stats);
   return `<b>Locked.</b> To unlock: ${d.unlock.text}${p.need > 1 ? ` (${p.have}/${p.need})` : ''}.<div class="pbar"><i style="width:${(100 * p.have) / p.need}%"></i></div>`;
 }
 
 // ---------------------------------------------------------------- the daily challenge
-function showDaily(back) {
-  const day = dayKey(), di = dayInfo(day), mine = save.daily[day];
-  setScreen(`<h2>Daily Challenge</h2>
-    <div class="dailycols"><div class="dcard"><div class="dic">${di.mod.icon}</div><b>${di.mod.name}</b><p>${di.mod.desc}</p>
-      <small>Everyone plays the same mice today, with the same cats: the starters plus Yuki, Hawkeye, Boomer, Pudding, Shadow, Ronin, Merlin and Cutlass. Kingdom upgrades are switched off, so it is a fair race.</small>
-      <div class="dstat">${mine ? `Your best today: <b>${mine.best}</b> (wave ${mine.wave})` : 'You have not played today yet. A first try earns a gem!'}</div>
-      <div class="row"><button class="btn big" data-act="go">Play daily</button></div></div>
-      <div class="board"><h4>Today's top cats</h4><div id="boardBody" class="bbody">Loading...</div></div></div>
+function showDaily(back, weekly = false) {
+  const day = weekly ? weekKey() : dayKey(), di = weekly ? weekInfo(day) : dayInfo(day), mine = (weekly ? save.weekly : save.daily)[day];
+  const modsHtml = weekly ? `<div class="wmods">${di.mods.map((m) => `<span class="wmod"><i>${m.icon}</i><b>${m.name}</b><small>${m.desc}</small></span>`).join('')}</div>` : '';
+  setScreen(`<h2>${weekly ? 'Weekly Challenge' : 'Daily Challenge'}</h2>
+    <div class="dailycols"><div class="dcard ${weekly ? 'weekly' : ''}"><div class="dic">${di.mod.icon}</div><b>${di.mod.name}</b>${weekly ? modsHtml + '<p class="wiron">Mice have 10% more health on top.</p>' : `<p>${di.mod.desc}</p>`}
+      <small>Everyone plays the same mice ${weekly ? 'all week' : 'today'}, with the same cats: the starters plus Yuki, Hawkeye, Boomer, Pudding, Shadow, Ronin, Merlin and Cutlass. Kingdom upgrades and mastery are switched off, so it is a fair race.</small>
+      <div class="dstat">${mine ? `Your best ${weekly ? 'this week' : 'today'}: <b>${mine.best}</b> (wave ${mine.wave})` : `You have not played ${weekly ? 'this week' : 'today'} yet. A first try earns ${weekly ? '2 gems' : 'a gem'}!`}</div>
+      <div class="row"><button class="btn big" data-act="go">Play ${weekly ? 'weekly' : 'daily'}</button></div></div>
+      <div class="board"><h4>${weekly ? "This week's top cats" : "Today's top cats"}</h4><div id="boardBody" class="bbody">Loading...</div></div></div>
     <div class="row"><button class="btn grey" data-act="back">Back</button></div>`);
-  acts = { back, go: () => startRun({ daily: true }) };
-  fetchBoard(day).then((r) => {
+  acts = { back, go: () => startRun({ daily: !weekly, weekly }) };
+  fetchBoard(day, undefined, undefined, weekly).then((r) => {
     const el = $('boardBody');
     if (!el || !el.isConnected) return;
     el.innerHTML = r.ok ? boardHtml(r.top) : '<small>The leaderboard is offline right now. You can still play!</small>';
@@ -412,6 +437,93 @@ function showDaily(back) {
 function boardHtml(top, me) {
   if (!top.length) return '<small>No scores yet today. Be the first!</small>';
   return top.slice(0, 10).map((e, i) => `<div class="brow ${e.name === (me || save.name) ? 'me' : ''}"><span>${i + 1}</span><b>${e.name}</b><em>wave ${e.wave}</em><strong>${e.score}</strong></div>`).join('');
+}
+
+// ================================================================ META 2 screens: difficulty ladder, mastery notes, wardrobe
+const ROMAN_N = ['', 'I', 'II', 'III', 'IV', 'V'];
+function metaNotes(r) {
+  const bits = [];
+  if (r.ladderClear) bits.push(`&#9760; Nightmare ${ROMAN_N[r.ladderClear]} cleared!${r.ladderClear < 5 ? ` Nightmare ${ROMAN_N[r.ladderClear + 1]} is open. &#128142; +1` : ' You beat the whole ladder!'}`);
+  for (const m of r.mastered || []) bits.push(`&#9733; ${CAT_BY_ID[m.id].name} reached Mastery ${m.lv}${m.lv >= MASTERY_MAX ? ' and earned the Master\'s Medal' : ''}`);
+  return bits.length ? `<div class="metanotes">${bits.map((b) => `<span>${b}</span>`).join('')}</div>` : '';
+}
+function diffLockText(id) {
+  const t = ladderTier(id);
+  return t === 1 ? `Reach wave ${LADDER_WAVE[0]} on Hard` : `Reach wave ${LADDER_WAVE[t - 1]} on Nightmare ${ROMAN_N[t - 1]}`;
+}
+function showDiffPicker(back) {
+  const card = (id) => {
+    const d = DIFFS[id], t = ladderTier(id), ok = diffAllowed(save, id), on = save.diff === id;
+    const rules = t ? LADDER_RULES.filter((r) => r.tier <= t).map((r) => `<span class="drule ${r.tier === t ? 'new' : ''}" title="${r.name}"><i>${r.icon}</i>${r.tier === t ? `<b>${r.name}</b>` : ''}</span>`).join('') : '';
+    const body = t ? `<small>${d.rule.desc}</small>` : `<small>${d.desc}</small>`;
+    return `<button class="dcell ${on ? 'on' : ''} ${ok ? '' : 'locked'} ${t ? 'nm' : ''}" data-act="${ok ? 'pick' : 'locked'}" data-id="${id}"><span class="dci">${ok ? d.icon : '&#128274;'}</span><b>${d.name}</b>${rules ? `<div class="drules">${rules}</div>` : ''}${body}${ok ? '' : `<em>${diffLockText(id)}</em>`}${t && ok ? `<em class="coinx">Coins x${d.coin}</em>` : ''}</button>`;
+  };
+  setScreen(`<h2>Difficulty</h2><p class="sub">Clear Hard, then climb the Nightmare ladder. Each tier keeps every rule below it.</p>
+    <div class="dgrid">${DIFF_ORDER.map(card).join('')}</div>
+    <div class="row"><button class="btn" data-act="back">Done</button></div>`);
+  acts = {
+    back, locked: () => {},
+    pick: (d) => { save.diff = d.id; persist(); showDiffPicker(back); },
+  };
+}
+
+function trimSpritePreviews() {
+  for (const k of [...catSprites.keys()]) {
+    const i = k.indexOf('|');
+    if (i < 0) continue;
+    const id = k.slice(0, i).split(':')[0];
+    if (k.slice(i + 1) !== lookSig(save, id)) catSprites.delete(k);
+  }
+}
+const starsHtml = (lv) => Array.from({ length: MASTERY_MAX }, (_, i) => `<i class="st ${i < lv ? 'on' : ''}">&#9733;</i>`).join('');
+function masteryHtml(id) {
+  const p = masteryProgress(save.catStats[id]), b = masteryBonus(p.lv);
+  return `<div class="mast"><b>Mastery</b><span class="stars">${starsHtml(p.lv)}</span><div class="mbar"><i style="width:${p.pct}%"></i></div>
+    <small>${p.to == null ? `${num(p.xp)} XP, max level` : `${num(p.xp)} / ${num(p.to)} XP`}${p.lv > 1 ? ` &middot; +${Math.round(b.dmg * 100)}% damage, +${Math.round(b.hp * 100)}% health` : ' &middot; +2% damage per level'}${p.lv >= MASTERY_MAX ? ' &middot; Medal unlocked' : ''}</small></div>`;
+}
+function showWardrobe(back, startCat) {
+  const list = CATS.filter((c) => save.unlocked.includes(c.id));
+  let cat = startCat && save.unlocked.includes(startCat) ? startCat : list[0].id, slot = 'head';
+  const mlv = () => masteryProgress(save.catStats[cat]).lv;
+  const draw = () => {
+    const look = lookOf(save, cat), k = save.kingdom, lv = mlv();
+    const items = COSMETICS.filter((c) => c.slot === slot);
+    const tile = (c) => {
+      const worn = look[c.slot] === c.id, can = canWear(save, c.id, lv), afford = k.coins >= c.cost;
+      const act = c.mastery ? (can ? 'Wear' : `Mastery ${c.mastery}`) : can ? (worn ? 'Take off' : 'Wear') : `Buy &#129689; ${c.cost}`;
+      const dis = c.mastery ? !can : (!can && !afford);
+      return `<div class="witem ${worn ? 'worn' : ''}"><canvas width="120" height="120" data-try="${c.id}"></canvas><b>${c.name}</b><small>${c.desc}</small><button class="btn small ${can ? (worn ? 'grey' : 'green') : afford ? '' : 'grey'}" data-act="item" data-id="${c.id}" ${dis ? 'disabled' : ''}>${worn ? 'Worn' : act}</button></div>`;
+    };
+    setScreen(`<h2>Wardrobe</h2><div class="kcoins"><span>&#129689;</span> <b>${num(k.coins)}</b> <small>Cosmetics are only for show. Every cat wears one hat, one pair of glasses and one neck piece.</small></div>
+      <div class="wstrip">${list.map((c) => `<button class="wcat ${c.id === cat ? 'sel' : ''}" data-act="cat" data-id="${c.id}" title="${c.name}"><canvas width="48" height="48" data-cat="${c.id}"></canvas></button>`).join('')}</div>
+      <div class="wcols"><div class="wprev"><canvas width="240" height="240" data-cat="${cat}"></canvas><b>${CAT_BY_ID[cat].name}</b>${masteryHtml(cat)}
+        <div class="wworn">${SLOTS.map((s) => `<span>${SLOT_NAMES[s]}: ${look[s] ? COSMETIC_BY_ID[look[s]].name : 'none'}</span>`).join('')}</div>
+        <button class="btn small grey" data-act="strip" ${look.head || look.face || look.neck ? '' : 'disabled'}>Take everything off</button></div>
+        <div class="wshop"><div class="seg">${SLOTS.map((s) => `<button class="${s === slot ? 'on' : ''}" data-act="slot" data-id="${s}">${SLOT_NAMES[s]}</button>`).join('')}</div>
+          <div class="wgrid">${items.map(tile).join('')}</div></div></div>
+      <div class="row"><button class="btn" data-act="back">Back</button></div>`, 'wardrobe');
+    screenEl.querySelectorAll('canvas[data-try]').forEach((cv2) => {
+      const c = COSMETIC_BY_ID[cv2.dataset.try], spr = catSprite(cat, 'open', { ...look, [c.slot]: c.id });
+      const x = cv2.getContext('2d'), crop = c.slot === 'neck' ? [30, 70, 180, 160] : [24, 8, 192, 192];
+      x.drawImage(spr, crop[0], crop[1], crop[2], crop[3], 0, 0, 120, 120);
+    });
+  };
+  draw();
+  acts = {
+    back: () => { trimSpritePreviews(); back(); },
+    cat: (d) => { cat = d.id; trimSpritePreviews(); draw(); sfx.meow(cat, 'pick'); },
+    slot: (d) => { slot = d.id; draw(); },
+    strip: () => { delete save.wardrobe[cat]; persist(); trimSpritePreviews(); draw(); },
+    item: (d) => {
+      const c = COSMETIC_BY_ID[d.id];
+      if (!canWear(save, d.id, mlv())) {
+        if (!buyCosmetic(save, d.id)) return;
+        sfx.play('upgrade'); toast(`${c.name} bought!`);
+      }
+      toggleWear(save, cat, d.id, mlv());
+      persist(); trimSpritePreviews(); draw();
+    },
+  };
 }
 
 // ---------------------------------------------------------------- the Cat Kingdom: a village you can tap
@@ -432,12 +544,13 @@ function showKingdom(back, selected) {
   setScreen(`<h2>Cat Kingdom <small class="klv">Lv ${kingdomLevel(k)}</small></h2>
     <div class="kcoins"><span>&#129689;</span> <b>${num(k.coins)}</b> <span class="gem">&#128142;</span> <b>${k.gems}</b> <small>${num(k.earned)} coins earned in total &middot; gems come from trophies and nests</small></div>
     <canvas id="kscene" width="1840" height="472"></canvas><div id="kdetail">${detail()}</div>
-    <div class="row"><button class="btn" data-act="back">Back</button></div>`, 'kingdom');
+    <div class="row"><button class="btn" data-act="back">Back</button><button class="btn pink" data-act="wardrobe">Wardrobe</button></div>`, 'kingdom');
   const refresh = () => { const el = $('kdetail'); if (el) el.innerHTML = detail(); };
   kScene = createKingdomScene($('kscene'), () => save.kingdom, (hit) => { sel = hit; sfx.play('ui'); refresh(); });
   if (sel) kScene.select(sel);
   acts = {
     back: () => { if (kScene) { kScene.stop(); kScene = null; } back(); },
+    wardrobe: () => { if (kScene) { kScene.stop(); kScene = null; } showWardrobe(() => showKingdom(back)); },
     buy: (d) => {
       const b = BUILDING_BY_ID[d.id];
       if (buyUpgrade(save.kingdom, d.id)) {
@@ -460,8 +573,10 @@ function showKingdom(back, selected) {
 let startTotal = START_CATS, maxComboRun = 0;
 function startRun(opts = {}) {
   sfx.unlock();
-  const daily = opts.daily ? dayInfo(dayKey()) : null;
-  g = S.newGame({ seed: (Math.random() * 2147483647) | 0, unlocked: [...save.unlocked], kingdom: save.kingdom, difficulty: save.diff, daily });
+  const daily = opts.weekly ? weekInfo(weekKey()) : opts.daily ? dayInfo(dayKey()) : null;
+  if (!diffAllowed(save, save.diff)) save.diff = 'hard';
+  g = S.newGame({ seed: (Math.random() * 2147483647) | 0, unlocked: [...save.unlocked], kingdom: save.kingdom, difficulty: save.diff, daily, mastery: masteryMap(save.catStats) });
+  if (opts.weekly) g.run.weekly = true;
   startTotal = START_CATS + g.meta.startPicks;
   runCommitted = false; pickN = 0; fx.length = 0; speed = 1; paused = false; rewardChoices = null;
   combo = 0; maxComboRun = 0; coinShown = 0; dpsHist.length = 0; sfx.setIntensity(0);
@@ -475,7 +590,7 @@ function showPickStart() {
   setScreen(`<h2>Choose friend ${pickN + 1} of ${startTotal}</h2><p class="sub">${pickN === 0 ? 'Every cat attacks differently. Pick the first one for your tower.' : 'Pick a friend to stack on top. Choosing the same cat again merges them!'}</p>
     <div class="cards">${rewardChoices.map((id) => catCard(id, { ribbon: owns(id) ? 'MERGE!' : '', gain: pickN > 0 })).join('')}</div>
     <div class="row hint">${rerollBtn()}</div>`);
-  coach('c1', 'Tap a cat to pick it. Every cat fights in its own way, and you will find more along the way!', 480, 440, 'up');
+  coach('c1', 'Step 1: tap a cat to pick it.', 480, 440, 'up', { target: '.card' });
   acts = {
     pickCat: (d) => {
       const prev = S.synergyState(g);
@@ -506,7 +621,7 @@ function beginWave() {
   sfx.play(boss ? 'boss' : 'wave');
   sfx.music(boss ? 'boss' : 'fight');
   dpsHist.length = 0;
-  if (g.wave === 1) setTimeout(() => { if (mode === 'play') coach('c2', 'The bottom cat takes the hits. Tough cats go low, shooters go high!', 250, 120, 'left'); }, 2600);
+  if (g.wave === 1) setTimeout(() => { if (mode === 'play' && !(coachEl && coachEl.dataset.key === 'c5')) coach('c2', 'The bottom cat takes the hits. Tough cats go low, shooters go high!', 250, 120, 'left'); }, 2600);
 }
 
 function onClear() {
@@ -518,13 +633,14 @@ function onClear() {
   confetti(g.towerX + 40, GROUND - 120, g.bossWave ? 60 : 26, 380);
   queue = g.reward.slice();
   if (g.bossWave) queue.splice(queue.length - 1, 0, 'route');
+  if (S.eventDue(g)) queue.push('event');
   if (g.report && g.report.chests) toast(`Opening ${g.report.chests} loot chest${g.report.chests > 1 ? 's' : ''}!`);
 }
 function nextReward() {
   const r = queue.shift();
   rewardChoices = null;
   if (!r) { beginWave(); return; }
-  if (r === 'cat') showCatReward(); else if (r === 'item') showItemReward(); else if (r === 'route') showRouteReward(); else showSnackReward();
+  if (r === 'event') showEvent(); else if (r === 'cat') showCatReward(); else if (r === 'item') showItemReward(); else if (r === 'route') showRouteReward(); else showSnackReward();
 }
 
 function reportHtml() {
@@ -555,6 +671,50 @@ function notifySyn(prev) {
     toast(`${SYNERGIES[t].icon} ${SYNERGIES[t].name} ${now.tiers[t] === 2 ? 'MAX' : 'active'}: ${synergyText(t, now.tiers[t])}`);
     sfx.play('synergy'); puff(S.TOWER_X, 330, 16, '#ffd23f', 150, 0.7, 4); zpunch = Math.max(zpunch, 0.015);
   }
+}
+
+// ---- event stop between waves: a shop, a shrine, a rest, a shady deal or some training
+function eventOptionHtml(o, i) {
+  const price = o.cost > 0 ? `<div class="evp ${o.cost > g.run.coins ? 'no' : ''}">&#129689; ${o.cost}</div>` : '';
+  const cls = `card ev ${o.sold ? 'sold' : ''} ${o.cost > g.run.coins && !o.sold ? 'poor' : ''}`;
+  const head = (ic, name, desc, extra = '') => `<div class="${cls}" data-act="evpick" data-i="${i}"><div class="ic">${ic}</div><h3>${name}</h3><p>${desc}</p>${extra}${price}${o.sold ? '<div class="evsold">Sold</div>' : ''}</div>`;
+  const it = o.item ? ITEM_BY_ID[o.item] : null;
+  switch (o.k) {
+    case 'buy': return head(it.icon, it.name, it.desc, `<div class="rar ${it.rarity}">${it.rarity}</div>`);
+    case 'heal': return head('&#128150;', o.cost ? 'Healing Snack' : 'Warm Rest', `Heal the whole team ${Math.round(o.pct * 100)}% and wake fallen cats.`);
+    case 'reroll': return head('&#128302;', o.bonusCoins ? 'Stay up late' : 'Reroll Token', o.bonusCoins ? `+1 reroll and +${o.bonusCoins} coins.` : '+1 reroll for later choices.');
+    case 'blood': return head(it.icon, 'Offer blood', `Every cat loses ${Math.round(o.hp * 100)}% health. The shrine gives <b>${it.name}</b> (${it.desc}).`);
+    case 'gamble': return head(it.icon, 'Make a wish', `${Math.round(o.chance * 100)}% chance of <b>${it.name}</b> (${it.desc}). Coins are gone either way.`);
+    case 'curse': return head(it.icon, it.name, `${it.desc}. <b class="warn">Mice bite ${Math.round(o.hurt * 100)}% harder for the rest of the run.</b>`);
+    case 'train': { const c = S.findCat(g, o.uid); return head(`<img class="thumb" src="${thumbURL(c.id)}" alt="">`, CAT_BY_ID[c.id].name, `Trains hard: +${Math.round(o.bonus * 100)}% damage for the rest of the run.`); }
+    default: return head('&#128062;', 'Move on', 'Walk away. Nothing happens.');
+  }
+}
+function showEvent() {
+  const ev = g.event || S.rollEvent(g);
+  if (!ev) { nextReward(); return; }
+  mode = 'reward';
+  const draw = () => {
+    setScreen(`<h2>${ev.icon} ${ev.name}</h2><p class="sub">${ev.desc}</p>
+      <div class="kcoins evcoins"><span>&#129689;</span><b>${num(g.run.coins)}</b><small>run coins</small></div>
+      <div class="cards evcards">${ev.options.map(eventOptionHtml).join('')}</div>
+      <div class="row hint"><button class="btn small grey" data-act="tower">Arrange tower</button><button class="btn ${ev.done ? 'green' : ''}" data-act="evdone">${ev.done ? 'Continue' : 'Leave'}</button></div>`, 'wide');
+  };
+  const finish = () => { S.endEvent(g); if (S.overflow(g) > 0) showTower(nextReward); else nextReward(); };
+  draw();
+  acts = {
+    evpick: (d) => {
+      if (ev.done) return;
+      const r = S.chooseEvent(g, +d.i);
+      if (!r.ok) { sfx.play('nope'); toast(r.msg); return; }
+      sfx.play('chest'); toast(r.msg); puff(S.TOWER_X, 330, 10, '#ffd23f', 120, 0.5);
+      if (r.again) { draw(); return; }
+      draw();
+    },
+    tower: () => showTower(() => showEvent()),
+    evdone: finish,
+  };
+  coach('c8', 'A quiet stop. Spend coins or take a chance. Coins spent here are not saved for the Kingdom!', 480, 20);
 }
 
 function showRouteReward() {
@@ -696,7 +856,7 @@ function showTower(back, opt = {}) {
         <h4>Backpack <span class="${over ? 'warn' : ''}">${g.stash.length}/${MAX_STASH}</span></h4><div class="bagrow">${bag}</div></div></div></div>
       <div class="tfoot"><div class="detail slim ${over ? 'bad' : ''}"><span>${msg}</span></div>${acts2}<button class="btn big2" data-act="done" ${over ? 'disabled' : ''}>Done</button></div>`, 'wide arr');
     if (selItem != null) coach('c6', 'Now tap a cat to equip it. The green numbers show how much stronger that cat gets!', 790, 6);
-    else coach('c4', 'Tap a cat, then another one to swap places. Two equal cats merge into one stronger cat!', 790, 6);
+    else coach('c4', 'Step 3: tap a cat, then another to swap. Two equal cats merge!', 790, 6, 'down', { target: '.slot.has', wait: true });
   };
   draw();
   acts = {
@@ -735,7 +895,7 @@ function showTower(back, opt = {}) {
       else if (sel === cat.uid) sel = null;
       else {
         const a = S.findCat(g, sel);
-        if (a.id === cat.id && a.lvl === cat.lvl && a.lvl < 3) { S.mergeCats(g, a.uid, cat.uid); sfx.play('merge'); toast(`Merged! ${CAT_BY_ID[a.id].name} is Lv ${a.lvl}`); } else S.swapCats(g, sel, cat.uid);
+        if (a.id === cat.id && a.lvl === cat.lvl && a.lvl < 3) { S.mergeCats(g, a.uid, cat.uid); sfx.play('merge'); buzz('merge'); toast(`Merged! ${CAT_BY_ID[a.id].name} is Lv ${a.lvl}`); } else S.swapCats(g, sel, cat.uid);
         sel = null;
       }
       notifySyn(prevSyn);
@@ -746,8 +906,8 @@ function showTower(back, opt = {}) {
 
 function recordCatStats(run) {
   const seen = new Set([...g.cats, ...g.bench].map((c) => c.id));
-  const row = (id) => save.catStats[id] || (save.catStats[id] = { runs: 0, dmg: 0, kills: 0, best: 0 });
-  for (const id of seen) { const s = row(id); s.runs++; s.best = Math.max(s.best, run.wave); }
+  const row = (id) => save.catStats[id] || (save.catStats[id] = { runs: 0, dmg: 0, kills: 0, best: 0, waves: 0 });
+  for (const id of seen) { const s = row(id); s.runs++; s.best = Math.max(s.best, run.wave); s.waves = (s.waves != null ? s.waves : s.runs * 4) + run.wave; }   // waves feed cat mastery
   for (const [id, v] of Object.entries(run.byCat)) { const s = row(id); s.dmg += v.dmg; s.kills += v.kills; }
 }
 function commitRun() {
@@ -763,13 +923,19 @@ function commitRun() {
   save.kingdom.earned += run.earned;
   run.gems = Math.floor(save.stats.bossKills / 3) - Math.floor(oldNests / 3);
   if (run.daily) {
-    const score = dailyScore(run), prev = save.daily[run.daily];
-    if (!prev) run.gems += 1;
-    if (!prev || score > prev.best) save.daily[run.daily] = { best: score, wave: run.wave };
+    const book = run.weekly ? save.weekly : save.daily;
+    const score = dailyScore(run), prev = book[run.daily];
+    if (!prev) run.gems += run.weekly ? 2 : 1;
+    if (!prev || score > prev.best) book[run.daily] = { best: score, wave: run.wave };
     run.dailyScore = score;
   }
+  const lt = ladderClears(run);                       // Nightmare ladder: reaching the wave on a tier unlocks the next one
+  if (lt && lt > (save.ladder | 0)) { save.ladder = lt; run.ladderClear = lt; run.gems += 1; }
   save.kingdom.gems += run.gems;
+  const lvBefore = {};
+  for (const id in run.byCat) lvBefore[id] = masteryProgress(save.catStats[id]).lv;
   recordCatStats(run);
+  run.mastered = Object.keys(lvBefore).filter((id) => masteryProgress(save.catStats[id]).lv > lvBefore[id]).map((id) => ({ id, lv: masteryProgress(save.catStats[id]).lv }));
   run.ach = checkAch(run);
   for (const a of run.ach) run.gems += a.gems;
   persist();
@@ -785,17 +951,23 @@ function showOver(fresh) {
   const r = g.run, best = save.stats.bestWave, k = save.kingdom, d = DIFFS[r.diff] || DIFFS.normal;
   const by = Object.entries(r.byCat).sort((a, b) => b[1].dmg - a[1].dmg), tot = Math.max(1, by.reduce((a, [, v]) => a + v.dmg, 0)), mx = Math.max(1, by[0] ? by[0][1].dmg : 1);
   const bars = by.slice(0, 6).map(([id, v], i) => `<div class="rb ${i === 0 ? 'mvp' : ''}"><img src="${thumbURL(id)}" alt=""><b>${CAT_BY_ID[id].name}</b><div class="bar"><i style="width:${(100 * v.dmg) / mx}%"></i></div><span>${num(v.dmg)} <em>${Math.round((100 * v.dmg) / tot)}%</em></span></div>`).join('');
-  const dailyBox = r.daily ? `<div class="dailybox" id="dailyBox"><b>${dayInfo(r.daily).mod.icon} Daily score ${r.dailyScore}</b><span id="dailyMsg"></span></div>` : '';
+  const dailyBox = r.daily ? `<div class="dailybox" id="dailyBox"><b>${(r.weekly ? weekInfo(r.daily) : dayInfo(r.daily)).mod.icon} ${r.weekly ? 'Weekly' : 'Daily'} score ${r.dailyScore}</b><span id="dailyMsg"></span></div>` : '';
   const trophies = (r.ach || []).length ? `<div class="trow">${r.ach.map((a) => `<span class="tchip">&#127942; ${a.name}</span>`).join('')}</div>` : '';
-  setScreen(`<h2>The stack has fallen</h2><p class="sub">${r.wave >= best && r.wave > 1 ? 'A new personal best!' : 'The mice cheer. Next time you will get them.'} <small>${d.icon} ${d.name}${r.daily ? ' &middot; Daily' : ''}</small></p>
+  setScreen(`<h2>The stack has fallen</h2><p class="sub">${r.wave >= best && r.wave > 1 ? 'A new personal best!' : 'The mice cheer. Next time you will get them.'} <small>${d.icon} ${d.name}${r.daily ? (r.weekly ? ' &middot; Weekly' : ' &middot; Daily') : ''}</small></p>${metaNotes(r)}
     <div class="overcols"><div><div class="stats"><div><b>${r.wave}</b>Wave reached</div><div><b>${r.kills}</b>Mice defeated</div><div><b>${r.bossKills}</b>Nests destroyed</div><div><b>${r.merges}</b>Merges</div>
       <div><b>${num(r.dmg)}</b>Damage dealt</div><div><b>${num(r.biggest)}</b>Biggest hit</div><div><b>${num(r.taken)}</b>Damage taken</div><div><b>${num(r.healed)}</b>Healed</div></div>
       <div class="earn">&#129689; <b id="earn" data-to="${r.earned}">0</b> <span>coins earned${r.gems ? ` &middot; &#128142; +${r.gems}` : ''}</span><small>Total ${num(k.coins)}</small></div>${dailyBox}</div>
       <div class="rbars big"><div class="rh"><b>Who did the work</b></div>${bars || '<small>No damage dealt</small>'}</div></div>
     ${trophies}${fresh.length ? `<p class="sub">New friends unlocked!</p><div class="newcats">${fresh.map((id) => catCard(id, { act: 'none' })).join('')}</div>` : ''}
-    <div class="row"><button class="btn big" data-act="again">Try again</button><button class="btn green" data-act="kingdom">Kingdom</button><button class="btn grey" data-act="title">Title</button></div>`, 'wide');
+    <div class="row"><button class="btn big" data-act="again">Try again</button><button class="btn green" data-act="kingdom">Kingdom</button><button class="btn small" data-act="share">Share</button><button class="btn grey" data-act="title">Title</button></div>`, 'wide');
   acts = {
-    again: () => startRun({ daily: !!r.daily }), title: () => { g = null; showTitle(); }, kingdom: () => showKingdom(() => showOver(fresh)), none: () => {},
+    share: (d, el) => {
+      const ids = (g && g.cats && g.cats.length ? g.cats.map((c) => c.id) : Object.keys(r.byCat));
+      if (el) el.textContent = '...';
+      shareRun({ wave: r.wave, kills: r.kills, bossKills: r.bossKills, biggest: r.biggest, diff: (DIFFS[r.diff] || DIFFS.normal).name, daily: !!r.daily, cats: ids })
+        .then((res) => { if (el && el.isConnected) el.textContent = 'Share'; if (res === 'downloaded') toast('Picture saved!'); });
+    },
+    again: () => startRun({ daily: !!r.daily && !r.weekly, weekly: !!r.weekly }), title: () => { g = null; showTitle(); }, kingdom: () => showKingdom(() => showOver(fresh)), none: () => {},
     sendscore: () => { const inp = screenEl.querySelector('input[data-n]'); if (inp) { save.name = inp.value.replace(/[^\w \-.']/g, '').slice(0, 12); persist(); } postDaily(); },
   };
   if ((r.ach || []).length) sfx.play('achieve');
@@ -817,9 +989,9 @@ function postDaily() {
   }
   if (r.sent) { msg.textContent = r.sent; return; }
   msg.textContent = 'Sending your score...';
-  submitScore({ name: save.name, score: r.dailyScore, wave: r.wave, kills: r.kills, day: r.daily }).then((res) => {
+  submitScore({ name: save.name, score: r.dailyScore, wave: r.wave, kills: r.kills, ...(r.weekly ? { type: 'weekly', week: r.daily } : { day: r.daily }) }).then((res) => {
     const el = $('dailyMsg');
-    r.sent = res.ok ? `You are #${rankOf(res.top, save.name) || '?'} today!` : res.status === 429 ? 'Slow down a little, then try again.' : 'Could not reach the leaderboard.';
+    r.sent = res.ok ? `You are #${rankOf(res.top, save.name) || '?'} ${r.weekly ? 'this week' : 'today'}!` : res.status === 429 ? 'Slow down a little, then try again.' : 'Could not reach the leaderboard.';
     if (el && el.isConnected) el.textContent = r.sent;
   });
 }
@@ -889,6 +1061,7 @@ function updateHud(dt) {
   z.style.display = playing ? 'flex' : 'none';
   z.style.setProperty('--p', (zr ? 100 * g.zoomT / g.zoomMax : g.zoom) + '%');
   z.className = zr ? 'on' : g.zoom >= 100 ? 'ready' : '';
+  if (coachEl && coachEl._hl === z) z.classList.add('tuthl');
   setText('zoomSub', zr ? 'GO!' : g.zoom >= 100 ? 'READY' : Math.floor(g.zoom) + '%');
   // coins count up smoothly, chests show while waiting to be opened
   coinShown += (g.run.coins - coinShown) * Math.min(1, dt * 7);
@@ -898,7 +1071,7 @@ function updateHud(dt) {
   $('chestBox').style.display = ch > 0 ? 'flex' : 'none';
   setText('chestTxt', String(ch));
   $('bMeter').classList.toggle('on', !!save.meter);
-  if (playing && g.zoom >= 100 && !zr && !save.tips.c5) coach('c5', 'Zoomies are ready! Tap the glowing button, or press Space, for super speed!', 830, 104, 'right');
+  if (playing && g.state === 'fight' && g.zoom >= 100 && !zr && !save.tips.c5) coach('c5', 'Step 2: tap Zoomies for super speed!', 830, 104, 'right', { target: '#zoom', wait: true });
   const syn = S.synergyState(g), ssig = JSON.stringify(syn.counts) + JSON.stringify(syn.tiers);
   if (hudCache.syn !== ssig) {
     hudCache.syn = ssig;
@@ -923,6 +1096,7 @@ function updateHud(dt) {
     $('snackBar').innerHTML = chips.join('');
     $('snackBar').style.display = chips.length ? 'flex' : 'none';
   }
+  updateSpecials();
   meterT -= dt;
   if (meterT <= 0) { meterT = 0.4; updateMeter(); }
 }
@@ -1009,7 +1183,7 @@ function handle(e) {
   switch (e.k) {
     case 'dmg':
       if (e.v >= 1) txtFx(e.x, e.y, Math.round(e.v), e.crit ? '#ffe14d' : '#ffffff', e.crit ? 24 : 14, e.crit ? 0.95 : 0.65);
-      if (e.crit) { sparks(e.x, e.y, 6, '#ffe14d', 180, 0.3); hit(0.03); shake = Math.max(shake, 2.5); }
+      if (e.crit) { sparks(e.x, e.y, 6, '#ffe14d', 180, 0.3); hit(0.03); shake = Math.max(shake, 2.5); buzz('crit'); }
       break;
     case 'kill': {
       if (e.quiet) { puff(e.x, e.y, 3, '#ffffff', 60, 0.4); break; }
@@ -1068,28 +1242,42 @@ function handle(e) {
       sfx.play('zap'); break;
     case 'star': bolt([{ x: e.x + 90, y: e.y - 160 }, { x: e.x, y: e.y }], '#ffe9a0', 4, 0.25); flashGlow(e.x, e.y, 28, '#ffe9a0', 0.25); break;
     case 'nova': ring(e.x, e.y, e.r, '#bfeaff', 0.5, 10); ring(e.x, e.y, e.r * 0.7, '#ffffff', 0.4, 4); flashGlow(e.x, e.y, e.r * 0.8, '#bfeaff', 0.35); sparks(e.x, e.y, 14, '#e8f8ff', 260, 0.45); shake = Math.max(shake, 4); sfx.play('zap'); break;
-    case 'ko': { const kc = S.findCat(g, e.uid); if (kc) sfx.meow(kc.id, 'sad'); emote(e.uid, '\uD83D\uDCAB', 1.6); const p = catPos(e.uid); txtFx(p.x, p.y - 30, 'KO!', '#ff8a8a', 26, 1.2); puff(p.x, p.y, 10, '#ffd1e0', 100, 0.6); sparks(p.x, p.y, 8, '#ff8a8a', 200, 0.4); shake = Math.max(shake, 9); hit(0.1); slowmo(0.5, 0.4); screenFlash('rgba(255,80,80,.22)', 0.25); sfx.play('ko'); break; }
+    case 'ko': { const kc = S.findCat(g, e.uid); if (kc) sfx.meow(kc.id, 'sad'); emote(e.uid, '\uD83D\uDCAB', 1.6); const p = catPos(e.uid); txtFx(p.x, p.y - 30, 'KO!', '#ff8a8a', 26, 1.2); puff(p.x, p.y, 10, '#ffd1e0', 100, 0.6); sparks(p.x, p.y, 8, '#ff8a8a', 200, 0.4); shake = Math.max(shake, 9); hit(0.1); slowmo(0.5, 0.4); screenFlash('rgba(255,80,80,.22)', 0.25); sfx.play('ko'); buzz('ko'); break; }
     case 'revive': { const rc = S.findCat(g, e.uid); if (rc) { sfx.meow(rc.id, 'happy'); moods.set(e.uid, 1.5); } const p = catPos(e.uid); txtFx(p.x, p.y - 30, 'Back up!', '#fff6b0', 22, 1.2); puff(p.x, p.y, 12, '#fff6b0', 100, 0.7); flashGlow(p.x, p.y, 70, '#fff6b0', 0.5); sfx.play('heal'); break; }
     case 'heal': { if (Math.random() < 0.25) emote(e.uid, '\u2764\uFE0F', 1); const p = catPos(e.uid); txtFx(p.x - 46, p.y - 20, '+' + Math.round(e.v), '#7dffb0', 16, 0.9); break; }
     case 'healfx': for (let i = 0; i < 3; i++) spawnFx({ k: 'h', x: e.x + (Math.random() - 0.5) * 50, y: e.y - 10, life: 0.9, max: 0.9 }); sfx.play('heal'); break;
-    case 'cathit': { if (Math.random() < 0.18) emote(e.uid, '\uD83D\uDCA2', 0.8); const p = catPos(e.uid); txtFx(p.x - 56, p.y, Math.round(e.v), '#ff8a8a', 15, 0.7); towerWob = 1; shake = Math.max(shake, 1.8); sfx.play('hit'); break; }
+    case 'cathit': { if (Math.random() < 0.18) emote(e.uid, '\uD83D\uDCA2', 0.8); const p = catPos(e.uid); txtFx(p.x - 56, p.y, Math.round(e.v), '#ff8a8a', 15, 0.7); towerWob = 1; shake = Math.max(shake, 1.8); sfx.play('hit'); buzz('hit'); break; }
     case 'coin': if (fx.length < 300) spawnFx({ k: 'fly', x: e.x, y: e.y, sx: e.x, sy: e.y, tx: 52, ty: 72, life: 0.7 + Math.random() * 0.2, max: 0.8, kind: 'coin', ox: (Math.random() - 0.5) * 160, oy: -60 - Math.random() * 60 }); break;
     case 'chest': spawnFx({ k: 'fly', x: e.x, y: e.y, sx: e.x, sy: e.y, tx: 150, ty: 72, life: 1.0, max: 1.0, kind: 'chest', ox: 0, oy: -90 }); sparks(e.x, e.y, 10, '#ffd23f', 220, 0.5); txtFx(e.x, e.y - 20, 'Chest!', '#ffd23f', 20, 1); sfx.play('chest'); break;
     case 'dodge': { const p = catPos(e.uid); txtFx(p.x - 40, p.y, 'Miss!', '#b9f5ff', 16, 0.7); break; }
     case 'ehit': sparks(e.x, e.y, 3, '#ffffff', 130, 0.2); break;
     case 'spawn': smoke(e.x, e.y, 1, 7, '#d9c9a0'); puff(e.x, e.y - 10, 3, '#d9c9a0', 50, 0.4, 4); ring(e.x, e.y + 2, 22, '#e8dcb8', 0.28, 3); break;
-    case 'roar': shake = Math.max(shake, 13); zpunch = Math.max(zpunch, 0.03); txtFx(e.x, e.y, 'SQUEAK!', '#ff9a9a', 32, 1.1); screenFlash('rgba(255,40,40,.18)', 0.3); sfx.play('roar'); break;
+    case 'roar': shake = Math.max(shake, 13); zpunch = Math.max(zpunch, 0.03); txtFx(e.x, e.y, 'SQUEAK!', '#ff9a9a', 32, 1.1); screenFlash('rgba(255,40,40,.18)', 0.3); sfx.play('roar'); buzz('boss'); break;
     case 'bossDown': {
       ring(e.x, e.y - 60, 200, '#fff6b0', 0.9, 14); ring(e.x, e.y - 60, 120, '#ffffff', 0.6, 8);
       flashGlow(e.x, e.y - 60, 260, '#fff2c0', 0.7);
       puff(e.x, e.y - 60, 40, '#ffd23f', 280, 1, 7); sparks(e.x, e.y - 60, 40, '#fff6b0', 420, 0.8); smoke(e.x, e.y - 40, 8, 22, '#b8aab8');
       confetti(e.x, e.y - 60, 70, 420);
       shake = 20; zpunch = 0.07; hit(0.16); slowmo(1.2, 0.28); screenFlash('rgba(255,255,230,.5)', 0.4);
-      sfx.play('boom'); break;
+      sfx.play('boom'); buzz('boss'); break;
     }
     case 'zoom': banner('ZOOMIES!', '', false); screenFlash('rgba(255,160,210,.25)', 0.25); zpunch = Math.max(zpunch, 0.03); sfx.play('zoom'); break;
     case 'nine': txtFx(S.TOWER_X + 40, 260, 'NINE LIVES!', '#ffd23f', 36, 1.6); puff(S.TOWER_X, 330, 30, '#ffd23f', 200, 0.9, 6); flashGlow(S.TOWER_X, 330, 200, '#ffd23f', 0.6); screenFlash('rgba(255,230,120,.35)', 0.4); sfx.play('heal'); break;
-    case 'merge': puff(S.TOWER_X, 330, 20, '#ffd23f', 160, 0.7, 5); moods.set(e.uid, 1.6); emote(e.uid, '\u2B50', 1.2); break;
+    case 'special': {
+      const p = catPos(e.uid), col = e.color || '#ffd23f';
+      ring(p.x, p.y, 120, col, 0.55, 10); ring(p.x, p.y, 70, '#ffffff', 0.4, 5);
+      flashGlow(p.x, p.y, 120, col, 0.6); sparks(p.x, p.y, 16, col, 300, 0.5);
+      txtFx(p.x + 60, p.y - 56, e.name + '!', col, 28, 1.3);
+      screenFlash(col.length === 7 ? col + '33' : 'rgba(255,255,255,.2)', 0.22);
+      shake = Math.max(shake, 5); hit(0.06); slowmo(0.35, 0.3); sfx.play('zoom'); sfx.meow(e.id, 'happy');
+      if (e.kind === 'anthem') for (let i = 0; i < 8; i++) spawnFx({ k: 'h', x: p.x + (Math.random() - 0.3) * 160, y: p.y - 20, life: 1.2, max: 1.2 });
+      break;
+    }
+    case 'shieldbreak': ring(e.x, e.y, 46, '#8fd0ff', 0.4, 6); sparks(e.x, e.y, 12, '#cfe8ff', 240, 0.4); flashGlow(e.x, e.y, 44, '#8fd0ff', 0.4); sfx.play('pop', 0.6); break;
+    case 'leap': puff(e.x, e.y - 8, 6, '#d9c9a0', 90, 0.4, 4); ring(e.x, e.y + 2, 26, '#e8dcb8', 0.25, 3); break;
+    case 'dig': puff(e.x, e.y, 14, '#8a6a48', 150, 0.6, 5); ring(e.x, e.y + 4, 42, '#a07a52', 0.35, 5); smoke(e.x, e.y, 2, 10, '#9a7a58'); shake = Math.max(shake, 2); sfx.play('pop', 0.5); break;
+    case 'bubble': ring(e.x, e.y, 90, '#cfc0ff', 0.5, 6); flashGlow(e.x, e.y, 110, '#cfc0ff', 0.5); sfx.play('route'); break;
+    case 'merge': puff(S.TOWER_X, 330, 20, '#ffd23f', 160, 0.7, 5); moods.set(e.uid, 1.6); emote(e.uid, '\u2B50', 1.2); buzz('merge'); break;
     default: break;
   }
 }
@@ -1278,8 +1466,16 @@ function drawStack(cx, list, t, marching, hpBars, cheer, zoomies) {
   });
 }
 
+function drawMound(e, t) {
+  // a buried digger: a moving bump of earth and a little dust
+  ctx.fillStyle = 'rgba(40,24,14,.35)'; ctx.beginPath(); ctx.ellipse(e.x, e.y + 5, 22, 5, 0, 0, TAU); ctx.fill();
+  ctx.fillStyle = '#8a6a48'; ctx.strokeStyle = '#4a3322'; ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.ellipse(e.x, e.y + 2, 17, 7 + Math.sin(t * 9 + e.t) * 1.2, 0, Math.PI, TAU); ctx.fill(); ctx.stroke();
+  if (Math.random() < 0.1) smoke(e.x + (Math.random() - 0.5) * 20, e.y, 1, 4, '#9a7a58');
+}
 function drawEnemy(e, t) {
   if (e.dead) return;
+  if (e.under) { drawMound(e, t); return; }
   let y = e.y;
   const walking = !e.boss && !e.fly && e.stun <= 0;
   if (e.fly) y -= e.alt + Math.sin(t * 4 + e.t) * 5;
@@ -1311,11 +1507,25 @@ function drawEnemy(e, t) {
   ctx.restore();
   ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
   const top = y - (e.boss ? 150 : e.h * (e.elite ? 1.28 : 1.12));
+  if (e.shield > 0) { add(); glow(e.x, y - e.h * 0.5, e.w * 0.95, '#6aa8ff', 0.3 + 0.08 * Math.sin(t * 6)); norm(); ctx.strokeStyle = 'rgba(190,220,255,.8)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.ellipse(e.x - e.w * 0.3, y - e.h * 0.45, e.w * 0.32, e.h * 0.5, 0, 0, TAU); ctx.stroke(); }
+  if (e.boss && e.bubble > 0) { ctx.fillStyle = 'rgba(207,192,255,.22)'; ctx.strokeStyle = 'rgba(235,225,255,.9)'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(e.x, y - 80, 112 + Math.sin(t * 8) * 3, 0, TAU); ctx.fill(); ctx.stroke(); add(); glow(e.x, y - 80, 120, '#cfc0ff', 0.25); norm(); }
+  if (g.hexT > 0 && !e.boss) { add(); glow(e.x, y - e.h * 0.5, e.w * 0.8, '#d28aff', 0.4); norm(); }
+  if (g.focus === e.uid) {
+    ctx.strokeStyle = '#ff8fb7'; ctx.lineWidth = 2.4; const rr = 15 + Math.sin(t * 8) * 2;
+    ctx.beginPath(); ctx.ellipse(e.x, e.y + 4, e.w * 0.55 + rr * 0.3, 7, 0, 0, TAU); ctx.stroke();
+    const ty = y - e.h * (e.elite ? 1.4 : 1.2) - 22 - Math.sin(t * 8) * 2;
+    ctx.fillStyle = '#ff8fb7'; ctx.strokeStyle = '#271c33'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(e.x - 7, ty - 8); ctx.lineTo(e.x + 7, ty - 8); ctx.lineTo(e.x, ty + 2); ctx.closePath(); ctx.fill(); ctx.stroke();
+  }
   if (e.slowT > 0 && e.slow > 0 && !e.boss) { add(); glow(e.x, y - e.h * 0.5, e.w * 0.9, '#8fd3ff', 0.4); norm(); if (Math.random() < 0.06) spawnFx({ k: 'sp', x: e.x + (Math.random() - 0.5) * e.w, y: y - e.h * (0.3 + Math.random() * 0.6), vx: (Math.random() - 0.5) * 50, vy: -20, col: '#dff4ff', life: 0.5, max: 0.5 }); }
   if (e.boss) { add(); glow(e.x, e.y + 2, 120, '#ff3a3a', 0.1 + 0.06 * Math.sin(t * 3) + (1 - e.hp / e.maxHp) * 0.14); norm(); }
   if (e.burn) { add(); glow(e.x + Math.sin(t * 20) * 3, y - e.h * 0.6, e.w * 0.6, '#ff7a2b', 0.5); norm(); }
   if (e.stun > 0 && !e.boss) { ctx.fillStyle = '#ffe14d'; for (let k = 0; k < 3; k++) { const an = t * 6 + k * 2.1; ctx.beginPath(); ctx.arc(e.x + Math.cos(an) * 10, top + Math.sin(an) * 3, 2.2, 0, TAU); ctx.fill(); } }
   if (e.poison) { ctx.fillStyle = '#8be05a'; ctx.beginPath(); ctx.arc(e.x + 12, y - e.h * 0.9 + Math.sin(t * 6) * 2, 3, 0, TAU); ctx.fill(); }
+  if (e.shield > 0 && !e.boss) {
+    const w = Math.max(26, e.w) * 0.9, by = top - 12;
+    ctx.fillStyle = 'rgba(39,28,51,.8)'; ctx.beginPath(); ctx.roundRect(e.x - w / 2 - 1, by, w + 2, 6, 3); ctx.fill();
+    ctx.fillStyle = '#6aa8ff'; ctx.beginPath(); ctx.roundRect(e.x - w / 2, by + 1, Math.max(2, w * e.shield / e.maxShield), 4, 2); ctx.fill();
+  }
   if (e.hp < e.maxHp && !e.boss) {
     const w = Math.max(26, e.w) * 0.9, by = top - 6;
     ctx.fillStyle = 'rgba(39,28,51,.8)'; ctx.beginPath(); ctx.roundRect(e.x - w / 2 - 1, by, w + 2, 6, 3); ctx.fill();
@@ -1377,6 +1587,12 @@ function drawField(t, dt) {
   const list = alive.map((c) => ({ id: c.id, lvl: c.lvl, hp: c.hp, max: S.catMaxHp(g, c), flash: c.flash, atk: c.atk, seed: c.uid * 0.7, items: c.items, uid: c.uid }));
   const marching = g.marching && g.state === 'fight';
   drawStack(g.towerX, list, t, marching, true, mode === 'celebrate', g.zoomT > 0);
+  if (g.fortressT > 0) {
+    const a = Math.min(1, g.fortressT) * (0.85 + 0.15 * Math.sin(t * 9));
+    ctx.fillStyle = `rgba(150,205,255,${0.16 * a})`; ctx.strokeStyle = `rgba(220,240,255,${0.75 * a})`; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.ellipse(g.towerX + 10, GROUND - 105, 74, 160, 0, 0, TAU); ctx.fill(); ctx.stroke();
+  }
+  if (g.phaseT > 0 && Math.random() < 0.3) spawnFx({ k: 'sm', x: g.towerX + (Math.random() - 0.5) * 60, y: GROUND - 40 - Math.random() * 200, vx: 0, vy: -20, r: 8, life: 0.5, max: 0.5, col: '#cfd8ff' });
   if (marching) { dustT -= dt; if (dustT <= 0) { dustT = 0.11; smoke(g.towerX - 10 + Math.random() * 40, GROUND + 6, 1, 6, '#d8cfae'); } }
   const es = g.enemies.filter((e) => !e.dead).sort((a, b) => a.y - b.y);
   for (const e of es) drawEnemy(e, t);
@@ -1547,7 +1763,62 @@ function render(dt) {
 
 // ---------------------------------------------------------------- input
 function togglePause() { if (mode !== 'play') return; if (paused) { paused = false; closeScreen(); } else showPause(); }
-function doZoomies() { if (mode === 'play' && !paused && S.useZoomies(g)) drain(); }
+// ---- special moves and tap focus
+const spBtns = new Map();
+function doSpecial(uid) {
+  if (mode !== 'play' || paused || !g) return;
+  if (S.useSpecial(g, uid)) { if (coachEl && coachEl.dataset.key === 'c7') hideCoach(); drain(); }
+  else sfx.play('nope');
+}
+function updateSpecials() {
+  const box = $('specials');
+  const show = g && mode === 'play' && g.state === 'fight';
+  box.style.display = show || (g && mode === 'play') ? 'flex' : 'none';
+  if (!g) return;
+  const cats = g.cats;
+  for (const [uid, b] of spBtns) if (!cats.some((c) => c.uid === uid)) { b.remove(); spBtns.delete(uid); }
+  cats.forEach((c, i) => {
+    let b = spBtns.get(c.uid);
+    if (!b) {
+      b = document.createElement('button'); b.className = 'spb'; b.dataset.uid = c.uid;
+      const info = S.specialInfo(c.id);
+      b.title = `${info.name} (key ${i + 1})`;
+      b.innerHTML = `<img src="${thumbURL(c.id)}" alt=""><i></i><em>${i + 1}</em>`;
+      box.appendChild(b); spBtns.set(c.uid, b);
+    }
+    const ready = S.specialReady(c);
+    b.style.setProperty('--p', Math.round(c.sp * 100) + '%');
+    b.style.setProperty('--c', S.specialInfo(c.id).color);
+    b.classList.toggle('ready', ready);
+    b.classList.toggle('down', c.ko);
+    b.firstChild.style.opacity = c.ko ? 0.35 : 1;
+    b.style.order = String(-i);
+    if (ready && !save.tips.c7 && g.state === 'fight') coach('c7', 'A cat is charged! Tap its glowing portrait (or press its number) for a special move. Tap a mouse to make everyone focus it.', 520, 400, 'right');
+  });
+}
+$('specials').addEventListener('click', (e) => { const b = e.target.closest('.spb'); if (b) { sfx.unlock(); doSpecial(+b.dataset.uid); } });
+// tapping the field: a charged cat fires its special, a mouse becomes the focus target
+cv.addEventListener('pointerdown', (e) => {
+  if (!g || mode !== 'play' || paused || g.state !== 'fight') return;
+  const r = cv.getBoundingClientRect();
+  const upright = coarse && innerHeight > innerWidth * 1.1;
+  let x, y;
+  if (upright) { x = ((e.clientY - r.top) / r.height) * W; y = ((r.right - e.clientX) / r.width) * H; }   // the whole game is turned a quarter turn
+  else { x = ((e.clientX - r.left) / r.width) * W; y = ((e.clientY - r.top) / r.height) * H; }
+  if (!isFinite(x) || !isFinite(y)) return;
+  for (let i = 0; i < g.cats.length; i++) {
+    const c = g.cats[i], py = GROUND - 50 - S.aliveCats(g).indexOf(c) * SLOT;
+    if (!c.ko && Math.abs(x - g.towerX) < 55 && Math.abs(y - py) < SLOT * 0.5) { if (S.specialReady(c)) doSpecial(c.uid); return; }
+  }
+  let best = null, bd = 1e9;
+  for (const en of g.enemies) {
+    if (en.dead || en.under) continue;
+    const cy = en.fly ? en.y - en.alt : en.y - en.h * 0.5, dx = Math.abs(x - en.x), dy = Math.abs(y - cy);
+    if (dx < en.w * 0.8 + 16 && dy < en.h * 0.8 + 20 && dx + dy < bd) { bd = dx + dy; best = en; }
+  }
+  if (best) { if (S.setFocus(g, best.uid)) { sfx.play('hover'); ring(best.x, best.y, 34, '#ff8fb7', 0.3, 4); } } else if (g.focus) g.focus = 0;
+});
+function doZoomies() { if (mode === 'play' && !paused && S.useZoomies(g)) { if (coachEl && coachEl.dataset.key === 'c5') hideCoach(); drain(); } }
 // full screen: the Fullscreen API where the browser has it (Android, desktop); iPhone Safari has none, so the button stays hidden there
 const fsEl = document.documentElement;
 const fsReq = fsEl.requestFullscreen || fsEl.webkitRequestFullscreen;
@@ -1579,6 +1850,7 @@ addEventListener('keydown', (e) => {
   if (k === ' ') { e.preventDefault(); doZoomies(); }
   else if (k === 'p' || k === 'escape') togglePause();
   else if (k === 'f') toggleSpeed();
+  else if (k >= '1' && k <= '6' && g && g.cats[+k - 1]) doSpecial(g.cats[+k - 1].uid);
   else if (k === 'g' && !$('bFull').hidden) toggleFull();
   else if (k === 'd') { save.meter = !save.meter; persist(); meterT = 0; }
   else if (k === 'm') { save.sound = !save.sound; sfx.on = save.sound; persist(); }
@@ -1661,7 +1933,7 @@ function frame(ts) {
   requestAnimationFrame(frame);
 }
 
-window.stackingCats = { get g() { return g; }, get mode() { return mode; }, S, save: () => save, hideCoach, startRun, toast, get res() { return res; }, get fxCount() { return fx.length; }, showTower, showItemReward };
+window.stackingCats = { get g() { return g; }, get mode() { return mode; }, S, save: () => save, hideCoach, startRun, toast, get res() { return res; }, get fxCount() { return fx.length; }, showTower, showItemReward, showEvent, doSpecial };
 showTitle();
 requestAnimationFrame(frame);
 void ENEMY_TYPES;

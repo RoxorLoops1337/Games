@@ -20,12 +20,31 @@ const dayOf = (ms) => { const d = new Date(ms); return `${d.getUTCFullYear()}-${
 const dayOk = (day, now) => DAY_RE.test(day) && [-1, 0, 1].some((k) => dayOf(now + k * 86400000) === day);
 const DAY_TTL = 5 * 86400; // KV needs at least 60 seconds
 
+// weekly challenge: ISO week keys like 2026-W43 (UTC). Same rules as weekKey() in the game.
+const WEEK_RE = /^\d{4}-W(0[1-9]|[1-4]\d|5[0-3])$/;
+export function weekOf(ms) {
+  const d = new Date(ms), day0 = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
+  const dow = (new Date(day0).getUTCDay() + 6) % 7;
+  const thu = day0 + (3 - dow) * 86400000;
+  const y = new Date(thu).getUTCFullYear();
+  return `${y}-W${p2(Math.floor((thu - Date.UTC(y, 0, 1)) / (7 * 86400000)) + 1)}`;
+}
+// this week, last week or next week is acceptable
+const weekOk = (week, now) => WEEK_RE.test(week) && [-7, 0, 7].some((k) => weekOf(now + k * 86400000) === week);
+const WEEK_TTL = 21 * 86400; // KV needs at least 60 seconds
+
 async function read(KV, key) { try { return JSON.parse((await KV.get(key)) || '[]'); } catch (e) { return []; } }
 
 export async function onRequestGet({ request, env }) {
   const KV = kv(env);
   if (!KV) return json({ error: 'not configured' }, 503);
   const now = Date.now();
+  const q = new URL(request.url).searchParams;
+  if (q.get('type') === 'weekly') {
+    let week = q.get('week') || weekOf(now);
+    if (!weekOk(week, now)) week = weekOf(now);
+    return json({ type: 'weekly', week, top: await read(KV, 'sc:w:' + week), all: await read(KV, 'sc:wall') });
+  }
   let day = new URL(request.url).searchParams.get('day') || dayOf(now);
   if (!dayOk(day, now)) day = dayOf(now);
   return json({ day, top: await read(KV, 'sc:d:' + day), all: await read(KV, 'sc:all') });
@@ -42,12 +61,15 @@ export async function onRequestPost({ request, env }) {
   const now = Date.now();
   const name = String(b.name || '').replace(/[^\w \-.']/g, '').trim().slice(0, 12) || 'Anonymous';
   const wave = Math.floor(+b.wave), kills = Math.floor(+b.kills), score = Math.floor(+b.score);
+  const weekly = b.type === 'weekly';
   const day = String(b.day || '');
-  if (!dayOk(day, now)) return json({ error: 'bad day' }, 400);
+  const week = String(b.week || '');
+  if (weekly ? !weekOk(week, now) : !dayOk(day, now)) return json({ error: weekly ? 'bad week' : 'bad day' }, 400);
   if (![wave, kills, score].every(Number.isFinite) || wave < 1 || wave > 300 || kills < 0 || kills > wave * 80 || score < 1 || score > 1000000) return json({ error: 'bad score' }, 400);
   const entry = { name, score, wave, kills, t: now };
   const result = {};
-  for (const [key, ttl] of [['sc:d:' + day, DAY_TTL], ['sc:all', 0]]) {
+  const boards = weekly ? [['sc:w:' + week, WEEK_TTL], ['sc:wall', 0]] : [['sc:d:' + day, DAY_TTL], ['sc:all', 0]];
+  for (const [key, ttl] of boards) {
     const top = await read(KV, key);
     const i = top.findIndex((e) => e.name === name);
     if (i >= 0 && top[i].score >= score) { result[key] = top; continue; }
@@ -59,6 +81,7 @@ export async function onRequestPost({ request, env }) {
     result[key] = top;
   }
   await KV.put('scrl:' + ip, String(now), { expirationTtl: 60 });
+  if (weekly) return json({ type: 'weekly', week, top: result['sc:w:' + week], all: result['sc:wall'] });
   return json({ day, top: result['sc:d:' + day], all: result['sc:all'] });
 }
 

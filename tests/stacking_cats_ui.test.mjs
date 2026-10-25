@@ -128,7 +128,7 @@ t('main.js parses and the ids it uses exist in index.html', () => {
 });
 
 t('no em dashes anywhere in the game files', () => {
-  for (const f of ['main.js', 'index.html', 'cats.js', 'sim.js', 'art_cats.js', 'art_world.js', 'art_kingdom.js', 'audio.js', 'kingdom_scene.js', 'savecode.js', 'daily.js', 'post.js', 'art_icons.js']) {
+  for (const f of ['main.js', 'index.html', 'cats.js', 'sim.js', 'art_cats.js', 'art_world.js', 'art_kingdom.js', 'audio.js', 'kingdom_scene.js', 'savecode.js', 'daily.js', 'post.js', 'art_icons.js', 'share.js', 'haptics.js', 'pwa.js', 'sw.js', 'manifest.webmanifest']) {
     assert.ok(!readFileSync('stacking_cats/' + f, 'utf8').includes('—'), f);
   }
 });

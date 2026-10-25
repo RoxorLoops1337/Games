@@ -3,7 +3,14 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
-<meta name="theme-color" content="#2a1d4a">
+<meta name="theme-color" content="#150f26">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Stacking Cats">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>Stacking Cats</title>
 <link rel="preload" href="fonts/lilitaone-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="fonts/baloo2-latin.woff2" as="font" type="font/woff2" crossorigin>
@@ -296,6 +303,9 @@ textarea.code{width:760px;height:170px;font-family:ui-monospace,Menlo,monospace;
 .dailybox input{width:150px}.dailybox .btn.small{margin:2px}
 
 .coach{position:absolute;z-index:60;max-width:270px;background:#fffaf0;color:var(--ink);border:3px solid var(--ink);border-radius:18px;box-shadow:0 5px 0 var(--ink),0 12px 22px #0008;padding:8px 12px;display:flex;gap:8px;align-items:center;font-weight:700;font-size:15px;line-height:1.15;pointer-events:none;animation:cardin .4s backwards;transform:translate(-50%,0)}
+.tuthl{outline:4px solid #ffd23f;outline-offset:3px;animation:tutpulse 1.1s ease-in-out infinite}
+@keyframes tutpulse{50%{box-shadow:0 0 0 12px #ffd23f55,0 0 26px #ffd23f}}
+body.nomotion .tuthl{animation:none!important}
 .coach .cico{font-size:30px}.coach button{pointer-events:auto;font-family:inherit;font-weight:800;font-size:13px;border:2px solid var(--ink);background:#ffd58f;border-radius:10px;padding:1px 10px;cursor:pointer;flex:none}
 .coach::after{content:'';position:absolute;width:16px;height:16px;background:#fffaf0;border:3px solid var(--ink);border-top:0;border-left:0;transform:rotate(45deg)}
 .coach.up::after{left:calc(50% - 8px);top:-10px;transform:rotate(225deg)}.coach.down::after{left:calc(50% - 8px);bottom:-10px}.coach.left{transform:translate(0,0)}.coach.left::after{left:-10px;top:calc(50% - 8px);transform:rotate(135deg)}.coach.right{transform:translate(-100%,0)}.coach.right::after{right:-10px;top:calc(50% - 8px);transform:rotate(-45deg)}
@@ -438,6 +448,62 @@ body.touch .tfoot .btn,body.touch .tfoot .fbtn{min-height:44px}
 #waveTxt{font-size:23px;letter-spacing:.5px;font-weight:400}
 .sdps b,.stats b{font-weight:400}
 .card h3{font-size:24px;letter-spacing:.3px}
+
+/* ===== fight agency: special tray, event stops, shield and focus hints ===== */
+#specials{position:absolute;right:62px;bottom:10px;display:none;gap:8px;align-items:flex-end;flex-direction:row-reverse}
+.spb{position:relative;width:48px;height:48px;border-radius:50%;border:3px solid #ffffff55;padding:0;cursor:pointer;background:conic-gradient(var(--c,#ffd23f) var(--p,0%),rgba(32,22,58,.9) 0);box-shadow:0 3px 0 #150f26,0 4px 10px #0007;transition:transform .1s}
+.spb img{position:absolute;inset:4px;width:calc(100% - 8px);height:calc(100% - 8px);border-radius:50%;background:#2a2050;object-fit:cover;pointer-events:none}
+.spb i{position:absolute;inset:0;border-radius:50%;pointer-events:none}
+.spb em{position:absolute;right:-3px;bottom:-4px;min-width:17px;height:17px;border-radius:9px;background:#150f26;color:#fff;font:400 11px/17px var(--display);text-align:center;font-style:normal;border:1.5px solid #ffffff44}
+.spb.ready{border-color:#fff;animation:spready 1s ease-in-out infinite;transform:scale(1.12);background:var(--c,#ffd23f)}
+@keyframes spready{50%{box-shadow:0 0 0 4px #fff4,0 0 22px var(--c,#ffd23f)}}
+.spb.down{filter:grayscale(1);opacity:.55}
+.spb:active{transform:scale(.94)}
+body.touch .spb{width:58px;height:58px}body.touch #specials{right:70px;bottom:12px;gap:10px}
+body.nomotion .spb.ready{animation:none}
+.evcards{gap:8px;justify-content:center}
+.screen .card.ev,.screen.wide .card.ev{width:150px;min-height:176px;padding:6px 6px 10px;cursor:pointer;position:relative}
+.screen .evcards{flex-wrap:nowrap;max-width:none;margin-bottom:6px}.card.ev .rar{position:static;font-size:11px;letter-spacing:1px;text-transform:uppercase;opacity:.7}
+.card.ev .ic{font-size:44px;line-height:1.1}.card.ev .ic .thumb{width:54px;height:54px}
+.card.ev h3{font-size:19px}.card.ev p{font-size:12.5px;line-height:1.15;margin:3px 0}
+.card.ev .evp{position:absolute;left:50%;bottom:-13px;transform:translateX(-50%);background:#2a1d4a;color:#ffd23f;border:2.5px solid #ffd23f;border-radius:999px;padding:1px 12px;font:400 17px var(--display);white-space:nowrap}
+.card.ev .evp.no{color:#ff8a8a;border-color:#ff8a8a}
+.card.ev.poor{filter:saturate(.45);opacity:.8}
+.card.ev.sold{opacity:.4;pointer-events:none}
+.card.ev .evsold{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font:400 30px var(--display);color:#fff;text-shadow:0 2px 0 #271c33,0 0 12px #000;transform:rotate(-12deg)}
+.evcoins{justify-content:center}
+.screen .row.hint{margin-top:18px}
+/* ---- meta 2: mastery, difficulty ladder, weekly, wardrobe ---- */
+.mast{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:3px}.mast b{font-size:14px;color:var(--grape)}
+.stars{display:inline-flex;gap:1px}.st{font-style:normal;font-size:18px;line-height:1;opacity:.28;filter:grayscale(1)}.st.on{opacity:1;filter:none}
+.st .gi{width:18px;height:18px}
+.mbar{height:8px;width:120px;background:#0003;border-radius:5px;overflow:hidden}.mbar i{display:block;height:100%;background:linear-gradient(90deg,#ffb13a,#ffd23f)}
+.mast small{font-size:12px;color:#6a5a80;font-weight:700}
+.detail .wbtn{margin:3px 0 0;float:right;position:relative;top:-6px}
+.btn.wk{padding-left:16px;padding-right:16px}
+.dcard.weekly{max-width:480px}.wmods{display:flex;flex-direction:column;gap:3px;margin:2px 0;width:100%}
+.wmod{display:grid;grid-template-columns:28px auto 1fr;gap:6px;align-items:center;text-align:left;background:#0001;border-radius:10px;padding:2px 8px}
+.wmod i{font-style:normal;font-size:20px;line-height:1}.wmod b{font-size:14px}.wmod small{font-size:11px}
+.dcard .wiron{font-size:12px}
+.metanotes{display:flex;flex-direction:column;gap:2px;margin:2px 0 4px}.metanotes span{background:rgba(255,210,63,.18);border:2px solid #ffd23f66;border-radius:12px;padding:1px 12px;font-weight:800;font-size:14px;color:#ffe9a8}
+.dgrid{display:grid;grid-template-columns:repeat(4,200px);gap:10px;margin:6px 0 8px}
+.dcell{font-family:inherit;display:flex;flex-direction:column;align-items:center;gap:1px;background:var(--paper);color:var(--ink);border:3px solid var(--ink);border-radius:16px;box-shadow:0 4px 0 var(--ink);padding:6px 8px;cursor:pointer;min-height:132px;text-align:center}
+.dcell.on{outline:4px solid var(--pink);background:#fff0f6}.dcell.locked{background:#6c5a96;color:#e8dcff;cursor:default}.dcell.nm{border-color:#3a1f4a}
+.dcell .dci{font-size:30px;line-height:1}.dcell b{font-size:18px;font-family:var(--display);font-weight:400}.dcell small{font-size:12px;font-weight:700;line-height:1.1;color:#5a4a70}
+.dcell.locked small{color:#d8c8f6}.dcell em{font-style:normal;font-size:12px;font-weight:800;color:#b03a4a}.dcell.locked em{color:#ffd23f}.dcell em.coinx{color:#2a8a52}
+.drules{display:flex;gap:3px;flex-wrap:wrap;justify-content:center}.drule{display:inline-flex;align-items:center;gap:3px;background:#0001;border-radius:9px;padding:0 4px;font-size:11px}.drule i{font-style:normal;font-size:14px}.drule .gi{width:15px;height:15px}.drule b{font-size:11px;font-family:inherit;font-weight:800}.drule.new{background:#ffd23f55}
+.screen.wardrobe{justify-content:flex-start;padding-top:10px}.screen.wardrobe h2{margin:0}.screen.wardrobe .kcoins{margin:0 0 4px}
+.wstrip{display:flex;gap:3px;width:900px;overflow-x:auto;padding:3px 2px;margin-bottom:4px}
+.wcat{flex:0 0 auto;width:46px;height:46px;border-radius:12px;border:2px solid var(--ink);background:rgba(255,248,239,.95);padding:0;cursor:pointer}.wcat canvas{width:42px;height:42px}.wcat.sel{outline:3px solid var(--pink)}
+.wcols{display:flex;gap:14px;width:900px;align-items:stretch}
+.wprev{width:260px;background:var(--paper);color:var(--ink);border:3px solid var(--ink);border-radius:18px;box-shadow:0 5px 0 var(--ink);padding:6px 10px;display:flex;flex-direction:column;align-items:center;gap:2px}
+.wprev canvas{width:150px;height:150px}.wprev>b{font-family:var(--display);font-weight:400;font-size:22px}.wworn{display:flex;flex-direction:column;font-size:12px;font-weight:700;color:#5a4a70;line-height:1.2}
+.wprev .mast{justify-content:center}.wprev .btn{margin:4px 0 2px}
+.wshop{flex:1;display:flex;flex-direction:column;gap:6px}.wshop .seg{width:100%}
+.wgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.witem{background:var(--paper);color:var(--ink);border:3px solid var(--ink);border-radius:14px;padding:3px 4px;display:flex;flex-direction:column;align-items:center;gap:0}
+.witem.worn{outline:3px solid var(--mint)}.witem canvas{width:64px;height:64px}.witem b{font-size:13px}.witem small{font-size:10px;font-weight:700;color:#6a5a80;line-height:1.05;min-height:21px}
+.witem .btn{margin:2px 0 0;padding:1px 8px;font-size:13px;box-shadow:0 2px 0 var(--ink)}
 </style>
 </head>
 <body>
@@ -458,6 +524,7 @@ body.touch .tfoot .btn,body.touch .tfoot .fbtn{min-height:44px}
       <button class="ib" id="bSound" title="Sound (M)">&#9835;</button>
     </div>
     <div id="meter"></div>
+    <div id="specials"></div>
     <button id="zoom" title="Zoomies (Space)"><span>Zoomies<br><small id="zoomSub">0%</small></span></button>
     <div class="pill" id="snackBar"></div>
     <div id="banner"></div>

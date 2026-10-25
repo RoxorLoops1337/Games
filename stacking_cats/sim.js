@@ -3,8 +3,8 @@
 import {
   CATS, CAT_BY_ID, STARTERS, SNACKS, SNACK_BY_ID, ENEMY_TYPES, NESTS,
   MAX_STACK, MAX_BENCH, BOSS_EVERY, LVL_MUL, AURA_MUL, BASE_HP, BASE_DMG, TEMP_WAVES,
-  ITEMS, ITEM_BY_ID, ITEM_WEIGHT, MAX_STASH, SELL_VALUE, FORGE_NEXT, FORGE_COUNT, itemSlots, kingdomBonuses, emptyKingdom, COIN,
-  DIFFS, CAT_TAGS, SYNERGIES, ROUTES, ROUTE_BY_ID, DAILY_POOL,
+  ITEMS, ITEM_BY_ID, ITEM_WEIGHT, MAX_STASH, SELL_VALUE, FORGE_NEXT, FORGE_COUNT, SPECIALS, SPECIAL_TIME, EVENTS, itemSlots, kingdomBonuses, emptyKingdom, COIN,
+  DIFFS, CAT_TAGS, SYNERGIES, ROUTES, ROUTE_BY_ID, DAILY_POOL, masteryBonus,
 } from './cats.js';
 
 export const W = 960, H = 540, GROUND = 440, TOWER_X = 170, SLOT = 56, DT = 1 / 30;
@@ -35,11 +35,12 @@ export const waveScale = (w) => {
   return { hp: 1 + TUNE.hpA * n + TUNE.hpB * n * n, dmg: 1 + TUNE.dmgA * n + TUNE.dmgB * n * n };
 };
 
-export function newGame({ seed = 1, unlocked = STARTERS, events = true, kingdom = null, difficulty = 'normal', daily = null } = {}) {
+export function newGame({ seed = 1, unlocked = STARTERS, events = true, kingdom = null, difficulty = 'normal', daily = null, mastery = null } = {}) {
   if (daily) { kingdom = null; unlocked = DAILY_POOL; seed = daily.seed; difficulty = 'normal'; }
   const meta = kingdomBonuses(kingdom || emptyKingdom());
   return {
-    meta, rerolls: meta.rerolls, diff: DIFFS[difficulty] || DIFFS.normal, route: ROUTE_BY_ID.trail, daily, zoomMax: 6 + meta.zoomDur, stash: [], chests: 0, curCat: null, report: null, wTaken: 0, wKills: 0, wCoins: 0, wDmg0: 0, wT0: 0,
+    focus: 0, fortressT: 0, anthemT: 0, hexT: 0, phaseT: 0, event: null, eventsSeen: 0, hurtMul: 1,
+    meta, mastery: daily ? null : mastery, rerolls: Math.max(0, meta.rerolls - ((DIFFS[difficulty] || DIFFS.normal).rerolls || 0)), diff: DIFFS[difficulty] || DIFFS.normal, route: ROUTE_BY_ID.trail, daily, zoomMax: 6 + meta.zoomDur, stash: [], chests: 0, curCat: null, report: null, wTaken: 0, wKills: 0, wCoins: 0, wDmg0: 0, wT0: 0,
     seed, rnd: rngMaker(seed), events, ev: [], unlocked: new Set(unlocked),
     t: 0, wave: 0, state: 'idle', intro: 0, bossWave: false, reward: [],
     cats: [], bench: [], enemies: [], projs: [], pools: [], mines: [],
@@ -62,6 +63,7 @@ export function calcMods(g) {
   for (const c of g.cats.concat(g.bench)) m.coin += itemFx(c).coin;
   if (g.daily) { m.dmg += g.daily.mod.dmg || 0; m.hp += g.daily.mod.hp || 0; }
   m.regenTeam = 0;
+  m.mastery = g.mastery || null;
   m.syn = synergyState(g);
   for (const t in m.syn.tiers) {
     const team = SYNERGIES[t].tiers[m.syn.tiers[t] - 1].team;
@@ -85,6 +87,7 @@ export function calcMods(g) {
   for (const id of g.perm) apply(id);
   for (const t of g.temp) apply(t.id);
   if (g.zoomT > 0) { m.haste += 1.0; m.dmg += 0.2; }
+  if (g.hexT > 0) m.curse += 0.35;
   m.dr = Math.min(0.65, m.dr);
   m.slow = Math.min(0.6, m.slow);
   return m;
@@ -113,6 +116,8 @@ export function synergyState(g) {
 function mkFx(mods, c, items) {
   const f = fxOf(items);
   f.regen += mods.regenTeam || 0;
+  const mlv = mods.mastery && mods.mastery[c.id];   // cat mastery: a tiny permanent bonus for this cat only
+  if (mlv > 1) { const mb = masteryBonus(mlv); f.dmg += mb.dmg; f.hp += mb.hp; }
   const syn = mods.syn;
   if (syn) for (const t of CAT_TAGS[c.id] || []) {
     const tier = syn.tiers[t];
@@ -132,13 +137,13 @@ export function catMaxHp(g, c, mods = g.mods || calcMods(g)) {
 }
 export function catDmg(c, mods, mult = 1) {
   const f = cfx(mods, c);
-  return BASE_DMG * CAT_BY_ID[c.id].atk.dmg * LVL_MUL[c.lvl - 1] * (1 + mods.dmg + f.dmg + (c.low ? f.berserk : 0)) * mult;
+  return BASE_DMG * CAT_BY_ID[c.id].atk.dmg * LVL_MUL[c.lvl - 1] * (1 + mods.dmg + f.dmg + (c.train || 0) + (c.low ? f.berserk : 0)) * mult;
 }
 // rough damage per second, used for the previews in the menus
 export function estDps(c, mods, items = c.items) {
   const a = CAT_BY_ID[c.id].atk, fx = mkFx(mods, c, items);
   const crit = 1 + Math.min(1, mods.crit + fx.crit + (a.crit || 0)) * (mods.critMul + fx.critMul - 1);
-  const per = BASE_DMG * a.dmg * LVL_MUL[c.lvl - 1] * (1 + mods.dmg + fx.dmg) * crit;
+  const per = BASE_DMG * a.dmg * LVL_MUL[c.lvl - 1] * (1 + mods.dmg + fx.dmg + (c.train || 0)) * crit;
   const shots = {
     melee: a.pierce ? 2.2 : 1 + 0.6 * (a.cleave || 0), cone: 2.2, chain: 1 + 0.6 * a.jumps, beam: 2, strike: 1.5, nova: 3, mine: 1.8, storm: (a.stars || 1) * 1.2,
     spread: (a.pellets || 1) * 0.85, lob: 1.8, proj: (a.count || 1) * (a.burst || 1) * (1 + 0.3 * (a.pierce || 0)) * (a.splash ? 1.5 : 1),
@@ -148,7 +153,7 @@ export function estDps(c, mods, items = c.items) {
 export const aliveCats = (g) => g.cats.filter((c) => !c.ko);
 
 export function makeCat(g, id, lvl = 1) {
-  const c = { uid: g.uid++, id, lvl, hp: 1, ko: false, cd: 0.3 + g.rnd() * 0.4, scd: 1, burst: 0, burstT: 0, shots: 0, flash: 0, atk: 0, revUsed: false, items: [], low: false, dmgDone: 0, healDone: 0, kills: 0, taken: 0, wDmg: 0, wKills: 0, wHeal: 0 };
+  const c = { uid: g.uid++, id, lvl, hp: 1, ko: false, cd: 0.3 + g.rnd() * 0.4, scd: 1, burst: 0, burstT: 0, shots: 0, flash: 0, atk: 0, revUsed: false, items: [], low: false, dmgDone: 0, healDone: 0, kills: 0, taken: 0, wDmg: 0, wKills: 0, wHeal: 0, sp: 0.3, frenzyT: 0 };
   c.hp = catMaxHp(g, c, calcMods(g));
   return c;
 }
@@ -353,7 +358,7 @@ export function rollCatChoices(g, n = 3) {
 }
 
 export function snackChoiceCount(g) {
-  return 3 + g.route.snackExtra + g.cats.concat(g.bench).reduce((n, c) => n + (CAT_BY_ID[c.id].pas && CAT_BY_ID[c.id].pas.snackPick ? 1 : 0), 0);
+  return Math.max(2, 3 - (g.diff.snack || 0)) + g.route.snackExtra + g.cats.concat(g.bench).reduce((n, c) => n + (CAT_BY_ID[c.id].pas && CAT_BY_ID[c.id].pas.snackPick ? 1 : 0), 0);
 }
 
 export function rollSnackChoices(g, n = snackChoiceCount(g)) {
@@ -400,7 +405,7 @@ function buildQueue(g, w) {
     let r = g.rnd() * wts.reduce((a, b) => a + b, 0), i = 0;
     while (r > wts[i] && i < wts.length - 1) { r -= wts[i]; i++; }
     const type = ok[i];
-    const elite = ((w >= 6 && g.rnd() < Math.min(0.22, (w - 5) * 0.018)) || (g.daily && g.daily.mod.elite && w >= 2 && g.rnd() < g.daily.mod.elite)) && ENEMY_TYPES[type].cost * 2.2 <= budget + 2;
+    const elite = ((w >= 6 && g.rnd() < Math.min(0.22, (w - 5) * 0.018)) || (g.daily && g.daily.mod.elite && w >= 2 && g.rnd() < g.daily.mod.elite) || (g.diff.elite && w >= 3 && g.rnd() < g.diff.elite)) && ENEMY_TYPES[type].cost * 2.2 <= budget + 2;
     budget -= ENEMY_TYPES[type].cost * (elite ? 2.2 : 1);
     q.push({ t, type, elite });
     t += gap * (0.5 + g.rnd());
@@ -413,13 +418,14 @@ export function makeEnemy(g, type, w, o = {}) {
   const d = ENEMY_TYPES[type], sc = waveScale(w), dm = (g.daily && g.daily.mod) || {};
   const elite = !!o.elite;
   const hp = d.hp * sc.hp * g.diff.hp * g.route.enemyHp * (dm.enemyHp || 1) * (elite ? 2.6 : 1);
-  const spdMul = g.route.speed * (dm.speed || 1);
+  const spdMul = g.route.speed * (dm.speed || 1) * (g.diff.speed || 1);
   return {
     uid: g.uid++, type, x: o.x != null ? o.x : W + 40, y: GROUND + 4 + g.rnd() * 20, hp, maxHp: hp,
     dmg: d.dmg * sc.dmg * g.diff.dmg * g.route.enemyDmg * (elite ? 1.35 : 1), cd: d.cd * (0.4 + g.rnd() * 0.8), spd: d.spd * spdMul * (0.9 + g.rnd() * 0.2) * (elite ? 0.92 : 1),
     w: d.w * (elite ? 1.2 : 1), h: d.h * (elite ? 1.2 : 1), armor: d.armor || 0, ai: d.ai, range: d.range || 0,
     fly: d.ai === 'fly', alt: d.alt || 0, elite, flash: 0, stun: 0, slow: 0, slowT: 0, burn: null, poison: null,
     dead: false, swing: 0, t: g.rnd() * 6, ability: 0, boss: false, age: 0, kb: 0,
+    shield: d.shield ? hp * d.shield : 0, maxShield: d.shield ? hp * d.shield : 0, under: d.ai === 'burrow', leapT: 0, leaped: false,
   };
 }
 const ecy = (e) => (e.fly ? e.y - e.alt : e.y - e.h * 0.5);
@@ -457,14 +463,15 @@ function finishWave(g) {
   const before = snapshotMax(g);
   for (const c of g.cats) {
     const mx = catMaxHp(g, c, m);
-    if (c.ko) { c.ko = false; c.hp = Math.round(mx * (0.35 + g.meta.reviveHp)); } else c.hp = Math.min(mx, c.hp + mx * m.waveHeal);
+    if (c.ko) { c.ko = false; c.hp = Math.round(mx * (0.35 + g.meta.reviveHp)); } else c.hp = Math.min(mx, c.hp + mx * m.waveHeal * (g.diff.heal == null ? 1 : g.diff.heal));
   }
   for (const c of g.bench) c.hp = Math.min(catMaxHp(g, c, m), c.hp + catMaxHp(g, c, m) * 0.6);
   for (const t of g.temp) t.left--;
   g.temp = g.temp.filter((t) => t.left > 0);
   if (!g.waveKO) g.run.flawless++;
   g.projs = []; g.pools = []; g.mines = [];
-  g.zoomT = 0;
+  g.zoomT = 0; g.fortressT = g.anthemT = g.hexT = g.phaseT = 0; g.focus = 0;
+  for (const c of g.cats) c.frenzyT = 0;
   addCoins(g, COIN.wave + COIN.waveGrow * g.wave);
   const chests = Math.min(2, g.chests);
   g.chests -= chests;
@@ -479,10 +486,22 @@ function finishWave(g) {
 
 // ---------------------------------------------------------------- damage
 function hurtEnemy(g, e, dmg, o = {}) {
-  if (e.dead) return 0;
+  if (e.dead || e.under) return 0;
   let d = dmg * (1 + g.mods.curse);
   if (e.armor && !o.pierceArmor) d *= 1 - e.armor;
-  e.hp -= d;
+  if (e.boss) {
+    // nest tricks: the Rat Castle is guarded by shield bearers, the Moon Burrow hides in a bubble, the Trash Tower rots back unless pressured
+    if (e.kind === 'castle' && g.enemies.some((o) => !o.dead && o.shield > 0)) d *= 0.35;
+    if (e.bubble > 0) d *= 0.08;
+    e.lastHit = g.t;
+  }
+  const shielded = e.shield > 0;
+  let absorbed = 0;
+  if (shielded) {
+    absorbed = Math.min(e.shield, d); e.shield -= absorbed;
+    if (e.shield <= 0) emit(g, { k: 'shieldbreak', x: e.x, y: ecy(e) });
+  }
+  e.hp -= d - absorbed;
   e.flash = 0.1;
   const sc = g.curCat;
   if (sc) {
@@ -492,7 +511,7 @@ function hurtEnemy(g, e, dmg, o = {}) {
     bc.dmg += d;
     const f = itemFx(sc);
     if (f.ls) healCat(g, sc, d * f.ls, sc, true);
-    if (!o.tick) {
+    if (!o.tick && !shielded) {
       if (f.burn && !e.burn) e.burn = { dps: d * 0.35, t: 2, owner: sc.uid };
       if (f.slow) { e.slow = Math.max(e.slow, f.slow); e.slowT = Math.max(e.slowT, 1.5); }
       if (f.stun && !e.boss && g.rnd() < f.stun) e.stun = Math.max(e.stun, 0.6);
@@ -500,10 +519,10 @@ function hurtEnemy(g, e, dmg, o = {}) {
   }
   if (!e.boss && !o.silent) e.kb = Math.min(9, e.kb + (e.w > 50 ? 1.6 : 4));
   if (!o.silent) emit(g, { k: 'dmg', x: e.x, y: ecy(e) - e.h * 0.4, v: d, crit: !!o.crit });
-  if (o.slow) { e.slow = Math.max(e.slow, o.slow); e.slowT = Math.max(e.slowT, o.slowT || 2); }
-  if (o.stun && !e.boss) e.stun = Math.max(e.stun, o.stun);
-  if (o.burn) e.burn = { dps: o.burn.dps * BASE_DMG * (o.mult || 1), t: o.burn.t, owner: sc ? sc.uid : 0 };
-  if (o.poison) {
+  if (o.slow && !shielded) { e.slow = Math.max(e.slow, o.slow); e.slowT = Math.max(e.slowT, o.slowT || 2); }
+  if (o.stun && !e.boss && !shielded) e.stun = Math.max(e.stun, o.stun);
+  if (o.burn && !shielded) e.burn = { dps: o.burn.dps * BASE_DMG * (o.mult || 1), t: o.burn.t, owner: sc ? sc.uid : 0 };
+  if (o.poison && !shielded) {
     const p = e.poison;
     e.poison = { dps: (p ? p.dps : 0) + o.poison.dps * BASE_DMG * (o.mult || 1), t: o.poison.t, owner: sc ? sc.uid : 0 };
   }
@@ -517,7 +536,7 @@ function killEnemy(g, e, credit) {
   e.dead = true;
   if (credit) {
     const sc = g.curCat;
-    if (sc) { sc.kills++; sc.wKills++; (g.run.byCat[sc.id] || (g.run.byCat[sc.id] = { dmg: 0, kills: 0, heal: 0 })).kills++; }
+    if (sc) { sc.sp = Math.min(1, sc.sp + (e.boss ? 0.2 : e.elite ? 0.06 : 0.025)); sc.kills++; sc.wKills++; (g.run.byCat[sc.id] || (g.run.byCat[sc.id] = { dmg: 0, kills: 0, heal: 0 })).kills++; }
     if (e.boss) { g.run.bossKills++; g.wKills++; addCoins(g, COIN.nest + COIN.nestGrow * e.n, e.x, e.y); emit(g, { k: 'bossDown', x: e.x, y: e.y }); }
     else {
       g.run.kills++; g.wKills++; g.zoom = Math.min(100, g.zoom + 2.4);
@@ -553,7 +572,8 @@ function hurtCat(g, c, dmg) {
   if (!c || c.ko) return;
   const d = CAT_BY_ID[c.id];
   if (d.pas && d.pas.dodge && g.rnd() < d.pas.dodge) { emit(g, { k: 'dodge', uid: c.uid }); return; }
-  const v = dmg * (1 - Math.min(0.8, g.mods.dr + itemFx(c).dr));
+  if (g.phaseT > 0 && g.rnd() < 0.6) { emit(g, { k: 'dodge', uid: c.uid }); return; }
+  const v = dmg * (1 - Math.min(0.8, g.mods.dr + itemFx(c).dr)) * (g.fortressT > 0 ? 0.3 : 1) * g.hurtMul;
   c.hp -= v;
   c.taken += v; g.run.taken += v; g.wTaken += v;
   c.flash = 0.18;
@@ -584,11 +604,12 @@ const catPos = (g, rank) => ({ x: g.towerX + 30, y: GROUND - 36 - rank * SLOT })
 function targetsInRange(g, range, from) {
   const out = [];
   for (const e of g.enemies) {
-    if (e.dead || e.x < g.towerX - 10) continue;
+    if (e.dead || e.under || e.x < g.towerX - 10) continue;
     const edge = e.x - e.w * (e.boss ? 0.45 : 0.4) - from;
     if (edge <= range) out.push(e);
   }
   out.sort((a, b) => a.x - b.x);
+  if (g.focus) { const i = out.findIndex((e) => e.uid === g.focus); if (i > 0) out.unshift(out.splice(i, 1)[0]); }
   return out;
 }
 
@@ -758,7 +779,10 @@ function updateCats(g, dt) {
     c.flash = Math.max(0, c.flash - dt);
     c.atk = Math.max(0, c.atk - dt);
     const f = cfx(m, c);
-    const hs = 1 + m.haste + f.haste;
+    let hs = 1 + m.haste + f.haste;
+    if (c.frenzyT > 0) { c.frenzyT -= dt; hs *= 2.2; }
+    if (g.anthemT > 0) hs *= 1.5;
+    c.sp = Math.min(1, c.sp + dt / SPECIAL_TIME);
     const mxh = catMaxHp(g, c, m);
     c.low = c.hp < mxh * 0.5;
     if (f.regen) healCat(g, c, mxh * f.regen * dt, c, true);
@@ -944,6 +968,20 @@ function updateEnemies(g, dt) {
           hurtCat(g, top, e.dmg);
         }
       }
+    } else if (e.ai === 'dash') {
+      // runs past the queue, then leaps onto the stack and bites the top cat like a glider
+      if (!e.leaped) {
+        e.x -= sp * dt;
+        if (e.x <= front + 130) { e.leaped = true; e.fly = true; e.alt = 96; e.cd = 0.3; emit(g, { k: 'leap', x: e.x, y: e.y }); }
+      } else if (e.x > front + 40) e.x -= sp * dt * 0.6;
+      else {
+        e.cd -= dt;
+        if (e.cd <= 0) { e.cd = ENEMY_TYPES.dasher.cd; e.swing = 0.3; hurtCat(g, alive[alive.length - 1], e.dmg); }
+      }
+    } else if (e.ai === 'burrow') {
+      // tunnels under the field (cannot be hit) and pops up near the stack, then fights like a melee mouse
+      e.x -= sp * dt;
+      if (e.under && e.x <= front + 230) { e.under = false; e.ai = 'melee'; emit(g, { k: 'dig', x: e.x, y: e.y }); }
     } else if (e.ai === 'bomb') {
       if (e.x > front + 24) e.x -= sp * dt;
       else {
@@ -999,6 +1037,28 @@ function nestAI(g, e, dt) {
     for (let i = 0; i < n; i++) spawnFromNest(g, e);
     emit(g, { k: 'roar', x: e.x, y: e.y - 80 });
   }
+  // each nest has its own trick (see NESTS in cats.js)
+  if (e.bubble > 0) e.bubble -= dt;
+  if (e.kind === 'pipe') {
+    e.dashT = (e.dashT == null ? 6 : e.dashT) - dt * rage;
+    if (e.dashT <= 0) {
+      e.dashT = Math.max(5.5, 10 - e.n * 0.35);
+      const n = 2 + Math.min(4, Math.floor(e.n / 2));
+      for (let i = 0; i < n; i++) { const d = makeEnemy(g, 'dasher', g.wave, { x: e.x - 50 - i * 18 }); g.enemies.push(d); emit(g, { k: 'spawn', x: d.x, y: d.y }); }
+      e.swing = 0.35;
+    }
+  } else if (e.kind === 'castle') {
+    e.guardT = (e.guardT == null ? 4 : e.guardT) - dt * rage;
+    if (e.guardT <= 0 && g.enemies.filter((o) => !o.dead && o.shield > 0).length < 2 + (e.n > 4 ? 1 : 0)) {
+      e.guardT = Math.max(7, 11 - e.n * 0.3);
+      const d = makeEnemy(g, 'shield', g.wave, { x: e.x - 50 }); g.enemies.push(d); emit(g, { k: 'spawn', x: d.x, y: d.y });
+    }
+  } else if (e.kind === 'trash') {
+    if (g.t - (e.lastHit || 0) > 2.2 && e.hp < e.maxHp) { e.hp = Math.min(e.maxHp, e.hp + e.maxHp * 0.035 * dt); if (g.rnd() < dt * 4) emit(g, { k: 'ehealfx', x: e.x, y: e.y - 70 }); }
+  } else if (e.kind === 'moon') {
+    e.moonT = (e.moonT == null ? 8 : e.moonT) - dt;
+    if (e.moonT <= 0 && !(e.bubble > 0)) { e.moonT = Math.max(7, 11 - e.n * 0.3); e.bubble = 2.4; emit(g, { k: 'bubble', x: e.x, y: e.y - 70 }); }
+  }
   // cheese bombs lobbed at the stack
   e.bombT -= dt * rage;
   if (e.bombT <= 0) {
@@ -1032,6 +1092,8 @@ export function step(g, dt = DT) {
   g.mods = calcMods(g);
   for (const t in g.mods.syn.counts) if (g.mods.syn.counts[t] > g.run.synMax) g.run.synMax = g.mods.syn.counts[t];
   if (g.zoomT > 0) g.zoomT -= dt;
+  for (const k of ['fortressT', 'anthemT', 'hexT', 'phaseT']) if (g[k] > 0) g[k] = Math.max(0, g[k] - dt);
+  if (g.focus && !g.enemies.some((e) => e.uid === g.focus && !e.dead && !e.under)) g.focus = 0;
 
   // spawn from the queue
   g.qT += dt;
@@ -1106,3 +1168,174 @@ export function grantStartItem(g) {
   equipItem(g, g.stash.length - 1, g.cats[0].uid);
   return it.id;
 }
+
+// ================================================================ special moves, event stops
+export const specialInfo = (id) => SPECIALS[id] || { kind: 'frenzy', name: 'Power Up', icon: '✨', color: '#ffd23f', pow: 1 };
+export const specialReady = (c) => !c.ko && c.sp >= 1;
+const foesOf = (g) => g.enemies.filter((e) => !e.dead && !e.under && e.x >= g.towerX - 10 && e.x < W + 30);
+const pickN = (g, arr, n) => { const a = arr.slice(), out = []; while (a.length && out.length < n) out.push(a.splice(Math.floor(g.rnd() * a.length), 1)[0]); return out; };
+
+// Fire a cat's special. Returns false when it is not allowed (not fighting, cat down, not charged).
+export function useSpecial(g, uid) {
+  const c = findCat(g, uid);
+  if (!c || g.state !== 'fight' || !g.cats.includes(c) || !specialReady(c)) return false;
+  const info = specialInfo(c.id), foes = foesOf(g), pow = info.pow, m = g.mods || calcMods(g);
+  const dmg = (mult) => catDmg(c, m, mult * pow);
+  const front = g.towerX + 30, rank = Math.max(0, g.cats.indexOf(c)), from = catPos(g, rank);
+  g.run.specials = (g.run.specials || 0) + 1;
+  g.curCat = c;
+  emit(g, { k: 'special', uid: c.uid, id: c.id, kind: info.kind, name: info.name, color: info.color, x: from.x, y: from.y });
+  switch (info.kind) {
+    case 'frenzy': c.frenzyT = 5 * pow; break;
+    case 'fortress': g.fortressT = 5; break;
+    case 'anthem': g.anthemT = 6; break;
+    case 'phase': g.phaseT = 5; break;
+    case 'hex': g.hexT = 6; for (const e of foes) emit(g, { k: 'ehealfx', x: e.x, y: ecy(e) }); break;
+    case 'heal': {
+      for (const cc of g.cats) {
+        if (cc.ko) { cc.ko = false; cc.hp = Math.round(catMaxHp(g, cc) * 0.35); emit(g, { k: 'revive', uid: cc.uid }); }
+        healCat(g, cc, catMaxHp(g, cc) * 0.4 * pow, c);
+      }
+      emit(g, { k: 'healfx', x: front, y: GROUND - 90 });
+      break;
+    }
+    case 'inferno': {
+      for (let i = 0; i < 4; i++) emit(g, { k: 'flame', x: front + 20, y: GROUND - 30 - i * 24, len: 320 });
+      for (const e of foes) if (e.x < front + 330) hurtEnemy(g, e, dmg(3), { burn: { dps: 0.5, t: 3 }, mult: 1 });
+      break;
+    }
+    case 'storm': {
+      const t = foes.slice().sort((a, b) => a.x - b.x).slice(0, 10);
+      const pts = [{ x: front, y: GROUND - 120 }].concat(t.map((e) => ({ x: e.x, y: ecy(e) })));
+      if (pts.length > 1) emit(g, { k: 'chain', pts });
+      for (const e of t) { emit(g, { k: 'star', x: e.x, y: ecy(e) }); hurtEnemy(g, e, dmg(2.6), { stun: 0.9 }); }
+      break;
+    }
+    case 'volley': {
+      for (let i = 0; i < 9 && foes.length; i++) {
+        const e = foes[Math.floor(g.rnd() * foes.length)];
+        emit(g, { k: 'pellet', x: from.x + 14, y: from.y, x2: e.x, y2: ecy(e) });
+        hurtEnemy(g, e, dmg(1.4), { crit: g.rnd() < 0.2 });
+      }
+      break;
+    }
+    case 'freeze': {
+      emit(g, { k: 'nova', x: front, y: GROUND - 40, r: 330 });
+      for (const e of foes) hurtEnemy(g, e, dmg(0.8), { stun: e.boss ? 0 : 2.6 * pow, slow: 0.6, slowT: 3.5 });
+      break;
+    }
+    case 'snipe': {
+      const t = foes.slice().sort((a, b) => b.hp - a.hp)[0];
+      if (t) { emit(g, { k: 'beam', x: from.x + 14, y: from.y, x2: t.x, y2: ecy(t) }); emit(g, { k: 'star', x: t.x, y: ecy(t) }); hurtEnemy(g, t, dmg(t.boss ? 5 : 13), { pierceArmor: true, crit: true }); }
+      break;
+    }
+    case 'barrage': {
+      for (let i = 0; i < 7; i++) {
+        const e = foes.length ? foes[Math.floor(g.rnd() * foes.length)] : null;
+        const x = e ? e.x + (g.rnd() - 0.5) * 40 : front + 140 + i * 70;
+        explode(g, x, GROUND - 8, 78, dmg(1.7), { color: info.color });
+      }
+      break;
+    }
+    case 'meteor': {
+      let best = null, bn = -1;
+      for (const e of foes) { const n = foes.filter((o) => Math.abs(o.x - e.x) < 130).length + (e.boss ? 2 : 0); if (n > bn) { bn = n; best = e; } }
+      const x = best ? best.x : front + 260;
+      emit(g, { k: 'star', x, y: GROUND - 40 });
+      explode(g, x, GROUND - 30, 150, dmg(7), { color: info.color });
+      break;
+    }
+    case 'toxin': for (const e of foes) hurtEnemy(g, e, dmg(0.6), { poison: { dps: 1.2, t: 5 }, mult: 1 }); break;
+    case 'supernova': {
+      emit(g, { k: 'nova', x: front + 200, y: GROUND - 60, r: 520 });
+      for (const e of foes) hurtEnemy(g, e, dmg(e.boss ? 3 : 4.2));
+      break;
+    }
+    default: break;
+  }
+  c.sp = 0;                       // after the effect, so kills it causes do not refill it at once
+  g.curCat = null;
+  return true;
+}
+
+// tapping a mouse makes every cat that can reach it shoot it first
+export function setFocus(g, uid) {
+  const e = g.enemies.find((o) => o.uid === uid && !o.dead && !o.under);
+  g.focus = e ? e.uid : 0;
+  return !!e;
+}
+
+// ---- event stops: a break between waves with a choice (see EVENTS in cats.js)
+const itemPrice = (g, id) => Math.round({ common: 45, rare: 110, epic: 250 }[ITEM_BY_ID[id].rarity] * (1 + 0.03 * g.wave));
+export function eventDue(g) { return g.wave >= 3 && !g.bossWave && g.wave % 3 === 0; }
+export function rollEvent(g) {
+  if (!eventDue(g)) return null;
+  const hurt = g.cats.some((c) => c.hp < catMaxHp(g, c) * 0.7);
+  const pool = EVENTS.filter((e) => !(e.id === 'rest' && !hurt && g.rnd() < 0.7));
+  const def = pool[Math.floor(g.rnd() * pool.length)];
+  const ev = { id: def.id, name: def.name, icon: def.icon, desc: def.desc, options: [], done: false };
+  const items = rollItemChoices(g, 3);
+  switch (def.id) {
+    case 'shop':
+      for (const id of items) ev.options.push({ k: 'buy', item: id, cost: itemPrice(g, id) });
+      ev.options.push({ k: 'heal', cost: Math.round(55 + g.wave * 2), pct: 0.4 });
+      ev.options.push({ k: 'reroll', cost: Math.round(70 + g.wave * 2) });
+      ev.multi = true;
+      break;
+    case 'shrine': {
+      const epic = ITEMS.filter((i) => i.rarity === 'epic'), rare = ITEMS.filter((i) => i.rarity === 'rare');
+      ev.options.push({ k: 'blood', item: rare[Math.floor(g.rnd() * rare.length)].id, hp: 0.25 });
+      ev.options.push({ k: 'gamble', cost: Math.round(80 + g.wave * 3), item: epic[Math.floor(g.rnd() * epic.length)].id, chance: 0.6 });
+      ev.options.push({ k: 'leave' });
+      break;
+    }
+    case 'rest':
+      ev.options.push({ k: 'heal', cost: 0, pct: 0.6 });
+      ev.options.push({ k: 'reroll', cost: 0, bonusCoins: 30 + g.wave * 2 });
+      break;
+    case 'deal': {
+      const epic = ITEMS.filter((i) => i.rarity === 'epic'), rare = ITEMS.filter((i) => i.rarity === 'rare');
+      ev.options.push({ k: 'curse', item: epic[Math.floor(g.rnd() * epic.length)].id, hurt: 0.12 });
+      ev.options.push({ k: 'curse', item: rare[Math.floor(g.rnd() * rare.length)].id, hurt: 0.05 });
+      ev.options.push({ k: 'leave' });
+      break;
+    }
+    case 'dojo':
+      for (const c of g.cats) ev.options.push({ k: 'train', uid: c.uid, bonus: 0.1 });
+      ev.options.push({ k: 'leave' });
+      break;
+    default: break;
+  }
+  g.event = ev; g.eventsSeen++;
+  return ev;
+}
+// returns { ok, msg, again } ; again=true means the stop stays open (the shop sells several things)
+export function chooseEvent(g, idx) {
+  const ev = g.event, o = ev && ev.options[idx];
+  if (!o || o.sold) return { ok: false, msg: 'Nothing there' };
+  if (o.cost > g.run.coins) return { ok: false, msg: 'Not enough coins' };
+  const spend = (n) => { g.run.coins -= n; };
+  let msg = '';
+  switch (o.k) {
+    case 'buy': spend(o.cost); takeItem(g, o.item); o.sold = true; msg = `Bought ${ITEM_BY_ID[o.item].name}`; break;
+    case 'heal': {
+      spend(o.cost);
+      const before = snapshotMax(g);
+      for (const c of g.cats.concat(g.bench)) { if (c.ko) c.ko = false; c.hp = Math.min(catMaxHp(g, c), Math.max(c.hp, 1) + catMaxHp(g, c) * o.pct); }
+      refreshHp(g, before); msg = 'The team feels better'; if (!ev.multi) ev.done = true; else o.sold = true; break;
+    }
+    case 'reroll': spend(o.cost); g.rerolls++; if (o.bonusCoins) g.run.coins += o.bonusCoins; msg = '+1 reroll'; if (!ev.multi) ev.done = true; else o.sold = true; break;
+    case 'blood':
+      for (const c of g.cats) if (!c.ko) c.hp = Math.max(1, c.hp - catMaxHp(g, c) * o.hp);
+      takeItem(g, o.item); msg = `The shrine gives ${ITEM_BY_ID[o.item].name}`; ev.done = true; break;
+    case 'gamble':
+      spend(o.cost);
+      if (g.rnd() < o.chance) { takeItem(g, o.item); msg = `Lucky! ${ITEM_BY_ID[o.item].name}`; } else msg = 'The shrine stays quiet';
+      ev.done = true; break;
+    case 'curse': takeItem(g, o.item); g.hurtMul *= 1 + o.hurt; msg = `${ITEM_BY_ID[o.item].name}, but mice bite ${Math.round(o.hurt * 100)}% harder now`; ev.done = true; break;
+    case 'train': { const c = findCat(g, o.uid); if (c) { c.train = (c.train || 0) + o.bonus; msg = `${CAT_BY_ID[c.id].name} trained: +${Math.round(o.bonus * 100)}% damage`; } ev.done = true; break; }
+    default: msg = 'You move on'; ev.done = true; break;
+  }
+  return { ok: true, msg, again: !ev.done };
+}
+export function endEvent(g) { g.event = null; }

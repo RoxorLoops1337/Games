@@ -199,14 +199,19 @@ export const ENEMY_TYPES = {
   glider:  { name: 'Glider',       w: 44, h: 34, hp: 30,  dmg: 8,  cd: 1.2, spd: 72, cost: 2, minWave: 6, wt: 3, ai: 'fly', alt: 105 },
   bomber:  { name: 'Bomb Mouse',   w: 36, h: 38, hp: 36,  dmg: 36, cd: 1,   spd: 86, cost: 3, minWave: 7, wt: 3, ai: 'bomb' },
   shaman:  { name: 'Shaman Rat',   w: 40, h: 50, hp: 58,  dmg: 0,  cd: 2.6, spd: 38, cost: 4, minWave: 8, wt: 2, ai: 'shaman', range: 400 },
+  // counters to a one-note tower: dashers leap over the stack to bite the top cat, shield bearers shrug off status effects until the
+  // shield breaks, diggers tunnel under the field and cannot be hit until they pop up next to the stack
+  dasher:  { name: 'Dash Mouse',   w: 30, h: 32, hp: 22,  dmg: 9,  cd: 1.5, spd: 120, cost: 2, minWave: 9, wt: 3, ai: 'dash', hint: 'Leaps over the stack to bite the top cat' },
+  shield:  { name: 'Shield Bearer', w: 46, h: 46, hp: 60, dmg: 9,  cd: 1.2, spd: 34, cost: 4, minWave: 10, wt: 3, ai: 'melee', shield: 1.4, hint: 'Its shield blocks burns, slows and poison until it breaks' },
+  digger:  { name: 'Digger',       w: 40, h: 40, hp: 52,  dmg: 15, cd: 1.3, spd: 44, cost: 4, minWave: 12, wt: 2, ai: 'burrow', hint: 'Tunnels under the field and cannot be hit until it pops up' },
 };
 
 export const NESTS = [
-  { id: 'cheese', name: 'Cheese Hut' },
-  { id: 'pipe', name: 'Drain Pipe Den' },
-  { id: 'castle', name: 'Rat Castle' },
-  { id: 'trash', name: 'Trash Tower' },
-  { id: 'moon', name: 'Moon Burrow' },
+  { id: 'cheese', name: 'Cheese Hut', trick: 'Lobs cheese bombs and calls for help as it gets hurt' },
+  { id: 'pipe', name: 'Drain Pipe Den', trick: 'Floods the field with fast Dash Mice every few seconds' },
+  { id: 'castle', name: 'Rat Castle', trick: 'Guards with shields: it takes far less damage while a Shield Bearer stands' },
+  { id: 'trash', name: 'Trash Tower', trick: 'Rots and heals itself unless you keep hitting it' },
+  { id: 'moon', name: 'Moon Burrow', trick: 'Wraps itself in a moon bubble for a moment: save your big hits' },
 ];
 
 // amb: ambient light on the first wave of a stage and on the nest wave (the day turns to dusk). grade: colour grading
@@ -444,3 +449,169 @@ export const ACHIEVEMENTS = [
   { id: 'big1000',  name: 'Big Hitter',       desc: 'Land a single hit of 1000 damage.',           coins: 120, gems: 1, check: (c) => c.run.biggest >= 1000 },
   { id: 'nine',     name: 'Nine Lives',       desc: 'Be saved by Nine Lives.',                     coins: 60,  gems: 1, check: (c) => (c.run.nine || 0) >= 1 },
 ];
+
+// ---------------------------------------------------------------- special moves (tap a charged cat; each cat has one)
+// kind picks the effect in sim.js (useSpecial); pow scales its damage or length
+export const SPECIALS = {
+  tabby:    { kind: 'frenzy', name: 'Claw Frenzy', icon: '🗡️', color: '#ffb35a', pow: 1 },
+  ember:    { kind: 'inferno', name: 'Inferno', icon: '🔥', color: '#ff7a2b', pow: 1 },
+  sparky:   { kind: 'storm', name: 'Static Storm', icon: '⚡', color: '#ffe14d', pow: 1 },
+  buckshot: { kind: 'volley', name: 'Double Barrel', icon: '🎯', color: '#ffd27a', pow: 1 },
+  mochi:    { kind: 'fortress', name: 'Fluffy Fortress', icon: '🛡️', color: '#9ad0ff', pow: 1 },
+  yuki:     { kind: 'freeze', name: 'Deep Freeze', icon: '❄️', color: '#bfeaff', pow: 1 },
+  hawkeye:  { kind: 'snipe', name: 'Headshot', icon: '🎯', color: '#ffffff', pow: 1 },
+  boomer:   { kind: 'barrage', name: 'Bomb Rain', icon: '✨', color: '#ff9a3a', pow: 1 },
+  pudding:  { kind: 'heal', name: 'Mass Healing', icon: '💖', color: '#ff9ec6', pow: 1 },
+  shadow:   { kind: 'volley', name: 'Shadow Dance', icon: '🌙', color: '#b88aff', pow: 1.2 },
+  ronin:    { kind: 'frenzy', name: 'Iaido Rush', icon: '🗡️', color: '#e8eef8', pow: 1.1 },
+  merlin:   { kind: 'meteor', name: 'Meteor', icon: '✨', color: '#c8a0ff', pow: 1 },
+  cutlass:  { kind: 'barrage', name: 'Broadside', icon: '✨', color: '#ffcf6a', pow: 1 },
+  sprout:   { kind: 'toxin', name: 'Toxic Bloom', icon: '☠️', color: '#8be05a', pow: 1 },
+  gizmo:    { kind: 'barrage', name: 'Minefield', icon: '✨', color: '#ffd23f', pow: 1.1 },
+  lyra:     { kind: 'anthem', name: 'Battle Anthem', icon: '🎵', color: '#ffd23f', pow: 1 },
+  nibbles:  { kind: 'frenzy', name: 'Bloodlust', icon: '🦷', color: '#ff6a8a', pow: 1.2 },
+  zeus:     { kind: 'storm', name: 'Judgement', icon: '⚡', color: '#fff27a', pow: 1.3 },
+  volcano:  { kind: 'inferno', name: 'Eruption', icon: '🔥', color: '#ff5a1f', pow: 1.2 },
+  blizzard: { kind: 'freeze', name: 'Absolute Zero', icon: '❄️', color: '#dff4ff', pow: 1.3 },
+  dusty:    { kind: 'volley', name: 'Quick Draw', icon: '🎯', color: '#ffc27a', pow: 1.1 },
+  cyber:    { kind: 'snipe', name: 'Orbital Beam', icon: '⚡', color: '#7bf0ff', pow: 1.2 },
+  boo:      { kind: 'phase', name: 'Phase Out', icon: '💨', color: '#cfd8ff', pow: 1 },
+  draco:    { kind: 'inferno', name: 'Dragon Breath', icon: '🔥', color: '#ff4a2a', pow: 1.4 },
+  halo:     { kind: 'heal', name: 'Holy Light', icon: '💖', color: '#fff6b0', pow: 1.2 },
+  mecha:    { kind: 'barrage', name: 'Missile Rain', icon: '✨', color: '#ff8a5a', pow: 1.2 },
+  hexa:     { kind: 'hex', name: 'Hex', icon: '🔮', color: '#d28aff', pow: 1 },
+  nori:     { kind: 'barrage', name: 'Hot Pot', icon: '✨', color: '#ffb05a', pow: 1 },
+  leo:      { kind: 'frenzy', name: 'Royal Roar', icon: '👑', color: '#ffd23f', pow: 1.3 },
+  nebula:   { kind: 'supernova', name: 'Supernova', icon: '✨', color: '#9a8aff', pow: 1 },
+};
+export const SPECIAL_TIME = 26;       // seconds of fighting to charge a special by itself (kills help)
+
+// ---------------------------------------------------------------- event stops between waves
+export const EVENTS = [
+  { id: 'shop', name: 'Wandering Shop', icon: '💰', desc: 'A travelling cat sells supplies. Coins you spend here are not saved for the Kingdom.' },
+  { id: 'shrine', name: 'Moon Shrine', icon: '🌙', desc: 'Offer something and the shrine may give back more.' },
+  { id: 'rest', name: 'Cozy Campfire', icon: '🔥', desc: 'A warm rest. Free, but only one choice.' },
+  { id: 'deal', name: 'Shady Deal', icon: '🎭', desc: 'A masked mouse offers loot with a catch.' },
+  { id: 'dojo', name: 'Training Yard', icon: '🥋', desc: 'Pick one cat to train for the rest of the run.' },
+];
+export const EVENT_BY_ID = Object.fromEntries(EVENTS.map((e) => [e.id, e]));
+
+// ================================================================ META 2: cat mastery, challenge ladder, weekly challenge
+// ---- cat mastery: every cat earns XP from use (waves survived in the tower, damage, kills) and levels 1 to 5.
+// Each level above 1 gives that cat a tiny permanent bonus. Level 5 also unlocks the Master's Medal cosmetic for it.
+export const MASTERY_XP = [0, 50, 200, 500, 1000];       // total XP needed for level 1..5
+export const MASTERY_MAX = 5;
+export const MASTERY_BONUS = { dmg: 0.02, hp: 0.01 };    // per level above 1 (level 5 = +8% damage, +4% health)
+export function masteryXp(s) {
+  if (!s) return 0;
+  const waves = s.waves != null ? s.waves : (s.runs || 0) * 4;   // older saves did not count waves
+  return Math.floor(waves * 3 + (s.kills || 0) + (s.dmg || 0) / 500);
+}
+export function masteryLevel(s) {
+  const xp = masteryXp(s);
+  let lv = 1;
+  for (let i = 1; i < MASTERY_XP.length; i++) if (xp >= MASTERY_XP[i]) lv = i + 1;
+  return lv;
+}
+// { lv, xp, from, to, pct } where to is null at the top level
+export function masteryProgress(s) {
+  const xp = masteryXp(s), lv = masteryLevel(s), from = MASTERY_XP[lv - 1], to = lv >= MASTERY_MAX ? null : MASTERY_XP[lv];
+  return { lv, xp, from, to, pct: to == null ? 100 : Math.max(0, Math.min(100, Math.round((100 * (xp - from)) / (to - from)))) };
+}
+export const masteryBonus = (lv) => ({ dmg: MASTERY_BONUS.dmg * Math.max(0, lv - 1), hp: MASTERY_BONUS.hp * Math.max(0, lv - 1) });
+// the map newGame takes: { catId: level } for cats that have reached level 2 or more
+export function masteryMap(catStats) {
+  const out = {};
+  for (const id in catStats || {}) if (CAT_BY_ID[id]) { const lv = masteryLevel(catStats[id]); if (lv >= 2) out[id] = lv; }
+  return out;
+}
+
+// ---- challenge ladder: Nightmare I to V, each tier stacks one more rule on top of the last
+// mod keys: speed (mice speed, multiplies), heal (wave healing multiplier, smallest wins), elite (extra elite chance from wave 3, adds),
+// snack (fewer snack choices, adds), rerolls (fewer free rerolls, adds)
+export const LADDER_RULES = [
+  { tier: 1, name: 'Quick Mice',    icon: '💨', desc: 'Mice move 12% faster.',                       mod: { speed: 1.12 } },
+  { tier: 2, name: 'Lean Times',    icon: '🥫', desc: 'Cats heal half as much after each wave.',      mod: { heal: 0.5 } },
+  { tier: 3, name: 'Royal Guard',   icon: '👑', desc: 'Elite mice show up much more often.',          mod: { elite: 0.1 } },
+  { tier: 4, name: 'Slim Pickings', icon: '🍱', desc: 'One snack choice fewer, and one reroll fewer.', mod: { snack: 1, rerolls: 1 } },
+  { tier: 5, name: 'Sealed Pantry', icon: '🔒', desc: 'No healing after waves and no free rerolls. Mice are faster still.', mod: { heal: 0, rerolls: 9, speed: 1.08 } },
+];
+export const LADDER_TIERS = LADDER_RULES.length;
+// the wave to reach on a tier to unlock the next one (index 0 is Hard, index n is Nightmare n)
+export const LADDER_WAVE = [15, 15, 15, 16, 16];
+const ROMAN = ['', 'I', 'II', 'III', 'IV', 'V'];
+export const ladderId = (tier) => 'nm' + tier;
+export const ladderTier = (diff) => { const m = /^nm([1-5])$/.exec(String(diff)); return m ? +m[1] : 0; };
+export function stackRules(tier) {
+  const out = { speed: 1, heal: 1, elite: 0, snack: 0, rerolls: 0 };
+  for (const r of LADDER_RULES) if (r.tier <= tier) {
+    const m = r.mod;
+    if (m.speed != null) out.speed *= m.speed;
+    if (m.heal != null) out.heal = Math.min(out.heal, m.heal);
+    for (const k of ['elite', 'snack', 'rerolls']) if (m[k]) out[k] += m[k];
+  }
+  return out;
+}
+for (let t = 1; t <= LADDER_TIERS; t++) {
+  const r = LADDER_RULES[t - 1];
+  DIFFS[ladderId(t)] = {
+    name: 'Nightmare ' + ROMAN[t], icon: '☠', tier: t, rule: r,
+    desc: 'Hard plus ' + LADDER_RULES.filter((x) => x.tier <= t).map((x) => x.name).join(', ') + '. Coins x' + (1.5 + 0.25 * t) + '.',
+    hp: 1.3 + 0.05 * t, dmg: 1.25 + 0.04 * t, budget: 1.12 + 0.02 * t, coin: 1.5 + 0.25 * t, ...stackRules(t),
+  };
+}
+export const DIFF_ORDER = ['cozy', 'normal', 'hard', ...LADDER_RULES.map((r) => ladderId(r.tier))];
+// highest Nightmare tier the player may start: Hard must have been cleared first (the 'hard15' trophy), then each tier clears the next
+export function ladderUnlocked(save) {
+  const cleared = Math.max(0, Math.min(LADDER_TIERS, (save && save.ladder) | 0));
+  const hard = cleared > 0 || !!(save && save.ach && save.ach.hard15);
+  return Math.min(LADDER_TIERS, cleared + (hard ? 1 : 0));
+}
+export const diffAllowed = (save, id) => !!DIFFS[id] && ladderTier(id) <= ladderUnlocked(save);
+// the tier a finished run clears, or 0 (Hard is tracked by the trophy)
+export const ladderClears = (run) => { const t = ladderTier(run.diff); return t && run.wave >= LADDER_WAVE[t] ? t : 0; };
+
+// ---- weekly challenge: one seed and three stacked modifiers per ISO week (UTC)
+export const WEEKLY_MODS = [
+  { id: 'fast',  name: 'Zoomies Week',  icon: '💨', desc: 'Mice move 20% faster.',                 speed: 1.2 },
+  { id: 'glass', name: 'Glass Cats',    icon: '🔮', desc: 'Cats deal +30% damage, 30% less health.', dmg: 0.3, hp: -0.3 },
+  { id: 'horde', name: 'Horde Week',    icon: '🐀', desc: '30% more mice, each 15% weaker.',        budget: 1.3, enemyHp: 0.85 },
+  { id: 'elite', name: 'Elite Storm',   icon: '👑', desc: 'Elite mice from wave 2. More chests.',   elite: 0.18, chest: 0.5 },
+  { id: 'tiny',  name: 'Tiny Tower',    icon: '🧱', desc: 'The tower only holds 4 cats.',           stack: 4 },
+  { id: 'brute', name: 'Brute Mice',    icon: '🛡', desc: 'Mice have 30% more health.',             enemyHp: 1.3 },
+  { id: 'poor',  name: 'Tight Purse',   icon: '🪙', desc: 'Coins are halved, chests are rarer.',    coin: 0.5, chest: -0.4 },
+];
+export function weekKey(ms = Date.now()) {
+  const d = new Date(ms), day0 = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
+  const dow = (new Date(day0).getUTCDay() + 6) % 7;                // Monday = 0
+  const thu = day0 + (3 - dow) * 86400000;                          // the Thursday decides which year the week belongs to
+  const y = new Date(thu).getUTCFullYear();
+  const wk = Math.floor((thu - Date.UTC(y, 0, 1)) / (7 * 86400000)) + 1;
+  return `${y}-W${String(wk).padStart(2, '0')}`;
+}
+export const WEEK_RE = /^\d{4}-W(0[1-9]|[1-4]\d|5[0-3])$/;
+export function mergeMods(list) {
+  const m = { id: 'weekly', enemyHp: 1.1 };                          // an iron week: mice are a little tougher before any rule
+  for (const x of list) {
+    for (const k of ['speed', 'budget', 'enemyHp', 'coin']) if (x[k]) m[k] = (m[k] || 1) * x[k];
+    for (const k of ['dmg', 'hp', 'elite', 'chest']) if (x[k]) m[k] = (m[k] || 0) + x[k];
+    if (x.stack) m.stack = Math.min(m.stack || 99, x.stack);
+  }
+  return m;
+}
+export function weekInfo(week) {
+  let h = 2166136261;
+  const s = 'weekly:' + week;
+  for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
+  h >>>= 0;
+  const pool = WEEKLY_MODS.slice(), picks = [];
+  let r = h;
+  while (picks.length < 3) {
+    const i = r % pool.length;
+    picks.push(pool.splice(i, 1)[0]);
+    r = Math.imul(r ^ (r >>> 15), 2246822519) >>> 0;
+  }
+  const mod = mergeMods(picks);
+  mod.name = 'Weekly Gauntlet'; mod.icon = '🏆'; mod.desc = picks.map((p) => p.name).join(', ');
+  return { day: week, week, kind: 'weekly', seed: h || 1, mod, mods: picks };
+}
