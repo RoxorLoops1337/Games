@@ -53,7 +53,7 @@ export const GRAFTS_EXTRA = [
     mods: [{ k: 'cost', d: 1 }, hook((A, ctx) => {
       const s = strainOf(A); const t = pick(A, ctx);
       if (t) A.status(t, 'burn', Math.min(13, 1 + 2 * s));
-      if (s > 0 && !ctx.replay) A.loseHp(A.player, Math.min(5, s), { floor1: true, src: 'graft' });
+      if (s > 0 && !ctx.replay) A.loseHp(A.player, Math.min(3, s), { floor1: true, src: 'graft' });
     })] }),
   G({ id: 'g_hearth_choir', name: 'Hearth Choir', school: 'ember', weight: 1, tier: 'weird', rarity: 'uncommon', types: AB,
     boon: 'Apply 1 Burn to all enemies per 2 Ember or Rust grafts in your deck (min 1, max 5).', price: '25% chance to jam. Lose 1 HP when played.',
@@ -110,8 +110,8 @@ export const GRAFTS_EXTRA = [
 
   // ================= RUST =================
   G({ id: 'g_rust_bloom', name: 'Rust Bloom', school: 'rust', weight: 1, tier: 'safe', rarity: 'common', types: AB,
-    boon: 'Gain 1 Thorns per Rust graft in your deck (max 5).', price: 'Gain 1 Frail when played.',
-    mods: [{ k: 'selfStatus', s: 'frail', n: 1 }, hook((A, ctx) => { const n = Math.min(5, stack(A, 'rust')); if (n && !ctx.replay) A.status(A.player, 'thorns', n); })] }),
+    boon: 'Gain 1 Thorns per Rust graft in your deck (max 3).', price: 'Gain 1 Frail when played.',
+    mods: [{ k: 'selfStatus', s: 'frail', n: 1 }, hook((A, ctx) => { const n = Math.min(3, stack(A, 'rust')); if (n && !ctx.replay) A.status(A.player, 'thorns', n); })] }),
   G({ id: 'g_slag_vent', name: 'Slag Vent', school: 'rust', weight: 2, tier: 'greedy', rarity: 'uncommon', types: AB, ok: (s) => !s.flags.exhaust,
     boon: 'Deal 4 damage to all enemies per junk card in your hand (max 20).', price: 'Exhaust. Shuffle 2 Rust Flakes into your deck each combat.',
     mods: [{ k: 'flag', f: 'exhaust' }, { k: 'junk', card: 'j_flake', n: 2, to: 'draw' }, hook((A, ctx) => {
@@ -127,16 +127,16 @@ export const GRAFTS_EXTRA = [
       if (junk.length) A.draw(Math.min(3, junk.length));
     })] }),
   G({ id: 'g_corroded_lattice', name: 'Corroded Lattice', school: 'rust', weight: 3, tier: 'greedy', rarity: 'rare', types: AB, ok: (s) => dmgOrBlock(s) && num(s),
-    boon: '+3 numbers per Rust graft in your deck (max 18).', price: 'Costs 1 more. Shuffle 2 Clots into your deck each combat.',
-    mods: [{ k: 'cost', d: 1 }, { k: 'junk', card: 'j_clot', n: 2, to: 'draw' }, hook((A, ctx) => boost(A, ctx, Math.min(18, 3 * stack(A, 'rust'))))] }),
+    boon: '+5 numbers per Rust graft in your deck (max 25).', price: 'Costs 1 more. Shuffle 1 Clot into your deck each combat.',
+    mods: [{ k: 'cost', d: 1 }, { k: 'junk', card: 'j_clot', n: 1, to: 'draw' }, hook((A, ctx) => boost(A, ctx, Math.min(25, 5 * stack(A, 'rust'))))] }),
 
   // ================= STATIC =================
   G({ id: 'g_phase_lock', name: 'Phase Lock', school: 'static', weight: 1, tier: 'safe', rarity: 'common', types: AB,
-    boon: 'Gain 1 Charge per 2 Static grafts in your deck (min 1, max 4).', price: 'Lose 2 HP when played.',
-    mods: [{ k: 'selfHurt', n: 2 }, hook((A, ctx) => { if (!ctx.replay) A.status(A.player, 'charge', Math.min(4, Math.max(1, Math.floor(stack(A, 'static') / 2)))); })] }),
+    boon: 'Gain 1 Charge per 2 Static grafts in your deck (min 1, max 4).', price: 'Lose 1 HP when played.',
+    mods: [{ k: 'selfHurt', n: 1 }, hook((A, ctx) => { if (!ctx.replay) A.status(A.player, 'charge', Math.min(4, Math.max(1, Math.floor(stack(A, 'static') / 2)))); })] }),
   G({ id: 'g_tesla_coil', name: 'Tesla Coil', school: 'static', weight: 3, tier: 'greedy', rarity: 'rare', types: ATK, ok: (s) => hits(s) && num(s) && s.cost <= 2,
-    boon: 'Deal 3 damage to all enemies per Static or Echo graft in your deck (max 18).', price: 'Costs 1 more. 33% chance to jam.',
-    mods: [{ k: 'cost', d: 1 }, { k: 'jam', p: 0.33 }, hook((A, ctx) => {
+    boon: 'Deal 3 damage to all enemies per Static or Echo graft in your deck (max 18).', price: 'Costs 1 more. 15% chance to jam.',
+    mods: [{ k: 'cost', d: 1 }, { k: 'jam', p: 0.15 }, hook((A, ctx) => {
       const n = Math.min(18, 3 * stack(A, 'static', 'echo'));
       if (n) for (const e of A.alive()) A.dmg(A.player, e, Math.max(1, Math.round(n * (ctx.mult || 1))), { card: true });
     })] }),
