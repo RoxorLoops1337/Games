@@ -1878,6 +1878,7 @@ addEventListener('keydown', (e) => {
   else if (k >= '1' && k <= '6' && g && g.cats[+k - 1]) doSpecial(g.cats[+k - 1].uid);
   else if (k === 'g' && !$('bFull').hidden) toggleFull();
   else if (k === 'd') { save.meter = !save.meter; persist(); meterT = 0; }
+  else if (k === 'a') { save.opt.autoSpecial = !save.opt.autoSpecial; persist(); toast(save.opt.autoSpecial ? 'Auto specials on' : 'Auto specials off'); }
   else if (k === 'm') { save.sound = !save.sound; sfx.on = save.sound; persist(); }
 });
 document.addEventListener('visibilitychange', () => {
